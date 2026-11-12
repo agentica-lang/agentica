@@ -8,73 +8,57 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.31.0-alpha.1] - 2026-11-12
+
 ### Added
 
-- Lambdas: `->(x) { x + 1 }` is a function value that can be kept in a
-  variable, a field, a list or a map, or passed as an argument; `-> { 42 }`
-  takes no parameters.
-- A lambda shows as `lambda` in a stack line, a profile and the bodies of
-  `std/analysis`.
-- A block or lambda parameter without an annotation or an `Fn` type takes its
-  type from its uses in the body when they allow only one
-  (`->(x) { x + 1 }`, `puts(Actor.call(a, 1000) do |reply| Msg.Get(reply) end)`).
+- Lambdas: `->(x) { x + 1 }` is a function value; `-> { 42 }` takes no
+  parameters.
+- A lambda shows as `lambda` in a stack line, a profile and `std/analysis`.
+- A block or lambda parameter without a type takes it from its uses in the body
+  when they allow only one.
 - A program may name a type `Header`, `HttpRequest`, `HttpResponse`,
   `HttpClient`, `HttpServer`, `HttpClientOptions`, `HttpServerOptions` or
   `HttpWire` (an enum `HttpWire` stays an error).
 - A call without arguments drops its `()` before a block: `run do ... end`,
-  `xs.each do |x| ... end`, and a block in braces, `xs.map { |x| x * 2 }`;
-  `agentica fmt` removes the empty `()` (`run() do` still parses).
+  `xs.map { |x| x * 2 }`; `agentica fmt` removes the empty `()`.
 - A lambda in a call's parentheses is its block: `xs.map(->(x) { x * 2 })`.
-- A pipe step may name a method of the value: `xs |> map(->(x) { x * 2 }) |>
-  sum()` is `xs.map(->(x) { x * 2 }).sum`; a function of the program with the
-  same name wins.
+- A pipe step may name a method of the value: `xs |> map(f) |> sum()`; a
+  function of the program with the same name wins.
 - `agentica lint` suggests a pipe for a method chain of three or more steps
   that passes lambdas (`LINT-LAMBDA-CHAIN`).
-- `s.edit_distance(other)` (Levenshtein, in characters; `edit_distance(other,
-  max)` stops at `max + 1`) and `s.jaro_winkler(other)` (from 0.0 to 1.0).
+- `s.edit_distance(other)` (Levenshtein) and `s.jaro_winkler(other)`.
 - The nested builtin names are accepted next to the old ones: `File.Info`,
-  `File.Handle`, `JSON.Value`, `JSON.Field`, `Process.Output`, `TCP.Socket`,
-  `TCP.Listener`, `TLS.Context`, `TLS.ClientOptions`, `TLS.ServerOptions`,
-  `Test.Case` and `System.Profile` (#1182).
+  `File.Handle`, `JSON.Value`, `TCP.Socket`, `TLS.Context`, `Test.Case` and
+  more (#1182).
 
 ### Changed
 
 - **Breaking:** `agentica test --jobs N` runs the scenarios of one file as
-  separate jobs, so they can overlap: ones that share a port, a path or a DB
-  need `--jobs 1` (#1458).
-- **Breaking:** a builtin has only its Ruby name: `trim`, `to_int`, `to_float`,
-  `contains?`, `starts_with?`, `ends_with?`, `String.from_int`,
-  `String.from_float`, `Float.from_int` and `String.join` are errors whose help
-  names the Ruby form (`strip`, `to_i`, `n.to_s`, `list.join`, ...); the
-  function forms moved too: `Int.to_s(n)`, `Float.to_s(x)`, `Int.to_f(n)`,
-  `List.join(xs, sep)`, `String.strip(s)`, `String.to_i(s)`, ...
+  separate jobs: ones that share a port, a path or a DB need `--jobs 1`
+  (#1458).
+- **Breaking:** a builtin has only its Ruby name: `trim`, `to_int`,
+  `contains?`, `String.from_int`, `String.join` and the like are errors whose
+  help names the Ruby form (`strip`, `to_i`, `list.join`, ...).
 - **Breaking:** the HTTP types are `HTTP.Request`, `HTTP.Response`,
   `HTTP.Header`, `HTTP.ClientOptions`, `HTTP.ServerOptions`, `HTTP.Client` and
-  `HTTP.Server` of `std/http`; the old names are unknown, with a help. A value
-  prints as `HTTP.Response(...)` and `<HTTP.Client>`.
+  `HTTP.Server` of `std/http`; the old names are errors with a help.
 - **Breaking:** the child channel of `Process.spawn_channel` is a pipe per
-  direction on every system: a child that is not Agentica reads fd 3 and writes
-  fd 4 (`AGENTICA_CHANNEL=3,4`) on Linux and macOS too.
-- **Breaking:** nothing chains after the `end` of a `do` block:
-  `xs.map do |x| f(x) end.join(", ")` (also `[i]` or `|>` after the `end`) is
-  `CHECK-CHAIN-AFTER-END`; write `xs.map { |x| f(x) }.join(", ")` or bind the
-  result first.
+  direction on every system (fd 3 and fd 4 for a child that is not Agentica).
+- **Breaking:** nothing chains after the `end` of a `do` block
+  (`CHECK-CHAIN-AFTER-END`); use braces or bind the result first.
 - Diagnostics, `help`, `doc`, `outline` and `type-at` write the HTTP and
-  logger types as a program does (`HTTP.Request`, `Logger.Event`), and
-  `symbol` and `refs` find them by those names.
+  logger types as a program does, and `symbol` and `refs` find them by those
+  names.
 - **Breaking:** `Error` is a reserved type name, for the coming builtin error
-  record: `struct Error`, `enum Error` or `type Error` is
-  `CHECK-REDEFINED-NAME`.
+  record (`CHECK-REDEFINED-NAME`).
 
 ### Fixed
 
-- An error message from the system (a file, process, library or TLS error)
-  with bytes that are not UTF-8 is a valid String, with U+FFFD for each bad
-  byte.
-- A printed logger value shows the names a program writes:
-  `Logger.Level.Info` and `Logger.Event(...)`, not `LogRegistry.Level.Info`.
-- A printed record or enum of a std module shows the module alias it is
-  imported with: `HTTP.Download(...)`, `Toml.Value.Int(1)`, not `Download(...)`.
+- A system error message with bytes that are not UTF-8 is a valid String.
+- A printed logger value shows `Logger.Level.Info` and `Logger.Event(...)`.
+- A printed record or enum of a std module shows its import alias:
+  `HTTP.Download(...)`, `Toml.Value.Int(1)`.
 
 ## [0.30.1] - 2026-11-11
 
@@ -1459,7 +1443,8 @@ First release of Agentica, a statically typed language designed for AI agents.
 - `main` returns `Void`; maps preserve insertion order and support fallible
   lookups.
 
-[unreleased]: https://github.com/agentica-lang/agentica/compare/0.30.1...HEAD
+[unreleased]: https://github.com/agentica-lang/agentica/compare/0.31.0-alpha.1...HEAD
+[0.31.0-alpha.1]: https://github.com/agentica-lang/agentica/compare/0.30.1...0.31.0-alpha.1
 [0.30.1]: https://github.com/agentica-lang/agentica/compare/0.30.0...0.30.1
 [0.30.0]: https://github.com/agentica-lang/agentica/compare/0.29.0...0.30.0
 [0.29.0]: https://github.com/agentica-lang/agentica/compare/0.28.0...0.29.0
