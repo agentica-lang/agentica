@@ -92,7 +92,7 @@ export def text_digest(text: String) -> String = OpenSSL.Digest.sha256_hexdigest
 ## digests of the files it imports, in the order of its import lines.
 export def tree_digest(shape: String, digest: String, imported: List[String]) -> String
   pieces = [FORMAT, shape, digest].concat(imported)
-  OpenSSL.Digest.sha256_hexdigest(pieces.map do |text: String| piece(text) end.join("").bytes)
+  OpenSSL.Digest.sha256_hexdigest(pieces.map(&piece).join("").bytes)
 end
 
 ## Every piece is written with its length, so two different lists never give one text.

@@ -182,5 +182,6 @@ end
 def unquote(chars: List[String], at: Int, stop: Int) -> String
   content = chars.take(stop - 1).drop(at + 1).join("")
   return content if not content.include?("\\")
-  content.split("\\\\").map do |part| part.replace("\\", "") end.join("\\")
+  parts = content.split("\\\\").map do |part| part.replace("\\", "") end
+  parts.join("\\")
 end

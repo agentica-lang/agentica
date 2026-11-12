@@ -491,7 +491,15 @@ positional value such as `user.with(31)` are `PARSE-UNEXPECTED-TOKEN`, with help
 that shows the form: `value.with(age: 31)`. Like a call, the update is a link of
 a chain (`a.with(x: 1).with(y: 2)`), and a `do` block cannot follow it.
 
-A method chain may span lines (§4), also after a `do ... end` block.
+A method chain may span lines (§4). Nothing chains after the `end` of a
+`do ... end` block: a `.name`, `.call(...)`, `.with(...)`, `[index]` or `|>`
+right after that `end`, on its line or as a leading `.name` on the next, is
+`CHECK-CHAIN-AFTER-END`, from the `end` to the name, index or call that
+follows. Parentheses around the call do not change it: `(xs.map do |x| f(x)
+end).size` is the same chain, and `agentica fmt` prints it without them. Write
+a one-line block in braces, `xs.map { |x| f(x) }.join(", ")`, or bind the
+result to a name first. A chain after a block in braces or after a lambda is
+fine, and so is a binary operator after `end` (`xs.map do |x| x end + ys`).
 
 `x |> f(a, b)` means `f(x, a, b)`: the left value becomes the first argument of
 the call on the right. The right side is a call with parentheses, `name(args)`

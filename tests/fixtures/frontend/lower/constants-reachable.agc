@@ -10,7 +10,7 @@ end
 
 def via_block() -> Int
   xs = [1]
-  return xs.map do |n| n + ONLY_BLOCK[0] end.size
+  return xs.map { |n| n + ONLY_BLOCK[0] }.size
 end
 
 def by_ref() -> Int

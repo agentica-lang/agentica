@@ -319,12 +319,11 @@ import Sqlite from "pkg/sqlite/db"
   the `end` is not an empty line, so it needs one too, also before a closing
   `end` and at the end of the file. A line that breaks it is
   `CHECK-BLANK-LINE-AFTER-END`, at the `end`, reported after the type check
-  passes. These next lines need no empty line: one that starts with
-  `end`, `else`, `elsif`, `)`, `]` or `}`, and one that starts with `.name`
-  (the lexer joins it to the `end`). The end of the file needs none either: the
+  passes. A line that starts with `end`, `else`, `elsif`, `)`, `]` or `}`
+  needs no empty line before it. The end of the file needs none either: the
   last `end` may have no final line break, one, or extra empty lines, in a
-  module file and in the main file. An `end` with more on its line (`end.size`,
-  `end)`) is not covered, and an `end` in a string, a heredoc or a comment
+  module file and in the main file. An `end` with more on its line (`end)`,
+  `end + xs`) is not covered, and an `end` in a string, a heredoc or a comment
   never counts.
 - A dependency is a local name and an inline table. The name is the key: a
   lowercase letter, then lowercase letters, digits, `_` and `-`, at most 64

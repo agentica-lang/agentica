@@ -7,9 +7,7 @@ import Model from "../analysis/model"
 import OutlineText from "outline_text"
 
 ## The lines of the matches, each with a line feed at the end.
-export def text(found: Model.Symbols) -> String
-  found.matches.map do |match: Model.Symbol| match_text(match) end.join("")
-end
+export def text(found: Model.Symbols) -> String = found.matches.map(&match_text).join("")
 
 ## One line for each file left out, each with a line feed at the end; empty when none was.
 export def skipped_text(found: Model.Symbols) -> String = skipped_lines(found.skipped)
@@ -22,7 +20,9 @@ end
 
 def match_text(match: Model.Symbol) -> String
   case match.kind
-    "builtin" -> match.signatures.map do |line: String| "builtin #{line}\n" end.join("")
+    "builtin" ->
+      lines = match.signatures.map do |line: String| "builtin #{line}\n" end
+      lines.join("")
     "field" ->
       head = OutlineText.field_text(match.owner, match.name, match.type, "")
       "#{OutlineText.place(match.module, match.name_range)} #{head}\n"

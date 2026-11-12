@@ -35,5 +35,6 @@ end
 
 # One `builtin SIGNATURE` line for each form of the builtin; nothing for an answer that is not a builtin.
 def builtin_lines(signatures: List[String]) -> String
-  signatures.map do |line: String| "builtin #{line}\n" end.join("")
+  lines = signatures.map do |line: String| "builtin #{line}\n" end
+  lines.join("")
 end

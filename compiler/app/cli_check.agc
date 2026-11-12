@@ -24,7 +24,7 @@ end
 export def usage() -> String = USAGE
 
 ## The number of files that did not pass.
-export def failures(entries: List[Entry]) -> Int = entries.select do |entry: Entry| !passed?(entry) end.size
+export def failures(entries: List[Entry]) -> Int = entries.size - entries.select(&passed?).size
 
 ## The exit status of a run: 2 when a file could not be read (a QUERY- problem), else 1 when a file failed, else 0.
 export def status(entries: List[Entry]) -> Int

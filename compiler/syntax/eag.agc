@@ -14,13 +14,13 @@
 ##
 ## The expansion is
 ##
-##     [0].map do |eag#n: Int|
+##     [0].map { |eag#n: Int|
 ##       eag#t: List[String] = []
 ##       eag#t = eag#t.push("text")
 ##       eag#t = eag#t.push("#{code}")
 ##       <statement>
 ##       eag#t.join("")
-##     end.first
+##     }.first
 ##
 ## which is an expression anywhere, since the language has no block expression, whose locals do not leak, and whose
 ## statements may be `if`, `for` or any other. The two names have a `#`, which no identifier has, so a tag can neither
@@ -106,7 +106,7 @@ export def expand(opener: Tokens.Token, body: Tokens.EagBody) -> Diag.Outcome[Li
     Tokens.Token(kind: "string", lexeme: "\"\"", value: Tokens.Value.Text(""), span: at),
     word("right-paren", ")", at),
     word("NL", "\n", at),
-    word("end", "end", at),
+    word("right-brace", "}", at),
     word("dot", ".", at),
     name("first", at),
     word("EOF", "", at),
@@ -115,7 +115,7 @@ export def expand(opener: Tokens.Token, body: Tokens.EagBody) -> Diag.Outcome[Li
   Diag.Outcome.Done(appended(appended(head, flush(built, at).tokens), tail))
 end
 
-# The tokens up to the first line of the block: `[0].map do |eag#n: Int|`, then the binding of the escaper when the
+# The tokens up to the first line of the block: `[0].map { |eag#n: Int|`, then the binding of the escaper when the
 # template has one, `eag#e: Fn[String, String] = function`, and the list of pieces `eag#t: List[String] = []`. The
 # binding stands at the place of the directive, and the tokens of the function keep theirs, so the checker reports a
 # function of another type there.
@@ -126,7 +126,7 @@ def block_head(built: Built, at: Source.Span) -> List[Tokens.Token]
     word("right-bracket", "]", at),
     word("dot", ".", at),
     name("map", at),
-    word("do", "do", at),
+    word("left-brace", "{", at),
     word("pipe", "|", at),
     name(Ast.EAG_SEED, at),
     word("colon", ":", at),

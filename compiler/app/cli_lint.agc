@@ -71,9 +71,9 @@ end
 ## or could not be read, that the run failed (the suggestions of the other files follow after a `;`).
 export def summary_text(entries: List[Entry]) -> String
   total = suggestions(entries)
-  unparsed = entries.select do |entry: Entry| unparsed?(entry) end.size
-  unreadable = entries.select do |entry: Entry| unreadable?(entry) end.size
-  holding = entries.select do |entry: Entry| suggested?(entry) end.size
+  unparsed = entries.select(&unparsed?).size
+  unreadable = entries.select(&unreadable?).size
+  holding = entries.select(&suggested?).size
   if unparsed + unreadable == 0
     return "lint ok: #{CliCheck.files_text(entries.size)}\n" if total == 0
 

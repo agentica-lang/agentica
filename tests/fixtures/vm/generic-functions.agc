@@ -100,11 +100,11 @@ end
 
 # The builtin block methods read the element type of a List[T] inside the body.
 def count_if[T](xs: List[T], keep: Fn[T, Bool]) -> Int
-  return xs.filter do |x| keep.call(x) end.size
+  return xs.filter { |x| keep.call(x) }.size
 end
 
 def groups[T](xs: List[T], key: Fn[T, String]) -> Int
-  return xs.group_by do |x| key.call(x) end.size
+  return xs.group_by { |x| key.call(x) }.size
 end
 
 def double(n: Int) -> Int
@@ -123,7 +123,8 @@ def main() -> Void
     w.length
   end
   puts(longest.unwrap_or("none"))
-  puts(max_by([]) do |w: String| w.length end.ok?)
+  nothing = max_by([]) do |w: String| w.length end
+  puts(nothing.ok?)
   puts(map_list([1, 2, 3]) do |n| n.to_s end)
   puts(fold([1, 2, 3], "") do |a, n| a + n.to_s end)
 
@@ -133,7 +134,8 @@ def main() -> Void
   end
   puts(doubled.unwrap_or(0))
   nobody: Lib.Pool[Int] = Lib.new([])
-  puts(Lib.with(nobody) do |conn| ok(conn) end.unwrap_or(-1))
+  missed = Lib.with(nobody) do |conn| ok(conn) end
+  puts(missed.unwrap_or(-1))
 
   # The expected type gives a type that only the result has.
   empty: List[Int] = empty_of()

@@ -15,7 +15,7 @@ def main() -> Void
   i = 0
   while i < 3000
     grid = rows(i % 5 + 1, i)
-    sums = grid.map do |row| row.filter do |x| x % 2 == 0 end.reduce(0) do |acc, x| acc + x end end
+    sums = grid.map do |row| row.filter { |x| x % 2 == 0 }.reduce(0) do |acc, x| acc + x end end
     sorted = sums.sort_by do |s| 0 - s end
     halves = sorted.map(&halve)
     if halves.any? do |h| h > i end

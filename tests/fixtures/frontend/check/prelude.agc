@@ -22,7 +22,7 @@ def main() -> Void
   _counts = words.tally
   _distinct = numbers.uniq
   _total = numbers.sum
-  _mass = items.map do |item| item.weight end.sum
+  _mass = items.map { |item| item.weight }.sum
   _ = items.min_by do |item| item.weight end
   _ = items.min_by do |item| item.name end
   _ = items.max_by do |item| item.count end

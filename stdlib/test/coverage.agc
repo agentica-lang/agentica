@@ -66,7 +66,8 @@ export def collect(parts: String, left_out: List[String]) -> Run
   merged: Map[String, Source] = {}
   broken: List[Broken] = []
   read_any = false
-  names = listed.unwrap!.filter do |name: String| name.end_with?(".info") end.sort
+  infos = listed.unwrap!.filter do |name: String| name.end_with?(".info") end
+  names = infos.sort
   for name in names
     read = read_part("#{parts}/#{name}")
     if read.ok?
@@ -169,10 +170,12 @@ export def text(merged: Map[String, Source], left_out: List[String]) -> String
     record = record.concat(functions.map do |function: Function| "FN:#{function.line},#{function.name}" end)
     record = record.concat(functions.map do |function: Function| "FNDA:#{function.calls},#{function.name}" end)
     record = record.push("FNF:#{functions.size}")
-    record = record.push("FNH:#{functions.select do |function: Function| function.calls > 0 end.size}")
+    called = functions.select do |function: Function| function.calls > 0 end
+    record = record.push("FNH:#{called.size}")
     record = record.concat(lines.map do |line: Int| "DA:#{line},#{source.lines[line]}" end)
     record = record.push("LF:#{lines.size}")
-    record = record.push("LH:#{lines.select do |line: Int| source.lines[line] > 0 end.size}")
+    hit = lines.select do |line: Int| source.lines[line] > 0 end
+    record = record.push("LH:#{hit.size}")
     chunks = chunks.push("#{record.join("\n")}\nend_of_record\n")
   end
 
@@ -183,7 +186,8 @@ end
 export def summary(merged: Map[String, Source], left_out: List[String]) -> List[Covered]
   kept(merged, left_out).map do |file: String|
     lines = merged[file].lines
-    Covered(file: file, lines: lines.size, hit: lines.keys.select do |line: Int| lines[line] > 0 end.size)
+    hit = lines.keys.select do |line: Int| lines[line] > 0 end
+    Covered(file: file, lines: lines.size, hit: hit.size)
   end
 end
 
@@ -284,7 +288,8 @@ def add_function(source: Source, function: Function) -> Source
 end
 
 def kept(merged: Map[String, Source], left_out: List[String]) -> List[String]
-  merged.keys.filter do |file: String| !left_out.include?(file) end.sort
+  files = merged.keys.filter do |file: String| !left_out.include?(file) end
+  files.sort
 end
 
 # "3/4 lines (75.0%)", the share rounded down to a tenth.

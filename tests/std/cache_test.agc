@@ -177,7 +177,7 @@ end
 
 def run_tasks(job: Job, count: Int, work: Fn[Job, Int]) -> Int
   tasks = (1..count).to_a.map do |_| Task.spawn(work, job) end
-  return tasks.map do |task| Task.await(task) end.sum
+  return tasks.map { |task| Task.await(task) }.sum
 end
 
 def main() -> Void
@@ -323,7 +323,7 @@ def main() -> Void
       computed: ATS[String, Int] = ATS.new()
       job = Job(cache: cache, computed: computed, keys: keys, now: clock())
       try Test.eq(run_tasks(job, 4, &fetch_all), 0)
-      expected = (0...keys).to_a.map do |n| entry_cost("k#{n}") end.sum
+      expected = (0...keys).to_a.map { |n| entry_cost("k#{n}") }.sum
       Test.eq(Cache.bytes(cache), expected)
     end,
     Test.test("bytes is exact after tasks put, replace, delete and fetch the same keys together") do
@@ -333,7 +333,7 @@ def main() -> Void
       job = Job(cache: cache, computed: computed, keys: keys, now: clock())
       try Test.eq(run_tasks(job, 4, &churn), 0)
       present = (0...keys).to_a.select do |n| Cache.get(cache, "k#{n}").unwrap_or("") != "" end
-      Test.eq(Cache.bytes(cache), present.map do |n| entry_cost("k#{n}") end.sum)
+      Test.eq(Cache.bytes(cache), present.map { |n| entry_cost("k#{n}") }.sum)
     end,
     Test.test("readers that get a key while it is put and deleted never see a deleted key or an older value") do
       stop: ATS[Int, Int] = ATS.new()

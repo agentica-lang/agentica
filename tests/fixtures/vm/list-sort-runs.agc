@@ -34,15 +34,15 @@ def main() -> Void
   show("by negation", scrambled.sort_by do |x| 0 - x end)
   rows = [Row(key: 3, tag: "a"), Row(key: 3, tag: "b"), Row(key: 2, tag: "c"), Row(key: 2, tag: "d"), Row(key: 1, tag: "e"),
           Row(key: 1, tag: "f")]
-  puts(rows.sort_by do |r| r.key end.map(&tag_of))
-  puts(rows.reverse.sort_by do |r| r.key end.map(&tag_of))
-  puts(rows.sort_by do |r| 0 - r.key end.map(&tag_of))
+  puts(rows.sort_by { |r| r.key }.map(&tag_of))
+  puts(rows.reverse.sort_by { |r| r.key }.map(&tag_of))
+  puts(rows.sort_by { |r| 0 - r.key }.map(&tag_of))
   distinct = [Row(key: 3, tag: "a"), Row(key: 2, tag: "b"), Row(key: 1, tag: "c")]
-  puts(distinct.sort_by do |r| r.key end.map(&tag_of))
-  puts(distinct.reverse.sort_by do |r| r.key end.map(&tag_of))
+  puts(distinct.sort_by { |r| r.key }.map(&tag_of))
+  puts(distinct.reverse.sort_by { |r| r.key }.map(&tag_of))
   words = scrambled.take(40).map do |x| "w#{x % 7}" end
   puts(words.sort.join(","))
-  puts(words.sort_by do |w| w.length end.join(","))
+  puts(words.sort_by { |w| w.length }.join(","))
   halves = scrambled.take(25).map do |x| x.to_f / 2.0 end
   puts(halves.sort)
   puts(halves.reverse.sort.reverse.take(5))

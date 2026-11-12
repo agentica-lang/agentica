@@ -267,7 +267,8 @@ def shapes(loaded: Modules.Loaded) -> Map[String, String]
   found: Map[String, String] = {}
   for key in loaded.order
     module = loaded.modules[key]
-    found = found.put(key, describe(module) + module.imports.map do |name: String| CheckCache.piece(name) end.join(""))
+    pieces = module.imports.map do |name: String| CheckCache.piece(name) end
+    found = found.put(key, describe(module) + pieces.join(""))
   end
 
   found
@@ -311,7 +312,8 @@ def describe(module: Modules.Module) -> String
     pieces = pieces.push(local).push(module.named[local].target).push(module.named[local].name)
   end
 
-  pieces.map do |text: String| CheckCache.piece(text) end.join("")
+  framed = pieces.map do |text: String| CheckCache.piece(text) end
+  framed.join("")
 end
 
 def same_texts?(kept: Modules.Loaded, loaded: Modules.Loaded) -> Bool

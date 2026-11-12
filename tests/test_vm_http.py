@@ -1354,7 +1354,7 @@ def main() -> Void
   options = HTTP.ClientOptions(timeout_ms: 5000, idle_timeout_ms: 5000, max_connections: 1, max_body_bytes: 1024, tls: none)
   client = Result.unwrap!(HTTP.client(options))
   reply = Result.unwrap!(HTTP.request(client, "GET", "http://127.0.0.1:" + System.args()[0] + "/", "".bytes, [HTTP.Header(name: "X-Name", value: "caf\u00e9")]))
-  back = reply.headers.detect do |h| h.name == "x-back" end.unwrap!.value
+  back = reply.headers.detect { |h| h.name == "x-back" }.unwrap!.value
   puts("#{back} #{back.length}")
 end
 """

@@ -728,7 +728,8 @@ def wider(a: Int, b: Int) -> Int
 end
 
 def row(slot: Slot, width: Int) -> String
-  text = [slot.help].concat(notes(slot)).select do |part| !part.empty? end.join(" ")
+  parts = [slot.help].concat(notes(slot)).select do |part| !part.empty? end
+  text = parts.join(" ")
   line = "  #{head(slot)}"
   return line if text.empty?
   "#{line}#{List.repeat(" ", width - head(slot).length).join("")}  #{text}"

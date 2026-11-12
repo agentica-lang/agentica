@@ -122,7 +122,8 @@ end
 
 def span_text(span: Source.Span) -> String
   numbers = [span.start.offset, span.start.line, span.start.column, span.stop.offset, span.stop.line, span.stop.column]
-  numbers.map do |number: Int| number.to_s end.join(",")
+  texts = numbers.map do |number: Int| number.to_s end
+  texts.join(",")
 end
 
 def read_span(text: String) -> Source.Span

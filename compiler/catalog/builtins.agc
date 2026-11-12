@@ -71,7 +71,8 @@ end
 export FAMILY_MEMBERS: Map[String, List[String]] = DATA_FAMILIES.reduce(EMPTY_FAMILIES) do |found, family|
   functions = ENTRIES.keys.filter do |name: String| name.start_with?("#{family}.") and name.split(".").size == 3 end
   types = FAMILY_TYPE_NAMES.filter do |name: String| name.start_with?("#{family}.") end
-  found.put(family, functions.concat(types).map do |name: String| name.split(".")[1] end.uniq.sort)
+  members = functions.concat(types).map do |name: String| name.split(".")[1] end
+  found.put(family, members.uniq.sort)
 end
 
 ## The public builtins a call can name, for the did-you-mean of an unknown name. Any other name with two dots
@@ -227,7 +228,7 @@ export def std_only_name?(name: String) -> Bool = STD_ONLY.has_key?(module_of(na
 ## The signature of every form of a builtin, one per line: name(param: Type, ...) -> Result.
 export def signature(entry: Model.Builtin) -> String
   forms = [entry].concat(entry.alternatives)
-  forms.map do |form: Model.Builtin| form_signature(form) end.join("\n")
+  forms.map(&form_signature).join("\n")
 end
 
 ## The signature of one form.

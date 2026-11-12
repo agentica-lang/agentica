@@ -51,7 +51,7 @@ def main() -> Void
   end
   puts(ranked.map(&name_of))
   puts(items.sort_by(&name_of).map(&name_of))
-  puts(items.sort_by do |it| it.score end.map(&name_of))
+  puts(items.sort_by { |it| it.score }.map(&name_of))
   big = 10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000.0
   inf = big * 10.0
   nan = inf - inf
@@ -63,7 +63,7 @@ def main() -> Void
   tagged = floats.map do |f| "#{f}" end
   puts(tagged.sort_by do |s| s end)
   nested = [[3, 1], [], [2]].map do |row|
-    row.sort_by do |x| x end.reduce(0) do |acc, x| acc * 10 + x end
+    row.sort_by { |x| x }.reduce(0) do |acc, x| acc * 10 + x end
   end
   puts(nested)
 end

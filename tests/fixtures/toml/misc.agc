@@ -32,8 +32,8 @@ def show(value: Toml.Value) -> String
     Toml.Value.Float(x) -> return "float(" + Float.to_bits(x).to_s + ")"
     Toml.Value.Bool(b) -> return "bool(" + b.to_s + ")"
     Toml.Value.DateTime(s) -> return "datetime(" + s + ")"
-    Toml.Value.Array(items) -> return "[" + items.map do |item| show(item) end.join(",") + "]"
-    Toml.Value.Table(entries) -> return "{" + entries.keys.map do |k| JSON.encode(k) + ":" + show(entries[k]) end.join(",") + "}"
+    Toml.Value.Array(items) -> return "[" + items.map { |item| show(item) }.join(",") + "]"
+    Toml.Value.Table(entries) -> return "{" + entries.keys.map { |k| JSON.encode(k) + ":" + show(entries[k]) }.join(",") + "}"
   end
 end
 

@@ -11,5 +11,5 @@ def main() -> Void
   p = Point(x: 1, y: 2)
   xs = [1, 2, 3]
   puts("n=#{xs.size} #{p.x + add(1, 2)}")
-  puts(xs.map do |x| x * 2 end.to_s)
+  puts(xs.map { |x| x * 2 }.to_s)
 end

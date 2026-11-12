@@ -227,7 +227,7 @@ negative value is `RUNTIME-INVALID-DURATION`, and there is no wait-forever
 value.
 
 `ch.lazy(timeout_ms)` reads the channel as a `Lazy` until it is closed and
-drained (`lazy.md`): `jobs.lazy(5000).select do |n| n > 0 end.reduce(0) do |s,
+drained (`lazy.md`): `jobs.lazy(5000).select { |n| n > 0 }.reduce(0) do |s,
 n| s + n end`.
 
 `closed?` is `true` once the channel is closed, even with values still

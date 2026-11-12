@@ -36,7 +36,7 @@ def main() -> Void
     drops = 0
     k = 0
     while k < 8000
-      drops += [k, k + 1, k + 2, k + 3].filter do |x| x < 0 end.size
+      drops += [k, k + 1, k + 2, k + 3].filter { |x| x < 0 }.size
       k += 1
     end
     checksum += groups.size + groups.get(7, []).size + counts.size + counts.get(2, 0) + drops
