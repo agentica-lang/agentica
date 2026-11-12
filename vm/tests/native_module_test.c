@@ -1023,10 +1023,18 @@ int main(int argc, char **argv) {
   static const char *const error_names[AGC_ERROR_FIELDS] = {"kind", "message", "code", "details", "cause", "location"};
   for (size_t k = 0; k < AGC_ERROR_FIELDS; k++)
     error_fields[k] = agc_make_string(error_names[k], strlen(error_names[k]), strlen(error_names[k]));
-  structs[2] = (agc_struct_def){agc_make_string("Error", 5, 5), AGC_ERROR_FIELDS, false, error_fields, NULL, NULL};
+  /* The field types of the builtin Error: String, String, Optional[Int], Map[String, String], Optional[Error] and
+     String, which agc_error_struct checks. */
+  static agc_type types[] = {{AGC_TYPE_INT, 0}, {AGC_TYPE_STRING, 0}, {AGC_TYPE_OPTIONAL, 0},
+                             {AGC_TYPE_MAP, 1}, {AGC_TYPE_STRUCT, 2}, {AGC_TYPE_OPTIONAL, 4}};
+  static uint32_t error_types[AGC_ERROR_FIELDS] = {1, 1, 2, 3, 5, 1};
+  structs[2] = (agc_struct_def){agc_make_string("Error", 5, 5), AGC_ERROR_FIELDS, false, error_fields, NULL,
+                                error_types};
   enums[0] = (agc_enum_def){agc_make_string("Shape", 5, 5), 2, 3, NULL, NULL};
   enums[1] = (agc_enum_def){agc_make_string("Shape", 5, 5), 5, 2, NULL, NULL};
   enums[2] = (agc_enum_def){agc_make_string("Shape", 5, 5), 7, 2, NULL, NULL};
+  program.types = types;
+  program.type_count = 6;
   program.variants = variants;
   program.variant_count = 9;
   program.structs = structs;
