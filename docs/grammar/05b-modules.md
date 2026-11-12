@@ -306,7 +306,8 @@ import Sqlite from "pkg/sqlite/db"
   every command that loads the project check the key of the project and of each
   locked package against the running version, and `add` and `update` that of
   each package they resolve; a newer one is `PKG-AGENTICA-TOO-OLD` at `agentica`
-  of that manifest. The key is read and checked right after the TOML parse,
+  of that manifest. A member of a workspace (below) also checks the key of the
+  workspace root's manifest, before the root's other keys. The key is read and checked right after the TOML parse,
   before any other key and before the lock, so a manifest written for a newer
   Agentica reports the version it needs rather than a key this one does not
   know. `run -- FILE.agcb`, `fmt` and `lint` do not check it. The running

@@ -8,6 +8,7 @@
 import Paths from "../modules/import_path"
 import Workspace from "../modules/workspace"
 import GitSource from "git_source"
+import Manifest from "manifest"
 import Toml from "std/toml"
 import Reader from "toml_read"
 
@@ -32,16 +33,18 @@ export def empty() -> Members = Members(root: "", repository: "", folders: [])
 ## members. A project whose folder is directly inside a folder named `deps` is a package and has none. A manifest above
 ## that cannot be read or parsed is passed over. The table is checked in full only when the project is in the
 ## workspace: a project below a broken table that does not list it builds as if the table were not there, unless the
-## project folder is the root itself, which reports the table. A bad table is PKG-MANIFEST-INVALID.
-export def find(workspace: Workspace.Workspace, project_dir: String) -> Result[Members]
+## project folder is the root itself, which reports the table. A bad table is PKG-MANIFEST-INVALID. For a member, the
+## root's own `agentica` key is checked against the running version `running` before the table, as the member's
+## manifest is (PKG-AGENTICA-TOO-OLD at the root's key): the member is built as a part of the root's repository.
+export def find(workspace: Workspace.Workspace, project_dir: String, running: String) -> Result[Members]
   return ok(empty()) if Paths.last_part(Paths.directory_of(project_dir)) == DEPS_FOLDER
 
   here = project_dir
   while here != ""
     file = Paths.join(here, MANIFEST_FILE)
     if workspace.file_exists.call(file)
-      tables = declared(workspace, file)
-      return belongs(workspace, here, file, tables[0], project_dir) if tables.size > 0
+      roots = declared(workspace, file)
+      return belongs(workspace, here, file, roots[0], project_dir, running) if roots.size > 0
     end
 
     parent = Paths.directory_of(here)
@@ -66,10 +69,9 @@ end
 ## The folder of the member that a source names (`member?` is true for it).
 export def folder_of(members: Members, source: GitSource.Source) -> String = Paths.join(members.root, source.subdir)
 
-# The value of the `workspace` key of the manifest at file, as a list of one value, or of none when the file has no
-# such key. A file that cannot be read or parsed has none here: the project's own manifest was read before and reports
-# its own failure.
-def declared(workspace: Workspace.Workspace, file: String) -> List[Toml.Value]
+# The parsed manifest at file, as a list of one table, or of none when the file has no `workspace` key. A file that
+# cannot be read or parsed has none here: the project's own manifest was read before and reports its own failure.
+def declared(workspace: Workspace.Workspace, file: String) -> List[Map[String, Toml.Value]]
   reading = Reader.Reading(file: file, code: "PKG-MANIFEST-INVALID")
   text = Reader.read_text(workspace, reading)
   return [] if !text.ok?
@@ -77,20 +79,27 @@ def declared(workspace: Workspace.Workspace, file: String) -> List[Toml.Value]
   root = Reader.parse(reading, text.unwrap!)
   return [] if !root.ok? or !root.unwrap!.has_key?("workspace")
 
-  [root.unwrap!["workspace"]]
+  [root.unwrap!]
 end
 
-# The answer for the project when the manifest at root_dir has the `workspace` value: the workspace when the project is
-# the root or is listed in its members (and the table is good), else none. Whether the project is listed is read from
-# the raw value, so a table that is broken elsewhere is not looked at for a project that is not in it.
+# The answer for the project when the manifest at root_dir, parsed as root, has a `workspace` value: the workspace when
+# the project is the root or is listed in its members (and the table is good), else none. Whether the project is listed
+# is read from the raw value, so a table that is broken elsewhere is not looked at for a project that is not in it. The
+# root's `agentica` key is checked only for a member: the root project's own manifest was checked when it was read.
 def belongs(
   workspace: Workspace.Workspace,
   root_dir: String,
   file: String,
-  value: Toml.Value,
+  root: Map[String, Toml.Value],
   project_dir: String,
+  running: String,
 ) -> Result[Members]
-  return ok(empty()) if root_dir != project_dir and !listed?(value, relative_to(root_dir, project_dir))
+  value = root["workspace"]
+  if root_dir != project_dir
+    return ok(empty()) if !listed?(value, relative_to(root_dir, project_dir))
+
+    try Manifest.checked_agentica(file, root, "", running)
+  end
 
   reading = Reader.Reading(file: file, code: "PKG-MANIFEST-INVALID")
   table = try Reader.table(reading, value, "workspace")

@@ -11,7 +11,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 ### Added
 
 - `agentica = "0.31.0"` in `agentica.toml` names the oldest Agentica a project
-  or package needs; an older one stops with `PKG-AGENTICA-TOO-OLD` (#1469).
+  or package needs; an older one stops with `PKG-AGENTICA-TOO-OLD` (#1469). A
+  workspace member also checks the root's key.
   Releases up to 0.31.0-alpha.1 refuse the key as unknown.
 - A failed Result holds an `Error` record, whose `location` says where it was
   made; `error(e)` passes one on as a Result of another type (#671).
