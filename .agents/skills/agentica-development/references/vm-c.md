@@ -29,7 +29,7 @@ Each rule names one place in the VM that follows it.
   `agc_wrong_tag`.
 - **A failure the program can reach is a value or a diagnostic.** A bad
   argument, an OS error, a closed handle or a refused `--deny-*` is the
-  builtin's error value (`agc_error_value`, `vm/tcp.c`) or its documented
+  builtin's error value (`agc_error`, `vm/tcp.c`) or its documented
   `RUNTIME-` code through `agc_fail`; never `abort`, `assert` or `exit`.
   `abort()` is only for a broken internal rule that the caller checked first
   (`agc_list_set`, `vm/list.c`). Out of memory and a thread that cannot

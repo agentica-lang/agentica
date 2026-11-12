@@ -232,6 +232,10 @@ typedef struct { uint32_t source, start_line, start_column, end_line, end_column
 
 typedef struct {
   agc_string *name;
+  /* The name as the file stores it, without the "./" of a user file in a std/ folder: name until
+     agc_program_set_source_root joins a folder to name. The location of an error uses it (agc_error_location), so the
+     text is the same on every machine and leaks no folder of the host. */
+  agc_string *stored;
   agc_string *text;
   uint32_t lines;
   uint32_t *line_start;
@@ -281,6 +285,18 @@ typedef struct {
 #define AGC_HTTP_OPTIONS_FIELDS 6
 #define AGC_HTTP_OPTION_PROXY 4
 #define AGC_HTTP_OPTION_TLS 5
+
+/* The builtin record Error (#671) as the catalog lays it out: kind, message, code (Optional[Int]), details
+   (Map[String, String]), cause (Optional[Error]) and location ("path:line:col"). Equality compares the fields before
+   AGC_ERROR_LOCATION. A file may declare a struct of this name and shape with any values in it, so every reader takes
+   the fields through the checked accessors. */
+#define AGC_ERROR_FIELDS 6
+#define AGC_ERROR_KIND 0
+#define AGC_ERROR_MESSAGE 1
+#define AGC_ERROR_CODE 2
+#define AGC_ERROR_DETAILS 3
+#define AGC_ERROR_CAUSE 4
+#define AGC_ERROR_LOCATION 5
 
 typedef struct {
   agc_resource *state;
@@ -809,7 +825,21 @@ const agc_bytes *agc_empty_bytes(void);
 /* The output helper of the byte builtins: agc_empty_bytes for no bytes, else a copy of data. */
 const agc_bytes *agc_make_bytes(const uint8_t *data, size_t len);
 bool agc_same_bytes(agc_vm *vm, const agc_bytes *x, const agc_bytes *y);
+/* A failed Result with MESSAGE as a String payload, the form of a program without the Error struct. Builtins call
+   agc_error, which picks the form of the running program; this one is for the C tests. */
 agc_value agc_error_value(const char *message);
+/* The failed Result of an error built in C: an Error of KIND (a dotted name, "error" by default) with MESSAGE, no code,
+   no details, no cause and the location of the builtin call (agc_error_location), when the program has the Error
+   struct; else a String payload with MESSAGE alone. */
+agc_value agc_error(agc_vm *vm, const char *kind, const char *message);
+agc_value agc_error_string(agc_vm *vm, const char *kind, agc_string *message);
+/* Whether V is an Error of the running program (a struct of rt->error_struct). */
+bool agc_is_error(const agc_vm *vm, agc_value v);
+/* The text of an error payload: a String as it is, the message of an Error. Any other value is a wrong tag. */
+agc_string *agc_error_message(agc_vm *vm, agc_value payload);
+/* The text a halt shows for an error payload (RUNTIME-UNWRAP-ERROR, RUNTIME-TEST-ERROR): the message, followed by
+   " (kind)" when an Error's kind is not "error", as Ruby prints `boom (RuntimeError)`. */
+agc_string *agc_error_halt_text(agc_vm *vm, agc_value payload);
 agc_struct *agc_new_struct(uint32_t type, uint32_t n);
 agc_enum *agc_new_enum(uint32_t variant, uint32_t n);
 agc_fn *agc_new_fn(uint32_t function, uint32_t n);

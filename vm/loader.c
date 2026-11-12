@@ -676,6 +676,19 @@ static bool library_source(const agc_string *name) {
   return true;
 }
 
+/* agc_source.stored: the name as stored, without the "./" with which the front end marks a user file in a std/ folder
+   (dot_slash), as a stack trace prints it. */
+static agc_string *stored_name(reader *r, agc_string *name) {
+  if (!named_under(name, "./")) return name;
+  size_t bytes = name->bytes - 2;
+  agc_string *s = load_alloc(r, agc_size_add(sizeof(agc_string), bytes), true);
+  // cchecker: ignore CC-GCC-ANALYZER-NULL-DEREFERENCE: the size is at least sizeof(agc_string), never 0
+  s->bytes = bytes;
+  s->chars = name->chars - 2;
+  if (bytes) memcpy(s->data, name->data + 2, bytes);
+  return s;
+}
+
 static void load(reader *r, agc_program *p) {
   if (memcmp(take(r, 4), AGC_MAGIC, 4) != 0) reject(r, "bad magic");
   r->format = read_u32(r);
@@ -689,6 +702,7 @@ static void load(reader *r, agc_program *p) {
   for (uint32_t i = 0; i < p->source_count; i++) {
     // cchecker: ignore CC-GCC-ANALYZER-NULL-DEREFERENCE: a count of 0 gets NULL and no loop
     p->sources[i].name = read_string(r);
+    p->sources[i].stored = stored_name(r, p->sources[i].name);
     p->sources[i].library = library_source(p->sources[i].name);
     p->sources[i].text = read_string(r);
     index_lines(r, &p->sources[i]);

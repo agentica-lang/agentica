@@ -965,7 +965,7 @@ static bool deep_fits(agc_vm *vm, const agc_native_fn *fn, agc_value result) {
       if (some) stack = push_check(stack, &n, &cap, e->payload[0], at);
     } else if (kind == K_RESULT) {
       const agc_result *r = agc_as_result(vm, item.v);
-      if (!r->ok && !agc_is(r->value, AGC_T_STRING)) return false;
+      if (!r->ok && !agc_is(r->value, AGC_T_STRING) && !agc_is_error(vm, r->value)) return false;
       if (r->ok) stack = push_check(stack, &n, &cap, r->value, at);
     } else if (kind == K_STRUCT) {
       const agc_struct *s = agc_as_struct(vm, item.v);
@@ -1189,7 +1189,7 @@ static agc_value build_node(agc_vm *vm, agc_native_dirty *d, staged *s, const ag
   }
   case N_SOME: return agc_optional_make(vm->rt->program, true, resolved(d, built, items[0]));
   case N_OK: return agc_result_value(true, resolved(d, built, items[0]));
-  case N_ERROR: return agc_result_value(false, text_of(vm, s));
+  case N_ERROR: return agc_error_string(vm, "error", agc_as_string(vm, text_of(vm, s)));
   case N_STRUCT: {
     agc_struct *st = agc_new_struct(s->id, (uint32_t)s->n);
     for (size_t k = 0; k < s->n; k++) st->fields[k] = resolved(d, built, items[k]);
@@ -1408,8 +1408,8 @@ static an_term text_term(an_env *env, uint8_t kind, const char *data, size_t len
     return stage(d, kind, 0, len, stage_bytes(d, data, len));
   }
   agc_charge_bytes(env->vm, len);
-  agc_value s = agc_string_value(agc_small_string(env->vm, data, len, chars));
-  return term_of(kind == N_ERROR ? agc_result_value(false, s) : s);
+  agc_string *s = agc_small_string(env->vm, data, len, chars);
+  return term_of(kind == N_ERROR ? agc_error_string(env->vm, "error", s) : agc_string_value(s));
 }
 
 static an_term api_string(an_env *env, const char *data, size_t len) {
@@ -1706,7 +1706,12 @@ static bool api_get_result(an_env *env, an_term t, bool *ok, an_term *value) {
   if (!agc_is(v, AGC_T_RESULT)) return false;
   const agc_result *r = agc_as_result(env->vm, v);
   *ok = r->ok;
-  *value = term_of(r->value);
+  /* An API 1.x module reads an error as its text, so an Error gives its message field. It is taken as it is, never
+     through a checked accessor: a wrong tag would raise through the module's own C frames, and a module that asks
+     for a String gets the refusal of an_get_string instead. */
+  agc_value text = r->value;
+  if (!r->ok && agc_is_error(env->vm, text)) text = agc_as_struct(env->vm, text)->fields[AGC_ERROR_MESSAGE];
+  *value = term_of(text);
   return true;
 }
 

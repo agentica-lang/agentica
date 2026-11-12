@@ -51,9 +51,9 @@ static const uint8_t zlib_empty[1] = {0};
    inflate, gunzip. */
 static const int step_bits[] = {15, -15, 31, 15, -15, 31};
 
-static agc_value zlib_error(const char *message) {
+static agc_value zlib_error(agc_vm *vm, const char *message) {
   size_t len = strlen(message);
-  return agc_result_value(false, agc_string_value(agc_make_string(message, len, len)));
+  return agc_error_string(vm, "error", agc_make_string(message, len, len));
 }
 
 /* The bytes of a Bytes argument of at most ZLIB_ONE_SHOT_MAX bytes, with *n
@@ -62,7 +62,7 @@ static agc_value zlib_error(const char *message) {
 static const uint8_t *zlib_bytes(agc_vm *vm, agc_value arg, size_t *n, agc_value *failed) {
   const uint8_t *bytes = agc_bytes_data(vm, arg, n);
   if (*n > ZLIB_ONE_SHOT_MAX) {
-    *failed = zlib_error("zlib: input exceeds 1048576 bytes");
+    *failed = zlib_error(vm, "zlib: input exceeds 1048576 bytes");
     return NULL;
   }
   return bytes;
@@ -110,15 +110,15 @@ static agc_value oneshot_run(agc_vm *vm, zlib_kind kind, agc_zcodec *codec, cons
       agc_out_of_memory();
     }
     if (fed == AGC_ZCODEC_CHECK) {
-      failed = zlib_error("zlib: checksum mismatch");
+      failed = zlib_error(vm, "zlib: checksum mismatch");
       break;
     }
     if (fed == AGC_ZCODEC_FORMAT) {
-      failed = zlib_error(kind == ZLIB_ENCODER ? "zlib: compression failed" : "zlib: invalid compressed data");
+      failed = zlib_error(vm, kind == ZLIB_ENCODER ? "zlib: compression failed" : "zlib: invalid compressed data");
       break;
     }
     if (!accum_push(&out, chunk, produced, max_out)) {
-      failed = zlib_error("zlib: output exceeds max_bytes");
+      failed = zlib_error(vm, "zlib: output exceeds max_bytes");
       break;
     }
     if (fed == AGC_ZCODEC_DONE) {
@@ -126,14 +126,14 @@ static agc_value oneshot_run(agc_vm *vm, zlib_kind kind, agc_zcodec *codec, cons
       break;
     }
     if (kind == ZLIB_DECODER && left == 0) {
-      failed = zlib_error("zlib: truncated stream");
+      failed = zlib_error(vm, "zlib: truncated stream");
       break;
     }
     /* Every pass consumes input, produces output, or ends: eight still
        passes bound a codec that stopped moving without ending. */
     if (before - left == 0 && produced == 0) {
       if (++idle > 8) {
-        failed = zlib_error(kind == ZLIB_ENCODER ? "zlib: compression failed" : "zlib: invalid compressed data");
+        failed = zlib_error(vm, kind == ZLIB_ENCODER ? "zlib: compression failed" : "zlib: invalid compressed data");
         break;
       }
     } else {
@@ -150,7 +150,7 @@ static agc_value oneshot_run(agc_vm *vm, zlib_kind kind, agc_zcodec *codec, cons
      end stay unconsumed, and are refused here rather than discarded. */
   if (kind == ZLIB_DECODER && left != 0) {
     free(out.data);
-    return zlib_error("zlib: trailing bytes after stream end");
+    return zlib_error(vm, "zlib: trailing bytes after stream end");
   }
   agc_charge_bytes(vm, n + out.len);
   agc_value result = agc_result_value(true, zlib_value(out.data, out.len));
@@ -166,7 +166,7 @@ static agc_value oneshot_compress(agc_vm *vm, const uint8_t *input, size_t n, in
 }
 
 static agc_value oneshot_decode(agc_vm *vm, const uint8_t *input, size_t n, int window_bits, size_t max_out) {
-  if (n == 0) return zlib_error("zlib: invalid compressed data");
+  if (n == 0) return zlib_error(vm, "zlib: invalid compressed data");
   agc_zcodec *codec = agc_zcodec_decode_begin(window_bits);
   if (!codec) agc_out_of_memory();
   return oneshot_run(vm, ZLIB_DECODER, codec, input, n, max_out);
@@ -183,11 +183,11 @@ static agc_value oneshot_args(agc_vm *vm, agc_value *args, int window_bits, bool
   int64_t level = 0;
   if (compress) {
     level = agc_as_int(vm, args[1]);
-    if (level < 0 || level > 9) return zlib_error("zlib: level must be between 0 and 9");
+    if (level < 0 || level > 9) return zlib_error(vm, "zlib: level must be between 0 and 9");
   }
   int64_t max_out = agc_as_int(vm, args[compress ? 2 : 1]);
   if (max_out < 1 || (uint64_t)max_out > ZLIB_ONE_SHOT_MAX)
-    return zlib_error("zlib: max_bytes must be between 1 and 1048576");
+    return zlib_error(vm, "zlib: max_bytes must be between 1 and 1048576");
   return compress ? oneshot_compress(vm, input, n, window_bits, level, (size_t)max_out)
                   : oneshot_decode(vm, input, n, window_bits, (size_t)max_out);
 }
@@ -227,7 +227,7 @@ static agc_value builtin_crc32(agc_vm *vm, agc_value *args, uint32_t span) {
   const uint8_t *input = zlib_bytes(vm, args[0], &n, &failed);
   if (!input) return failed;
   int64_t seed = agc_as_int(vm, args[1]);
-  if (seed < 0 || seed > 4294967295LL) return zlib_error("zlib: seed must be between 0 and 4294967295");
+  if (seed < 0 || seed > 4294967295LL) return zlib_error(vm, "zlib: seed must be between 0 and 4294967295");
   uint32_t crc = agc_zlib_crc32((uint32_t)seed, input, n);
   return agc_result_value(true, agc_int((int64_t)crc));
 }
@@ -259,14 +259,14 @@ static void close_zstep(agc_vm *vm, agc_resource *r, agc_task *ender) {
   free(z);
 }
 
-static agc_zstep_status zstep_failed(agc_value *out, const char *message) {
-  *out = zlib_error(message);
+static agc_zstep_status zstep_failed(agc_vm *vm, agc_value *out, const char *message) {
+  *out = zlib_error(vm, message);
   return AGC_ZSTEP_FAILED;
 }
 
-agc_value agc_zstep_check(int64_t kind, int64_t level, int64_t max_bytes) {
-  if (kind < 3 && (level < 0 || level > 9)) return zlib_error("zlib: level must be between 0 and 9");
-  if (kind >= 3 && max_bytes < 1) return zlib_error("zlib: max_bytes must be at least 1");
+agc_value agc_zstep_check(agc_vm *vm, int64_t kind, int64_t level, int64_t max_bytes) {
+  if (kind < 3 && (level < 0 || level > 9)) return zlib_error(vm, "zlib: level must be between 0 and 9");
+  if (kind >= 3 && max_bytes < 1) return zlib_error(vm, "zlib: max_bytes must be at least 1");
   return agc_void();
 }
 
@@ -314,7 +314,7 @@ agc_zstep_status agc_zstep_next(agc_vm *vm, agc_resource *r, const uint8_t *in, 
   *out = agc_void();
   zstep *z = r->close == close_zstep ? r->native : NULL;
   if (!z) agc_fail(vm, "RUNTIME-INTERNAL", "a Lazy zlib step after its stream was freed", 0);
-  if (z->done) return len ? zstep_failed(out, "zlib: trailing bytes after stream end") : AGC_ZSTEP_END;
+  if (z->done) return len ? zstep_failed(vm, out, "zlib: trailing bytes after stream end") : AGC_ZSTEP_END;
   if (len == 0 && !finish && !z->full) return AGC_ZSTEP_INPUT;
   size_t cap = ZLIB_QUANTUM;
   if (z->max_out - z->total_out < (uint64_t)cap) cap = (size_t)(z->max_out - z->total_out) + 1;
@@ -327,24 +327,24 @@ agc_zstep_status agc_zstep_next(agc_vm *vm, agc_resource *r, const uint8_t *in, 
   size_t consumed = len - left;
   *used = consumed;
   if (fed == AGC_ZCODEC_CHECK || fed == AGC_ZCODEC_FORMAT || z->total_out + produced > z->max_out) {
-    if (fed == AGC_ZCODEC_CHECK) return zstep_failed(out, "zlib: checksum mismatch");
+    if (fed == AGC_ZCODEC_CHECK) return zstep_failed(vm, out, "zlib: checksum mismatch");
     if (fed == AGC_ZCODEC_FORMAT)
-      return zstep_failed(out, z->encode ? "zlib: compression failed" : "zlib: invalid compressed data");
-    return zstep_failed(out, "zlib: output exceeds max_bytes");
+      return zstep_failed(vm, out, z->encode ? "zlib: compression failed" : "zlib: invalid compressed data");
+    return zstep_failed(vm, out, "zlib: output exceeds max_bytes");
   }
   z->total_out += produced;
   agc_charge_bytes(vm, consumed + produced);
   if (produced) *out = zlib_value(buf, produced);
   if (fed == AGC_ZCODEC_DONE) {
     z->done = true;
-    return left ? zstep_failed(out, "zlib: trailing bytes after stream end") : AGC_ZSTEP_END;
+    return left ? zstep_failed(vm, out, "zlib: trailing bytes after stream end") : AGC_ZSTEP_END;
   }
   /* Every pass consumes input, produces output, or ends: eight still passes bound a codec that stopped moving. */
   z->idle = consumed == 0 && produced == 0 ? z->idle + 1 : 0;
-  if (z->idle > 8) return zstep_failed(out, z->encode ? "zlib: compression failed" : "zlib: invalid compressed data");
+  if (z->idle > 8) return zstep_failed(vm, out, z->encode ? "zlib: compression failed" : "zlib: invalid compressed data");
   z->full = produced == cap;
   if (left || z->full || (finish && z->encode)) return AGC_ZSTEP_AGAIN;
-  if (finish) return zstep_failed(out, "zlib: truncated stream");
+  if (finish) return zstep_failed(vm, out, "zlib: truncated stream");
   return AGC_ZSTEP_INPUT;
 }
 

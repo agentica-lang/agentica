@@ -38,12 +38,12 @@ struct agc_channel {
 static agc_value ok_void(void) { return agc_result_value(true, agc_void()); }
 
 /* A send through an address whose channel the collector has freed: no task can reach that channel any more. */
-static agc_value gone_error(void) { return agc_error_value("address: gone"); }
+static agc_value gone_error(agc_vm *vm) { return agc_error(vm, "error", "address: gone"); }
 
 /* std/http matches on this text (CHANNEL_CLOSED in stdlib/http.agc). */
-static agc_value closed_error(void) { return agc_error_value("channel: closed"); }
+static agc_value closed_error(agc_vm *vm) { return agc_error(vm, "error", "channel: closed"); }
 
-static agc_value timed_out_error(void) { return agc_error_value("channel: timed out"); }
+static agc_value timed_out_error(agc_vm *vm) { return agc_error(vm, "error", "channel: timed out"); }
 
 static void grow(agc_vm *vm, agc_channel *c) {
   size_t slots = agc_size_mul(c->slots, 2);
@@ -161,13 +161,13 @@ static void check_timeout(agc_vm *vm, int64_t timeout, uint32_t span) {
 static agc_value wait(agc_vm *vm, agc_channel *c, agc_task *t, int64_t timeout, bool sending) {
   if (timeout == 0) {
     stop_waiting(t);
-    return timed_out_error();
+    return timed_out_error(vm);
   }
   /* A waiter is woken with a reservation, by a close, or by its timer. The first two never get here, so a resumed
      waiter's timer fired: it timed out. */
   if (resumed(t, c)) {
     stop_waiting(t);
-    return timed_out_error();
+    return timed_out_error(vm);
   }
   agc_sync_assert(vm);
   agc_task_parking(vm);
@@ -200,7 +200,7 @@ static agc_value send_value(agc_vm *vm, agc_channel *c, agc_value v, int64_t tim
     leave_queue(vm, c, t);
     if (c->closed) {
       stop_waiting(t);
-      return closed_error();
+      return closed_error(vm);
     }
     if (t->channel.reserved) {
       stop_waiting(t);
@@ -212,7 +212,7 @@ static agc_value send_value(agc_vm *vm, agc_channel *c, agc_value v, int64_t tim
   }
   if (c->closed) {
     stop_waiting(t);
-    return closed_error();
+    return closed_error(vm);
   }
   if (deliver(vm, c, v, false)) {
     stop_waiting(t);
@@ -254,7 +254,7 @@ static agc_value builtin_address_send(agc_vm *vm, agc_value *args, uint32_t span
   int64_t timeout = agc_as_int(vm, args[2]);
   check_timeout(vm, timeout, span + 3);
   agc_channel *c = agc_weak_get(a->channel);
-  if (!c) return gone_error();
+  if (!c) return gone_error(vm);
   return send_value(vm, c, args[1], timeout);
 }
 
@@ -298,8 +298,8 @@ static agc_value builtin_recv(agc_vm *vm, agc_value *args, uint32_t span) {
   agc_value v = agc_void();
   switch (agc_channel_receive(vm, c, timeout, &v)) {
     case AGC_RECV_VALUE: return agc_result_value(true, v);
-    case AGC_RECV_CLOSED: return closed_error();
-    case AGC_RECV_TIMED_OUT: return timed_out_error();
+    case AGC_RECV_CLOSED: return closed_error(vm);
+    case AGC_RECV_TIMED_OUT: return timed_out_error(vm);
     case AGC_RECV_WAIT: break;
   }
   return agc_void();

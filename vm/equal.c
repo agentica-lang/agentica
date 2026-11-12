@@ -244,7 +244,11 @@ static bool expand(agc_vm *vm, work_stack *s, agc_value a, agc_value b, uint32_t
     case AGC_T_SET: return set_equal(vm, agc_as_set(vm, a), agc_as_set(vm, b));
     case AGC_T_STRUCT: {
       const agc_struct *x = agc_as_struct(vm, a), *y = agc_as_struct(vm, b);
-      return x->type == y->type && x->n == y->n && visit_items(vm, s, x->fields, y->fields, x->n);
+      if (x->type != y->type || x->n != y->n) return false;
+      /* An Error's location says where it was made, not what it is: two errors are equal without it, so a test can
+         compare a result with error("text") made in another file. */
+      uint32_t compared = agc_is_error(vm, a) ? AGC_ERROR_LOCATION : x->n;
+      return visit_items(vm, s, x->fields, y->fields, compared);
     }
     case AGC_T_ENUM: {
       const agc_enum *x = agc_as_enum(vm, a), *y = agc_as_enum(vm, b);

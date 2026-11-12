@@ -124,7 +124,7 @@ CC_OWNS char *agc_host_path(agc_vm *vm, const agc_string *s);
    made gives -1 with *refused set; another failure gives -1 with errno. The descriptor may be nonblocking
    (agc_fs_blocking). */
 int agc_files_open_output(agc_vm *vm, const agc_string *path, bool *refused);
-agc_value agc_utf8_error(const uint8_t *data, size_t len);
+agc_value agc_utf8_error(agc_vm *vm, const uint8_t *data, size_t len);
 agc_value agc_system_error(agc_vm *vm, const char *what, int err);
 bool agc_tree_refused(const char *path);
 /* Removes the tree at path; on a failure inside it, *failed is a malloc'd path of the entry that failed, else NULL. */
@@ -137,8 +137,8 @@ struct uv_stream_s;
 struct uv_write_s;
 /* The area that starts a stream's timeout errors: TCP is `network:`, a process and the child channel `process:`. */
 typedef enum { AGC_STREAM_NETWORK, AGC_STREAM_PROCESS } agc_stream_area;
-agc_value agc_stream_bad_timeout(agc_stream_area area);
-agc_value agc_stream_timed_out(agc_stream_area area);
+agc_value agc_stream_bad_timeout(agc_vm *vm, agc_stream_area area);
+agc_value agc_stream_timed_out(agc_vm *vm, agc_stream_area area);
 /* The result of a finished write: Ok(Void), or the write error for a negative libuv status. */
 agc_value agc_stream_written(agc_vm *vm, int status);
 agc_resource *agc_new_lock(agc_vm *vm);
@@ -207,7 +207,7 @@ extern const size_t agc_file_builtin_count;
    none).
    END: the stream ended; a later call with bytes is a trailing byte. FAILED: *out is the error Result. */
 typedef enum { AGC_ZSTEP_INPUT, AGC_ZSTEP_AGAIN, AGC_ZSTEP_END, AGC_ZSTEP_FAILED } agc_zstep_status;
-agc_value agc_zstep_check(int64_t kind, int64_t level, int64_t max_bytes);
+agc_value agc_zstep_check(agc_vm *vm, int64_t kind, int64_t level, int64_t max_bytes);
 agc_resource *agc_zstep_open(agc_vm *vm, int64_t kind, int64_t level, int64_t max_bytes);
 void agc_zstep_close(agc_vm *vm, agc_resource *r);
 agc_zstep_status agc_zstep_next(agc_vm *vm, agc_resource *r, const uint8_t *in, size_t len, size_t *used, bool finish,

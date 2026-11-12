@@ -148,7 +148,7 @@ static agc_value waited(agc_vm *vm, void *data, agc_value context) {
     result = agc_result_value(true, agc_conn_socket(vm, w->child));
     w->child = NULL;
   } else if (w->accepting) {
-    result = agc_error_value(server_closed);
+    result = agc_error(vm, "error", server_closed);
   }
   agc_loop_call(w->loop, waiter_end, w);
   return result;
@@ -161,7 +161,7 @@ static agc_value wait_expired(agc_vm *vm, void *data, agc_value context) {
   (void)context;
   waiter *w = data;
   agc_loop_call(w->loop, waiter_end, w);
-  return agc_stream_timed_out(AGC_STREAM_NETWORK);
+  return agc_stream_timed_out(vm, AGC_STREAM_NETWORK);
 }
 
 /* On the I/O thread: the waiter leaves the list, so no serve ends a job that is being dropped. */
@@ -283,7 +283,7 @@ static agc_value builtin_accept(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   agc_http_server *hs = agc_as_http_server(vm, args[0]);
   server *s = open_server(hs);
-  if (!s) return agc_error_value(server_closed);
+  if (!s) return agc_error(vm, "error", server_closed);
   if (agc_io_here(vm)) {
     agc_conn *c = take(s);
     if (c) return agc_result_value(true, agc_conn_socket(vm, c));

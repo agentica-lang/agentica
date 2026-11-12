@@ -318,7 +318,7 @@ static agc_value head_value(agc_vm *vm, net *n, const request *q) {
     return head;
   }
   if (q->cut.error) return agc_system_error(vm, "could not read from the stream", q->cut.error);
-  return agc_error_value("network: end of input");
+  return agc_error(vm, "error", "network: end of input");
 }
 
 /* HttpWire.read_head's rest goes back in front of the input before the head
@@ -647,7 +647,7 @@ agc_value agc_host_error(agc_vm *vm, const char *what, const char *host, int64_t
   char *text = agc_alloc_atomic(total);
   int full = snprintf(text, total, "%s\n  system error: %s", head, reason);
   size_t n_text = full < 0 ? 0 : (size_t)full;
-  return agc_result_value(false, agc_string_value(agc_utf8_decode((const uint8_t *)text, n_text, "?", true)));
+  return agc_error_string(vm, "error", agc_utf8_decode((const uint8_t *)text, n_text, "?", true));
 }
 
 agc_value agc_tls_failure_error(agc_vm *vm, const char *head, const agc_tls_failure *f) {
@@ -656,7 +656,7 @@ agc_value agc_tls_failure_error(agc_vm *vm, const char *head, const agc_tls_fail
   char *text = agc_alloc_atomic(size);
   int len = snprintf(text, size, "%s (%s)", head, f->detail);
   size_t n_text = len < 0 ? 0 : (size_t)len;
-  return agc_result_value(false, agc_string_value(agc_utf8_decode((const uint8_t *)text, n_text, "?", true)));
+  return agc_error_string(vm, "error", agc_utf8_decode((const uint8_t *)text, n_text, "?", true));
 }
 
 agc_value agc_tls_load_error(agc_vm *vm, const char *what, const char *path, const agc_tls_failure *f) {
@@ -684,10 +684,10 @@ static agc_value open_failure(agc_vm *vm, const net *n, bool found, int err) {
 /* std/http matches the UPGRADE_UNREAD text (BEFORE_TLS in stdlib/http.agc) to name the proxy of a CONNECT tunnel. */
 static agc_value upgrade_error(agc_vm *vm, const request *q) {
   if (q->tls_failed) return agc_tls_failure_error(vm, "network: TLS handshake failed", &q->n->failure);
-  if (q->open_error == UPGRADE_UNREAD) return agc_error_value("network: data came before the TLS handshake");
-  if (q->open_error == UPGRADE_ENDED) return agc_error_value("network: end of input");
-  if (q->open_error == UPGRADE_SENDING) return agc_error_value("network: a send on the socket is in progress");
-  return agc_error_value(socket_closed);
+  if (q->open_error == UPGRADE_UNREAD) return agc_error(vm, "error", "network: data came before the TLS handshake");
+  if (q->open_error == UPGRADE_ENDED) return agc_error(vm, "error", "network: end of input");
+  if (q->open_error == UPGRADE_SENDING) return agc_error(vm, "error", "network: a send on the socket is in progress");
+  return agc_error(vm, "error", socket_closed);
 }
 
 static void read_port(net *n, const tcp_link *k) {
@@ -1248,7 +1248,7 @@ static int shared_open(net *n) {
 
 /* A read at N = 1 whose input is ready: the cut and the value in one step. */
 static agc_value take(agc_vm *vm, net *n, request *q) {
-  if (n->closed) return agc_error_value(socket_closed);
+  if (n->closed) return agc_error(vm, "error", socket_closed);
   if (q->kind == REQ_IDLE || heads(q->kind)) {
     if (q->kind == REQ_IDLE) cut_idle(n, q);
     else cut_head(n, q);
@@ -1283,12 +1283,12 @@ static agc_value adopt(agc_vm *vm, request *q, const net *l) {
 
 static agc_value accept_done(agc_vm *vm, request *q, const net *l) {
   if (q->accept_rc) return agc_system_error(vm, "network: accept failed", agc_net_errno(q->accept_rc));
-  if (q->closed) return agc_error_value(listener_closed);
+  if (q->closed) return agc_error(vm, "error", listener_closed);
   if (q->child && q->opened) return adopt(vm, q, l);
   if (q->child && q->tls_failed) return agc_tls_failure_error(vm, "network: TLS accept failed", &q->child->failure);
-  if (q->child) return agc_error_value(socket_closed);
+  if (q->child) return agc_error(vm, "error", socket_closed);
   if (q->error) return agc_system_error(vm, "network: accept failed", agc_net_errno(q->error));
-  return agc_error_value(listener_closed);
+  return agc_error(vm, "error", listener_closed);
 }
 
 static agc_value opened(agc_vm *vm, const request *q, agc_value context) {
@@ -1318,7 +1318,7 @@ static agc_value request_done(agc_vm *vm, void *data, agc_value context) {
     result = accept_done(vm, q, n);
   } else if (reads(q->kind)) {
     if (q->closed)
-      result = agc_error_value(socket_closed);
+      result = agc_error(vm, "error", socket_closed);
     else if (q->kind == REQ_IDLE)
       result = idle_value(q);
     else if (heads(q->kind))
@@ -1329,7 +1329,7 @@ static agc_value request_done(agc_vm *vm, void *data, agc_value context) {
       result = agc_inbuf_cut_line_value(vm, &q->cut, "network: line exceeds 1048576 bytes", "network: end of input");
     agc_charge(vm, agc_value_units(result));
   } else if (q->closed) {
-    result = agc_error_value(socket_closed);
+    result = agc_error(vm, "error", socket_closed);
   } else {
     result = q->write_status < 0 ? agc_system_error(vm, write_failed, agc_net_errno(q->write_status)) : ok_value(agc_void());
   }
@@ -1351,7 +1351,7 @@ static void stop_request(void *data) {
 static agc_value request_expired(agc_vm *vm, void *data, agc_value context) {
   const request *q = data;
   if (q->kind == REQ_CONNECT) disown(vm, agc_as_socket(vm, context)->state, "timeout");
-  return agc_stream_timed_out(AGC_STREAM_NETWORK);
+  return agc_stream_timed_out(vm, AGC_STREAM_NETWORK);
 }
 
 /* On the I/O thread without rt->sync: it stops the request and the net only. A cancelled connect's socket resource is
@@ -1391,7 +1391,7 @@ static void no_network(agc_vm *vm, uint32_t span) {
    to accept on. A TlsContext read its files when it was built (TLS.client_context, under --deny-fs). */
 static agc_value net_denied(agc_vm *vm, uint32_t span) {
   no_network(vm, span);
-  if (vm->rt->deny_net) return agc_error_value(AGC_DENIED_NET);
+  if (vm->rt->deny_net) return agc_error(vm, "error", AGC_DENIED_NET);
   return agc_void();
 }
 
@@ -1458,13 +1458,13 @@ static agc_value checked_connect(agc_vm *vm, const agc_value *where, int64_t tim
   if (!agc_is(denied, AGC_T_VOID)) return denied;
   const agc_string *host = agc_as_string(vm, where[0]);
   int64_t port = agc_as_int(vm, where[1]);
-  if (timeout <= 0) return agc_stream_bad_timeout(AGC_STREAM_NETWORK);
-  if (port < 1 || port > 65535) return agc_error_value("network: port must be 1..65535");
+  if (timeout <= 0) return agc_stream_bad_timeout(vm, AGC_STREAM_NETWORK);
+  if (port < 1 || port > 65535) return agc_error(vm, "error", "network: port must be 1..65535");
   agc_tls_context *tls = agc_is(context, AGC_T_TLS_CONTEXT) ? agc_as_tls_context(vm, context) : NULL;
   if (tls) agc_tls_context_check(vm, context, false, client_role, span + 3);
   agc_loop *io = agc_io_loop(vm);
   char *name = agc_cstr(host);
-  if (!name) return agc_error_value("network: host cannot contain NUL");
+  if (!name) return agc_error(vm, "error", "network: host cannot contain NUL");
   return connect_net(vm, io, name, port, tls ? agc_tls_config_ref(tls->config) : NULL, client, timeout);
 }
 
@@ -1505,11 +1505,11 @@ static agc_value open_listener(agc_vm *vm, const agc_value *args, uint32_t span,
   if (!agc_is(denied, AGC_T_VOID)) return denied;
   const agc_string *host = agc_as_string(vm, args[0]);
   int64_t port = agc_as_int(vm, args[1]);
-  if (port < 0 || port > 65535) return agc_error_value("network: port must be 0..65535");
+  if (port < 0 || port > 65535) return agc_error(vm, "error", "network: port must be 0..65535");
   agc_tls_context *tls = secure ? agc_as_tls_context(vm, args[2]) : NULL;
   agc_loop *io = agc_io_loop(vm);
   char *name = agc_cstr(host);
-  if (!name) return agc_error_value("network: host cannot contain NUL");
+  if (!name) return agc_error(vm, "error", "network: host cannot contain NUL");
   net *n = new_net(vm, io, name, port, true);
   n->secure = secure;
   if (tls) n->config = agc_tls_config_ref(tls->config);
@@ -1607,19 +1607,19 @@ static agc_value upgrade_socket(agc_vm *vm, agc_socket *sk, agc_tls_context *con
   bool server = context && context->server;
   if (server && host->bytes) agc_fail(vm, "RUNTIME-TLS-CONTEXT-ROLE", upgrade_role, span + 3);
   const net *plain = live(sk);
-  if (!plain) return agc_error_value(socket_closed);
-  if (plain->secure) return agc_error_value("network: the socket is TLS already");
-  if (timeout <= 0) return agc_stream_bad_timeout(AGC_STREAM_NETWORK);
-  if (!server && !host->bytes) return agc_error_value("network: host cannot be empty");
+  if (!plain) return agc_error(vm, "error", socket_closed);
+  if (plain->secure) return agc_error(vm, "error", "network: the socket is TLS already");
+  if (timeout <= 0) return agc_stream_bad_timeout(vm, AGC_STREAM_NETWORK);
+  if (!server && !host->bytes) return agc_error(vm, "error", "network: host cannot be empty");
   agc_loop *io = agc_io_loop(vm);
   char *name = agc_cstr(host);
-  if (!name) return agc_error_value("network: host cannot contain NUL");
+  if (!name) return agc_error(vm, "error", "network: host cannot contain NUL");
   /* The count on the shared context goes with the last check, so no error that follows loses it. A client that gave
      its context back (HttpWire.drop_tls) has none to give. */
   tls_shared *shared = client ? client_context(vm, client) : NULL;
   if (client && !shared) {
     free(name);
-    return agc_error_value("network: the client is closed");
+    return agc_error(vm, "error", "network: the client is closed");
   }
   net *n = new_net(vm, io, name, 0, false);
   n->secure = n->upgraded = true;
@@ -1678,8 +1678,8 @@ static agc_value builtin_accept(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   net *n = agc_as_listener(vm, args[0])->state->native;
   int64_t timeout = agc_as_int(vm, args[1]);
-  if (!n || n->closed) return agc_error_value(listener_closed);
-  if (timeout <= 0) return agc_stream_bad_timeout(AGC_STREAM_NETWORK);
+  if (!n || n->closed) return agc_error(vm, "error", listener_closed);
+  if (timeout <= 0) return agc_stream_bad_timeout(vm, AGC_STREAM_NETWORK);
   park(vm, new_request(vm, n, REQ_ACCEPT), args[0], timeout, begin_accept);
   return agc_void();
 }
@@ -1727,7 +1727,7 @@ static agc_value read_op(agc_vm *vm, const agc_value *args, request *want, bool 
   req_kind kind = want->kind;
   if (kind == REQ_BYTES) {
     int64_t wanted = agc_as_int(vm, args[1]);
-    if (wanted < 1 || (uint64_t)wanted > LIMIT) return agc_error_value("network: read size must be 1..1048576");
+    if (wanted < 1 || (uint64_t)wanted > LIMIT) return agc_error(vm, "error", "network: read size must be 1..1048576");
     want->count = (size_t)wanted;
   }
   const uint8_t *rest = NULL;
@@ -1747,7 +1747,7 @@ static agc_value read_op(agc_vm *vm, const agc_value *args, request *want, bool 
   agc_value result;
   if (!agc_stream_lock(vm, sk->reader, AGC_STREAM_NETWORK, &timeout, &result)) return result;
   net *n = live(sk);
-  if (!n) return agc_error_value(socket_closed);
+  if (!n) return agc_error(vm, "error", socket_closed);
   /* At N = 1 the input is this thread's: what is buffered is taken without a park. */
   if (agc_io_here(vm)) {
     if (!agc_inbuf_unread(&n->in, rest, rest_len)) agc_out_of_memory();
@@ -1951,7 +1951,7 @@ static agc_value write_op(agc_vm *vm, const agc_value *args, const uint8_t *data
   agc_value result;
   if (!agc_stream_lock(vm, sk->writer, AGC_STREAM_NETWORK, &timeout, &result)) return result;
   net *n = live(sk);
-  if (!n) return agc_error_value(socket_closed);
+  if (!n) return agc_error(vm, "error", socket_closed);
   bool here = agc_io_here(vm);
   if (here) {
     /* At N = 1 the socket is this thread's: a send that goes out at once returns without a park. */
@@ -1973,7 +1973,7 @@ static agc_value write_op(agc_vm *vm, const agc_value *args, const uint8_t *data
       if (whole && n && n->write_status < 0) n->write_status = 0;
       if (holding) agc_handle_let_go(vm, sk->writer);
       if (sent < 0) return agc_system_error(vm, write_failed, agc_net_errno((int)sent));
-      return whole ? ok_value(agc_void()) : agc_error_value(socket_closed);
+      return whole ? ok_value(agc_void()) : agc_error(vm, "error", socket_closed);
     }
     data += sent;
     len -= (size_t)sent;
@@ -2004,7 +2004,7 @@ static agc_value builtin_send_bytes(agc_vm *vm, agc_value *args, uint32_t span) 
   (void)span;
   size_t len = 0;
   const uint8_t *data = agc_stream_bytes(vm, args[1], LIMIT, &len);
-  if (!data) return agc_error_value("network: bytes exceed 1048576 per call");
+  if (!data) return agc_error(vm, "error", "network: bytes exceed 1048576 per call");
   return write_op(vm, args, data, len);
 }
 

@@ -107,16 +107,16 @@ static bool find_codec(const agc_string *name, codec_kind *kind) {
   return false;
 }
 
-static agc_value unknown_codec(const agc_string *name) {
+static agc_value unknown_codec(agc_vm *vm, const agc_string *name) {
   agc_string *text =
     agc_around("unknown encoding ", name, "; the agentica-lang/charset package reads the encodings not built in");
-  return agc_result_value(false, agc_string_value(text));
+  return agc_error_string(vm, "error", text);
 }
 
-static agc_value failure_at(const char *what, codec_kind kind, const char *unit, size_t at) {
+static agc_value failure_at(agc_vm *vm, const char *what, codec_kind kind, const char *unit, size_t at) {
   char text[96];
   snprintf(text, sizeof text, "%s %s at %s %zu", what, codec_names[kind], unit, at);
-  return agc_error_value(text);
+  return agc_error(vm, "error", text);
 }
 
 static unit_reader reader_of(codec_kind kind, const uint8_t *data, size_t len) {
@@ -211,7 +211,7 @@ static agc_value decode_utf8(agc_vm *vm, const uint8_t *data, size_t len) {
   size_t chars;
   if (agc_utf8_chars(data, len, &chars))
     return agc_result_value(true, agc_string_value(agc_small_string(vm, (const char *)data, len, chars)));
-  return failure_at("invalid", CODEC_UTF8, "byte", agc_utf8_bad_at(data, len));
+  return failure_at(vm, "invalid", CODEC_UTF8, "byte", agc_utf8_bad_at(data, len));
 }
 
 /* bytes.decode(encoding): the String of the bytes read in that encoding. */
@@ -220,13 +220,13 @@ static agc_value builtin_decode(agc_vm *vm, agc_value *args, uint32_t span) {
   size_t len;
   const uint8_t *data = agc_bytes_data(vm, args[0], &len);
   codec_kind kind;
-  if (!find_codec(agc_as_string(vm, args[1]), &kind)) return unknown_codec(agc_as_string(vm, args[1]));
+  if (!find_codec(agc_as_string(vm, args[1]), &kind)) return unknown_codec(vm, agc_as_string(vm, args[1]));
   if (kind == CODEC_UTF8) return decode_utf8(vm, data, len);
   unit_reader r = reader_of(kind, data, len);
   size_t bytes = 0, chars = 0;
   uint32_t cp;
   for (size_t at = r.start; at < len; chars++) {
-    if (!next_code_point(kind, &r, data, len, &at, &cp)) return failure_at("invalid", kind, "byte", at);
+    if (!next_code_point(kind, &r, data, len, &at, &cp)) return failure_at(vm, "invalid", kind, "byte", at);
     bytes = agc_size_add(bytes, utf8_width(cp));
   }
   if (bytes == 0) return agc_result_value(true, agc_string_value(vm->rt->empty_string));
@@ -280,7 +280,7 @@ static agc_value encode_units(const agc_string *s, codec_kind kind) {
 
 /* The bytes of a String in an encoding of one byte per character, or an error at the first character the encoding
    does not have. An ASCII String is its own bytes in every one of them. */
-static agc_value encode_bytes(const agc_string *s, codec_kind kind) {
+static agc_value encode_bytes(agc_vm *vm, const agc_string *s, codec_kind kind) {
   const uint8_t *data = (const uint8_t *)s->data;
   if (s->bytes == s->chars) return agc_result_value(true, agc_bytes_value(agc_make_bytes(data, s->bytes)));
   agc_bytes *b = agc_new_bytes(s->chars);
@@ -291,7 +291,7 @@ static agc_value encode_bytes(const agc_string *s, codec_kind kind) {
     if (byte < 0) {
       char text[96];
       snprintf(text, sizeof text, "cannot encode U+%04" PRIX32 " in %s at index %zu", cp, codec_names[kind], index);
-      return agc_error_value(text);
+      return agc_error(vm, "error", text);
     }
     b->data[index] = (uint8_t)byte;
   }
@@ -303,10 +303,10 @@ static agc_value builtin_encode(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   const agc_string *s = agc_as_string(vm, args[0]);
   codec_kind kind;
-  if (!find_codec(agc_as_string(vm, args[1]), &kind)) return unknown_codec(agc_as_string(vm, args[1]));
+  if (!find_codec(agc_as_string(vm, args[1]), &kind)) return unknown_codec(vm, agc_as_string(vm, args[1]));
   if (kind == CODEC_UTF8)
     return agc_result_value(true, agc_bytes_value(agc_make_bytes((const uint8_t *)s->data, s->bytes)));
-  if (byte_codec(kind)) return encode_bytes(s, kind);
+  if (byte_codec(kind)) return encode_bytes(vm, s, kind);
   return encode_units(s, kind);
 }
 

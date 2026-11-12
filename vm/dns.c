@@ -138,7 +138,7 @@ static agc_value expired(agc_vm *vm, void *data, agc_value context) {
   (void)vm;
   (void)data;
   (void)context;
-  return agc_stream_timed_out(AGC_STREAM_NETWORK);
+  return agc_stream_timed_out(vm, AGC_STREAM_NETWORK);
 }
 
 /* I/O thread (§16.5), like `resolved`, or the caller's thread before the job exists, when `started` is still false. A
@@ -160,14 +160,14 @@ static agc_value builtin_lookup(agc_vm *vm, agc_value *args, uint32_t span) {
   if (vm->rt->no_files) agc_fail(vm, "RUNTIME-INTERNAL", "network access is off in this run", span);
   const agc_string *host = agc_as_string(vm, args[0]);
   int64_t timeout = agc_as_int(vm, args[1]);
-  if (vm->rt->deny_net) return agc_error_value(AGC_DENIED_NET);
-  if (timeout <= 0) return agc_stream_bad_timeout(AGC_STREAM_NETWORK);
-  if (host->bytes == 0) return agc_error_value("network: the host name is empty");
+  if (vm->rt->deny_net) return agc_error(vm, "error", AGC_DENIED_NET);
+  if (timeout <= 0) return agc_stream_bad_timeout(vm, AGC_STREAM_NETWORK);
+  if (host->bytes == 0) return agc_error(vm, "error", "network: the host name is empty");
   agc_task_check_park(vm, "a callback of native code cannot wait for DNS.lookup", span);
   /* It may raise, so it comes before the allocations. */
   agc_loop *io = agc_io_loop(vm);
   char *name = agc_cstr(host);
-  if (!name) return agc_error_value("network: host cannot contain NUL");
+  if (!name) return agc_error(vm, "error", "network: host cannot contain NUL");
   CC_OWNS lookup *q = calloc(1, sizeof *q);
   if (!q) agc_out_of_memory();
   q->io = io;

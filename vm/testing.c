@@ -39,7 +39,7 @@ static agc_value failed(agc_vm *vm, uint32_t span, agc_string *message, agc_stri
   }
   agc_string *text = expected ? agc_concat(lit("expected "), expected) : message;
   if (actual) text = agc_concat(agc_concat(text, lit("; actual ")), actual);
-  return agc_result_value(false, agc_string_value(text));
+  return agc_error_string(vm, "error", text);
 }
 
 static agc_value builtin_test(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -224,8 +224,8 @@ static agc_string *report(agc_vm *vm, agc_task *t, const agc_test_case *c) {
   } else if (t->note) {
     record = fail_line(vm, "RUNTIME-TEST-ASSERTION", t->note->message, t->note->span, t->note, NULL);
   } else if (!agc_as_result(vm, t->result)->ok) {
-    record = fail_line(vm, "RUNTIME-TEST-ERROR", agc_as_string(vm, agc_as_result(vm, t->result)->value), c->span,
-                       NULL, NULL);
+    agc_string *text = agc_error_halt_text(vm, agc_as_result(vm, t->result)->value);
+    record = fail_line(vm, "RUNTIME-TEST-ERROR", text, c->span, NULL, NULL);
   } else if (t->left_children) {
     record = fail_line(vm, "RUNTIME-TEST-PENDING-TASKS", lit("the test returned while its tasks were still running"),
                        c->span, NULL, NULL);

@@ -233,6 +233,29 @@ void agc_stack_capture(const agc_vm *vm, agc_outcome *outcome) {
   stack->shown = true;
 }
 
+agc_string *agc_error_location(const agc_vm *vm) {
+  const agc_task *t = vm->task;
+  if (!vm->in_turn || !t || !t->frames || t->frame_count > t->frame_capacity) return vm->rt->empty_string;
+  const agc_program *p = vm->rt->program;
+  frame_walk w = {p, 0};
+  frame_cursor cursor = {t->frames, t->frame_count, t->below};
+  agc_stack_line line;
+  /* Not innermost: that span is the failing instruction's, which agc_fail is given; here the frame's pc is the call
+     of the builtin that builds the error, as the stack trace of a halt in that builtin shows it. */
+  if (!take_frame(&w, &cursor, false, &line) || line.span >= p->span_count) return vm->rt->empty_string;
+  const agc_span *span = &p->spans[line.span];
+  if (span->source >= p->source_count) return vm->rt->empty_string;
+  const agc_source *source = &p->sources[span->source];
+  const agc_string *file = source->stored ? source->stored : source->name;
+  char numbers[24];
+  int n = snprintf(numbers, sizeof numbers, ":%u:%u", (unsigned)span->start_line, (unsigned)span->start_column);
+  size_t tail = n > 0 ? (size_t)n : 0;
+  agc_string *text = agc_new_string(agc_size_add(file->bytes, tail), agc_size_add(file->chars, tail));
+  memcpy(text->data, file->data, file->bytes);
+  memcpy(text->data + file->bytes, numbers, tail);
+  return text;
+}
+
 static void put_place(FILE *err, const agc_program *p, uint32_t index) {
   const agc_span *span = &p->spans[index];
   const agc_string *file = p->sources[span->source].name;

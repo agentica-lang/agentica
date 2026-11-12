@@ -362,6 +362,10 @@ typedef struct {
      nothing can tell the object from a fresh one. */
   agc_value empty_list, empty_map, empty_set;
   agc_string *empty_string, *chars[AGC_ASCII_CHARS];
+  /* The builtin Error struct of the program, found by agc_vm_init before any scheduler thread starts and never written
+     after (agc_error_struct): UINT32_MAX when the program has none (an older front end, hand-made bytecode), and every
+     error of the run is then a String payload, as before the struct existed. */
+  uint32_t error_struct;
   agc_string *cwd;
   bool no_files, no_turn_cost, deny_run, deny_net, deny_fs, deny_env, drop_uring_env, flush_expired;
   agc_style style;
@@ -1051,6 +1055,9 @@ void agc_output_file_done(agc_output *out);
 bool agc_output_failed(const agc_output *out);
 
 uint32_t agc_builtin_struct(agc_vm *vm, const char *name, const char *const *fields, uint32_t count);
+/* The builtin Error struct of PROGRAM, by its name and its exact field list (AGC_ERROR_* in value.h), or UINT32_MAX:
+   unlike agc_builtin_struct it never fails, because a program without one still runs with String errors. */
+uint32_t agc_error_struct(const agc_program *program);
 uint32_t agc_builtin_variant(agc_vm *vm, const char *enum_name, const char *variant_name, uint32_t arity);
 
 #endif

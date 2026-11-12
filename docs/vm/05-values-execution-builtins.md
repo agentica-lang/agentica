@@ -44,7 +44,15 @@ does not make obvious:
   `Test.eq` compare by size and membership; there is no JSON form.
 - **Enum.** Nullary variants are shared, one object per variant, made at load
   time.
-- **Result.** An error holds its String message; `ok()` holds Void.
+- **Result.** `ok()` holds Void. An error holds an `Error` record when the
+  program has the builtin struct (`kind`, `message`, `code`, `details`,
+  `cause`, `location`), and its String message otherwise (an older front end,
+  hand-made bytecode). `agc_vm_init` finds the struct once, by its name and
+  exact fields (`rt->error_struct`); the helpers of `value.c` (`agc_error`,
+  `agc_error_message`) pick the form, and the builtin's call place is the
+  `location` (`agc_error_location`, `vm/diag.c`). An `Error` prints as its
+  `error(...)` call without defaults or location, its `to_s` is the message,
+  and `==` leaves out `location`.
 - **Range.** Immutable. `Range.size` fails with `RUNTIME-INTEGER-OVERFLOW`;
   `Range.to_a` above 1048576 values fails with `RUNTIME-INVALID-COUNT`; `first`
   and `last` of an empty range are an error value.

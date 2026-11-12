@@ -657,8 +657,8 @@ static bool read_ready(proc *p, req_kind kind, size_t count) {
 }
 
 static agc_value take(agc_vm *vm, proc *p, req_kind kind, size_t count) {
-  if (p->closed) return agc_error_value(closed_text);
-  if (p->out_cut || p->err_cut) return agc_error_value(over_text);
+  if (p->closed) return agc_error(vm, "error", closed_text);
+  if (p->out_cut || p->err_cut) return agc_error(vm, "error", over_text);
   if (kind != REQ_LINE) return agc_inbuf_bytes(vm, &p->out_buf, count);
   bool over;
   agc_value line = agc_inbuf_line(vm, &p->out_buf, "process: line exceeds 1048576 bytes", "process: end of input", &over);
@@ -697,7 +697,7 @@ static agc_value available_text(agc_vm *vm, const uint8_t *data, size_t n) {
 }
 
 static agc_value available(agc_vm *vm, proc *p) {
-  if (p->out_cut || p->err_cut) return agc_error_value(over_text);
+  if (p->out_cut || p->err_cut) return agc_error(vm, "error", over_text);
   size_t n = available_bytes(&p->out_buf);
   agc_value result = available_text(vm, pending_data(&p->out_buf), n);
   agc_inbuf_take(&p->out_buf, n);
@@ -723,9 +723,9 @@ static agc_value posted_result(agc_vm *vm, const request *q, agc_value context) 
     case REQ_LINE:
     case REQ_BYTES:
       if (q->closed)
-        result = agc_error_value(closed_text);
+        result = agc_error(vm, "error", closed_text);
       else if (q->over)
-        result = agc_error_value(over_text);
+        result = agc_error(vm, "error", over_text);
       else if (q->kind == REQ_LINE)
         result = agc_inbuf_cut_line_value(vm, &q->cut, "process: line exceeds 1048576 bytes", "process: end of input");
       else
@@ -734,19 +734,19 @@ static agc_value posted_result(agc_vm *vm, const request *q, agc_value context) 
       return result;
     case REQ_SEND:
       agc_charge(vm, q->count);
-      if (q->closed) return agc_error_value(closed_text);
-      if (q->stdin_closed) return agc_error_value("process: stdin is closed");
+      if (q->closed) return agc_error(vm, "error", closed_text);
+      if (q->stdin_closed) return agc_error(vm, "error", "process: stdin is closed");
       return agc_stream_written(vm, q->rc);
     case REQ_STDIN:
-      return q->closed ? agc_error_value(closed_text) : ok_void();
+      return q->closed ? agc_error(vm, "error", closed_text) : ok_void();
     case REQ_AVAILABLE:
-      if (q->closed) return agc_error_value(closed_text);
-      if (q->over) return agc_error_value(over_text);
+      if (q->closed) return agc_error(vm, "error", closed_text);
+      if (q->over) return agc_error(vm, "error", over_text);
       return available_text(vm, q->cut.data, q->cut.len);
     case REQ_WAIT:
-      return q->closed ? agc_error_value(closed_text) : agc_result_value(true, agc_int(q->status));
+      return q->closed ? agc_error(vm, "error", closed_text) : agc_result_value(true, agc_int(q->status));
     case REQ_OUTPUT:
-      if (q->closed) return agc_error_value(closed_text);
+      if (q->closed) return agc_error(vm, "error", closed_text);
       return output_of(vm, q->data, q->len, q->err_data, q->err_len, q->over);
   }
   return agc_void();
@@ -773,7 +773,7 @@ static agc_value request_done(agc_vm *vm, void *data, agc_value context) {
     result = take(vm, p, q->kind, q->count);
     agc_charge(vm, agc_value_units(result));
   } else if (p->closed) {
-    result = agc_error_value(closed_text);
+    result = agc_error(vm, "error", closed_text);
   } else if (q->kind == REQ_AVAILABLE) {
     result = available(vm, p);
   } else if (q->kind == REQ_WAIT || q->kind == REQ_OUTPUT) {
@@ -814,7 +814,7 @@ static agc_value request_expired(agc_vm *vm, void *data, agc_value context) {
   if (q->posted) {
     req_kind kind = q->kind;
     agc_loop_call(agc_io_loop(vm), stop_request, q);
-    return kind == REQ_CLOSE ? agc_void() : agc_stream_timed_out(AGC_STREAM_PROCESS);
+    return kind == REQ_CLOSE ? agc_void() : agc_stream_timed_out(vm, AGC_STREAM_PROCESS);
   }
   unlink_request(q);
   if (q->kind == REQ_CLOSE) {
@@ -822,7 +822,7 @@ static agc_value request_expired(agc_vm *vm, void *data, agc_value context) {
     return agc_void();
   }
   if (q->kind != REQ_WAIT && q->kind != REQ_OUTPUT) shut(q->p);
-  return agc_stream_timed_out(AGC_STREAM_PROCESS);
+  return agc_stream_timed_out(vm, AGC_STREAM_PROCESS);
 }
 
 /* The cancel half runs on the I/O thread when the job loses its task (a detach, or the deadline after it). */
@@ -1484,9 +1484,9 @@ static bool begin_spawn(void *data, agc_io_job *job) {
 static agc_value spawn_child(agc_vm *vm, const agc_value *args, const agc_string *dir, int64_t timeout, bool captured,
                              bool channel, const agc_map *env, const agc_string *out, const agc_string *err,
                              bool group) {
-  if (vm->rt->deny_run) return agc_error_value("denied: --deny-run turns off starting programs");
+  if (vm->rt->deny_run) return agc_error(vm, "error", "denied: --deny-run turns off starting programs");
   bool files = out->bytes || err->bytes;
-  if (files && captured) return agc_error_value("process: out and err need Process.spawn");
+  if (files && captured) return agc_error(vm, "error", "process: out and err need Process.spawn");
   const agc_string *command = agc_as_string(vm, args[0]);
   const agc_list *list = agc_as_list(vm, args[1]);
   /* Every argument is a String before the first malloc of the spawn (resolve): child_args copies these, so a wrong
@@ -1501,17 +1501,17 @@ static agc_value spawn_child(agc_vm *vm, const agc_value *args, const agc_string
     items[k] = agc_as_string(vm, item);
     valid = valid && no_nul(items[k]);
   }
-  if (!valid) return agc_error_value("process: command must be nonempty and arguments cannot contain NUL");
+  if (!valid) return agc_error(vm, "error", "process: command must be nonempty and arguments cannot contain NUL");
   if (dir->bytes == 0 || !no_nul(dir))
-    return agc_error_value("process: chdir must be nonempty and cannot contain NUL");
-  if (timeout <= 0) return agc_stream_bad_timeout(AGC_STREAM_PROCESS);
+    return agc_error(vm, "error", "process: chdir must be nonempty and cannot contain NUL");
+  if (timeout <= 0) return agc_stream_bad_timeout(vm, AGC_STREAM_PROCESS);
   const env_pair *pairs;
   size_t pair_count;
   const char *env_text = env_problem(vm, env, &pairs, &pair_count);
-  if (env_text) return agc_error_value(env_text);
-  if (files && vm->rt->deny_fs) return agc_error_value(AGC_DENIED_FS);
+  if (env_text) return agc_error(vm, "error", env_text);
+  if (files && vm->rt->deny_fs) return agc_error(vm, "error", AGC_DENIED_FS);
   if (files && (!no_nul(out) || !no_nul(err)))
-    return agc_error_value("process: out and err cannot contain NUL");
+    return agc_error(vm, "error", "process: out and err cannot contain NUL");
   agc_process *pr = agc_alloc(sizeof(agc_process));
   pr->reader = agc_new_lock(vm);
   pr->writer = agc_new_lock(vm);
@@ -1520,7 +1520,7 @@ static agc_value spawn_child(agc_vm *vm, const agc_value *args, const agc_string
   char *path = resolve(vm, command);
   if (!path) {
     AGC_TRACE(&vm->rt->trace, AGC_TRACE_PROC, "spawn_failed reason=unresolved");
-    return agc_error_value("process: executable is unavailable");
+    return agc_error(vm, "error", "process: executable is unavailable");
   }
   bool found;
   char *cwd = child_dir(vm, dir, &found);
@@ -1528,7 +1528,7 @@ static agc_value spawn_child(agc_vm *vm, const agc_value *args, const agc_string
     AGC_TRACE(&vm->rt->trace, AGC_TRACE_PROC, "spawn_failed reason=dir");
     free(path);
     free(cwd);
-    return agc_error_value("process: directory is unavailable");
+    return agc_error(vm, "error", "process: directory is unavailable");
   }
   int targets[2] = {-1, -1}, problem = 0;
   const char *target_text = files ? open_targets(vm, out, err, targets, &problem) : NULL;
@@ -1536,7 +1536,7 @@ static agc_value spawn_child(agc_vm *vm, const agc_value *args, const agc_string
     AGC_TRACE(&vm->rt->trace, AGC_TRACE_PROC, "spawn_failed reason=file");
     free(path);
     free(cwd);
-    return problem ? agc_system_error(vm, target_text, problem) : agc_error_value(target_text);
+    return problem ? agc_system_error(vm, target_text, problem) : agc_error(vm, "error", target_text);
   }
   launch *l = calloc(1, sizeof(launch));
   if (!l) agc_out_of_memory();
@@ -1635,7 +1635,7 @@ static bool begin_read(void *data, agc_io_job *job) {
 static proc *take_lock(agc_vm *vm, agc_process *pr, agc_resource *lock, int64_t *timeout, agc_value *result) {
   if (!agc_stream_lock(vm, lock, AGC_STREAM_PROCESS, timeout, result)) return NULL;
   proc *p = live(vm, pr);
-  if (!p) *result = agc_error_value(closed_text);
+  if (!p) *result = agc_error(vm, "error", closed_text);
   return p;
 }
 
@@ -1661,7 +1661,7 @@ static agc_value builtin_read_line(agc_vm *vm, agc_value *args, uint32_t span) {
 static agc_value builtin_read_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   int64_t count = agc_as_int(vm, args[1]);
-  if (count < 0 || (uint64_t)count > LIMIT) return agc_error_value("process: count must be 0..1048576");
+  if (count < 0 || (uint64_t)count > LIMIT) return agc_error(vm, "error", "process: count must be 0..1048576");
   return read_op(vm, args[0], REQ_BYTES, (size_t)count, agc_as_int(vm, args[2]));
 }
 
@@ -1694,7 +1694,7 @@ static agc_value write_op(agc_vm *vm, const agc_value *args, const uint8_t *data
   proc *p = take_lock(vm, pr, pr->writer, &timeout, &result);
   if (!p) return result;
   if (agc_io_here(vm)) {
-    if (p->in_closed) return agc_error_value("process: stdin is closed");
+    if (p->in_closed) return agc_error(vm, "error", "process: stdin is closed");
     /* In a callback of native code, a write that does not end at once stays in flight with no writer when new_request
        refuses below. Unlike the parent channel (`sending` in duplex.c), no later send can reach it: a callback reaches
        only a child it spawned, and the refusal fails its task, whose end closes the child and so cancels the write. */
@@ -1714,13 +1714,13 @@ static agc_value builtin_send_bytes(agc_vm *vm, agc_value *args, uint32_t span) 
   (void)span;
   size_t len = 0;
   const uint8_t *data = agc_bytes_data(vm, args[1], &len);
-  return len > LIMIT ? agc_error_value("process: bytes exceed 1048576 per call") : write_op(vm, args, data, len);
+  return len > LIMIT ? agc_error(vm, "error", "process: bytes exceed 1048576 per call") : write_op(vm, args, data, len);
 }
 
 static agc_value builtin_send(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   agc_string *text = agc_as_string(vm, args[1]);
-  if (text->bytes > LIMIT) return agc_error_value("process: send exceeds 1048576 bytes");
+  if (text->bytes > LIMIT) return agc_error(vm, "error", "process: send exceeds 1048576 bytes");
   return write_op(vm, args, (const uint8_t *)text->data, text->bytes);
 }
 
@@ -1764,11 +1764,11 @@ static bool begin_wait(void *data, agc_io_job *job) {
 static agc_value await_child(agc_vm *vm, const agc_value *args, req_kind kind) {
   agc_process *pr = agc_as_process(vm, args[0]);
   int64_t timeout = agc_as_int(vm, args[1]);
-  if (timeout <= 0) return agc_stream_bad_timeout(AGC_STREAM_PROCESS);
+  if (timeout <= 0) return agc_stream_bad_timeout(vm, AGC_STREAM_PROCESS);
   proc *p = live(vm, pr);
-  if (!p) return agc_error_value(closed_text);
+  if (!p) return agc_error(vm, "error", closed_text);
   /* `captured` is fixed before the child is shared, so any thread may read it. */
-  if (kind == REQ_OUTPUT && !p->captured) return agc_error_value("process: output is not captured");
+  if (kind == REQ_OUTPUT && !p->captured) return agc_error(vm, "error", "process: output is not captured");
   if (agc_io_here(vm) && waits_over(p, kind)) return waited(vm, p, kind);
   start_request(vm, new_request(vm, p, kind), agc_void(), timeout, begin_wait);
   return agc_void();
@@ -1827,8 +1827,8 @@ static agc_value builtin_close(agc_vm *vm, agc_value *args, uint32_t span) {
 static agc_duplex *channel_of(agc_vm *vm, agc_value handle, agc_process **pr, agc_value *result) {
   *pr = agc_as_process(vm, handle);
   const proc *p = live(vm, *pr);
-  if (!p) *result = agc_error_value(closed_text);
-  else if (!p->channel) *result = agc_error_value("process: the child has no channel");
+  if (!p) *result = agc_error(vm, "error", closed_text);
+  else if (!p->channel) *result = agc_error(vm, "error", "process: the child has no channel");
   return p ? p->channel : NULL;
 }
 
@@ -1895,7 +1895,7 @@ static agc_value builtin_read_available(agc_vm *vm, agc_value *args, uint32_t sp
   agc_value result;
   proc *p = take_lock(vm, pr, pr->reader, &timeout, &result);
   if (!p) return result;
-  if (!p->captured) return agc_error_value("process: output is not captured");
+  if (!p->captured) return agc_error(vm, "error", "process: output is not captured");
   if (!agc_io_here(vm) || !agc_proc_drains()) {
     start_request(vm, new_request(vm, p, REQ_AVAILABLE), agc_handle_value(pr->reader), timeout, begin_available);
     return agc_void();

@@ -15,11 +15,11 @@
 
 static agc_value ok_void(void) { return agc_result_value(true, agc_void()); }
 
-static agc_value taken_error(const agc_string *name, const char *before, const char *after) {
+static agc_value taken_error(agc_vm *vm, const agc_string *name, const char *before, const char *after) {
   agc_string *head = agc_make_string(before, strlen(before), strlen(before));
   agc_string *tail = agc_make_string(after, strlen(after), strlen(after));
   agc_string *text = agc_concat(agc_concat(head, name), tail);
-  return agc_result_value(false, agc_string_value(text));
+  return agc_error_string(vm, "error", text);
 }
 
 static bool find(agc_vm *vm, const agc_string *name, size_t *at) {
@@ -123,7 +123,7 @@ static agc_value builtin_attach(agc_vm *vm, agc_value *args, uint32_t span) {
   int64_t rank = agc_as_int(vm, args[1]);
   (void)agc_as_fn(vm, args[2]);
   size_t at;
-  if (find(vm, name, &at)) return taken_error(name, "a handler named \"", "\" is already attached");
+  if (find(vm, name, &at)) return taken_error(vm, name, "a handler named \"", "\" is already attached");
   append(&vm->rt->log, args[0], rank, args[2]);
   return ok_void();
 }
@@ -134,7 +134,7 @@ static agc_value builtin_detach(agc_vm *vm, agc_value *args, uint32_t span) {
   agc_log_registry *log = &vm->rt->log;
   agc_string *name = agc_as_string(vm, args[0]);
   size_t at;
-  if (!find(vm, name, &at)) return taken_error(name, "no handler named \"", "\" is attached");
+  if (!find(vm, name, &at)) return taken_error(vm, name, "no handler named \"", "\" is attached");
   memmove(&log->items[at], &log->items[at + 1], (log->count - at - 1) * sizeof *log->items);
   log->count--;
   memset(&log->items[log->count], 0, sizeof *log->items);

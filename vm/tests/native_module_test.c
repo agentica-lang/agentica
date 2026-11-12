@@ -59,9 +59,10 @@ typedef struct {
 static agc_vm vm;
 /* Optional's None and Some, then the variants of enum Shape (Dot, Circle(Int), Rect(Point, Point)). */
 static agc_variant_def variants[9];
-static agc_struct_def structs[2];
+static agc_struct_def structs[3];
 static agc_enum_def enums[3];
 static agc_string *point_fields[3];
+static agc_string *error_fields[AGC_ERROR_FIELDS];
 static agc_program program;
 static int inits, loads;
 static atomic_int racy_inits, racy_loads, ready;
@@ -86,6 +87,24 @@ static void fails(const char *signature, const agc_value *items, size_t n, const
 static bool same_text(agc_value v, const char *want) {
   const agc_string *s = agc_as_string(&vm, v);
   return s->bytes == strlen(want) && memcmp(s->data, want, s->bytes) == 0;
+}
+
+/* With the builtin Error struct (#671), an_error gives an Error of kind "error", which passes the check of a
+   Result[Int] return, and an_get_result gives a module the message, so an API 1.x module reads it as before. */
+static void test_error_record(void) {
+  uint32_t before = vm.rt->error_struct;
+  vm.rt->error_struct = agc_error_struct(&program);
+  assert(vm.rt->error_struct == 2);
+  agc_value letters = agc_test_str("12x");
+  agc_value refused = call("module (String) -> Result[Int] parse demo", &letters, 1);
+  const agc_struct *e = agc_as_struct(&vm, agc_as_result(&vm, refused)->value);
+  assert(e->type == 2 && same_text(e->fields[AGC_ERROR_MESSAGE], "not a number"));
+  assert(same_text(e->fields[AGC_ERROR_KIND], "error"));
+  fails("module (Result[Int]) -> Int unwrap demo", &refused, 1, "RUNTIME-NATIVE-ERROR");
+  /* The raise names the function before the text the module read. */
+  size_t len = vm.outcome->message_len;
+  assert(len >= 12 && memcmp(vm.outcome->message + len - 12, "not a number", 12) == 0);
+  vm.rt->error_struct = before;
 }
 
 static agc_value ints(const int64_t *items, size_t n) {
@@ -1001,13 +1020,17 @@ int main(int argc, char **argv) {
   point_fields[2] = agc_make_string("x: Int, y", 9, 9);
   structs[0] = (agc_struct_def){agc_make_string("Point", 5, 5), 2, false, point_fields, NULL, NULL};
   structs[1] = (agc_struct_def){agc_make_string("Point", 5, 5), 1, false, &point_fields[2], NULL, NULL};
+  static const char *const error_names[AGC_ERROR_FIELDS] = {"kind", "message", "code", "details", "cause", "location"};
+  for (size_t k = 0; k < AGC_ERROR_FIELDS; k++)
+    error_fields[k] = agc_make_string(error_names[k], strlen(error_names[k]), strlen(error_names[k]));
+  structs[2] = (agc_struct_def){agc_make_string("Error", 5, 5), AGC_ERROR_FIELDS, false, error_fields, NULL, NULL};
   enums[0] = (agc_enum_def){agc_make_string("Shape", 5, 5), 2, 3, NULL, NULL};
   enums[1] = (agc_enum_def){agc_make_string("Shape", 5, 5), 5, 2, NULL, NULL};
   enums[2] = (agc_enum_def){agc_make_string("Shape", 5, 5), 7, 2, NULL, NULL};
   program.variants = variants;
   program.variant_count = 9;
   program.structs = structs;
-  program.struct_count = 2;
+  program.struct_count = 3;
   program.enums = enums;
   program.enum_count = 3;
   program.optional = 0;
@@ -1015,6 +1038,7 @@ int main(int argc, char **argv) {
   agc_native_register(&vm, "demo", agentica_native_init);
   test_values();
   test_failures();
+  test_error_record();
   test_binding();
   test_versions();
   test_types();

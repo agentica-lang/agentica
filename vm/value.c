@@ -1,7 +1,8 @@
 /*
  * Values in C: allocation through the Boehm GC (with its stress hook), the
  * checked agc_as_* accessors, String allocation, UTF-8 checks and code point
- * counts, and agc_error_value (an error Result from C text). Core layer.
+ * counts, and the error Results built in C (agc_error: an Error record, or a String
+ * in a program without one) with their readers. Core layer.
  * Design: docs/vm/05-values-execution-builtins.md §5.
  */
 #include "core.h"
@@ -682,6 +683,59 @@ const agc_bytes *agc_make_bytes(const uint8_t *data, size_t len) {
 agc_value agc_error_value(const char *message) {
   size_t n = strlen(message);
   return agc_result_value(false, agc_string_value(agc_make_string(message, n, n)));
+}
+
+static agc_string *ascii_string(agc_vm *vm, const char *text) {
+  size_t n = strlen(text);
+  return agc_small_string(vm, text, n, n);
+}
+
+/* The empty map and none are the run's shared values (agc_vm_init and the loader made them before any thread), so an
+   error built on any scheduler allocates only its struct, its kind and its location. */
+agc_value agc_error_string(agc_vm *vm, const char *kind, agc_string *message) {
+  const agc_runtime *rt = vm->rt;
+  if (rt->error_struct == UINT32_MAX) return agc_result_value(false, agc_string_value(message));
+  agc_value none = agc_optional_make(rt->program, false, agc_void());
+  agc_struct *e = agc_new_struct(rt->error_struct, AGC_ERROR_FIELDS);
+  e->fields[AGC_ERROR_KIND] = agc_string_value(ascii_string(vm, kind));
+  e->fields[AGC_ERROR_MESSAGE] = agc_string_value(message);
+  e->fields[AGC_ERROR_CODE] = none;
+  e->fields[AGC_ERROR_DETAILS] = rt->empty_map;
+  e->fields[AGC_ERROR_CAUSE] = none;
+  e->fields[AGC_ERROR_LOCATION] = agc_string_value(agc_error_location(vm));
+  return agc_result_value(false, agc_struct_value(e));
+}
+
+agc_value agc_error(agc_vm *vm, const char *kind, const char *message) {
+  size_t n = strlen(message);
+  return agc_error_string(vm, kind, agc_utf8_decode((const uint8_t *)message, n, "\xEF\xBF\xBD", false));
+}
+
+bool agc_is_error(const agc_vm *vm, agc_value v) {
+  uint32_t type = vm->rt->error_struct;
+  return type != UINT32_MAX && v.tag == AGC_T_STRUCT && ((const agc_struct *)v.as.p)->type == type &&
+         ((const agc_struct *)v.as.p)->n == AGC_ERROR_FIELDS;
+}
+
+agc_string *agc_error_message(agc_vm *vm, agc_value payload) {
+  if (!agc_is_error(vm, payload)) return agc_as_string(vm, payload);
+  return agc_as_string(vm, agc_as_struct(vm, payload)->fields[AGC_ERROR_MESSAGE]);
+}
+
+agc_string *agc_error_halt_text(agc_vm *vm, agc_value payload) {
+  agc_string *message = agc_error_message(vm, payload);
+  if (!agc_is_error(vm, payload)) return message;
+  const agc_string *kind = agc_as_string(vm, agc_as_struct(vm, payload)->fields[AGC_ERROR_KIND]);
+  if (kind->bytes == 5 && memcmp(kind->data, "error", 5) == 0) return message;
+  size_t bytes = agc_size_add(agc_size_add(message->bytes, kind->bytes), 3);
+  agc_string *text = agc_new_string(bytes, agc_size_add(agc_size_add(message->chars, kind->chars), 3));
+  char *at = text->data;
+  memcpy(at, message->data, message->bytes);
+  at += message->bytes;
+  memcpy(at, " (", 2);
+  memcpy(at + 2, kind->data, kind->bytes);
+  at[2 + kind->bytes] = ')';
+  return text;
 }
 
 _Noreturn void agc_wrong_tag(agc_vm *vm) {

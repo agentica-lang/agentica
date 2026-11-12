@@ -441,6 +441,11 @@ bool agc_poll_one_wait(void);
    its word ("block", "lambda"), which a stack line shows and after which the name already says where it is; else 0. */
 size_t agc_block_word(const char *name, size_t len);
 void agc_stack_capture(const agc_vm *vm, agc_outcome *outcome);
+/* Where an error built in C is made: "path:line:col" of the call that the innermost frame of the current task makes,
+   skipping prelude and native frames as a stack trace does, with the source name the file stores (not joined with
+   --source-root). The empty String when no frame of the program runs (a detached job's done half, whose value is
+   dropped; a C test). */
+agc_string *agc_error_location(const agc_vm *vm);
 void agc_print_diagnostic(FILE *err, const agc_program *program, const agc_outcome *outcome, agc_style style,
                           bool task);
 agc_string *agc_crash_text(const agc_program *program, const agc_outcome *outcome);

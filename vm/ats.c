@@ -261,7 +261,7 @@ static agc_value builtin_get(agc_vm *vm, agc_value *args, uint32_t span) {
   const node *found = find(vm, load(t)->by_key, key_arg(vm, args[1]));
   if (found) return agc_result_value(true, found->e.value);
   agc_string *message = agc_concat(agc_concat(ascii("key "), agc_debug(vm, args[1])), ascii(" is not in the table"));
-  return agc_result_value(false, agc_string_value(message));
+  return agc_error_string(vm, "error", message);
 }
 
 static agc_value builtin_has_key(agc_vm *vm, agc_value *args, uint32_t span) {
