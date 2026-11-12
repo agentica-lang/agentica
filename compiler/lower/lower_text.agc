@@ -95,7 +95,7 @@ def program_lines(program: Ir.Program) -> List[String]
 
     line = "enum #{Text.quote(entry.name)}#{names}"
     if entry.decodable
-      types = entry.types.map do |type: Types.Type| Types.debug_text(type) end.join(", ")
+      types = Types.debug_list(entry.types)
       line = "#{line} types=[#{types}]"
     end
 
@@ -112,10 +112,11 @@ def program_lines(program: Ir.Program) -> List[String]
 end
 
 def struct_line(index: Int, entry: Ir.StructDef) -> String
-  fields = entry.fields.map do |field: String| Text.quote(field) end.join(",")
+  quoted = entry.fields.map do |field: String| Text.quote(field) end
+  fields = quoted.join(",")
   line = "struct s#{index} #{Text.quote(entry.name)} [#{fields}]"
   if entry.decodable
-    types = entry.types.map do |type: Types.Type| Types.debug_text(type) end.join(", ")
+    types = Types.debug_list(entry.types)
     line = "#{line} types=[#{types}]"
   end
 
@@ -183,7 +184,8 @@ def arg_text(instr: Ir.Instr, at: Int) -> String
   elsif (op == "struct" or op == "struct-with") and at == 2
     return "s#{value}"
   elsif op == "struct-with" and at == 3
-    positions = instr.args.drop(3).map do |position: Int| position.to_s end.join(" ")
+    texts = instr.args.drop(3).map do |position: Int| position.to_s end
+    positions = texts.join(" ")
     return "[#{positions}]"
   elsif (op == "field" or op == "payload" or op == "list" or op == "map") and at == 2
     return value.to_s

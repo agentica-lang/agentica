@@ -58,7 +58,7 @@ total = (
 
 lines = File.foreach("ledger.csv", 65536, TIMEOUT_MS)
   .drop(1)                                     # header
-  .map do |line| parse(line) end
+  .map { |line| parse(line) }
   .filter(&big_expense?)
 ```
 

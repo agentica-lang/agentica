@@ -2,5 +2,5 @@
 def main() -> Void
   xs = [10, 20]
   indexes = Lazy.produce(0) do |i| i + 1 end
-  puts(indexes.map do |i| xs[i] end.to_a)
+  puts(indexes.map { |i| xs[i] }.to_a)
 end

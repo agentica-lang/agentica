@@ -314,7 +314,8 @@ export def lower_update(cx: State.Cx, fx: State.Fx, node: Ast.StructUpdate, want
   window = fx.next - 1
   out = try cx.expression.call(cx, fx, node.target, window, false, false)
   fx = out.fx
-  positions = node.args.map do |arg: Ast.NamedArg| info.positions[arg.name] end.sort
+  written = node.args.map do |arg: Ast.NamedArg| info.positions[arg.name] end
+  positions = written.sort
   for _ in positions
     fx = State.alloc(fx)
   end

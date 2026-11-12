@@ -621,7 +621,8 @@ def scan_all(src: String, gzip: Bool, scan: Scan, members: List[String]) -> Resu
   deadline = scan.ctx.deadline
   stream = File.chunks(src, CHUNK, try time_left(deadline))
   if gzip
-    stream = stream.with_index do |chunk: Bytes, index: Int| try within_input(chunk, index) end.gunzip(SCAN_BYTES)
+    checked = stream.with_index do |chunk: Bytes, index: Int| try within_input(chunk, index) end
+    stream = checked.gunzip(SCAN_BYTES)
   end
   outcome = stream.reduce(scan) do |sc: Scan, chunk: Bytes| try feed(sc, chunk, gzip) end
   case outcome

@@ -18,7 +18,7 @@ end
 ## Reads `text`. Returns the expression, or an error whose message says what is wrong. An empty text is the expression
 ## that selects every scenario.
 export def compile(text: String) -> Result[Expr]
-  spaced = text.split("").map do |character| separator(character) end.join("")
+  spaced = text.split("").map(&separator).join("")
   words = spaced.split(" ").filter do |word| word != "" end
   return ok(Expr(groups: [])) if words.size == 0
 

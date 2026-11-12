@@ -105,6 +105,9 @@ Invoke the `pr-reviewer` skill (via the Skill tool) and follow it to review GitH
 
 - Do not ask which findings to fix: fix every critical and major plus the
   worthwhile minors; list skipped minors and why in the PR body.
+- A fix for a critical or major reruns the change's whole generator or
+  matrix before each push, not only the reported input: a spot fix can break
+  a case next to it.
 - After a pass with a critical or major: push, wait for green CI, new review.
   A pass with only minors: fix and merge without another review.
 - **Third-pass stop:** if the third review still has a critical or major,
@@ -155,6 +158,8 @@ Invoke the `pr-reviewer` skill (via the Skill tool) and follow it to review GitH
   `gh pr merge N --merge`.
 - Then `gh pr list --state open --json number,mergeable,mergeStateStatus`:
   tell the author of any PR that now conflicts to merge `origin/master`.
+  After a `VERSION` change, every open PR that refreshes stage0 also merges
+  master and refreshes it again (`references/ci.md` of agentica-development).
 - A `CHANGELOG.md` conflict on GitHub: merge `origin/master` locally; the
   union driver of `.gitattributes` keeps both sides, so check the order.
 - Stacks merge bottom-up; merge the updated lower branch into the next one.

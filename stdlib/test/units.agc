@@ -108,7 +108,8 @@ def list(settings: Settings, path: String, bytecode: String) -> Listed
   end
   found = output.unwrap!
   records = read.items
-  printed = found.stdout.split("\n").filter do |line| line != "" end.join("\n")
+  lines = found.stdout.split("\n").filter do |line| line != "" end
+  printed = lines.join("\n")
   shown = Child.tail(joined(printed, Child.stderr_text(found.stderr)), 65536)
   if found.truncated
     return broken(
@@ -136,19 +137,19 @@ def list(settings: Settings, path: String, bytecode: String) -> Listed
     return broken(Report.error_at("RUNTIME-TEST-RUN", "the test file did not call Test.run", where), shown)
   end
   empty: Map[Int, UnitTest] = {}
-  listed = records.filter do |record| Child.event_of(record) == "test" end
-    .reduce(empty) do |acc: Map[Int, UnitTest], record: Json|
-      line = Child.int_of(record, "line")
-      column = Child.int_of(record, "column")
-      acc.put(
-        acc.size,
-        UnitTest(
-          index: acc.size,
-          name: Child.text_of(record, "name"),
-          span: Report.Span(file: path, line: line, column: column, end_column: column),
-        ),
-      )
-    end
+  tests = records.filter do |record| Child.event_of(record) == "test" end
+  listed = tests.reduce(empty) do |acc: Map[Int, UnitTest], record: Json|
+    line = Child.int_of(record, "line")
+    column = Child.int_of(record, "column")
+    acc.put(
+      acc.size,
+      UnitTest(
+        index: acc.size,
+        name: Child.text_of(record, "name"),
+        span: Report.Span(file: path, line: line, column: column, end_column: column),
+      ),
+    )
+  end
 
   Listed.Ready(listed.values)
 end
@@ -419,7 +420,10 @@ def scenario(item: UnitTest, duration_ms: Int, verdict: Report.Verdict, output: 
   )
 end
 
-def joined(output: String, stderr: String) -> String = [output, stderr].filter do |part| part != "" end.join("\n")
+def joined(output: String, stderr: String) -> String
+  parts = [output, stderr].filter do |part| part != "" end
+  parts.join("\n")
+end
 
 # The child that runs the tests writes the LCOV part of the file; the one that lists them does not.
 def args(settings: Settings, bytecode: String, steps: Int, mode: String) -> List[String]

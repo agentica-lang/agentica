@@ -8,7 +8,7 @@ import Tokens from "token"
 ## Returns the tokens of the text, one per line, or the line of the first lexing problem.
 export def lex_text(text: String) -> String
   case Lexer.lex(text)
-    Diag.Outcome.Done(tokens) -> tokens.map do |token| token_line(token) end.join("\n")
+    Diag.Outcome.Done(tokens) -> tokens.map(&token_line).join("\n")
     Diag.Outcome.Failed(problem) -> Text.diagnostic_line(problem)
   end
 end

@@ -126,9 +126,11 @@ channel of an enum (there is no `select`). `TaskDown` is a builtin record:
 `TaskExit.Crashed` or `TaskExit.Cancelled`), and for a crash its diagnostic:
 `code` (the stable `RUNTIME-` code, to match on), `message`, `file`, `line`
 and `column` (`""` and `0` otherwise). The send never
-waits or fails: a closed or full channel drops the notice, so give it room. A
+waits or fails: a closed or full channel drops the notice, so give it room for
+every notice that can be pending at once. A
 crash whose notice went in counts as observed. `wrap` runs in a task of its
-own.
+own. Monitor a task after any setup step that can fail: a failed start leaves
+a stale notice in the inbox.
 
 `Task.current` is the running task as a `TaskRef`: `Task.monitor`,
 `Task.cancel` and `.id` take it, but `Task.await` of it is
@@ -225,7 +227,7 @@ negative value is `RUNTIME-INVALID-DURATION`, and there is no wait-forever
 value.
 
 `ch.lazy(timeout_ms)` reads the channel as a `Lazy` until it is closed and
-drained (`lazy.md`): `jobs.lazy(5000).select do |n| n > 0 end.reduce(0) do |s,
+drained (`lazy.md`): `jobs.lazy(5000).select { |n| n > 0 }.reduce(0) do |s,
 n| s + n end`.
 
 `closed?` is `true` once the channel is closed, even with values still

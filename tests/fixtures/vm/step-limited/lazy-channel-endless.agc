@@ -10,5 +10,5 @@ end
 def main() -> Void
   ch: Channel[Int] = Channel.new(4)
   Task.spawn(&feed, ch)
-  puts(ch.lazy(60000).map do |n| n + 1 end.to_a)
+  puts(ch.lazy(60000).map { |n| n + 1 }.to_a)
 end

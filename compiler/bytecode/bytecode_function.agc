@@ -161,7 +161,8 @@ end
 # to the table when it is new. The VM reads that number as a u16, so the table holds at most 65,535 updates.
 def update_operands(program: Ir.Program, tables: Tables, args: List[Int]) -> Result[Operands]
   positions = args.drop(3)
-  fields = positions.map do |position: Int| position.to_s end.join(",")
+  texts = positions.map do |position: Int| position.to_s end
+  fields = texts.join(",")
   key = "#{args[2]}:#{fields}"
   found = Pool.find(tables.updates, key)
   return ok(plain(tables, args[0], args[1], found.unwrap!)) if found.some?

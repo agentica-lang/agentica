@@ -48,7 +48,7 @@ lazy.write_bytes(path: String, timeout_ms: Int = 30000) -> Result[Int]   # Bytes
 ```ruby
 def main() -> Void
   naturals = Lazy.produce(1) do |n| n + 1 end
-  odd_squares = naturals.map do |n| n * n end.select do |n| n % 2 == 1 end
+  odd_squares = naturals.map { |n| n * n }.select do |n| n % 2 == 1 end
   puts(odd_squares.first(3))                                  # ok([1, 9, 25])
   puts((1..7).lazy.each_slice(3).to_a)                        # ok([[1, 2, 3], [4, 5, 6], [7]])
   done = naturals.each do |n|
@@ -79,7 +79,7 @@ end
 
 `try` works in every block of a `Lazy` method (a step, `Lazy.produce`, a
 terminal), whatever the block gives; the block still ends with a plain value,
-not `ok(...)`: `words.lazy.map do |w| try parse(w) * 10 end.to_a` is the first
+not `ok(...)`: `words.lazy.map { |w| try parse(w) * 10 }.to_a` is the first
 `parse` error. A failed `try` ends the pipeline: no later item is pulled, a file
 of the run is closed, and the terminal returns the error. A block nested in a
 `Lazy` block (`xs.map do ... end` inside a step) follows the usual rule: `try`
@@ -108,7 +108,7 @@ there is `CHECK-TRY-CONTEXT` unless that block returns a Result.
 - `write_lines(path, timeout_ms = 30000)` takes a `Lazy[String]` (a `Lazy[Int]`
   is `CHECK-TYPE-MISMATCH`: `map` to a String first). It creates or truncates
   the file and writes each item and `\n`: `File.foreach(src, 4096,
-  1000).drop(1).map do |line| ... end.write_lines("out.txt", 1000)` is `ok()`
+  1000).drop(1).map { |line| ... }.write_lines("out.txt", 1000)` is `ok()`
   or the first error.
 - The file opens before the first item is pulled and is flushed and closed
   before the terminal returns, on every path. What was written before an error

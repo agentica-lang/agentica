@@ -102,7 +102,8 @@ end
 
 # The builtin as a reference when it can be one: one form, the plain rule, and types a program can write.
 def usable(entry: Model.Builtin, name: String, method: String) -> Found
-  types = entry.parameters.map do |parameter: Model.Named| parameter.type end.push(entry.result)
+  params = entry.parameters.map do |parameter: Model.Named| parameter.type end
+  types = params.push(entry.result)
   if entry.alternatives.size > 0 or !plain?(entry.rule) or !types.all? do |type: T.Type| writable?(type) end
     return Found.Refused(BLOCK_HELP)
   end

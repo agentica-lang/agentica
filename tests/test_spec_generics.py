@@ -248,11 +248,11 @@ RULES = {
     "find and group_by on a List of T": (
         elements("_ = xs.find do |_a: T| true end", "g = xs.group_by do |_| \"k\" end", "puts(g.size)"), None, None),
     "the other block methods on a List of T": (
-        elements("xs.each_with_index do |_, i|", "  puts(i)", "end", "puts(xs.take_while do |_| true end.size)",
-                 "puts(xs.partition do |_| true end.size)", "puts(xs.min_by do |_| 1 end.some?)",
-                 "puts(xs.flat_map do |x| [x] end.size)"), None, None),
+        elements("xs.each_with_index do |_, i|", "  puts(i)", "end", "puts(xs.take_while { |_| true }.size)",
+                 "puts(xs.partition { |_| true }.size)", "puts(xs.min_by { |_| 1 }.some?)",
+                 "puts(xs.flat_map { |x| [x] }.size)"), None, None),
     "each and filter on a Map of T": (
-        elements("m.each do |k, _|", "  puts(k)", "end", "puts(m.filter do |_, _| true end.size)"), None, None),
+        elements("m.each do |k, _|", "  puts(k)", "end", "puts(m.filter { |_, _| true }.size)"), None, None),
     "lazy filter on a List of T": (elements("_l = xs.lazy.filter do |_| true end", "puts(1)"), None, None),
     "a generic function reference as the callback of filter": (
         elements("puts(xs.filter(&yes).size)", header=YES), None, None),

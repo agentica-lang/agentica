@@ -35,7 +35,7 @@ end
 
 ## Braces
 
-A call without arguments can take its block in braces instead, on one line or several. A call with arguments takes `do ... end`.
+A call without arguments can take its block in braces instead, on one line or several. A call with arguments takes `do ... end`. Nothing chains after the `end` of a `do` block (`CHECK-CHAIN-AFTER-END`): to call a method on the result, write the block in braces, `xs.map { |x| x * x }.sum`, or give the result a name first.
 
 ```agentica
 def main() -> Void
@@ -179,14 +179,14 @@ Where a call takes a block, the block is the one way to write it: `xs.map(->(x: 
 
 ## Chains over several lines
 
-A line that starts with a dot and a name continues the line before it, so a long chain of method calls and blocks reads one step per line, with no parentheses. A comment may end a line, or sit alone on a line between two steps. A blank line ends the statement.
+A line that starts with a dot and a name continues the line before it, so a long chain of method calls and blocks in braces reads one step per line, with no parentheses. A comment may end a line, or sit alone on a line between two steps. A blank line ends the statement.
 
 ```agentica
 def main() -> Void
   scores = [3, 8, 5, 10, 1]
-    .select do |x| x > 2 end # drop the small ones
+    .select { |x| x > 2 } # drop the small ones
     # then double what is left
-    .map do |x| x * 2 end
+    .map { |x| x * 2 }
     .take(3)
 
   puts(scores)

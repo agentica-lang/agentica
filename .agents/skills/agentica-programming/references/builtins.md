@@ -215,7 +215,7 @@ Range.include?(r: Range, value: Int) -> Bool
 Range.each(r: Range, f: Fn[Int, Void]) -> Void
 Range.first(r: Range) -> Result[Int]                     # error("the range is empty") when empty
 Range.last(r: Range) -> Result[Int]                      # last included value: (1...5).last is ok(4)
-Range.lazy(r: Range) -> Lazy[Int]                        # (1..n).lazy.select do ... end.first(3) (lazy.md)
+Range.lazy(r: Range) -> Lazy[Int]                        # (1..n).lazy.select { ... }.first(3) (lazy.md)
 Range.map(r: Range, f: Fn[Int, B]) -> List[B]            # as (1..5).to_a.map, without the list first
 ```
 

@@ -190,7 +190,8 @@ end
 def covered_run(config: Config, parts: String, entries: List[Entry]) -> Coverage.Run
   return Coverage.Run(path: "", files: [], broken: [], problem: "") if parts == ""
 
-  left_out = entries.filter do |entry| entry.kind == "tests" end.map do |entry| Coverage.shown(entry.path) end
+  tests = entries.filter do |entry| entry.kind == "tests" end
+  left_out = tests.map do |entry| Coverage.shown(entry.path) end
   Coverage.collect(parts, left_out.push(Coverage.shown(config.steps_source)))
 end
 
@@ -412,8 +413,8 @@ def list_steps(config: Config, where: Report.Span) -> Listing
     return Listing.Broken(crash.unwrap!) if crash.ok?
     return Listing.Broken(Report.error_at("RUNTIME-BDD-CONTEXT", "the step program did not call BDD.run", where))
   end
-  texts = records.filter do |record| Child.event_of(record) == "step" end
-    .map do |record| Child.text_of(record, "pattern") end
+  steps = records.filter do |record| Child.event_of(record) == "step" end
+  texts = steps.map do |record| Child.text_of(record, "pattern") end
 
   case Match.compile(texts, where)
     Gherkin.Outcome.Done(patterns) -> Listing.Ready(patterns)

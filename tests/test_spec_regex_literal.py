@@ -86,9 +86,9 @@ def test_programs_print_what_the_rule_says(tmp_path):
 # literals of the same shape at the same place, so the constant that each literal of a body becomes must stay its own.
 MODULES = {
     "letters.agc": 'import Regex from "std/regex"\n\nexport def count(items: List[String]) -> Int\n'
-                   "  return items.select do |item: String| Regex.match?(item, /^a+$/) end.size\nend\n",
+                   "  return items.select { |item: String| Regex.match?(item, /^a+$/) }.size\nend\n",
     "digits.agc": 'import R from "std/regex"\n\nexport def count(items: List[String]) -> Int\n'
-                  "  return items.select do |item: String| R.match?(item, /^1+$/) end.size\nend\n",
+                  "  return items.select { |item: String| R.match?(item, /^1+$/) }.size\nend\n",
     "names.agc": 'import {match?} from "std/regex"\n\nexport def first_or[T](items: List[T], fallback: T) -> T\n'
                  "  if match?(\"#{items.size}\", /^[1-9]/)\n    return items[0]\n  end\n\n  return fallback\nend\n",
     "main.agc": 'import Digits from "digits"\nimport Letters from "letters"\nimport Names from "names"\n\n'

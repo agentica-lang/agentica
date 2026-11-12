@@ -192,6 +192,9 @@ lines show. A task's stack ends with `task spawned at file:line:column`.
   type (`x * 2`: Int or String); annotate (`do |x: Int|`, `->(x: Int) { ... }`).
 - `CHECK-LAMBDA-BLOCK`: a lambda as the last argument of a call that takes a
   block; write the block (`xs.map do |x| ... end`).
+- `CHECK-CHAIN-AFTER-END`: `.name`, `[i]` or `|>` after the `end` of a `do`
+  block; write a one-line block in braces (`xs.map { |x| f(x) }.size`) or bind
+  the result to a name first.
 - `CHECK-LOOP-CONTROL`: `break` or `next` outside a `while`/`for` body, or
   inside a block.
 - `CHECK-UNUSED-VARIABLE`, `CHECK-UNREACHABLE-CODE`,

@@ -108,9 +108,11 @@ removes the old keys once no stage0 imports them.
 A PR that changes stage0 runs `make stage0-check BASE_STAGE0=<base stage0>` in
 the `checks` job (`mk/bootstrap.mk` says what it compares). It checks the merge
 commit, so when another `compiler/` change lands first, merge master and refresh
-again. Case (b) cannot pass it: say so in the PR, and the owner approves by
-hand. The loader also accepts format 5 (`AGC_FORMAT_PREVIOUS` in
-`vm/value.h`), kept for an older stage0; the checked-in stage0 is format 6.
+again. The same holds after any `VERSION` change on master (a release, a patch
+or its forward-port): the version is in the stage0 bytes. Case (b) cannot pass
+it: say so in the PR, and the owner approves by hand. The loader also accepts
+format 5 (`AGC_FORMAT_PREVIOUS` in `vm/value.h`), kept for an older stage0; the
+checked-in stage0 is format 6.
 
 ## Windows console
 

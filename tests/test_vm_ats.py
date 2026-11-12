@@ -77,7 +77,7 @@ def main() -> Void
   hits: ATS[String, Int] = ATS.new()
   cache: ATS[String, Int] = ATS.new()
   tasks = (0...64).to_a.map do |id| Task.spawn(&work, Job(id: id, hits: hits, cache: cache)) end
-  stored = tasks.map do |task| Task.await(task) end.sum
+  stored = tasks.map { |task| Task.await(task) }.sum
   puts("total #{hits.get("total").unwrap_or(0)}")
   puts("stored #{stored}")
   puts("hits #{hits.size}")
@@ -138,7 +138,7 @@ end
 
 def main() -> Void
   tasks = (0...8).to_a.map do |id| Task.spawn(&churn, id) end
-  puts(tasks.map do |task| Task.await(task) end.sum)
+  puts(tasks.map { |task| Task.await(task) }.sum)
 end
 """
 
@@ -151,7 +151,7 @@ def operations(seed, count, keys):
 
 def program(ops, key_type):
     if key_type == "Bytes":
-        key, keys = 'key("{k}")', "t.keys.map do |k| OpenSSL.Digest.hexencode(k) end"
+        key, keys = 'key("{k}")', "t.keys.map {{ |k| OpenSSL.Digest.hexencode(k) }}"
     else:
         key, keys = '"{k}"', "t.keys"
     lines = []

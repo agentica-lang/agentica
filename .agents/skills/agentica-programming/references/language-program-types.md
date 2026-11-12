@@ -46,15 +46,16 @@ constants, declarations and types. Builtin methods and `to_s`: `builtins.md`.
 - Blocks end with `end`; `#` starts a comment. A newline ends a statement.
   Inside `(...)`, `[...]` and `{...}` an expression may span lines (trailing
   commas allowed); wrap a long expression in parentheses to split it.
-- A line starting with `.name` continues the line before it, also after `do ...
-  end`; a `#` comment may end a line or sit between steps. These do not continue
-  a line: a blank line, a `##` line, a line starting with `..`, `...` or `|>`,
-  and a dot after the head of an `if`, `while`, `case` or `for`.
+- A line starting with `.name` continues the line before it, but not after the
+  `end` of a `do` block (`CHECK-CHAIN-AFTER-END`); a `#` comment may end a line
+  or sit between steps. These do not continue a line: a blank line, a `##`
+  line, a line starting with `..`, `...` or `|>`, and a dot after the head of an
+  `if`, `while`, `case` or `for`.
 
   ```ruby
   lines = File.foreach(path, 65536, 1000)
     .drop(1)                          # header
-    .map do |line| parse(line) end
+    .map { |line| parse(line) }
     .select(&big?)
   ```
 - Reserved words: `def struct enum case do import export end if elsif else

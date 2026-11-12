@@ -32,7 +32,9 @@ rule that a site page shows.
   `HUGO_PARAMS_VERSION`; the `release` shortcode (Getting started) fails a
   plain `hugo` build without it. Never type the version in `site/`.
 - To take a newer theme: `git -C site/themes/docs-theme checkout <commit>`,
-  `git add site/themes/docs-theme`, `make site`. `tools/site_versions.py`
+  `git add site/themes/docs-theme`, `make site`. `<commit>` is a commit on the
+  theme's default branch (never one from a PR branch): a deleted or squashed
+  branch breaks `git submodule update`. `tools/site_versions.py`
   builds each tag with the theme commit that tag pins.
 
 ## Content

@@ -16,7 +16,7 @@ def lines(path: String) -> Lazy[String]
 end
 
 def parse_all(path: String) -> Result[Void]
-  return lines(path).map do |line| line.strip end.each do |line|
+  return lines(path).map { |line| line.strip }.each do |line|
     n = try line.to_i
     puts("  #{n} + 1 = #{n + 1}")
     ok()
@@ -24,7 +24,7 @@ def parse_all(path: String) -> Result[Void]
 end
 
 def stop_at_two(path: String) -> Result[Void]
-  return lines(path).filter do |line| line != "" end.each do |line|
+  return lines(path).filter { |line| line != "" }.each do |line|
     puts("  saw #{line}")
     if line == "2"
       return error("stopped at #{line}")
@@ -34,11 +34,11 @@ def stop_at_two(path: String) -> Result[Void]
 end
 
 def divide(path: String) -> Result[List[Int]]
-  return lines(path).map do |line| 1 / (line.length - line.length) end.to_a
+  return lines(path).map { |line| 1 / (line.length - line.length) }.to_a
 end
 
 def park(path: String, gate: Channel[Int]) -> Result[Void]
-  return lines(path).map do |line| line end.each do |line|
+  return lines(path).map { |line| line }.each do |line|
     puts("  parked on #{line}")
     _ = gate.recv(60000)
     ok()
@@ -56,15 +56,15 @@ def main() -> Void
   Result.unwrap!(File.close(out, 60000))
   recipe = lines(numbers).map do |line| line.length end
   puts("a recipe opens nothing: #{recipe.first(0)}")
-  puts("to the end: #{lines(numbers).map do |line| "<#{line}>" end.to_a}")
+  puts("to the end: #{lines(numbers).map { |line| "<#{line}>" }.to_a}")
   puts("twice, read twice: #{recipe.reduce(0) do |sum, n| sum + n end} #{recipe.reduce(0) do |sum, n| sum + n end}")
   puts("first stops early: #{lines(numbers).first(2)}")
   puts("find stops early: #{lines(numbers).find do |line| line == "2" end}")
   puts("slices: #{lines(numbers).each_slice(3).to_a}")
   puts("an error from the block: #{stop_at_two(numbers)}")
   puts("a failed try: #{parse_all(words)}")
-  puts("invalid UTF-8: #{lines(bad).map do |line| line end.to_a}")
-  puts("a line over the buffer: #{lines(long).map do |line| line end.to_a}")
+  puts("invalid UTF-8: #{lines(bad).map { |line| line }.to_a}")
+  puts("a line over the buffer: #{lines(long).map { |line| line }.to_a}")
   puts("a missing file: #{lines(at(dir, "missing.txt")).take(1).to_a}")
   puts("a bad timeout: #{File.foreach(numbers, 1024, 0).take(1).to_a}")
   puts("a crash in a task: #{Task.await(Task.spawn(&divide, numbers)).ok?}")

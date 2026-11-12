@@ -18,13 +18,14 @@ def main() -> Void
   out = at(dir, "out.txt")
   puts("three lines: #{["a", "bc", ""].lazy.write_lines(out, 60000)} #{back(out)}")
   puts("truncated: #{["new"].lazy.write_lines(out, 60000)} #{back(out)}")
-  puts("no items, an empty file: #{(1..0).lazy.map do |n| "#{n}" end.write_lines(out, 60000)} #{back(out)}")
-  puts("an endless source with take: #{Lazy.produce(1) do |n| n * 2 end.map do |n| "#{n}" end.take(4).write_lines(out, 60000)} #{back(out)}")
+  puts("no items, an empty file: #{(1..0).lazy.map { |n| "#{n}" }.write_lines(out, 60000)} #{back(out)}")
+  powers = Lazy.produce(1) do |n| n * 2 end
+  puts("an endless source with take: #{powers.map { |n| "#{n}" }.take(4).write_lines(out, 60000)} #{back(out)}")
   copy = at(dir, "copy.txt")
-  puts("a copy through steps: #{File.foreach(out, 1024, 60000).filter do |line| line != "4" end.write_lines(copy, 60000)} #{back(copy)}")
+  puts("a copy through steps: #{File.foreach(out, 1024, 60000).filter { |line| line != "4" }.write_lines(copy, 60000)} #{back(copy)}")
   big = List.repeat("x", 70000).join("")
   puts("lines past the buffer: #{[big, big, "end"].lazy.write_lines(out, 60000)} #{File.read_text(out, 60000).unwrap!.length}")
-  failed = ["1", "2", "x", "4"].lazy.map do |s| "#{try number(s) * 10}" end.write_lines(out, 60000)
+  failed = ["1", "2", "x", "4"].lazy.map { |s| "#{try number(s) * 10}" }.write_lines(out, 60000)
   puts("a failed try keeps what was written: #{failed} #{back(out)}")
   mib = List.repeat(List.repeat("y", 1024).join(""), 1024).join("")
   puts("a line over 1 MiB: #{["ok", mib + "y"].lazy.write_lines(out, 60000)} #{back(out)}")
@@ -35,5 +36,5 @@ def main() -> Void
     puts("  never called")
     n + 1
   end
-  puts("a failed open pulls nothing: #{calls.map do |n| "#{n}" end.write_lines(dir, 60000).ok?}")
+  puts("a failed open pulls nothing: #{calls.map { |n| "#{n}" }.write_lines(dir, 60000).ok?}")
 end

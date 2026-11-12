@@ -58,7 +58,7 @@ def answer(fields: List[String]) -> String
     return "error"
   end
 
-  return bytes_of(fields[1]).to_a.map do |byte: Int| byte.to_s end.join(" ")
+  return bytes_of(fields[1]).to_a.map { |byte: Int| byte.to_s }.join(" ")
 end
 
 def main() -> Void

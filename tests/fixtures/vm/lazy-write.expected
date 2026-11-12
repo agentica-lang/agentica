@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 474,
+  "steps": 476,
   "stdout": [
     "three lines: ok() \"a\\nbc\\n\\n\"",
     "truncated: ok() \"new\\n\"",

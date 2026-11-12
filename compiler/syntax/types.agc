@@ -383,7 +383,10 @@ export def debug_text(type: Type) -> String
 end
 
 ## The types joined by ", ".
-export def list_text(types: List[Type]) -> String = types.map do |type: Type| to_text(type) end.join(", ")
+export def list_text(types: List[Type]) -> String = types.map(&to_text).join(", ")
+
+## The types joined by ", ", as debug_text writes each.
+export def debug_list(types: List[Type]) -> String = types.map(&debug_text).join(", ")
 
 # A struct with no type arguments prints as Struct(Name), a generic one as Struct(Name, [Int]).
 def struct_debug(name: String, args: List[Type]) -> String
@@ -392,8 +395,6 @@ def struct_debug(name: String, args: List[Type]) -> String
   "Struct(#{name}, [#{debug_list(args)}])"
 end
 
-def debug_list(types: List[Type]) -> String = types.map do |type: Type| debug_text(type) end.join(", ")
-
 def generic_text(name: String, args: List[Type], written: Map[String, String]) -> String
   return written_name(name, written) if args.size == 0
 
@@ -401,7 +402,8 @@ def generic_text(name: String, args: List[Type], written: Map[String, String]) -
 end
 
 def list_text_as(types: List[Type], written: Map[String, String]) -> String
-  types.map do |type: Type| to_text_as(type, written) end.join(", ")
+  texts = types.map do |type: Type| to_text_as(type, written) end
+  texts.join(", ")
 end
 
 # The name with the alias that `written` has for the linked name or, failing that, for its prefix.

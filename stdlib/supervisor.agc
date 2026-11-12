@@ -235,7 +235,8 @@ end
 # Counts a crash of a child; past the limit the supervisor gives up.
 def crashed(plan: Plan, state: State, index: Int) -> State
   now = Time.monotonic_ms
-  recent = state.crashes[index].select do |at| now - at < plan.options.within_ms end.push(now)
+  kept = state.crashes[index].select do |at| now - at < plan.options.within_ms end
+  recent = kept.push(now)
   stopped = state.with(stops: state.stops.set(index, none), crashes: state.crashes.set(index, recent))
   if recent.size > plan.options.max_restarts
     give_up(plan, stopped, index, "crashed #{times(recent.size)} in #{plan.options.within_ms} ms")

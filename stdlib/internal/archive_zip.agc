@@ -916,10 +916,10 @@ def pump_deflated(st: Stream, entry: Entry, handle: FileHandle, deadline: Int, s
     cap = 1
   end
   source = st.handle
-  outcome = Lazy.produce(start) do |piece: Piece| try next_piece(source, piece, deadline, src, entry.canon) end
-    .take_while do |piece: Piece| !piece.done end
-    .map do |piece: Piece| piece.bytes end
-    .inflate(true, cap)
+  produced = Lazy.produce(start) do |piece: Piece| try next_piece(source, piece, deadline, src, entry.canon) end
+  pieces = produced.take_while do |piece: Piece| !piece.done end
+  chunks = pieces.map do |piece: Piece| piece.bytes end
+  outcome = chunks.inflate(true, cap)
     .reduce(Pump(got: 0, crc: 0)) do |pump: Pump, out: Bytes| try pump_out(handle, pump, out, deadline, entry) end
 
   case outcome

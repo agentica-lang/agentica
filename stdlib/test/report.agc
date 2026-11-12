@@ -214,7 +214,8 @@ def report_text(files: List[FileResult], ai: Bool, seed: Int, timing: Bool, wall
   if sums.exit_code != 0
     last = "#{last}, seed #{seed}"
   end
-  chunks.filter do |chunk| chunk != "" end.push(last).join("\n")
+  shown = chunks.filter do |chunk| chunk != "" end
+  shown.push(last).join("\n")
 end
 
 # The time of a file: the durations of its scenarios, which run one after another.
@@ -232,7 +233,8 @@ def timing_text(files: List[FileResult], wall_ms: Int) -> String
     timed = timed.concat(file.scenarios.map do |item| Timed(label: label, item: item) end)
   end
 
-  slowest = timed.sort_by do |entry| 0 - entry.item.duration_ms end.take(SLOWEST)
+  by_time = timed.sort_by do |entry| 0 - entry.item.duration_ms end
+  slowest = by_time.take(SLOWEST)
   if slowest.size > 0
     lines = lines.push("slowest scenarios:")
   end
@@ -256,21 +258,21 @@ def count_text(count: Int) -> String
   "#{count} scenarios"
 end
 
+# How many scenarios of the files have the status `wanted`.
+def with_status(files: List[FileResult], wanted: String) -> Int
+  files.reduce(0) do |n, file|
+    matching = file.scenarios.filter do |item| status(item.verdict) == wanted end
+    n + matching.size
+  end
+end
+
 def totals(files: List[FileResult]) -> Totals
   scenarios = files.reduce(0) do |n, file| n + file.scenarios.size end
-  passed = files.reduce(0) do |n, file|
-    n + file.scenarios.filter do |item| status(item.verdict) == "passed" end.size
-  end
-
-  skipped = files.reduce(0) do |n, file|
-    n + file.scenarios.filter do |item| status(item.verdict) == "skipped" end.size
-  end
-
-  not_run = files.reduce(0) do |n, file|
-    n + file.scenarios.filter do |item| status(item.verdict) == "not_executed" end.size
-  end
-
-  file_errors = files.filter do |file| failed?(file.verdict) end.size
+  passed = with_status(files, "passed")
+  skipped = with_status(files, "skipped")
+  not_run = with_status(files, "not_executed")
+  failed_files = files.filter do |file| failed?(file.verdict) end
+  file_errors = failed_files.size
   severe = files.any? do |file| severe?(file.verdict) or file.scenarios.any? do |item| severe?(item.verdict) end end
   code = 1
   if scenarios > 0 and passed + skipped == scenarios and file_errors == 0
@@ -469,7 +471,8 @@ def output_text(output: String, ai: Bool) -> String
   elsif ai
     return " | output #{output.inspect}"
   end
-  indented = output.split("\n").map do |line| "  #{line}" end.join("\n")
+  lines = output.split("\n").map do |line| "  #{line}" end
+  indented = lines.join("\n")
   "\n#{indented}"
 end
 
@@ -486,7 +489,8 @@ def stack_text(problem: Error, ai: Bool) -> String
   elsif ai
     return " | stack #{lines.join("; ")}"
   end
-  frames = lines.map do |line| "    #{line}" end.join("\n")
+  indented = lines.map do |line| "    #{line}" end
+  frames = indented.join("\n")
   "\n  stack, innermost first:\n#{frames}"
 end
 

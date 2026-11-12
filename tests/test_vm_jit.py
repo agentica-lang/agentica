@@ -116,7 +116,7 @@ end
   total = 0
   r = 0
   while r < rounds
-    total += items.filter do |x| (x + r) % 5 == 0 end.size
+    total += items.filter { |x| (x + r) % 5 == 0 }.size
     r += 1
   end
   return total
@@ -561,7 +561,7 @@ BLOCKS = """def sweep(items: List[Int], rounds: Int, bias: Int) -> Int
   while i < rounds
     shift = i % 7
     kept = items.filter do |x| (x + shift) % 3 == 0 end
-    total = (total + kept.map do |x| x * bias + shift end.reduce(0) do |acc, x| (acc + x) % 1000003 end) % 1000003
+    total = (total + kept.map { |x| x * bias + shift }.reduce(0) do |acc, x| (acc + x) % 1000003 end) % 1000003
     if items.any? do |x| x == shift + 900 end
       total += 1
     end
@@ -1013,7 +1013,7 @@ def test_on_compiles_a_function_without_a_loop_that_makes_block_calls(tmp_path):
     # each of its 3,000 calls took two).
     bytecode = compile_text("""def score(items: List[Int], bias: Int) -> Int
   kept = items.filter do |x| (x + bias) % 3 == 0 end
-  return kept.map do |x| x * bias end.sum + kept.size
+  return kept.map { |x| x * bias }.sum + kept.size
 end
 
 def main() -> Void
@@ -1492,7 +1492,7 @@ def work(id: Int) -> Int
   while i < 4000
     total += measure(xs, words[i % 4])
     total += ping(i % 24 + id, 0)
-    total += words.map do |w| measure(xs, w) + w.length end.sum
+    total += words.map { |w| measure(xs, w) + w.length }.sum
     if i % 1000 == 0
       puts("#{id} #{i} #{total}")
     end
@@ -1709,7 +1709,7 @@ def test_string_joins_and_forms_run_in_compiled_code(tmp_path):
 # leaves. BLOCKS: no closure or block call of sweep's loop leaves (its 360 block calls start between two runs of
 # compiled code, and their blocks, compiled at the first call, run there too); under `always` the calls of puts and
 # Task in main and worker do.
-SWEEP_BLOCKS = ["block@sweep.agc:6:25", "block@sweep.agc:7:31", "block@sweep.agc:7:69", "block@sweep.agc:8:19"]
+SWEEP_BLOCKS = ["block@sweep.agc:6:25", "block@sweep.agc:7:31", "block@sweep.agc:7:66", "block@sweep.agc:8:19"]
 STAYS = {
     "builtins": (DIRECT, ["tally"], ("call-builtin",), 20),
     "map reads and lists": (LOOKUP, ["lookup"], ("map-get", "list"), 1),
@@ -1786,8 +1786,8 @@ def work(id: Int) -> Int
   r = 0
   while r < rounds
     bias = r + id
-    total += items.map do |x| x + bias end.sum % 1000
-    total += items.filter do |x| (x + bias) % 3 == 0 end.size
+    total += items.map { |x| x + bias }.sum % 1000
+    total += items.filter { |x| (x + bias) % 3 == 0 }.size
     total += items.reduce(0) do |acc, x| (acc + x * bias) % 100003 end
     if items.any? do |x| x == bias % 300 end
       total += 1
@@ -1796,7 +1796,7 @@ def work(id: Int) -> Int
       total += 1
     end
     total += items.map(&triple).sum % 1000
-    total += items.sort_by do |x| (x * 7 + bias) % 300 end.first
+    total += items.sort_by { |x| (x * 7 + bias) % 300 }.first
     items.each do |x| x + bias end
     300.times do |i| i + bias end
     3.upto(200) do |i| i - bias end
@@ -1845,7 +1845,7 @@ BLOCK_FAILURES = {
   total = 0
   i = 0
   while i < 1000
-    total += [i, i + 1, i + 2].map do |v| v * 3 / (300 - i) end.size
+    total += [i, i + 1, i + 2].map { |v| v * 3 / (300 - i) }.size
     i += 1
   end
   puts(total)
@@ -1855,7 +1855,7 @@ end
   total = 0
   r = 0
   while r < rounds
-    total += items.map do |x| 1000 / (x + 400 - r) end.sum
+    total += items.map { |x| 1000 / (x + 400 - r) }.sum
     r += 1
   end
   return total
@@ -1886,7 +1886,7 @@ DEEP_BLOCKS = """def down(n: Int) -> Int
   if n == 0
     return 0
   end
-  return [n].map do |x| down(x - 1) end.first + 1
+  return [n].map { |x| down(x - 1) }.first + 1
 end
 
 def main() -> Void
@@ -1936,8 +1936,8 @@ SHORT_BLOCKS = """def work(id: Int) -> Int
   while r < 3000
     one = [r + id]
     two = [r, id]
-    total += one.map do |x| x + 1 end.first
-    total += two.filter do |x| x % 2 == 0 end.size
+    total += one.map { |x| x + 1 }.first
+    total += two.filter { |x| x % 2 == 0 }.size
     total += two.reduce(0) do |acc, x| acc + x end
     if two.any? do |x| x >= 0 end
       total += 1
@@ -1945,7 +1945,7 @@ SHORT_BLOCKS = """def work(id: Int) -> Int
     if two.all? do |x| x < 0 end
       total += 1
     end
-    total += two.sort_by do |x| 0 - x end.first
+    total += two.sort_by { |x| 0 - x }.first
     3.times do |i| i + id end
     id.upto(id + 1) do |i| i end
     (0...3).each do |i| i + r end
