@@ -324,6 +324,8 @@ class TestSpecParser:
                                     "  if \"#{xs.any? { |x| x > 0 }}\" == \"true\" and {1: ready do |v| v > 0 end}[1]\n"
                                     "    puts(\"inside\")\n  end\n"),
                    ["arm", "if", "3", "6", "inside"]),
+            Output("struct Box\n  ok: Bool\nend\n\n" + blocks
+                   + main_of("  if Box(ok: ready do |v| v > 0 end).ok\n    puts(\"named\")\n  end\n"), ["named"]),
         ])
 
     def test_ruby_headers_one_line_case_arms_and_module_calls_without_parentheses(self):

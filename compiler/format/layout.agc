@@ -992,6 +992,48 @@ def refused_block?(args: List[Ast.Expr], condition: Bool, bare: Bool) -> Bool
   end
 end
 
+# The index of the last token of a case arm guard that starts at `at`: the one before the `->` outside brackets.
+def guard_end(c: Context, at: Int) -> Int
+  depth = 0
+  index = at
+  while index < c.tokens.size
+    kind = c.tokens[index].kind
+    if kind == "left-paren" or kind == "left-bracket" or kind == "left-brace"
+      depth += 1
+    elsif kind == "right-paren" or kind == "right-bracket" or kind == "right-brace"
+      depth -= 1
+    elsif kind == "arrow" and depth == 0
+      return index - 1
+    end
+
+    index += 1
+  end
+
+  c.tokens.size - 1
+end
+
+# Whether the tokens from `first` to `last` are one pair of parentheses and what is inside them.
+def wrapped?(c: Context, first: Int, last: Int) -> Bool
+  return false if c.tokens[first].kind != "left-paren" or c.tokens[last].kind != "right-paren"
+
+  depth = 0
+  index = first
+  while index < last
+    kind = c.tokens[index].kind
+    if kind == "left-paren"
+      depth += 1
+    elsif kind == "right-paren"
+      depth -= 1
+    end
+
+    return false if depth == 0
+
+    index += 1
+  end
+
+  true
+end
+
 # An arm: `pattern -> statement` on one line when its body is one simple statement that fits, else the body on the
 # lines below. The pattern and the guard are copied: the guard must stay on the line of its pattern.
 def arm_doc(c: Context, arm: Ast.CaseArm) -> Docs.Doc
@@ -999,10 +1041,16 @@ def arm_doc(c: Context, arm: Ast.CaseArm) -> Docs.Doc
   head = patterns.map do |pattern: Ast.Pattern| source(c, tight(c, Ast.pattern_span(pattern))) end.join(", ")
   case arm.guard
     some(guard) ->
-      # A piped guard starts at the value piped into it (value_start). The span leaves out parentheses around the
-      # guard, which a block that a condition refuses needs.
-      written = source(c, tight(c, Ast.expr_span(guard)).with(start: value_start(guard)))
-      if blocked?(guard, true)
+      # The guard is the tokens between the arm's `if` and its `->`, parentheses included. A block that a condition
+      # refuses needs parentheses around the whole guard.
+      first = token_index(c, Ast.pattern_span(arm.pattern).stop.offset)
+      while first < c.tokens.size and c.tokens[first].kind != "if"
+        first += 1
+      end
+
+      last = guard_end(c, first + 1)
+      written = source(c, Source.Span(start: c.tokens[first + 1].span.start, stop: c.tokens[last].span.stop))
+      if blocked?(guard, true) and !wrapped?(c, first + 1, last)
         written = "(#{written})"
       end
 

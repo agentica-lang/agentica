@@ -86,6 +86,10 @@ def inside(xs: List[Int], z: Int) -> Int
     0 if (ready do |v| v > 0 end) -> puts(6)
     1 if (xs.any? { |v| v > 0 }) -> puts(7)
     2 if xs.empty? |> same() -> puts(8)
+    3 if (ready do |v| v > 0 end) |> same() -> puts(10)
+    4 if (xs.any? { |v| v > 0 }) |> same() |> same() -> puts(11)
+    5 if (xs.size > 0) |> same() -> puts(12)
+    6 if ((ready do |v| v > 0 end)) -> puts(13)
     _ -> puts(9)
   end
   0
