@@ -57,6 +57,13 @@ def main() -> Void
     error(e) -> show("to_i", e)
   end
 
+  # A File error: kind and code stay their defaults until the builtins get kinds.
+  case File.read_text("error-record-missing/none.txt")
+    ok(text) -> puts(text)
+    # The message is the system's text, which differs between systems.
+    error(e) -> puts("file: kind=#{e.kind} code=#{e.code} at #{e.location}")
+  end
+
   missing: Optional[Int] = none
   case missing.to_result("nothing there")
     ok(n) -> puts(n)

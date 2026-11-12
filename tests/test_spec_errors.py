@@ -61,6 +61,8 @@ REJECTED = [
     # error(...) takes a String or an Error.
     ("  bad: Result[Int] = error(42)\n  puts(bad)", "CHECK-TYPE-MISMATCH", "42"),
     ("  bad: Result[Int] = error(r)\n  puts(bad)", "CHECK-TYPE-MISMATCH", "r"),
+    # A Result stays out of JSON, though the Error it holds is encodable.
+    ("  puts(JSON.encode(r))", "CHECK-NOT-ENCODABLE", "r"),
 ]
 
 
