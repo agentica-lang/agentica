@@ -15,6 +15,7 @@
 import Paths from "../modules/import_path"
 import Env from "../modules/link_env"
 import Failure from "../modules/link_failure"
+import AgenticaVersion from "../packages/agentica_version"
 import GitSource from "../packages/git_source"
 import Lock from "../packages/lock"
 import Manifest from "../packages/manifest"
@@ -306,6 +307,7 @@ def asked_by(
 
   manifest = try Manifest.read(settings.workspace, file)
   try Manifest.require_package(manifest)
+  try AgenticaVersion.check(file, locked.name, manifest.agentica, settings.version)
   ok(
     manifest.dependencies.map do |dependency|
       Wanted(name: dependency.name, source: dependency.source, asked_in: file, by: locked.name, override: false)

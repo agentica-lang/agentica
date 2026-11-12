@@ -337,7 +337,13 @@ def load_root(settings: Env.Settings, walk: Walk, root: String) -> Result[Walk]
 
   root_dir = Paths.directory_of(key.unwrap!)
   project = try Project.find(workspace, root_dir)
-  base = Packages.scope_of(project).with(os: settings.env.os, native_root: PackageCache.root(settings.env))
+  try Project.check_agentica(project, settings.version)
+  base = Packages.scope_of(project).with(
+    os: settings.env.os,
+    native_root: PackageCache.root(settings.env),
+    agentica: settings.version,
+  )
+
   scope = try Packages.check_manifests(workspace, base)
   scope = Packages.with_project_natives(workspace, scope, project)
   build = Resolve.Build(libs_dir: Project.library_dir(project, root_dir), scope: scope)

@@ -6,10 +6,12 @@
 ## other source of the name in the tree); `require_package` refuses both in the manifest of a package. A failure is
 ## PKG-MANIFEST-INVALID, with the file and the key path (toml_read.agc). The `[workspace]` table is known here but read
 ## by members.agc, and only for the project's manifest: the manifest of a package skips it. `[native]` is the other way
-## round: only a package's is used. `[tool.NAME]` belongs to other tools: only its shape is checked.
+## round: only a package's is used. `[tool.NAME]` belongs to other tools: only its shape is checked. `agentica` is the
+## oldest Agentica the package works with (agentica_version.agc).
 
 import Workspace from "../modules/workspace"
 import Paths from "../modules/import_path"
+import AgenticaVersion from "agentica_version"
 import GitSource from "git_source"
 import NativeArtifact from "native_artifact"
 import NativeBuild from "native_build"
@@ -18,7 +20,7 @@ import Toml from "std/toml"
 import Reader from "toml_read"
 
 # The keys the manifest knows, and those of [style] and of a dependency.
-TOP_KEYS = ["name", "dependencies", "native", "style", "workspace", "tool"]
+TOP_KEYS = ["name", "agentica", "dependencies", "native", "style", "workspace", "tool"]
 STYLE_KEYS = ["max_line_width", "blank_line_after_end"]
 DEPENDENCY_KEYS = ["git", "tag", "ref", "subdir", "path", "override"]
 GIT_KEYS = ["git", "tag", "ref", "subdir"]
@@ -68,11 +70,13 @@ export struct NativeLibrary
   optional: Bool
 end
 
-## A read manifest. name is "" when the file has none; max_line_width is 0 when it sets no limit;
-## blank_line_after_end is false unless `[style]` turns the rule on.
+## A read manifest. name is "" when the file has none, and so is agentica, the oldest Agentica version the package
+## works with; max_line_width is 0 when it sets no limit; blank_line_after_end is false unless `[style]` turns the rule
+## on.
 export struct Manifest
   file: String
   name: String
+  agentica: String
   dependencies: List[Dependency]
   natives: List[NativeLibrary]
   max_line_width: Int
@@ -98,6 +102,7 @@ export def parse(file: String, text: String) -> Result[Manifest]
   root = try Reader.parse(reading, text)
   try Reader.known_keys(reading, root, TOP_KEYS, "")
   name = try optional_name(reading, root)
+  agentica = try optional_agentica(reading, root)
   dependencies = try dependencies_of(reading, root)
   natives = try natives_of(reading, root)
   style = try style_of(reading, root)
@@ -106,6 +111,7 @@ export def parse(file: String, text: String) -> Result[Manifest]
     Manifest(
       file: file,
       name: name,
+      agentica: agentica,
       dependencies: dependencies,
       natives: natives,
       max_line_width: style.max_line_width,
@@ -168,6 +174,17 @@ def optional_name(reading: Reader.Reading, root: Map[String, Toml.Value]) -> Res
   return error(Reader.fail_help(reading, "name", "not a package name", problem)) if problem != ""
 
   ok(name)
+end
+
+# The oldest Agentica the package works with, one SemVer version. "" when the file has none.
+def optional_agentica(reading: Reader.Reading, root: Map[String, Toml.Value]) -> Result[String]
+  return ok("") if !root.has_key?(AgenticaVersion.KEY)
+
+  version = try Reader.text(reading, root[AgenticaVersion.KEY], AgenticaVersion.KEY)
+  problem = AgenticaVersion.problem(version)
+  return error(Reader.fail_help(reading, AgenticaVersion.KEY, "not a version", problem)) if problem != ""
+
+  ok(version)
 end
 
 # [dependencies]: a name and an inline table each, in the order of the file.

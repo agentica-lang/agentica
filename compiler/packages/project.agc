@@ -8,6 +8,7 @@
 import Paths from "../modules/import_path"
 import Failure from "../modules/link_failure"
 import Workspace from "../modules/workspace"
+import AgenticaVersion from "agentica_version"
 import GitSource from "git_source"
 import Lock from "lock"
 import Manifest from "manifest"
@@ -94,6 +95,16 @@ export def find_to_write(workspace: Workspace.Workspace, root_dir: String) -> Re
   end
 
   ok(Project.Declared(Found(dir: dir, manifest: manifest, lock: lock, members: members)))
+end
+
+## Checks the `agentica` key of the project's manifest against the running Agentica version: PKG-AGENTICA-TOO-OLD at
+## the key when the project needs a newer one. The manifests of the packages are checked as they are read
+## (package_import.agc, read_names).
+export def check_agentica(project: Project, running: String) -> Result[Void]
+  case project
+    Project.Bare -> ok()
+    Project.Declared(found) -> AgenticaVersion.check(found.manifest.file, "", found.manifest.agentica, running)
+  end
 end
 
 ## The local names of the dependencies of the root project, in the order of the manifest.

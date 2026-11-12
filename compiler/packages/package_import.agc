@@ -13,6 +13,7 @@ import Diag from "../diagnostics/diagnostic"
 import Paths from "../modules/import_path"
 import Failure from "../modules/link_failure"
 import Workspace from "../modules/workspace"
+import AgenticaVersion from "agentica_version"
 import Lock from "lock"
 import Manifest from "manifest"
 import Members from "members"
@@ -64,6 +65,8 @@ end
 ## `native_root`, the package cache root the downloaded native artifacts are verified from ("" when none), and
 ## `style_dir`, the folder of the manifest when it asks for a `[style]` rule ("" when it does not, or when there is
 ## no manifest), with the rules it asks for: `blank_line_after_end` and `max_line_width` (0 for no limit).
+## `agentica` is the running Agentica version, which the `agentica` key of each package's manifest is checked against
+## ("" checks nothing).
 export struct Scope
   deps: String
   os: String
@@ -79,6 +82,7 @@ export struct Scope
   style_dir: String
   blank_line_after_end: Bool
   max_line_width: Int
+  agentica: String
 end
 
 ## How a `pkg/` import reads: a library of the pkg/ roots, or a package and the module inside it (a path with `.agc`).
@@ -122,6 +126,7 @@ export def scope_of(project: Project.Project) -> Scope
         style_dir: "",
         blank_line_after_end: false,
         max_line_width: 0,
+        agentica: "",
       )
     Project.Project.Declared(found) ->
       Scope(
@@ -139,6 +144,7 @@ export def scope_of(project: Project.Project) -> Scope
         style_dir: style_folder(found),
         blank_line_after_end: found.manifest.blank_line_after_end,
         max_line_width: found.manifest.max_line_width,
+        agentica: "",
       )
   end
 end
@@ -316,7 +322,7 @@ export def check_folders(workspace: Workspace.Workspace, scope: Scope, folders: 
       case shape_of(workspace, real.unwrap!)
         Shape.Absent -> declared = declared.put(locked.name, [])
         Shape.Regular ->
-          names = try read_names(workspace, scope, real.unwrap!)
+          names = try read_names(workspace, scope, locked.name, real.unwrap!)
           declared = declared.put(locked.name, names)
         Shape.Unsafe(_) -> next
         Shape.Unlisted(_) -> next
@@ -459,7 +465,7 @@ def names_of(
 ) -> Result[List[String]]
   return ok(scope.declared[locked.name]) if scope.declared.has_key?(locked.name)
 
-  declared_names(workspace, scope, root, site)
+  declared_names(workspace, scope, locked.name, root, site)
 end
 
 # The names the manifest of the package declares, none when it has no manifest. Each must be in the lock with the same
@@ -470,12 +476,13 @@ end
 def declared_names(
   workspace: Workspace.Workspace,
   scope: Scope,
+  package: String,
   root: String,
   site: Failure.Site,
 ) -> Result[List[String]]
   case shape_of(workspace, root)
     Shape.Absent -> ok([])
-    Shape.Regular -> read_names(workspace, scope, root)
+    Shape.Regular -> read_names(workspace, scope, package, root)
     Shape.Unsafe(name) ->
       message = "#{name} in the package is not a regular file"
       error(Failure.fail_at(site, "PKG-SYMLINK", message, Failure.hint("a manifest is a file of the package")))
@@ -514,9 +521,12 @@ def natives_of(
   end
 end
 
-def read_names(workspace: Workspace.Workspace, scope: Scope, root: String) -> Result[List[String]]
+# The names the manifest of the package `name` declares, after its checks against the lock and against the running
+# Agentica version (PKG-AGENTICA-TOO-OLD).
+def read_names(workspace: Workspace.Workspace, scope: Scope, name: String, root: String) -> Result[List[String]]
   manifest = try Manifest.read(workspace, Paths.join(root, MANIFEST_FILE))
   try Project.check_dependencies(scope.lock, manifest, scope.members, true)
+  try AgenticaVersion.check(manifest.file, name, manifest.agentica, scope.agentica)
   ok(Manifest.names(manifest))
 end
 
