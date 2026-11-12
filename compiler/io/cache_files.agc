@@ -23,6 +23,9 @@ export PIECE = 1_048_576
 # The variables that change what the build of a native module makes (io/native_build.agc).
 COMPILER_VARIABLES = ["CC", "CPATH", "C_INCLUDE_PATH", "CPLUS_INCLUDE_PATH", "LIBRARY_PATH"]
 
+# The execute bits of the owner, the group and others (0111).
+EXECUTE_BITS = 73
+
 # The files that decide which package or library an import reads, next to the manifest.
 MANIFEST_FILE = "agentica.toml"
 PROJECT_FILES = [MANIFEST_FILE, "agentica.lock"]
@@ -233,9 +236,23 @@ end
 
 export def digest(data: Bytes) -> String = OpenSSL.Digest.sha256_hexdigest(data)
 
+## The words of CC, else the system's compiler: the command a native build runs (io/native_build.agc).
+export def compiler_words(system: String) -> List[String]
+  set = System.env("CC")
+  if set.ok?
+    words = set.unwrap!.split(" ").filter do |word: String| word != "" end
+    return words if words.size > 0
+  end
+
+  return ["gcc"] if system == "windows"
+
+  ["cc"]
+end
+
 # What, besides the files an import reads, changes what a build makes of the root: the environment that places
-# libraries and packages, the C compiler a native module builds with and its search variables (CC, CPATH and the
-# others of io/native_build.agc), and the project (the manifest the build finds and its lock).
+# libraries and packages, the C compiler a native module builds with (the file it is, `compiler_path`) and its
+# search variables (CC, CPATH and the others of io/native_build.agc), and the project (the manifest the build finds
+# and its lock).
 def inputs_digest(settings: Env.Settings, project: Project.Project) -> Result[String]
   workspace = settings.workspace
   env = settings.env
@@ -246,6 +263,8 @@ def inputs_digest(settings: Env.Settings, project: Project.Project) -> Result[St
       parts = parts.push("#{name} #{value.unwrap!}")
     end
   end
+
+  parts = parts.push("compiler #{compiler_path(env.os)}")
 
   case project
     Project.Project.Bare -> parts = parts.push("project -")
@@ -259,6 +278,40 @@ def inputs_digest(settings: Env.Settings, project: Project.Project) -> Result[St
   end
 
   ok(digest(parts.join("\n").bytes))
+end
+
+# The real path of the compiler that a native build would start: the first word of `compiler_words`, as it is when it
+# names a folder, else the first executable file of that name (or NAME.exe on Windows) in a folder of PATH; "" when
+# none is found. The key holds the file, not PATH, so another PATH (a venv) keeps the cache unless it finds another
+# compiler.
+def compiler_path(system: String) -> String
+  name = compiler_words(system)[0]
+  windows = system == "windows"
+  candidates = [name]
+  if !name.include?("/") and !(windows and name.include?("\\"))
+    path = System.env("PATH")
+    return "" if !path.ok?
+
+    separator = ":"
+    names = [name]
+    if windows
+      separator = ";"
+      names = [name, "#{name}.exe"]
+    end
+
+    folders = path.unwrap!.split(separator).filter do |folder: String| folder != "" end
+    candidates = folders.flat_map do |folder: String| names.map do |file: String| Paths.join(folder, file) end end
+  end
+
+  for candidate in candidates
+    info = File.stat(candidate, IO_TIMEOUT_MS)
+    if info.ok? and info.unwrap!.kind == "file" and (windows or info.unwrap!.mode.bit_and(EXECUTE_BITS) != 0)
+      real = Path.real(candidate)
+      return real.unwrap! if real.ok?
+    end
+  end
+
+  ""
 end
 
 # The workspace of the project (packages/members.agc): the manifest that holds the table, and the manifest of each

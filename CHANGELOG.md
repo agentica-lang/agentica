@@ -30,6 +30,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `agentica compile` reads and writes the bytecode cache, as a run does (not
   under a `--deny-*` flag or `--sandbox`), so it creates `_build/` in the
   project folder or beside the file.
+- The bytecode cache keys on the C compiler file that a native build would run
+  (`CC`, else `cc` found in `PATH`), and `BDD.given_program` on `PATH`: another
+  compiler makes a new build.
 
 ## [0.31.0-alpha.1] - 2026-11-12
 
