@@ -8,7 +8,6 @@
 import Paths from "../modules/import_path"
 import Failure from "../modules/link_failure"
 import Workspace from "../modules/workspace"
-import AgenticaVersion from "agentica_version"
 import GitSource from "git_source"
 import Lock from "lock"
 import Manifest from "manifest"
@@ -39,12 +38,13 @@ export enum Project
 end
 
 ## Finds the project of a root file in the folder root_dir (a canonical path). A failure is a packed failure:
-## PKG-MANIFEST-INVALID, PKG-LOCK-MISSING, PKG-LOCK-INVALID or PKG-LOCK-STALE.
-export def find(workspace: Workspace.Workspace, root_dir: String) -> Result[Project]
+## PKG-AGENTICA-TOO-OLD (the manifest needs a newer Agentica than `running`, checked first), PKG-MANIFEST-INVALID,
+## PKG-LOCK-MISSING, PKG-LOCK-INVALID or PKG-LOCK-STALE.
+export def find(workspace: Workspace.Workspace, root_dir: String, running: String) -> Result[Project]
   dir = nearest_manifest(workspace, root_dir)
   return ok(Project.Bare) if dir == ""
 
-  manifest = try Manifest.read(workspace, Paths.join(dir, MANIFEST_FILE))
+  manifest = try Manifest.read_checked(workspace, Paths.join(dir, MANIFEST_FILE), "", running)
   try check_paths(workspace, dir, manifest)
   members = try Members.find(workspace, dir)
   empty = Lock.Lock(file: Paths.join(dir, LOCK_FILE), packages: [], artifacts: [])
@@ -82,11 +82,11 @@ end
 ## Finds the project of the commands that write the lock (`add`, `update`). The manifest is read as `find` reads it,
 ## but the lock is not checked against it: those commands are what makes a missing, stale or partial lock right. A lock
 ## that is there must be a good one (PKG-LOCK-INVALID); a lock that is not there is an empty one.
-export def find_to_write(workspace: Workspace.Workspace, root_dir: String) -> Result[Project]
+export def find_to_write(workspace: Workspace.Workspace, root_dir: String, running: String) -> Result[Project]
   dir = nearest_manifest(workspace, root_dir)
   return ok(Project.Bare) if dir == ""
 
-  manifest = try Manifest.read(workspace, Paths.join(dir, MANIFEST_FILE))
+  manifest = try Manifest.read_checked(workspace, Paths.join(dir, MANIFEST_FILE), "", running)
   try check_paths(workspace, dir, manifest)
   members = try Members.find(workspace, dir)
   lock = Lock.Lock(file: Paths.join(dir, LOCK_FILE), packages: [], artifacts: [])
@@ -95,16 +95,6 @@ export def find_to_write(workspace: Workspace.Workspace, root_dir: String) -> Re
   end
 
   ok(Project.Declared(Found(dir: dir, manifest: manifest, lock: lock, members: members)))
-end
-
-## Checks the `agentica` key of the project's manifest against the running Agentica version: PKG-AGENTICA-TOO-OLD at
-## the key when the project needs a newer one. The manifests of the packages are checked as they are read
-## (package_import.agc, read_names).
-export def check_agentica(project: Project, running: String) -> Result[Void]
-  case project
-    Project.Bare -> ok()
-    Project.Declared(found) -> AgenticaVersion.check(found.manifest.file, "", found.manifest.agentica, running)
-  end
 end
 
 ## The local names of the dependencies of the root project, in the order of the manifest.

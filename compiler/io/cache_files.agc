@@ -57,7 +57,7 @@ end
 export def site(settings: Env.Settings, real: String) -> Result[Site]
   build = try File.stat(settings.self_path, IO_TIMEOUT_MS)
   root_dir = Paths.directory_of(real)
-  project = try Project.find(settings.workspace, root_dir)
+  project = try Project.find(settings.workspace, root_dir, settings.version)
   inputs = try inputs_digest(settings, project)
   libs_dir = Project.library_dir(project, root_dir)
   override = System.env(BUILD_VARIABLE)

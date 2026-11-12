@@ -105,6 +105,61 @@ def test_a_package_or_the_package_of_a_package_that_needs_a_newer_agentica_is_re
         assert_at_key(problem, "PKG-AGENTICA-TOO-OLD", manifest, "agentica")
 
 
+@pytest.mark.parametrize("where", ["project", "package"])
+def test_the_version_is_checked_before_any_other_key_so_a_newer_manifest_reports_it(ws, where):
+    # A later Agentica may add keys (`features` here): the version they need is what an older one reports.
+    manifest = ws.project / "agentica.toml" if where == "project" else ws.deps / "greeter" / "agentica.toml"
+    prepend(manifest, key(newer()) + "features = []\n")
+    for problem in every_command(ws):
+        assert_at_key(problem, "PKG-AGENTICA-TOO-OLD", manifest, "agentica")
+
+
+def test_the_version_of_the_project_is_checked_before_its_lock_and_a_package_before_its_dependencies(ws):
+    # The lock no longer has greeter: a stale lock, after the version.
+    ws.write_lock(lambda entries: entries.remove(next(e for e in entries if e["name"] == "greeter")))
+    manifest = ws.project / "agentica.toml"
+    prepend(manifest, key(newer()))
+    for problem in every_command(ws):
+        assert_at_key(problem, "PKG-AGENTICA-TOO-OLD", manifest, "agentica")
+    # A package that asks for a name the lock lacks.
+    ws.write_lock()
+    manifest.write_text(manifest_text({"greeter": dependency("https://example.test/owner/greeter", tag="v1")}),
+                        encoding="utf-8")
+    package = ws.deps / "greeter" / "agentica.toml"
+    package.write_text(key(newer()) + manifest_text({"more": dependency("https://example.test/o/more", tag="v1")}),
+                       encoding="utf-8")
+    for problem in every_command(ws):
+        assert_at_key(problem, "PKG-AGENTICA-TOO-OLD", package, "agentica")
+
+
+def test_an_edit_of_a_package_manifest_is_seen_by_a_run_from_the_bytecode_cache(ws):
+    # No build folder of the harness: the entry goes to the project's _build/ (tests/test_bytecode_cache.py).
+    env = vm_environment({"AGENTICA_PATH": "", "AGENTICA_BUILD_DIR": None, **ws.cache_variables})
+    for _ in range(2):
+        ran = run(cli() + ["main.agc"], cwd=ws.project, env=env)
+        assert (ran.code, ran.stdout) == (0, "hello!\n"), ran.stderr
+    assert list((ws.project / "_build" / "bytecode").iterdir())
+    manifest = ws.deps / "greeter" / "agentica.toml"
+    prepend(manifest, key(newer()))
+    ran = run(cli() + ["--json", "main.agc"], cwd=ws.project, env=env)
+    assert_at_key(json.loads(ran.stderr), "PKG-AGENTICA-TOO-OLD", manifest, "agentica")
+
+
+def test_a_path_package_that_needs_a_newer_agentica_is_refused(ws):
+    local = ws.base / "local"
+    local.mkdir()
+    (local / "agentica.toml").write_text(key(newer()) + 'name = "local"\n', encoding="utf-8")
+    (local / "bang.agc").write_text(BANG, encoding="utf-8")
+    (ws.project / "agentica.toml").write_text('name = "app"\n\n[dependencies]\nlocal = { path = "../local" }\n',
+                                              encoding="utf-8")
+    (ws.project / "agentica.lock").write_text('version = 1\n\n[[package]]\nname = "local"\npath = "../local"\n',
+                                              encoding="utf-8")
+    (ws.project / "main.agc").write_text('import Bang from "pkg/local/bang"\n\ndef main() -> Void\n'
+                                         '  puts(Bang.bang())\nend\n', encoding="utf-8")
+    for problem in every_command(ws):
+        assert_at_key(problem, "PKG-AGENTICA-TOO-OLD", local / "agentica.toml", "agentica")
+
+
 BAD_VALUES = [
     ("two parts", '"0.31"'),
     ("a range", '">=0.31.0"'),
@@ -152,6 +207,13 @@ ORDER = [
     ("0.10.0", "0.9.10", False),
     ("1.0.0+build.5", "1.0.0", True),
     ("0.32.0", "0.31.9", False),
+    # An identifier with a hyphen is alphanumeric: "alpha" is its prefix, so the shorter one comes first.
+    ("1.0.0-alpha", "1.0.0-alpha-1", True),
+    ("1.0.0-alpha-1", "1.0.0-alpha", False),
+    # Numbers longer than an Int are compared as text.
+    ("99999999999999999999.0.0", "0.31.0", False),
+    ("0.31.0", "99999999999999999999.0.0", True),
+    ("99999999999999999999.0.0", "99999999999999999998.0.0", False),
 ]
 
 
@@ -199,3 +261,14 @@ def test_install_refuses_a_package_that_needs_a_newer_agentica_and_writes_no_dep
     lock = (ws.project / "agentica.lock").read_text(encoding="utf-8")
     assert_at_key(command(ws, remotes, "update")[1], "PKG-AGENTICA-TOO-OLD", cached, "agentica")
     assert (ws.project / "agentica.lock").read_text(encoding="utf-8") == lock
+
+
+def test_add_refuses_a_package_that_needs_a_newer_agentica_and_writes_nothing(tmp_path, remotes):
+    ws = Workspace(tmp_path / "w")
+    commit = remotes.publish(GREETER, {"bang.agc": BANG, "agentica.toml": key(newer())}, tag="v1")
+    (ws.project / "agentica.toml").write_text('name = "app"\n', encoding="utf-8")
+    _, problem = command(ws, remotes, "add", "greeter", remotes.url(GREETER), "--tag", "v1")
+    assert_at_key(problem, "PKG-AGENTICA-TOO-OLD", ws.folder(remotes.url(GREETER), commit) / "agentica.toml",
+                  "agentica")
+    assert (ws.project / "agentica.toml").read_text(encoding="utf-8") == 'name = "app"\n'
+    assert not (ws.project / "agentica.lock").exists()

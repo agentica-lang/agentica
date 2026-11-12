@@ -13,7 +13,6 @@ import Diag from "../diagnostics/diagnostic"
 import Paths from "../modules/import_path"
 import Failure from "../modules/link_failure"
 import Workspace from "../modules/workspace"
-import AgenticaVersion from "agentica_version"
 import Lock from "lock"
 import Manifest from "manifest"
 import Members from "members"
@@ -395,13 +394,21 @@ def load(workspace: Workspace.Workspace, scope: Scope, locked: Lock.Locked, site
 
   names = try names_of(workspace, scope, locked, real.unwrap!, site)
   native = try natives_of(workspace, scope, real.unwrap!, locked)
+  # The bytecode cache watches the package's manifest, which the hash leaves out unless the package is native: an edit
+  # of its `agentica` key must be checked again. names_of has refused a manifest that is not a regular file.
+  watched = native.watched
+  manifest = Paths.join(real.unwrap!, MANIFEST_FILE)
+  if workspace.file_exists.call(manifest)
+    watched = watched.push(manifest)
+  end
+
   ok(
     Opened(
       root: real.unwrap!,
       label: Lock.label(locked),
       names: names,
       natives: native.targets,
-      watched: native.watched,
+      watched: watched,
       probed: native.probed,
     ),
   )
@@ -521,12 +528,11 @@ def natives_of(
   end
 end
 
-# The names the manifest of the package `name` declares, after its checks against the lock and against the running
-# Agentica version (PKG-AGENTICA-TOO-OLD).
+# The names the manifest of the package `name` declares, after its checks: the running Agentica version first
+# (PKG-AGENTICA-TOO-OLD), then the lock.
 def read_names(workspace: Workspace.Workspace, scope: Scope, name: String, root: String) -> Result[List[String]]
-  manifest = try Manifest.read(workspace, Paths.join(root, MANIFEST_FILE))
+  manifest = try Manifest.read_checked(workspace, Paths.join(root, MANIFEST_FILE), name, scope.agentica)
   try Project.check_dependencies(scope.lock, manifest, scope.members, true)
-  try AgenticaVersion.check(manifest.file, name, manifest.agentica, scope.agentica)
   ok(Manifest.names(manifest))
 end
 

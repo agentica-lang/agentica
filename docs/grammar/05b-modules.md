@@ -298,15 +298,22 @@ import Sqlite from "pkg/sqlite/db"
   dependency name below. `max_line_width` is an integer of 1 or more.
   `blank_line_after_end` is a boolean, false by default; any other value is
   `PKG-MANIFEST-INVALID` at `style.blank_line_after_end`.
-- `agentica = "0.31.0"` (optional) is the oldest Agentica the project or
-  package works with: one SemVer version, read as a minimum, in the order of
-  semver.org §11 (`0.31.0-alpha.2 < 0.31.0-alpha.10 < 0.31.0-beta.1 <
-  0.31.0`; build metadata `+...` is ignored). Anything else, a range included,
-  is `PKG-MANIFEST-INVALID` at `agentica`. `install`, `check`, `run`, `test`
-  and every command that loads the project check the key of the project and of
-  each locked package against the running version, and `add` and `update`
-  that of each package they resolve; a newer one is `PKG-AGENTICA-TOO-OLD` at
-  `agentica` of that manifest.
+- `agentica = "0.31.0"` (optional) is the oldest Agentica the project or package
+  works with: one SemVer version, read as a minimum, in the order of semver.org
+  §11 (`0.31.0-alpha.2 < 0.31.0-alpha.10 < 0.31.0-beta.1 < 0.31.0`; build
+  metadata `+...` is ignored). Anything else, a range included, is
+  `PKG-MANIFEST-INVALID` at `agentica`. `install`, `check`, `run`, `test` and
+  every command that loads the project check the key of the project and of each
+  locked package against the running version, and `add` and `update` that of
+  each package they resolve; a newer one is `PKG-AGENTICA-TOO-OLD` at `agentica`
+  of that manifest. The key is read and checked right after the TOML parse,
+  before any other key and before the lock, so a manifest written for a newer
+  Agentica reports the version it needs rather than a key this one does not
+  know. `run -- FILE.agcb`, `fmt` and `lint` do not check it. The running
+  version is the `VERSION` file as written when the binary was built, so a build
+  of master between releases reports the last release. Releases up to
+  0.31.0-alpha.1 do not know the key and refuse it as an unknown key
+  (`PKG-MANIFEST-INVALID`): a package that still supports them leaves it out.
 - With `max_line_width = N`, `agentica check` and every command that checks a
   program report a line of more than N characters (Unicode code points; a CR
   before the line feed does not count; comments count) as

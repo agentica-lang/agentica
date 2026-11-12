@@ -89,36 +89,26 @@ struct Style
   blank_line_after_end: Bool
 end
 
-## Reads the manifest at file.
+## Reads the manifest at file, with no running version to check its `agentica` key against.
 export def read(workspace: Workspace.Workspace, file: String) -> Result[Manifest]
+  read_checked(workspace, file, "", "")
+end
+
+## Reads the manifest at file of the package `package` ("" for the project) and checks its `agentica` key against the
+## running version `running` (PKG-AGENTICA-TOO-OLD; "" checks nothing) before anything else in the file.
+export def read_checked(
+  workspace: Workspace.Workspace,
+  file: String,
+  package: String,
+  running: String,
+) -> Result[Manifest]
   reading = Reader.Reading(file: file, code: "PKG-MANIFEST-INVALID")
   text = try Reader.read_text(workspace, reading)
-  parse(file, text)
+  parse_checked(file, text, package, running)
 end
 
 ## Reads the manifest text, which is said to come from file. The writer checks the text it is about to save with this.
-export def parse(file: String, text: String) -> Result[Manifest]
-  reading = Reader.Reading(file: file, code: "PKG-MANIFEST-INVALID")
-  root = try Reader.parse(reading, text)
-  try Reader.known_keys(reading, root, TOP_KEYS, "")
-  name = try optional_name(reading, root)
-  agentica = try optional_agentica(reading, root)
-  dependencies = try dependencies_of(reading, root)
-  natives = try natives_of(reading, root)
-  style = try style_of(reading, root)
-  try tool_of(reading, root)
-  ok(
-    Manifest(
-      file: file,
-      name: name,
-      agentica: agentica,
-      dependencies: dependencies,
-      natives: natives,
-      max_line_width: style.max_line_width,
-      blank_line_after_end: style.blank_line_after_end,
-    ),
-  )
-end
+export def parse(file: String, text: String) -> Result[Manifest] = parse_checked(file, text, "", "")
 
 ## Refuses what only the root project's manifest may say, in the manifest of a package (fetched, or a workspace member
 ## read in place): a `path` dependency, which cannot be published, and `override = true`, which the packages of a tree
@@ -163,6 +153,33 @@ export def has_downloaded(manifest: Manifest) -> Bool
   end
 
   false
+end
+
+# The `agentica` key comes first, right after the TOML parse: a manifest made for a newer Agentica may hold keys and
+# values that this one does not know, and the version it needs is then the failure to report. That order is a
+# contract: every later Agentica keeps it.
+def parse_checked(file: String, text: String, package: String, running: String) -> Result[Manifest]
+  reading = Reader.Reading(file: file, code: "PKG-MANIFEST-INVALID")
+  root = try Reader.parse(reading, text)
+  agentica = try optional_agentica(reading, root)
+  try AgenticaVersion.check(file, package, agentica, running)
+  try Reader.known_keys(reading, root, TOP_KEYS, "")
+  name = try optional_name(reading, root)
+  dependencies = try dependencies_of(reading, root)
+  natives = try natives_of(reading, root)
+  style = try style_of(reading, root)
+  try tool_of(reading, root)
+  ok(
+    Manifest(
+      file: file,
+      name: name,
+      agentica: agentica,
+      dependencies: dependencies,
+      natives: natives,
+      max_line_width: style.max_line_width,
+      blank_line_after_end: style.blank_line_after_end,
+    ),
+  )
 end
 
 # The project's own name, a package name too. "" when the file has none.

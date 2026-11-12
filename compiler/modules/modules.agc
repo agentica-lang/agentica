@@ -336,8 +336,7 @@ def load_root(settings: Env.Settings, walk: Walk, root: String) -> Result[Walk]
   end
 
   root_dir = Paths.directory_of(key.unwrap!)
-  project = try Project.find(workspace, root_dir)
-  try Project.check_agentica(project, settings.version)
+  project = try Project.find(workspace, root_dir, settings.version)
   base = Packages.scope_of(project).with(
     os: settings.env.os,
     native_root: PackageCache.root(settings.env),

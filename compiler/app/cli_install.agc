@@ -144,11 +144,10 @@ end
 # The lines of the answer, or a packed failure.
 def install(settings: Env.Settings, dir: String) -> Result[String]
   workspace = settings.workspace
-  project = try Project.find(workspace, dir)
+  project = try Project.find(workspace, dir, settings.version)
   case project
     Project.Project.Bare -> error(CliProject.missing_manifest(dir))
     Project.Project.Declared(found) ->
-      try Project.check_agentica(project, settings.version)
       lines = try fill_all(settings, found.lock)
       scope = PackageImport.scope_of(project).with(agentica: settings.version)
       try check_cache(settings, found.lock, scope)
