@@ -89,9 +89,10 @@ lower like user structs.
 
 ### 3.4 Closure conversion
 
-- A block becomes an IR function named `block@file:line:col` (the source file
-  name without its directory). Block functions follow the declared functions, in
-  the order the lowerer meets them. Its parameters are the block parameters.
+- A block becomes an IR function named `block@file:line:col`, a lambda
+  `lambda@file:line:col` (the source file name without its directory). Block
+  functions follow the declared functions, in the order the lowerer meets them.
+  Its parameters are the block parameters.
 - Its captures are the names used by a `name-ref` anywhere in its body (nested
   blocks included) that are visible where the block is created, in
   first-appearance order. This is enough because a block can only read captured

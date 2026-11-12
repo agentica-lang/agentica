@@ -21,22 +21,9 @@ def entry_cost(key: String) -> Int
   return 64 + key.bytesize + value_of(key).bytesize
 end
 
-# A block is a value only when it is passed to a call: these return the blocks a cache of ours is made of.
-def block0[R](f: Fn[R]) -> Fn[R]
-  return f
-end
-
-def block1[A, R](f: Fn[A, R]) -> Fn[A, R]
-  return f
-end
-
-def block2[A, B, R](f: Fn[A, B, R]) -> Fn[A, B, R]
-  return f
-end
-
 # The clock of a test is the number in `now`.
 def ticking(now: ATS[Int, Int], ttl_ms: Int) -> Cache.Options
-  return Cache.Options(ttl_ms: ttl_ms, clock: some(block0() do now.get(0).unwrap! end))
+  return Cache.Options(ttl_ms: ttl_ms, clock: some(-> { now.get(0).unwrap! }))
 end
 
 def tick(now: ATS[Int, Int], ms: Int) -> Void
@@ -68,13 +55,13 @@ end
 def table_cache() -> Cache.Store
   table: ATS[String, String] = ATS.new()
   return Cache.Store(
-    get: block1() do |key| table_get(table, key) end,
-    put: block2() do |key, value| table.put(key, value) end,
-    put_new: block2() do |key, value| table.put_new(key, value) end,
-    delete: block1() do |key| table.delete(key) end,
-    clear: block0() do table_clear(table) end,
-    cleanup: block0() do 0 end,
-    bytes: block0() do table.size end,
+    get: ->(key) { table_get(table, key) },
+    put: ->(key, value) { table.put(key, value) },
+    put_new: ->(key, value) { table.put_new(key, value) },
+    delete: ->(key) { table.delete(key) },
+    clear: -> { table_clear(table) },
+    cleanup: -> { 0 },
+    bytes: -> { table.size },
   )
 end
 
@@ -373,7 +360,7 @@ def main() -> Void
       now = clock()
       holder: Channel[Cache.Store] = Channel.new(1)
       # 1030 entries a generation, so the rotation that drops the first one beats before it is done.
-      options = Cache.Options(max_entries: 2_060, clock: some(block0() do takeover_clock(now, holder) end))
+      options = Cache.Options(max_entries: 2_060, clock: some(-> { takeover_clock(now, holder) }))
       cache = Cache.memory(10_000_000, options)
       _ = holder.send(cache, 0)
       for n in 0...3_090

@@ -25,9 +25,9 @@ end
 
 def counter(p: Probe, options: Actor.Options) -> Actor.Ref[Int, Msg]
   behaviour: Actor.Behaviour[Int, Msg] = Actor.Behaviour(
-    init: block0() do 0 end,
-    handle: block2() do |count, msg| handle(p, count, msg) end,
-    terminate: some(block1() do |count| finish(p, count) end),
+    init: -> { 0 },
+    handle: ->(count, msg) { handle(p, count, msg) },
+    terminate: some(->(count) { finish(p, count) }),
   )
 
   actor = Actor.start(behaviour, options)
@@ -75,12 +75,6 @@ def count_at_least(address: Address[Msg], n: Int) -> Result[Int]
 
   get(address, 5000)
 end
-
-def block0[R](f: Fn[R]) -> Fn[R] = f
-
-def block1[A, R](f: Fn[A, R]) -> Fn[A, R] = f
-
-def block2[A, B, R](f: Fn[A, B, R]) -> Fn[A, B, R] = f
 
 def test_casts_change_the_state_that_a_call_reads() -> Result[Void]
   actor = counter(probe(), Actor.Options())

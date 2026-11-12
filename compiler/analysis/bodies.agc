@@ -309,6 +309,7 @@ def expression(checked: Checker.Checked, expr: Ast.Expr) -> Model.Node
     Ast.Expr.Update(_) -> other("with", span)
     Ast.Expr.ListLit(_) -> other("list", span)
     Ast.Expr.MapLit(_) -> other("map", span)
+    Ast.Expr.BlockLit(node) if node.lambda -> other("lambda", span)
     Ast.Expr.BlockLit(_) -> other("block", span)
     Ast.Expr.TypeName(_) -> other("type", span)
     Ast.Expr.ConstRef(_) -> other("constant", span)

@@ -56,19 +56,19 @@ index 5 is outside a list of length 3
 
 A frame line is the function's declared name and the place it was running. For
 the innermost frame that is the place of the error, and for each caller it is
-the call it waits on. A block shows as `block`, a function from an imported file
-shows its name (the file is in the place), and the builtins that run a block
-(`xs.map`) are skipped, since the frame below already points at the call. A
-frame that a tail call replaced is gone: the frame left ends with `(after a tail
-call)`, so a reader knows that callers are missing there. Neighbouring frames
-with the same function and place are one line with a count, as in `walk at
-tree.agc:9:12 (9998 times)`, so a runaway recursion that ends in
-`RUNTIME-STACK-OVERFLOW` takes a few lines. After that merge at most 20 lines
-show: the 15 innermost, a line `... 312 frames not shown ...`, and the 5
-outermost. A task's stack ends with the task's function, and a last line `task
-spawned at file:line:column` gives the place of the `Task.spawn` call that
-started it. A function name or file path longer than 256 bytes is cut there, at
-a character boundary, and ends with `...`.
+the call it waits on. A block shows as `block` and a lambda as `lambda`, a
+function from an imported file shows its name (the file is in the place), and
+the builtins that run a block (`xs.map`) are skipped, since the frame below
+already points at the call. A frame that a tail call replaced is gone: the
+frame left ends with `(after a tail call)`, so a reader knows that callers are
+missing there. Neighbouring frames with the same function and place are one
+line with a count, as in `walk at tree.agc:9:12 (9998 times)`, so a runaway
+recursion that ends in `RUNTIME-STACK-OVERFLOW` takes a few lines. After that
+merge at most 20 lines show: the 15 innermost, a line `... 312 frames not
+shown ...`, and the 5 outermost. A task's stack ends with the task's function,
+and a last line `task spawned at file:line:column` gives the place of the
+`Task.spawn` call that started it. A function name or file path longer than 256
+bytes is cut there, at a character boundary, and ends with `...`.
 
 `--ai` puts the same lines under `  stack:` after the `source:` line. `--json`
 adds a `stack` array of objects with the keys `column`, `file`, `function` and

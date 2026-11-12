@@ -123,13 +123,13 @@ export def memory(max_bytes: Int, options: Options = Options()) -> Store
   end
 
   Store(
-    get: block1() do |key| lookup(state, key) end,
-    put: block2() do |key, value| write(state, key, value) end,
-    put_new: block2() do |key, value| write_new(state, key, value) end,
-    delete: block1() do |key| remove(state, key) end,
-    clear: block0() do wipe(state) end,
-    cleanup: block0() do sweep(state) end,
-    bytes: block0() do held(state) end,
+    get: ->(key) { lookup(state, key) },
+    put: ->(key, value) { write(state, key, value) },
+    put_new: ->(key, value) { write_new(state, key, value) },
+    delete: ->(key) { remove(state, key) },
+    clear: -> { wipe(state) },
+    cleanup: -> { sweep(state) },
+    bytes: -> { held(state) },
   )
 end
 
@@ -169,14 +169,6 @@ export def cleanup(cache: Store) -> Int = cache.cleanup.call()
 
 ## Returns how many bytes the entries take, never above `max_bytes` in `memory`.
 export def bytes(cache: Store) -> Int = cache.bytes.call()
-
-# A block is a value only when it is passed to a call, and the cache needs blocks that hold its state: these hand one
-# back.
-def block0[R](f: Fn[R]) -> Fn[R] = f
-
-def block1[A, R](f: Fn[A, R]) -> Fn[A, R] = f
-
-def block2[A, B, R](f: Fn[A, B, R]) -> Fn[A, B, R] = f
 
 def fetched(cache: Store, key: String, value: String) -> String
   _ = put_new(cache, key, value)

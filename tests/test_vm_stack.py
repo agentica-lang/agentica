@@ -5,6 +5,7 @@ Each stack-trace fixture of tests/fixtures/vm/ is run on the VM in the plain, --
 `python3 -m tests.test_vm_stack` rewrites the sidecars (make goldens). AGENTICA_FIXTURES limits the run to the named
 fixtures.
 """
+import json
 import sys
 import tempfile
 from pathlib import Path, PureWindowsPath
@@ -117,6 +118,21 @@ class StackTraces(VmCase):
 
 for _test in _STACK_TESTS:
     setattr(StackTraces, _test.__name__, _unittest_method(_test))
+
+
+def test_a_lambda_shows_as_lambda_and_a_block_as_block(tmp_path):
+    program = tmp_path / "lambda.agc"
+    program.write_text(
+        "def main() -> Void\n"
+        "  f = ->(x: Int) { 8 / x }\n"
+        "  puts([1, 0].map do |x| f.call(x) end)\n"
+        "end\n",
+        encoding="utf-8")
+    bytecode = compile_agc(program, tmp_path / "lambda.agcb")
+    status, _stdout, stderr = run_vm_process(Fixture(), ["--json"], bytecode, [], cwd=tmp_path)
+    assert status == 1
+    stack = json.loads(stderr.splitlines()[-1])["stack"]
+    assert [frame["function"] for frame in stack] == ["lambda", "block", "main"]
 
 
 def test_the_golden_paths_of_windows_come_back_as_tokens_in_every_spelling_the_vm_prints():

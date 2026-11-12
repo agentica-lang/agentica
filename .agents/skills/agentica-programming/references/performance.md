@@ -29,9 +29,10 @@ struct in one instruction, a constructor writes every field: `.with` pays from
 `AGENTICA_VM_TRACE=profile` prints a report to stderr when a run ends (`agentica
 FILE.agc`, `agentica check FILE`, `agentica run -- FILE.agcb`). Its first line
 is `total wall_ms= steps= calls= builtin_calls= builtin_ms= gc_ms=
-collections=`; then `fn` rows (a block is `block@FILE:LINE:COL`), `file` rows,
-`builtin calls= us= name=` rows and the `section` rows of `Profile.measure`; the
-`events`, `op` and `pair` rows at the end are for work on the VM. `agentica
+collections=`; then `fn` rows (a block is `block@FILE:LINE:COL`, a lambda
+`lambda@FILE:LINE:COL`), `file` rows, `builtin calls= us= name=` rows and the
+`section` rows of `Profile.measure`; the `events`, `op` and `pair` rows at the
+end are for work on the VM. `agentica
 FILE.agc` prints the front end's report, then the program's (its `steps` are its
 own, while `gc_ms` and `collections` count the whole process).
 `AGENTICA_VM_TRACE_FILE=PATH` writes the report to a file. Steps repeat exactly
@@ -97,8 +98,8 @@ writes `/tmp/perf-PID.map`, so `perf report` names the compiled functions
 (`agentica:NAME`).
 
 - Frames: `name@FILE:LINE` for a function, `block@FILE:LINE:COL` for a block,
-  the builtin's name for a native loop or callback (`Int.times`, `List.map`),
-  `measure:LABEL` for a `Profile.measure`.
+  `lambda@FILE:LINE:COL` for a lambda, the builtin's name for a native loop or
+  callback (`Int.times`, `List.map`), `measure:LABEL` for a `Profile.measure`.
 - One sample every 1000 steps, weight 1000; `AGENTICA_PROFILE_SAMPLE=N` sets N
   (1 counts every step, so the weights add up to the report's `steps`). There is
   no time weight, so the file is the same on every run.

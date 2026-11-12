@@ -24,9 +24,9 @@ end
 
 def counter(w: World, name: String) -> Supervisor.Child
   behaviour: Actor.Behaviour[Int, Msg] = Actor.Behaviour(
-    init: block0() do 0 end,
+    init: -> { 0 },
     handle: &handle,
-    terminate: some(block1() do |_count| w.stopped.put(name, w.stopped.add("", 1)) end),
+    terminate: some(->(_count) { w.stopped.put(name, w.stopped.add("", 1)) }),
   )
 
   Supervisor.child(name, behaviour) do |address| register(w, name, address) end
@@ -109,10 +109,6 @@ def slow_failure(_address: Address[Msg]) -> Void
   _ = 1 / 0
 end
 
-def block0[R](f: Fn[R]) -> Fn[R] = f
-
-def block1[A, R](f: Fn[A, R]) -> Fn[A, R] = f
-
 def test_a_crash_restarts_the_child_and_its_name_points_to_the_new_actor() -> Result[Void]
   w = world()
   sup = Supervisor.start([counter(w, "visits")])
@@ -168,7 +164,7 @@ end
 
 def test_a_failed_start_counts_as_a_crash() -> Result[Void]
   w = world()
-  behaviour: Actor.Behaviour[Int, Msg] = Actor.Behaviour(init: block0() do 0 end, handle: &handle)
+  behaviour: Actor.Behaviour[Int, Msg] = Actor.Behaviour(init: -> { 0 }, handle: &handle)
   failing = Supervisor.child("failing", behaviour) do |_address| w.starts.add("failing", 1 / 0) end
   sup = Supervisor.start([failing], Supervisor.Options(max_restarts: 1, within_ms: 60_000))
   Test.eq(Supervisor.stop(sup, 5000), error("supervisor: failing crashed 2 times in 60000 ms"))
@@ -176,7 +172,7 @@ end
 
 def test_an_init_crash_counts_as_a_crash() -> Result[Void]
   w = world()
-  behaviour: Actor.Behaviour[Int, Msg] = Actor.Behaviour(init: block0() do 1 / 0 end, handle: &handle)
+  behaviour: Actor.Behaviour[Int, Msg] = Actor.Behaviour(init: -> { 1 / 0 }, handle: &handle)
   failing = Supervisor.child("boom", behaviour) do |address| register(w, "boom", address) end
   sup = Supervisor.start([failing], Supervisor.Options(max_restarts: 1, within_ms: 60_000))
   downs: Channel[TaskDown] = Channel.new(1)
@@ -204,9 +200,9 @@ end
 # no end notice, so the inbox stays far from full, the crash notice of `victim` is not dropped and it starts again.
 def test_failed_starts_of_one_child_do_not_hide_the_crash_of_another() -> Result[Void]
   w = world()
-  behaviour: Actor.Behaviour[Int, Msg] = Actor.Behaviour(init: block0() do 0 end, handle: &handle)
+  behaviour: Actor.Behaviour[Int, Msg] = Actor.Behaviour(init: -> { 0 }, handle: &handle)
   flaky = Supervisor.child("flaky", behaviour) do |address| flaky_register(w, address) end
-  victim_behaviour: Actor.Behaviour[Int, Msg] = Actor.Behaviour(init: block0() do crash_once(w) end, handle: &handle)
+  victim_behaviour: Actor.Behaviour[Int, Msg] = Actor.Behaviour(init: -> { crash_once(w) }, handle: &handle)
   victim = Supervisor.child("victim", victim_behaviour) do |address| register(w, "victim", address) end
   sup = Supervisor.start([flaky, victim], Supervisor.Options(max_restarts: 1000, within_ms: 60_000))
   try started(w, "victim", 2)
@@ -218,9 +214,9 @@ end
 def test_stop_gives_the_error_of_a_child_whose_terminate_crashes() -> Result[Void]
   w = world()
   behaviour: Actor.Behaviour[Int, Msg] = Actor.Behaviour(
-    init: block0() do 0 end,
+    init: -> { 0 },
     handle: &handle,
-    terminate: some(block1() do |count| crash_on_stop(count) end),
+    terminate: some(->(count) { crash_on_stop(count) }),
   )
 
   bad = Supervisor.child("bad", behaviour) do |address| register(w, "bad", address) end
@@ -232,9 +228,9 @@ end
 
 def test_a_child_error_that_reads_like_a_supervisor_reason_stays_the_child_error() -> Result[Void]
   behaviour: Actor.Behaviour[Int, Msg] = Actor.Behaviour(
-    init: block0() do 0 end,
+    init: -> { 0 },
     handle: &handle,
-    terminate: some(block1() do |count| halt_on_stop(count) end),
+    terminate: some(->(count) { halt_on_stop(count) }),
   )
 
   sup = Supervisor.start([Supervisor.child("odd", behaviour) do |_address| nil end])
@@ -243,7 +239,7 @@ def test_a_child_error_that_reads_like_a_supervisor_reason_stays_the_child_error
 end
 
 def test_failed_starts_in_a_row_make_the_supervisor_give_up_whatever_their_pace() -> Result[Void]
-  behaviour: Actor.Behaviour[Int, Msg] = Actor.Behaviour(init: block0() do 0 end, handle: &handle)
+  behaviour: Actor.Behaviour[Int, Msg] = Actor.Behaviour(init: -> { 0 }, handle: &handle)
   slow = Supervisor.child("slow", behaviour) do |address| slow_failure(address) end
   sup = Supervisor.start([slow], Supervisor.Options(max_restarts: 2, within_ms: 1))
   downs: Channel[TaskDown] = Channel.new(1)
