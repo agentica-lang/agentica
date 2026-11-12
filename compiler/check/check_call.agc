@@ -92,7 +92,7 @@ export def check_enum_constructor(
         cx,
         st,
         "CHECK-UNKNOWN-VARIANT",
-        "enum \"#{T.display_name(enum_name)}\" has no variant \"#{variant_name}\"",
+        "enum \"#{T.written_type(enum_name)}\" has no variant \"#{variant_name}\"",
         span,
       ),
     )
@@ -100,7 +100,7 @@ export def check_enum_constructor(
 
   count = args.size + named
   if count != payload.unwrap!.size
-    variant = "#{T.display_name(enum_name)}.#{variant_name}"
+    variant = "#{T.written_type(enum_name)}.#{variant_name}"
     return error(
       State.fail(
         cx,
@@ -666,7 +666,7 @@ def finish_constructor(
 ) -> Result[State.Out]
   unresolved = definition.parameters.filter do |parameter: String| !substitutions.has_key?(parameter) end
   if unresolved.size > 0
-    variant = "#{T.display_name(definition.name)}.#{variant_name}"
+    variant = "#{T.written_type(definition.name)}.#{variant_name}"
     return error(
       State.fail(
         cx,
@@ -713,7 +713,7 @@ def check_struct_construct(cx: State.Cx, st: State.St, node: Ast.Construct, expe
         cx,
         st,
         "CHECK-UNKNOWN-TYPE",
-        "\"#{T.display_name(name)}\" is not a declared struct",
+        "\"#{T.written_type(name)}\" is not a declared struct",
         node.span,
         help,
       ),
@@ -733,7 +733,7 @@ def check_struct_construct(cx: State.Cx, st: State.St, node: Ast.Construct, expe
           cx,
           checked.st,
           "CHECK-MISSING-FIELD",
-          "constructor \"#{T.display_name(name)}\" is missing field \"#{field.name}\"",
+          "constructor \"#{T.written_type(name)}\" is missing field \"#{field.name}\"",
           node.span,
           "add \"#{field.name}: ...\" with a value of type #{T.to_text(field.type)}",
         ),
@@ -799,7 +799,7 @@ def check_named_fields(
           cx,
           current,
           "CHECK-UNKNOWN-FIELD",
-          "\"#{T.display_name(name)}\" has no field \"#{arg.name}\"",
+          "\"#{T.written_type(name)}\" has no field \"#{arg.name}\"",
           arg.span,
           Help.field_help(arg.name, fields),
         ),

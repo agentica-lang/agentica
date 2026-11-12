@@ -383,7 +383,7 @@ end
 # The read of a struct field of the program, or the call of an Fn field (`x.name(args)`).
 def field_read_sites(scan: Scan, target: Ast.Expr, name: String, name_span: Source.Span) -> List[Site]
   owner = struct_of(scan, target)
-  return [] if !scan.declared.include?(owner)
+  return [] if !known?(scan, owner)
 
   placed(scan, member("field", owner, name), "read", name_span, name_span)
 end
@@ -411,7 +411,7 @@ end
 
 # The name of a function (a call, a `&f`) or of a builtin, written from `start`.
 def name_sites(scan: Scan, name: String, start: Source.Position, kind: String) -> List[Site]
-  user = scan.declared.include?(name)
+  user = known?(scan, name)
   return [] if !user and !CatalogJson.public(name).ok?
 
   parts = written(scan.text, start)
@@ -424,6 +424,10 @@ def name_sites(scan: Scan, name: String, start: Source.Position, kind: String) -
   placed(scan, named(name), kind, whole, whole)
 end
 
+# Whether `name` is a declaration of the program or a builtin type that a std/ module re-exports (HttpWire.Request):
+# both are written as a program declares them, so their sites are found alike.
+def known?(scan: Scan, name: String) -> Bool = scan.declared.include?(name) or T.REEXPORTED_TYPES.has_key?(name)
+
 # The name of a declared type written from `start`, or of a builtin one when the scan wants those.
 def type_name_sites(scan: Scan, name: String, start: Source.Position, kind: String) -> List[Site]
   bounded_type_sites(scan, name, start, scan.text.length, kind)
@@ -432,7 +436,7 @@ end
 # The same, reading only the names that end by offset `limit`: `Models.User.members` holds the type `Models.User`
 # and then a method, which the text read from the start of the type would take for part of the type name.
 def bounded_type_sites(scan: Scan, name: String, start: Source.Position, limit: Int, kind: String) -> List[Site]
-  return [] if !scan.declared.include?(name) and !(scan.builtin_types and RESERVED.include?(name))
+  return [] if !known?(scan, name) and !(scan.builtin_types and RESERVED.include?(name))
 
   parts = written(scan.text, start).select do |part: Source.Span| part.stop.offset <= limit end
   return [] if parts.size == 0
@@ -445,7 +449,7 @@ end
 # variant the last. A position on the module alias or the enum selects the enum.
 def enum_part_sites(scan: Scan, enum_name: String, variant_name: String, span: Source.Span, kind: String) -> List[Site]
   parts = written(scan.text, span.start)
-  return [] if !scan.declared.include?(enum_name) or parts.size < 2
+  return [] if !known?(scan, enum_name) or parts.size < 2
 
   enum_part = parts[parts.size - 2]
   variant_part = parts[parts.size - 1]
@@ -458,7 +462,7 @@ end
 # The names of `name: value` pairs, which start at the name.
 def field_sites(scan: Scan, owner: String, args: List[Ast.NamedArg], kind: String) -> List[Site]
   out: List[Site] = []
-  return out if !scan.declared.include?(owner)
+  return out if !known?(scan, owner)
 
   for arg in args
     span = Source.Span(start: arg.span.start, stop: after(arg.span.start, arg.name.length))

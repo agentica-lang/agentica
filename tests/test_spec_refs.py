@@ -828,3 +828,38 @@ def test_two_blocks_that_declare_one_name_keep_their_uses_apart(tmp_path):
     assert [start(found["span"]) for found in other["references"]] == [
         where(TWINS, "A.start()"), where(TWINS, "A.Kind.One"), where(TWINS, "A.Kind.Two")]
     problem(ask("start", "twins.agc", cwd=tmp_path), "QUERY-AMBIGUOUS-NAME", 2)
+
+
+SERVER = '''import HTTP from "std/http"
+import {Request} from "std/http"
+
+def handle(request: Request) -> Result[HTTP.Response]
+  return ok(HTTP.Response(status: 200, headers: [], body: request.body))
+end
+
+def main() -> Void
+  made = HTTP.Request(method: "GET", target: "/", path: "/", headers: [], body: "".bytes)
+  puts(handle(made).unwrap!.status)
+end
+'''
+
+
+def test_a_builtin_type_that_std_re_exports_is_found_by_its_written_names(tmp_path):
+    # Request of std/http is the builtin HttpWire.Request: `symbol` and `refs` find it at its `export` line, and the
+    # uses of every linked file, written `Request`, `HTTP.Request`, or read as a field.
+    (tmp_path / "server.agc").write_text(SERVER, encoding="utf-8")
+    definition = symbol_match("HTTP.Request", "server.agc", cwd=tmp_path)
+    assert (definition["kind"], definition["name"], definition["module"]) == ("struct", "Request", "std/http.agc")
+    for name in ("Request", "HTTP.Request"):
+        report = told(name, "server.agc", cwd=tmp_path)
+        assert report["definition"] == definition, name
+        own = [place for place in places(report) if place[0] == "server.agc"]
+        assert own == [("server.agc", *where(SERVER, "Request) ->"), "type", "handle"),
+                       ("server.agc", *where(SERVER, "Request(method"), "construct", "main")], name
+    body = told("HTTP.Request.body", "server.agc", cwd=tmp_path)
+    assert ("server.agc", *where(SERVER, "body))"), "read", "handle") in places(body)
+    assert (body["definition"]["kind"], body["definition"]["name"]) == ("field", "body")
+    # By position, on the type and on a read of its field, the definition is the same, and no builtin name shows.
+    for needle, found in (("Request(method", report), ("body))", body)):
+        at = answer(("server.agc", where(SERVER, needle)), cwd=tmp_path)
+        assert (at["definition"], at["builtin"]) == (found["definition"], None), needle
