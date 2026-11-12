@@ -13,6 +13,9 @@ import Data from "check_tables"
 ## arity error).
 export PROCESS_OPTIONS_HELP = "the options go in a record: Process.Options(timeout_ms: 5000, chdir: \"dir\")"
 
+## The help for an Error where a String goes: the payload of error(e) was a String before it was an Error.
+export ERROR_TEXT_HELP = "an Error is not a String: its text is its message field, e.message"
+
 ## The tables of check_tables.agc, built once per run. A key is the receiver kind and the name, `String.size`.
 export struct Tables
   modules: Map[String, String]
@@ -35,6 +38,9 @@ end
 
 ## The help of a type mismatch: how to convert the actual type into the expected one (conversion-help).
 export def conversion(expected: Types.Type, actual: Types.Type) -> String
+  return ERROR_TEXT_HELP if Types.same?(expected, Types.Type.String) and Types.error?(actual)
+  return ERROR_TEXT_HELP if Types.error?(expected) and Types.same?(actual, Types.Type.String)
+
   if Types.is?(actual, "Result") and Types.same?(Types.item(actual), expected)
     return (
       "this is #{Types.to_text(actual)}; unwrap it with a ! form (#{unwrap_form(expected)}), " +

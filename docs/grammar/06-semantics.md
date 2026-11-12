@@ -18,7 +18,10 @@ programs are valid and how they run.
   `Bytes`; keeps insertion order
 - `Set[T]`: Immutable set of distinct `Int`, `String` or `Bytes` values; keeps
   first-insertion order
-- `Result[T]`: `ok(value)`, or `error(message)` with a `String` message
+- `Result[T]`: `ok(value)`, or `error(...)` holding an `Error`
+- `Error`: Builtin record of a failed Result: `kind: String`, `message:
+  String`, `code: Optional[Int]`, `details: Map[String, String]`, `cause:
+  Optional[Error]` and `location: String`
 - `Optional[T]`: `some(value)`, or `none` for a value that is missing
 - `Json`: Opaque JSON value, used through the `JSON` module
 - `Range`: Immutable `Int` range: `a..b` includes `b`, `a...b` excludes it
@@ -795,6 +798,20 @@ puts(seen)
 
 - `ok(value)`, `ok()` and `error(message)` build Results. `Result.Ok(x)`,
   `Result.Ok()` and `Result.Err(m)` are the same calls.
+- A failed Result holds an `Error`. `error(message)` with a `String` builds
+  one: kind `"error"`, no code, no details, no cause, and the location of the
+  call. `error(e)` with an `Error` holds `e` unchanged. Any other argument is
+  `CHECK-TYPE-MISMATCH`. The pattern `error(e)` binds an `Error`, so a literal
+  in its slot (`error("timeout")`) is `CHECK-PATTERN-TYPE`; test
+  `e.message` in a guard.
+- `location` is `path:line:col` of the `error(...)` call, or for an error that a
+  builtin makes, of the builtin call that the innermost frame outside the
+  prelude makes. The path is the source name the compiled file stores. It is
+  `""` when no such frame is found within 16 prelude or native frames.
+  `error(e)`, `try` and `e.with(...)` keep it.
+- `==` on two `Error`s compares every field but `location`. `to_s` and
+  interpolation give the message; `inspect` gives the `error(...)` call
+  (06b-builtins.md).
 - `Result[T]` is builtin, not a user enum. It can nest and hold any payload. It
   has no fields or indexing; `==` compares it when `T` has equality.
 - `ok(1)` infers `Result[Int]`. An expected `Result[T]` checks the payload
@@ -809,7 +826,8 @@ puts(seen)
 - The functions are in the
   [`Result` page](../../site/content/library/errors/result.md).
   `Result.unwrap!` on an error halts with `RUNTIME-UNWRAP-ERROR` at the call.
-  `Result.ok?` and `Result.message` need a known Result type. `ok(false)` and
+  `Result.ok?` and `Result.message` (the `message` field) need a known Result
+  type. `ok(false)` and
   `ok(nil)` are successes. An error value never prints a diagnostic or changes
   the exit code. Non-bang String conversions return an error for bad text or
   overflow; other runtime failures are never turned into Results.

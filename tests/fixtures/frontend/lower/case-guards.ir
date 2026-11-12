@@ -1,7 +1,9 @@
 program 0:1:1-35:1 entry=2 globals=0
-source 0 "case-guards.agc" chars=723
+source 0 "case-guards.agc" chars=741
+struct s0 "Error" ["kind","message","code","details","cause","location"] types=[String, String, Optional(Int), Map(String, String), Optional(Struct(Error)), String]
 enum "Option" v0="Some"/1 v1="None"/0
 enum "Shape" v2="Circle"/1 v3="Pair"/2
+enum "Optional" v4="None"/0 v5="Some"/1
 fn0 "describe" params=2 captures=0 slots=7 @ 0:11:1-20:1
     step @ 0:12:3-19:1
     step @ 0:12:8-12:13
@@ -77,7 +79,7 @@ fn0 "describe" params=2 captures=0 slots=7 @ 0:11:1-20:1
   L0:
     const r2 void @ 0:11:1-20:1
     return r2 @ 0:11:1-20:1
-fn1 "results" params=1 captures=0 slots=4 @ 0:21:1-30:1
+fn1 "results" params=1 captures=0 slots=5 @ 0:21:1-30:1
     step @ 0:22:3-29:1
     step @ 0:22:8-22:9
     is-ok r1 r0 @ 0:23:5-23:23
@@ -100,18 +102,23 @@ fn1 "results" params=1 captures=0 slots=4 @ 0:21:1-30:1
     return r1 @ 0:24:14-25:1
     jump L0 @ 0:22:3-29:1
   L2:
-    is-ok r1 r0 @ 0:25:5-25:18
-    jump-if-true r1 L3 @ 0:25:5-25:18
-    result-value r2 r0 @ 0:25:5-25:18
-    const r3 "boom" @ 0:25:11-25:17
-    same r3 r2 r3 @ 0:25:11-25:17
-    jump-if-false r3 L3 @ 0:25:11-25:17
-    step @ 0:25:22-26:1
-    step @ 0:25:29-25:31
-    step @ 0:25:30-25:31
-    const r2 int:1 @ 0:25:30-25:31
-    neg-i r1 r2 @ 0:25:29-25:30
-    return r1 @ 0:25:22-26:1
+    is-ok r1 r0 @ 0:25:5-25:13
+    jump-if-true r1 L3 @ 0:25:5-25:13
+    result-value r1 r0 @ 0:25:5-25:13
+    step @ 0:25:17-25:36
+    step @ 0:25:17-25:26
+    step @ 0:25:17-25:18
+    field r3 r1 1 @ 0:25:17-25:26
+    step @ 0:25:30-25:36
+    const r4 "boom" @ 0:25:30-25:36
+    eq r2 r3 r4 @ 0:25:27-25:29
+    jump-if-false r2 L3 @ 0:25:17-25:36
+    step @ 0:25:40-26:1
+    step @ 0:25:47-25:49
+    step @ 0:25:48-25:49
+    const r3 int:1 @ 0:25:48-25:49
+    neg-i r2 r3 @ 0:25:47-25:48
+    return r2 @ 0:25:40-26:1
     jump L0 @ 0:22:3-29:1
   L3:
     is-ok r1 r0 @ 0:26:5-26:13

@@ -334,7 +334,7 @@ def main() -> Void
   headers = [HTTP.Header(name: "Content-Type", value: "application/json")]
   case HTTP.post(client, "http://localhost:8080/items", "{\"name\":\"tea\"}".bytes, headers)
     ok(created) -> puts("#{created.status} #{HTTP.text(created.body, created.headers).unwrap!}")
-    error(message) -> IO.warn(message)
+    error(e) -> IO.warn(e.message)
   end
 
   deleted = HTTP.request(client, "DELETE", "http://localhost:8080/items/1", "".bytes)
@@ -351,7 +351,7 @@ import HTTP from "std/http"
 def main() -> Void
   case HTTP.get_response("http://localhost:8080/items", HTTP.ClientOptions(timeout_ms: 5000))
     ok(response) -> puts("#{response.status} #{HTTP.text(response.body, response.headers).unwrap!}")
-    error(message) -> IO.warn(message)
+    error(e) -> IO.warn(e.message)
   end
 end
 ```
@@ -424,7 +424,7 @@ def main() -> Void
   client = HTTP.client().unwrap!
   case HTTP.download(client, "http://localhost:8080/asset", "asset.bin")
     ok(saved) -> puts("#{saved.status} #{saved.bytes_written}")
-    error(message) -> IO.warn(message)
+    error(e) -> IO.warn(e.message)
   end
 
   HTTP.close_client(client)
@@ -814,7 +814,7 @@ end
 def handle(request: HTTP.Request, body: HTTP.RequestBody) -> Result[HTTP.Answer]
   case HTTP.read_all(body, 65536)
     ok(data) -> ok(echoed(data))
-    error(message) -> ok(HTTP.body_refusal(message))
+    error(e) -> ok(HTTP.body_refusal(e.message))
   end
 end
 

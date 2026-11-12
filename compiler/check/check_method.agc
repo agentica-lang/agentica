@@ -329,6 +329,9 @@ def unknown_method_help(cx: State.Cx, st: State.St, id: Int, target: T.Type, kin
       "only data values have to_s and inspect: numbers, Bool, String, nil, Json, ranges, and lists, maps, sets, " +
       "Results, structs and enums of those"
     )
+  elsif T.error?(target) and Names.resolve_method(cx, "String", name) != ""
+    # A String method on the payload of error(e), which was a String before it was an Error.
+    return "an Error is not a String: call #{name} on its text, e.message.#{name}"
   elsif T.is?(target, "Struct")
     return struct_help(cx, target, name)
   elsif name == "with"

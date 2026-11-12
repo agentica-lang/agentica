@@ -24,13 +24,13 @@ def answer(c: Case) -> Answer
   if c.op == "decode"
     case Bytes.from_list(c.data).unwrap!.decode(c.encoding)
       ok(text) -> return Answer(passed: true, data: [], text: text, message: "")
-      error(message) -> return Answer(passed: false, data: [], text: "", message: message)
+      error(e) -> return Answer(passed: false, data: [], text: "", message: e.message)
     end
   end
 
   case c.text.encode(c.encoding)
     ok(bytes) -> return Answer(passed: true, data: bytes.to_a, text: "", message: "")
-    error(message) -> return Answer(passed: false, data: [], text: "", message: message)
+    error(e) -> return Answer(passed: false, data: [], text: "", message: e.message)
   end
 end
 

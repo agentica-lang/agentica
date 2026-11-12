@@ -161,7 +161,7 @@ def describe(r: Result[Reading]) -> String
     ok(Reading.Value(n)) if n < 0 -> "negative #{n}"
     ok(Reading.Value(n)) -> "value #{n}"
     ok(_) -> "missing"
-    error(message) -> message
+    error(e) -> e.message
   end
 end
 ```

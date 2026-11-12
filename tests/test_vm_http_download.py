@@ -50,7 +50,7 @@ SHOW = """\
 def show(result: Result[HTTP.Download]) -> Void
   case result
     ok(download) -> puts("#{download.status} #{download.bytes_written}")
-    error(message) -> puts("ERR #{flat(message)}")
+    error(e) -> puts("ERR #{flat(e.message)}")
   end
 end
 

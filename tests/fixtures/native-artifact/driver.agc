@@ -11,7 +11,7 @@ def show(result: Result[String]) -> Void
   case result
     ok(path) -> puts("OK #{path}")
     error(packed) ->
-      failure = Failure.unpack_failure(packed)
+      failure = Failure.unpack_failure(packed.message)
       puts("ERR #{failure.diagnostic.code} file=#{failure.file} key=#{failure.key_path}")
   end
 end

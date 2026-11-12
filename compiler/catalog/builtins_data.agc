@@ -37,6 +37,27 @@ export BUILTIN_ROWS: List[Model.Builtin] = BUILTIN_GROUPS_1.concat(BUILTIN_GROUP
 
 ## The builtin record types, sorted by name.
 export RECORDS: List[Model.Record] = [
+  # The payload of a failed Result. vm/builtins.c (agc_error_struct) takes it as the builtin Error only with these
+  # fields, in this order and of these types: keep them in step. cause names the record itself.
+  Model.Record(
+    name: "Error",
+    fields: [
+      Model.Named(name: "kind", type: Types.Type.String, default: Model.Default.Text("error")),
+      Model.Named(name: "message", type: Types.Type.String),
+      Model.Named(name: "code", type: Types.Type.Optional(Types.Type.Int), default: Model.Default.None),
+      Model.Named(
+        name: "details",
+        type: Types.Type.Map(Types.Type.String, Types.Type.String),
+        default: Model.Default.EmptyMap,
+      ),
+      Model.Named(
+        name: "cause",
+        type: Types.Type.Optional(Types.Type.Struct("Error", [])),
+        default: Model.Default.None,
+      ),
+      Model.Named(name: "location", type: Types.Type.String, default: Model.Default.Text("")),
+    ],
+  ),
   Model.Record(
     name: "FileInfo",
     fields: [
@@ -5611,12 +5632,12 @@ ROWS_53: List[Model.Builtin] = [
 ROWS_54: List[Model.Builtin] = [
   Model.Builtin(
     name: "error",
-    parameters: [Model.Named(name: "message", type: Types.Type.String)],
+    parameters: [Model.Named(name: "message_or_error", type: Types.Type.String)],
     result: Types.Type.Result(Types.Type.Var("T")),
     rule: Model.Rule.Error,
     implementation: "error",
     effects: [],
-    description: "Construct an error; needs an expected Result type.",
+    description: "A failed Result: a new Error with the message, or the Error given; needs an expected Result type.",
     alternatives: [],
   ),
   Model.Builtin(

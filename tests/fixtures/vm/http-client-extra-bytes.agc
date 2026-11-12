@@ -57,7 +57,7 @@ end
 def show(r: Result[HTTP.Response]) -> String
   case r
     ok(response) -> return "#{response.status} [#{response.body.size} bytes]"
-    error(message) -> return message
+    error(e) -> return e.message
   end
 end
 

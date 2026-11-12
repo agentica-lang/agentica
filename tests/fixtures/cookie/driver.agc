@@ -30,7 +30,7 @@ def run_case(c: Case) -> Reply
     "set_header" ->
       case Cookie.set_header(c.cookie)
         ok(header) -> return text_reply(header)
-        error(message) -> return Reply(success: false, message: message, text: "", cookies: {})
+        error(e) -> return Reply(success: false, message: e.message, text: "", cookies: {})
       end
     _ -> return Reply(success: false, message: "unknown op #{c.op}", text: "", cookies: {})
   end

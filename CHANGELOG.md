@@ -36,6 +36,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   `File.Handle`, `JSON.Value`, `JSON.Field`, `Process.Output`, `TCP.Socket`,
   `TCP.Listener`, `TLS.Context`, `TLS.ClientOptions`, `TLS.ServerOptions`,
   `Test.Case` and `System.Profile` (#1182).
+- A failed Result holds an `Error` record, whose `location` says where it was
+  made; `error(e)` passes one on as a Result of another type (#671).
 
 ### Changed
 
@@ -59,9 +61,13 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - Diagnostics, `help`, `doc`, `outline` and `type-at` write the HTTP and
   logger types as a program does (`HTTP.Request`, `Logger.Event`), and
   `symbol` and `refs` find them by those names.
-- **Breaking:** `Error` is a reserved type name, for the coming builtin error
+- **Breaking:** `Error` is a reserved type name, for the builtin error
   record: `struct Error`, `enum Error` or `type Error` is
   `CHECK-REDEFINED-NAME`.
+- **Breaking:** `error(e)` in a `case` binds an `Error` (kind, message, code,
+  details, cause, location), not a String: use `e.message` for the text, and
+  `error(e) if e.message == "x"` for `error("x") ->`; `"#{e}"` and `puts(e)`
+  still give the message.
 
 ### Fixed
 

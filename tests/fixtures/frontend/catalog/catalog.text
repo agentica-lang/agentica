@@ -777,7 +777,7 @@ builtin __lazy_write_lines forms=1
 builtin __lazy_zlib forms=1
   __lazy_zlib(lazy: Lazy[Bytes], kind: Int, level: Int, max_bytes: Int) -> Lazy[Bytes] shape=(Lazy(Bytes), Int, Int, Int) -> Lazy(Bytes) rule=Plain impl="__lazy_zlib.bytes" effects=[] desc="Internal to the prelude: a step or terminal of Lazy (vm/lazy.c)."
 builtin error forms=1
-  error(message: String) -> Result[T] shape=(String) -> Result(Var(T)) rule=Error impl="error" effects=[] desc="Construct an error; needs an expected Result type."
+  error(message_or_error: String) -> Result[T] shape=(String) -> Result(Var(T)) rule=Error impl="error" effects=[] desc="A failed Result: a new Error with the message, or the Error given; needs an expected Result type."
 builtin gets forms=1
   gets() -> Result[String] shape=() -> Result(String) rule=Plain impl="IO.gets" effects=["stdin"] desc="Read a line as a Result; EOF is an error value."
 builtin gets! forms=1
@@ -983,6 +983,7 @@ builtin String.edit_distance forms=2
 builtin String.jaro_winkler forms=1
   String.jaro_winkler(s: String, other: String) -> Float shape=(String, String) -> Float rule=Plain impl="String.jaro_winkler" effects=[] desc="The Jaro-Winkler similarity in characters, from 0.0 to 1.0; a common prefix of up to 4 characters raises it when the Jaro similarity is above 0.7; two empty strings give 1.0."
 record Codec.Info name: String, members: List(Struct(StructMember))
+record Error kind: String = "error", message: String, code: Optional(Int) = none, details: Map(String, String) = {}, cause: Optional(Struct(Error)) = none, location: String = ""
 record FileInfo kind: String, size_bytes: Int, modified_seconds: Int, mode: Int, user_id: Int, group_id: Int
 record HttpWire.Chunk done: Bool, next: Int, runs: List(Int), state: Int, remaining: Int, size: Int, line: Int, block: Int, count: Int, name: String, name_length: Int, total: Int, limit: Int
 record HttpWire.ClientOptions timeout_ms: Int = 30000, idle_timeout_ms: Int = 30000, max_connections: Int = 4, max_body_bytes: Int = 1048576, proxy: String = "", tls: Optional(Opaque(TlsContext)) = none

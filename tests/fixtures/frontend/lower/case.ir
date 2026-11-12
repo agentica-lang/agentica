@@ -1,6 +1,8 @@
 program 0:1:1-72:1 entry=6 globals=0
-source 0 "case.agc" chars=1249
+source 0 "case.agc" chars=1245
+struct s0 "Error" ["kind","message","code","details","cause","location"] types=[String, String, Optional(Int), Map(String, String), Optional(Struct(Error)), String]
 enum "Shape" v0="Dot"/0 v1="Circle"/1 v2="Rect"/2
+enum "Optional" v3="None"/0 v4="Some"/1
 fn0 "area" params=1 captures=0 slots=5 @ 0:7:1-14:1
     step @ 0:8:3-13:1
     step @ 0:8:8-8:13
@@ -212,12 +214,14 @@ fn4 "check" params=1 captures=0 slots=4 @ 0:52:1-58:1
     return r2 @ 0:54:14-55:1
     jump L0 @ 0:53:3-57:1
   L1:
-    is-ok r1 r0 @ 0:55:5-55:19
-    jump-if-true r1 L2 @ 0:55:5-55:19
-    result-value r1 r0 @ 0:55:5-55:19
-    step @ 0:55:23-56:1
-    step @ 0:55:30-55:37
-    return r1 @ 0:55:23-56:1
+    is-ok r1 r0 @ 0:55:5-55:13
+    jump-if-true r1 L2 @ 0:55:5-55:13
+    result-value r1 r0 @ 0:55:5-55:13
+    step @ 0:55:17-56:1
+    step @ 0:55:24-55:33
+    step @ 0:55:24-55:25
+    field r2 r1 1 @ 0:55:24-55:33
+    return r2 @ 0:55:17-56:1
   L2:
   L0:
     const r1 void @ 0:52:1-58:1

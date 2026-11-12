@@ -1,5 +1,7 @@
 program 0:1:1-31:1 entry=3 globals=0
 source 0 "closures.agc" chars=698
+struct s0 "Error" ["kind","message","code","details","cause","location"] types=[String, String, Optional(Int), Map(String, String), Optional(Struct(Error)), String]
+enum "Optional" v0="None"/0 v1="Some"/1
 fn0 "apply" params=2 captures=0 slots=4 @ 0:1:1-4:1
     step @ 0:2:3-3:1
     step @ 0:2:10-2:19

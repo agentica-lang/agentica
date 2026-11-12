@@ -112,6 +112,9 @@ def run(linked: Linker.Linked, checked: Checker.Checked) -> Result[Ir.Program]
   mentioned = mentioned_in(checked.types, scanned.covered, watched)
   used = Set.new(scanned.written.concat(mentioned).concat(Builtins.default_enums().to_a))
   used = used.union(called_records(scanned.function_scans.concat(scanned.constant_scans)))
+  # Any builtin, and error(...), may hand back an Error, which the VM builds only when the table has the record and
+  # Optional (agc_error_struct, vm/builtins.c); without them every error payload stays a String.
+  used = used.add("Error").add("Optional")
   if used.include?("TaskDown")
     # The VM builds the reason of a TaskDown, so the enum is in the table even when no expression names it.
     used = used.add("TaskExit")

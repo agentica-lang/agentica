@@ -56,6 +56,12 @@ export enum Type
   Var(String)
 end
 
+## The builtin Error record, the payload of a failed Result.
+export def error_type() -> Type = Type.Struct("Error", [])
+
+## True for the builtin Error record.
+export def error?(type: Type) -> Bool = tag(type) == "Struct" and name(type) == "Error"
+
 ## The variant of a type as a word: "Int", "List", "Struct", ... Every test of a type's shape is a comparison with this
 ## word.
 export def tag(type: Type) -> String

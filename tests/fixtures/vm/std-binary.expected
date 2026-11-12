@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 80185,
+  "steps": 80192,
   "stdout": [
     "int round trips: 74 values, 0 mismatches",
     "byte round trips: 91 patterns, 0 mismatches",

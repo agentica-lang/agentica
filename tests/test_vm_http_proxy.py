@@ -34,7 +34,7 @@ end
 def answered(r: Result[HTTP.Response]) -> String
   case r
     ok(_) -> return "answered"
-    error(message) -> return message
+    error(e) -> return e.message
   end
 end
 
@@ -98,17 +98,17 @@ def main() -> Void
   gone = HTTP.ClientOptions(proxy: "http://#{down}")
   case HTTP.get_response("#{a}/hello", gone)
     ok(_) -> puts("answered")
-    error(message) -> puts(names_proxy(message, down))
+    error(e) -> puts(names_proxy(e.message, down))
   end
 
   case HTTP.start(a, gone)
     ok(_) -> puts("started")
-    error(message) -> puts(names_proxy(message, down))
+    error(e) -> puts(names_proxy(e.message, down))
   end
 
   case HTTP.download(HTTP.client(gone).unwrap!, "#{a}/big", "#{args[3]}/gone.bin")
     ok(_) -> puts("downloaded")
-    error(message) -> puts(names_proxy(message, down))
+    error(e) -> puts(names_proxy(e.message, down))
   end
 
   shown_error(HTTP.client(HTTP.ClientOptions(proxy: "ftp://127.0.0.1:1")))
@@ -269,7 +269,7 @@ def main() -> Void
   puts("-- a proxy that is down")
   case HTTP.get_response("#{a}/hello", HTTP.ClientOptions(proxy: "http://us:hunter2@127.0.0.1:#{args[4]}"))
     ok(_) -> puts("answered")
-    error(message) -> puts(message.start_with?("http: cannot reach the proxy 127.0.0.1:#{args[4]}: "))
+    error(e) -> puts(e.message.start_with?("http: cannot reach the proxy 127.0.0.1:#{args[4]}: "))
   end
 end
 """
@@ -555,7 +555,7 @@ end
 def names_down(r: Result[HTTP.Response], gone: String) -> Bool
   case r
     ok(_) -> return false
-    error(message) -> return message.start_with?("http: cannot reach the proxy #{gone}: ")
+    error(e) -> return e.message.start_with?("http: cannot reach the proxy #{gone}: ")
   end
 end
 
@@ -621,7 +621,7 @@ def main() -> Void
   strict = TLS.client_context(TlsClientOptions(ca_file: args[7])).unwrap!
   case HTTP.get_response("#{c}/hello", HTTP.ClientOptions(proxy: "http://#{proxy}", tls: some(strict)))
     ok(_) -> puts("answered")
-    error(message) -> puts(message.include?("proxy"))
+    error(e) -> puts(e.message.include?("proxy"))
   end
 
   puts("-- a refused tunnel, a proxy that is down, a bad proxy")
@@ -632,7 +632,7 @@ def main() -> Void
   puts(names_down(HTTP.get_response("#{c}/hello", down), "127.0.0.1:#{args[6]}"))
   case HTTP.start(c, down)
     ok(_) -> puts("started")
-    error(message) -> puts(message.start_with?("http: cannot reach the proxy 127.0.0.1:#{args[6]}: "))
+    error(e) -> puts(e.message.start_with?("http: cannot reach the proxy 127.0.0.1:#{args[6]}: "))
   end
 
   show(HTTP.get_response("#{c}/hello", HTTP.ClientOptions(proxy: "ftp://#{proxy}", tls: some(context))))

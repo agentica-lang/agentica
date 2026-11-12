@@ -12,6 +12,7 @@ import BuiltinRef from "builtin_ref"
 import {REFS_MODULE} from "builtin_ref"
 import Calls from "check_call"
 import Help from "check_help"
+import {ERROR_TEXT_HELP} from "check_help"
 import Methods from "check_method"
 import CheckRegex from "check_regex"
 import Rules from "check_rules"
@@ -861,7 +862,10 @@ def same_help(sides: Sides, with_to_s: Bool) -> String
   either_int = T.is?(sides.left, "Int") or T.is?(sides.right, "Int")
   either_float = T.is?(sides.left, "Float") or T.is?(sides.right, "Float")
   either_string = T.is?(sides.left, "String") or T.is?(sides.right, "String")
-  if either_int and either_float
+  either_error = T.error?(sides.left) or T.error?(sides.right)
+  if either_string and either_error
+    return ERROR_TEXT_HELP
+  elsif either_int and either_float
     return "make both sides the same type: n.to_f turns the Int into a Float, " + "x.to_i! truncates the Float"
   elsif either_string and (either_int or either_float)
     if with_to_s

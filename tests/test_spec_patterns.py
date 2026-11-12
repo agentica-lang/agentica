@@ -91,7 +91,12 @@ SINGLE_FILE = [
                  "    Deep.Node(Deep.Node(Deep.Leaf(n))) -> puts(n)\n    _ -> puts(0)\n  end\n", ""), None, None),
     ("a pattern in a Result payload",
      main_with("  r: Result[Option] = Result.Ok(Option.Some(1))\n  case r\n    ok(Option.Some(n)) -> puts(n)\n"
-               "    ok(_) -> puts(0)\n    error(\"x\") -> puts(1)\n    error(_) -> puts(2)\n  end\n"), None, None),
+               "    ok(_) -> puts(0)\n    error(e) if e.message == \"x\" -> puts(1)\n    error(_) -> puts(2)\n  end\n"), None,
+     None),
+    # The payload of error(...) is an Error, so a text literal in its slot has the wrong type.
+    ("a text literal in an error payload",
+     main_with("  r: Result[Int] = Result.Ok(1)\n  case r\n    ok(_) -> puts(0)\n    error(\"x\") -> puts(1)\n"
+               "    error(_) -> puts(2)\n  end\n"), "CHECK-PATTERN-TYPE", '"x"'),
     ("a literal of the wrong type in a payload position",
      case_of(["Shape.Circle(\"a\") -> puts(0)", "_ -> puts(1)"]), "CHECK-PATTERN-TYPE", '"a"'),
     ("a literal in the position of a non-primitive payload",
@@ -256,7 +261,7 @@ RUNS = [
      main_with("  rs: List[Result[Int]] = [Result.Ok(0), Result.Ok(-3), Result.Ok(8), Result.Err(\"boom\"),\n"
                "                           Result.Err(\"x\")]\n"
                "  for r in rs\n    case r\n      ok(0) -> puts(\"zero\")\n      ok(n) if n < 0 -> puts(\"negative\")\n"
-               "      ok(n) -> puts(\"positive #{n}\")\n      error(\"boom\") -> puts(\"boom\")\n"
+               "      ok(n) -> puts(\"positive #{n}\")\n      error(e) if e.message == \"boom\" -> puts(\"boom\")\n"
                "      error(m) -> puts(\"error #{m}\")\n    end\n  end\n"
                "  for n in [0, -4, 4]\n    case n\n      0 -> puts(\"zero\")\n      _ if n < 0 -> puts(\"neg\")\n"
                "      _ -> puts(\"pos\")\n    end\n  end\n", ""),

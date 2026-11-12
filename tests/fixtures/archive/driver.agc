@@ -42,7 +42,7 @@ end
 def shown(label: String, result: Result[List[Int]]) -> String
   case result
     ok(counts) -> "#{label} ok #{counts}"
-    error(message) -> "#{label} error #{flat(message)}"
+    error(e) -> "#{label} error #{flat(e.message)}"
   end
 end
 

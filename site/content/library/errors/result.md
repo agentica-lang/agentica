@@ -4,7 +4,7 @@ weight: 1
 description: Build and read Result values.
 ---
 
-`Result[T]` is `ok(value)` or `error(message)`. The tour page [Result and try](/tour/results-and-try/) explains how to use it.
+`Result[T]` is `ok(value)` or `error(...)`, which holds an [Error](/library/errors/error/). The tour page [Result and try](/tour/results-and-try/) explains how to use it.
 
 ## ok
 
@@ -29,9 +29,10 @@ ok("yes")
 
 ```signature
 error(message: String) -> Result[T]
+error(e: Error) -> Result[T]
 ```
 
-The type comes from an annotation, a return type, a parameter or a field.
+With a `String`, it builds a new `Error` with that message, made at this call. With an `Error`, it holds that same `Error`, so a `case` arm can pass an error on as a `Result` of another type. The type comes from an annotation, a return type, a parameter or a field.
 
 ```agentica
 def fail_now() -> Result[Int] = error("broken")
@@ -107,7 +108,7 @@ end
 Result.message(r: Result[T]) -> String
 ```
 
-Gives the error message, or `""` for a success.
+Gives the `message` of the error, or `""` for a success.
 
 ```agentica
 def main() -> Void

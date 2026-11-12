@@ -29,7 +29,7 @@ def describe(r: Result[Reading]) -> String
     ok(Reading.Value(n)) if n < 0 -> "negative #{n}"
     ok(Reading.Value(n)) -> "value #{n}"
     ok(_) -> "missing"
-    error("timeout") -> "timed out"
+    error(e) if e.message == "timeout" -> "timed out"
     error(_) -> "failed"
   end
 end

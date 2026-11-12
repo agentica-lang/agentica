@@ -35,7 +35,7 @@ def run_case(c: Case) -> Reply
     return Reply(success: true, message: "", spans: [], text: Regex.escape(c.text), parts: [], found: false)
   end
   case Regex.compile(c.pattern)
-    error(message) -> return failure(message)
+    error(e) -> return failure(e.message)
     ok(re) -> return run_with(c, re)
   end
 end
@@ -48,14 +48,14 @@ def run_with(c: Case, re: Regex.Regex) -> Reply
     "match" ->
       case Regex.match(c.text, re)
         ok(m) -> return done.with(spans: [spans_of(m)], text: m.text)
-        error(message) -> return failure(message)
+        error(e) -> return failure(e.message)
       end
     "find_all" -> return done.with(spans: Regex.find_all(c.text, re).map(&spans_of))
     "split" -> return done.with(parts: Regex.split(c.text, re))
     "replace" ->
       case Regex.replace(c.text, re, c.template)
         ok(text) -> return done.with(text: text)
-        error(message) -> return failure(message)
+        error(e) -> return failure(e.message)
       end
     _ -> return failure("unknown op #{c.op}")
   end

@@ -1974,7 +1974,7 @@ def dial(d: Dial) -> String
     ok(socket) ->
       TCP.close(socket)
       return "ok"
-    error(e) -> return e
+    error(e) -> return e.message
   end
 end
 
@@ -2292,7 +2292,7 @@ def accepted(got: Result[Socket]) -> String
     ok(socket) ->
       TCP.close(socket)
       return "accepted"
-    error(e) -> return e
+    error(e) -> return e.message
   end
 end
 
@@ -2483,7 +2483,7 @@ end
 def sent(got: Result[Void]) -> String
   case got
     ok(_) -> return "sent"
-    error(e) -> return e
+    error(e) -> return e.message
   end
 end
 
@@ -2502,7 +2502,7 @@ def accepted(got: Result[Socket]) -> String
     ok(socket) ->
       TCP.close(socket)
       return "accepted"
-    error(e) -> return e
+    error(e) -> return e.message
   end
 end
 
