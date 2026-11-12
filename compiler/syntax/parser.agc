@@ -312,12 +312,20 @@ export def library_name?(name: String) -> Bool = name != "" and (!name.include?(
 
 def brace_help(form: String) -> String = "blocks have no braces: write \"#{form}\" ... \"end\""
 
+# The help for a `{` that ends a head or a guard condition. After a name it may be the block of a call, which a head
+# takes only inside parentheses (a condition takes a `do` block after a method name too).
+def head_brace_help(e: Base.Env, pos: Int, form: String) -> String
+  return brace_help(form) if pos == 0 or e.tokens[pos - 1].kind != "name"
+
+  call = e.tokens[pos - 1].lexeme
+  "write \"#{form}\" ... \"end\"; a call in the head takes a block in braces only in parentheses: (#{call} { ... })"
+end
+
 # The newline that ends the head of a def, if, case, while or for. A `{` here gets the help that blocks have no braces.
 def expect_head_end(e: Base.Env, pos: Int, description: String, form: String) -> Result[Int]
   if e.tokens[pos].kind == "left-brace"
-    return error(
-      Base.unexpected_help(e, pos, "expected #{description}, found #{Base.describe(e.tokens[pos])}", brace_help(form)),
-    )
+    message = "expected #{description}, found #{Base.describe(e.tokens[pos])}"
+    return error(Base.unexpected_help(e, pos, message, head_brace_help(e, pos, form)))
   end
 
   Base.expect(e, pos, "NL", description, false)
@@ -682,11 +690,13 @@ def block_name_help(name: String) -> String
 
   return "there is no loop; use while true ... end, or a while condition" if name == "loop"
 
+  return keyword_help(name) if Ast.foreign_keyword?(name)
+
   "an if condition ends with a newline, not do; a block in a condition follows parentheses: #{name}() do ... end"
 end
 
 # Whether a `do` block may follow a plain name: the block makes it a call with no arguments, except in an if condition
-# and for block_word? names.
+# and for block_word? names (lambda, loop, next, match, ...).
 def bare_block_name?(e: Base.Env, target: Ast.Expr) -> Bool
   case target
     Ast.Expr.Name(reference) -> e.bare_blocks and !Ast.block_word?(reference.name)
@@ -995,6 +1005,21 @@ end
 # the `}`, also on the line of its last statement.
 def parse_brace_block(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
   cursor = pos + 1
+  key = e.tokens[cursor].kind
+  literal = key == "string" or key == "integer" or key == "float" or key == "true" or key == "false" or key == "nil"
+  if literal and Base.kind_at(e, cursor + 1) == "colon"
+    # `puts {"a": 1}`: a map literal written as an argument without the parentheses of the call.
+    name = e.tokens[pos - 1].lexeme
+    return error(
+      Base.unexpected_help(
+        e,
+        pos,
+        "a map literal after #{name} needs the parentheses of the call",
+        "write #{name}({...}); a block in braces holds statements",
+      ),
+    )
+  end
+
   if e.tokens[cursor].kind == "or"
     return error(Base.unexpected(e, cursor, "a block without parameters has no bars; write { ... }"))
   end
@@ -1826,6 +1851,11 @@ def parse_statement_guard(e: Base.Env, pos: Int, at: Int, stmt: Ast.Stmt, ids: I
     )
   end
 
+  if following.kind == "left-brace"
+    message = "expected a newline after the condition, found \"{\""
+    return error(Base.unexpected_help(e, condition.pos, message, head_brace_help(e, condition.pos, "if cond")))
+  end
+
   stop = try expect_statement_end(e, condition.pos, "a newline after the condition")
   branch = Ast.IfBranch(
     id: condition.ids,
@@ -1950,19 +1980,6 @@ def keyword_help(name: String) -> String
   end
 end
 
-def foreign_keyword?(name: String) -> Bool
-  (
-    name == "let" or
-    name == "var" or
-    name == "val" or
-    name == "const" or
-    name == "match" or
-    name == "break" or
-    name == "continue" or
-    name == "next"
-  )
-end
-
 # An expression statement. These stops are copied on purpose: an assignment target that is not a name, elif and elseif
 # written as names, and a foreign keyword (let, var, match, ...) or a call without parentheses before the end of the
 # line, each with its own message.
@@ -1990,7 +2007,9 @@ def parse_expression_statement(e: Base.Env, pos: Int, ids: Int) -> Result[Base.S
     end
 
     if !statement_end?(e, value.pos)
-      return error(Base.unexpected_help(e, pos, keyword_message(name), keyword_help(name))) if foreign_keyword?(name)
+      if Ast.foreign_keyword?(name)
+        return error(Base.unexpected_help(e, pos, keyword_message(name), keyword_help(name)))
+      end
 
       return error(
         Base.unexpected(
@@ -2241,7 +2260,7 @@ end
 def parse_guard(e: Base.Env, pos: Int, ids: Int) -> Result[GuardAt]
   return ok(GuardAt(node: none, pos: pos, ids: ids)) if e.tokens[pos].kind != "if"
 
-  condition = try parse_expression(e, pos + 1, ids)
+  condition = try parse_expression(Base.in_condition(e), pos + 1, ids)
   ok(GuardAt(node: some(condition.node), pos: condition.pos, ids: condition.ids))
 end
 

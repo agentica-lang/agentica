@@ -140,8 +140,9 @@ export def with_blocks(e: Env, allow: Bool) -> Env
   )
 end
 
-## The same context for the condition of an if, an elsif or a guard: blocks follow calls, but a plain name takes no
-## `do` block and no call takes a `{ ... }` block, so that the formatter may turn a guard into an if and back.
+## The same context for the condition of an if, an elsif, a guard or a case arm guard: blocks follow calls, but a plain
+## name takes no `do` block and no call takes a `{ ... }` block, so that the formatter may turn a guard into an if and
+## back.
 export def in_condition(e: Env) -> Env
   Env(
     tokens: e.tokens,

@@ -358,8 +358,8 @@ def last_lambda?(args: List[Ast.Expr]) -> Bool
 end
 
 # CHECK-LAMBDA-BLOCK for a call by name whose last argument is a lambda, when its last parameter is a function. A call
-# with no other argument drops its parentheses before the block (run do ... end), except after |>, and a piped call
-# shows its value.
+# by its plain name with no other argument shows `run() do ... end`, the form that parses in every place, an if
+# condition and a pipe included (fmt drops the `()` where it may), and a piped call shows its value.
 def call_lambda_block(cx: State.Cx, st: State.St, node: Ast.Call) -> Result[Bool]
   return ok(true) if !takes_block?(cx, node.name, node.args.size)
 
@@ -370,7 +370,7 @@ def call_lambda_block(cx: State.Cx, st: State.St, node: Ast.Call) -> Result[Bool
     name = receiver_text(cx, node.args[0]) + " |> " + name
   end
 
-  if node.piped and node.args.size == 2
+  if node.args.size - skip == 1 and (node.piped or !node.name.include?("."))
     name = "#{name}()"
   end
 

@@ -30,3 +30,36 @@ def main() -> Void
   j = Box.answer do 7 end
   puts(n + m + k + j + ys.size + zs.size)
 end
+
+def heads(xs: List[Int], z: Int) -> Int
+  if (xs.any? { |x| x > 0 })
+    puts("braces")
+  elsif (xs.all? { |x| x > z })
+    puts("elsif")
+  end
+  if (ready do |x| x > 0 end)
+    puts("bare")
+  end
+  if (ready do |x| x > 1 end and xs.none? { |x| x > 9 })
+    puts("both")
+  end
+  while (xs.any? do |x| x > 5 end) do
+    puts("while")
+  end
+  while (xs.any? { |x| x > 5 })
+    puts("while")
+  end
+  for y in (xs.map { |x| x + 1 })
+    puts(y)
+  end
+  for y in (xs.map do |x| x end) do
+    puts(y)
+  end
+  case (xs.map { |x| x }) do
+    _ -> puts("case")
+  end
+  for x in xs
+    next if (xs.any? { |y| y > z })
+  end
+  0
+end

@@ -708,9 +708,26 @@ export struct TypedTarget
   span: Source.Span
 end
 
-## The names that take a block only after parentheses (`loop() do ... end`): Ruby's lambda, proc and loop, whose parser
-## error explains them better than the checker can.
-export def block_word?(name: String) -> Bool = name == "lambda" or name == "proc" or name == "loop"
+## The names that take a block only after parentheses (`loop() do ... end`): Ruby's lambda, proc and loop, and the
+## foreign keywords, whose parser errors explain them better than the checker can.
+export def block_word?(name: String) -> Bool
+  name == "lambda" or name == "proc" or name == "loop" or foreign_keyword?(name)
+end
+
+## The keywords of other languages and the loop controls, which the parser names in its errors: let, var, val, const,
+## match, break, continue and next.
+export def foreign_keyword?(name: String) -> Bool
+  (
+    name == "let" or
+    name == "var" or
+    name == "val" or
+    name == "const" or
+    name == "match" or
+    name == "break" or
+    name == "continue" or
+    name == "next"
+  )
+end
 
 ## The id of an expression node.
 export def expr_id(expr: Expr) -> Int

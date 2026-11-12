@@ -14,8 +14,10 @@ A block is a function written at the call site as the last argument: `xs.map do
   `Util.start do`. `{ |x| ... }` follows only a name with no arguments:
   `xs.map { |x| x * 2 }`; with arguments, use `do`. A bare name without a block
   is never a call. Keep `()` after `|>` and for a plain-name call in an `if` or
-  guard condition (`if ready() do |x| ... end`). The last parameter must be a
-  `Fn` (`CHECK-BLOCK-TARGET`). Never `do || ... end`.
+  guard condition (`if ready() do |x| ... end`); a block in braces goes in a
+  condition or head only inside parentheses: `if (xs.any? { |x| x > 0 })`.
+  The last parameter must be a `Fn` (`CHECK-BLOCK-TARGET`). Never
+  `do || ... end`.
 - Parameter types come from the call, else from the uses in the body when they
   leave one type (`x + 1`: Int; `x.upcase`: String; `f(x)`, `Msg.Get(x)`: the
   parameter's type); annotate otherwise: `do |x: Int| ... end`

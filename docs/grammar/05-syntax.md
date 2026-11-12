@@ -469,9 +469,11 @@ without `(`, and its body is a lambda's: one line or several, up to the `}`;
 `xs.map() { ... }` and `xs.map(1) { ... }` are `PARSE-UNEXPECTED-TOKEN`, since
 a call with parentheses takes a `do` block. The `()` stays after `|>`
 (`PARSE-PIPE-TARGET` without it), for `lambda`, `proc` and `loop`, and for a
-function called by its plain name in an `if`, `elsif` or guard condition: there
-`ready do` is `PARSE-UNEXPECTED-TOKEN` (the `do` reads as a mistake for the end
-of the line), and no call takes a `{ ... }` block.
+function called by its plain name in an `if`, `elsif`, guard or case arm guard
+condition: there `ready do` is `PARSE-UNEXPECTED-TOKEN` (the `do` reads as a
+mistake for the end of the line), and no call takes a `{ ... }` block. Inside
+parentheses a condition or a `while`, `for` or `case` head takes any block:
+`if (xs.any? { |x| x > 0 })`.
 A lambda, `->(x) { x + 1 }`, is a block that no call takes; one without
 parameters has no parentheses (`-> { 42 }`), and its body is always in braces.
 `->() { ... }`, `->x { ... }`, `->(x) do ... end`, `lambda { ... }`,

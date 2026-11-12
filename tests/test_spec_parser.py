@@ -302,6 +302,26 @@ class TestSpecParser:
                    "PARSE-PIPE-TARGET", (13, 9, 13, 44)),
             Reject(blocks + main_of("  _f = proc do |x| x end\n"), "PARSE-UNEXPECTED-TOKEN", (12, 13, 12, 15)),
             Reject(blocks + main_of("  y = 1\n  _z = y do 2 end\n"), "CHECK-UNKNOWN-NAME", (13, 8, 13, 18)),
+            # A loop control or a foreign keyword takes no block; a map literal needs the call's parentheses.
+            Reject(blocks + main_of("  for x in [1]\n    next { x }\n  end\n"),
+                   "PARSE-UNEXPECTED-TOKEN", (13, 5, 13, 9)),
+            Reject(blocks + main_of("  while true\n    break do\n    end\n  end\n"),
+                   "PARSE-UNEXPECTED-TOKEN", (13, 11, 13, 13)),
+            Reject(blocks + main_of("  puts {\"a\": 1}\n"), "PARSE-UNEXPECTED-TOKEN", (12, 8, 12, 9)),
+            # A case arm guard is a condition too.
+            Reject(blocks + main_of("  case 1\n    1 if ready do |v| v > 0 end -> puts(1)\n    _ -> puts(2)\n  end\n"),
+                   "PARSE-UNEXPECTED-TOKEN", (13, 16, 13, 18)),
+            Reject(blocks + main_of("  xs = [1]\n  case 1\n    1 if xs.any? { |v| v > 0 } -> puts(1)\n"
+                                    "    _ -> puts(2)\n  end\n"), "PARSE-UNEXPECTED-TOKEN", (14, 18, 14, 19)),
+        ])
+        # Inside parentheses a head takes any block.
+        self.check_output([
+            Output(blocks + main_of("  xs = [1, 2]\n  case 1\n    1 if ready() do |v| v > 0 end -> puts(\"arm\")\n"
+                                    "    _ -> puts(\"other\")\n  end\n"
+                                    "  if (xs.any? { |x| x > 0 }) and (ready do |v| v > 0 end)\n"
+                                    "    puts(\"if\")\n  end\n"
+                                    "  for y in (xs.map { |x| x * 3 })\n    puts(y)\n  end\n"),
+                   ["arm", "if", "3", "6"]),
         ])
 
     def test_ruby_headers_one_line_case_arms_and_module_calls_without_parentheses(self):
