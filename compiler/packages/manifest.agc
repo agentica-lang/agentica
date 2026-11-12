@@ -131,18 +131,19 @@ export def require_package(manifest: Manifest) -> Result[Void]
   ok()
 end
 
-## The `agentica` key of the parsed manifest in file ("" when it has none), checked against the running version
-## `running` as `read_checked` checks it: PKG-MANIFEST-INVALID for a value that is not a version, PKG-AGENTICA-TOO-OLD
-## for a newer one. The workspace root is checked with this for the project of each member (members.agc).
+## The `agentica` key of the parsed manifest in file ("" when it has none), owned by `owner`, checked against the
+## running version `running` as `read_checked` checks it: PKG-MANIFEST-INVALID for a value that is not a version,
+## PKG-AGENTICA-TOO-OLD for a newer one. The workspace root is checked with this for the project of each member
+## (members.agc).
 export def checked_agentica(
   file: String,
   root: Map[String, Toml.Value],
-  package: String,
+  owner: AgenticaVersion.Owner,
   running: String,
 ) -> Result[String]
   reading = Reader.Reading(file: file, code: "PKG-MANIFEST-INVALID")
   agentica = try optional_agentica(reading, root)
-  try AgenticaVersion.check(file, package, agentica, running)
+  try AgenticaVersion.check(file, owner, agentica, running)
   ok(agentica)
 end
 
@@ -176,7 +177,7 @@ end
 def parse_checked(file: String, text: String, package: String, running: String) -> Result[Manifest]
   reading = Reader.Reading(file: file, code: "PKG-MANIFEST-INVALID")
   root = try Reader.parse(reading, text)
-  agentica = try checked_agentica(file, root, package, running)
+  agentica = try checked_agentica(file, root, AgenticaVersion.owner_of(package), running)
   try Reader.known_keys(reading, root, TOP_KEYS, "")
   name = try optional_name(reading, root)
   dependencies = try dependencies_of(reading, root)

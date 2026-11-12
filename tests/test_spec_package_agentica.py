@@ -291,12 +291,13 @@ def test_add_refuses_a_package_that_needs_a_newer_agentica_and_writes_nothing(tm
     assert not (ws.project / "agentica.lock").exists()
 
 
-def workspace_member(ws, root_text):
-    """Makes the project a member of a workspace whose root, the folder above it, has root_text before its table."""
+def workspace_member(ws, root_text, table_extra=""):
+    """Makes the project a member of a workspace whose root, the folder above it, has root_text before its table and
+    table_extra at the end of the table."""
     root = ws.project.parent / "agentica.toml"
     folder = ws.project.name
     root.write_text(root_text + '\n[workspace]\nrepository = "https://example.test/owner/mono"\nmembers = ["%s"]\n'
-                    % folder, encoding="utf-8")
+                    % folder + table_extra, encoding="utf-8")
     return root
 
 
@@ -310,3 +311,13 @@ def test_a_member_of_a_workspace_whose_root_needs_a_newer_agentica_is_refused(ws
     assert_at_key(problem, "PKG-AGENTICA-TOO-OLD", root, "agentica")
     workspace_member(ws, key(agentica_version()))
     assert agentica(ws, "check", "main.agc") == (0, None)
+
+
+def test_a_member_reports_a_bad_version_of_the_root_and_a_newer_one_before_a_broken_table(ws):
+    root = workspace_member(ws, 'agentica = ">=1.0.0"\n')
+    assert_at_key(agentica(ws, "check", "main.agc")[1], "PKG-MANIFEST-INVALID", root, "agentica")
+    # An unknown key of [workspace] is a broken table, which the version of the root is checked before.
+    workspace_member(ws, key(newer()), table_extra="features = []\n")
+    assert_at_key(agentica(ws, "check", "main.agc")[1], "PKG-AGENTICA-TOO-OLD", root, "agentica")
+    workspace_member(ws, key(agentica_version()), table_extra="features = []\n")
+    assert_at_key(agentica(ws, "check", "main.agc")[1], "PKG-MANIFEST-INVALID", root, "workspace.features")

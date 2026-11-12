@@ -7,6 +7,7 @@
 
 import Paths from "../modules/import_path"
 import Workspace from "../modules/workspace"
+import AgenticaVersion from "agentica_version"
 import GitSource from "git_source"
 import Manifest from "manifest"
 import Toml from "std/toml"
@@ -98,7 +99,7 @@ def belongs(
   if root_dir != project_dir
     return ok(empty()) if !listed?(value, relative_to(root_dir, project_dir))
 
-    try Manifest.checked_agentica(file, root, "", running)
+    try Manifest.checked_agentica(file, root, AgenticaVersion.Owner.WorkspaceRoot, running)
   end
 
   reading = Reader.Reading(file: file, code: "PKG-MANIFEST-INVALID")
