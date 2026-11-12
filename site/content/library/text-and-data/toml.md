@@ -53,8 +53,8 @@ end
 ```
 
 ```output
-ok(Value.Str("demo"))
-ok(Value.Str("b.agc"))
+ok(Toml.Value.Str("demo"))
+ok(Toml.Value.Str("b.agc"))
 error("no key \"license\" in \"package.license\"")
 error("line 3, column 3: expected '=' after key")
 ```
