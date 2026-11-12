@@ -70,6 +70,8 @@ error(message: String) -> Result[T]
 ```
 
 - An expected `Result[T]` checks the payload against T, even for `ok([])`.
+- `Error` is a reserved type name (the coming builtin error record): a
+  `struct Error` is `CHECK-REDEFINED-NAME`.
 - `error("bad")` needs an expected Result type from an annotation, an existing
   binding, a return, an argument, a field or a typed container element; `r =
   error("bad")` alone is `CHECK-RESULT-TYPE`. Lists and maps infer from the

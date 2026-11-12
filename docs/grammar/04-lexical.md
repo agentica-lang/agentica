@@ -83,17 +83,17 @@ variables, functions and struct fields.
 Reserved builtin names cannot be declared as functions, types, variables, import
 aliases or module names (`RESERVED_TYPE_NAMES` in
 `compiler/catalog/builtins_data.agc`): `ATS`, `Await`, `Base64`, `Bool`,
-`Bytes`, `Channel`, `Codec`, `Dir`, `File`, `FileHandle`, `FileInfo`, `Float`,
-`Fn`, `IO`, `Int`, `JSON`, `Json`, `JsonField`, `Lazy`, `List`, `Listener`,
-`Map`, `Math`, `Nil`, `OpenSSL`, `Optional`, `Path`, `Process`, `ProcessOutput`,
-`Profile`, `Random`, `Range`, `Result`, `Set`, `Socket`, `String`,
-`StructMember`, `System`, `TCP`, `TLS`, `Task`, `TaskDown`, `TaskExit`,
-`TaskRef`, `Test`, `TestCase`, `Time`, `TlsClientOptions`, `TlsContext`,
-`TlsServerOptions`, `Void` and `Zlib`. A builtin family reserves only its own
-name: its members are written `Family.Member`, such as `OpenSSL.Cipher`, and its
-functions `Family.Member.fn`, such as `OpenSSL.Cipher.aes_256_gcm_encrypt` (§6,
-"Minimal builtin functions"), so `Cipher` or `Digest` inside a family reserve
-nothing.
+`Bytes`, `Channel`, `Codec`, `Dir`, `Error`, `File`, `FileHandle`, `FileInfo`,
+`Float`, `Fn`, `IO`, `Int`, `JSON`, `Json`, `JsonField`, `Lazy`, `List`,
+`Listener`, `Map`, `Math`, `Nil`, `OpenSSL`, `Optional`, `Path`, `Process`,
+`ProcessOutput`, `Profile`, `Random`, `Range`, `Result`, `Set`, `Socket`,
+`String`, `StructMember`, `System`, `TCP`, `TLS`, `Task`, `TaskDown`,
+`TaskExit`, `TaskRef`, `Test`, `TestCase`, `Time`, `TlsClientOptions`,
+`TlsContext`, `TlsServerOptions`, `Void` and `Zlib`. A builtin family reserves
+only its own name: its members are written `Family.Member`, such as
+`OpenSSL.Cipher`, and its functions `Family.Member.fn`, such as
+`OpenSSL.Cipher.aes_256_gcm_encrypt` (§6, "Minimal builtin functions"), so
+`Cipher` or `Digest` inside a family reserve nothing.
 `LogRegistry` and `HttpWire`, the std-only families of `std/logger` and
 `std/http`, are not reserved, but an `enum` of either name is
 `CHECK-REDEFINED-NAME`: its variants would clash with the family's records
