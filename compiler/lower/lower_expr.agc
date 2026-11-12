@@ -173,6 +173,10 @@ export def lower_call(
     if laid_out and type_name?(node.args[index])
       arg = node.args[index]
       fx = try emit_layout(cx, fx, Lowering.type_of(cx, arg), Ast.expr_span(arg))
+    elsif node.named.size > 0
+      # error(message, kind: ...): the Error record, which the builtin error then places.
+      out = try Data.lower_error_record(cx, fx, node, fx.next - 1)
+      fx = out.fx
     elsif ok_call?(node)
       # The check of Result[T], this call's or that of the value holding it, covers T: a check at each level of nested
       # ok(...) walks the whole type below it, quadratic in the depth.

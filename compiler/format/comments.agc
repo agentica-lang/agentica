@@ -709,7 +709,7 @@ end
 def call_children(node: Ast.Call) -> List[Part]
   return [Part.Expr(node.args[0]), Part.Stage(node)] if node.piped
 
-  exprs(node.args)
+  exprs(node.args).concat(named(node.named))
 end
 
 def interpolated(parts: List[Ast.Part]) -> List[Part]

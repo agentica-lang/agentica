@@ -804,6 +804,21 @@ puts(seen)
   `CHECK-TYPE-MISMATCH`. The pattern `error(e)` binds an `Error`, so a literal
   in its slot (`error("timeout")`) is `CHECK-PATTERN-TYPE`; test
   `e.message` in a guard.
+- `error(message, kind:, code:, details:, cause:)`: after a `String` message
+  come named arguments, in any order, each optional: `kind: String`,
+  `code: Int`, `details: Map[String, String]` and `cause: Error`. `code` and
+  `cause` are stored as `some(...)`. They are the only calls with named
+  arguments, with `Result.Err(...)`; a named argument elsewhere is
+  `PARSE-UNEXPECTED-TOKEN`, as is a positional one after a named one. An
+  unknown name (`location` too) is `CHECK-UNKNOWN-FIELD`; `message` or a
+  repeated name is `CHECK-DUPLICATE-FIELD`; a named argument after an `Error`
+  is `CHECK-ARITY`; `code: some(19)` is `CHECK-TYPE-MISMATCH`.
+- A kind is a dotted name: parts of `a-z`, `0-9` and `_`, each starting with a
+  letter, joined by single dots (`db`, `db.constraint`, `io.not_found`). A
+  text literal given as `kind:` that is not one is `CHECK-ERROR-KIND`; a
+  computed kind is not checked.
+- `Error(...)` is `CHECK-ERROR-CONSTRUCTOR`: only `error(...)` builds an
+  `Error`, and `e.with(...)` changes one.
 - `location` is `path:line:col` of the `error(...)` call, or for an error that a
   builtin makes, of the builtin call that the innermost frame outside the
   prelude makes. The path is the source name the compiled file stores. It is

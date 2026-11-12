@@ -67,6 +67,7 @@ A lambda is a block written as a value, for a function value of its own:
 ok(value: T) -> Result[T]
 ok() -> Result[Void]
 error(message: String) -> Result[T]
+error(message: String, kind: String, code: Int, details: Map[String, String], cause: Error) -> Result[T]
 error(e: Error) -> Result[T]
 ```
 
@@ -81,6 +82,12 @@ error(e: Error) -> Result[T]
   as a Result of another type. A text literal in the pattern
   (`error("timeout") ->`) is `CHECK-PATTERN-TYPE`: write
   `error(e) if e.message == "timeout"`.
+- `error("unique failed", kind: "db.constraint", code: 19, cause: e)`: named
+  arguments after the message, each optional, any order; `code` and `cause`
+  are stored as `some(...)` (`code: some(19)` is an error). A `kind:` literal
+  is a dotted name of `a-z`, `0-9`, `_` (`CHECK-ERROR-KIND`). Branch on
+  `e.kind` or `e.code`, not on the message. `Error(...)` is
+  `CHECK-ERROR-CONSTRUCTOR`; only `error(...)` builds one.
 - `e.inspect` and a printed failed Result show `error("text")`, plus the
   fields that are not their default (never `location`). `==` on Errors skips
   `location`. `Error` is a reserved type name (`CHECK-REDEFINED-NAME`).

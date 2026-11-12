@@ -5637,7 +5637,7 @@ ROWS_54: List[Model.Builtin] = [
     rule: Model.Rule.Error,
     implementation: "error",
     effects: [],
-    description: "A failed Result holding a new Error with the message; needs an expected Result type.",
+    description: "A failed Result holding a new Error: the message, then optional kind:, code:, details:, cause:.",
     # One arity: check_error reads the type of the argument to tell the two forms apart.
     alternatives: [
       Model.Builtin(

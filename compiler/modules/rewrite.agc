@@ -415,7 +415,8 @@ def rewrite_call(cx: Resolve.Context, node: Ast.Call) -> Result[Ast.Expr]
     args = [try native_load_library(cx, args[0], name), args[1]]
   end
 
-  ok(Ast.Expr.Call(node.with(name: name, args: args)))
+  named = try rewrite_named(cx, node.named)
+  ok(Ast.Expr.Call(node.with(name: name, args: args, named: named)))
 end
 
 # `x |> name(a)` with a bare name that is no function of this file, no function it imports by name and no builtin

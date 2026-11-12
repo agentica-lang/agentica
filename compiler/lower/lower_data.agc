@@ -262,6 +262,43 @@ export def lower_struct(cx: State.Cx, fx: State.Fx, node: Ast.Construct, want: I
   ok(State.Out(fx: State.release(fx, saved, want, dst), slot: dst))
 end
 
+## The Error record of error(message, kind: ..., code: ..., details: ..., cause: ...) in register want, built as a
+## construction of it: the message and each named argument into the register of its field, code and cause as
+## some(value), the defaults of the others, then a `struct` instruction. Its location stays "", which the VM builtin
+## error fills with the place of the call.
+export def lower_error_record(cx: State.Cx, fx: State.Fx, node: Ast.Call, want: Int) -> Result[State.Out]
+  span = node.span
+  info = cx.structs["Error"]
+  fx = State.step(fx, span)
+  saved = fx.next
+  made = State.target(fx, want)
+  fx = made.fx
+  dst = made.slot
+  start = fx.next
+  for _ in info.fields
+    fx = State.alloc(fx)
+  end
+
+  after = fx.next
+  message = Ast.NamedArg(id: node.id, name: "message", value: node.args[0], span: Ast.expr_span(node.args[0]))
+  given = [message].concat(node.named)
+  for arg in given
+    slot = start + info.positions[arg.name]
+    if arg.name == "code" or arg.name == "cause"
+      out = try lower_enum(cx, fx, "Optional", "Some", [arg.value], arg.span, slot, false)
+      fx = out.fx.with(next: after)
+    else
+      out = try cx.expression.call(cx, fx, arg.value, slot, false, false)
+      fx = out.fx.with(next: after)
+    end
+  end
+
+  record = Ast.Construct(id: node.id, type_name: "Error", args: given, span: span)
+  fx = try lower_record_defaults(cx, fx, record, info, start, after)
+  fx = State.emit_at(fx, "struct", [dst, start, info.index], span)
+  ok(State.Out(fx: State.release(fx, saved, want, dst), slot: dst))
+end
+
 ## The value of a catalog default (Model.Default) in register want: a literal, an empty list, map or Bytes, a
 ## variant without a payload, or a builtin record built from the defaults of its fields. id and span are the ones of
 ## the node that the default stands in for.

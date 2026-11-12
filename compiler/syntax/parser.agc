@@ -475,6 +475,7 @@ def call_node(
   parenthesized: Bool,
   ids: Int,
   cursor: Int,
+  named: List[Ast.NamedArg] = [],
 ) -> Result[Base.ExprAt]
   node = Ast.Expr.Call(
     Ast.Call(
@@ -484,6 +485,7 @@ def call_node(
       piped: false,
       parenthesized: parenthesized,
       span: Base.span_from(e, start, cursor),
+      named: named,
     ),
   )
 
@@ -1378,6 +1380,8 @@ def parse_name_primary(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
     return error(Base.unexpected_help(e, pos, "a lambda is written with ->", "write ->(x: Int) { ... }"))
   end
 
+  return error_call(e, pos, "error", paren, ids) if token.lexeme == "error" and e.tokens[paren].kind == "left-paren"
+
   if e.tokens[paren].kind == "left-paren"
     args = try parse_expression_list(e, paren + 1, ids, "right-paren")
     close = try Base.expect(e, args.pos, "right-paren", "\")\"", false)
@@ -1394,6 +1398,29 @@ def parse_name_primary(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
   end
 
   expr_at(Ast.Expr.Name(Ast.NameRef(id: ids, name: token.lexeme, span: token.span)), paren, ids)
+end
+
+# error(...) or Result.Err(...) from `start`, with its "(" at `open`: the positional arguments, then the `name: value`
+# arguments, the fields of the Error it builds. A positional argument after a named one fails where a name is expected.
+# Named arguments in other calls stay a parse error until general keyword arguments land (#1163).
+def error_call(e: Base.Env, start: Int, name: String, open: Int, ids: Int) -> Result[Base.ExprAt]
+  args: List[Ast.Expr] = []
+  inner = Base.with_blocks(e, true)
+  cursor = open + 1
+  next_id = ids
+  while e.tokens[cursor].kind != "right-paren" and !named_argument_at?(e, cursor)
+    parsed = try parse_expression(inner, cursor, next_id)
+    args = args.push(parsed.node)
+    cursor = parsed.pos
+    next_id = parsed.ids
+    break if e.tokens[cursor].kind != "comma"
+
+    cursor += 1
+  end
+
+  named = try parse_named_arguments(e, cursor, next_id)
+  close = try Base.expect(e, named.pos, "right-paren", "\")\"", false)
+  call_node(e, start, name, args, true, named.ids, close, named.nodes)
 end
 
 def parenthesized_arguments(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprsAt]
@@ -1493,14 +1520,11 @@ def parse_qualified_member(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprA
     return enum_constructor_node(e, pos, qualified, e.tokens[variant_pos].lexeme, args, args.pos)
   end
 
-  if kind == "left-paren" and name == "Result" and (member == "Ok" or member == "Err")
-    args = try parenthesized_arguments(e, cursor, ids)
-    helper = "error"
-    if member == "Ok"
-      helper = "ok"
-    end
+  return error_call(e, pos, "error", cursor, ids) if kind == "left-paren" and name == "Result" and member == "Err"
 
-    return call_node(e, pos, helper, args.nodes, true, args.ids, args.pos)
+  if kind == "left-paren" and name == "Result" and member == "Ok"
+    args = try parenthesized_arguments(e, cursor, ids)
+    return call_node(e, pos, "ok", args.nodes, true, args.ids, args.pos)
   end
 
   if kind == "left-paren"

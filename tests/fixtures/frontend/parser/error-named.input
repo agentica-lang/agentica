@@ -1,0 +1,5 @@
+def insert(name: String) -> Result[Int]
+  return error("unique failed", kind: "db.constraint", code: 19) if name == "taken"
+
+  Result.Err("bad", details: {"name": name}, cause: base,)
+end

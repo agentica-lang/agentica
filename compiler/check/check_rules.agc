@@ -9,6 +9,7 @@ import Ast from "../syntax/ast"
 import Source from "../syntax/source"
 import T from "../syntax/types"
 import Args from "check_args"
+import ErrorArgs from "check_error"
 import {PROCESS_OPTIONS_HELP} from "check_help"
 import Collections from "check_collections"
 import Lists from "check_list"
@@ -283,22 +284,25 @@ def check_ok(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
   ok(State.Out(st: out.st, type: T.Type.Result(out.type)))
 end
 
-# error(message) builds a new Error and error(e) gives the Error e; either needs the Result type from its context,
-# except while a block is probed for its result type.
+# error(message, kind: ..., code: ..., details: ..., cause: ...) builds a new Error and error(e) gives the Error e;
+# either needs the Result type from its context, except while a block is probed for its result type. The named
+# arguments are checked in check_error.agc.
 def check_error(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
-  message = try State.expr(cx, st, site.args[0], T.Type.Unknown)
-  given = message.type
+  first = try State.expr(cx, st, site.args[0], T.Type.Unknown)
+  given = first.type
   if !T.is?(given, "String") and !T.error?(given) and !T.unknown?(given)
     return error(
       State.fail(
         cx,
-        message.st,
+        first.st,
         "CHECK-TYPE-MISMATCH",
         "expected String or Error, found #{T.to_text(given)}",
         Ast.expr_span(site.args[0]),
       ),
     )
   end
+
+  message = first.with(st: try ErrorArgs.check_named(cx, first.st, site.node, given))
 
   expected = site.expected
   span = site.node.span

@@ -4,7 +4,7 @@ weight: 2
 description: The record a failed Result holds.
 ---
 
-A failed `Result` holds an `Error`, a builtin record. `error("text")` builds one, and the pattern `error(e)` binds it.
+A failed `Result` holds an `Error`, a builtin record. `error("text")` builds one, `error("text", kind: "db.constraint", code: 19)` sets more of its fields, and the pattern `error(e)` binds it.
 
 ```text
 struct Error
@@ -24,7 +24,7 @@ end
 - `cause` is the error that led to this one, or `none`.
 - `location` is where the error was made, as `path:line:col`.
 
-Read the fields as on any record, and change one with `with`. A program cannot declare a type named `Error` of its own (`CHECK-REDEFINED-NAME`).
+Read the fields as on any record, and change one with `with`. Only `error(...)` builds an `Error`: `Error(...)` is `CHECK-ERROR-CONSTRUCTOR`. A program cannot declare a type named `Error` of its own (`CHECK-REDEFINED-NAME`).
 
 ```agentica
 def parse(text: String) -> Result[Int]
@@ -48,6 +48,32 @@ end
 empty input
 error
 main.agc:2:10
+```
+
+## Kinds
+
+`error(message, kind:, code:, details:, cause:)` takes the other fields as named arguments after the message, each optional and in any order. `code:` takes an `Int` and `cause:` an `Error`, which the call stores as `some(...)`; `location` is never given. `Result.Err(...)` takes the same arguments.
+
+A kind is a dotted name: parts of `a-z`, `0-9` and `_`, each starting with a letter (`db`, `db.constraint`, `io.not_found`). A text literal given as `kind:` that is not one is `CHECK-ERROR-KIND`; a kind computed at run time is kept as it is. A caller branches on the kind or the code, never on the message text.
+
+```agentica
+def insert(name: String) -> Result[Int]
+  return error("unique failed", kind: "db.constraint", code: 19) if name == "taken"
+
+  ok(name.length)
+end
+
+def main() -> Void
+  case insert("taken")
+    ok(id) -> puts(id)
+    error(e) if e.kind == "db.constraint" -> puts("duplicate, code #{e.code}")
+    error(e) -> puts(e.message)
+  end
+end
+```
+
+```output
+duplicate, code some(19)
 ```
 
 ## Location
@@ -87,7 +113,7 @@ error("no digits")
 
 ## Cause
 
-`cause` links an error to the one that led to it. A chain ends with `none`, and since values cannot change, it cannot loop.
+`cause` links an error to the one that led to it: `error("text", cause: e)`. A chain ends with `none`, and since values cannot change, it cannot loop.
 
 ```agentica
 def load() -> Result[Int] = error("disk gone")
@@ -95,12 +121,7 @@ def load() -> Result[Int] = error("disk gone")
 def start() -> Result[Int]
   case load()
     ok(n) -> ok(n)
-    error(e) ->
-      failed: Result[Int] = error("cannot start")
-      case failed
-        ok(n) -> ok(n)
-        error(top) -> error(top.with(cause: some(e)))
-      end
+    error(e) -> error("cannot start", cause: e)
   end
 end
 

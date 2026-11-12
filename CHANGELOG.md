@@ -15,6 +15,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   Releases up to 0.31.0-alpha.1 refuse the key as unknown.
 - A failed Result holds an `Error` record, whose `location` says where it was
   made; `error(e)` passes one on as a Result of another type (#671).
+- `error("unique failed", kind: "db.constraint", code: 19)` sets the kind,
+  code, details and cause of the Error it builds (#671).
 
 ### Changed
 
