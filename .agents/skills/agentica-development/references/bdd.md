@@ -192,7 +192,9 @@ the programming skill or the site).
   `COMPILE_ENV` variables the scenario sets and the root file's text, with
   `agentica [--deny-*] compile` (the bytecode cache when no deny flag is given)
   to a name of its own (`claimed`) and a rename. `COMPILE_ENV` mirrors the
-  variables of `inputs_digest` in `compiler/io/cache_files.agc`. A compile that fails leaves `NAME.failed`; that, an
+  variables of `inputs_digest` in `compiler/io/cache_files.agc`, plus PATH,
+  which finds the C compiler when CC names no path (the cache keys on the
+  compiler file it finds). A compile that fails leaves `NAME.failed`; that, an
   empty `programs` or any I/O error (`--deny-fs`) starts through
   `agentica FILE.agc` as before, so the front end prints the diagnostic.
 - `std/bdd/gherkin`: the English Gherkin subset with stable codes and the first
