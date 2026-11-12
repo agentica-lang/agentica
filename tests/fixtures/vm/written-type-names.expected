@@ -1,0 +1,18 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 69,
+  "stdout": [
+    "HTTP.Header(name: \"a\", value: \"b\")",
+    "HTTP.Header(name: \"a\", value: \"b\")",
+    "HTTP.Header(name: \"a\", value: \"b\")",
+    "got HTTP.Response(status: 200, headers: [HTTP.Header(name: \"a\", value: \"b\")], body: <Bytes 1 78>)",
+    "HTTP.ServerOptions(request_timeout_ms: 30000, idle_timeout_ms: 30000, max_connections: 2, max_body_bytes: 1048576)",
+    "ok(HTTP.Request(method: \"GET\", target: \"/\", path: \"/\", headers: [], body: <Bytes 0>, remote_addr: \"\"))",
+    "Logger.Level.Warning",
+    "[some(Logger.Level.Warning)]",
+    "Logger.Event(level: Logger.Level.Info, message: \"m\", fields: {}, time_ms: 0, task: 1)",
+    ""
+  ],
+  "stderr": []
+}

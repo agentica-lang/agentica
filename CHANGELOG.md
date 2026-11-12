@@ -32,6 +32,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   that passes lambdas (`LINT-LAMBDA-CHAIN`).
 - `s.edit_distance(other)` (Levenshtein, in characters; `edit_distance(other,
   max)` stops at `max + 1`) and `s.jaro_winkler(other)` (from 0.0 to 1.0).
+- The nested builtin names are accepted next to the old ones: `File.Info`,
+  `File.Handle`, `JSON.Value`, `JSON.Field`, `Process.Output`, `TCP.Socket`,
+  `TCP.Listener`, `TLS.Context`, `TLS.ClientOptions`, `TLS.ServerOptions`,
+  `Test.Case` and `System.Profile` (#1182).
 
 ### Changed
 
@@ -44,7 +48,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - **Breaking:** the HTTP types are `HTTP.Request`, `HTTP.Response`,
   `HTTP.Header`, `HTTP.ClientOptions`, `HTTP.ServerOptions`, `HTTP.Client` and
   `HTTP.Server` of `std/http`; the old names are unknown, with a help. A value
-  prints as `HttpWire.Response(...)` and `<HttpWire.Client>`.
+  prints as `HTTP.Response(...)` and `<HTTP.Client>`.
 - **Breaking:** the child channel of `Process.spawn_channel` is a pipe per
   direction on every system: a child that is not Agentica reads fd 3 and writes
   fd 4 (`AGENTICA_CHANNEL=3,4`) on Linux and macOS too.
@@ -64,6 +68,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - An error message from the system (a file, process, library or TLS error)
   with bytes that are not UTF-8 is a valid String, with U+FFFD for each bad
   byte.
+- A printed logger value shows the names a program writes:
+  `Logger.Level.Info` and `Logger.Event(...)`, not `LogRegistry.Level.Info`.
 
 ## [0.30.1] - 2026-11-11
 

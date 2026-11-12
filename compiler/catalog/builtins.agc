@@ -10,6 +10,7 @@ import {
   FAMILIES as DATA_FAMILIES,
   HANDLE_TYPES,
   MOVED_TYPES,
+  NESTED_NAMES as DATA_NESTED_NAMES,
   OPAQUE_TYPES as DATA_OPAQUE_TYPES,
   RECORDS as DATA_RECORDS,
   RESERVED_TYPE_NAMES,
@@ -51,6 +52,8 @@ export RESERVED = Set.new(RESERVED_TYPE_NAMES)
 export STD_ONLY = STD_ONLY_IMPORTS
 
 export MOVED = MOVED_TYPES
+
+export NESTED = DATA_NESTED_NAMES
 
 export PRELUDE: Map[String, Model.PreludeRow] = PRELUDE_ROWS.reduce(EMPTY_PRELUDE) do |found, row|
   found.put(row.name, row)

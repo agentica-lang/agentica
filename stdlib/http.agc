@@ -5,8 +5,8 @@
 ## normal responses. A bad URL, a refused connection, a timeout or a body over the limit is an `error` result.
 ##
 ## `HTTP.Request`, `HTTP.Response`, `HTTP.Header`, `HTTP.ClientOptions`, `HTTP.ServerOptions`, `HTTP.Client` and
-## `HTTP.Server` are the builtin types `HttpWire.Request`, `HttpWire.Response`, and so on: a printed value shows those
-## names, and the signatures below and a diagnostic show the `HTTP.` ones.
+## `HTTP.Server` are the builtin types `HttpWire.Request`, `HttpWire.Response`, and so on. The signatures below, the
+## diagnostic, `help` and a printed value show the `HTTP.` names as written.
 
 import WebSocketWire from "std/internal/websocket"
 import URI from "std/uri"
