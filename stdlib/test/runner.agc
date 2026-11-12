@@ -58,6 +58,38 @@ struct Run
   verdict: Report.Verdict
 end
 
+# A feature file read and filtered, before its scenarios run: its result without scenarios, the folder its scenarios
+# run in, and the scenarios that --only and --tags keep.
+struct Planned
+  shell: Report.FileResult
+  base: String
+  chosen: List[Gherkin.Scenario]
+end
+
+# How an entry runs: whole (a test file, or an entry with a problem), as a result known before anything runs (a
+# feature file that cannot be read or parsed), or scenario by scenario.
+enum Plan
+  Whole
+  Known(Report.FileResult)
+  Scenarios(Planned)
+end
+
+# One piece of work of `--jobs`: a whole entry (scenario is -1), or one scenario of a feature file with what it needs,
+# so a task copies only its own scenario.
+struct Job
+  entry: Int
+  scenario: Int
+  item: Optional[Gherkin.Scenario]
+  base: String
+  cover: String
+end
+
+# What a job gives back.
+enum Ran
+  File(Report.FileResult)
+  Scenario(Report.ScenarioResult)
+end
+
 ## Reads the configuration file named by the one command-line argument, runs every feature and test file in it, and
 ## writes the report to the file the configuration names (`report_path`, a new file). The driver reads it from there:
 ## a child's stdout keeps only 1 MiB, and the report of a large run is bigger. Exits with a non-zero code when
@@ -100,7 +132,7 @@ export def main() -> Void
   started = Time.monotonic_ms()
   entries = read.map do |entry| entry.unwrap! end
   files = selected(seeded(config, seed), tags, jobs, parts, entries)
-  # Wall time, not the sum of the file times: with `--jobs` the files overlap.
+  # Wall time, not the sum of the file times: with `--jobs` the files and their scenarios overlap.
   wall_ms = Time.monotonic_ms() - started
   text = Report.text(files, config.style == "ai", seed)
   if timing and config.style != "json"
@@ -165,7 +197,7 @@ def read_tags(handle: FileHandle) -> Result[String]
   text
 end
 
-# The `--jobs` line, after the tags line: a JSON integer. A missing or unusable line is one file at a time, the
+# The `--jobs` line, after the tags line: a JSON integer. A missing or unusable line is one job at a time, the
 # behaviour without the flag.
 def read_jobs(handle: FileHandle) -> Int
   line = File.read_line(handle, 5000)
@@ -253,10 +285,12 @@ def run_all(config: Config, tags: Tags.Expr, jobs: Int, parts: String, found: Li
   end
 end
 
-# Runs the files, `jobs` at a time, and gives their results in the order of `entries`, so the report does not depend
-# on which file ends first. Each file already runs in its own child VM, so a task only waits for its children. One
-# file at a time (the default) does not start tasks. The task deadline covers the wait for a free slot and the whole
-# file, and a file has no limit of its own (each scenario and test has one), so it is a day.
+# Runs the entries and gives their results in the order of `entries`, each file's scenarios in file order, so the
+# report does not depend on which job ends first. One job (the default) runs them one after another without tasks.
+# With more, the jobs are the scenarios of the feature files and the whole test files, `jobs` at a time from one
+# queue in entry order, so one long feature file no longer runs alone at the end. Each scenario and test file already
+# runs in its own child VM, so a task only waits for its children. The task deadline covers the wait for a free slot
+# and the job, which has a limit of its own (each scenario and test has one), so it is a day.
 def run_entries(
   config: Config,
   tags: Tags.Expr,
@@ -268,22 +302,81 @@ def run_entries(
   # The LCOV part of each child is named after its file's place in `entries` (and its scenario's in the file), so
   # children that run at once never share one.
   indices = (0...entries.size).to_a
-  if jobs <= 1 or entries.size <= 1
-    return indices.map do |at| run_entry(config, tags, patterns, part_of(parts, at), entries[at]) end
+  return indices.map do |at| run_entry(config, tags, patterns, part_of(parts, at), entries[at]) end if jobs <= 1
+
+  plans = indices.map do |at| plan_entry(config, tags, entries[at]) end
+  work = jobs_of(plans, parts)
+  ended = Task.map(work, jobs, 86_400_000) do |job|
+    if job.scenario < 0
+      at = job.entry
+      return ok(Ran.File(run_entry(config, tags, patterns, part_of(parts, at), entries[at])))
+    end
+
+    ok(Ran.Scenario(run_scenario(config, patterns, job.base, job.item.unwrap!, job.cover)))
   end
 
-  ended = Task.map(indices, jobs, 86_400_000) do |at|
-    ok(run_entry(config, tags, patterns, part_of(parts, at), entries[at]))
+  gathered(entries, plans, work, ended)
+end
+
+# The jobs of the plans, in entry order and each file's scenarios in file order.
+def jobs_of(plans: List[Plan], parts: String) -> List[Job]
+  work: List[Job] = []
+  for at in 0...plans.size
+    case plans[at]
+      Plan.Whole -> work = work.push(Job(entry: at, scenario: -1, item: none, base: "", cover: ""))
+      Plan.Known(_) -> work = work
+      Plan.Scenarios(planned) ->
+        for index in 0...planned.chosen.size
+          cover = cover_of(part_of(parts, at), index)
+          job = Job(entry: at, scenario: index, item: some(planned.chosen[index]), base: planned.base, cover: cover)
+          work = work.push(job)
+        end
+    end
   end
 
+  work
+end
+
+# The result of each entry from the results of its jobs, which follow `work` in order. A job that did not end (an
+# infrastructure failure of its task) makes its whole file an error, as when the file was one job.
+def gathered(
+  entries: List[Entry],
+  plans: List[Plan],
+  work: List[Job],
+  ended: List[Result[Ran]],
+) -> List[Report.FileResult]
   results: List[Report.FileResult] = []
+  next = 0
   for at in 0...entries.size
-    case ended[at]
-      ok(result) -> results = results.push(result)
-      error(message) ->
-        entry = entries[at]
-        problem = Child.located("RUNTIME-BDD-INFRA", "#{message}", entry.path)
-        results = results.push(Report.file_error(entry.path, entry.kind, problem))
+    entry = entries[at]
+    scenarios: List[Report.ScenarioResult] = []
+    file: Optional[Report.FileResult] = none
+    problem = ""
+    while next < work.size and work[next].entry == at
+      case ended[next]
+        ok(ran) ->
+          case ran
+            Ran.File(result) -> file = some(result)
+            Ran.Scenario(result) -> scenarios = scenarios.push(result)
+          end
+
+        error(message) ->
+          if problem == ""
+            problem = "#{message}"
+          end
+      end
+      next += 1
+    end
+
+    if problem != ""
+      located = Child.located("RUNTIME-BDD-INFRA", problem, entry.path)
+      results = results.push(Report.file_error(entry.path, entry.kind, located))
+    else
+      case plans[at]
+        Plan.Known(result) -> results = results.push(result)
+        Plan.Whole -> results = results.push(file.unwrap!)
+        Plan.Scenarios(planned) -> results = results.push(planned.shell.with(scenarios: scenarios))
+      end
     end
   end
 
@@ -362,6 +455,13 @@ def run_entry(
   run_file(config, tags, patterns, part, entry.path)
 end
 
+# How an entry runs under `--jobs`: a feature file without a problem is read and filtered here, the rest run whole.
+def plan_entry(config: Config, tags: Tags.Expr, entry: Entry) -> Plan
+  return Plan.Whole if entry.problem != "" or entry.kind == "tests"
+
+  plan_file(config, tags, entry.path)
+end
+
 def seeded(config: Config, seed: Int) -> Config
   Config(
     vm: config.vm,
@@ -429,37 +529,56 @@ def run_file(
   part: String,
   path: String,
 ) -> Report.FileResult
+  case plan_file(config, tags, path)
+    Plan.Scenarios(planned) ->
+      chosen = planned.chosen
+      scenarios = (0...chosen.size).to_a.map do |at|
+        run_scenario(config, patterns, planned.base, chosen[at], cover_of(part, at))
+      end
+
+      planned.shell.with(scenarios: scenarios)
+    Plan.Known(result) -> result
+    Plan.Whole -> Report.file_error(path, "feature", Child.located("RUNTIME-BDD-INFRA", "nothing to run", path))
+  end
+end
+
+# Reads and parses a feature file and keeps the scenarios that --only and --tags select; a file that cannot be read or
+# parsed is its error.
+def plan_file(config: Config, tags: Tags.Expr, path: String) -> Plan
   text = File.read_text(path, 5000)
   if text.message == "filesystem: file exceeds 1048576 bytes"
-    return Report.file_error(path, "feature", Child.located("RUNTIME-BDD-IO", "feature file exceeds 1 MiB", path))
+    located = Child.located("RUNTIME-BDD-IO", "feature file exceeds 1 MiB", path)
+    return Plan.Known(Report.file_error(path, "feature", located))
   end
-  return Report.file_error(path, "feature", Child.located("RUNTIME-BDD-INFRA", text.message, path)) if not text.ok?
+  if not text.ok?
+    return Plan.Known(Report.file_error(path, "feature", Child.located("RUNTIME-BDD-INFRA", text.message, path)))
+  end
   case Gherkin.parse(path, text.unwrap!)
-    Gherkin.Outcome.Failed(problem) -> Report.file_error(path, "feature", from_diagnostic(problem))
+    Gherkin.Outcome.Failed(problem) -> Plan.Known(Report.file_error(path, "feature", from_diagnostic(problem)))
     Gherkin.Outcome.Done(feature) ->
       base = Path.resolve(Path.join([path, ".."]).unwrap_or(path)).unwrap_or(path)
       chosen = feature.scenarios.filter do |item|
         (config.only == "" or item.name.include?(config.only)) and Tags.selects?(tags, item.tags)
       end
 
-      scenarios = (0...chosen.size).to_a.map do |at|
-        cover = ""
-        if part != ""
-          cover = "#{part}-#{at}.info"
-        end
-
-        run_scenario(config, patterns, base, chosen[at], cover)
-      end
-
-      Report.FileResult(
+      shell = Report.FileResult(
         path: path,
         feature: feature.name,
         kind: "feature",
-        scenarios: scenarios,
+        scenarios: [],
         verdict: Report.Verdict.Pass,
         output: "",
       )
+
+      Plan.Scenarios(Planned(shell: shell, base: base, chosen: chosen))
   end
+end
+
+# The LCOV file of the scenario at `at` of a file whose part is `part`, or "" without coverage.
+def cover_of(part: String, at: Int) -> String
+  return "" if part == ""
+
+  "#{part}-#{at}.info"
 end
 
 # Every step is resolved before the child starts; the first unresolved one fails and the others are not executed.
