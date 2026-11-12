@@ -1709,7 +1709,7 @@ def test_string_joins_and_forms_run_in_compiled_code(tmp_path):
 # leaves. BLOCKS: no closure or block call of sweep's loop leaves (its 360 block calls start between two runs of
 # compiled code, and their blocks, compiled at the first call, run there too); under `always` the calls of puts and
 # Task in main and worker do.
-SWEEP_BLOCKS = ["block@sweep.agc:6:25", "block@sweep.agc:7:31", "block@sweep.agc:7:69", "block@sweep.agc:8:19"]
+SWEEP_BLOCKS = ["block@sweep.agc:6:25", "block@sweep.agc:7:31", "block@sweep.agc:7:66", "block@sweep.agc:8:19"]
 STAYS = {
     "builtins": (DIRECT, ["tally"], ("call-builtin",), 20),
     "map reads and lists": (LOOKUP, ["lookup"], ("map-get", "list"), 1),

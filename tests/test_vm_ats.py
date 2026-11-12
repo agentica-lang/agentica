@@ -151,7 +151,7 @@ def operations(seed, count, keys):
 
 def program(ops, key_type):
     if key_type == "Bytes":
-        key, keys = 'key("{k}")', "t.keys.map do |k| OpenSSL.Digest.hexencode(k) end"
+        key, keys = 'key("{k}")', "t.keys.map {{ |k| OpenSSL.Digest.hexencode(k) }}"
     else:
         key, keys = '"{k}"', "t.keys"
     lines = []

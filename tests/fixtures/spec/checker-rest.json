@@ -11211,7 +11211,7 @@
         ""
       ],
       "code": "CHECK-TYPE-MISMATCH",
-      "start": [2, 33],
+      "start": [2, 32],
       "covers": "s.length"
     },
     {

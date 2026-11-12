@@ -178,7 +178,7 @@ DIAGNOSTICS = [
      "PARSE-UNEXPECTED-TOKEN", (3, 3, 3, 4), None),
     ("leading pipe does not continue", program(MAIN, "  x = 1", "    |> f()", "end"),
      "PARSE-UNEXPECTED-TOKEN", (3, 5, 3, 7), None),
-    ("error in a joined chain spans its lines", program(MAIN, "  xs = [1, 2]", "    .map do |x| x end", "    .nope",
+    ("error in a joined chain spans its lines", program(MAIN, "  xs = [1, 2]", "    .map { |x| x }", "    .nope",
                                                        "end"),
      "CHECK-UNKNOWN-METHOD", (2, 8, 4, 10), None),
     ("doc block inside a function body", program(MAIN, "  x = 1 # note", "  ## doc", "  y = 2", "end"),
@@ -232,8 +232,8 @@ CLEAN = [
 # (case, source, stdout): the program runs and prints this, with exit status 0.
 RUNS = [
     ("leading-dot chain over lines, comments and blocks",
-     program(MAIN, "  xs = [1, 2, 3, 4]  # the numbers", "    .drop(1)  # header", "    # twice", "    .map do |x|",
-             "      y = x * 2", "      y", "    end", "    .filter do |x| x > 4 end", "    .map do |x| x + 1 end",
+     program(MAIN, "  xs = [1, 2, 3, 4]  # the numbers", "    .drop(1)  # header", "    # twice", "    .map { |x|",
+             "      y = x * 2", "      y", "    }", "    .filter { |x| x > 4 }", "    .map { |x| x + 1 }",
              "  puts(xs)", "end"),
      "[7, 9]\n"),
     ("leading-dot struct update chain and heredoc",
