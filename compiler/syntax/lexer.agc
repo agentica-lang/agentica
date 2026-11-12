@@ -73,37 +73,26 @@ HEREDOC_NAME_CHARS = Set.new("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_".split(""))
 ## What follows a `\` in a string, and the character it stands for.
 ESCAPES = {"\"": "\"", "\\": "\\", "#": "#", "n": "\n", "r": "\r", "t": "\t"}
 
-## The class of each ASCII character; any other character is `Other`.
-CLASSES: Map[String, CharClass] = (0..127).to_a.reduce({}) do |classes, code|
-  character = String.from_code(code)
-  kind = CharClass.Other
-  if code == 32 or code == 9
-    kind = CharClass.Blank
-  elsif code == 10 or code == 13
-    kind = CharClass.Newline
-  elsif code == 35
-    kind = CharClass.Hash
-  elsif code >= 65 and code <= 90
-    kind = CharClass.NameUpper
-  elsif (code >= 97 and code <= 122) or code == 95
-    kind = CharClass.NameLower
-  elsif code >= 48 and code <= 57
-    kind = CharClass.Digit
-  elsif code == 34
-    kind = CharClass.Quote
-  elsif code == 40 or code == 91 or code == 123
-    kind = CharClass.Opening
-  elsif code == 41 or code == 93
-    kind = CharClass.Closing
-  elsif code == 125
-    kind = CharClass.CloseBrace
-  elsif code == 60
-    kind = CharClass.Less
-  elsif ",:.=+-*/%>&|!".include?(character)
-    kind = CharClass.Operator
-  end
+## The ASCII characters of each class but `Other`, as one string per class.
+CLASS_CHARACTERS: Map[String, CharClass] = {
+  "\t ": CharClass.Blank,
+  "\n\r": CharClass.Newline,
+  "#": CharClass.Hash,
+  "ABCDEFGHIJKLMNOPQRSTUVWXYZ": CharClass.NameUpper,
+  "abcdefghijklmnopqrstuvwxyz_": CharClass.NameLower,
+  "0123456789": CharClass.Digit,
+  "\"": CharClass.Quote,
+  "([{": CharClass.Opening,
+  ")]": CharClass.Closing,
+  "}": CharClass.CloseBrace,
+  "<": CharClass.Less,
+  ",:.=+-*/%>&|!": CharClass.Operator,
+}
 
-  classes.put(character, kind)
+## The class of each ASCII character; any other character is `Other`. Built from the strings above, not by testing all
+## 128 codes: the front end builds it at every start, a cache hit included (#1471).
+CLASSES: Map[String, CharClass] = CLASS_CHARACTERS.keys.reduce({}) do |classes, characters|
+  characters.split("").reduce(classes) do |found, character| found.put(character, CLASS_CHARACTERS[characters]) end
 end
 
 ## The operators and brackets of one character.
