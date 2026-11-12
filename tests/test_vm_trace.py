@@ -485,6 +485,8 @@ def main() -> Void
   3.times do |k|
     puts(Profile.measure("after") do depth(k) end)
   end
+  f = -> { work(10) }
+  puts(f.call())
 end
 """
 
@@ -541,7 +543,8 @@ def test_profile_steps_gives_the_same_counts_with_the_profile_off_or_on(tmp_path
 
 
 def test_the_folded_profile_is_the_same_on_every_run_and_names_each_frame(tmp_path, traced_vm):
-    """One line per stack, outermost frame first: functions as name@FILE:LINE, blocks as block@FILE:LINE:COL, native
+    """One line per stack, outermost frame first: functions as name@FILE:LINE, blocks as block@FILE:LINE:COL (lambdas
+    lambda@FILE:LINE:COL), native
     loops by their builtin, Profile.measure labels as measure:LABEL. Sampled at every step, the weights add up to the
     steps of the report."""
     vm = traced_vm[0]
@@ -566,6 +569,7 @@ def test_the_folded_profile_is_the_same_on_every_run_and_names_each_frame(tmp_pa
         b"block@sections.agc:12:35;depth@sections.agc:11",
         b"in_task@sections.agc:20;measure:task;block@sections.agc:21:34;work@sections.agc:1",
         b"main@sections.agc:30;Int.times;block@sections.agc:41:11;measure:after",
+        b"main@sections.agc:30;lambda@sections.agc:44:7;work@sections.agc:1",
     ]
     for stack in expected:
         assert stack in stacks, (stack, sorted(stacks))

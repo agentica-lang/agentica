@@ -10,7 +10,7 @@
 #include <string.h>
 
 static const char in_task[] = " in a task";
-/* The front end names a block block@FILE:LINE:COL and a lambda lambda@FILE:LINE:COL; a stack line shows the word. */
+/* The words of the block and lambda names (agc_block_word). */
 static const char *const block_words[] = {"block", "lambda"};
 static const char cut_mark[] = "...";
 static const size_t stack_name_max = 256;
@@ -141,15 +141,17 @@ static name_view display_name(const agc_string *name) {
       view.len -= digits + 2;
     }
   }
+  size_t word = agc_block_word(view.text, view.len);
+  if (word) view.len = word;
+  return view;
+}
+
+size_t agc_block_word(const char *name, size_t len) {
   for (size_t i = 0; i < sizeof block_words / sizeof block_words[0]; i++) {
     size_t word = strlen(block_words[i]);
-    if (view.len > word && memcmp(view.text, block_words[i], word) == 0 && view.text[word] == '@') {
-      view.text = block_words[i];
-      view.len = word;
-      break;
-    }
+    if (len > word && memcmp(name, block_words[i], word) == 0 && name[word] == '@') return word;
   }
-  return view;
+  return 0;
 }
 
 static uint32_t call_span(const agc_function *f, uint32_t pc) {

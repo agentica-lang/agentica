@@ -353,6 +353,7 @@ static void names(void) {
   begin(&vm, f, NULL);
   agc_task *t = vm.rt->main;
   f->fns[F_WALK].name = agc_make_string("caf\xC3\xA9\x7f\t", 7, 6);
+  f->fns[F_PUSH].name = agc_make_string("lambda@t.agc:3:4", 16, 16);
   frames(t, 5);
   frame(t, 0, F_SPARE, 1, false);
   frame(t, 1, F_PUSH, 1, false);
@@ -363,7 +364,8 @@ static void names(void) {
   agc_stack_capture(&vm, &o);
   json_agrees(&vm, f, &o);
   char *text = render(f, &o, AGC_STYLE_PLAIN, false);
-  assert(strstr(text, "    a\\nb at t.agc:1:17\n    block at t.agc:1:9\n    push at t.agc:1:5\n    @7:: at t.agc:1:21\n"));
+  assert(strstr(text, "    a\\nb at t.agc:1:17\n    block at t.agc:1:9\n    lambda at t.agc:1:5\n"
+                      "    @7:: at t.agc:1:21\n"));
   free(text);
 }
 
