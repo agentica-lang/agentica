@@ -6967,8 +6967,8 @@ ROWS_72: List[Model.Builtin] = [
         implementation: "String.edit_distance",
         effects: [],
         description: (
-          "The Levenshtein distance, or max + 1 once it passes max, in about n * (2 * max + 1) steps; a negative " +
-          "max halts."
+          "The Levenshtein distance, or max + 1 once it passes max, with about n * (2 * max + 1) table cells of " +
+          "work; a negative max fails with RUNTIME-INVALID-COUNT."
         ),
         alternatives: [],
       ),

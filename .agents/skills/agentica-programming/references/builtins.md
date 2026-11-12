@@ -91,7 +91,7 @@ s * n -> String                                          # n copies; n < 0 or ov
 c.code() -> Int                                          # code point of one character; other lengths halt
 String.compare(a: String, b: String) -> Int              # -1, 0 or 1 in sort order; also a.compare(b)
 s.edit_distance(other: String) -> Int                    # Levenshtein, in characters
-s.edit_distance(other: String, max: Int) -> Int          # max + 1 once past max (fast); max < 0 halts
+s.edit_distance(other: String, max: Int) -> Int          # max + 1 once past max (fast); max < 0 fails with RUNTIME-INVALID-COUNT
 s.jaro_winkler(other: String) -> Float                   # 0.0 to 1.0; "" and "" give 1.0
 String.from_code(n: Int) -> String                       # Unicode scalar value; halts otherwise
 n.to_s() -> String                                       # Int

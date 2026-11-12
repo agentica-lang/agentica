@@ -9,13 +9,17 @@ import random
 
 import pytest
 
-from tests.agentica_test import cli, run
+from tests.agentica_test import cli, compile_text, run, run_vm
 from tests.spec_support import assert_rule, covered
 
 MAIN = "def main() -> Void\n"
 
 RULES = [
-    (MAIN + '  d: Int = "a".edit_distance("b")\n  c: Int = "a".edit_distance("b", 1)\n  puts(d + c)\nend\n', None, None),
+    (
+        MAIN + '  d: Int = "a".edit_distance("b")\n  c: Int = "a".edit_distance("b", 1)\n  puts(d + c)\nend\n',
+        None,
+        None,
+    ),
     (MAIN + '  x: Float = "a".jaro_winkler("b")\n  puts(x)\nend\n', None, None),
     (MAIN + '  puts("a".edit_distance(1))\nend\n', "CHECK-TYPE-MISMATCH", "1"),
     (MAIN + '  puts("a".edit_distance("b", 1.5))\nend\n', "CHECK-TYPE-MISMATCH", "1.5"),
@@ -166,3 +170,39 @@ def test_string_distance_negative_max(tmp_path):
         assert result.code == 1, cap
         diagnostic = json.loads(result.stderr)
         assert (diagnostic["code"], covered(source, diagnostic["range"])) == ("RUNTIME-INVALID-COUNT", "max")
+
+
+STEPS = """def main() -> Void
+  size = System.args()[0].to_i!
+  a = "ab" * size
+  b = "ba" * size
+  before = Profile.steps()
+  puts(a.edit_distance(b))
+  middle = Profile.steps()
+  puts(("a" * size).jaro_winkler("b" * size))
+  puts(before)
+  puts(middle - before)
+  puts(Profile.steps() - middle)
+end
+"""
+
+
+def test_string_distance_long_work_takes_steps_and_stops_at_the_step_limit(tmp_path):
+    """Work past one turn's cost runs a step per 4096 table cells or Jaro comparisons: "ab" * 1000 against "ba" * 1000
+    share no end, so the walk covers all 2000 * 2000 cells, and Jaro of "a" * 1000 against "b" * 1000 finds no match
+    and compares each character with its whole window. A step budget that ends inside either call stops it with
+    RUNTIME-STEP-LIMIT at the call."""
+    bytecode = compile_text(STEPS, "steps", tmp_path)
+    result = run_vm(bytecode, args=["1000"])
+    lines = result.stdout.splitlines()
+    assert result.code == 0 and lines[:2] == ["2", "0.0"], result.stderr
+    before, distance_steps, jaro_steps = map(int, lines[2:])
+    assert 2000 * 2000 // 4096 <= distance_steps <= 2000 * 2000 // 4096 + 10, distance_steps
+    assert 100 < jaro_steps < 2000 * 2000 // 4096, jaro_steps
+    limits = [(before + distance_steps // 2, "edit_distance"), (before + distance_steps + jaro_steps // 2, "jaro")]
+    for limit, call in limits:
+        result = run_vm(bytecode, "--json", "--max-steps", str(limit), args=["1000"])
+        assert result.code == 1, result.stderr
+        diagnostic = json.loads(result.stderr)
+        assert diagnostic["code"] == "RUNTIME-STEP-LIMIT"
+        assert call in covered(STEPS, diagnostic["range"])

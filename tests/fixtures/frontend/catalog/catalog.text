@@ -979,7 +979,7 @@ builtin DNS.lookup forms=1
   DNS.lookup(host: String, timeout_ms: Int = 30000) -> Result[List[String]] shape=(String, Int = 30000) -> Result(List(String)) rule=Plain impl="DNS.lookup" effects=["network"] desc="Resolve a host name with the system resolver: every IPv4 and IPv6 address as text, in its order, without duplicates; an IP literal gives itself."
 builtin String.edit_distance forms=2
   String.edit_distance(s: String, other: String) -> Int shape=(String, String) -> Int rule=Plain impl="String.edit_distance" effects=[] desc="The Levenshtein distance in characters: the fewest inserts, deletes and replacements of one character that turn s into other; O(n * m) time, O(min(n, m)) memory; or, with max, max + 1 once it passes max."
-  String.edit_distance(s: String, other: String, max: Int) -> Int shape=(String, String, Int) -> Int rule=Plain impl="String.edit_distance" effects=[] desc="The Levenshtein distance, or max + 1 once it passes max, in about n * (2 * max + 1) steps; a negative max halts."
+  String.edit_distance(s: String, other: String, max: Int) -> Int shape=(String, String, Int) -> Int rule=Plain impl="String.edit_distance" effects=[] desc="The Levenshtein distance, or max + 1 once it passes max, with about n * (2 * max + 1) table cells of work; a negative max fails with RUNTIME-INVALID-COUNT."
 builtin String.jaro_winkler forms=1
   String.jaro_winkler(s: String, other: String) -> Float shape=(String, String) -> Float rule=Plain impl="String.jaro_winkler" effects=[] desc="The Jaro-Winkler similarity in characters, from 0.0 to 1.0; a common prefix of up to 4 characters raises it when the Jaro similarity is above 0.7; two empty strings give 1.0."
 record Codec.Info name: String, members: List(Struct(StructMember))

@@ -4,6 +4,7 @@
  */
 #include "../core.h"
 #include "../services.h"
+#include "test_support.h"
 
 #include <assert.h>
 #include <math.h>
@@ -260,22 +261,54 @@ static void shared_strings(agc_vm *vm) {
   assert(rt->empty_string->bytes == 0 && rt->empty_string->chars == 0);
 }
 
+/* The resumes of the last distance call that ran as a stepper: how many, and the most turn cost one charged. */
+static size_t last_resumes;
+static int64_t last_most_cost;
+
+/* Calls the builtin NAME on a task of its own and, when the call starts a stepper, runs it to its end as the scheduler
+   would: a turn per resume, with a collection every few resumes. A resume works through 4096 cells (64 units of turn
+   cost) per step until the turn is over, so it charges at most a turn and one chunk, plus the last pass of Jaro over
+   both texts (here under 64 units). */
+static agc_value run_call(agc_vm *vm, const char *name, uint32_t arity, agc_value *args) {
+  const agc_builtin *b = agc_find_builtin((const uint8_t *)name, strlen(name), arity);
+  assert(b && !b->direct && !b->leaf && !b->shared);
+  agc_task *was = vm->task, *t = agc_test_task();
+  vm->task = t;
+  agc_value v = b->fn(vm, args, 0);
+  last_resumes = 0;
+  last_most_cost = 0;
+  while (t->stepper) {
+    agc_turn_begin(vm);
+    agc_step step = t->stepper->step(vm, t->stepper, agc_void());
+    assert(vm->turn_cost_used <= AGC_TURN_STEPS + 2 * 64 + 1);
+    if (vm->turn_cost_used > last_most_cost) last_most_cost = vm->turn_cost_used;
+    if (++last_resumes % 8 == 0) agc_gc_collect();
+    if (step.kind == AGC_STEP_END) {
+      v = step.value;
+      break;
+    }
+    assert(step.kind == AGC_STEP_YIELD);
+  }
+  vm->task = was;
+  return v;
+}
+
 /* s.edit_distance(other), or with CAP >= 0 s.edit_distance(other, CAP), both ways round: the distance is symmetric. */
 static int64_t distance(agc_vm *vm, const char *s, const char *other, int64_t cap) {
   agc_value args[3] = {str(s), str(other), agc_int(cap)};
-  int64_t d = agc_as_int(vm, call(vm, "String.edit_distance", cap < 0 ? 2 : 3, args));
+  int64_t d = agc_as_int(vm, run_call(vm, "String.edit_distance", cap < 0 ? 2 : 3, args));
   args[0] = str(other);
   args[1] = str(s);
-  assert(agc_as_int(vm, call(vm, "String.edit_distance", cap < 0 ? 2 : 3, args)) == d);
+  assert(agc_as_int(vm, run_call(vm, "String.edit_distance", cap < 0 ? 2 : 3, args)) == d);
   return d;
 }
 
 static double jaro_winkler(agc_vm *vm, const char *s, const char *other) {
   agc_value args[2] = {str(s), str(other)};
-  double x = agc_as_float(vm, call(vm, "String.jaro_winkler", 2, args));
+  double x = agc_as_float(vm, run_call(vm, "String.jaro_winkler", 2, args));
   args[0] = str(other);
   args[1] = str(s);
-  assert(agc_as_float(vm, call(vm, "String.jaro_winkler", 2, args)) == x);
+  assert(agc_as_float(vm, run_call(vm, "String.jaro_winkler", 2, args)) == x);
   assert(x >= 0.0 && x <= 1.0);
   return x;
 }
@@ -329,13 +362,16 @@ static void distances(agc_vm *vm) {
   static const char *pieces[] = {"a", "b", "\xc3\xa9", "\xe2\x82\xac", "\xf0\x9f\x98\x80", "\xcc\x81"};
   static const uint32_t codes[] = {'a', 'b', 0xE9, 0x20AC, 0x1F600, 0x301};
   unsigned seed = 1441;
+  size_t stepped = 0;
   for (size_t k = 0; k < 400; k++) {
-    char text[2][401];
-    uint32_t points[2][100];
+    /* Mostly short texts, which run in the call; up to 900 characters in one case of 16, whose whole table (and wide
+       bands) runs as a stepper. */
+    char text[2][3601];
+    uint32_t points[2][900];
     size_t lengths[2];
     for (size_t t = 0; t < 2; t++) {
       seed = seed * 1103515245u + 12345u;
-      size_t length = (seed >> 16) % (k % 4 == 0 ? 100 : 12), bytes = 0;
+      size_t length = (seed >> 16) % (k % 16 == 0 ? 900 : k % 4 == 0 ? 100 : 12), bytes = 0;
       for (size_t c = 0; c < length; c++) {
         seed = seed * 1103515245u + 12345u;
         size_t pick = (seed >> 16) % (2 + k % 5);
@@ -348,9 +384,29 @@ static void distances(agc_vm *vm) {
     }
     int64_t want = table_distance(points[0], lengths[0], points[1], lengths[1]);
     assert(distance(vm, text[0], text[1], -1) == want);
-    for (int64_t cap = 0; cap <= 6; cap++) assert(distance(vm, text[0], text[1], cap) == (want <= cap ? want : cap + 1));
+    stepped += last_resumes > 1;
+    static const int64_t caps[] = {0, 1, 2, 3, 4, 5, 6, 100, 300};
+    for (size_t c = 0; c < sizeof caps / sizeof caps[0]; c++)
+      assert(distance(vm, text[0], text[1], caps[c]) == (want <= caps[c] ? want : caps[c] + 1));
     (void)jaro_winkler(vm, text[0], text[1]);
   }
+  assert(stepped > 5);
+
+  /* "ab" * 2000 against "ba" * 2000 share no end, so the whole table of 16 million cells is walked: over a hundred
+     resumes, each within a turn and a chunk (run_call), with collections between them. With max 1 the band is 3
+     cells wide and the call returns at once. Jaro of "a" * 4000 and "b" * 4000 finds no match, so each character
+     looks through its window: 12 million comparisons, many resumes too. */
+  char *ab = malloc(4001), *ba = malloc(4001);
+  assert(ab && ba);
+  for (size_t k = 0; k < 4000; k++) ab[k] = "ab"[k % 2], ba[k] = "ba"[k % 2];
+  ab[4000] = ba[4000] = '\0';
+  assert(distance(vm, ab, ba, -1) == 2 && last_resumes > 100 && last_most_cost > AGC_TURN_STEPS / 2);
+  assert(distance(vm, ab, ba, 1) == 2 && last_resumes == 0);
+  memset(ab, 'a', 4000);
+  memset(ba, 'b', 4000);
+  assert(jaro_winkler(vm, ab, ba) == 0.0 && last_resumes > 50);
+  free(ab);
+  free(ba);
 }
 
 int main(void) {
