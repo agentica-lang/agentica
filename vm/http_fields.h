@@ -31,7 +31,7 @@ agc_value agc_http_header_list(agc_vm *vm, const agc_http_fields *f);
 bool agc_http_closes(const agc_http_head *head);
 agc_http_slice agc_http_text(agc_vm *vm, agc_value v);
 bool agc_http_list_closes(agc_vm *vm, const agc_list *headers);
-agc_value agc_http_error_result(const char *prefix, const char *reason);
+agc_value agc_http_error_result(agc_vm *vm, const char *prefix, const char *reason);
 agc_value agc_http_head_value(agc_vm *vm, const uint8_t *buf, size_t len, uint64_t limit, size_t buffered,
                               bool *websocket);
 agc_value agc_http_response_value(agc_vm *vm, const uint8_t *buf, size_t len, bool head_only, uint64_t limit,

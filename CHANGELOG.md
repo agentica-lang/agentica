@@ -59,6 +59,15 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - Diagnostics, `help`, `doc`, `outline` and `type-at` write the HTTP and
   logger types as a program does (`HTTP.Request`, `Logger.Event`), and
   `symbol` and `refs` find them by those names.
+- **Breaking:** `Error` is a reserved type name, for the coming builtin error
+  record: `struct Error`, `enum Error` or `type Error` is
+  `CHECK-REDEFINED-NAME`.
+
+### Fixed
+
+- An error message from the system (a file, process, library or TLS error)
+  with bytes that are not UTF-8 is a valid String, with U+FFFD for each bad
+  byte.
 - A printed logger value shows the names a program writes:
   `Logger.Level.Info` and `Logger.Event(...)`, not `LogRegistry.Level.Info`.
 - A printed record or enum of a std module shows the module alias it is

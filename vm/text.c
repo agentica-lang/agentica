@@ -305,7 +305,55 @@ static bool optional_enum(const agc_program *p, const agc_enum_def *def) {
   return p->optional != UINT32_MAX && def->first == p->optional;
 }
 
+/* An Error prints as the error(...) call that builds it: the message, then each of kind, code, details and cause that
+   is not its default, by name, with code and cause out of their some(...). The location never prints. So an Error is
+   a struct whose items are these shown fields (error_shown), not its six fields: item_count and item_at of an Error
+   count and give only those. A field of a hostile struct that holds another type is shown as it is. */
+static bool error_default(agc_vm *vm, uint32_t field, agc_value v) {
+  if (field == AGC_ERROR_KIND) {
+    if (!agc_is(v, AGC_T_STRING)) return false;
+    const agc_string *kind = agc_as_string(vm, v);
+    return kind->bytes == 5 && memcmp(kind->data, "error", 5) == 0;
+  }
+  if (field == AGC_ERROR_DETAILS) return agc_is(v, AGC_T_MAP) && agc_as_map(vm, v)->size == 0;
+  return agc_is(v, AGC_T_ENUM) && agc_as_enum(vm, v)->variant == vm->rt->program->optional;
+}
+
+/* The fields of Error E that print, in the order of the call's arguments; returns how many. */
+static size_t error_shown(agc_vm *vm, const agc_struct *e, uint32_t shown[5]) {
+  static const uint32_t named[] = {AGC_ERROR_KIND, AGC_ERROR_CODE, AGC_ERROR_DETAILS, AGC_ERROR_CAUSE};
+  size_t n = 0;
+  shown[n++] = AGC_ERROR_MESSAGE;
+  for (size_t k = 0; k < sizeof named / sizeof named[0]; k++)
+    if (!error_default(vm, named[k], e->fields[named[k]])) shown[n++] = named[k];
+  return n;
+}
+
+/* A shown field of an Error: code and cause without their some(...), which the call does not write. */
+static agc_value error_item(agc_vm *vm, const agc_struct *e, size_t k) {
+  uint32_t shown[5];
+  (void)error_shown(vm, e, shown);
+  agc_value v = e->fields[shown[k]];
+  if ((shown[k] == AGC_ERROR_CODE || shown[k] == AGC_ERROR_CAUSE) && agc_is(v, AGC_T_ENUM)) {
+    const agc_enum *some = agc_as_enum(vm, v);
+    if (some->variant == vm->rt->program->optional + 1 && some->n == 1) return some->payload[0];
+  }
+  return v;
+}
+
+/* A failed Result that holds an Error prints as the Error alone, which is already the error(...) call: not
+   error(error(...)). */
+static agc_value printed(agc_vm *vm, agc_value v) {
+  if (!agc_is(v, AGC_T_RESULT)) return v;
+  const agc_result *r = agc_as_result(vm, v);
+  return !r->ok && agc_is_error(vm, r->value) ? r->value : v;
+}
+
 static size_t item_count(agc_vm *vm, agc_value v) {
+  if (agc_is_error(vm, v)) {
+    uint32_t shown[5];
+    return error_shown(vm, agc_as_struct(vm, v), shown);
+  }
   if (agc_is(v, AGC_T_LIST)) return agc_list_len(agc_as_list(vm, v));
   if (agc_is(v, AGC_T_MAP)) return agc_as_map(vm, v)->size;
   if (agc_is(v, AGC_T_SET)) return agc_as_set(vm, v)->size;
@@ -319,6 +367,7 @@ static size_t item_count(agc_vm *vm, agc_value v) {
 }
 
 static agc_value item_at(agc_vm *vm, agc_value v, size_t k) {
+  if (agc_is_error(vm, v)) return error_item(vm, agc_as_struct(vm, v), k);
   if (agc_is(v, AGC_T_LIST)) return agc_list_get(agc_as_list(vm, v), k);
   if (agc_is(v, AGC_T_STRUCT)) return agc_as_struct(vm, v)->fields[k];
   if (agc_is(v, AGC_T_RESULT)) return agc_as_result(vm, v)->value;
@@ -336,6 +385,10 @@ static bool open_value(agc_vm *vm, builder *b, agc_value v) {
   }
   if (agc_is(v, AGC_T_SET)) {
     append(b, "Set[", 4);
+    return true;
+  }
+  if (agc_is_error(vm, v)) {
+    append(b, "error(", 6);
     return true;
   }
   if (agc_is(v, AGC_T_STRUCT)) {
@@ -380,6 +433,7 @@ static agc_string *compound_debug(agc_vm *vm, agc_value root, bool json, bool *i
   debug_frame *stack = agc_alloc(agc_size_mul(capacity, sizeof(debug_frame)));
   agc_value item = root;
   for (;;) {
+    item = printed(vm, item);
     if (!compound(item)) {
       append_item(vm, &b, item, json, is_void);
       if (is_void && *is_void) return b.s;
@@ -408,7 +462,15 @@ static agc_string *compound_debug(agc_vm *vm, agc_value root, bool json, bool *i
     }
     debug_frame *top = &stack[depth - 1];
     if (top->next) append(&b, ", ", 2);
-    if (agc_is(top->value, AGC_T_STRUCT)) {
+    if (agc_is_error(vm, top->value)) {
+      /* The message is the call's first argument, without a name; the shown fields after it are named. */
+      if (top->next) {
+        uint32_t shown[5];
+        (void)error_shown(vm, agc_as_struct(vm, top->value), shown);
+        append_string(&b, agc_struct_def_of(vm, agc_as_struct(vm, top->value))->fields[shown[top->next]]);
+        append(&b, ": ", 2);
+      }
+    } else if (agc_is(top->value, AGC_T_STRUCT)) {
       append_string(&b, agc_struct_def_of(vm, agc_as_struct(vm, top->value))->fields[top->next]);
       append(&b, ": ", 2);
     }
@@ -439,6 +501,8 @@ static agc_string *bytes_text(agc_vm *vm, agc_value v) {
 
 agc_string *agc_text(agc_vm *vm, agc_value v) {
   if (agc_is(v, AGC_T_STRING)) return agc_as_string(vm, v);
+  /* to_s of an Error is its message, as Ruby's Exception#to_s; inspect is the error(...) call. */
+  if (agc_is_error(vm, v)) return agc_error_message(vm, v);
   if (agc_is(v, AGC_T_JSON)) return agc_json_encode(vm, v, 0);
   if (agc_is(v, AGC_T_BYTES)) return bytes_text(vm, v);
   return agc_debug(vm, v);
@@ -483,6 +547,10 @@ bool agc_text_checked(agc_vm *vm, agc_value v, agc_string **text) {
   if (agc_is(v, AGC_T_VOID)) return false;
   if (agc_is(v, AGC_T_STRING)) {
     *text = agc_as_string(vm, v);
+    return true;
+  }
+  if (agc_is_error(vm, v)) {
+    *text = agc_error_message(vm, v);
     return true;
   }
   if (agc_is(v, AGC_T_JSON)) {

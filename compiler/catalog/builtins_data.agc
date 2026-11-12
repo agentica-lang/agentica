@@ -308,6 +308,7 @@ export RESERVED_TYPE_NAMES: List[String] = [
   "Channel",
   "Codec",
   "Dir",
+  "Error",
   "File",
   "FileHandle",
   "FileInfo",

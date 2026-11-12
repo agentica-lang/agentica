@@ -64,15 +64,15 @@ _Noreturn static void misuse(agc_vm *vm, const char *what, uint32_t span) {
 }
 
 /* The error result std/http turns into an answer: "NNN reason". */
-static agc_value status_error(int code, const char *reason) {
+static agc_value status_error(agc_vm *vm, int code, const char *reason) {
   size_t size = strlen(reason) + 8;
   char *text = agc_alloc_atomic(size);
   snprintf(text, size, "%d %s", code, reason);
-  return agc_error_value(text);
+  return agc_error(vm, "error", text);
 }
 
-static agc_value parse_error(agc_http_error error) {
-  return status_error(agc_http_error_code(error), agc_http_error_text(error));
+static agc_value parse_error(agc_vm *vm, agc_http_error error) {
+  return status_error(vm, agc_http_error_code(error), agc_http_error_text(error));
 }
 
 static bool range_ok(int64_t from, int64_t count, size_t len) {
@@ -152,7 +152,7 @@ agc_value agc_http_head_value(agc_vm *vm, const uint8_t *buf, size_t len, uint64
   size_t used;
   agc_http_error error;
   agc_http_status status = agc_http_parse_request_head(buf, len, &head, &used, &error);
-  if (status == AGC_HTTP_INCOMPLETE) return agc_error_value("http: connection closed before the request was complete");
+  if (status == AGC_HTTP_INCOMPLETE) return agc_error(vm, "error", "http: connection closed before the request was complete");
   if (status == AGC_HTTP_ERROR) return refused_head(vm, agc_http_error_code(error), agc_http_error_text(error));
   agc_http_slice value = {NULL, 0};
   size_t upgrades = count_named(&head, "upgrade", &value);
@@ -199,8 +199,8 @@ agc_value agc_http_response_value(agc_vm *vm, const uint8_t *buf, size_t len, bo
   agc_http_status status = agc_http_parse_response_head(buf, len, &head, &used, &error);
   if (status == AGC_HTTP_INCOMPLETE && read_error)
     return agc_system_error(vm, "could not read from the stream", read_error); /* std/http: READ_FAILED */
-  if (status == AGC_HTTP_INCOMPLETE) return agc_error_value("http: connection closed before the response was complete");
-  if (status == AGC_HTTP_ERROR) return agc_http_error_result("http: ", agc_http_error_text(error));
+  if (status == AGC_HTTP_INCOMPLETE) return agc_error(vm, "error", "http: connection closed before the response was complete");
+  if (status == AGC_HTTP_ERROR) return agc_http_error_result(vm, "http: ", agc_http_error_text(error));
   bool closes = agc_http_closes(&head);
   if (head.status >= 200 && (head_only || head.status == 204 || head.status == 304)) {
     bool announced = head.frame == AGC_HTTP_FRAME_CHUNKED || (head.frame == AGC_HTTP_FRAME_LENGTH && head.length > 0);
@@ -210,7 +210,7 @@ agc_value agc_http_response_value(agc_vm *vm, const uint8_t *buf, size_t len, bo
   }
   if (head.frame == AGC_HTTP_FRAME_CLOSE) closes = true;
   if (head.frame == AGC_HTTP_FRAME_LENGTH && head.length > limit)
-    return agc_http_error_result("http: ", agc_http_error_text(AGC_HTTP_ERR_TOO_LARGE));
+    return agc_http_error_result(vm, "http: ", agc_http_error_text(AGC_HTTP_ERR_TOO_LARGE));
   agc_struct *r = agc_new_struct(agc_builtin_struct(vm, "HttpWire.ResponseHead", response_fields, 8), 8);
   r->fields[0] = agc_int(head.status);
   r->fields[1] = header_values(vm, &head);
@@ -313,7 +313,7 @@ static agc_value builtin_chunk(agc_vm *vm, agc_value *args, uint32_t span) {
     at += used;
   }
   agc_charge(vm, n / AGC_COST_BYTES);
-  if (status == AGC_HTTP_ERROR) return parse_error(b.error);
+  if (status == AGC_HTTP_ERROR) return parse_error(vm, b.error);
   agc_list_builder pieces;
   agc_list_builder_sized(&pieces, found);
   for (size_t k = 0; k < found; k++) agc_list_builder_push(&pieces, agc_int(runs[k]));
@@ -400,7 +400,7 @@ static agc_value builtin_encode_response(agc_vm *vm, agc_value *args, uint32_t s
   if (!bad && !agc_utf8_chars(out.data, out.len, &chars)) bad = "invalid response";
   agc_value result = agc_void();
   if (bad) {
-    result = agc_error_value(bad);
+    result = agc_error(vm, "error", bad);
   } else {
     agc_struct *r = agc_new_struct(agc_builtin_struct(vm, "HttpWire.Reply", reply_fields, 2), 2);
     r->fields[0] = agc_string_value(agc_make_string((const char *)out.data, out.len, chars));
@@ -478,17 +478,17 @@ static const char *request_head(agc_vm *vm, agc_http_bytes *b, const agc_value *
 static agc_value builtin_encode_request(agc_vm *vm, agc_value *args, uint32_t span) {
   const agc_string *scheme = agc_as_string(vm, args[0]);
   if (!text_is(scheme, "http") && !text_is(scheme, "https"))
-    return agc_error_value("http: the scheme must be http or https");
-  if (!host_text(agc_as_string(vm, args[1]))) return agc_error_value("http: invalid host");
+    return agc_error(vm, "error", "http: the scheme must be http or https");
+  if (!host_text(agc_as_string(vm, args[1]))) return agc_error(vm, "error", "http: invalid host");
   int64_t port = agc_as_int(vm, args[2]);
-  if (port < 1 || port > 65535) return agc_error_value("http: port must be 1..65535");
+  if (port < 1 || port > 65535) return agc_error(vm, "error", "http: port must be 1..65535");
   if ((int64_t)agc_as_bytes(vm, args[6])->len > agc_http_max_body(vm, args[7], span))
-    return agc_error_value("http: request body exceeds max_body_bytes");
+    return agc_error(vm, "error", "http: request body exceeds max_body_bytes");
   agc_http_bytes out = {0};
   const char *bad = request_head(vm, &out, args, text_is(scheme, "https"));
   size_t chars = 0;
   if (!bad && !agc_utf8_chars(out.data, out.len, &chars)) bad = "invalid request";
-  agc_value result = bad ? agc_http_error_result("http: ", bad)
+  agc_value result = bad ? agc_http_error_result(vm, "http: ", bad)
                          : agc_result_value(true, agc_string_value(agc_make_string((const char *)out.data, out.len, chars)));
   agc_charge(vm, out.len / AGC_COST_BYTES);
   free(out.data);

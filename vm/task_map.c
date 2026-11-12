@@ -93,9 +93,9 @@ static void item_ended(agc_vm *vm, agc_task *t) {
 static agc_value item_result(agc_vm *vm, const map_group *g, agc_task *t) {
   if (t->crashed) {
     agc_task_observe(vm, t);
-    return agc_result_value(false, agc_string_value(t->crash));
+    return agc_error_string(vm, "error", t->crash);
   }
-  if (t->cancelled) return agc_error_value("task: cancelled");
+  if (t->cancelled) return agc_error(vm, "error", "task: cancelled");
   if (!agc_is(t->result, AGC_T_RESULT))
     agc_fail(vm, "RUNTIME-INTERNAL", "invalid bytecode: a Task.map block did not give a Result", g->span);
   return t->result;
@@ -120,7 +120,7 @@ static void expire(agc_vm *vm, map_group *g, uint64_t now) {
   while (g->oldest && g->oldest->deadline <= now) {
     map_item *it = g->oldest;
     running_remove(g, it);
-    g->slots[it->index] = agc_error_value("task: timed out");
+    g->slots[it->index] = agc_error(vm, "error", "task: timed out");
     g->settled++;
     if (it->task->crashed) agc_task_observe(vm, it->task);
     agc_task_cancel(vm, it->task);

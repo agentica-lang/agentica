@@ -79,6 +79,14 @@ def test_a_field_named_with_cannot_hold_a_function(tmp_path):
     assert_clean("struct Hooks\n  with: Int\n  run: Fn[Int, Int]\nend\n\ndef main() -> Void\nend\n\n", tmp_path)
 
 
+def test_error_is_a_reserved_type_name(tmp_path):
+    # The builtin Error record (#671) owns the name, so the VM never takes a program's own struct for it.
+    main = "def main() -> Void\nend\n"
+    expect("struct Error\n  message: String\nend\n\n" + main, "CHECK-REDEFINED-NAME", (1, 1), tmp_path,
+           "struct Error\n  message: String\nend\n")
+    expect("enum Error\n  Bad\nend\n\n" + main, "CHECK-REDEFINED-NAME", (1, 1), tmp_path, "enum Error\n  Bad\nend\n")
+
+
 FN_FIELD = ("struct Hooks\n  run: Fn[Int, Int]\n  note: Fn[String, Void]\n  to_s: Fn[Int]\n  size: Int\nend\n\n"
             "struct Store[T]\n  get: Fn[String, T]\nend\n\n"
             "def one(n: Int) -> Int\n  return n\nend\n\n"

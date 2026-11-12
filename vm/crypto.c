@@ -213,7 +213,7 @@ static agc_value builtin_strict_decode64(agc_vm *vm, agc_value *args, uint32_t s
   const agc_string *s = agc_as_string(vm, args[0]);
   uint8_t *out = agc_alloc_atomic(s->bytes ? s->bytes : 1);
   size_t n = b64_strict((const uint8_t *)s->data, s->bytes, false, out);
-  if (n == SIZE_MAX) return agc_error_value("invalid base64");
+  if (n == SIZE_MAX) return agc_error(vm, "error", "invalid base64");
   return agc_result_value(true, byte_value(out, n));
 }
 
@@ -237,7 +237,7 @@ static agc_value builtin_urlsafe_decode64(agc_vm *vm, agc_value *args, uint32_t 
   } else {
     got = b64_strict(text, n, true, out);
   }
-  if (got == SIZE_MAX) return agc_error_value("invalid base64");
+  if (got == SIZE_MAX) return agc_error(vm, "error", "invalid base64");
   return agc_result_value(true, byte_value(out, got));
 }
 
@@ -272,12 +272,12 @@ static agc_value builtin_hexdecode(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   const agc_string *s = agc_as_string(vm, args[0]);
   const uint8_t *text = (const uint8_t *)s->data;
-  if (s->bytes % 2) return agc_error_value("invalid hex");
+  if (s->bytes % 2) return agc_error(vm, "error", "invalid hex");
   size_t n = s->bytes / 2;
   uint8_t *out = agc_alloc_atomic(n ? n : 1);
   for (size_t k = 0; k < n; k++) {
     int high = hex_value(text[2 * k]), low = hex_value(text[2 * k + 1]);
-    if (high < 0 || low < 0) return agc_error_value("invalid hex");
+    if (high < 0 || low < 0) return agc_error(vm, "error", "invalid hex");
     out[k] = (uint8_t)(high << 4 | low);
   }
   return agc_result_value(true, byte_value(out, n));
@@ -435,9 +435,9 @@ static agc_value des_ede3_cbc_value(agc_vm *vm, agc_value *args, uint32_t span, 
   const uint8_t *key = agc_bytes_data(vm, args[0], &key_n);
   const uint8_t *iv = agc_bytes_data(vm, args[1], &iv_n);
   const uint8_t *data = agc_bytes_data(vm, args[2], &n);
-  if (key_n != 16 && key_n != 24) return agc_error_value("Triple DES needs a key of 16 or 24 bytes");
-  if (iv_n != AGC_DES_BLOCK_BYTES) return agc_error_value("Triple DES CBC needs an iv of 8 bytes");
-  if (n % AGC_DES_BLOCK_BYTES != 0) return agc_error_value("Triple DES CBC needs data in whole blocks of 8 bytes");
+  if (key_n != 16 && key_n != 24) return agc_error(vm, "error", "Triple DES needs a key of 16 or 24 bytes");
+  if (iv_n != AGC_DES_BLOCK_BYTES) return agc_error(vm, "error", "Triple DES CBC needs an iv of 8 bytes");
+  if (n % AGC_DES_BLOCK_BYTES != 0) return agc_error(vm, "error", "Triple DES CBC needs data in whole blocks of 8 bytes");
   if (n == 0) return agc_result_value(true, agc_bytes_value(agc_empty_bytes()));
   agc_bytes *out = agc_new_bytes(n);
   cipher_compute(vm, encrypt, key, key_n, iv, data, n, out->data, span);
@@ -461,9 +461,9 @@ static agc_value cmac_value(agc_vm *vm, agc_value *args, uint32_t span, agc_cmac
   const uint8_t *key = agc_bytes_data(vm, args[0], &key_n);
   const uint8_t *data = agc_bytes_data(vm, args[1], &n);
   if (cipher == AGC_CMAC_AES && key_n != 16 && key_n != 24 && key_n != 32)
-    return agc_error_value("AES needs a key of 16, 24 or 32 bytes");
+    return agc_error(vm, "error", "AES needs a key of 16, 24 or 32 bytes");
   if (cipher == AGC_CMAC_DES_EDE3 && key_n != 16 && key_n != 24)
-    return agc_error_value("Triple DES needs a key of 16 or 24 bytes");
+    return agc_error(vm, "error", "Triple DES needs a key of 16 or 24 bytes");
   unsigned char tag[AGC_CMAC_MAX_BYTES];
   size_t len = cmac_compute(vm, cipher, key, key_n, data, n, tag, span);
   return agc_result_value(true, byte_value(tag, len));
@@ -500,12 +500,12 @@ static agc_value aes_256_gcm_value(agc_vm *vm, agc_value *args, uint32_t span, b
   const uint8_t *iv = agc_bytes_data(vm, args[1], &iv_n);
   const uint8_t *data = agc_bytes_data(vm, args[2], &n);
   const uint8_t *aad = agc_bytes_data(vm, args[3], &aad_n);
-  if (key_n != AGC_GCM_KEY_BYTES) return agc_error_value("AES-256-GCM needs a key of 32 bytes");
-  if (iv_n != AGC_GCM_IV_BYTES) return agc_error_value("AES-256-GCM needs an iv of 12 bytes");
+  if (key_n != AGC_GCM_KEY_BYTES) return agc_error(vm, "error", "AES-256-GCM needs a key of 32 bytes");
+  if (iv_n != AGC_GCM_IV_BYTES) return agc_error(vm, "error", "AES-256-GCM needs an iv of 12 bytes");
   if (!encrypt && n < AGC_GCM_TAG_BYTES)
-    return agc_error_value("AES-256-GCM needs the ciphertext with its 16-byte tag at the end");
+    return agc_error(vm, "error", "AES-256-GCM needs the ciphertext with its 16-byte tag at the end");
   size_t body = encrypt ? n : n - AGC_GCM_TAG_BYTES;
-  if ((uint64_t)body > AGC_GCM_MAX_BYTES) return agc_error_value("AES-256-GCM takes at most 2^36 - 32 bytes per iv");
+  if ((uint64_t)body > AGC_GCM_MAX_BYTES) return agc_error(vm, "error", "AES-256-GCM takes at most 2^36 - 32 bytes per iv");
   if (encrypt) {
     /* The ciphertext and then the tag, written in place. */
     agc_bytes *out = agc_new_bytes(n + AGC_GCM_TAG_BYTES);
@@ -516,7 +516,7 @@ static agc_value aes_256_gcm_value(agc_vm *vm, agc_value *args, uint32_t span, b
   memcpy(tag, data + body, sizeof tag);
   agc_bytes *out = body ? agc_new_bytes(body) : NULL;
   if (!gcm_compute(vm, false, key, iv, aad, aad_n, data, body, out ? out->data : NULL, tag, span))
-    return agc_error_value("AES-256-GCM: the tag does not match the key, iv, data and auth_data");
+    return agc_error(vm, "error", "AES-256-GCM: the tag does not match the key, iv, data and auth_data");
   return agc_result_value(true, agc_bytes_value(out ? out : agc_empty_bytes()));
 }
 
@@ -552,7 +552,7 @@ static agc_value builtin_rsa_public_encrypt_oaep(agc_vm *vm, agc_value *args, ui
   const agc_string *pem = agc_as_string(vm, args[0]);
   size_t n;
   const uint8_t *data = agc_bytes_data(vm, args[1], &n);
-  if (pem->bytes > RSA_MAX_PEM_BYTES) return agc_error_value("RSA: the PEM text has more than 65536 bytes");
+  if (pem->bytes > RSA_MAX_PEM_BYTES) return agc_error(vm, "error", "RSA: the PEM text has more than 65536 bytes");
   unsigned char out[AGC_RSA_MAX_BYTES];
   size_t len = 0;
   agc_rsa_status status = rsa_compute(pem->data, pem->bytes, data, n, out, &len);
@@ -561,17 +561,17 @@ static agc_value builtin_rsa_public_encrypt_oaep(agc_vm *vm, agc_value *args, ui
   if (status == AGC_RSA_FAILED) agc_fail(vm, "RUNTIME-INTERNAL", "RSA-OAEP is not available", span);
   switch (status) {
     case AGC_RSA_DONE: return agc_result_value(true, byte_value(out, len));
-    case AGC_RSA_BAD_PEM: return agc_error_value("RSA: the text holds no PEM public key");
-    case AGC_RSA_NOT_RSA: return agc_error_value("RSA: the public key is not an RSA key");
+    case AGC_RSA_BAD_PEM: return agc_error(vm, "error", "RSA: the text holds no PEM public key");
+    case AGC_RSA_NOT_RSA: return agc_error(vm, "error", "RSA: the public key is not an RSA key");
     case AGC_RSA_TOO_LONG: {
       char message[96];
       snprintf(message, sizeof message, "RSA: the data takes at most %zu bytes with this key", len);
-      return agc_error_value(message);
+      return agc_error(vm, "error", message);
     }
     case AGC_RSA_BAD_KEY:
     case AGC_RSA_FAILED: break;
   }
-  return agc_error_value("RSA: the key cannot encrypt");
+  return agc_error(vm, "error", "RSA: the key cannot encrypt");
 }
 
 /* The most bytes of a KDF password, salt or output: 1 MiB, the cap of the OpenSSL.Random counts. Real ones are tens of
@@ -669,11 +669,11 @@ static agc_value kdf_value(agc_vm *vm, agc_value *args, size_t length_at, const 
   const uint8_t *salt = agc_bytes_data(vm, args[1], &salt_n);
   int64_t length = agc_as_int(vm, args[length_at]);
   if (password_n > KDF_MAX_BYTES || salt_n > KDF_MAX_BYTES)
-    return agc_error_value("a KDF password and salt have at most 1048576 bytes each");
-  if (length < 1 || (uint64_t)length > KDF_MAX_BYTES) return agc_error_value("a KDF length is 1 to 1048576 bytes");
+    return agc_error(vm, "error", "a KDF password and salt have at most 1048576 bytes each");
+  if (length < 1 || (uint64_t)length > KDF_MAX_BYTES) return agc_error(vm, "error", "a KDF length is 1 to 1048576 bytes");
   uint64_t blocks = ((uint64_t)length + AGC_SHA256_BYTES - 1) / AGC_SHA256_BYTES, rounds;
   if (!kdf->scrypt && (__builtin_mul_overflow(kdf->iterations, blocks, &rounds) || rounds > PBKDF2_MAX_WORK))
-    return agc_error_value("OpenSSL.KDF.pbkdf2_hmac_sha256 needs iterations * ceil(length / 32) of at most 50000000");
+    return agc_error(vm, "error", "OpenSSL.KDF.pbkdf2_hmac_sha256 needs iterations * ceil(length / 32) of at most 50000000");
   if (vm->rt->no_files) agc_fail(vm, "RUNTIME-INTERNAL", "the thread pool is off in this run", span);
   agc_task_check_park(vm, "a callback of native code cannot wait for a KDF call", span);
   kdf_job *k = calloc(1, sizeof *k);
@@ -696,7 +696,7 @@ static agc_value kdf_value(agc_vm *vm, agc_value *args, size_t length_at, const 
    PBKDF2_MAX_WORK is an error Result. No shared lock, as digest_value. */
 static agc_value builtin_pbkdf2_hmac_sha256(agc_vm *vm, agc_value *args, uint32_t span) {
   int64_t iterations = agc_as_int(vm, args[2]);
-  if (iterations < 1) return agc_error_value("OpenSSL.KDF.pbkdf2_hmac_sha256 needs at least 1 iteration");
+  if (iterations < 1) return agc_error(vm, "error", "OpenSSL.KDF.pbkdf2_hmac_sha256 needs at least 1 iteration");
   kdf_params kdf = {.iterations = (uint64_t)iterations};
   return kdf_value(vm, args, 3, &kdf, span);
 }
@@ -708,20 +708,20 @@ static agc_value builtin_pbkdf2_hmac_sha256(agc_vm *vm, agc_value *args, uint32_
    before any work. No shared lock, as digest_value. */
 static agc_value builtin_scrypt(agc_vm *vm, agc_value *args, uint32_t span) {
   int64_t n = agc_as_int(vm, args[2]), r = agc_as_int(vm, args[3]), p = agc_as_int(vm, args[4]);
-  if (n < 2 || (n & (n - 1)) != 0) return agc_error_value("OpenSSL.KDF.scrypt needs n to be a power of 2 above 1");
-  if (r < 1 || p < 1) return agc_error_value("OpenSSL.KDF.scrypt needs r and p of at least 1");
-  if (p > ((1 << 30) - 1) / r) return agc_error_value("OpenSSL.KDF.scrypt needs r * p below 2^30");
+  if (n < 2 || (n & (n - 1)) != 0) return agc_error(vm, "error", "OpenSSL.KDF.scrypt needs n to be a power of 2 above 1");
+  if (r < 1 || p < 1) return agc_error(vm, "error", "OpenSSL.KDF.scrypt needs r and p of at least 1");
+  if (p > ((1 << 30) - 1) / r) return agc_error(vm, "error", "OpenSSL.KDF.scrypt needs r * p below 2^30");
   /* RFC 7914 §2: n < 2^(128 * r / 8). Only r <= 3 can meet it, since n fits in 63 bits. */
   if (r < 4 && (uint64_t)n >= (uint64_t)1 << (16 * r))
-    return agc_error_value("OpenSSL.KDF.scrypt needs n below 2^(16 * r)");
+    return agc_error(vm, "error", "OpenSSL.KDF.scrypt needs n below 2^(16 * r)");
   uint64_t lanes, memory, rounds;
   /* r * p is below 2^30, so only the product with n + 16 can overflow. */
   if (__builtin_add_overflow((uint64_t)n, (uint64_t)16, &rounds) ||
       __builtin_mul_overflow(rounds, (uint64_t)r * (uint64_t)p, &rounds) || rounds > SCRYPT_MAX_WORK)
-    return agc_error_value("OpenSSL.KDF.scrypt needs r * p * (n + 16) of at most 2^25");
+    return agc_error(vm, "error", "OpenSSL.KDF.scrypt needs r * p * (n + 16) of at most 2^25");
   bool big = __builtin_add_overflow((uint64_t)n, (uint64_t)p + 2, &lanes) ||
              __builtin_mul_overflow(lanes, (uint64_t)r * 128, &memory) || memory > SCRYPT_MAX_MEMORY;
-  if (big) return agc_error_value("OpenSSL.KDF.scrypt needs 128 * r * (n + p + 2) bytes of memory at most 1025 MiB");
+  if (big) return agc_error(vm, "error", "OpenSSL.KDF.scrypt needs 128 * r * (n + p + 2) bytes of memory at most 1025 MiB");
   kdf_params kdf = {.scrypt = true, .n = (uint64_t)n, .r = (uint64_t)r, .p = (uint64_t)p};
   return kdf_value(vm, args, 5, &kdf, span);
 }

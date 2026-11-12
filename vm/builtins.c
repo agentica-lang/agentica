@@ -56,7 +56,7 @@ static agc_value builtin_gets(agc_vm *vm, agc_value *args, uint32_t span) {
   if (status == AGC_INPUT_WAIT) return agc_void();
   if (status == AGC_INPUT_OK) return agc_result_value(true, agc_string_value(line));
   size_t n = sizeof end_of_input - 1;
-  return agc_result_value(false, agc_string_value(agc_make_string(end_of_input, n, n)));
+  return agc_error_string(vm, "error", agc_make_string(end_of_input, n, n));
 }
 
 static agc_value builtin_gets_bang(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -76,20 +76,20 @@ static agc_value builtin_read(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_string_value(text);
 }
 
-static agc_value text_error(const char *text) {
+static agc_value text_error(agc_vm *vm, const char *text) {
   size_t n = strlen(text);
-  return agc_result_value(false, agc_string_value(agc_make_string(text, n, n)));
+  return agc_error_string(vm, "error", agc_make_string(text, n, n));
 }
 
 /* IO.read_bytes(count): up to count bytes of stdin, as a Bytes. */
 static agc_value builtin_read_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   int64_t count = agc_as_int(vm, args[0]);
-  if (count < 0 || count > AGC_MAX_READ_BYTES) return text_error("byte count must be between 0 and 1048576");
+  if (count < 0 || count > AGC_MAX_READ_BYTES) return text_error(vm, "byte count must be between 0 and 1048576");
   const agc_bytes *bytes = NULL;
   agc_input_status status = agc_input_bytes(vm, (size_t)count, &bytes);
   if (status == AGC_INPUT_WAIT) return agc_void();
-  if (status == AGC_INPUT_FAILED) return text_error("input read failed");
+  if (status == AGC_INPUT_FAILED) return text_error(vm, "input read failed");
   return agc_result_value(true, agc_bytes_value(bytes));
 }
 
@@ -373,10 +373,23 @@ static agc_value builtin_ok_void(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_result_value(true, agc_void());
 }
 
+/* error(x): a String from a front end that has no Error record becomes an error of kind "error" made here, when the
+   program has the struct; an Error is kept as it is (re-raised), unless its location is empty. Lowering leaves it empty
+   in a prelude function, whose own position would mean nothing to the user, so it is filled here with the place of
+   the user's call, which agc_error_location finds by skipping the prelude frames. */
 static agc_value builtin_error(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
-  agc_as_string(vm, args[0]);
-  return agc_result_value(false, args[0]);
+  if (!agc_is_error(vm, args[0])) {
+    agc_string *message = agc_as_string(vm, args[0]);
+    if (vm->rt->error_struct == UINT32_MAX) return agc_result_value(false, args[0]);
+    return agc_error_string(vm, "error", message);
+  }
+  const agc_struct *e = agc_as_struct(vm, args[0]);
+  if (agc_as_string(vm, e->fields[AGC_ERROR_LOCATION])->bytes) return agc_result_value(false, args[0]);
+  agc_struct *placed = agc_new_struct(e->type, e->n);
+  memcpy(placed->fields, e->fields, AGC_ERROR_FIELDS * sizeof(agc_value));
+  placed->fields[AGC_ERROR_LOCATION] = agc_string_value(agc_error_location(vm));
+  return agc_result_value(false, agc_struct_value(placed));
 }
 
 /* In plain_leaves (vm/jit/jit.c): it must never agc_fail once its argument tags are right. */
@@ -387,7 +400,7 @@ static agc_value builtin_result_ok(agc_vm *vm, agc_value *args, uint32_t span) {
 
 static agc_value builtin_result_unwrap(agc_vm *vm, agc_value *args, uint32_t span) {
   const agc_result *r = agc_as_result(vm, args[0]);
-  if (!r->ok) agc_fail_text(vm, "RUNTIME-UNWRAP-ERROR", agc_as_string(vm, r->value), span);
+  if (!r->ok) agc_fail_text(vm, "RUNTIME-UNWRAP-ERROR", agc_error_halt_text(vm, r->value), span);
   return r->value;
 }
 
@@ -401,7 +414,7 @@ static agc_value builtin_result_message(agc_vm *vm, agc_value *args, uint32_t sp
   (void)span;
   const agc_result *r = agc_as_result(vm, args[0]);
   if (r->ok) return agc_string_value(vm->rt->empty_string);
-  return r->value;
+  return agc_string_value(agc_error_message(vm, r->value));
 }
 
 /* == and != on two lists, maps, sets, Results, Optionals, structs or enums (Value.equal and Optional.equal): the deep
@@ -460,7 +473,7 @@ static agc_value builtin_range_include(agc_vm *vm, agc_value *args, uint32_t spa
 
 static agc_value range_end(agc_vm *vm, agc_value v, bool first_end) {
   int64_t first, last;
-  if (!agc_range_bounds(agc_as_range(vm, v), &first, &last)) return text_error("the range is empty");
+  if (!agc_range_bounds(agc_as_range(vm, v), &first, &last)) return text_error(vm, "the range is empty");
   return agc_result_value(true, agc_int(first_end ? first : last));
 }
 
@@ -580,8 +593,7 @@ const agc_builtin *agc_find_builtin(const uint8_t *name, size_t len, uint32_t ar
 
 bool agc_builtin_prelude_only(const agc_builtin *b) { return b->name[0] == '_' && b->name[1] == '_'; }
 
-uint32_t agc_builtin_struct(agc_vm *vm, const char *name, const char *const *fields, uint32_t count) {
-  const agc_program *p = vm->rt->program;
+static uint32_t find_struct(const agc_program *p, const char *name, const char *const *fields, uint32_t count) {
   for (uint32_t k = 0; k < p->struct_count; k++) {
     const agc_struct_def *d = &p->structs[k];
     if (d->name->bytes != strlen(name) || memcmp(d->name->data, name, d->name->bytes) != 0 || d->count != count) continue;
@@ -590,6 +602,47 @@ uint32_t agc_builtin_struct(agc_vm *vm, const char *name, const char *const *fie
       same = same && d->fields[f]->bytes == strlen(fields[f]) && memcmp(d->fields[f]->data, fields[f], d->fields[f]->bytes) == 0;
     if (same) return k;
   }
+  return UINT32_MAX;
+}
+
+/* Whether type index AT of P is KIND and, for a Map or an Optional, holds an item of kind ITEM (with arg ITEM_ARG
+   when ITEM is AGC_TYPE_STRUCT). The loader checked every index, so the reads stay in the table. */
+static bool type_is(const agc_program *p, uint32_t at, uint32_t kind, uint32_t item, uint32_t item_arg) {
+  const agc_type *t = &p->types[at];
+  if (t->kind != kind) return false;
+  if (kind != AGC_TYPE_MAP && kind != AGC_TYPE_OPTIONAL) return true;
+  const agc_type *in = &p->types[t->arg];
+  return in->kind == item && (item != AGC_TYPE_STRUCT || in->arg == item_arg);
+}
+
+/* The field types of struct K are those of the builtin Error: String, String, Optional[Int], Map[String, String],
+   Optional[Error] and String. The front end gives a builtin record of JSON-able fields its types (builtin_decodable,
+   compiler/lower/lower_program.agc), so a struct without them is not the builtin one. */
+static bool error_types(const agc_program *p, uint32_t k) {
+  const uint32_t *t = p->structs[k].field_types;
+  return t && type_is(p, t[AGC_ERROR_KIND], AGC_TYPE_STRING, 0, 0) &&
+         type_is(p, t[AGC_ERROR_MESSAGE], AGC_TYPE_STRING, 0, 0) &&
+         type_is(p, t[AGC_ERROR_CODE], AGC_TYPE_OPTIONAL, AGC_TYPE_INT, 0) &&
+         type_is(p, t[AGC_ERROR_DETAILS], AGC_TYPE_MAP, AGC_TYPE_STRING, 0) &&
+         type_is(p, t[AGC_ERROR_CAUSE], AGC_TYPE_OPTIONAL, AGC_TYPE_STRUCT, k) &&
+         type_is(p, t[AGC_ERROR_LOCATION], AGC_TYPE_STRING, 0, 0);
+}
+
+uint32_t agc_error_struct(const agc_program *program) {
+  static const char *const fields[AGC_ERROR_FIELDS] = {"kind", "message", "code", "details", "cause", "location"};
+  /* code and cause are Optionals: without the enum an Error could not be built, so the program keeps String errors. */
+  if (!program || program->optional == UINT32_MAX || program->optional >= program->variant_count ||
+      !program->variants[program->optional].shared)
+    return UINT32_MAX;
+  /* The name is reserved, but a .agcb from before the reservation, or a hand-made one, may hold a struct Error of its
+     own whose fields the checker typed otherwise: filling it with an Error's values would break those types. */
+  uint32_t found = find_struct(program, "Error", fields, AGC_ERROR_FIELDS);
+  return found != UINT32_MAX && error_types(program, found) ? found : UINT32_MAX;
+}
+
+uint32_t agc_builtin_struct(agc_vm *vm, const char *name, const char *const *fields, uint32_t count) {
+  uint32_t found = find_struct(vm->rt->program, name, fields, count);
+  if (found != UINT32_MAX) return found;
   size_t size = agc_size_add(strlen(name), 48);
   char *message = agc_alloc_atomic(size);
   snprintf(message, size, "invalid bytecode: the %s struct is missing", name);

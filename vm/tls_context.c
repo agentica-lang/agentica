@@ -83,7 +83,7 @@ static agc_value expired(agc_vm *vm, void *data, agc_value context) {
   (void)vm;
   (void)data;
   (void)context;
-  return agc_error_value("network: operation timed out");
+  return agc_error(vm, "error", "network: operation timed out");
 }
 
 static void drop(CC_FREES void *data) { free_build(data); }
@@ -147,11 +147,11 @@ static agc_value start_build(agc_vm *vm, agc_value options, bool server, uint32_
   const agc_string *field[CLIENT_FIELDS - 1] = {NULL};
   size_t paths = server ? SERVER_FIELDS - 1 : CLIENT_FIELDS - 1;
   for (size_t k = 0; k < paths; k++) field[k] = agc_as_string(vm, o->fields[k]);
-  if (vm->rt->deny_net) return agc_error_value(AGC_DENIED_NET);
+  if (vm->rt->deny_net) return agc_error(vm, "error", AGC_DENIED_NET);
   agc_value alpn = o->fields[server ? 2 : 3];
   size_t alpn_len;
   const char *refused = alpn_size(vm, alpn, &alpn_len);
-  if (refused) return agc_error_value(refused);
+  if (refused) return agc_error(vm, "error", refused);
   agc_task_check_park(vm, "a callback of native code cannot wait for a TLS context", span);
   size_t protocols;
   uint8_t *wire = alpn_of(vm, alpn, alpn_len, &protocols);
@@ -173,7 +173,7 @@ static agc_value start_build(agc_vm *vm, agc_value options, bool server, uint32_
     refused = AGC_DENIED_FS;
   if (refused) {
     free_build(b);
-    return agc_error_value(refused);
+    return agc_error(vm, "error", refused);
   }
   agc_io_start(vm, &context_io, b, agc_void(), -1);
   return agc_void();

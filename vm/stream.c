@@ -26,23 +26,23 @@ static const char *const timed_out[] = {"network: operation timed out", "process
 
 /* The error of a text read whose bytes are not UTF-8: it names the offset (from 0) of the first byte that does not
    start a valid character. */
-agc_value agc_utf8_error(const uint8_t *data, size_t len) {
+agc_value agc_utf8_error(agc_vm *vm, const uint8_t *data, size_t len) {
   char message[64];
   snprintf(message, sizeof message, "invalid UTF-8 at byte %zu", agc_utf8_bad_at(data, len));
-  return agc_error_value(message);
+  return agc_error(vm, "error", message);
 }
 
 #if !defined(__linux__) && !defined(__APPLE__) && !defined(_WIN32)
 agc_value agc_system_error(agc_vm *vm, const char *what, int err) {
   (void)vm;
   (void)err;
-  return agc_error_value(what);
+  return agc_error(vm, "error", what);
 }
 #endif
 
-agc_value agc_stream_bad_timeout(agc_stream_area area) { return agc_error_value(bad_timeout[area]); }
+agc_value agc_stream_bad_timeout(agc_vm *vm, agc_stream_area area) { return agc_error(vm, "error", bad_timeout[area]); }
 
-agc_value agc_stream_timed_out(agc_stream_area area) { return agc_error_value(timed_out[area]); }
+agc_value agc_stream_timed_out(agc_vm *vm, agc_stream_area area) { return agc_error(vm, "error", timed_out[area]); }
 
 agc_value agc_stream_written(agc_vm *vm, int status) {
   static const char write_failed[] = "could not write to the stream";
@@ -59,12 +59,12 @@ agc_resource *agc_new_lock(agc_vm *vm) {
 
 bool agc_stream_lock(agc_vm *vm, agc_resource *lock, agc_stream_area area, int64_t *timeout, agc_value *result) {
   if (*timeout <= 0) {
-    *result = agc_stream_bad_timeout(area);
+    *result = agc_stream_bad_timeout(vm, area);
     return false;
   }
   agc_lock_status status = agc_handle_wait(vm, lock, timeout);
   if (status == AGC_LOCK_TAKEN) return true;
-  *result = status == AGC_LOCK_WAIT ? agc_void() : agc_stream_timed_out(area);
+  *result = status == AGC_LOCK_WAIT ? agc_void() : agc_stream_timed_out(vm, area);
   return false;
 }
 
@@ -174,11 +174,11 @@ static agc_cut_status spot_line(agc_inbuf *b, const uint8_t **data, size_t *len,
 
 static agc_value line_value(agc_vm *vm, agc_cut_status status, int error, const uint8_t *data, size_t len,
                             const char *too_long, const char *at_end) {
-  if (status == AGC_CUT_OVER) return agc_error_value(too_long);
+  if (status == AGC_CUT_OVER) return agc_error(vm, "error", too_long);
   if (status == AGC_CUT_FAILED) return agc_system_error(vm, "could not read from the stream", error);
-  if (status == AGC_CUT_END) return agc_error_value(at_end);
+  if (status == AGC_CUT_END) return agc_error(vm, "error", at_end);
   size_t chars;
-  if (!agc_utf8_chars(data, len, &chars)) return agc_utf8_error(data, len);
+  if (!agc_utf8_chars(data, len, &chars)) return agc_utf8_error(vm, data, len);
   return agc_result_value(true, agc_string_value(agc_small_string(vm, (const char *)data, len, chars)));
 }
 

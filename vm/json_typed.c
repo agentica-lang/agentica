@@ -34,7 +34,8 @@ static agc_string *buffer_string(const agc_json_buffer *b) {
 
 /* The error Result "path: expected what". The path is the keys and indexes of the open frames; field, when not NULL,
    is a key of the object being decoded (the "tag" or "values" of an enum) that comes last. */
-static agc_value decode_error_in(const decode_frame *stack, size_t depth, const char *field, const char *expected) {
+static agc_value decode_error_in(agc_vm *vm, const decode_frame *stack, size_t depth, const char *field,
+                                 const char *expected) {
   agc_json_buffer b;
   b.cap = 64;
   b.len = 0;
@@ -67,11 +68,11 @@ static agc_value decode_error_in(const decode_frame *stack, size_t depth, const 
   if (!b.len) agc_json_put(&b, "$", 1);
   agc_json_put(&b, ": expected ", 11);
   agc_json_put(&b, expected, strlen(expected));
-  return agc_result_value(false, agc_string_value(buffer_string(&b)));
+  return agc_error_string(vm, "error", buffer_string(&b));
 }
 
-static agc_value decode_error(const decode_frame *stack, size_t depth, const char *expected) {
-  return decode_error_in(stack, depth, NULL, expected);
+static agc_value decode_error(agc_vm *vm, const decode_frame *stack, size_t depth, const char *expected) {
+  return decode_error_in(vm, stack, depth, NULL, expected);
 }
 
 /* The next child of a List, Map or struct frame and the kind and operand of its type. A missing key is false, except
@@ -194,12 +195,12 @@ static bool decode_variant(agc_vm *vm, const agc_json *j, uint32_t index, decode
   f->tagged = NULL; /* the slot may hold a frame that closed before */
   const agc_json_member *tag = agc_json_find(j, agc_json_ascii("tag", 3));
   if (!tag) {
-    *error = decode_error_in(stack, depth, "tag", "required field");
+    *error = decode_error_in(vm, stack, depth, "tag", "required field");
     return false;
   }
   const agc_json *name = agc_as_json(vm, tag->value);
   if (name->kind != AGC_JSON_STRING) {
-    *error = decode_error_in(stack, depth, "tag", "String");
+    *error = decode_error_in(vm, stack, depth, "tag", "String");
     return false;
   }
   const agc_string *text = agc_as_string(vm, name->scalar);
@@ -225,7 +226,7 @@ static bool decode_variant(agc_vm *vm, const agc_json *j, uint32_t index, decode
     }
     if (def->count > MAX_LISTED_VARIANTS) agc_json_put(&b, ", ...", 5);
     agc_json_put(&b, "", 1);
-    *error = decode_error_in(stack, depth, "tag", b.data);
+    *error = decode_error_in(vm, stack, depth, "tag", b.data);
     return false;
   }
   uint32_t id = (uint32_t)(found - p->variants);
@@ -235,19 +236,19 @@ static bool decode_variant(agc_vm *vm, const agc_json *j, uint32_t index, decode
   if (values) {
     const agc_json *array = agc_as_json(vm, values->value);
     if (array->kind != AGC_JSON_ARRAY) {
-      *error = decode_error_in(stack, depth, "values", "array");
+      *error = decode_error_in(vm, stack, depth, "values", "array");
       return false;
     }
     items = agc_as_list(vm, array->scalar);
     n = agc_list_len(items);
   } else if (found->arity) {
-    *error = decode_error_in(stack, depth, "values", "required field");
+    *error = decode_error_in(vm, stack, depth, "values", "required field");
     return false;
   }
   if (n != found->arity) {
     char expected[48];
     snprintf(expected, sizeof expected, "array of %u items", (unsigned)found->arity);
-    *error = decode_error_in(stack, depth, "values", expected);
+    *error = decode_error_in(vm, stack, depth, "values", expected);
     return false;
   }
   if (!found->arity) {
@@ -284,44 +285,44 @@ agc_value agc_json_decode(agc_vm *vm, agc_value root, uint32_t root_kind, uint32
     } else if (kind == AGC_TYPE_JSON_FIELD || kind == AGC_TYPE_OPTIONAL) {
       const agc_type *inner = &p->types[arg];
       const char *mismatch = nullable_mismatch(j, inner->kind);
-      if (mismatch) return decode_error(stack, depth, mismatch);
+      if (mismatch) return decode_error(vm, stack, depth, mismatch);
       stack = agc_json_grow(stack, &capacity, depth, sizeof(decode_frame));
       open_frame(vm, &stack[depth++], j, kind, arg);
       kind = inner->kind;
       arg = inner->arg;
       continue;
     } else if (kind == AGC_TYPE_INT) {
-      if (j->kind != AGC_JSON_INT) return decode_error(stack, depth, "signed 64-bit Int");
+      if (j->kind != AGC_JSON_INT) return decode_error(vm, stack, depth, "signed 64-bit Int");
       v = j->scalar;
     } else if (kind == AGC_TYPE_FLOAT) {
-      if (!agc_json_to_float(vm, j, &x)) return decode_error(stack, depth, "finite Float");
+      if (!agc_json_to_float(vm, j, &x)) return decode_error(vm, stack, depth, "finite Float");
       v = agc_float(x);
     } else if (kind == AGC_TYPE_BOOL) {
-      if (j->kind != AGC_JSON_BOOL) return decode_error(stack, depth, "Bool");
+      if (j->kind != AGC_JSON_BOOL) return decode_error(vm, stack, depth, "Bool");
       v = j->scalar;
     } else if (kind == AGC_TYPE_STRING) {
-      if (j->kind != AGC_JSON_STRING) return decode_error(stack, depth, "String");
+      if (j->kind != AGC_JSON_STRING) return decode_error(vm, stack, depth, "String");
       v = j->scalar;
     } else if (kind == AGC_TYPE_ENUM) {
-      if (j->kind != AGC_JSON_OBJECT) return decode_error(stack, depth, "object");
+      if (j->kind != AGC_JSON_OBJECT) return decode_error(vm, stack, depth, "object");
       stack = agc_json_grow(stack, &capacity, depth, sizeof(decode_frame));
       agc_value error;
       if (!decode_variant(vm, j, arg, &stack[depth], &v, &error, stack, depth)) return error;
       if (stack[depth].tagged) {
         depth++;
-        if (!next_child(p, &stack[depth - 1], &item, &kind, &arg)) return decode_error(stack, depth, "required field");
+        if (!next_child(p, &stack[depth - 1], &item, &kind, &arg)) return decode_error(vm, stack, depth, "required field");
         continue;
       }
     } else {
       bool list = kind == AGC_TYPE_LIST;
       if (j->kind != (list ? AGC_JSON_ARRAY : AGC_JSON_OBJECT))
-        return decode_error(stack, depth, list ? "array" : "object");
+        return decode_error(vm, stack, depth, list ? "array" : "object");
       stack = agc_json_grow(stack, &capacity, depth, sizeof(decode_frame));
       decode_frame *f = &stack[depth];
       open_frame(vm, f, j, kind, arg);
       if (f->n) {
         depth++;
-        if (!next_child(p, f, &item, &kind, &arg)) return decode_error(stack, depth, "required field");
+        if (!next_child(p, f, &item, &kind, &arg)) return decode_error(vm, stack, depth, "required field");
         continue;
       }
       v = frame_value(p, f);
@@ -332,7 +333,7 @@ agc_value agc_json_decode(agc_vm *vm, agc_value root, uint32_t root_kind, uint32
       decode_frame *top = &stack[depth - 1];
       store_child(vm, top, v);
       if (++top->next < top->n) {
-        if (!next_child(p, top, &item, &kind, &arg)) return decode_error(stack, depth, "required field");
+        if (!next_child(p, top, &item, &kind, &arg)) return decode_error(vm, stack, depth, "required field");
         break;
       }
       v = frame_value(p, top);

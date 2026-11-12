@@ -638,8 +638,8 @@ static spec pair_spec(const agc_instr *first, uint32_t first_count, const agc_in
   return s;
 }
 
-/* The constant 2 that a file with SPEC's extra constant loads to. */
-static agc_value loaded_constant(spec s) {
+/* The program of a file built from SPEC, which must load. */
+static agc_program *loaded(spec s) {
   buffer b = build(s);
   agc_program *p;
   char error[160] = "";
@@ -647,8 +647,11 @@ static agc_value loaded_constant(spec s) {
   free(b.data);
   if (!ok) fprintf(stderr, "unexpected rejection: %s\n", error);
   assert(ok);
-  return p->constants[2];
+  return p;
 }
+
+/* The constant 2 that a file with SPEC's extra constant loads to. */
+static agc_value loaded_constant(spec s) { return loaded(s)->constants[2]; }
 
 /* Constant kind 7 is a Bytes of any content (here not UTF-8), the shared empty Bytes when it has none; a length
    past the end of the file is refused before anything is allocated for it. */
@@ -1192,6 +1195,102 @@ static bool loads_enums(uint32_t enum_arg, const buffer *tail, const char *reaso
   bool ok = loads(s, reason);
   free(t.data);
   return ok;
+}
+
+/* agc_source.stored, which the location of an error shows: the stored name without the "./" of a user file in a std/
+ * folder, kept when --source-root joins a folder to the name. */
+static void stored_name_tests(void) {
+  static const char *const names[][2] = {{"main.agc", "main.agc"}, {"./std/helper.agc", "std/helper.agc"}, {"./", ""}};
+  for (size_t k = 0; k < sizeof names / sizeof names[0]; k++) {
+    spec s = base();
+    s.name = names[k][0];
+    agc_program *p = loaded(s);
+    assert(is_name(p->sources[0].stored, names[k][1]));
+    assert(agc_program_set_source_root(p, "root", 4));
+    assert(is_name(p->sources[0].stored, names[k][1]) && p->sources[0].name->bytes > p->sources[0].stored->bytes);
+  }
+}
+
+/* The builtin Error struct (#671): a struct named Error with FIELDS, and the Optional enum when OPTIONAL. With TYPES
+   (indexes into Int, String, Optional[Int], Map[String, String], Error, Optional[Error]; needs OPTIONAL) the struct
+   is decodable with those field types, as the front end writes a builtin record. */
+static buffer error_tables(const char *const *fields, uint32_t count, bool optional, const uint32_t *types) {
+  static const uint8_t kinds[] = {AGC_TYPE_INT, AGC_TYPE_STRING, AGC_TYPE_OPTIONAL, AGC_TYPE_MAP, AGC_TYPE_STRUCT,
+                                  AGC_TYPE_OPTIONAL};
+  static const uint32_t args[] = {0, 0, 0, 1, 0, 4};
+  buffer t;
+  t.data = malloc(512);
+  assert(t.data);
+  t.len = 0;
+  u32(&t, 1);
+  str(&t, "Error");
+  u32(&t, count);
+  for (uint32_t k = 0; k < count; k++) str(&t, fields[k]);
+  u32(&t, types ? 6 : 0);
+  for (uint32_t k = 0; types && k < 6; k++) {
+    u8(&t, kinds[k]);
+    if (kinds[k] >= AGC_TYPE_LIST) u32(&t, args[k]);
+  }
+  u32(&t, types ? 1 : 0);
+  if (types) {
+    u32(&t, 0);
+    str(&t, "Error");
+    for (uint32_t k = 0; k < count; k++) u32(&t, types[k]);
+  }
+  u32(&t, optional ? 1 : 0);
+  if (optional) {
+    str(&t, "Optional");
+    u32(&t, 2);
+    str(&t, "None");
+    u32(&t, 0);
+    str(&t, "Some");
+    u32(&t, 1);
+  }
+  return t;
+}
+
+/* What error("boom") gives in a file with TABLES (none when NULL): the payload, and the struct the run found. */
+static agc_value error_payload(const buffer *tables, uint32_t *found) {
+  spec s = base();
+  s.tables = tables;
+  agc_vm *vm = agc_alloc(sizeof *vm);
+  agc_vm_init(vm, loaded(s), stdout, stderr, INT64_MAX);
+  *found = vm->rt->error_struct;
+  agc_value message = agc_string_value(agc_make_string("boom", 4, 4));
+  const agc_result *r = agc_as_result(vm, agc_find_builtin((const uint8_t *)"error", 5, 1)->fn(vm, &message, 0));
+  assert(!r->ok);
+  assert(is_name(agc_error_message(vm, r->value), "boom"));
+  return r->value;
+}
+
+/* agc_vm_init finds the Error struct by its name, exact fields and field types, with the Optional enum its code and
+ * cause need; a look-alike (other fields, other types, no types), a file without it or without Optional keep String
+ * errors, as an older front end makes them. */
+static void error_struct_tests(void) {
+  static const char *const exact[] = {"kind", "message", "code", "details", "cause", "location"};
+  static const char *const moved[] = {"message", "kind", "code", "details", "cause", "location"};
+  static const uint32_t typed[] = {1, 1, 2, 3, 5, 1};
+  static const uint32_t retyped[] = {1, 1, 2, 3, 5, 0};
+  uint32_t found;
+  buffer t = error_tables(exact, 6, true, typed);
+  agc_value e = error_payload(&t, &found);
+  assert(found == 0 && agc_is(e, AGC_T_STRUCT));
+  const agc_struct *fields = e.as.p;
+  assert(fields->type == 0 && fields->n == AGC_ERROR_FIELDS);
+  assert(is_name(fields->fields[AGC_ERROR_KIND].as.p, "error"));
+  assert(agc_is(fields->fields[AGC_ERROR_CODE], AGC_T_ENUM) && agc_is(fields->fields[AGC_ERROR_CAUSE], AGC_T_ENUM));
+  assert(((const agc_map *)fields->fields[AGC_ERROR_DETAILS].as.p)->size == 0);
+  /* No frame of the program runs: the location is empty, as for a detached job's done half. */
+  assert(is_name(fields->fields[AGC_ERROR_LOCATION].as.p, ""));
+  free(t.data);
+  const buffer others[] = {error_tables(moved, 6, true, typed), error_tables(exact, 5, true, NULL),
+                           error_tables(exact, 6, false, NULL), error_tables(exact, 6, true, NULL),
+                           error_tables(exact, 6, true, retyped)};
+  for (size_t k = 0; k < sizeof others / sizeof others[0]; k++) {
+    assert(agc_is(error_payload(&others[k], &found), AGC_T_STRING) && found == UINT32_MAX);
+    free(others[k].data);
+  }
+  assert(agc_is(error_payload(NULL, &found), AGC_T_STRING) && found == UINT32_MAX);
 }
 
 static void json_enum_tests(void) {
@@ -2132,6 +2231,8 @@ int main(void) {
   line_index_tests();
   table_count_tests();
   json_enum_tests();
+  error_struct_tests();
+  stored_name_tests();
   collector_tests();
   test_fuzz_timed_waits();
 

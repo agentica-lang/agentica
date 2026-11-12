@@ -167,12 +167,12 @@ static void check_step_error(agc_zstep_status status, agc_value error, const cha
 /* A bad level is an encoder's error and a bad max_bytes a decoder's; each
    kind ignores the other argument. Lazy max_bytes has no upper bound. */
 static void test_zstep_check(void) {
-  check_error(agc_zstep_check(0, 10, 1), "zlib: level must be between 0 and 9");
-  check_error(agc_zstep_check(2, -1, 1), "zlib: level must be between 0 and 9");
-  check_error(agc_zstep_check(3, 6, 0), "zlib: max_bytes must be at least 1");
-  check_error(agc_zstep_check(5, 6, -1), "zlib: max_bytes must be at least 1");
-  assert(agc_is(agc_zstep_check(1, 9, 0), AGC_T_VOID));
-  assert(agc_is(agc_zstep_check(4, 99, INT64_MAX), AGC_T_VOID));
+  check_error(agc_zstep_check(&vm, 0, 10, 1), "zlib: level must be between 0 and 9");
+  check_error(agc_zstep_check(&vm, 2, -1, 1), "zlib: level must be between 0 and 9");
+  check_error(agc_zstep_check(&vm, 3, 6, 0), "zlib: max_bytes must be at least 1");
+  check_error(agc_zstep_check(&vm, 5, 6, -1), "zlib: max_bytes must be at least 1");
+  assert(agc_is(agc_zstep_check(&vm, 1, 9, 0), AGC_T_VOID));
+  assert(agc_is(agc_zstep_check(&vm, 4, 99, INT64_MAX), AGC_T_VOID));
 }
 
 /* The streams write and read the independent vectors byte for byte, the

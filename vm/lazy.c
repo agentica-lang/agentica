@@ -94,9 +94,9 @@ static agc_step lazy_call2(agc_value fn, agc_value first, agc_value second) {
   return (agc_step){.kind = AGC_STEP_CALL2, .value = first, .second = second, .fn = fn};
 }
 
-static agc_value lazy_error(const char *message) {
+static agc_value lazy_error(agc_vm *vm, const char *message) {
   size_t len = strlen(message);
-  return agc_result_value(false, agc_string_value(agc_make_string(message, len, len)));
+  return agc_error_string(vm, "error", agc_make_string(message, len, len));
 }
 
 /* Argument 1 of the prelude function is the bad one: the count of take, drop, first, each_slice and each_cons, the
@@ -252,7 +252,7 @@ static agc_value builtin_zlib(agc_vm *vm, agc_value *args, uint32_t span) {
   lazy_node *node = lazy_new_step(vm, args[0], LAZY_ZLIB, agc_void(), kind);
   node->level = agc_as_int(vm, args[2]);
   node->cap = agc_as_int(vm, args[3]);
-  node->value = agc_zstep_check(kind, node->level, node->cap);
+  node->value = agc_zstep_check(vm, kind, node->level, node->cap);
   return agc_lazy_value(node);
 }
 
@@ -295,7 +295,7 @@ static void lazy_end_at(lazy_run *run, size_t stage) {
   if (run->ended < stage + 1) run->ended = stage + 1;
 }
 
-static agc_value lazy_finish(lazy_run *run) {
+static agc_value lazy_finish(agc_vm *vm, lazy_run *run) {
   switch (run->terminal) {
     case LAZY_TO_A: return agc_result_value(true, agc_list_value(agc_list_from_array(run->out, run->out_len)));
     case LAZY_EACH: return agc_result_value(true, agc_void());
@@ -304,7 +304,7 @@ static agc_value lazy_finish(lazy_run *run) {
     case LAZY_WRITE_BYTES: return agc_result_value(true, agc_int(run->written));
     case LAZY_FIND: break;
   }
-  return lazy_error("not found");
+  return lazy_error(vm, "not found");
 }
 
 /* The calls of a run that touch shared state: the line reader and writer start file jobs and close the handle, a
@@ -498,7 +498,7 @@ static lazy_pull lazy_io(agc_vm *vm, lazy_run *run, const lazy_node *source, agc
     switch (lazy_receive(vm, source, &run->item)) {
       case AGC_RECV_VALUE: return NEXT_ITEM;
       case AGC_RECV_CLOSED: return NEXT_NONE;
-      case AGC_RECV_TIMED_OUT: *call = lazy_end(lazy_error("channel: timed out")); return NEXT_STEP;
+      case AGC_RECV_TIMED_OUT: *call = lazy_end(lazy_error(vm, "channel: timed out")); return NEXT_STEP;
       case AGC_RECV_WAIT: break;
     }
   } else {
@@ -655,7 +655,7 @@ static agc_step lazy_step(agc_vm *vm, agc_stepper *self, agc_value last) {
       lazy_pull pulled = lazy_next(vm, run, &step);
       if (pulled == NEXT_STEP) return step.kind == AGC_STEP_END ? lazy_done(vm, run, step.value, agc_void()) : step;
       if (pulled == NEXT_NONE) {
-        if (run->ended > run->count) return lazy_done(vm, run, lazy_finish(run), agc_void());
+        if (run->ended > run->count) return lazy_done(vm, run, lazy_finish(vm, run), agc_void());
         continue;
       }
       /* Both run: the charge of the stages before must not be skipped when the step count ends the turn first. */
