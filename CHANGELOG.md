@@ -23,6 +23,12 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   `error(e) if e.message == "x"` for `error("x") ->`; `"#{e}"` and `puts(e)`
   still give the message, but `e.inspect` gives `error("boom")` (was
   `"boom"`) and `JSON.encode(e)` gives the record (was `"boom"`).
+- `BDD.given_program` compiles each program once per run and starts its
+  bytecode, instead of going through the front end in every scenario (#1458).
+  When such a start fails, its message begins with `agentica run:`.
+- `agentica compile` reads and writes the bytecode cache, as a run does (not
+  under a `--deny-*` flag or `--sandbox`), so it creates `_build/` in the
+  project folder or beside the file.
 
 ## [0.31.0-alpha.1] - 2026-11-12
 

@@ -109,24 +109,29 @@ def test_a_second_run_reads_the_entry_and_an_edit_of_any_source_file_misses(src,
         kept = stamp(entry)
 
 
-def test_check_compile_and_dump_neither_read_nor_write_the_entry(src, tmp_path):
+def test_check_and_dump_neither_read_nor_write_the_entry_and_compile_reads_and_writes_it(src, tmp_path):
     agentica(src, "main.agc")
     entry = only_entry(src / "_build" / "bytecode")
     swap_program(entry, compiled(tmp_path, "other", program("from the entry")))
     kept = stamp(entry)
     assert agentica(src, "check", "main.agc").code == 0
-    # `compile` writes the program of the sources, not the one in the entry.
-    assert agentica(src, "compile", "main.agc", "-o", "main.agcb").code == 0
-    assert b"from the entry" not in (src / "main.agcb").read_bytes()
     assert agentica(src, "--dump", "main.agc").code == 0
     assert stamp(entry) == kept
-    # And they make none where there is none.
+    # `compile` serves a hit as a run does (#1458), and `--no-cache` compiles the sources.
+    assert agentica(src, "compile", "main.agc", "-o", "main.agcb").code == 0
+    assert b"from the entry" in (src / "main.agcb").read_bytes()
+    assert agentica(src, "--no-cache", "compile", "main.agc", "-o", "main.agcb").code == 0
+    assert b"from the entry" not in (src / "main.agcb").read_bytes()
+    assert stamp(entry) == kept
+    # Where there is no entry, check and dump make none, and compile makes one.
     other = src.parent / "other"
     other.mkdir()
     (other / "main.agc").write_text(program("x"), encoding="utf-8")
-    for words in (("check", "main.agc"), ("compile", "main.agc", "-o", "main.agcb"), ("--dump-ir", "main.agc")):
+    for words in (("check", "main.agc"), ("--dump-ir", "main.agc")):
         assert agentica(other, *words).code == 0
     assert not (other / "_build").exists()
+    assert agentica(other, "compile", "main.agc", "-o", "main.agcb").code == 0
+    assert only_entry(other / "_build" / "bytecode").is_file()
 
 
 def test_a_damaged_entry_is_built_again(src):

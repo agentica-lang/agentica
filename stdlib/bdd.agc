@@ -6,11 +6,30 @@
 # The variables the VM owns, which `Process.spawn_captured` refuses (`reserved_names` in vm/process.c).
 VM_ENV_NAMES = ["AGENTICA_CHANNEL", "AGENTICA_VM_METRICS", "AGENTICA_VM_METRICS_FILE", "UV_USE_IO_URING"]
 
+# The variables that change what the front end builds, as the bytecode cache keys them (`inputs_digest` in
+# compiler/io/cache_files.agc: where packages and libraries are found, and the C compiler of a native module). The
+# others it reads (AGENTICA_BUILD_DIR, TMPDIR) only say where it keeps files.
+COMPILE_ENV = [
+  "AGENTICA_PATH",
+  "XDG_DATA_HOME",
+  "XDG_CACHE_HOME",
+  "HOME",
+  "LOCALAPPDATA",
+  "CC",
+  "CPATH",
+  "C_INCLUDE_PATH",
+  "CPLUS_INCLUDE_PATH",
+  "LIBRARY_PATH",
+]
+
 struct Settings
   base: String
   agentica: List[String]
   seeded: Bool
   seed: Int
+  # The folder of the run where the programs under test are compiled once for every scenario (`compiled`), or "" for
+  # none: each start then goes through the front end.
+  programs: String
 end
 
 struct StepLine
@@ -468,10 +487,16 @@ def start(ctx: Context, path: String) -> Context
   if settings.seeded
     flags = flags.concat(["--seed", settings.seed.to_s])
   end
+  options = Process.Options(chdir: settings.base, env: ctx.scenario.env)
   # No --max-steps: the program runs as `agentica FILE.agc` does. A runaway program ends with its scenario, whose
   # deadline and `within N milliseconds` steps are the limits.
-  args = settings.agentica.drop(1).concat(flags).concat([file]).concat(ctx.scenario.arguments)
-  options = Process.Options(chdir: settings.base, env: ctx.scenario.env)
+  launch = settings.agentica.drop(1).concat(flags)
+  args = launch.concat([file])
+  bytecode = compiled(settings, file, ctx.scenario.env, options)
+  if bytecode.ok?
+    args = ["run"].concat(launch).concat(source_root(file)).concat(["--", bytecode.unwrap!])
+  end
+  args = args.concat(ctx.scenario.arguments)
   spawned = Process.spawn_captured(settings.agentica[0], args, options)
   if not spawned.ok?
     if spawned.message == "process: executable is unavailable"
@@ -492,6 +517,92 @@ def start(ctx: Context, path: String) -> Context
       closing: ctx.scenario.closing,
     ),
   )
+end
+
+# The bytecode of the program `file`, compiled once per run for every scenario that starts it: `agentica compile` (with
+# the bytecode cache, so an unchanged program is not compiled again) writes a name of its own, which is then renamed to
+# the name of the program. Scenarios that start at once may each compile it; the rename keeps one. The name counts the
+# real path and text of `file` and the environment that changes what the front end builds (`compile_env_line`), so a
+# step that rewrites the program or sets AGENTICA_PATH gets a new compile, but a change to a file it imports during the
+# run does not. `compile` gets the run's --deny-* flags, as `agentica FILE.agc` did: under them it refuses a native
+# module that needs a build instead of building it. An error means: start through the front end, as `agentica
+# FILE.agc` does. That is the way for a program that does not compile (the front end prints its diagnostic), under
+# `--deny-fs` (no file here can be looked at) and when the runner gave no folder.
+def compiled(settings: Settings, file: String, env: Map[String, String], options: Process.Options) -> Result[String]
+  return error("no folder for compiled programs") if settings.programs == ""
+
+  real = try Path.real(file)
+  text = try File.read_text(real, 5000)
+  key = OpenSSL.Digest.sha256_hexdigest("#{real}\n#{compile_env_line(env)}\n#{text}".bytes)
+  target = try Path.join([settings.programs, "#{key}.agcb"])
+  return ok(target) if File.stat(target, 5000).ok?
+
+  failed = "#{target}.failed"
+  return error("the program does not compile") if File.stat(failed, 5000).ok?
+
+  own = try claimed(target)
+  args = settings.agentica.drop(1).concat(["compile", real, "-o", own])
+  started = try Process.spawn_captured(settings.agentica[0], args, options)
+  code = Process.wait(started, idle_ms())
+  Process.close(started)
+  if !code.ok? or code.unwrap! != 0
+    _ = Path.remove(own, 5000)
+    marked = File.open(failed, "create_private", 5000)
+    if marked.ok?
+      _ = File.close(marked.unwrap!, 5000)
+    end
+    return error("the program does not compile")
+  end
+
+  moved = Path.rename(own, target, 5000)
+  return ok(own) if !moved.ok?
+
+  ok(target)
+end
+
+# Those of COMPILE_ENV that the scenario sets (`given_env`), with their values. The rest come from the environment of
+# the run, which is the same for every scenario, so they need no place in the key.
+def compile_env_line(env: Map[String, String]) -> String
+  lines: List[String] = []
+  for name in COMPILE_ENV
+    given = env.filter do |key, _| same_env_name?(key, name) end
+    if given.size > 0
+      lines = lines.push("#{name}=#{given.values[0].inspect}")
+    end
+  end
+
+  lines.join(" ")
+end
+
+# A new file beside `target` that this task alone writes: the pid of the step child and a number, made with
+# `create_private` so two tasks of one child never share it.
+def claimed(target: String) -> Result[String]
+  for n in 0...64
+    name = "#{target}.#{System.pid()}-#{n}"
+    made = File.open(name, "create_private", 5000)
+    if made.ok?
+      _ = File.close(made.unwrap!, 5000)
+      return ok(name)
+    end
+  end
+
+  error("no free name for the compiled program")
+end
+
+# `--source-root` for the bytecode of `file`, as the front end gives it for an absolute path: the folder of its real
+# path, so a runtime error names the file as `agentica FILE.agc` would. None when the path cannot be resolved.
+def source_root(file: String) -> List[String]
+  real = Path.real(file)
+  return [] if !real.ok?
+
+  path = real.unwrap!
+  parts = path.split("/")
+  tail = parts[parts.size - 1].length
+  return [] if tail == path.length
+
+  return ["--source-root", "/"] if tail + 1 == path.length
+
+  ["--source-root", path.slice(0, path.length - tail - 1)]
 end
 
 # Environment and arguments are read when the program starts, so a later call would silently change nothing.

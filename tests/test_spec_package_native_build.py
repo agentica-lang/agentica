@@ -681,6 +681,22 @@ def test_test_under_a_deny_flag_builds_nothing_and_the_test_file_is_refused(ws, 
     assert builds(ws) == []
 
 
+@NATIVE_CALLS
+def test_a_program_under_test_under_a_deny_flag_builds_nothing_and_is_refused(ws):
+    """`BDD.given_program` compiles the program once per run with the run's deny flags (#1458), so the compile refuses
+    the module instead of building it, and the start goes through the front end, which the VM refuses."""
+    tool("cc")
+    project(ws)
+    (ws.project / "specs").mkdir()
+    (ws.project / "specs" / "start.feature").write_text(
+        'Feature: Start\n\n  Scenario: refused\n    Given the Agentica program "../main.agc"\n'
+        '    Then the program exits with code 2 within 20000 milliseconds\n    And stderr includes:\n'
+        '      """\n      RUNTIME-NATIVE-DENIED\n      """\n', encoding="utf-8")
+    tested = agentica(ws, "--deny-native", "--json", "test")
+    assert (tested.code, tested.stderr) == (0, ""), tested.stdout
+    assert builds(ws) == []
+
+
 def test_a_lock_row_that_says_member_outside_its_workspace_never_builds(ws):
     module_folder(ws.base / "repo" / "adder", name="adder")
     url = "https://example.test/owner/repo"

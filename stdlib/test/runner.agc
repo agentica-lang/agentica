@@ -652,6 +652,7 @@ def run_child(
     "agentica": JSON.from(config.agentica),
     "seeded": JSON.from(config.seeded),
     "seed": JSON.from(config.seed),
+    "programs": JSON.from(run_folder(config)),
   }
 
   run = Run(failed_at: count, verdict: Report.Verdict.Pass)
@@ -910,6 +911,12 @@ def vm_args(config: Config, steps: Int, mode: String, cover: String) -> List[Str
 
   return options.concat(["--embedded", "steps", "--", "--agentica-bdd", mode]) if config.steps_bytecode == ""
   options.concat(["--", config.steps_bytecode, "--agentica-bdd", mode])
+end
+
+# The private folder of the run, which holds the report: `std/bdd` compiles the programs under test there, once for
+# every scenario (`compiled` in stdlib/bdd.agc).
+def run_folder(config: Config) -> String
+  Path.resolve(Path.join([config.report_path, ".."]).unwrap_or("")).unwrap_or("")
 end
 
 # The user's --deny-* flags and --sandbox: the words after the binary in `agentica`.
