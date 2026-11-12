@@ -160,6 +160,11 @@ import Sqlite from "pkg/sqlite/db"
   apply to the files below the manifest's folder that have no manifest nearer,
   not to `std/`, packages, `agc_libs/` or `pkg/` libraries. After `end` the next
   line may start with `end`, `else`, `elsif`, `)`, `]`, `}` or `.name`.
+- `agentica = "0.31.0"` is the oldest Agentica the project or package needs
+  (one SemVer version, a minimum; pre-releases sort before their release).
+  When the project or a locked package needs a newer one, `install`, `check`,
+  `run` and `test` fail with `PKG-AGENTICA-TOO-OLD` at `agentica`; a range or
+  any other value is `PKG-MANIFEST-INVALID`.
 - `[tool.NAME]` tables are for other tools and Agentica reads nothing inside
   them; `tool` or `tool.NAME` that is not a table is `PKG-MANIFEST-INVALID`.
 - `subdir = "postgres"` makes the package a folder of the repository (several

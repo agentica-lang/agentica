@@ -6,10 +6,12 @@
 ## other source of the name in the tree); `require_package` refuses both in the manifest of a package. A failure is
 ## PKG-MANIFEST-INVALID, with the file and the key path (toml_read.agc). The `[workspace]` table is known here but read
 ## by members.agc, and only for the project's manifest: the manifest of a package skips it. `[native]` is the other way
-## round: only a package's is used. `[tool.NAME]` belongs to other tools: only its shape is checked.
+## round: only a package's is used. `[tool.NAME]` belongs to other tools: only its shape is checked. `agentica` is the
+## oldest Agentica the package works with (agentica_version.agc).
 
 import Workspace from "../modules/workspace"
 import Paths from "../modules/import_path"
+import AgenticaVersion from "agentica_version"
 import GitSource from "git_source"
 import NativeArtifact from "native_artifact"
 import NativeBuild from "native_build"
@@ -18,7 +20,7 @@ import Toml from "std/toml"
 import Reader from "toml_read"
 
 # The keys the manifest knows, and those of [style] and of a dependency.
-TOP_KEYS = ["name", "dependencies", "native", "style", "workspace", "tool"]
+TOP_KEYS = ["name", "agentica", "dependencies", "native", "style", "workspace", "tool"]
 STYLE_KEYS = ["max_line_width", "blank_line_after_end"]
 DEPENDENCY_KEYS = ["git", "tag", "ref", "subdir", "path", "override"]
 GIT_KEYS = ["git", "tag", "ref", "subdir"]
@@ -68,11 +70,13 @@ export struct NativeLibrary
   optional: Bool
 end
 
-## A read manifest. name is "" when the file has none; max_line_width is 0 when it sets no limit;
-## blank_line_after_end is false unless `[style]` turns the rule on.
+## A read manifest. name is "" when the file has none, and so is agentica, the oldest Agentica version the package
+## works with; max_line_width is 0 when it sets no limit; blank_line_after_end is false unless `[style]` turns the rule
+## on.
 export struct Manifest
   file: String
   name: String
+  agentica: String
   dependencies: List[Dependency]
   natives: List[NativeLibrary]
   max_line_width: Int
@@ -85,34 +89,26 @@ struct Style
   blank_line_after_end: Bool
 end
 
-## Reads the manifest at file.
+## Reads the manifest at file, with no running version to check its `agentica` key against.
 export def read(workspace: Workspace.Workspace, file: String) -> Result[Manifest]
+  read_checked(workspace, file, "", "")
+end
+
+## Reads the manifest at file of the package `package` ("" for the project) and checks its `agentica` key against the
+## running version `running` (PKG-AGENTICA-TOO-OLD; "" checks nothing) before anything else in the file.
+export def read_checked(
+  workspace: Workspace.Workspace,
+  file: String,
+  package: String,
+  running: String,
+) -> Result[Manifest]
   reading = Reader.Reading(file: file, code: "PKG-MANIFEST-INVALID")
   text = try Reader.read_text(workspace, reading)
-  parse(file, text)
+  parse_checked(file, text, package, running)
 end
 
 ## Reads the manifest text, which is said to come from file. The writer checks the text it is about to save with this.
-export def parse(file: String, text: String) -> Result[Manifest]
-  reading = Reader.Reading(file: file, code: "PKG-MANIFEST-INVALID")
-  root = try Reader.parse(reading, text)
-  try Reader.known_keys(reading, root, TOP_KEYS, "")
-  name = try optional_name(reading, root)
-  dependencies = try dependencies_of(reading, root)
-  natives = try natives_of(reading, root)
-  style = try style_of(reading, root)
-  try tool_of(reading, root)
-  ok(
-    Manifest(
-      file: file,
-      name: name,
-      dependencies: dependencies,
-      natives: natives,
-      max_line_width: style.max_line_width,
-      blank_line_after_end: style.blank_line_after_end,
-    ),
-  )
-end
+export def parse(file: String, text: String) -> Result[Manifest] = parse_checked(file, text, "", "")
 
 ## Refuses what only the root project's manifest may say, in the manifest of a package (fetched, or a workspace member
 ## read in place): a `path` dependency, which cannot be published, and `override = true`, which the packages of a tree
@@ -159,6 +155,33 @@ export def has_downloaded(manifest: Manifest) -> Bool
   false
 end
 
+# The `agentica` key comes first, right after the TOML parse: a manifest made for a newer Agentica may hold keys and
+# values that this one does not know, and the version it needs is then the failure to report. That order is a
+# contract: every later Agentica keeps it.
+def parse_checked(file: String, text: String, package: String, running: String) -> Result[Manifest]
+  reading = Reader.Reading(file: file, code: "PKG-MANIFEST-INVALID")
+  root = try Reader.parse(reading, text)
+  agentica = try optional_agentica(reading, root)
+  try AgenticaVersion.check(file, package, agentica, running)
+  try Reader.known_keys(reading, root, TOP_KEYS, "")
+  name = try optional_name(reading, root)
+  dependencies = try dependencies_of(reading, root)
+  natives = try natives_of(reading, root)
+  style = try style_of(reading, root)
+  try tool_of(reading, root)
+  ok(
+    Manifest(
+      file: file,
+      name: name,
+      agentica: agentica,
+      dependencies: dependencies,
+      natives: natives,
+      max_line_width: style.max_line_width,
+      blank_line_after_end: style.blank_line_after_end,
+    ),
+  )
+end
+
 # The project's own name, a package name too. "" when the file has none.
 def optional_name(reading: Reader.Reading, root: Map[String, Toml.Value]) -> Result[String]
   return ok("") if !root.has_key?("name")
@@ -168,6 +191,17 @@ def optional_name(reading: Reader.Reading, root: Map[String, Toml.Value]) -> Res
   return error(Reader.fail_help(reading, "name", "not a package name", problem)) if problem != ""
 
   ok(name)
+end
+
+# The oldest Agentica the package works with, one SemVer version. "" when the file has none.
+def optional_agentica(reading: Reader.Reading, root: Map[String, Toml.Value]) -> Result[String]
+  return ok("") if !root.has_key?(AgenticaVersion.KEY)
+
+  version = try Reader.text(reading, root[AgenticaVersion.KEY], AgenticaVersion.KEY)
+  problem = AgenticaVersion.problem(version)
+  return error(Reader.fail_help(reading, AgenticaVersion.KEY, "not a version", problem)) if problem != ""
+
+  ok(version)
 end
 
 # [dependencies]: a name and an inline table each, in the order of the file.

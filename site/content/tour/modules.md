@@ -323,4 +323,6 @@ agentica add sqlite https://github.com/owner/sqlite-ac --tag v1.2.0
 agentica update sqlite
 ```
 
+A manifest may say which Agentica it needs, as a minimum: `agentica = "0.31.0"` (one SemVer version; `0.31.0-alpha.1` is older than `0.31.0`). When the project or one of its packages needs a newer Agentica than the one running, `install`, `check`, `run` and `test` stop with `PKG-AGENTICA-TOO-OLD`.
+
 Problems are reported with `PKG-` codes. Workspaces, `path` and `override` dependencies, native libraries and modules built from C, the `[style]` and `[tool.NAME]` tables, and every limit and code are in the [modules reference](/reference/modules/); native code is in [Native code](/library/io-and-system/native/).

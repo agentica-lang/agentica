@@ -1,1 +1,1 @@
-ERROR PKG-MANIFEST-INVALID 0:1:1-0:1:1 "unknown key" "the known keys here are name, dependencies, native, style, workspace, tool" file="agentica.toml" key="colour"
+ERROR PKG-MANIFEST-INVALID 0:1:1-0:1:1 "unknown key" "the known keys here are name, agentica, dependencies, native, style, workspace, tool" file="agentica.toml" key="colour"

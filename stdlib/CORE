@@ -71,6 +71,7 @@ modules/rewrite.agc
 modules/test_main.agc
 modules/type_code.agc
 modules/workspace.agc
+packages/agentica_version.agc
 packages/git_source.agc
 packages/lock.agc
 packages/manifest.agc

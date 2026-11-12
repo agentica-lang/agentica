@@ -304,7 +304,7 @@ def asked_by(
   file = Paths.join(folder, MANIFEST_FILE)
   return ok([]) if !settings.workspace.file_exists.call(file)
 
-  manifest = try Manifest.read(settings.workspace, file)
+  manifest = try Manifest.read_checked(settings.workspace, file, locked.name, settings.version)
   try Manifest.require_package(manifest)
   ok(
     manifest.dependencies.map do |dependency|

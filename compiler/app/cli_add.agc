@@ -116,7 +116,7 @@ def option_of(options: Map[String, String], flag: String) -> String
 end
 
 def add_to(settings: Env.Settings, dir: String, request: Request) -> Result[String]
-  project = try Project.find_to_write(settings.workspace, dir)
+  project = try Project.find_to_write(settings.workspace, dir, settings.version)
   case project
     Project.Project.Bare -> error(CliProject.missing_manifest(dir))
     Project.Project.Declared(found) -> add_in(settings, found, request)
@@ -174,7 +174,7 @@ def one_more?(old: Manifest.Manifest, manifest: Manifest.Manifest, request: Requ
 end
 
 def update_in(settings: Env.Settings, dir: String, name: String) -> Result[String]
-  project = try Project.find_to_write(settings.workspace, dir)
+  project = try Project.find_to_write(settings.workspace, dir, settings.version)
   case project
     Project.Project.Bare -> error(CliProject.missing_manifest(dir))
     Project.Project.Declared(found) -> update_found(settings, found, name)
