@@ -14,6 +14,13 @@ IDENTIFIER_CHARACTERS = Set.new("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTU
 # A version is short; the limit keeps a hostile manifest from making the compare walk a long text.
 MAX_LENGTH = 256
 
+## Whose manifest a key is in, which the failure names.
+export enum Owner
+  Project
+  WorkspaceRoot
+  Package(String)
+end
+
 # The parts of a version, as text: the three numbers of the core and the pre-release identifiers (none for a release).
 # A number is compared as text by length first, which is its value because it has no leading zero.
 struct Version
@@ -29,11 +36,17 @@ export def problem(text: String) -> String
   parsed.message
 end
 
+## The owner of the manifest of the package `package`, "" for the project.
+export def owner_of(package: String) -> Owner
+  return Owner.Project if package == ""
+
+  Owner.Package(package)
+end
+
 ## Checks the `agentica` key of the manifest in `file` against the running version. `needed` is "" when the manifest
 ## has no key, and `running` is "" when the front end does not know its version (a program that writes no bytecode):
-## then there is nothing to check. The failure is PKG-AGENTICA-TOO-OLD at the key, naming the package (`package` is ""
-## for the root project).
-export def check(file: String, package: String, needed: String, running: String) -> Result[Void]
+## then there is nothing to check. The failure is PKG-AGENTICA-TOO-OLD at the key, naming the owner.
+export def check(file: String, owner: Owner, needed: String, running: String) -> Result[Void]
   return ok() if needed == "" or running == ""
 
   current = parse(running)
@@ -42,9 +55,12 @@ export def check(file: String, package: String, needed: String, running: String)
 
   who = "the project"
   help = "install Agentica #{needed} or newer"
-  if package != ""
-    who = "the package #{package}"
-    help = "#{help}, or pin a version of #{package} that works with #{running}"
+  case owner
+    Owner.Project -> who = "the project"
+    Owner.WorkspaceRoot -> who = "the workspace root"
+    Owner.Package(package) ->
+      who = "the package #{package}"
+      help = "#{help}, or pin a version of #{package} that works with #{running}"
   end
 
   message = "#{who} needs Agentica #{needed} or newer, and this is Agentica #{running}"

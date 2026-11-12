@@ -141,7 +141,7 @@ def attempt(request: Workspace.BuildRequest, noted: Bool) -> Result[String]
     return error(fail(request, "there is no place for the build cache", "set HOME or XDG_CACHE_HOME"))
   end
 
-  compiler = compiler_words(request.system)
+  compiler = CacheFiles.compiler_words(request.system)
   version = try first_line(request, compiler, "--version")
   target = try first_line(request, compiler, "-dumpmachine")
   header = try header_text(request)
@@ -247,19 +247,6 @@ def sweep(base: String) -> Void
       end
     end
   end
-end
-
-# The words of CC, else the system's compiler.
-def compiler_words(system: String) -> List[String]
-  set = System.env("CC")
-  if set.ok?
-    words = set.unwrap!.split(" ").filter do |word: String| word != "" end
-    return words if words.size > 0
-  end
-
-  return ["gcc"] if system == "windows"
-
-  ["cc"]
 end
 
 # The first line the compiler prints for one question (`--version`, `-dumpmachine`), which names it in the key.

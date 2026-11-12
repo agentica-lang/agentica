@@ -11,7 +11,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 ### Added
 
 - `agentica = "0.31.0"` in `agentica.toml` names the oldest Agentica a project
-  or package needs; an older one stops with `PKG-AGENTICA-TOO-OLD` (#1469).
+  or package needs; an older one stops with `PKG-AGENTICA-TOO-OLD` (#1469). A
+  workspace member also checks the root's key (#1474).
   Releases up to 0.31.0-alpha.1 refuse the key as unknown.
 - A failed Result holds an `Error` record, whose `location` says where it was
   made; `error(e)` passes one on as a Result of another type (#671).
@@ -29,6 +30,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `agentica compile` reads and writes the bytecode cache, as a run does (not
   under a `--deny-*` flag or `--sandbox`), so it creates `_build/` in the
   project folder or beside the file.
+- The bytecode cache keys on the C compiler file that a native build would run
+  (`CC`, else `cc` found in `PATH`), and `BDD.given_program` on `PATH`: another
+  compiler makes a new build.
 
 ## [0.31.0-alpha.1] - 2026-11-12
 
