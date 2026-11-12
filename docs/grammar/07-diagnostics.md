@@ -316,7 +316,7 @@ is a rule:
   (`PARSE-PIPE-TARGET`)
   Help: a call with parentheses on the right; wrap the expression in parentheses
   and use `.` on the result: `(x \|> f()).unwrap!`
-- `x \|> String.trim()` (`CHECK-PIPE-METHOD`)
+- `x \|> String.strip()` (`CHECK-PIPE-METHOD`)
   Help: the method form: `x.strip`
 - `import` followed by a string, the path-first form of earlier versions
   (`PARSE-UNEXPECTED-TOKEN`)

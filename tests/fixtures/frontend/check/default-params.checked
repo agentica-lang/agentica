@@ -12,7 +12,7 @@ program #109 0:1:1-712:35:1
         default: literal #7 70:6:42-74:6:46 value=string:", " type=String
       result: type-ref #9 79:6:51-85:6:57 name="String"
       body: return-stmt #13 88:7:3-108:8:1
-        value: method-call #12 95:7:10-107:7:22 name="join" type=String resolved=call("String.join", List(String))
+        value: method-call #12 95:7:10-107:7:22 name="join" type=String resolved=call("List.join", List(String))
           target: name-ref #10 95:7:10-97:7:12 name="xs" type=List(String)
           arg: name-ref #11 103:7:18-106:7:21 name="sep" type=String
     declaration: function-decl #38 113:10:1-287:13:1 name="describe"

@@ -56,7 +56,7 @@ export def resolve_method(cx: State.Cx, kind: String, name: String) -> String
 end
 
 ## The methods a receiver kind has, as Ruby names them: its aliases and the builtins of its module, without
-## duplicates. A builtin that has a Ruby name (`strip`) is listed under it, not under its own (`trim`), which still
+## duplicates. A builtin that has a Ruby name (`select`) is listed under it, not under its own (`filter`), which still
 ## works; a synonym (`collect` for `map`, `size` for `String.length`) is accepted but not listed.
 export def method_names(cx: State.Cx, kind: String) -> List[String]
   names: List[String] = []
@@ -85,7 +85,7 @@ export def method_names(cx: State.Cx, kind: String) -> List[String]
 end
 
 ## The method name a builtin is written as in method form, for the help of CHECK-PIPE-METHOD: String.upcase is upcase,
-## String.trim is strip. "" when there is none for that kind.
+## List.filter is select. "" when there is none for that kind.
 export def pipe_method_name(cx: State.Cx, kind: String, name: String) -> String
   return RubyForm.method_name(name) if RubyForm.method_key(name).start_with?("#{kind}.")
 
@@ -175,7 +175,7 @@ def result_help(cx: State.Cx, name: String) -> String
   text
 end
 
-# True when `name` is a Ruby name of the method it resolves to (`strip`, not `trim`), or has no builtin (`to_s`).
+# True when `name` is a Ruby name of the method it resolves to (`select`, not `filter`), or has no builtin (`to_s`).
 def ruby_method?(cx: State.Cx, kind: String, name: String) -> Bool
   resolved = resolve_method(cx, kind, name)
   RubyForm.method_name(resolved) == "" or RubyForm.ruby_name?(kind, name, resolved)

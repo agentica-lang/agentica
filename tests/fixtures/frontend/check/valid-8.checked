@@ -9,7 +9,7 @@ program #64 0:1:1-451:16:1
       body: binding #9 55:3:3-95:4:1 name="_b"
         type: type-ref #5 59:3:7-65:3:13 name="String"
         value: call #8 68:3:16-94:3:42 name="String.upcase" piped=false type=String
-          arg: field-access #7 82:3:30-93:3:41 name="strip" type=String resolved=call("String.trim", String)
+          arg: field-access #7 82:3:30-93:3:41 name="strip" type=String resolved=call("String.strip", String)
             target: literal #6 82:3:30-87:3:35 value=string:" x " type=String
       body: binding #15 97:4:3-140:5:1 name="c"
         type: type-ref #11 100:4:6-112:4:18 name="List"
@@ -19,22 +19,22 @@ program #64 0:1:1-451:16:1
           arg: literal #13 135:4:41-138:4:44 value=string:"," type=String
       body: binding #20 142:5:3-167:6:1 name="_d"
         type: type-ref #16 146:5:7-152:5:13 name="String"
-        value: method-call #19 155:5:16-166:5:27 name="join" type=String resolved=call("String.join", List(String))
+        value: method-call #19 155:5:16-166:5:27 name="join" type=String resolved=call("List.join", List(String))
           target: name-ref #17 155:5:16-156:5:17 name="c" type=List(String)
           arg: literal #18 162:5:23-165:5:26 value=string:"-" type=String
       body: binding #25 169:6:3-202:7:1 name="_e"
         type: type-ref #21 173:6:7-177:6:11 name="Bool"
-        value: method-call #24 180:6:14-201:6:35 name="include?" type=Bool resolved=call("String.contains?", String)
+        value: method-call #24 180:6:14-201:6:35 name="include?" type=Bool resolved=call("String.include?", String)
           target: literal #22 180:6:14-186:6:20 value=string:"hola" type=String
           arg: literal #23 196:6:30-200:6:34 value=string:"ol" type=String
       body: binding #30 204:7:3-240:8:1 name="_f"
         type: type-ref #26 208:7:7-212:7:11 name="Bool"
-        value: method-call #29 215:7:14-239:7:38 name="start_with?" type=Bool resolved=call("String.starts_with?", String)
+        value: method-call #29 215:7:14-239:7:38 name="start_with?" type=Bool resolved=call("String.start_with?", String)
           target: literal #27 215:7:14-221:7:20 value=string:"hola" type=String
           arg: literal #28 234:7:33-238:7:37 value=string:"ho" type=String
       body: binding #35 242:8:3-276:9:1 name="_g"
         type: type-ref #31 246:8:7-250:8:11 name="Bool"
-        value: method-call #34 253:8:14-275:8:36 name="end_with?" type=Bool resolved=call("String.ends_with?", String)
+        value: method-call #34 253:8:14-275:8:36 name="end_with?" type=Bool resolved=call("String.end_with?", String)
           target: literal #32 253:8:14-259:8:20 value=string:"hola" type=String
           arg: literal #33 270:8:31-274:8:35 value=string:"la" type=String
       body: binding #41 278:9:3-323:10:1 name="_h"
@@ -52,15 +52,15 @@ program #64 0:1:1-451:16:1
       body: binding #54 367:11:3-398:12:1 name="_j"
         type: type-ref #48 371:11:7-377:11:13 name="String"
         value: binary #53 380:11:16-397:11:33 op=plus op-span=387:11:23-388:11:24 type=String
-          left: field-access #50 380:11:16-386:11:22 name="to_s" type=String resolved=call("String.from_int", Int)
+          left: field-access #50 380:11:16-386:11:22 name="to_s" type=String resolved=call("Int.to_s", Int)
             target: literal #49 380:11:16-381:11:17 value=int:3 type=Int
-          right: field-access #52 389:11:25-397:11:33 name="to_s" type=String resolved=call("String.from_float", Float)
+          right: field-access #52 389:11:25-397:11:33 name="to_s" type=String resolved=call("Float.to_s", Float)
             target: literal #51 389:11:25-392:11:28 value=float:bits:4609434218613702656 type=Float
       body: binding #58 400:12:3-420:13:1 name="_k"
         type: type-ref #55 404:12:7-407:12:10 name="Int"
-        value: field-access #57 410:12:13-419:12:22 name="to_i!" type=Int resolved=call("String.to_int!", String)
+        value: field-access #57 410:12:13-419:12:22 name="to_i!" type=Int resolved=call("String.to_i!", String)
           target: literal #56 410:12:13-413:12:16 value=string:"3" type=String
       body: binding #62 422:13:3-446:14:1 name="_l"
         type: type-ref #59 426:13:7-431:13:12 name="Float"
-        value: field-access #61 434:13:15-445:13:26 name="to_f!" type=Float resolved=call("String.to_float!", String)
+        value: field-access #61 434:13:15-445:13:26 name="to_f!" type=Float resolved=call("String.to_f!", String)
           target: literal #60 434:13:15-439:13:20 value=string:"1.5" type=String

@@ -22,7 +22,7 @@ def grow(seed: Int) -> String
 end
 
 def main() -> Void
-  # One-character Strings from at, slice, from_code, split, trim and case changes.
+  # One-character Strings from at, slice, from_code, split, strip and case changes.
   hello = "hello"
   e = hello.at(1)
   e_slice = hello.slice(1, 1)
@@ -40,7 +40,7 @@ def main() -> Void
   puts("é".at(0).code)
   puts("a😀".at(1).length)
 
-  # The empty String from slice, trim, join, replace, split, from_bytes, Result.message and a digit's text.
+  # The empty String from slice, strip, join, replace, split, from_bytes, Result.message and a digit's text.
   nothing = hello.slice(2, 0)
   blank = " \t\n".strip
   joined = ["", ""].join("")

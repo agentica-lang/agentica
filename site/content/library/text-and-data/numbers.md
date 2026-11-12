@@ -4,31 +4,45 @@ weight: 2
 description: Convert between Int, Float and String, round, clamp and other number helpers, and work on the bits of an Int or a Float.
 ---
 
-Arithmetic never mixes `Int` and `Float`. Use these functions to convert.
-
-| Method | Same as |
-|---|---|
-| `n.to_s` on an `Int` | `String.from_int(n)` |
-| `n.to_f` on an `Int` | `Float.from_int(n)` |
-| `x.to_s` on a `Float` | `String.from_float(x)` |
-| `x.to_i`, `x.to_i!` on a `Float` | `Float.to_int(x)`, `Float.to_int!(x)` |
+Arithmetic never mixes `Int` and `Float`. Use these methods to convert: `n.to_f`, `x.to_i` and `x.to_i!`, and `to_s` for the text.
 
 The bit functions work on the 64-bit two's complement form of an `Int` (`Int.bit_and`, `Int.shift_left` and the others) and on the IEEE 754 bits of a `Float` (`Float.to_bits` and the others). They are methods too: `flags.bit_and(4)`, `x.to_bits`. Masks read best in hex or binary: `0xFF`, `0b1010` (see [hex, binary and octal](/tour/numbers/#hex-binary-and-octal)).
 
 The number helpers are methods, as in Ruby: `n.abs`, `n.pow(3)`, `a.gcd(b)`, `n.clamp(lo, hi)`, `x.floor`, `x.ceil`, `x.round`, and `Math.sqrt(x)`. There is no `**` operator. For the least or greatest item of a list, see [min and max](/library/data-structures/list/#min-and-max).
 
-To read numbers from text, see [to_int and to_float](/library/text-and-data/string/#to_int-and-to_float). For the loop methods `n.times`, `a.upto(b)` and `a.downto(b)`, see [Range](/library/data-structures/range/#times-upto-and-downto).
+To read numbers from text, see [to_i and to_f](/library/text-and-data/string/#to_i-and-to_f). For the loop methods `n.times`, `a.upto(b)` and `a.downto(b)`, see [Range](/library/data-structures/range/#times-upto-and-downto).
 
-## Float.from_int
+## to_s
 
 ```signature
-Float.from_int(n: Int) -> Float
+Int.to_s(n: Int) -> String
+Float.to_s(x: Float) -> String
+```
+
+The text of a number, as `puts` and interpolation write it.
+
+```agentica
+def main() -> Void
+  puts(42.to_s + "!")
+  puts(2.5.to_s + "!")
+end
+```
+
+```output
+42!
+2.5!
+```
+
+## to_f
+
+```signature
+Int.to_f(n: Int) -> Float
 ```
 
 ```agentica
 def main() -> Void
   n = 3
-  puts(Float.from_int(n) / 2.0)
+  puts(n.to_f / 2.0)
   puts(n.to_f)
 end
 ```
@@ -38,19 +52,19 @@ end
 3.0
 ```
 
-## Float.to_int
+## to_i
 
 ```signature
-Float.to_int(x: Float) -> Result[Int]
+Float.to_i(x: Float) -> Result[Int]
 ```
 
 Cuts off the decimals, toward zero. A value that does not fit in an `Int`, or that is not a number (NaN or an infinity), gives an error Result.
 
 ```agentica
 def main() -> Void
-  puts(Float.to_int(2.9))
+  puts(2.9.to_i)
   puts((-2.9).to_i)
-  puts(Float.to_int(10000000000.0 * 10000000000.0).ok?)
+  puts((10000000000.0 * 10000000000.0).to_i.ok?)
 end
 ```
 
@@ -60,17 +74,17 @@ ok(-2)
 false
 ```
 
-## Float.to_int!
+## to_i!
 
 ```signature
-Float.to_int!(x: Float) -> Int
+Float.to_i!(x: Float) -> Int
 ```
 
-Like `Float.to_int`, but gives the `Int` itself and stops the program on a bad value, with `RUNTIME-INVALID-NUMBER` or `RUNTIME-INTEGER-OVERFLOW`.
+Like `to_i`, but gives the `Int` itself and stops the program on a bad value, with `RUNTIME-INVALID-NUMBER` or `RUNTIME-INTEGER-OVERFLOW`.
 
 ```agentica
 def main() -> Void
-  puts(Float.to_int!(7.5) + 1)
+  puts(7.5.to_i! + 1)
   puts(9.99.to_i!)
 end
 ```

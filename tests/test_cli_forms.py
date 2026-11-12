@@ -67,7 +67,7 @@ PROGRAMS = ["ok.agc", "lex.agc", "parse.agc", "tab.agc", "crlf.agc", "unicode.ag
 BUILTINS = ["String.split", "ok", "Task.await", "Map.get", "List.group_by", "String.compare",
             "String.to_int", "String.to_it", "String.trim", "String.strip", "Result.ok?", "puts", "Map.length",
             "Json.get", "strip", "trim", "push", "value!", "to_i", "ok?", "unwrap_or", "contains?", "join", "include",
-            "length", "size", "contains", "reject", "float", "len", "frobnicate",
+            "length", "size", "contains", "reject", "float", "len", "frobnicate", "to_int", "to_float", "from_int",
             "collect", "inject", "detect", "member?", "select", "filter", "key?", "has_key?"]
 
 # Arguments with no file: the options, their mistakes and the help.
@@ -75,8 +75,8 @@ OPTIONS = [
     ["--version"], ["-h"], ["--help"], ["-hx"], ["-xh"], ["-ab", "c"], ["--foo"], ["+x"], ["-"], ["+"], [],
     ["check"], ["compile"], ["help"], ["help", "Nope"],
     ["help", "Strin.split"], ["help", "String.to_i"], ["help", "int"], ["help", "String.chomp"],
-    ["help", "a", "b", "c"], ["help", "List.map", "String.split"], ["--json", "help", "String.to_int"],
-    ["--max-steps", "10", "help", "String.to_int", "--json"], ["--ai", "help", "strip"], ["--ai", "help", "push"],
+    ["help", "a", "b", "c"], ["help", "List.map", "String.split"], ["--json", "help", "String.to_i"],
+    ["--max-steps", "10", "help", "String.to_i", "--json"], ["--ai", "help", "strip"], ["--ai", "help", "push"],
     ["--ai", "help", "Json.get"], ["--ai", "help", "Nope.frobnicate"],
     ["help", "std/nope"], ["help", "std"], ["--json", "help", "std/queue."], ["help", "HttpWire.service"], ["help", "__fail_arg"], ["help", "Native.string_at"],
     ["help", "List.concat"], ["--json", "help", "List.concat"], ["help", "concat"],

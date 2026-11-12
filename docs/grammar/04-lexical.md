@@ -107,7 +107,7 @@ for `puts`, `print`, `gets` and `gets!` as variables, parameters, loop variables
 and pattern bindings.
 
 A trailing `?` or `!` belongs to a lowercase name, whatever follows it:
-`contains? (s, part)` is valid. `!` is not a suffix before `=`, so `a!=b` is `a
+`include? (s, part)` is valid. `!` is not a suffix before `=`, so `a!=b` is `a
 != b`. By convention `?` marks a predicate that returns `Bool`, and `!` marks
 the form that halts the run with an error instead of returning a `Result`.
 Variables, fields and parameters cannot have the suffix.
@@ -183,7 +183,7 @@ digits and `_`, plus a `.` followed by a digit or a `_` and the run after it,
 plus an exponent. A `.` followed by a `_` belongs to the number, so
 `1._5` is an error; a `.` followed by a letter or by another `.` ends the number
 (`1_000.times`, `1_000..2_000`). `_1` is still a NAME. The text form of a number
-has no separators: `puts(1_000)` prints `1000`, and `String.to_int` and JSON
+has no separators: `puts(1_000)` prints `1000`, and `s.to_i` and JSON
 still reject `_`.
 
 `0x`, `0b` and `0o`, in either case, start a hex, binary or octal `INTEGER`, as

@@ -20,7 +20,7 @@ program #220 0:1:1-1396:57:1
         arg: type-ref #15 131:10:35-134:10:38 name="Int"
       body: binding #20 138:11:3-156:12:1 name="n"
         value: try-expr #19 142:11:7-155:11:20 type=Int
-          operand: field-access #18 146:11:11-155:11:20 name="to_i" type=Result(Int) resolved=call("String.to_int", String)
+          operand: field-access #18 146:11:11-155:11:20 name="to_i" type=Result(Int) resolved=call("String.to_i", String)
             target: name-ref #17 146:11:11-150:11:15 name="text" type=String
       body: return-stmt #25 158:12:3-175:13:1
         value: call #24 165:12:10-174:12:19 name="ok" piped=false type=Result(Int)
@@ -209,7 +209,7 @@ program #220 0:1:1-1396:57:1
                 target: literal #199 1297:53:8-1300:53:11 value=string:"a" type=String
               right: field-access #202 1308:53:19-1320:53:31 name="inspect" type=String resolved=inspect(List(String))
                 target: name-ref #201 1308:53:19-1312:53:23 name="keys" type=List(String)
-            right: field-access #205 1323:53:34-1329:53:40 name="to_s" type=String resolved=call("String.from_int", Int)
+            right: field-access #205 1323:53:34-1329:53:40 name="to_s" type=String resolved=call("Int.to_s", Int)
               target: literal #204 1323:53:34-1324:53:35 value=int:1 type=Int
       body: expr-stmt #213 1333:54:3-1360:55:1
         value: call #212 1333:54:3-1359:54:29 name="puts" piped=false type=Void

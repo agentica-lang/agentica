@@ -186,14 +186,14 @@ there is no implicit conversion.
   pair would be 8 sources times 7 targets times 3 forms, 168 catalog rows,
   against about 60 with the `Int` hub, and the widenings are the only pairs that
   are plain.
-- **Float to integer.** The bang and Result forms follow `Float.to_int` and
-  `Float.to_int!`: truncation toward zero, NaN and infinity give
+- **Float to integer.** The bang and Result forms follow `x.to_i` and
+  `x.to_i!` on a Float: truncation toward zero, NaN and infinity give
   `RUNTIME-INVALID-NUMBER`, and a value out of range gives
   `RUNTIME-INTEGER-OVERFLOW`. Reason: the same codes for the same meaning. There
   is no wrap form for floats, since a wrapped float has no clear meaning.
 - **Text parsers (step 1: none for sized types).** A program parses with
-  `String.to_int` and then converts: `try s.to_int` and `.to_uint8`. Reason:
-  that covers the 8, 16 and 32 bit types. `String.to_int` stops at the `Int`
+  `s.to_i` and then converts: `try s.to_i` and `.to_uint8`. Reason:
+  that covers the 8, 16 and 32 bit types. `s.to_i` stops at the `Int`
   maximum, so `UInt64` text needs its own parser with a clear rule, which is
   later (§42.16).
 - **Saturating forms: later.** Reason: clamping is a short `if` in the program,

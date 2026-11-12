@@ -125,7 +125,7 @@ The text of a `std/` source that the `agentica` binary carries, by its exact pat
 ```agentica
 def main() -> Void
   text = Std.source("queue.agc").unwrap_or("")
-  puts(text.starts_with?("## "))
+  puts(text.start_with?("## "))
   puts(Std.source("nope.agc").ok?)
 end
 ```

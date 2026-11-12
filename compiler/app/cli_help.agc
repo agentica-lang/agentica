@@ -114,7 +114,7 @@ def form_text(form: Model.Builtin, method: String) -> String
   ruby
 end
 
-# "`String.trim` is written `.strip`" when `name` is not how Ruby writes the builtin, "`strip` is called `Y` in
+# "`List.filter` is written `.select`" when `name` is not how Ruby writes the builtin, "`strip` is called `Y` in
 # Agentica" for a rename of a builtin that has no Ruby form, else nothing. `written` is the method the form is shown
 # with. A name asked without its type gets the type of `target`, so `help include?` says which type writes `.key?`.
 def rename_line(name: String, target: String, written: String) -> String
@@ -151,7 +151,7 @@ def suggestion(name: String) -> String
 
   return "; #{hint.unwrap!}" if hint.some?
 
-  hints = Alias.kind_hints(name)
+  hints = Alias.name_hints(name)
   return "; " + hints.keys.sort.map do |key: String| "#{key}: #{hints[key]}" end.join("; ") if hints.size > 0
 
   case Suggest.closest_among(name, CALLABLE_NAMES, [])

@@ -311,7 +311,7 @@ Core layer; the design (modes, native calls, exits, helper contract) is
 - Strings: `agc_string` keeps the byte and code point counts. Build every
   `String` result with a sizing pass and then a fill pass (or one copy), never
   by repeated concatenation. Search with the KMP finder in `vm/strings.c`, not a
-  naive loop. `String.trim` is `\s` only (five ASCII bytes). Case mapping is the
+  naive loop. `String.strip` is `\s` only (five ASCII bytes). Case mapping is the
   tables plus final sigma (`docs/vm/02-reference-behavior.md` §2.3); a new
   contextual case rule needs a generator check, not a hand edit.
 - `string-trim` in `format-diagnostic-ai` trims only ASCII `[ \t\n\f\r]`, not

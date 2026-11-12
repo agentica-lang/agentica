@@ -30,11 +30,6 @@ export def method_aliases() -> Map[String, String]
   {
     "ATS.length": "ATS.size",
     "Bytes.size": "Bytes.length",
-    "Float.to_i": "Float.to_int",
-    "Float.to_i!": "Float.to_int!",
-    "Float.to_s": "String.from_float",
-    "Int.to_f": "Float.from_int",
-    "Int.to_s": "String.from_int",
     "Lazy.collect": "Lazy.map",
     "Lazy.detect": "Lazy.find",
     "Lazy.inject": "Lazy.reduce",
@@ -42,7 +37,6 @@ export def method_aliases() -> Map[String, String]
     "List.collect": "List.map",
     "List.detect": "List.find",
     "List.inject": "List.reduce",
-    "List.join": "String.join",
     "List.length": "List.size",
     "List.member?": "List.include?",
     "List.push": "List.append",
@@ -59,15 +53,7 @@ export def method_aliases() -> Map[String, String]
     "Range.member?": "Range.include?",
     "Set.length": "Set.size",
     "Set.member?": "Set.include?",
-    "String.end_with?": "String.ends_with?",
-    "String.include?": "String.contains?",
     "String.size": "String.length",
-    "String.start_with?": "String.starts_with?",
-    "String.strip": "String.trim",
-    "String.to_f": "String.to_float",
-    "String.to_f!": "String.to_float!",
-    "String.to_i": "String.to_int",
-    "String.to_i!": "String.to_int!",
     "String.to_s": "self",
     "Task.id": "Task.id",
   }
@@ -76,7 +62,7 @@ end
 ## The aliases of `method_aliases` that are a second Ruby name of a builtin whose own name is Ruby already: Ruby has
 ## both `length` and `size`, `map` and `collect`, so Agentica accepts both and its texts show the name of the builtin
 ## (`map`, `reduce`, `find`, `include?`, `size`). Every other alias is the Ruby name of a builtin that has a different
-## name here (`strip` for `String.trim`, `select` for `List.filter`, `key?` for `Map.has_key?`), and the texts show it.
+## name here (`select` for `List.filter`, `key?` for `Map.has_key?`), and the texts show it.
 export def ruby_synonyms() -> List[String]
   [
     "ATS.length", "Bytes.size", "Lazy.collect", "Lazy.detect", "Lazy.inject", "List.collect", "List.detect",
@@ -98,6 +84,7 @@ export def foreign_names() -> Map[String, String]
       "write the producer as a task that sends into a channel: ch: Channel[Int] = Channel.new(8), " +
       "Task.spawn(&produce, ch), then ch.recv(timeout_ms)"
     ),
+    "Float.from_int": "use n.to_f",
     "Float.to_string": "use x.to_s",
     "Hash.new": "use a map literal with a type: m: Map[String, Int] = {}",
     "HttpWriter": (
@@ -152,6 +139,9 @@ export def foreign_names() -> Map[String, String]
     "Request": "a std/http handler takes an HTTP.Request: def handle(request: HTTP.Request) -> Result[HTTP.Response]",
     "Set.empty": "write Set.new([]) where the type is known: seen: Set[Int] = Set.new([])",
     "SizedQueue.new": "use Channel.new(capacity): ch: Channel[Int] = Channel.new(8)",
+    "String.from_float": "use x.to_s",
+    "String.from_int": "use n.to_s",
+    "String.join": "use list.join(separator)",
     "String.to_bytes": "use s.bytes",
     "Task.async": "use Task.spawn(&f, arg), and Task.await(task) for its result",
     "Task.async_stream": "use Task.map(items, limit, timeout_ms) do |x| ... end, where the block gives a Result",
@@ -193,17 +183,15 @@ end
 ## The Agentica methods that a foreign method name stands for.
 export def foreign_methods() -> Map[String, List[String]]
   {
-    "contains": ["contains?", "include?"],
+    "contains": ["include?"],
     "endswith": ["end_with?"],
     "include": ["include?"],
-    "includes": ["contains?", "include?"],
-    "includes?": ["contains?", "include?"],
+    "includes": ["include?"],
+    "includes?": ["include?"],
     "len": ["size", "length"],
     "lower": ["downcase"],
     "ok!": ["unwrap!"],
     "startswith": ["start_with?"],
-    "to_float": ["to_f", "to_float"],
-    "to_int": ["to_i", "to_int"],
     "to_str": ["to_s"],
     "to_string": ["to_s"],
     "upper": ["upcase"],
@@ -222,12 +210,15 @@ export def foreign_kind_methods() -> Map[String, String]
     "Bytes.select": "Bytes has no select; use b.to_a.select do |x| ... end",
     "Float.max": "use [a, b].max.unwrap!, or x.clamp(min, max) to keep x in a range",
     "Float.min": "use [a, b].min.unwrap!, or x.clamp(min, max) to keep x in a range",
+    "Float.to_int": "use x.to_i, which gives a Result",
+    "Float.to_int!": "use x.to_i!",
     "Int.ceil": "an Int is already whole; ceil, floor and round are Float methods (x.ceil)",
     "Int.chr": "use String.from_code(n) for the character of a code point",
     "Int.floor": "an Int is already whole; ceil, floor and round are Float methods (x.floor)",
     "Int.max": "use [a, b].max.unwrap!, or n.clamp(min, max) to keep n in a range",
     "Int.min": "use [a, b].min.unwrap!, or n.clamp(min, max) to keep n in a range",
     "Int.round": "an Int is already whole; ceil, floor and round are Float methods (x.round)",
+    "Int.to_float": "use n.to_f",
     "List.concat": "join two lists with +: xs + ys is a new list, and both stay as they were",
     "List.contains": "a List has no membership method; use xs.any? do |x| x == value end, or a Set with include?",
     "List.contains?": "a List has no membership method; use xs.any? do |x| x == value end, or a Set with include?",
@@ -260,10 +251,12 @@ export def foreign_kind_methods() -> Map[String, String]
     "String.chomp": "use s.strip to remove surrounding whitespace; IO.gets already drops the line ending",
     "String.chr": "use s.at(0) for the first character",
     "String.concat": "strings are immutable; join two strings with + and assign the result: a = a + b",
+    "String.contains?": "use s.include?(part)",
     "String.digit?": "test it with s.to_i (a Result): s.to_i.ok? is true for a whole number, s.to_f.ok? for a decimal",
     "String.count": "count a non-empty part with s.split(part).size - 1; s.length counts the characters",
     "String.drop": "use s.split(\"\").drop(n).join(\"\") for all but the first n characters; n may exceed the length",
     "String.each_char": "s.split(\"\") gives the characters as a List[String]; s.at(i) reads one character",
+    "String.ends_with?": "use s.end_with?(suffix)",
     "String.error?": "error? is not a String method; only a Result has ok? and message (!r.ok? tests for an error)",
     "String.gsub": "use s.replace(old, new)",
     "String.index": "use s.index_of(part), which gives an Optional[Int]",
@@ -295,12 +288,18 @@ export def foreign_kind_methods() -> Map[String, String]
       "there are no regular expressions; use s.include?(part), s.start_with?(part), s.end_with?(part) or " +
       "s.index_of(part)"
     ),
+    "String.starts_with?": "use s.start_with?(prefix)",
     "String.sub": "use s.replace(old, new)",
     "String.substr": "use s.slice(start, length) for a part of the text; length is end - start",
     "String.substring": "use s.slice(start, length) for a part of the text; length is end - start",
     "String.take": "use s.split(\"\").take(n).join(\"\") for the first n characters; n may exceed the length",
     "String.to_a": "s.split(\"\") gives the characters as a List[String]; s.at(i) reads one character",
     "String.to_bytes": "use s.bytes, or s.bytes.to_a for a List[Int]",
+    "String.to_float": "use s.to_f, which gives a Result",
+    "String.to_float!": "use s.to_f!",
+    "String.to_int": "use s.to_i, which gives a Result",
+    "String.to_int!": "use s.to_i!",
     "String.to_s": "a String is already text; s.to_s gives the same string",
+    "String.trim": "use s.strip",
   }
 end

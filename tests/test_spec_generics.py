@@ -376,7 +376,7 @@ CODEC_RULES = {
     "IO.inspect of a function field that takes a codec stays valid": (
         with_codec("IO.inspect(Hold(f: &body_as))",
                    header="struct Hold\n  f: Fn[String, Codec[User], Result[User]]\nend\n\n"), None, None),
-    "a codec method is also the builtin function, as String.trim is": (
+    "a codec method is also the builtin function, as String.strip is": (
         with_codec('puts(Codec.decode(c, "{}").ok?)', "puts(Codec.members(c).size)"), None, None),
 }
 

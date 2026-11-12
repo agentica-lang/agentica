@@ -74,7 +74,7 @@ def main() -> Void
   letters = put(dir, "letters.txt", "a\nb\n")
   before = open_files()
   report("an error from the block stops the call", before, stop_at_two(numbers))
-  report("try returns the error of String.to_int", before, parse_each(words))
+  report("try returns the error of to_i", before, parse_each(words))
   report("try with all lines numeric", before, parse_each(numbers))
   report("a call inside the block", before, read_other(letters, numbers))
   report("a block that waits on other tasks", before, wait_each(numbers))

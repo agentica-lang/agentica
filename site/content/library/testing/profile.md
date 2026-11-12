@@ -40,7 +40,7 @@ A block that uses `try` gives a `Result`. Give the call a `Result` type, so the 
 
 ```agentica
 def parse(text: String) -> Result[Int]
-  n = try text.to_int
+  n = try text.to_i
   ok(n)
 end
 

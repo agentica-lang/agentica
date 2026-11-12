@@ -258,12 +258,12 @@ error("negative")
 
 - The right side must be a call with parentheses. A multi-line chain goes in parentheses, as `total` above.
 - It may start with `try`: `x |> try f()` means `try f(x)`.
-- A builtin with a method form uses `.`: `s.strip`, not `s |> String.trim()` (`CHECK-PIPE-METHOD`).
+- A builtin with a method form uses `.`: `s.strip`, not `s |> String.strip()` (`CHECK-PIPE-METHOD`).
 
 ```agentica {expect="CHECK-PIPE-METHOD"}
 def main() -> Void
   s = " hi "
-  puts(s |> String.trim())
+  puts(s |> String.strip())
 end
 ```
 

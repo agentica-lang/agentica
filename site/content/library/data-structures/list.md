@@ -29,6 +29,7 @@ List.reverse(list: List[T]) -> List[T]
 - `append` is near constant time, so n appends cost O(n). `reverse` is O(n).
 - `repeat` takes a count from 0 to 1048576; zero gives an empty list of the element type, and any other count is `RUNTIME-INVALID-COUNT`.
 - A negative or out-of-range index is `RUNTIME-INDEX-OUT-OF-RANGE` at the index argument.
+- `parts.join(separator)` on a `List[String]` gives one string with the separator between the parts; [`List.join`](/library/text-and-data/string/#join) is on the String page.
 - `xs + ys` joins two lists of the same item type into a new one; both lists stay as they were. It takes time in the size of `ys` when `ys` has 32 items or fewer. A longer `ys` copies both lists.
 
 ```agentica

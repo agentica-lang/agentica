@@ -384,7 +384,7 @@ end
 
     assert [item["span"]["range"]["start"]["line"] for item in references("String.upcase")] == [7]
     # The calls of the expansion (`map`, `first`, `join`, `push`) belong to no line of the template.
-    for hidden in ("List.map", "List.first", "String.join", "List.append"):
+    for hidden in ("List.map", "List.first", "List.join", "List.append"):
         assert references(hidden) == []
 
 

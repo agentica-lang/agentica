@@ -1201,7 +1201,7 @@ def test_bodies_name_the_modules_defaults_and_values_a_translator_needs(driver, 
     assert [(node["kind"], type_text(node["children"][0]["type"])) for node in (index_list, index_map)] == [
         ("index", "List[Int]"), ("index", "Map[String,Int]")]
     parsed = body[4]["children"][0]
-    assert (parsed["kind"], type_text(parsed["type"]), parsed["children"][0]["target"]) == ("try", "Int", "String.to_int")
+    assert (parsed["kind"], type_text(parsed["type"]), parsed["children"][0]["target"]) == ("try", "Int", "String.to_i")
     # A case as a value: its type, and the last node of each arm's block is the arm's value.
     case = body[5]["children"][0]
     values = [arm["children"][-1]["children"][-1]["text"] for arm in case["children"][1:]]

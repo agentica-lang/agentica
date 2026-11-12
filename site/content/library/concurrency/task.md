@@ -100,7 +100,7 @@ def main() -> Void
   task = Task.spawn(&parse, "0")
   case Task.await(task)
     ok(n) -> puts(n)
-    error(e) -> puts(e.starts_with?("task crashed: RUNTIME-DIVISION-BY-ZERO"))
+    error(e) -> puts(e.start_with?("task crashed: RUNTIME-DIVISION-BY-ZERO"))
   end
 
   puts("still running")
@@ -222,7 +222,7 @@ About 200 ms, not 400: a sliding window of two, not batches. Items start in inpu
 ```agentica
 def main() -> Void
   results = Task.map(["30", "x", "10"], 3, 1000) do |text|
-    n = try String.to_int(text)
+    n = try text.to_i
     Task.sleep(40 - n)
     ok(n * 2)
   end

@@ -228,7 +228,7 @@ tasks, TCP, TLS and HTTP, files and paths, processes. VM internals are in
 
 - `std/toml` (`stdlib/toml.agc`) is pure Agentica, no C. CRLF is turned into LF
   before reading, so a lone CR is an error everywhere.
-- Floats go through `JSON.parse` and `JSON.float` (`String.to_float` has no
+- Floats go through `JSON.parse` and `JSON.float` (`String.to_f` has no
   exponent and rounds less well). A reader error on a valid float text means a
   magnitude over the largest float, which is inf, as in `tomllib`. A sign is
   applied afterwards so that `-0.0` survives.

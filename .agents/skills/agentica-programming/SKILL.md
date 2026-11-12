@@ -49,7 +49,7 @@ in one command, `for f in cases/*.txt; do agentica p.agc < "$f" || break; done`.
   `end` is `PARSE-UNCLOSED-BLOCK` at the end of the file, or
   `PARSE-UNEXPECTED-TOKEN` at the next `def`: count the `end`s.
 - A method not in `references/` does not exist (`contains?` on a List, `value!`,
-  `len`): `CHECK-UNKNOWN-METHOD`.
+  `len`, the old `trim` and `to_int`): `CHECK-UNKNOWN-METHOD`.
 
 ## References
 

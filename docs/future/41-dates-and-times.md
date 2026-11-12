@@ -113,7 +113,7 @@ Time.assume_offset(value: NaiveDateTime, offset_minutes: Int)
   it checks only the clock fields.
 - Errors are `error(...)` with a message, for example `month 13 is not in 1 ..
   12` or `day 30 is not valid for month 2 of year 2026`. A bad value from input
-  is an error the program handles, as `String.to_int` does. `Result.unwrap!`
+  is an error the program handles, as `s.to_i` does. `Result.unwrap!`
   covers the case where the program knows the value is good.
 - No `Date`-taking form of `naive`. One form per job: the seven-number form
   matches Python's `datetime(...)` and needs no second value; the fields of a
