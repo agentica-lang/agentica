@@ -56,7 +56,7 @@ def classify(r: Result[Option]) -> String
     ok(Option.Some(n)) -> return "ok #{n}"
     ok(Option.None) -> return "ok none"
     ok(_) -> return "ok other"
-    error("boom") -> return "boom"
+    error(e) if e.message == "boom" -> return "boom"
     error(m) -> return "error #{m}"
   end
 end

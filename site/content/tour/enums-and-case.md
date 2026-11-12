@@ -322,7 +322,7 @@ def describe(r: Result[Optional[Int]]) -> String
     ok(some(n)) if n < 0 -> "negative #{n}"
     ok(some(n)) -> "value #{n}"
     ok(_) -> "none"
-    error("timeout") -> "timed out"
+    error(e) if e.message == "timeout" -> "timed out"
     error(_) -> "failed"
   end
 end

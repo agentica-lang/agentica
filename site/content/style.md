@@ -514,7 +514,7 @@ end
 def main() -> Void
   case double_text("21")
     ok(n) -> puts(n)
-    error(message) -> IO.warn(message)
+    error(e) -> IO.warn(e.message)
   end
 end
 ```
@@ -533,7 +533,7 @@ end
 def main() -> Void
   case parse_port("70000")
     ok(n) -> puts("port #{n}")
-    error(message) -> IO.warn(message)
+    error(e) -> IO.warn(e.message)
   end
 end
 ```

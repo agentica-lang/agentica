@@ -52,7 +52,7 @@ end
 def check(r: Result[Int]) -> String
   case r
     ok(n) -> return "ok #{n}"
-    error(message) -> return message
+    error(e) -> return e.message
   end
 end
 

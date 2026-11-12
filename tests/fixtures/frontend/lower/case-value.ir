@@ -1,6 +1,8 @@
 program 0:1:1-32:1 entry=1 globals=0
 source 0 "case-value.agc" chars=450
+struct s0 "Error" ["kind","message","code","details","cause","location"] types=[String, String, Optional(Int), Map(String, String), Optional(Struct(Error)), String]
 enum "Kind" v0="Big"/0 v1="Small"/0
+enum "Optional" v2="None"/0 v3="Some"/1
 fn0 "label" params=1 captures=0 slots=3 @ 0:6:1-12:1
     step @ 0:7:3-11:1
     step @ 0:7:15-7:19

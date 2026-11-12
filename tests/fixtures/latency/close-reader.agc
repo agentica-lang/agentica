@@ -4,7 +4,7 @@ def reader(input: FileHandle) -> Int
   while running
     case File.read_line(input, 60000)
       ok(_) -> count = count + 1
-      error(message) -> running = message != "filesystem: file handle is closed"
+      error(e) -> running = e.message != "filesystem: file handle is closed"
     end
   end
   return count

@@ -1,8 +1,10 @@
 program 0:1:1-6:1 entry=0 globals=0
 source 0 "root.agc" chars=68
 source 1 "util.agc" chars=221
+struct s0 "Error" ["kind","message","code","details","cause","location"] types=[String, String, Optional(Int), Map(String, String), Optional(Struct(Error)), String]
 enum "@2::Local" v0="One"/0 v1="Two"/0
 enum "@3::Level" v2="Info"/0 v3="Warn"/0
+enum "Optional" v4="None"/0 v5="Some"/1
 fn0 "main" params=0 captures=0 slots=4 entry @ 0:3:1-6:1
     step @ 0:4:3-5:1
     step @ 0:4:3-4:20

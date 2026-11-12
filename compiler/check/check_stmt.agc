@@ -675,16 +675,15 @@ end
 # A literal pattern needs a primitive value of its own type (CHECK-PATTERN-TYPE), at the top of an arm or nested.
 def check_literal(cx: State.Cx, st: State.St, pattern: Ast.LiteralPattern, value_type: T.Type) -> Result[Bool]
   pattern_type = literal_type(pattern.value)
+  message = "literal pattern has type #{T.to_text(pattern_type)}, but case value has type #{T.to_text(value_type)}"
+  if T.error?(value_type) and T.is?(pattern_type, "String")
+    # error("timeout") -> matched the text while the payload was a String.
+    help = "the payload of error(...) is an Error: bind it and test its text, error(e) if e.message == ..."
+    return error(State.fail_help(cx, st, "CHECK-PATTERN-TYPE", message, pattern.span, help))
+  end
+
   if !Types.primitive?(value_type) or !T.same?(value_type, pattern_type)
-    return error(
-      State.fail(
-        cx,
-        st,
-        "CHECK-PATTERN-TYPE",
-        "literal pattern has type #{T.to_text(pattern_type)}, but case value has type #{T.to_text(value_type)}",
-        pattern.span,
-      ),
-    )
+    return error(State.fail(cx, st, "CHECK-PATTERN-TYPE", message, pattern.span))
   end
 
   ok(true)
@@ -858,7 +857,7 @@ end
 def payload_types(cx: State.Cx, pattern: Ast.VariantPattern, value_type: T.Type) -> Result[List[T.Type]]
   case value_type
     T.Type.Result(item) if pattern.enum_name == "Result" and pattern.variant_name == "Ok" -> return ok([item])
-    T.Type.Result(_) if pattern.enum_name == "Result" and pattern.variant_name == "Err" -> return ok([T.Type.String])
+    T.Type.Result(_) if pattern.enum_name == "Result" and pattern.variant_name == "Err" -> return ok([T.error_type()])
     T.Type.Optional(item) if pattern.enum_name == "Optional" and pattern.variant_name == "Some" -> return ok([item])
     T.Type.Optional(_) if pattern.enum_name == "Optional" and pattern.variant_name == "None" -> return ok([])
     T.Type.Enum(name, args) if pattern.enum_name == name ->

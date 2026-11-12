@@ -5,7 +5,9 @@ source 2 "std/queue.agc" chars=1458
 struct s0 "@2::User" ["name","age"]
 struct s1 "@3::QueueState" ["items"]
 struct s2 "@3::Popped" ["value","remaining"]
+struct s3 "Error" ["kind","message","code","details","cause","location"] types=[String, String, Optional(Int), Map(String, String), Optional(Struct(Error)), String]
 enum "@2::Status" v0="Active"/0 v1="Gone"/0
+enum "Optional" v2="None"/0 v3="Some"/1
 fn0 "main" params=0 captures=0 slots=7 entry @ 0:4:1-13:1
     step @ 0:5:3-6:1
     step @ 0:5:10-5:42
