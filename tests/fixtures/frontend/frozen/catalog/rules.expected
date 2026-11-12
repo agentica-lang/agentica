@@ -10,6 +10,7 @@ CodecDecode
 CodecEncode
 CodecMembers
 Error
+ErrorKind
 Identity
 JsonDecode
 JsonEncode

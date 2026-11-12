@@ -1,0 +1,53 @@
+program #51 0:1:1-337:14:1
+  module "error-is-a.agc"
+    declaration: function-decl #25 0:1:1-170:6:1 name="insert"
+      param: param #1 11:1:12-23:1:24 name="name"
+        type: type-ref #0 17:1:18-23:1:24 name="String"
+      result: type-ref #3 28:1:29-39:1:40 name="Result"
+        arg: type-ref #2 35:1:36-38:1:39 name="Int"
+      body: if-stmt #20 42:2:3-149:3:1 guard
+        branch: if-branch #19 42:2:3-148:2:109
+          condition: binary #18 133:2:94-148:2:109 op=equal op-span=138:2:99-140:2:101 type=Bool
+            left: name-ref #16 133:2:94-137:2:98 name="name" type=String
+            right: literal #17 141:2:102-148:2:109 value=string:"taken" type=String
+          body: return-stmt #15 42:2:3-129:2:90
+            value: call #14 49:2:10-129:2:90 name="error" piped=false type=Result(Int)
+              arg: literal #4 55:2:16-70:2:31 value=string:"unique failed" type=String
+              arg: named-arg #6 72:2:33-93:2:54 name="kind"
+                value: literal #5 78:2:39-93:2:54 value=string:"db.constraint" type=String
+              arg: named-arg #8 95:2:56-103:2:64 name="code"
+                value: literal #7 101:2:62-103:2:64 value=int:19 type=Int
+              arg: named-arg #13 105:2:66-128:2:89 name="details"
+                value: map-lit #12 114:2:75-128:2:89 type=Map(String, String)
+                  entry: map-entry #11 115:2:76-127:2:88
+                    key: literal #9 115:2:76-121:2:82 value=string:"name" type=String
+                    value: name-ref #10 123:2:84-127:2:88 name="name" type=String
+      body: return-stmt #24 152:4:3-165:4:16 implicit
+        value: call #23 152:4:3-165:4:16 name="ok" piped=false type=Result(Int)
+          arg: field-access #22 155:4:6-164:4:15 name="size" type=Int resolved=call("String.length", String)
+            target: name-ref #21 155:4:6-159:4:10 name="name" type=String
+    declaration: function-decl #50 171:7:1-337:14:1 name="main"
+      result: type-ref #26 185:7:15-189:7:19 name="Void"
+      body: case-stmt #49 192:8:3-333:13:1
+        value: call #28 197:8:8-212:8:23 name="insert" piped=false type=Result(Int)
+          arg: literal #27 204:8:15-211:8:22 value=string:"taken" type=String
+        arm: case-arm #33 217:9:5-236:10:1
+          pattern: variant-pattern #29 217:9:5-223:9:11 enum="Result" variant="Ok" bindings=["id"]
+          body: expr-stmt #32 227:9:15-236:10:1
+            value: call #31 227:9:15-235:9:23 name="puts" piped=false type=Void
+              arg: name-ref #30 232:9:20-234:9:22 name="id" type=Int
+        arm: case-arm #43 240:10:5-303:11:1
+          pattern: variant-pattern #34 240:10:5-248:10:13 enum="Result" variant="Err" bindings=["e"]
+          guard: method-call #37 252:10:17-265:10:30 name="is_a?" type=Bool resolved=call("Error.is_a?", Struct(Error))
+            target: name-ref #35 252:10:17-253:10:18 name="e" type=Struct(Error)
+            arg: literal #36 260:10:25-264:10:29 value=string:"db" type=String
+          body: expr-stmt #42 269:10:34-303:11:1
+            value: call #41 269:10:34-302:10:67 name="puts" piped=false type=Void
+              arg: method-call #40 274:10:39-301:10:66 name="kind_of?" type=Bool resolved=call("Error.is_a?", Struct(Error))
+                target: name-ref #38 274:10:39-275:10:40 name="e" type=Struct(Error)
+                arg: literal #39 285:10:50-300:10:65 value=string:"db.constraint" type=String
+        arm: case-arm #48 307:11:5-327:12:1
+          pattern: variant-pattern #44 307:11:5-315:11:13 enum="Result" variant="Err" bindings=["e"]
+          body: expr-stmt #47 319:11:17-327:12:1
+            value: call #46 319:11:17-326:11:24 name="puts" piped=false type=Void
+              arg: name-ref #45 324:11:22-325:11:23 name="e" type=Struct(Error)
