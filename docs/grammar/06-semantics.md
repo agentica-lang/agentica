@@ -817,10 +817,10 @@ puts(seen)
   letter, joined by single dots (`db`, `db.constraint`, `io.not_found`). A
   text literal given as `kind:` (of `error(...)` or `Result.Err(...)`) or to
   `is_a?` / `kind_of?` that is not one is `CHECK-ERROR-KIND`. Nothing else is
-  checked: not a computed kind, and not `e.with(kind: ...)`. `e.is_a?(family)` is true
-  when the kind is `family` or starts with `family` and a dot (`db` takes
-  `db.constraint`, not `dbx`); `kind_of?` is the same method, and `is?` is
-  `CHECK-UNKNOWN-METHOD` with a help that shows `is_a?`.
+  checked: not a computed kind, and not `e.with(kind: ...)`.
+  `e.is_a?(family)` is true when the kind is `family` or starts with `family`
+  and a dot (`db` takes `db.constraint`, not `dbx`); `kind_of?` is the same
+  method, and `is?` is `CHECK-UNKNOWN-METHOD` with a help that shows `is_a?`.
 - `Error(...)` is `CHECK-ERROR-CONSTRUCTOR`: only `error(...)` builds an
   `Error`, and `e.with(...)` changes one.
 - `location` is `path:line:col` of the `error(...)` call, or for an error that a
