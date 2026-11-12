@@ -3,7 +3,6 @@
 ## (CHECK-TOO-DEEP), checks the node by its kind, records the type by node id, and refuses a Void value that is not a
 ## completion.
 
-import Model from "../catalog/builtin_model"
 import {ENTRIES} from "../catalog/builtins"
 import Failure from "../diagnostics/problem"
 import Ast from "../syntax/ast"
@@ -19,7 +18,6 @@ import Rules from "check_rules"
 import State from "check_state"
 import Statements from "check_stmt"
 import CheckTypes from "check_types"
-import Defaults from "defaults"
 
 # The types whose left side of == gives the right side its expected type (check_sides).
 EXPECTING_SIDES = Set.new(["List", "Map", "Set", "Optional", "Result", "Struct", "Enum"])
@@ -104,13 +102,7 @@ def expression_inside(cx: State.Cx, st: State.St, node: Ast.Expr, expected: T.Ty
     Ast.Expr.Name(found) -> check_name(cx, st, found)
     Ast.Expr.Unary(found) -> check_unary(cx, st, found)
     Ast.Expr.Binary(found) -> check_binary(cx, st, found)
-    Ast.Expr.Call(found) ->
-      out = try Calls.check_call(cx, st, found, expected)
-      if last_lambda?(found.args)
-        try call_lambda_block(cx, out.st, found)
-      end
-
-      ok(out)
+    Ast.Expr.Call(found) -> Calls.check_call(cx, st, found, expected)
     Ast.Expr.EnumConstructor(found) ->
       Calls.check_enum_constructor(
         cx,
@@ -130,13 +122,7 @@ def expression_inside(cx: State.Cx, st: State.St, node: Ast.Expr, expected: T.Ty
     Ast.Expr.ListLit(found) -> check_list(cx, st, found, expected)
     Ast.Expr.MapLit(found) -> check_map(cx, st, found, expected)
     Ast.Expr.FieldAccess(found) -> Methods.check_field_access(cx, st, found, expected)
-    Ast.Expr.MethodCall(found) ->
-      out = try Methods.check_method(cx, st, found, expected)
-      if last_lambda?(found.args) and method_takes_block?(cx, out.st, found)
-        try lambda_block(cx, out.st, receiver_text(cx, found.target) + ".#{found.name}", found.args)
-      end
-
-      ok(out)
+    Ast.Expr.MethodCall(found) -> Methods.check_method(cx, st, found, expected)
     Ast.Expr.Typed(found) -> ok(State.Out(st: st, type: found.type))
     Ast.Expr.BlockLit(found) -> check_block_lit(cx, st, found, expected)
     Ast.Expr.Interpolation(found) -> check_interpolation(cx, st, found)
@@ -351,32 +337,55 @@ end
 
 # CHECK-CHAIN-AFTER-END: a method call, field, `.call`, `.with`, index or `|>` right after the `end` of a `do` block,
 # as in `xs.map do |x| f(x) end.join(", ")`. The parser keeps no node for parentheses, and fmt prints `(... end).size`
-# as `... end.size`, so parentheses do not hide it. A block in braces and a lambda may be chained.
+# as `... end.size`, so parentheses do not hide it. A block in braces and a lambda may be chained. A pipe into a method
+# is a method call that the linker made (Calls.piped_method?), and is reported as the `|>` it was written as.
 def chain_after_end(cx: State.Cx, st: State.St, node: Ast.Expr) -> Result[Bool]
   case node
-    Ast.Expr.FieldAccess(found) -> chain_link(cx, st, found.target, found.name_span, "a method call")
-    Ast.Expr.MethodCall(found) -> chain_link(cx, st, found.target, found.name_span, "a method call")
-    Ast.Expr.Invoke(found) -> chain_link(cx, st, found.target, found.span, "a method call")
-    Ast.Expr.Update(found) -> chain_link(cx, st, found.target, found.span, "a method call")
-    Ast.Expr.Index(found) -> chain_link(cx, st, found.target, found.span, "an index")
-    Ast.Expr.Call(found) if found.piped and found.args.size > 0 -> chain_link(cx, st, found.args[0], found.span, "|>")
+    Ast.Expr.FieldAccess(found) -> chain_link(cx, st, found.target, found.name_span, "a method call", "")
+    Ast.Expr.MethodCall(found) if Calls.piped_method?(found) ->
+      chain_link(cx, st, found.target, found.span, "|>", step_text(found.name, found.args.size))
+    Ast.Expr.MethodCall(found) ->
+      chain_link(cx, st, found.target, found.name_span, "a method call", step_text(found.name, found.args.size))
+    Ast.Expr.Invoke(found) -> chain_link(cx, st, found.target, found.span, "a method call", "")
+    Ast.Expr.Update(found) -> chain_link(cx, st, found.target, found.span, "a method call", "")
+    Ast.Expr.Index(found) -> chain_link(cx, st, found.target, found.span, "an index", "")
+    Ast.Expr.Call(found) if found.piped and found.args.size > 0 ->
+      chain_link(cx, st, found.args[0], found.span, "|>", step_text(T.display_name(found.name), found.args.size - 1))
     _ -> ok(true)
   end
 end
 
+# A pipe step as a help writes it: `name()`, or `name(...)` when it has arguments of its own.
+def step_text(name: String, count: Int) -> String
+  return "#{name}(...)" if count > 0
+
+  "#{name}()"
+end
+
 # The error when `target` ends with a `do` block. The span goes from that `end` (one token, on one line) to the end of
-# `link`, the name, index or call that follows it.
-def chain_link(cx: State.Cx, st: State.St, target: Ast.Expr, link: Source.Span, what: String) -> Result[Bool]
+# `link`, the name, index or call that follows it. The help shows the block as a lambda in the parentheses, followed
+# by `step` as a pipe step when the link is a method call with `()` or a pipe (`step` is "" for a name without `()`,
+# which may be a struct field, an index, `.call` and `.with`), then a block in braces when it fits, then a name for
+# the result.
+def chain_link(
+  cx: State.Cx,
+  st: State.St,
+  target: Ast.Expr,
+  link: Source.Span,
+  what: String,
+  step: String,
+) -> Result[Bool]
   found = do_block(target)
   return ok(true) if found.none?
 
   stop = found.unwrap!.span.stop
   start = Source.Position(offset: stop.offset - 3, line: stop.line, column: stop.column - 3)
-  help = "bind the result to a name first"
+  help = "pass a lambda in the parentheses: #{lambda_form(cx, target, found.unwrap!, step)}"
   if braces_fit?(cx, target)
-    help = "#{help}, or, outside a condition, a one-line block in braces: {#{block_bars(found.unwrap!.params)} ... }"
+    help = "#{help}; or, outside a condition, a one-line block in braces: {#{block_bars(found.unwrap!.params)} ... }"
   end
 
+  help = "#{help}; or bind the result to a name first"
   error(
     State.fail_help(
       cx,
@@ -387,6 +396,64 @@ def chain_link(cx: State.Cx, st: State.St, target: Ast.Expr, link: Source.Span, 
       help,
     ),
   )
+end
+
+# The call `target`, which ends with `block`, written with the block as a lambda in its parentheses and `step` piped
+# after it: `xs |> map(->(x) { ... }) |> join(...)`. A method call and a piped call show their receiver (`...` when it
+# is long), and a link with no pipe form (`step` is "") follows a method call as `xs.map(->(x) { ... })`.
+def lambda_form(cx: State.Cx, target: Ast.Expr, block: Ast.BlockLit, step: String) -> String
+  lambda = "-> { ... }"
+  if block.params.size > 0
+    names = block.params.map do |param: Ast.BlockParam| param.name end
+    lambda = "->(#{names.join(", ")}) { ... }"
+  end
+
+  name = ""
+  others = 0
+  piped = false
+  receiver: Optional[Ast.Expr] = none
+  case target
+    Ast.Expr.MethodCall(call) ->
+      name = call.name
+      others = call.args.size - 1
+      piped = Calls.piped_method?(call)
+      receiver = some(call.target)
+    Ast.Expr.Call(call) ->
+      name = T.display_name(call.name)
+      others = call.args.size - 1
+      if call.piped and call.args.size > 0
+        others -= 1
+        piped = true
+        receiver = some(call.args[0])
+      end
+
+    _ -> name = name
+  end
+
+  if others > 0
+    lambda = "..., #{lambda}"
+  end
+
+  form = "#{name}(#{lambda})"
+  case receiver
+    some(value) ->
+      text = Calls.extent_text(cx, value)
+      if text.length > 40 or text.include?("\n")
+        text = "..."
+      end
+
+      joint = "."
+      if piped or step != ""
+        joint = " |> "
+      end
+
+      form = "#{text}#{joint}#{form}"
+    none -> form = form
+  end
+
+  return form if step == ""
+
+  "#{form} |> #{step}"
 end
 
 # The `do` block that ends the call `target`: its last argument, when that is a block that is not in braces.
@@ -430,106 +497,6 @@ def block_bars(params: List[Ast.BlockParam]) -> String
 
   names = params.map do |param: Ast.BlockParam| param.name end
   " |#{names.join(", ")}|"
-end
-
-# Whether the last argument is a lambda; the lambda checks below run only then, so a call without one pays nothing.
-def last_lambda?(args: List[Ast.Expr]) -> Bool
-  return false if args.size == 0
-
-  case args[args.size - 1]
-    Ast.Expr.BlockLit(found) -> found.lambda
-    _ -> false
-  end
-end
-
-# CHECK-LAMBDA-BLOCK for a call by name whose last argument is a lambda, when its last parameter is a function. A call
-# by its plain name with no other argument shows `run() do ... end`, the form that parses in every place, an if
-# condition and a pipe included (fmt drops the `()` where it may), and a piped call shows its value.
-def call_lambda_block(cx: State.Cx, st: State.St, node: Ast.Call) -> Result[Bool]
-  return ok(true) if !takes_block?(cx, node.name, node.args.size)
-
-  skip = 0
-  name = T.display_name(node.name)
-  if node.piped
-    skip = 1
-    name = receiver_text(cx, node.args[0]) + " |> " + name
-  end
-
-  if node.args.size - skip == 1 and (node.piped or !node.name.include?("."))
-    name = "#{name}()"
-  end
-
-  lambda_block(cx, st, name, node.args.drop(skip))
-end
-
-# CHECK-LAMBDA-BLOCK at the lambda that ends `args`, the arguments the source shows of the call `name`: the call takes
-# a block there, the one way to write a function in that place. A parameter of a generic type (`some`, `push`) takes
-# no block, so the callers ask first (takes_block?). `.call(...)` is an Invoke, which takes no block, so it never
-# comes here.
-def lambda_block(cx: State.Cx, st: State.St, name: String, args: List[Ast.Expr]) -> Result[Bool]
-  case args[args.size - 1]
-    Ast.Expr.BlockLit(found) ->
-      call = name
-      if args.size > 1
-        call = "#{name}(...)"
-      end
-
-      head = "do#{block_bars(found.params)}"
-      error(
-        State.fail_help(
-          cx,
-          st,
-          "CHECK-LAMBDA-BLOCK",
-          "a lambda is passed where a block goes",
-          found.span,
-          "write it as a block after the call: #{call} #{head} ... end",
-        ),
-      )
-    _ -> ok(true)
-  end
-end
-
-# The receiver of a method call as the source writes it, for a help; "" when it is long or spans lines.
-def receiver_text(cx: State.Cx, target: Ast.Expr) -> String
-  text = Calls.extent_text(cx, target)
-  return "" if text.length > 40 or text.include?("\n")
-
-  text
-end
-
-# Whether the last of `count` arguments of the call `name` goes to a parameter declared as a function: one of the
-# program's functions, or a form of a builtin with that many parameters.
-def takes_block?(cx: State.Cx, name: String, count: Int) -> Bool
-  return false if count == 0
-
-  case cx.functions.get(name)
-    some(signature) ->
-      shape = signature.shape
-      return false if count < shape.required or count > shape.total
-
-      return T.is?(signature.params[Defaults.param_of(shape, count, count - 1)], "Fn")
-    none -> count = count
-  end
-
-  case ENTRIES.get(name)
-    some(entry) ->
-      forms = [entry].concat(entry.alternatives)
-      forms.any? do |form: Model.Builtin| last_takes_function?(form, count) end
-    none -> false
-  end
-end
-
-def last_takes_function?(form: Model.Builtin, count: Int) -> Bool
-  form.parameters.size == count and T.is?(form.parameters[count - 1].type, "Fn")
-end
-
-# takes_block? for a method call: the builtin it resolved to, whose first parameter is the receiver. A call of a field
-# of type Fn takes no block.
-def method_takes_block?(cx: State.Cx, st: State.St, node: Ast.MethodCall) -> Bool
-  case st.resolved.get(node.id)
-    some(State.Resolved.Call(name, _)) -> takes_block?(cx, name, node.args.size + 1)
-    _ -> false
-  end
 end
 
 # A block or a lambda where a function is expected, or anywhere a type is not demanded.

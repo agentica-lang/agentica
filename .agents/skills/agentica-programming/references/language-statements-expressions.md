@@ -173,8 +173,12 @@ Operators, from highest to lowest precedence:
   (`read!`). Operands run left to right.
 - `x |> f(a)` means `f(x, a)`. The right side is a call with parentheses
   (`f(a)`, `Alias.f(a)`), optionally after `try`, else `PARSE-PIPE-TARGET`;
-  pipes group left. A builtin with a method form is written with `.`
-  (`CHECK-PIPE-METHOD`: `x.upcase`, not `x |> String.upcase()`). A multi-line
+  pipes group left. A bare name that is no function of the file, no function
+  it imports by name and no builtin function is a method of the left value:
+  `xs |> map(->(x) { x * 2 }) |> sum()` is `xs.map(->(x) { x * 2 }).sum`; a
+  function of that name wins. A step never reads or calls a struct field. A
+  builtin is never piped with its type (`CHECK-PIPE-METHOD`: `x.upcase` or
+  `x |> upcase()`, not `x |> String.upcase()`). A multi-line
   chain goes in parentheses, one step per line; a leading `|>` does not continue
   a line, unlike a leading `.name`.
 

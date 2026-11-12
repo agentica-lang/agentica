@@ -258,7 +258,8 @@ error("negative")
 
 - The right side must be a call with parentheses. A multi-line chain goes in parentheses, as `total` above.
 - It may start with `try`: `x |> try f()` means `try f(x)`.
-- A builtin with a method form uses `.`: `s.strip`, not `s |> String.strip()` (`CHECK-PIPE-METHOD`).
+- A step may name a method of the value, which is then called on it: `xs |> map(->(x) { x * 2 }) |> sum()` is `xs.map(->(x) { x * 2 }).sum`. A function of the program with the same name as a method wins.
+- A builtin with a method form is written by the method name, not with its type: `s |> strip()` or `s.strip`, not `s |> String.strip()` (`CHECK-PIPE-METHOD`).
 
 ```agentica {expect="CHECK-PIPE-METHOD"}
 def main() -> Void

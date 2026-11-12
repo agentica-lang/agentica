@@ -833,13 +833,13 @@ end
 ## The first id the next file can use: one more than the id of the Program.
 export def next_free_id(program: Program) -> Int = program.id + 1
 
-## True when the last argument of a call is a block (do ... end), which picks the block form of a builtin (File.open).
-## A lambda there is an argument like any value.
+## True when the last argument of a call is a block (do ... end) or a lambda, which picks the block form of a builtin
+## (File.open): a lambda in the place of the block means the same as the block.
 export def block_call?(call: Call) -> Bool
   return false if call.args.size == 0
 
   case call.args[call.args.size - 1]
-    Expr.BlockLit(found) -> !found.lambda
+    Expr.BlockLit(_) -> true
     _ -> false
   end
 end

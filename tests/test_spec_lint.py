@@ -26,6 +26,7 @@ def helper(flag: Bool, text: String, n: Int) -> String
   label = "n=" + n.to_s + "!"
   shout = text |> upcase_it()
   boxed = wrap(trim_it(pad_it(text)), "*")
+  total = items.map(->(x) { x * 2 }).select(->(x) { x > 2 }).sum
   if not flag
     out = "a"
   else
@@ -46,8 +47,9 @@ end
 
 # The good form of each rule, and the near misses that must stay quiet: a pipe of two steps, a String built outside a
 # loop, a List grown in a loop, a `+` of two Strings with no to_s, two branches, a doc on public code, a qualified name
-# used a few times, two nested calls, a nest that is not in first position, and nests whose outer calls are builtins or
-# methods of a constant.
+# used a few times, two nested calls, a nest that is not in first position, nests whose outer calls are builtins or
+# methods of a constant, and method chains of two steps, of blocks in braces, or whose names after the lambda may be
+# fields.
 GOOD = '''import Db from "db"
 
 ## Returns the label of the count.
@@ -93,6 +95,15 @@ export def label(flag: Bool, text: String, n: Int) -> String
   methods = String.upcase(String.strip(pad_it(text)))
   builtins = puts(ok(pad_it(text)))
   rows = ROWS.concat(MORE.concat(pad_it(text)))
+  total = (
+    items
+    |> map(->(x) { x * 2 })
+    |> select(->(x) { x > 2 })
+    |> sum()
+  )
+  pair = items.map(->(x) { x * 2 }).sum
+  braces = items.map { |x| x * 2 }.select { |x| x > 2 }.sum
+  fields = items.map(->(x) { x * 2 }).first.size
   return "#{joined}#{greeting}#{note}#{shout}"
 end
 
@@ -165,6 +176,7 @@ def test_every_rule_reports_its_code_at_its_place(tmp_path):
         "LINT-TO-S-CONCAT": [where(BAD, '"n=" + n.to_s')],
         "LINT-SINGLE-PIPE": [where(BAD, "upcase_it()")],
         "LINT-NESTED-CALL": [where(BAD, "wrap(trim_it")],
+        "LINT-LAMBDA-CHAIN": [where(BAD, "items.map")],
         "LINT-NEGATED-ELSE": [where(BAD, "not flag")],
         "LINT-IF-CHAIN": [where(BAD, "n == 1")],
         "LINT-REPEATED-QUALIFIED-NAME": [where(BAD, "Db.Value", nth=2)],
@@ -421,3 +433,78 @@ def test_a_mistake_in_the_call_is_a_usage_error_and_lints_nothing(tmp_path, word
     (tmp_path / "empty" / "readme.txt").write_text("x", encoding="utf-8")
     (tmp_path / "bad.agc").write_text(BAD, encoding="utf-8")
     assert problem(lint_json(*words, cwd=tmp_path), "QUERY-USAGE", 2)["file"] == "<arguments>"
+
+
+def test_a_lambda_chain_is_judged_once_at_its_last_link_and_a_chain_in_an_argument_on_its_own(tmp_path):
+    source = (
+        "def f(xs: List[Int]) -> Int\n"
+        "  one = xs.map(->(x) { x }).select(->(x) { x > 0 }).map(->(x) { x + 1 }).size\n"
+        "  two = xs.take(xs.map(->(x) { x }).select(->(x) { x > 0 }).size).reverse.first\n"
+        "  return one + two\n"
+        "end\n"
+    )
+    found = suggested(tmp_path / "chains.agc", source)
+    assert found == {"LINT-LAMBDA-CHAIN": [where(source, "xs.map"), where(source, "xs.map", nth=2)]}
+
+
+def test_a_lambda_chain_after_a_field_is_judged_below_it_and_a_chain_through_a_file_function_is_not(tmp_path):
+    """A name without arguments ends the part of a chain that a pipe writes, so the method calls below it are judged as
+    a chain of their own; a link named as a function of the file would call that function in a pipe, so its chain is
+    left alone."""
+    source = (
+        "def f(xs: List[Int]) -> String\n"
+        "  one = xs.map(->(x) { x * 2 }).select(->(x) { x > 2 }).sum.to_s\n"
+        "  return one\n"
+        "end\n"
+    )
+    assert suggested(tmp_path / "field.agc", source) == {"LINT-LAMBDA-CHAIN": [where(source, "xs.map")]}
+    clash = "def select(xs: List[Int], f: Fn[Int, Bool]) -> List[Int] = xs\n\n" + source
+    assert suggested(tmp_path / "clash.agc", clash) == {}
+
+
+def test_the_help_of_a_one_step_pipe_into_a_method_is_the_method_call(tmp_path):
+    source = (
+        "def shout(text: String) -> String = text\n\n"
+        "def f(xs: List[Int], text: String) -> Bool\n"
+        "  loud = text |> shout()\n"
+        "  return xs |> any?(->(x) { x > 0 })\n"
+        "end\n"
+    )
+    path = tmp_path / "single.agc"
+    path.write_text(source, encoding="utf-8")
+    found = report(lint_json(path.name, cwd=tmp_path), 0)["files"][0]["suggestions"]
+    assert [(s["code"], start(s)) for s in found] == [
+        ("LINT-SINGLE-PIPE", where(source, "shout()")),
+        ("LINT-SINGLE-PIPE", where(source, "any?(")),
+    ]
+    assert found[0]["help"] != found[1]["help"]
+
+
+def test_a_function_imported_by_name_counts_as_a_function_of_the_file(tmp_path):
+    """The linker sends a piped bare name to a function the file imports by name, so lint treats it as the file's own:
+    a chain through it is left alone, and a one-step pipe into it gets the plain-call help."""
+    (tmp_path / "m2.agc").write_text(
+        "export def select(xs: List[Int], f: Fn[Int, Bool]) -> List[Int] = xs\n\n"
+        "export def double(n: Int) -> Int = n * 2\n",
+        encoding="utf-8",
+    )
+    chain = (
+        'import {select} from "m2"\n\n'
+        "def f(xs: List[Int]) -> Int\n"
+        "  return xs.map(->(x) { x * 2 }).select(->(x) { x > 2 }).sum\n"
+        "end\n"
+    )
+    assert suggested(tmp_path / "chain.agc", chain) == {}
+    helps = []
+    for name, header, call in [("plain", "", "shout()"), ("named", '{double}', "double()"),
+                               ("renamed", '{double as twice}', "twice()")]:
+        source = (f'import {header} from "m2"\n\n' if header else "") + (
+            "def shout(n: Int) -> Int = n\n\n"
+            f"def f() -> Int\n  return 3 |> {call}\nend\n"
+        )
+        path = tmp_path / f"{name}.agc"
+        path.write_text(source, encoding="utf-8")
+        found = report(lint_json(path.name, cwd=tmp_path), 0)["files"][0]["suggestions"]
+        assert [(s["code"], start(s)) for s in found] == [("LINT-SINGLE-PIPE", where(source, call))]
+        helps.append(found[0]["help"])
+    assert helps[0] == helps[1] == helps[2]

@@ -38,6 +38,16 @@ export NESTED_CALL = Rule(
   ),
 )
 
+## A method chain that passes lambdas is a pipe, one step per line.
+export LAMBDA_CHAIN = Rule(
+  code: "LINT-LAMBDA-CHAIN",
+  message: "a method chain of three or more steps passes lambdas",
+  help: (
+    "a pipe with one step per line, each method by its name: " +
+    "`(xs |> map(->(x) { x * 2 }) |> select(->(x) { x > 2 }) |> sum())`"
+  ),
+)
+
 ## Text is built with interpolation.
 export TO_S_CONCAT = Rule(
   code: "LINT-TO-S-CONCAT",

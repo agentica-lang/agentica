@@ -15,7 +15,10 @@ import Tokens from "token"
 ## PARSE-PIPE-TARGET; the linker gives it too, for x |> Type.Name.fn() whose head is no builtin family (rewrite.agc).
 export PIPE_TARGET_CODE = "PARSE-PIPE-TARGET"
 export PIPE_TARGET_MESSAGE = "the right side of |> must be a call with parentheses, such as f() or Alias.f(a)"
-export PIPE_TARGET_HINT = "wrap the expression in parentheses and use . on the result, for example (x |> f()).unwrap!"
+export PIPE_TARGET_HINT = (
+  "wrap the expression in parentheses and use . on the result, for example (x |> f()).unwrap!, or pipe into the " +
+  "method: x |> f() |> unwrap!()"
+)
 
 LEVELS: Map[String, Int] = {
   "or": 1,

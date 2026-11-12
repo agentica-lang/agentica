@@ -187,10 +187,25 @@ export def extent_text(cx: State.Cx, node: Ast.Expr) -> String
   text.unwrap!.slice(start, stop - start)
 end
 
+## Whether the method call is a step of a pipe, `x |> name()`, which the linker made a method call: it keeps the span
+## of the call right of `|>`, which starts after its receiver, while `x.name()` starts with it.
+export def piped_method?(call: Ast.MethodCall) -> Bool
+  call.span.start.offset >= Ast.expr_span(call.target).stop.offset
+end
+
+## The receiver of a method form in a help: the source text, in parentheses unless it is a simple expression that is
+## not a pipe, so `.name` binds to all of it (`(hs |> first()).run(...)`).
+export def receiver_text(cx: State.Cx, node: Ast.Expr) -> String
+  return extent_text(cx, node) if simple_receiver?(node) and !piped?(node)
+
+  "(#{extent_text(cx, node)})"
+end
+
 # The offset where an expression starts: a piped call starts where its receiver does, and so does a try of one.
 def extent_start(node: Ast.Expr) -> Int
   case node
     Ast.Expr.Call(call) -> call_start(call)
+    Ast.Expr.MethodCall(call) if piped_method?(call) -> extent_start(call.target)
     Ast.Expr.Try(attempt) -> try_start(attempt)
     _ -> Ast.expr_span(node).start.offset
   end
@@ -212,12 +227,14 @@ end
 def piped?(node: Ast.Expr) -> Bool
   case node
     Ast.Expr.Call(call) -> call.piped
+    Ast.Expr.MethodCall(call) -> piped_method?(call)
     Ast.Expr.Try(attempt) -> piped?(attempt.operand)
     _ -> false
   end
 end
 
-# CHECK-PIPE-METHOD: a builtin that has a method form (x |> String.upcase) is written as the method, x.upcase.
+# CHECK-PIPE-METHOD: a builtin that has a method form (x |> String.upcase()) is written as the method, x.upcase, or
+# piped by the method name alone, x |> upcase().
 def check_pipe_method(cx: State.Cx, st: State.St, node: Ast.Call, entry: Model.Builtin) -> Result[Bool]
   selected = Builtins.form_for(entry, node.args.size)
   return ok(true) if !selected.ok? or selected.unwrap!.parameters.size == 0
@@ -233,43 +250,38 @@ def check_pipe_method(cx: State.Cx, st: State.St, node: Ast.Call, entry: Model.B
       cx,
       st,
       "CHECK-PIPE-METHOD",
-      "\"#{entry.name}\" has a method form for #{kind}, so it is not piped",
+      "\"#{entry.name}\" has a method form for #{kind}, so it is written as the method",
       node.span,
       pipe_help(cx, node, method),
     ),
   )
 end
 
-# The method form of a piped call: receiver.method(arguments) do ... end.
+# The two method forms of a piped call: receiver.method(arguments) do ... end, and the pipe step by the method name,
+# receiver |> method(arguments) do ... end.
 def pipe_help(cx: State.Cx, node: Ast.Call, method: String) -> String
   left = node.args[0]
-  receiver = "(#{extent_text(cx, left)})"
-  if simple_receiver?(left) and !piped?(left)
-    receiver = extent_text(cx, left)
-  end
+  receiver = receiver_text(cx, left)
 
   plain: List[String] = []
-  block = false
+  block = ""
   index = 1
   while index < node.args.size
     case node.args[index]
-      Ast.Expr.BlockLit(found) if !found.lambda -> block = true
+      Ast.Expr.BlockLit(found) if !found.lambda -> block = " do ... end"
       _ -> plain = plain.push(extent_text(cx, node.args[index]))
     end
 
     index += 1
   end
 
-  text = "#{receiver}.#{method}"
+  arguments = "(#{plain.join(", ")})"
+  dot = "#{receiver}.#{method}"
   if plain.size > 0
-    text = "#{text}(#{plain.join(", ")})"
+    dot = "#{dot}#{arguments}"
   end
 
-  if block
-    text = "#{text} do ... end"
-  end
-
-  text
+  "write the method: #{dot}#{block} or #{extent_text(cx, left)} |> #{method}#{arguments}#{block}"
 end
 
 def simple_receiver?(node: Ast.Expr) -> Bool

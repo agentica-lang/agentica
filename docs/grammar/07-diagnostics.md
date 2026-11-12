@@ -315,9 +315,10 @@ is a rule:
 - `x \|> f`, `x \|> r.field`, `x \|> xs[0]`, `x \|> f(1).g`
   (`PARSE-PIPE-TARGET`)
   Help: a call with parentheses on the right; wrap the expression in parentheses
-  and use `.` on the result: `(x \|> f()).unwrap!`
+  and use `.` on the result, `(x \|> f()).unwrap!`, or pipe into the method:
+  `x \|> f() \|> unwrap!()`
 - `x \|> String.strip()` (`CHECK-PIPE-METHOD`)
-  Help: the method form: `x.strip`
+  Help: write the method: `x.strip` or `x \|> strip()`
 - `import` followed by a string, the path-first form of earlier versions
   (`PARSE-UNEXPECTED-TOKEN`)
   Help: `import Models from "models"`: the alias comes first, then `from` and

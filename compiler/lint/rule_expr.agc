@@ -1,19 +1,30 @@
-## The rules that read one expression: a Bool compared with a literal, a pipe of one step, three nested calls and text
-## joined with `+` and `to_s`.
+## The rules that read one expression: a Bool compared with a literal, a pipe of one step, three nested calls, text
+## joined with `+` and `to_s`, and a method chain that passes lambdas.
 
 import {ENTRIES} from "../catalog/builtins"
 import Problems from "../diagnostics/problem"
 import Ast from "../syntax/ast"
+import Source from "../syntax/source"
 import Rules from "rules"
 import Shape from "shape"
 
 ## The suggestions for `expr`. `chained` is true when it is the first operand of a pipe, of a `+` chain or of a call
 ## that is a step (step?): the expression above it judged the whole chain, so it must not be judged again as a chain of
-## its own. `aliases` are the module aliases that the file imports.
-export def suggestions(file: String, expr: Ast.Expr, chained: Bool, aliases: Set[String]) -> List[Problems.Problem]
+## its own. `aliases` are the module aliases that the file imports, and `functions` the names of its top-level
+## functions and the names it imports by name.
+export def suggestions(
+  file: String,
+  expr: Ast.Expr,
+  chained: Bool,
+  aliases: Set[String],
+  functions: Set[String],
+) -> List[Problems.Problem]
   case expr
     Ast.Expr.Binary(node) -> binary(file, node, chained)
-    Ast.Expr.Call(node) -> single_pipe(file, node, chained).concat(nested_call(file, node, chained, aliases))
+    Ast.Expr.Call(node) ->
+      single_pipe(file, node, chained, functions).concat(nested_call(file, node, chained, aliases))
+    Ast.Expr.MethodCall(node) -> lambda_chain(file, expr, node.span, chained, functions)
+    Ast.Expr.FieldAccess(node) -> lambda_chain(file, expr, node.span, chained, functions)
     _ -> []
   end
 end
@@ -33,6 +44,78 @@ export def step?(node: Ast.Call, aliases: Set[String]) -> Bool
   end
 
   parts.size == 1
+end
+
+# `xs.map(->(x) { ... }).select(->(x) { ... }).sum`: a method chain whose links, from the first that passes a lambda to
+# the end, are three or more reads better as a pipe. The walk judges the chain at its last link, so a method call
+# inside it is `chained`.
+def lambda_chain(
+  file: String,
+  expr: Ast.Expr,
+  span: Source.Span,
+  chained: Bool,
+  functions: Set[String],
+) -> List[Problems.Problem]
+  return [] if chained or lambda_steps(expr, functions) < 3
+
+  [Rules.at(file, Rules.LAMBDA_CHAIN, span)]
+end
+
+# How many links of the chain that ends with `expr` a pipe would write, from the first link that passes a lambda to the
+# end; 0 when no link does. A link is a method call, or a name without arguments as the last link only
+# (`.sum`): further
+# in it may be a struct field, which a pipe cannot name, and lint has no types to tell. A link named as a function of
+# the file, or one it imports by name, gives 0 too, since the pipe step would call that function.
+def lambda_steps(expr: Ast.Expr, functions: Set[String]) -> Int
+  links = 0
+  steps = 0
+  clash = -1
+  current = expr
+  case current
+    Ast.Expr.FieldAccess(node) ->
+      links = 1
+      current = node.target
+      if functions.include?(node.name)
+        clash = 1
+      end
+
+    _ -> links = 0
+  end
+
+  while method_call?(current)
+    case current
+      Ast.Expr.MethodCall(node) ->
+        links += 1
+        if node.args.any? do |arg: Ast.Expr| lambda?(arg) end
+          steps = links
+        end
+
+        if clash < 0 and functions.include?(node.name)
+          clash = links
+        end
+
+        current = node.target
+      _ -> break
+    end
+  end
+
+  return 0 if clash > 0 and clash <= steps
+
+  steps
+end
+
+def method_call?(expr: Ast.Expr) -> Bool
+  case expr
+    Ast.Expr.MethodCall(_) -> true
+    _ -> false
+  end
+end
+
+def lambda?(expr: Ast.Expr) -> Bool
+  case expr
+    Ast.Expr.BlockLit(node) -> node.lambda
+    _ -> false
+  end
 end
 
 def binary(file: String, node: Ast.Binary, chained: Bool) -> List[Problems.Problem]
@@ -57,11 +140,20 @@ def joins_text?(node: Ast.Binary) -> Bool
   literal and converted
 end
 
-# `x |> f()` where x is not itself the result of a pipe.
-def single_pipe(file: String, node: Ast.Call, chained: Bool) -> List[Problems.Problem]
+# `x |> f()` where x is not itself the result of a pipe. A bare name that is no function of the file, none it imports
+# by name and no builtin function is a method of x (the linker's rule), so the help shows the method call.
+def single_pipe(file: String, node: Ast.Call, chained: Bool, functions: Set[String]) -> List[Problems.Problem]
   return [] if !node.piped or chained or node.args.size == 0 or piped_call?(node.args[0])
 
-  [Rules.at(file, Rules.SINGLE_PIPE, node.span)]
+  rule = Rules.SINGLE_PIPE
+  if !node.name.include?(".") and !functions.include?(node.name) and !ENTRIES.has_key?(node.name)
+    rule = rule.with(
+      message: "a pipe with one step into a method is a method call",
+      help: "a method call with a dot: `x.#{node.name}(...)`, not `x |> #{node.name}(...)`",
+    )
+  end
+
+  [Rules.at(file, rule, node.span)]
 end
 
 # `h(f(g(x)))`: a call whose first argument is a call whose first argument is a call, which a pipe writes from the

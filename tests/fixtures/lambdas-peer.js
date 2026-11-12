@@ -50,4 +50,14 @@ const labels = [1, 2].map((n) => {
 lines.push(`[${labels.map((text) => `"${text}"`).join(", ")}]`);
 lines.push(shown(parseDouble("21")));
 lines.push(shown(parseDouble("x")));
+const xs = [1, 2, 3];
+lines.push(xs.map((x) => x * 2).reduce((acc, x) => acc + x, 0));
+lines.push(xs.map((x) => x * 2).filter((x) => x > 2).reduce((acc, x) => acc + x, 0));
+xs.forEach((x) => lines.push(x * c));
+lines.push(xs.reduce((acc, x) => acc + x, 0));
+Object.entries({ a: 1, b: 2 }).forEach(([key, value]) => lines.push(`${key}=${value}`));
+// The program's own first wins over the method of that name.
+const first = (list) => `first of ${list.length}`;
+lines.push(first(xs));
+lines.push(xs[0]);
 process.stdout.write(lines.join("\n") + "\n");

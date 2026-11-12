@@ -8,7 +8,7 @@
 ## see ast.agc).
 
 import Builtins from "../catalog/builtins"
-import {ENUMS} from "../catalog/builtins"
+import {BARE_NAMES, ENUMS} from "../catalog/builtins"
 import NativeLibrary from "../packages/native_library"
 import Ast from "../syntax/ast"
 import Parser from "../syntax/parser"
@@ -397,6 +397,8 @@ def rewrite_call(cx: Resolve.Context, node: Ast.Call) -> Result[Ast.Expr]
     return rewrite_constant_member(cx, node, Resolve.constant_identity(cx, parts[0]), parts[0].length, parts[1])
   end
 
+  return pipe_method(cx, node) if pipe_method?(cx, node, parts)
+
   plain = node.args.size == 0 and !node.parenthesized and !node.piped
   type_member = parts.size == 2 and (parts[1] == "members" or parts[1] == "codec")
   if type_member and plain and Resolve.declared_type?(cx, parts[0])
@@ -414,6 +416,33 @@ def rewrite_call(cx: Resolve.Context, node: Ast.Call) -> Result[Ast.Expr]
   end
 
   ok(Ast.Expr.Call(node.with(name: name, args: args)))
+end
+
+# `x |> name(a)` with a bare name that is no function of this file, no function it imports by name and no builtin
+# function is the method call x.name(a): `xs |> map(f)` is `xs.map(f)` and `xs |> sum()` is `xs.sum`. A function of
+# the program with the same name wins, so a program that pipes into its own `map` keeps its meaning. The checker judges
+# the method; a name that is no method of the receiver either is CHECK-UNKNOWN-NAME, as for an unknown function.
+def pipe_method?(cx: Resolve.Context, node: Ast.Call, parts: List[String]) -> Bool
+  return false if !node.piped or parts.size != 1 or node.args.size == 0
+
+  name = parts[0]
+  !cx.me.names.has_key?(name) and !cx.me.named.has_key?(name) and !BARE_NAMES.include?(name)
+end
+
+# The method call of a piped call (pipe_method?): the first argument is the receiver, the others are the arguments. It
+# keeps the id and the span of the call written right of `|>`, which starts at the name.
+def pipe_method(cx: Resolve.Context, node: Ast.Call) -> Result[Ast.Expr]
+  target = try rewrite_expr(cx, node.args[0])
+  args = try rewrite_exprs(cx, node.args.drop(1))
+  start = node.span.start
+  size = node.name.length
+  stop = Source.Position(offset: start.offset + size, line: start.line, column: start.column + size)
+  name_span = Source.Span(start: start, stop: stop)
+  ok(
+    Ast.Expr.MethodCall(
+      Ast.MethodCall(id: node.id, target: target, name: node.name, name_span: name_span, args: args, span: node.span),
+    ),
+  )
 end
 
 # Type.members and Type.codec, written without parentheses and not piped, on a type of this file or one it imports by

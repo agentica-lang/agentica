@@ -70,6 +70,7 @@ lint: 1 suggestion in 1 of 12 files
 | `LINT-BOOL-COMPARE` | `if done`, not `if done == true` |
 | `LINT-SINGLE-PIPE` | a plain call, not `x \|> f()` with one step |
 | `LINT-NESTED-CALL` | a pipe for three calls nested in first position, `h(g(f(x)))`, when the two outer ones are functions of the file or of a module it imports, not builtins; a `try` stays on its step (`\|> try h()`) |
+| `LINT-LAMBDA-CHAIN` | a pipe into methods, `xs \|> map(->(x) { ... }) \|> sum()`, for a method chain of three or more steps from the first one that passes a lambda; a name without arguments counts only as the last step |
 | `LINT-TO-S-CONCAT` | interpolation, not `"n=" + n.to_s` |
 | `LINT-STRING-APPEND-IN-LOOP` | `push` and one `join`, not `s = s + piece` in a `for` or `while` loop, which copies the text on every pass |
 

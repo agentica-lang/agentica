@@ -482,7 +482,7 @@ def main() -> Void
 end
 ```
 
-One step is a plain call: `shout(text)`, not `text |> shout()`. Three calls nested in first position are a pipe that starts with the innermost one: `wrap(shout(trim(text)), "*")` is `trim(text) |> shout() |> wrap("*")`. Two nested calls stay plain. A builtin that has a method form takes a `.` instead of a pipe:
+One step is a plain call: `shout(text)`, not `text |> shout()`. Three calls nested in first position are a pipe that starts with the innermost one: `wrap(shout(trim(text)), "*")` is `trim(text) |> shout() |> wrap("*")`. Two nested calls stay plain. A step may name a method of the value, and a method chain of three or more steps that passes lambdas is such a pipe: `xs.map(->(x) { x * 2 }).select(->(x) { x > 2 }).sum` is `xs |> map(->(x) { x * 2 }) |> select(->(x) { x > 2 }) |> sum()`, one step per line. A builtin is never piped with its type; write the method:
 
 ```agentica {expect="CHECK-PIPE-METHOD"}
 # bad
@@ -579,6 +579,6 @@ Use a `List` for order, a `Set` for membership, a `Map` for lookup by key, and a
 - `LINT-PRIVATE-DOC` and `LINT-REPEATED-QUALIFIED-NAME`: [Files and docs](#files-and-docs) (a private function never gets `##`; import a name used often).
 - `LINT-IF-CHAIN`: [if and case](#if-and-case) (`case` for three or more branches on one value).
 - `LINT-NEGATED-ELSE` and `LINT-BOOL-COMPARE`: [Naming](#naming) and [Functions](#functions) (say it positively; use a `Bool` as it is).
-- `LINT-SINGLE-PIPE` and `LINT-NESTED-CALL`: [Pipes](#pipes) (one step is a plain call; three nested calls are a pipe).
+- `LINT-SINGLE-PIPE`, `LINT-NESTED-CALL` and `LINT-LAMBDA-CHAIN`: [Pipes](#pipes) (one step is a plain call; three nested calls, or a method chain of three steps with lambdas, are a pipe).
 - `LINT-TO-S-CONCAT`: [Text and collections](#text-and-collections) (interpolation, not `+` and `.to_s`).
 - `LINT-STRING-APPEND-IN-LOOP`: [Text and collections](#text-and-collections) (a String that grows by `+` in a loop is copied on every pass: `push` the pieces and `join` them once).

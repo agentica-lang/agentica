@@ -30,10 +30,16 @@ export def check_method(cx: State.Cx, st: State.St, node: Ast.MethodCall, expect
     )
   end
 
+  # A pipe step resolves only to methods: `h |> run(4)` on an Fn field `run` would drop `h`.
+  piped = Calls.piped_method?(node)
   field = fn_field(cx, target.type, node.name)
-  return check_field_call(cx, target.st, node, field.unwrap!) if field.some?
+  if field.some? and piped
+    return error(unknown_piped(cx, target.st, target.type, node.target, node.name, node.span, ""))
+  elsif field.some?
+    return check_field_call(cx, target.st, node, field.unwrap!)
+  end
 
-  method_on(cx, target, node.id, node.target, node.name, node.args, node.span, expected)
+  method_on(cx, target, node.id, node.target, node.name, node.args, node.span, piped, expected)
 end
 
 ## The call of a function value of the given type: one argument for each parameter, each checked against its type, and
@@ -77,7 +83,7 @@ export def check_field_access(cx: State.Cx, st: State.St, node: Ast.FieldAccess,
   target = try State.expr(cx, st, node.target, T.Type.Unknown)
   return check_struct_field(cx, target.st, node, target.type) if field_target?(cx, target.type, node.name)
 
-  method_on(cx, target, node.id, node.target, node.name, [], node.span, expected)
+  method_on(cx, target, node.id, node.target, node.name, [], node.span, false, expected)
 end
 
 # The Fn field a struct has under the name, if any. Such a field wins over a method of the same name (to_s, inspect):
@@ -203,7 +209,8 @@ def method_kind(cx: State.Cx, target: T.Type, kind: String, name: String) -> Str
   ""
 end
 
-# The method on a receiver that is already checked. The resolution is recorded by the id of the node.
+# The method on a receiver that is already checked. The resolution is recorded by the id of the node. `piped` is
+# true for a pipe step (`x |> name()`), whose unknown name is CHECK-UNKNOWN-NAME.
 def method_on(
   cx: State.Cx,
   target: State.Out,
@@ -212,12 +219,16 @@ def method_on(
   name: String,
   args: List[Ast.Expr],
   span: Source.Span,
+  piped: Bool,
   expected: T.Type,
 ) -> Result[State.Out]
   type = target.type
   kind = Names.receiver_kind(type)
   resolved = method_kind(cx, type, kind, name)
-  if resolved == ""
+  if resolved == "" and piped
+    help = unknown_method_help(cx, target.st, id, type, kind, name)
+    return error(unknown_piped(cx, target.st, type, target_node, name, span, help))
+  elsif resolved == ""
     return error(
       State.fail_maybe(
         cx,
@@ -268,6 +279,45 @@ def check_own_method(
 
   checked = try State.ensure(cx, st, result, expected, span)
   ok(State.Out(st: State.record_resolved(st, id, how), type: checked))
+end
+
+# `x |> name()` that the linker made a method call, because no function of the program has the name, and whose
+# receiver has no such method either: CHECK-UNKNOWN-NAME, as for an unknown function. A step names only methods, so a
+# field of the receiver is read or called with `.`; a variable of that name is called with .call, a function with a
+# close name is likely the one meant, and otherwise `help` names the methods of the receiver.
+def unknown_piped(
+  cx: State.Cx,
+  st: State.St,
+  type: T.Type,
+  target: Ast.Expr,
+  name: String,
+  span: Source.Span,
+  help: String,
+) -> String
+  hint = help
+  near = Help.near(name, cx.functions.keys, [])
+  fields: List[Model.Named] = []
+  if T.is?(type, "Struct")
+    fields = CheckTypes.fields_of(cx, type)
+  end
+
+  field = Calls.find_field(fields, name)
+  receiver = Calls.receiver_text(cx, target)
+  if receiver == "" or receiver == "()" or receiver.length > 40 or receiver.include?("\n")
+    receiver = "value"
+  end
+
+  if field.ok? and T.is?(field.unwrap!.type, "Fn")
+    hint = "#{name} is an Fn field, which a pipe does not call; call it with #{receiver}.#{name}(...)"
+  elsif field.ok?
+    hint = "#{name} is a field, which a pipe does not read; read it with #{receiver}.#{name}"
+  elsif State.lookup(st, name).some?
+    hint = "#{name} is a variable, not a function; call it with #{name}.call(...)"
+  elsif near != ""
+    hint = near
+  end
+
+  State.fail_maybe(cx, st, "CHECK-UNKNOWN-NAME", "unknown function or method \"#{name}\"", span, hint)
 end
 
 # The help of CHECK-UNKNOWN-METHOD: a range that needs parentheses, then what is special about the receiver.

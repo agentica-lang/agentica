@@ -11,6 +11,9 @@ def compose[A, B, C](f: Fn[A, B], g: Fn[B, C], x: A) -> C = g.call(f.call(x))
 
 def adder(n: Int) -> Fn[Int, Int] = ->(x) { x + n }
 
+# A function of the program wins over the method of the same name, so `xs |> first()` calls this one.
+def first(xs: List[Int]) -> String = "first of #{xs.size}"
+
 def parse_double(text: String) -> Result[Int]
   doubled: Fn[String, Result[Int]] = ->(s) {
     n = try s.to_i
@@ -67,4 +70,20 @@ def main() -> Void
 
   puts(parse_double("21"))
   puts(parse_double("x"))
+
+  xs = [1, 2, 3]
+  puts(xs.map(->(x) { x * 2 }).sum)
+  total = (
+    xs
+    |> map(->(x) { x * 2 })
+    |> select(->(x) { x > 2 })
+    |> sum()
+  )
+
+  puts(total)
+  xs |> each(->(x) { puts(x * c) })
+  puts(xs |> reduce(0, ->(acc, x) { acc + x }))
+  {"a": 1, "b": 2} |> each(->(key, value) { puts("#{key}=#{value}") })
+  puts(xs |> first())
+  puts(xs.first)
 end

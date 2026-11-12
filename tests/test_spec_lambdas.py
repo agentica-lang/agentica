@@ -1,5 +1,5 @@
 """Lambdas, `->(x) { ... }`, through `agentica --json check`: where a lambda is a function value, how its parameters get
-their types, the one-way rule against a lambda where a block goes, and the forms of other languages. Each case asserts
+their types, a lambda in the parentheses where a block goes, and the forms of other languages. Each case asserts
 the code and the source text its range covers, never the message. The values a lambda gives at run time are the VM
 golden tests/fixtures/vm/lambdas.agc, which prints what its Python and Node peers print.
 """
@@ -49,6 +49,14 @@ VALID = [
     "  t = Task.spawn(->(x: Int) { x * 2 }, 21)\n  puts(Task.await(t))",
     # After an arm's -> a { is still a map literal.
     '  n = xs.size\n  m = case n\n    0 -> {"a": 1}\n    _ -> {"b": 2}\n  end\n  puts(m)',
+    # Where a block goes, a lambda in the parentheses is that block, its parameter types from the expected Fn: a
+    # method, a function of the program, a builtin, a pipe, a generic call and a block form of a builtin (File.open).
+    "  puts(xs.map(->(x) { x * 2 }).sum)\n  puts(last(1, ->(x) { x }))\n  t = Task.spawn(-> { 1 })\n  puts(Task.await(t))",
+    "  n = xs.size\n  puts(n |> last(->(x) { x }))\n  puts(xs.reduce(0, ->(acc, x) { acc + x }))",
+    '  m = {"a": 1}\n  m.each(->(k, v) { puts("#{k}=#{v}") })\n  xs.each(->(x) { puts(x) })',
+    '  r = File.open("in.txt", ->(_f) { ok(1) })\n  puts(r)',
+    # A lambda that captures a local, and one kept in a variable, whose Fn type fits the block's.
+    "  k = 10\n  f = ->(x: Int) { x + k }\n  puts(xs.map(->(x) { x + k }))\n  puts(xs.map(f))",
 ]
 
 
@@ -71,11 +79,13 @@ REJECTED = [
     ("  f = ->(x: Int) { next }\n  puts(f.call(1))", "CHECK-LOOP-CONTROL", "next"),
     # A lambda dropped as a statement.
     ("  ->(x: Int) { x }", "CHECK-UNUSED-VALUE", "->(x: Int) { x }"),
-    # One way: where a block goes, the lambda is that block.
-    ("  puts(xs.map(->(x: Int) { x * 2 }))", "CHECK-LAMBDA-BLOCK", "->(x: Int) { x * 2 }"),
-    ("  puts(last(1, ->(x: Int) { x }))", "CHECK-LAMBDA-BLOCK", "->(x: Int) { x }"),
-    ("  t = Task.spawn(-> { 1 })\n  puts(Task.await(t))", "CHECK-LAMBDA-BLOCK", "-> { 1 }"),
-    ("  n = xs.size\n  puts(n |> last(->(x: Int) { x }))", "CHECK-LAMBDA-BLOCK", "->(x: Int) { x }"),
+    # A lambda where a block goes is checked as the block: its arity, the types of its result and parameters, and a
+    # do block never goes inside the parentheses.
+    ("  puts(xs.map(->(x, y) { x + y }))", "CHECK-ARITY", "->(x, y) { x + y }"),
+    ("  puts(xs.select(->(x) { x }))", "CHECK-TYPE-MISMATCH", "x"),
+    ("  puts(last(1, ->(x: String) { 1 }))", "CHECK-TYPE-MISMATCH", "x: String"),
+    ("  f = ->(x: String) { x }\n  puts(xs.map(f).size)", "CHECK-TYPE-MISMATCH", "xs"),
+    ("  puts(xs.map(do |x| x end))", "PARSE-UNEXPECTED-TOKEN", "do"),
     # The forms of Ruby and other languages that the lambda replaces.
     ("  f = ->() { 1 }\n  puts(f.call())", "PARSE-UNEXPECTED-TOKEN", "("),
     ("  f = ->x { x }\n  puts(f)", "PARSE-UNEXPECTED-TOKEN", "x"),

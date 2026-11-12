@@ -41,6 +41,10 @@ def shown(result):
     return 'error("%s")' % result[1].replace('"', '\\"')
 
 
+def first(xs):
+    return "first of %d" % len(xs)
+
+
 def sign(x):
     if x < 0:
         return "negative"
@@ -77,6 +81,17 @@ def main():
     print("[%s]" % ", ".join('"%s"' % text for text in labels))
     print(shown(parse_double("21")))
     print(shown(parse_double("x")))
+    xs = [1, 2, 3]
+    print(sum(x * 2 for x in xs))
+    print(sum(x for x in (x * 2 for x in xs) if x > 2))
+    for x in xs:
+        print(x * c)
+    print(sum(xs))
+    for key, value in {"a": 1, "b": 2}.items():
+        print("%s=%d" % (key, value))
+    # The program's own first wins over the method of that name.
+    print(first(xs))
+    print(xs[0])
 
 
 main()

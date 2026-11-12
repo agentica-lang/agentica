@@ -474,8 +474,10 @@ condition: there `ready do` is `PARSE-UNEXPECTED-TOKEN` (the `do` reads as a
 mistake for the end of the line), and no call takes a `{ ... }` block. Inside
 parentheses, brackets, a map literal or `#{...}`, a condition or a `while`,
 `for` or `case` head takes any block: `if (xs.any? { |x| x > 0 })`.
-A lambda, `->(x) { x + 1 }`, is a block that no call takes; one without
-parameters has no parentheses (`-> { 42 }`), and its body is always in braces.
+A lambda, `->(x) { x + 1 }`, is a block written as a value; inside a call's
+parentheses, in the place of the block, it is that block:
+`xs.map(->(x) { x * 2 })`. One without parameters has no parentheses
+(`-> { 42 }`), and its body is always in braces.
 `->() { ... }`, `->x { ... }`, `->(x) do ... end`, `lambda { ... }`,
 `lambda do ... end`, `proc do ... end` and `fn(x: Int) ...` are
 `PARSE-UNEXPECTED-TOKEN`, with a help that shows the lambda.
@@ -496,9 +498,10 @@ A method chain may span lines (§4). Nothing chains after the `end` of a
 right after that `end`, on its line or as a leading `.name` on the next, is
 `CHECK-CHAIN-AFTER-END`, from the `end` to the name, index or call that
 follows. Parentheses around the call do not change it: `(xs.map do |x| f(x)
-end).size` is the same chain, and `agentica fmt` prints it without them. Write
-a one-line block in braces, `xs.map { |x| f(x) }.join(", ")`, or bind the
-result to a name first. A chain after a block in braces or after a lambda is
+end).size` is the same chain, and `agentica fmt` prints it without them. Pass a
+lambda and pipe, `xs |> map(->(x) { f(x) }) |> join(", ")`, write a one-line
+block in braces, `xs.map { |x| f(x) }.join(", ")`, or bind the result to a
+name first. A chain after a block in braces or after a lambda is
 fine, and so is a binary operator after `end` (`xs.map do |x| x end + ys`).
 
 `x |> f(a, b)` means `f(x, a, b)`: the left value becomes the first argument of
@@ -508,11 +511,16 @@ optionally preceded by `try`: `x |> try f(a)` is `try f(x, a)`. A trailing block
 works: `xs |> each_pair() do |a, b| ... end`. Anything else on the right (a bare
 name, a field, an index, a method chain such as `f(1).g`, a literal) is
 `PARSE-PIPE-TARGET` at the right side; wrap the expression in parentheses and
-use `.` on the result, as in `(x |> f()).unwrap!`. A builtin that has a method
-form for the type of the left value is `CHECK-PIPE-METHOD` at the right side,
-with the method form as help: `x |> String.strip()` gives `x.strip`. So `|>` is
-for user functions and for builtins without a method form, and the two styles
-mix: `s.strip |> try parse() |> try validate()`. `|>` binds lower than `+` and
+use `.` on the result, as in `(x |> f()).unwrap!`. A bare name that is no
+function of the file, no function it imports by name and no builtin function
+is a method of the left value: `xs |> map(->(x) { x * 2 })` is
+`xs.map(->(x) { x * 2 })`, and `xs |> sum()` is `xs.sum`; a name that is no
+method of the value either, a struct field (an `Fn` field too) included, is
+`CHECK-UNKNOWN-NAME` at the right side. A function of the program with the
+same name as a method wins. A builtin written
+with its type, `x |> String.strip()`, is `CHECK-PIPE-METHOD` at the right side,
+with the method form as help. The styles mix: `s.strip |> try parse() |> try
+validate()`. `|>` binds lower than `+` and
 `-` and higher than the comparisons, and groups from left to right: `a + 1 |>
 f()` is `f(a + 1)`, `x |> f() == y` is `f(x) == y`, and `x |> f() |> g()` is
 `g(f(x))`. `try` and unary operators bind tighter: `try x |> f()` is `f(try x)`.

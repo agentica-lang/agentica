@@ -1,1 +1,19 @@
-ERROR CHECK-LAMBDA-BLOCK 42:2:24-62:2:44 "a lambda is passed where a block goes" "write it as a block after the call: [1, 2].map do |x| ... end" signature="main() -> Void" file="lambda-block.agc"
+program #17 0:1:1-84:5:1
+  module "lambda-block.agc"
+    declaration: function-decl #16 0:1:1-84:5:1 name="main"
+      result: type-ref #0 14:1:15-18:1:19 name="Void"
+      body: binding #12 21:2:3-64:3:1 name="doubled"
+        value: method-call #11 31:2:13-63:2:45 name="map" type=List(Int) resolved=call("List.map", List(Int))
+          target: list-lit #3 31:2:13-37:2:19 type=List(Int)
+            element: literal #1 32:2:14-33:2:15 value=int:1 type=Int
+            element: literal #2 35:2:17-36:2:18 value=int:2 type=Int
+          arg: lambda #10 42:2:24-62:2:44 type=Fn([Int], Int)
+            param: block-param #5 45:2:27-51:2:33 name="x"
+              type: type-ref #4 48:2:30-51:2:33 name="Int"
+            body: expr-stmt #9 55:2:37-60:2:42
+              value: binary #8 55:2:37-60:2:42 op=multiply op-span=57:2:39-58:2:40 type=Int
+                left: name-ref #6 55:2:37-56:2:38 name="x" type=Int
+                right: literal #7 59:2:41-60:2:42 value=int:2 type=Int
+      body: expr-stmt #15 66:3:3-80:4:1
+        value: call #14 66:3:3-79:3:16 name="puts" piped=false type=Void
+          arg: name-ref #13 71:3:8-78:3:15 name="doubled" type=List(Int)
