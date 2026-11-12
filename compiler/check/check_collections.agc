@@ -640,7 +640,7 @@ end
 def block_parameters(params: List[T.Type]) -> String
   return "with no parameters" if params.size == 0
 
-  "that takes #{params.map do |param: T.Type| T.to_text(param) end.join(", ")}"
+  "that takes #{T.list_text(params)}"
 end
 
 def check_map_rule(cx: State.Cx, st: State.St, site: State.Site, rule: Model.Rule) -> Result[State.Out]

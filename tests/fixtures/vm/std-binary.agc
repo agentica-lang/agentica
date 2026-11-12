@@ -109,7 +109,7 @@ def bytes_result_text(result: Result[Bytes]) -> String
 end
 
 def bytes_text(bytes: Bytes) -> String
-  return "[#{bytes.to_a.map do |b| b.to_s end.join(", ")}]"
+  return "[#{bytes.to_a.map { |b| b.to_s }.join(", ")}]"
 end
 
 def pack(items: List[Int]) -> Bytes

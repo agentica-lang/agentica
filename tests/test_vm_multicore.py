@@ -399,11 +399,11 @@ def producer(ch: Channel[Int]) -> Void
 end
 
 def consumer(ch: Channel[Int]) -> Int
-  return ch.lazy(60000).filter do |n| n > 0 end.reduce(0) do |sum, n| sum + n end.unwrap!
+  return ch.lazy(60000).filter { |n| n > 0 }.reduce(0) do |sum, n| sum + n end.unwrap!
 end
 
 def lengths(path: String) -> Int
-  return File.foreach(path, 1024, 60000).map do |line| line.length end.reduce(0) do |sum, n| sum + n end.unwrap!
+  return File.foreach(path, 1024, 60000).map { |line| line.length }.reduce(0) do |sum, n| sum + n end.unwrap!
 end
 
 def main() -> Void

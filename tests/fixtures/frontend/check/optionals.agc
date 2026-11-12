@@ -11,6 +11,6 @@ def main() -> Void
     some(n) -> puts(n)
     none -> puts("none")
   end
-  puts(found.unwrap_or(0) + found.map do |n| n * 2 end.unwrap!)
+  puts(found.unwrap_or(0) + found.map { |n| n * 2 }.unwrap!)
   puts(found == some(4))
 end

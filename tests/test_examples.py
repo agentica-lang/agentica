@@ -350,8 +350,8 @@ SYNONYMS = [
     ("m.member?(\"z\")", "m.has_key?(\"z\")"),
     ("Set.new([1]).member?(1)", "Set.new([1]).include?(1)"),
     ("(1..3).member?(2)", "(1..3).include?(2)"),
-    ("xs.lazy.collect do |x| x + 1 end.select do |x| x > 2 end.to_a",
-     "xs.lazy.map do |x| x + 1 end.filter do |x| x > 2 end.to_a"),
+    ("xs.lazy.collect { |x| x + 1 }.select { |x| x > 2 }.to_a",
+     "xs.lazy.map { |x| x + 1 }.filter { |x| x > 2 }.to_a"),
 ]
 
 

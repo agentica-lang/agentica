@@ -251,12 +251,12 @@ def of_item(file: String, item: Model.Item, prefix: String, name: String) -> Lis
   member = name.slice(written.length + 1, name.length - written.length - 1)
   case item.detail
     Model.Detail.Struct(fields) ->
-      fields.filter do |field: Model.Field| field.name == member end
-        .map do |field: Model.Field| field_match(file, item, field) end
+      named = fields.filter do |field: Model.Field| field.name == member end
+      named.map do |field: Model.Field| field_match(file, item, field) end
 
     Model.Detail.Enum(variants) ->
-      variants.filter do |variant: Model.Variant| variant.name == member end
-        .map do |variant: Model.Variant| variant_match(file, item, variant) end
+      named = variants.filter do |variant: Model.Variant| variant.name == member end
+      named.map do |variant: Model.Variant| variant_match(file, item, variant) end
 
     Model.Detail.Function(_, _) -> []
     Model.Detail.Module(_) -> []

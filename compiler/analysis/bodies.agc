@@ -65,11 +65,12 @@ end
 
 def body_of(checked: Checker.Checked, node: Ast.FunctionDecl, name: String, exported: Bool) -> Model.Body
   params = node.params.map do |param: Ast.Param|
+    default = param.default.map do |value: Ast.Expr| [expression(checked, value)] end
     Model.BodyParam(
       name: param.name,
       type: bound(checked, param.id, 0),
       range: DiagnosticModel.range_of(param.span),
-      default: param.default.map do |value: Ast.Expr| [expression(checked, value)] end.unwrap_or([]),
+      default: default.unwrap_or([]),
     )
   end
 

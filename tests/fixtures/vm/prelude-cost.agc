@@ -11,40 +11,43 @@ def main() -> Void
   floats = numbers.map do |n| n.to_f end
   counts = numbers.tally
   total = 0
-  total += numbers.find do |n| n == 2000 end.unwrap!
+  total += numbers.find { |n| n == 2000 }.unwrap!
   numbers.each_with_index do |n, index|
     if index < 0
       puts(n)
     end
   end
-  total += numbers.flat_map do |n| [n, n] end.size
-  total += numbers.partition do |n| n % 2 == 0 end[0].size
-  total += numbers.take_while do |n| n < 2000 end.size
-  total += numbers.drop_while do |n| n < 2000 end.size
+  total += numbers.flat_map { |n| [n, n] }.size
+  total += numbers.partition { |n| n % 2 == 0 }[0].size
+  total += numbers.take_while { |n| n < 2000 }.size
+  total += numbers.drop_while { |n| n < 2000 }.size
   total += numbers.each_slice(3).size
-  total += numbers.group_by do |n| n % 100 end.size
-  total += words.group_by do |word| word end.size
+  total += numbers.group_by { |n| n % 100 }.size
+  total += words.group_by { |word| word }.size
   total += words.tally.size
   total += keys.uniq.size
   total += numbers.sum
   total += floats.sum.to_i!
-  total += numbers.min_by do |n| keys[n - 1] end.unwrap!
-  total += numbers.max_by do |n| keys[n - 1] end.unwrap!
-  total += floats.min_by do |x| x end.unwrap!.to_i!
-  total += words.max_by do |word| word end.unwrap!.length
+  total += numbers.min_by { |n| keys[n - 1] }.unwrap!
+  total += numbers.max_by { |n| keys[n - 1] }.unwrap!
+  total += floats.min_by { |x| x }.unwrap!.to_i!
+  total += words.max_by { |word| word }.unwrap!.length
   counts.each do |key, value|
     if value < 0
       puts(key)
     end
   end
-  total += counts.filter do |key, _| key % 2 == 0 end.size
-  lazy = numbers.lazy.map do |n| n + 1 end.filter do |n| n % 2 == 0 end.with_index do |n, index| n + index end
-  total += lazy.flat_map do |n| [n] end.each_slice(3).each_cons(2).to_a.unwrap!.size
-  middle = (1..2000).lazy.drop_while do |n| n < 10 end.take_while do |n| n < 1990 end.drop(5).take(1900)
+  total += counts.filter { |key, _| key % 2 == 0 }.size
+  lazy = numbers.lazy.map { |n| n + 1 }.filter { |n| n % 2 == 0 }.with_index do |n, index| n + index end
+  total += lazy.flat_map { |n| [n] }.each_slice(3).each_cons(2).to_a.unwrap!.size
+  middle = (1..2000).lazy.drop_while { |n| n < 10 }.take_while { |n| n < 1990 }.drop(5).take(1900)
   total += middle.first(1900).unwrap!.size
-  total += numbers.lazy.chunk_while do |a, b| b == a + 1 end.reduce(0) do |sum, chunk| sum + chunk.size end.unwrap!
-  total += Lazy.produce(1) do |n| n + 1 end.find do |n| n == 2000 end.unwrap!
-  if numbers.lazy.each do |_| ok() end.ok?
+  chunked = numbers.lazy.chunk_while { |a, b| b == a + 1 }.reduce(0) do |sum, chunk| sum + chunk.size end
+  total += chunked.unwrap!
+  naturals = Lazy.produce(1) do |n| n + 1 end
+  total += naturals.find { |n| n == 2000 }.unwrap!
+  done = numbers.lazy.each { |_| ok() }
+  if done.ok?
     total += 1
   end
   puts(total)

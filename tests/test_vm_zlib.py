@@ -442,10 +442,10 @@ def test_lazy_steps_take_empty_items_and_match_python_bytes(tmp_path):
         "  no_bytes = \"\".bytes\n"
         "  items: List[Bytes] = [no_bytes, \"h\".bytes, no_bytes, no_bytes, \"i\".bytes, no_bytes]\n"
         "  packed = items.lazy.deflate.to_a.unwrap!\n"
-        '  puts(Bytes.concat(packed).to_a.map do |x| x.to_s end.join(","))\n'
+        '  puts(Bytes.concat(packed).to_a.map { |x| x.to_s }.join(","))\n'
         "  spaced = packed.flat_map do |c| [no_bytes, c, no_bytes] end\n"
-        "  puts(spaced.lazy.inflate.map do |c| c.to_a end.to_a)\n"
-        "  puts(items.lazy.gzip.gunzip.map do |c| c.to_a end.to_a)\n"
+        "  puts(spaced.lazy.inflate.map { |c| c.to_a }.to_a)\n"
+        "  puts(items.lazy.gzip.gunzip.map { |c| c.to_a }.to_a)\n"
         "end\n"
     )
     result = run_source(tmp_path, "empty-items.agc", body, [])
@@ -511,8 +511,8 @@ def test_lazy_bad_arguments(tmp_path):
 def test_file_chunks_reads_a_file_and_refuses_what_is_not_regular(tmp_path):
     body = (
         "def main() -> Void\n"
-        "  puts(File.chunks(System.args()[0], 2).map do |c| c.to_a end.to_a)\n"
-        "  puts(File.chunks(System.args()[1]).map do |c| c.to_a end.to_a)\n"
+        "  puts(File.chunks(System.args()[0], 2).map { |c| c.to_a }.to_a)\n"
+        "  puts(File.chunks(System.args()[1]).map { |c| c.to_a }.to_a)\n"
         "  puts(File.chunks(System.args()[2]).to_a)\n"
         "  puts(File.chunks(System.args()[3]).to_a)\n"
         "end\n"
@@ -571,7 +571,7 @@ def test_deny_fs_refuses_file_chunks_and_write_bytes_but_not_the_steps(tmp_path)
         "def main() -> Void\n"
         "  puts(File.chunks(System.args()[0]).to_a)\n"
         "  puts([\"a\".bytes].lazy.write_bytes(System.args()[1]))\n"
-        "  puts([\"hi\".bytes].lazy.gzip.gunzip.map do |c| c.to_a end.to_a)\n"
+        "  puts([\"hi\".bytes].lazy.gzip.gunzip.map { |c| c.to_a }.to_a)\n"
         "end\n"
     )
     source = tmp_path / "deny.agc"
@@ -605,9 +605,10 @@ EARLY_STOP = (
     "end\n"
     "\n"
     "def boom(path: String) -> Result[Int]\n"
-    "  return ok(File.chunks(path, 4096).gunzip.reduce(0) do |n, c|\n"
+    "  summed = File.chunks(path, 4096).gunzip.reduce(0) do |n, c|\n"
     "    n + [1][c.size]\n"
-    "  end.unwrap!)\n"
+    "  end\n"
+    "  return ok(summed.unwrap!)\n"
     "end\n"
     "\n"
     "def slow(path: String) -> Result[Int]\n"
@@ -623,7 +624,7 @@ EARLY_STOP = (
     '  if args[0] == "first"\n'
     "    puts(File.chunks(path, 4096).gunzip.first(1).unwrap!.size)\n"
     '  elsif args[0] == "find"\n'
-    "    puts(File.chunks(path, 4096).gunzip.find do |c| c.size > 0 end.unwrap!.size)\n"
+    "    puts(File.chunks(path, 4096).gunzip.find { |c| c.size > 0 }.unwrap!.size)\n"
     '  elsif args[0] == "try"\n'
     "    puts(total(path))\n"
     '  elsif args[0] == "block"\n'

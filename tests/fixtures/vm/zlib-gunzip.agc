@@ -15,7 +15,7 @@ end
 
 # The chunks of a Lazy as lists, to print them.
 def lists(lazy: Lazy[Bytes]) -> Result[List[List[Int]]]
-  return lazy.map do |chunk| chunk.to_a end.to_a
+  return lazy.map { |chunk| chunk.to_a }.to_a
 end
 
 def main() -> Void

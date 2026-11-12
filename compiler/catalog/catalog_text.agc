@@ -126,7 +126,8 @@ end
 def limit_types(limit: Model.Limit) -> String
   return "equality" if limit.equality
 
-  limit.allowed.map do |type: Types.Type| Types.debug_text(type) end.join("/")
+  names = limit.allowed.map do |type: Types.Type| Types.debug_text(type) end
+  names.join("/")
 end
 
 def probe_line(probe: String) -> String
@@ -197,12 +198,13 @@ end
 def variant_text(variant: Model.Variant) -> String
   return variant.name if variant.payload.size == 0
 
-  payload = variant.payload.map do |type: Types.Type| Types.debug_text(type) end.join(", ")
+  payload = Types.debug_list(variant.payload)
   "#{variant.name}(#{payload})"
 end
 
 def quoted_list(items: List[String]) -> String
-  quoted = items.map do |item: String| Text.quote(item) end.join(", ")
+  texts = items.map do |item: String| Text.quote(item) end
+  quoted = texts.join(", ")
   "[#{quoted}]"
 end
 

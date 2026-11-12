@@ -1030,7 +1030,8 @@ end
 # lines below. The pattern and the guard are copied: the guard must stay on the line of its pattern.
 def arm_doc(c: Context, arm: Ast.CaseArm) -> Docs.Doc
   patterns = Ast.alternatives(arm.pattern)
-  head = patterns.map do |pattern: Ast.Pattern| source(c, tight(c, Ast.pattern_span(pattern))) end.join(", ")
+  texts = patterns.map do |pattern: Ast.Pattern| source(c, tight(c, Ast.pattern_span(pattern))) end
+  head = texts.join(", ")
   case arm.guard
     some(guard) ->
       # The guard is the tokens between the arm's `if` and its `->`, parentheses included. A block that a condition
@@ -1918,7 +1919,7 @@ end
 def type_text(type: Ast.TypeRef) -> String
   return type.name if type.args.size == 0
 
-  "#{type.name}[#{type.args.map do |arg: Ast.TypeRef| type_text(arg) end.join(", ")}]"
+  "#{type.name}[#{type.args.map(&type_text).join(", ")}]"
 end
 
 # The dangling comments of an empty list, call or literal.

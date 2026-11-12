@@ -202,5 +202,6 @@ def renamed_help(cx: State.Cx, kind: String, name: String) -> String
 
   return "" if found.size == 0
 
-  "use #{found.uniq.map do |written: String| ".#{written}" end.join(" or ")}"
+  methods = found.uniq.map do |written: String| ".#{written}" end
+  "use #{methods.join(" or ")}"
 end

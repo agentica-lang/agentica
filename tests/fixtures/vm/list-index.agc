@@ -42,5 +42,5 @@ def main() -> Void
   end
 
   puts(calls.unwrap_or(-1))
-  puts(words.find_index do |w| w.length == 3 end.unwrap!)
+  puts(words.find_index { |w| w.length == 3 }.unwrap!)
 end

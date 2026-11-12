@@ -58,8 +58,8 @@ def with_block(entry: Model.Builtin, arity: Int) -> String
 end
 
 def show(entry: Model.Builtin) -> Void
-  taken = [0, 1, 2, 3].map do |arity: Int| takes(entry, arity) end.join("")
-  blocks = [0, 1, 2, 3].map do |arity: Int| with_block(entry, arity) end.join("")
+  taken = [0, 1, 2, 3].map { |arity: Int| takes(entry, arity) }.join("")
+  blocks = [0, 1, 2, 3].map { |arity: Int| with_block(entry, arity) }.join("")
   puts("#{entry.name} takes=#{taken} block=#{blocks} required=#{Builtins.required_count(entry)}")
   puts("  arity=#{Builtins.arity_text(entry, 0)} method=#{Builtins.arity_text(entry, 1)}")
   puts("  signature=#{Builtins.form_signature(entry)}")
@@ -110,5 +110,5 @@ def main() -> Void
     Model.Default.EmptyMap,
     Model.Default.Variant("LogRegistry.Level.Info"),
   ]
-  puts(every.map do |default: Model.Default| "[#{Builtins.default_text(default)}]" end.join(" "))
+  puts(every.map { |default: Model.Default| "[#{Builtins.default_text(default)}]" }.join(" "))
 end

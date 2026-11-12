@@ -1086,7 +1086,7 @@ def key_text(key: String) -> String
   quote(key)
 end
 
-def path_text(path: List[String]) -> String = path.map do |k| key_text(k) end.join(".")
+def path_text(path: List[String]) -> String = path.map(&key_text).join(".")
 
 # `depth` counts the arrays and tables above `value`; the reader refuses more than 256, so the
 # writer does too, and what it writes can be read back.

@@ -141,6 +141,6 @@ def main() -> Void
   puts(String.from_bytes(Bytes.from_list(bytes.take(3)).unwrap!))
   puts(String.from_bytes(Bytes.from_list([255, 104]).unwrap!))
   puts((1..70).to_a.size)
-  puts(((0...40).to_a.map do |x| x * x end).reverse.take(3))
+  puts((0...40).to_a.map { |x| x * x }.reverse.take(3))
   [3, 4, 5].each do |x| puts(x * 2) end
 end

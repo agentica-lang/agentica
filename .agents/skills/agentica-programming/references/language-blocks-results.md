@@ -18,6 +18,10 @@ A block is a function written at the call site as the last argument: `xs.map do
   condition or head only inside parentheses: `if (xs.any? { |x| x > 0 })`.
   The last parameter must be a `Fn` (`CHECK-BLOCK-TARGET`). Never
   `do || ... end`.
+- Nothing chains after the `end` of a `do` block: `.name`, `[i]` or `|>` right
+  after it, also on a leading-dot line or with the call in parentheses, is
+  `CHECK-CHAIN-AFTER-END`. Use braces for one line,
+  `xs.map { |x| f(x) }.join(", ")`, or bind the result to a name first.
 - Parameter types come from the call, else from the uses in the body when they
   leave one type (`x + 1`: Int; `x.upcase`: String; `f(x)`, `Msg.Get(x)`: the
   parameter's type); annotate otherwise: `do |x: Int| ... end`

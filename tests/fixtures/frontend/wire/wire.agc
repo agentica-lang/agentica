@@ -52,5 +52,5 @@ def report(name: String, joined: Result[Bytes]) -> Void
     return
   end
 
-  puts("#{name} ok #{data.to_a.map do |b| b.to_s end.join(",")}")
+  puts("#{name} ok #{data.to_a.map { |b| b.to_s }.join(",")}")
 end

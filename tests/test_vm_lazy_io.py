@@ -28,7 +28,7 @@ EVENT = re.compile(r" io file_(open|close) handle=([0-9]+)$")
 
 STEP_LIMITED = """\
 def main() -> Void
-  r = File.foreach(System.args()[0], 1024, 60000).map do |line| line.length end.each do |_|
+  r = File.foreach(System.args()[0], 1024, 60000).map { |line| line.length }.each do |_|
     ok()
   end
   puts(r)
@@ -38,7 +38,7 @@ end
 
 PARKED = """\
 def read_all(path: String) -> Result[List[String]]
-  return File.foreach(path, 1024, 60000).map do |line| line end.to_a
+  return File.foreach(path, 1024, 60000).map { |line| line }.to_a
 end
 
 def main() -> Void
@@ -49,7 +49,7 @@ def main() -> Void
     end
     puts(items[0])
   else
-    puts(File.foreach(path, 1024, 300).map do |line| line end.to_a)
+    puts(File.foreach(path, 1024, 300).map { |line| line }.to_a)
   end
 end
 """
@@ -63,19 +63,19 @@ def main() -> Void
   puts(lines.lazy.write_lines(out, 60000))
   back = File.foreach(out, 1048576, 60000).to_a.unwrap!
   puts(back.inspect == lines.inspect)
-  puts(File.foreach(out, 1048576, 60000).map do |line| line end.write_lines(copy, 60000))
+  puts(File.foreach(out, 1048576, 60000).map { |line| line }.write_lines(copy, 60000))
 end
 """
 
 WRITE_LIMITED = """\
 def main() -> Void
-  puts((1..100000).lazy.map do |n| "line #{n}" end.write_lines(System.args()[0], 60000))
+  puts((1..100000).lazy.map { |n| "line #{n}" }.write_lines(System.args()[0], 60000))
 end
 """
 
 WRITE_PARKED = """\
 def write_all(path: String) -> Result[Void]
-  return (1..30000).lazy.map do |n| "line #{n}" end.write_lines(path, 60000)
+  return (1..30000).lazy.map { |n| "line #{n}" }.write_lines(path, 60000)
 end
 
 def main() -> Void

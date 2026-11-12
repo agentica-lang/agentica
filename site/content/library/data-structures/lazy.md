@@ -10,8 +10,9 @@ Use a `Lazy` for an endless source, for the lines of a big file or the values of
 
 ```agentica
 def main() -> Void
-  squares = Lazy.produce(1) do |n| n + 1 end.map do |n| n * n end
-  puts(squares.select do |n| n % 2 == 1 end.first(3))
+  naturals = Lazy.produce(1) do |n| n + 1 end
+  squares = naturals.map { |n| n * n }
+  puts(squares.select { |n| n % 2 == 1 }.first(3))
   puts((1..10).lazy.each_slice(4).to_a)
 end
 ```
@@ -42,7 +43,8 @@ Channel.lazy(channel: Channel[A], timeout_ms: Int) -> Lazy[A]
 def main() -> Void
   puts([3, 1, 2].lazy.to_a)
   puts((1...4).lazy.to_a)
-  puts(Lazy.produce("a") do |s| s + "a" end.first(3))
+  words = Lazy.produce("a") do |s| s + "a" end
+  puts(words.first(3))
 end
 ```
 
@@ -61,7 +63,7 @@ A read error (invalid UTF-8, a line over the buffer), a missing file or a bad ti
 ```agentica {mode="check"}
 def main() -> Void
   head = File.foreach("server.log", 4096, 1000).first(10)
-  errors = File.foreach("server.log", 4096, 1000).select do |line| line.include?("ERROR") end.each do |line|
+  errors = File.foreach("server.log", 4096, 1000).select { |line| line.include?("ERROR") }.each do |line|
     puts(line)
     ok()
   end
@@ -92,7 +94,7 @@ def main() -> Void
   Task.spawn(&produce, ch)
   values = ch.lazy(1000)
   puts(values.first(2))
-  puts(values.map do |n| n * n end.to_a)
+  puts(values.map { |n| n * n }.to_a)
 end
 ```
 
@@ -114,8 +116,8 @@ Lazy.flat_map(lazy: Lazy[A], f: Fn[A, List[B]]) -> Lazy[B]
 ```agentica
 def main() -> Void
   xs = [1, 2, 3, 4]
-  puts(xs.lazy.select do |x| x % 2 == 0 end.map do |x| x * 10 end.to_a)
-  puts(xs.lazy.flat_map do |x| [x, -x] end.first(5))
+  puts(xs.lazy.select { |x| x % 2 == 0 }.map { |x| x * 10 }.to_a)
+  puts(xs.lazy.flat_map { |x| [x, -x] }.first(5))
 end
 ```
 
@@ -139,8 +141,8 @@ A negative count is `RUNTIME-INVALID-COUNT` at the argument, when the step is bu
 def main() -> Void
   naturals = Lazy.produce(1) do |n| n + 1 end
   puts(naturals.drop(2).take(3).to_a)
-  puts(naturals.take_while do |n| n < 4 end.to_a)
-  puts([1, 5, 2, 7].lazy.drop_while do |n| n < 3 end.to_a)
+  puts(naturals.take_while { |n| n < 4 }.to_a)
+  puts([1, 5, 2, 7].lazy.drop_while { |n| n < 3 }.to_a)
 end
 ```
 
@@ -160,7 +162,7 @@ Maps each item with its index, from 0. To keep the item and the index together, 
 
 ```agentica
 def main() -> Void
-  puts(["a", "b", "c"].lazy.with_index do |s, i| "#{i}:#{s}" end.to_a)
+  puts(["a", "b", "c"].lazy.with_index { |s, i| "#{i}:#{s}" }.to_a)
 end
 ```
 
@@ -183,7 +185,7 @@ def main() -> Void
   xs = [1, 2, 4, 5, 6, 9]
   puts(xs.lazy.each_slice(4).to_a)
   puts(xs.lazy.each_cons(3).first(2))
-  puts(xs.lazy.chunk_while do |a, b| b == a + 1 end.to_a)
+  puts(xs.lazy.chunk_while { |a, b| b == a + 1 }.to_a)
 end
 ```
 
@@ -205,7 +207,7 @@ Lazy.first(lazy: Lazy[A], count: Int) -> Result[List[A]]
 ```agentica
 def main() -> Void
   puts([1, 2].lazy.first(5))
-  puts((1..3).lazy.map do |n| n * n end.to_a)
+  puts((1..3).lazy.map { |n| n * n }.to_a)
 end
 ```
 
@@ -224,7 +226,8 @@ The block returns `ok()` to go on, or an `error` that stops the pipeline and is 
 
 ```agentica
 def main() -> Void
-  result = Lazy.produce(1) do |n| n + 1 end.each do |n|
+  naturals = Lazy.produce(1) do |n| n + 1 end
+  result = naturals.each do |n|
     return error("stopped at #{n}") if n > 2
 
     puts(n)
@@ -253,7 +256,8 @@ Lazy.find(lazy: Lazy[A], f: Fn[A, Bool]) -> Result[A]
 ```agentica
 def main() -> Void
   puts((1..4).lazy.reduce(0) do |total, n| total + n end)
-  puts(Lazy.produce(1) do |n| n * 2 end.find do |n| n > 100 end)
+  powers = Lazy.produce(1) do |n| n * 2 end
+  puts(powers.find do |n| n > 100 end)
   puts([1, 2].lazy.find do |n| n > 5 end)
 end
 ```
@@ -279,7 +283,7 @@ def main() -> Void
   done = (
     File.foreach("ledger.csv", 4096, 1000)
       .drop(1)
-      .map do |line| "#{try amount(line) * 100}" end
+      .map { |line| "#{try amount(line) * 100}" }
       .write_lines("cents.txt", 1000)
   )
 
@@ -302,7 +306,7 @@ The steps compress or decompress a stream of [`Bytes`](/library/data-structures/
 ```agentica
 def main() -> Void
   packed = ["hi".bytes, "".bytes, "!".bytes].lazy.gzip.to_a.unwrap!
-  puts(packed.lazy.gunzip.map do |chunk| chunk.to_a end.to_a)
+  puts(packed.lazy.gunzip.map { |chunk| chunk.to_a }.to_a)
 end
 ```
 
@@ -319,8 +323,8 @@ def parse(text: String) -> Result[Int] = text.to_i
 
 def main() -> Void
   words = ["1", "2", "x", "4"]
-  puts(words.lazy.map do |word| try parse(word) * 10 end.first(2))
-  puts(words.lazy.map do |word| try parse(word) * 10 end.to_a)
+  puts(words.lazy.map { |word| try parse(word) * 10 }.first(2))
+  puts(words.lazy.map { |word| try parse(word) * 10 }.to_a)
   puts(words.lazy.reduce(0) do |sum, word| sum + try parse(word) end)
 end
 ```

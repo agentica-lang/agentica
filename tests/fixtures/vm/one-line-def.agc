@@ -9,7 +9,7 @@ def greet(name: String, greeting: String = "hi") -> String = "#{greeting} #{name
 
 def next_of(text: String) -> Result[Int] = ok(try text.to_i + 1)
 
-def total(xs: List[Int]) -> Int = xs.map do |x| double(x) end.sum
+def total(xs: List[Int]) -> Int = xs.map { |x| double(x) }.sum
 
 def inside(a: Int, b: Int) -> Int = (
   a +

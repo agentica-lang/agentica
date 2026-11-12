@@ -152,7 +152,10 @@ def suggestion(name: String) -> String
   return "; #{hint.unwrap!}" if hint.some?
 
   hints = Alias.name_hints(name)
-  return "; " + hints.keys.sort.map do |key: String| "#{key}: #{hints[key]}" end.join("; ") if hints.size > 0
+  if hints.size > 0
+    pairs = hints.keys.sort.map do |key: String| "#{key}: #{hints[key]}" end
+    return "; " + pairs.join("; ")
+  end
 
   case Suggest.closest_among(name, CALLABLE_NAMES, [])
     some(found) -> "; did you mean \"#{RubyForm.shown(found)}\"?"

@@ -6,5 +6,5 @@ end
 
 def main() -> Void
   words = ["1", "2"]
-  puts(words.lazy.map do |word| try parse(word) end.to_a)
+  puts(words.lazy.map { |word| try parse(word) }.to_a)
 end

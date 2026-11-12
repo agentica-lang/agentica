@@ -18,22 +18,22 @@ def main() -> Void
   # find gives a Result, min_by and max_by an Optional: an empty list has no answer.
   big = orders.find do |order| order.items > 4 end
   puts("big order: #{big.unwrap!.customer}")
-  puts(orders.find do |order| order.items > 9 end.message)
+  puts(orders.find { |order| order.items > 9 }.message)
   cheapest = orders.min_by do |order| order.total end
   puts("cheapest: #{cheapest.unwrap!.customer}")
-  puts("most items: #{orders.max_by do |order| order.items end.unwrap!.customer}")
+  puts("most items: #{orders.max_by { |order| order.items }.unwrap!.customer}")
 
   # Ties go to the first element: bob and eve both have 12.5.
-  puts("tie: #{orders.drop(1).max_by do |order| order.total end.unwrap!.customer}")
+  puts("tie: #{orders.drop(1).max_by { |order| order.total }.unwrap!.customer}")
 
   # Groups and counts keep the order of first appearance.
   by_customer = orders.group_by do |order| order.customer end
   by_customer.each do |customer, list|
-    puts("#{customer}: #{list.map do |order| order.items end.sum} items")
+    puts("#{customer}: #{list.map { |order| order.items }.sum} items")
   end
-  puts(orders.map do |order| order.customer end.tally)
-  puts(orders.map do |order| order.customer end.uniq)
-  puts("revenue: #{orders.map do |order| order.total end.sum}")
+  puts(orders.map { |order| order.customer }.tally)
+  puts(orders.map { |order| order.customer }.uniq)
+  puts("revenue: #{orders.map { |order| order.total }.sum}")
 
   # partition gives [accepted, rejected].
   halves = orders.partition do |order| order.total > 10.0 end
@@ -50,5 +50,5 @@ def main() -> Void
 
   # Strings compare in the order of sort.
   puts("apple".compare("banana"))
-  puts(by_customer.filter do |_, list| list.size > 1 end.keys)
+  puts(by_customer.filter { |_, list| list.size > 1 }.keys)
 end

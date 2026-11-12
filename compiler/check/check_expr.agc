@@ -7,6 +7,7 @@ import Model from "../catalog/builtin_model"
 import {ENTRIES} from "../catalog/builtins"
 import Failure from "../diagnostics/problem"
 import Ast from "../syntax/ast"
+import Source from "../syntax/source"
 import T from "../syntax/types"
 import BuiltinRef from "builtin_ref"
 import {REFS_MODULE} from "builtin_ref"
@@ -97,6 +98,7 @@ def int_min_digits() -> String = "9223372036854775808"
 
 # The type of the node by its kind, before the Void and expected-type checks.
 def expression_inside(cx: State.Cx, st: State.St, node: Ast.Expr, expected: T.Type) -> Result[State.Out]
+  try chain_after_end(cx, st, node)
   case node
     Ast.Expr.Literal(found) -> check_literal(cx, st, found)
     Ast.Expr.Name(found) -> check_name(cx, st, found)
@@ -347,6 +349,80 @@ def check_interpolation(cx: State.Cx, st: State.St, node: Ast.Interpolation) -> 
   ok(State.Out(st: current, type: T.Type.String))
 end
 
+# CHECK-CHAIN-AFTER-END: a method call, field, `.call`, `.with`, index or `|>` right after the `end` of a `do` block,
+# as in `xs.map do |x| f(x) end.join(", ")`. The parser keeps no node for parentheses, and fmt prints `(... end).size`
+# as `... end.size`, so parentheses do not hide it. A block in braces and a lambda may be chained.
+def chain_after_end(cx: State.Cx, st: State.St, node: Ast.Expr) -> Result[Bool]
+  case node
+    Ast.Expr.FieldAccess(found) -> chain_link(cx, st, found.target, found.name_span, "a method call")
+    Ast.Expr.MethodCall(found) -> chain_link(cx, st, found.target, found.name_span, "a method call")
+    Ast.Expr.Invoke(found) -> chain_link(cx, st, found.target, found.span, "a method call")
+    Ast.Expr.Update(found) -> chain_link(cx, st, found.target, found.span, "a method call")
+    Ast.Expr.Index(found) -> chain_link(cx, st, found.target, found.span, "an index")
+    Ast.Expr.Call(found) if found.piped and found.args.size > 0 -> chain_link(cx, st, found.args[0], found.span, "|>")
+    _ -> ok(true)
+  end
+end
+
+# The error when `target` ends with a `do` block. The span goes from that `end` (one token, on one line) to the end of
+# `link`, the name, index or call that follows it.
+def chain_link(cx: State.Cx, st: State.St, target: Ast.Expr, link: Source.Span, what: String) -> Result[Bool]
+  found = do_block(target)
+  return ok(true) if found.none?
+
+  stop = found.unwrap!.span.stop
+  start = Source.Position(offset: stop.offset - 3, line: stop.line, column: stop.column - 3)
+  help = "bind the result to a name first"
+  if braces_fit?(target)
+    help = "#{help}, or write a one-line block in braces: {#{block_bars(found.unwrap!.params)} ... }"
+  end
+
+  error(
+    State.fail_help(
+      cx,
+      st,
+      "CHECK-CHAIN-AFTER-END",
+      "#{what} after the end of a do block",
+      Source.Span(start: start, stop: link.stop),
+      help,
+    ),
+  )
+end
+
+# The `do` block that ends the call `target`: its last argument, when that is a block that is not in braces.
+def do_block(target: Ast.Expr) -> Optional[Ast.BlockLit]
+  args: List[Ast.Expr] = []
+  case target
+    Ast.Expr.Call(call) -> args = call.args
+    Ast.Expr.MethodCall(call) -> args = call.args
+    _ -> return none
+  end
+
+  return none if args.size == 0
+
+  case args[args.size - 1]
+    Ast.Expr.BlockLit(found) if !found.braces and !found.lambda -> some(found)
+    _ -> none
+  end
+end
+
+# Whether the block of `target` may be written in braces: the call has no other argument and is not piped.
+def braces_fit?(target: Ast.Expr) -> Bool
+  case target
+    Ast.Expr.Call(call) -> !call.piped and call.args.size == 1
+    Ast.Expr.MethodCall(call) -> call.args.size == 1
+    _ -> false
+  end
+end
+
+# The parameters of a block as its head writes them: " |a, b|", or "" when it has none.
+def block_bars(params: List[Ast.BlockParam]) -> String
+  return "" if params.size == 0
+
+  names = params.map do |param: Ast.BlockParam| param.name end
+  " |#{names.join(", ")}|"
+end
+
 # Whether the last argument is a lambda; the lambda checks below run only then, so a call without one pays nothing.
 def last_lambda?(args: List[Ast.Expr]) -> Bool
   return false if args.size == 0
@@ -389,12 +465,7 @@ def lambda_block(cx: State.Cx, st: State.St, name: String, args: List[Ast.Expr])
         call = "#{name}(...)"
       end
 
-      head = "do"
-      if found.params.size > 0
-        names = found.params.map do |param: Ast.BlockParam| param.name end
-        head = "do |#{names.join(", ")}|"
-      end
-
+      head = "do#{block_bars(found.params)}"
       error(
         State.fail_help(
           cx,

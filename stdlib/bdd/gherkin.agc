@@ -574,7 +574,7 @@ end
 def flat(cell: String) -> String
   return "\"\"" if cell == ""
 
-  cell.split("").map do |c| flat_char(c) end.join("")
+  cell.split("").map(&flat_char).join("")
 end
 
 def flat_char(c: String) -> String
@@ -608,7 +608,8 @@ end
 def substitute(text: String, bindings: Map[String, String]) -> String
   return text if not text.include?("<")
   parts = text.split("<")
-  parts[0] + parts.drop(1).map do |part| substitute_part(part, bindings) end.join("")
+  substituted = parts.drop(1).map do |part| substitute_part(part, bindings) end
+  parts[0] + substituted.join("")
 end
 
 def substitute_part(part: String, bindings: Map[String, String]) -> String

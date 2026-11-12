@@ -158,7 +158,7 @@ def peer_lines(numbers, words, floats, names):
 def peer_program(numbers, words, floats, names):
     """Build one Agentica program whose output is checked against peer_lines()."""
     minmax = "\n".join(
-        "  puts((0...%s.size).to_a.%s do |i| %s[i] end.to_s)" % (name, method, name)
+        "  puts((0...%s.size).to_a.%s { |i| %s[i] }.to_s)" % (name, method, name)
         for name in ("numbers", "floats", "names")
         for method in ("min_by", "max_by")
     )
@@ -169,14 +169,14 @@ def main() -> Void
   words: List[String] = [{words}]
   floats: List[Float] = [{floats}]
   names: List[String] = [{names}]
-  puts(numbers.find do |n| n % 5 == 0 end.to_s)
-  puts(numbers.flat_map do |n| [n, -n] end.to_s)
-  puts(numbers.partition do |n| n % 2 == 0 end.to_s)
-  puts(numbers.take_while do |n| n < 5 end.to_s)
-  puts(numbers.drop_while do |n| n < 5 end.to_s)
+  puts(numbers.find {{ |n| n % 5 == 0 }}.to_s)
+  puts(numbers.flat_map {{ |n| [n, -n] }}.to_s)
+  puts(numbers.partition {{ |n| n % 2 == 0 }}.to_s)
+  puts(numbers.take_while {{ |n| n < 5 }}.to_s)
+  puts(numbers.drop_while {{ |n| n < 5 }}.to_s)
   puts(numbers.each_slice(1).to_s)
   puts(numbers.each_slice(3).to_s)
-  puts(numbers.group_by do |n| n % 3 end.to_s)
+  puts(numbers.group_by {{ |n| n % 3 }}.to_s)
   puts(words.tally.to_s)
   puts(words.uniq.to_s)
   puts(numbers.sum.to_s)
@@ -185,13 +185,13 @@ def main() -> Void
   puts(words.member?("a").to_s)
   puts(floats.include?(1.5).to_s)
   puts(floats.include?(nan).to_s)
-  puts(numbers.map do |n| n > 5 end.include?(true).to_s)
-  puts(numbers.map do |n| [n, -n] end.member?([5, -5]).to_s)
+  puts(numbers.map {{ |n| n > 5 }}.include?(true).to_s)
+  puts(numbers.map {{ |n| [n, -n] }}.member?([5, -5]).to_s)
   puts(numbers.index(5).to_s)
   puts(words.index("a").to_s)
   puts(floats.index(1.5).to_s)
   puts(floats.index(nan).to_s)
-  puts(numbers.find_index do |n| n > 5 end.to_s)
+  puts(numbers.find_index {{ |n| n > 5 }}.to_s)
 {minmax}
 end
 """.format(
@@ -334,23 +334,24 @@ def range_program(ranges):
     return """\
 def main() -> Void
   for r in [{items}]
-    puts(r.map do |n| n * n end.to_s)
-    puts(r.select do |n| n % 3 == 0 end.to_s)
-    puts(r.flat_map do |n| [n, -n] end.to_s)
-    puts(r.reduce(7) do |total, n| total * 2 + n end.to_s)
+    puts(r.map {{ |n| n * n }}.to_s)
+    puts(r.select {{ |n| n % 3 == 0 }}.to_s)
+    puts(r.flat_map {{ |n| [n, -n] }}.to_s)
+    folded = r.reduce(7) do |total, n| total * 2 + n end
+    puts(folded.to_s)
     puts(r.sum.to_s)
     puts(r.min.to_s)
     puts(r.max.to_s)
-    puts(r.min_by do |n| (n - 2).abs end.to_s)
-    puts(r.find do |n| n > 3 end.to_s)
-    puts(r.find_index do |n| n == 5 end.to_s)
-    puts(r.any? do |n| n > 5 end.to_s)
-    puts(r.all? do |n| n < 9 end.to_s)
+    puts(r.min_by {{ |n| (n - 2).abs }}.to_s)
+    puts(r.find {{ |n| n > 3 }}.to_s)
+    puts(r.find_index {{ |n| n == 5 }}.to_s)
+    puts(r.any? {{ |n| n > 5 }}.to_s)
+    puts(r.all? {{ |n| n < 9 }}.to_s)
     puts(r.each_slice(3).to_s)
-    puts(r.partition do |n| n % 2 == 0 end.to_s)
-    puts(r.group_by do |n| n % 3 end.to_s)
-    puts(r.take_while do |n| n < 4 end.to_s)
-    puts(r.drop_while do |n| n < 4 end.to_s)
+    puts(r.partition {{ |n| n % 2 == 0 }}.to_s)
+    puts(r.group_by {{ |n| n % 3 }}.to_s)
+    puts(r.take_while {{ |n| n < 4 }}.to_s)
+    puts(r.drop_while {{ |n| n < 4 }}.to_s)
   end
 end
 """.format(items=items)
@@ -431,17 +432,19 @@ def lazy_peer_program(numbers, size, count):
     return """\
 def main() -> Void
   numbers: List[Int] = [{numbers}]
-  puts(numbers.lazy.map do |n| n * 2 end.to_a.to_s)
-  puts(Lazy.produce(1) do |n| n + 1 end.filter do |n| n % 7 == 3 end.first({count}).to_s)
+  puts(numbers.lazy.map {{ |n| n * 2 }}.to_a.to_s)
+  naturals = Lazy.produce(1) do |n| n + 1 end
+  puts(naturals.filter {{ |n| n % 7 == 3 }}.first({count}).to_s)
   puts(numbers.lazy.each_slice({size}).to_a.to_s)
   puts(numbers.lazy.each_cons({size}).to_a.to_s)
-  puts(numbers.lazy.chunk_while do |a, b| b == a + 1 end.to_a.to_s)
-  puts(numbers.lazy.filter do |n| n % 3 != 0 end.with_index do |n, i| n * i end.to_a.to_s)
-  puts(numbers.lazy.flat_map do |n| [n, -n] end.take({count}).to_a.to_s)
-  puts(numbers.lazy.drop({count}).drop_while do |n| n < 5 end.to_a.to_s)
-  puts(numbers.lazy.take_while do |n| n < 5 end.to_a.to_s)
-  puts(numbers.lazy.reduce(0) do |total, n| total + n end.to_s)
-  puts(numbers.lazy.find do |n| n > 9 end.to_s)
+  puts(numbers.lazy.chunk_while {{ |a, b| b == a + 1 }}.to_a.to_s)
+  puts(numbers.lazy.filter {{ |n| n % 3 != 0 }}.with_index {{ |n, i| n * i }}.to_a.to_s)
+  puts(numbers.lazy.flat_map {{ |n| [n, -n] }}.take({count}).to_a.to_s)
+  puts(numbers.lazy.drop({count}).drop_while {{ |n| n < 5 }}.to_a.to_s)
+  puts(numbers.lazy.take_while {{ |n| n < 5 }}.to_a.to_s)
+  summed = numbers.lazy.reduce(0) do |total, n| total + n end
+  puts(summed.to_s)
+  puts(numbers.lazy.find {{ |n| n > 9 }}.to_s)
 end
 """.format(numbers=", ".join(map(literal, numbers)), size=size, count=count)
 
@@ -487,10 +490,10 @@ def composed_peer_program(numbers, size, count):
     return """\
 def main() -> Void
   numbers: List[Int] = [{numbers}]
-  puts(numbers.lazy.take_while do |n| n < 9 end.each_slice({size}).to_a.to_s)
+  puts(numbers.lazy.take_while {{ |n| n < 9 }}.each_slice({size}).to_a.to_s)
   puts(numbers.lazy.each_slice({size}).take({count}).to_a.to_s)
-  puts(numbers.lazy.flat_map do |n| [n, n + 1] end.each_cons({size}).to_a.to_s)
-  puts(numbers.lazy.take({count}).chunk_while do |a, b| b >= a end.to_a.to_s)
+  puts(numbers.lazy.flat_map {{ |n| [n, n + 1] }}.each_cons({size}).to_a.to_s)
+  puts(numbers.lazy.take({count}).chunk_while {{ |a, b| b >= a }}.to_a.to_s)
   puts(numbers.lazy.each_slice(2).each_cons(2).first({count}).to_s)
 end
 """.format(numbers=", ".join(map(literal, numbers)), size=size, count=count)
@@ -568,11 +571,12 @@ end
 
 def main() -> Void
   words: List[String] = [{words}]
-  puts(words.lazy.map do |word| try number(word) end.to_a.to_s)
-  puts(words.lazy.map do |word| try number(word) end.filter do |n| n % 2 == 0 end.first({count}).to_s)
-  puts(words.lazy.map do |word| try number(word) end.reduce(0) do |sum, n| sum + try capped(n) end.to_s)
-  puts(words.lazy.find do |word| try number(word) > 5 end.to_s)
-  puts(words.lazy.take({count}).with_index do |word, index| try number(word) * index end.to_a.to_s)
+  puts(words.lazy.map {{ |word| try number(word) }}.to_a.to_s)
+  puts(words.lazy.map {{ |word| try number(word) }}.filter {{ |n| n % 2 == 0 }}.first({count}).to_s)
+  capped_sum = words.lazy.map {{ |word| try number(word) }}.reduce(0) do |sum, n| sum + try capped(n) end
+  puts(capped_sum.to_s)
+  puts(words.lazy.find {{ |word| try number(word) > 5 }}.to_s)
+  puts(words.lazy.take({count}).with_index {{ |word, index| try number(word) * index }}.to_a.to_s)
 end
 """.format(words=", ".join(map(literal, words)), count=count, limit=limit)
 

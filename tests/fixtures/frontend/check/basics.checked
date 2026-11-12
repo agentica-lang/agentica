@@ -1,4 +1,4 @@
-program #50 0:1:1-230:16:1
+program #50 0:1:1-227:16:1
   module "basics.agc"
     declaration: struct-decl #4 0:1:1-35:5:1 name="Point"
       field: field-decl #1 15:2:3-22:3:1 name="x"
@@ -15,7 +15,7 @@ program #50 0:1:1-230:16:1
         value: binary #12 76:7:10-81:7:15 op=plus op-span=78:7:12-79:7:13 type=Int
           left: name-ref #10 76:7:10-77:7:11 name="a" type=Int
           right: name-ref #11 80:7:14-81:7:15 name="b" type=Int
-    declaration: function-decl #49 87:10:1-230:16:1 name="main"
+    declaration: function-decl #49 87:10:1-227:16:1 name="main"
       result: type-ref #15 101:10:15-105:10:19 name="Void"
       body: binding #21 108:11:3-130:12:1 name="p"
         value: construct #20 112:11:7-129:11:24 type="Point" type=Struct(Point)
@@ -41,14 +41,14 @@ program #50 0:1:1-230:16:1
               right: call #33 176:13:30-185:13:39 name="add" piped=false type=Int
                 arg: literal #31 180:13:34-181:13:35 value=int:1 type=Int
                 arg: literal #32 183:13:37-184:13:38 value=int:2 type=Int
-      body: expr-stmt #48 191:14:3-226:15:1
-        value: call #47 191:14:3-225:14:37 name="puts" piped=false type=Void
-          arg: field-access #46 196:14:8-224:14:36 name="to_s" type=String resolved=text(List(Int))
-            target: method-call #45 196:14:8-219:14:31 name="map" type=List(Int) resolved=call("List.map", List(Int))
+      body: expr-stmt #48 191:14:3-223:15:1
+        value: call #47 191:14:3-222:14:34 name="puts" piped=false type=Void
+          arg: field-access #46 196:14:8-221:14:33 name="to_s" type=String resolved=text(List(Int))
+            target: method-call #45 196:14:8-216:14:28 name="map" type=List(Int) resolved=call("List.map", List(Int))
               target: name-ref #38 196:14:8-198:14:10 name="xs" type=List(Int)
-              arg: block-lit #44 203:14:15-219:14:31 type=Fn([Int], Int)
-                param: block-param #39 207:14:19-208:14:20 name="x"
-                body: expr-stmt #43 210:14:22-215:14:27
-                  value: binary #42 210:14:22-215:14:27 op=multiply op-span=212:14:24-213:14:25 type=Int
-                    left: name-ref #40 210:14:22-211:14:23 name="x" type=Int
-                    right: literal #41 214:14:26-215:14:27 value=int:2 type=Int
+              arg: block-lit #44 203:14:15-216:14:28 type=Fn([Int], Int)
+                param: block-param #39 206:14:18-207:14:19 name="x"
+                body: expr-stmt #43 209:14:21-214:14:26
+                  value: binary #42 209:14:21-214:14:26 op=multiply op-span=211:14:23-212:14:24 type=Int
+                    left: name-ref #40 209:14:21-210:14:22 name="x" type=Int
+                    right: literal #41 213:14:25-214:14:26 value=int:2 type=Int

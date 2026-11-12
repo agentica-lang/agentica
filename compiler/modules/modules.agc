@@ -691,7 +691,8 @@ def shape_of(module: Module) -> String
     pieces = pieces.push(local).push(module.named[local].target).push(module.named[local].name)
   end
 
-  pieces.map do |text: String| CheckCache.piece(text) end.join("")
+  framed = pieces.map do |text: String| CheckCache.piece(text) end
+  framed.join("")
 end
 
 # One import of the file on top: the alias, the path, then the file it names (read and entered unless it was seen). The

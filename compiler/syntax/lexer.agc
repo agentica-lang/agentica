@@ -1805,7 +1805,8 @@ def radix_value(digits: List[Int], base: Int, prefix: String) -> Tokens.Value
     if value > (INT_MAX - digit) / base
       significant = digits.drop_while do |d: Int| d == 0 end
       if significant.size > RADIX_EXACT_DIGITS[base]
-        return Tokens.Value.Huge(prefix + significant.map do |d: Int| HEX_DIGITS.slice(d, 1) end.join(""))
+        shown = significant.map do |d: Int| HEX_DIGITS.slice(d, 1) end
+        return Tokens.Value.Huge(prefix + shown.join(""))
       end
 
       return Tokens.Value.Huge(decimal_text(significant, base))
@@ -1839,7 +1840,8 @@ def decimal_text(digits: List[Int], base: Int) -> String
     decimal = grown
   end
 
-  decimal.reverse.map do |place: Int| place.to_s end.join("")
+  places = decimal.reverse.map do |place: Int| place.to_s end
+  places.join("")
 end
 
 def unexpected_character(character: String, start: Source.Position, stop: Source.Position) -> Diag.Diagnostic
