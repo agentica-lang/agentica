@@ -439,7 +439,14 @@ def parse_lambda(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
   body = try parse_block(Base.with_block_body(e, -1, ""), open, next_id, 2)
   close = try Base.expect(e, body.pos, "right-brace", "\"}\" to end the lambda", false)
   node = Ast.Expr.BlockLit(
-    Ast.BlockLit(id: body.ids, params: params, body: body.nodes, lambda: true, span: Base.span_from(e, pos, close)),
+    Ast.BlockLit(
+      id: body.ids,
+      params: params,
+      body: body.nodes,
+      lambda: true,
+      braces: false,
+      span: Base.span_from(e, pos, close),
+    ),
   )
 
   expr_at(node, close, body.ids)
@@ -675,16 +682,51 @@ def block_name_help(name: String) -> String
 
   return "there is no loop; use while true ... end, or a while condition" if name == "loop"
 
-  "to call a function, add parentheses: #{name}() do ... end; an if condition ends with a newline, not do"
+  "an if condition ends with a newline, not do; a block in a condition follows parentheses: #{name}() do ... end"
 end
 
-# `do` after a call, a method call or a field access adds a block as the last argument. The node built before is
-# dropped, and it was the last one numbered, so its id is reused: the block is parsed from ids - 1 and the new node is
-# numbered after the block, which keeps the ids dense and in post-order. A field access becomes a method call.
+# Whether a `do` block may follow a plain name: the block makes it a call with no arguments, except in an if condition
+# and for block_word? names.
+def bare_block_name?(e: Base.Env, target: Ast.Expr) -> Bool
+  case target
+    Ast.Expr.Name(reference) -> e.bare_blocks and !Ast.block_word?(reference.name)
+    _ -> false
+  end
+end
+
+# Whether a `{ ... }` block may follow a target: a call written without arguments (`recv.name`, `name`,
+# `Alias.name`), outside an if condition. A call with parentheses takes only a `do` block.
+def brace_target?(e: Base.Env, target: Ast.Expr) -> Bool
+  return false if !e.allow_blocks or !e.bare_blocks
+
+  case target
+    Ast.Expr.FieldAccess(_) -> true
+    Ast.Expr.Call(call) -> !call.parenthesized and !call.piped and call.args.size == 0
+    _ -> bare_block_name?(e, target)
+  end
+end
+
+# A `do` or `{` block after a call, a method call, a field access or a plain name is added as the last argument. The
+# node built before is dropped, and it was the last one numbered, so its id is reused: the block is parsed from ids - 1
+# and the new node is numbered after the block, which keeps the ids dense and in post-order. A field access becomes a
+# method call and a plain name a call, both with no other argument.
 def attach_block(e: Base.Env, start: Int, target: Ast.Expr, cursor: Int, ids: Int) -> Result[Base.ExprAt]
-  block = try parse_block_lit(e, cursor, ids - 1)
+  block = try parse_attached_block(e, cursor, ids - 1)
   span = Base.span_from(e, start, block.pos)
   case target
+    Ast.Expr.Name(reference) ->
+      node = Ast.Expr.Call(
+        Ast.Call(
+          id: block.ids,
+          name: reference.name,
+          args: [block.node],
+          piped: false,
+          parenthesized: false,
+          span: span,
+        ),
+      )
+
+      expr_at(node, block.pos, block.ids)
     Ast.Expr.Call(call) ->
       node = Ast.Expr.Call(
         Ast.Call(
@@ -807,13 +849,25 @@ def parse_postfix(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
 
       cursor = close
       next_id = index.ids + 1
-    elsif kind == "do" and e.allow_blocks and block_target?(target)
+    elsif (
+      (kind == "do" and e.allow_blocks and (block_target?(target) or bare_block_name?(e, target))) or
+      (kind == "left-brace" and brace_target?(e, target))
+    )
       links += 1
       inner = try Base.deepen(e, cursor, links)
       attached = try attach_block(inner, pos, target, cursor, next_id)
       target = attached.node
       cursor = attached.pos
       next_id = attached.ids
+    elsif kind == "left-brace" and e.allow_blocks and e.bare_blocks and block_target?(target)
+      return error(
+        Base.unexpected_help(
+          e,
+          cursor,
+          "a call with parentheses takes a do block, found \"{\"",
+          "write recv.name { ... } with no (), or recv.name(args) do ... end",
+        ),
+      )
     elsif kind == "do" and e.allow_blocks and name_target?(target)
       return error(
         Base.unexpected_help(
@@ -886,6 +940,13 @@ def parse_block_params(e: Base.Env, pos: Int, ids: Int, closer: String, closer_t
   ok(BlockParamsAt(params: params, pos: cursor, ids: next_id))
 end
 
+# The block at `pos`: `do ... end`, or `{ ... }` after a call without arguments.
+def parse_attached_block(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
+  return parse_brace_block(e, pos, ids) if e.tokens[pos].kind == "left-brace"
+
+  parse_block_lit(e, pos, ids)
+end
+
 # do |params| body end. The body allows blocks again and is a block body (depth 1), where `end` may follow a statement
 # on the same line.
 def parse_block_lit(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
@@ -917,7 +978,47 @@ def parse_block_lit(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
   body = try parse_block(Base.with_block_body(e, brace_at, form), cursor, next_id, 1)
   close = try expect_end(e, body.pos)
   node = Ast.Expr.BlockLit(
-    Ast.BlockLit(id: body.ids, params: params, body: body.nodes, lambda: false, span: Base.span_from(e, pos, close)),
+    Ast.BlockLit(
+      id: body.ids,
+      params: params,
+      body: body.nodes,
+      lambda: false,
+      braces: false,
+      span: Base.span_from(e, pos, close),
+    ),
+  )
+
+  expr_at(node, close, body.ids)
+end
+
+# { |params| body }: a block in braces after a call without arguments. Its body is a lambda's (depth 2), which ends at
+# the `}`, also on the line of its last statement.
+def parse_brace_block(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
+  cursor = pos + 1
+  if e.tokens[cursor].kind == "or"
+    return error(Base.unexpected(e, cursor, "a block without parameters has no bars; write { ... }"))
+  end
+
+  params: List[Ast.BlockParam] = []
+  next_id = ids
+  if e.tokens[cursor].kind == "pipe"
+    parsed = try parse_block_params(e, cursor + 1, next_id, "pipe", "\"|\" after the block parameters")
+    params = parsed.params
+    cursor = parsed.pos
+    next_id = parsed.ids
+  end
+
+  body = try parse_block(Base.with_block_body(e, -1, ""), cursor, next_id, 2)
+  close = try Base.expect(e, body.pos, "right-brace", "\"}\" to end the block", false)
+  node = Ast.Expr.BlockLit(
+    Ast.BlockLit(
+      id: body.ids,
+      params: params,
+      body: body.nodes,
+      lambda: false,
+      braces: true,
+      span: Base.span_from(e, pos, close),
+    ),
   )
 
   expr_at(node, close, body.ids)
@@ -1712,7 +1813,7 @@ def parse_statement_guard(e: Base.Env, pos: Int, at: Int, stmt: Ast.Stmt, ids: I
     )
   end
 
-  condition = try parse_expression(e, at + 1, ids)
+  condition = try parse_expression(Base.in_condition(e), at + 1, ids)
   following = e.tokens[condition.pos]
   if following.kind == "elsif" or following.kind == "else" or following.kind == "if"
     return error(
@@ -1940,7 +2041,7 @@ def parse_simple_statement(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtA
 end
 
 def parse_if_branch(e: Base.Env, pos: Int, ids: Int) -> Result[IfBranchAt]
-  condition = try parse_expression(e, pos + 1, ids)
+  condition = try parse_expression(Base.in_condition(e), pos + 1, ids)
   following = e.tokens[condition.pos]
   if following.kind == "name" and following.lexeme == "then"
     return error(

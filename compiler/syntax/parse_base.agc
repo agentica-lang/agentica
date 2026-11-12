@@ -26,12 +26,14 @@ RESERVED_RENAMES = {
 
 ## What a parse function reads and never changes: the tokens, the context of the construct being parsed, and the
 ## nesting level. depth is the block depth (0 outside a do block body), allow_blocks tells whether `do` after a call
-## starts a block, and brace_at and brace_form remember a `{` right after a block head, for the help of
-## PARSE-UNEXPECTED-TOKEN.
+## starts a block, bare_blocks whether a plain name takes a `do` block and whether a `{ ... }` block may follow a call
+## without arguments (not in an if condition, where `{` and `do` are mistakes for the end of the line), and brace_at
+## and brace_form remember a `{` right after a block head, for the help of PARSE-UNEXPECTED-TOKEN.
 export struct Env
   tokens: List[Tokens.Token]
   size: Int
   allow_blocks: Bool
+  bare_blocks: Bool
   depth: Int
   brace_at: Int
   brace_form: String
@@ -112,7 +114,16 @@ end
 ## the same way in every stage.
 ## The context for the start of a file.
 export def make_env(tokens: List[Tokens.Token]) -> Env
-  Env(tokens: tokens, size: tokens.size, allow_blocks: true, depth: 0, brace_at: -1, brace_form: "", nesting: 0)
+  Env(
+    tokens: tokens,
+    size: tokens.size,
+    allow_blocks: true,
+    bare_blocks: true,
+    depth: 0,
+    brace_at: -1,
+    brace_form: "",
+    nesting: 0,
+  )
 end
 
 ## The same context, with `do` blocks allowed or not. Headers of case, while and for do not allow them.
@@ -121,6 +132,22 @@ export def with_blocks(e: Env, allow: Bool) -> Env
     tokens: e.tokens,
     size: e.size,
     allow_blocks: allow,
+    bare_blocks: allow,
+    depth: e.depth,
+    brace_at: e.brace_at,
+    brace_form: e.brace_form,
+    nesting: e.nesting,
+  )
+end
+
+## The same context for the condition of an if, an elsif or a guard: blocks follow calls, but a plain name takes no
+## `do` block and no call takes a `{ ... }` block, so that the formatter may turn a guard into an if and back.
+export def in_condition(e: Env) -> Env
+  Env(
+    tokens: e.tokens,
+    size: e.size,
+    allow_blocks: e.allow_blocks,
+    bare_blocks: false,
     depth: e.depth,
     brace_at: e.brace_at,
     brace_form: e.brace_form,
@@ -134,6 +161,7 @@ export def with_depth(e: Env, depth: Int) -> Env
     tokens: e.tokens,
     size: e.size,
     allow_blocks: e.allow_blocks,
+    bare_blocks: e.bare_blocks,
     depth: depth,
     brace_at: e.brace_at,
     brace_form: e.brace_form,
@@ -147,6 +175,7 @@ export def with_block_body(e: Env, brace_at: Int, brace_form: String) -> Env
     tokens: e.tokens,
     size: e.size,
     allow_blocks: true,
+    bare_blocks: true,
     depth: 1,
     brace_at: brace_at,
     brace_form: brace_form,
@@ -264,6 +293,7 @@ export def deepen(e: Env, pos: Int, levels: Int) -> Result[Env]
       tokens: e.tokens,
       size: e.size,
       allow_blocks: e.allow_blocks,
+      bare_blocks: e.bare_blocks,
       depth: e.depth,
       brace_at: e.brace_at,
       brace_form: e.brace_form,

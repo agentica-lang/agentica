@@ -9,11 +9,13 @@ closures, `Result`, `try` and `Optional`. Builtin methods and `to_s`:
 A block is a function written at the call site as the last argument: `xs.map do
 |x| x * 2 end`, `run(5) do |n| n + 1 end`.
 
-- `do |a, b| ... end` or `do ... end` follows the call's `)`, or a method name
-  with no parentheses (`xs.each do`). A user function needs parentheses; one
-  through an import alias may drop them (`Util.start do ... end`). The last
-  parameter must be a `Fn` (`CHECK-BLOCK-TARGET`). Never `do || ... end` or
-  `{ |x| ... }`.
+- `do |a, b| ... end` or `do ... end` follows the call's `)`, or a name with
+  no arguments, which drops the empty `()`: `xs.each do`, `run do`,
+  `Util.start do`. `{ |x| ... }` follows only a name with no arguments:
+  `xs.map { |x| x * 2 }`; with arguments, use `do`. A bare name without a block
+  is never a call. Keep `()` after `|>` and for a plain-name call in an `if` or
+  guard condition (`if ready() do |x| ... end`). The last parameter must be a
+  `Fn` (`CHECK-BLOCK-TARGET`). Never `do || ... end`.
 - Parameter types come from the call, else from the uses in the body when they
   leave one type (`x + 1`: Int; `x.upcase`: String; `f(x)`, `Msg.Get(x)`: the
   parameter's type); annotate otherwise: `do |x: Int| ... end`

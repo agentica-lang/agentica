@@ -20,7 +20,7 @@ end
 
 def pick(n: Int) -> Fn[Int, Int]
   if n > 0
-    return keep() do |x: Int|
+    return keep do |x: Int|
       x + n
     end
   end
@@ -64,7 +64,7 @@ def checked(f: Fn[String, Result[Int]]) -> Fn[String, Result[Int]]
 end
 
 def lengths(words: List[String]) -> List[Result[Int]]
-  f = checked() do |w: String|
+  f = checked do |w: String|
     n = try parse(w)
     ok(n + 1)
   end
@@ -75,7 +75,7 @@ def main() -> Void
   base = 10
   label = "n"
   adders = [1, 2, 3].map do |i|
-    keep() do |x: Int|
+    keep do |x: Int|
       x + i + base
     end
   end
@@ -83,7 +83,7 @@ def main() -> Void
   for f in adders
     puts(f.call(5))
   end
-  late = keep() do |x: Int| x * base end
+  late = keep do |x: Int| x * base end
   puts(late.call(2))
   shown = [4, 5].map do |x: Int|
     inner = [x, x + 1].map do |y| "#{label}#{y + base}" end
@@ -91,8 +91,8 @@ def main() -> Void
   end
   puts(shown)
   for k in [1, 2]
-    g = keep() do |x: Int|
-      h = keep() do |y: Int| y * k + x end
+    g = keep do |x: Int|
+      h = keep do |y: Int| y * k + x end
       h.call(x)
     end
     puts(g.call(10))
@@ -102,20 +102,20 @@ def main() -> Void
   puts(table["triple"].call(4))
   puts(table["plus"].call(4))
   puts(pick(0).call(21))
-  hs = [Handler(name: "neg", run: keep() do |x: Int| 0 - x end), Handler(name: "sq", run: keep() do |x: Int| x * x end)]
+  hs = [Handler(name: "neg", run: keep do |x: Int| 0 - x end), Handler(name: "sq", run: keep do |x: Int| x * x end)]
   for h in hs
     puts("#{h.name} #{h.run.call(6)}")
   end
   puts(Cb.twice(&double, 3))
   puts(Cb.twice(&Cb.triple, 3))
-  puts(Cb.twice(keep() do |x: Int| x - base end, 3))
+  puts(Cb.twice(keep do |x: Int| x - base end, 3))
   puts(first_big([1, 2, 3], 1))
   puts(first_big([1, 2, 3], 9))
   puts(lengths(["ab", "abc"]))
   puts(lengths(["ab", "bad", "c"]))
   [1, 2].each do |_|
   end
-  g = quiet() do |v: Int|
+  g = quiet do |v: Int|
     if v > 1
       return
     end
@@ -138,8 +138,8 @@ def main() -> Void
     end
     i = i + 1
   end
-  made = [3, 4].reduce(keep() do |x: Int| x end) do |acc, k|
-    keep() do |x: Int| acc.call(x) * k + base end
+  made = [3, 4].reduce(keep do |x: Int| x end) do |acc, k|
+    keep do |x: Int| acc.call(x) * k + base end
   end
   puts(made.call(1))
   noop = [1, 2].map do |x|

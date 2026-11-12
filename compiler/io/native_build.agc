@@ -81,17 +81,14 @@ end
 ## PKG-NATIVE-UNBUILT warning of an optional module that was not built, once a run.
 export def builder(noted: Bool, warned: Fn[String, Void]) -> Fn[Workspace.BuildRequest, Workspace.Built]
   memo: ATS[String, String] = ATS.new()
-  builder_of() do |request: Workspace.BuildRequest| remembered(memo, request, noted, warned) end
+  ->(request) { remembered(memo, request, noted, warned) }
 end
 
 ## The builder of `compile` under `flag` (a --deny-* flag or --sandbox), whose program may not open native code: it
 ## starts no compiler and fails at the build table, so nothing names a module that was not built.
 export def refusing(flag: String) -> Fn[Workspace.BuildRequest, Workspace.Built]
-  builder_of() do |request: Workspace.BuildRequest| refused(request, flag) end
+  ->(request) { refused(request, flag) }
 end
-
-# The identity of a function value: a block can only be written as the block of a call.
-def builder_of(f: Fn[Workspace.BuildRequest, Workspace.Built]) -> Fn[Workspace.BuildRequest, Workspace.Built] = f
 
 def refused(request: Workspace.BuildRequest, flag: String) -> Workspace.Built
   message = "#{flag} refuses native code, so the module is not built"

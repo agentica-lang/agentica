@@ -151,6 +151,10 @@ OPENERS = {")": "(", "]": "[", "}": "{"}
 ## inside it is a statement break, as in a block; a `}` closes it as it closes a map literal.
 LAMBDA_BODY = "->"
 
+## The frame of the `{` that opens a block after a name (`xs.map { |x| ... }`): a body of statements, as a lambda's.
+## Before a `{`, a name token is always the end of a call: a map literal never follows one.
+BRACE_BLOCK = "{|"
+
 ## The default of a table lookup that cannot miss.
 NO_OP = Op(kind: "", lexeme: "", value: Tokens.Value.NoValue, width: 1)
 
@@ -480,6 +484,8 @@ def lex_from(input: Input, state: Lexed, stop_depth: Int) -> Diag.Outcome[Lexed]
         after_lambda = tokens.size > 0 and tokens[tokens.size - 1].kind == "lambda-arrow"
         if char == "{" and (after_lambda or tokens.size == body_at)
           kind = LAMBDA_BODY
+        elsif char == "{" and tokens.size > 0 and tokens[tokens.size - 1].kind == "name"
+          kind = BRACE_BLOCK
         elsif char == "(" and after_lambda
           params_depth = depth + 1
         end
@@ -569,7 +575,7 @@ def lex_from(input: Input, state: Lexed, stop_depth: Int) -> Diag.Outcome[Lexed]
         end
 
         column_base = 1 - line_start
-        if top.kind == "kw" or top.kind == LAMBDA_BODY
+        if top.kind == "kw" or top.kind == LAMBDA_BODY or top.kind == BRACE_BLOCK
           # A line that starts with `.name` continues the line before, so its NL is dropped. It needs a token that
           # can end an expression just before (not an NL, so a blank line ends the statement, nor a `do` or an
           # operator), and the line is not the head of an `if`, `while`, `case` or `for` (a dot on the first line of
@@ -987,7 +993,7 @@ def close_brace(
   return scan_piece(input, tokens, delimiters, index, line, line_start) if in_interpolation?(delimiters)
 
   kind = frame_on_top(delimiters, delimiters.size).kind
-  if kind != "{" and kind != LAMBDA_BODY
+  if kind != "{" and kind != LAMBDA_BODY and kind != BRACE_BLOCK
     return Diag.Outcome.Failed(unmatched(delimiters, index, "}", line, 1 - line_start))
   end
 
@@ -1624,12 +1630,15 @@ def unclosed(frame: Frame, here: Source.Position) -> Diag.Diagnostic
   opener = frame.kind
   if frame.kind == "{"
     help = Diag.Help.Hint(
-      "add the missing \"}\" of a map literal; if \"{\" was meant to open a block, remove it: " +
-      "blocks have no braces and end with \"end\"",
+      "add the missing \"}\" of a map literal; if \"{\" was meant to open a do block, remove it: " +
+      "a do block ends with \"end\"",
     )
   elsif frame.kind == LAMBDA_BODY
     opener = "{"
     help = Diag.Help.Hint("add the missing \"}\" that ends the lambda")
+  elsif frame.kind == BRACE_BLOCK
+    opener = "{"
+    help = Diag.Help.Hint("add the missing \"}\" that ends the block")
   end
 
   Diag.fail("LEX-UNCLOSED-DELIMITER", "unclosed #{opener} delimiter", span(frame.start, here), help)

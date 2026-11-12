@@ -62,6 +62,8 @@ export struct Context
   width: Int
   # The type aliases of the file whose target is Void (void_aliases): a def with such a result keeps its last `return`.
   void_aliases: List[String] = []
+  # Inside the condition of an if, an elsif or a guard, where a plain name takes a block only after `()`.
+  condition: Bool = false
 end
 
 ## An `extern` block, copied whole: its first and last lines and offsets, and the comments that the attachment gave
@@ -783,7 +785,8 @@ end
 # in a body.
 def guard_doc(c: Context, node: Ast.IfStmt) -> Docs.Doc
   branch = node.branches[0]
-  Docs.Doc.Concat([statement_doc(c, branch.body[0], true), text(" if "), expr_doc(c, branch.condition, false)])
+  condition = expr_doc(c.with(condition: true), branch.condition, false)
+  Docs.Doc.Concat([statement_doc(c, branch.body[0], true), text(" if "), condition])
 end
 
 # `if`, its `elsif` branches and its `else`. A comment before `elsif` or `else` stays just before the keyword, at the
@@ -812,7 +815,7 @@ def spelled_if_doc(c: Context, node: Ast.IfStmt) -> Docs.Doc
     head = commented(
       c,
       Comments.key_of("IfBranch", branch.span),
-      Docs.Doc.Concat([text(keyword), expr_doc(c, branch.condition, false)]),
+      Docs.Doc.Concat([text(keyword), expr_doc(c.with(condition: true), branch.condition, false)]),
     )
 
     parts = parts.concat([head, body(c, items)])
@@ -1475,6 +1478,12 @@ def call_doc_keyed(c: Context, node: Ast.Call, key: String) -> Docs.Doc
     end
   end
 
+  # The empty `()` before a block goes, except where the parser needs it: a pipe stage, a block word and a plain name
+  # in a condition (bare_block_name? of the parser).
+  plain = !node.name.include?(".")
+  kept = node.piped or (plain and (c.condition or Ast.block_word?(node.name)))
+  return Docs.Doc.Concat([text(call_name(c, node))].concat(block)) if args.size == 0 and block.size > 0 and !kept
+
   return Docs.Doc.Concat([text(call_name(c, node)), arguments(c, args, key)].concat(block)) if node.parenthesized
 
   return Docs.Doc.Concat([text(node.name)].concat(block)) if args.size == 0
@@ -1658,7 +1667,7 @@ def target_of(expr: Ast.Expr) -> Ast.Expr
   end
 end
 
-# `.name(args)`, with a trailing `do` block. A call whose only argument is a block keeps the `()` it was written with.
+# `.name(args)`, with a trailing block. A call whose only argument is a block drops the empty `()`.
 def method_link(c: Context, node: Ast.MethodCall) -> Link
   args = node.args
   block: List[Docs.Doc] = []
@@ -1672,19 +1681,14 @@ def method_link(c: Context, node: Ast.MethodCall) -> Link
   end
 
   name = text(".#{node.name}")
-  if args.size == 0 and block.size > 0
-    at = token_index(c, node.name_span.start.offset) + 1
-    if at >= c.tokens.size or c.tokens[at].kind != "left-paren"
-      return Link(doc: name, block: block, call: true, breaks: true)
-    end
-  end
+  return Link(doc: name, block: block, call: true, breaks: true) if args.size == 0 and block.size > 0
 
   shown = Docs.Doc.Concat([name, arguments(c, args, Comments.key_of("MethodCall", node.span))])
   Link(doc: shown, block: block, call: true, breaks: true)
 end
 
-# `do |params| body end`, or a lambda `->(params) { body }`: on one line when the body is one simple statement with no
-# comments and it fits, else with the body on the lines below.
+# `do |params| body end`, `{ |params| body }`, or a lambda `->(params) { body }`: on one line when the body is one
+# simple statement with no comments and it fits, else with the body on the lines below.
 def block_doc(c: Context, node: Ast.BlockLit) -> Docs.Doc
   key = Comments.key_of("BlockLit", node.span)
   params = node.params.map do |param: Ast.BlockParam| block_param(c, param) end
@@ -1695,6 +1699,12 @@ def block_doc(c: Context, node: Ast.BlockLit) -> Docs.Doc
     close = "}"
     if params.size > 0
       head = "->(#{params.join(", ")}) {"
+    end
+  elsif node.braces
+    head = "{"
+    close = "}"
+    if params.size > 0
+      head = "{ |#{params.join(", ")}|"
     end
   elsif params.size > 0
     head = "do |#{params.join(", ")}|"

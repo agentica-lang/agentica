@@ -891,11 +891,11 @@ total = xs.reduce(0) do |sum, x| sum + x end
 ```
 
 - **Where.** `do |a, b| ... end` comes right after the `)` of a call, or after a
-  method name without parentheses. The called function's last parameter must be
-  a `Fn`; otherwise `CHECK-BLOCK-TARGET`, for user functions and builtins alike.
-  A user function keeps its parentheses; only a function reached through an
-  import alias may drop them (`Util.start do ... end`). `do || ... end` is
-  rejected.
+  method or function name without arguments, which drops the empty `()`
+  (`xs.each do`, `start do`, `Util.start do`). `{ |a, b| ... }` comes only after
+  such a name (`xs.map { |x| x * 2 }`). The called function's last parameter
+  must be a `Fn`; otherwise `CHECK-BLOCK-TARGET`, for user functions and
+  builtins alike. `do || ... end` and `{ || ... }` are rejected.
 - **Headers.** `case`, `while` and `for` headers may end with an optional `do`,
   which is never a block; a block in such a header needs parentheses.
 - **Parameter types** come from the expected `Fn` or the builtin's rule

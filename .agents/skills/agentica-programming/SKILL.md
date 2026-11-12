@@ -27,9 +27,9 @@ in one command, `for f in cases/*.txt; do agentica p.agc < "$f" || break; done`.
 
 ## Rules agents break
 
-- Ruby only: no braces, `let`, `match`, `where` (`PARSE-UNEXPECTED-TOKEN`), `;`
-  (`LEX-UNEXPECTED-CHAR`) or `continue` (use `next`); guards are `pattern if
-  cond ->`; strings are double-quoted.
+- Ruby only: no braces around `if`, `while` or `def` bodies, no `let`, `match`,
+  `where` (`PARSE-UNEXPECTED-TOKEN`), `;` (`LEX-UNEXPECTED-CHAR`) or `continue`
+  (use `next`); guards are `pattern if cond ->`; strings are double-quoted.
 - Values never change: `xs = xs.push(4)`; a block cannot assign an outer
   variable (`reduce` for a total; a `for` loop, which can, to update several).
 - No implicit Int/Float (`n.to_f`); `<` only on numbers (strings: `a.compare(b)

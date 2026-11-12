@@ -131,11 +131,11 @@ def stream_answer(route: Fn[HTTP.Request, Result[HTTP.StreamResponse]], request:
 end
 
 def streamed(route: Fn[HTTP.Request, Result[HTTP.StreamResponse]]) -> HTTP.App
-  return app_of() do |request, body| stream_answer(route, request, body) end
+  return app_of do |request, body| stream_answer(route, request, body) end
 end
 
 def routes(hub: Hub) -> Fn[HTTP.Request, Result[HTTP.StreamResponse]]
-  return handler_of() do |request|
+  return handler_of do |request|
     case request.path
       "/gated" -> return stream(hub, &gated, 200)
       "/short" -> return stream(hub, &short, 200)

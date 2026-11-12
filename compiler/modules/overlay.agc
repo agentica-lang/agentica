@@ -53,18 +53,11 @@ end
 ## the buffer; `file_exists` says yes and `real_path` gives the canonical path even when the disk has no such file.
 export def over(workspace: Workspace.Workspace, buffers: List[Buffer]) -> Workspace.Workspace
   workspace.with(
-    read_text: as_reader() do |path: String| read_buffer(workspace, buffers, path) end,
-    file_exists: as_check() do |path: String| find(buffers, path).size > 0 or workspace.file_exists.call(path) end,
-    real_path: as_resolver() do |path: String| real_buffer(workspace, buffers, path) end,
+    read_text: ->(path) { read_buffer(workspace, buffers, path) },
+    file_exists: ->(path) { find(buffers, path).size > 0 or workspace.file_exists.call(path) },
+    real_path: ->(path) { real_buffer(workspace, buffers, path) },
   )
 end
-
-# The identity of a function value: a block can only be written as the block of a call.
-def as_reader(f: Fn[String, SourceFile.Read]) -> Fn[String, SourceFile.Read] = f
-
-def as_check(f: Fn[String, Bool]) -> Fn[String, Bool] = f
-
-def as_resolver(f: Fn[String, Result[String]]) -> Fn[String, Result[String]] = f
 
 # On Windows Path.resolve gives `\` separators, which the path helpers split only on `/`: they are split on a copy
 # with `/`, as Path.join writes them.

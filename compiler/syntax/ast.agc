@@ -603,12 +603,14 @@ export struct Interpolation
   span: Source.Span
 end
 
-## do |params| body end, or a lambda ->(params) { body } (`lambda`): the same function value without a call.
+## do |params| body end, { |params| body } after a call without arguments (`braces`), or a lambda ->(params) { body }
+## (`lambda`): the same function value without a call.
 export struct BlockLit
   id: Int
   params: List[BlockParam]
   body: List[Stmt]
   lambda: Bool
+  braces: Bool
   span: Source.Span
 end
 
@@ -705,6 +707,10 @@ export struct TypedTarget
   type: Types.Type
   span: Source.Span
 end
+
+## The names that take a block only after parentheses (`loop() do ... end`): Ruby's lambda, proc and loop, whose parser
+## error explains them better than the checker can.
+export def block_word?(name: String) -> Bool = name == "lambda" or name == "proc" or name == "loop"
 
 ## The id of an expression node.
 export def expr_id(expr: Expr) -> Int

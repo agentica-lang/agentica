@@ -1,3 +1,5 @@
 def main() -> Void
-  xs = foo do |x| x end
+  if foo do |x| x end
+    puts("x")
+  end
 end

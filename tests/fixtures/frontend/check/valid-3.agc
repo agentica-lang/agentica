@@ -25,7 +25,7 @@ def main() -> Void
     end
     "small"
   end
-  _ = parse() do |s|
+  _ = parse do |s|
     v = try s.to_i
     ok(v * 2)
   end

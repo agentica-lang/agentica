@@ -156,7 +156,7 @@ def logged(f: Fn[Int, Int]) -> Fn[Int, Int]
 end
 
 def main() -> Void
-  double = logged() do |x| x * 2 end
+  double = logged do |x| x * 2 end
   double.call(4)
 end
 ```
