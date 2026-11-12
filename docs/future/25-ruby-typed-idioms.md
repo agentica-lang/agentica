@@ -100,10 +100,6 @@ one exists.
 - **Generators and fibers** (`Enumerator.new`, `Fiber`): see
   `27-iteration-and-concurrency.md`; a producer task that sends into a
   `Channel` is the generator.
-- **Keyword arguments:** `connect("a", port: 8080)` would be a second way to
-  pass an argument that can already be passed by position. Calls stay
-  positional; `with` and struct construction stay the only places with named
-  arguments.
 - **`loop do ... end`:** `while true ... end` already does it, and `break`
   cannot leave a block, so it would be a statement that looks like a block.
 - **`unless` and modifiers on other statements** (`puts(x) if v`,

@@ -60,8 +60,7 @@ Each of these is decided; it gets a help that names the Agentica form.
   - Help: `Thread.new` shows `Task.spawn(&f, arg)`; `Mutex.new` shows an owner
     task with a `Channel`; `SizedQueue.new` shows `Channel.new(capacity)`.
 - **Options on `Task.map`:** Elixir's `ordered: false`, `on_timeout:` and
-  `zip_input_on_exit:`. Keyword arguments are decided against (§25.13), and each
-  option is a second behavior of one call. `Task.map` has one: input order,
+  `zip_input_on_exit:`. Each option is a second behavior of one call. `Task.map` has one: input order,
   per-item timeout, cancel on timeout.
 
 When the parts can simply be returned, returning them is the one form:
