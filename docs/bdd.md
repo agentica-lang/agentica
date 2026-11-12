@@ -57,12 +57,15 @@ agentica [--ai|--json] [--seed N] test [PATH...] [--steps FILE] [--only TEXT] [-
   files have no tags, so `--tags` leaves them out. With `--only`, a scenario
   must pass both. If nothing is kept, the run fails with `CHECK-BDD-EMPTY`.
 - **`--jobs N`** (once, a whole number from 1 to 1024; otherwise
-  `RUNTIME-BDD-USAGE`) runs up to `N` test files at the same time, each in its
-  own child. The default is 1, one file after another. Scenarios and
-  tests of one file never overlap, and the report lists the files in the same
-  order whatever `N` is. The step program is listed once, before any file runs.
-  Files that share a port, a path or a database need `--jobs 1`, and a high `N`
-  makes per-test timeouts likelier under CPU load.
+  `RUNTIME-BDD-USAGE`) runs up to `N` jobs at the same time, each in its own
+  child: a job is one scenario of a feature file (one row of a Scenario
+  Outline, with its Background) or one whole test file. The jobs start in the
+  order of the files and of the scenarios in each file. The default is 1, one
+  after another. The tests of one test file never overlap, and the report lists
+  the files, and the scenarios of each file, in the same order whatever `N` is.
+  The step program is listed once, before any job runs. Scenarios or files that
+  share a port, a path or a database need `--jobs 1`, and a high `N` makes
+  per-test timeouts likelier under CPU load.
 - **Seed.** Every run has one: `--seed N`, or one the runner draws. It reaches
   every step program, test file and program under test. A failing run's text
   report shows it on the summary line, so `--seed N` replays the run. The JSON

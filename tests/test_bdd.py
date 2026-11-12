@@ -839,6 +839,30 @@ def test_jobs_run_the_files_at_the_same_time_and_the_report_keeps_the_order_of_t
     assert [(item["name"], item["status"]) for item in report_cases(report)] == [("a", "passed"), ("b", "passed")]
 
 
+def test_jobs_spread_the_scenarios_of_one_file_and_the_report_keeps_their_order(bdd):
+    directory = bdd.suite({})
+    marks = [(directory / name).as_posix() for name in ("a.mark", "b.mark", "c.mark", "d.mark")]
+    # One file: two scenarios that meet each other, a failing one between them and the rows of an outline, which
+    # meet each other too. With the file as one job they would wait for each other until the step gives up. `a`
+    # ends last: in the order the scenarios end, the report would list it after `b`.
+    feature = ("Feature: one file\n"
+               "Scenario: a\nWhen \"%s\" meets \"%s\"\nAnd I linger 400 ms\n\n"
+               "Scenario: b\nWhen \"%s\" meets \"%s\"\n\n"
+               "Scenario: broken\nWhen nothing matches this step\n\n"
+               "Scenario Outline: row <n>\nWhen \"<mine>\" meets \"<other>\"\n\n"
+               "Examples:\n| n | mine | other |\n| 1 | %s | %s |\n| 2 | %s | %s |\n"
+               % (marks[0], marks[1], marks[1], marks[0], marks[2], marks[3], marks[3], marks[2]))
+    write_files(directory, {"one.feature": feature})
+    steps = directory / "steps.agc"
+    steps.write_text(MEETING_STEPS, encoding="utf-8")
+    status, report = bdd.json_test(directory, "--steps", steps, "--jobs", "2")
+    assert status == 1
+    # An outline row's name ends with its values in parentheses.
+    assert [(item["name"].split(" (")[0], item["status"]) for item in report_cases(report)] == [
+        ("a", "passed"), ("b", "passed"), ("broken", "failed"), ("row 1", "passed"), ("row 2", "passed")]
+    assert [file["path"] for file in report["files"]] == [(directory / "one.feature").as_posix()]
+
+
 # The sleep is longer than the 150 ms the test asserts: the parent's Time.monotonic_ms can read a coarse clock
 # (vm/numbers.c), so across two processes its interval can come out a few milliseconds short of the child's sleep.
 SLEEPS = 'def test_sleeps() -> Result[Void]\n  Task.sleep(200)\n  return Test.assert(true, "x")\nend\n'
