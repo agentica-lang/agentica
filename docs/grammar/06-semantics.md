@@ -936,8 +936,8 @@ total = xs.reduce(0) do |sum, x| sum + x end
 
 ### Lambdas
 
-A lambda is a block that no call takes: `->(x) { ... }` is a function value
-that can go wherever a value does.
+A lambda, `->(x) { ... }`, is a block written as a value: a function value
+that can go wherever a value does, the place of a call's block included.
 
 ```ruby
 c = 3
@@ -959,13 +959,15 @@ half: Fn[String, Result[Int]] = ->(s) {
   `CHECK-TYPE-MISMATCH`.
 - A lambda has no name, so it cannot call itself: the variable it is assigned
   to does not exist inside it (`CHECK-UNKNOWN-NAME`); recursion uses `def`.
-- **One way.** A lambda written as the last argument of a call whose last
-  parameter is declared as an `Fn` is `CHECK-LAMBDA-BLOCK`: there the block is
-  the one way (`xs.map do |x| x * 2 end`). A parameter of a generic type takes
-  no block, so `some(->(x: Int) { x })` and `fs.push(->(x: Int) { x })` are
-  valid; so is `f.call(1, ->(x: Int) { x })`, since `.call(...)` takes no
-  block, and a lambda kept in a variable and passed by name
-  (`xs.map(double)`).
+- **In the place of a block.** A lambda written as the last argument of a call
+  whose last parameter is an `Fn` is that call's block:
+  `xs.map(->(x) { x * 2 })` means `xs.map do |x| x * 2 end`, with the
+  parameter types from the expected `Fn`, and it picks the block form of a
+  builtin that has one (`File.open`). So is a lambda kept in a variable whose
+  type fits (`xs.map(double)`). A `do ... end` block still follows the call and
+  never goes inside its parentheses. A parameter of a generic type takes no
+  block, so `some(->(x: Int) { x })` and `fs.push(->(x: Int) { x })` pass the
+  lambda as a value.
 - In a generic call, a lambda that is not the last argument is checked after
   the arguments that have a type of their own, from left to right, as the
   block is (step 4 of "Generic functions").

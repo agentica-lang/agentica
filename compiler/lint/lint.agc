@@ -169,7 +169,8 @@ def path_below(item: Item) -> List[Int]
 end
 
 # Whether `first`, the first child of the item, is the first operand of a chain that the item continues: the value a
-# pipe passes on, the left side of a `+`, or the first argument of a step that is a step too (a nest, Exprs.step?).
+# pipe passes on, the left side of a `+`, the first argument of a step that is a step too (a nest, Exprs.step?), or
+# the receiver of a method call that is a link of a method chain too.
 # Only a child of the same chain counts: in `(a + b.to_s) |> f()` and in `a |> f() + "x"` the child is a chain of the
 # other kind, which nobody has judged yet. A `try` that wraps a pipe is part of it when the `try` is; a `+` does not
 # look through a `try` (Shape.plus_operands), so the `+` inside is its own chain.
@@ -184,7 +185,8 @@ def continues?(item: Item, first: Walk.Node, aliases: Set[String]) -> Bool
 end
 
 # "pipe" for a piped call, "nest" for a call that is a step, "plus" for a `+`, "pipe" for a `try` around a piped call,
-# and "" for anything else: a builtin call breaks a nest, so `puts(f(g(h(x))))` is judged at `f`.
+# "method" for a method call or a field, whose receiver is the link before it, and "" for anything else: a builtin call
+# breaks a nest, so `puts(f(g(h(x))))` is judged at `f`.
 def chain_kind(node: Walk.Node, aliases: Set[String]) -> String
   case node
     Walk.Node.Expr(Ast.Expr.Call(call)) ->
@@ -203,6 +205,8 @@ def chain_kind(node: Walk.Node, aliases: Set[String]) -> String
       return "pipe" if chain_kind(Walk.Node.Expr(wrapper.operand), aliases) == "pipe"
 
       ""
+    Walk.Node.Expr(Ast.Expr.MethodCall(_)) -> "method"
+    Walk.Node.Expr(Ast.Expr.FieldAccess(_)) -> "method"
     _ -> ""
   end
 end

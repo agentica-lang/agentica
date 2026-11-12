@@ -26,6 +26,7 @@ def helper(flag: Bool, text: String, n: Int) -> String
   label = "n=" + n.to_s + "!"
   shout = text |> upcase_it()
   boxed = wrap(trim_it(pad_it(text)), "*")
+  total = items.map(->(x) { x * 2 }).select(->(x) { x > 2 }).sum
   if not flag
     out = "a"
   else
@@ -46,8 +47,9 @@ end
 
 # The good form of each rule, and the near misses that must stay quiet: a pipe of two steps, a String built outside a
 # loop, a List grown in a loop, a `+` of two Strings with no to_s, two branches, a doc on public code, a qualified name
-# used a few times, two nested calls, a nest that is not in first position, and nests whose outer calls are builtins or
-# methods of a constant.
+# used a few times, two nested calls, a nest that is not in first position, nests whose outer calls are builtins or
+# methods of a constant, and method chains of two steps, of blocks in braces, or whose names after the lambda may be
+# fields.
 GOOD = '''import Db from "db"
 
 ## Returns the label of the count.
@@ -93,6 +95,15 @@ export def label(flag: Bool, text: String, n: Int) -> String
   methods = String.upcase(String.strip(pad_it(text)))
   builtins = puts(ok(pad_it(text)))
   rows = ROWS.concat(MORE.concat(pad_it(text)))
+  total = (
+    items
+    |> map(->(x) { x * 2 })
+    |> select(->(x) { x > 2 })
+    |> sum()
+  )
+  pair = items.map(->(x) { x * 2 }).sum
+  braces = items.map { |x| x * 2 }.select { |x| x > 2 }.sum
+  fields = items.map(->(x) { x * 2 }).first.size
   return "#{joined}#{greeting}#{note}#{shout}"
 end
 
@@ -165,6 +176,7 @@ def test_every_rule_reports_its_code_at_its_place(tmp_path):
         "LINT-TO-S-CONCAT": [where(BAD, '"n=" + n.to_s')],
         "LINT-SINGLE-PIPE": [where(BAD, "upcase_it()")],
         "LINT-NESTED-CALL": [where(BAD, "wrap(trim_it")],
+        "LINT-LAMBDA-CHAIN": [where(BAD, "items.map")],
         "LINT-NEGATED-ELSE": [where(BAD, "not flag")],
         "LINT-IF-CHAIN": [where(BAD, "n == 1")],
         "LINT-REPEATED-QUALIFIED-NAME": [where(BAD, "Db.Value", nth=2)],
@@ -421,3 +433,15 @@ def test_a_mistake_in_the_call_is_a_usage_error_and_lints_nothing(tmp_path, word
     (tmp_path / "empty" / "readme.txt").write_text("x", encoding="utf-8")
     (tmp_path / "bad.agc").write_text(BAD, encoding="utf-8")
     assert problem(lint_json(*words, cwd=tmp_path), "QUERY-USAGE", 2)["file"] == "<arguments>"
+
+
+def test_a_lambda_chain_is_judged_once_at_its_last_link_and_a_chain_in_an_argument_on_its_own(tmp_path):
+    source = (
+        "def f(xs: List[Int]) -> Int\n"
+        "  one = xs.map(->(x) { x }).select(->(x) { x > 0 }).map(->(x) { x + 1 }).size\n"
+        "  two = xs.take(xs.map(->(x) { x }).select(->(x) { x > 0 }).size).reverse.first\n"
+        "  return one + two\n"
+        "end\n"
+    )
+    found = suggested(tmp_path / "chains.agc", source)
+    assert found == {"LINT-LAMBDA-CHAIN": [where(source, "xs.map"), where(source, "xs.map", nth=2)]}

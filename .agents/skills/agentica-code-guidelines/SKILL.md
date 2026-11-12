@@ -116,8 +116,10 @@ Change style only in code you touch. Restyle untouched code separately.
 - Use a parenthesized pipe for two or more `|>` steps on one value; put one
   `|> f(args)` per line. Start with the input value. One step is a regular call.
   A statement that takes several lines is followed by an empty line (`fmt`).
-- Pipe into your own functions. Builtins with method forms use `.`; piping to
-  them fails (`CHECK-PIPE-METHOD`): write `x.upcase`, not
+- Pipe into your own functions, or into a method by its name with lambdas:
+  `xs |> map(->(x) { x * 2 }) |> sum()`. A method chain of three or more steps
+  that passes lambdas is such a pipe (`LINT-LAMBDA-CHAIN`). A builtin is never
+  piped with its type (`CHECK-PIPE-METHOD`): write `x.upcase`, not
   `x |> String.upcase()`.
   Replace three-deep nested calls with a pipe (`LINT-NESTED-CALL`).
 

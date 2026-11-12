@@ -177,7 +177,8 @@ lines show. A task's stack ends with `task spawned at file:line:column`.
   target or value with unsupported types; a `JsonField` that is not the direct
   type of a struct field (`json.md`).
 - `CHECK-PIPE-METHOD`: `x |> String.upcase()`: a builtin with a method form for
-  the left value is written with `.` (`x.upcase`).
+  the left value is written with `.` (`x.upcase`) or piped by the method name
+  alone (`x |> upcase()`).
 - `CHECK-UNKNOWN-METHOD`: a method not defined for the receiver's type, a method
   call on a struct, or `.with(...)` on a non-struct. Common foreign names get
   the real one (`s.chars` says `s.split("")`, `to_string` says `to_s`).
@@ -190,11 +191,10 @@ lines show. A task's stack ends with `task spawned at file:line:column`.
 - `CHECK-BLOCK-TYPE`: a block parameter has no type from the call, or a lambda
   parameter none from an `Fn` type, and its uses in the body leave no single
   type (`x * 2`: Int or String); annotate (`do |x: Int|`, `->(x: Int) { ... }`).
-- `CHECK-LAMBDA-BLOCK`: a lambda as the last argument of a call that takes a
-  block; write the block (`xs.map do |x| ... end`).
 - `CHECK-CHAIN-AFTER-END`: `.name`, `[i]` or `|>` after the `end` of a `do`
-  block; write a one-line block in braces (`xs.map { |x| f(x) }.size`) or bind
-  the result to a name first.
+  block; pass a lambda and pipe (`xs |> map(->(x) { f(x) }) |> size()`), write
+  a one-line block in braces (`xs.map { |x| f(x) }.size`) or bind the result to
+  a name first.
 - `CHECK-LOOP-CONTROL`: `break` or `next` outside a `while`/`for` body, or
   inside a block.
 - `CHECK-UNUSED-VARIABLE`, `CHECK-UNREACHABLE-CODE`,

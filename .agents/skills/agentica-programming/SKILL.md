@@ -30,7 +30,8 @@ in one command, `for f in cases/*.txt; do agentica p.agc < "$f" || break; done`.
 - Ruby only: no braces around `if`, `while` or `def` bodies, no `let`, `match`,
   `where` (`PARSE-UNEXPECTED-TOKEN`), `;` (`LEX-UNEXPECTED-CHAR`) or `continue`
   (use `next`); guards are `pattern if cond ->`; strings are double-quoted.
-- Nothing chains after a `do` block's `end` (`CHECK-CHAIN-AFTER-END`):
+- Nothing chains after a `do` block's `end` (`CHECK-CHAIN-AFTER-END`): pipe
+  with lambdas, `xs |> map(->(x) { f(x) }) |> join(", ")`, write
   `xs.map { |x| f(x) }.join(", ")`, or bind the result first.
 - Values never change: `xs = xs.push(4)`; a block cannot assign an outer
   variable (`reduce` for a total; a `for` loop, which can, to update several).

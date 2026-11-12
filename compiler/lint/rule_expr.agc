@@ -1,9 +1,10 @@
-## The rules that read one expression: a Bool compared with a literal, a pipe of one step, three nested calls and text
-## joined with `+` and `to_s`.
+## The rules that read one expression: a Bool compared with a literal, a pipe of one step, three nested calls, text
+## joined with `+` and `to_s`, and a method chain that passes lambdas.
 
 import {ENTRIES} from "../catalog/builtins"
 import Problems from "../diagnostics/problem"
 import Ast from "../syntax/ast"
+import Source from "../syntax/source"
 import Rules from "rules"
 import Shape from "shape"
 
@@ -14,6 +15,8 @@ export def suggestions(file: String, expr: Ast.Expr, chained: Bool, aliases: Set
   case expr
     Ast.Expr.Binary(node) -> binary(file, node, chained)
     Ast.Expr.Call(node) -> single_pipe(file, node, chained).concat(nested_call(file, node, chained, aliases))
+    Ast.Expr.MethodCall(node) -> lambda_chain(file, expr, node.span, chained)
+    Ast.Expr.FieldAccess(node) -> lambda_chain(file, expr, node.span, chained)
     _ -> []
   end
 end
@@ -33,6 +36,60 @@ export def step?(node: Ast.Call, aliases: Set[String]) -> Bool
   end
 
   parts.size == 1
+end
+
+# `xs.map(->(x) { ... }).select(->(x) { ... }).sum`: a method chain whose links, from the first that passes a lambda to
+# the end, are three or more reads better as a pipe. The walk judges the chain at its last link, so a link inside it is
+# `chained`.
+def lambda_chain(file: String, expr: Ast.Expr, span: Source.Span, chained: Bool) -> List[Problems.Problem]
+  return [] if chained or lambda_steps(expr) < 3
+
+  [Rules.at(file, Rules.LAMBDA_CHAIN, span)]
+end
+
+# How many links of the chain that ends with `expr` a pipe would write, from the first link that passes a lambda to the
+# end; 0 when no link does. A link is a method call, or a name without arguments as the last link only
+# (`.sum`): further
+# in it may be a struct field, which a pipe cannot name, and lint has no types to tell.
+def lambda_steps(expr: Ast.Expr) -> Int
+  links = 0
+  steps = 0
+  current = expr
+  case current
+    Ast.Expr.FieldAccess(node) ->
+      links = 1
+      current = node.target
+    _ -> links = 0
+  end
+
+  while method_call?(current)
+    case current
+      Ast.Expr.MethodCall(node) ->
+        links += 1
+        if node.args.any? do |arg: Ast.Expr| lambda?(arg) end
+          steps = links
+        end
+
+        current = node.target
+      _ -> break
+    end
+  end
+
+  steps
+end
+
+def method_call?(expr: Ast.Expr) -> Bool
+  case expr
+    Ast.Expr.MethodCall(_) -> true
+    _ -> false
+  end
+end
+
+def lambda?(expr: Ast.Expr) -> Bool
+  case expr
+    Ast.Expr.BlockLit(node) -> node.lambda
+    _ -> false
+  end
 end
 
 def binary(file: String, node: Ast.Binary, chained: Bool) -> List[Problems.Problem]

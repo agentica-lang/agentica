@@ -44,7 +44,7 @@ A block is a function written at the call site as the last argument: `xs.map do
 
 ## Lambdas
 
-A lambda is a block that no call takes, for a function value of its own:
+A lambda is a block written as a value, for a function value of its own:
 `add = ->(x: Int) { x + base }`, `answer = -> { 42 }`.
 
 - Parentheses hold the parameters, and none means no parentheses (`-> { 1 }`,
@@ -55,10 +55,11 @@ A lambda is a block that no call takes, for a function value of its own:
   the uses in the body (`->(x) { x + 1 }`), else `CHECK-BLOCK-TYPE`; `try`
   needs a known `Result` result, so annotate:
   `f: Fn[String, Result[Int]] = ->(s) { ... }`; `return` leaves the lambda.
-- Where a call takes a block, write the block: `xs.map(->(x) { ... })` is
-  `CHECK-LAMBDA-BLOCK`. `.call(...)` takes no block, so a lambda may be its
-  last argument. A lambda cannot call itself (use `def`), and one dropped as a
-  statement is `CHECK-UNUSED-VALUE`.
+- Where a call takes a block, a lambda inside the parentheses is that block,
+  typed from the call: `xs.map(->(x) { x * 2 }).sum`, and in a pipe into
+  methods, `xs |> map(->(x) { x * 2 }) |> sum()`. A `do ... end` block never
+  goes inside the parentheses. A lambda cannot call itself (use `def`), and one
+  dropped as a statement is `CHECK-UNUSED-VALUE`.
 
 ## Result and try
 

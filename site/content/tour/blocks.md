@@ -35,7 +35,7 @@ end
 
 ## Braces
 
-A call without arguments can take its block in braces instead, on one line or several. A call with arguments takes `do ... end`. Nothing chains after the `end` of a `do` block (`CHECK-CHAIN-AFTER-END`): to call a method on the result, write the block in braces, `xs.map { |x| x * x }.sum`, or give the result a name first.
+A call without arguments can take its block in braces instead, on one line or several. A call with arguments takes `do ... end`. Nothing chains after the `end` of a `do` block (`CHECK-CHAIN-AFTER-END`): to call a method on the result, pass a [lambda](#lambdas) and pipe, `xs |> map(->(x) { x * x }) |> sum()`, write the block in braces, `xs.map { |x| x * x }.sum`, or give the result a name first.
 
 ```agentica
 def main() -> Void
@@ -175,7 +175,27 @@ end
 [3, 4]
 ```
 
-Where a call takes a block, the block is the one way to write it: `xs.map(->(x: Int) { x + 1 })` is an error whose help shows `xs.map do |x| ... end`.
+Where a call takes a block, a lambda inside its parentheses is that block, with its parameter types from the call: `xs.map(->(x) { x + 1 })` is `xs.map do |x| x + 1 end`. A `do ... end` block still goes after the parentheses. With a [pipe](/tour/functions/) into methods, lambdas make a chain that reads one step per line:
+
+```agentica
+def main() -> Void
+  xs = [1, 2, 3]
+  puts(xs.map(->(x) { x * 2 }).sum)
+  total = (
+    xs
+    |> map(->(x) { x * 2 })
+    |> select(->(x) { x > 2 })
+    |> sum()
+  )
+
+  puts(total)
+end
+```
+
+```output
+12
+10
+```
 
 ## Chains over several lines
 

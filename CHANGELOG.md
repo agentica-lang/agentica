@@ -24,6 +24,12 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - A call without arguments drops its `()` before a block: `run do ... end`,
   `xs.each do |x| ... end`, and a block in braces, `xs.map { |x| x * 2 }`;
   `agentica fmt` removes the empty `()` (`run() do` still parses).
+- A lambda in a call's parentheses is its block: `xs.map(->(x) { x * 2 })`.
+- A pipe step may name a method of the value: `xs |> map(->(x) { x * 2 }) |>
+  sum()` is `xs.map(->(x) { x * 2 }).sum`; a function of the program with the
+  same name wins.
+- `agentica lint` suggests a pipe for a method chain of three or more steps
+  that passes lambdas (`LINT-LAMBDA-CHAIN`).
 
 ### Changed
 

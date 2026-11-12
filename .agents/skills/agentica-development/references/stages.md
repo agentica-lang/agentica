@@ -208,7 +208,11 @@ registration first (`check_register.agc`), then bodies.
   also reserved for locals, parameters, loop variables and fields.
 - A piped builtin call whose first parameter's type has a method form is
   `CHECK-PIPE-METHOD` at the call span, after the call's own checks. The help
-  text is cut from the source.
+  text is cut from the source. A piped bare name that is no function of the
+  file, no function imported by name and no builtin function is a method call:
+  the linker (`rewrite.agc`, `pipe_method?`) makes it a `MethodCall` with the
+  call's id and span, which starts after the receiver
+  (`Calls.piped_method?`).
 - Builtin module calls keep their dotted name. Arity, signature and fixed types
   come from the catalog (`builtins_data.agc`); generic rules are explicit
   functions (`check_rules.agc`, `check_list.agc`, `check_collections.agc`,

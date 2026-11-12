@@ -217,7 +217,9 @@ def method_on(
   type = target.type
   kind = Names.receiver_kind(type)
   resolved = method_kind(cx, type, kind, name)
-  if resolved == ""
+  if resolved == "" and span.start.offset >= Ast.expr_span(target_node).stop.offset
+    return error(unknown_piped(cx, target.st, name, span, unknown_method_help(cx, target.st, id, type, kind, name)))
+  elsif resolved == ""
     return error(
       State.fail_maybe(
         cx,
@@ -268,6 +270,22 @@ def check_own_method(
 
   checked = try State.ensure(cx, st, result, expected, span)
   ok(State.Out(st: State.record_resolved(st, id, how), type: checked))
+end
+
+# `x |> name()` that the linker made a method call, because no function of the program has the name (span starts after
+# the receiver), and whose receiver has no such method either: CHECK-UNKNOWN-NAME, as for an unknown function. A
+# variable of that name is called with .call, a function with a close name is likely the one meant, and otherwise
+# `help` names the methods of the receiver.
+def unknown_piped(cx: State.Cx, st: State.St, name: String, span: Source.Span, help: String) -> String
+  hint = help
+  near = Help.near(name, cx.functions.keys, [])
+  if State.lookup(st, name).some?
+    hint = "#{name} is a variable, not a function; call it with #{name}.call(...)"
+  elsif near != ""
+    hint = near
+  end
+
+  State.fail_maybe(cx, st, "CHECK-UNKNOWN-NAME", "unknown function or method \"#{name}\"", span, hint)
 end
 
 # The help of CHECK-UNKNOWN-METHOD: a range that needs parentheses, then what is special about the receiver.
