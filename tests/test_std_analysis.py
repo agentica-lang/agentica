@@ -1005,6 +1005,11 @@ def clamp(n: Int) -> Int
   return 0 if n < 0
   return n
 end
+
+def bump(xs: List[Int]) -> List[Int]
+  f = ->(x: Int) { x + 1 }
+  xs.map do |x| f.call(x) end
+end
 """
 
 
@@ -1083,7 +1088,7 @@ def test_bodies_resolve_calls_bindings_patterns_and_mark_what_they_do_not_cover(
     write_files(project, {"shapes.agc": BODIES})
     answer, functions = bodies_of(driver, project, "shapes.agc")
     assert [(function["name"], function["exported"]) for function in answer["functions"]] == [
-        ("first_or", True), ("size", False), ("sign", False), ("count", False), ("clamp", False)]
+        ("first_or", True), ("size", False), ("sign", False), ("count", False), ("clamp", False), ("bump", False)]
     generic = functions["first_or"]
     assert generic["generics"] == ["T"]
     assert [param["type"] for param in generic["params"]] == [
@@ -1127,6 +1132,9 @@ def test_bodies_resolve_calls_bindings_patterns_and_mark_what_they_do_not_cover(
     assert (guard["kind"], condition["kind"], block["kind"]) == ("if", "op", "block")
     assert (block["range"]["start"], block["range"]["end"], condition["range"]["start"]) == (
         {"line": 45, "column": 3}, {"line": 45, "column": 11}, {"line": 45, "column": 15})
+    # A lambda and a block are both `other`, told apart by their text.
+    others = [line.split()[2] for node in functions["bump"]["body"] for line in tree_text(node) if " other " in line]
+    assert others == ["text='lambda'", "text='block'"]
 
 
 # The same def with its values given by `return` and as the last expressions (#1287).

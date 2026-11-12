@@ -113,7 +113,7 @@ A `Node` has a `kind`, its `type`, its `range`, a `text`, a `target`, `new` and 
 - `op`: a binary operator, written in `text` as in the source (`+`, `<=`, `==`, `!=`, ...); its two children have their types. `and`, `or`, `not` (`text` `!`) and `neg` (unary minus, `text` `-`) are kinds of their own. `-9223372036854775808`, which only fits under its minus, is one `int` node.
 - `try`, `return`, and `interpolation`, whose children are `string` parts and typed expressions.
 - `if`: a `branch` (the condition, then a `block`) for each `if` and `elsif`, then a `block` for `else`. `case`: the value, then an `arm` each: its pattern, a `guard` when written, and a `block`. A `case` that gives a value has its type, and the last node of each arm's block is that arm's value. A pattern is a `wildcard`, a `literal` or a `variant` (`target` `Shape.Square`, `ok`, `error`, `some` or `none`) whose children are its slots: `bind`, `skip` or a nested pattern. An arm of several patterns (`"ex", "px" ->`) has an `alternatives` node whose children are those patterns.
-- `other`: a node that this version does not describe yet (loops, lists, maps, struct and enum values, blocks, constants), with its syntax in `text` and no children.
+- `other`: a node that this version does not describe yet (loops, lists, maps, struct and enum values, blocks and lambdas, constants), with its syntax in `text` (`block`, `lambda`, ...) and no children.
 
 A `block` runs from its first statement to its last. Some ranges are coarse: a `string` part of an interpolation has the range of the interpolation, a `skip` slot that of its variant, and an `if` or `case` statement runs to the start of the next line. The type arguments of a call of a generic function are not in the answer yet.
 

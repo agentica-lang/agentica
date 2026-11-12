@@ -175,7 +175,7 @@ main@app.agc:25;measure:outer;block@app.agc:27:32;measure:inner;block@app.agc:28
 main@app.agc:25;Int.times;block@app.agc:40:11 1000
 ```
 
-- A function is `name@FILE:LINE`, a block `block@FILE:LINE:COL`, a native loop or callback (`Int.times`, `List.map`) its builtin's name, and a `Profile.measure` `measure:LABEL`.
+- A function is `name@FILE:LINE`, a block `block@FILE:LINE:COL`, a lambda `lambda@FILE:LINE:COL`, a native loop or callback (`Int.times`, `List.map`) its builtin's name, and a `Profile.measure` `measure:LABEL`.
 - The VM takes a sample of the running task's stack every 1000 steps, each with a weight of 1000. `AGENTICA_PROFILE_SAMPLE=N` sets N (1 to 1000000000); `AGENTICA_PROFILE_SAMPLE=1` counts every step, and the weights then add up to the report's `steps`.
 - Sampling counts steps, not time, so the file is the same on every run of the same program, on every system. There is no time weight, since it would differ from run to run.
 - Stacks deeper than 512 frames keep the outer and inner halves around a `...` frame. A `;`, a `%` or a control character in a name is written as `%XX` (`%3B`, `%25`), so two different stacks never share a line.

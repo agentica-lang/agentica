@@ -437,6 +437,9 @@ void agc_poll_copied(const agc_poll_copy *copy);
 void agc_poll_close(int fd);
 bool agc_poll_one_wait(void);
 
+/* The front end names a block block@FILE:LINE:COL and a lambda lambda@FILE:LINE:COL. For such a name, the length of
+   its word ("block", "lambda"), which a stack line shows and after which the name already says where it is; else 0. */
+size_t agc_block_word(const char *name, size_t len);
 void agc_stack_capture(const agc_vm *vm, agc_outcome *outcome);
 void agc_print_diagnostic(FILE *err, const agc_program *program, const agc_outcome *outcome, agc_style style,
                           bool task);

@@ -1139,13 +1139,8 @@ def inferred(cx: State.Cx, st: State.St, block: Ast.BlockLit, param: Ast.BlockPa
         help = annotation_help(block, param.name, names)
       end
 
-    Infer.Guess.Conflict(types) ->
-      names = shown_names(types)
-      if names.size > 1
-        listed = spoken(names, types.size, "and", "others")
-        message = "the uses of #{noun} parameter \"#{param.name}\" need different types: #{listed}"
-        help = annotation_help(block, param.name, names)
-      end
+    # No type list: the types that each use allowed (a field name alone allows many records) are not the one to write.
+    Infer.Guess.Conflict -> message = "the uses of #{noun} parameter \"#{param.name}\" need different types"
   end
 
   error(State.fail_help(cx, st, "CHECK-BLOCK-TYPE", message, param.span, help))
