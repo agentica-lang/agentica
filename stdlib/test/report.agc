@@ -26,7 +26,7 @@ end
 ## A failure: a code, a message and its place, and the expected and actual values when known.
 ## `original` keeps the diagnostic object as `--json` wrote it (with its `stack` keys, which the text report shows), or
 ## JSON null for an error built from fields.
-export struct Error
+export struct Failure
   code: String
   message: String
   span: Span
@@ -40,7 +40,7 @@ end
 ## `NotExecuted`.
 export enum Verdict
   Pass
-  Fail(Error)
+  Fail(Failure)
   Skipped(String)
   NotExecuted
 end
@@ -48,7 +48,7 @@ end
 ## The result of one step. `Skipped` is the step that ended its scenario with `BDD.skip`.
 export enum StepStatus
   Passed
-  Failed(Error)
+  Failed(Failure)
   Skipped
   NotExecuted
 end
@@ -97,9 +97,9 @@ struct Totals
   exit_code: Int
 end
 
-## Builds an `Error` at `span` with no expected or actual value.
-export def error_at(code: String, message: String, span: Span) -> Error
-  Error(
+## Builds a `Failure` at `span` with no expected or actual value.
+export def error_at(code: String, message: String, span: Span) -> Failure
+  Failure(
     code: code,
     message: message,
     span: span,
@@ -112,7 +112,7 @@ end
 
 ## Reads a diagnostic as `--json` writes it. Keeps the whole object, so the report writes every key unchanged
 ## (`help`, `callee`, `labels` and so on).
-export def from_json(text: String) -> Result[Error]
+export def from_json(text: String) -> Result[Failure]
   root = try JSON.parse(text)
   range = try JSON.get(root, "range")
   start = try JSON.get(range, "start")
@@ -125,7 +125,7 @@ export def from_json(text: String) -> Result[Error]
   )
 
   ok(
-    Error(
+    Failure(
       code: try text_at(root, "code"),
       message: try text_at(root, "message"),
       span: span,
@@ -139,9 +139,9 @@ end
 
 ## Adds `actual` to an error built from fields. An error from `from_json` is returned unchanged, since its kept object
 ## is what the report writes, so the text and the JSON cannot disagree.
-export def with_actual(problem: Error, actual: String) -> Error
+export def with_actual(problem: Failure, actual: String) -> Failure
   return problem if not JSON.null?(problem.original)
-  Error(
+  Failure(
     code: problem.code,
     message: problem.message,
     span: problem.span,
@@ -153,10 +153,12 @@ export def with_actual(problem: Error, actual: String) -> Error
 end
 
 ## Builds a file result with no scenarios that fails with `problem`.
-export def file_error(path: String, kind: String, problem: Error) -> FileResult = file_failure(path, kind, problem, "")
+export def file_error(path: String, kind: String, problem: Failure) -> FileResult
+  file_failure(path, kind, problem, "")
+end
 
 ## Like `file_error`, and keeps the `output` of the file.
-export def file_failure(path: String, kind: String, problem: Error, output: String) -> FileResult
+export def file_failure(path: String, kind: String, problem: Failure, output: String) -> FileResult
   FileResult(path: path, feature: "", kind: kind, scenarios: [], verdict: Verdict.Fail(problem), output: output)
 end
 
@@ -401,7 +403,7 @@ def verdict_json(verdict: Verdict) -> Json
   end
 end
 
-def error_json(problem: Error) -> Json
+def error_json(problem: Failure) -> Json
   return problem.original if not JSON.null?(problem.original)
   span = problem.span
   start: Map[String, Json] = {"line": JSON.from(span.line), "column": JSON.from(span.column)}
@@ -476,13 +478,13 @@ def output_text(output: String, ai: Bool) -> String
   "\n#{indented}"
 end
 
-def summary(problem: Error, ai: Bool) -> String
+def summary(problem: Failure, ai: Bool) -> String
   span = problem.span
   head = "#{span.file}:#{span.line}:#{span.column} [#{problem.code}] #{problem.message}"
   head + detail_text("expected", problem.expected) + detail_text("actual", problem.actual) + stack_text(problem, ai)
 end
 
-def stack_text(problem: Error, ai: Bool) -> String
+def stack_text(problem: Failure, ai: Bool) -> String
   lines = stack_lines(problem.original)
   if lines.length == 0
     return ""

@@ -201,8 +201,8 @@ the programming skill or the site).
   `sort_members` in `vm/json.c`).
 - `std/test/report` builds the report and imports nothing; it owns `Span` and
   `Example`, which `gherkin` and `match` import. A `Verdict` is `Pass`,
-  `Fail(Error)`, `Skipped(reason)` (not a failure, exit code stays 0) or
-  `NotExecuted`. An `Error` is the diagnostic as `--json` writes it;
+  `Fail(Failure)`, `Skipped(reason)` (not a failure, exit code stays 0) or
+  `NotExecuted`. A `Failure` is the diagnostic as `--json` writes it;
   `original` must only come from `from_json` (it keeps the whole parsed
   object); any other error keeps `JSON.null()` there, or `json` would write the
   stale object instead of its fields. `json` sorts keys and derives statuses

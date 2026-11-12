@@ -4,8 +4,8 @@ def at(line: Int) -> Report.Span
   return Report.Span(file: "/specs/x.feature", line: line, column: 3, end_column: 12)
 end
 
-def problem(code: String) -> Report.Error
-  return Report.Error(code: code, message: "went wrong", span: at(2), end_line: 2, expected: Report.Detail.Unknown,
+def problem(code: String) -> Report.Failure
+  return Report.Failure(code: code, message: "went wrong", span: at(2), end_line: 2, expected: Report.Detail.Unknown,
                       actual: Report.Detail.Unknown, original: JSON.null())
 end
 
@@ -63,13 +63,13 @@ def main() -> Void
   end
   puts(Report.from_json("{\"code\":\"X\"}").message)
   odd = "a\"b\\c\nd\t" + String.from_code(233) + String.from_code(1) + String.from_code(127)
-  multi = Report.Error(code: "RUNTIME-DIVISION-BY-ZERO", message: odd, span: at(5), end_line: 7,
+  multi = Report.Failure(code: "RUNTIME-DIVISION-BY-ZERO", message: odd, span: at(5), end_line: 7,
                        expected: Report.Detail.Known(odd.inspect), actual: Report.Detail.Known("".inspect), original: JSON.null())
   files = [feature([scenario(odd, Report.Verdict.Fail(multi))])]
   show("escapes", files)
   puts(Report.text(files, false, 7))
   puts(Report.json(files, 7, 0))
-  failed = Report.Error(code: "RUNTIME-TEST-ASSERTION", message: "values are not equal", span: at(9), end_line: 9,
+  failed = Report.Failure(code: "RUNTIME-TEST-ASSERTION", message: "values are not equal", span: at(9), end_line: 9,
                         expected: Report.Detail.Known("2"), actual: Report.Detail.Known("3"), original: JSON.null())
   units = [unit("adds", Report.Verdict.Pass, ""), unit("fails", Report.Verdict.Fail(failed), "line one\nline two"),
            unit("later", Report.Verdict.NotExecuted, "")]

@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 3828,
+  "steps": 3832,
   "stdout": [
     "HTTP/1.1 200 OK [GET /cut 0]",
     "HTTP/1.1 200 OK []",

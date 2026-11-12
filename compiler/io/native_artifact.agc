@@ -580,7 +580,7 @@ def make_temp(parent: String, deadline: Int, context: NativeArtifact.Context) ->
     name = Paths.join(parent, ".tmp-#{System.pid()}-#{attempt}-#{Random.int(0, 999999999)}")
     case Dir.mkdir_private(name, left)
       ok(_) -> return ok(name)
-      error(message) -> failure = message
+      error(message) -> failure = "#{message}"
     end
   end
 

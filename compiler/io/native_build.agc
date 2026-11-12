@@ -113,7 +113,7 @@ def remembered(
     error(packed) ->
       text = "F#{packed}"
       if request.optional
-        reason = Failure.unpack_failure(packed).diagnostic.message
+        reason = Failure.unpack_failure("#{packed}").diagnostic.message
         text = "U#{reason}"
         message = "native module #{request.library} not built: #{reason}; the package runs without it"
         help = "install a C compiler or fix the module, then run again to build it"
@@ -519,7 +519,7 @@ def make_temp(request: Workspace.BuildRequest, base: String) -> Result[String]
     name = Paths.join(base, ".tmp-#{System.pid()}-#{attempt}-#{Random.int(0, 999999999)}")
     case Dir.mkdir_private(name, FILE_TIMEOUT_MS)
       ok(_) -> return ok(name)
-      error(message) -> failure = message
+      error(message) -> failure = "#{message}"
     end
   end
 

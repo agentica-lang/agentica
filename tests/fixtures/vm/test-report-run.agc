@@ -37,8 +37,8 @@ def report_feature() -> String
   return lines.join("\n")
 end
 
-def assertion(step: Gherkin.Step, expected: String, actual: String) -> Report.Error
-  return Report.Error(code: "RUNTIME-BDD-ASSERTION", message: "BDD assertion failed", span: step.span,
+def assertion(step: Gherkin.Step, expected: String, actual: String) -> Report.Failure
+  return Report.Failure(code: "RUNTIME-BDD-ASSERTION", message: "BDD assertion failed", span: step.span,
                       end_line: step.span.line, expected: Report.Detail.Known(expected), actual: Report.Detail.Known(actual),
                       original: JSON.null())
 end

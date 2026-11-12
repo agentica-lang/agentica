@@ -634,7 +634,7 @@ export def request(
   case HttpWire.jobs(pool).send(job, options.timeout_ms)
     ok(_) -> unless_denied(options, where.scheme, wait_reply(reply, deadline))
     error(message) ->
-      return error(CLIENT_CLOSED) if message == CHANNEL_CLOSED
+      return error(CLIENT_CLOSED) if "#{message}" == CHANNEL_CLOSED
       error(TIMED_OUT)
   end
 end
@@ -1227,7 +1227,7 @@ def proxy_denied(options: HttpWire.ClientOptions, offered: Bool) -> String
       return "http: the proxy #{name} requires credentials (407): put user:password in the proxy URL" if not offered
 
       "http: the proxy #{name} refused the credentials (407)"
-    error(message) -> message
+    error(message) -> "#{message}"
   end
 end
 
@@ -1235,7 +1235,7 @@ end
 def client_denied(options: HttpWire.ClientOptions) -> String
   case proxy_of(options)
     ok(proxy) -> proxy_denied(options, proxy.login != "")
-    error(message) -> message
+    error(message) -> "#{message}"
   end
 end
 
@@ -1546,10 +1546,10 @@ def closing_on_error(
     ok(secured) -> ok(secured)
     error(message) ->
       TCP.close(socket)
-      return error(message) if message != BEFORE_TLS
+      return error(message) if "#{message}" != BEFORE_TLS
 
       case proxy_of(options)
-        ok(proxy) -> error(tunnel_failed(proxy, tunnel_name(host, port), message))
+        ok(proxy) -> error(tunnel_failed(proxy, tunnel_name(host, port), "#{message}"))
         error(_) -> error(message)
       end
   end
@@ -1584,7 +1584,7 @@ def tunnel(options: HttpWire.ClientOptions, host: String, port: Int, deadline: I
       error("http: the proxy #{proxy_name(proxy.target)} refused the tunnel to #{target} (#{status})")
     error(message) ->
       TCP.close(socket)
-      error(tunnel_failed(proxy, target, message))
+      error(tunnel_failed(proxy, target, "#{message}"))
   end
 end
 
@@ -1723,7 +1723,7 @@ def next_chunked(socket: Socket, exchange: Exchange, most: Int, deadline: Int) -
         end
         pieces = run_pieces(data, state.runs)
         return ok(Step(piece: Bytes.concat(pieces), exchange: with_chunks(exchange, state))) if not pieces.empty?
-      error(problem) -> return error("http: #{rest_of(problem, 4)}")
+      error(problem) -> return error("http: #{rest_of("#{problem}", 4)}")
     end
   end
   error(TRUNCATED)
@@ -1868,7 +1868,7 @@ def upload_pieces(socket: Socket, body: Channel[Bytes], length: Int, timeout: In
         sent = emit(socket, piece, timeout, length, 0)
         return ok("http: #{sent.message}") if not Result.ok?(sent)
       error(message) ->
-        return error(message) if message != CHANNEL_CLOSED
+        return error(message) if "#{message}" != CHANNEL_CLOSED
         break
     end
   end
@@ -2147,7 +2147,7 @@ def cancelled?(feeder: Task[Result[Void]]) -> Bool
   case Task.await(feeder, 1)
     Await.Done(outcome) ->
       case outcome
-        error(message) -> message == TASK_CANCELLED
+        error(message) -> "#{message}" == TASK_CANCELLED
         ok(_) -> false
       end
     Await.TimedOut -> false
@@ -2214,7 +2214,7 @@ def whole_answer(handler: Handler, max_body_bytes: Int, request: HttpWire.Reques
       )
 
       ok(Answer.Whole(try handler.call(whole)))
-    error(message) -> ok(body_refusal(message))
+    error(message) -> ok(body_refusal("#{message}"))
   end
 end
 
@@ -2891,7 +2891,7 @@ def feed_chunked(feeding: Feeding) -> Result[Bytes]
       data = try more_request(socket, FRAME_BYTES, deadline)
       case HttpWire.chunk(state, data, 0)
         ok(next) -> state = next
-        error(problem) -> return error(feed_problem(problem))
+        error(problem) -> return error(feed_problem("#{problem}"))
       end
       pieces = run_pieces(data, state.runs)
       if not pieces.empty?
@@ -2982,8 +2982,8 @@ def reply_whole(socket: Socket, request: HttpWire.Request, response: HttpWire.Re
   case write_response(socket, request, response, timeout)
     ok(keep) -> return keep
     error(message) ->
-      if message.start_with?("http: invalid response: ")
-        IO.warn(message)
+      if "#{message}".start_with?("http: invalid response: ")
+        IO.warn("#{message}")
         failed(socket, request, timeout)
       end
   end
@@ -3028,7 +3028,7 @@ def answer_stream(
         return send_whole(socket, incoming, reply, NO_BYTES, timeout)
       end
       stream_out(socket, incoming, response.body, ready.pieces, reply, length, options)
-    error(reason) -> invalid_stream(socket, request, response.body, reason, timeout)
+    error(reason) -> invalid_stream(socket, request, response.body, "#{reason}", timeout)
   end
 end
 
@@ -3099,7 +3099,7 @@ def take_ready(body: Channel[Bytes]) -> Ready
     case body.recv(0)
       ok(piece) -> pieces = List.append(pieces, piece)
       error(message) ->
-        ended = message == CHANNEL_CLOSED
+        ended = "#{message}" == CHANNEL_CLOSED
         more = false
     end
   end
@@ -3257,7 +3257,7 @@ def pump(
             body.close
             return STREAM_CUT
         end
-      error(message) -> break if message == CHANNEL_CLOSED
+      error(message) -> break if "#{message}" == CHANNEL_CLOSED
     end
   end
   return STREAM_CUT if length != UNSIZED and count != length
@@ -3416,7 +3416,7 @@ def run_pool(pool: Pool) -> Result[Void]
           pool = gone(pool, job)
         end
       error(message) ->
-        if message == CHANNEL_CLOSED
+        if "#{message}" == CHANNEL_CLOSED
           shut_pool(pool)
           return ok()
         end
@@ -3711,14 +3711,12 @@ def finish_exchange(answer: Pending, received: Received, sent: Result[Void], reu
   case received.response
     ok(response) -> Attempt(answer: ok(response), kept: kept, retry: false)
     error(message) ->
-      lost = message == END_OF_INPUT or message.start_with?(READ_FAILED)
+      lost = "#{message}" == END_OF_INPUT or "#{message}".start_with?(READ_FAILED)
       retry = reused and idempotent?(answer.job.method) and not received.started
       case sent
         error(problem) -> Attempt(answer: error(problem), kept: false, retry: retry)
         ok(_) ->
-          if message == END_OF_INPUT
-            message = CUT_SHORT
-          end
+          return Attempt(answer: error(CUT_SHORT), kept: false, retry: retry and lost) if "#{message}" == END_OF_INPUT
           Attempt(answer: error(message), kept: false, retry: retry and lost)
       end
   end
@@ -3741,12 +3739,12 @@ def read_response(answer: Pending) -> Received
             interim = interim + 1
             return failed_read("http: too many interim responses", true) if interim > MAX_INTERIM
           error(message) ->
-            return failed_read(CUT_SHORT, true) if interim > 0 and message == END_OF_INPUT
-            broken = message.start_with?(READ_FAILED)
-            first = message == END_OF_INPUT or broken
-            return failed_read(message, interim > 0 or not first)
+            return failed_read(CUT_SHORT, true) if interim > 0 and "#{message}" == END_OF_INPUT
+            broken = "#{message}".start_with?(READ_FAILED)
+            first = "#{message}" == END_OF_INPUT or broken
+            return failed_read("#{message}", interim > 0 or not first)
         end
-      error(message) -> return failed_read(message, interim > 0)
+      error(message) -> return failed_read("#{message}", interim > 0)
     end
   end
   failed_read(TIMED_OUT, true)
@@ -3770,7 +3768,7 @@ def read_response_body(answer: Pending, head: HttpWire.ResponseHead) -> Received
     ok(done) ->
       response = HttpWire.Response(status: head.status, headers: head.headers, body: done.body)
       Received(response: ok(response), kept: done.kept and not head.closes, started: true)
-    error(message) -> failed_read(message, true)
+    error(message) -> failed_read("#{message}", true)
   end
 end
 
@@ -3804,7 +3802,7 @@ def read_chunked_body(answer: Pending) -> Result[Whole]
       return error(TRUNCATED) if framing.empty?
       case HttpWire.chunk(state, framing, 0)
         ok(next) -> state = next
-        error(problem) -> return error("http: #{rest_of(problem, 4)}")
+        error(problem) -> return error("http: #{rest_of("#{problem}", 4)}")
       end
       pieces = add_runs(pieces, framing, state.runs)
     end
@@ -3897,11 +3895,11 @@ def stream_download(
             ok(_) ->
               TCP.close(socket)
               ok(Download(status: head.status, headers: head.headers, bytes_written: written))
-            error(message) -> fail_download(socket, out, deadline, message)
+            error(message) -> fail_download(socket, out, deadline, "#{message}")
           end
-        error(message) -> fail_download(socket, out, deadline, message)
+        error(message) -> fail_download(socket, out, deadline, "#{message}")
       end
-    error(message) -> fail_download(socket, out, deadline, message)
+    error(message) -> fail_download(socket, out, deadline, "#{message}")
   end
 end
 
@@ -3930,7 +3928,7 @@ def read_head_of(socket: Socket, head_only: Bool, budget: Int, deadline: Int) ->
             interim = interim + 1
             return error("http: too many interim responses") if interim > MAX_INTERIM
           error(message) ->
-            return error(CUT_SHORT) if interim > 0 and message == END_OF_INPUT
+            return error(CUT_SHORT) if interim > 0 and "#{message}" == END_OF_INPUT
             return error(message)
         end
       error(message) -> return error(message)
@@ -4000,7 +3998,7 @@ def save_chunked(socket: Socket, out: FileHandle, budget: Int, deadline: Int) ->
       return error(TRUNCATED) if data.empty?
       case HttpWire.chunk(state, data, 0)
         ok(next) -> state = next
-        error(problem) -> return error("http: #{rest_of(problem, 4)}")
+        error(problem) -> return error("http: #{rest_of("#{problem}", 4)}")
       end
       written = try write_runs(out, data, state.runs, written, budget, deadline)
     end

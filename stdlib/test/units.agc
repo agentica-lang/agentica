@@ -26,7 +26,7 @@ struct UnitTest
 end
 
 struct Failure
-  problem: Report.Error
+  problem: Report.Failure
   output: String
   blame: Bool
 end
@@ -154,7 +154,7 @@ def list(settings: Settings, path: String, bytecode: String) -> Listed
   Listed.Ready(listed.values)
 end
 
-def broken(problem: Report.Error, output: String) -> Listed
+def broken(problem: Report.Failure, output: String) -> Listed
   Listed.Broken(Failure(problem: problem, output: output, blame: true))
 end
 
@@ -377,11 +377,11 @@ def timed_out(settings: Settings, span: Report.Span) -> Failure
   Failure(problem: problem, output: "", blame: true)
 end
 
-def stderr_limit(where: Report.Span) -> Report.Error
+def stderr_limit(where: Report.Span) -> Report.Failure
   Report.error_at("RUNTIME-BDD-OUTPUT-LIMIT", "the test file's stderr over all its tests exceeds 1 MiB", where)
 end
 
-def record_error(record: Json) -> Report.Error
+def record_error(record: Json) -> Report.Failure
   range = JSON.get(record, "range").unwrap_or(JSON.null())
   start = JSON.get(range, "start").unwrap_or(JSON.null())
   stop = JSON.get(range, "end").unwrap_or(JSON.null())
@@ -396,7 +396,7 @@ def record_error(record: Json) -> Report.Error
   if JSON.get(record, "stack").ok?
     original = Child.diagnostic_of(record)
   end
-  Report.Error(
+  Report.Failure(
     code: Child.text_of(record, "code"),
     message: Child.text_of(record, "message"),
     span: span,
