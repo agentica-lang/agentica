@@ -25,7 +25,7 @@ struct UnitTest
   span: Report.Span
 end
 
-struct Failure
+struct UnitFailure
   problem: Report.Failure
   output: String
   blame: Bool
@@ -33,12 +33,12 @@ end
 
 enum Listed
   Ready(List[UnitTest])
-  Broken(Failure)
+  Broken(UnitFailure)
 end
 
 enum Started
   Ready
-  Broken(Failure)
+  Broken(UnitFailure)
 end
 
 struct TestEnd
@@ -155,7 +155,7 @@ def list(settings: Settings, path: String, bytecode: String) -> Listed
 end
 
 def broken(problem: Report.Failure, output: String) -> Listed
-  Listed.Broken(Failure(problem: problem, output: output, blame: true))
+  Listed.Broken(UnitFailure(problem: problem, output: output, blame: true))
 end
 
 def run_child(settings: Settings, path: String, bytecode: String, chosen: List[UnitTest]) -> Report.FileResult
@@ -246,15 +246,15 @@ def await_ready(settings: Settings, p: Process, where: Report.Span) -> Started
       shown = joined(shown, joined(Child.printed(rest.unwrap!.stdout), Child.stderr_text(rest.unwrap!.stderr)))
     end
     problem = Report.error_at("RUNTIME-BDD-INFRA", "the test file broke the test record protocol", where)
-    return Started.Broken(Failure(problem: problem, output: Child.tail(shown, 65536), blame: true))
+    return Started.Broken(UnitFailure(problem: problem, output: Child.tail(shown, 65536), blame: true))
   end
   if line.message == "process: operation timed out"
     problem = Report.error_at("RUNTIME-TEST-TIMEOUT", "the test file did not start its tests within 30 seconds", where)
-    return Started.Broken(Failure(problem: problem, output: Child.tail(shown, 65536), blame: true))
+    return Started.Broken(UnitFailure(problem: problem, output: Child.tail(shown, 65536), blame: true))
   end
   found = failure(settings, p, line.message, deadline, where)
   output = Child.tail(joined(shown, found.output), 65536)
-  Started.Broken(Failure(problem: found.problem, output: output, blame: found.blame))
+  Started.Broken(UnitFailure(problem: found.problem, output: output, blame: found.blame))
 end
 
 def await_test(settings: Settings, p: Process, deadline: Int, span: Report.Span) -> TestEnd
@@ -321,10 +321,10 @@ def finish(settings: Settings, p: Process, where: Report.Span) -> Ending
   Ending(verdict: Report.Verdict.Fail(problem), output: shown)
 end
 
-def failure(settings: Settings, p: Process, message: String, deadline: Int, span: Report.Span) -> Failure
+def failure(settings: Settings, p: Process, message: String, deadline: Int, span: Report.Span) -> UnitFailure
   return timed_out(settings, span) if message == "process: operation timed out"
   if message == "process: line exceeds 1048576 bytes"
-    return Failure(
+    return UnitFailure(
       problem: Report.error_at("RUNTIME-BDD-OUTPUT-LIMIT", "a line of test output exceeds 1 MiB", span),
       output: "",
       blame: true,
@@ -332,13 +332,13 @@ def failure(settings: Settings, p: Process, message: String, deadline: Int, span
   end
   return overflow(settings, p, deadline, span) if message == "process: output exceeds 1048576 bytes"
   if not Child.gone?(message)
-    return Failure(problem: Report.error_at("RUNTIME-BDD-IO", message, span), output: "", blame: true)
+    return UnitFailure(problem: Report.error_at("RUNTIME-BDD-IO", message, span), output: "", blame: true)
   end
   output = Process.output(p, Child.left(deadline))
   return timed_out(settings, span) if not output.ok?
   stderr = output.unwrap!.stderr
   crash = Child.stderr_diagnostic(stderr, span)
-  return Failure(problem: crash.unwrap!, output: Child.stderr_text(stderr), blame: true) if crash.ok?
+  return UnitFailure(problem: crash.unwrap!, output: Child.stderr_text(stderr), blame: true) if crash.ok?
   code = Process.wait(p, Child.left(deadline))
   problem = Report.error_at(
     "RUNTIME-BDD-PREMATURE-EXIT",
@@ -346,14 +346,14 @@ def failure(settings: Settings, p: Process, message: String, deadline: Int, span
     span,
   )
 
-  Failure(problem: problem, output: Child.stderr_text(stderr), blame: true)
+  UnitFailure(problem: problem, output: Child.stderr_text(stderr), blame: true)
 end
 
-def overflow(settings: Settings, p: Process, deadline: Int, span: Report.Span) -> Failure
+def overflow(settings: Settings, p: Process, deadline: Int, span: Report.Span) -> UnitFailure
   _ = Process.channel_close(p, Child.left(deadline))
   output = Process.output(p, Child.brief(deadline))
   if not output.ok?
-    return Failure(
+    return UnitFailure(
       problem: Report.error_at("RUNTIME-BDD-OUTPUT-LIMIT", "test output exceeds 1 MiB", span),
       output: "",
       blame: true,
@@ -362,19 +362,19 @@ def overflow(settings: Settings, p: Process, deadline: Int, span: Report.Span) -
   stderr = output.unwrap!.stderr
   if stderr.length < 262144
     shown = Child.tail(Child.printed(output.unwrap!.stdout), 65536)
-    return Failure(
+    return UnitFailure(
       problem: Report.error_at("RUNTIME-BDD-OUTPUT-LIMIT", "test output exceeds 1 MiB", span),
       output: shown,
       blame: true,
     )
   end
   where = Report.Span(file: span.file, line: 1, column: 1, end_column: 1)
-  Failure(problem: stderr_limit(where), output: Child.stderr_text(stderr), blame: false)
+  UnitFailure(problem: stderr_limit(where), output: Child.stderr_text(stderr), blame: false)
 end
 
-def timed_out(settings: Settings, span: Report.Span) -> Failure
+def timed_out(settings: Settings, span: Report.Span) -> UnitFailure
   problem = Report.error_at("RUNTIME-TEST-TIMEOUT", "the test did not finish within #{settings.timeout_ms} ms", span)
-  Failure(problem: problem, output: "", blame: true)
+  UnitFailure(problem: problem, output: "", blame: true)
 end
 
 def stderr_limit(where: Report.Span) -> Report.Failure
