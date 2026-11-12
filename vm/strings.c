@@ -1,7 +1,8 @@
 /*
  * The String builtins (one of the tables that agc_find_builtin searches), with
  * UTF-8 encoding, offsets through a per-task cursor, KMP search, case mapping,
- * and the Int and Float parsers. Service layer. Design:
+ * the Int and Float parsers, and the edit distance and Jaro-Winkler similarity
+ * of two Strings. Service layer. Design:
  * docs/vm/02-reference-behavior.md §2.3.
  */
 #include "services.h"
@@ -15,8 +16,44 @@
 #define SMALL_SIGMA 0x3C3u
 #define FINAL_SIGMA 0x3C2u
 #define ASCII_HIGH_BITS UINT64_C(0x8080808080808080)
+/* Code points (and cells) that the distances keep on the C stack before they take GC memory. */
+#define DISTANCE_STACK 64
+/* A distance whose quadratic work (table cells, or Jaro comparisons) fits one turn's cost runs in the call; a longer
+   one runs as a stepper (port.h), DISTANCE_CHUNK of that work per STEP, so it yields between turns and meets
+   --max-steps. Each AGC_COST_BYTES of the work is a unit of turn cost. */
+#define DISTANCE_DIRECT ((size_t)AGC_TURN_STEPS * AGC_COST_BYTES)
+#define DISTANCE_CHUNK 4096
+#define CONTINUATION(byte) (((byte) & 0xC0) == 0x80)
 
 typedef agc_finder finder;
+
+/* One s.edit_distance walk over the Levenshtein table, which can stop at any cell and go on from it. A is the shorter
+   text (N code points), B the longer one as UTF-8 (M characters, read once, at AT). ROW holds the N + 1 cells of one
+   row. The walk is at row I (1..M) and column J, up to HI; C is the row's character of B, and DIAG, LEFT and BEST are
+   the cell above-left, the cell to the left and the row's smallest cell so far. Run as a stepper, the state is GC
+   memory that the task's stepper keeps: TEXTS keeps both Strings alive while B points into one of them, and A and ROW
+   are atomic blocks. */
+typedef struct {
+  agc_stepper stepper;
+  agc_value texts[2];
+  const uint32_t *a;
+  const uint8_t *b;
+  size_t *row;
+  size_t n, m, b_bytes, at, cap, top;
+  size_t i, j, hi, diag, left, best, result;
+  uint32_t c, span;
+} distance_run;
+
+/* One s.jaro_winkler matching walk, which can stop at any comparison and go on from it: character I of A (N code
+   points) against B (M) from J up to HI, within WINDOW of I. The same ownership as distance_run. */
+typedef struct {
+  agc_stepper stepper;
+  agc_value texts[2];
+  const uint32_t *a, *b;
+  uint8_t *matched_a, *matched_b;
+  size_t n, m, window, i, j, hi, matches;
+  uint32_t span;
+} jaro_run;
 
 size_t agc_utf8_encode(uint32_t cp, char out[4]) {
   if (cp < 0x80) {
@@ -634,13 +671,267 @@ static agc_value builtin_to_float_bang(agc_vm *vm, agc_value *args, uint32_t spa
 }
 
 /* -1, 0 or 1 in the order List.sort gives Strings: by bytes, which is the order of the code points in UTF-8. */
-static agc_value builtin_compare(agc_vm *vm, agc_value *args, uint32_t span) {
-  (void)span;
-  const agc_string *a = agc_as_string(vm, args[0]), *b = agc_as_string(vm, args[1]);
+static int byte_order(const agc_string *a, const agc_string *b) {
   size_t n = a->bytes < b->bytes ? a->bytes : b->bytes;
   int order = n ? memcmp(a->data, b->data, n) : 0;
-  if (order == 0) return agc_int(a->bytes < b->bytes ? -1 : a->bytes > b->bytes ? 1 : 0);
-  return agc_int(order < 0 ? -1 : 1);
+  if (order == 0) return a->bytes < b->bytes ? -1 : a->bytes > b->bytes ? 1 : 0;
+  return order < 0 ? -1 : 1;
+}
+
+static agc_value builtin_compare(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  return agc_int(byte_order(agc_as_string(vm, args[0]), agc_as_string(vm, args[1])));
+}
+
+/* The code points of the CHARS characters in BYTES bytes of UTF-8 at DATA: in SMALL (DISTANCE_STACK of them) when it
+   is given and they fit there, else in new GC memory, which the caller keeps alive. */
+static uint32_t *code_points(const char *data, size_t bytes, size_t chars, uint32_t *small) {
+  uint32_t *out = small && chars <= DISTANCE_STACK ? small : agc_alloc_atomic(agc_size_mul(chars, sizeof *out));
+  for (size_t at = 0, k = 0; k < chars; k++) out[k] = agc_utf8_next((const uint8_t *)data, bytes, &at);
+  return out;
+}
+
+/* The bytes that X and Y share at their start (returned) and at their end (*suffix), each cut back to whole characters
+   and not overlapping: neither changes the edit distance. The shared bytes are equal in both, so a character boundary
+   in one is a boundary in the other. */
+static size_t common_ends(const agc_string *x, const agc_string *y, size_t *suffix) {
+  const uint8_t *a = (const uint8_t *)x->data, *b = (const uint8_t *)y->data;
+  size_t shorter = x->bytes < y->bytes ? x->bytes : y->bytes, p = 0, s = 0;
+  while (p < shorter && a[p] == b[p]) p++;
+  while (p > 0 && ((p < x->bytes && CONTINUATION(a[p])) || (p < y->bytes && CONTINUATION(b[p])))) p--;
+  while (s < shorter - p && a[x->bytes - 1 - s] == b[y->bytes - 1 - s]) s++;
+  while (s > 0 && CONTINUATION(a[x->bytes - s])) s--;
+  *suffix = s;
+  return p;
+}
+
+/* Row I of the walk starts: its character of B, its band from lo to HI, and the cell left of the band. row[lo - 1]
+   still holds the previous row's cell (in its band), and row[HI] past the previous band holds TOP. */
+static void distance_row(distance_run *r) {
+  r->c = agc_utf8_next(r->b, r->b_bytes, &r->at);
+  size_t i = r->i, lo = i > r->cap ? i - r->cap : 1;
+  r->hi = i + r->cap < r->n ? i + r->cap : r->n;
+  r->diag = r->row[lo - 1];
+  r->left = r->best = lo == 1 && i < r->top ? i : r->top;
+  r->row[lo - 1] = r->left;
+  r->j = lo;
+}
+
+/* The Levenshtein distance of A and B capped at CAP + 1 (TOP), for 1 <= N <= M and M - N <= CAP <= M. Only the cells
+   within CAP of the diagonal can hold CAP or less, so a row computes those alone and TOP stands for the rest: a cell
+   then holds its distance when that is CAP or less, and more than CAP otherwise. The smallest cell of a row never
+   shrinks in the rows below, so a row with every cell past CAP ends the walk. Walks at most BUDGET cells, counted in
+   *CELLS; true once RESULT holds the distance. */
+static bool distance_walk(distance_run *r, size_t budget, size_t *cells) {
+  for (;;) {
+    size_t end = r->hi - r->j < budget ? r->hi + 1 : r->j + budget;
+    size_t diag = r->diag, left = r->left, best = r->best, *row = r->row;
+    const uint32_t *a = r->a;
+    uint32_t c = r->c;
+    for (size_t j = r->j; j < end; j++) {
+      size_t up = row[j], near = (up < left ? up : left) + 1, v = diag + (a[j - 1] != c);
+      if (near < v) v = near;
+      diag = up;
+      row[j] = left = v;
+      if (v < best) best = v;
+    }
+    r->diag = diag, r->left = left, r->best = best;
+    *cells += end - r->j;
+    budget -= end - r->j;
+    r->j = end;
+    if (r->j <= r->hi) return false;
+    if (best >= r->top || r->i == r->m) {
+      r->result = best >= r->top || row[r->n] >= r->top ? r->top : row[r->n];
+      return true;
+    }
+    r->i++;
+    distance_row(r);
+  }
+}
+
+static agc_step distance_step(agc_vm *vm, agc_stepper *self, agc_value last) {
+  (void)last;
+  distance_run *r = (distance_run *)self;
+  for (;;) {
+    size_t cells = 0;
+    bool done = distance_walk(r, DISTANCE_CHUNK, &cells);
+    agc_charge(vm, cells / AGC_COST_BYTES);
+    if (done) {
+      agc_turn_charge(vm);
+      return (agc_step){.kind = AGC_STEP_END, .value = agc_int((int64_t)r->result)};
+    }
+    /* Both run: the charge must not be skipped when the step count ends the turn first. */
+    bool charged = agc_turn_charge(vm);
+    if (agc_step_turn(vm, r->span) || charged) return (agc_step){.kind = AGC_STEP_YIELD};
+  }
+}
+
+/* s.edit_distance(other), and with CAPPED s.edit_distance(other, max): the Levenshtein distance in characters, or
+   max + 1 once it passes max. The common prefix and suffix are cut first; the shorter rest is decoded and the longer
+   one walked, so memory is O(min(n, m)). A walk of at most DISTANCE_DIRECT cells runs here, on the C stack when the
+   text is short; a longer one runs as a stepper. */
+static agc_value edit_distance(agc_vm *vm, agc_value *args, uint32_t span, bool capped) {
+  const agc_string *x = agc_as_string(vm, args[0]), *y = agc_as_string(vm, args[1]);
+  int64_t max = capped ? agc_as_int(vm, args[2]) : 0;
+  if (max < 0) agc_fail(vm, "RUNTIME-INVALID-COUNT", "max must be nonnegative", span + 3);
+  size_t suffix, prefix = common_ends(x, y, &suffix);
+  const char *xs = x->data + prefix, *ys = y->data + prefix;
+  size_t xb = x->bytes - prefix - suffix, yb = y->bytes - prefix - suffix;
+  size_t xn = agc_utf8_count((const uint8_t *)xs, xb), yn = agc_utf8_count((const uint8_t *)ys, yb);
+  agc_charge(vm, (x->bytes + y->bytes) / AGC_COST_BYTES);
+  if (xn > yn) {
+    const char *ts = xs;
+    size_t tb = xb, tn = xn;
+    xs = ys, xb = yb, xn = yn;
+    ys = ts, yb = tb, yn = tn;
+  }
+  size_t cap = capped && (uint64_t)max < yn ? (size_t)max : yn;
+  if (yn - xn > cap) return agc_int((int64_t)cap + 1);
+  if (xn == 0) return agc_int((int64_t)yn);
+  /* The band is at most 2 * cap + 1 cells wide, and cap <= yn, so neither sum overflows. */
+  size_t width = 2 * cap + 1 < xn ? 2 * cap + 1 : xn;
+  bool direct = width <= DISTANCE_DIRECT / yn;
+  distance_run local, *r = direct ? &local : agc_alloc(sizeof *r);
+  uint32_t small_points[DISTANCE_STACK];
+  size_t small_row[DISTANCE_STACK + 1];
+  *r = (distance_run){.texts = {args[0], args[1]}, .b = (const uint8_t *)ys, .n = xn, .m = yn, .b_bytes = yb,
+                      .cap = cap, .top = cap + 1, .i = 1, .span = span};
+  r->a = code_points(xs, xb, xn, direct ? small_points : NULL);
+  r->row = direct && xn < DISTANCE_STACK + 1 ? small_row : agc_alloc_atomic(agc_size_mul(xn + 1, sizeof *r->row));
+  for (size_t j = 0; j <= xn; j++) r->row[j] = j < r->top ? j : r->top;
+  distance_row(r);
+  if (direct) {
+    size_t cells = 0;
+    (void)distance_walk(r, SIZE_MAX, &cells);
+    agc_charge(vm, cells / AGC_COST_BYTES);
+    return agc_int((int64_t)r->result);
+  }
+  r->stepper.step = distance_step;
+  /* The step reads the immutable texts and writes only this run, which belongs to the calling task. */
+  r->stepper.unlocked = true;
+  r->stepper.no_block = true;
+  agc_task_stepper(vm, &r->stepper);
+  return agc_void();
+}
+
+static agc_value builtin_edit_distance(agc_vm *vm, agc_value *args, uint32_t span) {
+  return edit_distance(vm, args, span, false);
+}
+
+static agc_value builtin_edit_distance_max(agc_vm *vm, agc_value *args, uint32_t span) {
+  return edit_distance(vm, args, span, true);
+}
+
+/* Character I of A starts: its window of B, from J up to HI. */
+static void jaro_row(jaro_run *r) {
+  r->j = r->i > r->window ? r->i - r->window : 0;
+  r->hi = r->i + r->window + 1 < r->m ? r->i + r->window + 1 : r->m;
+}
+
+/* Matches each character of A with the first unmatched equal character of B in its window. Makes at most BUDGET
+   comparisons, counted in *CELLS; true once every character of A is done. */
+static bool jaro_walk(jaro_run *r, size_t budget, size_t *cells) {
+  while (r->i < r->n) {
+    size_t end = r->hi - r->j < budget ? r->hi : r->j + budget, j = r->j;
+    uint32_t c = r->a[r->i];
+    while (j < end && (r->matched_b[j] || r->b[j] != c)) j++;
+    bool found = j < end;
+    *cells += j - r->j + found;
+    budget -= j - r->j + found;
+    if (found) {
+      r->matched_a[r->i] = r->matched_b[j] = 1;
+      r->matches++;
+    } else if (end < r->hi) {
+      r->j = end;
+      return false;
+    }
+    r->i++;
+    if (r->i < r->n) jaro_row(r);
+    if (budget == 0 && r->i < r->n) return false;
+  }
+  return true;
+}
+
+/* The similarity once every match is found: half the transposed matches, rounded down, and the prefix bonus. */
+static double jaro_winkler_of(const jaro_run *r) {
+  if (r->matches == 0) return 0.0;
+  size_t transposed = 0;
+  for (size_t i = 0, k = 0; i < r->n; i++) {
+    if (!r->matched_a[i]) continue;
+    while (!r->matched_b[k]) k++;
+    if (r->a[i] != r->b[k++]) transposed++;
+  }
+  size_t transpositions = transposed / 2;
+  double found = (double)r->matches;
+  double jaro = (found / (double)r->n + found / (double)r->m + (found - (double)transpositions) / found) / 3.0;
+  if (jaro <= 0.7) return jaro;
+  size_t prefix = 0;
+  while (prefix < 4 && prefix < r->n && r->a[prefix] == r->b[prefix]) prefix++;
+  return jaro + (double)prefix * 0.1 * (1.0 - jaro);
+}
+
+static agc_step jaro_step(agc_vm *vm, agc_stepper *self, agc_value last) {
+  (void)last;
+  jaro_run *r = (jaro_run *)self;
+  for (;;) {
+    size_t cells = 0;
+    bool done = jaro_walk(r, DISTANCE_CHUNK, &cells);
+    agc_charge(vm, cells / AGC_COST_BYTES);
+    if (done) {
+      agc_charge(vm, (r->n + r->m) / AGC_COST_BYTES);
+      agc_turn_charge(vm);
+      return (agc_step){.kind = AGC_STEP_END, .value = agc_float(jaro_winkler_of(r))};
+    }
+    /* Both run: the charge must not be skipped when the step count ends the turn first. */
+    bool charged = agc_turn_charge(vm);
+    if (agc_step_turn(vm, r->span) || charged) return (agc_step){.kind = AGC_STEP_YIELD};
+  }
+}
+
+/* s.jaro_winkler(other): the Jaro similarity of the code points, plus 0.1 * (1 - jaro) for each character of a common
+   prefix of up to 4 when it is above 0.7, as Ruby's DidYouMean::JaroWinkler; half the transpositions, rounded down, as
+   Winkler's strcmp95. Two empty strings give 1.0. The shorter string (for equal lengths, the first in byte order) is
+   matched against the longer, so the order of the two does not matter. Matching makes at most n * (2 * window + 1)
+   comparisons: up to DISTANCE_DIRECT run here, more as a stepper. */
+static agc_value builtin_jaro_winkler(agc_vm *vm, agc_value *args, uint32_t span) {
+  const agc_string *x = agc_as_string(vm, args[0]), *y = agc_as_string(vm, args[1]);
+  int order = x->chars == y->chars ? byte_order(x, y) : 0;
+  if (x->chars == y->chars && order == 0) return agc_float(1.0);
+  if (x->chars > y->chars || order > 0) {
+    const agc_string *t = x;
+    x = y;
+    y = t;
+  }
+  size_t n = x->chars, m = y->chars;
+  if (n == 0) return agc_float(0.0);
+  size_t window = m / 2 > 0 ? m / 2 - 1 : 0;
+  /* The window is under m, so 2 * window + 1 does not overflow. */
+  size_t width = 2 * window + 1 < m ? 2 * window + 1 : m;
+  bool direct = width <= DISTANCE_DIRECT / n;
+  jaro_run local, *r = direct ? &local : agc_alloc(sizeof *r);
+  uint32_t small_a[DISTANCE_STACK], small_b[DISTANCE_STACK];
+  uint8_t small_flags[2 * DISTANCE_STACK];
+  *r = (jaro_run){.texts = {args[0], args[1]}, .n = n, .m = m, .window = window, .span = span};
+  r->a = code_points(x->data, x->bytes, n, direct ? small_a : NULL);
+  r->b = code_points(y->data, y->bytes, m, direct ? small_b : NULL);
+  r->matched_a = direct && m <= DISTANCE_STACK ? small_flags : agc_alloc_atomic(agc_size_add(n, m));
+  r->matched_b = r->matched_a + n;
+  memset(r->matched_a, 0, n + m);
+  jaro_row(r);
+  agc_charge(vm, (n + m) / AGC_COST_BYTES);
+  if (direct) {
+    size_t cells = 0;
+    (void)jaro_walk(r, SIZE_MAX, &cells);
+    /* n + m again for the pass over the matches in jaro_winkler_of, as jaro_step charges it. */
+    agc_charge(vm, (cells + n + m) / AGC_COST_BYTES);
+    return agc_float(jaro_winkler_of(r));
+  }
+  r->stepper.step = jaro_step;
+  /* The step reads the immutable texts and writes only this run, which belongs to the calling task. */
+  r->stepper.unlocked = true;
+  r->stepper.no_block = true;
+  agc_task_stepper(vm, &r->stepper);
+  return agc_void();
 }
 
 const agc_builtin agc_string_builtins[] = {
@@ -668,6 +959,11 @@ const agc_builtin agc_string_builtins[] = {
   {"String.to_float!", 1, builtin_to_float_bang, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true},
   {"String.from_bytes.bytes", 1, builtin_from_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true},
   {"String.multiply", 2, builtin_multiply, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true},
+  /* The distances charge their own cost and may start a stepper, so they are neither leaf nor direct rows; the
+     stepper touches only its own run (unlocked), so they are not shared. */
+  {"String.edit_distance", 2, builtin_edit_distance, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
+  {"String.edit_distance", 3, builtin_edit_distance_max, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
+  {"String.jaro_winkler", 2, builtin_jaro_winkler, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
 };
 
 const size_t agc_string_builtin_count = sizeof agc_string_builtins / sizeof agc_string_builtins[0];
