@@ -339,7 +339,7 @@
       "program": [
         "def main() -> Void",
         "  a = Set.new([1])",
-        "  r = a.include?(1)",
+        "  r = a.contains?(1)",
         "end",
         "",
         ""
@@ -6270,7 +6270,7 @@
     {
       "program": [
         "def main() -> Void",
-        "  x = \"a\".join(\",\")",
+        "  x = String.join(\"a\", \",\")",
         "end",
         "",
         ""
@@ -8243,7 +8243,7 @@
       "program": [
         "def main() -> Void",
         "  n = 2",
-        "  x = n.to_f",
+        "  x = n.to_float",
         "end",
         "",
         ""

@@ -351,7 +351,7 @@ def call_lambda_block(cx: State.Cx, st: State.St, node: Ast.Call) -> Result[Bool
     name = receiver_text(cx, node.args[0]) + " |> " + name
   end
 
-  if node.args.size - skip == 1 and !node.name.contains?(".")
+  if node.args.size - skip == 1 and !node.name.include?(".")
     name = "#{name}()"
   end
 
@@ -393,7 +393,7 @@ end
 # The receiver of a method call as the source writes it, for a help; "" when it is long or spans lines.
 def receiver_text(cx: State.Cx, target: Ast.Expr) -> String
   text = Calls.extent_text(cx, target)
-  return "" if text.length > 40 or text.contains?("\n")
+  return "" if text.length > 40 or text.include?("\n")
 
   text
 end
