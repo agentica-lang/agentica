@@ -9,8 +9,8 @@ to the task that opened it and closes when that task or the run ends
 The HTTP types are `HTTP.Request`, `HTTP.Response`, `HTTP.Header`,
 `HTTP.ClientOptions`, `HTTP.ServerOptions` and the handles `HTTP.Client` and
 `HTTP.Server`, builtin types that `std/http` re-exports (also
-`import {Request, Response} from "std/http"`). A value prints with the builtin
-name: `HttpWire.Response(...)`, `<HttpWire.Client>`.
+`import {Request, Response} from "std/http"`). A value prints with these
+names: `HTTP.Response(...)`, `<HTTP.Client>`.
 
 No flag is needed for network access. With `--deny-net` (or `--sandbox`) every
 DNS lookup, connect and listen, `std/http` included, returns an error starting

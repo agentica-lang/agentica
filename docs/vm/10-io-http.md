@@ -142,7 +142,7 @@ libuv sockets (`vm/tcp.c`, `vm/net.h`) and has no platform code of its own.
   `Test.test` does not see them as leftovers, and their timers do not keep a
   stalled run waiting (the stall checks count only the other timers). The owner
   owns `jobs`, so its end closes the channel. The `HttpWire.Client` value holds
-  the channel and the options; it prints `<HttpWire.Client>`.
+  the channel and the options; it prints `<HTTP.Client>`.
 - `HTTP.request` parses the URL and builds the head with `encode_request`
   (`vm/http_wire.c`), which adds `Host` (the port only when it is not the
   scheme's default; an IPv6 host in brackets) and `Content-Length`, and refuses

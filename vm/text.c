@@ -31,6 +31,28 @@ typedef struct {
   agc_value *keys;
 } debug_frame;
 
+/* The builtin records and enums that a std/ module re-exports, by their builtin name, with the name a program writes:
+   a printed value shows the written name (HTTP.Response(...), Logger.Level.Info), while the builtin name stays the key
+   of the bytecode and the lowering. The records and enums of REEXPORTED_TYPES (compiler/syntax/types.agc); its
+   handles print in agc_scalar_text (<HTTP.Client>). tests/test_frontend_catalog.py checks that they agree. Each name
+   keeps its length, so a print compares lengths first and calls no strlen. */
+#define WRITTEN(builtin, written) {builtin, sizeof builtin - 1, written, sizeof written - 1}
+static const struct {
+  const char *builtin;
+  size_t builtin_len;
+  const char *written;
+  size_t written_len;
+} written_names[] = {
+    WRITTEN("HttpWire.ClientOptions", "HTTP.ClientOptions"),
+    WRITTEN("HttpWire.Header", "HTTP.Header"),
+    WRITTEN("HttpWire.Request", "HTTP.Request"),
+    WRITTEN("HttpWire.Response", "HTTP.Response"),
+    WRITTEN("HttpWire.ServerOptions", "HTTP.ServerOptions"),
+    WRITTEN("LogRegistry.Event", "Logger.Event"),
+    WRITTEN("LogRegistry.Level", "Logger.Level"),
+};
+#undef WRITTEN
+
 bool agc_in_ranges(const uint32_t (*ranges)[2], size_t count, uint32_t cp) {
   size_t lo = 0, hi = count;
   while (lo < hi) {
@@ -221,26 +243,12 @@ static void append_string(builder *b, const agc_string *s) {
   b->s->chars += s->chars;
 }
 
-/* The builtin records and enums that a std/ module re-exports, by their builtin name, with the name a program writes:
-   a printed value shows the written name (HTTP.Response(...), Logger.Level.Info), while the builtin name stays the key
-   of the bytecode and the lowering. The records and enums of REEXPORTED_TYPES (compiler/syntax/types.agc); its
-   handles print in agc_scalar_text (<HTTP.Client>). tests/test_frontend_catalog.py checks that they agree. */
-static const char *const written_names[][2] = {
-    {"HttpWire.ClientOptions", "HTTP.ClientOptions"},
-    {"HttpWire.Header", "HTTP.Header"},
-    {"HttpWire.Request", "HTTP.Request"},
-    {"HttpWire.Response", "HTTP.Response"},
-    {"HttpWire.ServerOptions", "HTTP.ServerOptions"},
-    {"LogRegistry.Event", "Logger.Event"},
-    {"LogRegistry.Level", "Logger.Level"},
-};
-
 /* The name of a struct or an enum as a program writes it. */
 static void append_type_name(builder *b, const agc_string *name) {
   for (size_t k = 0; k < sizeof written_names / sizeof written_names[0]; k++) {
-    size_t len = strlen(written_names[k][0]);
-    if (len == name->bytes && memcmp(written_names[k][0], name->data, len) == 0) {
-      append(b, written_names[k][1], strlen(written_names[k][1]));
+    if (written_names[k].builtin_len == name->bytes &&
+        memcmp(written_names[k].builtin, name->data, name->bytes) == 0) {
+      append(b, written_names[k].written, written_names[k].written_len);
       return;
     }
   }

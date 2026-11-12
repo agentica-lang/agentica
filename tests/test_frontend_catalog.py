@@ -75,7 +75,7 @@ def test_every_builtin_type_a_std_module_re_exports_has_its_written_name():
     # A printed value shows the written name too: vm/text.c maps each record and enum (written_names) and prints
     # each handle as <WRITTEN>.
     text_c = (ROOT / "vm" / "text.c").read_text(encoding="utf-8")
-    printed = dict(re.findall(r'\{"([^"]+)", "([^"]+)"\}', text_c[text_c.index("written_names[][2] = {"):]
+    printed = dict(re.findall(r'WRITTEN\("([^"]+)", "([^"]+)"\)', text_c[text_c.index("} written_names[] = {"):]
                               .split("};", 1)[0]))
     handles = {name: shown for name, shown in written.items() if '"<%s>"' % shown in text_c}
     assert printed == {name: shown for name, shown in written.items() if name not in handles}
