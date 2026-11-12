@@ -141,6 +141,24 @@ def test_the_custom_suite_passes_in_the_three_formats_with_outline_names_and_qui
             "4 passed, 0 failed, 0 skipped, 0 not executed, 0 file errors\n")
 
 
+def test_a_program_under_test_is_compiled_again_for_a_scenario_that_sets_where_packages_are_found(bdd):
+    """`BDD.given_program` compiles a program once per run (#1458), but AGENTICA_PATH from `given_env` changes which
+    library an import reads, so each value gets its own compile."""
+    directory = bdd.suite({
+        "app.agc": 'import Lib from "pkg/lib/name"\n\ndef main() -> Void\n  puts(Lib.name())\nend\n'})
+    for name in ("a", "b"):
+        (directory / name / "lib").mkdir(parents=True)
+        (directory / name / "lib" / "name.agc").write_text('export def name() -> String = "%s"\n' % name,
+                                                           encoding="utf-8")
+    scenario = ('Scenario: %s\nGiven the environment variable "AGENTICA_PATH" is "%s"\n'
+                'And the Agentica program "app.agc"\nThen I receive the line "%s" within 10000 milliseconds\n')
+    roots = [(name, json.dumps(str(directory / name))[1:-1]) for name in ("a", "b", "a")]
+    (directory / "a.feature").write_text(
+        "Feature: A\n" + "".join(scenario % (name, root, name) for name, root in roots), encoding="utf-8")
+    status, report = bdd.json_test(directory, env={"AGENTICA_PATH": ""})
+    assert (status, report["passed"]) == (0, 3), report
+
+
 def test_the_runner_and_the_steps_the_binary_carries_give_the_report_of_ones_compiled_from_the_sources(bdd):
     """The binary starts its own compiled runner and default step program (`run --embedded`); a front end that
     reads the std/ sources from a folder compiles them. Both must report the same."""
