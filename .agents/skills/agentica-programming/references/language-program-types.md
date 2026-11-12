@@ -171,8 +171,9 @@ end
   called without type arguments (`first_or[Int](...)` is
   `PARSE-UNEXPECTED-TOKEN`). The checker binds `T` from the typed arguments,
   left to right (a clash is `CHECK-TYPE-MISMATCH`), then from the expected type
-  of the call, then from the block, whose open parameter types must be annotated
-  (`do |x: Int|`, else `CHECK-BLOCK-TYPE`). Arguments that need an expected type
+  of the call, then from the block, whose open parameter types come from an
+  annotation (`do |x: Int|`) or the uses in its body (else
+  `CHECK-BLOCK-TYPE`). Arguments that need an expected type
   (`[]`, `{}`, `error(...)`, a payload-less generic variant) bind nothing. A
   parameter still open is `CHECK-ENUM-TYPE-INFERENCE` at the call. In the
   body `T` is opaque: store, return and pass it on, but no `==`, arithmetic,

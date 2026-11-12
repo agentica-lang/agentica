@@ -7,6 +7,29 @@ import RubyForm from "ruby_form"
 import T from "../syntax/types"
 import State from "check_state"
 
+## The receiver kinds: the words of the types whose values have methods in the catalog, and Mutex (a parameter kind of
+## RubyForm). Infer reads them all to ask which receivers have a method of some name.
+export METHOD_KINDS = [
+  "String",
+  "List",
+  "Map",
+  "Set",
+  "Float",
+  "Result",
+  "Optional",
+  "Json",
+  "Int",
+  "Range",
+  "Bytes",
+  "Channel",
+  "Address",
+  "Lazy",
+  "Codec",
+  "ATS",
+  "Task",
+  "Mutex",
+]
+
 ## The kind of a receiver, or "" when its type has no methods in the catalog.
 export def receiver_kind(type: T.Type) -> String
   word = T.tag(type)
@@ -17,27 +40,8 @@ export def receiver_kind(type: T.Type) -> String
 
   return "Mutex" if RubyForm.parameter_kind(type) == "Mutex"
 
-  if (
-    word == "String" or
-    word == "List" or
-    word == "Map" or
-    word == "Set" or
-    word == "Float" or
-    word == "Result" or
-    word == "Optional" or
-    word == "Json" or
-    word == "Int" or
-    word == "Range" or
-    word == "Bytes" or
-    word == "Channel" or
-    word == "Address" or
-    word == "Lazy" or
-    word == "Codec" or
-    word == "ATS" or
-    word == "Task"
-  )
-    return word
-  end
+  # No tag is "Mutex", so only the words of the tags match here.
+  return word if METHOD_KINDS.include?(word)
 
   ""
 end

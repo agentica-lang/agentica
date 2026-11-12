@@ -14,8 +14,12 @@ A block is a function written at the call site as the last argument: `xs.map do
   through an import alias may drop them (`Util.start do ... end`). The last
   parameter must be a `Fn` (`CHECK-BLOCK-TARGET`). Never `do || ... end` or
   `{ |x| ... }`.
-- Parameter types come from the call; annotate when there is no context: `do |x:
-  Int| ... end` (`CHECK-BLOCK-TYPE`).
+- Parameter types come from the call, else from the uses in the body when they
+  leave one type (`x + 1`: Int; `x.upcase`: String; `f(x)`, `Msg.Get(x)`: the
+  parameter's type); annotate otherwise: `do |x: Int| ... end`
+  (`CHECK-BLOCK-TYPE`; `x * 2` is Int or String, `x.size` many types; a field
+  name counts every struct with it, builtin records such as `HTTP.Request`
+  included, so `p.path` alone leaves several).
 - The last expression is the block's value; `return value` leaves only the
   block. A non-Void block gives a value on every path. `try` in a block needs a
   Result return known from the call (not in `map` or `sort_by`) and the block
@@ -39,8 +43,9 @@ A lambda is a block that no call takes, for a function value of its own:
   never `->() { 1 }`). The body is always in braces, over one line or several;
   never `->(x) do ... end`, `lambda`, `proc` or `->x`.
 - The block rules hold: parameter types from the expected `Fn` (an annotated
-  variable, parameter, field, list or map item, return type) or annotations,
-  else `CHECK-BLOCK-TYPE`; `try` needs a known `Result` result, so annotate:
+  variable, parameter, field, list or map item, return type), annotations or
+  the uses in the body (`->(x) { x + 1 }`), else `CHECK-BLOCK-TYPE`; `try`
+  needs a known `Result` result, so annotate:
   `f: Fn[String, Result[Int]] = ->(s) { ... }`; `return` leaves the lambda.
 - Where a call takes a block, write the block: `xs.map(->(x) { ... })` is
   `CHECK-LAMBDA-BLOCK`. `.call(...)` takes no block, so a lambda may be its

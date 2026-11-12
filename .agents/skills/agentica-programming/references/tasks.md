@@ -393,8 +393,8 @@ the `Ref`; there are no methods.
 - `call` builds the message around a new reply channel and waits:
   `Actor.call(addr, 1000) do |reply| Msg.Get(reply) end`; the handler answers
   with `Actor.reply(reply, value)`. The answer type comes from the expected
-  type (the function's `Result[Int]`); with none, in `puts` or `#{}`, write
-  `do |reply: Channel[Int]|` (else `CHECK-BLOCK-TYPE`).
+  type (the function's `Result[Int]`), or else from the variant the block
+  builds (`Msg.Get(Channel[Int])`), so the call works in `puts` too.
 - Errors: `error("actor: timeout")` (inbox full or no answer in time) and
   `error("address: gone")` (the actor ended). A call whose actor crashes, a
   call to its own address from a handler, and two actors calling each other

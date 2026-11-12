@@ -9,6 +9,7 @@ import Source from "../syntax/source"
 import T from "../syntax/types"
 import DefaultChecks from "check_defaults"
 import Flow from "check_flow"
+import Infer from "check_infer"
 import State from "check_state"
 import Types from "check_types"
 import Unused from "check_unused"
@@ -1119,16 +1120,99 @@ def block_parameter_type(
     return ok(context)
   end
 
-  error(
-    State.fail_help(
-      cx,
-      st,
-      "CHECK-BLOCK-TYPE",
-      "the type of #{block_noun(block)} parameter \"#{param.name}\" is not known here",
-      param.span,
-      block_type_help(block, param.name),
-    ),
-  )
+  inferred(cx, st, block, param)
+end
+
+# The type of a parameter that has neither an annotation nor a type from the context: the one type its uses in the
+# body leave (Infer), else CHECK-BLOCK-TYPE with the annotation to write.
+def inferred(cx: State.Cx, st: State.St, block: Ast.BlockLit, param: Ast.BlockParam) -> Result[T.Type]
+  noun = block_noun(block)
+  message = "the type of #{noun} parameter \"#{param.name}\" is not known here"
+  help = block_type_help(block, param.name)
+  case Infer.param_type(cx, st, block.body, param.name)
+    Infer.Guess.Found(type) -> return ok(type)
+    Infer.Guess.Open -> message = message
+    Infer.Guess.Several(types) ->
+      names = shown_names(types)
+      if names.size > 0
+        message += ": its uses allow #{spoken(names, types.size, "or", "other types")}"
+        help = annotation_help(block, param.name, names)
+      end
+
+    Infer.Guess.Conflict(types) ->
+      names = shown_names(types)
+      if names.size > 1
+        listed = spoken(names, types.size, "and", "others")
+        message = "the uses of #{noun} parameter \"#{param.name}\" need different types: #{listed}"
+        help = annotation_help(block, param.name, names)
+      end
+  end
+
+  error(State.fail_help(cx, st, "CHECK-BLOCK-TYPE", message, param.span, help))
+end
+
+# The most types a message lists.
+def shown_limit() -> Int = 4
+
+# The names a message shows for the types, at most shown_limit: a builtin record of a std-only family by the alias
+# its std module re-exports it under (HttpWire.Request is HTTP.Request), and not at all when it has none
+# (HttpWire.Chunk): a use counts such a record, so that its set stays complete, but a program cannot write it.
+def shown_names(types: List[T.Type]) -> List[String]
+  out: List[String] = []
+  for type in types
+    name = shown_name(type)
+    if name != "" and out.size < shown_limit()
+      out = out.push(name)
+    end
+  end
+
+  out
+end
+
+def shown_name(type: T.Type) -> String
+  return T.to_text(type) if !T.is?(type, "Struct")
+
+  name = T.name(type)
+  parts = name.split(".")
+  return T.to_text(type) if parts.size != 2 or !Builtins.STD_ONLY.has_key?(parts[0])
+  return "" if !Builtins.MOVED.values.include?(name)
+
+  "#{Builtins.STD_ONLY[parts[0]][1]}.#{parts[1]}"
+end
+
+# The names as words: "Int, Float or String". When `total` types stand behind them (some hidden or past the limit),
+# `rest` ends the list instead: "Person or other types".
+def spoken(names: List[String], total: Int, last: String, rest: String) -> String
+  shown = names
+  if total > names.size
+    shown = names.push(rest)
+  end
+
+  text = shown[0]
+  index = 1
+  while index < shown.size
+    joiner = ", "
+    if index == shown.size - 1
+      joiner = " #{last} "
+    end
+
+    text += joiner + shown[index]
+    index += 1
+  end
+
+  text
+end
+
+# The help that shows the parameter annotated with each type.
+def annotation_help(block: Ast.BlockLit, name: String, types: List[String]) -> String
+  forms = types.map do |type: String| annotated_form(block, name, type) end
+  "annotate it, as in #{forms.join(" or ")}"
+end
+
+def annotated_form(block: Ast.BlockLit, name: String, type: String) -> String
+  return "->(#{name}: #{type}) { ... }" if block.lambda
+
+  "do |#{name}: #{type}| ... end"
 end
 
 # What the source calls the block literal: "lambda" for ->(x) { ... }, "block" for do |x| ... end.

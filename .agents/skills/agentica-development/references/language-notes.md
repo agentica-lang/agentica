@@ -195,6 +195,11 @@ section for the area you are changing.
   name found below the block's scope depth is `CHECK-CAPTURED-ASSIGNMENT`. List
   callback rules check the list first when the callback is a block, then the
   block with the element type.
+- A parameter with no annotation and no type from the context gets one from its
+  uses in the body (`check_infer.agc`, called by `block_parameter_type`): each
+  use gives no constraint or the complete set of types it allows, and the sets
+  must meet in one type. A new receiver kind goes in `METHOD_KINDS`
+  (`check_names.agc`), which keeps the method sets complete.
 
 ## Hints for foreign habits
 

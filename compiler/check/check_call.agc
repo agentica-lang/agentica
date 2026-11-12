@@ -449,10 +449,10 @@ def check_closed_argument(
   ok(out.st)
 end
 
-# The block of a call, against the Fn parameter type. Its parameter types are the ones known; one still open must be
-# annotated in the block (CHECK-BLOCK-TYPE otherwise), and an annotation binds it. The block's result binds what the Fn
-# result leaves open: a Result or an Optional type is asked for as such, so that ok(...) and error(...), or some(...)
-# and none, are read as the block's value.
+# The block of a call, against the Fn parameter type. Its parameter types are the ones known; one still open comes from
+# an annotation or from its uses in the body (Infer; CHECK-BLOCK-TYPE otherwise), and binds what it shows. The block's
+# result binds what the Fn result leaves open: a Result or an Optional type is asked for as such, so that ok(...) and
+# error(...), or some(...) and none, are read as the block's value.
 def check_generic_block(
   cx: State.Cx,
   st: State.St,
