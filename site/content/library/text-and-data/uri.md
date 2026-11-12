@@ -34,7 +34,7 @@ end
 caf%C3%A9+au+lait
 caf%C3%A9%20au%20lait
 ok("a+b c")
-ok([Pair(name: "a", value: "1"), Pair(name: "a", value: "2"), Pair(name: "b", value: ""), Pair(name: "k", value: "")])
+ok([URI.Pair(name: "a", value: "1"), URI.Pair(name: "a", value: "2"), URI.Pair(name: "b", value: ""), URI.Pair(name: "k", value: "")])
 q=a+b&q=%7E
 error("invalid %-encoding (100%)")
 ```

@@ -148,11 +148,20 @@ def sources(out: Wire.Chunks, program: Ir.Program) -> Wire.Chunks
   chunks
 end
 
+# The name of a struct or an enum as the program writes it: display_name, with the import alias of its std/ module.
+def written_name(program: Ir.Program, name: String) -> String
+  bare = Types.display_name(name)
+  alias = program.written.get(name.slice(0, name.length - bare.length), "")
+  return bare if alias == ""
+
+  "#{alias}.#{bare}"
+end
+
 # The structs: the name as the user wrote it, and the fields.
 def structs(out: Wire.Chunks, program: Ir.Program) -> Wire.Chunks
   chunks = Wire.add(out, Wire.u32(program.structs.size))
   for entry in program.structs
-    chunks = Wire.add_text(chunks, Types.display_name(entry.name))
+    chunks = Wire.add_text(chunks, written_name(program, entry.name))
     chunks = Wire.add(chunks, Wire.u32(entry.fields.size))
     for field in entry.fields
       chunks = Wire.add_text(chunks, field)
@@ -166,7 +175,7 @@ end
 def enums(out: Wire.Chunks, program: Ir.Program) -> Wire.Chunks
   chunks = Wire.add(out, Wire.u32(program.enums.size))
   for entry in program.enums
-    chunks = Wire.add_text(chunks, Types.display_name(entry.name))
+    chunks = Wire.add_text(chunks, written_name(program, entry.name))
     chunks = Wire.add(chunks, Wire.u32(entry.variants.size))
     for variant in entry.variants
       chunks = Wire.add_text(chunks, variant.name)

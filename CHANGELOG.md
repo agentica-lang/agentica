@@ -61,6 +61,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   `symbol` and `refs` find them by those names.
 - A printed logger value shows the names a program writes:
   `Logger.Level.Info` and `Logger.Event(...)`, not `LogRegistry.Level.Info`.
+- A printed record or enum of a std module shows the module alias it is
+  imported with: `HTTP.Download(...)`, `Toml.Value.Int(1)`, not `Download(...)`.
 
 ## [0.30.1] - 2026-11-11
 

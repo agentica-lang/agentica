@@ -125,6 +125,16 @@ def test_the_types_of_an_imported_file_cross(tmp_path, demo):
     assert result.stdout == "Point(x: 2, y: 1)\nShape.Rect(Point(x: 0, y: 0), Point(x: 3, y: 3))\n"
 
 
+# A record of a std module crosses by its bare name too, though it prints with the import alias (URI.Pair).
+@NATIVE_CALLS
+def test_a_record_of_a_std_module_crosses(tmp_path, demo):
+    text = ('import URI from "std/uri"\n\nextern module "%s"\n  def swap_pair(pair: URI.Pair) -> URI.Pair\nend\n\n'
+            'def main() -> Void\n  puts(swap_pair(URI.Pair(name: "a", value: "b")))\nend\n') % literal(demo)
+    result = agentica("--json", program(tmp_path, text))
+    assert (result.code, result.stderr) == (0, "")
+    assert result.stdout == 'URI.Pair(name: "b", value: "a")\n'
+
+
 # A short call never calls back into Agentica: the callback that the module starts runs nothing and gives 0, while
 # the same callback started from an extern call runs.
 @NATIVE_CALLS

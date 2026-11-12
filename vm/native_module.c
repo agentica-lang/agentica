@@ -314,9 +314,14 @@ static bool next_block(const agc_program *p, const char **at, const char *end, t
   const char *close = memchr(*at, '}', (size_t)(end - *at));
   if (!close || index >= (b->kind == B_ENUM ? p->enum_count : p->struct_count)) return false;
   b->index = (uint32_t)index;
+  /* The signature and the module name a type by its bare name, while the table names a record of a std module with
+     its import alias (URI.Pair): keep what follows the last dot. A user type has no dot and a builtin record never
+     crosses. */
   const agc_string *name = b->kind == B_ENUM ? p->enums[index].name : p->structs[index].name;
-  b->name = name->data;
-  b->name_len = name->bytes;
+  size_t skip_to = name->bytes;
+  while (skip_to > 0 && name->data[skip_to - 1] != '.') skip_to--;
+  b->name = name->data + skip_to;
+  b->name_len = name->bytes - skip_to;
   b->shape = *at;
   b->shape_len = (size_t)(close - *at);
   *at = close + 1;

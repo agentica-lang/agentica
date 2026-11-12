@@ -157,9 +157,11 @@ in a PR that rewrites the goldens.
 - Struct and enum names print as declared: an imported `Point` prints `Point(x:
   1)`, not the linker's `@2::` identity, and a builtin type that a std module
   re-exports prints with its written name (`HTTP.Response(...)`, not
-  `HttpWire.Response(...)`; `written_names` in `vm/text.c`). A field-less struct
-  prints `Name()`; a nullary variant prints `Enum.Variant`, even when written
-  `Enum.Variant()`. The VM never looks a type up by its display name.
+  `HttpWire.Response(...)`; `written_names` in `vm/text.c`). A record or enum
+  of a std module prints with the alias the program imports the module with
+  (`HTTP.Download(...)`; the bytecode writer stores that name). A field-less
+  struct prints `Name()`; a nullary variant prints `Enum.Variant`, even when
+  written `Enum.Variant()`. The VM never looks a type up by its display name.
 - JSON text sorts object keys, uses short escapes (`\n`) and lowercase `\u007f`
   for DEL, keeps non-ASCII raw, prints floats per 2.2 and big integers in
   decimal. `JSON.encode` of a non-Json value keeps struct declaration order and
