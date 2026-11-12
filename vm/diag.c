@@ -14,6 +14,10 @@ static const char in_task[] = " in a task";
 static const char *const block_words[] = {"block", "lambda"};
 static const char cut_mark[] = "...";
 static const size_t stack_name_max = 256;
+/* The most prelude or native frames agc_error_location passes over before it gives up with an empty location: an
+   error is built on every failed call, and the walk charges no steps, so its cost must not grow with the stack. A
+   prelude function nests a few frames deep at most, so 16 is never reached by the user's call. */
+static const uint32_t location_skips = 16;
 
 typedef struct {
   const char *text;
@@ -25,9 +29,10 @@ typedef struct {
   size_t len;
 } name_view;
 
+/* skips: how many frames take_frame may pass over (prelude, native) before it stops with no frame. */
 typedef struct {
   const agc_program *program;
-  uint32_t error_span;
+  uint32_t error_span, skips;
 } frame_walk;
 
 /* Where a walk of the frames is: below frame `at` of `frames`, then in the segments below (agc_frame_segment, the outer
@@ -168,7 +173,8 @@ static bool same_place(const agc_program *p, uint32_t a, uint32_t b) {
 
 static bool take_frame(const frame_walk *w, frame_cursor *cursor, bool innermost, agc_stack_line *line) {
   const agc_program *p = w->program;
-  for (;;) {
+  for (uint32_t skipped = 0;; skipped++) {
+    if (skipped > w->skips) return false;
     if (cursor->at == 0) {
       if (!cursor->below) return false;
       *cursor = (frame_cursor){cursor->below->frames, cursor->below->count, cursor->below->below};
@@ -207,7 +213,7 @@ void agc_stack_capture(const agc_vm *vm, agc_outcome *outcome) {
   stack->shown = false;
   if (!vm->in_turn || !t || !t->frames || t->frame_count > t->frame_capacity) return;
   const agc_program *p = vm->rt->program;
-  frame_walk w = {p, outcome->span < p->span_count ? outcome->span : 0};
+  frame_walk w = {p, outcome->span < p->span_count ? outcome->span : 0, UINT32_MAX};
   agc_stack_line line;
   uint32_t entries = 0;
   frame_cursor cursor = {t->frames, t->frame_count, t->below};
@@ -233,11 +239,20 @@ void agc_stack_capture(const agc_vm *vm, agc_outcome *outcome) {
   stack->shown = true;
 }
 
+/* Writes N in decimal at the end of the buffer that ends at END, and returns where it starts. */
+static char *put_decimal(char *end, uint32_t n) {
+  do {
+    *--end = (char)('0' + n % 10);
+    n /= 10;
+  } while (n);
+  return end;
+}
+
 agc_string *agc_error_location(const agc_vm *vm) {
   const agc_task *t = vm->task;
   if (!vm->in_turn || !t || !t->frames || t->frame_count > t->frame_capacity) return vm->rt->empty_string;
   const agc_program *p = vm->rt->program;
-  frame_walk w = {p, 0};
+  frame_walk w = {p, 0, location_skips};
   frame_cursor cursor = {t->frames, t->frame_count, t->below};
   agc_stack_line line;
   /* Not innermost: that span is the failing instruction's, which agc_fail is given; here the frame's pc is the call
@@ -247,12 +262,17 @@ agc_string *agc_error_location(const agc_vm *vm) {
   if (span->source >= p->source_count) return vm->rt->empty_string;
   const agc_source *source = &p->sources[span->source];
   const agc_string *file = source->stored ? source->stored : source->name;
+  /* ":line:col" by hand, from the end: snprintf was most of the cost of building an error. */
   char numbers[24];
-  int n = snprintf(numbers, sizeof numbers, ":%u:%u", (unsigned)span->start_line, (unsigned)span->start_column);
-  size_t tail = n > 0 ? (size_t)n : 0;
+  char *end = numbers + sizeof numbers;
+  char *at = put_decimal(end, span->start_column);
+  *--at = ':';
+  at = put_decimal(at, span->start_line);
+  *--at = ':';
+  size_t tail = (size_t)(end - at);
   agc_string *text = agc_new_string(agc_size_add(file->bytes, tail), agc_size_add(file->chars, tail));
   memcpy(text->data, file->data, file->bytes);
-  memcpy(text->data + file->bytes, numbers, tail);
+  memcpy(text->data + file->bytes, at, tail);
   return text;
 }
 

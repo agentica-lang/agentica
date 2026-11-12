@@ -366,6 +366,8 @@ typedef struct {
      after (agc_error_struct): UINT32_MAX when the program has none (an older front end, hand-made bytecode), and every
      error of the run is then a String payload, as before the struct existed. */
   uint32_t error_struct;
+  /* "error", the default kind, made once by agc_vm_init: every error built in C shares it (agc_error_string). */
+  agc_string *error_kind;
   agc_string *cwd;
   bool no_files, no_turn_cost, deny_run, deny_net, deny_fs, deny_env, drop_uring_env, flush_expired;
   agc_style style;

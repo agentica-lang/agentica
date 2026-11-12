@@ -685,19 +685,20 @@ agc_value agc_error_value(const char *message) {
   return agc_result_value(false, agc_string_value(agc_make_string(message, n, n)));
 }
 
-static agc_string *ascii_string(agc_vm *vm, const char *text) {
-  size_t n = strlen(text);
-  return agc_small_string(vm, text, n, n);
+static agc_string *kind_string(agc_vm *vm, const char *kind) {
+  if (strcmp(kind, "error") == 0) return vm->rt->error_kind;
+  size_t n = strlen(kind);
+  return agc_small_string(vm, kind, n, n);
 }
 
-/* The empty map and none are the run's shared values (agc_vm_init and the loader made them before any thread), so an
-   error built on any scheduler allocates only its struct, its kind and its location. */
+/* The empty map, none and the kind "error" are the run's shared values (agc_vm_init and the loader made them before
+   any thread), so an error built on any scheduler allocates only its struct and its location. */
 agc_value agc_error_string(agc_vm *vm, const char *kind, agc_string *message) {
   const agc_runtime *rt = vm->rt;
   if (rt->error_struct == UINT32_MAX) return agc_result_value(false, agc_string_value(message));
   agc_value none = agc_optional_make(rt->program, false, agc_void());
   agc_struct *e = agc_new_struct(rt->error_struct, AGC_ERROR_FIELDS);
-  e->fields[AGC_ERROR_KIND] = agc_string_value(ascii_string(vm, kind));
+  e->fields[AGC_ERROR_KIND] = agc_string_value(kind_string(vm, kind));
   e->fields[AGC_ERROR_MESSAGE] = agc_string_value(message);
   e->fields[AGC_ERROR_CODE] = none;
   e->fields[AGC_ERROR_DETAILS] = rt->empty_map;

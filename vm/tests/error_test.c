@@ -123,6 +123,11 @@ static void test_location(void) {
   vm.task = t;
   vm.in_turn = true;
   check(agc_error_location(&vm), "std/x.agc:1:2");
+  agc_span kept_span = shapes->span_table[1];
+  shapes->span_table[1].start_line = UINT32_MAX;
+  shapes->span_table[1].start_column = 10;
+  check(agc_error_location(&vm), "std/x.agc:4294967295:10");
+  shapes->span_table[1] = kept_span;
   agc_struct *e = error_of(agc_error(&vm, "io.not_found", "no file"));
   assert(e->type == vm.rt->error_struct && e->n == AGC_ERROR_FIELDS);
   check(agc_as_string(&vm, e->fields[AGC_ERROR_KIND]), "io.not_found");
@@ -144,6 +149,18 @@ static void test_location(void) {
   assert(placed != e);
   check(agc_as_string(&vm, placed->fields[AGC_ERROR_LOCATION]), "std/x.agc:1:2");
   check(agc_as_string(&vm, e->fields[AGC_ERROR_LOCATION]), "");
+  /* The walk passes over a few prelude frames only: deeper, the location is empty rather than a long uncharged walk. */
+  agc_frame *deep = agc_alloc(40 * sizeof(agc_frame));
+  deep[0] = (agc_frame){.function = F_MAIN, .pc = 2};
+  for (uint32_t k = 1; k < 40; k++) deep[k] = (agc_frame){.function = F_PRELUDE, .pc = 3};
+  agc_frame *kept = t->frames;
+  t->frames = deep;
+  t->frame_capacity = t->frame_count = 17;
+  check(agc_error_location(&vm), "std/x.agc:1:2");
+  t->frame_capacity = t->frame_count = 40;
+  check(agc_error_location(&vm), "");
+  t->frames = kept;
+  t->frame_capacity = t->frame_count = 2;
   vm.in_turn = false;
   check(agc_error_location(&vm), "");
   check(agc_as_string(&vm, agc_as_struct(&vm, located)->fields[AGC_ERROR_LOCATION]), "std/x.agc:1:2");
