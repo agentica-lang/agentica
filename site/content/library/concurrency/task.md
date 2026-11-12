@@ -100,7 +100,7 @@ def main() -> Void
   task = Task.spawn(&parse, "0")
   case Task.await(task)
     ok(n) -> puts(n)
-    error(e) -> puts(e.start_with?("task crashed: RUNTIME-DIVISION-BY-ZERO"))
+    error(e) -> puts(e.message.start_with?("task crashed: RUNTIME-DIVISION-BY-ZERO"))
   end
 
   puts("still running")

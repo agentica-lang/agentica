@@ -205,8 +205,8 @@ def round_trip_bytes() -> Int
         ok(v) ->
           failed += expect("#{pair.name} #{bytes_text(bytes)} write", bytes_result_text(pair.write.call(v)), "ok(#{bytes_text(bytes)})")
           checked += 1
-        error(message) ->
-          failed += expect("#{pair.name} #{bytes_text(bytes)} error", message, "u64 at offset 0 does not fit in Int")
+        error(e) ->
+          failed += expect("#{pair.name} #{bytes_text(bytes)} error", e.message, "u64 at offset 0 does not fit in Int")
       end
     end
   end

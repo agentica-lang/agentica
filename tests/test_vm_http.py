@@ -65,7 +65,7 @@ end
 def show(r: Result[HTTP.Response]) -> Void
   case r
     ok(response) -> puts("#{response.status} #{short(response.body)} #{String.length(decoded(response.body))}")
-    error(message) -> puts(String.replace(message, "\\n", " | "))
+    error(e) -> puts(String.replace(e.message, "\\n", " | "))
   end
 end
 
@@ -185,7 +185,7 @@ def why(started: Result[HTTP.Connection]) -> String
     ok(conn) ->
       HTTP.finish(conn)
       return "started"
-    error(message) -> return message
+    error(e) -> return e.message
   end
 end
 
@@ -275,7 +275,7 @@ def why(started: Result[HTTP.Connection]) -> String
     ok(conn) ->
       HTTP.finish(conn)
       return "started"
-    error(message) -> return message
+    error(e) -> return e.message
   end
 end
 
@@ -578,7 +578,7 @@ def handle(request: HTTP.Request, body: HTTP.RequestBody) -> Result[HTTP.Respons
   if request.path == "/all"
     case HTTP.read_all(body, 8)
       ok(data) -> return answer(200, "all #{data.size}")
-      error(message) -> return answer(413, message)
+      error(e) -> return answer(413, e.message)
     end
   end
 
@@ -792,7 +792,7 @@ end
 def stream_answer(route: Fn[HTTP.Request, Result[HTTP.StreamResponse]], request: HTTP.Request, body: HTTP.RequestBody) -> Result[HTTP.Answer]
   case HTTP.read_all(body, 1024)
     ok(_) -> return ok(HTTP.Answer.Stream(try route.call(request)))
-    error(message) -> return ok(HTTP.body_refusal(message))
+    error(e) -> return ok(HTTP.body_refusal(e.message))
   end
 end
 
@@ -1654,7 +1654,7 @@ def count(body: HTTP.RequestBody) -> HTTP.Answer
   done = "ok"
   case Task.await(body.done)
     ok(_) -> done = "ok"
-    error(message) -> done = message
+    error(e) -> done = e.message
   end
   puts("counted #{total} #{done}")
   IO.flush()

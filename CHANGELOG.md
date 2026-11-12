@@ -8,6 +8,19 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- A failed Result holds an `Error` record, whose `location` says where it was
+  made; `error(e)` passes one on as a Result of another type (#671).
+
+### Changed
+
+- **Breaking:** `error(e)` in a `case` binds an `Error` (kind, message, code,
+  details, cause, location), not a String: use `e.message` for the text, and
+  `error(e) if e.message == "x"` for `error("x") ->`; `"#{e}"` and `puts(e)`
+  still give the message, but `e.inspect` gives `error("boom")` (was
+  `"boom"`) and `JSON.encode(e)` gives the record (was `"boom"`).
+
 ## [0.31.0-alpha.1] - 2026-11-12
 
 ### Added

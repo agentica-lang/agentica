@@ -22,7 +22,7 @@ end
 def text_reply(result: Result[String]) -> Reply
   case result
     ok(text) -> return Reply(success: true, message: "", text: text, pairs: [])
-    error(message) -> return Reply(success: false, message: message, text: "", pairs: [])
+    error(e) -> return Reply(success: false, message: e.message, text: "", pairs: [])
   end
 end
 
@@ -36,7 +36,7 @@ def run_case(c: Case) -> Reply
     "decode_www_form" ->
       case URI.decode_www_form(c.text)
         ok(pairs) -> return Reply(success: true, message: "", text: "", pairs: pairs)
-        error(message) -> return Reply(success: false, message: message, text: "", pairs: [])
+        error(e) -> return Reply(success: false, message: e.message, text: "", pairs: [])
       end
     _ -> return Reply(success: false, message: "unknown op #{c.op}", text: "", pairs: [])
   end

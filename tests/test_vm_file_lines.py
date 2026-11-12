@@ -260,8 +260,8 @@ def main() -> Void
       ok(line) ->
         count += 1
         last = line
-      error(message) ->
-        if message.start_with?("filesystem: end of file")
+      error(e) ->
+        if e.message.start_with?("filesystem: end of file")
           break
         end
         puts("error #{count}")

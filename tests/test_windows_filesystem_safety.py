@@ -27,8 +27,8 @@ REMOVE_PROGRAM = """\
 def main() -> Void
   case Path.remove(System.args()[0], 5000)
     ok(_) -> puts("true")
-    error(message) ->
-      IO.warn(message)
+    error(e) ->
+      IO.warn(e.message)
       puts("false")
   end
 end

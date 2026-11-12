@@ -110,7 +110,7 @@ export BUILTIN_STRUCTS = [
   "FileInfo", "HttpWire.Header", "HttpWire.Request", "HttpWire.Response", "HttpWire.ClientOptions",
   "HttpWire.ServerOptions", "ProcessOutput", "LogRegistry.Event", "HttpWire.Head", "HttpWire.Chunk", "HttpWire.Reply",
   "HttpWire.Job", "HttpWire.ResponseHead", "StructMember", "Codec.Info", "TlsClientOptions", "TlsServerOptions",
-  "TaskDown", "Process.Options",
+  "TaskDown", "Process.Options", "Error",
 ]
 
 ## The builtin structs that another one has a field of: using the key also puts these in the table.

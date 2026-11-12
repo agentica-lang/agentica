@@ -1,6 +1,7 @@
 program 0:1:1-32:1 entry=7 globals=0
 source 0 "extern-module.agc" chars=629
 struct s0 "Point" ["x","y"]
+struct s1 "Error" ["kind","message","code","details","cause","location"] types=[String, String, Optional(Int), Map(String, String), Optional(Struct(Error)), String]
 enum "Shape" v0="Dot"/0 v1="Circle"/1 v2="Rect"/2
 enum "Optional" v3="None"/0 v4="Some"/1
 fn0 "add" params=2 captures=0 slots=4 @ 0:16:3-17:1

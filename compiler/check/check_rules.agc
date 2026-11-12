@@ -283,9 +283,23 @@ def check_ok(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
   ok(State.Out(st: out.st, type: T.Type.Result(out.type)))
 end
 
-# error(message) needs the Result type from its context, except while a block is probed for its result type.
+# error(message) builds a new Error and error(e) gives the Error e; either needs the Result type from its context,
+# except while a block is probed for its result type.
 def check_error(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
-  message = try State.expr(cx, st, site.args[0], T.Type.String)
+  message = try State.expr(cx, st, site.args[0], T.Type.Unknown)
+  given = message.type
+  if !T.is?(given, "String") and !T.error?(given) and !T.unknown?(given)
+    return error(
+      State.fail(
+        cx,
+        message.st,
+        "CHECK-TYPE-MISMATCH",
+        "expected String or Error, found #{T.to_text(given)}",
+        Ast.expr_span(site.args[0]),
+      ),
+    )
+  end
+
   expected = site.expected
   span = site.node.span
   if !T.unknown?(expected) and !T.is?(expected, "Result")

@@ -23,8 +23,8 @@ def backed_up(feed: Feed) -> Void
   while more
     case feed.body.send(piece, 5000)
       ok(_) -> sent += 1
-      error(message) ->
-        failure = message
+      error(e) ->
+        failure = e.message
         more = false
     end
   end
@@ -55,7 +55,7 @@ end
 def stream_answer(route: Fn[HTTP.Request, Result[HTTP.StreamResponse]], request: HTTP.Request, body: HTTP.RequestBody) -> Result[HTTP.Answer]
   case HTTP.read_all(body, 1024)
     ok(_) -> return ok(HTTP.Answer.Stream(try route.call(request)))
-    error(message) -> return ok(HTTP.body_refusal(message))
+    error(e) -> return ok(HTTP.body_refusal(e.message))
   end
 end
 

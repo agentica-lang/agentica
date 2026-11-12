@@ -1,0 +1,30 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 371,
+  "stdout": [
+    "try: kind=error message=empty input code=none details={} at error-record.agc:6:10",
+    "to_i: kind=error message=cannot convert \"x1\" to Int code=none details={} at error-record.agc:8:3",
+    "file: kind=error code=none at error-record.agc:61:8",
+    "to_result: kind=error message=nothing there code=none details={} at error-record.agc:68:8",
+    "relabel: kind=error message=empty input code=none details={} at error-record.agc:6:10",
+    "wrapped: kind=config message=cannot start code=some(7) details={\"step\": \"load\"} at error-record.agc:33:28",
+    "  cause: kind=error message=empty input code=none details={} at error-record.agc:6:10",
+    "error(\"cannot start\", kind: \"config\", code: 7, details: {\"step\": \"load\"}, cause: error(\"empty input\"))",
+    "cannot start",
+    "cannot start",
+    "cannot start",
+    "error(\"cannot start\", kind: \"config\", code: 7, details: {\"step\": \"load\"}, cause: error(\"empty input\"))",
+    "[error(\"cannot start\", kind: \"config\", code: 7, details: {\"step\": \"load\"}, cause: error(\"empty input\"))]",
+    "ok(error(\"cannot start\", kind: \"config\", code: 7, details: {\"step\": \"load\"}, cause: error(\"empty input\")))",
+    "true",
+    "false",
+    "true",
+    "{\"kind\":\"config\",\"message\":\"cannot start\",\"code\":7,\"details\":{\"step\":\"load\"},\"cause\":{\"kind\":\"error\",\"message\":\"empty input\",\"code\":null,\"details\":{},\"cause\":null,\"location\":\"error-record.agc:6:10\"},\"location\":\"\"}",
+    "true",
+    "true",
+    "true",
+    ""
+  ],
+  "stderr": []
+}

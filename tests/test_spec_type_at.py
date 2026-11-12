@@ -488,7 +488,7 @@ def measure(pair: Pair, scale: Int, parsed: Result[Int]) -> Int
   end
   case parsed
     ok(value) -> total += value
-    error(reason) -> total += reason.size
+    error(reason) -> total += reason.message.size
   end
   for i in 1..3
     total += i
@@ -562,7 +562,7 @@ LOCAL_CASES = [
     ("left", "Int", "pattern", "left, right", "left * right"),
     ("right", "Int", "pattern", "right)", "right + scale"),
     ("value", "Int", "pattern", "value)", "value\n"),
-    ("reason", "String", "pattern", "reason)", "reason.size"),
+    ("reason", "Error", "pattern", "reason)", "reason.message"),
     ("total", "Int", "local", "total = 0", "total |>"),
     ("i", "Int", "loop", "i in 1..3", "i\n  end"),
     ("note", "String", "local", 'note = "big"', "note)"),

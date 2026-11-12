@@ -81,8 +81,8 @@ constants, declarations and types. Builtin methods and `to_s`: `builtins.md`.
   JSON-encodable.
 - `Bytes`: immutable byte string (`references/bytes.md`); `Bytes` is a reserved
   name.
-- `Result[T]`: `ok(value)` or `error(message)` (the message is a String); one
-  type argument.
+- `Result[T]`: `ok(value)` or `error(...)` holding an `Error` record
+  (`language-blocks-results.md`); one type argument.
 - `Optional[T]`: `some(value)` or `none`, for a value that may be missing
   (`language-blocks-results.md`).
 - `Range`: `a..b` (includes `b`) or `a...b` (excludes it) over `Int`; prints

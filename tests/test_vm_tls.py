@@ -189,7 +189,7 @@ end
 def show(r: Result[HTTP.Response]) -> String
   case r
     ok(response) -> return String.from_bytes(response.body).unwrap!
-    error(message) -> return message
+    error(e) -> return e.message
   end
 end
 
@@ -240,7 +240,7 @@ end
 def show(r: Result[HTTP.Response]) -> String
   case r
     ok(response) -> return String.from_bytes(response.body).unwrap!
-    error(message) -> return message
+    error(e) -> return e.message
   end
 end
 
@@ -306,7 +306,7 @@ end
 def show(dir: String, r: Result[Socket]) -> String
   case r
     ok(_) -> return "ok"
-    error(message) -> return String.replace(message, dir, "<tls>")
+    error(e) -> return String.replace(e.message, dir, "<tls>")
   end
 end
 

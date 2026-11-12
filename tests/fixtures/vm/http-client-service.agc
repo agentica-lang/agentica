@@ -11,7 +11,7 @@ def serve(listener: Listener) -> String
         if line == ""
           _ = TCP.send(socket, "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok", 5000)
         end
-      error(message) -> ended = message
+      error(e) -> ended = e.message
     end
   end
   TCP.close(socket)
@@ -29,7 +29,7 @@ end
 def get(pool: HTTP.Client, url: String) -> String
   case HTTP.get(pool, url)
     ok(response) -> return "#{response.status} #{HTTP.text(response.body, response.headers).unwrap!}"
-    error(message) -> return message
+    error(e) -> return e.message
   end
 end
 

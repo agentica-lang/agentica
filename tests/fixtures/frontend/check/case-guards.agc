@@ -22,7 +22,7 @@ def results(r: Result[Option]) -> Int
   case r
     ok(Option.Some(n)) -> return n
     ok(_) -> return 0
-    error("boom") -> return -1
+    error(e) if e.message == "boom" -> return -1
     error(_) if true -> return -2
     error(_) -> return -3
   end

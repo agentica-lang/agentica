@@ -67,11 +67,23 @@ A lambda is a block written as a value, for a function value of its own:
 ok(value: T) -> Result[T]
 ok() -> Result[Void]
 error(message: String) -> Result[T]
+error(e: Error) -> Result[T]
 ```
 
 - An expected `Result[T]` checks the payload against T, even for `ok([])`.
-- `Error` is a reserved type name (the coming builtin error record): a
-  `struct Error` is `CHECK-REDEFINED-NAME`.
+- A failed Result holds an `Error`, a builtin record: `kind: String`
+  (`"error"` by default), `message: String`, `code: Optional[Int]`,
+  `details: Map[String, String]`, `cause: Optional[Error]` and `location:
+  String` (`path:line:col` of the `error(...)` or builtin call, `""` when
+  unknown). `error(e) ->` binds it: use `e.message` where a String goes
+  (`"x" + e` and `e.include?(...)` are errors); `"#{e}"`, `puts(e)` and
+  `e.to_s` give the message. `error(e)` with an Error passes it on unchanged,
+  as a Result of another type. A text literal in the pattern
+  (`error("timeout") ->`) is `CHECK-PATTERN-TYPE`: write
+  `error(e) if e.message == "timeout"`.
+- `e.inspect` and a printed failed Result show `error("text")`, plus the
+  fields that are not their default (never `location`). `==` on Errors skips
+  `location`. `Error` is a reserved type name (`CHECK-REDEFINED-NAME`).
 - `error("bad")` needs an expected Result type from an annotation, an existing
   binding, a return, an argument, a field or a typed container element; `r =
   error("bad")` alone is `CHECK-RESULT-TYPE`. Lists and maps infer from the
@@ -92,7 +104,7 @@ error(message: String) -> Result[T]
   it, `.unwrap!`, or write `_ = f(x)`.
 - `ok(false)` and `ok(nil)` are successes. Results nest and hold lists, maps and
   structs; they have no fields or indexing. `r == ok(1)` and `r == error("x")`
-  compare the tag and the payload or message.
+  compare the tag and the payload or the Error.
 - Non-bang conversions (`s.to_i`) share the bang forms' syntax and 64-bit
   bounds but return an error on bad text; other runtime errors are not
   converted. `"x".to_i` is a Result, not `0`.
@@ -146,7 +158,7 @@ where the caller needs another type:
 def handler(call: Call) -> Reply
   case body(call)
     ok(reply) -> reply
-    error(message) -> fail(call, message)
+    error(e) -> fail(call, e.message)
   end
 end
 ```
