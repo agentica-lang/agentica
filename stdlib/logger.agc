@@ -6,8 +6,8 @@
 ## synchronously, in the task that logs, so a line is written when the call returns. A handler error is the error of
 ## the task that logged. The registry lives in the VM and belongs to one run.
 ##
-## `Logger.Level` and `Logger.Event` are the builtin types `LogRegistry.Level` and `LogRegistry.Event`: a printed value
-## shows those names, and the signatures below and a diagnostic show `Logger.Level` and `Logger.Event`.
+## `Logger.Level` and `Logger.Event` are the builtin types `LogRegistry.Level` and `LogRegistry.Event`. The signatures
+## below, a diagnostic, `help` and any printed value show `Logger.Level` and `Logger.Event`, as written.
 
 import UTC from "std/utc"
 

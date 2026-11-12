@@ -44,7 +44,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - **Breaking:** the HTTP types are `HTTP.Request`, `HTTP.Response`,
   `HTTP.Header`, `HTTP.ClientOptions`, `HTTP.ServerOptions`, `HTTP.Client` and
   `HTTP.Server` of `std/http`; the old names are unknown, with a help. A value
-  prints as `HttpWire.Response(...)` and `<HttpWire.Client>`.
+  prints as `HTTP.Response(...)` and `<HTTP.Client>`.
 - **Breaking:** the child channel of `Process.spawn_channel` is a pipe per
   direction on every system: a child that is not Agentica reads fd 3 and writes
   fd 4 (`AGENTICA_CHANNEL=3,4`) on Linux and macOS too.
@@ -55,6 +55,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - Diagnostics, `help`, `doc`, `outline` and `type-at` write the HTTP and
   logger types as a program does (`HTTP.Request`, `Logger.Event`), and
   `symbol` and `refs` find them by those names.
+- A printed logger value shows the names a program writes:
+  `Logger.Level.Info` and `Logger.Event(...)`, not `LogRegistry.Level.Info`.
 
 ## [0.30.1] - 2026-11-11
 

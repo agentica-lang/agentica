@@ -1,8 +1,8 @@
 ## The types the checker works with, as an enum.
 
 ## The builtin types that a std/ module re-exports, by their builtin name, with the name a program writes: the alias
-## that the module's docs import it as (STD_ONLY_IMPORTS of the catalog), then the member. Messages, `help`, `doc` and
-## the queries print the written name; a printed value keeps the builtin name.
+## that the module's docs import it as (STD_ONLY_IMPORTS of the catalog), then the member. Messages, `help`, `doc`,
+## the queries and a printed value (vm/text.c) show the written name.
 export REEXPORTED_TYPES: Map[String, String] = {
   "HttpWire.Client": "HTTP.Client",
   "HttpWire.ClientOptions": "HTTP.ClientOptions",

@@ -27,7 +27,7 @@ Logger.time_text(ms: Int) -> String
   `Logger.Event` is a record: `level: Logger.Level`, `message: String`,
   `fields: Map[String, String]`, `time_ms: Int`, `task: Int` (main is 1).
   `import {Event, Level} from "std/logger"` binds them by name. A printed value
-  shows the builtin names `LogRegistry.Level` and `LogRegistry.Event`.
+  shows these names: `Logger.Level.Info`, `Logger.Event(...)`.
 - The function for the last level is `err`: `Logger.error` is
   `CHECK-IMPORT-NAME` because `error` is reserved. `fields` is optional:
   `Logger.info("done", {"path": "/items"})`.

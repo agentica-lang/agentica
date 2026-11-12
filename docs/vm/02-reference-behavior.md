@@ -153,11 +153,13 @@ in a PR that rewrites the goldens.
   in insertion order, `Name(f: v, ...)` in declaration order, `Enum.Variant` or
   `Enum.Variant(a, b)`, `ok(v)`, `ok()` for Void, `error("msg")`, and the handle
   forms `<Json>`, `<Fn>`, `<Task>`, `<Socket>`, `<Listener>`,
-  `<HttpWire.Client>`, `<FileHandle>`, `<Process>`.
+  `<HTTP.Client>`, `<FileHandle>`, `<Process>`.
 - Struct and enum names print as declared: an imported `Point` prints `Point(x:
-  1)`, not the linker's `@2::` identity. A field-less struct prints `Name()`; a
-  nullary variant prints `Enum.Variant`, even when written `Enum.Variant()`. The
-  VM never looks a type up by its display name.
+  1)`, not the linker's `@2::` identity, and a builtin type that a std module
+  re-exports prints with its written name (`HTTP.Response(...)`, not
+  `HttpWire.Response(...)`; `written_names` in `vm/text.c`). A field-less struct
+  prints `Name()`; a nullary variant prints `Enum.Variant`, even when written
+  `Enum.Variant()`. The VM never looks a type up by its display name.
 - JSON text sorts object keys, uses short escapes (`\n`) and lowercase `\u007f`
   for DEL, keeps non-ASCII raw, prints floats per 2.2 and big integers in
   decimal. `JSON.encode` of a non-Json value keeps struct declaration order and
