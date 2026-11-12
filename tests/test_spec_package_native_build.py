@@ -694,7 +694,35 @@ def test_a_program_under_test_under_a_deny_flag_builds_nothing_and_is_refused(ws
         '      """\n      RUNTIME-NATIVE-DENIED\n      """\n', encoding="utf-8")
     tested = agentica(ws, "--deny-native", "--json", "test")
     assert (tested.code, tested.stderr) == (0, ""), tested.stdout
+    assert json.loads(tested.stdout)["passed"] == 1
     assert builds(ws) == []
+
+
+@NATIVE_CALLS
+@host_only(WINDOWS, "the stand-in compiler is a shell script")
+def test_a_scenario_that_sets_path_to_another_compiler_does_not_reuse_the_program_built_with_the_first(ws):
+    """With no CC, PATH finds the compiler of a native module, so `BDD.given_program` and the bytecode cache key on it:
+    the scenario whose PATH finds a compiler that cannot answer builds again and fails, instead of starting the
+    program the first scenario built with the real one."""
+    tool("cc")
+    project(ws)
+    fake = ws.base / "fake-cc"
+    fake.mkdir()
+    (fake / "cc").write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
+    (fake / "cc").chmod(0o755)
+    path = json.dumps(f"{fake}{os.pathsep}{os.environ['PATH']}")[1:-1]
+    (ws.project / "specs").mkdir()
+    (ws.project / "specs" / "start.feature").write_text(
+        'Feature: Start\n\n  Scenario: the real compiler\n    Given the Agentica program "../main.agc"\n'
+        '    Then I receive the line "42" within 20000 milliseconds\n\n'
+        '  Scenario: a compiler that cannot answer\n'
+        f'    Given the environment variable "PATH" is "{path}"\n'
+        '    And the Agentica program "../main.agc"\n'
+        '    Then the program exits with code 1 within 20000 milliseconds\n    And stderr includes:\n'
+        '      """\n      PKG-NATIVE-BUILD\n      """\n', encoding="utf-8")
+    tested = agentica(ws, "--json", "test", CC=None)
+    assert (tested.code, tested.stderr) == (0, ""), tested.stdout
+    assert json.loads(tested.stdout)["passed"] == 2
 
 
 def test_a_lock_row_that_says_member_outside_its_workspace_never_builds(ws):

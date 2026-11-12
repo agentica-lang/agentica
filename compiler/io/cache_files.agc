@@ -20,8 +20,9 @@ BUILD_VARIABLE = "AGENTICA_BUILD_DIR"
 export IO_TIMEOUT_MS = 10_000
 export PIECE = 1_048_576
 
-# The variables that change what the build of a native module makes (io/native_build.agc).
-COMPILER_VARIABLES = ["CC", "CPATH", "C_INCLUDE_PATH", "CPLUS_INCLUDE_PATH", "LIBRARY_PATH"]
+# The variables that change what the build of a native module makes (io/native_build.agc), PATH included: it finds the
+# compiler when CC names no path.
+COMPILER_VARIABLES = ["CC", "CPATH", "C_INCLUDE_PATH", "CPLUS_INCLUDE_PATH", "LIBRARY_PATH", "PATH"]
 
 # The files that decide which package or library an import reads, next to the manifest.
 MANIFEST_FILE = "agentica.toml"
@@ -234,7 +235,7 @@ end
 export def digest(data: Bytes) -> String = OpenSSL.Digest.sha256_hexdigest(data)
 
 # What, besides the files an import reads, changes what a build makes of the root: the environment that places
-# libraries and packages, the C compiler a native module builds with and its search variables (CC, CPATH and the
+# libraries and packages, the C compiler a native module builds with and its search variables (CC, PATH, CPATH and the
 # others of io/native_build.agc), and the project (the manifest the build finds and its lock).
 def inputs_digest(settings: Env.Settings, project: Project.Project) -> Result[String]
   workspace = settings.workspace

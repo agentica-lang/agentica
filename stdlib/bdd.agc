@@ -7,8 +7,8 @@
 VM_ENV_NAMES = ["AGENTICA_CHANNEL", "AGENTICA_VM_METRICS", "AGENTICA_VM_METRICS_FILE", "UV_USE_IO_URING"]
 
 # The variables that change what the front end builds, as the bytecode cache keys them (`inputs_digest` in
-# compiler/io/cache_files.agc: where packages and libraries are found, and the C compiler of a native module). The
-# others it reads (AGENTICA_BUILD_DIR, TMPDIR) only say where it keeps files.
+# compiler/io/cache_files.agc: where packages and libraries are found, and the C compiler of a native module, which
+# PATH finds when CC names no path). The others it reads (AGENTICA_BUILD_DIR, TMPDIR) only say where it keeps files.
 COMPILE_ENV = [
   "AGENTICA_PATH",
   "XDG_DATA_HOME",
@@ -20,6 +20,7 @@ COMPILE_ENV = [
   "C_INCLUDE_PATH",
   "CPLUS_INCLUDE_PATH",
   "LIBRARY_PATH",
+  "PATH",
 ]
 
 struct Settings
@@ -542,7 +543,13 @@ def compiled(settings: Settings, file: String, env: Map[String, String], options
 
   own = try claimed(target)
   args = settings.agentica.drop(1).concat(["compile", real, "-o", own])
-  started = try Process.spawn_captured(settings.agentica[0], args, options)
+  spawned = Process.spawn_captured(settings.agentica[0], args, options)
+  if !spawned.ok?
+    _ = Path.remove(own, 5000)
+    return error(spawned.message)
+  end
+
+  started = spawned.unwrap!
   code = Process.wait(started, idle_ms())
   Process.close(started)
   if !code.ok? or code.unwrap! != 0
