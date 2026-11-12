@@ -637,7 +637,10 @@ def program(session: Session, verb: String, rest: List[String]) -> Int
 
   plan = cache_plan(session, verb, source)
   case BytecodeCache.lookup(plan, session.settings)
-    BytecodeCache.Lookup.Hit(bytes) -> start(session, rest, bytes)
+    BytecodeCache.Lookup.Hit(bytes) ->
+      return save(rest[2], bytes) if verb == "compile"
+
+      start(session, rest, bytes)
     BytecodeCache.Lookup.Miss -> read(session, verb, rest, plan)
   end
 end
@@ -649,11 +652,14 @@ def check_settings(session: Session, file: String) -> Env.Settings
   settings.with(test_file: Discover.test_file?(file))
 end
 
-# The bytecode cache (io/bytecode_cache.agc) serves a run: not `compile`, which is the explicit way to build a file,
-# nor a listing of the tree or the IR, and not `--no-cache`. `check` never gets here.
+# The bytecode cache (io/bytecode_cache.agc) serves a run and `compile` (whose bytes are the ones a fresh compile
+# writes): not a listing of the tree or the IR, and not `--no-cache`. `check` never gets here. A `compile` under a
+# --deny-* flag does not use it: it refuses a native module that needs a build (`builder_settings`), where a run's
+# entry names the library by its bare name.
 def cache_plan(session: Session, verb: String, source: String) -> BytecodeCache.Plan
   options = session.options
-  wanted = verb != "compile" and !options.no_cache and !options.dump and !options.dump_ir
+  denied_compile = verb == "compile" and options.deny.size > 0
+  wanted = !options.no_cache and !options.dump and !options.dump_ir and !denied_compile
   BytecodeCache.plan(session.settings, source, wanted)
 end
 

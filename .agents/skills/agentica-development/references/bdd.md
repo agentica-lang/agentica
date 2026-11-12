@@ -186,6 +186,13 @@ the programming skill or the site).
   for a late timeout only after an `after` record. Every failing `bdd.agc`
   helper takes `ctx` so it can run the hooks; `abort` is for the failures
   before a context exists.
+- `start` runs `agentica run -- BYTECODE` with the `--source-root` the front
+  end would give: `compiled` builds it once per run in the run folder
+  (`programs` in the settings line), named by the SHA-256 of the real path and
+  the root file's text, with `agentica compile` (bytecode cache) to a name of
+  its own and a rename. A compile that fails leaves `NAME.failed`; that, an
+  empty `programs` or any I/O error (`--deny-fs`) starts through
+  `agentica FILE.agc` as before, so the front end prints the diagnostic.
 - `std/bdd/gherkin`: the English Gherkin subset with stable codes and the first
   error; a `Span` is file, line and columns, no offset. Table rows and `<name>`
   substitution split and join once; a `push` per line is quadratic in the line

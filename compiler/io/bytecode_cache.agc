@@ -1,7 +1,7 @@
-## The bytecode cache of `agentica FILE.agc` and `agentica test` (issue #375): the compiled program of a root file is
-## kept in `_build/bytecode/`, with `_build/` in the folder of the project (the nearest agentica.toml) or, with none,
-## beside the root file. `AGENTICA_BUILD_DIR` names another folder in place of `_build/`. A run whose sources did not
-## change starts without the front end.
+## The bytecode cache of `agentica FILE.agc`, `agentica compile` and `agentica test` (issue #375): the compiled program
+## of a root file is kept in `_build/bytecode/`, with `_build/` in the folder of the project (the nearest
+## agentica.toml) or, with none, beside the root file. `AGENTICA_BUILD_DIR` names another folder in place of `_build/`.
+## A run whose sources did not change starts without the front end.
 ##
 ## An entry is one file: a head `AGCCACHE NNNNNNNN\n` with the byte length of the text that follows, that text, then
 ## the bytes of the program, the same ones `agentica compile` writes. The text has one line for each part of the key

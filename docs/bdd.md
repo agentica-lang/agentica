@@ -402,9 +402,11 @@ agentica test [PATH...] [--steps FILE]
   record. The runner sends a step only after the previous one ended.
 
 - **Direction:** runner to child
-  - **Record:** settings, once (`base`, `agentica`, `seeded`, `seed`)
-  - **Meaning:** Where programs resolve and run, how to start `agentica`, and
-    what to pass on
+  - **Record:** settings, once (`base`, `agentica`, `seeded`, `seed`,
+    `programs`)
+  - **Meaning:** Where programs resolve and run, how to start `agentica`,
+    what to pass on, and the run folder where `BDD.given_program` compiles
+    each program once per run (`""` for none)
 
 - **Direction:** runner to child
   - **Record:** `{"index":2,"definition":14,...}`

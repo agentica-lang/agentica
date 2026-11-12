@@ -11,6 +11,9 @@ struct Settings
   agentica: List[String]
   seeded: Bool
   seed: Int
+  # The folder of the run where the programs under test are compiled once for every scenario (`compiled`), or "" for
+  # none: each start then goes through the front end.
+  programs: String
 end
 
 struct StepLine
@@ -468,10 +471,16 @@ def start(ctx: Context, path: String) -> Context
   if settings.seeded
     flags = flags.concat(["--seed", settings.seed.to_s])
   end
+  options = Process.Options(chdir: settings.base, env: ctx.scenario.env)
   # No --max-steps: the program runs as `agentica FILE.agc` does. A runaway program ends with its scenario, whose
   # deadline and `within N milliseconds` steps are the limits.
-  args = settings.agentica.drop(1).concat(flags).concat([file]).concat(ctx.scenario.arguments)
-  options = Process.Options(chdir: settings.base, env: ctx.scenario.env)
+  launch = settings.agentica.drop(1).concat(flags)
+  args = launch.concat([file])
+  bytecode = compiled(settings, file, options)
+  if bytecode.ok?
+    args = ["run"].concat(launch).concat(source_root(file)).concat(["--", bytecode.unwrap!])
+  end
+  args = args.concat(ctx.scenario.arguments)
   spawned = Process.spawn_captured(settings.agentica[0], args, options)
   if not spawned.ok?
     if spawned.message == "process: executable is unavailable"
@@ -492,6 +501,60 @@ def start(ctx: Context, path: String) -> Context
       closing: ctx.scenario.closing,
     ),
   )
+end
+
+# The bytecode of the program `file`, compiled once per run for every scenario that starts it: `agentica compile` (with
+# the bytecode cache, so an unchanged program is not compiled again) writes a name of its own, which is then renamed to
+# the name of the program and its text. Scenarios that start at once may each compile it; the rename keeps one. The
+# name counts the text of `file` only, so a step that rewrites the program gets a new compile, but a change to a file
+# it imports during the run does not. An error means: start through the front end, as `agentica FILE.agc` does. That
+# is the way for a program that does not compile (the front end prints its diagnostic), under `--deny-fs` (no file
+# here can be looked at) and when the runner gave no folder.
+def compiled(settings: Settings, file: String, options: Process.Options) -> Result[String]
+  return error("no folder for compiled programs") if settings.programs == ""
+
+  real = try Path.real(file)
+  text = try File.read_text(real, 5000)
+  key = OpenSSL.Digest.sha256_hexdigest("#{real}\n#{text}".bytes)
+  target = try Path.join([settings.programs, "#{key}.agcb"])
+  return ok(target) if File.stat(target, 5000).ok?
+
+  failed = "#{target}.failed"
+  return error("the program does not compile") if File.stat(failed, 5000).ok?
+
+  own = "#{target}.#{System.pid()}"
+  started = try Process.spawn_captured(settings.agentica[0], ["compile", real, "-o", own], options)
+  code = Process.wait(started, idle_ms())
+  Process.close(started)
+  if !code.ok? or code.unwrap! != 0
+    _ = Path.remove(own, 5000)
+    marked = File.open(failed, "create_private", 5000)
+    if marked.ok?
+      _ = File.close(marked.unwrap!, 5000)
+    end
+    return error("the program does not compile")
+  end
+
+  moved = Path.rename(own, target, 5000)
+  return ok(own) if !moved.ok?
+
+  ok(target)
+end
+
+# `--source-root` for the bytecode of `file`, as the front end gives it for an absolute path: the folder of its real
+# path, so a runtime error names the file as `agentica FILE.agc` would. None when the path cannot be resolved.
+def source_root(file: String) -> List[String]
+  real = Path.real(file)
+  return [] if !real.ok?
+
+  path = real.unwrap!
+  parts = path.split("/")
+  tail = parts[parts.size - 1].length
+  return [] if tail == path.length
+
+  return ["--source-root", "/"] if tail + 1 == path.length
+
+  ["--source-root", path.slice(0, path.length - tail - 1)]
 end
 
 # Environment and arguments are read when the program starts, so a later call would silently change nothing.
