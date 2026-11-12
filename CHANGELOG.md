@@ -67,7 +67,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - **Breaking:** `error(e)` in a `case` binds an `Error` (kind, message, code,
   details, cause, location), not a String: use `e.message` for the text, and
   `error(e) if e.message == "x"` for `error("x") ->`; `"#{e}"` and `puts(e)`
-  still give the message.
+  still give the message, but `e.inspect` gives `error("boom")` (was
+  `"boom"`) and `JSON.encode(e)` gives the record (was `"boom"`).
 
 ### Fixed
 

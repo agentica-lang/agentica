@@ -776,8 +776,9 @@ builtin __lazy_write_lines forms=1
   __lazy_write_lines(lazy: Lazy[String], path: String, timeout_ms: Int) -> Result[Void] shape=(Lazy(String), String, Int) -> Result(Void) rule=Plain impl="__lazy_write_lines" effects=["filesystem"] desc="Internal to the prelude: a step or terminal of Lazy (vm/lazy.c)."
 builtin __lazy_zlib forms=1
   __lazy_zlib(lazy: Lazy[Bytes], kind: Int, level: Int, max_bytes: Int) -> Lazy[Bytes] shape=(Lazy(Bytes), Int, Int, Int) -> Lazy(Bytes) rule=Plain impl="__lazy_zlib.bytes" effects=[] desc="Internal to the prelude: a step or terminal of Lazy (vm/lazy.c)."
-builtin error forms=1
-  error(message_or_error: String) -> Result[T] shape=(String) -> Result(Var(T)) rule=Error impl="error" effects=[] desc="A failed Result: a new Error with the message, or the Error given; needs an expected Result type."
+builtin error forms=2
+  error(message: String) -> Result[T] shape=(String) -> Result(Var(T)) rule=Error impl="error" effects=[] desc="A failed Result holding a new Error with the message; needs an expected Result type."
+  error(error: Error) -> Result[T] shape=(Struct(Error)) -> Result(Var(T)) rule=Error impl="error" effects=[] desc="A failed Result holding the Error given, unchanged; needs an expected Result type."
 builtin gets forms=1
   gets() -> Result[String] shape=() -> Result(String) rule=Plain impl="IO.gets" effects=["stdin"] desc="Read a line as a Result; EOF is an error value."
 builtin gets! forms=1

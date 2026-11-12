@@ -30,9 +30,10 @@ An unknown method is `CHECK-UNKNOWN-METHOD`.
 text, an `Error` as its message, and any other data value in its `inspect`
 form (`[1, 2]`, `ok(3)`, `Item(name: "a")`). An `Error` inspects as the
 `error(...)` call that builds it, without the fields that hold their default
-and without `location`, both alone and as the payload of a failed Result. Inside a list, a `Json` shows as `<Json>`. Functions, tasks,
-handles, `C.Pointer` values and resources have no `to_s`, so printing or
-interpolating one is `CHECK-TYPE-MISMATCH`. Unlike Ruby, `nil.to_s` is `"nil"`.
+and without `location`, both alone and as the payload of a failed Result.
+Inside a list, a `Json` shows as `<Json>`. Functions, tasks, handles,
+`C.Pointer` values and resources have no `to_s`, so printing or interpolating
+one is `CHECK-TYPE-MISMATCH`. Unlike Ruby, `nil.to_s` is `"nil"`.
 `x.inspect` keeps a string's quotes; it is for display, not valid source.
 
 Values are immutable: a method never changes its receiver, so `xs.push(2)`

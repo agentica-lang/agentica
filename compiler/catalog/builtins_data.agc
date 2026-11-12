@@ -5632,13 +5632,25 @@ ROWS_53: List[Model.Builtin] = [
 ROWS_54: List[Model.Builtin] = [
   Model.Builtin(
     name: "error",
-    parameters: [Model.Named(name: "message_or_error", type: Types.Type.String)],
+    parameters: [Model.Named(name: "message", type: Types.Type.String)],
     result: Types.Type.Result(Types.Type.Var("T")),
     rule: Model.Rule.Error,
     implementation: "error",
     effects: [],
-    description: "A failed Result: a new Error with the message, or the Error given; needs an expected Result type.",
-    alternatives: [],
+    description: "A failed Result holding a new Error with the message; needs an expected Result type.",
+    # One arity: check_error reads the type of the argument to tell the two forms apart.
+    alternatives: [
+      Model.Builtin(
+        name: "error",
+        parameters: [Model.Named(name: "error", type: Types.Type.Struct("Error", []))],
+        result: Types.Type.Result(Types.Type.Var("T")),
+        rule: Model.Rule.Error,
+        implementation: "error",
+        effects: [],
+        description: "A failed Result holding the Error given, unchanged; needs an expected Result type.",
+        alternatives: [],
+      ),
+    ],
   ),
   Model.Builtin(
     name: "gets",

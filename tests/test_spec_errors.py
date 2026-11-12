@@ -53,6 +53,7 @@ REJECTED = [
     ("  case r\n    ok(n) -> puts(n)\n    error(msg) -> puts(shout(msg))\n  end", "CHECK-TYPE-MISMATCH", "msg"),
     ("  case r\n    ok(n) -> puts(n)\n    error(e) -> puts(e.include?(\"x\"))\n  end", "CHECK-UNKNOWN-METHOD",
      "e.include?(\"x\")"),
+    ("  case r\n    ok(n) -> puts(n)\n    error(e) -> puts(e.size)\n  end", "CHECK-UNKNOWN-FIELD", "e.size"),
     ("  case r\n    ok(n) -> puts(n)\n    error(e) -> puts(e == \"empty\")\n  end", "CHECK-TYPE-MISMATCH",
      "\"empty\""),
     # A text literal in the slot of error(...) no longer matches the message.
