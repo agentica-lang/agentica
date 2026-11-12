@@ -1,0 +1,14 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 65,
+  "stdout": [
+    "[1,2]",
+    "set 3",
+    "clear",
+    "[\"h2\"]",
+    "true",
+    ""
+  ],
+  "stderr": []
+}

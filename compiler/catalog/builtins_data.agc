@@ -382,6 +382,24 @@ export MOVED_TYPES: Map[String, String] = {
   "HttpServerOptions": "HttpWire.ServerOptions",
 }
 
+## The nested names of the builtin types (and of the Profile functions) that keep their old name for now: a program
+## may write either, File.Info or FileInfo, and the linker turns the nested name into the old one, which the checker,
+## the lowering and the VM know (#1182). A value still prints with the old name until its family moves.
+export NESTED_NAMES: Map[String, String] = {
+  "File.Handle": "FileHandle",
+  "File.Info": "FileInfo",
+  "JSON.Field": "JsonField",
+  "JSON.Value": "Json",
+  "Process.Output": "ProcessOutput",
+  "System.Profile": "Profile",
+  "TCP.Listener": "Listener",
+  "TCP.Socket": "Socket",
+  "TLS.ClientOptions": "TlsClientOptions",
+  "TLS.Context": "TlsContext",
+  "TLS.ServerOptions": "TlsServerOptions",
+  "Test.Case": "TestCase",
+}
+
 ROWS_1: List[Model.Builtin] = [
   Model.Builtin(
     name: "Address.send",

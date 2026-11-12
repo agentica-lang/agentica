@@ -6,7 +6,7 @@
 ## declares it.
 
 import Builtins from "../catalog/builtins"
-import {BARE_NAMES, ENUMS, ENTRIES, FAMILY_MEMBERS, RECORDS, RESERVED, STD_ONLY} from "../catalog/builtins"
+import {BARE_NAMES, ENUMS, ENTRIES, FAMILY_MEMBERS, NESTED, RECORDS, RESERVED, STD_ONLY} from "../catalog/builtins"
 import Diag from "../diagnostics/diagnostic"
 import Base from "../syntax/parse_base"
 import Source from "../syntax/source"
@@ -53,6 +53,9 @@ export def resolve(cx: Context, name: String, want: Want, span: Source.Span, hin
     return qualified(cx, parts[0], parts[1], want, span, hint)
   elsif parts.size == 3 and family?(cx, parts[0])
     return member_function(cx, parts, want, span)
+  elsif parts.size == 3 and nested(cx, parts[0], parts[1]) != ""
+    # System.Profile.steps is Profile.steps.
+    return ok("#{nested(cx, parts[0], parts[1])}.#{parts[2]}")
   elsif parts.size == 3 and aliased_block(cx, parts[0], parts[1]) != ""
     return imported(cx, cx.modules[aliased_block(cx, parts[0], parts[1])], parts[2], want, span)
   end
@@ -76,6 +79,14 @@ end
 ## True when the name is a builtin family (OpenSSL) in this file: its members are written Family.Member. An import
 ## alias of the same name wins, though a family name is reserved, so only std/ internals could take one.
 export def family?(cx: Context, name: String) -> Bool = FAMILY_MEMBERS.has_key?(name) and !cx.me.aliases.has_key?(name)
+
+## The old builtin name of the nested name Alias.Member (NESTED_NAMES: File.Info is FileInfo), or "" when it is none or
+## the file has an import alias of that name.
+export def nested(cx: Context, alias: String, member: String) -> String
+  return "" if cx.me.aliases.has_key?(alias)
+
+  NESTED.get("#{alias}.#{member}", "")
+end
 
 ## True when the file declares an enum with this name.
 export def local_enum?(cx: Context, name: String) -> Bool
@@ -211,6 +222,8 @@ def qualified(cx: Context, alias: String, member: String, want: Want, span: Sour
     return imported(cx, cx.modules[target], member, want, span)
   elsif STD_ONLY.has_key?(alias) and !Resolve.embedded?(cx.me.key)
     return error(std_only_failure(cx, alias, member, want, span))
+  elsif nested(cx, alias, member) != ""
+    return ok(nested(cx, alias, member))
   elsif family?(cx, alias)
     return family_member(cx, alias, member, want, span)
   elsif function_wanted?(want) or std_record?(alias, member, want) or builtin_type?(alias, member, want)

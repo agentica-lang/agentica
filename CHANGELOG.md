@@ -32,6 +32,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   that passes lambdas (`LINT-LAMBDA-CHAIN`).
 - `s.edit_distance(other)` (Levenshtein, in characters; `edit_distance(other,
   max)` stops at `max + 1`) and `s.jaro_winkler(other)` (from 0.0 to 1.0).
+- The nested builtin names are accepted next to the old ones: `File.Info`,
+  `File.Handle`, `JSON.Value`, `JSON.Field`, `Process.Output`, `TCP.Socket`,
+  `TCP.Listener`, `TLS.Context`, `TLS.ClientOptions`, `TLS.ServerOptions`,
+  `Test.Case` and `System.Profile` (#1182).
 
 ### Changed
 
