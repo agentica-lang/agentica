@@ -472,8 +472,8 @@ a call with parentheses takes a `do` block. The `()` stays after `|>`
 function called by its plain name in an `if`, `elsif`, guard or case arm guard
 condition: there `ready do` is `PARSE-UNEXPECTED-TOKEN` (the `do` reads as a
 mistake for the end of the line), and no call takes a `{ ... }` block. Inside
-parentheses a condition or a `while`, `for` or `case` head takes any block:
-`if (xs.any? { |x| x > 0 })`.
+parentheses, brackets, a map literal or `#{...}`, a condition or a `while`,
+`for` or `case` head takes any block: `if (xs.any? { |x| x > 0 })`.
 A lambda, `->(x) { x + 1 }`, is a block that no call takes; one without
 parameters has no parentheses (`-> { 42 }`), and its body is always in braces.
 `->() { ... }`, `->x { ... }`, `->(x) do ... end`, `lambda { ... }`,

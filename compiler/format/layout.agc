@@ -62,8 +62,9 @@ export struct Context
   width: Int
   # The type aliases of the file whose target is Void (void_aliases): a def with such a result keeps its last `return`.
   void_aliases: List[String] = []
-  # Inside the condition of an if, an elsif or a guard, where a plain name takes a block only after `()`.
-  condition: Bool = false
+  # The start offsets of the calls by plain name at the top level of the condition being printed (head_doc): there a
+  # call keeps the `()` before its `do` block, since the parser refuses `name do` in a condition.
+  head_calls: List[Int] = []
 end
 
 ## An `extern` block, copied whole: its first and last lines and offsets, and the comments that the attachment gave
@@ -915,35 +916,69 @@ def optional_do(c: Context, header: Ast.Expr) -> String
   ""
 end
 
+# Whether the last of `args` is a block in braces.
+def braced?(args: List[Ast.Expr]) -> Bool
+  return false if args.size == 0
+
+  case args[args.size - 1]
+    Ast.Expr.BlockLit(lit) -> lit.braces
+    _ -> false
+  end
+end
+
 # The expression of a head: the condition of an if, an elsif or a guard (`condition`), or the value of a while, for or
 # case head. It goes in parentheses when its top level holds a block that the parser refuses there (blocked?); inside
 # them every block is allowed again.
 def head_doc(c: Context, expr: Ast.Expr, condition: Bool) -> Docs.Doc
   return Docs.Doc.Concat([text("("), expr_doc(c, expr, true), text(")")]) if blocked?(expr, condition)
 
-  return expr_doc(c.with(condition: true), expr, false) if condition
+  return expr_doc(c, expr, false) if !condition
 
-  expr_doc(c, expr, false)
+  calls: List[Int] = []
+  for node in top_level(expr)
+    case node
+      Ast.Expr.Call(call) if !call.piped and !call.name.include?(".") -> calls = calls.push(call.span.start.offset)
+      _ -> calls = calls
+    end
+  end
+
+  expr_doc(c.with(head_calls: calls), expr, false)
 end
 
-# Whether the top level of a head (outside brackets and block bodies) holds a block that the parser refuses there.
-def blocked?(expr: Ast.Expr, condition: Bool) -> Bool
+# The nodes at the top level of a head, where the parser's head rules hold: the expression and, down chains,
+# operators, `try` and the left side of a pipe, its parts. Arguments, brackets, interpolations and block bodies
+# allow every block again (Base.with_blocks and with_block_body of the parser), so the walk stops there.
+def top_level(expr: Ast.Expr) -> List[Ast.Expr]
   case expr
     Ast.Expr.Call(node) ->
-      bare = !node.parenthesized and !node.piped and !node.name.include?(".")
-      return true if refused_block?(node.args, condition, bare)
+      return [expr].concat(top_level(node.args[0])) if node.piped and node.args.size > 0
 
-      node.piped and node.args.size > 0 and blocked?(node.args[0], condition)
-    Ast.Expr.MethodCall(node) -> refused_block?(node.args, condition, false) or blocked?(node.target, condition)
-    Ast.Expr.FieldAccess(node) -> blocked?(node.target, condition)
-    Ast.Expr.Invoke(node) -> blocked?(node.target, condition)
-    Ast.Expr.Update(node) -> blocked?(node.target, condition)
-    Ast.Expr.Index(node) -> blocked?(node.target, condition)
-    Ast.Expr.Try(node) -> blocked?(node.operand, condition)
-    Ast.Expr.Unary(node) -> blocked?(node.operand, condition)
-    Ast.Expr.Binary(node) -> blocked?(node.left, condition) or blocked?(node.right, condition)
-    _ -> false
+      [expr]
+    Ast.Expr.MethodCall(node) -> [expr].concat(top_level(node.target))
+    Ast.Expr.FieldAccess(node) -> [expr].concat(top_level(node.target))
+    Ast.Expr.Invoke(node) -> [expr].concat(top_level(node.target))
+    Ast.Expr.Update(node) -> [expr].concat(top_level(node.target))
+    Ast.Expr.Index(node) -> [expr].concat(top_level(node.target))
+    Ast.Expr.Try(node) -> [expr].concat(top_level(node.operand))
+    Ast.Expr.Unary(node) -> [expr].concat(top_level(node.operand))
+    Ast.Expr.Binary(node) -> [expr].concat(top_level(node.left)).concat(top_level(node.right))
+    _ -> [expr]
   end
+end
+
+# Whether the top level of a head holds a block that the parser refuses there.
+def blocked?(expr: Ast.Expr, condition: Bool) -> Bool
+  for node in top_level(expr)
+    case node
+      Ast.Expr.Call(call) ->
+        bare = !call.parenthesized and !call.piped and !call.name.include?(".")
+        return true if refused_block?(call.args, condition, bare)
+      Ast.Expr.MethodCall(call) -> return true if refused_block?(call.args, condition, false)
+      _ -> next
+    end
+  end
+
+  false
 end
 
 # Whether the last of `args` is a block that a head refuses: any block in a while, for or case head; in a condition a
@@ -963,7 +998,15 @@ def arm_doc(c: Context, arm: Ast.CaseArm) -> Docs.Doc
   patterns = Ast.alternatives(arm.pattern)
   head = patterns.map do |pattern: Ast.Pattern| source(c, tight(c, Ast.pattern_span(pattern))) end.join(", ")
   case arm.guard
-    some(guard) -> head = "#{head} if #{source(c, tight(c, Ast.expr_span(guard)))}"
+    some(guard) ->
+      # A piped guard starts at the value piped into it (value_start). The span leaves out parentheses around the
+      # guard, which a block that a condition refuses needs.
+      written = source(c, tight(c, Ast.expr_span(guard)).with(start: value_start(guard)))
+      if blocked?(guard, true)
+        written = "(#{written})"
+      end
+
+      head = "#{head} if #{written}"
     none -> head = head
   end
 
@@ -1526,9 +1569,10 @@ def call_doc_keyed(c: Context, node: Ast.Call, key: String) -> Docs.Doc
   end
 
   # The empty `()` before a block goes, except where the parser needs it: a pipe stage, a block word and a plain name
-  # in a condition (bare_block_name? of the parser).
+  # at the top level of a condition (bare_block_name? of the parser). A block in braces never follows `()`.
   plain = !node.name.include?(".")
-  kept = node.piped or (plain and (c.condition or Ast.block_word?(node.name)))
+  kept = node.piped or (plain and (c.head_calls.include?(node.span.start.offset) or Ast.block_word?(node.name)))
+  kept = kept and !braced?(node.args)
   if args.size == 0 and block.size > 0
     return Docs.Doc.Concat([text(call_name(c, node))].concat(block)) if !kept
 

@@ -320,8 +320,10 @@ class TestSpecParser:
                                     "    _ -> puts(\"other\")\n  end\n"
                                     "  if (xs.any? { |x| x > 0 }) and (ready do |v| v > 0 end)\n"
                                     "    puts(\"if\")\n  end\n"
-                                    "  for y in (xs.map { |x| x * 3 })\n    puts(y)\n  end\n"),
-                   ["arm", "if", "3", "6"]),
+                                    "  for y in (xs.map { |x| x * 3 })\n    puts(y)\n  end\n"
+                                    "  if \"#{xs.any? { |x| x > 0 }}\" == \"true\" and {1: ready do |v| v > 0 end}[1]\n"
+                                    "    puts(\"inside\")\n  end\n"),
+                   ["arm", "if", "3", "6", "inside"]),
         ])
 
     def test_ruby_headers_one_line_case_arms_and_module_calls_without_parentheses(self):

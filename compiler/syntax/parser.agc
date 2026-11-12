@@ -1009,13 +1009,12 @@ def parse_brace_block(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
   literal = key == "string" or key == "integer" or key == "float" or key == "true" or key == "false" or key == "nil"
   if literal and Base.kind_at(e, cursor + 1) == "colon"
     # `puts {"a": 1}`: a map literal written as an argument without the parentheses of the call.
-    name = e.tokens[pos - 1].lexeme
     return error(
       Base.unexpected_help(
         e,
         pos,
-        "a map literal after #{name} needs the parentheses of the call",
-        "write #{name}({...}); a block in braces holds statements",
+        "a map literal as an argument needs the parentheses of the call",
+        "write the call as name({...}) or recv.name({...}); a block in braces holds statements",
       ),
     )
   end
@@ -1085,7 +1084,7 @@ def parse_named_arguments(e: Base.Env, pos: Int, ids: Int) -> Result[NamedArgsAt
   while looping
     after = try Base.expect(e, cursor, "name", "a field name", false)
     colon = try Base.expect(e, after, "colon", "\":\"", false)
-    value = try parse_expression(e, colon, next_id)
+    value = try parse_expression(Base.with_blocks(e, true), colon, next_id)
     nodes = nodes.push(
       Ast.NamedArg(
         id: value.ids,
@@ -1172,8 +1171,9 @@ def parse_list_literal(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
   expr_at(node, close, elements.ids)
 end
 
+# A key: value pair; inside the braces every block is allowed, as in any brackets.
 def parse_map_entry(e: Base.Env, pos: Int, ids: Int, block_form: String) -> Result[MapEntryAt]
-  key = try parse_expression(e, pos, ids)
+  key = try parse_expression(Base.with_blocks(e, true), pos, ids)
   if e.tokens[key.pos].kind != "colon" and block_form != ""
     return error(
       Base.unexpected_help(
@@ -1186,7 +1186,7 @@ def parse_map_entry(e: Base.Env, pos: Int, ids: Int, block_form: String) -> Resu
   end
 
   colon = try Base.expect(e, key.pos, "colon", "\":\"", false)
-  value = try parse_expression(e, colon, key.ids)
+  value = try parse_expression(Base.with_blocks(e, true), colon, key.ids)
   node = Ast.MapEntry(id: value.ids, key: key.node, value: value.node, span: Base.span_from(e, pos, value.pos))
   ok(MapEntryAt(node: node, pos: value.pos, ids: value.ids + 1))
 end
@@ -1225,7 +1225,7 @@ def parse_map_literal(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
 end
 
 # The parts of "a#{x}b" arrive as one string token, then expressions and string tokens in turn; empty text parts are
-# dropped.
+# dropped. Inside #{...} every block is allowed, as in brackets.
 def parse_interpolation(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
   parts: List[Ast.Part] = []
   opening = Base.token_text(e.tokens[pos])
@@ -1235,8 +1235,9 @@ def parse_interpolation(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
 
   cursor = pos + 1
   next_id = ids
+  inner = Base.with_blocks(e, true)
   while true
-    parsed = try parse_expression(e, cursor, next_id)
+    parsed = try parse_expression(inner, cursor, next_id)
     parts = parts.push(Ast.Part.Code(parsed.node))
     next_id = parsed.ids
     piece = e.tokens[parsed.pos]
