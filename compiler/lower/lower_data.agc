@@ -352,7 +352,7 @@ def member_items(
   at = from
   while at < to
     fx = State.emit_const(fx, scratch, Ir.Imm.Text(fields[at].name), span)
-    fx = State.emit_const(fx, scratch + 1, Ir.Imm.Text(Types.to_text(fields[at].type)), span)
+    fx = State.emit_const(fx, scratch + 1, Ir.Imm.Text(Types.builtin_text(fields[at].type)), span)
     fx = State.emit_at(fx, "struct", [start + at - from, scratch, index], span)
     at += 1
   end

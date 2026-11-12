@@ -12,6 +12,7 @@ import CatalogJson from "../catalog/catalog_json"
 import Diag from "../diagnostics/diagnostic"
 import Problems from "../diagnostics/problem"
 import Model from "../docs/doc_model"
+import Origins from "../docs/doc_origins"
 import Signature from "../docs/signature"
 import Declarations from "../modules/declarations"
 import Env from "../modules/link_env"
@@ -93,7 +94,7 @@ end
 export def declared_at(module: Linker.LinkedModule, name_span: Source.Span) -> Optional[Match]
   at = name_span.start.offset
   file = Linker.home_key(module)
-  for item in Model.declared(module.parsed, module.text)
+  for item in items_of(module)
     return some(item_match(file, item)) if item.name_span.start.offset == at
 
     case item.detail
@@ -105,6 +106,35 @@ export def declared_at(module: Linker.LinkedModule, name_span: Source.Span) -> O
       Model.Detail.Enum(variants) ->
         for variant in variants
           return some(variant_match(file, item, variant)) if variant.name_span.start.offset == at
+        end
+
+      Model.Detail.Function(_, _) -> next
+      Model.Detail.Module(_) -> next
+      Model.Detail.Plain -> next
+    end
+  end
+
+  none
+end
+
+## The field or variant `name` of `module` whose name is written at `name_span`, as `answer` lists it, or `none`. The
+## members of a builtin type that a std/ module re-exports all take the place of the type's name, so `name` tells them
+## apart.
+export def member_at(module: Linker.LinkedModule, name_span: Source.Span, name: String) -> Optional[Match]
+  at = name_span.start.offset
+  file = Linker.home_key(module)
+  for item in items_of(module)
+    case item.detail
+      Model.Detail.Struct(fields) ->
+        for field in fields
+          return some(field_match(file, item, field)) if field.name_span.start.offset == at and field.name == name
+        end
+
+      Model.Detail.Enum(variants) ->
+        for variant in variants
+          if variant.name_span.start.offset == at and variant.name == name
+            return some(variant_match(file, item, variant))
+          end
         end
 
       Model.Detail.Function(_, _) -> next
@@ -143,7 +173,7 @@ end
 def declared(modules: List[Linker.LinkedModule], aliases: Map[String, List[String]], name: String) -> List[Match]
   found: List[Match] = []
   for module in modules
-    for item in Model.declared(module.parsed, module.text)
+    for item in items_of(module)
       for written in written_names(modules, module, item.exported, aliases)
         found = found.concat(of_item(Linker.home_key(module), item, written, name))
       end
@@ -151,6 +181,12 @@ def declared(modules: List[Linker.LinkedModule], aliases: Map[String, List[Strin
   end
 
   found
+end
+
+# The declarations of a module, with the builtin types that a std/ module re-exports (`export HttpWire.Request`) at
+# their `export` line.
+def items_of(module: Linker.LinkedModule) -> List[Model.Item]
+  Model.declared_through(module.parsed, module.text, Origins.builtin_items(module.key, module.parsed))
 end
 
 # The beginnings a name of a declaration can have: none (the name as the file declares it), and for an exported one the

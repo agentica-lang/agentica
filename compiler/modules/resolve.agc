@@ -11,6 +11,7 @@ import Diag from "../diagnostics/diagnostic"
 import Base from "../syntax/parse_base"
 import Source from "../syntax/source"
 import Suggest from "../syntax/suggest"
+import T from "../syntax/types"
 import Declarations from "declarations"
 import ImportHelp from "import_help"
 import Env from "link_env"
@@ -209,7 +210,7 @@ def qualified(cx: Context, alias: String, member: String, want: Want, span: Sour
   if target != ""
     return imported(cx, cx.modules[target], member, want, span)
   elsif STD_ONLY.has_key?(alias) and !Resolve.embedded?(cx.me.key)
-    return error(std_only_failure(cx, alias, member, span))
+    return error(std_only_failure(cx, alias, member, want, span))
   elsif family?(cx, alias)
     return family_member(cx, alias, member, want, span)
   elsif function_wanted?(want) or std_record?(alias, member, want) or builtin_type?(alias, member, want)
@@ -318,9 +319,29 @@ def function_wanted?(want: Want) -> Bool
   end
 end
 
-def std_only_failure(cx: Context, alias: String, member: String, span: Source.Span) -> String
-  help = Failure.hint(Modules.std_only_help(alias))
-  Failure.fail_at(site(cx, span), "CHECK-UNKNOWN-NAME", "unknown function \"#{alias}.#{member}\"", help)
+# Family.member of a std-only family outside std/: CHECK-UNKNOWN-NAME named for what the position wants, with the std
+# module to import, and the written name when std/ re-exports the member (HttpWire.Client is HTTP.Client).
+def std_only_failure(cx: Context, alias: String, member: String, want: Want, span: Source.Span) -> String
+  name = "#{alias}.#{member}"
+  help = Modules.std_only_help(alias)
+  if T.REEXPORTED_TYPES.has_key?(name)
+    wrapper = STD_ONLY[alias]
+    help = (
+      "#{alias} is internal to #{wrapper[0]}; write #{T.REEXPORTED_TYPES[name]}, with import #{wrapper[1]} from " +
+      "\"#{wrapper[0]}\""
+    )
+  end
+
+  Failure.fail_at(site(cx, span), "CHECK-UNKNOWN-NAME", "unknown #{wanted_word(want)} \"#{name}\"", Failure.hint(help))
+end
+
+# What a position wants, as a message says it: "type", "enum" or "function".
+def wanted_word(want: Want) -> String
+  case want
+    Want.Type -> "type"
+    Want.Enum -> "enum"
+    Want.Function -> "function"
+  end
 end
 
 def alias_help(alias: String, member: String, hint: Bool) -> String

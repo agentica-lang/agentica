@@ -6,7 +6,7 @@ import os
 
 import pytest
 
-from tests.agentica_test import cli, run, vm_environment
+from tests.agentica_test import ROOT, cli, run, vm_environment
 from tests.span_support import end, items_by_name, problem, start
 
 # Every kind of declaration, exported or not, an import list and an import that does not exist: `outline` only parses,
@@ -145,6 +145,26 @@ def test_an_embedded_std_module_is_named_with_its_extension(tmp_path):
     assert answer("std/queue.agc", cwd=tmp_path) == report
     for name in ["std/nothing", "std/../x", "std/prelude/lazy"]:
         problem(outline("--json", "outline", name, cwd=tmp_path), "QUERY-USAGE", 2)
+
+
+def test_a_builtin_type_that_std_re_exports_is_an_item_written_as_a_program_writes_it(tmp_path):
+    # `export HttpWire.Request` of std/http is the struct Request at that line; its fields and the signatures of the
+    # module write the re-exported types as HTTP.Header and HTTP.ClientOptions, never by their builtin names.
+    report = answer("std/http", cwd=tmp_path)
+    items = items_by_name(report)
+    request = items["Request"]
+    assert (request["kind"], request["exported"]) == ("struct", True)
+    std = (ROOT / "stdlib" / "http.agc").read_text(encoding="utf-8").split("\n")
+    assert start(request["name_span"])[0] == std.index("export HttpWire.Request") + 1
+    fields = {field["name"]: field["type"] for field in request["fields"]}
+    assert fields["headers"] == "List[HTTP.Header]"
+    signature = items["client"]["signature"]
+    assert signature == "client(options: HTTP.ClientOptions = HTTP.ClientOptions()) -> Result[HTTP.Client]"
+    # A default that is a string keeps its text, even when it looks like a builtin name.
+    (tmp_path / "label.agc").write_text('export def label(name: String = "HttpWire.Client") -> String = name\n',
+                                        encoding="utf-8")
+    label = items_by_name(answer("label.agc", cwd=tmp_path))["label"]
+    assert label["signature"] == 'label(name: String = "HttpWire.Client") -> String'
 
 
 def test_a_lex_or_parse_error_exits_1_with_its_code(tmp_path):

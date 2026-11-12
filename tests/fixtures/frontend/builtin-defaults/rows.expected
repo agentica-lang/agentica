@@ -52,20 +52,20 @@ Row.wrong_list takes=nyyn block=nppn required=1
   problem=the default of a is not a Map[String, Int]
 Row.variant_ok takes=nyyn block=nppn required=1
   arity=1 to 2 method=0 to 1
-  signature=Row.variant_ok(x: Int, level: LogRegistry.Level = LogRegistry.Level.Info) -> Void
+  signature=Row.variant_ok(x: Int, level: Logger.Level = LogRegistry.Level.Info) -> Void
   problem=
 Row.variant_missing takes=nyyn block=nppn required=1
   arity=1 to 2 method=0 to 1
-  signature=Row.variant_missing(x: Int, level: LogRegistry.Level = LogRegistry.Level.Nope) -> Void
-  problem=the default of level is not a LogRegistry.Level
+  signature=Row.variant_missing(x: Int, level: Logger.Level = LogRegistry.Level.Nope) -> Void
+  problem=the default of level is not a Logger.Level
 Row.variant_payload takes=nyyn block=nppn required=1
   arity=1 to 2 method=0 to 1
   signature=Row.variant_payload(x: Int, done: Await[Int] = Await.Done) -> Void
   problem=the default of done is not an Await[Int]
 Row.variant_other_enum takes=nyyn block=nppn required=1
   arity=1 to 2 method=0 to 1
-  signature=Row.variant_other_enum(x: Int, level: LogRegistry.Level = Await.TimedOut) -> Void
-  problem=the default of level is not a LogRegistry.Level
+  signature=Row.variant_other_enum(x: Int, level: Logger.Level = Await.TimedOut) -> Void
+  problem=the default of level is not a Logger.Level
 Row.variant_unknown_enum takes=nyyn block=nppn required=1
   arity=1 to 2 method=0 to 1
   signature=Row.variant_unknown_enum(x: Int, l: Nope = Nope.A) -> Void

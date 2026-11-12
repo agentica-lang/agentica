@@ -449,6 +449,27 @@ class TestModuleRules:
             self.assert_rejected(checked, "CHECK-UNKNOWN-NAME", line=line)
         assert results[3][1] is None
 
+    def test_a_type_mismatch_writes_a_re_exported_builtin_type_as_a_program_does(self):
+        """The expected and actual types of a mismatch write HttpWire.Client as HTTP.Client and LogRegistry.Level as
+        Logger.Level, so a user struct HttpWire stays apart from the builtin HTTP.Header. HttpWire.Client written as a
+        type is an unknown type whose help names HTTP.Client."""
+        http = 'import HTTP from "std/http"\n\n'
+        mismatches = [
+            (http + "def main() -> Void\n  c = HTTP.client().unwrap!\n  x: Int = c\nend\n\n", "Int", "HTTP.Client"),
+            ('import Logger from "std/logger"\n\ndef main() -> Void\n  x: Int = Logger.level()\nend\n\n', "Int",
+             "Logger.Level"),
+            (http + "struct HttpWire\n  name: String\nend\n\ndef main() -> Void\n"
+             '  puts(HTTP.header_values([HttpWire(name: "a")], "a"))\nend\n\n', "HTTP.Header", "HttpWire"),
+        ]
+        results = self.checks([({"root.agc": text}, "root.agc", None) for text, _expected, _actual in mismatches])
+        for (text, expected, actual), checked in zip(mismatches, results):
+            problem = self.assert_rejected(checked, "CHECK-TYPE-MISMATCH")
+            assert (problem["expected"], problem["actual"]) == (expected, actual), text
+        self.assert_cases([
+            ({"root.agc": "def f(x: HttpWire.Client) -> Void\nend\n\n" + MAIN}, "CHECK-UNKNOWN-NAME",
+             ((1, 10), (1, 25)), None, True),
+        ])
+
     def test_std_http_exports_its_records_and_handles_and_the_old_names_are_unknown_with_a_help(self):
         """std/http re-exports the builtin HttpWire records and handles as HTTP.Request, HTTP.Response, HTTP.Header,
         HTTP.ClientOptions, HTTP.ServerOptions, HTTP.Client and HTTP.Server (import HTTP, or import {Request, ...}).

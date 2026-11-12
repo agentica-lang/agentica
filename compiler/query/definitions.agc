@@ -1,18 +1,23 @@
 ## Where the declaration of an expression is (docs/grammar/06b-builtins.md): the function a call names, the
 ## variant of an enum constructor, the struct of a construction, the field of a field access, a constant. The
 ## names of the linked program are unique (`@N::name` for a file that is not the root), so one scan of its declarations
-## finds the declaration. A builtin has no declaration here, so it has no definition. A local is not in the
+## finds the declaration. A builtin has no declaration here, so it has no definition, except a builtin type that a std/
+## module re-exports (`export HttpWire.Request`) and its fields and variants: they are defined at that `export` line,
+## as `symbol` lists them. A local is not in the
 ## declarations: `of_local` makes its definition from the binding that query/locals.agc found. A definition carries
 ## the `##` doc and the signature of its declaration, read from the file as the parser gave it
 ## (`LinkedModule.parsed`), because the linker drops the doc of an `export`.
 
 import State from "../check/check_state"
 import Model from "../docs/doc_model"
+import Origins from "../docs/doc_origins"
 import Signature from "../docs/signature"
+import Declarations from "../modules/declarations"
 import Linker from "../modules/linker"
 import Ast from "../syntax/ast"
 import Source from "../syntax/source"
 import T from "../syntax/types"
+import {REEXPORTED_TYPES} from "../syntax/types"
 import Locals from "locals"
 
 ## A declaration found: its `kind` (`function`, `struct`, `enum`, `variant`, `field` or `constant`; `parameter`,
@@ -46,6 +51,13 @@ struct Described
   exported: Bool
 end
 
+# A builtin type that the std/ module `module` re-exports: its `item` is the catalog's, placed at the `export` line
+# (docs/doc_origins.agc).
+struct Reexported
+  module: Linker.LinkedModule
+  item: Model.Item
+end
+
 ## The definition of what `expr` names, or `none`. `types` is `Checked.types`: the struct of a field access is the type
 ## of its target. `resolved` is `Checked.resolved`: a method call that the checker resolved to a call of an `Fn` field
 ## names that field; any other method call is a builtin and has no definition.
@@ -63,11 +75,11 @@ export def of_expr(
     # from its site (query/type_at.agc).
     Ast.Expr.TypeName(node) -> top_level(modules, node.name)
     Ast.Expr.ConstRef(node) -> top_level(modules, node.name)
-    Ast.Expr.EnumConstructor(node) -> variant(find(modules, node.enum_name), node.variant_name)
-    Ast.Expr.FieldAccess(node) -> field(find(modules, T.name(target_type(types, node.target))), node.name)
+    Ast.Expr.EnumConstructor(node) -> of_variant(modules, node.enum_name, node.variant_name)
+    Ast.Expr.FieldAccess(node) -> of_field(modules, T.name(target_type(types, node.target)), node.name)
     Ast.Expr.MethodCall(node) ->
       if State.field_call?(resolved, node.id)
-        return field(find(modules, T.name(target_type(types, node.target))), node.name)
+        return of_field(modules, T.name(target_type(types, node.target)), node.name)
       end
 
       none
@@ -76,17 +88,24 @@ export def of_expr(
 end
 
 ## The definition of the top-level declaration with the linked name `name` (a function, struct, enum, alias or
-## constant), or `none` for a builtin, which no file declares.
+## constant), or `none` for a builtin, which no file declares. A builtin type that a std/ module of the program
+## re-exports is defined at its `export` line.
 export def of_name(modules: List[Linker.LinkedModule], name: String) -> Optional[Definition] = top_level(modules, name)
 
 ## The definition of the field `name` of the struct with the linked name `owner`, or `none`.
 export def of_field(modules: List[Linker.LinkedModule], owner: String, name: String) -> Optional[Definition]
-  field(find(modules, owner), name)
+  found = find(modules, owner)
+  return field(found, name) if found.some?
+
+  reexported_member(modules, owner, name)
 end
 
 ## The definition of the variant `name` of the enum with the linked name `owner`, or `none`.
 export def of_variant(modules: List[Linker.LinkedModule], owner: String, name: String) -> Optional[Definition]
-  variant(find(modules, owner), name)
+  found = find(modules, owner)
+  return variant(found, name) if found.some?
+
+  reexported_member(modules, owner, name)
 end
 
 ## The definition of a local: the binding site, with `kind` `parameter`, `local`, `loop` or `pattern` (see
@@ -115,8 +134,88 @@ end
 def top_level(modules: List[Linker.LinkedModule], name: String) -> Optional[Definition]
   case find(modules, name)
     some(found) -> some(whole(found))
-    none -> none
+    none ->
+      case reexported(modules, name)
+        some(placed) ->
+          item = placed.item
+          some(exported(item.kind, item.name, placed.module.file, item.span, item.name_span, item.doc, item.signature))
+        none -> none
+      end
   end
+end
+
+# The std/ module of `modules` that re-exports the builtin type `name` (`HttpWire.Request`, a key of REEXPORTED_TYPES)
+# and the type's item there, or `none`.
+def reexported(modules: List[Linker.LinkedModule], name: String) -> Optional[Reexported]
+  return none if !REEXPORTED_TYPES.has_key?(name)
+
+  for module in modules
+    for decl in Declarations.reexports_of(module.parsed.declarations)
+      next if "#{decl.alias}.#{decl.name}" != name
+
+      at = decl.name_span.start.offset
+      for item in Model.declared_through(module.parsed, module.text, Origins.builtin_items(module.key, module.parsed))
+        return some(Reexported(module: module, item: item)) if item.name_span.start.offset == at
+      end
+    end
+  end
+
+  none
+end
+
+# The field or variant `name` of the builtin type `owner` that a std/ module re-exports, at the `export` line of the
+# type; `none` when the program re-exports no such type or it has no such member.
+def reexported_member(modules: List[Linker.LinkedModule], owner: String, name: String) -> Optional[Definition]
+  case reexported(modules, owner)
+    none -> none
+    some(placed) ->
+      file = placed.module.file
+      case placed.item.detail
+        Model.Detail.Struct(fields) ->
+          for field in fields
+            if field.name == name
+              signature = "#{field.name}: #{field.type}"
+              return some(exported("field", name, file, field.span, field.name_span, field.doc, signature))
+            end
+          end
+
+        Model.Detail.Enum(variants) ->
+          for variant in variants
+            if variant.name == name
+              signature = Signature.variant_text(variant.name, variant.payload)
+              return some(exported("variant", name, file, variant.span, variant.name_span, variant.doc, signature))
+            end
+          end
+
+        Model.Detail.Function(_, _) -> return none
+        Model.Detail.Module(_) -> return none
+        Model.Detail.Plain -> return none
+      end
+
+      none
+  end
+end
+
+# The definition of something that a file exports, with what its item says.
+def exported(
+  kind: String,
+  name: String,
+  file: String,
+  span: Source.Span,
+  name_span: Source.Span,
+  doc: Optional[String],
+  signature: String,
+) -> Definition
+  Definition(
+    kind: kind,
+    name: name,
+    file: file,
+    span: span,
+    name_span: name_span,
+    doc: doc,
+    signature: signature,
+    exported: true,
+  )
 end
 
 # The first declaration with the linked name `name`; `none` for a builtin, which no file declares.

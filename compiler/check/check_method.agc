@@ -176,7 +176,7 @@ def check_struct_field(cx: State.Cx, st: State.St, node: Ast.FieldAccess, target
         cx,
         st,
         "CHECK-UNKNOWN-FIELD",
-        "\"#{T.display_name(T.name(target))}\" has no field \"#{node.name}\"",
+        "\"#{T.written_type(T.name(target))}\" has no field \"#{node.name}\"",
         node.span,
         Help.field_help(node.name, fields),
       ),

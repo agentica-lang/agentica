@@ -61,23 +61,31 @@ def test_the_builtin_types_that_a_std_module_re_exports_are_listed_with_their_fi
     assert names == [item["name"] for item in documented["items"]]
     event = json.loads(help_std(["std/logger.Event"], "--json", cwd=tmp_path).stdout)
     assert event["kind"] == "struct"
+    # A field and a signature write a re-exported type as a program does (Logger.Level), not by its builtin name.
     assert [(field["name"], field["type"]) for field in event["fields"]][:2] == [
-        ("level", "LogRegistry.Level"), ("message", "String"),
+        ("level", "Logger.Level"), ("message", "String"),
     ]
     level = json.loads(help_std(["std/logger.Level"], "--json", cwd=tmp_path).stdout)
     assert level["kind"] == "enum"
     assert [variant["name"] for variant in level["variants"]] == ["Debug", "Info", "Warning", "Error"]
+    attach = json.loads(help_std(["std/logger.attach"], "--json", cwd=tmp_path).stdout)
+    assert attach["signature"] == (
+        "attach(name: String, level: Logger.Level, handler: Fn[Logger.Event, Void]) -> Result[Void]")
 
 
 def test_std_http_lists_its_builtin_records_and_handles(tmp_path):
-    # std/http re-exports the HttpWire records and the two handles: help lists them, a handle as a resource.
+    # std/http re-exports the HttpWire records and the two handles: help lists them, a handle as a resource, and the
+    # signatures write them as HTTP.X, a default value too.
     names = [item["name"] for item in json.loads(help_std(["std/http", "--json"], cwd=tmp_path).stdout)["items"]]
     assert {"Request", "Response", "Header", "ClientOptions", "ServerOptions", "Client", "Server"} <= set(names)
     response = json.loads(help_std(["std/http.Response"], "--json", cwd=tmp_path).stdout)
     assert response["kind"] == "struct"
-    assert [field["name"] for field in response["fields"]] == ["status", "headers", "body"]
+    assert [(field["name"], field["type"]) for field in response["fields"]] == [
+        ("status", "Int"), ("headers", "List[HTTP.Header]"), ("body", "Bytes")]
     client = json.loads(help_std(["std/http.Client"], "--json", cwd=tmp_path).stdout)
     assert client["kind"] == "resource"
+    made = json.loads(help_std(["std/http.client"], "--json", cwd=tmp_path).stdout)
+    assert made["signature"] == "client(options: HTTP.ClientOptions = HTTP.ClientOptions()) -> Result[HTTP.Client]"
 
 
 def test_a_struct_lists_its_fields(tmp_path):

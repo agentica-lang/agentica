@@ -90,9 +90,9 @@ builtin FrontEnd.std_source forms=1
 builtin FrontEnd.stdin_bytes forms=1
   FrontEnd.stdin_bytes() -> Result[Bytes] shape=() -> Result(Bytes) rule=Plain impl="FrontEnd.stdin_bytes.bytes" effects=["process"] desc="Front end only: standard input as bytes, read to its end (a later call reads on from there); more than 16 MiB, or a read that fails, is an error. The front end has no input stream otherwise. Any other program fails with RUNTIME-FRONT-END-ONLY."
 builtin HttpWire.accept forms=1
-  HttpWire.accept(server: HttpWire.Server) -> Result[Socket] shape=(Opaque(HttpWire.Server)) -> Result(Opaque(Socket)) rule=Plain impl="HttpWire.accept" effects=["network"] desc="Internal to std/http: wait for a free slot and the next connection."
+  HttpWire.accept(server: HTTP.Server) -> Result[Socket] shape=(Opaque(HttpWire.Server)) -> Result(Opaque(Socket)) rule=Plain impl="HttpWire.accept" effects=["network"] desc="Internal to std/http: wait for a free slot and the next connection."
 builtin HttpWire.awaited? forms=1
-  HttpWire.awaited?(reply: Channel[Result[HttpWire.Response]]) -> Bool shape=(Channel(Result(Struct(HttpWire.Response)))) -> Bool rule=Plain impl="HttpWire.awaited?" effects=[] desc="Internal to std/http: false once a receiver that parked on reply left without a value."
+  HttpWire.awaited?(reply: Channel[Result[HTTP.Response]]) -> Bool shape=(Channel(Result(Struct(HttpWire.Response)))) -> Bool rule=Plain impl="HttpWire.awaited?" effects=[] desc="Internal to std/http: false once a receiver that parked on reply left without a value."
 builtin HttpWire.chunk forms=1
   HttpWire.chunk(state: HttpWire.Chunk, data: Bytes, from: Int) -> Result[HttpWire.Chunk] shape=(Struct(HttpWire.Chunk), Bytes, Int) -> Result(Struct(HttpWire.Chunk)) rule=Plain impl="HttpWire.chunk.bytes" effects=[] desc="Internal to std/http: decode the chunked framing in data from offset from; runs holds the start and length of each piece of body; the error is the answer status and the reason."
 builtin HttpWire.chunk_read forms=1
@@ -102,45 +102,45 @@ builtin HttpWire.chunked forms=1
 builtin HttpWire.clean_eof? forms=1
   HttpWire.clean_eof?(socket: Socket) -> Bool shape=(Opaque(Socket)) -> Bool rule=Plain impl="HttpWire.clean_eof?" effects=["network"] desc="Internal to std/http: whether the end of input a read reported was clean (TLS: close_notify)."
 builtin HttpWire.close_server forms=1
-  HttpWire.close_server(server: HttpWire.Server) -> Void shape=(Opaque(HttpWire.Server)) -> Void rule=Plain impl="HttpWire.close_server" effects=["network"] desc="Internal to std/http: close the listener and cancel the server's tasks."
+  HttpWire.close_server(server: HTTP.Server) -> Void shape=(Opaque(HttpWire.Server)) -> Void rule=Plain impl="HttpWire.close_server" effects=["network"] desc="Internal to std/http: close the listener and cancel the server's tasks."
 builtin HttpWire.close_write forms=1
   HttpWire.close_write(socket: Socket) -> Void shape=(Opaque(Socket)) -> Void rule=Plain impl="HttpWire.close_write" effects=["network"] desc="Internal to std/http: close the write side of a socket once its output is sent; reads go on."
 builtin HttpWire.connect_tls forms=1
-  HttpWire.connect_tls(client: HttpWire.Client, host: String, port: Int, timeout_ms: Int) -> Result[Socket] shape=(Opaque(HttpWire.Client), String, Int, Int) -> Result(Opaque(Socket)) rule=Plain impl="HttpWire.connect_tls" effects=["network"] desc="Internal to std/http: a TLS connection with the system trust, on the client's shared context."
+  HttpWire.connect_tls(client: HTTP.Client, host: String, port: Int, timeout_ms: Int) -> Result[Socket] shape=(Opaque(HttpWire.Client), String, Int, Int) -> Result(Opaque(Socket)) rule=Plain impl="HttpWire.connect_tls" effects=["network"] desc="Internal to std/http: a TLS connection with the system trust, on the client's shared context."
 builtin HttpWire.connect_context forms=1
   HttpWire.connect_context(host: String, port: Int, context: TlsContext, timeout_ms: Int) -> Result[Socket] shape=(String, Int, Opaque(TlsContext), Int) -> Result(Opaque(Socket)) rule=Plain impl="HttpWire.connect_context" effects=["network"] desc="Internal to std/http: TLS.connect, on a client TlsContext."
 builtin HttpWire.drop_tls forms=1
-  HttpWire.drop_tls(client: HttpWire.Client) -> Void shape=(Opaque(HttpWire.Client)) -> Void rule=Plain impl="HttpWire.drop_tls" effects=["network"] desc="Internal to std/http: give back the client's TLS context; open connections keep theirs."
+  HttpWire.drop_tls(client: HTTP.Client) -> Void shape=(Opaque(HttpWire.Client)) -> Void rule=Plain impl="HttpWire.drop_tls" effects=["network"] desc="Internal to std/http: give back the client's TLS context; open connections keep theirs."
 builtin HttpWire.upgrade_tls forms=1
-  HttpWire.upgrade_tls(client: HttpWire.Client, socket: Socket, host: String, timeout_ms: Int) -> Result[Socket] shape=(Opaque(HttpWire.Client), Opaque(Socket), String, Int) -> Result(Opaque(Socket)) rule=Plain impl="HttpWire.upgrade_tls" effects=["network"] desc="Internal to std/http: TLS.upgrade on the client's shared system-trust context."
+  HttpWire.upgrade_tls(client: HTTP.Client, socket: Socket, host: String, timeout_ms: Int) -> Result[Socket] shape=(Opaque(HttpWire.Client), Opaque(Socket), String, Int) -> Result(Opaque(Socket)) rule=Plain impl="HttpWire.upgrade_tls" effects=["network"] desc="Internal to std/http: TLS.upgrade on the client's shared system-trust context."
 builtin HttpWire.upgrade_context forms=1
   HttpWire.upgrade_context(socket: Socket, context: TlsContext, host: String, timeout_ms: Int) -> Result[Socket] shape=(Opaque(Socket), Opaque(TlsContext), String, Int) -> Result(Opaque(Socket)) rule=Plain impl="HttpWire.upgrade_context" effects=["network"] desc="Internal to std/http: TLS.upgrade, on a client TlsContext that agrees on no protocol but HTTP/1.1."
 builtin HttpWire.encode_request forms=1
-  HttpWire.encode_request(scheme: String, host: String, port: Int, method: String, target: String, headers: List[HttpWire.Header], body: Bytes, max_body_bytes: Int) -> Result[String] shape=(String, String, Int, String, String, List(Struct(HttpWire.Header)), Bytes, Int) -> Result(String) rule=Plain impl="HttpWire.encode_request" effects=[] desc="Internal to std/http: the text of a request head with Host and Content-Length, or the reason the request cannot be sent."
+  HttpWire.encode_request(scheme: String, host: String, port: Int, method: String, target: String, headers: List[HTTP.Header], body: Bytes, max_body_bytes: Int) -> Result[String] shape=(String, String, Int, String, String, List(Struct(HttpWire.Header)), Bytes, Int) -> Result(String) rule=Plain impl="HttpWire.encode_request" effects=[] desc="Internal to std/http: the text of a request head with Host and Content-Length, or the reason the request cannot be sent."
 builtin HttpWire.encode_response forms=1
-  HttpWire.encode_response(request: HttpWire.Request, response: HttpWire.Response, now_ms: Int) -> Result[HttpWire.Reply] shape=(Struct(HttpWire.Request), Struct(HttpWire.Response), Int) -> Result(Struct(HttpWire.Reply)) rule=Plain impl="HttpWire.encode_response" effects=[] desc="Internal to std/http: the text of a response head with Content-Length and Date, and whether the connection closes after it, or the reason it cannot be sent."
+  HttpWire.encode_response(request: HTTP.Request, response: HTTP.Response, now_ms: Int) -> Result[HttpWire.Reply] shape=(Struct(HttpWire.Request), Struct(HttpWire.Response), Int) -> Result(Struct(HttpWire.Reply)) rule=Plain impl="HttpWire.encode_response" effects=[] desc="Internal to std/http: the text of a response head with Content-Length and Date, and whether the connection closes after it, or the reason it cannot be sent."
 builtin HttpWire.error_answer forms=1
   HttpWire.error_answer(status: Int) -> String shape=(Int) -> String rule=Plain impl="HttpWire.error_answer" effects=[] desc="Internal to std/http: the error answer with this status, an empty body and Connection: close."
 builtin HttpWire.idle? forms=1
   HttpWire.idle?(socket: Socket, timeout_ms: Int) -> Result[Bool] shape=(Opaque(Socket), Int) -> Result(Bool) rule=Plain impl="HttpWire.idle?" effects=["network"] desc="Internal to std/http: whether the socket's input holds no byte now and has not ended or failed; it never waits for input (the timeout covers only the wait for the socket's read lock)."
 builtin HttpWire.jobs forms=1
-  HttpWire.jobs(client: HttpWire.Client) -> Channel[HttpWire.Job] shape=(Opaque(HttpWire.Client)) -> Channel(Struct(HttpWire.Job)) rule=Plain impl="HttpWire.jobs" effects=[] desc="Internal to std/http: the jobs channel of a client's owner task."
+  HttpWire.jobs(client: HTTP.Client) -> Channel[HttpWire.Job] shape=(Opaque(HttpWire.Client)) -> Channel(Struct(HttpWire.Job)) rule=Plain impl="HttpWire.jobs" effects=[] desc="Internal to std/http: the jobs channel of a client's owner task."
 builtin HttpWire.local_port forms=1
-  HttpWire.local_port(server: HttpWire.Server) -> Int shape=(Opaque(HttpWire.Server)) -> Int rule=Plain impl="HttpWire.local_port" effects=["network"] desc="Internal to std/http: the server's listening port."
+  HttpWire.local_port(server: HTTP.Server) -> Int shape=(Opaque(HttpWire.Server)) -> Int rule=Plain impl="HttpWire.local_port" effects=["network"] desc="Internal to std/http: the server's listening port."
 builtin HttpWire.options forms=1
-  HttpWire.options(client: HttpWire.Client) -> HttpWire.ClientOptions shape=(Opaque(HttpWire.Client)) -> Struct(HttpWire.ClientOptions) rule=Plain impl="HttpWire.options" effects=[] desc="Internal to std/http: the options a client was made with."
+  HttpWire.options(client: HTTP.Client) -> HTTP.ClientOptions shape=(Opaque(HttpWire.Client)) -> Struct(HttpWire.ClientOptions) rule=Plain impl="HttpWire.options" effects=[] desc="Internal to std/http: the options a client was made with."
 builtin HttpWire.read_head forms=1
   HttpWire.read_head(socket: Socket, rest: Bytes, max_body_bytes: Int, timeout_ms: Int) -> Result[HttpWire.Head] shape=(Opaque(Socket), Bytes, Int, Int) -> Result(Struct(HttpWire.Head)) rule=Plain impl="HttpWire.read_head.bytes" effects=["network"] desc="Internal to std/http: put rest back in front of the input, then read and parse the next request head; a bad head has the answer's status and reason (status 0 for a good one)."
 builtin HttpWire.read_response forms=1
   HttpWire.read_response(socket: Socket, head_only: Bool, max_body_bytes: Int, timeout_ms: Int) -> Result[HttpWire.ResponseHead] shape=(Opaque(Socket), Bool, Int, Int) -> Result(Struct(HttpWire.ResponseHead)) rule=Plain impl="HttpWire.read_response" effects=["network"] desc="Internal to std/http: read and parse the next response head, with the framing of a response to HEAD when head_only; an interim (1xx) head comes back as it is."
 builtin HttpWire.server forms=1
-  HttpWire.server(listener: Listener, max_connections: Int, f: Fn[HttpWire.Server, Void]) -> HttpWire.Server shape=(Opaque(Listener), Int, Fn([Opaque(HttpWire.Server)], Void)) -> Opaque(HttpWire.Server) rule=Plain impl="HttpWire.server" effects=["network"] desc="Internal to std/http: make a server's task group on a listener and run f, its accept loop, in it."
+  HttpWire.server(listener: Listener, max_connections: Int, f: Fn[HTTP.Server, Void]) -> HTTP.Server shape=(Opaque(Listener), Int, Fn([Opaque(HttpWire.Server)], Void)) -> Opaque(HttpWire.Server) rule=Plain impl="HttpWire.server" effects=["network"] desc="Internal to std/http: make a server's task group on a listener and run f, its accept loop, in it."
 builtin HttpWire.service forms=1
-  HttpWire.service(jobs: Channel[HttpWire.Job], options: HttpWire.ClientOptions, f: Fn[HttpWire.Client, Void]) -> HttpWire.Client shape=(Channel(Struct(HttpWire.Job)), Struct(HttpWire.ClientOptions), Fn([Opaque(HttpWire.Client)], Void)) -> Opaque(HttpWire.Client) rule=Plain impl="HttpWire.service" effects=["concurrency"] desc="Internal to std/http: run f(client), a client's owner task, outside every caller's task tree, as the owner of jobs; the client keeps jobs and options."
+  HttpWire.service(jobs: Channel[HttpWire.Job], options: HTTP.ClientOptions, f: Fn[HTTP.Client, Void]) -> HTTP.Client shape=(Channel(Struct(HttpWire.Job)), Struct(HttpWire.ClientOptions), Fn([Opaque(HttpWire.Client)], Void)) -> Opaque(HttpWire.Client) rule=Plain impl="HttpWire.service" effects=["concurrency"] desc="Internal to std/http: run f(client), a client's owner task, outside every caller's task tree, as the owner of jobs; the client keeps jobs and options."
 builtin HttpWire.spawn forms=1
-  HttpWire.spawn(server: HttpWire.Server, socket: Socket, f: Fn[Socket, Void]) -> Void shape=(Opaque(HttpWire.Server), Opaque(Socket), Fn([Opaque(Socket)], Void)) -> Void rule=Plain impl="HttpWire.spawn" effects=["network"] desc="Internal to std/http: run a connection task in the server's group."
+  HttpWire.spawn(server: HTTP.Server, socket: Socket, f: Fn[Socket, Void]) -> Void shape=(Opaque(HttpWire.Server), Opaque(Socket), Fn([Opaque(Socket)], Void)) -> Void rule=Plain impl="HttpWire.spawn" effects=["network"] desc="Internal to std/http: run a connection task in the server's group."
 builtin HttpWire.wait forms=1
-  HttpWire.wait(server: HttpWire.Server) -> Result[Void] shape=(Opaque(HttpWire.Server)) -> Result(Void) rule=Plain impl="HttpWire.wait" effects=["network"] desc="Internal to std/http: wait until the server is closed."
+  HttpWire.wait(server: HTTP.Server) -> Result[Void] shape=(Opaque(HttpWire.Server)) -> Result(Void) rule=Plain impl="HttpWire.wait" effects=["network"] desc="Internal to std/http: wait until the server is closed."
 builtin IO.eof? forms=1
   IO.eof?() -> Bool shape=() -> Bool rule=Plain impl="IO.eof?" effects=["stdin"] desc="Peek for EOF without consuming a byte; may block, not a readiness poll."
 builtin IO.flush forms=1
@@ -358,15 +358,15 @@ builtin List.tally forms=1
 builtin List.uniq forms=1
   List.uniq(list: List[K]) -> List[K] shape=(List(Var(K))) -> List(Var(K)) rule=Prelude impl="" effects=[] desc="Drop repeated Int or String elements, keeping the first of each; O(n)."
 builtin LogRegistry.attach forms=1
-  LogRegistry.attach(name: String, rank: Int, handler: Fn[LogRegistry.Event, Void]) -> Result[Void] shape=(String, Int, Fn([Struct(LogRegistry.Event)], Void)) -> Result(Void) rule=Plain impl="LogRegistry.attach" effects=["logging"] desc="Internal to std/logger: attach a named handler at a rank; a name in use is an error."
+  LogRegistry.attach(name: String, rank: Int, handler: Fn[Logger.Event, Void]) -> Result[Void] shape=(String, Int, Fn([Struct(LogRegistry.Event)], Void)) -> Result(Void) rule=Plain impl="LogRegistry.attach" effects=["logging"] desc="Internal to std/logger: attach a named handler at a rank; a name in use is an error."
 builtin LogRegistry.detach forms=1
   LogRegistry.detach(name: String) -> Result[Void] shape=(String) -> Result(Void) rule=Plain impl="LogRegistry.detach" effects=["logging"] desc="Internal to std/logger: detach a named handler; a name not in use is an error."
 builtin LogRegistry.floor forms=1
   LogRegistry.floor() -> Int shape=() -> Int rule=Plain impl="LogRegistry.floor" effects=["logging"] desc="Internal to std/logger: -1 until the default handler is installed, then the higher of the global level's rank and the lowest handler rank; a call below it reaches no handler."
 builtin LogRegistry.handlers forms=1
-  LogRegistry.handlers(rank: Int) -> List[Fn[LogRegistry.Event, Void]] shape=(Int) -> List(Fn([Struct(LogRegistry.Event)], Void)) rule=Plain impl="LogRegistry.handlers" effects=["logging"] desc="Internal to std/logger: the handlers whose rank is at or below the given rank, in attach order."
+  LogRegistry.handlers(rank: Int) -> List[Fn[Logger.Event, Void]] shape=(Int) -> List(Fn([Struct(LogRegistry.Event)], Void)) rule=Plain impl="LogRegistry.handlers" effects=["logging"] desc="Internal to std/logger: the handlers whose rank is at or below the given rank, in attach order."
 builtin LogRegistry.install_default forms=1
-  LogRegistry.install_default(handler: Fn[LogRegistry.Event, Void]) -> Void shape=(Fn([Struct(LogRegistry.Event)], Void)) -> Void rule=Plain impl="LogRegistry.install_default" effects=["logging"] desc="Internal to std/logger: while the level is -1, attach the console handler at info and set the level to info, in one step."
+  LogRegistry.install_default(handler: Fn[Logger.Event, Void]) -> Void shape=(Fn([Struct(LogRegistry.Event)], Void)) -> Void rule=Plain impl="LogRegistry.install_default" effects=["logging"] desc="Internal to std/logger: while the level is -1, attach the console handler at info and set the level to info, in one step."
 builtin LogRegistry.level forms=1
   LogRegistry.level() -> Int shape=() -> Int rule=Plain impl="LogRegistry.level" effects=["logging"] desc="Internal to std/logger: the global level's rank, or -1 until the default handler is installed."
 builtin LogRegistry.lowest forms=1
@@ -1040,7 +1040,7 @@ ref:Map.get/2 -> Map.get(map: Map[K, V], key: K) -> Optional[V] shape=(Map(Var(K
 ref:Map.get/3 -> Map.get(map: Map[K, V], key: K, default: V) -> V shape=(Map(Var(K), Var(V)), Var(K), Var(V)) -> Var(V) rule=MapGetDefault impl="Map.get" effects=[] desc="Read a value as some(value) or none, or supply an eagerly evaluated default as a third argument."
 ref:Map.get/4 -> -
 ref:Nope/1 -> -
-ref:HttpWire.service/3 -> HttpWire.service(jobs: Channel[HttpWire.Job], options: HttpWire.ClientOptions, f: Fn[HttpWire.Client, Void]) -> HttpWire.Client shape=(Channel(Struct(HttpWire.Job)), Struct(HttpWire.ClientOptions), Fn([Opaque(HttpWire.Client)], Void)) -> Opaque(HttpWire.Client) rule=Plain impl="HttpWire.service" effects=["concurrency"] desc="Internal to std/http: run f(client), a client's owner task, outside every caller's task tree, as the owner of jobs; the client keeps jobs and options."
+ref:HttpWire.service/3 -> HttpWire.service(jobs: Channel[HttpWire.Job], options: HTTP.ClientOptions, f: Fn[HTTP.Client, Void]) -> HTTP.Client shape=(Channel(Struct(HttpWire.Job)), Struct(HttpWire.ClientOptions), Fn([Opaque(HttpWire.Client)], Void)) -> Opaque(HttpWire.Client) rule=Plain impl="HttpWire.service" effects=["concurrency"] desc="Internal to std/http: run f(client), a client's owner task, outside every caller's task tree, as the owner of jobs; the client keeps jobs and options."
 ref:List.map/2 -> List.map(list: List[A], f: Fn[A, B]) -> List[B] shape=(List(Var(A)), Fn([Var(A)], Var(B))) -> List(Var(B)) rule=ListMap impl="List.map" effects=[] desc="Map each element in order without changing the input; O(n)."
 std:HttpWire.service -> true
 std:LogRegistry.level -> true

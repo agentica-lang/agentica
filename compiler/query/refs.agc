@@ -9,6 +9,7 @@
 ## every module, so two names that look alike but are different declarations (a field `name` of two structs, a local of
 ## the same name in two blocks) never mix.
 
+import {STD_ONLY} from "../catalog/builtins"
 import Checker from "../check/checker"
 import Diag from "../diagnostics/diagnostic"
 import Declarations from "../modules/declarations"
@@ -180,12 +181,32 @@ def target_of(modules: List[Linker.LinkedModule], found: Symbol.Match) -> Sites.
 
   # The file of a match is the file of a module block too: the block is the module whose span holds the name.
   same = modules.filter do |module: Linker.LinkedModule| Linker.home_key(module) == found.file end
-  prefix = At.holder(same, found.name_span.start.offset).prefix
+  holder = At.holder(same, found.name_span.start.offset)
+  builtin = reexported_builtin(holder, found.name_span)
   if found.kind == "field" or found.kind == "variant"
-    return Sites.member(found.kind, "#{prefix}#{found.owner}", found.name)
+    owner = "#{holder.prefix}#{found.owner}"
+    if builtin != ""
+      owner = builtin
+    end
+
+    return Sites.member(found.kind, owner, found.name)
   end
 
-  Sites.named("#{prefix}#{found.name}")
+  return Sites.named(builtin) if builtin != ""
+
+  Sites.named("#{holder.prefix}#{found.name}")
+end
+
+# The builtin type (`HttpWire.Request`) that a std/ module re-exports at `name_span` (`export HttpWire.Request`, where
+# a re-exported type and its members are placed), or "" when no such re-export is there.
+def reexported_builtin(module: Linker.LinkedModule, name_span: Source.Span) -> String
+  for decl in Declarations.reexports_of(module.parsed.declarations)
+    if decl.name_span.start.offset == name_span.start.offset and STD_ONLY.has_key?(decl.alias)
+      return "#{decl.alias}.#{decl.name}"
+    end
+  end
+
+  ""
 end
 
 # The uses of `target` in every module. `defined` is its definition when the caller has it.
@@ -321,7 +342,12 @@ def defined(modules: List[Linker.LinkedModule], target: Sites.Target) -> Optiona
     none -> none
     some(declared) ->
       same = modules.filter do |module: Linker.LinkedModule| module.file == declared.file end
-      Symbol.declared_at(At.holder(same, declared.name_span.start.offset), declared.name_span)
+      holder = At.holder(same, declared.name_span.start.offset)
+      if declared.kind == "field" or declared.kind == "variant"
+        return Symbol.member_at(holder, declared.name_span, declared.name)
+      end
+
+      Symbol.declared_at(holder, declared.name_span)
   end
 end
 

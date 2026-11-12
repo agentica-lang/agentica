@@ -5,7 +5,7 @@ import os
 
 import pytest
 
-from tests.agentica_test import cli, run, vm_environment
+from tests.agentica_test import ROOT, cli, run, vm_environment
 from tests.span_support import end, problem, start, where
 
 # The module the cases import: a struct, an enum with a payload and without, a function and a constant.
@@ -986,3 +986,37 @@ def test_a_block_type_is_written_as_the_importer_names_the_block_and_a_position_
     assert (gap["kind"], gap["type"], gap["definition"]) == ("type", "Int", None)
     blank = type_at(("twins.agc", where(TWINS, "\nstruct Gap")), cwd=tmp_path)
     problem(blank, "QUERY-NO-EXPRESSION", 2)
+
+
+def test_a_builtin_type_that_std_re_exports_is_written_as_the_file_imports_it(tmp_path):
+    # HttpWire.Response is HTTP.Response of std/http: written through the file's alias, or by its name in an import
+    # list, renamed or not.
+    body = 'def main() -> Void\n  r = {make}(status: 1, headers: [], body: "".bytes)\n  puts(r.status)\nend\n'
+    files = {"aliased.agc": ('import H from "std/http"\n\n', "H.Response"),
+             "listed.agc": ('import {Response} from "std/http"\n\n', "Response"),
+             "renamed.agc": ('import {Response as Answer} from "std/http"\n\n', "Answer")}
+    for file, (head, written) in files.items():
+        text = head + body.replace("{make}", written)
+        (tmp_path / file).write_text(text, encoding="utf-8")
+        assert answer((file, where(text, "r =")), cwd=tmp_path)["type"] == written, file
+
+
+def test_a_re_exported_builtin_type_and_its_field_are_defined_at_the_export_line(tmp_path):
+    # With an import list, the type is written by its listed name, and a type the list does not name (Header) by the
+    # std module's own alias. The type and its field are defined at `export HttpWire.Request` of std/http.
+    text = ('import {Request} from "std/http"\n\n'
+            'def handle(request: Request) -> Bytes\n  hs = request.headers\n  puts(hs.size)\n  request.body\nend\n\n'
+            'def main() -> Void\n  puts(1)\nend\n')
+    (tmp_path / "listed.agc").write_text(text, encoding="utf-8")
+    std = (ROOT / "stdlib" / "http.agc").read_text(encoding="utf-8").split("\n")
+    line = std.index("export HttpWire.Request") + 1
+    parameter = answer(("listed.agc", where(text, "request: Request")), cwd=tmp_path)
+    assert parameter["type"] == "Request"
+    on_type = answer(("listed.agc", where(text, "Request) ->")), cwd=tmp_path)
+    assert (on_type["kind"], on_type["type"]) == ("type", "Request")
+    assert (on_type["definition"]["kind"], on_type["definition"]["name"]) == ("struct", "Request")
+    assert (on_type["definition"]["file"], start(on_type["definition"]["name_span"])[0]) == ("std/http.agc", line)
+    headers = answer(("listed.agc", where(text, "headers")), cwd=tmp_path)
+    assert headers["type"] == "List[HTTP.Header]"
+    assert (headers["definition"]["kind"], headers["definition"]["name"]) == ("field", "headers")
+    assert start(headers["definition"]["name_span"])[0] == line
