@@ -87,6 +87,9 @@ REJECTED = [
     ("  f = ->(x) { x.size }\n  puts(f)", "CHECK-BLOCK-TYPE", "x"),
     # A field that two structs have.
     ("  f = ->(p) { p.top }\n  puts(f)\n  puts(Box(top: 1))", "CHECK-BLOCK-TYPE", "p"),
+    # A field that builtin records have too (name: HTTP.Header, StructMember ...), alone and against a typed argument.
+    ("  f = ->(p) { p.name }\n  puts(f)", "CHECK-BLOCK-TYPE", "p"),
+    ("  f = ->(p) {\n    puts(p.name)\n    twice(p)\n  }\n  puts(f)", "CHECK-BLOCK-TYPE", "p"),
     # A method or field nothing has: no constraint, then the body's own error.
     ("  f = ->(x) { x.frobnicate }\n  puts(f)", "CHECK-BLOCK-TYPE", "x"),
     ("  puts(make() do |x| x.lenght end)", "CHECK-BLOCK-TYPE", "x"),

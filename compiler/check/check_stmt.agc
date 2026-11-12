@@ -1133,47 +1133,70 @@ def inferred(cx: State.Cx, st: State.St, block: Ast.BlockLit, param: Ast.BlockPa
     Infer.Guess.Found(type) -> return ok(type)
     Infer.Guess.Open -> message = message
     Infer.Guess.Several(types) ->
-      named = writable(types)
-      if named.size > 0
-        message += ": its uses allow #{spoken(named, "or")}"
-        help = annotation_help(block, param.name, named)
+      names = shown_names(types)
+      if names.size > 0
+        message += ": its uses allow #{spoken(names, types.size, "or", "other types")}"
+        help = annotation_help(block, param.name, names)
       end
 
     Infer.Guess.Conflict(types) ->
-      named = writable(types)
-      if named.size > 0
-        message = "the uses of #{noun} parameter \"#{param.name}\" need different types: #{spoken(named, "and")}"
-        help = annotation_help(block, param.name, named)
+      names = shown_names(types)
+      if names.size > 1
+        listed = spoken(names, types.size, "and", "others")
+        message = "the uses of #{noun} parameter \"#{param.name}\" need different types: #{listed}"
+        help = annotation_help(block, param.name, names)
       end
   end
 
   error(State.fail_help(cx, st, "CHECK-BLOCK-TYPE", message, param.span, help))
 end
 
-# The types a message shows: not the builtin records (Codec.Info, HttpWire.Request ...), which a use counts so that
-# the set stays complete but a program does not write by those names, and at most four.
-def writable(types: List[T.Type]) -> List[T.Type]
-  out: List[T.Type] = []
+# The most types a message lists.
+def shown_limit() -> Int = 4
+
+# The names a message shows for the types, at most shown_limit: a builtin record of a std-only family by the alias
+# its std module re-exports it under (HttpWire.Request is HTTP.Request), and not at all when it has none
+# (HttpWire.Chunk): a use counts such a record, so that its set stays complete, but a program cannot write it.
+def shown_names(types: List[T.Type]) -> List[String]
+  out: List[String] = []
   for type in types
-    if out.size < 4 and !(T.is?(type, "Struct") and Builtins.RECORDS.has_key?(T.name(type)))
-      out = out.push(type)
+    name = shown_name(type)
+    if name != "" and out.size < shown_limit()
+      out = out.push(name)
     end
   end
 
   out
 end
 
-# The types as words: "Int, Float or String"; types is not empty.
-def spoken(types: List[T.Type], last: String) -> String
-  text = T.to_text(types[0])
+def shown_name(type: T.Type) -> String
+  return T.to_text(type) if !T.is?(type, "Struct")
+
+  name = T.name(type)
+  parts = name.split(".")
+  return T.to_text(type) if parts.size != 2 or !Builtins.STD_ONLY.has_key?(parts[0])
+  return "" if !Builtins.MOVED.values.include?(name)
+
+  "#{Builtins.STD_ONLY[parts[0]][1]}.#{parts[1]}"
+end
+
+# The names as words: "Int, Float or String". When `total` types stand behind them (some hidden or past the limit),
+# `rest` ends the list instead: "Person or other types".
+def spoken(names: List[String], total: Int, last: String, rest: String) -> String
+  shown = names
+  if total > names.size
+    shown = names.push(rest)
+  end
+
+  text = shown[0]
   index = 1
-  while index < types.size
+  while index < shown.size
     joiner = ", "
-    if index == types.size - 1
+    if index == shown.size - 1
       joiner = " #{last} "
     end
 
-    text += joiner + T.to_text(types[index])
+    text += joiner + shown[index]
     index += 1
   end
 
@@ -1181,8 +1204,8 @@ def spoken(types: List[T.Type], last: String) -> String
 end
 
 # The help that shows the parameter annotated with each type.
-def annotation_help(block: Ast.BlockLit, name: String, types: List[T.Type]) -> String
-  forms = types.map do |type: T.Type| annotated_form(block, name, T.to_text(type)) end
+def annotation_help(block: Ast.BlockLit, name: String, types: List[String]) -> String
+  forms = types.map do |type: String| annotated_form(block, name, type) end
   "annotate it, as in #{forms.join(" or ")}"
 end
 
