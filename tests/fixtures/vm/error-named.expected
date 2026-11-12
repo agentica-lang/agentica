@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 265,
+  "steps": 278,
   "stdout": [
     "insert: kind=db.constraint message=unique failed code=some(19) details={} at error-named.agc:5:10",
     "error(\"unique failed\", kind: \"db.constraint\", code: 19)",
@@ -11,6 +11,7 @@
     "[true, true, true, false]",
     "[false, false, false, false]",
     "computed: kind=Any Text message=x code=none details={} at error-named.agc:52:27",
+    "error(\"from a pipe\", kind: \"db.piped\", code: 3)",
     "true",
     "false",
     "ok(2)",

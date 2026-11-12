@@ -1,3 +1,9 @@
+def piped(name: String) -> Result[Int]
+  return name |> error(kind: "db.piped", code: 3) if name == ""
+
+  "a very long message that does not fit on one line with the rest of the call" |> error(kind: "db.piped", code: 3)
+end
+
 def insert(name: String) -> Result[Int]
   return error("unique failed", kind: "db.constraint", code: 19) if name == "taken"
 

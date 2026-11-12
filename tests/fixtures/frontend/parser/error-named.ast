@@ -1,4 +1,4 @@
-program #27 0:1:1-188:6:1
+program #39 0:1:1-271:8:1
   declaration: function-decl #26 0:1:1-188:6:1 name="insert"
     param: param #1 11:1:12-23:1:24 name="name"
       type: type-ref #0 17:1:18-23:1:24 name="String"
@@ -26,3 +26,15 @@ program #27 0:1:1-188:6:1
               value: name-ref #18 163:4:39-167:4:43 name="name"
         arg: named-arg #23 170:4:46-181:4:57 name="cause"
           value: name-ref #22 177:4:53-181:4:57 name="base"
+  declaration: function-decl #38 189:7:1-271:8:1 name="piped" expression
+    param: param #28 199:7:11-211:7:23 name="name"
+      type: type-ref #27 205:7:17-211:7:23 name="String"
+    result: type-ref #30 216:7:28-227:7:39 name="Result"
+      arg: type-ref #29 223:7:35-226:7:38 name="Int"
+    body: return-stmt #37 238:7:50-270:7:82 implicit
+      value: call #36 238:7:50-270:7:82 name="error" piped=true
+        arg: name-ref #31 230:7:42-234:7:46 name="name"
+        arg: named-arg #33 244:7:56-260:7:72 name="kind"
+          value: literal #32 250:7:62-260:7:72 value=string:"db.piped"
+        arg: named-arg #35 262:7:74-269:7:81 name="code"
+          value: literal #34 268:7:80-269:7:81 value=int:3
