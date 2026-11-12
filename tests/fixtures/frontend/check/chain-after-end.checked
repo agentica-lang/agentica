@@ -1,1 +1,1 @@
-ERROR CHECK-CHAIN-AFTER-END 66:2:48-74:2:56 "a method call after the end of a do block" "bind the result to a name first, or write a one-line block in braces: { |word| ... }" signature="main() -> Void" file="chain-after-end.agc"
+ERROR CHECK-CHAIN-AFTER-END 66:2:48-74:2:56 "a method call after the end of a do block" "bind the result to a name first, or, outside a condition, a one-line block in braces: { |word| ... }" signature="main() -> Void" file="chain-after-end.agc"

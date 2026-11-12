@@ -373,8 +373,8 @@ def chain_link(cx: State.Cx, st: State.St, target: Ast.Expr, link: Source.Span, 
   stop = found.unwrap!.span.stop
   start = Source.Position(offset: stop.offset - 3, line: stop.line, column: stop.column - 3)
   help = "bind the result to a name first"
-  if braces_fit?(target)
-    help = "#{help}, or write a one-line block in braces: {#{block_bars(found.unwrap!.params)} ... }"
+  if braces_fit?(cx, target)
+    help = "#{help}, or, outside a condition, a one-line block in braces: {#{block_bars(found.unwrap!.params)} ... }"
   end
 
   error(
@@ -406,13 +406,22 @@ def do_block(target: Ast.Expr) -> Optional[Ast.BlockLit]
   end
 end
 
-# Whether the block of `target` may be written in braces: the call has no other argument and is not piped.
-def braces_fit?(target: Ast.Expr) -> Bool
+# Whether the block of `target` may be written in braces: the call has no other argument, no `()` and is not piped. The
+# checker does not know whether the call is in a condition, where braces need parentheses, so the help says so.
+def braces_fit?(cx: State.Cx, target: Ast.Expr) -> Bool
   case target
-    Ast.Expr.Call(call) -> !call.piped and call.args.size == 1
-    Ast.Expr.MethodCall(call) -> call.args.size == 1
+    Ast.Expr.Call(call) -> !call.piped and !call.parenthesized and call.args.size == 1
+    Ast.Expr.MethodCall(call) -> call.args.size == 1 and !paren_after_name?(cx, call.name_span)
     _ -> false
   end
+end
+
+# Whether the source has `(` right after the method name that ends at `name` (`xs.map() do`); true without the text.
+def paren_after_name?(cx: State.Cx, name: Source.Span) -> Bool
+  text = cx.texts.get(cx.file)
+  return true if text.none? or name.stop.offset < 0 or name.stop.offset >= text.unwrap!.length
+
+  text.unwrap!.slice(name.stop.offset, 1) == "("
 end
 
 # The parameters of a block as its head writes them: " |a, b|", or "" when it has none.

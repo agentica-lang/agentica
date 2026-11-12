@@ -48,6 +48,11 @@ REJECTED = [
     # A leading dot on the next line is the same chain, and so is the call in parentheses, which fmt drops.
     ("  n = xs.map do |x|\n    x\n  end\n    .size\n  puts(n)", "end\n    .size"),
     ("  n = (xs.map do |x| x end).size\n  puts(n)", "end).size"),
+    ("  n = xs.map do |x|\n    x\n  end\n  # c\n  .size\n  puts(n)", "end\n  # c\n  .size"),
+    # In an if or guard condition, and after a call written with (), where braces would not parse.
+    ("  if xs.map do |x| x end.size > 1\n    puts(1)\n  end", "end.size"),
+    ("  return if xs.map do |x| x end.size > 1", "end.size"),
+    ("  n = xs.map() do |x| x end.size\n  puts(n)", "end.size"),
     # A call with arguments before the block, whose block cannot be in braces.
     ("  n = xs.each_slice(1) do |s| s end.size\n  puts(n)", "end.size"),
     # Nested: a do block inside a brace block, and the end of a do block that holds a chained brace block.

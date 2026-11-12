@@ -71,8 +71,7 @@ export def line_too_long(file: String, text: String, width: Int) -> Optional[Fai
 end
 
 ## The bare `end` tokens of `text`, lexed into `tokens`, that have no empty line after them, in order. An `end` is bare
-## when a line break comes before and after it: a trailing comment is no token, and a line that goes on with a leading
-## `.name` has no line break after it, so neither makes it less bare.
+## when a line break comes before and after it; a trailing comment is no token, so it does not make it less bare.
 export def missing_lines(text: String, tokens: List[Tokens.Token]) -> List[Tokens.Token]
   found: List[Tokens.Token] = []
   for index in 1...(tokens.size - 1)
