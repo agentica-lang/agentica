@@ -992,24 +992,16 @@ def refused_block?(args: List[Ast.Expr], condition: Bool, bare: Bool) -> Bool
   end
 end
 
-# The index of the last token of a case arm guard that starts at `at`: the one before the `->` outside brackets.
-def guard_end(c: Context, at: Int) -> Int
-  depth = 0
-  index = at
-  while index < c.tokens.size
-    kind = c.tokens[index].kind
-    if kind == "left-paren" or kind == "left-bracket" or kind == "left-brace"
-      depth += 1
-    elsif kind == "right-paren" or kind == "right-bracket" or kind == "right-brace"
-      depth -= 1
-    elsif kind == "arrow" and depth == 0
-      return index - 1
-    end
-
-    index += 1
+# The index of the last token of a case arm guard: the guard expression's last token, then the `)` that close
+# parentheses around it, which are all that may stand before the arm's `->` (a block in the guard may hold `->` of its
+# own).
+def guard_end(c: Context, guard: Ast.Expr) -> Int
+  last = token_index(c, tight(c, Ast.expr_span(guard)).stop.offset) - 1
+  while last + 1 < c.tokens.size and c.tokens[last + 1].kind == "right-paren"
+    last += 1
   end
 
-  c.tokens.size - 1
+  last
 end
 
 # Whether the tokens from `first` to `last` are one pair of parentheses and what is inside them.
@@ -1048,7 +1040,7 @@ def arm_doc(c: Context, arm: Ast.CaseArm) -> Docs.Doc
         first += 1
       end
 
-      last = guard_end(c, first + 1)
+      last = guard_end(c, guard)
       written = source(c, Source.Span(start: c.tokens[first + 1].span.start, stop: c.tokens[last].span.stop))
       if blocked?(guard, true) and !wrapped?(c, first + 1, last)
         written = "(#{written})"

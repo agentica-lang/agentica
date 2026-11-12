@@ -92,5 +92,14 @@ def inside(xs: List[Int], z: Int) -> Int
     6 if ((ready do |v| v > 0 end)) -> puts(13)
     _ -> puts(9)
   end
+  case z
+    7 if [1].any? do |v|
+      case v
+        1 -> true
+        _ -> false
+      end
+    end -> puts(14)
+    _ -> puts(15)
+  end
   0
 end
