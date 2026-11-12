@@ -59,6 +59,12 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   record: `struct Error`, `enum Error` or `type Error` is
   `CHECK-REDEFINED-NAME`.
 
+### Fixed
+
+- An error message from the system (a file, process, library or TLS error)
+  with bytes that are not UTF-8 is a valid String, with U+FFFD for each bad
+  byte.
+
 ## [0.30.1] - 2026-11-11
 
 ### Fixed
