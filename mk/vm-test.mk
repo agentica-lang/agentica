@@ -363,8 +363,8 @@ vm-lint-gcstress:
 # test harness code and not checked: cchecker reads a database of its own without it (CCHECKER_DB), so each run is a
 # full run, which checks the names of the settings and reports a stale ignore of the rules. It exits 1 on a finding
 # that is not in the baseline, which fails the CI job `cchecker`.
-CCHECKER_VERSION := 0.6.0
-CCHECKER_COMMIT := f7ec380044b6e2c5dc7c89eeed6f57028917fc1c
+CCHECKER_VERSION := 0.6.1
+CCHECKER_COMMIT := 9dbf8edc47c06a276a1f26338ffd13d13c7437fe
 CCHECKER_DIR := build/cchecker/$(CCHECKER_VERSION)
 CCHECKER_FLAGS ?=
 CCHECKER_DB := build/cchecker/compile_commands.json
