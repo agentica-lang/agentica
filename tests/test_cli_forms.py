@@ -67,7 +67,7 @@ PROGRAMS = ["ok.agc", "lex.agc", "parse.agc", "tab.agc", "crlf.agc", "unicode.ag
 BUILTINS = ["String.split", "ok", "Task.await", "Map.get", "List.group_by", "String.compare",
             "String.to_int", "String.to_it", "String.trim", "String.strip", "Result.ok?", "puts", "Map.length",
             "Json.get", "strip", "trim", "push", "value!", "to_i", "ok?", "unwrap_or", "contains?", "join", "include",
-            "length", "size", "contains", "reject", "float", "len", "frobnicate",
+            "length", "size", "contains", "reject", "float", "len", "frobnicate", "to_int", "to_float", "from_int",
             "collect", "inject", "detect", "member?", "select", "filter", "key?", "has_key?"]
 
 # Arguments with no file: the options, their mistakes and the help.

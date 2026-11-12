@@ -151,7 +151,7 @@ def suggestion(name: String) -> String
 
   return "; #{hint.unwrap!}" if hint.some?
 
-  hints = Alias.kind_hints(name)
+  hints = Alias.name_hints(name)
   return "; " + hints.keys.sort.map do |key: String| "#{key}: #{hints[key]}" end.join("; ") if hints.size > 0
 
   case Suggest.closest_among(name, CALLABLE_NAMES, [])

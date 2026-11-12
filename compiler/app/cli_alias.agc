@@ -43,9 +43,16 @@ end
 
 ## The checker's hints for the methods that a bare `name` is on some type (`List.contains: a List has no ...`), by
 ## `Kind.name`. A name with a dot has none: its own hint is looked up whole.
-export def kind_hints(name: String) -> Map[String, String]
-  hints = Tables.foreign_kind_methods()
-  found: Map[String, String] = {}
+export def kind_hints(name: String) -> Map[String, String] = ending_with(Tables.foreign_kind_methods(), name, {})
+
+## The kind_hints of `name` and the checker's hints for the functions it names in some module
+## (`String.from_int: use n.to_s` for `from_int`), by `Kind.name`.
+export def name_hints(name: String) -> Map[String, String]
+  ending_with(Tables.foreign_names(), name, kind_hints(name))
+end
+
+# `found` with each entry of `hints` whose key is `Kind.name`; none for a name with a dot.
+def ending_with(hints: Map[String, String], name: String, found: Map[String, String]) -> Map[String, String]
   return found if name.include?(".")
 
   for key in hints.keys.sort
