@@ -39,9 +39,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
-- `agentica test --jobs N` runs the scenarios of a feature file (each row of
-  a Scenario Outline) as separate jobs, so one long file no longer runs alone;
-  the report keeps the order of files and scenarios (#1458).
+- **Breaking:** `agentica test --jobs N` runs the scenarios of one file as
+  separate jobs, so they can overlap: ones that share a port, a path or a DB
+  need `--jobs 1` (#1458).
 - **Breaking:** a builtin has only its Ruby name: `trim`, `to_int`, `to_float`,
   `contains?`, `starts_with?`, `ends_with?`, `String.from_int`,
   `String.from_float`, `Float.from_int` and `String.join` are errors whose help

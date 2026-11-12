@@ -289,8 +289,8 @@ end
 # report does not depend on which job ends first. One job (the default) runs them one after another without tasks.
 # With more, the jobs are the scenarios of the feature files and the whole test files, `jobs` at a time from one
 # queue in entry order, so one long feature file no longer runs alone at the end. Each scenario and test file already
-# runs in its own child VM, so a task only waits for its children. The task deadline covers the wait for a free slot
-# and the job, which has a limit of its own (each scenario and test has one), so it is a day.
+# runs in its own child VM, so a task only waits for its children. The task deadline starts when the job's task starts,
+# after it has a slot. The job has a limit of its own (each scenario and test has one), so the deadline is a day.
 def run_entries(
   config: Config,
   tags: Tags.Expr,
@@ -538,6 +538,7 @@ def run_file(
 
       planned.shell.with(scenarios: scenarios)
     Plan.Known(result) -> result
+    # `plan_file` never returns `Whole` (only `plan_entry` does); the case needs the arm.
     Plan.Whole -> Report.file_error(path, "feature", Child.located("RUNTIME-BDD-INFRA", "nothing to run", path))
   end
 end
