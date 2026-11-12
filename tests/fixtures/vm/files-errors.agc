@@ -54,7 +54,7 @@ def main() -> Void
   IO.inspect(File.close(h, 0))
   w = Result.unwrap!(File.open(at(dir, "w.txt"), "write", 60000))
   IO.inspect(File.write_bytes(w, "a".bytes, 0))
-  IO.inspect(File.write_bytes(w, String.join(List.repeat("x", 1048577), "").bytes, 60000))
+  IO.inspect(File.write_bytes(w, List.repeat("x", 1048577).join("").bytes, 60000))
   IO.inspect(File.write(w, "x", 0))
   IO.inspect(File.write_bytes(w, "a".bytes, -1))
   _ = File.close(w, 60000)

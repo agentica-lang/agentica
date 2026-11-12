@@ -28,7 +28,7 @@ end
 
 ## Two path parts joined by one "/".
 export def join(base: String, rest: String) -> String
-  return base + rest if base.ends_with?("/")
+  return base + rest if base.end_with?("/")
 
   "#{base}/#{rest}"
 end
@@ -36,7 +36,7 @@ end
 ## Whether a path starts at "/", an absolute Windows drive path or a UNC share. A drive needs an ASCII letter,
 ## a colon and a separator: "C:" and "C:file" depend on a working directory and are not absolute paths.
 export def rooted?(path: String) -> Bool
-  return true if path.starts_with?("/") or path.starts_with?("\\\\")
+  return true if path.start_with?("/") or path.start_with?("\\\\")
 
   return false if path.length < 3
 
@@ -50,9 +50,9 @@ end
 ## (C:\ or C:/), a UNC path (\\server\share) or a path from the root of the current drive (/ or \); "C:libs" is
 ## relative.
 export def absolute?(path: String, on_windows: Bool) -> Bool
-  return path.starts_with?("\\") or rooted?(path) if on_windows
+  return path.start_with?("\\") or rooted?(path) if on_windows
 
-  path.starts_with?("/")
+  path.start_with?("/")
 end
 
 ## The path a file is stored under in the program and in the .agcb, and printed by the text forms. root_dir is the
@@ -81,7 +81,7 @@ export def stored_name(root_dir: String, file: String) -> String
   stored = out.join("/")
   # A user file under a std/ folder must not look like a standard module (the VM puts --source-root before every name
   # but those).
-  return "./#{stored}" if stored.starts_with?("std/")
+  return "./#{stored}" if stored.start_with?("std/")
 
   stored
 end
@@ -89,7 +89,7 @@ end
 ## The stored name of the file of a failure. The root file of a failure is the path as given (Path.resolve keeps
 ## links), so it is made canonical first, as the key of a loaded file is.
 export def stored_file(workspace: Workspace.Workspace, root_dir: String, file: String) -> String
-  return file if file.starts_with?("std/") or file.starts_with?(PRELUDE_PREFIX)
+  return file if file.start_with?("std/") or file.start_with?(PRELUDE_PREFIX)
 
   real = workspace.real_path.call(file)
   return stored_name(root_dir, real.unwrap!) if real.ok?
@@ -103,7 +103,7 @@ end
 export def module_file(decl: Ast.ImportDecl, site: Failure.Site) -> Result[String]
   path = decl.path
   stem = ""
-  has_stem = path.ends_with?(".agc")
+  has_stem = path.end_with?(".agc")
   if has_stem
     stem = path.slice(0, path.length - 4)
   end
@@ -149,10 +149,10 @@ end
 ## CHECK-IMPORT-PATH unless a std/ or pkg/ path is made of plain parts: no backslash, no empty, "." or ".." part, and
 ## no ":" in a part.
 export def validate_library_path(path: String, site: Failure.Site) -> Result[Void]
-  return error(invalid_library_path(site)) if path.contains?("\\")
+  return error(invalid_library_path(site)) if path.include?("\\")
 
   for part in path.split("/")
-    return error(invalid_library_path(site)) if part == "" or part == "." or part == ".." or part.contains?(":")
+    return error(invalid_library_path(site)) if part == "" or part == "." or part == ".." or part.include?(":")
   end
 
   ok()
@@ -220,7 +220,7 @@ end
 # A name has text and no dot: "models" is a module name, "models.rb" is not.
 def module_name?(text: String) -> Bool
   name = last_part(text)
-  name != "" and !name.contains?(".")
+  name != "" and !name.include?(".")
 end
 
 # The path without a final ".ext".

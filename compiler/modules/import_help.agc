@@ -24,7 +24,7 @@ OTHER_FORMS = [
 ## The help of CHECK-IMPORT-NAME for a name of an import list ({member}): a moved type gets the import list form of
 ## its new name (import {Response} from "std/http"), any other name the help of unknown_import_help.
 export def unknown_listed_help(key: String, exports: Map[String, Declarations.Kind], member: String) -> Diag.Help
-  if key.starts_with?("std/") and Builtins.moved_import(member) != ""
+  if key.start_with?("std/") and Builtins.moved_import(member) != ""
     return Diag.Help.Hint(Builtins.moved_import(member))
   end
 
@@ -51,7 +51,7 @@ export def unknown_import_help(key: String, exports: Map[String, Declarations.Ki
     )
   elsif key == "std/logger.agc" and member == "error"
     return Diag.Help.Hint("the function for the error level is Logger.err; error is a reserved name")
-  elsif key.starts_with?("std/") and Builtins.moved_type(member) != ""
+  elsif key.start_with?("std/") and Builtins.moved_type(member) != ""
     return Diag.Help.Hint(Builtins.moved_type(member))
   end
 

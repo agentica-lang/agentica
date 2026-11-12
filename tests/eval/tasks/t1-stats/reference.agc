@@ -3,14 +3,14 @@ def main() -> Void
   sum = 0
   largest = 0
   while not IO.eof?()
-    n = String.to_int!(String.trim(IO.gets!()))
+    n = IO.gets!().strip.to_i!
     if count == 0 or n > largest
       largest = n
     end
     count = count + 1
     sum = sum + n
   end
-  puts("count: " + String.from_int(count))
-  puts("sum: " + String.from_int(sum))
-  puts("max: " + String.from_int(largest))
+  puts("count: " + count.to_s)
+  puts("sum: " + sum.to_s)
+  puts("max: " + largest.to_s)
 end

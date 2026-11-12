@@ -6,7 +6,7 @@ def main() -> Void
     IO.inspect(Path.resolve(path))
   end
   cwd = Result.unwrap!(Path.cwd())
-  IO.inspect(cwd.ends_with?("/"))
+  IO.inspect(cwd.end_with?("/"))
   IO.inspect(Result.unwrap!(Path.resolve(".")) == cwd)
   IO.inspect(Result.unwrap!(Path.resolve("x/../y")) == cwd + "/y")
 end

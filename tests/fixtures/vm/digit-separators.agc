@@ -26,7 +26,7 @@ def main() -> Void
   puts(label(1000))
   puts(label(-1_000))
   puts(label(5))
-  puts(String.to_int("1_000"))
-  puts(String.to_float("1_0.5"))
-  puts(String.to_int!("1_000"))
+  puts("1_000".to_i)
+  puts("1_0.5".to_f)
+  puts("1_000".to_i!)
 end

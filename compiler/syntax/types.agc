@@ -264,7 +264,7 @@ end
 ## The name as the user wrote it: the linker gives a name from another file the prefix "@N::" to keep it unique, and
 ## messages leave it out.
 export def display_name(name: String) -> String
-  return name if not name.starts_with?("@")
+  return name if not name.start_with?("@")
 
   digits_end = 1
   while digits_end < name.length and digit?(name.at(digits_end))

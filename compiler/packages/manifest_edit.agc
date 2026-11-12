@@ -12,7 +12,7 @@ HEADER = "[dependencies]"
 ## entry, or in a new table at the end of the file when there is none.
 export def add_dependency(text: String, name: String, source: GitSource.Source) -> String
   newline = "\n"
-  if text.contains?("\r\n")
+  if text.include?("\r\n")
     newline = "\r\n"
   end
 
@@ -47,10 +47,10 @@ end
 # The line of `[dependencies]`, maybe with a comment after it; -1 when there is none.
 def header_index(lines: List[String]) -> Int
   for index in 0...lines.size
-    head = lines[index].trim
-    if head.starts_with?(HEADER)
-      rest = head.slice(HEADER.length, head.length - HEADER.length).trim
-      return index if rest == "" or rest.starts_with?("#")
+    head = lines[index].strip
+    if head.start_with?(HEADER)
+      rest = head.slice(HEADER.length, head.length - HEADER.length).strip
+      return index if rest == "" or rest.start_with?("#")
     end
   end
 
@@ -62,9 +62,9 @@ end
 def after_last_entry(lines: List[String], header: Int) -> Int
   last = header
   index = header + 1
-  while index < lines.size and !lines[index].trim.starts_with?("[")
-    head = lines[index].trim
-    if head != "" and !head.starts_with?("#")
+  while index < lines.size and !lines[index].strip.start_with?("[")
+    head = lines[index].strip
+    if head != "" and !head.start_with?("#")
       last = index
     end
 
@@ -76,14 +76,14 @@ end
 
 # A new table after the text, with one blank line between them.
 def with_new_table(text: String, entry: String, newline: String) -> String
-  return "#{HEADER}#{newline}#{entry}#{newline}" if text.trim == ""
+  return "#{HEADER}#{newline}#{entry}#{newline}" if text.strip == ""
 
   body = text
-  if !body.ends_with?("\n")
+  if !body.end_with?("\n")
     body = "#{body}#{newline}"
   end
 
-  if !body.ends_with?("\n#{newline}")
+  if !body.end_with?("\n#{newline}")
     body = "#{body}#{newline}"
   end
 

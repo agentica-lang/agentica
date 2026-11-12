@@ -124,7 +124,7 @@ end
 
 DETACHED_READ_PROGRAM = """\
 def main() -> Void
-  port = Result.unwrap!(String.to_int(System.args()[0]))
+  port = Result.unwrap!(System.args()[0].to_i)
   socket = Result.unwrap!(TCP.connect("127.0.0.1", port, 5000))
   results = Task.map([1], 1, @300@) do |_|
     line = try TCP.read_line(socket, 20000)

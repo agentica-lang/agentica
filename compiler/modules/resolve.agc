@@ -279,7 +279,7 @@ end
 
 # The first function, by name, of a member that is a group of functions: an example for a help.
 def first_function(member: String) -> String
-  found = ENTRIES.keys.filter do |name: String| name.starts_with?("#{member}.") end
+  found = ENTRIES.keys.filter do |name: String| name.start_with?("#{member}.") end
   return "#{member}.fn" if found.size == 0
 
   found.sort[0]

@@ -7,7 +7,7 @@ def read_all(input: FileHandle, ready: Channel[Int], go: Channel[Int]) -> List[I
   first = true
   while running
     case File.read_line(input, 60000)
-      ok(line) -> got = got.append(Result.unwrap!(line.to_int))
+      ok(line) -> got = got.append(Result.unwrap!(line.to_i))
       error(_) -> running = false
     end
     if first
@@ -24,7 +24,7 @@ def main() -> Void
   text = (1..60).to_a.map do |i|
     i.to_s
   end
-  Result.unwrap!(File.write_text(path, String.join(text, "\n"), 60000))
+  Result.unwrap!(File.write_text(path, text.join("\n"), 60000))
   input = Result.unwrap!(File.open(path, "read", 60000))
   ready: Channel[Int] = Channel.new(2)
   go: Channel[Int] = Channel.new(2)

@@ -22,7 +22,7 @@ def main() -> Void
 
     # Empty Strings: pieces between separators, a slice of no characters, blanks trimmed away and a join of nothing.
     for piece in text.split(",")
-      checksum += piece.slice(0, 0).length + "  ".trim.length + piece.trim.length + nothing.join(",").length
+      checksum += piece.slice(0, 0).length + "  ".strip.length + piece.strip.length + nothing.join(",").length
     end
 
     # Empty Lists and Maps: a default for a missing key, a seed for reduce, a filter that keeps nothing.

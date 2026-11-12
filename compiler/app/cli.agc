@@ -226,7 +226,7 @@ def answered(session: Session, answer: Reply.Answer, source: String) -> Int
     Reply.Answer.Printed(reply) -> emit(reply)
     Reply.Answer.Rejected(problem) ->
       status = 1
-      if problem.code.starts_with?("QUERY-")
+      if problem.code.start_with?("QUERY-")
         status = 2
       end
 
@@ -371,7 +371,7 @@ def fmt(session: Session, words: List[String]) -> Int
   end
 
   for path in paths
-    if path.starts_with?("-")
+    if path.start_with?("-")
       return fmt_usage(session, "unknown option #{path} (a file whose name starts with - is written ./#{path})")
     end
   end
@@ -816,7 +816,7 @@ def source_text(session: Session, file: String, root: Bool) -> String
   settings = session.settings
   if root and session.buffer_file != ""
     return session.buffer_shown
-  elsif !root and file.starts_with?("std/")
+  elsif !root and file.start_with?("std/")
     return text_of(Resolve.read_source(settings, file))
   end
 

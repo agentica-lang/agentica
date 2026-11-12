@@ -123,7 +123,7 @@ def walk(workspace: Workspace.Workspace, folder: String) -> Result[List[String]]
           # Hidden folders, agc_libs/ (in any case, as the package hash compares it) and _build/ at any depth;
           # deps/ only beside a manifest. _build and deps are this project's own folders, so their names are exact:
           # only the hash of a package folds them, since it must cover what a build can load on any file system.
-          hidden = entry.name.starts_with?(".") or PackageHash.libs_folder?(entry.name)
+          hidden = entry.name.start_with?(".") or PackageHash.libs_folder?(entry.name)
           own = entry.name == BUILD_FOLDER or (project and entry.name == DEPS_FOLDER)
           if !hidden and !own
             pending = pending.push(path)
@@ -148,7 +148,7 @@ end
 # A path without the separators that end it, which the Workspace does not take (the root folder keeps its one).
 def trimmed(path: String) -> String
   kept = path
-  while kept.length > 1 and kept.ends_with?("/")
+  while kept.length > 1 and kept.end_with?("/")
     kept = kept.slice(0, kept.length - 1)
   end
 

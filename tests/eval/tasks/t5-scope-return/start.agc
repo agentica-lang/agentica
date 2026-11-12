@@ -11,7 +11,7 @@ end
 def main() -> Void
   negatives = 0
   while not IO.eof?()
-    n = String.to_int!(String.trim(IO.gets!()))
+    n = IO.gets!().strip.to_i!
     label = classify(n)
     puts(label)
     if label == "negative"
@@ -20,6 +20,6 @@ def main() -> Void
     end
     last = n
   end
-  puts("negatives: " + String.from_int(negatives))
-  puts(String.from_int(last))
+  puts("negatives: " + negatives.to_s)
+  puts(last.to_s)
 end

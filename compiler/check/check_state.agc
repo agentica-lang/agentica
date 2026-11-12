@@ -396,7 +396,7 @@ export def introduce_local(
   shown: Source.Span,
   value: Optional[Ast.Expr],
 ) -> Result[St]
-  return introduce_slot(cx, st, name, type, span, immutable, -1) if name.starts_with?("_")
+  return introduce_slot(cx, st, name, type, span, immutable, -1) if name.start_with?("_")
 
   key = shown.start.offset
   introduced = try introduce_slot(cx, st, name, type, span, immutable, key)

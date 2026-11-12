@@ -135,8 +135,8 @@ def main() -> Void
       try Test.eq(Logger.time_text(951782400000), "2000-02-29T00:00:00.000Z")
       try Test.eq(Logger.time_text(4107542400000), "2100-03-01T00:00:00.000Z")
       try Test.eq(Logger.time_text(253402300799999), "9999-12-31T23:59:59.999Z")
-      try Test.assert(Logger.time_text(0 - 9223372036854775807 - 1).ends_with?("Z"), "Int.min does not overflow")
-      Test.assert(Logger.time_text(9223372036854775807).ends_with?("Z"), "Int.max does not overflow")
+      try Test.assert(Logger.time_text(0 - 9223372036854775807 - 1).end_with?("Z"), "Int.min does not overflow")
+      Test.assert(Logger.time_text(9223372036854775807).end_with?("Z"), "Int.max does not overflow")
     end,
   ])
 end

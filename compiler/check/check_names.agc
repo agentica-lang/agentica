@@ -63,7 +63,7 @@ export def method_names(cx: State.Cx, kind: String) -> List[String]
   seen: Set[String] = Set.new([])
   prefix = "#{kind}."
   for key in cx.help.aliases.keys
-    if key.starts_with?(prefix)
+    if key.start_with?(prefix)
       names = names.push(key.slice(prefix.length, key.length - prefix.length))
     end
   end
@@ -87,7 +87,7 @@ end
 ## The method name a builtin is written as in method form, for the help of CHECK-PIPE-METHOD: String.upcase is upcase,
 ## String.trim is strip. "" when there is none for that kind.
 export def pipe_method_name(cx: State.Cx, kind: String, name: String) -> String
-  return RubyForm.method_name(name) if RubyForm.method_key(name).starts_with?("#{kind}.")
+  return RubyForm.method_name(name) if RubyForm.method_key(name).start_with?("#{kind}.")
 
   ""
 end
@@ -150,7 +150,7 @@ end
 def module_methods(cx: State.Cx, kind: String, prefix: String) -> List[String]
   names: List[String] = []
   for key in ENTRIES.keys
-    if key.starts_with?(prefix)
+    if key.start_with?(prefix)
       name = key.slice(prefix.length, key.length - prefix.length)
       if shown_method(cx, kind, name) != ""
         names = names.push(name)

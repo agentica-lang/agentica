@@ -6,7 +6,7 @@ struct Row
 end
 
 def build(label: String) -> String
-  empty = "  ".trim
+  empty = "  ".strip
   letter = "xyz".at(1)
   both = empty + letter + label.slice(0, 0) + (label + "!").at(0)
   words = "#{label},,#{label}".split(",")
@@ -28,7 +28,7 @@ def main() -> Void
   e_slice = hello.slice(1, 1)
   e_code = String.from_code(101)
   e_split = hello.split("")[1]
-  e_trim = "  e ".trim
+  e_trim = "  e ".strip
   e_case = "E".downcase
   puts([e, e_slice, e_code, e_split, e_trim, e_case])
   puts([e == e_slice, e == e_code, e == e_split, e == e_trim, e == e_case])
@@ -42,8 +42,8 @@ def main() -> Void
 
   # The empty String from slice, trim, join, replace, split, from_bytes, Result.message and a digit's text.
   nothing = hello.slice(2, 0)
-  blank = " \t\n".trim
-  joined = String.join(["", ""], "")
+  blank = " \t\n".strip
+  joined = ["", ""].join("")
   erased = "abc".replace("abc", "")
   no_bytes = String.from_bytes("".bytes).unwrap!
   pieces = ",a,,b,".split(",")

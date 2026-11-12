@@ -180,7 +180,7 @@ export def alias_of(decl: Ast.ImportDecl) -> String = decl.alias.unwrap_or("")
 
 ## True when the name starts with a capital letter, as a TYPE_NAME token does: the case rule that tells a type from a
 ## function.
-export def type_name?(name: String) -> Bool = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".contains?(name.slice(0, 1))
+export def type_name?(name: String) -> Bool = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".include?(name.slice(0, 1))
 
 ## True for the name of a constant: capitals, digits and `_`, starting with a capital, at least two characters.
 export def constant_name?(name: String) -> Bool = Base.constant_name?(name)

@@ -1,5 +1,5 @@
 def parse(text: String) -> Result[Int]
-  return text.trim.to_int
+  return text.strip.to_i
 end
 
 def validate(n: Int) -> Result[Int]

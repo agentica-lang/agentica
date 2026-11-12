@@ -19,7 +19,7 @@ def main() -> Void
     check("max", r.max == xs.max)
     check("min_by", r.min_by do |n| (n - 4) * (n - 4) end == xs.min_by do |n| (n - 4) * (n - 4) end)
     check("max_by", r.max_by do |n| "k#{n % 4}" end == xs.max_by do |n| "k#{n % 4}" end)
-    check("max_by float", r.max_by do |n| Float.from_int(n % 3) end == xs.max_by do |n| Float.from_int(n % 3) end)
+    check("max_by float", r.max_by do |n| (n % 3).to_f end == xs.max_by do |n| (n % 3).to_f end)
     check("find", r.find do |n| n > 3 end == xs.find do |n| n > 3 end)
     check("detect", r.detect do |n| n > 30 end == xs.find do |n| n > 30 end)
     check("find_index", r.find_index do |n| n == 5 end == xs.find_index do |n| n == 5 end)

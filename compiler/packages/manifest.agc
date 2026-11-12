@@ -405,7 +405,7 @@ def file_problem(file: String) -> String
   problem = GitSource.subdir_problem(file)
   return problem if problem != ""
 
-  if !file.starts_with?("#{NATIVE_FOLDER}/")
+  if !file.start_with?("#{NATIVE_FOLDER}/")
     return "a native file is a path in the #{NATIVE_FOLDER}/ folder of the package"
   end
 
@@ -430,7 +430,7 @@ def system_problem(name: String) -> String
     return ""
   end
 
-  bad = name.contains?("/") or name.contains?("\\") or name.contains?(":") or has_nul
+  bad = name.include?("/") or name.include?("\\") or name.include?(":") or has_nul
   if name.length == 0 or name.length > MAX_SYSTEM_NAME or bad
     return (
       "a system library is a name such as libz.so.1 (no / \\ or :, at most #{MAX_SYSTEM_NAME} characters) " +

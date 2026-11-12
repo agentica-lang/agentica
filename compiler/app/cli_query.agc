@@ -193,7 +193,7 @@ end
 def word_ask(words: List[String]) -> RefsAsk
   if words.size == 0 or words[0] == ""
     return RefsAsk.Refused(QueryOptions.refusal("missing NAME or FILE:LINE:COL", REFS_USAGE))
-  elsif !words[0].contains?(":")
+  elsif !words[0].include?(":")
     return RefsAsk.Named(words[0], words.drop(1))
   end
 

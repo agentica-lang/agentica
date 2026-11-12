@@ -199,7 +199,7 @@ def hold(socket: Socket) -> Result[String]
 end
 
 def flood(socket: Socket) -> Void
-  chunk = String.join(List.repeat("abcdefgh", 131072), "")
+  chunk = List.repeat("abcdefgh", 131072).join("")
   while Result.ok?(TCP.send(socket, chunk, 60000))
   end
 end

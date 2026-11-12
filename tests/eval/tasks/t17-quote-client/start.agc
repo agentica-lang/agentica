@@ -40,7 +40,7 @@ def main() -> Void
     end
     text = quote(client, base, parts[0], quantity)
     sent += 1
-    if text.starts_with?("error:")
+    if text.start_with?("error:")
       failed += 1
       puts("#{parts[0]}: #{text}")
     else

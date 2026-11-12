@@ -32,7 +32,7 @@ def handle(request: HTTP.Request) -> Result[HTTP.Response]
     return ok(stats_response(HTTP.text(request.body, request.headers).unwrap!))
   elsif path == "/hello" && request.method == "GET"
     return ok(text_response(200, JSON.encode({"greeting": "hello, world"})))
-  elsif path.starts_with?("/double/") && request.method == "GET"
+  elsif path.start_with?("/double/") && request.method == "GET"
     n = path.slice(8, path.length - 8).to_i!
     return ok(text_response(200, JSON.encode({"n": n, "double": n * 2})))
   end

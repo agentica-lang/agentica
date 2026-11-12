@@ -182,7 +182,7 @@ def std_module(name: String) -> Result[String]
 end
 
 def folder?(files: Map[String, String], path: String) -> Bool
-  return files.keys.any? do |file: String| file.starts_with?("#{path}/") end
+  return files.keys.any? do |file: String| file.start_with?("#{path}/") end
 end
 
 # The names directly inside a folder: a name with more path after it is a folder. A path with a trailing "/" is not a
@@ -193,7 +193,7 @@ def entries(files: Map[String, String], path: String) -> Result[List[Workspace.E
   end
   found: Map[String, Workspace.EntryKind] = {}
   for file in files.keys
-    if file.starts_with?("#{path}/")
+    if file.start_with?("#{path}/")
       rest = file.slice(path.length + 1, file.length - path.length - 1).split("/")
       kind = Workspace.EntryKind.Directory
       if rest.size == 1

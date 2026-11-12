@@ -99,7 +99,7 @@ CLASSES: Map[String, CharClass] = (0..127).to_a.reduce({}) do |classes, code|
     kind = CharClass.CloseBrace
   elsif code == 60
     kind = CharClass.Less
-  elsif ",:.=+-*/%>&|!".contains?(character)
+  elsif ",:.=+-*/%>&|!".include?(character)
     kind = CharClass.Operator
   end
 
@@ -674,7 +674,7 @@ end
 # that end it, and its lines when no CR can end one early.
 def new_input(text: String) -> Input
   chars = text.split("")
-  by_lines = !text.contains?("\r")
+  by_lines = !text.include?("\r")
   lines: List[String] = []
   if by_lines
     lines = text.split("\n")
@@ -1336,7 +1336,7 @@ def scan_regex(input: Input, first: Int, line: Int, line_start: Int) -> Diag.Out
   flags = ""
   while NAME_CHARS.include?(chars[stop])
     flag = chars[stop]
-    if !REGEX_FLAGS.include?(flag) or flags.contains?(flag)
+    if !REGEX_FLAGS.include?(flag) or flags.include?(flag)
       return Diag.Outcome.Failed(regex_flag(flag, Source.position(stop, line, line_start)))
     end
 

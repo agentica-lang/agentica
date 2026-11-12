@@ -8,7 +8,7 @@ end
 
 def main() -> Void
   listener = Result.unwrap!(TCP.listen("127.0.0.1", 0))
-  puts(String.from_int(TCP.local_port(listener)))
+  puts(TCP.local_port(listener).to_s)
   IO.flush()
   while true
     connection = TCP.accept(listener, 30000)

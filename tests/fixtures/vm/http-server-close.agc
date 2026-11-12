@@ -14,7 +14,7 @@ end
 
 def side_of(request: HTTP.Request) -> Int
   at = request.target.index_of("?").unwrap!
-  return String.to_int!(request.target.slice(at + 1, request.target.length - at - 1))
+  return request.target.slice(at + 1, request.target.length - at - 1).to_i!
 end
 
 def handle(request: HTTP.Request) -> Result[HTTP.Response]

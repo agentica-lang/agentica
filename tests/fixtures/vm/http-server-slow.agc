@@ -3,7 +3,7 @@ import HTTP from "std/http"
 def handle(request: HTTP.Request) -> Result[HTTP.Response]
   if request.path == "/hang"
     at = request.target.index_of("?").unwrap!
-    side = String.to_int!(request.target.slice(at + 1, request.target.length - at - 1))
+    side = request.target.slice(at + 1, request.target.length - at - 1).to_i!
     socket = TCP.connect("127.0.0.1", side, 5000).unwrap!
     TCP.send(socket, "hanging\n", 5000).unwrap!
     Task.sleep(60000)

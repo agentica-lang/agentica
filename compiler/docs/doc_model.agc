@@ -101,12 +101,12 @@ export def cleaned(doc: Optional[String]) -> Optional[String]
     some(text) ->
       lines = text.split("\n")
       first = 0
-      while first < lines.size and lines[first].trim == ""
+      while first < lines.size and lines[first].strip == ""
         first += 1
       end
 
       last = lines.size
-      while last > first and lines[last - 1].trim == ""
+      while last > first and lines[last - 1].strip == ""
         last -= 1
       end
 
@@ -124,9 +124,9 @@ export def summary(doc: Optional[String]) -> Optional[String]
     some(text) ->
       words: List[String] = []
       for line in text.split("\n")
-        return some(words.join(" ")) if line.trim == ""
+        return some(words.join(" ")) if line.strip == ""
 
-        words = words.push(line.trim)
+        words = words.push(line.strip)
       end
 
       some(words.join(" "))

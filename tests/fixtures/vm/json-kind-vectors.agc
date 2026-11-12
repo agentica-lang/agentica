@@ -10,7 +10,7 @@ def follow(j: Json, path: String) -> Result[Json]
   end
   node = j
   for step in path.split("/")
-    if step.starts_with?("#")
+    if step.start_with?("#")
       node = try JSON.at(node, step.slice(1, step.length - 1).to_i!)
     else
       node = try JSON.get(node, step)

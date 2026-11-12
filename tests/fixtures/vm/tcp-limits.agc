@@ -10,7 +10,7 @@ end
 def main() -> Void
   listener = Result.unwrap!(TCP.listen("127.0.0.1", 0))
   port = TCP.local_port(listener)
-  exact = String.join(List.repeat("a", 1048576), "")
+  exact = List.repeat("a", 1048576).join("")
   client = Result.unwrap!(TCP.connect("127.0.0.1", port, 5000))
   server = Result.unwrap!(TCP.accept(listener, 5000))
   first = Task.spawn(&push, Job(socket: client, text: exact + "\n"))

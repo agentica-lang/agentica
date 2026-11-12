@@ -94,8 +94,8 @@ def option(options: Options, name: String, value: String) -> Options
     "--version" -> options.with(version: value)
     "--agentica" -> options.with(agentica: options.agentica.push(value))
     "--style" -> options.with(style: value)
-    "--seed" -> options.with(seeded: true, seed: value.to_int.unwrap_or(0))
-    "--test-timeout-ms" -> options.with(test_timeout_ms: value.to_int.unwrap_or(options.test_timeout_ms))
+    "--seed" -> options.with(seeded: true, seed: value.to_i.unwrap_or(0))
+    "--test-timeout-ms" -> options.with(test_timeout_ms: value.to_i.unwrap_or(options.test_timeout_ms))
     _ -> options
   end
 end
@@ -137,7 +137,7 @@ def user_arguments(options: Options, words: List[String]) -> Parsed
       elsif word == "--jobs"
         return Parsed.Usage("one --jobs N", shown) if jobs_seen
 
-        parsed = value.to_int
+        parsed = value.to_i
         if !parsed.ok? or parsed.unwrap! < 1 or parsed.unwrap! > MAX_JOBS
           return Parsed.Usage("--jobs needs a whole number from 1 to #{MAX_JOBS}", shown)
         end
@@ -167,7 +167,7 @@ def user_arguments(options: Options, words: List[String]) -> Parsed
     elsif DENY.include?(word)
       shown = shown.with(deny: shown.deny.push(word).uniq)
       at += 1
-    elsif word.starts_with?("--")
+    elsif word.start_with?("--")
       return Parsed.Usage("unknown option #{word}", shown)
     else
       shown = shown.with(paths: shown.paths.push(word))

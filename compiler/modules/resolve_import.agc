@@ -75,10 +75,10 @@ export def resolve_import(
   file: String,
   site: Failure.Site,
 ) -> Result[Resolution]
-  if file.starts_with?("std/")
+  if file.start_with?("std/")
     key = try standard_for(settings, file, site, embedded?(importer.key))
     return ok(plain(build, key))
-  elsif file.starts_with?("pkg/")
+  elsif file.start_with?("pkg/")
     return pkg(settings, build, importer, file, site)
   elsif embedded?(importer.key)
     # A relative import of a standard module stays in std/, and may use ".." to go up inside it.
@@ -101,12 +101,12 @@ end
 # `standard`, where `from_std` says the importing module is a std/ module, which may import std/internal/.
 def standard_for(settings: Env.Settings, file: String, site: Failure.Site, from_std: Bool) -> Result[String]
   try Paths.validate_library_path(file, site)
-  if file.starts_with?(INTERNAL) and !from_std
+  if file.start_with?(INTERNAL) and !from_std
     return error(io_failure(site, "std/internal/ modules are private to the standard library"))
   end
 
   # The files of std/prelude/ are the compiler prelude, which no program imports (prelude_files.agc).
-  if file.starts_with?("std/prelude/") or !std_exists?(settings, file)
+  if file.start_with?("std/prelude/") or !std_exists?(settings, file)
     return error(io_failure(site, "unknown standard library module"))
   end
 
@@ -119,7 +119,7 @@ def std_path(key: String) -> String = key.slice(4, key.length - 4)
 # The file of the source of a std/ module in the folder of a run with `--stdlib DIR`. The core that std/analysis embeds
 # as std/internal/compiler/X is the file compiler/X of the checkout, next to the stdlib/ folder.
 def std_file(folder: String, key: String) -> String
-  if key.starts_with?(INTERNAL_COMPILER)
+  if key.start_with?(INTERNAL_COMPILER)
     core = key.slice(INTERNAL_COMPILER.length, key.length - INTERNAL_COMPILER.length)
     return Paths.join(Paths.join(folder, "../compiler"), core)
   end
@@ -249,7 +249,7 @@ def user_roots(env: Env.Env, on_windows: Bool) -> List[String]
     return []
   end
 
-  return [Paths.join(env.xdg_data_home, "agentica/lib")] if env.xdg_data_home.starts_with?("/")
+  return [Paths.join(env.xdg_data_home, "agentica/lib")] if env.xdg_data_home.start_with?("/")
 
   return [] if env.home == ""
 
@@ -280,9 +280,9 @@ def relative(
   file: String,
   site: Failure.Site,
 ) -> Result[String]
-  if file.starts_with?("/")
+  if file.start_with?("/")
     return error(io_failure_help(site, "cannot resolve import", Diag.Help.Hint("an import path is never absolute")))
-  elsif file.contains?(String.from_code(0))
+  elsif file.include?(String.from_code(0))
     return error(io_failure(site, "cannot resolve import"))
   end
 
@@ -343,7 +343,7 @@ end
 # `Paths.folded` drops the "/" that a rooted path starts with: put it back, as `like` has it.
 def folded_from(like: String, path: String) -> String
   folded = Paths.folded(path)
-  return "/#{folded}" if like.starts_with?("/")
+  return "/#{folded}" if like.start_with?("/")
 
   folded
 end

@@ -22,7 +22,7 @@ def main() -> Void
   b = Task.spawn(&echo, "beta")
   p = Result.unwrap!(Process.spawn("cat", [], Process.Options(timeout_ms: 5000)))
   reader = Task.spawn(&drain, p)
-  data = String.join(List.repeat("abcdefgh", 65536), "")
+  data = List.repeat("abcdefgh", 65536).join("")
   IO.inspect(Process.send(p, data, 5000))
   IO.inspect(Process.close_stdin(p, 5000))
   IO.inspect(Process.wait(p, 5000))

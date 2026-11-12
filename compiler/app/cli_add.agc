@@ -50,7 +50,7 @@ end
 ## Runs `update`. `words` are the ones after the command: none for every package, or the name of a dependency.
 export def update(settings: Env.Settings, style: String, words: List[String]) -> Reply.Answer
   # A word that starts with "-" is an option nobody knows, not a name.
-  if words.size > 1 or (words.size == 1 and words[0].starts_with?("-"))
+  if words.size > 1 or (words.size == 1 and words[0].start_with?("-"))
     return Reply.Answer.Printed(Reply.failed(2, Texts.usage_text()))
   end
 

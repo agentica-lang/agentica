@@ -78,7 +78,7 @@ def float_of(field: String) -> Float
     return (0.0 - 1.0) * 0.0
   end
   parts = field.split("p")
-  return Float.from_int(parts[0].to_i!) * pow2(parts[1].to_i!)
+  return parts[0].to_i!.to_f * pow2(parts[1].to_i!)
 end
 
 def float_text(x: Float) -> String
@@ -174,7 +174,7 @@ def check_frame_length(line: String, f: List[String]) -> Int
   want = f[3]
   if want == "neg"
     want = "error: frame limit #{max} is negative"
-  elsif want.starts_with?("above:")
+  elsif want.start_with?("above:")
     want = "error: frame length #{want.split(":")[1]} is above the limit #{max}"
   end
   return report(line, int_result_text(Binary.read_frame_length(bytes_of(f[1]), 0, max)), want)

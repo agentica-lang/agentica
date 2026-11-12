@@ -50,7 +50,7 @@ def main() -> Void
   while !IO.eof?()
     line = IO.gets!().strip
     number += 1
-    if line == "" || line.starts_with?("#")
+    if line == "" || line.start_with?("#")
       next
     end
     result = apply_line(summary, line)

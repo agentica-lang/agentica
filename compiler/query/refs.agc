@@ -285,7 +285,7 @@ end
 # reaches from the first part (`Counter.Msg` of `Counter.Msg.Add`).
 def qualifier(text: String, site: Sites.Site, prefix: String) -> Optional[Source.Span]
   # A definition is never qualified: its reach is the bare name.
-  return none if site.target.kind != "name" or !site.target.name.starts_with?(prefix)
+  return none if site.target.kind != "name" or !site.target.name.start_with?(prefix)
 
   reach = site.reach
   written = text.slice(reach.start.offset, reach.stop.offset - reach.start.offset)
@@ -299,7 +299,7 @@ def qualifier(text: String, site: Sites.Site, prefix: String) -> Optional[Source
     skip = parts.take(index).join(".").length + 1
   end
 
-  return none if name == "" or name.strip != name or written.slice(0, skip).contains?("\n")
+  return none if name == "" or name.strip != name or written.slice(0, skip).include?("\n")
 
   start = Source.Position(offset: reach.start.offset + skip, line: reach.start.line, column: reach.start.column + skip)
   stop = Source.Position(offset: start.offset + name.length, line: start.line, column: start.column + name.length)

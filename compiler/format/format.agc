@@ -153,7 +153,7 @@ def comment_words(comments: List[Tokens.Comment]) -> String
   for comment in comments
     for word in comment.text.split(" ")
       bare = word
-      while bare.starts_with?("#")
+      while bare.start_with?("#")
         bare = bare.slice(1, bare.length - 1)
       end
 
@@ -191,23 +191,23 @@ end
 # ` expression` on a `function-decl` line and ` implicit` on a `return-stmt` line (parse_text.agc writes each last on
 # its line).
 def without_marks(line: String) -> String
-  return line.slice(0, line.length - " guard".length) if line.ends_with?(" guard") and line.contains?("if-stmt ")
+  return line.slice(0, line.length - " guard".length) if line.end_with?(" guard") and line.include?("if-stmt ")
 
-  if line.ends_with?(" implicit") and line.contains?("return-stmt ")
+  if line.end_with?(" implicit") and line.include?("return-stmt ")
     return line.slice(0, line.length - " implicit".length)
   end
 
-  if line.ends_with?(" expression") and line.contains?("function-decl ")
+  if line.end_with?(" expression") and line.include?("function-decl ")
     return line.slice(0, line.length - " expression".length)
   end
 
   line
 end
 
-def digit?(char: String) -> Bool = char.length == 1 and "0123456789".contains?(char)
+def digit?(char: String) -> Bool = char.length == 1 and "0123456789".include?(char)
 
 def word_char?(char: String) -> Bool
-  char.length == 1 and "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_".contains?(char)
+  char.length == 1 and "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_".include?(char)
 end
 
 # The index after the digits that start at `at` (`at` itself when there are none).

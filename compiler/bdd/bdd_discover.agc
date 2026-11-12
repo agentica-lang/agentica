@@ -32,7 +32,7 @@ end
 export def kind_of(path: String) -> String
   if test_file?(path)
     return "tests"
-  elsif path.ends_with?(".feature")
+  elsif path.end_with?(".feature")
     return "feature"
   end
 
@@ -40,7 +40,7 @@ export def kind_of(path: String) -> String
 end
 
 ## True for the name of a unit test file, `*_test.agc`.
-export def test_file?(path: String) -> Bool = path.ends_with?("_test.agc")
+export def test_file?(path: String) -> Bool = path.end_with?("_test.agc")
 
 ## The entries for the given paths: first the problems in the order they were met, then the files sorted by path, each
 ## once. A path is made absolute without following links. A folder is searched for the files whose names fit, in every
@@ -100,7 +100,7 @@ end
 # name is taken for "not UTF-8" even when the file really has a U+FFFD in its name (the only wrong report). Its kind is
 # unknown, so it is a problem only when its name fits (a file) and a folder with such a name is skipped.
 def visit(path: String, name: String, project: Bool, found: Found) -> Found
-  bad_name = name.contains?(String.from_code(65_533))
+  bad_name = name.include?(String.from_code(65_533))
   info = File.lstat(path, IO_TIMEOUT)
   if !info.ok? and bad_name
     return problem(found, path, "the file name is not valid UTF-8") if kind_of(name) != ""

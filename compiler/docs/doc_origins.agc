@@ -30,7 +30,7 @@ end
 ## The items of the builtin types that a std/ module (`path` is its std/ path or key) re-exports from a std-only family
 ## it does not import, by name. They need no link, and a std/ module given by its std/ path does not link as a root.
 export def builtin_items(path: String, program: Ast.Program) -> Map[String, Model.Item]
-  return {} if !path.starts_with?("std/")
+  return {} if !path.start_with?("std/")
 
   aliases = Declarations.imports_of(program.declarations).map do |decl: Ast.ImportDecl| Declarations.alias_of(decl) end
   items: Map[String, Model.Item] = {}

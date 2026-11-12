@@ -1018,7 +1018,7 @@ end
 ## before a stream for one, returns `ok(body_refusal(message))` for the error.
 export def body_refusal(message: String) -> Answer
   return Answer.Whole(closing_answer(413)) if message == BODY_TOO_LONG
-  return Answer.Whole(closing_answer(431)) if String.starts_with?(message, FIELDS_TOO_LARGE)
+  return Answer.Whole(closing_answer(431)) if message.start_with?(FIELDS_TOO_LARGE)
   Answer.Whole(closing_answer(400))
 end
 
@@ -1082,7 +1082,7 @@ end
 # of `http` left out.
 def host_authority(host: String, port: Int) -> String
   name = host
-  if String.contains?(host, ":")
+  if host.include?(":")
     name = "[#{host}]"
   end
 
@@ -1159,7 +1159,7 @@ def login_of(info: String) -> Result[String]
     password = try unescaped(rest_of(info, colon + 1))
   end
 
-  return error(BAD_LOGIN) if user == "" or String.contains?(user, ":")
+  return error(BAD_LOGIN) if user == "" or user.include?(":")
 
   ok("Basic #{Base64.strict_encode64("#{user}:#{password}".bytes)}")
 end
@@ -1263,7 +1263,7 @@ end
 # `host:port` of a target as an error shows it: an IPv6 literal in brackets and the port always there.
 def proxy_name(where: Target) -> String
   name = where.host
-  if String.contains?(name, ":")
+  if name.include?(":")
     name = "[#{name}]"
   end
 
@@ -1286,8 +1286,8 @@ def proxy_of_scheme(scheme: String) -> String
     return ""
   end
 
-  value = String.trim(env_value(lower, upper, trusted))
-  return value if value == "" or String.contains?(value, "://")
+  value = env_value(lower, upper, trusted).strip
+  return value if value == "" or value.include?("://")
 
   "http://#{value}"
 end
@@ -1308,7 +1308,7 @@ end
 def no_proxy_for?(where: Target) -> Bool
   # Commas and spaces both separate entries, as in curl 7.86 and later.
   for entry in String.split(String.replace(env_value("no_proxy", "NO_PROXY", true), ",", " "), " ")
-    item = String.downcase(String.trim(entry))
+    item = String.downcase(entry.strip)
     return true if item == "*" or (item != "" and exempt?(item, where))
   end
 
@@ -1319,14 +1319,14 @@ end
 def exempt?(item: String, where: Target) -> Bool
   host = item
   port = 0
-  if String.starts_with?(item, "[")
+  if item.start_with?("[")
     close = first_of(item, "]")
     return false if close == String.length(item)
 
     host = String.slice(item, 1, close - 1)
     after = rest_of(item, close + 1)
     if after != ""
-      return false if not String.starts_with?(after, ":")
+      return false if not after.start_with?(":")
 
       port = entry_port(rest_of(after, 1))
     end
@@ -1340,28 +1340,28 @@ def exempt?(item: String, where: Target) -> Bool
 
   # One trailing dot (the root of a fully qualified name) is not part of the name, on either side.
   name = without_dot(where.host)
-  return in_range?(host, name) if String.contains?(host, "/")
+  return in_range?(host, name) if host.include?("/")
 
   suffix = without_dot(host)
-  if String.starts_with?(suffix, "*.")
+  if suffix.start_with?("*.")
     suffix = rest_of(suffix, 1)
   end
 
-  if String.starts_with?(suffix, ".")
+  if suffix.start_with?(".")
     suffix = rest_of(suffix, 1)
   end
 
   return false if suffix == ""
 
   # An IP literal is matched by the same address or by a range, never by the tail of its digits (0.1 and 10.0.0.1).
-  return name == suffix if ipv4_number(name) >= 0 or String.contains?(name, ":")
+  return name == suffix if ipv4_number(name) >= 0 or name.include?(":")
 
-  name == suffix or String.ends_with?(name, ".#{suffix}")
+  name == suffix or name.end_with?(".#{suffix}")
 end
 
 # The name without one trailing dot.
 def without_dot(name: String) -> String
-  return String.slice(name, 0, String.length(name) - 1) if String.length(name) > 1 and String.ends_with?(name, ".")
+  return String.slice(name, 0, String.length(name) - 1) if String.length(name) > 1 and name.end_with?(".")
 
   name
 end
@@ -1370,7 +1370,7 @@ end
 def entry_port(text: String) -> Int
   return -1 if text == "" or String.length(text) > 5 or not plain?(text, true)
 
-  port = String.to_int!(text)
+  port = text.to_i!
   return -1 if port < 1 or port > 65535
 
   port
@@ -1382,7 +1382,7 @@ def in_range?(spec: String, host: String) -> Bool
   # An entry the environment gives may be anything: only 1 or 2 digits are a prefix length.
   return false if List.size(parts) != 2 or parts[1] == "" or not plain?(parts[1], true) or String.length(parts[1]) > 2
 
-  bits = String.to_int!(parts[1])
+  bits = parts[1].to_i!
   base = ipv4_number(parts[0])
   address = ipv4_number(host)
   return false if bits > 32 or base < 0 or address < 0
@@ -1403,9 +1403,9 @@ def ipv4_number(text: String) -> Int
 
   total = 0
   for part in parts
-    return -1 if part == "" or String.length(part) > 3 or not plain?(part, true) or String.to_int!(part) > 255
+    return -1 if part == "" or String.length(part) > 3 or not plain?(part, true) or part.to_i! > 255
 
-    total = total * 256 + String.to_int!(part)
+    total = total * 256 + part.to_i!
   end
 
   total
@@ -1921,7 +1921,7 @@ def charset_of(headers: List[HttpWire.Header]) -> String
     at = first_of(parameter, "=")
     if at < parameter.length and parameter.slice(0, at).strip.downcase == "charset"
       value = rest_of(parameter, at + 1).strip
-      if value.length >= 2 and value.starts_with?("\"") and value.ends_with?("\"")
+      if value.length >= 2 and value.start_with?("\"") and value.end_with?("\"")
         value = value.slice(1, value.length - 2)
       end
       return value.downcase
@@ -1943,7 +1943,7 @@ def plain?(text: String, digits_only: Bool) -> Bool
 end
 
 def ipv6?(text: String) -> Bool
-  return false if not String.contains?(text, ":")
+  return false if not text.include?(":")
   for c in String.split(text, "")
     code = String.code(c)
     if not ((code >= 48 and code <= 58) or (code >= 65 and code <= 70) or (code >= 97 and code <= 102) or code == 46)
@@ -1968,37 +1968,35 @@ def parse_url(url: String) -> Result[Target]
   end
   authority = String.slice(rest, 0, stop)
   target = rest_of(rest, stop)
-  if not String.starts_with?(target, "/")
+  if not target.start_with?("/")
     target = "/#{target}"
   end
   host = authority
   port_text = ""
-  if String.starts_with?(authority, "[")
+  if authority.start_with?("[")
     close = first_of(authority, "]")
     return bad_url() if close == String.length(authority)
     host = String.slice(authority, 1, close - 1)
     return bad_url() if not ipv6?(host)
     after = rest_of(authority, close + 1)
     if after != ""
-      return bad_url() if after == ":" or not String.starts_with?(after, ":")
+      return bad_url() if after == ":" or not after.start_with?(":")
       port_text = rest_of(after, 1)
     end
-  elsif String.contains?(authority, ":")
+  elsif authority.include?(":")
     colon = first_of(authority, ":")
     host = String.slice(authority, 0, colon)
     port_text = rest_of(authority, colon + 1)
     return bad_url() if port_text == ""
   end
-  if host == "" or String.contains?(authority, "@") or not plain?(host, false) or not plain?(port_text, true)
-    return bad_url()
-  end
+  return bad_url() if host == "" or authority.include?("@") or not plain?(host, false) or not plain?(port_text, true)
   port = 80
   if scheme == "https"
     port = 443
   end
   return error("http: the port must be 1..65535") if String.length(port_text) > 5
   if port_text != ""
-    port = String.to_int!(port_text)
+    port = port_text.to_i!
   end
   return error("http: the port must be 1..65535") if port < 1 or port > 65535
   ok(Target(scheme: scheme, host: String.downcase(host), port: port, target: target))
@@ -2226,7 +2224,7 @@ end
 def announced_length(headers: List[HttpWire.Header]) -> Int
   values = header_values(headers, "content-length")
   return 0 if values.empty? or not plain?(values[0], true)
-  String.to_int!(values[0])
+  values[0].to_i!
 end
 
 def closing_answer(status: Int) -> HttpWire.Response
@@ -2909,8 +2907,8 @@ end
 # The error of a chunked body the feeder cannot go on with ("NNN reason" from HttpWire.chunk): one over the limit is
 # BODY_TOO_LONG, as `read_all` says it, so `body_refusal` answers it 413, and a 431 starts with FIELDS_TOO_LARGE.
 def feed_problem(problem: String) -> String
-  return BODY_TOO_LONG if String.starts_with?(problem, "413")
-  return FIELDS_TOO_LARGE + rest_of(problem, 4) if String.starts_with?(problem, "431")
+  return BODY_TOO_LONG if problem.start_with?("413")
+  return FIELDS_TOO_LARGE + rest_of(problem, 4) if problem.start_with?("431")
   "http: #{rest_of(problem, 4)}"
 end
 
@@ -2986,7 +2984,7 @@ def reply_whole(socket: Socket, request: HttpWire.Request, response: HttpWire.Re
   case write_response(socket, request, response, timeout)
     ok(keep) -> return keep
     error(message) ->
-      if String.starts_with?(message, "http: invalid response: ")
+      if message.start_with?("http: invalid response: ")
         IO.warn(message)
         failed(socket, request, timeout)
       end
@@ -3715,7 +3713,7 @@ def finish_exchange(answer: Pending, received: Received, sent: Result[Void], reu
   case received.response
     ok(response) -> Attempt(answer: ok(response), kept: kept, retry: false)
     error(message) ->
-      lost = message == END_OF_INPUT or String.starts_with?(message, READ_FAILED)
+      lost = message == END_OF_INPUT or message.start_with?(READ_FAILED)
       retry = reused and idempotent?(answer.job.method) and not received.started
       case sent
         error(problem) -> Attempt(answer: error(problem), kept: false, retry: retry)
@@ -3746,7 +3744,7 @@ def read_response(answer: Pending) -> Received
             return failed_read("http: too many interim responses", true) if interim > MAX_INTERIM
           error(message) ->
             return failed_read(CUT_SHORT, true) if interim > 0 and message == END_OF_INPUT
-            broken = String.starts_with?(message, READ_FAILED)
+            broken = message.start_with?(READ_FAILED)
             first = message == END_OF_INPUT or broken
             return failed_read(message, interim > 0 or not first)
         end

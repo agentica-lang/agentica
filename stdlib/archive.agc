@@ -296,7 +296,7 @@ end
 def strip_slashes(path: String) -> String
   out = path
   while String.length(out) > 1
-    break if !String.ends_with?(out, "/")
+    break if !out.end_with?("/")
     out = String.slice(out, 0, String.length(out) - 1)
   end
   out
@@ -449,7 +449,7 @@ end
 # Checks one relative path after its leading `./` is gone: no absolute, drive, UNC, backslash, colon or NUL content
 # and no empty, `.` or `..` segments. `name` and `suffix` shape the error.
 def check_relative(path: String, name: String, suffix: String) -> Result[String]
-  return error("archive: #{name} is absolute#{suffix}") if String.starts_with?(path, "/")
+  return error("archive: #{name} is absolute#{suffix}") if path.start_with?("/")
   for b in path.bytes
     return error("archive: #{name} holds a NUL byte#{suffix}") if b == 0
     return error("archive: #{name} holds a portable separator#{suffix}") if b == 92 or b == 58
@@ -457,7 +457,7 @@ def check_relative(path: String, name: String, suffix: String) -> Result[String]
   if String.length(path) >= 2
     return error("archive: #{name} holds a drive letter#{suffix}") if String.slice(path, 1, 1) == ":"
   end
-  return error("archive: #{name} is a UNC path#{suffix}") if String.starts_with?(path, "\\\\")
+  return error("archive: #{name} is a UNC path#{suffix}") if path.start_with?("\\\\")
   for seg in String.split(path, "/")
     return error("archive: #{name} is not a safe relative path#{suffix}") if seg == "" or seg == "." or seg == ".."
   end
@@ -469,7 +469,7 @@ def normalize_selector(text: String) -> Result[String]
   return error("archive: a member must not be empty") if text == ""
   return error("archive: member is too long: #{text}") if text.bytesize > NAME_BYTES
   path = text
-  if String.starts_with?(path, "./")
+  if path.start_with?("./")
     path = String.slice(path, 2, String.length(path) - 2)
   end
   return error("archive: a member must name a file, not the root: #{text}") if path == "" or path == "."
@@ -486,10 +486,10 @@ def match_name_of(raw: Bytes) -> String
     return "" if raw[i] == 0
   end
   path = decode_or_empty(raw)
-  if String.starts_with?(path, "./")
+  if path.start_with?("./")
     path = String.slice(path, 2, String.length(path) - 2)
   end
-  while String.length(path) > 0 and String.ends_with?(path, "/")
+  while String.length(path) > 0 and path.end_with?("/")
     path = String.slice(path, 0, String.length(path) - 1)
   end
   path
@@ -546,8 +546,8 @@ end
 # uses the host one, and the joined segments themselves never hold a separator.
 def stays_under(out: String, dest: String) -> Bool
   return true if out == dest
-  return true if String.starts_with?(out, "#{dest}/")
-  String.starts_with?(out, back_join(dest))
+  return true if out.start_with?("#{dest}/")
+  out.start_with?(back_join(dest))
 end
 
 def back_join(dest: String) -> String = "#{dest}\\"
@@ -644,11 +644,11 @@ end
 # failed read of the source. The zlib texts matched here are the ones vm/zlib.c gives (agc_zstep_next): keep them in
 # step.
 def stream_error(message: String, src: String) -> String
-  return message if String.starts_with?(message, "archive: ")
+  return message if message.start_with?("archive: ")
   return "archive: trailing bytes after the gzip member" if message == "zlib: trailing bytes after stream end"
   return "archive: gzip stream is truncated" if message == "zlib: truncated stream"
   return "archive: decompressed input exceeds 1073741824 bytes" if message == "zlib: output exceeds max_bytes"
-  return "archive: gzip input is invalid: #{message}" if String.starts_with?(message, "zlib: ")
+  return "archive: gzip input is invalid: #{message}" if message.start_with?("zlib: ")
   "archive: cannot read #{src}: #{message}"
 end
 

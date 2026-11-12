@@ -208,7 +208,7 @@ def built_libraries(settings: Env.Settings, modules: List[Linker.LinkedModule]) 
         Ast.Decl.Function(node) ->
           case node.native
             some(native) ->
-              if native.library.starts_with?(base)
+              if native.library.start_with?(base)
                 found = found.push(native.library)
               end
 
@@ -240,7 +240,7 @@ end
 # while the front end works makes the next lookup miss instead of keeping the old program under the new key.
 def entry_for(settings: Env.Settings, root: String) -> Result[Entry]
   real = try settings.workspace.real_path.call(root)
-  return error("the path has a line feed") if real.contains?("\n")
+  return error("the path has a line feed") if real.include?("\n")
 
   site = try CacheFiles.site(settings, real)
   # A test file compiled for `agentica test` gets a `main` that a run does not (Settings.test_file), so the two have
@@ -286,9 +286,9 @@ def probe_lines(settings: Env.Settings, libs_dir: String, modules: List[Linker.L
   for module in modules
     for decl in Declarations.imports_of(module.parsed.declarations)
       file = "#{decl.path}.agc"
-      if file.starts_with?("std/")
+      if file.start_with?("std/")
         next
-      elsif file.starts_with?("pkg/")
+      elsif file.start_with?("pkg/")
         if !searched
           roots = try Resolve.search_roots(settings, libs_dir)
           searched = true
@@ -319,7 +319,7 @@ def probe(workspace: Workspace.Workspace, path: String) -> Result[String]
 end
 
 def plain?(path: String) -> Bool
-  !path.contains?("\n") and !path.contains?("\t") and !path.contains?(String.from_code(0))
+  !path.include?("\n") and !path.include?("\t") and !path.include?(String.from_code(0))
 end
 
 def read_entry(entry: Entry, settings: Env.Settings) -> Result[Bytes]
@@ -338,7 +338,7 @@ def read_whole(handle: FileHandle, entry: Entry, settings: Env.Settings) -> Resu
   size = try text_size(head)
   bytes = try read_exact(handle, size)
   text = try String.from_bytes(bytes)
-  return error("the entry is for another build or program") if !text.starts_with?("#{entry.key}\nprogram ")
+  return error("the entry is for another build or program") if !text.start_with?("#{entry.key}\nprogram ")
 
   # The key has no line feed inside a line, so its lines are the first ones of the text, then the program line.
   lines = text.split("\n").drop(entry.key.split("\n").size)
@@ -355,11 +355,11 @@ end
 def text_size(head: Bytes) -> Result[Int]
   text = try String.from_bytes(head)
   # The length is checked in characters: a head with a multi-byte character is shorter and not an entry.
-  if text.length != HEAD_BYTES or !text.starts_with?(HEAD_WORD) or !text.ends_with?("\n")
+  if text.length != HEAD_BYTES or !text.start_with?(HEAD_WORD) or !text.end_with?("\n")
     return error("not a cache entry")
   end
 
-  size = try text.slice(HEAD_WORD.length, HEAD_DIGITS).to_int
+  size = try text.slice(HEAD_WORD.length, HEAD_DIGITS).to_i
   return error("the head of the entry is wrong") if size < 0 or size > MAX_TEXT_BYTES
 
   ok(size)
@@ -368,16 +368,16 @@ end
 # Every source file must still have the digest the entry holds, and every probe must still answer as it did.
 def check_lines(workspace: Workspace.Workspace, lines: List[String]) -> Result[Void]
   for line in lines
-    if line.starts_with?(SOURCE_WORD)
+    if line.start_with?(SOURCE_WORD)
       try check_source(workspace, line)
-    elsif line.starts_with?(TREE_WORD)
+    elsif line.start_with?(TREE_WORD)
       try check_tree(workspace, line)
-    elsif line.starts_with?(ABSENT_WORD)
+    elsif line.start_with?(ABSENT_WORD)
       path = line.slice(ABSENT_WORD.length, line.length - ABSENT_WORD.length)
-      if path.contains?(String.from_code(0)) or workspace.file_exists.call(path)
+      if path.include?(String.from_code(0)) or workspace.file_exists.call(path)
         return error("a place that was empty has a file now")
       end
-    elsif line.starts_with?(PRESENT_WORD)
+    elsif line.start_with?(PRESENT_WORD)
       try check_present(workspace, line.slice(PRESENT_WORD.length, line.length - PRESENT_WORD.length))
     else
       return error("a line of the entry is wrong")
@@ -394,7 +394,7 @@ def check_source(workspace: Workspace.Workspace, line: String) -> Result[Void]
   from = SOURCE_WORD.length + DIGEST_CHARS + 1
   path = line.slice(from, line.length - from)
   # A path with a NUL is a contract error of the File calls, which would end the front end.
-  return error("a line of the entry is wrong") if path.contains?(String.from_code(0))
+  return error("a line of the entry is wrong") if path.include?(String.from_code(0))
 
   read = try workspace.read_bytes.call(path)
   return error("#{path} changed") if CacheFiles.digest(read) != wanted
@@ -407,7 +407,7 @@ def check_tree(workspace: Workspace.Workspace, line: String) -> Result[Void]
 
   from = TREE_WORD.length + DIGEST_CHARS + 1
   path = line.slice(from, line.length - from)
-  return error("a line of the entry is wrong") if path.contains?(String.from_code(0))
+  return error("a line of the entry is wrong") if path.include?(String.from_code(0))
 
   if names_digest(workspace, path) != line.slice(TREE_WORD.length, DIGEST_CHARS)
     return error("the native files of #{path} changed")
@@ -419,7 +419,7 @@ end
 # `PATH<TAB>REAL`: the path must still lead to the same file.
 def check_present(workspace: Workspace.Workspace, rest: String) -> Result[Void]
   parts = rest.split("\t")
-  return error("a line of the entry is wrong") if parts.size != 2 or parts[0].contains?(String.from_code(0))
+  return error("a line of the entry is wrong") if parts.size != 2 or parts[0].include?(String.from_code(0))
 
   real = try workspace.real_path.call(parts[0])
   return error("#{parts[0]} leads somewhere else") if real != parts[1]

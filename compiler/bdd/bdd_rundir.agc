@@ -223,10 +223,10 @@ end
 # The prefix and then hexadecimal digits only. `agentica-bdd-` is the final name of a run, `agentica-bdd-new-` a run
 # being made (the "n" of "new" is not a digit, so the first never matches the second).
 def hex_name?(name: String, prefix: String) -> Bool
-  return false if !name.starts_with?(prefix) or name.length == prefix.length
+  return false if !name.start_with?(prefix) or name.length == prefix.length
 
   for digit in name.slice(prefix.length, name.length - prefix.length).split("")
-    return false if !DIGITS.contains?(digit)
+    return false if !DIGITS.include?(digit)
   end
 
   true

@@ -17,7 +17,7 @@ def watch(task: Task[Int], inbox: Channel[Msg]) -> Void
   case inbox.recv(5000).unwrap!
     Msg.Down(down) ->
       puts("#{down.reason} same id: #{down.task_id == task.id}")
-      puts("  #{down.code.inspect} #{down.message.inspect} #{down.file.ends_with?("task-monitor-ends.agc")}")
+      puts("  #{down.code.inspect} #{down.message.inspect} #{down.file.end_with?("task-monitor-ends.agc")}")
       puts("  #{down.line}:#{down.column}")
   end
 end

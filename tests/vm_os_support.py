@@ -85,10 +85,10 @@ end
 
 def run_child(vm: String, driver: Int, source: String, target: String) -> Void
   copy_private(source, target)
-  p = Result.unwrap!(Process.spawn_captured(vm, ["run", "--driver-pid", String.from_int(driver), "--", target], Process.Options(timeout_ms: 5000)))
+  p = Result.unwrap!(Process.spawn_captured(vm, ["run", "--driver-pid", driver.to_s, "--", target], Process.Options(timeout_ms: 5000)))
   out = Result.unwrap!(Process.output(p, 10000))
   code = Result.unwrap!(Process.wait(p, 10000))
-  puts("driver-pid #{driver} exit #{code} stdout #{out.stdout.trim} stderr #{out.stderr.trim}")
+  puts("driver-pid #{driver} exit #{code} stdout #{out.stdout.strip} stderr #{out.stderr.strip}")
 end
 
 def main() -> Void
@@ -98,7 +98,7 @@ def main() -> Void
   puts("stable #{System.pid() == me}")
   sh = Result.unwrap!(Process.spawn_captured("sh", ["-c", "echo $PPID"], Process.Options(timeout_ms: 5000)))
   out = Result.unwrap!(Process.output(sh, 10000))
-  puts("parent seen by sh #{out.stdout.trim}")
+  puts("parent seen by sh #{out.stdout.strip}")
   run_child(args[0], me, args[1], args[2] + "/first.agcb")
   run_child(args[0], me + 1, args[1], args[2] + "/second.agcb")
 end

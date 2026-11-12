@@ -40,7 +40,7 @@ end
 ## The `--ai` text of a problem of `file` with the file in place of its `check failed: 1 error` heading, which the last
 ## line of a run says for all the files.
 export def headed(file: String, text: String) -> String
-  return text if !text.starts_with?(AI_HEADING)
+  return text if !text.start_with?(AI_HEADING)
 
   "#{file}:#{text.slice(AI_HEADING.length, text.length - AI_HEADING.length)}"
 end

@@ -50,7 +50,7 @@ export def line_too_long(file: String, text: String, width: Int) -> Optional[Fai
   number = 1
   for line in text.split("\n")
     shown = line
-    if shown.ends_with?("\r")
+    if shown.end_with?("\r")
       shown = shown.slice(0, shown.length - 1)
     end
 

@@ -21,7 +21,7 @@ export def method_key(name: String) -> String
 
   kind = parameter_kind(entry.unwrap!.parameters[0].type)
   module = Tables.method_modules().get(kind)
-  return "" if module.none? or !name.starts_with?("#{module.unwrap!}.")
+  return "" if module.none? or !name.start_with?("#{module.unwrap!}.")
 
   key = "#{kind}.#{name.slice(module.unwrap!.length + 1, name.length - module.unwrap!.length - 1)}"
   taken = Tables.method_aliases().get(key)
@@ -74,7 +74,7 @@ export def written_as?(name: String, method: String) -> Bool
   for key in Tables.ruby_synonyms()
     # A synonym that `method_aliases` lacks is skipped (a test keeps the two lists in step).
     target = aliases.get(key)
-    return true if key.ends_with?(".#{method}") and target.some? and target.unwrap! == name
+    return true if key.end_with?(".#{method}") and target.some? and target.unwrap! == name
   end
 
   false

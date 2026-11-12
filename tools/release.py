@@ -247,12 +247,12 @@ STEPS = """\
 import BDD from "std/bdd"
 
 def remember(ctx: BDD.Context, args: List[String]) -> BDD.Context
-  return BDD.set(ctx, "number", JSON.from(String.to_int!(args[0])))
+  return BDD.set(ctx, "number", JSON.from(args[0].to_i!))
 end
 
 def expect(ctx: BDD.Context, args: List[String]) -> BDD.Context
   actual = Result.unwrap!(JSON.int(Result.unwrap!(BDD.get(ctx, "number"))))
-  return BDD.assert(ctx, actual == String.to_int!(args[0]), "wrong number")
+  return BDD.assert(ctx, actual == args[0].to_i!, "wrong number")
 end
 
 def main() -> Void

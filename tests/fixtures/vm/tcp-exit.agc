@@ -22,7 +22,7 @@ def main() -> Void
   silent = Result.unwrap!(TCP.accept(listener, 5000))
   source = Result.unwrap!(TCP.connect("127.0.0.1", port, 5000))
   sink = Result.unwrap!(TCP.accept(listener, 5000))
-  chunk = String.join(List.repeat("abcdefgh", 1048576), "")
+  chunk = List.repeat("abcdefgh", 1048576).join("")
   chunk = chunk + chunk
   chunk = chunk + chunk
   chunk = chunk + chunk

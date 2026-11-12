@@ -55,7 +55,7 @@ end
 PYTHON_CLIENT_PROGRAM = """\
 def main() -> Void
   dir = System.args()[0]
-  port = String.to_int!(Result.unwrap!(IO.gets()))
+  port = Result.unwrap!(IO.gets()).to_i!
   socket = Result.unwrap!(TLS.connect("localhost", port, TLS.client_context(TlsClientOptions(ca_file: "#{dir}/ca.pem")).unwrap!, 5000))
   Result.unwrap!(TCP.send(socket, "from agentica\\n", 5000))
   puts(Result.unwrap!(TCP.read_line(socket, 5000)))
@@ -75,7 +75,7 @@ end
 
 def main() -> Void
   dir = System.args()[0]
-  port = String.to_int!(Result.unwrap!(IO.gets()))
+  port = Result.unwrap!(IO.gets()).to_i!
   ca = "#{dir}/ca.pem"
   puts(Result.unwrap!(talk(TLS.connect("localhost", port, TLS.client_context(TlsClientOptions(ca_file: ca, cert_file: "#{dir}/client.pem", key_file: "#{dir}/client-key.pem")).unwrap!, 5000))))
   # Under TLS 1.3 the server's refusal comes after the client's side of the handshake: the connect or the first
@@ -94,7 +94,7 @@ end
 
 def main() -> Void
   dir = System.args()[0]
-  port = String.to_int!(IO.gets().unwrap!)
+  port = IO.gets().unwrap!.to_i!
   tls = TLS.client_context(TlsClientOptions(ca_file: "#{dir}/ca.pem")).unwrap!
   socket = starttls(port, tls, 5000).unwrap!
   TCP.send(socket, "from agentica\\n", 5000).unwrap!
@@ -132,7 +132,7 @@ def offer(port: Int, ca: String, alpn: List[String]) -> Result[String]
 end
 
 def main() -> Void
-  port = String.to_int!(IO.gets().unwrap!)
+  port = IO.gets().unwrap!.to_i!
   ca = "#{System.args()[0]}/ca.pem"
   IO.inspect(offer(port, ca, ["http/1.1"]))
   IO.inspect(offer(port, ca, ["spdy/3"]))
@@ -213,7 +213,7 @@ def main() -> Void
   puts(show(HTTP.get(pool, base + "/last")))
   other = Result.unwrap!(HTTP.client(options))
   puts(show(HTTP.get(other, base + "/other")))
-  puts(String.starts_with?(TLS.client_context(TlsClientOptions(ca_file: ca)).message, "network: cannot load ca_file"))
+  puts(TLS.client_context(TlsClientOptions(ca_file: ca)).message.start_with?("network: cannot load ca_file"))
   # A client with no context builds one with the system trust (SSL_CERT_FILE here) for its first https connection
   # and shares it with the next.
   plain = Result.unwrap!(HTTP.client(HTTP.ClientOptions(timeout_ms: 20000)))
@@ -252,7 +252,7 @@ def main() -> Void
   # waiters, and the build goes on for the other two. The client has one timeout, so the two others start three
   # quarters of it after the first: before the first one's deadline they only have to join the waiters, after it the
   # test writes the FIFO and the build, the connects, the handshakes and the requests run, so that side gets the most.
-  timeout = String.to_int!(System.args()[1])
+  timeout = System.args()[1].to_i!
   pool = Result.unwrap!(HTTP.client(HTTP.ClientOptions(timeout_ms: timeout)))
   first = Task.spawn(&get, Call(pool: pool, url: base + "/first"))
   Task.sleep(timeout / 4 * 3)
@@ -400,7 +400,7 @@ def main() -> Void
   port = TCP.local_port(listener)
   Task.spawn(&hold, port)
   silent = Result.unwrap!(TCP.accept(listener, 5000))
-  Task.spawn(&flood, Flood(port: port, chunk: String.join(List.repeat(String.join(List.repeat("abcdefgh", 128), ""), 8192), "")))
+  Task.spawn(&flood, Flood(port: port, chunk: List.repeat(List.repeat("abcdefgh", 128).join(""), 8192).join("")))
   sink = Result.unwrap!(TCP.accept(listener, 5000))
   raw = Result.unwrap!(TCP.connect("127.0.0.1", port, 5000))
   Task.spawn(&wait_accept, listener)
@@ -515,7 +515,7 @@ def client_program(ports):
         '  TCP.close(reset)',
         '  big = Result.unwrap!(%s)' % dial("big"),
         '  puts(String.length(Result.unwrap!(TCP.read_line(big, 5000))))',
-        '  Result.unwrap!(TCP.send(big, String.join(List.repeat("b", 100000), "") + "\\n", 5000))',
+        '  Result.unwrap!(TCP.send(big, List.repeat("b", 100000).join("") + "\\n", 5000))',
         '  puts(Result.unwrap!(TCP.read_line(big, 5000)))',
         '  TCP.close(big)',
         '  long = Result.unwrap!(%s)' % dial("long"),

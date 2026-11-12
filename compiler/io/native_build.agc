@@ -130,9 +130,9 @@ end
 
 def answer(text: String) -> Workspace.Built
   rest = text.slice(1, text.length - 1)
-  if text.starts_with?("L")
+  if text.start_with?("L")
     return Workspace.Built.Library(rest)
-  elsif text.starts_with?("U")
+  elsif text.start_with?("U")
     return Workspace.Built.Unbuilt(rest)
   end
 
@@ -242,7 +242,7 @@ def sweep(base: String) -> Void
 
   now = Time.now_ms() / 1000
   for name in names.unwrap!
-    if name.starts_with?(TEMP_MARK)
+    if name.start_with?(TEMP_MARK)
       path = Paths.join(base, name)
       info = File.lstat(path, FILE_TIMEOUT_MS)
       if info.ok? and info.unwrap!.kind == "directory" and now - info.unwrap!.modified_seconds > STALE_TEMP_SECONDS
@@ -510,7 +510,7 @@ end
 
 # The text as IO.warn prints it: it adds the line feed that ends the compiler's last line.
 def without_line_end(text: String) -> String
-  return text.slice(0, text.length - 1) if text.ends_with?("\n")
+  return text.slice(0, text.length - 1) if text.end_with?("\n")
 
   text
 end

@@ -197,11 +197,11 @@ end
 def holds_feature?(path: String, features: List[Discover.Entry]) -> Bool
   resolved = Path.resolve(path).unwrap_or(path)
   below = resolved
-  if !below.ends_with?("/")
+  if !below.end_with?("/")
     below = "#{below}/"
   end
 
-  features.any? do |entry: Discover.Entry| entry.path == resolved or entry.path.starts_with?(below) end
+  features.any? do |entry: Discover.Entry| entry.path == resolved or entry.path.start_with?(below) end
 end
 
 # The nearest `steps.agc` for one path, or "" when there is none. A path that cannot be resolved has none.
@@ -216,11 +216,11 @@ def steps_near(path: String, here: String) -> String
   end
 
   below = here
-  if !here.ends_with?("/")
+  if !here.end_with?("/")
     below = "#{here}/"
   end
 
-  inside = here != "" and (folder == here or folder.starts_with?(below))
+  inside = here != "" and (folder == here or folder.start_with?(below))
   while folder != ""
     file = Paths.join(folder, DEFAULT_STEPS_FILE)
     found = File.stat(file, IO_TIMEOUT)

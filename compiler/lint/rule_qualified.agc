@@ -112,7 +112,7 @@ def of_expr(expr: Ast.Expr) -> List[Mention]
 end
 
 def qualified(name: String, span: Source.Span) -> List[Mention]
-  return [Mention(name: name, span: span)] if name.contains?(".")
+  return [Mention(name: name, span: span)] if name.include?(".")
 
   []
 end

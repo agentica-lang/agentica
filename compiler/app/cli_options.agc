@@ -74,9 +74,9 @@ export def parse(arguments: List[String], version: String) -> Parsed
       return Parsed.Ready(options.with(words: arguments.drop(at + 1)))
     elsif !option?(word)
       return Parsed.Ready(options.with(words: arguments.drop(at)))
-    elsif word == "--help" or (!word.starts_with?("--") and word.starts_with?("-h"))
+    elsif word == "--help" or (!word.start_with?("--") and word.start_with?("-h"))
       return Parsed.Answer(Reply.printed(Texts.help_text()))
-    elsif !word.starts_with?("--") and word.length > 1
+    elsif !word.start_with?("--") and word.length > 1
       return mistake("unknown switch: #{word.slice(0, 2)}")
     elsif word == "--version"
       return Parsed.Answer(Reply.printed("#{version}\n"))
@@ -110,7 +110,7 @@ end
 
 def mistake(message: String) -> Parsed = Parsed.Answer(Reply.failed(1, "agentica: #{message}\n"))
 
-def option?(word: String) -> Bool = word.length > 1 and (word.starts_with?("-") or word.starts_with?("+"))
+def option?(word: String) -> Bool = word.length > 1 and (word.start_with?("-") or word.start_with?("+"))
 
 # How many values an option takes, or -1 when it is not one.
 def values(word: String) -> Int
@@ -124,7 +124,7 @@ end
 
 def apply(options: Options, word: String, value: String) -> Applied
   # The --deny-* flags and --sandbox go to the VM as they are, which applies them (vm/launch.c).
-  if word.starts_with?("--deny-") or word == "--sandbox"
+  if word.start_with?("--deny-") or word == "--sandbox"
     return Applied.Changed(options.with(deny: options.deny.push(word)))
   end
 
@@ -194,7 +194,7 @@ def digits?(text: String) -> Bool
   return false if text.length == 0
 
   for character in text.split("")
-    return false if !DIGITS.contains?(character)
+    return false if !DIGITS.include?(character)
   end
 
   true

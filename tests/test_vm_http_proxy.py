@@ -40,7 +40,7 @@ end
 
 # True when the error names the proxy that could not be reached.
 def names_proxy(message: String, down: String) -> Bool
-  return String.starts_with?(message, "http: cannot reach the proxy #{down}: ")
+  return message.start_with?("http: cannot reach the proxy #{down}: ")
 end
 
 def chunks(into: Channel[Bytes]) -> Void
@@ -269,7 +269,7 @@ def main() -> Void
   puts("-- a proxy that is down")
   case HTTP.get_response("#{a}/hello", HTTP.ClientOptions(proxy: "http://us:hunter2@127.0.0.1:#{args[4]}"))
     ok(_) -> puts("answered")
-    error(message) -> puts(String.starts_with?(message, "http: cannot reach the proxy 127.0.0.1:#{args[4]}: "))
+    error(message) -> puts(message.start_with?("http: cannot reach the proxy 127.0.0.1:#{args[4]}: "))
   end
 end
 """
@@ -555,7 +555,7 @@ end
 def names_down(r: Result[HTTP.Response], gone: String) -> Bool
   case r
     ok(_) -> return false
-    error(message) -> return String.starts_with?(message, "http: cannot reach the proxy #{gone}: ")
+    error(message) -> return message.start_with?("http: cannot reach the proxy #{gone}: ")
   end
 end
 
@@ -621,7 +621,7 @@ def main() -> Void
   strict = TLS.client_context(TlsClientOptions(ca_file: args[7])).unwrap!
   case HTTP.get_response("#{c}/hello", HTTP.ClientOptions(proxy: "http://#{proxy}", tls: some(strict)))
     ok(_) -> puts("answered")
-    error(message) -> puts(String.contains?(message, "proxy"))
+    error(message) -> puts(message.include?("proxy"))
   end
 
   puts("-- a refused tunnel, a proxy that is down, a bad proxy")
@@ -632,7 +632,7 @@ def main() -> Void
   puts(names_down(HTTP.get_response("#{c}/hello", down), "127.0.0.1:#{args[6]}"))
   case HTTP.start(c, down)
     ok(_) -> puts("started")
-    error(message) -> puts(String.starts_with?(message, "http: cannot reach the proxy 127.0.0.1:#{args[6]}: "))
+    error(message) -> puts(message.start_with?("http: cannot reach the proxy 127.0.0.1:#{args[6]}: "))
   end
 
   show(HTTP.get_response("#{c}/hello", HTTP.ClientOptions(proxy: "ftp://#{proxy}", tls: some(context))))

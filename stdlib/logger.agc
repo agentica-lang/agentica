@@ -210,7 +210,7 @@ end
 # JSON.encode(s) is the quoted, escaped text, so it equals "\"" + s + "\"" exactly when s has no quote, backslash
 # or control character (DEL included). The three line breaks above are not escaped by it, so they are checked apart.
 def plain?(text: String) -> Bool
-  text.length > 0 and !text.contains?("=") and !line_break?(text) and JSON.encode(text) == "\"#{text}\""
+  text.length > 0 and !text.include?("=") and !line_break?(text) and JSON.encode(text) == "\"#{text}\""
 end
 
 # JSON.encode leaves U+0085, U+2028 and U+2029 as they are, but splitlines() and some viewers break lines there.
@@ -225,18 +225,18 @@ end
 
 def line_break?(text: String) -> Bool
   (
-    text.contains?(String.from_code(133)) or
-    text.contains?(String.from_code(8232)) or
-    text.contains?(String.from_code(8233))
+    text.include?(String.from_code(133)) or
+    text.include?(String.from_code(8232)) or
+    text.include?(String.from_code(8233))
   )
 end
 
 def message_token(message: String) -> String
-  return message if plain?(message) and !message.starts_with?(" ") and !message.ends_with?(" ")
+  return message if plain?(message) and !message.start_with?(" ") and !message.end_with?(" ")
   one_line(JSON.encode(message))
 end
 
 def field_token(text: String) -> String
-  return text if plain?(text) and !text.contains?(" ")
+  return text if plain?(text) and !text.include?(" ")
   one_line(JSON.encode(text))
 end

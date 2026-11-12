@@ -251,7 +251,7 @@ def split(line: Tokens.EagLine, cut: Int) -> Diag.Outcome[List[Part]]
       closed = inside.index_of("%>")
 
       code = inside.slice(0, closed.unwrap!)
-      trim = code.ends_with?("-")
+      trim = code.end_with?("-")
       if trim
         code = code.slice(0, code.length - 1)
       end

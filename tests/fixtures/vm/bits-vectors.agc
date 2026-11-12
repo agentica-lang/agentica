@@ -39,7 +39,7 @@ def float_of(field: String) -> Float
     return (0.0 - 1.0) * 0.0
   end
   parts = field.split("p")
-  return Float.from_int(parts[0].to_i!) * pow2(parts[1].to_i!)
+  return parts[0].to_i!.to_f * pow2(parts[1].to_i!)
 end
 
 def float_text(x: Float) -> String

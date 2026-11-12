@@ -32,7 +32,7 @@ end
 ## The refusal of `symbol` for `name`, with a note when the word ends in `.agc`: a file is not a name, and the position
 ## form takes `FILE:LINE:COL`.
 export def not_found(name: String, problem: Problems.Problem) -> Problems.Problem
-  return problem if problem.code != "QUERY-NOT-FOUND" or !name.ends_with?(".agc")
+  return problem if problem.code != "QUERY-NOT-FOUND" or !name.end_with?(".agc")
 
   note = "#{name} is a file; to ask about a place in it write #{name}:LINE:COL"
   case problem.help

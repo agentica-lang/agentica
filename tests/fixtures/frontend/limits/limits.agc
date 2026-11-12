@@ -28,7 +28,7 @@ def main() -> Void
   for argument in System.args()
     if argument == "slow"
       names = SLOW_SCENARIOS
-    elsif argument.starts_with?("--version=")
+    elsif argument.start_with?("--version=")
       version = argument.slice(10, argument.length - 10)
     end
   end

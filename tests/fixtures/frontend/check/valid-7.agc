@@ -1,5 +1,5 @@
 def text(n: Int) -> String
-  return String.from_int(n)
+  return n.to_s
 end
 
 
@@ -9,7 +9,7 @@ end
 
 
 def join(acc: String, n: Int) -> String
-  return acc + String.from_int(n)
+  return acc + n.to_s
 end
 
 

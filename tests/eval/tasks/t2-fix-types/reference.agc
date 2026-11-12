@@ -5,12 +5,12 @@ end
 def main() -> Void
   total = 0.0
   while not IO.eof?()
-    parts = String.split(String.trim(IO.gets!()), " ")
-    quantity = String.to_float!(parts[1])
-    price = String.to_float!(parts[2])
+    parts = String.split(IO.gets!().strip, " ")
+    quantity = parts[1].to_f!
+    price = parts[2].to_f!
     amount = line_total(quantity, price)
-    puts(parts[0] + ": " + String.from_float(amount))
+    puts(parts[0] + ": " + amount.to_s)
     total = total + amount
   end
-  puts("total: " + String.from_float(total))
+  puts("total: " + total.to_s)
 end

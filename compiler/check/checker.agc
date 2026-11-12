@@ -226,11 +226,11 @@ end
 # it, as in the common case.
 def stub_open(text: String, zero: Int) -> Int
   at = zero
-  while at > 0 and " \t\r\n".contains?(text.slice(at - 1, 1))
+  while at > 0 and " \t\r\n".include?(text.slice(at - 1, 1))
     at -= 1
   end
 
-  return at - 1 if at > 0 and at < zero and "[{(".contains?(text.slice(at - 1, 1))
+  return at - 1 if at > 0 and at < zero and "[{(".include?(text.slice(at - 1, 1))
 
   zero - 1
 end

@@ -118,7 +118,7 @@ def position_of(source: String, message: String) -> Source.Position
   start = Source.Position(offset: 0, line: 1, column: 1)
   pieces = message.split(": ")
   words = pieces[0].split(", ")
-  return start if words.size != 2 or !words[0].starts_with?("line ") or !words[1].starts_with?("column ")
+  return start if words.size != 2 or !words[0].start_with?("line ") or !words[1].start_with?("column ")
 
   line = words[0].slice(5, words[0].length - 5).to_i
   column = words[1].slice(7, words[1].length - 7).to_i

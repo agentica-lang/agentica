@@ -8,7 +8,7 @@ def square(n: Int) -> Int
 end
 
 def parse(text: String) -> Result[Int]
-  n = try text.to_int
+  n = try text.to_i
   return ok(n + 1)
 end
 

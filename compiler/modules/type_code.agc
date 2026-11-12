@@ -116,7 +116,7 @@ end
 # `<length>:<name>` for a name with no prefix, `@<length>:<key><length>:<local>` for "@N::local" with the key of the
 # file that has the prefix "@N::".
 def name_text(name: String, keys: Map[String, String]) -> Result[String]
-  return ok(name_plain(name)) if !name.starts_with?("@")
+  return ok(name_plain(name)) if !name.start_with?("@")
 
   split = name.index_of("::")
   return error("the name has a prefix that does not end") if split.none?
@@ -137,7 +137,7 @@ def read_type(text: String, at: Int, depth: Int, prefixes: Map[String, String]) 
   return ok(Read(type: SIMPLE[letter], next: at + 1)) if SIMPLE.has_key?(letter)
 
   after = at + 1
-  if "RPKCWZDLS".contains?(letter)
+  if "RPKCWZDLS".include?(letter)
     item = try read_type(text, after, depth + 1, prefixes)
     return ok(Read(type: around(letter, item.type), next: item.next))
   end
@@ -211,7 +211,7 @@ end
 # The number at `at` and its colon, with at most MAX_DIGITS digits.
 def read_count(text: String, at: Int) -> Result[Counted]
   stop = at
-  while stop < text.length and "0123456789".contains?(text.slice(stop, 1))
+  while stop < text.length and "0123456789".include?(text.slice(stop, 1))
     stop += 1
   end
 

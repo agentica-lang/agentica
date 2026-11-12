@@ -29,7 +29,7 @@ export def add_main(file: String, program: Ast.Program) -> Result[Ast.Program]
         if !function.native.some?
           if function.name == "main"
             main = some(function)
-          elsif function.name.starts_with?(TEST_PREFIX)
+          elsif function.name.start_with?(TEST_PREFIX)
             tests = tests.push(function)
           end
         end

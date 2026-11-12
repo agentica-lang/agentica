@@ -178,12 +178,12 @@ end
 # is the content of a file that anyone who can write the folder may have changed.
 def decode(raw: String, digest: String) -> Optional[Entry]
   head = "#{FORMAT}\ntext #{digest}\ntree "
-  return none if !raw.starts_with?(head) or raw.length < head.length + DIGEST_CHARS + 1
+  return none if !raw.start_with?(head) or raw.length < head.length + DIGEST_CHARS + 1
 
   tree = raw.slice(head.length, DIGEST_CHARS)
   rest = raw.slice(head.length + DIGEST_CHARS, raw.length - head.length - DIGEST_CHARS)
-  styled = rest.starts_with?(STYLED_STUB)
-  return none if !styled and !rest.starts_with?(UNSTYLED_STUB)
+  styled = rest.start_with?(STYLED_STUB)
+  return none if !styled and !rest.start_with?(UNSTYLED_STUB)
 
   after = rest.slice(STYLED_STUB.length, rest.length - STYLED_STUB.length)
   at = after.index_of("\n")
@@ -220,7 +220,7 @@ def decode_constants(tail: String) -> Result[Map[String, String]]
 
   prefix = "#{CONSTANT_WORD} "
   for line in lines.drop(1)
-    return error("a constant line of the entry is wrong") if !line.starts_with?(prefix)
+    return error("a constant line of the entry is wrong") if !line.start_with?(prefix)
 
     # The name ends at the first space; the type is the rest, which may hold spaces (the key of a file).
     rest = line.slice(prefix.length, line.length - prefix.length)
@@ -331,7 +331,7 @@ end
 # `stop` moved back over the blanks and line breaks before it, down to `floor`.
 def trimmed(text: String, floor: Int, stop: Int) -> Int
   at = stop
-  while at > floor and " \t\r\n".contains?(text.slice(at - 1, 1))
+  while at > floor and " \t\r\n".include?(text.slice(at - 1, 1))
     at -= 1
   end
 
@@ -374,7 +374,7 @@ end
 
 # "\r" for a line that ends with one, which stays where it is.
 def carriage(line: String) -> String
-  return "\r" if line.ends_with?("\r")
+  return "\r" if line.end_with?("\r")
 
   ""
 end

@@ -66,7 +66,7 @@ end
 
 ## Whether `word` looks like an option: it starts with "-" and has more than one character. A lone "-" is a file name.
 ## `--stdin` refuses such a FILE, so `--stdin --json` does not take the option as the file.
-export def option?(word: String) -> Bool = word.length > 1 and word.starts_with?("-")
+export def option?(word: String) -> Bool = word.length > 1 and word.start_with?("-")
 
 ## Whether `word` can be the FILE of `--stdin`: not empty and not an option.
 export def file_name?(word: String) -> Bool = word != "" and !option?(word)

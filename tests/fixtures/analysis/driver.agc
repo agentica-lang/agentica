@@ -161,7 +161,7 @@ def compare(session: Analysis.Session, buffers: Map[String, String], path: Strin
   ours = answers(session, path, numbers)
   theirs = answers(twin, path, numbers)
   if ours.join("\n") == theirs.join("\n")
-    found = ours.filter do |line: String| line.contains?("\"command\":\"type-at\"") end
+    found = ours.filter do |line: String| line.include?("\"command\":\"type-at\"") end
     return "same #{found.size}"
   end
   return "different\n#{ours.join("\n")}\n#{theirs.join("\n")}"

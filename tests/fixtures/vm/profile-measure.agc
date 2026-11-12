@@ -7,7 +7,7 @@ struct Point
 end
 
 def parse(text: String) -> Result[Int]
-  n = try String.to_int(text)
+  n = try text.to_i
   return ok(n)
 end
 

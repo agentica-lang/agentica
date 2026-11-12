@@ -68,7 +68,7 @@ def head_of(socket: Socket) -> String
   lines: List[String] = []
   line = TCP.read_line(socket, 5000).unwrap!
   while line != ""
-    if not String.starts_with?(line, "Date:")
+    if not line.start_with?("Date:")
       lines = List.append(lines, line)
     end
     line = TCP.read_line(socket, 5000).unwrap!

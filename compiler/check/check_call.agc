@@ -549,14 +549,14 @@ def unknown_function_help(cx: State.Cx, name: String) -> String
   help = Help.foreign(cx.help, name)
   if help != "" and !(help == Help.moved(name) and program_type?(cx, name.split(".")[0]))
     return help
-  elsif name.starts_with?("Agent.")
+  elsif name.start_with?("Agent.")
     return (
       "return values from tasks and combine them with reduce, " +
       "or keep the state in one task that receives on a Channel"
     )
-  elsif name.starts_with?("BDD.")
+  elsif name.start_with?("BDD.")
     return "import BDD from \"std/bdd\""
-  elsif name.starts_with?("HTTP.")
+  elsif name.start_with?("HTTP.")
     return "import HTTP from \"std/http\""
   end
 
@@ -566,7 +566,7 @@ end
 # True when the program declares or imports a struct or an enum of that name; an imported one is keyed @N::Name.
 def program_type?(cx: State.Cx, name: String) -> Bool
   suffix = "::#{name}"
-  cx.structs.keys.concat(cx.enums.keys).any? do |key: String| key == name or key.ends_with?(suffix) end
+  cx.structs.keys.concat(cx.enums.keys).any? do |key: String| key == name or key.end_with?(suffix) end
 end
 
 def unknown_enum_help(name: String) -> String

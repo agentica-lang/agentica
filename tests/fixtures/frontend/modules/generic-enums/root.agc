@@ -3,7 +3,7 @@ def main() -> Void
   value: Domain.Option[Int] = Domain.Option.Some(7)
   case value do
     Domain.Option.Some(item) ->
-      puts(String.from_int(item))
+      puts(item.to_s)
     Domain.Option.None ->
       puts("empty")
   end

@@ -44,7 +44,7 @@ HWM_REPORT = """\
 def hwm() -> Void
   status = Result.unwrap!(File.read_text("/proc/self/status", 10000))
   for entry in status.split("\\n")
-    if entry.starts_with?("VmHWM")
+    if entry.start_with?("VmHWM")
       puts(entry)
     end
   end
@@ -63,7 +63,7 @@ BASELINE_PROGRAM = """\
 def main() -> Void
   status = Result.unwrap!(File.read_text("/proc/self/status", 10000))
   for entry in status.split("\\n")
-    if entry.starts_with?("VmHWM")
+    if entry.start_with?("VmHWM")
       puts(entry)
     end
   end
@@ -89,7 +89,7 @@ end
 
 def main() -> Void
   before = open_files()
-  r = File.each_line(System.args()[0], 1024, Result.unwrap!(String.to_int(System.args()[1]))) do |line|
+  r = File.each_line(System.args()[0], 1024, Result.unwrap!(System.args()[1].to_i)) do |line|
     IO.inspect(line)
     ok()
   end
@@ -261,7 +261,7 @@ def main() -> Void
         count += 1
         last = line
       error(message) ->
-        if message.starts_with?("filesystem: end of file")
+        if message.start_with?("filesystem: end of file")
           break
         end
         puts("error #{count}")

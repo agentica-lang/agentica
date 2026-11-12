@@ -60,7 +60,7 @@ def item_blocks(item: Model.Item) -> List[String]
 end
 
 def nested_block(block: String) -> String
-  return "##{block}" if block.starts_with?("#")
+  return "##{block}" if block.start_with?("#")
 
   block
 end

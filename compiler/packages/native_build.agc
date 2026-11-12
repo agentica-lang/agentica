@@ -351,7 +351,7 @@ def source_problem(source: String) -> String
   problem = GitSource.subdir_problem(source)
   return problem if problem != ""
 
-  if !source.starts_with?("#{NATIVE_FOLDER}/") or !source.ends_with?(".c")
+  if !source.start_with?("#{NATIVE_FOLDER}/") or !source.end_with?(".c")
     return "a source is a .c file in the #{NATIVE_FOLDER}/ folder of the package"
   end
 
