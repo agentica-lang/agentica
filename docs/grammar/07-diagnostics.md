@@ -117,9 +117,9 @@ whose formatted text would not keep its tree or its comments; the file is left
 as it is, and the command exits 1, as for a file that does not parse.
 
 `LINT-` is the prefix of `agentica lint`. A `LINT-` code is a suggestion from
-the style guide, not an error: the program is valid without it, and the command
-exits 0 unless `--strict` is given. A suggestion has a source span and a help
-that names the form to write.
+the style guide, or a likely typo (`LINT-ERROR-KIND`), not an error: the
+program is valid without it, and the command exits 0 unless `--strict` is
+given. A suggestion has a source span and a help that names the form to write.
 
 Names and forms from other languages get a `help` that names the Agentica form
 (`len(x)`, `elif`, `let x = 5`, `Mutex.new`, `Agent.start_link`, `Thread.new`, a

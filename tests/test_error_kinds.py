@@ -2,6 +2,9 @@
 C call to, has a dotted name for each kind in vm/value.c; each kind is used, and the Error page lists it. The kinds
 that the `error(...)` calls of stdlib/ name are dotted and on the Error page too.
 
+`ERROR_KINDS` of compiler/catalog/builtins_data.agc, which `agentica lint` holds an `is_a?` literal to
+(LINT-ERROR-KIND), is the C kinds and the std/ kinds.
+
 The kind and the code of real failures are in the goldens tests/fixtures/vm/error-kinds.agc and std-error-kinds.agc;
 a permission error, which a golden cannot make, is here.
 """
@@ -122,6 +125,16 @@ def test_every_std_error_literal_names_its_kind():
             kindless.add((file, literal.group(1)))
     assert sorted(kindless - set(DEFAULT_KIND)) == []
     assert sorted(set(DEFAULT_KIND) - kindless) == []
+
+
+def test_the_kinds_of_the_catalog_are_the_c_kinds_and_the_std_kinds():
+    data = (ROOT / "compiler" / "catalog" / "builtins_data.agc").read_text(encoding="utf-8")
+    table = re.search(r"^export ERROR_KINDS: List\[String\] = \[\n(.*?)^\]$", data, re.M | re.S).group(1)
+    listed = re.findall(r'^  "([^"]*)",$', table, re.M)
+    assert len(listed) == len(table.splitlines()) == len(set(listed))
+    c_kinds = list(names().values())
+    assert listed[:len(c_kinds)] == c_kinds
+    assert sorted(listed[len(c_kinds):]) == sorted(std_kinds() - set(c_kinds))
 
 
 PERMISSION_PROGRAM = """\
