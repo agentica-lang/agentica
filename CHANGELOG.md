@@ -10,6 +10,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- A `private` line in a struct body makes the fields after it private to the
+  module that declares the struct: outside it they cannot be read, given or
+  set, and the struct is built only by that module (`CHECK-PRIVATE-FIELD`,
+  #1344).
 - A `private` line in a file or a module block makes every declaration above
   it public and every one after it private, as in Ruby; reaching a private
   name says how to make it public (#1502).

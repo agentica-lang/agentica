@@ -50,7 +50,8 @@ module_member    = [ DOC, NL ], [ "export" ], [ "compute" ], "def", NAME,
                    "(", [ parameters ], ")", "->", type, NL ;
 
 struct_decl      = "struct", TYPE_NAME, [ type_parameters ], NL,
-                   { field_decl }, "end", NL ;
+                   { field_decl }, [ "private", NL, { field_decl } ], "end",
+                   NL ;
 field_decl       = [ DOC, NL ], NAME, ":", type, [ "=", expression ], NL ;
 
 enum_decl        = "enum", TYPE_NAME, [ type_parameters ], NL,
@@ -84,6 +85,14 @@ allowed; the rules are in section 6, "Default parameter values". A block
 parameter (`do |x|`) takes no default. A field of a struct may end with a
 default the same way (`retries: Int = 3`), with the same rules; section 6,
 "Structs and lists", says what a constructor does with it.
+
+A struct body may have one `private` line: the word alone on its line, with a
+blank line before it unless it is the first line of the body and a blank line
+after it unless it is the last. The fields after it are private (section 6,
+"Private fields"). A missing blank line is `PARSE-MISSING-BLANK-LINE` and a
+second `private` is `PARSE-SECOND-PRIVATE`. `private` is a plain name, so a
+field may be called `private` (`private: Int`). A C struct of an extern block
+has no `private` line.
 
 An `extern` block declares functions of a native library (section 6d, "Native
 code"). The library is a plain string: a name without `/` or an absolute path

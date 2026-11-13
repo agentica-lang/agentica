@@ -136,6 +136,9 @@ lines show. A task's stack ends with `task spawned at file:line:column`.
   or unreadable import; an invalid path (no `.agc`); a cycle; an unknown or
   private imported name (also an alias with no member, `u: User`); a rename
   that breaks the case rule; an alias never used. See `modules.md`.
+- `CHECK-PRIVATE-FIELD`: a field after the `private` line of a struct read,
+  given, set with `with` or reaching a JSON codec outside the struct's module,
+  or the struct built there; call a function of that module. See `modules.md`.
 - `CHECK-IMPORT-PACKAGE`: a package declared in `agentica.toml` is not in
   `deps/` (run `agentica install`), or a package file imports a `pkg/` name its
   own `agentica.toml` does not declare.
