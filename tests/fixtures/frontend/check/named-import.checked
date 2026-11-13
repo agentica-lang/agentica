@@ -1,4 +1,4 @@
-program #40 0:1:1-297:13:1
+program #41 0:1:1-297:13:1
   module "root.agc"
     declaration: function-decl #39 83:4:1-297:13:1 name="main"
       result: type-ref #2 97:4:15-101:4:19 name="Void"
@@ -39,30 +39,30 @@ program #40 0:1:1-297:13:1
                 right: field-access #33 278:10:41-285:10:48 name="x" type=Int
                   target: name-ref #32 278:10:41-283:10:46 name="moved" type=Struct(@2::Point)
   module "lib.agc"
-    declaration: struct-decl #4 7:1:8-42:5:1 name="@2::Point"
-      field: field-decl #1 22:2:3-29:3:1 name="x"
-        type: type-ref #0 25:2:6-28:2:9 name="Int"
-      field: field-decl #3 31:3:3-38:4:1 name="y"
-        type: type-ref #2 34:3:6-37:3:9 name="Int"
-    declaration: enum-decl #11 50:6:8-99:10:1 name="@2::Shape" type-parameters=[]
-      variant: enum-variant #7 63:7:3-74:8:1 name="Dot"
-        payload: type-ref #6 67:7:7-72:7:12 name="@2::Point"
-      variant: enum-variant #10 76:8:3-95:9:1 name="Line"
-        payload: type-ref #8 81:8:8-86:8:13 name="@2::Point"
-        payload: type-ref #9 88:8:15-93:8:20 name="@2::Point"
-    declaration: function-decl #20 107:11:8-152:14:1 name="@2::double"
-      param: param #14 118:11:19-124:11:25 name="n"
-        type: type-ref #13 121:11:22-124:11:25 name="Int"
-      result: type-ref #15 129:11:30-132:11:33 name="Int"
-      body: return-stmt #19 135:12:3-148:13:1
-        value: binary #18 142:12:10-147:12:15 op=multiply op-span=144:12:12-145:12:13 type=Int
-          left: name-ref #16 142:12:10-143:12:11 name="n" type=Int
-          right: literal #17 146:12:14-147:12:15 value=int:2 type=Int
-    declaration: function-decl #29 160:15:8-213:18:1 name="@2::origin"
-      result: type-ref #22 176:15:24-181:15:29 name="@2::Point"
-      body: return-stmt #28 184:16:3-209:17:1
-        value: construct #27 191:16:10-208:16:27 type="@2::Point" type=Struct(@2::Point)
-          arg: named-arg #24 197:16:16-201:16:20 name="x"
-            value: literal #23 200:16:19-201:16:20 value=int:0 type=Int
-          arg: named-arg #26 203:16:22-207:16:26 name="y"
-            value: literal #25 206:16:25-207:16:26 value=int:0 type=Int
+    declaration: struct-decl #4 0:1:1-35:5:1 name="@2::Point"
+      field: field-decl #1 15:2:3-22:3:1 name="x"
+        type: type-ref #0 18:2:6-21:2:9 name="Int"
+      field: field-decl #3 24:3:3-31:4:1 name="y"
+        type: type-ref #2 27:3:6-30:3:9 name="Int"
+    declaration: enum-decl #10 36:6:1-85:10:1 name="@2::Shape" type-parameters=[]
+      variant: enum-variant #6 49:7:3-60:8:1 name="Dot"
+        payload: type-ref #5 53:7:7-58:7:12 name="@2::Point"
+      variant: enum-variant #9 62:8:3-81:9:1 name="Line"
+        payload: type-ref #7 67:8:8-72:8:13 name="@2::Point"
+        payload: type-ref #8 74:8:15-79:8:20 name="@2::Point"
+    declaration: function-decl #18 86:11:1-131:14:1 name="@2::double"
+      param: param #12 97:11:12-103:11:18 name="n"
+        type: type-ref #11 100:11:15-103:11:18 name="Int"
+      result: type-ref #13 108:11:23-111:11:26 name="Int"
+      body: return-stmt #17 114:12:3-127:13:1
+        value: binary #16 121:12:10-126:12:15 op=multiply op-span=123:12:12-124:12:13 type=Int
+          left: name-ref #14 121:12:10-122:12:11 name="n" type=Int
+          right: literal #15 125:12:14-126:12:15 value=int:2 type=Int
+    declaration: function-decl #26 132:15:1-185:18:1 name="@2::origin"
+      result: type-ref #19 148:15:17-153:15:22 name="@2::Point"
+      body: return-stmt #25 156:16:3-181:17:1
+        value: construct #24 163:16:10-180:16:27 type="@2::Point" type=Struct(@2::Point)
+          arg: named-arg #21 169:16:16-173:16:20 name="x"
+            value: literal #20 172:16:19-173:16:20 value=int:0 type=Int
+          arg: named-arg #23 175:16:22-179:16:26 name="y"
+            value: literal #22 178:16:25-179:16:26 value=int:0 type=Int

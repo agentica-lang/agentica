@@ -1,109 +1,109 @@
-program #107 107:1:108-721:29:1
-  declaration: export-decl #11 138:4:1-189:5:1 doc="The two values as a list."
-    declaration: function-decl #10 145:4:8-189:5:1 name="pair" type-parameters=["T"] expression
-      param: param #1 157:4:20-161:4:24 name="x"
-        type: type-ref #0 160:4:23-161:4:24 name="T"
-      param: param #3 163:4:26-167:4:30 name="y"
-        type: type-ref #2 166:4:29-167:4:30 name="T"
-      result: type-ref #5 172:4:35-179:4:42 name="List"
-        arg: type-ref #4 177:4:40-178:4:41 name="T"
-      body: return-stmt #9 182:4:45-188:4:51 implicit
-        value: list-lit #8 182:4:45-188:4:51
-          element: name-ref #6 183:4:46-184:4:47 name="x"
-          element: name-ref #7 186:4:49-187:4:50 name="y"
-  declaration: function-decl #19 190:6:1-224:7:1 name="double" expression
-    param: param #13 201:6:12-207:6:18 name="x"
-      type: type-ref #12 204:6:15-207:6:18 name="Int"
-    result: type-ref #14 212:6:23-215:6:26 name="Int"
-    body: return-stmt #18 218:6:29-223:6:34 implicit
-      value: binary #17 218:6:29-223:6:34 op=multiply op-span=220:6:31-221:6:32
-        left: name-ref #15 218:6:29-219:6:30 name="x"
-        right: literal #16 222:6:33-223:6:34 value=int:2
-  declaration: function-decl #30 225:8:1-329:9:1 name="greet" expression
-    param: param #21 235:8:11-247:8:23 name="name"
-      type: type-ref #20 241:8:17-247:8:23 name="String"
-    param: param #24 249:8:25-272:8:48 name="greeting"
-      type: type-ref #22 259:8:35-265:8:41 name="String"
-      default: literal #23 268:8:44-272:8:48 value=string:"hi"
-    result: type-ref #25 277:8:53-283:8:59 name="String"
-    body: return-stmt #29 286:8:62-307:8:83 implicit
-      value: interpolation #28 286:8:62-307:8:83
-        part: name-ref #26 289:8:65-297:8:73 name="greeting"
+program #107 107:1:108-723:31:1 private-at=1
+  declaration: export-decl #106 138:4:1-182:5:1 doc="The two values as a list."
+    declaration: function-decl #10 138:4:1-182:5:1 name="pair" type-parameters=["T"] doc="The two values as a list." expression
+      param: param #1 150:4:13-154:4:17 name="x"
+        type: type-ref #0 153:4:16-154:4:17 name="T"
+      param: param #3 156:4:19-160:4:23 name="y"
+        type: type-ref #2 159:4:22-160:4:23 name="T"
+      result: type-ref #5 165:4:28-172:4:35 name="List"
+        arg: type-ref #4 170:4:33-171:4:34 name="T"
+      body: return-stmt #9 175:4:38-181:4:44 implicit
+        value: list-lit #8 175:4:38-181:4:44
+          element: name-ref #6 176:4:39-177:4:40 name="x"
+          element: name-ref #7 179:4:42-180:4:43 name="y"
+  declaration: function-decl #18 192:8:1-226:9:1 name="double" expression
+    param: param #12 203:8:12-209:8:18 name="x"
+      type: type-ref #11 206:8:15-209:8:18 name="Int"
+    result: type-ref #13 214:8:23-217:8:26 name="Int"
+    body: return-stmt #17 220:8:29-225:8:34 implicit
+      value: binary #16 220:8:29-225:8:34 op=multiply op-span=222:8:31-223:8:32
+        left: name-ref #14 220:8:29-221:8:30 name="x"
+        right: literal #15 224:8:33-225:8:34 value=int:2
+  declaration: function-decl #29 227:10:1-331:11:1 name="greet" expression
+    param: param #20 237:10:11-249:10:23 name="name"
+      type: type-ref #19 243:10:17-249:10:23 name="String"
+    param: param #23 251:10:25-274:10:48 name="greeting"
+      type: type-ref #21 261:10:35-267:10:41 name="String"
+      default: literal #22 270:10:44-274:10:48 value=string:"hi"
+    result: type-ref #24 279:10:53-285:10:59 name="String"
+    body: return-stmt #28 288:10:62-309:10:83 implicit
+      value: interpolation #27 288:10:62-309:10:83
+        part: name-ref #25 291:10:65-299:10:73 name="greeting"
         part: text " "
-        part: name-ref #27 301:8:77-305:8:81 name="name"
-  declaration: function-decl #42 330:10:1-397:11:1 name="next_of" expression
-    param: param #32 342:10:13-354:10:25 name="text"
-      type: type-ref #31 348:10:19-354:10:25 name="String"
-    result: type-ref #34 359:10:30-370:10:41 name="Result"
-      arg: type-ref #33 366:10:37-369:10:40 name="Int"
-    body: return-stmt #41 373:10:44-396:10:67 implicit
-      value: call #40 373:10:44-396:10:67 name="ok" piped=false
-        arg: binary #39 376:10:47-395:10:66 op=plus op-span=392:10:63-393:10:64
-          left: try-expr #37 376:10:47-391:10:62
-            operand: field-access #36 380:10:51-391:10:62 name="to_int"
-              target: name-ref #35 380:10:51-384:10:55 name="text"
-          right: literal #38 394:10:65-395:10:66 value=int:1
-  declaration: function-decl #56 398:12:1-464:13:1 name="total" expression
-    param: param #45 408:12:11-421:12:24 name="xs"
-      type: type-ref #44 412:12:15-421:12:24 name="List"
-        arg: type-ref #43 417:12:20-420:12:23 name="Int"
-    result: type-ref #46 426:12:29-429:12:32 name="Int"
-    body: return-stmt #55 432:12:35-463:12:66 implicit
-      value: field-access #54 432:12:35-463:12:66 name="sum"
-        target: method-call #53 432:12:35-459:12:62 name="map"
-          target: name-ref #47 432:12:35-434:12:37 name="xs"
-          arg: block-lit #52 439:12:42-459:12:62
-            param: block-param #48 443:12:46-444:12:47 name="x"
-            body: expr-stmt #51 446:12:49-455:12:58
-              value: call #50 446:12:49-455:12:58 name="double" piped=false
-                arg: name-ref #49 453:12:56-454:12:57 name="x"
-  declaration: function-decl #66 465:14:1-515:18:1 name="inside" expression
-    param: param #58 476:14:12-482:14:18 name="a"
-      type: type-ref #57 479:14:15-482:14:18 name="Int"
-    param: param #60 484:14:20-490:14:26 name="b"
-      type: type-ref #59 487:14:23-490:14:26 name="Int"
-    result: type-ref #61 495:14:31-498:14:34 name="Int"
-    body: return-stmt #65 505:15:3-512:16:4 implicit
-      value: binary #64 505:15:3-512:16:4 op=plus op-span=507:15:5-508:15:6
-        left: name-ref #62 505:15:3-506:15:4 name="a"
-        right: name-ref #63 511:16:3-512:16:4 name="b"
-  declaration: function-decl #106 516:19:1-721:29:1 name="main"
-    result: type-ref #67 530:19:15-534:19:19 name="Void"
-    body: expr-stmt #72 537:20:3-558:21:1
-      value: call #71 537:20:3-557:20:23 name="puts" piped=false
-        arg: call #70 542:20:8-556:20:22 name="pair" piped=false
-          arg: literal #68 547:20:13-550:20:16 value=string:"a"
-          arg: literal #69 552:20:18-555:20:21 value=string:"b"
-    body: expr-stmt #76 560:21:3-577:22:1
-      value: call #75 560:21:3-576:21:19 name="puts" piped=false
-        arg: call #74 565:21:8-575:21:18 name="double" piped=false
-          arg: literal #73 572:21:15-574:21:17 value=int:21
-    body: expr-stmt #80 579:22:3-598:23:1
-      value: call #79 579:22:3-597:22:21 name="puts" piped=false
-        arg: call #78 584:22:8-596:22:20 name="greet" piped=false
-          arg: literal #77 590:22:14-595:22:19 value=string:"ann"
-    body: expr-stmt #85 600:23:3-628:24:1
-      value: call #84 600:23:3-627:23:30 name="puts" piped=false
-        arg: call #83 605:23:8-626:23:29 name="greet" piped=false
-          arg: literal #81 611:23:14-616:23:19 value=string:"bob"
-          arg: literal #82 618:23:21-625:23:28 value=string:"hello"
-    body: expr-stmt #89 630:24:3-650:25:1
-      value: call #88 630:24:3-649:24:22 name="puts" piped=false
-        arg: call #87 635:24:8-648:24:21 name="next_of" piped=false
-          arg: literal #86 643:24:16-647:24:20 value=string:"41"
-    body: expr-stmt #93 652:25:3-671:26:1
-      value: call #92 652:25:3-670:25:21 name="puts" piped=false
-        arg: call #91 657:25:8-669:25:20 name="next_of" piped=false
-          arg: literal #90 665:25:16-668:25:19 value=string:"x"
-    body: expr-stmt #100 673:26:3-696:27:1
-      value: call #99 673:26:3-695:26:25 name="puts" piped=false
-        arg: call #98 678:26:8-694:26:24 name="total" piped=false
-          arg: list-lit #97 684:26:14-693:26:23
-            element: literal #94 685:26:15-686:26:16 value=int:1
-            element: literal #95 688:26:18-689:26:19 value=int:2
-            element: literal #96 691:26:21-692:26:22 value=int:3
-    body: expr-stmt #105 698:27:3-717:28:1
-      value: call #104 698:27:3-716:27:21 name="puts" piped=false
-        arg: call #103 703:27:8-715:27:20 name="inside" piped=false
-          arg: literal #101 710:27:15-711:27:16 value=int:1
-          arg: literal #102 713:27:18-714:27:19 value=int:2
+        part: name-ref #26 303:10:77-307:10:81 name="name"
+  declaration: function-decl #41 332:12:1-399:13:1 name="next_of" expression
+    param: param #31 344:12:13-356:12:25 name="text"
+      type: type-ref #30 350:12:19-356:12:25 name="String"
+    result: type-ref #33 361:12:30-372:12:41 name="Result"
+      arg: type-ref #32 368:12:37-371:12:40 name="Int"
+    body: return-stmt #40 375:12:44-398:12:67 implicit
+      value: call #39 375:12:44-398:12:67 name="ok" piped=false
+        arg: binary #38 378:12:47-397:12:66 op=plus op-span=394:12:63-395:12:64
+          left: try-expr #36 378:12:47-393:12:62
+            operand: field-access #35 382:12:51-393:12:62 name="to_int"
+              target: name-ref #34 382:12:51-386:12:55 name="text"
+          right: literal #37 396:12:65-397:12:66 value=int:1
+  declaration: function-decl #55 400:14:1-466:15:1 name="total" expression
+    param: param #44 410:14:11-423:14:24 name="xs"
+      type: type-ref #43 414:14:15-423:14:24 name="List"
+        arg: type-ref #42 419:14:20-422:14:23 name="Int"
+    result: type-ref #45 428:14:29-431:14:32 name="Int"
+    body: return-stmt #54 434:14:35-465:14:66 implicit
+      value: field-access #53 434:14:35-465:14:66 name="sum"
+        target: method-call #52 434:14:35-461:14:62 name="map"
+          target: name-ref #46 434:14:35-436:14:37 name="xs"
+          arg: block-lit #51 441:14:42-461:14:62
+            param: block-param #47 445:14:46-446:14:47 name="x"
+            body: expr-stmt #50 448:14:49-457:14:58
+              value: call #49 448:14:49-457:14:58 name="double" piped=false
+                arg: name-ref #48 455:14:56-456:14:57 name="x"
+  declaration: function-decl #65 467:16:1-517:20:1 name="inside" expression
+    param: param #57 478:16:12-484:16:18 name="a"
+      type: type-ref #56 481:16:15-484:16:18 name="Int"
+    param: param #59 486:16:20-492:16:26 name="b"
+      type: type-ref #58 489:16:23-492:16:26 name="Int"
+    result: type-ref #60 497:16:31-500:16:34 name="Int"
+    body: return-stmt #64 507:17:3-514:18:4 implicit
+      value: binary #63 507:17:3-514:18:4 op=plus op-span=509:17:5-510:17:6
+        left: name-ref #61 507:17:3-508:17:4 name="a"
+        right: name-ref #62 513:18:3-514:18:4 name="b"
+  declaration: function-decl #105 518:21:1-723:31:1 name="main"
+    result: type-ref #66 532:21:15-536:21:19 name="Void"
+    body: expr-stmt #71 539:22:3-560:23:1
+      value: call #70 539:22:3-559:22:23 name="puts" piped=false
+        arg: call #69 544:22:8-558:22:22 name="pair" piped=false
+          arg: literal #67 549:22:13-552:22:16 value=string:"a"
+          arg: literal #68 554:22:18-557:22:21 value=string:"b"
+    body: expr-stmt #75 562:23:3-579:24:1
+      value: call #74 562:23:3-578:23:19 name="puts" piped=false
+        arg: call #73 567:23:8-577:23:18 name="double" piped=false
+          arg: literal #72 574:23:15-576:23:17 value=int:21
+    body: expr-stmt #79 581:24:3-600:25:1
+      value: call #78 581:24:3-599:24:21 name="puts" piped=false
+        arg: call #77 586:24:8-598:24:20 name="greet" piped=false
+          arg: literal #76 592:24:14-597:24:19 value=string:"ann"
+    body: expr-stmt #84 602:25:3-630:26:1
+      value: call #83 602:25:3-629:25:30 name="puts" piped=false
+        arg: call #82 607:25:8-628:25:29 name="greet" piped=false
+          arg: literal #80 613:25:14-618:25:19 value=string:"bob"
+          arg: literal #81 620:25:21-627:25:28 value=string:"hello"
+    body: expr-stmt #88 632:26:3-652:27:1
+      value: call #87 632:26:3-651:26:22 name="puts" piped=false
+        arg: call #86 637:26:8-650:26:21 name="next_of" piped=false
+          arg: literal #85 645:26:16-649:26:20 value=string:"41"
+    body: expr-stmt #92 654:27:3-673:28:1
+      value: call #91 654:27:3-672:27:21 name="puts" piped=false
+        arg: call #90 659:27:8-671:27:20 name="next_of" piped=false
+          arg: literal #89 667:27:16-670:27:19 value=string:"x"
+    body: expr-stmt #99 675:28:3-698:29:1
+      value: call #98 675:28:3-697:28:25 name="puts" piped=false
+        arg: call #97 680:28:8-696:28:24 name="total" piped=false
+          arg: list-lit #96 686:28:14-695:28:23
+            element: literal #93 687:28:15-688:28:16 value=int:1
+            element: literal #94 690:28:18-691:28:19 value=int:2
+            element: literal #95 693:28:21-694:28:22 value=int:3
+    body: expr-stmt #104 700:29:3-719:30:1
+      value: call #103 700:29:3-718:29:21 name="puts" piped=false
+        arg: call #102 705:29:8-717:29:20 name="inside" piped=false
+          arg: literal #100 712:29:15-713:29:16 value=int:1
+          arg: literal #101 715:29:18-716:29:19 value=int:2

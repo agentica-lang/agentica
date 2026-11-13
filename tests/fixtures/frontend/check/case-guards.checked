@@ -1,4 +1,4 @@
-program #100 0:1:1-741:35:1
+program #105 0:1:1-741:35:1
   module "case-guards.agc"
     declaration: enum-decl #3 0:1:1-35:5:1 name="Option" type-parameters=[]
       variant: enum-variant #1 14:2:3-24:3:1 name="Some"

@@ -2,4 +2,4 @@
 8:9 trailing Literal 8:5 "# after an operator"
 11:30 trailing Binding 11:3 "# after a string"
 14:17 trailing Call 13:5 "# after a pipe step"
-19:1 leading FunctionDecl 21:1 "# before a doc block"
+19:1 leading ExportDecl 21:1 "# before a doc block"

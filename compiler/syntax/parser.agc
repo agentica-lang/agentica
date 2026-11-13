@@ -4015,6 +4015,7 @@ def starts_member?(e: Base.Env, pos: Int, member: String) -> Bool
   if member == "extern"
     return (
       kind == "def" or
+      kind == "struct" or
       kind == "export" or
       compute_start?(e, pos) or
       resource_start?(e, pos) or

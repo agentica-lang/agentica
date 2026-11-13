@@ -22,11 +22,11 @@ The raw layer is one `extern` block per library. Copy each signature from the C 
 | A struct of options passed by value, with a function that gives the defaults | a struct of your own with the options the caller may set, copied into the [C struct](/library/io-and-system/native/types/#c-structs) by the wrapper (see Structs of options below) |
 | A table of function pointers (`api->CreateEnv(...)`) | [`C.Function`](/library/io-and-system/native/types/#function-pointers) calls in the raw layer, with the slots as constants of the wrapper (see Tables of function pointers below) |
 
-A block with a resource or a struct sits with the types of the file, at the top and before every function, and its `def`s do not count as functions in the declaration order (`CHECK-DECL-ORDER`). So the wrapper can sit in the same file as the block. Export the resource, so that callers can name the type, and keep the `def`s private: the file exports only the wrapper. A block with neither has no such rule. Its `def`s count as functions, so it stays at the end of the file, as in the examples after this one.
+A block with a resource or a struct sits with the types of the file, at the top and before every function, and its `def`s do not count as functions in the declaration order (`CHECK-DECL-ORDER`). So the wrapper can sit in the same file as the block. The block is public like any declaration, so callers can name the type, and the raw `def`s are importable too. A block with neither has no such rule. Its `def`s count as functions, so it stays at the end of the file, after `private` when the raw `def`s are not part of the API, as in the examples after this one.
 
 ```agentica {mode="check"}
 extern "libc.so.6"
-  export resource Stream, free: fclose
+  resource Stream, free: fclose
   def fopen(path: C.String, mode: C.String) -> Stream
   def fputs(text: C.String, stream: Stream) -> C.Int32
   compute def fflush(stream: Stream) -> C.Int32
@@ -34,7 +34,7 @@ extern "libc.so.6"
 end
 
 ## Opens a file for appending, or says which path failed.
-export def open_append(path: String) -> Result[Stream]
+def open_append(path: String) -> Result[Stream]
   case fopen(path, "a")
     Result.Ok(stream) -> ok(stream)
     Result.Err(_) -> error("cannot open #{path}")
@@ -42,40 +42,42 @@ export def open_append(path: String) -> Result[Stream]
 end
 
 ## Writes one line.
-export def write_line(stream: Stream, text: String) -> Result[Void]
+def write_line(stream: Stream, text: String) -> Result[Void]
   return error("cannot write to the stream") if fputs("#{text}\n", stream) < 0
 
   ok()
 end
 
 ## Pushes the buffered text to the file.
-export def flush(stream: Stream) -> Result[Void]
+def flush(stream: Stream) -> Result[Void]
   return error("cannot flush the stream") if fflush(stream) != 0
 
   ok()
 end
 
 ## True when the descriptor is a terminal.
-export def tty?(fd: Int) -> Bool = isatty(fd) == 1
+def tty?(fd: Int) -> Bool = isatty(fd) == 1
 ```
 
-`fopen` is declared `-> Stream`, so the raw call already gives a `Result[Stream]`. The wrapper only replaces its message with one that names the path. `Stream` is exported, so callers can name the type. Callers close the stream with `Native.close`, or the task that owns it frees it when it ends. `fflush` is a `compute def` in the raw layer, and `flush` calls it like any function.
+`fopen` is declared `-> Stream`, so the raw call already gives a `Result[Stream]`. The wrapper only replaces its message with one that names the path. `Stream` is public, so callers can name the type. Callers close the stream with `Native.close`, or the task that owns it frees it when it ends. `fflush` is a `compute def` in the raw layer, and `flush` calls it like any function.
 
 ## Out parameters
 
 An `out` parameter stays in the raw layer: the wrapper copies the record fields into a struct of its own.
 
 ```agentica {mode="check"}
-export struct Split
+struct Split
   whole: Float
   fraction: Float
 end
 
 ## Splits x into its whole part and its fraction, both with the sign of x.
-export def split(x: Float) -> Split
+def split(x: Float) -> Split
   parts = modf(x)
   Split(whole: parts.whole, fraction: parts.result)
 end
+
+private
 
 extern "libm.so.6"
   def modf(x: C.Double, out whole: C.Double) -> C.Double
@@ -88,13 +90,15 @@ A C function that fills memory its caller gives it, such as `getcwd`, gets an [o
 
 ```agentica {mode="check"}
 ## The working directory, or an error when it is longer than 4095 bytes.
-export def cwd() -> Result[String]
+def cwd() -> Result[String]
   Native.memory_pointer(4096) do |buf|
     return error("the working directory is longer than 4095 bytes") if Native.null?(getcwd(buf, 4096))
 
     ok(Native.get_string(buf, 0))
   end
 end
+
+private
 
 extern "libc.so.6"
   def getcwd(buf: C.Pointer, size: C.Int64) -> C.Pointer
@@ -105,13 +109,13 @@ A wrapper may give a resource a block form of its own, as Ruby's `File.open` doe
 
 ```agentica {mode="check"}
 extern "libc.so.6"
-  export resource Stream, free: fclose
+  resource Stream, free: fclose
   def fopen(path: C.String, mode: C.String) -> Stream
   def fputs(text: C.String, stream: Stream) -> C.Int32
 end
 
 ## Opens a file for appending, gives the stream to the block and closes it when the block ends.
-export def append_to(path: String, f: Fn[Stream, Result[Void]]) -> Result[Void]
+def append_to(path: String, f: Fn[Stream, Result[Void]]) -> Result[Void]
   stream = try fopen(path, "a")
   done = f.call(stream)
   Native.close(stream)
@@ -134,24 +138,19 @@ end
 Agentica functions have no variadic parameters, and a wrapper does not add any. Declare the C function once for each [shape](/library/io-and-system/native/types/#variadic-functions-and-c-names) that your wrapper needs, with `...` and `= "symbol"`, and keep the shapes private. The public function takes a normal parameter instead:
 
 - Parameters with defaults, when an argument is optional (`on: Bool = true`).
-- A struct, when there are many options. Export the struct and give its fields default values. The caller names only the fields that differ: `OpenOptions(create: true)`, or `OpenOptions()` for all the defaults.
+- A struct, when there are many options. Give its fields default values. The caller names only the fields that differ: `OpenOptions(create: true)`, or `OpenOptions()` for all the defaults.
 - A `List[T]`, when the count of arguments changes. The wrapper picks the shape from the length of the list and returns an `error` for a length it has no shape for.
 
 ```agentica {mode="check"}
-O_WRONLY = 1
-O_CREAT = 64 # the Linux value; macOS uses 0x200
-F_SETFD = 2
-FD_CLOEXEC = 1
-
 ## Read only by default, and mode 0600 when the file is created.
-export struct OpenOptions
+struct OpenOptions
   write: Bool = false
   create: Bool = false
   mode: Int = 384
 end
 
 ## Opens a file and gives its descriptor.
-export def open_file(path: String, options: OpenOptions) -> Result[Int]
+def open_file(path: String, options: OpenOptions) -> Result[Int]
   flags = 0
   if options.write
     flags = flags + O_WRONLY
@@ -168,7 +167,7 @@ export def open_file(path: String, options: OpenOptions) -> Result[Int]
 end
 
 ## Sets or clears close-on-exec.
-export def set_close_on_exec(fd: Int, on: Bool = true) -> Result[Void]
+def set_close_on_exec(fd: Int, on: Bool = true) -> Result[Void]
   flag = 0
   if on
     flag = FD_CLOEXEC
@@ -180,7 +179,7 @@ export def set_close_on_exec(fd: Int, on: Bool = true) -> Result[Void]
 end
 
 ## Writes one or two fields to fd, separated by a tab and ended by a newline.
-export def write_fields(fd: Int, fields: List[String]) -> Result[Void]
+def write_fields(fd: Int, fields: List[String]) -> Result[Void]
   written = -1
   if fields.length == 1
     written = dprintf1(fd, "%s\n", fields[0])
@@ -192,6 +191,13 @@ export def write_fields(fd: Int, fields: List[String]) -> Result[Void]
 
   ok()
 end
+
+private
+
+O_WRONLY = 1
+O_CREAT = 64 # the Linux value; macOS uses 0x200
+F_SETFD = 2
+FD_CLOEXEC = 1
 
 extern "libc.so.6"
   def open(path: C.String, flags: C.Int32, ..., mode: C.Int32) -> C.Int32
@@ -208,14 +214,14 @@ end
 Some libraries take their options as a struct by value, with a function that gives the defaults: llama.cpp has `llama_context_default_params()` and `llama_init_from_model(model, params)`. The raw layer declares the C struct in the block, every field in the order of the header ([C structs](/library/io-and-system/native/types/#c-structs)). The wrapper takes the defaults, sets the fields that the caller chose with `.with`, and passes the record on. The caller sees only a struct of its own, with the options it may set.
 
 ```agentica {mode="check"}
-export struct ContextOptions
+struct ContextOptions
   size: Int = 4096
   threads: Int = 4
 end
 
 extern "/opt/infer/libinfer.so"
-  export resource Model, free: infer_model_free
-  export resource Context, free: infer_free
+  resource Model, free: infer_model_free
+  resource Context, free: infer_free
   struct ContextParams
     n_ctx: C.Int32
     n_batch: C.Int32
@@ -231,7 +237,7 @@ extern "/opt/infer/libinfer.so"
 end
 
 ## A context of the model with the caller's options; the other parameters keep the library's defaults.
-export def context(model: Model, options: ContextOptions) -> Result[Context]
+def context(model: Model, options: ContextOptions) -> Result[Context]
   params = infer_context_default_params().with(n_ctx: options.size, n_threads: options.threads)
   case infer_init_from_model(model, params)
     Result.Ok(made) -> ok(made)

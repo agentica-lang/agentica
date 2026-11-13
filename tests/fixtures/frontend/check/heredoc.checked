@@ -1,4 +1,4 @@
-program #23 0:1:1-210:15:1
+program #25 0:1:1-210:15:1
   module "heredoc.agc"
     declaration: function-decl #11 0:1:1-116:7:1 name="label"
       param: param #1 10:1:11-22:1:23 name="name"

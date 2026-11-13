@@ -110,9 +110,9 @@ def test_a_bare_name_finds_each_kind_of_top_level_declaration_with_its_signature
     assert (make["kind"], make["name"], make["module"], make["exported"]) == ("function", "make", "models.agc", True)
     assert make["signature"] == "make(name: String) -> User"
     assert make["doc"] == "Makes a user.\n\nThe age is 3."
-    # `span` is the whole declaration, `export` included, as in `outline`; `name_span` is the name alone.
+    # `span` is the whole declaration, as in `outline`; `name_span` is the name alone.
     assert make["span"]["file"] == make["name_span"]["file"] == "models.agc"
-    assert start(make["span"]) == where(MODELS, "def make\n")
+    assert start(make["span"]) == where(MODELS, "def make(")
     assert (start(make["name_span"]), end(make["name_span"])) == (where(MODELS, "make(name"),
                                                                   where(MODELS, "make(name", 4))
     cases = [("User", "struct", "struct User", "A user."), ("Shape", "enum", "enum Shape", None),
@@ -250,7 +250,7 @@ def test_a_chain_of_imports_is_linked_once_and_its_matches_come_in_the_order_the
         previous = f'import Before from "f{number - 1:03d}"\n\n' if number > 1 else ""
         call = f"Before.step() + 1" if number > 1 else "1"
         (tmp_path / f"f{number:03d}.agc").write_text(
-            f"{previous}export def step() -> Int\n  return {call}\nend\n", encoding="utf-8")
+            f"{previous}def step() -> Int\n  return {call}\nend\n", encoding="utf-8")
     report = answer("step", ".", cwd=tmp_path)
     assert [m["module"] for m in report["matches"]] == [f"f{number:03d}.agc" for number in range(1, count + 1)]
     assert report["skipped"] == []
@@ -395,8 +395,8 @@ def test_text_form_lists_one_line_per_match_as_outline_does_and_the_skipped_root
     (program / "broken.agc").write_text("def broken(\n", encoding="utf-8")
     result = run(cli() + ["symbol", "make", "."], env=vm_environment(), cwd=program)
     assert result.code == 0
-    assert result.stdout.split("\n") == ["models.agc:%d:%d export def make(name: String) -> User" % where(
-        MODELS, "def make\n"), ""]
+    assert result.stdout.split("\n") == ["models.agc:%d:%d def make(name: String) -> User" % where(
+        MODELS, "def make("), ""]
     assert result.stderr.strip().split("\n") == ["skipped broken.agc: LEX-UNCLOSED-DELIMITER"]
     members = run(cli() + ["symbol", "User.name", "orders.agc"], env=vm_environment(), cwd=program)
     assert members.stdout == "models.agc:%d:%d field User.name: String\n" % where(MODELS, "name: String")

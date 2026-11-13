@@ -169,7 +169,7 @@ CASES = [
     ("a module block: encode", block("puts(JSON.encode(s))"), "CHECK-PRIVATE-FIELD", (18, 20), (18, 21)),
     ("a block reads a struct of its file", FILE_STRUCT % "c.secret", None, None, None),
     ("a struct of a block is private to the block", FILE_STRUCT % "Inner.make().key", "CHECK-PRIVATE-FIELD",
-     (22, 53), (22, 56)),
+     (22, 46), (22, 49)),
     ("a re-export keeps the declaring module",
      {"main.agc": 'import F from "facade"\n\ndef main() -> Void\n  puts(F.open(1).secret)\nend\n', "lib.agc": LIB,
       "facade.agc": 'import L from "lib"\n\nexport L.Conn\nexport L.open\n'},

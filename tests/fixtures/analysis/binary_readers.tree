@@ -1,56 +1,56 @@
 read_u16_le exported=True (data: Bytes, offset: Int) -> Result[Int]
-  return Result[Int] @23:67-23:97
-    call Result[Int] target='load16_le' @23:67-23:97
-      local Bytes text='data' @23:77-23:81
-      local Int text='offset' @23:83-23:89
-      string String text='u16' @23:91-23:96
+  return Result[Int] @23:60-23:90
+    call Result[Int] target='load16_le' @23:60-23:90
+      local Bytes text='data' @23:70-23:74
+      local Int text='offset' @23:76-23:82
+      string String text='u16' @23:84-23:89
 load16_le exported=False (data: Bytes, offset: Int, type: String) -> Result[Int]
-  try Void @249:3-249:36
-    call Result[Void] target='window' @249:7-249:36
-      local Bytes text='data' @249:14-249:18
-      local Int text='offset' @249:20-249:26
-      int Int text='2' @249:28-249:29
-      local String text='type' @249:31-249:35
-  let Int text='a' new @250:3-250:19
-    call Int target='Bytes.at' @250:7-250:19
-      local Bytes text='data' @250:7-250:11
-      local Int text='offset' @250:12-250:18
-  let Int text='b' new @251:3-251:23
-    call Int target='Bytes.at' @251:7-251:23
-      local Bytes text='data' @251:7-251:11
-      op Int text='+' @251:12-251:22
-        local Int text='offset' @251:12-251:18
-        int Int text='1' @251:21-251:22
-  return Result[Int] @252:3-252:32
-    call Result[Int] target='ok' @252:3-252:32
-      call Int target='Int.bit_or' @252:6-252:31
-        call Int target='Int.shift_left' @252:6-252:21
-          local Int text='b' @252:6-252:7
-          int Int text='8' @252:19-252:20
-        local Int text='a' @252:29-252:30
+  try Void @251:3-251:36
+    call Result[Void] target='window' @251:7-251:36
+      local Bytes text='data' @251:14-251:18
+      local Int text='offset' @251:20-251:26
+      int Int text='2' @251:28-251:29
+      local String text='type' @251:31-251:35
+  let Int text='a' new @252:3-252:19
+    call Int target='Bytes.at' @252:7-252:19
+      local Bytes text='data' @252:7-252:11
+      local Int text='offset' @252:12-252:18
+  let Int text='b' new @253:3-253:23
+    call Int target='Bytes.at' @253:7-253:23
+      local Bytes text='data' @253:7-253:11
+      op Int text='+' @253:12-253:22
+        local Int text='offset' @253:12-253:18
+        int Int text='1' @253:21-253:22
+  return Result[Int] @254:3-254:32
+    call Result[Int] target='ok' @254:3-254:32
+      call Int target='Int.bit_or' @254:6-254:31
+        call Int target='Int.shift_left' @254:6-254:21
+          local Int text='b' @254:6-254:7
+          int Int text='8' @254:19-254:20
+        local Int text='a' @254:29-254:30
 window exported=False (data: Bytes, offset: Int, n: Int, type: String) -> Result[Void]
-  if - @222:3-225:1
-    branch - @222:3-224:1
-      or Bool text='or' @222:6-222:42
-        op Bool text='<' @222:6-222:16
-          local Int text='offset' @222:6-222:12
-          int Int text='0' @222:15-222:16
-        op Bool text='>' @222:20-222:42
-          local Int text='offset' @222:20-222:26
-          op Int text='-' @222:29-222:42
-            call Int target='Bytes.length' @222:29-222:38
-              local Bytes text='data' @222:29-222:33
-            local Int text='n' @222:41-222:42
-      block - @223:5-223:106
-        return Result[Void] @223:5-223:106
-          call Result[Void] target='error' @223:12-223:106
-            interpolation String @223:18-223:87
-              local String text='type' @223:21-223:25
-              string String text=' at offset ' @223:18-223:87
-              local Int text='offset' @223:39-223:45
-              string String text=' is outside bytes of length ' @223:18-223:87
-              call Int target='Bytes.length' @223:76-223:85
-                local Bytes text='data' @223:76-223:80
-            string String text='argument' @223:95-223:105
-  return Result[Void] @225:3-225:7
-    call Result[Void] target='ok' @225:3-225:7
+  if - @224:3-227:1
+    branch - @224:3-226:1
+      or Bool text='or' @224:6-224:42
+        op Bool text='<' @224:6-224:16
+          local Int text='offset' @224:6-224:12
+          int Int text='0' @224:15-224:16
+        op Bool text='>' @224:20-224:42
+          local Int text='offset' @224:20-224:26
+          op Int text='-' @224:29-224:42
+            call Int target='Bytes.length' @224:29-224:38
+              local Bytes text='data' @224:29-224:33
+            local Int text='n' @224:41-224:42
+      block - @225:5-225:106
+        return Result[Void] @225:5-225:106
+          call Result[Void] target='error' @225:12-225:106
+            interpolation String @225:18-225:87
+              local String text='type' @225:21-225:25
+              string String text=' at offset ' @225:18-225:87
+              local Int text='offset' @225:39-225:45
+              string String text=' is outside bytes of length ' @225:18-225:87
+              call Int target='Bytes.length' @225:76-225:85
+                local Bytes text='data' @225:76-225:80
+            string String text='argument' @225:95-225:105
+  return Result[Void] @227:3-227:7
+    call Result[Void] target='ok' @227:3-227:7

@@ -364,7 +364,7 @@ SINGLE_FILE = [
 # Several files: (title, files, code, file of the diagnostic, text the range covers).
 MODULES = [
     ("a call through an import alias leaves out the defaults",
-     {"util.agc": "export " + JOIN,
+     {"util.agc": JOIN,
       "root.agc": 'import Util from "util"\n\n'
                   + main_with('  puts(Util.join(["a"]))\n  puts(Util.join(["a"], "-"))\n')},
      None, None, None),
@@ -376,11 +376,11 @@ MODULES = [
       "root.agc": 'import Util from "util"\n\n' + main_with("  x = Util.connect\n  puts(x)\n")},
      None, None, None),
     ("an alias call without parentheses and a required parameter is an arity error",
-     {"util.agc": "export " + JOIN,
+     {"util.agc": JOIN,
       "root.agc": 'import Util from "util"\n\n' + main_with("  x = Util.join\n  puts(x)\n")},
      "CHECK-ARITY", "root.agc", "Util.join"),
     ("an alias call with too many arguments is an arity error",
-     {"util.agc": "export " + JOIN,
+     {"util.agc": JOIN,
       "root.agc": 'import Util from "util"\n\n' + main_with('  puts(Util.join([], ",", 1))\n')},
      "CHECK-ARITY", "root.agc", 'Util.join([], ",", 1)'),
     ("a default that names a variant through an import alias is resolved in the declaring module",
@@ -431,7 +431,7 @@ MODULES = [
       "root.agc": 'import Util from "util"\n\n' + main_with("  puts(Util.pick())\n")},
      "CHECK-DEFAULT-VALUE", "util.agc", "1 + 1"),
     ("a named import of a function with defaults leaves them out",
-     {"util.agc": "export " + JOIN,
+     {"util.agc": JOIN,
       "root.agc": 'import {join} from "util"\n\n' + main_with('  puts(join(["a"]))\n')},
      None, None, None),
     ("a struct with defaults, exported, is built by another file that leaves them out",

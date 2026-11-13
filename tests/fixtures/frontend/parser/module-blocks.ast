@@ -1,18 +1,18 @@
-program #17 0:1:1-148:14:1
-  declaration: export-decl #15 12:2:1-130:11:1 doc="Counter."
-    declaration: module-decl #14 19:2:8-130:11:1 name="Counter"
-      declaration: const-decl #1 36:3:3-53:4:1 name="LIMIT" exported=true
-        value: literal #0 51:3:18-52:3:19 value=int:1
-      declaration: export-decl #5 56:5:3-91:8:1
-        declaration: enum-decl #4 63:5:10-91:8:1 name="Msg" type-parameters=[]
-          variant: enum-variant #3 76:6:5-85:7:1 name="Add"
-            payload: type-ref #2 80:6:9-83:6:12 name="Int"
-      declaration: function-decl #13 94:9:3-126:10:1 name="step" expression
-        param: param #7 103:9:12-109:9:18 name="n"
-          type: type-ref #6 106:9:15-109:9:18 name="Int"
-        result: type-ref #8 114:9:23-117:9:26 name="Int"
-        body: return-stmt #12 120:9:29-125:9:34 implicit
-          value: binary #11 120:9:29-125:9:34 op=plus op-span=122:9:31-123:9:32
-            left: name-ref #9 120:9:29-121:9:30 name="n"
-            right: literal #10 124:9:33-125:9:34 value=int:1
-  declaration: module-decl #16 131:12:1-148:14:1 name="Empty"
+program #17 0:1:1-147:18:1 private-at=1
+  declaration: export-decl #16 12:2:1-120:13:1 doc="Counter."
+    declaration: module-decl #14 12:2:1-120:13:1 name="Counter" doc="Counter." private-at=2
+      declaration: const-decl #1 29:3:3-39:4:1 name="LIMIT" exported=true
+        value: literal #0 37:3:11-38:3:12 value=int:1
+      declaration: export-decl #13 42:5:3-70:8:1
+        declaration: enum-decl #4 42:5:3-70:8:1 name="Msg" type-parameters=[]
+          variant: enum-variant #3 55:6:5-64:7:1 name="Add"
+            payload: type-ref #2 59:6:9-62:6:12 name="Int"
+      declaration: function-decl #12 84:11:3-116:12:1 name="step" expression
+        param: param #6 93:11:12-99:11:18 name="n"
+          type: type-ref #5 96:11:15-99:11:18 name="Int"
+        result: type-ref #7 104:11:23-107:11:26 name="Int"
+        body: return-stmt #11 110:11:29-115:11:34 implicit
+          value: binary #10 110:11:29-115:11:34 op=plus op-span=112:11:31-113:11:32
+            left: name-ref #8 110:11:29-111:11:30 name="n"
+            right: literal #9 114:11:33-115:11:34 value=int:1
+  declaration: module-decl #15 130:16:1-147:18:1 name="Empty"

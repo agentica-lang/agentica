@@ -382,7 +382,7 @@ def test_an_integer_outside_the_bits_of_its_type_stops_the_run(tmp_path, peer, c
 
 @NATIVE_CALLS
 def test_an_extern_function_is_exported_and_imported_like_any_function(tmp_path, peer):
-    raw = PEER_EXTERN.format(library=literal(peer)).replace("  def peer_add(", "  def peer_add(\n")
+    raw = PEER_EXTERN.format(library=literal(peer))
     program(tmp_path, raw.rstrip("\n") + "\n", "raw.agc")
     main = program(tmp_path, 'import Raw from "./raw"\n\ndef main() -> Void\n  puts(Raw.peer_add(1, 2))\nend\n')
     result = agentica(main)

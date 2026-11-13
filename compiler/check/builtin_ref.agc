@@ -74,6 +74,8 @@ def fn_type(ref: Ref) -> T.Type
 end
 
 ## The source of the prelude file with one function per reference, in order: `ref_0` calls the builtin of `names[0]`.
+## Like the files of stdlib/prelude/, it starts with `private`: prelude_files.agc keeps the plain functions of a file,
+## not the exported ones.
 def source(names: List[String]) -> String
   functions: List[String] = []
   for name in names
@@ -83,7 +85,7 @@ def source(names: List[String]) -> String
     end
   end
 
-  functions.join("\n")
+  "private\n\n#{functions.join("\n")}"
 end
 
 private

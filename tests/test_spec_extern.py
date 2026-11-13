@@ -88,7 +88,7 @@ def test_an_exported_extern_function_is_imported_with_its_agentica_types(tmp_pat
 
 
 def test_a_private_extern_function_is_not_exported(tmp_path):
-    source(tmp_path, 'extern "libm.so.6"\n  def cos(x: C.Double) -> C.Double\nend\n', "raw.agc")
+    source(tmp_path, 'private\n\nextern "libm.so.6"\n  def cos(x: C.Double) -> C.Double\nend\n', "raw.agc")
     text = 'import Raw from "./raw"\n\ndef main() -> Void\n  puts(Raw.cos(1.0))\nend\n'
     assert at(problem_of(check(source(tmp_path, text))))[0].startswith("CHECK-")
 
@@ -247,7 +247,8 @@ def test_an_extern_parameter_has_no_default(tmp_path):
     ('extern "libc.so.6"\n  def abs(n: C.Int32) -> C.Int32\n', (3, 1)),
     ('extern "libc.so.6" def abs(n: C.Int32) -> C.Int32\nend\n', (1, 20)),
     ('extern <<~A\n  a\n  b\nA\n  def abs(n: C.Int32) -> C.Int32\nend\n', (1, 8)),
-    ('extern "libc.so.6"\n  compute def abs(n: C.Int32) -> C.Int32\nend\n', (2, 3)),
+    ('extern "libc.so.6"\n  export def abs(n: C.Int32) -> C.Int32\nend\n', (2, 3)),
+    ('extern "libc.so.6"\n  compute export def abs(n: C.Int32) -> C.Int32\nend\n', (2, 3)),
     ('extern "libc.so.6"\n  compute abs(n: C.Int32) -> C.Int32\nend\n', (2, 3)),
 ])
 def test_an_extern_block_holds_only_signatures(checked, text, start):
@@ -466,7 +467,7 @@ def test_an_exported_resource_is_imported_like_a_type(tmp_path):
     good = 'import Raw from "./raw"\n\ndef shut(db: Raw.Db) -> Void\n  Native.close(db)\nend\n\n' \
            'def main() -> Void\n  shut(Raw.db_open().unwrap!)\nend\n'
     assert check(source(tmp_path, good)).code == 0
-    private = raw.replace("export resource", "resource")
+    private = "private\n\n" + raw
     source(tmp_path, private, "raw.agc")
     assert at(problem_of(check(source(tmp_path, good))))[0] == "CHECK-IMPORT-NAME"
 

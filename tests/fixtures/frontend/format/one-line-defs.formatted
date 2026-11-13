@@ -1,8 +1,5 @@
 # A def may follow an import with no empty line, so one written with a body gets none there either.
 import HTTP from "std/http"
-def long_name(first_argument: Int, second_argument: Int) -> Int
-  first_argument * second_argument + first_argument * 20000
-end
 
 # A one-line def stays one when it fits. A one-line def too long for its line (an exported one with a `##` doc too),
 # or whose value takes lines of its own (a pipe chain of two or more `|>`), is written as the def with a body that it
@@ -10,8 +7,30 @@ end
 # over lines inside parentheses or with a leading `.` is joined when it fits.
 
 ## The product, scaled.
-export def scaled_product(first_argument: Int, second_argument: Int) -> Int
-  first_argument * second_argument * 7000000
+def scaled_product(first_argument: Int, second_argument: Int) -> Int = first_argument * second_argument * 7000000
+
+# One-line defs may follow each other with no empty line, and `fmt` keeps the author's choice. One that is too long
+# for its line is written with a body, and gets the empty lines of a declaration on both sides, so the output still
+# parses; its neighbours stay one line.
+
+## One.
+def one() -> Int = 1
+
+# A def whose body is one `return value` is written as a one-line def when that fits on its line: with a `##` doc and
+# `export` too, with comment lines right before it and right after its `end`, and when the source spreads the value
+# over lines that the layout joins (arguments, a `.name` line, a `do` block that fits), and for `try`. It keeps its
+# body when a comment sits from its `def` line to its `end` line, when the value takes lines of its own (a pipe chain
+# of two or more `|>`, a `case`), when it does not fit, when the body is anything else (two statements, a guard, a bare
+# `return`), and for a Void function (`main` included). The empty lines are kept as found. A body that stays gives
+# its value without `return` (#1287), but for a `case` value and in a Void function.
+
+## Doubles a number.
+def double(x: Int) -> Int = x * 2
+
+private
+
+def long_name(first_argument: Int, second_argument: Int) -> Int
+  first_argument * second_argument + first_argument * 20000
 end
 
 def double(x: Int) -> Int = x * 2 # twice
@@ -32,12 +51,6 @@ def long_name(first_argument: Int, second_argument: Int) -> Int
   first_argument * second_argument + first_argument * 20000
 end
 
-# One-line defs may follow each other with no empty line, and `fmt` keeps the author's choice. One that is too long
-# for its line is written with a body, and gets the empty lines of a declaration on both sides, so the output still
-# parses; its neighbours stay one line.
-
-## One.
-export def one() -> Int = 1
 def two() -> Int = 2
 # a note
 def three() -> Int = 3
@@ -49,17 +62,6 @@ end
 def four() -> Int = 4
 
 def five() -> Int = 5
-
-# A def whose body is one `return value` is written as a one-line def when that fits on its line: with a `##` doc and
-# `export` too, with comment lines right before it and right after its `end`, and when the source spreads the value
-# over lines that the layout joins (arguments, a `.name` line, a `do` block that fits), and for `try`. It keeps its
-# body when a comment sits from its `def` line to its `end` line, when the value takes lines of its own (a pipe chain
-# of two or more `|>`, a `case`), when it does not fit, when the body is anything else (two statements, a guard, a bare
-# `return`), and for a Void function (`main` included). The empty lines are kept as found. A body that stays gives
-# its value without `return` (#1287), but for a `case` value and in a Void function.
-
-## Doubles a number.
-export def double(x: Int) -> Int = x * 2
 
 def triple(x: Int) -> Int = x * 3
 

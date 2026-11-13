@@ -1,2 +1,2 @@
-1:1 leading FunctionDecl 3:1 "# A one-line def and its body form meet at the width: `def f() -> String = \"...\"` is 119 columns with 97 characters of"
-2:1 leading FunctionDecl 3:1 "# text and 120 with 98; `export ` takes 7 more. Only the width decides, and a body gives its value without `return`."
+15:1 leading FunctionDecl 17:1 "# A one-line def and its body form meet at the width: `def f() -> String = \"...\"` is 119 columns with 97 characters of"
+16:1 leading FunctionDecl 17:1 "# text and 120 with 98; `export ` takes 7 more. Only the width decides, and a body gives its value without `return`."

@@ -302,7 +302,7 @@ def test_rejected_fragments_fail_with_the_intended_code(program):
 def check_table(name):
     """The text of one function of the checker tables (compiler/check/check_tables.agc)."""
     text = (ROOT / "compiler" / "check" / "check_tables.agc").read_text(encoding="utf-8")
-    start = text.index("def %s()\n" % name)
+    start = text.index("def %s() -> " % name)
     return text[start:text.index("\nend\n", start)]
 
 

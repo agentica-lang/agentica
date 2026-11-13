@@ -61,7 +61,7 @@ def test_every_own_line_comment_of_a_large_file_is_placed_once_in_source_order(f
 
 
 def test_the_attachment_of_a_file_with_many_declarations_stays_near_linear(format_stage):
-    lines = []
+    lines = ["private", ""]
     for index in range(GENERATED_DECLS):
         lines += ["# leads f%d" % index, "def f%d() -> Int # on the header" % index,
                   "  return %d # on the value" % index, "end", ""]
@@ -72,7 +72,7 @@ def test_the_attachment_of_a_file_with_many_declarations_stays_near_linear(forma
     elapsed = time.monotonic() - started
     placed = output.rstrip("\n").split("\n")
     assert len(placed) == 3 * GENERATED_DECLS
-    last = 5 * GENERATED_DECLS - 4
+    last = 5 * GENERATED_DECLS - 2
     assert [line.split(" ")[:4] for line in placed[-3:]] == [
         ["%d:1" % last, "leading", "FunctionDecl", "%d:1" % (last + 1)],
         ["%d:20" % (last + 1), "trailing", "TypeRef", "%d:16" % (last + 1)],

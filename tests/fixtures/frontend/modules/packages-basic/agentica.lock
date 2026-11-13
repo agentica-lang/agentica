@@ -5,11 +5,11 @@ name = "greeter"
 git = "https://github.com/owner/greeter.git"
 tag = "v1.2.3"
 commit = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-hash = "sha256:1239aeba973409210caec6a10934ff649e11538d7d19d851d12336ce73442023"
+hash = "sha256:4c5da1e3bc240f6f268cecc7d59de706d58e7c6e155ceb6fd725457b6714f7ac"
 
 [[package]]
 name = "tools"
 git = "https://gitlab.com/team/tools"
 ref = "aaaaaaa"
 commit = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-hash = "sha256:eec2c68b7df0c482a0dea7a004eb74dba2da04661165ad27d0e735be2534766f"
+hash = "sha256:cc7c38d7752587ce2be06af4ffd53b071e6780d87f7bfd4b5605ceb1f5fb9313"

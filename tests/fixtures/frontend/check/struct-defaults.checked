@@ -1,4 +1,4 @@
-program #43 0:1:1-308:19:1
+program #46 0:1:1-308:19:1
   module "struct-defaults.agc"
     declaration: enum-decl #2 0:1:1-28:5:1 name="Mode" type-parameters=[]
       variant: enum-variant #0 12:2:3-17:3:1 name="Fast"

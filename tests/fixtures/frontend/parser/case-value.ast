@@ -1,75 +1,78 @@
-program #72 0:1:1-450:32:1
-  declaration: enum-decl #2 0:1:1-28:5:1 name="Kind" type-parameters=[]
-    variant: enum-variant #0 12:2:3-16:3:1 name="Big"
-    variant: enum-variant #1 18:3:3-24:4:1 name="Small"
-  declaration: function-decl #17 29:6:1-138:12:1 name="label"
-    param: param #4 39:6:11-49:6:21 name="kind"
-      type: type-ref #3 45:6:17-49:6:21 name="Kind"
-    result: type-ref #5 54:6:26-60:6:32 name="String"
-    body: return-stmt #16 63:7:3-134:11:1
-      value: case-expr #15 70:7:10-133:10:6
-        value: name-ref #6 75:7:15-79:7:19 name="kind"
-        arm: case-arm #10 84:8:5-102:9:1
-          pattern: variant-pattern #7 84:8:5-92:8:13 enum="Kind" variant="Big" bindings=[]
-          body: expr-stmt #9 96:8:17-102:9:1
-            value: literal #8 96:8:17-101:8:22 value=string:"big"
-        arm: case-arm #14 106:9:5-128:10:1
-          pattern: variant-pattern #11 106:9:5-116:9:15 enum="Kind" variant="Small" bindings=[]
-          body: expr-stmt #13 120:9:19-128:10:1
-            value: literal #12 120:9:19-127:9:26 value=string:"small"
-  declaration: function-decl #71 139:13:1-450:32:1 name="main"
-    result: type-ref #18 153:13:15-157:13:19 name="Void"
-    body: binding #33 160:14:3-230:20:1 name="size"
-      value: case-expr #32 167:14:10-229:19:6
-        value: literal #19 172:14:15-173:14:16 value=int:3
-        arm: case-arm #27 178:15:5-213:18:1
-          pattern: literal-pattern #20 178:15:5-179:15:6 value=int:3
-          body: binding #22 189:16:7-198:17:1 name="base"
-            value: literal #21 196:16:14-197:16:15 value=int:4
-          body: expr-stmt #26 204:17:7-213:18:1
-            value: binary #25 204:17:7-212:17:15 op=plus op-span=209:17:12-210:17:13
-              left: name-ref #23 204:17:7-208:17:11 name="base"
-              right: literal #24 211:17:14-212:17:15 value=int:1
-        arm: case-arm #31 217:18:5-224:19:1
-          pattern: wildcard-pattern #28 217:18:5-218:18:6
-          body: expr-stmt #30 222:18:10-224:19:1
-            value: literal #29 222:18:10-223:18:11 value=int:0
-    body: binding #46 232:20:3-279:24:1 name="size"
-      value: binary #45 232:20:3-279:24:1 op=plus op-span=237:20:8-239:20:10
-        left: name-ref #34 232:20:3-236:20:7 name="size"
-        right: case-expr #44 240:20:11-278:23:6
-          value: literal #35 245:20:16-248:20:19 value=string:"a"
-          arm: case-arm #39 253:21:5-262:22:1
-            pattern: literal-pattern #36 253:21:5-256:21:8 value=string:"a"
-            body: expr-stmt #38 260:21:12-262:22:1
-              value: literal #37 260:21:12-261:21:13 value=int:1
-          arm: case-arm #43 266:22:5-273:23:1
-            pattern: wildcard-pattern #40 266:22:5-267:22:6
-            body: expr-stmt #42 271:22:10-273:23:1
-              value: literal #41 271:22:10-272:22:11 value=int:2
-    body: binding #63 281:24:3-400:30:1 name="names"
-      value: method-call #62 289:24:11-399:29:6 name="map"
-        target: list-lit #49 289:24:11-311:24:33
-          element: type-expression #47 290:24:12-298:24:20 name="Kind.Big"
-          element: type-expression #48 300:24:22-310:24:32 name="Kind.Small"
-        arg: block-lit #61 316:24:38-399:29:6
-          param: block-param #50 320:24:42-324:24:46 name="kind"
-          body: case-stmt #60 330:25:5-394:29:1
-            value: name-ref #51 335:25:10-339:25:14 name="kind"
-            arm: case-arm #55 346:26:7-362:27:1
-              pattern: variant-pattern #52 346:26:7-354:26:15 enum="Kind" variant="Big" bindings=[]
-              body: expr-stmt #54 358:26:19-362:27:1
-                value: literal #53 358:26:19-361:26:22 value=string:"B"
-            arm: case-arm #59 368:27:7-386:28:1
-              pattern: variant-pattern #56 368:27:7-378:27:17 enum="Kind" variant="Small" bindings=[]
-              body: expr-stmt #58 382:27:21-386:28:1
-                value: literal #57 382:27:21-385:27:24 value=string:"S"
-    body: expr-stmt #70 402:30:3-446:31:1
-      value: call #69 402:30:3-445:30:46 name="puts" piped=false
-        arg: interpolation #68 407:30:8-444:30:45
-          part: name-ref #64 410:30:11-414:30:15 name="size"
-          part: text " "
-          part: name-ref #65 418:30:19-423:30:24 name="names"
-          part: text " "
-          part: call #67 427:30:28-442:30:43 name="label" piped=false
-            arg: type-expression #66 433:30:34-441:30:42 name="Kind.Big"
+program #75 0:1:1-450:32:1
+  declaration: export-decl #72 0:1:1-28:5:1
+    declaration: enum-decl #2 0:1:1-28:5:1 name="Kind" type-parameters=[]
+      variant: enum-variant #0 12:2:3-16:3:1 name="Big"
+      variant: enum-variant #1 18:3:3-24:4:1 name="Small"
+  declaration: export-decl #73 29:6:1-138:12:1
+    declaration: function-decl #17 29:6:1-138:12:1 name="label"
+      param: param #4 39:6:11-49:6:21 name="kind"
+        type: type-ref #3 45:6:17-49:6:21 name="Kind"
+      result: type-ref #5 54:6:26-60:6:32 name="String"
+      body: return-stmt #16 63:7:3-134:11:1
+        value: case-expr #15 70:7:10-133:10:6
+          value: name-ref #6 75:7:15-79:7:19 name="kind"
+          arm: case-arm #10 84:8:5-102:9:1
+            pattern: variant-pattern #7 84:8:5-92:8:13 enum="Kind" variant="Big" bindings=[]
+            body: expr-stmt #9 96:8:17-102:9:1
+              value: literal #8 96:8:17-101:8:22 value=string:"big"
+          arm: case-arm #14 106:9:5-128:10:1
+            pattern: variant-pattern #11 106:9:5-116:9:15 enum="Kind" variant="Small" bindings=[]
+            body: expr-stmt #13 120:9:19-128:10:1
+              value: literal #12 120:9:19-127:9:26 value=string:"small"
+  declaration: export-decl #74 139:13:1-450:32:1
+    declaration: function-decl #71 139:13:1-450:32:1 name="main"
+      result: type-ref #18 153:13:15-157:13:19 name="Void"
+      body: binding #33 160:14:3-230:20:1 name="size"
+        value: case-expr #32 167:14:10-229:19:6
+          value: literal #19 172:14:15-173:14:16 value=int:3
+          arm: case-arm #27 178:15:5-213:18:1
+            pattern: literal-pattern #20 178:15:5-179:15:6 value=int:3
+            body: binding #22 189:16:7-198:17:1 name="base"
+              value: literal #21 196:16:14-197:16:15 value=int:4
+            body: expr-stmt #26 204:17:7-213:18:1
+              value: binary #25 204:17:7-212:17:15 op=plus op-span=209:17:12-210:17:13
+                left: name-ref #23 204:17:7-208:17:11 name="base"
+                right: literal #24 211:17:14-212:17:15 value=int:1
+          arm: case-arm #31 217:18:5-224:19:1
+            pattern: wildcard-pattern #28 217:18:5-218:18:6
+            body: expr-stmt #30 222:18:10-224:19:1
+              value: literal #29 222:18:10-223:18:11 value=int:0
+      body: binding #46 232:20:3-279:24:1 name="size"
+        value: binary #45 232:20:3-279:24:1 op=plus op-span=237:20:8-239:20:10
+          left: name-ref #34 232:20:3-236:20:7 name="size"
+          right: case-expr #44 240:20:11-278:23:6
+            value: literal #35 245:20:16-248:20:19 value=string:"a"
+            arm: case-arm #39 253:21:5-262:22:1
+              pattern: literal-pattern #36 253:21:5-256:21:8 value=string:"a"
+              body: expr-stmt #38 260:21:12-262:22:1
+                value: literal #37 260:21:12-261:21:13 value=int:1
+            arm: case-arm #43 266:22:5-273:23:1
+              pattern: wildcard-pattern #40 266:22:5-267:22:6
+              body: expr-stmt #42 271:22:10-273:23:1
+                value: literal #41 271:22:10-272:22:11 value=int:2
+      body: binding #63 281:24:3-400:30:1 name="names"
+        value: method-call #62 289:24:11-399:29:6 name="map"
+          target: list-lit #49 289:24:11-311:24:33
+            element: type-expression #47 290:24:12-298:24:20 name="Kind.Big"
+            element: type-expression #48 300:24:22-310:24:32 name="Kind.Small"
+          arg: block-lit #61 316:24:38-399:29:6
+            param: block-param #50 320:24:42-324:24:46 name="kind"
+            body: case-stmt #60 330:25:5-394:29:1
+              value: name-ref #51 335:25:10-339:25:14 name="kind"
+              arm: case-arm #55 346:26:7-362:27:1
+                pattern: variant-pattern #52 346:26:7-354:26:15 enum="Kind" variant="Big" bindings=[]
+                body: expr-stmt #54 358:26:19-362:27:1
+                  value: literal #53 358:26:19-361:26:22 value=string:"B"
+              arm: case-arm #59 368:27:7-386:28:1
+                pattern: variant-pattern #56 368:27:7-378:27:17 enum="Kind" variant="Small" bindings=[]
+                body: expr-stmt #58 382:27:21-386:28:1
+                  value: literal #57 382:27:21-385:27:24 value=string:"S"
+      body: expr-stmt #70 402:30:3-446:31:1
+        value: call #69 402:30:3-445:30:46 name="puts" piped=false
+          arg: interpolation #68 407:30:8-444:30:45
+            part: name-ref #64 410:30:11-414:30:15 name="size"
+            part: text " "
+            part: name-ref #65 418:30:19-423:30:24 name="names"
+            part: text " "
+            part: call #67 427:30:28-442:30:43 name="label" piped=false
+              arg: type-expression #66 433:30:34-441:30:42 name="Kind.Big"

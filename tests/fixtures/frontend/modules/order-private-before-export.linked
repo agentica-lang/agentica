@@ -1,1 +1,1 @@
-ERROR CHECK-DECL-ORDER 26:4:1-55:6:1 "declaration is out of order" "exported functions come before private functions" file="root.agc"
+ERROR CHECK-DECL-ORDER 58:9:1-68:10:1 "declaration is out of order" "the private constants come right after private" file="root.agc"

@@ -1,4 +1,4 @@
-program #11 0:1:1-134:7:1
+program #12 0:1:1-134:7:1
   module "root.agc"
     declaration: function-decl #10 62:3:1-134:7:1 name="main"
       result: type-ref #1 76:3:15-80:3:19 name="Void"
@@ -11,93 +11,93 @@ program #11 0:1:1-134:7:1
             arg: name-ref #5 121:5:17-122:5:18 name="q"
             arg: literal #6 124:5:20-127:5:23 value=string:"a"
   module "std/queue.agc"
-    declaration: struct-decl #3 242:7:8-317:11:1 name="@2::QueueState"
-      field: field-decl #2 293:9:3-313:10:1 name="items" doc="The values, oldest first."
-        type: type-ref #1 300:9:10-312:9:22 name="List"
-          arg: type-ref #0 305:9:15-311:9:21 name="String"
-    declaration: struct-decl #9 391:13:8-516:19:1 name="@2::Popped"
-      field: field-decl #6 430:15:3-444:16:1 name="value" doc="The oldest value."
-        type: type-ref #5 437:15:10-443:15:16 name="String"
-      field: field-decl #8 490:17:3-512:18:1 name="remaining" doc="The queue after the value was removed."
-        type: type-ref #7 501:17:14-511:17:24 name="@2::QueueState"
-    declaration: function-decl #16 551:21:8-599:22:1 name="@2::new" expression
-      result: type-ref #11 564:21:21-574:21:31 name="@2::QueueState"
-      body: return-stmt #15 577:21:34-598:21:55 implicit
-        value: construct #14 577:21:34-598:21:55 type="@2::QueueState"
-          arg: named-arg #13 588:21:45-597:21:54 name="items"
-            value: list-lit #12 595:21:52-597:21:54
-    declaration: function-decl #30 658:24:8-768:25:1 name="@2::push" expression
-      param: param #19 667:24:17-684:24:34 name="queue"
-        type: type-ref #18 674:24:24-684:24:34 name="@2::QueueState"
-      param: param #21 686:24:36-699:24:49 name="value"
-        type: type-ref #20 693:24:43-699:24:49 name="String"
-      result: type-ref #22 704:24:54-714:24:64 name="@2::QueueState"
-      body: return-stmt #29 717:24:67-767:24:117 implicit
-        value: construct #28 717:24:67-767:24:117 type="@2::QueueState"
-          arg: named-arg #27 728:24:78-766:24:116 name="items"
-            value: call #26 735:24:85-766:24:116 name="List.append" piped=false
-              arg: field-access #24 747:24:97-758:24:108 name="items"
-                target: name-ref #23 747:24:97-752:24:102 name="queue"
-              arg: name-ref #25 760:24:110-765:24:115 name="value"
-    declaration: function-decl #58 879:27:8-1071:31:1 name="@2::pop"
-      param: param #33 887:27:16-904:27:33 name="queue"
-        type: type-ref #32 894:27:23-904:27:33 name="@2::QueueState"
-      result: type-ref #35 909:27:38-923:27:52 name="Result"
-        arg: type-ref #34 916:27:45-922:27:51 name="@2::Popped"
-      body: if-stmt #42 926:28:3-974:29:1 guard
-        branch: if-branch #41 926:28:3-973:28:50
-          condition: call #40 960:28:37-973:28:50 name="@2::empty?" piped=false
-            arg: name-ref #39 967:28:44-972:28:49 name="queue"
-          body: return-stmt #38 926:28:3-956:28:33
-            value: call #37 933:28:10-956:28:33 name="error" piped=false
-              arg: literal #36 939:28:16-955:28:32 value=string:"queue is empty"
-      body: return-stmt #57 976:29:3-1066:29:93 implicit
-        value: call #56 976:29:3-1066:29:93 name="ok" piped=false
-          arg: construct #55 979:29:6-1065:29:92 type="@2::Popped"
-            arg: named-arg #47 986:29:13-1007:29:34 name="value"
-              value: index-access #46 993:29:20-1007:29:34
-                target: field-access #44 993:29:20-1004:29:31 name="items"
-                  target: name-ref #43 993:29:20-998:29:25 name="queue"
-                index: literal #45 1005:29:32-1006:29:33 value=int:0
-            arg: named-arg #54 1009:29:36-1064:29:91 name="remaining"
-              value: construct #53 1020:29:47-1064:29:91 type="@2::QueueState"
-                arg: named-arg #52 1031:29:58-1063:29:90 name="items"
-                  value: call #51 1038:29:65-1063:29:90 name="List.drop" piped=false
-                    arg: field-access #49 1048:29:75-1059:29:86 name="items"
-                      target: name-ref #48 1048:29:75-1053:29:80 name="queue"
-                    arg: literal #50 1061:29:88-1062:29:89 value=int:1
-    declaration: function-decl #77 1165:33:8-1286:37:1 name="@2::peek"
-      param: param #61 1174:33:17-1191:33:34 name="queue"
-        type: type-ref #60 1181:33:24-1191:33:34 name="@2::QueueState"
-      result: type-ref #63 1196:33:39-1210:33:53 name="Result"
-        arg: type-ref #62 1203:33:46-1209:33:52 name="String"
-      body: if-stmt #70 1213:34:3-1261:35:1 guard
-        branch: if-branch #69 1213:34:3-1260:34:50
-          condition: call #68 1247:34:37-1260:34:50 name="@2::empty?" piped=false
-            arg: name-ref #67 1254:34:44-1259:34:49 name="queue"
-          body: return-stmt #66 1213:34:3-1243:34:33
-            value: call #65 1220:34:10-1243:34:33 name="error" piped=false
-              arg: literal #64 1226:34:16-1242:34:32 value=string:"queue is empty"
-      body: return-stmt #76 1263:35:3-1281:35:21 implicit
-        value: call #75 1263:35:3-1281:35:21 name="ok" piped=false
-          arg: index-access #74 1266:35:6-1280:35:20
-            target: field-access #72 1266:35:6-1277:35:17 name="items"
-              target: name-ref #71 1266:35:6-1271:35:11 name="queue"
-            index: literal #73 1278:35:18-1279:35:19 value=int:0
-    declaration: function-decl #86 1339:39:8-1399:40:1 name="@2::size" expression
-      param: param #80 1348:39:17-1365:39:34 name="queue"
-        type: type-ref #79 1355:39:24-1365:39:34 name="@2::QueueState"
-      result: type-ref #81 1370:39:39-1373:39:42 name="Int"
-      body: return-stmt #85 1376:39:45-1398:39:67 implicit
-        value: call #84 1376:39:45-1398:39:67 name="List.size" piped=false
-          arg: field-access #83 1386:39:55-1397:39:66 name="items"
-            target: name-ref #82 1386:39:55-1391:39:60 name="queue"
-    declaration: function-decl #96 1453:42:8-1510:43:1 name="@2::empty?" expression
-      param: param #89 1464:42:19-1481:42:36 name="queue"
-        type: type-ref #88 1471:42:26-1481:42:36 name="@2::QueueState"
-      result: type-ref #90 1486:42:41-1490:42:45 name="Bool"
-      body: return-stmt #95 1493:42:48-1509:42:64 implicit
-        value: binary #94 1493:42:48-1509:42:64 op=equal op-span=1505:42:60-1507:42:62
-          left: call #92 1493:42:48-1504:42:59 name="@2::size" piped=false
-            arg: name-ref #91 1498:42:53-1503:42:58 name="queue"
-          right: literal #93 1508:42:63-1509:42:64 value=int:0
+    declaration: struct-decl #3 235:7:1-310:11:1 name="@2::QueueState" doc="A queue. Build one with `new`."
+      field: field-decl #2 286:9:3-306:10:1 name="items" doc="The values, oldest first."
+        type: type-ref #1 293:9:10-305:9:22 name="List"
+          arg: type-ref #0 298:9:15-304:9:21 name="String"
+    declaration: struct-decl #8 377:13:1-502:19:1 name="@2::Popped" doc="What `pop` returns: the oldest value and the queue without it."
+      field: field-decl #5 416:15:3-430:16:1 name="value" doc="The oldest value."
+        type: type-ref #4 423:15:10-429:15:16 name="String"
+      field: field-decl #7 476:17:3-498:18:1 name="remaining" doc="The queue after the value was removed."
+        type: type-ref #6 487:17:14-497:17:24 name="@2::QueueState"
+    declaration: function-decl #14 530:21:1-578:22:1 name="@2::new" doc="Returns an empty queue." expression
+      result: type-ref #9 543:21:14-553:21:24 name="@2::QueueState"
+      body: return-stmt #13 556:21:27-577:21:48 implicit
+        value: construct #12 556:21:27-577:21:48 type="@2::QueueState"
+          arg: named-arg #11 567:21:38-576:21:47 name="items"
+            value: list-lit #10 574:21:45-576:21:47
+    declaration: function-decl #27 630:24:1-740:25:1 name="@2::push" doc="Returns a queue with `value` added at the back." expression
+      param: param #16 639:24:10-656:24:27 name="queue"
+        type: type-ref #15 646:24:17-656:24:27 name="@2::QueueState"
+      param: param #18 658:24:29-671:24:42 name="value"
+        type: type-ref #17 665:24:36-671:24:42 name="String"
+      result: type-ref #19 676:24:47-686:24:57 name="@2::QueueState"
+      body: return-stmt #26 689:24:60-739:24:110 implicit
+        value: construct #25 689:24:60-739:24:110 type="@2::QueueState"
+          arg: named-arg #24 700:24:71-738:24:109 name="items"
+            value: call #23 707:24:78-738:24:109 name="List.append" piped=false
+              arg: field-access #21 719:24:90-730:24:101 name="items"
+                target: name-ref #20 719:24:90-724:24:95 name="queue"
+              arg: name-ref #22 732:24:103-737:24:108 name="value"
+    declaration: function-decl #54 844:27:1-1036:31:1 name="@2::pop" doc="Takes the oldest value. Returns it with the rest of the queue, or an error when the queue is empty."
+      param: param #29 852:27:9-869:27:26 name="queue"
+        type: type-ref #28 859:27:16-869:27:26 name="@2::QueueState"
+      result: type-ref #31 874:27:31-888:27:45 name="Result"
+        arg: type-ref #30 881:27:38-887:27:44 name="@2::Popped"
+      body: if-stmt #38 891:28:3-939:29:1 guard
+        branch: if-branch #37 891:28:3-938:28:50
+          condition: call #36 925:28:37-938:28:50 name="@2::empty?" piped=false
+            arg: name-ref #35 932:28:44-937:28:49 name="queue"
+          body: return-stmt #34 891:28:3-921:28:33
+            value: call #33 898:28:10-921:28:33 name="error" piped=false
+              arg: literal #32 904:28:16-920:28:32 value=string:"queue is empty"
+      body: return-stmt #53 941:29:3-1031:29:93 implicit
+        value: call #52 941:29:3-1031:29:93 name="ok" piped=false
+          arg: construct #51 944:29:6-1030:29:92 type="@2::Popped"
+            arg: named-arg #43 951:29:13-972:29:34 name="value"
+              value: index-access #42 958:29:20-972:29:34
+                target: field-access #40 958:29:20-969:29:31 name="items"
+                  target: name-ref #39 958:29:20-963:29:25 name="queue"
+                index: literal #41 970:29:32-971:29:33 value=int:0
+            arg: named-arg #50 974:29:36-1029:29:91 name="remaining"
+              value: construct #49 985:29:47-1029:29:91 type="@2::QueueState"
+                arg: named-arg #48 996:29:58-1028:29:90 name="items"
+                  value: call #47 1003:29:65-1028:29:90 name="List.drop" piped=false
+                    arg: field-access #45 1013:29:75-1024:29:86 name="items"
+                      target: name-ref #44 1013:29:75-1018:29:80 name="queue"
+                    arg: literal #46 1026:29:88-1027:29:89 value=int:1
+    declaration: function-decl #72 1123:33:1-1244:37:1 name="@2::peek" doc="Returns the oldest value without removing it, or an error when the queue is empty."
+      param: param #56 1132:33:10-1149:33:27 name="queue"
+        type: type-ref #55 1139:33:17-1149:33:27 name="@2::QueueState"
+      result: type-ref #58 1154:33:32-1168:33:46 name="Result"
+        arg: type-ref #57 1161:33:39-1167:33:45 name="String"
+      body: if-stmt #65 1171:34:3-1219:35:1 guard
+        branch: if-branch #64 1171:34:3-1218:34:50
+          condition: call #63 1205:34:37-1218:34:50 name="@2::empty?" piped=false
+            arg: name-ref #62 1212:34:44-1217:34:49 name="queue"
+          body: return-stmt #61 1171:34:3-1201:34:33
+            value: call #60 1178:34:10-1201:34:33 name="error" piped=false
+              arg: literal #59 1184:34:16-1200:34:32 value=string:"queue is empty"
+      body: return-stmt #71 1221:35:3-1239:35:21 implicit
+        value: call #70 1221:35:3-1239:35:21 name="ok" piped=false
+          arg: index-access #69 1224:35:6-1238:35:20
+            target: field-access #67 1224:35:6-1235:35:17 name="items"
+              target: name-ref #66 1224:35:6-1229:35:11 name="queue"
+            index: literal #68 1236:35:18-1237:35:19 value=int:0
+    declaration: function-decl #80 1290:39:1-1350:40:1 name="@2::size" doc="Returns how many values are in the queue." expression
+      param: param #74 1299:39:10-1316:39:27 name="queue"
+        type: type-ref #73 1306:39:17-1316:39:27 name="@2::QueueState"
+      result: type-ref #75 1321:39:32-1324:39:35 name="Int"
+      body: return-stmt #79 1327:39:38-1349:39:60 implicit
+        value: call #78 1327:39:38-1349:39:60 name="List.size" piped=false
+          arg: field-access #77 1337:39:48-1348:39:59 name="items"
+            target: name-ref #76 1337:39:48-1342:39:53 name="queue"
+    declaration: function-decl #89 1397:42:1-1454:43:1 name="@2::empty?" doc="Returns true when the queue has no values." expression
+      param: param #82 1408:42:12-1425:42:29 name="queue"
+        type: type-ref #81 1415:42:19-1425:42:29 name="@2::QueueState"
+      result: type-ref #83 1430:42:34-1434:42:38 name="Bool"
+      body: return-stmt #88 1437:42:41-1453:42:57 implicit
+        value: binary #87 1437:42:41-1453:42:57 op=equal op-span=1449:42:53-1451:42:55
+          left: call #85 1437:42:41-1448:42:52 name="@2::size" piped=false
+            arg: name-ref #84 1442:42:46-1447:42:51 name="queue"
+          right: literal #86 1452:42:56-1453:42:57 value=int:0

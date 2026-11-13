@@ -222,13 +222,13 @@ end
 - When the run ends (`main` returns, `System.exit`, a crash of `main`, the step limit, or the first `SIGINT`, `SIGTERM` or `SIGHUP`), a compute call that has not started is never made, child programs stop, files are written, and the run waits for the running `compute def` calls that hold a resource. Then every resource and buffer still open is freed, newest first (the reverse of opening), whatever task owns it. The frees stop at the first resource that a running call still holds and never skip past it, so that one and all older ones stay unfreed. So `stream` above keeps what `fputs` wrote even without `Native.close`. A resource that such a call returns at that point is never freed.
 - After a signal the run does not wait for those calls, and what they hold is not freed. The wait and the frees share the file flush limit (30 seconds, `--flush-timeout MS`): a call or a free function that takes longer is left behind, the exit code stays, and stderr gets one line saying native resources may not be freed. With `--flush-timeout 0` nothing is freed. A second signal ends the run at once.
 - Every resource result is a new pointer that your program owns. A function that returns a pointer its library keeps (a borrowed one) must be declared `-> C.Pointer`, or the pointer is freed twice. The free function cannot also be declared with `def` in its block (`PARSE-EXTERN-FREE`); the check is per block, so do not declare it in another block either.
-- A resource is a type: `export resource` makes it importable, and its lines come before the functions that use it. Resources and `C.Pointer` do not convert into each other. `IO.inspect` prints `<Stream>`; a resource has no `to_s` and no JSON.
+- A resource is a type: it is importable like the block, and its lines come before the functions that use it. Resources and `C.Pointer` do not convert into each other. `IO.inspect` prints `<Stream>`; a resource has no `to_s` and no JSON.
 
 ## Out parameters
 
 A C function that gives a value through a pointer, such as `int sqlite3_open(const char *filename, sqlite3 **db)`, declares that parameter with `out`. The caller does not pass it: C writes into a slot that is zeroed before the call, and the call returns a record with the C result as `result` and one field per out parameter, named after it.
 
-- The record is a struct named after the function in CamelCase (`sqlite3_open` gives `Sqlite3Open`), exported with its function. A `Void` function's record has no `result`.
+- The record is a struct named after the function in CamelCase (`sqlite3_open` gives `Sqlite3Open`), public with its function. A `Void` function's record has no `result`.
 - An out parameter is an integer type, `C.Double`, `C.Float`, `C.Bool`, `C.Pointer` or a resource of the block; anything else is `PARSE-EXTERN-OUT`. For a `char **`, use an out `C.Pointer`.
 - An out resource is the resource itself, not a `Result`. When C wrote a pointer, the calling task owns it, as for a resource result. When C wrote NULL or left the slot alone, it is a resource that is closed already: nothing frees it, `Native.close` does nothing, and a call with it fails with `RUNTIME-NATIVE-CLOSED`. Check `result` before you use it, or `Native.closed?`: `sqlite3_prepare_v2` gives `SQLITE_OK` and a NULL statement for SQL that is only a comment.
 - A cancelled `compute def` call drops its record; an out resource that C made is freed when the call returns.
@@ -343,7 +343,7 @@ end
 - A struct is a parameter or a result, also of a `compute def` and of a call through a function pointer. It is not an out parameter (`PARSE-EXTERN-OUT`; for a struct that C fills, pass a `C.Pointer` to an owned buffer and read it with `Native.get_struct`, [below](#structs-through-pointers)) or a variadic parameter (`PARSE-EXTERN-VARIADIC-TYPE`).
 - Each field of an argument is checked as an argument is, before C runs: an integer outside the bits of its type fails with `RUNTIME-INTEGER-OVERFLOW`, a `C.Float` is rounded, and a freed owned buffer in a `C.Pointer` field fails with `RUNTIME-NATIVE-CLOSED`. A `C.Bool` field of a result is `true` when its byte is not 0.
 - A `C.Pointer` field is an address that nothing tracks: the memory it names must outlive C's use. A `compute def` call holds the owned buffers in the fields of its struct arguments until it returns, as it holds its buffer arguments.
-- The struct is a type of the block, used after its declaration (`PARSE-EXTERN-TYPE` before). `export struct` makes it importable. Field defaults work as in any struct. A block that declares a struct takes the place of types as a whole, as a block with a resource does.
+- The struct is a type of the block, used after its declaration (`PARSE-EXTERN-TYPE` before). It is importable like the block. Field defaults work as in any struct. A block that declares a struct takes the place of types as a whole, as a block with a resource does.
 
 ### Structs through pointers
 

@@ -1,74 +1,74 @@
-program #72 0:1:1-606:32:1 module-doc="Constants of a module, after the imports and before the types."
+program #72 0:1:1-597:37:1 module-doc="Constants of a module, after the imports and before the types." private-at=5
   declaration: import-decl #0 67:3:1-89:4:1 path="lib" alias="Lib"
   declaration: import-decl #1 89:4:1-113:5:1 path="lib" names=["MAX"@97:4:9-100:4:12]
-  declaration: const-decl #3 137:6:1-161:7:1 name="MAX_DEPTH" exported=true doc="The deepest nesting."
-    value: literal #2 156:6:20-160:6:24 value=int:1000
-  declaration: const-decl #6 161:7:1-195:8:1 name="GREETING" exported=true
-    type: type-ref #4 178:7:18-184:7:24 name="String"
-    value: literal #5 187:7:27-194:7:34 value=string:"hello"
-  declaration: const-decl #10 195:8:1-213:9:1 name="SECONDS"
-    value: binary #9 205:8:11-212:8:18 op=multiply op-span=208:8:14-209:8:15
-      left: literal #7 205:8:11-207:8:13 value=int:60
-      right: literal #8 210:8:16-212:8:18 value=int:60
-  declaration: const-decl #14 213:9:1-238:13:1 name="NAMES"
-    value: list-lit #13 221:9:9-237:12:2
-      element: literal #11 225:10:3-228:10:6 value=string:"a"
-      element: literal #12 232:11:3-235:11:6 value=string:"b"
-  declaration: const-decl #25 238:13:1-282:14:1 name="LEVELS"
-    type: type-ref #17 246:13:9-262:13:25 name="Map"
-      arg: type-ref #15 250:13:13-256:13:19 name="String"
-      arg: type-ref #16 258:13:21-261:13:24 name="Int"
-    value: map-lit #24 265:13:28-281:13:44
-      entry: map-entry #20 266:13:29-272:13:35
-        key: literal #18 266:13:29-269:13:32 value=string:"x"
-        value: literal #19 271:13:34-272:13:35 value=int:1
-      entry: map-entry #23 274:13:37-280:13:43
-        key: literal #21 274:13:37-277:13:40 value=string:"y"
-        value: literal #22 279:13:42-280:13:43 value=int:2
-  declaration: const-decl #32 315:15:1-370:16:1 name="KEYWORDS" exported=true doc="The words that start a block."
-    type: type-ref #27 332:15:18-343:15:29 name="Set"
-      arg: type-ref #26 336:15:22-342:15:28 name="String"
-    value: call #31 346:15:32-369:15:55 name="Set.new" piped=false
-      arg: list-lit #30 354:15:40-368:15:54
-        element: literal #28 355:15:41-359:15:45 value=string:"if"
-        element: literal #29 361:15:47-367:15:53 value=string:"else"
-  declaration: const-decl #44 370:16:1-413:19:1 name="DOUBLED"
-    value: method-call #43 380:16:11-412:18:4 name="map"
-      target: list-lit #36 380:16:11-389:16:20
-        element: literal #33 381:16:12-382:16:13 value=int:1
-        element: literal #34 384:16:15-385:16:16 value=int:2
-        element: literal #35 387:16:18-388:16:19 value=int:3
-      arg: block-lit #42 394:16:25-412:18:4
-        param: block-param #37 398:16:29-399:16:30 name="n"
-        body: expr-stmt #41 403:17:3-409:18:1
-          value: binary #40 403:17:3-408:17:8 op=multiply op-span=405:17:5-406:17:6
-            left: name-ref #38 403:17:3-404:17:4 name="n"
-            right: literal #39 407:17:7-408:17:8 value=int:2
-  declaration: const-decl #50 413:19:1-450:20:1 name="CONFIG"
-    value: construct #49 422:19:10-449:19:37 type="Config"
-      arg: named-arg #46 429:19:17-437:19:25 name="port"
-        value: literal #45 435:19:23-437:19:25 value=int:80
-      arg: named-arg #48 439:19:27-448:19:36 name="name"
-        value: literal #47 445:19:33-448:19:36 value=string:"x"
-  declaration: const-decl #53 450:20:1-464:21:1 name="NEGATIVE"
-    value: unary #52 461:20:12-463:20:14 op=minus op-span=461:20:12-462:20:13
-      operand: literal #51 462:20:13-463:20:14 value=int:1
-  declaration: const-decl #58 464:21:1-491:22:1 name="FLAGS"
-    value: list-lit #57 472:21:9-490:21:27
-      element: literal #54 473:21:10-477:21:14 value=bool:true
-      element: literal #55 479:21:16-484:21:21 value=bool:false
-      element: literal #56 486:21:23-489:21:26 value=nil
-  declaration: const-decl #61 491:22:1-519:23:1 name="TEXT"
-    value: interpolation #60 498:22:8-518:22:28
+  declaration: const-decl #3 137:6:1-154:7:1 name="MAX_DEPTH" exported=true doc="The deepest nesting."
+    value: literal #2 149:6:13-153:6:17 value=int:1000
+  declaration: const-decl #6 154:7:1-181:8:1 name="GREETING" exported=true
+    type: type-ref #4 164:7:11-170:7:17 name="String"
+    value: literal #5 173:7:20-180:7:27 value=string:"hello"
+  declaration: const-decl #13 215:10:1-263:11:1 name="KEYWORDS" exported=true doc="The words that start a block."
+    type: type-ref #8 225:10:11-236:10:22 name="Set"
+      arg: type-ref #7 229:10:15-235:10:21 name="String"
+    value: call #12 239:10:25-262:10:48 name="Set.new" piped=false
+      arg: list-lit #11 247:10:33-261:10:47
+        element: literal #9 248:10:34-252:10:38 value=string:"if"
+        element: literal #10 254:10:40-260:10:46 value=string:"else"
+  declaration: const-decl #17 273:14:1-291:15:1 name="SECONDS"
+    value: binary #16 283:14:11-290:14:18 op=multiply op-span=286:14:14-287:14:15
+      left: literal #14 283:14:11-285:14:13 value=int:60
+      right: literal #15 288:14:16-290:14:18 value=int:60
+  declaration: const-decl #21 291:15:1-316:19:1 name="NAMES"
+    value: list-lit #20 299:15:9-315:18:2
+      element: literal #18 303:16:3-306:16:6 value=string:"a"
+      element: literal #19 310:17:3-313:17:6 value=string:"b"
+  declaration: const-decl #32 316:19:1-360:20:1 name="LEVELS"
+    type: type-ref #24 324:19:9-340:19:25 name="Map"
+      arg: type-ref #22 328:19:13-334:19:19 name="String"
+      arg: type-ref #23 336:19:21-339:19:24 name="Int"
+    value: map-lit #31 343:19:28-359:19:44
+      entry: map-entry #27 344:19:29-350:19:35
+        key: literal #25 344:19:29-347:19:32 value=string:"x"
+        value: literal #26 349:19:34-350:19:35 value=int:1
+      entry: map-entry #30 352:19:37-358:19:43
+        key: literal #28 352:19:37-355:19:40 value=string:"y"
+        value: literal #29 357:19:42-358:19:43 value=int:2
+  declaration: const-decl #44 361:21:1-404:24:1 name="DOUBLED"
+    value: method-call #43 371:21:11-403:23:4 name="map"
+      target: list-lit #36 371:21:11-380:21:20
+        element: literal #33 372:21:12-373:21:13 value=int:1
+        element: literal #34 375:21:15-376:21:16 value=int:2
+        element: literal #35 378:21:18-379:21:19 value=int:3
+      arg: block-lit #42 385:21:25-403:23:4
+        param: block-param #37 389:21:29-390:21:30 name="n"
+        body: expr-stmt #41 394:22:3-400:23:1
+          value: binary #40 394:22:3-399:22:8 op=multiply op-span=396:22:5-397:22:6
+            left: name-ref #38 394:22:3-395:22:4 name="n"
+            right: literal #39 398:22:7-399:22:8 value=int:2
+  declaration: const-decl #50 404:24:1-441:25:1 name="CONFIG"
+    value: construct #49 413:24:10-440:24:37 type="Config"
+      arg: named-arg #46 420:24:17-428:24:25 name="port"
+        value: literal #45 426:24:23-428:24:25 value=int:80
+      arg: named-arg #48 430:24:27-439:24:36 name="name"
+        value: literal #47 436:24:33-439:24:36 value=string:"x"
+  declaration: const-decl #53 441:25:1-455:26:1 name="NEGATIVE"
+    value: unary #52 452:25:12-454:25:14 op=minus op-span=452:25:12-453:25:13
+      operand: literal #51 453:25:13-454:25:14 value=int:1
+  declaration: const-decl #58 455:26:1-482:27:1 name="FLAGS"
+    value: list-lit #57 463:26:9-481:26:27
+      element: literal #54 464:26:10-468:26:14 value=bool:true
+      element: literal #55 470:26:16-475:26:21 value=bool:false
+      element: literal #56 477:26:23-480:26:26 value=nil
+  declaration: const-decl #61 482:27:1-510:28:1 name="TEXT"
+    value: interpolation #60 489:27:8-509:27:28
       part: text "limit "
-      part: type-expression #59 507:22:17-516:22:26 name="MAX_DEPTH"
-  declaration: struct-decl #66 520:24:1-565:28:1 name="Config"
-    field: field-decl #63 536:25:3-546:26:1 name="port"
-      type: type-ref #62 542:25:9-545:25:12 name="Int"
-    field: field-decl #65 548:26:3-561:27:1 name="name"
-      type: type-ref #64 554:26:9-560:26:15 name="String"
-  declaration: function-decl #71 566:29:1-606:32:1 name="main"
-    result: type-ref #67 580:29:15-584:29:19 name="Void"
-    body: expr-stmt #70 587:30:3-602:31:1
-      value: call #69 587:30:3-601:30:17 name="puts" piped=false
-        arg: type-expression #68 592:30:8-600:30:16 name="GREETING"
+      part: type-expression #59 498:27:17-507:27:26 name="MAX_DEPTH"
+  declaration: struct-decl #66 511:29:1-556:33:1 name="Config"
+    field: field-decl #63 527:30:3-537:31:1 name="port"
+      type: type-ref #62 533:30:9-536:30:12 name="Int"
+    field: field-decl #65 539:31:3-552:32:1 name="name"
+      type: type-ref #64 545:31:9-551:31:15 name="String"
+  declaration: function-decl #71 557:34:1-597:37:1 name="main"
+    result: type-ref #67 571:34:15-575:34:19 name="Void"
+    body: expr-stmt #70 578:35:3-593:36:1
+      value: call #69 578:35:3-592:35:17 name="puts" piped=false
+        arg: type-expression #68 583:35:8-591:35:16 name="GREETING"

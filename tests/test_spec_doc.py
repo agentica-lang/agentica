@@ -79,15 +79,15 @@ def test_exports_in_source_order_with_docs_and_spans(tmp_path):
         ("function", "bare"),
     ]
     items = items_by_name(report)
-    # The span is the whole declaration, `export` included, in the file as typed.
+    # The span is the whole declaration, in the file as typed.
     assert items["Shape"]["span"]["file"] == str(path)
-    assert start(items["Shape"]["span"]) == (15, 1)
+    assert start(items["Shape"]["span"]) == (13, 1)
     assert start(items["LIMIT"]["span"]) == (8, 1)
     # Lines and columns start at 1 and the end is exclusive: a declaration followed by a line break ends at the next
     # line, column 1. The span does not cover the `##` block above it.
     assert end(items["LIMIT"]["span"]) == (9, 1)
 
-    # `export def`: the doc sits on the export, and an undocumented export is still listed.
+    # A public def: the doc sits on it, and an undocumented one is still listed.
     add = items["add"]
     assert add["signature"] == "add(a: Int, b: Int = 2) -> Int"
     assert (add["doc"], add["summary"]) == ("Adds two numbers.", "Adds two numbers.")
@@ -214,28 +214,33 @@ def test_an_unreadable_path_or_a_wrong_command_line_exits_2(tmp_path):
     assert run(cli() + ["doc", "a.agc", "b.agc"], env=vm_environment()).code == 2
 
 
-# An exported resource is documented with its kind and signature (free_ref: as written); a private one is left out.
-def test_an_exported_resource_is_documented_and_a_private_one_is_not(tmp_path):
+# A public resource is documented with its kind and signature (free_ref: as written); the block after `private` is left
+# out.
+def test_a_public_resource_is_documented_and_a_private_one_is_not(tmp_path):
     path = tmp_path / "db.agc"
-    path.write_text(('extern "libdb.so"\n'
-                     "  ## An open database.\n"
-                     "  resource Db, free: db_close\n"
-                     "  resource Row, free: row_free\n"
-                     "  resource Conn, free_ref: conn_close\n"
-                     "  def db_open(path: C.String) -> Db\n"
-                     "end\n"),
-                    encoding="utf-8")
+    block = ('extern "libdb.so"\n'
+             "  ## An open database.\n"
+             "  resource Db, free: db_close\n"
+             "  resource Row, free: row_free\n"
+             "  resource Conn, free_ref: conn_close\n"
+             "  def db_open(path: C.String) -> Db\n"
+             "end\n")
+    path.write_text(block, encoding="utf-8")
     result = doc(path, "--json")
     assert (result.code, result.stderr) == (0, "")
     report = json.loads(result.stdout)
     assert [(item["kind"], item["name"]) for item in report["items"]] == [
-        ("resource", "Db"), ("resource", "Conn"), ("function", "db_open"),
+        ("resource", "Db"), ("resource", "Row"), ("resource", "Conn"), ("function", "db_open"),
     ]
     assert items_by_name(report)["Conn"]["signature"] == "resource Conn, free_ref: conn_close"
     db = items_by_name(report)["Db"]
     assert (db["signature"], db["summary"], start(db["span"])) == (
         "resource Db, free: db_close", "An open database.", (3, 3))
     assert items_by_name(report)["db_open"]["result"] == "Result[Db]"
+    path.write_text("private\n\n" + block, encoding="utf-8")
+    hidden = doc(path, "--json")
+    assert (hidden.code, hidden.stderr) == (0, "")
+    assert json.loads(hidden.stdout)["items"] == []
 
 
 # A facade only re-exports: `doc` links it to find the originals and lists them with their docs, at the export line. A

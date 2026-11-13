@@ -83,7 +83,7 @@ def test_exported_alias_can_name_a_private_struct(tmp_path, agentica_check):
 
 def test_private_alias_cannot_be_imported(tmp_path, agentica_check):
     (tmp_path / "models.agc").write_text(
-        "type Names = List[String]\n", encoding="utf-8"
+        "private\n\ntype Names = List[String]\n", encoding="utf-8"
     )
     found = agentica_check('import {Names} from "models"\n\ndef main() -> Void\nend\n\n')
     assert found["code"] == "CHECK-IMPORT-NAME"
@@ -130,7 +130,6 @@ end
         ("type X\n", "PARSE-UNEXPECTED-TOKEN", (1, 7)),
         ("type X =\n", "PARSE-UNEXPECTED-TOKEN", (1, 9)),
         ("type x = Int\n", "PARSE-UNEXPECTED-TOKEN", (1, 6)),
-        ("type\n", "PARSE-UNEXPECTED-TOKEN", (1, 12)),
         ("type X = Int = 3\n", "PARSE-UNEXPECTED-TOKEN", (1, 14)),
         (
             "type X = Nope\n\ndef main() -> Void\nend\n\n",

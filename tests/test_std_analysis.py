@@ -76,11 +76,13 @@ extern module "stats"
   def again(summary: Summary) -> Summary
 end
 
-extern module "pure"
-  def pair(value: Pair) -> Int
+def main() -> Void
 end
 
-def main() -> Void
+private
+
+extern module "pure"
+  def pair(value: Pair) -> Int
 end
 """
 MISSING_IMPORT = 'import Nowhere from "nowhere"\n\ndef main() -> Void\n  puts("x")\nend\n'
@@ -855,7 +857,7 @@ def test_native_modules_lists_the_functions_resources_and_types_of_each_block(dr
     rows = stats["functions"][1]
     # The alias is expanded, and the enum is reached through the collections.
     assert (rows["signature"], rows["types_in"], rows["types_out"], rows["exported"], rows["doc"]) == (
-        "(String) -> Result[List[Map[String, Cell]]]", [], ["Cell"], False, None)
+        "(String) -> Result[List[Map[String, Cell]]]", [], ["Cell"], True, None)
     opening, count = stats["functions"][3], stats["functions"][4]
     assert (opening["mode"], opening["signature"], opening["types_in"], opening["types_out"]) == (
         "dirty", "(String) -> Result[Db]", [], ["Db"])
@@ -864,9 +866,9 @@ def test_native_modules_lists_the_functions_resources_and_types_of_each_block(dr
     again = stats["functions"][5]
     assert (again["types_in"], again["types_out"]) == (["Summary"], ["Summary"])
     pair = pure["functions"][0]
-    assert (pair["types_in"], pair["types_out"]) == (["Pair", "Cell"], [])
+    assert (pair["types_in"], pair["types_out"], pair["exported"]) == (["Pair", "Cell"], [], False)
     assert [(resource["name"], resource["exported"], resource["doc"]) for resource in stats["resources"]] == [
-        ("Pool", True, "A pool of connections."), ("Db", False, None)]
+        ("Pool", True, "A pool of connections."), ("Db", True, None)]
     # The types come once, in the order the functions meet them.
     assert [(item["kind"], item["name"], item["shape"]) for item in stats["types"]] == [
         ("struct", "Summary", "count: Int, mean: Float"), ("enum", "Cell", "Empty | Number(Float) | Text(String)")]
@@ -882,7 +884,7 @@ def test_native_modules_lists_the_functions_resources_and_types_of_each_block(dr
     assert (other["types"], other["resources"]) == ([], [])
     # Places count from 1 and name the file of the answer.
     assert summary["name_span"]["file"] == "natives.agc"
-    assert summary["name_span"]["range"]["start"] == {"line": 22, "column": 14}
+    assert summary["name_span"]["range"]["start"] == {"line": 22, "column": 7}
     # A block range runs from its first declaration to the end of its last one (the start of the next line), without
     # `extern module` and `end`; the second "stats" block is inside it, so it covers the block of "other".
     assert (stats["span"]["range"]["start"]["line"], stats["span"]["range"]["end"]["line"]) == (22, 38)
@@ -1135,14 +1137,14 @@ def test_bodies_resolve_calls_bindings_patterns_and_mark_what_they_do_not_cover(
     # A loop is past the first subset: it is `other`, with its place and no children.
     loop = functions["count"]["body"][0]
     assert (loop["kind"], loop["text"], loop["children"], loop["range"]["start"]) == (
-        "other", "while", [], {"line": 38, "column": 3})
+        "other", "while", [], {"line": 40, "column": 3})
     # A guard is an `if` whose branch is [condition, block], as written out; the block is the statement before the
     # condition, so the two do not overlap.
     guard = functions["clamp"]["body"][0]
     condition, block = guard["children"][0]["children"]
     assert (guard["kind"], condition["kind"], block["kind"]) == ("if", "op", "block")
     assert (block["range"]["start"], block["range"]["end"], condition["range"]["start"]) == (
-        {"line": 45, "column": 3}, {"line": 45, "column": 11}, {"line": 45, "column": 15})
+        {"line": 47, "column": 3}, {"line": 47, "column": 11}, {"line": 47, "column": 15})
     # A lambda and a block are both `other`, told apart by their text.
     others = [line.split()[2] for node in functions["bump"]["body"] for line in tree_text(node) if " other " in line]
     assert others == ["text='lambda'", "text='block'"]

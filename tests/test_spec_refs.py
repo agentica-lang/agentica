@@ -158,7 +158,7 @@ def test_a_function_has_its_calls_and_values_through_every_way_to_name_it(progra
     assert definition["signature"] == "make(name: String) -> User"
     assert start(definition["name_span"]) == where(MODELS, "make(name")
     # The span is the whole declaration, `export` included, as `symbol` and `outline` give it.
-    assert start(definition["span"]) == where(MODELS, "def make\n")
+    assert start(definition["span"]) == where(MODELS, "def make(")
     # Through the alias (`Models.make`), through a pipe and through a name imported `as create`; the definition is not
     # one of the references, and each reference is the name alone.
     line_a, col_a = where(ORDERS, "Models.make(", 7)
@@ -556,7 +556,7 @@ def test_with_paths_every_span_asked_back_gives_the_same_set(program):
 
 def test_a_path_that_does_not_link_is_skipped_and_the_file_of_the_position_must_link(program):
     (program / "broken.agc").write_text("def broken(\n", encoding="utf-8")
-    position = spot("models.agc", MODELS, "def make\n", 11)
+    position = spot("models.agc", MODELS, "def make(", 4)
     for report in (told(position, ".", cwd=program), told("make", ".", cwd=program)):
         assert [(left["file"], left["diagnostic"]["code"]) for left in report["skipped"]] == [
             ("broken.agc", "LEX-UNCLOSED-DELIMITER")]
@@ -595,7 +595,7 @@ def test_a_name_that_nothing_declares_is_not_found_and_one_that_several_declarat
         assert ambiguous["range"] == {"start": {"line": 1, "column": 1}, "end": {"line": 1, "column": 1}}
         # The help names each candidate as FILE:LINE:COL, which is the position form.
         candidates = re.findall(r"[\w./]+:\d+:\d+", ambiguous["help"])
-        assert candidates == ["one.agc:1:12", "two.agc:1:12"], name
+        assert candidates == ["one.agc:1:5", "two.agc:1:5"], name
         found = [told(candidate, ".", cwd=tmp_path) for candidate in candidates]
         assert [report["definition"]["module"] for report in found] == ["one.agc", "two.agc"]
         assert [[use["span"]["file"] for use in report["references"]] for report in found] == [
@@ -653,7 +653,7 @@ def test_a_position_on_a_name_of_an_import_list_selects_the_imported_declaration
 def test_a_check_error_of_a_path_is_exit_1_and_the_standard_input_stands_for_a_file_of_the_paths(program):
     (program / "bad.agc").write_text('def f() -> Int\n  return "x"\nend\n', encoding="utf-8")
     assert problem(ask("make", ".", cwd=program), "CHECK-TYPE-MISMATCH", 1)["file"] == "bad.agc"
-    assert problem(ask(spot("models.agc", MODELS, "def make\n", 11), "bad.agc", cwd=program),
+    assert problem(ask(spot("models.agc", MODELS, "def make(", 4), "bad.agc", cwd=program),
                    "CHECK-TYPE-MISMATCH", 1)["file"] == "bad.agc"
     (program / "bad.agc").unlink()
     # A buffer for `models.agc`: it is searched first, the disk is not written.

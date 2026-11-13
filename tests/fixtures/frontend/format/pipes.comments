@@ -1,4 +1,4 @@
-1:1 leading FunctionDecl 3:1 "# The layout of pipe chains and of the empty line after a statement that takes several lines."
+1:1 leading ExportDecl 3:1 "# The layout of pipe chains and of the empty line after a statement that takes several lines."
 13:3 leading Binding 14:3 "# The comments around a chain keep their place."
 16:18 trailing Binding 14:3 "# after the chain"
 17:3 leading ExprStmt 18:3 "# alone after the chain"
@@ -12,5 +12,5 @@
 63:3 trailing Binding 62:3 "# A comment alone at the end of a block takes no empty line after a statement of several lines."
 69:5 trailing Binding 68:5 "# The same in a nested block."
 76:3 trailing Binding 74:3 "# An empty line of the source stays."
-79:1 leading FunctionDecl 81:1 "# Two `|>` go one stage per line and close with a `)` alone, the wrapped statement is followed by an empty line, a"
-80:1 leading FunctionDecl 81:1 "# single `|>` stays on its line, and the last statement of a block gets no empty line after it."
+79:1 leading ExportDecl 81:1 "# Two `|>` go one stage per line and close with a `)` alone, the wrapped statement is followed by an empty line, a"
+80:1 leading ExportDecl 81:1 "# single `|>` stays on its line, and the last statement of a block gets no empty line after it."

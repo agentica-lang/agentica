@@ -10,7 +10,11 @@ from tests.agentica_test import cli, run, unreadable, vm_environment
 from tests.span_support import end, problem, start, where
 
 # Every rule once. The file does not need to check: lint only parses, so `upcase_it` and `Db` need not exist.
-BAD = '''import Db from "db"
+BAD = (
+    'import Db from "db"\n'
+    + "".join(f'\ndef make{i}() -> Db.Value\n  return Db.Value.Text("a")\nend\n' for i in range(20))
+    + '''
+private
 
 ## A private declaration with a doc.
 def helper(flag: Bool, text: String, n: Int) -> String
@@ -44,7 +48,7 @@ def helper(flag: Bool, text: String, n: Int) -> String
   missing = err.is_a?("io.notfound")
   return out
 end
-''' + "".join(f'\nexport def make{i}() -> Db.Value\n  return Db.Value.Text("a")\nend\n' for i in range(20))
+''')
 
 # The good form of each rule, and the near misses that must stay quiet: a pipe of two steps, a String built outside a
 # loop, a List grown in a loop, a `+` of two Strings with no to_s, two branches, a doc on public code, a qualified name
@@ -237,7 +241,7 @@ def test_a_suggestion_exits_zero_and_strict_exits_one(tmp_path):
     (tmp_path / "good.agc").write_text(GOOD, encoding="utf-8")
     plain = lint("bad.agc", cwd=tmp_path)
     assert (plain.code, plain.stderr) == (0, "")
-    assert "bad.agc:7:5 LINT-STRING-APPEND-IN-LOOP" in plain.stdout
+    assert "bad.agc:%d:%d LINT-STRING-APPEND-IN-LOOP" % where(BAD, "out = out + text") in plain.stdout
     assert plain.stdout.rstrip().endswith("in 1 of 1 file")
     assert (lint("--strict", "bad.agc", cwd=tmp_path).code, lint("bad.agc", "--strict", cwd=tmp_path).code) == (1, 1)
     assert report(lint_json("--strict", "bad.agc", cwd=tmp_path), 1)["suggestions"] > 0
@@ -282,7 +286,25 @@ def test_a_string_grows_in_a_loop_only_when_it_was_set_outside_that_loop(tmp_pat
     assert suggested(tmp_path / f"{name}.agc", source) == expected
 
 
-PRIVATE_DOCS = """## A doc on a private struct.
+PRIVATE_DOCS = """## A doc on a public function, struct and enum.
+def shown() -> Int
+  return 1
+end
+
+## A doc on a public struct.
+struct Pair
+  x: Int
+end
+
+## A doc on a public enum.
+enum Side
+  Left
+  Right
+end
+
+private
+
+## A doc on a private struct.
 struct Point
   x: Int
 end
@@ -291,22 +313,6 @@ end
 enum Mode
   On
   Off
-end
-
-## A doc on an exported function, struct and enum.
-def shown() -> Int
-  return 1
-end
-
-## A doc on an exported struct.
-struct Pair
-  x: Int
-end
-
-## A doc on an exported enum.
-enum Side
-  Left
-  Right
 end
 
 extern "demo"
@@ -319,7 +325,7 @@ end
 """
 
 
-def test_a_doc_is_private_only_on_a_function_struct_or_enum_that_is_not_exported_or_extern(tmp_path):
+def test_a_doc_is_private_only_on_a_function_struct_or_enum_that_is_after_private_and_not_extern(tmp_path):
     found = suggested(tmp_path / "docs.agc", PRIVATE_DOCS)
     assert found == {"LINT-PRIVATE-DOC": [where(PRIVATE_DOCS, "Point"), where(PRIVATE_DOCS, "Mode")]}
 

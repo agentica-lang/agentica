@@ -1,1 +1,1 @@
-ERROR PARSE-CONSTANT-NAME 7:1:8-12:1:13 "\"Limit\" is not a constant name" "write constant names in capitals with underscores: use LIMIT"
+ERROR PARSE-UNEXPECTED-TOKEN 0:1:1-6:1:7 "export before a declaration" "remove export: a declaration is public unless it comes after private (export Alias.name re-exports a name)"

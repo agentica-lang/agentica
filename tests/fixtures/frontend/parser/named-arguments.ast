@@ -1,37 +1,38 @@
-program #36 0:1:1-209:8:1
-  declaration: function-decl #35 0:1:1-209:8:1 name="main"
-    result: type-ref #0 14:1:15-18:1:19 name="Void"
-    body: expr-stmt #9 21:2:3-67:3:1
-      value: call #8 21:2:3-66:2:48 name="puts" piped=false
-        arg: call #7 26:2:8-65:2:47 name="check" piped=false
-          arg: name-ref #1 32:2:14-35:2:17 name="gen"
-          arg: literal #2 37:2:19-40:2:22 value=int:200
-          arg: named-arg #4 42:2:24-55:2:37 name="verbose"
-            value: literal #3 51:2:33-55:2:37 value=bool:true
-          arg: named-arg #6 57:2:39-64:2:46 name="seed"
-            value: literal #5 63:2:45-64:2:46 value=int:3
-    body: expr-stmt #14 69:3:3-93:4:1
-      value: method-call #13 69:3:3-92:3:26 name="join"
-        target: name-ref #10 69:3:3-71:3:5 name="xs"
-        arg: named-arg #12 77:3:11-91:3:25 name="separator"
-          value: literal #11 88:3:22-91:3:25 value=string:"-"
-    body: expr-stmt #19 95:4:3-118:5:1
-      value: call #18 95:4:3-117:4:25 name="Geo.scale" piped=false
-        arg: name-ref #15 105:4:13-106:4:14 name="p"
-        arg: named-arg #17 108:4:16-116:4:24 name="shift"
-          value: literal #16 115:4:23-116:4:24 value=int:1
-    body: expr-stmt #29 120:5:3-180:6:1
-      value: call #28 120:5:3-179:5:62 name="each_line" piped=false
-        arg: literal #20 130:5:13-137:5:20 value=string:"a.txt"
-        arg: block-lit #27 155:5:38-179:5:62
-          param: block-param #23 159:5:42-163:5:46 name="line"
-          body: expr-stmt #26 165:5:48-175:5:58
-            value: call #25 165:5:48-175:5:58 name="puts" piped=false
-              arg: name-ref #24 170:5:53-174:5:57 name="line"
-        arg: named-arg #22 139:5:22-153:5:36 name="timeout_ms"
-          value: literal #21 151:5:34-153:5:36 value=int:50
-    body: expr-stmt #34 182:6:3-205:7:1
-      value: call #33 187:6:8-204:6:25 name="scaled" piped=true
-        arg: name-ref #30 182:6:3-183:6:4 name="p"
-        arg: named-arg #32 194:6:15-203:6:24 name="shift"
-          value: literal #31 201:6:22-203:6:24 value=int:10
+program #37 0:1:1-209:8:1
+  declaration: export-decl #36 0:1:1-209:8:1
+    declaration: function-decl #35 0:1:1-209:8:1 name="main"
+      result: type-ref #0 14:1:15-18:1:19 name="Void"
+      body: expr-stmt #9 21:2:3-67:3:1
+        value: call #8 21:2:3-66:2:48 name="puts" piped=false
+          arg: call #7 26:2:8-65:2:47 name="check" piped=false
+            arg: name-ref #1 32:2:14-35:2:17 name="gen"
+            arg: literal #2 37:2:19-40:2:22 value=int:200
+            arg: named-arg #4 42:2:24-55:2:37 name="verbose"
+              value: literal #3 51:2:33-55:2:37 value=bool:true
+            arg: named-arg #6 57:2:39-64:2:46 name="seed"
+              value: literal #5 63:2:45-64:2:46 value=int:3
+      body: expr-stmt #14 69:3:3-93:4:1
+        value: method-call #13 69:3:3-92:3:26 name="join"
+          target: name-ref #10 69:3:3-71:3:5 name="xs"
+          arg: named-arg #12 77:3:11-91:3:25 name="separator"
+            value: literal #11 88:3:22-91:3:25 value=string:"-"
+      body: expr-stmt #19 95:4:3-118:5:1
+        value: call #18 95:4:3-117:4:25 name="Geo.scale" piped=false
+          arg: name-ref #15 105:4:13-106:4:14 name="p"
+          arg: named-arg #17 108:4:16-116:4:24 name="shift"
+            value: literal #16 115:4:23-116:4:24 value=int:1
+      body: expr-stmt #29 120:5:3-180:6:1
+        value: call #28 120:5:3-179:5:62 name="each_line" piped=false
+          arg: literal #20 130:5:13-137:5:20 value=string:"a.txt"
+          arg: block-lit #27 155:5:38-179:5:62
+            param: block-param #23 159:5:42-163:5:46 name="line"
+            body: expr-stmt #26 165:5:48-175:5:58
+              value: call #25 165:5:48-175:5:58 name="puts" piped=false
+                arg: name-ref #24 170:5:53-174:5:57 name="line"
+          arg: named-arg #22 139:5:22-153:5:36 name="timeout_ms"
+            value: literal #21 151:5:34-153:5:36 value=int:50
+      body: expr-stmt #34 182:6:3-205:7:1
+        value: call #33 187:6:8-204:6:25 name="scaled" piped=true
+          arg: name-ref #30 182:6:3-183:6:4 name="p"
+          arg: named-arg #32 194:6:15-203:6:24 name="shift"
+            value: literal #31 201:6:22-203:6:24 value=int:10

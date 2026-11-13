@@ -1,4 +1,4 @@
-program #65 0:1:1-389:18:1
+program #67 0:1:1-389:18:1
   module "ats.agc"
     declaration: function-decl #53 0:1:1-308:13:1 name="count"
       param: param #3 10:1:11-32:1:33 name="hits"

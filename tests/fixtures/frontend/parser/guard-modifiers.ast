@@ -1,58 +1,60 @@
-program #57 0:1:1-247:15:1
-  declaration: function-decl #36 0:1:1-167:10:1 name="main"
-    result: type-ref #0 14:1:15-18:1:19 name="Void"
-    body: if-stmt #6 21:2:3-37:3:1 guard
-      branch: if-branch #5 21:2:3-36:2:18
-        condition: binary #4 31:2:13-36:2:18 op=greater op-span=33:2:15-34:2:16
-          left: name-ref #2 31:2:13-32:2:14 name="x"
-          right: literal #3 35:2:17-36:2:18 value=int:3
-        body: return-stmt #1 21:2:3-27:2:9
-    body: for-stmt #24 39:3:3-124:7:1 variable="y"
-      iterable: name-ref #7 48:3:12-50:3:14 name="ys"
-      body: if-stmt #13 55:4:5-82:5:1 guard
-        branch: if-branch #12 55:4:5-69:4:19
-          condition: binary #11 63:4:13-69:4:19 op=equal op-span=65:4:15-67:4:17
-            left: name-ref #9 63:4:13-64:4:14 name="y"
-            right: literal #10 68:4:18-69:4:19 value=int:1
-          body: loop-control #8 55:4:5-59:4:9 kind=next
-      body: if-stmt #23 86:5:5-118:6:1 guard
-        branch: if-branch #22 86:5:5-117:5:36
-          condition: binary #21 95:5:14-117:5:36 op=and op-span=101:5:20-104:5:23
-            left: binary #17 95:5:14-100:5:19 op=greater op-span=97:5:16-98:5:17
-              left: name-ref #15 95:5:14-96:5:15 name="y"
-              right: literal #16 99:5:18-100:5:19 value=int:9
-            right: unary #20 105:5:24-117:5:36 op=not op-span=105:5:24-108:5:27
-              operand: call #19 109:5:28-117:5:36 name="done?" piped=false
-                arg: name-ref #18 115:5:34-116:5:35 name="y"
-          body: loop-control #14 86:5:5-91:5:10 kind=break
-    body: expr-stmt #35 127:8:3-163:9:1
-      value: method-call #34 127:8:3-162:8:38 name="each"
-        target: name-ref #25 127:8:3-129:8:5 name="ys"
-        arg: block-lit #33 135:8:11-162:8:38
-          param: block-param #26 139:8:15-140:8:16 name="y"
-          body: if-stmt #32 142:8:18-158:8:34 guard
-            branch: if-branch #31 142:8:18-158:8:34
-              condition: binary #30 152:8:28-158:8:34 op=equal op-span=154:8:30-156:8:32
-                left: name-ref #28 152:8:28-153:8:29 name="y"
-                right: literal #29 157:8:33-158:8:34 value=int:2
-              body: return-stmt #27 142:8:18-148:8:24
-  declaration: function-decl #56 168:11:1-247:15:1 name="f"
-    param: param #38 174:11:7-180:11:13 name="x"
-      type: type-ref #37 177:11:10-180:11:13 name="Int"
-    result: type-ref #39 185:11:18-188:11:21 name="Int"
-    body: if-stmt #53 191:12:3-232:13:1 guard
-      branch: if-branch #52 191:12:3-231:12:43
-        condition: method-call #51 207:12:19-231:12:43 name="any?"
-          target: name-ref #44 207:12:19-209:12:21 name="xs"
-          arg: block-lit #50 215:12:27-231:12:43
-            param: block-param #45 219:12:31-220:12:32 name="y"
-            body: expr-stmt #49 222:12:34-227:12:39
-              value: binary #48 222:12:34-227:12:39 op=greater op-span=224:12:36-225:12:37
-                left: name-ref #46 222:12:34-223:12:35 name="y"
-                right: name-ref #47 226:12:38-227:12:39 name="x"
-        body: return-stmt #43 191:12:3-203:12:15
-          value: binary #42 198:12:10-203:12:15 op=plus op-span=200:12:12-201:12:13
-            left: name-ref #40 198:12:10-199:12:11 name="x"
-            right: literal #41 202:12:14-203:12:15 value=int:1
-    body: return-stmt #55 234:13:3-243:14:1
-      value: literal #54 241:13:10-242:13:11 value=int:0
+program #59 0:1:1-247:15:1
+  declaration: export-decl #57 0:1:1-167:10:1
+    declaration: function-decl #36 0:1:1-167:10:1 name="main"
+      result: type-ref #0 14:1:15-18:1:19 name="Void"
+      body: if-stmt #6 21:2:3-37:3:1 guard
+        branch: if-branch #5 21:2:3-36:2:18
+          condition: binary #4 31:2:13-36:2:18 op=greater op-span=33:2:15-34:2:16
+            left: name-ref #2 31:2:13-32:2:14 name="x"
+            right: literal #3 35:2:17-36:2:18 value=int:3
+          body: return-stmt #1 21:2:3-27:2:9
+      body: for-stmt #24 39:3:3-124:7:1 variable="y"
+        iterable: name-ref #7 48:3:12-50:3:14 name="ys"
+        body: if-stmt #13 55:4:5-82:5:1 guard
+          branch: if-branch #12 55:4:5-69:4:19
+            condition: binary #11 63:4:13-69:4:19 op=equal op-span=65:4:15-67:4:17
+              left: name-ref #9 63:4:13-64:4:14 name="y"
+              right: literal #10 68:4:18-69:4:19 value=int:1
+            body: loop-control #8 55:4:5-59:4:9 kind=next
+        body: if-stmt #23 86:5:5-118:6:1 guard
+          branch: if-branch #22 86:5:5-117:5:36
+            condition: binary #21 95:5:14-117:5:36 op=and op-span=101:5:20-104:5:23
+              left: binary #17 95:5:14-100:5:19 op=greater op-span=97:5:16-98:5:17
+                left: name-ref #15 95:5:14-96:5:15 name="y"
+                right: literal #16 99:5:18-100:5:19 value=int:9
+              right: unary #20 105:5:24-117:5:36 op=not op-span=105:5:24-108:5:27
+                operand: call #19 109:5:28-117:5:36 name="done?" piped=false
+                  arg: name-ref #18 115:5:34-116:5:35 name="y"
+            body: loop-control #14 86:5:5-91:5:10 kind=break
+      body: expr-stmt #35 127:8:3-163:9:1
+        value: method-call #34 127:8:3-162:8:38 name="each"
+          target: name-ref #25 127:8:3-129:8:5 name="ys"
+          arg: block-lit #33 135:8:11-162:8:38
+            param: block-param #26 139:8:15-140:8:16 name="y"
+            body: if-stmt #32 142:8:18-158:8:34 guard
+              branch: if-branch #31 142:8:18-158:8:34
+                condition: binary #30 152:8:28-158:8:34 op=equal op-span=154:8:30-156:8:32
+                  left: name-ref #28 152:8:28-153:8:29 name="y"
+                  right: literal #29 157:8:33-158:8:34 value=int:2
+                body: return-stmt #27 142:8:18-148:8:24
+  declaration: export-decl #58 168:11:1-247:15:1
+    declaration: function-decl #56 168:11:1-247:15:1 name="f"
+      param: param #38 174:11:7-180:11:13 name="x"
+        type: type-ref #37 177:11:10-180:11:13 name="Int"
+      result: type-ref #39 185:11:18-188:11:21 name="Int"
+      body: if-stmt #53 191:12:3-232:13:1 guard
+        branch: if-branch #52 191:12:3-231:12:43
+          condition: method-call #51 207:12:19-231:12:43 name="any?"
+            target: name-ref #44 207:12:19-209:12:21 name="xs"
+            arg: block-lit #50 215:12:27-231:12:43
+              param: block-param #45 219:12:31-220:12:32 name="y"
+              body: expr-stmt #49 222:12:34-227:12:39
+                value: binary #48 222:12:34-227:12:39 op=greater op-span=224:12:36-225:12:37
+                  left: name-ref #46 222:12:34-223:12:35 name="y"
+                  right: name-ref #47 226:12:38-227:12:39 name="x"
+          body: return-stmt #43 191:12:3-203:12:15
+            value: binary #42 198:12:10-203:12:15 op=plus op-span=200:12:12-201:12:13
+              left: name-ref #40 198:12:10-199:12:11 name="x"
+              right: literal #41 202:12:14-203:12:15 value=int:1
+      body: return-stmt #55 234:13:3-243:14:1
+        value: literal #54 241:13:10-242:13:11 value=int:0

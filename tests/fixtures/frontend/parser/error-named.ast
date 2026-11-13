@@ -1,40 +1,42 @@
-program #39 0:1:1-271:8:1
-  declaration: function-decl #26 0:1:1-188:6:1 name="insert"
-    param: param #1 11:1:12-23:1:24 name="name"
-      type: type-ref #0 17:1:18-23:1:24 name="String"
-    result: type-ref #3 28:1:29-39:1:40 name="Result"
-      arg: type-ref #2 35:1:36-38:1:39 name="Int"
-    body: if-stmt #15 42:2:3-124:3:1 guard
-      branch: if-branch #14 42:2:3-123:2:84
-        condition: binary #13 108:2:69-123:2:84 op=equal op-span=113:2:74-115:2:76
-          left: name-ref #11 108:2:69-112:2:73 name="name"
-          right: literal #12 116:2:77-123:2:84 value=string:"taken"
-        body: return-stmt #10 42:2:3-104:2:65
-          value: call #9 49:2:10-104:2:65 name="error" piped=false
-            arg: literal #4 55:2:16-70:2:31 value=string:"unique failed"
-            arg: named-arg #6 72:2:33-93:2:54 name="kind"
-              value: literal #5 78:2:39-93:2:54 value=string:"db.constraint"
-            arg: named-arg #8 95:2:56-103:2:64 name="code"
-              value: literal #7 101:2:62-103:2:64 value=int:19
-    body: return-stmt #25 127:4:3-183:4:59 implicit
-      value: call #24 127:4:3-183:4:59 name="error" piped=false
-        arg: literal #16 138:4:14-143:4:19 value=string:"bad"
-        arg: named-arg #21 145:4:21-168:4:44 name="details"
-          value: map-lit #20 154:4:30-168:4:44
-            entry: map-entry #19 155:4:31-167:4:43
-              key: literal #17 155:4:31-161:4:37 value=string:"name"
-              value: name-ref #18 163:4:39-167:4:43 name="name"
-        arg: named-arg #23 170:4:46-181:4:57 name="cause"
-          value: name-ref #22 177:4:53-181:4:57 name="base"
-  declaration: function-decl #38 189:7:1-271:8:1 name="piped" expression
-    param: param #28 199:7:11-211:7:23 name="name"
-      type: type-ref #27 205:7:17-211:7:23 name="String"
-    result: type-ref #30 216:7:28-227:7:39 name="Result"
-      arg: type-ref #29 223:7:35-226:7:38 name="Int"
-    body: return-stmt #37 238:7:50-270:7:82 implicit
-      value: call #36 238:7:50-270:7:82 name="error" piped=true
-        arg: name-ref #31 230:7:42-234:7:46 name="name"
-        arg: named-arg #33 244:7:56-260:7:72 name="kind"
-          value: literal #32 250:7:62-260:7:72 value=string:"db.piped"
-        arg: named-arg #35 262:7:74-269:7:81 name="code"
-          value: literal #34 268:7:80-269:7:81 value=int:3
+program #41 0:1:1-271:8:1
+  declaration: export-decl #39 0:1:1-188:6:1
+    declaration: function-decl #26 0:1:1-188:6:1 name="insert"
+      param: param #1 11:1:12-23:1:24 name="name"
+        type: type-ref #0 17:1:18-23:1:24 name="String"
+      result: type-ref #3 28:1:29-39:1:40 name="Result"
+        arg: type-ref #2 35:1:36-38:1:39 name="Int"
+      body: if-stmt #15 42:2:3-124:3:1 guard
+        branch: if-branch #14 42:2:3-123:2:84
+          condition: binary #13 108:2:69-123:2:84 op=equal op-span=113:2:74-115:2:76
+            left: name-ref #11 108:2:69-112:2:73 name="name"
+            right: literal #12 116:2:77-123:2:84 value=string:"taken"
+          body: return-stmt #10 42:2:3-104:2:65
+            value: call #9 49:2:10-104:2:65 name="error" piped=false
+              arg: literal #4 55:2:16-70:2:31 value=string:"unique failed"
+              arg: named-arg #6 72:2:33-93:2:54 name="kind"
+                value: literal #5 78:2:39-93:2:54 value=string:"db.constraint"
+              arg: named-arg #8 95:2:56-103:2:64 name="code"
+                value: literal #7 101:2:62-103:2:64 value=int:19
+      body: return-stmt #25 127:4:3-183:4:59 implicit
+        value: call #24 127:4:3-183:4:59 name="error" piped=false
+          arg: literal #16 138:4:14-143:4:19 value=string:"bad"
+          arg: named-arg #21 145:4:21-168:4:44 name="details"
+            value: map-lit #20 154:4:30-168:4:44
+              entry: map-entry #19 155:4:31-167:4:43
+                key: literal #17 155:4:31-161:4:37 value=string:"name"
+                value: name-ref #18 163:4:39-167:4:43 name="name"
+          arg: named-arg #23 170:4:46-181:4:57 name="cause"
+            value: name-ref #22 177:4:53-181:4:57 name="base"
+  declaration: export-decl #40 189:7:1-271:8:1
+    declaration: function-decl #38 189:7:1-271:8:1 name="piped" expression
+      param: param #28 199:7:11-211:7:23 name="name"
+        type: type-ref #27 205:7:17-211:7:23 name="String"
+      result: type-ref #30 216:7:28-227:7:39 name="Result"
+        arg: type-ref #29 223:7:35-226:7:38 name="Int"
+      body: return-stmt #37 238:7:50-270:7:82 implicit
+        value: call #36 238:7:50-270:7:82 name="error" piped=true
+          arg: name-ref #31 230:7:42-234:7:46 name="name"
+          arg: named-arg #33 244:7:56-260:7:72 name="kind"
+            value: literal #32 250:7:62-260:7:72 value=string:"db.piped"
+          arg: named-arg #35 262:7:74-269:7:81 name="code"
+            value: literal #34 268:7:80-269:7:81 value=int:3

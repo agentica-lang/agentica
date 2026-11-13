@@ -1,4 +1,4 @@
-program #37 0:1:1-275:18:1
+program #40 0:1:1-275:18:1
   module "default-constant.agc"
     declaration: const-decl #1 0:1:1-11:2:1 name="LIMIT"
       value: literal #0 8:1:9-10:1:11 value=int:10 type=Int

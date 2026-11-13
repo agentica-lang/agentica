@@ -175,7 +175,7 @@ class TestModuleRules:
                          "def main() -> Void\n  _n = C.go()\nend\n\n"}
         types, funcs = self.checks([(files, "types.agc", None), (files, "funcs.agc", None)])
         problem = self.assert_rejected(types, "CHECK-UNKNOWN-TYPE")
-        assert start(problem) == (6, 6)
+        assert start(problem) == (8, 6)
         assert Path(problem["file"]) == types[0] / "bad.agc"
         self.assert_rejected(funcs, "CHECK-UNKNOWN-NAME")
 
@@ -282,7 +282,7 @@ class TestModuleRules:
 
     def test_private_imported_enums_remain_inaccessible(self):
         self.assert_rejected(self.check({
-            "option.agc": "enum Option[T]\n  Some(T)\nend\n\n",
+            "option.agc": "private\n\nenum Option[T]\n  Some(T)\nend\n\n",
             "root.agc": 'import Domain from "option"\ndef main() -> Void\n'
                         '  value: Domain.Option[Int] = Domain.Option.Some(1)\nend\n\n'}), "CHECK-IMPORT-NAME")
 
@@ -508,12 +508,13 @@ class TestModuleRules:
         problem = self.check({"root.agc": "def main() -> Void\nend\n\nstruct Late\n  n: Int\nend\n\n"})
         assert start(self.assert_rejected(problem, "CHECK-DECL-ORDER")) == (4, 1)
 
-    def test_a_private_function_before_an_exported_one_is_out_of_order_at_the_export(self):
+    def test_a_type_after_a_function_in_the_private_part_is_out_of_order_at_the_type(self):
         results = self.checks([
-            ({"root.agc": "def api() -> Void\nend\n\nprivate\n\ndef helper() -> Void\nend\n\n"}, "root.agc", None),
-            ({"root.agc": "struct Late\nend\n\nprivate\n\ndef helper() -> Void\nend\n\n"}, "root.agc", None)])
-        for checked in results:
-            assert start(self.assert_rejected(checked, "CHECK-DECL-ORDER")) == (4, 1)
+            ({"root.agc": "private\n\ndef helper() -> Void\nend\n\nstruct Late\nend\n\n"}, "root.agc", None),
+            ({"root.agc": "def api() -> Void\nend\n\nprivate\n\ndef helper() -> Void\nend\n\nenum Late\n  A\nend\n\n"},
+             "root.agc", None)])
+        for checked, line in zip(results, (6, 9)):
+            assert start(self.assert_rejected(checked, "CHECK-DECL-ORDER")) == (line, 1)
 
     def test_a_private_enum_after_a_function_is_out_of_order_at_the_enum(self):
         problem = self.check({"root.agc": "def main() -> Void\nend\n\nenum Late\n  A\nend\n\n"})
@@ -532,26 +533,23 @@ class TestModuleRules:
         api = "def api() -> Void\nend\n\n"
         later = "def helper() -> Void\nend\n\n"
         results = self.checks([({"root.agc": text + MAIN}, "root.agc", None) for text in (
-            # The private defs of the block do not count as functions: the block goes before the exported ones.
+            # The functions of the block do not count as functions: the block goes before the functions.
             block + api + later,
-            # After an exported function the block is out of order, at its first member.
+            # After a function the block is out of order, at its first member.
             api + block,
-            # A block with neither a resource nor a struct keeps its rule:
-            # private defs come after the exported functions.
+            # A block with neither a resource nor a struct ranks with the functions, in either order.
             plain + api,
             api + plain,
-            # The rule is per block, also for two blocks of one library.
             block + plain + api,
             block + api + plain,
-            # An exported def with an out record and a compute def, with the resource declared after them.
-            mixed + api + later)])
+            # An extern def with an out record and a compute def, with the resource declared after them.
+            mixed + api + later,
+            # The rule is the same after private: a block with a resource goes before the private functions.
+            "private\n\n" + later + block)])
         assert results[0][1] is None
         assert start(self.assert_rejected(results[1], "CHECK-DECL-ORDER")) == (5, 3)
-        assert start(self.assert_rejected(results[2], "CHECK-DECL-ORDER")) == (5, 1)
-        assert results[3][1] is None
-        assert start(self.assert_rejected(results[4], "CHECK-DECL-ORDER")) == (11, 1)
-        assert results[5][1] is None
-        assert results[6][1] is None
+        assert [results[index][1] for index in (2, 3, 4, 5, 6)] == [None] * 5
+        assert start(self.assert_rejected(results[7], "CHECK-DECL-ORDER")) == (7, 3)
 
     def test_an_import_after_a_declaration_is_out_of_order(self):
         problem = self.check({
@@ -574,10 +572,10 @@ class TestModuleRules:
 
     def test_an_imported_module_is_checked_too_and_the_diagnostic_names_its_file(self):
         checked = self.check({
-            "lib.agc": "def go() -> Void\nend\n\nprivate\n\ndef helper() -> Void\nend\n\n",
+            "lib.agc": "def go() -> Void\nend\n\nprivate\n\ndef helper() -> Void\nend\n\nstruct Late\nend\n\n",
             "root.agc": 'import Lib from "lib"\ndef main() -> Void\n  Lib.go()\nend\n\n'})
         problem = self.assert_rejected(checked, "CHECK-DECL-ORDER", file="lib.agc")
-        assert start(problem) == (4, 1)
+        assert start(problem) == (9, 1)
 
     def test_embedded_std_modules_follow_the_rule_so_importing_them_never_trips_it(self):
         names = {"std/http": "client", "std/logger": "debug", "std/binary": "read_u8", "std/toml": "parse",
@@ -684,8 +682,8 @@ class TestModuleRules:
             # (files, code, file, line, column)
             ({**url, "facade.agc": 'import Url from "url"\n\n## Doc.\nexport Url.parse\n', "root.agc": root},
              "PARSE-DETACHED-DOC", "facade.agc", 3, 1),
-            ({**url, "facade.agc": 'import Url from "url"\n\nLIMIT = 1\n\nexport Url.parse\n', "root.agc": root},
-             "CHECK-DECL-ORDER", "facade.agc", 5, 1),
+            ({**url, "facade.agc": 'import Url from "url"\n\nstruct Shape\nend\n\nexport Url.parse\n', "root.agc": root},
+             "CHECK-DECL-ORDER", "facade.agc", 6, 1),
             ({"url.agc": cycle_url, "facade.agc": 'import Url from "url"\n\nexport Url.parse\n', "root.agc": root},
              "CHECK-IMPORT-CYCLE", "url.agc", 1, 1),
             ({"value.agc": value, "facade.agc": 'import Value from "value"\n\nexport Value.Value\n', "root.agc": root},
@@ -826,8 +824,9 @@ class TestModuleRules:
         for (_root, at), checked in zip(cases, results):
             assert start(self.assert_rejected(checked, "CHECK-IMPORT-NAME", file="root.agc")) == at
         # Inside the file, a private name of a block is refused the same way.
-        local = "module A\n  def hidden() -> Int = 1\nend\n\ndef main() -> Void\n  puts(A.hidden())\nend\n"
-        assert start(self.assert_rejected(self.check({"root.agc": local}), "CHECK-IMPORT-NAME")) == (6, 8)
+        local = ("module A\n  private\n\n  def hidden() -> Int = 1\nend\n\n"
+                 "def main() -> Void\n  puts(A.hidden())\nend\n")
+        assert start(self.assert_rejected(self.check({"root.agc": local}), "CHECK-IMPORT-NAME")) == (8, 8)
 
     def test_a_module_block_name_follows_the_rules_of_an_import_alias(self):
         lib = {"lib.agc": "def one() -> Int = 1\n"}
@@ -841,7 +840,7 @@ class TestModuleRules:
 
     def test_a_module_block_is_top_level_ranks_with_the_types_and_may_be_empty(self):
         cases = [("module A\n  module B\n  end\nend\n\n" + MAIN, "PARSE-NESTED-MODULE", (2, 3)),
-                 ("module A\n  ## B.\n  module B\n  end\nend\n\n" + MAIN, "PARSE-NESTED-MODULE", (3, 10)),
+                 ("module A\n  ## B.\n  module B\n  end\nend\n\n" + MAIN, "PARSE-NESTED-MODULE", (3, 3)),
                  ('module A\n  import B from "b"\nend\n\n' + MAIN, "PARSE-UNEXPECTED-TOKEN", (2, 3)),
                  ("def f() -> Int = 1\n\nmodule A\nend\n\n" + MAIN, "CHECK-DECL-ORDER", (3, 1))]
         results = self.checks([({"root.agc": root}, "root.agc", None) for root, _code, _at in cases])
@@ -867,8 +866,8 @@ class TestModuleRules:
             ("LIMIT = 1\n", "module M\n  LIMIT = 2\n\n" + member + "end\n", (4, 3)),
             ('import {parse} from "lib"\n', "module M\n" + member + "\n  def parse() -> Int = parse()\nend\n",
              (6, 7)),
-            ('import Lib from "lib"\n', "private\n\nmodule M\n  struct Lib\n    n: Int\n  end\nend\n", (4, 17)),
-            ("", "private\n\nmodule M\n  enum N\n    V\n  end\nend\n\nmodule N\nend\n", (3, 15)),
+            ('import Lib from "lib"\n', "private\n\nmodule M\n  struct Lib\n    n: Int\n  end\nend\n", (6, 10)),
+            ("", "private\n\nmodule M\n  enum N\n    V\n  end\nend\n\nmodule N\nend\n", (5, 8)),
         ]
         roots = []
         for top, block, _at in cases:

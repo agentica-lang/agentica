@@ -239,7 +239,7 @@ EDITS = [
     ("deep", "total = SIZE * 2", "total = SIZE * missing"),
     ("mid", "Deep.make(name)", "Deep.make(1)"),
     ("main", "size: Int = Deep.SIZE", "size: String = Deep.SIZE"),
-    ("deep", "def make(name: String)\n", "def make(name: Int)\n"),
+    ("deep", "def make(name: String)", "def make(name: Int)"),
     # A private name of a module is not something the root can import, whether or not the stub has it.
     ("main", 'import Deep from "deep"', 'import {tidy} from "deep"\nimport Deep from "deep"'),
     ("deep", "def tidy(name: String) -> String", "def tidy(name: Int) -> String"),
@@ -539,7 +539,7 @@ def test_a_module_that_re_exports_answers_alike_cold_warm_and_off_and_after_edit
     assert len(entries(ws)) >= 3
     edit(ws, "deep", "SIZE = 7\n", "SIZE = 8\n")
     assert settled(ws, **asked)[0][0] == 0
-    edit(ws, "deep", "def make(name: String)\n", "def make(name: Int)\n")
+    edit(ws, "deep", "def make(name: String)", "def make(name: Int)")
     assert settled(ws, **asked)[0][0] == 1
     edit(ws, "facade", "export Deep.SIZE", "export Deep.SIZES")
     assert settled(ws, **asked)[0][0] == 1
@@ -741,7 +741,7 @@ def test_a_default_that_names_a_long_list_that_starts_with_zero_answers_alike(ws
 # A value of exactly ELIDE_FROM (24) characters whose first line is a lone `[`: the stub has no room for its 0 beside the
 # `(` on that line, so the 0 is on the second. The file ends without a line break after the value.
 LONE_BRACKET_VALUE = "[\n1,2,3,4,5,6,7,8,9,10 ]"
-LIMITS_LONE_BRACKET = (LIMITS.rsplit("LONG_LIST", 1)[0] + "LONG_LIST = \n" + LONE_BRACKET_VALUE)
+LIMITS_LONE_BRACKET = (LIMITS.rsplit("LONG_LIST", 1)[0] + "LONG_LIST = " + LONE_BRACKET_VALUE)
 
 
 def test_a_default_that_names_a_value_with_a_lone_bracket_line_answers_alike(ws):
@@ -755,7 +755,7 @@ def test_a_default_that_names_a_value_with_a_lone_bracket_line_answers_alike(ws)
 
 def test_a_real_zero_far_after_its_equals_sign_is_no_blanked_value(ws):
     # Blanks between the `=` and the value must not be read as the room a stub leaves for its 0.
-    (ws.project / "lim.agc").write_text(LIMITS + "ZERO =\n" + " " * 30 + "0\n", encoding="utf-8")
+    (ws.project / "lim.agc").write_text(LIMITS + "ZERO =" + " " * 30 + "0\n", encoding="utf-8")
     (ws.project / "main.agc").write_text(THROUGH_LIMITS, encoding="utf-8")
     assert settled(ws, source=THROUGH_LIMITS, needle="Lim.SMALL")[0] == (0, '{"ok":true}\n', "")
     zero = THROUGH_LIMITS.replace("a: Int = Lim.SMALL", "a: Int = Lim.ZERO")

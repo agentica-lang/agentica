@@ -1,1 +1,1 @@
-ERROR LEX-UNCLOSED-DELIMITER 13:1:14-28:4:1 "unclosed ( delimiter" - file="bad.agc"
+ERROR LEX-UNCLOSED-DELIMITER 6:1:7-21:4:1 "unclosed ( delimiter" - file="bad.agc"

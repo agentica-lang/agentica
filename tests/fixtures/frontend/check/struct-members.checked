@@ -1,4 +1,4 @@
-program #20 0:1:1-137:11:1
+program #22 0:1:1-137:11:1
   module "struct-members.agc"
     declaration: struct-decl #5 0:1:1-47:5:1 name="User"
       field: field-decl #1 14:2:3-22:3:1 name="id"
@@ -11,7 +11,7 @@ program #20 0:1:1-137:11:1
       body: expr-stmt #18 69:7:3-133:10:1
         value: method-call #17 69:7:3-132:9:6 name="each" type=Void resolved=call("List.each", List(Struct(StructMember)))
           target: field-access #7 69:7:3-81:7:15 name="members" type=List(Struct(StructMember)) resolved=members(id, tags)
-            target: type-expression #28 69:7:3-73:7:7 name="User"
+            target: type-expression #30 69:7:3-73:7:7 name="User"
           arg: block-lit #16 87:7:21-132:9:6 type=Fn([Struct(StructMember)], Void)
             param: block-param #8 91:7:25-92:7:26 name="m"
             body: expr-stmt #15 98:8:5-127:9:1
