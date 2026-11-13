@@ -1023,8 +1023,12 @@ def test_a_re_exported_builtin_type_and_its_field_are_defined_at_the_export_line
 
 
 # A file whose functions the cases on named arguments call by name: a default, a second `factor` of another function,
-# a generic one and one with a trailing block, and a call by name inside the file itself.
-NAMED_LIB = '''## Scales a value.
+# a generic one, one with a trailing block and an extern one, and a call by name inside the file itself.
+NAMED_LIB = '''extern "libm.so.6"
+  export def pow(x: C.Double, y: C.Double) -> C.Double
+end
+
+## Scales a value.
 export def scale(value: Int, factor: Int = 2) -> Int
   return value * factor
 end
@@ -1068,6 +1072,10 @@ end
 def kind() -> String
   return Mime.mime_type("a.bin", fallback: "x/y") + ["a", "b"].join(separator: ",")
 end
+
+def power() -> Float
+  return Lib.pow(2.0, y: 3.0)
+end
 '''
 
 
@@ -1093,6 +1101,15 @@ def test_the_name_of_a_named_argument_is_the_parameter_it_fills(named):
     line, column = position[1]
     off = run(cli() + ["--json", "--no-cache", "type-at", f"use.agc:{line}:{column}"], env=vm_environment(), cwd=named)
     assert (off.code, json.loads(off.stdout)) == (0, report)
+    # An extern function has no body to check, so its parameters have no recorded type: the name of its argument is in
+    # the call, cold, warm and without the cache alike.
+    extern = ("use.agc", where(NAMED_USE, "y: 3.0"))
+    cold = answer(extern, cwd=named)
+    assert (cold["kind"], cold["text"]) == ("expression", "Lib.pow(2.0, y: 3.0)")
+    assert answer(extern, cwd=named) == cold
+    line, column = extern[1]
+    off = run(cli() + ["--json", "--no-cache", "type-at", f"use.agc:{line}:{column}"], env=vm_environment(), cwd=named)
+    assert (off.code, json.loads(off.stdout)) == (0, cold)
     # A generic parameter keeps its type variable; a name before a trailing block, of a std/ function and of an import
     # list are answered alike.
     generic = answer(("use.agc", where(NAMED_USE, "fallback: 0")), cwd=named)

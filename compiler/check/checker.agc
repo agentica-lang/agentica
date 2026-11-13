@@ -328,12 +328,15 @@ end
 
 # The parameter types of the functions of a module whose bodies are not checked (a clean module), as the check of a
 # body records them (State.record_bound): a named argument of a call names a parameter, and `agentica type-at` gives
-# its type (query/named_args.agc).
+# its type (query/named_args.agc). An extern function has no body, and its check records none (check_function_body):
+# it is left out here too, so the answer is the one of a check from the start.
 def parameter_types(cx: State.Cx, st: State.St, module: Linker.LinkedModule) -> State.St
   out = st
   for decl in module.declarations
     case decl
       Ast.Decl.Function(node) ->
+        next if node.native.some?
+
         case cx.functions.get(node.name)
           some(signature) ->
             index = 0
