@@ -1,7 +1,7 @@
 ---
 title: Actor (std)
 weight: 5
-description: The std/actor module, a task that owns its state and handles the messages of one inbox, with cast, call and stop.
+description: The std/actor module, a task that owns its state and handles the messages of one inbox, with cast, call, stop and a receive timeout.
 ---
 
 `std/actor` is written in Agentica, on top of [Task](/library/concurrency/task/) and [Channel](/library/concurrency/channel/): `import Actor from "std/actor"`. An actor is a task that owns its state and handles the messages of one inbox, one at a time, so its state needs no lock and no `ATS` table.
@@ -15,7 +15,7 @@ description: The std/actor module, a task that owns its state and handles the me
 
 ```signature
 Actor.start(behaviour: Actor.Behaviour[S, M], options: Actor.Options = Actor.Options()) -> Actor.Ref[S, M]
-Actor.Behaviour(init: Fn[S], handle: Fn[S, M, Actor.Step[S]], terminate: Optional[Fn[S, Void]] = none)
+Actor.Behaviour(init: Fn[S], handle: Fn[S, M, Actor.Step[S]], terminate: Optional[Fn[S, Void]] = none, timeout: Optional[Actor.Timeout[S]] = none)
 Actor.Options(capacity: Int = 1024)
 Actor.continue(state: S) -> Actor.Step[S]
 Actor.done(state: S) -> Actor.Step[S]
@@ -34,10 +34,10 @@ A `Ref` has three fields: `address`, `inbox` (the `Channel[M]`) and `task`. Send
 ```signature
 Actor.cast(address: Address[M], message: M, timeout_ms: Int = 5000) -> Result[Void]
 Actor.call(address: Address[M], timeout_ms: Int, make: Fn[Channel[R], M]) -> Result[R]
-Actor.reply(channel: Channel[R], value: R) -> Void
+Actor.reply(channel: Channel[R], value: R) -> Bool
 ```
 
-`cast` puts a message in the inbox and returns; it waits at most `timeout_ms` for room when the inbox is full. `call` makes a reply channel, builds the message around it with the block, sends it and waits for the answer, all within `timeout_ms`. The handler answers with `Actor.reply(channel, value)`, which never waits. Each call has its own reply channel, so an answer that comes after its call timed out never reaches a later call. A `timeout_ms` of 0 tries once: `cast` sends only when there is room, and `call(address, 0)` still puts the message in the inbox, then gives `actor: timeout`. Give `call` a timeout above 0; a negative one is `RUNTIME-INVALID-DURATION`.
+`cast` puts a message in the inbox and returns; it waits at most `timeout_ms` for room when the inbox is full. `call` makes a reply channel, builds the message around it with the block, sends it and waits for the answer, all within `timeout_ms`. The handler answers with `Actor.reply(channel, value)`, which never waits and gives whether the caller gets the value. A call that gives up closes its reply channel, so a later `reply` gives `false` and the value is still the actor's to keep (a pool puts the worker back); an answer that came just before the call gave up is returned by the call. So an answer is never lost: either the call returns it, or `reply` gives `false`. A second answer to one call also gives `false`. Each call has its own reply channel, so an answer never reaches a later call. A `timeout_ms` of 0 tries once: `cast` sends only when there is room, and `call(address, 0)` still puts the message in the inbox, then gives `actor: timeout`. Give `call` a timeout above 0; a negative one is `RUNTIME-INVALID-DURATION`.
 
 Errors: `actor: timeout` (kind `channel.timeout`) when the inbox stays full or the answer does not come in time, and `address: gone` (kind `channel.gone`) when the actor has ended. A call whose actor crashes or ends before it answers waits for its timeout. A call to the actor's own address from its handler, or two actors that call each other, wait for their timeouts too, since an actor handles one message at a time; send the work to another task instead.
 
@@ -162,9 +162,55 @@ ok()
 false
 ```
 
+## Actor.Timeout
+
+```signature
+Actor.Timeout(after_ms: Fn[S, Optional[Int]], handle: Fn[S, Actor.Step[S]])
+```
+
+A receive timeout wakes the actor when no message came in time, with no timer task. After `init` and after each message (or timeout), the actor calls `after_ms` with its state: `some(ms)` waits at most that long for the next message, and `none` waits without a limit. When no message comes in that time, `handle` runs with the state, in place of a message, and gives the next step as a message handler does. A message starts the wait again, as a `receive ... after` does in Erlang. For a deadline that messages must not push back, keep the deadline in the state and give what is left of it: `some(deadline - Time.monotonic_ms)`, done in the message handler too once it has passed. `after_ms` must give a wait above 0: `some(0)` or less crashes the actor with `actor: after_ms must be above 0, not N` (kind `argument`), as a runtime error in a handler does. A stop or a crash with a wait pending leaves nothing behind, and an actor that a [supervisor](/library/concurrency/supervisor/) starts again waits from its new `init`.
+
+```agentica
+import Actor from "std/actor"
+
+enum Msg
+  Get(Channel[Int])
+end
+
+def handle(ticks: Int, msg: Msg) -> Actor.Step[Int]
+  case msg
+    Msg.Get(reply) ->
+      Actor.reply(reply, ticks)
+      Actor.continue(ticks)
+  end
+end
+
+# Three ticks, 10 ms apart when no message comes, then no more.
+def after_ms(ticks: Int) -> Optional[Int]
+  return none if ticks == 3
+
+  some(10)
+end
+
+def tick(ticks: Int) -> Actor.Step[Int] = Actor.continue(ticks + 1)
+
+def main() -> Void
+  timeout = Actor.Timeout(after_ms: &after_ms, handle: &tick)
+  actor = Actor.start(Actor.Behaviour(init: -> { 0 }, handle: &handle, timeout: some(timeout)))
+  Task.sleep(100)
+  puts(Actor.call(actor.address, 1000) do |reply| Msg.Get(reply) end)
+  puts(Actor.stop(actor, 1000))
+end
+```
+
+```output
+ok(3)
+ok()
+```
+
 ## Monitors and timers
 
-There is no `select`: whatever an actor waits for comes in as a variant of its message enum. `Task.monitor(task, actor.inbox) do |down| Msg.Down(down) end` sends a notice into the inbox when the task ends; a notice that finds the inbox full is dropped, so give it room. A timer is a task that sleeps, then casts to the address.
+There is no `select`: whatever an actor waits for comes in as a variant of its message enum. `Task.monitor(task, actor.inbox) do |down| Msg.Down(down) end` sends a notice into the inbox when the task ends; a notice that finds the inbox full is dropped, so give it room. To wake when no message came, give the behaviour an [`Actor.Timeout`](#actortimeout); a timer that sends a message of its own is a task that sleeps, then casts to the address.
 
 ```agentica
 import Actor from "std/actor"

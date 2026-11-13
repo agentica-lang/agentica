@@ -2,11 +2,13 @@
 suite, here on one and on four schedulers.
 
 actor_test covers cast, call, a timed-out call, stop, a handler that ends the actor, a crash, a stop that times out, a
-monitor notice and an actor that calls itself. supervisor_test covers a restart that registers the new address, a
-child that ends without a crash, the stop order, the restart limit (the supervisor crashes), failed starts (in the
-register block, in init, many next to another child's crash, many in a row), the window of the limit, a crashing
-terminate and a child error that reads like a supervisor reason. The crashes leave their diagnostics in the tests'
-output.
+monitor notice, an actor that calls itself, answers that race the timeout of their call (taken or refused, never lost)
+and the receive timeout (repeated, next to messages, changed per message, 0 or less, stop and crash with a wait
+pending, 1,000 actors with no extra task). supervisor_test covers a restart that registers the new address, a child
+that ends without a crash, a restart that starts the receive timeout again, the stop order, the restart limit (the
+supervisor crashes), failed starts (in the register block, in init, many next to another child's crash, many in a
+row), the window of the limit, a crashing terminate and a child error that reads like a supervisor reason. The crashes
+leave their diagnostics in the tests' output.
 """
 import json
 
@@ -15,7 +17,7 @@ import pytest
 from tests.agentica_test import TESTS, cli, run, vm_environment
 
 # A test file and how many tests it has.
-FILES = [("actor_test.agc", 9), ("supervisor_test.agc", 11)]
+FILES = [("actor_test.agc", 17), ("supervisor_test.agc", 12)]
 
 
 @pytest.mark.parametrize("schedulers", [1, 4])

@@ -8,6 +8,14 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `std/actor`: `Actor.Timeout`, a receive timeout that wakes an actor when no message came in time (#1523).
+
+### Changed
+
+- `std/actor`: a call that times out closes its reply channel, and `Actor.reply` gives whether the caller gets the value, so an answer is never lost (#1523).
+
 ## [0.31.0] - 2026-11-13
 
 The first stable release since 0.30.1, with the changes of `0.31.0-alpha.1`
