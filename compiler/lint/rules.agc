@@ -103,5 +103,3 @@ end
 def at(file: String, rule: Rule, span: Source.Span) -> Problems.Problem
   Problems.problem(file, "", rule.code, rule.message, span, Diag.Help.Hint(rule.help))
 end
-
-private

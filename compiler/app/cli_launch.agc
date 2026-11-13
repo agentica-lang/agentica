@@ -8,5 +8,3 @@ struct Launch
   flags: List[String]
   arguments: List[String]
 end
-
-private

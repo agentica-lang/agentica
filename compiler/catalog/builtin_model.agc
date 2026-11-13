@@ -171,5 +171,3 @@ struct PreludeRow
   selector: String
   bodies: Map[String, String]
 end
-
-private

@@ -80,5 +80,3 @@ def embedded_settings(workspace: Workspace.Workspace, env: Env, version: String,
     native_denied: false,
   )
 end
-
-private

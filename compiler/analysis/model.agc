@@ -365,5 +365,3 @@ struct Bodies
   modules: List[BodyModule]
   functions: List[Body]
 end
-
-private

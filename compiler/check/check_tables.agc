@@ -280,5 +280,3 @@ def foreign_kind_methods() -> Map[String, String]
     "String.trim": "use s.strip",
   }
 end
-
-private
