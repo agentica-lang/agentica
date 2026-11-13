@@ -70,11 +70,23 @@ def main() -> Void
 end
 """
 
-FIFO_PROGRAM = """\
+# The fewest of a few reads: another thread of the VM may hold a descriptor for a moment.
+OPEN_FILES = """\
 def open_files() -> Int
-  return Result.unwrap!(Dir.list("/proc/self/fd", 10000)).length
+  fewest = Result.unwrap!(Dir.list("/proc/self/fd", 10000)).length
+  for _ in 1..4
+    Task.sleep(2)
+    count = Result.unwrap!(Dir.list("/proc/self/fd", 10000)).length
+    if count < fewest
+      fewest = count
+    end
+  end
+  return fewest
 end
 
+"""
+
+WAIT_FOR = """\
 def wait_for(before: Int, want: Int) -> Bool
   tries = 0
   while tries < 500
@@ -87,6 +99,9 @@ def wait_for(before: Int, want: Int) -> Bool
   return false
 end
 
+"""
+
+FIFO_PROGRAM = OPEN_FILES + WAIT_FOR + """\
 def main() -> Void
   before = open_files()
   r = File.each_line(System.args()[0], 1024, Result.unwrap!(System.args()[1].to_i)) do |line|
@@ -98,28 +113,12 @@ def main() -> Void
 end
 """
 
-CRASH_PROGRAM = """\
-def open_files() -> Int
-  return Result.unwrap!(Dir.list("/proc/self/fd", 10000)).length
-end
-
+CRASH_PROGRAM = OPEN_FILES + WAIT_FOR + """\
 def reader(path: String) -> Result[Void]
   return File.each_line(path, 1024, 60000) do |line|
     puts("never #{line}")
     ok()
   end
-end
-
-def wait_for(before: Int, want: Int) -> Bool
-  tries = 0
-  while tries < 500
-    if open_files() - before == want
-      return true
-    end
-    Task.sleep(10)
-    tries = tries + 1
-  end
-  return false
 end
 
 def parent(go: Channel[Int]) -> Int
@@ -139,23 +138,7 @@ def main() -> Void
 end
 """
 
-CLOSE_PROGRAM = """\
-def open_files() -> Int
-  return Result.unwrap!(Dir.list("/proc/self/fd", 10000)).length
-end
-
-def wait_for(before: Int, want: Int) -> Bool
-  tries = 0
-  while tries < 500
-    if open_files() - before == want
-      return true
-    end
-    Task.sleep(10)
-    tries = tries + 1
-  end
-  return false
-end
-
+CLOSE_PROGRAM = OPEN_FILES + WAIT_FOR + """\
 def main() -> Void
   path = System.args()[0]
   before = open_files()
@@ -198,11 +181,7 @@ def main() -> Void
 end
 """
 
-COUNT_FDS_PROGRAM = """\
-def open_files() -> Int
-  return Result.unwrap!(Dir.list("/proc/self/fd", 10000)).length
-end
-
+COUNT_FDS_PROGRAM = OPEN_FILES + """\
 def main() -> Void
   before = open_files()
   r = File.each_line(System.args()[0], 1024, 5000) do |line|
