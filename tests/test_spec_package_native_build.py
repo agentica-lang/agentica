@@ -37,7 +37,7 @@ static const an_function functions[] = {{"add", "(Int, Int) -> Int", add, AN_SHO
 
 AN_MODULE("adder", functions, NULL)
 """
-ADDER_AGC = 'extern module "adder"\n  export def add(a: Int, b: Int) -> Int\nend\n'
+ADDER_AGC = 'extern module "adder"\n  def add(a: Int, b: Int) -> Int\nend\n'
 MAIN = 'import Adder from "adder"\n\ndef main() -> Void\n  puts(Adder.add(40, 2))\nend\n'
 TABLE = '[native.adder]\nbuild = { sources = ["native/adder.c"], defines = ["SCALE=1"] }\n'
 # The adder with a header in a folder of native/.

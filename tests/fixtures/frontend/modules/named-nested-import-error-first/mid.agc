@@ -1,4 +1,4 @@
 import Missing from "missing"
 
-export def known() -> Void
+def known() -> Void
 end

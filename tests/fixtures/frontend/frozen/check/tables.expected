@@ -3,7 +3,7 @@
 ## A key `Kind.name` pairs the kind of the receiver (String, List, ...) with a method name.
 
 ## The builtin module that holds the methods of each receiver kind.
-export def method_modules() -> Map[String, String]
+def method_modules() -> Map[String, String]
   {
     "ATS": "ATS",
     "Address": "Address",
@@ -27,7 +27,7 @@ export def method_modules() -> Map[String, String]
 end
 
 ## The method names that are another builtin; `self` means the method returns the receiver.
-export def method_aliases() -> Map[String, String]
+def method_aliases() -> Map[String, String]
   {
     "ATS.length": "ATS.size",
     "Bytes.size": "Bytes.length",
@@ -65,7 +65,7 @@ end
 ## both `length` and `size`, `map` and `collect`, so Agentica accepts both and its texts show the name of the builtin
 ## (`map`, `reduce`, `find`, `include?`, `size`). Every other alias is the Ruby name of a builtin that has a different
 ## name here (`select` for `List.filter`, `key?` for `Map.has_key?`), and the texts show it.
-export def ruby_synonyms() -> List[String]
+def ruby_synonyms() -> List[String]
   [
     "ATS.length", "Bytes.size", "Error.kind_of?", "Lazy.collect", "Lazy.detect", "Lazy.inject", "List.collect",
     "List.detect", "List.inject", "List.length", "List.member?", "Map.include?", "Map.length", "Map.member?",
@@ -75,7 +75,7 @@ export def ruby_synonyms() -> List[String]
 end
 
 ## The help for a name used as a function or type that another language has.
-export def foreign_names() -> Map[String, String]
+def foreign_names() -> Map[String, String]
   {
     "Array.new": "use a list literal with a type: xs: List[Int] = []",
     "Enumerator.new": (
@@ -157,7 +157,7 @@ export def foreign_names() -> Map[String, String]
 end
 
 ## The Agentica methods that a foreign method name stands for.
-export def foreign_methods() -> Map[String, List[String]]
+def foreign_methods() -> Map[String, List[String]]
   {
     "contains": ["include?"],
     "endswith": ["end_with?"],
@@ -177,7 +177,7 @@ export def foreign_methods() -> Map[String, List[String]]
 end
 
 ## The help for a method another language has, by receiver kind.
-export def foreign_kind_methods() -> Map[String, String]
+def foreign_kind_methods() -> Map[String, String]
   {
     "Bytes.each_byte": "use b.each do |byte| ... end",
     "Bytes.getbyte": "use b.at(i), or b[i], which halts on a bad index",
@@ -280,3 +280,5 @@ export def foreign_kind_methods() -> Map[String, String]
     "String.trim": "use s.strip",
   }
 end
+
+private

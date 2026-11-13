@@ -20,8 +20,7 @@ from tests.package_support import COMMIT, package_hash
 END_TO_END = FIXTURES / "frontend" / "workspace" / "end-to-end.agc"
 
 GIT = "https://github.com/acme/greet.git"
-GREET = """\
-export def hello(name: String) -> String
+GREET = """def hello(name: String) -> String
   return "hello " + name
 end
 """
@@ -41,7 +40,7 @@ def write_decoys(root):
         path = root / relative
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(GARBAGE, encoding="utf-8")
-    (root / "project/src/missing.agc").write_text("export def n() -> Int = 1\n", encoding="utf-8")
+    (root / "project/src/missing.agc").write_text("def n() -> Int = 1\n", encoding="utf-8")
 
 
 # Both variants run on a Linux host with forward slashes only; no backslash path is tried.

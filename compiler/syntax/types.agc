@@ -3,7 +3,7 @@
 ## The builtin types that a std/ module re-exports, by their builtin name, with the name a program writes: the alias
 ## that the module's docs import it as (STD_ONLY_IMPORTS of the catalog), then the member. Messages, `help`, `doc`,
 ## the queries and a printed value (vm/text.c) show the written name.
-export REEXPORTED_TYPES: Map[String, String] = {
+REEXPORTED_TYPES: Map[String, String] = {
   "HttpWire.Client": "HTTP.Client",
   "HttpWire.ClientOptions": "HTTP.ClientOptions",
   "HttpWire.Header": "HTTP.Header",
@@ -15,19 +15,13 @@ export REEXPORTED_TYPES: Map[String, String] = {
   "LogRegistry.Level": "Logger.Level",
 }
 
-# A `written` map whose key "" (no linked name or prefix is empty) asks to_text_as for the builtin names.
-KEEP_BUILTIN: Map[String, String] = {"": ""}
-
-# The characters that may continue a name: a type name next to one of them is part of a longer name.
-NAME_CHARACTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_?!"
-
 ## A resolved type. Opaque holds the name of a handle or other builtin type with no structure (TCP.Socket, Process,
 ## Test.Case, C.Pointer), or the linked name of a resource of an extern block. Struct and Enum hold the linked name and
 ## carry their type arguments (none for a plain struct or enum). Var is a type variable of a builtin signature, a
 ## generic struct or a generic enum. Fn lists the parameters, then the result. Codec is Codec[T], the codec of a
 ## struct or enum (T.codec). Optional is Optional[T], a value that is some(x) or none. Unknown is no type: the expected
 ## type when none is known (Unknown), and the type of a literal the lexer could not classify.
-export enum Type
+enum Type
   Int
   Float
   Bool
@@ -57,14 +51,14 @@ export enum Type
 end
 
 ## The builtin Error record, the payload of a failed Result.
-export def error_type() -> Type = Type.Struct("Error", [])
+def error_type() -> Type = Type.Struct("Error", [])
 
 ## True for the builtin Error record.
-export def error?(type: Type) -> Bool = tag(type) == "Struct" and name(type) == "Error"
+def error?(type: Type) -> Bool = tag(type) == "Struct" and name(type) == "Error"
 
 ## The variant of a type as a word: "Int", "List", "Struct", ... Every test of a type's shape is a comparison with this
 ## word.
-export def tag(type: Type) -> String
+def tag(type: Type) -> String
   case type
     Type.Int -> "Int"
     Type.Float -> "Float"
@@ -96,14 +90,14 @@ export def tag(type: Type) -> String
 end
 
 ## True when the type is that variant: is?(type, "List").
-export def is?(type: Type, word: String) -> Bool = tag(type) == word
+def is?(type: Type, word: String) -> Bool = tag(type) == word
 
 ## True for no type (Unknown).
-export def unknown?(type: Type) -> Bool = tag(type) == "Unknown"
+def unknown?(type: Type) -> Bool = tag(type) == "Unknown"
 
 ## The element type of a List, Set, Result, Optional, Task, Channel, Address, Lazy or Codec; Unknown for any other
 ## type.
-export def item(type: Type) -> Type
+def item(type: Type) -> Type
   case type
     Type.Result(inner) -> inner
     Type.Optional(inner) -> inner
@@ -119,7 +113,7 @@ export def item(type: Type) -> Type
 end
 
 ## The key type of a Map or an ATS; Unknown for any other type.
-export def key(type: Type) -> Type
+def key(type: Type) -> Type
   case type
     Type.Map(inner, _) -> inner
     Type.ATS(inner, _) -> inner
@@ -128,7 +122,7 @@ export def key(type: Type) -> Type
 end
 
 ## The value type of a Map or an ATS; Unknown for any other type.
-export def value(type: Type) -> Type
+def value(type: Type) -> Type
   case type
     Type.Map(_, inner) -> inner
     Type.ATS(_, inner) -> inner
@@ -137,7 +131,7 @@ export def value(type: Type) -> Type
 end
 
 ## The parameter types of an Fn; empty for any other type.
-export def params(type: Type) -> List[Type]
+def params(type: Type) -> List[Type]
   case type
     Type.Fn(found, _) -> found
     _ -> []
@@ -145,7 +139,7 @@ export def params(type: Type) -> List[Type]
 end
 
 ## The result type of an Fn; Unknown for any other type.
-export def result(type: Type) -> Type
+def result(type: Type) -> Type
   case type
     Type.Fn(_, last) -> last
     _ -> Type.Unknown
@@ -153,7 +147,7 @@ export def result(type: Type) -> Type
 end
 
 ## The name of an Opaque, Var, Struct or Enum type; "" for any other type.
-export def name(type: Type) -> String
+def name(type: Type) -> String
   case type
     Type.Opaque(found) -> found
     Type.Var(found) -> found
@@ -164,7 +158,7 @@ export def name(type: Type) -> String
 end
 
 ## The type arguments of a Struct or Enum type; empty for any other type.
-export def args(type: Type) -> List[Type]
+def args(type: Type) -> List[Type]
   case type
     Type.Struct(_, list) -> list
     Type.Enum(_, list) -> list
@@ -173,7 +167,7 @@ export def args(type: Type) -> List[Type]
 end
 
 ## Structural equality: compiler/ does not use == on enums until stage0 lowers it.
-export def same?(a: Type, b: Type) -> Bool
+def same?(a: Type, b: Type) -> Bool
   return false if tag(a) != tag(b)
 
   case a
@@ -198,7 +192,7 @@ export def same?(a: Type, b: Type) -> Bool
 end
 
 ## True when the two lists have the same length and equal types in order.
-export def same_all?(a: List[Type], b: List[Type]) -> Bool
+def same_all?(a: List[Type], b: List[Type]) -> Bool
   return false if a.size != b.size
 
   index = 0
@@ -212,56 +206,56 @@ export def same_all?(a: List[Type], b: List[Type]) -> Bool
 end
 
 ## Result[type], or Unknown when there is no type: the expected type of the operand of try.
-export def result_of(type: Type) -> Type
+def result_of(type: Type) -> Type
   return type if unknown?(type)
 
   Type.Result(type)
 end
 
 ## Task[type], or Unknown when there is no type.
-export def task_of(type: Type) -> Type
+def task_of(type: Type) -> Type
   return type if unknown?(type)
 
   Type.Task(type)
 end
 
 ## List[type], or Unknown when there is no type.
-export def list_of(type: Type) -> Type
+def list_of(type: Type) -> Type
   return type if unknown?(type)
 
   Type.List(type)
 end
 
 ## The type itself when it is a List, else Unknown: the expected type that a list operation passes on.
-export def only_list(type: Type) -> Type
+def only_list(type: Type) -> Type
   return type if is?(type, "List")
 
   Type.Unknown
 end
 
 ## The type itself when it is a Map, else Unknown.
-export def only_map(type: Type) -> Type
+def only_map(type: Type) -> Type
   return type if is?(type, "Map")
 
   Type.Unknown
 end
 
 ## The type itself when it is a Set, else Unknown.
-export def only_set(type: Type) -> Type
+def only_set(type: Type) -> Type
   return type if is?(type, "Set")
 
   Type.Unknown
 end
 
 ## The item of a Result, else Unknown: the expected type of the value inside a Result.
-export def only_result_item(type: Type) -> Type
+def only_result_item(type: Type) -> Type
   return item(type) if is?(type, "Result")
 
   Type.Unknown
 end
 
 ## The item of an Optional, else Unknown: the expected type of the value inside some(...).
-export def only_optional_item(type: Type) -> Type
+def only_optional_item(type: Type) -> Type
   return item(type) if is?(type, "Optional")
 
   Type.Unknown
@@ -269,7 +263,7 @@ end
 
 ## The name as the user wrote it: the linker gives a name from another file the prefix "@N::" to keep it unique, and
 ## messages leave it out.
-export def display_name(name: String) -> String
+def display_name(name: String) -> String
   return name if not name.start_with?("@")
 
   digits_end = 1
@@ -286,12 +280,12 @@ end
 
 ## The name of a struct, enum or other named type as a message prints it: display_name, and a builtin type that a std/
 ## module re-exports by its written name (HttpWire.Request is HTTP.Request).
-export def written_type(name: String) -> String = REEXPORTED_TYPES.get(name, display_name(name))
+def written_type(name: String) -> String = REEXPORTED_TYPES.get(name, display_name(name))
 
 ## Source text with each re-exported builtin type written by its written name: the default `HttpWire.ClientOptions()`
 ## of a std/ signature prints as `HTTP.ClientOptions()`. Only a whole name outside a string literal is a type: the
 ## default `"HttpWire.Client"` stays as written.
-export def written_types_in(text: String) -> String
+def written_types_in(text: String) -> String
   pieces: List[String] = []
   quoted = false
   at = 0
@@ -321,11 +315,11 @@ end
 
 ## The type as the messages print it: Int, List[String], Map[String, Int], Fn[Int, Void], Point, Option[Int],
 ## HTTP.Request.
-export def to_text(type: Type) -> String = to_text_as(type, {})
+def to_text(type: Type) -> String = to_text_as(type, {})
 
 ## The type as `to_text` prints it, but a re-exported builtin type keeps its builtin name (HttpWire.Request): the text
 ## that runtime data holds (Type.members, a codec), which a printed value shows.
-export def builtin_text(type: Type) -> String = to_text_as(type, KEEP_BUILTIN)
+def builtin_text(type: Type) -> String = to_text_as(type, KEEP_BUILTIN)
 
 ## The type as `to_text` prints it, except that a struct or an enum of another file is written through the import alias
 ## of the file that asks: `written` maps the "@N::" prefix of a linked name to that alias, so `@1::User` prints as
@@ -333,7 +327,7 @@ export def builtin_text(type: Type) -> String = to_text_as(type, KEEP_BUILTIN)
 ## written through that alias too. A prefix it does not map prints as the bare name. A re-exported builtin type
 ## (REEXPORTED_TYPES) prints as the text `written` maps its builtin name to (`H.Request` for import H from "std/http",
 ## `Request` for import {Request}), else by its written name.
-export def to_text_as(type: Type, written: Map[String, String]) -> String
+def to_text_as(type: Type, written: Map[String, String]) -> String
   case type
     Type.Int -> "Int"
     Type.Float -> "Float"
@@ -366,7 +360,7 @@ end
 
 ## The type with its variant written out, for tests: Struct(Header), Struct(Box, [Int]), Enum(Await, [Var(T)]),
 ## Fn([Int], Void). Unlike to_text, two variants never print the same.
-export def debug_text(type: Type) -> String
+def debug_text(type: Type) -> String
   case type
     Type.Opaque(name) -> "Opaque(#{name})"
     Type.Var(name) -> "Var(#{name})"
@@ -389,10 +383,18 @@ export def debug_text(type: Type) -> String
 end
 
 ## The types joined by ", ".
-export def list_text(types: List[Type]) -> String = types.map(&to_text).join(", ")
+def list_text(types: List[Type]) -> String = types.map(&to_text).join(", ")
 
 ## The types joined by ", ", as debug_text writes each.
-export def debug_list(types: List[Type]) -> String = types.map(&debug_text).join(", ")
+def debug_list(types: List[Type]) -> String = types.map(&debug_text).join(", ")
+
+private
+
+# A `written` map whose key "" (no linked name or prefix is empty) asks to_text_as for the builtin names.
+KEEP_BUILTIN: Map[String, String] = {"": ""}
+
+# The characters that may continue a name: a type name next to one of them is part of a longer name.
+NAME_CHARACTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_?!"
 
 # A struct with no type arguments prints as Struct(Name), a generic one as Struct(Name, [Int]).
 def struct_debug(name: String, args: List[Type]) -> String

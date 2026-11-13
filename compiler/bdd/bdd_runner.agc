@@ -11,13 +11,8 @@ import Discover from "bdd_discover"
 import {IO_TIMEOUT} from "bdd_files"
 import Opts from "bdd_options"
 
-# The runner is an ordinary program with a 30 second start, and no limit on its run (each scenario has its own).
-START_TIMEOUT = 30_000
-WAIT_SLICE = 3_600_000
-MAXIMUM_EXIT_CODE = 2
-
 ## The first line of the configuration file, as the runner decodes it (`Config` in stdlib/test/runner.agc).
-export struct Config
+struct Config
   # The binary: the runner starts the step program and each test file with its `run` command.
   vm: String
   # The step program is the file `steps_bytecode`, or, when it is "", the default one that the binary carries
@@ -40,13 +35,13 @@ export struct Config
 end
 
 ## The program of the runner: a file of the run directory, or the one the binary carries (`run --embedded runner`).
-export enum Program
+enum Program
   File(String)
   Embedded(String)
 end
 
 ## How a runner ended: with the exit code and the report it wrote, or with a message that says why it has no report.
-export enum Ran
+enum Ran
   Reported(Int, String)
   Failed(String)
 end
@@ -57,7 +52,7 @@ end
 ## last lines are not fields of `Config` because the runner decodes `Config` with no optional fields, and a driver that
 ## does not write them (stage0) must keep working with the runner. Each line follows the one before it, so a run with
 ## jobs and no tags writes an empty tags string, which is no filter, and a run with timing alone writes both before it.
-export def config_text(
+def config_text(
   config: Config,
   entries: List[Discover.Entry],
   tags: String,
@@ -88,7 +83,7 @@ end
 ## Runs the runner `program` on `config_file` with `agentica run` of the binary of the options, waits for it, and reads
 ## the report at `report_file`. The child gets this program's process id with --driver-pid, so it ends if this program
 ## does.
-export def run(options: Opts.Options, program: Program, config_file: String, report_file: String) -> Ran
+def run(options: Opts.Options, program: Program, config_file: String, report_file: String) -> Ran
   words = ["run"]
   if options.seeded
     words = words.concat(["--seed", options.seed.to_s])
@@ -121,6 +116,13 @@ export def run(options: Opts.Options, program: Program, config_file: String, rep
 
   read_report(code.unwrap!, report_file)
 end
+
+private
+
+# The runner is an ordinary program with a 30 second start, and no limit on its run (each scenario has its own).
+START_TIMEOUT = 30_000
+WAIT_SLICE = 3_600_000
+MAXIMUM_EXIT_CODE = 2
 
 # Waits as long as the run takes: a wait that times out is repeated.
 def wait_for(child: Process) -> Result[Int]

@@ -4,8 +4,10 @@
 
 ## The start of the name of a source file of the compiler prelude. The prelude has no text in the program: the file is
 ## a name, with no text, and every span of its functions is its first character.
-export PRELUDE_PREFIX = "<prelude>/"
+PRELUDE_PREFIX = "<prelude>/"
 
 ## The name, in the lowered program, of the prelude function with this key: "list::find" is the function find of
 ## stdlib/prelude/list.agc. The prefix cannot start the name of a function of a program.
-export def prelude_name(key: String) -> String = "@prelude::" + key
+def prelude_name(key: String) -> String = "@prelude::" + key
+
+private

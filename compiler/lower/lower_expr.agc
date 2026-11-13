@@ -26,7 +26,7 @@ import {
 
 ## Lowers an expression into the register want (-1: any). void allows a Void value (a statement, a completion); known
 ## skips the type check of an item whose list or map, or payload whose some(...) or ok(...), was checked as a whole.
-export def lower_expression(
+def lower_expression(
   cx: Lowering.Cx,
   fx: Lowering.Fx,
   expr: Ast.Expr,
@@ -106,7 +106,7 @@ end
 
 ## Lowers a call of a function or builtin by name. checked is set for the call made from a resolved method call, whose
 ## type check was the method call's own; tail makes it a `tail-call` (a return of a call of a function of the program).
-export def lower_call(
+def lower_call(
   cx: Lowering.Cx,
   fx: Lowering.Fx,
   written: Ast.Call,
@@ -247,6 +247,8 @@ export def lower_call(
 
   ok(Lowering.Out(fx: fx.with(next: base + 1), slot: base))
 end
+
+private
 
 # The methods of a codec. A codec is a Codec.Info record at run time (Type.codec, Data.lower_codec): its name is the
 # type argument of JSON.decode and its members are what Type.members gives. decode is JSON.decode of the source and

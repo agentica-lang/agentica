@@ -12,7 +12,7 @@ import Shape from "shape"
 ## that is a step (step?): the expression above it judged the whole chain, so it must not be judged again as a chain of
 ## its own. `aliases` are the module aliases that the file imports, and `functions` the names of its top-level
 ## functions and the names it imports by name.
-export def suggestions(
+def suggestions(
   file: String,
   expr: Ast.Expr,
   chained: Bool,
@@ -34,7 +34,7 @@ end
 ## `List.map`), and not a variant (`Domain.Some(x)`: the member after the alias starts with a capital). Any other
 ## qualified name is a method of a constant, a type or a value (`ROWS.concat(x)`, `Mod.LIMIT.concat(x)`), or a
 ## variant, and its first argument is not its receiver.
-export def step?(node: Ast.Call, aliases: Set[String]) -> Bool
+def step?(node: Ast.Call, aliases: Set[String]) -> Bool
   return false if node.piped or node.args.size == 0 or ENTRIES.has_key?(node.name)
 
   parts = node.name.split(".")
@@ -45,6 +45,8 @@ export def step?(node: Ast.Call, aliases: Set[String]) -> Bool
 
   parts.size == 1
 end
+
+private
 
 # `xs.map(->(x) { ... }).select(->(x) { ... }).sum`: a method chain whose links, from the first that passes a lambda to
 # the end, are three or more reads better as a pipe. The walk judges the chain at its last link, so a method call

@@ -14,14 +14,14 @@ import Ir from "ir"
 
 ## A struct of the program as the lowering reads it: its index in the struct table, its fields in order, and the
 ## position of each field.
-export struct StructInfo
+struct StructInfo
   index: Int
   fields: List[String]
   positions: Map[String, Int]
 end
 
 ## What a read of a module constant becomes: the literal itself, or a read of the slot of the Globals table.
-export enum Read
+enum Read
   Literal(Ir.Imm)
   Slot(Int)
 end
@@ -29,7 +29,7 @@ end
 ## A function with default values, as a call site needs it: its shape, its parameters (the defaults are expressions of
 ## the file that declares it), that file and its position in the sources. The default is lowered with the instructions
 ## in that file, because its spans and the names in it belong there.
-export struct Fill
+struct Fill
   shape: Defaults.Shape
   params: List[Ast.Param]
   file: String
@@ -39,7 +39,7 @@ end
 ## The field defaults of a struct, as a construction needs them: the expression of each field that has one, by field
 ## name, the file that declares the struct and its position in the sources. Like a parameter default, a field default
 ## is lowered with the instructions in that file, because its spans and the names in it belong there.
-export struct FieldFill
+struct FieldFill
   values: Map[String, Ast.Expr]
   file: String
   index: Int
@@ -59,7 +59,7 @@ end
 ## lowers an expression, block lowers a block as a function, and case_value lowers a case that gives a value: the
 ## cycles between expressions, statements and blocks go through these fields, because a module cannot import one that
 ## imports it.
-export struct Cx
+struct Cx
   types: List[Types.Type]
   resolved: Map[Int, State.Resolved]
   user_types: Map[String, String]
@@ -87,7 +87,7 @@ end
 ## labels made, the labels `next` and `break` jump to (-1 outside a loop), the instructions to put after the next
 ## statement's `step` (the read of the element of a `for`), the file index of the instructions, and, shared with the
 ## blocks lowered inside it, the block functions made so far by function index and the next function index.
-export struct Fx
+struct Fx
   code: List[Ir.Instr]
   next: Int
   high: Int
@@ -102,13 +102,13 @@ export struct Fx
 end
 
 ## The result of lowering an expression: the new state and the register that holds the value.
-export struct Out
+struct Out
   fx: Fx
   slot: Int
 end
 
 ## The state at the start of a function in file index: nothing emitted, no names, no registers.
-export def fresh(file: Int, blocks: Map[Int, Ir.Function], block_count: Int) -> Fx
+def fresh(file: Int, blocks: Map[Int, Ir.Function], block_count: Int) -> Fx
   Fx(
     code: [],
     next: 0,
@@ -125,50 +125,50 @@ export def fresh(file: Int, blocks: Map[Int, Ir.Function], block_count: Int) -> 
 end
 
 ## The failure of a form the VM does not support: LOWER-UNSUPPORTED "the VM does not support WHAT yet".
-export def unsupported(cx: Cx, what: String, span: Source.Span) -> String
+def unsupported(cx: Cx, what: String, span: Source.Span) -> String
   message = "the VM does not support #{what} yet"
   Failure.pack(Failure.problem(cx.file, "", "LOWER-UNSUPPORTED", message, span, Diag.Help.NoHelp))
 end
 
 ## The failure for a program the lowering cannot make sense of.
-export def internal(cx: Cx, message: String, span: Source.Span) -> String
+def internal(cx: Cx, message: String, span: Source.Span) -> String
   Failure.pack(Failure.problem(cx.file, "", "LOWER-INTERNAL", message, span, Diag.Help.NoHelp))
 end
 
 ## The state with an instruction emitted. The spans are those the VM reports an error or a stack frame at.
-export def emit(fx: Fx, op: String, args: List[Int], spans: List[Source.Span]) -> Fx
+def emit(fx: Fx, op: String, args: List[Int], spans: List[Source.Span]) -> Fx
   fx.with(code: fx.code.push(Ir.instr(op, args, fx.file, spans)))
 end
 
 ## The state with an instruction that has one span.
-export def emit_at(fx: Fx, op: String, args: List[Int], span: Source.Span) -> Fx
+def emit_at(fx: Fx, op: String, args: List[Int], span: Source.Span) -> Fx
   fx.with(code: fx.code.push(Ir.instr(op, args, fx.file, [span])))
 end
 
 ## The state with a `step` for a node.
-export def step(fx: Fx, span: Source.Span) -> Fx = fx.with(code: fx.code.push(Ir.instr("step", [], fx.file, [span])))
+def step(fx: Fx, span: Source.Span) -> Fx = fx.with(code: fx.code.push(Ir.instr("step", [], fx.file, [span])))
 
 ## The state with a `const` of a value.
-export def emit_const(fx: Fx, dst: Int, value: Ir.Imm, span: Source.Span) -> Fx
+def emit_const(fx: Fx, dst: Int, value: Ir.Imm, span: Source.Span) -> Fx
   made = Ir.Instr(op: "const", args: [dst], imm: value, name: "", file: fx.file, spans: [span])
   fx.with(code: fx.code.push(made))
 end
 
 ## The state with a `call-builtin` of a name and the number of its arguments. spans is the call's span and then each
 ## argument's.
-export def emit_builtin(fx: Fx, base: Int, name: String, count: Int, spans: List[Source.Span]) -> Fx
+def emit_builtin(fx: Fx, base: Int, name: String, count: Int, spans: List[Source.Span]) -> Fx
   made = Ir.Instr(op: "call-builtin", args: [base, count], imm: Ir.Imm.Void, name: name, file: fx.file, spans: spans)
   fx.with(code: fx.code.push(made))
 end
 
 ## The state with a label placed here.
-export def place(fx: Fx, id: Int) -> Fx = fx.with(code: fx.code.push(Ir.label(id, fx.file)))
+def place(fx: Fx, id: Int) -> Fx = fx.with(code: fx.code.push(Ir.label(id, fx.file)))
 
 ## The state with a new label id; the id is labels - 1 of the result.
-export def new_label(fx: Fx) -> Fx = fx.with(labels: fx.labels + 1)
+def new_label(fx: Fx) -> Fx = fx.with(labels: fx.labels + 1)
 
 ## The state with one more register taken; the register is next - 1 of the result.
-export def alloc(fx: Fx) -> Fx
+def alloc(fx: Fx) -> Fx
   next = fx.next + 1
   high = fx.high
   if next > high
@@ -179,7 +179,7 @@ export def alloc(fx: Fx) -> Fx
 end
 
 ## The register to compute into: want when there is one (a register of 0 or more), else a new one.
-export def target(fx: Fx, want: Int) -> Out
+def target(fx: Fx, want: Int) -> Out
   return Out(fx: fx, slot: want) if want >= 0
 
   taken = alloc(fx)
@@ -188,20 +188,20 @@ end
 
 ## The state after a value is in dst: the registers go back to saved when the caller gave a register to fill (want),
 ## else only dst stays taken.
-export def release(fx: Fx, saved: Int, want: Int, dst: Int) -> Fx
+def release(fx: Fx, saved: Int, want: Int, dst: Int) -> Fx
   return fx.with(next: saved) if want >= 0
 
   fx.with(next: dst + 1)
 end
 
 ## The register of a name in scope, or -1.
-export def lookup(fx: Fx, name: String) -> Int = fx.vars.get(name, -1)
+def lookup(fx: Fx, name: String) -> Int = fx.vars.get(name, -1)
 
 ## The type the checker recorded for an expression (Unknown when none).
-export def type_of(cx: Cx, expr: Ast.Expr) -> Types.Type = cx.types[Ast.expr_id(expr)]
+def type_of(cx: Cx, expr: Ast.Expr) -> Types.Type = cx.types[Ast.expr_id(expr)]
 
 ## The type of an expression, or the type a TypedTarget carries.
-export def static_type(cx: Cx, expr: Ast.Expr) -> Types.Type
+def static_type(cx: Cx, expr: Ast.Expr) -> Types.Type
   case expr
     Ast.Expr.Typed(node) -> node.type
     _ -> type_of(cx, expr)
@@ -209,7 +209,7 @@ export def static_type(cx: Cx, expr: Ast.Expr) -> Types.Type
 end
 
 ## True when the VM has a representation for values of the type.
-export def vm_type?(cx: Cx, type: Types.Type) -> Bool
+def vm_type?(cx: Cx, type: Types.Type) -> Bool
   case type
     Types.Type.List(item) -> vm_type?(cx, item)
     Types.Type.Map(_, value) -> vm_type?(cx, value)
@@ -250,7 +250,7 @@ end
 
 ## Fails with LOWER-UNSUPPORTED unless the expression has a type the VM can hold. void allows Void; type is the type to
 ## test (the checker's, or a TypedTarget's).
-export def require_type(cx: Cx, expr: Ast.Expr, void: Bool, type: Types.Type) -> Result[Bool]
+def require_type(cx: Cx, expr: Ast.Expr, void: Bool, type: Types.Type) -> Result[Bool]
   return ok(true) if vm_type?(cx, type) or (void and Types.is?(type, "Void"))
 
   what = "this expression"
@@ -260,6 +260,8 @@ export def require_type(cx: Cx, expr: Ast.Expr, void: Bool, type: Types.Type) ->
 
   error(unsupported(cx, what, Ast.expr_span(expr)))
 end
+
+private
 
 def fn_type?(cx: Cx, params: List[Types.Type], result: Types.Type) -> Bool
   for param in params

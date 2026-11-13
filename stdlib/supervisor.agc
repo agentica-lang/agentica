@@ -7,6 +7,77 @@
 
 import Actor from "std/actor"
 
+## A child of a supervisor; `child` makes one.
+struct Child
+  name: String
+  start: Fn[Channel[Msg], Int, Int, Result[Fn[Int, Result[Void]]]]
+end
+
+## What `start` takes besides the children.
+struct Options
+  ## A child that crashes more than this many times within `within_ms`, or fails to start more than this many times in
+  ## a row, makes the supervisor give up. Counted per child; 0 or more.
+  max_restarts: Int = 3
+  ## Above 0.
+  within_ms: Int = 5000
+end
+
+## A running supervisor.
+struct Ref
+  address: Address[Msg]
+  task: Task[Result[Void]]
+end
+
+## A child that runs `behaviour` and calls `register` with the address of each new actor, in a task of its own, for at
+## most 5 s. A child that nobody reaches by name gives `do |_address| nil end`.
+def child[S, M](name: String, behaviour: Actor.Behaviour[S, M], register: Fn[Address[M], Void]) -> Child
+  Child(name: name, start: ->(inbox, index, run) { launch(behaviour, register, inbox, index, run) })
+end
+
+## Starts the supervisor in a task of its own, a child of the calling task, and returns once the first start of every
+## child has run (a failed one is tried again later), the supervisor gave up, or 60 s passed. Options out of range
+## halt with `RUNTIME-UNWRAP-ERROR`.
+def start(children: List[Child], options: Options = Options()) -> Ref
+  if options.max_restarts < 0
+    halt("supervisor: max_restarts must be 0 or more, not #{options.max_restarts}")
+  end
+  if options.within_ms <= 0
+    halt("supervisor: within_ms must be above 0, not #{options.within_ms}")
+  end
+
+  capacity = MIN_CAPACITY + NOTICES_PER_CHILD * children.size
+  inbox: Channel[Msg] = Channel.new(capacity)
+  ready: Channel[Bool] = Channel.new(1)
+  plan = Plan(children: children, options: options, inbox: inbox, ready: ready)
+  task = Task.spawn_owning(&run, plan)
+  _ = ready.recv(READY_MS)
+  Ref(address: inbox.address, task: task)
+end
+
+## Stops the children in reverse order, each as `Actor.stop` does, then the supervisor, all within `timeout_ms`, and
+## gives the first error of a child's stop. A child still running when the time is over is cancelled, and so are the
+## ones after it, without `terminate`; a supervisor still running then is cancelled with its children, and `stop` gives
+## `supervisor: timeout`. A child's error may also come from a crash while it handles the messages left in its inbox. A
+## supervisor that gave up gives its reason: `supervisor: NAME crashed N times in M ms` or `supervisor: NAME failed to
+## start N times in a row`.
+def stop(supervisor: Ref, timeout_ms: Int) -> Result[Void]
+  deadline = Time.monotonic_ms + timeout_ms
+  answer: Channel[Result[Void]] = Channel.new(1)
+  _ = supervisor.address.send(Msg.Stop(deadline, answer), timeout_ms)
+  case Task.await(supervisor.task, max_of(deadline - Time.monotonic_ms, 1))
+    Await.Done(result) ->
+      case answer.recv(0)
+        ok(children) -> children
+        error(_) -> reason(result)
+      end
+    Await.TimedOut ->
+      Task.cancel(supervisor.task)
+      error("supervisor: timeout", kind: "task.timeout")
+  end
+end
+
+private
+
 # How long the loop waits for a message before it waits again: a receive always has a timeout.
 IDLE_MS = 60_000
 # How long `start` waits for the first start of every child, which runs the register blocks.
@@ -30,27 +101,6 @@ enum Msg
   Stop(Int, Channel[Result[Void]])
 end
 
-## A child of a supervisor; `child` makes one.
-export struct Child
-  name: String
-  start: Fn[Channel[Msg], Int, Int, Result[Fn[Int, Result[Void]]]]
-end
-
-## What `start` takes besides the children.
-export struct Options
-  ## A child that crashes more than this many times within `within_ms`, or fails to start more than this many times in
-  ## a row, makes the supervisor give up. Counted per child; 0 or more.
-  max_restarts: Int = 3
-  ## Above 0.
-  within_ms: Int = 5000
-end
-
-## A running supervisor.
-export struct Ref
-  address: Address[Msg]
-  task: Task[Result[Void]]
-end
-
 struct Plan
   children: List[Child]
   options: Options
@@ -66,54 +116,6 @@ struct State
   runs: List[Int]
   crashes: List[List[Int]]
   failed: List[Int]
-end
-
-## A child that runs `behaviour` and calls `register` with the address of each new actor, in a task of its own, for at
-## most 5 s. A child that nobody reaches by name gives `do |_address| nil end`.
-export def child[S, M](name: String, behaviour: Actor.Behaviour[S, M], register: Fn[Address[M], Void]) -> Child
-  Child(name: name, start: ->(inbox, index, run) { launch(behaviour, register, inbox, index, run) })
-end
-
-## Starts the supervisor in a task of its own, a child of the calling task, and returns once the first start of every
-## child has run (a failed one is tried again later), the supervisor gave up, or 60 s passed. Options out of range
-## halt with `RUNTIME-UNWRAP-ERROR`.
-export def start(children: List[Child], options: Options = Options()) -> Ref
-  if options.max_restarts < 0
-    halt("supervisor: max_restarts must be 0 or more, not #{options.max_restarts}")
-  end
-  if options.within_ms <= 0
-    halt("supervisor: within_ms must be above 0, not #{options.within_ms}")
-  end
-
-  capacity = MIN_CAPACITY + NOTICES_PER_CHILD * children.size
-  inbox: Channel[Msg] = Channel.new(capacity)
-  ready: Channel[Bool] = Channel.new(1)
-  plan = Plan(children: children, options: options, inbox: inbox, ready: ready)
-  task = Task.spawn_owning(&run, plan)
-  _ = ready.recv(READY_MS)
-  Ref(address: inbox.address, task: task)
-end
-
-## Stops the children in reverse order, each as `Actor.stop` does, then the supervisor, all within `timeout_ms`, and
-## gives the first error of a child's stop. A child still running when the time is over is cancelled, and so are the
-## ones after it, without `terminate`; a supervisor still running then is cancelled with its children, and `stop` gives
-## `supervisor: timeout`. A child's error may also come from a crash while it handles the messages left in its inbox. A
-## supervisor that gave up gives its reason: `supervisor: NAME crashed N times in M ms` or `supervisor: NAME failed to
-## start N times in a row`.
-export def stop(supervisor: Ref, timeout_ms: Int) -> Result[Void]
-  deadline = Time.monotonic_ms + timeout_ms
-  answer: Channel[Result[Void]] = Channel.new(1)
-  _ = supervisor.address.send(Msg.Stop(deadline, answer), timeout_ms)
-  case Task.await(supervisor.task, max_of(deadline - Time.monotonic_ms, 1))
-    Await.Done(result) ->
-      case answer.recv(0)
-        ok(children) -> children
-        error(_) -> reason(result)
-      end
-    Await.TimedOut ->
-      Task.cancel(supervisor.task)
-      error("supervisor: timeout", kind: "task.timeout")
-  end
 end
 
 # The end of a supervisor that did not answer a Stop: one that gave up crashed with its reason as the message, which is

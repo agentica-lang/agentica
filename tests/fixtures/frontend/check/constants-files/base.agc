@@ -1,1 +1,1 @@
-export BASE = 10
+BASE = 10

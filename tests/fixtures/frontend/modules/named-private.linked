@@ -1,1 +1,1 @@
-ERROR CHECK-IMPORT-NAME 13:1:14-19:1:20 "unknown or private imported name" "hidden is private in \"lib.agc\": add export to it there" file="root.agc"
+ERROR CHECK-IMPORT-NAME 13:1:14-19:1:20 "unknown or private imported name" "hidden is private in \"lib.agc\": move it above private there" file="root.agc"

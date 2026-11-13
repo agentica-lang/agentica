@@ -156,9 +156,9 @@ def test_the_lowering_fixtures_fill_every_section_of_the_file():
 
 def test_the_header_constants_are_those_of_the_original_writer(stage):
     text = TABLES.read_text(encoding="utf-8")
-    assert re.search(r"^export FORMAT_VERSION = (.+)$", text, flags=re.MULTILINE).group(1) == str(FORMAT_VERSION)
+    assert re.search(r"^FORMAT_VERSION = (.+)$", text, flags=re.MULTILINE).group(1) == str(FORMAT_VERSION)
     # There is no VERSION constant: the header carries the version that the caller passed in.
-    assert re.search(r"^export VERSION\b", text, flags=re.MULTILINE) is None
+    assert re.search(r"^VERSION\b", text, flags=re.MULTILINE) is None
     stage.compile_paths(["examples/hello.agc"], stage.corpus_dir("examples", "fixtures"))
     data = stage.files["examples/hello.agc"].read_bytes()
     assert data[:8] == b"AGCB" + FORMAT_VERSION.to_bytes(4, "little")

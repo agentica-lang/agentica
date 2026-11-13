@@ -25,6 +25,31 @@ import CliProject from "cli_project"
 import Reply from "cli_reply"
 import Texts from "cli_text"
 
+## Runs `add`. `words` are the ones after the command: NAME URL, `--tag TAG` or `--ref COMMIT`, and `--subdir DIR`.
+def add(settings: Env.Settings, style: String, words: List[String]) -> Reply.Answer
+  asked = request_of(words)
+  return Reply.Answer.Printed(Reply.failed(2, asked.message)) if !asked.ok?
+
+  CliProject.run(style, settings.workspace) do |dir: String| add_to(settings, dir, asked.unwrap!) end
+end
+
+## Runs `update`. `words` are the ones after the command: none for every package, or the name of a dependency.
+def update(settings: Env.Settings, style: String, words: List[String]) -> Reply.Answer
+  # A word that starts with "-" is an option nobody knows, not a name.
+  if words.size > 1 or (words.size == 1 and words[0].start_with?("-"))
+    return Reply.Answer.Printed(Reply.failed(2, Texts.usage_text()))
+  end
+
+  name = ""
+  if words.size == 1
+    name = words[0]
+  end
+
+  CliProject.run(style, settings.workspace) do |dir: String| update_in(settings, dir, name) end
+end
+
+private
+
 # The deadline of the write of a file, in milliseconds.
 WRITE_TIMEOUT_MS = 60_000
 # More help for a manifest that could not be written after the lock was.
@@ -37,29 +62,6 @@ DEPS_PENDING = "agentica.lock was written already; run `agentica install` to wri
 struct Request
   name: String
   source: GitSource.Source
-end
-
-## Runs `add`. `words` are the ones after the command: NAME URL, `--tag TAG` or `--ref COMMIT`, and `--subdir DIR`.
-export def add(settings: Env.Settings, style: String, words: List[String]) -> Reply.Answer
-  asked = request_of(words)
-  return Reply.Answer.Printed(Reply.failed(2, asked.message)) if !asked.ok?
-
-  CliProject.run(style, settings.workspace) do |dir: String| add_to(settings, dir, asked.unwrap!) end
-end
-
-## Runs `update`. `words` are the ones after the command: none for every package, or the name of a dependency.
-export def update(settings: Env.Settings, style: String, words: List[String]) -> Reply.Answer
-  # A word that starts with "-" is an option nobody knows, not a name.
-  if words.size > 1 or (words.size == 1 and words[0].start_with?("-"))
-    return Reply.Answer.Printed(Reply.failed(2, Texts.usage_text()))
-  end
-
-  name = ""
-  if words.size == 1
-    name = words[0]
-  end
-
-  CliProject.run(style, settings.workspace) do |dir: String| update_in(settings, dir, name) end
 end
 
 # NAME URL, then --tag TAG or --ref COMMIT (one of them), and --subdir DIR when the package is a folder of the

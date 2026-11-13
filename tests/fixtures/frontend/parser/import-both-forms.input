@@ -3,5 +3,5 @@ import New from "new"
 import {a, B as C} from "new"
 import Other from "new"
 
-export def main() -> Void
+def main() -> Void
 end

@@ -15,7 +15,7 @@ import CheckTypes from "check_types"
 
 ## Checks a call of a Task, Channel, Map, Set, System.Profile or Native builtin by its rule. Any other rule is the
 ## caller's.
-export def check_collection_rule(cx: State.Cx, st: State.St, site: State.Site, rule: Model.Rule) -> Result[State.Out]
+def check_collection_rule(cx: State.Cx, st: State.St, site: State.Site, rule: Model.Rule) -> Result[State.Out]
   case rule
     Model.Rule.TaskSpawn -> check_spawn(cx, st, site, false)
     Model.Rule.TaskSpawnOwning -> check_spawn(cx, st, site, true)
@@ -47,15 +47,13 @@ end
 
 ## True for a type that holds a Codec somewhere, walked as holds_handle? walks: IO.inspect refuses it, since a codec
 ## has no text of its own.
-export def holds_codec?(cx: State.Cx, type: T.Type) -> Bool
-  holds?(cx, type) do |part: T.Type| T.is?(part, "Codec") end
-end
+def holds_codec?(cx: State.Cx, type: T.Type) -> Bool = holds?(cx, type) do |part: T.Type| T.is?(part, "Codec") end
 
 ## True for a type that holds an Address somewhere, walked as holds_handle? walks: a constant refuses it, since an
 ## address belongs to the run that made it.
-export def holds_address?(cx: State.Cx, type: T.Type) -> Bool
-  holds?(cx, type) do |part: T.Type| T.is?(part, "Address") end
-end
+def holds_address?(cx: State.Cx, type: T.Type) -> Bool = holds?(cx, type) do |part: T.Type| T.is?(part, "Address") end
+
+private
 
 # Task.spawn and Task.spawn_owning: a function of one parameter and the argument it gets; Task.spawn alone also has
 # the form with no argument, for a function of no parameter. The owning form also hands over a handle, a channel or

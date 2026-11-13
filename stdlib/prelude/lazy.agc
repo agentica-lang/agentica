@@ -16,6 +16,8 @@
 ## Cost: each item pulled from the source costs one step, and each callback a step plus its body, as in Range.each.
 ## A terminal can be switched out between items, so --max-steps, the turns of other tasks and a cancel reach it.
 
+private
+
 def from_list(list: List[A]) -> Lazy[A] = __lazy_list(list)
 
 def from_range(range: Range) -> Lazy[Int] = __lazy_range(range)

@@ -1,4 +1,4 @@
-program #61 0:1:1-391:28:1
+program #63 0:1:1-391:28:1
   module "root.agc"
     declaration: enum-decl #11 19:3:1-90:8:1 name="Local" type-parameters=["T"]
       variant: enum-variant #3 35:4:3-50:5:1 name="Wrap"
@@ -61,10 +61,10 @@ program #61 0:1:1-391:28:1
             value: call #56 372:24:17-379:24:24 name="puts" piped=false
               arg: name-ref #55 377:24:22-378:24:23 name="m"
   module "a.agc"
-    declaration: enum-decl #3 7:1:8-40:5:1 name="@2::Opt" type-parameters=["T"]
-      variant: enum-variant #1 21:2:3-29:3:1 name="Some"
-        payload: type-ref #0 26:2:8-27:2:9 name="T"
-      variant: enum-variant #2 31:3:3-36:4:1 name="Nope"
-    declaration: struct-decl #7 48:6:8-70:9:1 name="@2::W"
-      field: field-decl #6 59:7:3-66:8:1 name="x"
-        type: type-ref #5 62:7:6-65:7:9 name="Int"
+    declaration: enum-decl #3 0:1:1-33:5:1 name="@2::Opt" type-parameters=["T"]
+      variant: enum-variant #1 14:2:3-22:3:1 name="Some"
+        payload: type-ref #0 19:2:8-20:2:9 name="T"
+      variant: enum-variant #2 24:3:3-29:4:1 name="Nope"
+    declaration: struct-decl #6 34:6:1-56:9:1 name="@2::W"
+      field: field-decl #5 45:7:3-52:8:1 name="x"
+        type: type-ref #4 48:7:6-51:7:9 name="Int"

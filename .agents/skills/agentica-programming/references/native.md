@@ -6,7 +6,7 @@ signature with C types and no body; call the function like any `def`.
 ~~~ruby
 extern "libm.so.6"
   ## The cosine of x.
-  export def cos(x: C.Double) -> C.Double
+  def cos(x: C.Double) -> C.Double
 
   def labs(n: C.Long) -> C.Long
 end
@@ -104,7 +104,7 @@ end
   is `RUNTIME-NATIVE-BOUNDS`; at C's pointer only NULL (`RUNTIME-NATIVE-NULL`)
   and a negative offset are checked, the rest is trusted (UB if wrong). Two
   tasks that use the same C memory at once race, as in C.
-- `[export] resource Db, free: db_close` in a block declares a resource type,
+- `resource Db, free: db_close` in a block declares a resource type,
   freed by `void db_close(void *)` of the same library (any C name, capitals
   allowed: `free: PQfinish`; only `C.Function` is a type). On Windows the free
   function must come from the declared library itself (not a dependency's
@@ -185,7 +185,7 @@ end
   `synchronize` by the holder is `RUNTIME-NATIVE-MUTEX`. A mutex
   is no data (no `==`, no `to_s`, no constant): make it in the open function and
   keep it next to the handle.
-- `[export] compute def f(...) -> T` runs the call on the VM's compute pool (one
+- `compute def f(...) -> T` runs the call on the VM's compute pool (one
   thread per scheduler) while the task waits and other tasks run; for long
   calls. Same plain result. No timeout, and `--max-steps` cannot end it; for a
   limit run it in a task and use `Task.await(task, ms)`. A cancel skips a call
@@ -266,7 +266,7 @@ end
   C's own thread, a free function or a `compute def` gives zero (the compute
   call then fails); at most 128 nested (`RUNTIME-STACK-OVERFLOW`).
 - C structs by value (llama.cpp's `llama_context_params`, Ruby ffi's
-  `FFI::Struct`): `[export] struct Name ... end` in the block, every field of
+  `FFI::Struct`): `struct Name ... end` in the block, every field of
   the header in its order, each an integer type, `C.Double`, `C.Float`,
   `C.Bool`, `C.Pointer` or a struct declared above in the block (else
   `PARSE-EXTERN-TYPE`: a `char *` is a `C.Pointer` read with
@@ -321,8 +321,9 @@ Keep the `extern` layer private and give the user a normal API; guide:
   yes/no `int` becomes a `name?` function returning `Bool`.
 - A block with a resource or a struct sits with the types, above every function
   of the file, and its `def`s do not count as functions for `CHECK-DECL-ORDER`.
-  `export resource` so callers can name the type, keep the `def`s private. A
-  block with neither: put it at the end of the file. An `extern module` block
+  The block is public as a whole, or private after `private`. A block with
+  neither: put it at the end of the file, after `private` to keep its `def`s
+  out of the API. An `extern module` block
   is all `def`s, its resources included: put it with the functions.
 - A `String` with a NUL stops the program at the C call
   (`RUNTIME-INVALID-CHARACTER`): check inputs first, or pass

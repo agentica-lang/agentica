@@ -9,7 +9,7 @@ import State from "check_state"
 
 ## The receiver kinds: the words of the types whose values have methods in the catalog, and Mutex (a parameter kind of
 ## RubyForm). Infer reads them all to ask which receivers have a method of some name.
-export METHOD_KINDS = [
+METHOD_KINDS = [
   "String",
   "List",
   "Map",
@@ -31,7 +31,7 @@ export METHOD_KINDS = [
 ]
 
 ## The kind of a receiver, or "" when its type has no methods in the catalog.
-export def receiver_kind(type: T.Type) -> String
+def receiver_kind(type: T.Type) -> String
   word = T.tag(type)
   if word == "Opaque" and T.name(type) == "TaskRef"
     # The running task (Task.current) has the methods of a task.
@@ -49,7 +49,7 @@ end
 
 ## The builtin that method name of that kind stands for, "self", or "" when there is none: an alias first (size, to_i,
 ## push), then the builtin of the kind's module whose first parameter has that kind.
-export def resolve_method(cx: State.Cx, kind: String, name: String) -> String
+def resolve_method(cx: State.Cx, kind: String, name: String) -> String
   alias = cx.help.aliases.get("#{kind}.#{name}")
   return alias.unwrap! if alias.some?
 
@@ -59,7 +59,7 @@ end
 ## The methods a receiver kind has, as Ruby names them: its aliases and the builtins of its module, without
 ## duplicates. A builtin that has a Ruby name (`select`) is listed under it, not under its own (`filter`), which still
 ## works; a synonym (`collect` for `map`, `size` for `String.length`) is accepted but not listed.
-export def method_names(cx: State.Cx, kind: String) -> List[String]
+def method_names(cx: State.Cx, kind: String) -> List[String]
   names: List[String] = []
   seen: Set[String] = Set.new([])
   prefix = "#{kind}."
@@ -87,14 +87,14 @@ end
 
 ## The method name a builtin is written as in method form, for the help of CHECK-PIPE-METHOD: String.upcase is upcase,
 ## List.filter is select. "" when there is none for that kind.
-export def pipe_method_name(cx: State.Cx, kind: String, name: String) -> String
+def pipe_method_name(cx: State.Cx, kind: String, name: String) -> String
   return RubyForm.method_name(name) if RubyForm.method_key(name).start_with?("#{kind}.")
 
   ""
 end
 
 ## The help for a method name another language has, or "".
-export def foreign_method_help(cx: State.Cx, kind: String, name: String) -> String
+def foreign_method_help(cx: State.Cx, kind: String, name: String) -> String
   direct = cx.help.kind_methods.get("#{kind}.#{name}")
   return direct.unwrap! if direct.some?
 
@@ -115,6 +115,8 @@ export def foreign_method_help(cx: State.Cx, kind: String, name: String) -> Stri
 
   renamed_help(cx, kind, name)
 end
+
+private
 
 # True when Lazy has a step with that name: a method that takes a Lazy and returns one (not the source produce).
 def lazy_step?(name: String) -> Bool

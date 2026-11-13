@@ -5,14 +5,14 @@
 import Report from "report"
 
 ## The JSON records read from a child's channel, and the message of the error that ended the reading.
-export struct Records
+struct Records
   items: List[JSON.Value]
   problem: String
 end
 
 ## Reads the channel records of the child `process` until a read fails or the `deadline` passes (a `Time.monotonic_ms`
 ## value). Lines that are not JSON are skipped.
-export def read_records(process: Process, deadline: Int) -> Records
+def read_records(process: Process, deadline: Int) -> Records
   items: List[JSON.Value] = []
   while true
     line = Process.channel_read_line(process, left(deadline))
@@ -26,27 +26,27 @@ export def read_records(process: Process, deadline: Int) -> Records
 end
 
 ## Parses a channel line as JSON. Returns JSON null when it is not valid.
-export def record_of(line: String) -> JSON.Value = JSON.parse(line).unwrap_or(JSON.null())
+def record_of(line: String) -> JSON.Value = JSON.parse(line).unwrap_or(JSON.null())
 
 ## Returns the `event` text of a record, or an empty string when it is missing or not a string.
-export def event_of(record: JSON.Value) -> String = text_of(record, "event")
+def event_of(record: JSON.Value) -> String = text_of(record, "event")
 
 ## Returns the string at `key` in a record, or an empty string when it is missing or not a string.
-export def text_of(record: JSON.Value, key: String) -> String
+def text_of(record: JSON.Value, key: String) -> String
   found = JSON.get(record, key)
   return JSON.string(found.unwrap!).unwrap_or("") if found.ok?
   ""
 end
 
 ## Returns the integer at `key` in a record, or 1 when it is missing or not an integer.
-export def int_of(record: JSON.Value, key: String) -> Int
+def int_of(record: JSON.Value, key: String) -> Int
   found = JSON.get(record, key)
   return JSON.int(found.unwrap!).unwrap_or(1) if found.ok?
   1
 end
 
 ## Returns the diagnostic a crash record carries as `--json` writes it: the code, file, message, range and stack keys.
-export def diagnostic_of(record: JSON.Value) -> JSON.Value
+def diagnostic_of(record: JSON.Value) -> JSON.Value
   fields: Map[String, JSON.Value] = {}
   for key in ["code", "file", "message", "range", "spawned_at", "stack", "stack_omitted"]
     found = JSON.get(record, key)
@@ -58,14 +58,14 @@ export def diagnostic_of(record: JSON.Value) -> JSON.Value
 end
 
 ## Returns the string at `key` as a known detail, or an unknown one.
-export def detail_of(record: JSON.Value, key: String) -> Report.Detail
+def detail_of(record: JSON.Value, key: String) -> Report.Detail
   found = JSON.get(record, key)
   return Report.Detail.Known(JSON.string(found.unwrap!).unwrap!) if found.ok? and JSON.string(found.unwrap!).ok?
   Report.Detail.Unknown
 end
 
 ## Returns true when the error `message` says the child's channel has ended or closed.
-export def gone?(message: String) -> Bool
+def gone?(message: String) -> Bool
   (
     message == "process: end of input" or
     message == "process: channel is closed" or
@@ -74,32 +74,32 @@ export def gone?(message: String) -> Bool
 end
 
 ## Returns the milliseconds left until `deadline`, at most 2000.
-export def brief(deadline: Int) -> Int
+def brief(deadline: Int) -> Int
   remaining = left(deadline)
   return remaining if remaining < 2000
   2000
 end
 
 ## Returns the milliseconds left until `deadline`, at least 1.
-export def left(deadline: Int) -> Int
+def left(deadline: Int) -> Int
   remaining = deadline - Time.monotonic_ms()
   return 1 if remaining < 1
   remaining
 end
 
 ## Builds a `Failure` for the file `path`, at line 1 and column 1.
-export def located(code: String, message: String, path: String) -> Report.Failure
+def located(code: String, message: String, path: String) -> Report.Failure
   Report.error_at(code, message, Report.Span(file: path, line: 1, column: 1, end_column: 1))
 end
 
 ## Returns `output` without one final newline.
-export def printed(output: String) -> String
+def printed(output: String) -> String
   return output.slice(0, output.length - 1) if output.end_with?("\n")
   output
 end
 
 ## Returns the last `limit` characters of `text`.
-export def tail(text: String, limit: Int) -> String
+def tail(text: String, limit: Int) -> String
   return text if text.length <= limit
   text.slice(text.length - limit, limit)
 end
@@ -107,7 +107,7 @@ end
 ## Reads the diagnostic a child wrote as the last line of `stderr`. A child that halts writes its `--json` diagnostic
 ## there, and a child with an unobserved task crash writes a summary, which becomes `RUNTIME-TASK-CRASHED`. Lines of
 ## task crashes are skipped. Returns an error when there is none.
-export def stderr_diagnostic(stderr: String, span: Report.Span) -> Result[Report.Failure]
+def stderr_diagnostic(stderr: String, span: Report.Span) -> Result[Report.Failure]
   lines = stderr.split("\n").filter do |line| line != "" and not vm_shape?(line, true) end
   return error("no diagnostic") if lines.size == 0
   last = lines[lines.size - 1]
@@ -122,7 +122,7 @@ export def stderr_diagnostic(stderr: String, span: Report.Span) -> Result[Report
 end
 
 ## Returns the lines of `stderr` that are not diagnostics, cut to their last 65536 characters.
-export def stderr_text(stderr: String) -> String
+def stderr_text(stderr: String) -> String
   kept = stderr.split("\n")
     .filter do |line|
       line != "" and not vm_shape?(line, true) and not vm_shape?(line, false) and not summary?(line)
@@ -130,6 +130,8 @@ export def stderr_text(stderr: String) -> String
 
   tail(kept.join("\n"), 65536)
 end
+
+private
 
 def vm_shape?(line: String, task: Bool) -> Bool
   parsed = JSON.parse(line)

@@ -15,7 +15,7 @@ import Workspace from "workspace"
 ## relative to the folder of the root file, with `..` parts above it, or std/NAME.agc. A failure is the lexer's ERROR
 ## line with ` file="path"` added, and ` key="path"` for a failure at a key of agentica.toml or agentica.lock. The
 ## goldens are in tests/fixtures/frontend/modules/.
-export def link_text(path: String, settings: Env.Settings) -> String
+def link_text(path: String, settings: Env.Settings) -> String
   case Linker.link_file(path, settings)
     Linker.Linking.Done(linked) -> program_lines(linked, {}).join("\n")
     Linker.Linking.Failed(failure) -> root_failure_text(settings.workspace, path, failure)
@@ -25,7 +25,7 @@ end
 ## The ids of the files of a link, one line per file in the order they were read, including the files that declare
 ## nothing: `module "path" first=N next=N` (the file's nodes are numbered N up to, not including, the next). A failure
 ## prints as link_text does.
-export def ids_text(path: String, settings: Env.Settings) -> String
+def ids_text(path: String, settings: Env.Settings) -> String
   case Linker.link_file(path, settings)
     Linker.Linking.Done(linked) ->
       lines = linked.modules.map do |module|
@@ -38,13 +38,13 @@ export def ids_text(path: String, settings: Env.Settings) -> String
 end
 
 ## The ERROR line of the failure of linking the root file at `path`.
-export def root_failure_text(workspace: Workspace.Workspace, path: String, failure: Failure.Failure) -> String
+def root_failure_text(workspace: Workspace.Workspace, path: String, failure: Failure.Failure) -> String
   failure_text(workspace, root_dir_of(workspace, path), failure)
 end
 
 ## The ERROR line of a link failure, with the file it is in, and ` key="path"` for a failure at a key of agentica.toml
 ## or agentica.lock.
-export def failure_text(workspace: Workspace.Workspace, root_dir: String, failure: Failure.Failure) -> String
+def failure_text(workspace: Workspace.Workspace, root_dir: String, failure: Failure.Failure) -> String
   shown = Text.quote(Paths.stored_file(workspace, root_dir, failure.file))
   line = "#{Text.diagnostic_line(failure.diagnostic)} file=#{shown}"
   return "#{line} key=#{Text.quote(failure.key_path)}" if failure.key_path != ""
@@ -53,7 +53,7 @@ export def failure_text(workspace: Workspace.Workspace, root_dir: String, failur
 end
 
 ## The lines of the linked program. notes is the text added to the line of a node, by id (see ParseText.Margin).
-export def program_lines(linked: Linker.Linked, notes: Map[Int, String]) -> List[String]
+def program_lines(linked: Linker.Linked, notes: Map[Int, String]) -> List[String]
   root = linked.root
   lines: List[String] = [
     ParseText.head(
@@ -74,6 +74,8 @@ export def program_lines(linked: Linker.Linked, notes: Map[Int, String]) -> List
 
   lines
 end
+
+private
 
 def module_lines(out: List[String], module: Linker.LinkedModule, notes: Map[Int, String]) -> List[String]
   lines = out.push("  module #{Text.quote(module.name)}")

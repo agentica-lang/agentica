@@ -8,7 +8,7 @@ import State from "check_state"
 import Defaults from "defaults"
 
 ## A call with its named arguments bound, and the state with its slots recorded.
-export struct Bound
+struct Bound
   st: State.St
   node: Ast.Call
 end
@@ -18,7 +18,7 @@ end
 ## method call), which a help never lists. A name with no parameter is CHECK-UNKNOWN-ARGUMENT and a parameter given
 ## twice (by name, or by position and by name) CHECK-REPEATED-ARGUMENT, at that argument; a parameter with no default
 ## and no argument is CHECK-MISSING-ARGUMENT at the call.
-export def bind(
+def bind(
   cx: State.Cx,
   st: State.St,
   node: Ast.Call,
@@ -60,3 +60,5 @@ export def bind(
 
   ok(Bound(st: State.record_slots(st, node.id, binding.slots), node: Defaults.bound(node, binding.slots)))
 end
+
+private

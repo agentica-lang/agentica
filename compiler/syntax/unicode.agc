@@ -3,10 +3,10 @@
 import {GRAPHIC_RANGES} from "unicode_table"
 
 ## Whether the code point is a graphic character, one that a program can write as it is.
-export def graphic?(code: Int) -> Bool = in_ranges?(GRAPHIC_RANGES, code, 0, GRAPHIC_RANGES.size / 2)
+def graphic?(code: Int) -> Bool = in_ranges?(GRAPHIC_RANGES, code, 0, GRAPHIC_RANGES.size / 2)
 
 ## An Int as upper-case hexadecimal digits, padded with zeros to width.
-export def hex(value: Int, width: Int) -> String
+def hex(value: Int, width: Int) -> String
   digits = "0123456789ABCDEF"
   parts: List[String] = []
   rest = value
@@ -23,10 +23,10 @@ export def hex(value: Int, width: Int) -> String
 end
 
 ## Returns the code as upper-case hexadecimal digits, with at least one.
-export def hex_text(value: Int) -> String = hex(value, 1)
+def hex_text(value: Int) -> String = hex(value, 1)
 
 ## Returns the character literal of the code point, such as `#\tab` or `#\u00E9`.
-export def written(code: Int) -> String
+def written(code: Int) -> String
   case code
     0 -> "#\\nul"
     8 -> "#\\backspace"
@@ -46,7 +46,7 @@ end
 
 ## A String as `write` shows it: quotes, with \\a \\b \\t \\n \\v \\f \\r \\e, \\" and \\\\, and \\uXXXX or
 ## \\UXXXXXXXX for characters that are neither graphic nor blank.
-export def written_text(text: String) -> String
+def written_text(text: String) -> String
   parts: List[String] = ["\""]
   for character in text.split("")
     parts = parts.push(written_character(GRAPHIC_RANGES, String.code(character), character))
@@ -55,6 +55,8 @@ export def written_text(text: String) -> String
   parts = parts.push("\"")
   parts.join("")
 end
+
+private
 
 def in_ranges?(ranges: List[Int], code: Int, low: Int, high: Int) -> Bool
   while low < high

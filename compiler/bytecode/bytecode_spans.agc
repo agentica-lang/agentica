@@ -9,7 +9,7 @@ import Pool from "bytecode_pool"
 ## The run of the spans of the written instruction that starts at body[at] and stands for `count` instructions (more
 ## than one for a run of `step`): the pool with it added when it is new, and its number. Nearly every instruction has
 ## one span, which skips the lists the general case builds.
-export def intern_run(pool: Pool.Pool, body: List[Ir.Instr], at: Int, count: Int) -> Pool.Interned
+def intern_run(pool: Pool.Pool, body: List[Ir.Instr], at: Int, count: Int) -> Pool.Interned
   # With one instruction and one span the general path below has keys = [span_key(file, span)], so its key is that one
   # key (join of one item) and run_bytes is span_bytes(file, span): intern_one builds exactly the same key and bytes.
   first = body[at]
@@ -31,13 +31,15 @@ export def intern_run(pool: Pool.Pool, body: List[Ir.Instr], at: Int, count: Int
 end
 
 ## The run of one span in the source at index file.
-export def intern_one(pool: Pool.Pool, file: Int, span: Source.Span) -> Pool.Interned
+def intern_one(pool: Pool.Pool, file: Int, span: Source.Span) -> Pool.Interned
   key = span_key(file, span)
   found = Pool.find(pool, key)
   return Pool.Interned(pool: pool, id: found.unwrap!) if found.some?
 
   Pool.Interned(pool: Pool.add(pool, key, span_bytes(file, span), 1), id: pool.count)
 end
+
+private
 
 # The key of a run is the keys of its spans joined with ";", so a run of one span has this key.
 def span_key(file: Int, span: Source.Span) -> String

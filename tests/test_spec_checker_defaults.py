@@ -88,7 +88,7 @@ SINGLE_FILE = [
      ' h: Optional[Int] = NO, i: List[Int] = NONE_LIST, j: Map[String, Int] = NONE_MAP) -> Int\n'
      '  return a\nend\n\n' + main_with("  puts(f())\n"), None, None),
     ("a default may name an exported constant of the same file",
-     'export LIMIT = 10\n\ndef f(a: Int = LIMIT) -> Int\n  return a\nend\n\n' + main_with("  puts(f())\n"), None, None),
+     "LIMIT = 10\n\nprivate\n\ndef f(a: Int = LIMIT) -> Int\n  return a\nend\n\n" + main_with("  puts(f())\n"), None, None),
     ("a parameter default may name a constant that is a struct built with no arguments",
      'BASE = Opts()\n\nstruct Opts\n  n: Int = 1\nend\n\n'
      'def f(o: Opts = BASE) -> Int\n  return o.n\nend\n\n' + main_with("  puts(f())\n"), None, None),
@@ -364,88 +364,93 @@ SINGLE_FILE = [
 # Several files: (title, files, code, file of the diagnostic, text the range covers).
 MODULES = [
     ("a call through an import alias leaves out the defaults",
-     {"util.agc": "export " + JOIN,
+     {"util.agc": JOIN,
       "root.agc": 'import Util from "util"\n\n'
                   + main_with('  puts(Util.join(["a"]))\n  puts(Util.join(["a"], "-"))\n')},
      None, None, None),
     ("an alias call without parentheses fills every default",
-     {"util.agc": 'export def connect(host: String = "localhost", port: Int = 8080) -> String\n'
-                  '  return "#{host}:#{port}"\nend\n\n',
+     {"util.agc": ('def connect(host: String = "localhost", port: Int = 8080) -> String\n'
+                   '  return "#{host}:#{port}"\n'
+                   "end\n"
+                   "\n"),
       "root.agc": 'import Util from "util"\n\n' + main_with("  x = Util.connect\n  puts(x)\n")},
      None, None, None),
     ("an alias call without parentheses and a required parameter is an arity error",
-     {"util.agc": "export " + JOIN,
+     {"util.agc": JOIN,
       "root.agc": 'import Util from "util"\n\n' + main_with("  x = Util.join\n  puts(x)\n")},
      "CHECK-ARITY", "root.agc", "Util.join"),
     ("an alias call with too many arguments is an arity error",
-     {"util.agc": "export " + JOIN,
+     {"util.agc": JOIN,
       "root.agc": 'import Util from "util"\n\n' + main_with('  puts(Util.join([], ",", 1))\n')},
      "CHECK-ARITY", "root.agc", 'Util.join([], ",", 1)'),
     ("a default that names a variant through an import alias is resolved in the declaring module",
-     {"models.agc": "export enum Level\n  Info\n  Warn\nend\n\n",
-      "util.agc": 'import Models from "models"\n\n'
-                  'export def pick(level: Models.Level = Models.Level.Warn) -> Models.Level\n  return level\nend\n\n',
+     {"models.agc": "enum Level\n  Info\n  Warn\nend\n\n",
+      "util.agc": ('import Models from "models"\n\n'
+                   "def pick(level: Models.Level = Models.Level.Warn) -> Models.Level\n  return level\nend\n\n"),
       "root.agc": 'import Util from "util"\n\n' + main_with("  x = Util.pick()\n  puts(x)\n")},
      None, None, None),
     ("a default that names a private enum of its module can be left out by another module",
-     {"util.agc": 'enum Mode\n  Fast\n  Safe\nend\n\n'
-                  'export def pick(mode: Mode = Mode.Safe) -> String\n  return "#{mode}"\nend\n\n',
+     {"util.agc": ('def pick(mode: Mode = Mode.Safe) -> String\n  return "#{mode}"\nend\n\n'
+                   "private\n\n"
+                   "enum Mode\n  Fast\n  Safe\nend\n\n"),
       "root.agc": 'import Util from "util"\n\n' + main_with("  puts(Util.pick())\n")},
      None, None, None),
     ("a default may name a constant through an import alias or an imported name",
-     {"limits.agc": "export LIMIT = 10\nexport LABEL = \"x\"\nexport NEG = -1\n",
+     {"limits.agc": 'LIMIT = 10\nLABEL = "x"\nNEG = -1\n',
       "root.agc": 'import Limits from "limits"\nimport {LIMIT as CAP, NEG} from "limits"\n\n'
                   'struct Conf\n  a: Int = Limits.LIMIT\n  b: Int = CAP\n  c: Int = NEG\nend\n\n'
                   'def f(a: Int = Limits.LIMIT, b: String = Limits.LABEL, c: Int = CAP, d: Int = NEG) -> Int\n'
                   '  return a\nend\n\n' + main_with("  puts(f())\n  puts(Conf().inspect)\n")},
      None, None, None),
     ("a default that names an imported constant is resolved in the declaring module",
-     {"limits.agc": "LIMIT = 10\n\nexport struct Conf\n  a: Int = LIMIT\nend\n\n"
-                    "export def f(a: Int = LIMIT) -> Int\n  return a\nend\n\n",
+     {"limits.agc": ("struct Conf\n  a: Int = LIMIT\nend\n\n"
+                     "def f(a: Int = LIMIT) -> Int\n  return a\nend\n\n"
+                     "private\n\n"
+                     "LIMIT = 10\n\n"),
       "root.agc": 'import Limits from "limits"\n\n' + main_with("  puts(Limits.f())\n  puts(Limits.Conf().inspect)\n")},
      None, None, None),
     ("a default that names an imported constant needs a value that is a constant form",
-     {"limits.agc": "export SUM = 1 + 2\n",
+     {"limits.agc": "SUM = 1 + 2\n",
       "root.agc": 'import Limits from "limits"\n\n'
                   'def f(a: Int = Limits.SUM) -> Int\n  return a\nend\n\n' + main_with("  puts(f())\n")},
      "CHECK-DEFAULT-VALUE", "root.agc", "SUM"),
     ("two modules may declare a constant of one name: a default is judged by the module it names",
-     {"first.agc": "export LIMIT = 10\n",
-      "second.agc": "export LIMIT = 1 + 2\n",
+     {"first.agc": "LIMIT = 10\n",
+      "second.agc": "LIMIT = 1 + 2\n",
       "root.agc": 'import {LIMIT as CAP} from "first"\nimport Second from "second"\n\n'
                   'def f(a: Int = CAP) -> Int\n  return a\nend\n\n'
                   'def g(a: Int = Second.LIMIT) -> Int\n  return a\nend\n\n' + main_with("  puts(f() + g())\n")},
      "CHECK-DEFAULT-VALUE", "root.agc", "LIMIT"),
     ("a default that names an imported constant keeps the type check",
-     {"limits.agc": "export LABEL = \"x\"\n",
+     {"limits.agc": 'LABEL = "x"\n',
       "root.agc": 'import {LABEL} from "limits"\n\n'
                   'struct S\n  a: Int = LABEL\nend\n\n' + main_with("  puts(S().inspect)\n")},
      "CHECK-TYPE-MISMATCH", "root.agc", "LABEL"),
     ("a bad default in an imported file is reported in that file",
-     {"util.agc": 'export def pick(n: Int = 1 + 1) -> Int\n  return n\nend\n\n',
+     {"util.agc": "def pick(n: Int = 1 + 1) -> Int\n  return n\nend\n\n",
       "root.agc": 'import Util from "util"\n\n' + main_with("  puts(Util.pick())\n")},
      "CHECK-DEFAULT-VALUE", "util.agc", "1 + 1"),
     ("a named import of a function with defaults leaves them out",
-     {"util.agc": "export " + JOIN,
+     {"util.agc": JOIN,
       "root.agc": 'import {join} from "util"\n\n' + main_with('  puts(join(["a"]))\n')},
      None, None, None),
     ("a struct with defaults, exported, is built by another file that leaves them out",
-     {"models.agc": 'export enum Level\n  Info\n  Warn\nend\n\n'
-                    'export struct Options\n  name: String\n  level: Level = Level.Warn\n  retries: Int = 3\nend\n\n',
+     {"models.agc": ("enum Level\n  Info\n  Warn\nend\n\n"
+                     "struct Options\n  name: String\n  level: Level = Level.Warn\n  retries: Int = 3\nend\n\n"),
       "root.agc": 'import Models from "models"\n\n'
                   + main_with('  puts(Models.Options(name: "a").inspect)\n'
                               '  puts(Models.Options(name: "a", retries: 1).inspect)\n')},
      None, None, None),
     ("a field default that names a private enum of its module can be left out by another module",
-     {"models.agc": 'enum Mode\n  Fast\n  Safe\nend\n\nexport struct S\n  mode: Mode = Mode.Safe\nend\n\n',
+     {"models.agc": "struct S\n  mode: Mode = Mode.Safe\nend\n\nprivate\n\nenum Mode\n  Fast\n  Safe\nend\n\n",
       "root.agc": 'import Models from "models"\n\n' + main_with("  puts(Models.S().inspect)\n")},
      None, None, None),
     ("a field of an imported struct without a default must still be given",
-     {"models.agc": 'export struct S\n  a: Int\n  b: Int = 1\nend\n\n',
+     {"models.agc": "struct S\n  a: Int\n  b: Int = 1\nend\n\n",
       "root.agc": 'import Models from "models"\n\n' + main_with("  puts(Models.S(b: 2).inspect)\n")},
      "CHECK-MISSING-FIELD", "root.agc", "Models.S(b: 2)"),
     ("a bad field default in an imported file is reported in that file",
-     {"models.agc": 'export struct S\n  a: Int = 1 + 1\nend\n\n',
+     {"models.agc": "struct S\n  a: Int = 1 + 1\nend\n\n",
       "root.agc": 'import Models from "models"\n\n' + main_with("  puts(Models.S().inspect)\n")},
      "CHECK-DEFAULT-VALUE", "models.agc", "1 + 1"),
 ]

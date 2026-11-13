@@ -10,14 +10,14 @@ import Failure from "link_failure"
 import Workspace from "workspace"
 
 ## The text after the last "/" of a path.
-export def last_part(text: String) -> String
+def last_part(text: String) -> String
   parts = text.split("/")
   parts[parts.size - 1]
 end
 
 ## The folder of a file path: everything before the last "/" (empty for a name alone, "/" for a file in the root
 ## folder).
-export def directory_of(path: String) -> String
+def directory_of(path: String) -> String
   tail = last_part(path).length
   return "" if tail == path.length
 
@@ -27,7 +27,7 @@ export def directory_of(path: String) -> String
 end
 
 ## Two path parts joined by one "/".
-export def join(base: String, rest: String) -> String
+def join(base: String, rest: String) -> String
   return base + rest if base.end_with?("/")
 
   "#{base}/#{rest}"
@@ -35,7 +35,7 @@ end
 
 ## Whether a path starts at "/", an absolute Windows drive path or a UNC share. A drive needs an ASCII letter,
 ## a colon and a separator: "C:" and "C:file" depend on a working directory and are not absolute paths.
-export def rooted?(path: String) -> Bool
+def rooted?(path: String) -> Bool
   return true if path.start_with?("/") or path.start_with?("\\\\")
 
   return false if path.length < 3
@@ -49,7 +49,7 @@ end
 ## A root that does not depend on the working directory. Elsewhere it starts with "/". On Windows it is a drive path
 ## (C:\ or C:/), a UNC path (\\server\share) or a path from the root of the current drive (/ or \); "C:libs" is
 ## relative.
-export def absolute?(path: String, on_windows: Bool) -> Bool
+def absolute?(path: String, on_windows: Bool) -> Bool
   return path.start_with?("\\") or rooted?(path) if on_windows
 
   path.start_with?("/")
@@ -59,7 +59,7 @@ end
 ## folder of the root file. A file inside it is its path from there, with no "./"; a file above it keeps the ".." parts
 ## ("../shared/x.agc"); a std/NAME.agc key is unchanged, and a user file under a std/ folder is "./std/NAME.agc". The
 ## bytes of an .agcb then do not depend on where the project lives.
-export def stored_name(root_dir: String, file: String) -> String
+def stored_name(root_dir: String, file: String) -> String
   return file if root_dir == "" or !rooted?(file)
 
   from = path_parts(root_dir)
@@ -88,7 +88,7 @@ end
 
 ## The stored name of the file of a failure. The root file of a failure is the path as given (Path.resolve keeps
 ## links), so it is made canonical first, as the key of a loaded file is.
-export def stored_file(workspace: Workspace.Workspace, root_dir: String, file: String) -> String
+def stored_file(workspace: Workspace.Workspace, root_dir: String, file: String) -> String
   return file if file.start_with?("std/") or file.start_with?(PRELUDE_PREFIX)
 
   real = workspace.real_path.call(file)
@@ -100,7 +100,7 @@ end
 ## The file an import names: "util" is "util.agc". A path that names a file with an extension, or no module at all, is
 ## CHECK-IMPORT-PATH with a help that shows the fix, written as the import line of decl (the alias form or the name
 ## list).
-export def module_file(decl: Ast.ImportDecl, site: Failure.Site) -> Result[String]
+def module_file(decl: Ast.ImportDecl, site: Failure.Site) -> Result[String]
   path = decl.path
   stem = ""
   has_stem = path.end_with?(".agc")
@@ -148,7 +148,7 @@ end
 
 ## CHECK-IMPORT-PATH unless a std/ or pkg/ path is made of plain parts: no backslash, no empty, "." or ".." part, and
 ## no ":" in a part.
-export def validate_library_path(path: String, site: Failure.Site) -> Result[Void]
+def validate_library_path(path: String, site: Failure.Site) -> Result[Void]
   return error(invalid_library_path(site)) if path.include?("\\")
 
   for part in path.split("/")
@@ -161,7 +161,7 @@ end
 ## The std/ path that a relative import of a std/ module names: `path` is the folder of the importing module (a key,
 ## with its trailing "/") and the import path. A ".." goes up inside std/ and may not leave it. CHECK-IMPORT-PATH for a
 ## path that leaves std/ or is not made of plain parts (validate_library_path).
-export def inside_std(path: String, site: Failure.Site) -> Result[String]
+def inside_std(path: String, site: Failure.Site) -> Result[String]
   kept: List[String] = []
   for part in path.split("/")
     if part == ".." and kept.size > 1
@@ -179,11 +179,11 @@ export def inside_std(path: String, site: Failure.Site) -> Result[String]
 end
 
 ## The parts of a canonical path, with no empty part.
-export def path_parts(path: String) -> List[String] = path.split("/").filter do |part| part != "" end
+def path_parts(path: String) -> List[String] = path.split("/").filter do |part| part != "" end
 
 ## The parts of a path, with the "." and ".." parts folded in as text: a ".." removes the part before it, and one at
 ## the start is dropped. Joined with "/" they only serve to compare with inside?.
-export def folded(path: String) -> String
+def folded(path: String) -> String
   kept: List[String] = []
   for part in path_parts(path)
     if part == ".."
@@ -197,7 +197,7 @@ export def folded(path: String) -> String
 end
 
 ## True when file is below the folder root: every part of root begins the parts of file.
-export def inside?(root: String, file: String) -> Bool
+def inside?(root: String, file: String) -> Bool
   base = path_parts(root)
   target = path_parts(file)
   return false if target.size < base.size
@@ -208,6 +208,8 @@ export def inside?(root: String, file: String) -> Bool
 
   true
 end
+
+private
 
 def invalid_library_path(site: Failure.Site) -> String
   Failure.fail_at(site, "CHECK-IMPORT-PATH", "invalid library path", Diag.Help.NoHelp)

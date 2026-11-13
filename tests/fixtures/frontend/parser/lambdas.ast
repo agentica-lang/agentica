@@ -1,62 +1,63 @@
-program #61 0:1:1-259:15:1
-  declaration: function-decl #60 0:1:1-259:15:1 name="main"
-    result: type-ref #0 14:1:15-18:1:19 name="Void"
-    body: binding #2 21:2:3-27:3:1 name="c"
-      value: literal #1 25:2:7-26:2:8 value=int:3
-    body: binding #12 29:3:3-63:4:1 name="f"
-      type: type-ref #5 32:3:6-44:3:18 name="Fn"
-        arg: type-ref #3 35:3:9-38:3:12 name="Int"
-        arg: type-ref #4 40:3:14-43:3:17 name="Int"
-      value: lambda #11 47:3:21-62:3:36
-        param: block-param #6 50:3:24-51:3:25 name="x"
-        body: expr-stmt #10 55:3:29-60:3:34
-          value: binary #9 55:3:29-60:3:34 op=plus op-span=57:3:31-58:3:32
-            left: name-ref #7 55:3:29-56:3:30 name="x"
-            right: name-ref #8 59:3:33-60:3:34 name="c"
-    body: binding #16 65:4:3-84:5:1 name="answer"
-      value: lambda #15 74:4:12-83:4:21
-        body: expr-stmt #14 79:4:17-81:4:19
-          value: literal #13 79:4:17-81:4:19 value=int:42
-    body: binding #30 86:5:3-147:9:1 name="g"
-      value: lambda #29 90:5:7-146:8:4
-        param: block-param #18 93:5:10-99:5:16 name="a"
-          type: type-ref #17 96:5:13-99:5:16 name="Int"
-        param: block-param #20 101:5:18-107:5:24 name="b"
-          type: type-ref #19 104:5:21-107:5:24 name="Int"
-        body: binding #24 115:6:5-129:7:1 name="total"
-          value: binary #23 123:6:13-128:6:18 op=plus op-span=125:6:15-126:6:16
-            left: name-ref #21 123:6:13-124:6:14 name="a"
-            right: name-ref #22 127:6:17-128:6:18 name="b"
-        body: expr-stmt #28 133:7:5-143:8:1
-          value: binary #27 133:7:5-142:7:14 op=multiply op-span=139:7:11-140:7:12
-            left: name-ref #25 133:7:5-138:7:10 name="total"
-            right: literal #26 141:7:13-142:7:14 value=int:2
-    body: binding #48 149:9:3-210:13:1 name="h"
-      value: case-expr #47 153:9:7-209:12:6
-        value: name-ref #31 158:9:12-159:9:13 name="c"
-        arm: case-arm #39 164:10:5-186:11:1
-          pattern: literal-pattern #32 164:10:5-165:10:6 value=int:0
-          body: expr-stmt #38 169:10:10-186:11:1
-            value: lambda #37 169:10:10-185:10:26
-              param: block-param #34 172:10:13-178:10:19 name="x"
-                type: type-ref #33 175:10:16-178:10:19 name="Int"
-              body: expr-stmt #36 182:10:23-183:10:24
-                value: name-ref #35 182:10:23-183:10:24 name="x"
-        arm: case-arm #46 190:11:5-204:12:1
-          pattern: wildcard-pattern #40 190:11:5-191:11:6
-          body: expr-stmt #45 195:11:10-204:12:1
-            value: map-lit #44 195:11:10-203:11:18
-              entry: map-entry #43 196:11:11-202:11:17
-                key: literal #41 196:11:11-199:11:14 value=string:"a"
-                value: literal #42 201:11:16-202:11:17 value=int:1
-    body: expr-stmt #59 212:13:3-255:14:1
-      value: call #58 212:13:3-254:13:45 name="puts" piped=false
-        arg: binary #57 217:13:8-253:13:44 op=plus op-span=239:13:30-240:13:31
-          left: invoke #52 217:13:8-238:13:29
-            target: name-ref #49 217:13:8-218:13:9 name="f"
-            arg: invoke #51 224:13:15-237:13:28
-              target: name-ref #50 224:13:15-230:13:21 name="answer"
-          right: invoke #56 241:13:32-253:13:44
-            target: name-ref #53 241:13:32-242:13:33 name="g"
-            arg: literal #54 248:13:39-249:13:40 value=int:1
-            arg: literal #55 251:13:42-252:13:43 value=int:2
+program #62 0:1:1-259:15:1
+  declaration: export-decl #61 0:1:1-259:15:1
+    declaration: function-decl #60 0:1:1-259:15:1 name="main"
+      result: type-ref #0 14:1:15-18:1:19 name="Void"
+      body: binding #2 21:2:3-27:3:1 name="c"
+        value: literal #1 25:2:7-26:2:8 value=int:3
+      body: binding #12 29:3:3-63:4:1 name="f"
+        type: type-ref #5 32:3:6-44:3:18 name="Fn"
+          arg: type-ref #3 35:3:9-38:3:12 name="Int"
+          arg: type-ref #4 40:3:14-43:3:17 name="Int"
+        value: lambda #11 47:3:21-62:3:36
+          param: block-param #6 50:3:24-51:3:25 name="x"
+          body: expr-stmt #10 55:3:29-60:3:34
+            value: binary #9 55:3:29-60:3:34 op=plus op-span=57:3:31-58:3:32
+              left: name-ref #7 55:3:29-56:3:30 name="x"
+              right: name-ref #8 59:3:33-60:3:34 name="c"
+      body: binding #16 65:4:3-84:5:1 name="answer"
+        value: lambda #15 74:4:12-83:4:21
+          body: expr-stmt #14 79:4:17-81:4:19
+            value: literal #13 79:4:17-81:4:19 value=int:42
+      body: binding #30 86:5:3-147:9:1 name="g"
+        value: lambda #29 90:5:7-146:8:4
+          param: block-param #18 93:5:10-99:5:16 name="a"
+            type: type-ref #17 96:5:13-99:5:16 name="Int"
+          param: block-param #20 101:5:18-107:5:24 name="b"
+            type: type-ref #19 104:5:21-107:5:24 name="Int"
+          body: binding #24 115:6:5-129:7:1 name="total"
+            value: binary #23 123:6:13-128:6:18 op=plus op-span=125:6:15-126:6:16
+              left: name-ref #21 123:6:13-124:6:14 name="a"
+              right: name-ref #22 127:6:17-128:6:18 name="b"
+          body: expr-stmt #28 133:7:5-143:8:1
+            value: binary #27 133:7:5-142:7:14 op=multiply op-span=139:7:11-140:7:12
+              left: name-ref #25 133:7:5-138:7:10 name="total"
+              right: literal #26 141:7:13-142:7:14 value=int:2
+      body: binding #48 149:9:3-210:13:1 name="h"
+        value: case-expr #47 153:9:7-209:12:6
+          value: name-ref #31 158:9:12-159:9:13 name="c"
+          arm: case-arm #39 164:10:5-186:11:1
+            pattern: literal-pattern #32 164:10:5-165:10:6 value=int:0
+            body: expr-stmt #38 169:10:10-186:11:1
+              value: lambda #37 169:10:10-185:10:26
+                param: block-param #34 172:10:13-178:10:19 name="x"
+                  type: type-ref #33 175:10:16-178:10:19 name="Int"
+                body: expr-stmt #36 182:10:23-183:10:24
+                  value: name-ref #35 182:10:23-183:10:24 name="x"
+          arm: case-arm #46 190:11:5-204:12:1
+            pattern: wildcard-pattern #40 190:11:5-191:11:6
+            body: expr-stmt #45 195:11:10-204:12:1
+              value: map-lit #44 195:11:10-203:11:18
+                entry: map-entry #43 196:11:11-202:11:17
+                  key: literal #41 196:11:11-199:11:14 value=string:"a"
+                  value: literal #42 201:11:16-202:11:17 value=int:1
+      body: expr-stmt #59 212:13:3-255:14:1
+        value: call #58 212:13:3-254:13:45 name="puts" piped=false
+          arg: binary #57 217:13:8-253:13:44 op=plus op-span=239:13:30-240:13:31
+            left: invoke #52 217:13:8-238:13:29
+              target: name-ref #49 217:13:8-218:13:9 name="f"
+              arg: invoke #51 224:13:15-237:13:28
+                target: name-ref #50 224:13:15-230:13:21 name="answer"
+            right: invoke #56 241:13:32-253:13:44
+              target: name-ref #53 241:13:32-242:13:33 name="g"
+              arg: literal #54 248:13:39-249:13:40 value=int:1
+              arg: literal #55 251:13:42-252:13:43 value=int:2

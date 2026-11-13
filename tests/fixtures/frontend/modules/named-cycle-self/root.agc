@@ -1,4 +1,4 @@
 import {main} from "root"
 
-export def main() -> Void
+def main() -> Void
 end

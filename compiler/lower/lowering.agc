@@ -28,10 +28,20 @@ import Stmt from "lower_stmt"
 import {BUILTIN_STRUCTS} from "lower_tables"
 
 ## The result of lowering: the program, or the first problem (the file it is in comes with it).
-export enum Lowered
+enum Lowered
   Done(Ir.Program)
   Failed(Failure.Problem)
 end
+
+## Lowers a linked program that the checker accepted.
+def lower(linked: Linker.Linked, checked: Checker.Checked) -> Lowered
+  result = run(linked, checked)
+  return Lowered.Done(result.unwrap!) if result.ok?
+
+  Lowered.Failed(Failure.unpack(result.message))
+end
+
+private
 
 # A function or constant of the program with the file it is declared in.
 struct Located
@@ -66,14 +76,6 @@ struct Scanned
   type_names: List[String]
   type_ids: List[Int]
   covered: Set[Int]
-end
-
-## Lowers a linked program that the checker accepted.
-export def lower(linked: Linker.Linked, checked: Checker.Checked) -> Lowered
-  result = run(linked, checked)
-  return Lowered.Done(result.unwrap!) if result.ok?
-
-  Lowered.Failed(Failure.unpack(result.message))
 end
 
 def run(linked: Linker.Linked, checked: Checker.Checked) -> Result[Ir.Program]

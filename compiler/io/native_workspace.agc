@@ -6,17 +6,19 @@ import NativeArtifact from "../packages/native_artifact"
 import Engine from "native_artifact"
 import Host from "host"
 
-# The deadline of a cached artifact verification (no network): the receipt and member reads and hashes.
-NATIVE_TIMEOUT_MS = 30_000
-
 ## The workspace of this machine, with `std_source` as the reader of the std/ sources and `native_artifact`
 ## verifying the cache.
-export def workspace_with(std_source: Fn[String, Result[String]]) -> Workspace.Workspace
+def workspace_with(std_source: Fn[String, Result[String]]) -> Workspace.Workspace
   Host.workspace_with(std_source).with(native_artifact: &native_cached)
 end
 
 ## The workspace of this machine for a run with `--stdlib DIR`.
-export def workspace() -> Workspace.Workspace = workspace_with(&no_std_source)
+def workspace() -> Workspace.Workspace = workspace_with(&no_std_source)
+
+private
+
+# The deadline of a cached artifact verification (no network): the receipt and member reads and hashes.
+NATIVE_TIMEOUT_MS = 30_000
 
 def no_std_source(name: String) -> Result[String] = error("this workspace carries no std sources")
 

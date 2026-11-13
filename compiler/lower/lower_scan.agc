@@ -13,7 +13,7 @@ import AstWalk from "../syntax/ast_walk"
 ## names of the type recorded at x's id, so lowering.agc's top_names reads only its top. regexes are the regex literals
 ## of a function body: each one reads the constant regex_constant names, which lowering.agc makes for it, so a literal
 ## is compiled once.
-export struct Scan
+struct Scan
   consts: List[String]
   calls: List[String]
   written: List[String]
@@ -24,23 +24,23 @@ export struct Scan
 end
 
 ## The scan of the statements of a function body, and of the types it writes.
-export def scan_body(body: List[Ast.Stmt], watched: Set[String]) -> Scan
+def scan_body(body: List[Ast.Stmt], watched: Set[String]) -> Scan
   work: List[AstWalk.Node] = body.map do |stmt: Ast.Stmt| AstWalk.Node.Stmt(stmt) end
   walk(work, watched, empty(), true)
 end
 
 ## The scan of the initializer of a constant. A regex literal there is built with the constant, so the scan goes into
 ## its call.
-export def scan_value(value: Ast.Expr, watched: Set[String]) -> Scan
+def scan_value(value: Ast.Expr, watched: Set[String]) -> Scan
   walk([AstWalk.Node.Expr(value)], watched, empty(), false)
 end
 
 ## The linked name of the constant that holds a regex literal of a function body. `#` keeps it apart from every name a
 ## program can write.
-export def regex_constant(node: Ast.RegexLit) -> String = "regex##{node.id}"
+def regex_constant(node: Ast.RegexLit) -> String = "regex##{node.id}"
 
 ## The watched names a type annotation writes, nested names included.
-export def written_in(ref: Ast.TypeRef, watched: Set[String]) -> List[String]
+def written_in(ref: Ast.TypeRef, watched: Set[String]) -> List[String]
   found: List[String] = []
   if watched.include?(ref.name)
     found = [ref.name]
@@ -54,7 +54,7 @@ export def written_in(ref: Ast.TypeRef, watched: Set[String]) -> List[String]
 end
 
 ## The watched names the signature of a function writes: its parameters and result.
-export def written_signature(decl: Ast.FunctionDecl, watched: Set[String]) -> List[String]
+def written_signature(decl: Ast.FunctionDecl, watched: Set[String]) -> List[String]
   found = written_in(decl.result, watched)
   for param in decl.params
     found = found.concat(written_in(param.type, watched))
@@ -62,6 +62,8 @@ export def written_signature(decl: Ast.FunctionDecl, watched: Set[String]) -> Li
 
   found
 end
+
+private
 
 def empty() -> Scan = Scan(consts: [], calls: [], written: [], type_names: [], type_ids: [], covered: [], regexes: [])
 

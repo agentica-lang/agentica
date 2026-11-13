@@ -1,4 +1,4 @@
-program #58 0:1:1-477:22:1
+program #62 0:1:1-477:22:1
   module "json-codec.agc"
     declaration: struct-decl #4 0:1:1-50:5:1 name="Reading"
       field: field-decl #1 17:2:3-31:3:1 name="label"
@@ -32,7 +32,7 @@ program #58 0:1:1-477:22:1
       result: type-ref #28 244:14:15-248:14:19 name="Void"
       body: binding #30 251:15:3-273:16:1 name="codec"
         value: field-access #29 259:15:11-272:15:24 name="codec" type=Codec(Struct(Reading)) resolved=codec("Reading", members(label, value))
-          target: type-expression #88 259:15:11-266:15:18 name="Reading"
+          target: type-expression #92 259:15:11-266:15:18 name="Reading"
       body: binding #35 275:16:3-343:17:1 name="reading"
         value: field-access #34 285:16:13-342:16:70 name="unwrap!" type=Struct(Reading) resolved=call("Result.unwrap!", Result(Struct(Reading)))
           target: call #33 285:16:13-334:16:62 name="read_as" piped=false type=Result(Struct(Reading))

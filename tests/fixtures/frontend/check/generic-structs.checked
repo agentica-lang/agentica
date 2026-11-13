@@ -1,4 +1,4 @@
-program #57 0:1:1-373:23:1
+program #61 0:1:1-373:23:1
   module "generic-structs.agc"
     declaration: struct-decl #6 0:1:1-51:5:1 name="Box" type-parameters=["T"]
       field: field-decl #1 16:2:3-25:3:1 name="value"

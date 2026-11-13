@@ -6,35 +6,37 @@ import Wire from "bytecode_bytes"
 
 ## The entries added so far. index maps a key to the number of its first item. count is the number of items: an entry
 ## is one item, except a run of spans, which is one item for each span.
-export struct Pool
+struct Pool
   index: Map[String, Int]
   chunks: Wire.Chunks
   count: Int
 end
 
 ## A pool and the number of an item of it.
-export struct Interned
+struct Interned
   pool: Pool
   id: Int
 end
 
 ## A pool with no entry.
-export def empty() -> Pool = Pool(index: {}, chunks: Wire.start(), count: 0)
+def empty() -> Pool = Pool(index: {}, chunks: Wire.start(), count: 0)
 
 ## The pool with a new entry for the key: its bytes, and how many items it adds. The first item of the entry is
 ## numbered pool.count of the pool before.
-export def add(pool: Pool, key: String, bytes: List[Int], items: Int) -> Pool
+def add(pool: Pool, key: String, bytes: List[Int], items: Int) -> Pool
   Pool(index: pool.index.put(key, pool.count), chunks: Wire.add(pool.chunks, bytes), count: pool.count + items)
 end
 
 ## The number of the first item of the entry for the key, or none when the pool has no such entry. Callers build the
 ## bytes of an entry only after this gives none, so a key that is already there costs no bytes.
-export def find(pool: Pool, key: String) -> Optional[Int] = pool.index.get(key)
+def find(pool: Pool, key: String) -> Optional[Int] = pool.index.get(key)
 
 ## The item of an entry with one item, added when the key is new: its number, and the pool that holds it.
-export def intern(pool: Pool, key: String, bytes: List[Int]) -> Interned
+def intern(pool: Pool, key: String, bytes: List[Int]) -> Interned
   found = find(pool, key)
   return Interned(pool: pool, id: found.unwrap!) if found.some?
 
   Interned(pool: add(pool, key, bytes, 1), id: pool.count)
 end
+
+private

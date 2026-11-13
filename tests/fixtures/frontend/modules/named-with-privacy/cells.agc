@@ -1,15 +1,17 @@
-export struct Cell
+struct Cell
   n: Int
 end
 
-export struct Other
+struct Other
   n: Int
 end
+
+def cell() -> Cell
+  return Cell(n: 1)
+end
+
+private
 
 struct Secret
   n: Int
-end
-
-export def cell() -> Cell
-  return Cell(n: 1)
 end

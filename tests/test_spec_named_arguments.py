@@ -94,8 +94,8 @@ MODULE_CASES = [
      "CHECK-UNKNOWN-ARGUMENT", "shfit: 1"),
 ]
 
-GEO = (POINT.replace("struct", "export struct")
-       + "export def scale(p: Point, by: Int = 2, shift: Int = 0) -> Point = Point(x: p.x * by + shift)\n")
+GEO = (POINT
+       + "def scale(p: Point, by: Int = 2, shift: Int = 0) -> Point = Point(x: p.x * by + shift)\n")
 
 
 def module_program(title, body, *_):

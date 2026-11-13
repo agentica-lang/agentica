@@ -7,32 +7,29 @@ import Problems from "../diagnostics/problem"
 import Source from "../syntax/source"
 import QueryOptions from "query_options"
 
-# The most digits of a line or a column: nine always fit an Int.
-MAX_DIGITS = 9
-
 ## A position asked for: the file, as typed, and a line and a column, both at least 1.
-export struct Asked
+struct Asked
   file: String
   line: Int
   column: Int
 end
 
 ## The position of a word, or why the word is not one.
-export enum Parsed
+enum Parsed
   Ready(Asked)
   Refused(Problems.Problem)
 end
 
 ## Where a position falls in the text: on a character, with its offset, or outside the text, with the span at the end
 ## of the line it is past, or at the end of the text when the line does not exist.
-export enum Located
+enum Located
   At(Int)
   Outside(Source.Span)
 end
 
 ## Reads `FILE:LINE:COL`. The last two colons end the file name, so a name that holds colons (`C:\src\a.agc`) works.
 ## `usage` is the usage line of the command, given as the help of QUERY-USAGE.
-export def parse(word: String, usage: String) -> Parsed
+def parse(word: String, usage: String) -> Parsed
   parts = word.split(":")
   return Parsed.Refused(QueryOptions.refusal("#{word} is not FILE:LINE:COL", usage)) if parts.size < 3
 
@@ -48,7 +45,7 @@ end
 
 ## Where `line` and `column` fall in `text`. A column on the line break, or past it, is outside, at the end of its
 ## line; a line past the last is outside, at the end of the text.
-export def locate(text: String, line: Int, column: Int) -> Located
+def locate(text: String, line: Int, column: Int) -> Located
   lines = text.split("\n")
   return Located.Outside(point(0, 1, 1)) if lines.size == 0
 
@@ -69,13 +66,13 @@ export def locate(text: String, line: Int, column: Int) -> Located
 end
 
 ## The span of the one character at `line` and `column`, which is at `offset`.
-export def character(offset: Int, line: Int, column: Int) -> Source.Span
+def character(offset: Int, line: Int, column: Int) -> Source.Span
   here = Source.Position(offset: offset, line: line, column: column)
   Source.Span(start: here, stop: Source.Position(offset: offset + 1, line: line, column: column + 1))
 end
 
 ## QUERY-NO-EXPRESSION for the position `asked`: it is on no expression or name. `span` is where the diagnostic points.
-export def no_expression(asked: Asked, span: Source.Span) -> Diag.Diagnostic
+def no_expression(asked: Asked, span: Source.Span) -> Diag.Diagnostic
   Diag.fail(
     "QUERY-NO-EXPRESSION",
     "no expression at line #{asked.line}, column #{asked.column}",
@@ -83,6 +80,11 @@ export def no_expression(asked: Asked, span: Source.Span) -> Diag.Diagnostic
     Diag.Help.Hint("put the position on a token of an expression; agentica outline lists the declarations"),
   )
 end
+
+private
+
+# The most digits of a line or a column: nine always fit an Int.
+MAX_DIGITS = 9
 
 # The empty span at the end of a line.
 def point(offset: Int, line: Int, column: Int) -> Source.Span

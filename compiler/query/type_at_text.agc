@@ -7,7 +7,7 @@ import Model from "../analysis/model"
 import DiagnosticModel from "../diagnostics/diagnostic_model"
 
 ## The lines of the answer for the expression in the file of its position.
-export def text(found: Model.TypeAt) -> String
+def text(found: Model.TypeAt) -> String
   type = found.type
   if type == ""
     type = "?"
@@ -19,6 +19,8 @@ export def text(found: Model.TypeAt) -> String
   definition = found.definition[0]
   "#{head}\n#{definition.file}:#{start(definition.name_range)} #{definition.kind} #{definition.name}\n"
 end
+
+private
 
 # `line:column-line:column`, the end exclusive.
 def range(part: DiagnosticModel.Region) -> String = "#{start(part)}-#{part.stop.line}:#{part.stop.column}"

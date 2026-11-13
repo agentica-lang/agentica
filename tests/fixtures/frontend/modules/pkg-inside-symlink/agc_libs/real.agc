@@ -1,4 +1,3 @@
-export def read() -> String
+def read() -> String
   return "real"
 end
-

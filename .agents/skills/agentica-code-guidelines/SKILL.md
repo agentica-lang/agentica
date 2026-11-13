@@ -64,8 +64,8 @@ Change style only in code you touch. Restyle untouched code separately.
   `def`; then `private` on its own line, with a blank line before and after;
   then the private part in the same order. Sort imports by path; put callers
   before helpers within a group.
-- Use `private`, not `export`, for new files: the API goes above it. Keep
-  public only the names used by other files. Keep one topic per file; split
+- The API goes above `private`. Keep public only the names used by other
+  files. Keep one topic per file; split
   files that grow into several topics.
 - A struct whose fields other modules must not touch (a socket, a counter
   that must stay in step) puts them after a `private` line in its body, with a
@@ -80,7 +80,7 @@ Change style only in code you touch. Restyle untouched code separately.
   don't alias a short, clear type.
 - The first `##` block, then a blank line, is the module doc. Document as
   little as possible (KISS; implicit over explicit). Only public code gets
-  `##`: a public `def`, `struct` or `enum` (every `stdlib/` export needs
+  `##`: a public `def`, `struct` or `enum` (every public `stdlib/` name needs
   one; `tests/test_stdlib_docs.py` checks it), saying what it returns or is,
   not how. A private `def` never gets `##` (one `#` comment when it needs a
   note). A field or variant gets a note only when its name does not say

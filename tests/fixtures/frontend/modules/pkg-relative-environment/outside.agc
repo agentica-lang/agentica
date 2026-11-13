@@ -1,4 +1,3 @@
-export def read() -> Int
+def read() -> Int
   return 1
 end
-

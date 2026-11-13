@@ -13,11 +13,8 @@ import Problems from "../diagnostics/problem"
 import Lint from "../lint/lint"
 import CliCheck from "cli_check"
 
-# The usage line of `lint`, given as the help of QUERY-USAGE.
-USAGE = "usage: agentica lint [PATH...] [--json] [--strict]"
-
 ## What linting one file gave. `file` is the path as it was typed or listed.
-export enum Entry
+enum Entry
   Clean(String)
   Suggested(String, List[Problems.Problem])
   Unparsed(String, Problems.Problem)
@@ -25,10 +22,10 @@ export enum Entry
 end
 
 ## The usage line of `agentica lint`.
-export def usage() -> String = USAGE
+def usage() -> String = USAGE
 
 ## The entry of the file `file` whose text is `text`.
-export def entry(file: String, text: String) -> Entry
+def entry(file: String, text: String) -> Entry
   case Lint.check(file, text)
     Diag.Outcome.Failed(diagnostic) -> Entry.Unparsed(file, Front.stage_problem(file, diagnostic))
     Diag.Outcome.Done(found) ->
@@ -40,7 +37,7 @@ end
 
 ## The exit status of a run: 2 when a file could not be read, else 1 when a file did not parse, else 1 with `strict`
 ## and any suggestion, else 0.
-export def status(entries: List[Entry], strict: Bool) -> Int
+def status(entries: List[Entry], strict: Bool) -> Int
   if entries.any? do |entry: Entry| unreadable?(entry) end
     return 2
   elsif entries.any? do |entry: Entry| unparsed?(entry) end
@@ -53,7 +50,7 @@ export def status(entries: List[Entry], strict: Bool) -> Int
 end
 
 ## The lines of the suggestions of one file: `file:line:column CODE message`, and its help under it.
-export def suggestions_text(found: List[Problems.Problem]) -> String
+def suggestions_text(found: List[Problems.Problem]) -> String
   lines: List[String] = []
   for problem in found
     start = problem.span.start
@@ -69,7 +66,7 @@ end
 
 ## The last line of a run: that every file is fine, how many suggestions the files hold, or, when a file did not parse
 ## or could not be read, that the run failed (the suggestions of the other files follow after a `;`).
-export def summary_text(entries: List[Entry]) -> String
+def summary_text(entries: List[Entry]) -> String
   total = suggestions(entries)
   unparsed = entries.select(&unparsed?).size
   unreadable = entries.select(&unreadable?).size
@@ -92,7 +89,7 @@ end
 ## The JSON document of a run: `ok` (no suggestion and no diagnostic), the number of files `checked` and of
 ## `suggestions`, and `files`, an entry for each file in order with its `file`, `ok` and its `suggestions` (diagnostic
 ## objects with a LINT- code) or, when it did not parse or read, its `diagnostic`.
-export def json_text(entries: List[Entry]) -> String
+def json_text(entries: List[Entry]) -> String
   clean = entries.all? do |entry: Entry| clean?(entry) end
   document = JSON.object({
     "ok": JSON.from(clean),
@@ -103,6 +100,11 @@ export def json_text(entries: List[Entry]) -> String
 
   "#{JSON.encode(document)}\n"
 end
+
+private
+
+# The usage line of `lint`, given as the help of QUERY-USAGE.
+USAGE = "usage: agentica lint [PATH...] [--json] [--strict]"
 
 def json_entry(entry: Entry) -> Map[String, JSON.Value]
   case entry

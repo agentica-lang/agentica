@@ -6,12 +6,14 @@ import Text from "text"
 import Tokens from "token"
 
 ## Returns the tokens of the text, one per line, or the line of the first lexing problem.
-export def lex_text(text: String) -> String
+def lex_text(text: String) -> String
   case Lexer.lex(text)
     Diag.Outcome.Done(tokens) -> tokens.map(&token_line).join("\n")
     Diag.Outcome.Failed(problem) -> Text.diagnostic_line(problem)
   end
 end
+
+private
 
 def value_text(token: Tokens.Token) -> String
   case token.value

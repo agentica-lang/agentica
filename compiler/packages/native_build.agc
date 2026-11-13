@@ -29,45 +29,17 @@ import PackageHash from "package_hash"
 import Toml from "std/toml"
 import Reader from "toml_read"
 
-BUILD_KEYS = ["sources", "defines", "libs"]
-# The folder of the package that holds the sources (the one of `file` entries).
-NATIVE_FOLDER = "native"
-MAX_SOURCES = 256
-MAX_DEFINES = 64
-MAX_LIBS = 32
-MAX_NAME = 128
-MAX_VALUE = 256
-# The most files and folders the walk of native/ takes; the build key reads each file.
-MAX_FILES = 4096
-MAX_FOLDERS = 1024
-# The first letter of a define and the others; a value and a library name.
-DEFINE_FIRST = Set.new("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_".split(""))
-DEFINE_REST = Set.new("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_".split(""))
-WORD_CHARACTERS = Set.new("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.+-".split(""))
-# The first line of the build key; change it when the key or the flags change, so no old build is reused.
-KEY_FORMAT = "agentica-native-build-1"
-# The helps of a native/ that a build cannot read safely.
-UNLISTED = "make the folder readable by this user"
-LINKED = "put the file itself in native/, not a link to it"
-SPECIAL = "remove the pipe, socket or device from native/"
-
 ## The `build` table of a library: the sources (paths in native/, as written), the defines (`NAME` or `NAME=VALUE`)
 ## and the libraries to link (`m` for `-lm`), in the order of the file.
-export struct Build
+struct Build
   sources: List[String]
   defines: List[String]
   libs: List[String]
 end
 
-# The files of native/ that a fetched package builds from and their checked bytes, at the same index.
-struct Pinned
-  files: List[String]
-  contents: List[Bytes]
-end
-
 ## Reads `build = { sources = [...], defines = [...], libs = [...] }` at `path` (`native.NAME.build`). `sources` is
 ## required (1 to 256), the others are optional; a failure is the reading's code at the key path of the item.
-export def parse(reading: Reader.Reading, value: Toml.Value, path: String) -> Result[Build]
+def parse(reading: Reader.Reading, value: Toml.Value, path: String) -> Result[Build]
   entries = try Reader.table(reading, value, path)
   try Reader.known_keys(reading, entries, BUILD_KEYS, path)
   if !entries.has_key?("sources")
@@ -87,7 +59,7 @@ end
 ## The request for the build of `library` from the package folder `root` (a real path), for the system `os`. `pinned`
 ## is the locked hash of a fetched package, "" for one read in place; `optional` is the library's `optional` key. Its
 ## files are not listed yet: `listed` does that when a file first uses the library, so an unused one costs nothing.
-export def request(
+def request(
   library: String,
   build: Build,
   root: String,
@@ -119,7 +91,7 @@ end
 ## 4096 files or 1024 folders, is PKG-NATIVE-BUILD at `native.NAME.build`. A fetched package (`pinned`) has instead
 ## the files of native/ that its hash covers, with their bytes (pinned_files): a package that cannot be read is
 ## PKG-NATIVE-BUILD there, and one whose bytes are not the locked ones is PKG-HASH-MISMATCH.
-export def listed(workspace: Workspace.Workspace, request: Workspace.BuildRequest) -> Result[Workspace.BuildRequest]
+def listed(workspace: Workspace.Workspace, request: Workspace.BuildRequest) -> Result[Workspace.BuildRequest]
   pinned = try pinned_files(workspace, request)
   files = pinned.files
   if request.pinned == ""
@@ -144,7 +116,7 @@ end
 ## It is `native-build/unbuilt/` in the build cache, which nothing makes, and whose libraries the bytecode cache reads
 ## before it stores a program: one it cannot read stores none, so the next run tries the build again. With no cache
 ## (no HOME), it is the package's native/ folder, which holds the sources.
-export def unbuilt_path(request: Workspace.BuildRequest) -> String
+def unbuilt_path(request: Workspace.BuildRequest) -> String
   base = Paths.join(request.root, NATIVE_FOLDER)
   if request.cache_root != ""
     base = Paths.join(Paths.join(request.cache_root, "native-build"), "unbuilt")
@@ -154,7 +126,7 @@ export def unbuilt_path(request: Workspace.BuildRequest) -> String
 end
 
 ## The file name of the built library of `name` on `system`, as the VM opens it.
-export def output_name(name: String, system: String) -> String
+def output_name(name: String, system: String) -> String
   if system == "windows"
     return "#{name}.dll"
   elsif system == "macos"
@@ -168,7 +140,7 @@ end
 ## sources (absolute paths in the package) and the libraries. `include` is the folder that holds agentica_native.h.
 ## A module links nothing of `agentica` (the VM passes it a table), so an undefined symbol is an error at link time on
 ## Linux (`-z defs`) and macOS (the default of its linker, which warns that `-undefined error` is deprecated).
-export def arguments(request: Workspace.BuildRequest, include: String, output: String) -> List[String]
+def arguments(request: Workspace.BuildRequest, include: String, output: String) -> List[String]
   found = ["-std=c11", "-O2", "-fvisibility=hidden", "-I#{include}"]
   found = found.concat(request.defines.map do |define: String| "-D#{define}" end)
   if request.system == "windows"
@@ -188,7 +160,7 @@ end
 ## The text the build key covers, from the request: the format, the library, the system, the table as written and
 ## `digests`, the SHA-256 (hex) of each file of `request.files` in the same order. The machine adds the compiler, its
 ## version and target, and the header the binary carries, then hashes the whole.
-export def key_text(request: Workspace.BuildRequest, digests: List[String]) -> String
+def key_text(request: Workspace.BuildRequest, digests: List[String]) -> String
   lines = [KEY_FORMAT, "library #{request.library}", "system #{request.system}"]
   lines = lines.concat(request.sources.map do |source: String| "source #{source}" end)
   lines = lines.concat(request.defines.map do |define: String| "define #{define}" end)
@@ -204,12 +176,7 @@ end
 ## include any of them. Only that folder is walked, with an explicit stack, and never through a link: native/ itself
 ## must be a real folder (a link or a file in its place, in any case of the name, is refused), and a link, a pipe or a
 ## device anywhere in it is refused. A package with no native/ has no files.
-export def native_files(
-  workspace: Workspace.Workspace,
-  root: String,
-  file: String,
-  key: String,
-) -> Result[List[String]]
+def native_files(workspace: Workspace.Workspace, root: String, file: String, key: String) -> Result[List[String]]
   found: List[String] = []
   top = workspace.list_folder.call(root)
   return error(refused(file, key, "cannot list the package folder: #{top.message}", UNLISTED)) if !top.ok?
@@ -254,6 +221,36 @@ export def native_files(
   end
 
   ok(found.sort)
+end
+
+private
+
+BUILD_KEYS = ["sources", "defines", "libs"]
+# The folder of the package that holds the sources (the one of `file` entries).
+NATIVE_FOLDER = "native"
+MAX_SOURCES = 256
+MAX_DEFINES = 64
+MAX_LIBS = 32
+MAX_NAME = 128
+MAX_VALUE = 256
+# The most files and folders the walk of native/ takes; the build key reads each file.
+MAX_FILES = 4096
+MAX_FOLDERS = 1024
+# The first letter of a define and the others; a value and a library name.
+DEFINE_FIRST = Set.new("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_".split(""))
+DEFINE_REST = Set.new("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_".split(""))
+WORD_CHARACTERS = Set.new("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.+-".split(""))
+# The first line of the build key; change it when the key or the flags change, so no old build is reused.
+KEY_FORMAT = "agentica-native-build-1"
+# The helps of a native/ that a build cannot read safely.
+UNLISTED = "make the folder readable by this user"
+LINKED = "put the file itself in native/, not a link to it"
+SPECIAL = "remove the pipe, socket or device from native/"
+
+# The files of native/ that a fetched package builds from and their checked bytes, at the same index.
+struct Pinned
+  files: List[String]
+  contents: List[Bytes]
 end
 
 # The files of native/ that the hash of a fetched package covers and their bytes, once all the bytes the hash covers

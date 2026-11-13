@@ -1,13 +1,13 @@
 extern "libm.so.6"
   ## The cosine.
-  export def cos(x: C.Double) -> C.Double
+  def cos(x: C.Double) -> C.Double
 
   def labs(n: C.Long) -> C.Long
 end
 
 extern "/opt/lib/my peer.so"
   ## A connection.
-  export resource Conn, free: peer_close
+  resource Conn, free: peer_close
   def peer_open(path: C.String) -> Conn
   def peer(a: C.Int32, b: C.Bool, s: C.String) -> C.String
   def send(conn: Conn, data: C.Bytes, n: C.Int32) -> C.Pointer
@@ -17,7 +17,7 @@ extern "/opt/lib/my peer.so"
   ## Runs on the compute pool.
   compute def crunch(n: C.Int64) -> C.Double
   ## Gives a connection and a count as out parameters.
-  export def peer_accept(port: C.Int32, out conn: Conn, out count: C.Int64) -> C.Int32
+  def peer_accept(port: C.Int32, out conn: Conn, out count: C.Int64) -> C.Int32
   def peer_split(x: C.Double, out whole: C.Double) -> Void
   ## Variadic, under another C name.
   def peer_vsum(kinds: C.String, out n: C.Int32, ..., a: C.Int32, b: C.Double) -> C.Double = "peer_vmix"
@@ -31,7 +31,7 @@ extern "/opt/lib/my peer.so"
   compute def session_open(fn: C.Function, path: C.String, out s: Session, free: C.Function) -> C.Int32
   def session_named(path: C.String, free: C.Function) -> Session
   ## A C struct passed by value.
-  export struct Pair
+  struct Pair
     x: C.Int32
     y: C.Int32 = 0
   end
@@ -48,7 +48,7 @@ extern "/opt/lib/my peer.so"
   resource Handle, free_ref: handle_close
   def handle_open(out handle: Handle) -> C.Int32
   ## A C function pointer that C calls.
-  export callback Visit(arg: C.Pointer, n: C.UInt32, name: C.String, x: C.Float) -> C.Int32
+  callback Visit(arg: C.Pointer, n: C.UInt32, name: C.String, x: C.Float) -> C.Int32
   callback Done(arg: C.Pointer) -> Void
   def peer_walk(visit: Visit, done: Done, arg: C.Pointer) -> C.Int32
   def peer_log(level: C.Int32, ..., visit: Visit) -> Void

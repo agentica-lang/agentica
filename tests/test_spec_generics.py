@@ -270,7 +270,7 @@ RULES = {
         declared("fns = [&id]", "puts(first_or(fns, &id))", header=FIRST_OR + ID), "CHECK-TYPE-MISMATCH",
         "first_or(fns, &id)"),
     "a call is no constant expression": (
-        "export LIMIT = first_or([1], 2)\n\n" + FIRST_OR + main("puts(1)"), "CHECK-CONSTANT-EXPRESSION",
+        "LIMIT = first_or([1], 2)\n\n" + FIRST_OR + main("puts(1)"), "CHECK-CONSTANT-EXPRESSION",
         "first_or([1], 2)"),
     "a function reference where the Fn type is known": (
         declared("f: Fn[List[Int], Int, Int] = &first_or", "puts(f.call([], 3))"), None, None),
@@ -289,14 +289,12 @@ RULES = {
 }
 
 LIB = (
-    "export struct Pool[T]\n  items: List[T]\nend\n\n"
-    "export def first_or[T](xs: List[T], fallback: T) -> T\n"
-    "  if xs.length == 0\n    return fallback\n  end\n\n  return xs[0]\n"
-    "end\n\n"
-    "export def new[T](items: List[T]) -> Pool[T]\n  return Pool(items: items)\nend\n\n"
-    "export def with[T, R](pool: Pool[T], body: Fn[T, Result[R]]) -> Result[R]\n"
-    '  if pool.items.length == 0\n    return error("empty pool")\n  end\n\n  return body.call(pool.items[0])\n'
-    "end\n"
+    ("struct Pool[T]\n  items: List[T]\nend\n\n"
+     "def first_or[T](xs: List[T], fallback: T) -> T\n  if xs.length == 0\n    return fallback\n  end\n\n"
+     "  return xs[0]\nend\n\n"
+     "def new[T](items: List[T]) -> Pool[T]\n  return Pool(items: items)\nend\n\n"
+     'def with[T, R](pool: Pool[T], body: Fn[T, Result[R]]) -> Result[R]\n  if pool.items.length == 0\n    return error("empty pool")\n  end\n\n'
+     "  return body.call(pool.items[0])\nend\n")
 )
 
 MODULE_RULES = {
@@ -468,7 +466,7 @@ def test_codec_rules(batch, name):
 
 def test_codec_is_reserved_as_an_import_alias(agentica_check):
     program = 'import Codec from "m"\n\n' + main("puts(1)")
-    found = agentica_check({"m.agc": "export def f() -> Int\n  return 1\nend\n", "main.agc": program})
+    found = agentica_check({"m.agc": "def f() -> Int\n  return 1\nend\n", "main.agc": program})
     assert found["code"] == "CHECK-REDEFINED-NAME"
     assert covered(program, found["range"]).startswith('import Codec from "m"')
     assert found["help"]
@@ -476,9 +474,9 @@ def test_codec_is_reserved_as_an_import_alias(agentica_check):
 
 def test_a_codec_crosses_modules(agentica_check):
     lib = (
-        "export struct User\n  name: String\nend\n\n"
-        "export def users() -> Codec[User]\n  return User.codec\nend\n\n"
-        "export def show[T](codec: Codec[T], value: T) -> String\n  return codec.encode(value)\nend\n"
+        ("struct User\n  name: String\nend\n\n"
+         "def users() -> Codec[User]\n  return User.codec\nend\n\n"
+         "def show[T](codec: Codec[T], value: T) -> String\n  return codec.encode(value)\nend\n")
     )
     program = 'import M from "m"\n\n' + main('u = M.users().decode("{}").unwrap!', "puts(M.show(M.users(), u))")
     assert_rule(agentica_check({"m.agc": lib, "main.agc": program}), program, None, None)

@@ -13,7 +13,7 @@ import Types from "../syntax/types"
 
 ## The value of a `const` instruction. Void and Nil are the values of those types; Bytes is the UTF-8 bytes of its
 ## text (`"text".bytes` on a literal), a Bytes constant that the VM makes once when it loads the program.
-export enum Imm
+enum Imm
   Void
   Nil
   Bool(Bool)
@@ -25,7 +25,7 @@ end
 
 ## One instruction, or a label. file is the index in Program.sources of the file the spans are in: a Span has no file
 ## in compiler/, and the spans of one instruction are always in one file.
-export struct Instr
+struct Instr
   op: String
   args: List[Int]
   imm: Imm
@@ -36,7 +36,7 @@ end
 
 ## One function of the table: a declared function, a kept constant, `<start>` or a block. The span is the one of the
 ## declaration (the program's for `<start>`), in the file at index file.
-export struct Function
+struct Function
   name: String
   params: Int
   captures: Int
@@ -48,7 +48,7 @@ end
 
 ## A struct of the table. decodable says that JSON.decode may build it, and types then lists its field types in field
 ## order.
-export struct StructDef
+struct StructDef
   name: String
   fields: List[String]
   decodable: Bool
@@ -56,14 +56,14 @@ export struct StructDef
 end
 
 ## One variant of an enum, with the number of its payload items.
-export struct VariantDef
+struct VariantDef
   name: String
   size: Int
 end
 
 ## An enum of the table. The variants of all enums are numbered one after the other in table order. decodable says that
 ## JSON.decode may build it, and types then lists the payload types of all its variants, one variant after the other.
-export struct EnumDef
+struct EnumDef
   name: String
   variants: List[VariantDef]
   decodable: Bool
@@ -73,7 +73,7 @@ end
 ## A source file of the program, in the order the spans refer to it: the canonical path (std/NAME.agc for a standard
 ## module), the name the bytecode stores it under (the path from the folder of the root file, or `key@version/path` for
 ## a file of a package) and the text.
-export struct SourceFile
+struct SourceFile
   file: String
   name: String
   text: String
@@ -83,7 +83,7 @@ end
 ## function the VM starts: `main`, or `<start>` when globals is above zero. The span is the root file's. written maps
 ## the linker prefix of a std/ module ("@3::") to the alias the program imports it with ("HTTP"), so the bytecode names
 ## its records and enums as written (HTTP.Download).
-export struct Program
+struct Program
   sources: List[SourceFile]
   structs: List[StructDef]
   enums: List[EnumDef]
@@ -96,14 +96,14 @@ end
 
 ## True when the source file at index file is a file of the prelude: the functions lowered from it are the prelude
 ## functions, which the bytecode flags and the VM reports at the call of the user.
-export def prelude_file?(program: Program, file: Int) -> Bool = program.sources[file].file.start_with?(PRELUDE_PREFIX)
+def prelude_file?(program: Program, file: Int) -> Bool = program.sources[file].file.start_with?(PRELUDE_PREFIX)
 
 ## The instruction with no immediate and no builtin name.
-export def instr(op: String, args: List[Int], file: Int, spans: List[Source.Span]) -> Instr
+def instr(op: String, args: List[Int], file: Int, spans: List[Source.Span]) -> Instr
   Instr(op: op, args: args, imm: Imm.Void, name: "", file: file, spans: spans)
 end
 
 ## The label with that id.
-export def label(id: Int, file: Int) -> Instr
-  Instr(op: "label", args: [id], imm: Imm.Void, name: "", file: file, spans: [])
-end
+def label(id: Int, file: Int) -> Instr = Instr(op: "label", args: [id], imm: Imm.Void, name: "", file: file, spans: [])
+
+private

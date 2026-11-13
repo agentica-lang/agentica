@@ -14,7 +14,7 @@ from tests.agentica_test import cli, run
 from tests.spec_support import check_many
 
 LIB = """## A connection.
-export struct Conn
+struct Conn
   id: Int
   peer: String
 
@@ -25,7 +25,7 @@ export struct Conn
   timeout_ms: Int = 5
 end
 
-export struct Job
+struct Job
   name: String
 
   private
@@ -33,12 +33,12 @@ export struct Job
   run: Fn[Int, Int]
 end
 
-export enum Slot
+enum Slot
   Empty
   Held(Conn)
 end
 
-export struct Box[T]
+struct Box[T]
   label: String
 
   private
@@ -46,19 +46,19 @@ export struct Box[T]
   value: T
 end
 
-export def open(id: Int) -> Conn = Conn(id: id, peer: "p", secret: "s#{id}")
+def open(id: Int) -> Conn = Conn(id: id, peer: "p", secret: "s#{id}")
 
-export def secret_of(c: Conn) -> String = c.with(secret: c.secret + "!", timeout_ms: 1).secret
+def secret_of(c: Conn) -> String = c.with(secret: c.secret + "!", timeout_ms: 1).secret
 
-export def codec() -> Codec[Conn] = Conn.codec
+def codec() -> Codec[Conn] = Conn.codec
 
-export def encode(c: Conn) -> String = JSON.encode(c) + Conn.members.size.to_s
+def encode(c: Conn) -> String = JSON.encode(c) + Conn.members.size.to_s
 
-export def job() -> Job = Job(name: "j", run: ->(x: Int) { x + 1 })
+def job() -> Job = Job(name: "j", run: ->(x: Int) { x + 1 })
 
-export def box[T](value: T) -> Box[T] = Box(label: "b", value: value)
+def box[T](value: T) -> Box[T] = Box(label: "b", value: value)
 
-export def dump[T](value: T) -> String = JSON.encode(value)
+def dump[T](value: T) -> String = JSON.encode(value)
 """
 
 USES = """import L from "lib"
@@ -78,7 +78,7 @@ end
 """
 
 BLOCK = """module Net
-  export struct Sock
+  struct Sock
     fd: Int
 
     private
@@ -86,9 +86,9 @@ BLOCK = """module Net
     key: String
   end
 
-  export def make() -> Sock = Sock(fd: 1, key: "k")
+  def make() -> Sock = Sock(fd: 1, key: "k")
 
-  export def key_of(s: Sock) -> String = s.with(key: "z").key + JSON.encode(s) + Sock.codec.members.size.to_s
+  def key_of(s: Sock) -> String = s.with(key: "z").key + JSON.encode(s) + Sock.codec.members.size.to_s
 end
 
 def main() -> Void
@@ -110,7 +110,7 @@ FILE_STRUCT = """struct Conn
 end
 
 module Inner
-  export struct Key
+  struct Key
     id: Int
 
     private
@@ -118,11 +118,11 @@ module Inner
     key: String
   end
 
-  export def make() -> Key = Key(id: 1, key: "k")
+  def make() -> Key = Key(id: 1, key: "k")
 end
 
 module Pool
-  export def peek(c: Conn) -> String = %s
+  def peek(c: Conn) -> String = %s
 end
 
 def main() -> Void
@@ -169,7 +169,7 @@ CASES = [
     ("a module block: encode", block("puts(JSON.encode(s))"), "CHECK-PRIVATE-FIELD", (18, 20), (18, 21)),
     ("a block reads a struct of its file", FILE_STRUCT % "c.secret", None, None, None),
     ("a struct of a block is private to the block", FILE_STRUCT % "Inner.make().key", "CHECK-PRIVATE-FIELD",
-     (22, 53), (22, 56)),
+     (22, 46), (22, 49)),
     ("a re-export keeps the declaring module",
      {"main.agc": 'import F from "facade"\n\ndef main() -> Void\n  puts(F.open(1).secret)\nend\n', "lib.agc": LIB,
       "facade.agc": 'import L from "lib"\n\nexport L.Conn\nexport L.open\n'},

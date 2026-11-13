@@ -1,6 +1,8 @@
 ## The Map methods of the compiler prelude (see list.agc). K is the key type and V the value type. Both functions walk
 ## the keys in insertion order, taken once before the loop, and call their callback once for each entry.
 
+private
+
 def each(map: Map[K, V], block: Fn[K, V, Void]) -> Void
   keys = map.keys
   for key in keys

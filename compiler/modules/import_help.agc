@@ -6,7 +6,7 @@ import Declarations from "declarations"
 
 ## The help of CHECK-IMPORT-NAME for member, which the module key does not export: the fixed text for the std/logger
 ## error, or the did-you-mean over the exports (a private name is never suggested).
-export def unknown_import_help(key: String, exports: Map[String, Declarations.Kind], member: String) -> Diag.Help
+def unknown_import_help(key: String, exports: Map[String, Declarations.Kind], member: String) -> Diag.Help
   if key == "std/logger.agc" and member == "error"
     return Diag.Help.Hint("the function for the error level is Logger.err; error is a reserved name")
   end
@@ -16,3 +16,5 @@ export def unknown_import_help(key: String, exports: Map[String, Declarations.Ki
     none -> Diag.Help.NoHelp
   end
 end
+
+private

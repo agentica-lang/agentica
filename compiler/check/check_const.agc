@@ -20,11 +20,33 @@ import Variables from "check_variables"
 
 ## What checking the constants leaves: the context with the type of every constant, the state with the types of the
 ## initializers, and the linked names of the constants in initialization order.
-export struct Done
+struct Done
   cx: State.Cx
   st: State.St
   order: List[String]
 end
+
+## Orders and checks the constants of the program (the declarations of the linked modules, in order). A program without
+## constants gives its context and state back. The modules of `kept` were checked by an earlier run that the context
+## and the state already hold (their constants are not read again, but they take their place in the order).
+def check_all(cx: State.Cx, st: State.St, modules: List[Linker.LinkedModule], kept: Set[String]) -> Result[Done]
+  entries = collect(modules, kept)
+  return ok(Done(cx: cx, st: st, order: [])) if entries.size == 0
+
+  order = try order_of(cx, st, entries)
+  current = Done(cx: cx, st: st, order: [])
+  for index in order
+    if entries[index].kept
+      current = current.with(order: current.order.push(entries[index].decl.name))
+    else
+      current = try check_one(current, entries[index])
+    end
+  end
+
+  ok(current)
+end
+
+private
 
 # A constant with the file and the module prefix it is declared in, and whether an earlier check already did it
 # (check_reuse.agc).
@@ -40,26 +62,6 @@ struct Visit
   index: Int
   reads: List[Ast.ConstRef]
   next: Int
-end
-
-## Orders and checks the constants of the program (the declarations of the linked modules, in order). A program without
-## constants gives its context and state back. The modules of `kept` were checked by an earlier run that the context
-## and the state already hold (their constants are not read again, but they take their place in the order).
-export def check_all(cx: State.Cx, st: State.St, modules: List[Linker.LinkedModule], kept: Set[String]) -> Result[Done]
-  entries = collect(modules, kept)
-  return ok(Done(cx: cx, st: st, order: [])) if entries.size == 0
-
-  order = try order_of(cx, st, entries)
-  current = Done(cx: cx, st: st, order: [])
-  for index in order
-    if entries[index].kept
-      current = current.with(order: current.order.push(entries[index].decl.name))
-    else
-      current = try check_one(current, entries[index])
-    end
-  end
-
-  ok(current)
 end
 
 # The constants of std/regex come first: a regex literal in a constant calls its compile, which reads them, and the

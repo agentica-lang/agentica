@@ -8,6 +8,8 @@
 ## the last. Nothing here calls concat, take, drop, reverse, sort, sort_by, Map.keys or Map.values inside a loop or a
 ## callback (tests/test_stdlib_prelude.py reads this file for them), so no function is quadratic.
 
+private
+
 def find(list: List[A], block: Fn[A, Bool]) -> Result[A]
   for item in list
     return ok(item) if block.call(item)

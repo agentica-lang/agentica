@@ -10,12 +10,9 @@
 import Diag from "../diagnostics/diagnostic"
 import Source from "source"
 
-# The bytes of U+FFFD, which stand for each byte that starts no valid sequence.
-REPLACEMENT = String.from_code(65_533).bytes
-
 ## What reading a source file gives: its text; the place of the first invalid byte (the position the lexer would
 ## have, counting the characters before it); or the system's message when the file cannot be read.
-export enum Read
+enum Read
   Text(String)
   Invalid(Source.Position)
   Unreadable(String)
@@ -23,7 +20,7 @@ end
 
 ## The text of a whole source given as bytes (the standard input of `check --stdin`), by the rules of a file: strict
 ## UTF-8, and the place of the first invalid byte when it is not.
-export def decode(data: Bytes) -> Read
+def decode(data: Bytes) -> Read
   decoded = String.from_bytes(data)
   return Read.Text(decoded.unwrap!) if decoded.ok?
 
@@ -31,7 +28,7 @@ export def decode(data: Bytes) -> Read
 end
 
 ## The LEX-INVALID-UTF8 diagnostic for the invalid byte at `at`: a span of length 1 that starts there.
-export def invalid_utf8(at: Source.Position) -> Diag.Diagnostic
+def invalid_utf8(at: Source.Position) -> Diag.Diagnostic
   stop = Source.Position(offset: at.offset + 1, line: at.line, column: at.column + 1)
   help = Diag.Help.Hint("source files are UTF-8: save the file as UTF-8 text")
   Diag.fail("LEX-INVALID-UTF8", "source file is not valid UTF-8", Source.Span(start: at, stop: stop), help)
@@ -39,7 +36,7 @@ end
 
 ## The text of `data` with U+FFFD for each byte at which no valid sequence starts, and
 ## decoding going on at the next byte: the rule of a UTF-8 decoder with an error character.
-export def replace_invalid(data: Bytes) -> String
+def replace_invalid(data: Bytes) -> String
   # One pass over the bytes: each run of valid sequences is cut out once, each bad byte becomes U+FFFD, and the parts
   # are joined and decoded once.
   parts: List[Bytes] = []
@@ -63,7 +60,7 @@ end
 ## How many leading bytes of `data` end on a character boundary. A lead byte in the last three bytes whose
 ## sequence is not complete yet stays out, so the next chunk can finish it. Anything else (an invalid lead byte,
 ## a stray continuation byte) is left in: String.from_bytes then rejects it.
-export def complete_prefix(data: Bytes) -> Int
+def complete_prefix(data: Bytes) -> Int
   size = data.size
   back = 1
   while back <= 3 and back <= size
@@ -84,7 +81,7 @@ end
 
 ## The position of the first invalid sequence of `head`, which did not decode, after the already decoded `parts`.
 ## It is found by hand (the error path only).
-export def error_position(parts: List[String], head: Bytes) -> Source.Position
+def error_position(parts: List[String], head: Bytes) -> Source.Position
   # The characters, lines and columns before it are counted in loops: the decoded chunks by their newlines, and the
   # valid bytes of `head` by their lead bytes. The text before it is never built in one piece.
   bad = first_invalid(head)
@@ -126,6 +123,11 @@ export def error_position(parts: List[String], head: Bytes) -> Source.Position
 
   Source.Position(offset: offset, line: line, column: since_newline + 1)
 end
+
+private
+
+# The bytes of U+FFFD, which stand for each byte that starts no valid sequence.
+REPLACEMENT = String.from_code(65_533).bytes
 
 # The length of the sequence a lead byte starts, or 0 when it cannot start one.
 def lead_width(byte: Int) -> Int

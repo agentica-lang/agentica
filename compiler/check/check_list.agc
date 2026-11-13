@@ -11,7 +11,7 @@ import Stmt from "check_stmt"
 import CheckTypes from "check_types"
 
 ## Checks a call of a List builtin by its rule. Any other rule is the caller's.
-export def check_list_rule(cx: State.Cx, st: State.St, site: State.Site, rule: Model.Rule) -> Result[State.Out]
+def check_list_rule(cx: State.Cx, st: State.St, site: State.Site, rule: Model.Rule) -> Result[State.Out]
   case rule
     Model.Rule.ListSize ->
       out = try Args.list_argument(cx, st, site, T.Type.Unknown)
@@ -30,7 +30,7 @@ export def check_list_rule(cx: State.Cx, st: State.St, site: State.Site, rule: M
 end
 
 ## The type written on parameter number index of a block, or Unknown when it has none.
-export def annotated_parameter(cx: State.Cx, st: State.St, block: Ast.BlockLit, index: Int) -> Result[T.Type]
+def annotated_parameter(cx: State.Cx, st: State.St, block: Ast.BlockLit, index: Int) -> Result[T.Type]
   return ok(T.Type.Unknown) if block.params.size <= index
 
   case block.params[index].type
@@ -38,6 +38,8 @@ export def annotated_parameter(cx: State.Cx, st: State.St, block: Ast.BlockLit, 
     none -> ok(T.Type.Unknown)
   end
 end
+
+private
 
 # List.sort: a list of Int, Float or String.
 def check_sort(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]

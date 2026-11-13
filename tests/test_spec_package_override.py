@@ -19,7 +19,7 @@ CHANNELS = "owner/channels"
 
 
 def bond_module(version):
-    return 'export def version() -> String\n  return "bond %s"\nend\n' % version
+    return 'def version() -> String\n  return "bond %s"\nend\n' % version
 
 
 MAIN = ('import Bond from "pkg/bond/bond"\nimport Channels from "pkg/channels/channels"\n\n'
@@ -36,8 +36,8 @@ def publish_channels(remotes, bond_entry=None):
     """channels, which depends on bond (as `bond_entry` says, bond v1 by default) and prints what bond says."""
     entry = bond_entry or '{ git = "%s", tag = "v1" }' % remotes.url(BOND)
     manifest = 'name = "channels"\n\n[dependencies]\nbond = %s\n' % entry
-    module = ('import Bond from "pkg/bond/bond"\n\nexport def describe() -> String\n'
-              '  return "channels over " + Bond.version()\nend\n')
+    module = ('import Bond from "pkg/bond/bond"\n\n'
+               'def describe() -> String\n  return "channels over " + Bond.version()\nend\n')
     remotes.publish(CHANNELS, {"agentica.toml": manifest, "channels.agc": module}, tag="v1")
 
 

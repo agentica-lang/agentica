@@ -26,19 +26,9 @@ import Workspace from "../modules/workspace"
 import CacheFiles from "cache_files"
 import RandomName from "random_name"
 
-# The folder of the entries, in the build folder.
-CHECK_FOLDER = "check"
-
-# The first line of the head of an entry; change it when the layout of a file changes.
-FORMAT = "agentica-check-cache-1"
-
-# The characters of the digest in the name of an entry, and its ending.
-NAME_CHARS = 32
-ENTRY_END = ".chk"
-
 ## Where the entries of one run are, what their head must say, and whether the folder exists and may be trusted now
 ## (`present`; a folder that is missing is made by the first write).
-export struct Plan
+struct Plan
   build: String
   folder: String
   head: String
@@ -51,7 +41,7 @@ end
 ## `settings` with the check cache of the project of the root file `root` in its Workspace, or `settings` as they are
 ## when there is no cache to use: `wanted` is false for `--no-cache`, the front end was not started by the binary or
 ## reads a stdlib/ folder, or the folder is not one that can be trusted.
-export def attach(settings: Env.Settings, root: String, wanted: Bool) -> Env.Settings
+def attach(settings: Env.Settings, root: String, wanted: Bool) -> Env.Settings
   planned = plan(settings, root, wanted)
   return settings if !planned.ok?
 
@@ -59,7 +49,7 @@ export def attach(settings: Env.Settings, root: String, wanted: Bool) -> Env.Set
 end
 
 ## The plan for the root file `root` (as typed).
-export def plan(settings: Env.Settings, root: String, wanted: Bool) -> Result[Plan]
+def plan(settings: Env.Settings, root: String, wanted: Bool) -> Result[Plan]
   return error("the cache is off") if !wanted or settings.self_path == ""
 
   case settings.std
@@ -67,6 +57,18 @@ export def plan(settings: Env.Settings, root: String, wanted: Bool) -> Result[Pl
     Env.StdProvider.Embedded -> planned(settings, root)
   end
 end
+
+private
+
+# The folder of the entries, in the build folder.
+CHECK_FOLDER = "check"
+
+# The first line of the head of an entry; change it when the layout of a file changes.
+FORMAT = "agentica-check-cache-1"
+
+# The characters of the digest in the name of an entry, and its ending.
+NAME_CHARS = 32
+ENTRY_END = ".chk"
 
 # The plan of a front end that is the binary's: the site of the project, the user of the process and the state of the
 # folders. A root that cannot be resolved, or has a line feed in its path, has no plan.

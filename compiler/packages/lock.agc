@@ -15,21 +15,10 @@ import NativeArtifact from "native_artifact"
 import Toml from "std/toml"
 import Reader from "toml_read"
 
-# The keys of the lock, of a [[package]] table and of a [[native-artifact]] table.
-TOP_KEYS = ["version", "package", "native-artifact"]
-PACKAGE_KEYS = ["name", "git", "subdir", "tag", "ref", "commit", "hash", "workspace", "path", "override"]
-GIT_KEYS = ["git", "subdir", "tag", "ref", "commit", "hash", "workspace"]
-ARTIFACT_KEYS = ["package", "library", "system", "url", "sha256", "member"]
-
-LOCK_FORMAT = 1
-HASH_PREFIX = "sha256:"
-HASH_LENGTH = 71
-HEX = Set.new("0123456789abcdef".split(""))
-
 ## One locked package. commit is the full git commit; hash is `sha256:` and 64 hex digits. A workspace member (member
 ## is true) and a package of a `path` (source.path is not "") have "" for both: their files are the ones in the
 ## folder. override is true when the root manifest overrides the name.
-export struct Locked
+struct Locked
   name: String
   source: GitSource.Source
   commit: String
@@ -40,7 +29,7 @@ end
 
 ## One locked native artifact: the lock key of the package ("" for the project root), the library and the
 ## system, with the archive URL, its expected SHA-256 and the member to use. One row is one alias on one system.
-export struct Artifact
+struct Artifact
   package: String
   library: String
   system: String
@@ -50,14 +39,14 @@ export struct Artifact
 end
 
 ## A read lock. packages and artifacts are in the order of the file.
-export struct Lock
+struct Lock
   file: String
   packages: List[Locked]
   artifacts: List[Artifact]
 end
 
 ## Reads the lock at file.
-export def read(workspace: Workspace.Workspace, file: String) -> Result[Lock]
+def read(workspace: Workspace.Workspace, file: String) -> Result[Lock]
   reading = Reader.Reading(file: file, code: "PKG-LOCK-INVALID")
   text = try Reader.read_text(workspace, reading)
   root = try Reader.parse(reading, text)
@@ -109,7 +98,7 @@ end
 ## sorted by name, then one `[[native-artifact]]` for each, sorted by (package, library, system), with the keys in
 ## a fixed order. The same entries always give the same bytes, so a lock that did not change makes no diff, and
 ## `read` gives back what was written. A lock with no packages and no artifacts is `version = 1` alone.
-export def encode(packages: List[Locked], artifacts: List[Artifact]) -> String
+def encode(packages: List[Locked], artifacts: List[Artifact]) -> String
   sorted = packages.sort_by do |locked| locked.name end
   tables = sorted.map do |locked| package_table(locked) end
   ordered = artifacts.sort_by do |artifact| sort_key(artifact) end
@@ -135,10 +124,10 @@ end
 
 ## Whether the files of the package are read in place, with no fetch, no cache and no hash: a workspace member or a
 ## `path`.
-export def in_place?(locked: Locked) -> Bool = locked.member or GitSource.local?(locked.source)
+def in_place?(locked: Locked) -> Bool = locked.member or GitSource.local?(locked.source)
 
 ## The locked package with this name, or an error.
-export def find(lock: Lock, name: String) -> Result[Locked]
+def find(lock: Lock, name: String) -> Result[Locked]
   for locked in lock.packages
     return ok(locked) if locked.name == name
   end
@@ -147,7 +136,7 @@ export def find(lock: Lock, name: String) -> Result[Locked]
 end
 
 ## The locked artifact for this package, library and system, or an error. package is "" for the project root.
-export def find_artifact(lock: Lock, package: String, library: String, system: String) -> Result[Artifact]
+def find_artifact(lock: Lock, package: String, library: String, system: String) -> Result[Artifact]
   for artifact in lock.artifacts
     return ok(artifact) if artifact.package == package and artifact.library == library and artifact.system == system
   end
@@ -157,13 +146,26 @@ end
 
 ## `name@version` for the messages and the stored names of a package's files: the tag, the first characters of the
 ## commit, or `workspace` for a member.
-export def label(locked: Locked) -> String
+def label(locked: Locked) -> String
   return "#{locked.name}@workspace" if locked.member
 
   return "#{locked.name}@path" if GitSource.local?(locked.source)
 
   "#{locked.name}@#{GitSource.version_label(locked.source, locked.commit)}"
 end
+
+private
+
+# The keys of the lock, of a [[package]] table and of a [[native-artifact]] table.
+TOP_KEYS = ["version", "package", "native-artifact"]
+PACKAGE_KEYS = ["name", "git", "subdir", "tag", "ref", "commit", "hash", "workspace", "path", "override"]
+GIT_KEYS = ["git", "subdir", "tag", "ref", "commit", "hash", "workspace"]
+ARTIFACT_KEYS = ["package", "library", "system", "url", "sha256", "member"]
+
+LOCK_FORMAT = 1
+HASH_PREFIX = "sha256:"
+HASH_LENGTH = 71
+HEX = Set.new("0123456789abcdef".split(""))
 
 # The keys of a package, in the order of 05b: name, git, subdir (when there is one), tag or ref, then commit and hash,
 # or `workspace = true` for a member; name and path for a local folder. `override = true` is last.

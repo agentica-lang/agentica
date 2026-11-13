@@ -1,4 +1,4 @@
-export def go() -> Void
+def go() -> Void
   x = "open
 end
 

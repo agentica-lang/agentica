@@ -19,28 +19,9 @@ import PackageHash from "package_hash"
 import Toml from "std/toml"
 import Reader from "toml_read"
 
-# The keys the manifest knows, and those of [style] and of a dependency.
-TOP_KEYS = ["name", "agentica", "dependencies", "native", "style", "workspace", "tool"]
-STYLE_KEYS = ["max_line_width", "blank_line_after_end"]
-DEPENDENCY_KEYS = ["git", "tag", "ref", "subdir", "path", "override"]
-GIT_KEYS = ["git", "tag", "ref", "subdir"]
-PLACE_KEYS = ["file", "system", "url", "sha256", "member"]
-# The systems a native library can be named for. The key is the whole system: a macOS file is a universal binary.
-SYSTEMS = Set.new(["linux", "macos", "windows"])
-# The folder of a package that holds its native files (package_hash.agc hashes them with the .agc files).
-NATIVE_FOLDER = "native"
-# The keys of [native.NAME] that are not a system: the C sources of the library (native_build.agc), and whether the
-# package runs without it when it cannot be built.
-BUILD_KEY = "build"
-OPTIONAL_KEY = "optional"
-MAX_SYSTEM_NAME = 128
-MAX_SYSTEM_PATH = 1024
-# The most candidates a `system` list holds: each one is looked up on disk when the library is used.
-MAX_CANDIDATES = 16
-
 ## A direct dependency: the local name (the segment after `pkg/` in an import) and where it comes from. override is
 ## true when the manifest says `override = true`.
-export struct Dependency
+struct Dependency
   name: String
   source: GitSource.Source
   override: Bool
@@ -51,7 +32,7 @@ end
 ## artifact (`url`, `sha256` and `member`). Exactly one shape is present: `file` and `system` keep their meaning, and
 ## a downloaded row names the archive URL, its expected SHA-256 (64 lowercase hex digits) and the member to use from
 ## it. The other fields are "" (names is empty) when the shape does not use them.
-export struct Place
+struct Place
   system: String
   file: String
   names: List[String]
@@ -63,7 +44,7 @@ end
 ## A native library of a package: the name its `extern "name"` uses, where it is on each system it names, the
 ## `build` table that compiles it from the package's C sources (native_build.agc), if any, and `optional`: when true, a
 ## build that fails is a warning and the program runs without the library.
-export struct NativeLibrary
+struct NativeLibrary
   name: String
   places: List[Place]
   build: Optional[NativeBuild.Build]
@@ -73,7 +54,7 @@ end
 ## A read manifest. name is "" when the file has none, and so is agentica, the oldest Agentica version the package
 ## works with; max_line_width is 0 when it sets no limit; blank_line_after_end is false unless `[style]` turns the rule
 ## on.
-export struct Manifest
+struct Manifest
   file: String
   name: String
   agentica: String
@@ -83,37 +64,24 @@ export struct Manifest
   blank_line_after_end: Bool
 end
 
-# The values of [style]: what the project asks of its files.
-struct Style
-  max_line_width: Int
-  blank_line_after_end: Bool
-end
-
 ## Reads the manifest at file, with no running version to check its `agentica` key against.
-export def read(workspace: Workspace.Workspace, file: String) -> Result[Manifest]
-  read_checked(workspace, file, "", "")
-end
+def read(workspace: Workspace.Workspace, file: String) -> Result[Manifest] = read_checked(workspace, file, "", "")
 
 ## Reads the manifest at file of the package `package` ("" for the project) and checks its `agentica` key against the
 ## running version `running` (PKG-AGENTICA-TOO-OLD; "" checks nothing) before anything else in the file.
-export def read_checked(
-  workspace: Workspace.Workspace,
-  file: String,
-  package: String,
-  running: String,
-) -> Result[Manifest]
+def read_checked(workspace: Workspace.Workspace, file: String, package: String, running: String) -> Result[Manifest]
   reading = Reader.Reading(file: file, code: "PKG-MANIFEST-INVALID")
   text = try Reader.read_text(workspace, reading)
   parse_checked(file, text, package, running)
 end
 
 ## Reads the manifest text, which is said to come from file. The writer checks the text it is about to save with this.
-export def parse(file: String, text: String) -> Result[Manifest] = parse_checked(file, text, "", "")
+def parse(file: String, text: String) -> Result[Manifest] = parse_checked(file, text, "", "")
 
 ## Refuses what only the root project's manifest may say, in the manifest of a package (fetched, or a workspace member
 ## read in place): a `path` dependency, which cannot be published, and `override = true`, which the packages of a tree
 ## cannot impose on each other. A failure is PKG-ROOT-ONLY at `dependencies.<name>.path` or `.override`.
-export def require_package(manifest: Manifest) -> Result[Void]
+def require_package(manifest: Manifest) -> Result[Void]
   reading = Reader.Reading(file: manifest.file, code: "PKG-ROOT-ONLY")
   for dependency in manifest.dependencies
     here = Reader.child("dependencies", dependency.name)
@@ -135,7 +103,7 @@ end
 ## running version `running` as `read_checked` checks it: PKG-MANIFEST-INVALID for a value that is not a version,
 ## PKG-AGENTICA-TOO-OLD for a newer one. The workspace root is checked with this for the project of each member
 ## (members.agc).
-export def checked_agentica(
+def checked_agentica(
   file: String,
   root: Map[String, Toml.Value],
   owner: AgenticaVersion.Owner,
@@ -148,7 +116,7 @@ export def checked_agentica(
 end
 
 ## The dependency with this name, or an error.
-export def find(manifest: Manifest, name: String) -> Result[Dependency]
+def find(manifest: Manifest, name: String) -> Result[Dependency]
   for dependency in manifest.dependencies
     return ok(dependency) if dependency.name == name
   end
@@ -157,11 +125,11 @@ export def find(manifest: Manifest, name: String) -> Result[Dependency]
 end
 
 ## The local names of the dependencies, in the order of the file.
-export def names(manifest: Manifest) -> List[String] = manifest.dependencies.map do |dependency| dependency.name end
+def names(manifest: Manifest) -> List[String] = manifest.dependencies.map do |dependency| dependency.name end
 
 ## Whether the manifest declares a downloaded native artifact on any system: a `[native]` row with
 ## `url`+`sha256`+`member`. Such a project needs a lock even with no dependencies.
-export def has_downloaded(manifest: Manifest) -> Bool
+def has_downloaded(manifest: Manifest) -> Bool
   for library in manifest.natives
     for place in library.places
       return true if place.url != ""
@@ -169,6 +137,33 @@ export def has_downloaded(manifest: Manifest) -> Bool
   end
 
   false
+end
+
+private
+
+# The keys the manifest knows, and those of [style] and of a dependency.
+TOP_KEYS = ["name", "agentica", "dependencies", "native", "style", "workspace", "tool"]
+STYLE_KEYS = ["max_line_width", "blank_line_after_end"]
+DEPENDENCY_KEYS = ["git", "tag", "ref", "subdir", "path", "override"]
+GIT_KEYS = ["git", "tag", "ref", "subdir"]
+PLACE_KEYS = ["file", "system", "url", "sha256", "member"]
+# The systems a native library can be named for. The key is the whole system: a macOS file is a universal binary.
+SYSTEMS = Set.new(["linux", "macos", "windows"])
+# The folder of a package that holds its native files (package_hash.agc hashes them with the .agc files).
+NATIVE_FOLDER = "native"
+# The keys of [native.NAME] that are not a system: the C sources of the library (native_build.agc), and whether the
+# package runs without it when it cannot be built.
+BUILD_KEY = "build"
+OPTIONAL_KEY = "optional"
+MAX_SYSTEM_NAME = 128
+MAX_SYSTEM_PATH = 1024
+# The most candidates a `system` list holds: each one is looked up on disk when the library is used.
+MAX_CANDIDATES = 16
+
+# The values of [style]: what the project asks of its files.
+struct Style
+  max_line_width: Int
+  blank_line_after_end: Bool
 end
 
 # The `agentica` key comes first, right after the TOML parse: a manifest made for a newer Agentica may hold keys and

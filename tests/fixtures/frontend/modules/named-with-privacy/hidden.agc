@@ -1,7 +1,7 @@
-export struct Behind
+struct Behind
   n: Int
 end
 
-export def behind() -> Behind
+def behind() -> Behind
   return Behind(n: 1)
 end

@@ -1,4 +1,4 @@
-program #9 0:1:1-80:6:1
+program #10 0:1:1-80:6:1
   module "root.agc"
     declaration: function-decl #8 22:2:1-79:5:1 name="main"
       result: type-ref #1 36:2:15-40:2:19 name="Void"
@@ -9,39 +9,39 @@ program #9 0:1:1-80:6:1
               element: literal #2 67:3:27-68:3:28 value=int:1
               element: literal #3 70:3:30-71:3:31 value=int:2
   module "lib.agc"
-    declaration: struct-decl #2 0:1:1-25:4:1 name="@2::Pair"
-      field: field-decl #1 14:2:3-21:3:1 name="n"
-        type: type-ref #0 17:2:6-20:2:9 name="Int"
-    declaration: function-decl #27 33:5:8-163:9:1 name="@2::doubled"
-      param: param #5 45:5:20-58:5:33 name="xs"
-        type: type-ref #4 49:5:24-58:5:33 name="List"
-          arg: type-ref #3 54:5:29-57:5:32 name="Int"
-      result: type-ref #7 63:5:38-72:5:47 name="List"
-        arg: type-ref #6 68:5:43-71:5:46 name="Int"
-      body: binding #17 75:6:3-119:7:1 name="pairs"
-        value: method-call #16 83:6:11-118:6:46 name="map"
-          target: name-ref #8 83:6:11-85:6:13 name="xs"
-          arg: block-lit #15 90:6:18-118:6:46
-            param: block-param #9 94:6:22-95:6:23 name="x"
-            body: expr-stmt #14 97:6:25-114:6:42
-              value: construct #13 97:6:25-114:6:42 type="@2::Pair"
-                arg: named-arg #12 102:6:30-113:6:41 name="n"
-                  value: call #11 105:6:33-113:6:41 name="@2::twice" piped=false
-                    arg: name-ref #10 111:6:39-112:6:40 name="x"
-      body: return-stmt #26 121:7:3-159:8:1
-        value: method-call #25 128:7:10-158:7:40 name="map"
-          target: name-ref #18 128:7:10-133:7:15 name="pairs"
-          arg: block-lit #24 138:7:20-158:7:40
-            param: block-param #20 142:7:24-149:7:31 name="p"
-              type: type-ref #19 145:7:27-149:7:31 name="@2::Pair"
-            body: expr-stmt #23 151:7:33-154:7:36
-              value: field-access #22 151:7:33-154:7:36 name="n"
-                target: name-ref #21 151:7:33-152:7:34 name="p"
-    declaration: function-decl #36 164:10:1-208:13:1 name="@2::twice"
-      param: param #30 174:10:11-180:10:17 name="n"
-        type: type-ref #29 177:10:14-180:10:17 name="Int"
-      result: type-ref #31 185:10:22-188:10:25 name="Int"
-      body: return-stmt #35 191:11:3-204:12:1
-        value: binary #34 198:11:10-203:11:15 op=multiply op-span=200:11:12-201:11:13
-          left: name-ref #32 198:11:10-199:11:11 name="n"
-          right: literal #33 202:11:14-203:11:15 value=int:2
+    declaration: function-decl #24 0:1:1-130:5:1 name="@2::doubled"
+      param: param #2 12:1:13-25:1:26 name="xs"
+        type: type-ref #1 16:1:17-25:1:26 name="List"
+          arg: type-ref #0 21:1:22-24:1:25 name="Int"
+      result: type-ref #4 30:1:31-39:1:40 name="List"
+        arg: type-ref #3 35:1:36-38:1:39 name="Int"
+      body: binding #14 42:2:3-86:3:1 name="pairs"
+        value: method-call #13 50:2:11-85:2:46 name="map"
+          target: name-ref #5 50:2:11-52:2:13 name="xs"
+          arg: block-lit #12 57:2:18-85:2:46
+            param: block-param #6 61:2:22-62:2:23 name="x"
+            body: expr-stmt #11 64:2:25-81:2:42
+              value: construct #10 64:2:25-81:2:42 type="@2::Pair"
+                arg: named-arg #9 69:2:30-80:2:41 name="n"
+                  value: call #8 72:2:33-80:2:41 name="@2::twice" piped=false
+                    arg: name-ref #7 78:2:39-79:2:40 name="x"
+      body: return-stmt #23 88:3:3-126:4:1
+        value: method-call #22 95:3:10-125:3:40 name="map"
+          target: name-ref #15 95:3:10-100:3:15 name="pairs"
+          arg: block-lit #21 105:3:20-125:3:40
+            param: block-param #17 109:3:24-116:3:31 name="p"
+              type: type-ref #16 112:3:27-116:3:31 name="@2::Pair"
+            body: expr-stmt #20 118:3:33-121:3:36
+              value: field-access #19 118:3:33-121:3:36 name="n"
+                target: name-ref #18 118:3:33-119:3:34 name="p"
+    declaration: struct-decl #27 140:8:1-165:11:1 name="@2::Pair"
+      field: field-decl #26 154:9:3-161:10:1 name="n"
+        type: type-ref #25 157:9:6-160:9:9 name="Int"
+    declaration: function-decl #35 166:12:1-210:15:1 name="@2::twice"
+      param: param #29 176:12:11-182:12:17 name="n"
+        type: type-ref #28 179:12:14-182:12:17 name="Int"
+      result: type-ref #30 187:12:22-190:12:25 name="Int"
+      body: return-stmt #34 193:13:3-206:14:1
+        value: binary #33 200:13:10-205:13:15 op=multiply op-span=202:13:12-203:13:13
+          left: name-ref #31 200:13:10-201:13:11 name="n"
+          right: literal #32 204:13:14-205:13:15 value=int:2

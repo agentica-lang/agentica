@@ -5,6 +5,33 @@
 import Util from "util"
 import Shapes from "shapes"
 
+## A choice.
+enum Choice[T, U]
+  ## First.
+  First(T)
+  Second(T, U)
+  Third
+  ## Last.
+  Fourth(List[T])
+end
+
+struct Empty
+end
+
+enum Documented
+  A
+end
+
+## Adds.
+def add(a: Int, b: Int,) -> Int
+  return a + b
+end
+
+def is_ok!() -> Void
+end
+
+private
+
 ## A point.
 struct Point
   ## Across.
@@ -15,27 +42,9 @@ struct Point
   items: List[Map[String, Int]]
 end
 
-## A choice.
-export enum Choice[T, U]
-  ## First.
-  First(T)
-  Second(T, U)
-  Third
-  ## Last.
-  Fourth(List[T])
-end
-
-export struct Empty
-end
-
 enum Plain
   A
   B
-end
-
-## Adds.
-export def add(a: Int, b: Int,) -> Int
-  return a + b
 end
 
 def none() -> Void
@@ -45,13 +54,6 @@ def with_types(a: List[Int], b: Map[String, Shapes.Shape], c: Result[Int]) -> Re
   return ok([])
 end
 
-export enum Documented
-  A
-end
-
 def ready?() -> Bool
   return true
-end
-
-export def is_ok!() -> Void
 end

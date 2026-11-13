@@ -15,6 +15,86 @@ import Types from "check_types"
 import Unused from "check_unused"
 import Variables from "check_variables"
 
+## Checks a function: its body with the parameters in scope, then that every path returns a value when the result is
+## not Void. An extern function has no body: its signature is all there is. The body of a generic function is checked
+## once, with its type parameters in scope as types that stand only for themselves.
+def check_function(cx: State.Cx, st: State.St, node: Ast.FunctionDecl) -> Result[State.St]
+  return check_function_body(cx.with(type_params: node.type_parameters), st, node) if node.type_parameters.size > 0
+
+  check_function_body(cx, st, node)
+end
+
+## Checks the statements in order. A statement that follows a terminator (return, break, next, or an if or case that
+## ends on every path) is CHECK-UNREACHABLE-CODE; it is not checked, so every error before the terminator comes first.
+def check_block(cx: State.Cx, st: State.St, statements: List[Ast.Stmt]) -> Result[State.St]
+  current = st
+  index = 0
+  while index < statements.size
+    current = try check_statement(cx, current, statements[index])
+    try check_reachable(cx, current, statements, index)
+    index += 1
+  end
+
+  ok(current)
+end
+
+## Checks the body of a block literal (do |x| ... end) against the parameter types and result type its context knows
+## (`none` and Unknown when it knows none). A known_result of Result[Unknown] says the block must give a Result whose
+## type the body decides (Slot.InferResult). The block's type is Fn(parameters, result), and it is recorded for the
+## block's id. each_receiver is the list of a List.each call, for the help of CHECK-CAPTURED-ASSIGNMENT.
+def check_block_body(
+  cx: State.Cx,
+  st: State.St,
+  block: Ast.BlockLit,
+  known_params: Optional[List[T.Type]],
+  known_result: T.Type,
+  each_receiver: Optional[Ast.Expr],
+) -> Result[State.Out]
+  check_block_in(cx, st, block, known_params, known_result, each_receiver, false)
+end
+
+## check_block_body for the block of a Lazy method when step is true: a `try` in it (not in a block nested in it) ends
+## the pipeline, whatever the block's result type (State.St.step).
+##
+## A block whose result is not known and that gives an error(...) call (Flow.gives_error?) is checked twice: a first
+## run (State.St.probe) learns the Result type from the other paths, such as an ok(...), and the second run checks the
+## block against it. The first run is the more lenient one, so a problem it finds is real and is the one reported. When
+## it finds no Result type, the block is checked as usual and the error(...) is refused.
+def check_block_in(
+  cx: State.Cx,
+  st: State.St,
+  block: Ast.BlockLit,
+  known_params: Optional[List[T.Type]],
+  known_result: T.Type,
+  each_receiver: Optional[Ast.Expr],
+  step: Bool,
+) -> Result[State.Out]
+  if !st.probe and (T.unknown?(known_result) or settling?(known_result)) and Flow.gives_error?(block.body)
+    probed = check_block_run(cx, st.with(probe: true), block, known_params, known_result, each_receiver, step)
+    case probed
+      ok(out) ->
+        learned = T.result(out.type)
+        if (T.is?(learned, "Result") or T.is?(learned, "Optional")) and !T.unknown?(T.item(learned))
+          return check_block_run(cx, st, block, known_params, learned, each_receiver, step)
+        end
+
+      error(problem) -> return error(problem)
+    end
+  end
+
+  check_block_run(cx, st, block, known_params, known_result, each_receiver, step)
+end
+
+## Checks a case that gives a value (the right side of an assignment, or after `return`): every arm ends with an
+## expression, all of one type, which is `expected` when it is known (CHECK-TYPE-MISMATCH at the arm's expression
+## otherwise). Exhaustiveness is the rule of a statement.
+def check_case_value(cx: State.Cx, st: State.St, node: Ast.CaseStmt, expected: T.Type) -> Result[State.Out]
+  done = try case_arms(cx, st, node, valued_arms(expected, false))
+  ok(State.Out(st: done.st, type: done.type))
+end
+
+private
+
 # What the arms of a case have covered so far: the variants named, the literals seen, and whether a wildcard arm came.
 # A case that gives a value (`valued`) also carries the type its arms must have, which is the expected type or else the
 # type of the first arm, and whether an arm may end with a Void expression (`completion`, the last line of a block).
@@ -49,84 +129,6 @@ end
 struct CaseDone
   st: State.St
   type: T.Type
-end
-
-## Checks a function: its body with the parameters in scope, then that every path returns a value when the result is
-## not Void. An extern function has no body: its signature is all there is. The body of a generic function is checked
-## once, with its type parameters in scope as types that stand only for themselves.
-export def check_function(cx: State.Cx, st: State.St, node: Ast.FunctionDecl) -> Result[State.St]
-  return check_function_body(cx.with(type_params: node.type_parameters), st, node) if node.type_parameters.size > 0
-
-  check_function_body(cx, st, node)
-end
-
-## Checks the statements in order. A statement that follows a terminator (return, break, next, or an if or case that
-## ends on every path) is CHECK-UNREACHABLE-CODE; it is not checked, so every error before the terminator comes first.
-export def check_block(cx: State.Cx, st: State.St, statements: List[Ast.Stmt]) -> Result[State.St]
-  current = st
-  index = 0
-  while index < statements.size
-    current = try check_statement(cx, current, statements[index])
-    try check_reachable(cx, current, statements, index)
-    index += 1
-  end
-
-  ok(current)
-end
-
-## Checks the body of a block literal (do |x| ... end) against the parameter types and result type its context knows
-## (`none` and Unknown when it knows none). A known_result of Result[Unknown] says the block must give a Result whose
-## type the body decides (Slot.InferResult). The block's type is Fn(parameters, result), and it is recorded for the
-## block's id. each_receiver is the list of a List.each call, for the help of CHECK-CAPTURED-ASSIGNMENT.
-export def check_block_body(
-  cx: State.Cx,
-  st: State.St,
-  block: Ast.BlockLit,
-  known_params: Optional[List[T.Type]],
-  known_result: T.Type,
-  each_receiver: Optional[Ast.Expr],
-) -> Result[State.Out]
-  check_block_in(cx, st, block, known_params, known_result, each_receiver, false)
-end
-
-## check_block_body for the block of a Lazy method when step is true: a `try` in it (not in a block nested in it) ends
-## the pipeline, whatever the block's result type (State.St.step).
-##
-## A block whose result is not known and that gives an error(...) call (Flow.gives_error?) is checked twice: a first
-## run (State.St.probe) learns the Result type from the other paths, such as an ok(...), and the second run checks the
-## block against it. The first run is the more lenient one, so a problem it finds is real and is the one reported. When
-## it finds no Result type, the block is checked as usual and the error(...) is refused.
-export def check_block_in(
-  cx: State.Cx,
-  st: State.St,
-  block: Ast.BlockLit,
-  known_params: Optional[List[T.Type]],
-  known_result: T.Type,
-  each_receiver: Optional[Ast.Expr],
-  step: Bool,
-) -> Result[State.Out]
-  if !st.probe and (T.unknown?(known_result) or settling?(known_result)) and Flow.gives_error?(block.body)
-    probed = check_block_run(cx, st.with(probe: true), block, known_params, known_result, each_receiver, step)
-    case probed
-      ok(out) ->
-        learned = T.result(out.type)
-        if (T.is?(learned, "Result") or T.is?(learned, "Optional")) and !T.unknown?(T.item(learned))
-          return check_block_run(cx, st, block, known_params, learned, each_receiver, step)
-        end
-
-      error(problem) -> return error(problem)
-    end
-  end
-
-  check_block_run(cx, st, block, known_params, known_result, each_receiver, step)
-end
-
-## Checks a case that gives a value (the right side of an assignment, or after `return`): every arm ends with an
-## expression, all of one type, which is `expected` when it is known (CHECK-TYPE-MISMATCH at the arm's expression
-## otherwise). Exhaustiveness is the rule of a statement.
-export def check_case_value(cx: State.Cx, st: State.St, node: Ast.CaseStmt, expected: T.Type) -> Result[State.Out]
-  done = try case_arms(cx, st, node, valued_arms(expected, false))
-  ok(State.Out(st: done.st, type: done.type))
 end
 
 # Fails at statements[index + 1] when statements[index], already checked, never falls through to it.

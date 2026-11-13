@@ -1,1 +1,1 @@
-ERROR CHECK-PRIVATE-FIELD 265:18:10-268:18:13 "the field \"key\" of \"Sock\" is private to the module that declares it" "only that module reads, sets or gives a private field; call one of its functions instead" signature="main() -> Void" file="private-field.agc"
+ERROR CHECK-PRIVATE-FIELD 244:18:10-247:18:13 "the field \"key\" of \"Sock\" is private to the module that declares it" "only that module reads, sets or gives a private field; call one of its functions instead" signature="main() -> Void" file="private-field.agc"

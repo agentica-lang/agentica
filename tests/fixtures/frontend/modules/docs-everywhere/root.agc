@@ -2,24 +2,25 @@
 
 import Lib from "lib"
 
+## An exported enum.
+enum E
+  ## A variant.
+  V
+end
+
+## An exported function.
+def api() -> Void
+end
+
+private
+
 ## A struct.
 struct S
   ## A field.
   a: Int
 end
 
-## An exported enum.
-export enum E
-  ## A variant.
-  V
-end
-
-## An exported function.
-export def api() -> Void
-end
-
 ## Main.
 def main() -> Void
   Lib.go()
 end
-

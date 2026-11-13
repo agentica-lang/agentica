@@ -1,9 +1,10 @@
-"""Every standard library module has a module doc and a doc on every export.
+"""Every standard library module has a module doc and a doc on every public declaration.
 
 The check reads the source text, so it needs no front end: a doc block is a run of lines that start with `##`
 (docs/grammar/04-lexical.md). The module doc is the first block of the file when only blank lines and `#` comments
-come before it and a blank line follows it. An export is a top-level line that starts with `export`, and its doc is the
-block on the lines directly above it; a re-export (`export Alias.Name`) takes no doc, since its doc is the original's.
+come before it and a blank line follows it. A public declaration is a top-level line above the `private` line (`def`, `struct`, `enum`, `type`, `module` or a
+constant), and its doc is the block on the lines directly above it; a re-export (`export Alias.Name`) takes no doc,
+since its doc is the original's.
 The parser rejects any other doc block (`PARSE-DETACHED-DOC`), which the examples and goldens check.
 """
 import re
@@ -13,7 +14,7 @@ import pytest
 from tests.agentica_test import ROOT
 
 STDLIB = ROOT / "stdlib"
-EXPORT = re.compile(r"^export\s(?![A-Z][A-Za-z0-9_]*\.)")
+PUBLIC = re.compile(r"^(?:(?:def|struct|enum|type|module)\s|[A-Z][A-Z0-9_]+\s*[:=])")
 
 
 def doc_text(lines):
@@ -36,10 +37,12 @@ def module_doc(lines):
 
 
 def export_docs(lines):
-    """[(line number, doc text or None)] for each top-level export."""
+    """[(line number, doc text or None)] for each public top-level declaration."""
     found = []
     for number, line in enumerate(lines):
-        if EXPORT.match(line):
+        if line == "private":
+            break
+        if PUBLIC.match(line):
             start = number
             while start > 0 and lines[start - 1].lstrip().startswith("##"):
                 start -= 1
@@ -56,7 +59,7 @@ def test_the_standard_library_has_files_to_check():
     sorted(STDLIB.rglob("*.agc")),
     ids=lambda file: str(file.relative_to(STDLIB)),
 )
-def test_every_module_has_a_module_doc_and_a_doc_on_every_export(file):
+def test_every_module_has_a_module_doc_and_a_doc_on_every_public_declaration(file):
     name = str(file.relative_to(STDLIB))
     lines = file.read_text(encoding="utf-8").split("\n")
     assert module_doc(lines), f"{name}: module doc"

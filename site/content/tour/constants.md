@@ -97,11 +97,11 @@ end
 
 ## Share a constant between files
 
-`export` makes a constant visible, and the importing file brings it in by name, like a function or a struct:
+A constant above `private` (or in a file with no `private`) is public, and the importing file brings it in by name, like a function or a struct:
 
 ```agentica {file="limits.agc"}
-export MAX = 100
-export NAMES = ["x", "y"]
+MAX = 100
+NAMES = ["x", "y"]
 ```
 
 ```agentica

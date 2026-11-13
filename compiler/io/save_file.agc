@@ -1,11 +1,8 @@
 ## Writing the bytes of a file: the front end's `compile` output and the harness of the bytecode writer.
 
-# One File.write_bytes call takes at most 1 MiB.
-PIECE = 1_048_576
-
 ## Writes the bytes to the file at `path`, which is created or truncated, in pieces of 1 MiB. Every call waits at most
 ## `timeout_ms`.
-export def bytes(path: String, data: Bytes, timeout_ms: Int) -> Result[Void]
+def bytes(path: String, data: Bytes, timeout_ms: Int) -> Result[Void]
   out = try File.open(path, "write", timeout_ms)
   rest = data
   while rest.size > 0
@@ -25,7 +22,7 @@ end
 ## replaced in one step by `File.replace`, which keeps its permission bits and writes through a symbolic link. A new
 ## file is written beside the path first and renamed into place (`Path.rename` never replaces, so a file made there
 ## meanwhile is kept); a step that fails removes what was made.
-export def replace(path: String, data: Bytes, replacing: Bool, timeout_ms: Int) -> Result[Void]
+def replace(path: String, data: Bytes, replacing: Bool, timeout_ms: Int) -> Result[Void]
   return File.replace(path, data, timeout_ms) if replacing
 
   fresh = "#{path}.new-#{System.pid()}"
@@ -40,3 +37,8 @@ export def replace(path: String, data: Bytes, replacing: Bool, timeout_ms: Int) 
 
   placed
 end
+
+private
+
+# One File.write_bytes call takes at most 1 MiB.
+PIECE = 1_048_576

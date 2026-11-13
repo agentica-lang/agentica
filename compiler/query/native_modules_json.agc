@@ -6,7 +6,7 @@ import Model from "../analysis/model"
 import DocJson from "../docs/doc_json"
 
 ## The object of the answer.
-export def json(found: Model.NativeModules) -> JSON.Value
+def json(found: Model.NativeModules) -> JSON.Value
   blocks = found.blocks.map do |block: Model.NativeBlock| block_json(found.file, block) end
   JSON.object({
     "version": JSON.from(found.version),
@@ -15,6 +15,8 @@ export def json(found: Model.NativeModules) -> JSON.Value
     "blocks": JSON.array(blocks),
   })
 end
+
+private
 
 # `api` is `{major, minor}`, the least version of the C API that has what the block declares.
 def block_json(file: String, block: Model.NativeBlock) -> JSON.Value

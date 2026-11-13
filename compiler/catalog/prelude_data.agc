@@ -8,7 +8,7 @@ import Model from "builtin_model"
 
 ## The builtins that only the prelude may call: the checker does not know them outside a prelude file, and no help or
 ## suggestion lists them.
-export PRELUDE_ONLY = [
+PRELUDE_ONLY = [
   "__fail_arg", "__lazy_channel", "__lazy_chunk_while", "__lazy_chunks", "__lazy_count", "__lazy_each", "__lazy_file",
   "__lazy_find", "__lazy_flat_map", "__lazy_group", "__lazy_list", "__lazy_map", "__lazy_produce", "__lazy_range",
   "__lazy_reduce", "__lazy_test", "__lazy_to_a", "__lazy_with_index", "__lazy_write_bytes", "__lazy_write_lines",
@@ -16,7 +16,7 @@ export PRELUDE_ONLY = [
 ]
 
 ## Every prelude function, sorted by name.
-export ROWS: List[Model.PreludeRow] = [
+ROWS: List[Model.PreludeRow] = [
   Model.PreludeRow(name: "Bytes.each", module: "bytes", limits: [], selector: "", bodies: {"": "each"}),
   Model.PreludeRow(name: "Bytes.empty?", module: "bytes", limits: [], selector: "", bodies: {"": "empty"}),
   Model.PreludeRow(name: "Channel.lazy", module: "lazy", limits: [], selector: "", bodies: {"": "from_channel"}),
@@ -213,3 +213,5 @@ export ROWS: List[Model.PreludeRow] = [
   Model.PreludeRow(name: "Range.take_while", module: "range", limits: [], selector: "", bodies: {"": "take_while"}),
   Model.PreludeRow(name: "String.empty?", module: "string", limits: [], selector: "", bodies: {"": "empty"}),
 ]
+
+private

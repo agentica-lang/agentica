@@ -1,6 +1,8 @@
 ## The Optional methods of the compiler prelude (see list.agc). A is the item type and B the type a callback gives.
 ## Each function is O(1) and calls its callback at most once.
 
+private
+
 def unwrap_or(value: Optional[A], default: A) -> A
   case value
     some(item) -> item

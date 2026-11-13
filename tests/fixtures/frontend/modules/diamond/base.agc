@@ -1,3 +1,2 @@
-export def go() -> Void
+def go() -> Void
 end
-

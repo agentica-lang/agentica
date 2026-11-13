@@ -16,7 +16,7 @@ import {
 ## (is NAME inside a std-only module) `type:WORD` (the help for an unknown type: the record and enum names, and the
 ## primitive and handle type names), `sig:NAME` (the signature of every form of NAME) or `disp:NAME` (display_name of a
 ## linked name).
-export def catalog_text(probes: List[String]) -> String
+def catalog_text(probes: List[String]) -> String
   lines: List[String] = []
   for name in ENTRIES.keys
     lines = lines.concat(builtin_lines(ENTRIES[name]))
@@ -29,6 +29,8 @@ export def catalog_text(probes: List[String]) -> String
 
   lines.join("\n")
 end
+
+private
 
 def builtin_lines(entry: Model.Builtin) -> List[String]
   forms = [entry].concat(entry.alternatives)

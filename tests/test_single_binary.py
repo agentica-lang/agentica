@@ -62,7 +62,7 @@ SPAWN = (
 STD_SOURCE = 'def main() -> Void\n  puts(FrontEnd.std_source("queue.agc").ok?)\nend\n'
 STDIN_BYTES = "def main() -> Void\n  puts(FrontEnd.stdin_bytes().ok?)\nend\n"
 HAND_OFF = "def main() -> Void\n  puts(FrontEnd.hand_off(\"a\".bytes, [], []).ok?)\nend\n"
-BROKEN_STD = '\nexport def broken() -> Int\n  return "text"\nend\n'
+BROKEN_STD = '\ndef broken() -> Int\n  return "text"\nend\n'
 INTERLEAVED = (
     'def main() -> Void\n  for i in 0...6\n    puts("out #{i}")\n    IO.warn("err #{i}")\n  end\nend\n')
 USES_STD = 'import Queue from "std/queue"\n\ndef main() -> Void\n  _ = Queue.new()\nend\n'

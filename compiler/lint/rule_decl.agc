@@ -6,7 +6,7 @@ import Rules from "rules"
 
 ## The suggestions for `decl`. An exported declaration is public, so its doc is right; so is the doc of an extern
 ## function or a C struct, which the parser makes from a block.
-export def suggestions(file: String, decl: Ast.Decl) -> List[Problems.Problem]
+def suggestions(file: String, decl: Ast.Decl) -> List[Problems.Problem]
   case decl
     Ast.Decl.Function(node) ->
       return [Rules.at(file, Rules.PRIVATE_DOC, node.name_span)] if node.doc.some? and node.native.none?
@@ -25,3 +25,5 @@ export def suggestions(file: String, decl: Ast.Decl) -> List[Problems.Problem]
     _ -> []
   end
 end
+
+private

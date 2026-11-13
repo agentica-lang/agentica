@@ -3,6 +3,32 @@
 ## spaces, and OPTIONS, the list of the options). tests/test_cli_forms.py
 ## compares them with a golden.
 
+## What a command line gets when it names `run` after other words: `agentica run` is answered before the options of the
+## command line are read, so it must be the first word.
+def run_first_text() -> String
+  "agentica: run must be the first word, before any option: agentica run [OPTIONS] -- <file.agcb> [args...]\n"
+end
+
+## What `test` says when the front end does not know the path of the binary that it has to start again.
+def test_without_binary_text() -> String
+  "agentica: the test command needs the path of the binary, which this front end was not given (--self)\n"
+end
+
+## The usage lines, each ending with a line feed.
+def usage_text() -> String = "#{USAGE.join("\n")}\n"
+
+## The summary of the commands and the core rules: the lines of `agentica help` before the namespaces, each ending with
+## a line feed.
+def summary_text() -> String = "#{SUMMARY.join("\n")}\n"
+
+## The help of `-h` and `--help`.
+def help_text() -> String
+  lines = [HELP_FIRST_LINE].concat(SUMMARY.map do |line: String| "  #{line}" end).concat(OPTIONS)
+  "#{lines.join("\n")}\n"
+end
+
+private
+
 # What a command line that names no source file gets on stderr (exit code 2), one line each.
 USAGE = [
   [
@@ -187,27 +213,3 @@ OPTIONS = [
   " Multiple single-letter switches can be combined after",
   " one `-`. For example, `-h-` is the same as `-h --`.",
 ]
-
-## What a command line gets when it names `run` after other words: `agentica run` is answered before the options of the
-## command line are read, so it must be the first word.
-export def run_first_text() -> String
-  "agentica: run must be the first word, before any option: agentica run [OPTIONS] -- <file.agcb> [args...]\n"
-end
-
-## What `test` says when the front end does not know the path of the binary that it has to start again.
-export def test_without_binary_text() -> String
-  "agentica: the test command needs the path of the binary, which this front end was not given (--self)\n"
-end
-
-## The usage lines, each ending with a line feed.
-export def usage_text() -> String = "#{USAGE.join("\n")}\n"
-
-## The summary of the commands and the core rules: the lines of `agentica help` before the namespaces, each ending with
-## a line feed.
-export def summary_text() -> String = "#{SUMMARY.join("\n")}\n"
-
-## The help of `-h` and `--help`.
-export def help_text() -> String
-  lines = [HELP_FIRST_LINE].concat(SUMMARY.map do |line: String| "  #{line}" end).concat(OPTIONS)
-  "#{lines.join("\n")}\n"
-end

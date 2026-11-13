@@ -367,7 +367,7 @@ A `private` line in a struct body, alone with a blank line before and after, mak
 
 ```agentica
 module Bank
-  export struct Account
+  struct Account
     owner: String
 
     private
@@ -375,11 +375,11 @@ module Bank
     cents: Int
   end
 
-  export def open(owner: String) -> Account = Account(owner: owner, cents: 0)
+  def open(owner: String) -> Account = Account(owner: owner, cents: 0)
 
-  export def deposit(account: Account, cents: Int) -> Account = account.with(cents: account.cents + cents)
+  def deposit(account: Account, cents: Int) -> Account = account.with(cents: account.cents + cents)
 
-  export def balance(account: Account) -> Int = account.cents
+  def balance(account: Account) -> Int = account.cents
 end
 
 def main() -> Void
@@ -398,7 +398,7 @@ Account(owner: "Ana", cents: 150)
 
 ```agentica {expect="CHECK-PRIVATE-FIELD"}
 module Bank
-  export struct Account
+  struct Account
     owner: String
 
     private
@@ -406,7 +406,7 @@ module Bank
     cents: Int
   end
 
-  export def open(owner: String) -> Account = Account(owner: owner, cents: 0)
+  def open(owner: String) -> Account = Account(owner: owner, cents: 0)
 end
 
 def main() -> Void

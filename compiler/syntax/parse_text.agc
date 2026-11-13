@@ -8,7 +8,7 @@ import Source from "source"
 import Text from "text"
 
 ## The text form of a parse and the first node id the next file can use (first_id again when the parse failed).
-export struct Printed
+struct Printed
   text: String
   next_id: Int
 end
@@ -17,7 +17,7 @@ end
 ## line of a node, by the node's id (the checker's text form adds the type of each expression this way). A file of a
 ## linked program prints ids that start at 0 inside the file, so the text does not depend on which files came before
 ## it.
-export struct Margin
+struct Margin
   indent: String
   base: Int
   notes: Map[Int, String]
@@ -26,13 +26,13 @@ end
 ## Lexes and parses a file and returns the text form of the tree, or the ERROR line of the first diagnostic. One node
 ## per line: `role: kind #id span attributes`, children indented by two spaces. The goldens are in
 ## tests/fixtures/frontend/parser/.
-export def parse_text(text: String) -> String = parse_text_from(text, 0)
+def parse_text(text: String) -> String = parse_text_from(text, 0)
 
 ## Like parse_text, with the ids of the nodes starting at first_id.
-export def parse_text_from(text: String, first_id: Int) -> String = print_from(text, first_id).text
+def parse_text_from(text: String, first_id: Int) -> String = print_from(text, first_id).text
 
 ## Like parse_text_from, and also gives Ast.next_free_id of the Program, so the next file can continue the numbering.
-export def print_from(text: String, first_id: Int) -> Printed
+def print_from(text: String, first_id: Int) -> Printed
   case Lexer.lex(text)
     Diag.Outcome.Failed(problem) -> Printed(text: Text.diagnostic_line(problem), next_id: first_id)
     Diag.Outcome.Done(tokens) ->
@@ -45,11 +45,11 @@ export def print_from(text: String, first_id: Int) -> Printed
 end
 
 ## The margin one level deeper.
-export def deeper(at: Margin) -> Margin = at.with(indent: "#{at.indent}  ")
+def deeper(at: Margin) -> Margin = at.with(indent: "#{at.indent}  ")
 
 ## The first line of a node: the indent, the role if there is one (the root has none), the kind, the id relative to the
 ## margin, the span and the attributes.
-export def head(at: Margin, role: String, kind: String, id: Int, span: Source.Span, attrs: String) -> String
+def head(at: Margin, role: String, kind: String, id: Int, span: Source.Span, attrs: String) -> String
   label = ""
   if role != ""
     label = "#{role}: "
@@ -66,7 +66,7 @@ export def head(at: Margin, role: String, kind: String, id: Int, span: Source.Sp
 end
 
 ## The label followed by the quoted text of an optional string, or the empty string when it is absent.
-export def text_attr(label: String, doc: Optional[String]) -> String
+def text_attr(label: String, doc: Optional[String]) -> String
   case doc
     some(text) -> label + Text.quote(text)
     none -> ""
@@ -75,7 +75,7 @@ end
 
 ## The text form of a parsed tree, one line per node: `role: kind #id span attributes`, children indented by two
 ## spaces.
-export def print_program(program: Ast.Program) -> List[String]
+def print_program(program: Ast.Program) -> List[String]
   lines: List[String] = [
     head(
       Margin(indent: "", base: 0, notes: {}),
@@ -95,7 +95,7 @@ export def print_program(program: Ast.Program) -> List[String]
 end
 
 ## Prints a declaration and everything under it, one line per node, after the lines already in out.
-export def print_decl(out: List[String], at: Margin, role: String, decl: Ast.Decl) -> List[String]
+def print_decl(out: List[String], at: Margin, role: String, decl: Ast.Decl) -> List[String]
   child = deeper(at)
   case decl
     Ast.Decl.Import(node) -> out.push(head(at, role, "import-decl", node.id, node.span, import_attrs(node)))
@@ -218,6 +218,8 @@ export def print_decl(out: List[String], at: Margin, role: String, decl: Ast.Dec
       print_type(lines, child, "target", node.target)
   end
 end
+
+private
 
 # ` private-at=N` for a scope with a `private` line before its declaration number N, "" for one without.
 def private_attr(mark: Optional[Ast.PrivateMark]) -> String

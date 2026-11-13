@@ -18,32 +18,29 @@ import SourceFile from "../syntax/source_file"
 import T from "../syntax/types"
 import Cache from "cache"
 
-# No file is known to follow the style rule: every file of a project that asks for it is looked at.
-NO_STYLED: Set[String] = Set.new([])
-
 ## What the root file is: it can be read as UTF-8, it cannot be read (the system's message), or it is not UTF-8
 ## (LEX-INVALID-UTF8, in that file).
-export enum Root
+enum Root
   Readable
   Unreadable(String)
   Invalid(Problems.Problem)
 end
 
 ## A program that linked and checked: what lowering, `--dump` and the diagnostics' source text read.
-export struct Checked
+struct Checked
   linked: Linker.Linked
   checked: Checker.Checked
 end
 
 ## The result of linking and checking: the program, or the first problem.
-export enum Outcome
+enum Outcome
   Done(Checked)
   Rejected(Problems.Problem)
 end
 
 ## Reads the root file once through `workspace`, so a file that cannot be read or decoded is told apart from a problem
 ## of the program. The linker reads it again; every problem names `path` as it was given.
-export def read_root(workspace: Workspace.Workspace, path: String) -> Root
+def read_root(workspace: Workspace.Workspace, path: String) -> Root
   case workspace.read_text.call(path)
     SourceFile.Read.Unreadable(message) -> Root.Unreadable(message)
     SourceFile.Read.Invalid(at) -> Root.Invalid(stage_problem(path, SourceFile.invalid_utf8(at)))
@@ -52,29 +49,29 @@ export def read_root(workspace: Workspace.Workspace, path: String) -> Root
 end
 
 ## The problem of a stage that has no file of its own (the lexer and the parser), put in `file`.
-export def stage_problem(file: String, problem: Diag.Diagnostic) -> Problems.Problem
+def stage_problem(file: String, problem: Diag.Diagnostic) -> Problems.Problem
   Problems.problem(file, "", problem.code, problem.message, problem.span, problem.help)
 end
 
 ## The problem of a linker failure: the diagnostic in its file, or at a key of agentica.toml or agentica.lock.
-export def link_problem(failure: Failure.Failure) -> Problems.Problem
+def link_problem(failure: Failure.Failure) -> Problems.Problem
   stage_problem(failure.file, failure.diagnostic).with(key_path: failure.key_path)
 end
 
 ## Links the file at `path` and checks it.
-export def check_file(path: String, settings: Env.Settings) -> Outcome = front(path, settings, true)
+def check_file(path: String, settings: Env.Settings) -> Outcome = front(path, settings, true)
 
 ## Links the file at `path` and checks it as `agentica check` and `agentica type-at` do: every rule of `check_file`
 ## except that the program declares a `main`, so a library file passes, and that an unused import or variable of the
 ## root file is not an error when `settings.unused` is false (the files it imports keep the rule). A `main` that is
 ## declared keeps its signature.
-export def query_file(path: String, settings: Env.Settings) -> Outcome = query_cached(Cache.empty(), path, settings)
+def query_file(path: String, settings: Env.Settings) -> Outcome = query_cached(Cache.empty(), path, settings)
 
 ## Like `query_file`, using the program that `cache` holds for the file when the modules it reads are the ones the
 ## program was made from. The modules are read and walked again either way, so the answer is the one `query_file`
 ## gives; `cache` only saves parsing the files that did not change and linking and checking a program that did not
 ## change.
-export def query_cached(cache: Cache.Cache, path: String, settings: Env.Settings) -> Outcome
+def query_cached(cache: Cache.Cache, path: String, settings: Env.Settings) -> Outcome
   walked = Modules.load_with(path, settings, cache.parses)
   return Outcome.Rejected(link_problem(Failure.unpack_failure(walked.message))) if !walked.ok?
 
@@ -94,7 +91,7 @@ end
 ## problem included, is the one `query_cached` gives: a problem is only given when it is in a file that was read in
 ## full, and a walk in which a stub is not vouched for is made again without stubs. After a program that checks, the
 ## modules that were checked in full are entered in the cache.
-export def query_checked(cache: Cache.Cache, path: String, settings: Env.Settings) -> Outcome
+def query_checked(cache: Cache.Cache, path: String, settings: Env.Settings) -> Outcome
   if !settings.workspace.check_cache.on or cache.roots.size > 0 or cache.parses.kept.size > 0
     return query_cached(cache, path, settings)
   end
@@ -123,7 +120,7 @@ end
 ## find it. When the file cannot be loaded or linked, `cache` is returned as it was: the question will say why. A
 ## program that does not check is kept with its first problem. The cache is the one of the session that the caller
 ## refreshes; two refreshes of one cache give two caches, and the caller keeps one (stdlib/analysis.agc).
-export def refresh(cache: Cache.Cache, path: String, settings: Env.Settings) -> Cache.Cache
+def refresh(cache: Cache.Cache, path: String, settings: Env.Settings) -> Cache.Cache
   walked = Modules.load_with(path, settings, cache.parses)
   return cache if !walked.ok?
 
@@ -145,11 +142,16 @@ end
 
 ## Checks `linked`, a program that `Linker.link_programs` made from several files, as `query_file` does: with
 ## `settings.unused` false, an unused import or variable is no error in a root.
-export def query_linked(linked: Linker.Linked, settings: Env.Settings) -> Outcome = check(linked, settings, false)
+def query_linked(linked: Linker.Linked, settings: Env.Settings) -> Outcome = check(linked, settings, false)
 
 ## The first style problem of a linked program: the files whose project asks for a rule that they break. `none` when
 ## none does. The style rules come after the type check, so a program that does not check reports that first.
-export def style_problem(linked: Linker.Linked) -> Optional[Problems.Problem] = Style.first_problem(linked, NO_STYLED)
+def style_problem(linked: Linker.Linked) -> Optional[Problems.Problem] = Style.first_problem(linked, NO_STYLED)
+
+private
+
+# No file is known to follow the style rule: every file of a project that asks for it is looked at.
+NO_STYLED: Set[String] = Set.new([])
 
 def front(path: String, settings: Env.Settings, main_required: Bool) -> Outcome
   case Linker.link_file(path, settings)

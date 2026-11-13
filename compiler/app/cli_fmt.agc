@@ -19,22 +19,19 @@ import Workspace from "../modules/workspace"
 import Manifest from "../packages/manifest"
 import Project from "../packages/project"
 
-# The usage line of `fmt`.
-USAGE = "usage: agentica fmt [--check] [PATH...]   or   agentica fmt -   or   agentica fmt --tree FILE"
-
 ## What formatting one file gives: no change, the changed text, or the diagnostic that refuses it.
-export enum Verdict
+enum Verdict
   Same
   Changed(String)
   Refused(Diag.Diagnostic)
 end
 
 ## The usage line of `agentica fmt`.
-export def usage() -> String = USAGE
+def usage() -> String = USAGE
 
 ## What formatting `text` as `settings` ask gives. A text whose bytes differ from the output is changed, so a CRLF file
 ## is.
-export def verdict(text: String, settings: Format.Settings) -> Verdict
+def verdict(text: String, settings: Format.Settings) -> Verdict
   case Format.format_text(text, settings)
     Diag.Outcome.Failed(problem) -> Verdict.Refused(problem)
     Diag.Outcome.Done(output) ->
@@ -45,12 +42,12 @@ export def verdict(text: String, settings: Format.Settings) -> Verdict
 end
 
 ## The normal form of `text`, or the diagnostic of a text that does not parse.
-export def tree(text: String) -> Diag.Outcome[String] = Format.tree_text(text)
+def tree(text: String) -> Diag.Outcome[String] = Format.tree_text(text)
 
 ## The folder of the agentica.toml whose `[style]` the file or folder `path` follows: the nearest one going up from
 ## its canonical path, "" when there is none. A file has no agentica.toml of its own, so starting at it is starting at
 ## its folder.
-export def manifest_dir(workspace: Workspace.Workspace, path: String) -> String
+def manifest_dir(workspace: Workspace.Workspace, path: String) -> String
   real = workspace.real_path.call(path)
   return Project.nearest_manifest(workspace, real.unwrap!) if real.ok?
 
@@ -59,7 +56,7 @@ end
 
 ## The settings of the files that follow the manifest in the folder `found` ("" for none: the default settings). A
 ## manifest that cannot be read or has a bad value is a packed failure, PKG-MANIFEST-INVALID.
-export def settings_of(workspace: Workspace.Workspace, found: String) -> Result[Format.Settings]
+def settings_of(workspace: Workspace.Workspace, found: String) -> Result[Format.Settings]
   return ok(Format.default_settings()) if found == ""
 
   manifest = try Manifest.read(workspace, Paths.join(found, Project.MANIFEST_FILE))
@@ -70,3 +67,8 @@ export def settings_of(workspace: Workspace.Workspace, found: String) -> Result[
 
   ok(Format.Settings(width: width, blank_line_after_end: manifest.blank_line_after_end))
 end
+
+private
+
+# The usage line of `fmt`.
+USAGE = "usage: agentica fmt [--check] [PATH...]   or   agentica fmt -   or   agentica fmt --tree FILE"

@@ -17,18 +17,9 @@ import Source from "../syntax/source"
 import Types from "../syntax/types"
 import Model from "model"
 
-# The version of the shape. The query is experimental: the shape may change between releases with the same number.
-BODIES_VERSION = 1
-
-# The source form of each binary operator token; `and` and `or` are written as words in the answer.
-OPERATOR_TEXT: Map[String, String] = {
-  "plus": "+", "minus": "-", "multiply": "*", "divide": "/", "modulo": "%", "less": "<", "less-equal": "<=",
-  "greater": ">", "greater-equal": ">=", "equal": "==", "not-equal": "!=", "and": "and", "or": "or",
-}
-
 ## The functions of the root file of `linked` (checked as `checked`) that have a body, in source order. `file` is the
 ## name the answer gives the file, and `modules` the prefix and the file of each linked module.
-export def of_program(
+def of_program(
   file: String,
   modules: List[Model.BodyModule],
   linked: Linker.Linked,
@@ -63,6 +54,17 @@ export def of_program(
 
   Model.Bodies(version: BODIES_VERSION, file: file, modules: modules, functions: functions)
 end
+
+private
+
+# The version of the shape. The query is experimental: the shape may change between releases with the same number.
+BODIES_VERSION = 1
+
+# The source form of each binary operator token; `and` and `or` are written as words in the answer.
+OPERATOR_TEXT: Map[String, String] = {
+  "plus": "+", "minus": "-", "multiply": "*", "divide": "/", "modulo": "%", "less": "<", "less-equal": "<=",
+  "greater": ">", "greater-equal": ">=", "equal": "==", "not-equal": "!=", "and": "and", "or": "or",
+}
 
 def body_of(checked: Checker.Checked, node: Ast.FunctionDecl, name: String, exported: Bool) -> Model.Body
   params = node.params.map do |param: Ast.Param|

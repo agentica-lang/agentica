@@ -19,6 +19,734 @@ export HttpWire.ServerOptions
 export HttpWire.Client
 export HttpWire.Server
 
+## How far a download may go: a positive `timeout_ms` for the whole call, from the connect to the last byte
+## written, and a positive `max_total_bytes` for the body, at most 256 MiB.
+struct DownloadOptions
+  ## The milliseconds the whole download may take.
+  timeout_ms: Int = 30000
+  ## The most body bytes written to the file.
+  max_total_bytes: Int = DOWNLOAD_MAX_BYTES
+end
+
+## What a download wrote: the response `status` and `headers` with the count of body `bytes_written` to the file.
+## The body itself is in the file, never in this record.
+struct Download
+  ## The response status, however high: 404 and 500 are normal responses, as with `get`.
+  status: Int
+  ## The response headers.
+  headers: List[HttpWire.Header]
+  ## How many body bytes went to the file.
+  bytes_written: Int
+end
+
+## An HTTP/1.1 connection that the program drives itself, as `Net::HTTP.start` gives: one request at a time, and the
+## body read piece by piece. Open it with `start`, send with `send_request`, read with `read_body` and end it with
+## `finish`. The fields are the connection's own: do not read them. It belongs to the task that opened it, as a socket
+## does, and one call at a time uses it.
+struct Connection
+  ## The socket, a plain one or a TLS one.
+  socket: TCP.Socket
+  ## `http` or `https`, the host and the port, which the request head names.
+  scheme: String
+  host: String
+  port: Int
+  ## The options it was opened with: `timeout_ms` is the time of each call, and `max_body_bytes` the largest request
+  ## body. A `proxy` has no user info here, so printing a connection shows no password.
+  options: HttpWire.ClientOptions
+  ## The `Proxy-Authorization` value of the proxy's user info ("" with none), alone in a channel that holds one value:
+  ## a channel prints as `<Channel>`, where a field would print the login.
+  login: Channel[String]
+  ## The one `Exchange` of the connection, in a channel that holds a single value: a call takes it and puts it back,
+  ## so a second call at the same time finds it empty and says so.
+  cell: Channel[Exchange]
+end
+
+## The head of a response read on a `Connection`: the `status` and `headers` (names in lowercase). The body is still
+## on the connection, for `read_body`.
+struct ResponseHead
+  ## The status, however high: 404 and 500 are normal responses. An interim `1xx` head is read past.
+  status: Int
+  ## The response headers.
+  headers: List[HttpWire.Header]
+end
+
+## A response whose body arrives on a channel, from `open`: the `status` and `headers` of the head, the `body` channel
+## and the `done` task that feeds it. The task reads the connection and sends each piece (up to 64 KiB, never empty),
+## and it closes the channel on every path, so the reader runs the usual receive loop until the closed error and then
+## awaits `done`: `ok` means the body ended cleanly, an `error` says why it did not (a cut body, a timeout, a body over
+## 256 MiB). To stop early the reader closes the channel: the task's next `send` fails, it closes the connection and
+## `done` is an `error`. That works only while data flows: on a quiet stream the task waits in its read until
+## `timeout_ms`, so the prompt stop is `Task.cancel(stream.done)`, which closes the connection at once. The connection
+## belongs to the task and is never reused.
+struct Stream
+  status: Int
+  headers: List[HttpWire.Header]
+  body: Channel[Bytes]
+  done: Task[Result[Void]]
+end
+
+## A response whose body is sent as it is produced: the `status` and `headers` of the head, and a `body` channel of
+## pieces. The handler returns it at once and a task it spawned sends the pieces and closes the channel at the end. The
+## server sends each piece as soon as it arrives and ends the body when the channel closes. When the client leaves, the
+## server closes the channel, so the producer's next `send` returns an error and it stops.
+struct StreamResponse
+  ## The status, 200 to 599, and not 204 or 304 unless the body is already closed and empty.
+  status: Int
+  ## The response headers. The server adds `Transfer-Encoding: chunked` or `Content-Length`: the handler sets neither.
+  headers: List[HttpWire.Header]
+  ## The pieces of the body, as `Bytes` of any content (an empty one is skipped).
+  body: Channel[Bytes]
+  ## The size of the whole body in bytes, when the handler knows it (a file). The head then says `Content-Length` and
+  ## the pieces go out as they are, with no chunk framing, so a client can show progress and a range answer can
+  ## stream. The producer must send exactly that many bytes and then close the channel: a body that ends short, or
+  ## a piece that would pass the length, cuts the connection (the client sees an incomplete body), and a body that is
+  ## closed when the handler returns and has another size is a 500. Not for a 204 or a 304. `none` is the default: the
+  ## body is chunked.
+  length: Optional[Int] = none
+end
+
+## A route that takes the request whole: the request in, the whole response out. `app` makes an `App` from it. A
+## middleware is a function from a `Handler` to a `Handler`.
+type Handler = Fn[HttpWire.Request, Result[HttpWire.Response]]
+
+## The body of a request as it arrives, on a channel, for an `App`: the `pieces` channel (`Bytes` of any content, up
+## to 64 KiB each, never empty, a chunked body already decoded) and the `done` task that feeds it. The task closes the
+## channel on every path, so the app runs the usual receive loop until the closed error and then awaits `done`: `ok`
+## means the body arrived whole, an `error` says why it did not (the client left, a bad chunk, a timeout, a body over
+## `max_body_bytes`). An app that answers before the whole body arrived ends the connection after its answer.
+struct RequestBody
+  pieces: Channel[Bytes]
+  done: Task[Result[Void]]
+end
+
+## A message of a WebSocket, in either direction. `Text` and `Binary` are whole messages: the server joins the
+## fragments of a message it receives, and a text message is checked as UTF-8. `Ping` and `Pong` carry at most 125
+## bytes. The server answers every ping it receives with a pong, and does not hand it to the handler. `Close` is the
+## end: the code (1000 to 1003 and 1007 to 1014 are the registered codes, 3000 to 4999 are for programs) and a reason
+## of at most 123 bytes. It is always the last message the handler receives, and when the connection ended with no
+## close frame (the peer left, a timeout) its code is 1006. `Prepared` is a text or binary message already framed by
+## `prepare`, so a broadcast does not frame its message for every socket; the server never receives one.
+enum Message
+  Text(String)
+  Binary(Bytes)
+  Ping(Bytes)
+  Pong(Bytes)
+  Close(Int, String)
+  Prepared(Bytes)
+end
+
+## An upgraded connection, for the session function of `accept_websocket`: messages from the peer arrive on `incoming`
+## and the messages to send go on `outgoing`. `protocol` is the subprotocol that was agreed, or "". Both channels hold
+## 8 messages, so a handler that does not read makes the server stop reading the socket, and a handler that sends
+## faster than the peer reads waits. A session must keep taking messages from `incoming` (or end): while it does not,
+## the server does not read the socket, so the pings and the close of the peer go unanswered. `incoming` closes after
+## the `Close` message, and `outgoing` closes when the connection is over, so a send then is an error.
+struct WebSocket
+  incoming: Channel[Message]
+  outgoing: Channel[Message]
+  protocol: String
+end
+
+## The function that runs a WebSocket after its handshake: it gets the `WebSocket` and returns when it is done. When it
+## returns, the server sends a close frame (code 1000, or 1011 for an `error`) if the session did not, waits for the
+## peer's, and closes the connection.
+type WebSocketSession = Fn[WebSocket, Result[Void]]
+
+## The limits of a WebSocket. `max_message_bytes` is the largest message, joined from its fragments (1 to 256 MiB): a
+## larger one closes the connection with code 1009. `idle_ms` is the longest the server waits for the peer to send
+## anything, 0 for no limit but a year (a read that times out closes the socket); a timeout drops the connection, and
+## the handler receives `Close` with code 1006. `ping_ms` makes the server send a ping after that many milliseconds
+## without anything to write, 0 for none: with a `ping_ms` below `idle_ms` the pongs keep a live peer from being
+## dropped. `close_ms` is how long the server waits for the peer's answer to its close frame. `protocols` are the
+## subprotocols the server speaks, in order of preference. `outgoing_queue` is how many messages `outgoing` holds (1 to
+## 1048576) before a send waits: the writer takes everything queued at that moment and writes it in one go.
+struct WebSocketOptions
+  max_message_bytes: Int = 1048576
+  idle_ms: Int = 0
+  ping_ms: Int = 0
+  close_ms: Int = 5000
+  protocols: List[String] = []
+  outgoing_queue: Int = 8
+end
+
+## What `accept_websocket` decides for a request, for an `Answer.Upgrade`: `Reply` answers it as a whole response (and
+## the connection serves the next request), `Accept` upgrades it. Make an `Accept` with `accept_websocket`.
+enum Upgrade
+  Reply(HttpWire.Response)
+  Accept(WebSocketSession, WebSocketOptions, String, String)
+end
+
+## What an `App` returns for a request. `Whole` is a whole response, as a `Handler` returns. `Stream` is a response
+## whose body arrives on a channel. `Upgrade` is what `accept_websocket` makes: its
+## `Accept` runs a WebSocket on the connection, and its `Reply` (a request that is no handshake) is sent as `Whole`.
+enum Answer
+  Whole(HttpWire.Response)
+  Stream(StreamResponse)
+  Upgrade(Upgrade)
+end
+
+## The function that `serve` and `serve_tls` call for each request: the request with an empty `body`, the
+## `RequestBody` that carries the body as it arrives, and the `Answer` out. A route that wants the body whole calls
+## `read_all`; `app` makes an `App` from a `Handler`. A middleware is a function from an `App` to an `App`.
+type App = Fn[HttpWire.Request, RequestBody, Result[Answer]]
+
+## Creates a client that keeps connections open and reuses them. `options` is optional and defaults to
+## `HTTP.ClientOptions()`: 30 s timeouts, up to 4 connections, 1 MiB bodies, the system CA certificates and no proxy
+## (set `tls: some(context)` to use a client context of `TLS.client_context` instead of the system certificates).
+## Every number in `options` must be positive, `max_connections` at most 65536 and `max_body_bytes` at most 64 MiB, or
+## the result is an error. With a `proxy` (`http://host:port`, an origin with no path) every `http://` request goes
+## through that forward proxy in absolute form (`GET http://host/path HTTP/1.1`, `Host` still the target's), the
+## connections are pooled by the proxy. An `https://` request opens a `CONNECT host:port` tunnel through the proxy,
+## one per target, and speaks TLS inside it, verified against the target (a non-2xx answer to the `CONNECT` is an
+## error that names the proxy). A `proxy` that is not an `http://` origin is an error here. The user info of the
+## `proxy` (`http://user:password@host:8080`, percent-decoded) is sent to the proxy as `Proxy-Authorization: Basic`,
+## and a `407` from it is an error that names the proxy and not the credentials. Close the client with `close_client`.
+def client(options: HttpWire.ClientOptions = HttpWire.ClientOptions()) -> Result[HttpWire.Client]
+  try check_options(
+    options.timeout_ms,
+    options.idle_timeout_ms,
+    options.max_connections,
+    options.max_body_bytes,
+    CLIENT_MAX_BODY,
+  )
+
+  try check_proxy(options)
+  jobs: Channel[HttpWire.Job] = Channel.new(CLIENT_JOBS)
+  ok(HttpWire.service(jobs, options) do |own| supervise_pool(own) end)
+end
+
+## The proxy that the environment names for `url`, to pass as `HTTP.ClientOptions(proxy: ...)`, or `""` when there is
+## none. It is the only call that reads the environment: a client never does, so nothing changes until a program asks.
+## It follows curl. An `http://` URL reads `http_proxy` and an `https://` URL `https_proxy`; the lower-case name wins
+## over `HTTP_PROXY` or `HTTPS_PROXY`, even when it is set and empty (which means no proxy). `HTTP_PROXY` is ignored
+## when `REQUEST_METHOD` is set, as in a CGI program, where a request's `Proxy` header becomes it (httpoxy); on
+## Windows, whose names do not differ by case, an `http://` URL then gets no proxy. `ALL_PROXY` is not read. A value
+## with no `://` is read as `http://` (`proxy.example:8080`), and one with another scheme is returned as it is, so the
+## client that gets it says it is not an `http://` origin.
+##
+## `no_proxy` (or `NO_PROXY`) is a list, separated by commas or spaces, that says where no proxy is used, and the
+## result is then `""`: `*` is every host; `example.com` and `.example.com` are that domain and its subdomains; an
+## entry may end in `:port` (`[::1]:8080` for an IPv6 literal); an IP literal matches only itself, and an IPv4 range
+## such as `10.0.0.0/8` matches its addresses (an IPv6 range is not read). Empty entries and an entry that is not
+## valid are ignored, one trailing dot of a host or an entry does not count, and the case of a host is not
+## significant. A `url` that is not valid gives `""`: the call that gets it reports it.
+##
+## An `https://` URL gets `https_proxy`, which `HTTP` then reaches with a `CONNECT` tunnel.
+def proxy_from_env(url: String) -> String
+  case parse_url(url)
+    ok(where) ->
+      return "" if no_proxy_for?(where)
+
+      proxy_of_scheme(where.scheme)
+    error(_) -> ""
+  end
+end
+
+## Closes the client and its connections. A call still in flight fails with `http: client is closed`; its request
+## is not sent, unless a connection had already started sending it.
+def close_client(pool: HttpWire.Client) -> Void
+  Channel.close(HttpWire.jobs(pool))
+end
+
+## Sends a `GET` request to `url` and returns the response, whose `body` is `Bytes`.
+def get(pool: HttpWire.Client, url: String) -> Result[HttpWire.Response] = request(pool, "GET", url, NO_BYTES)
+
+## Sends a `POST` request to `url` with the `Bytes` `body` and `headers`, which default to none, as Ruby's
+## `Net::HTTP.post(uri, data, header)` does. Send text as `"...".bytes`.
+def post(
+  pool: HttpWire.Client,
+  url: String,
+  body: Bytes,
+  headers: List[HttpWire.Header] = [],
+) -> Result[HttpWire.Response]
+  request(pool, "POST", url, body, headers)
+end
+
+## Sends a `GET` request to `url` on a client of its own and returns the response, like Ruby's
+## `Net::HTTP.get_response(uri)`. It is the call for one request: it makes a client with `options` (default
+## `HTTP.ClientOptions()`), makes the call and closes the client, and with it the connection, before it returns. Many
+## requests to the same hosts belong on one `HTTP.client()` with `get`, which reuses connections.
+def get_response(url: String, options: HttpWire.ClientOptions = HttpWire.ClientOptions()) -> Result[HttpWire.Response]
+  request_once("GET", url, NO_BYTES, [], options)
+end
+
+## Sends a `POST` request on a client of its own, as `get_response` does for `GET`: the `Bytes` `body`, `headers`
+## (default none) and `options` (default `HTTP.ClientOptions()`), then the client is closed. Like Ruby's
+## `Net::HTTP.post(uri, data, header)`, and the pooled `post` for many requests.
+def post_response(
+  url: String,
+  body: Bytes,
+  headers: List[HttpWire.Header] = [],
+  options: HttpWire.ClientOptions = HttpWire.ClientOptions(),
+) -> Result[HttpWire.Response]
+  request_once("POST", url, body, headers, options)
+end
+
+## Sends a request with any `method`. `url` must start with `http://` or `https://`.
+## The client adds `Host` and `Content-Length` itself, so `headers` may not set them, nor `Transfer-Encoding` or
+## `Connection`. The `body` is `Bytes` of at most `max_body_bytes` (`"".bytes` sends none); `headers` default to none.
+def request(
+  pool: HttpWire.Client,
+  method: String,
+  url: String,
+  body: Bytes,
+  headers: List[HttpWire.Header] = [],
+) -> Result[HttpWire.Response]
+  where = try parse_url(url)
+  options = HttpWire.options(pool)
+  # The pool connects to `via` (the proxy, or the target's host) and keys its connections by it.
+  via = try connect_target(where, options)
+  head = try HttpWire.encode_request(
+    where.scheme,
+    where.host,
+    where.port,
+    method,
+    request_target(options, where),
+    with_login(options, where.scheme, headers),
+    body,
+    options.max_body_bytes,
+  )
+
+  deadline = Time.monotonic_ms() + options.timeout_ms
+  reply: Channel[Result[HttpWire.Response]] = Channel.new(1)
+  job = HttpWire.Job(
+    origin: "#{via.scheme}://#{via.host}:#{via.port}",
+    scheme: via.scheme,
+    host: via.host,
+    port: via.port,
+    method: method,
+    head: head,
+    body: body,
+    deadline: deadline,
+    reply: reply,
+    worker: 0,
+    kept: false,
+  )
+
+  case HttpWire.jobs(pool).send(job, options.timeout_ms)
+    ok(_) -> unless_denied(options, where.scheme, wait_reply(reply, deadline))
+    error(message) ->
+      return error(CLIENT_CLOSED, kind: "http.closed") if "#{message}" == CHANNEL_CLOSED
+      error(TIMED_OUT, kind: "net.timeout")
+  end
+end
+
+## Downloads the resource at `url` with a `GET` request and writes its body bytes to `path`. `options` is optional
+## and defaults to `DownloadOptions()`: a 30 s timeout and bodies up to 256 MiB.
+##
+## The transfer stays bounded: at most 1 MiB is held at once, the body stops at
+## `options.max_total_bytes` with `http: body exceeds max_body_bytes`, and the file never grows past it. The file
+## must not exist: it is made with `create_private`, so an existing path is an error and stays intact, while a
+## failed download keeps the partial file. Status codes such as 404 or 500 are normal responses, as with `get`:
+## the body is still written and the status returned, so check `status` before using the file. There is no
+## redirect follow, and the connection is not pooled: it closes when the download ends. The pool gives the TLS
+## context and its certificates for `https`, whose verification stays on.
+def download(
+  pool: HttpWire.Client,
+  url: String,
+  path: String,
+  options: DownloadOptions = DownloadOptions(),
+) -> Result[Download]
+  if options.timeout_ms <= 0 or options.max_total_bytes <= 0
+    return error("http: every download option must be positive", kind: "argument")
+  end
+  if options.max_total_bytes > DOWNLOAD_MAX_BYTES
+    return error("http: max_total_bytes must be at most 268435456", kind: "argument")
+  end
+  where = try parse_url(url)
+  client_options = HttpWire.options(pool)
+  via = try connect_target(where, client_options)
+  head = try HttpWire.encode_request(
+    where.scheme,
+    where.host,
+    where.port,
+    "GET",
+    request_target(client_options, where),
+    with_login(client_options, where.scheme, []),
+    NO_BYTES,
+    client_options.max_body_bytes,
+  )
+
+  deadline = Time.monotonic_ms() + options.timeout_ms
+  # What a 407 from the proxy is told as; empty when there is no proxy or the request is in a tunnel, whose 407 is the
+  # server's own answer.
+  denied = ""
+  if proxy_asked?(client_options, where.scheme, 407)
+    denied = client_denied(client_options)
+  end
+
+  socket = try connect_download(pool, via, deadline)
+  case TCP.send_bytes(socket, head_bytes(head), try time_left(socket, deadline))
+    ok(_) -> finish_download(socket, path, options, deadline, denied)
+    error(message) ->
+      TCP.close(socket)
+      error(message)
+  end
+end
+
+## Opens a connection to the `origin` (`http://host` or `https://host:8443`, with no path) and returns it, as
+## Ruby's `Net::HTTP.start` does. The connection is made now. Only `timeout_ms` (the time of each call: this one, each
+## `send_request` and each `read_body`), `max_body_bytes` (the largest request body), `tls` (over `https`, the
+## certificate is verified with that client context, the system trust by default, built again for each `start`) and
+## `proxy` (an `http` origin is then reached through the proxy, which each `send_request` addresses in absolute form)
+## of `options` apply: nothing is pooled. The connection is for one request at a time and stays open for the next one
+## when the response had a body that was read to its end (`read_body` gave an empty piece) and the server did not
+## close it. A response body is at most 256 MiB, the limit of `download`: a longer one is an `error`. Close it with
+## `finish`. For whole requests use `get_response` or the pooled client instead.
+def start(origin: String, options: HttpWire.ClientOptions = HttpWire.ClientOptions()) -> Result[Connection]
+  try check_options(
+    options.timeout_ms,
+    options.idle_timeout_ms,
+    options.max_connections,
+    options.max_body_bytes,
+    CLIENT_MAX_BODY,
+  )
+
+  where = try parse_url(origin)
+  if where.target != "/"
+    return error("http: start takes an origin such as http://host:8080, with no path or query", kind: "argument")
+  end
+  connect_to(where, options)
+end
+
+## Sends a request on the connection and returns when the head of the response has been read, as Ruby's
+## `Net::HTTP#send_request` does. `target` is the path with its query (`/items?page=2`); `method`, `body` (`Bytes`, at
+## most `max_body_bytes`; `"".bytes` sends none) and `headers` (default none) are as for `request`, and the client
+## adds `Host` and `Content-Length`. The body of the response is not read: call `read_body` until it gives an empty
+## piece (a response with no body, such as one to `HEAD` or a `204`, leaves the connection ready at once). An `error`
+## is a request refused before it was written, which leaves the connection as it was, a connection that is closed or
+## has a response still to be read, or a failure of the connection, which then ends. A server that closed an idle
+## connection shows as an `error` here: `start` a new one.
+def send_request(
+  conn: Connection,
+  method: String,
+  target: String,
+  body: Bytes,
+  headers: List[HttpWire.Header] = [],
+) -> Result[ResponseHead]
+  exchange = try take_exchange(conn)
+  if exchange.phase == READING
+    put_exchange(conn, exchange)
+    return error("http: the body of the last response is not read to its end", kind: "argument")
+  end
+  if exchange.phase == OVER or exchange.phase == SPENT
+    put_exchange(conn, exchange)
+    return error(CONNECTION_OVER, kind: "http.closed")
+  end
+  # A request that cannot be encoded (a bad method, header or target, a body over the limit) was never written, so
+  # the connection is as healthy as before. Only a failure after the first byte ends it.
+  encoded = HttpWire.encode_request(
+    conn.scheme,
+    conn.host,
+    conn.port,
+    method,
+    connection_target(conn, target),
+    connection_headers(conn, headers),
+    body,
+    conn.options.max_body_bytes,
+  )
+
+  case encoded
+    ok(request) -> send_encoded(conn, request, method == "HEAD", body)
+    error(message) ->
+      put_exchange(conn, exchange)
+      error(message)
+  end
+end
+
+## Reads the next piece of the body of the last response, at most `max_bytes` (1 to 1 MiB, 64 KiB by default), as
+## Ruby's `Net::HTTP#read_body` does with a block. It waits for at least one byte, and an empty `Bytes` is the end of
+## the body: the connection is then ready for the next `send_request`, or closed when the server said so. It is the
+## end as soon as the last byte has been read, so a program that knows the length may stop before the empty piece. A
+## chunked body is decoded and a `Content-Length` one is held to its length. A cut body, a bad chunk and a timeout are
+## an `error`, and end the connection.
+def read_body(conn: Connection, max_bytes: Int = 65536) -> Result[Bytes]
+  if max_bytes < 1 or max_bytes > BODY_READ_BYTES
+    return error("http: max_bytes must be 1 to 1048576", kind: "argument")
+  end
+  exchange = try take_exchange(conn)
+  if exchange.phase == OVER
+    put_exchange(conn, exchange)
+    return error(CONNECTION_OVER, kind: "http.closed")
+  end
+  if exchange.phase == IDLE or exchange.phase == SPENT
+    put_exchange(conn, exchange)
+    return ok(NO_BYTES)
+  end
+  deadline = Time.monotonic_ms() + conn.options.timeout_ms
+  case next_piece(conn.socket, exchange, max_bytes, deadline)
+    ok(step) ->
+      put_exchange(conn, finished_exchange(conn, step.exchange))
+      ok(step.piece)
+    error(message) ->
+      end_connection(conn)
+      error(message)
+  end
+end
+
+## Ends the connection and frees its socket, as Ruby's `Net::HTTP#finish` does. A response body not read to its end is
+## dropped. It is safe to call twice.
+def finish(conn: Connection) -> Void
+  end_connection(conn)
+end
+
+## Sends a request on a connection of its own and returns at the head of the response, whose body arrives on a channel
+## (`Stream`), for a body that is too big to hold, that never ends (events, lines of a log) or that another task reads
+## as it comes. `url` has a path and query; `method`, `body` (`Bytes`, at most `max_body_bytes`) and `headers` are as
+## for `request`. `options.timeout_ms` is the time of each wait: the connect, the head, each read of the body and each
+## `send` to the channel, so a reader that takes longer than that to ask for the next piece ends the stream. The body
+## is at most 256 MiB, whatever its framing. The connection is not pooled and ends with the body. For whole responses
+## use `get`.
+def open(
+  method: String,
+  url: String,
+  body: Bytes,
+  headers: List[HttpWire.Header] = [],
+  options: HttpWire.ClientOptions = HttpWire.ClientOptions(),
+) -> Result[Stream]
+  try check_options(
+    options.timeout_ms,
+    options.idle_timeout_ms,
+    options.max_connections,
+    options.max_body_bytes,
+    CLIENT_MAX_BODY,
+  )
+
+  where = try parse_url(url)
+  conn = try connect_to(where, options)
+  case send_request(conn, method, where.target, body, headers)
+    ok(head) ->
+      pieces: Channel[Bytes] = Channel.new(STREAM_PIECES)
+      done = Task.spawn_owning(&feed_stream, Feed(conn: conn, pieces: pieces))
+      ok(Stream(status: head.status, headers: head.headers, body: pieces, done: done))
+    error(message) ->
+      end_connection(conn)
+      error(message)
+  end
+end
+
+## Sends a request whose body comes from a channel, and returns the whole response. The caller's other task sends the
+## pieces (`Bytes` of any content) and closes the channel at the end. `length` is the exact byte count, which the
+## request then says as `Content-Length` and which ends the body as soon as that many bytes were sent (the producer
+## need not close the channel), or -1 (the default) for a chunked body, which ends when the channel closes. `method` is
+## `POST`, `PUT` or `PATCH`; `headers` and `options` are as for `request`, and `options.max_body_bytes` limits the
+## response body, not the upload. `options.timeout_ms` is the time of each wait: the connect, each piece from the
+## channel, each send and the head of the response. A body that is longer or shorter than `length`, or a channel that
+## stays silent for longer than the timeout, is an `error` and ends the connection. A channel that closes ends the
+## body, also when its producer died, so a producer that can fail should set `length`. A server that answers and closes
+## before the upload ends (a 413) does not hide its answer: when a write fails, the head of the response that is
+## waiting is read and returned, and the write failure is the `error` only when there is none. The connection is not
+## pooled. The channel is closed when the call returns, so a producer that is still sending finds the closed error and
+## stops.
+def upload(
+  method: String,
+  url: String,
+  body: Channel[Bytes],
+  length: Int = -1,
+  headers: List[HttpWire.Header] = [],
+  options: HttpWire.ClientOptions = HttpWire.ClientOptions(),
+) -> Result[HttpWire.Response]
+  answer = upload_whole(method, url, body, length, headers, options)
+  body.close
+  answer
+end
+
+## Returns every value of the header `name`, ignoring case, in order.
+def header_values(headers: List[HttpWire.Header], name: String) -> List[String]
+  wanted = String.downcase(name)
+  found: List[String] = []
+  for header in headers
+    if String.downcase(header.name) == wanted
+      found = List.append(found, header.value)
+    end
+  end
+  found
+end
+
+## Returns `body` as a `String`, decoded in the `charset` of the `Content-Type` of `headers`, those of the same
+## message (`response.headers`), or as UTF-8 when there is none. The charsets are the encodings of `Bytes.decode`
+## (UTF-8, UTF-16, UTF-32, ASCII, Latin-1, ISO-8859-15 and Windows-1252, by any of their names, in any case). A body
+## that is not valid in its charset is an `error` result, with the offset for a charset other than UTF-8, and any
+## other charset is an `error` that names it: those (Shift_JIS, GB18030, KOI8-R) are for the `agentica-lang/charset`
+## package.
+def text(body: Bytes, headers: List[HttpWire.Header] = []) -> Result[String]
+  charset = charset_of(headers)
+  if charset == "" or UTF8_CHARSETS.include?(charset.replace("_", "-"))
+    case String.from_bytes(body)
+      ok(decoded) -> return ok(decoded)
+      error(_) -> return error(BAD_BODY, kind: "text.encoding")
+    end
+  end
+  # Every encoding writes the empty text, so this asks whether Bytes.decode knows the name.
+  if not "".encode(charset).ok?
+    shown = charset
+    if shown.length > MAX_SHOWN
+      shown = shown.slice(0, MAX_SHOWN)
+    end
+    return error(
+      "http: charset #{shown} is not supported, decode the body with agentica-lang/charset",
+      kind: "text.encoding",
+    )
+  end
+  case body.decode(charset)
+    ok(decoded) -> ok(decoded)
+    error(e) -> error(e.with(message: "http: #{e.message}"))
+  end
+end
+
+## Collects the body for an `App` that wants it whole, so one server can serve small routes simply next to the big
+## ones: the pieces of `body` joined, at most `max_bytes` (0 or more), after the end of the body was checked. It is an
+## `error` when the body is longer than `max_bytes` (the app then answers 413, and the server closes the connection
+## after that answer) and when `done` says the body did not arrive whole.
+def read_all(body: RequestBody, max_bytes: Int) -> Result[Bytes]
+  return error("http: max_bytes must be 0 or more", kind: "argument") if max_bytes < 0
+  pieces: List[Bytes] = []
+  total = 0
+  while true
+    case body.pieces.recv(OWNER_WAIT_MS)
+      ok(piece) ->
+        total = total + piece.size
+        return error(BODY_TOO_LONG, kind: "http.too_large", code: 413) if total > max_bytes
+        pieces = pieces.push(piece)
+      error(_) -> break
+    end
+  end
+  try Task.await(body.done)
+  ok(Bytes.concat(pieces))
+end
+
+## Checks that `request` is a WebSocket handshake and makes the `Upgrade` that runs `session` on it. The request must
+## be a `GET` with `Upgrade: websocket`, `Connection: Upgrade`, `Sec-WebSocket-Version: 13` and a `Sec-WebSocket-Key`
+## of 16 bytes in base64. A request that is not gets an `Upgrade.Reply`: 426 with `Sec-WebSocket-Version: 13` for
+## another version, 400 for the rest. The first of `options.protocols` that the client offers in
+## `Sec-WebSocket-Protocol` is agreed on (`WebSocket.protocol`). No extension is accepted, so no frame is compressed.
+## The server does not check `Origin`: a browser sends it with every handshake, and a handler that serves pages of its
+## own should compare it with `header_values(request.headers, "origin")` before it accepts. It is an `error` when
+## `options` is out of range.
+def accept_websocket(
+  request: HttpWire.Request,
+  session: WebSocketSession,
+  options: WebSocketOptions = WebSocketOptions(),
+) -> Result[Upgrade]
+  try check_websocket_options(options)
+  case handshake_problem(request)
+    some(response) -> ok(Upgrade.Reply(response))
+    none -> ok(accepted(request, session, options))
+  end
+end
+
+## Frames a `Text` or `Binary` message once, for a broadcast: the `Prepared` message it returns is sent on any
+## number of `outgoing` channels, and each writer sends its bytes as they are, where a `Text` would be framed again
+## for every socket. The peer receives the same frame as for the message itself. Any other message is returned as it
+## is.
+def prepare(message: Message) -> Message
+  case message
+    Message.Text(text) -> Message.Prepared(WebSocketWire.text_frame(text))
+    Message.Binary(data) -> Message.Prepared(WebSocketWire.binary_frame(data))
+    _ -> message
+  end
+end
+
+## Starts an HTTP server on `host` and `port` that serves every kind of route on one port, and returns at once; it
+## serves in the background. Port 0 picks a free port, which `local_port` returns. The server closes when the task that
+## called `serve` ends. `app` gets each request with its body on a channel (`RequestBody`) and answers with a whole
+## response, a stream or a WebSocket upgrade (`Answer`); `app(handler)` makes one from a `Handler`, for a route that
+## takes the request whole. Every body is at most `max_body_bytes` of `options` (1 MiB unless raised, up to 256 MiB): a
+## request whose `Content-Length` is larger is answered 413 before `app` runs and before any `100 Continue`. A route
+## that wants less counts the bytes or calls `read_all`. The connection serves the next request only when the body was
+## read whole by the time `app` returned (a body that had all arrived counts, read or not); otherwise the answer says
+## `Connection: close`, and an upgrade is refused. The server sets no limit on the time of `app`. `options` is optional
+## and defaults to `HTTP.ServerOptions()`: 30 s `request_timeout_ms` and `idle_timeout_ms`, 128 connections and 1 MiB
+## bodies.
+def serve(
+  host: String,
+  port: Int,
+  app: App,
+  options: HttpWire.ServerOptions = HttpWire.ServerOptions(),
+) -> Result[HttpWire.Server]
+  try check_options(
+    options.request_timeout_ms,
+    options.idle_timeout_ms,
+    options.max_connections,
+    options.max_body_bytes,
+    DOWNLOAD_MAX_BYTES,
+  )
+
+  listener = try TCP.listen(host, port)
+  ok(start_server(listener, app, options))
+end
+
+## Like `serve`, but over TLS, with the certificate and key of `tls`, a server context. `options` is optional and
+## defaults to `HTTP.ServerOptions()`.
+def serve_tls(
+  host: String,
+  port: Int,
+  tls: TLS.Context,
+  app: App,
+  options: HttpWire.ServerOptions = HttpWire.ServerOptions(),
+) -> Result[HttpWire.Server]
+  try check_options(
+    options.request_timeout_ms,
+    options.idle_timeout_ms,
+    options.max_connections,
+    options.max_body_bytes,
+    DOWNLOAD_MAX_BYTES,
+  )
+
+  listener = try TLS.listen(host, port, tls)
+  ok(start_server(listener, app, options))
+end
+
+## Makes an `App` from a `Handler`, for a route that wants the request whole: the body is read first, at most
+## `max_body_bytes` (1 MiB unless given; a negative one counts as 0), and `handler` gets the request with it; its
+## response is the `Whole` answer. A body that is larger, by its `Content-Length` or as it arrives, is answered 413,
+## a chunk line or trailer section over the head limits 431 and a bad chunk 400, all with `Connection: close` and
+## without calling `handler`; a body cut or stalled (the client left, a timeout) closes the connection. The server sets
+## no limit on the time of `handler`.
+def app(handler: Handler, max_body_bytes: Int = 1048576) -> App
+  limit = max_body_bytes
+  if limit < 0
+    limit = 0
+  end
+  ->(request, body) { whole_answer(handler, limit, request, body) }
+end
+
+## The answer that refuses a request body `read_all` could not read, from its error: 413 for a body over its limit
+## (the error `"http: body exceeds max_bytes"`), 431 for a chunk line or trailer section over the head limits (an
+## error that starts with `"http: request fields too large: "`), 400 for any other (a bad chunk, a body cut or
+## stalled).
+## It is a whole response with `Connection: close` and no body. `app` answers so; a route that reads the body itself,
+## before a stream for one, returns `ok(body_refusal(message))` for the error.
+def body_refusal(message: String) -> Answer
+  return Answer.Whole(closing_answer(413)) if message == BODY_TOO_LONG
+  return Answer.Whole(closing_answer(431)) if message.start_with?(FIELDS_TOO_LARGE)
+  Answer.Whole(closing_answer(400))
+end
+
+## Returns a closed channel that holds `data` as its one piece: the body of a `StreamResponse` that is one whole
+## text or file. The server then answers with `Content-Length`, as for a whole response.
+def whole(data: Bytes) -> Channel[Bytes]
+  body: Channel[Bytes] = Channel.new(1)
+  if not data.empty?
+    _ = body.send(data, 0)
+  end
+  body.close
+  body
+end
+
+## Returns the port the server listens on.
+def local_port(server: HttpWire.Server) -> Int = HttpWire.local_port(server)
+
+## Returns `ok()` once the server and its tasks are done.
+def wait(server: HttpWire.Server) -> Result[Void] = HttpWire.wait(server)
+
+## Stops accepting, closes every connection and cancels the running handlers. Calling it again does nothing.
+def close_server(server: HttpWire.Server) -> Void
+  HttpWire.close_server(server)
+end
+
+private
+
 READ_BYTES = 65536
 # Chunked framing is read in small pieces, so the decoder sees the bytes of a chunk's framing and no more.
 FRAME_BYTES = 512
@@ -295,177 +1023,6 @@ struct Received
   started: Bool
 end
 
-## How far a download may go: a positive `timeout_ms` for the whole call, from the connect to the last byte
-## written, and a positive `max_total_bytes` for the body, at most 256 MiB.
-export struct DownloadOptions
-  ## The milliseconds the whole download may take.
-  timeout_ms: Int = 30000
-  ## The most body bytes written to the file.
-  max_total_bytes: Int = DOWNLOAD_MAX_BYTES
-end
-
-## What a download wrote: the response `status` and `headers` with the count of body `bytes_written` to the file.
-## The body itself is in the file, never in this record.
-export struct Download
-  ## The response status, however high: 404 and 500 are normal responses, as with `get`.
-  status: Int
-  ## The response headers.
-  headers: List[HttpWire.Header]
-  ## How many body bytes went to the file.
-  bytes_written: Int
-end
-
-## An HTTP/1.1 connection that the program drives itself, as `Net::HTTP.start` gives: one request at a time, and the
-## body read piece by piece. Open it with `start`, send with `send_request`, read with `read_body` and end it with
-## `finish`. The fields are the connection's own: do not read them. It belongs to the task that opened it, as a socket
-## does, and one call at a time uses it.
-export struct Connection
-  ## The socket, a plain one or a TLS one.
-  socket: TCP.Socket
-  ## `http` or `https`, the host and the port, which the request head names.
-  scheme: String
-  host: String
-  port: Int
-  ## The options it was opened with: `timeout_ms` is the time of each call, and `max_body_bytes` the largest request
-  ## body. A `proxy` has no user info here, so printing a connection shows no password.
-  options: HttpWire.ClientOptions
-  ## The `Proxy-Authorization` value of the proxy's user info ("" with none), alone in a channel that holds one value:
-  ## a channel prints as `<Channel>`, where a field would print the login.
-  login: Channel[String]
-  ## The one `Exchange` of the connection, in a channel that holds a single value: a call takes it and puts it back,
-  ## so a second call at the same time finds it empty and says so.
-  cell: Channel[Exchange]
-end
-
-## The head of a response read on a `Connection`: the `status` and `headers` (names in lowercase). The body is still
-## on the connection, for `read_body`.
-export struct ResponseHead
-  ## The status, however high: 404 and 500 are normal responses. An interim `1xx` head is read past.
-  status: Int
-  ## The response headers.
-  headers: List[HttpWire.Header]
-end
-
-## A response whose body arrives on a channel, from `open`: the `status` and `headers` of the head, the `body` channel
-## and the `done` task that feeds it. The task reads the connection and sends each piece (up to 64 KiB, never empty),
-## and it closes the channel on every path, so the reader runs the usual receive loop until the closed error and then
-## awaits `done`: `ok` means the body ended cleanly, an `error` says why it did not (a cut body, a timeout, a body over
-## 256 MiB). To stop early the reader closes the channel: the task's next `send` fails, it closes the connection and
-## `done` is an `error`. That works only while data flows: on a quiet stream the task waits in its read until
-## `timeout_ms`, so the prompt stop is `Task.cancel(stream.done)`, which closes the connection at once. The connection
-## belongs to the task and is never reused.
-export struct Stream
-  status: Int
-  headers: List[HttpWire.Header]
-  body: Channel[Bytes]
-  done: Task[Result[Void]]
-end
-
-## A response whose body is sent as it is produced: the `status` and `headers` of the head, and a `body` channel of
-## pieces. The handler returns it at once and a task it spawned sends the pieces and closes the channel at the end. The
-## server sends each piece as soon as it arrives and ends the body when the channel closes. When the client leaves, the
-## server closes the channel, so the producer's next `send` returns an error and it stops.
-export struct StreamResponse
-  ## The status, 200 to 599, and not 204 or 304 unless the body is already closed and empty.
-  status: Int
-  ## The response headers. The server adds `Transfer-Encoding: chunked` or `Content-Length`: the handler sets neither.
-  headers: List[HttpWire.Header]
-  ## The pieces of the body, as `Bytes` of any content (an empty one is skipped).
-  body: Channel[Bytes]
-  ## The size of the whole body in bytes, when the handler knows it (a file). The head then says `Content-Length` and
-  ## the pieces go out as they are, with no chunk framing, so a client can show progress and a range answer can
-  ## stream. The producer must send exactly that many bytes and then close the channel: a body that ends short, or
-  ## a piece that would pass the length, cuts the connection (the client sees an incomplete body), and a body that is
-  ## closed when the handler returns and has another size is a 500. Not for a 204 or a 304. `none` is the default: the
-  ## body is chunked.
-  length: Optional[Int] = none
-end
-
-## A route that takes the request whole: the request in, the whole response out. `app` makes an `App` from it. A
-## middleware is a function from a `Handler` to a `Handler`.
-export type Handler = Fn[HttpWire.Request, Result[HttpWire.Response]]
-
-## The body of a request as it arrives, on a channel, for an `App`: the `pieces` channel (`Bytes` of any content, up
-## to 64 KiB each, never empty, a chunked body already decoded) and the `done` task that feeds it. The task closes the
-## channel on every path, so the app runs the usual receive loop until the closed error and then awaits `done`: `ok`
-## means the body arrived whole, an `error` says why it did not (the client left, a bad chunk, a timeout, a body over
-## `max_body_bytes`). An app that answers before the whole body arrived ends the connection after its answer.
-export struct RequestBody
-  pieces: Channel[Bytes]
-  done: Task[Result[Void]]
-end
-
-## A message of a WebSocket, in either direction. `Text` and `Binary` are whole messages: the server joins the
-## fragments of a message it receives, and a text message is checked as UTF-8. `Ping` and `Pong` carry at most 125
-## bytes. The server answers every ping it receives with a pong, and does not hand it to the handler. `Close` is the
-## end: the code (1000 to 1003 and 1007 to 1014 are the registered codes, 3000 to 4999 are for programs) and a reason
-## of at most 123 bytes. It is always the last message the handler receives, and when the connection ended with no
-## close frame (the peer left, a timeout) its code is 1006. `Prepared` is a text or binary message already framed by
-## `prepare`, so a broadcast does not frame its message for every socket; the server never receives one.
-export enum Message
-  Text(String)
-  Binary(Bytes)
-  Ping(Bytes)
-  Pong(Bytes)
-  Close(Int, String)
-  Prepared(Bytes)
-end
-
-## An upgraded connection, for the session function of `accept_websocket`: messages from the peer arrive on `incoming`
-## and the messages to send go on `outgoing`. `protocol` is the subprotocol that was agreed, or "". Both channels hold
-## 8 messages, so a handler that does not read makes the server stop reading the socket, and a handler that sends
-## faster than the peer reads waits. A session must keep taking messages from `incoming` (or end): while it does not,
-## the server does not read the socket, so the pings and the close of the peer go unanswered. `incoming` closes after
-## the `Close` message, and `outgoing` closes when the connection is over, so a send then is an error.
-export struct WebSocket
-  incoming: Channel[Message]
-  outgoing: Channel[Message]
-  protocol: String
-end
-
-## The function that runs a WebSocket after its handshake: it gets the `WebSocket` and returns when it is done. When it
-## returns, the server sends a close frame (code 1000, or 1011 for an `error`) if the session did not, waits for the
-## peer's, and closes the connection.
-export type WebSocketSession = Fn[WebSocket, Result[Void]]
-
-## The limits of a WebSocket. `max_message_bytes` is the largest message, joined from its fragments (1 to 256 MiB): a
-## larger one closes the connection with code 1009. `idle_ms` is the longest the server waits for the peer to send
-## anything, 0 for no limit but a year (a read that times out closes the socket); a timeout drops the connection, and
-## the handler receives `Close` with code 1006. `ping_ms` makes the server send a ping after that many milliseconds
-## without anything to write, 0 for none: with a `ping_ms` below `idle_ms` the pongs keep a live peer from being
-## dropped. `close_ms` is how long the server waits for the peer's answer to its close frame. `protocols` are the
-## subprotocols the server speaks, in order of preference. `outgoing_queue` is how many messages `outgoing` holds (1 to
-## 1048576) before a send waits: the writer takes everything queued at that moment and writes it in one go.
-export struct WebSocketOptions
-  max_message_bytes: Int = 1048576
-  idle_ms: Int = 0
-  ping_ms: Int = 0
-  close_ms: Int = 5000
-  protocols: List[String] = []
-  outgoing_queue: Int = 8
-end
-
-## What `accept_websocket` decides for a request, for an `Answer.Upgrade`: `Reply` answers it as a whole response (and
-## the connection serves the next request), `Accept` upgrades it. Make an `Accept` with `accept_websocket`.
-export enum Upgrade
-  Reply(HttpWire.Response)
-  Accept(WebSocketSession, WebSocketOptions, String, String)
-end
-
-## What an `App` returns for a request. `Whole` is a whole response, as a `Handler` returns. `Stream` is a response
-## whose body arrives on a channel. `Upgrade` is what `accept_websocket` makes: its
-## `Accept` runs a WebSocket on the connection, and its `Reply` (a request that is no handshake) is sent as `Whole`.
-export enum Answer
-  Whole(HttpWire.Response)
-  Stream(StreamResponse)
-  Upgrade(Upgrade)
-end
-
-## The function that `serve` and `serve_tls` call for each request: the request with an empty `body`, the
-## `RequestBody` that carries the body as it arrives, and the `Answer` out. A route that wants the body whole calls
-## `read_all`; `app` makes an `App` from a `Handler`. A middleware is a function from an `App` to an `App`.
-export type App = Fn[HttpWire.Request, RequestBody, Result[Answer]]
-
 # Where a connection is: `phase` is IDLE, READING, SPENT or OVER. While READING, `framing` says how the body ends,
 # `left` is what a body with a length still owes (for a body that runs to the end of input, what it has given),
 # `chunks` is the decoder of a chunked body, and `closes` whether the connection ends with the body
@@ -493,564 +1050,6 @@ end
 struct Feed
   conn: Connection
   pieces: Channel[Bytes]
-end
-
-## Creates a client that keeps connections open and reuses them. `options` is optional and defaults to
-## `HTTP.ClientOptions()`: 30 s timeouts, up to 4 connections, 1 MiB bodies, the system CA certificates and no proxy
-## (set `tls: some(context)` to use a client context of `TLS.client_context` instead of the system certificates).
-## Every number in `options` must be positive, `max_connections` at most 65536 and `max_body_bytes` at most 64 MiB, or
-## the result is an error. With a `proxy` (`http://host:port`, an origin with no path) every `http://` request goes
-## through that forward proxy in absolute form (`GET http://host/path HTTP/1.1`, `Host` still the target's), the
-## connections are pooled by the proxy. An `https://` request opens a `CONNECT host:port` tunnel through the proxy,
-## one per target, and speaks TLS inside it, verified against the target (a non-2xx answer to the `CONNECT` is an
-## error that names the proxy). A `proxy` that is not an `http://` origin is an error here. The user info of the
-## `proxy` (`http://user:password@host:8080`, percent-decoded) is sent to the proxy as `Proxy-Authorization: Basic`,
-## and a `407` from it is an error that names the proxy and not the credentials. Close the client with `close_client`.
-export def client(options: HttpWire.ClientOptions = HttpWire.ClientOptions()) -> Result[HttpWire.Client]
-  try check_options(
-    options.timeout_ms,
-    options.idle_timeout_ms,
-    options.max_connections,
-    options.max_body_bytes,
-    CLIENT_MAX_BODY,
-  )
-
-  try check_proxy(options)
-  jobs: Channel[HttpWire.Job] = Channel.new(CLIENT_JOBS)
-  ok(HttpWire.service(jobs, options) do |own| supervise_pool(own) end)
-end
-
-## The proxy that the environment names for `url`, to pass as `HTTP.ClientOptions(proxy: ...)`, or `""` when there is
-## none. It is the only call that reads the environment: a client never does, so nothing changes until a program asks.
-## It follows curl. An `http://` URL reads `http_proxy` and an `https://` URL `https_proxy`; the lower-case name wins
-## over `HTTP_PROXY` or `HTTPS_PROXY`, even when it is set and empty (which means no proxy). `HTTP_PROXY` is ignored
-## when `REQUEST_METHOD` is set, as in a CGI program, where a request's `Proxy` header becomes it (httpoxy); on
-## Windows, whose names do not differ by case, an `http://` URL then gets no proxy. `ALL_PROXY` is not read. A value
-## with no `://` is read as `http://` (`proxy.example:8080`), and one with another scheme is returned as it is, so the
-## client that gets it says it is not an `http://` origin.
-##
-## `no_proxy` (or `NO_PROXY`) is a list, separated by commas or spaces, that says where no proxy is used, and the
-## result is then `""`: `*` is every host; `example.com` and `.example.com` are that domain and its subdomains; an
-## entry may end in `:port` (`[::1]:8080` for an IPv6 literal); an IP literal matches only itself, and an IPv4 range
-## such as `10.0.0.0/8` matches its addresses (an IPv6 range is not read). Empty entries and an entry that is not
-## valid are ignored, one trailing dot of a host or an entry does not count, and the case of a host is not
-## significant. A `url` that is not valid gives `""`: the call that gets it reports it.
-##
-## An `https://` URL gets `https_proxy`, which `HTTP` then reaches with a `CONNECT` tunnel.
-export def proxy_from_env(url: String) -> String
-  case parse_url(url)
-    ok(where) ->
-      return "" if no_proxy_for?(where)
-
-      proxy_of_scheme(where.scheme)
-    error(_) -> ""
-  end
-end
-
-## Closes the client and its connections. A call still in flight fails with `http: client is closed`; its request
-## is not sent, unless a connection had already started sending it.
-export def close_client(pool: HttpWire.Client) -> Void
-  Channel.close(HttpWire.jobs(pool))
-end
-
-## Sends a `GET` request to `url` and returns the response, whose `body` is `Bytes`.
-export def get(pool: HttpWire.Client, url: String) -> Result[HttpWire.Response] = request(pool, "GET", url, NO_BYTES)
-
-## Sends a `POST` request to `url` with the `Bytes` `body` and `headers`, which default to none, as Ruby's
-## `Net::HTTP.post(uri, data, header)` does. Send text as `"...".bytes`.
-export def post(
-  pool: HttpWire.Client,
-  url: String,
-  body: Bytes,
-  headers: List[HttpWire.Header] = [],
-) -> Result[HttpWire.Response]
-  request(pool, "POST", url, body, headers)
-end
-
-## Sends a `GET` request to `url` on a client of its own and returns the response, like Ruby's
-## `Net::HTTP.get_response(uri)`. It is the call for one request: it makes a client with `options` (default
-## `HTTP.ClientOptions()`), makes the call and closes the client, and with it the connection, before it returns. Many
-## requests to the same hosts belong on one `HTTP.client()` with `get`, which reuses connections.
-export def get_response(
-  url: String,
-  options: HttpWire.ClientOptions = HttpWire.ClientOptions(),
-) -> Result[HttpWire.Response]
-  request_once("GET", url, NO_BYTES, [], options)
-end
-
-## Sends a `POST` request on a client of its own, as `get_response` does for `GET`: the `Bytes` `body`, `headers`
-## (default none) and `options` (default `HTTP.ClientOptions()`), then the client is closed. Like Ruby's
-## `Net::HTTP.post(uri, data, header)`, and the pooled `post` for many requests.
-export def post_response(
-  url: String,
-  body: Bytes,
-  headers: List[HttpWire.Header] = [],
-  options: HttpWire.ClientOptions = HttpWire.ClientOptions(),
-) -> Result[HttpWire.Response]
-  request_once("POST", url, body, headers, options)
-end
-
-## Sends a request with any `method`. `url` must start with `http://` or `https://`.
-## The client adds `Host` and `Content-Length` itself, so `headers` may not set them, nor `Transfer-Encoding` or
-## `Connection`. The `body` is `Bytes` of at most `max_body_bytes` (`"".bytes` sends none); `headers` default to none.
-export def request(
-  pool: HttpWire.Client,
-  method: String,
-  url: String,
-  body: Bytes,
-  headers: List[HttpWire.Header] = [],
-) -> Result[HttpWire.Response]
-  where = try parse_url(url)
-  options = HttpWire.options(pool)
-  # The pool connects to `via` (the proxy, or the target's host) and keys its connections by it.
-  via = try connect_target(where, options)
-  head = try HttpWire.encode_request(
-    where.scheme,
-    where.host,
-    where.port,
-    method,
-    request_target(options, where),
-    with_login(options, where.scheme, headers),
-    body,
-    options.max_body_bytes,
-  )
-
-  deadline = Time.monotonic_ms() + options.timeout_ms
-  reply: Channel[Result[HttpWire.Response]] = Channel.new(1)
-  job = HttpWire.Job(
-    origin: "#{via.scheme}://#{via.host}:#{via.port}",
-    scheme: via.scheme,
-    host: via.host,
-    port: via.port,
-    method: method,
-    head: head,
-    body: body,
-    deadline: deadline,
-    reply: reply,
-    worker: 0,
-    kept: false,
-  )
-
-  case HttpWire.jobs(pool).send(job, options.timeout_ms)
-    ok(_) -> unless_denied(options, where.scheme, wait_reply(reply, deadline))
-    error(message) ->
-      return error(CLIENT_CLOSED, kind: "http.closed") if "#{message}" == CHANNEL_CLOSED
-      error(TIMED_OUT, kind: "net.timeout")
-  end
-end
-
-## Downloads the resource at `url` with a `GET` request and writes its body bytes to `path`. `options` is optional
-## and defaults to `DownloadOptions()`: a 30 s timeout and bodies up to 256 MiB.
-##
-## The transfer stays bounded: at most 1 MiB is held at once, the body stops at
-## `options.max_total_bytes` with `http: body exceeds max_body_bytes`, and the file never grows past it. The file
-## must not exist: it is made with `create_private`, so an existing path is an error and stays intact, while a
-## failed download keeps the partial file. Status codes such as 404 or 500 are normal responses, as with `get`:
-## the body is still written and the status returned, so check `status` before using the file. There is no
-## redirect follow, and the connection is not pooled: it closes when the download ends. The pool gives the TLS
-## context and its certificates for `https`, whose verification stays on.
-export def download(
-  pool: HttpWire.Client,
-  url: String,
-  path: String,
-  options: DownloadOptions = DownloadOptions(),
-) -> Result[Download]
-  if options.timeout_ms <= 0 or options.max_total_bytes <= 0
-    return error("http: every download option must be positive", kind: "argument")
-  end
-  if options.max_total_bytes > DOWNLOAD_MAX_BYTES
-    return error("http: max_total_bytes must be at most 268435456", kind: "argument")
-  end
-  where = try parse_url(url)
-  client_options = HttpWire.options(pool)
-  via = try connect_target(where, client_options)
-  head = try HttpWire.encode_request(
-    where.scheme,
-    where.host,
-    where.port,
-    "GET",
-    request_target(client_options, where),
-    with_login(client_options, where.scheme, []),
-    NO_BYTES,
-    client_options.max_body_bytes,
-  )
-
-  deadline = Time.monotonic_ms() + options.timeout_ms
-  # What a 407 from the proxy is told as; empty when there is no proxy or the request is in a tunnel, whose 407 is the
-  # server's own answer.
-  denied = ""
-  if proxy_asked?(client_options, where.scheme, 407)
-    denied = client_denied(client_options)
-  end
-
-  socket = try connect_download(pool, via, deadline)
-  case TCP.send_bytes(socket, head_bytes(head), try time_left(socket, deadline))
-    ok(_) -> finish_download(socket, path, options, deadline, denied)
-    error(message) ->
-      TCP.close(socket)
-      error(message)
-  end
-end
-
-## Opens a connection to the `origin` (`http://host` or `https://host:8443`, with no path) and returns it, as
-## Ruby's `Net::HTTP.start` does. The connection is made now. Only `timeout_ms` (the time of each call: this one, each
-## `send_request` and each `read_body`), `max_body_bytes` (the largest request body), `tls` (over `https`, the
-## certificate is verified with that client context, the system trust by default, built again for each `start`) and
-## `proxy` (an `http` origin is then reached through the proxy, which each `send_request` addresses in absolute form)
-## of `options` apply: nothing is pooled. The connection is for one request at a time and stays open for the next one
-## when the response had a body that was read to its end (`read_body` gave an empty piece) and the server did not
-## close it. A response body is at most 256 MiB, the limit of `download`: a longer one is an `error`. Close it with
-## `finish`. For whole requests use `get_response` or the pooled client instead.
-export def start(origin: String, options: HttpWire.ClientOptions = HttpWire.ClientOptions()) -> Result[Connection]
-  try check_options(
-    options.timeout_ms,
-    options.idle_timeout_ms,
-    options.max_connections,
-    options.max_body_bytes,
-    CLIENT_MAX_BODY,
-  )
-
-  where = try parse_url(origin)
-  if where.target != "/"
-    return error("http: start takes an origin such as http://host:8080, with no path or query", kind: "argument")
-  end
-  connect_to(where, options)
-end
-
-## Sends a request on the connection and returns when the head of the response has been read, as Ruby's
-## `Net::HTTP#send_request` does. `target` is the path with its query (`/items?page=2`); `method`, `body` (`Bytes`, at
-## most `max_body_bytes`; `"".bytes` sends none) and `headers` (default none) are as for `request`, and the client
-## adds `Host` and `Content-Length`. The body of the response is not read: call `read_body` until it gives an empty
-## piece (a response with no body, such as one to `HEAD` or a `204`, leaves the connection ready at once). An `error`
-## is a request refused before it was written, which leaves the connection as it was, a connection that is closed or
-## has a response still to be read, or a failure of the connection, which then ends. A server that closed an idle
-## connection shows as an `error` here: `start` a new one.
-export def send_request(
-  conn: Connection,
-  method: String,
-  target: String,
-  body: Bytes,
-  headers: List[HttpWire.Header] = [],
-) -> Result[ResponseHead]
-  exchange = try take_exchange(conn)
-  if exchange.phase == READING
-    put_exchange(conn, exchange)
-    return error("http: the body of the last response is not read to its end", kind: "argument")
-  end
-  if exchange.phase == OVER or exchange.phase == SPENT
-    put_exchange(conn, exchange)
-    return error(CONNECTION_OVER, kind: "http.closed")
-  end
-  # A request that cannot be encoded (a bad method, header or target, a body over the limit) was never written, so
-  # the connection is as healthy as before. Only a failure after the first byte ends it.
-  encoded = HttpWire.encode_request(
-    conn.scheme,
-    conn.host,
-    conn.port,
-    method,
-    connection_target(conn, target),
-    connection_headers(conn, headers),
-    body,
-    conn.options.max_body_bytes,
-  )
-
-  case encoded
-    ok(request) -> send_encoded(conn, request, method == "HEAD", body)
-    error(message) ->
-      put_exchange(conn, exchange)
-      error(message)
-  end
-end
-
-## Reads the next piece of the body of the last response, at most `max_bytes` (1 to 1 MiB, 64 KiB by default), as
-## Ruby's `Net::HTTP#read_body` does with a block. It waits for at least one byte, and an empty `Bytes` is the end of
-## the body: the connection is then ready for the next `send_request`, or closed when the server said so. It is the
-## end as soon as the last byte has been read, so a program that knows the length may stop before the empty piece. A
-## chunked body is decoded and a `Content-Length` one is held to its length. A cut body, a bad chunk and a timeout are
-## an `error`, and end the connection.
-export def read_body(conn: Connection, max_bytes: Int = 65536) -> Result[Bytes]
-  if max_bytes < 1 or max_bytes > BODY_READ_BYTES
-    return error("http: max_bytes must be 1 to 1048576", kind: "argument")
-  end
-  exchange = try take_exchange(conn)
-  if exchange.phase == OVER
-    put_exchange(conn, exchange)
-    return error(CONNECTION_OVER, kind: "http.closed")
-  end
-  if exchange.phase == IDLE or exchange.phase == SPENT
-    put_exchange(conn, exchange)
-    return ok(NO_BYTES)
-  end
-  deadline = Time.monotonic_ms() + conn.options.timeout_ms
-  case next_piece(conn.socket, exchange, max_bytes, deadline)
-    ok(step) ->
-      put_exchange(conn, finished_exchange(conn, step.exchange))
-      ok(step.piece)
-    error(message) ->
-      end_connection(conn)
-      error(message)
-  end
-end
-
-## Ends the connection and frees its socket, as Ruby's `Net::HTTP#finish` does. A response body not read to its end is
-## dropped. It is safe to call twice.
-export def finish(conn: Connection) -> Void
-  end_connection(conn)
-end
-
-## Sends a request on a connection of its own and returns at the head of the response, whose body arrives on a channel
-## (`Stream`), for a body that is too big to hold, that never ends (events, lines of a log) or that another task reads
-## as it comes. `url` has a path and query; `method`, `body` (`Bytes`, at most `max_body_bytes`) and `headers` are as
-## for `request`. `options.timeout_ms` is the time of each wait: the connect, the head, each read of the body and each
-## `send` to the channel, so a reader that takes longer than that to ask for the next piece ends the stream. The body
-## is at most 256 MiB, whatever its framing. The connection is not pooled and ends with the body. For whole responses
-## use `get`.
-export def open(
-  method: String,
-  url: String,
-  body: Bytes,
-  headers: List[HttpWire.Header] = [],
-  options: HttpWire.ClientOptions = HttpWire.ClientOptions(),
-) -> Result[Stream]
-  try check_options(
-    options.timeout_ms,
-    options.idle_timeout_ms,
-    options.max_connections,
-    options.max_body_bytes,
-    CLIENT_MAX_BODY,
-  )
-
-  where = try parse_url(url)
-  conn = try connect_to(where, options)
-  case send_request(conn, method, where.target, body, headers)
-    ok(head) ->
-      pieces: Channel[Bytes] = Channel.new(STREAM_PIECES)
-      done = Task.spawn_owning(&feed_stream, Feed(conn: conn, pieces: pieces))
-      ok(Stream(status: head.status, headers: head.headers, body: pieces, done: done))
-    error(message) ->
-      end_connection(conn)
-      error(message)
-  end
-end
-
-## Sends a request whose body comes from a channel, and returns the whole response. The caller's other task sends the
-## pieces (`Bytes` of any content) and closes the channel at the end. `length` is the exact byte count, which the
-## request then says as `Content-Length` and which ends the body as soon as that many bytes were sent (the producer
-## need not close the channel), or -1 (the default) for a chunked body, which ends when the channel closes. `method` is
-## `POST`, `PUT` or `PATCH`; `headers` and `options` are as for `request`, and `options.max_body_bytes` limits the
-## response body, not the upload. `options.timeout_ms` is the time of each wait: the connect, each piece from the
-## channel, each send and the head of the response. A body that is longer or shorter than `length`, or a channel that
-## stays silent for longer than the timeout, is an `error` and ends the connection. A channel that closes ends the
-## body, also when its producer died, so a producer that can fail should set `length`. A server that answers and closes
-## before the upload ends (a 413) does not hide its answer: when a write fails, the head of the response that is
-## waiting is read and returned, and the write failure is the `error` only when there is none. The connection is not
-## pooled. The channel is closed when the call returns, so a producer that is still sending finds the closed error and
-## stops.
-export def upload(
-  method: String,
-  url: String,
-  body: Channel[Bytes],
-  length: Int = -1,
-  headers: List[HttpWire.Header] = [],
-  options: HttpWire.ClientOptions = HttpWire.ClientOptions(),
-) -> Result[HttpWire.Response]
-  answer = upload_whole(method, url, body, length, headers, options)
-  body.close
-  answer
-end
-
-## Returns every value of the header `name`, ignoring case, in order.
-export def header_values(headers: List[HttpWire.Header], name: String) -> List[String]
-  wanted = String.downcase(name)
-  found: List[String] = []
-  for header in headers
-    if String.downcase(header.name) == wanted
-      found = List.append(found, header.value)
-    end
-  end
-  found
-end
-
-## Returns `body` as a `String`, decoded in the `charset` of the `Content-Type` of `headers`, those of the same
-## message (`response.headers`), or as UTF-8 when there is none. The charsets are the encodings of `Bytes.decode`
-## (UTF-8, UTF-16, UTF-32, ASCII, Latin-1, ISO-8859-15 and Windows-1252, by any of their names, in any case). A body
-## that is not valid in its charset is an `error` result, with the offset for a charset other than UTF-8, and any
-## other charset is an `error` that names it: those (Shift_JIS, GB18030, KOI8-R) are for the `agentica-lang/charset`
-## package.
-export def text(body: Bytes, headers: List[HttpWire.Header] = []) -> Result[String]
-  charset = charset_of(headers)
-  if charset == "" or UTF8_CHARSETS.include?(charset.replace("_", "-"))
-    case String.from_bytes(body)
-      ok(decoded) -> return ok(decoded)
-      error(_) -> return error(BAD_BODY, kind: "text.encoding")
-    end
-  end
-  # Every encoding writes the empty text, so this asks whether Bytes.decode knows the name.
-  if not "".encode(charset).ok?
-    shown = charset
-    if shown.length > MAX_SHOWN
-      shown = shown.slice(0, MAX_SHOWN)
-    end
-    return error(
-      "http: charset #{shown} is not supported, decode the body with agentica-lang/charset",
-      kind: "text.encoding",
-    )
-  end
-  case body.decode(charset)
-    ok(decoded) -> ok(decoded)
-    error(e) -> error(e.with(message: "http: #{e.message}"))
-  end
-end
-
-## Collects the body for an `App` that wants it whole, so one server can serve small routes simply next to the big
-## ones: the pieces of `body` joined, at most `max_bytes` (0 or more), after the end of the body was checked. It is an
-## `error` when the body is longer than `max_bytes` (the app then answers 413, and the server closes the connection
-## after that answer) and when `done` says the body did not arrive whole.
-export def read_all(body: RequestBody, max_bytes: Int) -> Result[Bytes]
-  return error("http: max_bytes must be 0 or more", kind: "argument") if max_bytes < 0
-  pieces: List[Bytes] = []
-  total = 0
-  while true
-    case body.pieces.recv(OWNER_WAIT_MS)
-      ok(piece) ->
-        total = total + piece.size
-        return error(BODY_TOO_LONG, kind: "http.too_large", code: 413) if total > max_bytes
-        pieces = pieces.push(piece)
-      error(_) -> break
-    end
-  end
-  try Task.await(body.done)
-  ok(Bytes.concat(pieces))
-end
-
-## Checks that `request` is a WebSocket handshake and makes the `Upgrade` that runs `session` on it. The request must
-## be a `GET` with `Upgrade: websocket`, `Connection: Upgrade`, `Sec-WebSocket-Version: 13` and a `Sec-WebSocket-Key`
-## of 16 bytes in base64. A request that is not gets an `Upgrade.Reply`: 426 with `Sec-WebSocket-Version: 13` for
-## another version, 400 for the rest. The first of `options.protocols` that the client offers in
-## `Sec-WebSocket-Protocol` is agreed on (`WebSocket.protocol`). No extension is accepted, so no frame is compressed.
-## The server does not check `Origin`: a browser sends it with every handshake, and a handler that serves pages of its
-## own should compare it with `header_values(request.headers, "origin")` before it accepts. It is an `error` when
-## `options` is out of range.
-export def accept_websocket(
-  request: HttpWire.Request,
-  session: WebSocketSession,
-  options: WebSocketOptions = WebSocketOptions(),
-) -> Result[Upgrade]
-  try check_websocket_options(options)
-  case handshake_problem(request)
-    some(response) -> ok(Upgrade.Reply(response))
-    none -> ok(accepted(request, session, options))
-  end
-end
-
-## Frames a `Text` or `Binary` message once, for a broadcast: the `Prepared` message it returns is sent on any
-## number of `outgoing` channels, and each writer sends its bytes as they are, where a `Text` would be framed again
-## for every socket. The peer receives the same frame as for the message itself. Any other message is returned as it
-## is.
-export def prepare(message: Message) -> Message
-  case message
-    Message.Text(text) -> Message.Prepared(WebSocketWire.text_frame(text))
-    Message.Binary(data) -> Message.Prepared(WebSocketWire.binary_frame(data))
-    _ -> message
-  end
-end
-
-## Starts an HTTP server on `host` and `port` that serves every kind of route on one port, and returns at once; it
-## serves in the background. Port 0 picks a free port, which `local_port` returns. The server closes when the task that
-## called `serve` ends. `app` gets each request with its body on a channel (`RequestBody`) and answers with a whole
-## response, a stream or a WebSocket upgrade (`Answer`); `app(handler)` makes one from a `Handler`, for a route that
-## takes the request whole. Every body is at most `max_body_bytes` of `options` (1 MiB unless raised, up to 256 MiB): a
-## request whose `Content-Length` is larger is answered 413 before `app` runs and before any `100 Continue`. A route
-## that wants less counts the bytes or calls `read_all`. The connection serves the next request only when the body was
-## read whole by the time `app` returned (a body that had all arrived counts, read or not); otherwise the answer says
-## `Connection: close`, and an upgrade is refused. The server sets no limit on the time of `app`. `options` is optional
-## and defaults to `HTTP.ServerOptions()`: 30 s `request_timeout_ms` and `idle_timeout_ms`, 128 connections and 1 MiB
-## bodies.
-export def serve(
-  host: String,
-  port: Int,
-  app: App,
-  options: HttpWire.ServerOptions = HttpWire.ServerOptions(),
-) -> Result[HttpWire.Server]
-  try check_options(
-    options.request_timeout_ms,
-    options.idle_timeout_ms,
-    options.max_connections,
-    options.max_body_bytes,
-    DOWNLOAD_MAX_BYTES,
-  )
-
-  listener = try TCP.listen(host, port)
-  ok(start_server(listener, app, options))
-end
-
-## Like `serve`, but over TLS, with the certificate and key of `tls`, a server context. `options` is optional and
-## defaults to `HTTP.ServerOptions()`.
-export def serve_tls(
-  host: String,
-  port: Int,
-  tls: TLS.Context,
-  app: App,
-  options: HttpWire.ServerOptions = HttpWire.ServerOptions(),
-) -> Result[HttpWire.Server]
-  try check_options(
-    options.request_timeout_ms,
-    options.idle_timeout_ms,
-    options.max_connections,
-    options.max_body_bytes,
-    DOWNLOAD_MAX_BYTES,
-  )
-
-  listener = try TLS.listen(host, port, tls)
-  ok(start_server(listener, app, options))
-end
-
-## Makes an `App` from a `Handler`, for a route that wants the request whole: the body is read first, at most
-## `max_body_bytes` (1 MiB unless given; a negative one counts as 0), and `handler` gets the request with it; its
-## response is the `Whole` answer. A body that is larger, by its `Content-Length` or as it arrives, is answered 413,
-## a chunk line or trailer section over the head limits 431 and a bad chunk 400, all with `Connection: close` and
-## without calling `handler`; a body cut or stalled (the client left, a timeout) closes the connection. The server sets
-## no limit on the time of `handler`.
-export def app(handler: Handler, max_body_bytes: Int = 1048576) -> App
-  limit = max_body_bytes
-  if limit < 0
-    limit = 0
-  end
-  ->(request, body) { whole_answer(handler, limit, request, body) }
-end
-
-## The answer that refuses a request body `read_all` could not read, from its error: 413 for a body over its limit
-## (the error `"http: body exceeds max_bytes"`), 431 for a chunk line or trailer section over the head limits (an
-## error that starts with `"http: request fields too large: "`), 400 for any other (a bad chunk, a body cut or
-## stalled).
-## It is a whole response with `Connection: close` and no body. `app` answers so; a route that reads the body itself,
-## before a stream for one, returns `ok(body_refusal(message))` for the error.
-export def body_refusal(message: String) -> Answer
-  return Answer.Whole(closing_answer(413)) if message == BODY_TOO_LONG
-  return Answer.Whole(closing_answer(431)) if message.start_with?(FIELDS_TOO_LARGE)
-  Answer.Whole(closing_answer(400))
-end
-
-## Returns a closed channel that holds `data` as its one piece: the body of a `StreamResponse` that is one whole
-## text or file. The server then answers with `Content-Length`, as for a whole response.
-export def whole(data: Bytes) -> Channel[Bytes]
-  body: Channel[Bytes] = Channel.new(1)
-  if not data.empty?
-    _ = body.send(data, 0)
-  end
-  body.close
-  body
-end
-
-## Returns the port the server listens on.
-export def local_port(server: HttpWire.Server) -> Int = HttpWire.local_port(server)
-
-## Returns `ok()` once the server and its tasks are done.
-export def wait(server: HttpWire.Server) -> Result[Void] = HttpWire.wait(server)
-
-## Stops accepting, closes every connection and cancels the running handlers. Calling it again does nothing.
-export def close_server(server: HttpWire.Server) -> Void
-  HttpWire.close_server(server)
 end
 
 # One request on a client that lives for it alone. The client is closed after the reply, whatever it was, so no

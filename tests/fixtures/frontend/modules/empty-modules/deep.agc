@@ -1,3 +1,2 @@
-export def deep() -> Void
+def deep() -> Void
 end
-

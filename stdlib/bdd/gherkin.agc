@@ -6,20 +6,20 @@
 import Report from "std/test/report"
 
 ## A problem in a feature file: a code, a message and its place.
-export struct Diagnostic
+struct Diagnostic
   code: String
   message: String
   span: Report.Span
 end
 
 ## The result of a read that can fail: `Done` with a value, or `Failed` with a `Diagnostic`.
-export enum Outcome[T]
+enum Outcome[T]
   Done(T)
   Failed(Diagnostic)
 end
 
 ## What follows a step: nothing, a Doc String or a Data Table.
-export enum Argument
+enum Argument
   NoArgument
   DocString(String)
   DataTable(List[List[String]])
@@ -27,7 +27,7 @@ end
 
 ## One step of a scenario: its kind (`Given`, `When` or `Then`), the text after the keyword, its argument and its
 ## place.
-export struct Step
+struct Step
   kind: String
   text: String
   argument: Argument
@@ -36,7 +36,7 @@ end
 
 ## One scenario, with the `Background` steps first, the tags of the feature, of the scenario and of its `Examples`
 ## block, and the example row it came from.
-export struct Scenario
+struct Scenario
   name: String
   steps: List[Step]
   tags: List[String]
@@ -45,53 +45,15 @@ export struct Scenario
 end
 
 ## A parsed feature file. A `Scenario Outline` is already expanded into one scenario for each `Examples` row.
-export struct Feature
+struct Feature
   name: String
   scenarios: List[Scenario]
   tags: List[String]
   span: Report.Span
 end
 
-struct Source
-  file: String
-  raws: List[String]
-  texts: List[String]
-end
-
-struct ExampleRow
-  span: Report.Span
-  headers: List[String]
-  cells: List[String]
-  bindings: Map[String, String]
-  tags: List[String]
-end
-
-struct Draft
-  name: String
-  outline: Bool
-  steps: List[Step]
-  examples: List[ExampleRow]
-  tags: List[String]
-  span: Report.Span
-end
-
-struct TableRow
-  span: Report.Span
-  cells: List[String]
-end
-
-struct Table
-  rows: List[TableRow]
-  next: Int
-end
-
-struct Doc
-  text: String
-  next: Int
-end
-
 ## Parses the text of the feature file `file`. Returns the `Feature`, or a `Diagnostic` for the first problem.
-export def parse(file: String, text: String) -> Outcome[Feature]
+def parse(file: String, text: String) -> Outcome[Feature]
   src = read_lines(file, text)
   count = src.raws.size
   cursor = 0
@@ -292,6 +254,46 @@ export def parse(file: String, text: String) -> Outcome[Feature]
     end
   end
   Outcome.Done(Feature(name: title, scenarios: scenarios, tags: feature_tags, span: title_span))
+end
+
+private
+
+struct Source
+  file: String
+  raws: List[String]
+  texts: List[String]
+end
+
+struct ExampleRow
+  span: Report.Span
+  headers: List[String]
+  cells: List[String]
+  bindings: Map[String, String]
+  tags: List[String]
+end
+
+struct Draft
+  name: String
+  outline: Bool
+  steps: List[Step]
+  examples: List[ExampleRow]
+  tags: List[String]
+  span: Report.Span
+end
+
+struct TableRow
+  span: Report.Span
+  cells: List[String]
+end
+
+struct Table
+  rows: List[TableRow]
+  next: Int
+end
+
+struct Doc
+  text: String
+  next: Int
 end
 
 def problem(code: String, message: String, span: Report.Span) -> Diagnostic

@@ -14,6 +14,49 @@
 ## Ruby, `decode_www_form` skips an empty piece (`a=1&&b=2` has two pairs, as in Python, Rack and browsers) and
 ## returns an `error` for a bad `%` instead of leaving it in the text.
 
+## One `name=value` piece of a query string.
+struct Pair
+  name: String
+  value: String
+end
+
+## Encodes `text` for a query string or a form: space becomes `+` and every byte but `A-Z a-z 0-9 * - . _` becomes
+## `%XX`, as Ruby's `URI.encode_www_form_component`.
+def encode_www_form_component(text: String) -> String = encode(text, [PLUS])
+
+## Encodes `text` for a path segment or any URI component: space becomes `%20` and every byte but `A-Z a-z 0-9 * - . _`
+## becomes `%XX`, as Ruby's `URI.encode_uri_component`.
+def encode_uri_component(text: String) -> String = encode(text, ENCODED_SPACE)
+
+## Decodes a query string or form component: `+` becomes a space and `%XX` becomes its byte, as Ruby's
+## `URI.decode_www_form_component`. Returns an error for a `%` without two hex digits and for bytes that are not UTF-8.
+def decode_www_form_component(text: String) -> Result[String] = decode(text, true)
+
+## Decodes a path segment or any URI component: `%XX` becomes its byte and `+` stays a plus, as Ruby's
+## `URI.decode_uri_component`. Returns an error for a `%` without two hex digits and for bytes that are not UTF-8.
+def decode_uri_component(text: String) -> Result[String] = decode(text, false)
+
+## Joins pairs into a query string, `a=1&a=2&b=`, encoding each name and value with `encode_www_form_component`. Names
+## may repeat and the order is kept.
+def encode_www_form(pairs: List[Pair]) -> String
+  parts = pairs.map do |pair| "#{encode_www_form_component(pair.name)}=#{encode_www_form_component(pair.value)}" end
+  parts.join("&")
+end
+
+## Splits a query string on `&` into pairs and decodes both parts with `decode_www_form_component`, as Ruby's
+## `URI.decode_www_form`. Names may repeat and the order is kept; a piece without `=` has the value `""`, and an empty
+## piece is skipped. Returns the error of the first piece that does not decode.
+def decode_www_form(query: String) -> Result[List[Pair]]
+  pairs: List[Pair] = []
+  for piece in query.split("&")
+    next if piece.empty?
+    pairs = pairs.push(try decode_pair(piece))
+  end
+  ok(pairs)
+end
+
+private
+
 # The bytes of "0123456789ABCDEF", indexed by a nibble.
 HEX_DIGITS = [48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 65, 66, 67, 68, 69, 70]
 
@@ -25,47 +68,6 @@ PERCENT = 37
 PLUS = 43
 SPACE = 32
 ENCODED_SPACE = [PERCENT, 50, 48]
-
-## One `name=value` piece of a query string.
-export struct Pair
-  name: String
-  value: String
-end
-
-## Encodes `text` for a query string or a form: space becomes `+` and every byte but `A-Z a-z 0-9 * - . _` becomes
-## `%XX`, as Ruby's `URI.encode_www_form_component`.
-export def encode_www_form_component(text: String) -> String = encode(text, [PLUS])
-
-## Encodes `text` for a path segment or any URI component: space becomes `%20` and every byte but `A-Z a-z 0-9 * - . _`
-## becomes `%XX`, as Ruby's `URI.encode_uri_component`.
-export def encode_uri_component(text: String) -> String = encode(text, ENCODED_SPACE)
-
-## Decodes a query string or form component: `+` becomes a space and `%XX` becomes its byte, as Ruby's
-## `URI.decode_www_form_component`. Returns an error for a `%` without two hex digits and for bytes that are not UTF-8.
-export def decode_www_form_component(text: String) -> Result[String] = decode(text, true)
-
-## Decodes a path segment or any URI component: `%XX` becomes its byte and `+` stays a plus, as Ruby's
-## `URI.decode_uri_component`. Returns an error for a `%` without two hex digits and for bytes that are not UTF-8.
-export def decode_uri_component(text: String) -> Result[String] = decode(text, false)
-
-## Joins pairs into a query string, `a=1&a=2&b=`, encoding each name and value with `encode_www_form_component`. Names
-## may repeat and the order is kept.
-export def encode_www_form(pairs: List[Pair]) -> String
-  parts = pairs.map do |pair| "#{encode_www_form_component(pair.name)}=#{encode_www_form_component(pair.value)}" end
-  parts.join("&")
-end
-
-## Splits a query string on `&` into pairs and decodes both parts with `decode_www_form_component`, as Ruby's
-## `URI.decode_www_form`. Names may repeat and the order is kept; a piece without `=` has the value `""`, and an empty
-## piece is skipped. Returns the error of the first piece that does not decode.
-export def decode_www_form(query: String) -> Result[List[Pair]]
-  pairs: List[Pair] = []
-  for piece in query.split("&")
-    next if piece.empty?
-    pairs = pairs.push(try decode_pair(piece))
-  end
-  ok(pairs)
-end
 
 def encode(text: String, space: List[Int]) -> String
   out: List[Int] = []

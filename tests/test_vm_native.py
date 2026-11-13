@@ -382,7 +382,7 @@ def test_an_integer_outside_the_bits_of_its_type_stops_the_run(tmp_path, peer, c
 
 @NATIVE_CALLS
 def test_an_extern_function_is_exported_and_imported_like_any_function(tmp_path, peer):
-    raw = PEER_EXTERN.format(library=literal(peer)).replace("  def peer_add(", "  export def peer_add(")
+    raw = PEER_EXTERN.format(library=literal(peer))
     program(tmp_path, raw.rstrip("\n") + "\n", "raw.agc")
     main = program(tmp_path, 'import Raw from "./raw"\n\ndef main() -> Void\n  puts(Raw.peer_add(1, 2))\nend\n')
     result = agentica(main)
@@ -2979,7 +2979,7 @@ def test_closed_tells_a_live_resource_from_a_closed_one(tmp_path, peer, schedule
 # The record of an exported extern function is exported with it: another file names its type and reads its fields.
 @NATIVE_CALLS
 def test_the_record_of_an_out_call_crosses_an_import(tmp_path, peer):
-    program(tmp_path, 'extern "%s"\n  export def peer_out_twice(n: C.Int32, out twice: C.Int32) -> Void\nend\n'
+    program(tmp_path, 'extern "%s"\n  def peer_out_twice(n: C.Int32, out twice: C.Int32) -> Void\nend\n'
             % literal(peer), "raw.agc")
     main = program(tmp_path, 'import Raw from "./raw"\n\ndef twice(made: Raw.PeerOutTwice) -> Int\n'
                    '  return made.twice\nend\n\ndef main() -> Void\n  puts(twice(Raw.peer_out_twice(4)))\nend\n')

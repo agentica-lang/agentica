@@ -6,11 +6,8 @@
 ## `cast` sends a message, `call` sends one that carries a reply channel and waits for the answer, and `stop` ends the
 ## actor after the messages already in its inbox.
 
-# How long the loop waits for a message before it waits again: a receive always has a timeout.
-IDLE_MS = 60_000
-
 ## The contract of an actor with state `S` and messages `M`.
-export struct Behaviour[S, M]
+struct Behaviour[S, M]
   ## Makes the first state, in the actor's task.
   init: Fn[S]
   handle: Fn[S, M, Step[S]]
@@ -19,31 +16,26 @@ export struct Behaviour[S, M]
 end
 
 ## What `start` takes besides the behaviour.
-export struct Options
+struct Options
   ## How many messages the inbox holds before `cast` and `call` wait for room (1 to 1048576).
   capacity: Int = 1024
 end
 
 ## What a handler gives: the next state, or the last one.
-export enum Step[S]
+enum Step[S]
   Continue(S)
   Done(S)
 end
 
 ## A running actor. Send through `address`; `inbox` is only the channel for `Task.monitor`: never receive from it.
-export struct Ref[S, M]
+struct Ref[S, M]
   address: Address[M]
   inbox: Channel[M]
   task: Task[Result[Void]]
 end
 
-struct Setup[S, M]
-  behaviour: Behaviour[S, M]
-  inbox: Channel[M]
-end
-
 ## Starts the actor in a task of its own, which owns the inbox: the inbox closes when the actor ends in any way.
-export def start[S, M](behaviour: Behaviour[S, M], options: Options = Options()) -> Ref[S, M]
+def start[S, M](behaviour: Behaviour[S, M], options: Options = Options()) -> Ref[S, M]
   inbox: Channel[M] = Channel.new(options.capacity)
   body: Fn[Setup[S, M], Result[Void]] = &run
   task = Task.spawn_owning(body, Setup(behaviour: behaviour, inbox: inbox))
@@ -51,20 +43,20 @@ export def start[S, M](behaviour: Behaviour[S, M], options: Options = Options())
 end
 
 ## The step that keeps the actor running with `state`.
-export def continue[S](state: S) -> Step[S] = Step.Continue(state)
+def continue[S](state: S) -> Step[S] = Step.Continue(state)
 
 ## The step that ends the actor with `state`: it runs `terminate` and handles no more messages.
-export def done[S](state: S) -> Step[S] = Step.Done(state)
+def done[S](state: S) -> Step[S] = Step.Done(state)
 
 ## Answers a `call`. It never waits: the answer to a caller that gave up stays in a channel nobody reads, and a second
 ## answer to one call finds the channel full and is dropped.
-export def reply[R](channel: Channel[R], value: R) -> Void
+def reply[R](channel: Channel[R], value: R) -> Void
   _ = channel.send(value, 0)
 end
 
 ## Sends a message, waiting at most `timeout_ms` for room in the inbox. Errors: `actor: timeout` when the inbox stays
 ## full, `address: gone` when the actor has ended.
-export def cast[M](address: Address[M], message: M, timeout_ms: Int = 5000) -> Result[Void]
+def cast[M](address: Address[M], message: M, timeout_ms: Int = 5000) -> Result[Void]
   case address.send(message, timeout_ms)
     ok(_) -> ok()
     error(e) -> gone_or_timeout(e)
@@ -73,7 +65,7 @@ end
 
 ## Sends the message that `make` builds around a new reply channel and returns the answer, all within `timeout_ms`.
 ## Errors as `cast`; a call whose actor ends or crashes before it answers ends with `actor: timeout`.
-export def call[M, R](address: Address[M], timeout_ms: Int, make: Fn[Channel[R], M]) -> Result[R]
+def call[M, R](address: Address[M], timeout_ms: Int, make: Fn[Channel[R], M]) -> Result[R]
   answer: Channel[R] = Channel.new(1)
   started = Time.monotonic_ms
   try cast(address, make.call(answer), timeout_ms)
@@ -89,7 +81,7 @@ end
 ## Stops the actor: it handles the messages already in its inbox, runs `terminate` and ends, and `stop` waits for that
 ## at most `timeout_ms`. An actor still running then is cancelled and `stop` gives `actor: timeout`; an actor that
 ## crashed gives its `task crashed: ...` error. Stopping an ended actor gives how it ended.
-export def stop[S, M](actor: Ref[S, M], timeout_ms: Int) -> Result[Void]
+def stop[S, M](actor: Ref[S, M], timeout_ms: Int) -> Result[Void]
   actor.inbox.close
   case Task.await(actor.task, timeout_ms)
     Await.Done(result) -> result
@@ -97,6 +89,16 @@ export def stop[S, M](actor: Ref[S, M], timeout_ms: Int) -> Result[Void]
       Task.cancel(actor.task)
       error("actor: timeout", kind: "task.timeout")
   end
+end
+
+private
+
+# How long the loop waits for a message before it waits again: a receive always has a timeout.
+IDLE_MS = 60_000
+
+struct Setup[S, M]
+  behaviour: Behaviour[S, M]
+  inbox: Channel[M]
 end
 
 # A closed inbox and a collected one both mean that the actor has ended: `channel.gone`.

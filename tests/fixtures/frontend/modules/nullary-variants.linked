@@ -1,4 +1,4 @@
-program #36 0:1:1-273:21:1
+program #38 0:1:1-273:21:1
   module "root.agc"
     declaration: enum-decl #4 24:3:1-59:7:1 name="Command" type-parameters=[]
       variant: enum-variant #1 39:4:3-44:5:1 name="Show"
@@ -36,7 +36,7 @@ program #36 0:1:1-273:21:1
             value: call #31 248:17:10-261:17:23 name="puts" piped=false
               arg: literal #30 253:17:15-260:17:22 value=string:"other"
   module "shapes.agc"
-    declaration: enum-decl #3 7:1:8-39:5:1 name="@2::Shape" type-parameters=[]
-      variant: enum-variant #0 20:2:3-24:3:1 name="Dot"
-      variant: enum-variant #2 26:3:3-35:4:1 name="Box"
-        payload: type-ref #1 30:3:7-33:3:10 name="Int"
+    declaration: enum-decl #3 0:1:1-32:5:1 name="@2::Shape" type-parameters=[]
+      variant: enum-variant #0 13:2:3-17:3:1 name="Dot"
+      variant: enum-variant #2 19:3:3-28:4:1 name="Box"
+        payload: type-ref #1 23:3:7-26:3:10 name="Int"

@@ -9,17 +9,8 @@
 import Reply from "cli_reply"
 import Texts from "cli_text"
 
-# The options that are given once at most, with the number of values each takes; --steps may repeat.
-ONCE = {
-  "--version": 0, "--deny-run": 0, "--deny-net": 0, "--deny-fs": 0, "--deny-env": 0, "--deny-native": 0,
-  "--sandbox": 0, "--max-steps": 1, "--seed": 1, "--flush-timeout": 1, "--schedulers": 1, "--jit": 1, "--dump": 0,
-  "--dump-ir": 0, "--ai": 0, "--json": 0, "--no-cache": 0, "--coverage": 1,
-}
-JIT_MODES: Set[String] = Set.new(["off", "on", "always"])
-DIGITS = "0123456789"
-
 ## What the options said, and the words after them (the command, or the source file, and its arguments).
-export struct Options
+struct Options
   style: String
   max_steps: String
   seed: String
@@ -35,21 +26,15 @@ export struct Options
   words: List[String]
 end
 
-# What applying one option gave: the options, or why it was refused (exit code 2).
-enum Applied
-  Changed(Options)
-  Refused(String)
-end
-
 ## The result of reading the options: to go on with, or an answer already complete (`--version`, `-h`, a mistake in
 ## the options).
-export enum Parsed
+enum Parsed
   Ready(Options)
   Answer(Reply.Reply)
 end
 
 ## Reads the options of `arguments`. `version` is what `--version` prints.
-export def parse(arguments: List[String], version: String) -> Parsed
+def parse(arguments: List[String], version: String) -> Parsed
   options = Options(
     style: "plain",
     max_steps: "",
@@ -106,6 +91,23 @@ export def parse(arguments: List[String], version: String) -> Parsed
   end
 
   Parsed.Ready(options)
+end
+
+private
+
+# The options that are given once at most, with the number of values each takes; --steps may repeat.
+ONCE = {
+  "--version": 0, "--deny-run": 0, "--deny-net": 0, "--deny-fs": 0, "--deny-env": 0, "--deny-native": 0,
+  "--sandbox": 0, "--max-steps": 1, "--seed": 1, "--flush-timeout": 1, "--schedulers": 1, "--jit": 1, "--dump": 0,
+  "--dump-ir": 0, "--ai": 0, "--json": 0, "--no-cache": 0, "--coverage": 1,
+}
+JIT_MODES: Set[String] = Set.new(["off", "on", "always"])
+DIGITS = "0123456789"
+
+# What applying one option gave: the options, or why it was refused (exit code 2).
+enum Applied
+  Changed(Options)
+  Refused(String)
 end
 
 def mistake(message: String) -> Parsed = Parsed.Answer(Reply.failed(1, "agentica: #{message}\n"))

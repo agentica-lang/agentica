@@ -12,7 +12,7 @@ import Env from "../modules/link_env"
 import Ast from "../syntax/ast"
 
 ## What a file declares: its doc, its imports and its other declarations, each in source order.
-export struct Outline
+struct Outline
   doc: Optional[String]
   imports: List[Ast.ImportDecl]
   items: List[Model.Item]
@@ -20,7 +20,7 @@ end
 
 ## The outline of the file at `path`, whose text is `text`, or the first lexer or parser diagnostic. Only a file that
 ## re-exports something reads its imports (docs/doc_origins.agc).
-export def of_file(settings: Env.Settings, path: String, text: String) -> Diag.Outcome[Outline]
+def of_file(settings: Env.Settings, path: String, text: String) -> Diag.Outcome[Outline]
   case Docs.parse(text)
     Diag.Outcome.Failed(problem) -> Diag.Outcome.Failed(problem)
     Diag.Outcome.Done(program) ->
@@ -33,6 +33,8 @@ export def of_file(settings: Env.Settings, path: String, text: String) -> Diag.O
       )
   end
 end
+
+private
 
 # The import declarations, in source order. An import is a top-level declaration like the others in the tree.
 def imports_of(program: Ast.Program) -> List[Ast.ImportDecl]

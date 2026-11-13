@@ -27,7 +27,7 @@ import SymbolPaths from "symbol_paths"
 
 ## What a match has besides the common data: the type of a field, the payload of a variant, the catalog row of a
 ## builtin.
-export enum Extra
+enum Extra
   Declared
   Field(String)
   Variant(List[String])
@@ -39,7 +39,7 @@ end
 ## key of the file (Linker.home_key, which a module block shares; `display` of query_files.agc names it in an answer),
 ## "" for a builtin, which has no place; so do its spans. `exported` is the flag of the declaration, or of the struct
 ## or enum of a member. `signature` and `doc` are the ones `type-at` gives the definition.
-export struct Match
+struct Match
   kind: String
   name: String
   owner: String
@@ -54,13 +54,13 @@ end
 
 ## The matches, in the order the modules were linked and then in source order (the builtin last), and the roots that
 ## were left out.
-export struct Answer
+struct Answer
   matches: List[Match]
   skipped: List[SymbolLink.Skipped]
 end
 
 ## The answer, or why there is none.
-export enum Outcome
+enum Outcome
   Found(Answer)
   Refused(Problems.Problem)
 end
@@ -68,18 +68,13 @@ end
 ## The matches of `name` in the modules linked from `roots`. When every root is left out there is nothing to search:
 ## the answer is the first problem of the first one (an error of the program, exit status 1). A name that nothing
 ## declares is QUERY-NOT-FOUND.
-export def answer(
-  name: String,
-  roots: List[SymbolPaths.Root],
-  settings: Env.Settings,
-  parses: Modules.Parses,
-) -> Outcome
+def answer(name: String, roots: List[SymbolPaths.Root], settings: Env.Settings, parses: Modules.Parses) -> Outcome
   search(name, roots, SymbolLink.link(roots, settings, parses))
 end
 
 ## The matches of `name` in `linked`, the program of `roots` (symbol_link.agc): as `answer`, for a caller that needs
 ## the program as well.
-export def search(name: String, roots: List[SymbolPaths.Root], linked: SymbolLink.Linked) -> Outcome
+def search(name: String, roots: List[SymbolPaths.Root], linked: SymbolLink.Linked) -> Outcome
   return Outcome.Refused(linked.skipped[0].problem) if linked.modules.size == 0
 
   aliases = aliases_of(linked.modules, roots)
@@ -91,7 +86,7 @@ end
 
 ## The declaration of `module` whose name is written at `name_span`: a top-level declaration, a field or a variant, as
 ## `answer` lists it (the `file` is the key of its file). `none` when the span is no declaration's name.
-export def declared_at(module: Linker.LinkedModule, name_span: Source.Span) -> Optional[Match]
+def declared_at(module: Linker.LinkedModule, name_span: Source.Span) -> Optional[Match]
   at = name_span.start.offset
   file = Linker.home_key(module)
   for item in items_of(module)
@@ -120,7 +115,7 @@ end
 ## The field or variant `name` of `module` whose name is written at `name_span`, as `answer` lists it, or `none`. The
 ## members of a builtin type that a std/ module re-exports all take the place of the type's name, so `name` tells them
 ## apart.
-export def member_at(module: Linker.LinkedModule, name_span: Source.Span, name: String) -> Optional[Match]
+def member_at(module: Linker.LinkedModule, name_span: Source.Span, name: String) -> Optional[Match]
   at = name_span.start.offset
   file = Linker.home_key(module)
   for item in items_of(module)
@@ -145,6 +140,8 @@ export def member_at(module: Linker.LinkedModule, name_span: Source.Span, name: 
 
   none
 end
+
+private
 
 # The aliases that the files of the roots import each module under, by the key of the module. The same alias can name
 # different modules in different files, so a name through it lists a match for each.

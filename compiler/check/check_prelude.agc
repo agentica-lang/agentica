@@ -18,17 +18,9 @@ import Stmt from "check_stmt"
 import CheckTypes from "check_types"
 import Defaults from "defaults"
 
-# What the arguments checked so far learned: the state, the type of each variable and the span of the argument that
-# bound it (the limits are reported there).
-struct Bound
-  st: State.St
-  types: Map[String, T.Type]
-  spans: Map[String, Source.Span]
-end
-
 ## Checks a call of a prelude builtin: the arguments against the parameters of the selected form, the limits of the
 ## row, and the type of the call, the result of the form with the variables filled in.
-export def check_prelude_call(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
+def check_prelude_call(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
   form = site.selected
   row = PRELUDE[form.name]
   count = site.args.size
@@ -46,6 +38,16 @@ export def check_prelude_call(cx: State.Cx, st: State.St, site: State.Site) -> R
   try check_limits(cx, bound, form, row, site.node.span)
   found = bound.st.with(bodies: bound.st.bodies.put(site.node.id, body_of(row, bound.types)))
   ok(State.Out(st: found, type: CheckTypes.substitute(form.result, bound.types)))
+end
+
+private
+
+# What the arguments checked so far learned: the state, the type of each variable and the span of the argument that
+# bound it (the limits are reported there).
+struct Bound
+  st: State.St
+  types: Map[String, T.Type]
+  spans: Map[String, Source.Span]
 end
 
 # One argument: a block is checked with the parameter types known so far and the result the parameter says, any other

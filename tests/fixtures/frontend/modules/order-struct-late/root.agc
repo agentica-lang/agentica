@@ -1,6 +1,5 @@
 def helper() -> Void
 end
 
-export def api() -> Void
+struct Late
 end
-

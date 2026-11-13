@@ -38,23 +38,23 @@ cat buffer.agc | agentica outline --stdin src/orders.agc
 
 ```text
 src/orders.agc:1:1 import Models from "models"
-src/orders.agc:3:1 export struct Order
+src/orders.agc:3:1 struct Order
 src/orders.agc:4:3 field Order.id: Int
-src/orders.agc:8:1 export def total(order: Order) -> Int
+src/orders.agc:8:1 def total(order: Order) -> Int
 ```
 
 It parses: imports need not exist and no `main` is needed (only a file with
 re-exports is linked, to list the original declarations). FILE may be a
 `std/` module (`agentica outline std/queue`). Private declarations are listed
-too (`agentica doc` shows only the exported API). `--partial` is accepted and
-changes nothing.
+too, with `private` in front (`agentica doc` shows only the public API).
+`--partial` is accepted and changes nothing.
 
 JSON: `{version, command, file, doc, imports, items}`. `items`, in source order:
 `{kind, name, exported, signature, doc, summary, span, name_span}`; `kind` is
 `function`, `struct`, `enum`, `alias`, `resource` or `constant`; a function adds
 `parameters` and `result`, a struct `fields`, an enum `variants`. A span is
 `{file, range: {start: {line, column}, end: {line, column}}}`, end exclusive;
-`span` covers the whole declaration (`export` included), `name_span` is the name
+`span` covers the whole declaration, `name_span` is the name
 alone, the place to edit. `file` is relative to the working folder when below
 it, absolute otherwise.
 
@@ -181,7 +181,7 @@ disk.
 JSON: `{version, command, query, matches, skipped}`. `matches[]`: `{kind, name,
 module, exported, signature, doc, span, name_span}`; `kind` is `function`,
 `struct`, `enum`, `alias`, `resource`, `constant`, `field`, `variant` or
-`builtin`. `span` is the declaration (`export` included), so compare
+`builtin`. `span` is the whole declaration, so compare
 `name_span`, not `range`, with a `type-at` definition. A field adds `type` and
 `struct`; a variant `payload` and `enum`; a builtin has `help` and null
 `module`. `skipped[]`: `{file, diagnostic}`.

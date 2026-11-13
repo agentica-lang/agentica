@@ -3,26 +3,26 @@
 import Source from "source"
 
 ## A `##` block: its text and what follows it.
-export struct DocBlock
+struct DocBlock
   text: String
   next: String
 end
 
 ## One line of an `<<~EAG` body as written, without its line break, and where it starts (column 1).
-export struct EagLine
+struct EagLine
   text: String
   start: Source.Position
 end
 
 ## The body of an `<<~EAG` heredoc: its lines as written and the number of spaces the squiggly form removes from each
 ## (the fewest leading spaces of the lines that have text). The parser expands it (eag.agc).
-export struct EagBody
+struct EagBody
   lines: List[EagLine]
   indent: Int
 end
 
 ## The value a token carries besides its lexeme.
-export enum Value
+enum Value
   NoValue
   Text(String)
   Whole(Int)
@@ -35,16 +35,18 @@ end
 ## A plain comment, which makes no token: its text from the `#` to the end of its line (the line break is not part of
 ## it), whether only blanks come before it on its line (`own_line`; false for a comment after code), and its span. A
 ## `##` line that starts a line is a doc, a DOC token, not a comment; a `##` after code is a comment.
-export struct Comment
+struct Comment
   text: String
   own_line: Bool
   span: Source.Span
 end
 
 ## A token: its kind, its lexeme, its value and its span.
-export struct Token
+struct Token
   kind: String
   lexeme: String
   value: Value
   span: Source.Span
 end
+
+private

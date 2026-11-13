@@ -14,34 +14,18 @@ import Names from "check_names"
 import State from "check_state"
 import Types from "check_types"
 
-# The receiver kinds whose type has no type arguments, so a method of theirs names the whole type.
-PLAIN_KINDS = {
-  "Int": T.Type.Int,
-  "Float": T.Type.Float,
-  "String": T.Type.String,
-  "Json": T.Type.Json,
-  "Range": T.Type.Range,
-  "Bytes": T.Type.Bytes,
-}
-
 ## What the uses of a parameter say: Found(type) when they leave one type; Open when no use names a type; Several when
 ## they leave more than one; Conflict when no type passes them all.
-export enum Guess
+enum Guess
   Found(T.Type)
   Open
   Several(List[T.Type])
   Conflict
 end
 
-# What one use allows: Any (no constraint) or OneOf(types), every type the use can take.
-enum Allows
-  Any
-  OneOf(List[T.Type])
-end
-
 ## The type that the uses of `name` in `body` leave for it. Shadowing is an error of its own (CHECK-SHADOWED-NAME), so
 ## every read of the name below the block, nested blocks included, is a read of the parameter.
-export def param_type(cx: State.Cx, st: State.St, body: List[Ast.Stmt], name: String) -> Guess
+def param_type(cx: State.Cx, st: State.St, body: List[Ast.Stmt], name: String) -> Guess
   left: List[T.Type] = []
   narrowed = false
   structs = cx.structs.keys.sort
@@ -74,6 +58,24 @@ export def param_type(cx: State.Cx, st: State.St, body: List[Ast.Stmt], name: St
   return Guess.Several(left) if left.size > 1
 
   Guess.Conflict
+end
+
+private
+
+# The receiver kinds whose type has no type arguments, so a method of theirs names the whole type.
+PLAIN_KINDS = {
+  "Int": T.Type.Int,
+  "Float": T.Type.Float,
+  "String": T.Type.String,
+  "Json": T.Type.Json,
+  "Range": T.Type.Range,
+  "Bytes": T.Type.Bytes,
+}
+
+# What one use allows: Any (no constraint) or OneOf(types), every type the use can take.
+enum Allows
+  Any
+  OneOf(List[T.Type])
 end
 
 # What the node says about `name` when the name is one of its direct parts.

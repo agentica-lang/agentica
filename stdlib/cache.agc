@@ -9,19 +9,8 @@
 ## Every entry carries an id, and whoever removes it must win that id with `ATS.add` first, so its bytes are given back
 ## exactly once however the removals race.
 
-# Generation g lives in tables[g % SLOTS]: the young one is g, the old one g - 1, and the slot of g - 2 is dead until
-# the next rotation empties and reuses it.
-SLOTS = 3
-# What an entry costs besides its key and value (the table node), so many tiny entries are bounded too.
-ENTRY_OVERHEAD = 64
-# A task that holds a rotation for longer than this on the cache's clock is taken to have died (cancelled or
-# crashed): another may redo it.
-ROTATION_LEASE_MS = 2_000
-# A rotation shows it is alive after this many deletes.
-BEAT_EVERY = 1024
-
 ## The contract of a cache. Every function is safe to call from any task at any time. Keys and values are strings.
-export struct Store
+struct Store
   ## Gives the value of a key, or `none`; an entry past its time to live is a miss.
   get: Fn[String, Optional[String]]
   ## Stores a value and replaces one already there. A value too big for the cache is not stored and drops the old one.
@@ -37,7 +26,7 @@ export struct Store
 end
 
 ## What `memory` takes besides the byte budget.
-export struct Options
+struct Options
   ## At most this many entries, 0 for no limit.
   max_entries: Int = 0
   ## The time to live of an entry in milliseconds, 0 for none.
@@ -48,35 +37,10 @@ export struct Options
   clock: Optional[Fn[Int]] = none
 end
 
-struct Entry
-  key: String
-  value: String
-  at: Int
-  id: Int
-  gen: Int
-end
-
-struct Memory
-  byte_limit: Int
-  entry_limit: Int
-  ttl_ms: Int
-  clock: Fn[Int]
-  tables: List[ATS[String, Entry]]
-  lives: List[ATS[Int, Int]]
-  generation: ATS[Int, Int]
-  started: ATS[Int, Int]
-  rotations: ATS[Int, Int]
-  beats: ATS[Int, Int]
-  deaths: ATS[Int, Int]
-  stored: ATS[Int, Int]
-  counted: ATS[Int, Int]
-  ids: ATS[Int, Int]
-end
-
 ## Returns a cache in memory that holds at most `max_bytes` bytes of keys, values and entry overhead (64 bytes an
 ## entry). Each of the two live generations may hold half of it, and of `max_entries`; a value that would take more
 ## than half of `max_bytes` is never stored.
-export def memory(max_bytes: Int, options: Options = Options()) -> Store
+def memory(max_bytes: Int, options: Options = Options()) -> Store
   tables: List[ATS[String, Entry]] = []
   lives: List[ATS[Int, Int]] = []
   for _ in 1..SLOTS
@@ -134,11 +98,11 @@ export def memory(max_bytes: Int, options: Options = Options()) -> Store
 end
 
 ## Returns the value of `key`, or `none`.
-export def get(cache: Store, key: String) -> Optional[String] = cache.get.call(key)
+def get(cache: Store, key: String) -> Optional[String] = cache.get.call(key)
 
 ## Returns the value of `key`. On a miss it runs the block and stores its result, then returns it. Two tasks that miss
 ## together both run the block; one result is kept. A value that the cache refuses is returned and not stored.
-export def fetch(cache: Store, key: String, compute: Fn[String]) -> String
+def fetch(cache: Store, key: String, compute: Fn[String]) -> String
   case get(cache, key)
     some(value) -> value
     none -> fetched(cache, key, compute.call())
@@ -146,29 +110,67 @@ export def fetch(cache: Store, key: String, compute: Fn[String]) -> String
 end
 
 ## Stores `value` under `key`, replacing a value already there.
-export def put(cache: Store, key: String, value: String) -> Void
+def put(cache: Store, key: String, value: String) -> Void
   cache.put.call(key, value)
 end
 
 ## Stores `value` under `key` only when the key has none. Returns true when it stored it.
-export def put_new(cache: Store, key: String, value: String) -> Bool = cache.put_new.call(key, value)
+def put_new(cache: Store, key: String, value: String) -> Bool = cache.put_new.call(key, value)
 
 ## Removes `key`.
-export def delete(cache: Store, key: String) -> Void
+def delete(cache: Store, key: String) -> Void
   cache.delete.call(key)
 end
 
 ## Removes every entry. Tasks that put at the same moment may keep an entry.
-export def clear(cache: Store) -> Void
+def clear(cache: Store) -> Void
   cache.clear.call()
 end
 
 ## Removes every entry past its time to live and returns how many it removed. It is safe next to any other call, so a
 ## task may run it every few seconds.
-export def cleanup(cache: Store) -> Int = cache.cleanup.call()
+def cleanup(cache: Store) -> Int = cache.cleanup.call()
 
 ## Returns how many bytes the entries take, never above `max_bytes` in `memory`.
-export def bytes(cache: Store) -> Int = cache.bytes.call()
+def bytes(cache: Store) -> Int = cache.bytes.call()
+
+private
+
+# Generation g lives in tables[g % SLOTS]: the young one is g, the old one g - 1, and the slot of g - 2 is dead until
+# the next rotation empties and reuses it.
+SLOTS = 3
+# What an entry costs besides its key and value (the table node), so many tiny entries are bounded too.
+ENTRY_OVERHEAD = 64
+# A task that holds a rotation for longer than this on the cache's clock is taken to have died (cancelled or
+# crashed): another may redo it.
+ROTATION_LEASE_MS = 2_000
+# A rotation shows it is alive after this many deletes.
+BEAT_EVERY = 1024
+
+struct Entry
+  key: String
+  value: String
+  at: Int
+  id: Int
+  gen: Int
+end
+
+struct Memory
+  byte_limit: Int
+  entry_limit: Int
+  ttl_ms: Int
+  clock: Fn[Int]
+  tables: List[ATS[String, Entry]]
+  lives: List[ATS[Int, Int]]
+  generation: ATS[Int, Int]
+  started: ATS[Int, Int]
+  rotations: ATS[Int, Int]
+  beats: ATS[Int, Int]
+  deaths: ATS[Int, Int]
+  stored: ATS[Int, Int]
+  counted: ATS[Int, Int]
+  ids: ATS[Int, Int]
+end
 
 def fetched(cache: Store, key: String, value: String) -> String
   _ = put_new(cache, key, value)

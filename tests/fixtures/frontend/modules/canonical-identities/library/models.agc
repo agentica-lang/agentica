@@ -1,12 +1,13 @@
-export struct Value
+struct Value
   n: Int
 end
 
-export def read(value: Value) -> Int
+def read(value: Value) -> Int
   return value.n
 end
+
+private
 
 def main() -> Void
   puts("must not run")
 end
-

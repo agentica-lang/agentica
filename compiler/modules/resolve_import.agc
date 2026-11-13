@@ -11,27 +11,23 @@ import Env from "link_env"
 import Failure from "link_failure"
 import Workspace from "workspace"
 
-# The std/ modules that only std/ may import, and the part of them that is the front end's own core (compiler/).
-INTERNAL = "std/internal/"
-INTERNAL_COMPILER = "std/internal/compiler/"
-
 ## What a build gives the resolution besides the importing file: libs_dir, the folder whose agc_libs/ is searched first
 ## (the folder of the manifest when the project has one, else the folder of the root file), and the packages
 ## (packages/package_import.agc).
-export struct Build
+struct Build
   libs_dir: String
   scope: Packages.Scope
 end
 
 ## The importing file: its key and the package it belongs to.
-export struct Importer
+struct Importer
   key: String
   origin: Packages.Origin
 end
 
 ## The module an import names: its key, the package it belongs to, its stored name when it is not just the path from
 ## the root folder (a package file's is `pkg/name@version/path`), and the packages loaded so far.
-export struct Resolution
+struct Resolution
   key: String
   origin: Packages.Origin
   name: String
@@ -39,11 +35,11 @@ export struct Resolution
 end
 
 ## True for the key of a standard module, which no canonical path can look like.
-export def embedded?(key: String) -> Bool = !Paths.rooted?(key)
+def embedded?(key: String) -> Bool = !Paths.rooted?(key)
 
 ## Reads the source of the module with this key: a file, or a std/ module from the provider of the settings (a
 ## stdlib/ folder, or the copy that the binary carries).
-export def read_source(settings: Env.Settings, key: String) -> SourceFile.Read
+def read_source(settings: Env.Settings, key: String) -> SourceFile.Read
   workspace = settings.workspace
   return workspace.read_text.call(key) if !embedded?(key)
 
@@ -60,7 +56,7 @@ end
 ## The folders that a `pkg/` import searches for a library, in order, for a build whose manifest (or root file) is in
 ## `libs_dir`: the bytecode cache lists them, to see a library appear in one. A relative AGENTICA_PATH entry is an
 ## error.
-export def search_roots(settings: Env.Settings, libs_dir: String) -> Result[List[String]]
+def search_roots(settings: Env.Settings, libs_dir: String) -> Result[List[String]]
   here = Source.position(0, 1, 0)
   site = Failure.Site(file: libs_dir, span: Source.Span(start: here, stop: here))
   library_roots(settings, libs_dir, site)
@@ -68,7 +64,7 @@ end
 
 ## Finds the module that the import path file (already ending in .agc) names, from the importer. A failure is
 ## CHECK-IMPORT-PATH, CHECK-IMPORT-IO, CHECK-IMPORT-PACKAGE or a PKG- failure at site.
-export def resolve_import(
+def resolve_import(
   settings: Env.Settings,
   build: Build,
   importer: Importer,
@@ -94,9 +90,15 @@ end
 ## `agentica doc` and `outline`). A std/ module exists when the provider has its source. The registry is
 ## stdlib/MODULES, which the binary embeds and which lists the files of the stdlib/ folder (a test checks that they are
 ## the same list). The modules of std/internal/ are private to std/: this refuses them as it refuses a missing module.
-export def standard(settings: Env.Settings, file: String, site: Failure.Site) -> Result[String]
+def standard(settings: Env.Settings, file: String, site: Failure.Site) -> Result[String]
   standard_for(settings, file, site, false)
 end
+
+private
+
+# The std/ modules that only std/ may import, and the part of them that is the front end's own core (compiler/).
+INTERNAL = "std/internal/"
+INTERNAL_COMPILER = "std/internal/compiler/"
 
 # `standard`, where `from_std` says the importing module is a std/ module, which may import std/internal/.
 def standard_for(settings: Env.Settings, file: String, site: Failure.Site, from_std: Bool) -> Result[String]

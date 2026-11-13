@@ -1,4 +1,4 @@
-program #8 0:1:1-108:7:1
+program #9 0:1:1-108:7:1
   module "root.agc"
     declaration: function-decl #7 58:3:1-108:7:1 name="main"
       result: type-ref #2 72:3:15-76:3:19 name="Void"
@@ -7,8 +7,8 @@ program #8 0:1:1-108:7:1
       body: expr-stmt #6 93:5:3-104:6:1
         value: call #5 93:5:3-103:5:13 name="@4::go" piped=false
   module "deep.agc"
-    declaration: function-decl #1 7:1:8-30:3:1 name="@3::deep"
-      result: type-ref #0 21:1:22-25:1:26 name="Void"
+    declaration: function-decl #1 0:1:1-23:3:1 name="@3::deep"
+      result: type-ref #0 14:1:15-18:1:19 name="Void"
   module "after.agc"
-    declaration: function-decl #1 7:1:8-28:3:1 name="@4::go"
-      result: type-ref #0 19:1:20-23:1:24 name="Void"
+    declaration: function-decl #1 0:1:1-21:3:1 name="@4::go"
+      result: type-ref #0 12:1:13-16:1:17 name="Void"

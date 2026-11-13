@@ -1,4 +1,4 @@
-program #111 0:1:1-653:35:1
+program #114 0:1:1-653:35:1
   module "constants.agc"
     declaration: const-decl #3 0:1:1-17:2:1 name="LIMIT"
       value: binary #2 8:1:9-16:1:17 op=multiply op-span=13:1:14-14:1:15 type=Int
@@ -23,7 +23,7 @@ program #111 0:1:1-653:35:1
         element: literal #18 111:6:15-114:6:18 value=string:"b" type=String
     declaration: const-decl #28 116:7:1-158:8:1 name="LOUD"
       value: method-call #27 123:7:8-157:7:42 name="map" type=List(String) resolved=call("List.map", List(String))
-        target: const-ref #139 123:7:8-128:7:13 name="WORDS" type=List(String)
+        target: const-ref #142 123:7:8-128:7:13 name="WORDS" type=List(String)
         arg: block-lit #26 133:7:18-157:7:42 type=Fn([String], String)
           param: block-param #21 137:7:22-141:7:26 name="word"
           body: expr-stmt #25 143:7:28-153:7:38
@@ -70,7 +70,7 @@ program #111 0:1:1-653:35:1
       value: enum-constructor #65 331:13:9-340:13:18 enum="Color" variant="Red" type=Enum(Color, [])
     declaration: const-decl #68 341:14:1-360:15:1 name="SHOWN"
       value: field-access #67 349:14:9-359:14:19 name="to_s" type=String resolved=text(Enum(Color, []))
-        target: const-ref #179 349:14:9-354:14:14 name="FIRST" type=Enum(Color, [])
+        target: const-ref #182 349:14:9-354:14:14 name="FIRST" type=Enum(Color, [])
     declaration: const-decl #71 360:15:1-379:16:1 name="RATIO"
       type: type-ref #69 367:15:8-372:15:13 name="Float"
       value: literal #70 375:15:16-378:15:19 value=float:bits:4609434218613702656 type=Float
@@ -101,7 +101,7 @@ program #111 0:1:1-653:35:1
       body: expr-stmt #93 533:29:3-562:30:1
         value: call #92 533:29:3-561:29:31 name="puts" piped=false type=Void
           arg: method-call #91 538:29:8-560:29:30 name="include?" type=Bool resolved=call("Set.include?", Set(String))
-            target: const-ref #203 538:29:8-546:29:16 name="KEYWORDS" type=Set(String)
+            target: const-ref #206 538:29:8-546:29:16 name="KEYWORDS" type=Set(String)
             arg: literal #90 556:29:26-559:29:29 value=string:"a" type=String
       body: expr-stmt #102 564:30:3-605:31:1
         value: call #101 564:30:3-604:30:43 name="puts" piped=false type=Void
@@ -111,12 +111,12 @@ program #111 0:1:1-653:35:1
                 target: const-ref #94 569:30:8-575:30:14 name="LEVELS" type=Map(String, Int)
                 index: literal #95 576:30:15-579:30:18 value=string:"b" type=String
               right: field-access #97 583:30:22-593:30:32 name="size" type=Int resolved=call("Map.size", Map(String, Int))
-                target: const-ref #209 583:30:22-588:30:27 name="EMPTY" type=Map(String, Int)
+                target: const-ref #212 583:30:22-588:30:27 name="EMPTY" type=Map(String, Int)
             right: field-access #99 596:30:35-603:30:42 name="x" type=Int
-              target: const-ref #211 596:30:35-601:30:40 name="MOVED" type=Struct(Point)
+              target: const-ref #214 596:30:35-601:30:40 name="MOVED" type=Struct(Point)
       body: expr-stmt #109 607:31:3-649:34:1
         value: method-call #108 607:31:3-648:33:6 name="each" type=Void resolved=call("List.each", List(String))
-          target: const-ref #220 607:31:3-612:31:8 name="WORDS" type=List(String)
+          target: const-ref #223 607:31:3-612:31:8 name="WORDS" type=List(String)
           arg: block-lit #107 618:31:14-648:33:6 type=Fn([String], Void)
             param: block-param #103 622:31:18-626:31:22 name="word"
             body: expr-stmt #106 632:32:5-643:33:1

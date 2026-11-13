@@ -1,52 +1,56 @@
-program #50 117:1:118-573:30:1
-  declaration: function-decl #26 270:4:1-430:16:1 name="sign"
-    param: param #1 279:4:10-285:4:16 name="x"
-      type: type-ref #0 282:4:13-285:4:16 name="Int"
-    result: type-ref #2 290:4:21-296:4:27 name="String"
-    body: if-stmt #25 299:5:3-426:15:1
-      branch: if-branch #8 299:5:3-319:7:1
-        condition: binary #5 302:5:6-307:5:11 op=greater op-span=304:5:8-305:5:9
-          left: name-ref #3 302:5:6-303:5:7 name="x"
-          right: literal #4 306:5:10-307:5:11 value=int:0
-        body: return-stmt #7 312:6:5-318:6:11 implicit
-          value: literal #6 312:6:5-318:6:11 value=string:"plus"
-      branch: if-branch #22 321:7:3-402:12:1
-        condition: binary #11 327:7:9-332:7:14 op=less op-span=329:7:11-330:7:12
-          left: name-ref #9 327:7:9-328:7:10 name="x"
-          right: literal #10 331:7:13-332:7:14 value=int:0
-        body: case-stmt #21 337:8:5-402:12:1
-          value: name-ref #12 342:8:10-343:8:11 name="x"
-          arm: case-arm #16 350:9:7-368:10:1
-            pattern: literal-pattern #13 350:9:7-352:9:9 value=int:-1
-            body: return-stmt #15 356:9:13-367:9:24 implicit
-              value: literal #14 356:9:13-367:9:24 value=string:"minus one"
-          arm: case-arm #20 374:10:7-394:11:1
-            pattern: wildcard-pattern #17 374:10:7-375:10:8
-            body: return-stmt #19 379:10:12-394:11:1
-              value: literal #18 386:10:19-393:10:26 value=string:"minus"
-      else:
-        body: return-stmt #24 413:13:5-419:13:11 implicit
-          value: literal #23 413:13:5-419:13:11 value=string:"zero"
-  declaration: function-decl #37 431:17:1-488:22:1 name="open_ended"
-    param: param #28 446:17:16-452:17:22 name="x"
-      type: type-ref #27 449:17:19-452:17:22 name="Int"
-    result: type-ref #29 457:17:27-460:17:30 name="Int"
-    body: if-stmt #36 463:18:3-484:21:1
-      branch: if-branch #35 463:18:3-478:20:1
-        condition: binary #32 466:18:6-471:18:11 op=greater op-span=468:18:8-469:18:9
-          left: name-ref #30 466:18:6-467:18:7 name="x"
-          right: literal #31 470:18:10-471:18:11 value=int:0
-        body: expr-stmt #34 476:19:5-478:20:1
-          value: name-ref #33 476:19:5-477:19:6 name="x"
-  declaration: function-decl #43 489:23:1-533:26:1 name="tried"
-    result: type-ref #39 504:23:16-515:23:27 name="Result"
-      arg: type-ref #38 511:23:23-514:23:26 name="Int"
-    body: expr-stmt #42 518:24:3-529:25:1
-      value: try-expr #41 518:24:3-528:24:13
-        operand: call #40 522:24:7-528:24:13 name="load" piped=false
-  declaration: function-decl #49 534:27:1-573:30:1 name="main"
-    result: type-ref #44 548:27:15-552:27:19 name="Void"
-    body: expr-stmt #48 555:28:3-569:29:1
-      value: call #47 555:28:3-568:28:16 name="puts" piped=false
-        arg: call #46 560:28:8-567:28:15 name="sign" piped=false
-          arg: literal #45 565:28:13-566:28:14 value=int:1
+program #54 117:1:118-573:30:1
+  declaration: export-decl #50 270:4:1-430:16:1
+    declaration: function-decl #26 270:4:1-430:16:1 name="sign"
+      param: param #1 279:4:10-285:4:16 name="x"
+        type: type-ref #0 282:4:13-285:4:16 name="Int"
+      result: type-ref #2 290:4:21-296:4:27 name="String"
+      body: if-stmt #25 299:5:3-426:15:1
+        branch: if-branch #8 299:5:3-319:7:1
+          condition: binary #5 302:5:6-307:5:11 op=greater op-span=304:5:8-305:5:9
+            left: name-ref #3 302:5:6-303:5:7 name="x"
+            right: literal #4 306:5:10-307:5:11 value=int:0
+          body: return-stmt #7 312:6:5-318:6:11 implicit
+            value: literal #6 312:6:5-318:6:11 value=string:"plus"
+        branch: if-branch #22 321:7:3-402:12:1
+          condition: binary #11 327:7:9-332:7:14 op=less op-span=329:7:11-330:7:12
+            left: name-ref #9 327:7:9-328:7:10 name="x"
+            right: literal #10 331:7:13-332:7:14 value=int:0
+          body: case-stmt #21 337:8:5-402:12:1
+            value: name-ref #12 342:8:10-343:8:11 name="x"
+            arm: case-arm #16 350:9:7-368:10:1
+              pattern: literal-pattern #13 350:9:7-352:9:9 value=int:-1
+              body: return-stmt #15 356:9:13-367:9:24 implicit
+                value: literal #14 356:9:13-367:9:24 value=string:"minus one"
+            arm: case-arm #20 374:10:7-394:11:1
+              pattern: wildcard-pattern #17 374:10:7-375:10:8
+              body: return-stmt #19 379:10:12-394:11:1
+                value: literal #18 386:10:19-393:10:26 value=string:"minus"
+        else:
+          body: return-stmt #24 413:13:5-419:13:11 implicit
+            value: literal #23 413:13:5-419:13:11 value=string:"zero"
+  declaration: export-decl #51 431:17:1-488:22:1
+    declaration: function-decl #37 431:17:1-488:22:1 name="open_ended"
+      param: param #28 446:17:16-452:17:22 name="x"
+        type: type-ref #27 449:17:19-452:17:22 name="Int"
+      result: type-ref #29 457:17:27-460:17:30 name="Int"
+      body: if-stmt #36 463:18:3-484:21:1
+        branch: if-branch #35 463:18:3-478:20:1
+          condition: binary #32 466:18:6-471:18:11 op=greater op-span=468:18:8-469:18:9
+            left: name-ref #30 466:18:6-467:18:7 name="x"
+            right: literal #31 470:18:10-471:18:11 value=int:0
+          body: expr-stmt #34 476:19:5-478:20:1
+            value: name-ref #33 476:19:5-477:19:6 name="x"
+  declaration: export-decl #52 489:23:1-533:26:1
+    declaration: function-decl #43 489:23:1-533:26:1 name="tried"
+      result: type-ref #39 504:23:16-515:23:27 name="Result"
+        arg: type-ref #38 511:23:23-514:23:26 name="Int"
+      body: expr-stmt #42 518:24:3-529:25:1
+        value: try-expr #41 518:24:3-528:24:13
+          operand: call #40 522:24:7-528:24:13 name="load" piped=false
+  declaration: export-decl #53 534:27:1-573:30:1
+    declaration: function-decl #49 534:27:1-573:30:1 name="main"
+      result: type-ref #44 548:27:15-552:27:19 name="Void"
+      body: expr-stmt #48 555:28:3-569:29:1
+        value: call #47 555:28:3-568:28:16 name="puts" piped=false
+          arg: call #46 560:28:8-567:28:15 name="sign" piped=false
+            arg: literal #45 565:28:13-566:28:14 value=int:1

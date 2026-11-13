@@ -85,7 +85,7 @@ def test_a_path_dependency_is_counted_under_its_package_name(tmp_path):
     (tmp_path / "tools").mkdir()
     (tmp_path / "app").mkdir()
     (tmp_path / "tools" / "agentica.toml").write_text('name = "tools"\n')
-    (tmp_path / "tools" / "tools.agc").write_text("export def twice(n: Int) -> Int\n  return n * 2\nend\n")
+    (tmp_path / "tools" / "tools.agc").write_text("def twice(n: Int) -> Int\n  return n * 2\nend\n")
     (tmp_path / "app" / "agentica.toml").write_text('name = "app"\n\n[dependencies]\ntools = { path = "../tools" }\n')
     (tmp_path / "app" / "agentica.lock").write_text('version = 1\n\n[[package]]\nname = "tools"\npath = "../tools"\n')
     (tmp_path / "app" / "main.agc").write_text(
@@ -104,7 +104,7 @@ def test_a_workspace_member_is_counted_as_a_path_dependency_is(ws, remotes, tmp_
     files = {
         "agentica.toml": '[workspace]\nrepository = "%s"\nmembers = ["app", "common"]\n' % url,
         "common/agentica.toml": 'name = "common"\n',
-        "common/util.agc": "export def twice(n: Int) -> Int\n  return n * 2\nend\n",
+        "common/util.agc": "def twice(n: Int) -> Int\n  return n * 2\nend\n",
         "app/agentica.toml": 'name = "app"\n\n[dependencies]\ncommon = %s\n'
                              % inline_table(dependency(url, tag="common-1", subdir="common")),
         "app/main.agc": 'import Util from "pkg/common/util"\n\ndef main() -> Void\n  puts(Util.twice(2))\nend\n',
@@ -125,7 +125,7 @@ def test_a_workspace_member_is_counted_as_a_path_dependency_is(ws, remotes, tmp_
 def test_a_fetched_package_is_left_out_when_the_entry_is_in_another_folder(ws, remotes):
     """Run from the folder above the project, so the loader joins that folder to every name (--source-root): the
     package is still told apart by the name it was stored with."""
-    files = {"agentica.toml": 'name = "x"\n', "x.agc": "export def twice(n: Int) -> Int\n  return n * 2\nend\n"}
+    files = {"agentica.toml": 'name = "x"\n', "x.agc": "def twice(n: Int) -> Int\n  return n * 2\nend\n"}
     commit = remotes.publish("owner/x", files, tag="v1.0.0")
     lock_entry(ws, remotes, "owner/x", files, commit, tag="v1.0.0")
     ws.write_manifest({"x": dependency(remotes.url("owner/x"), tag="v1.0.0")})

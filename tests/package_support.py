@@ -20,8 +20,8 @@ from tests.agentica_test import WINDOWS, cli, run, tool, vm_environment
 COMMIT = "a" * 40
 
 # A package that imports another one, and a program that imports it, for the tests that fetch.
-GREET = 'import Tools from "pkg/tools/bang"\n\nexport def hello() -> String\n  return "hello" + Tools.bang()\nend\n'
-BANG = 'export def bang() -> String\n  return "!"\nend\n'
+GREET = 'import Tools from "pkg/tools/bang"\n\ndef hello() -> String\n  return "hello" + Tools.bang()\nend\n'
+BANG = 'def bang() -> String\n  return "!"\nend\n'
 MAIN = 'import Greet from "pkg/greeter/greet"\n\ndef main() -> Void\n  puts(Greet.hello())\nend\n'
 
 

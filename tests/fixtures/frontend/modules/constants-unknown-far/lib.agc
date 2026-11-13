@@ -1,2 +1,2 @@
-export MAX = 1
-export NAMES = ["a"]
+MAX = 1
+NAMES = ["a"]

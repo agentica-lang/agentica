@@ -13,21 +13,16 @@ import Manifest from "manifest"
 import Toml from "std/toml"
 import Reader from "toml_read"
 
-MANIFEST_FILE = "agentica.toml"
-# The folder `agentica install` writes the packages to. A project inside it is a package, never in a workspace.
-DEPS_FOLDER = "deps"
-TABLE_KEYS = ["repository", "members"]
-
 ## The workspace of a project. root is the folder of the manifest that has the table ("" when the project is in none),
 ## repository its URL as written and folders the members as written, each a subdir of the repository.
-export struct Members
+struct Members
   root: String
   repository: String
   folders: List[String]
 end
 
 ## The workspace of a project that is in none.
-export def empty() -> Members = Members(root: "", repository: "", folders: [])
+def empty() -> Members = Members(root: "", repository: "", folders: [])
 
 ## Finds the workspace of the project whose manifest is in `project_dir` (a canonical path): the nearest manifest going
 ## up, from that folder, that has a `[workspace]` table, provided the project is that folder or one of its listed
@@ -37,7 +32,7 @@ export def empty() -> Members = Members(root: "", repository: "", folders: [])
 ## project folder is the root itself, which reports the table. A bad table is PKG-MANIFEST-INVALID. For a member, the
 ## root's own `agentica` key is checked against the running version `running` before the table, as the member's
 ## manifest is (PKG-AGENTICA-TOO-OLD at the root's key): the member is built as a part of the root's repository.
-export def find(workspace: Workspace.Workspace, project_dir: String, running: String) -> Result[Members]
+def find(workspace: Workspace.Workspace, project_dir: String, running: String) -> Result[Members]
   return ok(empty()) if Paths.last_part(Paths.directory_of(project_dir)) == DEPS_FOLDER
 
   here = project_dir
@@ -59,7 +54,7 @@ end
 
 ## Whether a dependency source names a member of this workspace: its repository is the workspace's, and its subdir is a
 ## member.
-export def member?(members: Members, source: GitSource.Source) -> Bool
+def member?(members: Members, source: GitSource.Source) -> Bool
   return false if members.root == "" or source.subdir == ""
 
   return false if GitSource.identity(source.git) != GitSource.identity(members.repository)
@@ -68,7 +63,14 @@ export def member?(members: Members, source: GitSource.Source) -> Bool
 end
 
 ## The folder of the member that a source names (`member?` is true for it).
-export def folder_of(members: Members, source: GitSource.Source) -> String = Paths.join(members.root, source.subdir)
+def folder_of(members: Members, source: GitSource.Source) -> String = Paths.join(members.root, source.subdir)
+
+private
+
+MANIFEST_FILE = "agentica.toml"
+# The folder `agentica install` writes the packages to. A project inside it is a package, never in a workspace.
+DEPS_FOLDER = "deps"
+TABLE_KEYS = ["repository", "members"]
 
 # The parsed manifest at file, as a list of one table, or of none when the file has no `workspace` key. A file that
 # cannot be read or parsed has none here: the project's own manifest was read before and reports its own failure.

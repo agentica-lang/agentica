@@ -11,23 +11,23 @@
 import Paths from "../modules/import_path"
 
 ## The most redirects one fetch follows, each with a fresh private file.
-export MAX_REDIRECTS = 5
+MAX_REDIRECTS = 5
 ## The most archive bytes one fetch writes across all hops, bodies of redirects included.
-export TOTAL_BODY_BYTES = 268435456
+TOTAL_BODY_BYTES = 268435456
 ## The most extracted bytes of one member, as in std/archive.
-export MEMBER_MAX_BYTES = 268435456
+MEMBER_MAX_BYTES = 268435456
 ## The longest member path in bytes, as in std/archive.
-export NAME_LIMIT_BYTES = 1024
+NAME_LIMIT_BYTES = 1024
 ## The length of a SHA-256 in lowercase hex digits.
-export SHA_HEX_LENGTH = 64
+SHA_HEX_LENGTH = 64
 ## The widest timeout the engine takes, in milliseconds, as in std/http and std/archive.
-export MAX_TIMEOUT_MS = 86400000
+MAX_TIMEOUT_MS = 86400000
 ## The largest clock reading the engine adds a timeout to.
-export MAX_CLOCK = 9223372036854775807
+MAX_CLOCK = 9223372036854775807
 
 ## One artifact row: the URL of the archive, its expected SHA-256 (64 lowercase hex digits), and the member to use
 ## from it (a relative TAR or ZIP member path, kept in archive spelling after one optional leading "./").
-export struct Source
+struct Source
   url: String
   sha256: String
   member: String
@@ -35,35 +35,14 @@ end
 
 ## Where a row was written: the file and the dotted key path its failures point at (a manifest or lock entry today, a
 ## caller key until the manifest and lock rows land).
-export struct Context
+struct Context
   file: String
   key: String
 end
 
-# One parsed URL: the lowercased scheme, the authority as written, the lowercased host without brackets, and the
-# request target (the path, always starting with "/", with the query when there is one).
-struct Parts
-  scheme: String
-  authority: String
-  host: String
-  target: String
-end
-
-# The request target split at its first "?": the path and the query with its mark, or the whole target and "".
-struct Halves
-  before: String
-  after: String
-end
-
-# The host without brackets and the port text, checked the way std/http checks them.
-struct HostPort
-  host: String
-  port: String
-end
-
 ## Whether the hash names 32 bytes in 64 lowercase hex digits. The archive check compares it after the download, so a
 ## row with a short, long or uppercase hash fails here, before any network use.
-export def valid_sha?(sha: String) -> Bool
+def valid_sha?(sha: String) -> Bool
   return false if sha.length != SHA_HEX_LENGTH
 
   for c in String.split(sha, "")
@@ -79,7 +58,7 @@ end
 ## The member with one leading "./" stripped, when it is a safe relative path of at most 1024 bytes: no absolute
 ## path, drive letter, UNC share, backslash, colon or NUL byte, and no empty, "." or ".." segment. The spelling after
 ## the strip is canonical: "./lib.so" and "lib.so" name one member.
-export def canonical_member(member: String) -> Result[String]
+def canonical_member(member: String) -> Result[String]
   return error("a member must not be empty") if member == ""
 
   return error("a member is longer than 1024 bytes") if member.bytesize > NAME_LIMIT_BYTES
@@ -108,37 +87,37 @@ end
 
 ## The hex SHA-256 of the canonical member UTF-8 bytes: the key of its cache object. The hex of the pathname would
 ## leak the member spelling into folder names and vary in length; the digest is fixed width and opaque.
-export def member_digest_hex(canonical: String) -> String = OpenSSL.Digest.sha256_hexdigest(canonical.bytes)
+def member_digest_hex(canonical: String) -> String = OpenSSL.Digest.sha256_hexdigest(canonical.bytes)
 
 ## The folder that holds the native artifacts: `<root>/native`, beside the package folders, never inside one, so the
 ## package hash never sees them.
-export def native_base(cache_root: String) -> String = Paths.join(cache_root, "native")
+def native_base(cache_root: String) -> String = Paths.join(cache_root, "native")
 
 ## Where the archive with this SHA-256 lives: `<root>/native/<sha>/archive`.
-export def archive_path(cache_root: String, sha: String) -> String
+def archive_path(cache_root: String, sha: String) -> String
   Paths.join(Paths.join(native_base(cache_root), sha), "archive")
 end
 
 ## Where the object of one member lives: `<root>/native/<sha>/m/<digest>`.
-export def member_dir(cache_root: String, sha: String, digest: String) -> String
+def member_dir(cache_root: String, sha: String, digest: String) -> String
   Paths.join(Paths.join(Paths.join(native_base(cache_root), sha), "m"), digest)
 end
 
 ## Where the extracted member of a member object lives: `<...>/payload/<member>`, in archive spelling, so the shared
 ## library keeps its file extension for the system loader.
-export def payload_path(cache_root: String, sha: String, digest: String, canonical: String) -> String
+def payload_path(cache_root: String, sha: String, digest: String, canonical: String) -> String
   Paths.join(Paths.join(member_dir(cache_root, sha, digest), "payload"), canonical)
 end
 
 ## Where the receipt of a member object lives: `<...>/receipt`, holding the hex SHA-256 of the member bytes.
-export def receipt_path(cache_root: String, sha: String, digest: String) -> String
+def receipt_path(cache_root: String, sha: String, digest: String) -> String
   Paths.join(member_dir(cache_root, sha, digest), "receipt")
 end
 
 ## Whether the URL may be fetched: https anywhere, or http to a loopback literal (127.0.0.1 or [::1]) for hermetic
 ## tests. Anything with user info, a fragment or a control character is refused, as is anything but http(s); the host,
 ## port and bracket rules are std/http's, which rechecks before it sends.
-export def url_allowed?(url: String) -> Bool
+def url_allowed?(url: String) -> Bool
   parsed = parse_url(url)
   return false if !parsed.ok?
 
@@ -152,7 +131,7 @@ end
 
 ## Whether following `next` from `current` drops from https to http. Both URLs passed `url_allowed?` first; an
 ## unparsable one never downgrades, it is refused elsewhere.
-export def downgrade?(current: String, next: String) -> Bool
+def downgrade?(current: String, next: String) -> Bool
   current_parts = parse_url(current)
   next_parts = parse_url(next)
   return false if !current_parts.ok? or !next_parts.ok?
@@ -163,7 +142,7 @@ end
 ## The body budget left for the next hop of a fetch: `total` minus the bytes every hop wrote so far. A hop needs
 ## a positive budget before it sends anything, so a fetch that already wrote `total` bytes stops without further
 ## I/O. The engine passes TOTAL_BODY_BYTES; tests pass tiny totals to prove the arithmetic without huge fixtures.
-export def hop_budget(consumed: Int, total: Int) -> Result[Int]
+def hop_budget(consumed: Int, total: Int) -> Result[Int]
   return error("the budget is not usable") if total <= 0 or consumed < 0
 
   remaining = total - consumed
@@ -174,7 +153,7 @@ end
 
 ## Whether the status is a redirect the engine follows with a GET: 301, 302, 303, 307 or 308, each with exactly one
 ## Location header.
-export def redirect_status?(status: Int) -> Bool
+def redirect_status?(status: Int) -> Bool
   status == 301 or status == 302 or status == 303 or status == 307 or status == 308
 end
 
@@ -183,7 +162,7 @@ end
 ## anything else merges with the folder of the current target. A fragment is dropped
 ## (it is never sent); dot segments resolve lexically, and climbing past the root is refused. Errors are plain text
 ## for the engine to pack with the caller's file and key, without the secrets a Location may carry.
-export def resolve_location(current: String, location: String) -> Result[String]
+def resolve_location(current: String, location: String) -> Result[String]
   bare = String.slice(location, 0, first_index(location, "#"))
   return error("the redirect holds no usable location") if bare == ""
 
@@ -212,6 +191,29 @@ export def resolve_location(current: String, location: String) -> Result[String]
   raw = split_query("#{folder}#{merged.before}")
   fixed = try normalize_path(raw.before)
   ok("#{parsed.scheme}://#{parsed.authority}#{fixed}#{raw.after}")
+end
+
+private
+
+# One parsed URL: the lowercased scheme, the authority as written, the lowercased host without brackets, and the
+# request target (the path, always starting with "/", with the query when there is one).
+struct Parts
+  scheme: String
+  authority: String
+  host: String
+  target: String
+end
+
+# The request target split at its first "?": the path and the query with its mark, or the whole target and "".
+struct Halves
+  before: String
+  after: String
+end
+
+# The host without brackets and the port text, checked the way std/http checks them.
+struct HostPort
+  host: String
+  port: String
 end
 
 # A scheme-relative target (`//host/path`) with the scheme of the current URL, for the normal URL policy to judge.

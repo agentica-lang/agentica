@@ -77,16 +77,14 @@ RULES = {
 }
 
 LIB = (
-    "export NAMES: ATS[String, Address[Int]] = ATS.new()\n\n"
-    "struct Address\n  street: String\nend\n\n"
-    "export def tell(name: String, n: Int) -> Result[Void]\n"
-    "  address: Address[Int] = try NAMES.get(name)\n"
-    "  address.send(n, 1000)\n"
-    "end\n\n"
-    "export def street() -> String = Address(street: \"Main\").street\n"
+    ("NAMES: ATS[String, Address[Int]] = ATS.new()\n\n"
+     "def tell(name: String, n: Int) -> Result[Void]\n  address: Address[Int] = try NAMES.get(name)\n  address.send(n, 1000)\nend\n\n"
+     'def street() -> String = Address(street: "Main").street\n\n'
+     "private\n\n"
+     "struct Address\n  street: String\nend\n")
 )
 
-GENERIC_LIB = "export type Address[T] = List[T]\n\nexport def first(a: Address[Int]) -> Int = a[0]\n"
+GENERIC_LIB = "type Address[T] = List[T]\n\ndef first(a: Address[Int]) -> Int = a[0]\n"
 
 # A module case is (m.agc, main.agc, code, covered text in the file the diagnostic names).
 MODULE_RULES = {

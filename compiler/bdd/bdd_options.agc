@@ -10,15 +10,8 @@
 
 import Tags from "std/bdd/tags"
 
-# The most test files that run at once: the `limit` of `Task.map` takes 1 to 1024.
-MAX_JOBS = 1024
-
-# The flags that the VMs of the user's code get (the test files, the step program and the programs it starts), never
-# the runner. A flag given twice counts once.
-DENY = Set.new(["--deny-run", "--deny-net", "--deny-fs", "--deny-env", "--deny-native", "--sandbox"])
-
 ## Everything a run needs.
-export struct Options
+struct Options
   vm: String
   version: String
   agentica: List[String]
@@ -39,14 +32,14 @@ end
 
 ## What the arguments are: options to run with; a usage error of the user (RUNTIME-BDD-USAGE, with the options read so
 ## far, which say how to report it); or a mistake in the driver options, which is a bug of the caller.
-export enum Parsed
+enum Parsed
   Ready(Options)
   Usage(String, Options)
   Broken(String)
 end
 
 ## Reads the arguments.
-export def parse(arguments: List[String]) -> Parsed
+def parse(arguments: List[String]) -> Parsed
   options = Options(
     vm: "",
     version: "",
@@ -85,6 +78,15 @@ export def parse(arguments: List[String]) -> Parsed
 
   user_arguments(options, arguments.drop(at + 1))
 end
+
+private
+
+# The most test files that run at once: the `limit` of `Task.map` takes 1 to 1024.
+MAX_JOBS = 1024
+
+# The flags that the VMs of the user's code get (the test files, the step program and the programs it starts), never
+# the runner. A flag given twice counts once.
+DENY = Set.new(["--deny-run", "--deny-net", "--deny-fs", "--deny-env", "--deny-native", "--sandbox"])
 
 # One driver option with its value. An unknown name or a bad number leaves the options as they are, and the checks of
 # parse find what is missing.

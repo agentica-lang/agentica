@@ -17,15 +17,11 @@ import Lexer from "../syntax/lexer"
 import Source from "../syntax/source"
 import Tokens from "../syntax/token"
 
-# The token kinds a line may start with right after an `end`, with no empty line between: the words that go on with the
-# block `end` closed (`else`, `elsif`) or close the next one (`end`), and the closing brackets.
-FOLLOWERS = Set.new(["end", "else", "elsif", "right-paren", "right-bracket", "right-brace"])
-
 ## The first style problem of `linked`, among the files whose project asks for a rule, in program order: in each file
 ## a line that is too long, else an `end` with no empty line after it (a problem at that `end`, since there is no empty
 ## line to point at). `none` when every file follows its rules. A file of `styled`, which an earlier check found to
 ## follow the blank line rule in this very text (modules/check_cache.agc), is not lexed.
-export def first_problem(linked: Linker.Linked, styled: Set[String]) -> Optional[Failure.Problem]
+def first_problem(linked: Linker.Linked, styled: Set[String]) -> Optional[Failure.Problem]
   for module in linked.modules
     if module.max_line_width > 0
       wide = line_too_long(module.file, module.text, module.max_line_width)
@@ -45,7 +41,7 @@ end
 
 ## The first line of `text` longer than `width` characters, as CHECK-LINE-TOO-LONG from its first character past the
 ## width to its end. `none` when every line fits.
-export def line_too_long(file: String, text: String, width: Int) -> Optional[Failure.Problem]
+def line_too_long(file: String, text: String, width: Int) -> Optional[Failure.Problem]
   offset = 0
   number = 1
   for line in text.split("\n")
@@ -72,7 +68,7 @@ end
 
 ## The bare `end` tokens of `text`, lexed into `tokens`, that have no empty line after them, in order. An `end` is bare
 ## when a line break comes before and after it; a trailing comment is no token, so it does not make it less bare.
-export def missing_lines(text: String, tokens: List[Tokens.Token]) -> List[Tokens.Token]
+def missing_lines(text: String, tokens: List[Tokens.Token]) -> List[Tokens.Token]
   found: List[Tokens.Token] = []
   for index in 1...(tokens.size - 1)
     token = tokens[index]
@@ -87,7 +83,13 @@ export def missing_lines(text: String, tokens: List[Tokens.Token]) -> List[Token
 end
 
 ## Whether `text` has no `end` that the rule refuses, whatever the project of the file asks.
-export def follows_rule?(file: String, text: String) -> Bool = problem_in(file, text).none?
+def follows_rule?(file: String, text: String) -> Bool = problem_in(file, text).none?
+
+private
+
+# The token kinds a line may start with right after an `end`, with no empty line between: the words that go on with the
+# block `end` closed (`else`, `elsif`) or close the next one (`end`), and the closing brackets.
+FOLLOWERS = Set.new(["end", "else", "elsif", "right-paren", "right-bracket", "right-brace"])
 
 def problem_in(file: String, text: String) -> Optional[Failure.Problem]
   case Lexer.lex(text)

@@ -1,5 +1,4 @@
 import B from "b"
-export def go() -> Void
+def go() -> Void
   B.nope()
 end
-

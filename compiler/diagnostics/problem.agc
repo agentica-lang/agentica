@@ -6,7 +6,7 @@ import Diag from "../diagnostics/diagnostic"
 import Source from "../syntax/source"
 
 ## A note on a second span, such as "this is Int".
-export struct Label
+struct Label
   span: Source.Span
   text: String
 end
@@ -14,7 +14,7 @@ end
 ## The first problem the checker found. The notes are "" when the diagnostic has none. signature is the
 ## signature of the function being checked; callee the signature of the function or builtin called. key_path is the
 ## place of a problem in agentica.toml or agentica.lock, which have no source span for it; "" for any other problem.
-export struct Problem
+struct Problem
   file: String
   key_path: String
   code: String
@@ -31,10 +31,10 @@ end
 ## Whether the problem points at the text of its file: false for a problem at a key of agentica.toml or agentica.lock,
 ## and for one about such a file as a whole (no line 0 span, see link_failure.agc, fail_file). The text forms print the
 ## file name alone for those.
-export def at_source?(found: Problem) -> Bool = found.key_path == "" and found.span.start.line > 0
+def at_source?(found: Problem) -> Bool = found.key_path == "" and found.span.start.line > 0
 
 ## A problem with no notes.
-export def problem(
+def problem(
   file: String,
   signature: String,
   code: String,
@@ -58,7 +58,7 @@ export def problem(
 end
 
 ## The problem written as one String.
-export def pack(found: Problem) -> String
+def pack(found: Problem) -> String
   fields = [
     found.file,
     found.key_path,
@@ -83,7 +83,7 @@ export def pack(found: Problem) -> String
 end
 
 ## Reads back the problem that pack wrote.
-export def unpack(text: String) -> Problem
+def unpack(text: String) -> Problem
   fields: List[String] = []
   at = 0
   while at < text.length
@@ -119,6 +119,8 @@ export def unpack(text: String) -> Problem
     labels: labels,
   )
 end
+
+private
 
 def span_text(span: Source.Span) -> String
   numbers = [span.start.offset, span.start.line, span.start.column, span.stop.offset, span.stop.line, span.stop.column]

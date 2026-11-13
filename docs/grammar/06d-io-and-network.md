@@ -60,7 +60,7 @@ in the
 
 ```ruby
 extern "libm.so.6"
-  export def cos(x: C.Double) -> C.Double
+  def cos(x: C.Double) -> C.Double
 end
 ```
 

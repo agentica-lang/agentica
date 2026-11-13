@@ -219,7 +219,7 @@ def test_a_discard_checks_and_runs_wherever_a_name_is_bound(tmp_path):
 
 
 def test_type_members_reads_a_struct_imported_by_name_or_through_an_alias(agentica_check):
-    models = "export struct User\n  id: Int\nend\n\nexport enum Role\n  Admin\nend\n\n"
+    models = "struct User\n  id: Int\nend\n\nenum Role\n  Admin\nend\n\n"
     root = (
         'import {User, Role} from "models"\n'
         'import Models from "models"\n\n'

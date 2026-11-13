@@ -6,6 +6,6 @@ export Url.parse
 export Url.Address
 export Parts.LIMIT
 
-export def api() -> Int
+def api() -> Int
   return 1
 end

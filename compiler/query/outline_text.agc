@@ -8,7 +8,7 @@ import DiagnosticModel from "../diagnostics/diagnostic_model"
 import Signature from "../docs/signature"
 
 ## The text of the outline, one line each and a line feed at the end of every line; empty for an empty file.
-export def text(outlined: Model.Outline) -> String
+def text(outlined: Model.Outline) -> String
   file = outlined.file
   lines: List[String] = []
   for declaration in outlined.imports
@@ -25,31 +25,32 @@ export def text(outlined: Model.Outline) -> String
 end
 
 ## `file:line:column`, the start of `range`, which `rg` prints in front of a hit.
-export def place(file: String, range: DiagnosticModel.Region) -> String
-  "#{file}:#{range.start.line}:#{range.start.column}"
-end
+def place(file: String, range: DiagnosticModel.Region) -> String = "#{file}:#{range.start.line}:#{range.start.column}"
 
-## The declaration with `export` when it has one; a function with `def`, since its signature does not hold it.
-export def declaration_text(kind: String, exported: Bool, signature: String) -> String
+## The declaration with `private` when it is private (below the `private` line of its file or block); a function with
+## `def`, since its signature does not hold it.
+def declaration_text(kind: String, exported: Bool, signature: String) -> String
   head = signature
   if kind == "function"
     head = "def #{head}"
   end
 
-  return "export #{head}" if exported
+  return head if exported
 
-  head
+  "private #{head}"
 end
 
 ## `field Struct.name: Type`, with ` = default` as written when `default` is not "".
-export def field_text(owner: String, name: String, type: String, default: String) -> String
+def field_text(owner: String, name: String, type: String, default: String) -> String
   return "field #{owner}.#{name}: #{type} = #{default}" if default != ""
 
   "field #{owner}.#{name}: #{type}"
 end
 
 ## `variant Enum.Name(Payload)`, the variant written as its signature.
-export def variant_text(owner: String, signature: String) -> String = "variant #{owner}.#{signature}"
+def variant_text(owner: String, signature: String) -> String = "variant #{owner}.#{signature}"
+
+private
 
 # `import Models from "models"` or `import {A, B as C} from "models"`.
 def import_text(declaration: Model.Import) -> String
@@ -67,6 +68,8 @@ end
 
 # The line of the item, the lines of its fields or variants, and those of the declarations of a module block.
 def item_lines(file: String, item: Model.Item) -> List[String]
+  return ["#{place(file, item.range)} export #{item.reexport}"] if item.reexport != ""
+
   lines = ["#{place(file, item.range)} #{declaration_text(item.kind, item.exported, item.signature)}"]
   lines = lines.concat(member_lines(file, item))
   for inner in item.items

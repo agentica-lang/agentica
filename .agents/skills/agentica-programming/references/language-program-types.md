@@ -6,20 +6,20 @@ constants, declarations and types. Builtin methods and `to_s`: `builtins.md`.
 ## Program shape
 
 - Top level holds `def`, `struct`, `enum`, `type` alias, `import` and constants;
-  no statement runs there. `export` prefixes a function, struct, enum, alias or
-  constant. An `extern "LIB"` block declares native functions, which count as
+  no statement runs there. A declaration is public unless it comes after a
+  `private` line (`modules.md`). An `extern "LIB"` block declares native functions, which count as
   `def`s, and resources and C structs, which count as types; a block with a
   resource or a struct counts as types as a whole (`native.md`).
 - Order is checked: module doc and `import`s, constants, `struct`, `enum`,
-  aliases and `extern` blocks with a resource or a struct (any order),
-  `export def`, then private `def`.
+  aliases and `extern` blocks with a resource or a struct (any order), then
+  `def`; the same again after `private` (`modules.md`).
   The first declaration out of place is `CHECK-DECL-ORDER`. A function may call
   one declared later.
 - A constant is `NAME = expr` or `NAME: Type = expr` (the type also types `[]`,
   `{}` and `Set.new([])`). The name is capitals, digits and `_`, at least two
   characters, capital first (`MAX_DEPTH`), else `PARSE-CONSTANT-NAME`. `IO`,
   `JSON`, `TCP`, `TLS` are reserved. Constants need no blank line between them
-  (`##` docs and `export` are fine); a blank line precedes a `struct`, `enum` or
+  (`##` docs are fine); a blank line precedes a `struct`, `enum` or
   `def`. The value starts on the `=` line.
 - A constant is read as `NAME` in its file or through a named import, and is a
   value (`NAME.size`, `NAME[i]`, `NAME.field`, `"#{NAME}"`) that never changes:
@@ -112,7 +112,7 @@ constants, declarations and types. Builtin methods and `to_s`: `builtins.md`.
   or `_`.
 
 `type Names = List[String]` names any type and is transparent in every type
-position. `export type` makes it importable. It adds no runtime type and cannot
+position. Above `private` it is importable. It adds no runtime type and cannot
 be constructed or used as an enum pattern. Cycles are `CHECK-TYPE-ALIAS-CYCLE`;
 errors in an expanded type point to the alias use; expansion stops at 1,000 type
 references (`CHECK-TOO-DEEP`).

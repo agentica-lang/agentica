@@ -22,7 +22,7 @@ import RubyForm from "ruby_form"
 
 ## Checks a call of the builtin entry (the first form of the name). expected is the type the context wants, Unknown
 ## when none.
-export def check_builtin_call(
+def check_builtin_call(
   cx: State.Cx,
   st: State.St,
   written: Ast.Call,
@@ -63,7 +63,7 @@ export def check_builtin_call(
 end
 
 ## CHECK-TYPE-MISMATCH unless the type can be printed or interpolated (it has to_s).
-export def ensure_printable(cx: State.Cx, st: State.St, type: T.Type, span: Source.Span) -> Result[Bool]
+def ensure_printable(cx: State.Cx, st: State.St, type: T.Type, span: Source.Span) -> Result[Bool]
   if !CheckTypes.data?(cx, type)
     return error(
       State.fail_help(
@@ -82,9 +82,11 @@ export def ensure_printable(cx: State.Cx, st: State.St, type: T.Type, span: Sour
 end
 
 ## Type.codec: the codec of the struct or enum named by the type name, which must be a type JSON.decode takes.
-export def check_codec_of(cx: State.Cx, st: State.St, node: Ast.TypeName) -> Result[T.Type]
+def check_codec_of(cx: State.Cx, st: State.St, node: Ast.TypeName) -> Result[T.Type]
   ok(T.Type.Codec(try json_target(cx, st, node, "codec requires a struct or enum name")))
 end
+
+private
 
 # The named arguments of a builtin call bound to the parameters of its form. A Plain or Prelude row reads the slots
 # (and only such a row has defaults); the other rules read their arguments by position, so they get them in parameter

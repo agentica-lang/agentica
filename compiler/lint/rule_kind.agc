@@ -10,20 +10,9 @@ import Source from "../syntax/source"
 import Suggest from "../syntax/suggest"
 import Rules from "rules"
 
-METHODS = Set.new(["is_a?", "kind_of?"])
-QUALIFIED = Set.new(["Error.is_a?", "Error.kind_of?"])
-
-# Every name that is_a? takes in a builtin family: each kind and each dotted prefix of one, so the family itself.
-KNOWN = Set.new(
-  ERROR_KINDS.flat_map do |kind: String|
-    (1..kind.split(".").size).to_a.map do |count: Int| kind.split(".").take(count).join(".") end
-  end,
-)
-FAMILIES = Set.new(ERROR_KINDS.map do |kind: String| kind.split(".")[0] end)
-
 ## A kind literal of the file: one that an is_a? or kind_of? call tests (`created` false), or one that a `kind:`
 ## argument gives (`error("x", kind: "number.negative")`, `e.with(kind: ...)`), which the program creates.
-export struct Seen
+struct Seen
   kind: String
   span: Source.Span
   created: Bool
@@ -33,7 +22,7 @@ end
 ## call tests, as `e.is_a?("x")`, `Error.is_a?(e, "x")` or `e |> is_a?("x")`, positional or named `family:`. A bare
 ## `is_a?(e, "x")` that is not piped, or a piped one in a file that defines `is_a?` or `kind_of?` itself
 ## (`functions`), is a function of the program; the method form always reaches Error.
-export def seen(expr: Ast.Expr, functions: Set[String]) -> List[Seen]
+def seen(expr: Ast.Expr, functions: Set[String]) -> List[Seen]
   case expr
     Ast.Expr.MethodCall(node) ->
       found = created(node.named)
@@ -52,7 +41,7 @@ end
 
 ## LINT-ERROR-KIND for each tested literal of a builtin family that is neither a builtin kind (or its family) nor a
 ## kind that the file creates.
-export def suggestions(file: String, literals: List[Seen]) -> List[Problems.Problem]
+def suggestions(file: String, literals: List[Seen]) -> List[Problems.Problem]
   made: Set[String] = Set.new([])
   for literal in literals
     if literal.created
@@ -73,6 +62,19 @@ export def suggestions(file: String, literals: List[Seen]) -> List[Problems.Prob
 
   found
 end
+
+private
+
+METHODS = Set.new(["is_a?", "kind_of?"])
+QUALIFIED = Set.new(["Error.is_a?", "Error.kind_of?"])
+
+# Every name that is_a? takes in a builtin family: each kind and each dotted prefix of one, so the family itself.
+KNOWN = Set.new(
+  ERROR_KINDS.flat_map do |kind: String|
+    (1..kind.split(".").size).to_a.map do |count: Int| kind.split(".").take(count).join(".") end
+  end,
+)
+FAMILIES = Set.new(ERROR_KINDS.map do |kind: String| kind.split(".")[0] end)
 
 # The family an is_a? call tests: the positional argument at `index`, or else the named `family:`. A receiver named
 # `error:` (`Error.is_a?(error: e, family: "x")`, or `Error.is_a?("x", error: e)`) leaves one positional slot fewer.

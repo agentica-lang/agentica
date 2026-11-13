@@ -11,13 +11,13 @@ import SourceFile from "../syntax/source_file"
 import Toml from "std/toml"
 
 ## Whose file is read: its path and the code of its failures (PKG-MANIFEST-INVALID or PKG-LOCK-INVALID).
-export struct Reading
+struct Reading
   file: String
   code: String
 end
 
 ## The text of the file, or the failure for a file that cannot be read or is not UTF-8.
-export def read_text(workspace: Workspace.Workspace, reading: Reading) -> Result[String]
+def read_text(workspace: Workspace.Workspace, reading: Reading) -> Result[String]
   case workspace.read_text.call(reading.file)
     SourceFile.Read.Text(text) -> ok(text)
     SourceFile.Read.Invalid(at) ->
@@ -27,7 +27,7 @@ export def read_text(workspace: Workspace.Workspace, reading: Reading) -> Result
 end
 
 ## Parses a document. A syntax error is located at its line and column, as std/toml reports them; the root is a table.
-export def parse(reading: Reading, text: String) -> Result[Map[String, Toml.Value]]
+def parse(reading: Reading, text: String) -> Result[Map[String, Toml.Value]]
   parsed = Toml.parse(text)
   return error(located(reading, position_of(text, parsed.message), parsed.message, Diag.Help.NoHelp)) if !parsed.ok?
 
@@ -35,27 +35,27 @@ export def parse(reading: Reading, text: String) -> Result[Map[String, Toml.Valu
 end
 
 ## The failure for a key path: "" is the file as a whole, which has no position to show.
-export def fail(reading: Reading, key_path: String, message: String) -> String
+def fail(reading: Reading, key_path: String, message: String) -> String
   fail_with(reading, key_path, message, Diag.Help.NoHelp)
 end
 
 ## Like fail, with a help text.
-export def fail_help(reading: Reading, key_path: String, message: String, help: String) -> String
+def fail_help(reading: Reading, key_path: String, message: String, help: String) -> String
   fail_with(reading, key_path, message, Failure.hint(help))
 end
 
 ## The path of a key inside the table at path.
-export def child(path: String, key: String) -> String
+def child(path: String, key: String) -> String
   return key if path == ""
 
   "#{path}.#{key}"
 end
 
 ## The path of an item of the array at path (counted from 0).
-export def item(path: String, index: Int) -> String = "#{path}[#{index}]"
+def item(path: String, index: Int) -> String = "#{path}[#{index}]"
 
 ## The entries of a table value, or a failure that says the value at path is not a table.
-export def table(reading: Reading, value: Toml.Value, path: String) -> Result[Map[String, Toml.Value]]
+def table(reading: Reading, value: Toml.Value, path: String) -> Result[Map[String, Toml.Value]]
   case value
     Toml.Value.Table(entries) -> ok(entries)
     _ -> error(fail(reading, path, "expected a table"))
@@ -63,7 +63,7 @@ export def table(reading: Reading, value: Toml.Value, path: String) -> Result[Ma
 end
 
 ## The items of an array value, or a failure.
-export def array(reading: Reading, value: Toml.Value, path: String) -> Result[List[Toml.Value]]
+def array(reading: Reading, value: Toml.Value, path: String) -> Result[List[Toml.Value]]
   case value
     Toml.Value.Array(items) -> ok(items)
     _ -> error(fail(reading, path, "expected an array"))
@@ -71,7 +71,7 @@ export def array(reading: Reading, value: Toml.Value, path: String) -> Result[Li
 end
 
 ## The text of a string value, or a failure.
-export def text(reading: Reading, value: Toml.Value, path: String) -> Result[String]
+def text(reading: Reading, value: Toml.Value, path: String) -> Result[String]
   case value
     Toml.Value.Str(content) -> ok(content)
     _ -> error(fail(reading, path, "expected a string"))
@@ -79,7 +79,7 @@ export def text(reading: Reading, value: Toml.Value, path: String) -> Result[Str
 end
 
 ## The number of an integer value, or a failure.
-export def integer(reading: Reading, value: Toml.Value, path: String) -> Result[Int]
+def integer(reading: Reading, value: Toml.Value, path: String) -> Result[Int]
   case value
     Toml.Value.Int(number) -> ok(number)
     _ -> error(fail(reading, path, "expected an integer"))
@@ -87,7 +87,7 @@ export def integer(reading: Reading, value: Toml.Value, path: String) -> Result[
 end
 
 ## The value of a boolean, or a failure.
-export def boolean(reading: Reading, value: Toml.Value, path: String) -> Result[Bool]
+def boolean(reading: Reading, value: Toml.Value, path: String) -> Result[Bool]
   case value
     Toml.Value.Bool(flag) -> ok(flag)
     _ -> error(fail(reading, path, "expected true or false"))
@@ -95,12 +95,7 @@ export def boolean(reading: Reading, value: Toml.Value, path: String) -> Result[
 end
 
 ## Fails on the first key of a table (at path) that is not in allowed, in the order the file wrote them.
-export def known_keys(
-  reading: Reading,
-  entries: Map[String, Toml.Value],
-  allowed: List[String],
-  path: String,
-) -> Result[Void]
+def known_keys(reading: Reading, entries: Map[String, Toml.Value], allowed: List[String], path: String) -> Result[Void]
   known = Set.new(allowed)
   for key in entries.keys
     if !known.include?(key)
@@ -111,6 +106,8 @@ export def known_keys(
 
   ok()
 end
+
+private
 
 # The line and column in "line L, column C: ..." as a position in text; the start of the file when the message has
 # none.

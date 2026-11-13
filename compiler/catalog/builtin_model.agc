@@ -6,7 +6,7 @@ import Types from "../syntax/types"
 ## checked against the parameters. The other variants name a special rule of the checker in CamelCase (a task spawn is
 ## TaskSpawn); a test compares the two lists. Prelude is a function written in Agentica in stdlib/prelude/ (its
 ## PreludeRow says which): the arguments are matched against the type variables of the row.
-export enum Rule
+enum Rule
   Plain
   AddressSend
   AtsCall
@@ -90,7 +90,7 @@ end
 ## are the literals of those types, Nothing is nil, EmptyBytes is `"".bytes`, None is `none` (an Optional),
 ## Variant holds "Enum.Variant" of a builtin enum whose variant has no payload, and Fields holds the name of a builtin
 ## record whose fields all have a default: the record those defaults build (`Process.Options()`).
-export enum Default
+enum Default
   Absent
   Whole(Int)
   Real(Float)
@@ -108,7 +108,7 @@ end
 ## A name with a type: a parameter of a builtin, or a field of a struct. Only a parameter of a builtin has a default;
 ## the lowering of a call that leaves out the trailing arguments with a default puts the default in their place, so the
 ## VM always gets every argument.
-export struct Named
+struct Named
   name: String
   type: Types.Type
   default: Default = Default.Absent
@@ -118,7 +118,7 @@ end
 ## a timeout, Map.get with a default). A Plain or Prelude builtin with no alternative may instead give a default to its
 ## last parameters, as a user function does (builtins.agc `default_problem` lists the rules). implementation is the
 ## name of the VM builtin; effects are the capabilities it needs (stdout, network, ...).
-export struct Builtin
+struct Builtin
   name: String
   parameters: List[Named]
   result: Types.Type
@@ -130,20 +130,20 @@ export struct Builtin
 end
 
 ## A builtin record type, such as HttpWire.Request, with its fields in declaration order.
-export struct Record
+struct Record
   name: String
   fields: List[Named]
 end
 
 ## One variant of an enum and the types of its payload.
-export struct Variant
+struct Variant
   name: String
   payload: List[Types.Type]
 end
 
 ## An enum with its type parameters and variants in declaration order. The builtin enums (Await, TaskExit) and, in the
 ## checker, the enums of the program have this shape.
-export struct EnumDef
+struct EnumDef
   name: String
   parameters: List[String]
   variants: List[Variant]
@@ -152,7 +152,7 @@ end
 ## A type variable of a prelude function that only some types may take: the key of `group_by` is an Int or a String.
 ## what is how the message names the value ("a key"). The variables of a row that has no Limit take any type. With
 ## equality the variable may take any type that == compares (allowed is then empty), as the items of `include?` do.
-export struct Limit
+struct Limit
   variable: String
   allowed: List[Types.Type]
   what: String
@@ -164,10 +164,12 @@ end
 ## function of that file: bodies maps the word of the type that selector (a limited variable) is bound to, such as
 ## "Int", to the function; a function that serves every allowed type has selector "" and the one entry "". With a
 ## selector, the entry "" serves the types that have no entry of their own.
-export struct PreludeRow
+struct PreludeRow
   name: String
   module: String
   limits: List[Limit]
   selector: String
   bodies: Map[String, String]
 end
+
+private

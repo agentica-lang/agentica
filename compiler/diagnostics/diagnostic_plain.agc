@@ -9,19 +9,10 @@ import Source from "../syntax/source"
 import Diag from "diagnostic"
 import Problems from "problem"
 
-struct Mark
-  line: Int
-  column: Int
-  width: Int
-  character: String
-  note: String
-  noted: Bool
-end
-
 ## The text of the problem. `text` is the text of the file that the problem names. A problem at a key of a manifest or
 ## a lock has no source lines: the key path takes their place, and a problem about the whole file shows the file name
 ## alone.
-export def format(problem: Problems.Problem, text: String) -> String
+def format(problem: Problems.Problem, text: String) -> String
   return without_source(problem) if !Problems.at_source?(problem)
 
   lines = text.split("\n")
@@ -40,7 +31,7 @@ export def format(problem: Problems.Problem, text: String) -> String
 end
 
 ## The text of a problem that has no place in the source: the file, the code, the message, and the key when it has one.
-export def without_source(problem: Problems.Problem) -> String
+def without_source(problem: Problems.Problem) -> String
   head = "#{problem.file}: error[#{problem.code}]\n#{problem.message}"
   notes: List[String] = []
   if problem.key_path != ""
@@ -54,13 +45,24 @@ export def without_source(problem: Problems.Problem) -> String
 end
 
 ## The text of a line (1-based), without one carriage return at its end; empty outside the file.
-export def line_text(lines: List[String], number: Int) -> String
+def line_text(lines: List[String], number: Int) -> String
   return "" if number < 1 or number > lines.size
 
   text = lines[number - 1]
   return text.slice(0, text.length - 1) if text.end_with?("\r")
 
   text
+end
+
+private
+
+struct Mark
+  line: Int
+  column: Int
+  width: Int
+  character: String
+  note: String
+  noted: Bool
 end
 
 def help_note(help: Diag.Help) -> List[String]

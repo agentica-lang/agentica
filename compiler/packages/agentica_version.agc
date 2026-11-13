@@ -7,29 +7,17 @@
 import Failure from "../modules/link_failure"
 
 ## The key of the manifest that holds the version, which is also the key path of its failures.
-export KEY = "agentica"
-
-DIGITS = Set.new("0123456789".split(""))
-IDENTIFIER_CHARACTERS = Set.new("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-".split(""))
-# A version is short; the limit keeps a hostile manifest from making the compare walk a long text.
-MAX_LENGTH = 256
+KEY = "agentica"
 
 ## Whose manifest a key is in, which the failure names.
-export enum Owner
+enum Owner
   Project
   WorkspaceRoot
   Package(String)
 end
 
-# The parts of a version, as text: the three numbers of the core and the pre-release identifiers (none for a release).
-# A number is compared as text by length first, which is its value because it has no leading zero.
-struct Version
-  core: List[String]
-  pre: List[String]
-end
-
 ## Why text is not one SemVer version, or "" when it is one.
-export def problem(text: String) -> String
+def problem(text: String) -> String
   parsed = parse(text)
   return "" if parsed.ok?
 
@@ -37,7 +25,7 @@ export def problem(text: String) -> String
 end
 
 ## The owner of the manifest of the package `package`, "" for the project.
-export def owner_of(package: String) -> Owner
+def owner_of(package: String) -> Owner
   return Owner.Project if package == ""
 
   Owner.Package(package)
@@ -46,7 +34,7 @@ end
 ## Checks the `agentica` key of the manifest in `file` against the running version. `needed` is "" when the manifest
 ## has no key, and `running` is "" when the front end does not know its version (a program that writes no bytecode):
 ## then there is nothing to check. The failure is PKG-AGENTICA-TOO-OLD at the key, naming the owner.
-export def check(file: String, owner: Owner, needed: String, running: String) -> Result[Void]
+def check(file: String, owner: Owner, needed: String, running: String) -> Result[Void]
   return ok() if needed == "" or running == ""
 
   current = parse(running)
@@ -65,6 +53,20 @@ export def check(file: String, owner: Owner, needed: String, running: String) ->
 
   message = "#{who} needs Agentica #{needed} or newer, and this is Agentica #{running}"
   error(Failure.fail_key(file, KEY, "PKG-AGENTICA-TOO-OLD", message, Failure.hint(help)))
+end
+
+private
+
+DIGITS = Set.new("0123456789".split(""))
+IDENTIFIER_CHARACTERS = Set.new("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-".split(""))
+# A version is short; the limit keeps a hostile manifest from making the compare walk a long text.
+MAX_LENGTH = 256
+
+# The parts of a version, as text: the three numbers of the core and the pre-release identifiers (none for a release).
+# A number is compared as text by length first, which is its value because it has no leading zero.
+struct Version
+  core: List[String]
+  pre: List[String]
 end
 
 # The parts of a version, or why the text is not one: MAJOR.MINOR.PATCH, then an optional `-` and dot-separated

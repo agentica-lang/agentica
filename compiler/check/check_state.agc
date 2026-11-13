@@ -13,15 +13,11 @@ import Types from "../syntax/types"
 import Help from "check_help"
 import Defaults from "defaults"
 
-# List.repeat halts above this count (RUNTIME-INVALID-COUNT), and a program of about 5.7 MB of source has more node
-# ids.
-MAX_REPEAT = 1_048_576
-
 ## A name in scope: its type, whether it cannot be assigned (a for variable), and how many scopes were open when it was
 ## introduced (a block cannot assign a name from outside it, so the level tells which side a name is on).
 ## slot is the key of the name in `St.locals` (the offset where it is introduced) when CHECK-UNUSED-VARIABLE watches
 ## it, and -1 for a parameter of a function, which is never watched.
-export struct Binding
+struct Binding
   type: Types.Type
   immutable: Bool
   level: Int
@@ -30,7 +26,7 @@ end
 
 ## How a watched name was introduced: an assignment, a `for` variable, the parameter of a block or a name of a `case`
 ## pattern. The help of CHECK-UNUSED-VARIABLE depends on it.
-export enum Origin
+enum Origin
   Variable
   ForVariable
   BlockParameter
@@ -40,7 +36,7 @@ end
 ## A name that has to be read before the function ends (CHECK-UNUSED-VARIABLE): where it is introduced (`span`), how,
 ## its type, and the value it is set to (the iterable of a `for`), none for a parameter or a pattern name. `tryable` is
 ## whether `try` is allowed where the name is introduced (try_allowed?), which its help depends on.
-export struct Local
+struct Local
   name: String
   span: Source.Span
   origin: Origin
@@ -53,7 +49,7 @@ end
 ## return or the last expression gives it. InferResult is a block that must give a Result of a type not known yet (the
 ## block of Task.map): the first return or the last expression gives the whole type, which must be a Result, and
 ## `try` works in it, since the outer type is a Result whatever the inner one is.
-export enum Slot
+enum Slot
   Infer
   InferResult
   Known(Types.Type)
@@ -61,7 +57,7 @@ end
 
 ## The block being checked and the scope depth at its start, for CHECK-CAPTURED-ASSIGNMENT. each_receiver is the list
 ## of a List.each call, which the help text names.
-export struct Capture
+struct Capture
   boundary: Int
   params: List[Ast.BlockParam]
   each_receiver: Optional[Ast.Expr]
@@ -72,7 +68,7 @@ end
 ## Each holds the type of the receiver. Members is Type.members on a struct type: the fields of the struct. Codec is
 ## Type.codec: the linked name of the type and its fields (none for an enum). FieldCall is `receiver.name(args)` where
 ## name is an Fn field of the struct: the call of the function the field holds.
-export enum Resolved
+enum Resolved
   Self(Types.Type)
   Text(Types.Type)
   Inspect(Types.Type)
@@ -85,7 +81,7 @@ end
 ## The parameter types and the result type of a function, and how many arguments a call takes (Defaults.Shape). A
 ## generic function lists its type parameters; its types have them as type variables. names are the parameter names,
 ## which a call may give its arguments with.
-export struct Signature
+struct Signature
   type_parameters: List[String]
   params: List[Types.Type]
   result: Types.Type
@@ -96,7 +92,7 @@ end
 ## Where a module constant is declared and what it is set to: the value is how a default that names the constant is
 ## judged (CHECK-DEFAULT-VALUE), and the file is the one a problem about a blanked value is reported in. blanked is
 ## true when the value is the 0 that the check cache leaves in the stub of a long constant (checker.agc, blanked?).
-export struct ConstSite
+struct ConstSite
   file: String
   value: Ast.Expr
   blanked: Bool
@@ -106,7 +102,7 @@ end
 ## order as Cx.structs). A diagnostic that points at a field of a struct from another file leaves the note out, because
 ## a note holds a span and no file.
 ## hidden holds the private fields, the ones after the `private` line of the struct (CHECK-PRIVATE-FIELD).
-export struct FieldSite
+struct FieldSite
   file: String
   spans: List[Source.Span]
   hidden: List[String] = []
@@ -132,7 +128,7 @@ end
 ## (checker.agc computes it before the bodies are checked): each is a type variable, or an Optional, JSON.Field or Map
 ## key of one, that must be encodable once the variables are bound. lenient is the files in which a name that nothing
 ## reads is no error (CHECK-UNUSED-VARIABLE): the roots of a query, as for an unused import.
-export struct Cx
+struct Cx
   help: Help.Tables
   structs: Map[String, List[Model.Named]]
   struct_params: Map[String, List[String]]
@@ -161,7 +157,7 @@ end
 ## What the body of a generic function does with JSON that its callers must know: Need is a JSON.encode or JSON.from
 ## of a value whose type has type variables, with what it needs (CheckTypes.encode_needs); Pass is a call or a
 ## reference of a generic function, with the type arguments it binds, which may hold the variables of the body.
-export enum JsonUse
+enum JsonUse
   Need(Types.Type)
   Pass(String, Map[String, Types.Type])
 end
@@ -183,7 +179,7 @@ end
 ## that an assignment set again, and assigning the ones whose assignment is being checked, where a read of the name
 ## itself is no use of it (check_variables.agc). slots holds, by the id of each call with named arguments, the
 ## parameter each of its arguments fills in source order (Ast.Call.slots), which the lowering reads.
-export struct St
+struct St
   types: List[Types.Type]
   resolved: Map[Int, Resolved]
   vars: Map[String, Binding]
@@ -209,7 +205,7 @@ end
 
 ## A call of a builtin that has its own rule: the call, its arguments, the form of the builtin that takes that many
 ## arguments, and the type the context expects (Unknown when none).
-export struct Site
+struct Site
   node: Ast.Call
   args: List[Ast.Expr]
   selected: Model.Builtin
@@ -217,17 +213,17 @@ export struct Site
 end
 
 ## The result of checking an expression: the new state and the type.
-export struct Out
+struct Out
   st: St
   type: Types.Type
 end
 
 ## The deepest nesting of expressions and statements the checker accepts (CHECK-TOO-DEEP beyond it).
-export def nesting_limit() -> Int = 1000
+def nesting_limit() -> Int = 1000
 
 ## A list of `count` slots with no type, built from repeats of at most MAX_REPEAT, so no runtime error escapes for a
 ## huge program.
-export def no_types(count: Int) -> List[Types.Type]
+def no_types(count: Int) -> List[Types.Type]
   types: List[Types.Type] = []
   left = count
   while left > 0
@@ -244,7 +240,7 @@ export def no_types(count: Int) -> List[Types.Type]
 end
 
 ## The state at the start of a function: no names, no types.
-export def fresh() -> St
+def fresh() -> St
   no_tries: Set[Int] = Set.new([])
   no_reads: Set[Int] = Set.new([])
   no_writes: Set[Int] = Set.new([])
@@ -274,33 +270,33 @@ export def fresh() -> St
 end
 
 ## The state with one more JsonUse of the body.
-export def use_json(st: St, use: JsonUse) -> St = st.with(json_uses: st.json_uses.push(use))
+def use_json(st: St, use: JsonUse) -> St = st.with(json_uses: st.json_uses.push(use))
 
 ## The failure of a diagnostic with a help text.
-export def fail_help(cx: Cx, st: St, code: String, message: String, span: Source.Span, help: String) -> String
+def fail_help(cx: Cx, st: St, code: String, message: String, span: Source.Span, help: String) -> String
   Failure.pack(Failure.problem(cx.file, st.signature, code, message, span, Diag.Help.Hint(help)))
 end
 
 ## The failure of a diagnostic with no help.
-export def fail(cx: Cx, st: St, code: String, message: String, span: Source.Span) -> String
+def fail(cx: Cx, st: St, code: String, message: String, span: Source.Span) -> String
   Failure.pack(Failure.problem(cx.file, st.signature, code, message, span, Diag.Help.NoHelp))
 end
 
 ## The failure of a diagnostic whose help may be absent ("" is no help).
-export def fail_maybe(cx: Cx, st: St, code: String, message: String, span: Source.Span, help: String) -> String
+def fail_maybe(cx: Cx, st: St, code: String, message: String, span: Source.Span, help: String) -> String
   return fail(cx, st, code, message, span) if help == ""
 
   fail_help(cx, st, code, message, span, help)
 end
 
 ## The failure of a diagnostic with the signature of the callee as a note.
-export def fail_callee(cx: Cx, st: St, code: String, message: String, span: Source.Span, callee: String) -> String
+def fail_callee(cx: Cx, st: St, code: String, message: String, span: Source.Span, callee: String) -> String
   base = Failure.problem(cx.file, st.signature, code, message, span, Diag.Help.NoHelp)
   Failure.pack(base.with(callee: callee))
 end
 
 ## The failure of a type mismatch: "expected T, found U" with the types as notes and the conversion help.
-export def mismatch(cx: Cx, st: St, expected: Types.Type, actual: Types.Type, span: Source.Span) -> String
+def mismatch(cx: Cx, st: St, expected: Types.Type, actual: Types.Type, span: Source.Span) -> String
   base = Failure.problem(
     cx.file,
     st.signature,
@@ -314,7 +310,7 @@ export def mismatch(cx: Cx, st: St, expected: Types.Type, actual: Types.Type, sp
 end
 
 ## actual, or the failure of a mismatch when there is an expected type and it differs.
-export def ensure(cx: Cx, st: St, actual: Types.Type, expected: Types.Type, span: Source.Span) -> Result[Types.Type]
+def ensure(cx: Cx, st: St, actual: Types.Type, expected: Types.Type, span: Source.Span) -> Result[Types.Type]
   if !Types.unknown?(expected) and !Types.same?(actual, expected)
     return error(mismatch(cx, st, expected, actual, span))
   end
@@ -323,40 +319,38 @@ export def ensure(cx: Cx, st: St, actual: Types.Type, expected: Types.Type, span
 end
 
 ## Checks an expression through the hook, where a Void value is an error.
-export def expr(cx: Cx, st: St, node: Ast.Expr, expected: Types.Type) -> Result[Out]
+def expr(cx: Cx, st: St, node: Ast.Expr, expected: Types.Type) -> Result[Out]
   cx.expression.call(cx, st, node, expected, false)
 end
 
 ## Checks an expression where a Void value is allowed (a statement, a completion).
-export def expr_completion(cx: Cx, st: St, node: Ast.Expr, expected: Types.Type) -> Result[Out]
+def expr_completion(cx: Cx, st: St, node: Ast.Expr, expected: Types.Type) -> Result[Out]
   cx.expression.call(cx, st, node, expected, true)
 end
 
 ## Checks an expression where a Void value is allowed only when completion is true.
-export def expr_completion_if(cx: Cx, st: St, node: Ast.Expr, expected: Types.Type, completion: Bool) -> Result[Out]
+def expr_completion_if(cx: Cx, st: St, node: Ast.Expr, expected: Types.Type, completion: Bool) -> Result[Out]
   cx.expression.call(cx, st, node, expected, completion)
 end
 
 ## The state with the type of a node recorded.
-export def record_type(st: St, id: Int, type: Types.Type) -> St = st.with(types: st.types.set(id, type))
+def record_type(st: St, id: Int, type: Types.Type) -> St = st.with(types: st.types.set(id, type))
 
 ## The state with the types that a node introduced as names recorded: one for a parameter, a block parameter, a binding
 ## or a `for` statement (the type of its variable), and one for each payload position of a variant pattern (the type of
 ## the name there, if the slot has one). The result annotation of a function has its result type, for
 ## Analysis.bodies. They are kept apart from `types`, which holds expressions only, so a type that
 ## only a binding names does not reach the lowering.
-export def record_bound(st: St, id: Int, types: List[Types.Type]) -> St = st.with(bound: st.bound.put(id, types))
+def record_bound(st: St, id: Int, types: List[Types.Type]) -> St = st.with(bound: st.bound.put(id, types))
 
 ## The state with the slots of a call with named arguments recorded.
-export def record_slots(st: St, id: Int, slots: List[Int]) -> St = st.with(slots: st.slots.put(id, slots))
+def record_slots(st: St, id: Int, slots: List[Int]) -> St = st.with(slots: st.slots.put(id, slots))
 
 ## The state with the resolution of a node recorded.
-export def record_resolved(st: St, id: Int, resolved: Resolved) -> St
-  st.with(resolved: st.resolved.put(id, resolved))
-end
+def record_resolved(st: St, id: Int, resolved: Resolved) -> St = st.with(resolved: st.resolved.put(id, resolved))
 
 ## Whether the node `id` was resolved to a call of an `Fn` field (`store.put(a, b)`).
-export def field_call?(resolved: Map[Int, Resolved], id: Int) -> Bool
+def field_call?(resolved: Map[Int, Resolved], id: Int) -> Bool
   found = resolved.get(id)
   return false if found.none?
 
@@ -367,18 +361,18 @@ export def field_call?(resolved: Map[Int, Resolved], id: Int) -> Bool
 end
 
 ## The binding of a name, or none when the name is not in scope.
-export def lookup(st: St, name: String) -> Optional[Binding] = st.vars.get(name)
+def lookup(st: St, name: String) -> Optional[Binding] = st.vars.get(name)
 
 ## Opens a scope: the state to give back to leave when it is closed.
-export def enter(st: St) -> St = st.with(depth: st.depth + 1)
+def enter(st: St) -> St = st.with(depth: st.depth + 1)
 
 ## Closes the scope opened from before: the names, the depth and nothing else go back; types and resolutions stay.
-export def leave(st: St, before: St) -> St = st.with(vars: before.vars, depth: before.depth)
+def leave(st: St, before: St) -> St = st.with(vars: before.vars, depth: before.depth)
 
 ## Whether `try` is allowed in the function or block being checked: it returns a Result (a block with an inferred
 ## result qualifies only when it must give a Result), or it is the block of a Lazy method, where a failed `try` ends
 ## the pipeline.
-export def try_allowed?(st: St) -> Bool
+def try_allowed?(st: St) -> Bool
   return true if st.step
 
   case st.result
@@ -391,14 +385,14 @@ end
 ## Introduces a name (a parameter, a binding, a pattern variable, a for variable) in the scope: no builtin constructor
 ## or function name, and no shadowing. `_` binds nothing: it can repeat and it is never in scope to be read. The name
 ## is not watched by CHECK-UNUSED-VARIABLE (a parameter of a function).
-export def introduce(cx: Cx, st: St, name: String, type: Types.Type, span: Source.Span, immutable: Bool) -> Result[St]
+def introduce(cx: Cx, st: St, name: String, type: Types.Type, span: Source.Span, immutable: Bool) -> Result[St]
   introduce_slot(cx, st, name, type, span, immutable, -1)
 end
 
 ## `introduce` for a name that CHECK-UNUSED-VARIABLE watches: it must be read before the function ends, unless it
 ## starts with `_`. `span` is where a clash is reported; `shown` is where the name is introduced, which an unused
 ## name is reported at, and its offset is the name's key. `value` is what the name is set to, if anything.
-export def introduce_local(
+def introduce_local(
   cx: Cx,
   st: St,
   name: String,
@@ -418,34 +412,34 @@ export def introduce_local(
 end
 
 ## The state after the name of `binding` was read, unless it is the name that is being assigned.
-export def read(st: St, binding: Binding) -> St
+def read(st: St, binding: Binding) -> St
   return st if binding.slot < 0 or st.reads.include?(binding.slot) or st.assigning.include?(binding.slot)
 
   st.with(reads: st.reads.add(binding.slot))
 end
 
 ## The state at the start of the assignment to `binding`: it is set again, and a read of it in the value is no use.
-export def assigning(st: St, binding: Binding) -> St
+def assigning(st: St, binding: Binding) -> St
   return st if binding.slot < 0
 
   st.with(writes: st.writes.add(binding.slot), assigning: st.assigning.add(binding.slot))
 end
 
 ## The state at the end of the assignment to `binding`.
-export def assigned(st: St, binding: Binding) -> St
+def assigned(st: St, binding: Binding) -> St
   return st if binding.slot < 0
 
   st.with(assigning: st.assigning.delete(binding.slot))
 end
 
 ## The state with no name to watch: the start of a function or of a constant.
-export def forget_locals(st: St) -> St
+def forget_locals(st: St) -> St
   no_reads: Set[Int] = Set.new([])
   st.with(locals: {}, reads: no_reads, writes: no_reads, assigning: no_reads)
 end
 
 ## CHECK-REDEFINED-NAME for ok, error, some and none, which are builtin constructors.
-export def reserve_constructor(cx: Cx, st: St, name: String, span: Source.Span) -> Result[Bool]
+def reserve_constructor(cx: Cx, st: St, name: String, span: Source.Span) -> Result[Bool]
   if name == "ok" or name == "error" or name == "some" or name == "none"
     return error(fail(cx, st, "CHECK-REDEFINED-NAME", "\"#{name}\" is a builtin constructor", span))
   end
@@ -454,7 +448,7 @@ export def reserve_constructor(cx: Cx, st: St, name: String, span: Source.Span) 
 end
 
 ## CHECK-REDEFINED-NAME for the names a local may not take: ok, error, some, none, puts, print, gets and gets!.
-export def reserve_local(cx: Cx, st: St, name: String, span: Source.Span) -> Result[Bool]
+def reserve_local(cx: Cx, st: St, name: String, span: Source.Span) -> Result[Bool]
   try reserve_constructor(cx, st, name, span)
   if name == "puts" or name == "print" or name == "gets" or name == "gets!"
     return error(
@@ -474,25 +468,23 @@ end
 
 ## The names a program may use as a value or a call, for the did-you-mean help: names in scope, functions, public
 ## builtins.
-export def visible_names(cx: Cx, st: St) -> List[String]
-  st.vars.keys.concat(cx.functions.keys).concat(CALLABLE_NAMES)
-end
+def visible_names(cx: Cx, st: St) -> List[String] = st.vars.keys.concat(cx.functions.keys).concat(CALLABLE_NAMES)
 
 ## A Diag.Help for a help text that may be absent ("" is absent).
-export def hint_of(text: String) -> Diag.Help
+def hint_of(text: String) -> Diag.Help
   return Diag.Help.NoHelp if text == ""
 
   Diag.Help.Hint(text)
 end
 
 ## The context for a declaration of the module with that file and prefix (Linker.LinkedModule).
-export def within(cx: Cx, file: String, prefix: String) -> Cx = cx.with(file: file, prefix: prefix)
+def within(cx: Cx, file: String, prefix: String) -> Cx = cx.with(file: file, prefix: prefix)
 
 ## The private fields of the struct `name` that the module being checked may not name: none in the module that declares
 ## the struct (its linked name has that module's prefix), in a module block of the file that declares it at its top
 ## level (a block sees the file's private names), and for a builtin record. A struct declared in a block keeps its
 ## private fields from the rest of the file.
-export def private_fields(cx: Cx, name: String) -> List[String]
+def private_fields(cx: Cx, name: String) -> List[String]
   site = cx.field_sites.get(name)
   return [] if site.none? or site.unwrap!.hidden.size == 0
 
@@ -504,7 +496,7 @@ end
 
 ## The fields of the struct `name` that a help may show here: the private ones are left out outside the struct's
 ## module.
-export def shown_fields(cx: Cx, name: String, fields: List[Model.Named]) -> List[Model.Named]
+def shown_fields(cx: Cx, name: String, fields: List[Model.Named]) -> List[Model.Named]
   hidden = private_fields(cx, name)
   return fields if hidden.size == 0
 
@@ -512,7 +504,7 @@ export def shown_fields(cx: Cx, name: String, fields: List[Model.Named]) -> List
 end
 
 ## CHECK-PRIVATE-FIELD at `span`, for the private field `field` of the struct `name` named outside its module.
-export def private_field(cx: Cx, st: St, name: String, field: String, span: Source.Span) -> String
+def private_field(cx: Cx, st: St, name: String, field: String, span: Source.Span) -> String
   struct_name = Types.written_type(name)
   fail_help(
     cx,
@@ -523,6 +515,12 @@ export def private_field(cx: Cx, st: St, name: String, field: String, span: Sour
     "only that module reads, sets or gives a private field; call one of its functions instead",
   )
 end
+
+private
+
+# List.repeat halts above this count (RUNTIME-INVALID-COUNT), and a program of about 5.7 MB of source has more node
+# ids.
+MAX_REPEAT = 1_048_576
 
 def introduce_slot(
   cx: Cx,

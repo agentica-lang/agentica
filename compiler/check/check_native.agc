@@ -17,6 +17,40 @@ import T from "../syntax/types"
 import State from "check_state"
 import Types from "check_types"
 
+## The state with the types of the functions of the extern module blocks recorded, for the modules that are not clean
+## (a clean module keeps the types of the check it was taken from); the first problem is CHECK-NATIVE-TYPE.
+def check_all(cx: State.Cx, st: State.St, modules: List[Linker.LinkedModule], clean: Set[String]) -> Result[State.St]
+  program = Program(written: written_types(modules), owners: resource_owners(modules))
+  current = st
+  for module in modules
+    next if clean.include?(module.key)
+
+    here = State.within(cx, module.file, module.prefix)
+    # One walk per block: a module's library, as written, names it.
+    blocks: Map[String, Walk] = {}
+    for decl in module.declarations
+      case decl
+        Ast.Decl.Function(node) ->
+          case node.native
+            some(native) if native.module ->
+              unseen: Set[String] = Set.new([])
+              walk = blocks.get(native.library, Walk(st: current, seen: unseen, named: {})).with(st: current)
+              walk = try check_function(here, walk, node, native.library, program)
+              blocks = blocks.put(native.library, walk)
+              current = walk.st
+            _ -> next
+          end
+
+        _ -> next
+      end
+    end
+  end
+
+  ok(current)
+end
+
+private
+
 # The kinds of type that cross as they are, and the keys of a Map that crosses (the keys of vm/map.c).
 PLAIN = Set.new(["Int", "Float", "Bool", "String", "Bytes", "Void"])
 KEYS = Set.new(["Int", "String", "Bytes"])
@@ -58,43 +92,6 @@ end
 struct Reached
   walk: Walk
   types: List[T.Type]
-end
-
-## The state with the types of the functions of the extern module blocks recorded, for the modules that are not clean
-## (a clean module keeps the types of the check it was taken from); the first problem is CHECK-NATIVE-TYPE.
-export def check_all(
-  cx: State.Cx,
-  st: State.St,
-  modules: List[Linker.LinkedModule],
-  clean: Set[String],
-) -> Result[State.St]
-  program = Program(written: written_types(modules), owners: resource_owners(modules))
-  current = st
-  for module in modules
-    next if clean.include?(module.key)
-
-    here = State.within(cx, module.file, module.prefix)
-    # One walk per block: a module's library, as written, names it.
-    blocks: Map[String, Walk] = {}
-    for decl in module.declarations
-      case decl
-        Ast.Decl.Function(node) ->
-          case node.native
-            some(native) if native.module ->
-              unseen: Set[String] = Set.new([])
-              walk = blocks.get(native.library, Walk(st: current, seen: unseen, named: {})).with(st: current)
-              walk = try check_function(here, walk, node, native.library, program)
-              blocks = blocks.put(native.library, walk)
-              current = walk.st
-            _ -> next
-          end
-
-        _ -> next
-      end
-    end
-  end
-
-  ok(current)
 end
 
 # The library of each resource of an extern module block, by linked name.

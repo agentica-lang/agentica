@@ -8,7 +8,7 @@ import DiagnosticJson from "../diagnostics/diagnostic_json"
 import DocJson from "../docs/doc_json"
 
 ## The object of the answer.
-export def json(found: Model.Bodies) -> JSON.Value
+def json(found: Model.Bodies) -> JSON.Value
   functions = found.functions.map do |function: Model.Body| function_json(found.file, function) end
   JSON.object({
     "version": JSON.from(found.version),
@@ -22,6 +22,8 @@ export def json(found: Model.Bodies) -> JSON.Value
     "functions": JSON.array(functions),
   })
 end
+
+private
 
 def function_json(file: String, function: Model.Body) -> JSON.Value
   params = function.params.map do |param: Model.BodyParam|

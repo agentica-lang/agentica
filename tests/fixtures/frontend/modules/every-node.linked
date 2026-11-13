@@ -1,4 +1,4 @@
-program #142 0:1:1-829:45:1
+program #144 0:1:1-829:45:1
   module "root.agc"
     declaration: struct-decl #10 23:3:1-114:8:1 name="Local"
       field: field-decl #2 38:4:3-53:5:1 name="item"
@@ -146,18 +146,18 @@ program #142 0:1:1-829:45:1
         value: call #139 816:42:3-823:42:10 name="puts" piped=false
           arg: name-ref #138 821:42:8-822:42:9 name="s"
   module "lib.agc"
-    declaration: struct-decl #2 7:1:8-32:4:1 name="@2::Item"
-      field: field-decl #1 21:2:3-28:3:1 name="n"
-        type: type-ref #0 24:2:6-27:2:9 name="Int"
-    declaration: enum-decl #7 40:5:8-72:9:1 name="@2::Pick" type-parameters=[]
-      variant: enum-variant #5 52:6:3-61:7:1 name="One"
-        payload: type-ref #4 56:6:7-59:6:10 name="Int"
-      variant: enum-variant #6 63:7:3-68:8:1 name="Zero"
-    declaration: function-decl #16 80:10:8-124:13:1 name="@2::twice"
-      param: param #10 90:10:18-96:10:24 name="n"
-        type: type-ref #9 93:10:21-96:10:24 name="Int"
-      result: type-ref #11 101:10:29-104:10:32 name="Int"
-      body: return-stmt #15 107:11:3-120:12:1
-        value: binary #14 114:11:10-119:11:15 op=multiply op-span=116:11:12-117:11:13
-          left: name-ref #12 114:11:10-115:11:11 name="n"
-          right: literal #13 118:11:14-119:11:15 value=int:2
+    declaration: struct-decl #2 0:1:1-25:4:1 name="@2::Item"
+      field: field-decl #1 14:2:3-21:3:1 name="n"
+        type: type-ref #0 17:2:6-20:2:9 name="Int"
+    declaration: enum-decl #6 26:5:1-58:9:1 name="@2::Pick" type-parameters=[]
+      variant: enum-variant #4 38:6:3-47:7:1 name="One"
+        payload: type-ref #3 42:6:7-45:6:10 name="Int"
+      variant: enum-variant #5 49:7:3-54:8:1 name="Zero"
+    declaration: function-decl #14 59:10:1-103:13:1 name="@2::twice"
+      param: param #8 69:10:11-75:10:17 name="n"
+        type: type-ref #7 72:10:14-75:10:17 name="Int"
+      result: type-ref #9 80:10:22-83:10:25 name="Int"
+      body: return-stmt #13 86:11:3-99:12:1
+        value: binary #12 93:11:10-98:11:15 op=multiply op-span=95:11:12-96:11:13
+          left: name-ref #10 93:11:10-94:11:11 name="n"
+          right: literal #11 97:11:14-98:11:15 value=int:2

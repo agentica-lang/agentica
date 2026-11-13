@@ -15,7 +15,7 @@ import {MAX_TYPE_DEPTH, MAX_U16} from "bytecode_tables"
 
 ## The sections: the type table (entries in the order they were first needed), the bytes of the Decodable section
 ## after its count, with the count, and the same for the decodable enums, which the writer puts last in the file.
-export struct Section
+struct Section
   types: Pool.Pool
   decodable: Wire.Chunks
   decodable_count: Int
@@ -25,7 +25,7 @@ end
 
 ## Builds the sections for the structs and enums of the program. struct_index and enum_index map a name to its place in
 ## the table.
-export def build(program: Ir.Program, struct_index: Map[String, Int], enum_index: Map[String, Int]) -> Result[Section]
+def build(program: Ir.Program, struct_index: Map[String, Int], enum_index: Map[String, Int]) -> Result[Section]
   pool = Pool.empty()
   chunks = Wire.start()
   count = 0
@@ -89,6 +89,8 @@ export def build(program: Ir.Program, struct_index: Map[String, Int], enum_index
 
   ok(Section(types: pool, decodable: chunks, decodable_count: count, enums: enum_chunks, enums_count: enum_count))
 end
+
+private
 
 # The entry of a type, added after the entries of the types it is made of. An entry is its tag (0 Int, 1 Float, 2 Bool,
 # 3 String, 4 List, 5 Map from String, 6 struct, 7 JSON.Field, 8 Optional, 9 enum) and, for the last six, the number of

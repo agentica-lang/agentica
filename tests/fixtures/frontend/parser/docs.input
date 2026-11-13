@@ -1,10 +1,23 @@
 # A comment that is not a doc.
 
+## An exported struct.
+struct T
+  ## Only field.
+  a: Int
+end
+
+## An exported enum.
+enum U
+  A
+end
+
 ## Documented module.
 
 ## A doc on a function.
-export def one() -> Void
+def one() -> Void
 end
+
+private
 
 ## A struct.
 struct S
@@ -23,17 +36,6 @@ enum E
   B
   ## Last variant.
   C
-end
-
-## An exported struct.
-export struct T
-  ## Only field.
-  a: Int
-end
-
-## An exported enum.
-export enum U
-  A
 end
 
 def plain() -> Void

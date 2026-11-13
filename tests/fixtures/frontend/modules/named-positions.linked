@@ -1,4 +1,4 @@
-program #154 0:1:1-1141:54:1
+program #159 0:1:1-1141:54:1
   module "root.agc"
     declaration: struct-decl #11 143:6:1-212:11:1 name="Holder"
       field: field-decl #5 159:7:3-171:8:1 name="spot"
@@ -152,50 +152,50 @@ program #154 0:1:1-1141:54:1
             part: text " "
             part: name-ref #149 1130:52:25-1133:52:28 name="red"
   module "lib.agc"
-    declaration: enum-decl #3 7:1:8-41:5:1 name="@2::Color" type-parameters=[]
-      variant: enum-variant #0 20:2:3-24:3:1 name="Red"
-      variant: enum-variant #2 26:3:3-37:4:1 name="Green"
-        payload: type-ref #1 32:3:9-35:3:12 name="Int"
-    declaration: enum-decl #8 49:6:8-84:10:1 name="@2::Maybe" type-parameters=["T"]
-      variant: enum-variant #6 65:7:3-73:8:1 name="Some"
-        payload: type-ref #5 70:7:8-71:7:9 name="T"
-      variant: enum-variant #7 75:8:3-80:9:1 name="None"
-    declaration: struct-decl #14 92:11:8-127:15:1 name="@2::Point"
-      field: field-decl #11 107:12:3-114:13:1 name="x"
-        type: type-ref #10 110:12:6-113:12:9 name="Int"
-      field: field-decl #13 116:13:3-123:14:1 name="y"
-        type: type-ref #12 119:13:6-122:13:9 name="Int"
-    declaration: function-decl #22 135:16:8-187:19:1 name="@2::lex"
-      param: param #17 143:16:16-155:16:28 name="text"
-        type: type-ref #16 149:16:22-155:16:28 name="String"
-      result: type-ref #18 160:16:33-163:16:36 name="Int"
-      body: return-stmt #21 166:17:3-183:18:1
-        value: field-access #20 173:17:10-182:17:19 name="size"
-          target: name-ref #19 173:17:10-177:17:14 name="text"
-    declaration: function-decl #33 195:20:8-252:23:1 name="@2::make"
-      param: param #25 204:20:17-210:20:23 name="x"
-        type: type-ref #24 207:20:20-210:20:23 name="Int"
-      result: type-ref #26 215:20:28-220:20:33 name="@2::Point"
-      body: return-stmt #32 223:21:3-248:22:1
-        value: construct #31 230:21:10-247:21:27 type="@2::Point"
-          arg: named-arg #28 236:21:16-240:21:20 name="x"
-            value: name-ref #27 239:21:19-240:21:20 name="x"
-          arg: named-arg #30 242:21:22-246:21:26 name="y"
-            value: literal #29 245:21:25-246:21:26 value=int:0
-    declaration: function-decl #38 253:24:1-288:27:1 name="@2::hidden"
-      result: type-ref #35 269:24:17-272:24:20 name="Int"
-      body: return-stmt #37 275:25:3-284:26:1
-        value: literal #36 282:25:10-283:25:11 value=int:2
+    declaration: enum-decl #3 0:1:1-34:5:1 name="@2::Color" type-parameters=[]
+      variant: enum-variant #0 13:2:3-17:3:1 name="Red"
+      variant: enum-variant #2 19:3:3-30:4:1 name="Green"
+        payload: type-ref #1 25:3:9-28:3:12 name="Int"
+    declaration: enum-decl #7 35:6:1-70:10:1 name="@2::Maybe" type-parameters=["T"]
+      variant: enum-variant #5 51:7:3-59:8:1 name="Some"
+        payload: type-ref #4 56:7:8-57:7:9 name="T"
+      variant: enum-variant #6 61:8:3-66:9:1 name="None"
+    declaration: struct-decl #12 71:11:1-106:15:1 name="@2::Point"
+      field: field-decl #9 86:12:3-93:13:1 name="x"
+        type: type-ref #8 89:12:6-92:12:9 name="Int"
+      field: field-decl #11 95:13:3-102:14:1 name="y"
+        type: type-ref #10 98:13:6-101:13:9 name="Int"
+    declaration: function-decl #19 107:16:1-159:19:1 name="@2::lex"
+      param: param #14 115:16:9-127:16:21 name="text"
+        type: type-ref #13 121:16:15-127:16:21 name="String"
+      result: type-ref #15 132:16:26-135:16:29 name="Int"
+      body: return-stmt #18 138:17:3-155:18:1
+        value: field-access #17 145:17:10-154:17:19 name="size"
+          target: name-ref #16 145:17:10-149:17:14 name="text"
+    declaration: function-decl #29 160:20:1-217:23:1 name="@2::make"
+      param: param #21 169:20:10-175:20:16 name="x"
+        type: type-ref #20 172:20:13-175:20:16 name="Int"
+      result: type-ref #22 180:20:21-185:20:26 name="@2::Point"
+      body: return-stmt #28 188:21:3-213:22:1
+        value: construct #27 195:21:10-212:21:27 type="@2::Point"
+          arg: named-arg #24 201:21:16-205:21:20 name="x"
+            value: name-ref #23 204:21:19-205:21:20 name="x"
+          arg: named-arg #26 207:21:22-211:21:26 name="y"
+            value: literal #25 210:21:25-211:21:26 value=int:0
+    declaration: function-decl #33 227:26:1-262:29:1 name="@2::hidden"
+      result: type-ref #30 243:26:17-246:26:20 name="Int"
+      body: return-stmt #32 249:27:3-258:28:1
+        value: literal #31 256:27:10-257:27:11 value=int:2
   module "mid.agc"
-    declaration: function-decl #12 44:3:8-116:6:1 name="@3::twice"
-      param: param #2 54:3:18-66:3:30 name="text"
-        type: type-ref #1 60:3:24-66:3:30 name="String"
-      result: type-ref #3 71:3:35-72:3:36 name="@2::Point"
-      body: return-stmt #11 75:4:3-112:5:1
-        value: construct #10 82:4:10-111:4:39 type="@2::Point"
-          arg: named-arg #6 84:4:12-96:4:24 name="x"
-            value: call #5 87:4:15-96:4:24 name="@2::lex" piped=false
-              arg: name-ref #4 91:4:19-95:4:23 name="text"
-          arg: named-arg #9 98:4:26-110:4:38 name="y"
-            value: call #8 101:4:29-110:4:38 name="@2::lex" piped=false
-              arg: name-ref #7 105:4:33-109:4:37 name="text"
+    declaration: function-decl #12 37:3:1-109:6:1 name="@3::twice"
+      param: param #2 47:3:11-59:3:23 name="text"
+        type: type-ref #1 53:3:17-59:3:23 name="String"
+      result: type-ref #3 64:3:28-65:3:29 name="@2::Point"
+      body: return-stmt #11 68:4:3-105:5:1
+        value: construct #10 75:4:10-104:4:39 type="@2::Point"
+          arg: named-arg #6 77:4:12-89:4:24 name="x"
+            value: call #5 80:4:15-89:4:24 name="@2::lex" piped=false
+              arg: name-ref #4 84:4:19-88:4:23 name="text"
+          arg: named-arg #9 91:4:26-103:4:38 name="y"
+            value: call #8 94:4:29-103:4:38 name="@2::lex" piped=false
+              arg: name-ref #7 98:4:33-102:4:37 name="text"

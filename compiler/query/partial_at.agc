@@ -18,15 +18,10 @@ import Refs from "refs"
 import Sites from "sites"
 import TypeAt from "type_at"
 
-# The sites that a name written in an expression gives. A `read` needs the type of its target and a `definition` is the
-# name where a declaration is written, which `type-at` does not answer. A `type` is not here: `TypeAt.answer` finds the
-# name of a type from the link alone, in a function that failed too.
-LINKED_KINDS = Set.new(["call", "value", "construct", "pattern"])
-
 ## The answer for `asked`, a position in the root file of `linked`, of which `checked` holds the functions that passed
 ## and `failed` names (by linked name) those that did not. Only a position inside a failed function falls back to the
 ## link: elsewhere the answer, QUERY-NO-EXPRESSION included, is the one of `type-at`.
-export def answer(
+def answer(
   linked: Linker.Linked,
   checked: Checker.Checked,
   failed: List[String],
@@ -49,13 +44,20 @@ end
 ## Whether a position that no answer was found for may still name something: it is on a token inside a function that
 ## did not check, where only the types are missing. A position anywhere else, such as a blank, a comment, an import
 ## line or a keyword outside the failed functions, is on no expression, as `type-at` would say of the whole program.
-export def unclear?(linked: Linker.Linked, failed: List[String], asked: Position.Asked) -> Bool
+def unclear?(linked: Linker.Linked, failed: List[String], asked: Position.Asked) -> Bool
   module = linked.modules[0]
   case Position.locate(module.text, asked.line, asked.column)
     Position.Located.Outside(_) -> false
     Position.Located.At(offset) -> in_failed?(linked, failed, offset) and TypeAt.on_token?(module.text, offset)
   end
 end
+
+private
+
+# The sites that a name written in an expression gives. A `read` needs the type of its target and a `definition` is the
+# name where a declaration is written, which `type-at` does not answer. A `type` is not here: `TypeAt.answer` finds the
+# name of a type from the link alone, in a function that failed too.
+LINKED_KINDS = Set.new(["call", "value", "construct", "pattern"])
 
 # Whether `offset` is in a function of the root file, or of one of its module blocks, that did not check.
 def in_failed?(linked: Linker.Linked, failed: List[String], offset: Int) -> Bool

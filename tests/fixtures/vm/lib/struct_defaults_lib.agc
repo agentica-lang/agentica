@@ -1,13 +1,13 @@
 import Levels from "struct_levels"
 
-export enum Level
+enum Level
   Quiet
   Loud
 end
 
 # Every kind of constant default. The Levels.Tone.Bold default is resolved here, so a file that does not import
 # struct_levels can leave the field out.
-export struct Options
+struct Options
   name: String
   retries: Int = 3
   ratio: Float = -0.5
@@ -20,16 +20,16 @@ export struct Options
 end
 
 # Every field has a default, so a parameter can default to Limits(); its Levels.Tone.Bold resolves here too.
-export struct Limits
+struct Limits
   count: Int = 3
   tone: Levels.Tone = Levels.Tone.Bold
 end
 
-export def limits_text(l: Limits = Limits()) -> String
+def limits_text(l: Limits = Limits()) -> String
   return "#{l.count} #{l.tone}"
 end
 
-export def describe(o: Options) -> String
+def describe(o: Options) -> String
   head = "#{o.name} #{o.retries} #{o.ratio} #{o.label} #{o.verbose}"
   return "#{head} #{o.tags.size} #{o.limits.size} #{o.level} #{o.tone}"
 end

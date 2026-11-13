@@ -7,14 +7,9 @@ import Env from "../modules/link_env"
 import Workspace from "../modules/workspace"
 import SourceReader from "source_reader"
 
-# The deadline, in milliseconds, of a File.stat and of each call of a read.
-STAT_TIMEOUT_MS = 10_000
-
-CHUNK_BYTES = 262_144
-
 ## The workspace of this machine, with `std_source` as the reader of the std/ sources (`FrontEnd.std_source` in the
 ## front end, `Std.source` in a program that embeds the core as `std/internal/compiler`).
-export def workspace_with(std_source: Fn[String, Result[String]]) -> Workspace.Workspace
+def workspace_with(std_source: Fn[String, Result[String]]) -> Workspace.Workspace
   Workspace.Workspace(
     read_text: &SourceReader.read,
     file_exists: &file_exists,
@@ -33,10 +28,10 @@ end
 
 ## The workspace of this machine for a run with `--stdlib DIR` (the entry programs of the stages), which reads the std/
 ## sources from that folder and never asks the workspace for them.
-export def workspace() -> Workspace.Workspace = workspace_with(&no_std_source)
+def workspace() -> Workspace.Workspace = workspace_with(&no_std_source)
 
 ## The environment of this process.
-export def process_env() -> Env.Env
+def process_env() -> Env.Env
   os = System.os()
   Env.Env(
     agentica_path: variable("AGENTICA_PATH"),
@@ -48,6 +43,13 @@ export def process_env() -> Env.Env
     os: os,
   )
 end
+
+private
+
+# The deadline, in milliseconds, of a File.stat and of each call of a read.
+STAT_TIMEOUT_MS = 10_000
+
+CHUNK_BYTES = 262_144
 
 def no_std_source(name: String) -> Result[String] = error("this workspace carries no std sources")
 

@@ -12,13 +12,10 @@ import Diag from "../diagnostics/diagnostic"
 import Problems from "../diagnostics/problem"
 import Source from "../syntax/source"
 
-# The file of every QUERY-USAGE diagnostic.
-ARGUMENTS = "<arguments>"
-
 ## What the words said. `style` is "plain", "ai" or "json". `stdin` is the FILE of `--stdin` ("" without it): the text
 ## of that file is the standard input. `partial` is whether `--partial` was given. `words` are the arguments that are
 ## not options, in order.
-export struct Query
+struct Query
   style: String
   stdin: String
   partial: Bool
@@ -26,7 +23,7 @@ export struct Query
 end
 
 ## The words of a query, or why they are wrong.
-export enum Parsed
+enum Parsed
   Ready(Query)
   Refused(Problems.Problem)
 end
@@ -34,7 +31,7 @@ end
 ## Reads `arguments`, the words after the command. `style` is the one the options in front of the command gave, and
 ## `usage` the usage line of the command, which a refusal gives as its help. `partial_wanted` is whether the command
 ## has the option `--partial`; for another it is an unknown option.
-export def parse(arguments: List[String], style: String, usage: String, partial_wanted: Bool) -> Parsed
+def parse(arguments: List[String], style: String, usage: String, partial_wanted: Bool) -> Parsed
   query = Query(style: style, stdin: "", partial: false, words: [])
   at = 0
   while at < arguments.size
@@ -66,29 +63,34 @@ end
 
 ## Whether `word` looks like an option: it starts with "-" and has more than one character. A lone "-" is a file name.
 ## `--stdin` refuses such a FILE, so `--stdin --json` does not take the option as the file.
-export def option?(word: String) -> Bool = word.length > 1 and word.start_with?("-")
+def option?(word: String) -> Bool = word.length > 1 and word.start_with?("-")
 
 ## Whether `word` can be the FILE of `--stdin`: not empty and not an option.
-export def file_name?(word: String) -> Bool = word != "" and !option?(word)
+def file_name?(word: String) -> Bool = word != "" and !option?(word)
 
 ## Whether the problem is about the words of the command line (QUERY-USAGE), which no file holds.
-export def arguments?(problem: Problems.Problem) -> Bool = problem.file == ARGUMENTS
+def arguments?(problem: Problems.Problem) -> Bool = problem.file == ARGUMENTS
 
 ## The problem with no place in a text (line 0), for `--ai`, which prints the source line of a place: it shows the file
 ## name alone, as the plain form does. The JSON form keeps the span of `refusal`.
-export def unplaced(problem: Problems.Problem) -> Problems.Problem
+def unplaced(problem: Problems.Problem) -> Problems.Problem
   origin = Source.Position(offset: 0, line: 0, column: 0)
   problem.with(span: Source.Span(start: origin, stop: origin))
 end
 
 ## The QUERY-USAGE diagnostic with `message`, and `usage` as its help.
-export def refusal(message: String, usage: String) -> Problems.Problem
+def refusal(message: String, usage: String) -> Problems.Problem
   at_arguments("QUERY-USAGE", message, Diag.Help.Hint(usage))
 end
 
 ## A QUERY- diagnostic about the words of the command line, located at the pseudo-file `<arguments>`.
-export def at_arguments(code: String, message: String, help: Diag.Help) -> Problems.Problem
+def at_arguments(code: String, message: String, help: Diag.Help) -> Problems.Problem
   start = Source.Position(offset: 0, line: 1, column: 1)
   span = Source.Span(start: start, stop: start)
   Problems.problem(ARGUMENTS, "", code, message, span, help)
 end
+
+private
+
+# The file of every QUERY-USAGE diagnostic.
+ARGUMENTS = "<arguments>"

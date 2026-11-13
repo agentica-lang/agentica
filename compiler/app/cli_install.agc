@@ -29,12 +29,9 @@ import Reader from "../packages/toml_read"
 import CliProject from "cli_project"
 import Reply from "cli_reply"
 
-# The deadline of one downloaded artifact during install (the engine caps hops and bytes).
-NATIVE_TIMEOUT_MS = 300_000
-
 ## Runs `install` in the working folder. `style` is the output style of the options: with `json` a success prints
 ## `{"ok":true}`, as `check` does.
-export def run(settings: Env.Settings, style: String) -> Reply.Answer
+def run(settings: Env.Settings, style: String) -> Reply.Answer
   CliProject.run(style, settings.workspace) do |dir: String| install(settings, dir) end
 end
 
@@ -42,7 +39,7 @@ end
 ## of this host. The lines say `fetched` or `in the cache` for each package; artifacts are pinned for all systems
 ## in the lock, and only this host is fetched. With no package but host artifacts, the answer counts the host
 ## artifacts ensured; a lock with neither, or with no entry for this host, stays quiet.
-export def fill_all(settings: Env.Settings, lock: Lock.Lock) -> Result[String]
+def fill_all(settings: Env.Settings, lock: Lock.Lock) -> Result[String]
   return ok("nothing to install\n") if lock.packages.size == 0 and lock.artifacts.size == 0
 
   lines: List[String] = []
@@ -85,7 +82,7 @@ end
 
 ## One line for each overridden package, by name: `overridden NAME@VERSION`, and when `asked` has the packages that
 ## asked for another source of the name (`add` and `update` know them), `(another source asked by A, B)`.
-export def overridden_lines(packages: List[Lock.Locked], asked: Map[String, List[String]]) -> List[String]
+def overridden_lines(packages: List[Lock.Locked], asked: Map[String, List[String]]) -> List[String]
   lines: List[String] = []
   ordered = packages.sort_by do |item| item.name end
   for locked in ordered
@@ -101,6 +98,11 @@ export def overridden_lines(packages: List[Lock.Locked], asked: Map[String, List
 
   lines
 end
+
+private
+
+# The deadline of one downloaded artifact during install (the engine caps hops and bytes).
+NATIVE_TIMEOUT_MS = 300_000
 
 # The downloaded native artifacts of this host in the lock, verified from the cache alone afterwards: the archive is
 # downloaded and hashed once per SHA-256, then the member is extracted into its own object. Other systems stay pinned

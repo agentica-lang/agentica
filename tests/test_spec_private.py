@@ -2,8 +2,8 @@
 
 Each case is a folder of files checked with `--json check` on main.agc: a program that is refused gives its code and
 the start of its span; message and help text are not asserted (AGENTS.md), only whether a help is there. A file or
-block with a `private` line makes everything above it public and everything after it private; one without keeps the
-rule of `export`.
+block with a `private` line makes everything above it public and everything after it private; one without it is
+public as a whole, and `export` before a declaration is refused.
 """
 import json
 
@@ -58,7 +58,7 @@ end
 type Waits = List[Secret]
 
 module Hidden
-  export def twice(x: Int) -> Int = x * 2
+  def twice(x: Int) -> Int = x * 2
 end
 
 def helper(x: Int) -> Int = x + 1
@@ -132,10 +132,8 @@ CASES = [
     ("a private name of a block in its own file",
      "module Counter\n  def start() -> Int = step()\n\n  private\n\n  def step() -> Int = 1\nend\n\n"
      "def main() -> Void\n  puts(Counter.step())\nend\n", "CHECK-IMPORT-NAME", (10, 8), True),
-    ("a file without private keeps the export rule",
-     program(calling("L.a()"), "LIMIT = 1\n\ndef a() -> Int = 1\n"), "CHECK-IMPORT-NAME", (4, 8), True),
-    ("a file without private exports its export declarations",
-     program(calling("L.a()"), "export def a() -> Int = 1\n"), None, None, False),
+    ("a file without private is public as a whole",
+     program(calling("L.a() + L.LIMIT"), "LIMIT = 1\n\ndef a() -> Int = 1\n"), None, None, False),
     ("a private std name says only that it is private",
      'import HTTP from "std/http"\n\ndef main() -> Void\n  puts(HTTP.settled(1, true))\nend\n',
      "CHECK-IMPORT-NAME", (4, 8), True),
@@ -155,11 +153,11 @@ CASES = [
      "PARSE-UNEXPECTED-TOKEN", (1, 1), True),
     ("export after private", "def a() -> Int = 1\n\nprivate\n\nexport LIMIT = 1\n\ndef main() -> Void\n  puts(a())\nend\n",
      "PARSE-UNEXPECTED-TOKEN", (5, 1), True),
-    ("export in a block with private",
-     "module X\n  export def a() -> Int = 1\n\n  private\n\n  def b() -> Int = 1\nend\n\n"
-     "def main() -> Void\n  puts(X.a())\nend\n", "PARSE-UNEXPECTED-TOKEN", (2, 3), True),
-    ("export module in a file with private",
-     "export module X\n  export def a() -> Int = 1\nend\n\nprivate\n\ndef main() -> Void\n  puts(X.a())\nend\n",
+    ("export in a block", "module X\n  export def a() -> Int = 1\nend\n\ndef main() -> Void\n  puts(X.a())\nend\n",
+     "PARSE-UNEXPECTED-TOKEN", (2, 3), True),
+    ("export module", "export module X\n  def a() -> Int = 1\nend\n\ndef main() -> Void\n  puts(X.a())\nend\n",
+     "PARSE-UNEXPECTED-TOKEN", (1, 1), True),
+    ("export in a file with no private", "export def main() -> Void\n  puts(1)\nend\n",
      "PARSE-UNEXPECTED-TOKEN", (1, 1), True),
     ("a second private", "def a() -> Int = 1\n\nprivate\n\ndef main() -> Void\n  puts(a())\nend\n\nprivate\n",
      "PARSE-SECOND-PRIVATE", (9, 1), True),

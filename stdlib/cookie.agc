@@ -10,28 +10,14 @@
 ## value as the client sent it. A caller that needs encoding (for a space, a comma or a non-ASCII character) does it
 ## before `set_header` and decodes after `parse`.
 
-# The bytes that the functions look at.
-SPACE = 32
-QUOTE = 34
-SEMICOLON = 59
-COMMA = 44
-BACKSLASH = 92
-DEL = 127
-
 ## The `max_age` of a cookie that has no `Max-Age`, the default. It is the smallest `Int`, so no computed value is
 ## taken for it: every other negative `max_age` writes `Max-Age=0`, which deletes the cookie.
-export NO_MAX_AGE = -9223372036854775808
-
-# The bytes that RFC 6265 allows in a cookie name (an RFC 7230 token): letters, digits and !#$%&'*+-.^_`|~
-TOKEN_SYMBOLS = Set.new("!#$%&'*+-.^_`|~".bytes.to_a)
-
-# The same-site values that `set_header` writes.
-SAME_SITE_VALUES = Set.new(["Strict", "Lax", "None"])
+NO_MAX_AGE = -9223372036854775808
 
 ## A cookie to send. An empty `path`, `domain`, `expires` or `same_site`, a `max_age` of `NO_MAX_AGE` and a false
 ## `secure` or `http_only` leave that attribute out. A `max_age` of 0 or less writes `Max-Age=0`, which deletes the
 ## cookie.
-export struct Cookie
+struct Cookie
   name: String
   value: String
   path: String = ""
@@ -49,7 +35,7 @@ end
 ## Reads the value of a `Cookie` request header into a map from name to value, as Rack's `parse_cookies_header`.
 ## Pieces are separated by `;`, and spaces around a piece, a name and a value are dropped. A piece without `=` or with
 ## an empty name is skipped, and the first value of a repeated name wins. Values are not decoded or unquoted.
-export def parse(header: String) -> Map[String, String]
+def parse(header: String) -> Map[String, String]
   cookies: Map[String, String] = {}
   for piece in header.split(";")
     pair = piece.strip
@@ -76,7 +62,7 @@ end
 ##   or `domain` is set (browsers compare the prefix without regard to case, so this does too).
 ##
 ## The text of an error about a name or an attribute has its control bytes removed.
-export def set_header(cookie: Cookie) -> Result[String]
+def set_header(cookie: Cookie) -> Result[String]
   try check_cookie(cookie)
   parts = ["#{cookie.name}=#{cookie.value}"]
   parts = try add_attribute(parts, "Domain", "domain", cookie.domain)
@@ -96,6 +82,22 @@ export def set_header(cookie: Cookie) -> Result[String]
   end
   ok(parts.join("; "))
 end
+
+private
+
+# The bytes that the functions look at.
+SPACE = 32
+QUOTE = 34
+SEMICOLON = 59
+COMMA = 44
+BACKSLASH = 92
+DEL = 127
+
+# The bytes that RFC 6265 allows in a cookie name (an RFC 7230 token): letters, digits and !#$%&'*+-.^_`|~
+TOKEN_SYMBOLS = Set.new("!#$%&'*+-.^_`|~".bytes.to_a)
+
+# The same-site values that `set_header` writes.
+SAME_SITE_VALUES = Set.new(["Strict", "Lax", "None"])
 
 # The checks of `set_header` that are not about one attribute alone. Returns the first error.
 def check_cookie(cookie: Cookie) -> Result[Bool]

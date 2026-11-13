@@ -46,7 +46,7 @@ MAIN = <<~SRC
 SRC
 
 UTIL = <<~SRC
-  export def twice(n: Int) -> Int
+  def twice(n: Int) -> Int
     return n * 2
   end
 SRC
@@ -60,7 +60,7 @@ BROKEN = <<~SRC
 SRC
 
 MINI = <<~SRC
-  export def cap(n: Int, high: Int) -> Int
+  def cap(n: Int, high: Int) -> Int
     if n > high
       return high
     end

@@ -1,4 +1,4 @@
 import {x} from "a"
 
-export def y() -> Void
+def y() -> Void
 end

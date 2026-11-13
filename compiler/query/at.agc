@@ -13,7 +13,7 @@ import T from "../syntax/types"
 ## and the deepest of two with the same span; so `a` in `a.b` and `b` in `f(b)` are not the whole access or call. Only
 ## the function or constant that holds the position is walked. A call that is piped (`x |> f(y)`) holds `f(y)` but not
 ## `x`, so no node is skipped for its parent's span.
-export def innermost(module: Linker.LinkedModule, types: List[T.Type], offset: Int) -> Optional[Ast.Expr]
+def innermost(module: Linker.LinkedModule, types: List[T.Type], offset: Int) -> Optional[Ast.Expr]
   best: Optional[Ast.Expr] = none
   best_size = -1
   work = roots(module, offset)
@@ -45,7 +45,7 @@ end
 ## `linked` with the module that holds `offset` in its root file first, which is the module a query answers a position
 ## from: a module block of the root file is a module of its own (Linker.LinkedModule), so a position inside one puts it
 ## first. Elsewhere `linked` is as it was.
-export def focus(linked: Linker.Linked, offset: Int) -> Linker.Linked
+def focus(linked: Linker.Linked, offset: Int) -> Linker.Linked
   root = Linker.home_key(linked.modules[0])
   here = holder(linked.modules.filter do |module: Linker.LinkedModule| Linker.home_key(module) == root end, offset)
   return linked if here.key == linked.modules[0].key
@@ -56,7 +56,7 @@ end
 
 ## The module among `modules`, a file and its module blocks, whose own declarations hold `offset`: the block whose span
 ## holds it, else the file.
-export def holder(modules: List[Linker.LinkedModule], offset: Int) -> Linker.LinkedModule
+def holder(modules: List[Linker.LinkedModule], offset: Int) -> Linker.LinkedModule
   for module in modules
     return module if module.block != "" and holds?(module.parsed.span, offset)
   end
@@ -68,7 +68,9 @@ export def holder(modules: List[Linker.LinkedModule], offset: Int) -> Linker.Lin
 end
 
 ## Whether the span, which ends before its last character, holds the character at `offset`.
-export def holds?(span: Source.Span, offset: Int) -> Bool = span.start.offset <= offset and offset < span.stop.offset
+def holds?(span: Source.Span, offset: Int) -> Bool = span.start.offset <= offset and offset < span.stop.offset
+
+private
 
 # The bodies and defaults of the functions that hold the position, and the values of the constants that do.
 def roots(module: Linker.LinkedModule, offset: Int) -> List[Walk.Node]

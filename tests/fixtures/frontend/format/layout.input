@@ -8,12 +8,22 @@ import {
 } from "third"
 export Lib.helper
 
+NAMES = ["alpha", "beta", "gamma", "delta", "epsilon", "zeta", "eta", "theta", "iota", "kappa", "lambda", "mu"]
+
 ## A point.
-export struct Point
+struct Point
   x: Int
   ## The second coordinate.
   y: Int = 0
 end
+
+private
+
+LIMIT: Int = 10
+
+TABLE = {
+  "or": 1, "and": 2, "equal": 3, "not-equal": 3, "less": 4, "less-equal": 4, "greater": 4, "greater-equal": 4, "pipe": 5,
+}
 
 enum Shape[T]
   Circle(Int)
@@ -22,12 +32,6 @@ enum Shape[T]
 end
 
 type Grid[T] = List[List[T]]
-
-LIMIT: Int = 10
-export NAMES = ["alpha", "beta", "gamma", "delta", "epsilon", "zeta", "eta", "theta", "iota", "kappa", "lambda", "mu"]
-TABLE = {
-  "or": 1, "and": 2, "equal": 3, "not-equal": 3, "less": 4, "less-equal": 4, "greater": 4, "greater-equal": 4, "pipe": 5,
-}
 
 def short(a: Int, b: Int) -> Int
   return a + b

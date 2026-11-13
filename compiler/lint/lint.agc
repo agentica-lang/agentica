@@ -20,6 +20,20 @@ import Qualified from "rule_qualified"
 import Stmts from "rule_stmt"
 import Shape from "shape"
 
+## The suggestions for the text of `file`, in source order, or the first lexer or parser diagnostic.
+def check(file: String, text: String) -> Diag.Outcome[List[Problems.Problem]]
+  case Lexer.lex(text)
+    Diag.Outcome.Failed(problem) -> Diag.Outcome.Failed(problem)
+    Diag.Outcome.Done(tokens) ->
+      case Parser.parse(tokens, 0)
+        Diag.Outcome.Failed(problem) -> Diag.Outcome.Failed(problem)
+        Diag.Outcome.Done(program) -> Diag.Outcome.Done(of_program(file, program))
+      end
+  end
+end
+
+private
+
 # A node and what the walk knows of its place.
 struct Item
   node: Walk.Node
@@ -32,18 +46,6 @@ struct Scan
   found: List[Problems.Problem]
   mentions: List[Qualified.Mention]
   kinds: List[Kinds.Seen]
-end
-
-## The suggestions for the text of `file`, in source order, or the first lexer or parser diagnostic.
-export def check(file: String, text: String) -> Diag.Outcome[List[Problems.Problem]]
-  case Lexer.lex(text)
-    Diag.Outcome.Failed(problem) -> Diag.Outcome.Failed(problem)
-    Diag.Outcome.Done(tokens) ->
-      case Parser.parse(tokens, 0)
-        Diag.Outcome.Failed(problem) -> Diag.Outcome.Failed(problem)
-        Diag.Outcome.Done(program) -> Diag.Outcome.Done(of_program(file, program))
-      end
-  end
 end
 
 def of_program(file: String, program: Ast.Program) -> List[Problems.Problem]

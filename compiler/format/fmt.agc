@@ -8,6 +8,8 @@ import SourceFile from "../syntax/source_file"
 import Text from "../syntax/text"
 import Format from "format"
 
+private
+
 def main() -> Void
   args = System.args()
   mode = ""

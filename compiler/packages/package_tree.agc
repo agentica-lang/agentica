@@ -5,29 +5,15 @@
 
 import PackageHash from "package_hash"
 
-# The manifest of a package, at the root of the commit.
-MANIFEST_FILE = "agentica.toml"
-
-# The end of a record of `git ls-tree -z`. A string literal has no escape for it.
-NUL = String.from_code(0)
-
-# The most a file of a package may hold, and all the copied files together (PackageHash.MAX_FILE_BYTES).
-MAX_FILE_BYTES = PackageHash.MAX_FILE_BYTES
-MAX_TOTAL_BYTES = PackageHash.MAX_TOTAL_BYTES
-COLLISION_HELP = "rename one of them, so that the package works on a case-insensitive file system"
-
-# The modes of git that are not a regular file: a symbolic link and a gitlink (a submodule).
-LINK_MODES = Set.new(["120000", "160000"])
-
 ## One file to copy: its path in the package and the id of its blob.
-export struct Blob
+struct Blob
   path: String
   oid: String
 end
 
 ## Why a fetch stops. `code` is the PKG- code; `key` is the key of the lock entry it concerns ("" for the entry as a
 ## whole), so the caller can name the file and the key path.
-export struct Fault
+struct Fault
   code: String
   key: String
   message: String
@@ -35,24 +21,16 @@ export struct Fault
 end
 
 ## The files to copy, or the reason the commit cannot be a package.
-export enum Plan
+enum Plan
   Files(List[Blob])
   Refused(Fault)
-end
-
-# One line of the listing: the fields before the tab, and the path.
-struct Line
-  mode: String
-  oid: String
-  size: Int
-  path: String
 end
 
 ## Chooses the files to copy from the listing. A symbolic link or a gitlink named like a source file or the manifest is
 ## PKG-SYMLINK, two paths that differ only in case are PKG-PATH-COLLISION, and a path that could leave the folder is
 ## PKG-FETCH. The folders the hash leaves out (PackageHash.skipped_folder?) and files that are not `.agc` are left
 ## out, as in the hash.
-export def plan(listing: String) -> Plan
+def plan(listing: String) -> Plan
   chosen: List[Blob] = []
   total = 0
   folded: Map[String, String] = {}
@@ -98,6 +76,30 @@ export def plan(listing: String) -> Plan
   end
 
   Plan.Files(chosen)
+end
+
+private
+
+# The manifest of a package, at the root of the commit.
+MANIFEST_FILE = "agentica.toml"
+
+# The end of a record of `git ls-tree -z`. A string literal has no escape for it.
+NUL = String.from_code(0)
+
+# The most a file of a package may hold, and all the copied files together (PackageHash.MAX_FILE_BYTES).
+MAX_FILE_BYTES = PackageHash.MAX_FILE_BYTES
+MAX_TOTAL_BYTES = PackageHash.MAX_TOTAL_BYTES
+COLLISION_HELP = "rename one of them, so that the package works on a case-insensitive file system"
+
+# The modes of git that are not a regular file: a symbolic link and a gitlink (a submodule).
+LINK_MODES = Set.new(["120000", "160000"])
+
+# One line of the listing: the fields before the tab, and the path.
+struct Line
+  mode: String
+  oid: String
+  size: Int
+  path: String
 end
 
 # `MODE SP TYPE SP OID SP... SIZE TAB PATH`.

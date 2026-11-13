@@ -15,7 +15,7 @@ import Types from "check_types"
 import Defaults from "defaults"
 
 ## The context with the enums, structs and functions of the program added to the builtin ones.
-export def register(cx: State.Cx, modules: List[Linker.LinkedModule]) -> Result[State.Cx]
+def register(cx: State.Cx, modules: List[Linker.LinkedModule]) -> Result[State.Cx]
   found = try register_resources(cx, modules)
   found = try register_aliases(found, modules)
   found = try register_enum_names(found, modules)
@@ -30,7 +30,7 @@ end
 ## an imported file does not), and the first main of each is the one that counts; a query that links several roots
 ## checks each. root is the span of the program. When `required` is false a program with no main passes, but a main
 ## that is declared still has to have the signature.
-export def check_main(
+def check_main(
   cx: State.Cx,
   modules: List[Linker.LinkedModule],
   roots: List[String],
@@ -62,6 +62,8 @@ export def check_main(
     ),
   )
 end
+
+private
 
 # The resources of the extern blocks: nominal types with no structure, which every later pass may name. A callback is
 # one too, with the Fn type of the function that Native.callback takes for it (its types are builtin ones).

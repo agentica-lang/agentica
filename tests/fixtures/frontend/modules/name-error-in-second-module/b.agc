@@ -1,3 +1,2 @@
-export def ok_() -> Void
+def ok_() -> Void
 end
-

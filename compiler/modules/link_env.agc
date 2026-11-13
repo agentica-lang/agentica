@@ -9,7 +9,7 @@ import Workspace from "workspace"
 ## and `os`, the name System.os gives (it picks the native library of a package). An unset variable is "".
 ## `local_app_data` is the user data folder of Windows, where XDG_DATA_HOME, XDG_CACHE_HOME and HOME are not read.
 ## `windows` is `os == "windows"`; whoever builds an Env sets both to agree.
-export struct Env
+struct Env
   agentica_path: String
   xdg_data_home: String
   xdg_cache_home: String
@@ -21,7 +21,7 @@ end
 
 ## Where the std/ sources come from: the files of a stdlib/ folder (an ordinary run of the front end, with `--stdlib`),
 ## or the copy the binary carries, read with FrontEnd.std_source (docs/vm/08-loader-and-cli.md §9).
-export enum StdProvider
+enum StdProvider
   Folder(String)
   Embedded
 end
@@ -37,7 +37,7 @@ end
 ## `agentica check` decide by its name): when it has no `main`, its `test_*` functions are its tests (test_main.agc).
 ## native_denied says that a --deny-* flag is on, so the VM refuses native code: no module is built, and the bytecode
 ## cache keeps the programs of such runs apart.
-export struct Settings
+struct Settings
   std: StdProvider
   embedded_bdd: Bool
   env: Env
@@ -51,7 +51,7 @@ end
 
 ## Settings for a stdlib/ folder and an environment. The version is "": a program that writes .agcb files sets it
 ## with `with(version: ...)`, and the writer refuses an empty one.
-export def settings(workspace: Workspace.Workspace, stdlib: String, env: Env) -> Settings
+def settings(workspace: Workspace.Workspace, stdlib: String, env: Env) -> Settings
   Settings(
     std: StdProvider.Folder(stdlib),
     embedded_bdd: false,
@@ -67,7 +67,7 @@ end
 
 ## Settings for the std/ sources of the binary (FrontEnd.std_source), with the version the headers name and whether
 ## it carries the compiled BDD programs.
-export def embedded_settings(workspace: Workspace.Workspace, env: Env, version: String, embedded_bdd: Bool) -> Settings
+def embedded_settings(workspace: Workspace.Workspace, env: Env, version: String, embedded_bdd: Bool) -> Settings
   Settings(
     std: StdProvider.Embedded,
     embedded_bdd: embedded_bdd,
@@ -80,3 +80,5 @@ export def embedded_settings(workspace: Workspace.Workspace, env: Env, version: 
     native_denied: false,
   )
 end
+
+private

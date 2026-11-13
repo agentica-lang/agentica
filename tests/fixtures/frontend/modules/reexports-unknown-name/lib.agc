@@ -1,12 +1,12 @@
-export struct Address
+struct Address
   host: String
 end
 
-export enum Option
+enum Option
   Some(Int)
   None
 end
 
-export def parse(text: String) -> Address
+def parse(text: String) -> Address
   return Address(host: text)
 end

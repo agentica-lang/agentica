@@ -25,7 +25,7 @@ def program(message):
 
 
 MAIN = 'import Util from "util"\n\ndef main() -> Void\n  puts(Util.word())\nend\n'
-UTIL = 'export def word() -> String\n  return "%s"\nend\n'
+UTIL = 'def word() -> String\n  return "%s"\nend\n'
 PASSING = 'def main() -> Void\n  Test.run([Test.test("fine") do\n    ok()\n  end])\nend\n'
 FAILING = 'def main() -> Void\n  Test.run([Test.test("fine") do\n    error("changed")\n  end])\nend\n'
 TEST_FUNCTIONS = 'def test_fine() -> Result[Void]\n  return ok()\nend\n'
@@ -207,8 +207,8 @@ def test_a_folder_that_cannot_be_written_still_runs(src):
 def test_a_change_of_the_lock_misses(tmp_path):
     ws = Workspace(tmp_path)
     git = "https://github.com/owner/greeter.git"
-    ws.add_package("greeter", git, {"greet.agc": 'export def hello() -> String\n  return "hi"\nend\n'}, tag="v1.0.0")
-    other = ws.add_package("greeter", git, {"greet.agc": 'export def hello() -> String\n  return "hi"\nend\n'},
+    ws.add_package("greeter", git, {"greet.agc": 'def hello() -> String\n  return "hi"\nend\n'}, tag="v1.0.0")
+    other = ws.add_package("greeter", git, {"greet.agc": 'def hello() -> String\n  return "hi"\nend\n'},
                            tag="v1.0.0", commit="b" * 40)
     ws.locked.remove(other)
     ws.write_manifest({"greeter": dependency(git, tag="v1.0.0")})

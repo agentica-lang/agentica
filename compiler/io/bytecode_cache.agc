@@ -52,6 +52,82 @@ import Ast from "../syntax/ast"
 import CacheFiles from "cache_files"
 import RandomName from "random_name"
 
+## Where the entry of one root file is and what it must match. `build` is the `_build/` folder and `folder` the
+## `bytecode/` folder in it. `beside` is true for `_build/` of the project, false for the folder of AGENTICA_BUILD_DIR.
+## `libs_dir` is the folder whose agc_libs/ the build reads first (the probes of the `pkg/` imports start there).
+struct Entry
+  build: String
+  folder: String
+  file: String
+  key: String
+  beside: Bool
+  libs_dir: String
+end
+
+## The cache for one root file: off (asked off, no place for it, or a run that is not of the binary), or on with its
+## entry.
+enum Plan
+  Off
+  On(Entry)
+end
+
+## What a lookup found: the bytes of the program, or nothing usable.
+enum Lookup
+  Hit(Bytes)
+  Miss
+end
+
+## The plan for the root file `root` (as typed). `wanted` is false for `--no-cache`. The cache is off for a front end
+## that was not started by the binary (no `self_path`, or a stdlib/ folder instead of the embedded std/ sources), for a
+## root that cannot be resolved and for a project whose manifest or lock is not good: the front end then says why.
+def plan(settings: Env.Settings, root: String, wanted: Bool) -> Plan
+  return Plan.Off if !wanted or settings.self_path == ""
+
+  case settings.std
+    Env.StdProvider.Folder(_) -> Plan.Off
+    Env.StdProvider.Embedded ->
+      made = entry_for(settings, root)
+      return Plan.On(made.unwrap!) if made.ok?
+
+      Plan.Off
+  end
+end
+
+## The program kept for the plan, if the sources are the ones it was made from and the entry is the program's own.
+def lookup(plan: Plan, settings: Env.Settings) -> Lookup
+  case plan
+    Plan.Off -> Lookup.Miss
+    Plan.On(entry) ->
+      found = read_entry(entry, settings)
+      return Lookup.Hit(found.unwrap!) if found.ok?
+
+      Lookup.Miss
+  end
+end
+
+## Keeps `program`, which was compiled from `modules`, as the entry of the plan. It gives false when it could not (a
+## folder that is not safe or not writable); the run goes on either way. The probes are taken here, after the compile,
+## so a file that appears between the two is the one gap: it is seen as present, not as absent.
+def store(plan: Plan, settings: Env.Settings, modules: List[Linker.LinkedModule], program: Bytes) -> Bool
+  case plan
+    Plan.Off -> false
+    Plan.On(entry) ->
+      sources = modules.filter do |module: Linker.LinkedModule| !Resolve.embedded?(module.key) end
+      probes = probe_lines(settings, entry.libs_dir, sources)
+      return false if !probes.ok?
+
+      lines = sources.map do |module: Linker.LinkedModule| source_line(module) end
+      libraries = library_lines(settings.workspace, sources, built_libraries(settings, sources))
+      return false if !libraries.ok?
+
+      lines = lines.concat(libraries.unwrap!)
+      text = [entry.key, "program #{CacheFiles.digest(program)}"].concat(lines).concat(probes.unwrap!).join("\n")
+      publish(entry, text, program)
+  end
+end
+
+private
+
 # The folder of the entries, in the build folder (io/cache_files.agc).
 BYTECODE_FOLDER = "bytecode"
 
@@ -80,80 +156,6 @@ DIGEST_CHARS = 64
 # (4 bytes, little endian) and the version.
 MAGIC = "AGCB"
 VERSION_AT = 12
-
-## Where the entry of one root file is and what it must match. `build` is the `_build/` folder and `folder` the
-## `bytecode/` folder in it. `beside` is true for `_build/` of the project, false for the folder of AGENTICA_BUILD_DIR.
-## `libs_dir` is the folder whose agc_libs/ the build reads first (the probes of the `pkg/` imports start there).
-export struct Entry
-  build: String
-  folder: String
-  file: String
-  key: String
-  beside: Bool
-  libs_dir: String
-end
-
-## The cache for one root file: off (asked off, no place for it, or a run that is not of the binary), or on with its
-## entry.
-export enum Plan
-  Off
-  On(Entry)
-end
-
-## What a lookup found: the bytes of the program, or nothing usable.
-export enum Lookup
-  Hit(Bytes)
-  Miss
-end
-
-## The plan for the root file `root` (as typed). `wanted` is false for `--no-cache`. The cache is off for a front end
-## that was not started by the binary (no `self_path`, or a stdlib/ folder instead of the embedded std/ sources), for a
-## root that cannot be resolved and for a project whose manifest or lock is not good: the front end then says why.
-export def plan(settings: Env.Settings, root: String, wanted: Bool) -> Plan
-  return Plan.Off if !wanted or settings.self_path == ""
-
-  case settings.std
-    Env.StdProvider.Folder(_) -> Plan.Off
-    Env.StdProvider.Embedded ->
-      made = entry_for(settings, root)
-      return Plan.On(made.unwrap!) if made.ok?
-
-      Plan.Off
-  end
-end
-
-## The program kept for the plan, if the sources are the ones it was made from and the entry is the program's own.
-export def lookup(plan: Plan, settings: Env.Settings) -> Lookup
-  case plan
-    Plan.Off -> Lookup.Miss
-    Plan.On(entry) ->
-      found = read_entry(entry, settings)
-      return Lookup.Hit(found.unwrap!) if found.ok?
-
-      Lookup.Miss
-  end
-end
-
-## Keeps `program`, which was compiled from `modules`, as the entry of the plan. It gives false when it could not (a
-## folder that is not safe or not writable); the run goes on either way. The probes are taken here, after the compile,
-## so a file that appears between the two is the one gap: it is seen as present, not as absent.
-export def store(plan: Plan, settings: Env.Settings, modules: List[Linker.LinkedModule], program: Bytes) -> Bool
-  case plan
-    Plan.Off -> false
-    Plan.On(entry) ->
-      sources = modules.filter do |module: Linker.LinkedModule| !Resolve.embedded?(module.key) end
-      probes = probe_lines(settings, entry.libs_dir, sources)
-      return false if !probes.ok?
-
-      lines = sources.map do |module: Linker.LinkedModule| source_line(module) end
-      libraries = library_lines(settings.workspace, sources, built_libraries(settings, sources))
-      return false if !libraries.ok?
-
-      lines = lines.concat(libraries.unwrap!)
-      text = [entry.key, "program #{CacheFiles.digest(program)}"].concat(lines).concat(probes.unwrap!).join("\n")
-      publish(entry, text, program)
-  end
-end
 
 def source_line(module: Linker.LinkedModule) -> String
   "#{SOURCE_WORD}#{CacheFiles.digest(module.text.bytes)} #{module.key}"

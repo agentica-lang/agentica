@@ -18,28 +18,15 @@ import State from "check_state"
 
 ## What is taken: the state with the entries of the modules in `clean`, the types of their constants by linked name,
 ## and those modules (the ones asked for that the earlier program also has, with the same ids and constants).
-export struct Taken
+struct Taken
   st: State.St
   constants: Map[String, T.Type]
   clean: Set[String]
 end
 
-# The ids of a module: first <= id < next.
-struct Stretch
-  first: Int
-  next: Int
-end
-
-# The modules that are taken: their ids, and the types of their constants.
-struct Plan
-  stretches: List[Stretch]
-  clean: Set[String]
-  constants: Map[String, T.Type]
-end
-
 ## Takes from `old`, the state that checked `before`, the entries of the modules of `wanted` that `linked` has as
 ## `before` has them. `old_constants` are the types of the constants of `before` by linked name.
-export def take(
+def take(
   linked: Linker.Linked,
   before: Linker.Linked,
   old: State.St,
@@ -63,6 +50,21 @@ export def take(
   )
 
   Taken(st: st, constants: plan.constants, clean: plan.clean)
+end
+
+private
+
+# The ids of a module: first <= id < next.
+struct Stretch
+  first: Int
+  next: Int
+end
+
+# The modules that are taken: their ids, and the types of their constants.
+struct Plan
+  stretches: List[Stretch]
+  clean: Set[String]
+  constants: Map[String, T.Type]
 end
 
 # The modules of `wanted` that `before` has with the same ids and the types of all their constants, ordered by ids.

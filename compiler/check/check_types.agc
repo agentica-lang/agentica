@@ -10,35 +10,9 @@ import Types from "../syntax/types"
 import Help from "check_help"
 import State from "check_state"
 
-type ResolvedType = Types.Type
-
-type TypeRef = Ast.TypeRef
-
-struct Expansion
-  ref: TypeRef
-  remaining: Int
-end
-
-# What place_walk found: the place ("" for none) and the structs walked so far.
-struct Placed
-  place: String
-  seen: Map[String, Bool]
-end
-
-# What a walk of a type found: whether the test passed, and the structs walked so far (see struct_walk). why is the
-# struct field or enum variant where the walk of equality stopped, or "" (see equality_gap). When it is a struct field,
-# file and field are where the field is declared.
-struct Walk
-  passes: Bool
-  seen: Map[String, Bool]
-  why: String
-  file: String
-  field: Optional[Source.Span]
-end
-
 ## Why a type has no equality (equality_gap): why is the text ("" when nothing on the way explains it), and field the
 ## declaration of the struct field that blocks it, in file, when there is one.
-export struct Gap
+struct Gap
   why: String
   file: String
   field: Optional[Source.Span]
@@ -47,7 +21,7 @@ end
 ## The type a type written in the source stands for. completion says Void is allowed here (a result type, or the item
 ## of a Result or Task). The first problem is CHECK-VOID-TYPE, CHECK-MAP-KEY-TYPE, CHECK-SET-ELEMENT-TYPE or
 ## CHECK-UNKNOWN-TYPE.
-export def resolve_type(cx: State.Cx, st: State.St, ref: TypeRef, completion: Bool) -> Result[ResolvedType]
+def resolve_type(cx: State.Cx, st: State.St, ref: TypeRef, completion: Bool) -> Result[ResolvedType]
   return resolve_expanded(cx, st, ref, completion) if !contains_alias?(cx, ref)
 
   expanded = try expand_alias(cx, st, ref, [], State.nesting_limit(), ref.span)
@@ -55,7 +29,7 @@ export def resolve_type(cx: State.Cx, st: State.St, ref: TypeRef, completion: Bo
 end
 
 ## The types of several type references, in order.
-export def resolve_all(cx: State.Cx, st: State.St, refs: List[TypeRef]) -> Result[List[ResolvedType]]
+def resolve_all(cx: State.Cx, st: State.St, refs: List[TypeRef]) -> Result[List[ResolvedType]]
   out: List[ResolvedType] = []
   for ref in refs
     out = out.push(try resolve_type(cx, st, ref, false))
@@ -67,40 +41,38 @@ end
 ## The context that checks the target of a type alias: the alias's type parameters are in scope as type variables. A
 ## parameter may be a Map key or a Set element here (as in the files of the prelude): it stands for any type, so the
 ## key rule is judged where the alias is used, on the expanded type.
-export def alias_scope(cx: State.Cx, decl: Ast.TypeAliasDecl) -> State.Cx
+def alias_scope(cx: State.Cx, decl: Ast.TypeAliasDecl) -> State.Cx
   return cx if decl.type_parameters.size == 0
 
   cx.with(type_params: decl.type_parameters, prelude: true)
 end
 
 ## The type an alias stands for as text; a generic alias prints its parameters (List[List[T]]).
-export def alias_target_text(cx: State.Cx, st: State.St, name: String) -> Result[String]
+def alias_target_text(cx: State.Cx, st: State.St, name: String) -> Result[String]
   decl = cx.aliases[name]
   target = try resolve_type(alias_scope(cx, decl), st, decl.target, true)
   ok(Types.to_text(target))
 end
 
 ## True for Int, String and Bytes, the types of a Map key or a Set element.
-export def key_type?(type: ResolvedType) -> Bool
+def key_type?(type: ResolvedType) -> Bool
   Types.is?(type, "Int") or Types.is?(type, "String") or Types.is?(type, "Bytes")
 end
 
 ## True when the type may be a Map key or a Set element where cx checks: Int, String and Bytes, and in the files of the
 ## prelude a type variable too (the checker has checked the types it stands for, check_prelude.agc).
-export def key_here?(cx: State.Cx, type: ResolvedType) -> Bool
-  key_type?(type) or (cx.prelude and Types.is?(type, "Var"))
-end
+def key_here?(cx: State.Cx, type: ResolvedType) -> Bool = key_type?(type) or (cx.prelude and Types.is?(type, "Var"))
 
 ## True for Int and Float.
-export def numeric?(type: ResolvedType) -> Bool = Types.is?(type, "Int") or Types.is?(type, "Float")
+def numeric?(type: ResolvedType) -> Bool = Types.is?(type, "Int") or Types.is?(type, "Float")
 
 ## True for Int, Float, Bool, String and Nil, the types that == compares.
-export def primitive?(type: ResolvedType) -> Bool
+def primitive?(type: ResolvedType) -> Bool
   numeric?(type) or Types.is?(type, "Bool") or Types.is?(type, "String") or Types.is?(type, "Nil")
 end
 
 ## True for JSON.Field[T], the builtin enum of an optional and nullable JSON field.
-export def json_field?(type: ResolvedType) -> Bool
+def json_field?(type: ResolvedType) -> Bool
   Types.is?(type, "Enum") and Types.name(type) == "JSON.Field" and Types.args(type).size == 1
 end
 
@@ -108,7 +80,7 @@ end
 ## the direct type of a struct field. direct says the type is a struct field's own type, kind names its place when it
 ## is not ("list item", "map value", "nested JSON.Field", "encode argument") and owner the struct field it sits in
 ## ("Wrapper.items", "" outside a struct). Runs before the decodable and encodable tests.
-export def json_field_place(cx: State.Cx, type: ResolvedType, direct: Bool, kind: String, owner: String) -> String
+def json_field_place(cx: State.Cx, type: ResolvedType, direct: Bool, kind: String, owner: String) -> String
   place_walk(cx, type, direct, kind, owner, {}).place
 end
 
@@ -116,14 +88,14 @@ end
 ## of a struct. It only picks the help of a JSON builtin that refuses the type (Bytes is not JSON; Base64 is the usual
 ## way). A struct is read once, by its declared fields: its type arguments are walked on their own, so a generic struct
 ## that nests itself with other arguments ends.
-export def bytes_inside?(cx: State.Cx, type: ResolvedType) -> Bool
+def bytes_inside?(cx: State.Cx, type: ResolvedType) -> Bool
   inside?(cx, type) do |current: ResolvedType| Types.is?(current, "Bytes") end
 end
 
 ## CHECK-PRIVATE-FIELD at `span` when the type holds, anywhere in its fields, items or enum payloads, a struct with a
 ## private field that the module being checked may not name: a JSON codec reads and writes every field, so only the
 ## module of such a struct derives one (Type.codec, JSON.encode, JSON.from, JSON.decode, JSON.schema).
-export def no_private_inside(cx: State.Cx, st: State.St, type: ResolvedType, span: Source.Span) -> Result[Void]
+def no_private_inside(cx: State.Cx, st: State.St, type: ResolvedType, span: Source.Span) -> Result[Void]
   pending = [type]
   seen: Set[String] = Set.new([])
   at = 0
@@ -158,20 +130,20 @@ end
 
 ## True when a JSON.Field of an Optional sits anywhere in the type, walked as bytes_inside? walks: it picks the help of
 ## a JSON builtin that refuses the type, since JSON writes null for both none and JSON.Field.Null.
-export def optional_json_field_inside?(cx: State.Cx, type: ResolvedType) -> Bool
+def optional_json_field_inside?(cx: State.Cx, type: ResolvedType) -> Bool
   inside?(cx, type) do |current: ResolvedType| json_field?(current) and Types.is?(json_item(current), "Optional") end
 end
 
 ## True when JSON.encode can write a value of the type: primitives, JSON.Value, lists, maps with String keys, structs
 ## of those (a generic struct by its fields with the type arguments put in), and JSON.Field and Optional of an
 ## encodable type other than Nil (and other than an Optional, for a JSON.Field).
-export def encodable?(cx: State.Cx, type: ResolvedType) -> Bool = encode_walk(cx, type, {}).passes
+def encodable?(cx: State.Cx, type: ResolvedType) -> Bool = encode_walk(cx, type, {}).passes
 
 ## What a type with type variables needs to be encodable once they are bound, or none when no binding makes it
 ## encodable (an Fn, a Bytes, a Map with an Int key ...). Each need is a variable, an Optional or JSON.Field of one
 ## (its item must not be a null), or a Map with one as key and String as value (the key must be a String). A variable
 ## stands for String while the rest of the type is walked: String fits every place of an encodable type.
-export def encode_needs(cx: State.Cx, type: ResolvedType) -> Optional[List[ResolvedType]]
+def encode_needs(cx: State.Cx, type: ResolvedType) -> Optional[List[ResolvedType]]
   strings: Map[String, ResolvedType] = {}
   for name in variable_names(type)
     strings = strings.put(name, Types.Type.String)
@@ -187,7 +159,7 @@ end
 ## bound. The span is the one of the first argument whose parameter type (templates, beside spans) has a variable of
 ## the failed need, else span. In a generic body the call is recorded (State.JsonUse.Pass), so the body's own needs
 ## include the callee's.
-export def check_json_needs(
+def check_json_needs(
   cx: State.Cx,
   st: State.St,
   callee: String,
@@ -225,7 +197,7 @@ export def check_json_needs(
 end
 
 ## found with the need, unless it holds the same type already.
-export def add_need(found: List[ResolvedType], need: ResolvedType) -> List[ResolvedType]
+def add_need(found: List[ResolvedType], need: ResolvedType) -> List[ResolvedType]
   text = Types.to_text(need)
   return found if found.any? do |known: ResolvedType| Types.to_text(known) == text end
 
@@ -236,20 +208,20 @@ end
 ## structs of those, and JSON.Field and Optional of a decodable type (Nil is not one; nor is an Optional, for a
 ## JSON.Field). A generic struct is not decodable: the schema of the structs is keyed by their bare names, which
 ## Box[Int] and Box[String] would share.
-export def decodable?(cx: State.Cx, type: ResolvedType) -> Bool = decode_walk(cx, type, {}).passes
+def decodable?(cx: State.Cx, type: ResolvedType) -> Bool = decode_walk(cx, type, {}).passes
 
 ## True when the type may be the value of an ATS: a data type (data?, a deep walk that rejects Fn, Task, Channel, every
 ## handle and ATS itself, so no table holds a table) that is not Nil and has no type variable. A variable is allowed
 ## only where it is checked later: in the target of a generic alias (cx.prelude), whose uses are checked expanded. A
 ## generic enum checks its arguments only with data?, which accepts a variable, so a payload ATS[String, T] is refused.
-export def ats_value?(cx: State.Cx, type: ResolvedType) -> Bool
+def ats_value?(cx: State.Cx, type: ResolvedType) -> Bool
   return false if Types.is?(type, "Nil") or !data?(cx, type)
 
   cx.prelude or !has_variables?(type)
 end
 
 ## CHECK-ATS-VALUE for the value type of an ATS that ats_value? refuses, at span.
-export def ats_value_failure(cx: State.Cx, st: State.St, type: ResolvedType, span: Source.Span) -> String
+def ats_value_failure(cx: State.Cx, st: State.St, type: ResolvedType, span: Source.Span) -> String
   State.fail_help(
     cx,
     st,
@@ -263,7 +235,7 @@ end
 ## True for a type that has to_s: the data types. Numbers, Bool, String, nil, JSON.Value, ranges, addresses, and lists,
 ## maps, sets, Results, structs and enums of those. A type variable is one only in the files of the prelude: in the
 ## body of a generic function it stands for any type, which could be an Fn.
-export def data?(cx: State.Cx, type: ResolvedType) -> Bool = data_walk(cx, type, {}, false).passes
+def data?(cx: State.Cx, type: ResolvedType) -> Bool = data_walk(cx, type, {}, false).passes
 
 ## True for a type that == and != compare: a data type (data?) with no JSON.Value inside. Numbers, Bool, String, nil,
 ## ranges, Bytes, addresses, and lists, maps, sets, Optionals, Results, structs and enums of those. A group of structs
@@ -271,18 +243,18 @@ export def data?(cx: State.Cx, type: ResolvedType) -> Bool = data_walk(cx, type,
 ## data?, a type variable passes only in the files of the prelude, where == on it lowers to Value.equal. List#include?
 ## needs it (include in stdlib/prelude/list.agc); its equality limit checks the item type at the call site
 ## (check_prelude.agc).
-export def equality?(cx: State.Cx, type: ResolvedType) -> Bool = data_walk(cx, type, {}, true).passes
+def equality?(cx: State.Cx, type: ResolvedType) -> Bool = data_walk(cx, type, {}, true).passes
 
 ## Why a type that equality? refuses has no equality: a type variable of a generic function, else the innermost
 ## struct field or enum variant on the way ("field User.on_save is Fn[User, Void]"), or "" when neither is on the way
 ## (List[Fn[Int, Int]]). A struct field also gives its declaration.
-export def equality_gap(cx: State.Cx, type: ResolvedType) -> Gap
+def equality_gap(cx: State.Cx, type: ResolvedType) -> Gap
   found = data_walk(cx, type, {}, true)
   Gap(why: found.why, file: found.file, field: found.field)
 end
 
 ## True when the type has a type variable inside.
-export def has_variables?(type: ResolvedType) -> Bool
+def has_variables?(type: ResolvedType) -> Bool
   case type
     Types.Type.Var(_) -> true
     Types.Type.Result(item) -> has_variables?(item)
@@ -307,12 +279,12 @@ end
 ## True when the template has a type variable that substitutions does not set yet. A template is the signature of a
 ## function or the type of a field: every variable in it is a parameter of the declaration, whatever the types in
 ## substitutions hold (they may hold the variables of the code that calls).
-export def open_variables?(template: ResolvedType, substitutions: Map[String, ResolvedType]) -> Bool
+def open_variables?(template: ResolvedType, substitutions: Map[String, ResolvedType]) -> Bool
   variable_names(template).any? do |name: String| !substitutions.has_key?(name) end
 end
 
 ## The names of the type variables written in the type, in order, with repeats.
-export def variable_names(type: ResolvedType) -> List[String]
+def variable_names(type: ResolvedType) -> List[String]
   return [Types.name(type)] if Types.is?(type, "Var")
 
   names: List[String] = []
@@ -325,7 +297,7 @@ end
 
 ## True when the type has Void where a value is needed. Void is valid as the result of a function type, the last type
 ## of an Fn, and the item of a Result or a Task: completion says the type is in such a place.
-export def misplaced_void?(type: ResolvedType, completion: Bool) -> Bool
+def misplaced_void?(type: ResolvedType, completion: Bool) -> Bool
   case type
     Types.Type.Void -> !completion
     Types.Type.Result(item) -> misplaced_void?(item, true)
@@ -339,7 +311,7 @@ end
 ## Matches the actual type against a template and returns the substitutions with the variables of the template that it
 ## binds and substitutions does not set yet. It is unify without the failures: a part that does not match is left to
 ## the check that follows, and a variable is not bound to a type that is not known (Unknown, or with Unknown inside).
-export def learn(
+def learn(
   template: ResolvedType,
   actual: ResolvedType,
   substitutions: Map[String, ResolvedType],
@@ -368,7 +340,7 @@ export def learn(
 end
 
 ## The type with each type variable that has a substitution replaced.
-export def substitute(type: ResolvedType, substitutions: Map[String, ResolvedType]) -> ResolvedType
+def substitute(type: ResolvedType, substitutions: Map[String, ResolvedType]) -> ResolvedType
   case type
     Types.Type.Var(name) -> substitution(type, name, substitutions)
     Types.Type.Result(item) -> Types.Type.Result(substitute(item, substitutions))
@@ -391,12 +363,12 @@ export def substitute(type: ResolvedType, substitutions: Map[String, ResolvedTyp
 end
 
 ## substitute for each type of a list.
-export def substitute_all(types: List[ResolvedType], substitutions: Map[String, ResolvedType]) -> List[ResolvedType]
+def substitute_all(types: List[ResolvedType], substitutions: Map[String, ResolvedType]) -> List[ResolvedType]
   types.map do |type: ResolvedType| substitute(type, substitutions) end
 end
 
 ## The substitutions that a list of type parameters and a list of type arguments of the same length make.
-export def bindings(parameters: List[String], args: List[ResolvedType]) -> Map[String, ResolvedType]
+def bindings(parameters: List[String], args: List[ResolvedType]) -> Map[String, ResolvedType]
   found: Map[String, ResolvedType] = {}
   index = 0
   while index < parameters.size and index < args.size
@@ -409,7 +381,7 @@ end
 
 ## The fields of a struct type with its type arguments put in, in declaration order: a Box[Int] has `value: Int`.
 ## A plain struct has the fields as declared.
-export def fields_of(cx: State.Cx, type: ResolvedType) -> List[Model.Named]
+def fields_of(cx: State.Cx, type: ResolvedType) -> List[Model.Named]
   name = Types.name(type)
   parameters = cx.struct_params.get(name, [])
   return cx.structs[name] if parameters.size == 0 or parameters.size != Types.args(type).size
@@ -421,7 +393,7 @@ end
 ## Matches the actual type against a template that may have type variables, and returns the substitutions with what the
 ## match learned. A variable already set must match again; a template with no variable must equal the actual type, else
 ## CHECK-TYPE-MISMATCH.
-export def unify(
+def unify(
   cx: State.Cx,
   st: State.St,
   template: ResolvedType,
@@ -445,6 +417,34 @@ export def unify(
 
   try State.ensure(cx, st, actual, template, span)
   ok(substitutions)
+end
+
+private
+
+type ResolvedType = Types.Type
+
+type TypeRef = Ast.TypeRef
+
+struct Expansion
+  ref: TypeRef
+  remaining: Int
+end
+
+# What place_walk found: the place ("" for none) and the structs walked so far.
+struct Placed
+  place: String
+  seen: Map[String, Bool]
+end
+
+# What a walk of a type found: whether the test passed, and the structs walked so far (see struct_walk). why is the
+# struct field or enum variant where the walk of equality stopped, or "" (see equality_gap). When it is a struct field,
+# file and field are where the field is declared.
+struct Walk
+  passes: Bool
+  seen: Map[String, Bool]
+  why: String
+  file: String
+  field: Optional[Source.Span]
 end
 
 def contains_alias?(cx: State.Cx, ref: TypeRef) -> Bool

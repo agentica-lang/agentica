@@ -20,7 +20,7 @@ import Checker from "checker"
 ## failure of the checker has the notes of the diagnostic that are present,
 ## ` expected="..." actual="..." callee="..." signature="..." labels=[SPAN "text", ...]`, then ` file="path"`.
 ## The goldens in tests/fixtures/frontend/check/ hold it.
-export def check_text(path: String, settings: Env.Settings) -> String
+def check_text(path: String, settings: Env.Settings) -> String
   case Linker.link_file(path, settings)
     Linker.Linking.Failed(failure) -> LinkText.root_failure_text(settings.workspace, path, failure)
     Linker.Linking.Done(linked) -> checked_text(linked, settings)
@@ -28,7 +28,7 @@ export def check_text(path: String, settings: Env.Settings) -> String
 end
 
 ## The ERROR line of a failure of the checker, with its notes and the file (relative to the folder of the root).
-export def problem_text(workspace: Workspace.Workspace, root_dir: String, problem: Failure.Problem) -> String
+def problem_text(workspace: Workspace.Workspace, root_dir: String, problem: Failure.Problem) -> String
   line = Text.diagnostic_line(
     Diag.Diagnostic(code: problem.code, message: problem.message, span: problem.span, help: problem.help),
   )
@@ -50,9 +50,11 @@ export def problem_text(workspace: Workspace.Workspace, root_dir: String, proble
 end
 
 ## The text form of a program that checked: what `agentica --dump` prints.
-export def program_text(linked: Linker.Linked, checked: Checker.Checked) -> String
+def program_text(linked: Linker.Linked, checked: Checker.Checked) -> String
   LinkText.program_lines(linked, notes_of(checked)).concat(order_lines(checked)).join("\n")
 end
+
+private
 
 def checked_text(linked: Linker.Linked, settings: Env.Settings) -> String
   case Checker.check(linked, settings)

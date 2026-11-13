@@ -8,7 +8,7 @@ import Child from "child"
 ## The options of a run: the path of the binary (started as `run ...` for each test file), the seed, the `--only` text,
 ## the timeout of each test in milliseconds, the `--source-root` of the file's bytecode ("" for none), so a trace
 ## names the file as the report does, and the user's `--deny-*` flags and `--sandbox`, which the file's VMs get.
-export struct Settings
+struct Settings
   vm: String
   seed: Int
   only: String
@@ -18,6 +18,33 @@ export struct Settings
   # The LCOV part of the child that runs the tests, without its `.info`, or "" without coverage.
   coverage: String
 end
+
+## Runs the tests of the file `path` from its compiled `bytecode` and returns the result. A non-empty `front_end` is a
+## front-end error of the file, which is reported instead.
+def run(settings: Settings, path: String, bytecode: String, front_end: String) -> Report.FileResult
+  if front_end != ""
+    parsed = Report.from_json(front_end)
+    return Report.file_error(path, "tests", parsed.unwrap_or(Child.located("RUNTIME-BDD-INFRA", parsed.message, path)))
+  end
+  case list(settings, path, bytecode)
+    Listed.Broken(found) -> Report.file_failure(path, "tests", found.problem, found.output)
+    Listed.Ready(found) ->
+      chosen = found.filter do |item| settings.only == "" or item.name.include?(settings.only) end
+      if chosen.size == 0
+        return Report.FileResult(
+          path: path,
+          feature: "",
+          kind: "tests",
+          scenarios: [],
+          verdict: Report.Verdict.Pass,
+          output: "",
+        )
+      end
+      run_child(settings, path, bytecode, chosen)
+  end
+end
+
+private
 
 struct UnitTest
   index: Int
@@ -51,31 +78,6 @@ end
 struct Ending
   verdict: Report.Verdict
   output: String
-end
-
-## Runs the tests of the file `path` from its compiled `bytecode` and returns the result. A non-empty `front_end` is a
-## front-end error of the file, which is reported instead.
-export def run(settings: Settings, path: String, bytecode: String, front_end: String) -> Report.FileResult
-  if front_end != ""
-    parsed = Report.from_json(front_end)
-    return Report.file_error(path, "tests", parsed.unwrap_or(Child.located("RUNTIME-BDD-INFRA", parsed.message, path)))
-  end
-  case list(settings, path, bytecode)
-    Listed.Broken(found) -> Report.file_failure(path, "tests", found.problem, found.output)
-    Listed.Ready(found) ->
-      chosen = found.filter do |item| settings.only == "" or item.name.include?(settings.only) end
-      if chosen.size == 0
-        return Report.FileResult(
-          path: path,
-          feature: "",
-          kind: "tests",
-          scenarios: [],
-          verdict: Report.Verdict.Pass,
-          output: "",
-        )
-      end
-      run_child(settings, path, bytecode, chosen)
-  end
 end
 
 def list(settings: Settings, path: String, bytecode: String) -> Listed

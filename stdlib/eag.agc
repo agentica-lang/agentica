@@ -24,4 +24,6 @@ import HTML from "std/html"
 
 ## Replaces `&`, `<`, `>`, `"` and `'` with `&amp;`, `&lt;`, `&gt;`, `&quot;` and `&#39;`, as Ruby's
 ## `ERB::Util.html_escape` does.
-export def html_escape(value: String) -> String = HTML.escape(value)
+def html_escape(value: String) -> String = HTML.escape(value)
+
+private

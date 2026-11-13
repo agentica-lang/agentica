@@ -3,8 +3,8 @@
 ## the JSON form lists. It is built from the parsed program only: nothing is linked or checked.
 ##
 ## A doc is the text of the `##` block with the markers removed (an `Optional`, as on the syntax tree) and its leading
-## and trailing blank lines dropped (`cleaned`); the lexer already strips the one space after each `##`. The doc of an
-## exported declaration sits on its ExportDecl, not on the declaration inside it (parser.agc, parse_declaration), so
+## and trailing blank lines dropped (`cleaned`); the lexer already strips the one space after each `##`. The doc of a
+## public declaration sits on its ExportDecl, not on the declaration inside it (parser.agc, publish), so
 ## `item_of` reads the outer doc first and the inner one when there is none. `of_program` takes the source `text` for
 ## the default values of the parameters.
 
@@ -13,14 +13,14 @@ import Source from "../syntax/source"
 import Signature from "signature"
 
 ## One parameter of a function: its name, its type as written and the source text of its default value.
-export struct Parameter
+struct Parameter
   name: String
   type: String
   default: Optional[String]
 end
 
 ## One field of a struct, with its doc, its span, the span of its name and the source text of its default value.
-export struct Field
+struct Field
   name: String
   span: Source.Span
   name_span: Source.Span
@@ -30,7 +30,7 @@ export struct Field
 end
 
 ## One variant of an enum, with the types of its payload as written, its doc, its span and the span of its name.
-export struct Variant
+struct Variant
   name: String
   span: Source.Span
   name_span: Source.Span
@@ -40,7 +40,7 @@ end
 
 ## What an item has besides the common data: the parameters and the result of a function, the fields of a struct, the
 ## variants of an enum, the declarations of a module block, private ones included. An alias or a constant has none.
-export enum Detail
+enum Detail
   Function(List[Parameter], String)
   Struct(List[Field])
   Enum(List[Variant])
@@ -49,10 +49,10 @@ export enum Detail
 end
 
 ## One top-level declaration. `kind` is "function", "struct", "enum", "alias", "resource", "constant" or "module";
-## `span` is the whole declaration, `export` included, and `name_span` the name alone. `agentica doc` lists the
+## `span` is the whole declaration, and `name_span` the name alone. `agentica doc` lists the
 ## exported ones only; `agentica outline` lists all of them. A struct lists its public fields only; private_line is the
 ## span of its `private` line when it has private fields, which the readers show as one line.
-export struct Item
+struct Item
   kind: String
   name: String
   name_span: Source.Span
@@ -62,10 +62,11 @@ export struct Item
   span: Source.Span
   detail: Detail
   private_line: Optional[Source.Span] = none
+  reexport: String = ""
 end
 
 ## A documented module: its doc and its exported items.
-export struct Module
+struct Module
   doc: Optional[String]
   items: List[Item]
 end
@@ -73,18 +74,18 @@ end
 ## The exported API of a parsed program, in source order. Private declarations and imports are left out. `origins` maps
 ## each name the program re-exports to the item of the original declaration (doc_origins.agc); a re-export without an
 ## entry is left out.
-export def of_program(program: Ast.Program, text: String, origins: Map[String, Item]) -> Module
+def of_program(program: Ast.Program, text: String, origins: Map[String, Item]) -> Module
   items = declared_through(program, text, origins).filter do |item: Item| item.exported end
   Module(doc: cleaned(program.module_doc), items: items.map do |item: Item| exported_only(item) end)
 end
 
 ## Every declaration of a parsed program that is not an import, private ones included, in source order. A re-export
 ## (`export Url.parse`) is not a declaration of the file, so it is left out.
-export def declared(program: Ast.Program, text: String) -> List[Item] = declared_through(program, text, {})
+def declared(program: Ast.Program, text: String) -> List[Item] = declared_through(program, text, {})
 
 ## `declared`, and the re-exports of the program as the items in `origins`: the original declaration, with its doc and
 ## signature, at the place of the `export` line, so every span of the item is in this file.
-export def declared_through(program: Ast.Program, text: String, origins: Map[String, Item]) -> List[Item]
+def declared_through(program: Ast.Program, text: String, origins: Map[String, Item]) -> List[Item]
   items: List[Item] = []
   for declaration in program.declarations
     for item in items_of(declaration, text, origins)
@@ -97,7 +98,7 @@ end
 
 ## A doc without its leading and trailing blank lines (a line of spaces is blank); absent when nothing else is left.
 ## The lines in between stay as written.
-export def cleaned(doc: Optional[String]) -> Optional[String]
+def cleaned(doc: Optional[String]) -> Optional[String]
   case doc
     none -> doc
     some(text) ->
@@ -120,7 +121,7 @@ end
 
 ## The first paragraph of a doc, on one line: its lines up to the first blank one, each trimmed, joined by a space.
 ## `none` when the doc has no such text.
-export def summary(doc: Optional[String]) -> Optional[String]
+def summary(doc: Optional[String]) -> Optional[String]
   case cleaned(doc)
     none -> none
     some(text) ->
@@ -134,6 +135,8 @@ export def summary(doc: Optional[String]) -> Optional[String]
       some(words.join(" "))
   end
 end
+
+private
 
 # The item a top-level declaration gives: none for an import. The doc of an `export` sits on the export.
 def items_of(declaration: Ast.Decl, text: String, origins: Map[String, Item]) -> List[Item]
@@ -165,6 +168,7 @@ def reexport_items(node: Ast.ReexportDecl, origins: Map[String, Item]) -> List[I
       name_span: node.name_span,
       detail: placed(origin.detail, node.name_span),
       private_line: origin.private_line.map { |_: Source.Span| node.name_span },
+      reexport: "#{node.alias}.#{node.name}",
     ),
   ]
 end

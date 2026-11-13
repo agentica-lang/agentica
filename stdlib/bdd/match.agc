@@ -5,32 +5,22 @@
 import Gherkin from "gherkin"
 import Report from "std/test/report"
 
-enum Capture
-  IntCapture
-  StringCapture
-end
-
-struct Slot
-  capture: Capture
-  literal: List[String]
-end
-
 ## A compiled step pattern. `compile` builds them.
-export struct Pattern
+struct Pattern
   text: String
   head: List[String]
   slots: List[Slot]
 end
 
 ## The pattern a step matched: its index in the list and the values it captured.
-export struct Resolved
+struct Resolved
   index: Int
   captures: List[String]
 end
 
 ## Compiles the step patterns `texts`. Checks them in order and returns a failure at `where` for the first duplicate
 ## (`RUNTIME-BDD-DUPLICATE`) or bad pattern (`RUNTIME-BDD-PATTERN`).
-export def compile(texts: List[String], where: Report.Span) -> Gherkin.Outcome[List[Pattern]]
+def compile(texts: List[String], where: Report.Span) -> Gherkin.Outcome[List[Pattern]]
   compiled = texts.map do |text| compile_one(text) end
   seen: Map[String, Bool] = {}
   for i in 0...texts.size
@@ -44,7 +34,7 @@ end
 
 ## Finds the one pattern that matches the text of `step`. Fails with `CHECK-BDD-UNDEFINED` when none does and
 ## `CHECK-BDD-AMBIGUOUS` when several do.
-export def resolve(patterns: List[Pattern], step: Gherkin.Step) -> Gherkin.Outcome[Resolved]
+def resolve(patterns: List[Pattern], step: Gherkin.Step) -> Gherkin.Outcome[Resolved]
   found = patterns.map do |pattern| captures(pattern, step.text) end
   hits = 0
   first = 0
@@ -70,10 +60,22 @@ export def resolve(patterns: List[Pattern], step: Gherkin.Step) -> Gherkin.Outco
 end
 
 ## Matches `text` against `pattern`. Returns the captured values as strings, or an error when the text does not match.
-export def captures(pattern: Pattern, text: String) -> Result[List[String]]
+def captures(pattern: Pattern, text: String) -> Result[List[String]]
   chars = text.split("")
   return error("no match") if not literal_at?(chars, 0, pattern.head)
   walk(pattern.slots, 0, chars, pattern.head.size, [])
+end
+
+private
+
+enum Capture
+  IntCapture
+  StringCapture
+end
+
+struct Slot
+  capture: Capture
+  literal: List[String]
 end
 
 # An outline leaves a `<name>` that is not an Examples column as written, so a misspelled column ends here: the text

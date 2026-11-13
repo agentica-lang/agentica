@@ -114,7 +114,7 @@ class TestModuleRules:
     def test_a_relative_import_that_finds_no_file_has_help_at_the_import(self):
         """An import is relative to the importing file: a missing folder or file is CHECK-IMPORT-IO at the import
         line, with a help (the path tried, and the form from the importing file when the project folder has it)."""
-        lib = "export def hi() -> String\n  return \"hi\"\nend\n"
+        lib = 'def hi() -> String\n  return "hi"\nend\n'
         main = "\ndef main() -> Void\nend\n"
         cases = [
             ({"agentica.toml": 'name = "p"\n', "src/lib.agc": lib, "tools/x.agc": 'import L from "src/lib"\n' + main},
@@ -139,7 +139,7 @@ class TestModuleRules:
     def test_pkg_imports_reject_relative_environment_roots_and_escaping_symlinks(self):
         directory = self.files({
             "root.agc": 'import Value from "pkg/value"\n' + MAIN,
-            "outside.agc": "export def read() -> Int\n  return 1\nend\n\n"})
+            "outside.agc": "def read() -> Int\n  return 1\nend\n\n"})
         checked = self.checks([(directory, "root.agc", {"AGENTICA_PATH": "relative"})])
         self.assert_rejected(checked[0], "CHECK-IMPORT-PATH")
         # Unix symlinks need no privilege; Windows link creation may require it, so the link case is skipped there.
@@ -150,13 +150,13 @@ class TestModuleRules:
 
     def test_imported_structs_fields_and_arity_are_checked_with_their_spans(self):
         checked = self.check({
-            "a.agc": "export struct Point\n  x: Int\nend\n\n",
+            "a.agc": "struct Point\n  x: Int\nend\n\n",
             "root.agc": 'import A from "a"\ndef main() -> Void\n  n: Int = A.Point(x: 1)\nend\n\n'})
         problem = self.assert_rejected(checked, "CHECK-TYPE-MISMATCH")
         assert problem["actual"] == "Point"
         files = {
-            "a.agc": "export struct Point\n  x: Int\nend\n\n"
-                     "export def make(x: Int) -> Point\n  return Point(x: x)\nend\n\n",
+            "a.agc": ("struct Point\n  x: Int\nend\n\n"
+                      "def make(x: Int) -> Point\n  return Point(x: x)\nend\n\n"),
             "root.agc": 'import A from "a"\ndef main() -> Void\n  n = A.Point(x: 1).z\nend\n\n',
             "arity.agc": 'import A from "a"\ndef main() -> Void\n  p = A.make()\nend\n\n'}
         field, arity = self.checks([(files, "root.agc", None), (files, "arity.agc", None)])
@@ -166,20 +166,24 @@ class TestModuleRules:
 
     def test_unknown_types_and_names_in_imported_files_are_reported_in_those_files(self):
         files = {
-            "bad.agc": "export struct Point\n  x: Int\nend\n\nstruct Pair\n  p: Pont\nend\n\n",
-            "calls.agc": "export def go() -> Int\n  return helpr()\nend\n\ndef helper() -> Int\n  return 1\nend\n\n",
+            "bad.agc": "struct Point\n  x: Int\nend\n\nprivate\n\nstruct Pair\n  p: Pont\nend\n\n",
+            "calls.agc": ("def go() -> Int\n  return helpr()\nend\n\n"
+                          "private\n\n"
+                          "def helper() -> Int\n  return 1\nend\n\n"),
             "types.agc": 'import B from "bad"\n\ndef shown(p: B.Point) -> Void\nend\n\n' + MAIN,
             "funcs.agc": 'import C from "calls"\n\ndef helpe() -> Int\n  return 2\nend\n\n'
                          "def main() -> Void\n  _n = C.go()\nend\n\n"}
         types, funcs = self.checks([(files, "types.agc", None), (files, "funcs.agc", None)])
         problem = self.assert_rejected(types, "CHECK-UNKNOWN-TYPE")
-        assert start(problem) == (6, 6)
+        assert start(problem) == (8, 6)
         assert Path(problem["file"]) == types[0] / "bad.agc"
         self.assert_rejected(funcs, "CHECK-UNKNOWN-NAME")
 
     def test_module_errors_are_located_and_do_not_expose_private_declarations(self):
-        module = ("struct Secret\n  value: Int\nend\n\nexport struct Public\nend\n\n"
-                  "def hidden() -> Void\nend\n\n")
+        module = ("struct Public\nend\n\n"
+                   "private\n\n"
+                   "struct Secret\n  value: Int\nend\n\n"
+                   "def hidden() -> Void\nend\n\n")
         cases = [
             ('import Missing from "missing"\n', "", "CHECK-IMPORT-IO"),
             ('import M from "module"\n', "  M.hidden()\n", "CHECK-IMPORT-NAME"),
@@ -202,7 +206,7 @@ class TestModuleRules:
         names = ["lib/util.agc", "lib/util.rb", 'a"b.agc', "json.tools.agc", "lib/", "..", ".", ""]
         # The import is on line 4, after the two comment lines, so its span is not the start of the file.
         results = self.checks([({
-            "lib/util.agc": "export def read() -> String\n  return \"util\"\nend\n\n",
+            "lib/util.agc": 'def read() -> String\n  return "util"\nend\n\n',
             "root.agc": "# two comment lines keep the import off line 1\n# so the span is not the file start\n\n"
                         + "import Util from %s\n" % json.dumps(name) + MAIN}, "root.agc", None)
             for name in names])
@@ -223,20 +227,24 @@ class TestModuleRules:
     def test_a_struct_update_follows_the_rules_of_construction_across_files(self):
         # A value of a struct that the other module keeps private cannot be updated: the rule of constructing it.
         problem = self.check({
-            "lib.agc": "struct Hidden\n  n: Int\nend\n\nexport def hidden() -> Hidden\n  return Hidden(n: 1)\nend\n\n",
+            "lib.agc": ("def hidden() -> Hidden\n  return Hidden(n: 1)\nend\n\n"
+                        "private\n\n"
+                        "struct Hidden\n  n: Int\nend\n\n"),
             "root.agc": 'import Lib from "lib"\n\ndef main() -> Void\n'
                         "  h = Lib.hidden()\n  x = h.with(n: 2)\nend\n\n"})
         assert start(self.assert_rejected(problem, "CHECK-IMPORT-NAME")) == (5, 7)
         # Importing a module that only passes the struct along is not enough: the importer needs its own module.
         self.assert_rejected(self.check({
-            "a.agc": "export struct P\n  n: Int\nend\n\n",
-            "b.agc": 'import A from "a"\n\nexport def get() -> A.P\n  return A.P(n: 1)\nend\n\n',
+            "a.agc": "struct P\n  n: Int\nend\n\n",
+            "b.agc": 'import A from "a"\n\ndef get() -> A.P\n  return A.P(n: 1)\nend\n\n',
             "root.agc": 'import B from "b"\n\ndef main() -> Void\n'
                         "  x = B.get().with(n: 2)\nend\n\n"}), "CHECK-IMPORT-NAME")
 
     def test_an_exported_constant_is_read_through_the_alias_like_an_exported_function(self):
-        lib = ("HIDDEN = 5\nexport LIMIT = HIDDEN + 1\nexport NAMES = [\"a\"]\nexport CONFIG = Config(port: 80)\n\n"
-               "export struct Config\n  port: Int\nend\n\n")
+        lib = ('LIMIT = HIDDEN + 1\nNAMES = ["a"]\nCONFIG = Config(port: 80)\n\n'
+                "struct Config\n  port: Int\nend\n\n"
+                "private\n\n"
+                "HIDDEN = 5\n\n")
         header = 'import Lib from "lib"\n\ndef main() -> Void\n'
         good = ("  _x = Lib.LIMIT + 1\n  puts(Lib.NAMES.size)\n  puts(Lib.CONFIG.port)\n"
                 "  _moved: Lib.Config = Lib.CONFIG.with(port: 81)\n  puts(\"#{Lib.LIMIT}\")\n")
@@ -254,7 +262,7 @@ class TestModuleRules:
             self.assert_rejected(checked_wrong, "CHECK-TYPE-MISMATCH", line=4)
 
     def test_a_constant_through_the_alias_sits_beside_enum_variants_and_blocks(self):
-        lib = "export LIMIT = 3\nexport NAMES = [\"a\"]\n\nexport enum Shade\n  Dark\n  Light(Int)\nend\n\n"
+        lib = 'LIMIT = 3\nNAMES = ["a"]\n\nenum Shade\n  Dark\n  Light(Int)\nend\n\n'
         local = "enum Level\n  HIGH\nend\n\nenum Mix\n  Low\nend\n\n"
         header = 'import Lib from "lib"\n\n' + local + "def main() -> Void\n"
         bodies = ["  a = Lib.Shade.Dark\n  b = Lib.Shade.Light(Lib.LIMIT)\n  puts(Lib.LIMIT.to_s + a.to_s + b.to_s)\n",
@@ -274,7 +282,7 @@ class TestModuleRules:
 
     def test_private_imported_enums_remain_inaccessible(self):
         self.assert_rejected(self.check({
-            "option.agc": "enum Option[T]\n  Some(T)\nend\n\n",
+            "option.agc": "private\n\nenum Option[T]\n  Some(T)\nend\n\n",
             "root.agc": 'import Domain from "option"\ndef main() -> Void\n'
                         '  value: Domain.Option[Int] = Domain.Option.Some(1)\nend\n\n'}), "CHECK-IMPORT-NAME")
 
@@ -288,8 +296,11 @@ class TestModuleRules:
             assert "help" not in problem, body
 
     def test_a_wrong_imported_name_suggests_the_closest_export_never_a_private_name(self):
-        module = ("struct Secret\n  value: Int\nend\n\nexport struct Public\n  a: Int\nend\n\n"
-                  "export def public() -> Void\nend\n\ndef hidden() -> Void\nend\n\n")
+        module = ("struct Public\n  a: Int\nend\n\n"
+                   "def public() -> Void\nend\n\n"
+                   "private\n\n"
+                   "struct Secret\n  value: Int\nend\n\n"
+                   "def hidden() -> Void\nend\n\n")
         # A suggestion is given for a near public name; none for a near private name or a name far from all. A
         # private name itself gets the help that says how to make it public (test_spec_private.py).
         cases = [("  x = M.publc()\n", True), ("  x = M.Publik(a: 1)\n", True), ("  x: M.Publc = nil\n", True),
@@ -302,7 +313,7 @@ class TestModuleRules:
             assert ("help" in problem) == suggests
         # `ab` and `ac` are both one edit from `ad`. The tie-break is message detail, so only the code is checked.
         self.assert_rejected(self.check({
-            "module.agc": "export def ac() -> Void\nend\n\nexport def ab() -> Void\nend\n\n",
+            "module.agc": "def ac() -> Void\nend\n\ndef ab() -> Void\nend\n\n",
             "root.agc": 'import M from "module"\ndef main() -> Void\n  M.ad()\nend\n\n'}), "CHECK-IMPORT-NAME")
 
     def test_the_std_http_and_std_logger_wrong_names_are_rejected_by_name(self):
@@ -339,7 +350,7 @@ class TestModuleRules:
              False),
             ({"root.agc": "def f(e: LogEvent) -> Void\nend\n\n" + MAIN}, "CHECK-UNKNOWN-TYPE", ((1, 10), (1, 18)), None,
              False),
-            ({"root.agc": in_lib, "lib.agc": "export def f() -> Void\n  e: LogEvent = 1\nend\n"}, "CHECK-UNKNOWN-TYPE",
+            ({"root.agc": in_lib, "lib.agc": "def f() -> Void\n  e: LogEvent = 1\nend\n"}, "CHECK-UNKNOWN-TYPE",
              ((2, 6), (2, 14)), "lib.agc", False),
             ({"root.agc": logger + "def main() -> Void\n  Logger.set_level(LogLevel.Info)\nend\n\n"},
              "CHECK-IMPORT-NAME", ((4, 20), (4, 33)), None, False),
@@ -380,15 +391,15 @@ class TestModuleRules:
               + "  puts(RegexEngine(n: 1).n + LogEvent(n: 2).n)\n  puts(LogLevel.Loud)\nend\n\n"},
              "root.agc", None),
             ({"root.agc": 'import Std from "lib"\n\ndef main() -> Void\n  puts(Std.source(1))\nend\n\n',
-              "lib.agc": "export def source(n: Int) -> Int = n\n"}, "root.agc", None),
+              "lib.agc": "def source(n: Int) -> Int = n\n"}, "root.agc", None),
             ({"root.agc": 'import Lib from "lib"\ndef main() -> Void\n  Lib.go()\nend\n\n',
-              "lib.agc": "export def go() -> Void\n" + search + "end\n\n"}, "root.agc", None)])
+              "lib.agc": "def go() -> Void\n" + search + "end\n\n"}, "root.agc", None)])
         assert free[1] is None, free[1]
         assert aliased[1] is None, aliased[1]
         assert start(self.assert_rejected(engine, "CHECK-UNKNOWN-NAME", file="lib.agc")) == (2, 7)
 
     def test_http_wire_is_internal_to_std_http_for_user_files_relative_imports_and_pkg_modules(self):
-        call = 'export def go() -> Void\n  HttpWire.options(HttpWire.service(1, 1, 1))\nend\n\n'
+        call = "def go() -> Void\n  HttpWire.options(HttpWire.service(1, 1, 1))\nend\n\n"
         roots = [("root.agc", 'import Wire from "pkg/wire"\ndef main() -> Void\n'
                               '  HttpWire.jobs(HttpWire.service(1, 1, 1))\nend\n\n'),
                  ("lib.agc", 'import Lib from "lib"\ndef main() -> Void\n  Lib.go()\nend\n\n'),
@@ -486,7 +497,7 @@ class TestModuleRules:
             ({"root.agc": http + 'def main() -> Void\n  puts(HTTP.proxy_from_env("x"))\n  h = Header(name: "a", value: "b")\n'
               "end\n\n"}, "CHECK-UNKNOWN-TYPE", ((5, 7), (5, 36)), None, False),
             ({"root.agc": 'import Lib from "lib"\n\ndef main() -> Void\n  Lib.f()\nend\n\n',
-              "lib.agc": "export def f() -> Void\n  o: HttpServerOptions = 1\nend\n"}, "CHECK-UNKNOWN-TYPE",
+              "lib.agc": "def f() -> Void\n  o: HttpServerOptions = 1\nend\n"}, "CHECK-UNKNOWN-TYPE",
              ((2, 6), (2, 23)), "lib.agc", False),
             ({"root.agc": 'import {HttpResponse} from "std/http"\n\n' + MAIN}, "CHECK-IMPORT-NAME", ((1, 9), (1, 21)),
              None, False),
@@ -497,12 +508,13 @@ class TestModuleRules:
         problem = self.check({"root.agc": "def main() -> Void\nend\n\nstruct Late\n  n: Int\nend\n\n"})
         assert start(self.assert_rejected(problem, "CHECK-DECL-ORDER")) == (4, 1)
 
-    def test_a_private_function_before_an_exported_one_is_out_of_order_at_the_export(self):
+    def test_a_type_after_a_function_in_the_private_part_is_out_of_order_at_the_type(self):
         results = self.checks([
-            ({"root.agc": "def helper() -> Void\nend\n\nexport def api() -> Void\nend\n\n"}, "root.agc", None),
-            ({"root.agc": "def helper() -> Void\nend\n\nexport struct Late\nend\n\n"}, "root.agc", None)])
-        for checked in results:
-            assert start(self.assert_rejected(checked, "CHECK-DECL-ORDER")) == (4, 1)
+            ({"root.agc": "private\n\ndef helper() -> Void\nend\n\nstruct Late\nend\n\n"}, "root.agc", None),
+            ({"root.agc": "def api() -> Void\nend\n\nprivate\n\ndef helper() -> Void\nend\n\nenum Late\n  A\nend\n\n"},
+             "root.agc", None)])
+        for checked, line in zip(results, (6, 9)):
+            assert start(self.assert_rejected(checked, "CHECK-DECL-ORDER")) == (line, 1)
 
     def test_a_private_enum_after_a_function_is_out_of_order_at_the_enum(self):
         problem = self.check({"root.agc": "def main() -> Void\nend\n\nenum Late\n  A\nend\n\n"})
@@ -512,53 +524,58 @@ class TestModuleRules:
         block = ('extern "/opt/libdb.so"\n  resource Db, free: db_close\n  def db_open() -> Db\n'
                  "  def db_ping() -> C.Int32\nend\n\n")
         plain = 'extern "/opt/libdb.so"\n  def db_stat() -> C.Int32\nend\n\n'
-        mixed = ('extern "/opt/libdb.so"\n  export def db_load(path: C.String, out size: C.Int32) -> C.Int32\n'
-                 "  compute def db_scan(db: C.Pointer) -> C.Int32\n  resource Db, free: db_close\nend\n\n")
-        api = "export def api() -> Void\nend\n\n"
+        mixed = ('extern "/opt/libdb.so"\n'
+                  "  def db_load(path: C.String, out size: C.Int32) -> C.Int32\n"
+                  "  compute def db_scan(db: C.Pointer) -> C.Int32\n"
+                  "  resource Db, free: db_close\n"
+                  "end\n"
+                  "\n")
+        api = "def api() -> Void\nend\n\n"
         later = "def helper() -> Void\nend\n\n"
         results = self.checks([({"root.agc": text + MAIN}, "root.agc", None) for text in (
-            # The private defs of the block do not count as functions: the block goes before the exported ones.
+            # The functions of the block do not count as functions: the block goes before the functions.
             block + api + later,
-            # After an exported function the block is out of order, at its first member.
+            # After a function the block is out of order, at its first member.
             api + block,
-            # A block with neither a resource nor a struct keeps its rule:
-            # private defs come after the exported functions.
+            # A block with neither a resource nor a struct ranks with the functions, in either order.
             plain + api,
             api + plain,
-            # The rule is per block, also for two blocks of one library.
             block + plain + api,
             block + api + plain,
-            # An exported def with an out record and a compute def, with the resource declared after them.
-            mixed + api + later)])
+            # An extern def with an out record and a compute def, with the resource declared after them.
+            mixed + api + later,
+            # The rule is the same after private: a block with a resource goes before the private functions.
+            "private\n\n" + later + block)])
         assert results[0][1] is None
         assert start(self.assert_rejected(results[1], "CHECK-DECL-ORDER")) == (5, 3)
-        assert start(self.assert_rejected(results[2], "CHECK-DECL-ORDER")) == (5, 1)
-        assert results[3][1] is None
-        assert start(self.assert_rejected(results[4], "CHECK-DECL-ORDER")) == (11, 1)
-        assert results[5][1] is None
-        assert results[6][1] is None
+        assert [results[index][1] for index in (2, 3, 4, 5, 6)] == [None] * 5
+        assert start(self.assert_rejected(results[7], "CHECK-DECL-ORDER")) == (7, 3)
 
     def test_an_import_after_a_declaration_is_out_of_order(self):
         problem = self.check({
-            "lib.agc": "export def go() -> Void\nend\n\n",
+            "lib.agc": "def go() -> Void\nend\n\n",
             "root.agc": 'struct Early\nend\n\nimport Lib from "lib"\n'})
         assert start(self.assert_rejected(problem, "CHECK-DECL-ORDER")) == (4, 1)
 
     def test_types_in_any_order_then_exports_then_private_functions_check_clean(self):
         assert self.check({
-            "lib.agc": "export def go() -> Void\nend\n\n",
-            "root.agc": '## Module doc.\n\nimport Lib from "lib"\nimport Queue from "std/queue"\n\n'
-                        "export enum Kind\n  A\nend\n\nstruct Box\n  n: Int\nend\n\n"
-                        "export struct Pair\n  n: Int\nend\n\nenum Hidden\n  B\nend\n\n"
-                        "export def api() -> Void\n  Lib.go()\n  helper()\nend\n\n"
-                        "def helper() -> Void\n  _ = Queue.new()\nend\n\n" + MAIN})[1] is None
+            "lib.agc": "def go() -> Void\nend\n\n",
+            "root.agc": ("## Module doc.\n\n"
+                         'import Lib from "lib"\nimport Queue from "std/queue"\n\n'
+                         "enum Kind\n  A\nend\n\n"
+                         "struct Pair\n  n: Int\nend\n\n"
+                         "def api() -> Void\n  Lib.go()\n  helper()\nend\n\n"
+                         "private\n\n"
+                         "struct Box\n  n: Int\nend\n\n"
+                         "enum Hidden\n  B\nend\n\n"
+                         "def helper() -> Void\n  _ = Queue.new()\nend\n\n") + MAIN})[1] is None
 
     def test_an_imported_module_is_checked_too_and_the_diagnostic_names_its_file(self):
         checked = self.check({
-            "lib.agc": "def helper() -> Void\nend\n\nexport def go() -> Void\nend\n\n",
+            "lib.agc": "def go() -> Void\nend\n\nprivate\n\ndef helper() -> Void\nend\n\nstruct Late\nend\n\n",
             "root.agc": 'import Lib from "lib"\ndef main() -> Void\n  Lib.go()\nend\n\n'})
         problem = self.assert_rejected(checked, "CHECK-DECL-ORDER", file="lib.agc")
-        assert start(problem) == (4, 1)
+        assert start(problem) == (9, 1)
 
     def test_embedded_std_modules_follow_the_rule_so_importing_them_never_trips_it(self):
         names = {"std/http": "client", "std/logger": "debug", "std/binary": "read_u8", "std/toml": "parse",
@@ -571,9 +588,10 @@ class TestModuleRules:
     def test_an_imported_alias_in_a_generic_enum_is_not_captured_by_a_parameter_named_like_a_lib_type(self):
         # `Item` is a type of lib.agc and the parameter of the enum; the alias target is read in lib.agc, so
         # neither the named nor the qualified use is a capture.
-        lib = ("struct Item\n  n: Int\nend\n\n"
-               "export type Items = List[Item]\n\n"
-               "export type Box[T] = List[T]\n\n")
+        lib = ("type Items = List[Item]\n\n"
+                "type Box[T] = List[T]\n\n"
+                "private\n\n"
+                "struct Item\n  n: Int\nend\n\n")
         enum = "enum E[Item]\n  V(Items, Lib.Items, Box[Item], Lib.Box[Item])\nend\n\n"
         results = self.checks([
             ({"lib.agc": lib, "root.agc": 'import Lib from "lib"\nimport {Items, Box} from "lib"\n\n' + enum + MAIN},
@@ -583,10 +601,11 @@ class TestModuleRules:
         for _directory, problem in results:
             assert problem is None
 
-    URL = ("export struct Address\n  host: String\nend\n\n"
-           "export enum Option\n  Some(Int)\n  None\nend\n\n"
-           "export def parse(text: String) -> Address\n  return Address(host: text)\nend\n\n"
-           "def hidden() -> Void\nend\n\n")
+    URL = ("struct Address\n  host: String\nend\n\n"
+            "enum Option\n  Some(Int)\n  None\nend\n\n"
+            "def parse(text: String) -> Address\n  return Address(host: text)\nend\n\n"
+            "private\n\n"
+            "def hidden() -> Void\nend\n\n")
 
     def test_a_module_re_exports_what_it_imports_and_the_importer_sees_the_original_declaration(self):
         files = {
@@ -613,8 +632,8 @@ class TestModuleRules:
             ("export Url.parsee\n", "CHECK-IMPORT-NAME", 3, 12),
             ("export Url.hidden\n", "CHECK-IMPORT-NAME", 3, 12),
             ("export Url.parse\nexport Url.parse\n", "CHECK-REDEFINED-NAME", 4, 12),
-            ("export Url.parse\n\nexport def parse() -> Void\nend\n\n", "CHECK-REDEFINED-NAME", 3, 12),
-            ("export Url.Address\n\nexport struct Address\nend\n\n", "CHECK-REDEFINED-NAME", 3, 12),
+            ("export Url.parse\n\ndef parse() -> Void\nend\n\n", "CHECK-REDEFINED-NAME", 3, 12),
+            ("export Url.Address\n\nstruct Address\nend\n\n", "CHECK-REDEFINED-NAME", 3, 12),
         ]
         results = self.checks([({"url.agc": url, "facade.agc": 'import Url from "url"\n\n' + lines,
                                  "root.agc": 'import Facade from "facade"\n\n' + MAIN}, "root.agc", None)
@@ -648,23 +667,31 @@ class TestModuleRules:
         url = {"url.agc": self.URL}
         after_import = self.check(
             {**url, "root.agc": 'import Url from "url"\nexport Url.parse\nexport Url.Address\n' + MAIN})
-        after_declaration = self.check({**url, "root.agc": 'import Url from "url"\n\nexport def api() -> Void\nend\n'
-                                                           "export Url.parse\n" + MAIN})
+        after_declaration = self.check({**url, "root.agc": ('import Url from "url"\n\n'
+                                                            "def api() -> Void\nend\nexport Url.parse\n") + MAIN})
         assert after_import[1] is None
         assert start(self.assert_rejected(after_declaration, "PARSE-MISSING-BLANK-LINE")) == (5, 1)
 
+    def test_an_import_after_a_re_export_is_out_of_order_and_a_re_export_may_follow_a_constant(self):
+        files = {"url.agc": self.URL, "other.agc": "def one() -> Int = 1\n"}
+        late = self.check({**files, "root.agc": 'import Url from "url"\nexport Url.parse\nimport Other from "other"\n' + MAIN})
+        assert start(self.assert_rejected(late, "CHECK-DECL-ORDER", file="root.agc")) == (3, 1)
+        after_constant = self.check(
+            {**files, "root.agc": 'import Url from "url"\n\nLIMIT = 1\n\nexport Url.parse\n' + MAIN})
+        assert after_constant[1] is None
+
     def test_a_re_export_next_to_other_forms_a_doc_a_constant_a_cycle_and_its_own_alias(self):
         url = {"url.agc": self.URL}
-        value = "export struct Value\n  n: Int\nend\n\n"
+        value = "struct Value\n  n: Int\nend\n\n"
         cycle_url = ('import Facade from "facade"\n\n'
-                     "export def parse(text: String) -> Int\n  return 1\nend\n\n")
+                      "def parse(text: String) -> Int\n  return 1\nend\n\n")
         root = 'import Facade from "facade"\n\n' + MAIN
         cases = [
             # (files, code, file, line, column)
             ({**url, "facade.agc": 'import Url from "url"\n\n## Doc.\nexport Url.parse\n', "root.agc": root},
              "PARSE-DETACHED-DOC", "facade.agc", 3, 1),
-            ({**url, "facade.agc": 'import Url from "url"\n\nLIMIT = 1\n\nexport Url.parse\n', "root.agc": root},
-             "CHECK-DECL-ORDER", "facade.agc", 5, 1),
+            ({**url, "facade.agc": 'import Url from "url"\n\nstruct Shape\nend\n\nexport Url.parse\n', "root.agc": root},
+             "CHECK-DECL-ORDER", "facade.agc", 6, 1),
             ({"url.agc": cycle_url, "facade.agc": 'import Url from "url"\n\nexport Url.parse\n', "root.agc": root},
              "CHECK-IMPORT-CYCLE", "url.agc", 1, 1),
             ({"value.agc": value, "facade.agc": 'import Value from "value"\n\nexport Value.Value\n', "root.agc": root},
@@ -677,12 +704,14 @@ class TestModuleRules:
         # The alias of the facade is the usual cause of the last one, so the diagnostic says what to do.
         assert results[3][1]["help"]
 
-    SHAPES = ("export LIMIT = 3\n\nexport struct Square\n  side: Int\nend\n\nexport enum Shade\n  Dark\n  Light(Int)\nend\n\n"
-              "export def area(s: Square) -> Int\n  return s.side * s.side\nend\n\n"
-              "export def pick() -> Optional[Shade]\n  return none\nend\n\n")
+    SHAPES = ("LIMIT = 3\n\n"
+               "struct Square\n  side: Int\nend\n\n"
+               "enum Shade\n  Dark\n  Light(Int)\nend\n\n"
+               "def area(s: Square) -> Int\n  return s.side * s.side\nend\n\n"
+               "def pick() -> Optional[Shade]\n  return none\nend\n\n")
 
     def test_an_import_alias_that_nothing_uses_is_refused_at_the_alias(self):
-        shapes = {"shapes.agc": self.SHAPES, "extra.agc": "export def one() -> Int\n  return 1\nend\n\n"}
+        shapes = {"shapes.agc": self.SHAPES, "extra.agc": "def one() -> Int\n  return 1\nend\n\n"}
         root = 'import Shapes from "shapes"\nimport Extra from "extra"\n\n'
         # The first alias that is never used is the one reported, at the alias and not at the whole line.
         unused = self.check({**shapes, "root.agc": root + "def main() -> Void\n  puts(Shapes.LIMIT)\nend\n"})
@@ -745,7 +774,7 @@ class TestModuleRules:
 
     def test_an_unused_alias_is_reported_in_the_file_that_has_it(self):
         files = {"shapes.agc": self.SHAPES,
-                 "lib.agc": 'import Shapes from "shapes"\n\nexport def one() -> Int\n  return 1\nend\n',
+                 "lib.agc": 'import Shapes from "shapes"\n\ndef one() -> Int\n  return 1\nend\n',
                  "root.agc": 'import Lib from "lib"\n\ndef main() -> Void\n  puts(Lib.one())\nend\n'}
         self.assert_rejected(self.check(files), "CHECK-UNUSED-IMPORT", line=1, file="lib.agc")
 
@@ -765,17 +794,22 @@ class TestModuleRules:
         assert "Shade" in variant["help"]
         self.assert_rejected(results[1], "CHECK-UNKNOWN-NAME", line=5)
 
-    BLOCKS = ("import Lib from \"lib\"\n\nTOP = 1\n\n"
-              "export module Pub\n  export enum Tree[T]\n    Leaf(T)\n    Node(List[Tree[T]])\n  end\n\n"
-              "  export struct Pair[A, B]\n    left: A\n    right: B\n  end\n\n"
-              "  export def leaf[T](value: T) -> Tree[T] = Tree.Leaf(value)\n\n"
-              "  export def total() -> Int = hidden() + Priv.f() + Lib.one()\n\n"
-              "  def hidden() -> Int = TOP + secret()\nend\n\n"
-              "module Priv\n  export def f() -> Int = Pub.total() - Pub.total() + 1\n\n  def g() -> Int = 2\nend\n\n"
-              "def secret() -> Int = 3\n")
+    BLOCKS = ('import Lib from "lib"\n\n'
+               "module Pub\n  enum Tree[T]\n    Leaf(T)\n    Node(List[Tree[T]])\n  end\n\n"
+               "  struct Pair[A, B]\n    left: A\n    right: B\n  end\n\n"
+               "  def leaf[T](value: T) -> Tree[T] = Tree.Leaf(value)\n\n"
+               "  def total() -> Int = hidden() + Priv.f() + Lib.one()\n\n"
+               "  private\n\n"
+               "  def hidden() -> Int = TOP + secret()\nend\n\n"
+               "private\n\n"
+               "TOP = 1\n\n"
+               "module Priv\n  def f() -> Int = Pub.total() - Pub.total() + 1\n\n"
+               "  private\n\n"
+               "  def g() -> Int = 2\nend\n\n"
+               "def secret() -> Int = 3\n")
 
     def test_module_blocks_see_their_file_and_each_other_and_export_through_both_import_forms(self):
-        lib = {"lib.agc": "export def one() -> Int = 1\n", "mods.agc": self.BLOCKS}
+        lib = {"lib.agc": "def one() -> Int = 1\n", "mods.agc": self.BLOCKS}
         braces = ('import {Pub} from "mods"\n\ndef main() -> Void\n'
                   "  t: Pub.Tree[Int] = Pub.Tree.Node([Pub.leaf(1)])\n"
                   "  p: Pub.Pair[Int, String] = Pub.Pair(left: Pub.total(), right: \"x\")\n"
@@ -790,7 +824,7 @@ class TestModuleRules:
         assert [problem for _directory, problem in results] == [None, None]
 
     def test_a_private_name_of_a_module_block_and_a_private_block_are_refused_like_private_exports(self):
-        lib = {"lib.agc": "export def one() -> Int = 1\n", "mods.agc": self.BLOCKS}
+        lib = {"lib.agc": "def one() -> Int = 1\n", "mods.agc": self.BLOCKS}
         cases = [('import {Pub} from "mods"\n\ndef main() -> Void\n  puts(Pub.hidden())\nend\n', (4, 8)),
                  ('import {Priv} from "mods"\n\ndef main() -> Void\nend\n', (1, 9)),
                  ('import Mods from "mods"\n\ndef main() -> Void\n  puts(Mods.Priv.f())\nend\n', (4, 8))]
@@ -798,11 +832,12 @@ class TestModuleRules:
         for (_root, at), checked in zip(cases, results):
             assert start(self.assert_rejected(checked, "CHECK-IMPORT-NAME", file="root.agc")) == at
         # Inside the file, a private name of a block is refused the same way.
-        local = "module A\n  def hidden() -> Int = 1\nend\n\ndef main() -> Void\n  puts(A.hidden())\nend\n"
-        assert start(self.assert_rejected(self.check({"root.agc": local}), "CHECK-IMPORT-NAME")) == (6, 8)
+        local = ("module A\n  private\n\n  def hidden() -> Int = 1\nend\n\n"
+                 "def main() -> Void\n  puts(A.hidden())\nend\n")
+        assert start(self.assert_rejected(self.check({"root.agc": local}), "CHECK-IMPORT-NAME")) == (8, 8)
 
     def test_a_module_block_name_follows_the_rules_of_an_import_alias(self):
-        lib = {"lib.agc": "export def one() -> Int = 1\n"}
+        lib = {"lib.agc": "def one() -> Int = 1\n"}
         cases = [("module String\nend\n\n" + MAIN, (1, 8)),
                  ("struct Point\n  x: Int\nend\n\nmodule Point\nend\n\n" + MAIN, (5, 8)),
                  ("module M\nend\n\nmodule M\nend\n\n" + MAIN, (4, 8)),
@@ -813,7 +848,7 @@ class TestModuleRules:
 
     def test_a_module_block_is_top_level_ranks_with_the_types_and_may_be_empty(self):
         cases = [("module A\n  module B\n  end\nend\n\n" + MAIN, "PARSE-NESTED-MODULE", (2, 3)),
-                 ("module A\n  ## B.\n  export module B\n  end\nend\n\n" + MAIN, "PARSE-NESTED-MODULE", (3, 10)),
+                 ("module A\n  ## B.\n  module B\n  end\nend\n\n" + MAIN, "PARSE-NESTED-MODULE", (3, 3)),
                  ('module A\n  import B from "b"\nend\n\n' + MAIN, "PARSE-UNEXPECTED-TOKEN", (2, 3)),
                  ("def f() -> Int = 1\n\nmodule A\nend\n\n" + MAIN, "CHECK-DECL-ORDER", (3, 1))]
         results = self.checks([({"root.agc": root}, "root.agc", None) for root, _code, _at in cases])
@@ -832,15 +867,15 @@ class TestModuleRules:
     def test_a_module_block_may_not_declare_a_name_its_file_has_and_may_not_declare_main(self):
         """One name means one thing in a scope: a block cannot hide a top-level declaration, private ones too, an
         import alias, an imported name or a block of its file. Two blocks may each declare the same name."""
-        lib = {"lib.agc": "export def parse() -> Int = 1\n"}
-        member = "  export def go() -> Int = 2\n"
+        lib = {"lib.agc": "def parse() -> Int = 1\n"}
+        member = "  def go() -> Int = 2\n"
         cases = [
             ("def helper() -> Int = 1\n", "module M\n" + member + "\n  def helper() -> Int = 3\nend\n", (4, 7)),
             ("LIMIT = 1\n", "module M\n  LIMIT = 2\n\n" + member + "end\n", (4, 3)),
             ('import {parse} from "lib"\n', "module M\n" + member + "\n  def parse() -> Int = parse()\nend\n",
              (6, 7)),
-            ('import Lib from "lib"\n', "module M\n  export struct Lib\n    n: Int\n  end\nend\n", (4, 17)),
-            ("", "module M\n  export enum N\n    V\n  end\nend\n\nmodule N\nend\n", (3, 15)),
+            ('import Lib from "lib"\n', "private\n\nmodule M\n  struct Lib\n    n: Int\n  end\nend\n", (6, 10)),
+            ("", "private\n\nmodule M\n  enum N\n    V\n  end\nend\n\nmodule N\nend\n", (5, 8)),
         ]
         roots = []
         for top, block, _at in cases:
@@ -859,15 +894,17 @@ class TestModuleRules:
                  "module M\n  def main() -> Void\n  end\nend\n"]
         for checked in self.checks([({"root.agc": root}, "root.agc", None) for root in mains]):
             assert start(self.assert_rejected(checked, "CHECK-MAIN")) == (2, 7)
-        twins = ("module A\n  export def start() -> Int = 1\nend\n\nmodule B\n  export def start() -> Int = 2\nend\n\n"
-                 "def main() -> Void\n  puts(A.start() * 10 + B.start())\nend\n")
+        twins = ("module A\n  def start() -> Int = 1\nend\n\n"
+                  "module B\n  def start() -> Int = 2\nend\n\n"
+                  "def main() -> Void\n  puts(A.start() * 10 + B.start())\nend\n")
         directory = self.files({"root.agc": twins})
         result = run(cli() + [str(directory / "root.agc")], cwd=self.cwd, env=vm_environment(HERMETIC))
         assert (result.code, result.stdout) == (0, "12\n")
 
     def test_a_file_re_exports_a_name_of_its_own_module_block(self):
-        lib = ("export Counter.start\n\nmodule Counter\n  export def start() -> Int = 41\nend\n\n"
-               "def main() -> Void\n  puts(Counter.start())\nend\n")
+        lib = ("export Counter.start\n\n"
+                "module Counter\n  def start() -> Int = 41\nend\n\n"
+                "def main() -> Void\n  puts(Counter.start())\nend\n")
         root = 'import {start} from "lib"\n\ndef main() -> Void\n  puts(start() + 1)\nend\n'
         directory = self.files({"lib.agc": lib, "root.agc": root})
         runs = [run(cli() + [str(directory / name)], cwd=self.cwd, env=vm_environment(HERMETIC))
@@ -879,7 +916,7 @@ class TestModuleRules:
                  ('import A from "lib"\n\ndef main() -> Void\n  _x = A.B.E.V(v: 1)\nend\n', (4, 8)),
                  ('import A from "lib"\n\ndef main() -> Void\n  _x = A.B.E.V(1)\n  _y = A.F.V(v: 1)\nend\n',
                   (5, 8))]
-        lib_enum = {"lib.agc": "export module B\n  export enum E\n    V(Int)\n  end\nend\n\nexport enum F\n  V(Int)\nend\n"}
+        lib_enum = {"lib.agc": "module B\n  enum E\n    V(Int)\n  end\nend\n\nenum F\n  V(Int)\nend\n"}
         results = self.checks([({**lib_enum, "root.agc": root}, "root.agc", None) for root, _at in cases])
         for (_root, at), checked in zip(cases, results):
             assert start(self.assert_rejected(checked, "CHECK-ENUM-POSITIONAL-ARGS", file="root.agc")) == at

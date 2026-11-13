@@ -21,18 +21,11 @@ import Ast from "../syntax/ast"
 import Source from "../syntax/source"
 import Tokens from "../syntax/token"
 
-# The kinds of the statement nodes.
-STATEMENT_KINDS = Set.new([
-  "Binding", "Return", "ExprStmt", "IfStmt", "WhileStmt", "ForStmt", "LoopControl", "CaseStmt",
-])
-# The nodes a comment before `end` trails: a statement, or a field or variant before the `end` of its declaration.
-BODY_END_KINDS = STATEMENT_KINDS.union(Set.new(["FieldDecl", "EnumVariant"]))
-
 ## A node of the outline: the name of its tree node (`FunctionDecl`, `Param`, `IfStmt`, `Call`, ... and `ModuleDoc`
 ## for the module doc), its span from its first token to its last token that is not a line break, the index of its
 ## parent in the outline (-1 for the Program, which is always the first entry), and its key (`key_of` of its kind and
 ## its span as parsed), by which the layout finds the comments of a tree node.
-export struct Node
+struct Node
   kind: String
   span: Source.Span
   parent: Int
@@ -41,7 +34,7 @@ end
 
 ## A comment and its place: the index of its node in the outline, its role, and the keyword a dangling comment comes
 ## before or after when that keyword has no node (`elsif`, `else` or `end`; "" otherwise).
-export struct Attached
+struct Attached
   comment: Tokens.Comment
   node: Int
   role: Role
@@ -49,74 +42,28 @@ export struct Attached
 end
 
 ## The outline of a file and its comments in source order, each with its place.
-export struct Attachment
+struct Attachment
   nodes: List[Node]
   comments: List[Attached]
 end
 
-# A part waiting in the worklist, with the index of its parent.
-struct Pending
-  part: Part
-  parent: Int
-end
-
-# The outline with, for each node, where its children start in it and how many there are, and where each node starts
-# and stops. A node's children are queued together, so they sit side by side; they come in source order and do not
-# overlap, so their starts and their stops both ascend, and the searches among them are binary.
-struct Outline
-  nodes: List[Node]
-  first: List[Int]
-  count: List[Int]
-  starts: List[Int]
-  stops: List[Int]
-end
-
-# The tokens that are not line breaks or the end of the text, with their offsets for the binary searches.
-struct Marks
-  tokens: List[Tokens.Token]
-  starts: List[Int]
-  stops: List[Int]
-end
-
 ## A stage of a pipe chain: the piped call (`x |> f(a)` is the call `f(x, a)`, whose first argument is the rest of the
 ## chain), and whether the stage is written `|> try f(a)`.
-export struct PipeStage
+struct PipeStage
   call: Ast.Call
   tried: Bool
 end
 
 ## How a comment sits on its node: above it (`Leading`), after it (`Trailing`), or inside a node that has no child at
 ## that place (`Dangling`), such as an empty body or list.
-export enum Role
+enum Role
   Leading
   Trailing
   Dangling
 end
 
-# A part of the tree that can be a node of the outline.
-enum Part
-  Program(Ast.Program)
-  ModuleDoc(Tokens.Token)
-  Decl(Ast.Decl)
-  Private(Ast.PrivateMark)
-  ImportName(Ast.ImportName)
-  Param(Ast.Param)
-  Field(Ast.FieldDecl)
-  Variant(Ast.EnumVariant)
-  Type(Ast.TypeRef)
-  Stmt(Ast.Stmt)
-  Branch(Ast.IfBranch)
-  Arm(Ast.CaseArm)
-  Pattern(Ast.Pattern)
-  Expr(Ast.Expr)
-  Stage(Ast.Call)
-  Named(Ast.NamedArg)
-  Entry(Ast.MapEntry)
-  BlockParam(Ast.BlockParam)
-end
-
 ## Attaches each comment of `comments` to a node of `program`, which was parsed from `tokens`.
-export def attach(program: Ast.Program, tokens: List[Tokens.Token], comments: List[Tokens.Comment]) -> Attachment
+def attach(program: Ast.Program, tokens: List[Tokens.Token], comments: List[Tokens.Comment]) -> Attachment
   marks = marks_of(tokens)
   outline = outline_of(program, marks)
   placed = comments.map do |comment: Tokens.Comment| place(outline, marks, comment) end
@@ -125,10 +72,10 @@ end
 
 ## The key of a tree node of kind `kind` (as `Node.kind` names it) with the span `span` as the parser gave it. Two
 ## nodes of one tree never share a key: a node and its child of the same kind never have the same span.
-export def key_of(kind: String, span: Source.Span) -> String = "#{kind}:#{span.start.offset}:#{span.stop.offset}"
+def key_of(kind: String, span: Source.Span) -> String = "#{kind}:#{span.start.offset}:#{span.stop.offset}"
 
 ## The name of a role, as the text form prints it.
-export def role_name(role: Role) -> String
+def role_name(role: Role) -> String
   case role
     Role.Leading -> "leading"
     Role.Trailing -> "trailing"
@@ -137,7 +84,7 @@ export def role_name(role: Role) -> String
 end
 
 ## The kind of a declaration, as `Node.kind` names it.
-export def decl_kind(decl: Ast.Decl) -> String
+def decl_kind(decl: Ast.Decl) -> String
   case decl
     Ast.Decl.Import(_) -> "ImportDecl"
     Ast.Decl.Reexport(_) -> "ReexportDecl"
@@ -153,7 +100,7 @@ export def decl_kind(decl: Ast.Decl) -> String
 end
 
 ## The kind of a statement, as `Node.kind` names it.
-export def stmt_kind(stmt: Ast.Stmt) -> String
+def stmt_kind(stmt: Ast.Stmt) -> String
   case stmt
     Ast.Stmt.Binding(_) -> "Binding"
     Ast.Stmt.Return(_) -> "Return"
@@ -167,7 +114,7 @@ export def stmt_kind(stmt: Ast.Stmt) -> String
 end
 
 ## The kind of a pattern, as `Node.kind` names it.
-export def pattern_kind(pattern: Ast.Pattern) -> String
+def pattern_kind(pattern: Ast.Pattern) -> String
   case pattern
     Ast.Pattern.Wildcard(_) -> "WildcardPattern"
     Ast.Pattern.Literal(_) -> "LiteralPattern"
@@ -177,7 +124,7 @@ export def pattern_kind(pattern: Ast.Pattern) -> String
 end
 
 ## The kind of a expression, as `Node.kind` names it.
-export def expr_kind(expr: Ast.Expr) -> String
+def expr_kind(expr: Ast.Expr) -> String
   case expr
     Ast.Expr.Literal(_) -> "Literal"
     Ast.Expr.Name(_) -> "NameRef"
@@ -208,7 +155,7 @@ end
 
 ## The stage that `expr` ends a chain with: a piped call, or a `try` of one. None for any other expression. The layout
 ## and the comment attachment both walk a chain through this, so their stages and keys cannot differ.
-export def pipe_stage(expr: Ast.Expr) -> Optional[PipeStage]
+def pipe_stage(expr: Ast.Expr) -> Optional[PipeStage]
   case expr
     Ast.Expr.Call(node) -> return some(PipeStage(call: node, tried: false)) if node.piped
 
@@ -223,6 +170,61 @@ export def pipe_stage(expr: Ast.Expr) -> Optional[PipeStage]
   end
 
   none
+end
+
+private
+
+# The kinds of the statement nodes.
+STATEMENT_KINDS = Set.new([
+  "Binding", "Return", "ExprStmt", "IfStmt", "WhileStmt", "ForStmt", "LoopControl", "CaseStmt",
+])
+# The nodes a comment before `end` trails: a statement, or a field or variant before the `end` of its declaration.
+BODY_END_KINDS = STATEMENT_KINDS.union(Set.new(["FieldDecl", "EnumVariant"]))
+
+# A part waiting in the worklist, with the index of its parent.
+struct Pending
+  part: Part
+  parent: Int
+end
+
+# The outline with, for each node, where its children start in it and how many there are, and where each node starts
+# and stops. A node's children are queued together, so they sit side by side; they come in source order and do not
+# overlap, so their starts and their stops both ascend, and the searches among them are binary.
+struct Outline
+  nodes: List[Node]
+  first: List[Int]
+  count: List[Int]
+  starts: List[Int]
+  stops: List[Int]
+end
+
+# The tokens that are not line breaks or the end of the text, with their offsets for the binary searches.
+struct Marks
+  tokens: List[Tokens.Token]
+  starts: List[Int]
+  stops: List[Int]
+end
+
+# A part of the tree that can be a node of the outline.
+enum Part
+  Program(Ast.Program)
+  ModuleDoc(Tokens.Token)
+  Decl(Ast.Decl)
+  Private(Ast.PrivateMark)
+  ImportName(Ast.ImportName)
+  Param(Ast.Param)
+  Field(Ast.FieldDecl)
+  Variant(Ast.EnumVariant)
+  Type(Ast.TypeRef)
+  Stmt(Ast.Stmt)
+  Branch(Ast.IfBranch)
+  Arm(Ast.CaseArm)
+  Pattern(Ast.Pattern)
+  Expr(Ast.Expr)
+  Stage(Ast.Call)
+  Named(Ast.NamedArg)
+  Entry(Ast.MapEntry)
+  BlockParam(Ast.BlockParam)
 end
 
 def marks_of(tokens: List[Tokens.Token]) -> Marks

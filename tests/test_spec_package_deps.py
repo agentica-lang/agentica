@@ -259,7 +259,7 @@ def test_a_write_that_fails_keeps_the_old_copy_and_leaves_no_hidden_folder(proje
 
 
 TEST_FILE = 'def main() -> Void\n  Test.run([Test.test("t") do ok() end])\nend\n'
-MODULE = 'export def mine() -> Int\n  return 1\nend\n'
+MODULE = "def mine() -> Int\n  return 1\nend\n"
 
 
 def test_the_walks_of_test_and_symbol_skip_the_deps_of_the_project_and_build(tmp_path):

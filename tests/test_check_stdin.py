@@ -15,7 +15,7 @@ from tests.agentica_test import (POSIX_PYTHON, TARGET_OS, WINDOWS, binary, host_
 CLEAN = 'def main() -> Void\n  puts("ok")\nend\n'
 # The error is on line 2, columns 12 to 15.
 TYPE_ERROR = 'def main() -> Void\n  x: Int = "a"\n  puts(x)\nend\n'
-UTIL = "export def twice(n: Int) -> Int\n  return n * 2\nend\n"
+UTIL = "def twice(n: Int) -> Int\n  return n * 2\nend\n"
 USES_UTIL = 'import Util from "util"\n\ndef main() -> Void\n  puts(Util.twice(2).to_s)\nend\n'
 STDIN_CAP = 16 * 1024 * 1024
 
@@ -82,7 +82,7 @@ def test_a_file_that_is_not_on_the_disk_works_and_its_folder_is_the_base_of_the_
 
 def test_an_import_that_is_not_there_and_an_error_in_an_imported_file_are_reported(tmp_path):
     assert problem(check(tmp_path, USES_UTIL, "new.agc"))["code"] == "CHECK-IMPORT-IO"
-    write_files(tmp_path, {"util.agc": 'export def twice(n: Int) -> Int\n  return "no"\nend\n'})
+    write_files(tmp_path, {"util.agc": 'def twice(n: Int) -> Int\n  return "no"\nend\n'})
     diagnostic = problem(check(tmp_path, USES_UTIL, "new.agc"))
     assert diagnostic["code"] == "CHECK-TYPE-MISMATCH"
     assert diagnostic["file"].replace("\\", "/").endswith("util.agc")
@@ -91,7 +91,7 @@ def test_an_import_that_is_not_there_and_an_error_in_an_imported_file_are_report
 
 def test_agc_libs_and_the_manifest_are_found_from_the_folder_of_the_file(tmp_path):
     (tmp_path / "app" / "agc_libs").mkdir(parents=True)
-    write_files(tmp_path / "app" / "agc_libs", {"helper.agc": 'export def name() -> String\n  return "h"\nend\n'})
+    write_files(tmp_path / "app" / "agc_libs", {"helper.agc": 'def name() -> String\n  return "h"\nend\n'})
     buffer = 'import Helper from "pkg/helper"\n\ndef main() -> Void\n  puts(Helper.name())\nend\n'
     assert check(tmp_path, buffer, "app/new.agc").code == 0
     write_files(tmp_path, {"agentica.toml": "[package\n"})

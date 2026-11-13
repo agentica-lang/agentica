@@ -25,16 +25,6 @@ import NamedArgs from "named_args"
 import Position from "query_position"
 import Sites from "sites"
 
-# The characters of a name written in front of the parenthesis of a call: a name, a dot between a module and its
-# member, and the ? or ! that ends a name.
-HEAD_CHARS = Set.new("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.?!".split(""))
-
-# The characters that a type name can start with.
-CAPITALS = Set.new("ABCDEFGHIJKLMNOPQRSTUVWXYZ".split(""))
-
-# The longest name a call head is read from, in characters.
-HEAD_LIMIT = 128
-
 ## What a position is on. `kind` is `builtin` when the position is on the name of a builtin (`split` in
 ## `xs.split(",")`, `puts`), `type` when it is on the name of a type in an annotation or a type argument, `name` when
 ## it is on another name (a variable, a function named, the name of a field or method after the dot, the name where a
@@ -43,7 +33,7 @@ HEAD_LIMIT = 128
 ## the source text of `span`, `type` the type as the root file writes it (the written name for a `type` answer), and
 ## `definition` the declaration of what the expression names, the binding of a local, or the struct, enum or alias of
 ## a type (none for a builtin type). `builtin` is the catalog row of a `builtin` answer, which has no definition.
-export struct Answer
+struct Answer
   kind: String
   span: Source.Span
   text: String
@@ -53,7 +43,7 @@ export struct Answer
 end
 
 ## The answer for `asked`, a position in the root file of `linked` (checked as `checked`), or QUERY-NO-EXPRESSION.
-export def answer(linked: Linker.Linked, checked: Checker.Checked, asked: Position.Asked) -> Diag.Outcome[Answer]
+def answer(linked: Linker.Linked, checked: Checker.Checked, asked: Position.Asked) -> Diag.Outcome[Answer]
   case Position.locate(linked.modules[0].text, asked.line, asked.column)
     Position.Located.Outside(span) -> nothing(asked, span)
     Position.Located.At(offset) -> answer_at(At.focus(linked, offset), checked, asked, offset)
@@ -70,7 +60,7 @@ end
 ## both (`Agents.Counter.Msg`), unless the root file names the block itself, and so is a block that such a file
 ## re-exports (`export Agents.Counter`). A builtin type that a std/ module re-exports maps to its whole text: the name
 ## of an import list (`Request`), else the alias and the member (`H.Request`).
-export def written_prefixes(linked: Linker.Linked) -> Map[String, String]
+def written_prefixes(linked: Linker.Linked) -> Map[String, String]
   written: Map[String, String] = {}
   aliases = linked.modules[0].aliases
   here = linked.modules[0].key
@@ -140,7 +130,7 @@ export def written_prefixes(linked: Linker.Linked) -> Map[String, String]
 end
 
 ## The file of the definition of `answered`; "" when the answer has none.
-export def definition_file(answered: Answer) -> String
+def definition_file(answered: Answer) -> String
   case answered.definition
     some(definition) -> definition.file
     none -> ""
@@ -149,7 +139,19 @@ end
 
 ## Whether some token of the text holds the character at `offset`. Line breaks and the end are tokens that hold
 ## nothing.
-export def on_token?(text: String, offset: Int) -> Bool = kind_at(text, offset) != ""
+def on_token?(text: String, offset: Int) -> Bool = kind_at(text, offset) != ""
+
+private
+
+# The characters of a name written in front of the parenthesis of a call: a name, a dot between a module and its
+# member, and the ? or ! that ends a name.
+HEAD_CHARS = Set.new("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.?!".split(""))
+
+# The characters that a type name can start with.
+CAPITALS = Set.new("ABCDEFGHIJKLMNOPQRSTUVWXYZ".split(""))
+
+# The longest name a call head is read from, in characters.
+HEAD_LIMIT = 128
 
 # The "@N::" in front of a linked name; "" for a name of the root file.
 def prefix_of(name: String) -> String = name.slice(0, name.length - T.display_name(name).length)

@@ -4,6 +4,28 @@
 ##
 ## `unescape("&#0;")` gives a NUL character, as Ruby does.
 
+## Replaces `&`, `<`, `>`, `"` and `'` with `&amp;`, `&lt;`, `&gt;`, `&quot;` and `&#39;`, as Ruby's
+## `CGI.escape_html`.
+def escape(text: String) -> String
+  text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;").replace("'", "&#39;")
+end
+
+## Replaces `&amp;`, `&lt;`, `&gt;`, `&quot;`, `&apos;`, `&#NN;` and `&#xHH;` with their characters, as Ruby's
+## `CGI.unescape_html`. Any other text that looks like an entity stays as it is: a name that is not in that list
+## (`&nbsp;`), a number that is not a Unicode scalar value (above `10FFFF` or a surrogate), and an entity without its
+## `;`. The text is read once, so `&amp;lt;` becomes `&lt;`.
+def unescape(text: String) -> String
+  return text if !text.include?("&")
+  pieces = text.split("&")
+  out = [pieces[0]]
+  for piece in List.drop(pieces, 1)
+    out = out.push(unescape_piece(piece))
+  end
+  out.join("")
+end
+
+private
+
 # The code points and bytes that the functions look at.
 HASH = 35
 UPPER_X = 88
@@ -14,26 +36,6 @@ LAST_CODE_POINT = 1114111
 
 # The entities that Ruby's `unescape_html` decodes by name, as written between `&` and `;`.
 NAMED_ENTITIES = {"amp": "&", "lt": "<", "gt": ">", "quot": "\"", "apos": "'"}
-
-## Replaces `&`, `<`, `>`, `"` and `'` with `&amp;`, `&lt;`, `&gt;`, `&quot;` and `&#39;`, as Ruby's
-## `CGI.escape_html`.
-export def escape(text: String) -> String
-  text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;").replace("'", "&#39;")
-end
-
-## Replaces `&amp;`, `&lt;`, `&gt;`, `&quot;`, `&apos;`, `&#NN;` and `&#xHH;` with their characters, as Ruby's
-## `CGI.unescape_html`. Any other text that looks like an entity stays as it is: a name that is not in that list
-## (`&nbsp;`), a number that is not a Unicode scalar value (above `10FFFF` or a surrogate), and an entity without its
-## `;`. The text is read once, so `&amp;lt;` becomes `&lt;`.
-export def unescape(text: String) -> String
-  return text if !text.include?("&")
-  pieces = text.split("&")
-  out = [pieces[0]]
-  for piece in List.drop(pieces, 1)
-    out = out.push(unescape_piece(piece))
-  end
-  out.join("")
-end
 
 # The text after one `&` up to the next one: the decoded entity followed by the rest, or the `&` and the piece again.
 def unescape_piece(piece: String) -> String

@@ -1,15 +1,11 @@
 ## Random names for the files and folders the front end makes (the run folder of `agentica test`, the temporary files
 ## of the bytecode cache), and the hex form of bytes.
 
-# The deadline of each system call, in milliseconds.
-IO_TIMEOUT_MS = 10_000
-DIGITS = "0123456789abcdef"
-
 ## A random name of 32 hex digits. Elsewhere it is 16 bytes of /dev/urandom, so it cannot be guessed (Random.int has a
 ## 31-bit seed). Windows has no such file: the name is 8 bytes of Random.int, 4 of the clock and the process id, which
 ## is enough there because `Dir.mkdir_private` and the `create_private` mode fail on a name that is taken and make
 ## something that only its owner can use, so a guessed name costs a retry and gives no access.
-export def hex() -> Result[String]
+def hex() -> Result[String]
   return ok(hex_of(process_bytes())) if System.os() == "windows"
 
   source = try File.open("/dev/urandom", "read", IO_TIMEOUT_MS)
@@ -29,11 +25,17 @@ export def hex() -> Result[String]
 end
 
 ## The bytes (each 0 to 255) as two lowercase hex digits each.
-export def hex_of(bytes: List[Int]) -> String
+def hex_of(bytes: List[Int]) -> String
   digits = bytes.map do |byte: Int| "#{DIGITS.slice(byte.shift_right(4), 1)}#{DIGITS.slice(byte.bit_and(15), 1)}" end
 
   digits.join("")
 end
+
+private
+
+# The deadline of each system call, in milliseconds.
+IO_TIMEOUT_MS = 10_000
+DIGITS = "0123456789abcdef"
 
 # 8 bytes from Random.int, 4 from the clock and the process id as 4 bytes: 16 bytes like the name from /dev/urandom.
 # The clock keeps the names from repeating when the user gives --seed, which makes Random.int deterministic.

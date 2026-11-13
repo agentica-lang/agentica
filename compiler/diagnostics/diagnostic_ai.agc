@@ -12,7 +12,7 @@ import Problems from "problem"
 ## problem has (message, place, function, source line, callee, expected, actual, labels, help). A problem at a key of a
 ## manifest or a lock has `key` in place of the line and column and the source line, and a problem about the whole file
 ## has the file name alone.
-export def ai(problem: Problems.Problem, text: String) -> String
+def ai(problem: Problems.Problem, text: String) -> String
   start = problem.span.start
   line = trim(Plain.line_text(text.split("\n"), start.line))
   out = ["check failed: 1 error", "", "[#{problem.code}]", "  message: #{problem.message}"]
@@ -42,11 +42,13 @@ end
 
 ## The compact form of a warning, which is not an error (the command goes on): the form of `ai` with `warning` as its
 ## first line, and an empty line after it, which sets it apart from what the command prints next.
-export def warning(problem: Problems.Problem) -> String
+def warning(problem: Problems.Problem) -> String
   text = ai(problem, "")
   at = text.index_of("\n").unwrap!
   "warning#{text.slice(at, text.length - at)}\n"
 end
+
+private
 
 def hint_text(help: Diag.Help) -> String
   case help

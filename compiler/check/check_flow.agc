@@ -6,7 +6,7 @@ import State from "check_state"
 
 ## True when every path of the statements ends in a return. A terminator is always the last statement of its block
 ## (CHECK-UNREACHABLE-CODE), so only the last one is looked at.
-export def block_returns?(statements: List[Ast.Stmt]) -> Bool
+def block_returns?(statements: List[Ast.Stmt]) -> Bool
   return false if statements.size == 0
 
   returns?(statements[statements.size - 1])
@@ -15,7 +15,7 @@ end
 ## True when the statement never falls through to the next one: a return, break or next, an if with an else whose
 ## branches all end so, or a case whose arms all do. It does not look into loops or calls (System.exit and the `!`
 ## functions may halt, but have no "never returns" type), and a try leaves early only on an error.
-export def ends?(statement: Ast.Stmt) -> Bool
+def ends?(statement: Ast.Stmt) -> Bool
   case statement
     Ast.Stmt.Return(_) -> true
     Ast.Stmt.Control(_) -> true
@@ -26,7 +26,7 @@ export def ends?(statement: Ast.Stmt) -> Bool
 end
 
 ## The help of CHECK-UNREACHABLE-CODE: the statement before the dead one is the terminator, on `line`.
-export def unreachable_help(terminator: Ast.Stmt, line: Int) -> String
+def unreachable_help(terminator: Ast.Stmt, line: Int) -> String
   case terminator
     Ast.Stmt.If(_) -> "every branch of the if above ends with return, break or next; #{fix_text("if")}"
     Ast.Stmt.Case(_) -> "every arm of the case above ends with return, break or next; #{fix_text("case")}"
@@ -39,7 +39,7 @@ end
 ## True when the statements give an error(...) call or none as the value of a return (also inside an if, a loop or a
 ## case arm) or as the last expression. The call has no type of its own, so a block with such a value may need its
 ## result type from another path (Stmt.check_block_in).
-export def gives_error?(statements: List[Ast.Stmt]) -> Bool
+def gives_error?(statements: List[Ast.Stmt]) -> Bool
   return false if statements.size == 0
 
   last = statements[statements.size - 1]
@@ -50,7 +50,7 @@ export def gives_error?(statements: List[Ast.Stmt]) -> Bool
 end
 
 ## The help of CHECK-MISSING-RETURN: what is missing at the end of the body, or "".
-export def missing_return_help(body: List[Ast.Stmt], type_name: String) -> String
+def missing_return_help(body: List[Ast.Stmt], type_name: String) -> String
   if !contains_return?(body)
     return "end the function with a value of type #{type_name}"
   elsif body.size == 0
@@ -69,13 +69,13 @@ export def missing_return_help(body: List[Ast.Stmt], type_name: String) -> Strin
 end
 
 ## The help of CHECK-MISSING-RETURN for a loop at the end of the body.
-export def loop_help(type_name: String) -> String
+def loop_help(type_name: String) -> String
   "a loop gives no value; end the function with a value of type #{type_name} after it"
 end
 
 ## The message of CHECK-CAPTURED-ASSIGNMENT. A template is a block of its function (eag.agc), so two assignments get a
 ## message of their own: a block of a tag that writes the output, and a tag that assigns a variable of the function.
-export def captured_message(name: String, capture: State.Capture) -> String
+def captured_message(name: String, capture: State.Capture) -> String
   if name == Ast.EAG_PIECES
     return "a block in a template cannot write output"
   elsif template_block?(capture)
@@ -86,7 +86,7 @@ export def captured_message(name: String, capture: State.Capture) -> String
 end
 
 ## The help of CHECK-CAPTURED-ASSIGNMENT: a for loop can assign.
-export def captured_help(name: String, capture: State.Capture) -> String
+def captured_help(name: String, capture: State.Capture) -> String
   return "compute it before the template, or use a new name inside it" if template_block?(capture)
 
   element = "x"
@@ -118,6 +118,8 @@ export def captured_help(name: String, capture: State.Capture) -> String
     "or build it with xs.reduce(#{name}) do |acc, #{element}| ... end"
   )
 end
+
+private
 
 # Whether the block is the one that holds a template.
 def template_block?(capture: State.Capture) -> Bool

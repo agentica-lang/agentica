@@ -4,7 +4,7 @@
 import Problems from "../diagnostics/problem"
 
 ## The answer of a command. `out` and `err` are written as they are: a line ends with "\n" in them.
-export struct Reply
+struct Reply
   code: Int
   out: String
   err: String
@@ -12,13 +12,15 @@ end
 
 ## What a command that reads a program gave: a complete answer (the text, a usage error, a file that cannot be read),
 ## or the first problem of the program, which cli.agc prints in the style of the options.
-export enum Answer
+enum Answer
   Printed(Reply)
   Rejected(Problems.Problem)
 end
 
 ## Success, with `text` on stdout.
-export def printed(text: String) -> Reply = Reply(code: 0, out: text, err: "")
+def printed(text: String) -> Reply = Reply(code: 0, out: text, err: "")
 
 ## A failure with `code`, and `text` on stderr.
-export def failed(code: Int, text: String) -> Reply = Reply(code: code, out: "", err: text)
+def failed(code: Int, text: String) -> Reply = Reply(code: code, out: "", err: text)
+
+private

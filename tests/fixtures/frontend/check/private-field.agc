@@ -1,5 +1,5 @@
 module Net
-  export struct Sock
+  struct Sock
     fd: Int
 
     private
@@ -7,9 +7,9 @@ module Net
     key: String
   end
 
-  export def make() -> Sock = Sock(fd: 1, key: "k")
+  def make() -> Sock = Sock(fd: 1, key: "k")
 
-  export def key_of(s: Sock) -> String = s.key
+  def key_of(s: Sock) -> String = s.key
 end
 
 def main() -> Void

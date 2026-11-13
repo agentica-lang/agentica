@@ -27,7 +27,7 @@ import Rewrite from "rewrite"
 ## `declarations` come from the stub of the check cache (check_cache.agc), which blanks the value of a long constant.
 ## block is the name of the module block this module is, "" for a file: a block is a module of its own, with the
 ## `file` and `text` of the file that holds it, its own key (`home_key`) and `parsed` the block alone.
-export struct LinkedModule
+struct LinkedModule
   key: String
   file: String
   name: String
@@ -55,7 +55,7 @@ end
 ## (Rewrite.rewrite_constant_member). receivers is the first of those extra ids (the highest id of the parser), or -1
 ## when no file declares a constant. roots are the keys of the modules that are roots: the first file for `link_file`,
 ## each root that linked for `link_programs`. The checker checks the `main` of those and no other.
-export struct Linked
+struct Linked
   root: Ast.Program
   root_dir: String
   modules: List[LinkedModule]
@@ -65,49 +65,31 @@ export struct Linked
 end
 
 ## The result of linking: the program, or the first failure.
-export enum Linking
+enum Linking
   Done(Linked)
   Failed(Failure.Failure)
 end
 
 ## A root that link_programs left out: the path as it was given, and the first failure of its own file or of a file it
 ## reaches.
-export struct Left
+struct Left
   root: String
   failure: Failure.Failure
 end
 
 ## The result of linking several roots: the program of the roots that linked (`none` when none did) and the roots that
 ## were left out, in the order given.
-export struct Programs
+struct Programs
   linked: Optional[Linked]
   skipped: List[Left]
 end
 
-# What link_programs knows while it admits the roots one after the other: the modules kept, in order, and by key; the
-# modules rewritten so far (a root that fails may leave some, which a later root reuses); and the modules whose
-# rewrite failed, with the failure.
-struct Pool
-  kept: List[LinkedModule]
-  held: Map[String, Bool]
-  made: Map[String, LinkedModule]
-  failed: Map[String, Failure.Failure]
-end
-
-# A pool after one root, and why the root was left out (`none` when it was kept).
-struct Admission
-  pool: Pool
-  failure: Optional[Failure.Failure]
-end
-
 ## Links the file at path, with the std/ sources of settings.std and the environment of settings.env.
-export def link_file(path: String, settings: Env.Settings) -> Linking
-  link_file_with(path, settings, Modules.no_parses())
-end
+def link_file(path: String, settings: Env.Settings) -> Linking = link_file_with(path, settings, Modules.no_parses())
 
 ## The program in the form the checker reads: the declarations of every file in one list, with the id, span and module
 ## doc of the root.
-export def program(linked: Linked) -> Ast.Program
+def program(linked: Linked) -> Ast.Program
   declarations: List[Ast.Decl] = []
   for module in linked.modules
     declarations = declarations.concat(module.declarations)
@@ -123,7 +105,7 @@ end
 
 ## The key of the file that holds `module`: its own key, or for a module block the key of its file
 ## (Modules.block_key), so a query names the file and never the block.
-export def home_key(module: LinkedModule) -> String
+def home_key(module: LinkedModule) -> String
   return module.key if module.block == ""
 
   module.key.slice(0, module.key.length - module.block.length - 1)
@@ -131,7 +113,7 @@ end
 
 ## The linked name of the module block `module` among `modules` (`@2::Counter`: the prefix of its file and its name),
 ## which `reexported` holds for a file that re-exports the block (`export Agents.Counter`); "" for a file.
-export def block_name(modules: List[LinkedModule], module: LinkedModule) -> String
+def block_name(modules: List[LinkedModule], module: LinkedModule) -> String
   return "" if module.block == ""
 
   for file in modules
@@ -148,7 +130,7 @@ end
 ## so a later root that reaches it is left out with the same failure. The modules are in the order of the roots, and
 ## those of one root in the order of its imports, as `link_file` gives them, so a module that two roots reach comes
 ## with the first. The first failure of a root is the one `link_file` gives it.
-export def link_programs(roots: List[String], settings: Env.Settings, parses: Modules.Parses) -> Programs
+def link_programs(roots: List[String], settings: Env.Settings, parses: Modules.Parses) -> Programs
   many = Modules.load_roots(roots, settings, parses)
   loaded = many.loaded
   ids = 0
@@ -188,7 +170,7 @@ export def link_programs(roots: List[String], settings: Env.Settings, parses: Mo
 end
 
 ## Links files that were loaded (Modules.load_with): the second half of `link_file`.
-export def link_loaded(loaded: Modules.Loaded, settings: Env.Settings) -> Linking
+def link_loaded(loaded: Modules.Loaded, settings: Env.Settings) -> Linking
   files = rewrite_all(loaded, settings, loaded.order.take(1))
   if files.ok?
     root = loaded.modules[loaded.order[0]].program
@@ -205,6 +187,24 @@ export def link_loaded(loaded: Modules.Loaded, settings: Env.Settings) -> Linkin
   end
 
   Linking.Failed(Failure.unpack_failure(files.message))
+end
+
+private
+
+# What link_programs knows while it admits the roots one after the other: the modules kept, in order, and by key; the
+# modules rewritten so far (a root that fails may leave some, which a later root reuses); and the modules whose
+# rewrite failed, with the failure.
+struct Pool
+  kept: List[LinkedModule]
+  held: Map[String, Bool]
+  made: Map[String, LinkedModule]
+  failed: Map[String, Failure.Failure]
+end
+
+# A pool after one root, and why the root was left out (`none` when it was kept).
+struct Admission
+  pool: Pool
+  failure: Optional[Failure.Failure]
 end
 
 # The root `key` and the files it reaches, in the order `link_file` lists them: the file, then the files of its first

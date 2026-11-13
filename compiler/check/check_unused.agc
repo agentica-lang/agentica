@@ -7,14 +7,11 @@ import Ast from "../syntax/ast"
 import T from "../syntax/types"
 import State from "check_state"
 
-# The longest text of a value that a help copies; a longer or multi-line one is written as `...`.
-MAX_VALUE_TEXT = 60
-
 ## CHECK-UNUSED-RESULT when the dropped value is a Result, from any call (a Result[Void] too); it runs first, so a pure
 ## builtin that gives a Result, such as s.to_i, is this error and not CHECK-UNUSED-VALUE. Then CHECK-UNUSED-VALUE when
 ## the value could only have been used for itself: a pure builtin, a to_s on a data value, a .with, a lambda. Anything
 ## else, and any Void value, is fine.
-export def check_unused_value(cx: State.Cx, st: State.St, value: Ast.Expr, type: T.Type) -> Result[Bool]
+def check_unused_value(cx: State.Cx, st: State.St, value: Ast.Expr, type: T.Type) -> Result[Bool]
   return ok(true) if T.is?(type, "Void")
 
   case value
@@ -67,7 +64,7 @@ end
 
 ## How to handle a Result that is not used: `try` where it is allowed, a `case`, `.unwrap!`, or the discard `_ =`. The
 ## help of CHECK-UNUSED-RESULT and of CHECK-UNUSED-VARIABLE share it; `text` is the source of the call.
-export def handle_result_help(text: String, tryable: Bool) -> String
+def handle_result_help(text: String, tryable: Bool) -> String
   attempt = ""
   if tryable
     attempt = "try #{text}, "
@@ -77,13 +74,18 @@ export def handle_result_help(text: String, tryable: Bool) -> String
 end
 
 ## The source text of the expression, or `...` when it is long or spans lines.
-export def value_text(cx: State.Cx, value: Ast.Expr) -> String
+def value_text(cx: State.Cx, value: Ast.Expr) -> String
   span = Ast.expr_span(value)
   text = cx.texts.get(cx.file).unwrap_or("").slice(span.start.offset, span.stop.offset - span.start.offset)
   return "..." if text.length > MAX_VALUE_TEXT or text.include?("\n")
 
   text
 end
+
+private
+
+# The longest text of a value that a help copies; a longer or multi-line one is written as `...`.
+MAX_VALUE_TEXT = 60
 
 # What a method call or field access resolved to; `none` for any other expression.
 def resolution(st: State.St, value: Ast.Expr) -> Optional[State.Resolved]

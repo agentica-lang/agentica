@@ -9,7 +9,7 @@ import Regex from "std/regex"
 
 ## The type of a regex literal, the `Regex` of std/regex. A file without an import of std/regex is CHECK-REGEX-IMPORT,
 ## and a body that std/regex does not compile is CHECK-INVALID-REGEX at the character where the error is.
-export def check_regex(cx: State.Cx, st: State.St, node: Ast.RegexLit) -> Result[State.Out]
+def check_regex(cx: State.Cx, st: State.St, node: Ast.RegexLit) -> Result[State.Out]
   if function_of(node) == ""
     return error(
       State.fail_help(
@@ -32,6 +32,8 @@ export def check_regex(cx: State.Cx, st: State.St, node: Ast.RegexLit) -> Result
 
   State.expr(cx, st, node.call, T.Type.Unknown)
 end
+
+private
 
 # The name the linker gave the call of the literal: the linked `compile` of std/regex, or "" without an import.
 def function_of(node: Ast.RegexLit) -> String

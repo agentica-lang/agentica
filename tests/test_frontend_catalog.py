@@ -40,7 +40,7 @@ def test_the_catalog_prints_the_golden_tables_signatures_lookups_and_did_you_mea
 
 def test_the_rule_enum_has_the_rules_of_the_builtin_table():
     text = (ROOT / "compiler" / "catalog" / "builtin_model.agc").read_bytes().decode("utf-8")
-    declared = re.search(r"^export enum Rule\n(.*?)\nend", text, flags=re.MULTILINE | re.DOTALL).group(1)
+    declared = re.search(r"^enum Rule\n(.*?)\nend", text, flags=re.MULTILINE | re.DOTALL).group(1)
     names = sorted(line.strip() for line in declared.split("\n"))
     assert_golden("".join(name + "\n" for name in names), FROZEN / "catalog" / "rules.expected")
 
@@ -49,7 +49,7 @@ def test_the_highlighter_needs_no_list_of_reserved_type_names():
     # The site grammar scopes a type by its shape, so a new reserved name needs no docs-theme PR: a list of names in
     # the grammar would have to be kept equal to RESERVED_TYPE_NAMES again.
     data = (ROOT / "compiler" / "catalog" / "builtins_data.agc").read_text(encoding="utf-8")
-    reserved_text = re.search(r"^export RESERVED_TYPE_NAMES: List\[String\] = \[(.*?)^\]", data, flags=re.M | re.S).group(1)
+    reserved_text = re.search(r"^RESERVED_TYPE_NAMES: List\[String\] = \[(.*?)^\]", data, flags=re.M | re.S).group(1)
     reserved = re.findall(r'"([^"]+)"', reserved_text)
     grammar_file = ROOT / "site" / "themes" / "docs-theme" / "highlight" / "agentica.tmLanguage.json"
     grammar_text = grammar_file.read_text(encoding="utf-8")
@@ -67,7 +67,7 @@ def test_every_builtin_type_a_std_module_re_exports_has_its_written_name():
     # `export Family.Type` of stdlib/, written as the alias of STD_ONLY_IMPORTS and the member.
     def table(path, name):
         text = (ROOT / "compiler" / path).read_text(encoding="utf-8")
-        return re.search(r"^export %s: Map\[.*?\] = \{(.*?)^\}" % name, text, flags=re.M | re.S).group(1)
+        return re.search(r"^%s: Map\[.*?\] = \{(.*?)^\}" % name, text, flags=re.M | re.S).group(1)
 
     written = dict(re.findall(r'"([^"]+)": "([^"]+)"', table("syntax/types.agc", "REEXPORTED_TYPES")))
     families = {family: (path, alias) for family, path, alias in

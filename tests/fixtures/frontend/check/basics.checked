@@ -1,4 +1,4 @@
-program #50 0:1:1-227:16:1
+program #53 0:1:1-227:16:1
   module "basics.agc"
     declaration: struct-decl #4 0:1:1-35:5:1 name="Point"
       field: field-decl #1 15:2:3-22:3:1 name="x"

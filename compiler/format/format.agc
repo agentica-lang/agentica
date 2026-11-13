@@ -18,7 +18,6 @@
 
 import Style from "../check/check_style"
 import Diag from "../diagnostics/diagnostic"
-import Ast from "../syntax/ast"
 import Lexer from "../syntax/lexer"
 import ParseText from "../syntax/parse_text"
 import Parser from "../syntax/parser"
@@ -29,20 +28,20 @@ import Docs from "doc"
 import Layout from "layout"
 
 ## The width of the output when no `[style] max_line_width` sets one (47.9, question 1).
-export WIDTH = 119
+WIDTH = 119
 
 ## What the formatter is asked: the width of the output, and whether every bare `end` gets an empty line after it.
-export struct Settings
+struct Settings
   width: Int
   blank_line_after_end: Bool
 end
 
 ## The settings of a file with no `[style]`: the width WIDTH and no empty line added after `end`.
-export def default_settings() -> Settings = Settings(width: WIDTH, blank_line_after_end: false)
+def default_settings() -> Settings = Settings(width: WIDTH, blank_line_after_end: false)
 
 ## The text of `text` formatted as `settings` ask, or the diagnostic of a text that does not lex or parse, or
 ## FMT-INTERNAL when the output would not keep the tree and the comments. CRLF line ends become LF.
-export def format_text(text: String, settings: Settings) -> Diag.Outcome[String]
+def format_text(text: String, settings: Settings) -> Diag.Outcome[String]
   input = text.replace("\r\n", "\n")
   case unchecked_text(input, settings)
     Diag.Outcome.Failed(problem) -> Diag.Outcome.Failed(problem)
@@ -52,15 +51,14 @@ end
 
 ## Like format_text without the check of its own output, which the tests use to show what a refused file would have
 ## become.
-export def unchecked_text(text: String, settings: Settings) -> Diag.Outcome[String]
+def unchecked_text(text: String, settings: Settings) -> Diag.Outcome[String]
   input = text.replace("\r\n", "\n")
   case Lexer.lex_with_comments(input)
     Diag.Outcome.Failed(problem) -> Diag.Outcome.Failed(problem)
     Diag.Outcome.Done(scanned) ->
       case Parser.parse(scanned.tokens, 0)
         Diag.Outcome.Failed(problem) -> Diag.Outcome.Failed(problem)
-        Diag.Outcome.Done(parsed) ->
-          program = as_written(parsed)
+        Diag.Outcome.Done(program) ->
           attachment = Comments.attach(program, scanned.tokens, scanned.comments)
           context = Layout.context(input, scanned.tokens, attachment, settings.width)
           output = Docs.render(Layout.program_doc(context, program), settings.width)
@@ -73,7 +71,7 @@ end
 
 ## The normal form of `text`, one line per node and a last line with the words of its comments, or the diagnostic of
 ## a text that does not lex or parse.
-export def tree_text(text: String) -> Diag.Outcome[String]
+def tree_text(text: String) -> Diag.Outcome[String]
   case Lexer.lex_with_comments(text.replace("\r\n", "\n"))
     Diag.Outcome.Failed(problem) -> Diag.Outcome.Failed(problem)
     Diag.Outcome.Done(scanned) ->
@@ -86,31 +84,7 @@ export def tree_text(text: String) -> Diag.Outcome[String]
   end
 end
 
-# The tree as the text wrote it: in a file or module block with `private`, the parser made each declaration above it
-# public (Ast.PrivateMark), and the layout must not write the `export` that the text did not have.
-def as_written(program: Ast.Program) -> Ast.Program
-  program.with(declarations: written_scope(program.declarations, program.private_mark.some?))
-end
-
-def written_scope(declarations: List[Ast.Decl], marked: Bool) -> List[Ast.Decl]
-  declarations.map do |decl: Ast.Decl| written_decl(decl, marked) end
-end
-
-def written_decl(decl: Ast.Decl, marked: Bool) -> Ast.Decl
-  case decl
-    Ast.Decl.Export(node) ->
-      return written_decl(node.declaration, marked) if marked
-
-      Ast.Decl.Export(node.with(declaration: written_decl(node.declaration, false)))
-    Ast.Decl.Constant(node) ->
-      return Ast.Decl.Constant(node.with(exported: false)) if marked
-
-      decl
-    Ast.Decl.Module(node) ->
-      Ast.Decl.Module(node.with(declarations: written_scope(node.declarations, node.private_mark.some?)))
-    _ -> decl
-  end
-end
+private
 
 # `output` with an empty line after each bare `end` that the style rule asks one for. The output lexes, since the
 # layout keeps every token.

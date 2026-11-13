@@ -1,5 +1,4 @@
 import Util from "../lib/util"
-export def read() -> String
+def read() -> String
   return Util.read()
 end
-

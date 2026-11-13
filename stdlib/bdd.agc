@@ -3,6 +3,260 @@
 ## A step program builds a list of steps with `step` and passes it to `run`. A handler gets the context of its scenario
 ## and returns it: most functions here take the context first and return it, so keep the one they return.
 
+## The state of one scenario: the values saved with `set`, the services kept with `keep`, the current step, the
+## environment and arguments for the program under test, the after hooks and the program under test.
+struct Context
+  ## The scenario's state.
+  scenario: Scenario
+end
+
+## A step definition: a pattern and the handler that runs for the steps that match it. Build one with `step`.
+struct Step
+  ## The step text to match. `{string}` and `{int}` capture a value.
+  pattern: String
+  ## Gets the context and the captured values as strings, in order, and returns the context.
+  handler: Fn[Context, List[String], Context]
+end
+
+## Returns a step that runs `handler` for the steps whose text matches `pattern`.
+def step(pattern: String, handler: Fn[Context, List[String], Context]) -> Step
+  Step(pattern: pattern, handler: handler)
+end
+
+## Serves the steps that `agentica test` asks for, with the built-in steps added in front of `steps`. It never returns.
+## Run any other way, it prints how to run the step program and exits with code 2.
+def run(steps: List[Step]) -> Void
+  all = predefined().concat(steps)
+  args = System.args()
+  mode = ""
+  if args.size == 2 and args[0] == "--agentica-bdd"
+    mode = args[1]
+  end
+  if mode == "list"
+    check_start()
+    all.each do |item|
+      fields: Map[String, JSON.Value] = {"event": JSON.from("step"), "pattern": JSON.from(item.pattern)}
+      deliver(record_text(fields))
+    end
+
+    emit("ready")
+    System.exit(0)
+  elsif mode == "scenario"
+    check_start()
+    serve(all)
+  end
+  IO.warn("run this step program with agentica test --steps FILE")
+  System.exit(2)
+end
+
+## Returns the Doc String under the current step. Ends the scenario with an error when the step has none.
+def doc_string(ctx: Context) -> String
+  return ctx.scenario.step.doc if ctx.scenario.step.has_doc
+  halt(ctx, "RUNTIME-BDD-CONTEXT", "this step has no Doc String")
+  ""
+end
+
+## Returns the Data Table under the current step as rows of cells. Ends the scenario with an error when the step has
+## none.
+def table(ctx: Context) -> List[List[String]]
+  rows: List[List[String]] = ctx.scenario.step.table
+  if not ctx.scenario.step.has_table
+    halt(ctx, "RUNTIME-BDD-CONTEXT", "this step has no Data Table")
+  end
+  rows
+end
+
+## Fails the scenario with `message` when `condition` is false. Returns the context.
+def assert(ctx: Context, condition: Bool, message: String) -> Context
+  emit("assert")
+  if not condition
+    halt(ctx, "RUNTIME-BDD-ASSERTION", message)
+  end
+  ctx
+end
+
+## Ends the scenario as skipped, with `reason` in the report. The step ends at once, like a failed assertion, and no
+## later step of the scenario runs. A skipped scenario is not a failure: the run can still pass.
+def skip(ctx: Context, reason: String) -> Context
+  if closing?(ctx)
+    halt(ctx, "RUNTIME-BDD-CONTEXT", "an after hook cannot skip the scenario")
+  end
+  # The hooks run first: the runner stops the child as soon as it reads the skip record.
+  problems = run_after(ctx)
+  if problems.size > 0
+    deliver(after_record(problems))
+    System.exit(1)
+  end
+  fields: Map[String, JSON.Value] = {"event": JSON.from("skip"), "reason": JSON.from(clip(reason))}
+  deliver(record_text(fields))
+  System.exit(0)
+  ctx
+end
+
+## Returns the context with `value` saved under `name`, for the later steps of the same scenario.
+def set(ctx: Context, name: String, value: JSON.Value) -> Context
+  with_state(ctx, ctx.scenario.state.put(name, value))
+end
+
+## Returns the value saved under `name`, or an error when there is none.
+def get(ctx: Context, name: String) -> Result[JSON.Value]
+  ctx.scenario.state.get(name).to_result("missing scenario state")
+end
+
+## Returns the context with `service` kept under `name`, for the later steps of the same scenario. A service is a
+## function from a request to a result, both JSON: the way to keep a value that is not JSON, such as an open database
+## connection, which the function captures. The handles close when the scenario's child VM ends with the scenario.
+def keep(ctx: Context, name: String, service: Fn[JSON.Value, Result[JSON.Value]]) -> Context
+  with_services(ctx, ctx.scenario.services.put(name, service))
+end
+
+## Calls the service kept under `name` with `request` and returns its result, or an error when there is none.
+def call(ctx: Context, name: String, request: JSON.Value) -> Result[JSON.Value]
+  found = ctx.scenario.services.get(name)
+  return error("missing scenario service", kind: "argument") if found.none?
+  found.unwrap!.call(request)
+end
+
+## Returns the context with the environment variable `name` set to `value` for the program that `given_program` starts
+## later, on top of the environment `agentica test` runs in. The scenario's own environment does not change, and the
+## variable does not reach any other scenario. Setting a name again replaces its value; on Windows, where names ignore
+## case, `"Path"` and `"PATH"` are one name, and two names that differ only in the case of a letter outside ASCII
+## (`"Ä"`, `"ä"`) make `given_program` fail. It must come before `given_program`. `name` must be nonempty and
+## cannot contain `=` or a NUL byte, `value` cannot contain a NUL byte, and the names the VM owns (`AGENTICA_CHANNEL`,
+## `AGENTICA_VM_METRICS`, `AGENTICA_VM_METRICS_FILE`, `UV_USE_IO_URING`) cannot be set.
+def given_env(ctx: Context, name: String, value: String) -> Context
+  not_started(ctx, "the environment")
+  if name == "" or name.include?("=") or has_nul?(name) or has_nul?(value)
+    halt(
+      ctx,
+      "RUNTIME-BDD-CONTEXT",
+      "an environment variable name must be nonempty and cannot contain = or NUL, and its value cannot contain NUL",
+    )
+  end
+  if VM_ENV_NAMES.any? do |owned| same_env_name?(owned, name) end
+    halt(ctx, "RUNTIME-BDD-CONTEXT", "the environment variable #{name} belongs to the VM and cannot be set")
+  end
+  # Where names ignore case the old spelling goes first: the child would get both and could see either.
+  env = ctx.scenario.env.filter do |key, _| !same_env_name?(key, name) end
+  with_launch(ctx, env.put(name, value), ctx.scenario.arguments)
+end
+
+## Returns the context with `value` added to the command-line arguments of the program that `given_program` starts
+## later: the program reads them with `System.args`, in the order of the calls. It must come before `given_program`.
+def given_argument(ctx: Context, value: String) -> Context
+  not_started(ctx, "the arguments")
+  with_launch(ctx, ctx.scenario.env, ctx.scenario.arguments.push(value))
+end
+
+## Returns the context with `hook` registered to run when the scenario ends, whether it passed, failed or was skipped.
+## Hooks run in the reverse order of registration, in the child process of the scenario, before the program under test
+## is stopped. A hook gets the context at the end of the scenario and returns `error(message)` when its cleanup fails.
+## The hook is kept in the context this returns: a step that fails on an older context does not run it.
+## A failed hook fails a passing scenario and is added to the message of a failing one. The other hooks still run, also
+## when a hook crashes or fails a `BDD` check, on its own context or on one it captured earlier. Hooks do not run when
+## the process itself ends: a crash in a step, the scenario's time limit or `System.exit`.
+def after(ctx: Context, hook: Fn[Context, Result[Void]]) -> Context = with_after(ctx, ctx.scenario.after.push(hook))
+
+## Starts the Agentica program at `path`, relative to the feature file, and returns the context that holds it. It runs
+## with the environment variables and arguments given before it. One program may start per scenario.
+def given_program(ctx: Context, path: String) -> Context
+  case ctx.scenario.program
+    Program.Running(_) -> halt(ctx, "RUNTIME-BDD-CONTEXT", "only one program may start per scenario")
+    Program.NotStarted -> return start(ctx, path)
+  end
+  ctx
+end
+
+## Sends `text` and a newline to the program's input.
+def when_line(ctx: Context, text: String) -> Context = send(ctx, "#{text}\n")
+
+## Sends `text` to the program's input as it is.
+def when_input(ctx: Context, text: String) -> Context = send(ctx, text)
+
+## Closes the program's input.
+def when_eof(ctx: Context) -> Context
+  p = program(ctx)
+  closed = Process.close_stdin(p, 5000)
+  check(ctx, closed.ok?, closed.message)
+  ctx
+end
+
+## Returns the next output line of the program, waiting up to `timeout_ms` milliseconds. It is an error when the output
+## ended or no line came in time.
+def read_line(ctx: Context, timeout_ms: Int) -> Result[String]
+  line = raw_line(ctx, timeout_ms)
+  return line if line.ok?
+  if line.message == ended_text()
+    return error("stdout ended before a line", kind: "process.eof")
+  elsif line.message == timed_out_text()
+    return error("no line within #{timeout_ms} milliseconds", kind: "process.timeout")
+  end
+  check(ctx, false, line.message)
+  line
+end
+
+## Checks that the next output line of the program is `expected`, waiting up to `timeout_ms` milliseconds.
+def then_line(ctx: Context, expected: String, timeout_ms: Int) -> Context
+  compare_text(ctx, next_line(ctx, timeout_ms), expected)
+end
+
+## Checks that the next output line and `expected` are the same JSON value, in any key order, waiting up to
+## `timeout_ms` milliseconds.
+def then_json_line(ctx: Context, expected: String, timeout_ms: Int) -> Context
+  actual = next_line(ctx, timeout_ms)
+  left = JSON.parse(expected)
+  right = JSON.parse(actual)
+  if not left.ok? or not right.ok?
+    halt(ctx, "RUNTIME-BDD-JSON", "expected and received lines must be valid JSON")
+    return ctx
+  end
+  compare(ctx, Test.eq(right.unwrap!, left.unwrap!), JSON.encode(left.unwrap!), JSON.encode(right.unwrap!))
+end
+
+## Checks that the program is still running with its input open.
+def then_stdin_open(ctx: Context) -> Context
+  p = program(ctx)
+  wanted = "open stdin and active program"
+  state = "closed stdin or stopped program"
+  if Process.send(p, "", 5000).ok? and not Process.wait(p, 1).ok?
+    state = wanted
+  end
+  compare(ctx, Test.eq(state, wanted), wanted, state)
+end
+
+## Waits up to `timeout_ms` milliseconds for the program to exit and checks that its exit code is `code`.
+def then_exit(ctx: Context, code: Int, timeout_ms: Int) -> Context
+  p = program(ctx)
+  positive(ctx, timeout_ms)
+  status = Process.wait(p, timeout_ms)
+  check(ctx, status.ok?, status.message)
+  finished(ctx, p)
+  actual = status.unwrap!
+  compare(ctx, Test.eq(actual, code), code.inspect, actual.inspect)
+end
+
+## Checks that the output no line step has read yet is `expected`. The program must have exited.
+def then_stdout(ctx: Context, expected: String) -> Context
+  compare_text(ctx, finished(ctx, exited(ctx, program(ctx))).stdout, expected)
+end
+
+## Checks that the whole error output is `expected`. The program must have exited.
+def then_stderr(ctx: Context, expected: String) -> Context
+  compare_text(ctx, finished(ctx, exited(ctx, program(ctx))).stderr, expected)
+end
+
+## Checks that the output no line step has read yet includes `expected` as a substring. The program must have exited.
+def then_stdout_includes(ctx: Context, expected: String) -> Context
+  compare_includes(ctx, finished(ctx, exited(ctx, program(ctx))).stdout, expected)
+end
+
+## Checks that the whole error output includes `expected` as a substring. The program must have exited.
+def then_stderr_includes(ctx: Context, expected: String) -> Context
+  compare_includes(ctx, finished(ctx, exited(ctx, program(ctx))).stderr, expected)
+end
+
+private
+
 # The variables the VM owns, which `Process.spawn_captured` refuses (`reserved_names` in vm/process.c).
 VM_ENV_NAMES = ["AGENTICA_CHANNEL", "AGENTICA_VM_METRICS", "AGENTICA_VM_METRICS_FILE", "UV_USE_IO_URING"]
 
@@ -62,260 +316,6 @@ struct Scenario
   arguments: List[String]
   after: List[Fn[Context, Result[Void]]]
   closing: Channel[Bool]
-end
-
-## The state of one scenario: the values saved with `set`, the services kept with `keep`, the current step, the
-## environment and arguments for the program under test, the after hooks and the program under test.
-export struct Context
-  ## The scenario's state.
-  scenario: Scenario
-end
-
-## A step definition: a pattern and the handler that runs for the steps that match it. Build one with `step`.
-export struct Step
-  ## The step text to match. `{string}` and `{int}` capture a value.
-  pattern: String
-  ## Gets the context and the captured values as strings, in order, and returns the context.
-  handler: Fn[Context, List[String], Context]
-end
-
-## Returns a step that runs `handler` for the steps whose text matches `pattern`.
-export def step(pattern: String, handler: Fn[Context, List[String], Context]) -> Step
-  Step(pattern: pattern, handler: handler)
-end
-
-## Serves the steps that `agentica test` asks for, with the built-in steps added in front of `steps`. It never returns.
-## Run any other way, it prints how to run the step program and exits with code 2.
-export def run(steps: List[Step]) -> Void
-  all = predefined().concat(steps)
-  args = System.args()
-  mode = ""
-  if args.size == 2 and args[0] == "--agentica-bdd"
-    mode = args[1]
-  end
-  if mode == "list"
-    check_start()
-    all.each do |item|
-      fields: Map[String, JSON.Value] = {"event": JSON.from("step"), "pattern": JSON.from(item.pattern)}
-      deliver(record_text(fields))
-    end
-
-    emit("ready")
-    System.exit(0)
-  elsif mode == "scenario"
-    check_start()
-    serve(all)
-  end
-  IO.warn("run this step program with agentica test --steps FILE")
-  System.exit(2)
-end
-
-## Returns the Doc String under the current step. Ends the scenario with an error when the step has none.
-export def doc_string(ctx: Context) -> String
-  return ctx.scenario.step.doc if ctx.scenario.step.has_doc
-  halt(ctx, "RUNTIME-BDD-CONTEXT", "this step has no Doc String")
-  ""
-end
-
-## Returns the Data Table under the current step as rows of cells. Ends the scenario with an error when the step has
-## none.
-export def table(ctx: Context) -> List[List[String]]
-  rows: List[List[String]] = ctx.scenario.step.table
-  if not ctx.scenario.step.has_table
-    halt(ctx, "RUNTIME-BDD-CONTEXT", "this step has no Data Table")
-  end
-  rows
-end
-
-## Fails the scenario with `message` when `condition` is false. Returns the context.
-export def assert(ctx: Context, condition: Bool, message: String) -> Context
-  emit("assert")
-  if not condition
-    halt(ctx, "RUNTIME-BDD-ASSERTION", message)
-  end
-  ctx
-end
-
-## Ends the scenario as skipped, with `reason` in the report. The step ends at once, like a failed assertion, and no
-## later step of the scenario runs. A skipped scenario is not a failure: the run can still pass.
-export def skip(ctx: Context, reason: String) -> Context
-  if closing?(ctx)
-    halt(ctx, "RUNTIME-BDD-CONTEXT", "an after hook cannot skip the scenario")
-  end
-  # The hooks run first: the runner stops the child as soon as it reads the skip record.
-  problems = run_after(ctx)
-  if problems.size > 0
-    deliver(after_record(problems))
-    System.exit(1)
-  end
-  fields: Map[String, JSON.Value] = {"event": JSON.from("skip"), "reason": JSON.from(clip(reason))}
-  deliver(record_text(fields))
-  System.exit(0)
-  ctx
-end
-
-## Returns the context with `value` saved under `name`, for the later steps of the same scenario.
-export def set(ctx: Context, name: String, value: JSON.Value) -> Context
-  with_state(ctx, ctx.scenario.state.put(name, value))
-end
-
-## Returns the value saved under `name`, or an error when there is none.
-export def get(ctx: Context, name: String) -> Result[JSON.Value]
-  ctx.scenario.state.get(name).to_result("missing scenario state")
-end
-
-## Returns the context with `service` kept under `name`, for the later steps of the same scenario. A service is a
-## function from a request to a result, both JSON: the way to keep a value that is not JSON, such as an open database
-## connection, which the function captures. The handles close when the scenario's child VM ends with the scenario.
-export def keep(ctx: Context, name: String, service: Fn[JSON.Value, Result[JSON.Value]]) -> Context
-  with_services(ctx, ctx.scenario.services.put(name, service))
-end
-
-## Calls the service kept under `name` with `request` and returns its result, or an error when there is none.
-export def call(ctx: Context, name: String, request: JSON.Value) -> Result[JSON.Value]
-  found = ctx.scenario.services.get(name)
-  return error("missing scenario service", kind: "argument") if found.none?
-  found.unwrap!.call(request)
-end
-
-## Returns the context with the environment variable `name` set to `value` for the program that `given_program` starts
-## later, on top of the environment `agentica test` runs in. The scenario's own environment does not change, and the
-## variable does not reach any other scenario. Setting a name again replaces its value; on Windows, where names ignore
-## case, `"Path"` and `"PATH"` are one name, and two names that differ only in the case of a letter outside ASCII
-## (`"Ä"`, `"ä"`) make `given_program` fail. It must come before `given_program`. `name` must be nonempty and
-## cannot contain `=` or a NUL byte, `value` cannot contain a NUL byte, and the names the VM owns (`AGENTICA_CHANNEL`,
-## `AGENTICA_VM_METRICS`, `AGENTICA_VM_METRICS_FILE`, `UV_USE_IO_URING`) cannot be set.
-export def given_env(ctx: Context, name: String, value: String) -> Context
-  not_started(ctx, "the environment")
-  if name == "" or name.include?("=") or has_nul?(name) or has_nul?(value)
-    halt(
-      ctx,
-      "RUNTIME-BDD-CONTEXT",
-      "an environment variable name must be nonempty and cannot contain = or NUL, and its value cannot contain NUL",
-    )
-  end
-  if VM_ENV_NAMES.any? do |owned| same_env_name?(owned, name) end
-    halt(ctx, "RUNTIME-BDD-CONTEXT", "the environment variable #{name} belongs to the VM and cannot be set")
-  end
-  # Where names ignore case the old spelling goes first: the child would get both and could see either.
-  env = ctx.scenario.env.filter do |key, _| !same_env_name?(key, name) end
-  with_launch(ctx, env.put(name, value), ctx.scenario.arguments)
-end
-
-## Returns the context with `value` added to the command-line arguments of the program that `given_program` starts
-## later: the program reads them with `System.args`, in the order of the calls. It must come before `given_program`.
-export def given_argument(ctx: Context, value: String) -> Context
-  not_started(ctx, "the arguments")
-  with_launch(ctx, ctx.scenario.env, ctx.scenario.arguments.push(value))
-end
-
-## Returns the context with `hook` registered to run when the scenario ends, whether it passed, failed or was skipped.
-## Hooks run in the reverse order of registration, in the child process of the scenario, before the program under test
-## is stopped. A hook gets the context at the end of the scenario and returns `error(message)` when its cleanup fails.
-## The hook is kept in the context this returns: a step that fails on an older context does not run it.
-## A failed hook fails a passing scenario and is added to the message of a failing one. The other hooks still run, also
-## when a hook crashes or fails a `BDD` check, on its own context or on one it captured earlier. Hooks do not run when
-## the process itself ends: a crash in a step, the scenario's time limit or `System.exit`.
-export def after(ctx: Context, hook: Fn[Context, Result[Void]]) -> Context
-  with_after(ctx, ctx.scenario.after.push(hook))
-end
-
-## Starts the Agentica program at `path`, relative to the feature file, and returns the context that holds it. It runs
-## with the environment variables and arguments given before it. One program may start per scenario.
-export def given_program(ctx: Context, path: String) -> Context
-  case ctx.scenario.program
-    Program.Running(_) -> halt(ctx, "RUNTIME-BDD-CONTEXT", "only one program may start per scenario")
-    Program.NotStarted -> return start(ctx, path)
-  end
-  ctx
-end
-
-## Sends `text` and a newline to the program's input.
-export def when_line(ctx: Context, text: String) -> Context = send(ctx, "#{text}\n")
-
-## Sends `text` to the program's input as it is.
-export def when_input(ctx: Context, text: String) -> Context = send(ctx, text)
-
-## Closes the program's input.
-export def when_eof(ctx: Context) -> Context
-  p = program(ctx)
-  closed = Process.close_stdin(p, 5000)
-  check(ctx, closed.ok?, closed.message)
-  ctx
-end
-
-## Returns the next output line of the program, waiting up to `timeout_ms` milliseconds. It is an error when the output
-## ended or no line came in time.
-export def read_line(ctx: Context, timeout_ms: Int) -> Result[String]
-  line = raw_line(ctx, timeout_ms)
-  return line if line.ok?
-  if line.message == ended_text()
-    return error("stdout ended before a line", kind: "process.eof")
-  elsif line.message == timed_out_text()
-    return error("no line within #{timeout_ms} milliseconds", kind: "process.timeout")
-  end
-  check(ctx, false, line.message)
-  line
-end
-
-## Checks that the next output line of the program is `expected`, waiting up to `timeout_ms` milliseconds.
-export def then_line(ctx: Context, expected: String, timeout_ms: Int) -> Context
-  compare_text(ctx, next_line(ctx, timeout_ms), expected)
-end
-
-## Checks that the next output line and `expected` are the same JSON value, in any key order, waiting up to
-## `timeout_ms` milliseconds.
-export def then_json_line(ctx: Context, expected: String, timeout_ms: Int) -> Context
-  actual = next_line(ctx, timeout_ms)
-  left = JSON.parse(expected)
-  right = JSON.parse(actual)
-  if not left.ok? or not right.ok?
-    halt(ctx, "RUNTIME-BDD-JSON", "expected and received lines must be valid JSON")
-    return ctx
-  end
-  compare(ctx, Test.eq(right.unwrap!, left.unwrap!), JSON.encode(left.unwrap!), JSON.encode(right.unwrap!))
-end
-
-## Checks that the program is still running with its input open.
-export def then_stdin_open(ctx: Context) -> Context
-  p = program(ctx)
-  wanted = "open stdin and active program"
-  state = "closed stdin or stopped program"
-  if Process.send(p, "", 5000).ok? and not Process.wait(p, 1).ok?
-    state = wanted
-  end
-  compare(ctx, Test.eq(state, wanted), wanted, state)
-end
-
-## Waits up to `timeout_ms` milliseconds for the program to exit and checks that its exit code is `code`.
-export def then_exit(ctx: Context, code: Int, timeout_ms: Int) -> Context
-  p = program(ctx)
-  positive(ctx, timeout_ms)
-  status = Process.wait(p, timeout_ms)
-  check(ctx, status.ok?, status.message)
-  finished(ctx, p)
-  actual = status.unwrap!
-  compare(ctx, Test.eq(actual, code), code.inspect, actual.inspect)
-end
-
-## Checks that the output no line step has read yet is `expected`. The program must have exited.
-export def then_stdout(ctx: Context, expected: String) -> Context
-  compare_text(ctx, finished(ctx, exited(ctx, program(ctx))).stdout, expected)
-end
-
-## Checks that the whole error output is `expected`. The program must have exited.
-export def then_stderr(ctx: Context, expected: String) -> Context
-  compare_text(ctx, finished(ctx, exited(ctx, program(ctx))).stderr, expected)
-end
-
-## Checks that the output no line step has read yet includes `expected` as a substring. The program must have exited.
-export def then_stdout_includes(ctx: Context, expected: String) -> Context
-  compare_includes(ctx, finished(ctx, exited(ctx, program(ctx))).stdout, expected)
-end
-
-## Checks that the whole error output includes `expected` as a substring. The program must have exited.
-export def then_stderr_includes(ctx: Context, expected: String) -> Context
-  compare_includes(ctx, finished(ctx, exited(ctx, program(ctx))).stderr, expected)
 end
 
 def predefined() -> List[Step]

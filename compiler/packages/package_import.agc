@@ -20,12 +20,6 @@ import NativeLibrary from "native_library"
 import PackageHash from "package_hash"
 import Project from "project"
 
-# The manifest of a package, in the folder that holds its files.
-MANIFEST_FILE = "agentica.toml"
-
-# The folder beside the manifest of the project that holds the files of the locked packages, one folder for each.
-DEPS_FOLDER = "deps"
-
 ## The package a file belongs to. package is its local name, root the real folder of its files in deps/ and label
 ## `name@version`, which names each of its files in the program (`pkg/name@version/path`). All are "" for the files of
 ## the project. natives says what each `extern "name"` of the files means (native_library.agc) and watched lists the
@@ -34,7 +28,7 @@ DEPS_FOLDER = "deps"
 ## max_line_width is the `[style] max_line_width` of that project (0 for no limit); no other file has either.
 ## library is true for a file of a std/ or pkg/ library and for what such a file imports by a relative path: those
 ## files keep the style answer of their origin.
-export struct Origin
+struct Origin
   package: String
   root: String
   label: String
@@ -48,7 +42,7 @@ end
 
 ## A package that the build has loaded and hashed: the same fields as its Origin, and the names its own manifest
 ## declares, which its files may import.
-export struct Opened
+struct Opened
   root: String
   label: String
   names: List[String]
@@ -66,7 +60,7 @@ end
 ## no manifest), with the rules it asks for: `blank_line_after_end` and `max_line_width` (0 for no limit).
 ## `agentica` is the running Agentica version, which the `agentica` key of each package's manifest is checked against
 ## ("" checks nothing).
-export struct Scope
+struct Scope
   deps: String
   os: String
   natives: Map[String, NativeLibrary.Target]
@@ -85,29 +79,21 @@ export struct Scope
 end
 
 ## How a `pkg/` import reads: a library of the pkg/ roots, or a package and the module inside it (a path with `.agc`).
-export enum Match
+enum Match
   Library
   Package(String, String)
 end
 
 ## A package file that was found. name is the stored name of the file.
-export struct Located
+struct Located
   file: String
   origin: Origin
   name: String
   opened: Map[String, Opened]
 end
 
-# What a package folder holds under the name of the manifest.
-enum Shape
-  Absent
-  Regular
-  Unsafe(String)
-  Unlisted(String)
-end
-
 ## The scope of a build of this project, before any package is loaded.
-export def scope_of(project: Project.Project) -> Scope
+def scope_of(project: Project.Project) -> Scope
   case project
     Project.Project.Bare ->
       Scope(
@@ -151,7 +137,7 @@ end
 ## The scope with the native libraries of the project's own manifest ([native], for this system). Its files are the
 ## project's own, so they are not hashed; the files of its native/ folder are watched by the bytecode cache.
 ## Downloaded rows are verified from `scope.native_root` against `scope.lock` (the lock key "" is the project).
-export def with_project_natives(workspace: Workspace.Workspace, scope: Scope, project: Project.Project) -> Scope
+def with_project_natives(workspace: Workspace.Workspace, scope: Scope, project: Project.Project) -> Scope
   case project
     Project.Project.Bare -> scope
     Project.Project.Declared(found) ->
@@ -174,7 +160,7 @@ end
 
 ## The origin of the root file of the project: its folder's native libraries are the scope's. The root file is in the
 ## folder of the manifest or below it, with no nearer manifest, so it has the style rule when the manifest asks for it.
-export def project_origin(scope: Scope) -> Origin
+def project_origin(scope: Scope) -> Origin
   Origin(
     package: "",
     root: "",
@@ -193,7 +179,7 @@ end
 ## manifest with no agentica.toml of its own nearer (the manifest of a folder inside is another project, and its keys
 ## are not read), so a file outside that folder never has it, whoever imports it. A library file is not a file of the
 ## project, wherever its folder is: what it imports keeps its origin.
-export def file_origin(workspace: Workspace.Workspace, scope: Scope, importer: Origin, key: String) -> Origin
+def file_origin(workspace: Workspace.Workspace, scope: Scope, importer: Origin, key: String) -> Origin
   return importer if importer.library
 
   if Project.styled?(workspace, scope.style_dir, key)
@@ -204,7 +190,7 @@ export def file_origin(workspace: Workspace.Workspace, scope: Scope, importer: O
 end
 
 ## The origin of a std/ or pkg/ library, which belongs to no package and has no native library of its own.
-export def library_origin() -> Origin
+def library_origin() -> Origin
   Origin(
     package: "",
     root: "",
@@ -222,7 +208,7 @@ end
 ## and it shadows the library roots for that name. An undeclared name is a library for a file of the project, and
 ## CHECK-IMPORT-PACKAGE for a file of a package, which reaches nothing its manifest does not declare. `pkg/name` alone,
 ## naming no module, is CHECK-IMPORT-PATH when `name` is declared.
-export def match_import(scope: Scope, origin: Origin, file: String, site: Failure.Site) -> Result[Match]
+def match_import(scope: Scope, origin: Origin, file: String, site: Failure.Site) -> Result[Match]
   names = allowed_names(scope, origin)
   parts = file.split("/")
   if parts.size == 2
@@ -244,7 +230,7 @@ end
 
 ## Finds the module rest of the package name in its folder of deps/, hashed (and its manifest read) the first time it
 ## is used.
-export def open_package(
+def open_package(
   workspace: Workspace.Workspace,
   scope: Scope,
   name: String,
@@ -288,7 +274,7 @@ export def open_package(
 end
 
 ## Checks that a file found by a relative import in a package stays in the package, and gives its stored name.
-export def stay_inside(origin: Origin, file: String, site: Failure.Site) -> Result[String]
+def stay_inside(origin: Origin, file: String, site: Failure.Site) -> Result[String]
   inner = try confined(origin.root, file, site)
   ok(stored_name(origin.label, inner))
 end
@@ -299,7 +285,7 @@ end
 ## safely is left for the import that loads it: a package that is not in deps/, a folder that cannot be listed and a
 ## manifest that is not a regular file report their own diagnostic there (and nothing is read from them here). It gives
 ## the scope with the names that the manifests declare, so that loading a package does not list its folder again.
-export def check_manifests(workspace: Workspace.Workspace, scope: Scope) -> Result[Scope]
+def check_manifests(workspace: Workspace.Workspace, scope: Scope) -> Result[Scope]
   folders: Map[String, String] = {}
   for locked in scope.lock.packages
     folders = folders.put(locked.name, folder_of(scope, locked))
@@ -311,7 +297,7 @@ end
 ## The same check over other folders: `folders` maps a package name to the folder that holds its files, such as its
 ## folder of the package cache (`agentica install` checks the manifests there before it writes deps/). A locked
 ## package with no entry is left out.
-export def check_folders(workspace: Workspace.Workspace, scope: Scope, folders: Map[String, String]) -> Result[Scope]
+def check_folders(workspace: Workspace.Workspace, scope: Scope, folders: Map[String, String]) -> Result[Scope]
   declared = scope.declared
   for locked in scope.lock.packages
     next if !folders.has_key?(locked.name) or folders[locked.name] == ""
@@ -334,7 +320,7 @@ end
 
 ## The folder of a locked package, `deps/<name>` beside the manifest of the project, or the folder of the workspace
 ## member or of the `path` (scope.deps is beside the manifest, so its folder is the project's).
-export def folder_of(scope: Scope, locked: Lock.Locked) -> String
+def folder_of(scope: Scope, locked: Lock.Locked) -> String
   return Project.folder_of(Paths.directory_of(scope.deps), scope.members, locked) if Lock.in_place?(locked)
 
   Paths.join(scope.deps, locked.name)
@@ -342,10 +328,26 @@ end
 
 ## The hash that pins the content of a fetched package, which its folder must have before it builds a native module
 ## (NativeBuild.listed checks it again): the locked hash, "" for a package read in place.
-export def pinned_hash(locked: Lock.Locked) -> String
+def pinned_hash(locked: Lock.Locked) -> String
   return "" if Lock.in_place?(locked)
 
   locked.hash
+end
+
+private
+
+# The manifest of a package, in the folder that holds its files.
+MANIFEST_FILE = "agentica.toml"
+
+# The folder beside the manifest of the project that holds the files of the locked packages, one folder for each.
+DEPS_FOLDER = "deps"
+
+# What a package folder holds under the name of the manifest.
+enum Shape
+  Absent
+  Regular
+  Unsafe(String)
+  Unlisted(String)
 end
 
 # The name of a package file in the program and in the .agcb: it does not depend on the cache folder of the machine.

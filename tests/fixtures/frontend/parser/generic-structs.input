@@ -1,12 +1,14 @@
+struct Pair[A, B]
+  first: A
+  second: B
+end
+
+private
+
 ## A generic struct.
 struct Box[T]
   value: T
   items: List[T] = []
-end
-
-export struct Pair[A, B]
-  first: A
-  second: B
 end
 
 struct Plain

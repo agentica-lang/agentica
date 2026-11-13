@@ -1,5 +1,4 @@
-export enum Shape
+enum Shape
   Dot
   Box(Int)
 end
-

@@ -1,8 +1,8 @@
-export enum Option
+enum Option
   Some(Int)
   None
 end
 
-export enum Shape
+enum Shape
   Boxed(Option)
 end

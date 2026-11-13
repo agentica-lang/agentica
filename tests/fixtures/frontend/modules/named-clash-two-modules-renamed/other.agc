@@ -1,3 +1,3 @@
-export struct Point
+struct Point
   n: Int
 end

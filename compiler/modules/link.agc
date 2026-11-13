@@ -3,6 +3,8 @@ import NativeWorkspace from "../io/native_workspace"
 import Env from "link_env"
 import LinkText from "link_text"
 
+private
+
 # `agentica compiler/modules/link.agc [flags] ROOT...` prints the text form of linking each root file (link_text.agc).
 # The flags apply to the roots after them. `--stdlib=DIR` is the stdlib/ folder (the default is stdlib).
 # `--agentica-path=V`, `--xdg-data-home=V`, `--xdg-cache-home=V`, `--home=V` and `--local-app-data=V` replace the

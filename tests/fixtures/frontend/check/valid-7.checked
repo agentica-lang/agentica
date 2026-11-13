@@ -1,4 +1,4 @@
-program #77 0:1:1-520:37:1
+program #84 0:1:1-520:37:1
   module "valid-7.agc"
     declaration: function-decl #6 0:1:1-47:4:1 name="text"
       param: param #1 9:1:10-15:1:16 name="n"

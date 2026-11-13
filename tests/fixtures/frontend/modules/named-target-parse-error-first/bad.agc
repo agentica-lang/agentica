@@ -1,2 +1,2 @@
-export def broken() Void
+def broken() Void
 end

@@ -21,7 +21,7 @@ import Texts from "cli_text"
 ## Ruby writes it, then the hints of the checker for that name on other types; as JSON it is {"alias": NAME,
 ## "builtins": [the object of each builtin], "hints": {"Kind.name": text}}. A name with a foreign-language hint of its
 ## own (`int`) gets that hint and exit 2.
-export def help(words: List[String], style: String) -> Reply.Reply
+def help(words: List[String], style: String) -> Reply.Reply
   rest = words
   as_json = style == "json"
   if rest.size > 0 and rest[rest.size - 1] == "--json"
@@ -45,6 +45,8 @@ export def help(words: List[String], style: String) -> Reply.Reply
 
   Reply.printed(block(name, entry.unwrap!))
 end
+
+private
 
 # The answer for a name that is no builtin: the hint of the checker for a name from another language that has one
 # (`int`, `Hash.new`: its targets could mislead), else the builtins it stands for, else the unknown-builtin error.

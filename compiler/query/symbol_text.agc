@@ -7,16 +7,18 @@ import Model from "../analysis/model"
 import OutlineText from "outline_text"
 
 ## The lines of the matches, each with a line feed at the end.
-export def text(found: Model.Symbols) -> String = found.matches.map(&match_text).join("")
+def text(found: Model.Symbols) -> String = found.matches.map(&match_text).join("")
 
 ## One line for each file left out, each with a line feed at the end; empty when none was.
-export def skipped_text(found: Model.Symbols) -> String = skipped_lines(found.skipped)
+def skipped_text(found: Model.Symbols) -> String = skipped_lines(found.skipped)
 
 ## The same lines for any answer that lists `skipped` files (`agentica refs` too).
-export def skipped_lines(skipped: List[Model.Skipped]) -> String
+def skipped_lines(skipped: List[Model.Skipped]) -> String
   lines = skipped.map do |left: Model.Skipped| "skipped #{left.file}: #{left.diagnostic.code}\n" end
   lines.join("")
 end
+
+private
 
 def match_text(match: Model.Symbol) -> String
   case match.kind

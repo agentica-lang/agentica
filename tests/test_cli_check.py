@@ -9,7 +9,7 @@ import pytest
 from tests.agentica_test import cli, run, unreadable, vm_environment
 from tests.span_support import problem
 
-LIBRARY = "export def one() -> Int\n  return 1\nend\n"
+LIBRARY = "def one() -> Int\n  return 1\nend\n"
 ROOT_USER = hasattr(os, "geteuid") and os.geteuid() == 0
 PROGRAM = 'def main() -> Void\n  puts("ok")\nend\n'
 BROKEN_TYPE = 'def main() -> Void\n  x: Int = "a"\n  puts(x)\nend\n'

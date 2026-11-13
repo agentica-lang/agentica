@@ -18,15 +18,8 @@ import Ast from "../syntax/ast"
 import Source from "../syntax/source"
 import Model from "model"
 
-# The version of each shape.
-OUTLINE_VERSION = 1
-TYPE_AT_VERSION = 1
-CHECKED_VERSION = 1
-SYMBOL_VERSION = 1
-REFS_VERSION = 1
-
 ## The declaration `declared` of a module as plain data.
-export def item(declared: DocModel.Item) -> Model.Item
+def item(declared: DocModel.Item) -> Model.Item
   parameters: List[Model.Parameter] = []
   result = ""
   fields: List[Model.Field] = []
@@ -79,16 +72,17 @@ export def item(declared: DocModel.Item) -> Model.Item
     variants: variants,
     items: items,
     private_range: declared.private_line.map { |span: Source.Span| [DiagnosticModel.range_of(span)] }.unwrap_or([]),
+    reexport: declared.reexport,
   )
 end
 
 ## The answer of `check` for `file`, the name the answer gives it: passed when there is no diagnostic.
-export def checked(file: String, diagnostics: List[DiagnosticModel.Diagnostic]) -> Model.Checked
+def checked(file: String, diagnostics: List[DiagnosticModel.Diagnostic]) -> Model.Checked
   Model.Checked(version: CHECKED_VERSION, file: file, passed: diagnostics.size == 0, diagnostics: diagnostics)
 end
 
 ## The outline `outlined` of the file that the answer calls `file`.
-export def outline(file: String, outlined: Outline.Outline) -> Model.Outline
+def outline(file: String, outlined: Outline.Outline) -> Model.Outline
   Model.Outline(
     version: OUTLINE_VERSION,
     file: file,
@@ -100,7 +94,7 @@ end
 
 ## The answer `found` for the position `asked`. `file` is the name the answer gives the file of the position, and
 ## `home` the one it gives the file of the definition.
-export def type_at(file: String, asked: Position.Asked, found: TypeAt.Answer, home: String) -> Model.TypeAt
+def type_at(file: String, asked: Position.Asked, found: TypeAt.Answer, home: String) -> Model.TypeAt
   help = JSON.null()
   signatures: List[String] = []
   case found.builtin
@@ -126,7 +120,7 @@ export def type_at(file: String, asked: Position.Asked, found: TypeAt.Answer, ho
 end
 
 ## The answer `found` for `query`. Each match and skipped file is already named as the answer names it.
-export def symbols(query: String, found: Symbol.Answer) -> Model.Symbols
+def symbols(query: String, found: Symbol.Answer) -> Model.Symbols
   Model.Symbols(
     version: SYMBOL_VERSION,
     query: query,
@@ -137,7 +131,7 @@ end
 
 ## The answer `found` of `refs` for `query`, with the roots left out. `names` gives the name the answer gives each file
 ## (a file it does not hold keeps the name the linker gives it).
-export def refs(
+def refs(
   query: String,
   found: Refs.Answer,
   skipped: List[SymbolLink.Skipped],
@@ -170,7 +164,16 @@ end
 
 ## The text of an optional one. The docs and defaults of an item have been through `DocModel.cleaned`, which turns a
 ## blank one into `none`, and an alias is never empty, so absent and "" mean the same.
-export def text(value: Optional[String]) -> String = value.unwrap_or("")
+def text(value: Optional[String]) -> String = value.unwrap_or("")
+
+private
+
+# The version of each shape.
+OUTLINE_VERSION = 1
+TYPE_AT_VERSION = 1
+CHECKED_VERSION = 1
+SYMBOL_VERSION = 1
+REFS_VERSION = 1
 
 def skipped_of(left: SymbolLink.Skipped) -> Model.Skipped
   Model.Skipped(file: left.file, diagnostic: DiagnosticModel.of_problem(left.problem))

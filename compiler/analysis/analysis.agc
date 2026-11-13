@@ -31,14 +31,14 @@ import NativeModules from "native_modules"
 import Partial from "partial"
 
 ## What `check` found: the program links and checks, the file cannot be read, or the first problem.
-export enum Verdict
+enum Verdict
   Passed
   Unreadable
   Rejected(Problems.Problem)
 end
 
 ## The outline of a file, the file cannot be read, or the first problem.
-export enum Outlined
+enum Outlined
   Done(Model.Outline)
   Unreadable
   Rejected(Problems.Problem)
@@ -46,7 +46,7 @@ end
 
 ## The answer for a position, the file cannot be read, or the first problem (QUERY-NO-EXPRESSION when the position is
 ## on no expression).
-export enum Typed
+enum Typed
   Done(Model.TypeAt)
   Unreadable
   Rejected(Problems.Problem)
@@ -54,42 +54,28 @@ end
 
 ## The references for a position, the file cannot be read, or the first problem (QUERY-NO-EXPRESSION when the
 ## position names nothing).
-export enum Referenced
+enum Referenced
   Done(Model.Refs)
   Unreadable
   Rejected(Problems.Problem)
 end
 
 ## The matches of a `symbol` query, or why there is none.
-export enum Found
+enum Found
   Done(Model.Symbols)
   Rejected(Problems.Problem)
 end
 
 ## The `extern module` blocks of a file, the file cannot be read, or the first problem.
-export enum Natived
+enum Natived
   Done(Model.NativeModules)
   Unreadable
   Rejected(Problems.Problem)
 end
 
 ## The answer of `bodies`.
-export enum Bodied
+enum Bodied
   Done(Model.Bodies)
-  Unreadable
-  Rejected(Problems.Problem)
-end
-
-# The file of a position, linked and checked, the file cannot be read, or the first problem.
-enum Fronted
-  Done(Front.Checked)
-  Unreadable
-  Rejected(Problems.Problem)
-end
-
-# The file of a position, linked and checked as far as it goes, the file cannot be read, or the first problem.
-enum Partly
-  Done(Partial.Recovered)
   Unreadable
   Rejected(Problems.Problem)
 end
@@ -97,7 +83,7 @@ end
 ## Links and checks the file at `path`, as `agentica check` does: every rule of a build except that the program
 ## declares a `main`, so a library file passes. `cache` (cache.agc) only saves work: `Cache.empty()` gives the same
 ## answer.
-export def check(cache: Cache.Cache, settings: Env.Settings, path: String) -> Verdict
+def check(cache: Cache.Cache, settings: Env.Settings, path: String) -> Verdict
   case Front.read_root(settings.workspace, path)
     Front.Root.Unreadable(_) -> Verdict.Unreadable
     Front.Root.Invalid(problem) -> Verdict.Rejected(problem)
@@ -111,7 +97,7 @@ end
 
 ## The answer of `check` as data, for the file at `path`. A file that cannot be read is QUERY-USAGE, as for the
 ## queries.
-export def checked(cache: Cache.Cache, settings: Env.Settings, path: String) -> Model.Checked
+def checked(cache: Cache.Cache, settings: Env.Settings, path: String) -> Model.Checked
   diagnostics: List[DiagnosticModel.Diagnostic] = []
   case check(cache, settings, path)
     Verdict.Passed -> diagnostics = diagnostics
@@ -124,7 +110,7 @@ end
 
 ## The outline of `file`, which is lexed and parsed only: its imports need not exist. `buffered` is true when the
 ## Workspace of the `settings` holds a buffer as `file` (a `std/` name is then a path of the disk).
-export def outline(settings: Env.Settings, file: String, buffered: Bool) -> Outlined
+def outline(settings: Env.Settings, file: String, buffered: Bool) -> Outlined
   case QueryFiles.read(settings, file, buffered)
     SourceFile.Read.Unreadable(_) -> Outlined.Unreadable
     SourceFile.Read.Invalid(at) -> Outlined.Rejected(Front.stage_problem(file, SourceFile.invalid_utf8(at)))
@@ -138,7 +124,7 @@ end
 
 ## The `extern module "NAME"` blocks of the file at `path` (never a `std/` module), linked and checked with what it
 ## imports and without requiring `main`, described for a code generator: native_modules.agc. `cache` only saves work.
-export def native_modules(cache: Cache.Cache, settings: Env.Settings, path: String) -> Natived
+def native_modules(cache: Cache.Cache, settings: Env.Settings, path: String) -> Natived
   settings = for_query(settings)
   case Front.read_root(settings.workspace, path)
     Front.Root.Unreadable(_) -> Natived.Unreadable
@@ -158,7 +144,7 @@ end
 
 ## The functions of the file at `path` (never a `std/` module) with their bodies as a typed tree, linked and checked
 ## with what it imports and without requiring `main`: bodies.agc. Experimental. `cache` only saves work.
-export def bodies(cache: Cache.Cache, settings: Env.Settings, path: String) -> Bodied
+def bodies(cache: Cache.Cache, settings: Env.Settings, path: String) -> Bodied
   settings = for_query(settings)
   case Front.read_root(settings.workspace, path)
     Front.Root.Unreadable(_) -> Bodied.Unreadable
@@ -184,7 +170,7 @@ end
 
 ## The type and the definition at the position `asked` of a file of the disk (never a `std/` module), linked and
 ## checked with what it imports and without requiring `main`. `cache` only saves work, as for `check`.
-export def type_at(cache: Cache.Cache, settings: Env.Settings, asked: QueryPosition.Asked) -> Typed
+def type_at(cache: Cache.Cache, settings: Env.Settings, asked: QueryPosition.Asked) -> Typed
   settings = for_query(settings)
   case position_front(cache, settings, asked, true)
     Fronted.Unreadable -> Typed.Unreadable
@@ -200,7 +186,7 @@ end
 ## declarations (their types, `main`, the constants) do not check, and a position in a function that did not check
 ## that the link cannot name are the first problem, as for `type_at`; a position on no expression is
 ## QUERY-NO-EXPRESSION.
-export def type_at_partial(cache: Cache.Cache, settings: Env.Settings, asked: QueryPosition.Asked) -> Typed
+def type_at_partial(cache: Cache.Cache, settings: Env.Settings, asked: QueryPosition.Asked) -> Typed
   settings = for_query(settings)
   case partial_front(cache, settings, asked)
     Partly.Unreadable -> Typed.Unreadable
@@ -224,7 +210,7 @@ end
 ## builtin needs the types of every function, so the answer for one is the first problem, as for `refs`; so is a
 ## position in a function that did not check that the link cannot name. Any other position that names nothing is
 ## QUERY-NO-EXPRESSION.
-export def refs_partial(cache: Cache.Cache, settings: Env.Settings, asked: QueryPosition.Asked) -> Referenced
+def refs_partial(cache: Cache.Cache, settings: Env.Settings, asked: QueryPosition.Asked) -> Referenced
   settings = for_query(settings)
   case partial_front(cache, settings, asked)
     Partly.Unreadable -> Referenced.Unreadable
@@ -247,7 +233,7 @@ end
 ## The declaration of the name at the position `asked` and every reference to it, in the file of the position (linked
 ## and checked as for `type_at`) and what it imports; a file that only imports it is not seen: `refs_at` adds files.
 ## `cache` only saves work.
-export def refs(cache: Cache.Cache, settings: Env.Settings, asked: QueryPosition.Asked) -> Referenced
+def refs(cache: Cache.Cache, settings: Env.Settings, asked: QueryPosition.Asked) -> Referenced
   settings = for_query(settings)
   case position_front(cache, settings, asked, false)
     Fronted.Unreadable -> Referenced.Unreadable
@@ -261,7 +247,7 @@ end
 ## the work of. A file of `paths` that does not link is left out and
 ## listed in `skipped`; the file of the position must link. A path that names no `*.agc` file is QUERY-USAGE with
 ## `usage` as the help ("" for none).
-export def refs_at(
+def refs_at(
   cache: Cache.Cache,
   settings: Env.Settings,
   asked: QueryPosition.Asked,
@@ -298,7 +284,7 @@ end
 ## for `symbol`, `buffer` is searched first). A name that nothing declares is QUERY-NOT-FOUND and one that several
 ## declarations answer to is QUERY-AMBIGUOUS-NAME, with the place of each candidate in the help. A builtin is a name
 ## too. The program is checked as for `refs`, so an error of the program is the first problem.
-export def refs_named(
+def refs_named(
   cache: Cache.Cache,
   settings: Env.Settings,
   name: String,
@@ -328,7 +314,7 @@ end
 ## `buffer` is the FILE that the Workspace of the `settings` holds as a buffer ("" for none); it is searched first. A
 ## missing name and a path that names no `*.agc` file are QUERY-USAGE with `usage` as the help ("" for none), a name
 ## that nothing declares is QUERY-NOT-FOUND, and when no file links the answer is the first problem of the first one.
-export def symbol(
+def symbol(
   cache: Cache.Cache,
   settings: Env.Settings,
   name: String,
@@ -353,7 +339,7 @@ end
 
 ## The problem with the root file named as the caller wrote it (`source`): the linker knows it by its canonical path. A
 ## problem in another file keeps its canonical path.
-export def named(settings: Env.Settings, problem: Problems.Problem, source: String) -> Problems.Problem
+def named(settings: Env.Settings, problem: Problems.Problem, source: String) -> Problems.Problem
   return problem.with(file: source) if root?(problem.file, source, settings)
 
   problem
@@ -361,7 +347,7 @@ end
 
 ## Whether a file that a problem names is the root file typed as `typed`. The Workspace answers for the canonical path
 ## of the root, which is not a file of the disk when it is a buffer.
-export def root?(named: String, typed: String, settings: Env.Settings) -> Bool
+def root?(named: String, typed: String, settings: Env.Settings) -> Bool
   return true if named == typed
 
   real = settings.workspace.real_path.call(typed)
@@ -369,11 +355,25 @@ export def root?(named: String, typed: String, settings: Env.Settings) -> Bool
 end
 
 ## The QUERY-USAGE problem of a file that cannot be read, in that file.
-export def unreadable(path: String) -> Problems.Problem = QueryFiles.unreadable(path, "").with(file: path)
+def unreadable(path: String) -> Problems.Problem = QueryFiles.unreadable(path, "").with(file: path)
 
 ## The QUERY-USAGE problem of a question that is wrong in itself, such as a position below line 1, put in `path`.
-export def refused(message: String, path: String) -> Problems.Problem
-  QueryOptions.refusal(message, "").with(file: path)
+def refused(message: String, path: String) -> Problems.Problem = QueryOptions.refusal(message, "").with(file: path)
+
+private
+
+# The file of a position, linked and checked, the file cannot be read, or the first problem.
+enum Fronted
+  Done(Front.Checked)
+  Unreadable
+  Rejected(Problems.Problem)
+end
+
+# The file of a position, linked and checked as far as it goes, the file cannot be read, or the first problem.
+enum Partly
+  Done(Partial.Recovered)
+  Unreadable
+  Rejected(Problems.Problem)
 end
 
 # `skipping` is true for a question that reads only the root file's nodes (`type-at`), which may use the cache of

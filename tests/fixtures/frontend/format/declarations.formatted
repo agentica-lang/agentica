@@ -6,6 +6,10 @@
 import Lib from "lib" # after an import
 import {A, B} from "other"
 
+private
+
+LIMIT = 10 # after a constant
+
 # before a struct
 struct Point
   # before a field
@@ -21,8 +25,6 @@ enum Shape
   Square # after a variant
 end
 
-LIMIT = 10 # after a constant
-
 def area(
   # before a parameter
   shape: Shape,
@@ -34,4 +36,5 @@ end
 def empty() -> Void
   # alone in an empty body
 end
+
 # after the last item

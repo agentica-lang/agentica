@@ -1,5 +1,5 @@
 1:1 leading ExportDecl 3:1 "# a block"
 4:5 leading ConstDecl 5:3 "# inside"
-11:34 trailing FunctionDecl 11:7 "# trailing"
-12:3 dangling ModuleDecl 3:8 end "# before end"
-16:3 dangling ModuleDecl 15:1 end "# only a comment"
+13:34 trailing FunctionDecl 13:7 "# trailing"
+15:3 dangling ModuleDecl 3:1 end "# before end"
+21:3 dangling ModuleDecl 20:1 end "# only a comment"

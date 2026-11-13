@@ -1,1 +1,1 @@
-export MAX = 2
+MAX = 2

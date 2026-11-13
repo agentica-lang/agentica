@@ -23,9 +23,11 @@ HERE = "windows" if WINDOWS else "macos" if TARGET_OS == "darwin" else "linux"
 OTHER = "linux" if HERE == "windows" else "windows"
 THIRD = "macos" if HERE != "macos" else "linux"
 
-DEMO = 'extern "pkgdemo"\n  export def pkgdemo_add(a: C.Int32, b: C.Int32) -> C.Int32\nend\n'
+DEMO = 'extern "pkgdemo"\n  def pkgdemo_add(a: C.Int32, b: C.Int32) -> C.Int32\nend\n'
 MAIN = 'import Demo from "pkg/pkgdemo/demo"\n\ndef main() -> Void\n  puts(Demo.pkgdemo_add(40, 2))\nend\n'
-ROOT_MAIN = 'import Demo from "demo"\n\nextern "demo"\n  export def demo_add(a: C.Int32, b: C.Int32) -> C.Int32\nend\n\ndef main() -> Void\n  puts(demo_add(40, 2))\nend\n'
+ROOT_MAIN = ('import Demo from "demo"\n\n'
+             'extern "demo"\n  def demo_add(a: C.Int32, b: C.Int32) -> C.Int32\nend\n\n'
+             "def main() -> Void\n  puts(demo_add(40, 2))\nend\n")
 
 
 class Server:
@@ -249,9 +251,9 @@ def test_multi_member_one_archive_two_aliases(server, tmp_path):
 
 def use_site(ws, server, member_bytes=b"member-bytes", member="lib.bin", route="/t/lib.tar"):
     """A project whose main uses downloaded `demo`: writes the sources, serves the archive and pins it."""
-    (ws.project / "demo.agc").write_text('extern "demo"\n  export def f() -> Void\nend\n', encoding="utf-8")
+    (ws.project / "demo.agc").write_text('extern "demo"\n  def f() -> Void\nend\n', encoding="utf-8")
     (ws.project / "main.agc").write_text(
-        'import Demo from "demo"\n\nextern "demo"\n  export def f() -> Void\nend\n\ndef main() -> Void\n  f()\nend\n',
+        'import Demo from "demo"\n\nextern "demo"\n  def f() -> Void\nend\n\ndef main() -> Void\n  f()\nend\n',
         encoding="utf-8")
     archive = make_tar({member: member_bytes})
     sha = digest(archive)
@@ -469,7 +471,7 @@ def test_workspace_member_download_uses_folder_and_cache(server, tmp_path):
     member_manifest = 'name = "common"\n\n[native.demo]\n' + download_row(HERE, url, sha)
     (repo / member).mkdir(parents=True)
     (repo / member / "agentica.toml").write_text(member_manifest, encoding="utf-8")
-    (repo / member / "util.agc").write_text('export def shout() -> String\n  return "hi"\nend\n', encoding="utf-8")
+    (repo / member / "util.agc").write_text('def shout() -> String\n  return "hi"\nend\n', encoding="utf-8")
     # Workspace root listing the member; app is the member itself (its own download, lock key "").
     (repo / "agentica.toml").write_text('[workspace]\nrepository = "https://example.test/owner/ws"\nmembers = ["%s"]\n' % member, encoding="utf-8")
     result = run(cli() + ["--json", "update"], cwd=repo / member, env=no_proxy_env(ws))

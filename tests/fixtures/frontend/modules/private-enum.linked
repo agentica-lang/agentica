@@ -1,1 +1,1 @@
-ERROR CHECK-IMPORT-NAME 56:3:10-74:3:28 "unknown or private imported name" "Option is private in \"option.agc\": add export to it there" file="root.agc"
+ERROR CHECK-IMPORT-NAME 56:3:10-74:3:28 "unknown or private imported name" "Option is private in \"option.agc\": move it above private there" file="root.agc"

@@ -1,0 +1,1 @@
+ERROR CHECK-DECL-ORDER 26:4:1-42:6:1 "declaration is out of order" "structs, enums, type aliases, resources and modules come before functions" file="root.agc"

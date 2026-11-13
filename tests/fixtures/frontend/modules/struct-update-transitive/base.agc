@@ -1,4 +1,3 @@
-export struct Base
+struct Base
   n: Int
 end
-

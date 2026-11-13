@@ -1,7 +1,9 @@
-struct Secret
-  value: Int
+def make() -> Secret
+  return Secret(value: 1)
 end
 
-export def make() -> Secret
-  return Secret(value: 1)
+private
+
+struct Secret
+  value: Int
 end

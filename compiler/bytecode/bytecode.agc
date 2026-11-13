@@ -10,6 +10,8 @@ import LinkText from "../modules/link_text"
 import Linker from "../modules/linker"
 import Writer from "bytecode_writer"
 
+private
+
 # `agentica compiler/bytecode/bytecode.agc [flags] ROOT -o OUT ...` links, checks, lowers and writes each ROOT file to
 # the .agcb file OUT, and prints `== ROOT`, then `wrote N bytes` or the ERROR line of the first failure (those of
 # lower.agc, and BYTECODE- ones). No file is written for a failure. The flags are those of link.agc and apply to the

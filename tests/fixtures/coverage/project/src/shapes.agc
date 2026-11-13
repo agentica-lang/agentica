@@ -1,4 +1,4 @@
-export def area(kind: String, side: Int) -> Int
+def area(kind: String, side: Int) -> Int
   if kind == "square"
     return side * side
   elsif kind == "triangle"
@@ -8,6 +8,6 @@ export def area(kind: String, side: Int) -> Int
   return 0
 end
 
-export def unused() -> Int
+def unused() -> Int
   return 1
 end

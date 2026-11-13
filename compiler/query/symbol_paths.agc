@@ -13,31 +13,16 @@ import Workspace from "../modules/workspace"
 import PackageHash from "../packages/package_hash"
 import QueryOptions from "query_options"
 
-# The folder a query reads when the command line names none.
-DEFAULT_PATH = "."
-
-# The manifest of a project, the folder beside it that holds its installed packages, and the folder of agentica's
-# caches (beside a manifest or a root file).
-MANIFEST_FILE = "agentica.toml"
-DEPS_FOLDER = "deps"
-BUILD_FOLDER = "_build"
-
 ## One file a query links: the path as it was typed or listed (a diagnostic names it so), and the canonical path that
 ## keys its module, so one file has one root whatever its spelling.
-export struct Root
+struct Root
   typed: String
   key: String
 end
 
 ## The files of the arguments, or why they do not name any.
-export enum Expanded
+enum Expanded
   Files(List[Root])
-  Refused(Problems.Problem)
-end
-
-# The files one argument names, or why it names none.
-enum Listed
-  Files(List[String])
   Refused(Problems.Problem)
 end
 
@@ -45,7 +30,7 @@ end
 ## `--stdin` ("" without it): the buffer is a root of its own, and the first one, since it is the file being edited. A
 ## path that is neither a file nor a folder, a folder that cannot be listed and a folder with no `*.agc` file are
 ## QUERY-USAGE, with `usage` as the help.
-export def expand(workspace: Workspace.Workspace, paths: List[String], buffer: String, usage: String) -> Expanded
+def expand(workspace: Workspace.Workspace, paths: List[String], buffer: String, usage: String) -> Expanded
   asked = paths
   if asked.size == 0
     asked = [DEFAULT_PATH]
@@ -61,8 +46,25 @@ end
 
 ## The roots of the position form of `refs`: `file`, the file of the position, first, then the files of `paths`, which
 ## may be none (the folder `.` is not a default here: the file alone is linked).
-export def expand_from(workspace: Workspace.Workspace, file: String, paths: List[String], usage: String) -> Expanded
+def expand_from(workspace: Workspace.Workspace, file: String, paths: List[String], usage: String) -> Expanded
   with_paths(workspace, [root_of(workspace, file)], paths, usage)
+end
+
+private
+
+# The folder a query reads when the command line names none.
+DEFAULT_PATH = "."
+
+# The manifest of a project, the folder beside it that holds its installed packages, and the folder of agentica's
+# caches (beside a manifest or a root file).
+MANIFEST_FILE = "agentica.toml"
+DEPS_FOLDER = "deps"
+BUILD_FOLDER = "_build"
+
+# The files one argument names, or why it names none.
+enum Listed
+  Files(List[String])
+  Refused(Problems.Problem)
 end
 
 # `roots` and then the files of `asked`, in order and without repeats.

@@ -129,7 +129,7 @@ def test_every_std_error_literal_names_its_kind():
 
 def test_the_kinds_of_the_catalog_are_the_c_kinds_and_the_std_kinds():
     data = (ROOT / "compiler" / "catalog" / "builtins_data.agc").read_text(encoding="utf-8")
-    table = re.search(r"^export ERROR_KINDS: List\[String\] = \[\n(.*?)^\]$", data, re.M | re.S).group(1)
+    table = re.search(r"^ERROR_KINDS: List\[String\] = \[\n(.*?)^\]$", data, re.M | re.S).group(1)
     listed = re.findall(r'^  "([^"]*)",$', table, re.M)
     assert len(listed) == len(table.splitlines()) == len(set(listed))
     c_kinds = list(names().values())

@@ -31,7 +31,7 @@ READ_SIZE = 262144
 
 IMPORT_BAD_ROOT = "import Bad from \"./bad\"\n\ndef main() -> Void\nend\n"
 SHARED_ROOT = "import Shared from \"../shared/x\"\n\ndef main() -> Void\n  puts(Shared.name())\nend\n"
-SHARED_X = "export def name() -> String\n  return \"x\"\nend\n"
+SHARED_X = 'def name() -> String\n  return "x"\nend\n'
 
 def fixture_names():
     return sorted(path.name for path in MODULE_FIXTURES.iterdir() if path.is_dir())
@@ -121,14 +121,14 @@ def chain_files():
     for n in range(3000):
         if n < 2999:
             files["chain/m%d.agc" % n] = (
-                "import Next from \"m%d\"\nexport def f%d() -> Int\n  return Next.f%d()\nend\n\n" % (n + 1, n, n + 1))
+                'import Next from "m%d"\ndef f%d() -> Int\n  return Next.f%d()\nend\n\n' % (n + 1, n, n + 1))
         else:
-            files["chain/m%d.agc" % n] = "export def f%d() -> Int\n  return 1\nend\n\n" % n
+            files["chain/m%d.agc" % n] = "def f%d() -> Int\n  return 1\nend\n\n" % n
     return files
 
 
 def wide_files():
-    files = {"wide/w%d.agc" % n: "export def g%d() -> Int\n  return %d\nend\n\n" % (n, n) for n in range(2000)}
+    files = {"wide/w%d.agc" % n: "def g%d() -> Int\n  return %d\nend\n\n" % (n, n) for n in range(2000)}
     files["wide/root.agc"] = (
         "".join("import W%d from \"w%d\"\n" % (n, n) for n in range(2000))
         + "def main() -> Void\n" + "".join("  puts(W%d.g%d())\n" % (n, n) for n in range(2000)) + "end\n\n")
@@ -144,9 +144,9 @@ def broken_files():
     for n in range(1500):
         if n < 1499:
             files["broken/b%d.agc" % n] = (
-                "import Next from \"b%d\"\nexport def f() -> Int\n  return Next.f()\nend\n\n" % (n + 1))
+                'import Next from "b%d"\ndef f() -> Int\n  return Next.f()\nend\n\n' % (n + 1))
         else:
-            files["broken/b%d.agc" % n] = "export def f() -> Int\n  return Nope.Thing\nend\n\n"
+            files["broken/b%d.agc" % n] = "def f() -> Int\n  return Nope.Thing\nend\n\n"
     return files
 
 
@@ -344,7 +344,7 @@ def test_a_valid_source_file_over_1_mib_links_as_the_root_and_as_an_import(stage
     program = b"def main() -> Void\n  puts(\"big\")\nend\n"
     alone = {"alone/root.agc": comment + program}
     imported = {
-        "imported/big.agc": comment + b"export def one() -> Int\n  return 1\nend\n",
+        "imported/big.agc": comment + b"def one() -> Int\n  return 1\nend\n",
         "imported/root.agc": "import Big from \"./big\"\n\ndef main() -> Void\n  puts(Big.one().to_s)\nend\n"}
     outputs = stage.link_trees({"big-alone": (alone, "alone/root.agc"),
                                 "big-imported": (imported, "imported/root.agc")})
@@ -362,8 +362,8 @@ def test_the_user_library_root_is_the_home_local_share_or_the_local_app_data_fol
     # ~/.local/share/agentica/lib; on Windows HOME is not read, so the root is %LOCALAPPDATA%/agentica/lib.
     directory = stage.temp_dir()
     write_files(directory, {
-        "home/.local/share/agentica/lib/homelib.agc": "export def answer() -> Int\n  return 42\nend\n",
-        "local/agentica/lib/homelib.agc": "export def answer() -> Int\n  return 42\nend\n",
+        "home/.local/share/agentica/lib/homelib.agc": "def answer() -> Int\n  return 42\nend\n",
+        "local/agentica/lib/homelib.agc": "def answer() -> Int\n  return 42\nend\n",
         "home-root/root.agc":
             "import Homelib from \"pkg/homelib\"\n\ndef main() -> Void\n  puts(Homelib.answer().to_s)\nend\n"})
     env = {"AGENTICA_PATH": "", "XDG_DATA_HOME": "relative/data", "XDG_CACHE_HOME": "relative/cache",

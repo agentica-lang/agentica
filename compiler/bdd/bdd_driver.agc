@@ -21,36 +21,10 @@ import RunDir from "bdd_rundir"
 import Runner from "bdd_runner"
 import SourceRoot from "bdd_source_root"
 
-# The runner is a program of two lines, and the step program a program of one call when no --steps is given. A binary
-# that carries the std/ sources carries these two compiled (compiler/embedded/, made by the Makefile with the same two
-# texts, which tests/test_bdd.py checks), and only a run that reads the std/ sources from a folder compiles them.
-RUNNER_ROOT = "import Runner from \"std/test/runner\"\n\ndef main() -> Void\n  Runner.main()\nend\n"
-DEFAULT_STEPS = "import BDD from \"std/bdd\"\n\ndef main() -> Void\n  BDD.run([])\nend\n"
-
-# What a report names as the source of the default step program that the binary carries: no file of the run directory.
-EMBEDDED_STEPS_SOURCE = "std/bdd.agc"
-
-# Where the tests are when no path is given.
-DEFAULT_PATHS = ["specs/", "test/"]
-
-# The file that is the step program when --steps is not given and a searched folder holds it.
-DEFAULT_STEPS_FILE = "steps.agc"
-
-# The step program, compiled: where its bytecode is (nothing is written when it did not compile; "" when it is the
-# default one that the binary carries), the source the runner names in reports, the folder for the VM's --source-root,
-# and the diagnostic that the runner reports in place of the steps ("" when it compiled).
-struct Steps
-  bytecode: String
-  source: String
-  root: String
-  failure: String
-  given: Bool
-end
-
 ## Runs `agentica test` for the options and says how it ended. `settings` are the caller's: the Agentica version that
 ## the programs it compiles are written for, and its provider of the `std/` sources (the files of a folder, or the
 ## binary).
-export def run(options: Opts.Options, settings: Env.Settings) -> Report.Ending
+def run(options: Opts.Options, settings: Env.Settings) -> Report.Ending
   return Report.usage("one --steps program; import the other files from it", options) if options.steps.size > 1
 
   found = File.stat(options.vm, IO_TIMEOUT)
@@ -70,6 +44,34 @@ export def run(options: Opts.Options, settings: Env.Settings) -> Report.Ending
   ending = inside(run_directory.path, options, settings, temporary.unwrap!)
   RunDir.release(run_directory)
   ending
+end
+
+private
+
+# The runner is a program of two lines, and the step program a program of one call when no --steps is given. A binary
+# that carries the std/ sources carries these two compiled (compiler/embedded/, made by the Makefile with the same two
+# texts, which tests/test_bdd.py checks), and only a run that reads the std/ sources from a folder compiles them.
+RUNNER_ROOT = "import Runner from \"std/test/runner\"\n\nprivate\n\ndef main() -> Void\n  Runner.main()\nend\n"
+DEFAULT_STEPS = "import BDD from \"std/bdd\"\n\nprivate\n\ndef main() -> Void\n  BDD.run([])\nend\n"
+
+# What a report names as the source of the default step program that the binary carries: no file of the run directory.
+EMBEDDED_STEPS_SOURCE = "std/bdd.agc"
+
+# Where the tests are when no path is given.
+DEFAULT_PATHS = ["specs/", "test/"]
+
+# The file that is the step program when --steps is not given and a searched folder holds it.
+DEFAULT_STEPS_FILE = "steps.agc"
+
+# The step program, compiled: where its bytecode is (nothing is written when it did not compile; "" when it is the
+# default one that the binary carries), the source the runner names in reports, the folder for the VM's --source-root,
+# and the diagnostic that the runner reports in place of the steps ("" when it compiled).
+struct Steps
+  bytecode: String
+  source: String
+  root: String
+  failure: String
+  given: Bool
 end
 
 # Whether this binary carries the runner and the default step program, compiled with the std/ sources.

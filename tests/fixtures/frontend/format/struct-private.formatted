@@ -1,5 +1,5 @@
 ## A connection.
-export struct Conn
+struct Conn
   id: Int # the id
   peer: String
 
@@ -14,6 +14,8 @@ export struct Conn
   timeout_ms: Int = 5
 end
 
+private
+
 struct First
   private
 
@@ -27,7 +29,7 @@ struct Last
 end
 
 module M
-  export struct S
+  struct S
     a: Int
 
     private

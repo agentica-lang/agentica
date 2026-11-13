@@ -11,42 +11,19 @@ import Lock from "../packages/lock"
 import Project from "../packages/project"
 import RandomName from "random_name"
 
-# The folder of the project (or of the root file) that holds the build outputs, and the variable that names another
-# folder in place of the first.
-BUILD_FOLDER = "_build"
-BUILD_VARIABLE = "AGENTICA_BUILD_DIR"
-
 # The deadline of each system call, in milliseconds, and the most one File.read_bytes gives.
-export IO_TIMEOUT_MS = 10_000
-export PIECE = 1_048_576
-
-# The variables that change what the build of a native module makes (io/native_build.agc).
-COMPILER_VARIABLES = ["CC", "CPATH", "C_INCLUDE_PATH", "CPLUS_INCLUDE_PATH", "LIBRARY_PATH"]
-
-# The execute bits of the owner, the group and others (0111).
-EXECUTE_BITS = 73
-
-# The files that decide which package or library an import reads, next to the manifest.
-MANIFEST_FILE = "agentica.toml"
-PROJECT_FILES = [MANIFEST_FILE, "agentica.lock"]
-
-# The write bits of the group and of others (020 and 002).
-GROUP_OTHER_WRITE = 18
+IO_TIMEOUT_MS = 10_000
+PIECE = 1_048_576
 
 # A file that a run could not finish is left with this in its name; the next one to write removes the old ones.
-export TEMP_MARK = ".agcb.tmp-"
-STALE_TEMP_SECONDS = 3600
-
-# How often, and how far apart, discard tries on Windows to remove a temporary file that cannot be removed yet.
-DISCARD_TRIES = 5
-DISCARD_PAUSE_MS = 30
+TEMP_MARK = ".agcb.tmp-"
 
 ## Where the caches of a root file are kept and what their entries must match. `build` is the `_build/` folder and
 ## `beside` is true for the `_build/` of the project, false for the folder of AGENTICA_BUILD_DIR. `libs_dir` is the
 ## folder whose agc_libs/ the build reads first. `binary` and `inputs` are lines of the key of an entry: the size, time
 ## and path of the running binary, and a digest of what, besides the files an import reads, changes what a build makes
 ## of the root.
-export struct Site
+struct Site
   build: String
   beside: Bool
   libs_dir: String
@@ -57,7 +34,7 @@ end
 ## The site of the caches for the real path `real` of a root file. The inputs are read now, before the work, so a file
 ## that changes while the front end works makes the next lookup miss instead of keeping the old result under the new
 ## key.
-export def site(settings: Env.Settings, real: String) -> Result[Site]
+def site(settings: Env.Settings, real: String) -> Result[Site]
   build = try File.stat(settings.self_path, IO_TIMEOUT_MS)
   root_dir = Paths.directory_of(real)
   project = try Project.find(settings.workspace, root_dir, settings.version)
@@ -86,7 +63,7 @@ end
 # refused) and, where the system has owners and modes (`user` is not -1), be owned by the user of this process and
 # writable by no one else. On Windows any real folder and file pass: the cache trusts its folder, with no owner or ACL
 # check, and a folder that other users can write is out of scope.
-export def private_kind(path: String, kind: String, user: Int) -> Result[Void]
+def private_kind(path: String, kind: String, user: Int) -> Result[Void]
   info = try File.lstat(path, IO_TIMEOUT_MS)
   return error("#{path} is not a #{kind}") if info.kind != kind
 
@@ -102,7 +79,7 @@ end
 # cannot give another id; a temporary folder that others can write without the sticky bit could still swap the file
 # between the create and the stat, which is a setting of the user's. -1 on Windows, where `user_id` is always 0 and
 # means nothing.
-export def own_user() -> Result[Int]
+def own_user() -> Result[Int]
   return ok(-1) if System.os() == "windows"
 
   name = try RandomName.hex()
@@ -129,7 +106,7 @@ end
 # A folder that exists must pass private_kind; one that does not is made with `Dir.mkdir_private`, one level only (the
 # folders above it are made with the default mode when they are missing). True when it was made now. A folder that
 # another run made between the check and the mkdir is one that exists.
-export def private_folder(path: String, user: Int) -> Result[Bool]
+def private_folder(path: String, user: Int) -> Result[Bool]
   if File.lstat(path, IO_TIMEOUT_MS).ok?
     try private_kind(path, "directory", user)
     return ok(false)
@@ -152,7 +129,7 @@ export def private_folder(path: String, user: Int) -> Result[Bool]
 end
 
 # A new file that only this user can use. `create_private` fails on a name that exists and never follows a link.
-export def write_private(path: String, data: Bytes) -> Result[Void]
+def write_private(path: String, data: Bytes) -> Result[Void]
   out = try File.open(path, "create_private", IO_TIMEOUT_MS)
   rest = data
   while rest.size > 0
@@ -173,7 +150,7 @@ end
 # a miss, and a run that dies in between leaves no entry. False when anything fails, and then `temporary` is removed:
 # a run that lost the race to another one (its rename finds the entry the other made) must not leave its file. The
 # write handle is closed by then (write_private closes it on every path).
-export def install(temporary: String, data: Bytes, target: String) -> Bool
+def install(temporary: String, data: Bytes, target: String) -> Bool
   if !write_private(temporary, data).ok?
     discard(temporary)
     return false
@@ -193,7 +170,7 @@ end
 # is tried again a few times. Elsewhere it is tried once: a failure there is permanent. A scanner that shares the file
 # for deletion lets the removal succeed and keeps the name in the folder until it lets go, which no retry shortens.
 # A file that cannot be removed is left for the sweep.
-export def discard(path: String) -> Void
+def discard(path: String) -> Void
   tries = 1
   if System.os() == "windows"
     tries = DISCARD_TRIES
@@ -210,7 +187,7 @@ end
 
 # Removes the file, link, FIFO, socket or device at `path` (a link is removed as a link, never followed). A folder in
 # its place stays (the rename then fails and the entry is not written): `Path.remove` would delete the whole folder.
-export def remove_file(path: String) -> Void
+def remove_file(path: String) -> Void
   info = File.lstat(path, IO_TIMEOUT_MS)
   if info.ok? and info.unwrap!.kind != "directory"
     _ = Path.remove(path, IO_TIMEOUT_MS)
@@ -218,7 +195,7 @@ export def remove_file(path: String) -> Void
 end
 
 # Removes the temporary files that a run left (it died between the write and the rename) once they are an hour old.
-export def sweep(folder: String) -> Void
+def sweep(folder: String) -> Void
   names = Dir.list(folder, IO_TIMEOUT_MS)
   return if !names.ok?
 
@@ -234,10 +211,10 @@ export def sweep(folder: String) -> Void
   end
 end
 
-export def digest(data: Bytes) -> String = OpenSSL.Digest.sha256_hexdigest(data)
+def digest(data: Bytes) -> String = OpenSSL.Digest.sha256_hexdigest(data)
 
 ## The words of CC, else the system's compiler: the command a native build runs (io/native_build.agc).
-export def compiler_words(system: String) -> List[String]
+def compiler_words(system: String) -> List[String]
   set = System.env("CC")
   if set.ok?
     words = set.unwrap!.split(" ").filter do |word: String| word != "" end
@@ -248,6 +225,32 @@ export def compiler_words(system: String) -> List[String]
 
   ["cc"]
 end
+
+private
+
+# The folder of the project (or of the root file) that holds the build outputs, and the variable that names another
+# folder in place of the first.
+BUILD_FOLDER = "_build"
+BUILD_VARIABLE = "AGENTICA_BUILD_DIR"
+
+# The variables that change what the build of a native module makes (io/native_build.agc).
+COMPILER_VARIABLES = ["CC", "CPATH", "C_INCLUDE_PATH", "CPLUS_INCLUDE_PATH", "LIBRARY_PATH"]
+
+# The execute bits of the owner, the group and others (0111).
+EXECUTE_BITS = 73
+
+# The files that decide which package or library an import reads, next to the manifest.
+MANIFEST_FILE = "agentica.toml"
+PROJECT_FILES = [MANIFEST_FILE, "agentica.lock"]
+
+# The write bits of the group and of others (020 and 002).
+GROUP_OTHER_WRITE = 18
+
+STALE_TEMP_SECONDS = 3600
+
+# How often, and how far apart, discard tries on Windows to remove a temporary file that cannot be removed yet.
+DISCARD_TRIES = 5
+DISCARD_PAUSE_MS = 30
 
 # What, besides the files an import reads, changes what a build makes of the root: the environment that places
 # libraries and packages, the C compiler a native module builds with (the file it is, `compiler_path`) and its

@@ -20,32 +20,11 @@ import Failure from "link_failure"
 import Modules from "modules"
 import Rewrite from "rewrite"
 
-# What a written name must be: a call or function value (`Call`), a type or an enum (`Type`), where an alias without a
-# member is a mistake, or the enum of a variant (`Variant`), which the parser reads from `Alias.Name(...)` too: the
-# alias then has a member when its module exports `member`, whatever that is (a struct that is called is the checker's
-# to refuse).
-enum Role
-  Call
-  Type
-  Variant
-  Module
-end
-
-# A name as written, the role of the place that wrote it, the span of that place and, for a variant, its name. For a
-# `Module` (a regex literal or an EAG template, which need the import of their library in any form) the name is the key
-# of that module.
-struct Written
-  name: String
-  role: Role
-  span: Source.Span
-  member: String
-end
-
 ## CHECK-UNUSED-IMPORT for the first alias of the file that nothing uses, or CHECK-IMPORT-NAME for an alias written
 ## without its member. A module read from the stub of the check cache has no bodies to read, and passed this check
 ## when its entry was made, so it is not checked. With `unused` false (a query about this file, whose editor adds the
 ## import before the code that uses it) only CHECK-IMPORT-NAME is reported: the other rule is skipped.
-export def check(module: Modules.Module, modules: Map[String, Modules.Module], unused: Bool) -> Result[Bool]
+def check(module: Modules.Module, modules: Map[String, Modules.Module], unused: Bool) -> Result[Bool]
   return ok(true) if module.stubbed
 
   written = of_program(module.program)
@@ -93,6 +72,29 @@ export def check(module: Modules.Module, modules: Map[String, Modules.Module], u
   end
 
   ok(true)
+end
+
+private
+
+# What a written name must be: a call or function value (`Call`), a type or an enum (`Type`), where an alias without a
+# member is a mistake, or the enum of a variant (`Variant`), which the parser reads from `Alias.Name(...)` too: the
+# alias then has a member when its module exports `member`, whatever that is (a struct that is called is the checker's
+# to refuse).
+enum Role
+  Call
+  Type
+  Variant
+  Module
+end
+
+# A name as written, the role of the place that wrote it, the span of that place and, for a variant, its name. For a
+# `Module` (a regex literal or an EAG template, which need the import of their library in any form) the name is the key
+# of that module.
+struct Written
+  name: String
+  role: Role
+  span: Source.Span
+  member: String
 end
 
 # True when a call is written `Head.name` and Head is nothing the checker would resolve: no alias, no declaration or

@@ -114,14 +114,15 @@ files of a program. Read the definitions for the fields. Rules the types do not
 show:
 
 - `Program.docs` maps the span of each documented node to its doc text. The key
-  is the span of the node as it stands in its list: the `ExportDecl` for an
-  exported declaration (not the `def` inside), the `FieldDecl`, the
+  is the span of the node as it stands in its list: the `ExportDecl` for a
+  public declaration (not the `def` inside), the `FieldDecl`, the
   `EnumVariant`. Other nodes know nothing of docs, so later stages see the tree
   as before.
-- In a file or module block with a `private` line (`private_mark`), the
-  parser wraps each declaration above it in an `ExportDecl` (or sets
-  `ConstDecl.exported`), with its span and doc, so every reader of the exports
-  sees one rule; `fmt` unwraps them again (`format.agc`, `as_written`).
+- The parser wraps each declaration above the `private` line of its file or
+  module block (`private_mark`; every one when there is none) in an
+  `ExportDecl` (or sets `ConstDecl.exported`), with its span and doc, so every
+  reader of the exports sees one tree; `export` before a declaration is
+  refused (`no_export`) and `fmt` writes none.
 - Exactly one of `ImportDecl.alias` and `names` is set.
 - The linker makes `ConstRef` for a read of a constant, fills
   `StructUpdate.visible` and `EnumConstructor.named`, and clears

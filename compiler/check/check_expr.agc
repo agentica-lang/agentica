@@ -20,20 +20,9 @@ import State from "check_state"
 import Statements from "check_stmt"
 import CheckTypes from "check_types"
 
-# The types whose left side of == gives the right side its expected type (check_sides).
-EXPECTING_SIDES = Set.new(["List", "Map", "Set", "Optional", "Result", "Struct", "Enum"])
-
-# What the two sides of a binary operator are, checked in order. The right side of a range is checked with the methods
-# and fields of its chain marked, so that the help can say a method call on a range needs parentheses.
-struct Sides
-  st: State.St
-  left: T.Type
-  right: T.Type
-end
-
 ## Checks an expression against the type the context expects (Unknown when none). completion says a Void value is
 ## allowed here: a statement, the last expression of a block, a return.
-export def check_expression(
+def check_expression(
   cx: State.Cx,
   st: State.St,
   node: Ast.Expr,
@@ -68,6 +57,19 @@ export def check_expression(
 
   recorded = State.record_type(checked.st, Ast.expr_id(node), checked.type)
   ok(State.Out(st: recorded.with(nest: st.nest), type: actual))
+end
+
+private
+
+# The types whose left side of == gives the right side its expected type (check_sides).
+EXPECTING_SIDES = Set.new(["List", "Map", "Set", "Optional", "Result", "Struct", "Enum"])
+
+# What the two sides of a binary operator are, checked in order. The right side of a range is checked with the methods
+# and fields of its chain marked, so that the help can say a method call on a range needs parentheses.
+struct Sides
+  st: State.St
+  left: T.Type
+  right: T.Type
 end
 
 # True when the type of the node is the expected type without a look: some(x) against Optional[T], ok(x) against

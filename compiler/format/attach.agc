@@ -3,6 +3,8 @@ import SourceFile from "../syntax/source_file"
 import Text from "../syntax/text"
 import CommentsText from "comments_text"
 
+private
+
 def main() -> Void
   for path in System.args()
     puts("== #{path}")

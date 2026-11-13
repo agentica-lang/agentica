@@ -14,7 +14,7 @@ import Front from "front"
 
 ## The program, the problems of its functions that did not check and the linked names of those functions: none when
 ## the program checks, so the answers are complete.
-export struct Recovered
+struct Recovered
   front: Front.Checked
   problems: List[Problems.Problem]
   failed: List[String]
@@ -22,7 +22,7 @@ end
 
 ## The program linked and checked as far as it goes, or the first problem of a program that does not link or whose
 ## declarations (their types, `main`, the constants) do not check.
-export enum Outcome
+enum Outcome
   Done(Recovered)
   Rejected(Problems.Problem)
 end
@@ -31,7 +31,7 @@ end
 ## problem. `problems` is empty exactly when `Front.query_file` gives Done. A program that `cache` holds as checked
 ## (same modules and texts, see Front.query_cached) is not checked again; one it holds as failed is, since the cache
 ## keeps only the first problem.
-export def query_file(cache: Cache.Cache, path: String, settings: Env.Settings) -> Outcome
+def query_file(cache: Cache.Cache, path: String, settings: Env.Settings) -> Outcome
   walked = Modules.load_with(path, settings, cache.parses)
   return Outcome.Rejected(Front.link_problem(Failure.unpack_failure(walked.message))) if !walked.ok?
 
@@ -40,6 +40,8 @@ export def query_file(cache: Cache.Cache, path: String, settings: Env.Settings) 
     Cache.Found.Miss -> linked(cache, walked.unwrap!, settings)
   end
 end
+
+private
 
 def reused(cache: Cache.Cache, root: Cache.Root, settings: Env.Settings) -> Outcome
   case root.checking

@@ -1,15 +1,15 @@
-export struct Item
+struct Item
   name: String
   count: Int
 end
 
-export enum Level
+enum Level
   Empty
   Low(Int)
   Plenty
 end
 
-export def level(item: Item) -> Level
+def level(item: Item) -> Level
   if item.count == 0
     return Level.Empty
   elsif item.count < 5
@@ -18,6 +18,6 @@ export def level(item: Item) -> Level
   return Level.Plenty
 end
 
-export def pick(items: List[Item], index: Int) -> Item
+def pick(items: List[Item], index: Int) -> Item
   return items[index]
 end
