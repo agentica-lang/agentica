@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 792,
+  "steps": 12109,
   "stdout": [
     "missing file: io.not_found code=2 io=true",
     "directory as file: io.is_directory code=21 io=true",
@@ -28,10 +28,19 @@
     "read timeout: net.timeout code=none net=true",
     "refused: net.refused code=true",
     "no program: process.not_found code=none process=true",
+    "response line too large: http.too_large code=431 http=true",
+    "response headers too many: http.too_large code=431 http=true",
+    "chunk line too large: http.too_large code=431 http=true",
+    "response body too large: http.too_large code=413 http=true",
+    "response head malformed: http.protocol code=none http=true",
+    "request header line too large: http.too_large code=431 http=true",
+    "request headers too many: http.too_large code=431 http=true",
+    "request body too large: http.too_large code=413 http=true",
+    "request method malformed: http.protocol code=none http=true",
     ""
   ],
   "stderr": [
-    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/error-kinds.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":17,\"line\":33},\"start\":{\"column\":16,\"line\":33}},\"spawned_at\":{\"column\":43,\"file\":\"@fixtures/vm/error-kinds.agc\",\"line\":70},\"stack\":[{\"column\":16,\"file\":\"@fixtures/vm/error-kinds.agc\",\"function\":\"boom\",\"line\":33}],\"task\":true}",
+    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/error-kinds.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":17,\"line\":36},\"start\":{\"column\":16,\"line\":36}},\"spawned_at\":{\"column\":43,\"file\":\"@fixtures/vm/error-kinds.agc\",\"line\":118},\"stack\":[{\"column\":16,\"file\":\"@fixtures/vm/error-kinds.agc\",\"function\":\"boom\",\"line\":36}],\"task\":true}",
     ""
   ]
 }
