@@ -1406,9 +1406,7 @@ end
     assert capture.has(free_stream, b"native-free\n")
 
 
-# One pool thread (one scheduler) runs a call that waits for the flag while 49 naps wait in its queue. Their tasks are
-# cancelled while the pool thread is still held, then the flag lets it go: the waiting calls are never made, so no nap
-# starts. The first call holds the thread until main sets the flag, so a slow wake of main cannot let a nap start first.
+# The holder keeps the one pool thread busy until the 49 queued naps are cancelled, so no nap can start first.
 @NATIVE_CALLS
 def test_a_cancel_skips_a_compute_call_that_has_not_started(tmp_path, peer):
     main = """def nap(ms: Int) -> Result[Int]
