@@ -374,8 +374,8 @@ When `task` ends for any reason (it returns, crashes or is cancelled), the runti
 
 - `TaskDown` is a builtin record: `task_id: Int` (the `task.id` of the task), `reason: TaskExit`, then the diagnostic of a crash: `code: String` (the stable code, such as `RUNTIME-DIVISION-BY-ZERO`, to match on), `message: String`, and `file: String`, `line: Int` and `column: Int` where the error was raised. For `TaskExit.Ok` and `TaskExit.Cancelled` the strings are `""` and the numbers `0`. `TaskExit` is a builtin enum: `TaskExit.Ok`, `TaskExit.Crashed` or `TaskExit.Cancelled`, read as `Task.await` reads the end (a crash first, then a cancel). Both names are reserved.
 - A task that has ended already gets its notice at once, and a task may have several monitors, each with its own notice. A monitor cannot be removed.
-- The send never waits and never fails: when the channel is closed or full at that moment, the notice is dropped without an error. Give the channel room for every notice it may get.
-- A crash whose notice goes into the channel counts as observed, like an await of it, so it does not make the run exit 1. It counts once the notice is in the channel, even if nobody ever receives it.
+- The send never waits and never fails. A notice that finds the channel full goes in past its capacity, after the values already in it, so it is never lost while the channel is open: a `send` still finds the channel full until the receiver has taken the values over the capacity. A notice for a closed channel is dropped without an error.
+- A crash whose notice goes into the channel counts as observed, like an await of it, so it does not make the run exit 1. It counts once the notice is in the channel, even if nobody ever receives it. A monitor through a `TaskRef` does not observe the crash: only the holder of the `Task[R]`, which can await it, does.
 - `task` may also be the `TaskRef` of [Task.current](#taskcurrent).
 - The notice comes as soon as the ended task has closed what it owns, as for `Task.await`. The `message` block runs in a task of its own, outside the caller's tree, so a cancel never reaches it; keep it to building the message. A runtime error in `message` is a crash of that task, and the notice is lost.
 
@@ -544,6 +544,6 @@ true
 
 Some errors end the whole run, whichever task raises them: a runtime error in `main`, `RUNTIME-STEP-LIMIT`, an internal VM error, and `System.exit` in any task. The first of these wins.
 
-A crash is observed when an await returns its error or halts, when its [monitor](#taskmonitor)'s notice goes into the channel, or when `Test.run` reports it. If `main` returns with a crash never observed, the run exits 1 and prints one line on stderr: `2 task crashes were not observed; first: task crashed: ...` (with `--json`, `{"unobserved_crashes":2,"first":"task crashed: ..."}`).
+A crash is observed when an await returns its error or halts, when the notice of its [monitor](#taskmonitor) through a `Task[R]` goes into the channel, or when `Test.run` reports it. If `main` returns with a crash never observed, the run exits 1 and prints one line on stderr: `2 task crashes were not observed; first: task crashed: ...` (with `--json`, `{"unobserved_crashes":2,"first":"task crashed: ..."}`).
 
 Returning from `main` ends the run, and pending tasks never run again. At the end of any run the VM flushes and closes open files and waits for the buffered output of stdout and stderr to reach the pipe or file (bounded by the flush limit, 30 seconds by default, `--flush-timeout`), frees what native code still owns within the same limit, closes sockets and listeners, and stops and reaps the child processes it started. Standard streams stay open.

@@ -501,13 +501,15 @@ typedef struct agc_timers {
 
 /* A Task.monitor registration on its task (`monitors`, changed under rt->sync). When the task settles, the runtime
    runs wrap(TaskDown) in a service task of its own and offers the result to channel without waiting (monitor_fire in
-   vm/task.c); `span` is the call, the spawn site of that task. */
+   vm/task.c); `span` is the call, the spawn site of that task. `observes`: a notice that goes in observes a crash of
+   the task; false for a monitor through a TaskRef. */
 typedef struct agc_monitor {
   struct agc_monitor *next;
   struct agc_task *target;
   agc_channel *channel;
   agc_value wrap;
   uint32_t span;
+  bool observes;
 } agc_monitor;
 
 struct agc_task {

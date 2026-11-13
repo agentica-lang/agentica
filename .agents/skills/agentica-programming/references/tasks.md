@@ -125,12 +125,12 @@ of an enum (there is no `select`). `TaskDown` is a builtin record:
 `task_id: Int` (equal to `task.id`), `reason: TaskExit` (`TaskExit.Ok`,
 `TaskExit.Crashed` or `TaskExit.Cancelled`), and for a crash its diagnostic: `code` (the stable
 `RUNTIME-` code, to match on), `message`, `file`, `line` and `column` (`""` and
-`0` otherwise). The send never waits or fails: a closed or full channel drops
-the notice, so give it room for every notice that can be pending at once. A
-crash whose notice went in counts as observed. The `message` block runs in a
-task of its own. Monitor a task after any setup step that can fail: a failed
-start leaves a stale notice in the inbox. A retry loop that never reads its
-inbox must not create notices, or a real one is dropped once the inbox is full.
+`0` otherwise). The send never waits or fails: a notice into a full channel
+goes in past its capacity, and only a closed channel drops it. A crash whose
+notice went in counts as observed, unless the monitor came through a `TaskRef`
+(only the `Task[R]` holder observes). The `message` block runs in a task of its
+own. Monitor a task after any setup step that can fail: a failed start leaves a
+stale notice in the inbox.
 
 `Task.current` is the running task as a `TaskRef`: `Task.monitor`,
 `Task.cancel` and `.id` take it, but `Task.await` of it is
@@ -409,7 +409,8 @@ the `Ref`; there are no methods.
 - A crash in a handler ends the actor (its diagnostic prints, `terminate` does
   not run, queued messages are lost). A crash nothing observes fails the run
   when `main` returns: observe it with `Actor.stop`, `Task.await(ref.task)` or
-  `Task.monitor(ref.task, ...)`. A monitor notice into a full inbox is dropped.
+  `Task.monitor(ref.task, ...)`. A monitor notice into a full inbox still goes
+  in, past its capacity.
 - The actor is a child of the task that calls `start`: a crash or cancel of
   that task cancels it. Start long-lived actors from `main` or a supervisor.
 - `timeout_ms` of `stop` must be above 0 (`RUNTIME-INVALID-DURATION`); give

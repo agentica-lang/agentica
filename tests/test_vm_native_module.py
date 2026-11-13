@@ -254,6 +254,25 @@ def test_dirty_calls_and_resources_of_a_module(tmp_path, demo):
         'error("not a number")', "1", "2", "true", "[1, 1]", "1", ""])
 
 
+# The Error that a module function returns (an_error) has the location of the user's call, as an Error of a builtin
+# does, for a short and a compute def alike: not the place of the extern declaration.
+@NATIVE_CALLS
+def test_an_error_of_a_module_function_points_at_the_call(tmp_path, demo):
+    module = ('extern module "LIBRARY"\n  def parse(text: String) -> Result[Int]\n'
+              '  compute def dirty_parse(text: String) -> Result[Int]\nend\n\n')
+    body = """  for result in [parse("12x"), dirty_parse("12x")]
+    case result
+      ok(n) -> puts(n)
+      error(e) -> puts(e.location)
+    end
+  end
+"""
+    result = run_main(tmp_path, demo, body, "", module)
+    assert (result.code, result.stderr) == (0, "")
+    line = module.count("\n") + 2
+    assert result.stdout == "program.agc:%d:18\nprogram.agc:%d:32\n" % (line, line)
+
+
 @NATIVE_CALLS
 @pytest.mark.parametrize("body, name, code", [
     ('  puts(dirty_unwrap(error("no")))\n', "compute def dirty_unwrap(", "RUNTIME-NATIVE-ERROR"),
