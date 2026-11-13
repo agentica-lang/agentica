@@ -64,6 +64,7 @@ typedef enum {
   AGC_KIND_DENIED_FS,
   AGC_KIND_DENIED_NET,
   AGC_KIND_DENIED_RUN,
+  AGC_KIND_SYSTEM_SIGNAL,
   AGC_KIND_COUNT
 } agc_error_kind;
 

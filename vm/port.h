@@ -51,6 +51,21 @@ struct agc_resource {
 
 typedef void (*agc_end_fn)(agc_vm *vm, agc_task *t);
 
+/* The System.Signal variants in catalog order (ENUMS in compiler/catalog/builtins_data.agc); bit k of a signal mask
+   is variant k. The first AGC_SIGNAL_DELIVERED can be subscribed to (System.subscribe); Quit is the VM's force stop and
+   Kill is never caught. */
+enum {
+  AGC_SIGNAL_TERM,
+  AGC_SIGNAL_INT,
+  AGC_SIGNAL_HUP,
+  AGC_SIGNAL_USR1,
+  AGC_SIGNAL_USR2,
+  AGC_SIGNAL_QUIT,
+  AGC_SIGNAL_KILL,
+  AGC_SIGNAL_COUNT,
+  AGC_SIGNAL_DELIVERED = AGC_SIGNAL_QUIT
+};
+
 typedef struct agc_test_note agc_test_note;
 typedef struct agc_test_run agc_test_run;
 typedef struct agc_registry agc_registry;
@@ -444,6 +459,11 @@ typedef struct {
   bool down_found;
   /* The addresses made so far (channel.address, vm/channel.c), under rt->sync: the last number given. */
   uint64_t addresses;
+  /* The open signal channels of System.subscribe (vm/channel.c), linked by their signal_next, and the variant ids of
+     the System.Signal values they deliver, found by the first subscribe; all under rt->sync. */
+  struct agc_channel *signal_channels;
+  uint32_t signal_variants[AGC_SIGNAL_COUNT];
+  bool signal_found;
   _Atomic int64_t steps_left;
   _Atomic uint64_t next_task_id;
   agc_log_registry log;

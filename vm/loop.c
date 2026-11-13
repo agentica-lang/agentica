@@ -63,9 +63,13 @@ typedef struct {
   const agc_io_kind *kind;
 } job_trace;
 
+/* `subscribed` (AGC_SIGNAL_* bits) is written by the schedulers (agc_io_signals_set) and read by the handler;
+   `pending` is set by the handler and taken by a scheduler (agc_io_signals_take); `ignored` is written once, by
+   agc_io_watch_stop before any subscription. */
 typedef struct {
   atomic_int signal, now;
   atomic_bool held;
+  atomic_uint subscribed, pending, ignored;
 #if defined(_WIN32)
   HANDLE driver;
 #else
@@ -1218,10 +1222,20 @@ agc_loop *agc_loop_of_uv(struct uv_loop_s *uv) { return (agc_loop *)(void *)((ch
 bool agc_io_here(agc_vm *vm) { return !vm->rt->loop || on_io_thread(vm->rt->loop); }
 
 #if !defined(_WIN32)
-#define STOP_SIGNALS 3
+#define STOP_SIGNALS 6
 #define STOP_GRACE_SECONDS 3
 
-static const int stop_signals[STOP_SIGNALS] = {SIGINT, SIGTERM, SIGHUP};
+static const int stop_signals[STOP_SIGNALS] = {SIGINT, SIGTERM, SIGHUP, SIGUSR1, SIGUSR2, SIGQUIT};
+
+/* The OS number of each System.Signal variant, by AGC_SIGNAL_* index. */
+static const int signal_numbers[AGC_SIGNAL_COUNT] = {SIGTERM, SIGINT, SIGHUP, SIGUSR1, SIGUSR2, SIGQUIT, SIGKILL};
+
+/* The AGC_SIGNAL_* bit of an OS signal, 0 for one outside the enum. Async-signal-safe: the handler calls it. */
+static unsigned signal_bit(int sig) {
+  for (unsigned k = 0; k < AGC_SIGNAL_COUNT; k++)
+    if (signal_numbers[k] == sig) return 1u << k;
+  return 0;
+}
 
 void agc_io_block_stop(sigset_t *saved) {
   sigset_t block;
@@ -1239,6 +1253,8 @@ _Static_assert(ATOMIC_INT_LOCK_FREE == 2 && ATOMIC_BOOL_LOCK_FREE == 2, "the sto
    it). A signal sent to the whole process may be taken later by another thread, and on macOS the _exit(128 + sig)
    that follows a call would then win. */
 void agc_io_die_by(int sig) {
+  /* Quit is the force stop of the VM (Ctrl-backslash): its end is _exit(131) without a core dump. */
+  if (sig == SIGQUIT) _exit(128 + SIGQUIT);
   signal(sig, SIG_DFL);
   sigset_t one;
   sigemptyset(&one);
@@ -1287,14 +1303,26 @@ static long dbg_thread(void) {
 #endif
 }
 
+/* The handler of the stop signals: async-signal-safe, so it only reads and writes the atomics of stop_status, calls
+   getppid and uv_async_send (which libuv documents as async-signal-safe), or ends with _exit. A subscribed signal
+   (System.subscribe) is only recorded in `pending` and wakes the loop, while no stop has begun and the driver, if any,
+   lives (a driven VM whose driver is gone takes the stop path, PR_SET_PDEATHSIG's signal included). */
 static void stop_requested(int sig) {
   int saved = errno;
   dbg_line("handler sig thread wake_pending wake", sig, dbg_thread(),
            stop_status()->wake ? (long)atomic_load((_Atomic int *)&stop_status()->wake->pending) : -1,
            stop_status()->wake != NULL);
+  bool orphan = stop_status()->driver && getppid() != stop_status()->driver;
+  unsigned bit = signal_bit(sig);
+  if (!orphan && stop_status()->wake && !atomic_load(&stop_status()->signal) &&
+      (atomic_load(&stop_status()->subscribed) & bit)) {
+    atomic_fetch_or(&stop_status()->pending, bit);
+    uv_async_send(stop_status()->wake);
+    errno = saved;
+    return;
+  }
   int none = 0;
   bool first = atomic_compare_exchange_strong(&stop_status()->signal, &none, sig);
-  bool orphan = stop_status()->driver && getppid() != stop_status()->driver;
   if (first && !orphan) {
     if (stop_status()->wake)
       uv_async_send(stop_status()->wake);
@@ -1367,11 +1395,16 @@ void agc_io_watch_stop(agc_vm *vm, int64_t driver) {
   act.sa_handler = stop_requested;
   sigemptyset(&act.sa_mask);
   for (size_t k = 0; k < STOP_SIGNALS; k++) sigaddset(&act.sa_mask, stop_signals[k]);
+  unsigned ignored = 0;
   for (size_t k = 0; k < STOP_SIGNALS; k++) {
     struct sigaction now;
-    if (sigaction(stop_signals[k], NULL, &now) == 0 && now.sa_handler != SIG_IGN)
+    if (sigaction(stop_signals[k], NULL, &now) != 0) continue;
+    if (now.sa_handler == SIG_IGN)
+      ignored |= signal_bit(stop_signals[k]);
+    else
       sigaction(stop_signals[k], &act, NULL);
   }
+  atomic_store(&stop_status()->ignored, ignored);
 }
 
 int agc_io_stop_signal(void) { return atomic_load(&stop_status()->signal); }
@@ -1389,6 +1422,52 @@ void agc_io_thread_signals(void) {
   sigset_t saved;
   agc_io_block_stop(&saved);
 }
+
+/* On the loop's thread: the wake handle keeps the loop alive while a signal is subscribed, so a run whose tasks all
+   wait for a signal sleeps in the loop instead of reporting a stall; unreferenced otherwise, as before. */
+static void keep_wake(void *data) {
+  agc_loop *loop = data;
+  if (stop_status()->wake != &loop->wake) return;
+  if (atomic_load(&stop_status()->subscribed))
+    uv_ref((uv_handle_t *)&loop->wake);
+  else
+    uv_unref((uv_handle_t *)&loop->wake);
+}
+
+/* A subscribed signal does not stop the run, so the system calls it interrupts restart (SA_RESTART): a blocking write
+   of the FILE fallback goes on instead of failing with EINTR, and glibc empties a FILE's buffer on a failed write, so
+   a retry of the rest would lose bytes. A signal that is not subscribed keeps no SA_RESTART: its EINTR still ends such
+   a write at once on the stop path. Only a handler of ours is changed (an ignored signal has none). */
+static void restart_subscribed(unsigned mask) {
+  for (unsigned k = 0; k < AGC_SIGNAL_DELIVERED; k++) {
+    struct sigaction now;
+    if (sigaction(signal_numbers[k], NULL, &now) != 0 || now.sa_handler != stop_requested) continue;
+    int flags = (mask >> k) & 1u ? SA_RESTART : 0;
+    if ((now.sa_flags & SA_RESTART) == flags) continue;
+    now.sa_flags = (now.sa_flags & ~SA_RESTART) | flags;
+    (void)sigaction(signal_numbers[k], &now, NULL);
+  }
+}
+
+/* Under rt->sync (the subscribe and the close of a signal channel), or on the one thread of the end of the run. A
+   signal has SA_RESTART before it is subscribed and keeps it until it is not, so a subscribed signal never gives an
+   EINTR. */
+void agc_io_signals_set(agc_vm *vm, unsigned mask) {
+  restart_subscribed(mask | atomic_load(&stop_status()->subscribed));
+  atomic_store(&stop_status()->subscribed, mask);
+  restart_subscribed(mask);
+  if (vm->rt->loop) call_on(vm->rt->loop, keep_wake, vm->rt->loop);
+}
+
+/* A signal that a scheduler took from `pending` but that no channel wants any more (its last subscription ended in
+   between): the handler's stop path, run from the scheduler (it only uses atomics and uv_async_send). */
+void agc_io_signals_stop(unsigned index) {
+  if (index < AGC_SIGNAL_COUNT) stop_requested(signal_numbers[index]);
+}
+
+bool agc_io_signals_supported(void) { return stop_status()->wake != NULL; }
+
+int agc_io_signal_number(unsigned index) { return index < AGC_SIGNAL_COUNT ? signal_numbers[index] : 0; }
 #else
 static const int stop_signal_numbers[] = {SIGINT, SIGBREAK, SIGHUP};
 
@@ -1462,7 +1541,33 @@ void agc_io_children_stopped(void) {
 
 /* Windows has no signal mask: a console control event is handled where libuv delivers it. */
 void agc_io_thread_signals(void) {}
+
+/* No subscription on Windows (System.subscribe refuses it): Ctrl-C, Ctrl-Break and the console close keep the stop
+   path. The numbers are Linux's, so 128 + System.signal_number gives the same exit codes everywhere. */
+static const int signal_numbers[AGC_SIGNAL_COUNT] = {15, 2, 1, 10, 12, 3, 9};
+
+void agc_io_signals_set(agc_vm *vm, unsigned mask) {
+  (void)vm;
+  atomic_store(&stop_status()->subscribed, mask);
+}
+
+void agc_io_signals_stop(unsigned index) { (void)index; }
+
+bool agc_io_signals_supported(void) { return false; }
+
+int agc_io_signal_number(unsigned index) { return index < AGC_SIGNAL_COUNT ? signal_numbers[index] : 0; }
 #endif
+
+bool agc_io_signals_pending(void) { return atomic_load_explicit(&stop_status()->pending, memory_order_relaxed) != 0; }
+
+unsigned agc_io_signals_take(void) { return atomic_exchange(&stop_status()->pending, 0); }
+
+unsigned agc_io_signals_ignored(void) { return atomic_load(&stop_status()->ignored); }
+
+void agc_io_signals_end(agc_vm *vm) {
+  agc_io_signals_set(vm, 0);
+  atomic_store(&stop_status()->pending, 0);
+}
 
 #if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
 static void poll_ready(uv_poll_t *handle, int status, int events) {
@@ -2001,6 +2106,9 @@ void agc_io_serve(agc_vm *vm) {
     dbg_mask("mask after-run", dbg_step);
     drain(vm);
     dbg_mask("mask after-drain", dbg_step);
+    /* A subscribed signal is delivered by a scheduler between turns (agc_signals_deliver): the nudge wakes one that
+       sleeps, which then passes its stop check. */
+    if (agc_io_signals_pending()) agc_runq_nudge(rt->runq);
     int sig = agc_io_stop_signal();
     if (sig) {
       AGC_TRACE(&rt->trace, AGC_TRACE_SCHED, "stop signal=%d", sig);
@@ -2540,6 +2648,28 @@ void agc_io_watch_stop(agc_vm *vm, int64_t driver) {
 int agc_io_stop_signal(void) { return 0; }
 
 void agc_io_children_stopped(void) {}
+
+void agc_io_signals_set(agc_vm *vm, unsigned mask) {
+  (void)vm;
+  (void)mask;
+}
+
+bool agc_io_signals_pending(void) { return false; }
+
+unsigned agc_io_signals_take(void) { return 0; }
+
+void agc_io_signals_stop(unsigned index) { (void)index; }
+
+void agc_io_signals_end(agc_vm *vm) { (void)vm; }
+
+bool agc_io_signals_supported(void) { return false; }
+
+unsigned agc_io_signals_ignored(void) { return 0; }
+
+int agc_io_signal_number(unsigned index) {
+  (void)index;
+  return 0;
+}
 
 void agc_io_goodbye(agc_vm *vm) { (void)vm; }
 

@@ -1,7 +1,8 @@
 """Stop signals on the VM.
 
-A SIGTERM, SIGINT or SIGHUP takes the exit path: children die, buffered file
-data is written, and the VM dies by the signal. fixtures/stop-peer.py starts
+A SIGTERM, SIGINT, SIGHUP, SIGUSR1 or SIGUSR2 takes the exit path: children
+die, buffered file data is written, and the VM dies by the signal. SIGQUIT
+takes it too and exits with 131 (no core dump). fixtures/stop-peer.py starts
 the VM with chosen signal dispositions, fills a FIFO, or plays the driver of a
 driven VM. A process killed by a signal has returncode -signal here (the
 original test saw 128 + signal).
@@ -177,7 +178,8 @@ def full_fifo(adopt, tmp_path):
 def test_a_stop_signal_takes_the_exit_path_children_die_buffered_file_data_is_written_the_vm_dies_by_the_signal(
     tmp_path, adopt
 ):
-    for mode, number in (("sleep", signal.SIGTERM), ("spin", signal.SIGINT), ("sleep", signal.SIGHUP)):
+    for mode, number in (("sleep", signal.SIGTERM), ("spin", signal.SIGINT), ("sleep", signal.SIGHUP),
+                         ("spin", signal.SIGUSR1), ("sleep", signal.SIGUSR2)):
         path = tmp_path / ("out-%s-%d.txt" % (mode, number))
         vm = launch(adopt, "default", "--", bytecode(child_program(), tmp_path, "program-%s" % mode),
                     path, mode, capture_stderr=True)
@@ -185,6 +187,19 @@ def test_a_stop_signal_takes_the_exit_path_children_die_buffered_file_data_is_wr
         os.kill(vm.process.pid, number)
         assert vm.wait(WAIT_SECONDS) == -number
         check_stopped(pid, path, "%s %s" % (mode, number))
+
+
+@host_only(WINDOWS, "SIGQUIT does not exist on Windows")
+def test_quit_takes_the_exit_path_and_exits_with_131_also_when_it_comes_twice(tmp_path, adopt):
+    for count in (1, 2):
+        path = tmp_path / ("out-%d.txt" % count)
+        vm = launch(adopt, "default", "--", bytecode(child_program(), tmp_path, "program-%d" % count), path, "sleep",
+                    capture_stderr=True)
+        pid = int(vm.next_line(WAIT_SECONDS))
+        for _ in range(count):
+            os.kill(vm.process.pid, signal.SIGQUIT)
+        assert vm.wait(WAIT_SECONDS) == 128 + signal.SIGQUIT
+        assert gone_soon(pid), "quit %d: the child is gone" % count
 
 
 @host_only(WINDOWS, "a stop signal inherited as ignored (nohup) has no Windows form")
