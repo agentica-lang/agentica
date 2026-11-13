@@ -161,6 +161,12 @@ copy).
   `enum`, `struct` and alias of that name next to a `std/` module that uses the
   builtin, and for the root file building the builtin record itself. The linker
   gives both forms one dotted name, so a check by file cannot tell them apart.
+- A name the VM matches as a builtin (`agc_error_struct`, a compatibility
+  fallback in `vm/loader.c` kept for stage0) stays in `RESERVED_TYPE_NAMES`,
+  with a `CHECK-REDEFINED-NAME` spec case, until the PR that removes the VM
+  match: free a name there, not before. Match field types, not only names.
+- When `std/` re-exports a builtin type, check that `agentica help` and `doc`
+  list it, not only the checker.
 
 ## Common tasks
 
@@ -186,6 +192,24 @@ first to the last consumed token (`Base.span_from`) and the next free id. Update
 every walker: `rewrite.agc`, `ast_walk.agc`, `modules/import_use.agc`, the
 checker, lowering, `parse_text.agc`. Parser golden:
 `tests/fixtures/frontend/parser/NAME.input`.
+
+### A new AST field, or a rewrite into an existing node kind
+
+The program still checks and runs, so only this list finds the bug:
+
+- A new field: `rg` the node's struct and list every place that builds,
+  rebuilds, rewrites or reads it: the parser (`piped_call`, `pipe_node`,
+  block attach), `rewrite.agc`, `ast_walk.agc`, `fmt` and its comment
+  placement, inference, `check_pipe_method`, the bodies of calls, `lint/`, the
+  queries. Carry the field through each, or say in the PR why it cannot
+  matter. A rebuild that drops it loses source silently.
+- A rewrite into a node kind that exists (`x |> f(a)` into a `MethodCall`):
+  every way the checker resolves that kind (field calls, `Fn` fields,
+  constants, methods) now applies to the rewritten form. Decide each one; a
+  form that may only mean a method is an error on the others.
+- Hard inputs cross the new form with a pipe, a trailing block, named
+  arguments, an alias and an imported module, and a callee with and without
+  defaults and with `Fn` last or not.
 
 ### Add syntax
 

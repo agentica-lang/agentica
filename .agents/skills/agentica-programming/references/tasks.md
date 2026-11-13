@@ -130,7 +130,8 @@ waits or fails: a closed or full channel drops the notice, so give it room for
 every notice that can be pending at once. A
 crash whose notice went in counts as observed. `wrap` runs in a task of its
 own. Monitor a task after any setup step that can fail: a failed start leaves
-a stale notice in the inbox.
+a stale notice in the inbox. A retry loop that never reads its inbox must not
+create notices, or a real one is dropped once the inbox is full.
 
 `Task.current` is the running task as a `TaskRef`: `Task.monitor`,
 `Task.cancel` and `.id` take it, but `Task.await` of it is
