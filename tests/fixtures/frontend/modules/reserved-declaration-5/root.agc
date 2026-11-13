@@ -1,4 +1,4 @@
-struct ProcessOutput
+struct TaskDown
   n: Int
 end
 

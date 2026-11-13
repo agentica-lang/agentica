@@ -170,10 +170,10 @@ Starts a program as `Process.spawn` does, in the folder `chdir`, and keeps its o
 ## Process.output
 
 ```signature
-Process.output(p: Process, timeout_ms: Int) -> Result[ProcessOutput]
+Process.output(p: Process, timeout_ms: Int) -> Result[Process.Output]
 ```
 
-Waits until a captured program has closed its standard output and error, then gives `ProcessOutput(stdout: String, stderr: String, truncated: Bool)`: `stdout` is what you have not read yet, `stderr` all of it, `truncated` says whether output was dropped (invalid UTF-8 in `stderr` becomes U+FFFD). It consumes nothing, so call it again if needed. A timeout is `error("process: operation timed out")` and keeps the program. A `Process.spawn` program gives `error("process: output is not captured")`.
+Waits until a captured program has closed its standard output and error, then gives `Process.Output(stdout: String, stderr: String, truncated: Bool)`: `stdout` is what you have not read yet, `stderr` all of it, `truncated` says whether output was dropped (invalid UTF-8 in `stderr` becomes U+FFFD). It consumes nothing, so call it again if needed. A timeout is `error("process: operation timed out")` and keeps the program. A `Process.spawn` program gives `error("process: output is not captured")`.
 
 ```agentica {mode="check"}
 def main() -> Void

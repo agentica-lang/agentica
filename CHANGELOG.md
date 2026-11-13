@@ -38,6 +38,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   shows a JSON value as `<JSON.Value>`.
 - **Breaking:** `FileInfo` and `FileHandle` are `File.Info` and `File.Handle`
   (#1182); the old names are unknown, and a program may take them.
+- **Breaking:** `ProcessOutput` is `Process.Output` (#1182); the old name is
+  unknown, and a program may take it.
 
 ## [0.31.0-alpha.1] - 2026-11-12
 

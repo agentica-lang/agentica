@@ -661,7 +661,7 @@ def exited(ctx: Context, p: Process) -> Process
   p
 end
 
-def finished(ctx: Context, p: Process) -> ProcessOutput
+def finished(ctx: Context, p: Process) -> Process.Output
   output = Process.output(p, 5000)
   check(ctx, output.ok?, output.message)
   if output.unwrap!.truncated

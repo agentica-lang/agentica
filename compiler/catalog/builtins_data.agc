@@ -217,7 +217,7 @@ export RECORDS: List[Model.Record] = [
     ],
   ),
   Model.Record(
-    name: "ProcessOutput",
+    name: "Process.Output",
     fields: [
       Model.Named(name: "stdout", type: Types.Type.String),
       Model.Named(name: "stderr", type: Types.Type.String),
@@ -346,7 +346,6 @@ export RESERVED_TYPE_NAMES: List[String] = [
   "Optional",
   "Path",
   "Process",
-  "ProcessOutput",
   "Profile",
   "Random",
   "Range",
@@ -376,7 +375,7 @@ export RESERVED_TYPE_NAMES: List[String] = [
 ## Family.Member: a group of functions (the rows named Family.Member.fn) or a builtin type named Family.Member (a
 ## record, an enum or an opaque type). A new member, or a new function of a member, only adds its rows or its type and
 ## reserves no name.
-export FAMILIES: List[String] = ["File", "JSON", "OpenSSL"]
+export FAMILIES: List[String] = ["File", "JSON", "OpenSSL", "Process"]
 
 ## The modules only std/ may call: each name with the std module that wraps it and the alias its help shows.
 export STD_ONLY_IMPORTS: Map[String, List[String]] = {
@@ -404,7 +403,6 @@ export MOVED_TYPES: Map[String, String] = {
 ## may write either, File.Info or File.Info, and the linker turns the nested name into the old one, which the checker,
 ## the lowering and the VM know (#1182). A value still prints with the old name until its family moves.
 export NESTED_NAMES: Map[String, String] = {
-  "Process.Output": "ProcessOutput",
   "System.Profile": "Profile",
   "TCP.Listener": "Listener",
   "TCP.Socket": "Socket",
@@ -3957,7 +3955,7 @@ ROWS_31: List[Model.Builtin] = [
       Model.Named(name: "p", type: Types.Type.Opaque("Process")),
       Model.Named(name: "timeout_ms", type: Types.Type.Int),
     ],
-    result: Types.Type.Result(Types.Type.Struct("ProcessOutput", [])),
+    result: Types.Type.Result(Types.Type.Struct("Process.Output", [])),
     rule: Model.Rule.Plain,
     implementation: "Process.output",
     effects: ["subprocess"],

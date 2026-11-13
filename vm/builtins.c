@@ -644,6 +644,7 @@ uint32_t agc_error_struct(const agc_program *program) {
    stage0, which compiles the first front end of a build) gives them. */
 static const char *const renamed_structs[][2] = {
     {"File.Info", "FileInfo"},
+    {"Process.Output", "ProcessOutput"},
 };
 
 uint32_t agc_builtin_struct(agc_vm *vm, const char *name, const char *const *fields, uint32_t count) {

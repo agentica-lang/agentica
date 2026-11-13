@@ -99,7 +99,7 @@ constants, declarations and types. Builtin methods and `to_s`: `builtins.md`.
   `TaskExit` (`Ok`, `Crashed`, `Cancelled`; `tasks.md`). `std/logger` exports
   the builtin `Logger.Level` (`Debug`, `Info`, `Warning`, `Error`) and
   `Logger.Event` (`logger.md`); they reserve no name.
-- Builtin records: `File.Info`, `ProcessOutput`, `StructMember`, `TaskDown`.
+- Builtin records: `File.Info`, `Process.Output`, `StructMember`, `TaskDown`.
   `std/http` exports the builtin `HTTP.Header`, `HTTP.Request`,
   `HTTP.Response`, `HTTP.ClientOptions` and `HTTP.ServerOptions`
   (`network.md`); they reserve no name.

@@ -14417,5 +14417,65 @@
       ],
       "code": null
     }
+  ],
+  "The Process family: Process.Output; the old name ProcessOutput is unknown and free": [
+    {
+      "program": [
+        "def text(o: Process.Output) -> String = \"#{o.stdout} #{o.truncated} ProcessOutput\"",
+        "",
+        "def main() -> Void",
+        "  puts(text(Process.Output(stdout: \"a\", stderr: \"\", truncated: false).with(stdout: \"b\")))",
+        "end",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def text(o: ProcessOutput) -> String = o.stdout",
+        "",
+        "def main() -> Void",
+        "end",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-TYPE",
+      "start": [1, 13],
+      "covers": "ProcessOutput"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  puts(ProcessOutput(stdout: \"a\", stderr: \"\", truncated: false))",
+        "end",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-TYPE",
+      "start": [2, 8]
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x: Process.Outpt = Process.Output(stdout: \"a\", stderr: \"\", truncated: false)",
+        "end",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-NAME",
+      "start": [2, 6],
+      "covers": "Process.Outpt",
+      "help": true
+    },
+    {
+      "program": [
+        "struct ProcessOutput",
+        "  a: Int",
+        "end",
+        "",
+        "def main() -> Void",
+        "  puts(ProcessOutput(a: 1))",
+        "end",
+        ""
+      ],
+      "code": null
+    }
   ]
 }

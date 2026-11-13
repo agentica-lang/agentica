@@ -85,7 +85,7 @@ aliases or module names (`RESERVED_TYPE_NAMES` in
 `compiler/catalog/builtins_data.agc`): `ATS`, `Await`, `Base64`, `Bool`,
 `Bytes`, `Channel`, `Codec`, `Dir`, `Error`, `File`, `Float`, `Fn`, `IO`, `Int`,
 `JSON`, `Lazy`, `List`, `Listener`, `Map`, `Math`, `Nil`, `OpenSSL`, `Optional`,
-`Path`, `Process`, `ProcessOutput`, `Profile`, `Random`, `Range`, `Result`,
+`Path`, `Process`, `Profile`, `Random`, `Range`, `Result`,
 `Set`, `Socket`, `String`, `StructMember`, `System`, `TCP`, `TLS`, `Task`,
 `TaskDown`, `TaskExit`, `TaskRef`, `Test`, `TestCase`, `Time`,
 `TlsClientOptions`, `TlsContext`, `TlsServerOptions`, `Void` and `Zlib`. A

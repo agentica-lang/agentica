@@ -4,6 +4,6 @@ def main() -> Void
     ok(i) -> puts(i.kind)
     error(m) -> puts(m)
   end
-  o = ProcessOutput(stdout: "", stderr: "", truncated: false)
+  o = Process.Output(stdout: "", stderr: "", truncated: false)
   puts(o.truncated)
 end
