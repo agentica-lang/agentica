@@ -4736,6 +4736,7 @@ def parse_body(e: Base.Env, start: Int, first_id: Int, nested: Bool) -> Result[B
   module_doc: Optional[String] = none
   private_mark: Optional[Ast.PrivateMark] = none
   after_private = false
+  after_import = false
   # The token of the first `export` written on a declaration of this scope, or -1: refused in a scope with `private`.
   first_export = -1
   after_declaration = false
@@ -4746,6 +4747,13 @@ def parse_body(e: Base.Env, start: Int, first_id: Int, nested: Bool) -> Result[B
   looping = true
   while looping
     kind = e.tokens[cursor].kind
+    # Imports and re-exports may follow each other directly, but `private` comes after a blank line.
+    if after_import and private_start?(e, cursor)
+      return error(
+        Base.bail(e, cursor, "PARSE-MISSING-BLANK-LINE", "expected a blank line before private", Diag.Help.NoHelp),
+      )
+    end
+
     if (
       after_declaration and
       (declaration_start?(e, cursor) or kind == "import" or kind == "DOC" or private_start?(e, cursor)) and
@@ -4766,6 +4774,7 @@ def parse_body(e: Base.Env, start: Int, first_id: Int, nested: Bool) -> Result[B
     after_constant = false
     after_one_line = false
     after_private = false
+    after_import = false
     if kind == "EOF" or (nested and kind == "end")
       looping = false
     elsif nested and (kind == "import" or reexport_start?(e, cursor) or extern_start?(e, cursor))
@@ -4801,11 +4810,13 @@ def parse_body(e: Base.Env, start: Int, first_id: Int, nested: Bool) -> Result[B
       declarations = declarations.push(parsed.node)
       cursor = parsed.pos
       next_id = parsed.ids
+      after_import = true
     elsif reexport_start?(e, cursor)
       parsed = try parse_reexport(e, cursor, next_id)
       declarations = declarations.push(parsed.node)
       cursor = parsed.pos
       next_id = parsed.ids
+      after_import = true
     elsif private_start?(e, cursor)
       if private_mark.some?
         return error(

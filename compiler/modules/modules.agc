@@ -256,6 +256,11 @@ export def import_name_help(modules: Map[String, Module], target: Module, member
     return Diag.Help.Hint("#{member} is private in #{place}: add export to it there")
   end
 
+  if target.block == "" and block_holding(modules, target, member) != ""
+    block = block_holding(modules, target, member)
+    return Diag.Help.Hint("#{member} is in module #{block} of #{place}: write #{block}.#{member} after the alias")
+  end
+
   imported = target.block == "" and imported_alias(modules, target, member) != ""
   if imported and library
     return Diag.Help.Hint("#{member} is imported by #{place}, which does not re-export it")
@@ -1084,11 +1089,24 @@ def collect(file: String, declarations: List[Ast.Decl]) -> Result[Collected]
   ok(Collected(names: names, public: public))
 end
 
+# The public module block of `file` that has `member` among its public names, or "".
+def block_holding(modules: Map[String, Module], file: Module, member: String) -> String
+  for block in Declarations.modules_of(file.program.declarations)
+    key = block_key(file.key, block.name)
+    held = modules.has_key?(key) and modules[key].public.has_key?(member)
+    return block.name if held and file.public.has_key?(block.name)
+  end
+
+  ""
+end
+
 # The alias under which `file` imports a module that exports `member`, "?" when it imports `member` by name from a
 # module it has no alias for, or "" when it does not import `member`.
 def imported_alias(modules: Map[String, Module], file: Module, member: String) -> String
   for alias in file.aliases.keys.sort
     key = file.aliases[alias]
+    next if key == block_key(file.key, alias)
+
     return alias if modules.has_key?(key) and modules[key].public.has_key?(member)
   end
 

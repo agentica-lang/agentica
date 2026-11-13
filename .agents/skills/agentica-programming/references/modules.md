@@ -59,14 +59,14 @@ def connect(id: Int) -> Int = id + BUFFER
   `Models.Change.Added(value)`, and `Models.Change.Added(item)` in a pattern.
   Local names stay unqualified inside their own file.
 - Re-export: `export Url.parse` or `export Url.Address` (after the imports and
-  above `private`, `Url` an alias of this file) passes on a name of an imported module, so a
-  facade file collects an API. The importer gets the original declaration
-  (`Web.Address` and `Url.Address` are one type, `&Web.parse` is `&Url.parse`);
-  the file adds no local name. No `as`, no wildcard. An unknown alias or name
-  is `CHECK-IMPORT-NAME`; a name that is also a declaration, re-export or
-  alias of the file is `CHECK-REDEFINED-NAME`, so the alias must differ from
-  the names it re-exports: `import V from "value"` with `export V.Value`, not
-  `import Value ...` with `export Value.Value`.
+  above `private`, `Url` an alias of this file) passes on a name of an imported
+  module, so a facade file collects an API. The importer gets the original
+  declaration (`Web.Address` and `Url.Address` are one type, `&Web.parse` is
+  `&Url.parse`); the file adds no local name. No `as`, no wildcard. An unknown
+  alias or name is `CHECK-IMPORT-NAME`; a name that is also a declaration,
+  re-export or alias of the file is `CHECK-REDEFINED-NAME`, so the alias must
+  differ from the names it re-exports: `import V from "value"` with `export
+  V.Value`, not `import Value ...` with `export Value.Value`.
 - Alias names are uppercase and cannot collide with declarations, other aliases,
   imported names or builtin names.
 
@@ -96,28 +96,28 @@ the enum. A bare function still needs parentheses.
 
 ## Constants
 
-A public constant (`LIMIT = 100` above `private`) is shared; `import {LIMIT, TABLE as LOOKUP} from
-"limits"` brings it in by name, read bare. A constant can be renamed only to
-another constant name (capitals and underscores): `{LIMIT as max}` is
-`CHECK-IMPORT-RENAME`. An alias reads it too: `Limits.LIMIT`,
+A public constant (`LIMIT = 100` above `private`) is shared; `import {LIMIT,
+TABLE as LOOKUP} from "limits"` brings it in by name, read bare. A constant can
+be renamed only to another constant name (capitals and underscores): `{LIMIT as
+max}` is `CHECK-IMPORT-RENAME`. An alias reads it too: `Limits.LIMIT`,
 `Limits.TABLE.size`, `Limits.CONFIG.with(port: 81)`; a private one is
 `CHECK-IMPORT-NAME`, `Limits.LIMIT()` is `CHECK-TYPE-MISMATCH`. An imported
 constant cannot equal a constant or another name of the file
 (`CHECK-REDEFINED-NAME`); a private constant cannot be imported
-(`CHECK-IMPORT-NAME`). The constants of the imported
-files that the program can reach are built before `main`.
+(`CHECK-IMPORT-NAME`). The constants of the imported files that the program can
+reach are built before `main`.
 
 ## Module blocks
 
 `module Counter ... end` at the top level groups declarations under a name, so
 one file holds several modules (a namespace only). Inside: constants, structs,
-enums, aliases and functions with the file's layout rules, and its own
-`private` line: what is above it is visible outside as `Counter.start(0)`,
-`Counter.Msg.Add(5)`, `Counter.LIMIT`. A private name is `CHECK-IMPORT-NAME`. The body sees the
-file's imports, top-level names (private too) and other blocks; it may not
-declare one of those names again (`CHECK-SHADOWED-NAME`) or `main`
-(`CHECK-MAIN`), but two blocks may both have `start`. A block above the file's
-`private` is importable: `import {Counter} from "agents"` (an alias) or
+enums, aliases and functions with the file's layout rules, and its own `private`
+line: what is above it is visible outside as `Counter.start(0)`,
+`Counter.Msg.Add(5)`, `Counter.LIMIT`. A private name is `CHECK-IMPORT-NAME`.
+The body sees the file's imports, top-level names (private too) and other
+blocks; it may not declare one of those names again (`CHECK-SHADOWED-NAME`) or
+`main` (`CHECK-MAIN`), but two blocks may both have `start`. A block above the
+file's `private` is importable: `import {Counter} from "agents"` (an alias) or
 `Agents.Counter.start(0)`. The name follows the alias rules
 (`CHECK-REDEFINED-NAME`); a block inside a block is `PARSE-NESTED-MODULE`; no
 import, re-export or extern block inside.
