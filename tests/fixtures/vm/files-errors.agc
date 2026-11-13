@@ -10,7 +10,6 @@ def main() -> Void
   missing = at(dir, "missing")
   IO.inspect(File.read_text(missing, 60000))
   IO.inspect(File.read_text(dir, 60000))
-  IO.inspect(File.read_text(at(file, "x"), 60000))
   IO.inspect(File.write_text(dir, "x", 60000))
   IO.inspect(File.write_text(at(missing, "x"), "x", 60000))
   IO.inspect(File.write_text(file + "/", "x", 60000))

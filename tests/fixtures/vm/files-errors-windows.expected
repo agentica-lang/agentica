@@ -3,10 +3,10 @@
   "code": null,
   "steps": 68,
   "stdout": [
-    "error(\"filesystem: cannot open file for reading\\n  path: @tmp/file.txt/\\n  system error: No such file or directory; errno=2\")",
-    "error(\"filesystem: cannot open file for writing\\n  path: @tmp/file.txt/x\\n  system error: No such file or directory; errno=2\")",
-    "error(\"filesystem: cannot make directory\\n  path: @tmp/file.txt/sub/\\n  system error: No such file or directory; errno=2\")",
-    "error(\"filesystem: cannot make directory\\n  path: @tmp/file.txt/sub\\n  system error: No such file or directory; errno=2\")",
+    "error(\"filesystem: cannot open file for reading\\n  path: @tmp/file.txt/\\n  system error: No such file or directory; errno=2\", kind: \"io.not_found\", code: 2)",
+    "error(\"filesystem: cannot open file for writing\\n  path: @tmp/file.txt/x\\n  system error: No such file or directory; errno=2\", kind: \"io.not_found\", code: 2)",
+    "error(\"filesystem: cannot make directory\\n  path: @tmp/file.txt/sub/\\n  system error: No such file or directory; errno=2\", kind: \"io.not_found\", code: 2)",
+    "error(\"filesystem: cannot make directory\\n  path: @tmp/file.txt/sub\\n  system error: No such file or directory; errno=2\", kind: \"io.not_found\", code: 2)",
     ""
   ],
   "stderr": []

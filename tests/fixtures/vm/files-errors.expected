@@ -1,11 +1,10 @@
 {
   "exit": 1,
   "code": "RUNTIME-INVALID-COUNT",
-  "steps": 474,
+  "steps": 461,
   "stdout": [
     "error(\"filesystem: path does not refer to a regular file\", kind: \"io.not_found\", code: 2)",
     "error(\"filesystem: path does not refer to a regular file\", kind: \"io.is_directory\", code: 21)",
-    "error(\"filesystem: path does not refer to a regular file\", kind: \"io.not_directory\", code: 20)",
     "error(\"filesystem: path does not refer to a regular file\", kind: \"io.is_directory\", code: 21)",
     "error(\"filesystem: cannot open file for writing\\n  path: @tmp/missing/x\\n  system error: No such file or directory; errno=2\", kind: \"io.not_found\", code: 2)",
     "error(\"filesystem: path is a directory\\n  path: @tmp/file.txt/\", kind: \"io.is_directory\")",

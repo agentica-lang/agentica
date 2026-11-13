@@ -4,8 +4,8 @@
   "steps": 73,
   "stdout": [
     "ok()",
-    "error(\"filesystem: refusing to remove an unsafe Windows path\")",
-    "error(\"filesystem: refusing to remove an unsafe Windows path\")",
+    "error(\"filesystem: refusing to remove an unsafe Windows path\", kind: \"argument\")",
+    "error(\"filesystem: refusing to remove an unsafe Windows path\", kind: \"argument\")",
     "true",
     "ok()",
     ""
