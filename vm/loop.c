@@ -1961,18 +1961,46 @@ static bool stalled(agc_vm *vm) {
    there is nothing to do), and the drain, which wakes tasks and hands detached jobs to the schedulers. It ends the run
    itself on a stop signal or a stall, and returns once the run is over (agc_run_over wakes it). A failure of its own
    (agc_fail in sweep) ends the run too. */
+/* DEBUG #1529: say when the stop signals' blocked state of this thread changes, and where. */
+static void dbg_mask(const char *where, long step) {
+  static int last = -1;
+  sigset_t cur;
+  pthread_sigmask(SIG_BLOCK, NULL, &cur);
+  int now = (sigismember(&cur, SIGTERM) ? 1 : 0) | (sigismember(&cur, SIGINT) ? 2 : 0) |
+            (sigismember(&cur, SIGUSR1) ? 4 : 0) | (sigismember(&cur, SIGPROF) ? 8 : 0);
+  if (now == last) return;
+  last = now;
+  dbg_line(where, step, now, dbg_thread(), 0);
+}
+
+static void dbg_tick(uv_timer_t *timer) {
+  (void)timer;
+  dbg_mask("mask tick", 0);
+}
+
 void agc_io_serve(agc_vm *vm) {
   agc_runtime *rt = vm->rt;
   agc_loop *loop = rt->loop;
+  static uv_timer_t dbg_timer;
+  uv_timer_init(&loop->uv, &dbg_timer);
+  uv_timer_start(&dbg_timer, dbg_tick, 200, 200);
+  uv_unref((uv_handle_t *)&dbg_timer);
+  long dbg_step = 0;
+  dbg_mask("mask serve-start", 0);
   if (setjmp(vm->fail) != 0) {
     agc_sync_reset(vm);
     agc_run_over_untasked(vm);
     return;
   }
   while (!atomic_load_explicit(&rt->over, memory_order_acquire)) {
+    dbg_step++;
+    dbg_mask("mask before-inbox", dbg_step);
     (void)agc_inbox_run(loop->inbox);
+    dbg_mask("mask after-inbox", dbg_step);
     uv_run(&loop->uv, loop->ready ? UV_RUN_NOWAIT : UV_RUN_ONCE);
+    dbg_mask("mask after-run", dbg_step);
     drain(vm);
+    dbg_mask("mask after-drain", dbg_step);
     int sig = agc_io_stop_signal();
     if (sig) {
       AGC_TRACE(&rt->trace, AGC_TRACE_SCHED, "stop signal=%d", sig);
