@@ -1269,49 +1269,12 @@ static void stop_overdue(uv_timer_t *timer) {
   if (now) agc_io_die_by(now);
 }
 
-/* DEBUG #1529: an async-signal-safe line on fd 2. */
-static void dbg_line(const char *what, long a, long b, long c, long d) {
-  char buf[200];
-  size_t n = 0;
-  for (const char *p = "agc-debug "; *p; p++) buf[n++] = *p;
-  for (const char *p = what; *p && n < 100; p++) buf[n++] = *p;
-  long v[4] = {a, b, c, d};
-  for (int k = 0; k < 4; k++) {
-    buf[n++] = ' ';
-    long x = v[k];
-    if (x < 0) {
-      buf[n++] = '-';
-      x = -x;
-    }
-    char tmp[24];
-    int m = 0;
-    do {
-      tmp[m++] = (char)('0' + x % 10);
-      x /= 10;
-    } while (x && m < 23);
-    while (m) buf[n++] = tmp[--m];
-  }
-  buf[n++] = '\n';
-  (void)!write(2, buf, n);
-}
-
-static long dbg_thread(void) {
-#ifdef __APPLE__
-  return (long)pthread_mach_thread_np(pthread_self());
-#else
-  return 0;
-#endif
-}
-
 /* The handler of the stop signals: async-signal-safe, so it only reads and writes the atomics of stop_status, calls
    getppid and uv_async_send (which libuv documents as async-signal-safe), or ends with _exit. A subscribed signal
    (System.subscribe) is only recorded in `pending` and wakes the loop, while no stop has begun and the driver, if any,
    lives (a driven VM whose driver is gone takes the stop path, PR_SET_PDEATHSIG's signal included). */
 static void stop_requested(int sig) {
   int saved = errno;
-  dbg_line("handler sig thread wake_pending wake", sig, dbg_thread(),
-           stop_status()->wake ? (long)atomic_load((_Atomic int *)&stop_status()->wake->pending) : -1,
-           stop_status()->wake != NULL);
   bool orphan = stop_status()->driver && getppid() != stop_status()->driver;
   unsigned bit = signal_bit(sig);
   if (!orphan && stop_status()->wake && !atomic_load(&stop_status()->signal) &&
@@ -1348,8 +1311,6 @@ static void stop_requested(int sig) {
 
 static void stop_woken(uv_async_t *wake) {
   agc_loop *loop = wake->data;
-  dbg_line("woken signal now thread x", atomic_load(&stop_status()->signal), atomic_load(&stop_status()->now),
-           dbg_thread(), 0);
   int sig = atomic_load(&stop_status()->now);
   if (!sig) return;
   if (!atomic_load(&stop_status()->held) || !loop->stop_grace_init) {
@@ -2066,46 +2027,18 @@ static bool stalled(agc_vm *vm) {
    there is nothing to do), and the drain, which wakes tasks and hands detached jobs to the schedulers. It ends the run
    itself on a stop signal or a stall, and returns once the run is over (agc_run_over wakes it). A failure of its own
    (agc_fail in sweep) ends the run too. */
-/* DEBUG #1529: say when the stop signals' blocked state of this thread changes, and where. */
-static void dbg_mask(const char *where, long step) {
-  static int last = -1;
-  sigset_t cur;
-  pthread_sigmask(SIG_BLOCK, NULL, &cur);
-  int now = (sigismember(&cur, SIGTERM) ? 1 : 0) | (sigismember(&cur, SIGINT) ? 2 : 0) |
-            (sigismember(&cur, SIGUSR1) ? 4 : 0) | (sigismember(&cur, SIGPROF) ? 8 : 0);
-  if (now == last) return;
-  last = now;
-  dbg_line(where, step, now, dbg_thread(), 0);
-}
-
-static void dbg_tick(uv_timer_t *timer) {
-  (void)timer;
-  dbg_mask("mask tick", 0);
-}
-
 void agc_io_serve(agc_vm *vm) {
   agc_runtime *rt = vm->rt;
   agc_loop *loop = rt->loop;
-  static uv_timer_t dbg_timer;
-  uv_timer_init(&loop->uv, &dbg_timer);
-  uv_timer_start(&dbg_timer, dbg_tick, 200, 200);
-  uv_unref((uv_handle_t *)&dbg_timer);
-  long dbg_step = 0;
-  dbg_mask("mask serve-start", 0);
   if (AGC_CATCH(vm->fail) != 0) {
     agc_sync_reset(vm);
     agc_run_over_untasked(vm);
     return;
   }
   while (!atomic_load_explicit(&rt->over, memory_order_acquire)) {
-    dbg_step++;
-    dbg_mask("mask before-inbox", dbg_step);
     (void)agc_inbox_run(loop->inbox);
-    dbg_mask("mask after-inbox", dbg_step);
     uv_run(&loop->uv, loop->ready ? UV_RUN_NOWAIT : UV_RUN_ONCE);
-    dbg_mask("mask after-run", dbg_step);
     drain(vm);
-    dbg_mask("mask after-drain", dbg_step);
     /* A subscribed signal is delivered by a scheduler between turns (agc_signals_deliver): the nudge wakes one that
        sleeps, which then passes its stop check. */
     if (agc_io_signals_pending()) agc_runq_nudge(rt->runq);
