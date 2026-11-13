@@ -1,6 +1,6 @@
 """`agentica test` cases that need a POSIX system: file modes and links, a shell script that logs how the binary is
-started, and the first binary of the bootstrap (its driver is the one of stage0, which does not know the Windows
-temporary folder).
+started (a known issue on Windows, #1485), and the first binary of the bootstrap (its driver is the one of stage0, which
+does not know the Windows temporary folder).
 
 On Windows the cases that need a mode bit or a name that is not valid UTF-8 are skipped (host-only): a temporary
 folder that cannot be written with chmod has a counterpart in tests/test_windows_process_cleanup.py (an access list).
@@ -13,7 +13,7 @@ import os
 
 import pytest
 
-from tests.agentica_test import ROOT, WINDOWS, binary, host_only, run, vm_environment
+from tests.agentica_test import ROOT, WINDOWS, binary, host_only, known_issue, run, vm_environment
 from tests.test_bdd import (  # noqa: F401  (bdd is the fixture of that module)
     ADDS_TEST, HANDLERS, BddCli, assert_unwritable_temporary_is_an_infrastructure_error, bdd)
 
@@ -95,7 +95,7 @@ def test_the_first_binary_of_the_bootstrap_still_tests_with_the_driver_of_stage0
     assert result.stderr != ""
 
 
-@pytest.mark.skipif(WINDOWS, reason="the stand-in binary is a shell script")
+@known_issue(WINDOWS, 1485, "the stand-in that counts the starts of the binary is a shell script; Windows has none")
 def test_a_program_under_test_is_compiled_once_and_every_scenario_starts_its_bytecode(bdd):
     """Each scenario starts the program with `agentica run -- BYTECODE`; one `agentica compile` per run made it (#1458).
     A program that does not compile still starts through the front end, which prints its diagnostic."""
