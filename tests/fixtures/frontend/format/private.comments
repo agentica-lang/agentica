@@ -1,0 +1,4 @@
+9:1 leading PrivateMark 10:1 "# The rest is internal."
+11:1 leading ConstDecl 13:1 "# right after private"
+18:33 trailing ExportDecl 18:3 "# public"
+20:3 leading PrivateMark 21:3 "# before the private part"

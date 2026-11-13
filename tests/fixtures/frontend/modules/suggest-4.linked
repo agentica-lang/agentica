@@ -1,1 +1,1 @@
-ERROR CHECK-IMPORT-NAME 48:3:7-66:3:25 "unknown or private imported name" - file="root.agc"
+ERROR CHECK-IMPORT-NAME 48:3:7-66:3:25 "unknown or private imported name" "Secret is private in \"module.agc\": add export to it there" file="root.agc"

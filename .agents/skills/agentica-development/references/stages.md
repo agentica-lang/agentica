@@ -118,6 +118,10 @@ show:
   exported declaration (not the `def` inside), the `FieldDecl`, the
   `EnumVariant`. Other nodes know nothing of docs, so later stages see the tree
   as before.
+- In a file or module block with a `private` line (`private_mark`), the
+  parser wraps each declaration above it in an `ExportDecl` (or sets
+  `ConstDecl.exported`), with its span and doc, so every reader of the exports
+  sees one rule; `fmt` unwraps them again (`format.agc`, `as_written`).
 - Exactly one of `ImportDecl.alias` and `names` is set.
 - The linker makes `ConstRef` for a read of a constant, fills
   `StructUpdate.visible` and `EnumConstructor.named`, and clears

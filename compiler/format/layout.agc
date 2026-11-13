@@ -91,6 +91,9 @@ struct Item
   # source may have on the next line, it needs an empty line (sequence).
   one_line: Bool = false
   gap: Bool = false
+  # The `private` line with its comments: an empty line before the first of them and after the last (private_items).
+  blank_before: Bool = false
+  blank_after: Bool = false
 end
 
 # The comments of a node before it and after it, as documents to put around it.
@@ -168,7 +171,13 @@ export def program_doc(c: Context, program: Ast.Program) -> Docs.Doc
   end
 
   printed: Set[Int] = Set.new([])
+  at = 0
   for decl in program.declarations
+    if private_at?(program.private_mark, at)
+      items = items.concat(private_items(c, program.private_mark.unwrap!))
+    end
+
+    at += 1
     start = decl_span(decl).start.offset
     block = extern_at(c.externs, start)
     if block < 0
@@ -179,11 +188,32 @@ export def program_doc(c: Context, program: Ast.Program) -> Docs.Doc
     end
   end
 
+  if private_at?(program.private_mark, at)
+    items = items.concat(private_items(c, program.private_mark.unwrap!))
+  end
+
   for placed in c.dangling.get(Comments.key_of("Program", program.span), [])
     items = items.push(comment_item(placed.comment))
   end
 
   sequence(c, items)
+end
+
+# Whether the `private` line of a scope comes before its declaration number `at` (the size of the scope for the end).
+def private_at?(mark: Optional[Ast.PrivateMark], at: Int) -> Bool
+  case mark
+    some(found) -> found.index == at
+    none -> false
+  end
+end
+
+# The `private` line with its comments, laid out as Ruby does: an empty line before and after.
+def private_items(c: Context, mark: Ast.PrivateMark) -> List[Item]
+  line = mark.span.start.line
+  items = node_items(c, Comments.key_of("PrivateMark", mark.span), line, line, text("private"))
+  last = items.size - 1
+  items = items.set(0, items[0].with(blank_before: true))
+  items.set(last, items[last].with(blank_after: true))
 end
 
 # ---- Items, blank lines and comments ----
@@ -201,7 +231,8 @@ def sequence(c: Context, items: List[Item]) -> Docs.Doc
     item = items[at]
     if at > 0
       before = items[at - 1]
-      if blank_before?(c, item.first, before.last) or gap_between?(before, item)
+      apart = item.blank_before or before.blank_after
+      if blank_before?(c, item.first, before.last) or gap_between?(before, item) or apart
         parts = parts.concat([Docs.Doc.HardLine, Docs.Doc.HardLine])
       elsif owed and not item.closing
         parts = parts.push(Docs.Doc.GapLine)
@@ -410,8 +441,18 @@ end
 # A module block: its declarations two spaces in, laid out as those of a file.
 def module_block_doc(c: Context, node: Ast.ModuleDecl) -> Docs.Doc
   items: List[Item] = []
+  at = 0
   for decl in node.declarations
+    if private_at?(node.private_mark, at)
+      items = items.concat(private_items(c, node.private_mark.unwrap!))
+    end
+
     items = items.concat(decl_items_at(c, decl, 2))
+    at += 1
+  end
+
+  if private_at?(node.private_mark, at)
+    items = items.concat(private_items(c, node.private_mark.unwrap!))
   end
 
   items = items.concat(dangling_items(c, Comments.key_of("ModuleDecl", node.span)))

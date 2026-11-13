@@ -58,12 +58,15 @@ Change style only in code you touch. Restyle untouched code separately.
 
 ## Modules and docs
 
-- Declaration order is fixed (`CHECK-DECL-ORDER`): module doc/imports,
-  constants, structs/enums (an `extern` block with a resource or a struct
-  goes here, whole), `export def`, private `def`. Sort imports by path; put
-  callers before helpers within a group.
-- Export only names used by other files. Keep one topic per file; split files
-  that grow into several topics.
+- Declaration order is fixed (`CHECK-DECL-ORDER`): module doc/imports; the
+  public part: constants (and re-exports), structs/enums/type aliases/module
+  blocks (an `extern` block with a resource or a struct goes here, whole),
+  `def`; then `private` on its own line, with a blank line before and after;
+  then the private part in the same order. Sort imports by path; put callers
+  before helpers within a group.
+- Use `private`, not `export`, for new files: the API goes above it. Keep
+  public only the names used by other files. Keep one topic per file; split
+  files that grow into several topics.
 - Use `import Alias from "path"` for many names or possible collisions;
   `import {a, B} from "path"` for one or two frequent names. Constants read
   through the alias too (`Mod.LIMIT`); import one by name only when used
@@ -74,7 +77,7 @@ Change style only in code you touch. Restyle untouched code separately.
   don't alias a short, clear type.
 - The first `##` block, then a blank line, is the module doc. Document as
   little as possible (KISS; implicit over explicit). Only public code gets
-  `##`: an exported `def`, `struct` or `enum` (every `stdlib/` export needs
+  `##`: a public `def`, `struct` or `enum` (every `stdlib/` export needs
   one; `tests/test_stdlib_docs.py` checks it), saying what it returns or is,
   not how. A private `def` never gets `##` (one `#` comment when it needs a
   note). A field or variant gets a note only when its name does not say

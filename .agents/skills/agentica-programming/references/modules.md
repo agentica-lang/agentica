@@ -8,9 +8,12 @@ part with a dot such as `"models.rb"`): a module file name has no dot except
 `.agc` (`json.tools.agc` cannot be imported).
 
 - Relative paths resolve from the importing file, not the working directory.
-- Every file, imported ones included, keeps the order: `import`s, constants,
-  `struct`, `enum` and `module` blocks, `export def`, private `def`. An
-  imported file out of order is `CHECK-DECL-ORDER`, located in that file.
+- Every file, imported ones included, keeps the order: `import`s; the public
+  part (constants and re-exports, `struct`, `enum`, `type` and `module` blocks,
+  `def`); `private`; the private part (constants, types and blocks, `def`). A
+  file without `private` keeps the old order: `import`s, constants, types and
+  blocks, `export def`, private `def`. An imported file out of order is
+  `CHECK-DECL-ORDER`, located in that file.
 - Each file is linked once. A cycle is `CHECK-IMPORT-CYCLE`; a missing or
   unreadable import `CHECK-IMPORT-IO`; an invalid path `CHECK-IMPORT-PATH`.
 - An import alias that the file never uses is `CHECK-UNUSED-IMPORT`: remove
@@ -19,27 +22,51 @@ part with a dot such as `"models.rb"`): a module file name has no dot except
   member (`u: User`) is `CHECK-IMPORT-NAME`. Unused names of `import {a, b}` are
   fine.
 
-## Exports and names
+## Public and private names
 
-`export struct`, `export enum`, `export def` and `export NAME = ...` (a
-constant) expose declarations; everything else is private. An exported
-signature may mention private types, but importers
-cannot name or build them.
+A `private` line, alone, splits a file: every declaration above it (constant,
+struct, enum, type alias, function, module block) is public, every one after it
+is private to the file. Write the API first:
+
+```agentica
+LIMIT = 10
+
+def open(id: Int) -> Int = connect(id)
+
+private
+
+BUFFER = 4096
+
+def connect(id: Int) -> Int = id + BUFFER
+```
+
+- One `private` per file or block (a second is `PARSE-SECOND-PRIVATE`), with a
+  blank line before and after it. Imports are never public.
+- In a file with `private`, `export` before a declaration is
+  `PARSE-UNEXPECTED-TOKEN`. A file without `private` uses the older form:
+  `export def`, `export struct`, `export enum`, `export type`, `export NAME =
+  ...` and `export module` mark the public names, and the rest is private;
+  `private` replaces it.
+- A public signature may mention private types, but importers cannot name or
+  build them.
+- Reaching a private name is `CHECK-IMPORT-NAME`; its help says where to move it
+  (above `private`), or which `export Alias.name` would pass on a name the
+  module only imports.
 
 - Through the alias: `Models.User` in annotations and JSON type arguments,
   `Models.User(name: "Ana")` to construct, `Models.greet(user)` to call,
   `&Models.greet` for a callback; imported enums: `Models.Change[T]`,
   `Models.Change.Added(value)`, and `Models.Change.Added(item)` in a pattern.
   Local names stay unqualified inside their own file.
-- Re-export: `export Url.parse` or `export Url.Address` (after the imports,
-  `Url` an alias of this file) passes on a name of an imported module, so a
-  facade file collects an API. The importer gets the original declaration
-  (`Web.Address` and `Url.Address` are one type, `&Web.parse` is `&Url.parse`);
-  the file adds no local name. No `as`, no wildcard. An unknown alias or name
-  is `CHECK-IMPORT-NAME`; a name that is also a declaration, re-export or
-  alias of the file is `CHECK-REDEFINED-NAME`, so the alias must differ from
-  the names it re-exports: `import V from "value"` with `export V.Value`, not
-  `import Value ...` with `export Value.Value`.
+- Re-export: `export Url.parse` or `export Url.Address` (after the imports and
+  above `private`, `Url` an alias of this file) passes on a name of an imported
+  module, so a facade file collects an API. The importer gets the original
+  declaration (`Web.Address` and `Url.Address` are one type, `&Web.parse` is
+  `&Url.parse`); the file adds no local name. No `as`, no wildcard. An unknown
+  alias or name is `CHECK-IMPORT-NAME`; a name that is also a declaration,
+  re-export or alias of the file is `CHECK-REDEFINED-NAME`, so the alias must
+  differ from the names it re-exports: `import V from "value"` with `export
+  V.Value`, not `import Value ...` with `export Value.Value`.
 - Alias names are uppercase and cannot collide with declarations, other aliases,
   imported names or builtin names.
 
@@ -69,28 +96,28 @@ the enum. A bare function still needs parentheses.
 
 ## Constants
 
-`export LIMIT = 100` shares a constant; `import {LIMIT, TABLE as LOOKUP} from
-"limits"` brings it in by name, read bare. A constant can be renamed only to
-another constant name (capitals and underscores): `{LIMIT as max}` is
-`CHECK-IMPORT-RENAME`. An alias reads it too: `Limits.LIMIT`,
+A public constant (`LIMIT = 100` above `private`) is shared; `import {LIMIT,
+TABLE as LOOKUP} from "limits"` brings it in by name, read bare. A constant can
+be renamed only to another constant name (capitals and underscores): `{LIMIT as
+max}` is `CHECK-IMPORT-RENAME`. An alias reads it too: `Limits.LIMIT`,
 `Limits.TABLE.size`, `Limits.CONFIG.with(port: 81)`; a private one is
 `CHECK-IMPORT-NAME`, `Limits.LIMIT()` is `CHECK-TYPE-MISMATCH`. An imported
 constant cannot equal a constant or another name of the file
 (`CHECK-REDEFINED-NAME`); a private constant cannot be imported
-(`CHECK-IMPORT-NAME`). The constants of the imported
-files that the program can reach are built before `main`.
+(`CHECK-IMPORT-NAME`). The constants of the imported files that the program can
+reach are built before `main`.
 
 ## Module blocks
 
 `module Counter ... end` at the top level groups declarations under a name, so
 one file holds several modules (a namespace only). Inside: constants, structs,
-enums, aliases and functions with the file's layout rules; `export` marks what
-is visible outside as `Counter.start(0)`, `Counter.Msg.Add(5)`,
-`Counter.LIMIT`. A private name is `CHECK-IMPORT-NAME`. The body sees the
-file's imports, top-level names (private too) and other blocks; it may not
-declare one of those names again (`CHECK-SHADOWED-NAME`) or `main`
-(`CHECK-MAIN`), but two blocks may both have `start`. `export module Counter`
-is importable: `import {Counter} from "agents"` (an alias) or
+enums, aliases and functions with the file's layout rules, and its own `private`
+line: what is above it is visible outside as `Counter.start(0)`,
+`Counter.Msg.Add(5)`, `Counter.LIMIT`. A private name is `CHECK-IMPORT-NAME`.
+The body sees the file's imports, top-level names (private too) and other
+blocks; it may not declare one of those names again (`CHECK-SHADOWED-NAME`) or
+`main` (`CHECK-MAIN`), but two blocks may both have `start`. A block above the
+file's `private` is importable: `import {Counter} from "agents"` (an alias) or
 `Agents.Counter.start(0)`. The name follows the alias rules
 (`CHECK-REDEFINED-NAME`); a block inside a block is `PARSE-NESTED-MODULE`; no
 import, re-export or extern block inside.

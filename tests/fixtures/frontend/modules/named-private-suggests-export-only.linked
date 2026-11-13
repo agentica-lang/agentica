@@ -1,1 +1,1 @@
-ERROR CHECK-IMPORT-NAME 8:1:9-13:1:14 "unknown or private imported name" "did you mean \"make\"?" file="root.agc"
+ERROR CHECK-IMPORT-NAME 8:1:9-13:1:14 "unknown or private imported name" "maker is private in \"lib.agc\": add export to it there" file="root.agc"

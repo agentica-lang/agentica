@@ -44,11 +44,22 @@ export struct TypeRef
   span: Source.Span
 end
 
-## The root of a parsed file. It has the last id of the tree.
+## The root of a parsed file. It has the last id of the tree. private_mark is the file's `private` line, if any.
 export struct Program
   id: Int
   declarations: List[Decl]
   module_doc: Optional[String]
+  span: Source.Span
+  private_mark: Optional[PrivateMark] = none
+end
+
+## The `private` line of a file or a module block (docs/grammar/05b-modules.md): index is the number of declarations
+## before it. In a scope with it the parser has wrapped each declaration before it in an ExportDecl (or set
+## ConstDecl.exported), and the ones after it stay private, so every reader of the exports gives the same answer for
+## both forms; `export` on a declaration is refused there. The wrap keeps the declaration's own doc, and the ExportDecl
+## has its span.
+export struct PrivateMark
+  index: Int
   span: Source.Span
 end
 
@@ -114,11 +125,12 @@ export struct ModuleDecl
   declarations: List[Decl]
   doc: Optional[String]
   span: Source.Span
+  private_mark: Optional[PrivateMark] = none
 end
 
 ## A module constant: [export] NAME[: Type] = value (docs/grammar/06-semantics.md). Unlike the other declarations
-## it is not wrapped by an ExportDecl: exported says whether `export` was written, and the span starts at it. The
-## linker clears exported.
+## it is not wrapped by an ExportDecl: exported says whether `export` was written (or the constant is above `private`),
+## and the span starts at it. The linker clears exported.
 export struct ConstDecl
   id: Int
   name: String
@@ -834,6 +846,37 @@ export def stmt_span(stmt: Stmt) -> Source.Span
     Stmt.For(node) -> node.span
     Stmt.Control(node) -> node.span
     Stmt.Case(node) -> node.span
+  end
+end
+
+## The span of a top-level declaration (of the whole export, for an exported one).
+export def decl_span(decl: Decl) -> Source.Span
+  case decl
+    Decl.Import(node) -> node.span
+    Decl.Reexport(node) -> node.span
+    Decl.Export(node) -> node.span
+    Decl.Function(node) -> node.span
+    Decl.Struct(node) -> node.span
+    Decl.Enum(node) -> node.span
+    Decl.TypeAlias(node) -> node.span
+    Decl.Resource(node) -> node.span
+    Decl.Constant(node) -> node.span
+    Decl.Module(node) -> node.span
+  end
+end
+
+## The `##` doc of a top-level declaration; none for an import or a re-export.
+export def doc_of(decl: Decl) -> Optional[String]
+  case decl
+    Decl.Export(node) -> node.doc
+    Decl.Function(node) -> node.doc
+    Decl.Struct(node) -> node.doc
+    Decl.Enum(node) -> node.doc
+    Decl.TypeAlias(node) -> node.doc
+    Decl.Resource(node) -> node.doc
+    Decl.Constant(node) -> node.doc
+    Decl.Module(node) -> node.doc
+    _ -> none
   end
 end
 
