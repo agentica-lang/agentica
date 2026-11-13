@@ -59,6 +59,7 @@ export def take(
     bound: moved_bound(linked, before, old.bound, plan.stretches),
     bodies: moved_bodies(linked, before, old.bodies, plan.stretches),
     step_tries: moved_tries(linked, before, old.step_tries, plan.stretches),
+    slots: moved_slots(linked, before, old.slots, plan.stretches),
   )
 
   Taken(st: st, constants: plan.constants, clean: plan.clean)
@@ -237,6 +238,24 @@ def moved_bodies(
     if at >= 0
       found = found.put(at, old[id])
     end
+  end
+
+  found
+end
+
+# The slots of the calls with named arguments, at their new ids.
+def moved_slots(
+  linked: Linker.Linked,
+  before: Linker.Linked,
+  old: Map[Int, List[Int]],
+  stretches: List[Stretch],
+) -> Map[Int, List[Int]]
+  found: Map[Int, List[Int]] = {}
+  for id in old.keys
+    at = placed(linked, before, stretches, id)
+    next if at < 0
+
+    found = found.put(at, old[id])
   end
 
   found

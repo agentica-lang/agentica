@@ -13,6 +13,7 @@ import ErrorArgs from "check_error"
 import {PROCESS_OPTIONS_HELP} from "check_help"
 import Collections from "check_collections"
 import Lists from "check_list"
+import Named from "check_named"
 import PreludeCalls from "check_prelude"
 import State from "check_state"
 import CheckTypes from "check_types"
@@ -24,21 +25,41 @@ import RubyForm from "ruby_form"
 export def check_builtin_call(
   cx: State.Cx,
   st: State.St,
-  node: Ast.Call,
+  written: Ast.Call,
   expected: T.Type,
   entry: Model.Builtin,
 ) -> Result[State.Out]
-  selected = Builtins.form_for_call(entry, node.args.size, Ast.block_call?(node))
+  # The named arguments of error(...) are the fields of the Error it builds (check_error.agc).
+  named = written.named.size > 0 and written.name != "error"
+  count = written.args.size
+  if named
+    count += written.named.size
+  end
+
+  selected = Builtins.form_for_call(entry, count, Ast.block_call?(written))
+  if named and entry.alternatives.size == 0
+    # One form: the binding says which name is wrong, which a count cannot.
+    selected = ok(entry)
+  end
+
   if !selected.ok?
     # A block after the last argument of a builtin that takes none (each_slice) is a block with no target.
-    try block_without_target(cx, st, node, entry)
-    return error(arity_failure(cx, st, node, entry))
+    try block_without_target(cx, st, written, entry)
+    return error(arity_failure(cx, st, written, entry))
   end
 
   form = selected.unwrap!
-  try check_block_target(cx, st, node, form)
+  node = written
+  current = st
+  if named
+    bound = try bind_named(cx, st, written, form)
+    node = bound.node
+    current = bound.st
+  end
+
+  try check_block_target(cx, current, node, form)
   site = State.Site(node: node, args: node.args, selected: form, expected: expected)
-  check_rule(cx, st, site, form.rule)
+  check_rule(cx, current, site, form.rule)
 end
 
 ## CHECK-TYPE-MISMATCH unless the type can be printed or interpolated (it has to_s).
@@ -65,6 +86,26 @@ export def check_codec_of(cx: State.Cx, st: State.St, node: Ast.TypeName) -> Res
   ok(T.Type.Codec(try json_target(cx, st, node, "codec requires a struct or enum name")))
 end
 
+# The named arguments of a builtin call bound to the parameters of its form. A Plain or Prelude row reads the slots
+# (and only such a row has defaults); the other rules read their arguments by position, so they get them in parameter
+# order. A call in method form names the method and leaves the receiver out of the help.
+def bind_named(cx: State.Cx, st: State.St, node: Ast.Call, form: Model.Builtin) -> Result[Named.Bound]
+  names = form.parameters.map do |param: Model.Named| param.name end
+  shown = form.name
+  skipped = 0
+  if method_form?(node) and RubyForm.method_name(form.name) != ""
+    shown = RubyForm.shown(form.name)
+    skipped = 1
+  end
+
+  bound = try Named.bind(cx, st, node, names, Defaults.builtin_shape(form), shown, skipped)
+  case form.rule
+    Model.Rule.Plain -> ok(bound)
+    Model.Rule.Prelude -> ok(bound)
+    _ -> ok(bound.with(node: Defaults.in_parameter_order(bound.node)))
+  end
+end
+
 # CHECK-ARITY: no form of the builtin takes this many arguments. The note is the signature of every form. A call
 # written in method form (the receiver is the first argument, a Typed node) names the Ruby method and counts the
 # arguments after the receiver: `s.include?` expects 1, not 2.
@@ -86,7 +127,12 @@ def arity_failure(cx: State.Cx, st: State.St, node: Ast.Call, entry: Model.Built
   end
 
   expected = counts.join(" or ")
-  message = "\"#{name}\" expects #{expected} argument(s), found #{node.args.size - skipped}"
+  found = node.args.size - skipped
+  if name != "error"
+    found += node.named.size
+  end
+
+  message = "\"#{name}\" expects #{expected} argument(s), found #{found}"
   base = Failure.problem(
     cx.file,
     st.signature,
@@ -249,7 +295,7 @@ def check_plain(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Ou
   current = st
   index = 0
   while index < count and index < form.parameters.size
-    param = Defaults.param_of(shape, count, index)
+    param = Defaults.param_of(shape, site.node.slots, count, index)
     out = try State.expr(cx, current, site.args[index], form.parameters[param].type)
     current = out.st
     index += 1

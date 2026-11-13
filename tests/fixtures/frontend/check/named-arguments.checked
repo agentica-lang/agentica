@@ -1,0 +1,47 @@
+program #42 0:1:1-269:10:1
+  module "named-arguments.agc"
+    declaration: function-decl #18 0:1:1-132:4:1 name="check"
+      param: param #1 10:1:11-22:1:23 name="name"
+        type: type-ref #0 16:1:17-22:1:23 name="String"
+      param: param #4 24:1:25-39:1:40 name="runs"
+        type: type-ref #2 30:1:31-33:1:34 name="Int"
+        default: literal #3 36:1:37-39:1:40 value=int:100 type=Int
+      param: param #7 41:1:42-54:1:55 name="seed"
+        type: type-ref #5 47:1:48-50:1:51 name="Int"
+        default: literal #6 53:1:54-54:1:55 value=int:0 type=Int
+      param: param #10 56:1:57-77:1:78 name="verbose"
+        type: type-ref #8 65:1:66-69:1:70 name="Bool"
+        default: literal #9 72:1:73-77:1:78 value=bool:false type=Bool
+      result: type-ref #11 82:1:83-88:1:89 name="String"
+      body: return-stmt #17 91:2:3-127:2:39 implicit
+        value: interpolation #16 91:2:3-127:2:39 type=String
+          part: name-ref #12 94:2:6-98:2:10 name="name" type=String
+          part: text " "
+          part: name-ref #13 102:2:14-106:2:18 name="runs" type=Int
+          part: text " "
+          part: name-ref #14 110:2:22-114:2:26 name="seed" type=Int
+          part: text " "
+          part: name-ref #15 118:2:30-125:2:37 name="verbose" type=Bool
+    declaration: function-decl #41 133:5:1-269:10:1 name="main"
+      result: type-ref #19 147:5:15-151:5:19 name="Void"
+      body: expr-stmt #25 154:6:3-189:7:1
+        value: call #24 154:6:3-188:6:37 name="puts" piped=false type=Void
+          arg: call #23 159:6:8-187:6:36 name="check" piped=false type=String
+            arg: literal #20 165:6:14-171:6:20 value=string:"sort" type=String
+            arg: named-arg #22 173:6:22-186:6:35 name="verbose"
+              value: literal #21 182:6:31-186:6:35 value=bool:true type=Bool
+      body: expr-stmt #32 191:7:3-225:8:1
+        value: call #31 191:7:3-224:7:36 name="puts" piped=false type=Void
+          arg: call #30 196:7:8-223:7:35 name="check" piped=false type=String
+            arg: named-arg #27 202:7:14-209:7:21 name="seed"
+              value: literal #26 208:7:20-209:7:21 value=int:1 type=Int
+            arg: named-arg #29 211:7:23-222:7:34 name="name"
+              value: literal #28 217:7:29-222:7:34 value=string:"map" type=String
+      body: expr-stmt #40 227:8:3-265:9:1
+        value: call #39 227:8:3-264:8:40 name="puts" piped=false type=Void
+          arg: method-call #38 232:8:8-263:8:39 name="join" type=String resolved=call("List.join", List(String))
+            target: list-lit #35 232:8:8-242:8:18 type=List(String)
+              element: literal #33 233:8:9-236:8:12 value=string:"a" type=String
+              element: literal #34 238:8:14-241:8:17 value=string:"b" type=String
+            arg: named-arg #37 248:8:24-262:8:38 name="separator"
+              value: literal #36 259:8:35-262:8:38 value=string:"-" type=String

@@ -1,0 +1,7 @@
+def main() -> Void
+  puts(check(gen, 200, verbose: true, seed: 3))
+  xs.join(separator: "-")
+  Geo.scale(p, shift: 1)
+  each_line("a.txt", timeout_ms: 50) do |line| puts(line) end
+  p |> scaled(shift: 10)
+end

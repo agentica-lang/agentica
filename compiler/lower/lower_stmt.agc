@@ -223,7 +223,13 @@ end
 def tail_call(cx: Lowering.Cx, value: Ast.Expr) -> Optional[Ast.Call]
   case value
     Ast.Expr.Call(node) ->
-      return none if Builtins.ref(node.name, node.args.size).ok?
+      # The named arguments of error(...) are the fields of its Error, not arguments.
+      count = node.args.size
+      if node.name != "error"
+        count += node.named.size
+      end
+
+      return none if Builtins.ref(node.name, count).ok?
 
       some(node)
     _ -> none

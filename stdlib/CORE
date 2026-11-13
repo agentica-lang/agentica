@@ -25,6 +25,7 @@ check/check_help.agc
 check/check_infer.agc
 check/check_list.agc
 check/check_method.agc
+check/check_named.agc
 check/check_names.agc
 check/check_native.agc
 check/check_prelude.agc

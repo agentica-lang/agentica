@@ -1,0 +1,20 @@
+def main() -> Void
+  puts(check(gen, verbose: true))
+  xs.join(separator: "-")
+  each_line("a.txt", timeout_ms: 50) do |line| puts(line) end
+  check(
+    "a very long name that does not fit on one line",
+    runs: 200,
+    seed: 3,
+    verbose: true,
+    output: "a-much-longer-report-name.txt",
+  )
+
+  check(
+    gen, # the generator
+    runs: 2, # two runs
+  )
+
+  xs.select(by: 2) do |x| x > 1 end
+  p |> scaled(shift: 10)
+end

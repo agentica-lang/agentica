@@ -292,7 +292,8 @@ end
 ##   `_ = child`.
 ## - `call`: `target` is the function or builtin the checker resolved (`window`, `@2::helper`, `Int.shift_left`,
 ##   `Bytes.length` for `data.size`, `Bytes.at` for `data[i]`, `ok`, `some`); the children are the arguments, the
-##   receiver of a method first.
+##   receiver of a method first. A call with named arguments (`f(1, size: 2)`) has them in parameter order, and a
+##   parameter it leaves out before the last one it gives is a `default` node, which takes the parameter's default.
 ## - `index`: `target[index]` on a List or Map; the children are the target and the index.
 ## - `op`: a binary operator, `text` as written (`+`, `-`, `<=`, `==`, `!=`, ...); the two children carry their own
 ##   types. `and`, `or`, `not` (`text` `!`) and `neg` (`text` `-`) are their own kinds. A minus before a number literal
@@ -321,9 +322,9 @@ export struct Node
   children: List[Node]
 end
 
-## One parameter of a function of `bodies`, with its resolved type and its default value (one node, or none). Arguments
-## are positional: a call may have fewer arguments than parameters, and the ones it leaves out take their defaults, in
-## order; a trailing block (`do ... end`) always fills the last parameter.
+## One parameter of a function of `bodies`, with its resolved type and its default value (one node, or none). The
+## arguments of a call are in parameter order: a call may have fewer arguments than parameters, and the ones it leaves
+## out take their defaults, in order; a trailing block (`do ... end`) always fills the last parameter.
 export struct BodyParam
   name: String
   type: TypeShape

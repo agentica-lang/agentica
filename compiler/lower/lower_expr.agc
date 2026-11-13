@@ -109,12 +109,22 @@ end
 export def lower_call(
   cx: Lowering.Cx,
   fx: Lowering.Fx,
-  node: Ast.Call,
+  written: Ast.Call,
   want: Int,
   void: Bool,
   checked: Bool,
   tail: Bool,
 ) -> Result[Lowering.Out]
+  node = written
+  case cx.slots.get(written.id)
+    some(slots) -> node = Defaults.bound(written, slots)
+    none ->
+      # Only error(...) keeps its named arguments, the fields of its Error; any other call has its slots.
+      if written.named.size > 0 and written.name != "error"
+        return error(Lowering.internal(cx, "lower: a call with named arguments has no slots", written.span))
+      end
+  end
+
   span = node.span
   count = node.args.size
   form = Builtins.call_ref(node.name, count, Ast.block_call?(node))
@@ -132,9 +142,9 @@ export def lower_call(
   if key == "Task.await"
     key = try await_key(cx, node, checked, count)
   elsif form.ok? and CODEC_BUILTINS.include?(node.name)
-    return lower_codec(cx, fx, node, key, want, void, checked, tail)
+    return lower_codec(cx, fx, Defaults.in_parameter_order(node), key, want, void, checked, tail)
   elsif optional_call?(node)
-    return lower_optional(cx, fx, node, want, void, checked, tail)
+    return lower_optional(cx, fx, Defaults.in_parameter_order(node), want, void, checked, tail)
   end
 
   builtin = key != "" and VM_BUILTINS.include?(key)
@@ -167,7 +177,16 @@ export def lower_call(
   # The struct builtins of Native and Native.callback take a type name as its layout code or signature (no defaults:
   # one argument per parameter).
   laid_out = builtin and NATIVE_LAYOUTS.include?(key)
+  if laid_out
+    node = Defaults.in_parameter_order(node)
+  end
+
   index = 0
+  if node.slots.size > 0
+    fx = try lower_bound_arguments(cx, fx, node, fill, form, defaulted, shape, base)
+    index = total
+  end
+
   while index < total
     fx = Lowering.alloc(fx.with(next: base + index))
     if laid_out and type_name?(node.args[index])
@@ -331,6 +350,48 @@ def codec_value(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Call, key: String) -
   ok(Lowering.Out(fx: Lowering.emit_builtin(fx, base, key, count, spans), slot: base))
 end
 
+# The arguments of a call with named arguments (Ast.Call.slots), which run in source order: the registers of all the
+# parameters are taken first, then the defaults of the parameters left out are put in (constants, so their order does
+# not matter), each with its scratch registers above its own, then each argument goes to the register of its parameter
+# with its scratch registers above the window, so no argument overwrites one put in before it.
+def lower_bound_arguments(
+  cx: Lowering.Cx,
+  fx: Lowering.Fx,
+  node: Ast.Call,
+  fill: Optional[Lowering.Fill],
+  form: Result[Model.Builtin],
+  defaulted: Bool,
+  shape: Defaults.Shape,
+  base: Int,
+) -> Result[Lowering.Fx]
+  total = shape.total
+  current = fx
+  for param in 0...total
+    current = Lowering.alloc(current.with(next: base + param))
+  end
+
+  for param in 0...total
+    next if Defaults.argument_for(shape, node.slots, node.args.size, param) >= 0
+
+    here = current.with(next: base + param + 1)
+    if defaulted
+      out = try lower_builtin_default(cx, here, node, form.unwrap!.parameters[param].default)
+      current = out.fx
+    else
+      out = try lower_default(cx, here, node, fill.unwrap!, param)
+      current = out.fx
+    end
+  end
+
+  top = base + total
+  for index in 0...node.args.size
+    out = try lower_expression(cx, current.with(next: top), node.args[index], base + node.slots[index], false, false)
+    current = out.fx
+  end
+
+  ok(current.with(next: top))
+end
+
 # The value of parameter param of a call: the argument that fills it, or its default value. A function with defaults
 # gets all its arguments at the call site, so the bytecode and the VM know nothing about defaults.
 def lower_argument(
@@ -341,7 +402,7 @@ def lower_argument(
   shape: Defaults.Shape,
   param: Int,
 ) -> Result[Lowering.Out]
-  source = Defaults.argument_for(shape, node.args.size, param)
+  source = Defaults.argument_for(shape, node.slots, node.args.size, param)
   return lower_expression(cx, fx, node.args[source], fx.next - 1, false, false) if source >= 0
 
   lower_default(cx, fx, node, fill.unwrap!, param)
@@ -356,7 +417,7 @@ def lower_builtin_argument(
   shape: Defaults.Shape,
   param: Int,
 ) -> Result[Lowering.Out]
-  source = Defaults.argument_for(shape, node.args.size, param)
+  source = Defaults.argument_for(shape, node.slots, node.args.size, param)
   return lower_expression(cx, fx, node.args[source], fx.next - 1, false, false) if source >= 0
 
   lower_builtin_default(cx, fx, node, form.parameters[param].default)
@@ -370,7 +431,7 @@ def builtin_spans(node: Ast.Call, shape: Defaults.Shape) -> List[Source.Span]
   spans = [node.span]
   param = 0
   while param < shape.total
-    source = Defaults.argument_for(shape, node.args.size, param)
+    source = Defaults.argument_for(shape, node.slots, node.args.size, param)
     if source >= 0
       spans = spans.push(Ast.expr_span(node.args[source]))
     else
@@ -931,7 +992,8 @@ def lower_method_checked(
     try Lowering.require_type(cx, expr, void, Lowering.type_of(cx, expr))
     return lower_field_call(cx, fx, node, want) if field_call?(resolved.unwrap!)
 
-    return lower_resolved(cx, fx, node.target, node.args, node.span, node.id, resolved.unwrap!, want, void)
+    named = node.named
+    return lower_resolved(cx, fx, node.target, node.args, named, node.span, node.id, resolved.unwrap!, want, void)
   end
 
   try typed(cx, expr, known)
@@ -950,7 +1012,7 @@ def lower_field_checked(
   resolved = cx.resolved.get(node.id)
   if resolved.some?
     try Lowering.require_type(cx, expr, void, Lowering.type_of(cx, expr))
-    return lower_resolved(cx, fx, node.target, [], node.span, node.id, resolved.unwrap!, want, void)
+    return lower_resolved(cx, fx, node.target, [], [], node.span, node.id, resolved.unwrap!, want, void)
   end
 
   try typed(cx, expr, known)
@@ -964,6 +1026,7 @@ def lower_resolved(
   fx: Lowering.Fx,
   receiver: Ast.Expr,
   args: List[Ast.Expr],
+  named: List[Ast.NamedArg],
   span: Source.Span,
   id: Int,
   resolved: State.Resolved,
@@ -993,6 +1056,7 @@ def lower_resolved(
         piped: false,
         parenthesized: false,
         span: span,
+        named: named,
       )
 
       lower_call(cx, fx, call, want, void, true, false)

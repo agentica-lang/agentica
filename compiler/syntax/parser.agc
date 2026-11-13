@@ -174,6 +174,14 @@ struct NamedArgsAt
   ids: Int
 end
 
+# The arguments of a call: the positional ones, then the named ones, with pos after the ")".
+struct CallArgsAt
+  args: List[Ast.Expr]
+  named: List[Ast.NamedArg]
+  pos: Int
+  ids: Int
+end
+
 struct MapEntryAt
   node: Ast.MapEntry
   pos: Int
@@ -550,14 +558,22 @@ def piped_call(left: Ast.Expr, node: Ast.Expr) -> Optional[Ast.Expr]
     Ast.Expr.Call(call) ->
       return none if call.piped or !call.parenthesized
 
-      # The named arguments of error(...) stay with the call: "x" |> error(kind: "db") is error("x", kind: "db").
+      # The named arguments stay with the call: "x" |> error(kind: "db") is error("x", kind: "db").
       some(pipe_node(call.id, call.name, List.concat([left], call.args), call.span, call.named))
     Ast.Expr.MethodCall(call) ->
       case call.target
         Ast.Expr.TypeName(type_name) ->
           return none if type_name.name.split(".").size != 2
 
-          some(pipe_node(call.id, "#{type_name.name}.#{call.name}", List.concat([left], call.args), call.span))
+          some(
+            pipe_node(
+              call.id,
+              "#{type_name.name}.#{call.name}",
+              List.concat([left], call.args),
+              call.span,
+              call.named,
+            ),
+          )
         _ -> none
       end
 
@@ -754,16 +770,7 @@ def attach_block(e: Base.Env, start: Int, target: Ast.Expr, cursor: Int, ids: In
 
       expr_at(node, block.pos, block.ids)
     Ast.Expr.MethodCall(call) ->
-      node = Ast.Expr.MethodCall(
-        Ast.MethodCall(
-          id: block.ids,
-          target: call.target,
-          name: call.name,
-          name_span: call.name_span,
-          args: call.args.push(block.node),
-          span: span,
-        ),
-      )
+      node = Ast.Expr.MethodCall(call.with(id: block.ids, args: call.args.push(block.node), span: span))
 
       expr_at(node, block.pos, block.ids)
     Ast.Expr.FieldAccess(access) ->
@@ -817,11 +824,20 @@ def parse_postfix(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
         cursor = close
         next_id = args.ids + 1
       elsif e.tokens[after_name].kind == "left-paren"
-        args = try parse_expression_list(inner, after_name + 1, next_id, "right-paren")
-        close = try Base.expect(e, args.pos, "right-paren", "\")\"", false)
+        args = try parse_call_arguments(inner, after_name + 1, next_id)
+        close = args.pos
         span = Base.span_from(e, pos, close)
-        if name == "call"
-          target = Ast.Expr.Invoke(Ast.Invoke(id: args.ids, target: target, args: args.nodes, span: span))
+        if name == "call" and args.named.size > 0
+          return error(
+            Base.bail_span(
+              "PARSE-UNEXPECTED-TOKEN",
+              "a function value takes positional arguments",
+              args.named[0].span,
+              Base.hint("names are not part of an Fn type: write f.call(1, 2)"),
+            ),
+          )
+        elsif name == "call"
+          target = Ast.Expr.Invoke(Ast.Invoke(id: args.ids, target: target, args: args.args, span: span))
         else
           target = Ast.Expr.MethodCall(
             Ast.MethodCall(
@@ -829,8 +845,9 @@ def parse_postfix(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
               target: target,
               name: name,
               name_span: e.tokens[cursor + 1].span,
-              args: args.nodes,
+              args: args.args,
               span: span,
+              named: args.named,
             ),
           )
         end
@@ -1378,12 +1395,9 @@ def parse_name_primary(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
     return error(Base.unexpected_help(e, pos, "a lambda is written with ->", "write ->(x: Int) { ... }"))
   end
 
-  return error_call(e, pos, "error", paren, ids) if token.lexeme == "error" and e.tokens[paren].kind == "left-paren"
-
   if e.tokens[paren].kind == "left-paren"
-    args = try parse_expression_list(e, paren + 1, ids, "right-paren")
-    close = try Base.expect(e, args.pos, "right-paren", "\")\"", false)
-    return call_node(e, pos, token.lexeme, args.nodes, true, args.ids, close)
+    args = try parse_call_arguments(e, paren + 1, ids)
+    return call_node(e, pos, token.lexeme, args.args, true, args.ids, args.pos, args.named)
   end
 
   if token.lexeme == "gets" or token.lexeme == "gets!" or token.lexeme == "none"
@@ -1398,27 +1412,60 @@ def parse_name_primary(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
   expr_at(Ast.Expr.Name(Ast.NameRef(id: ids, name: token.lexeme, span: token.span)), paren, ids)
 end
 
-# error(...) or Result.Err(...) from `start`, with its "(" at `open`: the positional arguments, then the `name: value`
-# arguments, the fields of the Error it builds. A positional argument after a named one fails where a name is expected.
-# Named arguments in other calls stay a parse error until general keyword arguments land (#1163).
+# error(...) or Result.Err(...) from `start`, with its "(" at `open`: the named arguments are the fields of the Error
+# it builds.
 def error_call(e: Base.Env, start: Int, name: String, open: Int, ids: Int) -> Result[Base.ExprAt]
+  args = try parse_call_arguments(e, open + 1, ids)
+  call_node(e, start, name, args.args, true, args.ids, args.pos, args.named)
+end
+
+# The arguments of a call from `pos`, the token after its "(": the positional arguments, then the `name: value` ones,
+# up to the ")". A positional argument after a named one is PARSE-UNEXPECTED-TOKEN at that argument.
+def parse_call_arguments(e: Base.Env, pos: Int, ids: Int) -> Result[CallArgsAt]
   args: List[Ast.Expr] = []
+  named: List[Ast.NamedArg] = []
   inner = Base.with_blocks(e, true)
-  cursor = open + 1
+  cursor = pos
   next_id = ids
-  while e.tokens[cursor].kind != "right-paren" and !named_argument_at?(e, cursor)
-    parsed = try parse_expression(inner, cursor, next_id)
-    args = args.push(parsed.node)
-    cursor = parsed.pos
-    next_id = parsed.ids
+  while e.tokens[cursor].kind != "right-paren"
+    if named_argument_at?(e, cursor)
+      value = try parse_expression(inner, cursor + 2, next_id)
+      named = named.push(
+        Ast.NamedArg(
+          id: value.ids,
+          name: e.tokens[cursor].lexeme,
+          value: value.node,
+          span: Base.span_from(e, cursor, value.pos),
+        ),
+      )
+
+      cursor = value.pos
+      next_id = value.ids + 1
+    else
+      parsed = try parse_expression(inner, cursor, next_id)
+      if named.size > 0
+        return error(
+          Base.bail_span(
+            "PARSE-UNEXPECTED-TOKEN",
+            "a positional argument cannot follow a named argument",
+            Ast.expr_span(parsed.node),
+            Base.hint("write the positional arguments first, then the named ones: f(1, 2, size: 3)"),
+          ),
+        )
+      end
+
+      args = args.push(parsed.node)
+      cursor = parsed.pos
+      next_id = parsed.ids
+    end
+
     break if e.tokens[cursor].kind != "comma"
 
     cursor += 1
   end
 
-  named = try parse_named_arguments(e, cursor, next_id)
-  close = try Base.expect(e, named.pos, "right-paren", "\")\"", false)
-  call_node(e, start, name, args, true, named.ids, close, named.nodes)
+  close = try Base.expect(e, cursor, "right-paren", "\")\"", false)
+  ok(CallArgsAt(args: args, named: named, pos: close, ids: next_id))
 end
 
 def parenthesized_arguments(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprsAt]
@@ -1562,11 +1609,10 @@ def parse_module_call(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
   after_member = try Base.expect_used(e, member_pos, "a function name")
   member = e.tokens[member_pos]
   parenthesized = e.tokens[after_member].kind == "left-paren"
-  args = Base.ExprsAt(nodes: [], pos: after_member, ids: ids)
-  cursor = after_member
+  no_named: List[Ast.NamedArg] = []
+  args = CallArgsAt(args: [], named: no_named, pos: after_member, ids: ids)
   if parenthesized
-    args = try parenthesized_arguments(e, after_member, ids)
-    cursor = args.pos
+    args = try parse_call_arguments(e, after_member + 1, ids)
   else
     following = e.tokens[after_member].kind
     if (
@@ -1589,7 +1635,7 @@ def parse_module_call(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
     end
   end
 
-  call_node(e, pos, "#{name}.#{member.lexeme}", args.nodes, parenthesized, args.ids, cursor)
+  call_node(e, pos, "#{name}.#{member.lexeme}", args.args, parenthesized, args.ids, args.pos, args.named)
 end
 
 # NAME.with(field: x) updates a constant of a struct type: the postfix loop reads the .with. A call has no named

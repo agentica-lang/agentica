@@ -39,7 +39,7 @@ export def check_method(cx: State.Cx, st: State.St, node: Ast.MethodCall, expect
     return check_field_call(cx, target.st, node, field.unwrap!)
   end
 
-  method_on(cx, target, node.id, node.target, node.name, node.args, node.span, piped, expected)
+  method_on(cx, target, node.id, node.target, node.name, node.args, node.named, node.span, piped, expected)
 end
 
 ## The call of a function value of the given type: one argument for each parameter, each checked against its type, and
@@ -83,7 +83,7 @@ export def check_field_access(cx: State.Cx, st: State.St, node: Ast.FieldAccess,
   target = try State.expr(cx, st, node.target, T.Type.Unknown)
   return check_struct_field(cx, target.st, node, target.type) if field_target?(cx, target.type, node.name)
 
-  method_on(cx, target, node.id, node.target, node.name, [], node.span, false, expected)
+  method_on(cx, target, node.id, node.target, node.name, [], [], node.span, false, expected)
 end
 
 # The Fn field a struct has under the name, if any. Such a field wins over a method of the same name (to_s, inspect):
@@ -101,6 +101,13 @@ end
 
 # target.name(args) where name is an Fn field: the arguments match the parameters of the function the field holds.
 def check_field_call(cx: State.Cx, st: State.St, node: Ast.MethodCall, field: Model.Named) -> Result[State.Out]
+  if node.named.size > 0
+    arg = node.named[0]
+    message = "the field \"#{node.name}\" holds a function value, which has no parameter names"
+    help = "a function value takes positional arguments: #{node.name}(...) without names"
+    return error(State.fail_help(cx, st, "CHECK-UNKNOWN-ARGUMENT", message, arg.span, help))
+  end
+
   called = try apply_function(cx, st, field.type, node.args, node.span)
   ok(State.Out(st: State.record_resolved(called.st, node.id, State.Resolved.FieldCall), type: called.type))
 end
@@ -224,6 +231,7 @@ def method_on(
   target_node: Ast.Expr,
   name: String,
   args: List[Ast.Expr],
+  named: List[Ast.NamedArg],
   span: Source.Span,
   piped: Bool,
   expected: T.Type,
@@ -248,14 +256,23 @@ def method_on(
   end
 
   if resolved == "self" or resolved == "text" or resolved == "inspect"
-    return check_own_method(cx, target.st, id, resolved, type, name, args, span, expected)
+    return check_own_method(cx, target.st, id, resolved, type, name, args.size + named.size, span, expected)
   end
 
   typed = Ast.Expr.Typed(
     Ast.TypedTarget(id: Ast.expr_id(target_node), target: target_node, type: type, span: Ast.expr_span(target_node)),
   )
 
-  call = Ast.Call(id: id, name: resolved, args: [typed].concat(args), piped: false, parenthesized: true, span: span)
+  call = Ast.Call(
+    id: id,
+    name: resolved,
+    args: [typed].concat(args),
+    piped: false,
+    parenthesized: true,
+    span: span,
+    named: named,
+  )
+
   st = State.record_resolved(target.st, id, State.Resolved.Call(resolved, type))
   Calls.check_call(cx, st, call, expected)
 end
@@ -268,11 +285,11 @@ def check_own_method(
   resolved: String,
   type: T.Type,
   name: String,
-  args: List[Ast.Expr],
+  count: Int,
   span: Source.Span,
   expected: T.Type,
 ) -> Result[State.Out]
-  return error(State.fail(cx, st, "CHECK-ARITY", "\"#{name}\" takes no arguments", span)) if args.size > 0
+  return error(State.fail(cx, st, "CHECK-ARITY", "\"#{name}\" takes no arguments", span)) if count > 0
 
   result = T.Type.String
   how = State.Resolved.Text(type)

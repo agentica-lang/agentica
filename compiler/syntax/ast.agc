@@ -484,7 +484,9 @@ end
 
 ## A call by name, with the piped value as first argument after |>. parenthesized records whether the source had
 ## parentheses; only such a call may be the target of |>. named holds the `name: value` arguments after the positional
-## ones, which the parser reads only in error(...) and Result.Err(...): the fields of the Error it builds.
+## ones: the parameters they fill, or in error(...) and Result.Err(...) the fields of the Error it builds. slots is
+## empty from the parser. The checker and the lowering set it on a call with named arguments, whose args then hold
+## every argument in source order (Defaults.arguments): the parameter each one fills.
 export struct Call
   id: Int
   name: String
@@ -493,6 +495,7 @@ export struct Call
   parenthesized: Bool
   span: Source.Span
   named: List[NamedArg] = []
+  slots: List[Int] = []
 end
 
 ## Enum.Variant(args), also through a module alias. named is empty from the parser. The linker fills it, and leaves
@@ -583,6 +586,7 @@ export struct FieldAccess
 end
 
 ## target.name(args), with a trailing block as the last argument. `name_span` is the span of the name after the dot.
+## named holds the `name: value` arguments after the positional ones.
 export struct MethodCall
   id: Int
   target: Expr
@@ -590,6 +594,7 @@ export struct MethodCall
   name_span: Source.Span
   args: List[Expr]
   span: Source.Span
+  named: List[NamedArg] = []
 end
 
 ## One part of an interpolated string: text, or an expression.

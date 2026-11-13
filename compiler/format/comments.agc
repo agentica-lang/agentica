@@ -578,7 +578,7 @@ def children_of(part: Part, marks: Marks) -> List[Part]
     Part.Arm(node) -> [Part.Pattern(node.pattern)].concat(optional_expr(node.guard)).concat(stmts(node.body))
     Part.Pattern(pattern) -> pattern_children(pattern)
     Part.Expr(expr) -> expr_children(expr)
-    Part.Stage(node) -> exprs(node.args.drop(1)).concat(named(node.named))
+    Part.Stage(node) -> arguments(node.args.drop(1), node.named)
     Part.Named(node) -> [Part.Expr(node.value)]
     Part.Entry(node) -> [Part.Expr(node.key), Part.Expr(node.value)]
     Part.BlockParam(node) -> optional_type(node.type)
@@ -691,7 +691,7 @@ def expr_children(expr: Ast.Expr) -> List[Part]
     Ast.Expr.ListLit(node) -> exprs(node.elements)
     Ast.Expr.MapLit(node) -> node.entries.map do |entry: Ast.MapEntry| Part.Entry(entry) end
     Ast.Expr.FieldAccess(node) -> [Part.Expr(node.target)]
-    Ast.Expr.MethodCall(node) -> [Part.Expr(node.target)].concat(exprs(node.args))
+    Ast.Expr.MethodCall(node) -> [Part.Expr(node.target)].concat(arguments(node.args, node.named))
     Ast.Expr.Interpolation(node) -> interpolated(node.parts)
     Ast.Expr.BlockLit(node) -> block_params(node.params).concat(stmts(node.body))
     Ast.Expr.Index(node) -> [Part.Expr(node.target), Part.Expr(node.index)]
@@ -709,7 +709,23 @@ end
 def call_children(node: Ast.Call) -> List[Part]
   return [Part.Expr(node.args[0]), Part.Stage(node)] if node.piped
 
-  exprs(node.args).concat(named(node.named))
+  arguments(node.args, node.named)
+end
+
+# The arguments of a call in source order: the positional ones, the named ones, then a trailing block.
+def arguments(args: List[Ast.Expr], given: List[Ast.NamedArg]) -> List[Part]
+  return exprs(args) if given.size == 0
+
+  last = args.size - 1
+  if last >= 0
+    case args[last]
+      Ast.Expr.BlockLit(lit) if !lit.lambda ->
+        return exprs(args.take(last)).concat(named(given)).push(Part.Expr(args[last]))
+      _ -> last = last
+    end
+  end
+
+  exprs(args).concat(named(given))
 end
 
 def interpolated(parts: List[Ast.Part]) -> List[Part]
