@@ -20,6 +20,9 @@
 #include <fcntl.h>
 #include <uv.h>
 #include <signal.h>
+#include <execinfo.h>
+#include <stdio.h>
+#include <pthread.h>
 #ifdef __APPLE__
 #include <poll.h>
 #include <sys/stat.h>
@@ -489,7 +492,11 @@ static void work_finished(uv_work_t *req, int status) {
    stop signal is handled on the loop's thread only (unwatch_stop). Nothing to block on Windows. */
 #if !defined(_WIN32)
 static void pool_enter(pool_mask *saved) { agc_io_block_stop(saved); }
-static void pool_leave(const pool_mask *saved) { pthread_sigmask(SIG_SETMASK, saved, NULL); }
+void agc_dbg_stack(const char *what, int restored_term);
+static void pool_leave(const pool_mask *saved) {
+  agc_dbg_stack("pool_leave", sigismember(saved, SIGTERM));
+  pthread_sigmask(SIG_SETMASK, saved, NULL);
+}
 #else
 static void pool_enter(pool_mask *saved) { *saved = 0; }
 static void pool_leave(const pool_mask *saved) { (void)saved; }
@@ -1237,7 +1244,21 @@ static unsigned signal_bit(int sig) {
   return 0;
 }
 
+/* DEBUG #1529: the loop thread, and a stack whenever it blocks or restores the stop signals. */
+static pthread_t dbg_loop_thread;
+static bool dbg_loop_known;
+void agc_dbg_stack(const char *what, int restored_term) {
+  if (!dbg_loop_known || !pthread_equal(pthread_self(), dbg_loop_thread)) return;
+  void *frames[24];
+  int n = backtrace(frames, 24);
+  char line[96];
+  int len = snprintf(line, sizeof line, "agc-debug stack %s restored_term=%d\n", what, restored_term);
+  (void)!write(2, line, (size_t)len);
+  backtrace_symbols_fd(frames, n, 2);
+}
+
 void agc_io_block_stop(sigset_t *saved) {
+  agc_dbg_stack("block_stop", -1);
   sigset_t block;
   sigemptyset(&block);
   for (size_t k = 0; k < STOP_SIGNALS; k++) sigaddset(&block, stop_signals[k]);
@@ -2091,6 +2112,8 @@ void agc_io_serve(agc_vm *vm) {
   uv_timer_start(&dbg_timer, dbg_tick, 200, 200);
   uv_unref((uv_handle_t *)&dbg_timer);
   long dbg_step = 0;
+  dbg_loop_thread = pthread_self();
+  dbg_loop_known = true;
   dbg_mask("mask serve-start", 0);
   if (setjmp(vm->fail) != 0) {
     agc_sync_reset(vm);
