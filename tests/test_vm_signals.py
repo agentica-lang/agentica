@@ -2,7 +2,7 @@
 
 The peer is this test: it starts the VM, sends the signals with os.kill and reads what the program prints. Each case
 runs at one scheduler and at four, where the I/O thread takes the signal and a scheduler delivers it. Windows has no
-subscription: System.subscribe returns a system.signal error there, and the last case checks it.
+subscription: System.subscribe returns a system.signal error there, which the last case checks.
 """
 import os
 import signal
@@ -14,7 +14,7 @@ from tests.agentica_test import FIXTURES, PYTHON, WINDOWS, Child, compile_agc, h
 
 WAIT_SECONDS = scaled(10)
 POSIX = "System.subscribe needs POSIX signals; on Windows it returns a system.signal error, which " \
-        "test_on_windows_subscribe_returns_a_system_signal_error checks"
+        "test_subscribe_answers_on_every_system checks"
 SCHEDULERS = pytest.mark.parametrize("schedulers", [1, 4])
 
 # Waits in the way its first argument names, with a Term delivered meanwhile, then receives it. `channel` waits on the
@@ -359,9 +359,9 @@ def test_a_signal_the_vm_started_ignoring_cannot_be_subscribed_to(tmp_path, adop
     assert vm.wait(WAIT_SECONDS) == 0
 
 
-@host_only(not WINDOWS, "the Windows form of the POSIX cases above: Linux and macOS subscribe")
-def test_on_windows_subscribe_returns_a_system_signal_error(tmp_path, adopt):
-    text = IGNORED.replace("System.Signal.Int", "System.Signal.Term")
-    vm = start(adopt, tmp_path, text)
-    assert vm.next_line(WAIT_SECONDS) == "system.signal: signal: not supported on this system"
+def test_subscribe_answers_on_every_system(tmp_path, adopt):
+    """The one case that runs everywhere: Windows has no subscription, and says so with a system.signal error."""
+    vm = start(adopt, tmp_path, IGNORED.replace("System.Signal.Int", "System.Signal.Term"))
+    want = "system.signal: signal: not supported on this system" if WINDOWS else "subscribed"
+    assert vm.next_line(WAIT_SECONDS) == want
     assert vm.wait(WAIT_SECONDS) == 0
