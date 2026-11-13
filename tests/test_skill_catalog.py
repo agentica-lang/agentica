@@ -56,13 +56,13 @@ def catalog():
     """The names of the public builtins."""
     result = run(cli() + ["help", "--json"])
     assert result.code == 0, result.stderr
-    return frozenset(entry["name"] for entry in json.loads(result.stdout))
+    return frozenset(entry["name"] for entry in json.loads(result.stdout) if "kind" not in entry)
 
 
 @lru_cache(maxsize=None)
 def family_types():
     """The builtin types named Family.Member (a record, an enum or an opaque type of the catalog, such as
-    System.Signal), which `agentica help` does not list: every quoted Type.Name of the catalog's data file."""
+    System.Signal), which catalog() leaves out: every quoted Type.Name of the catalog's data file."""
     text = (ROOT / "compiler" / "catalog" / "builtins_data.agc").read_text(encoding="utf-8")
     return frozenset(re.findall(r'"([A-Z][A-Za-z0-9]*\.[A-Z][A-Za-z0-9]*)"', text))
 

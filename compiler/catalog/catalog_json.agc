@@ -6,8 +6,16 @@
 import Types from "../syntax/types"
 import Model from "builtin_model"
 import Builtins from "builtins"
-import {ENUMS, JSON_VALUE, OPAQUE_TYPES, OPERATOR_ONLY, PRELUDE_ONLY, PUBLIC_NAMES, RECORDS, STD_ONLY} from "builtins"
-import {TYPE_DESCRIPTIONS} from "builtins_data"
+import {
+  ENUMS,
+  OPERATOR_ONLY,
+  PRELUDE_ONLY,
+  PUBLIC_NAMES,
+  RECORDS,
+  STD_ONLY,
+  TYPE_DESCRIPTIONS,
+  TYPE_NAMES,
+} from "builtins"
 
 struct TypeRow
   name: String
@@ -111,9 +119,7 @@ end
 
 private
 
-PUBLIC_TYPES = TYPE_NAMES.filter do |name: String| !STD_ONLY.has_key?(name.split(".")[0]) end
-
-TYPE_NAMES = RECORDS.keys.concat(ENUMS.keys).concat(OPAQUE_TYPES.to_a).push(JSON_VALUE).sort
+PUBLIC_TYPES = TYPE_NAMES.filter { |name: String| !STD_ONLY.has_key?(name.split(".")[0]) }.sort
 
 # `unwrap!` cannot fail: a name that is not a type is one of PUBLIC_NAMES.
 def entry_json(name: String, ruby: Fn[Model.Builtin, String]) -> JSON.Value
