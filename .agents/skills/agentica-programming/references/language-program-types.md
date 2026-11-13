@@ -215,9 +215,10 @@ end
   in written order. A named argument before a positional one is
   `PARSE-UNEXPECTED-TOKEN`; an unknown name `CHECK-UNKNOWN-ARGUMENT`; a
   parameter given twice (name and position too) `CHECK-REPEATED-ARGUMENT`; a
-  required parameter left out `CHECK-MISSING-ARGUMENT`. A trailing block works
-  as usual. Function values take no names (`f.call(1)`); struct construction
-  and `.with(...)` are unchanged.
+  required parameter left out `CHECK-MISSING-ARGUMENT`. A trailing block fills
+  the `Fn` (`xs.reduce(initial: 0) do ... end`); with names, pass a function
+  value for it as a block or by name, not by position. Function values take no
+  names (`f.call(1)`); struct construction and `.with(...)` are unchanged.
 - Nesting goes 1000 levels at most (`PARSE-TOO-DEEP`, `CHECK-TOO-DEEP`); each
   operator of a chain counts a level, so 1,000 `+` already fail.
 - Calls nest 10000 deep at most (`RUNTIME-STACK-OVERFLOW`). Tail calls do not

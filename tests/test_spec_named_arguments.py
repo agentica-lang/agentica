@@ -12,6 +12,9 @@ EACH_LINE = ('def each_line(path: String, timeout_ms: Int = 1000, f: Fn[String, 
              'def show(line: String) -> Void\n  puts(line)\nend\n\n')
 PAIR = 'def pair[T](first: T, rest: List[T] = []) -> List[T] = rest.push(first)\n\n'
 RUNNER = 'struct Runner\n  run: Fn[Int, Int]\nend\n\n'
+APPLY = ('def apply(x: Int, f: Fn[Int, Int]) -> Int = f.call(x)\n\n'
+         'def tagged(x: Int, f: Fn[Int, Int], tag: String = "t") -> String = "#{tag}#{f.call(x)}"\n\n')
+RUN = 'def run[T](f: Fn[T, Result[Int]]) -> Int = 0\n\n'
 POINT = 'struct Point\n  x: Int\n  y: Int = 0\nend\n\n'
 
 
@@ -36,12 +39,25 @@ CASES = [
     ("a type parameter comes from a named argument",
      main_with('  xs: List[String] = pair(rest: [], first: "a")\n  puts(xs)\n', PAIR), None, None),
     ("a type parameter clash through names", main_with('  puts(pair(rest: [1], first: "a"))\n', PAIR),
-     "CHECK-TYPE-MISMATCH", None),
+     "CHECK-TYPE-MISMATCH", '"a"'),
     ("a trailing block with a named argument",
      main_with('  each_line("a.txt", timeout_ms: 5) do |line|\n    puts(line)\n  end\n', EACH_LINE), None, None),
     ("a trailing block fills the Fn that a name fills too",
      main_with('  each_line("a.txt", f: &show) do |line|\n    puts(line)\n  end\n', EACH_LINE),
      "CHECK-REPEATED-ARGUMENT", "f: &show"),
+    ("a block with names on a builtin with no defaults fills its Fn",
+     main_with("  puts([1, 2].reduce(initial: 0) do |acc, x| acc + x end)\n"), None, None),
+    ("a block with names on a function with no defaults fills its Fn",
+     main_with("  puts(apply(x: 1) do |v| v + 1 end)\n", APPLY), None, None),
+    ("a block with names fills the Fn before the defaults",
+     main_with('  puts(tagged(x: 2, tag: "k") do |v| v end)\n', APPLY), None, None),
+    ("with names a function value for the last Fn goes by name or as a block",
+     main_with('  each_line("a.txt", &show, timeout_ms: 5)\n', EACH_LINE), "CHECK-REPEATED-ARGUMENT", "timeout_ms: 5"),
+    ("a block parameter type comes from a builtin call with names",
+     main_with("  puts(run do |data| Zlib.crc32(seed: 1, data: data) end)\n", RUN), None, None),
+    ("a piped builtin with a method form and a name",
+     main_with('  puts("a,b" |> String.split(separator: ","))\n'),
+     "CHECK-PIPE-METHOD", 'String.split(separator: ",")'),
     ("a method of a builtin type takes names", main_with('  puts(["a"].join(separator: "-"))\n'), None, None),
     ("an unknown name of a method", main_with('  puts(["a"].join(sep: "-"))\n'), "CHECK-UNKNOWN-ARGUMENT", 'sep: "-"'),
     ("a builtin with defaults takes names",
@@ -58,7 +74,7 @@ CASES = [
     ("struct construction and with are unchanged",
      main_with("  p = Point(x: 1)\n  puts(p.with(y: 2))\n  puts(Point(y: 1, x: 2))\n", POINT), None, None),
     ("a struct construction still names fields only", main_with("  puts(Point(1, y: 2))\n", POINT),
-     "PARSE-UNEXPECTED-TOKEN", None),
+     "PARSE-UNEXPECTED-TOKEN", "1"),
     ("error(...) keeps its named arguments",
      main_with('  r: Result[Int] = error("x", kind: "db", code: 1)\n  puts(r)\n', ""), None, None),
 ]

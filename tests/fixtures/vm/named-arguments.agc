@@ -11,6 +11,8 @@ end
 
 def pair(a: Int, b: Int) -> Int = a * 10 + b
 
+def apply(x: Int, f: Fn[Int, Int]) -> Int = f.call(x)
+
 def check(name: String, runs: Int = 100, seed: Int = 7, verbose: Bool = false) -> String
   "#{name} #{runs} #{seed} #{verbose}"
 end
@@ -39,6 +41,8 @@ def failing() -> Result[Int] = error("boom", kind: "db.constraint", code: 19)
 def main() -> Void
   puts(pair(b: side("b", 2), a: side("a", 1)))
   puts(pair(1, b: 2))
+  puts(apply(x: 1) do |v| v + 1 end)
+  puts([1, 2].reduce(initial: 0) do |acc, x| acc + x end)
   puts(check("sort", verbose: true))
   puts(check("sort", 200, verbose: true))
   puts(check(seed: 3, name: "map"))

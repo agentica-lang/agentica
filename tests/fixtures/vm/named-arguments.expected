@@ -1,12 +1,14 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 361,
+  "steps": 390,
   "stdout": [
     "b",
     "a",
     "12",
     "12",
+    "2",
+    "3",
     "sort 100 7 true",
     "sort 200 7 true",
     "map 100 3 false",

@@ -357,7 +357,7 @@ a-b
 
 - Positional arguments come first; a positional argument after a named one is `PARSE-UNEXPECTED-TOKEN`. Named ones come in any order and run in the order they are written.
 - A name that is no parameter is `CHECK-UNKNOWN-ARGUMENT`, a parameter given twice (by name, or by position and by name) is `CHECK-REPEATED-ARGUMENT`, and a parameter with no default and no argument is `CHECK-MISSING-ARGUMENT`.
-- A trailing block works as in a positional call: `each_line("a.txt", timeout_ms: 50) do |line| ... end`.
+- A trailing block fills the `Fn` parameter: `each_line("a.txt", timeout_ms: 50) do |line| ... end`, `xs.reduce(initial: 0) do |acc, x| ... end`. When other arguments are named, a function value for that parameter is passed as a block or by name (`f: &show`), not by position.
 - Builtins and `std/` functions take names too. A function value does not: its `Fn` type has no names, so `f.call(1)` stays positional.
 
 ```agentica {expect="CHECK-UNKNOWN-ARGUMENT"}

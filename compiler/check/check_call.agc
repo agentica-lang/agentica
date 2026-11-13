@@ -245,7 +245,17 @@ end
 # CHECK-PIPE-METHOD: a builtin that has a method form (x |> String.upcase()) is written as the method, x.upcase, or
 # piped by the method name alone, x |> upcase().
 def check_pipe_method(cx: State.Cx, st: State.St, node: Ast.Call, entry: Model.Builtin) -> Result[Bool]
-  selected = Builtins.form_for(entry, node.args.size)
+  # The named arguments count as check_builtin_call counts them; error(...) keeps its own.
+  count = node.args.size
+  if node.name != "error"
+    count += node.named.size
+  end
+
+  selected = Builtins.form_for(entry, count)
+  if node.name != "error" and node.named.size > 0 and entry.alternatives.size == 0
+    selected = ok(entry)
+  end
+
   return ok(true) if !selected.ok? or selected.unwrap!.parameters.size == 0
 
   kind = Names.receiver_kind(selected.unwrap!.parameters[0].type)

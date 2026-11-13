@@ -148,11 +148,34 @@ def call_uses(cx: State.Cx, written: Ast.Call, name: String) -> List[Allows]
       end
 
     none ->
-      count = call.args.size
       entry = ENTRIES.get(call.name)
-      return [] if call.named.size > 0 or !plain_builtin?(entry, count)
+      return named_builtin_uses(call, entry, name) if call.named.size > 0
+
+      return [] if !plain_builtin?(entry, call.args.size)
 
       params = entry.unwrap!.parameters.map do |param: Model.Named| param.type end
+  end
+
+  slot_uses(call.args, params, name)
+end
+
+# The parameter as an argument of a builtin call with named arguments: a Plain row with one form, bound by the names of
+# its parameters (error(...) has the fields of its Error as names, so it is left out).
+def named_builtin_uses(written: Ast.Call, entry: Optional[Model.Builtin], name: String) -> List[Allows]
+  return [] if entry.none? or written.name == "error"
+
+  form = entry.unwrap!
+  return [] if !plain_rule?(form.rule) or form.alternatives.size > 0
+
+  shape = Defaults.builtin_shape(form)
+  names = form.parameters.map do |param: Model.Named| param.name end
+  binding = Defaults.bind(names, shape, written.args, written.named)
+  return [] if binding.code != ""
+
+  call = Defaults.bound(written, binding.slots)
+  params: List[T.Type] = []
+  for index in 0...call.args.size
+    params = params.push(form.parameters[Defaults.param_of(shape, call.slots, call.args.size, index)].type)
   end
 
   slot_uses(call.args, params, name)

@@ -93,8 +93,10 @@ export def argument_for(shape: Shape, slots: List[Int], count: Int, param: Int) 
 end
 
 ## Binds the arguments of a call to the parameters called `names`. The positional arguments fill the parameters from
-## the left, each named one the parameter of its name, and a trailing block the last parameter when it is an Fn that
-## follows defaults (Shape.fn_last), else the next one, as a positional call does. A parameter named `_` has no name.
+## the left and each named one the parameter of its name. A trailing block fills the last parameter when it is an Fn
+## that follows defaults (Shape.fn_last), as in a positional call; otherwise the first parameter that no other
+## argument fills, which is the next one in a positional call (`reduce(initial: 0) do ... end` gives the block to the
+## Fn after `initial`). A parameter named `_` has no name.
 export def bind(names: List[String], shape: Shape, args: List[Ast.Expr], named: List[Ast.NamedArg]) -> Binding
   block = trailing_block?(args)
   positional = args.size
@@ -102,18 +104,13 @@ export def bind(names: List[String], shape: Shape, args: List[Ast.Expr], named: 
     positional -= 1
   end
 
-  block_slot = positional
-  if shape.fn_last
-    block_slot = shape.total - 1
-  end
-
-  if positional > shape.total or (block and block_slot >= shape.total)
+  if positional > shape.total or (block and shape.fn_last and positional >= shape.total)
     return Binding(slots: [], code: "CHECK-ARITY", at: -1, name: "")
   end
 
   filled: List[Bool] = []
   for param in 0...shape.total
-    filled = filled.push(param < positional or (block and param == block_slot))
+    filled = filled.push(param < positional or (block and shape.fn_last and param == shape.total - 1))
   end
 
   slots: List[Int] = []
@@ -131,6 +128,14 @@ export def bind(names: List[String], shape: Shape, args: List[Ast.Expr], named: 
     filled = filled.set(param, true)
     slots = slots.push(param)
     at += 1
+  end
+
+  block_slot = shape.total - 1
+  if block and !shape.fn_last
+    block_slot = first_open(filled)
+    return Binding(slots: [], code: "CHECK-ARITY", at: -1, name: "") if block_slot < 0
+
+    filled = filled.set(block_slot, true)
   end
 
   if block
@@ -188,6 +193,18 @@ end
 
 ## True when a struct field has a default value.
 export def field_default?(field: Ast.FieldDecl) -> Bool = field.default.some?
+
+# The first parameter that no argument fills, or -1.
+def first_open(filled: List[Bool]) -> Int
+  index = 0
+  while index < filled.size
+    return index if !filled[index]
+
+    index += 1
+  end
+
+  -1
+end
 
 # The argument that fills param, or -1.
 def slot_of(slots: List[Int], param: Int) -> Int

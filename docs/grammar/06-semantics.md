@@ -324,8 +324,12 @@ the function: definitions do not change, so every function of the program, of
 fill the parameters from the left; a positional argument after a named one is
 `PARSE-UNEXPECTED-TOKEN` at that argument. Each named argument fills the
 parameter of its name, in any order, and a parameter left out takes its
-default. A trailing block fills the parameter it fills in a positional call.
-The arguments run in the order they are written, not in the order of the
+default. A trailing block fills a last `Fn` parameter that follows defaults,
+as in a positional call, and otherwise the first parameter no other argument
+fills: `xs.reduce(initial: 0) do |acc, x| ... end`. The positional arguments
+still fill from the left, so with named arguments a function value for that
+last `Fn` is passed as a block or by name (`f: &show`), not by position. The
+arguments run in the order they are written, not in the order of the
 parameters.
 
 A name that is no parameter is `CHECK-UNKNOWN-ARGUMENT`, and a parameter given
