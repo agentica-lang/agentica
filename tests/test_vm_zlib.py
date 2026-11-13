@@ -225,7 +225,7 @@ def test_zlib_inflate_rejects_a_broken_wrapper(bytes_peer, tmp_path, mutate, pri
 
 def break_gzip_member(mutate):
     """One gzip member with one thing wrong, by kind."""
-    blob = bytearray(gzip.compress(b"hello world, hello world"))
+    blob = bytearray(gzip.compress(b"hello world, hello world", mtime=0))
     if mutate == "magic":
         blob[0] = 0x1E
     elif mutate == "method":
@@ -455,14 +455,15 @@ def test_lazy_steps_take_empty_items_and_match_python_bytes(tmp_path):
     assert lines[1:] == ["ok([[104, 105]])", "ok([[104, 105]])"], lines
 
 
+# mtime=0: these blobs become test ids, so they must not change with the clock.
 @pytest.mark.parametrize("op, blob", [
-    ("gunzip", gzip.compress(b"hi") + gzip.compress(b"yo")),
-    ("gunzip", gzip.compress(b"hi") + b"\x00"),
-    ("gunzip", gzip.compress(b"hi")[:-3]),
+    ("gunzip", gzip.compress(b"hi", mtime=0) + gzip.compress(b"yo", mtime=0)),
+    ("gunzip", gzip.compress(b"hi", mtime=0) + b"\x00"),
+    ("gunzip", gzip.compress(b"hi", mtime=0)[:-3]),
     ("gunzip", break_gzip_member("crc")),
     ("gunzip", zlib.compress(b"hi")),
     ("inflate", zlib.compress(b"hi") + b"junk"),
-    ("inflate", gzip.compress(b"hi")),
+    ("inflate", gzip.compress(b"hi", mtime=0)),
     ("inflate", b""),
     ("raw_inflate", python_compress(b"hi", "raw_deflate") + b"\x00"),
 ])
