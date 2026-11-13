@@ -73,6 +73,7 @@ tests/test_spec_package_native_build.py 12 0 0 0
 tests/test_spec_package_native_download.py 10 0 0 0
 tests/test_spec_package_override.py 3 0 0 0
 tests/test_spec_package_subdir.py 10 0 0 0
+tests/test_spec_package_test_group.py 3 0 0 0
 tests/test_spec_package_workspace.py 3 0 0 0
 tests/test_spec_packages.py 11 0 0 0
 tests/test_spec_parser.py 5 0 0 0
