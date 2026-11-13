@@ -53,6 +53,9 @@ below.
 - **Breaking:** `export` before a declaration is `PARSE-UNEXPECTED-TOKEN`: a
   declaration is public unless it comes after `private`, and `export
   Alias.name` still re-exports a name (#1502).
+- **Breaking:** a file with no `private` is public as a whole (it exported
+  only what it marked before), and an `import` after a re-export is
+  `CHECK-DECL-ORDER` (#1502).
 - `agentica outline` prints `private ` before a private declaration, and a
   re-export as `export Alias.name` (#1502).
 - **Breaking:** `error(e)` in a `case` binds an `Error`, not a String: use
