@@ -78,7 +78,7 @@ def test_a_json_field_in_a_list_of_an_imported_struct_is_misplaced(agentica_chec
     """The CHECK-JSON-FIELD-PLACE walk follows a struct of another module, and reports at the target."""
     root = 'import Models from "models"\n\ndef main() -> Void\n  x = JSON.schema(Models.Patch)\nend\n'
     files = {
-        "models.agc": "export struct Patch\n  ages: List[JsonField[Int]]\nend\n",
+        "models.agc": "export struct Patch\n  ages: List[JSON.Field[Int]]\nend\n",
         "root.agc": root,
     }
     found = agentica_check(files, "root.agc")

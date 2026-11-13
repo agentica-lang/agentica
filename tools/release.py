@@ -288,7 +288,7 @@ def main() -> Void
 end
 """
 TCP = """\
-def serve(listener: Listener) -> Result[Void]
+def serve(listener: TCP.Listener) -> Result[Void]
   socket = try TCP.accept(listener, 10000)
   line = try TCP.read_line(socket, 10000)
   try TCP.send(socket, "echo " + line + "\\n", 10000)

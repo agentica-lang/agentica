@@ -138,7 +138,7 @@ def list(settings: Settings, path: String, bytecode: String) -> Listed
   end
   empty: Map[Int, UnitTest] = {}
   tests = records.filter do |record| Child.event_of(record) == "test" end
-  listed = tests.reduce(empty) do |acc: Map[Int, UnitTest], record: Json|
+  listed = tests.reduce(empty) do |acc: Map[Int, UnitTest], record: JSON.Value|
     line = Child.int_of(record, "line")
     column = Child.int_of(record, "column")
     acc.put(
@@ -381,7 +381,7 @@ def stderr_limit(where: Report.Span) -> Report.Failure
   Report.error_at("RUNTIME-BDD-OUTPUT-LIMIT", "the test file's stderr over all its tests exceeds 1 MiB", where)
 end
 
-def record_error(record: Json) -> Report.Failure
+def record_error(record: JSON.Value) -> Report.Failure
   range = JSON.get(record, "range").unwrap_or(JSON.null())
   start = JSON.get(range, "start").unwrap_or(JSON.null())
   stop = JSON.get(range, "end").unwrap_or(JSON.null())

@@ -36,6 +36,25 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - The bytecode cache keys on the C compiler file that a native build would run
   (`CC`, else `cc` found in `PATH`), and `BDD.given_program` on `PATH`: another
   compiler makes a new build.
+- **Breaking:** `Json` and `JsonField` are `JSON.Value` and `JSON.Field`
+  (#1182); the old names are unknown, a program may take `Json`, and
+  `JsonField` stays reserved for now. `inspect` shows a JSON value as
+  `<JSON.Value>`.
+- **Breaking:** `FileInfo` and `FileHandle` are `File.Info` and `File.Handle`
+  (#1182); the old names are unknown, a program may take `FileHandle`, and
+  `FileInfo` stays reserved for now.
+- **Breaking:** `ProcessOutput` is `Process.Output` (#1182); the old name is
+  unknown and stays reserved for now.
+- **Breaking:** `Socket` and `Listener` are `TCP.Socket` and `TCP.Listener`
+  (#1182); the old names are unknown, and a program may take them.
+- **Breaking:** `TlsContext`, `TlsClientOptions` and `TlsServerOptions` are
+  `TLS.Context`, `TLS.ClientOptions` and `TLS.ServerOptions` (#1182); the old
+  names are unknown, and a program may take them.
+- **Breaking:** `TestCase` is `Test.Case` (#1182); the old name is unknown,
+  and a program may take it.
+- **Breaking:** `Profile.measure` and `Profile.steps` are
+  `System.Profile.measure` and `System.Profile.steps` (#1182); `Profile` is
+  unknown, and a program may take it.
 
 ## [0.31.0-alpha.1] - 2026-11-12
 

@@ -25,7 +25,7 @@ end
 def main() -> Void
   Test.run([
     Test.test("default client options") do
-      # The record holds a TlsContext (tls), which has no equality: its fields are compared.
+      # The record holds a TLS.Context (tls), which has no equality: its fields are compared.
       given = HTTP.ClientOptions()
       expected = options(30000, 4)
       try Test.eq([given.timeout_ms, given.idle_timeout_ms, given.max_connections, given.max_body_bytes],

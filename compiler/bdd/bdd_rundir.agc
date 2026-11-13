@@ -40,7 +40,7 @@ DIGITS = "0123456789abcdef"
 ## A claimed run directory: its final path, and the open lock file. The lock is released when the handle is closed.
 export struct Run
   path: String
-  lock: FileHandle
+  lock: File.Handle
 end
 
 ## The places that can hold the temporary directory, best first. On Windows: the variables TMPDIR, TMP and TEMP in
@@ -137,7 +137,7 @@ def windows?() -> Bool = System.os() == "windows"
 
 # Removes the run folder and releases its lock. Elsewhere the lock is held until the folder is gone, so no other sweep
 # takes the same folder; Windows cannot remove a folder with an open file in it, so the lock is closed first there.
-def discard(path: String, lock: FileHandle) -> Void
+def discard(path: String, lock: File.Handle) -> Void
   if windows?()
     _ = File.close(lock, IO_TIMEOUT)
     _ = Path.remove(path, IO_TIMEOUT)
@@ -189,7 +189,7 @@ def lock_and_name(temporary: String, current: String) -> Result[Run]
 end
 
 # Creates the lock file and locks it. It is a new file, so a name in the way is an error and never a link followed.
-def take_lock(directory: String) -> Result[FileHandle]
+def take_lock(directory: String) -> Result[File.Handle]
   path = try Path.join([directory, "lock"])
   lock = try File.open(path, "create_private", IO_TIMEOUT)
   taken = File.try_lock(lock, IO_TIMEOUT)
@@ -236,7 +236,7 @@ end
 # `owner` (on Windows every folder has the user id 0; another user's folder fails at `lock`, see `sweep`) with a real
 # `lock` file whose lock this call took, and not changed in the last `age` seconds. The handle keeps the folder from
 # being claimed by another sweep until it is closed. A lock held by a live run is an error.
-def abandoned(path: String, owner: Int, age: Int) -> Result[FileHandle]
+def abandoned(path: String, owner: Int, age: Int) -> Result[File.Handle]
   folder = try File.lstat(path, IO_TIMEOUT)
   lock_path = try Path.join([path, "lock"])
   lock_info = try File.lstat(lock_path, IO_TIMEOUT)

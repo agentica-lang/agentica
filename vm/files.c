@@ -822,7 +822,7 @@ static void work_sha256(op *o) {
   o->out_cap = AGC_SHA256_BYTES;
 }
 
-/* The `kind` of a FileInfo: Ruby's File::Stat#ftype names. A path stat on Windows (libuv) gives only a directory, a
+/* The `kind` of a File.Info: Ruby's File::Stat#ftype names. A path stat on Windows (libuv) gives only a directory, a
    link (a reparse point, lstat only), a regular file and the NUL device (as a character device), so the other kinds
    come from POSIX systems only. */
 static const char *file_kind(uint64_t mode) {
@@ -1489,7 +1489,7 @@ static agc_value text_result(agc_vm *vm, const op *o) {
 
 static uint32_t file_info_struct(agc_vm *vm) {
   static const char *const fields[] = {"kind", "size_bytes", "modified_seconds", "mode", "user_id", "group_id"};
-  return agc_builtin_struct(vm, "FileInfo", fields, 6);
+  return agc_builtin_struct(vm, "File.Info", fields, 6);
 }
 
 static agc_value stat_result(agc_vm *vm, const op *o) {

@@ -1,13 +1,17 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 65,
+  "steps": 62,
   "stdout": [
     "[1,2]",
-    "set 3",
-    "clear",
-    "[\"h2\"]",
+    "[<JSON.Value>]",
+    "Patch(age: JSON.Field.Value(3))",
+    "Patch(age: JSON.Field.Null)",
+    "TLS.ClientOptions(ca_file: \"\", cert_file: \"\", key_file: \"\", alpn: [\"h2\"])",
+    "Process.Output(stdout: \"a\", stderr: \"\", truncated: false)",
+    "<TCP.Listener>",
     "true",
+    "Json JsonField FileInfo FileHandle ProcessOutput Socket Listener TlsContext TestCase Profile.steps",
     ""
   ],
   "stderr": []

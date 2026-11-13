@@ -107,9 +107,9 @@ export NATIVE_LAYOUTS = Set.new(["Native.size_of", "Native.get_struct", "Native.
 
 ## The builtin records the VM can build as structs, in the order the struct table lists the ones a program uses.
 export BUILTIN_STRUCTS = [
-  "FileInfo", "HttpWire.Header", "HttpWire.Request", "HttpWire.Response", "HttpWire.ClientOptions",
-  "HttpWire.ServerOptions", "ProcessOutput", "LogRegistry.Event", "HttpWire.Head", "HttpWire.Chunk", "HttpWire.Reply",
-  "HttpWire.Job", "HttpWire.ResponseHead", "StructMember", "Codec.Info", "TlsClientOptions", "TlsServerOptions",
+  "File.Info", "HttpWire.Header", "HttpWire.Request", "HttpWire.Response", "HttpWire.ClientOptions",
+  "HttpWire.ServerOptions", "Process.Output", "LogRegistry.Event", "HttpWire.Head", "HttpWire.Chunk", "HttpWire.Reply",
+  "HttpWire.Job", "HttpWire.ResponseHead", "StructMember", "Codec.Info", "TLS.ClientOptions", "TLS.ServerOptions",
   "TaskDown", "Process.Options", "Error",
 ]
 

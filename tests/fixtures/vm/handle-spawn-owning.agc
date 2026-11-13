@@ -7,34 +7,34 @@ def ask(port: Int) -> Result[String]
   return TCP.read_line(socket, 5000)
 end
 
-def peek(socket: Socket) -> Result[Void]
+def peek(socket: TCP.Socket) -> Result[Void]
   return TCP.send(socket, "peek\n", 5000)
 end
 
-def echo_once(socket: Socket) -> Result[String]
+def echo_once(socket: TCP.Socket) -> Result[String]
   line = try TCP.read_line(socket, 5000)
   try TCP.send(socket, "echo #{line}\n", 5000)
   return ok(line)
 end
 
-def give_away(socket: Socket) -> Result[Int]
+def give_away(socket: TCP.Socket) -> Result[Int]
   Task.spawn_owning(&echo_once, socket)
   return ok(1)
 end
 
-def give_twice(socket: Socket) -> Result[Int]
+def give_twice(socket: TCP.Socket) -> Result[Int]
   Task.spawn_owning(&echo_once, socket)
   Task.spawn_owning(&peek, socket)
   return ok(2)
 end
 
-def give_closed(socket: Socket) -> Result[Int]
+def give_closed(socket: TCP.Socket) -> Result[Int]
   TCP.close(socket)
   Task.spawn_owning(&peek, socket)
   return ok(3)
 end
 
-def accept_once(listener: Listener) -> Result[String]
+def accept_once(listener: TCP.Listener) -> Result[String]
   socket = try TCP.accept(listener, 5000)
   try TCP.send(socket, "listener handed over\n", 5000)
   return ok("accepted")

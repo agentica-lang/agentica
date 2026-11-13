@@ -1,6 +1,6 @@
 import HTTP from "std/http"
 
-def head(socket: Socket, port: Int, seen: List[String]) -> List[String]
+def head(socket: TCP.Socket, port: Int, seen: List[String]) -> List[String]
   line = Result.unwrap!(TCP.read_line(socket, 5000))
   while line != ""
     seen = List.append(seen, String.replace(line, port.to_s, "PORT"))
@@ -9,7 +9,7 @@ def head(socket: Socket, port: Int, seen: List[String]) -> List[String]
   return seen
 end
 
-def serve(listener: Listener) -> List[String]
+def serve(listener: TCP.Listener) -> List[String]
   port = TCP.local_port(listener)
   socket = Result.unwrap!(TCP.accept(listener, 5000))
   seen = head(socket, port, [])

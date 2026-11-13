@@ -23,7 +23,7 @@ Analysis.refs_partial(session, path: String, line: Int, column: Int) -> Result[A
 Analysis.native_modules(session, path: String) -> Result[Analysis.NativeModules]
 Analysis.bodies(session, path: String) -> Result[Analysis.Bodies]   # experimental
 Analysis.diagnostic(message: String) -> Result[Analysis.Diagnostic]
-Analysis.outline_json(found) -> Json     # also type_at_json, symbols_json, refs_json,
+Analysis.outline_json(found) -> JSON.Value     # also type_at_json, symbols_json, refs_json,
                                          # native_modules_json, bodies_json,
                                          # diagnostic_json
 ```

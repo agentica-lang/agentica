@@ -17,7 +17,7 @@ Process.wait(p: Process, timeout_ms: Int) -> Result[Int]
 Process.close(p: Process) -> Void
 Process.spawn_captured(command: String, args: List[String],
                        options: Process.Options = Process.Options()) -> Result[Process]
-Process.output(p: Process, timeout_ms: Int) -> Result[ProcessOutput]
+Process.output(p: Process, timeout_ms: Int) -> Result[Process.Output]
 Process.spawn_channel(command: String, args: List[String],
                       options: Process.Options = Process.Options()) -> Result[Process]
 Process.channel_read_line(p: Process, timeout_ms: Int) -> Result[String]
@@ -111,12 +111,11 @@ cleanup) with these differences.
   truncated and more bytes are dropped. Once either stream is truncated, every
   stdout read returns `error("process: output exceeds 1048576 bytes")`.
 - `output` waits until the child's stdout and stderr both end, then returns the
-  builtin record `ProcessOutput(stdout: String, stderr: String, truncated:
+  builtin record `Process.Output(stdout: String, stderr: String, truncated:
   Bool)`: the stdout not read yet, all of stderr (invalid UTF-8 becomes U+FFFD)
   and whether either stream was truncated. It consumes nothing and can repeat. A
   timeout is `error("process: operation timed out")` and keeps the child; a
   `spawn` process gives `error("process: output is not captured")`.
-  `ProcessOutput` is reserved.
 - Closing a captured child (`close`, a stream timeout, the end of the run) sends
   `SIGTERM`, then `SIGKILL` after one second, so a child that is an Agentica
   program can stop its own children first. `close` and a timeout never wait.

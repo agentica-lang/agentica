@@ -1,5 +1,5 @@
 # Checks typed JSON with Optional against the vectors of tests/fixtures/json-optional-vectors.py: each document is
-# decoded from its text and from its Json value, and both must give the peer's encoded text or error message. A
+# decoded from its text and from its JSON.Value value, and both must give the peer's encoded text or error message. A
 # "same" vector must come back unchanged up to key order, and every decoded value must encode back to the same text
 # after a second decode (the round trip).
 struct Address

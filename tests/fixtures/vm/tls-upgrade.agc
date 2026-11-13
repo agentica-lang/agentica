@@ -1,6 +1,6 @@
 # STARTTLS inside one program: each side trades plain lines, then TLS.upgrade starts TLS on its socket. The client
 # task prints nothing, so the output does not depend on which side finishes its handshake first.
-def starttls(port: Int, tls: TlsContext, host: String) -> Result[List[String]]
+def starttls(port: Int, tls: TLS.Context, host: String) -> Result[List[String]]
   plain = try TCP.connect("127.0.0.1", port, 5000)
   try TCP.send(plain, "STARTTLS\n", 5000)
   ready = try TCP.read_line(plain, 5000)
@@ -10,7 +10,7 @@ def starttls(port: Int, tls: TlsContext, host: String) -> Result[List[String]]
   return ok([TCP.send(plain, "plain\n", 5000).message, reply])
 end
 
-def answer(listener: Listener, server: TlsContext) -> Result[String]
+def answer(listener: TCP.Listener, server: TLS.Context) -> Result[String]
   plain = try TCP.accept(listener, 5000)
   puts(try TCP.read_line(plain, 5000))
   try TCP.send(plain, "ready\n", 5000)
@@ -24,8 +24,8 @@ end
 
 def main() -> Void
   dir = System.args()[0]
-  server = TLS.server_context(TlsServerOptions(cert_file: "#{dir}/server.pem", key_file: "#{dir}/server-key.pem"))
-  tls = TLS.client_context(TlsClientOptions(ca_file: "#{dir}/ca.pem")).unwrap!
+  server = TLS.server_context(TLS.ServerOptions(cert_file: "#{dir}/server.pem", key_file: "#{dir}/server-key.pem"))
+  tls = TLS.client_context(TLS.ClientOptions(ca_file: "#{dir}/ca.pem")).unwrap!
   listener = TCP.listen("127.0.0.1", 0).unwrap!
   port = TCP.local_port(listener)
   task = Task.spawn do starttls(port, tls, "localhost") end

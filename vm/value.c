@@ -170,7 +170,7 @@ void agc_init(void) {
   if (floor_text && *floor_text && !agc_gc_heap_parse(floor_text, &heap_floor)) heap_floor = HEAP_FLOOR_DEFAULT;
   size_t heap = GC_get_heap_size();
   if (!(initial && *initial) && heap_floor > heap) (void)GC_expand_hp(heap_floor - heap);
-  /* Finalizers (only the TlsContext's) run when agc_gc_finalize_pending calls them, between turns, so OpenSSL is
+  /* Finalizers (only the TLS.Context's) run when agc_gc_finalize_pending calls them, between turns, so OpenSSL is
      never entered from inside a collection or in the middle of a builtin. */
   GC_set_finalize_on_demand(1);
 #endif

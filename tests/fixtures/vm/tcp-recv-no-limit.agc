@@ -1,11 +1,11 @@
 # TCP.recv_bytes without a timeout waits with no limit: for bytes that come late, behind another reader's lock, after
 # a cancel, and until the peer closes. Timeouts above 2^31 ms and the largest Int are taken as given; 0 and negative
 # ones are errors.
-def wait_bytes(socket: Socket) -> Result[Bytes]
+def wait_bytes(socket: TCP.Socket) -> Result[Bytes]
   return TCP.recv_bytes(socket, 16)
 end
 
-def wait_byte(socket: Socket) -> Result[Bytes]
+def wait_byte(socket: TCP.Socket) -> Result[Bytes]
   return TCP.recv_bytes(socket, 1)
 end
 

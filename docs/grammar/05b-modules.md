@@ -863,5 +863,5 @@ import Sqlite from "pkg/sqlite/db"
   changed file of `deps/` is caught.
 - A `files` list in the manifest: only `.agc` files and the files of `native/`
   are used and hashed.
-- A `Json` value or typed decoding for `Toml.parse`: the result is the enum
-  `Toml.Value`, which keeps the types of TOML and works with `case`.
+- A `JSON.Value` value or typed decoding for `Toml.parse`: the result is the
+  enum `Toml.Value`, which keeps the types of TOML and works with `case`.

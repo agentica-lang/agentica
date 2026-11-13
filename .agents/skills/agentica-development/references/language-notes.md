@@ -18,8 +18,8 @@ section for the area you are changing.
   Its methods are prelude bodies (`stdlib/prelude/optional.agc`).
 - `==` on a list, map, set, Result, struct or enum is the VM builtin
   `Value.equal` (`lower_deep_equality`), the deep walk of `vm/equal.c` that
-  `Test.eq` shares. The checker's `CheckTypes.equality?` is `data?` with Json
-  refused; `equality_gap` names the field or variant for the message.
+  `Test.eq` shares. The checker's `CheckTypes.equality?` is `data?` with
+  JSON.Value refused; `equality_gap` names the field or variant for the message.
 - `try` is a unary expression node. It requires a Result-returning function
   (`CHECK-TRY-CONTEXT` otherwise), unwraps successes, and returns errors through
   the current function's escape. It does not guarantee a return.
@@ -161,7 +161,7 @@ section for the area you are changing.
 - The checker checks each interpolated expression with no context (Void is
   rejected, and `ensure_printable` rejects types without `to_s`: functions,
   tasks, handles); the VM inserts each value in its `to_s` form (strings raw,
-  `Json` as JSON text, others in the inspect form).
+  `JSON.Value` as JSON text, others in the inspect form).
 - `puts`/`print`/`IO.puts`/`IO.print`/`IO.warn` take `T` with the `show` rule
   tag, which only calls `ensure_printable`; the VM writes the `to_s` form.
   `x.to_s` resolves through the method tables for String/Int/Float; for any

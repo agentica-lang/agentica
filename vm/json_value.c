@@ -11,7 +11,7 @@
 #include <math.h>
 #include <string.h>
 
-/* next is the child to read, written the number of children written so far: a JsonField.Absent struct field is read
+/* next is the child to read, written the number of children written so far: a JSON.Field.Absent struct field is read
    but not written, so the two differ. */
 typedef struct {
   agc_value value;
@@ -211,7 +211,7 @@ static bool is_object(agc_vm *vm, agc_value v) {
 }
 
 /* The two children of an enum value: its variant name under "tag", then its payload items as the array under
-   "values" (an enum with no payload writes an empty one). Optional and JsonField have their own forms and never get
+   "values" (an enum with no payload writes an empty one). Optional and JSON.Field have their own forms and never get
    here from a checked program. */
 static agc_value enum_child(agc_vm *vm, const agc_enum *e, size_t k, agc_string **key) {
   if (k == 0) {
@@ -252,10 +252,10 @@ static agc_value child(agc_vm *vm, walk_frame *f, agc_string **key) {
   return j->members[k].value;
 }
 
-/* A struct field's value as JSON writes it (docs/grammar/06b-builtins.md, typed JSON): false for JsonField.Absent,
-   whose key is left out; JsonField.Null is nil (null) and JsonField.Value(x) is x. Any other value is unchanged. The
-   checker allows JsonField only as the direct type of a struct field, so only struct children are looked at. Only
-   hostile bytecode puts a JsonField anywhere else; it is then written as a tagged enum object like any other enum. */
+/* A struct field's value as JSON writes it (docs/grammar/06b-builtins.md, typed JSON): false for JSON.Field.Absent,
+   whose key is left out; JSON.Field.Null is nil (null) and JSON.Field.Value(x) is x. Any other value is unchanged. The
+   checker allows JSON.Field only as the direct type of a struct field, so only struct children are looked at. Only
+   hostile bytecode puts a JSON.Field anywhere else; it is then written as a tagged enum object like any other enum. */
 static bool field_value(agc_vm *vm, agc_value *item) {
   if (!agc_is(*item, AGC_T_ENUM)) return true;
   uint32_t first = vm->rt->program->json_field;
@@ -267,7 +267,7 @@ static bool field_value(agc_vm *vm, agc_value *item) {
     *item = agc_nil();
     return true;
   }
-  if (e->n != 1) agc_fail(vm, "RUNTIME-INTERNAL", "invalid JsonField value", 0);
+  if (e->n != 1) agc_fail(vm, "RUNTIME-INTERNAL", "invalid JSON.Field value", 0);
   *item = e->payload[0];
   return true;
 }
@@ -287,7 +287,7 @@ static void optional_value(agc_vm *vm, agc_value *item) {
   }
 }
 
-/* The next child of the frame that JSON writes, skipping JsonField.Absent struct fields; false when none is left. */
+/* The next child of the frame that JSON writes, skipping JSON.Field.Absent struct fields; false when none is left. */
 static bool next_child(agc_vm *vm, walk_frame *f, agc_value *item, agc_string **key) {
   while (f->next < f->n) {
     *item = child(vm, f, key);

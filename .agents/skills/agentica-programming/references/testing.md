@@ -1,10 +1,11 @@
 # Unit tests (`Test`)
 
-`Test` is a builtin module (no import). `Test` and `TestCase` are reserved.
+`Test` is a builtin module (no import). `Test` is reserved; `Test.Case` is its
+member.
 
 ```text
-Test.test(name: String, body: Fn[Result[Void]]) -> TestCase
-Test.run(tests: List[TestCase]) -> Void
+Test.test(name: String, body: Fn[Result[Void]]) -> Test.Case
+Test.run(tests: List[Test.Case]) -> Void
 Test.eq(actual: T, expected: T) -> Result[Void]
 Test.ok?(result: Result[T]) -> Result[Void]
 Test.error?(result: Result[T]) -> Result[Void]
@@ -63,10 +64,10 @@ for a test function with parameters, type parameters or another result;
 - `Test.eq(actual, expected)`: actual first (the expected type comes from the
   left argument, so `Test.eq(error("x"), r)` is `CHECK-RESULT-TYPE`; write
   `Test.eq(r, error("x"))`). Both have one data type: numbers, `Bool`, `String`,
-  `nil`, ranges, `Json`, and lists, maps, sets, Results, structs and enums of
-  those; `Fn`, `Task`, handles, `TestCase` and two different types are
+  `nil`, ranges, `JSON.Value`, and lists, maps, sets, Results, structs and enums
+  of those; `Fn`, `Task`, handles, `Test.Case` and two different types are
   `CHECK-TYPE-MISMATCH`. Maps compare in any key order and sets in any element
-  order; Floats by IEEE 754 (NaN is not equal to itself); a `Json` as its
+  order; Floats by IEEE 754 (NaN is not equal to itself); a `JSON.Value` as its
   canonical text (sorted keys). A `Bytes` shows as quoted text, the first 32
   bytes with the escapes of a String (`<Bytes 7 "+OK\r\n\x00\xFF">`).
 - `Test.ok?(r)` and `Test.error?(r)` check a Result's tag;
@@ -117,7 +118,7 @@ for a test function with parameters, type parameters or another result;
   test file is a file error; the other files still run.
 - A file runs with `--max-steps` 1,000,000 x (the tests it runs + 1), shared by
   its tests (`RUNTIME-STEP-LIMIT` ends the file), so `--only` lowers it:
-  measure a heavy test with `Profile.steps`.
+  measure a heavy test with `System.Profile.steps`.
 - A passed test's output is dropped; a failed one shows the last 64 Ki
   characters. Stdout is limited to 1 MiB per test and stderr to 1 MiB for the
   whole file: past a limit the running test (or the file) fails with

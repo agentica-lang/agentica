@@ -4112,7 +4112,7 @@ def derives(x: Int) -> Int
 end
 
 def contexts(x: Int) -> Int
-  if TLS.client_context(TlsClientOptions()).ok?
+  if TLS.client_context(TLS.ClientOptions()).ok?
     return x
   end
 

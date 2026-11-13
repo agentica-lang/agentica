@@ -523,7 +523,7 @@ def zip_magic?(archive: String, deadline: Int) -> Bool
 end
 
 # Closes a sniff handle on the capped cleanup budget, never failing the caller.
-def close_quiet(handle: FileHandle, deadline: Int) -> Void
+def close_quiet(handle: File.Handle, deadline: Int) -> Void
   left = deadline - Time.monotonic_ms()
   budget = 5000
   if left > 0 and left < budget

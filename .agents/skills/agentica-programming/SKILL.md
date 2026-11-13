@@ -38,7 +38,7 @@ in one command, `for f in cases/*.txt; do agentica p.agc < "$f" || break; done`.
 - No implicit Int/Float (`n.to_f`); `<` only on numbers (strings: `a.compare(b)
   < 0`); `==` on two values of one type: primitives, Bytes, ranges, and lists,
   maps, sets, Optionals, Results, structs and enums of those; never on Fn,
-  Task, Channel, handles, Json or a generic `T` (`CHECK-TYPE-MISMATCH`).
+  Task, Channel, handles, JSON.Value or a generic `T` (`CHECK-TYPE-MISMATCH`).
 - `try` only in a function that returns `Result[T]`, never in `main`;
   `"x".to_i` is a Result: `try s.to_i`, not `try s.to_i!`.
 - A value that may be missing is `Optional[T]` (`some(x)`, `none`), not `nil`
@@ -79,7 +79,7 @@ Read only what the task needs.
 | `lazy.md` | Lazy pipelines, endless sources, big files |
 | `testing.md` | unit tests (`Test`, `*_test.agc`) |
 | `bdd.md` | `.feature` specs and step programs |
-| `performance.md` | slow code, `Profile`, step costs |
+| `performance.md` | slow code, `System.Profile`, step costs |
 | `binary.md` | bit operations, the `OpenSSL` family (`Digest` hashes, `HMAC`, `Cipher` for AES-GCM and Triple DES, `CMAC`, password hashing with `KDF`, `RSA`, secure `Random`), `Base64`, hex, `std/binary` |
 | `logger.md` | `std/logger` |
 | `toml.md` | `std/toml` |

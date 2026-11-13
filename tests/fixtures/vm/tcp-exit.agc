@@ -1,13 +1,13 @@
 struct Flood
-  socket: Socket
+  socket: TCP.Socket
   chunk: String
 end
 
-def hold(socket: Socket) -> Result[String]
+def hold(socket: TCP.Socket) -> Result[String]
   return TCP.read_line(socket, 60000)
 end
 
-def wait_accept(listener: Listener) -> Bool
+def wait_accept(listener: TCP.Listener) -> Bool
   return Result.ok?(TCP.accept(listener, 60000))
 end
 

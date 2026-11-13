@@ -4,7 +4,7 @@ import HTTP from "std/http"
 # Content-Length body, bytes after a chunked body that ends at the 512th byte, and a body on a 204. The client keeps
 # no such connection, so every call gets its own response.
 
-def request_line(socket: Socket) -> Result[String]
+def request_line(socket: TCP.Socket) -> Result[String]
   first = try TCP.read_line(socket, 5000)
   line = first
   while line != ""
@@ -34,7 +34,7 @@ end
 
 # One connection at a time: the client never has two open (max_connections 1), and it closes each one it does not
 # keep before it opens the next.
-def serve(listener: Listener) -> List[String]
+def serve(listener: TCP.Listener) -> List[String]
   log: List[String] = []
   id = 1
   while id <= 7

@@ -3,8 +3,8 @@
   "code": null,
   "steps": 90,
   "stdout": [
-    "<Socket>",
-    "<Socket>",
+    "<TCP.Socket>",
+    "<TCP.Socket>",
     "done",
     ""
   ],

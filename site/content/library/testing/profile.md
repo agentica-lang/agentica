@@ -4,17 +4,17 @@ weight: 3
 description: Measure sections of a program in steps and time, count the steps of a task, and write input for flame graphs.
 ---
 
-`Profile` is a builtin module; it needs no import. `Profile.measure` names a section of a program for the profile, and `Profile.steps` counts the steps of the running task. Both work the same whether the profile is on or off, so they can stay in the code.
+`System.Profile` is a builtin member of `System`; it needs no import. `System.Profile.measure` names a section of a program for the profile, and `System.Profile.steps` counts the steps of the running task. Both work the same whether the profile is on or off, so they can stay in the code.
 
 Steps are the unit of work of the VM: the entries that `--max-steps` counts. They repeat exactly from run to run, so they are the numbers to compare. Wall time changes with the machine and its load.
 
-## Profile.measure
+## System.Profile.measure
 
 ```signature
-Profile.measure(label: String, block: Fn[T]) -> T
+System.Profile.measure(label: String, block: Fn[T]) -> T
 ```
 
-Runs the block once and gives back its value. The block takes no parameters; a function value of no parameters works too (`Profile.measure("load", &load)`).
+Runs the block once and gives back its value. The block takes no parameters; a function value of no parameters works too (`System.Profile.measure("load", &load)`).
 
 ```agentica
 def total(n: Int) -> Int
@@ -27,7 +27,7 @@ def total(n: Int) -> Int
 end
 
 def main() -> Void
-  t = Profile.measure("total") do total(1000) end
+  t = System.Profile.measure("total") do total(1000) end
   puts(t)
 end
 ```
@@ -45,7 +45,7 @@ def parse(text: String) -> Result[Int]
 end
 
 def main() -> Void
-  r: Result[Int] = Profile.measure("parse") do
+  r: Result[Int] = System.Profile.measure("parse") do
     a = try parse("12")
     b = try parse("30")
     ok(a + b)
@@ -79,9 +79,9 @@ def work(n: Int) -> Int
 end
 
 def main() -> Void
-  both = Profile.measure("outer") do
-    a = Profile.measure("inner") do work(100) end
-    b = Profile.measure("inner") do work(200) end
+  both = System.Profile.measure("outer") do
+    a = System.Profile.measure("inner") do work(100) end
+    b = System.Profile.measure("inner") do work(200) end
     a + b
   end
 
@@ -93,10 +93,10 @@ end
 24850
 ```
 
-## Profile.steps
+## System.Profile.steps
 
 ```signature
-Profile.steps() -> Int
+System.Profile.steps() -> Int
 ```
 
 The steps the running task has run so far. The count is the same on every run of the same work, with or without the profile, so a test can hold code to a step budget. Each task has its own count.
@@ -112,9 +112,9 @@ def work(n: Int) -> Int
 end
 
 def cost(n: Int) -> Int
-  before = Profile.steps()
+  before = System.Profile.steps()
   work(n)
-  Profile.steps() - before
+  System.Profile.steps() - before
 end
 
 def main() -> Void
@@ -175,7 +175,7 @@ main@app.agc:25;measure:outer;block@app.agc:27:32;measure:inner;block@app.agc:28
 main@app.agc:25;Int.times;block@app.agc:40:11 1000
 ```
 
-- A function is `name@FILE:LINE`, a block `block@FILE:LINE:COL`, a lambda `lambda@FILE:LINE:COL`, a native loop or callback (`Int.times`, `List.map`) its builtin's name, and a `Profile.measure` `measure:LABEL`.
+- A function is `name@FILE:LINE`, a block `block@FILE:LINE:COL`, a lambda `lambda@FILE:LINE:COL`, a native loop or callback (`Int.times`, `List.map`) its builtin's name, and a `System.Profile.measure` `measure:LABEL`.
 - The VM takes a sample of the running task's stack every 1000 steps, each with a weight of 1000. `AGENTICA_PROFILE_SAMPLE=N` sets N (1 to 1000000000); `AGENTICA_PROFILE_SAMPLE=1` counts every step, and the weights then add up to the report's `steps`.
 - Sampling counts steps, not time, so the file is the same on every run of the same program, on every system. There is no time weight, since it would differ from run to run.
 - Stacks deeper than 512 frames keep the outer and inner halves around a `...` frame. A `;`, a `%` or a control character in a name is written as `%XX` (`%3B`, `%25`), so two different stacks never share a line.
@@ -193,7 +193,7 @@ perf report
 
 ## Performance notes
 
-- With the profile off, `Profile.steps` is one builtin call; leave `Profile.measure` and `Profile.steps` in the code.
+- With the profile off, `System.Profile.steps` is one builtin call; leave `System.Profile.measure` and `System.Profile.steps` in the code.
 - The profile counts every step and instruction and times every builtin call, so a profiled run is slower, most on a loop of cheap builtin calls such as String methods. Folded output adds more, the more often it samples.
 - Rank by steps; use `us` to compare builtins and sections in one run, and time the program without the profile.
 - The profile runs on one scheduler: a profiled run uses one unless `--schedulers` or `AGENTICA_SCHEDULERS` asks for more, which it refuses.

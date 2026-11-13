@@ -7,7 +7,7 @@ description: DNS lookups, TCP and TLS sockets and the HTTP/1.1 client and server
 Network functions return a `Result` and take timeouts in milliseconds.
 
 - With `--deny-net` (or `--sandbox`), every DNS lookup, connect and listen returns an error that begins with `denied: --deny-net`, before any DNS query. With `--deny-fs`, a TLS call that names a file (a CA file, a certificate or a key) returns `denied: --deny-fs`.
-- Sockets, listeners, clients and servers are handles: `IO.inspect` prints `<Socket>`, they cannot be compared, and they close when the program ends.
+- Sockets, listeners, clients and servers are handles: `IO.inspect` prints `<TCP.Socket>`, they cannot be compared, and they close when the program ends.
 - A handle belongs to the task that opened it and closes when that task ends, so open it in the task that keeps it. [Task.spawn_owning](/library/concurrency/task/#taskspawn_owning) gives one to a new task.
 - Timeouts are positive milliseconds, up to the largest `Int`, taken as given: `0` or a negative one returns `network: timeout must be positive milliseconds`. A timeout covers the whole call, including the wait for another task using the same socket. After a timeout during active I/O the socket is closed, and later calls fail at once with `network: socket is closed`; a timeout while only waiting for a lock keeps it open.
 
@@ -40,8 +40,8 @@ error("network: the host name is empty")
 ### TCP.listen and TCP.local_port
 
 ```signature
-TCP.listen(host: String, port: Int) -> Result[Listener]
-TCP.local_port(listener: Listener) -> Int
+TCP.listen(host: String, port: Int) -> Result[TCP.Listener]
+TCP.local_port(listener: TCP.Listener) -> Int
 ```
 
 Port `0` picks a free port, and `local_port` tells which (ports are 0 to 65535 here, 1 to 65535 in `connect`). A host that holds a NUL is an error. The listener takes every address the host name stands for: `"localhost"` accepts `127.0.0.1` and `::1`.
@@ -61,8 +61,8 @@ true
 ### TCP.connect and TCP.accept
 
 ```signature
-TCP.connect(host: String, port: Int, timeout_ms: Int) -> Result[Socket]
-TCP.accept(listener: Listener, timeout_ms: Int) -> Result[Socket]
+TCP.connect(host: String, port: Int, timeout_ms: Int) -> Result[TCP.Socket]
+TCP.accept(listener: TCP.Listener, timeout_ms: Int) -> Result[TCP.Socket]
 ```
 
 `connect` opens a connection to a server. `accept` waits for the next client of a listener.
@@ -70,7 +70,7 @@ TCP.accept(listener: Listener, timeout_ms: Int) -> Result[Socket]
 ### TCP.remote_address
 
 ```signature
-TCP.remote_address(socket: Socket) -> String
+TCP.remote_address(socket: TCP.Socket) -> String
 ```
 
 The IP address of the other side, without the port: `"127.0.0.1"` or `"::1"`, like Rack's `REMOTE_ADDR`. An IPv4 client of an IPv6 listener shows as IPv4 (`"127.0.0.1"`, not `"::ffff:127.0.0.1"`). The IPv6 scope id is dropped, so link-local peers (`fe80::...`) on different interfaces can look the same. A closed socket gives `""`. TLS sockets have it too.
@@ -96,8 +96,8 @@ end
 ### TCP.send and TCP.read_line
 
 ```signature
-TCP.send(socket: Socket, text: String, timeout_ms: Int) -> Result[Void]
-TCP.read_line(socket: Socket, timeout_ms: Int) -> Result[String]
+TCP.send(socket: TCP.Socket, text: String, timeout_ms: Int) -> Result[Void]
+TCP.read_line(socket: TCP.Socket, timeout_ms: Int) -> Result[String]
 ```
 
 `send` writes UTF-8 text and flushes. `read_line` reads one line without its line ending (LF or CRLF).
@@ -109,7 +109,7 @@ TCP.read_line(socket: Socket, timeout_ms: Int) -> Result[String]
 A program that talks to itself, with a task as the server:
 
 ```agentica
-def echo_once(listener: Listener) -> Result[Void]
+def echo_once(listener: TCP.Listener) -> Result[Void]
   client = try TCP.accept(listener, 2000)
   line = try TCP.read_line(client, 2000)
   try TCP.send(client, "echo: #{line}\n", 2000)
@@ -137,9 +137,9 @@ ok()
 ### TCP.send_bytes and TCP.recv_bytes
 
 ```signature
-TCP.send_bytes(socket: Socket, bytes: Bytes, timeout_ms: Int) -> Result[Void]
-TCP.recv_bytes(socket: Socket, max_bytes: Int, timeout_ms: Int) -> Result[Bytes]
-TCP.recv_bytes(socket: Socket, max_bytes: Int) -> Result[Bytes]
+TCP.send_bytes(socket: TCP.Socket, bytes: Bytes, timeout_ms: Int) -> Result[Void]
+TCP.recv_bytes(socket: TCP.Socket, max_bytes: Int, timeout_ms: Int) -> Result[Bytes]
+TCP.recv_bytes(socket: TCP.Socket, max_bytes: Int) -> Result[Bytes]
 ```
 
 Raw bytes, as [`Bytes`](/library/data-structures/bytes/). `send_bytes` takes at most 1 MiB per call. `recv_bytes` takes a `max_bytes` from 1 to 1048576 and gives what has arrived, up to `max_bytes`, and empty `Bytes` when the other side has closed.
@@ -149,8 +149,8 @@ Without `timeout_ms`, `recv_bytes` waits with no limit, until bytes arrive, the 
 ### TCP.close and TCP.close_listener
 
 ```signature
-TCP.close(socket: Socket) -> Void
-TCP.close_listener(listener: Listener) -> Void
+TCP.close(socket: TCP.Socket) -> Void
+TCP.close_listener(listener: TCP.Listener) -> Void
 ```
 
 Closing twice is fine. Close early only when it must not wait for the task to end.
@@ -158,30 +158,30 @@ Closing twice is fine. Close early only when it must not wait for the task to en
 ## TLS
 
 ```signature
-TLS.alpn(socket: Socket) -> String
-TLS.client_context(options: TlsClientOptions) -> Result[TlsContext]
-TLS.server_context(options: TlsServerOptions) -> Result[TlsContext]
-TLS.connect(host: String, port: Int, context: TlsContext, timeout_ms: Int) -> Result[Socket]
-TLS.listen(host: String, port: Int, context: TlsContext) -> Result[Listener]
-TLS.upgrade(socket: Socket, context: TlsContext, host: String, timeout_ms: Int) -> Result[Socket]
+TLS.alpn(socket: TCP.Socket) -> String
+TLS.client_context(options: TLS.ClientOptions) -> Result[TLS.Context]
+TLS.server_context(options: TLS.ServerOptions) -> Result[TLS.Context]
+TLS.connect(host: String, port: Int, context: TLS.Context, timeout_ms: Int) -> Result[TCP.Socket]
+TLS.listen(host: String, port: Int, context: TLS.Context) -> Result[TCP.Listener]
+TLS.upgrade(socket: TCP.Socket, context: TLS.Context, host: String, timeout_ms: Int) -> Result[TCP.Socket]
 ```
 
 ```text
-struct TlsClientOptions
+struct TLS.ClientOptions
   ca_file: String = ""
   cert_file: String = ""
   key_file: String = ""
   alpn: List[String] = []
 end
 
-struct TlsServerOptions
+struct TLS.ServerOptions
   cert_file: String
   key_file: String
   alpn: List[String] = []
 end
 ```
 
-A `TlsContext` is the TLS setup of one role, built once and shared by every socket, listener and HTTP client made from it. `HTTP.ClientOptions` holds one, so `JSON.schema`, `JSON.decode` and `JSON.encode` refuse it. TLS sockets and listeners use the same `TCP` functions, with the same limits and timeouts.
+A `TLS.Context` is the TLS setup of one role, built once and shared by every socket, listener and HTTP client made from it. `HTTP.ClientOptions` holds one, so `JSON.schema`, `JSON.decode` and `JSON.encode` refuse it. TLS sockets and listeners use the same `TCP` functions, with the same limits and timeouts.
 
 - `TLS.client_context` and `TLS.server_context` read and check the PEM files when they run, so a bad file fails there, not at each connect. A file that changes later does not change the context: build a new one.
 - `TLS.connect` takes a client context and `TLS.listen` a server context; the other role stops the program with `RUNTIME-TLS-CONTEXT-ROLE`. A context stays valid while a socket or listener made from it is open.
@@ -203,7 +203,7 @@ A client that speaks HTTP/2 offers it first and reads which protocol the server 
 
 ```agentica {mode="check"}
 def protocol(host: String) -> Result[String]
-  context = try TLS.client_context(TlsClientOptions(alpn: ["h2", "http/1.1"]))
+  context = try TLS.client_context(TLS.ClientOptions(alpn: ["h2", "http/1.1"]))
   socket = try TLS.connect(host, 443, context, 5000)
   ok(TLS.alpn(socket))
 end
@@ -222,7 +222,7 @@ An SMTP client reads each reply to its last line, so no byte is left before the 
 
 ```agentica {mode="check"}
 # An SMTP reply, up to its last line: "250-" goes on, "250 " ends it.
-def reply(socket: Socket) -> Result[String]
+def reply(socket: TCP.Socket) -> Result[String]
   line = try TCP.read_line(socket, 5000)
   while line.slice(3, 1) == "-"
     line = try TCP.read_line(socket, 5000)
@@ -231,7 +231,7 @@ def reply(socket: Socket) -> Result[String]
   ok(line)
 end
 
-def starttls(host: String, context: TlsContext) -> Result[Socket]
+def starttls(host: String, context: TLS.Context) -> Result[TCP.Socket]
   plain = try TCP.connect(host, 587, 5000)
   try reply(plain)
   try TCP.send(plain, "EHLO client.example\r\n", 5000)
@@ -246,7 +246,7 @@ end
 
 ```agentica {mode="check"}
 def main() -> Void
-  context = TLS.client_context(TlsClientOptions()).unwrap!
+  context = TLS.client_context(TLS.ClientOptions()).unwrap!
   socket = TLS.connect("example.com", 443, context, 5000).unwrap!
   _ = TCP.send(socket, "HEAD / HTTP/1.1\r\nHost: example.com\r\nConnection: close\r\n\r\n", 5000)
   puts(TCP.read_line(socket, 5000))
@@ -281,7 +281,7 @@ A client reuses open connections for the same scheme, host and port. Every field
 | `max_connections` | 4, per host | positive, at most 65536 |
 | `max_body_bytes` | 1 MiB | positive, at most 64 MiB |
 | `proxy` | `""`: no proxy | an `http://host:port` origin, see below |
-| `tls` | `none`: the system's CA certificates | a client `TlsContext` |
+| `tls` | `none`: the system's CA certificates | a client `TLS.Context` |
 
 - Calls wait in FIFO order for a `max_connections` slot. A call in flight when `close_client` runs fails with `http: client is closed` (unless a connection had already started sending it).
 - `proxy` is an `http://host:port` origin with no path or query, else the call is an `error`. `http://` requests go to it in absolute form and share its connections; an `https://` request opens a `CONNECT` tunnel (one per target host and port) and speaks TLS to the target inside it, verified as without a proxy. This holds for `HTTP.client` and every call that takes a client or options.
@@ -305,7 +305,7 @@ Clients that trust the same CA file share one context: build it once and pass it
 import HTTP from "std/http"
 
 def main() -> Void
-  tls = TLS.client_context(TlsClientOptions(ca_file: "ca.pem")).unwrap!
+  tls = TLS.client_context(TLS.ClientOptions(ca_file: "ca.pem")).unwrap!
   client = HTTP.client(HTTP.ClientOptions(tls: some(tls))).unwrap!
   HTTP.close_client(client)
 end
@@ -525,12 +525,12 @@ The server is in `std/http` too. `serve` serves every kind of route on one port:
 
 ```signature
 HTTP.serve(host: String, port: Int, app: HTTP.App, options: HTTP.ServerOptions = HTTP.ServerOptions()) -> Result[HTTP.Server]
-HTTP.serve_tls(host: String, port: Int, tls: TlsContext, app: HTTP.App, options: HTTP.ServerOptions = HTTP.ServerOptions()) -> Result[HTTP.Server]
+HTTP.serve_tls(host: String, port: Int, tls: TLS.Context, app: HTTP.App, options: HTTP.ServerOptions = HTTP.ServerOptions()) -> Result[HTTP.Server]
 HTTP.app(handler: HTTP.Handler, max_body_bytes: Int = 1048576) -> HTTP.App
 HTTP.local_port(server: HTTP.Server) -> Int
 ```
 
-- `serve` returns at once and serves in the background; `serve_tls` does the same over TLS with a server `TlsContext` (`TLS.server_context`). Port 0 picks a free port (`local_port`).
+- `serve` returns at once and serves in the background; `serve_tls` does the same over TLS with a server `TLS.Context` (`TLS.server_context`). Port 0 picks a free port (`local_port`).
 - The app, an `HTTP.App`, decides for each request how to read the body and how to answer. `HTTP.App` is `Fn[HTTP.Request, HTTP.RequestBody, Result[HTTP.Answer]]`: it gets the request with an empty `body` and the body on a channel ([request bodies](#request-bodies)).
 - `HTTP.Answer` is an enum. `Answer.Whole(response)` answers with an `HTTP.Response`. `Answer.Stream(response)` sends an `HTTP.StreamResponse`, whose body arrives on a channel ([streamed responses](#streamed-responses-and-server-sent-events)). `Answer.Upgrade(upgrade)` takes what [`accept_websocket`](#websockets) returns: its `Accept` runs the WebSocket on the connection, and its `Reply` is sent as `Whole`.
 - `HTTP.app(handler, max_body_bytes)` makes an `App` from a `Handler`, for routes that take the request whole. It reads the body first, at most `max_body_bytes` (1 MiB unless given, whatever the server's cap; a negative limit counts as 0), and calls `handler` with it. A body that is larger, by its `Content-Length` or as it arrives, gets a `413`, a chunk line or trailer section over the head limits a `431`, and a bad chunk a `400`. These answers come with `Connection: close`, and `handler` is not called. A body that is cut or stalls (the client left, a timeout) closes the connection.

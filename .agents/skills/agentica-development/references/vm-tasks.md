@@ -248,7 +248,7 @@ The ring, the reservations and the FIFOs of waiters are
   concat tasks, and must not with `AGENTICA_VM_TEST_BLOCKING_OUTPUT=1` (stdout
   and stderr on the blocking `FILE` fallback) or
   `AGENTICA_VM_TEST_NO_TURN_COST=1` (no turn costs, `docs/vm/10-io-scheduler.md`
-  §10.2.1). A task reading a `FileHandle` in a loop must let `main` close it,
+  §10.2.1). A task reading a `File.Handle` in a loop must let `main` close it,
   and the run must end. The test skips when `AGENTICA_VM_BINARY` names another
   binary.
 - The `task-*` fixtures keep tasks from running side by side wherever the

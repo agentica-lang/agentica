@@ -30,7 +30,7 @@ static agc_value builtin_service(agc_vm *vm, agc_value *args, uint32_t span) {
   const agc_enum *tls = optional_of(vm, o->fields[AGC_HTTP_OPTION_TLS]);
   if (tls->n) {
     agc_tls_context_check(vm, tls->payload[0], false,
-                          "HTTP.client takes a client TlsContext in options.tls (TLS.client_context), not a server one",
+                          "HTTP.client takes a client TLS.Context in options.tls (TLS.client_context), not a server one",
                           span + 2);
     agc_tls_http1_check(vm, agc_as_tls_context(vm, tls->payload[0])->config, span + 2);
   }

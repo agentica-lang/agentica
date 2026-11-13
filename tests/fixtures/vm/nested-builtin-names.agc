@@ -1,27 +1,21 @@
-# A nested builtin name (#1182) is the old builtin: the linker turns JSON.Field.Value into JsonField.Value and
-# System.Profile.steps into Profile.steps, so a value of either name is one type.
+# The builtin families (#1182) print with the names a program writes: JSON.Field.Value(3), TLS.ClientOptions(...),
+# Process.Output(...), <JSON.Value>, <TCP.Listener>. A string keeps the old names as they are.
 struct Patch
   age: JSON.Field[Int]
 end
 
-def label(f: JSON.Field[Int]) -> String
-  return case f
-    JSON.Field.Absent -> "keep"
-    JSON.Field.Null -> "clear"
-    JSON.Field.Value(n) -> "set #{n}"
-  end
-end
-
 def main() -> Void
   value: JSON.Value = JSON.parse("[1, 2]").unwrap!
-  old: Json = value
-  puts(old)
-  puts(label(Patch(age: JSON.Field.Value(3)).age))
-  puts(label(JSON.Field.Null))
-  options: TlsClientOptions = TLS.ClientOptions(alpn: ["h2"])
-  puts(options.alpn)
-  first = System.Profile.steps()
-  inside = System.Profile.measure("steps") do System.Profile.steps() end
-  piped = "pipe" |> System.Profile.measure() do 4 end
-  puts(inside > first and piped == 4)
+  puts(value)
+  puts([value].inspect)
+  puts(Patch(age: JSON.Field.Value(3)))
+  puts(Patch(age: JSON.Field.Null).inspect)
+  puts(TLS.ClientOptions(alpn: ["h2"]))
+  puts(Process.Output(stdout: "a", stderr: "", truncated: false))
+  listener: TCP.Listener = TCP.listen("127.0.0.1", 0).unwrap!
+  IO.inspect(listener)
+  TCP.close_listener(listener)
+  steps = System.Profile.measure("steps") do System.Profile.steps() end
+  puts(steps > 0)
+  puts("Json JsonField FileInfo FileHandle ProcessOutput Socket Listener TlsContext TestCase Profile.steps")
 end

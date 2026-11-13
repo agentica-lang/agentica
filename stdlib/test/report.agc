@@ -33,7 +33,7 @@ export struct Failure
   end_line: Int
   expected: Detail
   actual: Detail
-  original: Json
+  original: JSON.Value
 end
 
 ## The result of a scenario or a file: `Pass`, `Fail` with an error, `Skipped` with the reason a step gave, or
@@ -168,12 +168,12 @@ export def exit_code(files: List[FileResult]) -> Int = totals(files).exit_code
 
 ## Builds the `--json` report of `files` and the `seed` as a JSON object. `wall_ms` is the time the run took, which
 ## is less than the sum of the file times when files run in parallel (`--jobs`).
-export def json(files: List[FileResult], seed: Int, wall_ms: Int) -> Json = json_and(files, seed, wall_ms, {})
+export def json(files: List[FileResult], seed: Int, wall_ms: Int) -> JSON.Value = json_and(files, seed, wall_ms, {})
 
 ## `json` with the fields of `more` added (`coverage`), or put in place of its own (`ok` and `exit_code`).
-export def json_and(files: List[FileResult], seed: Int, wall_ms: Int, more: Map[String, Json]) -> Json
+export def json_and(files: List[FileResult], seed: Int, wall_ms: Int, more: Map[String, JSON.Value]) -> JSON.Value
   sums = totals(files)
-  fields: Map[String, Json] = {
+  fields: Map[String, JSON.Value] = {
     "ok": JSON.from(sums.exit_code == 0),
     "passed": JSON.from(sums.passed),
     "failed": JSON.from(sums.failed),
@@ -312,12 +312,12 @@ def status(verdict: Verdict) -> String
   end
 end
 
-def file_json(file: FileResult) -> Json
+def file_json(file: FileResult) -> JSON.Value
   state = status(file.verdict)
   if file.scenarios.any? do |item| failed?(item.verdict) end
     state = "failed"
   end
-  fields: Map[String, Json] = {
+  fields: Map[String, JSON.Value] = {
     "path": JSON.from(file.path),
     "feature": JSON.from(file.feature),
     "kind": JSON.from(file.kind),
@@ -331,13 +331,13 @@ def file_json(file: FileResult) -> Json
   JSON.object(fields)
 end
 
-def scenario_json(item: ScenarioResult) -> Json
+def scenario_json(item: ScenarioResult) -> JSON.Value
   example = JSON.null()
   case item.example
     Example.Row(span) -> example = location_json(span)
     Example.NoExample -> example = JSON.null()
   end
-  fields: Map[String, Json] = {
+  fields: Map[String, JSON.Value] = {
     "name": JSON.from(item.name),
     "status": JSON.from(status(item.verdict)),
     "tags": JSON.from(item.tags),
@@ -354,7 +354,7 @@ def scenario_json(item: ScenarioResult) -> Json
 end
 
 # The reason a step gave to `BDD.skip`, or null.
-def reason_json(verdict: Verdict) -> Json
+def reason_json(verdict: Verdict) -> JSON.Value
   case verdict
     Verdict.Skipped(reason) -> JSON.from(reason)
     Verdict.Pass -> JSON.null()
@@ -363,7 +363,7 @@ def reason_json(verdict: Verdict) -> Json
   end
 end
 
-def step_json(step: StepResult) -> Json
+def step_json(step: StepResult) -> JSON.Value
   state = "passed"
   problem = JSON.null()
   case step.status
@@ -374,7 +374,7 @@ def step_json(step: StepResult) -> Json
       state = "failed"
       problem = error_json(found)
   end
-  fields: Map[String, Json] = {
+  fields: Map[String, JSON.Value] = {
     "text": JSON.from(step.text),
     "status": JSON.from(state),
     "location": location_json(step.location),
@@ -384,8 +384,8 @@ def step_json(step: StepResult) -> Json
   JSON.object(fields)
 end
 
-def location_json(span: Span) -> Json
-  fields: Map[String, Json] = {
+def location_json(span: Span) -> JSON.Value
+  fields: Map[String, JSON.Value] = {
     "file": JSON.from(span.file),
     "line": JSON.from(span.line),
     "column": JSON.from(span.column),
@@ -394,7 +394,7 @@ def location_json(span: Span) -> Json
   JSON.object(fields)
 end
 
-def verdict_json(verdict: Verdict) -> Json
+def verdict_json(verdict: Verdict) -> JSON.Value
   case verdict
     Verdict.Fail(problem) -> error_json(problem)
     Verdict.Pass -> JSON.null()
@@ -403,13 +403,13 @@ def verdict_json(verdict: Verdict) -> Json
   end
 end
 
-def error_json(problem: Failure) -> Json
+def error_json(problem: Failure) -> JSON.Value
   return problem.original if not JSON.null?(problem.original)
   span = problem.span
-  start: Map[String, Json] = {"line": JSON.from(span.line), "column": JSON.from(span.column)}
-  stop: Map[String, Json] = {"line": JSON.from(problem.end_line), "column": JSON.from(span.end_column)}
-  range: Map[String, Json] = {"start": JSON.object(start), "end": JSON.object(stop)}
-  fields: Map[String, Json] = {
+  start: Map[String, JSON.Value] = {"line": JSON.from(span.line), "column": JSON.from(span.column)}
+  stop: Map[String, JSON.Value] = {"line": JSON.from(problem.end_line), "column": JSON.from(span.end_column)}
+  range: Map[String, JSON.Value] = {"start": JSON.object(start), "end": JSON.object(stop)}
+  fields: Map[String, JSON.Value] = {
     "code": JSON.from(problem.code),
     "message": JSON.from(problem.message),
     "file": JSON.from(span.file),
@@ -419,7 +419,7 @@ def error_json(problem: Failure) -> Json
   JSON.object(put_detail(put_detail(fields, "expected", problem.expected), "actual", problem.actual))
 end
 
-def put_detail(fields: Map[String, Json], key: String, detail: Detail) -> Map[String, Json]
+def put_detail(fields: Map[String, JSON.Value], key: String, detail: Detail) -> Map[String, JSON.Value]
   case detail
     Detail.Known(value) -> fields.put(key, JSON.from(value))
     Detail.Unknown -> fields
@@ -496,10 +496,10 @@ def stack_text(problem: Failure, ai: Bool) -> String
   "\n  stack, innermost first:\n#{frames}"
 end
 
-def stack_lines(root: Json) -> List[String]
+def stack_lines(root: JSON.Value) -> List[String]
   found = JSON.get(root, "stack")
   return [] if not found.ok?
-  no_frames: List[Json] = []
+  no_frames: List[JSON.Value] = []
   frames = JSON.list(found.unwrap!).unwrap_or(no_frames)
   omitted = int_at(root, "stack_omitted").unwrap_or(0)
   lines: List[String] = []
@@ -524,7 +524,7 @@ def not_shown(omitted: Int) -> String
   "... #{omitted} frames not shown ..."
 end
 
-def frame_line(frame: Json) -> String
+def frame_line(frame: JSON.Value) -> String
   name = text_at(frame, "function").unwrap_or("?")
   line = "#{name} at #{place_text(frame)}"
   repeat = int_at(frame, "repeat").unwrap_or(1)
@@ -537,7 +537,7 @@ def frame_line(frame: Json) -> String
   line
 end
 
-def place_text(place: Json) -> String
+def place_text(place: JSON.Value) -> String
   file = text_at(place, "file").unwrap_or("?")
   line = int_at(place, "line").unwrap_or(0)
   column = int_at(place, "column").unwrap_or(0)
@@ -551,11 +551,11 @@ def detail_text(label: String, detail: Detail) -> String
   end
 end
 
-def text_at(root: Json, key: String) -> Result[String] = JSON.string(try JSON.get(root, key))
+def text_at(root: JSON.Value, key: String) -> Result[String] = JSON.string(try JSON.get(root, key))
 
-def int_at(root: Json, key: String) -> Result[Int] = JSON.int(try JSON.get(root, key))
+def int_at(root: JSON.Value, key: String) -> Result[Int] = JSON.int(try JSON.get(root, key))
 
-def detail_at(root: Json, key: String) -> Detail
+def detail_at(root: JSON.Value, key: String) -> Detail
   found = JSON.get(root, key)
   if found.ok?
     value = JSON.string(found.unwrap!)

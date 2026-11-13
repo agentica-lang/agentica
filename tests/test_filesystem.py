@@ -414,8 +414,8 @@ def test_fifos_stream_on_the_loop_read_line_waits_for_a_writer_task_read_text_re
     os.mkfifo(first)
     os.mkfifo(second)
     code, output, errors = run_vm_bounded(root, r"""struct Pair
-  first: FileHandle
-  second: FileHandle
+  first: File.Handle
+  second: File.Handle
 end
 
 def feed(p: Pair) -> Result[Void]
@@ -660,15 +660,15 @@ def test_file_streams_whole_text_helpers_directories_metadata_and_paths_work_tog
     output = run_program(r"""def main() -> Void
   made: Result[Void] = Dir.mkdir(%s, 1000)
   made_again: Result[Void] = Dir.mkdir(%s, 1000)
-  opened: Result[FileHandle] = File.open(%s, "write", 1000)
-  handle: FileHandle = Result.unwrap!(opened)
+  opened: Result[File.Handle] = File.open(%s, "write", 1000)
+  handle: File.Handle = Result.unwrap!(opened)
   wrote: Result[Void] = File.write(handle, "alpha\n", 1000)
   wrote_bytes: Result[Void] = File.write_bytes(handle, "beta".bytes, 1000)
   closed: Result[Void] = File.close(handle, 1000)
   closed_again: Result[Void] = File.close(handle, 1000)
   appended: Result[Void] = File.append_text(%s, "\nend", 1000)
   text: Result[String] = File.read_text(%s, 1000)
-  info: Result[FileInfo] = File.stat(%s, 1000)
+  info: Result[File.Info] = File.stat(%s, 1000)
   entries: Result[List[String]] = Dir.list(%s, 1000)
   joined: Result[String] = Path.join([%s, "notes.txt"])
   resolved: Result[String] = Path.resolve(%s)
@@ -684,7 +684,7 @@ end
                                          unnormalized)))
     assert "true\n" in output
     assert 'ok("alpha\\nbeta\\nend")' in output
-    assert 'FileInfo(kind: "file", size_bytes: 14' in output
+    assert 'File.Info(kind: "file", size_bytes: 14' in output
     assert 'ok(["notes.txt"])' in output
     # The VM prints joined and resolved paths with "/" on every system.
     assert "ok(%s)" % literal(path.as_posix()) in output
@@ -697,9 +697,9 @@ def test_invalid_modes_closed_handles_invalid_utf8_and_whole_file_bounds_return_
     large = root / "large.txt"
     large.write_bytes(b"x" * 1048577)
     output = run_program(r"""def main() -> Void
-  invalid_mode: Result[FileHandle] = File.open(%s, "readwrite", 1000)
-  opened: Result[FileHandle] = File.open(%s, "write", 1000)
-  handle: FileHandle = Result.unwrap!(opened)
+  invalid_mode: Result[File.Handle] = File.open(%s, "readwrite", 1000)
+  opened: Result[File.Handle] = File.open(%s, "write", 1000)
+  handle: File.Handle = Result.unwrap!(opened)
   _wrote: Result[Void] = File.write_bytes(handle, Bytes.from_list([255]).unwrap!, 1000)
   _closed: Result[Void] = File.close(handle, 1000)
   closed_read: Result[Bytes] = File.read_bytes(handle, 1, 1000)
@@ -722,8 +722,8 @@ def test_bounded_stream_reads_and_line_decoding_preserve_eof_semantics(new_dir, 
     path = new_dir() / "lines.txt"
     path.write_bytes(b"one\r\ntwo\nlast")
     output = run_program(r"""def main() -> Void
-  opened: Result[FileHandle] = File.open(%s, "read", 1000)
-  handle: FileHandle = Result.unwrap!(opened)
+  opened: Result[File.Handle] = File.open(%s, "read", 1000)
+  handle: File.Handle = Result.unwrap!(opened)
   first: Result[String] = File.read_line(handle, 1000)
   second: Result[String] = File.read_line(handle, 1000)
   rest: Result[Bytes] = File.read_bytes(handle, 100, 1000)
@@ -750,14 +750,14 @@ def test_file_operations_follow_symlinks_to_regular_files(new_dir, run_program):
     os.symlink(target, alias)
     output = run_program(r"""def main() -> Void
   contents: Result[String] = File.read_text(%s, 1000)
-  info: Result[FileInfo] = File.stat(%s, 1000)
+  info: Result[File.Info] = File.stat(%s, 1000)
   IO.inspect(contents)
   IO.inspect(info)
 end
 
 """ % (literal(alias), literal(alias)))
     assert 'ok("linked")' in output
-    assert 'FileInfo(kind: "file", size_bytes: 6' in output
+    assert 'File.Info(kind: "file", size_bytes: 6' in output
 
 
 def test_empty_files_read_as_empty_text_and_relative_symlinks_resolve_from_the_link_directory(new_dir, run_program):
@@ -930,8 +930,8 @@ def test_system_env_does_not_show_the_variables_the_vm_keeps_for_itself(os_lines
 def test_the_end_of_a_run_flushes_and_closes_an_unclosed_file_handle(new_dir, run_program):
     path = new_dir() / "cleanup.txt"
     run_program(r"""def main() -> Void
-  opened: Result[FileHandle] = File.open(%s, "write", 1000)
-  handle: FileHandle = Result.unwrap!(opened)
+  opened: Result[File.Handle] = File.open(%s, "write", 1000)
+  handle: File.Handle = Result.unwrap!(opened)
   _wrote: Result[Void] = File.write(handle, "cleanup", 1000)
 end
 

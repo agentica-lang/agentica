@@ -181,7 +181,7 @@ else 0). SIGPIPE is ignored and every write is checked.
   (`references/vm-build.md`, Gotchas).
 - No GC finalizer for an OS resource (a descriptor, a libuv handle, a process):
   `close` or the owner's end frees it (`references/vm-io.md`). The one
-  finalizer, `TlsContext`'s (`vm/value.c`), is registered with
+  finalizer, `TLS.Context`'s (`vm/value.c`), is registered with
   `GC_REGISTER_FINALIZER_NO_ORDER` (the macro that matches the GC-debug build)
   and runs between turns (`agc_gc_finalize_pending`), never inside an
   allocation. OOM and abort

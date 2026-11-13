@@ -111,7 +111,7 @@ end
 
 # The forward reader of one pass: the handle, the bytes read but not taken yet, and the physical accounting.
 struct Stream
-  handle: FileHandle
+  handle: File.Handle
   buf: Bytes
   raw: Int
   eof: Bool
@@ -262,21 +262,21 @@ def close_budget(deadline: Int) -> Int
   smaller(left, CLOSE_MS)
 end
 
-def close_file(handle: FileHandle, budget: Int) -> Void
+def close_file(handle: File.Handle, budget: Int) -> Void
   case File.close(handle, budget)
     ok(_) -> return
     error(_) -> return
   end
 end
 
-def stat_src(src: String, deadline: Int) -> Result[FileInfo]
+def stat_src(src: String, deadline: Int) -> Result[File.Info]
   case File.lstat(src, try time_left(deadline))
     ok(found) -> ok(found)
     error(message) -> error("archive: cannot use #{src}: #{message}")
   end
 end
 
-def open_src(src: String, deadline: Int) -> Result[FileHandle]
+def open_src(src: String, deadline: Int) -> Result[File.Handle]
   case File.open(src, "read", try time_left(deadline))
     ok(opened) -> ok(opened)
     error(message) -> error("archive: cannot open #{src}: #{message}")
@@ -290,7 +290,7 @@ def make_dest(dest: String, deadline: Int) -> Result[Void]
   end
 end
 
-def read_raw(handle: FileHandle, n: Int, deadline: Int, src: String) -> Result[Bytes]
+def read_raw(handle: File.Handle, n: Int, deadline: Int, src: String) -> Result[Bytes]
   case File.read_bytes(handle, n, try time_left(deadline))
     ok(bytes) -> ok(bytes)
     error(message) -> error("archive: cannot read #{src}: #{message}")
@@ -441,7 +441,7 @@ def pass1(src: String, deadline: Int) -> Result[Found]
   outcome
 end
 
-def scan_tail(handle: FileHandle, src: String, deadline: Int) -> Result[Found]
+def scan_tail(handle: File.Handle, src: String, deadline: Int) -> Result[Found]
   total = 0
   tail = "".bytes
   while true
@@ -523,7 +523,7 @@ def pass2(src: String, found: Found, deadline: Int) -> Result[List[Entry]]
   outcome
 end
 
-def scan_cd(handle: FileHandle, src: String, found: Found, deadline: Int) -> Result[List[Entry]]
+def scan_cd(handle: File.Handle, src: String, found: Found, deadline: Int) -> Result[List[Entry]]
   st = Stream(handle: handle, buf: "".bytes, raw: 0, eof: false)
   eocd = found.eocd
   st = try stream_skip(st, eocd.cd_offset, INPUT_BYTES, deadline, src, "the central directory offset")
@@ -685,7 +685,7 @@ def pass3(src: String, found: Found, ordered: List[Entry], ctx: Zctx) -> Result[
   outcome
 end
 
-def walk_locals(handle: FileHandle, src: String, found: Found, ordered: List[Entry], ctx: Zctx) -> Result[List[Int]]
+def walk_locals(handle: File.Handle, src: String, found: Found, ordered: List[Entry], ctx: Zctx) -> Result[List[Int]]
   st = Stream(handle: handle, buf: "".bytes, raw: 0, eof: false)
   cursor = 0
   first = true
@@ -874,7 +874,7 @@ def write_selected(
 end
 
 # Streams one stored file, chaining the CRC32 over 64 KiB pieces.
-def pump_stored(st: Stream, entry: Entry, handle: FileHandle, deadline: Int, src: String) -> Result[Stream]
+def pump_stored(st: Stream, entry: Entry, handle: File.Handle, deadline: Int, src: String) -> Result[Stream]
   rest = entry.csize
   crc = 0
   while rest > 0
@@ -892,7 +892,7 @@ def pump_stored(st: Stream, entry: Entry, handle: FileHandle, deadline: Int, src
   ok(st)
 end
 
-def write_piece(handle: FileHandle, piece: Bytes, timeout_ms: Int) -> Result[Void]
+def write_piece(handle: File.Handle, piece: Bytes, timeout_ms: Int) -> Result[Void]
   File.write_bytes(handle, piece, timeout_ms)
 end
 
@@ -907,7 +907,7 @@ end
 # archive counts, leftover or missing bytes are an error, and the size and CRC32 must match. The window starts with
 # the bytes the stream already read past the local header (at most csize of them, taken first) and goes on from the
 # stream's handle, csize bytes in all.
-def pump_deflated(st: Stream, entry: Entry, handle: FileHandle, deadline: Int, src: String) -> Result[Stream]
+def pump_deflated(st: Stream, entry: Entry, handle: File.Handle, deadline: Int, src: String) -> Result[Stream]
   held = st.buf.take(entry.csize)
   start = Piece(bytes: held, left: entry.csize - held.size, done: false)
   raw = try add_cap(st.raw, start.left, INPUT_BYTES, "archive: source exceeds #{INPUT_BYTES} bytes")
@@ -937,7 +937,7 @@ end
 
 # The next piece of a compressed window, at most CHUNK bytes; a window that runs past the end of the file is
 # truncated.
-def next_piece(handle: FileHandle, piece: Piece, deadline: Int, src: String, canon: String) -> Result[Piece]
+def next_piece(handle: File.Handle, piece: Piece, deadline: Int, src: String, canon: String) -> Result[Piece]
   return ok(Piece(bytes: "".bytes, left: 0, done: true)) if piece.left == 0
   return error("archive: operation timed out") if Time.monotonic_ms() >= deadline
   want = smaller(piece.left, CHUNK)
@@ -949,7 +949,7 @@ def next_piece(handle: FileHandle, piece: Piece, deadline: Int, src: String, can
 end
 
 # Writes one inflated piece of a selected file and chains its CRC32.
-def pump_out(handle: FileHandle, pump: Pump, out: Bytes, deadline: Int, entry: Entry) -> Result[Pump]
+def pump_out(handle: File.Handle, pump: Pump, out: Bytes, deadline: Int, entry: Entry) -> Result[Pump]
   case write_piece(handle, out, try time_left(deadline))
     ok(_) -> ok(Pump(got: pump.got + out.size, crc: try chain_crc(out, pump.crc, entry.canon)))
     error(message) -> error("archive: cannot write a selected file: #{message}")
@@ -1013,7 +1013,7 @@ def make_parents(ctx: Zctx, segments: List[String], deadline: Int) -> Result[Zct
   ok(ctx)
 end
 
-def create_out(out: String, deadline: Int) -> Result[FileHandle]
+def create_out(out: String, deadline: Int) -> Result[File.Handle]
   case File.open(out, "create_private", try time_left(deadline))
     ok(opened) -> ok(opened)
     error(message) -> error("archive: cannot create #{out}: #{message}")

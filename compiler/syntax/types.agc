@@ -21,8 +21,8 @@ KEEP_BUILTIN: Map[String, String] = {"": ""}
 # The characters that may continue a name: a type name next to one of them is part of a longer name.
 NAME_CHARACTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_?!"
 
-## A resolved type. Opaque holds the name of a handle or other builtin type with no structure (Socket, Process,
-## TestCase, C.Pointer), or the linked name of a resource of an extern block. Struct and Enum hold the linked name and
+## A resolved type. Opaque holds the name of a handle or other builtin type with no structure (TCP.Socket, Process,
+## Test.Case, C.Pointer), or the linked name of a resource of an extern block. Struct and Enum hold the linked name and
 ## carry their type arguments (none for a plain struct or enum). Var is a type variable of a builtin signature, a
 ## generic struct or a generic enum. Fn lists the parameters, then the result. Codec is Codec[T], the codec of a
 ## struct or enum (T.codec). Optional is Optional[T], a value that is some(x) or none. Unknown is no type: the expected
@@ -341,7 +341,7 @@ export def to_text_as(type: Type, written: Map[String, String]) -> String
     Type.String -> "String"
     Type.Nil -> "Nil"
     Type.Void -> "Void"
-    Type.Json -> "Json"
+    Type.Json -> "JSON.Value"
     Type.Range -> "Range"
     Type.Bytes -> "Bytes"
     Type.Unknown -> "?"

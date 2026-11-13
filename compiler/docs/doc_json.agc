@@ -10,7 +10,7 @@ import DocModel from "doc_model"
 
 ## The object `{module, doc, items}` of a documented module. `module` is the path as the user typed it, and the `file`
 ## of each span.
-export def json(module: String, documented: DocModel.Module) -> Json
+export def json(module: String, documented: DocModel.Module) -> JSON.Value
   items = documented.items.map do |item: DocModel.Item| item_json(module, Convert.item(item), false) end
   JSON.object({
     "module": JSON.from(module),
@@ -22,8 +22,8 @@ end
 ## `{kind, name, signature, summary, doc, span}` and, by kind, the parameters and the result, the fields or the
 ## variants, or the `items` of a module block. `located` adds what `agentica outline` lists: `exported` and the
 ## `name_span` of the item and of each field or variant.
-export def item_json(module: String, item: Model.Item, located: Bool) -> Json
-  fields: Map[String, Json] = {
+export def item_json(module: String, item: Model.Item, located: Bool) -> JSON.Value
+  fields: Map[String, JSON.Value] = {
     "kind": JSON.from(item.kind),
     "name": JSON.from(item.name),
     "signature": JSON.from(item.signature),
@@ -61,8 +61,8 @@ end
 ## The object of `agentica help std/MODULE.NAME --json`: the fields `help NAME --json` has for a builtin that apply
 ## (`name`, `arity`, `parameters`, `result`, `signature`, `description` as the whole doc or null), `summary`, `kind`
 ## and `module`, and the `fields` of a struct or the `variants` of an enum. It has no span and no `effects`.
-export def help_json(module: String, item: Model.Item) -> Json
-  fields: Map[String, Json] = {
+export def help_json(module: String, item: Model.Item) -> JSON.Value
+  fields: Map[String, JSON.Value] = {
     "name": JSON.from(item.name),
     "kind": JSON.from(item.kind),
     "module": JSON.from(module),
@@ -91,18 +91,18 @@ export def help_json(module: String, item: Model.Item) -> Json
 end
 
 ## `{file, range}`: the two keys a diagnostic puts at its top level, in an object of their own.
-export def span_json(module: String, range: DiagnosticModel.Region) -> Json
+export def span_json(module: String, range: DiagnosticModel.Region) -> JSON.Value
   JSON.object({"file": JSON.from(module), "range": DiagnosticJson.range(range)})
 end
 
 ## The text, or null when it is empty.
-export def text_json(text: String) -> Json
+export def text_json(text: String) -> JSON.Value
   return JSON.null() if text == ""
 
   JSON.from(text)
 end
 
-def parameter_json(parameter: Model.Parameter) -> Json
+def parameter_json(parameter: Model.Parameter) -> JSON.Value
   JSON.object({
     "name": JSON.from(parameter.name),
     "type": JSON.from(parameter.type),
@@ -110,8 +110,8 @@ def parameter_json(parameter: Model.Parameter) -> Json
   })
 end
 
-def field_json(module: String, field: Model.Field, located: Bool) -> Json
-  fields: Map[String, Json] = {
+def field_json(module: String, field: Model.Field, located: Bool) -> JSON.Value
+  fields: Map[String, JSON.Value] = {
     "name": JSON.from(field.name),
     "type": JSON.from(field.type),
     "default": text_json(field.default),
@@ -125,9 +125,9 @@ def field_json(module: String, field: Model.Field, located: Bool) -> Json
   JSON.object(fields)
 end
 
-def variant_json(module: String, variant: Model.Variant, located: Bool) -> Json
+def variant_json(module: String, variant: Model.Variant, located: Bool) -> JSON.Value
   payload = variant.payload.map do |type: String| JSON.from(type) end
-  fields: Map[String, Json] = {
+  fields: Map[String, JSON.Value] = {
     "name": JSON.from(variant.name),
     "payload": JSON.array(payload),
     "doc": text_json(variant.doc),

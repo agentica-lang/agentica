@@ -159,7 +159,7 @@ end
 # one-slot channels that tell the stream what the watcher saw: left (the client's input ended, so the body was cut, not
 # finished) and sent (the client sent bytes while the stream ran).
 struct Watch
-  socket: Socket
+  socket: TCP.Socket
   body: Channel[Bytes]
   left: Channel[Bool]
   sent: Channel[Bool]
@@ -171,7 +171,7 @@ struct Incoming
 end
 
 struct Reading
-  socket: Socket
+  socket: TCP.Socket
   head: HttpWire.Head
   deadline: Int
   max_body_bytes: Int
@@ -191,7 +191,7 @@ end
 # word of the reader (`control` holds one item, and `wake` rouses the writer), the options, the wait of a write and the
 # bytes read past the handshake.
 struct Wire
-  socket: Socket
+  socket: TCP.Socket
   incoming: Channel[Message]
   outgoing: Channel[Message]
   control: Channel[Control]
@@ -271,7 +271,7 @@ struct Placed
 end
 
 struct Done
-  socket: Result[Socket]
+  socket: Result[TCP.Socket]
   answer: Result[HttpWire.Response]
   kept: Bool
 end
@@ -283,7 +283,7 @@ struct Attempt
 end
 
 struct Pending
-  socket: Socket
+  socket: TCP.Socket
   job: HttpWire.Job
   max_body_bytes: Int
 end
@@ -321,7 +321,7 @@ end
 ## does, and one call at a time uses it.
 export struct Connection
   ## The socket, a plain one or a TLS one.
-  socket: Socket
+  socket: TCP.Socket
   ## `http` or `https`, the host and the port, which the request head names.
   scheme: String
   host: String
@@ -980,7 +980,7 @@ end
 export def serve_tls(
   host: String,
   port: Int,
-  tls: TlsContext,
+  tls: TLS.Context,
   app: App,
   options: HttpWire.ServerOptions = HttpWire.ServerOptions(),
 ) -> Result[HttpWire.Server]
@@ -1450,14 +1450,14 @@ end
 
 # The socket of `start`: TLS with the context of `options.tls` for `https` (one with the system trust, built for this
 # connection, when it names none), TCP for `http`.
-def open_socket(where: Target, options: HttpWire.ClientOptions) -> Result[Socket]
+def open_socket(where: Target, options: HttpWire.ClientOptions) -> Result[TCP.Socket]
   return tunnel_context(where, options) if where.scheme == "https" and options.proxy != ""
 
   if where.scheme == "https"
     case options.tls
       some(context) -> return HttpWire.connect_context(where.host, where.port, context, options.timeout_ms)
       none ->
-        context = try TLS.client_context(TlsClientOptions())
+        context = try TLS.client_context(TLS.ClientOptions())
         return HttpWire.connect_context(where.host, where.port, context, options.timeout_ms)
     end
   end
@@ -1466,7 +1466,7 @@ end
 
 # The result of connecting to `where`, which is the proxy when the options have one: a failure names the proxy, so the
 # caller does not take it for the target being down.
-def reaching(connected: Result[Socket], options: HttpWire.ClientOptions, where: Target) -> Result[Socket]
+def reaching(connected: Result[TCP.Socket], options: HttpWire.ClientOptions, where: Target) -> Result[TCP.Socket]
   case connected
     ok(socket) -> ok(socket)
     error(message) ->
@@ -1478,7 +1478,7 @@ end
 
 # A TLS connection of a client's pool: on the context of `options.tls`, or on the client's shared system-trust context
 # when it names none (HttpWire.connect_tls builds it once per client).
-def connect_tls(client: HttpWire.Client, host: String, port: Int, timeout_ms: Int) -> Result[Socket]
+def connect_tls(client: HttpWire.Client, host: String, port: Int, timeout_ms: Int) -> Result[TCP.Socket]
   case HttpWire.options(client).tls
     some(context) -> HttpWire.connect_context(host, port, context, timeout_ms)
     none -> HttpWire.connect_tls(client, host, port, timeout_ms)
@@ -1488,7 +1488,7 @@ end
 # An `https` connection of a client's pool or of a download: TLS to the host, or, with a proxy in the options, a
 # CONNECT tunnel through the proxy with TLS inside it, on the same context as without a proxy (the client's shared
 # system trust, or the one of `options.tls`).
-def connect_https(client: HttpWire.Client, host: String, port: Int, timeout_ms: Int) -> Result[Socket]
+def connect_https(client: HttpWire.Client, host: String, port: Int, timeout_ms: Int) -> Result[TCP.Socket]
   options = HttpWire.options(client)
   return connect_tls(client, host, port, timeout_ms) if options.proxy == ""
 
@@ -1502,10 +1502,10 @@ end
 def upgrade_client(
   client: HttpWire.Client,
   options: HttpWire.ClientOptions,
-  socket: Socket,
+  socket: TCP.Socket,
   host: String,
   deadline: Int,
-) -> Result[Socket]
+) -> Result[TCP.Socket]
   left = try time_left(socket, deadline)
   case options.tls
     some(context) -> HttpWire.upgrade_context(socket, context, host, left)
@@ -1515,7 +1515,7 @@ end
 
 # The `https` socket of `start`, `open` and `upload` through a proxy: the tunnel, then TLS inside it on the context of
 # `options.tls`, or on one with the system trust built for this connection (as without a proxy).
-def tunnel_context(where: Target, options: HttpWire.ClientOptions) -> Result[Socket]
+def tunnel_context(where: Target, options: HttpWire.ClientOptions) -> Result[TCP.Socket]
   # The context is built first, so that its failure never leaves a tunnel socket behind.
   context = try tunnel_trust(options)
   deadline = Time.monotonic_ms() + options.timeout_ms
@@ -1525,10 +1525,10 @@ def tunnel_context(where: Target, options: HttpWire.ClientOptions) -> Result[Soc
   closing_on_error(upgraded, socket, options, where.host, where.port)
 end
 
-def tunnel_trust(options: HttpWire.ClientOptions) -> Result[TlsContext]
+def tunnel_trust(options: HttpWire.ClientOptions) -> Result[TLS.Context]
   case options.tls
     some(context) -> ok(context)
-    none -> TLS.client_context(TlsClientOptions())
+    none -> TLS.client_context(TLS.ClientOptions())
   end
 end
 
@@ -1536,12 +1536,12 @@ end
 # arguments were refused. Bytes that came with the CONNECT answer are the proxy's fault, so that error names the proxy
 # and the tunnel; a TLS failure is the target's and stays as it is.
 def closing_on_error(
-  answer: Result[Socket],
-  socket: Socket,
+  answer: Result[TCP.Socket],
+  socket: TCP.Socket,
   options: HttpWire.ClientOptions,
   host: String,
   port: Int,
-) -> Result[Socket]
+) -> Result[TCP.Socket]
   case answer
     ok(secured) -> ok(secured)
     error(message) ->
@@ -1567,7 +1567,7 @@ end
 # A CONNECT tunnel to `host:port` through the proxy of `options`, as a plain socket the proxy now relays: CONNECT
 # with the proxy's login (RFC 9110 9.3.6), then the head of the answer. A 2xx opens the tunnel; any other status is
 # an error that names the proxy (a 407 as for an `http` request) and never the login or the answer's body.
-def tunnel(options: HttpWire.ClientOptions, host: String, port: Int, deadline: Int) -> Result[Socket]
+def tunnel(options: HttpWire.ClientOptions, host: String, port: Int, deadline: Int) -> Result[TCP.Socket]
   proxy = try proxy_of(options)
   left = deadline - Time.monotonic_ms()
   return error(TIMED_OUT) if left <= 0
@@ -1589,7 +1589,7 @@ def tunnel(options: HttpWire.ClientOptions, host: String, port: Int, deadline: I
 end
 
 # The CONNECT sent over `socket` and the status of the head that answers it.
-def tunnel_opened(socket: Socket, proxy: Proxy, target: String, deadline: Int) -> Result[Int]
+def tunnel_opened(socket: TCP.Socket, proxy: Proxy, target: String, deadline: Int) -> Result[Int]
   head = "CONNECT #{target} HTTP/1.1\r\nHost: #{target}\r\n"
   if proxy.login != ""
     head = "#{head}Proxy-Authorization: #{proxy.login}\r\n"
@@ -1684,7 +1684,7 @@ def body_ended?(exchange: Exchange) -> Bool
 end
 
 # The next piece of a body, and the response after it. A piece is never empty unless the body is over.
-def next_piece(socket: Socket, exchange: Exchange, most: Int, deadline: Int) -> Result[Step]
+def next_piece(socket: TCP.Socket, exchange: Exchange, most: Int, deadline: Int) -> Result[Step]
   return next_chunked(socket, exchange, most, deadline) if exchange.framing == BY_CHUNKS
   return next_until_close(socket, exchange, most, deadline) if exchange.framing == BY_CLOSE
   return ok(Step(piece: NO_BYTES, exchange: exchange)) if exchange.left == 0
@@ -1703,7 +1703,7 @@ end
 
 # A chunked body: the decoder says which bytes of each read are body, and a read may be all framing, so it goes on
 # until there is a piece or the body is over.
-def next_chunked(socket: Socket, exchange: Exchange, most: Int, deadline: Int) -> Result[Step]
+def next_chunked(socket: TCP.Socket, exchange: Exchange, most: Int, deadline: Int) -> Result[Step]
   state = exchange.chunks
   while true
     return ok(Step(piece: NO_BYTES, exchange: with_chunks(exchange, state))) if state.done
@@ -1747,7 +1747,7 @@ end
 # A body that ends with the connection: over TLS the end must be the peer's close_notify, else it was cut. The end
 # is a body of length 0 that closes the connection, which `finished_exchange` does.
 # `left` counts the bytes given so far, for the cap that every framing has.
-def next_until_close(socket: Socket, exchange: Exchange, most: Int, deadline: Int) -> Result[Step]
+def next_until_close(socket: TCP.Socket, exchange: Exchange, most: Int, deadline: Int) -> Result[Step]
   data = try recv_body(socket, most, deadline)
   if data.empty?
     return error(TRUNCATED) if not HttpWire.clean_eof?(socket)
@@ -1856,7 +1856,7 @@ end
 # `length`, as they are and only while they fit in it, ending at the last byte (the producer need not close the
 # channel). The result is "" when everything was written, the reason when a write failed, and an `error` for a
 # problem of the body itself (too long, too short, a silent channel), which no answer of the server changes.
-def upload_pieces(socket: Socket, body: Channel[Bytes], length: Int, timeout: Int) -> Result[String]
+def upload_pieces(socket: TCP.Socket, body: Channel[Bytes], length: Int, timeout: Int) -> Result[String]
   count = 0
   while length == UNSIZED or count < length
     case body.recv(timeout)
@@ -2002,7 +2002,7 @@ def parse_url(url: String) -> Result[Target]
   ok(Target(scheme: scheme, host: String.downcase(host), port: port, target: target))
 end
 
-def start_server(listener: Listener, app: App, options: HttpWire.ServerOptions) -> HttpWire.Server
+def start_server(listener: TCP.Listener, app: App, options: HttpWire.ServerOptions) -> HttpWire.Server
   # The `done` of every request with no body. It ends here, in the caller's task: `close_server` cancels the
   # server's tasks, and a task of its own could end cancelled before it ran.
   ended = Task.spawn(&no_body)
@@ -2023,7 +2023,7 @@ end
 
 # One task per connection: each request's head is read first, then `answer_app` feeds its body to the app and sends
 # the answer. The first request may take `request_timeout_ms` to start, the next ones `idle_timeout_ms`.
-def serve_connection(socket: Socket, service: Service) -> Void
+def serve_connection(socket: TCP.Socket, service: Service) -> Void
   options = service.options
   wait_ms = options.request_timeout_ms
   rest = NO_BYTES
@@ -2041,7 +2041,7 @@ end
 
 # A request up to its body: the head read and checked against `max_body_bytes` as the largest body, and `100 Continue`
 # sent when the client waits for it.
-def start_request(socket: Socket, rest: Bytes, first_ms: Int, options: HttpWire.ServerOptions) -> Result[Reading]
+def start_request(socket: TCP.Socket, rest: Bytes, first_ms: Int, options: HttpWire.ServerOptions) -> Result[Reading]
   first = rest
   if first.empty?
     first = try TCP.recv_bytes(socket, 1, first_ms)
@@ -2058,7 +2058,7 @@ end
 
 # The head stays in the socket's input until it is whole (HttpWire.read_head), so a slow head holds no bytes here.
 # The parser answers 501 to every `Upgrade` except a WebSocket handshake, which goes on to the app.
-def read_head(socket: Socket, rest: Bytes, deadline: Int, max_body_bytes: Int) -> Result[HttpWire.Head]
+def read_head(socket: TCP.Socket, rest: Bytes, deadline: Int, max_body_bytes: Int) -> Result[HttpWire.Head]
   left = try time_left(socket, deadline)
   case HttpWire.read_head(socket, rest, max_body_bytes, left)
     ok(head) ->
@@ -2158,7 +2158,7 @@ end
 # past it (the start of the next request). An upgrade needs the whole body: before that, the connection is not free
 # to change protocols, so an `Accept` is refused with a 500 and a `Reply` closes after it.
 def send_answer(
-  socket: Socket,
+  socket: TCP.Socket,
   request: HttpWire.Request,
   result: Result[Answer],
   whole: Bool,
@@ -2305,7 +2305,7 @@ def agreed_protocol(headers: List[HttpWire.Header], ours: List[String]) -> Strin
   ""
 end
 
-def answer_upgrade(socket: Socket, incoming: Incoming, upgrade: Upgrade, options: HttpWire.ServerOptions) -> Sent
+def answer_upgrade(socket: TCP.Socket, incoming: Incoming, upgrade: Upgrade, options: HttpWire.ServerOptions) -> Sent
   case upgrade
     Upgrade.Reply(response) ->
       keep = reply_whole(socket, incoming.request, response, options.request_timeout_ms)
@@ -2338,7 +2338,7 @@ end
 # frames never interleave. The session ends the connection: the close frame it leaves (or 1000) goes out and the writer
 # finishes when the peer answered or `close_ms` passed; the reader is cancelled after.
 def run_websocket(
-  socket: Socket,
+  socket: TCP.Socket,
   rest: Bytes,
   session: WebSocketSession,
   limits: WebSocketOptions,
@@ -2363,7 +2363,7 @@ def switching_head(key: String, protocol: String) -> String
 end
 
 def run_session(
-  socket: Socket,
+  socket: TCP.Socket,
   rest: Bytes,
   session: WebSocketSession,
   limits: WebSocketOptions,
@@ -2916,7 +2916,7 @@ def smaller(a: Int, b: Int) -> Int
 end
 
 # The next bytes of a request that has started: the end of input here closes the connection with no answer.
-def more_request(socket: Socket, most: Int, deadline: Int) -> Result[Bytes]
+def more_request(socket: TCP.Socket, most: Int, deadline: Int) -> Result[Bytes]
   data = try TCP.recv_bytes(socket, most, try time_left(socket, deadline))
   if data.empty?
     TCP.close(socket)
@@ -2926,7 +2926,7 @@ def more_request(socket: Socket, most: Int, deadline: Int) -> Result[Bytes]
 end
 
 # The milliseconds left before deadline. When none are left the socket closes, as a timeout in TCP closes it.
-def time_left(socket: Socket, deadline: Int) -> Result[Int]
+def time_left(socket: TCP.Socket, deadline: Int) -> Result[Int]
   left = deadline - Time.monotonic_ms()
   if left <= 0
     TCP.close(socket)
@@ -2936,7 +2936,7 @@ def time_left(socket: Socket, deadline: Int) -> Result[Int]
 end
 
 # Answers a bad request, closes, and returns the error text.
-def refuse(socket: Socket, status: Int, reason: String, deadline: Int) -> String
+def refuse(socket: TCP.Socket, status: Int, reason: String, deadline: Int) -> String
   linger(socket, HttpWire.error_answer(status), deadline)
   "http: #{reason}"
 end
@@ -2945,7 +2945,7 @@ end
 # so unread request bytes cannot turn the close into a reset that loses the answer. Then it closes the socket. The
 # answer gets at least ANSWER_MS even when the deadline has passed; only the drain is bound by the deadline and the
 # byte limit.
-def linger(socket: Socket, text: String, deadline: Int) -> Void
+def linger(socket: TCP.Socket, text: String, deadline: Int) -> Void
   wait = deadline - Time.monotonic_ms()
   if wait < ANSWER_MS
     wait = ANSWER_MS
@@ -2957,7 +2957,7 @@ def linger(socket: Socket, text: String, deadline: Int) -> Void
   TCP.close(socket)
 end
 
-def drain(socket: Socket, deadline: Int) -> Void
+def drain(socket: TCP.Socket, deadline: Int) -> Void
   rest = DRAIN_BYTES
   while rest > 0
     most = READ_BYTES
@@ -2978,7 +2978,7 @@ def drain(socket: Socket, deadline: Int) -> Void
 end
 
 # Sends a whole response; true when the connection stays. A response that cannot be sent gets a 500 and a close.
-def reply_whole(socket: Socket, request: HttpWire.Request, response: HttpWire.Response, timeout: Int) -> Bool
+def reply_whole(socket: TCP.Socket, request: HttpWire.Request, response: HttpWire.Response, timeout: Int) -> Bool
   case write_response(socket, request, response, timeout)
     ok(keep) -> return keep
     error(message) ->
@@ -2994,7 +2994,7 @@ end
 # whole response. Otherwise the head goes now, with chunked framing (or with the Content-Length of `length` and no
 # framing), and each piece follows as it arrives.
 def answer_stream(
-  socket: Socket,
+  socket: TCP.Socket,
   incoming: Incoming,
   response: StreamResponse,
   options: HttpWire.ServerOptions,
@@ -3047,7 +3047,7 @@ end
 
 # A body that was complete when the handler returned, with its Content-Length (the encoded head says 0, as its body
 # there is empty; a 204 or 304 head has no length and no body). A HEAD request gets the head alone.
-def send_whole(socket: Socket, incoming: Incoming, reply: HttpWire.Reply, data: Bytes, timeout: Int) -> Sent
+def send_whole(socket: TCP.Socket, incoming: Incoming, reply: HttpWire.Reply, data: Bytes, timeout: Int) -> Sent
   deadline = Time.monotonic_ms() + timeout
   head = String.replace(reply.head, "\r\nContent-Length: 0\r\n", "\r\nContent-Length: #{data.size}\r\n")
   sent = ok()
@@ -3065,7 +3065,7 @@ def send_whole(socket: Socket, incoming: Incoming, reply: HttpWire.Reply, data: 
 end
 
 # Sends bytes in the pieces TCP.send_bytes takes. The whole send has `timeout`, not each piece.
-def send_all(socket: Socket, data: Bytes, timeout: Int) -> Result[Void]
+def send_all(socket: TCP.Socket, data: Bytes, timeout: Int) -> Result[Void]
   deadline = Time.monotonic_ms() + timeout
   at = 0
   while at < data.size
@@ -3077,7 +3077,7 @@ def send_all(socket: Socket, data: Bytes, timeout: Int) -> Result[Void]
 end
 
 def invalid_stream(
-  socket: Socket,
+  socket: TCP.Socket,
   request: HttpWire.Request,
   body: Channel[Bytes],
   reason: String,
@@ -3126,7 +3126,7 @@ end
 # are dropped, and the connection closes when the stream ends. Otherwise the watcher's read is the wait for the next
 # request.
 def stream_out(
-  socket: Socket,
+  socket: TCP.Socket,
   incoming: Incoming,
   body: Channel[Bytes],
   first: List[Bytes],
@@ -3157,7 +3157,7 @@ end
 
 # The connection closes after the stream, as linger does: the write side first, then the peer gets the rest of the time
 # to close its side, so a reset cannot lose the last chunk.
-def end_stream(socket: Socket, watcher: Task[Result[Bytes]], timeout: Int) -> Sent
+def end_stream(socket: TCP.Socket, watcher: Task[Result[Bytes]], timeout: Int) -> Sent
   HttpWire.close_write(socket)
   case Task.await(watcher, timeout)
     Await.Done(_) -> drain(socket, Time.monotonic_ms() + timeout)
@@ -3168,7 +3168,7 @@ def end_stream(socket: Socket, watcher: Task[Result[Bytes]], timeout: Int) -> Se
 end
 
 # After a HEAD response: false when the connection closes.
-def end_head(socket: Socket, reply: HttpWire.Reply, timeout: Int) -> Bool
+def end_head(socket: TCP.Socket, reply: HttpWire.Reply, timeout: Int) -> Bool
   if reply.closes
     linger(socket, "", Time.monotonic_ms() + timeout)
     return false
@@ -3177,7 +3177,7 @@ def end_head(socket: Socket, reply: HttpWire.Reply, timeout: Int) -> Bool
 end
 
 # The stream ended and the client is still there: the watcher's read is the first byte of its next request.
-def next_request(socket: Socket, watcher: Task[Result[Bytes]], idle_ms: Int) -> Sent
+def next_request(socket: TCP.Socket, watcher: Task[Result[Bytes]], idle_ms: Int) -> Sent
   case Task.await(watcher, idle_ms)
     Await.Done(read) ->
       case read
@@ -3207,7 +3207,7 @@ end
 # read before the last chunk or the last byte of a body with a length goes out: after it the client may send its next
 # request), STREAM_DONE otherwise.
 def pump(
-  socket: Socket,
+  socket: TCP.Socket,
   body: Channel[Bytes],
   first: List[Bytes],
   length: Int,
@@ -3270,7 +3270,7 @@ end
 
 # Sends one piece and gives the bytes sent so far: as chunks, or with a `length`, as they are and only while they fit
 # in it (a piece that would pass it is not sent: an error, so the body is cut).
-def emit(socket: Socket, piece: Bytes, timeout: Int, length: Int, count: Int) -> Result[Int]
+def emit(socket: TCP.Socket, piece: Bytes, timeout: Int, length: Int, count: Int) -> Result[Int]
   if length == UNSIZED
     try send_piece(socket, piece, timeout)
     return ok(count)
@@ -3283,7 +3283,7 @@ end
 # The piece as chunks: the size in hex, the bytes and the CRLFs, in one send so a chunk is one flush. A piece over
 # CHUNK_BYTES is several chunks, all within `timeout`. An empty piece would read as the last chunk, so it sends
 # nothing. The bytes go as they are: no UTF-8 check runs on a piece.
-def send_piece(socket: Socket, piece: Bytes, timeout: Int) -> Result[Void]
+def send_piece(socket: TCP.Socket, piece: Bytes, timeout: Int) -> Result[Void]
   deadline = Time.monotonic_ms() + timeout
   at = 0
   while at < piece.size
@@ -3335,7 +3335,7 @@ end
 # Writes one whole response with Content-Length. ok(false) when the request or the response asked to close: the
 # connection then closes as in linger.
 def write_response(
-  socket: Socket,
+  socket: TCP.Socket,
   request: HttpWire.Request,
   response: HttpWire.Response,
   timeout: Int,
@@ -3347,7 +3347,7 @@ def write_response(
 end
 
 def send_response(
-  socket: Socket,
+  socket: TCP.Socket,
   request: HttpWire.Request,
   response: HttpWire.Response,
   reply: HttpWire.Reply,
@@ -3371,7 +3371,7 @@ def send_response(
   ok(true)
 end
 
-def failed(socket: Socket, request: HttpWire.Request, timeout: Int) -> Void
+def failed(socket: TCP.Socket, request: HttpWire.Request, timeout: Int) -> Void
   _ = write_response(
     socket,
     request,
@@ -3564,7 +3564,7 @@ end
 # that connection, until the connection cannot be kept or stays idle for idle_timeout_ms.
 def work(worker: Worker) -> Result[Void]
   job = try worker.inbox.recv(0)
-  socket: Result[Socket] = error("")
+  socket: Result[TCP.Socket] = error("")
   while true
     # Once the client is closed (even while the owner still has jobs to drain), a job is not sent: it is answered
     # with CLIENT_CLOSED, here or by shut_pool, whichever comes first (the second finds the reply channel full).
@@ -3608,7 +3608,7 @@ def work(worker: Worker) -> Result[Void]
   ok()
 end
 
-def close_socket(socket: Result[Socket]) -> Void
+def close_socket(socket: Result[TCP.Socket]) -> Void
   case socket
     ok(s) -> TCP.close(s)
     error(_) -> return
@@ -3623,7 +3623,7 @@ end
 
 # One job: on the worker's connection when it has one, else on a new one. A reused connection that fails before any
 # byte of the response is retried once on a new connection, for the methods that may be sent twice.
-def run_job(worker: Worker, socket: Result[Socket], job: HttpWire.Job) -> Done
+def run_job(worker: Worker, socket: Result[TCP.Socket], job: HttpWire.Job) -> Done
   reused = Result.ok?(socket)
   if not reused
     socket = connect(worker, job)
@@ -3649,7 +3649,7 @@ def ok_status?(answer: Result[HttpWire.Response], status: Int) -> Bool
   end
 end
 
-def connect(worker: Worker, job: HttpWire.Job) -> Result[Socket]
+def connect(worker: Worker, job: HttpWire.Job) -> Result[TCP.Socket]
   left = job.deadline - Time.monotonic_ms()
   return error(TIMED_OUT) if left <= 0
   return connect_https(worker.client, job.host, job.port, left) if job.scheme == "https"
@@ -3847,7 +3847,7 @@ end
 
 # One download connection: on a new socket, which closes when the download ends, since the pool only runs
 # whole-response calls. The pool gives the TLS context and its certificates for https.
-def connect_download(pool: HttpWire.Client, where: Target, deadline: Int) -> Result[Socket]
+def connect_download(pool: HttpWire.Client, where: Target, deadline: Int) -> Result[TCP.Socket]
   left = deadline - Time.monotonic_ms()
   return error(TIMED_OUT) if left <= 0
   return connect_https(pool, where.host, where.port, left) if where.scheme == "https"
@@ -3857,7 +3857,7 @@ end
 # Opens the destination exclusively, then streams the response into it. Every error below closes both handles;
 # the partial file stays, while a path that existed before is never touched.
 def finish_download(
-  socket: Socket,
+  socket: TCP.Socket,
   path: String,
   options: DownloadOptions,
   deadline: Int,
@@ -3879,8 +3879,8 @@ end
 
 # The response head (after at most MAX_INTERIM interim ones) streamed into the file.
 def stream_download(
-  socket: Socket,
-  out: FileHandle,
+  socket: TCP.Socket,
+  out: File.Handle,
   options: DownloadOptions,
   deadline: Int,
   denied: String,
@@ -3904,20 +3904,20 @@ def stream_download(
 end
 
 # Closes both handles after a failure and reports it; the partial file stays for inspection.
-def fail_download(socket: Socket, out: FileHandle, deadline: Int, message: String) -> Result[Download]
+def fail_download(socket: TCP.Socket, out: File.Handle, deadline: Int, message: String) -> Result[Download]
   _ = File.close(out, larger(deadline - Time.monotonic_ms(), 1))
   TCP.close(socket)
   error(message)
 end
 
 # The response head of a download, with the download budget as the body limit.
-def download_head(socket: Socket, budget: Int, deadline: Int) -> Result[HttpWire.ResponseHead]
+def download_head(socket: TCP.Socket, budget: Int, deadline: Int) -> Result[HttpWire.ResponseHead]
   read_head_of(socket, false, budget, deadline)
 end
 
 # The head of the final response (after at most MAX_INTERIM interim ones), with the framing of a response to HEAD when
 # `head_only`, and `budget` as the largest body the head may announce.
-def read_head_of(socket: Socket, head_only: Bool, budget: Int, deadline: Int) -> Result[HttpWire.ResponseHead]
+def read_head_of(socket: TCP.Socket, head_only: Bool, budget: Int, deadline: Int) -> Result[HttpWire.ResponseHead]
   interim = 0
   while true
     case time_left(socket, deadline)
@@ -3938,26 +3938,32 @@ def read_head_of(socket: Socket, head_only: Bool, budget: Int, deadline: Int) ->
 end
 
 # Streams the body framing of head into the file and counts its bytes.
-def save_body(socket: Socket, out: FileHandle, head: HttpWire.ResponseHead, budget: Int, deadline: Int) -> Result[Int]
+def save_body(
+  socket: TCP.Socket,
+  out: File.Handle,
+  head: HttpWire.ResponseHead,
+  budget: Int,
+  deadline: Int,
+) -> Result[Int]
   return save_chunked(socket, out, budget, deadline) if head.chunked
   return save_until_close(socket, out, budget, deadline) if head.until_close
   save_length(socket, out, head.length, budget, deadline)
 end
 
 # The next body bytes, at most most of them; no bytes means the peer closed the input.
-def recv_body(socket: Socket, most: Int, deadline: Int) -> Result[Bytes]
+def recv_body(socket: TCP.Socket, most: Int, deadline: Int) -> Result[Bytes]
   TCP.recv_bytes(socket, most, try time_left(socket, deadline))
 end
 
 # Appends data to the download within the whole-call deadline.
-def write_body(out: FileHandle, data: Bytes, deadline: Int) -> Result[Void]
+def write_body(out: File.Handle, data: Bytes, deadline: Int) -> Result[Void]
   left = deadline - Time.monotonic_ms()
   return error(TIMED_OUT) if left <= 0
   File.write_bytes(out, data, left)
 end
 
 # Appends data without letting the file grow past the budget: writes what fits, then reports TOO_LARGE.
-def write_bounded(out: FileHandle, data: Bytes, written: Int, budget: Int, deadline: Int) -> Result[Int]
+def write_bounded(out: File.Handle, data: Bytes, written: Int, budget: Int, deadline: Int) -> Result[Int]
   room = budget - written
   if data.size > room
     if room > 0
@@ -3970,7 +3976,7 @@ def write_bounded(out: FileHandle, data: Bytes, written: Int, budget: Int, deadl
 end
 
 # A Content-Length body: the head already refused one over the budget, so the count only follows it.
-def save_length(socket: Socket, out: FileHandle, length: Int, budget: Int, deadline: Int) -> Result[Int]
+def save_length(socket: TCP.Socket, out: File.Handle, length: Int, budget: Int, deadline: Int) -> Result[Int]
   left = length
   written = 0
   while left > 0
@@ -3983,7 +3989,7 @@ def save_length(socket: Socket, out: FileHandle, length: Int, budget: Int, deadl
 end
 
 # A chunked body: framing goes through the decoder, whose runs say which bytes of each read are body.
-def save_chunked(socket: Socket, out: FileHandle, budget: Int, deadline: Int) -> Result[Int]
+def save_chunked(socket: TCP.Socket, out: File.Handle, budget: Int, deadline: Int) -> Result[Int]
   data = NO_BYTES
   state = HttpWire.chunked(budget)
   written = 0
@@ -4007,7 +4013,7 @@ def save_chunked(socket: Socket, out: FileHandle, budget: Int, deadline: Int) ->
 end
 
 # Appends the runs of data (start, length pairs) to the download.
-def write_runs(out: FileHandle, data: Bytes, runs: List[Int], written: Int, budget: Int, deadline: Int) -> Result[Int]
+def write_runs(out: File.Handle, data: Bytes, runs: List[Int], written: Int, budget: Int, deadline: Int) -> Result[Int]
   at = 0
   while at < List.size(runs)
     piece = data.slice(List.at(runs, at), List.at(runs, at + 1))
@@ -4018,7 +4024,7 @@ def write_runs(out: FileHandle, data: Bytes, runs: List[Int], written: Int, budg
 end
 
 # A body that ends with the connection: over TLS the end must be the peer's close_notify.
-def save_until_close(socket: Socket, out: FileHandle, budget: Int, deadline: Int) -> Result[Int]
+def save_until_close(socket: TCP.Socket, out: File.Handle, budget: Int, deadline: Int) -> Result[Int]
   written = 0
   while true
     data = try recv_body(socket, BODY_READ_BYTES, deadline)

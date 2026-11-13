@@ -729,7 +729,7 @@ static const char *context_fails(const char *name, agc_value options) {
   return "nothing";
 }
 
-/* A TlsClientOptions or TlsServerOptions of N fields: the paths, then an empty alpn list. */
+/* A TLS.ClientOptions or TLS.ServerOptions of N fields: the paths, then an empty alpn list. */
 static agc_value tls_options(uint32_t n, agc_value a, agc_value b, agc_value c) {
   agc_struct *s = agc_new_struct(0, n);
   agc_value paths[3] = {a, b, c};

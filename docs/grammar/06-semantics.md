@@ -23,7 +23,7 @@ programs are valid and how they run.
   String`, `code: Optional[Int]`, `details: Map[String, String]`, `cause:
   Optional[Error]` and `location: String`
 - `Optional[T]`: `some(value)`, or `none` for a value that is missing
-- `Json`: Opaque JSON value, used through the `JSON` module
+- `JSON.Value`: Opaque JSON value, used through the `JSON` module
 - `Range`: Immutable `Int` range: `a..b` includes `b`, `a...b` excludes it
 - `Fn[A, ..., R]`: Function value; the last type is its return, the others are
   its parameters
@@ -85,7 +85,7 @@ nullable wildcard: `name: String = nil` is invalid; use `Optional[T]`.
   for `Result[Void]`); structs when they have the same type and equal fields.
   A struct or enum that holds itself (`children: List[Node]`) has equality when
   no type of its group lacks it. Functions, tasks, channels, handles and
-  `Json` have no equality, nor does any type that holds one, nor a type
+  `JSON.Value` have no equality, nor does any type that holds one, nor a type
   variable of a generic function: `CHECK-TYPE-MISMATCH`, whose message names
   the field or variant without equality. A `Float` follows IEEE 754 at any
   depth, so a list or struct that holds a NaN is not equal to itself. A list,
@@ -514,7 +514,7 @@ form: an alias is expanded (`type Id = Int` gives `Int`) and a struct or enum
 from another module is written by its own name, without the import alias, so
 `A.Point` and `B.Point` both give `Point`. `Type` is a struct you declare, one
 you import by name or through an alias (`Models.User.members`), or a builtin
-record such as `FileInfo`. It is written without parentheses and not
+record such as `File.Info`. It is written without parentheses and not
 piped: `User.members()` and `x |> User.members()` are `CHECK-UNKNOWN-NAME`, and
 `Models.User.members()` is `CHECK-TYPE-MISMATCH`. There is no form on a value:
 `user.members` is the field of that name, so a struct may have a field called
@@ -591,7 +591,7 @@ generic instance anywhere in the target (a field `b: Box[Int]`, or an alias of
 one) with `CHECK-NOT-DECODABLE`, because the schema is keyed by the bare struct
 name and `Box[Int]` and `Box[String]` would share it; a bare generic struct as
 the target is `CHECK-UNKNOWN-TYPE`. A type argument counts after substitution
-for `JsonField` too (rules in `06b-builtins.md`, "Optional and nullable
+for `JSON.Field` too (rules in `06b-builtins.md`, "Optional and nullable
 fields"). A C struct of an `extern` block takes no type parameters
 (`PARSE-UNEXPECTED-TOKEN` at the `[`). Type parameters exist only in the
 checker: the VM sees a struct of its field names and order, as before.

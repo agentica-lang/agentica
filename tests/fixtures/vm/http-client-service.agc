@@ -2,7 +2,7 @@ import HTTP from "std/http"
 
 # Answers one request per accepted connection while that connection lasts, then says how it ended. The client's
 # connection ends only when the client closes it.
-def serve(listener: Listener) -> String
+def serve(listener: TCP.Listener) -> String
   socket = Result.unwrap!(TCP.accept(listener, 5000))
   ended = ""
   while ended == ""

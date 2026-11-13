@@ -93,7 +93,7 @@ end
 
 ## to_s and inspect
 
-`puts` prints any value as its `to_s` text: strings as they are, other values in a short, readable form (`[1, 2, 3]`, `{"a": 1}`, `ok(5)`). A function, a task or a handle, such as a `Listener`, has no `to_s`: `f.to_s` is `CHECK-UNKNOWN-METHOD`. `inspect` is the debug form: strings keep their quotes.
+`puts` prints any value as its `to_s` text: strings as they are, other values in a short, readable form (`[1, 2, 3]`, `{"a": 1}`, `ok(5)`). A function, a task or a handle, such as a `TCP.Listener`, has no `to_s`: `f.to_s` is `CHECK-UNKNOWN-METHOD`. `inspect` is the debug form: strings keep their quotes.
 
 ```agentica
 def main() -> Void

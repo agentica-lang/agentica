@@ -90,7 +90,7 @@ end
 """
 
 SERVER_PROGRAM = """\
-def serve(socket: Socket) -> Void
+def serve(socket: TCP.Socket) -> Void
   line = TCP.read_line(socket, 10000)
   while Result.ok?(line)
     Result.unwrap!(TCP.send(socket, "hello #{Result.unwrap!(line)}\\n", 10000))
@@ -113,7 +113,7 @@ end
 """
 
 OWNERS_PROGRAM = """\
-def boom(socket: Socket) -> Result[Int]
+def boom(socket: TCP.Socket) -> Result[Int]
   zero = 0
   return ok(1 / zero)
 end
@@ -163,7 +163,7 @@ end
 
 WRITERS_PROGRAM = """\
 struct Job
-  socket: Socket
+  socket: TCP.Socket
   text: String
 end
 
@@ -194,17 +194,17 @@ end
 """
 
 EXIT_PROGRAM = """\
-def hold(socket: Socket) -> Result[String]
+def hold(socket: TCP.Socket) -> Result[String]
   return TCP.read_line(socket, 60000)
 end
 
-def flood(socket: Socket) -> Void
+def flood(socket: TCP.Socket) -> Void
   chunk = List.repeat("abcdefgh", 131072).join("")
   while Result.ok?(TCP.send(socket, chunk, 60000))
   end
 end
 
-def wait_accept(listener: Listener) -> Bool
+def wait_accept(listener: TCP.Listener) -> Bool
   return Result.ok?(TCP.accept(listener, 60000))
 end
 
@@ -451,7 +451,7 @@ def test_main_returns_while_tasks_wait_on_sockets_and_the_peer_sees_every_socket
     # Only the VM run is timed: compiling through the CLI can be slow on a busy machine.
     started = time.monotonic()
     result = run_vm(bytecode, env=vm_environment(env))
-    assert (result.code, result.stdout) == (0, "<Socket>\ndone\n"), result.stderr
+    assert (result.code, result.stdout) == (0, "<TCP.Socket>\ndone\n"), result.stderr
     assert time.monotonic() - started < scaled(20)
     text = trace.read_text()
     assert re.compile(r" io end code=0 signal=0$", re.M).search(text), text
@@ -461,15 +461,15 @@ def test_main_returns_while_tasks_wait_on_sockets_and_the_peer_sees_every_socket
 
 
 CANCEL_PROGRAM = """\
-def dial(port: Int) -> Result[Socket]
+def dial(port: Int) -> Result[TCP.Socket]
   return TCP.connect("127.0.0.1", port, 30000)
 end
 
-def wait_accept(listener: Listener) -> Result[Socket]
+def wait_accept(listener: TCP.Listener) -> Result[TCP.Socket]
   return TCP.accept(listener, 60000)
 end
 
-def parent(listener: Listener) -> Result[Int]
+def parent(listener: TCP.Listener) -> Result[Int]
   Task.spawn(&dial, %d)
   Task.spawn_owning(&wait_accept, listener)
   Task.sleep(0)
@@ -494,7 +494,7 @@ end
 """
 
 ECHO_SERVER_PROGRAM = """\
-def serve(socket: Socket) -> Void
+def serve(socket: TCP.Socket) -> Void
   line = TCP.read_line(socket, 20000)
   while Result.ok?(line)
     Result.unwrap!(TCP.send(socket, "#{Result.unwrap!(line)}!\\n", 20000))
@@ -682,18 +682,18 @@ def test_ipv6_client_and_server_with_python_peers(tmp_path, adopt):
 
 
 BACKLOG_PROGRAM = """\
-def wait_accept(listener: Listener) -> Result[Socket]
+def wait_accept(listener: TCP.Listener) -> Result[TCP.Socket]
   return TCP.accept(listener, 60000)
 end
 
-def parent(listener: Listener) -> Result[Int]
+def parent(listener: TCP.Listener) -> Result[Int]
   Task.spawn(&wait_accept, listener)
   Task.sleep(0)
   zero = 0
   return ok(1 / zero)
 end
 
-def answer(socket: Socket) -> Void
+def answer(socket: TCP.Socket) -> Void
   Result.unwrap!(TCP.send(socket, "answered\\n", 5000))
   TCP.close(socket)
 end
@@ -762,11 +762,11 @@ def test_listener_takes_every_connection_that_waited_in_its_backlog(tmp_path, ad
 
 
 CANCELLED_WAITS_PROGRAM = """\
-def wait_accept(listener: Listener) -> Result[Socket]
+def wait_accept(listener: TCP.Listener) -> Result[TCP.Socket]
   return TCP.accept(listener, 60000)
 end
 
-def wait_line(socket: Socket) -> Result[String]
+def wait_line(socket: TCP.Socket) -> Result[String]
   return TCP.read_line(socket, 60000)
 end
 
@@ -799,7 +799,7 @@ def test_a_cancelled_accept_or_read_leaves_its_place_at_once(tmp_path):
 
 
 IDLE_PROGRAM = """\
-def wait_bytes(socket: Socket) -> Result[Bytes]
+def wait_bytes(socket: TCP.Socket) -> Result[Bytes]
   return TCP.recv_bytes(socket, 16)
 end
 

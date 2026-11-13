@@ -42,11 +42,11 @@ end
 """
 
 HANDLE_WAIT_TIMEOUT = """\
-def reader(s: Socket) -> Result[String]
+def reader(s: TCP.Socket) -> Result[String]
   return TCP.read_line(s, 400)
 end
 
-def impatient(s: Socket) -> Result[String]
+def impatient(s: TCP.Socket) -> Result[String]
   return TCP.read_line(s, 20)
 end
 
@@ -63,15 +63,15 @@ end
 """
 
 CANCELLED_WAITER = """\
-def reader(s: Socket) -> Result[String]
+def reader(s: TCP.Socket) -> Result[String]
   return TCP.read_line(s, 400)
 end
 
-def patient(s: Socket) -> Result[String]
+def patient(s: TCP.Socket) -> Result[String]
   return TCP.read_line(s, 20000)
 end
 
-def parent(s: Socket) -> Result[Int]
+def parent(s: TCP.Socket) -> Result[Int]
   Task.spawn(&patient, s)
   Task.sleep(0)
   Task.sleep(0)

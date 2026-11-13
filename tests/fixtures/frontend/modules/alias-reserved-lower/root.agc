@@ -1,4 +1,4 @@
-import FileInfo from "lib"
+import StructMember from "lib"
 def main() -> Void
 end
 

@@ -2,8 +2,8 @@ import HTTP from "std/http"
 
 TYPE = "Content-Type"
 
-# What the producers of the routes share with main: the gate main opens to let a producer go on, and the line a producer
-# writes about how it ended.
+# What the producers of the routes share with main: the gate main opens to let a producer go on, and the line a
+# producer writes about how it ended.
 struct Hub
   gate: Channel[Bool]
   said: Channel[String]
@@ -155,16 +155,16 @@ def routes(hub: Hub) -> Fn[HTTP.Request, Result[HTTP.StreamResponse]]
   end
 end
 
-def connect(port: Int) -> Socket
+def connect(port: Int) -> TCP.Socket
   return TCP.connect("127.0.0.1", port, 5000).unwrap!
 end
 
-def ask(socket: Socket, method: String, path: String, extra: String) -> Void
+def ask(socket: TCP.Socket, method: String, path: String, extra: String) -> Void
   TCP.send(socket, "#{method} #{path} HTTP/1.1\r\nHost: x\r\n#{extra}\r\n", 5000).unwrap!
 end
 
 # The status line and the headers, without the Date, which differs on every run.
-def head_of(socket: Socket) -> String
+def head_of(socket: TCP.Socket) -> String
   lines: List[String] = []
   line = TCP.read_line(socket, 5000).unwrap!
   while line != ""
@@ -177,7 +177,7 @@ def head_of(socket: Socket) -> String
 end
 
 # One chunk as "size data", or "end" for the last one.
-def chunk_of(socket: Socket) -> String
+def chunk_of(socket: TCP.Socket) -> String
   size = TCP.read_line(socket, 5000).unwrap!
   if size == "0"
     TCP.read_line(socket, 5000).unwrap!
@@ -187,7 +187,7 @@ def chunk_of(socket: Socket) -> String
 end
 
 # Exactly count bytes of the socket, as numbers.
-def bytes_of(socket: Socket, count: Int) -> List[Int]
+def bytes_of(socket: TCP.Socket, count: Int) -> List[Int]
   got = "".bytes
   while got.size < count
     got = got + TCP.recv_bytes(socket, count - got.size, 5000).unwrap!
@@ -196,7 +196,7 @@ def bytes_of(socket: Socket, count: Int) -> List[Int]
 end
 
 # One chunk of binary data as "size [bytes]", and the CRLF after it.
-def binary_chunk_of(socket: Socket) -> String
+def binary_chunk_of(socket: TCP.Socket) -> String
   size = TCP.read_line(socket, 5000).unwrap!
   data = bytes_of(socket, size.to_i!)
   TCP.read_line(socket, 5000).unwrap!
@@ -204,7 +204,7 @@ def binary_chunk_of(socket: Socket) -> String
 end
 
 # True once the server has closed the connection: the input ends.
-def closed_by_server(socket: Socket) -> Bool
+def closed_by_server(socket: TCP.Socket) -> Bool
   line = TCP.read_line(socket, 5000)
   while Result.ok?(line)
     line = TCP.read_line(socket, 5000)

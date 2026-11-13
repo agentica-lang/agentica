@@ -24,13 +24,13 @@ Analysis.refs_partial(session: Analysis.Session, path: String, line: Int, column
 Analysis.native_modules(session: Analysis.Session, path: String) -> Result[Analysis.NativeModules]
 Analysis.bodies(session: Analysis.Session, path: String) -> Result[Analysis.Bodies]
 Analysis.diagnostic(message: String) -> Result[Analysis.Diagnostic]
-Analysis.outline_json(found: Analysis.Outline) -> Json
-Analysis.type_at_json(found: Analysis.TypeAt) -> Json
-Analysis.symbols_json(found: Analysis.Symbols) -> Json
-Analysis.refs_json(found: Analysis.Refs) -> Json
-Analysis.native_modules_json(found: Analysis.NativeModules) -> Json
-Analysis.bodies_json(found: Analysis.Bodies) -> Json
-Analysis.diagnostic_json(found: Analysis.Diagnostic) -> Json
+Analysis.outline_json(found: Analysis.Outline) -> JSON.Value
+Analysis.type_at_json(found: Analysis.TypeAt) -> JSON.Value
+Analysis.symbols_json(found: Analysis.Symbols) -> JSON.Value
+Analysis.refs_json(found: Analysis.Refs) -> JSON.Value
+Analysis.native_modules_json(found: Analysis.NativeModules) -> JSON.Value
+Analysis.bodies_json(found: Analysis.Bodies) -> JSON.Value
+Analysis.diagnostic_json(found: Analysis.Diagnostic) -> JSON.Value
 ```
 
 ## Sessions and buffers

@@ -124,7 +124,7 @@ end
 ## variables are opaque types, and a Map key or Set element may be one. json_needs holds, by linked name, what each
 ## generic function needs of its type arguments for the JSON.encode and JSON.from calls of its body and of the generic
 ## functions it calls (checker.agc computes it before the bodies are checked): each is a type variable, or an Optional,
-## JsonField or Map key of one, that must be encodable once the variables are bound. lenient is the files in which a
+## JSON.Field or Map key of one, that must be encodable once the variables are bound. lenient is the files in which a
 ## name that nothing reads is no error (CHECK-UNUSED-VARIABLE): the roots of a query, as for an unused import.
 export struct Cx
   help: Help.Tables

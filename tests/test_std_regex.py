@@ -405,11 +405,11 @@ def main() -> Void
   size = System.args()[0].to_i!
   re = Regex.compile("(a+)+$").unwrap!
   text = List.repeat("a", size).join("") + "!"
-  before = Profile.steps()
+  before = System.Profile.steps()
   puts(Regex.match?(text, re))
   puts(Regex.match(text, re).ok?)
   puts(before)
-  puts(Profile.steps() - before)
+  puts(System.Profile.steps() - before)
 end
 """
 

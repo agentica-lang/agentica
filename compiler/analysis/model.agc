@@ -115,7 +115,7 @@ export struct TypeAt
   type: String
   range: Diagnostics.Region
   definition: List[Definition]
-  help: Json
+  help: JSON.Value
   signatures: List[String]
   partial: Bool
   diagnostics: List[Diagnostics.Diagnostic]
@@ -148,7 +148,7 @@ export struct Symbol
   name_range: Diagnostics.Region
   type: String
   payload: List[String]
-  help: Json
+  help: JSON.Value
   signatures: List[String]
 end
 

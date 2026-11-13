@@ -381,25 +381,25 @@ end
 export def diagnostic(message: String) -> Result[Diagnostic] = DiagnosticRead.read(message)
 
 ## Returns the JSON that `agentica --json outline` prints, without its final line feed.
-export def outline_json(found: Outline) -> Json = OutlineJson.json(found)
+export def outline_json(found: Outline) -> JSON.Value = OutlineJson.json(found)
 
 ## Returns the JSON that `agentica --json type-at` prints, without its final line feed.
-export def type_at_json(found: TypeAt) -> Json = TypeAtJson.json(found)
+export def type_at_json(found: TypeAt) -> JSON.Value = TypeAtJson.json(found)
 
 ## Returns the JSON that `agentica --json symbol` prints, without its final line feed.
-export def symbols_json(found: Symbols) -> Json = SymbolJson.json(found)
+export def symbols_json(found: Symbols) -> JSON.Value = SymbolJson.json(found)
 
 ## Returns the JSON that `agentica --json refs` prints, without its final line feed.
-export def refs_json(found: Refs) -> Json = RefsJson.json(found)
+export def refs_json(found: Refs) -> JSON.Value = RefsJson.json(found)
 
 ## Returns the JSON of the answer of `native_modules`, without its final line feed.
-export def native_modules_json(found: NativeModules) -> Json = NativeModulesJson.json(found)
+export def native_modules_json(found: NativeModules) -> JSON.Value = NativeModulesJson.json(found)
 
 ## Returns the JSON of the answer of `bodies`, without its final line feed.
-export def bodies_json(found: Bodies) -> Json = BodiesJson.json(found)
+export def bodies_json(found: Bodies) -> JSON.Value = BodiesJson.json(found)
 
 ## Returns the JSON that `agentica --json check` prints on stderr for a problem.
-export def diagnostic_json(found: Diagnostic) -> Json = DiagnosticJson.object(found)
+export def diagnostic_json(found: Diagnostic) -> JSON.Value = DiagnosticJson.object(found)
 
 # The settings of the machine: the disk, the process environment and the std/ sources of this binary. The version is
 # empty, since nothing is written.

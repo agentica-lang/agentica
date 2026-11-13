@@ -1,5 +1,5 @@
 enum Conn
-  Plain(Socket)
+  Plain(TCP.Socket)
   Idle
 end
 
@@ -10,7 +10,7 @@ end
 
 struct Pair
   inbox: Channel[Int]
-  sockets: Channel[Socket]
+  sockets: Channel[TCP.Socket]
 end
 
 def report(label: String, r: Result[Int]) -> Void
@@ -41,21 +41,21 @@ def work(job: Job) -> Result[Int]
   end
 end
 
-def sockets(all: List[Socket]) -> Result[Int]
+def sockets(all: List[TCP.Socket]) -> Result[Int]
   for socket in all
     try TCP.send(socket, "listed\n", 5000)
   end
   return ok(all.size)
 end
 
-def table(all: Map[String, Socket]) -> Result[Int]
+def table(all: Map[String, TCP.Socket]) -> Result[Int]
   for socket in all.values
     try TCP.send(socket, "mapped\n", 5000)
   end
   return ok(all.size)
 end
 
-def wrapped(r: Result[Socket]) -> Result[Int]
+def wrapped(r: Result[TCP.Socket]) -> Result[Int]
   socket = try r
   try TCP.send(socket, "wrapped\n", 5000)
   return ok(1)
@@ -111,7 +111,7 @@ def main() -> Void
   drain("spare", spare)
 
   half: Channel[Int] = Channel.new(4)
-  sockets: Channel[Socket] = Channel.new(1)
+  sockets: Channel[TCP.Socket] = Channel.new(1)
   halfway = Task.spawn_owning(&give_half, Pair(inbox: half, sockets: sockets))
   IO.inspect(sockets.send(kept, 5000))
   report("half", Task.await(halfway))

@@ -68,7 +68,7 @@ its owner closes it (then it gets the closed error).
 `Task.spawn` and gives it a handle the caller owns, so the new task closes it
 when it ends (a server takes its listener with it). Use it for a connection that
 a server loop passes to its own task; a crash then closes only that connection.
-The argument must be a `FileHandle`, `Socket`, `Listener`, `Process`,
+The argument must be a `File.Handle`, `TCP.Socket`, `TCP.Listener`, `Process`,
 `HTTP.Server`, `Channel[T]`, native resource or owned buffer, or a struct, enum,
 `List`, `Map` or `Result` whose type holds one (else `CHECK-NOT-A-HANDLE`). The
 new task gets the value and owns every handle in it, so an enum

@@ -1,4 +1,4 @@
-## The checking rules of the Map, Set, Task, Channel, ATS, Profile and Native builtins. A rule takes the call
+## The checking rules of the Map, Set, Task, Channel, ATS, System.Profile and Native builtins. A rule takes the call
 ## (State.Site) and returns the new state with the type of the call.
 
 import Model from "../catalog/builtin_model"
@@ -13,7 +13,8 @@ import State from "check_state"
 import Stmt from "check_stmt"
 import CheckTypes from "check_types"
 
-## Checks a call of a Task, Channel, Map, Set, Profile or Native builtin by its rule. Any other rule is the caller's.
+## Checks a call of a Task, Channel, Map, Set, System.Profile or Native builtin by its rule. Any other rule is the
+## caller's.
 export def check_collection_rule(cx: State.Cx, st: State.St, site: State.Site, rule: Model.Rule) -> Result[State.Out]
   case rule
     Model.Rule.TaskSpawn -> check_spawn(cx, st, site, false)
@@ -78,8 +79,8 @@ def check_spawn(cx: State.Cx, st: State.St, site: State.Site, owning: Bool) -> R
         "CHECK-NOT-A-HANDLE",
         "Task.spawn_owning gives a handle to the new task, but the argument is #{T.to_text(handed.type)}",
         Ast.expr_span(site.args[1]),
-        "pass a FileHandle, Socket, Listener, Process, HTTP.Server, Channel, resource or owned buffer, or a value " +
-        "that holds one; Task.spawn passes any other value",
+        "pass a File.Handle, TCP.Socket, TCP.Listener, Process, HTTP.Server, Channel, resource or owned buffer, " +
+        "or a value that holds one; Task.spawn passes any other value",
       ),
     )
   end
@@ -600,9 +601,9 @@ def check_target(
   ok(State.Out(st: target.st, type: site.selected.result))
 end
 
-# Profile.measure(label) do ... end, Native.memory_pointer(size) do |buf| ... end and Native.from_string(text) do |buf|
-# ... end: the first argument has the type `first`, then a block or a function that takes `params`; the call has the
-# type the block returns. The context of the call is the block's expected result.
+# System.Profile.measure(label) do ... end, Native.memory_pointer(size) do |buf| ... end and Native.from_string(text)
+# do |buf| ... end: the first argument has the type `first`, then a block or a function that takes `params`; the call
+# has the type the block returns. The context of the call is the block's expected result.
 def check_block_value(
   cx: State.Cx,
   st: State.St,

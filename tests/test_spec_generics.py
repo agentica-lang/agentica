@@ -333,7 +333,7 @@ def with_codec(*lines: str, header: str = "") -> str:
 
 CODEC_RULES = {
     "generic code decodes and encodes through a codec": (
-        with_codec('u = body_as("{}", c).unwrap!', "puts(show(c, u))", "j: Json = c.from(u)",
+        with_codec('u = body_as("{}", c).unwrap!', "puts(show(c, u))", "j: JSON.Value = c.from(u)",
                    "puts(c.decode(j).ok?)"), None, None),
     "a codec is a struct field": (
         with_codec("h = Holder(codec: c)", 'puts(h.codec.decode("{}").ok?)',
@@ -347,7 +347,7 @@ CODEC_RULES = {
                    header="enum Color\n  Red\n  Green\nend\n\n"), None, None),
     "members of a codec are a list of StructMember": (
         with_codec("n: Int = c.members", header=""), "CHECK-TYPE-MISMATCH", "c.members"),
-    "decode of a source that is no text or Json": (with_codec("r = c.decode(1)"), "CHECK-TYPE-MISMATCH", "1"),
+    "decode of a source that is no text or JSON.Value": (with_codec("r = c.decode(1)"), "CHECK-TYPE-MISMATCH", "1"),
     "encode of a value of another type": (with_codec("s = c.encode(1)"), "CHECK-TYPE-MISMATCH", "1"),
     "the value and the codec of a generic call disagree": (
         with_codec("puts(show(c, 1))"), "CHECK-TYPE-MISMATCH", "1"),

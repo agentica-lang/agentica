@@ -77,10 +77,10 @@ BDD.doc_string(ctx: BDD.Context) -> String
 BDD.table(ctx: BDD.Context) -> List[List[String]]
 BDD.assert(ctx: BDD.Context, condition: Bool, message: String) -> BDD.Context
 BDD.skip(ctx: BDD.Context, reason: String) -> BDD.Context
-BDD.set(ctx: BDD.Context, name: String, value: Json) -> BDD.Context
-BDD.get(ctx: BDD.Context, name: String) -> Result[Json]
-BDD.keep(ctx: BDD.Context, name: String, service: Fn[Json, Result[Json]]) -> BDD.Context
-BDD.call(ctx: BDD.Context, name: String, request: Json) -> Result[Json]
+BDD.set(ctx: BDD.Context, name: String, value: JSON.Value) -> BDD.Context
+BDD.get(ctx: BDD.Context, name: String) -> Result[JSON.Value]
+BDD.keep(ctx: BDD.Context, name: String, service: Fn[JSON.Value, Result[JSON.Value]]) -> BDD.Context
+BDD.call(ctx: BDD.Context, name: String, request: JSON.Value) -> Result[JSON.Value]
 BDD.read_line(ctx: BDD.Context, timeout_ms: Int) -> Result[String]
 BDD.after(ctx: BDD.Context, hook: Fn[BDD.Context, Result[Void]]) -> BDD.Context
 BDD.given_env(ctx, name, value) / given_argument(ctx, value) / given_program(ctx, path)
@@ -101,10 +101,10 @@ BDD.then_stdout_includes(ctx, expected) / then_stderr_includes(ctx, expected)
   handler or block. `BDD.Context` can be named, not built.
 - State that is not JSON (an open connection) goes in a service: `BDD.keep(ctx,
   "db", service)` with a block `do |request| ... end` that captures the value
-  and answers a JSON request with a `Result[Json]`; a later step runs it with
-  `BDD.call(ctx, "db", request)` (an error for a missing name). Services start
-  empty in each scenario. Keeping a name again replaces the service; the old
-  handle lives until the scenario ends (or close it in a `BDD.after` hook).
+  and answers a JSON request with a `Result[JSON.Value]`; a later step runs it
+  with `BDD.call(ctx, "db", request)` (an error for a missing name). Services
+  start empty in each scenario. Keeping a name again replaces the service; the
+  old handle lives until the scenario ends (or close it in a `BDD.after` hook).
 - `BDD.after(ctx, hook)` registers a cleanup that runs when the scenario ends,
   also after a failure or `BDD.skip`, last registered first, in the scenario's
   child before its program is stopped. Register it in the step that makes the

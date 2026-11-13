@@ -6,7 +6,7 @@
 ## declares it.
 
 import Builtins from "../catalog/builtins"
-import {BARE_NAMES, ENUMS, ENTRIES, FAMILY_MEMBERS, NESTED, RECORDS, RESERVED, STD_ONLY} from "../catalog/builtins"
+import {BARE_NAMES, ENUMS, ENTRIES, FAMILY_MEMBERS, RECORDS, RESERVED, STD_ONLY} from "../catalog/builtins"
 import Diag from "../diagnostics/diagnostic"
 import Base from "../syntax/parse_base"
 import Source from "../syntax/source"
@@ -53,9 +53,6 @@ export def resolve(cx: Context, name: String, want: Want, span: Source.Span, hin
     return qualified(cx, parts[0], parts[1], want, span, hint)
   elsif parts.size == 3 and family?(cx, parts[0])
     return member_function(cx, parts, want, span)
-  elsif parts.size == 3 and nested(cx, parts[0], parts[1]) != ""
-    # System.Profile.steps is Profile.steps.
-    return ok("#{nested(cx, parts[0], parts[1])}.#{parts[2]}")
   elsif parts.size == 3 and aliased_block(cx, parts[0], parts[1]) != ""
     return imported(cx, cx.modules[aliased_block(cx, parts[0], parts[1])], parts[2], want, span)
   end
@@ -79,14 +76,6 @@ end
 ## True when the name is a builtin family (OpenSSL) in this file: its members are written Family.Member. An import
 ## alias of the same name wins, though a family name is reserved, so only std/ internals could take one.
 export def family?(cx: Context, name: String) -> Bool = FAMILY_MEMBERS.has_key?(name) and !cx.me.aliases.has_key?(name)
-
-## The old builtin name of the nested name Alias.Member (NESTED_NAMES: File.Info is FileInfo), or "" when it is none or
-## the file has an import alias of that name.
-export def nested(cx: Context, alias: String, member: String) -> String
-  return "" if cx.me.aliases.has_key?(alias)
-
-  NESTED.get("#{alias}.#{member}", "")
-end
 
 ## True when the file declares an enum with this name.
 export def local_enum?(cx: Context, name: String) -> Bool
@@ -150,7 +139,7 @@ export def alias_constant_identity(cx: Context, name: String) -> String
 end
 
 ## True when the name is a type that the file declares or imports by name (a struct, enum, type alias or resource), or
-## a builtin record such as FileInfo.
+## a builtin record such as File.Info.
 export def declared_type?(cx: Context, name: String) -> Bool
   return right_kind?(cx.me.names[name], Want.Type) if cx.me.names.has_key?(name)
 
@@ -222,9 +211,7 @@ def qualified(cx: Context, alias: String, member: String, want: Want, span: Sour
     return imported(cx, cx.modules[target], member, want, span)
   elsif STD_ONLY.has_key?(alias) and !Resolve.embedded?(cx.me.key)
     return error(std_only_failure(cx, alias, member, want, span))
-  elsif nested(cx, alias, member) != ""
-    return ok(nested(cx, alias, member))
-  elsif family?(cx, alias)
+  elsif family?(cx, alias) and !(alias == "JSON" and member == "Codec")
     return family_member(cx, alias, member, want, span)
   elsif function_wanted?(want) or std_record?(alias, member, want) or builtin_type?(alias, member, want)
     return ok("#{alias}.#{member}")
@@ -238,15 +225,21 @@ def qualified(cx: Context, alias: String, member: String, want: Want, span: Sour
   error(Failure.fail_at(site(cx, span), "CHECK-IMPORT-NAME", message, Failure.hint(alias_help(alias, member, hint))))
 end
 
-# Family.Member: a builtin type of the family where a type is wanted, or a function of the family itself
-# (Family.fn). A member that is a group of functions is no type or enum (CHECK-UNKNOWN-TYPE); a name that is no member
-# is CHECK-UNKNOWN-NAME with the members in the help.
+# Family.Member: a builtin type of the family where a type or an enum is wanted (JSON.Field), or a function of the
+# family itself (Family.fn). A member that is a group of functions is no type or enum (CHECK-UNKNOWN-TYPE); a name
+# that is no member is CHECK-UNKNOWN-NAME with the members in the help.
 def family_member(cx: Context, family: String, member: String, want: Want, span: Source.Span) -> Result[String]
   name = "#{family}.#{member}"
   if function_wanted?(want) and (ENTRIES.has_key?(name) or Builtins.member?(family, member))
     # A member called as a function is an unknown function for the checker, with the closest name.
     return ok(name)
+  elsif function_wanted?(want) and own_functions?(family) and member_owners(family, member).size == 0
+    # File.reed: the checker gives the unknown function, as for an unknown name of a builtin namespace.
+    return ok(name)
   elsif type_wanted?(want) and Builtins.member_type?(family, member)
+    return ok(name)
+  elsif enum_wanted?(want) and Builtins.member_type?(family, member)
+    # JSON.Field, or a type of the family that is no enum (File.Info.Foo), which the checker reports as for any type.
     return ok(name)
   elsif !function_wanted?(want) and Builtins.member?(family, member)
     return error(not_a_type(cx, name, name, span))
@@ -261,6 +254,8 @@ def member_function(cx: Context, parts: List[String], want: Want, span: Source.S
   return error(unknown_member(cx, parts[0], parts[1], span)) if !Builtins.member?(parts[0], parts[1])
 
   name = parts.join(".")
+  # File.Info.Foo as a type: the checker gives the unknown type, as for any name; only a group of functions has help.
+  return ok(name) if !function_wanted?(want) and Builtins.member_type?(parts[0], parts[1])
   return error(not_a_type(cx, name, "#{parts[0]}.#{parts[1]}", span)) if !function_wanted?(want)
 
   ok(name)
@@ -277,7 +272,7 @@ end
 def unknown_member(cx: Context, family: String, member: String, span: Source.Span) -> String
   members = FAMILY_MEMBERS[family]
   help = "the members of #{family} are #{members.join(", ")}"
-  owners = members.filter do |owner: String| ENTRIES.has_key?("#{family}.#{owner}.#{member}") end
+  owners = member_owners(family, member)
   if owners.size > 0
     help = "use #{family}.#{owners[0]}.#{member}; #{help}"
   else
@@ -288,6 +283,16 @@ def unknown_member(cx: Context, family: String, member: String, span: Source.Spa
   end
 
   Failure.fail_at(site(cx, span), "CHECK-UNKNOWN-NAME", "#{family} has no member \"#{member}\"", Failure.hint(help))
+end
+
+# The members of the family that have a function of this name (OpenSSL.Digest for sha256).
+def member_owners(family: String, name: String) -> List[String]
+  FAMILY_MEMBERS[family].filter do |owner: String| ENTRIES.has_key?("#{family}.#{owner}.#{name}") end
+end
+
+# True when the family has functions of its own, written Family.fn (File.read, JSON.parse).
+def own_functions?(family: String) -> Bool
+  ENTRIES.keys.any? do |name: String| name.start_with?("#{family}.") and name.split(".").size == 2 end
 end
 
 # The first function, by name, of a member that is a group of functions: an example for a help.
@@ -321,6 +326,13 @@ end
 def type_wanted?(want: Want) -> Bool
   case want
     Want.Type -> true
+    _ -> false
+  end
+end
+
+def enum_wanted?(want: Want) -> Bool
+  case want
+    Want.Enum -> true
     _ -> false
   end
 end

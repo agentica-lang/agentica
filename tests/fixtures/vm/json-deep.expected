@@ -6,7 +6,7 @@
     "2049",
     "true",
     "true",
-    "ok(<Json>)",
+    "ok(<JSON.Value>)",
     ""
   ],
   "stderr": []

@@ -1,19 +1,20 @@
 # Files and paths
 
-`File`, `Dir`, `Path`, `FileHandle` and `FileInfo` are reserved. The
-interpreter uses the host user's filesystem permissions. With `--deny-fs` (or
-`--sandbox`) every call here but `Path.join`, and `Lazy.write_lines` and
-`Lazy.write_bytes`, returns an error starting `denied: --deny-fs`.
+`File`, `Dir` and `Path` are reserved; `File.Handle` and `File.Info` are members
+of `File`. The interpreter uses the host user's filesystem permissions. With
+`--deny-fs` (or `--sandbox`) every call here but `Path.join`, and
+`Lazy.write_lines` and `Lazy.write_bytes`, returns an error starting `denied:
+--deny-fs`.
 
 ```text
-File.open(path: String, mode: String = "read", timeout_ms: Int = 30000) -> Result[FileHandle]
+File.open(path: String, mode: String = "read", timeout_ms: Int = 30000) -> Result[File.Handle]
 File.open(path: String, mode: String = "read", timeout_ms: Int = 30000) do |f| ... end -> Result[T]
-File.read_bytes(handle: FileHandle, max_bytes: Int, timeout_ms: Int = 30000) -> Result[Bytes]
-File.read_line(handle: FileHandle, timeout_ms: Int = 30000) -> Result[String]
-File.write(handle: FileHandle, text: String, timeout_ms: Int = 30000) -> Result[Void]
-File.write_bytes(handle: FileHandle, bytes: Bytes, timeout_ms: Int = 30000) -> Result[Void]
-File.flush(handle: FileHandle, timeout_ms: Int = 30000) -> Result[Void]
-File.close(handle: FileHandle, timeout_ms: Int = 30000) -> Result[Void]
+File.read_bytes(handle: File.Handle, max_bytes: Int, timeout_ms: Int = 30000) -> Result[Bytes]
+File.read_line(handle: File.Handle, timeout_ms: Int = 30000) -> Result[String]
+File.write(handle: File.Handle, text: String, timeout_ms: Int = 30000) -> Result[Void]
+File.write_bytes(handle: File.Handle, bytes: Bytes, timeout_ms: Int = 30000) -> Result[Void]
+File.flush(handle: File.Handle, timeout_ms: Int = 30000) -> Result[Void]
+File.close(handle: File.Handle, timeout_ms: Int = 30000) -> Result[Void]
 File.each_line(path: String, buffer_bytes: Int = 65536, timeout_ms: Int = 30000) do |line| ... end -> Result[Void]
 File.foreach(path: String, buffer_bytes: Int = 65536, timeout_ms: Int = 30000) -> Lazy[String]   # lazy.md
 Lazy.write_lines(lazy: Lazy[String], path: String, timeout_ms: Int = 30000) -> Result[Void]   # lazy.md
@@ -22,9 +23,9 @@ File.sha256(path: String, timeout_ms: Int = 30000) -> Result[Bytes]
 File.write_text(path: String, text: String, timeout_ms: Int = 30000) -> Result[Void]
 File.replace(path: String, data: Bytes, timeout_ms: Int = 30000) -> Result[Void]
 File.append_text(path: String, text: String, timeout_ms: Int = 30000) -> Result[Void]
-File.stat(path: String, timeout_ms: Int = 30000) -> Result[FileInfo]
-File.lstat(path: String, timeout_ms: Int = 30000) -> Result[FileInfo]
-File.try_lock(handle: FileHandle, timeout_ms: Int = 30000) -> Result[Bool]
+File.stat(path: String, timeout_ms: Int = 30000) -> Result[File.Info]
+File.lstat(path: String, timeout_ms: Int = 30000) -> Result[File.Info]
+File.try_lock(handle: File.Handle, timeout_ms: Int = 30000) -> Result[Bool]
 Dir.list(path: String, timeout_ms: Int = 30000) -> Result[List[String]]
 Dir.mkdir(path: String, timeout_ms: Int = 30000) -> Result[Void]
 Dir.mkdir_private(path: String, timeout_ms: Int = 30000) -> Result[Void]
@@ -60,7 +61,7 @@ also reads, and `each_line` and `foreach` default `buffer_bytes` to 65536.
   file, then `Path.rename` it into place.
 - `read_line` removes LF or CRLF and accepts a final unterminated line. EOF
   before any line, or invalid UTF-8, is an error.
-- `File.stat` follows symlinks and returns `FileInfo(kind: String, size_bytes:
+- `File.stat` follows symlinks and returns `File.Info(kind: String, size_bytes:
   Int, modified_seconds: Int, mode: Int, user_id: Int, group_id: Int)`;
   directory sizes are zero; `mode` is the permission bits with setuid, setgid
   and sticky (384 is `rw-------`). On Windows `mode` is only the read-only

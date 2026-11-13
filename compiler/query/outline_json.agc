@@ -6,7 +6,7 @@ import Model from "../analysis/model"
 import DocJson from "../docs/doc_json"
 
 ## The object of the outline; `file` is the name the answer gives the file (query_files.agc, `display`).
-export def json(outlined: Model.Outline) -> Json
+export def json(outlined: Model.Outline) -> JSON.Value
   file = outlined.file
   imports = outlined.imports.map do |declaration: Model.Import| import_json(file, declaration) end
   items = outlined.items.map do |item: Model.Item| DocJson.item_json(file, item, true) end
@@ -22,7 +22,7 @@ end
 
 # `{path, alias, names, span}`: `alias` is null for an import with a list of names, and `names` is empty for one
 # with an alias.
-def import_json(file: String, declaration: Model.Import) -> Json
+def import_json(file: String, declaration: Model.Import) -> JSON.Value
   names = declaration.names.map do |name: Model.ImportName|
     JSON.object({
       "name": JSON.from(name.name),

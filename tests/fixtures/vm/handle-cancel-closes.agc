@@ -1,8 +1,8 @@
-def hold(socket: Socket) -> Result[String]
+def hold(socket: TCP.Socket) -> Result[String]
   return TCP.read_line(socket, 60000)
 end
 
-def parent(socket: Socket) -> Result[Int]
+def parent(socket: TCP.Socket) -> Result[Int]
   Task.spawn_owning(&hold, socket)
   Task.sleep(0)
   zero = 0

@@ -20,7 +20,7 @@ def not_allowed(allow: String) -> HTTP.Response
   return HTTP.Response(status: 405, headers: headers, body: JSON.encode({"error": "method not allowed"}).bytes)
 end
 
-def integers(root: Json) -> Result[List[Int]]
+def integers(root: JSON.Value) -> Result[List[Int]]
   field = try JSON.get(root, "values")
   items = try JSON.list(field)
   if items.size == 0

@@ -3,8 +3,8 @@
   "code": null,
   "steps": 187,
   "stdout": [
-    "<Listener>",
-    "<Socket>",
+    "<TCP.Listener>",
+    "<TCP.Socket>",
     "true",
     "ok(\"hello\")",
     "ok(\"ñ😀\")",

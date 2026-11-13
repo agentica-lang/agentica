@@ -453,7 +453,7 @@ PROFILED = """def work(n: Int) -> Int
 end
 
 def depth(n: Int) -> Int
-  return Profile.measure("depth") do
+  return System.Profile.measure("depth") do
     if n == 0
       return 0
     end
@@ -462,28 +462,28 @@ def depth(n: Int) -> Int
 end
 
 def in_task(n: Int) -> Int
-  return Profile.measure("task") do work(n) end
+  return System.Profile.measure("task") do work(n) end
 end
 
 def crash(xs: List[Int]) -> Result[Int]
-  return Profile.measure("crash") do
+  return System.Profile.measure("crash") do
     ok(xs[5])
   end
 end
 
 def main() -> Void
-  before = Profile.steps()
-  both = Profile.measure("outer") do
-    a = Profile.measure("inner") do work(100) end
-    b = Profile.measure("inner") do work(100) end
+  before = System.Profile.steps()
+  both = System.Profile.measure("outer") do
+    a = System.Profile.measure("inner") do work(100) end
+    b = System.Profile.measure("inner") do work(100) end
     a + b
   end
-  puts("outer #{Profile.steps() - before} #{both}")
-  puts(Profile.measure("wrap") do depth(20) end)
+  puts("outer #{System.Profile.steps() - before} #{both}")
+  puts(System.Profile.measure("wrap") do depth(20) end)
   puts(Task.await(Task.spawn(&in_task, 50)))
   puts(Task.await(Task.spawn(&crash, [1])).ok?)
   3.times do |k|
-    puts(Profile.measure("after") do depth(k) end)
+    puts(System.Profile.measure("after") do depth(k) end)
   end
   f = -> { work(10) }
   puts(f.call())
@@ -531,8 +531,8 @@ def test_profile_measure_adds_a_section_row_for_each_label(tmp_path, traced_vm):
 def test_profile_steps_gives_the_same_counts_with_the_profile_off_or_on(tmp_path, traced_vm):
     vm = traced_vm[0]
     source = tmp_path / "steps.agc"
-    source.write_text("def main() -> Void\n  a = Profile.steps()\n  10.times do |_|\n    puts(Profile.steps() - a)\n"
-                      "  end\n  puts(Profile.measure(\"m\") do Profile.steps() end)\nend\n")
+    source.write_text("def main() -> Void\n  a = System.Profile.steps()\n  10.times do |_|\n    puts(System.Profile.steps() - a)\n"
+                      "  end\n  puts(System.Profile.measure(\"m\") do System.Profile.steps() end)\nend\n")
     bytecode = compile_fixture(source, tmp_path)
     plain = run_vm(vm, bytecode)
     report = run_vm(vm, bytecode, {"AGENTICA_VM_TRACE": "profile", "AGENTICA_VM_TRACE_FILE": tmp_path / "r.trace"})
@@ -545,7 +545,7 @@ def test_profile_steps_gives_the_same_counts_with_the_profile_off_or_on(tmp_path
 def test_the_folded_profile_is_the_same_on_every_run_and_names_each_frame(tmp_path, traced_vm):
     """One line per stack, outermost frame first: functions as name@FILE:LINE, blocks as block@FILE:LINE:COL (lambdas
     lambda@FILE:LINE:COL), native
-    loops by their builtin, Profile.measure labels as measure:LABEL. Sampled at every step, the weights add up to the
+    loops by their builtin, System.Profile.measure labels as measure:LABEL. Sampled at every step, the weights add up to the
     steps of the report."""
     vm = traced_vm[0]
     bytecode = profiled_bytecode(tmp_path)
@@ -563,11 +563,11 @@ def test_the_folded_profile_is_the_same_on_every_run_and_names_each_frame(tmp_pa
     stacks = {line.rsplit(b" ", 1)[0] for line in lines}
     assert len(stacks) == len(lines)
     expected = [
-        b"main@sections.agc:30;measure:outer;block@sections.agc:32:35;measure:inner;block@sections.agc:33:34;"
+        b"main@sections.agc:30;measure:outer;block@sections.agc:32:42;measure:inner;block@sections.agc:33:41;"
         b"work@sections.agc:1",
-        b"main@sections.agc:30;measure:wrap;block@sections.agc:38:32;depth@sections.agc:11;measure:depth;"
-        b"block@sections.agc:12:35;depth@sections.agc:11",
-        b"in_task@sections.agc:20;measure:task;block@sections.agc:21:34;work@sections.agc:1",
+        b"main@sections.agc:30;measure:wrap;block@sections.agc:38:39;depth@sections.agc:11;measure:depth;"
+        b"block@sections.agc:12:42;depth@sections.agc:11",
+        b"in_task@sections.agc:20;measure:task;block@sections.agc:21:41;work@sections.agc:1",
         b"main@sections.agc:30;Int.times;block@sections.agc:41:11;measure:after",
         b"main@sections.agc:30;lambda@sections.agc:44:7;work@sections.agc:1",
     ]
@@ -606,11 +606,11 @@ def test_the_folded_profile_puts_the_stacks_past_its_limit_on_one_truncated_line
 
 
 LABELS = """def main() -> Void
-  puts(Profile.measure("a;b") do 1 end)
-  puts(Profile.measure("a%3Bb") do 2 end)
-  puts(Profile.measure("[overflow]") do 3 end)
+  puts(System.Profile.measure("a;b") do 1 end)
+  puts(System.Profile.measure("a%3Bb") do 2 end)
+  puts(System.Profile.measure("[overflow]") do 3 end)
   total = (0...4100).to_a.map do |i|
-    Profile.measure("item #{i}") do i end
+    System.Profile.measure("item #{i}") do i end
   end
   puts(total.size)
 end

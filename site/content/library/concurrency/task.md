@@ -45,14 +45,14 @@ Task.spawn_owning(function: Fn[A, R], handle: A) -> Task[R]
 
 Starts `function(handle)` like `Task.spawn` and gives `handle` to the new task in the same call.
 
-- The argument must be a `FileHandle`, `Socket`, `Listener`, `Process`, `HTTP.Server`, `Channel[T]`, a `C.Pointer` or a [native resource or owned buffer](/library/io-and-system/native/types/), or a struct, enum, `List`, `Map` or `Result` whose type holds one (through fields, variant payloads and type arguments). Anything else (an `Int`, a struct with no handle, an `HTTP.Client`) is `CHECK-NOT-A-HANDLE`. A crash or an end never closes an `HTTP.Client`.
+- The argument must be a `File.Handle`, `TCP.Socket`, `TCP.Listener`, `Process`, `HTTP.Server`, `Channel[T]`, a `C.Pointer` or a [native resource or owned buffer](/library/io-and-system/native/types/), or a struct, enum, `List`, `Map` or `Result` whose type holds one (through fields, variant payloads and type arguments). Anything else (an `Int`, a struct with no handle, an `HTTP.Client`) is `CHECK-NOT-A-HANDLE`. A crash or an end never closes an `HTTP.Client`.
 - A value that holds handles hands over every one of them: the new task gets the value and closes them all when it ends. An enum variant with no handle hands over nothing. A channel's [`Address`](/library/concurrency/channel/#channeladdress) is data, not a handle: put the address of a channel that other tasks keep using in the value, and it stays open ([one handle owned, one channel shared](/library/concurrency/channel/#one-handle-owned-one-channel-shared)).
 - The caller must own each handle, and can still use it while the new task runs. Otherwise (not owned, already handed over, closed) the caller stops with `RUNTIME-HANDLE-NOT-OWNED`, no task is made and no handle moves: all of them or none. Of the `C.Pointer` values only an owned buffer (`Native.memory_pointer`) can be handed over; a pointer that C gave, or a view of a buffer (`Native.offset`), is `RUNTIME-HANDLE-NOT-OWNED`.
 - A server loop can give each accepted connection to its own task, so a crash closes only that connection. A handed-over server takes its listener along and keeps serving after its creator ends.
 - A [Channel](/library/concurrency/channel/) has no opener, so any task can make the first hand-off. The ownership rules are in [a producer that owns the channel](/library/concurrency/channel/#a-producer-that-owns-the-channel).
 
 ```agentica
-def echo(socket: Socket) -> Result[String]
+def echo(socket: TCP.Socket) -> Result[String]
   line = try TCP.read_line(socket, 2000)
   try TCP.send(socket, "echo: #{line}\n", 2000)
   ok(line)

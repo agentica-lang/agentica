@@ -191,8 +191,8 @@ The report shows `SKIP`, the summary counts `skipped`, and `--json` gives `"stat
 ## BDD.set and BDD.get
 
 ```signature
-BDD.set(ctx: BDD.Context, name: String, value: Json) -> BDD.Context
-BDD.get(ctx: BDD.Context, name: String) -> Result[Json]
+BDD.set(ctx: BDD.Context, name: String, value: JSON.Value) -> BDD.Context
+BDD.get(ctx: BDD.Context, name: String) -> Result[JSON.Value]
 ```
 
 Keep JSON values between the steps of one scenario (each starts empty). `BDD.get` gives an error for a missing name.
@@ -200,8 +200,8 @@ Keep JSON values between the steps of one scenario (each starts empty). `BDD.get
 ## BDD.keep and BDD.call
 
 ```signature
-BDD.keep(ctx: BDD.Context, name: String, service: Fn[Json, Result[Json]]) -> BDD.Context
-BDD.call(ctx: BDD.Context, name: String, request: Json) -> Result[Json]
+BDD.keep(ctx: BDD.Context, name: String, service: Fn[JSON.Value, Result[JSON.Value]]) -> BDD.Context
+BDD.call(ctx: BDD.Context, name: String, request: JSON.Value) -> Result[JSON.Value]
 ```
 
 Keep a value that is not JSON between the steps of one scenario, such as an open connection. The service is a function from a request to a result, both JSON, and it captures the value. `BDD.call` runs the service kept under `name`, or gives an error when there is none. Each scenario starts with no services. Keeping a name again replaces the service, and the old handle is not closed until the scenario's process ends (use [BDD.after](#bddafter) to close it sooner). A step cannot leave a task running, so the service does its work in the calling step.

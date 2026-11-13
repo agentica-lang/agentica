@@ -152,8 +152,8 @@ in a PR that rewrites the goldens.
 - Debug form: `nil`, `true`, Int, Float (2.2), String (2.3), `[a, b]`, `{k: v}`
   in insertion order, `Name(f: v, ...)` in declaration order, `Enum.Variant` or
   `Enum.Variant(a, b)`, `ok(v)`, `ok()` for Void, `error("msg")`, and the handle
-  forms `<Json>`, `<Fn>`, `<Task>`, `<Socket>`, `<Listener>`,
-  `<HTTP.Client>`, `<FileHandle>`, `<Process>`.
+  forms `<JSON.Value>`, `<Fn>`, `<Task>`, `<TCP.Socket>`, `<TCP.Listener>`,
+  `<HTTP.Client>`, `<File.Handle>`, `<Process>`.
 - Struct and enum names print as declared: an imported `Point` prints `Point(x:
   1)`, not the linker's `@2::` identity, and a builtin type that a std module
   re-exports prints with its written name (`HTTP.Response(...)`, not

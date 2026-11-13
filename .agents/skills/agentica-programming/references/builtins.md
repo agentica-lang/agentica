@@ -264,7 +264,7 @@ o.to_result(message: String) -> Result[T]                # ok(x), or error(messa
 
 `receiver.name(args)` calls the builtin of the receiver's static type with the
 receiver first; the module is the type's name (`List[T]` uses `List`), except
-`Json`, which uses `JSON`. Without parentheses,
+`JSON.Value`, which uses `JSON`. Without parentheses,
 `receiver.name` on a non-struct value calls a method with no arguments
 (`s.length`, `xs.size`, `r.ok?`); on a struct it reads a field, and structs and
 enums have no methods. `.call(...)` invokes a function value, and an `Fn`
@@ -277,17 +277,18 @@ here), not `0`. A negative literal receiver needs parentheses: `(-5).to_s`.
 
 ## to_s and inspect
 
-- Every data value has `to_s`: numbers, `Bool`, `String`, `nil`, `Json`, and
-  lists, maps, sets, Results, structs and enums built from those. It is the text
-  `"#{x}"` gives: a String as it is, a `Json` as its JSON text, else the
-  `IO.inspect` form (`true`, `nil`, `[1, 2]`, `ok(3)`, `Item(name: "a")`,
-  `Shape.Box(1, 2)`). Inside a list or Result, `Json` shows as `<Json>`.
+- Every data value has `to_s`: numbers, `Bool`, `String`, `nil`, `JSON.Value`,
+  and lists, maps, sets, Results, structs and enums built from those. It is the
+  text `"#{x}"` gives: a String as it is, a `JSON.Value` as its JSON text, else
+  the `IO.inspect` form (`true`, `nil`, `[1, 2]`, `ok(3)`, `Item(name: "a")`,
+  `Shape.Box(1, 2)`). Inside a list or Result, `JSON.Value` shows as
+  `<JSON.Value>`.
 - Functions, tasks and handles (sockets, files, processes, HTTP values) have no
   `to_s`: printing or interpolating one is `CHECK-TYPE-MISMATCH`, `.to_s` on one
   is `CHECK-UNKNOWN-METHOD`.
 - `x.inspect` is the `IO.inspect` form as a String, for display only. It differs
-  from `to_s` for strings, which keep their quotes, and for `Json` (`<Json>`).
-  A struct field named `to_s` is read as the field.
+  from `to_s` for strings, which keep their quotes, and for `JSON.Value`
+  (`<JSON.Value>`). A struct field named `to_s` is read as the field.
 
 ## Other rules
 

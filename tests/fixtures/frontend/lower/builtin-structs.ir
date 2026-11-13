@@ -1,7 +1,7 @@
 program 0:1:1-10:1 entry=0 globals=0
-source 0 "builtin-structs.agc" chars=206
-struct s0 "FileInfo" ["kind","size_bytes","modified_seconds","mode","user_id","group_id"] types=[String, Int, Int, Int, Int, Int]
-struct s1 "ProcessOutput" ["stdout","stderr","truncated"] types=[String, String, Bool]
+source 0 "builtin-structs.agc" chars=207
+struct s0 "File.Info" ["kind","size_bytes","modified_seconds","mode","user_id","group_id"] types=[String, Int, Int, Int, Int, Int]
+struct s1 "Process.Output" ["stdout","stderr","truncated"] types=[String, String, Bool]
 struct s2 "Error" ["kind","message","code","details","cause","location"] types=[String, String, Optional(Int), Map(String, String), Optional(Struct(Error)), String]
 enum "Optional" v0="None"/0 v1="Some"/1
 fn0 "main" params=0 captures=0 slots=5 entry @ 0:1:1-10:1
@@ -37,14 +37,14 @@ fn0 "main" params=0 captures=0 slots=5 entry @ 0:1:1-10:1
   L2:
   L0:
     step @ 0:7:3-8:1
-    step @ 0:7:7-7:62
-    step @ 0:7:29-7:31
-    const r2 "" @ 0:7:29-7:31
-    step @ 0:7:41-7:43
-    const r3 "" @ 0:7:41-7:43
-    step @ 0:7:56-7:61
-    const r4 false @ 0:7:56-7:61
-    struct r1 r2 s1 @ 0:7:7-7:62
+    step @ 0:7:7-7:63
+    step @ 0:7:30-7:32
+    const r2 "" @ 0:7:30-7:32
+    step @ 0:7:42-7:44
+    const r3 "" @ 0:7:42-7:44
+    step @ 0:7:57-7:62
+    const r4 false @ 0:7:57-7:62
+    struct r1 r2 s1 @ 0:7:7-7:63
     step @ 0:8:3-9:1
     step @ 0:8:3-8:20
     step @ 0:8:8-8:19

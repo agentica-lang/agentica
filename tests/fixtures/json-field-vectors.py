@@ -1,6 +1,6 @@
 """Writes tests/fixtures/vm/json-field-vectors.stdin, the vectors that json-field-vectors.agc checks.
 
-The peer is Python's json module plus a small model of typed JSON with JsonField
+The peer is Python's json module plus a small model of typed JSON with JSON.Field
 (docs/grammar/06b-builtins.md, "Optional and nullable JSON fields"), written from
 the rules and sharing no code with the VM. It decodes each document into the
 Patch struct of the fixture and writes one line of four fields joined by a tab:
@@ -78,7 +78,7 @@ ABSENT = object()
 
 
 def top_kind_ok(value, kind):
-    """The top kind check of a JsonField field, before its T is decoded."""
+    """The top kind check of a JSON.Field field, before its T is decoded."""
     if kind in EXPECTED:
         return scalar_kind_ok(value, kind)
     if isinstance(kind, tuple):

@@ -1,5 +1,5 @@
 ## The Types and Decodable sections of the .agcb (docs/vm/03-ir-and-bytecode.md 4.6): the field types of the structs
-## that JSON.decode may build, as a table of types in which a List, a Map from String, a JsonField, an Optional, a
+## that JSON.decode may build, as a table of types in which a List, a Map from String, a JSON.Field, an Optional, a
 ## struct and an enum name the entry of their item, and for each such struct the entries of its fields. The enums that
 ## JSON.decode may build go in a last section of the file (4.6), with the entries of the payloads of their variants.
 ##
@@ -91,8 +91,8 @@ export def build(program: Ir.Program, struct_index: Map[String, Int], enum_index
 end
 
 # The entry of a type, added after the entries of the types it is made of. An entry is its tag (0 Int, 1 Float, 2 Bool,
-# 3 String, 4 List, 5 Map from String, 6 struct, 7 JsonField, 8 Optional, 9 enum) and, for the last six, the number of
-# the item type, the struct, the type inside the JsonField or the Optional, or the enum.
+# 3 String, 4 List, 5 Map from String, 6 struct, 7 JSON.Field, 8 Optional, 9 enum) and, for the last six, the number of
+# the item type, the struct, the type inside the JSON.Field or the Optional, or the enum.
 def type_id(
   program: Ir.Program,
   struct_index: Map[String, Int],
@@ -116,7 +116,7 @@ def type_id(
       inner = try type_id(program, struct_index, enum_index, pool, value)
       ok(entry_of(inner.pool, 5, inner.id))
     Types.Type.Enum(name, args) ->
-      if name == "JsonField" and args.size == 1
+      if name == "JSON.Field" and args.size == 1
         inner = try type_id(program, struct_index, enum_index, pool, args[0])
         return ok(entry_of(inner.pool, 7, inner.id))
       end
@@ -145,13 +145,13 @@ end
 
 def unsupported(program: Ir.Program, message: String) -> String = Failure.internal(program, message)
 
-# The levels of List, Map, JsonField and Optional around a type.
+# The levels of List, Map, JSON.Field and Optional around a type.
 def nesting(type: Types.Type) -> Int
   case type
     Types.Type.List(item) -> 1 + nesting(item)
     Types.Type.Map(_, item) -> 1 + nesting(item)
     Types.Type.Enum(name, args) ->
-      return 1 + nesting(args[0]) if name == "JsonField"
+      return 1 + nesting(args[0]) if name == "JSON.Field"
 
       0
     Types.Type.Optional(item) -> 1 + nesting(item)
