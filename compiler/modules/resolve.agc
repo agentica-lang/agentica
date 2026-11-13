@@ -234,7 +234,7 @@ def family_member(cx: Context, family: String, member: String, want: Want, span:
     # A member called as a function is an unknown function for the checker, with the closest name.
     return ok(name)
   elsif function_wanted?(want) and own_functions?(family) and member_owners(family, member).size == 0
-    # File.reed: the checker gives the unknown function with the closest one (File.read).
+    # File.reed: the checker gives the unknown function, as for an unknown name of a builtin namespace.
     return ok(name)
   elsif type_wanted?(want) and Builtins.member_type?(family, member)
     return ok(name)
@@ -254,6 +254,8 @@ def member_function(cx: Context, parts: List[String], want: Want, span: Source.S
   return error(unknown_member(cx, parts[0], parts[1], span)) if !Builtins.member?(parts[0], parts[1])
 
   name = parts.join(".")
+  # File.Info.Foo as a type: the checker gives the unknown type, as for any name; only a group of functions has help.
+  return ok(name) if !function_wanted?(want) and Builtins.member_type?(parts[0], parts[1])
   return error(not_a_type(cx, name, "#{parts[0]}.#{parts[1]}", span)) if !function_wanted?(want)
 
   ok(name)

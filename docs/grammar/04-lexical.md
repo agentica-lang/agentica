@@ -83,11 +83,14 @@ variables, functions and struct fields.
 Reserved builtin names cannot be declared as functions, types, variables, import
 aliases or module names (`RESERVED_TYPE_NAMES` in
 `compiler/catalog/builtins_data.agc`): `ATS`, `Await`, `Base64`, `Bool`,
-`Bytes`, `Channel`, `Codec`, `Dir`, `Error`, `File`, `Float`, `Fn`, `IO`, `Int`,
-`JSON`, `Lazy`, `List`, `Map`, `Math`, `Nil`, `OpenSSL`, `Optional`, `Path`,
-`Process`, `Random`, `Range`, `Result`, `Set`, `String`, `StructMember`,
-`System`, `TCP`, `TLS`, `Task`, `TaskDown`, `TaskExit`, `TaskRef`, `Test`,
-`Time`, `Void` and `Zlib`. A builtin family reserves only its own name: its
+`Bytes`, `Channel`, `Codec`, `Dir`, `Error`, `File`, `FileInfo`, `Float`, `Fn`,
+`IO`, `Int`, `JSON`, `JsonField`, `Lazy`, `List`, `Map`, `Math`, `Nil`,
+`OpenSSL`, `Optional`, `Path`, `Process`, `ProcessOutput`, `Random`, `Range`,
+`Result`, `Set`, `String`, `StructMember`, `System`, `TCP`, `TLS`, `Task`,
+`TaskDown`, `TaskExit`, `TaskRef`, `Test`, `Time`, `Void` and `Zlib`
+(`FileInfo`, `JsonField` and `ProcessOutput`, the old names of `File.Info`,
+`JSON.Field` and `Process.Output`, until the VM no longer takes them for those
+types, #1491). A builtin family reserves only its own name: its
 members are written `Family.Member`, such as `OpenSSL.Cipher`, and its functions
 `Family.Member.fn`, such as `OpenSSL.Cipher.aes_256_gcm_encrypt` (§6, "Minimal
 builtin functions"), so `Cipher` or `Digest` inside a family reserve nothing.

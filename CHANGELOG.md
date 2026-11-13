@@ -37,12 +37,14 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   (`CC`, else `cc` found in `PATH`), and `BDD.given_program` on `PATH`: another
   compiler makes a new build.
 - **Breaking:** `Json` and `JsonField` are `JSON.Value` and `JSON.Field`
-  (#1182); the old names are unknown, and a program may take them. `inspect`
-  shows a JSON value as `<JSON.Value>`.
+  (#1182); the old names are unknown, a program may take `Json`, and
+  `JsonField` stays reserved for now. `inspect` shows a JSON value as
+  `<JSON.Value>`.
 - **Breaking:** `FileInfo` and `FileHandle` are `File.Info` and `File.Handle`
-  (#1182); the old names are unknown, and a program may take them.
+  (#1182); the old names are unknown, a program may take `FileHandle`, and
+  `FileInfo` stays reserved for now.
 - **Breaking:** `ProcessOutput` is `Process.Output` (#1182); the old name is
-  unknown, and a program may take it.
+  unknown and stays reserved for now.
 - **Breaking:** `Socket` and `Listener` are `TCP.Socket` and `TCP.Listener`
   (#1182); the old names are unknown, and a program may take them.
 - **Breaking:** `TlsContext`, `TlsClientOptions` and `TlsServerOptions` are
