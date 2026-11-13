@@ -74,6 +74,7 @@ help:
 	  'make vm-test             the C tests' \
 	  'make test [TESTS=...]    the fast Python tests' \
 	  'make test-slow           the slow Python tests (CI)' \
+	  'make probe TESTS=... [K=...] [TARGET=...] [PROGRAM=...] [REPEAT=N]  a few chosen checks (probe.yml)' \
 	  'make tests KIND=fast|files|slow|all [DOCKER=1|WINE=1]' \
 	  'make vm-tsan             the C tests of the shared-state code, under ThreadSanitizer' \
 	  'make goldens             rewrite the VM, CLI and front-end goldens' \

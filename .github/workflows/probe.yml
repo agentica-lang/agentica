@@ -1,0 +1,180 @@
+name: Probe
+
+# A fast, manual check of a branch on chosen systems: build dist/agentica once per system and run `make probe` (a few
+# test modules or node ids, a make target, an .agc program; tools/probe.py), instead of a debug commit and a whole
+# Platforms run. It runs the version of this file on the branch given with --ref:
+#
+#   gh workflow run probe.yml --ref BRANCH -f systems=macos-arm64 -f tests="tests/test_vm_bits.py"
+#
+# references/ci.md of the development skill ("Probe") has the other forms. The systems, runners, shells and make of
+# each come from tools/ci_systems.py, the table platforms.yml uses. The build and the test settings are those of a
+# Platforms job (the same linkage, AGENTICA_TEST_TIMEOUT_SCALE, AGENTICA_SWEEP=sampled), so a case that fails there
+# fails here, and the caches of Platforms are restored, never saved: a probe does not write them. Not a required check.
+on:
+  workflow_dispatch:
+    inputs:
+      systems:
+        description: 'Systems: names (linux-x86_64, linux-arm64, windows-x86_64, macos-x86_64, macos-arm64) or linux, windows, macos, all; comma separated'
+        type: string
+        default: macos-arm64
+      tests:
+        description: 'Test modules or pytest node ids, space separated (tests/test_x.py tests/test_y.py::test_z)'
+        type: string
+        default: ''
+      k:
+        description: A pytest -k expression for those tests
+        type: string
+        default: ''
+      target:
+        description: 'A make target and VAR=value words (vm-test, conformance-area/processes)'
+        type: string
+        default: ''
+      program:
+        description: An .agc file of the branch, run with dist/agentica
+        type: string
+        default: ''
+      repeat:
+        description: Run everything N times, stopping at the first round that fails
+        type: string
+        default: '1'
+      schedulers:
+        description: Scheduler count of every VM (empty is the default, one per core)
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+env:
+  AGENTICA_TEST_TIMEOUT_SCALE: '4'
+
+jobs:
+  # Checks the inputs before any runner builds: an unknown system or a malformed value fails here, in seconds.
+  systems:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.pick.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: |
+            tools/ci_systems.py
+            tools/probe.py
+          sparse-checkout-cone-mode: false
+      - id: pick
+        env:
+          SYSTEMS: ${{ inputs.systems }}
+          TESTS: ${{ inputs.tests }}
+          K: ${{ inputs.k }}
+          TARGET: ${{ inputs.target }}
+          PROGRAM: ${{ inputs.program }}
+          REPEAT: ${{ inputs.repeat }}
+          SCHEDULERS: ${{ inputs.schedulers }}
+        run: |
+          python3 tools/probe.py --check
+          python3 tools/ci_systems.py probe "$SYSTEMS" >> "$GITHUB_OUTPUT"
+
+  probe:
+    name: probe ${{ matrix.platform }}
+    needs: systems
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.systems.outputs.matrix) }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 40
+    env:
+      AGENTICA_REQUIRE_VM: '1'
+      AGENTICA_SWEEP: sampled
+      # The linkage of the Platforms job of this system (system libraries on Linux, vendored OpenSSL and zlib elsewhere).
+      AGENTICA_OPENSSL: ${{ startsWith(matrix.platform, 'linux-') && 'system' || 'vendored' }}
+      AGENTICA_ZLIB: ${{ startsWith(matrix.platform, 'linux-') && 'system' || 'vendored' }}
+      CCACHE_DIR: ${{ github.workspace }}/build/ccache
+      PYTHON: ${{ matrix.python }}
+      PLATFORM: ${{ matrix.platform }}
+      MAKE_COMMAND: ${{ matrix.make }}
+      # tools/probe.py stops the checks after this, so the upload below still runs before timeout-minutes.
+      PROBE_MINUTES: '30'
+    defaults:
+      run:
+        shell: ${{ matrix.shell }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: true
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - run: python3 -m pip install poetry==2.1.2 && poetry install --only test --no-root
+        if: runner.os != 'Windows'
+      - run: python -m pip install poetry==2.1.2
+        if: runner.os == 'Windows'
+        shell: pwsh
+      - run: poetry install --only test --no-root
+        if: runner.os == 'Windows'
+        shell: pwsh
+      - uses: ./.github/actions/msys2
+        if: runner.os == 'Windows'
+        with:
+          install: make perl mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-ccache mingw-w64-ucrt-x86_64-openssl mingw-w64-ucrt-x86_64-pkgconf
+      - name: Linux packages (system libgc and OpenSSL, ccache, libsqlite3-0), when the image lacks them
+        if: runner.os == 'Linux'
+        run: |
+          command -v pkg-config >/dev/null && pkg-config --atleast-version=3.0.0 openssl && pkg-config --atleast-version=8.2.0 bdw-gc && pkg-config --atleast-version=1.2.0 zlib || { sudo apt-get update && sudo apt-get install -y --no-install-recommends libssl-dev libgc-dev zlib1g-dev pkg-config; }
+          command -v ccache >/dev/null || { sudo apt-get update && sudo apt-get install -y --no-install-recommends ccache; }
+          dpkg -s libsqlite3-0 >/dev/null 2>&1 || { sudo apt-get update && sudo apt-get install -y --no-install-recommends libsqlite3-0; }
+      - if: runner.os == 'macOS'
+        run: brew install make ccache
+      # The caches of Platforms, restored only (a probe must not save a cache that a Platforms run then restores).
+      - run: mkdir -p build && make -s vm-third-party-key > build/native-deps-key
+      - if: env.AGENTICA_OPENSSL == 'vendored'
+        run: make -s vm-openssl-key > build/openssl-key-release
+      - if: env.AGENTICA_OPENSSL == 'vendored'
+        uses: actions/cache/restore@v6
+        with:
+          path: |
+            build/vm/release/openssl/include
+            build/vm/release/openssl/libssl.a
+            build/vm/release/openssl/libcrypto.a
+            build/vm/release/openssl-flags
+          key: openssl-release-${{ hashFiles('build/openssl-key-release') }}
+      - uses: actions/cache/restore@v6
+        with:
+          path: |
+            build/vm/release/uv
+            build/vm/release/libuv.a
+            build/vm/release/third-party-flags
+            build/vm/release/yyjson.o
+            build/vm/release/picohttpparser.o
+            build/vm/release/zlib
+            build/vm/release/libzlib.a
+            build/vm/gc.o
+            build/vm/gc-flags
+          key: native-deps-release-${{ hashFiles('build/native-deps-key') }}
+      - uses: actions/cache/restore@v6
+        with:
+          path: build/ccache
+          key: ccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Makefile', 'mk/*.mk', 'vm/**/*.c', 'vm/**/*.h') }}
+          restore-keys: ccache-${{ runner.os }}-${{ runner.arch }}-
+
+      - name: Build dist/agentica (make, the default goal)
+        run: '"$MAKE_COMMAND" -j4'
+      - name: make probe
+        env:
+          TESTS: ${{ inputs.tests }}
+          K: ${{ inputs.k }}
+          TARGET: ${{ inputs.target }}
+          PROGRAM: ${{ inputs.program }}
+          REPEAT: ${{ inputs.repeat }}
+          SCHEDULERS: ${{ inputs.schedulers }}
+        run: '"$MAKE_COMMAND" probe'
+      - if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: probe-${{ matrix.platform }}
+          path: build/probe/
+          if-no-files-found: ignore
+          retention-days: 7
