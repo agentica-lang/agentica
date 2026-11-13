@@ -25,5 +25,3 @@ def suggestions(file: String, decl: Ast.Decl) -> List[Problems.Problem]
     _ -> []
   end
 end
-
-private

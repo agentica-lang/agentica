@@ -38,5 +38,3 @@ def intern(pool: Pool, key: String, bytes: List[Int]) -> Interned
 
   Interned(pool: add(pool, key, bytes, 1), id: pool.count)
 end
-
-private

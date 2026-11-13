@@ -22,5 +22,3 @@ def printed(text: String) -> Reply = Reply(code: 0, out: text, err: "")
 
 ## A failure with `code`, and `text` on stderr.
 def failed(code: Int, text: String) -> Reply = Reply(code: code, out: "", err: text)
-
-private

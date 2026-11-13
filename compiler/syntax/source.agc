@@ -17,5 +17,3 @@ end
 def position(offset: Int, line: Int, line_start: Int) -> Position
   Position(offset: offset, line: line, column: offset - line_start + 1)
 end
-
-private

@@ -37,5 +37,3 @@ def folder(root: String, source: GitSource.Source, commit: String) -> String
 
   Paths.join(Paths.join(root, GitSource.cache_path(source.git)), name)
 end
-
-private

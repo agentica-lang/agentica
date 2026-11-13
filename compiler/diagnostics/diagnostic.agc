@@ -26,5 +26,3 @@ end
 def fail(code: String, message: String, span: Source.Span, help: Help) -> Diagnostic
   Diagnostic(code: code, message: message, span: span, help: help)
 end
-
-private
