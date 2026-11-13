@@ -1,7 +1,8 @@
-## The rules of `agentica lint`: each is a suggestion from the style guide (site/content/style.md) that the syntax tree
-## shows without types, with a stable LINT- code. The rules read the catalog of builtins as data (a builtin is no step
-## of a pipe), never the checker. A suggestion is a Problem, so it prints and serializes as any
-## diagnostic does, but it never means the program is wrong: `agentica check` owns what is always a mistake.
+## The rules of `agentica lint`: each is a suggestion from the style guide (site/content/style.md), or a likely typo,
+## that the syntax tree shows without types, with a stable LINT- code. The rules read the catalog of builtins as data
+## (a builtin is no step of a pipe, a kind is in ERROR_KINDS), never the checker. A suggestion is a Problem, so it
+## prints and serializes as any diagnostic does, but it never means the program is wrong: `agentica check` owns what is
+## always a mistake.
 
 import Diag from "../diagnostics/diagnostic"
 import Problems from "../diagnostics/problem"
@@ -81,6 +82,13 @@ export REPEATED_NAME = Rule(
   code: "LINT-REPEATED-QUALIFIED-NAME",
   message: "a qualified name is written many times",
   help: "import the type by name",
+)
+
+## An is_a? literal in a builtin family that names no kind of it. The message and the help are set per literal.
+export ERROR_KIND = Rule(
+  code: "LINT-ERROR-KIND",
+  message: "this is not a kind of a builtin family",
+  help: "use a kind that the family has",
 )
 
 ## One rule: its code, what it says and how to write it instead. The message and the help may be replaced (`with`) by a

@@ -15,6 +15,7 @@ import Lexer from "../syntax/lexer"
 import Parser from "../syntax/parser"
 import Decls from "rule_decl"
 import Exprs from "rule_expr"
+import Kinds from "rule_kind"
 import Qualified from "rule_qualified"
 import Stmts from "rule_stmt"
 import Shape from "shape"
@@ -170,7 +171,8 @@ def suggestions(
   functions: Set[String],
 ) -> List[Problems.Problem]
   case item.node
-    Walk.Node.Expr(expr) -> Exprs.suggestions(file, expr, item.chained, aliases, functions)
+    Walk.Node.Expr(expr) ->
+      Exprs.suggestions(file, expr, item.chained, aliases, functions).concat(Kinds.suggestions(file, expr, functions))
     Walk.Node.Stmt(stmt) -> Stmts.suggestions(file, stmt, item.path, locals)
   end
 end

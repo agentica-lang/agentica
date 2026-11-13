@@ -41,6 +41,7 @@ def helper(flag: Bool, text: String, n: Int) -> String
     out = "many"
   end
 
+  missing = err.is_a?("io.notfound")
   return out
 end
 ''' + "".join(f'\nexport def make{i}() -> Db.Value\n  return Db.Value.Text("a")\nend\n' for i in range(20))
@@ -180,6 +181,7 @@ def test_every_rule_reports_its_code_at_its_place(tmp_path):
         "LINT-NEGATED-ELSE": [where(BAD, "not flag")],
         "LINT-IF-CHAIN": [where(BAD, "n == 1")],
         "LINT-REPEATED-QUALIFIED-NAME": [where(BAD, "Db.Value", nth=2)],
+        "LINT-ERROR-KIND": [where(BAD, '"io.notfound"')],
     }
 
 
@@ -508,3 +510,48 @@ def test_a_function_imported_by_name_counts_as_a_function_of_the_file(tmp_path):
         assert [(s["code"], start(s)) for s in found] == [("LINT-SINGLE-PIPE", where(source, call))]
         helps.append(found[0]["help"])
     assert helps[0] == helps[1] == helps[2]
+
+
+# Each is_a? form with its literal, and whether LINT-ERROR-KIND marks the literal: a builtin family (of a C kind or a
+# std/ kind) takes the family and its kinds only; a library's family, a computed kind and the default kind are quiet.
+KIND_CASES = [
+    ('e.is_a?("io.notfound")', True),
+    ('e.kind_of?("net.timeot")', True),
+    ('Error.is_a?(e, "toml.prase")', True),
+    ('e.is_a?("error.other")', True),
+    ('e.is_a?("io")', False),
+    ('e.is_a?("io.not_found")', False),
+    ('e.is_a?("http.too_large")', False),
+    ('e.is_a?("archive.unsafe")', False),
+    ('e.kind_of?("option_parser.help")', False),
+    ('e.is_a?("error")', False),
+    ('e.is_a?("db.constraint")', False),
+    ('e.is_a?(name)', False),
+    ('e.is_a?("io.#{name}")', False),
+    ('e.include?("io.notfound")', False),
+]
+
+
+@pytest.mark.parametrize(("call", "marked"), KIND_CASES)
+def test_an_is_a_literal_of_a_builtin_family_must_name_one_of_its_kinds(tmp_path, call, marked):
+    source = f"def f(e: Error, name: String) -> Bool\n  {call}\nend\n"
+    literal = call[call.index('"'):call.rindex('"') + 1] if '"' in call else ""
+    expected = {"LINT-ERROR-KIND": [where(source, literal)]} if marked else {}
+    assert suggested(tmp_path / "kind.agc", source) == expected
+
+
+def test_the_kind_help_is_the_nearest_kind_or_the_kinds_of_the_family(tmp_path):
+    source = 'def f(e: Error) -> List[Bool]\n  [e.is_a?("io.notfound"), e.is_a?("io.zzzzzzzz")]\nend\n'
+    path = tmp_path / "help.agc"
+    path.write_text(source, encoding="utf-8")
+    found = report(lint_json(path.name, cwd=tmp_path), 0)["files"][0]["suggestions"]
+    assert [(s["code"], start(s), end(s)) for s in found] == [
+        ("LINT-ERROR-KIND", where(source, '"io.notfound"'), where(source, '), e.is_a')),
+        ("LINT-ERROR-KIND", where(source, '"io.zzzzzzzz"'), where(source, ')]')),
+    ]
+    assert found[0]["help"] != found[1]["help"]
+
+
+def test_a_file_that_defines_is_a_keeps_its_own_method(tmp_path):
+    source = 'def is_a?(box: Int, label: String) -> Bool = true\n\ndef f(n: Int) -> Bool\n  n.is_a?("io.x")\nend\n'
+    assert suggested(tmp_path / "own.agc", source) == {}
