@@ -372,10 +372,8 @@ jobs:
       - if: ${{ !cancelled() }}
         run: make dup-check
 
-  # cchecker (project rules for C, gcc -fanalyzer and clang-tidy over vm/) against cchecker-baseline.json. Until Agentica 0.31.0
-  # final it runs on a released Agentica (CCHECKER_AGENTICA_VERSION in mk/vm-test.mk), not on the dist/agentica of `build`, so a
-  # language change does not break it (https://github.com/agentica-lang/agentica/issues/1490); `build` gives the files the compile
-  # database needs. A new finding, a stale ignore or a tool error fails it, and `test` needs it. The analyzers word
+  # cchecker (project rules for C, gcc -fanalyzer and clang-tidy over vm/) against cchecker-baseline.json, run by the dist/agentica
+  # of `build`, which also gives the files the compile database needs. A new finding, a stale ignore or a tool error fails it, and `test` needs it. The analyzers word
   # their messages differently between versions and the baseline matches by message, so the job pins the versions it was
   # made with (gcc 14, clang and clang-tidy 19).
   cchecker:
@@ -415,25 +413,6 @@ jobs:
             if [ "$try" -lt 3 ]; then sleep 15; fi
           done
           echo "::error::could not clone cchecker; see the git messages above"
-          exit 1
-      # The pinned release of Agentica that runs cchecker, from GitHub and checked against its SHA256SUMS, with the same tries
-      # as the clone. A sum that does not match is no network failure: it fails at once.
-      - name: Download the pinned Agentica (CCHECKER_AGENTICA_VERSION, checked against the SHA256SUMS of the release)
-        id: agentica
-        run: |
-          for try in 1 2 3; do
-            if out=$(timeout -k 10 120 make -s cchecker-agentica 2>&1); then
-              exit 0
-            fi
-            printf '%s\n' "$out"
-            if printf '%s\n' "$out" | grep -q 'does not match the SHA256SUMS'; then
-              echo "::error::the Agentica archive does not match the SHA256SUMS of its release"
-              exit 1
-            fi
-            echo "::warning::Agentica download failed (try $try of 3)"
-            if [ "$try" -lt 3 ]; then sleep 15; fi
-          done
-          echo "::error::could not download Agentica; see the messages above"
           exit 1
       # --json prints one object (the new findings, the counts of the baselined and the fixed ones, the tool errors, the files
       # that were not checked); the next steps print it as lines and keep it as an artifact, which is what refreshing the
