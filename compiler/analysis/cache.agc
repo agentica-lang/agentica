@@ -26,10 +26,8 @@ import Linker from "../modules/linker"
 import Modules from "../modules/modules"
 import Ast from "../syntax/ast"
 
-MAX_ROOTS = 16
-
 ## The last program of a root that checked: the modules it was made from, their shapes by key, and the result.
-export struct Good
+struct Good
   loaded: Modules.Loaded
   shapes: Map[String, String]
   earlier: Checker.Earlier
@@ -42,7 +40,7 @@ end
 ## outside the accounting of `pruned` and `crowded?`. `style` is the first style problem of the program when it
 ## checked (Front.style_problem): it depends on the texts and on which modules ask for a rule, and the fingerprint has
 ## both, so a hit reuses it and does not lex the modules again. It is `none` when the program did not check.
-export struct Root
+struct Root
   loaded: Modules.Loaded
   fingerprint: String
   linked: Linker.Linked
@@ -56,7 +54,7 @@ end
 ## the roots that `refresh` linked and checked, `parsed` the files it lexed and parsed, and `reused` the modules that
 ## it did not check again because they and what they import were unchanged, as the checker took them (a test reads
 ## them to see what a refresh reused).
-export struct Cache
+struct Cache
   roots: Map[String, Root]
   parses: Modules.Parses
   clock: Int
@@ -66,16 +64,16 @@ export struct Cache
 end
 
 ## Whether the cache holds the checked program of a walk.
-export enum Found
+enum Found
   Hit(Root)
   Miss
 end
 
 ## A cache that holds nothing.
-export def empty() -> Cache = Cache(roots: {}, parses: Modules.no_parses(), clock: 0, checks: 0, parsed: 0, reused: 0)
+def empty() -> Cache = Cache(roots: {}, parses: Modules.no_parses(), clock: 0, checks: 0, parsed: 0, reused: 0)
 
 ## The root that was made from the modules of `loaded` with their texts, if the cache has it.
-export def find(cache: Cache, loaded: Modules.Loaded) -> Found
+def find(cache: Cache, loaded: Modules.Loaded) -> Found
   key = loaded.order[0]
   return Found.Miss if !cache.roots.has_key?(key)
 
@@ -87,7 +85,7 @@ end
 
 ## The root of a program that `loaded` gave and that linked and checked, or failed to check. `before` is the root that
 ## the cache held for the file, if any, whose last good program stays when this one does not check.
-export def solved(
+def solved(
   loaded: Modules.Loaded,
   linked: Linker.Linked,
   checking: Checker.Checking,
@@ -120,10 +118,10 @@ export def solved(
 end
 
 ## The root that the cache holds for the file that `loaded` starts from.
-export def held(cache: Cache, loaded: Modules.Loaded) -> Optional[Root] = root_of(cache, loaded.order[0])
+def held(cache: Cache, loaded: Modules.Loaded) -> Optional[Root] = root_of(cache, loaded.order[0])
 
 ## The root that the cache holds for the file with the canonical key `key`.
-export def root_of(cache: Cache, key: String) -> Optional[Root]
+def root_of(cache: Cache, key: String) -> Optional[Root]
   return some(cache.roots[key]) if cache.roots.has_key?(key)
 
   none
@@ -132,7 +130,7 @@ end
 ## A cache that holds `root` and the files it was made from, and nothing else. Their ids do not overlap, since one
 ## program gave them all, so it is a line of its own: a root of another cache can be put in a new cache this way and no
 ## cache has to be merged with another.
-export def alone(root: Root) -> Cache
+def alone(root: Root) -> Cache
   # The counters (checks, parsed, reused) restart at 0 on purpose: they count the work of one session's refreshes.
   start = reaching(empty(), root.loaded)
   start.with(roots: {root.loaded.order[0]: root.with(used: 1)}, clock: 1)
@@ -140,7 +138,7 @@ end
 
 ## What the checker may take from the last good program of the root of `loaded`, when some of its modules are
 ## unchanged since.
-export def reusing(cache: Cache, loaded: Modules.Loaded) -> Optional[Checker.Reusing]
+def reusing(cache: Cache, loaded: Modules.Loaded) -> Optional[Checker.Reusing]
   case held(cache, loaded)
     none -> none
     some(root) ->
@@ -158,7 +156,7 @@ export def reusing(cache: Cache, loaded: Modules.Loaded) -> Optional[Checker.Reu
 end
 
 ## `cache` with the files of `loaded` among the parsed ones.
-export def reaching(cache: Cache, loaded: Modules.Loaded) -> Cache
+def reaching(cache: Cache, loaded: Modules.Loaded) -> Cache
   kept = cache.parses.kept
   top = cache.parses.top
   for key in loaded.order
@@ -179,12 +177,10 @@ end
 
 ## `cache` with no parsed file but those of `loaded`, which was parsed from id 0: the ids of the other files may
 ## overlap its own now.
-export def restart(cache: Cache, loaded: Modules.Loaded) -> Cache
-  reaching(cache.with(parses: Modules.no_parses()), loaded)
-end
+def restart(cache: Cache, loaded: Modules.Loaded) -> Cache = reaching(cache.with(parses: Modules.no_parses()), loaded)
 
 ## Whether the highest id in use is above twice the ids that the parsed files hold.
-export def crowded?(cache: Cache) -> Bool
+def crowded?(cache: Cache) -> Bool
   live = 0
   for file in cache.parses.kept.values
     live += Ast.next_free_id(file.program) - file.first_id
@@ -196,7 +192,7 @@ end
 ## `cache` with `root` as the root that `loaded` made, the latest used. Roots over the limit and the files that no root
 ## reaches are dropped. `computed` is true when `root` was linked and checked for this call, and `reused` is the number
 ## of modules it did not check again.
-export def remember(cache: Cache, root: Root, loaded: Modules.Loaded, computed: Bool, reused: Int) -> Cache
+def remember(cache: Cache, root: Root, loaded: Modules.Loaded, computed: Bool, reused: Int) -> Cache
   clock = cache.clock + 1
   roots = trimmed(cache.roots.put(loaded.order[0], root.with(used: clock)))
   pruned(
@@ -209,6 +205,10 @@ export def remember(cache: Cache, root: Root, loaded: Modules.Loaded, computed: 
     ),
   )
 end
+
+private
+
+MAX_ROOTS = 16
 
 def counted(count: Int, one: Bool) -> Int
   return count + 1 if one

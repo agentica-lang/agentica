@@ -7,22 +7,9 @@
 ## and inline tables nest at most 256 levels, and a key (a header or a dotted key) has at most 256 parts; a deeper
 ## input is an error at the opening bracket or the key.
 
-# Bits of the class table, indexed by code point (0 .. 127; other code points have none).
-#   1 digit   2 bare-key character   4 hex digit   8 number character (digit, letter, _ . + -)
-#   16 control character that TOML forbids in strings and comments (tab and LF are not)
-#   32 ends a run of plain string characters (quote, apostrophe, backslash, LF)
-# A literal, so a parse does not build it again (#1471).
-CLASS_TABLE = [
-  16, 16, 16, 16, 16, 16, 16, 16, 16, 0, 32, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16,
-  16, 16, 16, 0, 0, 32, 0, 0, 0, 0, 32, 0, 0, 0, 8, 0, 10, 8, 0, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 0, 0, 0, 0, 0,
-  0, 0, 14, 14, 14, 14, 14, 14, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 0, 32,
-  0, 0, 10, 0, 14, 14, 14, 14, 14, 14, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
-  0, 0, 0, 0, 16,
-]
-
 ## A TOML value. The root of a document is always a `Table`.
 ## A `Map` keeps the order its keys were first written in, so `encode` is deterministic.
-export enum Value
+enum Value
   ## A string of any kind (basic, literal, multi-line).
   Str(String)
   ## A 64-bit integer. A value outside the signed 64-bit range is a parse error.
@@ -40,58 +27,10 @@ export enum Value
   Table(Map[String, Value])
 end
 
-# How a table came to exist. A table can be opened by a `[header]` only while it is Implicit
-# (made on the way to a deeper header). Dotted keys fix the shape of what they build.
-enum Origin
-  Implicit
-  Header
-  Dotted
-end
-
-# The tree built while reading. Unlike Value it knows which tables may still be extended:
-# a Leaf (a scalar, a static array, an inline table) is sealed, and Rows is an array of tables
-# whose last element is the one that later headers and keys extend.
-enum Node
-  Leaf(Value)
-  Tab(Tbl)
-  Rows(List[Node])
-end
-
-# `stamp` is the number of the section ([header]) that built a Dotted table: only that section
-# may add more keys to it.
-struct Tbl
-  entries: Map[String, Node]
-  origin: Origin
-  stamp: Int
-end
-
-# The input as code points, with a class table (see CLASS_TABLE) for fast tests.
-struct Src
-  text: String
-  codes: List[Int]
-  n: Int
-  cls: List[Int]
-end
-
-struct Parsed
-  value: Value
-  pos: Int
-end
-
-struct Scan
-  text: String
-  pos: Int
-end
-
-struct Key
-  parts: List[String]
-  pos: Int
-end
-
 ## Reads a TOML document. Returns the root `Value.Table`, or an error that starts with `line L, column C: `.
 ## It checks all of TOML 1.0: a duplicate key, a table defined twice, extending an inline table or a static array, and
 ## a bad escape, number or date are errors. A CRLF line ending counts as one LF, also inside multi-line strings.
-export def parse(text: String) -> Result[Value]
+def parse(text: String) -> Result[Value]
   src = make_src(text)
   root = Node.Tab(empty_tbl(Origin.Header, 0))
   header: List[String] = []
@@ -152,7 +91,7 @@ end
 ## but the keys of a Map may be regrouped (plain entries first, then sub-tables, then arrays of tables). A table path
 ## of more than 256 parts or an inline value nested more than 256 levels is an error (the reader refuses such text), so
 ## the text that `encode` writes can always be read back. No value halts the function.
-export def encode(value: Value) -> Result[String]
+def encode(value: Value) -> Result[String]
   case value
     Value.Table(entries) ->
       lines = try emit_table(entries, [], [], CLASS_TABLE)
@@ -166,12 +105,12 @@ end
 ## string. An `inf` or `nan` float is an error, since `JSON.Value` cannot hold it. An integer stays an integer and a
 ## float stays a float (`1.0` is not `1`). A value nested more than 2,048 levels (no document `parse` reads is that
 ## deep) is an error, not a halt.
-export def to_json(value: Value) -> Result[JSON.Value] = json_of(value, 0)
+def to_json(value: Value) -> Result[JSON.Value] = json_of(value, 0)
 
 ## Looks up a value by a dotted path of keys: `Toml.get(doc, "package.name")`. A segment of plain ASCII digits without
 ## a leading zero also indexes an array (`"bin.0.path"`). Returns an error that names the missing key. A key that holds
 ## a dot cannot be reached this way: use `case` on the `Table`.
-export def get(value: Value, path: String) -> Result[Value]
+def get(value: Value, path: String) -> Result[Value]
   current = value
   for part in path.split(".")
     case current
@@ -188,6 +127,69 @@ export def get(value: Value, path: String) -> Result[Value]
     end
   end
   ok(current)
+end
+
+private
+
+# Bits of the class table, indexed by code point (0 .. 127; other code points have none).
+#   1 digit   2 bare-key character   4 hex digit   8 number character (digit, letter, _ . + -)
+#   16 control character that TOML forbids in strings and comments (tab and LF are not)
+#   32 ends a run of plain string characters (quote, apostrophe, backslash, LF)
+# A literal, so a parse does not build it again (#1471).
+CLASS_TABLE = [
+  16, 16, 16, 16, 16, 16, 16, 16, 16, 0, 32, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16,
+  16, 16, 16, 0, 0, 32, 0, 0, 0, 0, 32, 0, 0, 0, 8, 0, 10, 8, 0, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 0, 0, 0, 0, 0,
+  0, 0, 14, 14, 14, 14, 14, 14, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 0, 32,
+  0, 0, 10, 0, 14, 14, 14, 14, 14, 14, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
+  0, 0, 0, 0, 16,
+]
+
+# How a table came to exist. A table can be opened by a `[header]` only while it is Implicit
+# (made on the way to a deeper header). Dotted keys fix the shape of what they build.
+enum Origin
+  Implicit
+  Header
+  Dotted
+end
+
+# The tree built while reading. Unlike Value it knows which tables may still be extended:
+# a Leaf (a scalar, a static array, an inline table) is sealed, and Rows is an array of tables
+# whose last element is the one that later headers and keys extend.
+enum Node
+  Leaf(Value)
+  Tab(Tbl)
+  Rows(List[Node])
+end
+
+# `stamp` is the number of the section ([header]) that built a Dotted table: only that section
+# may add more keys to it.
+struct Tbl
+  entries: Map[String, Node]
+  origin: Origin
+  stamp: Int
+end
+
+# The input as code points, with a class table (see CLASS_TABLE) for fast tests.
+struct Src
+  text: String
+  codes: List[Int]
+  n: Int
+  cls: List[Int]
+end
+
+struct Parsed
+  value: Value
+  pos: Int
+end
+
+struct Scan
+  text: String
+  pos: Int
+end
+
+struct Key
+  parts: List[String]
+  pos: Int
 end
 
 # A plain run of ASCII digits without a leading zero (`0`, `7`, `12`): not `01`, `+1` or `-0`.

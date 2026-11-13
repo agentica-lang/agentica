@@ -7,11 +7,8 @@ import Source from "../syntax/source"
 import Walk from "../syntax/ast_walk"
 import Rules from "rules"
 
-# How many times a file writes the same qualified name before importing it by name pays.
-LIMIT = 20
-
 ## One use of an alias-qualified type name, such as `Db.Value`, and where it is.
-export struct Mention
+struct Mention
   name: String
   span: Source.Span
 end
@@ -19,7 +16,7 @@ end
 ## The qualified type names that the node writes: a variant or struct built, a variant in a pattern and a type name
 ## in an expression. A name with no `.` has no alias and is not a mention. A local enum variant (`Answer.SignedOut`)
 ## has a `.` too; `suggestions` drops it, as its first part is not an import alias.
-export def mentions(node: Walk.Node) -> List[Mention]
+def mentions(node: Walk.Node) -> List[Mention]
   case node
     Walk.Node.Expr(expr) -> of_expr(expr)
     Walk.Node.Stmt(stmt) -> of_stmt(stmt)
@@ -29,7 +26,7 @@ end
 ## One suggestion for each qualified name that `found` holds `LIMIT` times or more, at the first place it is written.
 ## Only a name whose first part is the alias of an import counts: that is the only name that importing by name
 ## shortens, and `imports` then give the path for the help.
-export def suggestions(file: String, found: List[Mention], imports: List[Ast.ImportDecl]) -> List[Problems.Problem]
+def suggestions(file: String, found: List[Mention], imports: List[Ast.ImportDecl]) -> List[Problems.Problem]
   counts: Map[String, Int] = {}
   firsts: Map[String, Source.Span] = {}
   aliases = alias_names(imports)
@@ -53,6 +50,11 @@ export def suggestions(file: String, found: List[Mention], imports: List[Ast.Imp
 
   out
 end
+
+private
+
+# How many times a file writes the same qualified name before importing it by name pays.
+LIMIT = 20
 
 def alias_names(imports: List[Ast.ImportDecl]) -> Set[String]
   names: Set[String] = Set.new([])

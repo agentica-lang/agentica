@@ -9,13 +9,10 @@ import Ast from "../syntax/ast"
 import Types from "../syntax/types"
 import State from "check_state"
 
-# The default that only a parameter takes (check_value).
-EMPTY_STRUCT = "a struct with no arguments"
-
 ## CHECK-DEFAULT-ORDER at the first parameter without a default that follows a parameter with one, unless it is the
 ## last and an Fn (the block of a call goes to it), and CHECK-DEFAULT-VALUE at the first default that is not a
 ## constant. Parameters are read in order, so the first problem found is the leftmost.
-export def check_parameters(cx: State.Cx, st: State.St, node: Ast.FunctionDecl) -> Result[Bool]
+def check_parameters(cx: State.Cx, st: State.St, node: Ast.FunctionDecl) -> Result[Bool]
   seen = false
   index = 0
   while index < node.params.size
@@ -38,7 +35,7 @@ end
 
 ## Checks the default of each parameter against the parameter's type, in order. The types are recorded by node id, and
 ## the lowering reads them when it copies a default to a call site.
-export def check_types(cx: State.Cx, st: State.St, node: Ast.FunctionDecl, types: List[Types.Type]) -> Result[State.St]
+def check_types(cx: State.Cx, st: State.St, node: Ast.FunctionDecl, types: List[Types.Type]) -> Result[State.St]
   current = st
   index = 0
   while index < node.params.size
@@ -56,7 +53,7 @@ export def check_types(cx: State.Cx, st: State.St, node: Ast.FunctionDecl, types
 end
 
 ## CHECK-DEFAULT-VALUE at the first field default that is not a constant.
-export def check_field_value(cx: State.Cx, st: State.St, field: Ast.FieldDecl) -> Result[Bool]
+def check_field_value(cx: State.Cx, st: State.St, field: Ast.FieldDecl) -> Result[Bool]
   case field.default
     some(value) -> check_value(cx, st, value, false, "remove the default")
     none -> ok(true)
@@ -65,7 +62,7 @@ end
 
 ## Checks the default of each field of a registered struct against the field's type, in order, and records the types
 ## by node id like check_types.
-export def check_field_types(cx: State.Cx, st: State.St, node: Ast.StructDecl) -> Result[State.St]
+def check_field_types(cx: State.Cx, st: State.St, node: Ast.StructDecl) -> Result[State.St]
   types = cx.structs[node.name].map do |field: Model.Named| field.type end
   current = st
   index = 0
@@ -82,6 +79,11 @@ export def check_field_types(cx: State.Cx, st: State.St, node: Ast.StructDecl) -
 
   ok(current)
 end
+
+private
+
+# The default that only a parameter takes (check_value).
+EMPTY_STRUCT = "a struct with no arguments"
 
 def order_failure(cx: State.Cx, st: State.St, param: Ast.Param) -> String
   State.fail_help(

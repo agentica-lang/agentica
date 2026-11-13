@@ -12,7 +12,7 @@ import {INT_MIN, INT_MIN_DIGITS} from "lower_tables"
 ## linked name of every non-literal constant that an emitted function reads to its slot of the Globals table, numbered
 ## in initialization order, so its size is the Globals count. literals maps the constants whose initializer is one
 ## scalar literal to its value.
-export struct Plan
+struct Plan
   kept: List[Ast.ConstDecl]
   slots: Map[String, Int]
   literals: Map[String, Ir.Imm]
@@ -23,7 +23,7 @@ end
 ## non-literal constant that any emitted function reads, reachable or not, so the code of an unreachable function still
 ## loads. functions and constants are the declarations in program order, with the scan of each body; order is the
 ## initialization order of the constants (their linked names).
-export def plan(
+def plan(
   functions: List[Ast.FunctionDecl],
   function_scans: List[Scans.Scan],
   constants: List[Ast.ConstDecl],
@@ -78,7 +78,7 @@ end
 
 ## The value of a scalar literal initializer: one literal, or `-` and a number literal. `none` for any other
 ## initializer.
-export def literal_value(value: Ast.Expr) -> Optional[Ir.Imm]
+def literal_value(value: Ast.Expr) -> Optional[Ir.Imm]
   case value
     Ast.Expr.Literal(node) -> plain(node.value)
     Ast.Expr.Unary(node) ->
@@ -99,7 +99,7 @@ end
 ## read of the constant, which a constant built after the call could not give. The spans become the one of the name,
 ## because the instructions belong to the file of the default, and the node ids stay the ones of the value, which the
 ## checker typed. Any other default is as written.
-export def in_place(default: Ast.Expr, values: Map[String, Ast.Expr]) -> Ast.Expr
+def in_place(default: Ast.Expr, values: Map[String, Ast.Expr]) -> Ast.Expr
   case default
     Ast.Expr.ConstRef(node) ->
       found = values.get(node.name)
@@ -110,6 +110,8 @@ export def in_place(default: Ast.Expr, values: Map[String, Ast.Expr]) -> Ast.Exp
     _ -> default
   end
 end
+
+private
 
 # The names of the constants to build: those the reachable functions read and, to a fixed point, those the kept
 # constants read and those the functions their initializers call read.

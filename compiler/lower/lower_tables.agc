@@ -3,14 +3,14 @@
 
 ## The builtins that lowering writes with no builtin of their own (lower_codec): the methods of a codec, which call
 ## JSON.decode, JSON.encode and JSON.from with other arguments than theirs, or read a field of the codec record.
-export CODEC_BUILTINS = Set.new(["Codec.decode", "Codec.encode", "Codec.from", "Codec.members"])
+CODEC_BUILTINS = Set.new(["Codec.decode", "Codec.encode", "Codec.from", "Codec.members"])
 
 ## The fields of the Codec.Info record that T.codec builds (builtins_data.agc), by position.
-export CODEC_NAME = 0
-export CODEC_MEMBERS = 1
+CODEC_NAME = 0
+CODEC_MEMBERS = 1
 
 ## The `implementation` names of the builtins the VM has. A call of any other builtin is LOWER-UNSUPPORTED.
-export VM_BUILTINS = Set.new([
+VM_BUILTINS = Set.new([
   "puts", "IO.print", "IO.warn", "IO.inspect", "IO.gets", "IO.gets!", "IO.read", "IO.read_bytes.bytes", "IO.flush",
   "IO.eof?", "System.args", "System.exit", "System.env", "System.os", "System.pid", "String.from_int",
   "String.from_float", "ok", "error", "Result.ok?", "Result.unwrap!", "Result.unwrap_or", "Result.message", "List.map",
@@ -86,16 +86,16 @@ export VM_BUILTINS = Set.new([
 
 ## The instruction of an operator on two Ints, by the token kind of the operator. `>` and `>=` use the instruction of
 ## `<` and `<=` with the operands swapped.
-export INT_OPS: Map[String, String] = {
+INT_OPS: Map[String, String] = {
   "plus": "add-i", "minus": "sub-i", "multiply": "mul-i", "divide": "div-i", "modulo": "mod-i", "less": "lt-i",
   "less-equal": "le-i", "greater": "lt-i", "greater-equal": "le-i",
 }
 
 ## The operators on two Strings: only `+` (`String * Int` is the builtin String.multiply, lower_expr.agc).
-export STRING_OPS: Map[String, String] = {"plus": "concat"}
+STRING_OPS: Map[String, String] = {"plus": "concat"}
 
 ## The same for two Floats.
-export FLOAT_OPS: Map[String, String] = {
+FLOAT_OPS: Map[String, String] = {
   "plus": "add-f", "minus": "sub-f", "multiply": "mul-f", "divide": "div-f", "less": "lt-f", "less-equal": "le-f",
   "greater": "lt-f", "greater-equal": "le-f",
 }
@@ -103,10 +103,10 @@ export FLOAT_OPS: Map[String, String] = {
 ## The builtins that take a type of an extern block as a string: a type name argument lowers to the layout code of its
 ## C struct, or to the signature of its callback (Native.callback), and Native.put_struct gets the layout of its
 ## value's struct as one more argument (lower_expr.agc).
-export NATIVE_LAYOUTS = Set.new(["Native.size_of", "Native.get_struct", "Native.put_struct", "Native.callback"])
+NATIVE_LAYOUTS = Set.new(["Native.size_of", "Native.get_struct", "Native.put_struct", "Native.callback"])
 
 ## The builtin records the VM can build as structs, in the order the struct table lists the ones a program uses.
-export BUILTIN_STRUCTS = [
+BUILTIN_STRUCTS = [
   "File.Info", "HttpWire.Header", "HttpWire.Request", "HttpWire.Response", "HttpWire.ClientOptions",
   "HttpWire.ServerOptions", "Process.Output", "LogRegistry.Event", "HttpWire.Head", "HttpWire.Chunk", "HttpWire.Reply",
   "HttpWire.Job", "HttpWire.ResponseHead", "StructMember", "Codec.Info", "TLS.ClientOptions", "TLS.ServerOptions",
@@ -114,7 +114,7 @@ export BUILTIN_STRUCTS = [
 ]
 
 ## The builtin structs that another one has a field of: using the key also puts these in the table.
-export STRUCT_NEEDS: Map[String, List[String]] = {
+STRUCT_NEEDS: Map[String, List[String]] = {
   "HttpWire.Response": ["HttpWire.Header"],
   "HttpWire.Request": ["HttpWire.Header"],
   "HttpWire.Head": ["HttpWire.Header"],
@@ -125,10 +125,12 @@ export STRUCT_NEEDS: Map[String, List[String]] = {
 
 ## The most items one `list` instruction gathers and the most entries one `map` instruction gathers; larger literals
 ## are built in chunks.
-export MAX_CHUNK = 255
+MAX_CHUNK = 255
 
 ## The smallest and largest Int, and the digits of the first (a literal `9223372036854775808` is the digits of an Int
 ## that does not fit).
-export INT_MIN = -9_223_372_036_854_775_807 - 1
-export INT_MAX = 9_223_372_036_854_775_807
-export INT_MIN_DIGITS = "9223372036854775808"
+INT_MIN = -9_223_372_036_854_775_807 - 1
+INT_MAX = 9_223_372_036_854_775_807
+INT_MIN_DIGITS = "9223372036854775808"
+
+private

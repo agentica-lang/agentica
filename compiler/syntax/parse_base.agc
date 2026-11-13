@@ -13,23 +13,14 @@ import Source from "source"
 import Tokens from "token"
 import Unicode from "unicode"
 
-LITERAL_KINDS = Set.new(["integer", "float", "string", "true", "false", "nil"])
-export NESTING_LIMIT = 1000
-
-# A name to suggest in place of a reserved word written where a name goes (`end` as the end of a range).
-RESERVED_RENAMES = {
-  "end": "last", "in": "inside", "case": "kind", "def": "definition", "do": "action", "return": "result",
-  "for": "target", "if": "condition", "try": "attempt", "else": "other", "elsif": "alternative", "while": "pending",
-  "import": "imported", "export": "exported", "struct": "record", "enum": "choice", "and": "both", "or": "either",
-  "not": "negated", "true": "yes", "false": "no", "nil": "empty",
-}
+NESTING_LIMIT = 1000
 
 ## What a parse function reads and never changes: the tokens, the context of the construct being parsed, and the
 ## nesting level. depth is the block depth (0 outside a do block body), allow_blocks tells whether `do` after a call
 ## starts a block, bare_blocks whether a plain name takes a `do` block and whether a `{ ... }` block may follow a call
 ## without arguments (not in an if condition, where `{` and `do` are mistakes for the end of the line), and brace_at
 ## and brace_form remember a `{` right after a block head, for the help of PARSE-UNEXPECTED-TOKEN.
-export struct Env
+struct Env
   tokens: List[Tokens.Token]
   size: Int
   allow_blocks: Bool
@@ -41,66 +32,45 @@ export struct Env
 end
 
 ## The result of parsing an expression: the node, the position of the next token, and the next free node id.
-export struct ExprAt
+struct ExprAt
   node: Ast.Expr
   pos: Int
   ids: Int
 end
 
 ## A list of expressions with the next position and the next free node id.
-export struct ExprsAt
+struct ExprsAt
   nodes: List[Ast.Expr]
   pos: Int
   ids: Int
 end
 
 ## A statement with the next position and the next free node id.
-export struct StmtAt
+struct StmtAt
   node: Ast.Stmt
   pos: Int
   ids: Int
 end
 
 ## A list of statements with the next position and the next free node id.
-export struct StmtsAt
+struct StmtsAt
   nodes: List[Ast.Stmt]
   pos: Int
   ids: Int
 end
 
 ## A type with the next position and the next free node id.
-export struct TypeAt
+struct TypeAt
   node: Ast.TypeRef
   pos: Int
   ids: Int
 end
 
 ## A pattern with the next position and the next free node id.
-export struct PatternAt
+struct PatternAt
   node: Ast.Pattern
   pos: Int
   ids: Int
-end
-
-# The payload slots of a variant pattern, with the next position and the next free node id.
-struct SlotsAt
-  slots: List[Ast.Slot]
-  pos: Int
-  ids: Int
-end
-
-# One slot with the next position and the next free node id.
-struct SlotAt
-  slot: Ast.Slot
-  pos: Int
-  ids: Int
-end
-
-# Where a pattern item ends in the look-ahead: the index after a leaf or after the `(` of a variant that opens a list
-# of slots, or -1 when the tokens are no pattern.
-struct Scanned
-  next: Int
-  opens: Bool
 end
 
 ## The deepest nesting the parser accepts (PARSE-TOO-DEEP beyond it). Each statement, expression, prefix operator and
@@ -113,7 +83,7 @@ end
 ## trees, and a pass that recurses on the tree needs its own stack or limit. The limit counts nesting
 ## the same way in every stage.
 ## The context for the start of a file.
-export def make_env(tokens: List[Tokens.Token]) -> Env
+def make_env(tokens: List[Tokens.Token]) -> Env
   Env(
     tokens: tokens,
     size: tokens.size,
@@ -127,7 +97,7 @@ export def make_env(tokens: List[Tokens.Token]) -> Env
 end
 
 ## The same context, with `do` blocks allowed or not. Headers of case, while and for do not allow them.
-export def with_blocks(e: Env, allow: Bool) -> Env
+def with_blocks(e: Env, allow: Bool) -> Env
   Env(
     tokens: e.tokens,
     size: e.size,
@@ -143,7 +113,7 @@ end
 ## The same context for the condition of an if, an elsif, a guard or a case arm guard: blocks follow calls, but a plain
 ## name takes no `do` block and no call takes a `{ ... }` block, so that the formatter may turn a guard into an if and
 ## back.
-export def in_condition(e: Env) -> Env
+def in_condition(e: Env) -> Env
   Env(
     tokens: e.tokens,
     size: e.size,
@@ -157,7 +127,7 @@ export def in_condition(e: Env) -> Env
 end
 
 ## The same context for the body of a block or a case arm.
-export def with_depth(e: Env, depth: Int) -> Env
+def with_depth(e: Env, depth: Int) -> Env
   Env(
     tokens: e.tokens,
     size: e.size,
@@ -171,7 +141,7 @@ export def with_depth(e: Env, depth: Int) -> Env
 end
 
 ## The context for the body of a do block, remembering a `{` that follows the block head.
-export def with_block_body(e: Env, brace_at: Int, brace_form: String) -> Env
+def with_block_body(e: Env, brace_at: Int, brace_form: String) -> Env
   Env(
     tokens: e.tokens,
     size: e.size,
@@ -185,7 +155,7 @@ export def with_block_body(e: Env, brace_at: Int, brace_form: String) -> Env
 end
 
 ## The kind of the token at an index. An index past the end reads the last token (EOF).
-export def kind_at(e: Env, index: Int) -> String
+def kind_at(e: Env, index: Int) -> String
   return e.tokens[index].kind if index < e.size
 
   e.tokens[e.size - 1].kind
@@ -193,7 +163,7 @@ end
 
 ## True for the name of a module constant: capitals, digits and `_`, starting with a capital, at least two characters
 ## (UPPER_SNAKE_CASE). The lexer makes every such name a type-name token; this tells it from a CamelCase type.
-export def constant_name?(text: String) -> Bool
+def constant_name?(text: String) -> Bool
   codes = text.split("").map do |character| String.code(character) end
   return false if codes.size < 2 or codes[0] < 65 or codes[0] > 90
 
@@ -210,12 +180,12 @@ end
 
 ## The span from the start of the token at start to the end of the last token before pos, that is, the last consumed
 ## token.
-export def span_from(e: Env, start: Int, pos: Int) -> Source.Span
+def span_from(e: Env, start: Int, pos: Int) -> Source.Span
   Source.Span(start: e.tokens[start].span.start, stop: e.tokens[pos - 1].span.stop)
 end
 
 ## How a token is named in "found ..." messages. The lexeme is shown in the form of `written_text` (unicode.agc).
-export def describe(token: Tokens.Token) -> String
+def describe(token: Tokens.Token) -> String
   return token.kind if token.lexeme == ""
 
   return "a newline" if token.kind == "NL"
@@ -228,7 +198,7 @@ export def describe(token: Tokens.Token) -> String
 end
 
 ## Reads back the failure that pack wrote.
-export def unpack(text: String) -> Diag.Diagnostic
+def unpack(text: String) -> Diag.Diagnostic
   parts = text.split("\n")
   consumed = 0
   index = 0
@@ -250,16 +220,16 @@ export def unpack(text: String) -> Diag.Diagnostic
 end
 
 ## A help text.
-export def hint(text: String) -> Diag.Help = Diag.Help.Hint(text)
+def hint(text: String) -> Diag.Help = Diag.Help.Hint(text)
 
 ## The failure for a span that is not the span of one token.
-export def bail_span(code: String, message: String, span: Source.Span, help: Diag.Help) -> String
+def bail_span(code: String, message: String, span: Source.Span, help: Diag.Help) -> String
   pack(code, message, span, help)
 end
 
 ## The failure for the token at at. A doc comment token always gives PARSE-DETACHED-DOC, except for
 ## PARSE-MISSING-BLANK-LINE.
-export def bail(e: Env, at: Int, code: String, message: String, help: Diag.Help) -> String
+def bail(e: Env, at: Int, code: String, message: String, help: Diag.Help) -> String
   token = e.tokens[at]
   return detached_doc(token) if token.kind == "DOC" and code != "PARSE-MISSING-BLANK-LINE"
 
@@ -267,26 +237,26 @@ export def bail(e: Env, at: Int, code: String, message: String, help: Diag.Help)
 end
 
 ## The PARSE-DETACHED-DOC failure for the doc token at at.
-export def bail_detached(e: Env, at: Int) -> String = detached_doc(e.tokens[at])
+def bail_detached(e: Env, at: Int) -> String = detached_doc(e.tokens[at])
 
 ## A PARSE-UNEXPECTED-TOKEN failure without help.
-export def unexpected(e: Env, at: Int, message: String) -> String
+def unexpected(e: Env, at: Int, message: String) -> String
   bail(e, at, "PARSE-UNEXPECTED-TOKEN", message, Diag.Help.NoHelp)
 end
 
 ## A PARSE-UNEXPECTED-TOKEN failure with a help text.
-export def unexpected_help(e: Env, at: Int, message: String, help: String) -> String
+def unexpected_help(e: Env, at: Int, message: String, help: String) -> String
   bail(e, at, "PARSE-UNEXPECTED-TOKEN", message, hint(help))
 end
 
 ## "expected X, found Y" for the token at at.
-export def found(e: Env, at: Int, expected: String) -> String
+def found(e: Env, at: Int, expected: String) -> String
   unexpected(e, at, "expected #{expected}, found #{describe(e.tokens[at])}")
 end
 
 ## The context `levels` deeper than e; PARSE-TOO-DEEP when that passes nesting_limit. enter adds one level, deepen adds
 ## the k links of a chain so far.
-export def deepen(e: Env, pos: Int, levels: Int) -> Result[Env]
+def deepen(e: Env, pos: Int, levels: Int) -> Result[Env]
   return error(too_deep(e, pos)) if e.nesting + levels > NESTING_LIMIT
 
   ok(
@@ -304,21 +274,21 @@ export def deepen(e: Env, pos: Int, levels: Int) -> Result[Env]
 end
 
 ## Counts one more level of nesting; PARSE-TOO-DEEP when that passes nesting_limit.
-export def enter(e: Env, pos: Int) -> Result[Env] = deepen(e, pos, 1)
+def enter(e: Env, pos: Int) -> Result[Env] = deepen(e, pos, 1)
 
 ## A failure for a state the grammar functions cannot reach, so that no code path needs a bare string error:
 ## PARSE-UNEXPECTED-TOKEN at the token at pos.
-export def impossible(e: Env, pos: Int) -> String
+def impossible(e: Env, pos: Int) -> String
   unexpected(e, pos, "the parser cannot continue at #{describe(e.tokens[pos])}")
 end
 
 ## True for a name token without a ? or ! suffix: the names of fields, parameters and bindings.
-export def plain_name?(token: Tokens.Token) -> Bool = token.kind == "name" and !decorated?(token.lexeme)
+def plain_name?(token: Tokens.Token) -> Bool = token.kind == "name" and !decorated?(token.lexeme)
 
 ## The position after the token at pos when it has the kind. A name that ends in ? or ! is refused unless suffix is
 ## true, which only function and method names allow. A reserved word where a name goes is named as one, with another
 ## name as the help.
-export def expect(e: Env, pos: Int, kind: String, description: String, suffix: Bool) -> Result[Int]
+def expect(e: Env, pos: Int, kind: String, description: String, suffix: Bool) -> Result[Int]
   token = e.tokens[pos]
   return ok(pos + 1) if token.kind == kind and !(kind == "name" and !suffix and decorated?(token.lexeme))
 
@@ -328,7 +298,7 @@ export def expect(e: Env, pos: Int, kind: String, description: String, suffix: B
 end
 
 ## PARSE-RESERVED-WORD at the reserved word at pos, written where a name goes, with another name as the help.
-export def reserved_name(e: Env, pos: Int, description: String) -> String
+def reserved_name(e: Env, pos: Int, description: String) -> String
   word = e.tokens[pos].lexeme
   other = RESERVED_RENAMES.get(word, "#{word}_value")
   message = "expected #{description}, found the reserved word \"#{word}\""
@@ -338,7 +308,7 @@ end
 
 ## The position after a name that refers to something declared elsewhere: a field or method after a dot, a module
 ## function, a function reference. A reserved word there names nothing, so the help does not suggest a rename.
-export def expect_used(e: Env, pos: Int, description: String) -> Result[Int]
+def expect_used(e: Env, pos: Int, description: String) -> Result[Int]
   if reserved?(e.tokens[pos])
     word = e.tokens[pos].lexeme
     message = "expected #{description}, found the reserved word \"#{word}\""
@@ -351,14 +321,14 @@ end
 
 ## True when the token at pos is a reserved word that `=`, `:` or a compound assignment (`+=`) follows, as a local or
 ## a field would be written.
-export def reserved_name_at?(e: Env, pos: Int) -> Bool
+def reserved_name_at?(e: Env, pos: Int) -> Bool
   following = kind_at(e, pos + 1)
   assigned = following == "assign" or following == "colon" or following.end_with?("-assign")
   reserved?(e.tokens[pos]) and assigned
 end
 
 ## The position of the first token at or after pos that is not NL.
-export def skip_newlines(e: Env, pos: Int) -> Int
+def skip_newlines(e: Env, pos: Int) -> Int
   cursor = pos
   while e.tokens[cursor].kind == "NL"
     cursor += 1
@@ -368,7 +338,7 @@ export def skip_newlines(e: Env, pos: Int) -> Int
 end
 
 ## The text of a token whose value is a string.
-export def token_text(token: Tokens.Token) -> String
+def token_text(token: Tokens.Token) -> String
   case token.value
     Tokens.Value.Text(text) -> text
     _ -> ""
@@ -377,10 +347,10 @@ end
 
 ## Whether a `string` token is a heredoc (25.10). The lexer gives a heredoc the lexeme of its opener, `<<~NAME`, and
 ## a string literal the lexeme of its quotes, so the parser tells them apart with no field on the token.
-export def heredoc?(token: Tokens.Token) -> Bool = token.lexeme.start_with?("<<~")
+def heredoc?(token: Tokens.Token) -> Bool = token.lexeme.start_with?("<<~")
 
 ## The literal value of an integer, float or string token.
-export def literal_value(token: Tokens.Token) -> Ast.LitValue
+def literal_value(token: Tokens.Token) -> Ast.LitValue
   case token.value
     Tokens.Value.Whole(number) -> Ast.LitValue.Whole(number)
     Tokens.Value.Huge(digits) -> Ast.LitValue.Huge(digits)
@@ -391,7 +361,7 @@ export def literal_value(token: Tokens.Token) -> Ast.LitValue
 end
 
 ## Parses a type: Name, Mod.Name, or Name[Type, ...].
-export def parse_type(e: Env, pos: Int, ids: Int) -> Result[TypeAt]
+def parse_type(e: Env, pos: Int, ids: Int) -> Result[TypeAt]
   inner = try enter(e, pos)
   name = e.tokens[pos].lexeme
   cursor = try expect(e, pos, "type-name", "a type name", false)
@@ -429,7 +399,7 @@ export def parse_type(e: Env, pos: Int, ids: Int) -> Result[TypeAt]
 end
 
 ## Parses the pattern of a case arm.
-export def parse_pattern(e: Env, pos: Int, ids: Int) -> Result[PatternAt]
+def parse_pattern(e: Env, pos: Int, ids: Int) -> Result[PatternAt]
   token = e.tokens[pos]
   kind = token.kind
   return parse_name_pattern(e, pos, ids) if kind == "name"
@@ -476,7 +446,7 @@ end
 ## Whether the tokens at pos start a case arm, that is, one or more patterns separated by commas, an optional `if`
 ## guard and ->. A case body ends there, because arms have no closing token. A guard is looked for up to the end of its
 ## line.
-export def case_arm_start?(e: Env, pos: Int) -> Bool
+def case_arm_start?(e: Env, pos: Int) -> Bool
   stop = pattern_end(e, pos)
   while stop >= 0 and kind_at(e, stop) == "comma"
     # Patterns split over lines start an arm too, so that the arm's parser can say they stay on one line.
@@ -490,6 +460,39 @@ export def case_arm_start?(e: Env, pos: Int) -> Bool
   return guard_arrow(e, stop + 1) >= 0 if kind_at(e, stop) == "if"
 
   kind_at(e, stop) == "arrow"
+end
+
+private
+
+LITERAL_KINDS = Set.new(["integer", "float", "string", "true", "false", "nil"])
+
+# A name to suggest in place of a reserved word written where a name goes (`end` as the end of a range).
+RESERVED_RENAMES = {
+  "end": "last", "in": "inside", "case": "kind", "def": "definition", "do": "action", "return": "result",
+  "for": "target", "if": "condition", "try": "attempt", "else": "other", "elsif": "alternative", "while": "pending",
+  "import": "imported", "export": "exported", "struct": "record", "enum": "choice", "and": "both", "or": "either",
+  "not": "negated", "true": "yes", "false": "no", "nil": "empty",
+}
+
+# The payload slots of a variant pattern, with the next position and the next free node id.
+struct SlotsAt
+  slots: List[Ast.Slot]
+  pos: Int
+  ids: Int
+end
+
+# One slot with the next position and the next free node id.
+struct SlotAt
+  slot: Ast.Slot
+  pos: Int
+  ids: Int
+end
+
+# Where a pattern item ends in the look-ahead: the index after a leaf or after the `(` of a variant that opens a list
+# of slots, or -1 when the tokens are no pattern.
+struct Scanned
+  next: Int
+  opens: Bool
 end
 
 def kind?(e: Env, pos: Int, kind: String) -> Bool = e.tokens[pos].kind == kind

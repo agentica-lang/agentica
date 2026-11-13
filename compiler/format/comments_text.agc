@@ -10,7 +10,7 @@ import Text from "../syntax/text"
 import Comments from "comments"
 
 ## The comments of `text` and their places, one per line.
-export def attach_text(text: String) -> String
+def attach_text(text: String) -> String
   case Lexer.lex_with_comments(text)
     Diag.Outcome.Failed(problem) -> Text.diagnostic_line(problem)
     Diag.Outcome.Done(scanned) ->
@@ -23,6 +23,8 @@ export def attach_text(text: String) -> String
       end
   end
 end
+
+private
 
 def line_of(attachment: Comments.Attachment, placed: Comments.Attached) -> String
   node = attachment.nodes[placed.node]

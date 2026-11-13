@@ -8,7 +8,7 @@ import OutlineText from "outline_text"
 import SymbolText from "symbol_text"
 
 ## The lines of the answer, a line feed after each.
-export def text(found: Model.Refs) -> String
+def text(found: Model.Refs) -> String
   lines: List[String] = []
   for declared in found.definition
     lines = lines.push("#{OutlineText.place(declared.module, declared.name_range)} definition #{described(declared)}")
@@ -24,7 +24,9 @@ export def text(found: Model.Refs) -> String
 end
 
 ## One line for each file left out, each with a line feed at the end; empty when none was.
-export def skipped_text(found: Model.Refs) -> String = SymbolText.skipped_lines(found.skipped)
+def skipped_text(found: Model.Refs) -> String = SymbolText.skipped_lines(found.skipped)
+
+private
 
 def inside(function: String) -> String
   return "" if function == ""

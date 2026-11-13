@@ -12,13 +12,15 @@ import Report from "bdd_report"
 ## `path` as it was given for the root file, and the canonical path for the files it imports. `cached` is false for a
 ## file of the driver's own (the runner and the default steps), true for the user's: the bytecode cache of
 ## io/bytecode_cache.agc then gives the bytes of a file that did not change, and keeps the bytes of one that did.
-export def file(path: String, settings: Env.Settings, unreadable: String, cached: Bool) -> Pipeline.Compiled
+def file(path: String, settings: Env.Settings, unreadable: String, cached: Bool) -> Pipeline.Compiled
   plan = BytecodeCache.plan(settings, path, cached)
   case BytecodeCache.lookup(plan, settings)
     BytecodeCache.Lookup.Hit(bytes) -> Pipeline.Compiled.Bytes(bytes)
     BytecodeCache.Lookup.Miss -> missed(path, settings, unreadable, plan)
   end
 end
+
+private
 
 def missed(path: String, settings: Env.Settings, unreadable: String, plan: BytecodeCache.Plan) -> Pipeline.Compiled
   case Front.read_root(settings.workspace, path)

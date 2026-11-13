@@ -11,7 +11,7 @@ import DocJson from "../docs/doc_json"
 import SymbolJson from "symbol_json"
 
 ## The object of the answer.
-export def json(found: Model.Refs) -> JSON.Value
+def json(found: Model.Refs) -> JSON.Value
   shape = {
     "version": JSON.from(found.version),
     "command": JSON.from("refs"),
@@ -26,6 +26,8 @@ export def json(found: Model.Refs) -> JSON.Value
 
   JSON.object(shape)
 end
+
+private
 
 def skipped_json(left: Model.Skipped) -> JSON.Value
   JSON.object({"file": JSON.from(left.file), "diagnostic": DiagnosticJson.object(left.diagnostic)})

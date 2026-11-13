@@ -6,11 +6,9 @@
 
 import GitSource from "git_source"
 
-HEADER = "[dependencies]"
-
 ## The text with `name = { git = "...", tag = "..." }` (or `ref`) added to the [dependencies] table: after its last
 ## entry, or in a new table at the end of the file when there is none.
-export def add_dependency(text: String, name: String, source: GitSource.Source) -> String
+def add_dependency(text: String, name: String, source: GitSource.Source) -> String
   newline = "\n"
   if text.include?("\r\n")
     newline = "\r\n"
@@ -31,6 +29,10 @@ export def add_dependency(text: String, name: String, source: GitSource.Source) 
 
   lines.take(at).push("#{entry}#{carriage}").concat(lines.drop(at)).join("\n")
 end
+
+private
+
+HEADER = "[dependencies]"
 
 # The values were checked (GitSource), so they hold no quote or backslash and need no escape.
 def inline_table(source: GitSource.Source) -> String

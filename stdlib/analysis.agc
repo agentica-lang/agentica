@@ -67,107 +67,107 @@ import SymbolJson from "std/internal/compiler/query/symbol_json"
 import TypeAtJson from "std/internal/compiler/query/type_at_json"
 
 ## A place in a text: line and column count from 1, in characters.
-export type Position = DiagnosticModel.Position
+type Position = DiagnosticModel.Position
 
 ## A part of a text: `stop` is the first place after it.
-export type Region = DiagnosticModel.Region
+type Region = DiagnosticModel.Region
 
 ## A note on a second part of the text.
-export type Label = DiagnosticModel.Label
+type Label = DiagnosticModel.Label
 
 ## One problem of a program, in the shape of the `--json` diagnostic.
-export type Diagnostic = DiagnosticModel.Diagnostic
+type Diagnostic = DiagnosticModel.Diagnostic
 
 ## The place a question asked about.
-export type Place = Model.Place
+type Place = Model.Place
 
 ## One parameter of a function.
-export type Parameter = Model.Parameter
+type Parameter = Model.Parameter
 
 ## One field of a struct.
-export type Field = Model.Field
+type Field = Model.Field
 
 ## One variant of an enum.
-export type Variant = Model.Variant
+type Variant = Model.Variant
 
 ## One top-level declaration of a file.
-export type Item = Model.Item
+type Item = Model.Item
 
 ## One name of an import list.
-export type ImportName = Model.ImportName
+type ImportName = Model.ImportName
 
 ## One import of a file.
-export type Import = Model.Import
+type Import = Model.Import
 
 ## What a file declares.
-export type Outline = Model.Outline
+type Outline = Model.Outline
 
 ## The declaration of what an expression names.
-export type Definition = Model.Definition
+type Definition = Model.Definition
 
 ## What a position is on.
-export type TypeAt = Model.TypeAt
+type TypeAt = Model.TypeAt
 
 ## The answer of `check`.
-export type Checked = Model.Checked
+type Checked = Model.Checked
 
 ## One declaration that `symbol` found.
-export type Symbol = Model.Symbol
+type Symbol = Model.Symbol
 
 ## A file of a `symbol` query that was left out, with the first problem it hit.
-export type Skipped = Model.Skipped
+type Skipped = Model.Skipped
 
 ## The answer of `symbol`.
-export type Symbols = Model.Symbols
+type Symbols = Model.Symbols
 
 ## One parameter of a function of an `extern module` block.
-export type NativeParameter = Model.NativeParameter
+type NativeParameter = Model.NativeParameter
 
 ## One function of an `extern module` block.
-export type NativeFunction = Model.NativeFunction
+type NativeFunction = Model.NativeFunction
 
 ## One `resource` line of an `extern module` block.
-export type NativeResource = Model.NativeResource
+type NativeResource = Model.NativeResource
 
 ## One field of a struct or variant of an enum that crosses to a native module.
-export type NativeMember = Model.NativeMember
+type NativeMember = Model.NativeMember
 
 ## A struct or enum that crosses to a native module.
-export type NativeType = Model.NativeType
+type NativeType = Model.NativeType
 
 ## One `extern module` block.
-export type NativeBlock = Model.NativeBlock
+type NativeBlock = Model.NativeBlock
 
 ## The answer of `native_modules`.
-export type NativeModules = Model.NativeModules
+type NativeModules = Model.NativeModules
 
 ## One use of a declaration.
-export type Reference = Model.Reference
+type Reference = Model.Reference
 
 ## A resolved type of `bodies`.
-export type TypeShape = Model.TypeShape
+type TypeShape = Model.TypeShape
 
 ## One node of the typed tree of a body.
-export type Node = Model.Node
+type Node = Model.Node
 
 ## One parameter of a function of `bodies`.
-export type BodyParam = Model.BodyParam
+type BodyParam = Model.BodyParam
 
 ## A module of the linked program of `bodies`: the prefix of its linked names and its file.
-export type BodyModule = Model.BodyModule
+type BodyModule = Model.BodyModule
 
 ## One function of `bodies`.
-export type Body = Model.Body
+type Body = Model.Body
 
 ## The answer of `bodies`.
-export type Bodies = Model.Bodies
+type Bodies = Model.Bodies
 
 ## The answer of `refs`.
-export type Refs = Model.Refs
+type Refs = Model.Refs
 
 ## What a session reads: the disk of the working folder, except the files of `buffers`, which map a path to the text
 ## that stands in for it (an unsaved buffer), whether or not the disk has the file.
-export struct Workspace
+struct Workspace
   ## The version of this shape, 1.
   version: Int
   ## The text of each buffer, by path.
@@ -175,46 +175,44 @@ export struct Workspace
 end
 
 ## The files and buffers that the questions read. Its field is not API: it changes without a new version.
-export struct Session
+struct Session
   ## The state of the session.
   internal: Sessions.Session
 end
 
 ## What `refresh` kept for one file: the program it linked and checked and the modules it parsed. Unlike a `Session`,
 ## which holds functions, it is plain data, so an `ATS` table can hold it and tasks can share it. Its field is not API.
-export struct Entry
+struct Entry
   ## The state of the entry.
   internal: Cache.Root
 end
 
 ## Returns the workspace of the disk, with no buffer.
-export def workspace() -> Workspace
+def workspace() -> Workspace
   no_buffers: Map[String, String] = {}
   Workspace(version: 1, buffers: no_buffers)
 end
 
 ## Returns a session that reads `files`.
-export def open(files: Workspace) -> Session = Session(internal: Sessions.open(settings(), files.buffers))
+def open(files: Workspace) -> Session = Session(internal: Sessions.open(settings(), files.buffers))
 
 ## Returns `session` with `text` as the content of the file `path`, whether or not the disk has it. Two spellings of
 ## one file are one buffer.
-export def update(session: Session, path: String, text: String) -> Session
+def update(session: Session, path: String, text: String) -> Session
   Session(internal: Sessions.update(session.internal, path, text))
 end
 
 ## Returns `session` without the buffer of `path`: the disk answers for the file again.
-export def close(session: Session, path: String) -> Session = Session(internal: Sessions.close(session.internal, path))
+def close(session: Session, path: String) -> Session = Session(internal: Sessions.close(session.internal, path))
 
 ## Returns `session` with the file `path` linked and checked in its cache, so the questions about `path` that follow
 ## reuse them, and so do those about files that import the same modules. A file that cannot be read or linked leaves
 ## the cache as it was, and the questions say why. Run one `refresh` at a time per session and keep what it returns.
-export def refresh(session: Session, path: String) -> Session
-  Session(internal: Sessions.refresh(session.internal, path))
-end
+def refresh(session: Session, path: String) -> Session = Session(internal: Sessions.refresh(session.internal, path))
 
 ## Returns the entry that the cache of `session` holds for the file `path`, as the last `refresh` of it left it. It is
 ## an error when the cache holds none: the file was not refreshed, could not be linked, or its entry left the cache.
-export def entry(session: Session, path: String) -> Result[Entry]
+def entry(session: Session, path: String) -> Result[Entry]
   case Sessions.entry(session.internal, path)
     some(root) -> ok(Entry(internal: root))
     none -> error("the cache holds no entry for #{path}")
@@ -227,19 +225,19 @@ end
 ## The answers are the same with any entry, so one that is stale costs time and never gives a wrong answer. An entry
 ## made by one session can be adopted by another over the same folder: tasks that each `refresh` their own session and
 ## keep the entries in an `ATS` table share the work, where two refreshes of one session would drop one of the caches.
-export def adopt(session: Session, entry: Entry) -> Session
+def adopt(session: Session, entry: Entry) -> Session
   Session(internal: Sessions.adopt(session.internal, entry.internal))
 end
 
 ## Returns the answer of `agentica check` for the file `path`: it links and checks the program, and its `diagnostics`
 ## hold the first problem, if any. A file that cannot be read is a `QUERY-USAGE` diagnostic.
-export def check(session: Session, path: String) -> Checked
+def check(session: Session, path: String) -> Checked
   Core.checked(session.internal.cache, Sessions.asking(session.internal), path)
 end
 
 ## Returns the declarations of the file `path`, as `agentica outline` lists them. The file is only parsed, so its
 ## imports need not exist.
-export def outline(session: Session, path: String) -> Result[Outline]
+def outline(session: Session, path: String) -> Result[Outline]
   settings = Sessions.asking(session.internal)
   buffered = Sessions.buffered?(session.internal, path)
   case Core.outline(settings, path, buffered)
@@ -253,7 +251,7 @@ end
 ## answers: the type of the innermost expression or name and the definition of what it names. The file is linked and
 ## checked with what it imports, and needs no `main`. An import or a variable that the file itself never uses is not an
 ## error (an editor adds the import first); the files it imports keep that rule, as `check` does.
-export def type_at(session: Session, path: String, line: Int, column: Int) -> Result[TypeAt]
+def type_at(session: Session, path: String, line: Int, column: Int) -> Result[TypeAt]
   settings = Sessions.asking(session.internal)
   if path == "" or line < 1 or column < 1
     return error(failure(Core.refused("the position is FILE, LINE and COLUMN, from line 1 and column 1", path)))
@@ -271,7 +269,7 @@ end
 ## `diagnostics`. A program that checks gives the answer of `type_at`. A file that does not link, a program whose
 ## declarations (their types, `main`, the constants) do not check, and a position that the link cannot name in a
 ## function that did not check are the first problem, an error as for `type_at`.
-export def type_at_partial(session: Session, path: String, line: Int, column: Int) -> Result[TypeAt]
+def type_at_partial(session: Session, path: String, line: Int, column: Int) -> Result[TypeAt]
   settings = Sessions.asking(session.internal)
   if path == "" or line < 1 or column < 1
     return error(failure(Core.refused("the position is FILE, LINE and COLUMN, from line 1 and column 1", path)))
@@ -296,7 +294,7 @@ end
 ## `<arguments>`, and no usage `help` (the command line's line); `QUERY-NOT-FOUND` keeps its `help`, the files not
 ## searched. Every searched file is a root, so an unused import or variable in a searched file is not reported there,
 ## as for `type_at`; one in a file that is only imported is.
-export def symbol(session: Session, name: String, paths: List[String]) -> Result[Symbols]
+def symbol(session: Session, name: String, paths: List[String]) -> Result[Symbols]
   settings = Sessions.asking(session.internal)
   # Sorted, since `update` moves a buffer to the end of the list and the order of the matches must not depend on it.
   ordered = session.internal.buffers.sort_by do |buffer: Overlay.Buffer| buffer.names.key end
@@ -320,7 +318,7 @@ end
 ## and the `api_major` and `api_minor` of the C API it needs. The signatures and shapes are written by the code that
 ## the compiler binds a call with, so they are the bytes the loader compares. An unreadable or wrong file is an error,
 ## as for `type_at`.
-export def native_modules(session: Session, path: String) -> Result[NativeModules]
+def native_modules(session: Session, path: String) -> Result[NativeModules]
   settings = Sessions.asking(session.internal)
   case Core.native_modules(session.internal.cache, settings, path)
     Core.Natived.Done(found) -> ok(found)
@@ -333,7 +331,7 @@ end
 ## parameters and result and its body as a typed tree (`Node`), for a tool that translates them. The file is linked and
 ## checked with what it imports and needs no `main`, as for `type_at`. Experimental: the shape may change between
 ## releases without notice. An unreadable or wrong file is an error, as for `type_at`.
-export def bodies(session: Session, path: String) -> Result[Bodies]
+def bodies(session: Session, path: String) -> Result[Bodies]
   settings = Sessions.asking(session.internal)
   case Core.bodies(session.internal.cache, settings, path)
     Core.Bodied.Done(found) -> ok(found)
@@ -346,7 +344,7 @@ end
 ## every reference to it, as `agentica refs` answers: in that file, linked and checked as for `type_at`, and in what it
 ## imports; a file that only imports it is not seen. A position that names nothing is `QUERY-NO-EXPRESSION`. An unused
 ## import or variable of the file itself is not an error, as for `type_at`; the files it imports keep the rule.
-export def refs(session: Session, path: String, line: Int, column: Int) -> Result[Refs]
+def refs(session: Session, path: String, line: Int, column: Int) -> Result[Refs]
   settings = Sessions.asking(session.internal)
   if path == "" or line < 1 or column < 1
     return error(failure(Core.refused("the position is FILE, LINE and COLUMN, from line 1 and column 1", path)))
@@ -363,7 +361,7 @@ end
 ## `diagnostics`; it is complete for a function, struct, enum, alias, constant, variant or a local of a function that
 ## checked. A field or a builtin needs the types of every function, so for one the error is the first problem, as for
 ## `refs`. A program that checks gives the answer of `refs`.
-export def refs_partial(session: Session, path: String, line: Int, column: Int) -> Result[Refs]
+def refs_partial(session: Session, path: String, line: Int, column: Int) -> Result[Refs]
   settings = Sessions.asking(session.internal)
   if path == "" or line < 1 or column < 1
     return error(failure(Core.refused("the position is FILE, LINE and COLUMN, from line 1 and column 1", path)))
@@ -378,28 +376,30 @@ end
 
 ## Reads back the diagnostic that is the message of an error of `outline`, `type_at`, `type_at_partial`, `symbol`,
 ## `refs`, `refs_partial`, `native_modules` or `bodies`.
-export def diagnostic(message: String) -> Result[Diagnostic] = DiagnosticRead.read(message)
+def diagnostic(message: String) -> Result[Diagnostic] = DiagnosticRead.read(message)
 
 ## Returns the JSON that `agentica --json outline` prints, without its final line feed.
-export def outline_json(found: Outline) -> JSON.Value = OutlineJson.json(found)
+def outline_json(found: Outline) -> JSON.Value = OutlineJson.json(found)
 
 ## Returns the JSON that `agentica --json type-at` prints, without its final line feed.
-export def type_at_json(found: TypeAt) -> JSON.Value = TypeAtJson.json(found)
+def type_at_json(found: TypeAt) -> JSON.Value = TypeAtJson.json(found)
 
 ## Returns the JSON that `agentica --json symbol` prints, without its final line feed.
-export def symbols_json(found: Symbols) -> JSON.Value = SymbolJson.json(found)
+def symbols_json(found: Symbols) -> JSON.Value = SymbolJson.json(found)
 
 ## Returns the JSON that `agentica --json refs` prints, without its final line feed.
-export def refs_json(found: Refs) -> JSON.Value = RefsJson.json(found)
+def refs_json(found: Refs) -> JSON.Value = RefsJson.json(found)
 
 ## Returns the JSON of the answer of `native_modules`, without its final line feed.
-export def native_modules_json(found: NativeModules) -> JSON.Value = NativeModulesJson.json(found)
+def native_modules_json(found: NativeModules) -> JSON.Value = NativeModulesJson.json(found)
 
 ## Returns the JSON of the answer of `bodies`, without its final line feed.
-export def bodies_json(found: Bodies) -> JSON.Value = BodiesJson.json(found)
+def bodies_json(found: Bodies) -> JSON.Value = BodiesJson.json(found)
 
 ## Returns the JSON that `agentica --json check` prints on stderr for a problem.
-export def diagnostic_json(found: Diagnostic) -> JSON.Value = DiagnosticJson.object(found)
+def diagnostic_json(found: Diagnostic) -> JSON.Value = DiagnosticJson.object(found)
+
+private
 
 # The settings of the machine: the disk, the process environment and the std/ sources of this binary. The version is
 # empty, since nothing is written.

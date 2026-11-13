@@ -1,5 +1,7 @@
 ## The File methods of the compiler prelude (see list.agc). A is the type of the value the block gives.
 
+private
+
 # File.open with a block. The handle is closed on every way out of the block that gives a Result: its last
 # expression, an early return and a failed try. A runtime error in the block ends the task, which closes what it owns.
 # The close flushes the writes, so its error replaces an ok result; after an error result it is dropped.

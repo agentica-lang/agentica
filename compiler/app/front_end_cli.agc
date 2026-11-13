@@ -15,9 +15,11 @@ import Cli from "cli"
 import Launch from "cli_launch"
 
 ## Runs the command line.
-export def run(settings: Env.Settings, words: List[String]) -> Void
+def run(settings: Env.Settings, words: List[String]) -> Void
   System.exit(Cli.run(settings, words, &hand_off))
 end
+
+private
 
 # The VM answers only when it refuses the hand-off; the program is running otherwise and this program is gone.
 def hand_off(launch: Launch.Launch) -> Int

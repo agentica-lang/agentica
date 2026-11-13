@@ -7,7 +7,7 @@ import Model from "doc_model"
 import Signature from "signature"
 
 ## The text of a documented module, ending with a line feed. `module` is the path as the user typed it.
-export def text(module: String, documented: Model.Module) -> String
+def text(module: String, documented: Model.Module) -> String
   blocks = ["# #{module}"]
   case documented.doc
     some(doc) -> blocks = blocks.push(doc)
@@ -23,7 +23,7 @@ end
 
 ## One list line per field or variant: `signature` and, when it has a doc, a dash and the doc, then a line that says a
 ## struct has private fields, which are not listed. `agentica help std/` prints the same lines.
-export def part_lines(item: Model.Item) -> List[String]
+def part_lines(item: Model.Item) -> List[String]
   case item.detail
     Model.Detail.Struct(fields) ->
       lines = fields.map do |field: Model.Field| part_line(field_signature(field), field.doc) end
@@ -36,6 +36,8 @@ export def part_lines(item: Model.Item) -> List[String]
     Model.Detail.Plain -> []
   end
 end
+
+private
 
 # The blocks of one item, each separated from the next by a blank line: the heading, the doc, the list of its parts.
 def item_blocks(item: Model.Item) -> List[String]

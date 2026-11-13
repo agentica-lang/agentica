@@ -15,7 +15,7 @@ import Reply from "cli_reply"
 
 ## Runs `agentica doc` for `words`, the words from `doc` on, in the style `--json` or `--ai` gave in front of it. A
 ## trailing `--json` asks for the JSON form too, as it does for `help`.
-export def run(words: List[String], style: String, settings: Env.Settings) -> Reply.Answer
+def run(words: List[String], style: String, settings: Env.Settings) -> Reply.Answer
   rest = words.drop(1)
   as_json = style == "json"
   if rest.size > 0 and rest[rest.size - 1] == "--json"
@@ -34,6 +34,8 @@ export def run(words: List[String], style: String, settings: Env.Settings) -> Re
     SourceFile.Read.Text(text) -> documented(settings, path, text, as_json)
   end
 end
+
+private
 
 def documented(settings: Env.Settings, path: String, text: String, as_json: Bool) -> Reply.Answer
   case Docs.of_file(settings, path, text)

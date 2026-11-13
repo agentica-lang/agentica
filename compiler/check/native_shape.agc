@@ -12,20 +12,20 @@ import Ast from "../syntax/ast"
 import Types from "../syntax/types"
 
 ## The tags of `Crossing.tag`, as `Types.is?` names the kinds of type.
-export STRUCT = "Struct"
-export ENUM = "Enum"
-export RESOURCE = "Opaque"
+STRUCT = "Struct"
+ENUM = "Enum"
+RESOURCE = "Opaque"
 
 ## The version of the C API of native modules (AN_API_MAJOR of vm/agentica_native.h), and the least minor version that
 ## has what a block uses: 1.0 has functions of scalars and collections, 1.1 adds the program's structs and enums, 1.2
 ## the module's resources. tests/test_std_analysis.py checks them against the header.
-export API_MAJOR = 1
-export API_MINOR_TYPES = 1
-export API_MINOR_RESOURCES = 2
+API_MAJOR = 1
+API_MINOR_TYPES = 1
+API_MINOR_RESOURCES = 2
 
 ## One field of a struct or variant of an enum that crosses: its name and its canonical types, the field's type (one)
 ## or the payload of the variant.
-export struct Member
+struct Member
   name: String
   types: List[String]
 end
@@ -34,7 +34,7 @@ end
 ## members and the shape the module's table must have for its bare name ("name: Type, ..." for a struct, "Variant |
 ## Variant(Type, ...)" for an enum), or a resource of the block. `name` is the linked name; a resource has no members
 ## and an empty shape.
-export struct Crossing
+struct Crossing
   name: String
   tag: String
   members: List[Member]
@@ -49,7 +49,7 @@ end
 ## never read, and one that only a parameter reaches is read and never made. Each list is in the order of its own
 ## walk, which is not a subsequence of `crossings`: for a parameter `A{b: B}`, `B{c: C}` and a result `C`, `crossings`
 ## is [A, C, B] and `from_params` is [A, B, C]. Do not merge them by position.
-export struct Signature
+struct Signature
   params: List[String]
   result: String
   text: String
@@ -61,7 +61,7 @@ end
 ## The signature of `function`, a function of a native module block. `types` are the types of the checker by node id,
 ## and `structs` and `enums` the declarations of the program by linked name. The error is a message for a type the
 ## checker recorded nothing for, which the caller turns into its own internal failure.
-export def of_function(
+def of_function(
   types: List[Types.Type],
   function: Ast.FunctionDecl,
   structs: Map[String, Ast.StructDecl],
@@ -91,6 +91,8 @@ export def of_function(
     ),
   )
 end
+
+private
 
 # The crossings that the types `roots` reach, each once, in the order the walk meets them. The walk is a list, not a
 # recursion, so a recursive type ends.

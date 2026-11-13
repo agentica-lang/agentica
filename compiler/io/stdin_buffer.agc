@@ -11,19 +11,19 @@ import SourceFile from "../syntax/source_file"
 
 ## What the standard input held: how a file reads it (its text, or the place of the first byte that is not UTF-8), and
 ## the text to show lines of it in a message (U+FFFD in place of each invalid byte).
-export struct Buffer
+struct Buffer
   read: SourceFile.Read
   shown: String
 end
 
 ## The buffer, or why the standard input could not be taken (more than the cap of the VM, or a failed read).
-export enum Taken
+enum Taken
   Got(Buffer)
   Failed(String)
 end
 
 ## Reads all of the standard input.
-export def take() -> Taken
+def take() -> Taken
   bytes = FrontEnd.stdin_bytes()
   return Taken.Failed(bytes.message) if !bytes.ok?
 
@@ -36,6 +36,8 @@ export def take() -> Taken
 end
 
 ## `workspace` with `buffer` as the content of `file` (modules/overlay.agc). `windows` is true on a Windows host.
-export def over(workspace: Workspace.Workspace, windows: Bool, file: String, buffer: Buffer) -> Workspace.Workspace
+def over(workspace: Workspace.Workspace, windows: Bool, file: String, buffer: Buffer) -> Workspace.Workspace
   Overlay.over(workspace, [Overlay.buffer(workspace, windows, file, buffer.read)])
 end
+
+private

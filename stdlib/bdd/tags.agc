@@ -4,20 +4,14 @@
 ## `and`, and `and` tighter than `or`; a `not` before a `not` cancels it. There are no parentheses. Words are
 ## separated by any white space, no-break spaces included.
 
-# One tag, or its negation.
-struct Literal
-  tag: String
-  negated: Bool
-end
-
 ## A tag expression: groups joined with `or`, each a list of literals joined with `and`. No groups selects everything.
-export struct Expr
+struct Expr
   groups: List[List[Literal]]
 end
 
 ## Reads `text`. Returns the expression, or an error whose message says what is wrong. An empty text is the expression
 ## that selects every scenario.
-export def compile(text: String) -> Result[Expr]
+def compile(text: String) -> Result[Expr]
   spaced = text.split("").map(&separator).join("")
   words = spaced.split(" ").filter do |word| word != "" end
   return ok(Expr(groups: [])) if words.size == 0
@@ -51,14 +45,22 @@ export def compile(text: String) -> Result[Expr]
 end
 
 ## Whether the expression selects a scenario that has `tags` (with their `@`).
-export def selects?(expr: Expr, tags: List[String]) -> Bool
+def selects?(expr: Expr, tags: List[String]) -> Bool
   return true if expr.groups.size == 0
 
   expr.groups.any? do |group| holds?(group, tags) end
 end
 
 ## Whether the expression leaves some scenarios out, that is, whether `--tags` was given.
-export def filters?(expr: Expr) -> Bool = expr.groups.size > 0
+def filters?(expr: Expr) -> Bool = expr.groups.size > 0
+
+private
+
+# One tag, or its negation.
+struct Literal
+  tag: String
+  negated: Bool
+end
 
 # A space for any character that separates words: the ASCII and Unicode white space.
 def separator(character: String) -> String

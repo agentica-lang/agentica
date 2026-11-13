@@ -5,6 +5,45 @@ import Source from "source"
 import Tokens from "token"
 import Unicode from "unicode"
 
+## The name of the heredoc whose body is a template (docs/grammar/04-lexical.md): the lexer keeps its lines as written
+## in one `eag` token and the parser expands it (eag.agc).
+EAG_HEREDOC = "EAG"
+
+## The tokens of a text and its plain comments, in source order (`lex_with_comments`).
+struct Scanned
+  tokens: List[Tokens.Token]
+  comments: List[Tokens.Comment]
+end
+
+## Whether `word` is a reserved word, which the lexer gives a token of its own kind and never a name.
+def keyword?(word: String) -> Bool = WORD_ACTIONS.get(word, 0) > 0
+
+## Lexes a source text into its tokens, or the first `LEX-` diagnostic.
+def lex(text: String) -> Diag.Outcome[List[Tokens.Token]]
+  case lex_with_comments(text)
+    Diag.Outcome.Failed(problem) -> Diag.Outcome.Failed(problem)
+    Diag.Outcome.Done(scanned) -> Diag.Outcome.Done(scanned.tokens)
+  end
+end
+
+## Lexes a source text like `lex`, and also gives its plain comments, which `lex` drops: the side list that the
+## formatter attaches to the tree. The tokens are the ones `lex` gives.
+def lex_with_comments(text: String) -> Diag.Outcome[Scanned]
+  input = new_input(text)
+  first = Lexed(tokens: [], comments: [], delimiters: [], index: 0, line: 1, line_start: 0)
+  case lex_from(input, first, -1)
+    Diag.Outcome.Failed(problem) -> Diag.Outcome.Failed(problem)
+    Diag.Outcome.Done(lexed) ->
+      here = Source.position(lexed.index, lexed.line, lexed.line_start)
+      case finish(input, lexed.tokens, lexed.delimiters, here)
+        Diag.Outcome.Failed(problem) -> Diag.Outcome.Failed(problem)
+        Diag.Outcome.Done(tokens) -> Diag.Outcome.Done(Scanned(tokens: tokens, comments: lexed.comments))
+      end
+  end
+end
+
+private
+
 ## The token kind of each operator and bracket.
 OPERATOR_KINDS = {
   "->": "arrow", "==": "equal", "!=": "not-equal", "<=": "less-equal", ">=": "greater-equal", "&&": "and", "||": "or",
@@ -59,10 +98,6 @@ STRING_STOPS = Set.new(["\"", "#", "\\", "\n", "\r", ""])
 
 ## Where the plain text of a heredoc line ends: `#`, `\`, a line break, or the sentinel. A `"` is plain text there.
 HEREDOC_STOPS = Set.new(["#", "\\", "\n", "\r", ""])
-
-## The name of the heredoc whose body is a template (docs/grammar/04-lexical.md): the lexer keeps its lines as written
-## in one `eag` token and the parser expands it (eag.agc).
-export EAG_HEREDOC = "EAG"
 
 ## The capitals that start a heredoc name. Never the sentinel, as for NAME_CHARS.
 HEREDOC_UPPER = Set.new("ABCDEFGHIJKLMNOPQRSTUVWXYZ".split(""))
@@ -212,12 +247,6 @@ struct Lexed
   line_start: Int
 end
 
-## The tokens of a text and its plain comments, in source order (`lex_with_comments`).
-export struct Scanned
-  tokens: List[Tokens.Token]
-  comments: List[Tokens.Comment]
-end
-
 # One body line of a heredoc: where it starts, where its text starts after the spaces, where it stops (before the
 # line break) and its line number.
 struct BodyLine
@@ -286,33 +315,6 @@ struct Input
   size: Int
   lines: List[String]
   by_lines: Bool
-end
-
-## Whether `word` is a reserved word, which the lexer gives a token of its own kind and never a name.
-export def keyword?(word: String) -> Bool = WORD_ACTIONS.get(word, 0) > 0
-
-## Lexes a source text into its tokens, or the first `LEX-` diagnostic.
-export def lex(text: String) -> Diag.Outcome[List[Tokens.Token]]
-  case lex_with_comments(text)
-    Diag.Outcome.Failed(problem) -> Diag.Outcome.Failed(problem)
-    Diag.Outcome.Done(scanned) -> Diag.Outcome.Done(scanned.tokens)
-  end
-end
-
-## Lexes a source text like `lex`, and also gives its plain comments, which `lex` drops: the side list that the
-## formatter attaches to the tree. The tokens are the ones `lex` gives.
-export def lex_with_comments(text: String) -> Diag.Outcome[Scanned]
-  input = new_input(text)
-  first = Lexed(tokens: [], comments: [], delimiters: [], index: 0, line: 1, line_start: 0)
-  case lex_from(input, first, -1)
-    Diag.Outcome.Failed(problem) -> Diag.Outcome.Failed(problem)
-    Diag.Outcome.Done(lexed) ->
-      here = Source.position(lexed.index, lexed.line, lexed.line_start)
-      case finish(input, lexed.tokens, lexed.delimiters, here)
-        Diag.Outcome.Failed(problem) -> Diag.Outcome.Failed(problem)
-        Diag.Outcome.Done(tokens) -> Diag.Outcome.Done(Scanned(tokens: tokens, comments: lexed.comments))
-      end
-  end
 end
 
 # The main loop, from the state `state` to the end of the text. A heredoc runs it again for each `#{...}` of its body

@@ -29,17 +29,17 @@ import State from "check_state"
 import Statements from "check_stmt"
 
 ## The prelude files a program needs, added to the program: the state with room for their node ids, and their modules.
-export struct Attached
+struct Attached
   st: State.St
   modules: List[Linker.LinkedModule]
 end
 
 ## The type variables the signatures of the prelude functions may use: the letters of the catalog rows.
-export def variables() -> List[String] = ["A", "B", "K", "V"]
+def variables() -> List[String] = ["A", "B", "K", "V"]
 
 ## Reads, checks and returns the prelude functions that st.bodies names. base is the context of the program before its
 ## declarations were registered, and the node ids of the prelude files start at the end of the ids of the program.
-export def attach(settings: Env.Settings, base: State.Cx, st: State.St) -> Result[Attached]
+def attach(settings: Env.Settings, base: State.Cx, st: State.St) -> Result[Attached]
   return ok(Attached(st: st, modules: [])) if st.bodies.size == 0
 
   wanted = wanted_functions(st.bodies.values)
@@ -71,6 +71,8 @@ export def attach(settings: Env.Settings, base: State.Cx, st: State.St) -> Resul
 
   ok(Attached(st: grown, modules: modules))
 end
+
+private
 
 # The functions of each file that the program calls, by file stem, in the order the calls were checked.
 def wanted_functions(keys: List[String]) -> Map[String, List[String]]

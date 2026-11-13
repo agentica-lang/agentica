@@ -33,45 +33,29 @@ import TypeAtJson from "../query/type_at_json"
 import TypeAtText from "../query/type_at_text"
 import Reply from "cli_reply"
 
-# The usage line of each query command, given as the help of QUERY-USAGE.
-OUTLINE_USAGE = (
-  "usage: agentica outline FILE [--json] [--partial]   or   " +
-  "agentica outline --stdin FILE [--json] [--partial]"
-)
-TYPE_AT_USAGE = (
-  "usage: agentica type-at FILE:LINE:COL [--json] [--partial]   or   " +
-  "agentica type-at --stdin FILE:LINE:COL [--json] [--partial]"
-)
-REFS_USAGE = (
-  "usage: agentica refs NAME [PATH...] [--json]   or   " +
-  "agentica refs FILE:LINE:COL [PATH...] [--json] [--partial]   or   " +
-  "agentica refs --stdin FILE:LINE:COL [PATH...] [--json] [--partial]"
-)
-SYMBOL_USAGE = "usage: agentica symbol NAME [PATH...] [--json] [--stdin FILE]"
-
 ## What the words of `agentica refs` ask: a position and the paths to link with its file, a name and the paths to
 ## search, or why the words are wrong.
-export enum RefsAsk
+enum RefsAsk
   At(QueryPosition.Asked, List[String])
   Named(String, List[String])
   Refused(Problems.Problem)
 end
 
 ## The usage line of `agentica outline`.
-export def outline_usage() -> String = OUTLINE_USAGE
+def outline_usage() -> String = OUTLINE_USAGE
 
 ## The usage line of `agentica type-at`.
-export def type_at_usage() -> String = TYPE_AT_USAGE
+def type_at_usage() -> String = TYPE_AT_USAGE
 
 ## The usage line of `agentica refs`.
-export def refs_usage() -> String = REFS_USAGE
+def refs_usage() -> String = REFS_USAGE
 
 ## The usage line of `agentica symbol`.
-export def symbol_usage() -> String = SYMBOL_USAGE
+def symbol_usage() -> String = SYMBOL_USAGE
 
 ## `agentica outline` for `file`. `buffered` is true when the Workspace of `settings` holds the standard input as
 ## `file`; `style` is "json" for the JSON form.
-export def outline(file: String, style: String, buffered: Bool, settings: Env.Settings) -> Reply.Answer
+def outline(file: String, style: String, buffered: Bool, settings: Env.Settings) -> Reply.Answer
   case Core.outline(settings, file, buffered)
     Core.Outlined.Unreadable -> Reply.Answer.Rejected(QueryFiles.unreadable(file, OUTLINE_USAGE))
     Core.Outlined.Rejected(problem) -> Reply.Answer.Rejected(problem)
@@ -87,7 +71,7 @@ end
 ## the rule that a program declares `main` off; a diagnostic of that is exit status 1, and a position that is on no
 ## expression is QUERY-NO-EXPRESSION. With `partial`, a program in which some functions do not check is answered too
 ## (`Core.type_at_partial`).
-export def type_at(asked: QueryPosition.Asked, style: String, partial: Bool, settings: Env.Settings) -> Reply.Answer
+def type_at(asked: QueryPosition.Asked, style: String, partial: Bool, settings: Env.Settings) -> Reply.Answer
   asking: Core.Typed = Core.Typed.Unreadable
   if partial
     asking = Core.type_at_partial(Cache.empty(), settings, asked)
@@ -110,7 +94,7 @@ end
 ## FILE:LINE:COL` stands in for the first word. A word with a colon is a position, which a name never has, so a bad
 ## position is QUERY-USAGE and not a name that nothing declares. `--partial` answers a position alone, so a NAME or a
 ## path with it is QUERY-USAGE.
-export def refs_ask(asked: QueryOptions.Query) -> RefsAsk
+def refs_ask(asked: QueryOptions.Query) -> RefsAsk
   found = positioned(asked)
   case found
     RefsAsk.At(_, paths) ->
@@ -133,7 +117,7 @@ end
 ## It lists the references to the name at the position, or is QUERY-NO-EXPRESSION when the position names nothing. With
 ## `partial` (and no `paths`: `refs_ask` has refused the others) a program in which some functions do not check is
 ## answered too (`Core.refs_partial`).
-export def refs_at(
+def refs_at(
   asked: QueryPosition.Asked,
   paths: List[String],
   style: String,
@@ -147,7 +131,7 @@ end
 
 ## `agentica refs` for a NAME, searched in the files of `paths` (`.` by default) and what they import. `buffer` is the
 ## FILE whose text the Workspace of `settings` holds as the standard input, if any; it is searched too.
-export def refs_named(
+def refs_named(
   name: String,
   paths: List[String],
   buffer: String,
@@ -162,7 +146,7 @@ end
 ## too. The answer is in the JSON form for `asked.style` "json"; in the text form the roots that were left out are one
 ## line each on stderr. A name nothing declares is QUERY-NOT-FOUND, and when no root links the first problem of the
 ## first one is the answer.
-export def symbol(asked: QueryOptions.Query, settings: Env.Settings) -> Reply.Answer
+def symbol(asked: QueryOptions.Query, settings: Env.Settings) -> Reply.Answer
   name = ""
   if asked.words.size > 0
     name = asked.words[0]
@@ -176,6 +160,24 @@ export def symbol(asked: QueryOptions.Query, settings: Env.Settings) -> Reply.An
       Reply.Answer.Printed(Reply.Reply(code: 0, out: SymbolText.text(found), err: SymbolText.skipped_text(found)))
   end
 end
+
+private
+
+# The usage line of each query command, given as the help of QUERY-USAGE.
+OUTLINE_USAGE = (
+  "usage: agentica outline FILE [--json] [--partial]   or   " +
+  "agentica outline --stdin FILE [--json] [--partial]"
+)
+TYPE_AT_USAGE = (
+  "usage: agentica type-at FILE:LINE:COL [--json] [--partial]   or   " +
+  "agentica type-at --stdin FILE:LINE:COL [--json] [--partial]"
+)
+REFS_USAGE = (
+  "usage: agentica refs NAME [PATH...] [--json]   or   " +
+  "agentica refs FILE:LINE:COL [PATH...] [--json] [--partial]   or   " +
+  "agentica refs --stdin FILE:LINE:COL [PATH...] [--json] [--partial]"
+)
+SYMBOL_USAGE = "usage: agentica symbol NAME [PATH...] [--json] [--stdin FILE]"
 
 # The words as a position or a name, whatever `--partial` says.
 def positioned(asked: QueryOptions.Query) -> RefsAsk

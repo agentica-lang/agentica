@@ -5,14 +5,14 @@
 import Ast from "ast"
 
 ## An expression or a statement, the two kinds of node a block body mixes.
-export enum Node
+enum Node
   Expr(Ast.Expr)
   Stmt(Ast.Stmt)
 end
 
 ## The expressions and statements directly below a node, in source order. Named arguments, map entries, if branches and
 ## case arms are not nodes of their own here: their parts come in the place of the wrapper.
-export def children(node: Node) -> List[Node]
+def children(node: Node) -> List[Node]
   case node
     Node.Expr(expr) -> expr_children(expr)
     Node.Stmt(stmt) -> stmt_children(stmt)
@@ -20,12 +20,12 @@ export def children(node: Node) -> List[Node]
 end
 
 ## The start offset of a read, the key the reads are ordered by.
-export def read_offset(read: Ast.ConstRef) -> Int = read.span.start.offset
+def read_offset(read: Ast.ConstRef) -> Int = read.span.start.offset
 
 ## The reads of constants below an initializer, ordered by the start offsets of the reads in the source text, so the
 ## order does not depend on how a tree stores its parts (a map entry gives its key before its value). It walks with a
 ## worklist and no recursion: it runs before the checker has bounded the depth of the tree.
-export def references(root: Ast.Expr) -> List[Ast.ConstRef]
+def references(root: Ast.Expr) -> List[Ast.ConstRef]
   found: List[Ast.ConstRef] = []
   work: List[Node] = [Node.Expr(root)]
   at = 0
@@ -44,6 +44,8 @@ export def references(root: Ast.Expr) -> List[Ast.ConstRef]
 
   found.sort_by do |read: Ast.ConstRef| read_offset(read) end
 end
+
+private
 
 def push_read(found: List[Ast.ConstRef], expr: Ast.Expr) -> List[Ast.ConstRef]
   case expr

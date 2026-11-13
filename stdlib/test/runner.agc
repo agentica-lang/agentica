@@ -11,6 +11,82 @@ import Child from "child"
 import Coverage from "coverage"
 import Units from "units"
 
+## Reads the configuration file named by the one command-line argument, runs every feature and test file in it, and
+## writes the report to the file the configuration names (`report_path`, a new file). The driver reads it from there:
+## a child's stdout keeps only 1 MiB, and the report of a large run is bigger. Exits with a non-zero code when
+## something failed.
+def main() -> Void
+  args = System.args()
+  if args.size != 1
+    IO.warn("usage: the BDD runner takes the path of its configuration file")
+    System.exit(2)
+  end
+  opened = File.open(args[0], "read", 5000)
+  if not opened.ok?
+    IO.warn("cannot open the BDD runner configuration: #{opened.message}")
+    System.exit(2)
+  end
+  handle = opened.unwrap!
+  decoded = JSON.decode(File.read_line(handle, 5000).unwrap_or(""), Config)
+  if not decoded.ok?
+    IO.warn("invalid BDD runner configuration: #{decoded.message}")
+    System.exit(2)
+  end
+  config = decoded.unwrap!
+  # The driver writes one feature file or discovery error per line after the settings, then, only when `--tags` was
+  # given, the expression as a JSON string. It is a line of its own, not a field of `Config`, because the decode of
+  # `Config` has no optional fields and the driver of stage0 (which never writes it) must keep working.
+  read = (0...config.count).to_a.map do |_| JSON.decode(File.read_line(handle, 5000).unwrap_or(""), Entry) end
+  tags = read_tags(handle)
+  jobs = read_jobs(handle)
+  timing = read_timing(handle)
+  parts = read_coverage(handle)
+  _ = File.close(handle, 5000)
+  if read.any? do |entry| not entry.ok? end
+    IO.warn("invalid BDD runner configuration: a feature entry does not decode")
+    System.exit(2)
+  end
+  seed = config.seed
+  if not config.seeded
+    seed = Random.int(0, 2147483647)
+  end
+  started = Time.monotonic_ms()
+  entries = read.map do |entry| entry.unwrap! end
+  files = selected(seeded(config, seed), tags, jobs, parts, entries)
+  # Wall time, not the sum of the file times: with `--jobs` the files and their scenarios overlap.
+  wall_ms = Time.monotonic_ms() - started
+  text = Report.text(files, config.style == "ai", seed)
+  if timing and config.style != "json"
+    text = Report.timed_text(files, config.style == "ai", seed, wall_ms)
+  end
+  # A red run still writes its coverage: what its tests reached is worth seeing. A green run whose report cannot be
+  # written fails, so that CI does not upload an old report as this run's.
+  covered = covered_run(config, parts, entries)
+  code = Report.exit_code(files)
+  if code == 0 and Coverage.failed?(covered)
+    code = 1
+  end
+
+  if config.style == "json" and parts != ""
+    more = {"coverage": Coverage.json(covered), "ok": JSON.from(code == 0), "exit_code": JSON.from(code)}
+    text = JSON.encode(Report.json_and(files, seed, wall_ms, more))
+  elsif config.style == "json"
+    text = JSON.encode(Report.json(files, seed, wall_ms))
+  elsif parts != ""
+    text = "#{text}\n#{Coverage.report_text(covered)}"
+  end
+  saved = save_report(config.report_path, text)
+  if not saved.ok?
+    IO.warn("cannot write the BDD report: #{saved.message}")
+    System.exit(2)
+  end
+  if code != 0
+    System.exit(code)
+  end
+end
+
+private
+
 struct Config
   # The binary, started as `run ...` for the step program and for each scenario.
   vm: String
@@ -88,80 +164,6 @@ end
 enum Ran
   File(Report.FileResult)
   Scenario(Report.ScenarioResult)
-end
-
-## Reads the configuration file named by the one command-line argument, runs every feature and test file in it, and
-## writes the report to the file the configuration names (`report_path`, a new file). The driver reads it from there:
-## a child's stdout keeps only 1 MiB, and the report of a large run is bigger. Exits with a non-zero code when
-## something failed.
-export def main() -> Void
-  args = System.args()
-  if args.size != 1
-    IO.warn("usage: the BDD runner takes the path of its configuration file")
-    System.exit(2)
-  end
-  opened = File.open(args[0], "read", 5000)
-  if not opened.ok?
-    IO.warn("cannot open the BDD runner configuration: #{opened.message}")
-    System.exit(2)
-  end
-  handle = opened.unwrap!
-  decoded = JSON.decode(File.read_line(handle, 5000).unwrap_or(""), Config)
-  if not decoded.ok?
-    IO.warn("invalid BDD runner configuration: #{decoded.message}")
-    System.exit(2)
-  end
-  config = decoded.unwrap!
-  # The driver writes one feature file or discovery error per line after the settings, then, only when `--tags` was
-  # given, the expression as a JSON string. It is a line of its own, not a field of `Config`, because the decode of
-  # `Config` has no optional fields and the driver of stage0 (which never writes it) must keep working.
-  read = (0...config.count).to_a.map do |_| JSON.decode(File.read_line(handle, 5000).unwrap_or(""), Entry) end
-  tags = read_tags(handle)
-  jobs = read_jobs(handle)
-  timing = read_timing(handle)
-  parts = read_coverage(handle)
-  _ = File.close(handle, 5000)
-  if read.any? do |entry| not entry.ok? end
-    IO.warn("invalid BDD runner configuration: a feature entry does not decode")
-    System.exit(2)
-  end
-  seed = config.seed
-  if not config.seeded
-    seed = Random.int(0, 2147483647)
-  end
-  started = Time.monotonic_ms()
-  entries = read.map do |entry| entry.unwrap! end
-  files = selected(seeded(config, seed), tags, jobs, parts, entries)
-  # Wall time, not the sum of the file times: with `--jobs` the files and their scenarios overlap.
-  wall_ms = Time.monotonic_ms() - started
-  text = Report.text(files, config.style == "ai", seed)
-  if timing and config.style != "json"
-    text = Report.timed_text(files, config.style == "ai", seed, wall_ms)
-  end
-  # A red run still writes its coverage: what its tests reached is worth seeing. A green run whose report cannot be
-  # written fails, so that CI does not upload an old report as this run's.
-  covered = covered_run(config, parts, entries)
-  code = Report.exit_code(files)
-  if code == 0 and Coverage.failed?(covered)
-    code = 1
-  end
-
-  if config.style == "json" and parts != ""
-    more = {"coverage": Coverage.json(covered), "ok": JSON.from(code == 0), "exit_code": JSON.from(code)}
-    text = JSON.encode(Report.json_and(files, seed, wall_ms, more))
-  elsif config.style == "json"
-    text = JSON.encode(Report.json(files, seed, wall_ms))
-  elsif parts != ""
-    text = "#{text}\n#{Coverage.report_text(covered)}"
-  end
-  saved = save_report(config.report_path, text)
-  if not saved.ok?
-    IO.warn("cannot write the BDD report: #{saved.message}")
-    System.exit(2)
-  end
-  if code != 0
-    System.exit(code)
-  end
 end
 
 # A file gets at most 1 MiB in one write, and a character takes up to 4 bytes.

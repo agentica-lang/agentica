@@ -8,12 +8,9 @@ import Failure from "../modules/link_failure"
 import Workspace from "../modules/workspace"
 import Reply from "cli_reply"
 
-# The manifest the commands look for, as in packages/project.agc.
-MANIFEST_FILE = "agentica.toml"
-
 ## Runs `work` in the working folder (a canonical path). Its text is the answer; `style` is the output style of the
 ## options: with `json` a success prints `{"ok":true}`, as `check` does.
-export def run(style: String, workspace: Workspace.Workspace, work: Fn[String, Result[String]]) -> Reply.Answer
+def run(style: String, workspace: Workspace.Workspace, work: Fn[String, Result[String]]) -> Reply.Answer
   cwd = Path.cwd()
   return Reply.Answer.Printed(Reply.failed(2, "agentica: cannot read the working folder\n")) if !cwd.ok?
 
@@ -32,9 +29,14 @@ export def run(style: String, workspace: Workspace.Workspace, work: Fn[String, R
 end
 
 ## The failure for a working folder with no manifest above it.
-export def missing_manifest(dir: String) -> String
+def missing_manifest(dir: String) -> String
   file = Paths.join(dir, MANIFEST_FILE)
   message = "there is no #{MANIFEST_FILE} in this folder or above"
   help = Failure.hint("write #{MANIFEST_FILE} in the folder of the project, with a [dependencies] table")
   Failure.fail_file(file, "PKG-MANIFEST-MISSING", message, help)
 end
+
+private
+
+# The manifest the commands look for, as in packages/project.agc.
+MANIFEST_FILE = "agentica.toml"

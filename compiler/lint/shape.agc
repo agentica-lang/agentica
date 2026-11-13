@@ -3,7 +3,7 @@
 import Ast from "../syntax/ast"
 
 ## Whether the expression is `true` or `false`.
-export def flag?(expr: Ast.Expr) -> Bool
+def flag?(expr: Ast.Expr) -> Bool
   case expr
     Ast.Expr.Literal(node) ->
       case node.value
@@ -16,7 +16,7 @@ export def flag?(expr: Ast.Expr) -> Bool
 end
 
 ## Whether the expression is a string literal or an interpolated string.
-export def text?(expr: Ast.Expr) -> Bool
+def text?(expr: Ast.Expr) -> Bool
   case expr
     Ast.Expr.Literal(node) ->
       case node.value
@@ -30,7 +30,7 @@ export def text?(expr: Ast.Expr) -> Bool
 end
 
 ## Whether the expression is `to_s` on a value, written `n.to_s` or `n.to_s()`.
-export def to_s?(expr: Ast.Expr) -> Bool
+def to_s?(expr: Ast.Expr) -> Bool
   case expr
     Ast.Expr.FieldAccess(node) -> node.name == "to_s"
     Ast.Expr.MethodCall(node) -> node.name == "to_s" and node.args.size == 0
@@ -40,7 +40,7 @@ end
 
 ## The operands of a `+` chain, left to right: the left side is followed down while it is a `+` itself, so
 ## `a + b + c` gives [a, b, c]. Anything else is a chain of one operand.
-export def plus_operands(expr: Ast.Expr) -> List[Ast.Expr]
+def plus_operands(expr: Ast.Expr) -> List[Ast.Expr]
   rights: List[Ast.Expr] = []
   left = expr
   following = true
@@ -62,9 +62,11 @@ export def plus_operands(expr: Ast.Expr) -> List[Ast.Expr]
 end
 
 ## The name a variable read has, `none` for any other expression.
-export def read_name(expr: Ast.Expr) -> Optional[String]
+def read_name(expr: Ast.Expr) -> Optional[String]
   case expr
     Ast.Expr.Name(node) -> some(node.name)
     _ -> none
   end
 end
+
+private

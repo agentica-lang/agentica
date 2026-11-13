@@ -4,14 +4,12 @@ import Types from "types"
 
 ## The help text for the exported name closest to name, or `none` when none is close. A name of up to 4 characters may
 ## differ by 1 edit, a longer one by 2; the nearest wins, and the smaller name breaks a tie.
-export def did_you_mean(name: String, candidates: List[String]) -> Optional[String]
-  did_you_mean_among(name, candidates, [])
-end
+def did_you_mean(name: String, candidates: List[String]) -> Optional[String] = did_you_mean_among(name, candidates, [])
 
 ## did_you_mean for the names of a linked program. A linked name starts with "@N::",
 ## the prefix of its file; only the candidates of the same file are offered, and without their prefix. shared are extra
 ## candidates that have no prefix, such as the builtin names.
-export def did_you_mean_among(full_name: String, candidates: List[String], shared: List[String]) -> Optional[String]
+def did_you_mean_among(full_name: String, candidates: List[String], shared: List[String]) -> Optional[String]
   case closest_among(full_name, candidates, shared)
     some(name) -> some("did you mean \"#{name}\"?")
     none -> none
@@ -19,7 +17,7 @@ export def did_you_mean_among(full_name: String, candidates: List[String], share
 end
 
 ## The name nearest to full_name among the candidates of its file and the shared ones, or `none` when none is close.
-export def closest_among(full_name: String, candidates: List[String], shared: List[String]) -> Optional[String]
+def closest_among(full_name: String, candidates: List[String], shared: List[String]) -> Optional[String]
   prefix = file_prefix(full_name)
   name = Types.display_name(full_name)
   limit = 2
@@ -38,17 +36,19 @@ export def closest_among(full_name: String, candidates: List[String], shared: Li
 end
 
 ## The "@N::" a linked name starts with, or "".
-export def file_prefix(name: String) -> String
+def file_prefix(name: String) -> String
   shown = Types.display_name(name)
   name.slice(0, name.length - shown.length)
 end
 
 ## The number of single-character edits (insert, delete, replace) from a to b.
-export def edit_distance(a: String, b: String) -> Int
+def edit_distance(a: String, b: String) -> Int
   right = b.split("")
   first: List[Int] = (0..right.size).to_a
   last_row(a.split(""), right, 1, first)
 end
+
+private
 
 # The candidates are sorted, so the first one at the smallest distance is the smaller name of a tie. A candidate whose
 # length differs by more than the limit cannot be near, which skips most of the table.

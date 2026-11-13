@@ -18,36 +18,10 @@ import Tokens from "../syntax/token"
 import Comments from "comments"
 import Docs from "doc"
 
-# The binary operators by token kind, with the level of the parser (compiler/syntax/parser.agc LEVELS). A range is
-# looser than all of them and does not chain.
-LEVELS: Map[String, Int] = {
-  "or": 1,
-  "and": 2,
-  "equal": 3,
-  "not-equal": 3,
-  "less": 4,
-  "less-equal": 4,
-  "greater": 4,
-  "greater-equal": 4,
-  "pipe-forward": 5,
-  "plus": 6,
-  "minus": 6,
-  "multiply": 7,
-  "divide": 7,
-  "modulo": 7,
-}
-# The level of `|>`, of `try`, `-` and `not`, and of a postfix or primary expression.
-PIPE_LEVEL = 5
-UNARY_LEVEL = 8
-POSTFIX_LEVEL = 9
-# A width no line reaches: a doc laid out in it breaks only where it must.
-UNLIMITED = 1000000
-EXPORT = "export "
-
 ## What the layout reads besides the tree: the source lines, the tokens that are not line breaks with their starts,
 ## the comments of each node by its key (`Comments.key_of`), the body of each heredoc by the offset of its opener, and
 ## the `extern` blocks.
-export struct Context
+struct Context
   lines: List[String]
   tokens: List[Tokens.Token]
   starts: List[Int]
@@ -69,7 +43,7 @@ end
 
 ## An `extern` block, copied whole: its first and last lines and offsets, and the comments that the attachment gave
 ## to its declarations from outside it, before and after it.
-export struct Extern
+struct Extern
   first: Int
   last: Int
   start: Int
@@ -78,41 +52,8 @@ export struct Extern
   after: List[Tokens.Comment]
 end
 
-# One item of a body: its first and last source lines and its document, whether it is a simple statement whose
-# document is measured (it owes an empty line after it when it took several lines), and whether it is a comment that
-# closes its body (it does not take the empty line that is owed, as no item follows to be told apart from it).
-struct Item
-  first: Int
-  last: Int
-  doc: Docs.Doc
-  spread: Bool
-  closing: Bool
-  # A one-line def of the source, and one that the layout writes with a body: next to another one-line def, which the
-  # source may have on the next line, it needs an empty line (sequence).
-  one_line: Bool = false
-  gap: Bool = false
-  # The `private` line with its comments: an empty line before the first of them and after the last (private_items).
-  blank_before: Bool = false
-  blank_after: Bool = false
-end
-
-# The comments of a node before it and after it, as documents to put around it.
-struct Around
-  before: List[Docs.Doc]
-  after: List[Docs.Doc]
-end
-
-# A link of a method chain: its document (from the `.` or `[`) without its trailing `do` block, which `block` holds,
-# whether it is a call, and whether a chain may break before it.
-struct Link
-  doc: Docs.Doc
-  block: List[Docs.Doc]
-  call: Bool
-  breaks: Bool
-end
-
 ## Builds the context of a file from its text, its tokens, its comments and their attachment.
-export def context(text: String, tokens: List[Tokens.Token], attachment: Comments.Attachment, width: Int) -> Context
+def context(text: String, tokens: List[Tokens.Token], attachment: Comments.Attachment, width: Int) -> Context
   lines = text.split("\n")
   kept = tokens.select do |token: Tokens.Token| token.kind != "NL" and token.kind != "EOF" end
   starts = kept.map do |token: Tokens.Token| token.span.start.offset end
@@ -158,7 +99,7 @@ export def context(text: String, tokens: List[Tokens.Token], attachment: Comment
 end
 
 ## The document of a file.
-export def program_doc(c: Context, program: Ast.Program) -> Docs.Doc
+def program_doc(c: Context, program: Ast.Program) -> Docs.Doc
   c = c.with(void_aliases: void_aliases(program.declarations))
   items: List[Item] = []
   if program.module_doc.some? and c.tokens.size > 0 and c.tokens[0].kind == "DOC"
@@ -197,6 +138,67 @@ export def program_doc(c: Context, program: Ast.Program) -> Docs.Doc
   end
 
   sequence(c, items)
+end
+
+private
+
+# The binary operators by token kind, with the level of the parser (compiler/syntax/parser.agc LEVELS). A range is
+# looser than all of them and does not chain.
+LEVELS: Map[String, Int] = {
+  "or": 1,
+  "and": 2,
+  "equal": 3,
+  "not-equal": 3,
+  "less": 4,
+  "less-equal": 4,
+  "greater": 4,
+  "greater-equal": 4,
+  "pipe-forward": 5,
+  "plus": 6,
+  "minus": 6,
+  "multiply": 7,
+  "divide": 7,
+  "modulo": 7,
+}
+# The level of `|>`, of `try`, `-` and `not`, and of a postfix or primary expression.
+PIPE_LEVEL = 5
+UNARY_LEVEL = 8
+POSTFIX_LEVEL = 9
+# A width no line reaches: a doc laid out in it breaks only where it must.
+UNLIMITED = 1000000
+EXPORT = "export "
+
+# One item of a body: its first and last source lines and its document, whether it is a simple statement whose
+# document is measured (it owes an empty line after it when it took several lines), and whether it is a comment that
+# closes its body (it does not take the empty line that is owed, as no item follows to be told apart from it).
+struct Item
+  first: Int
+  last: Int
+  doc: Docs.Doc
+  spread: Bool
+  closing: Bool
+  # A one-line def of the source, and one that the layout writes with a body: next to another one-line def, which the
+  # source may have on the next line, it needs an empty line (sequence).
+  one_line: Bool = false
+  gap: Bool = false
+  # The `private` line with its comments: an empty line before the first of them and after the last (private_items).
+  blank_before: Bool = false
+  blank_after: Bool = false
+end
+
+# The comments of a node before it and after it, as documents to put around it.
+struct Around
+  before: List[Docs.Doc]
+  after: List[Docs.Doc]
+end
+
+# A link of a method chain: its document (from the `.` or `[`) without its trailing `do` block, which `block` holds,
+# whether it is a call, and whether a chain may break before it.
+struct Link
+  doc: Docs.Doc
+  block: List[Docs.Doc]
+  call: Bool
+  breaks: Bool
 end
 
 # Whether the `private` line of a scope comes before its declaration number `at` (the size of the scope for the end).

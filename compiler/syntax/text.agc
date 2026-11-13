@@ -5,7 +5,7 @@ import Source from "source"
 import Unicode from "unicode"
 
 ## A String as ASCII text between double quotes; every other character is written as \\u{HEX}.
-export def quote(text: String) -> String
+def quote(text: String) -> String
   codes = text.split("").map do |character| String.code(character) end
   parts: List[String] = ["\""]
   segment = 0
@@ -27,12 +27,14 @@ export def quote(text: String) -> String
 end
 
 ## A span as offset:line:column-offset:line:column.
-export def span_text(span: Source.Span) -> String = "#{position_text(span.start)}-#{position_text(span.stop)}"
+def span_text(span: Source.Span) -> String = "#{position_text(span.start)}-#{position_text(span.stop)}"
 
 ## The ERROR line of a diagnostic: code, span, message and help (- when there is none).
-export def diagnostic_line(problem: Diag.Diagnostic) -> String
+def diagnostic_line(problem: Diag.Diagnostic) -> String
   "ERROR #{problem.code} #{span_text(problem.span)} #{quote(problem.message)} #{help_text(problem.help)}"
 end
+
+private
 
 def escaped(code: Int) -> String
   case code

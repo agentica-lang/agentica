@@ -5,6 +5,8 @@
 ## Cost: each function is O(n) in the steps of the VM, n the values it visits, and calls its callback once for each of
 ## them, in order; min and max are O(1).
 
+private
+
 def map(range: Range, block: Fn[Int, B]) -> List[B]
   found: List[B] = []
   for item in range

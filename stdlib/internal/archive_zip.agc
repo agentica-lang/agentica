@@ -25,6 +25,67 @@
 
 import Binary from "std/binary"
 
+## Copies the allowlisted `members` out of the ZIP archive at `src` into `dest_dir` and returns each file's bytes in
+## member order.
+##
+## `timeout_ms` is the whole call in milliseconds and `max_output_bytes` caps the total of the extracted files; the
+## caller (`Archive.extract_zip`) checks their ranges. `members` holds 1 to 256 safe relative paths, `dest_dir` is
+## created private and must not exist, and only regular files are written. Fixed ceilings: the source is at most
+## 256 MiB, the three passes together read at most 768 MiB of physical bytes, 8192 entries, 1024 name bytes, and
+## names are strict UTF-8 when flag 11 is set and pure ASCII otherwise.
+def extract_zip(
+  src: String,
+  members: List[String],
+  dest_dir: String,
+  timeout_ms: Int,
+  max_output_bytes: Int,
+) -> Result[List[Int]]
+  if timeout_ms <= 0 or timeout_ms > 86400000
+    return error("archive: options.timeout_ms must be 1..86400000", kind: "argument")
+  end
+  if max_output_bytes <= 0 or max_output_bytes > 1073741824
+    return error("archive: options.max_output_bytes must be 1..1073741824", kind: "argument")
+  end
+  now = Time.monotonic_ms()
+  return error("archive: the clock is too far ahead for the timeout", kind: "argument") if now > INT_MAX - timeout_ms
+  deadline = now + timeout_ms
+  wanted = try validate_members(members)
+  # The destination in the spelling the host join produces: on Windows Path.join turns every `\` into a `/`,
+  # while a caller may hold `\` (a cache root from the OS does), and the under-destination guard compares the joined
+  # output with this folder literally. Without this a valid destination looks like an escape on Windows.
+  joined = try join_one([dest_dir])
+  dest = strip_slashes(joined)
+  return error("archive: destination must not be empty", kind: "argument") if dest == ""
+  info = try stat_src(src, deadline)
+  return error("archive: source is not a regular file: #{src}", kind: "argument") if info.kind != "file"
+  found = try pass1(src, deadline)
+  entries = try pass2(src, found, deadline)
+  try make_dest(dest, deadline)
+  ordered = List.sort_by(entries) do |entry| entry.offset end
+  by: Map[String, Int] = {}
+  for item in wanted
+    by = Map.put(by, item.path, item.index)
+  end
+  ctx = Zctx(
+    dest: dest,
+    size: found.size,
+    deadline: deadline,
+    max_output: max_output_bytes,
+    wanted: wanted,
+    by_name: by,
+    matched: List.repeat(false, wanted.size),
+    counts: List.repeat(0, wanted.size),
+    extracted: 0,
+    seen_fold: {},
+    seen_exact: {},
+  )
+
+  outcome = try pass3(src, found, ordered, ctx)
+  ok(outcome)
+end
+
+private
+
 # Fixed ceilings, documented on `extract_zip`.
 CHUNK = 65536
 INPUT_BYTES = 268435456
@@ -177,65 +238,6 @@ struct Zctx
   extracted: Int
   seen_fold: Map[String, Bool]
   seen_exact: Map[String, Bool]
-end
-
-## Copies the allowlisted `members` out of the ZIP archive at `src` into `dest_dir` and returns each file's bytes in
-## member order.
-##
-## `timeout_ms` is the whole call in milliseconds and `max_output_bytes` caps the total of the extracted files; the
-## caller (`Archive.extract_zip`) checks their ranges. `members` holds 1 to 256 safe relative paths, `dest_dir` is
-## created private and must not exist, and only regular files are written. Fixed ceilings: the source is at most
-## 256 MiB, the three passes together read at most 768 MiB of physical bytes, 8192 entries, 1024 name bytes, and
-## names are strict UTF-8 when flag 11 is set and pure ASCII otherwise.
-export def extract_zip(
-  src: String,
-  members: List[String],
-  dest_dir: String,
-  timeout_ms: Int,
-  max_output_bytes: Int,
-) -> Result[List[Int]]
-  if timeout_ms <= 0 or timeout_ms > 86400000
-    return error("archive: options.timeout_ms must be 1..86400000", kind: "argument")
-  end
-  if max_output_bytes <= 0 or max_output_bytes > 1073741824
-    return error("archive: options.max_output_bytes must be 1..1073741824", kind: "argument")
-  end
-  now = Time.monotonic_ms()
-  return error("archive: the clock is too far ahead for the timeout", kind: "argument") if now > INT_MAX - timeout_ms
-  deadline = now + timeout_ms
-  wanted = try validate_members(members)
-  # The destination in the spelling the host join produces: on Windows Path.join turns every `\` into a `/`,
-  # while a caller may hold `\` (a cache root from the OS does), and the under-destination guard compares the joined
-  # output with this folder literally. Without this a valid destination looks like an escape on Windows.
-  joined = try join_one([dest_dir])
-  dest = strip_slashes(joined)
-  return error("archive: destination must not be empty", kind: "argument") if dest == ""
-  info = try stat_src(src, deadline)
-  return error("archive: source is not a regular file: #{src}", kind: "argument") if info.kind != "file"
-  found = try pass1(src, deadline)
-  entries = try pass2(src, found, deadline)
-  try make_dest(dest, deadline)
-  ordered = List.sort_by(entries) do |entry| entry.offset end
-  by: Map[String, Int] = {}
-  for item in wanted
-    by = Map.put(by, item.path, item.index)
-  end
-  ctx = Zctx(
-    dest: dest,
-    size: found.size,
-    deadline: deadline,
-    max_output: max_output_bytes,
-    wanted: wanted,
-    by_name: by,
-    matched: List.repeat(false, wanted.size),
-    counts: List.repeat(0, wanted.size),
-    extracted: 0,
-    seen_fold: {},
-    seen_exact: {},
-  )
-
-  outcome = try pass3(src, found, ordered, ctx)
-  ok(outcome)
 end
 
 def smaller(a: Int, b: Int) -> Int

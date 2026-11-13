@@ -6,11 +6,8 @@ import Base from "../syntax/parse_base"
 import Source from "../syntax/source"
 import Failure from "link_failure"
 
-# The first group of the private part, in a scope with `private` (check_order).
-PRIVATE_PART = 4
-
 ## What a top-level declaration is.
-export enum Kind
+enum Kind
   Struct
   Enum
   TypeAlias
@@ -22,7 +19,7 @@ export enum Kind
 end
 
 ## The declaration inside an export, or the declaration itself.
-export def unwrap(decl: Ast.Decl) -> Ast.Decl
+def unwrap(decl: Ast.Decl) -> Ast.Decl
   case decl
     Ast.Decl.Export(node) -> node.declaration
     _ -> decl
@@ -30,7 +27,7 @@ export def unwrap(decl: Ast.Decl) -> Ast.Decl
 end
 
 ## The span of a declaration (of the whole export, for an exported one).
-export def span_of(decl: Ast.Decl) -> Source.Span
+def span_of(decl: Ast.Decl) -> Source.Span
   case decl
     Ast.Decl.Import(node) -> node.span
     Ast.Decl.Reexport(node) -> node.span
@@ -47,7 +44,7 @@ end
 
 ## Returns the span of the name of a type alias or a module block, and the span of the whole declaration for any other
 ## one.
-export def name_span_of(decl: Ast.Decl) -> Source.Span
+def name_span_of(decl: Ast.Decl) -> Source.Span
   case unwrap(decl)
     Ast.Decl.TypeAlias(node) -> node.name_span
     Ast.Decl.Module(node) -> node.name_span
@@ -57,7 +54,7 @@ end
 
 ## The span of the name of a declaration: of the name itself for a constant, a function, a struct, an enum, a type
 ## alias or a module block, and of the whole declaration for a resource.
-export def declared_name_span(decl: Ast.Decl) -> Source.Span
+def declared_name_span(decl: Ast.Decl) -> Source.Span
   case unwrap(decl)
     Ast.Decl.Constant(node) -> node.name_span
     Ast.Decl.Function(node) -> node.name_span
@@ -68,7 +65,7 @@ export def declared_name_span(decl: Ast.Decl) -> Source.Span
 end
 
 ## The name a struct, enum, alias, resource, function, constant or module block declares; "" for an import.
-export def name_of(decl: Ast.Decl) -> String
+def name_of(decl: Ast.Decl) -> String
   case unwrap(decl)
     Ast.Decl.Function(node) -> node.name
     Ast.Decl.Struct(node) -> node.name
@@ -82,7 +79,7 @@ export def name_of(decl: Ast.Decl) -> String
 end
 
 ## The kind of the declaration inside an export, or of the declaration itself.
-export def kind_of(decl: Ast.Decl) -> Kind
+def kind_of(decl: Ast.Decl) -> Kind
   case unwrap(decl)
     Ast.Decl.Function(_) -> Kind.Function
     Ast.Decl.Struct(_) -> Kind.Struct
@@ -96,7 +93,7 @@ export def kind_of(decl: Ast.Decl) -> Kind
 end
 
 ## True for a struct.
-export def struct?(kind: Kind) -> Bool
+def struct?(kind: Kind) -> Bool
   case kind
     Kind.Struct -> true
     _ -> false
@@ -104,7 +101,7 @@ export def struct?(kind: Kind) -> Bool
 end
 
 ## True for a function.
-export def function?(kind: Kind) -> Bool
+def function?(kind: Kind) -> Bool
   case kind
     Kind.Function -> true
     _ -> false
@@ -112,7 +109,7 @@ export def function?(kind: Kind) -> Bool
 end
 
 ## True for an enum.
-export def enum?(kind: Kind) -> Bool
+def enum?(kind: Kind) -> Bool
   case kind
     Kind.Enum -> true
     _ -> false
@@ -120,7 +117,7 @@ export def enum?(kind: Kind) -> Bool
 end
 
 ## Whether the kind is a type alias.
-export def type_alias?(kind: Kind) -> Bool
+def type_alias?(kind: Kind) -> Bool
   case kind
     Kind.TypeAlias -> true
     _ -> false
@@ -128,7 +125,7 @@ export def type_alias?(kind: Kind) -> Bool
 end
 
 ## True for a resource of an extern block.
-export def resource?(kind: Kind) -> Bool
+def resource?(kind: Kind) -> Bool
   case kind
     Kind.Resource -> true
     _ -> false
@@ -136,7 +133,7 @@ export def resource?(kind: Kind) -> Bool
 end
 
 ## True for a constant.
-export def constant?(kind: Kind) -> Bool
+def constant?(kind: Kind) -> Bool
   case kind
     Kind.Constant -> true
     _ -> false
@@ -144,7 +141,7 @@ export def constant?(kind: Kind) -> Bool
 end
 
 ## True for a module block.
-export def module?(kind: Kind) -> Bool
+def module?(kind: Kind) -> Bool
   case kind
     Kind.Module -> true
     _ -> false
@@ -152,7 +149,7 @@ export def module?(kind: Kind) -> Bool
 end
 
 ## True for an import.
-export def import?(kind: Kind) -> Bool
+def import?(kind: Kind) -> Bool
   case kind
     Kind.Import -> true
     _ -> false
@@ -160,7 +157,7 @@ export def import?(kind: Kind) -> Bool
 end
 
 ## True for an export, or a constant written with export.
-export def exported?(decl: Ast.Decl) -> Bool
+def exported?(decl: Ast.Decl) -> Bool
   case decl
     Ast.Decl.Export(_) -> true
     Ast.Decl.Constant(node) -> node.exported
@@ -169,7 +166,7 @@ export def exported?(decl: Ast.Decl) -> Bool
 end
 
 ## The text of the import line a help shows, for the path as written (quoted): the alias form, or the name list.
-export def import_line(written: String, decl: Ast.ImportDecl) -> String
+def import_line(written: String, decl: Ast.ImportDecl) -> String
   case decl.alias
     some(alias) -> "import #{alias} from #{written}"
     none ->
@@ -179,17 +176,17 @@ export def import_line(written: String, decl: Ast.ImportDecl) -> String
 end
 
 ## The alias of an import, or "" for an import list (an alias is never empty).
-export def alias_of(decl: Ast.ImportDecl) -> String = decl.alias.unwrap_or("")
+def alias_of(decl: Ast.ImportDecl) -> String = decl.alias.unwrap_or("")
 
 ## True when the name starts with a capital letter, as a TYPE_NAME token does: the case rule that tells a type from a
 ## function.
-export def type_name?(name: String) -> Bool = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".include?(name.slice(0, 1))
+def type_name?(name: String) -> Bool = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".include?(name.slice(0, 1))
 
 ## True for the name of a constant: capitals, digits and `_`, starting with a capital, at least two characters.
-export def constant_name?(name: String) -> Bool = Base.constant_name?(name)
+def constant_name?(name: String) -> Bool = Base.constant_name?(name)
 
 ## The imports of a file, in order.
-export def imports_of(declarations: List[Ast.Decl]) -> List[Ast.ImportDecl]
+def imports_of(declarations: List[Ast.Decl]) -> List[Ast.ImportDecl]
   found: List[Ast.ImportDecl] = []
   for decl in declarations
     case decl
@@ -202,7 +199,7 @@ export def imports_of(declarations: List[Ast.Decl]) -> List[Ast.ImportDecl]
 end
 
 ## The module blocks of a file, exported or not, in order.
-export def modules_of(declarations: List[Ast.Decl]) -> List[Ast.ModuleDecl]
+def modules_of(declarations: List[Ast.Decl]) -> List[Ast.ModuleDecl]
   found: List[Ast.ModuleDecl] = []
   for decl in declarations
     case unwrap(decl)
@@ -215,7 +212,7 @@ export def modules_of(declarations: List[Ast.Decl]) -> List[Ast.ModuleDecl]
 end
 
 ## The re-exports of a file, in order.
-export def reexports_of(declarations: List[Ast.Decl]) -> List[Ast.ReexportDecl]
+def reexports_of(declarations: List[Ast.Decl]) -> List[Ast.ReexportDecl]
   found: List[Ast.ReexportDecl] = []
   for decl in declarations
     case decl
@@ -236,7 +233,7 @@ end
 ## block is in the group of a def (exported or not), with the block's functions. The record of an extern function
 ## with out parameters (Ast.StructDecl.record_of) goes with its function, so it has no group. This is a style rule with
 ## no meaning for evaluation.
-export def check_order(file: String, declarations: List[Ast.Decl], mark: Optional[Ast.PrivateMark]) -> Result[Void]
+def check_order(file: String, declarations: List[Ast.Decl], mark: Optional[Ast.PrivateMark]) -> Result[Void]
   highest = 0
   at = 0
   for decl in declarations
@@ -272,6 +269,11 @@ export def check_order(file: String, declarations: List[Ast.Decl], mark: Optiona
 
   ok()
 end
+
+private
+
+# The first group of the private part, in a scope with `private` (check_order).
+PRIVATE_PART = 4
 
 # The group of a declaration in a scope with `private`, from its group in a scope without (`plain`): imports 0,
 # re-exports and constants 1, types 2, functions 3, each but the imports and the re-exports 3 more after `private`.

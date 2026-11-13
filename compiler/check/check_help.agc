@@ -9,13 +9,13 @@ import Data from "check_tables"
 
 ## The help for positional options where the spawns take Process.Options (a type mismatch or, past three arguments, an
 ## arity error).
-export PROCESS_OPTIONS_HELP = "the options go in a record: Process.Options(timeout_ms: 5000, chdir: \"dir\")"
+PROCESS_OPTIONS_HELP = "the options go in a record: Process.Options(timeout_ms: 5000, chdir: \"dir\")"
 
 ## The help for an Error where a String goes: the payload of error(e) was a String before it was an Error.
-export ERROR_TEXT_HELP = "an Error is not a String: its text is its message field, e.message"
+ERROR_TEXT_HELP = "an Error is not a String: its text is its message field, e.message"
 
 ## The tables of check_tables.agc, built once per run. A key is the receiver kind and the name, `String.size`.
-export struct Tables
+struct Tables
   modules: Map[String, String]
   aliases: Map[String, String]
   foreign_names: Map[String, String]
@@ -24,7 +24,7 @@ export struct Tables
 end
 
 ## The tables of this run.
-export def tables() -> Tables
+def tables() -> Tables
   Tables(
     modules: Data.method_modules(),
     aliases: Data.method_aliases(),
@@ -35,7 +35,7 @@ export def tables() -> Tables
 end
 
 ## The help of a type mismatch: how to convert the actual type into the expected one (conversion-help).
-export def conversion(expected: Types.Type, actual: Types.Type) -> String
+def conversion(expected: Types.Type, actual: Types.Type) -> String
   return ERROR_TEXT_HELP if Types.same?(expected, Types.Type.String) and Types.error?(actual)
   return ERROR_TEXT_HELP if Types.error?(expected) and Types.same?(actual, Types.Type.String)
 
@@ -82,11 +82,11 @@ export def conversion(expected: Types.Type, actual: Types.Type) -> String
 end
 
 ## The help for a name another language has but Agentica does not, or "".
-export def foreign(tables: Tables, name: String) -> String = tables.foreign_names.get(name, "")
+def foreign(tables: Tables, name: String) -> String = tables.foreign_names.get(name, "")
 
 ## The "did you mean" help for the closest of the candidates and the shared names, or "". A builtin that has a Ruby
 ## method form is offered in it (`list.select`, not `List.filter`).
-export def near(name: String, candidates: List[String], shared: List[String]) -> String
+def near(name: String, candidates: List[String], shared: List[String]) -> String
   case Suggest.closest_among(name, candidates, shared)
     some(found) -> "did you mean \"#{RubyForm.shown(found)}\"?"
     none -> ""
@@ -94,13 +94,13 @@ export def near(name: String, candidates: List[String], shared: List[String]) ->
 end
 
 ## The field names alone, as "fields: a, b".
-export def field_list(fields: List[Model.Named]) -> String
+def field_list(fields: List[Model.Named]) -> String
   names = fields.map do |field: Model.Named| field.name end
   "fields: #{names.join(", ")}"
 end
 
 ## The help of a missing or unknown field: a guess if one is close, then the field names.
-export def field_help(name: String, fields: List[Model.Named]) -> String
+def field_help(name: String, fields: List[Model.Named]) -> String
   names = fields.map do |field: Model.Named| field.name end
   all = field_list(fields)
   guess = near(name, names, [])
@@ -108,6 +108,8 @@ export def field_help(name: String, fields: List[Model.Named]) -> String
 
   "#{guess} #{all}"
 end
+
+private
 
 # What a failed unwrap suggests, by the type that was expected.
 def unwrap_form(expected: Types.Type) -> String

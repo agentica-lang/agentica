@@ -32,6 +32,111 @@ import Parser from "../syntax/parser"
 import Declarations from "declarations"
 import Workspace from "workspace"
 
+## A constant whose value is shorter than this keeps its value in the stub: it is cheap to read and to check.
+ELIDE_FROM = 24
+
+## What an entry says about the text whose digest was asked for: `tree` is "" when no check vouches for it, `styled` is
+## true when the text has no `end` that the style rule blank_line_after_end refuses (false when it breaks the rule, or
+## nobody looked), `stub` is "" when the entry has none, and `constants` holds the type of each constant of the file by
+## its name, as type_code.agc writes it (all of them, or none).
+struct Entry
+  tree: String
+  styled: Bool
+  stub: String
+  constants: Map[String, String]
+end
+
+## The SHA-256 of `text` as 64 lowercase hex digits.
+def text_digest(text: String) -> String = OpenSSL.Digest.sha256_hexdigest(text.bytes)
+
+## The tree digest of a file: `shape` (what describes it apart from its text), the digest of its text and the tree
+## digests of the files it imports, in the order of its import lines.
+def tree_digest(shape: String, digest: String, imported: List[String]) -> String
+  pieces = [FORMAT, shape, digest].concat(imported)
+  OpenSSL.Digest.sha256_hexdigest(pieces.map(&piece).join("").bytes)
+end
+
+## Every piece is written with its length, so two different lists never give one text.
+def piece(text: String) -> String = "#{text.length}:#{text}"
+
+## The names of the constants that `program` declares, sorted.
+def constant_names(program: Ast.Program) -> List[String]
+  names: List[String] = []
+  for wrapped in program.declarations
+    case Declarations.unwrap(wrapped)
+      Ast.Decl.Constant(node) -> names = names.push(node.name)
+      _ -> next
+    end
+  end
+
+  names.sort
+end
+
+## The entry the cache holds for the file `key` if it is for the text with `digest`, else `none`.
+def find(cache: Workspace.CheckCache, key: String, digest: String) -> Optional[Entry]
+  return none if !cache.on
+
+  raw = cache.read.call(key)
+  return none if !raw.ok?
+
+  decode(raw.unwrap!, digest)
+end
+
+## The text of an entry for the text with `digest`: five lines of head, the stub, then one line for each constant.
+def encode(digest: String, entry: Entry) -> String
+  tree = entry.tree
+  if tree == ""
+    tree = NO_TREE
+  end
+
+  head = [
+    FORMAT,
+    "text #{digest}",
+    "tree #{tree}",
+    "style #{styled_digit(entry.styled)}",
+    "stub #{entry.stub.length} #{text_digest(entry.stub)}",
+  ].join("\n")
+
+  lines = entry.constants.keys.sort.map do |name: String|
+    "\n#{CONSTANT_WORD} #{name} #{escaped(entry.constants[name])}"
+  end
+
+  head + "\n" + entry.stub + lines.join("")
+end
+
+## Keeps the entry of the file `key` for the text with `digest`. False when the machine could not.
+def store(cache: Workspace.CheckCache, key: String, digest: String, entry: Entry) -> Bool
+  return false if !cache.on
+
+  cache.write.call(key, encode(digest, entry))
+end
+
+## The stub of `text`, which `program` is the parse of, or `none` when there is none worth keeping: nothing to blank,
+## a module block in the file, or the text does not have the shape the cut relies on, or the stub does not parse to the
+## same declarations.
+def stub_of(text: String, program: Ast.Program) -> Optional[String]
+  # A module block of the file is checked with the file's private functions, which a stub leaves out.
+  return none if Declarations.modules_of(program.declarations).size > 0
+
+  cuts = cuts_of(text, program.declarations)
+  return none if !cuts.ok? or cuts.unwrap!.size == 0
+
+  pieces: List[String] = []
+  at = 0
+  for cut in cuts.unwrap!
+    pieces = pieces.push(text.slice(at, cut.first - at))
+    pieces = pieces.push(replacement(text.slice(cut.first, cut.stop - cut.first), cut.wrap))
+    at = cut.stop
+  end
+
+  stub = pieces.push(text.slice(at, text.length - at)).join("")
+  return some(stub) if stub.length == text.length and same_declarations?(program, stub)
+
+  none
+end
+
+private
+
 # The first line of an entry and of every tree digest; change it when the meaning of an entry changes.
 FORMAT = "agentica-check-4"
 
@@ -41,9 +146,6 @@ NO_TREE = "0000000000000000000000000000000000000000000000000000000000000000"
 
 # `end` closes a function; the stub keeps it and the line break before it.
 END_WORD = "end"
-
-## A constant whose value is shorter than this keeps its value in the stub: it is cheap to read and to check.
-export ELIDE_FROM = 24
 
 # What follows the tree digest in an entry: the style line and the start of the stub line, which are as long as each
 # other.
@@ -66,112 +168,12 @@ BLANKS = (
   "                                                                "
 )
 
-## What an entry says about the text whose digest was asked for: `tree` is "" when no check vouches for it, `styled` is
-## true when the text has no `end` that the style rule blank_line_after_end refuses (false when it breaks the rule, or
-## nobody looked), `stub` is "" when the entry has none, and `constants` holds the type of each constant of the file by
-## its name, as type_code.agc writes it (all of them, or none).
-export struct Entry
-  tree: String
-  styled: Bool
-  stub: String
-  constants: Map[String, String]
-end
-
 # A piece of the text to blank, from its first character to the one before `stop`; `wrap` makes it a parenthesized
 # zero (a constant's value) instead of blanks (the statements of a body).
 struct Cut
   first: Int
   stop: Int
   wrap: Bool
-end
-
-## The SHA-256 of `text` as 64 lowercase hex digits.
-export def text_digest(text: String) -> String = OpenSSL.Digest.sha256_hexdigest(text.bytes)
-
-## The tree digest of a file: `shape` (what describes it apart from its text), the digest of its text and the tree
-## digests of the files it imports, in the order of its import lines.
-export def tree_digest(shape: String, digest: String, imported: List[String]) -> String
-  pieces = [FORMAT, shape, digest].concat(imported)
-  OpenSSL.Digest.sha256_hexdigest(pieces.map(&piece).join("").bytes)
-end
-
-## Every piece is written with its length, so two different lists never give one text.
-export def piece(text: String) -> String = "#{text.length}:#{text}"
-
-## The names of the constants that `program` declares, sorted.
-export def constant_names(program: Ast.Program) -> List[String]
-  names: List[String] = []
-  for wrapped in program.declarations
-    case Declarations.unwrap(wrapped)
-      Ast.Decl.Constant(node) -> names = names.push(node.name)
-      _ -> next
-    end
-  end
-
-  names.sort
-end
-
-## The entry the cache holds for the file `key` if it is for the text with `digest`, else `none`.
-export def find(cache: Workspace.CheckCache, key: String, digest: String) -> Optional[Entry]
-  return none if !cache.on
-
-  raw = cache.read.call(key)
-  return none if !raw.ok?
-
-  decode(raw.unwrap!, digest)
-end
-
-## The text of an entry for the text with `digest`: five lines of head, the stub, then one line for each constant.
-export def encode(digest: String, entry: Entry) -> String
-  tree = entry.tree
-  if tree == ""
-    tree = NO_TREE
-  end
-
-  head = [
-    FORMAT,
-    "text #{digest}",
-    "tree #{tree}",
-    "style #{styled_digit(entry.styled)}",
-    "stub #{entry.stub.length} #{text_digest(entry.stub)}",
-  ].join("\n")
-
-  lines = entry.constants.keys.sort.map do |name: String|
-    "\n#{CONSTANT_WORD} #{name} #{escaped(entry.constants[name])}"
-  end
-
-  head + "\n" + entry.stub + lines.join("")
-end
-
-## Keeps the entry of the file `key` for the text with `digest`. False when the machine could not.
-export def store(cache: Workspace.CheckCache, key: String, digest: String, entry: Entry) -> Bool
-  return false if !cache.on
-
-  cache.write.call(key, encode(digest, entry))
-end
-
-## The stub of `text`, which `program` is the parse of, or `none` when there is none worth keeping: nothing to blank,
-## a module block in the file, or the text does not have the shape the cut relies on, or the stub does not parse to the
-## same declarations.
-export def stub_of(text: String, program: Ast.Program) -> Optional[String]
-  # A module block of the file is checked with the file's private functions, which a stub leaves out.
-  return none if Declarations.modules_of(program.declarations).size > 0
-
-  cuts = cuts_of(text, program.declarations)
-  return none if !cuts.ok? or cuts.unwrap!.size == 0
-
-  pieces: List[String] = []
-  at = 0
-  for cut in cuts.unwrap!
-    pieces = pieces.push(text.slice(at, cut.first - at))
-    pieces = pieces.push(replacement(text.slice(cut.first, cut.stop - cut.first), cut.wrap))
-    at = cut.stop
-  end
-
-  stub = pieces.push(text.slice(at, text.length - at)).join("")
-  return some(stub) if stub.length == text.length and same_declarations?(program, stub)
-
-  none
 end
 
 # The entry in `raw` if it is well formed and for `digest`. Every length is looked at before a slice is taken: an entry

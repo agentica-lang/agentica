@@ -24,7 +24,7 @@ import At from "at"
 ## parameter, which `find` answers so that the caller knows the position is on no expression. `span` is the whole
 ## parameter or binding, and the name alone for a `for` variable and a pattern name, which have no node of their own;
 ## `name_span` is the name as the binding writes it.
-export struct Local
+struct Local
   kind: String
   name: String
   span: Source.Span
@@ -34,10 +34,63 @@ end
 
 ## A local found at a position: `site` is the span of what the position is on, a use of the name or the name of its
 ## binding.
-export struct Found
+struct Found
   local: Local
   site: Source.Span
 end
+
+## The local that the character at `offset` is on in the root file `module`, or `none`. `bound` is `Checked.bound`. A
+## local whose type the checker recorded none for is not answered.
+def find(module: Linker.LinkedModule, bound: Map[Int, List[T.Type]], offset: Int) -> Optional[Found]
+  ask = Query(offset: offset, bound: bound)
+  for declaration in module.declarations
+    case declaration
+      Ast.Decl.Function(node) -> return typed(function_found(ask, node)) if At.holds?(node.span, offset)
+
+      Ast.Decl.Constant(node) ->
+        # A block in the value of a constant has no function around it: the scope starts empty. No other top-level
+        # form holds an expression that can hold a block (a parameter default must be a constant, and a struct field
+        # has no default).
+        return typed(walk(ask, Step.Expr(node.value), {})) if At.holds?(node.span, offset)
+
+      _ -> ask = ask
+    end
+  end
+
+  none
+end
+
+## The names in `module` that stand for `target`, a local `find` gave, in the order of the walk: every use of it, and
+## every assignment to it after the binding (`x += 1`); the binding itself is not one. The walk covers the function or
+## constant that holds the binding, once, with the scopes of the checker, so two sibling blocks that bind one name
+## keep their uses apart. `bound` is `Checked.bound`.
+def uses(module: Linker.LinkedModule, bound: Map[Int, List[T.Type]], target: Local) -> List[Source.Span]
+  ask = Query(offset: -1, bound: bound)
+  offset = target.name_span.start.offset
+  for declaration in module.declarations
+    case declaration
+      Ast.Decl.Function(node) ->
+        if At.holds?(node.span, offset)
+          scope = bind_parameters(ask, parameters_of(ask, node.params), {}).scope
+          return sweep(ask, target, Step.Block(node.body), scope)
+        end
+
+      Ast.Decl.Constant(node) -> return sweep(ask, target, Step.Expr(node.value), {}) if At.holds?(node.span, offset)
+
+      _ -> ask = ask
+    end
+  end
+
+  []
+end
+
+## The parameter `param` of a function as a local, with the type the checker recorded for it (`bound` is
+## `Checked.bound`; Unknown when it recorded none).
+def function_parameter(bound: Map[Int, List[T.Type]], param: Ast.Param) -> Local
+  parameter(Query(offset: -1, bound: bound), param.id, param.name, param.span, param.name_span)
+end
+
+private
 
 # What a walk needs to know that does not change: where the position is, and the types the checker recorded for the
 # binding nodes (`Checked.bound`).
@@ -72,57 +125,6 @@ end
 struct Visit
   hits: List[Source.Span]
   next: List[Pending]
-end
-
-## The local that the character at `offset` is on in the root file `module`, or `none`. `bound` is `Checked.bound`. A
-## local whose type the checker recorded none for is not answered.
-export def find(module: Linker.LinkedModule, bound: Map[Int, List[T.Type]], offset: Int) -> Optional[Found]
-  ask = Query(offset: offset, bound: bound)
-  for declaration in module.declarations
-    case declaration
-      Ast.Decl.Function(node) -> return typed(function_found(ask, node)) if At.holds?(node.span, offset)
-
-      Ast.Decl.Constant(node) ->
-        # A block in the value of a constant has no function around it: the scope starts empty. No other top-level
-        # form holds an expression that can hold a block (a parameter default must be a constant, and a struct field
-        # has no default).
-        return typed(walk(ask, Step.Expr(node.value), {})) if At.holds?(node.span, offset)
-
-      _ -> ask = ask
-    end
-  end
-
-  none
-end
-
-## The names in `module` that stand for `target`, a local `find` gave, in the order of the walk: every use of it, and
-## every assignment to it after the binding (`x += 1`); the binding itself is not one. The walk covers the function or
-## constant that holds the binding, once, with the scopes of the checker, so two sibling blocks that bind one name
-## keep their uses apart. `bound` is `Checked.bound`.
-export def uses(module: Linker.LinkedModule, bound: Map[Int, List[T.Type]], target: Local) -> List[Source.Span]
-  ask = Query(offset: -1, bound: bound)
-  offset = target.name_span.start.offset
-  for declaration in module.declarations
-    case declaration
-      Ast.Decl.Function(node) ->
-        if At.holds?(node.span, offset)
-          scope = bind_parameters(ask, parameters_of(ask, node.params), {}).scope
-          return sweep(ask, target, Step.Block(node.body), scope)
-        end
-
-      Ast.Decl.Constant(node) -> return sweep(ask, target, Step.Expr(node.value), {}) if At.holds?(node.span, offset)
-
-      _ -> ask = ask
-    end
-  end
-
-  []
-end
-
-## The parameter `param` of a function as a local, with the type the checker recorded for it (`bound` is
-## `Checked.bound`; Unknown when it recorded none).
-export def function_parameter(bound: Map[Int, List[T.Type]], param: Ast.Param) -> Local
-  parameter(Query(offset: -1, bound: bound), param.id, param.name, param.span, param.name_span)
 end
 
 # A found local is answered only with a type; a discard has none and is kept, so the caller can tell it from a position

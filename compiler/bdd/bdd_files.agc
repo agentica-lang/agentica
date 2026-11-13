@@ -2,14 +2,10 @@
 ## most 1 MiB.
 
 ## The deadline, in milliseconds, of each file system call of the driver.
-export IO_TIMEOUT = 10_000
-
-# At most 1 MiB goes in one call. A character takes up to 4 bytes, so a piece of 250,000 characters always fits.
-PIECE_BYTES = 1_048_576
-PIECE_CHARACTERS = 250_000
+IO_TIMEOUT = 10_000
 
 ## Writes bytes to a new file with mode 0600. It fails when the path exists (a link in the way included).
-export def write_bytes(path: String, bytes: Bytes) -> Result[Void]
+def write_bytes(path: String, bytes: Bytes) -> Result[Void]
   out = try File.open(path, "create_private", IO_TIMEOUT)
   rest = bytes
   while rest.size > 0
@@ -26,7 +22,7 @@ export def write_bytes(path: String, bytes: Bytes) -> Result[Void]
 end
 
 ## Writes text to a new file with mode 0600, as write_bytes does.
-export def write_text(path: String, text: String) -> Result[Void]
+def write_text(path: String, text: String) -> Result[Void]
   out = try File.open(path, "create_private", IO_TIMEOUT)
   at = 0
   while at < text.length
@@ -46,3 +42,9 @@ export def write_text(path: String, text: String) -> Result[Void]
 
   File.close(out, IO_TIMEOUT)
 end
+
+private
+
+# At most 1 MiB goes in one call. A character takes up to 4 bytes, so a piece of 250,000 characters always fits.
+PIECE_BYTES = 1_048_576
+PIECE_CHARACTERS = 250_000

@@ -7,16 +7,8 @@ import SourceFile from "../syntax/source_file"
 import Paths from "import_path"
 import Workspace from "workspace"
 
-# The names one buffer answers to: its file as typed, as a lexical absolute path, and as the linker keys it (the
-# canonical folder of the file and its name, since the file itself need not exist).
-struct Names
-  typed: String
-  absolute: String
-  key: String
-end
-
 ## What a file reads as, and the names that reach it. Two buffers with one canonical `key` are one file.
-export struct Buffer
+struct Buffer
   names: Names
   read: SourceFile.Read
 end
@@ -24,19 +16,17 @@ end
 ## The buffer that makes `read` the content of `file`, whether or not the disk has the file. The folder of `file` is
 ## the base of its imports and of agentica.toml; when it does not exist, an import fails. `windows` is true on a
 ## Windows host.
-export def buffer(workspace: Workspace.Workspace, windows: Bool, file: String, read: SourceFile.Read) -> Buffer
+def buffer(workspace: Workspace.Workspace, windows: Bool, file: String, read: SourceFile.Read) -> Buffer
   Buffer(names: names_for(workspace, windows, file), read: read)
 end
 
 ## `buffers` with `added`, which replaces the buffer of the same file.
-export def put(buffers: List[Buffer], added: Buffer) -> List[Buffer]
-  without_key(buffers, added.names.key).push(added)
-end
+def put(buffers: List[Buffer], added: Buffer) -> List[Buffer] = without_key(buffers, added.names.key).push(added)
 
 ## `buffers` without the buffer of `file`, if it has one: the buffer whose file has the same canonical name now, or
 ## that was made with `file` spelled as given (the name of a file whose folder did not exist then may have changed
 ## since).
-export def remove(buffers: List[Buffer], workspace: Workspace.Workspace, windows: Bool, file: String) -> List[Buffer]
+def remove(buffers: List[Buffer], workspace: Workspace.Workspace, windows: Bool, file: String) -> List[Buffer]
   key = names_for(workspace, windows, file).key
   buffers.filter do |held: Buffer|
     held.names.key != key and held.names.typed != file and held.names.absolute != file
@@ -44,19 +34,29 @@ export def remove(buffers: List[Buffer], workspace: Workspace.Workspace, windows
 end
 
 ## Whether some buffer is the file `file` names, whichever way it is spelled.
-export def holds?(buffers: List[Buffer], workspace: Workspace.Workspace, windows: Bool, file: String) -> Bool
+def holds?(buffers: List[Buffer], workspace: Workspace.Workspace, windows: Bool, file: String) -> Bool
   key = names_for(workspace, windows, file).key
   buffers.any? do |held: Buffer| held.names.key == key end
 end
 
 ## `workspace` with the content of every buffer. A read of a buffer's file, or of its absolute or canonical path, gives
 ## the buffer; `file_exists` says yes and `real_path` gives the canonical path even when the disk has no such file.
-export def over(workspace: Workspace.Workspace, buffers: List[Buffer]) -> Workspace.Workspace
+def over(workspace: Workspace.Workspace, buffers: List[Buffer]) -> Workspace.Workspace
   workspace.with(
     read_text: ->(path) { read_buffer(workspace, buffers, path) },
     file_exists: ->(path) { find(buffers, path).size > 0 or workspace.file_exists.call(path) },
     real_path: ->(path) { real_buffer(workspace, buffers, path) },
   )
+end
+
+private
+
+# The names one buffer answers to: its file as typed, as a lexical absolute path, and as the linker keys it (the
+# canonical folder of the file and its name, since the file itself need not exist).
+struct Names
+  typed: String
+  absolute: String
+  key: String
 end
 
 # On Windows Path.resolve gives `\` separators, which the path helpers split only on `/`: they are split on a copy

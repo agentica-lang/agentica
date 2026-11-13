@@ -17,65 +17,49 @@ import {
 } from "builtins_data"
 import {PRELUDE_ONLY as DATA_PRELUDE_ONLY, ROWS as PRELUDE_ROWS} from "prelude_data"
 
-EMPTY_BUILTINS: Map[String, Model.Builtin] = {}
-EMPTY_RECORDS: Map[String, List[Model.Named]] = {}
-EMPTY_ENUMS: Map[String, Model.EnumDef] = {}
-EMPTY_PRELUDE: Map[String, Model.PreludeRow] = {}
-EMPTY_FAMILIES: Map[String, List[String]] = {}
+ENTRIES: Map[String, Model.Builtin] = BUILTIN_ROWS.reduce(EMPTY_BUILTINS) do |found, row| found.put(row.name, row) end
 
-export ENTRIES: Map[String, Model.Builtin] = BUILTIN_ROWS.reduce(EMPTY_BUILTINS) do |found, row|
-  found.put(row.name, row)
-end
-
-export RECORDS: Map[String, List[Model.Named]] = DATA_RECORDS.reduce(EMPTY_RECORDS) do |found, record|
+RECORDS: Map[String, List[Model.Named]] = DATA_RECORDS.reduce(EMPTY_RECORDS) do |found, record|
   found.put(record.name, record.fields)
 end
 
-export ENUMS: Map[String, Model.EnumDef] = DATA_ENUMS.reduce(EMPTY_ENUMS) do |found, definition|
+ENUMS: Map[String, Model.EnumDef] = DATA_ENUMS.reduce(EMPTY_ENUMS) do |found, definition|
   found.put(definition.name, definition)
 end
 
-export OPAQUE_TYPES = Set.new(DATA_OPAQUE_TYPES)
+OPAQUE_TYPES = Set.new(DATA_OPAQUE_TYPES)
 
 ## The builtin type of a family that is a type of its own in the checker, not a record, enum or opaque type: JSON.Value
 ## is Types.Type.Json.
-export JSON_VALUE = "JSON.Value"
+JSON_VALUE = "JSON.Value"
 
-## The builtin types of a family (Family.Member): the records, enums and opaque types whose name starts with a family,
-## and JSON.Value.
-FAMILY_TYPE_NAMES = RECORDS.keys
-  .concat(ENUMS.keys)
-  .concat(DATA_OPAQUE_TYPES)
-  .concat([JSON_VALUE])
-  .filter do |name: String| name.include?(".") and DATA_FAMILIES.include?(name.split(".")[0]) end
+FAMILY_TYPES = Set.new(FAMILY_TYPE_NAMES)
 
-export FAMILY_TYPES = Set.new(FAMILY_TYPE_NAMES)
+HANDLES = Set.new(HANDLE_TYPES)
+RESERVED = Set.new(RESERVED_TYPE_NAMES)
 
-export HANDLES = Set.new(HANDLE_TYPES)
-export RESERVED = Set.new(RESERVED_TYPE_NAMES)
-
-export STD_ONLY = STD_ONLY_IMPORTS
+STD_ONLY = STD_ONLY_IMPORTS
 
 ## The kinds of the errors that the builtins and std/ build.
-export ERROR_KINDS = DATA_ERROR_KINDS
+ERROR_KINDS = DATA_ERROR_KINDS
 
-export PRELUDE: Map[String, Model.PreludeRow] = PRELUDE_ROWS.reduce(EMPTY_PRELUDE) do |found, row|
+PRELUDE: Map[String, Model.PreludeRow] = PRELUDE_ROWS.reduce(EMPTY_PRELUDE) do |found, row|
   found.put(row.name, row)
 end
 
-export PRELUDE_ONLY = Set.new(DATA_PRELUDE_ONLY)
+PRELUDE_ONLY = Set.new(DATA_PRELUDE_ONLY)
 
 ## Builtins that a program writes as an operator: `xs + ys` is List.concat. The name still checks, because the
 ## compiler's own source calls it and stage0 must compile that source, but no user text (help, did-you-mean) shows it.
-export OPERATOR_ONLY = Set.new(["List.concat"])
+OPERATOR_ONLY = Set.new(["List.concat"])
 
-export PUBLIC_NAMES = ENTRIES.keys.filter do |name|
+PUBLIC_NAMES = ENTRIES.keys.filter do |name|
   !STD_ONLY.has_key?(name.split(".")[0]) and !PRELUDE_ONLY.include?(name) and !OPERATOR_ONLY.include?(name)
 end
 
 ## The builtin families (builtins_data.agc), each with its members: Family.Member is a group of functions, the rows
 ## named Family.Member.fn, or a builtin type of that name. Members are sorted by name.
-export FAMILY_MEMBERS: Map[String, List[String]] = DATA_FAMILIES.reduce(EMPTY_FAMILIES) do |found, family|
+FAMILY_MEMBERS: Map[String, List[String]] = DATA_FAMILIES.reduce(EMPTY_FAMILIES) do |found, family|
   functions = ENTRIES.keys.filter do |name: String| name.start_with?("#{family}.") and name.split(".").size == 3 end
   types = FAMILY_TYPE_NAMES.filter do |name: String| name.start_with?("#{family}.") end
   members = functions.concat(types).map do |name: String| name.split(".")[1] end
@@ -85,60 +69,58 @@ end
 ## The public builtins a call can name, for the did-you-mean of an unknown name. Any other name with two dots
 ## (Native.Mutex.synchronize) is a method of a builtin type, written only on a value of it, so it is left out; a
 ## function of a family member (OpenSSL.Digest.sha256) stays.
-export CALLABLE_NAMES = PUBLIC_NAMES.filter do |name|
+CALLABLE_NAMES = PUBLIC_NAMES.filter do |name|
   parts = name.split(".")
   parts.size < 3 or (FAMILY_MEMBERS.has_key?(parts[0]) and !FAMILY_TYPES.include?("#{parts[0]}.#{parts[1]}"))
 end
 
-export BARE_NAMES = Set.new(ENTRIES.keys.filter do |name| !name.include?(".") end)
+BARE_NAMES = Set.new(ENTRIES.keys.filter do |name| !name.include?(".") end)
 
 ## Whether a program may not declare an enum of this name: a std-only family with a record of its own
 ## (LogRegistry.Event). After linking, a construction of that record and of a variant Event of the program's enum would
 ## be the same text, so the enum stays reserved; a struct or a type alias of the name is free.
-export def record_family?(name: String) -> Bool
+def record_family?(name: String) -> Bool
   STD_ONLY.has_key?(name) and RECORDS.keys.any? do |record| record.start_with?("#{name}.") end
 end
 
 ## Whether a builtin record, enum or opaque type has this name (HttpWire.Request, LogRegistry.Level, HttpWire.Client).
-export def type_named?(name: String) -> Bool
-  RECORDS.has_key?(name) or ENUMS.has_key?(name) or OPAQUE_TYPES.include?(name)
-end
+def type_named?(name: String) -> Bool = RECORDS.has_key?(name) or ENUMS.has_key?(name) or OPAQUE_TYPES.include?(name)
 
 ## The enum and the variant of a default written "Enum.Variant": the variant is after the last dot, so the enum may
 ## be a member of a family (LogRegistry.Level.Info).
-export def default_variant(name: String) -> List[String]
+def default_variant(name: String) -> List[String]
   parts = name.split(".")
   variant = parts[parts.size - 1]
   [name.slice(0, name.length - variant.length - 1), variant]
 end
 
 ## True when the name is Family.Member.fn, a function of a member of a builtin family.
-export def member_function?(name: String) -> Bool
+def member_function?(name: String) -> Bool
   parts = name.split(".")
   parts.size == 3 and member?(parts[0], parts[1])
 end
 
 ## True when the family has the member: Family.Member names a group of functions or a builtin type.
-export def member?(family: String, member: String) -> Bool
+def member?(family: String, member: String) -> Bool
   found = FAMILY_MEMBERS.get(family)
   found.some? and found.unwrap!.include?(member)
 end
 
 ## True when Family.Member names a builtin type (a record, an enum or an opaque type) rather than a group of functions.
-export def member_type?(family: String, member: String) -> Bool = FAMILY_TYPES.include?("#{family}.#{member}")
+def member_type?(family: String, member: String) -> Bool = FAMILY_TYPES.include?("#{family}.#{member}")
 
 ## The builtin of that name, or none when there is none (builtin-ref without an arity).
-export def lookup(name: String) -> Optional[Model.Builtin] = ENTRIES.get(name)
+def lookup(name: String) -> Optional[Model.Builtin] = ENTRIES.get(name)
 
 ## The form of a builtin that takes that many arguments, or an error when none does. A form with defaults takes every
 ## count from its required parameters to all of them; a form that takes exactly that many wins.
-export def form_for(entry: Model.Builtin, arity: Int) -> Result[Model.Builtin]
+def form_for(entry: Model.Builtin, arity: Int) -> Result[Model.Builtin]
   form_among([entry].concat(entry.alternatives), arity)
 end
 
 ## The form for a call: block is true when its last argument is a block (do ... end). A block call takes the block form
 ## of a builtin that also has a form without a block (File.open), whatever the count; otherwise it is form_for.
-export def form_for_call(entry: Model.Builtin, arity: Int, block: Bool) -> Result[Model.Builtin]
+def form_for_call(entry: Model.Builtin, arity: Int, block: Bool) -> Result[Model.Builtin]
   forms = [entry].concat(entry.alternatives)
   if block and block_form?(entry)
     return form_among(forms.filter do |form: Model.Builtin| takes_block?(form) end, arity)
@@ -149,20 +131,20 @@ end
 
 ## The form for a call of that many arguments with no block: the entry alone for a builtin with a block form
 ## (File.open), since its block form takes the block as its last argument, so it is not a form without one.
-export def form_without_block(entry: Model.Builtin, arity: Int) -> Result[Model.Builtin]
+def form_without_block(entry: Model.Builtin, arity: Int) -> Result[Model.Builtin]
   return form_among([entry], arity) if block_form?(entry)
 
   form_for(entry, arity)
 end
 
 ## The form of the builtin name for a call with that many arguments, the last a block when block is true.
-export def call_ref(name: String, arity: Int, block: Bool) -> Result[Model.Builtin]
+def call_ref(name: String, arity: Int, block: Bool) -> Result[Model.Builtin]
   entry = try lookup(name).to_result("unknown builtin")
   form_for_call(entry, arity, block)
 end
 
 ## True for a form whose body is a function of the prelude (Rule.Prelude), such as the block form of File.open.
-export def prelude_form?(form: Model.Builtin) -> Bool
+def prelude_form?(form: Model.Builtin) -> Bool
   case form.rule
     Model.Rule.Prelude -> true
     _ -> false
@@ -171,23 +153,23 @@ end
 
 ## The builtin that `target[index]` runs for a target of that type: `Bytes.at`, or "" for a List or Map, which the VM
 ## indexes with an instruction of its own. The lowering and `Analysis.bodies` both ask here.
-export def index_builtin(target: Types.Type) -> String
+def index_builtin(target: Types.Type) -> String
   return "Bytes.at" if Types.is?(target, "Bytes")
 
   ""
 end
 
 ## True when some parameter of the form has a default.
-export def defaulted?(form: Model.Builtin) -> Bool = first_default(form) < form.parameters.size
+def defaulted?(form: Model.Builtin) -> Bool = first_default(form) < form.parameters.size
 
 ## True when the last parameter of a form with defaults has none: it is an Fn, and the last argument (or the block)
 ## always goes to it, as in a function of the program (check/defaults.agc).
-export def fn_last?(form: Model.Builtin) -> Bool
+def fn_last?(form: Model.Builtin) -> Bool
   defaulted?(form) and !default_present?(form.parameters[form.parameters.size - 1].default)
 end
 
 ## The fewest arguments a call of the form takes: the parameters before the first default, and the last Fn after them.
-export def required_count(form: Model.Builtin) -> Int
+def required_count(form: Model.Builtin) -> Int
   first = first_default(form)
   return first + 1 if fn_last?(form)
 
@@ -196,7 +178,7 @@ end
 
 ## What a call of the form expects: `2`, or `1 to 2` when the form has defaults. skipped leaves out the receiver of a
 ## call written as a method.
-export def arity_text(form: Model.Builtin, skipped: Int) -> String
+def arity_text(form: Model.Builtin, skipped: Int) -> String
   total = form.parameters.size - skipped
   return total.to_s if !defaulted?(form)
 
@@ -204,28 +186,28 @@ export def arity_text(form: Model.Builtin, skipped: Int) -> String
 end
 
 ## The form of the builtin name that takes that many arguments (builtin-ref with an arity).
-export def ref(name: String, arity: Int) -> Result[Model.Builtin]
+def ref(name: String, arity: Int) -> Result[Model.Builtin]
   entry = try lookup(name).to_result("unknown builtin")
   form_for(entry, arity)
 end
 
 ## True for a name inside a std-only module, such as HttpWire.service.
-export def std_only_name?(name: String) -> Bool = STD_ONLY.has_key?(module_of(name))
+def std_only_name?(name: String) -> Bool = STD_ONLY.has_key?(module_of(name))
 
 ## The signature of every form of a builtin, one per line: name(param: Type, ...) -> Result.
-export def signature(entry: Model.Builtin) -> String
+def signature(entry: Model.Builtin) -> String
   forms = [entry].concat(entry.alternatives)
   forms.map(&form_signature).join("\n")
 end
 
 ## The signature of one form.
-export def form_signature(form: Model.Builtin) -> String
+def form_signature(form: Model.Builtin) -> String
   parameters = form.parameters.map do |parameter: Model.Named| parameter_text(parameter) end
   "#{form.name}(#{parameters.join(", ")}) -> #{Types.to_text(form.result)}"
 end
 
 ## A parameter as a signature writes it: `level: Int = 6`.
-export def parameter_text(parameter: Model.Named) -> String
+def parameter_text(parameter: Model.Named) -> String
   typed = "#{parameter.name}: #{Types.to_text(parameter.type)}"
   return typed if !default_present?(parameter.default)
 
@@ -234,7 +216,7 @@ end
 
 ## A default as the source writes it: 6, 0.5, "x", true, nil, [], {}, "".bytes, none, Enum.Variant or Record(); ""
 ## for no default.
-export def default_text(value: Model.Default) -> String
+def default_text(value: Model.Default) -> String
   case value
     Model.Default.Absent -> ""
     Model.Default.Whole(number) -> number.to_s
@@ -252,7 +234,7 @@ export def default_text(value: Model.Default) -> String
 end
 
 ## True for a default (not Absent).
-export def default_present?(value: Model.Default) -> Bool
+def default_present?(value: Model.Default) -> Bool
   case value
     Model.Default.Absent -> false
     _ -> true
@@ -261,7 +243,7 @@ end
 
 ## The fields of each builtin record that have a default (Model.Named.default): a constructor may leave them out, as
 ## the fields of a struct with a default, and the lowering fills them in (lower_data.agc, lower_struct).
-export def record_defaults() -> Map[String, Set[String]]
+def record_defaults() -> Map[String, Set[String]]
   found: Map[String, Set[String]] = {}
   for record in DATA_RECORDS
     defaulted = record.fields.filter do |field: Model.Named| default_present?(field.default) end
@@ -274,7 +256,7 @@ end
 ## The builtin records with a field whose default is `none`: a program that builds one needs the Optional enum in its
 ## tables, since a constructor that leaves the field out builds `none` with no expression that names Optional. Only
 ## record fields count: a builtin parameter with a `none` default would need the same, and no builtin has one.
-export def none_default_records() -> Set[String]
+def none_default_records() -> Set[String]
   names: List[String] = []
   for record in DATA_RECORDS
     if record.fields.any? do |field: Model.Named| none_default?(field.default) end
@@ -286,7 +268,7 @@ export def none_default_records() -> Set[String]
 end
 
 ## The problem with the defaults of a record field, or "" when its default fits its type (default_fits?).
-export def record_default_problem(record: String, field: Model.Named) -> String
+def record_default_problem(record: String, field: Model.Named) -> String
   return "" if default_fits?(field)
 
   written = Types.to_text(field.type)
@@ -298,7 +280,7 @@ end
 ## form picked by the number of arguments would be ambiguous; a block form is picked by the block), a parameter after a
 ## default has one too unless it is the last and an Fn, and each default has the type of its parameter (a variant is
 ## one of its enum, with no payload). The catalog text prints a problem, and a test fails on it.
-export def default_problem(entry: Model.Builtin) -> String
+def default_problem(entry: Model.Builtin) -> String
   forms = [entry].concat(entry.alternatives)
   return "" if !forms.any? do |form: Model.Builtin| defaulted?(form) end
 
@@ -317,7 +299,7 @@ end
 ## The builtin enums that some builtin gives a default variant of: the lowering keeps them in the tables of every
 ## program, because a call that leaves the argument out builds the variant with no expression that names the enum. A
 ## function, not a constant: a constant cannot call variant_enum.
-export def default_enums() -> Set[String]
+def default_enums() -> Set[String]
   names: List[String] = []
   for row in BUILTIN_ROWS
     for parameter in row.parameters
@@ -334,7 +316,7 @@ end
 ## The builtin records that a call of the builtin named `name` may build from a Fields default (Process.Options for
 ## Process.spawn), or none: the lowering keeps them in the tables of a program that calls it, because a call that
 ## leaves the argument out builds the record with no expression that names it.
-export def default_records(name: String) -> List[String]
+def default_records(name: String) -> List[String]
   return [] if !ENTRIES.has_key?(name)
 
   found: List[String] = []
@@ -347,6 +329,22 @@ export def default_records(name: String) -> List[String]
 
   found
 end
+
+private
+
+EMPTY_BUILTINS: Map[String, Model.Builtin] = {}
+EMPTY_RECORDS: Map[String, List[Model.Named]] = {}
+EMPTY_ENUMS: Map[String, Model.EnumDef] = {}
+EMPTY_PRELUDE: Map[String, Model.PreludeRow] = {}
+EMPTY_FAMILIES: Map[String, List[String]] = {}
+
+## The builtin types of a family (Family.Member): the records, enums and opaque types whose name starts with a family,
+## and JSON.Value.
+FAMILY_TYPE_NAMES = RECORDS.keys
+  .concat(ENUMS.keys)
+  .concat(DATA_OPAQUE_TYPES)
+  .concat([JSON_VALUE])
+  .filter do |name: String| name.include?(".") and DATA_FAMILIES.include?(name.split(".")[0]) end
 
 # True for the `none` default.
 def none_default?(value: Model.Default) -> Bool

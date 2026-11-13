@@ -14,14 +14,6 @@ import UTC from "std/utc"
 export LogRegistry.Level
 export LogRegistry.Event
 
-struct JsonLine
-  time: String
-  level: String
-  msg: String
-  fields: Map[String, String]
-  task: Int
-end
-
 # A level function reads the floor once and compares it once. The floor is the higher of the global level and the
 # lowest handler level, so a call that no handler would accept is as cheap as a disabled one: one user call (the
 # empty `fields` default is a constant the call site builds), one builtin call and one comparison. -1 (the default not
@@ -29,7 +21,7 @@ end
 # global level is checked.
 
 ## Logs a `debug` message, with optional fields.
-export def debug(message: String, fields: Map[String, String] = {}) -> Void
+def debug(message: String, fields: Map[String, String] = {}) -> Void
   if LogRegistry.floor() <= 0
     if ready() <= 0
       dispatch(LogRegistry.Level.Debug, 0, message, fields)
@@ -38,7 +30,7 @@ export def debug(message: String, fields: Map[String, String] = {}) -> Void
 end
 
 ## Logs an `info` message, with optional fields.
-export def info(message: String, fields: Map[String, String] = {}) -> Void
+def info(message: String, fields: Map[String, String] = {}) -> Void
   if LogRegistry.floor() <= 1
     if ready() <= 1
       dispatch(LogRegistry.Level.Info, 1, message, fields)
@@ -47,7 +39,7 @@ export def info(message: String, fields: Map[String, String] = {}) -> Void
 end
 
 ## Logs a `warning` message, with optional fields.
-export def warning(message: String, fields: Map[String, String] = {}) -> Void
+def warning(message: String, fields: Map[String, String] = {}) -> Void
   if LogRegistry.floor() <= 2
     if ready() <= 2
       dispatch(LogRegistry.Level.Warning, 2, message, fields)
@@ -57,7 +49,7 @@ end
 
 ## Logs an `error` message, with optional fields. The function is `err` because `error` is a reserved name; the output
 ## still says `error`.
-export def err(message: String, fields: Map[String, String] = {}) -> Void
+def err(message: String, fields: Map[String, String] = {}) -> Void
   if LogRegistry.floor() <= 3
     if ready() <= 3
       dispatch(LogRegistry.Level.Error, 3, message, fields)
@@ -66,7 +58,7 @@ export def err(message: String, fields: Map[String, String] = {}) -> Void
 end
 
 ## Logs a message, with optional fields, at a level given as a value.
-export def log(level: LogRegistry.Level, message: String, fields: Map[String, String] = {}) -> Void
+def log(level: LogRegistry.Level, message: String, fields: Map[String, String] = {}) -> Void
   rank = rank_of(level)
   if rank >= ready()
     dispatch(level, rank, message, fields)
@@ -75,53 +67,53 @@ end
 
 ## Returns true only when a call at `level` would reach a handler: the level is at or above the global level and at or
 ## above the lowest level of the attached handlers. Guard costly fields with it.
-export def enabled?(level: LogRegistry.Level) -> Bool
+def enabled?(level: LogRegistry.Level) -> Bool
   rank = rank_of(level)
   rank >= ready() and rank >= LogRegistry.lowest()
 end
 
 ## Returns the global level, `info` until `set_level` changes it.
-export def level() -> LogRegistry.Level = level_of(ready())
+def level() -> LogRegistry.Level = level_of(ready())
 
 ## Sets the global level. A call below it makes no event at all.
-export def set_level(level: LogRegistry.Level) -> Void
+def set_level(level: LogRegistry.Level) -> Void
   _ = ready()
   LogRegistry.set_level(rank_of(level))
 end
 
 ## Attaches a handler under a name, for events at `level` or above. The handler is a function (`&Logger.stderr_json`)
 ## or a block. A name already in use is an error result.
-export def attach(name: String, level: LogRegistry.Level, handler: Fn[LogRegistry.Event, Void]) -> Result[Void]
+def attach(name: String, level: LogRegistry.Level, handler: Fn[LogRegistry.Event, Void]) -> Result[Void]
   _ = ready()
   LogRegistry.attach(name, rank_of(level), handler)
 end
 
 ## Detaches the handler with that name. A name not in use is an error result.
-export def detach(name: String) -> Result[Void]
+def detach(name: String) -> Result[Void]
   _ = ready()
   LogRegistry.detach(name)
 end
 
 ## Returns the names of the attached handlers, in attach order.
-export def handlers() -> List[String]
+def handlers() -> List[String]
   _ = ready()
   LogRegistry.names()
 end
 
 ## Writes `format_text(event)` to stderr as one line.
-export def stderr_text(event: LogRegistry.Event) -> Void
+def stderr_text(event: LogRegistry.Event) -> Void
   IO.warn(format_text(event))
 end
 
 ## Writes `format_json(event)` to stderr as one line.
-export def stderr_json(event: LogRegistry.Event) -> Void
+def stderr_json(event: LogRegistry.Event) -> Void
   IO.warn(format_json(event))
 end
 
 ## Returns the text line of an event: `TIME LEVEL MESSAGE key=value ...`, with the time in UTC.
 ## A message or field that is empty, has a space (for a field), `=`, a quote, a backslash or a control character is
 ## written as a JSON string, so a line is always one line.
-export def format_text(event: LogRegistry.Event) -> String
+def format_text(event: LogRegistry.Event) -> String
   parts = [time_text(event.time_ms), level_name(event.level).upcase, message_token(event.message)]
   for key in event.fields.keys
     parts = parts.push("#{field_token(key)}=#{field_token(event.fields.get(key, ""))}")
@@ -131,7 +123,7 @@ end
 
 ## Returns the JSON line of an event: the keys `time`, `level`, `msg`, `fields` and `task`. The fields are nested, so a
 ## field named `level` never clashes with a fixed key.
-export def format_json(event: LogRegistry.Event) -> String
+def format_json(event: LogRegistry.Event) -> String
   one_line(
     JSON.encode(
       JsonLine(
@@ -147,7 +139,17 @@ end
 
 ## Returns milliseconds since the Unix epoch as UTC text, such as `2026-10-12T10:15:02.345Z`.
 ## A year outside 0 to 9999 is written with its sign and at least four digits.
-export def time_text(time_ms: Int) -> String = UTC.iso8601(time_ms, 3)
+def time_text(time_ms: Int) -> String = UTC.iso8601(time_ms, 3)
+
+private
+
+struct JsonLine
+  time: String
+  level: String
+  msg: String
+  fields: Map[String, String]
+  task: Int
+end
 
 # The ranks are the order of Level: debug 0, info 1, warning 2, error 3. LogRegistry stores ranks, not enums,
 # so its rows need no enum type.

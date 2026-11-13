@@ -28,28 +28,12 @@ import Reader from "../packages/toml_read"
 import PackageFetch from "package_fetch"
 import SaveFile from "save_file"
 
-# The deadline of one file-system call, in milliseconds.
-FS_TIMEOUT_MS = 60_000
-TEMP_TRIES = 5
-# How old a hidden .tmp-* or .old-* entry of deps/ must be before the next command removes it.
-LEFTOVER_SECONDS = 600
-# The manifest of a package, copied when the cache holds it as a regular file.
-MANIFEST_FILE = "agentica.toml"
-
-# What a path is, looked at without following a link: the entry in the folder that holds it.
-enum Kind
-  Absent
-  Folder
-  Link
-  Other
-end
-
 ## Writes the locked packages into `deps`, the deps/ folder of the project, in the order given, and then removes the
 ## folders of the `dropped` names that are not among them. `packages` are in the order of `lock_file`, whose entries
 ## the failures about a package name. Every package must be in the cache already (`install`, `add` and `update` fill
 ## it), except a workspace member or a `path` package, which has no folder in deps/: its entry is skipped, and a
 ## folder of deps/ that the name has is removed like that of a dropped package.
-export def sync(
+def sync(
   settings: Env.Settings,
   lock_file: String,
   deps: String,
@@ -89,7 +73,7 @@ end
 ## Writes the locked package from `source` (its cache folder) into `deps`, the deps/ folder of the project, unless its
 ## folder there is a real folder that already has the locked hash (a rewrite would only change the times of the files
 ## and make the bytecode cache miss). `place` names the lock entry, for the failures about the package itself.
-export def put(
+def put(
   workspace: Workspace.Workspace,
   deps: String,
   source: String,
@@ -106,6 +90,24 @@ export def put(
   # only the empty parent is left.
   _ = Path.remove(parent, FS_TIMEOUT_MS)
   done
+end
+
+private
+
+# The deadline of one file-system call, in milliseconds.
+FS_TIMEOUT_MS = 60_000
+TEMP_TRIES = 5
+# How old a hidden .tmp-* or .old-* entry of deps/ must be before the next command removes it.
+LEFTOVER_SECONDS = 600
+# The manifest of a package, copied when the cache holds it as a regular file.
+MANIFEST_FILE = "agentica.toml"
+
+# What a path is, looked at without following a link: the entry in the folder that holds it.
+enum Kind
+  Absent
+  Folder
+  Link
+  Other
 end
 
 # Whether deps/<name> is a folder (never a link) whose .agc files hash to the lock. Anything else, a failed look

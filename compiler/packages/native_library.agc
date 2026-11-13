@@ -24,7 +24,7 @@ import Reader from "toml_read"
 ## What `extern "name"` means in a file of the package: the absolute path of a file of the package, a name for the
 ## system loader, a module to build from its C sources when a file first uses it (the linker asks the Workspace then,
 ## build_target), or the packed failure to report when the file uses it.
-export enum Target
+enum Target
   File(String)
   System(String)
   Build(Workspace.BuildRequest)
@@ -42,7 +42,7 @@ end
 ## the same. watched is empty when there is
 ## nothing to open. A built library is not known here (it is built when a file uses it); the bytecode cache watches the
 ## ones the program names.
-export struct Found
+struct Found
   targets: Map[String, Target]
   watched: List[String]
   probed: List[String]
@@ -57,7 +57,7 @@ end
 ## package ("" for the project root), `lock` the lock to match downloaded rows against, and `cache_root` the
 ## package cache root ("" when no place was given): downloaded rows are verified from the cache alone and become
 ## a file path, never fetched.
-export def resolve(
+def resolve(
   workspace: Workspace.Workspace,
   manifest: Manifest.Manifest,
   root: String,
@@ -106,7 +106,7 @@ end
 ## failure, even for `check`), then the library the Workspace built (or found built), the name as written when the
 ## command does not build (`check`: the program is not run), the packed failure, or, for an optional module that could
 ## not be built, a library that does not open (NativeBuild.unbuilt_path).
-export def build_target(workspace: Workspace.Workspace, request: Workspace.BuildRequest, name: String) -> Target
+def build_target(workspace: Workspace.Workspace, request: Workspace.BuildRequest, name: String) -> Target
   listed = NativeBuild.listed(workspace, request)
   return Target.Unusable(listed.message) if !listed.ok?
 
@@ -122,7 +122,7 @@ end
 ## links): `root` is the real folder of the project or of a package read in place. A fetched package is not built
 ## there: its module builds when a file first uses it, so installing it needs no compiler. The failure of the first
 ## build that fails is packed at the manifest and its key.
-export def build_all(
+def build_all(
   workspace: Workspace.Workspace,
   manifest: Manifest.Manifest,
   root: String,
@@ -144,6 +144,8 @@ export def build_all(
 
   ok()
 end
+
+private
 
 # The absolute candidates of the `system` lists of this system. A list of one is not a choice, so it is not probed.
 def probes(manifest: Manifest.Manifest, os: String) -> List[String]

@@ -22,16 +22,10 @@ import Walk from "../syntax/ast_walk"
 import Source from "../syntax/source"
 import T from "../syntax/types"
 
-# The characters of a name written in the source: a name, a module alias, an enum, a variant.
-NAME_CHARS = Set.new("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_?!".split(""))
-
-# The longest dotted name read from the text, in characters.
-HEAD_LIMIT = 128
-
 ## What a name stands for. `key` tells two targets apart (and is the whole identity); `kind` is `name` for a function,
 ## struct, enum, type alias, constant or builtin, `field` for a field of the struct `owner`, `variant` for a variant of
 ## the enum `owner`. `name` is the linked name, or the name of the field or the variant.
-export struct Target
+struct Target
   key: String
   kind: String
   owner: String
@@ -41,7 +35,7 @@ end
 ## One place that names a Target. `kind` is `definition` (the name where the declaration writes it), `call`, `value`,
 ## `type`, `construct`, `read` or `pattern`. `span` is the name alone (the last part of `Models.total`); `reach` is the
 ## whole written name, which a position selects. `function` is the name of the function the site is in, or "".
-export struct Site
+struct Site
   target: Target
   kind: String
   span: Source.Span
@@ -49,22 +43,8 @@ export struct Site
   function: String
 end
 
-# What the walk of a module knows: what the checker recorded, the linked names the program declares (a name that is
-# none of these and no public builtin is not a declaration), `wanted`, the `key` of the one target to keep or "" to
-# keep all, whether the name of a builtin type (`Int`, `List`) is a site too, the text of the module and the function
-# the walk is in.
-struct Scan
-  types: List[T.Type]
-  resolved: Map[Int, State.Resolved]
-  declared: Set[String]
-  wanted: String
-  builtin_types: Bool
-  text: String
-  function: String
-end
-
 ## The linked names of the top-level declarations of every module.
-export def declared_names(modules: List[Linker.LinkedModule]) -> Set[String]
+def declared_names(modules: List[Linker.LinkedModule]) -> Set[String]
   names: List[String] = []
   for module in modules
     for declaration in module.declarations
@@ -76,7 +56,7 @@ export def declared_names(modules: List[Linker.LinkedModule]) -> Set[String]
 end
 
 ## The sites of `module`, in the order of the text, with those of other targets left out when `wanted` is a key.
-export def of_module(
+def of_module(
   module: Linker.LinkedModule,
   checked: Checker.Checked,
   declared: Set[String],
@@ -88,12 +68,12 @@ end
 ## The sites of kind `type` of `module`, in the order of the text: the names of types in annotations and as type
 ## arguments. Unlike `of_module`, the name of a builtin type is a site too, with the target `named("Int")`, so a query
 ## can answer on it.
-export def of_types(module: Linker.LinkedModule, checked: Checker.Checked, declared: Set[String]) -> List[Site]
+def of_types(module: Linker.LinkedModule, checked: Checker.Checked, declared: Set[String]) -> List[Site]
   scanned(module, checked, declared, "", true).filter do |site: Site| site.kind == "type" end
 end
 
 ## The innermost site whose written name holds the character at `offset`: the shortest, and the first of two equal.
-export def innermost(sites: List[Site], offset: Int) -> Optional[Site]
+def innermost(sites: List[Site], offset: Int) -> Optional[Site]
   best: Optional[Site] = none
   best_size = -1
   for site in sites
@@ -109,11 +89,11 @@ export def innermost(sites: List[Site], offset: Int) -> Optional[Site]
 end
 
 ## The target of a name that is a top-level declaration (its linked name) or a builtin.
-export def named(name: String) -> Target = Target(key: "name|#{name}", kind: "name", owner: "", name: name)
+def named(name: String) -> Target = Target(key: "name|#{name}", kind: "name", owner: "", name: name)
 
 ## The target of the field or variant `name` of the struct or enum `owner` (a linked name); `kind` is `field` or
 ## `variant`.
-export def member(kind: String, owner: String, name: String) -> Target
+def member(kind: String, owner: String, name: String) -> Target
   Target(key: "#{kind}|#{owner}|#{name}", kind: kind, owner: owner, name: name)
 end
 
@@ -121,7 +101,7 @@ end
 ## `create` of `import {make as create} from "models"`; or of the name of a re-export (`parse` of `export Url.parse`),
 ## which is the original declaration. An import is not a reference, but it names a declaration, which a query can
 ## select. `none` elsewhere, an alias import (`import Models from "models"`) included: it names a module.
-export def imported(module: Linker.LinkedModule, offset: Int) -> Optional[Target]
+def imported(module: Linker.LinkedModule, offset: Int) -> Optional[Target]
   for declaration in module.parsed.declarations
     case declaration
       Ast.Decl.Import(node) ->
@@ -140,6 +120,28 @@ export def imported(module: Linker.LinkedModule, offset: Int) -> Optional[Target
   end
 
   none
+end
+
+private
+
+# The characters of a name written in the source: a name, a module alias, an enum, a variant.
+NAME_CHARS = Set.new("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_?!".split(""))
+
+# The longest dotted name read from the text, in characters.
+HEAD_LIMIT = 128
+
+# What the walk of a module knows: what the checker recorded, the linked names the program declares (a name that is
+# none of these and no public builtin is not a declaration), `wanted`, the `key` of the one target to keep or "" to
+# keep all, whether the name of a builtin type (`Int`, `List`) is a site too, the text of the module and the function
+# the walk is in.
+struct Scan
+  types: List[T.Type]
+  resolved: Map[Int, State.Resolved]
+  declared: Set[String]
+  wanted: String
+  builtin_types: Bool
+  text: String
+  function: String
 end
 
 def scanned(

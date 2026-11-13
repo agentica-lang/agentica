@@ -9,13 +9,10 @@ import CatalogJson from "../catalog/catalog_json"
 import RubyForm from "../check/ruby_form"
 import Tables from "../check/check_tables"
 
-# A name that stands for more builtins than this is too vague to list (`new`, `read`).
-MAX_TARGETS = 8
-
 ## The public builtins that `name` stands for, sorted, or an empty list. `name` is a method name (`strip`) or a
 ## receiver kind and a method name (`String.strip`); with a kind only the builtins of that kind count. A name that is
 ## itself a public builtin is not asked here.
-export def targets(name: String) -> List[String]
+def targets(name: String) -> List[String]
   parts = name.split(".")
   modules = Tables.method_modules()
   kind = ""
@@ -43,13 +40,16 @@ end
 
 ## The checker's hints for the methods that a bare `name` is on some type (`List.contains: a List has no ...`), by
 ## `Kind.name`. A name with a dot has none: its own hint is looked up whole.
-export def kind_hints(name: String) -> Map[String, String] = ending_with(Tables.foreign_kind_methods(), name, {})
+def kind_hints(name: String) -> Map[String, String] = ending_with(Tables.foreign_kind_methods(), name, {})
 
 ## The kind_hints of `name` and the checker's hints for the functions it names in some module
 ## (`String.from_int: use n.to_s` for `from_int`), by `Kind.name`.
-export def name_hints(name: String) -> Map[String, String]
-  ending_with(Tables.foreign_names(), name, kind_hints(name))
-end
+def name_hints(name: String) -> Map[String, String] = ending_with(Tables.foreign_names(), name, kind_hints(name))
+
+private
+
+# A name that stands for more builtins than this is too vague to list (`new`, `read`).
+MAX_TARGETS = 8
 
 # `found` with each entry of `hints` whose key is `Kind.name`; none for a name with a dot.
 def ending_with(hints: Map[String, String], name: String, found: Map[String, String]) -> Map[String, String]

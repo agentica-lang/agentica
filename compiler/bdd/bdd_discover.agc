@@ -4,16 +4,10 @@
 
 import {IO_TIMEOUT} from "bdd_files"
 
-# The manifest of a project, and the folder beside it that holds its installed packages.
-MANIFEST_FILE = "agentica.toml"
-DEPS_FOLDER = "deps"
-# The folder of agentica's caches, beside a manifest or a root file (io/cache_files.agc), skipped at any depth.
-BUILD_FOLDER = "_build"
-
 ## One feature file or test file, or one problem of the search, as the runner reads it (stdlib/test/runner.agc,
 ## `Entry`): `problem` is "" for a file to run; `kind` is "tests", "feature" or "" (neither); `bytecode`, `source_root`
 ## and `front_end` are filled in by the driver for a test file.
-export struct Entry
+struct Entry
   path: String
   problem: String
   kind: String
@@ -22,14 +16,8 @@ export struct Entry
   front_end: String
 end
 
-# What the walk has found so far: the problems in the order they were met, and the files to run.
-struct Found
-  problems: List[Entry]
-  files: List[String]
-end
-
 ## The kind of a path by its name: "tests" for `_test.agc`, "feature" for `.feature`, else "".
-export def kind_of(path: String) -> String
+def kind_of(path: String) -> String
   if test_file?(path)
     return "tests"
   elsif path.end_with?(".feature")
@@ -40,14 +28,14 @@ export def kind_of(path: String) -> String
 end
 
 ## True for the name of a unit test file, `*_test.agc`.
-export def test_file?(path: String) -> Bool = path.end_with?("_test.agc")
+def test_file?(path: String) -> Bool = path.end_with?("_test.agc")
 
 ## The entries for the given paths: first the problems in the order they were met, then the files sorted by path, each
 ## once. A path is made absolute without following links. A folder is searched for the files whose names fit, in every
 ## folder below it, except the `deps/` of a project (a folder that holds an `agentica.toml`): those are packages
 ## installed for the build, not tests of the project, and `_build/` folders, which hold what agentica writes. A link
 ## to a folder is skipped. A path to a file is taken whatever its name is.
-export def discover(given: List[String]) -> List[Entry]
+def discover(given: List[String]) -> List[Entry]
   found = Found(problems: [], files: [])
   for text in given
     path = Path.resolve(text).unwrap_or(text)
@@ -72,6 +60,20 @@ export def discover(given: List[String]) -> List[Entry]
   end
 
   entries
+end
+
+private
+
+# The manifest of a project, and the folder beside it that holds its installed packages.
+MANIFEST_FILE = "agentica.toml"
+DEPS_FOLDER = "deps"
+# The folder of agentica's caches, beside a manifest or a root file (io/cache_files.agc), skipped at any depth.
+BUILD_FOLDER = "_build"
+
+# What the walk has found so far: the problems in the order they were met, and the files to run.
+struct Found
+  problems: List[Entry]
+  files: List[String]
 end
 
 def entry(path: String, problem: String) -> Entry

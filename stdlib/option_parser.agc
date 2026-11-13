@@ -30,11 +30,8 @@
 ## halts the program (`RUNTIME-UNWRAP-ERROR`, whose stack names the line of the call): that is a bug of the
 ## program, not of the user.
 
-# The first line of the error that stands for a request of help; what follows it is the usage text.
-HELP_MARK = "option_parser: help\n"
-
 ## The type of the value of an option or an argument. A `Flag` takes no value: it is false unless given.
-export enum Kind
+enum Kind
   Int
   Float
   String
@@ -44,7 +41,7 @@ end
 ## A positional argument. All are required, in the order of the list given to `new`. `metavar` is the name shown in
 ## the usage line (default: `name`). `choices` are compared as text. `min` and `max` limit an `Int` argument, and
 ## `min_float` and `max_float` a `Float` one (`none`: no limit).
-export struct Arg
+struct Arg
   name: String
   help: String = ""
   kind: Kind = Kind.String
@@ -61,7 +58,7 @@ end
 ## `choices` are compared as text. `metavar` is the value name shown in the help (default: the choices as `a|b`,
 ## else `name` in capitals). `min` and `max` limit an `Int` option, and `min_float` and `max_float` a `Float` one
 ## (`none`: no limit); they also apply to the default.
-export struct Opt
+struct Opt
   name: String
   short: String = ""
   kind: Kind = Kind.String
@@ -76,7 +73,7 @@ export struct Opt
 end
 
 ## The interface of a program, built by `new`.
-export struct Parser
+struct Parser
   program: String
   description: String
   args: List[Arg]
@@ -86,7 +83,7 @@ end
 
 ## The converted values of a command line, read by the getters. Treat it as opaque: `kinds` says which names were
 ## declared and with what kind, the other maps hold the values that are present.
-export struct Parsed
+struct Parsed
   kinds: Map[String, Kind]
   strings: Map[String, String]
   ints: Map[String, Int]
@@ -95,6 +92,139 @@ export struct Parsed
   rest: List[String] = []
   after_dashes: List[String] = []
 end
+
+## Describes a program: its name, a one-line description and its arguments and options, each list in order. `rest`
+## names the positional words after the arguments (`FILE` shows `[FILE...]` in the usage line; the help has no row for
+## it), which `parse` then keeps for `rest` and `after_dashes` instead of refusing them; "" (the default) refuses them.
+def new(
+  program: String,
+  description: String = "",
+  args: List[Arg] = [],
+  opts: List[Opt] = [],
+  rest: String = "",
+) -> Parser
+  Parser(program: program, description: description, args: args, opts: opts, rest: rest)
+end
+
+## Checks the words (normally `System.args()`) against the parser and returns the converted values. An error says
+## what is wrong, or, when `help?` is true for it, that the usage text was asked for. Its kind is `option_parser.help`
+## for `--help`, `option_parser.parse` for a mistake in the words and `argument` for a bad specification.
+def parse(parser: Parser, args: List[String]) -> Result[Parsed]
+  slots = try slots_of(parser)
+  scan = try scan_words(parser, slots, args)
+  build(parser, slots, scan)
+end
+
+## Returns true when the error of `parse` stands for `--help`: the program prints `usage` and exits with 0.
+def help?(message: String) -> Bool = message.start_with?(HELP_MARK)
+
+## Returns the text to print for an error of `parse`: the usage text when `help?` is true, without the marker line,
+## and the message itself otherwise. A program that prints errors itself uses this and never prints the raw message
+## of a help request.
+def message(error_text: String) -> String
+  return error_text.slice(HELP_MARK.length, error_text.length - HELP_MARK.length) if help?(error_text)
+  error_text
+end
+
+## Returns the help text: the usage line, the description and a row for every argument and option.
+def usage(parser: Parser) -> String
+  slots = slots_unchecked(parser)
+  lines = ["Usage: #{usage_line(parser, slots)}"]
+  if !parser.description.empty?
+    lines = lines.push("").push(parser.description)
+  end
+  positionals = slots.select do |slot| slot.positional end
+  options = slots.select do |slot| not slot.positional end
+  help_slot = Slot(
+    name: "help",
+    short: "h",
+    kind: Kind.Flag,
+    default: "",
+    choices: [],
+    help: "show this help",
+    metavar: "",
+    min: none,
+    max: none,
+    min_float: none,
+    max_float: none,
+    positional: false,
+    flag: true,
+  )
+
+  width = slots.push(help_slot).reduce(0) do |widest, slot| wider(widest, head(slot).length) end
+  if !positionals.empty?
+    lines = lines.push("").push("Arguments:").concat(positionals.map do |slot| row(slot, width) end)
+  end
+  lines = lines.push("").push("Options:").concat(options.push(help_slot).map do |slot| row(slot, width) end)
+  lines.join("\n")
+end
+
+## Prints the help (to stdout) and exits with 0 when `result` is the error for `--help`; prints the error to stderr
+## and exits with 2 for any other error; returns the value of an `ok`. Call it where the program gets its options
+## (`options = OP.run!(load())`): it is the one place of this module that ends the program.
+def run![T](result: Result[T]) -> T
+  case result
+    ok(value) -> return value
+    error(text) -> finish("#{text}")
+  end
+  result.unwrap!
+end
+
+## Returns the value of a String option or argument. The option needs a default (or be an argument); otherwise use
+## `optional_string`.
+def string(parsed: Parsed, name: String) -> String
+  require(parsed, name, Kind.String, parsed.strings.key?(name))
+  parsed.strings[name]
+end
+
+## Returns the value of an Int option or argument; see `string`.
+def int(parsed: Parsed, name: String) -> Int
+  require(parsed, name, Kind.Int, parsed.ints.key?(name))
+  parsed.ints[name]
+end
+
+## Returns the value of a Float option or argument; see `string`.
+def float(parsed: Parsed, name: String) -> Float
+  require(parsed, name, Kind.Float, parsed.floats.key?(name))
+  parsed.floats[name]
+end
+
+## Returns true when the flag was given, false otherwise.
+def flag(parsed: Parsed, name: String) -> Bool
+  require(parsed, name, Kind.Flag, true)
+  parsed.flags[name]
+end
+
+## Returns the value of a String option, or `none` when it was not given and has no default.
+def optional_string(parsed: Parsed, name: String) -> Optional[String]
+  require(parsed, name, Kind.String, true)
+  parsed.strings.get(name)
+end
+
+## Returns the value of an Int option, or `none` when it was not given and has no default.
+def optional_int(parsed: Parsed, name: String) -> Optional[Int]
+  require(parsed, name, Kind.Int, true)
+  parsed.ints.get(name)
+end
+
+## Returns the value of a Float option, or `none` when it was not given and has no default.
+def optional_float(parsed: Parsed, name: String) -> Optional[Float]
+  require(parsed, name, Kind.Float, true)
+  parsed.floats.get(name)
+end
+
+## Returns the positional words after the arguments, in order, those after `--` included, as Ruby's
+## `OptionParser#parse` returns them. Empty unless `new` was given `rest`.
+def rest(parsed: Parsed) -> List[String] = parsed.rest
+
+## Returns the words of `rest` that came after `--`, its last ones: in `FILE... -- FLAGS` they are the flags, and the
+## files are `rest` without them.
+def after_dashes(parsed: Parsed) -> List[String] = parsed.after_dashes
+
+private
+
+# The first line of the error that stands for a request of help; what follows it is the usage text.
+HELP_MARK = "option_parser: help\n"
 
 # One Arg or Opt, as the parser sees them.
 struct Slot
@@ -134,134 +264,6 @@ struct Step
   next: Int
   help: Bool
 end
-
-## Describes a program: its name, a one-line description and its arguments and options, each list in order. `rest`
-## names the positional words after the arguments (`FILE` shows `[FILE...]` in the usage line; the help has no row for
-## it), which `parse` then keeps for `rest` and `after_dashes` instead of refusing them; "" (the default) refuses them.
-export def new(
-  program: String,
-  description: String = "",
-  args: List[Arg] = [],
-  opts: List[Opt] = [],
-  rest: String = "",
-) -> Parser
-  Parser(program: program, description: description, args: args, opts: opts, rest: rest)
-end
-
-## Checks the words (normally `System.args()`) against the parser and returns the converted values. An error says
-## what is wrong, or, when `help?` is true for it, that the usage text was asked for. Its kind is `option_parser.help`
-## for `--help`, `option_parser.parse` for a mistake in the words and `argument` for a bad specification.
-export def parse(parser: Parser, args: List[String]) -> Result[Parsed]
-  slots = try slots_of(parser)
-  scan = try scan_words(parser, slots, args)
-  build(parser, slots, scan)
-end
-
-## Returns true when the error of `parse` stands for `--help`: the program prints `usage` and exits with 0.
-export def help?(message: String) -> Bool = message.start_with?(HELP_MARK)
-
-## Returns the text to print for an error of `parse`: the usage text when `help?` is true, without the marker line,
-## and the message itself otherwise. A program that prints errors itself uses this and never prints the raw message
-## of a help request.
-export def message(error_text: String) -> String
-  return error_text.slice(HELP_MARK.length, error_text.length - HELP_MARK.length) if help?(error_text)
-  error_text
-end
-
-## Returns the help text: the usage line, the description and a row for every argument and option.
-export def usage(parser: Parser) -> String
-  slots = slots_unchecked(parser)
-  lines = ["Usage: #{usage_line(parser, slots)}"]
-  if !parser.description.empty?
-    lines = lines.push("").push(parser.description)
-  end
-  positionals = slots.select do |slot| slot.positional end
-  options = slots.select do |slot| not slot.positional end
-  help_slot = Slot(
-    name: "help",
-    short: "h",
-    kind: Kind.Flag,
-    default: "",
-    choices: [],
-    help: "show this help",
-    metavar: "",
-    min: none,
-    max: none,
-    min_float: none,
-    max_float: none,
-    positional: false,
-    flag: true,
-  )
-
-  width = slots.push(help_slot).reduce(0) do |widest, slot| wider(widest, head(slot).length) end
-  if !positionals.empty?
-    lines = lines.push("").push("Arguments:").concat(positionals.map do |slot| row(slot, width) end)
-  end
-  lines = lines.push("").push("Options:").concat(options.push(help_slot).map do |slot| row(slot, width) end)
-  lines.join("\n")
-end
-
-## Prints the help (to stdout) and exits with 0 when `result` is the error for `--help`; prints the error to stderr
-## and exits with 2 for any other error; returns the value of an `ok`. Call it where the program gets its options
-## (`options = OP.run!(load())`): it is the one place of this module that ends the program.
-export def run![T](result: Result[T]) -> T
-  case result
-    ok(value) -> return value
-    error(text) -> finish("#{text}")
-  end
-  result.unwrap!
-end
-
-## Returns the value of a String option or argument. The option needs a default (or be an argument); otherwise use
-## `optional_string`.
-export def string(parsed: Parsed, name: String) -> String
-  require(parsed, name, Kind.String, parsed.strings.key?(name))
-  parsed.strings[name]
-end
-
-## Returns the value of an Int option or argument; see `string`.
-export def int(parsed: Parsed, name: String) -> Int
-  require(parsed, name, Kind.Int, parsed.ints.key?(name))
-  parsed.ints[name]
-end
-
-## Returns the value of a Float option or argument; see `string`.
-export def float(parsed: Parsed, name: String) -> Float
-  require(parsed, name, Kind.Float, parsed.floats.key?(name))
-  parsed.floats[name]
-end
-
-## Returns true when the flag was given, false otherwise.
-export def flag(parsed: Parsed, name: String) -> Bool
-  require(parsed, name, Kind.Flag, true)
-  parsed.flags[name]
-end
-
-## Returns the value of a String option, or `none` when it was not given and has no default.
-export def optional_string(parsed: Parsed, name: String) -> Optional[String]
-  require(parsed, name, Kind.String, true)
-  parsed.strings.get(name)
-end
-
-## Returns the value of an Int option, or `none` when it was not given and has no default.
-export def optional_int(parsed: Parsed, name: String) -> Optional[Int]
-  require(parsed, name, Kind.Int, true)
-  parsed.ints.get(name)
-end
-
-## Returns the value of a Float option, or `none` when it was not given and has no default.
-export def optional_float(parsed: Parsed, name: String) -> Optional[Float]
-  require(parsed, name, Kind.Float, true)
-  parsed.floats.get(name)
-end
-
-## Returns the positional words after the arguments, in order, those after `--` included, as Ruby's
-## `OptionParser#parse` returns them. Empty unless `new` was given `rest`.
-export def rest(parsed: Parsed) -> List[String] = parsed.rest
-
-## Returns the words of `rest` that came after `--`, its last ones: in `FILE... -- FLAGS` they are the flags, and the
-## files are `rest` without them.
-export def after_dashes(parsed: Parsed) -> List[String] = parsed.after_dashes
 
 # Halts with a bug of the program: an undeclared name, the wrong getter for a kind, or a plain getter for a value
 # that may be absent. `present` is whether the value exists.

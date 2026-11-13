@@ -27,7 +27,7 @@ import Locals from "locals"
 ## one line `agentica doc` gives the declaration (`make(name: String) -> User`), `name: Type` for a field and
 ## `Circle(Float)` for a variant. `exported` is whether the file exports the declaration, or the struct or enum a field
 ## or variant belongs to; a local is not.
-export struct Definition
+struct Definition
   kind: String
   name: String
   file: String
@@ -38,30 +38,10 @@ export struct Definition
   exported: Bool
 end
 
-# A top-level declaration of the linked program and the module it is in.
-struct Found
-  module: Linker.LinkedModule
-  declaration: Ast.Decl
-end
-
-# What the parsed file says about a declaration: its doc and its signature.
-struct Described
-  doc: Optional[String]
-  signature: String
-  exported: Bool
-end
-
-# A builtin type that the std/ module `module` re-exports: its `item` is the catalog's, placed at the `export` line
-# (docs/doc_origins.agc).
-struct Reexported
-  module: Linker.LinkedModule
-  item: Model.Item
-end
-
 ## The definition of what `expr` names, or `none`. `types` is `Checked.types`: the struct of a field access is the type
 ## of its target. `resolved` is `Checked.resolved`: a method call that the checker resolved to a call of an `Fn` field
 ## names that field; any other method call is a builtin and has no definition.
-export def of_expr(
+def of_expr(
   modules: List[Linker.LinkedModule],
   types: List[T.Type],
   resolved: Map[Int, State.Resolved],
@@ -90,10 +70,10 @@ end
 ## The definition of the top-level declaration with the linked name `name` (a function, struct, enum, alias or
 ## constant), or `none` for a builtin, which no file declares. A builtin type that a std/ module of the program
 ## re-exports is defined at its `export` line.
-export def of_name(modules: List[Linker.LinkedModule], name: String) -> Optional[Definition] = top_level(modules, name)
+def of_name(modules: List[Linker.LinkedModule], name: String) -> Optional[Definition] = top_level(modules, name)
 
 ## The definition of the field `name` of the struct with the linked name `owner`, or `none`.
-export def of_field(modules: List[Linker.LinkedModule], owner: String, name: String) -> Optional[Definition]
+def of_field(modules: List[Linker.LinkedModule], owner: String, name: String) -> Optional[Definition]
   found = find(modules, owner)
   return field(found, name) if found.some?
 
@@ -101,7 +81,7 @@ export def of_field(modules: List[Linker.LinkedModule], owner: String, name: Str
 end
 
 ## The definition of the variant `name` of the enum with the linked name `owner`, or `none`.
-export def of_variant(modules: List[Linker.LinkedModule], owner: String, name: String) -> Optional[Definition]
+def of_variant(modules: List[Linker.LinkedModule], owner: String, name: String) -> Optional[Definition]
   found = find(modules, owner)
   return variant(found, name) if found.some?
 
@@ -112,7 +92,7 @@ end
 ## Locals.Local), and the name and the type as the file writes it (`total: Int`) for a signature and no doc. `span` is
 ## the binding node when it has one (the whole parameter or assignment), else the name (`loop` and `pattern`);
 ## `name_span` is the name.
-export def of_local(module: Linker.LinkedModule, local: Locals.Local, type_text: String) -> Definition
+def of_local(module: Linker.LinkedModule, local: Locals.Local, type_text: String) -> Definition
   made(
     local.kind,
     local.name,
@@ -121,6 +101,28 @@ export def of_local(module: Linker.LinkedModule, local: Locals.Local, type_text:
     local.name_span,
     Described(doc: none, signature: "#{local.name}: #{type_text}", exported: false),
   )
+end
+
+private
+
+# A top-level declaration of the linked program and the module it is in.
+struct Found
+  module: Linker.LinkedModule
+  declaration: Ast.Decl
+end
+
+# What the parsed file says about a declaration: its doc and its signature.
+struct Described
+  doc: Optional[String]
+  signature: String
+  exported: Bool
+end
+
+# A builtin type that the std/ module `module` re-exports: its `item` is the catalog's, placed at the `export` line
+# (docs/doc_origins.agc).
+struct Reexported
+  module: Linker.LinkedModule
+  item: Model.Item
 end
 
 # The type recorded for the target of a field access; Unknown when there is none.

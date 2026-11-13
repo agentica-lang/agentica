@@ -26,25 +26,8 @@ import {
 } from "../packages/native_artifact"
 import Reader from "../packages/toml_read"
 
-# Tries for a fresh private name, as in package_fetch.agc.
-TEMP_TRIES = 5
-
-# What the cache holds for one member: its verified payload path, nothing yet, or a packed failure for corrupt data.
-enum Probe
-  Present(String)
-  Missing
-  Broken(String)
-end
-
-# What the cache holds for one archive: ready to extract, nothing yet, or a packed failure for corrupt data.
-enum ArchiveSeen
-  Ready
-  Absent
-  Broken(String)
-end
-
 ## The folder of the package cache, or the failure for `file` when the environment leaves no place for it.
-export def cache_root(env: Env.Env, file: String) -> Result[String]
+def cache_root(env: Env.Env, file: String) -> Result[String]
   cache = PackageCache.root(env)
   if cache == ""
     message = "there is no place for the native artifact cache: HOME is not set"
@@ -57,7 +40,7 @@ end
 ## The verified local path of the selected member: the cache hit when it is valid, else the archive (downloaded and
 ## hashed first when missing) with the member extracted from it into its own object. Concurrent publishers of one
 ## archive or one member keep the winner after verifying it; nothing cached is ever overwritten.
-export def fetch(
+def fetch(
   cache_root: String,
   source: NativeArtifact.Source,
   context: NativeArtifact.Context,
@@ -87,7 +70,7 @@ end
 ## object, or a member extracted from a valid cached archive. A corrupt receipt, member or archive
 ## is PKG-HASH-MISMATCH;
 ## nothing usable is PKG-NATIVE-MISSING.
-export def cached(
+def cached(
   cache_root: String,
   sha: String,
   member: String,
@@ -111,6 +94,25 @@ export def cached(
         ArchiveSeen.Broken(packed) -> error(packed)
       end
   end
+end
+
+private
+
+# Tries for a fresh private name, as in package_fetch.agc.
+TEMP_TRIES = 5
+
+# What the cache holds for one member: its verified payload path, nothing yet, or a packed failure for corrupt data.
+enum Probe
+  Present(String)
+  Missing
+  Broken(String)
+end
+
+# What the cache holds for one archive: ready to extract, nothing yet, or a packed failure for corrupt data.
+enum ArchiveSeen
+  Ready
+  Absent
+  Broken(String)
 end
 
 def fail(context: NativeArtifact.Context, code: String, key: String, message: String, help: String) -> String

@@ -11,21 +11,21 @@ import QueryFiles from "query_files"
 import SymbolPaths from "symbol_paths"
 
 ## A root left out, with the name its answer gives it and the first problem it hit.
-export struct Skipped
+struct Skipped
   file: String
   problem: Problems.Problem
 end
 
 ## What linking the roots gave: the program of the roots that linked (`none` when none did), its modules in the order
 ## they were linked, with the roots among them, and the roots left out.
-export struct Linked
+struct Linked
   program: Optional[Linker.Linked]
   modules: List[Linker.LinkedModule]
   skipped: List[Skipped]
 end
 
 ## Links every root of `roots`, taking the trees of `parses` for the files whose text is the same.
-export def link(roots: List[SymbolPaths.Root], settings: Env.Settings, parses: Modules.Parses) -> Linked
+def link(roots: List[SymbolPaths.Root], settings: Env.Settings, parses: Modules.Parses) -> Linked
   programs = Linker.link_programs(roots.map do |root: SymbolPaths.Root| root.typed end, settings, parses)
   skipped = programs.skipped.map do |left: Linker.Left|
     root = rooted(roots, left.root)
@@ -40,6 +40,8 @@ export def link(roots: List[SymbolPaths.Root], settings: Env.Settings, parses: M
 
   Linked(program: programs.linked, modules: modules, skipped: skipped)
 end
+
+private
 
 # The root that was typed as `typed`.
 def rooted(roots: List[SymbolPaths.Root], typed: String) -> SymbolPaths.Root

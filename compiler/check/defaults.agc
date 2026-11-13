@@ -13,7 +13,7 @@ import Ast from "../syntax/ast"
 ## What a call needs to know about a function: the fewest arguments it takes (required), all its parameters (total),
 ## and whether its last parameter is an Fn that takes the last argument (fn_last). A function with no default has
 ## required == total and fn_last false.
-export struct Shape
+struct Shape
   required: Int
   total: Int
   fn_last: Bool
@@ -24,7 +24,7 @@ end
 ## CHECK-REPEATED-ARGUMENT (at the named argument `at`), CHECK-MISSING-ARGUMENT (the parameter `name` has no default
 ## and no argument) or CHECK-ARITY (more positional arguments than parameters); at is -1 for a problem of the whole
 ## call.
-export struct Binding
+struct Binding
   slots: List[Int]
   code: String
   at: Int
@@ -34,13 +34,13 @@ end
 ## The shape of a form of a builtin, read from its parameters by the same rules. A builtin has no default after the
 ## first unless the last parameter is an Fn (Builtins.default_problem), so the shape is the one a function of the
 ## program with those defaults would have.
-export def builtin_shape(form: Model.Builtin) -> Shape
+def builtin_shape(form: Model.Builtin) -> Shape
   Shape(required: Builtins.required_count(form), total: form.parameters.size, fn_last: Builtins.fn_last?(form))
 end
 
 ## The shape of a function, read from its parameters. The order of the defaults was checked before
 ## (CHECK-DEFAULT-ORDER), so a parameter without a default after a default can only be the last one, an Fn.
-export def shape(params: List[Ast.Param]) -> Shape
+def shape(params: List[Ast.Param]) -> Shape
   total = params.size
   first = total
   index = total - 1
@@ -62,11 +62,11 @@ export def shape(params: List[Ast.Param]) -> Shape
 end
 
 ## True when the function has a parameter with a default.
-export def has_defaults?(shape: Shape) -> Bool = shape.required < shape.total
+def has_defaults?(shape: Shape) -> Bool = shape.required < shape.total
 
 ## The parameter that argument index fills in a call with count arguments. slots is the parameter of each argument of a
 ## call with named arguments (Ast.Call.slots), empty for the positional rule.
-export def param_of(shape: Shape, slots: List[Int], count: Int, index: Int) -> Int
+def param_of(shape: Shape, slots: List[Int], count: Int, index: Int) -> Int
   return slots[index] if slots.size > 0
 
   return shape.total - 1 if shape.fn_last and index == count - 1
@@ -76,7 +76,7 @@ end
 
 ## The argument that fills a parameter in a call with count arguments, or -1 when the default fills it. slots as for
 ## param_of.
-export def argument_for(shape: Shape, slots: List[Int], count: Int, param: Int) -> Int
+def argument_for(shape: Shape, slots: List[Int], count: Int, param: Int) -> Int
   return slot_of(slots, param) if slots.size > 0
 
   if shape.fn_last and param == shape.total - 1
@@ -97,7 +97,7 @@ end
 ## that follows defaults (Shape.fn_last), as in a positional call; otherwise the first parameter that no other
 ## argument fills, which is the next one in a positional call (`reduce(initial: 0) do ... end` gives the block to the
 ## Fn after `initial`). A parameter named `_` has no name.
-export def bind(names: List[String], shape: Shape, args: List[Ast.Expr], named: List[Ast.NamedArg]) -> Binding
+def bind(names: List[String], shape: Shape, args: List[Ast.Expr], named: List[Ast.NamedArg]) -> Binding
   block = trailing_block?(args)
   positional = args.size
   if block
@@ -153,7 +153,7 @@ end
 
 ## The arguments of a call in source order: the positional ones, then the named values, then a trailing block (which
 ## the parser keeps as the last of args).
-export def arguments(args: List[Ast.Expr], named: List[Ast.NamedArg]) -> List[Ast.Expr]
+def arguments(args: List[Ast.Expr], named: List[Ast.NamedArg]) -> List[Ast.Expr]
   values = named.map do |arg: Ast.NamedArg| arg.value end
   return args.concat(values) if !trailing_block?(args)
 
@@ -162,14 +162,14 @@ export def arguments(args: List[Ast.Expr], named: List[Ast.NamedArg]) -> List[As
 end
 
 ## The call with its named arguments bound: args in source order, named empty and slots set.
-export def bound(node: Ast.Call, slots: List[Int]) -> Ast.Call
+def bound(node: Ast.Call, slots: List[Int]) -> Ast.Call
   no_named: List[Ast.NamedArg] = []
   node.with(args: arguments(node.args, node.named), named: no_named, slots: slots)
 end
 
 ## A bound call with every parameter given, as the positional call with its arguments in parameter order. It is for the
 ## builtin rules that read the arguments by position; the lowering still runs them in source order.
-export def in_parameter_order(node: Ast.Call) -> Ast.Call
+def in_parameter_order(node: Ast.Call) -> Ast.Call
   return node if node.slots.size == 0
 
   args: List[Ast.Expr] = []
@@ -182,7 +182,7 @@ export def in_parameter_order(node: Ast.Call) -> Ast.Call
 end
 
 ## True when the last argument is a `do` or `{ }` block written after the call.
-export def trailing_block?(args: List[Ast.Expr]) -> Bool
+def trailing_block?(args: List[Ast.Expr]) -> Bool
   return false if args.size == 0
 
   case args[args.size - 1]
@@ -192,7 +192,9 @@ export def trailing_block?(args: List[Ast.Expr]) -> Bool
 end
 
 ## True when a struct field has a default value.
-export def field_default?(field: Ast.FieldDecl) -> Bool = field.default.some?
+def field_default?(field: Ast.FieldDecl) -> Bool = field.default.some?
+
+private
 
 # The first parameter that no argument fills, or -1.
 def first_open(filled: List[Bool]) -> Int

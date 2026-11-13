@@ -42,6 +42,21 @@ import Workspace from "../modules/workspace"
 import NativeBuild from "../packages/native_build"
 import CacheFiles from "cache_files"
 
+## A builder for one run: it builds a request, or finds it built, the first time it is asked, and gives the same
+## answer for the same library afterwards. `noted` prints on stderr what the compiler says and the path of a new build;
+## without it (`--json`, `--ai`) nothing is printed, so stderr holds the diagnostic alone. `warned` gets the packed
+## PKG-NATIVE-UNBUILT warning of an optional module that was not built, once a run.
+def builder(noted: Bool, warned: Fn[String, Void]) -> Fn[Workspace.BuildRequest, Workspace.Built]
+  memo: ATS[String, String] = ATS.new()
+  ->(request) { remembered(memo, request, noted, warned) }
+end
+
+## The builder of `compile` under `flag` (a --deny-* flag or --sandbox), whose program may not open native code: it
+## starts no compiler and fails at the build table, so nothing names a module that was not built.
+def refusing(flag: String) -> Fn[Workspace.BuildRequest, Workspace.Built] = ->(request) { refused(request, flag) }
+
+private
+
 # The folder of the package cache that holds the builds, and the names inside an entry.
 BUILD_FOLDER = "native-build"
 INCLUDE_FOLDER = "include"
@@ -73,21 +88,6 @@ struct Ran
   status: Int
   stdout: String
   stderr: String
-end
-
-## A builder for one run: it builds a request, or finds it built, the first time it is asked, and gives the same
-## answer for the same library afterwards. `noted` prints on stderr what the compiler says and the path of a new build;
-## without it (`--json`, `--ai`) nothing is printed, so stderr holds the diagnostic alone. `warned` gets the packed
-## PKG-NATIVE-UNBUILT warning of an optional module that was not built, once a run.
-export def builder(noted: Bool, warned: Fn[String, Void]) -> Fn[Workspace.BuildRequest, Workspace.Built]
-  memo: ATS[String, String] = ATS.new()
-  ->(request) { remembered(memo, request, noted, warned) }
-end
-
-## The builder of `compile` under `flag` (a --deny-* flag or --sandbox), whose program may not open native code: it
-## starts no compiler and fails at the build table, so nothing names a module that was not built.
-export def refusing(flag: String) -> Fn[Workspace.BuildRequest, Workspace.Built]
-  ->(request) { refused(request, flag) }
 end
 
 def refused(request: Workspace.BuildRequest, flag: String) -> Workspace.Built

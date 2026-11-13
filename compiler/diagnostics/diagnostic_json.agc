@@ -9,30 +9,30 @@ import Model from "diagnostic_model"
 import Problems from "problem"
 
 ## The JSON object of the problem.
-export def json(problem: Problems.Problem) -> JSON.Value = object(Model.of_problem(problem))
+def json(problem: Problems.Problem) -> JSON.Value = object(Model.of_problem(problem))
 
 ## The JSON object of a warning: the object of the problem with `"warning": true`. A warning is not an error: the
 ## command goes on (a native module that was not built, io/native_build.agc).
-export def warning(problem: Problems.Problem) -> JSON.Value
+def warning(problem: Problems.Problem) -> JSON.Value
   JSON.object(fields_of(Model.of_problem(problem)).put("warning", JSON.from(true)))
 end
 
 ## The JSON object of a diagnostic.
-export def object(diagnostic: Model.Diagnostic) -> JSON.Value = JSON.object(fields_of(diagnostic))
+def object(diagnostic: Model.Diagnostic) -> JSON.Value = JSON.object(fields_of(diagnostic))
 
 ## The JSON object of a range: `start` and `end`, each with a `line` and a `column`.
-export def range(part: Model.Region) -> JSON.Value
-  JSON.object({"start": position(part.start), "end": position(part.stop)})
-end
+def range(part: Model.Region) -> JSON.Value = JSON.object({"start": position(part.start), "end": position(part.stop)})
 
 ## The `shape` of an answer from a program that does not check (docs/grammar/06b-builtins.md): `partial` is
 ## true and `diagnostics` holds its problems. A complete answer leaves both keys out.
-export def partial(shape: Map[String, JSON.Value], diagnostics: List[Model.Diagnostic]) -> Map[String, JSON.Value]
+def partial(shape: Map[String, JSON.Value], diagnostics: List[Model.Diagnostic]) -> Map[String, JSON.Value]
   (
     shape.put("partial", JSON.from(true))
       .put("diagnostics", JSON.array(diagnostics.map do |found: Model.Diagnostic| object(found) end))
   )
 end
+
+private
 
 # The fields of the object of a diagnostic.
 def fields_of(diagnostic: Model.Diagnostic) -> Map[String, JSON.Value]

@@ -7,19 +7,19 @@ import Diag from "diagnostic"
 import Problems from "problem"
 
 ## A place in a text: line and column count from 1, in characters.
-export struct Position
+struct Position
   line: Int
   column: Int
 end
 
 ## A part of a text: `stop` is the first place after it.
-export struct Region
+struct Region
   start: Position
   stop: Position
 end
 
 ## A note on a second part of the text, such as "this is Int".
-export struct Label
+struct Label
   range: Region
   text: String
 end
@@ -27,7 +27,7 @@ end
 ## One problem of a program. `file` is the file as the answer names it; `key_path` is the place in agentica.toml or
 ## agentica.lock of a problem that has no source span (`range` is then the start of the file); `function` is the
 ## signature of the function being checked, and `callee` the one of the function or builtin called.
-export struct Diagnostic
+struct Diagnostic
   code: String
   message: String
   file: String
@@ -42,7 +42,7 @@ export struct Diagnostic
 end
 
 ## The part of a text that a span covers, without its offsets.
-export def range_of(span: Source.Span) -> Region
+def range_of(span: Source.Span) -> Region
   Region(
     start: Position(line: span.start.line, column: span.start.column),
     stop: Position(line: span.stop.line, column: span.stop.column),
@@ -50,7 +50,7 @@ export def range_of(span: Source.Span) -> Region
 end
 
 ## The diagnostic of a problem.
-export def of_problem(problem: Problems.Problem) -> Diagnostic
+def of_problem(problem: Problems.Problem) -> Diagnostic
   help = ""
   case problem.help
     Diag.Help.Hint(text) -> help = text
@@ -71,3 +71,5 @@ export def of_problem(problem: Problems.Problem) -> Diagnostic
     labels: problem.labels.map do |label: Problems.Label| Label(range: range_of(label.span), text: label.text) end,
   )
 end
+
+private

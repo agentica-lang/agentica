@@ -10,7 +10,7 @@ import Unused from "check_unused"
 ## CHECK-UNUSED-VARIABLE for the name that starts first in the source among those that nothing read, in a file that is
 ## not lenient. The scope of every name is the function (or constant) that introduced it, which is why the state holds
 ## no name of another one.
-export def check(cx: State.Cx, st: State.St) -> Result[Bool]
+def check(cx: State.Cx, st: State.St) -> Result[Bool]
   return ok(true) if st.locals.size == 0 or cx.lenient.include?(cx.file)
 
   first = -1
@@ -34,6 +34,8 @@ export def check(cx: State.Cx, st: State.St) -> Result[Bool]
     ),
   )
 end
+
+private
 
 def label(origin: State.Origin) -> String
   case origin

@@ -1,10 +1,7 @@
 ## Results of `agentica test`, and the text and JSON reports built from them.
 
-# How many scenarios the timing lists, the slowest first.
-SLOWEST = 5
-
 ## A place in a file: the line, the column and the end column.
-export struct Span
+struct Span
   file: String
   line: Int
   column: Int
@@ -12,13 +9,13 @@ export struct Span
 end
 
 ## Where a scenario came from: no example, or one `Examples` row.
-export enum Example
+enum Example
   NoExample
   Row(Span)
 end
 
 ## An expected or actual value of an error: unknown, or known as text.
-export enum Detail
+enum Detail
   Unknown
   Known(String)
 end
@@ -26,7 +23,7 @@ end
 ## A failure: a code, a message and its place, and the expected and actual values when known.
 ## `original` keeps the diagnostic object as `--json` wrote it (with its `stack` keys, which the text report shows), or
 ## JSON null for an error built from fields.
-export struct Failure
+struct Failure
   code: String
   message: String
   span: Span
@@ -38,7 +35,7 @@ end
 
 ## The result of a scenario or a file: `Pass`, `Fail` with an error, `Skipped` with the reason a step gave, or
 ## `NotExecuted`.
-export enum Verdict
+enum Verdict
   Pass
   Fail(Failure)
   Skipped(String)
@@ -46,7 +43,7 @@ export enum Verdict
 end
 
 ## The result of one step. `Skipped` is the step that ended its scenario with `BDD.skip`.
-export enum StepStatus
+enum StepStatus
   Passed
   Failed(Failure)
   Skipped
@@ -54,14 +51,14 @@ export enum StepStatus
 end
 
 ## The text, place and status of one step.
-export struct StepResult
+struct StepResult
   text: String
   location: Span
   status: StepStatus
 end
 
 ## The result of one scenario: its steps, verdict, duration and output.
-export struct ScenarioResult
+struct ScenarioResult
   name: String
   tags: List[String]
   location: Span
@@ -73,7 +70,7 @@ export struct ScenarioResult
 end
 
 ## The result of one feature file or test file.
-export struct FileResult
+struct FileResult
   path: String
   feature: String
   kind: String
@@ -82,23 +79,8 @@ export struct FileResult
   output: String
 end
 
-# A scenario with the name of its file, as the report shows it.
-struct Timed
-  label: String
-  item: ScenarioResult
-end
-
-struct Totals
-  passed: Int
-  failed: Int
-  skipped: Int
-  not_executed: Int
-  file_errors: Int
-  exit_code: Int
-end
-
 ## Builds a `Failure` at `span` with no expected or actual value.
-export def error_at(code: String, message: String, span: Span) -> Failure
+def error_at(code: String, message: String, span: Span) -> Failure
   Failure(
     code: code,
     message: message,
@@ -112,7 +94,7 @@ end
 
 ## Reads a diagnostic as `--json` writes it. Keeps the whole object, so the report writes every key unchanged
 ## (`help`, `callee`, `labels` and so on).
-export def from_json(text: String) -> Result[Failure]
+def from_json(text: String) -> Result[Failure]
   root = try JSON.parse(text)
   range = try JSON.get(root, "range")
   start = try JSON.get(range, "start")
@@ -139,7 +121,7 @@ end
 
 ## Adds `actual` to an error built from fields. An error from `from_json` is returned unchanged, since its kept object
 ## is what the report writes, so the text and the JSON cannot disagree.
-export def with_actual(problem: Failure, actual: String) -> Failure
+def with_actual(problem: Failure, actual: String) -> Failure
   return problem if not JSON.null?(problem.original)
   Failure(
     code: problem.code,
@@ -153,25 +135,23 @@ export def with_actual(problem: Failure, actual: String) -> Failure
 end
 
 ## Builds a file result with no scenarios that fails with `problem`.
-export def file_error(path: String, kind: String, problem: Failure) -> FileResult
-  file_failure(path, kind, problem, "")
-end
+def file_error(path: String, kind: String, problem: Failure) -> FileResult = file_failure(path, kind, problem, "")
 
 ## Like `file_error`, and keeps the `output` of the file.
-export def file_failure(path: String, kind: String, problem: Failure, output: String) -> FileResult
+def file_failure(path: String, kind: String, problem: Failure, output: String) -> FileResult
   FileResult(path: path, feature: "", kind: kind, scenarios: [], verdict: Verdict.Fail(problem), output: output)
 end
 
 ## Returns the exit code of a run: 0 when there is a scenario and nothing failed or was left unexecuted (a skipped
 ## scenario is not a failure), 2 when any file or scenario error is `RUNTIME-BDD-INFRA` or `RUNTIME-BDD-USAGE`, else 1.
-export def exit_code(files: List[FileResult]) -> Int = totals(files).exit_code
+def exit_code(files: List[FileResult]) -> Int = totals(files).exit_code
 
 ## Builds the `--json` report of `files` and the `seed` as a JSON object. `wall_ms` is the time the run took, which
 ## is less than the sum of the file times when files run in parallel (`--jobs`).
-export def json(files: List[FileResult], seed: Int, wall_ms: Int) -> JSON.Value = json_and(files, seed, wall_ms, {})
+def json(files: List[FileResult], seed: Int, wall_ms: Int) -> JSON.Value = json_and(files, seed, wall_ms, {})
 
 ## `json` with the fields of `more` added (`coverage`), or put in place of its own (`ok` and `exit_code`).
-export def json_and(files: List[FileResult], seed: Int, wall_ms: Int, more: Map[String, JSON.Value]) -> JSON.Value
+def json_and(files: List[FileResult], seed: Int, wall_ms: Int, more: Map[String, JSON.Value]) -> JSON.Value
   sums = totals(files)
   fields: Map[String, JSON.Value] = {
     "ok": JSON.from(sums.exit_code == 0),
@@ -194,12 +174,32 @@ export def json_and(files: List[FileResult], seed: Int, wall_ms: Int, more: Map[
 end
 
 ## Builds the plain text report, or the `--ai` text when `ai` is true. It has no final newline.
-export def text(files: List[FileResult], ai: Bool, seed: Int) -> String = report_text(files, ai, seed, false, 0)
+def text(files: List[FileResult], ai: Bool, seed: Int) -> String = report_text(files, ai, seed, false, 0)
 
 ## Like `text`, with the time of the run (`wall_ms`, as in `json`), of each file and of the slowest scenarios
 ## (`agentica test --timing`) before the totals.
-export def timed_text(files: List[FileResult], ai: Bool, seed: Int, wall_ms: Int) -> String
+def timed_text(files: List[FileResult], ai: Bool, seed: Int, wall_ms: Int) -> String
   report_text(files, ai, seed, true, wall_ms)
+end
+
+private
+
+# How many scenarios the timing lists, the slowest first.
+SLOWEST = 5
+
+# A scenario with the name of its file, as the report shows it.
+struct Timed
+  label: String
+  item: ScenarioResult
+end
+
+struct Totals
+  passed: Int
+  failed: Int
+  skipped: Int
+  not_executed: Int
+  file_errors: Int
+  exit_code: Int
 end
 
 def report_text(files: List[FileResult], ai: Bool, seed: Int, timing: Bool, wall_ms: Int) -> String

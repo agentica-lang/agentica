@@ -15,13 +15,13 @@ import Env from "../modules/link_env"
 
 ## What the arguments of the front end are: the settings and the words of the user, or the mistake of whoever started
 ## it (a bug of the caller, not a usage error of the user).
-export enum Read
+enum Read
   Ready(Env.Settings, List[String])
   Broken(String)
 end
 
 ## Reads the arguments of the front end.
-export def read(arguments: List[String]) -> Read
+def read(arguments: List[String]) -> Read
   version = ""
   stdlib = ""
   self_path = ""
@@ -63,5 +63,7 @@ export def read(arguments: List[String]) -> Read
 
   Read.Ready(Env.settings(workspace, stdlib, env).with(version: version, self_path: self_path), words)
 end
+
+private
 
 def std_source(name: String) -> Result[String] = FrontEnd.std_source(name)

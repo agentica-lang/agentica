@@ -7,6 +7,135 @@
 ## input. A compile error starts with the place, for example `character 9: missing ')' for the group at character 1`;
 ## characters count from 1. Nothing halts.
 
+## A compiled pattern, made by `compile`.
+struct Regex
+  ## The pattern it was compiled from.
+  source: String
+  ## Private: only `compile` makes it.
+  program: Program
+end
+
+## One match of a search. Positions are character indexes; `stop` is the index after the last character.
+struct Match
+  ## The whole match, the same as `groups[0].text`.
+  text: String
+  start: Int
+  stop: Int
+  ## `groups[0]` is the whole match, then one entry per group in the order of its `(`.
+  groups: List[Group]
+  ## Each group name with its index in `groups`.
+  names: Map[String, Int]
+end
+
+## One group of a match. A group that did not take part has `matched` false, `text` "" and both positions -1.
+struct Group
+  text: String
+  start: Int
+  stop: Int
+  matched: Bool
+end
+
+## Parses and compiles a pattern. An error starts with `character N: `, N counted from 1: this prefix is a contract,
+## since the checker reads it to place CHECK-INVALID-REGEX in a regex literal (compiler/check/check_regex.agc). Limits:
+## 4096 characters, a repetition count of 1000, 10000 instructions after repetitions are expanded, groups nested 256
+## levels deep and 256 groups.
+def compile(pattern: String) -> Result[Regex]
+  chars = pattern.split("")
+  return syntax(MAX_PATTERN, "the pattern is longer than #{MAX_PATTERN} characters") if chars.size > MAX_PATTERN
+  pat = Pat(chars: chars, codes: chars.map do |c| c.code end, n: chars.size)
+  start = St(pos: 0, flags: Flags(fold: false, multi: false, dotall: false), groups: 0, names: {})
+  out = try parse_alt(pat, start, 0)
+  # parse_alt stops only at the end or at a `)` that closes no group.
+  return syntax(out.st.pos, "unexpected ')'") if out.st.pos < pat.n
+  return syntax(0, "the pattern needs more than #{MAX_INSTS} instructions") if size_of(out.node) > MAX_INSTS
+  ok(Regex(source: pattern, program: build(out.node, out.st.groups, out.st.names)))
+end
+
+## Whether the pattern matches anywhere in `text`. It keeps no groups, so it is the cheapest search.
+def match?(text: String, regex: Regex) -> Bool = run(text, regex.program, MODE_TEST).size > 0
+
+## The leftmost-first match in `text`, or `error("no match")`.
+def match(text: String, regex: Regex) -> Result[Match]
+  caps = run(text, regex.program, MODE_FIRST)
+  return error("no match") if caps.size == 0
+  ok(make_match(text, caps, 0, regex.program))
+end
+
+## Every match from left to right, without overlaps. After an empty match the search moves one character on, and an
+## empty match right where the previous match ended is dropped (Go's rule).
+def find_all(text: String, regex: Regex) -> List[Match]
+  prog = regex.program
+  caps = run(text, prog, MODE_ALL)
+  found: List[Match] = []
+  at = 0
+  while at < caps.size
+    found = found.push(make_match(text, caps, at, prog))
+    at += prog.ncap
+  end
+  found
+end
+
+## Replaces every match that `find_all` finds. In `template`, `$0` is the whole match, `$N` group N (the
+## longest run of digits), `${N}` and `${name}` a group, and `$$` a dollar sign; a group that did not take part gives
+## "". The template is checked before any text is replaced: another `$` form or a missing group is an error.
+def replace(text: String, regex: Regex, template: String) -> Result[String]
+  pieces = try parse_template(template, regex.program)
+  ncap = regex.program.ncap
+  caps = run(text, regex.program, MODE_ALL)
+  out: List[String] = []
+  last = 0
+  at = 0
+  while at < caps.size
+    out = out.push(slice(text, last, caps[at]))
+    for piece in pieces
+      case piece
+        Piece.Text(s) -> out = out.push(s)
+        Piece.Ref(g) ->
+          start = caps[at + 2 * g]
+          stop = caps[at + 2 * g + 1]
+          if start >= 0 and stop >= start
+            out = out.push(slice(text, start, stop))
+          end
+      end
+    end
+    last = caps[at + 1]
+    at += ncap
+  end
+  out = out.push(slice(text, last, text.length))
+  ok(out.join(""))
+end
+
+## The parts of `text` between the matches that take at least one character. Empty parts are kept, and an empty
+## match separates nothing.
+def split(text: String, regex: Regex) -> List[String]
+  ncap = regex.program.ncap
+  caps = run(text, regex.program, MODE_ALL)
+  parts: List[String] = []
+  last = 0
+  at = 0
+  while at < caps.size
+    if caps[at + 1] > caps[at]
+      parts = parts.push(slice(text, last, caps[at]))
+      last = caps[at + 1]
+    end
+    at += ncap
+  end
+  parts.push(slice(text, last, text.length))
+end
+
+## A pattern that matches `text` literally. A backslash goes before each of the characters `\.+*?()|[]{}^$`.
+def escape(text: String) -> String = text.split("").map(&escape_char).join("")
+
+## The group of `match` with that name, or an error when the pattern has no such group.
+def named(match: Match, name: String) -> Result[Group]
+  case match.names.get(name)
+    some(index) if index >= 0 and index < match.groups.size -> ok(match.groups[index])
+    _ -> error("no group named \"#{name}\"", kind: "argument")
+  end
+end
+
+private
+
 MAX_PATTERN = 4096
 MAX_COUNT = 1000
 MAX_INSTS = 10000
@@ -41,34 +170,6 @@ WORD_RANGES = [48, 57, 65, 90, 95, 95, 97, 122]
 SPACE_RANGES = [9, 10, 12, 13, 32, 32]
 HEX_DIGITS = "0123456789abcdef"
 SPECIAL = Set.new(["\\", ".", "+", "*", "?", "(", ")", "|", "[", "]", "{", "}", "^", "$"])
-
-## A compiled pattern, made by `compile`.
-export struct Regex
-  ## The pattern it was compiled from.
-  source: String
-  ## Private: only `compile` makes it.
-  program: Program
-end
-
-## One match of a search. Positions are character indexes; `stop` is the index after the last character.
-export struct Match
-  ## The whole match, the same as `groups[0].text`.
-  text: String
-  start: Int
-  stop: Int
-  ## `groups[0]` is the whole match, then one entry per group in the order of its `(`.
-  groups: List[Group]
-  ## Each group name with its index in `groups`.
-  names: Map[String, Int]
-end
-
-## One group of a match. A group that did not take part has `matched` false, `text` "" and both positions -1.
-export struct Group
-  text: String
-  start: Int
-  stop: Int
-  matched: Bool
-end
 
 # The compiled pattern. Instruction pc is (ops[pc], xs[pc], ys[pc]): CHAR code, CLASS index into classes, SPLIT
 # preferred-pc other-pc, JUMP pc, SAVE slot, ASSERT kind. The last instruction is MATCH. RegexEngine.search
@@ -160,105 +261,6 @@ struct FlagScan
   flags: Flags
   stop: Int
   scoped: Bool
-end
-
-## Parses and compiles a pattern. An error starts with `character N: `, N counted from 1: this prefix is a contract,
-## since the checker reads it to place CHECK-INVALID-REGEX in a regex literal (compiler/check/check_regex.agc). Limits:
-## 4096 characters, a repetition count of 1000, 10000 instructions after repetitions are expanded, groups nested 256
-## levels deep and 256 groups.
-export def compile(pattern: String) -> Result[Regex]
-  chars = pattern.split("")
-  return syntax(MAX_PATTERN, "the pattern is longer than #{MAX_PATTERN} characters") if chars.size > MAX_PATTERN
-  pat = Pat(chars: chars, codes: chars.map do |c| c.code end, n: chars.size)
-  start = St(pos: 0, flags: Flags(fold: false, multi: false, dotall: false), groups: 0, names: {})
-  out = try parse_alt(pat, start, 0)
-  # parse_alt stops only at the end or at a `)` that closes no group.
-  return syntax(out.st.pos, "unexpected ')'") if out.st.pos < pat.n
-  return syntax(0, "the pattern needs more than #{MAX_INSTS} instructions") if size_of(out.node) > MAX_INSTS
-  ok(Regex(source: pattern, program: build(out.node, out.st.groups, out.st.names)))
-end
-
-## Whether the pattern matches anywhere in `text`. It keeps no groups, so it is the cheapest search.
-export def match?(text: String, regex: Regex) -> Bool = run(text, regex.program, MODE_TEST).size > 0
-
-## The leftmost-first match in `text`, or `error("no match")`.
-export def match(text: String, regex: Regex) -> Result[Match]
-  caps = run(text, regex.program, MODE_FIRST)
-  return error("no match") if caps.size == 0
-  ok(make_match(text, caps, 0, regex.program))
-end
-
-## Every match from left to right, without overlaps. After an empty match the search moves one character on, and an
-## empty match right where the previous match ended is dropped (Go's rule).
-export def find_all(text: String, regex: Regex) -> List[Match]
-  prog = regex.program
-  caps = run(text, prog, MODE_ALL)
-  found: List[Match] = []
-  at = 0
-  while at < caps.size
-    found = found.push(make_match(text, caps, at, prog))
-    at += prog.ncap
-  end
-  found
-end
-
-## Replaces every match that `find_all` finds. In `template`, `$0` is the whole match, `$N` group N (the
-## longest run of digits), `${N}` and `${name}` a group, and `$$` a dollar sign; a group that did not take part gives
-## "". The template is checked before any text is replaced: another `$` form or a missing group is an error.
-export def replace(text: String, regex: Regex, template: String) -> Result[String]
-  pieces = try parse_template(template, regex.program)
-  ncap = regex.program.ncap
-  caps = run(text, regex.program, MODE_ALL)
-  out: List[String] = []
-  last = 0
-  at = 0
-  while at < caps.size
-    out = out.push(slice(text, last, caps[at]))
-    for piece in pieces
-      case piece
-        Piece.Text(s) -> out = out.push(s)
-        Piece.Ref(g) ->
-          start = caps[at + 2 * g]
-          stop = caps[at + 2 * g + 1]
-          if start >= 0 and stop >= start
-            out = out.push(slice(text, start, stop))
-          end
-      end
-    end
-    last = caps[at + 1]
-    at += ncap
-  end
-  out = out.push(slice(text, last, text.length))
-  ok(out.join(""))
-end
-
-## The parts of `text` between the matches that take at least one character. Empty parts are kept, and an empty
-## match separates nothing.
-export def split(text: String, regex: Regex) -> List[String]
-  ncap = regex.program.ncap
-  caps = run(text, regex.program, MODE_ALL)
-  parts: List[String] = []
-  last = 0
-  at = 0
-  while at < caps.size
-    if caps[at + 1] > caps[at]
-      parts = parts.push(slice(text, last, caps[at]))
-      last = caps[at + 1]
-    end
-    at += ncap
-  end
-  parts.push(slice(text, last, text.length))
-end
-
-## A pattern that matches `text` literally. A backslash goes before each of the characters `\.+*?()|[]{}^$`.
-export def escape(text: String) -> String = text.split("").map(&escape_char).join("")
-
-## The group of `match` with that name, or an error when the pattern has no such group.
-export def named(match: Match, name: String) -> Result[Group]
-  case match.names.get(name)
-    some(index) if index >= 0 and index < match.groups.size -> ok(match.groups[index])
-    _ -> error("no group named \"#{name}\"", kind: "argument")
-  end
 end
 
 # A compile error at character `pos`, counted from 0.

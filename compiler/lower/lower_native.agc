@@ -24,14 +24,10 @@ import Types from "../syntax/types"
 import Ir from "ir"
 import Lowering from "lower_state"
 
-## The builtin of every native call, and the most parameters the VM takes for one (AGC_FFI_MAX_PARAMS in vm/ffi_os.h).
-NATIVE_CALL = "Native.call"
-MAX_PARAMS = 64
-
 ## The function that calls the C function, or LOWER-UNSUPPORTED when it has more parameters than the VM takes. structs
 ## and enums are the program's struct and enum declarations by name, and index is the index of the function's file in
 ## the program's sources.
-export def lower(
+def lower(
   cx: Lowering.Cx,
   function: Ast.FunctionDecl,
   native: Ast.Native,
@@ -108,7 +104,7 @@ export def lower(
 end
 
 ## The signature of a callback of an extern block that Native.callback gets: "CODES NAME".
-export def callback_signature(decl: Ast.ResourceDecl) -> String
+def callback_signature(decl: Ast.ResourceDecl) -> String
   case decl.callback
     some(callback) -> "#{callback.codes} #{Types.display_name(decl.name)}"
     none -> ""
@@ -117,10 +113,16 @@ end
 
 ## The layout code of the C struct of this name with the index of each struct after its {, "{N:CODES}" as in a
 ## signature, for Native.size_of, get_struct and put_struct: the VM lays it out as it lays out a struct argument.
-export def struct_layout(cx: Lowering.Cx, name: String, structs: Map[String, Ast.StructDecl]) -> Result[String]
+def struct_layout(cx: Lowering.Cx, name: String, structs: Map[String, Ast.StructDecl]) -> Result[String]
   decl = structs[name]
   indexed(cx, decl.layout, nested_structs(name, structs), name, decl.span)
 end
+
+private
+
+## The builtin of every native call, and the most parameters the VM takes for one (AGC_FFI_MAX_PARAMS in vm/ffi_os.h).
+NATIVE_CALL = "Native.call"
+MAX_PARAMS = 64
 
 # The signature of a function of a native module, after any "compute ": "module TYPES(PARAMS) -> RESULT NAME LIBRARY".
 # PARAMS and RESULT, and the shape of each user type, come from NativeShape.of_function, which std/analysis lists for

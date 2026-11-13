@@ -5,7 +5,7 @@
 import Model from "diagnostic_model"
 
 ## The diagnostic that the JSON text `text` holds, or why it is not one.
-export def read(text: String) -> Result[Model.Diagnostic]
+def read(text: String) -> Result[Model.Diagnostic]
   root = try JSON.parse(text)
   labels: List[Model.Label] = []
   if has?(root, "labels")
@@ -31,6 +31,8 @@ export def read(text: String) -> Result[Model.Diagnostic]
     ),
   )
 end
+
+private
 
 def has?(object: JSON.Value, key: String) -> Bool = JSON.get(object, key).ok?
 

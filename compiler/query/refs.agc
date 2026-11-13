@@ -30,7 +30,7 @@ import TypeAt from "type_at"
 ## One use of the declaration: its `kind` (`call`, `value`, `type`, `construct`, `read`, `pattern` or `binding`, and
 ## `qualifier` for the name of a module block written in front of one of its names), the `function` it is in ("" at
 ## the top level), the `file` (of its LinkedModule) and the `span` of the name.
-export struct Reference
+struct Reference
   kind: String
   function: String
   file: String
@@ -41,7 +41,7 @@ end
 ## for a builtin, which `builtin` names: `File.read`; "" for anything else); a local is a match of the kind
 ## `parameter`, `local`, `loop` or `pattern`. `references` do not include the definition; they are in the order of the
 ## linked files and, within one file, of the text.
-export struct Answer
+struct Answer
   definition: Optional[Symbol.Match]
   builtin: String
   references: List[Reference]
@@ -49,7 +49,7 @@ end
 
 ## The references to what `asked`, a position in the first file of `linked` (checked as `checked`), names, or
 ## QUERY-NO-EXPRESSION.
-export def answer(linked: Linker.Linked, checked: Checker.Checked, asked: Position.Asked) -> Diag.Outcome[Answer]
+def answer(linked: Linker.Linked, checked: Checker.Checked, asked: Position.Asked) -> Diag.Outcome[Answer]
   case Position.locate(linked.modules[0].text, asked.line, asked.column)
     Position.Located.Outside(span) -> Diag.Outcome.Failed(Position.no_expression(asked, span))
     Position.Located.At(offset) ->
@@ -71,7 +71,7 @@ end
 
 ## The references to the declaration or builtin that `found` is, a match of `Symbol.answer` over the modules of
 ## `linked` (checked as `checked`). A builtin has no definition: `builtin` names it.
-export def of_match(linked: Linker.Linked, checked: Checker.Checked, found: Symbol.Match) -> Answer
+def of_match(linked: Linker.Linked, checked: Checker.Checked, found: Symbol.Match) -> Answer
   return of_block(linked, checked, found) if found.kind == "module"
 
   defined = some(found)
@@ -84,7 +84,7 @@ end
 
 ## Whether the answer needs the types of every function to be complete: a field is read through the type of its target,
 ## and a builtin may be a method that resolved through one.
-export def needs_types?(found: Answer) -> Bool
+def needs_types?(found: Answer) -> Bool
   case found.definition
     some(declared) -> declared.kind == "field"
     none -> true
@@ -92,7 +92,7 @@ export def needs_types?(found: Answer) -> Bool
 end
 
 ## The definition of the declaration `target` names, or `none` for a builtin.
-export def definition_of(modules: List[Linker.LinkedModule], target: Sites.Target) -> Optional[Definitions.Definition]
+def definition_of(modules: List[Linker.LinkedModule], target: Sites.Target) -> Optional[Definitions.Definition]
   if target.kind == "field"
     return Definitions.of_field(modules, target.owner, target.name)
   elsif target.kind == "variant"
@@ -101,6 +101,8 @@ export def definition_of(modules: List[Linker.LinkedModule], target: Sites.Targe
 
   Definitions.of_name(modules, target.name)
 end
+
+private
 
 # A local of `module`: its binding is the definition, and its uses are in the function that holds it. A parameter of a
 # function is used by name at a call too (`f(x, size: 2)`), in any module: kind `argument`.

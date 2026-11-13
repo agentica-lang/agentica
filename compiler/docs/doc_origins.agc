@@ -17,7 +17,7 @@ import Model from "doc_model"
 
 ## The item of the original declaration of each name that `program`, the parse of the file at `path`, re-exports. It is
 ## empty for a file that re-exports nothing, and holds only the builtin types for one that does not link.
-export def of_file(settings: Env.Settings, path: String, program: Ast.Program) -> Map[String, Model.Item]
+def of_file(settings: Env.Settings, path: String, program: Ast.Program) -> Map[String, Model.Item]
   builtins = builtin_items(path, program)
   return builtins if Declarations.reexports_of(program.declarations).size == builtins.size
 
@@ -29,7 +29,7 @@ end
 
 ## The items of the builtin types that a std/ module (`path` is its std/ path or key) re-exports from a std-only family
 ## it does not import, by name. They need no link, and a std/ module given by its std/ path does not link as a root.
-export def builtin_items(path: String, program: Ast.Program) -> Map[String, Model.Item]
+def builtin_items(path: String, program: Ast.Program) -> Map[String, Model.Item]
   return {} if !path.start_with?("std/")
 
   aliases = Declarations.imports_of(program.declarations).map do |decl: Ast.ImportDecl| Declarations.alias_of(decl) end
@@ -45,6 +45,8 @@ export def builtin_items(path: String, program: Ast.Program) -> Map[String, Mode
 
   items
 end
+
+private
 
 def joined(found: Map[String, Model.Item], more: Map[String, Model.Item]) -> Map[String, Model.Item]
   more.keys.reduce(found) do |all, name| all.put(name, more[name]) end

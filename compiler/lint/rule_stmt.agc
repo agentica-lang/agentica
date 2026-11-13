@@ -9,26 +9,28 @@ import Shape from "shape"
 ## Where a name of a function was set: the source `offset` of the binding, the `path` of the loops it sits in (the ids
 ## of the enclosing `for` and `while`, outermost first; a parameter has the empty path and comes first) and whether
 ## it holds a String.
-export struct Origin
+struct Origin
   offset: Int
   path: List[Int]
   string: Bool
 end
 
 ## The origins of every name of a function, for the String rule.
-export struct Locals
+struct Locals
   origins: Map[String, List[Origin]]
 end
 
 ## The suggestions for `stmt`. `path` is the loops that the statement sits in, of the same function body (a block
 ## starts again: its locals do not live across calls). `locals` are the names of the function.
-export def suggestions(file: String, stmt: Ast.Stmt, path: List[Int], locals: Locals) -> List[Problems.Problem]
+def suggestions(file: String, stmt: Ast.Stmt, path: List[Int], locals: Locals) -> List[Problems.Problem]
   case stmt
     Ast.Stmt.Binding(node) -> appended(file, node, path, locals)
     Ast.Stmt.If(node) -> branches(file, node)
     _ -> []
   end
 end
+
+private
 
 # `s = s + piece` (and `s += piece`, which the parser writes the same way) in a loop, where s is a String that was set
 # outside that loop: the nearest earlier binding of s is in fewer loops than this one, so the String lives across the

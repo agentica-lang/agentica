@@ -13,12 +13,32 @@ import Source from "source"
 import Tokens from "token"
 
 ## PARSE-PIPE-TARGET; the linker gives it too, for x |> Type.Name.fn() whose head is no builtin family (rewrite.agc).
-export PIPE_TARGET_CODE = "PARSE-PIPE-TARGET"
-export PIPE_TARGET_MESSAGE = "the right side of |> must be a call with parentheses, such as f() or Alias.f(a)"
-export PIPE_TARGET_HINT = (
+PIPE_TARGET_CODE = "PARSE-PIPE-TARGET"
+PIPE_TARGET_MESSAGE = "the right side of |> must be a call with parentheses, such as f() or Alias.f(a)"
+PIPE_TARGET_HINT = (
   "wrap the expression in parentheses and use . on the result, for example (x |> f()).unwrap!, or pipe into the " +
   "method: x |> f() |> unwrap!()"
 )
+
+## The help of a library that is not a name or an absolute path, in an extern block and in Native.load.
+EXTERN_LIBRARY_HELP = "write a library name such as \"libm.so.6\" or an absolute path such as \"/usr/lib/libx.so\""
+
+## Parses the tokens of the lexer into a Program, or returns the first PARSE- diagnostic. It stops at the first error
+## and never fails otherwise. The nodes are numbered in post-order from first_id (see ast.agc), so that the modules of
+## one program can share one numbering: start the next file at Ast.next_free_id(program).
+def parse(tokens: List[Tokens.Token], first_id: Int) -> Diag.Outcome[Ast.Program]
+  case parse_program(Base.make_env(tokens), first_id)
+    ok(program) -> Diag.Outcome.Done(program)
+    error(text) -> Diag.Outcome.Failed(Base.unpack("#{text}"))
+  end
+end
+
+## Whether the library of an extern block or of Native.load is a name the system loader searches for or an absolute
+## path. A relative path would resolve against the working directory, while imports resolve against the source file:
+## until a later phase decides, it is refused.
+def library_name?(name: String) -> Bool = name != "" and (!name.include?("/") or name.start_with?("/"))
+
+private
 
 LEVELS: Map[String, Int] = {
   "or": 1,
@@ -104,10 +124,7 @@ TYPE_NAME_HELP = {
   "C.UInt64": "write C.Int64: it carries the same 64 bits, and a value above 2^63 - 1 reads as negative",
   "C.ULong": "write C.Long: it carries the same bits, and a value above the largest long reads as negative",
 }
-## The help of a library that is not a name or an absolute path, in an extern block and in Native.load.
-export EXTERN_LIBRARY_HELP = (
-  "write a library name such as \"libm.so.6\" or an absolute path such as \"/usr/lib/libx.so\""
-)
+
 EXTERN_SYMBOL_HELP = "write the C name as a plain string of letters, digits and _, such as = \"fcntl\""
 # The help of a one-line def that cannot be one: a Void function, or a `case` or an `if` after `=`.
 ONE_LINE_DEF_HELP = "write a function with a body: def name() -> Type, then its statements, then end"
@@ -306,21 +323,6 @@ struct FunctionShape
   params: ParamsAt
   result: Base.TypeAt
 end
-
-## Parses the tokens of the lexer into a Program, or returns the first PARSE- diagnostic. It stops at the first error
-## and never fails otherwise. The nodes are numbered in post-order from first_id (see ast.agc), so that the modules of
-## one program can share one numbering: start the next file at Ast.next_free_id(program).
-export def parse(tokens: List[Tokens.Token], first_id: Int) -> Diag.Outcome[Ast.Program]
-  case parse_program(Base.make_env(tokens), first_id)
-    ok(program) -> Diag.Outcome.Done(program)
-    error(text) -> Diag.Outcome.Failed(Base.unpack("#{text}"))
-  end
-end
-
-## Whether the library of an extern block or of Native.load is a name the system loader searches for or an absolute
-## path. A relative path would resolve against the working directory, while imports resolve against the source file:
-## until a later phase decides, it is refused.
-export def library_name?(name: String) -> Bool = name != "" and (!name.include?("/") or name.start_with?("/"))
 
 def brace_help(form: String) -> String = "blocks have no braces: write \"#{form}\" ... \"end\""
 

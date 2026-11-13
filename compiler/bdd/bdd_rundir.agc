@@ -31,14 +31,8 @@
 import RandomName from "../io/random_name"
 import {IO_TIMEOUT} from "bdd_files"
 
-# How many names a run tries before it gives up: a name can be taken, and a hostile user could take names on purpose.
-ATTEMPTS = 16
-STALE_NEW_SECONDS = 3600
-WINDOWS_MIN_AGE_SECONDS = 60
-DIGITS = "0123456789abcdef"
-
 ## A claimed run directory: its final path, and the open lock file. The lock is released when the handle is closed.
-export struct Run
+struct Run
   path: String
   lock: File.Handle
 end
@@ -46,7 +40,7 @@ end
 ## The places that can hold the temporary directory, best first. On Windows: the variables TMPDIR, TMP and TEMP in
 ## that order (TMP and TEMP are the first two that `GetTempPath` reads) and no fixed folder. Elsewhere: TMPDIR when it
 ## is set, then /var/tmp, /usr/tmp and /tmp.
-export def temporary_candidates() -> List[String]
+def temporary_candidates() -> List[String]
   candidates: List[String] = []
   names = ["TMPDIR"]
   fixed: List[String] = ["/var/tmp", "/usr/tmp", "/tmp"]
@@ -66,7 +60,7 @@ export def temporary_candidates() -> List[String]
 end
 
 ## The temporary directory: the first of `temporary_candidates()` that is a directory.
-export def temporary_directory() -> Result[String]
+def temporary_directory() -> Result[String]
   candidates = temporary_candidates()
   for path in candidates
     info = File.stat(path, IO_TIMEOUT)
@@ -77,7 +71,7 @@ export def temporary_directory() -> Result[String]
 end
 
 ## Makes the run directory in `temporary`, locked and under its final name. Nothing is left behind on a failure.
-export def claim(temporary: String) -> Result[Run]
+def claim(temporary: String) -> Result[Run]
   prefix = "agentica-bdd-new-"
   if windows?()
     prefix = "agentica-bdd-"
@@ -93,7 +87,7 @@ export def claim(temporary: String) -> Result[Run]
 end
 
 ## Removes the run directory and releases its lock. The removal is best effort: what stays is swept by a later run.
-export def release(run: Run) -> Void
+def release(run: Run) -> Void
   discard(run.path, run.lock)
 end
 
@@ -102,7 +96,7 @@ end
 ## have a `lock` file nobody holds. `own` is not removed. A folder that cannot be inspected or removed stays. On
 ## Windows the user id is 0 for every folder, so it does not tell the users apart: the folder of another user stays
 ## because its owner-only access list makes the inspection of `lock` fail.
-export def sweep(temporary: String, own: Run) -> Void
+def sweep(temporary: String, own: Run) -> Void
   owner = File.lstat(own.path, IO_TIMEOUT)
   names = Dir.list(temporary, IO_TIMEOUT)
   return if !owner.ok? or !names.ok?
@@ -131,6 +125,14 @@ export def sweep(temporary: String, own: Run) -> Void
     end
   end
 end
+
+private
+
+# How many names a run tries before it gives up: a name can be taken, and a hostile user could take names on purpose.
+ATTEMPTS = 16
+STALE_NEW_SECONDS = 3600
+WINDOWS_MIN_AGE_SECONDS = 60
+DIGITS = "0123456789abcdef"
 
 # Whether the run is on Windows, where the temporary folder, the random names and the ownership checks differ.
 def windows?() -> Bool = System.os() == "windows"

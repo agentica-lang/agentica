@@ -21,7 +21,7 @@
 ## in spaces.
 
 ## A piece of a document.
-export enum Doc
+enum Doc
   ## Text with no line break in it.
   Text(String)
   ## A space when its group is flat, a line break when it is not.
@@ -63,29 +63,9 @@ export enum Doc
   GapLine
 end
 
-# A piece waiting on the stack, with its indent and whether its group is flat.
-struct Command
-  indent: Int
-  flat: Bool
-  doc: Doc
-end
-
-# What the printer has written: the finished lines, the line being written (without its indent while it is still
-# empty), the indent it will get, and the line suffixes, heredoc bodies and comments below waiting for the next line
-# break.
-struct Output
-  lines: List[String]
-  line: String
-  indent: Int
-  suffixes: List[String]
-  afters: List[List[String]]
-  belows: List[String]
-  measured: Bool
-end
-
 ## Lays out `doc` in `width` columns and gives the text: lines with no trailing spaces, joined by line breaks, with a
 ## final line break and no empty line at the end.
-export def render(doc: Doc, width: Int) -> String
+def render(doc: Doc, width: Int) -> String
   stack: List[Command] = [Command(indent: 0, flat: false, doc: doc)]
   out = Output(lines: [], line: "", indent: 0, suffixes: [], afters: [], belows: [], measured: false)
   while stack.size > 0
@@ -148,6 +128,28 @@ export def render(doc: Doc, width: Int) -> String
   end
 
   lines.join("\n") + "\n"
+end
+
+private
+
+# A piece waiting on the stack, with its indent and whether its group is flat.
+struct Command
+  indent: Int
+  flat: Bool
+  doc: Doc
+end
+
+# What the printer has written: the finished lines, the line being written (without its indent while it is still
+# empty), the indent it will get, and the line suffixes, heredoc bodies and comments below waiting for the next line
+# break.
+struct Output
+  lines: List[String]
+  line: String
+  indent: Int
+  suffixes: List[String]
+  afters: List[List[String]]
+  belows: List[String]
+  measured: Bool
 end
 
 # Pushes the parts so that the first is on top.

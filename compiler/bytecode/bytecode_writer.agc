@@ -21,14 +21,14 @@ import {FORMAT_VERSION, MAX_U16} from "bytecode_tables"
 import JsonTypes from "bytecode_types"
 
 ## The result of writing: the bytes of the file, or the first problem (BYTECODE-LIMIT or BYTECODE-INTERNAL).
-export enum Written
+enum Written
   Done(Bytes)
   Failed(Problems.Problem)
 end
 
 ## Writes the program. version is the Agentica version that the header names; the VM loads the file only when it is
 ## its own, so an empty one is BYTECODE-INTERNAL.
-export def write(program: Ir.Program, version: String) -> Written
+def write(program: Ir.Program, version: String) -> Written
   return Written.Failed(Problems.unpack(Failure.internal(program, "the Agentica version is empty"))) if version == ""
 
   result = build(program, version)
@@ -36,6 +36,8 @@ export def write(program: Ir.Program, version: String) -> Written
 
   Written.Failed(Problems.unpack(result.message))
 end
+
+private
 
 def build(program: Ir.Program, version: String) -> Result[Bytes]
   try check_limits(program)

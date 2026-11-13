@@ -67,6 +67,18 @@ import Reply from "cli_reply"
 import Texts from "cli_text"
 import Pipeline from "pipeline"
 
+## Runs the command line `args` (the words after the program name) and gives the exit status. Everything it writes goes
+## to the standard streams of this process.
+def run(settings: Env.Settings, args: List[String], hand_off: Fn[Launch.Launch, Int]) -> Int
+  case Options.parse(args, settings.version)
+    Options.Parsed.Answer(reply) -> emit(reply)
+    Options.Parsed.Ready(options) ->
+      dispatch(Session(options: options, settings: settings, hand_off: hand_off, buffer_file: "", buffer_shown: ""))
+  end
+end
+
+private
+
 # The deadline of each call that writes the output of `compile` or a file of `fmt`, in milliseconds.
 SAVE_TIMEOUT = 60_000
 # The name of the standard input in the diagnostics of `fmt -`.
@@ -81,16 +93,6 @@ struct Session
   hand_off: Fn[Launch.Launch, Int]
   buffer_file: String
   buffer_shown: String
-end
-
-## Runs the command line `args` (the words after the program name) and gives the exit status. Everything it writes goes
-## to the standard streams of this process.
-export def run(settings: Env.Settings, args: List[String], hand_off: Fn[Launch.Launch, Int]) -> Int
-  case Options.parse(args, settings.version)
-    Options.Parsed.Answer(reply) -> emit(reply)
-    Options.Parsed.Ready(options) ->
-      dispatch(Session(options: options, settings: settings, hand_off: hand_off, buffer_file: "", buffer_shown: ""))
-  end
 end
 
 # The first word picks the command; a word that is not a command is the source file of a run.

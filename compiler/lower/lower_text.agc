@@ -26,11 +26,11 @@ import Lowering from "lowering"
 ## FILE:LINE:COLUMN-LINE:COLUMN, with the index of its source. A register is `rN`, a function `fnN`, a struct `sN`, a
 ## variant `vN`, a global `gN`, a label `LN`; a `const` shows its value as `void`, `nil`, `true`, `false`, `int:N`,
 ## `float:bits:N` or a quoted string. The goldens in tests/fixtures/frontend/lower/ hold it.
-export def lower_text(path: String, settings: Env.Settings) -> String = lower_text_after(path, settings, 0)
+def lower_text(path: String, settings: Env.Settings) -> String = lower_text_after(path, settings, 0)
 
 ## The same, with the lowering started `frames` VM calls deeper than it would be. A test uses it to show how much of
 ## the call depth limit the lowering of a deep tree leaves free.
-export def lower_text_after(path: String, settings: Env.Settings, frames: Int) -> String
+def lower_text_after(path: String, settings: Env.Settings, frames: Int) -> String
   case Linker.link_file(path, settings)
     Linker.Linking.Failed(failure) -> LinkText.root_failure_text(settings.workspace, path, failure)
     Linker.Linking.Done(linked) -> linked_text(linked, settings, frames)
@@ -39,13 +39,15 @@ end
 
 ## The ERROR line of a problem of the lowering or of the bytecode writer: the line of its diagnostic with
 ## ` file="path"` added.
-export def problem_text(workspace: Workspace.Workspace, root_dir: String, problem: Failure.Problem) -> String
+def problem_text(workspace: Workspace.Workspace, root_dir: String, problem: Failure.Problem) -> String
   shown = Diag.Diagnostic(code: problem.code, message: problem.message, span: problem.span, help: problem.help)
   "#{Text.diagnostic_line(shown)} file=#{Text.quote(Paths.stored_file(workspace, root_dir, problem.file))}"
 end
 
 ## The text form of a lowered program: what `agentica --dump-ir` prints.
-export def program_text(program: Ir.Program) -> String = program_lines(program).join("\n")
+def program_text(program: Ir.Program) -> String = program_lines(program).join("\n")
+
+private
 
 def linked_text(linked: Linker.Linked, settings: Env.Settings, frames: Int) -> String
   case Checker.check(linked, settings)

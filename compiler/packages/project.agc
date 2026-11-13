@@ -14,17 +14,17 @@ import Manifest from "manifest"
 import Members from "members"
 
 ## The names of the two files, beside each other in the folder of the project.
-export MANIFEST_FILE = "agentica.toml"
-LOCK_FILE = "agentica.lock"
+MANIFEST_FILE = "agentica.toml"
+
 ## The help of PKG-SOURCE-CONFLICT, here and where `add` and `update` find the conflict (io/package_resolve.agc).
-export CONFLICT_HELP = (
+CONFLICT_HELP = (
   "one name stands for one source in a build: make the manifests agree, " +
   "or write override = true on the dependency in the agentica.toml of the root project"
 )
 
 ## A manifest, the folder that holds it, the lock that goes with it (empty when the manifest declares no dependency)
 ## and the workspace of the project (members.agc; none when the project is in no workspace).
-export struct Found
+struct Found
   dir: String
   manifest: Manifest.Manifest
   lock: Lock.Lock
@@ -32,7 +32,7 @@ export struct Found
 end
 
 ## No manifest above the root file, or one.
-export enum Project
+enum Project
   Bare
   Declared(Found)
 end
@@ -40,7 +40,7 @@ end
 ## Finds the project of a root file in the folder root_dir (a canonical path). A failure is a packed failure:
 ## PKG-AGENTICA-TOO-OLD (the manifest needs a newer Agentica than `running`, checked first), PKG-MANIFEST-INVALID,
 ## PKG-LOCK-MISSING, PKG-LOCK-INVALID or PKG-LOCK-STALE.
-export def find(workspace: Workspace.Workspace, root_dir: String, running: String) -> Result[Project]
+def find(workspace: Workspace.Workspace, root_dir: String, running: String) -> Result[Project]
   dir = nearest_manifest(workspace, root_dir)
   return ok(Project.Bare) if dir == ""
 
@@ -82,7 +82,7 @@ end
 ## Finds the project of the commands that write the lock (`add`, `update`). The manifest is read as `find` reads it,
 ## but the lock is not checked against it: those commands are what makes a missing, stale or partial lock right. A lock
 ## that is there must be a good one (PKG-LOCK-INVALID); a lock that is not there is an empty one.
-export def find_to_write(workspace: Workspace.Workspace, root_dir: String, running: String) -> Result[Project]
+def find_to_write(workspace: Workspace.Workspace, root_dir: String, running: String) -> Result[Project]
   dir = nearest_manifest(workspace, root_dir)
   return ok(Project.Bare) if dir == ""
 
@@ -98,7 +98,7 @@ export def find_to_write(workspace: Workspace.Workspace, root_dir: String, runni
 end
 
 ## The local names of the dependencies of the root project, in the order of the manifest.
-export def direct_names(project: Project) -> List[String]
+def direct_names(project: Project) -> List[String]
   case project
     Project.Bare -> []
     Project.Declared(found) -> Manifest.names(found.manifest)
@@ -107,7 +107,7 @@ end
 
 ## The folder whose agc_libs/ the pkg/ search reads first: the folder of the manifest when there is one, else the
 ## folder of the root file.
-export def library_dir(project: Project, root_dir: String) -> String
+def library_dir(project: Project, root_dir: String) -> String
   case project
     Project.Bare -> root_dir
     Project.Declared(found) -> found.dir
@@ -116,14 +116,14 @@ end
 
 ## The folder of a package that is read in place: the folder of the workspace member, or the `path` of the root
 ## manifest in `dir`, which is the folder of that manifest (a relative path starts there).
-export def folder_of(dir: String, members: Members.Members, locked: Lock.Locked) -> String
+def folder_of(dir: String, members: Members.Members, locked: Lock.Locked) -> String
   return Members.folder_of(members, locked.source) if locked.member
 
   path_folder(dir, locked.source.path)
 end
 
 ## The folder that a `path` names, for the root manifest in `dir`.
-export def path_folder(dir: String, path: String) -> String
+def path_folder(dir: String, path: String) -> String
   return path if Paths.rooted?(path)
 
   Paths.join(dir, path)
@@ -131,7 +131,7 @@ end
 
 ## Checks that each `path` dependency of the root manifest names a folder with an agentica.toml, as a workspace member
 ## must have one. A failure is PKG-MANIFEST-INVALID at `dependencies.<name>.path`.
-export def check_paths(workspace: Workspace.Workspace, dir: String, manifest: Manifest.Manifest) -> Result[Void]
+def check_paths(workspace: Workspace.Workspace, dir: String, manifest: Manifest.Manifest) -> Result[Void]
   for dependency in manifest.dependencies
     next if !GitSource.local?(dependency.source)
 
@@ -155,7 +155,7 @@ end
 ## manifest is checked by `Manifest.require_package` first (PKG-ROOT-ONLY), and a name that the lock marks as
 ## overridden keeps the source of the root, so the source a package asks for is not compared. The failure names the
 ## manifest and `dependencies.<name>`.
-export def check_dependencies(
+def check_dependencies(
   lock: Lock.Lock,
   manifest: Manifest.Manifest,
   members: Members.Members,
@@ -208,7 +208,7 @@ end
 ## Whether the file `key` (a canonical path) follows the style keys of the manifest in `style_dir` ("" when no manifest
 ## asks for a style rule): it is below that folder, no folder between them has an agentica.toml (that is another
 ## project, whose own keys are not read) and it is not in the agc_libs/ of the folder, which holds libraries.
-export def styled?(workspace: Workspace.Workspace, style_dir: String, key: String) -> Bool
+def styled?(workspace: Workspace.Workspace, style_dir: String, key: String) -> Bool
   if style_dir == "" or !Paths.inside?(style_dir, key) or Paths.inside?(Paths.join(style_dir, "agc_libs"), key)
     return false
   end
@@ -224,7 +224,7 @@ export def styled?(workspace: Workspace.Workspace, style_dir: String, key: Strin
 end
 
 ## The folder with an agentica.toml that is the nearest to dir, going up; "" when there is none.
-export def nearest_manifest(workspace: Workspace.Workspace, dir: String) -> String
+def nearest_manifest(workspace: Workspace.Workspace, dir: String) -> String
   here = dir
   while here != ""
     return here if workspace.file_exists.call(Paths.join(here, MANIFEST_FILE))
@@ -237,6 +237,10 @@ export def nearest_manifest(workspace: Workspace.Workspace, dir: String) -> Stri
 
   ""
 end
+
+private
+
+LOCK_FILE = "agentica.lock"
 
 def stale(file: String, path: String, message: String) -> String
   help = Failure.hint("make #{LOCK_FILE} list the source and the pin that the manifest names")

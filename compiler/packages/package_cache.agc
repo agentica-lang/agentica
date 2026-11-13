@@ -10,7 +10,7 @@ import GitSource from "git_source"
 ## XDG_CACHE_HOME is not set or not absolute. On Windows it is `%LOCALAPPDATA%/agentica/cache/pkg` (the user data
 ## folder of Windows, as for pkg/ libraries; XDG_CACHE_HOME and HOME are not read there). It is "" when the variables
 ## leave no place for it: an unset HOME, or a relative or unset LOCALAPPDATA.
-export def root(env: Env.Env) -> String
+def root(env: Env.Env) -> String
   if env.windows
     return Paths.join(env.local_app_data, "agentica/cache/pkg") if Paths.absolute?(env.local_app_data, true)
 
@@ -29,7 +29,7 @@ end
 ## projects that name one repository differently share its folder. A package that is a folder of the repository
 ## (`subdir`) has a folder of its own that holds only the files of that folder: `<commit>@<subdir>` with the `/` of the
 ## subdir written `@`, which a subdir never holds, so two folders of one commit never share a cache folder or nest.
-export def folder(root: String, source: GitSource.Source, commit: String) -> String
+def folder(root: String, source: GitSource.Source, commit: String) -> String
   name = commit
   if source.subdir != ""
     name = "#{commit}@#{source.subdir.split("/").join("@")}"
@@ -37,3 +37,5 @@ export def folder(root: String, source: GitSource.Source, commit: String) -> Str
 
   Paths.join(Paths.join(root, GitSource.cache_path(source.git)), name)
 end
+
+private

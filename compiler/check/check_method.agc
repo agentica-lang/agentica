@@ -14,7 +14,7 @@ import Rules from "check_rules"
 import CheckTypes from "check_types"
 
 ## Checks target.name(args).
-export def check_method(cx: State.Cx, st: State.St, node: Ast.MethodCall, expected: T.Type) -> Result[State.Out]
+def check_method(cx: State.Cx, st: State.St, node: Ast.MethodCall, expected: T.Type) -> Result[State.Out]
   target = try State.expr(cx, st, node.target, T.Type.Unknown)
   if node.name == "each" and foreach_call?(node.target)
     return error(
@@ -46,7 +46,7 @@ end
 
 ## The call of a function value of the given type: one argument for each parameter, each checked against its type, and
 ## the result type of the function. Shared by `f.call(args)` and a call of an Fn field (`s.name(args)`).
-export def apply_function(
+def apply_function(
   cx: State.Cx,
   st: State.St,
   type: T.Type,
@@ -70,7 +70,7 @@ export def apply_function(
 end
 
 ## Checks target.name: a struct field, or a method without arguments (to_s, size, ...).
-export def check_field_access(cx: State.Cx, st: State.St, node: Ast.FieldAccess, expected: T.Type) -> Result[State.Out]
+def check_field_access(cx: State.Cx, st: State.St, node: Ast.FieldAccess, expected: T.Type) -> Result[State.Out]
   case node.target
     Ast.Expr.TypeName(type_name) ->
       if node.name == "members"
@@ -87,6 +87,8 @@ export def check_field_access(cx: State.Cx, st: State.St, node: Ast.FieldAccess,
 
   method_on(cx, target, node.id, node.target, node.name, [], [], node.span, false, expected)
 end
+
+private
 
 # The Fn field a struct has under the name, if any. Such a field wins over a method of the same name (to_s, inspect):
 # `s.name(args)` calls the function the field holds, as `s.name.call(args)` does. A field of another type is not

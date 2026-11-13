@@ -33,6 +33,49 @@ import Lexer from "lexer"
 import Source from "source"
 import Tokens from "token"
 
+## The tokens of the expression for the template `body`, opened by the token `opener`, ending with an EOF token; or the
+## first problem of a tag: `PARSE-EAG-UNTERMINATED-TAG`, `PARSE-EAG-BLOCK`, or the lexer's own for the code of a tag.
+def expand(opener: Tokens.Token, body: Tokens.EagBody) -> Diag.Outcome[List[Tokens.Token]]
+  built = Built(
+    tokens: [],
+    text: [],
+    text_at: opener.span,
+    open: [],
+    first: true,
+    escaper: [],
+    escaper_at: opener.span,
+  )
+
+  for line in body.lines
+    case line_built(opener.span, body.indent, line, built)
+      Diag.Outcome.Failed(problem) -> return Diag.Outcome.Failed(problem)
+      Diag.Outcome.Done(next) -> built = next.with(first: false)
+    end
+  end
+
+  return Diag.Outcome.Failed(unclosed(built.open[built.open.size - 1])) if built.open.size > 0
+
+  at = opener.span
+  head = block_head(built, at)
+  tail = [
+    name(Ast.EAG_PIECES, at),
+    word("dot", ".", at),
+    name("join", at),
+    word("left-paren", "(", at),
+    Tokens.Token(kind: "string", lexeme: "\"\"", value: Tokens.Value.Text(""), span: at),
+    word("right-paren", ")", at),
+    word("NL", "\n", at),
+    word("right-brace", "}", at),
+    word("dot", ".", at),
+    name("first", at),
+    word("EOF", "", at),
+  ]
+
+  Diag.Outcome.Done(appended(appended(head, flush(built, at).tokens), tail))
+end
+
+private
+
 # The code of the error for a tag with no end on its line.
 UNTERMINATED_TAG = "PARSE-EAG-UNTERMINATED-TAG"
 
@@ -72,47 +115,6 @@ struct Built
   first: Bool
   escaper: List[Tokens.Token]
   escaper_at: Source.Span
-end
-
-## The tokens of the expression for the template `body`, opened by the token `opener`, ending with an EOF token; or the
-## first problem of a tag: `PARSE-EAG-UNTERMINATED-TAG`, `PARSE-EAG-BLOCK`, or the lexer's own for the code of a tag.
-export def expand(opener: Tokens.Token, body: Tokens.EagBody) -> Diag.Outcome[List[Tokens.Token]]
-  built = Built(
-    tokens: [],
-    text: [],
-    text_at: opener.span,
-    open: [],
-    first: true,
-    escaper: [],
-    escaper_at: opener.span,
-  )
-
-  for line in body.lines
-    case line_built(opener.span, body.indent, line, built)
-      Diag.Outcome.Failed(problem) -> return Diag.Outcome.Failed(problem)
-      Diag.Outcome.Done(next) -> built = next.with(first: false)
-    end
-  end
-
-  return Diag.Outcome.Failed(unclosed(built.open[built.open.size - 1])) if built.open.size > 0
-
-  at = opener.span
-  head = block_head(built, at)
-  tail = [
-    name(Ast.EAG_PIECES, at),
-    word("dot", ".", at),
-    name("join", at),
-    word("left-paren", "(", at),
-    Tokens.Token(kind: "string", lexeme: "\"\"", value: Tokens.Value.Text(""), span: at),
-    word("right-paren", ")", at),
-    word("NL", "\n", at),
-    word("right-brace", "}", at),
-    word("dot", ".", at),
-    name("first", at),
-    word("EOF", "", at),
-  ]
-
-  Diag.Outcome.Done(appended(appended(head, flush(built, at).tokens), tail))
 end
 
 # The tokens up to the first line of the block: `[0].map { |eag#n: Int|`, then the binding of the escaper when the

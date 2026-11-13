@@ -25,43 +25,21 @@ import Tree from "../packages/package_tree"
 import Reader from "../packages/toml_read"
 import GitProcess from "git_process"
 
-# The deadline of one file-system call, in milliseconds.
-FS_TIMEOUT_MS = 60_000
-TEMP_TRIES = 5
-# Where the fetched pin lands in the temporary repository. It is not under refs/tags/, so the name cannot clash with a
-# tag of the repository.
-PINNED = "refs/fetched/pin"
-# The number of characters of git's error text that goes in the help.
-HELP_LIMIT = 600
-
 ## What filling one package did: the files were fetched, or the folder was already there with the locked hash.
-export enum Filled
+enum Filled
   Fetched
   Present
 end
 
 ## Where the package is in the lock: the file and the path of its `[[package]]` table, such as `package[2]`.
-export struct Place
+struct Place
   file: String
   entry: String
 end
 
-# The temporary folder of one fetch: the bare repository, and the files that are copied out of it. git runs in `temp`.
-struct Scratch
-  temp: String
-  repo: String
-  files: String
-end
-
-# What a folder of the cache holds under the commit: nothing, or the locked files.
-enum Seen
-  Absent
-  Matches
-end
-
 ## The folder of the package cache, or the failure for `file` (the lock, whose entries are about to be filled) when the
 ## environment leaves no place for it.
-export def cache_root(env: Env.Env, file: String) -> Result[String]
+def cache_root(env: Env.Env, file: String) -> Result[String]
   cache = PackageCache.root(env)
   if cache == ""
     message = "there is no package cache folder: HOME is not set"
@@ -73,14 +51,14 @@ end
 
 ## Like `cache_root`, for the packages of a lock: a lock of workspace members and paths alone fetches nothing and
 ## needs no cache, so it gives "" for it and fails only when a package has to be fetched.
-export def cache_for(env: Env.Env, file: String, packages: List[Lock.Locked]) -> Result[String]
+def cache_for(env: Env.Env, file: String, packages: List[Lock.Locked]) -> Result[String]
   return ok("") if packages.all? do |locked| Lock.in_place?(locked) end
 
   cache_root(env, file)
 end
 
 ## Puts the files of the locked package into the cache under `cache` (a folder; PackageCache.root).
-export def fill(workspace: Workspace.Workspace, cache: String, place: Place, locked: Lock.Locked) -> Result[Filled]
+def fill(workspace: Workspace.Workspace, cache: String, place: Place, locked: Lock.Locked) -> Result[Filled]
   target = PackageCache.folder(cache, locked.source, locked.commit)
   seen = try inspect(workspace, place, target, locked)
   case seen
@@ -93,7 +71,7 @@ end
 ## that the pin points to and the hash of the files, and the files are in the cache as `fill` would put them. A tag may
 ## point anywhere now (that is what `update` is for); a `ref` must be the whole commit, since git cannot fetch an
 ## abbreviation. `place` names the dependency in the manifest that asks for it.
-export def resolve(
+def resolve(
   workspace: Workspace.Workspace,
   cache: String,
   place: Place,
@@ -121,7 +99,7 @@ export def resolve(
 end
 
 ## The failure for the key of an entry ("" for the entry as a whole). An empty help is no help.
-export def fail(place: Place, code: String, key: String, message: String, help: String) -> String
+def fail(place: Place, code: String, key: String, message: String, help: String) -> String
   path = Reader.child(place.entry, key)
   if key == ""
     path = place.entry
@@ -130,6 +108,30 @@ export def fail(place: Place, code: String, key: String, message: String, help: 
   return Failure.fail_key(place.file, path, code, message, Diag.Help.NoHelp) if help == ""
 
   Failure.fail_key(place.file, path, code, message, Failure.hint(help))
+end
+
+private
+
+# The deadline of one file-system call, in milliseconds.
+FS_TIMEOUT_MS = 60_000
+TEMP_TRIES = 5
+# Where the fetched pin lands in the temporary repository. It is not under refs/tags/, so the name cannot clash with a
+# tag of the repository.
+PINNED = "refs/fetched/pin"
+# The number of characters of git's error text that goes in the help.
+HELP_LIMIT = 600
+
+# The temporary folder of one fetch: the bare repository, and the files that are copied out of it. git runs in `temp`.
+struct Scratch
+  temp: String
+  repo: String
+  files: String
+end
+
+# What a folder of the cache holds under the commit: nothing, or the locked files.
+enum Seen
+  Absent
+  Matches
 end
 
 # Looks at the folder of the commit, if there is one: the locked files (nothing to do) or others (an error).

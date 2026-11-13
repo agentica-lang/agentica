@@ -20,14 +20,14 @@ import Types from "types"
 ## parameter of the block that holds it, and the escaper when the template names one. They have a `#`, which no
 ## identifier has, so a template can neither write nor read them; the checker tells them from user names to explain an
 ## error of a template.
-export EAG_PIECES = "eag#t"
-export EAG_SEED = "eag#n"
-export EAG_ESCAPER = "eag#e"
+EAG_PIECES = "eag#t"
+EAG_SEED = "eag#n"
+EAG_ESCAPER = "eag#e"
 
 ## The value of a literal or of a literal pattern. Huge keeps an integer that does not fit an Int as its decimal digits
 ## (a hex, binary or octal literal far past 2^64 keeps its prefix and digits instead, `0x1ff...`), with a leading -
 ## when a pattern negates it.
-export enum LitValue
+enum LitValue
   Whole(Int)
   Huge(String)
   Real(Float)
@@ -37,7 +37,7 @@ export enum LitValue
 end
 
 ## A type written in the source, such as List[Int] or Mod.Type.
-export struct TypeRef
+struct TypeRef
   id: Int
   name: String
   args: List[TypeRef]
@@ -45,7 +45,7 @@ export struct TypeRef
 end
 
 ## The root of a parsed file. It has the last id of the tree. private_mark is the file's `private` line, if any.
-export struct Program
+struct Program
   id: Int
   declarations: List[Decl]
   module_doc: Optional[String]
@@ -59,13 +59,13 @@ end
 ## both forms; `export` on a declaration is refused there. The wrap keeps the declaration's own doc, and the ExportDecl
 ## has its span. In a struct body (StructDecl.private_mark) index is the number of fields before it, and nothing is
 ## wrapped.
-export struct PrivateMark
+struct PrivateMark
   index: Int
   span: Source.Span
 end
 
 ## A top-level declaration.
-export enum Decl
+enum Decl
   Import(ImportDecl)
   Reexport(ReexportDecl)
   Export(ExportDecl)
@@ -80,7 +80,7 @@ end
 
 ## An import: import Alias from "path" (alias is `some`, names is empty), or import {A, B as C} from "path" (alias is
 ## `none`, names has at least one entry).
-export struct ImportDecl
+struct ImportDecl
   id: Int
   path: String
   alias: Optional[String]
@@ -90,7 +90,7 @@ end
 
 ## One entry of an import list: the exported name, the name this file binds (the same without `as`), and the span of
 ## each (equal without `as`). It has no id: it is part of its ImportDecl.
-export struct ImportName
+struct ImportName
   name: String
   local: String
   span: Source.Span
@@ -99,7 +99,7 @@ end
 
 ## A re-export: `export Alias.name` or `export Alias.TypeName` passes on a name that the file imports under `alias`.
 ## The spans are of the whole line, of the alias and of the name.
-export struct ReexportDecl
+struct ReexportDecl
   id: Int
   alias: String
   name: String
@@ -109,7 +109,7 @@ export struct ReexportDecl
 end
 
 ## export before a def, struct or enum; its doc is the doc of the declaration.
-export struct ExportDecl
+struct ExportDecl
   id: Int
   declaration: Decl
   doc: Optional[String]
@@ -119,7 +119,7 @@ end
 ## A module block: `module Name ... end` at the top level of a file, a namespace for the declarations inside it
 ## (docs/grammar/05b-modules.md). `export module Name` wraps it in an ExportDecl. The linker makes a module of its own
 ## of the declarations.
-export struct ModuleDecl
+struct ModuleDecl
   id: Int
   name: String
   name_span: Source.Span
@@ -132,7 +132,7 @@ end
 ## A module constant: [export] NAME[: Type] = value (docs/grammar/06-semantics.md). Unlike the other declarations
 ## it is not wrapped by an ExportDecl: exported says whether `export` was written (or the constant is above `private`),
 ## and the span starts at it. The linker clears exported.
-export struct ConstDecl
+struct ConstDecl
   id: Int
   name: String
   name_span: Source.Span
@@ -147,7 +147,7 @@ end
 ## its parameter and result types are already the Agentica types of the C types it was written with.
 ## type_parameters are the names of a generic function (def first_or[T](...)) and type_parameter_spans their spans, in
 ## the same order; both are empty for any other function, and always for an extern one.
-export struct FunctionDecl
+struct FunctionDecl
   id: Int
   name: String
   name_span: Source.Span
@@ -182,7 +182,7 @@ end
 ## module is true for a function of an `extern module "NAME"` block, a function of a native module's table: library is
 ## then the module's NAME as written, symbol the def's name (`?` and `!` included), and codes, resource, free and outs
 ## are empty; its parameter and result types stay the Agentica types as written.
-export struct Native
+struct Native
   library: String
   symbol: String
   codes: String
@@ -196,7 +196,7 @@ end
 
 ## A resource that an out parameter of an extern function gives: its name as written and the C name of its free
 ## function.
-export struct NativeResource
+struct NativeResource
   name: String
   free: String
 end
@@ -204,7 +204,7 @@ end
 ## One parameter of a function, with its default value when `NAME: type = expression` gave one. The default is an
 ## ordinary expression of the file; the checker accepts only a constant (CHECK-DEFAULT-VALUE), and the linker resolves
 ## its names in the file that declares the function.
-export struct Param
+struct Param
   id: Int
   name: String
   name_span: Source.Span
@@ -221,7 +221,7 @@ end
 ## a generic struct (struct Box[T]); empty for any other, and always for a record or a C struct. private_mark is the
 ## `private` line of the body: the fields from its index on are private to the module that declares the struct
 ## (CHECK-PRIVATE-FIELD).
-export struct StructDecl
+struct StructDecl
   id: Int
   name: String
   name_span: Source.Span
@@ -237,7 +237,7 @@ end
 ## One field of a struct, with its default value when `name: Type = expression` gave one. Like a parameter default, it
 ## is an ordinary expression of the file; the checker accepts only a constant (CHECK-DEFAULT-VALUE), the linker
 ## resolves its names in the file that declares the struct, and a constructor that leaves the field out gets the value.
-export struct FieldDecl
+struct FieldDecl
   id: Int
   name: String
   name_span: Source.Span
@@ -248,7 +248,7 @@ export struct FieldDecl
 end
 
 ## An enum with its type parameters and variants.
-export struct EnumDecl
+struct EnumDecl
   id: Int
   name: String
   name_span: Source.Span
@@ -259,7 +259,7 @@ export struct EnumDecl
 end
 
 ## A type alias, with the type parameters of a generic one (type Matrix[T] = List[List[T]]; empty for type Grid = ...).
-export struct TypeAliasDecl
+struct TypeAliasDecl
   id: Int
   name: String
   name_span: Source.Span
@@ -277,7 +277,7 @@ end
 ## is "" and callback holds its C function type; it is `none` for every other resource. A resource of an
 ## `extern module "NAME"` block (`resource Db`) has module NAME, the library as written, and free "": the module's
 ## resource table frees it; module is "" for every other resource.
-export struct ResourceDecl
+struct ResourceDecl
   id: Int
   name: String
   name_span: Source.Span
@@ -292,14 +292,14 @@ end
 ## The C function type of a callback of an extern block: its parameters and result with the Agentica types that the
 ## function given to Native.callback takes and returns (C.Int32 is Int, Void stays Void), and the codes of the C
 ## types, the result's first, as in Native.codes (an integer code, d, f, b, p, s for a parameter, v for a result).
-export struct Callback
+struct Callback
   params: List[Param]
   result: TypeRef
   codes: String
 end
 
 ## One variant of an enum, with the types of its payload.
-export struct EnumVariant
+struct EnumVariant
   id: Int
   name: String
   name_span: Source.Span
@@ -309,7 +309,7 @@ export struct EnumVariant
 end
 
 ## A statement.
-export enum Stmt
+enum Stmt
   Binding(Binding)
   Return(Return)
   Expression(ExprStmt)
@@ -321,7 +321,7 @@ export enum Stmt
 end
 
 ## name = value, name: Type = value, or the desugared name += value. `name_span` is the name on the left.
-export struct Binding
+struct Binding
   id: Int
   name: String
   name_span: Source.Span
@@ -332,7 +332,7 @@ end
 
 ## return with an optional value. `implicit` is true for the last expression of a def that gives its value, written
 ## with no `return` (the parser's tail_returns); its span is the expression's.
-export struct Return
+struct Return
   id: Int
   value: Optional[Expr]
   span: Source.Span
@@ -340,14 +340,14 @@ export struct Return
 end
 
 ## An expression used as a statement.
-export struct ExprStmt
+struct ExprStmt
   id: Int
   value: Expr
   span: Source.Span
 end
 
 ## The if or elsif part of an if statement: a condition and a body.
-export struct IfBranch
+struct IfBranch
   id: Int
   condition: Expr
   body: List[Stmt]
@@ -357,7 +357,7 @@ end
 ## if with its elsif branches. else_body is `some` when the else keyword is written, even for an empty body. `guard` is
 ## true for a guard, `return x if c`, `break if c` or `next if c`: one branch whose body is that one statement, which
 ## checks and lowers as the `if` written out, and which the formatter writes back as a guard.
-export struct IfStmt
+struct IfStmt
   id: Int
   branches: List[IfBranch]
   else_body: Optional[List[Stmt]]
@@ -366,7 +366,7 @@ export struct IfStmt
 end
 
 ## while condition ... end.
-export struct WhileStmt
+struct WhileStmt
   id: Int
   condition: Expr
   body: List[Stmt]
@@ -374,7 +374,7 @@ export struct WhileStmt
 end
 
 ## for variable in iterable ... end.
-export struct ForStmt
+struct ForStmt
   id: Int
   variable: String
   variable_span: Source.Span
@@ -384,7 +384,7 @@ export struct ForStmt
 end
 
 ## break or next; kind is that word.
-export struct LoopControl
+struct LoopControl
   id: Int
   kind: String
   span: Source.Span
@@ -392,7 +392,7 @@ end
 
 ## case value ... end with its arms. A statement, or an expression (`Expr.Case`) on the right side of an assignment or
 ## after `return`: each arm of a case that gives a value ends with an expression, which is the arm's value.
-export struct CaseStmt
+struct CaseStmt
   id: Int
   value: Expr
   arms: List[CaseArm]
@@ -401,7 +401,7 @@ end
 
 ## One arm of a case: a pattern, an optional guard (`pattern if condition ->`) and a body. The guard is a Bool
 ## expression that may read the names the pattern binds.
-export struct CaseArm
+struct CaseArm
   id: Int
   pattern: Pattern
   guard: Optional[Expr]
@@ -410,7 +410,7 @@ export struct CaseArm
 end
 
 ## The pattern of a case arm.
-export enum Pattern
+enum Pattern
   Wildcard(WildcardPattern)
   Literal(LiteralPattern)
   Variant(VariantPattern)
@@ -419,27 +419,27 @@ end
 
 ## Several patterns of one case arm, `"ex", "px" ->`: the arm matches when one of them does. Only the top of an arm
 ## has one, and its patterns bind no names.
-export struct OrPattern
+struct OrPattern
   id: Int
   patterns: List[Pattern]
   span: Source.Span
 end
 
 ## The pattern _.
-export struct WildcardPattern
+struct WildcardPattern
   id: Int
   span: Source.Span
 end
 
 ## A literal pattern: a number (possibly negative), a string, true, false or nil.
-export struct LiteralPattern
+struct LiteralPattern
   id: Int
   value: LitValue
   span: Source.Span
 end
 
 ## An enum variant pattern, or ok(...) and error(...) as Result variants, with one slot for each payload position.
-export struct VariantPattern
+struct VariantPattern
   id: Int
   enum_name: String
   variant_name: String
@@ -450,14 +450,14 @@ end
 ## One payload position of a variant pattern: a name that binds the value (with the span of the name), `_` that drops
 ## it, or a nested pattern (a literal, or another variant, to any depth). A name and `_` have no node id of their own,
 ## so a pattern with no nested part numbers the nodes of the tree as it did before nested patterns existed.
-export enum Slot
+enum Slot
   Bind(String, Source.Span)
   Skip
   Nested(Pattern)
 end
 
 ## An expression.
-export enum Expr
+enum Expr
   Literal(Literal)
   Name(NameRef)
   Call(Call)
@@ -485,14 +485,14 @@ export enum Expr
 end
 
 ## A number, string, true, false or nil.
-export struct Literal
+struct Literal
   id: Int
   value: LitValue
   span: Source.Span
 end
 
 ## A variable name.
-export struct NameRef
+struct NameRef
   id: Int
   name: String
   span: Source.Span
@@ -503,7 +503,7 @@ end
 ## ones: the parameters they fill, or in error(...) and Result.Err(...) the fields of the Error it builds. slots is
 ## empty from the parser. The checker and the lowering set it on a call with named arguments, whose args then hold
 ## every argument in source order (Defaults.arguments): the parameter each one fills.
-export struct Call
+struct Call
   id: Int
   name: String
   args: List[Expr]
@@ -517,7 +517,7 @@ end
 ## Enum.Variant(args), also through a module alias. named is empty from the parser. The linker fills it, and leaves
 ## args empty, for a call written with names such as Enum.Variant(x: 1), which the parser reads as a Construct; the
 ## checker refuses it (variants take positional arguments).
-export struct EnumConstructor
+struct EnumConstructor
   id: Int
   enum_name: String
   variant_name: String
@@ -527,14 +527,14 @@ export struct EnumConstructor
 end
 
 ## &name or &Alias.name.
-export struct FunctionRef
+struct FunctionRef
   id: Int
   name: String
   span: Source.Span
 end
 
 ## target.call(args): a call of a function value.
-export struct Invoke
+struct Invoke
   id: Int
   target: Expr
   args: List[Expr]
@@ -542,7 +542,7 @@ export struct Invoke
 end
 
 ## name: value in a struct construction.
-export struct NamedArg
+struct NamedArg
   id: Int
   name: String
   value: Expr
@@ -550,7 +550,7 @@ export struct NamedArg
 end
 
 ## Type(name: value, ...): a struct construction.
-export struct Construct
+struct Construct
   id: Int
   type_name: String
   args: List[NamedArg]
@@ -562,7 +562,7 @@ end
 ## of the update may build: its own and the exported ones of the files it imports (a builtin record is always allowed,
 ## so it is not listed). The checker refuses an update of any other user struct (CHECK-IMPORT-NAME). It is data in the
 ## node, not a predicate.
-export struct StructUpdate
+struct StructUpdate
   id: Int
   target: Expr
   args: List[NamedArg]
@@ -571,14 +571,14 @@ export struct StructUpdate
 end
 
 ## [a, b, c].
-export struct ListLit
+struct ListLit
   id: Int
   elements: List[Expr]
   span: Source.Span
 end
 
 ## key: value in a map literal.
-export struct MapEntry
+struct MapEntry
   id: Int
   key: Expr
   value: Expr
@@ -586,14 +586,14 @@ export struct MapEntry
 end
 
 ## {key: value, ...}.
-export struct MapLit
+struct MapLit
   id: Int
   entries: List[MapEntry]
   span: Source.Span
 end
 
 ## target.name without parentheses. `name_span` is the span of the name after the dot.
-export struct FieldAccess
+struct FieldAccess
   id: Int
   target: Expr
   name: String
@@ -603,7 +603,7 @@ end
 
 ## target.name(args), with a trailing block as the last argument. `name_span` is the span of the name after the dot.
 ## named holds the `name: value` arguments after the positional ones.
-export struct MethodCall
+struct MethodCall
   id: Int
   target: Expr
   name: String
@@ -614,13 +614,13 @@ export struct MethodCall
 end
 
 ## One part of an interpolated string: text, or an expression.
-export enum Part
+enum Part
   Text(String)
   Code(Expr)
 end
 
 ## A string with #{...} parts; empty text parts are left out.
-export struct Interpolation
+struct Interpolation
   id: Int
   parts: List[Part]
   span: Source.Span
@@ -628,7 +628,7 @@ end
 
 ## do |params| body end, { |params| body } after a call without arguments (`braces`), or a lambda ->(params) { body }
 ## (`lambda`): the same function value without a call.
-export struct BlockLit
+struct BlockLit
   id: Int
   params: List[BlockParam]
   body: List[Stmt]
@@ -638,7 +638,7 @@ export struct BlockLit
 end
 
 ## One parameter of a block, with an optional type.
-export struct BlockParam
+struct BlockParam
   id: Int
   name: String
   name_span: Source.Span
@@ -647,7 +647,7 @@ export struct BlockParam
 end
 
 ## target[index].
-export struct IndexAccess
+struct IndexAccess
   id: Int
   target: Expr
   index: Expr
@@ -655,14 +655,14 @@ export struct IndexAccess
 end
 
 ## try operand.
-export struct TryExpr
+struct TryExpr
   id: Int
   operand: Expr
   span: Source.Span
 end
 
 ## - or not applied to an operand; op is the token kind (minus or not).
-export struct Unary
+struct Unary
   id: Int
   op: String
   op_span: Source.Span
@@ -672,7 +672,7 @@ end
 
 ## A binary operator; op is the token kind (plus, and, equal, dot-dot, ...), and a compound assignment is desugared to
 ## plus, minus, multiply, divide or modulo.
-export struct Binary
+struct Binary
   id: Int
   op: String
   op_span: Source.Span
@@ -683,7 +683,7 @@ end
 
 ## A type name in expression position: Foo or Mod.Foo, or List[T] and Map[K, V] as a JSON.decode target, whose type
 ## arguments are in args (empty for any other name).
-export struct TypeName
+struct TypeName
   id: Int
   name: String
   args: List[TypeRef]
@@ -693,7 +693,7 @@ end
 ## The read of a module constant, made by the linker from NAME (name is the linked name), and the receiver of a
 ## rewritten NAME.method(...) or NAME.field. A receiver made from a call has the id total + the id of the call, where
 ## total is the number of ids of the program, so it does not clash with a node of the parser (see Linker.Linked.ids).
-export struct ConstRef
+struct ConstRef
   id: Int
   name: String
   span: Source.Span
@@ -703,7 +703,7 @@ end
 ## `compile(pattern).unwrap!` of std/regex, which builds the value: the parser makes it with the name "" and the
 ## pattern (the body after `(?i)`, `(?s)` or `(?is)` for the flags), and the linker names the function when the file
 ## imports std/regex. Its nodes take the ids before the literal's own.
-export struct RegexLit
+struct RegexLit
   id: Int
   body: String
   flags: String
@@ -715,7 +715,7 @@ end
 ## makes from the body (eag.agc) with tokens that keep their places in the template. The literal stands for it in the
 ## tree so that the linker can ask for the import of std/eag and the formatter can print the template as written.
 ## `span` is the opener. The nodes of `call` take the ids before the literal's own.
-export struct EagLit
+struct EagLit
   id: Int
   call: Expr
   span: Source.Span
@@ -724,7 +724,7 @@ end
 ## The receiver of a method call that the checker has already checked, with its type, so the builtin rule of the method
 ## checks it as the first argument without checking it twice. The parser never makes it. id
 ## and span are those of the receiver.
-export struct TypedTarget
+struct TypedTarget
   id: Int
   target: Expr
   type: Types.Type
@@ -733,13 +733,11 @@ end
 
 ## The names that take a block only after parentheses (`loop() do ... end`): Ruby's lambda, proc and loop, and the
 ## foreign keywords, whose parser errors explain them better than the checker can.
-export def block_word?(name: String) -> Bool
-  name == "lambda" or name == "proc" or name == "loop" or foreign_keyword?(name)
-end
+def block_word?(name: String) -> Bool = name == "lambda" or name == "proc" or name == "loop" or foreign_keyword?(name)
 
 ## The keywords of other languages and the loop controls, which the parser names in its errors: let, var, val, const,
 ## match, break, continue and next.
-export def foreign_keyword?(name: String) -> Bool
+def foreign_keyword?(name: String) -> Bool
   (
     name == "let" or
     name == "var" or
@@ -753,7 +751,7 @@ export def foreign_keyword?(name: String) -> Bool
 end
 
 ## The id of an expression node.
-export def expr_id(expr: Expr) -> Int
+def expr_id(expr: Expr) -> Int
   case expr
     Expr.Literal(node) -> node.id
     Expr.Name(node) -> node.id
@@ -783,7 +781,7 @@ export def expr_id(expr: Expr) -> Int
 end
 
 ## The span of an expression node.
-export def expr_span(expr: Expr) -> Source.Span
+def expr_span(expr: Expr) -> Source.Span
   case expr
     Expr.Literal(node) -> node.span
     Expr.Name(node) -> node.span
@@ -813,7 +811,7 @@ export def expr_span(expr: Expr) -> Source.Span
 end
 
 ## The span of a pattern node.
-export def pattern_span(pattern: Pattern) -> Source.Span
+def pattern_span(pattern: Pattern) -> Source.Span
   case pattern
     Pattern.Wildcard(node) -> node.span
     Pattern.Literal(node) -> node.span
@@ -823,7 +821,7 @@ export def pattern_span(pattern: Pattern) -> Source.Span
 end
 
 ## The patterns a case arm tries in order: those of an or-pattern, or the pattern alone.
-export def alternatives(pattern: Pattern) -> List[Pattern]
+def alternatives(pattern: Pattern) -> List[Pattern]
   case pattern
     Pattern.Or(node) -> node.patterns
     _ -> [pattern]
@@ -831,7 +829,7 @@ export def alternatives(pattern: Pattern) -> List[Pattern]
 end
 
 ## Whether a pattern binds a name anywhere in it.
-export def binds?(pattern: Pattern) -> Bool
+def binds?(pattern: Pattern) -> Bool
   case pattern
     Pattern.Variant(node) -> node.slots.any? do |slot: Slot| slot_binds?(slot) end
     Pattern.Or(node) -> node.patterns.any? do |inner: Pattern| binds?(inner) end
@@ -840,7 +838,7 @@ export def binds?(pattern: Pattern) -> Bool
 end
 
 ## The span of a statement node.
-export def stmt_span(stmt: Stmt) -> Source.Span
+def stmt_span(stmt: Stmt) -> Source.Span
   case stmt
     Stmt.Binding(node) -> node.span
     Stmt.Return(node) -> node.span
@@ -854,7 +852,7 @@ export def stmt_span(stmt: Stmt) -> Source.Span
 end
 
 ## The span of a top-level declaration (of the whole export, for an exported one).
-export def decl_span(decl: Decl) -> Source.Span
+def decl_span(decl: Decl) -> Source.Span
   case decl
     Decl.Import(node) -> node.span
     Decl.Reexport(node) -> node.span
@@ -870,7 +868,7 @@ export def decl_span(decl: Decl) -> Source.Span
 end
 
 ## The `##` doc of a top-level declaration; none for an import or a re-export.
-export def doc_of(decl: Decl) -> Optional[String]
+def doc_of(decl: Decl) -> Optional[String]
   case decl
     Decl.Export(node) -> node.doc
     Decl.Function(node) -> node.doc
@@ -885,11 +883,11 @@ export def doc_of(decl: Decl) -> Optional[String]
 end
 
 ## The first id the next file can use: one more than the id of the Program.
-export def next_free_id(program: Program) -> Int = program.id + 1
+def next_free_id(program: Program) -> Int = program.id + 1
 
 ## True when the last argument of a call is a block (do ... end) or a lambda, which picks the block form of a builtin
 ## (File.open): a lambda in the place of the block means the same as the block.
-export def block_call?(call: Call) -> Bool
+def block_call?(call: Call) -> Bool
   return false if call.args.size == 0
 
   case call.args[call.args.size - 1]
@@ -897,6 +895,8 @@ export def block_call?(call: Call) -> Bool
     _ -> false
   end
 end
+
+private
 
 def slot_binds?(slot: Slot) -> Bool
   case slot

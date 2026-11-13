@@ -6,6 +6,21 @@
 
 import T from "../syntax/types"
 
+## The text of `type`. `keys` maps the prefix of each module of the walk ("@3::") to the key of its file. A name with a
+## prefix that `keys` lacks is an error.
+def encode(type: T.Type, keys: Map[String, String]) -> Result[String] = written(type, keys, 0)
+
+## The type that `text` holds. `prefixes` maps the key of each file of the walk to its prefix. A text that is not one
+## whole type, or that names a file the walk lacks, is an error.
+def decode(text: String, prefixes: Map[String, String]) -> Result[T.Type]
+  found = try read_type(text, 0, 0, prefixes)
+  return error("the type has text after it") if found.next != text.length
+
+  ok(found.type)
+end
+
+private
+
 # A type nests at most this deep in the text; a constant type is far shallower, and a deeper text is not one.
 MAX_DEPTH = 48
 
@@ -48,19 +63,6 @@ end
 struct Named
   name: String
   next: Int
-end
-
-## The text of `type`. `keys` maps the prefix of each module of the walk ("@3::") to the key of its file. A name with a
-## prefix that `keys` lacks is an error.
-export def encode(type: T.Type, keys: Map[String, String]) -> Result[String] = written(type, keys, 0)
-
-## The type that `text` holds. `prefixes` maps the key of each file of the walk to its prefix. A text that is not one
-## whole type, or that names a file the walk lacks, is an error.
-export def decode(text: String, prefixes: Map[String, String]) -> Result[T.Type]
-  found = try read_type(text, 0, 0, prefixes)
-  return error("the type has text after it") if found.next != text.length
-
-  ok(found.type)
 end
 
 def written(type: T.Type, keys: Map[String, String], depth: Int) -> Result[String]

@@ -18,16 +18,11 @@ import Failure from "link_failure"
 import Modules from "modules"
 import Resolve from "resolve_import"
 
-# The builtin types with a module name that is no family, which any file may name: C.Pointer, the type of a C pointer
-# (the extern blocks of native code), Native.Mutex, the lock of a native library, and Process.Options, the options of
-# the spawns. The types of a family are family_member's.
-MODULE_TYPES = Set.new(["C.Pointer", "Native.Mutex", "Process.Options"])
-
 ## What the linker knows while it rewrites one file: the settings, every module, the file itself, the linked names of
 ## the user structs the file may update (StructUpdate.visible), and ids, the number of node ids of the program (the
 ## receiver of a rewritten NAME.method(...) takes the id ids + the id of the call). type_parameters are the type
 ## parameters of the generic function being rewritten, whose names stay as written.
-export struct Context
+struct Context
   settings: Env.Settings
   modules: Map[String, Modules.Module]
   me: Modules.Module
@@ -37,7 +32,7 @@ export struct Context
 end
 
 ## What a name must be where it is written: a type (a struct, enum or alias), an enum, or a function.
-export enum Want
+enum Want
   Type
   Enum
   Function
@@ -46,7 +41,7 @@ end
 ## The name in the linked program for a name written in the file. want says what the name must be. hint adds the enum
 ## hint to the help of an unknown alias. A failure is CHECK-IMPORT-NAME, CHECK-TYPE-MISMATCH or CHECK-UNKNOWN-NAME at
 ## span.
-export def resolve(cx: Context, name: String, want: Want, span: Source.Span, hint: Bool) -> Result[String]
+def resolve(cx: Context, name: String, want: Want, span: Source.Span, hint: Bool) -> Result[String]
   parts = name.split(".")
   if parts.size == 2
     return qualified(cx, parts[0], parts[1], want, span, hint)
@@ -66,7 +61,7 @@ end
 ## The linked name of a type written with `arity` type arguments, as resolve with Want.Type. Address[M] is always the
 ## builtin, as in the checker (check_types.agc): Address is not reserved, since a program's own `struct Address` is
 ## common.
-export def resolve_type(cx: Context, name: String, arity: Int, span: Source.Span) -> Result[String]
+def resolve_type(cx: Context, name: String, arity: Int, span: Source.Span) -> Result[String]
   return ok(name) if name == "Address" and arity == 1
 
   resolve(cx, name, Want.Type, span, false)
@@ -74,26 +69,26 @@ end
 
 ## True when the name is a builtin family (OpenSSL) in this file: its members are written Family.Member. An import
 ## alias of the same name wins, though a family name is reserved, so only std/ internals could take one.
-export def family?(cx: Context, name: String) -> Bool = FAMILY_MEMBERS.has_key?(name) and !cx.me.aliases.has_key?(name)
+def family?(cx: Context, name: String) -> Bool = FAMILY_MEMBERS.has_key?(name) and !cx.me.aliases.has_key?(name)
 
 ## True when the file declares an enum with this name.
-export def local_enum?(cx: Context, name: String) -> Bool
+def local_enum?(cx: Context, name: String) -> Bool
   cx.me.names.has_key?(name) and Declarations.enum?(cx.me.names[name])
 end
 
 ## True when the module exports an enum with this name.
-export def exports_enum?(module: Modules.Module, name: String) -> Bool
+def exports_enum?(module: Modules.Module, name: String) -> Bool
   module.public.has_key?(name) and Declarations.enum?(module.public[name])
 end
 
 ## True when the file imports an enum by name under this name (or, in a module block, sees one of its file).
-export def named_enum?(cx: Context, name: String) -> Bool
+def named_enum?(cx: Context, name: String) -> Bool
   cx.me.named.has_key?(name) and Declarations.enum?(named_kind(cx, cx.me.named[name]))
 end
 
 ## The key of the module block `block` that the module under the import alias `alias` exports (`Alias.Block.name`),
 ## or "".
-export def aliased_block(cx: Context, alias: String, block: String) -> String
+def aliased_block(cx: Context, alias: String, block: String) -> String
   return "" if !cx.me.aliases.has_key?(alias)
 
   Modules.exported_block(cx.modules[cx.me.aliases[alias]], block)
@@ -101,7 +96,7 @@ end
 
 ## The linked name of the constant that a name reads in this file (declared here, or imported by name), or "" when the
 ## name is not a constant of the file.
-export def constant_identity(cx: Context, name: String) -> String
+def constant_identity(cx: Context, name: String) -> String
   return identity(cx, name) if cx.me.names.has_key?(name) and Declarations.constant?(cx.me.names[name])
 
   if cx.me.named.has_key?(name)
@@ -116,7 +111,7 @@ end
 ## The linked name of the constant that Alias.NAME reads, or "" when the alias is unknown or the module it names does
 ## not export a constant of that name (a private constant is left to `resolve`, which refuses it like a private
 ## function).
-export def alias_constant_identity(cx: Context, name: String) -> String
+def alias_constant_identity(cx: Context, name: String) -> String
   # An alias is a single segment, so only `Alias.NAME` counts, and `Alias.Block.NAME` for a module block it exports.
   parts = name.split(".")
   key = ""
@@ -139,7 +134,7 @@ end
 
 ## True when the name is a type that the file declares or imports by name (a struct, enum, type alias or resource), or
 ## a builtin record such as File.Info.
-export def declared_type?(cx: Context, name: String) -> Bool
+def declared_type?(cx: Context, name: String) -> Bool
   return right_kind?(cx.me.names[name], Want.Type) if cx.me.names.has_key?(name)
 
   return right_kind?(named_kind(cx, cx.me.named[name]), Want.Type) if cx.me.named.has_key?(name)
@@ -149,7 +144,7 @@ end
 
 ## A name in capitals that no declaration, import, alias or reserved type of the file owns: a constant that does not
 ## exist.
-export def unknown_constant?(cx: Context, name: String) -> Bool
+def unknown_constant?(cx: Context, name: String) -> Bool
   (
     Base.constant_name?(name) and
     !RESERVED.include?(name) and
@@ -161,7 +156,7 @@ end
 
 ## CHECK-UNKNOWN-NAME for such a name, with the closest constant the file can read: its own, declared above or below,
 ## and the ones it imports by name, by the name written.
-export def unknown_constant_failure(cx: Context, name: String, span: Source.Span) -> String
+def unknown_constant_failure(cx: Context, name: String, span: Source.Span) -> String
   seen: List[String] = []
   for own in cx.me.names.keys
     if Declarations.constant?(cx.me.names[own])
@@ -185,12 +180,19 @@ export def unknown_constant_failure(cx: Context, name: String, span: Source.Span
 end
 
 ## The kind of what a name of the `named` table stands for.
-export def named_kind(cx: Context, entry: Modules.Named) -> Declarations.Kind
+def named_kind(cx: Context, entry: Modules.Named) -> Declarations.Kind
   Modules.kind_in(cx.modules[entry.target], entry.name)
 end
 
 ## The name in the linked program of a declaration of the file.
-export def identity(cx: Context, name: String) -> String = cx.me.prefix + name
+def identity(cx: Context, name: String) -> String = cx.me.prefix + name
+
+private
+
+# The builtin types with a module name that is no family, which any file may name: C.Pointer, the type of a C pointer
+# (the extern blocks of native code), Native.Mutex, the lock of a native library, and Process.Options, the options of
+# the spawns. The types of a family are family_member's.
+MODULE_TYPES = Set.new(["C.Pointer", "Native.Mutex", "Process.Options"])
 
 # A reserved type, a builtin enum (and Result and Optional), or a bare builtin function keeps its name.
 def builtin_name?(cx: Context, name: String, want: Want) -> Bool

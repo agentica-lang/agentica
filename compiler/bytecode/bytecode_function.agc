@@ -12,7 +12,7 @@ import Spans from "bytecode_spans"
 import {MAX_U16, NEEDS, OPCODES, PAIR_OPS, SINGLE_OPS, WIDE_OPS} from "bytecode_tables"
 
 ## What the writer has interned so far: the entries of the constant, struct update, builtin and span sections.
-export struct Tables
+struct Tables
   constants: Pool.Pool
   updates: Pool.Pool
   builtins: Pool.Pool
@@ -21,24 +21,14 @@ end
 
 ## The bytes of a function in the file (its header, its code and the span of each instruction, as three chunks) and
 ## the tables after it.
-export struct Encoded
+struct Encoded
   tables: Tables
   parts: Wire.Chunks
 end
 
-# The operands an instruction is written with, and the tables after naming what it needs. The instruction is written
-# as the opcode and three u16 operands, or, when generic, as the operands it has.
-struct Operands
-  tables: Tables
-  a: Int
-  b: Int
-  c: Int
-  generic: Bool
-end
-
 ## Encodes a function. It fails with BYTECODE-LIMIT when the function has more than 65,535 registers or the program
 ## more than 65,535 distinct struct updates.
-export def encode(program: Ir.Program, tables: Tables, function: Ir.Function) -> Result[Encoded]
+def encode(program: Ir.Program, tables: Tables, function: Ir.Function) -> Result[Encoded]
   if function.slots > MAX_U16
     return error(Failure.limit(program, function.file, "registers in one function", function.span))
   end
@@ -84,6 +74,18 @@ export def encode(program: Ir.Program, tables: Tables, function: Ir.Function) ->
   head = head.concat(Wire.u32(prelude_flag(program, function))).concat(Wire.u32(count))
   parts = Wire.add(Wire.add(Wire.add(Wire.start(), head), code), refs)
   ok(Encoded(tables: state.with(spans: own.pool), parts: parts))
+end
+
+private
+
+# The operands an instruction is written with, and the tables after naming what it needs. The instruction is written
+# as the opcode and three u16 operands, or, when generic, as the operands it has.
+struct Operands
+  tables: Tables
+  a: Int
+  b: Int
+  c: Int
+  generic: Bool
 end
 
 # 1 for a function lowered from a file of the prelude, else 0: the VM reports an error in it at the user's call.

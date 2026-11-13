@@ -5,45 +5,36 @@
 ## order in which the children ended: the parts are read in name order, the files are written in name order, and the
 ## lines in line order. A function keeps the order in which the parts first list it, sorted by its line.
 
-# Where `agentica test --coverage` writes its report.
-REPORT = "coverage/lcov.info"
-
-# The code of a report that cannot be written: the one `agentica --coverage FILE` gives for a file it cannot write.
-PROBLEM_CODE = "RUNTIME-INTERNAL"
-
-# The most bytes File.replace takes.
-REPLACE_LIMIT = 16777216
-
 ## A function of a source: the line of its `def` and how many times it was called.
-export struct Function
+struct Function
   name: String
   line: Int
   calls: Int
 end
 
 ## One source file: its functions, and the count of each line that has code.
-export struct Source
+struct Source
   file: String
   functions: List[Function]
   lines: Map[Int, Int]
 end
 
 ## One line of the summary: a file, how many of its lines have code, and how many of them ran.
-export struct Covered
+struct Covered
   file: String
   lines: Int
   hit: Int
 end
 
 ## A part left out because it did not read as LCOV: its file name in the parts folder, and why.
-export struct Broken
+struct Broken
   part: String
   message: String
 end
 
 ## The coverage of a run: the report written (`path`, "" when none was), its files, the parts left out, and why the
 ## report could not be written ("" when nothing went wrong).
-export struct Run
+struct Run
   path: String
   files: List[Covered]
   broken: List[Broken]
@@ -57,7 +48,7 @@ end
 ## (killed at its timeout) adds nothing; neither is a `problem`. With no part (no test ran), nothing is written and an
 ## old report stays, since an empty report would hide it. A folder that cannot be listed, parts that are all broken
 ## and a report that cannot be written are a `problem`, which fails the run (`failed?`): an old report stays.
-export def collect(parts: String, left_out: List[String]) -> Run
+def collect(parts: String, left_out: List[String]) -> Run
   listed = Dir.list(parts, 5000)
   if !listed.ok?
     return Run(path: "", files: [], broken: [], problem: "cannot read the coverage parts: #{listed.message}")
@@ -93,10 +84,10 @@ export def collect(parts: String, left_out: List[String]) -> Run
 end
 
 ## Whether the coverage fails the run: a report that should have been written was not, so an old one may be stale.
-export def failed?(run: Run) -> Bool = run.problem != ""
+def failed?(run: Run) -> Bool = run.problem != ""
 
 ## A path as the report names it: relative to the working directory when it is inside it.
-export def shown(path: String) -> String
+def shown(path: String) -> String
   here = Path.cwd().unwrap_or("")
   return path.slice(here.length + 1, path.length - here.length - 1) if here != "" and path.start_with?("#{here}/")
 
@@ -104,7 +95,7 @@ export def shown(path: String) -> String
 end
 
 ## The sources of an LCOV text, in its order. A line that is not LCOV of the shape the VM writes is an error.
-export def parse(text: String) -> Result[List[Source]]
+def parse(text: String) -> Result[List[Source]]
   found: List[Source] = []
   current = Source(file: "", functions: [], lines: {})
   open = false
@@ -141,7 +132,7 @@ export def parse(text: String) -> Result[List[Source]]
 end
 
 ## `merged` with the counts of `sources` added, file by file.
-export def add(merged: Map[String, Source], sources: List[Source]) -> Map[String, Source]
+def add(merged: Map[String, Source], sources: List[Source]) -> Map[String, Source]
   result = merged
   for source in sources
     known = result.get(source.file, Source(file: source.file, functions: [], lines: {}))
@@ -160,7 +151,7 @@ export def add(merged: Map[String, Source], sources: List[Source]) -> Map[String
 end
 
 ## The LCOV text of `merged`, without the files of `left_out`, in the order of the module doc.
-export def text(merged: Map[String, Source], left_out: List[String]) -> String
+def text(merged: Map[String, Source], left_out: List[String]) -> String
   chunks: List[String] = []
   for file in kept(merged, left_out)
     source = merged[file]
@@ -183,7 +174,7 @@ export def text(merged: Map[String, Source], left_out: List[String]) -> String
 end
 
 ## The line totals of each file of `merged`, without the files of `left_out`, in name order.
-export def summary(merged: Map[String, Source], left_out: List[String]) -> List[Covered]
+def summary(merged: Map[String, Source], left_out: List[String]) -> List[Covered]
   kept(merged, left_out).map do |file: String|
     lines = merged[file].lines
     hit = lines.keys.select do |line: Int| lines[line] > 0 end
@@ -193,7 +184,7 @@ end
 
 ## The summary after the test report: the report's path (or why there is none), one line for each file and the
 ## total, then the parts left out.
-export def report_text(run: Run) -> String
+def report_text(run: Run) -> String
   lines = ["coverage: #{run.path}"]
   if failed?(run)
     lines = ["coverage: [#{PROBLEM_CODE}] #{run.problem}"]
@@ -219,7 +210,7 @@ end
 ## The `coverage` object of the `--json` report: `{path, lines, hit, files: [{file, lines, hit}], broken: [{part,
 ## message}], problem: {code, message}}`, with `path` null when no report was written and `problem` null when nothing
 ## went wrong.
-export def json(run: Run) -> JSON.Value
+def json(run: Run) -> JSON.Value
   files = run.files.map do |file: Covered|
     JSON.object({"file": JSON.from(file.file), "lines": JSON.from(file.lines), "hit": JSON.from(file.hit)})
   end
@@ -247,6 +238,17 @@ export def json(run: Run) -> JSON.Value
     "problem": problem,
   })
 end
+
+private
+
+# Where `agentica test --coverage` writes its report.
+REPORT = "coverage/lcov.info"
+
+# The code of a report that cannot be written: the one `agentica --coverage FILE` gives for a file it cannot write.
+PROBLEM_CODE = "RUNTIME-INTERNAL"
+
+# The most bytes File.replace takes.
+REPLACE_LIMIT = 16777216
 
 # `source` with one FN (line, name), FNDA (calls, name) or DA (line, count). The totals are counted again on writing.
 def with_field(source: Source, key: String, value: String) -> Result[Source]

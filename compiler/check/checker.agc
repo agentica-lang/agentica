@@ -33,7 +33,7 @@ import Prelude from "prelude_files"
 ## each function at the id of its result annotation, for `Analysis.bodies`. constant_types is the type of each constant
 ## by linked name (a later check of the same program takes them with the entries of the modules it does not check
 ## again).
-export struct Checked
+struct Checked
   types: List[T.Type]
   resolved: Map[Int, State.Resolved]
   constants: List[String]
@@ -47,7 +47,7 @@ end
 
 ## What `check_recovering` learned: the types of the functions that passed, and the problems of those that did not with
 ## their linked names (`failed`, in the same order).
-export struct Recovered
+struct Recovered
   checked: Checked
   problems: List[Failure.Problem]
   failed: List[String]
@@ -55,19 +55,19 @@ end
 
 ## The result of `check_recovering`: the program as far as it checks, or the one failure that leaves nothing to
 ## answer from.
-export enum Recovering
+enum Recovering
   Done(Recovered)
   Failed(Failure.Problem)
 end
 
 ## The result of checking: the types, or the first problem.
-export enum Checking
+enum Checking
   Done(Checked)
   Failed(Failure.Problem)
 end
 
 ## A program that checked and the result, for a check of the same program after some edits.
-export struct Earlier
+struct Earlier
   linked: Linker.Linked
   checked: Checked
 end
@@ -75,28 +75,20 @@ end
 ## What a check may take from an earlier one: the modules of `clean` are those of the new program that read the same
 ## texts as in `earlier`, with everything they import (analysis/cache.agc finds them). The checker takes the entries
 ## of those that `earlier.linked` has with the same ids, and does not check them again.
-export struct Reusing
+struct Reusing
   earlier: Earlier
   clean: Set[String]
 end
 
 ## The result of `check_query_reusing` and the number of modules it did not check again: those of `Reusing.clean` that
 ## the earlier program also has with the same ids and constants (the others are checked, so this may be less).
-export struct Rechecked
+struct Rechecked
   checking: Checking
   taken: Int
 end
 
-# A call or a reference of the generic function callee in the body of the generic function caller, with the type
-# arguments it binds.
-struct JsonPass
-  caller: String
-  callee: String
-  found: Map[String, T.Type]
-end
-
 ## Checks a linked program. The settings tell where the files of the prelude are read.
-export def check(linked: Linker.Linked, settings: Env.Settings) -> Checking
+def check(linked: Linker.Linked, settings: Env.Settings) -> Checking
   finished(run(linked, settings, true, false, taking(linked, none)))
 end
 
@@ -105,26 +97,26 @@ end
 ## of a failed function stay Unknown), so a query can answer about the rest; `problems` are the failures in program
 ## order, and the first is the one `check_query` gives. A failure of the registration of the declarations, of the main
 ## rule or of the module constants leaves no part that passes, so it is the failure, as for `check_query`.
-export def check_recovering(linked: Linker.Linked, settings: Env.Settings) -> Recovering
+def check_recovering(linked: Linker.Linked, settings: Env.Settings) -> Recovering
   recovered(run(linked, settings, false, true, taking(linked, none)))
 end
 
 ## `check_recovering`, taking from an earlier check what `reusing` says is unchanged. The answer is the one of
 ## `check_recovering` without it.
-export def check_recovering_reusing(linked: Linker.Linked, settings: Env.Settings, reusing: Reusing) -> Recovering
+def check_recovering_reusing(linked: Linker.Linked, settings: Env.Settings, reusing: Reusing) -> Recovering
   recovered(run(linked, settings, false, true, taking(linked, some(reusing))))
 end
 
 ## Checks a linked program as `check` does, without the rule that it declares a main (CHECK-MAIN): `agentica check` and
 ## a query about a position (`agentica type-at`) take a library file as well as a program. A main that is declared must
 ## still be `main() -> Void`, and every other rule holds.
-export def check_query(linked: Linker.Linked, settings: Env.Settings) -> Checking
+def check_query(linked: Linker.Linked, settings: Env.Settings) -> Checking
   finished(run(linked, settings, false, false, taking(linked, none)))
 end
 
 ## `check_query`, taking from an earlier check what `reusing` says is unchanged. The answer is the one of `check_query`
 ## without it, and so is the first problem.
-export def check_query_reusing(linked: Linker.Linked, settings: Env.Settings, reusing: Reusing) -> Rechecked
+def check_query_reusing(linked: Linker.Linked, settings: Env.Settings, reusing: Reusing) -> Rechecked
   taken = taking(linked, some(reusing))
   Rechecked(checking: finished(run(linked, settings, false, false, taken)), taken: taken.clean.size)
 end
@@ -134,7 +126,7 @@ end
 ## as a module that was checked leaves it (analysis/front.agc takes both from the cache of checked modules, modules/
 ## check_cache.agc, which vouches for them). The first problem is the one `check_query` gives; the types of the nodes
 ## of a clean module are not known (Unknown).
-export def check_query_taking(
+def check_query_taking(
   linked: Linker.Linked,
   settings: Env.Settings,
   clean: Set[String],
@@ -142,6 +134,16 @@ export def check_query_taking(
 ) -> Checking
   st = State.fresh().with(types: State.no_types(ids_of(linked)))
   finished(run(linked, settings, false, false, Reuse.Taken(st: st, constants: constants, clean: clean)))
+end
+
+private
+
+# A call or a reference of the generic function callee in the body of the generic function caller, with the type
+# arguments it binds.
+struct JsonPass
+  caller: String
+  callee: String
+  found: Map[String, T.Type]
 end
 
 def recovered(result: Result[Recovered]) -> Recovering

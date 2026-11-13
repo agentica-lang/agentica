@@ -12,7 +12,7 @@ import Tables from "check_tables"
 
 ## `Kind.method` of the Ruby method form of the builtin `name` (`List.select` for `List.filter`), or "" when it has
 ## none.
-export def method_key(name: String) -> String
+def method_key(name: String) -> String
   aliased = by_builtin().get(name)
   return aliased.unwrap! if aliased.some?
 
@@ -32,7 +32,7 @@ end
 
 ## The receiver kind of a builtin whose first parameter has this type: its tag (`String`, `List`, ...), but Mutex for
 ## Native.Mutex, the one opaque type with methods, and Error for the builtin record Error, the one struct with methods.
-export def parameter_kind(type: Types.Type) -> String
+def parameter_kind(type: Types.Type) -> String
   return "Mutex" if Types.is?(type, "Opaque") and Types.name(type) == "Native.Mutex"
   return "Error" if Types.error?(type)
 
@@ -40,7 +40,7 @@ export def parameter_kind(type: Types.Type) -> String
 end
 
 ## The method name of the Ruby form of the builtin `name` (`select` for `List.filter`), or "".
-export def method_name(name: String) -> String
+def method_name(name: String) -> String
   key = method_key(name)
   return "" if key == ""
 
@@ -49,17 +49,17 @@ end
 
 ## True when `method` is a Ruby name of the builtin `name` on the receiver `kind`: its Ruby form, or a synonym of it
 ## (`length` and `size`).
-export def ruby_name?(kind: String, method: String, name: String) -> Bool
+def ruby_name?(kind: String, method: String, name: String) -> Bool
   method_name(name) == method or synonym?("#{kind}.#{method}")
 end
 
 ## The signature of one form of a builtin in its Ruby form, `s.strip() -> String` or `list.push(value: T) -> List[T]`,
 ## or "" when the builtin has none. The receiver is the first parameter.
-export def signature(form: Model.Builtin) -> String = signature_as(form, method_name(form.name))
+def signature(form: Model.Builtin) -> String = signature_as(form, method_name(form.name))
 
 ## The Ruby form of `form` written with the method name `method`, which is its own or a synonym of it (`s.size()` for
 ## `String.length`); "" when `method` is "".
-export def signature_as(form: Model.Builtin, method: String) -> String
+def signature_as(form: Model.Builtin, method: String) -> String
   return "" if method == ""
 
   rest = form.parameters.drop(1).map do |parameter: Model.Named| Builtins.parameter_text(parameter) end
@@ -68,7 +68,7 @@ export def signature_as(form: Model.Builtin, method: String) -> String
 end
 
 ## True when `method` is a way to write the builtin `name` as a method: its Ruby name or a synonym of it, on any kind.
-export def written_as?(name: String, method: String) -> Bool
+def written_as?(name: String, method: String) -> Bool
   return true if method_name(name) == method
 
   aliases = Tables.method_aliases()
@@ -82,7 +82,7 @@ export def written_as?(name: String, method: String) -> Bool
 end
 
 ## The Ruby form of a builtin name as a suggestion: `list.select` for `List.filter`; `name` when it has none.
-export def shown(name: String) -> String
+def shown(name: String) -> String
   method = method_name(name)
   entry = ENTRIES.get(name)
   return name if method == "" or entry.none?
@@ -92,7 +92,9 @@ end
 
 ## True when the alias key `Kind.method` is a second Ruby name (`List.collect`, `String.size`): accepted, and never
 ## shown in a text.
-export def synonym?(key: String) -> Bool = Tables.ruby_synonyms().any? do |known: String| known == key end
+def synonym?(key: String) -> Bool = Tables.ruby_synonyms().any? do |known: String| known == key end
+
+private
 
 # The alias key of each builtin that has a Ruby name of its own; the first key in name order wins.
 def by_builtin() -> Map[String, String]

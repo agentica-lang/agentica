@@ -9,9 +9,6 @@ import Source from "../syntax/source"
 import Declarations from "declarations"
 import Failure from "link_failure"
 
-# The prefix that makes a function a test.
-TEST_PREFIX = "test_"
-
 ## The tree of the test file `file` with the `main` that runs its tests, or the same tree when it has no test
 ## function (a run of a file with neither is CHECK-MAIN later). A file that declares `main` and test functions is
 ## CHECK-TEST-MAIN, at `main`, before any test function is looked at: with a `main`, a `test_*` function may be a
@@ -20,7 +17,7 @@ TEST_PREFIX = "test_"
 ## must be written so (the check reads the written type: an alias of it is not one). The new nodes take ids from the id
 ## of the Program on and the Program the next one, so the ids stay in post-order with no gap, and the next file is
 ## numbered after them.
-export def add_main(file: String, program: Ast.Program) -> Result[Ast.Program]
+def add_main(file: String, program: Ast.Program) -> Result[Ast.Program]
   tests: List[Ast.FunctionDecl] = []
   main: Optional[Ast.FunctionDecl] = none
   for decl in program.declarations
@@ -47,6 +44,11 @@ export def add_main(file: String, program: Ast.Program) -> Result[Ast.Program]
 
   ok(with_main(program, tests))
 end
+
+private
+
+# The prefix that makes a function a test.
+TEST_PREFIX = "test_"
 
 # CHECK-TEST-MAIN at a `main` of a file with test functions.
 def no_main(file: String, main: Optional[Ast.FunctionDecl]) -> Result[Void]

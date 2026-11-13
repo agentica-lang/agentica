@@ -9,13 +9,9 @@ import Ir from "ir"
 import State from "lower_state"
 import {BUILTIN_STRUCTS, STRUCT_NEEDS} from "lower_tables"
 
-# The field types that keep a builtin record from JSON.decode: an enum, a channel, and Bytes (JSON has no bytes:
-# HttpWire.Request.body).
-UNDECODABLE = Set.new(["Enum", "Channel", "Bytes", "Opaque"])
-
 ## The builtin enum of an Optional value: none, and some with its item. The VM prints a variant of the enum named
 ## Optional as its name alone (none, some(1)).
-export OPTIONAL = Ir.EnumDef(
+OPTIONAL = Ir.EnumDef(
   name: "Optional",
   variants: [Ir.VariantDef(name: "None", size: 0), Ir.VariantDef(name: "Some", size: 1)],
   decodable: false,
@@ -25,7 +21,7 @@ export OPTIONAL = Ir.EnumDef(
 ## The tables, and what the lowering looks up in them. user_types maps each name in the tables to "Struct" or "Enum",
 ## structs gives the index and the fields of a struct by name, enum_index the index of an enum by name, variants the id
 ## of "Enum.Variant", and json_types the structs and enums JSON.decode may build.
-export struct Tables
+struct Tables
   structs: List[Ir.StructDef]
   enums: List[Ir.EnumDef]
   user_types: Map[String, String]
@@ -40,12 +36,7 @@ end
 ## are the types that functions use as a value, which is when the user structs and enums that JSON can build are looked
 ## for, and targets the types the checker gave them (lowering.agc json_targets): an alias counts by what it names, and
 ## a List or Map target gets a struct of its own (json_list_name).
-export def build(
-  decls: List[Ast.Decl],
-  used: Set[String],
-  type_names: List[String],
-  targets: List[Types.Type],
-) -> Tables
+def build(decls: List[Ast.Decl], used: Set[String], type_names: List[String], targets: List[Types.Type]) -> Tables
   struct_decls: List[Ast.StructDecl] = []
   enum_decls: List[Ast.EnumDecl] = []
   for decl in decls
@@ -122,7 +113,7 @@ end
 ## The name of the struct that stands for a List[T] or Map[String, T] used as a JSON.decode target: the type with its
 ## linked names, such as List[app.Person]. A `[` keeps it apart from every struct a program declares, and the VM
 ## decodes such a struct's one field in its place (docs/vm/03-ir-and-bytecode.md).
-export def json_list_name(type: Types.Type) -> String
+def json_list_name(type: Types.Type) -> String
   case type
     Types.Type.List(item) -> "List[#{json_list_name(item)}]"
     Types.Type.Map(key, value) -> "Map[#{json_list_name(key)}, #{json_list_name(value)}]"
@@ -132,6 +123,12 @@ export def json_list_name(type: Types.Type) -> String
     _ -> Types.tag(type)
   end
 end
+
+private
+
+# The field types that keep a builtin record from JSON.decode: an enum, a channel, and Bytes (JSON has no bytes:
+# HttpWire.Request.body).
+UNDECODABLE = Set.new(["Enum", "Channel", "Bytes", "Opaque"])
 
 # The lookups over the finished tables.
 def index(structs: List[Ir.StructDef], enums: List[Ir.EnumDef]) -> Tables

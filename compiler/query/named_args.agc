@@ -17,28 +17,21 @@ import Locals from "locals"
 
 ## The parameter that a named argument stands for: `local` is the parameter, as query/locals.agc gives it, `module` the
 ## module that declares its function and `site` the name of the argument at the call.
-export struct Named
+struct Named
   local: Locals.Local
   module: Linker.LinkedModule
   site: Source.Span
 end
 
 ## A named argument at a call of the function of a parameter: `module` holds the call, `span` is the name.
-export struct Use
+struct Use
   module: Linker.LinkedModule
   span: Source.Span
 end
 
-# The parameter `index` of the function `function`, which `module` declares.
-struct Param
-  module: Linker.LinkedModule
-  function: Ast.FunctionDecl
-  index: Int
-end
-
 ## The parameter that the name of a named argument at `offset` in the root file of `modules` stands for, or `none`.
 ## `slots` is `Checked.slots` and `bound` is `Checked.bound`, which give the type of the parameter.
-export def at(
+def at(
   modules: List[Linker.LinkedModule],
   slots: Map[Int, List[Int]],
   bound: Map[Int, List[T.Type]],
@@ -70,7 +63,7 @@ end
 ## The named arguments of every module that fill `local`, when it is a parameter of a function that `module` declares;
 ## none for any other local (a block parameter has no name a call could give). In the order of `modules` and, within
 ## one module, of the walk.
-export def uses(
+def uses(
   modules: List[Linker.LinkedModule],
   slots: Map[Int, List[Int]],
   module: Linker.LinkedModule,
@@ -99,6 +92,15 @@ export def uses(
 
       out
   end
+end
+
+private
+
+# The parameter `index` of the function `function`, which `module` declares.
+struct Param
+  module: Linker.LinkedModule
+  function: Ast.FunctionDecl
+  index: Int
 end
 
 # The function of `module` whose parameter `local` is, with the index of the parameter.

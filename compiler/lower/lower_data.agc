@@ -12,7 +12,7 @@ import {MAX_CHUNK} from "lower_tables"
 
 ## A list literal. One `list` instruction gathers at most MAX_CHUNK items; a longer literal is built in chunks joined
 ## with List.concat.
-export def lower_list(cx: State.Cx, fx: State.Fx, node: Ast.ListLit, want: Int) -> Result[State.Out]
+def lower_list(cx: State.Cx, fx: State.Fx, node: Ast.ListLit, want: Int) -> Result[State.Out]
   span = node.span
   fx = State.step(fx, span)
   saved = fx.next
@@ -66,7 +66,7 @@ end
 ## Type.members: the list of StructMember for the fields the checker recorded, each name and type a constant text.
 ## Like a list literal, one `list` instruction gathers at most MAX_CHUNK items and a struct with more fields is built
 ## in chunks joined with List.concat.
-export def lower_members(
+def lower_members(
   cx: State.Cx,
   fx: State.Fx,
   fields: List[Model.Named],
@@ -114,7 +114,7 @@ end
 
 ## Type.codec: a Codec.Info record of the linked name of the type and the list Type.members gives for its fields. The
 ## `struct` instruction reads the name and the members from the two registers after its own.
-export def lower_codec(
+def lower_codec(
   cx: State.Cx,
   fx: State.Fx,
   name: String,
@@ -140,7 +140,7 @@ end
 
 ## A map literal: key and value registers one after the other. One `map` instruction gathers at most MAX_CHUNK entries;
 ## the rest are added with Map.put.
-export def lower_map(cx: State.Cx, fx: State.Fx, node: Ast.MapLit, want: Int) -> Result[State.Out]
+def lower_map(cx: State.Cx, fx: State.Fx, node: Ast.MapLit, want: Int) -> Result[State.Out]
   span = node.span
   fx = State.step(fx, span)
   saved = fx.next
@@ -184,7 +184,7 @@ end
 
 ## An enum value: the payload items in consecutive registers and an `enum` instruction with the id of the variant.
 ## known skips the type check of the items, which the type of the enum value covered (an Optional's item).
-export def lower_enum(
+def lower_enum(
   cx: State.Cx,
   fx: State.Fx,
   enum_name: String,
@@ -219,7 +219,7 @@ end
 ## A struct construction: a register for each field, each value computed into the register of its field, in source
 ## order, then the default of each field the construction leaves out, and a `struct` instruction. The checker accepted
 ## only a construction that gives every field without a default.
-export def lower_struct(cx: State.Cx, fx: State.Fx, node: Ast.Construct, want: Int) -> Result[State.Out]
+def lower_struct(cx: State.Cx, fx: State.Fx, node: Ast.Construct, want: Int) -> Result[State.Out]
   span = node.span
   info = cx.structs[node.type_name]
   fx = State.step(fx, span)
@@ -266,7 +266,7 @@ end
 ## construction of it: the message and each named argument into the register of its field, code and cause as
 ## some(value), the defaults of the others, then a `struct` instruction. Its location stays "", which the VM builtin
 ## error fills with the place of the call.
-export def lower_error_record(cx: State.Cx, fx: State.Fx, node: Ast.Call, want: Int) -> Result[State.Out]
+def lower_error_record(cx: State.Cx, fx: State.Fx, node: Ast.Call, want: Int) -> Result[State.Out]
   span = node.span
   info = cx.structs["Error"]
   fx = State.step(fx, span)
@@ -302,7 +302,7 @@ end
 ## The value of a catalog default (Model.Default) in register want: a literal, an empty list, map or Bytes, a
 ## variant without a payload, or a builtin record built from the defaults of its fields. id and span are the ones of
 ## the node that the default stands in for.
-export def lower_catalog_default(
+def lower_catalog_default(
   cx: State.Cx,
   fx: State.Fx,
   value: Model.Default,
@@ -339,7 +339,7 @@ end
 ## it, in the order of the struct's fields (the order of the update table of the bytecode), so one `struct-with` copies
 ## the receiver and overwrites those fields. The receiver runs first, then the values in source order; the register a
 ## value lands in does not depend on where it is written.
-export def lower_update(cx: State.Cx, fx: State.Fx, node: Ast.StructUpdate, want: Int) -> Result[State.Out]
+def lower_update(cx: State.Cx, fx: State.Fx, node: Ast.StructUpdate, want: Int) -> Result[State.Out]
   span = node.span
   info = cx.structs[Types.name(State.type_of(cx, Ast.Expr.Update(node)))]
   fx = State.step(fx, span)
@@ -367,6 +367,8 @@ export def lower_update(cx: State.Cx, fx: State.Fx, node: Ast.StructUpdate, want
   fx = State.emit_at(fx, "struct-with", [dst, window, info.index].concat(positions), span)
   ok(State.Out(fx: State.release(fx, saved, want, dst), slot: dst))
 end
+
+private
 
 # The StructMember of fields[from, to) in consecutive registers: a register for each, then two scratch registers
 # above them for the name and the type, which the `struct` instruction reads as consecutive fields.

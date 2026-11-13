@@ -22,6 +22,131 @@
 
 import Zip from "std/internal/archive_zip"
 
+## The knobs of `extract_tar`. Every other limit is a fixed ceiling named in `extract_tar`.
+struct Options
+  ## The whole call in milliseconds, 1 to 86400000.
+  timeout_ms: Int = 30000
+  ## The largest total of extracted file bytes, 1 to 1073741824.
+  max_output_bytes: Int = 268435456
+end
+
+## Copies the allowlisted `members` out of the ZIP archive at `src` into `dest_dir` and returns each file's bytes in
+## member order.
+##
+## `src` is a classic single-disk `.zip` file holding stored (method 0) and raw deflate (method 8) entries only:
+## ZIP64, encryption, multi-disk images, split archives, self-extractors and other methods are refused. `members`
+## holds 1 to 256 archive paths with the same safe-relative rules as `extract_tar`, `dest_dir` is created private
+## and must not exist, and only regular files are written; a selected link, directory or device is an error. The
+## reader makes three forward-only passes in 64 KiB reads without ever holding the file, so the source is at most
+## 256 MiB and the passes together read at most 768 MiB of physical bytes. Fixed ceilings: 8192 entries, 1024 name
+## bytes. Names are strict UTF-8 when flag 11 is set and pure ASCII otherwise; legacy CP437 bytes are refused,
+## never misdecoded. Every local record is validated even after the selected files, so corruption past a selected
+## file is still an error. Selected payloads stream within their exact compressed window with their CRC32 and
+## uncompressed size verified; unselected payloads are skipped by size and offset only, never inflated or
+## CRC-checked. `options` is optional and defaults to `Options()`: a 30 s deadline and at most 256 MiB of extracted
+## files.
+def extract_zip(
+  src: String,
+  members: List[String],
+  dest_dir: String,
+  options: Options = Options(),
+) -> Result[List[Int]]
+  if options.timeout_ms <= 0 or options.timeout_ms > 86400000
+    return error("archive: options.timeout_ms must be 1..86400000", kind: "argument")
+  end
+  if options.max_output_bytes <= 0 or options.max_output_bytes > SCAN_BYTES
+    return error("archive: options.max_output_bytes must be 1..1073741824", kind: "argument")
+  end
+  Zip.extract_zip(src, members, dest_dir, options.timeout_ms, options.max_output_bytes)
+end
+
+## Copies the allowlisted `members` out of the TAR archive at `src` into `dest_dir` and returns each file's bytes in
+## member order.
+##
+## `src` is a plain `.tar` or a `.tar.gz` file. `members` holds 1 to 256 archive paths; each must be a safe relative
+## path after one optional leading `./`, with no duplicates and no two entries that only differ in case. `dest_dir`
+## is created private and must not exist. Fixed ceilings: the raw TAR scan is at most 1073741824 bytes, a gzipped
+## source at most 268435456 compressed bytes, 8192 entries, 1024 name bytes and 65536 bytes of PAX and GNU extension
+## data. Headers follow USTAR with PAX `path` and `size` records (local for one entry, global until replaced) and GNU
+## long names; other PAX records are ignored, sparse entries are refused, and only `0`, NUL and `7` type flags count
+## as regular files. A selected link, directory or device is an error, as are a missing member, a repeated member, a
+## bad checksum, truncation, non-zero padding after the end, and any trailing bytes after the gzip member. `options`
+## is optional and defaults to `Options()`: a 30 s deadline and at most 256 MiB of extracted files.
+def extract_tar(
+  src: String,
+  members: List[String],
+  dest_dir: String,
+  options: Options = Options(),
+) -> Result[List[Int]]
+  if options.timeout_ms <= 0 or options.timeout_ms > 86400000
+    return error("archive: options.timeout_ms must be 1..86400000", kind: "argument")
+  end
+  if options.max_output_bytes <= 0 or options.max_output_bytes > SCAN_BYTES
+    return error("archive: options.max_output_bytes must be 1..1073741824", kind: "argument")
+  end
+  now = Time.monotonic_ms()
+  if now > INT_MAX - options.timeout_ms
+    return error("archive: the clock is too far ahead for the timeout", kind: "argument")
+  end
+  deadline = now + options.timeout_ms
+  wanted = try validate_members(members)
+  # The destination in the spelling the host join produces: on Windows Path.join turns every `\` into a `/`,
+  # while a caller may hold `\` (a cache root from the OS does), and the under-destination guard compares the joined
+  # output with this folder literally. Without this a valid destination looks like an escape on Windows.
+  joined = try join_one([dest_dir])
+  dest = strip_slashes(joined)
+  return error("archive: destination must not be empty", kind: "argument") if dest == ""
+  info = try stat_src(src, deadline)
+  return error("archive: source is not a regular file: #{src}", kind: "argument") if info.kind != "file"
+  try make_dest(dest, deadline)
+  first = try read_first(src, deadline)
+  return error("archive: #{src} is empty, not a TAR archive", kind: "archive.format") if first.size == 0
+  gzip = false
+  if first.size >= 2
+    gzip = first[0] == GZIP_FIRST and first[1] == GZIP_SECOND
+  end
+  ctx = Ctx(
+    dest: dest,
+    deadline: deadline,
+    max_output: options.max_output_bytes,
+    wanted: wanted,
+    matched: List.repeat(false, wanted.size),
+    counts: List.repeat(0, wanted.size),
+    extracted: 0,
+    entries: 0,
+    meta_used: 0,
+    local: Local(has_path: false, path: "".bytes, has_size: false, size: 0),
+    gnu_name: "".bytes,
+    has_gnu_name: false,
+    global_path: "".bytes,
+    has_global_path: false,
+    global_size: 0,
+    has_global_size: false,
+    seen_fold: {},
+    seen_exact: {},
+  )
+
+  scan = Scan(
+    ctx: ctx,
+    carry: "".bytes,
+    phase: Phase.Header,
+    zeros: 0,
+    rest: 0,
+    size: 0,
+    what: "",
+    typeflag: 0,
+    entry: 0,
+    out: "",
+    index: -1,
+    fold: "",
+    total: 0,
+  )
+
+  scan_all(src, gzip, scan, members)
+end
+
+private
+
 # Fixed ceilings, documented on `extract_tar`.
 CHUNK = 65536
 HEADER_BYTES = 512
@@ -47,14 +172,6 @@ ZERO_RUN = Bytes.from_list(List.repeat(0, 4096)).unwrap!
 
 # One header block of zeros: two of them end the archive.
 ZERO_BLOCK = ZERO_RUN.take(HEADER_BYTES)
-
-## The knobs of `extract_tar`. Every other limit is a fixed ceiling named in `extract_tar`.
-export struct Options
-  ## The whole call in milliseconds, 1 to 86400000.
-  timeout_ms: Int = 30000
-  ## The largest total of extracted file bytes, 1 to 1073741824.
-  max_output_bytes: Int = 268435456
-end
 
 # One validated allowlist member: the canonical archive path and its segments under the new base.
 struct Wanted
@@ -127,121 +244,6 @@ struct Scan
   index: Int
   fold: String
   total: Int
-end
-
-## Copies the allowlisted `members` out of the ZIP archive at `src` into `dest_dir` and returns each file's bytes in
-## member order.
-##
-## `src` is a classic single-disk `.zip` file holding stored (method 0) and raw deflate (method 8) entries only:
-## ZIP64, encryption, multi-disk images, split archives, self-extractors and other methods are refused. `members`
-## holds 1 to 256 archive paths with the same safe-relative rules as `extract_tar`, `dest_dir` is created private
-## and must not exist, and only regular files are written; a selected link, directory or device is an error. The
-## reader makes three forward-only passes in 64 KiB reads without ever holding the file, so the source is at most
-## 256 MiB and the passes together read at most 768 MiB of physical bytes. Fixed ceilings: 8192 entries, 1024 name
-## bytes. Names are strict UTF-8 when flag 11 is set and pure ASCII otherwise; legacy CP437 bytes are refused,
-## never misdecoded. Every local record is validated even after the selected files, so corruption past a selected
-## file is still an error. Selected payloads stream within their exact compressed window with their CRC32 and
-## uncompressed size verified; unselected payloads are skipped by size and offset only, never inflated or
-## CRC-checked. `options` is optional and defaults to `Options()`: a 30 s deadline and at most 256 MiB of extracted
-## files.
-export def extract_zip(
-  src: String,
-  members: List[String],
-  dest_dir: String,
-  options: Options = Options(),
-) -> Result[List[Int]]
-  if options.timeout_ms <= 0 or options.timeout_ms > 86400000
-    return error("archive: options.timeout_ms must be 1..86400000", kind: "argument")
-  end
-  if options.max_output_bytes <= 0 or options.max_output_bytes > SCAN_BYTES
-    return error("archive: options.max_output_bytes must be 1..1073741824", kind: "argument")
-  end
-  Zip.extract_zip(src, members, dest_dir, options.timeout_ms, options.max_output_bytes)
-end
-
-## Copies the allowlisted `members` out of the TAR archive at `src` into `dest_dir` and returns each file's bytes in
-## member order.
-##
-## `src` is a plain `.tar` or a `.tar.gz` file. `members` holds 1 to 256 archive paths; each must be a safe relative
-## path after one optional leading `./`, with no duplicates and no two entries that only differ in case. `dest_dir`
-## is created private and must not exist. Fixed ceilings: the raw TAR scan is at most 1073741824 bytes, a gzipped
-## source at most 268435456 compressed bytes, 8192 entries, 1024 name bytes and 65536 bytes of PAX and GNU extension
-## data. Headers follow USTAR with PAX `path` and `size` records (local for one entry, global until replaced) and GNU
-## long names; other PAX records are ignored, sparse entries are refused, and only `0`, NUL and `7` type flags count
-## as regular files. A selected link, directory or device is an error, as are a missing member, a repeated member, a
-## bad checksum, truncation, non-zero padding after the end, and any trailing bytes after the gzip member. `options`
-## is optional and defaults to `Options()`: a 30 s deadline and at most 256 MiB of extracted files.
-export def extract_tar(
-  src: String,
-  members: List[String],
-  dest_dir: String,
-  options: Options = Options(),
-) -> Result[List[Int]]
-  if options.timeout_ms <= 0 or options.timeout_ms > 86400000
-    return error("archive: options.timeout_ms must be 1..86400000", kind: "argument")
-  end
-  if options.max_output_bytes <= 0 or options.max_output_bytes > SCAN_BYTES
-    return error("archive: options.max_output_bytes must be 1..1073741824", kind: "argument")
-  end
-  now = Time.monotonic_ms()
-  if now > INT_MAX - options.timeout_ms
-    return error("archive: the clock is too far ahead for the timeout", kind: "argument")
-  end
-  deadline = now + options.timeout_ms
-  wanted = try validate_members(members)
-  # The destination in the spelling the host join produces: on Windows Path.join turns every `\` into a `/`,
-  # while a caller may hold `\` (a cache root from the OS does), and the under-destination guard compares the joined
-  # output with this folder literally. Without this a valid destination looks like an escape on Windows.
-  joined = try join_one([dest_dir])
-  dest = strip_slashes(joined)
-  return error("archive: destination must not be empty", kind: "argument") if dest == ""
-  info = try stat_src(src, deadline)
-  return error("archive: source is not a regular file: #{src}", kind: "argument") if info.kind != "file"
-  try make_dest(dest, deadline)
-  first = try read_first(src, deadline)
-  return error("archive: #{src} is empty, not a TAR archive", kind: "archive.format") if first.size == 0
-  gzip = false
-  if first.size >= 2
-    gzip = first[0] == GZIP_FIRST and first[1] == GZIP_SECOND
-  end
-  ctx = Ctx(
-    dest: dest,
-    deadline: deadline,
-    max_output: options.max_output_bytes,
-    wanted: wanted,
-    matched: List.repeat(false, wanted.size),
-    counts: List.repeat(0, wanted.size),
-    extracted: 0,
-    entries: 0,
-    meta_used: 0,
-    local: Local(has_path: false, path: "".bytes, has_size: false, size: 0),
-    gnu_name: "".bytes,
-    has_gnu_name: false,
-    global_path: "".bytes,
-    has_global_path: false,
-    global_size: 0,
-    has_global_size: false,
-    seen_fold: {},
-    seen_exact: {},
-  )
-
-  scan = Scan(
-    ctx: ctx,
-    carry: "".bytes,
-    phase: Phase.Header,
-    zeros: 0,
-    rest: 0,
-    size: 0,
-    what: "",
-    typeflag: 0,
-    entry: 0,
-    out: "",
-    index: -1,
-    fold: "",
-    total: 0,
-  )
-
-  scan_all(src, gzip, scan, members)
 end
 
 def smaller(a: Int, b: Int) -> Int

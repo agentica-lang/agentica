@@ -15,6 +15,20 @@ import Source from "../syntax/source"
 import Types from "../syntax/types"
 import Model from "model"
 
+## The blocks of the root file of `linked` (checked as `checked`), or CHECK-INTERNAL when the checker recorded no type
+## for a type of a function. `file` is the name the answer gives the file.
+def of_program(file: String, linked: Linker.Linked, checked: Checker.Checked) -> Diag.Outcome[Model.NativeModules]
+  root = linked.modules[0]
+  built = blocks_of(root, program_of(linked, checked))
+  if !built.ok?
+    return Diag.Outcome.Failed(Diag.fail("CHECK-INTERNAL", built.message, root.parsed.span, Diag.Help.NoHelp))
+  end
+
+  Diag.Outcome.Done(Model.NativeModules(version: NATIVE_MODULES_VERSION, file: file, blocks: built.unwrap!))
+end
+
+private
+
 # The version of the shape.
 NATIVE_MODULES_VERSION = 1
 
@@ -42,22 +56,6 @@ struct Placed
   exported: Bool
   doc: Optional[String]
   span: Source.Span
-end
-
-## The blocks of the root file of `linked` (checked as `checked`), or CHECK-INTERNAL when the checker recorded no type
-## for a type of a function. `file` is the name the answer gives the file.
-export def of_program(
-  file: String,
-  linked: Linker.Linked,
-  checked: Checker.Checked,
-) -> Diag.Outcome[Model.NativeModules]
-  root = linked.modules[0]
-  built = blocks_of(root, program_of(linked, checked))
-  if !built.ok?
-    return Diag.Outcome.Failed(Diag.fail("CHECK-INTERNAL", built.message, root.parsed.span, Diag.Help.NoHelp))
-  end
-
-  Diag.Outcome.Done(Model.NativeModules(version: NATIVE_MODULES_VERSION, file: file, blocks: built.unwrap!))
 end
 
 def program_of(linked: Linker.Linked, checked: Checker.Checked) -> Program

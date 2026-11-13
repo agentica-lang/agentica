@@ -11,14 +11,14 @@ import QueryOptions from "query_options"
 import Symbol from "symbol"
 
 ## The match a name selects, or why it selects none.
-export enum Picked
+enum Picked
   One(Symbol.Match)
   Refused(Problems.Problem)
 end
 
 ## The one declaration of `matches`, the answer of `symbol` for `name`. A declaration that several names reach counts
 ## once. The candidates of a refusal are named with the files as an answer names them.
-export def pick(name: String, matches: List[Symbol.Match], settings: Env.Settings) -> Picked
+def pick(name: String, matches: List[Symbol.Match], settings: Env.Settings) -> Picked
   distinct = once(matches)
   return Picked.One(distinct[0]) if distinct.size == 1
 
@@ -31,7 +31,7 @@ end
 
 ## The refusal of `symbol` for `name`, with a note when the word ends in `.agc`: a file is not a name, and the position
 ## form takes `FILE:LINE:COL`.
-export def not_found(name: String, problem: Problems.Problem) -> Problems.Problem
+def not_found(name: String, problem: Problems.Problem) -> Problems.Problem
   return problem if problem.code != "QUERY-NOT-FOUND" or !name.end_with?(".agc")
 
   note = "#{name} is a file; to ask about a place in it write #{name}:LINE:COL"
@@ -40,6 +40,8 @@ export def not_found(name: String, problem: Problems.Problem) -> Problems.Proble
     Diag.Help.NoHelp -> problem.with(help: Diag.Help.Hint(note))
   end
 end
+
+private
 
 # The matches without a second one for the same name in the same file.
 def once(matches: List[Symbol.Match]) -> List[Symbol.Match]

@@ -8,14 +8,8 @@
 import Ast from "../syntax/ast"
 import T from "../syntax/types"
 
-# One thing still to print: a type, or the text between types.
-enum Piece
-  Node(Ast.TypeRef)
-  Text(String)
-end
-
 ## The type as written: `List[Int]`, `Models.User`, `Fn[Int, String]`.
-export def type_text(type: Ast.TypeRef) -> String
+def type_text(type: Ast.TypeRef) -> String
   work = [Piece.Node(type)]
   parts: List[String] = []
   while work.size > 0
@@ -38,7 +32,7 @@ end
 
 ## `name(a: Int, b: Int = 2) -> Int`, or `name[T](a: T) -> T` for a generic function. `text` is the source of the
 ## module: a default value is printed as written there.
-export def function_text(declaration: Ast.FunctionDecl, text: String) -> String
+def function_text(declaration: Ast.FunctionDecl, text: String) -> String
   parameters = declaration.params.map do |parameter: Ast.Param| parameter_text(parameter, text) end
   names = parameters_text(declaration.type_parameters)
   "#{declaration.name}#{names}(#{parameters.join(", ")}) -> #{type_text(declaration.result)}"
@@ -46,36 +40,36 @@ end
 
 ## `callback Name(a: Int, p: C.Pointer) -> Int`: a callback of an extern block, with the Agentica types its function
 ## takes and returns.
-export def callback_text(name: String, callback: Ast.Callback) -> String
+def callback_text(name: String, callback: Ast.Callback) -> String
   parameters = callback.params.map do |parameter: Ast.Param| "#{parameter.name}: #{type_text(parameter.type)}" end
   "callback #{name}(#{parameters.join(", ")}) -> #{type_text(callback.result)}"
 end
 
 ## `struct Name` or `struct Name[T, U]`.
-export def struct_text(declaration: Ast.StructDecl) -> String
+def struct_text(declaration: Ast.StructDecl) -> String
   "struct #{declaration.name}#{parameters_text(declaration.type_parameters)}"
 end
 
 ## `enum Name` or `enum Name[T, U]`.
-export def enum_text(declaration: Ast.EnumDecl) -> String
+def enum_text(declaration: Ast.EnumDecl) -> String
   "enum #{declaration.name}#{parameters_text(declaration.type_parameters)}"
 end
 
 ## `Name` or `Name(Int, String)`: a variant with the types of its payload, as written.
-export def variant_text(name: String, payload: List[String]) -> String
+def variant_text(name: String, payload: List[String]) -> String
   return name if payload.size == 0
 
   "#{name}(#{payload.join(", ")})"
 end
 
 ## `type Name = Target` or `type Name[T] = Target`.
-export def alias_text(declaration: Ast.TypeAliasDecl) -> String
+def alias_text(declaration: Ast.TypeAliasDecl) -> String
   names = parameters_text(declaration.type_parameters)
   "type #{declaration.name}#{names} = #{type_text(declaration.target)}"
 end
 
 ## `NAME: Type`, or `NAME` when the constant has no written type.
-export def constant_text(declaration: Ast.ConstDecl) -> String
+def constant_text(declaration: Ast.ConstDecl) -> String
   case declaration.type
     some(type) -> "#{declaration.name}: #{type_text(type)}"
     none -> declaration.name
@@ -84,13 +78,21 @@ end
 
 ## The source text of the default value of a parameter or a struct field, or absent when it has none. A span ends
 ## after its last character, so the slice is the expression exactly as written.
-export def default_text(default: Optional[Ast.Expr], text: String) -> Optional[String]
+def default_text(default: Optional[Ast.Expr], text: String) -> Optional[String]
   case default
     none -> none
     some(value) ->
       span = Ast.expr_span(value)
       some(T.written_types_in(text.slice(span.start.offset, span.stop.offset - span.start.offset)))
   end
+end
+
+private
+
+# One thing still to print: a type, or the text between types.
+enum Piece
+  Node(Ast.TypeRef)
+  Text(String)
 end
 
 # The pieces after an opening "[", in the order the stack gives them back: the first argument is the last one pushed,

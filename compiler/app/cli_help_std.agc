@@ -19,21 +19,16 @@ import Suggest from "../syntax/suggest"
 import SourceFile from "../syntax/source_file"
 import Reply from "cli_reply"
 
-# The longest summary in the list of a module, in characters.
-SHORT_SUMMARY = 100
-# The usage line of a QUERY-USAGE from this command.
-USAGE = "usage: agentica help std/MODULE[.NAME] [--json]"
-
 ## Whether `words`, the words from `help` on, ask for a module of the standard library: one word that is `std` or
 ## starts with `std/`, with or without a trailing `--json`. No builtin name is written that way.
-export def asks?(words: List[String]) -> Bool
+def asks?(words: List[String]) -> Bool
   rest = unflagged(words)
   rest.size == 2 and (rest[1] == "std" or rest[1].start_with?("std/"))
 end
 
 ## Runs `agentica help std/...` for `words`, the words from `help` on, in the style `--json` or `--ai` gave in front of
 ## it. Call it only when `asks?` is true.
-export def run(words: List[String], style: String, settings: Env.Settings) -> Reply.Answer
+def run(words: List[String], style: String, settings: Env.Settings) -> Reply.Answer
   as_json = style == "json" or (words.size > 0 and words[words.size - 1] == "--json")
   asked = unflagged(words)[1]
   dot = asked.index_of(".")
@@ -51,6 +46,13 @@ export def run(words: List[String], style: String, settings: Env.Settings) -> Re
     SourceFile.Read.Text(text) -> answered(settings, path, name, text, as_json)
   end
 end
+
+private
+
+# The longest summary in the list of a module, in characters.
+SHORT_SUMMARY = 100
+# The usage line of a QUERY-USAGE from this command.
+USAGE = "usage: agentica help std/MODULE[.NAME] [--json]"
 
 # The words of `help` without a trailing `--json`.
 def unflagged(words: List[String]) -> List[String]

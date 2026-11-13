@@ -16,23 +16,9 @@ import Stmt from "check_stmt"
 import Types from "check_types"
 import Defaults from "defaults"
 
-# What checking the arguments of a variant learned: the state and the type arguments found.
-struct Inferred
-  st: State.St
-  substitutions: Map[String, T.Type]
-end
-
-# The names given in a construction or an update, the state after checking their values, and the type arguments of a
-# generic struct that the values showed.
-struct Fields
-  st: State.St
-  seen: Set[String]
-  substitutions: Map[String, T.Type]
-end
-
 ## Checks a call written by name: a builtin (and, for a piped call, that its method form is not the better one) or a
 ## function of the program.
-export def check_call(cx: State.Cx, st: State.St, node: Ast.Call, expected: T.Type) -> Result[State.Out]
+def check_call(cx: State.Cx, st: State.St, node: Ast.Call, expected: T.Type) -> Result[State.Out]
   entry = ENTRIES.get(node.name)
   return check_plain_call(cx, st, node, expected) if entry.none? or (PRELUDE_ONLY.include?(node.name) and !cx.prelude)
 
@@ -46,7 +32,7 @@ end
 
 ## Checks Enum.Variant(args): the arguments against the payload types, with the enum's type arguments taken from the
 ## expected type or from the arguments. named is the arguments written with names, which a variant does not take.
-export def check_enum_constructor(
+def check_enum_constructor(
   cx: State.Cx,
   st: State.St,
   enum_name: String,
@@ -124,7 +110,7 @@ end
 
 ## Checks Type(name: value, ...): a struct, or Enum.Variant(name: value) written as a construction, which a variant
 ## does not take.
-export def check_construct(cx: State.Cx, st: State.St, node: Ast.Construct, expected: T.Type) -> Result[State.Out]
+def check_construct(cx: State.Cx, st: State.St, node: Ast.Construct, expected: T.Type) -> Result[State.Out]
   # One way to build an Error: error(...), which also places it. An Error value comes from a pattern, and .with
   # changes one.
   if node.type_name == "Error"
@@ -144,7 +130,7 @@ end
 ## Checks target.with(name: value, ...): the target is a struct, every name is one of its fields, given once, with a
 ## value of the field's type. A struct that its module keeps private cannot be updated from another module
 ## (CHECK-IMPORT-NAME).
-export def check_struct_update(cx: State.Cx, st: State.St, node: Ast.StructUpdate) -> Result[State.Out]
+def check_struct_update(cx: State.Cx, st: State.St, node: Ast.StructUpdate) -> Result[State.Out]
   target = try State.expr(cx, st, node.target, T.Type.Unknown)
   if !T.is?(target.type, "Struct")
     return error(
@@ -178,7 +164,7 @@ export def check_struct_update(cx: State.Cx, st: State.St, node: Ast.StructUpdat
 end
 
 ## The field of that name in the list, or an error.
-export def find_field(fields: List[Model.Named], name: String) -> Result[Model.Named]
+def find_field(fields: List[Model.Named], name: String) -> Result[Model.Named]
   for field in fields
     return ok(field) if field.name == name
   end
@@ -187,7 +173,7 @@ export def find_field(fields: List[Model.Named], name: String) -> Result[Model.N
 end
 
 ## The text of the source between the start of an expression, including a piped receiver, and its end.
-export def extent_text(cx: State.Cx, node: Ast.Expr) -> String
+def extent_text(cx: State.Cx, node: Ast.Expr) -> String
   text = cx.texts.get(cx.file)
   return "" if text.none?
 
@@ -198,16 +184,30 @@ end
 
 ## Whether the method call is a step of a pipe, `x |> name()`, which the linker made a method call: it keeps the span
 ## of the call right of `|>`, which starts after its receiver, while `x.name()` starts with it.
-export def piped_method?(call: Ast.MethodCall) -> Bool
-  call.span.start.offset >= Ast.expr_span(call.target).stop.offset
-end
+def piped_method?(call: Ast.MethodCall) -> Bool = call.span.start.offset >= Ast.expr_span(call.target).stop.offset
 
 ## The receiver of a method form in a help: the source text, in parentheses unless it is a simple expression that is
 ## not a pipe, so `.name` binds to all of it (`(hs |> first()).run(...)`).
-export def receiver_text(cx: State.Cx, node: Ast.Expr) -> String
+def receiver_text(cx: State.Cx, node: Ast.Expr) -> String
   return extent_text(cx, node) if simple_receiver?(node) and !piped?(node)
 
   "(#{extent_text(cx, node)})"
+end
+
+private
+
+# What checking the arguments of a variant learned: the state and the type arguments found.
+struct Inferred
+  st: State.St
+  substitutions: Map[String, T.Type]
+end
+
+# The names given in a construction or an update, the state after checking their values, and the type arguments of a
+# generic struct that the values showed.
+struct Fields
+  st: State.St
+  seen: Set[String]
+  substitutions: Map[String, T.Type]
 end
 
 # The offset where an expression starts: a piped call starts where its receiver does, and so does a try of one.

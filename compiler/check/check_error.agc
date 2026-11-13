@@ -6,14 +6,9 @@ import Source from "../syntax/source"
 import T from "../syntax/types"
 import State from "check_state"
 
-# The fields a named argument may set, and the type of each value. code and cause are stored as some(value).
-NAMED_FIELDS = ["kind", "code", "details", "cause"]
-KIND_START = Set.new("abcdefghijklmnopqrstuvwxyz".split(""))
-KIND_REST = Set.new("abcdefghijklmnopqrstuvwxyz0123456789_".split(""))
-
 ## Why a kind is not a dotted name, or "" when it is one: segments of a-z, 0-9 and _, each starting with a letter,
 ## joined by single dots (`db`, `db.constraint`, `io.not_found`).
-export def kind_problem(kind: String) -> String
+def kind_problem(kind: String) -> String
   shape = "a kind is a dotted name such as db.constraint: parts of a-z, 0-9 and _ that start with a letter"
   return shape if kind == ""
 
@@ -30,7 +25,7 @@ end
 
 ## CHECK-ERROR-KIND when expr is a text literal that is not a dotted name. A computed kind is not checked: building an
 ## error must never fail.
-export def check_kind_literal(cx: State.Cx, st: State.St, expr: Ast.Expr) -> Result[Void]
+def check_kind_literal(cx: State.Cx, st: State.St, expr: Ast.Expr) -> Result[Void]
   case expr
     Ast.Expr.Literal(literal) ->
       case literal.value
@@ -50,7 +45,7 @@ end
 ## Checks the named arguments of an error(...) call whose first argument has the type `first`. An Error first argument
 ## takes none (CHECK-ARITY at the first name); otherwise each name is one of kind, code, details and cause, given once,
 ## with a value of its field's type: code an Int and cause an Error, which the call wraps in some(...).
-export def check_named(cx: State.Cx, st: State.St, node: Ast.Call, first: T.Type) -> Result[State.St]
+def check_named(cx: State.Cx, st: State.St, node: Ast.Call, first: T.Type) -> Result[State.St]
   return ok(st) if node.named.size == 0
 
   if T.error?(first)
@@ -79,6 +74,13 @@ export def check_named(cx: State.Cx, st: State.St, node: Ast.Call, first: T.Type
 
   ok(current)
 end
+
+private
+
+# The fields a named argument may set, and the type of each value. code and cause are stored as some(value).
+NAMED_FIELDS = ["kind", "code", "details", "cause"]
+KIND_START = Set.new("abcdefghijklmnopqrstuvwxyz".split(""))
+KIND_REST = Set.new("abcdefghijklmnopqrstuvwxyz0123456789_".split(""))
 
 def check_value(cx: State.Cx, st: State.St, arg: Ast.NamedArg) -> Result[State.St]
   wanted = T.Type.Int

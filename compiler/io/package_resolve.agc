@@ -26,45 +26,24 @@ import Engine from "native_artifact"
 import NativeArtifact from "../packages/native_artifact"
 import PackageFetch from "package_fetch"
 
-MANIFEST_FILE = "agentica.toml"
-# The deadline of one downloaded artifact during resolve (the engine caps hops and bytes).
-NATIVE_TIMEOUT_MS = 300_000
-
 ## Which tag pins are fetched again: every one (`all`), or the one of the package called `name` ("" for none). A
 ## commit (`ref`) cannot move, so it is never fetched again while the lock holds it.
-export struct Refresh
+struct Refresh
   all: Bool
   name: String
 end
 
-# A package some manifest asks for, the file of that manifest (the project's, or the cached one of a package), the
-# package it belongs to ("" for the project's) and whether it says `override = true` (only the project's can).
-struct Wanted
-  name: String
-  source: GitSource.Source
-  asked_in: String
-  by: String
-  override: Bool
-end
-
 ## What `resolve` found: every package of the build, and for each overridden name the packages that asked for another
 ## source of it (a name that no package contested is not in `asked`).
-export struct Resolved
+struct Resolved
   packages: List[Lock.Locked]
   asked: Map[String, List[String]]
-end
-
-# One downloaded row with where it was declared, for fetching HOST rows with a manifest file/key context.
-struct Found_artifact
-  artifact: Lock.Artifact
-  file: String
-  row: String
 end
 
 ## The lock entries of `manifest` and everything it needs, with `old` as the lock to start from and `members` the
 ## workspace of the project. The first failure stops it. A failure names the manifest that asked for the package
 ## (`dependencies.<name>`), or the lock entry that was kept.
-export def resolve(
+def resolve(
   settings: Env.Settings,
   manifest: Manifest.Manifest,
   members: Members.Members,
@@ -117,7 +96,7 @@ end
 
 ## The native artifacts of `manifest` and every package of `packages`: one row per alias on every system the
 ## manifests declare, in `found` by (package, library, system). Only the rows of this host are fetched here.
-export def resolve_artifacts(
+def resolve_artifacts(
   settings: Env.Settings,
   manifest: Manifest.Manifest,
   members: Members.Members,
@@ -168,6 +147,29 @@ export def resolve_artifacts(
   end
 
   ok(found.values.map do |entry: Found_artifact| entry.artifact end)
+end
+
+private
+
+MANIFEST_FILE = "agentica.toml"
+# The deadline of one downloaded artifact during resolve (the engine caps hops and bytes).
+NATIVE_TIMEOUT_MS = 300_000
+
+# A package some manifest asks for, the file of that manifest (the project's, or the cached one of a package), the
+# package it belongs to ("" for the project's) and whether it says `override = true` (only the project's can).
+struct Wanted
+  name: String
+  source: GitSource.Source
+  asked_in: String
+  by: String
+  override: Bool
+end
+
+# One downloaded row with where it was declared, for fetching HOST rows with a manifest file/key context.
+struct Found_artifact
+  artifact: Lock.Artifact
+  file: String
+  row: String
 end
 
 # A package that is read in place and never fetched: a `path`, or a member of the workspace.

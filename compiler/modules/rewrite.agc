@@ -19,17 +19,17 @@ import Modules from "modules"
 import Resolve from "resolve"
 
 ## The module key of std/regex, whose compile a regex literal calls.
-export REGEX_MODULE = "std/regex.agc"
+REGEX_MODULE = "std/regex.agc"
 
 ## The module key of std/eag, which a file with an `<<~EAG` template must import, as `require "eag"` does in Ruby.
-export EAG_MODULE = "std/eag.agc"
+EAG_MODULE = "std/eag.agc"
 
 ## The code of the error for a template without that import.
-export EAG_IMPORT_CODE = "CHECK-EAG-IMPORT"
+EAG_IMPORT_CODE = "CHECK-EAG-IMPORT"
 
 ## The declarations of a file in the linked program: its functions, structs, enums and aliases without the export,
 ## imports and module blocks left out (a module block is a module of its own, Modules.enter_block).
-export def rewrite_declarations(cx: Resolve.Context) -> Result[List[Ast.Decl]]
+def rewrite_declarations(cx: Resolve.Context) -> Result[List[Ast.Decl]]
   out: List[Ast.Decl] = []
   for wrapped in cx.me.program.declarations
     kind = Declarations.kind_of(wrapped)
@@ -40,6 +40,8 @@ export def rewrite_declarations(cx: Resolve.Context) -> Result[List[Ast.Decl]]
 
   ok(out)
 end
+
+private
 
 def rewrite_decl(cx: Resolve.Context, decl: Ast.Decl) -> Result[Ast.Decl]
   case decl

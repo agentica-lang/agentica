@@ -5,38 +5,12 @@
 import Types from "../syntax/types"
 import Model from "builtin_model"
 
-## Every builtin, sorted by name; the Zlib rows, the ATS rows, the Base64 and hex rows, the digest rows, the HMAC rows,
-## the OpenSSL.Random rows, the OpenSSL.HMAC.secure_compare row, the Bytes rows, the Cipher and CMAC rows, the AES-GCM
-## and KDF rows, the Optional rows, the text codec rows, the task monitor rows, the Native.Mutex rows, the RSA row, the
-## Range Enumerable rows, the DNS row and then the String distance rows are appended last, in contract order, so the
-## positions of the existing rows never shift. A builtin of a family (FAMILIES) is named Family.Member.fn, such as
-## OpenSSL.Cipher.aes_256_gcm_encrypt.
-BUILTIN_GROUP_1 = ROWS_1.concat(ROWS_2.concat(ROWS_3.concat(ROWS_4.concat(ROWS_5))))
-BUILTIN_GROUP_2 = ROWS_6.concat(ROWS_7.concat(ROWS_8.concat(ROWS_9.concat(ROWS_10))))
-BUILTIN_GROUP_3 = ROWS_11.concat(ROWS_12.concat(ROWS_13.concat(ROWS_14.concat(ROWS_15))))
-BUILTIN_GROUP_4 = ROWS_16.concat(ROWS_17.concat(ROWS_18.concat(ROWS_19.concat(ROWS_20))))
-BUILTIN_GROUP_5 = ROWS_21.concat(ROWS_22.concat(ROWS_23.concat(ROWS_24.concat(ROWS_25))))
-BUILTIN_GROUP_6 = ROWS_26.concat(ROWS_27.concat(ROWS_28.concat(ROWS_29.concat(ROWS_30))))
-BUILTIN_GROUP_7 = ROWS_31.concat(ROWS_32.concat(ROWS_33.concat(ROWS_34.concat(ROWS_35))))
-BUILTIN_GROUP_8 = ROWS_36.concat(ROWS_37.concat(ROWS_38.concat(ROWS_39.concat(ROWS_40))))
-BUILTIN_GROUP_9 = ROWS_41.concat(ROWS_42.concat(ROWS_43.concat(ROWS_44.concat(ROWS_45))))
-BUILTIN_GROUP_10 = ROWS_46.concat(ROWS_47.concat(ROWS_48.concat(ROWS_49.concat(ROWS_50))))
-BUILTIN_GROUP_11 = ROWS_51.concat(ROWS_52.concat(ROWS_53.concat(ROWS_54.concat(ROWS_55))))
-BUILTIN_GROUP_12 = ROWS_56.concat(ROWS_57.concat(ROWS_58.concat(ROWS_59.concat(ROWS_60))))
-BUILTIN_GROUP_13 = ROWS_61.concat(ROWS_62.concat(ROWS_63.concat(ROWS_64.concat(ROWS_65))))
-BUILTIN_GROUP_14 = ROWS_66.concat(ROWS_67.concat(ROWS_68.concat(ROWS_69.concat(ROWS_70))))
-BUILTIN_GROUP_15 = ROWS_71.concat(ROWS_72)
-BUILTIN_GROUPS_1 = BUILTIN_GROUP_1.concat(BUILTIN_GROUP_2.concat(BUILTIN_GROUP_3))
-BUILTIN_GROUPS_2 = BUILTIN_GROUP_4.concat(BUILTIN_GROUP_5.concat(BUILTIN_GROUP_6))
-BUILTIN_GROUPS_3 = BUILTIN_GROUP_7.concat(BUILTIN_GROUP_8.concat(BUILTIN_GROUP_9))
-BUILTIN_GROUPS_4 = BUILTIN_GROUP_10.concat(BUILTIN_GROUP_11.concat(BUILTIN_GROUP_12))
-BUILTIN_GROUPS_5 = BUILTIN_GROUP_13.concat(BUILTIN_GROUP_14.concat(BUILTIN_GROUP_15))
-export BUILTIN_ROWS: List[Model.Builtin] = BUILTIN_GROUPS_1.concat(BUILTIN_GROUPS_2).concat(
+BUILTIN_ROWS: List[Model.Builtin] = BUILTIN_GROUPS_1.concat(BUILTIN_GROUPS_2).concat(
   BUILTIN_GROUPS_3.concat(BUILTIN_GROUPS_4.concat(BUILTIN_GROUPS_5)),
 )
 
 ## The builtin record types, sorted by name.
-export RECORDS: List[Model.Record] = [
+RECORDS: List[Model.Record] = [
   # The payload of a failed Result. vm/builtins.c (agc_error_struct) takes it as the builtin Error only with these
   # fields, in this order and of these types: keep them in step. cause names the record itself.
   Model.Record(
@@ -270,7 +244,7 @@ export RECORDS: List[Model.Record] = [
 ]
 
 ## The builtin enums, whose variants are written without an import.
-export ENUMS: List[Model.EnumDef] = [
+ENUMS: List[Model.EnumDef] = [
   Model.EnumDef(
     name: "Await",
     parameters: ["T"],
@@ -310,17 +284,17 @@ export ENUMS: List[Model.EnumDef] = [
 ]
 
 ## The handle types a task can be given with Task.spawn_owning.
-export HANDLE_TYPES: List[String] = ["TCP.Socket", "TCP.Listener", "HttpWire.Server", "File.Handle", "Process"]
+HANDLE_TYPES: List[String] = ["TCP.Socket", "TCP.Listener", "HttpWire.Server", "File.Handle", "Process"]
 
 ## The builtin types with no structure: handles, Test.Case, TLS.Context, C.Pointer (a C pointer of native code),
 ## TaskRef (the running task, from Task.current) and Native.Mutex (the lock of a native library).
-export OPAQUE_TYPES: List[String] = [
+OPAQUE_TYPES: List[String] = [
   "TCP.Socket", "TCP.Listener", "HttpWire.Client", "HttpWire.Server", "File.Handle", "Process", "Test.Case",
   "TLS.Context", "C.Pointer", "TaskRef", "Native.Mutex",
 ]
 
 ## The type names no declaration or import alias may take.
-export RESERVED_TYPE_NAMES: List[String] = [
+RESERVED_TYPE_NAMES: List[String] = [
   "ATS",
   "Await",
   "Base64",
@@ -368,13 +342,13 @@ export RESERVED_TYPE_NAMES: List[String] = [
 ## Family.Member: a group of functions (the rows named Family.Member.fn) or a builtin type named Family.Member (a
 ## record, an enum or an opaque type). A new member, or a new function of a member, only adds its rows or its type and
 ## reserves no name.
-export FAMILIES: List[String] = ["File", "JSON", "OpenSSL", "Process", "System", "TCP", "TLS", "Test"]
+FAMILIES: List[String] = ["File", "JSON", "OpenSSL", "Process", "System", "TCP", "TLS", "Test"]
 
 ## The kinds of the errors that the builtins and std/ build (issue #671): the C kinds of kind_names in vm/value.c, in
 ## its order, then the kinds of the std/ modules. A kind is a contract, only added and never renamed. A first segment
 ## here is a builtin family, which LINT-ERROR-KIND holds an is_a? literal to. tests/test_error_kinds.py checks that the
 ## list is the C kinds and the std/ kinds, no more and no fewer.
-export ERROR_KINDS: List[String] = [
+ERROR_KINDS: List[String] = [
   "error",
   "argument",
   "io.not_found",
@@ -438,11 +412,40 @@ export ERROR_KINDS: List[String] = [
 ]
 
 ## The modules only std/ may call: each name with the std module that wraps it and the alias its help shows.
-export STD_ONLY_IMPORTS: Map[String, List[String]] = {
+STD_ONLY_IMPORTS: Map[String, List[String]] = {
   "HttpWire": ["std/http", "HTTP"],
   "LogRegistry": ["std/logger", "Logger"],
   "RegexEngine": ["std/regex", "Regex"],
 }
+
+private
+
+## Every builtin, sorted by name; the Zlib rows, the ATS rows, the Base64 and hex rows, the digest rows, the HMAC rows,
+## the OpenSSL.Random rows, the OpenSSL.HMAC.secure_compare row, the Bytes rows, the Cipher and CMAC rows, the AES-GCM
+## and KDF rows, the Optional rows, the text codec rows, the task monitor rows, the Native.Mutex rows, the RSA row, the
+## Range Enumerable rows, the DNS row and then the String distance rows are appended last, in contract order, so the
+## positions of the existing rows never shift. A builtin of a family (FAMILIES) is named Family.Member.fn, such as
+## OpenSSL.Cipher.aes_256_gcm_encrypt.
+BUILTIN_GROUP_1 = ROWS_1.concat(ROWS_2.concat(ROWS_3.concat(ROWS_4.concat(ROWS_5))))
+BUILTIN_GROUP_2 = ROWS_6.concat(ROWS_7.concat(ROWS_8.concat(ROWS_9.concat(ROWS_10))))
+BUILTIN_GROUP_3 = ROWS_11.concat(ROWS_12.concat(ROWS_13.concat(ROWS_14.concat(ROWS_15))))
+BUILTIN_GROUP_4 = ROWS_16.concat(ROWS_17.concat(ROWS_18.concat(ROWS_19.concat(ROWS_20))))
+BUILTIN_GROUP_5 = ROWS_21.concat(ROWS_22.concat(ROWS_23.concat(ROWS_24.concat(ROWS_25))))
+BUILTIN_GROUP_6 = ROWS_26.concat(ROWS_27.concat(ROWS_28.concat(ROWS_29.concat(ROWS_30))))
+BUILTIN_GROUP_7 = ROWS_31.concat(ROWS_32.concat(ROWS_33.concat(ROWS_34.concat(ROWS_35))))
+BUILTIN_GROUP_8 = ROWS_36.concat(ROWS_37.concat(ROWS_38.concat(ROWS_39.concat(ROWS_40))))
+BUILTIN_GROUP_9 = ROWS_41.concat(ROWS_42.concat(ROWS_43.concat(ROWS_44.concat(ROWS_45))))
+BUILTIN_GROUP_10 = ROWS_46.concat(ROWS_47.concat(ROWS_48.concat(ROWS_49.concat(ROWS_50))))
+BUILTIN_GROUP_11 = ROWS_51.concat(ROWS_52.concat(ROWS_53.concat(ROWS_54.concat(ROWS_55))))
+BUILTIN_GROUP_12 = ROWS_56.concat(ROWS_57.concat(ROWS_58.concat(ROWS_59.concat(ROWS_60))))
+BUILTIN_GROUP_13 = ROWS_61.concat(ROWS_62.concat(ROWS_63.concat(ROWS_64.concat(ROWS_65))))
+BUILTIN_GROUP_14 = ROWS_66.concat(ROWS_67.concat(ROWS_68.concat(ROWS_69.concat(ROWS_70))))
+BUILTIN_GROUP_15 = ROWS_71.concat(ROWS_72)
+BUILTIN_GROUPS_1 = BUILTIN_GROUP_1.concat(BUILTIN_GROUP_2.concat(BUILTIN_GROUP_3))
+BUILTIN_GROUPS_2 = BUILTIN_GROUP_4.concat(BUILTIN_GROUP_5.concat(BUILTIN_GROUP_6))
+BUILTIN_GROUPS_3 = BUILTIN_GROUP_7.concat(BUILTIN_GROUP_8.concat(BUILTIN_GROUP_9))
+BUILTIN_GROUPS_4 = BUILTIN_GROUP_10.concat(BUILTIN_GROUP_11.concat(BUILTIN_GROUP_12))
+BUILTIN_GROUPS_5 = BUILTIN_GROUP_13.concat(BUILTIN_GROUP_14.concat(BUILTIN_GROUP_15))
 
 ROWS_1: List[Model.Builtin] = [
   Model.Builtin(

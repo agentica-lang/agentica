@@ -7,7 +7,7 @@ import Paths from "../modules/import_path"
 ## The folder of the file `entry`: relative to the working directory (built from the canonical folder, so the ".."
 ## names of an imported file stay right through links), or absolute when the entry was typed as an absolute path. It is
 ## "" when the file is in the working directory, and also when a path cannot be resolved.
-export def option(entry: String) -> String
+def option(entry: String) -> String
   real = Path.real(entry)
   return "" if !real.ok?
 
@@ -22,6 +22,8 @@ export def option(entry: String) -> String
 
   relative(parts(canonical.unwrap!), parts(folder))
 end
+
+private
 
 # The path of `to` from `from`: one ".." for each part of `from` that `to` does not share, then the rest of `to`.
 def relative(from: List[String], to: List[String]) -> String

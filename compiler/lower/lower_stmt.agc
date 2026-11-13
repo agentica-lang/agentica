@@ -13,7 +13,7 @@ import {INT_MIN, INT_MIN_DIGITS} from "lower_tables"
 
 ## A lowered function, and the state after it: the block functions made inside it and the next function index, for the
 ## program to collect.
-export struct Built
+struct Built
   function: Ir.Function
   fx: Lowering.Fx
 end
@@ -22,7 +22,7 @@ end
 ## registers and the captured names of a block the ones after them. A block gives its last expression statement as its
 ## value, or its last case when the checker made that case a value (it recorded a type for it); any other function ends
 ## with a Void return.
-export def lower_function(
+def lower_function(
   cx: Lowering.Cx,
   fx: Lowering.Fx,
   name: String,
@@ -84,7 +84,7 @@ end
 ## Lowers a block literal as a function of the table (Cx.block), named block@FILE:LINE:COL (lambda@ for a lambda,
 ## which a stack line shows). The block takes the next function index before its body is lowered, so the blocks
 ## inside it come after it. The state it gives back is the caller's, with the blocks and the index count updated.
-export def lower_block_function(
+def lower_block_function(
   cx: Lowering.Cx,
   fx: Lowering.Fx,
   node: Ast.BlockLit,
@@ -106,13 +106,15 @@ end
 ## Lowers a case that gives a value (Cx.case_value): each arm computes its last expression into the register `want`, or
 ## into a new one when want is -1. The checker made the case exhaustive, so some arm without a guard always runs and
 ## the register is always set.
-export def lower_case_value(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.CaseStmt, want: Int) -> Result[Lowering.Out]
+def lower_case_value(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.CaseStmt, want: Int) -> Result[Lowering.Out]
   target = Lowering.target(fx, want)
   fx = target.fx
   entry = fx.next
   done = try lower_arms(cx, fx, node, target.slot)
   ok(Lowering.Out(fx: done.with(next: entry), slot: target.slot))
 end
+
+private
 
 # The statements in order.
 def lower_block(cx: Lowering.Cx, fx: Lowering.Fx, statements: List[Ast.Stmt]) -> Result[Lowering.Fx]

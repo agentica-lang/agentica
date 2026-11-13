@@ -8,26 +8,28 @@ import Source from "../syntax/source"
 import Opts from "bdd_options"
 
 ## How a run ends: the exit code and the text to print.
-export struct Ending
+struct Ending
   code: Int
   text: String
 end
 
 ## The report of a usage error. It is located at `<arguments>`.
-export def usage(message: String, options: Opts.Options) -> Ending
+def usage(message: String, options: Opts.Options) -> Ending
   one_error("<arguments>", "RUNTIME-BDD-USAGE", message, options)
 end
 
 ## The report of an infrastructure error, located at the start of `file`.
-export def infrastructure(message: String, file: String, options: Opts.Options) -> Ending
+def infrastructure(message: String, file: String, options: Opts.Options) -> Ending
   one_error(file, "RUNTIME-BDD-INFRA", message, options)
 end
 
 ## A problem with no place of its own: the start of the file, and RUNTIME-BDD-INFRA when no code is needed.
-export def located(file: String, code: String, message: String) -> Problems.Problem
+def located(file: String, code: String, message: String) -> Problems.Problem
   start = Source.Position(offset: 0, line: 1, column: 1)
   Problems.problem(file, "", code, message, Source.Span(start: start, stop: start), Diag.Help.NoHelp)
 end
+
+private
 
 # The report of a run that ends with this one file error: exit code 2, no scenario. The text report has no seed; the
 # JSON report has the seed given with --seed, else null.

@@ -8,14 +8,14 @@
 import Diagnostics from "../diagnostics/diagnostic_model"
 
 ## The place a question asked about.
-export struct Place
+struct Place
   file: String
   line: Int
   column: Int
 end
 
 ## One parameter of a function: its name, its type as written and the source text of its default value ("" for none).
-export struct Parameter
+struct Parameter
   name: String
   type: String
   default: String
@@ -23,7 +23,7 @@ end
 
 ## One field of a struct, with the source text of its default value ("" for none), its doc ("" for none) and the range
 ## of its name.
-export struct Field
+struct Field
   name: String
   name_range: Diagnostics.Region
   type: String
@@ -32,7 +32,7 @@ export struct Field
 end
 
 ## One variant of an enum, with the types of its payload as written, its doc ("" for none) and the range of its name.
-export struct Variant
+struct Variant
   name: String
   name_range: Diagnostics.Region
   payload: List[String]
@@ -45,7 +45,7 @@ end
 ## struct its `fields`, an enum its `variants` and a module block the `items` it declares; the other lists are empty.
 ## A struct lists its public fields only, and `private_range` holds the range of its `private` line when it has private
 ## fields (empty otherwise).
-export struct Item
+struct Item
   kind: String
   name: String
   name_range: Diagnostics.Region
@@ -63,14 +63,14 @@ export struct Item
 end
 
 ## One name of an import list: `name` in the module, `local` in the file.
-export struct ImportName
+struct ImportName
   name: String
   local: String
   range: Diagnostics.Region
 end
 
 ## One import. `alias` is "" for an import with a list of names, and `names` is empty for one with an alias.
-export struct Import
+struct Import
   path: String
   alias: String
   names: List[ImportName]
@@ -79,7 +79,7 @@ end
 
 ## What a file declares: its doc ("" for none), its imports and its other declarations, private ones too, in source
 ## order. Every range is in `file`.
-export struct Outline
+struct Outline
   version: Int
   file: String
   doc: String
@@ -91,7 +91,7 @@ end
 ## `variant`, `field` or `constant`; `parameter`, `local`, `loop` or `pattern` for a local. `range` is the whole
 ## declaration and `name_range` its name, in `file`. `signature` is the one line `agentica doc` gives it, and `doc` the
 ## whole `##` text ("" for none).
-export struct Definition
+struct Definition
   kind: String
   name: String
   file: String
@@ -110,7 +110,7 @@ end
 ## (docs/grammar/06b-builtins.md): `diagnostics` are its problems, and `type` is "" when the answer is known
 ## from the link alone, such as a name in a function that did not check. A complete answer has `partial` false and no
 ## diagnostics.
-export struct TypeAt
+struct TypeAt
   version: Int
   position: Place
   kind: String
@@ -126,7 +126,7 @@ end
 
 ## The answer of `check`: `passed` is true when the program has no problem (`ok` is a reserved name, so a field cannot
 ## have it). The stages stop at the first problem, so `diagnostics` holds at most one.
-export struct Checked
+struct Checked
   version: Int
   file: String
   passed: Bool
@@ -139,7 +139,7 @@ end
 ## its `module` is "". `exported` is the flag of the declaration, or of the struct or enum of a member, and `doc` the
 ## whole `##` text ("" for none). A field has its `type`, a variant its `payload`; a builtin has `help` (the object of
 ## `agentica help NAME --json`, JSON null for the others) and the signature of each of its forms in `signatures`.
-export struct Symbol
+struct Symbol
   kind: String
   name: String
   owner: String
@@ -156,14 +156,14 @@ export struct Symbol
 end
 
 ## A file of a `symbol` query that was left out, with the first problem it hit.
-export struct Skipped
+struct Skipped
   file: String
   diagnostic: Diagnostics.Diagnostic
 end
 
 ## The answer of `symbol` for `query`: the matches, in the order the modules were linked and then in source order (the
 ## builtin last), and the files left out.
-export struct Symbols
+struct Symbols
   version: Int
   query: String
   matches: List[Symbol]
@@ -172,7 +172,7 @@ end
 
 ## One use of a declaration: its `kind` (`call`, `value`, `type`, `construct`, `read`, `pattern` or `binding`), the
 ## `function` it is in ("" at the top level), and the `range` of the name in `file`.
-export struct Reference
+struct Reference
   kind: String
   function: String
   file: String
@@ -184,7 +184,7 @@ end
 ## builtin, which `builtin` names (`File.read`; "" for anything else). `references` do not include the definition; they
 ## are in the order of the linked files and, within one file, of the text. `skipped` holds the files left out, as for
 ## `symbol`. `partial` and `diagnostics` are as for `TypeAt`: the answer of a program that does not check.
-export struct Refs
+struct Refs
   version: Int
   query: String
   definition: List[Symbol]
@@ -197,7 +197,7 @@ end
 
 ## One parameter of a function of a native module: its name and its canonical type, the text the module's function
 ## table has ("List[Float]", aliases expanded, user types by their bare names).
-export struct NativeParameter
+struct NativeParameter
   name: String
   type: String
 end
@@ -211,7 +211,7 @@ end
 ## A, C, B but `types_in` is A, B, C, so do not merge them by position. A type in `types_out` only is made by the
 ## module and never read, and one in `types_in` only is read and never made. `doc` is the whole `##` text ("" for
 ## none), `range` the whole declaration, `export` included, and `name_range` the name alone.
-export struct NativeFunction
+struct NativeFunction
   name: String
   name_range: Diagnostics.Region
   mode: String
@@ -226,7 +226,7 @@ export struct NativeFunction
 end
 
 ## One `resource Name` line of an `extern module` block, with the same fields as a function.
-export struct NativeResource
+struct NativeResource
   name: String
   name_range: Diagnostics.Region
   exported: Bool
@@ -236,7 +236,7 @@ end
 
 ## One field of a struct that crosses, or one variant of an enum: its name and its canonical types (a field has one, a
 ## variant its payload).
-export struct NativeMember
+struct NativeMember
   name: String
   types: List[String]
 end
@@ -246,7 +246,7 @@ end
 ## module's type table ("count: Int, mean: Float", "Empty | Number(Float) | Text(String)"), the one the lowering writes
 ## after `=` in the `{S<index>=...}` or `{E<index>=...}` of a signature. (The index is the place of the type in the
 ## program's tables, which a generator does not need.)
-export struct NativeType
+struct NativeType
   kind: String
   name: String
   members: List[NativeMember]
@@ -260,7 +260,7 @@ end
 ## that reaches them meets them. `api_major` and `api_minor` are the least version of the C API (AN_API_MAJOR and
 ## AN_API_MINOR of vm/agentica_native.h) that has what the block needs: 1.0 for functions of scalars and collections,
 ## 1.1 when a struct or enum crosses, 1.2 for a resource.
-export struct NativeBlock
+struct NativeBlock
   library: String
   range: Diagnostics.Region
   api_major: Int
@@ -271,7 +271,7 @@ export struct NativeBlock
 end
 
 ## The answer of `native_modules`: the `extern module` blocks of a file, in source order.
-export struct NativeModules
+struct NativeModules
   version: Int
   file: String
   blocks: List[NativeBlock]
@@ -281,7 +281,7 @@ end
 ## or `opaque` (`name` is the linked name, `@N::Name` for one of another file), `var` (a type parameter, `name` as
 ## written) or `none` (a node that has no value, such as a statement). `args` are the type arguments in order; an `Fn`
 ## has its parameters, then its result.
-export struct TypeShape
+struct TypeShape
   kind: String
   name: String
   args: List[TypeShape]
@@ -315,7 +315,7 @@ end
 ## `range` is the place of the node. Some are coarse: a `string` part of an interpolation has the range of the
 ## interpolation, a `skip` slot that of its variant, and an `if` or `case` statement runs to the start of the next
 ## line. A `block` runs from its first statement to its last (an empty one is empty, at the start of its owner).
-export struct Node
+struct Node
   kind: String
   type: TypeShape
   range: Diagnostics.Region
@@ -328,7 +328,7 @@ end
 ## One parameter of a function of `bodies`, with its resolved type and its default value (one node, or none). The
 ## arguments of a call are in parameter order: a call may have fewer arguments than parameters, and the ones it leaves
 ## out take their defaults, in order; a trailing block (`do ... end`) always fills the last parameter.
-export struct BodyParam
+struct BodyParam
   name: String
   type: TypeShape
   range: Diagnostics.Region
@@ -337,14 +337,14 @@ end
 
 ## A module of the linked program: `prefix` is the `@N::` that the linked names of its declarations start with ("" for
 ## none), and `file` its name as the other answers give it (`std/NAME.agc` for a `std/` module).
-export struct BodyModule
+struct BodyModule
   prefix: String
   file: String
 end
 
 ## One function of `bodies`: `name` as written, `linked` the name a `call` node targets, `generics` its type
 ## parameters, the resolved types of its parameters and result, and its body as a list of statement nodes.
-export struct Body
+struct Body
   name: String
   linked: String
   exported: Bool
@@ -357,9 +357,11 @@ export struct Body
 end
 
 ## The answer of `bodies` (experimental): every function of a file with a body, private ones too, in source order.
-export struct Bodies
+struct Bodies
   version: Int
   file: String
   modules: List[BodyModule]
   functions: List[Body]
 end
+
+private

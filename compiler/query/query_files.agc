@@ -15,14 +15,14 @@ import SourceFile from "../syntax/source_file"
 import QueryOptions from "query_options"
 
 ## The file of a command, or why the words do not name exactly one.
-export enum Picked
+enum Picked
   File(String)
   Refused(Problems.Problem)
 end
 
 ## The one file `query` names: its only word, or the file of `--stdin` in place of a word. A missing or an extra
 ## argument is QUERY-USAGE, with `usage` as its help.
-export def pick(query: QueryOptions.Query, usage: String) -> Picked
+def pick(query: QueryOptions.Query, usage: String) -> Picked
   if query.stdin != ""
     if query.words.size > 0
       return Picked.Refused(QueryOptions.refusal("--stdin FILE stands in for the FILE argument", usage))
@@ -39,7 +39,7 @@ export def pick(query: QueryOptions.Query, usage: String) -> Picked
 end
 
 ## The text of `file`. `buffered` is true when the Workspace holds the standard input as that file.
-export def read(settings: Env.Settings, file: String, buffered: Bool) -> SourceFile.Read
+def read(settings: Env.Settings, file: String, buffered: Bool) -> SourceFile.Read
   if embedded?(file, buffered)
     key = std_key(file)
     here = Source.Position(offset: 0, line: 1, column: 1)
@@ -54,14 +54,12 @@ export def read(settings: Env.Settings, file: String, buffered: Bool) -> SourceF
 end
 
 ## The QUERY-USAGE diagnostic of a file that cannot be read.
-export def unreadable(file: String, usage: String) -> Problems.Problem
-  QueryOptions.refusal("cannot read #{file}", usage)
-end
+def unreadable(file: String, usage: String) -> Problems.Problem = QueryOptions.refusal("cannot read #{file}", usage)
 
 ## The name an answer gives the file: `std/MOD.agc` for a module of the standard library, otherwise the canonical path,
 ## made relative to the working folder when the file is below it (a canonical path is the same file under any
 ## spelling). A file the Workspace cannot resolve keeps the name it was typed with.
-export def display(settings: Env.Settings, file: String, buffered: Bool) -> String
+def display(settings: Env.Settings, file: String, buffered: Bool) -> String
   return std_key(file) if embedded?(file, buffered)
 
   real = settings.workspace.real_path.call(file)
@@ -79,6 +77,8 @@ export def display(settings: Env.Settings, file: String, buffered: Bool) -> Stri
 
   real.unwrap!
 end
+
+private
 
 def embedded?(file: String, buffered: Bool) -> Bool = !buffered and file.start_with?("std/")
 

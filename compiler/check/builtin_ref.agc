@@ -13,19 +13,17 @@ import RubyForm from "ruby_form"
 import Tables from "check_tables"
 
 ## The prelude file stem of the wrappers: no file of stdlib/prelude/ has this name.
-export REFS_MODULE = "builtin_refs"
-
-BLOCK_HELP = "pass a block that calls it instead, such as do |x| ... end, or wrap it in a def"
+REFS_MODULE = "builtin_refs"
 
 ## A builtin a reference names: the builtin, and the method it is written with (`to_s` for `&Int.to_s`), or "" for a
 ## function (`&Time.now_ms`).
-export struct Ref
+struct Ref
   builtin: Model.Builtin
   method: String
 end
 
 ## What a name after `&` is when no function of the program has it.
-export enum Found
+enum Found
   ## No builtin has the name.
   Missing
   ## A builtin that cannot be a value, with the help to show.
@@ -35,7 +33,7 @@ end
 
 ## The builtin that `&name` names, as written in the program (`Int.to_s`, `Time.now_ms`, `puts`). A method of
 ## JSON.Value (`&JSON.Value.get`) is the method of its kind, Json.
-export def find(written: String) -> Found
+def find(written: String) -> Found
   name = written
   if written.start_with?("#{JSON_VALUE}.")
     name = "Json.#{written.slice(JSON_VALUE.length + 1, written.length - JSON_VALUE.length - 1)}"
@@ -71,12 +69,12 @@ export def find(written: String) -> Found
 end
 
 ## The Fn type of the reference: the builtin's parameters, the receiver first, and its result.
-export def fn_type(ref: Ref) -> T.Type
+def fn_type(ref: Ref) -> T.Type
   T.Type.Fn(ref.builtin.parameters.map do |parameter: Model.Named| parameter.type end, ref.builtin.result)
 end
 
 ## The source of the prelude file with one function per reference, in order: `ref_0` calls the builtin of `names[0]`.
-export def source(names: List[String]) -> String
+def source(names: List[String]) -> String
   functions: List[String] = []
   for name in names
     case find(name)
@@ -87,6 +85,10 @@ export def source(names: List[String]) -> String
 
   functions.join("\n")
 end
+
+private
+
+BLOCK_HELP = "pass a block that calls it instead, such as do |x| ... end, or wrap it in a def"
 
 # `def ref_N(p0: Int) -> String` and a body that calls the builtin with the parameters: `p0.to_s()` for a method,
 # `Time.now_ms()` for a function.

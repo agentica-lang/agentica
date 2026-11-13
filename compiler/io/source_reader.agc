@@ -6,19 +6,21 @@
 
 import SourceFile from "../syntax/source_file"
 
-# The deadline, in milliseconds, of each system call of a read.
-IO_TIMEOUT_MS = 10_000
-
-CHUNK_BYTES = 262_144
-
 ## Reads the file at `path`.
-export def read(path: String) -> SourceFile.Read = read_as(path, false)
+def read(path: String) -> SourceFile.Read = read_as(path, false)
 
 ## Reads the file at `path` to show lines of it in a message: the text with U+FFFD in place of each byte that is not
 ## part of a valid sequence, as a lossy UTF-8 decoder does with that character.
 ## The result is never Invalid. The time is linear in the size of
 ## the file, bad bytes or not.
-export def read_shown(path: String) -> SourceFile.Read = read_as(path, true)
+def read_shown(path: String) -> SourceFile.Read = read_as(path, true)
+
+private
+
+# The deadline, in milliseconds, of each system call of a read.
+IO_TIMEOUT_MS = 10_000
+
+CHUNK_BYTES = 262_144
 
 def read_as(path: String, shown: Bool) -> SourceFile.Read
   opened = File.open(path, "read", IO_TIMEOUT_MS)

@@ -11,7 +11,7 @@ import {OPERATOR_ONLY, PRELUDE_ONLY, PUBLIC_NAMES} from "builtins"
 ## The public builtin called `name`, or an error: a name in a std-only module (`HttpWire.service`), a prelude-only
 ## helper or a builtin written as an operator (List.concat is `+`) is not a public name, and neither is one that the
 ## catalog lacks.
-export def public(name: String) -> Result[Model.Builtin]
+def public(name: String) -> Result[Model.Builtin]
   hidden = PRELUDE_ONLY.include?(name) or OPERATOR_ONLY.include?(name)
   return error("not a public builtin") if Builtins.std_only_name?(name) or hidden
 
@@ -19,7 +19,7 @@ export def public(name: String) -> Result[Model.Builtin]
 end
 
 ## Every public builtin, in name order, each as `builtin` gives it.
-export def catalog(ruby: Fn[Model.Builtin, String]) -> JSON.Value
+def catalog(ruby: Fn[Model.Builtin, String]) -> JSON.Value
   # `unwrap!` cannot fail: PUBLIC_NAMES are keys of the same ENTRIES that `Builtins.lookup` reads.
   JSON.array(PUBLIC_NAMES.sort.map do |name: String| builtin(Builtins.lookup(name).unwrap!, ruby) end)
 end
@@ -29,7 +29,7 @@ end
 ## method form (`map.key?(key: K) -> Bool` for `Map.has_key?`) or "" for none (check/ruby_form.agc: catalog/ cannot
 ## read the checker's alias tables, so the caller passes it); a form has it as `ruby`, or null. `name` and `signature`
 ## stay the name of the builtin.
-export def builtin(entry: Model.Builtin, ruby: Fn[Model.Builtin, String]) -> JSON.Value
+def builtin(entry: Model.Builtin, ruby: Fn[Model.Builtin, String]) -> JSON.Value
   return form_json(entry, ruby) if entry.alternatives.size == 0
 
   forms = [entry].concat(entry.alternatives)
@@ -40,6 +40,8 @@ export def builtin(entry: Model.Builtin, ruby: Fn[Model.Builtin, String]) -> JSO
     "overloads": JSON.array(forms.map do |form: Model.Builtin| form_json(form, ruby) end),
   })
 end
+
+private
 
 def form_json(form: Model.Builtin, ruby: Fn[Model.Builtin, String]) -> JSON.Value
   parameters = form.parameters.map do |parameter: Model.Named| parameter_json(parameter) end

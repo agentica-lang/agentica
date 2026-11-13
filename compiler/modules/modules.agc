@@ -36,11 +36,11 @@ import Workspace from "workspace"
 
 ## The target of a re-export of a builtin type (`export LogRegistry.Event` in std/): no module has this key, and the
 ## name of the origin is the builtin's own (LogRegistry.Event).
-export BUILTIN = ""
+BUILTIN = ""
 
 ## A name bound by import {Name} from "path" (or {Name as Local}): the key of the module that exports it and the
 ## exported name.
-export struct Named
+struct Named
   target: String
   name: String
 end
@@ -59,7 +59,7 @@ end
 ## constants then has the type of each constant by its linked name. tested says that the file was read as the root of a
 ## test file (Settings.test_file), so its tree may hold the `main` of its test functions (test_main.agc). block is the
 ## name of the module block this module is (`enter_block`), "" for a file.
-export struct Module
+struct Module
   key: String
   file: String
   name: String
@@ -90,7 +90,7 @@ end
 ## file imported twice appears once. root_dir is the folder of the root file. parsed is the number of files that this
 ## walk lexed and parsed (stubs included); the others came from the Kept files it was given. stubs counts the files
 ## parsed from a stub.
-export struct Loaded
+struct Loaded
   order: List[String]
   modules: Map[String, Module]
   root_dir: String
@@ -101,7 +101,7 @@ end
 ## A file parsed by an earlier walk: its text, the first id of its tree, the tree, and whether it was read as the root
 ## of a test file (Module.tested). It can stand for the file in a later walk while the file has this text and is read
 ## the same way.
-export struct Kept
+struct Kept
   text: String
   first_id: Int
   program: Ast.Program
@@ -110,10 +110,157 @@ end
 
 ## The files that a walk may take instead of parsing, by key, and top, an id above every id of those files (the ranges
 ## of the files in `kept` must not overlap). A file that has to be parsed gets ids from top on.
-export struct Parses
+struct Parses
   kept: Map[String, Kept]
   top: Int
 end
+
+## One root of load_roots: the path as it was given, the key of its file, the folder of the root and, when it did not
+## load, why (a packed failure read back, link_failure.agc).
+struct Entry
+  typed: String
+  key: String
+  root_dir: String
+  failure: Optional[Failure.Failure]
+end
+
+## What load_roots gave: every module of the roots that loaded, and one Entry for each root, in the order given. The
+## modules of a root that failed are not in `loaded`.
+struct Roots
+  loaded: Loaded
+  entries: List[Entry]
+end
+
+## The kind of `name` in `module`: an export (a re-export included), or else a name that the file declares. A module
+## block (`module_blocks`) reads the private names of its file through the `named` table, which points at the file.
+def kind_in(module: Module, name: String) -> Declarations.Kind
+  return module.public[name] if module.public.has_key?(name)
+
+  module.names[name]
+end
+
+## The key of the module block `name` of the file `key`: the module that the linker makes of the block.
+def block_key(key: String, name: String) -> String = "#{key}##{name}"
+
+## The key of the module block that `module` exports as `name`, its own or one it re-exports, or "" when `name` is no
+## exported module block.
+def exported_block(module: Module, name: String) -> String
+  return "" if !module.public.has_key?(name) or !Declarations.module?(module.public[name])
+
+  return block_key(module.reexports[name].target, module.reexports[name].name) if module.reexports.has_key?(name)
+
+  block_key(module.key, name)
+end
+
+## Parses nothing again: the files are numbered one after the other from 0.
+def no_parses() -> Parses = Parses(kept: {}, top: 0)
+
+## The name in the linked program of the export `name` of `module`: with the prefix of the file that declares it, which
+## is another file when the module re-exports the name.
+def linked_name(modules: Map[String, Module], module: Module, name: String) -> String
+  if module.reexports.has_key?(name)
+    origin = module.reexports[name]
+    return origin.name if origin.target == BUILTIN
+
+    return modules[origin.target].prefix + origin.name
+  end
+
+  module.prefix + name
+end
+
+## The help for a std-only family (STD_ONLY) named outside std/: the std module to import in its place.
+def std_only_help(family: String) -> String
+  wrapper = STD_ONLY[family]
+  "#{family} is internal to #{wrapper[0]}; use import #{wrapper[1]} from \"#{wrapper[0]}\""
+end
+
+## The help of CHECK-IMPORT-NAME for `member`, which the module `target` does not export. A name it declares is private
+## there: the help says how to open it, above `private` in a scope that has one and with `export` in one that has not,
+## and for a std/ module or a package, which the user does not edit, only that it is private. A name that a file only
+## imports gets the re-export that passes it on. Any other name gets the did-you-mean over the exports.
+def import_name_help(modules: Map[String, Module], target: Module, member: String) -> Diag.Help
+  place = "\"#{target.name}\""
+  if target.block != ""
+    place = "module #{target.block} of \"#{target.name}\""
+  end
+
+  library = target.origin.library or target.origin.package != ""
+  if target.names.has_key?(member)
+    return Diag.Help.Hint("#{member} is private in #{place}") if library
+
+    if target.program.private_mark.some?
+      return Diag.Help.Hint("#{member} is private in #{place}: move it above private there")
+    end
+
+    return Diag.Help.Hint("#{member} is private in #{place}: add export to it there")
+  end
+
+  if target.block == "" and block_holding(modules, target, member) != ""
+    block = block_holding(modules, target, member)
+    return Diag.Help.Hint("#{member} is in module #{block} of #{place}: write #{block}.#{member} after the alias")
+  end
+
+  imported = target.block == "" and imported_alias(modules, target, member) != ""
+  if imported and library
+    return Diag.Help.Hint("#{member} is imported by #{place}, which does not re-export it")
+  elsif imported
+    alias = imported_alias(modules, target, member)
+    return Diag.Help.Hint("add export #{alias}.#{member} to #{place} to re-export it") if alias != "?"
+
+    return Diag.Help.Hint(
+      "#{member} is only imported in #{place}: import its module with an alias there and add export Alias.#{member}",
+    )
+  end
+
+  ImportHelp.unknown_import_help(target.key, target.public, member)
+end
+
+## Loads the root file and everything it imports. A failure is a packed failure (link_failure.agc): CHECK-IMPORT-*,
+## CHECK-DECL-ORDER and CHECK-REDEFINED-NAME, or the diagnostic of the lexer or the parser for a file.
+def load(root: String, settings: Env.Settings) -> Result[Loaded] = load_with(root, settings, no_parses())
+
+## Like `load`, taking from `parses` the tree of each file whose text it still has. The files are read as before, so a
+## file that appeared, vanished or changed since the earlier walk is met, and the walk fails or differs as it would
+## without `parses`.
+def load_with(root: String, settings: Env.Settings, parses: Parses) -> Result[Loaded]
+  finished = try load_root(settings, empty_walk(false, parses), root)
+  ok(loaded_of(finished))
+end
+
+## Like `load`, using the check cache of the workspace (check_cache.agc): each file but the root gets its digest and
+## the tree digest of this walk, and is `clean` when the cache's entry for its text vouches for that tree. With `stubs`
+## a file whose text has an entry with a stub is parsed from the stub; the caller must then look at every `stubbed`
+## module, which is a stand-in until it is `clean`. With the cache off it is `load`. The walk, its order, its ids and
+## its failures are those of `load`, except that a stub has fewer nodes than its text.
+def load_checked(root: String, settings: Env.Settings, stubs: Bool) -> Result[Loaded]
+  use = settings.workspace.check_cache.on
+  finished = try load_root(settings, empty_walk(false, no_parses()).with(cached: use, stubs: use and stubs), root)
+  ok(loaded_of(finished))
+end
+
+## Loads several roots into one set of modules: a file that two roots reach is read, parsed and entered once, and every
+## module, the roots too, gets the prefix "@N::". Each root is a transaction: the walk of a root that fails is dropped
+## as a whole, so none of its modules stays, and the next root starts from the walk before it. A root whose file an
+## earlier root already loaded adds nothing. `parses` is taken as `load_with` takes it.
+def load_roots(roots: List[String], settings: Env.Settings, parses: Parses) -> Roots
+  walk = empty_walk(true, parses)
+  entries: List[Entry] = []
+  for root in roots
+    key = settings.workspace.real_path.call(root).unwrap_or(root)
+    loaded = load_root(settings, walk, root)
+    if loaded.ok?
+      walk = loaded.unwrap!
+      entries = entries.push(Entry(typed: root, key: key, root_dir: walk.root_dir, failure: none))
+    else
+      failure = Failure.unpack_failure(loaded.message)
+      entries = entries.push(Entry(typed: root, key: key, root_dir: walk.root_dir, failure: some(failure)))
+    end
+  end
+
+  Roots(loaded: loaded_of(walk), entries: entries)
+end
+
+private
 
 # A file whose imports are being read: the module so far (its aliases and named imports are filled in as imports are
 # read), and the index of the next import to read. pending is the key of the file that the import at next names while
@@ -168,157 +315,12 @@ struct Collected
   public: Map[String, Declarations.Kind]
 end
 
-## One root of load_roots: the path as it was given, the key of its file, the folder of the root and, when it did not
-## load, why (a packed failure read back, link_failure.agc).
-export struct Entry
-  typed: String
-  key: String
-  root_dir: String
-  failure: Optional[Failure.Failure]
-end
-
-## What load_roots gave: every module of the roots that loaded, and one Entry for each root, in the order given. The
-## modules of a root that failed are not in `loaded`.
-export struct Roots
-  loaded: Loaded
-  entries: List[Entry]
-end
-
 # A tree for a file, from the Kept files or from the parser, and whether the parser made it.
 struct Taken
   program: Ast.Program
   first_id: Int
   fresh: Bool
   stubbed: Bool
-end
-
-## The kind of `name` in `module`: an export (a re-export included), or else a name that the file declares. A module
-## block (`module_blocks`) reads the private names of its file through the `named` table, which points at the file.
-export def kind_in(module: Module, name: String) -> Declarations.Kind
-  return module.public[name] if module.public.has_key?(name)
-
-  module.names[name]
-end
-
-## The key of the module block `name` of the file `key`: the module that the linker makes of the block.
-export def block_key(key: String, name: String) -> String = "#{key}##{name}"
-
-## The key of the module block that `module` exports as `name`, its own or one it re-exports, or "" when `name` is no
-## exported module block.
-export def exported_block(module: Module, name: String) -> String
-  return "" if !module.public.has_key?(name) or !Declarations.module?(module.public[name])
-
-  return block_key(module.reexports[name].target, module.reexports[name].name) if module.reexports.has_key?(name)
-
-  block_key(module.key, name)
-end
-
-## Parses nothing again: the files are numbered one after the other from 0.
-export def no_parses() -> Parses = Parses(kept: {}, top: 0)
-
-## The name in the linked program of the export `name` of `module`: with the prefix of the file that declares it, which
-## is another file when the module re-exports the name.
-export def linked_name(modules: Map[String, Module], module: Module, name: String) -> String
-  if module.reexports.has_key?(name)
-    origin = module.reexports[name]
-    return origin.name if origin.target == BUILTIN
-
-    return modules[origin.target].prefix + origin.name
-  end
-
-  module.prefix + name
-end
-
-## The help for a std-only family (STD_ONLY) named outside std/: the std module to import in its place.
-export def std_only_help(family: String) -> String
-  wrapper = STD_ONLY[family]
-  "#{family} is internal to #{wrapper[0]}; use import #{wrapper[1]} from \"#{wrapper[0]}\""
-end
-
-## The help of CHECK-IMPORT-NAME for `member`, which the module `target` does not export. A name it declares is private
-## there: the help says how to open it, above `private` in a scope that has one and with `export` in one that has not,
-## and for a std/ module or a package, which the user does not edit, only that it is private. A name that a file only
-## imports gets the re-export that passes it on. Any other name gets the did-you-mean over the exports.
-export def import_name_help(modules: Map[String, Module], target: Module, member: String) -> Diag.Help
-  place = "\"#{target.name}\""
-  if target.block != ""
-    place = "module #{target.block} of \"#{target.name}\""
-  end
-
-  library = target.origin.library or target.origin.package != ""
-  if target.names.has_key?(member)
-    return Diag.Help.Hint("#{member} is private in #{place}") if library
-
-    if target.program.private_mark.some?
-      return Diag.Help.Hint("#{member} is private in #{place}: move it above private there")
-    end
-
-    return Diag.Help.Hint("#{member} is private in #{place}: add export to it there")
-  end
-
-  if target.block == "" and block_holding(modules, target, member) != ""
-    block = block_holding(modules, target, member)
-    return Diag.Help.Hint("#{member} is in module #{block} of #{place}: write #{block}.#{member} after the alias")
-  end
-
-  imported = target.block == "" and imported_alias(modules, target, member) != ""
-  if imported and library
-    return Diag.Help.Hint("#{member} is imported by #{place}, which does not re-export it")
-  elsif imported
-    alias = imported_alias(modules, target, member)
-    return Diag.Help.Hint("add export #{alias}.#{member} to #{place} to re-export it") if alias != "?"
-
-    return Diag.Help.Hint(
-      "#{member} is only imported in #{place}: import its module with an alias there and add export Alias.#{member}",
-    )
-  end
-
-  ImportHelp.unknown_import_help(target.key, target.public, member)
-end
-
-## Loads the root file and everything it imports. A failure is a packed failure (link_failure.agc): CHECK-IMPORT-*,
-## CHECK-DECL-ORDER and CHECK-REDEFINED-NAME, or the diagnostic of the lexer or the parser for a file.
-export def load(root: String, settings: Env.Settings) -> Result[Loaded] = load_with(root, settings, no_parses())
-
-## Like `load`, taking from `parses` the tree of each file whose text it still has. The files are read as before, so a
-## file that appeared, vanished or changed since the earlier walk is met, and the walk fails or differs as it would
-## without `parses`.
-export def load_with(root: String, settings: Env.Settings, parses: Parses) -> Result[Loaded]
-  finished = try load_root(settings, empty_walk(false, parses), root)
-  ok(loaded_of(finished))
-end
-
-## Like `load`, using the check cache of the workspace (check_cache.agc): each file but the root gets its digest and
-## the tree digest of this walk, and is `clean` when the cache's entry for its text vouches for that tree. With `stubs`
-## a file whose text has an entry with a stub is parsed from the stub; the caller must then look at every `stubbed`
-## module, which is a stand-in until it is `clean`. With the cache off it is `load`. The walk, its order, its ids and
-## its failures are those of `load`, except that a stub has fewer nodes than its text.
-export def load_checked(root: String, settings: Env.Settings, stubs: Bool) -> Result[Loaded]
-  use = settings.workspace.check_cache.on
-  finished = try load_root(settings, empty_walk(false, no_parses()).with(cached: use, stubs: use and stubs), root)
-  ok(loaded_of(finished))
-end
-
-## Loads several roots into one set of modules: a file that two roots reach is read, parsed and entered once, and every
-## module, the roots too, gets the prefix "@N::". Each root is a transaction: the walk of a root that fails is dropped
-## as a whole, so none of its modules stays, and the next root starts from the walk before it. A root whose file an
-## earlier root already loaded adds nothing. `parses` is taken as `load_with` takes it.
-export def load_roots(roots: List[String], settings: Env.Settings, parses: Parses) -> Roots
-  walk = empty_walk(true, parses)
-  entries: List[Entry] = []
-  for root in roots
-    key = settings.workspace.real_path.call(root).unwrap_or(root)
-    loaded = load_root(settings, walk, root)
-    if loaded.ok?
-      walk = loaded.unwrap!
-      entries = entries.push(Entry(typed: root, key: key, root_dir: walk.root_dir, failure: none))
-    else
-      failure = Failure.unpack_failure(loaded.message)
-      entries = entries.push(Entry(typed: root, key: key, root_dir: walk.root_dir, failure: some(failure)))
-    end
-  end
-
-  Roots(loaded: loaded_of(walk), entries: entries)
 end
 
 # The modules a walk finished, as `Loaded`.
