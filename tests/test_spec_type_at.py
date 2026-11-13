@@ -1020,3 +1020,115 @@ def test_a_re_exported_builtin_type_and_its_field_are_defined_at_the_export_line
     assert headers["type"] == "List[HTTP.Header]"
     assert (headers["definition"]["kind"], headers["definition"]["name"]) == ("field", "headers")
     assert start(headers["definition"]["name_span"])[0] == line
+
+
+# A file whose functions the cases on named arguments call by name: a default, a second `factor` of another function,
+# a generic one, one with a trailing block and an extern one, and a call by name inside the file itself.
+NAMED_LIB = '''extern "libm.so.6"
+  export def pow(x: C.Double, y: C.Double) -> C.Double
+end
+
+## Scales a value.
+export def scale(value: Int, factor: Int = 2) -> Int
+  return value * factor
+end
+
+export def other(factor: Int = 3) -> Int
+  return factor
+end
+
+export def first[T](items: List[T], fallback: T) -> T
+  return fallback if items.size == 0
+
+  return items[0]
+end
+
+export def twice(count: Int = 1, step: Fn[Int, Int]) -> Int
+  return step.call(count) + step.call(count)
+end
+
+export def doubled(value: Int) -> Int
+  return scale(value, factor: 2)
+end
+'''
+
+# The calls by name: through the module alias, an import list, a pipe, a generic function, a trailing block, a std/
+# function and a builtin. The local `factor` has the name of the parameter it is given to.
+NAMED_USE = '''import Lib from "lib"
+import {scale} from "lib"
+import Mime from "std/mime"
+
+def by_name() -> Int
+  factor = 5
+  a = Lib.scale(1, factor: factor)
+  b = scale(2, factor: 3)
+  c = 4 |> scale(factor: 2)
+  d = Lib.other(factor: 1)
+  e = Lib.first([1], fallback: 0)
+  f = Lib.twice(count: 2) do |x| x + 1 end
+  return a + b + c + d + e + f
+end
+
+def kind() -> String
+  return Mime.mime_type("a.bin", fallback: "x/y") + ["a", "b"].join(separator: ",")
+end
+
+def power() -> Float
+  return Lib.pow(2.0, y: 3.0)
+end
+'''
+
+
+@pytest.fixture
+def named(tmp_path):
+    (tmp_path / "lib.agc").write_text(NAMED_LIB, encoding="utf-8")
+    (tmp_path / "use.agc").write_text(NAMED_USE, encoding="utf-8")
+    return tmp_path
+
+
+def test_the_name_of_a_named_argument_is_the_parameter_it_fills(named):
+    position = ("use.agc", where(NAMED_USE, "factor: factor"))
+    report = answer(position, cwd=named)
+    assert (report["kind"], report["type"], report["text"]) == ("name", "Int", "factor")
+    assert (start(report["span"]), end(report["span"])) == (where(NAMED_USE, "factor: factor"),
+                                                           where(NAMED_USE, ": factor"))
+    definition = report["definition"]
+    assert (definition["kind"], definition["name"], definition["file"]) == ("parameter", "factor", "lib.agc")
+    assert start(definition["name_span"]) == where(NAMED_LIB, "factor: Int = 2")
+    # The second question finds lib.agc in the cache of checked modules, whose bodies are not checked again: the answer
+    # is the same, and the same without the cache.
+    assert answer(position, cwd=named) == report
+    line, column = position[1]
+    off = run(cli() + ["--json", "--no-cache", "type-at", f"use.agc:{line}:{column}"], env=vm_environment(), cwd=named)
+    assert (off.code, json.loads(off.stdout)) == (0, report)
+    # An extern function has no body to check, so its parameters have no recorded type: the name of its argument is in
+    # the call, cold, warm and without the cache alike.
+    extern = ("use.agc", where(NAMED_USE, "y: 3.0"))
+    cold = answer(extern, cwd=named)
+    assert (cold["kind"], cold["text"]) == ("expression", "Lib.pow(2.0, y: 3.0)")
+    assert answer(extern, cwd=named) == cold
+    line, column = extern[1]
+    off = run(cli() + ["--json", "--no-cache", "type-at", f"use.agc:{line}:{column}"], env=vm_environment(), cwd=named)
+    assert (off.code, json.loads(off.stdout)) == (0, cold)
+    # A generic parameter keeps its type variable; a name before a trailing block, of a std/ function and of an import
+    # list are answered alike.
+    generic = answer(("use.agc", where(NAMED_USE, "fallback: 0")), cwd=named)
+    assert (generic["type"], start(generic["definition"]["name_span"])) == ("T", where(NAMED_LIB, "fallback: T"))
+    block = answer(("use.agc", where(NAMED_USE, "count: 2")), cwd=named)
+    assert (block["type"], start(block["definition"]["name_span"])) == ("Int", where(NAMED_LIB, "count: Int"))
+    listed = answer(("use.agc", where(NAMED_USE, "factor: 3", 2)), cwd=named)
+    assert start(listed["definition"]["name_span"]) == where(NAMED_LIB, "factor: Int = 2")
+    std = answer(("use.agc", where(NAMED_USE, "fallback: \"x/y\"")), cwd=named)
+    assert (std["type"], std["definition"]["kind"], std["definition"]["file"]) == ("String", "parameter", "std/mime.agc")
+    # A builtin has no parameter declared in a file: the name of its argument is in the call, as before.
+    builtin = answer(("use.agc", where(NAMED_USE, "separator")), cwd=named)
+    assert (builtin["kind"], builtin["text"]) == ("expression", '["a", "b"].join(separator: ",")')
+
+
+def test_a_named_argument_that_names_no_parameter_is_the_check_error(tmp_path):
+    (tmp_path / "lib.agc").write_text(NAMED_LIB, encoding="utf-8")
+    text = 'import Lib from "lib"\n\ndef main() -> Void\n  puts(Lib.scale(1, factr: 2))\nend\n'
+    (tmp_path / "bad.agc").write_text(text, encoding="utf-8")
+    diagnostic = problem(type_at(("bad.agc", where(text, "factr")), cwd=tmp_path), "CHECK-UNKNOWN-ARGUMENT", 1)
+    assert (diagnostic["file"], diagnostic["range"]["start"]) == (
+        "bad.agc", dict(zip(("line", "column"), where(text, "factr"))))

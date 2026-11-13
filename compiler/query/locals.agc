@@ -119,6 +119,12 @@ export def uses(module: Linker.LinkedModule, bound: Map[Int, List[T.Type]], targ
   []
 end
 
+## The parameter `param` of a function as a local, with the type the checker recorded for it (`bound` is
+## `Checked.bound`; Unknown when it recorded none).
+export def function_parameter(bound: Map[Int, List[T.Type]], param: Ast.Param) -> Local
+  parameter(Query(offset: -1, bound: bound), param.id, param.name, param.span, param.name_span)
+end
+
 # A found local is answered only with a type; a discard has none and is kept, so the caller can tell it from a position
 # on no local.
 def typed(found: Optional[Found]) -> Optional[Found]
