@@ -64,19 +64,25 @@ def output_of(workspace, scratch, files, name="root.agc", env=None):
 
 def test_methods_work_on_values_whose_types_come_from_another_file(workspace, scratch):
     assert output_of(workspace, scratch, {
-        "lib.agc": "export struct Box\n  label: String\nend\n\nexport def make(text: String) -> Box\n  return Box(label: text)\nend\n\n",
+        "lib.agc": ("struct Box\n  label: String\nend\n\n"
+                    "def make(text: String) -> Box\n  return Box(label: text)\nend\n\n"),
         "root.agc": "import Lib from \"lib\"\ndef main() -> Void\n  b = Lib.make(\" hi \")\n  IO.inspect(b.label.strip.upcase.size)\nend\n\n"}) == "2\n"
 
 
 def test_blocks_in_an_imported_file_call_that_files_private_helpers_and_types(workspace, scratch):
     assert output_of(workspace, scratch, {
-        "lib.agc": "struct Pair\n  n: Int\nend\n\nexport def doubled(xs: List[Int]) -> List[Int]\n  pairs = xs.map do |x| Pair(n: twice(x)) end\n  return pairs.map do |p: Pair| p.n end\nend\n\ndef twice(n: Int) -> Int\n  return n * 2\nend\n\n",
+        "lib.agc": ("def doubled(xs: List[Int]) -> List[Int]\n  pairs = xs.map do |x| Pair(n: twice(x)) end\n  return pairs.map do |p: Pair| p.n end\nend\n\n"
+                    "private\n\n"
+                    "struct Pair\n  n: Int\nend\n\n"
+                    "def twice(n: Int) -> Int\n  return n * 2\nend\n\n"),
         "root.agc": "import Lib from \"lib\"\ndef main() -> Void\n  IO.inspect(Lib.doubled([1, 2]))\nend\n\n"}) == "[2, 4]\n"
 
 
 def test_interpolation_in_an_imported_function_reaches_that_files_private_helpers(workspace, scratch):
     assert output_of(workspace, scratch, {
-        "lib.agc": "export def label(n: Int) -> String\n  return \"n=#{twice(n)}\"\nend\n\ndef twice(n: Int) -> Int\n  return n * 2\nend\n\n",
+        "lib.agc": ('def label(n: Int) -> String\n  return "n=#{twice(n)}"\nend\n\n'
+                    "private\n\n"
+                    "def twice(n: Int) -> Int\n  return n * 2\nend\n\n"),
         "root.agc": "import Lib from \"lib\"\ndef main() -> Void\n  puts(Lib.label(3))\nend\n\n"}) == "n=6\n"
 
 
@@ -101,7 +107,7 @@ LIBRARY_ROOT = "import Value from \"pkg/%s/value\"\ndef main() -> Void\n  puts(V
 
 
 def library(name):
-    return "export def read() -> String\n  return \"%s\"\nend\n\n" % name
+    return 'def read() -> String\n  return "%s"\nend\n\n' % name
 
 
 def test_pkg_roots_search_project_environment_then_user_data_independent_of_cwd(workspace, scratch):
@@ -109,7 +115,7 @@ def test_pkg_roots_search_project_environment_then_user_data_independent_of_cwd(
         "root.agc": LIBRARY_ROOT,
         "agc_libs/%s/value.agc" % PROBE: library("project"),
         "first/%s/value.agc" % PROBE:
-            "import Helper from \"helper\"\nexport def read() -> String\n  return Helper.read()\nend\n\n",
+            'import Helper from "helper"\ndef read() -> String\n  return Helper.read()\nend\n\n',
         "first/%s/helper.agc" % PROBE: library("first"),
         "second/%s/value.agc" % PROBE: library("second"),
         "third/%s/value.agc" % PROBE: library("third"),
@@ -184,22 +190,35 @@ def test_pkg_roots_split_the_path_variable_at_the_separator_of_the_system_only(w
 
 def test_imports_share_canonical_identities_and_resolve_relative_to_each_file(workspace, scratch):
     assert output_of(workspace, scratch, {
-        "library/models.agc": "export struct Value\n  n: Int\nend\n\nexport def read(value: Value) -> Int\n  return value.n\nend\n\ndef main() -> Void\n  puts(\"must not run\")\nend\n\n",
-        "library/outer.agc": "import Models from \"models\"\nexport def make(n: Int) -> Models.Value\n  return Models.Value(n: n)\nend\n\n",
+        "library/models.agc": ("struct Value\n  n: Int\nend\n\n"
+                               "def read(value: Value) -> Int\n  return value.n\nend\n\n"
+                               "private\n\n"
+                               'def main() -> Void\n  puts("must not run")\nend\n\n'),
+        "library/outer.agc": ('import Models from "models"\n'
+                              "def make(n: Int) -> Models.Value\n"
+                              "  return Models.Value(n: n)\n"
+                              "end\n"
+                              "\n"),
         "root.agc": "import First from \"library/models\"\nimport Second from \"library/../library/models\"\nimport Outer from \"library/outer\"\ndef main() -> Void\n  value: Second.Value = Outer.make(42)\n  IO.inspect(First.read(value))\n  IO.inspect(Second.read(First.Value(n: 7)))\nend\n\n"}) == "42\n7\n"
 
 
 def test_private_helpers_and_same_names_in_different_modules_stay_separate(workspace, scratch):
     assert output_of(workspace, scratch, {
-        "a.agc": "export def apply(n: Int) -> Int\n  return helper(n)\nend\n\ndef helper(n: Int) -> Int\n  return n + 1\nend\n\n",
-        "b.agc": "export def apply(n: Int) -> Int\n  return helper(n)\nend\n\ndef helper(n: Int) -> Int\n  return n + 10\nend\n\n",
+        "a.agc": ("def apply(n: Int) -> Int\n  return helper(n)\nend\n\n"
+                  "private\n\n"
+                  "def helper(n: Int) -> Int\n  return n + 1\nend\n\n"),
+        "b.agc": ("def apply(n: Int) -> Int\n  return helper(n)\nend\n\n"
+                  "private\n\n"
+                  "def helper(n: Int) -> Int\n  return n + 10\nend\n\n"),
         "root.agc": "import A from \"a\"\nimport B from \"b\"\ndef main() -> Void\n  IO.inspect(List.map([1, 2], &A.apply))\n  IO.inspect(List.map([1, 2], &B.apply))\nend\n\n"}) == "[2, 3]\n[11, 12]\n"
 
 
 def test_imported_structs_and_enums_print_their_declared_names(workspace, scratch):
     directory = workspace({
-        "a.agc": "export struct Point\n  x: Int\nend\n\nexport enum Shape\n  Dot(Point)\n  Empty\nend\n\nexport def show() -> Void\n  puts(\"#{Point(x: 2)} #{Shape.Empty}\")\nend\n\n",
-        "b.agc": "export struct Point\n  y: Int\nend\n\n",
+        "a.agc": ("struct Point\n  x: Int\nend\n\n"
+                  "enum Shape\n  Dot(Point)\n  Empty\nend\n\n"
+                  'def show() -> Void\n  puts("#{Point(x: 2)} #{Shape.Empty}")\nend\n\n'),
+        "b.agc": "struct Point\n  y: Int\nend\n\n",
         "root.agc": "import A from \"a\"\nimport B from \"b\"\n\nstruct Both\n  a: A.Point\n  b: B.Point\nend\n\ndef main() -> Void\n  A.show()\n  p = A.Point(x: 3)\n  puts(p)\n  puts(B.Point(y: 4).inspect)\n  puts([A.Shape.Dot(p)].to_s)\n  puts({\"k\": ok(A.Shape.Empty)})\n  IO.warn(p)\n  IO.warn(JSON.schema(Both))\nend\n\n"})
     out, problem, errors = run_root(scratch, directory)
     assert problem is None, errors
@@ -211,34 +230,39 @@ def test_imported_structs_and_enums_print_their_declared_names(workspace, scratc
 
 def test_import_paths_name_modules_without_an_extension(workspace, scratch):
     assert output_of(workspace, scratch, {
-        "lib/util.agc": "export def read() -> String\n  return \"util\"\nend\n\n",
+        "lib/util.agc": 'def read() -> String\n  return "util"\nend\n\n',
         "app/root.agc": "import Util from \"../lib/util\"\ndef main() -> Void\n  puts(Util.read())\nend\n\n"}, "app/root.agc") == "util\n"
 
 
 def test_nullary_variants_need_no_parentheses_locally_and_through_an_alias(workspace, scratch):
     assert output_of(workspace, scratch, {
-        "shapes.agc": "export enum Shape\n  Dot\n  Box(Int)\nend\n\n",
+        "shapes.agc": "enum Shape\n  Dot\n  Box(Int)\nend\n\n",
         "root.agc": "import S from \"shapes\"\n\nenum Command\n  Show\n  Add(Int)\nend\n\ndef main() -> Void\n  c = Command.Show\n  case c\n    Command.Show -> puts(\"show\")\n    Command.Add(n) -> puts(n.to_s)\n  end\n  s = S.Shape.Dot\n  case s\n    S.Shape.Dot -> puts(\"dot\")\n    _ -> puts(\"other\")\n  end\nend\n\n"}) == "show\ndot\n"
 
 
 def test_a_struct_update_follows_the_rules_of_construction_across_files(workspace, scratch):
     # An exported struct can be updated by an importer; a module may update its own private structs.
     assert output_of(workspace, scratch, {
-        "lib.agc": "export struct Box\n  label: String\n  size: Int\nend\n\nstruct Hidden\n  n: Int\nend\n\nexport def make() -> Box\n  return Box(label: \"a\", size: 1)\nend\n\nexport def grow(b: Box) -> Box\n  return b.with(size: b.size + 1)\nend\n\nexport def hidden() -> Hidden\n  return Hidden(n: 1).with(n: 2)\nend\n\n",
+        "lib.agc": ("struct Box\n  label: String\n  size: Int\nend\n\n"
+                    'def make() -> Box\n  return Box(label: "a", size: 1)\nend\n\n'
+                    "def grow(b: Box) -> Box\n  return b.with(size: b.size + 1)\nend\n\n"
+                    "def hidden() -> Hidden\n  return Hidden(n: 1).with(n: 2)\nend\n\n"
+                    "private\n\n"
+                    "struct Hidden\n  n: Int\nend\n\n"),
         "root.agc": "import Lib from \"lib\"\n\ndef main() -> Void\n  b = Lib.make().with(label: \"b\")\n  puts(Lib.grow(b))\n  puts(Lib.hidden().n)\nend\n\n"}) == "Box(label: \"b\", size: 2)\n2\n"
     # A builtin record that std/http re-exports is updated like a struct of the module.
     assert output_of(workspace, scratch, {
         "root.agc": "import HTTP from \"std/http\"\n\ndef main() -> Void\n  o = HTTP.ClientOptions()\n  p = o.with(timeout_ms: 5000, tls: none)\n  puts(p.timeout_ms)\n  puts(o.timeout_ms)\nend\n\n"}) == "5000\n30000\n"
     # Alias.with(...) is a call of the module's function named with, not an update.
     assert output_of(workspace, scratch, {
-        "lib.agc": "export def with(n: Int) -> Int\n  return n + 1\nend\n\n",
+        "lib.agc": "def with(n: Int) -> Int\n  return n + 1\nend\n\n",
         "root.agc": "import Lib from \"lib\"\n\ndef main() -> Void\n  puts(Lib.with(1))\nend\n\n"}) == "2\n"
 
 
 def test_a_runtime_failure_in_a_dependency_keeps_the_original_file_span(workspace, scratch):
     directory = workspace({
         "root.agc": "import A from \"a\"\ndef main() -> Void\n  IO.inspect(A.fail(0))\nend\n\n",
-        "a.agc": "export def fail(n: Int) -> Int\n  return 1 / n\nend\n\n"})
+        "a.agc": "def fail(n: Int) -> Int\n  return 1 / n\nend\n\n"})
     _out, problem, errors = run_root(scratch, directory)
     assert problem is not None, errors
     assert problem["code"] == "RUNTIME-DIVISION-BY-ZERO"
@@ -249,7 +273,7 @@ def test_a_runtime_failure_in_a_dependency_keeps_the_original_file_span(workspac
 def test_imported_task_callbacks_keep_the_execution_budget(workspace, scratch):
     directory = workspace({
         "root.agc": "import Worker from \"worker\"\ndef main() -> Void\n  task = Task.spawn(&Worker.run, 0)\n  IO.inspect(Task.await(task))\nend\n\n",
-        "worker.agc": "export def run(n: Int) -> Int\n  while n < 100\n    n = n + 1\n  end\n  return n\nend\n\n"})
+        "worker.agc": "def run(n: Int) -> Int\n  while n < 100\n    n = n + 1\n  end\n  return n\nend\n\n"})
     out, problem, errors = run_root(scratch, directory)
     assert problem is None, errors
     assert out == "100\n"
@@ -260,7 +284,8 @@ def test_imported_task_callbacks_keep_the_execution_budget(workspace, scratch):
 def test_a_bdd_step_program_imports_its_handlers_which_share_std_bdd(workspace, scratch):
     directory = workspace({
         "steps.agc": "import BDD from \"std/bdd\"\nimport Assertions from \"assertions\"\n\ndef main() -> Void\n  BDD.run([BDD.step(\"it works\", &Assertions.verify)])\nend\n\n",
-        "assertions.agc": "import Spec from \"std/bdd\"\nimport Queue from \"std/queue\"\n\nexport def verify(ctx: Spec.Context, args: List[String]) -> Spec.Context\n  q = Queue.push(Queue.new(), \"imported handler\")\n  return Spec.assert(ctx, Result.unwrap!(Queue.peek(q)) == \"imported handler\", \"imported handler\")\nend\n\n",
+        "assertions.agc": ('import Spec from "std/bdd"\nimport Queue from "std/queue"\n\n'
+                           'def verify(ctx: Spec.Context, args: List[String]) -> Spec.Context\n  q = Queue.push(Queue.new(), "imported handler")\n  return Spec.assert(ctx, Result.unwrap!(Queue.peek(q)) == "imported handler", "imported handler")\nend\n\n'),
         "test.feature": "Feature: Modules\nScenario: Imported handler\nThen it works\n"})
     result = agentica(scratch, "test", "--json", directory / "test.feature", "--steps", directory / "steps.agc")
     assert result.code == 0, result.stderr
@@ -281,7 +306,7 @@ def test_the_combined_json_module_example_runs_through_the_cli(scratch):
 
 def test_imported_generic_enums_resolve_constructors_and_exhaustive_patterns(workspace, scratch):
     assert output_of(workspace, scratch, {
-        "option.agc": "export enum Option[T]\n  Some(T)\n  None\nend\n\n",
+        "option.agc": "enum Option[T]\n  Some(T)\n  None\nend\n\n",
         "root.agc": "import Domain from \"option\"\ndef main() -> Void\n  value: Domain.Option[Int] = Domain.Option.Some(7)\n  case value do\n    Domain.Option.Some(item) ->\n      puts(item.to_s)\n    Domain.Option.None ->\n      puts(\"empty\")\n  end\n  empty: Domain.Option[String] = Domain.Option.None()\n  case empty do\n    Domain.Option.Some(item) ->\n      puts(item)\n    Domain.Option.None ->\n      puts(\"none\")\n  end\nend\n\n"}) == "7\nnone\n"
 
 

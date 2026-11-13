@@ -126,7 +126,7 @@ end
 
 ## Files and docs
 
-A file has a fixed order: its doc and imports; the public part (constants, then structs, enums, type aliases, module blocks and extern blocks with a resource, then functions); a `private` line with a blank line before and after it; then the private part in the same order. Use `private` rather than `export` in new files. Sort imports by path. A constant reads through the alias (`Limits.LIMIT`) like the rest; import it by name (`import {LIMIT} from "limits"`) when it is used often, and a file may import one module both ways.
+A file has a fixed order: its doc and imports; the public part (constants, then structs, enums, type aliases, module blocks and extern blocks with a resource, then functions); a `private` line with a blank line before and after it; then the private part in the same order. Sort imports by path. A constant reads through the alias (`Limits.LIMIT`) like the rest; import it by name (`import {LIMIT} from "limits"`) when it is used often, and a file may import one module both ways.
 
 ```agentica {expect="CHECK-DECL-ORDER"}
 # bad
@@ -164,7 +164,7 @@ end
 ```agentica {mode="check"}
 # good
 ## Returns the sum of the prices, in cents.
-export def total(prices: List[Int]) -> Int
+def total(prices: List[Int]) -> Int
   sum = 0
   for price in prices
     sum += price
@@ -172,6 +172,8 @@ export def total(prices: List[Int]) -> Int
 
   sum
 end
+
+private
 
 def main() -> Void
   puts(total([250, 199]))

@@ -1,13 +1,12 @@
-export struct Item
+struct Item
   n: Int
 end
 
-export enum Pick
+enum Pick
   One(Int)
   Zero
 end
 
-export def twice(n: Int) -> Int
+def twice(n: Int) -> Int
   return n * 2
 end
-

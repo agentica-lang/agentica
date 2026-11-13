@@ -1,6 +1,5 @@
 def helper() -> Void
 end
 
-export struct Late
+struct Late
 end
-

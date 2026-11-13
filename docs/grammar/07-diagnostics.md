@@ -186,21 +186,21 @@ is a rule:
   or variant (`PARSE-DETACHED-DOC`)
   Help: put the doc block on the lines just above what it documents, with no
   blank line or `#` comment between; use `#` for a note that documents nothing
-- a function before a `struct`, `enum` or type alias, a private `def` before an
-  `export def`, a constant after a declaration that is not an import or a
-  constant, an `import` after a declaration (`CHECK-DECL-ORDER`)
-  Help: keep the file order: module doc and imports, then constants, then
-  `struct`, `enum`, type aliases and `module` blocks, then `export def`, then
-  `def`; in a file or block with `private`: imports, the public
-  part (constants and re-exports, types and blocks, functions), `private`, then
+- a function before a `struct`, `enum` or type alias, a constant after a
+  declaration that is not an import, a re-export or a constant, an `import`
+  after a declaration (`CHECK-DECL-ORDER`)
+  Help: keep the file order: module doc and imports, then the public part
+  (constants and re-exports, types and blocks, functions), then `private` and
   the private part (constants, types and blocks, functions), so a re-export or
   an import after `private` is out of order too
 - a second `private` line in a file, a module block or a struct body
   (`PARSE-SECOND-PRIVATE`)
   Help: everything after the first `private` is private already
-- `export def`, `export NAME = ...` or `export module` in a file or block with
-  `private` (`PARSE-UNEXPECTED-TOKEN`, at the `export`)
-  Help: every declaration above `private` is public: remove `export`
+- `export def`, `export struct`, `export NAME = ...` or `export module`, in a
+  file, a module block or an extern block (`PARSE-UNEXPECTED-TOKEN`, at the
+  `export`)
+  Help: a declaration is public unless it comes after `private`: remove
+  `export` (`export Alias.name` still re-exports a name)
 - `private def f`, `private` with more on its line
   (`PARSE-TOP-LEVEL-STATEMENT`)
   Help: `private` stands alone on its line
@@ -249,8 +249,8 @@ is a rule:
 - a statement or an extra `end` at the top level (`PARSE-TOP-LEVEL-STATEMENT`)
   Help: statements go inside `def main() -> Void ... end`; an extra `end` closes
   nothing; a stray `else` or `elsif` has no matching `if`; a file holds only
-  `def`, `struct`, `enum`, type aliases (`type Name = Type`), `import`, `export`
-  and constants (`NAME = value`)
+  `def`, `struct`, `enum`, type aliases (`type Name = Type`), `import`, a
+  re-export and constants (`NAME = value`)
 - `user.with()`, `user.with(31)`, `user.with(age)` (`PARSE-UNEXPECTED-TOKEN`)
   Help: a struct update names each field it changes, one or more:
   `user.with(age: 31)`
@@ -371,8 +371,7 @@ is a rule:
   never suggests a private name, and it stays empty when no export is close
 - `M.helper`, `import {helper} from "m"` or `Counter.step` when the name is
   private there (`CHECK-IMPORT-NAME`)
-  Help: `helper is private in "m.agc": move it above private there` (in a file
-  or block with `private`), `... add export to it there` (without), only the
+  Help: `helper is private in "m.agc": move it above private there`, only the
   first part for a `std/` module or a package; for a name that the module only
   imports, `add export Url.parse to "m.agc" to re-export it`
 - `conn.socket`, `Conn(id: 1)`, `conn.with(socket: s)`, `Conn.codec` or

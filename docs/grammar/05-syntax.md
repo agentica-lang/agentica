@@ -7,12 +7,14 @@ uppercase names are lexical tokens.
 ### File and declarations
 
 ```ebnf
-program          = [ NL ], [ module_doc ], { declaration }, EOF ;
+program          = [ NL ], [ module_doc ], { declaration },
+                   [ private_line, { declaration } ], EOF ;
+private_line     = "private", NL ;
 module_doc       = DOC, NL, NL ;
 declaration      = import_decl | reexport_decl | extern_decl
-                 | [ DOC, NL ], ( constant_decl | function_decl | struct_decl | enum_decl | alias_decl
-                 | "export", ( function_decl | struct_decl | enum_decl | alias_decl ) ) ;
-constant_decl    = [ "export" ], CONST_NAME, [ ":", type ], "=", expression, NL ;
+                 | [ DOC, NL ], ( constant_decl | function_decl | struct_decl | enum_decl
+                 | alias_decl ) ;
+constant_decl    = CONST_NAME, [ ":", type ], "=", expression, NL ;
 import_decl      = "import", ( TYPE_NAME | name_list ), "from", STRING, NL ;
 name_list        = "{", import_name, { ",", import_name }, [ "," ], "}" ;
 import_name      = ( NAME | TYPE_NAME ), [ "as", ( NAME | TYPE_NAME ) ] ;
@@ -26,7 +28,7 @@ parameter        = NAME, ":", type, [ "=", expression ] ;
 extern_decl      = "extern", STRING, NL, { extern_member }, "end", NL
                  | "extern", "module", STRING, NL, { module_member }, "end",
                    NL ;
-extern_member    = [ DOC, NL ], [ "export" ],
+extern_member    = [ DOC, NL ],
                    ( extern_function | resource_decl | callback_decl
                    | c_struct_decl ) ;
 extern_function  = [ "compute" ], "def", NAME, "(", [ c_parameters ], ")",
@@ -46,7 +48,7 @@ c_field          = [ DOC, NL ], NAME, ":", ( c_field_type | TYPE_NAME ),
                    [ "=", expression ], NL ;
 c_field_type     = "C", ".", ( "Int32" | "Int64" | "Double" | "Float" | "Bool"
                    | "Pointer" ) ;
-module_member    = [ DOC, NL ], [ "export" ], [ "compute" ], "def", NAME,
+module_member    = [ DOC, NL ], [ "compute" ], "def", NAME,
                    "(", [ parameters ], ")", "->", type, NL ;
 
 struct_decl      = "struct", TYPE_NAME, [ type_parameters ], NL,
@@ -67,7 +69,7 @@ type             = qualified_type, [ "[", type, { ",", type }, "]" ] ;
 A one-line def, `def name(params) -> Type = expression`, is the def with
 `expression` as its body, and the form `agentica fmt` writes for such a def when
 it fits on its line and holds no comment: it checks and runs the same way,
-generics, defaults, `export` and a `##` doc included. The expression starts on
+generics, defaults and a `##` doc included. The expression starts on
 the line of `=` (`PARSE-UNEXPECTED-TOKEN` at the end of the line otherwise)
 and goes on to other lines only as any expression does: inside parentheses or a
 block, or on a next line that starts with `.name`. A `case` or an `if` after `=`
@@ -103,12 +105,14 @@ only (`PARSE-EXTERN-TYPE` at the type), at most 64 parameters
 with a C name (`PARSE-EXTERN-NAME` at the name). Anything else in the block, a
 body or a library given as a heredoc is `PARSE-UNEXPECTED-TOKEN`. A `##` doc
 goes on a `def` inside the block. Each function is a `def` for the rest of the
-language: `export` makes it importable, it takes the place of a `def` in the
-declaration order (except in a block that declares a resource, below), the whole
-block needs the blank line of a declaration, and the checker sees each C type as
-the Agentica type that section 6d gives it. `compute def` declares a function
-that runs off the scheduler while the task waits (section 6d); `export` comes
-first. `extern` is contextual: it is a keyword only at the start of a top-level
+language: it is public or private as the block is (above or after `private`,
+section 5b; `export` before a member is `PARSE-UNEXPECTED-TOKEN`, and a block
+with both kinds of function is written as two blocks), it takes the place of a
+`def` in the declaration order (except in a block that declares a resource,
+below), the whole block needs the blank line of a declaration, and the checker
+sees each C type as the Agentica type that section 6d gives it. `compute def`
+declares a function that runs off the scheduler while the task waits (section
+6d). `extern` is contextual: it is a keyword only at the start of a top-level
 declaration, and `compute` only before `def` in an extern block. `C.UInt64` and
 `C.ULong` are `PARSE-EXTERN-TYPE` (section 6d).
 
@@ -122,9 +126,9 @@ C function that takes a reference to the pointer instead (`void c_name(T **)`,
 as `duckdb_close`; `ref` as in Ruby's `Fiddle::Pointer#ref`), checked as a
 `free:` name. A resource has one free word: a second one is `PARSE-EXTERN-FREE`
 at it, and `free_ref: C.Function` is `PARSE-EXTERN-FUNCTION`. It is a type for
-the rest of the language: `export` makes it importable, and it takes the place
+the rest of the language: it is public above `private`, and it takes the place
 of a type in the declaration order. So does every `def` of a block that
-declares a resource or a struct, exported or not: such a block is one
+declares a resource or a struct, public or not: such a block is one
 declaration among the types, and its functions do not count as functions for the
 order (a block with neither keeps the rule of the `def`). A `def` of the block
 may use it in its signature after the line that declares it (`PARSE-EXTERN-TYPE`
@@ -141,7 +145,7 @@ a slot and writes the value there (section 6d). The caller does not pass it.
 A function with out parameters returns its record, a struct that the parser
 declares next to it, named after the function in CamelCase (`sqlite3_open` gives
 `Sqlite3Open`): a field `result` with the C result (none for `Void`), then one
-field per out parameter, in order, named after it. The record is exported with
+field per out parameter, in order, named after it. The record is public with
 its function and has no place in the declaration order. An out parameter is
 an integer type, `C.Double`, `C.Float`, `C.Bool`, `C.Pointer` or a resource of
 the block, whose field is the resource itself, not a `Result`;
@@ -189,8 +193,8 @@ has no default (`PARSE-EXTERN-DEFAULT`), no out parameter (`PARSE-EXTERN-OUT`
 at the parameter), no `...` (`PARSE-EXTERN-VARIADIC`) and at most 64
 parameters (`PARSE-EXTERN-ARITY`); a parameter name used twice is
 `CHECK-REDEFINED-NAME` at the second. For the rest of the language it is a
-resource: a type, with `export` and the place of a type in the declaration
-order (a block that declares one goes with the types). A `def` of the block
+resource: a type, with the place of a type in the declaration order (a block
+that declares one goes with the types). A `def` of the block
 below it takes it as a parameter, also in the variadic part, and so is
 `Optional[Name]`, which C gets as NULL for `none`; a callback result, or an
 `Optional` of anything else, is `PARSE-EXTERN-TYPE` and an out one
@@ -206,8 +210,8 @@ type (a `char *` field is a `C.Pointer`). A struct with no field is
 `PARSE-EXTERN-TYPE` at its name, and one with more than 1024 fields or 16
 levels, nested structs counted, `PARSE-EXTERN-ARITY` there. For the rest of the
 language it is an ordinary struct whose fields have the Agentica types (`Int`,
-`Float`, `Bool`, `C.Pointer`, the nested struct), with field defaults, `.with`
-and `export`. Like a resource, a `def` of the block may use it after its
+`Float`, `Bool`, `C.Pointer`, the nested struct), with field defaults, `.with`.
+Like a resource, a `def` of the block may use it after its
 declaration (`PARSE-EXTERN-TYPE` before), as a parameter or a result; an out
 struct is `PARSE-EXTERN-OUT` and a variadic one `PARSE-EXTERN-VARIADIC-TYPE`.
 
@@ -238,17 +242,17 @@ is `PARSE-UNEXPECTED-TOKEN` at the comma. Writing the path first is
 `PARSE-UNEXPECTED-TOKEN` at the string, with the help
 `write import Alias from "path"`. What each form means is in section 5b.
 
-A function, struct, enum or type alias declaration, exported or not, needs a
+A function, struct, enum or type alias declaration needs a
 blank line before the next declaration; a line with only a comment counts, but a
 doc line does not, because it belongs to the declaration after it: the blank
 line goes before the doc block. Otherwise `PARSE-MISSING-BLANK-LINE` is reported
 at the next declaration, or at the first line of its doc block. Imports may
 follow each other directly, but an import after a declaration also needs the
 blank line. A constant follows the imports, and another constant, with no blank
-line, also when the next constant has a doc block or `export`; the blank line is
+line, also when the next constant has a doc block; the blank line is
 still needed between a constant and a `struct`, `enum`, type alias or `def`, and
 before an import. In the same way a one-line def may follow a one-line def with
-no blank line, also when the next one has a doc block or `export`; after a
+no blank line, also when the next one has a doc block; after a
 one-line def the blank line is still needed before any other declaration, and
 before a one-line def after any other declaration but an import, a constant or
 a def with a body included. Other text after a declaration's `end` is
@@ -256,24 +260,22 @@ a def with a body included. Other text after a declaration's `end` is
 
 Declarations follow a fixed order in every file, the root program, imported
 files and embedded `std/` modules alike: the module doc and the imports first,
-then the constants, then `struct`, `enum`, type alias and `module` block
-declarations (exported or not, in any order among themselves), then `export def`
-functions, then private `def` functions (an extern block that declares a
-resource or a struct goes with the types, as a whole). In a file or module block
-with a `private` line (section 5b) the order is: the imports, then the public
-part (constants and re-exports, then the types and blocks, then the functions),
-then `private`, then the private part (constants, then types and blocks, then
-functions). `type` is contextual in an alias declaration and remains an ordinary
-name elsewhere. The order is a style rule only: a function may still call a
-function, use a struct declared later or read a constant in the same group. The
-first declaration that comes after a declaration of a later group is
-`CHECK-DECL-ORDER`, reported at the start of that declaration (at `export` or
-`import` when it has one), with help that says where it goes. The module linker
-checks it for each file before linking, so a file with a parse error reports
-`PARSE-` first and a file that imports another reports its own order first.
+then the public part (the constants and re-exports, then the `struct`, `enum`,
+type alias and `module` block declarations, then the functions), then
+`private` and the private part (constants, then types and blocks, then
+functions) when the file or module block has one (section 5b). An extern block
+that declares a resource or a struct goes with the types, as a whole. `type` is
+contextual in an alias declaration and remains an ordinary name elsewhere. The
+order is a style rule only: a function may still call a function, use a struct
+declared later or read a constant in the same group. The first declaration that
+comes after a declaration of a later group is `CHECK-DECL-ORDER`, reported at
+the start of that declaration (at `import` when it is one), with help that says
+where it goes. The module linker checks it for each file before linking, so a
+file with a parse error reports `PARSE-` first and a file that imports another
+reports its own order first.
 
 A constant is `NAME = expression` or `NAME: Type = expression` at the top level,
-with `export` in front to make it visible to importers. `NAME` is a `TYPE_NAME`
+public when it is above `private` (section 5b). `NAME` is a `TYPE_NAME`
 token whose text is `UPPER_SNAKE_CASE`: capital letters, digits and `_`,
 starting with a capital letter, at least two characters. Any other name (`Limit
 = 1`, `X = 1`) is `PARSE-CONSTANT-NAME` at the name, with the closest constant
@@ -286,8 +288,7 @@ the line of the `=`; it may span lines inside brackets or a `do ... end` block.
 What the expression may contain and how a constant is read are in section 6.
 
 A doc block (a `DOC` token, section 4) documents what comes on the next line: a
-`def`, `struct`, `enum`, type alias or constant declaration, with or without
-`export`, a field inside a `struct`, or a variant inside an `enum`. The first
+`def`, `struct`, `enum`, type alias or constant declaration, a field inside a `struct`, or a variant inside an `enum`. The first
 doc block of a file is the module doc when only blank lines and ordinary `#`
 comment lines come before it and a blank line follows it; a `#` comment line
 right after it does not count as that blank line. A file has at most one module
@@ -330,7 +331,7 @@ only its own parameters are in scope, so a name in it is never taken for a type
 parameter of the use. An enum type parameter that hides a type the alias names
 (`struct Item`, `type Items = List[Item]`, `enum E[Item] V(Items) end`) is
 `CHECK-UNKNOWN-TYPE` at the use. The argument of an unused parameter is still
-checked. An exported generic alias is used through an import (`S.Matrix[Int]`,
+checked. A public generic alias is used through an import (`S.Matrix[Int]`,
 or `import {Matrix} from "m"`). Like any alias it is neither a constructor nor a
 pattern.
 

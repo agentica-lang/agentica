@@ -48,7 +48,7 @@ FILES = {
     "missing_import.agc": 'import Nothing from "nothing"\n\ndef main() -> Void\n  puts("x")\nend\n',
     "std_error.agc": 'import Queue from "std/queue"\n\ndef main() -> Void\n  puts(Queue.nope())\nend\n',
     "lib/util.agc": (
-        "export def boom(n: Int) -> Int\n  return n / 0\nend\n\nexport def bad() -> Int\n  return \"s\"\nend\n"),
+        'def boom(n: Int) -> Int\n  return n / 0\nend\n\ndef bad() -> Int\n  return "s"\nend\n'),
     "sub/boom.agc": (
         'import Util from "../lib/util"\n\ndef main() -> Void\n  puts("start")\n  puts(Util.boom(1))\nend\n'),
     "sub/bad.agc": 'import Util from "../lib/util"\n\ndef main() -> Void\n  puts(Util.bad())\nend\n',

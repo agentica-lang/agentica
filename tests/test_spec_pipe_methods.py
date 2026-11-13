@@ -65,7 +65,7 @@ def test_a_pipe_into_a_method_keeps_the_rules_of_the_method(checked, body, code,
     assert_rule(checked(program), program, code, text)
 
 
-UTIL = "export def sum(xs: List[Int]) -> String = \"util #{xs.size}\"\n"
+UTIL = 'def sum(xs: List[Int]) -> String = "util #{xs.size}"\n'
 
 CLASHES = [
     # A function of the file named as a method wins: `map` here gives a String, the method a List.

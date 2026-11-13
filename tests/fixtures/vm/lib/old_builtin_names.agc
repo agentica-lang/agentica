@@ -1,6 +1,6 @@
 # The old names of File.Info and Process.Output, free since #1491, as a module's own types.
 
-export struct FileInfo
+struct FileInfo
   kind: String
   size_bytes: Int
   modified_seconds: Int
@@ -9,13 +9,13 @@ export struct FileInfo
   group_id: Int
 end
 
-export struct ProcessOutput
+struct ProcessOutput
   stdout: String
   stderr: String
   truncated: Bool
 end
 
-export enum JsonField
+enum JsonField
   Absent
   Null
   Value(Int)

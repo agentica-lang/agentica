@@ -5,7 +5,7 @@
 import Queue from "std/queue"
 
 ## One line of an order.
-export struct Line
+struct Line
   ## The item name.
   name: String
   price: Int
@@ -13,11 +13,13 @@ export struct Line
 end
 
 ## Whether an order is paid.
-export enum Status
+enum Status
   Paid
   ## Money still owed, in cents.
   Owed(Int)
 end
+
+private
 
 ## The price of a line in cents.
 def total(line: Line) -> Int

@@ -105,7 +105,7 @@ def test_the_rule_and_its_exceptions(tmp_path, what, program, expected):
 
 
 def test_the_rule_covers_the_files_an_import_reads_and_not_std(tmp_path):
-    (tmp_path / "util.agc").write_text("export def one() -> Int\n  if true\n    return 1\n  end\n  return 2\nend\n",
+    (tmp_path / "util.agc").write_text("def one() -> Int\n  if true\n    return 1\n  end\n  return 2\nend\n",
                                        encoding="utf-8")
     program = 'import Util from "util"\nimport Queue from "std/queue"\n\ndef main() -> Void\n  puts(Util.one())\n  _ = Queue.new()\nend\n'
     # The second check reads util.agc from the stub that the check cache keeps, and still sees its text.
@@ -117,7 +117,7 @@ def test_the_rule_covers_the_files_an_import_reads_and_not_std(tmp_path):
 
 @pytest.mark.parametrize("tail", ["", "\n", "\n\n"], ids=["no line break", "one line break", "an extra empty line"])
 def test_the_last_end_of_a_module_file_needs_nothing_after_it(tmp_path, tail):
-    (tmp_path / "util.agc").write_text("export def one() -> Int\n  return 1\nend" + tail, encoding="utf-8")
+    (tmp_path / "util.agc").write_text("def one() -> Int\n  return 1\nend\n" + tail, encoding="utf-8")
     program = 'import Util from "util"\n\ndef main() -> Void\n  puts(Util.one())\nend\n'
     assert check(tmp_path, program) is None
 
@@ -158,8 +158,8 @@ def write(path, text):
 
 
 # A module with a bare end that has no empty line after it, and a program that imports it by the path given.
-BROKEN = "export def one() -> Int\n  if true\n    return 1\n  end\n  return 2\nend\n"
-FIXED = "export def one() -> Int\n  if true\n    return 1\n  end\n\n  return 2\nend\n"
+BROKEN = "def one() -> Int\n  if true\n    return 1\n  end\n  return 2\nend\n"
+FIXED = "def one() -> Int\n  if true\n    return 1\n  end\n\n  return 2\nend\n"
 
 
 def importing(path):
@@ -322,7 +322,7 @@ def test_the_width_comes_after_a_type_error_and_before_the_empty_line_after_end(
 
 def test_the_width_covers_the_files_of_the_project_only_and_follows_the_manifest(tmp_path):
     # The width is 28, so that the lines of main.agc fit and line 2 of util.agc (31 characters) does not.
-    long_module = "export def one() -> Int\n  return 1234567890 + 123456789\nend\n"
+    long_module = "def one() -> Int\n  return 1234567890 + 123456789\nend\n"
     write(tmp_path / "lib" / "util.agc", long_module)
     write(tmp_path / "sub" / "agentica.toml", "")
     write(tmp_path / "sub" / "util.agc", long_module)

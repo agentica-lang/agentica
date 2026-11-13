@@ -22,7 +22,7 @@ def test_copied_binary_compiles_and_runs_outside_the_checkout(tmp_path) -> None:
     project.mkdir()
     source = project / "main ñ🙂.agc"
     (project / "helper.agc").write_text(
-        'export def value() -> String\n  return "relative"\nend\n',
+        'def value() -> String\n  return "relative"\nend\n',
         encoding="utf-8",
     )
     source.write_text(

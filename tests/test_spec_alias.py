@@ -49,7 +49,7 @@ def test_alias_types_run_as_the_expanded_type(tmp_path):
 
 def test_exported_alias_imports_by_name_and_qualified_name(tmp_path, agentica_check):
     (tmp_path / "models.agc").write_text(
-        "export type Names = List[String]\n", encoding="utf-8"
+        "type Names = List[String]\n", encoding="utf-8"
     )
     text = (
         'import Models from "models"\n'
@@ -65,11 +65,10 @@ def test_exported_alias_imports_by_name_and_qualified_name(tmp_path, agentica_ch
 
 def test_exported_alias_can_name_a_private_struct(tmp_path, agentica_check):
     (tmp_path / "models.agc").write_text(
-        "struct User\n  name: String\nend\n\n"
-        "export type Person = User\n\n"
-        "export def person() -> Person\n"
-        '  return User(name: "Ada")\n'
-        "end\n",
+        ("type Person = User\n\n"
+         'def person() -> Person\n  return User(name: "Ada")\nend\n\n'
+         "private\n\n"
+         "struct User\n  name: String\nend\n"),
         encoding="utf-8",
     )
     text = (
@@ -131,7 +130,7 @@ end
         ("type X\n", "PARSE-UNEXPECTED-TOKEN", (1, 7)),
         ("type X =\n", "PARSE-UNEXPECTED-TOKEN", (1, 9)),
         ("type x = Int\n", "PARSE-UNEXPECTED-TOKEN", (1, 6)),
-        ("export type\n", "PARSE-UNEXPECTED-TOKEN", (1, 12)),
+        ("type\n", "PARSE-UNEXPECTED-TOKEN", (1, 12)),
         ("type X = Int = 3\n", "PARSE-UNEXPECTED-TOKEN", (1, 14)),
         (
             "type X = Nope\n\ndef main() -> Void\nend\n\n",
@@ -266,7 +265,7 @@ def test_exported_generic_alias_imports_by_name_and_qualified_name(
     tmp_path, agentica_check
 ):
     (tmp_path / "shapes.agc").write_text(
-        "export type Matrix[T] = List[List[T]]\n", encoding="utf-8"
+        "type Matrix[T] = List[List[T]]\n", encoding="utf-8"
     )
     text = (
         'import Shapes from "shapes"\n'

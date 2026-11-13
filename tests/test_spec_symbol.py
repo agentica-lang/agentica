@@ -12,35 +12,37 @@ from tests.test_spec_type_at import AGENTS, write_agents
 ROOT_USER = hasattr(os, "geteuid") and os.geteuid() == 0
 
 # The module the cases import: a struct, an enum, a type alias, a constant, an exported and a private function.
-MODELS = '''## The cap.
-export LIMIT: Int = 5
+MODELS = """## The cap.
+LIMIT: Int = 5
 
 ## A user.
-export struct User
+struct User
   ## The name.
   name: String
   age: Int
 end
 
-export enum Shape
+enum Shape
   ## A round one.
   Circle(Float)
   Square
 end
 
-export type Names = List[String]
+type Names = List[String]
 
 ## Makes a user.
 ##
 ## The age is 3.
-export def make(name: String) -> User
+def make(name: String) -> User
   return User(name: name, age: 3)
 end
+
+private
 
 def hidden() -> Int
   return 1
 end
-'''
+"""
 
 # The file that imports it. Its uses of `Models` are the places `type-at` is asked from in the round trip.
 ORDERS = '''import Models from "models"
@@ -86,7 +88,7 @@ def test_symbol_searches_a_file_with_an_unused_import(tmp_path):
         (tmp_path / name).write_text(text, encoding="utf-8")
     assert [match["module"] for match in answer("draft", "draft.agc", cwd=tmp_path)["matches"]] == ["draft.agc"]
     # A searched file is a root, so it is forgiven; a file that is only imported keeps the rule.
-    (tmp_path / "user.agc").write_text('import Draft from "draft"\n\nexport def one() -> Int\n  return 1\nend\n',
+    (tmp_path / "user.agc").write_text('import Draft from "draft"\n\ndef one() -> Int\n  return 1\nend\n',
                                        encoding="utf-8")
     (tmp_path / "main.agc").write_text('import User from "user"\n\ndef main() -> Void\n  puts(User.one())\nend\n',
                                        encoding="utf-8")
@@ -110,7 +112,7 @@ def test_a_bare_name_finds_each_kind_of_top_level_declaration_with_its_signature
     assert make["doc"] == "Makes a user.\n\nThe age is 3."
     # `span` is the whole declaration, `export` included, as in `outline`; `name_span` is the name alone.
     assert make["span"]["file"] == make["name_span"]["file"] == "models.agc"
-    assert start(make["span"]) == where(MODELS, "export def make")
+    assert start(make["span"]) == where(MODELS, "def make\n")
     assert (start(make["name_span"]), end(make["name_span"])) == (where(MODELS, "make(name"),
                                                                   where(MODELS, "make(name", 4))
     cases = [("User", "struct", "struct User", "A user."), ("Shape", "enum", "enum Shape", None),
@@ -179,8 +181,8 @@ def test_a_builtin_carries_the_help_object_and_no_place(program):
 def test_a_bare_name_lists_every_module_that_declares_it_in_link_order_and_the_same_alias_for_two_modules(tmp_path):
     (tmp_path / "one").mkdir()
     (tmp_path / "two").mkdir()
-    (tmp_path / "one" / "lib.agc").write_text("export def parse(a: Int) -> Int\n  return a\nend\n", encoding="utf-8")
-    (tmp_path / "two" / "lib.agc").write_text("export def parse(a: String) -> String\n  return a\nend\n",
+    (tmp_path / "one" / "lib.agc").write_text("def parse(a: Int) -> Int\n  return a\nend\n", encoding="utf-8")
+    (tmp_path / "two" / "lib.agc").write_text("def parse(a: String) -> String\n  return a\nend\n",
                                               encoding="utf-8")
     (tmp_path / "one" / "main.agc").write_text('import Lib from "lib"\n\ndef run() -> Int\n  return Lib.parse(1)\nend\n',
                                                encoding="utf-8")
@@ -220,7 +222,7 @@ def test_a_folder_is_every_agc_file_under_it_without_hidden_folders_and_agc_libs
 
 def test_a_root_that_does_not_link_is_skipped_with_its_first_diagnostic_and_the_others_answer(tmp_path):
     (tmp_path / "good.agc").write_text("def found() -> Int\n  return 1\nend\n", encoding="utf-8")
-    (tmp_path / "lexer.agc").write_text("export def broken(\n", encoding="utf-8")
+    (tmp_path / "lexer.agc").write_text("def broken(\n", encoding="utf-8")
     (tmp_path / "bad.agc").write_text('def broken() -> Int\n  return "\n', encoding="utf-8")
     (tmp_path / "one.agc").write_text('import Bad from "bad"\n\ndef a() -> Int\n  return 1\nend\n', encoding="utf-8")
     (tmp_path / "two.agc").write_text('import Bad from "bad"\n\ndef b() -> Int\n  return 1\nend\n', encoding="utf-8")
@@ -259,9 +261,9 @@ def test_a_chain_of_imports_is_linked_once_and_its_matches_come_in_the_order_the
 
 def test_a_root_is_a_transaction_the_modules_it_linked_stay_and_a_module_that_failed_fails_every_root_that_reaches_it(
         tmp_path):
-    (tmp_path / "lib.agc").write_text("export def helper() -> Int\n  return 1\nend\n", encoding="utf-8")
+    (tmp_path / "lib.agc").write_text("def helper() -> Int\n  return 1\nend\n", encoding="utf-8")
     (tmp_path / "dep_bad.agc").write_text(
-        'import Lib from "lib"\n\nexport def bad() -> Int\n  return Lib.nothere()\nend\n', encoding="utf-8")
+        'import Lib from "lib"\n\ndef bad() -> Int\n  return Lib.nothere()\nend\n', encoding="utf-8")
     for name in ("a_first", "b_second"):
         (tmp_path / f"{name}.agc").write_text(
             'import Lib from "lib"\nimport Dep from "dep_bad"\n\ndef %s() -> Int\n  return Lib.helper()\nend\n' % name,
@@ -316,7 +318,7 @@ def test_a_root_that_cannot_be_read_is_skipped_and_the_others_answer(tmp_path):
 
 
 def test_an_alias_comes_only_from_a_whole_module_import_not_from_a_selective_one(tmp_path):
-    (tmp_path / "m.agc").write_text("export def make() -> Int\n  return 1\nend\n", encoding="utf-8")
+    (tmp_path / "m.agc").write_text("def make() -> Int\n  return 1\nend\n", encoding="utf-8")
     (tmp_path / "u.agc").write_text('import {make as mk} from "m"\n\ndef run() -> Int\n  return mk()\nend\n',
                                     encoding="utf-8")
     problem(symbol("mk", "u.agc", cwd=tmp_path), "QUERY-NOT-FOUND", 2)
@@ -326,7 +328,7 @@ def test_an_alias_comes_only_from_a_whole_module_import_not_from_a_selective_one
 
 
 def test_when_every_root_is_skipped_the_first_diagnostic_is_the_answer_with_exit_1(tmp_path):
-    (tmp_path / "broken.agc").write_text("export def broken(\n", encoding="utf-8")
+    (tmp_path / "broken.agc").write_text("def broken(\n", encoding="utf-8")
     (tmp_path / "other.agc").write_text('def other() -> Int\n  return "\n', encoding="utf-8")
     first = problem(symbol("broken", "broken.agc", "other.agc", cwd=tmp_path), "LEX-UNCLOSED-DELIMITER", 1)
     assert first["file"] == "broken.agc"
@@ -348,7 +350,7 @@ def test_a_file_has_one_name_whatever_the_spelling_of_its_path(tmp_path):
 
 
 def test_the_buffer_on_standard_input_wins_over_the_file_on_the_disk_and_comes_first(program):
-    buffer = "export def make(name: String, age: Int) -> Int\n  return age\nend\n\nexport def fresh() -> Int\n  return 1\nend\n"
+    buffer = "def make(name: String, age: Int) -> Int\n  return age\nend\n\ndef fresh() -> Int\n  return 1\nend\n"
     report = answer("make", "orders.agc", "--stdin", "models.agc", cwd=program, stdin=buffer)
     assert [(m["module"], m["signature"]) for m in report["matches"]] == [("models.agc",
                                                                             "make(name: String, age: Int) -> Int")]
@@ -360,7 +362,7 @@ def test_the_buffer_on_standard_input_wins_over_the_file_on_the_disk_and_comes_f
     assert json.loads(after.stdout) == answer("make", "--stdin", "models.agc", cwd=program, stdin=buffer)
     # An error of the buffer skips that root only: the others still answer.
     (program / "plain.agc").write_text("def plain() -> Int\n  return 1\nend\n", encoding="utf-8")
-    broken = answer("plain", "plain.agc", "--stdin", "models.agc", cwd=program, stdin="export def broken(\n")
+    broken = answer("plain", "plain.agc", "--stdin", "models.agc", cwd=program, stdin="def broken(\n")
     assert [m["module"] for m in broken["matches"]] == ["plain.agc"]
     assert [(item["file"], item["diagnostic"]["code"]) for item in broken["skipped"]] == [
         ("models.agc", "LEX-UNCLOSED-DELIMITER")]
@@ -390,11 +392,11 @@ def test_the_match_of_a_name_used_in_a_file_is_the_definition_type_at_gives_ther
 
 
 def test_text_form_lists_one_line_per_match_as_outline_does_and_the_skipped_roots_on_stderr(program):
-    (program / "broken.agc").write_text("export def broken(\n", encoding="utf-8")
+    (program / "broken.agc").write_text("def broken(\n", encoding="utf-8")
     result = run(cli() + ["symbol", "make", "."], env=vm_environment(), cwd=program)
     assert result.code == 0
     assert result.stdout.split("\n") == ["models.agc:%d:%d export def make(name: String) -> User" % where(
-        MODELS, "export def make"), ""]
+        MODELS, "def make\n"), ""]
     assert result.stderr.strip().split("\n") == ["skipped broken.agc: LEX-UNCLOSED-DELIMITER"]
     members = run(cli() + ["symbol", "User.name", "orders.agc"], env=vm_environment(), cwd=program)
     assert members.stdout == "models.agc:%d:%d field User.name: String\n" % where(MODELS, "name: String")

@@ -11,7 +11,7 @@ from tests.span_support import end, items_by_name, problem, start
 
 # Every kind of declaration, exported or not, an import list and an import that does not exist: `outline` only parses,
 # so the imports cannot make it fail. Line numbers are asserted below.
-MODULE = '''## Shapes and helpers.
+MODULE = """## Shapes and helpers.
 ##
 ## Second paragraph.
 
@@ -19,18 +19,27 @@ import Nowhere from "./nowhere"
 import {first, Second as Other} from "./other"
 
 ## The largest size.
-export LIMIT: Int = 5
-
-PRIVATE_LIMIT = 1
+LIMIT: Int = 5
 
 ## A shape.
 ##
 ## Longer text.
-export enum Shape[T]
+enum Shape[T]
   ## A circle with a radius.
   Circle(Float)
   Rect(Float, Map[String, List[Int]])
 end
+
+type Grid[T] = List[List[T]]
+
+## Adds two numbers.
+def add(a: Int, b: Int = 2) -> Int
+  return a + b
+end
+
+private
+
+PRIVATE_LIMIT = 1
 
 ## A point.
 struct Point
@@ -39,17 +48,10 @@ struct Point
   user: Nowhere.User
 end
 
-export type Grid[T] = List[List[T]]
-
-## Adds two numbers.
-export def add(a: Int, b: Int = 2) -> Int
-  return a + b
-end
-
 def hidden(f: Fn[Int, String]) -> Nowhere.User
   return f
 end
-'''
+"""
 
 
 def outline(*words, cwd=None, stdin=None):
@@ -161,14 +163,14 @@ def test_a_builtin_type_that_std_re_exports_is_an_item_written_as_a_program_writ
     signature = items["client"]["signature"]
     assert signature == "client(options: HTTP.ClientOptions = HTTP.ClientOptions()) -> Result[HTTP.Client]"
     # A default that is a string keeps its text, even when it looks like a builtin name.
-    (tmp_path / "label.agc").write_text('export def label(name: String = "HttpWire.Client") -> String = name\n',
+    (tmp_path / "label.agc").write_text('def label(name: String = "HttpWire.Client") -> String = name\n',
                                         encoding="utf-8")
     label = items_by_name(answer("label.agc", cwd=tmp_path))["label"]
     assert label["signature"] == 'label(name: String = "HttpWire.Client") -> String'
 
 
 def test_a_lex_or_parse_error_exits_1_with_its_code(tmp_path):
-    (tmp_path / "lexer.agc").write_text("export def broken(\n", encoding="utf-8")
+    (tmp_path / "lexer.agc").write_text("def broken(\n", encoding="utf-8")
     (tmp_path / "parser.agc").write_text('def ok() -> Int\n  return 1\nend\n\nputs("x")\n', encoding="utf-8")
     cases = [("lexer.agc", "LEX-UNCLOSED-DELIMITER", 1), ("parser.agc", "PARSE-TOP-LEVEL-STATEMENT", 5)]
     for name, code, line in cases:
@@ -179,7 +181,7 @@ def test_a_lex_or_parse_error_exits_1_with_its_code(tmp_path):
 
 def test_the_buffer_on_standard_input_wins_over_the_file_on_the_disk(tmp_path):
     (tmp_path / "main.agc").write_text("def on_disk() -> Int\n  return 1\nend\n", encoding="utf-8")
-    buffer = "export def in_buffer(n: Int) -> Int\n  return n\nend\n"
+    buffer = "def in_buffer(n: Int) -> Int\n  return n\nend\n"
     report = answer("--stdin", "main.agc", cwd=tmp_path, stdin=buffer)
     assert report["file"] == "main.agc"
     assert [item["name"] for item in report["items"]] == ["in_buffer"]
@@ -189,7 +191,7 @@ def test_the_buffer_on_standard_input_wins_over_the_file_on_the_disk(tmp_path):
     assert (tmp_path / "main.agc").read_text() == "def on_disk() -> Int\n  return 1\nend\n"
     # FILE need not exist, and an error of the buffer is a diagnostic of FILE.
     assert answer("--stdin", "new.agc", cwd=tmp_path, stdin=buffer)["file"] == "new.agc"
-    broken = outline("--json", "outline", "--stdin", "main.agc", cwd=tmp_path, stdin="export def broken(\n")
+    broken = outline("--json", "outline", "--stdin", "main.agc", cwd=tmp_path, stdin="def broken(\n")
     assert problem(broken, "LEX-UNCLOSED-DELIMITER", 1)["file"] == "main.agc"
 
 
@@ -221,7 +223,7 @@ def test_ai_form_of_query_usage_has_no_empty_source_line(tmp_path):
 
 
 def test_a_file_with_crlf_line_ends_keeps_its_spans_and_docs(tmp_path):
-    text = "## Adds.\r\nexport def add(a: Int) -> Int\r\n  return a\r\nend\r\n"
+    text = "## Adds.\r\ndef add(a: Int) -> Int\r\n  return a\r\nend\r\n"
     (tmp_path / "crlf.agc").write_bytes(text.encode("utf-8"))
     add = items_by_name(answer("crlf.agc", cwd=tmp_path))["add"]
     assert (start(add["name_span"]), end(add["name_span"])) == ((2, 12), (2, 15))
@@ -244,7 +246,7 @@ def test_text_form_lists_one_line_per_declaration(tmp_path):
         "shapes.agc:25:3 field Point.x: Int = 0",
         "shapes.agc:26:3 field Point.user: Nowhere.User",
         "shapes.agc:29:1 export type Grid[T] = List[List[T]]",
-        "shapes.agc:32:1 export def add(a: Int, b: Int = 2) -> Int",
+        "shapes.agc:32:1 def add(a: Int, b: Int = 2) -> Int",
         "shapes.agc:36:1 def hidden(f: Fn[Int, String]) -> Nowhere.User",
         "",
     ]
@@ -253,7 +255,7 @@ def test_text_form_lists_one_line_per_declaration(tmp_path):
 # A resource of an extern block is an item of its own kind, with its doc, its export and the name of its free function
 # in the signature; the functions of the block follow.
 def test_a_resource_of_an_extern_block_is_a_resource_item(tmp_path):
-    source = ('extern "libdb.so"\n  ## An open database.\n  export resource Db, free: db_close\n'
+    source = ('extern "libdb.so"\n  ## An open database.\n  resource Db, free: db_close\n'
               "  def db_open(path: C.String) -> Db\nend\n")
     (tmp_path / "db.agc").write_text(source, encoding="utf-8")
     report = answer("db.agc", cwd=tmp_path)
@@ -266,7 +268,7 @@ def test_a_resource_of_an_extern_block_is_a_resource_item(tmp_path):
 
 
 def test_a_facade_lists_its_reexports_with_the_docs_of_the_originals(tmp_path):
-    models = "## Makes a user.\nexport def make(name: String) -> Int\n  return 1\nend\n"
+    models = "## Makes a user.\ndef make(name: String) -> Int\n  return 1\nend\n"
     facade = 'import Models from "models"\n\nexport Models.make\n\ndef hidden() -> Int\n  return 1\nend\n'
     (tmp_path / "models.agc").write_text(models, encoding="utf-8")
     (tmp_path / "facade.agc").write_text(facade, encoding="utf-8")
@@ -275,13 +277,13 @@ def test_a_facade_lists_its_reexports_with_the_docs_of_the_originals(tmp_path):
     assert (make["span"]["file"], start(make["name_span"]), end(make["name_span"])) == ("facade.agc", (3, 15), (3, 19))
     result = outline("outline", "facade.agc", cwd=tmp_path)
     assert result.stdout.split("\n")[1:3] == [
-        "facade.agc:3:1 export def make(name: String) -> Int",
+        "facade.agc:3:1 def make(name: String) -> Int",
         "facade.agc:5:1 def hidden() -> Int",
     ]
 
 
 def test_a_facade_of_a_facade_lists_the_original_declaration(tmp_path):
-    models = "## Makes a user.\nexport def make() -> Int\n  return 1\nend\n"
+    models = "## Makes a user.\ndef make() -> Int\n  return 1\nend\n"
     (tmp_path / "models.agc").write_text(models, encoding="utf-8")
     (tmp_path / "inner.agc").write_text('import Models from "models"\n\nexport Models.make\n', encoding="utf-8")
     (tmp_path / "outer.agc").write_text('import Inner from "inner"\n\nexport Inner.make\n', encoding="utf-8")

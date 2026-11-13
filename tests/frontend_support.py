@@ -64,15 +64,15 @@ def direct_files(files, folder):
     return sorted(path for path in files if path.startswith(folder + "/") and "/" not in path[len(folder) + 1:])
 
 
-EXPORT = re.compile(r"^export (def|struct|enum|type) (\w+)", re.MULTILINE)
+PUBLIC = re.compile(r"^(def|struct|enum|type) (\w+)", re.MULTILINE)
 
 
 def std_wrapper(name, source):
     """A program that imports the std module `name` and uses its alias: an unused import is CHECK-UNUSED-IMPORT.
 
-    The use is its first export, as a function value or as a type; a module with no export is only imported.
+    The use is its first public declaration, as a function value or as a type; a module with none is only imported.
     """
-    found = EXPORT.search(source)
+    found = PUBLIC.search(source.split("\nprivate\n")[0])
     header = 'import Module from "std/%s"\n\n' % name
     if found is None:
         return header + "def main() -> Void\nend\n"

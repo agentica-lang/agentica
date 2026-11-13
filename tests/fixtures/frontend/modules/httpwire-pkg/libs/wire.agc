@@ -1,4 +1,3 @@
-export def go() -> Void
+def go() -> Void
   HttpWire.client(1, 1, 1, 1, "")
 end
-

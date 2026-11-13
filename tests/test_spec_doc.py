@@ -7,21 +7,19 @@ from tests.span_support import end, items_by_name, start
 
 # A module with every kind of export, a private declaration of each kind that must be left out, and an import that does
 # not exist: `doc` only parses, so the import cannot make it fail. Line numbers are asserted below.
-MODULE = '''## Shapes and helpers.
+MODULE = """## Shapes and helpers.
 ##
 ## Second paragraph.
 
 import Nowhere from "./nowhere"
 
 ## The largest size.
-export LIMIT: Int = 5
-
-PRIVATE_LIMIT = 1
+LIMIT: Int = 5
 
 ## A shape.
 ##
 ## Longer text.
-export enum Shape[T]
+enum Shape[T]
   ## A circle with a radius.
   Circle(Float)
   Rect(Float, Map[String, List[Int]])
@@ -30,33 +28,37 @@ export enum Shape[T]
 end
 
 ## A point.
-export struct Point
+struct Point
   ## The x position.
   x: Int = 0
   user: Nowhere.User
 end
 
-struct Hidden
-  value: Int
-end
-
 ## A grid of cells.
-export type Grid[T] = List[List[T]]
+type Grid[T] = List[List[T]]
 
 ## Adds two numbers.
-export def add(a: Int, b: Int = 2) -> Int
+def add(a: Int, b: Int = 2) -> Int
   return a + b
 end
 
-export def bare(f: Fn[Int, Map[String, List[Int]]]) -> Nowhere.User
+def bare(f: Fn[Int, Map[String, List[Int]]]) -> Nowhere.User
   return f
+end
+
+private
+
+PRIVATE_LIMIT = 1
+
+struct Hidden
+  value: Int
 end
 
 ## Documented but private.
 def hidden() -> Int
   return 1
 end
-'''
+"""
 
 
 def doc(path, *flags, cwd=None):
@@ -122,7 +124,7 @@ def test_exports_in_source_order_with_docs_and_spans(tmp_path):
 def test_a_generic_function_lists_its_type_parameters(tmp_path):
     path = tmp_path / "generic.agc"
     path.write_text(
-        "export def first_or[T](xs: List[T], fallback: T) -> T\n  return fallback\nend\n", encoding="utf-8")
+        "def first_or[T](xs: List[T], fallback: T) -> T\n  return fallback\nend\n", encoding="utf-8")
     result = doc(path, "--json")
     assert result.code == 0, result.stderr
     item = json.loads(result.stdout)["items"][0]
@@ -132,7 +134,7 @@ def test_a_generic_function_lists_its_type_parameters(tmp_path):
 
 def test_a_trailing_json_flag_and_a_module_without_docs(tmp_path):
     path = tmp_path / "plain.agc"
-    path.write_text("export def one() -> Int\n  return 1\nend\n", encoding="utf-8")
+    path.write_text("def one() -> Int\n  return 1\nend\n", encoding="utf-8")
     before = doc(path, "--json")
     after = run(cli() + ["doc", str(path), "--json"], env=vm_environment())
     assert before.code == after.code == 0
@@ -175,9 +177,8 @@ def test_markdown_form(tmp_path):
 def test_summary_skips_blank_lines_and_a_default_is_printed_as_written(tmp_path):
     path = tmp_path / "blank.agc"
     path.write_text(
-        '##\n##\n## Leading blank.\n##  indented\n##\n## Second.\n##\n'
-        'export def f(a: Int = -1, b: String = "x" + "y") -> Int\n  return a\nend\n\n'
-        '##\n##\nexport def g() -> Int\n  return 1\nend\n',
+        ('##\n##\n## Leading blank.\n##  indented\n##\n## Second.\n##\ndef f(a: Int = -1, b: String = "x" + "y") -> Int\n  return a\nend\n\n'
+         "##\n##\ndef g() -> Int\n  return 1\nend\n"),
         encoding="utf-8",
     )
     items = items_by_name(json.loads(doc(path, "--json").stdout))
@@ -191,9 +192,9 @@ def test_summary_skips_blank_lines_and_a_default_is_printed_as_written(tmp_path)
 
 def test_a_lex_or_parse_error_exits_1_with_its_code(tmp_path):
     lexer = tmp_path / "lexer.agc"
-    lexer.write_text("export def broken(\n", encoding="utf-8")
+    lexer.write_text("def broken(\n", encoding="utf-8")
     parser = tmp_path / "parser.agc"
-    parser.write_text('## Fine.\nexport def ok() -> Int\n  return 1\nend\n\nputs("x")\n', encoding="utf-8")
+    parser.write_text('## Fine.\ndef ok() -> Int\n  return 1\nend\n\nputs("x")\n', encoding="utf-8")
     for path, code, line in [(lexer, "LEX-UNCLOSED-DELIMITER", 1), (parser, "PARSE-TOP-LEVEL-STATEMENT", 6)]:
         result = doc(path, "--json")
         assert result.code == 1
@@ -216,9 +217,13 @@ def test_an_unreadable_path_or_a_wrong_command_line_exits_2(tmp_path):
 # An exported resource is documented with its kind and signature (free_ref: as written); a private one is left out.
 def test_an_exported_resource_is_documented_and_a_private_one_is_not(tmp_path):
     path = tmp_path / "db.agc"
-    path.write_text('extern "libdb.so"\n  ## An open database.\n  export resource Db, free: db_close\n'
-                    "  resource Row, free: row_free\n  export resource Conn, free_ref: conn_close\n"
-                    "  export def db_open(path: C.String) -> Db\nend\n",
+    path.write_text(('extern "libdb.so"\n'
+                     "  ## An open database.\n"
+                     "  resource Db, free: db_close\n"
+                     "  resource Row, free: row_free\n"
+                     "  resource Conn, free_ref: conn_close\n"
+                     "  def db_open(path: C.String) -> Db\n"
+                     "end\n"),
                     encoding="utf-8")
     result = doc(path, "--json")
     assert (result.code, result.stderr) == (0, "")
@@ -236,8 +241,8 @@ def test_an_exported_resource_is_documented_and_a_private_one_is_not(tmp_path):
 # A facade only re-exports: `doc` links it to find the originals and lists them with their docs, at the export line. A
 # facade whose import does not exist lists nothing and does not fail.
 def test_a_facade_lists_its_reexports_with_the_docs_of_the_originals(tmp_path):
-    models = ("## A user.\nexport struct User\n  ## The name.\n  name: String\nend\n\n"
-              "## Makes a user.\nexport def make(name: String) -> User\n  return User(name: name)\nend\n")
+    models = ("## A user.\nstruct User\n  ## The name.\n  name: String\nend\n\n"
+               "## Makes a user.\ndef make(name: String) -> User\n  return User(name: name)\nend\n")
     facade = 'import Models from "models"\n\nexport Models.make\nexport Models.User\n'
     (tmp_path / "models.agc").write_text(models, encoding="utf-8")
     (tmp_path / "facade.agc").write_text(facade, encoding="utf-8")

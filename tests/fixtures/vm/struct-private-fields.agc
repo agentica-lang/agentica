@@ -1,7 +1,7 @@
 # A struct with private fields, built and changed only by the functions of its module block, while the rest of the
 # file passes it around, stores it, sends it over a channel, compares it and prints it with every field.
 module Account
-  export struct Wallet
+  struct Wallet
     owner: String
 
     private
@@ -10,15 +10,15 @@ module Account
     log: List[String] = []
   end
 
-  export def open(owner: String) -> Wallet = Wallet(owner: owner, cents: 0)
+  def open(owner: String) -> Wallet = Wallet(owner: owner, cents: 0)
 
-  export def deposit(wallet: Wallet, cents: Int) -> Wallet
+  def deposit(wallet: Wallet, cents: Int) -> Wallet
     wallet.with(cents: wallet.cents + cents, log: wallet.log.push("+#{cents}"))
   end
 
-  export def balance(wallet: Wallet) -> Int = wallet.cents
+  def balance(wallet: Wallet) -> Int = wallet.cents
 
-  export def to_json(wallet: Wallet) -> String = JSON.encode(wallet)
+  def to_json(wallet: Wallet) -> String = JSON.encode(wallet)
 end
 
 def main() -> Void

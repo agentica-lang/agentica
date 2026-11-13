@@ -1,5 +1,7 @@
 import EAG from "std/eag"
 
+private
+
 def page(names: List[String], flag: Bool) -> String
   return <<~EAG
     <ul>

@@ -1,5 +1,4 @@
-export enum Option[T]
+enum Option[T]
   Some(T)
   None
 end
-

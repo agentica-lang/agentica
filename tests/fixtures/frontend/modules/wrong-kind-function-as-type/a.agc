@@ -1,3 +1,2 @@
-export def f() -> Void
+def f() -> Void
 end
-

@@ -162,8 +162,8 @@ RULES = {
 }
 
 MODULE = (
-    "export struct Box[T]\n  value: T\n  items: List[T] = []\nend\n\n"
-    "export def make(n: Int) -> Box[Int]\n  return Box(value: n)\nend\n"
+    ("struct Box[T]\n  value: T\n  items: List[T] = []\nend\n\n"
+     "def make(n: Int) -> Box[Int]\n  return Box(value: n)\nend\n")
 )
 
 MODULE_RULES = {
@@ -205,7 +205,9 @@ def test_generic_structs_across_modules(batch, name):
 
 
 def test_a_generic_struct_of_another_module_stays_private_to_update(agentica_check):
-    private = "struct Box[T]\n  value: T\nend\n\nexport def make(n: Int) -> Box[Int]\n  return Box(value: n)\nend\n"
+    private = ("def make(n: Int) -> Box[Int]\n  return Box(value: n)\nend\n\n"
+               "private\n\n"
+               "struct Box[T]\n  value: T\nend\n")
     program = 'import M from "m"\n\n' + main("puts(M.make(1).with(value: 5).value)")
     found = agentica_check({"m.agc": private, "main.agc": program})
     assert found["code"] == "CHECK-IMPORT-NAME"

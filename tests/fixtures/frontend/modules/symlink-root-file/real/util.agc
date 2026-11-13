@@ -1,4 +1,3 @@
-export def twice(n: Int) -> Int
+def twice(n: Int) -> Int
   return n * 2
 end
-

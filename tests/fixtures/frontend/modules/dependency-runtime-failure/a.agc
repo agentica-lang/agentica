@@ -1,4 +1,3 @@
-export def fail(n: Int) -> Int
+def fail(n: Int) -> Int
   return 1 / n
 end
-

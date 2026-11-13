@@ -17,8 +17,8 @@ from tests.package_support import (assert_at_key, build, cached_files, command, 
 
 
 REPOSITORY = "owner/agentica-packages"
-SQLITE = {"db.agc": 'export def open() -> String\n  return "sqlite"\nend\n', "util/text.agc": "# text\n"}
-POSTGRES = {"db.agc": 'export def open() -> String\n  return "postgres"\nend\n'}
+SQLITE = {"db.agc": 'def open() -> String\n  return "sqlite"\nend\n', "util/text.agc": "# text\n"}
+POSTGRES = {"db.agc": 'def open() -> String\n  return "postgres"\nend\n'}
 # Files of the repository outside the two folders, and the junk a package leaves out.
 ELSEWHERE = {"common/util.agc": "# common\n", "README.md": "not code", "root.agc": "# root\n",
              "other/y.agc": "# other\n"}
@@ -282,9 +282,9 @@ def test_a_package_can_declare_another_folder_of_its_own_repository(ws, remotes,
     manifest = 'name = "postgres"\n\n[dependencies]\ncommon = %s\n' % inline_table(
         dependency(url(remotes), tag="common-1", subdir="common"))
     files = {"postgres/agentica.toml": manifest,
-             "postgres/db.agc": 'import Common from "pkg/common/util"\n\nexport def open() -> String\n'
-                                '  return "postgres+" + Common.name()\nend\n',
-             "common/util.agc": 'export def name() -> String\n  return "common"\nend\n'}
+             "postgres/db.agc": ('import Common from "pkg/common/util"\n\n'
+                                 'def open() -> String\n  return "postgres+" + Common.name()\nend\n'),
+             "common/util.agc": 'def name() -> String\n  return "common"\nend\n'}
     remotes.publish(REPOSITORY, files, tag="postgres-0.1.0")
     tag_too(remotes, "common-1")
     (ws.project / "agentica.toml").write_text('name = "app"\n', encoding="utf-8")

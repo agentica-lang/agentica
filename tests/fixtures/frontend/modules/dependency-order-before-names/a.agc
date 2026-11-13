@@ -1,6 +1,9 @@
+def a() -> Void
+end
+
+private
+
 def b() -> Void
 end
 
-export def a() -> Void
-end
-
+LIMIT = 1

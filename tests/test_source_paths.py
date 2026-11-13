@@ -29,20 +29,20 @@ end
 UTIL = """import Logger from "std/logger"
 import Shared from "../../shared/x"
 
-export def twice(n: Int) -> Int
+def twice(n: Int) -> Int
   return n * 2
 end
 
-export def boom(event: Logger.Event) -> Void
+def boom(event: Logger.Event) -> Void
   puts(Shared.fail().to_s)
 end
 """
 
-SHARED = """export def name() -> String
+SHARED = """def name() -> String
   return "shared"
 end
 
-export def fail() -> Int
+def fail() -> Int
   xs = [1]
   return xs[3]
 end
@@ -59,7 +59,7 @@ def main() -> Void
 end
 """
 
-STD_FAIL = """export def fail() -> Int
+STD_FAIL = """def fail() -> Int
   xs = [1]
   return xs[3]
 end
@@ -72,7 +72,7 @@ def main() -> Void
 end
 """
 
-PKG_HELPER = """export def name() -> String
+PKG_HELPER = """def name() -> String
   return "helper"
 end
 """

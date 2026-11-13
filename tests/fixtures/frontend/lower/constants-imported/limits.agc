@@ -1,10 +1,13 @@
-export TOP = 100
-export NAMES = ["a", "b"]
-PRIVATE = NAMES.size
+TOP = 100
+NAMES = ["a", "b"]
 
-export def top() -> Int
+def top() -> Int
   return TOP + PRIVATE
 end
+
+private
+
+PRIVATE = NAMES.size
 
 def unused() -> Int
   return PRIVATE

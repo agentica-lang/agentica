@@ -148,7 +148,7 @@ def test_a_program_under_test_is_compiled_again_for_a_scenario_that_sets_where_p
         "app.agc": 'import Lib from "pkg/lib/name"\n\ndef main() -> Void\n  puts(Lib.name())\nend\n'})
     for name in ("a", "b"):
         (directory / name / "lib").mkdir(parents=True)
-        (directory / name / "lib" / "name.agc").write_text('export def name() -> String = "%s"\n' % name,
+        (directory / name / "lib" / "name.agc").write_text('def name() -> String = "%s"\n' % name,
                                                            encoding="utf-8")
     scenario = ('Scenario: %s\nGiven the environment variable "AGENTICA_PATH" is "%s"\n'
                 'And the Agentica program "app.agc"\nThen I receive the line "%s" within 10000 milliseconds\n')

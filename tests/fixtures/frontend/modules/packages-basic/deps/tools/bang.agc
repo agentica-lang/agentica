@@ -1,3 +1,3 @@
-export def bang() -> String
+def bang() -> String
   return "!"
 end

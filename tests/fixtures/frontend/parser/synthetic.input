@@ -2,17 +2,19 @@
 
 import Util from "util"
 
+## What a lookup can return.
+enum Found[T]
+  Hit(T)
+  Miss
+end
+
+private
+
 ## One stocked item.
 struct Item
   name: String
   count: Int
   price: Float
-end
-
-## What a lookup can return.
-export enum Found[T]
-  Hit(T)
-  Miss
 end
 
 def find(items: List[Item], name: String) -> Found[Item]

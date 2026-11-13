@@ -9,20 +9,20 @@ from tests.agentica_test import ROOT, cli, run, vm_environment
 from tests.span_support import end, problem, start, where
 
 # The module the cases import: a struct, an enum with a payload and without, a function and a constant.
-MODELS = '''## A user.
-export struct User
+MODELS = """## A user.
+struct User
   ## The name.
   name: String
   age: Int
 end
 
-export enum Shape
+enum Shape
   ## A round one.
   Circle(Float)
   Square
 end
 
-export enum Slot[T]
+enum Slot[T]
   Full(T)
   Empty
 end
@@ -30,10 +30,10 @@ end
 ## Makes a user.
 ##
 ## The age is 3.
-export def make(name: String) -> User
+def make(name: String) -> User
   return User(name: name, age: 3)
 end
-'''
+"""
 
 # The file asked about. It has no `main`: `type-at` also answers for a library file. Positions are found by text with
 # `where`, so a line added here does not move them.
@@ -388,7 +388,7 @@ def test_the_doc_of_a_field_is_read_from_the_struct_that_the_target_names(progra
 
 
 def test_the_call_of_an_fn_field_names_the_field_of_its_struct(tmp_path):
-    hooks = "export struct Hooks\n  add: Fn[Int, Int, Int]\nend\n"
+    hooks = "struct Hooks\n  add: Fn[Int, Int, Int]\nend\n"
     source = ("import H from \"hooks\"\n\nstruct Counter\n  next: Fn[Int, Int]\nend\n\n"
               "def run(hooks: H.Hooks, counter: Counter) -> Int\n"
               "  return hooks.add(counter.next(1), 2)\nend\n")
@@ -674,14 +674,14 @@ def test_text_form_of_a_local_gives_the_name_with_its_type_and_the_binding(local
 
 
 # The types of a program, named in every place a type is written, and the file they come from.
-KINDS = '''## A user of the other file.
-export struct User
+KINDS = """## A user of the other file.
+struct User
   name: String
 end
 
 ## An id.
-export type Id = Int
-'''
+type Id = Int
+"""
 
 TYPES = '''import Kinds from "kinds"
 import {Id} from "kinds"
@@ -881,7 +881,7 @@ def test_a_query_refuses_code_after_a_return_as_check_does(program):
 def test_a_query_answers_a_file_with_an_unused_variable_and_check_still_refuses_it(program):
     # An editor writes a name before its first use, so the query commands do not refuse it in the file they are asked
     # about; check does, and so does a file that is only imported.
-    draft = "export def f(n: Int) -> Int\n  later = n\n  return n + 1\nend\n"
+    draft = "def f(n: Int) -> Int\n  later = n\n  return n + 1\nend\n"
     assert_draft_answers_int(program, draft)
     checked = run(cli() + ["--json", "check", "draft.agc"], env=vm_environment(), cwd=program)
     assert start(problem(checked, "CHECK-UNUSED-VARIABLE", 1)) == (2, 3)
@@ -895,14 +895,16 @@ def test_a_query_answers_a_file_with_an_unused_variable_and_check_still_refuses_
 # Module blocks (docs/grammar/05b-modules.md): a block of agents.agc is a module of its own, which the queries answer
 # from and name by the file that holds it. `refs` and `symbol` (tests/test_spec_refs.py, tests/test_spec_symbol.py)
 # and std/analysis (tests/test_std_analysis.py) ask the same files.
-AGENTS = '''import {LIMIT, cap} from "limits"
+AGENTS = """import {LIMIT, cap} from "limits"
 
-export module Counter
-  export struct State
+module Counter
+  struct State
     count: Int
   end
 
-  export def start(initial: Int) -> State = State(count: clamp(initial))
+  def start(initial: Int) -> State = State(count: clamp(initial))
+
+  private
 
   def clamp(n: Int) -> Int
     total = n
@@ -912,16 +914,18 @@ export module Counter
   end
 end
 
+private
+
 module Hidden
-  export def peek() -> Int = Counter.start(1).count
+  def peek() -> Int = Counter.start(1).count
 end
 
 def main() -> Void
   state = Counter.start(cap(12))
   puts(state.count + Hidden.peek() + LIMIT)
 end
-'''
-LIMITS = "export LIMIT = 10\n\nexport def cap(n: Int) -> Int = n + LIMIT\n"
+"""
+LIMITS = "LIMIT = 10\n\ndef cap(n: Int) -> Int = n + LIMIT\n"
 AGENTS_USER = '''import Agents from "agents"
 
 def main() -> Void
@@ -938,9 +942,11 @@ AGENTS_FACADE = 'import Agents from "agents"\n\nexport Agents.Counter\n'
 AGENTS_THROUGH = ('import Facade from "facade"\n\ndef main() -> Void\n  s = Facade.Counter.start(1)\n  puts(s.count)\n'
                   "end\n")
 # Two blocks that declare the same name, and a struct of the file between them.
-TWINS = ("module A\n  export enum Kind\n    One\n    Two\n  end\n\n  export def start() -> Int = 1\nend\n\n"
-         "struct Gap\n  n: Int\nend\n\nmodule B\n  export def start() -> Int = 2\nend\n\n"
-         "def main() -> Void\n  puts(A.start() * 10 + B.start())\n  puts(A.Kind.One == A.Kind.Two)\nend\n")
+TWINS = ("module A\n  enum Kind\n    One\n    Two\n  end\n\n"
+          "  def start() -> Int = 1\nend\n\n"
+          "struct Gap\n  n: Int\nend\n\n"
+          "module B\n  def start() -> Int = 2\nend\n\n"
+          "def main() -> Void\n  puts(A.start() * 10 + B.start())\n  puts(A.Kind.One == A.Kind.Two)\nend\n")
 
 
 def write_agents(directory, more=False):
@@ -1024,33 +1030,33 @@ def test_a_re_exported_builtin_type_and_its_field_are_defined_at_the_export_line
 
 # A file whose functions the cases on named arguments call by name: a default, a second `factor` of another function,
 # a generic one, one with a trailing block and an extern one, and a call by name inside the file itself.
-NAMED_LIB = '''extern "libm.so.6"
-  export def pow(x: C.Double, y: C.Double) -> C.Double
+NAMED_LIB = """extern "libm.so.6"
+  def pow(x: C.Double, y: C.Double) -> C.Double
 end
 
 ## Scales a value.
-export def scale(value: Int, factor: Int = 2) -> Int
+def scale(value: Int, factor: Int = 2) -> Int
   return value * factor
 end
 
-export def other(factor: Int = 3) -> Int
+def other(factor: Int = 3) -> Int
   return factor
 end
 
-export def first[T](items: List[T], fallback: T) -> T
+def first[T](items: List[T], fallback: T) -> T
   return fallback if items.size == 0
 
   return items[0]
 end
 
-export def twice(count: Int = 1, step: Fn[Int, Int]) -> Int
+def twice(count: Int = 1, step: Fn[Int, Int]) -> Int
   return step.call(count) + step.call(count)
 end
 
-export def doubled(value: Int) -> Int
+def doubled(value: Int) -> Int
   return scale(value, factor: 2)
 end
-'''
+"""
 
 # The calls by name: through the module alias, an import list, a pipe, a generic function, a trailing block, a std/
 # function and a builtin. The local `factor` has the name of the parameter it is given to.

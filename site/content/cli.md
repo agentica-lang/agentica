@@ -93,7 +93,7 @@ Split text; an empty separator gives characters.
 agentica doc std/queue    # a file path works too; --json prints one JSON object
 ```
 
-It prints the exported declarations in source order, each with its signature and its `##` doc, and a struct's fields or an enum's variants. It only reads the file, so the module's imports need not exist. Private declarations (after `private`, or without `export` in a file without `private`) are left out.
+It prints the exported declarations in source order, each with its signature and its `##` doc, and a struct's fields or an enum's variants. It only reads the file, so the module's imports need not exist. Private declarations (after `private`) are left out.
 
 To learn one module, `agentica help std/queue` lists its exports with the first sentence of each doc (at most about 100 characters), and `agentica help std/queue.pop` prints the signature and the whole doc of one export (a struct's fields or an enum's variants too). `--json` prints one JSON object, with the whole first paragraph as `summary`. A module or name that does not exist is `QUERY-NOT-FOUND` (exit 2); for a name it offers the closest export.
 
@@ -108,13 +108,13 @@ agentica outline src/orders.agc    # --json prints one JSON object; std/queue wo
 ```
 
 ```text
-src/orders.agc:3:1 export struct Order
+src/orders.agc:3:1 struct Order
 src/orders.agc:4:3 field Order.id: Int
-src/orders.agc:8:1 export def total(order: Order) -> Int
-src/orders.agc:14:1 def round_cents(value: Float) -> Int
+src/orders.agc:8:1 def total(order: Order) -> Int
+src/orders.agc:14:1 private def round_cents(value: Float) -> Int
 ```
 
-`outline` parses its file, so the imports need not exist. A file that re-exports a name (`export Url.parse`) is also linked, so the original declaration is listed with its doc. Each line starts with `file:line:column`, like `rg`, and private declarations are listed too. `--json` adds the `##` doc, the signature, `exported`, the spans and the fields or variants; a module block (kind `module`) lists its declarations under `items`.
+`outline` parses its file, so the imports need not exist. A file that re-exports a name (`export Url.parse`) is also linked, so the original declaration is listed with its doc. Each line starts with `file:line:column`, like `rg`, and private declarations are listed too, with `private` in front. `--json` adds the `##` doc, the signature, `exported`, the spans and the fields or variants; a module block (kind `module`) lists its declarations under `items`.
 
 ## Type at a position
 

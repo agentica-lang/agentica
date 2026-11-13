@@ -1,6 +1,9 @@
+def go() -> Void
+end
+
+private
+
 def helper() -> Void
 end
 
-export def go() -> Void
-end
-
+LIMIT = 1

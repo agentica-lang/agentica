@@ -1,3 +1,3 @@
-export def shout(text: String) -> String
+def shout(text: String) -> String
   return text.upcase
 end

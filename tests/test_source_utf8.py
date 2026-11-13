@@ -38,7 +38,7 @@ def test_invalid_byte_is_reported_where_python_stops(tmp_path):
 
 def test_invalid_byte_in_an_import_names_the_imported_file(tmp_path):
     write_files(tmp_path, {"root.agc": 'import Bad from "./bad"\n\n' + PROGRAM})
-    (tmp_path / "bad.agc").write_bytes(b"export def one() -> Int\n  return \xff\nend\n")
+    (tmp_path / "bad.agc").write_bytes(b"def one() -> Int\n  return \xff\nend\n")
     problem = check_file(tmp_path / "root.agc")
     assert problem["code"] == "LEX-INVALID-UTF8"
     assert Path(problem["file"]) == tmp_path / "bad.agc"

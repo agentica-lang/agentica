@@ -1,7 +1,9 @@
 # One-line defs: `def name(params) -> Type = value` returns the value, as the def with `return value` does.
 
 ## The two values as a list.
-export def pair[T](x: T, y: T) -> List[T] = [x, y]
+def pair[T](x: T, y: T) -> List[T] = [x, y]
+
+private
 
 def double(x: Int) -> Int = x * 2
 

@@ -51,10 +51,10 @@ end
 # used a few times, two nested calls, a nest that is not in first position, nests whose outer calls are builtins or
 # methods of a constant, and method chains of two steps, of blocks in braces, or whose names after the lambda may be
 # fields.
-GOOD = '''import Db from "db"
+GOOD = """import Db from "db"
 
 ## Returns the label of the count.
-export def label(flag: Bool, text: String, n: Int) -> String
+def label(flag: Bool, text: String, n: Int) -> String
   parts: List[String] = []
   for i in 0...3
     parts = parts.push(text)
@@ -108,6 +108,8 @@ export def label(flag: Bool, text: String, n: Int) -> String
   return "#{joined}#{greeting}#{note}#{shout}"
 end
 
+private
+
 # Near misses: a String made fresh in the body of a loop, `if not` with no else, and a Bool compared with a name.
 def near_misses(flag: Bool, done: Bool, text: String) -> Int
   total = ""
@@ -140,7 +142,7 @@ end
 def helper() -> Int
   return 1
 end
-'''
+"""
 
 
 def lint(*words, cwd=None):
@@ -280,7 +282,7 @@ def test_a_string_grows_in_a_loop_only_when_it_was_set_outside_that_loop(tmp_pat
     assert suggested(tmp_path / f"{name}.agc", source) == expected
 
 
-PRIVATE_DOCS = '''## A doc on a private struct.
+PRIVATE_DOCS = """## A doc on a private struct.
 struct Point
   x: Int
 end
@@ -292,17 +294,17 @@ enum Mode
 end
 
 ## A doc on an exported function, struct and enum.
-export def shown() -> Int
+def shown() -> Int
   return 1
 end
 
 ## A doc on an exported struct.
-export struct Pair
+struct Pair
   x: Int
 end
 
 ## A doc on an exported enum.
-export enum Side
+enum Side
   Left
   Right
 end
@@ -314,7 +316,7 @@ extern "demo"
   ## A doc on a C function.
   def demo_make(x: C.Int32) -> DemoPair
 end
-'''
+"""
 
 
 def test_a_doc_is_private_only_on_a_function_struct_or_enum_that_is_not_exported_or_extern(tmp_path):
@@ -486,8 +488,8 @@ def test_a_function_imported_by_name_counts_as_a_function_of_the_file(tmp_path):
     """The linker sends a piped bare name to a function the file imports by name, so lint treats it as the file's own:
     a chain through it is left alone, and a one-step pipe into it gets the plain-call help."""
     (tmp_path / "m2.agc").write_text(
-        "export def select(xs: List[Int], f: Fn[Int, Bool]) -> List[Int] = xs\n\n"
-        "export def double(n: Int) -> Int = n * 2\n",
+        ("def select(xs: List[Int], f: Fn[Int, Bool]) -> List[Int] = xs\n\n"
+         "def double(n: Int) -> Int = n * 2\n"),
         encoding="utf-8",
     )
     chain = (

@@ -15,13 +15,13 @@ from tests.test_spec_partial import APP, BAD_DECLARATIONS, FIXED, MODELS as PART
 from tests.test_spec_type_at import AGENTS, MODELS, ORDERS, where, write_agents
 
 DRIVER = "tests/fixtures/analysis/driver.agc"
-UTIL = "export def twice(n: Int) -> Int\n  return n * 2\nend\n"
+UTIL = "def twice(n: Int) -> Int\n  return n * 2\nend\n"
 # `twice` is gone, so MAIN no longer checks against this one.
-UTIL_RENAMED = "export def doubled(n: Int) -> Int\n  return n * 2\nend\n"
+UTIL_RENAMED = "def doubled(n: Int) -> Int\n  return n * 2\nend\n"
 MAIN = 'import Util from "util"\n\ndef run() -> Int\n  return Util.twice(2)\nend\n'
 # Another body for `twice`: the same exports, another text.
-UTIL_CHANGED = "export def twice(n: Int) -> Int\n  return n + n\nend\n"
-EXTRA = "export def three() -> Int\n  return 3\nend\n"
+UTIL_CHANGED = "def twice(n: Int) -> Int\n  return n + n\nend\n"
+EXTRA = "def three() -> Int\n  return 3\nend\n"
 USES_EXTRA = 'import Extra from "extra"\n\ndef run() -> Int\n  return Extra.three()\nend\n'
 PARSE_ERROR = "def broken(\n"
 TYPE_ERROR = 'def main() -> Void\n  x: Int = "a"\n  puts(x)\nend\n'
@@ -32,7 +32,7 @@ LABELLED = 'def main() -> Void\n  puts("tab\\there \\\\")\n  puts(1 + "a")\nend\
 NON_ASCII = 'def main() -> Void\n  puts(\u00f1and\u00fa)\nend\n'
 # Unsaved text that `symbol` and `refs` read in place of (or beside) the disk: a module the disk lacks, and a main.agc
 # that calls `twice` twice.
-FRESH = "export def fresh(n: Int) -> Int\n  return n\nend\n"
+FRESH = "def fresh(n: Int) -> Int\n  return n\nend\n"
 TWICE_TWICE = 'import Util from "util"\n\ndef run() -> Int\n  return Util.twice(2) + Util.twice(3)\nend\n'
 OPTIONS = "struct Options\n  name: String\n  retries: Int = 3\nend\n"
 # The blocks of a native module (#1156): a struct, an enum, an alias, a resource and a `compute def`, in two blocks of
@@ -58,9 +58,9 @@ type Rows = List[Map[String, Cell]]
 
 extern module "stats"
   ## The count and mean of the values; none for no values.
-  export def summary(values: List[Float]) -> Optional[Summary]
+  def summary(values: List[Float]) -> Optional[Summary]
   ## A pool of connections.
-  export resource Pool
+  resource Pool
   def rows(text: String) -> Result[Rows]
   def empty?(text: String) -> Bool
   resource Db
@@ -98,7 +98,7 @@ def project(tmp_path):
         "util.agc": UTIL, "main.agc": MAIN, "models.agc": MODELS, "orders.agc": ORDERS, "parse_error.agc": PARSE_ERROR,
         "type_error.agc": TYPE_ERROR, "missing_import.agc": MISSING_IMPORT, "uses_extra.agc": USES_EXTRA,
         "options.agc": OPTIONS,
-        "bad_util.agc": "export def twice(n: Int) -> Int\n  return \"a\"\nend\n", "uses_bad.agc": USES_BAD,
+        "bad_util.agc": 'def twice(n: Int) -> Int\n  return "a"\nend\n', "uses_bad.agc": USES_BAD,
     })
     return tmp_path
 
@@ -284,7 +284,7 @@ def test_symbol_and_refs_read_the_buffers_as_stdin_does(driver, project):
 
 
 def test_symbol_searches_the_buffers_in_the_order_of_their_paths_not_of_their_updates(driver, project):
-    (project / "dup.agc").write_text("export def dup() -> Int\n  return 1\nend\n", encoding="utf-8")
+    (project / "dup.agc").write_text("def dup() -> Int\n  return 1\nend\n", encoding="utf-8")
     first = ("buffer", "a.agc", "dup.agc", "buffer", "b.agc", "dup.agc")
     before = library(driver, project, *first, "symbol", "dup", "models.agc")
     modules = [found["module"] for found in json.loads(before[0])["matches"]]
@@ -343,7 +343,7 @@ def test_a_std_module_of_a_stdlib_folder_may_not_leave_std_with_dots(project):
     """`..` in a relative import of a std module is allowed only while the path stays in std/ (Paths.inside_std)."""
     stdlib = project / "lib"
     stdlib.mkdir()
-    write_files(stdlib, {"a.agc": 'import X from "../x"\n\nexport def f() -> Int\n  return 1\nend\n'})
+    write_files(stdlib, {"a.agc": 'import X from "../x"\n\ndef f() -> Int\n  return 1\nend\n'})
     write_files(project, {"uses.agc": 'import A from "std/a"\n\ndef main() -> Void\nend\n'})
     stage = [str(ROOT / "compiler/modules/link.agc"), "--stdlib=" + str(stdlib), "--ids", "uses.agc"]
     linked = run(cli() + stage, cwd=project, env=vm_environment())
@@ -501,7 +501,7 @@ def positions(source, *needles):
 def test_cached_answers_equal_uncached_answers_when_the_modules_move_in_the_id_space(driver, project):
     """Every edit of a buffer gives its file new ids above the others, so the files leave their order of ids; the
     answers must not notice, and the ids are numbered again from 0 when the gaps pass half of them."""
-    extra = "\nexport def extra() -> Int\n  return 1\nend\n"
+    extra = "\ndef extra() -> Int\n  return 1\nend\n"
     write_files(project, {"models_a.agc": "# one\n" + MODELS, "models_b.agc": MODELS + extra})
     words = ["refresh", "orders.agc", "stats"]
     for text in ["models_a.agc", "models_b.agc"] * 5:
@@ -525,11 +525,14 @@ def test_cached_answers_equal_uncached_answers_when_the_modules_move_in_the_id_s
 
 # Three modules in a chain: REPORT imports SIZES, which imports SHAPES. SIZES has a constant read with a method, whose
 # receiver gets an id past the ids of the parser.
-SHAPES = "export def scale(n: Int) -> Int\n  return n * 2\nend\n"
-SIZES = 'import Shapes from "shapes"\n\nLIMIT = 5\n\nexport def area(n: Int) -> Int\n  return Shapes.scale(n) + LIMIT.to_s.length\nend\n'
+SHAPES = "def scale(n: Int) -> Int\n  return n * 2\nend\n"
+SIZES = ('import Shapes from "shapes"\n\n'
+         "def area(n: Int) -> Int\n  return Shapes.scale(n) + LIMIT.to_s.length\nend\n\n"
+         "private\n\n"
+         "LIMIT = 5\n")
 REPORT = 'import Sizes from "sizes"\n\ndef report() -> Int\n  return Sizes.area(3)\nend\n'
 # `scale` takes another argument: SIZES, whose text did not change, no longer checks.
-SHAPES_WIDER = "export def scale(n: Int, by: Int) -> Int\n  return n * by\nend\n"
+SHAPES_WIDER = "def scale(n: Int, by: Int) -> Int\n  return n * by\nend\n"
 
 
 def test_a_refresh_after_an_edit_checks_only_the_modules_that_changed_or_import_one_and_answers_as_a_cold_check(
@@ -568,8 +571,14 @@ def test_a_refresh_after_an_edit_checks_only_the_modules_that_changed_or_import_
     assert out.splitlines()[-1] == "same 2"
 
 
-BLOCKS_LIB = ('import X from "x"\n\nLIMIT = 2\n\nmodule M\n  BASE = 10\n\n  export def get() -> Int = BASE + X.n()\nend\n\n'
-              "module N\n  export def twice() -> Int = M.get() * LIMIT\nend\n\nexport def total() -> Int = N.twice()\n")
+BLOCKS_LIB = ('import X from "x"\n\n'
+               "def total() -> Int = N.twice()\n\n"
+               "private\n\n"
+               "LIMIT = 2\n\n"
+               "module M\n  def get() -> Int = BASE + X.n()\n\n"
+               "  private\n\n"
+               "  BASE = 10\nend\n\n"
+               "module N\n  def twice() -> Int = M.get() * LIMIT\nend\n")
 BLOCKS_USER = 'import Lib from "blocks_lib"\n\ndef main() -> Void\n  puts(Lib.total())\nend\n'
 
 
@@ -578,7 +587,7 @@ def test_a_module_block_is_checked_again_when_a_file_its_file_imports_changes_an
     changes, the file and its blocks are taken together and the answers are a cold check's."""
     user_edit = "# An edit.\n" + BLOCKS_USER
     write_files(project, {
-        "x.agc": "export def n() -> Int = 1\n", "x_string.agc": 'export def n() -> String = "a"\n',
+        "x.agc": "def n() -> Int = 1\n", "x_string.agc": 'def n() -> String = "a"\n',
         "blocks_lib.agc": BLOCKS_LIB, "blocks_user.agc": BLOCKS_USER, "blocks_user_edit.agc": user_edit,
     })
     out, _err = library(
@@ -670,7 +679,7 @@ def test_tasks_share_entries_in_an_ats_table_and_answer_as_the_command_line_does
 
 
 # A fourth module that the edits below do not touch, so it is taken from the last good program.
-NAMES = 'export def label() -> String\n  return "r"\nend\n'
+NAMES = 'def label() -> String\n  return "r"\nend\n'
 REPORT_NAMED = (
     'import Names from "names"\nimport Sizes from "sizes"\n\n'
     "def report() -> Int\n  return Sizes.area(3) + Names.label().length\nend\n"
@@ -889,7 +898,7 @@ def test_native_modules_gives_the_diagnostic_of_a_file_that_does_not_check_or_ca
 
 
 def test_native_modules_names_the_types_of_an_imported_file_by_their_bare_names(driver, project):
-    shapes = "export struct Point\n  x: Int\n  y: Int\nend\n"
+    shapes = "struct Point\n  x: Int\n  y: Int\nend\n"
     block = 'import Shapes from "shapes"\n\nextern module "demo"\n  def flip(point: Shapes.Point) -> Shapes.Point\nend\n'
     write_files(project, {"shapes.agc": shapes, "natives.agc": block})
     _answer, blocks = native_blocks(driver, project)
@@ -947,7 +956,7 @@ def test_the_api_versions_of_a_block_are_those_of_the_native_header():
     header = (ROOT / "vm" / "agentica_native.h").read_text(encoding="utf-8")
     shape = (ROOT / "compiler" / "check" / "native_shape.agc").read_text(encoding="utf-8")
     major, minor = (int(re.search(r"#define AN_API_%s (\d+)" % name, header).group(1)) for name in ("MAJOR", "MINOR"))
-    constants = {name: int(value) for name, value in re.findall(r"^export (API_\w+) = (\d+)$", shape, re.M)}
+    constants = {name: int(value) for name, value in re.findall(r"^(API_\w+) = (\d+)$", shape, re.M)}
     assert constants["API_MAJOR"] == major and constants["API_MINOR_RESOURCES"] <= minor
     # The header comment names each minor version up to the header's own.
     comment = header[:header.index("*/")]
@@ -960,14 +969,16 @@ def test_the_api_versions_of_a_block_are_those_of_the_native_header():
 # The bodies of `bodies` (#1159): a little of every node of the first subset, beside the readers of std/binary.
 BODIES = """import Util from "util"
 
+def first_or[T](item: Optional[T], fallback: T) -> T
+  return item.unwrap_or(fallback)
+end
+
+private
+
 enum Shape
   Dot
   Square(Int)
   Pair(Shape, Shape)
-end
-
-export def first_or[T](item: Optional[T], fallback: T) -> T
-  return item.unwrap_or(fallback)
 end
 
 def size(shape: Shape) -> Int
@@ -1178,7 +1189,7 @@ def test_bodies_give_the_diagnostic_of_a_file_that_does_not_check_or_cannot_be_r
 
 
 def test_bodies_name_the_modules_defaults_and_values_a_translator_needs(driver, project):
-    twice = "export def twice(n: Int) -> Int\n  return n {} n\nend\n"
+    twice = "def twice(n: Int) -> Int\n  return n {} n\nend\n"
     write_files(project, {"a.agc": twice.format("*"), "b.agc": twice.format("+"), "calls.agc": CALLS})
     answer, functions = bodies_of(driver, project, "calls.agc")
     # A linked name `@N::` is found in `modules`: the two `twice` are two files.

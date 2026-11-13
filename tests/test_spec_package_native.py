@@ -22,9 +22,9 @@ MACOS = TARGET_OS == "darwin"
 HERE = "windows" if WINDOWS else "macos" if MACOS else "linux"
 OTHER = "linux" if WINDOWS else "windows"
 
-DEMO = 'extern "pkgdemo"\n  export def pkgdemo_add(a: C.Int32, b: C.Int32) -> C.Int32\nend\n'
+DEMO = 'extern "pkgdemo"\n  def pkgdemo_add(a: C.Int32, b: C.Int32) -> C.Int32\nend\n'
 MAIN = 'import Demo from "pkg/pkgdemo/demo"\n\ndef main() -> Void\n  puts(Demo.pkgdemo_add(40, 2))\nend\n'
-LIBM = 'extern "cmath"\n  export def cos(x: C.Double) -> C.Double\nend\n'
+LIBM = 'extern "cmath"\n  def cos(x: C.Double) -> C.Double\nend\n'
 SYSTEM_MAIN = 'import Libm from "pkg/pkgdemo/math"\n\ndef main() -> Void\n  puts(Libm.cos(0.0))\nend\n'
 # The libraries of the C runtime and the math library, found by name by the system loader.
 SYSTEM_TABLE = """[native.cmath]
@@ -186,7 +186,7 @@ def test_a_native_folder_of_only_agc_modules_keeps_the_old_hash(ws):
 
 def test_a_cached_build_sees_a_manifest_or_a_native_file_changed_in_a_package_with_native_files_and_no_table(ws):
     # No [native] table, but a file in native/: the manifest is hashed, and the cache entry watches it and the names.
-    pure = 'export def hi() -> String\n  return "hi"\nend\n'
+    pure = 'def hi() -> String\n  return "hi"\nend\n'
     declare(ws, {"p.agc": pure, "native/data.bin": b"data"}, "# a note\n")
     (ws.project / "main.agc").write_text(
         'import P from "pkg/pkgdemo/p"\n\ndef main() -> Void\n  puts(P.hi())\nend\n', encoding="utf-8")
@@ -240,7 +240,7 @@ def test_a_link_named_native_is_a_symlink_error_in_the_build_and_in_the_fetch(ws
 
 
 # Native.load("pkgdemo") means what extern "pkgdemo" means, so it is refused the same way.
-LOAD_DEMO = """export def pkgdemo_add(a: Int, b: Int) -> Int
+LOAD_DEMO = """def pkgdemo_add(a: Int, b: Int) -> Int
   if Native.load("pkgdemo").ok?
     return a + b
   end
@@ -326,10 +326,10 @@ def test_a_system_list_picks_an_existing_absolute_path_else_a_name_else_the_firs
 
 
 BOTH = """extern "pkgdemo"
-  export def pkgdemo_add(a: C.Int32, b: C.Int32) -> C.Int32
+  def pkgdemo_add(a: C.Int32, b: C.Int32) -> C.Int32
 end
 
-export def loaded?() -> Bool
+def loaded?() -> Bool
   return Native.load("pkgdemo").ok?
 end
 """

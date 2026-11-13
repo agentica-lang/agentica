@@ -8,20 +8,20 @@ import pytest
 from tests.agentica_test import cli, run, vm_environment
 from tests.span_support import end, problem, start, where
 
-MODELS = '''export struct User
+MODELS = """struct User
   name: String
   age: Int
 end
 
-export enum Shape
+enum Shape
   Circle(Float)
   Square
 end
 
-export def make(name: String) -> User
+def make(name: String) -> User
   return User(name: name, age: 3)
 end
-'''
+"""
 
 # `broken` does not check: `helper("no")` passes a String. The other functions do. Positions are found by text.
 APP = '''import Models from "models"

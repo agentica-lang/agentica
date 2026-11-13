@@ -10,10 +10,8 @@ part with a dot such as `"models.rb"`): a module file name has no dot except
 - Relative paths resolve from the importing file, not the working directory.
 - Every file, imported ones included, keeps the order: `import`s; the public
   part (constants and re-exports, `struct`, `enum`, `type` and `module` blocks,
-  `def`); `private`; the private part (constants, types and blocks, `def`). A
-  file without `private` keeps the old order: `import`s, constants, types and
-  blocks, `export def`, private `def`. An imported file out of order is
-  `CHECK-DECL-ORDER`, located in that file.
+  `def`); `private`; the private part (constants, types and blocks, `def`). An
+  imported file out of order is `CHECK-DECL-ORDER`, located in that file.
 - Each file is linked once. A cycle is `CHECK-IMPORT-CYCLE`; a missing or
   unreadable import `CHECK-IMPORT-IO`; an invalid path `CHECK-IMPORT-PATH`.
 - An import alias that the file never uses is `CHECK-UNUSED-IMPORT`: remove
@@ -24,9 +22,10 @@ part with a dot such as `"models.rb"`): a module file name has no dot except
 
 ## Public and private names
 
-A `private` line, alone, splits a file: every declaration above it (constant,
-struct, enum, type alias, function, module block) is public, every one after it
-is private to the file. Write the API first:
+A declaration is public unless it comes after a `private` line, alone on its
+line: every declaration above it (constant, struct, enum, type alias, function,
+module block) is public, every one after it is private to the file, and a file
+with no `private` is public as a whole. Write the API first:
 
 ```agentica
 LIMIT = 10
@@ -42,11 +41,8 @@ def connect(id: Int) -> Int = id + BUFFER
 
 - One `private` per file or block (a second is `PARSE-SECOND-PRIVATE`), with a
   blank line before and after it. Imports are never public.
-- In a file with `private`, `export` before a declaration is
-  `PARSE-UNEXPECTED-TOKEN`. A file without `private` uses the older form:
-  `export def`, `export struct`, `export enum`, `export type`, `export NAME =
-  ...` and `export module` mark the public names, and the rest is private;
-  `private` replaces it.
+- `export` before a declaration (`export def`, `export struct`, `export NAME =
+  ...`) is `PARSE-UNEXPECTED-TOKEN`; `export` only re-exports (below).
 - A public signature may mention private types, but importers cannot name or
   build them.
 - Reaching a private name is `CHECK-IMPORT-NAME`; its help says where to move it

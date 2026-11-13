@@ -1,6 +1,5 @@
-export def ac() -> Void
+def ac() -> Void
 end
 
-export def ab() -> Void
+def ab() -> Void
 end
-

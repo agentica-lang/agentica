@@ -12,40 +12,42 @@ from tests.span_support import end, problem, start, where
 from tests.test_spec_type_at import (AGENTS, AGENTS_NAMED, AGENTS_THROUGH, AGENTS_USER, LIMITS, NAMED_LIB, NAMED_USE,
                                      TWINS, write_agents)
 
-MODELS = '''export LIMIT = 10
+MODELS = """LIMIT = 10
 
 ## A user.
-export struct User
+struct User
   name: String
   age: Int
 end
 
-export struct Pet
+struct Pet
   name: String
 end
 
-export enum Shape
+enum Shape
   Circle(Float)
   Square
 end
 
-export def make(name: String) -> User
+def make(name: String) -> User
   return User(name: name, age: 3)
 end
 
-export def unused() -> Int
+def unused() -> Int
   return LIMIT
 end
-'''
+"""
 
 # The file asked about. It has no `main`. Positions are found by text with `where`, so a line added here does not move
 # them. The names `i`, `note` and `count` are bound in more than one scope on purpose.
-ORDERS = '''import Models from "models"
+ORDERS = """import Models from "models"
 import {LIMIT, make as create} from "models"
 
-export def total(user: Models.User) -> Int
+def total(user: Models.User) -> Int
   return user.age + LIMIT
 end
+
+private
 
 def pet_name(pet: Models.Pet) -> String
   return pet.name
@@ -89,7 +91,7 @@ def build() -> Models.User
   _total_of = &total
   return copy
 end
-'''
+"""
 
 # A third file that reaches `models` twice: through its own import and through `orders`.
 REPORT = '''import Models from "models"
@@ -156,7 +158,7 @@ def test_a_function_has_its_calls_and_values_through_every_way_to_name_it(progra
     assert definition["signature"] == "make(name: String) -> User"
     assert start(definition["name_span"]) == where(MODELS, "make(name")
     # The span is the whole declaration, `export` included, as `symbol` and `outline` give it.
-    assert start(definition["span"]) == where(MODELS, "export def make")
+    assert start(definition["span"]) == where(MODELS, "def make\n")
     # Through the alias (`Models.make`), through a pipe and through a name imported `as create`; the definition is not
     # one of the references, and each reference is the name alone.
     line_a, col_a = where(ORDERS, "Models.make(", 7)
@@ -553,8 +555,8 @@ def test_with_paths_every_span_asked_back_gives_the_same_set(program):
 
 
 def test_a_path_that_does_not_link_is_skipped_and_the_file_of_the_position_must_link(program):
-    (program / "broken.agc").write_text("export def broken(\n", encoding="utf-8")
-    position = spot("models.agc", MODELS, "export def make", 11)
+    (program / "broken.agc").write_text("def broken(\n", encoding="utf-8")
+    position = spot("models.agc", MODELS, "def make\n", 11)
     for report in (told(position, ".", cwd=program), told("make", ".", cwd=program)):
         assert [(left["file"], left["diagnostic"]["code"]) for left in report["skipped"]] == [
             ("broken.agc", "LEX-UNCLOSED-DELIMITER")]
@@ -567,7 +569,7 @@ def test_a_path_that_does_not_link_is_skipped_and_the_file_of_the_position_must_
     # So is a name when every file is left out.
     lonely = program / "lonely"
     lonely.mkdir()
-    (lonely / "only.agc").write_text("export def only(\n", encoding="utf-8")
+    (lonely / "only.agc").write_text("def only(\n", encoding="utf-8")
     assert problem(ask("only", "lonely", cwd=program), "LEX-UNCLOSED-DELIMITER", 1)["file"] == "lonely/only.agc"
     # A file that links but whose dependency does not is skipped with that file's diagnostic.
     (program / "needy.agc").write_text('import Gone from "./gone"\n\ndef needy() -> Int\n  return 1\nend\n',
@@ -579,8 +581,8 @@ def test_a_path_that_does_not_link_is_skipped_and_the_file_of_the_position_must_
 
 
 def test_a_name_that_nothing_declares_is_not_found_and_one_that_several_declarations_answer_to_is_ambiguous(tmp_path):
-    for name, text in (("one.agc", "export def shared() -> Int\n  return 1\nend\n"),
-                       ("two.agc", "export def shared() -> Int\n  return 2\nend\n"),
+    for name, text in (("one.agc", "def shared() -> Int\n  return 1\nend\n"),
+                       ("two.agc", "def shared() -> Int\n  return 2\nend\n"),
                        ("use_one.agc", 'import M from "one"\n\ndef a() -> Int\n  return M.shared()\nend\n'),
                        ("use_two.agc", 'import M from "two"\n\ndef b() -> Int\n  return M.shared()\nend\n')):
         (tmp_path / name).write_text(text, encoding="utf-8")
@@ -651,11 +653,11 @@ def test_a_position_on_a_name_of_an_import_list_selects_the_imported_declaration
 def test_a_check_error_of_a_path_is_exit_1_and_the_standard_input_stands_for_a_file_of_the_paths(program):
     (program / "bad.agc").write_text('def f() -> Int\n  return "x"\nend\n', encoding="utf-8")
     assert problem(ask("make", ".", cwd=program), "CHECK-TYPE-MISMATCH", 1)["file"] == "bad.agc"
-    assert problem(ask(spot("models.agc", MODELS, "export def make", 11), "bad.agc", cwd=program),
+    assert problem(ask(spot("models.agc", MODELS, "def make\n", 11), "bad.agc", cwd=program),
                    "CHECK-TYPE-MISMATCH", 1)["file"] == "bad.agc"
     (program / "bad.agc").unlink()
     # A buffer for `models.agc`: it is searched first, the disk is not written.
-    buffer = MODELS + "\nexport def fresh() -> Int\n  return 1\nend\n"
+    buffer = MODELS + "\ndef fresh() -> Int\n  return 1\nend\n"
     report = told("fresh", "orders.agc", "--stdin", "models.agc", cwd=program, stdin=buffer)
     assert (report["definition"]["module"], report["definition"]["name"], report["references"]) == (
         "models.agc", "fresh", [])
@@ -671,7 +673,7 @@ def test_a_main_of_a_root_keeps_its_signature_and_one_of_an_imported_file_is_not
     (tmp_path / "other.agc").write_text("def other() -> Int\n  return 1\nend\n", encoding="utf-8")
     (tmp_path / "user.agc").write_text('import L from "lib"\n\ndef f() -> Int\n  return L.g()\nend\n', encoding="utf-8")
     (tmp_path / "lib.agc").write_text(
-        "export def main(x: Int) -> Int\n  return x\nend\n\nexport def g() -> Int\n  return 1\nend\n", encoding="utf-8")
+        "def main(x: Int) -> Int\n  return x\nend\n\ndef g() -> Int\n  return 1\nend\n", encoding="utf-8")
     # The root of a position, alone or with other roots, is checked as `type-at` checks it.
     for words in (["bad.agc:1:5"], ["bad.agc:1:5", "other.agc"], ["other.agc:1:5", "bad.agc"]):
         diagnostic = problem(ask(*words, cwd=tmp_path), "CHECK-MAIN", 1)
@@ -689,9 +691,11 @@ def test_a_file_name_is_not_found_with_a_hint_and_partial_goes_with_a_position_a
 # A resource is found by its definition, through the alias of another file and in the result of its block, where the
 # parser wraps it in Result.
 def test_a_resource_is_found_in_the_signatures_of_its_block_and_of_another_file(tmp_path):
-    db = ('extern "libdb.so"\n  export resource Db, free: db_close\n'
-          "  export def db_open(path: C.String) -> Db\nend\n")
-    use = 'import Raw from "db"\n\nexport def count(db: Raw.Db) -> Int\n  return 0\nend\n'
+    db = ('extern "libdb.so"\n'
+           "  resource Db, free: db_close\n"
+           "  def db_open(path: C.String) -> Db\n"
+           "end\n")
+    use = 'import Raw from "db"\n\ndef count(db: Raw.Db) -> Int\n  return 0\nend\n'
     (tmp_path / "db.agc").write_text(db, encoding="utf-8")
     (tmp_path / "use.agc").write_text(use, encoding="utf-8")
     for words in (["Raw.Db", "use.agc"], [spot("db.agc", db, "Db,"), "."]):
@@ -753,7 +757,7 @@ def test_the_name_of_a_re_export_is_the_original_declaration_and_its_uses_throug
 
 
 def test_type_members_is_a_use_of_the_type_name_alone(tmp_path):
-    models = "export struct User\n  name: String\nend\n"
+    models = "struct User\n  name: String\nend\n"
     main = (
         'import Models from "models"\n'
         'import {User} from "models"\n\n'

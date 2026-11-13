@@ -126,7 +126,7 @@ def test_json_list_rules(name, program, code, covers, tmp_path):
 
 def test_a_list_of_an_imported_type_decodes_through_its_alias(tmp_path):
     """The linker resolves the type arguments: the alias counts as used, and the decode builds the imported struct."""
-    (tmp_path / "rows.agc").write_text("export struct Raw\n  file: String\nend\n", encoding="utf-8")
+    (tmp_path / "rows.agc").write_text("struct Raw\n  file: String\nend\n", encoding="utf-8")
     root = tmp_path / "root.agc"
     root.write_text(
         'import Rows from "rows"\n\n'

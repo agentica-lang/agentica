@@ -1,6 +1,8 @@
-type Names = List[String]
+type Labels = Names
 
-export type Labels = Names
+private
+
+type Names = List[String]
 
 def main() -> Void
   labels: Labels = ["red", "blue"]

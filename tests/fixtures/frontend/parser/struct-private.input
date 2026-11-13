@@ -1,5 +1,5 @@
 ## A connection.
-export struct Conn
+struct Conn
   id: Int
   private: Int = 0
 
@@ -8,6 +8,8 @@ export struct Conn
   ## The socket.
   secret: String
 end
+
+private
 
 struct First[T]
   private

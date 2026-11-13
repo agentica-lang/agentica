@@ -100,15 +100,7 @@ A module keeps the addresses of its actors in a constant `ATS` table and wraps t
 import Actor from "std/actor"
 
 module Counter
-  NAMES: ATS[String, Address[Msg]] = ATS.new()
-
-  enum Msg
-    Add(Int)
-    Get(Channel[Int])
-    Stop
-  end
-
-  export def start(name: String, initial: Int) -> Result[Void]
+  def start(name: String, initial: Int) -> Result[Void]
     actor = Actor.start(Actor.Behaviour(init: -> { initial }, handle: &handle))
     return ok() if NAMES.put_new(name, actor.address)
 
@@ -116,20 +108,30 @@ module Counter
     error("counter: #{name} is taken")
   end
 
-  export def add(name: String, n: Int) -> Result[Void]
+  def add(name: String, n: Int) -> Result[Void]
     address = try NAMES.get(name)
     Actor.cast(address, Msg.Add(n))
   end
 
-  export def get(name: String) -> Result[Int]
+  def get(name: String) -> Result[Int]
     address = try NAMES.get(name)
     Actor.call(address, 1000) do |reply| Msg.Get(reply) end
   end
 
-  export def stop(name: String) -> Result[Void]
+  def stop(name: String) -> Result[Void]
     address = try NAMES.get(name)
     NAMES.delete(name)
     Actor.cast(address, Msg.Stop)
+  end
+
+  private
+
+  NAMES: ATS[String, Address[Msg]] = ATS.new()
+
+  enum Msg
+    Add(Int)
+    Get(Channel[Int])
+    Stop
   end
 
   def handle(count: Int, msg: Msg) -> Actor.Step[Int]

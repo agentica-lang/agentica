@@ -169,7 +169,7 @@ end
 
 @pytest.mark.parametrize("last", ["return count_down(n - 1)", "count_down(n - 1)"])
 def test_a_last_void_call_in_a_def_of_an_imported_void_alias_is_a_tail_call(tmp_path, last):
-    (tmp_path / "types.agc").write_text("export type Nothing = Void\n", encoding="utf-8")
+    (tmp_path / "types.agc").write_text("type Nothing = Void\n", encoding="utf-8")
     path = tmp_path / "main.agc"
     path.write_text(COUNT_DOWN % last, encoding="utf-8")
     result = run(cli() + [str(path)], env=vm_environment())

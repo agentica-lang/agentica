@@ -1,7 +1,7 @@
-export def helper() -> Void
+def helper() -> Void
 end
 
-export LIMIT = 1
+LIMIT = 1
 
 def main() -> Void
 end

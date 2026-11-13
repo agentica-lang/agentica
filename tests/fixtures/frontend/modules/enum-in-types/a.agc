@@ -1,9 +1,8 @@
-export enum Opt[T]
+enum Opt[T]
   Some(T)
   Nope
 end
 
-export struct W
+struct W
   x: Int
 end
-

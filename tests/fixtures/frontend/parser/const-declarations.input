@@ -3,16 +3,21 @@
 import Lib from "lib"
 import {MAX} from "lib"
 ## The deepest nesting.
-export MAX_DEPTH = 1000
-export GREETING: String = "hello"
+MAX_DEPTH = 1000
+GREETING: String = "hello"
+
+## The words that start a block.
+KEYWORDS: Set[String] = Set.new(["if", "else"])
+
+private
+
 SECONDS = 60 * 60
 NAMES = [
   "a",
   "b"
 ]
 LEVELS: Map[String, Int] = {"x": 1, "y": 2}
-## The words that start a block.
-export KEYWORDS: Set[String] = Set.new(["if", "else"])
+
 DOUBLED = [1, 2, 3].map do |n|
   n * 2
 end

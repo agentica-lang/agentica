@@ -1,4 +1,4 @@
-export enum Tone
+enum Tone
   Soft
   Bold
 end

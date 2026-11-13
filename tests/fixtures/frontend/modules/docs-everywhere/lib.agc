@@ -1,10 +1,16 @@
 ## Module doc of lib.
 
 ## Lib struct.
-export struct L
+struct L
   ## Lib field.
   a: Int
 end
+
+## Lib function.
+def go() -> Void
+end
+
+private
 
 ## Private lib enum.
 enum P
@@ -12,11 +18,6 @@ enum P
   Q
 end
 
-## Lib function.
-export def go() -> Void
-end
-
 ## Private.
 def hidden() -> Void
 end
-

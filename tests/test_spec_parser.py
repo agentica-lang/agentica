@@ -20,7 +20,7 @@ Accept = namedtuple("Accept", "text files", defaults=(None,))
 Output = namedtuple("Output", "text lines files", defaults=(None,))
 
 
-ALPHA = "export def one() -> Int\n  return 1\nend\n"
+ALPHA = "def one() -> Int\n  return 1\nend\n"
 
 
 def main_of(body):
@@ -45,7 +45,7 @@ TRY_PRELUDE = (
     "def add(a: Int, b: Int) -> Result[Int]\n  return Result.Ok(a + b)\nend\n\n"
 )
 
-SHAPE = "export enum Shape\n  Dot\n  Circle(Int)\nend\n"
+SHAPE = "enum Shape\n  Dot\n  Circle(Int)\nend\n"
 
 # The habits of other languages, each with the line of its first problem (the case arms start one line lower).
 HABITS = [
@@ -416,9 +416,9 @@ class TestSpecParser:
         files = {
             "old.agc": ALPHA,
             "new.agc": ALPHA,
-            "lexer.agc": ("export struct Token\n  n: Int\nend\n\n"
-                          "export def as() -> Int\n  return 1\nend\n\n"
-                          "export def from() -> Int\n  return 2\nend\n"),
+            "lexer.agc": ("struct Token\n  n: Int\nend\n\n"
+                           "def as() -> Int\n  return 1\nend\n\n"
+                           "def from() -> Int\n  return 2\nend\n"),
         }
         imports = ("import Old from \"old\"\nimport New from \"new\"\n"
                    "import {\n  as as from,\n  Token,\n} from \"lexer\"\n\n")
@@ -440,7 +440,7 @@ class TestSpecParser:
         ])
         self.check_rejected([
             Reject("struct A\n  n: Int\nend\ndef main() -> Void\nend\n\n", "PARSE-MISSING-BLANK-LINE", (4,)),
-            Reject("def f() -> Void\nend\nexport def main() -> Void\nend\n\n", "PARSE-MISSING-BLANK-LINE"),
+            Reject("def f() -> Void\nend\ndef main() -> Void\nend\n\n", "PARSE-MISSING-BLANK-LINE"),
             Reject("enum E\n  A\nend\nimport A from \"a\"\n", "PARSE-MISSING-BLANK-LINE"),
             Reject("def f() -> Void\nend\nend\n", "PARSE-TOP-LEVEL-STATEMENT"),
             Reject("def f() -> Void\nend\nputs(1)\n", "PARSE-TOP-LEVEL-STATEMENT"),
@@ -538,8 +538,10 @@ class TestSpecParser:
         # brackets of a generic do not end the lookahead. Any other pair of declarations still needs the blank line,
         # reported at the second one.
         self.check_accepted([
-            Accept("export def f() -> Int = 1\n## Two.\nexport def g() -> Int = 2\ndef h() -> Int = 3\n# a note\n"
-                   "def i() -> Int = 4\n\ndef j() -> Int = 5\n\n" + main_of("  puts(f() + g() + h() + i() + j())\n")),
+            Accept(("def f() -> Int = 1\n## Two.\ndef g() -> Int = 2\n\n"
+                    "private\n\n"
+                    "def h() -> Int = 3\n# a note\ndef i() -> Int = 4\n\n"
+                    "def j() -> Int = 5\n\n") + main_of("  puts(f() + g() + h() + i() + j())\n")),
             Accept("def f() -> Int = 1\ndef g[T](x: T, n: Int = 1) -> Int = n\n\n" + main_of("  puts(f() + g(\"a\"))\n")),
         ])
         missing = "PARSE-MISSING-BLANK-LINE"
@@ -622,7 +624,7 @@ class TestSpecParser:
                 "  box = Box(with: 3)\n  puts(box.with)\n"),
                 ["Bea", "31", "Cy", "3"]),
             Output("import W from \"w\"\n\n" + main_of("  puts(W.with(1))\n"), ["1"],
-                   {"w.agc": "export def with(n: Int) -> Int\n  return n\nend\n"}),
+                   {"w.agc": "def with(n: Int) -> Int\n  return n\nend\n"}),
         ])
         update = "  ana.with(age: 31, name: \"Bea\",)"
         unused = person + main_of("  ana = Person(name: \"Ana\", age: 30)\n" + update + "\n")
@@ -690,7 +692,7 @@ class TestSpecParser:
         self.check_output([Output(program, ["3"])])
 
     def test_underscore_discards_direct_enum_payloads_and_imported_patterns_keep_qualification(self):
-        domain = "export enum Option\n  Some(Int, Int)\n  None\nend\n"
+        domain = "enum Option\n  Some(Int, Int)\n  None\nend\n"
         program = ("import Domain from \"./domain\"\n\n"
                    + main_of("  value = Domain.Option.Some(1, 2)\n  case value do\n"
                              "    Domain.Option.Some(_, other) ->\n      puts(other)\n"
@@ -702,8 +704,9 @@ class TestSpecParser:
             "import Util from \"./util\"\n\n"
             "def mix(a: Int, b: Int, c: Int) -> Int\n  return a * 100 + b * 10 + c\nend\n\n"
             + main_of("  x = 5\n  puts(x |> mix(1, 2))\n  puts(x |> Util.twice())\n"))
-        self.check_output([Output(program, ["512", "10"], {"util.agc": "export def twice(n: Int) -> Int\n"
-                                                                       "  return n * 2\nend\n"})])
+        self.check_output([Output(program, ["512", "10"], {"util.agc": ("def twice(n: Int) -> Int\n"
+                                                                        "  return n * 2\n"
+                                                                        "end\n")})])
 
     def test_pipe_binds_lower_than_plus_and_minus_and_higher_than_comparisons(self):
         program = (
@@ -750,13 +753,14 @@ class TestSpecParser:
 
     def test_a_doc_block_attaches_to_the_declaration_on_the_next_line(self):
         program = (
-            "## A point.\nstruct Point\nend\n\n"
-            "## A shape.\nexport struct Shape\nend\n\n"
-            "## A choice.\nexport enum Choice\n  A\nend\n\n"
-            "## Plain.\nenum Plain\n  B\nend\n\n"
-            "## Shows.\nexport def show() -> Void\nend\n\n"
-            "## Adds.\n##\n## Two numbers.\ndef add() -> Void\nend\n\n"
-            "def main() -> Void\nend\n")
+            ("## A shape.\nstruct Shape\nend\n\n"
+             "## A choice.\nenum Choice\n  A\nend\n\n"
+             "## Shows.\ndef show() -> Void\nend\n\n"
+             "private\n\n"
+             "## A point.\nstruct Point\nend\n\n"
+             "## Plain.\nenum Plain\n  B\nend\n\n"
+             "## Adds.\n##\n## Two numbers.\ndef add() -> Void\nend\n\n"
+             "def main() -> Void\nend\n"))
         self.check_accepted([Accept(program)])
 
     def test_fields_and_variants_take_docs(self):

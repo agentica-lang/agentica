@@ -1,4 +1,3 @@
-export enum E
+enum E
   A(Int)
 end
-

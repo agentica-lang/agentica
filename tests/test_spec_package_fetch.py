@@ -69,7 +69,7 @@ def test_install_fetches_a_tag_and_a_commit_then_a_program_runs_from_the_cache_w
 
 
 def test_install_fetches_the_missing_package_and_leaves_the_cached_one_alone(ws, remotes):
-    files = {"one.agc": "export def one() -> Int\n  return 1\nend\n"}
+    files = {"one.agc": "def one() -> Int\n  return 1\nend\n"}
     commit = remotes.publish(GREETER, files, tag="v1.0.0")
     entry = lock_entry(ws, remotes, GREETER, files, commit, tag="v1.0.0")
     project(ws, {"greeter": dependency(remotes.url(GREETER), tag="v1.0.0")})

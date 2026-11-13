@@ -3,22 +3,24 @@
 UNIT = "items"
 
 module Stock
-  export enum Change
+  enum Change
     Add(Int)
     Take(Int)
   end
 
-  export struct Shelf[T]
+  struct Shelf[T]
     label: T
     count: Int
   end
 
-  export def apply(count: Int, change: Change) -> Int
+  def apply(count: Int, change: Change) -> Int
     case change
       Change.Add(n) -> count + n
       Change.Take(n) -> floor_at_zero(count - n)
     end
   end
+
+  private
 
   def floor_at_zero(n: Int) -> Int
     return 0 if n < 0
@@ -28,7 +30,7 @@ module Stock
 end
 
 module Report
-  export def line(shelf: Stock.Shelf[String]) -> String = "#{shelf.label}: #{shelf.count} #{UNIT}"
+  def line(shelf: Stock.Shelf[String]) -> String = "#{shelf.label}: #{shelf.count} #{UNIT}"
 end
 
 def main() -> Void

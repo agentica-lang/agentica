@@ -1,4 +1,3 @@
-export def name() -> String
+def name() -> String
   return "helper"
 end
-

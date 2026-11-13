@@ -1,6 +1,9 @@
+def api() -> Void
+end
+
+private
+
 def helper() -> Void
 end
 
-export def api() -> Void
-end
-
+LIMIT = 1

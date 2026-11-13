@@ -1,9 +1,12 @@
 import Lib from "lib"
 import {MAX, NAMES, LEVELS as TABLE, CONFIG} from "lib"
 
-LIMIT = MAX + 1
 ## The seconds of a day.
-export SECONDS: Int = 60 * 60 * 24
+SECONDS: Int = 60 * 60 * 24
+
+private
+
+LIMIT = MAX + 1
 
 def main() -> Void
   puts("#{LIMIT} #{MAX} #{Lib.double(MAX)}")

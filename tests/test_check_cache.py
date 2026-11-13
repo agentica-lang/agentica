@@ -28,28 +28,28 @@ GIT = "https://github.com/owner/greeter.git"
 
 # A module two levels down: a struct, a constant long enough to be blanked in the stub, one that is not, a multi-line
 # one, non-ASCII text, a heredoc, a function with a body and a private function, which the stub leaves out.
-DEEP = '''import Shapes from "shapes"
+DEEP = """import Shapes from "shapes"
 
-export SIZE = 7
-export ORIGIN = Shapes.Point(x: 0, y: 0)
-export CHOICES = [Shapes.Kind.Round(1.5), Shapes.Kind.Flat]
-export LABELS = ["alpha", "beta", "gamma", "delta", "épsilon"]
-export TABLE = {
+SIZE = 7
+ORIGIN = Shapes.Point(x: 0, y: 0)
+CHOICES = [Shapes.Kind.Round(1.5), Shapes.Kind.Flat]
+LABELS = ["alpha", "beta", "gamma", "delta", "épsilon"]
+TABLE = {
   "one": 1,
   "two": 2,
 }
 
-export struct Item
+struct Item
   name: String
   count: Int
 end
 
-export enum Pick
+enum Pick
   One(Item)
   Nothing
 end
 
-export def make(name: String) -> Item
+def make(name: String) -> Item
   total = SIZE * 2
   note = <<~TEXT
     héllo #{name}
@@ -58,34 +58,36 @@ export def make(name: String) -> Item
   return Item(name: tidy(name) + note, count: total)
 end
 
+private
+
 def tidy(name: String) -> String
   return name.strip
 end
-'''
+"""
 
-MID = '''import Deep from "deep"
+MID = """import Deep from "deep"
 
-export def build(name: String) -> Deep.Item
+def build(name: String) -> Deep.Item
   return Deep.make(name)
 end
 
-export def pick(item: Deep.Item) -> Deep.Pick
+def pick(item: Deep.Item) -> Deep.Pick
   return Deep.Pick.One(item)
 end
-'''
+"""
 
-SHAPES = '''export struct Point
+SHAPES = """struct Point
   x: Int
   y: Int
 end
 
-export enum Kind
+enum Kind
   Round(Float)
   Flat
 end
-'''
+"""
 
-GREET = 'export def hello(name: String) -> String\n  return "hello " + name\nend\n'
+GREET = 'def hello(name: String) -> String\n  return "hello " + name\nend\n'
 
 MAIN = '''import Queue from "std/queue"
 import Greet from "pkg/greeter/greet"
@@ -209,9 +211,9 @@ def test_warm_cold_and_off_answer_alike_and_a_hit_skips_the_check(ws):
     # One entry for each file but the root: mid, deep, the package module and the standard library module.
     assert len(kept) >= 4
     # The stub of a module keeps its exported functions and leaves its private ones out.
-    stubs = [path.read_bytes() for path in kept if b"export struct Item" in path.read_bytes()]
+    stubs = [path.read_bytes() for path in kept if b"struct Item" in path.read_bytes()]
     assert len(stubs) == 1
-    assert b"export def make(name: String) -> Item" in stubs[0]
+    assert b"def make(name: String) -> Item" in stubs[0]
     assert b"tidy" not in stubs[0]
     # A run that finds every entry in place writes nothing.
     stamps = [(path.stat().st_mtime_ns, path.read_bytes()) for path in kept]
@@ -230,14 +232,14 @@ EDITS = [
     ("mid", "return Deep.make(name)", "return Deep.make(name + name)"),
     # Two levels down, in a body, in a constant and in a signature the root and the middle module use.
     ("deep", "total = SIZE * 2", "total = SIZE * 3"),
-    ("deep", "export SIZE = 7", "export SIZE = 8"),
+    ("deep", "SIZE = 7\n", "SIZE = 8\n"),
     ("deep", '"épsilon"', '"epsilon", "zeta"'),
     ("deep", "count: Int\nend", "count: Int\n  extra: Int = 0\nend"),
     # Errors: in the module two levels down, in the middle one, and in the root, each once the entries are there.
     ("deep", "total = SIZE * 2", "total = SIZE * missing"),
     ("mid", "Deep.make(name)", "Deep.make(1)"),
     ("main", "size: Int = Deep.SIZE", "size: String = Deep.SIZE"),
-    ("deep", "export def make(name: String)", "export def make(name: Int)"),
+    ("deep", "def make(name: String)\n", "def make(name: Int)\n"),
     # A private name of a module is not something the root can import, whether or not the stub has it.
     ("main", 'import Deep from "deep"', 'import {tidy} from "deep"\nimport Deep from "deep"'),
     ("deep", "def tidy(name: String) -> String", "def tidy(name: Int) -> String"),
@@ -267,7 +269,7 @@ def test_a_comment_after_the_end_of_a_function_still_gives_a_stub(ws):
     edit(ws, "mid", "return Deep.make(name)\nend", "return Deep.make(name)\nend # builds")
     edit(ws, "deep", "return name.strip\nend", "return name.strip\nend # private")
     assert settled(ws)[0][0] == 0
-    for marker in (b"export def pick", b"export struct Item"):
+    for marker in (b"def pick", b"struct Item"):
         stubbed = [path.read_bytes() for path in entries(ws) if marker in path.read_bytes()]
         assert len(stubbed) == 1
         assert b"\nstub 0 " not in stubbed[0]
@@ -290,7 +292,7 @@ def test_the_style_rule_is_found_in_a_module_that_has_an_entry(tmp_path):
     flagged = []
     for path in entries(ws):
         raw = path.read_bytes()
-        if b"\nstyle 0\n" in raw and b"export struct Item" in raw:
+        if b"\nstyle 0\n" in raw and b"struct Item" in raw:
             flagged.append(path)
     assert len(flagged) == 1
     flagged[0].write_bytes(flagged[0].read_bytes().replace(b"\nstyle 0\n", b"\nstyle 1\n", 1))
@@ -302,7 +304,7 @@ def test_the_style_rule_is_found_in_a_module_that_has_an_entry(tmp_path):
 
 def test_a_query_forgives_an_unused_import_of_the_root_only_and_check_still_refuses_both(ws):
     project = ws.project
-    (project / "lib.agc").write_text('import Shapes from "shapes"\n\nexport def one() -> Int\n  return 1\nend\n',
+    (project / "lib.agc").write_text('import Shapes from "shapes"\n\ndef one() -> Int\n  return 1\nend\n',
                                      encoding="utf-8")
     (project / "main.agc").write_text('import Lib from "lib"\n\ndef main() -> Void\n  puts(Lib.one())\nend\n',
                                       encoding="utf-8")
@@ -395,7 +397,7 @@ def test_a_misaligned_stub_is_a_miss(warm, expected):
     for path in entries(ws):
         good = path.read_bytes()
         # The stub is replaced by text of the same length that declares something else.
-        path.write_bytes(good.replace(b"export struct Item", b"export struct Itex", 1))
+        path.write_bytes(good.replace(b"struct Item", b"struct Itex", 1))
     assert answers(ws) == expected
 
 
@@ -535,24 +537,24 @@ def test_a_module_that_re_exports_answers_alike_cold_warm_and_off_and_after_edit
     assert json.loads(first[1][1])["definition"]["file"].endswith("deep.agc")
     # An entry exists for the facade, and an edit of the original reaches the root through it.
     assert len(entries(ws)) >= 3
-    edit(ws, "deep", "export SIZE = 7", "export SIZE = 8")
+    edit(ws, "deep", "SIZE = 7\n", "SIZE = 8\n")
     assert settled(ws, **asked)[0][0] == 0
-    edit(ws, "deep", "export def make(name: String)", "export def make(name: Int)")
+    edit(ws, "deep", "def make(name: String)\n", "def make(name: Int)\n")
     assert settled(ws, **asked)[0][0] == 1
     edit(ws, "facade", "export Deep.SIZE", "export Deep.SIZES")
     assert settled(ws, **asked)[0][0] == 1
 
 
 # A module whose struct field and function use an `ATS` table type, which the stub of the module must carry.
-TABLES = '''export struct Shared
+TABLES = """struct Shared
   hits: ATS[String, Int]
 end
 
-export def fresh() -> Shared
+def fresh() -> Shared
   hits: ATS[String, Int] = ATS.new()
   return Shared(hits: hits)
 end
-'''
+"""
 
 THROUGH_TABLES = '''import Tables from "tables"
 
@@ -578,13 +580,13 @@ def test_a_table_type_in_a_module_answers_alike_cold_warm_and_off(ws):
 
 # A module whose constants have the type of a generic struct with arguments and an Optional, which the entry writes
 # with their own letters.
-GENERIC = '''export ORIGIN = Pt(x: ["a"])
-export LIMIT = some(3)
+GENERIC = """ORIGIN = Pt(x: ["a"])
+LIMIT = some(3)
 
-export struct Pt[T]
+struct Pt[T]
   x: T
 end
-'''
+"""
 
 THROUGH_GENERIC = '''import Gen from "gen"
 
@@ -614,19 +616,19 @@ def test_a_generic_struct_constant_is_read_back_from_its_entry(ws):
 
 
 # A constant whose type is a struct of a module block of its own file.
-BLOCKED = '''export ORIGIN = Geo.Point(x: 0, y: 0)
+BLOCKED = """ORIGIN = Geo.Point(x: 0, y: 0)
 
-export module Geo
-  export struct Point
+module Geo
+  struct Point
     x: Int
     y: Int
   end
 
-  export struct Size
+  struct Size
     x: String
   end
 end
-'''
+"""
 
 THROUGH_BLOCKED = '''import Gen from "gen"
 
@@ -651,14 +653,14 @@ def test_a_constant_with_the_type_of_a_module_block_is_read_back_from_its_entry(
 
 
 # A module with a generic function: the stub keeps the signature with its type parameters, and the body goes.
-GENERIC_FUNCTION = '''export def first_or[T](xs: List[T], fallback: T) -> T
+GENERIC_FUNCTION = """def first_or[T](xs: List[T], fallback: T) -> T
   if xs.length == 0
     return fallback
   end
 
   return xs[0]
 end
-'''
+"""
 
 THROUGH_GENERIC_FUNCTION = '''import Gen from "gen"
 
@@ -674,8 +676,8 @@ def test_a_generic_function_is_called_through_its_stub(ws):
     (ws.project / "main.agc").write_text(THROUGH_GENERIC_FUNCTION, encoding="utf-8")
     asked = {"source": THROUGH_GENERIC_FUNCTION, "needle": "Gen.first_or"}
     assert settled(ws, **asked)[0] == (0, '{"ok":true}\n', "")
-    stubs = [path.read_bytes() for path in entries(ws) if b"export def first_or" in path.read_bytes()]
-    assert len(stubs) == 1 and b"export def first_or[T](xs: List[T], fallback: T) -> T" in stubs[0]
+    stubs = [path.read_bytes() for path in entries(ws) if b"def first_or" in path.read_bytes()]
+    assert len(stubs) == 1 and b"def first_or[T](xs: List[T], fallback: T) -> T" in stubs[0]
     # The second run reads the entry: the same wrong use gets the same diagnostic, cold, warm and off.
     wrong = THROUGH_GENERIC_FUNCTION.replace("n: Int", "n: String")
     (ws.project / "main.agc").write_text(wrong, encoding="utf-8")
@@ -686,10 +688,10 @@ def test_a_generic_function_is_called_through_its_stub(ws):
 
 # A module with constants a default may name (a short one and a long string, which the stub blanks) and one that no
 # default may (a long list).
-LIMITS = '''export SMALL = 7
-export LONG_TEXT = "a text long enough to be blanked in the stub"
-export LONG_LIST = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
-'''
+LIMITS = """SMALL = 7
+LONG_TEXT = "a text long enough to be blanked in the stub"
+LONG_LIST = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+"""
 
 THROUGH_LIMITS = '''import Lim from "lim"
 
@@ -725,9 +727,9 @@ def test_a_default_that_names_a_constant_of_a_stubbed_module_answers_alike(ws):
 
 # A long list that starts with a 0: the stub puts its own 0 where the whole text has a 0 too, so a look at the text at
 # the value cannot tell them apart.
-LIMITS_WITH_ZERO = '''export SMALL = 7
-export LONG_LIST = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
-'''
+LIMITS_WITH_ZERO = """SMALL = 7
+LONG_LIST = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+"""
 
 
 def test_a_default_that_names_a_long_list_that_starts_with_zero_answers_alike(ws):
@@ -739,7 +741,7 @@ def test_a_default_that_names_a_long_list_that_starts_with_zero_answers_alike(ws
 # A value of exactly ELIDE_FROM (24) characters whose first line is a lone `[`: the stub has no room for its 0 beside the
 # `(` on that line, so the 0 is on the second. The file ends without a line break after the value.
 LONE_BRACKET_VALUE = "[\n1,2,3,4,5,6,7,8,9,10 ]"
-LIMITS_LONE_BRACKET = (LIMITS.rsplit("export LONG_LIST", 1)[0] + "export LONG_LIST = " + LONE_BRACKET_VALUE)
+LIMITS_LONE_BRACKET = (LIMITS.rsplit("LONG_LIST", 1)[0] + "LONG_LIST = \n" + LONE_BRACKET_VALUE)
 
 
 def test_a_default_that_names_a_value_with_a_lone_bracket_line_answers_alike(ws):
@@ -753,7 +755,7 @@ def test_a_default_that_names_a_value_with_a_lone_bracket_line_answers_alike(ws)
 
 def test_a_real_zero_far_after_its_equals_sign_is_no_blanked_value(ws):
     # Blanks between the `=` and the value must not be read as the room a stub leaves for its 0.
-    (ws.project / "lim.agc").write_text(LIMITS + "export ZERO =" + " " * 30 + "0\n", encoding="utf-8")
+    (ws.project / "lim.agc").write_text(LIMITS + "ZERO =\n" + " " * 30 + "0\n", encoding="utf-8")
     (ws.project / "main.agc").write_text(THROUGH_LIMITS, encoding="utf-8")
     assert settled(ws, source=THROUGH_LIMITS, needle="Lim.SMALL")[0] == (0, '{"ok":true}\n', "")
     zero = THROUGH_LIMITS.replace("a: Int = Lim.SMALL", "a: Int = Lim.ZERO")

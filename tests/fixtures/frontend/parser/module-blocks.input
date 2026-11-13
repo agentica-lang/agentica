@@ -1,13 +1,17 @@
 ## Counter.
-export module Counter
-  export LIMIT = 1
+module Counter
+  LIMIT = 1
 
-  export enum Msg
+  enum Msg
     Add(Int)
   end
 
+  private
+
   def step(n: Int) -> Int = n + 1
 end
+
+private
 
 module Empty
 end

@@ -9,9 +9,9 @@ from tests.spec_support import Batch
 
 VALID = """extern "libm.so.6"
   ## The cosine of x.
-  export def cos(x: C.Double) -> C.Double
+  def cos(x: C.Double) -> C.Double
   ## Runs on the compute pool.
-  export compute def crunch(n: C.Int64) -> C.Double
+  compute def crunch(n: C.Int64) -> C.Double
 
   def labs(n: C.Long) -> C.Long
 end
@@ -80,7 +80,7 @@ def test_an_extern_block_declares_functions_that_check_like_any_other(tmp_path):
 
 
 def test_an_exported_extern_function_is_imported_with_its_agentica_types(tmp_path):
-    source(tmp_path, 'extern "libm.so.6"\n  export def cos(x: C.Double) -> C.Double\nend\n', "raw.agc")
+    source(tmp_path, 'extern "libm.so.6"\n  def cos(x: C.Double) -> C.Double\nend\n', "raw.agc")
     good = 'import Raw from "./raw"\n\ndef main() -> Void\n  puts(Raw.cos(1.0) + 1.5)\nend\n'
     assert check(source(tmp_path, good)).code == 0
     bad = 'import Raw from "./raw"\n\ndef main() -> Void\n  puts(Raw.cos("x"))\nend\n'
@@ -247,7 +247,7 @@ def test_an_extern_parameter_has_no_default(tmp_path):
     ('extern "libc.so.6"\n  def abs(n: C.Int32) -> C.Int32\n', (3, 1)),
     ('extern "libc.so.6" def abs(n: C.Int32) -> C.Int32\nend\n', (1, 20)),
     ('extern <<~A\n  a\n  b\nA\n  def abs(n: C.Int32) -> C.Int32\nend\n', (1, 8)),
-    ('extern "libc.so.6"\n  compute export def abs(n: C.Int32) -> C.Int32\nend\n', (2, 3)),
+    ('extern "libc.so.6"\n  compute def abs(n: C.Int32) -> C.Int32\nend\n', (2, 3)),
     ('extern "libc.so.6"\n  compute abs(n: C.Int32) -> C.Int32\nend\n', (2, 3)),
 ])
 def test_an_extern_block_holds_only_signatures(checked, text, start):
@@ -403,7 +403,7 @@ def test_the_waits_take_int_arguments_and_give_a_result(tmp_path):
     assert check(source(tmp_path, WAIT)).code == 0
     bad = 'def main() -> Void\n  puts(Native.wait_readable("3", 5_000))\nend\n'
     assert at(problem_of(check(source(tmp_path, bad)))) == ("CHECK-TYPE-MISMATCH", (2, 29), (2, 32))
-    source(tmp_path, "export def wait_readable(fd: Int) -> Int\n  return fd\nend\n", "native.agc")
+    source(tmp_path, "def wait_readable(fd: Int) -> Int\n  return fd\nend\n", "native.agc")
     shadow = 'import Native from "./native"\n\ndef main() -> Void\n  puts(Native.wait_readable(1) + 1)\nend\n'
     assert check(source(tmp_path, shadow)).code == 0
 
@@ -414,8 +414,8 @@ end
 
 extern "/opt/peer/libpeer.so"
   ## An open database.
-  export resource Db, free: db_close
-  export def db_open(path: C.String) -> Db
+  resource Db, free: db_close
+  def db_open(path: C.String) -> Db
   def db_exec(db: Db, sql: C.String, blob: C.Bytes, n: C.Int32) -> C.Int32
   compute def db_wait(db: Db) -> C.Int32
   def db_handle(db: Db) -> C.Pointer
@@ -461,7 +461,7 @@ def test_a_c_bytes_parameter_takes_bytes_not_a_list(checked, argument):
 
 
 def test_an_exported_resource_is_imported_like_a_type(tmp_path):
-    raw = 'extern "/opt/libdb.so"\n  export resource Db, free: db_close\n  export def db_open() -> Db\nend\n'
+    raw = 'extern "/opt/libdb.so"\n  resource Db, free: db_close\n  def db_open() -> Db\nend\n'
     source(tmp_path, raw, "raw.agc")
     good = 'import Raw from "./raw"\n\ndef shut(db: Raw.Db) -> Void\n  Native.close(db)\nend\n\n' \
            'def main() -> Void\n  shut(Raw.db_open().unwrap!)\nend\n'
@@ -588,10 +588,8 @@ def test_c_pointer_is_a_type_without_an_extern_block(tmp_path):
     assert check(source(tmp_path, text)).code == 0
 
 
-OUTS = 'extern "/opt/libdb.so"\n  resource Db, free: db_close\n' \
-       '  export def db_open(name: C.String, out db: Db, out code: C.Int64) -> C.Int32\n' \
-       '  def db_fill(out n: C.Int32, out x: C.Double, out on: C.Bool, out p: C.Pointer) -> Void\n' \
-       'end\n\ndef main() -> Void\n%s\nend\n'
+OUTS = ('extern "/opt/libdb.so"\n  resource Db, free: db_close\n  def db_open(name: C.String, out db: Db, out code: C.Int64) -> C.Int32\n  def db_fill(out n: C.Int32, out x: C.Double, out on: C.Bool, out p: C.Pointer) -> Void\nend\n\n'
+        "def main() -> Void\n%s\nend\n")
 
 
 # An out parameter is not an argument: the call gives the function's record, DbOpen, with `result` (absent for Void)
@@ -770,7 +768,7 @@ def test_a_sole_c_function_of_a_maker_is_its_free_function(checked, signature):
 
 STRUCTS = """extern "/opt/libllama.so"
   ## The params of a model.
-  export struct ModelParams
+  struct ModelParams
     n_gpu_layers: C.Int32 = 0
     use_mmap: C.Bool
     progress: C.Pointer
@@ -784,7 +782,7 @@ STRUCTS = """extern "/opt/libllama.so"
     scale: C.Double
   end
   resource Model, free: llama_model_free
-  export def llama_model_default_params() -> ModelParams
+  def llama_model_default_params() -> ModelParams
   compute def llama_model_load_from_file(path: C.String, params: ModelParams) -> Model
   def outer_twice(fn: C.Function, o: Outer) -> Outer
   def make_outer(out n: C.Int32) -> Outer
@@ -922,7 +920,7 @@ def test_an_extern_block_with_a_struct_goes_with_the_types(tmp_path):
 CALLBACKS = """extern "libsqlite3.so.0"
   resource Db, free: sqlite3_close_v2
   ## The comparison of a collation.
-  export callback Compare(arg: C.Pointer, a_len: C.Int32, a: C.Pointer, b_len: C.Int32, b: C.Pointer) -> C.Int32
+  callback Compare(arg: C.Pointer, a_len: C.Int32, a: C.Pointer, b_len: C.Int32, b: C.Pointer) -> C.Int32
   callback Hook(arg: C.Pointer, op: C.Int32, db: C.String, table: C.String, row: C.Int64) -> Void
   callback Scale(x: C.Double, y: C.Float, on: C.Bool, n: C.UInt8) -> C.Float
   def sqlite3_open(filename: C.String, out db: Db) -> C.Int32
@@ -1094,7 +1092,7 @@ end
 
 extern module "sqlite_native"
   ## Opens the database.
-  export def open(path: String, flags: Int) -> Result[Int]
+  def open(path: String, flags: Int) -> Result[Int]
   compute def query(db: Int, params: List[Value]) -> Result[List[Map[String, Value]]]
   def autocommit?(db: Int) -> Bool
   def close!(db: Int) -> Void
@@ -1201,8 +1199,8 @@ def test_a_module_function_takes_at_most_64_parameters(tmp_path):
 # The module knows its types by their bare names: two types of one name in the functions of a block are refused at
 # the second.
 def test_two_types_of_one_bare_name_cannot_cross_to_one_module(tmp_path):
-    source(tmp_path, "export struct Row\n  id: Int\nend\n", "a.agc")
-    source(tmp_path, "export struct Row\n  name: String\nend\n", "b.agc")
+    source(tmp_path, "struct Row\n  id: Int\nend\n", "a.agc")
+    source(tmp_path, "struct Row\n  name: String\nend\n", "b.agc")
     text = ('import A from "./a"\nimport B from "./b"\n\nextern module "demo"\n  def f(row: A.Row) -> Int\n'
             '  def g(row: B.Row) -> Int\nend\n\ndef main() -> Void\nend\n')
     assert at(problem_of(check(source(tmp_path, text)))) == ("CHECK-NATIVE-TYPE", (6, 14), (6, 19))
@@ -1255,7 +1253,7 @@ def test_a_resource_of_the_module_block_crosses_whole(checked, signature, code, 
 
 # A resource counts in the bare names of a block: a struct of its name is refused at the second.
 def test_a_resource_and_a_struct_of_one_bare_name_cannot_cross_to_one_module(tmp_path):
-    source(tmp_path, "export struct Db\n  id: Int\nend\n", "a.agc")
+    source(tmp_path, "struct Db\n  id: Int\nend\n", "a.agc")
     text = ('import A from "./a"\n\nextern module "demo"\n  resource Db\n  def f(db: Db) -> A.Db\nend\n\n'
             'def main() -> Void\nend\n')
     assert at(problem_of(check(source(tmp_path, text)))) == ("CHECK-NATIVE-TYPE", (5, 20), (5, 24))
@@ -1269,7 +1267,7 @@ def module_after(before, block):
 # functions of the file, and an exported resource an exported def.
 @table("before, block", [
     ("def helper() -> Int\n  return 1\nend\n", "  resource Db\n  def open() -> Db"),
-    ("export def helper() -> Int\n  return 1\nend\n", "  export resource Db\n  export def open() -> Db"),
+    ("def helper() -> Int\n  return 1\nend\n", "  resource Db\n  def open() -> Db\n"),
 ], module_after)
 def test_a_module_block_with_a_resource_takes_the_place_of_a_def(checked, before, block):
     assert checked(module_after(before, block)) is None

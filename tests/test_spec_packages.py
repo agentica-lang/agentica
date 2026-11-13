@@ -29,10 +29,10 @@ TOOLS = dependency(TOOLS_GIT, ref="bbbbbbb")
 TOOLS_COMMIT = "b" * 40
 
 GREET = ('import Shout from "util/shout"\nimport Tools from "pkg/tools/bang"\n\n'
-         'export def hello(name: String) -> String\n  return Shout.shout("hello #{name}") + Tools.bang()\nend\n')
-SHOUT = "export def shout(text: String) -> String\n  return text.upcase\nend\n"
-BANG = 'export def bang() -> String\n  return "!"\nend\n'
-ONE = "export def one() -> Int\n  return 1\nend\n"
+          'def hello(name: String) -> String\n  return Shout.shout("hello #{name}") + Tools.bang()\nend\n')
+SHOUT = "def shout(text: String) -> String\n  return text.upcase\nend\n"
+BANG = 'def bang() -> String\n  return "!"\nend\n'
+ONE = "def one() -> Int\n  return 1\nend\n"
 MAIN = 'import Greet from "pkg/greeter/greet"\n\ndef main() -> Void\n  puts(Greet.hello("ana"))\nend\n'
 
 
@@ -88,7 +88,7 @@ def assert_at_import(problem, code, line=1):
 
 def test_a_package_module_cannot_import_the_private_core_of_std(ws):
     # Only a module of std/ may import std/internal/; a locked package is not one, and its file is named in the error.
-    snoop = 'import Ast from "std/internal/compiler/syntax/ast"\n\nexport def one() -> Int\n  return 1\nend\n'
+    snoop = 'import Ast from "std/internal/compiler/syntax/ast"\n\ndef one() -> Int\n  return 1\nend\n'
     git = "https://github.com/owner/snoop.git"
     ws.add_package("snoop", git, {"snoop.agc": snoop})
     ws.write_manifest({"greeter": GREETER, "snoop": dependency(git, tag="v1.0.0")})
@@ -467,7 +467,7 @@ def test_a_declared_name_shadows_a_library_of_the_same_name(ws):
     root = ws.base / "libs"
     (root / "greeter").mkdir(parents=True)
     (root / "greeter" / "greet.agc").write_text(
-        'export def hello(name: String) -> String\n  return "library"\nend\n', encoding="utf-8")
+        'def hello(name: String) -> String\n  return "library"\nend\n', encoding="utf-8")
     ran = run(cli() + [str(ws.project / "main.agc")], cwd=ws.base, env=environment(ws, AGENTICA_PATH=str(root)))
     assert (ran.code, ran.stdout) == (0, "HELLO ANA!\n"), ran.stderr
     # Undeclared, the same import is the library.
@@ -481,7 +481,7 @@ def test_agc_libs_of_a_declared_name_is_not_read_and_a_file_edited_in_deps_is_a_
     # A declared name shadows the library roots, agc_libs/ included, so a library of that name changes nothing ...
     (ws.project / "agc_libs" / "greeter").mkdir(parents=True)
     (ws.project / "agc_libs" / "greeter" / "greet.agc").write_text(
-        'export def hello(name: String) -> String\n  return "library"\nend\n', encoding="utf-8")
+        'def hello(name: String) -> String\n  return "library"\nend\n', encoding="utf-8")
     assert check(ws) is None
     # ... while a file of deps/greeter that is not the locked one is PKG-HASH-MISMATCH at the import.
     (ws.deps / "greeter" / "greet.agc").write_text("# edited\n", encoding="utf-8")

@@ -5,12 +5,23 @@
 import Queue from "std/queue"
 
 ## A point on a grid.
-export struct Point
+struct Point
   ## The column.
   x: Int
   ## The row.
   y: Int
 end
+
+# An ordinary comment is not a doc block.
+## Says how a move ended.
+def describe(outcome: Outcome) -> String
+  case outcome
+    Outcome.Moved(p) -> return "moved to #{p.x},#{p.y}"
+    Outcome.Blocked -> return "blocked"
+  end
+end
+
+private
 
 ## How a move ends.
 ### Variants
@@ -19,15 +30,6 @@ enum Outcome
   Moved(Point)
   ## The move was blocked.
   Blocked
-end
-
-# An ordinary comment is not a doc block.
-## Says how a move ended.
-export def describe(outcome: Outcome) -> String
-  case outcome
-    Outcome.Moved(p) -> return "moved to #{p.x},#{p.y}"
-    Outcome.Blocked -> return "blocked"
-  end
 end
 
 ## Moves a point one column to the right.

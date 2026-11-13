@@ -23,7 +23,7 @@ TABLE = '[workspace]\nrepository = "%s"\nmembers = ["sqlite", "common"]\n'
 
 
 def shout(version):
-    return 'export def shout() -> String\n  return "common %s"\nend\n' % version
+    return 'def shout() -> String\n  return "common %s"\nend\n' % version
 
 
 def files_of(remotes, root_manifest=None, sqlite_manifest_extra=""):
@@ -37,8 +37,8 @@ def files_of(remotes, root_manifest=None, sqlite_manifest_extra=""):
         "common/agentica.toml": 'name = "common"\n',
         "common/util.agc": shout("v1"),
         "sqlite/agentica.toml": sqlite,
-        "sqlite/db.agc": 'import Util from "pkg/common/util"\n\nexport def open() -> String\n'
-                         '  return "sqlite+" + Util.shout()\nend\n',
+        "sqlite/db.agc": ('import Util from "pkg/common/util"\n\n'
+                          'def open() -> String\n  return "sqlite+" + Util.shout()\nend\n'),
         "sqlite/main.agc": 'import Db from "db"\n\ndef main() -> Void\n  puts(Db.open())\nend\n',
     }
 
@@ -227,8 +227,8 @@ def test_a_fetched_package_that_depends_on_a_member_reads_it_from_the_folder(ws,
     url = remotes.url(REPOSITORY)
     library = {"agentica.toml": 'name = "lib"\n\n[dependencies]\ncommon = %s\n' % inline_table(
                    dependency(url, tag="common-1", subdir="common")),
-               "x.agc": 'import Util from "pkg/common/util"\n\nexport def go() -> String\n'
-                        '  return "lib+" + Util.shout()\nend\n'}
+               "x.agc": ('import Util from "pkg/common/util"\n\n'
+                         'def go() -> String\n  return "lib+" + Util.shout()\nend\n')}
     remotes.publish("other/lib", library, tag="v1")
     files = files_of(remotes)
     files["agentica.toml"] += '\n[dependencies]\nlib = %s\n' % inline_table(

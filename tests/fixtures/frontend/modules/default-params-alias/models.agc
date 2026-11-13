@@ -1,4 +1,4 @@
-export enum Level
+enum Level
   Info
   Warn
 end

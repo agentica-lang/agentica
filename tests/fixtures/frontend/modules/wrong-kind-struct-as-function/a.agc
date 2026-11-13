@@ -1,4 +1,3 @@
-export struct P
+struct P
   x: Int
 end
-

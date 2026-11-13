@@ -75,7 +75,7 @@ def check(path):
 
 def test_check_accepts_a_test_file_with_test_functions_and_no_main(tmp_path):
     helper = "def twice(n: Int) -> Int\n  return n * 2\nend\n\n"
-    exported = "export def test_exported() -> Result[Void]\n  return Test.eq(twice(2), 4)\nend\n\n"
+    exported = "def test_exported() -> Result[Void]\n  return Test.eq(twice(2), 4)\nend\n\n"
     result = check(sample_test_file(tmp_path, exported + helper + TEST_PASSING))
     assert (result.code, result.stdout) == (0, '{"ok":true}\n'), result.stderr
 

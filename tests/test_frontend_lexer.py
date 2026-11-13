@@ -59,7 +59,7 @@ def test_the_unicode_table_is_the_char_graphic_table_of_the_freeze(lexer_stage):
     # compiler/syntax/unicode_table.agc is hand-edited data (its header has the provenance, Unicode 17.0); the ranges
     # of the original table are frozen in lexer/graphic-ranges.expected.
     text = (ROOT / "compiler" / "syntax" / "unicode_table.agc").read_text(encoding="utf-8")
-    body = text.split("export GRAPHIC_RANGES = [", 1)[1].split("]", 1)[0]
+    body = text.split("GRAPHIC_RANGES = [\n", 1)[1].split("]", 1)[0]
     numbers = [int(number) for number in re.findall(r"\d+", body)]
     ranges = ["%d %d" % pair for pair in zip(numbers[::2], numbers[1::2])]
     lexer_stage.assert_golden("".join(line + "\n" for line in ranges), FROZEN / "lexer" / "graphic-ranges.expected")

@@ -141,7 +141,7 @@ def test_refused_equality_marks_the_field_that_blocks_it(agentica_check):
 
 def test_refused_equality_leaves_the_note_out_for_a_field_of_another_file(agentica_check):
     files = {
-        "hook.agc": "export struct Hook\n  run: Fn[Int, Int]\nend\n",
+        "hook.agc": "struct Hook\n  run: Fn[Int, Int]\nend\n",
         "main.agc": (
             'import {Hook} from "hook"\n\n'
             "def same(h: Hook) -> Bool\n  return h == h\nend\n\n"

@@ -90,7 +90,7 @@ end
 Imported types use the alias too: in annotations, in construction and in patterns.
 
 ```agentica {file="status.agc"}
-export enum Status
+enum Status
   Active
   Banned(String)
 end
@@ -217,15 +217,17 @@ The alias must be an import of the file, and the module must export the name (`C
 `module Name ... end` groups declarations under a name, so one file can hold several modules. A block holds constants, structs, enums, type aliases and functions with the layout rules of a file, its own `private` line included: what is above it is visible outside the block. This example uses the older form, where `export` marks what is visible. Save this as `agents.agc`:
 
 ```agentica {file="agents.agc"}
-export module Counter
-  export LIMIT = 100
+module Counter
+  LIMIT = 100
 
-  export enum Msg
+  enum Msg
     Add(Int)
     Get
   end
 
-  export def start(initial: Int) -> Int = step(initial, Msg.Add(1))
+  def start(initial: Int) -> Int = step(initial, Msg.Add(1))
+
+  private
 
   def step(count: Int, msg: Msg) -> Int
     case msg
@@ -235,8 +237,8 @@ export module Counter
   end
 end
 
-export module Greeter
-  export def hello(name: String) -> String = "hello #{name}, up to #{Counter.LIMIT}"
+module Greeter
+  def hello(name: String) -> String = "hello #{name}, up to #{Counter.LIMIT}"
 end
 ```
 

@@ -25,7 +25,7 @@ end
 ```ruby
 # good
 ## Returns the sum of the prices, in cents.
-export def total(prices: List[Int]) -> Int
+def total(prices: List[Int]) -> Int
   sum = 0
   for price in prices
     sum += price

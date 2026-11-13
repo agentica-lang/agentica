@@ -1,6 +1,8 @@
-type Matrix[T] = List[List[T]]
+type Lookup[K, V] = Map[K, List[V]]
 
-export type Lookup[K, V] = Map[K, List[V]]
+private
+
+type Matrix[T] = List[List[T]]
 
 def main() -> Void
 end
