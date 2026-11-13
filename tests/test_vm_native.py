@@ -1406,9 +1406,9 @@ end
     assert capture.has(free_stream, b"native-free\n")
 
 
-# One pool thread (one scheduler) runs the first call while the other 49 wait in its queue. Once their tasks are
-# cancelled (after the first nap has started, so that one runs), the waiting calls are never made: only the first nap
-# is counted, even after a second nap would have ended.
+# One pool thread (one scheduler) runs a call that waits for the flag while 49 naps wait in its queue. Their tasks are
+# cancelled while the pool thread is still held, then the flag lets it go: the waiting calls are never made, so no nap
+# starts. The first call holds the thread until main sets the flag, so a slow wake of main cannot let a nap start first.
 @NATIVE_CALLS
 def test_a_cancel_skips_a_compute_call_that_has_not_started(tmp_path, peer):
     main = """def nap(ms: Int) -> Result[Int]
@@ -1416,32 +1416,24 @@ def test_a_cancel_skips_a_compute_call_that_has_not_started(tmp_path, peer):
 end
 
 def main() -> Void
+  holder = Task.spawn(&peer_wait_flag, 20_000)
   tasks: List[Task[Result[Int]]] = []
-  for _ in 1..50
+  for _ in 1..49
     tasks = tasks.push(Task.spawn(&nap, 100))
   end
-  n = 0
-  while peer_nap_starts() == 0 and n < 5000
-    Task.sleep(1)
-    n += 1
-  end
-  if peer_nap_starts() == 0
-    puts("never started")
-  end
+  wait_waiting(1)
   for task in tasks
     Task.cancel(task)
   end
-  n = 0
-  while peer_naps() == 0 and n < 2000
-    Task.sleep(1)
-    n += 1
-  end
+  peer_set_flag()
+  puts(Task.await(holder))
   Task.sleep(250)
-  puts(peer_naps())
+  puts(peer_nap_starts())
 end
 """
-    result = agentica("--schedulers", "1", program(tmp_path, COMPUTE_EXTERN.format(library=literal(peer)) + main))
-    assert (result.code, result.stdout, result.stderr) == (0, "1\n", "")
+    source = program(tmp_path, (COMPUTE_EXTERN + PEER_WAITING).format(library=literal(peer)) + main)
+    result = agentica("--schedulers", "1", source)
+    assert (result.code, result.stdout, result.stderr) == (0, "1\n0\n", "")
 
 
 RESOURCE_EXTERN = """extern "{library}"
