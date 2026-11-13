@@ -1,6 +1,9 @@
 # The kind and the code of one real failure per family of the C builtins (#671): an OS error has the errno as its code
 # (ENOENT 2, EEXIST 17 and EISDIR 21 are the same on Linux, macOS and Windows) and the rest no code.
-# ECONNREFUSED differs between systems, so only its presence is shown.
+# ECONNREFUSED differs between systems, so only its presence is shown. The HTTP codec (HttpWire, reached through
+# std/http) gives http.too_large for every size limit, with 431 for a head and 413 for a body, and http.protocol
+# for the rest.
+import HTTP from "std/http"
 
 struct Row
   name: String
@@ -38,6 +41,55 @@ def send_long(socket: TCP.Socket) -> Result[Void]
   chunk = "x" * 600000
   try TCP.send(socket, chunk, 5000)
   return TCP.send(socket, chunk, 5000)
+end
+
+# Answers each request with the next reply, one connection each.
+def answer(listener: TCP.Listener, replies: List[String]) -> Void
+  for reply in replies
+    socket = Result.unwrap!(TCP.accept(listener, 5000))
+    line = Result.unwrap!(TCP.read_line(socket, 5000))
+    while line != ""
+      line = Result.unwrap!(TCP.read_line(socket, 5000))
+    end
+    _ = TCP.send(socket, reply, 5000)
+    TCP.close(socket)
+  end
+end
+
+def http_rows() -> Void
+  options = HTTP.ClientOptions(timeout_ms: 5000, idle_timeout_ms: 5000, max_connections: 1, max_body_bytes: 16)
+  pool = Result.unwrap!(HTTP.client(options))
+  listener = Result.unwrap!(TCP.listen("127.0.0.1", 0))
+  url = "http://127.0.0.1:#{TCP.local_port(listener)}/"
+  replies = [
+    "HTTP/1.1 200 OK\r\nX-Long: #{"a" * 9000}\r\nContent-Length: 0\r\n\r\n",
+    "HTTP/1.1 200 OK\r\n#{"X-Many: 1\r\n" * 101}Content-Length: 0\r\n\r\n",
+    "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n1;#{"e" * 9000}\r\nx\r\n0\r\n\r\n",
+    "HTTP/1.1 200 OK\r\nContent-Length: 40\r\n\r\n",
+    "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n28\r\n#{"b" * 40}\r\n0\r\n\r\n",
+    "HTTP/1.1 200 OK\r\nConnection: close\r\n\r\n#{"c" * 40}",
+    "HTTP/1.1 2x0 OK\r\nContent-Length: 0\r\n\r\n",
+  ]
+  server = Task.spawn(-> { answer(listener, replies) })
+  show("response line too large", "http", HTTP.get(pool, url))
+  show("response headers too many", "http", HTTP.get(pool, url))
+  show("chunk line too large", "http", HTTP.get(pool, url))
+  show("response body too large", "http", HTTP.get(pool, url))
+  show("chunked body too large", "http", HTTP.get(pool, url))
+  show("close-delimited body too large", "http", HTTP.get(pool, url))
+  show("response head malformed", "http", HTTP.get(pool, url))
+  long = [HTTP.Header(name: "X-Long", value: "a" * 9000)]
+  show("request header line too large", "http", HTTP.post(pool, url, "".bytes, long))
+  many: List[HTTP.Header] = []
+  while List.size(many) < 101
+    many = List.append(many, HTTP.Header(name: "X-Many", value: "1"))
+  end
+  show("request headers too many", "http", HTTP.post(pool, url, "".bytes, many))
+  show("request body too large", "http", HTTP.post(pool, url, "this body is over the limit".bytes))
+  show("request method malformed", "http", HTTP.request(pool, "BAD METHOD", url, "".bytes))
+  Task.await(server)
+  HTTP.close_client(pool)
+  TCP.close_listener(listener)
 end
 
 def main() -> Void
@@ -90,4 +142,5 @@ def main() -> Void
   TCP.close_listener(listener)
   coded("refused", TCP.connect("127.0.0.1", port, 5000))
   show("no program", "process", Process.spawn("agentica-error-kinds-missing", [], Process.Options(timeout_ms: 5000)))
+  http_rows()
 end

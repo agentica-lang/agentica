@@ -69,9 +69,7 @@ static agc_value status_error(agc_vm *vm, int code, const char *reason) {
   char *text = agc_alloc_atomic(size);
   int n = snprintf(text, size, "%d %s", code, reason);
   agc_string *message = agc_utf8_decode((const uint8_t *)text, n < 0 ? 0 : (size_t)n, "\xEF\xBF\xBD", false);
-  /* 413 Content Too Large and 431 Request Header Fields Too Large are limits; every other refusal is the protocol. */
-  agc_error_kind kind = code == 413 || code == 431 ? AGC_KIND_HTTP_TOO_LARGE : AGC_KIND_HTTP_PROTOCOL;
-  return agc_error_code(vm, kind, message, code);
+  return agc_error_code(vm, agc_http_status_kind(code), message, code);
 }
 
 static agc_value parse_error(agc_vm *vm, agc_http_error error) {
@@ -206,7 +204,7 @@ agc_value agc_http_response_value(agc_vm *vm, const uint8_t *buf, size_t len, bo
   if (status == AGC_HTTP_INCOMPLETE)
     return agc_error(vm, AGC_KIND_HTTP_CLOSED, "http: connection closed before the response was complete");
   if (status == AGC_HTTP_ERROR)
-    return agc_http_error_result(vm, AGC_KIND_HTTP_PROTOCOL, "http: ", agc_http_error_text(error));
+    return agc_http_error_result(vm, agc_http_error_code(error), "http: ", agc_http_error_text(error));
   bool closes = agc_http_closes(&head);
   if (head.status >= 200 && (head_only || head.status == 204 || head.status == 304)) {
     bool announced = head.frame == AGC_HTTP_FRAME_CHUNKED || (head.frame == AGC_HTTP_FRAME_LENGTH && head.length > 0);
@@ -216,7 +214,8 @@ agc_value agc_http_response_value(agc_vm *vm, const uint8_t *buf, size_t len, bo
   }
   if (head.frame == AGC_HTTP_FRAME_CLOSE) closes = true;
   if (head.frame == AGC_HTTP_FRAME_LENGTH && head.length > limit)
-    return agc_http_error_result(vm, AGC_KIND_HTTP_TOO_LARGE, "http: ", agc_http_error_text(AGC_HTTP_ERR_TOO_LARGE));
+    return agc_http_error_result(vm, agc_http_error_code(AGC_HTTP_ERR_TOO_LARGE), "http: ",
+                                 agc_http_error_text(AGC_HTTP_ERR_TOO_LARGE));
   agc_struct *r = agc_new_struct(agc_builtin_struct(vm, "HttpWire.ResponseHead", response_fields, 8), 8);
   r->fields[0] = agc_int(head.status);
   r->fields[1] = header_values(vm, &head);
@@ -363,9 +362,10 @@ static void put_date(agc_http_bytes *b, int64_t now_ms) {
 }
 
 /* The head of the response to request: the body itself is std/http's to send,
-   and only when the method is not HEAD (a 204 or 304 body is refused here). */
+   and only when the method is not HEAD (a 204 or 304 body is refused here).
+   *too_large is set when a refusal is a head limit. */
 static const char *response_head(agc_vm *vm, agc_http_bytes *b, const agc_struct *request,
-                                 const agc_struct *response, int64_t now_ms, bool *closes) {
+                                 const agc_struct *response, int64_t now_ms, bool *closes, bool *too_large) {
   if (request->n != 6 || response->n != 3) return "invalid response";
   int64_t status = agc_as_int(vm, response->fields[0]);
   const agc_list *headers = agc_as_list(vm, response->fields[1]);
@@ -381,7 +381,7 @@ static const char *response_head(agc_vm *vm, agc_http_bytes *b, const agc_struct
   size_t count = 0;
   const char *bad = agc_http_put_headers(vm, b, headers, framing_headers, 2,
                                          "Content-Length and Transfer-Encoding are set by the server",
-                                         close ? "connection" : NULL, &count);
+                                         close ? "connection" : NULL, &count, too_large);
   if (bad) return bad;
   if (!has_named(vm, headers, "date")) put_date(b, now_ms);
   if (!bodyless) {
@@ -395,18 +395,19 @@ static const char *response_head(agc_vm *vm, agc_http_bytes *b, const agc_struct
 
 /* HttpWire.encode_response: the head as text, and whether the connection
    closes after this response (either side said Connection: close). The head
-   is the status line and the handler's String headers, so it is UTF-8. */
+   is the status line and the handler's String headers, so it is UTF-8. A head
+   over a limit is http.too_large with no code: 431 names a request's fields. */
 static agc_value builtin_encode_response(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   agc_http_bytes out = {0};
-  bool closes = false;
+  bool closes = false, too_large = false;
   const char *bad = response_head(vm, &out, agc_as_struct(vm, args[0]), agc_as_struct(vm, args[1]),
-                                  agc_as_int(vm, args[2]), &closes);
+                                  agc_as_int(vm, args[2]), &closes, &too_large);
   size_t chars = 0;
   if (!bad && !agc_utf8_chars(out.data, out.len, &chars)) bad = "invalid response";
   agc_value result = agc_void();
   if (bad) {
-    result = agc_error(vm, AGC_KIND_HTTP_PROTOCOL, bad);
+    result = agc_error(vm, too_large ? AGC_KIND_HTTP_TOO_LARGE : AGC_KIND_HTTP_PROTOCOL, bad);
   } else {
     agc_struct *r = agc_new_struct(agc_builtin_struct(vm, "HttpWire.Reply", reply_fields, 2), 2);
     r->fields[0] = agc_string_value(agc_make_string((const char *)out.data, out.len, chars));
@@ -436,8 +437,9 @@ static bool host_text(const agc_string *host) {
 
 /* The request head: the request line, Host (an IPv6 literal in brackets, the
    port only when it is not the scheme's), Content-Length when there is a body
-   or the method is POST, PUT or PATCH, then the caller's headers. */
-static const char *request_head(agc_vm *vm, agc_http_bytes *b, const agc_value *args, bool secure) {
+   or the method is POST, PUT or PATCH, then the caller's headers. *too_large
+   is set when a refusal is a head limit. */
+static const char *request_head(agc_vm *vm, agc_http_bytes *b, const agc_value *args, bool secure, bool *too_large) {
   const agc_string *host = agc_as_string(vm, args[1]);
   int64_t port = agc_as_int(vm, args[2]);
   const agc_string *method = agc_as_string(vm, args[3]);
@@ -472,7 +474,7 @@ static const char *request_head(agc_vm *vm, agc_http_bytes *b, const agc_value *
   const char *bad = agc_http_put_headers(vm, b, agc_as_list(vm, args[5]), managed_headers,
                                          sizeof managed_headers / sizeof managed_headers[0],
                                          "Host, Content-Length, Transfer-Encoding and Connection are set by the client", NULL,
-                                         &count);
+                                         &count, too_large);
   if (bad) return bad;
   agc_http_put_text(b, "\r\n");
   return NULL;
@@ -480,7 +482,8 @@ static const char *request_head(agc_vm *vm, agc_http_bytes *b, const agc_value *
 
 /* HttpWire.encode_request(scheme, host, port, method, target, headers, body,
    max_body_bytes): the request head as text, or the reason the request cannot
-   be sent. std/http sends the body after it. */
+   be sent. std/http sends the body after it. A body over max_body_bytes is
+   http.too_large with the code 413, a head over a limit with 431. */
 static agc_value builtin_encode_request(agc_vm *vm, agc_value *args, uint32_t span) {
   const agc_string *scheme = agc_as_string(vm, args[0]);
   if (!text_is(scheme, "http") && !text_is(scheme, "https"))
@@ -489,12 +492,13 @@ static agc_value builtin_encode_request(agc_vm *vm, agc_value *args, uint32_t sp
   int64_t port = agc_as_int(vm, args[2]);
   if (port < 1 || port > 65535) return agc_error(vm, AGC_KIND_ARGUMENT, "http: port must be 1..65535");
   if ((int64_t)agc_as_bytes(vm, args[6])->len > agc_http_max_body(vm, args[7], span))
-    return agc_error(vm, AGC_KIND_HTTP_TOO_LARGE, "http: request body exceeds max_body_bytes");
+    return agc_http_error_result(vm, 413, "http: ", "request body exceeds max_body_bytes");
   agc_http_bytes out = {0};
-  const char *bad = request_head(vm, &out, args, text_is(scheme, "https"));
+  bool too_large = false;
+  const char *bad = request_head(vm, &out, args, text_is(scheme, "https"), &too_large);
   size_t chars = 0;
   if (!bad && !agc_utf8_chars(out.data, out.len, &chars)) bad = "invalid request";
-  agc_value result = bad ? agc_http_error_result(vm, AGC_KIND_HTTP_PROTOCOL, "http: ", bad)
+  agc_value result = bad ? agc_http_error_result(vm, too_large ? 431 : 400, "http: ", bad)
                          : agc_result_value(true, agc_string_value(agc_make_string((const char *)out.data, out.len, chars)));
   agc_charge(vm, out.len / AGC_COST_BYTES);
   free(out.data);

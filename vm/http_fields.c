@@ -46,8 +46,17 @@ static const char *put_value(agc_http_bytes *b, const agc_string *value, size_t 
   return NULL;
 }
 
+static const char *over_limit(bool *too_large, const char *reason) {
+  *too_large = true;
+  return reason;
+}
+
+/* Writes the caller's headers after the ones in b. A refusal is its reason; *too_large is set when the reason is one
+   of the head limits (a line, the count or the block), so the caller makes it http.too_large. */
 const char *agc_http_put_headers(agc_vm *vm, agc_http_bytes *b, const agc_list *headers, const char *const *managed,
-                                 size_t managed_count, const char *managed_reason, const char *skip, size_t *count) {
+                                 size_t managed_count, const char *managed_reason, const char *skip, size_t *count,
+                                 bool *too_large) {
+  *too_large = false;
   size_t block = b->len, block_extra = 0;
   agc_list_cursor cursor;
   agc_value item;
@@ -70,10 +79,10 @@ const char *agc_http_put_headers(agc_vm *vm, agc_http_bytes *b, const agc_list *
     if (bad) return bad;
     agc_http_put_text(b, "\r\n");
     block_extra += extra;
-    if (b->len - start - extra > AGC_HTTP_MAX_LINE + 2) return "a header line is too large";
-    if (++*count > AGC_HTTP_MAX_HEADERS) return "too many headers";
+    if (b->len - start - extra > AGC_HTTP_MAX_LINE + 2) return over_limit(too_large, "a header line is too large");
+    if (++*count > AGC_HTTP_MAX_HEADERS) return over_limit(too_large, "too many headers");
   }
-  if (b->len - block - block_extra > AGC_HTTP_MAX_BLOCK) return "headers are too large";
+  if (b->len - block - block_extra > AGC_HTTP_MAX_BLOCK) return over_limit(too_large, "headers are too large");
   return NULL;
 }
 
@@ -177,9 +186,19 @@ bool agc_http_list_closes(agc_vm *vm, const agc_list *headers) {
   return false;
 }
 
-agc_value agc_http_error_result(agc_vm *vm, agc_error_kind kind, const char *prefix, const char *reason) {
+/* 413 Content Too Large and 431 Request Header Fields Too Large are size limits; every other status is the protocol. */
+agc_error_kind agc_http_status_kind(int status) {
+  return status == 413 || status == 431 ? AGC_KIND_HTTP_TOO_LARGE : AGC_KIND_HTTP_PROTOCOL;
+}
+
+/* The error prefix + reason for a failure whose answer would be status: a size limit is http.too_large with the
+   status as its code, anything else http.protocol with no code. */
+agc_value agc_http_error_result(agc_vm *vm, int status, const char *prefix, const char *reason) {
   size_t size = agc_size_add(strlen(prefix), strlen(reason) + 1);
   char *text = agc_alloc_atomic(size);
-  snprintf(text, size, "%s%s", prefix, reason);
-  return agc_error(vm, kind, text);
+  int n = snprintf(text, size, "%s%s", prefix, reason);
+  agc_string *message = agc_utf8_decode((const uint8_t *)text, n < 0 ? 0 : (size_t)n, "\xEF\xBF\xBD", false);
+  agc_error_kind kind = agc_http_status_kind(status);
+  if (kind == AGC_KIND_HTTP_PROTOCOL) return agc_error_string(vm, kind, message);
+  return agc_error_code(vm, kind, message, status);
 }

@@ -914,7 +914,7 @@ export def read_all(body: RequestBody, max_bytes: Int) -> Result[Bytes]
     case body.pieces.recv(OWNER_WAIT_MS)
       ok(piece) ->
         total = total + piece.size
-        return error(BODY_TOO_LONG, kind: "http.too_large") if total > max_bytes
+        return error(BODY_TOO_LONG, kind: "http.too_large", code: 413) if total > max_bytes
         pieces = pieces.push(piece)
       error(_) -> break
     end
@@ -1776,7 +1776,7 @@ def next_until_close(socket: TCP.Socket, exchange: Exchange, most: Int, deadline
     return ok(Step(piece: NO_BYTES, exchange: done))
   end
   given = exchange.left + data.size
-  return error(TOO_LARGE, kind: "http.too_large") if given > DOWNLOAD_MAX_BYTES
+  return error(TOO_LARGE, kind: "http.too_large", code: 413) if given > DOWNLOAD_MAX_BYTES
   next = Exchange(phase: READING, framing: BY_CLOSE, left: given, chunks: exchange.chunks, closes: true)
   ok(Step(piece: data, exchange: next))
 end
@@ -1920,7 +1920,7 @@ def read_whole(conn: Connection, most: Int) -> Result[Bytes]
     piece = try read_body(conn, BODY_READ_BYTES)
     return ok(Bytes.concat(pieces)) if piece.empty?
     total = total + piece.size
-    return error(TOO_LARGE, kind: "http.too_large") if total > most
+    return error(TOO_LARGE, kind: "http.too_large", code: 413) if total > most
     pieces = pieces.push(piece)
   end
   error(TRUNCATED, kind: "http.protocol")
@@ -3883,7 +3883,7 @@ def read_until_close(answer: Pending) -> Result[Whole]
       return ok(Whole(body: Bytes.concat(pieces), kept: false))
     end
     total = total + data.size
-    return error(TOO_LARGE, kind: "http.too_large") if total > answer.max_body_bytes
+    return error(TOO_LARGE, kind: "http.too_large", code: 413) if total > answer.max_body_bytes
     pieces = List.append(pieces, data)
   end
   error(TRUNCATED, kind: "http.protocol")
@@ -4013,7 +4013,7 @@ def write_bounded(out: File.Handle, data: Bytes, written: Int, budget: Int, dead
     if room > 0
       try write_body(out, data.take(room), deadline)
     end
-    return error(TOO_LARGE, kind: "http.too_large")
+    return error(TOO_LARGE, kind: "http.too_large", code: 413)
   end
   try write_body(out, data, deadline)
   ok(written + data.size)
