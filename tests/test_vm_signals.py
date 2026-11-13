@@ -359,7 +359,7 @@ def test_a_signal_the_vm_started_ignoring_cannot_be_subscribed_to(tmp_path, adop
     assert vm.wait(WAIT_SECONDS) == 0
 
 
-@pytest.mark.skipif(not WINDOWS, reason="the Windows form of the POSIX cases above")
+@host_only(not WINDOWS, "the Windows form of the POSIX cases above: Linux and macOS subscribe")
 def test_on_windows_subscribe_returns_a_system_signal_error(tmp_path, adopt):
     text = IGNORED.replace("System.Signal.Int", "System.Signal.Term")
     vm = start(adopt, tmp_path, text)
