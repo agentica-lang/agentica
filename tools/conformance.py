@@ -125,6 +125,7 @@ AREAS = {
             "tests/test_spec_checker_defaults.py", "tests/test_spec_named_arguments.py",
             "tests/test_spec_checker.py", "tests/test_spec_checker_rest.py", "tests/test_spec_diagnostic.py",
             "tests/test_spec_lexer.py", "tests/test_spec_main.py", "tests/test_spec_modules.py", "tests/test_spec_private.py",
+            "tests/test_spec_private_fields.py",
             "tests/test_spec_regex_literal.py",
             "tests/test_spec_eag.py", "tests/test_spec_implicit_return.py", "tests/test_spec_lambdas.py",
             "tests/test_spec_block_inference.py", "tests/test_spec_block_chain.py", "tests/test_spec_pipe_methods.py",
