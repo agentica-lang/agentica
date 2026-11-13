@@ -83,12 +83,14 @@ export enum Resolved
 end
 
 ## The parameter types and the result type of a function, and how many arguments a call takes (Defaults.Shape). A
-## generic function lists its type parameters; its types have them as type variables.
+## generic function lists its type parameters; its types have them as type variables. names are the parameter names,
+## which a call may give its arguments with.
 export struct Signature
   type_parameters: List[String]
   params: List[Types.Type]
   result: Types.Type
   shape: Defaults.Shape
+  names: List[String]
 end
 
 ## Where a module constant is declared and what it is set to: the value is how a default that names the constant is
@@ -173,7 +175,8 @@ end
 ## the JsonUse of the body in order; only the run that computes Cx.json_needs reads it. locals are the names that the
 ## function introduced and must read (by the offset of their span), reads the ones a read has reached, writes the ones
 ## that an assignment set again, and assigning the ones whose assignment is being checked, where a read of the name
-## itself is no use of it (check_variables.agc).
+## itself is no use of it (check_variables.agc). slots holds, by the id of each call with named arguments, the
+## parameter each of its arguments fills in source order (Ast.Call.slots), which the lowering reads.
 export struct St
   types: List[Types.Type]
   resolved: Map[Int, Resolved]
@@ -195,6 +198,7 @@ export struct St
   reads: Set[Int]
   writes: Set[Int]
   assigning: Set[Int]
+  slots: Map[Int, List[Int]] = {}
 end
 
 ## A call of a builtin that has its own rule: the call, its arguments, the form of the builtin that takes that many
@@ -336,6 +340,9 @@ export def record_type(st: St, id: Int, type: Types.Type) -> St = st.with(types:
 ## Analysis.bodies. They are kept apart from `types`, which holds expressions only, so a type that
 ## only a binding names does not reach the lowering.
 export def record_bound(st: St, id: Int, types: List[Types.Type]) -> St = st.with(bound: st.bound.put(id, types))
+
+## The state with the slots of a call with named arguments recorded.
+export def record_slots(st: St, id: Int, slots: List[Int]) -> St = st.with(slots: st.slots.put(id, slots))
 
 ## The state with the resolution of a node recorded.
 export def record_resolved(st: St, id: Int, resolved: Resolved) -> St

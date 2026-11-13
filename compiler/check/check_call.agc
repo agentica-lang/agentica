@@ -9,6 +9,7 @@ import Source from "../syntax/source"
 import T from "../syntax/types"
 import Help from "check_help"
 import Names from "check_names"
+import Named from "check_named"
 import Rules from "check_rules"
 import State from "check_state"
 import Stmt from "check_stmt"
@@ -244,7 +245,17 @@ end
 # CHECK-PIPE-METHOD: a builtin that has a method form (x |> String.upcase()) is written as the method, x.upcase, or
 # piped by the method name alone, x |> upcase().
 def check_pipe_method(cx: State.Cx, st: State.St, node: Ast.Call, entry: Model.Builtin) -> Result[Bool]
-  selected = Builtins.form_for(entry, node.args.size)
+  # The named arguments count as check_builtin_call counts them; error(...) keeps its own.
+  count = node.args.size
+  if node.name != "error"
+    count += node.named.size
+  end
+
+  selected = Builtins.form_for(entry, count)
+  if node.name != "error" and node.named.size > 0 and entry.alternatives.size == 0
+    selected = ok(entry)
+  end
+
   return ok(true) if !selected.ok? or selected.unwrap!.parameters.size == 0
 
   kind = Names.receiver_kind(selected.unwrap!.parameters[0].type)
@@ -306,7 +317,8 @@ end
 
 # A function of the program: the arguments against the parameter types. A generic function infers its type arguments
 # first (check_generic_call).
-def check_plain_call(cx: State.Cx, st: State.St, node: Ast.Call, expected: T.Type) -> Result[State.Out]
+def check_plain_call(cx: State.Cx, st: State.St, written: Ast.Call, expected: T.Type) -> Result[State.Out]
+  node = written
   entry = cx.functions.get(node.name)
   if entry.none?
     return error(
@@ -323,15 +335,22 @@ def check_plain_call(cx: State.Cx, st: State.St, node: Ast.Call, expected: T.Typ
 
   signature = entry.unwrap!
   shape = signature.shape
-  count = node.args.size
-  return error(arity_failure(cx, st, node, signature)) if count < shape.required or count > shape.total
-
-  return check_generic_call(cx, st, node, signature, expected) if signature.type_parameters.size > 0
-
   current = st
+  if written.named.size > 0
+    bound = try Named.bind(cx, st, written, signature.names, shape, T.display_name(written.name), 0)
+    node = bound.node
+    current = bound.st
+  end
+
+  count = node.args.size
+  return error(arity_failure(cx, current, node, signature)) if count < shape.required or count > shape.total
+
+  return check_generic_call(cx, current, node, signature, expected) if signature.type_parameters.size > 0
+
   index = 0
   while index < count
-    out = try State.expr(cx, current, node.args[index], signature.params[Defaults.param_of(shape, count, index)])
+    param = Defaults.param_of(shape, node.slots, count, index)
+    out = try State.expr(cx, current, node.args[index], signature.params[param])
     current = out.st
     index += 1
   end
@@ -365,7 +384,7 @@ def check_generic_call(
   blocks: List[Int] = []
   index = 0
   while index < count
-    template = signature.params[Defaults.param_of(shape, count, index)]
+    template = signature.params[Defaults.param_of(shape, node.slots, count, index)]
     arg = node.args[index]
     if block_literal?(arg) and T.is?(template, "Fn")
       blocks = blocks.push(index)
@@ -383,7 +402,7 @@ def check_generic_call(
   found = Types.learn(signature.result, expected, found)
   later: List[Int] = []
   for at in waiting
-    template = signature.params[Defaults.param_of(shape, count, at)]
+    template = signature.params[Defaults.param_of(shape, node.slots, count, at)]
     if Types.open_variables?(template, found)
       later = later.push(at)
     else
@@ -392,14 +411,14 @@ def check_generic_call(
   end
 
   for block in blocks
-    template = signature.params[Defaults.param_of(shape, count, block)]
+    template = signature.params[Defaults.param_of(shape, node.slots, count, block)]
     after = try check_generic_block(cx, current, node.args[block], template, found)
     current = after.st
     found = after.substitutions
   end
 
   for at in later
-    template = signature.params[Defaults.param_of(shape, count, at)]
+    template = signature.params[Defaults.param_of(shape, node.slots, count, at)]
     return error(uninferred_failure(cx, current, node, signature, found)) if Types.open_variables?(template, found)
 
     current = try check_closed_argument(cx, current, node.args[at], template, found)
@@ -411,7 +430,7 @@ def check_generic_call(
   try check_void_arguments(cx, current, node, signature, found)
   templates: List[T.Type] = []
   for at in 0...count
-    templates = templates.push(signature.params[Defaults.param_of(shape, count, at)])
+    templates = templates.push(signature.params[Defaults.param_of(shape, node.slots, count, at)])
   end
 
   spans = node.args.map do |arg: Ast.Expr| Ast.expr_span(arg) end

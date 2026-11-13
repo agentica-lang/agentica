@@ -504,6 +504,7 @@ def register_function(cx: State.Cx, st: State.St, node: Ast.FunctionDecl, types:
     params: params,
     result: result,
     shape: Defaults.shape(node.params),
+    names: node.params.map do |param: Ast.Param| param.name end,
   )
 
   natives = cx.natives

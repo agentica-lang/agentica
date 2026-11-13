@@ -9,6 +9,7 @@
 import Builtins from "../catalog/builtins"
 import State from "../check/check_state"
 import Checker from "../check/checker"
+import Defaults from "../check/defaults"
 import DiagnosticModel from "../diagnostics/diagnostic_model"
 import Linker from "../modules/linker"
 import Ast from "../syntax/ast"
@@ -252,15 +253,13 @@ def expression(checked: Checker.Checked, expr: Ast.Expr) -> Model.Node
     Ast.Expr.Name(node) -> leaf("local", type, span).with(text: node.name)
     Ast.Expr.Call(node) ->
       # The values of the named arguments of error(...) follow the positional ones.
-      values = node.named.map do |arg: Ast.NamedArg| arg.value end
-      leaf("call", type, span).with(target: node.name, children: arguments(checked, node.args.concat(values)))
+      given = Defaults.arguments(node.args, node.named)
+      leaf("call", type, span).with(target: node.name, children: bound_arguments(checked, id, given, span))
     Ast.Expr.MethodCall(node) ->
       case checked.resolved.get(id)
         some(State.Resolved.Call(name, _)) ->
-          leaf("call", type, span).with(
-            target: name,
-            children: [expression(checked, node.target)].concat(arguments(checked, node.args)),
-          )
+          given = [node.target].concat(Defaults.arguments(node.args, node.named))
+          leaf("call", type, span).with(target: name, children: bound_arguments(checked, id, given, span))
         _ -> other("method", span)
       end
 
@@ -332,6 +331,32 @@ end
 
 def arguments(checked: Checker.Checked, args: List[Ast.Expr]) -> List[Model.Node]
   args.map do |arg: Ast.Expr| expression(checked, arg) end
+end
+
+# The arguments of the call `id`, given in source order. A call with named arguments has them in parameter order, and a
+# parameter it leaves out before the last one it gives is a `default` node at the call.
+def bound_arguments(checked: Checker.Checked, id: Int, given: List[Ast.Expr], span: Source.Span) -> List[Model.Node]
+  slots = checked.slots.get(id).unwrap_or([])
+  return arguments(checked, given) if slots.size == 0
+
+  last = 0
+  for slot in slots
+    if slot > last
+      last = slot
+    end
+  end
+
+  nodes: List[Model.Node] = []
+  for param in 0..last
+    at = Defaults.argument_for(Defaults.Shape(required: 0, total: 0, fn_last: false), slots, given.size, param)
+    if at >= 0
+      nodes = nodes.push(expression(checked, given[at]))
+    else
+      nodes = nodes.push(leaf("default", Types.Type.Unknown, span))
+    end
+  end
+
+  nodes
 end
 
 def literal_kind(value: Ast.LitValue) -> String

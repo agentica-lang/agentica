@@ -126,6 +126,15 @@ copy).
   lowering writes the value in place (`Const.in_place`), so a call reads no
   global. Compiler code must not use defaults until `bootstrap/stage0.agcb` can
   compile them (the two-step refresh in `references/ci.md`).
+- Named arguments: the parser keeps them in `Call.named` and
+  `MethodCall.named`. The checker binds them (`check_named.agc`,
+  `Defaults.bind`) to a call whose `args` are in source order and whose
+  `slots` give each argument's parameter, recorded by call id
+  (`Checked.slots`). `param_of` and `argument_for` read the slots; a builtin
+  rule other than Plain or Prelude gets the arguments in parameter order.
+  `lower_call` binds the call again from `Cx.slots` and runs the arguments in
+  source order into their parameter registers. `error(...)` keeps its own
+  named arguments (the fields of its Error).
 - Builtin defaults: a catalog parameter may have
   `default: Model.Default.Whole(0)` (`Model.Named`; also `Real`, `Text`, `Flag`,
   `Nothing`, `EmptyList`, `EmptyMap`, `EmptyBytes`, `Variant("TaskExit.Ok")`).

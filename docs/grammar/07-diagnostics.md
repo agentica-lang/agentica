@@ -280,6 +280,10 @@ is a rule:
 - `f()` or `f(1, 2, 3)` for `def f(a: Int, b: Int = 1)` (`CHECK-ARITY`)
   Help: a call takes from the number of parameters without a default to the
   number of all parameters (`1 to 2 arguments`)
+- `f(1, c: 2)` for `def f(a: Int, b: Int = 1)` (`CHECK-UNKNOWN-ARGUMENT`), `f(1,
+  a: 2)` (`CHECK-REPEATED-ARGUMENT`), `f(b: 2)` (`CHECK-MISSING-ARGUMENT`)
+  Help: the parameters the function takes by name, or a close one; give each
+  argument once; give the missing one by position or as `a: value`
 - `s[0]` on a String (`CHECK-NOT-INDEXABLE`)
   Help: `s.at(i)`, `s.slice(start, length)`, or `s.split("")`
 - `error("x", kind: "Db Constraint")` or `e.is_a?("Db")`, a kind literal that

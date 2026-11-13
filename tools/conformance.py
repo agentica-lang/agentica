@@ -122,7 +122,7 @@ AREAS = {
         "the rules of the language through `check`: lexer, parser, checker, modules, bytecode",
         [
             "tests/test_spec_address.py", "tests/test_spec_alias.py", "tests/test_spec_bytecode.py",
-            "tests/test_spec_checker_defaults.py",
+            "tests/test_spec_checker_defaults.py", "tests/test_spec_named_arguments.py",
             "tests/test_spec_checker.py", "tests/test_spec_checker_rest.py", "tests/test_spec_diagnostic.py",
             "tests/test_spec_lexer.py", "tests/test_spec_main.py", "tests/test_spec_modules.py", "tests/test_spec_regex_literal.py",
             "tests/test_spec_eag.py", "tests/test_spec_implicit_return.py", "tests/test_spec_lambdas.py",

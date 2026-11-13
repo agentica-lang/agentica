@@ -434,7 +434,8 @@ def print_container_expr(out: List[String], at: Margin, role: String, expr: Ast.
     Ast.Expr.MethodCall(node) ->
       lines = out.push(head(at, role, "method-call", node.id, node.span, name_attr(node.name)))
       lines = print_expr(lines, child, "target", node.target)
-      print_exprs(lines, child, "arg", node.args)
+      lines = print_exprs(lines, child, "arg", node.args)
+      print_named_args(lines, child, node.named)
     Ast.Expr.Interpolation(node) ->
       lines = out.push(head(at, role, "interpolation", node.id, node.span, ""))
       for part in node.parts

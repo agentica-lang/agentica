@@ -90,7 +90,7 @@ KINDS_REJECTED = [
     ("  w: Result[Int] = \"x\" |> error(kind: \"Bad..Kind\", code: 1)\n  puts(w)", "CHECK-ERROR-KIND",
      "\"Bad..Kind\""),
     ("  w: Result[Int] = \"x\" |> error(kind: \"db\", nope: 3)\n  puts(w)", "CHECK-UNKNOWN-FIELD", "nope"),
-    ("  puts(shout(text: \"x\"))", "PARSE-UNEXPECTED-TOKEN", ":"),
+    ("  puts(shout(txt: \"x\"))", "CHECK-UNKNOWN-ARGUMENT", "txt: \"x\""),
     ("  case r\n    ok(n) -> puts(n)\n    error(e) if e.is_a?(\"Db\") -> puts(e)\n    error(_) -> puts(1)\n  end",
      "CHECK-ERROR-KIND", "\"Db\""),
     ("  case r\n    ok(n) -> puts(n)\n    error(e) if e.is?(\"db\") -> puts(e)\n    error(_) -> puts(1)\n  end",

@@ -93,6 +93,10 @@ lines show. A task's stack ends with `task spawned at file:line:column`.
 - `CHECK-DEFAULT-ORDER`, `CHECK-DEFAULT-VALUE`: a parameter without a default
   after one with a default (only a last `Fn` parameter may); a default that is
   not a constant (`language-program-types.md`).
+- `CHECK-UNKNOWN-ARGUMENT`, `CHECK-REPEATED-ARGUMENT`, `CHECK-MISSING-ARGUMENT`:
+  a named argument with no such parameter (or to a function value); a parameter
+  given twice, by name or by position and name; a parameter without a default
+  that no argument fills.
 - `CHECK-EMPTY-LIST-TYPE`, `CHECK-EMPTY-MAP-TYPE`, `CHECK-EMPTY-SET-TYPE`,
   `CHECK-RESULT-TYPE`, `CHECK-OPTIONAL-TYPE`, `CHECK-EXPECTED-TYPE`: `[]`, `{}`,
   `Set.new([])`, `error(...)`, `none`, `Channel.new(n)` or `ATS.new()` with no

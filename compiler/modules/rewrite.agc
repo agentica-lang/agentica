@@ -435,13 +435,22 @@ end
 def pipe_method(cx: Resolve.Context, node: Ast.Call) -> Result[Ast.Expr]
   target = try rewrite_expr(cx, node.args[0])
   args = try rewrite_exprs(cx, node.args.drop(1))
+  named = try rewrite_named(cx, node.named)
   start = node.span.start
   size = node.name.length
   stop = Source.Position(offset: start.offset + size, line: start.line, column: start.column + size)
   name_span = Source.Span(start: start, stop: stop)
   ok(
     Ast.Expr.MethodCall(
-      Ast.MethodCall(id: node.id, target: target, name: node.name, name_span: name_span, args: args, span: node.span),
+      Ast.MethodCall(
+        id: node.id,
+        target: target,
+        name: node.name,
+        name_span: name_span,
+        args: args,
+        span: node.span,
+        named: named,
+      ),
     ),
   )
 end
@@ -525,9 +534,18 @@ def rewrite_constant_member(
   end
 
   args = try rewrite_exprs(cx, node.args)
+  named = try rewrite_named(cx, node.named)
   ok(
     Ast.Expr.MethodCall(
-      Ast.MethodCall(id: node.id, target: receiver, name: member, name_span: name_span, args: args, span: node.span),
+      Ast.MethodCall(
+        id: node.id,
+        target: receiver,
+        name: member,
+        name_span: name_span,
+        args: args,
+        span: node.span,
+        named: named,
+      ),
     ),
   )
 end
@@ -585,18 +603,19 @@ def rewrite_compound(cx: Resolve.Context, expr: Ast.Expr) -> Result[Ast.Expr]
     Ast.Expr.MapLit(node) -> rewrite_map(cx, node)
     Ast.Expr.FieldAccess(node) ->
       if family_member(cx, node.target, node.name) != ""
-        return member_call(cx, node.target, node.id, node.name, [], false, node.span)
+        return member_call(cx, node.target, node.id, node.name, [], [], false, node.span)
       end
 
       ok(Ast.Expr.FieldAccess(node.with(target: try rewrite_expr(cx, node.target))))
     Ast.Expr.MethodCall(node) ->
       if family_member(cx, node.target, node.name) != ""
-        return member_call(cx, node.target, node.id, node.name, node.args, true, node.span)
+        return member_call(cx, node.target, node.id, node.name, node.args, node.named, true, node.span)
       end
 
       target = try rewrite_expr(cx, node.target)
       args = try rewrite_exprs(cx, node.args)
-      ok(Ast.Expr.MethodCall(node.with(target: target, args: args)))
+      named = try rewrite_named(cx, node.named)
+      ok(Ast.Expr.MethodCall(node.with(target: target, args: args, named: named)))
     Ast.Expr.Interpolation(node) -> rewrite_interpolation(cx, node)
     Ast.Expr.BlockLit(node) -> rewrite_block(cx, node)
     Ast.Expr.Index(node) ->
@@ -649,12 +668,13 @@ def member_call(
   id: Int,
   method: String,
   args: List[Ast.Expr],
+  named: List[Ast.NamedArg],
   parenthesized: Bool,
   span: Source.Span,
 ) -> Result[Ast.Expr]
   name = "#{family_member(cx, target, method)}.#{method}"
   try Resolve.resolve(cx, name, Resolve.Want.Function, Ast.expr_span(target), false)
-  call = Ast.Call(id: id, name: name, args: args, piped: false, parenthesized: parenthesized, span: span)
+  call = Ast.Call(id: id, name: name, args: args, piped: false, parenthesized: parenthesized, span: span, named: named)
   rewrite_call(cx, call)
 end
 

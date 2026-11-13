@@ -53,7 +53,8 @@ end
 ## declared function; bodies the prelude function each call of a prelude builtin runs, by id of the call
 ## (prelude_files.agc); step_tries the `try` nodes in the blocks of Lazy methods, which lower to try-step;
 ## fills the functions that have default values, by name; field_fills the structs that have fields with a default, by
-## name; reads what a constant read becomes. file
+## name; reads what a constant read becomes; slots the parameter of each argument of a call with named arguments, by
+## id of the call (Ast.Call.slots). file
 ## is the file of the function being lowered and index its position in the sources. expression lowers an expression,
 ## lowers an expression, block lowers a block as a function, and case_value lowers a case that gives a value: the
 ## cycles between expressions, statements and blocks go through these fields, because a module cannot import one that
@@ -70,6 +71,7 @@ export struct Cx
   functions: Map[String, Int]
   bodies: Map[Int, String]
   step_tries: Set[Int]
+  slots: Map[Int, List[Int]]
   fills: Map[String, Fill]
   field_fills: Map[String, FieldFill]
   reads: Map[String, Read]

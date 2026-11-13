@@ -36,7 +36,7 @@ export def check_prelude_call(cx: State.Cx, st: State.St, site: State.Site) -> R
   bound = Bound(st: st, types: {}, spans: {})
   index = 0
   while index < count
-    param = Defaults.param_of(shape, count, index)
+    param = Defaults.param_of(shape, site.node.slots, count, index)
     template = form.parameters[param].type
     settled = block_result(form, template, site.expected)
     bound = try check_argument(cx, bound, site.args[index], template, settled, row.module == "lazy")
