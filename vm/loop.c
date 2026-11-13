@@ -1253,8 +1253,45 @@ static void stop_overdue(uv_timer_t *timer) {
   if (now) agc_io_die_by(now);
 }
 
+/* DEBUG #1529: an async-signal-safe line on fd 2. */
+static void dbg_line(const char *what, long a, long b, long c, long d) {
+  char buf[200];
+  size_t n = 0;
+  for (const char *p = "agc-debug "; *p; p++) buf[n++] = *p;
+  for (const char *p = what; *p && n < 100; p++) buf[n++] = *p;
+  long v[4] = {a, b, c, d};
+  for (int k = 0; k < 4; k++) {
+    buf[n++] = ' ';
+    long x = v[k];
+    if (x < 0) {
+      buf[n++] = '-';
+      x = -x;
+    }
+    char tmp[24];
+    int m = 0;
+    do {
+      tmp[m++] = (char)('0' + x % 10);
+      x /= 10;
+    } while (x && m < 23);
+    while (m) buf[n++] = tmp[--m];
+  }
+  buf[n++] = '\n';
+  (void)!write(2, buf, n);
+}
+
+static long dbg_thread(void) {
+#ifdef __APPLE__
+  return (long)pthread_mach_thread_np(pthread_self());
+#else
+  return 0;
+#endif
+}
+
 static void stop_requested(int sig) {
   int saved = errno;
+  dbg_line("handler sig thread wake_pending wake", sig, dbg_thread(),
+           stop_status()->wake ? (long)atomic_load((_Atomic int *)&stop_status()->wake->pending) : -1,
+           stop_status()->wake != NULL);
   int none = 0;
   bool first = atomic_compare_exchange_strong(&stop_status()->signal, &none, sig);
   bool orphan = stop_status()->driver && getppid() != stop_status()->driver;
@@ -1283,6 +1320,8 @@ static void stop_requested(int sig) {
 
 static void stop_woken(uv_async_t *wake) {
   agc_loop *loop = wake->data;
+  dbg_line("woken signal now thread x", atomic_load(&stop_status()->signal), atomic_load(&stop_status()->now),
+           dbg_thread(), 0);
   int sig = atomic_load(&stop_status()->now);
   if (!sig) return;
   if (!atomic_load(&stop_status()->held) || !loop->stop_grace_init) {
