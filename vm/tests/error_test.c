@@ -1,7 +1,8 @@
 /*
  * The builtin Error record in C (#671): agc_error and its location, the error builtins (error, Result.message,
  * Result.unwrap!, Error.is_a?), printing as the error(...) call, equality without the location, hostile field values,
- * and the kind and code of an errno (agc_errno_kind, agc_system_error).
+ * the kind and code of an errno (agc_errno_kind, agc_system_error), and the kind of a response head over a limit
+ * (HttpWire.encode_response, which only std/http calls and which no program sees the error of).
  */
 #include "../core.h"
 #include "../services.h"
@@ -332,6 +333,39 @@ static void test_codes(void) {
         "error(\"413 too large\", kind: \"http.too_large\", code: 413)");
 }
 
+#if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
+/* 101 headers are over the head limit: http.too_large with no code, since 431 names a request's fields. The builtin
+   reads only the field counts of its records (6, 3 and 2), so the Error type stands in for theirs. */
+static void test_response_head_limit(void) {
+  agc_list_builder headers;
+  agc_list_builder_sized(&headers, 101);
+  for (int k = 0; k < 101; k++) {
+    agc_struct *h = agc_new_struct(0, 2);
+    h->fields[0] = agc_string_value(text("X-Many"));
+    h->fields[1] = agc_string_value(text("1"));
+    agc_list_builder_push(&headers, agc_struct_value(h));
+  }
+  agc_list_builder none;
+  agc_list_builder_sized(&none, 0);
+  agc_struct *request = agc_new_struct(0, 6);
+  for (int k = 0; k < 6; k++) request->fields[k] = agc_string_value(text(""));
+  request->fields[3] = agc_list_value(agc_list_builder_finish(&none));
+  agc_struct *response = agc_new_struct(0, 3);
+  response->fields[0] = agc_int(200);
+  response->fields[1] = agc_list_value(agc_list_builder_finish(&headers));
+  response->fields[2] = agc_bytes_value(agc_make_bytes((const uint8_t *)"", 0));
+  agc_value args[3] = {agc_struct_value(request), agc_struct_value(response), agc_int(0)};
+  const agc_builtin *row = agc_find_builtin((const uint8_t *)"HttpWire.encode_response", 24, 3);
+  assert(row);
+  agc_struct *e = error_of(row->fn(&vm, args, 0));
+  check(agc_as_string(&vm, e->fields[AGC_ERROR_KIND]), "http.too_large");
+  check(agc_as_string(&vm, e->fields[AGC_ERROR_MESSAGE]), "too many headers");
+  assert(agc_as_enum(&vm, e->fields[AGC_ERROR_CODE])->variant == 0);
+}
+#else
+static void test_response_head_limit(void) {}
+#endif
+
 int main(void) {
   agc_init();
   shapes = build();
@@ -345,6 +379,7 @@ int main(void) {
   AGC_TEST_RUN(test_fallback());
   AGC_TEST_RUN(test_shape());
   AGC_TEST_RUN(test_codes());
+  AGC_TEST_RUN(test_response_head_limit());
   puts("error tests passed");
   return 0;
 }
