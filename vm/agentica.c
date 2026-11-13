@@ -89,17 +89,22 @@ static void run_front_end(agc_launch *launch, const char *self, const char *repl
     fprintf(stderr, "%s: invalid front end: %s\n", name, error);
     exit(2);
   }
-  /* The inputs of the front end (compiler/app/front_end_inputs.agc), then the words of the user. */
+  /* The inputs of the front end (compiler/app/front_end_inputs.agc), then the words of the user. A front end of
+   * --front-end gets no --self, and a front end with no --self uses no cache (#1489): the key of a cache entry names
+   * the binary, not the front end, so it would get a program that another front end compiled. Without --self it
+   * cannot run `agentica test`, which starts the binary again, and the bootstrap does not need that. */
   char version_flag[] = "--version", self_flag[] = "--self", bdd_flag[] = "--embedded-bdd", separator[] = "--",
        version[] = AGC_VERSION;
   bool embedded_bdd = !replacement && agc_embedded_index[3] != 0 && agc_embedded_index[5] != 0;
-  int input_count = embedded_bdd ? 6 : 5;
+  int input_count = 3 + (replacement ? 0 : 2) + (embedded_bdd ? 1 : 0);
   char **arguments = agc_alloc(agc_size_mul((size_t)count + (size_t)input_count, sizeof *arguments));
   arguments[0] = version_flag;
   arguments[1] = version;
-  arguments[2] = self_flag;
-  arguments[3] = (char *)self;
-  int separator_at = 4;
+  int separator_at = 2;
+  if (!replacement) {
+    arguments[separator_at++] = self_flag;
+    arguments[separator_at++] = (char *)self;
+  }
   if (embedded_bdd) arguments[separator_at++] = bdd_flag;
   arguments[separator_at++] = separator;
   for (int k = 0; k < count; k++) arguments[separator_at + k] = words[k];

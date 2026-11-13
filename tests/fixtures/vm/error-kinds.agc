@@ -51,6 +51,8 @@ def main() -> Void
   show("invalid path", "io", File.read_text("", 60000))
   show("stat missing", "io", File.stat(at(dir, "missing.txt"), 60000))
   show("TLS ca_file", "io", TLS.client_context(TLS.ClientOptions(ca_file: at(dir, "missing.pem"))))
+  identity = TLS.ServerOptions(cert_file: at(dir, "missing.pem"), key_file: at(dir, "missing.key"))
+  show("TLS cert_file", "io", TLS.server_context(identity))
   show("bad timeout", "argument", File.read_text(file, 0))
 
   show("parse Int", "number", "12x".to_i)

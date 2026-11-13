@@ -393,11 +393,8 @@ def test_a_front_end_of_another_version_runs_but_a_program_of_another_version_do
     other = work / "other.agcb"
     other.write_bytes(with_version(data, ANOTHER_VERSION))
     loaded = agentica("--front-end", other, "inputs", "x")
-    # The binary names itself with the real path of its file, for the commands that start it again.
-    self_path = os.path.realpath(binary())
-    if os.environ.get("AGENTICA_TEST_WINE"):
-        self_path = "Z:" + str(ROOT / "dist" / "agentica.exe").replace("/", "\\")
-    inputs = "--version %s --self %s -- inputs x\n" % (version(), self_path)
+    # A front end of --front-end is not told the path of the binary, so it uses no cache (#1489).
+    inputs = "--version %s -- inputs x\n" % version()
     assert (loaded.code, loaded.stdout, loaded.stderr) == (0, inputs, "")
     refused = run_vm(other, env=vm_environment())
     assert refused.code == 2
