@@ -4,10 +4,11 @@
 ## import (Linker.link_programs), so a use in any of them is seen.
 ##
 ## The name at the position is found as `type-at` finds it: a local by the scopes of query/locals.agc, an imported name
-## by the import lists, anything else by the places that query/sites.agc lists for the first file, where the position
-## is on the written name or on a declaration's own name. The references are the other places of the same target in
-## every module, so two names that look alike but are different declarations (a field `name` of two structs, a local of
-## the same name in two blocks) never mix.
+## by the import lists, the name of a named argument (`size` of `f(x, size: 2)`) as the parameter it fills
+## (query/named_args.agc), anything else by the places that query/sites.agc lists for the first file, where the
+## position is on the written name or on a declaration's own name. The references are the other places of the same
+## target in every module, so two names that look alike but are different declarations (a field `name` of two structs,
+## a local of the same name in two blocks) never mix.
 
 import {STD_ONLY} from "../catalog/builtins"
 import Checker from "../check/checker"
@@ -20,6 +21,7 @@ import T from "../syntax/types"
 import At from "at"
 import Definitions from "definitions"
 import Locals from "locals"
+import NamedArgs from "named_args"
 import Position from "query_position"
 import Sites from "sites"
 import Symbol from "symbol"
@@ -57,8 +59,12 @@ export def answer(linked: Linker.Linked, checked: Checker.Checked, asked: Positi
         some(found) ->
           return Diag.Outcome.Failed(Position.no_expression(asked, here)) if found.local.kind == "discard"
 
-          Diag.Outcome.Done(of_local(focused, checked, found.local))
-        none -> of_name(focused, checked, asked, offset, here)
+          Diag.Outcome.Done(of_local(focused, checked, focused.modules[0], found.local))
+        none ->
+          case NamedArgs.at(focused.modules, checked.slots, checked.bound, offset)
+            some(named) -> Diag.Outcome.Done(of_local(focused, checked, named.module, named.local))
+            none -> of_name(focused, checked, asked, offset, here)
+          end
       end
   end
 end
@@ -96,19 +102,29 @@ export def definition_of(modules: List[Linker.LinkedModule], target: Sites.Targe
   Definitions.of_name(modules, target.name)
 end
 
-# A local: its binding is the definition, and its uses are in the function that holds it.
-def of_local(linked: Linker.Linked, checked: Checker.Checked, local: Locals.Local) -> Answer
-  module = linked.modules[0]
+# A local of `module`: its binding is the definition, and its uses are in the function that holds it. A parameter of a
+# function is used by name at a call too (`f(x, size: 2)`), in any module: kind `argument`.
+def of_local(
+  linked: Linker.Linked,
+  checked: Checker.Checked,
+  module: Linker.LinkedModule,
+  local: Locals.Local,
+) -> Answer
   type = T.to_text_as(local.type, TypeAt.written_prefixes(linked))
   function = function_at(module, local.name_span.start.offset)
   uses = Locals.uses(module, checked.bound, local).map do |span: Source.Span|
     Reference(kind: "binding", function: function, file: module.file, span: span)
   end
 
+  for use in NamedArgs.uses(linked.modules, checked.slots, module, local)
+    caller = function_at(use.module, use.span.start.offset)
+    uses = uses.push(Reference(kind: "argument", function: caller, file: use.module.file, span: use.span))
+  end
+
   Answer(
     definition: some(of_definition(Linker.home_key(module), Definitions.of_local(module, local, type))),
     builtin: "",
-    references: once(uses.sort_by do |use: Reference| use.span.start.offset end),
+    references: once(in_order(linked.modules, uses)),
   )
 end
 
@@ -128,11 +144,12 @@ def of_definition(file: String, found: Definitions.Definition) -> Symbol.Match
   )
 end
 
-# `x += 1` is the assignment to `x` and the read of `x` at one place: it is one reference.
+# `x += 1` is the assignment to `x` and the read of `x` at one place: it is one reference. `sorted` is in_order.
 def once(sorted: List[Reference]) -> List[Reference]
   out: List[Reference] = []
   for found in sorted
-    if out.size == 0 or out[out.size - 1].span.start.offset != found.span.start.offset
+    last = out.size - 1
+    if last < 0 or out[last].file != found.file or out[last].span.start.offset != found.span.start.offset
       out = out.push(found)
     end
   end

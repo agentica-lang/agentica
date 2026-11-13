@@ -90,6 +90,7 @@ query/at.agc
 query/bodies_json.agc
 query/definitions.agc
 query/locals.agc
+query/named_args.agc
 query/native_modules_json.agc
 query/outline.agc
 query/outline_json.agc

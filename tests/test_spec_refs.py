@@ -9,8 +9,8 @@ import pytest
 
 from tests.agentica_test import cli, run, vm_environment
 from tests.span_support import end, problem, start, where
-from tests.test_spec_type_at import (AGENTS, AGENTS_NAMED, AGENTS_THROUGH, AGENTS_USER, LIMITS, TWINS,
-                                     write_agents)
+from tests.test_spec_type_at import (AGENTS, AGENTS_NAMED, AGENTS_THROUGH, AGENTS_USER, LIMITS, NAMED_LIB, NAMED_USE,
+                                     TWINS, write_agents)
 
 MODELS = '''export LIMIT = 10
 
@@ -863,3 +863,50 @@ def test_a_builtin_type_that_std_re_exports_is_found_by_its_written_names(tmp_pa
     for needle, found in (("Request(method", report), ("body))", body)):
         at = answer(("server.agc", where(SERVER, needle)), cwd=tmp_path)
         assert (at["definition"], at["builtin"]) == (found["definition"], None), needle
+
+
+@pytest.fixture
+def named(tmp_path):
+    (tmp_path / "lib.agc").write_text(NAMED_LIB, encoding="utf-8")
+    (tmp_path / "use.agc").write_text(NAMED_USE, encoding="utf-8")
+    return tmp_path
+
+
+def test_a_parameter_is_used_by_name_at_each_call_that_binds_it(named):
+    report = told(spot("lib.agc", NAMED_LIB, "factor: Int = 2"), ".", cwd=named)
+    assert (report["definition"]["kind"], report["definition"]["name"]) == ("parameter", "factor")
+    # The use in the body, the call by name in the file itself, and the calls of use.agc: through the alias, through an
+    # import list and in a pipe. `other` has a `factor` of its own, and the local `factor` given as the value is not
+    # the parameter.
+    assert places(report) == [
+        ("lib.agc", *where(NAMED_LIB, "factor\nend"), "binding", "scale"),
+        ("lib.agc", *where(NAMED_LIB, "factor: 2"), "argument", "doubled"),
+        ("use.agc", *where(NAMED_USE, "factor: factor"), "argument", "by_name"),
+        ("use.agc", *where(NAMED_USE, "factor: 3"), "argument", "by_name"),
+        ("use.agc", *where(NAMED_USE, "factor: 2"), "argument", "by_name"),
+    ]
+    # The span is the name alone.
+    assert end(report["references"][2]["span"]) == where(NAMED_USE, ": factor")
+    # From the name at a call the answer is the same, the file asked about first.
+    on_name = answer(("use.agc", where(NAMED_USE, "factor: 3")), cwd=named)
+    assert on_name["definition"] == report["definition"]
+    assert sorted(places(on_name)) == sorted(places(report))
+    other = answer(("use.agc", where(NAMED_USE, "factor: 1")), cwd=named)
+    assert (start(other["definition"]["name_span"]), places(other)) == (where(NAMED_LIB, "factor: Int = 3"), [
+        ("use.agc", *where(NAMED_USE, "factor: 1"), "argument", "by_name"),
+        ("lib.agc", *where(NAMED_LIB, "factor\nend", 0, 2), "binding", "other"),
+    ])
+    local = answer(("use.agc", where(NAMED_USE, "factor = 5")), cwd=named)
+    assert places(local) == [("use.agc", *where(NAMED_USE, "factor)"), "binding", "by_name")]
+
+
+def test_a_generic_a_block_and_a_std_function_are_used_by_name_too(named):
+    for needle, declared in (("fallback: 0", "fallback: T"), ("count: 2", "count: Int")):
+        report = answer(("use.agc", where(NAMED_USE, needle)), cwd=named)
+        assert start(report["definition"]["name_span"]) == where(NAMED_LIB, declared), needle
+        assert places(report)[0] == ("use.agc", *where(NAMED_USE, needle), "argument", "by_name"), needle
+    std = answer(("use.agc", where(NAMED_USE, "fallback: \"x/y\"")), cwd=named)
+    assert (std["definition"]["kind"], std["definition"]["module"]) == ("parameter", "std/mime.agc")
+    assert places(std)[0] == ("use.agc", *where(NAMED_USE, "fallback: \"x/y\""), "argument", "kind")
+    # A builtin declares no parameter: the name of its argument is no expression, as before.
+    problem(refs(("use.agc", where(NAMED_USE, "separator")), cwd=named), "QUERY-NO-EXPRESSION", 2)
