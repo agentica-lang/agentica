@@ -44,7 +44,7 @@ end
 ## JSON.decode
 
 ```signature
-JSON.decode(s: String, type: T) -> Result[T]
+JSON.decode(text: String, type: T) -> Result[T]
 JSON.decode(json: JSON.Value, type: T) -> Result[T]
 ```
 
@@ -141,7 +141,7 @@ end
 `User.codec` (on the type, without parentheses, as `User.members`) is the `Codec[User]` of a struct or enum that `JSON.decode` takes.
 
 ```signature
-codec.decode(s: String) -> Result[T]
+codec.decode(text: String) -> Result[T]
 codec.decode(json: JSON.Value) -> Result[T]
 codec.encode(value: T) -> String
 codec.from(value: T) -> JSON.Value

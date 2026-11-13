@@ -170,7 +170,7 @@
  "[[\"--ai\", \"help\", \"strip\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "s.strip() -> String\nStrip surrounding whitespace.\n",
+  "stdout": "string.strip() -> String\nStrip surrounding whitespace.\n",
   "written": []
  },
  "[[\"--allow-run\", \"ok.agc\"], {}]": {
@@ -394,7 +394,7 @@
  "[[\"--json\", \"help\", \"String.to_i\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "{\"arity\":1,\"description\":\"Parse signed decimal Int as a Result.\",\"effects\":[],\"name\":\"String.to_i\",\"parameters\":[{\"name\":\"s\",\"type\":\"String\"}],\"result\":\"Result[Int]\",\"ruby\":\"s.to_i() -> Result[Int]\",\"signature\":\"String.to_i(s: String) -> Result[Int]\"}\n",
+  "stdout": "{\"arity\":1,\"description\":\"Parse signed decimal Int as a Result.\",\"effects\":[],\"name\":\"String.to_i\",\"parameters\":[{\"name\":\"string\",\"type\":\"String\"}],\"result\":\"Result[Int]\",\"ruby\":\"string.to_i() -> Result[Int]\",\"signature\":\"String.to_i(string: String) -> Result[Int]\"}\n",
   "written": []
  },
  "[[\"--json\", \"help\", \"std/queue.\"], {}]": {
@@ -454,7 +454,7 @@
  "[[\"--max-steps\", \"10\", \"help\", \"String.to_i\", \"--json\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "{\"arity\":1,\"description\":\"Parse signed decimal Int as a Result.\",\"effects\":[],\"name\":\"String.to_i\",\"parameters\":[{\"name\":\"s\",\"type\":\"String\"}],\"result\":\"Result[Int]\",\"ruby\":\"s.to_i() -> Result[Int]\",\"signature\":\"String.to_i(s: String) -> Result[Int]\"}\n",
+  "stdout": "{\"arity\":1,\"description\":\"Parse signed decimal Int as a Result.\",\"effects\":[],\"name\":\"String.to_i\",\"parameters\":[{\"name\":\"string\",\"type\":\"String\"}],\"result\":\"Result[Int]\",\"ruby\":\"string.to_i() -> Result[Int]\",\"signature\":\"String.to_i(string: String) -> Result[Int]\"}\n",
   "written": []
  },
  "[[\"--max-steps\", \"1000\", \"--json\", \"loop.agc\"], {}]": {
@@ -939,7 +939,7 @@
  },
  "[[\"help\", \"Strin.split\"], {}]": {
   "code": 2,
-  "stderr": "agentica: unknown builtin Strin.split; did you mean \"s.split\"?\n",
+  "stderr": "agentica: unknown builtin Strin.split; did you mean \"string.split\"?\n",
   "stdout": "",
   "written": []
  },
@@ -964,31 +964,31 @@
  "[[\"help\", \"String.split\", \"--json\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "{\"arity\":2,\"description\":\"Split text; an empty separator gives characters.\",\"effects\":[],\"name\":\"String.split\",\"parameters\":[{\"name\":\"s\",\"type\":\"String\"},{\"name\":\"separator\",\"type\":\"String\"}],\"result\":\"List[String]\",\"ruby\":\"s.split(separator: String) -> List[String]\",\"signature\":\"String.split(s: String, separator: String) -> List[String]\"}\n",
+  "stdout": "{\"arity\":2,\"description\":\"Split text; an empty separator gives characters.\",\"effects\":[],\"name\":\"String.split\",\"parameters\":[{\"name\":\"string\",\"type\":\"String\"},{\"name\":\"separator\",\"type\":\"String\"}],\"result\":\"List[String]\",\"ruby\":\"string.split(separator: String) -> List[String]\",\"signature\":\"String.split(string: String, separator: String) -> List[String]\"}\n",
   "written": []
  },
  "[[\"help\", \"String.split\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "s.split(separator: String) -> List[String]\nSplit text; an empty separator gives characters.\n",
+  "stdout": "string.split(separator: String) -> List[String]\nSplit text; an empty separator gives characters.\n",
   "written": []
  },
  "[[\"help\", \"String.strip\", \"--json\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "{\"arity\":1,\"description\":\"Strip surrounding whitespace.\",\"effects\":[],\"name\":\"String.strip\",\"parameters\":[{\"name\":\"s\",\"type\":\"String\"}],\"result\":\"String\",\"ruby\":\"s.strip() -> String\",\"signature\":\"String.strip(s: String) -> String\"}\n",
+  "stdout": "{\"arity\":1,\"description\":\"Strip surrounding whitespace.\",\"effects\":[],\"name\":\"String.strip\",\"parameters\":[{\"name\":\"string\",\"type\":\"String\"}],\"result\":\"String\",\"ruby\":\"string.strip() -> String\",\"signature\":\"String.strip(string: String) -> String\"}\n",
   "written": []
  },
  "[[\"help\", \"String.strip\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "s.strip() -> String\nStrip surrounding whitespace.\n",
+  "stdout": "string.strip() -> String\nStrip surrounding whitespace.\n",
   "written": []
  },
  "[[\"help\", \"String.to_i\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "s.to_i() -> Result[Int]\nParse signed decimal Int as a Result.\n",
+  "stdout": "string.to_i() -> Result[Int]\nParse signed decimal Int as a Result.\n",
   "written": []
  },
  "[[\"help\", \"String.to_int\", \"--json\"], {}]": {
@@ -1005,13 +1005,13 @@
  },
  "[[\"help\", \"String.to_it\", \"--json\"], {}]": {
   "code": 2,
-  "stderr": "agentica: unknown builtin String.to_it; did you mean \"s.to_i\"?\n",
+  "stderr": "agentica: unknown builtin String.to_it; did you mean \"string.to_i\"?\n",
   "stdout": "",
   "written": []
  },
  "[[\"help\", \"String.to_it\"], {}]": {
   "code": 2,
-  "stderr": "agentica: unknown builtin String.to_it; did you mean \"s.to_i\"?\n",
+  "stderr": "agentica: unknown builtin String.to_it; did you mean \"string.to_i\"?\n",
   "stdout": "",
   "written": []
  },
@@ -1054,13 +1054,13 @@
  "[[\"help\", \"collect\", \"--json\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "{\"alias\":\"collect\",\"builtins\":[{\"arity\":2,\"description\":\"Lazy step: f applied to each item.\",\"effects\":[],\"name\":\"Lazy.map\",\"parameters\":[{\"name\":\"lazy\",\"type\":\"Lazy[A]\"},{\"name\":\"f\",\"type\":\"Fn[A, B]\"}],\"result\":\"Lazy[B]\",\"ruby\":\"lazy.map(f: Fn[A, B]) -> Lazy[B]\",\"signature\":\"Lazy.map(lazy: Lazy[A], f: Fn[A, B]) -> Lazy[B]\"},{\"arity\":2,\"description\":\"Map each element in order without changing the input; O(n).\",\"effects\":[],\"name\":\"List.map\",\"parameters\":[{\"name\":\"list\",\"type\":\"List[A]\"},{\"name\":\"f\",\"type\":\"Fn[A, B]\"}],\"result\":\"List[B]\",\"ruby\":\"list.map(f: Fn[A, B]) -> List[B]\",\"signature\":\"List.map(list: List[A], f: Fn[A, B]) -> List[B]\"},{\"arity\":2,\"description\":\"List what f gives for each value, in order; O(n).\",\"effects\":[],\"name\":\"Range.map\",\"parameters\":[{\"name\":\"range\",\"type\":\"Range\"},{\"name\":\"f\",\"type\":\"Fn[Int, B]\"}],\"result\":\"List[B]\",\"ruby\":\"range.map(f: Fn[Int, B]) -> List[B]\",\"signature\":\"Range.map(range: Range, f: Fn[Int, B]) -> List[B]\"}],\"hints\":{}}\n",
+  "stdout": "{\"alias\":\"collect\",\"builtins\":[{\"arity\":2,\"description\":\"Lazy step: block applied to each item.\",\"effects\":[],\"name\":\"Lazy.map\",\"parameters\":[{\"name\":\"lazy\",\"type\":\"Lazy[A]\"},{\"name\":\"block\",\"type\":\"Fn[A, B]\"}],\"result\":\"Lazy[B]\",\"ruby\":\"lazy.map(block: Fn[A, B]) -> Lazy[B]\",\"signature\":\"Lazy.map(lazy: Lazy[A], block: Fn[A, B]) -> Lazy[B]\"},{\"arity\":2,\"description\":\"Map each element in order without changing the input; O(n).\",\"effects\":[],\"name\":\"List.map\",\"parameters\":[{\"name\":\"list\",\"type\":\"List[A]\"},{\"name\":\"block\",\"type\":\"Fn[A, B]\"}],\"result\":\"List[B]\",\"ruby\":\"list.map(block: Fn[A, B]) -> List[B]\",\"signature\":\"List.map(list: List[A], block: Fn[A, B]) -> List[B]\"},{\"arity\":2,\"description\":\"List what block gives for each value, in order; O(n).\",\"effects\":[],\"name\":\"Range.map\",\"parameters\":[{\"name\":\"range\",\"type\":\"Range\"},{\"name\":\"block\",\"type\":\"Fn[Int, B]\"}],\"result\":\"List[B]\",\"ruby\":\"range.map(block: Fn[Int, B]) -> List[B]\",\"signature\":\"Range.map(range: Range, block: Fn[Int, B]) -> List[B]\"}],\"hints\":{}}\n",
   "written": []
  },
  "[[\"help\", \"collect\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "`Lazy.collect` is written `.map`\nlazy.map(f: Fn[A, B]) -> Lazy[B]\nLazy step: f applied to each item.\n\n`List.collect` is written `.map`\nlist.map(f: Fn[A, B]) -> List[B]\nMap each element in order without changing the input; O(n).\n\n`Range.collect` is written `.map`\nrange.map(f: Fn[Int, B]) -> List[B]\nList what f gives for each value, in order; O(n).\n",
+  "stdout": "`Lazy.collect` is written `.map`\nlazy.map(block: Fn[A, B]) -> Lazy[B]\nLazy step: block applied to each item.\n\n`List.collect` is written `.map`\nlist.map(block: Fn[A, B]) -> List[B]\nMap each element in order without changing the input; O(n).\n\n`Range.collect` is written `.map`\nrange.map(block: Fn[Int, B]) -> List[B]\nList what block gives for each value, in order; O(n).\n",
   "written": []
  },
  "[[\"help\", \"concat\"], {}]": {
@@ -1072,13 +1072,13 @@
  "[[\"help\", \"contains\", \"--json\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "{\"alias\":\"contains\",\"builtins\":[{\"arity\":2,\"description\":\"Check whether a value is in the list, comparing with ==; items need equality; O(n).\",\"effects\":[],\"name\":\"List.include?\",\"parameters\":[{\"name\":\"list\",\"type\":\"List[T]\"},{\"name\":\"value\",\"type\":\"T\"}],\"result\":\"Bool\",\"ruby\":\"list.include?(value: T) -> Bool\",\"signature\":\"List.include?(list: List[T], value: T) -> Bool\"},{\"arity\":2,\"description\":\"Check whether a key exists.\",\"effects\":[],\"name\":\"Map.has_key?\",\"parameters\":[{\"name\":\"map\",\"type\":\"Map[K, V]\"},{\"name\":\"key\",\"type\":\"K\"}],\"result\":\"Bool\",\"ruby\":\"map.key?(key: K) -> Bool\",\"signature\":\"Map.has_key?(map: Map[K, V], key: K) -> Bool\"},{\"arity\":2,\"description\":\"Check whether a value is in the range.\",\"effects\":[],\"name\":\"Range.include?\",\"parameters\":[{\"name\":\"range\",\"type\":\"Range\"},{\"name\":\"value\",\"type\":\"Int\"}],\"result\":\"Bool\",\"ruby\":\"range.include?(value: Int) -> Bool\",\"signature\":\"Range.include?(range: Range, value: Int) -> Bool\"},{\"arity\":2,\"description\":\"Check whether an element is in the set.\",\"effects\":[],\"name\":\"Set.include?\",\"parameters\":[{\"name\":\"set\",\"type\":\"Set[T]\"},{\"name\":\"value\",\"type\":\"T\"}],\"result\":\"Bool\",\"ruby\":\"set.include?(value: T) -> Bool\",\"signature\":\"Set.include?(set: Set[T], value: T) -> Bool\"},{\"arity\":2,\"description\":\"Check for a substring.\",\"effects\":[],\"name\":\"String.include?\",\"parameters\":[{\"name\":\"s\",\"type\":\"String\"},{\"name\":\"part\",\"type\":\"String\"}],\"result\":\"Bool\",\"ruby\":\"s.include?(part: String) -> Bool\",\"signature\":\"String.include?(s: String, part: String) -> Bool\"}],\"hints\":{\"List.contains\":\"a List has no membership method; use xs.any? do |x| x == value end, or a Set with include?\",\"Map.contains\":\"use m.key?(key)\",\"Set.contains\":\"use s.include?(x)\"}}\n",
+  "stdout": "{\"alias\":\"contains\",\"builtins\":[{\"arity\":2,\"description\":\"Check whether a value is in the list, comparing with ==; items need equality; O(n).\",\"effects\":[],\"name\":\"List.include?\",\"parameters\":[{\"name\":\"list\",\"type\":\"List[T]\"},{\"name\":\"value\",\"type\":\"T\"}],\"result\":\"Bool\",\"ruby\":\"list.include?(value: T) -> Bool\",\"signature\":\"List.include?(list: List[T], value: T) -> Bool\"},{\"arity\":2,\"description\":\"Check whether a key exists.\",\"effects\":[],\"name\":\"Map.has_key?\",\"parameters\":[{\"name\":\"map\",\"type\":\"Map[K, V]\"},{\"name\":\"key\",\"type\":\"K\"}],\"result\":\"Bool\",\"ruby\":\"map.key?(key: K) -> Bool\",\"signature\":\"Map.has_key?(map: Map[K, V], key: K) -> Bool\"},{\"arity\":2,\"description\":\"Check whether a value is in the range.\",\"effects\":[],\"name\":\"Range.include?\",\"parameters\":[{\"name\":\"range\",\"type\":\"Range\"},{\"name\":\"value\",\"type\":\"Int\"}],\"result\":\"Bool\",\"ruby\":\"range.include?(value: Int) -> Bool\",\"signature\":\"Range.include?(range: Range, value: Int) -> Bool\"},{\"arity\":2,\"description\":\"Check whether an element is in the set.\",\"effects\":[],\"name\":\"Set.include?\",\"parameters\":[{\"name\":\"set\",\"type\":\"Set[T]\"},{\"name\":\"value\",\"type\":\"T\"}],\"result\":\"Bool\",\"ruby\":\"set.include?(value: T) -> Bool\",\"signature\":\"Set.include?(set: Set[T], value: T) -> Bool\"},{\"arity\":2,\"description\":\"Check for a substring.\",\"effects\":[],\"name\":\"String.include?\",\"parameters\":[{\"name\":\"string\",\"type\":\"String\"},{\"name\":\"part\",\"type\":\"String\"}],\"result\":\"Bool\",\"ruby\":\"string.include?(part: String) -> Bool\",\"signature\":\"String.include?(string: String, part: String) -> Bool\"}],\"hints\":{\"List.contains\":\"a List has no membership method; use xs.any? do |x| x == value end, or a Set with include?\",\"Map.contains\":\"use m.key?(key)\",\"Set.contains\":\"use s.include?(x)\"}}\n",
   "written": []
  },
  "[[\"help\", \"contains\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "`List.contains` is written `.include?`\nlist.include?(value: T) -> Bool\nCheck whether a value is in the list, comparing with ==; items need equality; O(n).\n\n`Map.contains` is written `.key?`\nmap.key?(key: K) -> Bool\nCheck whether a key exists.\n\n`Range.contains` is written `.include?`\nrange.include?(value: Int) -> Bool\nCheck whether a value is in the range.\n\n`Set.contains` is written `.include?`\nset.include?(value: T) -> Bool\nCheck whether an element is in the set.\n\n`String.contains` is written `.include?`\ns.include?(part: String) -> Bool\nCheck for a substring.\n\nList.contains: a List has no membership method; use xs.any? do |x| x == value end, or a Set with include?\n\nMap.contains: use m.key?(key)\n\nSet.contains: use s.include?(x)\n",
+  "stdout": "`List.contains` is written `.include?`\nlist.include?(value: T) -> Bool\nCheck whether a value is in the list, comparing with ==; items need equality; O(n).\n\n`Map.contains` is written `.key?`\nmap.key?(key: K) -> Bool\nCheck whether a key exists.\n\n`Range.contains` is written `.include?`\nrange.include?(value: Int) -> Bool\nCheck whether a value is in the range.\n\n`Set.contains` is written `.include?`\nset.include?(value: T) -> Bool\nCheck whether an element is in the set.\n\n`String.contains` is written `.include?`\nstring.include?(part: String) -> Bool\nCheck for a substring.\n\nList.contains: a List has no membership method; use xs.any? do |x| x == value end, or a Set with include?\n\nMap.contains: use m.key?(key)\n\nSet.contains: use s.include?(x)\n",
   "written": []
  },
  "[[\"help\", \"contains?\", \"--json\"], {}]": {
@@ -1096,25 +1096,25 @@
  "[[\"help\", \"detect\", \"--json\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "{\"alias\":\"detect\",\"builtins\":[{\"arity\":2,\"description\":\"Terminal: the first item f accepts, else error(\\\"not found\\\") when the source ends.\",\"effects\":[],\"name\":\"Lazy.find\",\"parameters\":[{\"name\":\"lazy\",\"type\":\"Lazy[A]\"},{\"name\":\"f\",\"type\":\"Fn[A, Bool]\"}],\"result\":\"Result[A]\",\"ruby\":\"lazy.find(f: Fn[A, Bool]) -> Result[A]\",\"signature\":\"Lazy.find(lazy: Lazy[A], f: Fn[A, Bool]) -> Result[A]\"},{\"arity\":2,\"description\":\"The first element f accepts, else error(\\\"not found\\\"); f stops being called at the first true; O(n).\",\"effects\":[],\"name\":\"List.find\",\"parameters\":[{\"name\":\"list\",\"type\":\"List[A]\"},{\"name\":\"f\",\"type\":\"Fn[A, Bool]\"}],\"result\":\"Result[A]\",\"ruby\":\"list.find(f: Fn[A, Bool]) -> Result[A]\",\"signature\":\"List.find(list: List[A], f: Fn[A, Bool]) -> Result[A]\"},{\"arity\":2,\"description\":\"The first value f accepts, else error(\\\"not found\\\"); f stops being called at the first true; O(n).\",\"effects\":[],\"name\":\"Range.find\",\"parameters\":[{\"name\":\"range\",\"type\":\"Range\"},{\"name\":\"f\",\"type\":\"Fn[Int, Bool]\"}],\"result\":\"Result[Int]\",\"ruby\":\"range.find(f: Fn[Int, Bool]) -> Result[Int]\",\"signature\":\"Range.find(range: Range, f: Fn[Int, Bool]) -> Result[Int]\"}],\"hints\":{}}\n",
+  "stdout": "{\"alias\":\"detect\",\"builtins\":[{\"arity\":2,\"description\":\"Terminal: the first item block accepts, else error(\\\"not found\\\") when the source ends.\",\"effects\":[],\"name\":\"Lazy.find\",\"parameters\":[{\"name\":\"lazy\",\"type\":\"Lazy[A]\"},{\"name\":\"block\",\"type\":\"Fn[A, Bool]\"}],\"result\":\"Result[A]\",\"ruby\":\"lazy.find(block: Fn[A, Bool]) -> Result[A]\",\"signature\":\"Lazy.find(lazy: Lazy[A], block: Fn[A, Bool]) -> Result[A]\"},{\"arity\":2,\"description\":\"The first element block accepts, else error(\\\"not found\\\"); block stops being called at the first true; O(n).\",\"effects\":[],\"name\":\"List.find\",\"parameters\":[{\"name\":\"list\",\"type\":\"List[A]\"},{\"name\":\"block\",\"type\":\"Fn[A, Bool]\"}],\"result\":\"Result[A]\",\"ruby\":\"list.find(block: Fn[A, Bool]) -> Result[A]\",\"signature\":\"List.find(list: List[A], block: Fn[A, Bool]) -> Result[A]\"},{\"arity\":2,\"description\":\"The first value block accepts, else error(\\\"not found\\\"); block stops being called at the first true; O(n).\",\"effects\":[],\"name\":\"Range.find\",\"parameters\":[{\"name\":\"range\",\"type\":\"Range\"},{\"name\":\"block\",\"type\":\"Fn[Int, Bool]\"}],\"result\":\"Result[Int]\",\"ruby\":\"range.find(block: Fn[Int, Bool]) -> Result[Int]\",\"signature\":\"Range.find(range: Range, block: Fn[Int, Bool]) -> Result[Int]\"}],\"hints\":{}}\n",
   "written": []
  },
  "[[\"help\", \"detect\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "`Lazy.detect` is written `.find`\nlazy.find(f: Fn[A, Bool]) -> Result[A]\nTerminal: the first item f accepts, else error(\"not found\") when the source ends.\n\n`List.detect` is written `.find`\nlist.find(f: Fn[A, Bool]) -> Result[A]\nThe first element f accepts, else error(\"not found\"); f stops being called at the first true; O(n).\n\n`Range.detect` is written `.find`\nrange.find(f: Fn[Int, Bool]) -> Result[Int]\nThe first value f accepts, else error(\"not found\"); f stops being called at the first true; O(n).\n",
+  "stdout": "`Lazy.detect` is written `.find`\nlazy.find(block: Fn[A, Bool]) -> Result[A]\nTerminal: the first item block accepts, else error(\"not found\") when the source ends.\n\n`List.detect` is written `.find`\nlist.find(block: Fn[A, Bool]) -> Result[A]\nThe first element block accepts, else error(\"not found\"); block stops being called at the first true; O(n).\n\n`Range.detect` is written `.find`\nrange.find(block: Fn[Int, Bool]) -> Result[Int]\nThe first value block accepts, else error(\"not found\"); block stops being called at the first true; O(n).\n",
   "written": []
  },
  "[[\"help\", \"filter\", \"--json\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "{\"alias\":\"filter\",\"builtins\":[{\"arity\":2,\"description\":\"Lazy step: keep the items whose predicate is true.\",\"effects\":[],\"name\":\"Lazy.filter\",\"parameters\":[{\"name\":\"lazy\",\"type\":\"Lazy[A]\"},{\"name\":\"f\",\"type\":\"Fn[A, Bool]\"}],\"result\":\"Lazy[A]\",\"ruby\":\"lazy.select(f: Fn[A, Bool]) -> Lazy[A]\",\"signature\":\"Lazy.filter(lazy: Lazy[A], f: Fn[A, Bool]) -> Lazy[A]\"},{\"arity\":2,\"description\":\"Keep elements whose predicate is true, in order; O(n).\",\"effects\":[],\"name\":\"List.filter\",\"parameters\":[{\"name\":\"list\",\"type\":\"List[A]\"},{\"name\":\"f\",\"type\":\"Fn[A, Bool]\"}],\"result\":\"List[A]\",\"ruby\":\"list.select(f: Fn[A, Bool]) -> List[A]\",\"signature\":\"List.filter(list: List[A], f: Fn[A, Bool]) -> List[A]\"},{\"arity\":2,\"description\":\"Keep the entries f accepts, in insertion order; O(n).\",\"effects\":[],\"name\":\"Map.filter\",\"parameters\":[{\"name\":\"map\",\"type\":\"Map[K, V]\"},{\"name\":\"f\",\"type\":\"Fn[K, V, Bool]\"}],\"result\":\"Map[K, V]\",\"ruby\":\"map.select(f: Fn[K, V, Bool]) -> Map[K, V]\",\"signature\":\"Map.filter(map: Map[K, V], f: Fn[K, V, Bool]) -> Map[K, V]\"}],\"hints\":{}}\n",
+  "stdout": "{\"alias\":\"filter\",\"builtins\":[{\"arity\":2,\"description\":\"Lazy step: keep the items whose predicate is true.\",\"effects\":[],\"name\":\"Lazy.filter\",\"parameters\":[{\"name\":\"lazy\",\"type\":\"Lazy[A]\"},{\"name\":\"block\",\"type\":\"Fn[A, Bool]\"}],\"result\":\"Lazy[A]\",\"ruby\":\"lazy.select(block: Fn[A, Bool]) -> Lazy[A]\",\"signature\":\"Lazy.filter(lazy: Lazy[A], block: Fn[A, Bool]) -> Lazy[A]\"},{\"arity\":2,\"description\":\"Keep elements whose predicate is true, in order; O(n).\",\"effects\":[],\"name\":\"List.filter\",\"parameters\":[{\"name\":\"list\",\"type\":\"List[A]\"},{\"name\":\"block\",\"type\":\"Fn[A, Bool]\"}],\"result\":\"List[A]\",\"ruby\":\"list.select(block: Fn[A, Bool]) -> List[A]\",\"signature\":\"List.filter(list: List[A], block: Fn[A, Bool]) -> List[A]\"},{\"arity\":2,\"description\":\"Keep the entries block accepts, in insertion order; O(n).\",\"effects\":[],\"name\":\"Map.filter\",\"parameters\":[{\"name\":\"map\",\"type\":\"Map[K, V]\"},{\"name\":\"block\",\"type\":\"Fn[K, V, Bool]\"}],\"result\":\"Map[K, V]\",\"ruby\":\"map.select(block: Fn[K, V, Bool]) -> Map[K, V]\",\"signature\":\"Map.filter(map: Map[K, V], block: Fn[K, V, Bool]) -> Map[K, V]\"}],\"hints\":{}}\n",
   "written": []
  },
  "[[\"help\", \"filter\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "`Lazy.filter` is written `.select`\nlazy.select(f: Fn[A, Bool]) -> Lazy[A]\nLazy step: keep the items whose predicate is true.\n\n`List.filter` is written `.select`\nlist.select(f: Fn[A, Bool]) -> List[A]\nKeep elements whose predicate is true, in order; O(n).\n\n`Map.filter` is written `.select`\nmap.select(f: Fn[K, V, Bool]) -> Map[K, V]\nKeep the entries f accepts, in insertion order; O(n).\n",
+  "stdout": "`Lazy.filter` is written `.select`\nlazy.select(block: Fn[A, Bool]) -> Lazy[A]\nLazy step: keep the items whose predicate is true.\n\n`List.filter` is written `.select`\nlist.select(block: Fn[A, Bool]) -> List[A]\nKeep elements whose predicate is true, in order; O(n).\n\n`Map.filter` is written `.select`\nmap.select(block: Fn[K, V, Bool]) -> Map[K, V]\nKeep the entries block accepts, in insertion order; O(n).\n",
   "written": []
  },
  "[[\"help\", \"float\", \"--json\"], {}]": {
@@ -1168,25 +1168,25 @@
  "[[\"help\", \"include\", \"--json\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "{\"alias\":\"include\",\"builtins\":[{\"arity\":2,\"description\":\"Check whether a value is in the list, comparing with ==; items need equality; O(n).\",\"effects\":[],\"name\":\"List.include?\",\"parameters\":[{\"name\":\"list\",\"type\":\"List[T]\"},{\"name\":\"value\",\"type\":\"T\"}],\"result\":\"Bool\",\"ruby\":\"list.include?(value: T) -> Bool\",\"signature\":\"List.include?(list: List[T], value: T) -> Bool\"},{\"arity\":2,\"description\":\"Check whether a key exists.\",\"effects\":[],\"name\":\"Map.has_key?\",\"parameters\":[{\"name\":\"map\",\"type\":\"Map[K, V]\"},{\"name\":\"key\",\"type\":\"K\"}],\"result\":\"Bool\",\"ruby\":\"map.key?(key: K) -> Bool\",\"signature\":\"Map.has_key?(map: Map[K, V], key: K) -> Bool\"},{\"arity\":2,\"description\":\"Check whether a value is in the range.\",\"effects\":[],\"name\":\"Range.include?\",\"parameters\":[{\"name\":\"range\",\"type\":\"Range\"},{\"name\":\"value\",\"type\":\"Int\"}],\"result\":\"Bool\",\"ruby\":\"range.include?(value: Int) -> Bool\",\"signature\":\"Range.include?(range: Range, value: Int) -> Bool\"},{\"arity\":2,\"description\":\"Check whether an element is in the set.\",\"effects\":[],\"name\":\"Set.include?\",\"parameters\":[{\"name\":\"set\",\"type\":\"Set[T]\"},{\"name\":\"value\",\"type\":\"T\"}],\"result\":\"Bool\",\"ruby\":\"set.include?(value: T) -> Bool\",\"signature\":\"Set.include?(set: Set[T], value: T) -> Bool\"},{\"arity\":2,\"description\":\"Check for a substring.\",\"effects\":[],\"name\":\"String.include?\",\"parameters\":[{\"name\":\"s\",\"type\":\"String\"},{\"name\":\"part\",\"type\":\"String\"}],\"result\":\"Bool\",\"ruby\":\"s.include?(part: String) -> Bool\",\"signature\":\"String.include?(s: String, part: String) -> Bool\"}],\"hints\":{}}\n",
+  "stdout": "{\"alias\":\"include\",\"builtins\":[{\"arity\":2,\"description\":\"Check whether a value is in the list, comparing with ==; items need equality; O(n).\",\"effects\":[],\"name\":\"List.include?\",\"parameters\":[{\"name\":\"list\",\"type\":\"List[T]\"},{\"name\":\"value\",\"type\":\"T\"}],\"result\":\"Bool\",\"ruby\":\"list.include?(value: T) -> Bool\",\"signature\":\"List.include?(list: List[T], value: T) -> Bool\"},{\"arity\":2,\"description\":\"Check whether a key exists.\",\"effects\":[],\"name\":\"Map.has_key?\",\"parameters\":[{\"name\":\"map\",\"type\":\"Map[K, V]\"},{\"name\":\"key\",\"type\":\"K\"}],\"result\":\"Bool\",\"ruby\":\"map.key?(key: K) -> Bool\",\"signature\":\"Map.has_key?(map: Map[K, V], key: K) -> Bool\"},{\"arity\":2,\"description\":\"Check whether a value is in the range.\",\"effects\":[],\"name\":\"Range.include?\",\"parameters\":[{\"name\":\"range\",\"type\":\"Range\"},{\"name\":\"value\",\"type\":\"Int\"}],\"result\":\"Bool\",\"ruby\":\"range.include?(value: Int) -> Bool\",\"signature\":\"Range.include?(range: Range, value: Int) -> Bool\"},{\"arity\":2,\"description\":\"Check whether an element is in the set.\",\"effects\":[],\"name\":\"Set.include?\",\"parameters\":[{\"name\":\"set\",\"type\":\"Set[T]\"},{\"name\":\"value\",\"type\":\"T\"}],\"result\":\"Bool\",\"ruby\":\"set.include?(value: T) -> Bool\",\"signature\":\"Set.include?(set: Set[T], value: T) -> Bool\"},{\"arity\":2,\"description\":\"Check for a substring.\",\"effects\":[],\"name\":\"String.include?\",\"parameters\":[{\"name\":\"string\",\"type\":\"String\"},{\"name\":\"part\",\"type\":\"String\"}],\"result\":\"Bool\",\"ruby\":\"string.include?(part: String) -> Bool\",\"signature\":\"String.include?(string: String, part: String) -> Bool\"}],\"hints\":{}}\n",
   "written": []
  },
  "[[\"help\", \"include\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "`List.include` is written `.include?`\nlist.include?(value: T) -> Bool\nCheck whether a value is in the list, comparing with ==; items need equality; O(n).\n\n`Map.include` is written `.key?`\nmap.key?(key: K) -> Bool\nCheck whether a key exists.\n\n`Range.include` is written `.include?`\nrange.include?(value: Int) -> Bool\nCheck whether a value is in the range.\n\n`Set.include` is written `.include?`\nset.include?(value: T) -> Bool\nCheck whether an element is in the set.\n\n`String.include` is written `.include?`\ns.include?(part: String) -> Bool\nCheck for a substring.\n",
+  "stdout": "`List.include` is written `.include?`\nlist.include?(value: T) -> Bool\nCheck whether a value is in the list, comparing with ==; items need equality; O(n).\n\n`Map.include` is written `.key?`\nmap.key?(key: K) -> Bool\nCheck whether a key exists.\n\n`Range.include` is written `.include?`\nrange.include?(value: Int) -> Bool\nCheck whether a value is in the range.\n\n`Set.include` is written `.include?`\nset.include?(value: T) -> Bool\nCheck whether an element is in the set.\n\n`String.include` is written `.include?`\nstring.include?(part: String) -> Bool\nCheck for a substring.\n",
   "written": []
  },
  "[[\"help\", \"inject\", \"--json\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "{\"alias\":\"inject\",\"builtins\":[{\"arity\":3,\"description\":\"Terminal: fold left from initial in order.\",\"effects\":[],\"name\":\"Lazy.reduce\",\"parameters\":[{\"name\":\"lazy\",\"type\":\"Lazy[A]\"},{\"name\":\"initial\",\"type\":\"B\"},{\"name\":\"f\",\"type\":\"Fn[B, A, B]\"}],\"result\":\"Result[B]\",\"ruby\":\"lazy.reduce(initial: B, f: Fn[B, A, B]) -> Result[B]\",\"signature\":\"Lazy.reduce(lazy: Lazy[A], initial: B, f: Fn[B, A, B]) -> Result[B]\"},{\"arity\":3,\"description\":\"Fold left with f(accumulator, item); empty lists return initial; O(n).\",\"effects\":[],\"name\":\"List.reduce\",\"parameters\":[{\"name\":\"list\",\"type\":\"List[A]\"},{\"name\":\"initial\",\"type\":\"B\"},{\"name\":\"f\",\"type\":\"Fn[B, A, B]\"}],\"result\":\"B\",\"ruby\":\"list.reduce(initial: B, f: Fn[B, A, B]) -> B\",\"signature\":\"List.reduce(list: List[A], initial: B, f: Fn[B, A, B]) -> B\"},{\"arity\":3,\"description\":\"Fold left with f(accumulator, value); an empty range returns initial; O(n).\",\"effects\":[],\"name\":\"Range.reduce\",\"parameters\":[{\"name\":\"range\",\"type\":\"Range\"},{\"name\":\"initial\",\"type\":\"B\"},{\"name\":\"f\",\"type\":\"Fn[B, Int, B]\"}],\"result\":\"B\",\"ruby\":\"range.reduce(initial: B, f: Fn[B, Int, B]) -> B\",\"signature\":\"Range.reduce(range: Range, initial: B, f: Fn[B, Int, B]) -> B\"}],\"hints\":{\"Bytes.inject\":\"Bytes has no reduce; use b.to_a.reduce(0) do |acc, x| ... end\"}}\n",
+  "stdout": "{\"alias\":\"inject\",\"builtins\":[{\"arity\":3,\"description\":\"Terminal: fold left from initial in order.\",\"effects\":[],\"name\":\"Lazy.reduce\",\"parameters\":[{\"name\":\"lazy\",\"type\":\"Lazy[A]\"},{\"name\":\"initial\",\"type\":\"B\"},{\"name\":\"block\",\"type\":\"Fn[B, A, B]\"}],\"result\":\"Result[B]\",\"ruby\":\"lazy.reduce(initial: B, block: Fn[B, A, B]) -> Result[B]\",\"signature\":\"Lazy.reduce(lazy: Lazy[A], initial: B, block: Fn[B, A, B]) -> Result[B]\"},{\"arity\":3,\"description\":\"Fold left with block(accumulator, item); empty lists return initial; O(n).\",\"effects\":[],\"name\":\"List.reduce\",\"parameters\":[{\"name\":\"list\",\"type\":\"List[A]\"},{\"name\":\"initial\",\"type\":\"B\"},{\"name\":\"block\",\"type\":\"Fn[B, A, B]\"}],\"result\":\"B\",\"ruby\":\"list.reduce(initial: B, block: Fn[B, A, B]) -> B\",\"signature\":\"List.reduce(list: List[A], initial: B, block: Fn[B, A, B]) -> B\"},{\"arity\":3,\"description\":\"Fold left with block(accumulator, value); an empty range returns initial; O(n).\",\"effects\":[],\"name\":\"Range.reduce\",\"parameters\":[{\"name\":\"range\",\"type\":\"Range\"},{\"name\":\"initial\",\"type\":\"B\"},{\"name\":\"block\",\"type\":\"Fn[B, Int, B]\"}],\"result\":\"B\",\"ruby\":\"range.reduce(initial: B, block: Fn[B, Int, B]) -> B\",\"signature\":\"Range.reduce(range: Range, initial: B, block: Fn[B, Int, B]) -> B\"}],\"hints\":{\"Bytes.inject\":\"Bytes has no reduce; use b.to_a.reduce(0) do |acc, x| ... end\"}}\n",
   "written": []
  },
  "[[\"help\", \"inject\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "`Lazy.inject` is written `.reduce`\nlazy.reduce(initial: B, f: Fn[B, A, B]) -> Result[B]\nTerminal: fold left from initial in order.\n\n`List.inject` is written `.reduce`\nlist.reduce(initial: B, f: Fn[B, A, B]) -> B\nFold left with f(accumulator, item); empty lists return initial; O(n).\n\n`Range.inject` is written `.reduce`\nrange.reduce(initial: B, f: Fn[B, Int, B]) -> B\nFold left with f(accumulator, value); an empty range returns initial; O(n).\n\nBytes.inject: Bytes has no reduce; use b.to_a.reduce(0) do |acc, x| ... end\n",
+  "stdout": "`Lazy.inject` is written `.reduce`\nlazy.reduce(initial: B, block: Fn[B, A, B]) -> Result[B]\nTerminal: fold left from initial in order.\n\n`List.inject` is written `.reduce`\nlist.reduce(initial: B, block: Fn[B, A, B]) -> B\nFold left with block(accumulator, item); empty lists return initial; O(n).\n\n`Range.inject` is written `.reduce`\nrange.reduce(initial: B, block: Fn[B, Int, B]) -> B\nFold left with block(accumulator, value); an empty range returns initial; O(n).\n\nBytes.inject: Bytes has no reduce; use b.to_a.reduce(0) do |acc, x| ... end\n",
   "written": []
  },
  "[[\"help\", \"int\"], {}]": {
@@ -1198,13 +1198,13 @@
  "[[\"help\", \"join\", \"--json\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "{\"alias\":\"join\",\"builtins\":[{\"arity\":2,\"description\":\"Join text elements.\",\"effects\":[],\"name\":\"List.join\",\"parameters\":[{\"name\":\"parts\",\"type\":\"List[String]\"},{\"name\":\"separator\",\"type\":\"String\"}],\"result\":\"String\",\"ruby\":\"parts.join(separator: String) -> String\",\"signature\":\"List.join(parts: List[String], separator: String) -> String\"},{\"arity\":1,\"description\":\"Join path parts using host path semantics.\",\"effects\":[\"filesystem\"],\"name\":\"Path.join\",\"parameters\":[{\"name\":\"parts\",\"type\":\"List[String]\"}],\"result\":\"Result[String]\",\"ruby\":null,\"signature\":\"Path.join(parts: List[String]) -> Result[String]\"}],\"hints\":{}}\n",
+  "stdout": "{\"alias\":\"join\",\"builtins\":[{\"arity\":2,\"description\":\"Join text elements.\",\"effects\":[],\"name\":\"List.join\",\"parameters\":[{\"name\":\"list\",\"type\":\"List[String]\"},{\"name\":\"separator\",\"type\":\"String\"}],\"result\":\"String\",\"ruby\":\"list.join(separator: String) -> String\",\"signature\":\"List.join(list: List[String], separator: String) -> String\"},{\"arity\":1,\"description\":\"Join path parts using host path semantics.\",\"effects\":[\"filesystem\"],\"name\":\"Path.join\",\"parameters\":[{\"name\":\"parts\",\"type\":\"List[String]\"}],\"result\":\"Result[String]\",\"ruby\":null,\"signature\":\"Path.join(parts: List[String]) -> Result[String]\"}],\"hints\":{}}\n",
   "written": []
  },
  "[[\"help\", \"join\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "parts.join(separator: String) -> String\nJoin text elements.\n\nPath.join(parts: List[String]) -> Result[String]\nJoin path parts using host path semantics.\n",
+  "stdout": "list.join(separator: String) -> String\nJoin text elements.\n\nPath.join(parts: List[String]) -> Result[String]\nJoin path parts using host path semantics.\n",
   "written": []
  },
  "[[\"help\", \"key?\", \"--json\"], {}]": {
@@ -1234,13 +1234,13 @@
  "[[\"help\", \"length\", \"--json\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "{\"alias\":\"length\",\"builtins\":[{\"arity\":1,\"description\":\"Count the entries of the table (a snapshot); VM only.\",\"effects\":[],\"name\":\"ATS.size\",\"parameters\":[{\"name\":\"table\",\"type\":\"ATS[K, V]\"}],\"result\":\"Int\",\"ruby\":\"table.size() -> Int\",\"signature\":\"ATS.size(table: ATS[K, V]) -> Int\"},{\"arity\":1,\"description\":\"Count the bytes.\",\"effects\":[],\"name\":\"Bytes.length\",\"parameters\":[{\"name\":\"bytes\",\"type\":\"Bytes\"}],\"result\":\"Int\",\"ruby\":\"bytes.length() -> Int\",\"signature\":\"Bytes.length(bytes: Bytes) -> Int\"},{\"arity\":1,\"description\":\"Count list elements.\",\"effects\":[],\"name\":\"List.size\",\"parameters\":[{\"name\":\"list\",\"type\":\"List[T]\"}],\"result\":\"Int\",\"ruby\":\"list.size() -> Int\",\"signature\":\"List.size(list: List[T]) -> Int\"},{\"arity\":1,\"description\":\"Count map entries.\",\"effects\":[],\"name\":\"Map.size\",\"parameters\":[{\"name\":\"map\",\"type\":\"Map[K, V]\"}],\"result\":\"Int\",\"ruby\":\"map.size() -> Int\",\"signature\":\"Map.size(map: Map[K, V]) -> Int\"},{\"arity\":1,\"description\":\"Count the values; halts when the count does not fit in Int.\",\"effects\":[],\"name\":\"Range.size\",\"parameters\":[{\"name\":\"range\",\"type\":\"Range\"}],\"result\":\"Int\",\"ruby\":\"range.size() -> Int\",\"signature\":\"Range.size(range: Range) -> Int\"},{\"arity\":1,\"description\":\"Count set elements.\",\"effects\":[],\"name\":\"Set.size\",\"parameters\":[{\"name\":\"set\",\"type\":\"Set[T]\"}],\"result\":\"Int\",\"ruby\":\"set.size() -> Int\",\"signature\":\"Set.size(set: Set[T]) -> Int\"},{\"arity\":1,\"description\":\"Count Unicode characters.\",\"effects\":[],\"name\":\"String.length\",\"parameters\":[{\"name\":\"s\",\"type\":\"String\"}],\"result\":\"Int\",\"ruby\":\"s.length() -> Int\",\"signature\":\"String.length(s: String) -> Int\"}],\"hints\":{}}\n",
+  "stdout": "{\"alias\":\"length\",\"builtins\":[{\"arity\":1,\"description\":\"Count the entries of the table (a snapshot); VM only.\",\"effects\":[],\"name\":\"ATS.size\",\"parameters\":[{\"name\":\"table\",\"type\":\"ATS[K, V]\"}],\"result\":\"Int\",\"ruby\":\"table.size() -> Int\",\"signature\":\"ATS.size(table: ATS[K, V]) -> Int\"},{\"arity\":1,\"description\":\"Count the bytes.\",\"effects\":[],\"name\":\"Bytes.length\",\"parameters\":[{\"name\":\"bytes\",\"type\":\"Bytes\"}],\"result\":\"Int\",\"ruby\":\"bytes.length() -> Int\",\"signature\":\"Bytes.length(bytes: Bytes) -> Int\"},{\"arity\":1,\"description\":\"Count list elements.\",\"effects\":[],\"name\":\"List.size\",\"parameters\":[{\"name\":\"list\",\"type\":\"List[T]\"}],\"result\":\"Int\",\"ruby\":\"list.size() -> Int\",\"signature\":\"List.size(list: List[T]) -> Int\"},{\"arity\":1,\"description\":\"Count map entries.\",\"effects\":[],\"name\":\"Map.size\",\"parameters\":[{\"name\":\"map\",\"type\":\"Map[K, V]\"}],\"result\":\"Int\",\"ruby\":\"map.size() -> Int\",\"signature\":\"Map.size(map: Map[K, V]) -> Int\"},{\"arity\":1,\"description\":\"Count the values; halts when the count does not fit in Int.\",\"effects\":[],\"name\":\"Range.size\",\"parameters\":[{\"name\":\"range\",\"type\":\"Range\"}],\"result\":\"Int\",\"ruby\":\"range.size() -> Int\",\"signature\":\"Range.size(range: Range) -> Int\"},{\"arity\":1,\"description\":\"Count set elements.\",\"effects\":[],\"name\":\"Set.size\",\"parameters\":[{\"name\":\"set\",\"type\":\"Set[T]\"}],\"result\":\"Int\",\"ruby\":\"set.size() -> Int\",\"signature\":\"Set.size(set: Set[T]) -> Int\"},{\"arity\":1,\"description\":\"Count Unicode characters.\",\"effects\":[],\"name\":\"String.length\",\"parameters\":[{\"name\":\"string\",\"type\":\"String\"}],\"result\":\"Int\",\"ruby\":\"string.length() -> Int\",\"signature\":\"String.length(string: String) -> Int\"}],\"hints\":{}}\n",
   "written": []
  },
  "[[\"help\", \"length\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "`ATS.length` is written `.size`\ntable.size() -> Int\nCount the entries of the table (a snapshot); VM only.\n\nbytes.length() -> Int\nCount the bytes.\n\n`List.length` is written `.size`\nlist.size() -> Int\nCount list elements.\n\n`Map.length` is written `.size`\nmap.size() -> Int\nCount map entries.\n\n`Range.length` is written `.size`\nrange.size() -> Int\nCount the values; halts when the count does not fit in Int.\n\n`Set.length` is written `.size`\nset.size() -> Int\nCount set elements.\n\ns.length() -> Int\nCount Unicode characters.\n",
+  "stdout": "`ATS.length` is written `.size`\ntable.size() -> Int\nCount the entries of the table (a snapshot); VM only.\n\nbytes.length() -> Int\nCount the bytes.\n\n`List.length` is written `.size`\nlist.size() -> Int\nCount list elements.\n\n`Map.length` is written `.size`\nmap.size() -> Int\nCount map entries.\n\n`Range.length` is written `.size`\nrange.size() -> Int\nCount the values; halts when the count does not fit in Int.\n\n`Set.length` is written `.size`\nset.size() -> Int\nCount set elements.\n\nstring.length() -> Int\nCount Unicode characters.\n",
   "written": []
  },
  "[[\"help\", \"member?\", \"--json\"], {}]": {
@@ -1318,25 +1318,25 @@
  "[[\"help\", \"select\", \"--json\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "{\"alias\":\"select\",\"builtins\":[{\"arity\":2,\"description\":\"Lazy step: keep the items whose predicate is true.\",\"effects\":[],\"name\":\"Lazy.filter\",\"parameters\":[{\"name\":\"lazy\",\"type\":\"Lazy[A]\"},{\"name\":\"f\",\"type\":\"Fn[A, Bool]\"}],\"result\":\"Lazy[A]\",\"ruby\":\"lazy.select(f: Fn[A, Bool]) -> Lazy[A]\",\"signature\":\"Lazy.filter(lazy: Lazy[A], f: Fn[A, Bool]) -> Lazy[A]\"},{\"arity\":2,\"description\":\"Keep elements whose predicate is true, in order; O(n).\",\"effects\":[],\"name\":\"List.filter\",\"parameters\":[{\"name\":\"list\",\"type\":\"List[A]\"},{\"name\":\"f\",\"type\":\"Fn[A, Bool]\"}],\"result\":\"List[A]\",\"ruby\":\"list.select(f: Fn[A, Bool]) -> List[A]\",\"signature\":\"List.filter(list: List[A], f: Fn[A, Bool]) -> List[A]\"},{\"arity\":2,\"description\":\"Keep the entries f accepts, in insertion order; O(n).\",\"effects\":[],\"name\":\"Map.filter\",\"parameters\":[{\"name\":\"map\",\"type\":\"Map[K, V]\"},{\"name\":\"f\",\"type\":\"Fn[K, V, Bool]\"}],\"result\":\"Map[K, V]\",\"ruby\":\"map.select(f: Fn[K, V, Bool]) -> Map[K, V]\",\"signature\":\"Map.filter(map: Map[K, V], f: Fn[K, V, Bool]) -> Map[K, V]\"},{\"arity\":2,\"description\":\"List the values f accepts, in order; O(n).\",\"effects\":[],\"name\":\"Range.select\",\"parameters\":[{\"name\":\"range\",\"type\":\"Range\"},{\"name\":\"f\",\"type\":\"Fn[Int, Bool]\"}],\"result\":\"List[Int]\",\"ruby\":\"range.select(f: Fn[Int, Bool]) -> List[Int]\",\"signature\":\"Range.select(range: Range, f: Fn[Int, Bool]) -> List[Int]\"}],\"hints\":{\"Bytes.select\":\"Bytes has no select; use b.to_a.select do |x| ... end\"}}\n",
+  "stdout": "{\"alias\":\"select\",\"builtins\":[{\"arity\":2,\"description\":\"Lazy step: keep the items whose predicate is true.\",\"effects\":[],\"name\":\"Lazy.filter\",\"parameters\":[{\"name\":\"lazy\",\"type\":\"Lazy[A]\"},{\"name\":\"block\",\"type\":\"Fn[A, Bool]\"}],\"result\":\"Lazy[A]\",\"ruby\":\"lazy.select(block: Fn[A, Bool]) -> Lazy[A]\",\"signature\":\"Lazy.filter(lazy: Lazy[A], block: Fn[A, Bool]) -> Lazy[A]\"},{\"arity\":2,\"description\":\"Keep elements whose predicate is true, in order; O(n).\",\"effects\":[],\"name\":\"List.filter\",\"parameters\":[{\"name\":\"list\",\"type\":\"List[A]\"},{\"name\":\"block\",\"type\":\"Fn[A, Bool]\"}],\"result\":\"List[A]\",\"ruby\":\"list.select(block: Fn[A, Bool]) -> List[A]\",\"signature\":\"List.filter(list: List[A], block: Fn[A, Bool]) -> List[A]\"},{\"arity\":2,\"description\":\"Keep the entries block accepts, in insertion order; O(n).\",\"effects\":[],\"name\":\"Map.filter\",\"parameters\":[{\"name\":\"map\",\"type\":\"Map[K, V]\"},{\"name\":\"block\",\"type\":\"Fn[K, V, Bool]\"}],\"result\":\"Map[K, V]\",\"ruby\":\"map.select(block: Fn[K, V, Bool]) -> Map[K, V]\",\"signature\":\"Map.filter(map: Map[K, V], block: Fn[K, V, Bool]) -> Map[K, V]\"},{\"arity\":2,\"description\":\"List the values block accepts, in order; O(n).\",\"effects\":[],\"name\":\"Range.select\",\"parameters\":[{\"name\":\"range\",\"type\":\"Range\"},{\"name\":\"block\",\"type\":\"Fn[Int, Bool]\"}],\"result\":\"List[Int]\",\"ruby\":\"range.select(block: Fn[Int, Bool]) -> List[Int]\",\"signature\":\"Range.select(range: Range, block: Fn[Int, Bool]) -> List[Int]\"}],\"hints\":{\"Bytes.select\":\"Bytes has no select; use b.to_a.select do |x| ... end\"}}\n",
   "written": []
  },
  "[[\"help\", \"select\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "lazy.select(f: Fn[A, Bool]) -> Lazy[A]\nLazy step: keep the items whose predicate is true.\n\nlist.select(f: Fn[A, Bool]) -> List[A]\nKeep elements whose predicate is true, in order; O(n).\n\nmap.select(f: Fn[K, V, Bool]) -> Map[K, V]\nKeep the entries f accepts, in insertion order; O(n).\n\nrange.select(f: Fn[Int, Bool]) -> List[Int]\nList the values f accepts, in order; O(n).\n\nBytes.select: Bytes has no select; use b.to_a.select do |x| ... end\n",
+  "stdout": "lazy.select(block: Fn[A, Bool]) -> Lazy[A]\nLazy step: keep the items whose predicate is true.\n\nlist.select(block: Fn[A, Bool]) -> List[A]\nKeep elements whose predicate is true, in order; O(n).\n\nmap.select(block: Fn[K, V, Bool]) -> Map[K, V]\nKeep the entries block accepts, in insertion order; O(n).\n\nrange.select(block: Fn[Int, Bool]) -> List[Int]\nList the values block accepts, in order; O(n).\n\nBytes.select: Bytes has no select; use b.to_a.select do |x| ... end\n",
   "written": []
  },
  "[[\"help\", \"size\", \"--json\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "{\"alias\":\"size\",\"builtins\":[{\"arity\":1,\"description\":\"Count the entries of the table (a snapshot); VM only.\",\"effects\":[],\"name\":\"ATS.size\",\"parameters\":[{\"name\":\"table\",\"type\":\"ATS[K, V]\"}],\"result\":\"Int\",\"ruby\":\"table.size() -> Int\",\"signature\":\"ATS.size(table: ATS[K, V]) -> Int\"},{\"arity\":1,\"description\":\"Count the bytes.\",\"effects\":[],\"name\":\"Bytes.length\",\"parameters\":[{\"name\":\"bytes\",\"type\":\"Bytes\"}],\"result\":\"Int\",\"ruby\":\"bytes.length() -> Int\",\"signature\":\"Bytes.length(bytes: Bytes) -> Int\"},{\"arity\":1,\"description\":\"Count list elements.\",\"effects\":[],\"name\":\"List.size\",\"parameters\":[{\"name\":\"list\",\"type\":\"List[T]\"}],\"result\":\"Int\",\"ruby\":\"list.size() -> Int\",\"signature\":\"List.size(list: List[T]) -> Int\"},{\"arity\":1,\"description\":\"Count map entries.\",\"effects\":[],\"name\":\"Map.size\",\"parameters\":[{\"name\":\"map\",\"type\":\"Map[K, V]\"}],\"result\":\"Int\",\"ruby\":\"map.size() -> Int\",\"signature\":\"Map.size(map: Map[K, V]) -> Int\"},{\"arity\":1,\"description\":\"Count the values; halts when the count does not fit in Int.\",\"effects\":[],\"name\":\"Range.size\",\"parameters\":[{\"name\":\"range\",\"type\":\"Range\"}],\"result\":\"Int\",\"ruby\":\"range.size() -> Int\",\"signature\":\"Range.size(range: Range) -> Int\"},{\"arity\":1,\"description\":\"Count set elements.\",\"effects\":[],\"name\":\"Set.size\",\"parameters\":[{\"name\":\"set\",\"type\":\"Set[T]\"}],\"result\":\"Int\",\"ruby\":\"set.size() -> Int\",\"signature\":\"Set.size(set: Set[T]) -> Int\"},{\"arity\":1,\"description\":\"Count Unicode characters.\",\"effects\":[],\"name\":\"String.length\",\"parameters\":[{\"name\":\"s\",\"type\":\"String\"}],\"result\":\"Int\",\"ruby\":\"s.length() -> Int\",\"signature\":\"String.length(s: String) -> Int\"}],\"hints\":{}}\n",
+  "stdout": "{\"alias\":\"size\",\"builtins\":[{\"arity\":1,\"description\":\"Count the entries of the table (a snapshot); VM only.\",\"effects\":[],\"name\":\"ATS.size\",\"parameters\":[{\"name\":\"table\",\"type\":\"ATS[K, V]\"}],\"result\":\"Int\",\"ruby\":\"table.size() -> Int\",\"signature\":\"ATS.size(table: ATS[K, V]) -> Int\"},{\"arity\":1,\"description\":\"Count the bytes.\",\"effects\":[],\"name\":\"Bytes.length\",\"parameters\":[{\"name\":\"bytes\",\"type\":\"Bytes\"}],\"result\":\"Int\",\"ruby\":\"bytes.length() -> Int\",\"signature\":\"Bytes.length(bytes: Bytes) -> Int\"},{\"arity\":1,\"description\":\"Count list elements.\",\"effects\":[],\"name\":\"List.size\",\"parameters\":[{\"name\":\"list\",\"type\":\"List[T]\"}],\"result\":\"Int\",\"ruby\":\"list.size() -> Int\",\"signature\":\"List.size(list: List[T]) -> Int\"},{\"arity\":1,\"description\":\"Count map entries.\",\"effects\":[],\"name\":\"Map.size\",\"parameters\":[{\"name\":\"map\",\"type\":\"Map[K, V]\"}],\"result\":\"Int\",\"ruby\":\"map.size() -> Int\",\"signature\":\"Map.size(map: Map[K, V]) -> Int\"},{\"arity\":1,\"description\":\"Count the values; halts when the count does not fit in Int.\",\"effects\":[],\"name\":\"Range.size\",\"parameters\":[{\"name\":\"range\",\"type\":\"Range\"}],\"result\":\"Int\",\"ruby\":\"range.size() -> Int\",\"signature\":\"Range.size(range: Range) -> Int\"},{\"arity\":1,\"description\":\"Count set elements.\",\"effects\":[],\"name\":\"Set.size\",\"parameters\":[{\"name\":\"set\",\"type\":\"Set[T]\"}],\"result\":\"Int\",\"ruby\":\"set.size() -> Int\",\"signature\":\"Set.size(set: Set[T]) -> Int\"},{\"arity\":1,\"description\":\"Count Unicode characters.\",\"effects\":[],\"name\":\"String.length\",\"parameters\":[{\"name\":\"string\",\"type\":\"String\"}],\"result\":\"Int\",\"ruby\":\"string.length() -> Int\",\"signature\":\"String.length(string: String) -> Int\"}],\"hints\":{}}\n",
   "written": []
  },
  "[[\"help\", \"size\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "table.size() -> Int\nCount the entries of the table (a snapshot); VM only.\n\n`Bytes.size` is written `.length`\nbytes.length() -> Int\nCount the bytes.\n\nlist.size() -> Int\nCount list elements.\n\nmap.size() -> Int\nCount map entries.\n\nrange.size() -> Int\nCount the values; halts when the count does not fit in Int.\n\nset.size() -> Int\nCount set elements.\n\n`String.size` is written `.length`\ns.length() -> Int\nCount Unicode characters.\n",
+  "stdout": "table.size() -> Int\nCount the entries of the table (a snapshot); VM only.\n\n`Bytes.size` is written `.length`\nbytes.length() -> Int\nCount the bytes.\n\nlist.size() -> Int\nCount list elements.\n\nmap.size() -> Int\nCount map entries.\n\nrange.size() -> Int\nCount the values; halts when the count does not fit in Int.\n\nset.size() -> Int\nCount set elements.\n\n`String.size` is written `.length`\nstring.length() -> Int\nCount Unicode characters.\n",
   "written": []
  },
  "[[\"help\", \"std\"], {}]": {
@@ -1354,13 +1354,13 @@
  "[[\"help\", \"strip\", \"--json\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "{\"alias\":\"strip\",\"builtins\":[{\"arity\":1,\"description\":\"Strip surrounding whitespace.\",\"effects\":[],\"name\":\"String.strip\",\"parameters\":[{\"name\":\"s\",\"type\":\"String\"}],\"result\":\"String\",\"ruby\":\"s.strip() -> String\",\"signature\":\"String.strip(s: String) -> String\"}],\"hints\":{}}\n",
+  "stdout": "{\"alias\":\"strip\",\"builtins\":[{\"arity\":1,\"description\":\"Strip surrounding whitespace.\",\"effects\":[],\"name\":\"String.strip\",\"parameters\":[{\"name\":\"string\",\"type\":\"String\"}],\"result\":\"String\",\"ruby\":\"string.strip() -> String\",\"signature\":\"String.strip(string: String) -> String\"}],\"hints\":{}}\n",
   "written": []
  },
  "[[\"help\", \"strip\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "s.strip() -> String\nStrip surrounding whitespace.\n",
+  "stdout": "string.strip() -> String\nStrip surrounding whitespace.\n",
   "written": []
  },
  "[[\"help\", \"to_float\", \"--json\"], {}]": {
@@ -1378,13 +1378,13 @@
  "[[\"help\", \"to_i\", \"--json\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "{\"alias\":\"to_i\",\"builtins\":[{\"arity\":1,\"description\":\"Truncate toward zero; NaN, infinity or overflow return an error.\",\"effects\":[],\"name\":\"Float.to_i\",\"parameters\":[{\"name\":\"x\",\"type\":\"Float\"}],\"result\":\"Result[Int]\",\"ruby\":\"x.to_i() -> Result[Int]\",\"signature\":\"Float.to_i(x: Float) -> Result[Int]\"},{\"arity\":1,\"description\":\"Parse signed decimal Int as a Result.\",\"effects\":[],\"name\":\"String.to_i\",\"parameters\":[{\"name\":\"s\",\"type\":\"String\"}],\"result\":\"Result[Int]\",\"ruby\":\"s.to_i() -> Result[Int]\",\"signature\":\"String.to_i(s: String) -> Result[Int]\"}],\"hints\":{}}\n",
+  "stdout": "{\"alias\":\"to_i\",\"builtins\":[{\"arity\":1,\"description\":\"Truncate toward zero; NaN, infinity or overflow return an error.\",\"effects\":[],\"name\":\"Float.to_i\",\"parameters\":[{\"name\":\"x\",\"type\":\"Float\"}],\"result\":\"Result[Int]\",\"ruby\":\"x.to_i() -> Result[Int]\",\"signature\":\"Float.to_i(x: Float) -> Result[Int]\"},{\"arity\":1,\"description\":\"Parse signed decimal Int as a Result.\",\"effects\":[],\"name\":\"String.to_i\",\"parameters\":[{\"name\":\"string\",\"type\":\"String\"}],\"result\":\"Result[Int]\",\"ruby\":\"string.to_i() -> Result[Int]\",\"signature\":\"String.to_i(string: String) -> Result[Int]\"}],\"hints\":{}}\n",
   "written": []
  },
  "[[\"help\", \"to_i\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "x.to_i() -> Result[Int]\nTruncate toward zero; NaN, infinity or overflow return an error.\n\ns.to_i() -> Result[Int]\nParse signed decimal Int as a Result.\n",
+  "stdout": "x.to_i() -> Result[Int]\nTruncate toward zero; NaN, infinity or overflow return an error.\n\nstring.to_i() -> Result[Int]\nParse signed decimal Int as a Result.\n",
   "written": []
  },
  "[[\"help\", \"to_int\", \"--json\"], {}]": {
@@ -1414,25 +1414,25 @@
  "[[\"help\", \"unwrap_or\", \"--json\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "{\"alias\":\"unwrap_or\",\"builtins\":[{\"arity\":2,\"description\":\"Return x of some(x), else default; both arguments run eagerly.\",\"effects\":[],\"name\":\"Optional.unwrap_or\",\"parameters\":[{\"name\":\"o\",\"type\":\"Optional[T]\"},{\"name\":\"default\",\"type\":\"T\"}],\"result\":\"T\",\"ruby\":\"o.unwrap_or(default: T) -> T\",\"signature\":\"Optional.unwrap_or(o: Optional[T], default: T) -> T\"},{\"arity\":2,\"description\":\"Return success or default; both arguments run eagerly.\",\"effects\":[],\"name\":\"Result.unwrap_or\",\"parameters\":[{\"name\":\"r\",\"type\":\"Result[T]\"},{\"name\":\"default\",\"type\":\"T\"}],\"result\":\"T\",\"ruby\":\"r.unwrap_or(default: T) -> T\",\"signature\":\"Result.unwrap_or(r: Result[T], default: T) -> T\"}],\"hints\":{}}\n",
+  "stdout": "{\"alias\":\"unwrap_or\",\"builtins\":[{\"arity\":2,\"description\":\"Return x of some(x), else default; both arguments run eagerly.\",\"effects\":[],\"name\":\"Optional.unwrap_or\",\"parameters\":[{\"name\":\"optional\",\"type\":\"Optional[T]\"},{\"name\":\"default\",\"type\":\"T\"}],\"result\":\"T\",\"ruby\":\"optional.unwrap_or(default: T) -> T\",\"signature\":\"Optional.unwrap_or(optional: Optional[T], default: T) -> T\"},{\"arity\":2,\"description\":\"Return success or default; both arguments run eagerly.\",\"effects\":[],\"name\":\"Result.unwrap_or\",\"parameters\":[{\"name\":\"result\",\"type\":\"Result[T]\"},{\"name\":\"default\",\"type\":\"T\"}],\"result\":\"T\",\"ruby\":\"result.unwrap_or(default: T) -> T\",\"signature\":\"Result.unwrap_or(result: Result[T], default: T) -> T\"}],\"hints\":{}}\n",
   "written": []
  },
  "[[\"help\", \"unwrap_or\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "o.unwrap_or(default: T) -> T\nReturn x of some(x), else default; both arguments run eagerly.\n\nr.unwrap_or(default: T) -> T\nReturn success or default; both arguments run eagerly.\n",
+  "stdout": "optional.unwrap_or(default: T) -> T\nReturn x of some(x), else default; both arguments run eagerly.\n\nresult.unwrap_or(default: T) -> T\nReturn success or default; both arguments run eagerly.\n",
   "written": []
  },
  "[[\"help\", \"value!\", \"--json\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "{\"alias\":\"value!\",\"builtins\":[{\"arity\":1,\"description\":\"Return x of some(x); halt on none.\",\"effects\":[],\"name\":\"Optional.unwrap!\",\"parameters\":[{\"name\":\"o\",\"type\":\"Optional[T]\"}],\"result\":\"T\",\"ruby\":\"o.unwrap!() -> T\",\"signature\":\"Optional.unwrap!(o: Optional[T]) -> T\"},{\"arity\":1,\"description\":\"Return the success value; halt on error.\",\"effects\":[],\"name\":\"Result.unwrap!\",\"parameters\":[{\"name\":\"r\",\"type\":\"Result[T]\"}],\"result\":\"T\",\"ruby\":\"r.unwrap!() -> T\",\"signature\":\"Result.unwrap!(r: Result[T]) -> T\"}],\"hints\":{}}\n",
+  "stdout": "{\"alias\":\"value!\",\"builtins\":[{\"arity\":1,\"description\":\"Return x of some(x); halt on none.\",\"effects\":[],\"name\":\"Optional.unwrap!\",\"parameters\":[{\"name\":\"optional\",\"type\":\"Optional[T]\"}],\"result\":\"T\",\"ruby\":\"optional.unwrap!() -> T\",\"signature\":\"Optional.unwrap!(optional: Optional[T]) -> T\"},{\"arity\":1,\"description\":\"Return the success value; halt on error.\",\"effects\":[],\"name\":\"Result.unwrap!\",\"parameters\":[{\"name\":\"r\",\"type\":\"Result[T]\"}],\"result\":\"T\",\"ruby\":\"r.unwrap!() -> T\",\"signature\":\"Result.unwrap!(r: Result[T]) -> T\"}],\"hints\":{}}\n",
   "written": []
  },
  "[[\"help\", \"value!\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "`Optional.value!` is written `.unwrap!`\no.unwrap!() -> T\nReturn x of some(x); halt on none.\n\n`Result.value!` is written `.unwrap!`\nr.unwrap!() -> T\nReturn the success value; halt on error.\n",
+  "stdout": "`Optional.value!` is written `.unwrap!`\noptional.unwrap!() -> T\nReturn x of some(x); halt on none.\n\n`Result.value!` is written `.unwrap!`\nr.unwrap!() -> T\nReturn the success value; halt on error.\n",
   "written": []
  },
  "[[\"help\"], {}]": {

@@ -28,10 +28,10 @@ end
 
 ## Splits milliseconds since the Unix epoch into the civil date and time in UTC. A negative value is a time before
 ## 1970.
-export def parts(ms: Int) -> Parts
+export def parts(time_ms: Int) -> Parts
   # Floor division written so that no intermediate product leaves the Int range, even at Int.min.
-  days = ms / 86400000
-  rest = ms % 86400000
+  days = time_ms / 86400000
+  rest = time_ms % 86400000
   if rest < 0
     days -= 1
     rest += 86400000
@@ -69,8 +69,8 @@ end
 ## as Ruby's `Time#iso8601(n)` does, except that Ruby writes n digits for any n and this clamps: a count below 0 is
 ## read as 0 and one above 9 as 9. Digits past the third are 0, since the input has milliseconds. A year outside 0 to
 ## 9999 is written with its sign and at least four digits.
-export def iso8601(ms: Int, fraction_digits: Int = 0) -> String
-  p = parts(ms)
+export def iso8601(time_ms: Int, fraction_digits: Int = 0) -> String
+  p = parts(time_ms)
   sign = ""
   year = p.year
   if year < 0

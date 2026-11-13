@@ -15,32 +15,32 @@ use the eager `List` methods.
 ```text
 List.lazy(list: List[A]) -> Lazy[A]
 Range.lazy(range: Range) -> Lazy[Int]                         # (1..n).lazy, (0...n).lazy
-Lazy.produce(seed: A, f: Fn[A, A]) -> Lazy[A]                 # seed, f(seed), f(f(seed)) ... without end
+Lazy.produce(seed: A, block: Fn[A, A]) -> Lazy[A]             # seed, block(seed), block(block(seed)) ... without end
 File.foreach(path: String, buffer_bytes: Int = 65536, timeout_ms: Int = 30000) -> Lazy[String]   # lines, read as File.each_line
 File.chunks(path: String, size: Int = 65536, timeout_ms: Int = 30000) -> Lazy[Bytes]   # bytes, size at a time
 Channel.lazy(channel: Channel[A], timeout_ms: Int) -> Lazy[A]  # ch.lazy(ms): values until closed and drained
 
 # Steps: each gives a new Lazy and runs nothing
-Lazy.map(lazy: Lazy[A], f: Fn[A, B]) -> Lazy[B]
-lazy.select(f: Fn[A, Bool]) -> Lazy[A]
+Lazy.map(lazy: Lazy[A], block: Fn[A, B]) -> Lazy[B]
+lazy.select(block: Fn[A, Bool]) -> Lazy[A]
 Lazy.take(lazy: Lazy[A], count: Int) -> Lazy[A]               # count < 0 is RUNTIME-INVALID-COUNT
-Lazy.take_while(lazy: Lazy[A], f: Fn[A, Bool]) -> Lazy[A]
+Lazy.take_while(lazy: Lazy[A], block: Fn[A, Bool]) -> Lazy[A]
 Lazy.drop(lazy: Lazy[A], count: Int) -> Lazy[A]               # count < 0 is RUNTIME-INVALID-COUNT
-Lazy.drop_while(lazy: Lazy[A], f: Fn[A, Bool]) -> Lazy[A]
-Lazy.flat_map(lazy: Lazy[A], f: Fn[A, List[B]]) -> Lazy[B]
-Lazy.with_index(lazy: Lazy[A], f: Fn[A, Int, B]) -> Lazy[B]   # f(item, index), index from 0
+Lazy.drop_while(lazy: Lazy[A], block: Fn[A, Bool]) -> Lazy[A]
+Lazy.flat_map(lazy: Lazy[A], block: Fn[A, List[B]]) -> Lazy[B]
+Lazy.with_index(lazy: Lazy[A], block: Fn[A, Int, B]) -> Lazy[B]   # block(item, index), index from 0
 Lazy.each_slice(lazy: Lazy[A], size: Int) -> Lazy[List[A]]    # last slice shorter; size < 1 is RUNTIME-INVALID-COUNT
 Lazy.each_cons(lazy: Lazy[A], size: Int) -> Lazy[List[A]]     # windows of size neighbours
-Lazy.chunk_while(lazy: Lazy[A], f: Fn[A, A, Bool]) -> Lazy[List[A]]   # new group where f(prev, item) is false
+Lazy.chunk_while(lazy: Lazy[A], block: Fn[A, A, Bool]) -> Lazy[List[A]]   # new group where block(prev, item) is false
 lazy.deflate(level = 6, raw = false), lazy.inflate(raw = false, max_bytes = 1073741824),
 lazy.gzip(level = 6), lazy.gunzip(max_bytes = 1073741824)    # Bytes chunks, compression.md
 
 # Terminals: always a Result
 Lazy.to_a(lazy: Lazy[A]) -> Result[List[A]]
 Lazy.first(lazy: Lazy[A], count: Int) -> Result[List[A]]      # take(count) then to_a
-Lazy.each(lazy: Lazy[A], f: Fn[A, Result[Void]]) -> Result[Void]   # stops at f's first error and returns it
-Lazy.reduce(lazy: Lazy[A], initial: B, f: Fn[B, A, B]) -> Result[B]
-Lazy.find(lazy: Lazy[A], f: Fn[A, Bool]) -> Result[A]         # error("not found") when the source ends
+Lazy.each(lazy: Lazy[A], block: Fn[A, Result[Void]]) -> Result[Void]   # stops at the block's first error and returns it
+Lazy.reduce(lazy: Lazy[A], initial: B, block: Fn[B, A, B]) -> Result[B]
+Lazy.find(lazy: Lazy[A], block: Fn[A, Bool]) -> Result[A]     # error("not found") when the source ends
 Lazy.write_lines(lazy: Lazy[String], path: String, timeout_ms: Int = 30000) -> Result[Void]   # each item + LF into a file
 lazy.write_bytes(path: String, timeout_ms: Int = 30000) -> Result[Int]   # Bytes chunks into a file, bytes written
 ```

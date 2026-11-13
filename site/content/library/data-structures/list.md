@@ -127,9 +127,9 @@ end
 ## map, select and reduce
 
 ```signature
-List.map(list: List[A], f: Fn[A, B]) -> List[B]
-List.filter(list: List[A], f: Fn[A, Bool]) -> List[A]
-List.reduce(list: List[A], initial: B, f: Fn[B, A, B]) -> B
+List.map(list: List[A], block: Fn[A, B]) -> List[B]
+List.filter(list: List[A], block: Fn[A, Bool]) -> List[A]
+List.reduce(list: List[A], initial: B, block: Fn[B, A, B]) -> B
 ```
 
 `select` (the function is `List.filter`) keeps the elements for which the function gives `true`. `reduce` combines from left to right, starting with `initial`.
@@ -151,8 +151,8 @@ end
 ## each and each_with_index
 
 ```signature
-List.each(list: List[A], f: Fn[A, Void]) -> Void
-List.each_with_index(list: List[A], f: Fn[A, Int, Void]) -> Void
+List.each(list: List[A], block: Fn[A, Void]) -> Void
+List.each_with_index(list: List[A], block: Fn[A, Int, Void]) -> Void
 ```
 
 Run the function for each element, in order, and give nothing back. The index starts at 0.
@@ -171,8 +171,8 @@ end
 ## any? and all?
 
 ```signature
-List.any?(list: List[A], f: Fn[A, Bool]) -> Bool
-List.all?(list: List[A], f: Fn[A, Bool]) -> Bool
+List.any?(list: List[A], block: Fn[A, Bool]) -> Bool
+List.all?(list: List[A], block: Fn[A, Bool]) -> Bool
 ```
 
 `any?` stops at the first `true`, `all?` at the first `false`.
@@ -193,7 +193,7 @@ false
 ## find
 
 ```signature
-List.find(list: List[A], f: Fn[A, Bool]) -> Result[A]
+List.find(list: List[A], block: Fn[A, Bool]) -> Result[A]
 ```
 
 `ok` with the first element for which the function gives `true`, else `error("not found")`. It stops at the first match.
@@ -215,7 +215,7 @@ error("not found")
 
 ```signature
 List.index(list: List[T], value: T) -> Optional[Int]
-List.find_index(list: List[A], f: Fn[A, Bool]) -> Optional[Int]
+List.find_index(list: List[A], block: Fn[A, Bool]) -> Optional[Int]
 ```
 
 `index` gives `some` with the position of the first item `==` the value, else `none`; the items need `==`, as for `include?`. `find_index` takes a block instead and gives the position of the first element for which it gives `true`, so it is the block form: `xs.index do ... end` is `CHECK-BLOCK-TARGET`. Floats compare with `==`, so a NaN never matches (`[nan].index(nan)` is `none`) and `-0.0` matches `0.0`. Both stop at the first match and are O(n).
@@ -238,7 +238,7 @@ some(0)
 ## flat_map
 
 ```signature
-List.flat_map(list: List[A], f: Fn[A, List[B]]) -> List[B]
+List.flat_map(list: List[A], block: Fn[A, List[B]]) -> List[B]
 ```
 
 Joins the lists the function gives, in order.
@@ -256,7 +256,7 @@ end
 ## partition
 
 ```signature
-List.partition(list: List[A], f: Fn[A, Bool]) -> List[List[A]]
+List.partition(list: List[A], block: Fn[A, Bool]) -> List[List[A]]
 ```
 
 Gives `[accepted, rejected]`.
@@ -277,8 +277,8 @@ end
 ## take_while and drop_while
 
 ```signature
-List.take_while(list: List[A], f: Fn[A, Bool]) -> List[A]
-List.drop_while(list: List[A], f: Fn[A, Bool]) -> List[A]
+List.take_while(list: List[A], block: Fn[A, Bool]) -> List[A]
+List.drop_while(list: List[A], block: Fn[A, Bool]) -> List[A]
 ```
 
 `take_while` keeps the elements before the first `false`; `drop_while` keeps that one and the rest. Neither calls the function after it.

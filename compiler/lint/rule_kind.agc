@@ -74,11 +74,17 @@ export def suggestions(file: String, literals: List[Seen]) -> List[Problems.Prob
   found
 end
 
-# The family an is_a? call tests: the positional argument at `index`, or else the named `family:`.
+# The family an is_a? call tests: the positional argument at `index`, or else the named `family:`. A receiver named
+# `error:` (`Error.is_a?(error: e, family: "x")`, or `Error.is_a?("x", error: e)`) leaves one positional slot fewer.
 def tested(args: List[Ast.Expr], named: List[Ast.NamedArg], index: Int) -> List[Seen]
-  return text(args[index], false) if args.size == index + 1
+  at = index
+  if (index > 0 and named.any? { |arg: Ast.NamedArg| arg.name == "error" })
+    at = index - 1
+  end
 
-  return [] if args.size != index
+  return text(args[at], false) if args.size == at + 1
+
+  return [] if args.size != at
 
   named.flat_map do |arg: Ast.NamedArg|
     case arg.name

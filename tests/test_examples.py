@@ -397,9 +397,9 @@ def test_the_helps_of_diagnostics_name_the_ruby_form_not_the_builtin(tmp_path):
         assert (found["code"], found["help"]) == (code, help_text), expression
     # A call in method form counts the arguments after the receiver and names the Ruby method; the callee note keeps
     # the signature of the catalog.
-    for expression, name, internal in [('"a".include?()', "s.include?", "String.include?"),
+    for expression, name, internal in [('"a".include?()', "string.include?", "String.include?"),
                                        ("[1].push()", "list.push", "List.append"),
-                                       ('"a".strip(1)', "s.strip", "String.strip"),
+                                       ('"a".strip(1)', "string.strip", "String.strip"),
                                        ("m.length(1)", "map.size", "Map.size"),
                                        ("[1].filter(1, 2)", "list.select", "List.filter"),
                                        ("[1].collect()", "list.map", "List.map"),

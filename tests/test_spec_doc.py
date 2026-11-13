@@ -151,7 +151,7 @@ def test_std_module_comes_from_the_embedded_sources(tmp_path):
     assert report["doc"] is not None
     items = items_by_name(report)
     assert items["QueueState"]["kind"] == "struct"
-    assert items["pop"]["signature"] == "pop(q: QueueState) -> Result[Popped]"
+    assert items["pop"]["signature"] == "pop(queue: QueueState) -> Result[Popped]"
     assert items["pop"]["span"]["file"] == "std/queue"
 
 

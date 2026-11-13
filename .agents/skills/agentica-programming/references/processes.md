@@ -8,22 +8,22 @@ Process.Options(timeout_ms: Int = 30000, chdir: String = ".", env: Map[String, S
                 out: String = "", err: String = "", pgroup: Bool = false)
 Process.spawn(command: String, args: List[String],
               options: Process.Options = Process.Options()) -> Result[Process]
-Process.send(p: Process, text: String, timeout_ms: Int) -> Result[Void]
-Process.send_bytes(p: Process, bytes: Bytes, timeout_ms: Int) -> Result[Void]
-Process.read_line(p: Process, timeout_ms: Int) -> Result[String]
-Process.read_bytes(p: Process, count: Int, timeout_ms: Int) -> Result[Bytes]
-Process.close_stdin(p: Process, timeout_ms: Int) -> Result[Void]
-Process.wait(p: Process, timeout_ms: Int) -> Result[Int]
-Process.close(p: Process) -> Void
+Process.send(process: Process, text: String, timeout_ms: Int) -> Result[Void]
+Process.send_bytes(process: Process, bytes: Bytes, timeout_ms: Int) -> Result[Void]
+Process.read_line(process: Process, timeout_ms: Int) -> Result[String]
+Process.read_bytes(process: Process, count: Int, timeout_ms: Int) -> Result[Bytes]
+Process.close_stdin(process: Process, timeout_ms: Int) -> Result[Void]
+Process.wait(process: Process, timeout_ms: Int) -> Result[Int]
+Process.close(process: Process) -> Void
 Process.spawn_captured(command: String, args: List[String],
                        options: Process.Options = Process.Options()) -> Result[Process]
-Process.output(p: Process, timeout_ms: Int) -> Result[Process.Output]
+Process.output(process: Process, timeout_ms: Int) -> Result[Process.Output]
 Process.spawn_channel(command: String, args: List[String],
                       options: Process.Options = Process.Options()) -> Result[Process]
-Process.channel_read_line(p: Process, timeout_ms: Int) -> Result[String]
-Process.channel_send(p: Process, text: String, timeout_ms: Int) -> Result[Void]
-Process.channel_close(p: Process, timeout_ms: Int) -> Result[Void]
-Process.read_available(p: Process, timeout_ms: Int) -> Result[String]
+Process.channel_read_line(process: Process, timeout_ms: Int) -> Result[String]
+Process.channel_send(process: Process, text: String, timeout_ms: Int) -> Result[Void]
+Process.channel_close(process: Process, timeout_ms: Int) -> Result[Void]
+Process.read_available(process: Process, timeout_ms: Int) -> Result[String]
 Process.parent_read_line(timeout_ms: Int) -> Result[String]
 Process.parent_send(text: String, timeout_ms: Int) -> Result[Void]
 ```

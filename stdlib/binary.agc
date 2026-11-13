@@ -186,19 +186,19 @@ export def write_i64_le(value: Int) -> Bytes = bytes8_le(value)
 
 ## Returns the 4 bytes of `x` as a big-endian 32-bit IEEE 754 float. It rounds to the nearest binary32 value. It never
 ## fails; every NaN gives the canonical NaN bits.
-export def write_f32_be(x: Float) -> Bytes = bytes4_be(Float.to_bits32(x))
+export def write_f32_be(value: Float) -> Bytes = bytes4_be(Float.to_bits32(value))
 
 ## Returns the 4 bytes of `x` as a little-endian 32-bit IEEE 754 float. It rounds to the nearest binary32 value. It
 ## never fails; every NaN gives the canonical NaN bits.
-export def write_f32_le(x: Float) -> Bytes = bytes4_le(Float.to_bits32(x))
+export def write_f32_le(value: Float) -> Bytes = bytes4_le(Float.to_bits32(value))
 
 ## Returns the 8 bytes of `x` as a big-endian 64-bit IEEE 754 float. It never fails; every NaN gives the canonical NaN
 ## bits.
-export def write_f64_be(x: Float) -> Bytes = bytes8_be(Float.to_bits(x))
+export def write_f64_be(value: Float) -> Bytes = bytes8_be(Float.to_bits(value))
 
 ## Returns the 8 bytes of `x` as a little-endian 64-bit IEEE 754 float. It never fails; every NaN gives the canonical
 ## NaN bits.
-export def write_f64_le(x: Float) -> Bytes = bytes8_le(Float.to_bits(x))
+export def write_f64_le(value: Float) -> Bytes = bytes8_le(Float.to_bits(value))
 
 ## Returns the 4-byte big-endian length of `payload` followed by `payload`. Returns an error when `payload` has more
 ## than 4294967295 bytes.

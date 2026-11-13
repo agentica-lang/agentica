@@ -5,8 +5,8 @@ date and time in UTC. `Time` is the builtin's name, so the module is `UTC`.
 `iso8601` is Ruby's `Time#utc.iso8601(n)`. Nothing halts.
 
 ```text
-UTC.parts(ms: Int) -> UTC.Parts
-UTC.iso8601(ms: Int, fraction_digits: Int = 0) -> String
+UTC.parts(time_ms: Int) -> UTC.Parts
+UTC.iso8601(time_ms: Int, fraction_digits: Int = 0) -> String
 ```
 
 - `UTC.Parts` has `year`, `month` (1-12), `day`, `hour`, `minute`, `second`

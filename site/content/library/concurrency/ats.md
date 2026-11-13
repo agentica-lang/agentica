@@ -100,7 +100,7 @@ true
 ## ATS.add
 
 ```signature
-ATS.add(table: ATS[K, Int], key: K, n: Int) -> Int
+ATS.add(table: ATS[K, Int], key: K, by: Int) -> Int
 ```
 
 Adds `n` to the value of the key, an absent key counting as 0, and gives the new value. The read and the write are one atomic step, so tasks that add at the same time lose no update. It works only on a table of `Int` values, else `CHECK-TYPE-MISMATCH`. A result outside the 64-bit range stops with `RUNTIME-INTEGER-OVERFLOW` and leaves the table unchanged.

@@ -105,7 +105,7 @@ Logger.stderr_text(event: Logger.Event) -> Void
 Logger.stderr_json(event: Logger.Event) -> Void
 Logger.format_text(event: Logger.Event) -> String
 Logger.format_json(event: Logger.Event) -> String
-Logger.time_text(ms: Int) -> String
+Logger.time_text(time_ms: Int) -> String
 ```
 
 `stderr_text` and `stderr_json` are the built-in handlers. Each writes one line with one `IO.warn` call. `format_text` and `format_json` build the line without writing it, for your own handler.

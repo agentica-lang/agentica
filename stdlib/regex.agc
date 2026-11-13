@@ -179,19 +179,19 @@ export def compile(pattern: String) -> Result[Regex]
 end
 
 ## Whether the pattern matches anywhere in `text`. It keeps no groups, so it is the cheapest search.
-export def match?(text: String, re: Regex) -> Bool = run(text, re.program, MODE_TEST).size > 0
+export def match?(text: String, regex: Regex) -> Bool = run(text, regex.program, MODE_TEST).size > 0
 
 ## The leftmost-first match in `text`, or `error("no match")`.
-export def match(text: String, re: Regex) -> Result[Match]
-  caps = run(text, re.program, MODE_FIRST)
+export def match(text: String, regex: Regex) -> Result[Match]
+  caps = run(text, regex.program, MODE_FIRST)
   return error("no match") if caps.size == 0
-  ok(make_match(text, caps, 0, re.program))
+  ok(make_match(text, caps, 0, regex.program))
 end
 
 ## Every match from left to right, without overlaps. After an empty match the search moves one character on, and an
 ## empty match right where the previous match ended is dropped (Go's rule).
-export def find_all(text: String, re: Regex) -> List[Match]
-  prog = re.program
+export def find_all(text: String, regex: Regex) -> List[Match]
+  prog = regex.program
   caps = run(text, prog, MODE_ALL)
   found: List[Match] = []
   at = 0
@@ -205,10 +205,10 @@ end
 ## Replaces every match that `find_all` finds. In `template`, `$0` is the whole match, `$N` group N (the
 ## longest run of digits), `${N}` and `${name}` a group, and `$$` a dollar sign; a group that did not take part gives
 ## "". The template is checked before any text is replaced: another `$` form or a missing group is an error.
-export def replace(text: String, re: Regex, template: String) -> Result[String]
-  pieces = try parse_template(template, re.program)
-  ncap = re.program.ncap
-  caps = run(text, re.program, MODE_ALL)
+export def replace(text: String, regex: Regex, template: String) -> Result[String]
+  pieces = try parse_template(template, regex.program)
+  ncap = regex.program.ncap
+  caps = run(text, regex.program, MODE_ALL)
   out: List[String] = []
   last = 0
   at = 0
@@ -234,9 +234,9 @@ end
 
 ## The parts of `text` between the matches that take at least one character. Empty parts are kept, and an empty
 ## match separates nothing.
-export def split(text: String, re: Regex) -> List[String]
-  ncap = re.program.ncap
-  caps = run(text, re.program, MODE_ALL)
+export def split(text: String, regex: Regex) -> List[String]
+  ncap = regex.program.ncap
+  caps = run(text, regex.program, MODE_ALL)
   parts: List[String] = []
   last = 0
   at = 0
@@ -253,10 +253,10 @@ end
 ## A pattern that matches `text` literally. A backslash goes before each of the characters `\.+*?()|[]{}^$`.
 export def escape(text: String) -> String = text.split("").map(&escape_char).join("")
 
-## The group of `m` with that name, or an error when the pattern has no such group.
-export def named(m: Match, name: String) -> Result[Group]
-  case m.names.get(name)
-    some(index) if index >= 0 and index < m.groups.size -> ok(m.groups[index])
+## The group of `match` with that name, or an error when the pattern has no such group.
+export def named(match: Match, name: String) -> Result[Group]
+  case match.names.get(name)
+    some(index) if index >= 0 and index < match.groups.size -> ok(match.groups[index])
     _ -> error("no group named \"#{name}\"", kind: "argument")
   end
 end

@@ -8,10 +8,10 @@ JSON.null() -> JSON.Value
 JSON.null?(value: JSON.Value) -> Bool
 JSON.kind(value: JSON.Value) -> String
 JSON.schema(type: T) -> JSON.Value
-JSON.decode(s: String, type: T) -> Result[T]
+JSON.decode(text: String, type: T) -> Result[T]
 JSON.decode(json: JSON.Value, type: T) -> Result[T]
 T.codec -> Codec[T]
-codec.decode(s: String) -> Result[T]
+codec.decode(text: String) -> Result[T]
 codec.decode(json: JSON.Value) -> Result[T]
 codec.encode(value: T) -> String
 codec.from(value: T) -> JSON.Value

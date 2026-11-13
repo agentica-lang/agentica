@@ -13,7 +13,7 @@ Binary.write_u8(value: Int) -> Result[Bytes]
 Binary.write_i8(value: Int) -> Result[Bytes]
 Binary.write_u16_be(value: Int) -> Result[Bytes]  # also _le, i16, u32, i32, u64
 Binary.write_i64_be(value: Int) -> Bytes          # also _le; cannot fail
-Binary.write_f32_be(x: Float) -> Bytes            # also _le, f64; cannot fail
+Binary.write_f32_be(value: Float) -> Bytes        # also _le, f64; cannot fail
 Binary.frame(payload: Bytes) -> Result[Bytes]
 Binary.read_frame_length(data: Bytes, offset: Int, max: Int) -> Result[Int]
 ```

@@ -124,9 +124,9 @@ it, so a program that needs ten seconds of cleanup is not cut.
 #### 46.3.4 Sending, groups and other pids
 
 ```text
-Process.signal(p: Process, sig: Signal) -> Result[Void]
+Process.signal(process: Process, sig: Signal) -> Result[Void]
 Process.spawn_group(command: String, args: List[String], dir: String, timeout_ms: Int) -> Result[Process]
-Process.signal_group(p: Process, sig: Signal) -> Result[Void]
+Process.signal_group(process: Process, sig: Signal) -> Result[Void]
 System.signal(pid: Int, sig: Signal, comm: String) -> Result[Void]
 ```
 

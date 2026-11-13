@@ -25,7 +25,7 @@ Bytes.concat(parts: List[Bytes]) -> Bytes # one copy
 b.each do |byte| ... end                  # Void
 for byte in b ... end
 b.decode(encoding) -> Result[String]      # text in an encoding; see below
-s.encode(encoding) -> Result[Bytes]
+string.encode(encoding) -> Result[Bytes]
 ```
 
 - `decode` and `encode` take `utf-8`, `utf-16`, `utf-16le`, `utf-16be`,

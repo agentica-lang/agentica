@@ -1,17 +1,17 @@
 # Tasks, channels and shared tables
 
 ```text
-Task.spawn(f: Fn[R]) -> Task[R]
-Task.spawn(f: Fn[A, R], arg: A) -> Task[R]
-Task.spawn_owning(f: Fn[A, R], handle: A) -> Task[R]
+Task.spawn(block: Fn[R]) -> Task[R]
+Task.spawn(block: Fn[A, R], arg: A) -> Task[R]
+Task.spawn_owning(block: Fn[A, R], handle: A) -> Task[R]
 Task.await(task: Task[R]) -> R
 Task.await(task: Task[R], timeout_ms: Int) -> Await[R]
-Task.map(items: List[A], limit: Int, timeout_ms: Int, f: Fn[A, Result[R]]) -> List[Result[R]]
+Task.map(items: List[A], limit: Int, timeout_ms: Int, block: Fn[A, Result[R]]) -> List[Result[R]]
 Task.sleep(milliseconds: Int) -> Void
 Task.cancel(task: Task[R]) -> Void
 Task.pending_count() -> Int
 Task.unobserved_crash() -> Result[String]
-Task.monitor(task: Task[R], channel: Channel[M], wrap: Fn[TaskDown, M]) -> Void
+Task.monitor(task: Task[R], channel: Channel[M], message: Fn[TaskDown, M]) -> Void
 Task.current() -> TaskRef
 task.id -> Int
 ```
@@ -118,20 +118,19 @@ cancel a `Result` return type when something awaits it.
 ## Monitors
 
 `Task.monitor(task, inbox) do |down| Msg.Down(down) end` sends
-`wrap(TaskDown(...))` into the channel once when the task ends (returns,
-crashes or is cancelled), at once for a task that has ended; several monitors
-of one task each get one, and none can be removed. Use the consumer's one
-channel of an enum (there is no `select`). `TaskDown` is a builtin record:
+`message(TaskDown(...))` into the channel once when the task ends (returns,
+crashes or is cancelled), at once for a task that has ended; several monitors of
+one task each get one, and none can be removed. Use the consumer's one channel
+of an enum (there is no `select`). `TaskDown` is a builtin record:
 `task_id: Int` (equal to `task.id`), `reason: TaskExit` (`TaskExit.Ok`,
-`TaskExit.Crashed` or `TaskExit.Cancelled`), and for a crash its diagnostic:
-`code` (the stable `RUNTIME-` code, to match on), `message`, `file`, `line`
-and `column` (`""` and `0` otherwise). The send never
-waits or fails: a closed or full channel drops the notice, so give it room for
-every notice that can be pending at once. A
-crash whose notice went in counts as observed. `wrap` runs in a task of its
-own. Monitor a task after any setup step that can fail: a failed start leaves
-a stale notice in the inbox. A retry loop that never reads its inbox must not
-create notices, or a real one is dropped once the inbox is full.
+`TaskExit.Crashed` or `TaskExit.Cancelled`), and for a crash its diagnostic: `code` (the stable
+`RUNTIME-` code, to match on), `message`, `file`, `line` and `column` (`""` and
+`0` otherwise). The send never waits or fails: a closed or full channel drops
+the notice, so give it room for every notice that can be pending at once. A
+crash whose notice went in counts as observed. The `message` block runs in a
+task of its own. Monitor a task after any setup step that can fail: a failed
+start leaves a stale notice in the inbox. A retry loop that never reads its
+inbox must not create notices, or a real one is dropped once the inbox is full.
 
 `Task.current` is the running task as a `TaskRef`: `Task.monitor`,
 `Task.cancel` and `.id` take it, but `Task.await` of it is
@@ -339,7 +338,7 @@ ATS.put_new(table: ATS[K, V], key: K, value: V) -> Bool  # false: key present, n
 ATS.get(table: ATS[K, V], key: K) -> Result[V]
 ATS.has_key?(table: ATS[K, V], key: K) -> Bool
 ATS.delete(table: ATS[K, V], key: K) -> Void             # absent key ignored
-ATS.add(table: ATS[K, Int], key: K, n: Int) -> Int       # absent counts as 0
+ATS.add(table: ATS[K, Int], key: K, by: Int) -> Int       # absent counts as 0
 ATS.size(table: ATS[K, V]) -> Int
 ATS.keys(table: ATS[K, V]) -> List[K]                    # first-insertion order
 ATS.to_map(table: ATS[K, V]) -> Map[K, V]                # first-insertion order

@@ -81,8 +81,8 @@ ok("report\n")
 ## Process.send and Process.send_bytes
 
 ```signature
-Process.send(p: Process, text: String, timeout_ms: Int) -> Result[Void]
-Process.send_bytes(p: Process, bytes: Bytes, timeout_ms: Int) -> Result[Void]
+Process.send(process: Process, text: String, timeout_ms: Int) -> Result[Void]
+Process.send_bytes(process: Process, bytes: Bytes, timeout_ms: Int) -> Result[Void]
 ```
 
 Write to the program's standard input, and flush. A send takes at most 1048576 bytes, UTF-8 text or a `Bytes`; invalid data consumes nothing.
@@ -103,8 +103,8 @@ ok("ping")
 ## Process.read_line and Process.read_bytes
 
 ```signature
-Process.read_line(p: Process, timeout_ms: Int) -> Result[String]
-Process.read_bytes(p: Process, count: Int, timeout_ms: Int) -> Result[Bytes]
+Process.read_line(process: Process, timeout_ms: Int) -> Result[String]
+Process.read_bytes(process: Process, count: Int, timeout_ms: Int) -> Result[Bytes]
 ```
 
 Read from the program's standard output.
@@ -115,7 +115,7 @@ Read from the program's standard output.
 ## Process.close_stdin
 
 ```signature
-Process.close_stdin(p: Process, timeout_ms: Int) -> Result[Void]
+Process.close_stdin(process: Process, timeout_ms: Int) -> Result[Void]
 ```
 
 Closes the program's input, so it sees the end of input. It flushes first, and closing twice is fine.
@@ -136,7 +136,7 @@ end
 ## Process.wait
 
 ```signature
-Process.wait(p: Process, timeout_ms: Int) -> Result[Int]
+Process.wait(process: Process, timeout_ms: Int) -> Result[Int]
 ```
 
 Gives the exit code, nonzero codes included (`false` gives `ok(1)`), and can be repeated. A timeout leaves the program running. Unread output stays readable after `wait`. A program blocks when its standard output pipe is full, so read it in a task while you send or wait.
@@ -144,7 +144,7 @@ Gives the exit code, nonzero codes included (`false` gives `ok(1)`), and can be 
 ## Process.close
 
 ```signature
-Process.close(p: Process) -> Void
+Process.close(process: Process) -> Void
 ```
 
 Stops the program if it still runs and frees it. Closing twice is fine. A running program is killed, the call waits for it to exit (other tasks run meanwhile) and closes the ports it owns; a timeout closes the program too, but does not wait for it. A failed explicit cleanup is `RUNTIME-PROCESS-CLOSE` at the call.
@@ -170,7 +170,7 @@ Starts a program as `Process.spawn` does, in the folder `chdir`, and keeps its o
 ## Process.output
 
 ```signature
-Process.output(p: Process, timeout_ms: Int) -> Result[Process.Output]
+Process.output(process: Process, timeout_ms: Int) -> Result[Process.Output]
 ```
 
 Waits until a captured program has closed its standard output and error, then gives `Process.Output(stdout: String, stderr: String, truncated: Bool)`: `stdout` is what you have not read yet, `stderr` all of it, `truncated` says whether output was dropped (invalid UTF-8 in `stderr` becomes U+FFFD). It consumes nothing, so call it again if needed. A timeout is `error("process: operation timed out")` and keeps the program. A `Process.spawn` program gives `error("process: output is not captured")`.
@@ -209,9 +209,9 @@ Like `Process.spawn_captured`, and also opens a private channel to the program, 
 ## Process.channel_read_line, Process.channel_send and Process.channel_close
 
 ```signature
-Process.channel_read_line(p: Process, timeout_ms: Int) -> Result[String]
-Process.channel_send(p: Process, text: String, timeout_ms: Int) -> Result[Void]
-Process.channel_close(p: Process, timeout_ms: Int) -> Result[Void]
+Process.channel_read_line(process: Process, timeout_ms: Int) -> Result[String]
+Process.channel_send(process: Process, text: String, timeout_ms: Int) -> Result[Void]
+Process.channel_close(process: Process, timeout_ms: Int) -> Result[Void]
 ```
 
 - `channel_read_line` reads one line (at most 1 MiB, ending removed), as `Process.read_line` does. At the end it gives `error("process: end of input")`; a last line that the program's exit cut off, with no line ending, is not returned as a line: it gives `error("process: line cut off")`. If standard output or error was cut (see `Process.read_available`) and no complete line is there, it gives `error("process: output exceeds 1048576 bytes")` at once, so a program that prints forever is noticed without the timeout.
@@ -237,7 +237,7 @@ ok("got hello")
 ## Process.read_available
 
 ```signature
-Process.read_available(p: Process, timeout_ms: Int) -> Result[String]
+Process.read_available(process: Process, timeout_ms: Int) -> Result[String]
 ```
 
 Gives, and removes, the standard output of a captured program that has arrived since the last call.

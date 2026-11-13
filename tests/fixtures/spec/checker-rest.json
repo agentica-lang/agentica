@@ -7174,7 +7174,7 @@
         ""
       ],
       "code": "CHECK-ARITY",
-      "callee": "String.to_i(s: String) -> Result[Int]"
+      "callee": "String.to_i(string: String) -> Result[Int]"
     }
   ],
   "Result constructor names cannot be declared by users, but struct fields may have them": [

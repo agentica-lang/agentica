@@ -6,13 +6,13 @@ Positions count characters.
 
 ```text
 Regex.compile(pattern: String) -> Result[Regex.Regex]
-Regex.match?(text: String, re: Regex.Regex) -> Bool
-Regex.match(text: String, re: Regex.Regex) -> Result[Regex.Match]   # error("no match")
-Regex.find_all(text: String, re: Regex.Regex) -> List[Regex.Match]
-Regex.replace(text: String, re: Regex.Regex, template: String) -> Result[String]
-Regex.split(text: String, re: Regex.Regex) -> List[String]
+Regex.match?(text: String, regex: Regex.Regex) -> Bool
+Regex.match(text: String, regex: Regex.Regex) -> Result[Regex.Match]   # error("no match")
+Regex.find_all(text: String, regex: Regex.Regex) -> List[Regex.Match]
+Regex.replace(text: String, regex: Regex.Regex, template: String) -> Result[String]
+Regex.split(text: String, regex: Regex.Regex) -> List[String]
 Regex.escape(text: String) -> String
-Regex.named(m: Regex.Match, name: String) -> Result[Regex.Group]
+Regex.named(match: Regex.Match, name: String) -> Result[Regex.Group]
 
 struct Regex.Match  # text, start, stop, groups: List[Regex.Group] (groups[0] is
                     # the whole match), names: Map[String, Int]

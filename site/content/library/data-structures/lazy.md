@@ -31,7 +31,7 @@ A `Lazy` has no `==`, no `to_s` (`CHECK-TYPE-MISMATCH`) and no JSON form (`CHECK
 ```signature
 List.lazy(list: List[A]) -> Lazy[A]
 Range.lazy(range: Range) -> Lazy[Int]
-Lazy.produce(seed: A, f: Fn[A, A]) -> Lazy[A]
+Lazy.produce(seed: A, block: Fn[A, A]) -> Lazy[A]
 File.foreach(path: String, buffer_bytes: Int = 65536, timeout_ms: Int = 30000) -> Lazy[String]
 File.chunks(path: String, size: Int = 65536, timeout_ms: Int = 30000) -> Lazy[Bytes]
 Channel.lazy(channel: Channel[A], timeout_ms: Int) -> Lazy[A]
@@ -106,9 +106,9 @@ ok([9, 16, 25, 36])
 ## map, select and flat_map
 
 ```signature
-Lazy.map(lazy: Lazy[A], f: Fn[A, B]) -> Lazy[B]
-Lazy.filter(lazy: Lazy[A], f: Fn[A, Bool]) -> Lazy[A]
-Lazy.flat_map(lazy: Lazy[A], f: Fn[A, List[B]]) -> Lazy[B]
+Lazy.map(lazy: Lazy[A], block: Fn[A, B]) -> Lazy[B]
+Lazy.filter(lazy: Lazy[A], block: Fn[A, Bool]) -> Lazy[A]
+Lazy.flat_map(lazy: Lazy[A], block: Fn[A, List[B]]) -> Lazy[B]
 ```
 
 `select` is the method of `Lazy.filter`. `flat_map` gives the items of the lists its block returns, in order. There is no `filter_map`: write `select` then `map`.
@@ -130,9 +130,9 @@ ok([1, -1, 2, -2, 3])
 
 ```signature
 Lazy.take(lazy: Lazy[A], count: Int) -> Lazy[A]
-Lazy.take_while(lazy: Lazy[A], f: Fn[A, Bool]) -> Lazy[A]
+Lazy.take_while(lazy: Lazy[A], block: Fn[A, Bool]) -> Lazy[A]
 Lazy.drop(lazy: Lazy[A], count: Int) -> Lazy[A]
-Lazy.drop_while(lazy: Lazy[A], f: Fn[A, Bool]) -> Lazy[A]
+Lazy.drop_while(lazy: Lazy[A], block: Fn[A, Bool]) -> Lazy[A]
 ```
 
 A negative count is `RUNTIME-INVALID-COUNT` at the argument, when the step is built. `take_while` stops at the first item its block rejects; `drop_while` stops calling its block at the first item it rejects.
@@ -155,7 +155,7 @@ ok([5, 2, 7])
 ## with_index
 
 ```signature
-Lazy.with_index(lazy: Lazy[A], f: Fn[A, Int, B]) -> Lazy[B]
+Lazy.with_index(lazy: Lazy[A], block: Fn[A, Int, B]) -> Lazy[B]
 ```
 
 Maps each item with its index, from 0. To keep the item and the index together, return a struct.
@@ -175,7 +175,7 @@ ok(["0:a", "1:b", "2:c"])
 ```signature
 Lazy.each_slice(lazy: Lazy[A], size: Int) -> Lazy[List[A]]
 Lazy.each_cons(lazy: Lazy[A], size: Int) -> Lazy[List[A]]
-Lazy.chunk_while(lazy: Lazy[A], f: Fn[A, A, Bool]) -> Lazy[List[A]]
+Lazy.chunk_while(lazy: Lazy[A], block: Fn[A, A, Bool]) -> Lazy[List[A]]
 ```
 
 `each_slice` gives slices of `size` items, the last one shorter. `each_cons` gives every window of `size` neighbours, and nothing when the source has fewer. `chunk_while` starts a new group where its block is false for two neighbours. A size below 1 is `RUNTIME-INVALID-COUNT` at the argument, when the step is built.
@@ -219,7 +219,7 @@ ok([1, 4, 9])
 ## each
 
 ```signature
-Lazy.each(lazy: Lazy[A], f: Fn[A, Result[Void]]) -> Result[Void]
+Lazy.each(lazy: Lazy[A], block: Fn[A, Result[Void]]) -> Result[Void]
 ```
 
 The block returns `ok()` to go on, or an `error` that stops the pipeline and is the result, as in `File.each_line`. `try` works in the block.
@@ -247,8 +247,8 @@ error("stopped at 3")
 ## reduce and find
 
 ```signature
-Lazy.reduce(lazy: Lazy[A], initial: B, f: Fn[B, A, B]) -> Result[B]
-Lazy.find(lazy: Lazy[A], f: Fn[A, Bool]) -> Result[A]
+Lazy.reduce(lazy: Lazy[A], initial: B, block: Fn[B, A, B]) -> Result[B]
+Lazy.find(lazy: Lazy[A], block: Fn[A, Bool]) -> Result[A]
 ```
 
 `reduce` folds from the left, as `List.reduce`. `find` gives the first item its block accepts, or `error("not found")` when the source ends, as `List.find`.

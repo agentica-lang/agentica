@@ -199,7 +199,7 @@ end
 ## each and for
 
 ```signature
-Bytes.each(bytes: Bytes, f: Fn[Int, Void]) -> Void
+Bytes.each(bytes: Bytes, block: Fn[Int, Void]) -> Void
 ```
 
 Calls the block with each byte in order. `for byte in b` does the same and allows assignment in the body.

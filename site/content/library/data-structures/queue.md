@@ -32,7 +32,7 @@ end
 ## Queue.push
 
 ```signature
-Queue.push(q: Queue.QueueState, value: String) -> Queue.QueueState
+Queue.push(queue: Queue.QueueState, value: String) -> Queue.QueueState
 ```
 
 Adds a value at the back.
@@ -54,7 +54,7 @@ end
 ## Queue.pop
 
 ```signature
-Queue.pop(q: Queue.QueueState) -> Result[Queue.Popped]
+Queue.pop(queue: Queue.QueueState) -> Result[Queue.Popped]
 ```
 
 Takes the oldest value. It gives a `Popped` with `value` and the `remaining` queue, or an error when the queue is empty.
@@ -80,7 +80,7 @@ false
 ## Queue.peek
 
 ```signature
-Queue.peek(q: Queue.QueueState) -> Result[String]
+Queue.peek(queue: Queue.QueueState) -> Result[String]
 ```
 
 Reads the oldest value without removing it.
@@ -101,8 +101,8 @@ ok("first")
 ## Queue.size and Queue.empty?
 
 ```signature
-Queue.size(q: Queue.QueueState) -> Int
-Queue.empty?(q: Queue.QueueState) -> Bool
+Queue.size(queue: Queue.QueueState) -> Int
+Queue.empty?(queue: Queue.QueueState) -> Bool
 ```
 
 ```agentica

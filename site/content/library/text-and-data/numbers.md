@@ -136,8 +136,8 @@ end
 ## clamp
 
 ```signature
-Int.clamp(n: Int, min: Int, max: Int) -> Int
-Float.clamp(x: Float, min: Float, max: Float) -> Float
+Int.clamp(int: Int, min: Int, max: Int) -> Int
+Float.clamp(float: Float, min: Float, max: Float) -> Float
 ```
 
 Gives `min` when the number is below it, `max` when above it, and the number itself otherwise. `min > max` stops the program with `RUNTIME-INVALID-RANGE`, as in Ruby (an `ArgumentError` there). On a `Float`, a NaN bound is `RUNTIME-INVALID-RANGE` too, and a NaN `x` comes back as NaN.

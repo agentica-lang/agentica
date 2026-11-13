@@ -147,7 +147,7 @@ end
 
 ## Returns milliseconds since the Unix epoch as UTC text, such as `2026-10-12T10:15:02.345Z`.
 ## A year outside 0 to 9999 is written with its sign and at least four digits.
-export def time_text(ms: Int) -> String = UTC.iso8601(ms, 3)
+export def time_text(time_ms: Int) -> String = UTC.iso8601(time_ms, 3)
 
 # The ranks are the order of Level: debug 0, info 1, warning 2, error 3. LogRegistry stores ranks, not enums,
 # so its rows need no enum type.

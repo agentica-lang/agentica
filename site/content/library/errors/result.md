@@ -86,7 +86,7 @@ end
 ## Result.unwrap_or
 
 ```signature
-Result.unwrap_or(r: Result[T], default: T) -> T
+Result.unwrap_or(result: Result[T], default: T) -> T
 ```
 
 Gives the value, or the default for an error. The default is always computed.

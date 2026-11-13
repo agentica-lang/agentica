@@ -411,7 +411,7 @@ def test_a_builtin_is_answered_with_its_help_object_and_no_definition(program):
     # The same object as `agentica help NAME --json`, name included.
     assert report["help"] == cli_help("String.upcase")
     assert report["help"]["name"] == "String.upcase"
-    assert report["help"]["ruby"] == "s.upcase() -> String"
+    assert report["help"]["ruby"] == "string.upcase() -> String"
     # A builtin with two forms answers with its overloads; the bare function `puts` is a builtin too, on its name only.
     overloaded = answer(("orders.agc", where(ORDERS, "table.get", 7)), cwd=program)
     assert (overloaded["kind"], overloaded["help"]) == ("builtin", cli_help("Map.get"))
@@ -454,7 +454,7 @@ def test_text_form_of_a_builtin_gives_a_line_with_its_signature(program):
     line, column = where(ORDERS, "name.upcase")
     assert result.stdout.split("\n") == [
         f"orders.agc:{line}:{column}-{line}:{column + 11} name.upcase: String",
-        "builtin String.upcase(s: String) -> String",
+        "builtin String.upcase(string: String) -> String",
         "",
     ]
 

@@ -13,8 +13,8 @@ As in Ruby, `s.size` is the same as `s.length`.
 ## length and empty?
 
 ```signature
-String.length(s: String) -> Int
-String.empty?(s: String) -> Bool
+String.length(string: String) -> Int
+String.empty?(string: String) -> Bool
 ```
 
 `length` counts Unicode characters. `empty?` is true when there are none.
@@ -38,8 +38,8 @@ false
 ## upcase and downcase
 
 ```signature
-String.upcase(s: String) -> String
-String.downcase(s: String) -> String
+String.upcase(string: String) -> String
+String.downcase(string: String) -> String
 ```
 
 ```agentica
@@ -57,7 +57,7 @@ hello
 ## strip
 
 ```signature
-String.strip(s: String) -> String
+String.strip(string: String) -> String
 ```
 
 Removes spaces, tabs and new lines at both ends.
@@ -75,7 +75,7 @@ end
 ## split
 
 ```signature
-String.split(s: String, separator: String) -> List[String]
+String.split(string: String, separator: String) -> List[String]
 ```
 
 Cuts text at each separator. Every part is kept, even an empty one at either end or between two separators, so `join` with the same separator gives the text back. Empty text gives `[""]`. An empty separator gives the characters.
@@ -103,7 +103,7 @@ a,,b,
 ## join
 
 ```signature
-List.join(parts: List[String], separator: String) -> String
+List.join(list: List[String], separator: String) -> String
 ```
 
 A method of a `List[String]`: puts the separator between the parts.
@@ -123,9 +123,9 @@ x, y
 ## include?, start_with? and end_with?
 
 ```signature
-String.include?(s: String, part: String) -> Bool
-String.start_with?(s: String, prefix: String) -> Bool
-String.end_with?(s: String, suffix: String) -> Bool
+String.include?(string: String, part: String) -> Bool
+String.start_with?(string: String, prefix: String) -> Bool
+String.end_with?(string: String, suffix: String) -> Bool
 ```
 
 ```agentica
@@ -146,7 +146,7 @@ false
 ## replace
 
 ```signature
-String.replace(s: String, from: String, to: String) -> String
+String.replace(string: String, from: String, to: String) -> String
 ```
 
 Replaces every match.
@@ -164,7 +164,7 @@ a+b+c
 ## slice
 
 ```signature
-String.slice(s: String, start: Int, length: Int) -> String
+String.slice(string: String, start: Int, length: Int) -> String
 ```
 
 Gives `length` characters starting at `start`. A range outside the text stops the program.
@@ -184,7 +184,7 @@ ica
 ## index_of
 
 ```signature
-String.index_of(s: String, part: String) -> Optional[Int]
+String.index_of(string: String, part: String) -> Optional[Int]
 ```
 
 Finds the first match as `some(index)`, counted in characters (`some(0)` for an empty part). Missing text gives `none`.
@@ -204,7 +204,7 @@ true
 ## at
 
 ```signature
-String.at(s: String, index: Int) -> String
+String.at(string: String, index: Int) -> String
 ```
 
 Gives one character. Indexes start at 0. An index outside the string stops the program with `RUNTIME-INDEX-OUT-OF-RANGE`.
@@ -222,7 +222,7 @@ e
 ## reverse
 
 ```signature
-String.reverse(s: String) -> String
+String.reverse(string: String) -> String
 ```
 
 ```agentica
@@ -299,14 +299,14 @@ end
 ## edit_distance and jaro_winkler
 
 ```signature
-String.edit_distance(s: String, other: String) -> Int
-String.edit_distance(s: String, other: String, max: Int) -> Int
-String.jaro_winkler(s: String, other: String) -> Float
+String.edit_distance(string: String, other: String) -> Int
+String.edit_distance(string: String, other: String, max: Int) -> Int
+String.jaro_winkler(string: String, other: String) -> Float
 ```
 
 Both measure how close two texts are, in characters as `length` counts them, and give the same result in either order. They find the nearest name in a list, as a "did you mean" hint does.
 
-`edit_distance` is the Levenshtein distance: the fewest inserts, deletes and replacements of one character that turn `s` into `other`. It takes time in proportion to `s.length * other.length`, and memory in proportion to the shorter text. With `max`, the result stops at `max + 1`: once the distance is past `max`, the method gives `max + 1`. The work is then about `length * (2 * max + 1)` cells of the distance table instead of `s.length * other.length`, with `length` the longer text's, and it ends early once the distance is past `max`, so a small `max` is fast on long texts. A negative `max` stops the program with `RUNTIME-INVALID-COUNT`. A long call of either method lets other tasks run between parts of its work, and `--max-steps` counts that work.
+`edit_distance` is the Levenshtein distance: the fewest inserts, deletes and replacements of one character that turn `string` into `other`. It takes time in proportion to `string.length * other.length`, and memory in proportion to the shorter text. With `max`, the result stops at `max + 1`: once the distance is past `max`, the method gives `max + 1`. The work is then about `length * (2 * max + 1)` cells of the distance table instead of `string.length * other.length`, with `length` the longer text's, and it ends early once the distance is past `max`, so a small `max` is fast on long texts. A negative `max` stops the program with `RUNTIME-INVALID-COUNT`. A long call of either method lets other tasks run between parts of its work, and `--max-steps` counts that work.
 
 `jaro_winkler` is the Jaro-Winkler similarity, from `0.0` (nothing in common) to `1.0` (the same text), as Ruby's `DidYouMean::JaroWinkler` computes it: when the Jaro similarity is above `0.7`, each character of a common prefix of up to 4 adds a tenth of what is left to `1.0`. Two empty texts give `1.0`, and an empty text against another gives `0.0`.
 
@@ -332,8 +332,8 @@ some("length")
 ## to_i and to_f
 
 ```signature
-String.to_i(s: String) -> Result[Int]
-String.to_f(s: String) -> Result[Float]
+String.to_i(string: String) -> Result[Int]
+String.to_f(string: String) -> Result[Float]
 ```
 
 Read a signed decimal number. Bad text gives an error Result. A number becomes text with [`n.to_s`](/library/text-and-data/numbers/#to_s).
@@ -361,8 +361,8 @@ false
 ## to_i! and to_f!
 
 ```signature
-String.to_i!(s: String) -> Int
-String.to_f!(s: String) -> Float
+String.to_i!(string: String) -> Int
+String.to_f!(string: String) -> Float
 ```
 
 Like `to_i` and `to_f`, but give the number itself and stop the program on bad text: `RUNTIME-INVALID-NUMBER` for text that is not a number (`1e`, `.5`, ` 1`, `1_000.0` and `Infinity` for `to_f!`), and `RUNTIME-INTEGER-OVERFLOW` for an integer outside `Int`.
@@ -402,7 +402,7 @@ false
 ## bytes
 
 ```signature
-String.bytes(s: String) -> Bytes
+String.bytes(string: String) -> Bytes
 ```
 
 Encodes the text as UTF-8, as a [`Bytes`](/library/data-structures/bytes/). It cannot fail, and `String.from_bytes` turns it back into the text. `s.bytes.to_a` gives the bytes as a list of integers from 0 to 255.
@@ -423,7 +423,7 @@ end
 ## encode
 
 ```signature
-String.encode(s: String, encoding: String) -> Result[Bytes]
+String.encode(string: String, encoding: String) -> Result[Bytes]
 ```
 
 Writes the text as bytes in an encoding, named as for [`Bytes.decode`](/library/data-structures/bytes/#decode): UTF-8, UTF-16, UTF-32, ASCII, Latin-1, ISO-8859-15 or Windows-1252. Plain `utf-16` and `utf-32` write a byte order mark and then big-endian units; the `le` and `be` forms write no mark. A character that a one-byte encoding cannot hold (`€` in Latin-1, `¤` in ISO-8859-15) gives an error Result whose text ends with its index in the text, `at index N`, and an unknown name gives an error too. The Unicode encodings never fail. For UTF-8, use [`.bytes`](#bytes) and [`String.from_bytes`](#from_bytes).
@@ -447,7 +447,7 @@ error("cannot encode U+20AC in Latin-1 at index 1", kind: "text.encoding")
 ## bytesize
 
 ```signature
-String.bytesize(s: String) -> Int
+String.bytesize(string: String) -> Int
 ```
 
 Counts the UTF-8 bytes of the text, a NUL included (`"é".bytesize` is 2), as many as `s.bytes` gives, without building them. A C function that takes text with its length gets this count, with the text in a buffer of [`Native.from_string`](/library/io-and-system/native/types/#owned-buffers-and-typed-memory).

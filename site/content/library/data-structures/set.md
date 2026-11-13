@@ -159,12 +159,12 @@ end
 ## union, intersection and difference
 
 ```signature
-Set.union(a: Set[T], b: Set[T]) -> Set[T]
-Set.intersection(a: Set[T], b: Set[T]) -> Set[T]
-Set.difference(a: Set[T], b: Set[T]) -> Set[T]
+Set.union(set: Set[T], other: Set[T]) -> Set[T]
+Set.intersection(set: Set[T], other: Set[T]) -> Set[T]
+Set.difference(set: Set[T], other: Set[T]) -> Set[T]
 ```
 
-`union` gives the elements of `a`, then the elements of `b` that `a` lacks. `intersection` and `difference` keep the order of `a`.
+`union` gives the elements of `set`, then the elements of `other` that `set` lacks. `intersection` and `difference` keep the order of `set`.
 
 ```agentica
 def main() -> Void
@@ -187,10 +187,10 @@ Set[9]
 ## subset?
 
 ```signature
-Set.subset?(a: Set[T], b: Set[T]) -> Bool
+Set.subset?(set: Set[T], other: Set[T]) -> Bool
 ```
 
-True when every element of `a` is in `b`. The empty set is a subset of every set.
+True when every element of `set` is in `other`. The empty set is a subset of every set.
 
 ```agentica
 def main() -> Void
