@@ -1598,6 +1598,8 @@ def call_doc(c: Context, node: Ast.Call) -> Docs.Doc = call_doc_keyed(c, node, C
 
 # `call_doc`, where `key` holds the dangling comments of an empty argument list: the call's own, or its pipe stage's.
 def call_doc_keyed(c: Context, node: Ast.Call, key: String) -> Docs.Doc
+  return named_call_doc(c, node, key) if node.named.size > 0
+
   args = node.args
   block: List[Docs.Doc] = []
   if args.size > 0
@@ -1645,6 +1647,13 @@ end
 
 # The arguments of a call. A sole argument that is a list or map literal hugs the parentheses, `Set.new([`, and
 # breaks inside its own brackets.
+# error(...) or Result.Err(...) with named arguments, which follow the positional ones.
+def named_call_doc(c: Context, node: Ast.Call, key: String) -> Docs.Doc
+  shown = node.args.map do |arg: Ast.Expr| expr_doc(c, arg, true) end
+  shown = shown.concat(node.named.map do |arg: Ast.NamedArg| named_doc(c, arg) end)
+  Docs.Doc.Concat([text(call_name(c, node)), listed(text("("), shown, text(")"), dangling_comments(c, key))])
+end
+
 def arguments(c: Context, args: List[Ast.Expr], key: String) -> Docs.Doc
   shown = args.map do |arg: Ast.Expr| expr_doc(c, arg, true) end
   return Docs.Doc.Concat([text("("), shown[0], text(")")]) if args.size == 1 and huggable?(c, args[0])

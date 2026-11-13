@@ -124,6 +124,14 @@ end
 ## Checks Type(name: value, ...): a struct, or Enum.Variant(name: value) written as a construction, which a variant
 ## does not take.
 export def check_construct(cx: State.Cx, st: State.St, node: Ast.Construct, expected: T.Type) -> Result[State.Out]
+  # One way to build an Error: error(...), which also places it. An Error value comes from a pattern, and .with
+  # changes one.
+  if node.type_name == "Error"
+    help = "build an error with error(\"text\", kind: ...)"
+    message = "an Error is built with error(...), not Error(...)"
+    return error(State.fail_help(cx, st, "CHECK-ERROR-CONSTRUCTOR", message, node.span, help))
+  end
+
   parts = node.type_name.split(".")
   if parts.size == 2 and cx.enums.has_key?(parts[0])
     return check_enum_constructor(cx, st, parts[0], parts[1], [], node.args.size, node.span, expected)

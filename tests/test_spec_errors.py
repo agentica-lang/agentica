@@ -42,6 +42,74 @@ VALID = [
 ]
 
 
+def uses_r(body):
+    """The body, with a read of r when it has none."""
+    return body if "case r" in body else body + "\n  puts(r)"
+
+
+KINDS = [
+    # error(...) takes the fields of an Error as named arguments, in any order; code and cause are stored as some(...).
+    "  e: Result[Int] = error(\"unique failed\", kind: \"db.constraint\", code: 19)\n  puts(e)",
+    "  case r\n    ok(n) -> puts(n)\n    error(e) ->\n      w: Result[Int] = error(\"cannot load\", cause: e, kind: \"config\",\n"
+    "        details: {\"line\": \"12\"})\n      puts(w)\n  end",
+    "  w: Result[Int] = Result.Err(\"x\", kind: \"io.not_found_2\")\n  puts(w)",
+    "  case r\n    ok(n) -> puts(n)\n    error(e) if e.is_a?(\"db\") or e.kind_of?(\"db.constraint\") -> puts(e)\n"
+    "    error(e) -> puts(e.is_a?(e.kind))\n  end",
+    # A pipe passes the message: "x" |> error(kind: ...) is error("x", kind: ...).
+    "  w: Result[Int] = \"x\" |> error(kind: \"db.x\", code: 1)\n  puts(w)",
+    # A computed kind is not checked, nor one set with .with.
+    "  name = \"Not A Kind\"\n  w: Result[Int] = error(\"x\", kind: name)\n  puts(w)",
+]
+
+
+KINDS = [uses_r(body) for body in KINDS]
+
+
+@table("body", KINDS, HEAD)
+def test_error_takes_the_fields_of_an_error_as_named_arguments(checked, body):
+    assert checked(HEAD % body) is None
+
+
+KINDS_REJECTED = [
+    ("  w: Result[Int] = error(\"x\", kind: \"Db Constraint\")\n  puts(w)", "CHECK-ERROR-KIND", "\"Db Constraint\""),
+    ("  w: Result[Int] = error(\"x\", kind: \"\")\n  puts(w)", "CHECK-ERROR-KIND", "\"\""),
+    ("  w: Result[Int] = error(\"x\", kind: \"db..x\")\n  puts(w)", "CHECK-ERROR-KIND", "\"db..x\""),
+    ("  w: Result[Int] = error(\"x\", kind: \"1db\")\n  puts(w)", "CHECK-ERROR-KIND", "\"1db\""),
+    ("  w: Result[Int] = error(kind: \"db\")\n  puts(w)", "CHECK-ARITY", "error(kind: \"db\")"),
+    ("  w: Result[Int] = error(\"x\", message: \"y\")\n  puts(w)", "CHECK-DUPLICATE-FIELD", "message"),
+    ("  w: Result[Int] = error(\"x\", knd: \"db\")\n  puts(w)", "CHECK-UNKNOWN-FIELD", "knd"),
+    ("  w: Result[Int] = error(\"x\", location: \"a\")\n  puts(w)", "CHECK-UNKNOWN-FIELD", "location"),
+    ("  w: Result[Int] = error(\"x\", kind: \"a\", kind: \"b\")\n  puts(w)", "CHECK-DUPLICATE-FIELD", "kind"),
+    ("  case r\n    ok(n) -> puts(n)\n    error(e) ->\n      w: Result[Int] = error(e, kind: \"x\")\n      puts(w)\n  end",
+     "CHECK-ARITY", "kind"),
+    ("  w: Result[Int] = error(\"x\", code: \"19\")\n  puts(w)", "CHECK-TYPE-MISMATCH", "\"19\""),
+    ("  w: Result[Int] = error(\"x\", code: some(19))\n  puts(w)", "CHECK-TYPE-MISMATCH", "some(19)"),
+    ("  w: Result[Int] = error(\"x\", details: {\"a\": 1})\n  puts(w)", "CHECK-TYPE-MISMATCH", "1"),
+    ("  w: Result[Int] = error(\"x\", cause: \"y\")\n  puts(w)", "CHECK-TYPE-MISMATCH", "\"y\""),
+    ("  w: Result[Int] = error(kind: \"x\", \"m\")\n  puts(w)", "PARSE-UNEXPECTED-TOKEN", "\"m\""),
+    ("  w: Result[Int] = \"x\" |> error(kind: \"Bad..Kind\", code: 1)\n  puts(w)", "CHECK-ERROR-KIND",
+     "\"Bad..Kind\""),
+    ("  w: Result[Int] = \"x\" |> error(kind: \"db\", nope: 3)\n  puts(w)", "CHECK-UNKNOWN-FIELD", "nope"),
+    ("  puts(shout(text: \"x\"))", "PARSE-UNEXPECTED-TOKEN", ":"),
+    ("  case r\n    ok(n) -> puts(n)\n    error(e) if e.is_a?(\"Db\") -> puts(e)\n    error(_) -> puts(1)\n  end",
+     "CHECK-ERROR-KIND", "\"Db\""),
+    ("  case r\n    ok(n) -> puts(n)\n    error(e) if e.is?(\"db\") -> puts(e)\n    error(_) -> puts(1)\n  end",
+     "CHECK-UNKNOWN-METHOD", "e.is?(\"db\")"),
+    ("  case r\n    ok(n) -> puts(n)\n    error(e) -> puts(e.is_a?(1))\n  end", "CHECK-TYPE-MISMATCH", "1"),
+    # Only error(...) builds an Error.
+    ("  e = Error(message: \"x\")\n  puts(e)", "CHECK-ERROR-CONSTRUCTOR", "Error(message: \"x\")"),
+]
+
+
+KINDS_REJECTED = [(uses_r(body), code, text) for body, code, text in KINDS_REJECTED]
+
+
+@table("body, code, text", KINDS_REJECTED, HEAD)
+def test_a_wrong_named_argument_of_error_is_refused(checked, body, code, text):
+    program = HEAD % body
+    assert_rule(checked(program), program, code, text)
+
+
 @table("body", VALID, HEAD)
 def test_an_error_payload_is_an_error_record(checked, body):
     assert checked(HEAD % body) is None

@@ -36,6 +36,7 @@ OpenSSL.Digest.sha512_hexdigest Plain
 Dir.list Plain
 Dir.mkdir Plain
 Dir.mkdir_private Plain
+Error.is_a? ErrorKind
 File.append_text Plain
 File.close Plain
 File.each_line Plain

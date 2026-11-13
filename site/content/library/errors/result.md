@@ -29,10 +29,11 @@ ok("yes")
 
 ```signature
 error(message: String) -> Result[T]
+error(message: String, kind: String, code: Int, details: Map[String, String], cause: Error) -> Result[T]
 error(e: Error) -> Result[T]
 ```
 
-With a `String`, it builds a new `Error` with that message, made at this call. With an `Error`, it holds that same `Error`, so a `case` arm can pass an error on as a `Result` of another type. The type comes from an annotation, a return type, a parameter or a field.
+With a `String`, it builds a new `Error` with that message, made at this call. The other fields come as named arguments, each optional and in any order; `code` and `cause` are stored as `some(...)` ([Error](/library/errors/error/#kinds)). With an `Error`, it holds that same `Error`, so a `case` arm can pass an error on as a `Result` of another type. The type comes from an annotation, a return type, a parameter or a field.
 
 ```agentica
 def fail_now() -> Result[Int] = error("broken")

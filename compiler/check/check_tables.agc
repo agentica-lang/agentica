@@ -10,6 +10,7 @@ export def method_modules() -> Map[String, String]
     "Bytes": "Bytes",
     "Channel": "Channel",
     "Codec": "Codec",
+    "Error": "Error",
     "Float": "Float",
     "Int": "Int",
     "Json": "JSON",
@@ -30,6 +31,7 @@ export def method_aliases() -> Map[String, String]
   {
     "ATS.length": "ATS.size",
     "Bytes.size": "Bytes.length",
+    "Error.kind_of?": "Error.is_a?",
     "Lazy.collect": "Lazy.map",
     "Lazy.detect": "Lazy.find",
     "Lazy.inject": "Lazy.reduce",
@@ -65,9 +67,10 @@ end
 ## name here (`select` for `List.filter`, `key?` for `Map.has_key?`), and the texts show it.
 export def ruby_synonyms() -> List[String]
   [
-    "ATS.length", "Bytes.size", "Lazy.collect", "Lazy.detect", "Lazy.inject", "List.collect", "List.detect",
-    "List.inject", "List.length", "List.member?", "Map.include?", "Map.length", "Map.member?", "Range.collect",
-    "Range.detect", "Range.inject", "Range.length", "Range.member?", "Set.length", "Set.member?", "String.size",
+    "ATS.length", "Bytes.size", "Error.kind_of?", "Lazy.collect", "Lazy.detect", "Lazy.inject", "List.collect",
+    "List.detect", "List.inject", "List.length", "List.member?", "Map.include?", "Map.length", "Map.member?",
+    "Range.collect", "Range.detect", "Range.inject", "Range.length", "Range.member?", "Set.length", "Set.member?",
+    "String.size",
   ]
 end
 
@@ -208,6 +211,7 @@ export def foreign_kind_methods() -> Map[String, String]
     "Bytes.inject": "Bytes has no reduce; use b.to_a.reduce(0) do |acc, x| ... end",
     "Bytes.map": "Bytes has no map; use b.to_a.map do |x| ... end",
     "Bytes.select": "Bytes has no select; use b.to_a.select do |x| ... end",
+    "Error.is?": "use e.is_a?(\"db\"), true for the kind db and every db.* kind",
     "Float.max": "use [a, b].max.unwrap!, or x.clamp(min, max) to keep x in a range",
     "Float.min": "use [a, b].min.unwrap!, or x.clamp(min, max) to keep x in a range",
     "Float.to_int": "use x.to_i, which gives a Result",

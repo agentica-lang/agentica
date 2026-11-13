@@ -392,6 +392,18 @@ static agc_value builtin_error(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_result_value(false, agc_struct_value(placed));
 }
 
+/* e.is_a?(family) (#671): the kind is the family, or starts with the family and a dot, so "db" takes "db" and
+   "db.constraint" but not "dbx". The receiver must be the program's Error record: a hostile file may call this on
+   another struct, which agc_wrong_tag stops before any field is read. */
+static agc_value builtin_error_is_a(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  if (!agc_is_error(vm, args[0])) agc_wrong_tag(vm);
+  const agc_string *kind = agc_as_string(vm, agc_as_struct(vm, args[0])->fields[AGC_ERROR_KIND]);
+  const agc_string *family = agc_as_string(vm, args[1]);
+  if (family->bytes > kind->bytes || memcmp(kind->data, family->data, family->bytes) != 0) return agc_bool(false);
+  return agc_bool(kind->bytes == family->bytes || kind->data[family->bytes] == '.');
+}
+
 /* In plain_leaves (vm/jit/jit.c): it must never agc_fail once its argument tags are right. */
 static agc_value builtin_result_ok(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
@@ -558,6 +570,7 @@ const agc_builtin agc_core_builtins[] = {
   {"Result.unwrap!", 1, builtin_result_unwrap, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false},
   {"Result.unwrap_or", 2, builtin_result_unwrap_or, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false},
   {"Result.message", 1, builtin_result_message, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false},
+  {"Error.is_a?", 2, builtin_error_is_a, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
   {"Optional.equal", 2, builtin_value_equal, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, true},
   {"Value.equal", 2, builtin_value_equal, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, true},
   {"List.map", 2, NULL, AGC_NATIVE_MAP, AGC_COST_NONE, false, false, false},

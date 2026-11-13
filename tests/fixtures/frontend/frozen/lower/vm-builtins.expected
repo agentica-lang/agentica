@@ -37,6 +37,7 @@ DNS.lookup
 Dir.list
 Dir.mkdir
 Dir.mkdir_private
+Error.is_a?
 File.append_text
 File.close
 File.each_line

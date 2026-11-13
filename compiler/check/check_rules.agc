@@ -9,6 +9,7 @@ import Ast from "../syntax/ast"
 import Source from "../syntax/source"
 import T from "../syntax/types"
 import Args from "check_args"
+import ErrorArgs from "check_error"
 import {PROCESS_OPTIONS_HELP} from "check_help"
 import Collections from "check_collections"
 import Lists from "check_list"
@@ -99,7 +100,7 @@ def arity_failure(cx: State.Cx, st: State.St, node: Ast.Call, entry: Model.Built
 end
 
 # The help for a call in a form that a builtin had before (TLS.listen with the PEM paths before contexts, 19a, and the
-# spawns with positional options before Process.Options), or "".
+# spawns with positional options before Process.Options), the named form of error, or "".
 def old_form_help(name: String, node: Ast.Call) -> String
   spawns = ["Process.spawn", "Process.spawn_captured", "Process.spawn_channel"]
   return PROCESS_OPTIONS_HELP if spawns.include?(name) and node.args.size > 3
@@ -109,6 +110,11 @@ def old_form_help(name: String, node: Ast.Call) -> String
       "a TlsContext holds the PEM files: build one with " +
       "TLS.server_context(TlsServerOptions(cert_file: c, key_file: k))"
     )
+  end
+
+  # The callee lists the catalog forms, which have no named arguments.
+  if name == "error"
+    return "error takes the message first, then the named arguments: error(\"text\", kind:, code:, details:, cause:)"
   end
 
   ""
@@ -212,6 +218,10 @@ def check_rule(cx: State.Cx, st: State.St, site: State.Site, rule: Model.Rule) -
     Model.Rule.Ok -> check_ok(cx, st, site)
     Model.Rule.OkVoid -> ok(State.Out(st: st, type: T.Type.Result(T.Type.Void)))
     Model.Rule.Error -> check_error(cx, st, site)
+    Model.Rule.ErrorKind ->
+      # e.is_a?("db"): a kind literal must be a dotted name, as in error(..., kind: ...).
+      try ErrorArgs.check_kind_literal(cx, st, site.args[site.args.size - 1])
+      check_plain(cx, st, site)
     Model.Rule.OptionalSome -> check_some(cx, st, site)
     Model.Rule.OptionalNone -> check_none(cx, st, site)
     Model.Rule.JsonDecode -> check_json_type(cx, st, site, true)
@@ -283,22 +293,25 @@ def check_ok(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
   ok(State.Out(st: out.st, type: T.Type.Result(out.type)))
 end
 
-# error(message) builds a new Error and error(e) gives the Error e; either needs the Result type from its context,
-# except while a block is probed for its result type.
+# error(message, kind: ..., code: ..., details: ..., cause: ...) builds a new Error and error(e) gives the Error e;
+# either needs the Result type from its context, except while a block is probed for its result type. The named
+# arguments are checked in check_error.agc.
 def check_error(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
-  message = try State.expr(cx, st, site.args[0], T.Type.Unknown)
-  given = message.type
+  first = try State.expr(cx, st, site.args[0], T.Type.Unknown)
+  given = first.type
   if !T.is?(given, "String") and !T.error?(given) and !T.unknown?(given)
     return error(
       State.fail(
         cx,
-        message.st,
+        first.st,
         "CHECK-TYPE-MISMATCH",
         "expected String or Error, found #{T.to_text(given)}",
         Ast.expr_span(site.args[0]),
       ),
     )
   end
+
+  message = first.with(st: try ErrorArgs.check_named(cx, first.st, site.node, given))
 
   expected = site.expected
   span = site.node.span

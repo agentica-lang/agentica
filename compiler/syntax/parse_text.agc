@@ -375,7 +375,7 @@ def print_expr(out: List[String], at: Margin, role: String, expr: Ast.Expr) -> L
     Ast.Expr.ConstRef(node) -> out.push(head(at, role, "const-ref", node.id, node.span, name_attr(node.name)))
     Ast.Expr.FunctionRef(node) -> out.push(head(at, role, "function-ref", node.id, node.span, name_attr(node.name)))
     Ast.Expr.Call(node) ->
-      print_call_like(
+      lines = print_call_like(
         out,
         at,
         role,
@@ -385,6 +385,8 @@ def print_expr(out: List[String], at: Margin, role: String, expr: Ast.Expr) -> L
         "#{name_attr(node.name)} piped=#{node.piped}",
         node.args,
       )
+
+      print_named_args(lines, child, node.named)
     Ast.Expr.EnumConstructor(node) ->
       lines = print_call_like(
         out,

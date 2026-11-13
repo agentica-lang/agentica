@@ -1,0 +1,1 @@
+ERROR CHECK-ERROR-CONSTRUCTOR 25:2:7-44:2:26 "an Error is built with error(...), not Error(...)" "build an error with error(\"text\", kind: ...)" signature="main() -> Void" file="error-constructor.agc"

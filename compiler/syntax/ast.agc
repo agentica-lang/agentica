@@ -483,7 +483,8 @@ export struct NameRef
 end
 
 ## A call by name, with the piped value as first argument after |>. parenthesized records whether the source had
-## parentheses; only such a call may be the target of |>.
+## parentheses; only such a call may be the target of |>. named holds the `name: value` arguments after the positional
+## ones, which the parser reads only in error(...) and Result.Err(...): the fields of the Error it builds.
 export struct Call
   id: Int
   name: String
@@ -491,6 +492,7 @@ export struct Call
   piped: Bool
   parenthesized: Bool
   span: Source.Span
+  named: List[NamedArg] = []
 end
 
 ## Enum.Variant(args), also through a module alias. named is empty from the parser. The linker fills it, and leaves
