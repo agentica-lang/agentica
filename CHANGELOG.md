@@ -14,6 +14,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- The `location` of an error that a function of an `extern module` block returns is the place of the call, not of the declaration (#1466).
 - **Breaking:** `std/actor`: a call that times out closes its reply channel, and `Actor.reply` gives whether the caller gets the value (a `Bool`) and closes the channel, so an answer to a call that gave up is never lost. Only `&Actor.reply` used as a `Fn[..., Void]` value no longer checks (#1523).
 
 ## [0.31.0] - 2026-11-13

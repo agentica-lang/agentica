@@ -139,7 +139,7 @@ duplicate, code some(19)
 
 ## Location
 
-`error("text")` sets `location` to the place of that call. An error that a builtin makes gets the place of the builtin call: in the program, or in the `std/` module whose function made the call. A prelude function (`o.to_result(...)`) is skipped, so its error points at the program's call. A function of an `extern module` block gives the place of its declaration. The path is relative: the name the compiled file stores for the source, relative to the folder of the entry file, or `std/...` for a standard module.
+`error("text")` sets `location` to the place of that call. An error that a builtin makes gets the place of the builtin call: in the program, or in the `std/` module whose function made the call. A prelude function (`o.to_result(...)`) and a function of an `extern module` block are skipped, so their errors point at the program's call. The path is relative: the name the compiled file stores for the source, relative to the folder of the entry file, or `std/...` for a standard module.
 
 `location` is `""` when no place is known: when the call is more than 16 prelude or native frames deep, or when no task is running the code that builds the error.
 
