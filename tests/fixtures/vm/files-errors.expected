@@ -1,7 +1,7 @@
 {
   "exit": 1,
   "code": "RUNTIME-INVALID-COUNT",
-  "steps": 461,
+  "steps": 462,
   "stdout": [
     "error(\"filesystem: path does not refer to a regular file\", kind: \"io.not_found\", code: 2)",
     "error(\"filesystem: path does not refer to a regular file\", kind: \"io.is_directory\", code: 21)",
@@ -9,8 +9,8 @@
     "error(\"filesystem: cannot open file for writing\\n  path: @tmp/missing/x\\n  system error: No such file or directory; errno=2\", kind: \"io.not_found\", code: 2)",
     "error(\"filesystem: path is a directory\\n  path: @tmp/file.txt/\", kind: \"io.is_directory\")",
     "error(\"filesystem: path is a directory\\n  path: @tmp/new/\", kind: \"io.is_directory\")",
-    "error(\"filesystem: path does not exist\", kind: \"io.not_found\")",
-    "error(\"filesystem: path does not exist\", kind: \"io.not_found\")",
+    "error(\"filesystem: path does not exist\", kind: \"io.not_found\", code: 2)",
+    "false",
     "error(\"filesystem: cannot open directory\\n  path: @tmp/missing\\n  system error: No such file or directory; errno=2\", kind: \"io.not_found\", code: 2)",
     "error(\"filesystem: cannot open directory\\n  path: @tmp/file.txt\\n  system error: Not a directory; errno=20\", kind: \"io.not_directory\", code: 20)",
     "ok()",

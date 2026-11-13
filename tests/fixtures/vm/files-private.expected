@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 597,
+  "steps": 591,
   "stdout": [
     "ok()",
     "error(\"filesystem: cannot make directory\\n  path: @tmp/private\\n  system error: File exists; errno=17\", kind: \"io.exists\", code: 17)",
@@ -19,8 +19,8 @@
     "error(\"filesystem: cannot open file for writing\\n  path: @tmp/missing/file\\n  system error: No such file or directory; errno=2\", kind: \"io.not_found\", code: 2)",
     "error(\"filesystem: invalid path \\\"\\\"\", kind: \"argument\")",
     "error(\"filesystem: timeout must be positive milliseconds\", kind: \"argument\")",
-    "error(\"filesystem: path does not exist\", kind: \"io.not_found\")",
-    "error(\"filesystem: path does not exist\", kind: \"io.not_found\")",
+    "error(\"filesystem: path does not exist\", kind: \"io.not_found\", code: 2)",
+    "false",
     "error(\"filesystem: invalid path \\\"\\\"\", kind: \"argument\")",
     "error(\"filesystem: invalid path \\\"a\\\\u0000\\\"\", kind: \"argument\")",
     "error(\"filesystem: timeout must be positive milliseconds\", kind: \"argument\")",

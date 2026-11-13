@@ -652,8 +652,9 @@ agc_value agc_host_error(agc_vm *vm, const char *what, const char *host, int64_t
   return agc_error_string(vm, AGC_KIND_NET_HOST_NOT_FOUND, agc_utf8_decode((const uint8_t *)text, n_text, "?", true));
 }
 
-agc_value agc_tls_failure_error(agc_vm *vm, const char *head, const agc_tls_failure *f) {
-  if (f->sys) return agc_system_error(vm, AGC_FAMILY_NET, head, f->sys);
+/* A system error of a TLS failure is of FAMILY: io when a file of the context failed to load, else net. */
+static agc_value tls_error(agc_vm *vm, agc_error_family family, const char *head, const agc_tls_failure *f) {
+  if (f->sys) return agc_system_error(vm, family, head, f->sys);
   size_t size = agc_size_add(strlen(head), sizeof f->detail + 4);
   char *text = agc_alloc_atomic(size);
   int len = snprintf(text, size, "%s (%s)", head, f->detail);
@@ -661,11 +662,15 @@ agc_value agc_tls_failure_error(agc_vm *vm, const char *head, const agc_tls_fail
   return agc_error_string(vm, AGC_KIND_NET_TLS, agc_utf8_decode((const uint8_t *)text, n_text, "?", true));
 }
 
+agc_value agc_tls_failure_error(agc_vm *vm, const char *head, const agc_tls_failure *f) {
+  return tls_error(vm, AGC_FAMILY_NET, head, f);
+}
+
 agc_value agc_tls_load_error(agc_vm *vm, const char *what, const char *path, const agc_tls_failure *f) {
   size_t size = agc_size_add(strlen(what), agc_size_add(strlen(path), 32));
   char *head = agc_alloc_atomic(size);
   snprintf(head, size, "network: cannot load %s \"%s\"", what, path);
-  return agc_tls_failure_error(vm, head, f);
+  return tls_error(vm, AGC_FAMILY_IO, head, f);
 }
 
 /* The files of a context are read when it is built (TLS.client_context), so only the lazy system-trust context of an

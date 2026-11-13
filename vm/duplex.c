@@ -360,7 +360,7 @@ static agc_value posted_result(agc_vm *vm, agc_duplex *d, request *q) {
     agc_charge(vm, q->count);
     return agc_stream_written(vm, AGC_STREAM_PROCESS, q->write_status);
   }
-  agc_value result = q->overflow ? agc_error(vm, AGC_KIND_PROCESS_FAILED, q->overflow) : cut_value(vm, &q->cut);
+  agc_value result = q->overflow ? agc_error(vm, AGC_KIND_PROCESS_TOO_LARGE, q->overflow) : cut_value(vm, &q->cut);
   agc_charge(vm, agc_value_units(result));
   return result;
 }
@@ -384,7 +384,7 @@ static agc_value request_done(agc_vm *vm, void *data, agc_value context) {
     agc_charge(vm, q->count);
     result = agc_stream_written(vm, AGC_STREAM_PROCESS, d->write_status);
   } else {
-    result = d->overflow && !agc_inbuf_ready(&d->in, true, 0) ? agc_error(vm, AGC_KIND_PROCESS_FAILED, d->overflow)
+    result = d->overflow && !agc_inbuf_ready(&d->in, true, 0) ? agc_error(vm, AGC_KIND_PROCESS_TOO_LARGE, d->overflow)
                                                               : take_line(vm, d);
     agc_charge(vm, agc_value_units(result));
   }
@@ -518,7 +518,7 @@ agc_value agc_duplex_read_line(agc_vm *vm, agc_duplex *d, agc_resource *lock, in
   if (agc_io_here(vm)) {
     if (!usable(vm, d, d->reader != NULL, &result)) return result;
     if (agc_inbuf_ready(&d->in, true, 0)) return take_line(vm, d);
-    if (d->overflow) return agc_error(vm, AGC_KIND_PROCESS_FAILED, d->overflow);
+    if (d->overflow) return agc_error(vm, AGC_KIND_PROCESS_TOO_LARGE, d->overflow);
   }
   start_request(vm, new_request(vm, d, DX_READ, false), agc_handle_value(lock), timeout, begin_read);
   return agc_void();

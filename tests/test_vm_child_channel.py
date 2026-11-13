@@ -86,7 +86,7 @@ def test_parent_side_send_read_available_close_timeouts_and_limits(bytecode, nod
     assert ask("stalled") == lines(
         'send: error("process: operation timed out", kind: "process.timeout")', 'after: error("process: channel is closed", kind: "process.closed")')
     assert ask("long") == lines(
-        'read: error("process: line exceeds 1048576 bytes", kind: "process.failed")', 'again: error("process: channel is closed", kind: "process.closed")')
+        'read: error("process: line exceeds 1048576 bytes", kind: "process.too_large")', 'again: error("process: channel is closed", kind: "process.closed")')
     assert ask("loud") == lines('read: ok("done")', 'printed: ok("noise\\n")')
     assert ask("split") == lines(
         'first: ok("one")', 'printed: ok("a")', "send: ok()", 'second: ok("two")', 'printed: ok("éb\\n")')

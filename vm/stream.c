@@ -26,7 +26,7 @@ static const char *const bad_timeout[] = {"network: timeout must be positive mil
 static const char *const timed_out[] = {"network: operation timed out", "process: operation timed out"};
 static const agc_error_kind timeout_kinds[] = {AGC_KIND_NET_TIMEOUT, AGC_KIND_PROCESS_TIMEOUT};
 static const agc_error_kind eof_kinds[] = {AGC_KIND_NET_EOF, AGC_KIND_PROCESS_EOF};
-static const agc_error_kind failed_kinds[] = {AGC_KIND_NET_FAILED, AGC_KIND_PROCESS_FAILED};
+static const agc_error_kind too_large_kinds[] = {AGC_KIND_NET_TOO_LARGE, AGC_KIND_PROCESS_TOO_LARGE};
 
 /* The error of a text read whose bytes are not UTF-8: it names the offset (from 0) of the first byte that does not
    start a valid character. */
@@ -213,7 +213,7 @@ static agc_cut_status spot_line(agc_inbuf *b, const uint8_t **data, size_t *len,
 
 static agc_value line_value(agc_vm *vm, agc_stream_area area, agc_cut_status status, int error, const uint8_t *data,
                             size_t len, const char *too_long, const char *at_end) {
-  if (status == AGC_CUT_OVER) return agc_error(vm, failed_kinds[area], too_long);
+  if (status == AGC_CUT_OVER) return agc_error(vm, too_large_kinds[area], too_long);
   if (status == AGC_CUT_FAILED) return agc_system_error(vm, family_of(area), "could not read from the stream", error);
   if (status == AGC_CUT_END) return agc_error(vm, eof_kinds[area], at_end);
   size_t chars;

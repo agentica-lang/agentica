@@ -574,7 +574,7 @@ def test_client_against_node_tls_servers_data_eof_resets_limits_timeouts_and_ver
         ("prefix", 'error("could not read from the stream\\n  system error: '),
         "100000",
         "100000 true",
-        'error("network: line exceeds 1048576 bytes", kind: "net.failed")',
+        'error("network: line exceeds 1048576 bytes", kind: "net.too_large")',
         'error("network: socket is closed", kind: "net.closed")',
         'error("network: operation timed out", kind: "net.timeout")',
         'error("network: socket is closed", kind: "net.closed")',

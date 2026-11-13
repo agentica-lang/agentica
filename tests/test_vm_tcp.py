@@ -279,7 +279,7 @@ def test_client_reads_fragments_eof_resets_long_lines_and_timeouts_from_node_pee
                              'error("network: end of input", kind: "net.eof")\n'
                              "ok(<Bytes 0>)\n"
                              + RESET +
-                             'error("network: line exceeds 1048576 bytes", kind: "net.failed")\n'
+                             'error("network: line exceeds 1048576 bytes", kind: "net.too_large")\n'
                              'error("network: socket is closed", kind: "net.closed")\n'
                              'error("network: operation timed out", kind: "net.timeout")\n'
                              'error("network: socket is closed", kind: "net.closed")\n'

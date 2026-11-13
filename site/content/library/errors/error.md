@@ -58,16 +58,16 @@ A kind is a dotted name: parts of `a-z`, `0-9` and `_`, each starting with a let
 
 ## Builtin kinds
 
-The errors of the builtins have these kinds. A kind is never renamed, so a program can branch on it. `argument` is a bad argument value: out of range, empty, too large or holding NUL.
+The errors of the builtins have these kinds. A kind is never renamed, so a program can branch on it. Only the cases of the `error` row have the kind `error`, so `e.kind == "error"` and `e.is_a?("error")` match none of the others: branch on `e.kind` or `e.is_a?`, never on the message. `argument` is a bad argument value: out of range, empty, too large or holding NUL.
 
 | Family | Kinds |
 |---|---|
 | `error` | the default: `error("text")`, `o.to_result(...)`, `List.find` and `Lazy.find` with no match, a missing key of an `Ats` table, a logger handler name that is taken or missing, `Task.unobserved_crash` with none, a native module's `an_error` and the `--deny-*` refusals |
 | `argument` | `argument` |
 | `io` | `io.not_found`, `io.permission`, `io.exists`, `io.is_directory`, `io.not_directory`, `io.too_large`, `io.eof`, `io.closed`, `io.timeout`, `io.failed` |
-| `net` | `net.timeout`, `net.refused`, `net.host_not_found`, `net.closed`, `net.eof`, `net.tls`, `net.failed` |
+| `net` | `net.timeout`, `net.refused`, `net.host_not_found`, `net.closed`, `net.eof`, `net.tls`, `net.too_large`, `net.failed` |
 | `http` | `http.protocol`, `http.too_large`, `http.closed` |
-| `process` | `process.not_found`, `process.timeout`, `process.closed`, `process.eof`, `process.failed` |
+| `process` | `process.not_found`, `process.timeout`, `process.closed`, `process.eof`, `process.too_large`, `process.failed` |
 | `task`, `channel` | `task.crashed`, `task.cancelled`, `task.timeout`, `channel.closed`, `channel.timeout`, `channel.gone` |
 | `json`, `number`, `text` | `json.parse`, `json.decode`, `number.parse`, `number.range`, `text.encoding` |
 | `zlib`, `crypto` | `zlib.data`, `zlib.too_large`, `crypto.auth`, `crypto.key`, `crypto.failed` |

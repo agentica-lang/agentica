@@ -184,6 +184,13 @@ static agc_value error_of(agc_vm *vm, agc_error_kind kind, const char *message) 
   return error_text(vm, kind, &t, 0);
 }
 
+/* The error of MESSAGE with the kind and code of ERR, or of FALLBACK when no errno is known (ERR 0). */
+static agc_value errno_of(agc_vm *vm, agc_error_kind fallback, const char *message, int err) {
+  text t = {0};
+  puts_text(&t, message);
+  return error_text(vm, err ? agc_errno_kind(AGC_FAMILY_IO, err) : fallback, &t, err);
+}
+
 static const char *os_message(agc_vm *vm, int err) {
 #ifdef __linux__
   locale_t messages = vm->rt->messages_locale;
@@ -670,21 +677,29 @@ static int open_for(op *o, bool reading, bool append) {
 
 int agc_files_open_output(agc_vm *vm, const agc_string *given, bool *refused) {
   *refused = !path_string(given);
-  if (*refused) return -1;
+  if (*refused) {
+    errno = 0;
+    return -1;
+  }
   char *path = agc_host_path_try(vm, given);
   if (!path) {
     errno = EINVAL;
     return -1;
   }
   int fd = -1;
-  *refused = names_output_fd(vm->rt, path) || write_refused(path) != 0;
-  if (!*refused) fd = agc_fs_open(path, AGC_FS_WRITE | AGC_FS_CREATE | AGC_FS_TRUNCATE);
-  int problem = errno;
+  bool own = names_output_fd(vm->rt, path);
+  int problem = own ? 0 : write_refused(path);
+  *refused = own || problem != 0;
+  if (!*refused) {
+    fd = agc_fs_open(path, AGC_FS_WRITE | AGC_FS_CREATE | AGC_FS_TRUNCATE);
+    problem = errno;
+  }
   free(path);
   if (fd >= 0 && private_pipe(vm->rt, fd)) {
     agc_fs_close(fd);
     *refused = true;
     fd = -1;
+    problem = 0;
   }
   errno = problem;
   return fd;
@@ -778,7 +793,7 @@ static void work_sha256(op *o) {
   }
   if (!AGC_FS_ISREG(info.mode)) {
     agc_fs_close(fd);
-    fail_op(o, FS_NOT_REGULAR, 0);
+    fail_op(o, FS_NOT_REGULAR, AGC_FS_ISDIR(info.mode) ? EISDIR : 0);
     return;
   }
   agc_fs_blocking(fd);
@@ -848,7 +863,7 @@ static const char *file_kind(uint64_t mode) {
 static void work_stat(op *o) {
   agc_fs_info info;
   if ((o->kind == OP_LSTAT ? agc_fs_stat(o->path, &info, false) : agc_fs_stat(o->path, &info, true)) != 0) {
-    fail_op(o, errno == ELOOP ? FS_LINK : FS_MISSING, 0);
+    fail_op(o, errno == ELOOP ? FS_LINK : FS_MISSING, errno);
     return;
   }
   bool dir = AGC_FS_ISDIR(info.mode);
@@ -1063,7 +1078,7 @@ static void work_replace(op *o) {
   }
   if (!AGC_FS_ISREG(info.mode)) {
     free(target);
-    fail_op(o, FS_NOT_REGULAR, 0);
+    fail_op(o, FS_NOT_REGULAR, AGC_FS_ISDIR(info.mode) ? EISDIR : 0);
     return;
   }
 #ifdef _WIN32
@@ -1126,9 +1141,11 @@ static void work_open(op *o) {
   int fd = open_for(o, o->kind == OP_OPEN_READ, o->kind == OP_OPEN_APPEND);
   if (fd < 0) return;
   agc_fs_info info;
-  if (o->regular && (agc_fs_fstat(fd, &info) != 0 || !AGC_FS_ISREG(info.mode))) {
+  bool stated = o->regular && agc_fs_fstat(fd, &info) == 0;
+  if (o->regular && (!stated || !AGC_FS_ISREG(info.mode))) {
+    int err = !stated ? errno : AGC_FS_ISDIR(info.mode) ? EISDIR : 0;
     agc_fs_close(fd);
-    fail_op(o, FS_NOT_REGULAR, 0);
+    fail_op(o, FS_NOT_REGULAR, err);
     return;
   }
   int err = probe(fd, &o->st->polled);
@@ -1467,8 +1484,8 @@ static agc_value common_error(agc_vm *vm, const op *o) {
       put(&t, o->path, path_len);
       return error_text(vm, AGC_KIND_IO_IS_DIRECTORY, &t, o->err);
     }
-    case FS_MISSING: return error_of(vm, AGC_KIND_IO_NOT_FOUND, "filesystem: path does not exist");
-    case FS_LINK: return error_of(vm, AGC_KIND_IO_FAILED, "filesystem: path is not a regular file or directory");
+    case FS_MISSING: return errno_of(vm, AGC_KIND_IO_NOT_FOUND, "filesystem: path does not exist", o->err);
+    case FS_LINK: return errno_of(vm, AGC_KIND_IO_FAILED, "filesystem: path is not a regular file or directory", o->err);
     case FS_EOF: return error_of(vm, AGC_KIND_IO_EOF, "filesystem: end of file");
     case FS_LONG_LINE: return error_of(vm, AGC_KIND_IO_TOO_LARGE, "filesystem: line exceeds 1048576 bytes");
     case FS_MKDIR: return os_error(vm, "filesystem: cannot make directory", o->path, o->fail_at, o->err);

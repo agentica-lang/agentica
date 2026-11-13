@@ -33,6 +33,13 @@ def boom(n: Int) -> Result[Int]
   return ok(10 / n)
 end
 
+# Two sends of 600000 bytes and no newline: the reader's line goes over its limit of 1048576 bytes.
+def send_long(socket: TCP.Socket) -> Result[Void]
+  chunk = "x" * 600000
+  try TCP.send(socket, chunk, 5000)
+  return TCP.send(socket, chunk, 5000)
+end
+
 def main() -> Void
   dir: String = System.args()[0]
   file = at(dir, "file.txt")
@@ -42,6 +49,8 @@ def main() -> Void
   show("directory as text", "io", File.read_text(dir, 60000))
   show("existing file", "io", File.open(file, "create_private", 60000))
   show("invalid path", "io", File.read_text("", 60000))
+  show("stat missing", "io", File.stat(at(dir, "missing.txt"), 60000))
+  show("TLS ca_file", "io", TLS.client_context(TLS.ClientOptions(ca_file: at(dir, "missing.pem"))))
   show("bad timeout", "argument", File.read_text(file, 0))
 
   show("parse Int", "number", "12x".to_i)
@@ -66,6 +75,13 @@ def main() -> Void
   show("end of input", "net", TCP.read_line(client, 5000))
   TCP.close(client)
   show("closed socket", "net", TCP.read_line(client, 5000))
+  long = Result.unwrap!(TCP.connect("127.0.0.1", port, 5000))
+  peer = Result.unwrap!(TCP.accept(listener, 5000))
+  sender = Task.spawn(&send_long, peer)
+  show("long line", "net", TCP.read_line(long, 5000))
+  TCP.close(long)
+  _ = Task.await(sender)
+  TCP.close(peer)
   idle = Result.unwrap!(TCP.connect("127.0.0.1", port, 5000))
   show("read timeout", "net", TCP.read_line(idle, 30))
   TCP.close(idle)

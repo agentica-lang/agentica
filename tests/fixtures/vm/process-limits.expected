@@ -19,7 +19,7 @@
     "error(\"process: executable is unavailable\", kind: \"process.not_found\")",
     "error(\"process: executable is unavailable\", kind: \"process.not_found\")",
     "1048576",
-    "error(\"process: line exceeds 1048576 bytes\", kind: \"process.failed\")",
+    "error(\"process: line exceeds 1048576 bytes\", kind: \"process.too_large\")",
     "error(\"process: process is closed\", kind: \"process.closed\")",
     "error(\"process: process is closed\", kind: \"process.closed\")",
     ""

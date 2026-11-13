@@ -35,7 +35,8 @@ def main() -> Void
   IO.inspect(File.open("", "create_private", 60000))
   IO.inspect(File.open(at(dir, "late"), "create_private", 0))
   describe("missing", File.lstat(at(dir, "missing"), 60000))
-  describe("below a file", File.lstat(at(file, "x"), 60000))
+  # Below a file: ENOTDIR on POSIX and ENOENT on Windows, so only the failure is shown.
+  IO.inspect(File.lstat(at(file, "x"), 60000).ok?)
   IO.inspect(File.lstat("", 60000))
   IO.inspect(File.lstat("a" + nul, 60000))
   IO.inspect(File.lstat(file, -1))

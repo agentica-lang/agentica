@@ -15,7 +15,8 @@ def main() -> Void
   IO.inspect(File.write_text(file + "/", "x", 60000))
   IO.inspect(File.append_text(at(dir, "new") + "/", "x", 60000))
   IO.inspect(File.stat(missing, 60000))
-  IO.inspect(File.stat(at(file, "x"), 60000))
+  # ENOTDIR on POSIX and ENOENT on Windows (tests/test_error_kinds.py has the kind), so only the failure is shown.
+  IO.inspect(File.stat(at(file, "x"), 60000).ok?)
   IO.inspect(Dir.list(missing, 60000))
   IO.inspect(Dir.list(file, 60000))
   IO.inspect(Dir.mkdir(at(dir, "x//file.txt//sub"), 60000))

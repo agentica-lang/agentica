@@ -69,3 +69,44 @@ def test_a_file_without_read_permission_is_io_permission(tmp_path, work):
         assert run_program(tmp_path, work, PERMISSION_PROGRAM, "permission", locked) == ["io.permission some(13) true"]
     finally:
         locked.chmod(0o600)
+
+
+POSIX_PROGRAM = """\
+def show[T](label: String, result: Result[T]) -> Void
+  case result
+    ok(_) -> puts("#{label}: ok")
+    error(e) -> puts("#{label}: #{e.kind} #{e.code}")
+  end
+end
+
+def main() -> Void
+  dir = System.args()[0]
+  show("stat through a file", File.stat(dir + "/file.txt/x", 5000))
+  show("stat in a locked folder", File.stat(dir + "/locked/x", 5000))
+  show("out is a folder", Process.spawn("true", [], Process.Options(timeout_ms: 5000, out: dir)))
+  long = Result.unwrap!(Process.spawn("head", ["-c", "1048577", "/dev/zero"]))
+  show("long line", Process.read_line(long, 5000))
+  captured = Result.unwrap!(Process.spawn_captured("head", ["-c", "2097152", "/dev/zero"]))
+  _ = Process.wait(captured, 5000)
+  show("long output", Process.read_bytes(captured, 0, 5000))
+end
+"""
+
+
+@pytest.mark.skipif(WINDOWS or os.geteuid() == 0,
+                    reason="host-only: a mode of 000, true, head and /dev/zero are POSIX; root ignores the mode")
+def test_stat_process_and_long_lines_take_the_kind_of_the_failure(tmp_path, work):
+    (tmp_path / "file.txt").write_text("x", encoding="utf-8")
+    locked = tmp_path / "locked"
+    locked.mkdir()
+    locked.chmod(0)
+    try:
+        assert run_program(tmp_path, work, POSIX_PROGRAM, "posix", tmp_path) == [
+            "stat through a file: io.not_directory some(20)",
+            "stat in a locked folder: io.permission some(13)",
+            "out is a folder: io.is_directory some(21)",
+            "long line: process.too_large none",
+            "long output: process.too_large none",
+        ]
+    finally:
+        locked.chmod(0o700)

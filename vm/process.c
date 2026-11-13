@@ -658,7 +658,7 @@ static bool read_ready(proc *p, req_kind kind, size_t count) {
 
 static agc_value take(agc_vm *vm, proc *p, req_kind kind, size_t count) {
   if (p->closed) return agc_error(vm, AGC_KIND_PROCESS_CLOSED, closed_text);
-  if (p->out_cut || p->err_cut) return agc_error(vm, AGC_KIND_PROCESS_FAILED, over_text);
+  if (p->out_cut || p->err_cut) return agc_error(vm, AGC_KIND_PROCESS_TOO_LARGE, over_text);
   if (kind != REQ_LINE) return agc_inbuf_bytes(vm, AGC_STREAM_PROCESS, &p->out_buf, count);
   bool over;
   agc_value line = agc_inbuf_line(vm, AGC_STREAM_PROCESS, &p->out_buf, "process: line exceeds 1048576 bytes",
@@ -698,7 +698,7 @@ static agc_value available_text(agc_vm *vm, const uint8_t *data, size_t n) {
 }
 
 static agc_value available(agc_vm *vm, proc *p) {
-  if (p->out_cut || p->err_cut) return agc_error(vm, AGC_KIND_PROCESS_FAILED, over_text);
+  if (p->out_cut || p->err_cut) return agc_error(vm, AGC_KIND_PROCESS_TOO_LARGE, over_text);
   size_t n = available_bytes(&p->out_buf);
   agc_value result = available_text(vm, pending_data(&p->out_buf), n);
   agc_inbuf_take(&p->out_buf, n);
@@ -726,7 +726,7 @@ static agc_value posted_result(agc_vm *vm, const request *q, agc_value context) 
       if (q->closed)
         result = agc_error(vm, AGC_KIND_PROCESS_CLOSED, closed_text);
       else if (q->over)
-        result = agc_error(vm, AGC_KIND_PROCESS_FAILED, over_text);
+        result = agc_error(vm, AGC_KIND_PROCESS_TOO_LARGE, over_text);
       else if (q->kind == REQ_LINE)
         result = agc_inbuf_cut_line_value(vm, AGC_STREAM_PROCESS, &q->cut, "process: line exceeds 1048576 bytes",
                                           "process: end of input");
@@ -743,7 +743,7 @@ static agc_value posted_result(agc_vm *vm, const request *q, agc_value context) 
       return q->closed ? agc_error(vm, AGC_KIND_PROCESS_CLOSED, closed_text) : ok_void();
     case REQ_AVAILABLE:
       if (q->closed) return agc_error(vm, AGC_KIND_PROCESS_CLOSED, closed_text);
-      if (q->over) return agc_error(vm, AGC_KIND_PROCESS_FAILED, over_text);
+      if (q->over) return agc_error(vm, AGC_KIND_PROCESS_TOO_LARGE, over_text);
       return available_text(vm, q->cut.data, q->cut.len);
     case REQ_WAIT:
       if (q->closed) return agc_error(vm, AGC_KIND_PROCESS_CLOSED, closed_text);
@@ -1417,8 +1417,10 @@ static bool same_file(int a, int b) {
 }
 
 /* Opens the files of `out` and `err` (empty: the pipe) into FILES; NULL, or the error of the one that failed, with
-   nothing left open (*problem: its errno, 0 for a refused path). */
-static const char *open_targets(agc_vm *vm, const agc_string *out, const agc_string *err, int files[2], int *problem) {
+   nothing left open (*problem: its errno, or the refusal's EISDIR or ELOOP, else 0; *refused: the path was
+   refused). */
+static const char *open_targets(agc_vm *vm, const agc_string *out, const agc_string *err, int files[2], int *problem,
+                                bool *refused_at) {
   const agc_string *paths[2] = {out, err};
   static const char *const texts[2][2] = {
     {"process: cannot open the out file", "process: out does not refer to a regular file"},
@@ -1433,7 +1435,8 @@ static const char *open_targets(agc_vm *vm, const agc_string *out, const agc_str
     bool refused;
     files[k] = open_target(vm, paths[k], &refused);
     if (files[k] < 0) {
-      *problem = refused ? 0 : errno;
+      *problem = errno;
+      *refused_at = refused;
       close_fd(&files[0]);
       return texts[k][refused];
     }
@@ -1535,13 +1538,17 @@ static agc_value spawn_child(agc_vm *vm, const agc_value *args, const agc_string
     return agc_error(vm, AGC_KIND_PROCESS_NOT_FOUND, "process: directory is unavailable");
   }
   int targets[2] = {-1, -1}, problem = 0;
-  const char *target_text = files ? open_targets(vm, out, err, targets, &problem) : NULL;
+  bool refused = false;
+  const char *target_text = files ? open_targets(vm, out, err, targets, &problem, &refused) : NULL;
   if (target_text) {
     AGC_TRACE(&vm->rt->trace, AGC_TRACE_PROC, "spawn_failed reason=file");
     free(path);
     free(cwd);
-    return problem ? agc_system_error(vm, AGC_FAMILY_IO, target_text, problem)
-                   : agc_error(vm, AGC_KIND_ARGUMENT, target_text);
+    if (!problem) return agc_error(vm, AGC_KIND_ARGUMENT, target_text);
+    if (!refused) return agc_system_error(vm, AGC_FAMILY_IO, target_text, problem);
+    /* A refused folder or link loop keeps its text and takes the kind and code of its errno, as File does. */
+    size_t n = strlen(target_text);
+    return agc_error_code(vm, agc_errno_kind(AGC_FAMILY_IO, problem), agc_make_string(target_text, n, n), problem);
   }
   launch *l = calloc(1, sizeof(launch));
   if (!l) agc_out_of_memory();
