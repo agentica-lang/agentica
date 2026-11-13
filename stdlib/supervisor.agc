@@ -86,8 +86,8 @@ READY_MS = 60_000
 REGISTER_MS = 5000
 # How long a supervisor that gives up waits for the other children to stop.
 GIVE_UP_STOP_MS = 5000
-# Room in the inbox for the end notices of the children, which are dropped when it is full. Only a start that succeeded
-# is monitored, and a failed one sends a Retry instead, so a child has at most one message waiting.
+# Room in the inbox for the end notices of the children. Only a start that succeeded is monitored, and a failed one
+# sends a Retry instead, so a child has at most one message waiting.
 NOTICES_PER_CHILD = 2
 MIN_CAPACITY = 64
 

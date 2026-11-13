@@ -15,6 +15,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 ### Changed
 
 - **Breaking:** `std/actor`: a call that times out closes its reply channel, and `Actor.reply` gives whether the caller gets the value (a `Bool`) and closes the channel, so an answer to a call that gave up is never lost. Only `&Actor.reply` used as a `Fn[..., Void]` value no longer checks (#1523).
+- **Breaking:** `Task.monitor`: a notice that finds its channel full goes in past the capacity instead of being dropped, and a monitor through a `TaskRef` (`Task.current`) no longer marks the crash of the task as observed (#1522).
 
 ## [0.31.0] - 2026-11-13
 
