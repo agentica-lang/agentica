@@ -149,6 +149,10 @@ Invoke the `pr-reviewer` skill (via the Skill tool) and follow it to review GitH
   with `gh run rerun ID --failed` and say so. Read other
   failures with `gh run view ID --log-failed`; native Windows finds bugs Wine
   hides.
+- A case that fails on one system only: run the **Probe** on that system
+  (`gh workflow run probe.yml --ref BRANCH -f systems=... -f tests=...`,
+  `agentica-development` `references/ci.md`), not debug commits through
+  Platforms.
 
 ## 5. Merge and clean up
 

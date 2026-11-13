@@ -3,7 +3,7 @@
 
 .PHONY: test test-slow test-py tests tests-host tests-files tests-docker tests-wine test-cli conformance conformance-report \
   fmt-check check-compiler goldens bench bench-native eval-references vm-latency vm-task-map test-distribution vm-golden-check dup-check dup-baseline \
-  docker-test-image windows-docker-remove-check windows-docker-remove-wine-check test-remove-actions test-jit-off
+  docker-test-image windows-docker-remove-check windows-docker-remove-wine-check test-remove-actions test-jit-off probe
 
 # Tests live in tests/test_<area>.py and run through pytest; unittest.TestCase modules remain supported.
 # TESTS names modules, or directories that hold them (the default is tests/). Design: references/ci.md.
@@ -92,6 +92,14 @@ py-test/%: FORCE
 	  fi; \
 	  exit $$status; \
 	else $(PYTEST_RUNNER) "$*" $(JUNIT_ARG); fi
+
+# A probe: a few chosen checks on the built binary, the steps of probe.yml (references/ci.md, "Probe"). tools/probe.py
+# reads TESTS (modules or pytest node ids), K (a -k expression), TARGET (make words), PROGRAM (an .agc file), REPEAT
+# and SCHEDULERS from the environment, where make puts the variables of its command line, so no value goes through a
+# shell line. Example: make probe TESTS="tests/test_vm_bits.py" REPEAT=3
+probe: $(PRODUCT)
+	@PROBE_MAKE="$(MAKE)" PROBE_PRODUCT="$(PRODUCT)" PROBE_ISOLATED="$(ISOLATED_PY_TESTS)" POETRY="$(POETRY)" \
+	  $(PYTHON) tools/probe.py
 
 # The tests that run the product command line on dist/agentica (make test runs them too, with the rest): the options, the
 # diagnostics, the programs, `agentica test`, `agentica run`.
