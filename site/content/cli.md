@@ -190,7 +190,7 @@ Three variables have no flag. `AGENTICA_GC_HEAP` (default `32M`: bytes, or a num
 | `type-at --stdin FILE:LINE:COL`, `refs --stdin FILE:LINE:COL` | answer for the text on standard input, as if `FILE` held it |
 | `symbol NAME --stdin FILE`, `refs NAME --stdin FILE` | search that text as one more file, the first |
 | `type-at --partial`, `refs FILE:LINE:COL --partial` | answer although some functions do not check, from the ones that do and from the link: the JSON has `"partial": true` and `diagnostics`, and the exit code is 0. `refs` takes it for a position without PATH. `outline` takes the option and ignores it |
-| `install`, `add NAME URL --tag TAG` (or `--ref COMMIT`, `--subdir DIR`), `update [NAME]` | keep `deps/` and `agentica.lock`; see [Packages](/tour/modules/#packages) |
+| `install`, `add NAME URL --tag TAG` (or `--ref COMMIT`, `--subdir DIR`, `--group test`), `update [NAME]` | keep `deps/` and `agentica.lock`; see [Packages](/tour/modules/#packages) |
 | `compile FILE -o OUT` | writes VM bytecode |
 | `run [OPTIONS] -- FILE.agcb [ARGS...]` | runs bytecode; `run` must be the first word. Options: the ones above except `--dump*`, plus `--source-root DIR`, `--ai`, `--json`. `run --version` lists the linked libraries |
 | `--version` | prints the version |

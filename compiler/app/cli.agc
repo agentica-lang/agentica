@@ -23,7 +23,6 @@
 import Core from "../analysis/analysis"
 import Cache from "../analysis/cache"
 import Front from "../analysis/front"
-import Discover from "../bdd/bdd_discover"
 import Driver from "../bdd/bdd_driver"
 import Opts from "../bdd/bdd_options"
 import Report from "../bdd/bdd_report"
@@ -647,11 +646,10 @@ def program(session: Session, verb: String, rest: List[String]) -> Int
   end
 end
 
-# The settings `check` reads `file` with: the check cache, and a `*_test.agc` file is a test file, as for `agentica
-# test`, so its `test_*` functions are checked as tests.
+# The settings `check` reads `file` with: the check cache. Whether the file is a test is the check's own
+# (analysis/analysis.agc, modules/test_files.agc).
 def check_settings(session: Session, file: String) -> Env.Settings
-  settings = CheckCache.attach(session.settings, file, !session.options.no_cache)
-  settings.with(test_file: Discover.test_file?(file))
+  CheckCache.attach(session.settings, file, !session.options.no_cache)
 end
 
 # The bytecode cache (io/bytecode_cache.agc) serves a run and `compile` (whose bytes are the ones a fresh compile

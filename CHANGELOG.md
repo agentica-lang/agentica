@@ -20,6 +20,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   stopped, files written) instead of ending it at once, and `SIGQUIT` does the
   same and exits with 131 instead of dumping core (#1477).
 - `std/actor`: `Actor.Timeout`, a receive timeout that wakes an actor when no message came in time (#1523).
+- Test-only dependencies: `group = "test"` on a dependency of `agentica.toml` (`agentica add ... --group test`); only the tests import it, and projects that depend on the package do not fetch it (#1196).
 
 ### Changed
 

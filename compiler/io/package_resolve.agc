@@ -1,9 +1,10 @@
 ## Resolves the packages of a project (docs/grammar/05b-modules.md): the list of lock entries for `add` and
 ## `update`. It starts from the dependencies of the manifest and follows the manifest of each package it settles, so
 ## the result holds every package of the build, direct or not, and only those: a package that nothing asks for any more
-## is dropped. A package is settled in one of two ways. A locked entry with the same source is kept (its files are put
-## in the cache if they are missing, with no git when they are there). Anything else is fetched afresh: a name the lock
-## lacks, a new source, and the tag pins that `update` was asked to move. The exception is a package that is a member
+## is dropped. The test group of the project (`group = "test"`) is followed, and that of a package is not. A package is
+## settled in one of two ways. A locked entry with the same source is kept (its files are put in the cache if they are
+## missing, with no git when they are there). Anything else is fetched afresh: a name the lock lacks, a new source,
+## and the tag pins that `update` was asked to move. The exception is a package that is a member
 ## of the workspace of the project (packages/members.agc): it is locked as a member and never fetched, and its manifest
 ## is read from the member's folder. The files of every other settled package are in the cache when this returns,
 ## because the manifest of a package is read from there.
@@ -308,8 +309,9 @@ def asked_by(
 
   manifest = try Manifest.read_checked(settings.workspace, file, locked.name, settings.version)
   try Manifest.require_package(manifest)
+  # The test group of a package is its own: a project that depends on it neither fetches nor locks it.
   ok(
-    manifest.dependencies.map do |dependency|
+    Manifest.needed(manifest).map do |dependency|
       Wanted(name: dependency.name, source: dependency.source, asked_in: file, by: locked.name, override: false)
     end,
   )

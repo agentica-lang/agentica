@@ -97,11 +97,20 @@ def find_to_write(workspace: Workspace.Workspace, root_dir: String, running: Str
   ok(Project.Declared(Found(dir: dir, manifest: manifest, lock: lock, members: members)))
 end
 
-## The local names of the dependencies of the root project, in the order of the manifest.
+## The local names of the dependencies of the root project that a program that is not a test may import, in the order
+## of the manifest.
 def direct_names(project: Project) -> List[String]
   case project
     Project.Bare -> []
-    Project.Declared(found) -> Manifest.names(found.manifest)
+    Project.Declared(found) -> Manifest.program_names(found.manifest)
+  end
+end
+
+## The local names of the dependencies of the root project in the test group, which only its tests import.
+def test_names(project: Project) -> List[String]
+  case project
+    Project.Bare -> []
+    Project.Declared(found) -> Manifest.test_names(found.manifest)
   end
 end
 
@@ -153,19 +162,22 @@ end
 ## sources in one build). A dependency that is a member of the workspace `members` must be locked as a member, and any
 ## other as a fetched package: the same two codes. The root manifest and the lock must agree on `override`. A package
 ## manifest is checked by `Manifest.require_package` first (PKG-ROOT-ONLY), and a name that the lock marks as
-## overridden keeps the source of the root, so the source a package asks for is not compared. The failure names the
-## manifest and `dependencies.<name>`.
+## overridden keeps the source of the root, so the source a package asks for is not compared. The test group of a
+## package (`group = "test"`) is its own and is not in the lock of the project, so it is not checked. The failure names
+## the manifest and `dependencies.<name>`.
 def check_dependencies(
   lock: Lock.Lock,
   manifest: Manifest.Manifest,
   members: Members.Members,
   of_package: Bool,
 ) -> Result[Void]
+  dependencies = manifest.dependencies
   if of_package
     try Manifest.require_package(manifest)
+    dependencies = Manifest.needed(manifest)
   end
 
-  for dependency in manifest.dependencies
+  for dependency in dependencies
     path = "dependencies.#{dependency.name}"
     found = Lock.find(lock, dependency.name)
     return error(stale(manifest.file, path, "#{dependency.name} is not in #{LOCK_FILE}")) if !found.ok?

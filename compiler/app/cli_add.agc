@@ -1,4 +1,4 @@
-## `agentica add NAME URL --tag TAG` (or `--ref COMMIT`, and `--subdir DIR`) and `agentica update [NAME]`
+## `agentica add NAME URL --tag TAG` (or `--ref COMMIT`, `--subdir DIR` and `--group test`) and `agentica update`
 ## (docs/grammar/05b-modules.md). Both work on the project of the working folder, resolve its packages
 ## (io/package_resolve.agc: git runs for the pins that are new or asked to move), fill the cache, write agentica.lock
 ## and refresh deps/ (io/package_deps.agc: every package of the new lock is written, and a package the old lock had
@@ -25,7 +25,8 @@ import CliProject from "cli_project"
 import Reply from "cli_reply"
 import Texts from "cli_text"
 
-## Runs `add`. `words` are the ones after the command: NAME URL, `--tag TAG` or `--ref COMMIT`, and `--subdir DIR`.
+## Runs `add`. `words` are the ones after the command: NAME URL, `--tag TAG` or `--ref COMMIT`, `--subdir DIR` and
+## `--group test`.
 def add(settings: Env.Settings, style: String, words: List[String]) -> Reply.Answer
   asked = request_of(words)
   return Reply.Answer.Printed(Reply.failed(2, asked.message)) if !asked.ok?
@@ -52,31 +53,33 @@ private
 
 # The deadline of the write of a file, in milliseconds.
 WRITE_TIMEOUT_MS = 60_000
+# The options of `add`, each with a value.
+ADD_FLAGS = Set.new(["--tag", "--ref", "--subdir", "--group"])
+
 # More help for a manifest that could not be written after the lock was.
 LOCK_WRITTEN = "; agentica.lock was written already, so run `agentica update` to make it match agentica.toml again"
 
 # More help for a deps/ that could not be written after the lock was.
 DEPS_PENDING = "agentica.lock was written already; run `agentica install` to write the locked packages into deps/"
 
-# What `add` was asked: the local name and where the package comes from.
+# What `add` was asked: the local name, where the package comes from and whether only the tests import it.
 struct Request
   name: String
   source: GitSource.Source
+  test: Bool
 end
 
-# NAME URL, then --tag TAG or --ref COMMIT (one of them), and --subdir DIR when the package is a folder of the
-# repository, in any order. A word that is not a good name, URL, tag, commit or subdir is refused here, before the
-# project is read, with the reason of the rule that the manifest applies. The commit is the whole id: git fetches no
-# abbreviation.
+# NAME URL, then --tag TAG or --ref COMMIT (one of them), --subdir DIR when the package is a folder of the
+# repository, and --group test for a dependency that only the tests import, in any order. A word that is not a good
+# name, URL, tag, commit, subdir or group is refused here, before the project is read, with the reason of the rule that
+# the manifest applies. The commit is the whole id: git fetches no abbreviation.
 def request_of(words: List[String]) -> Result[Request]
   return error(Texts.usage_text()) if words.size < 4 or words.size % 2 != 0
 
   options: Map[String, String] = {}
   for at in 1...(words.size / 2)
     flag = words[at * 2]
-    if (flag != "--tag" and flag != "--ref" and flag != "--subdir") or options.has_key?(flag)
-      return error(Texts.usage_text())
-    end
+    return error(Texts.usage_text()) if !ADD_FLAGS.include?(flag) or options.has_key?(flag)
 
     options = options.put(flag, words[at * 2 + 1])
   end
@@ -104,10 +107,15 @@ def request_of(words: List[String]) -> Result[Request]
     problem = GitSource.subdir_problem(subdir)
   end
 
+  group = option_of(options, "--group")
+  if problem == "" and options.has_key?("--group") and group != Manifest.TEST_GROUP
+    problem = "the only group is #{Manifest.TEST_GROUP}: --group #{Manifest.TEST_GROUP}"
+  end
+
   return error("agentica: #{problem}\n") if problem != ""
 
   source = GitSource.Source(git: words[1], subdir: subdir, tag: tag, ref: ref, path: "")
-  ok(Request(name: words[0], source: source))
+  ok(Request(name: words[0], source: source, test: group == Manifest.TEST_GROUP))
 end
 
 # The value of an option, "" when it was not given.
@@ -134,7 +142,7 @@ def add_in(settings: Env.Settings, found: Project.Found, request: Request) -> Re
   end
 
   text = try Reader.read_text(settings.workspace, Reader.Reading(file: file, code: "PKG-MANIFEST-INVALID"))
-  edited = ManifestEdit.add_dependency(text, request.name, request.source)
+  edited = ManifestEdit.add_dependency(text, request.name, request.source, request.test)
   manifest = try added_manifest(found.manifest, edited, request)
   refresh = PackageResolve.Refresh(all: false, name: "")
   resolved = try PackageResolve.resolve(settings, manifest, found.members, found.lock, refresh)
@@ -172,7 +180,7 @@ def one_more?(old: Manifest.Manifest, manifest: Manifest.Manifest, request: Requ
   entry = Manifest.find(manifest, request.name)
   return false if manifest.dependencies.size != old.dependencies.size + 1 or !entry.ok?
 
-  GitSource.same?(entry.unwrap!.source, request.source)
+  GitSource.same?(entry.unwrap!.source, request.source) and entry.unwrap!.test == request.test
 end
 
 def update_in(settings: Env.Settings, dir: String, name: String) -> Result[String]

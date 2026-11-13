@@ -65,6 +65,11 @@ import Sqlite from "pkg/sqlite/db"
   manifest either key is `PKG-ROOT-ONLY`. Without `override`, a name with two
   sources in the tree is `PKG-SOURCE-CONFLICT`. `install`, `add` and `update`
   print one `overridden NAME@VERSION` line for each overridden package.
+- `group = "test"` on a dependency (`agentica add ... --group test`) is a
+  test-only dependency: locked and installed for the project, but only its
+  `*_test.agc` files and its step program (and what they import) may import
+  it; any other program is `CHECK-IMPORT-PACKAGE` at the import. A project
+  that depends on the package never fetches or locks it.
 - `pkg/<name>/<module path>` (no `.agc`) imports a module of a declared package.
   A declared name comes before the `pkg/` library folders; an undeclared name is
   the library search of `modules.md`. The files of a package come only from
