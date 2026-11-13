@@ -43,7 +43,7 @@ export def check_main(
     if roots.any? do |key: String| key == module.key end
       case main_of(module)
         some(node) ->
-          try main_signature(cx.with(file: module.file), st, node)
+          try main_signature(State.within(cx, module.file, module.prefix), st, node)
           found = true
         none -> found = found
       end
@@ -72,7 +72,7 @@ def register_resources(cx: State.Cx, modules: List[Linker.LinkedModule]) -> Resu
     for decl in module.declarations
       case decl
         Ast.Decl.Resource(node) ->
-          here = found.with(file: module.file)
+          here = State.within(found, module.file, module.prefix)
           try check_new_name(here, st, node.name, node.name_span)
           found = try register_callback(here.with(resources: here.resources.add(node.name)), st, node)
         _ -> st = st
@@ -112,7 +112,7 @@ def register_aliases(cx: State.Cx, modules: List[Linker.LinkedModule]) -> Result
     for decl in module.declarations
       case decl
         Ast.Decl.TypeAlias(node) ->
-          here = found.with(file: module.file)
+          here = State.within(found, module.file, module.prefix)
           try check_new_name(here, st, node.name, node.name_span)
           try check_address_name(here, st, node.name, node.type_parameters, node.name_span)
           try check_type_parameters(here, st, node.type_parameters, [], "type alias", node.span)
@@ -128,7 +128,7 @@ end
 def check_alias_targets(cx: State.Cx, modules: List[Linker.LinkedModule]) -> Result[Bool]
   st = State.fresh()
   for module in modules
-    here = cx.with(file: module.file)
+    here = State.within(cx, module.file, module.prefix)
     for decl in module.declarations
       case decl
         Ast.Decl.TypeAlias(node) -> try Types.resolve_type(Types.alias_scope(here, node), st, node.target, true)
@@ -169,7 +169,8 @@ def register_enum_names(cx: State.Cx, modules: List[Linker.LinkedModule]) -> Res
   for module in modules
     for decl in module.declarations
       case decl
-        Ast.Decl.Enum(node) -> found = try register_enum_name(found.with(file: module.file), st, node)
+        Ast.Decl.Enum(node) ->
+          found = try register_enum_name(State.within(found, module.file, module.prefix), st, node)
         _ -> st = st
       end
     end
@@ -291,7 +292,7 @@ def register_structs(cx: State.Cx, modules: List[Linker.LinkedModule]) -> Result
     for decl in module.declarations
       case decl
         Ast.Decl.Struct(node) ->
-          here = found.with(file: module.file)
+          here = State.within(found, module.file, module.prefix)
           try check_new_name(here, st, node.name, node.span)
           try check_address_name(here, st, node.name, node.type_parameters, node.span)
           try check_type_parameters(here, st, node.type_parameters, [], "struct", node.span)
@@ -307,7 +308,7 @@ def register_structs(cx: State.Cx, modules: List[Linker.LinkedModule]) -> Result
   for module in modules
     for decl in module.declarations
       case decl
-        Ast.Decl.Struct(node) -> found = try register_fields(found.with(file: module.file), st, node)
+        Ast.Decl.Struct(node) -> found = try register_fields(State.within(found, module.file, module.prefix), st, node)
         _ -> st = st
       end
     end
@@ -346,6 +347,12 @@ def register_fields(cx: State.Cx, st: State.St, node: Ast.StructDecl) -> Result[
     spans = spans.push(field.span)
   end
 
+  hidden: List[String] = []
+  case node.private_mark
+    some(mark) -> hidden = node.fields.drop(mark.index).map do |field: Ast.FieldDecl| field.name end
+    none -> hidden = hidden
+  end
+
   c_structs = cx.c_structs
   if node.layout != ""
     c_structs = c_structs.add(node.name)
@@ -354,7 +361,7 @@ def register_fields(cx: State.Cx, st: State.St, node: Ast.StructDecl) -> Result[
   ok(
     cx.with(
       structs: cx.structs.put(node.name, fields),
-      field_sites: cx.field_sites.put(node.name, State.FieldSite(file: cx.file, spans: spans)),
+      field_sites: cx.field_sites.put(node.name, State.FieldSite(file: cx.file, spans: spans, hidden: hidden)),
       field_defaults: cx.field_defaults.put(node.name, defaulted),
       c_structs: c_structs,
     ),
@@ -383,7 +390,7 @@ def register_enum_variants(cx: State.Cx, modules: List[Linker.LinkedModule]) -> 
   for module in modules
     for decl in module.declarations
       case decl
-        Ast.Decl.Enum(node) -> found = try register_variants(found.with(file: module.file), st, node)
+        Ast.Decl.Enum(node) -> found = try register_variants(State.within(found, module.file, module.prefix), st, node)
         _ -> st = st
       end
     end
@@ -426,7 +433,8 @@ def register_functions(cx: State.Cx, modules: List[Linker.LinkedModule]) -> Resu
     types = type_names(cx, module)
     for decl in module.declarations
       case decl
-        Ast.Decl.Function(node) -> found = try register_function(found.with(file: module.file), st, node, types)
+        Ast.Decl.Function(node) ->
+          found = try register_function(State.within(found, module.file, module.prefix), st, node, types)
         _ -> st = st
       end
     end

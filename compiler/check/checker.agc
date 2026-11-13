@@ -190,12 +190,31 @@ def start(linked: Linker.Linked) -> State.Cx
     const_sites: sites,
     type_params: [],
     file: linked.modules[0].file,
+    prefix: linked.modules[0].prefix,
+    homes: homes(linked.modules),
     texts: texts,
     expression: &Expr.check_expression,
     prelude: false,
     json_needs: {},
     lenient: Set.new([]),
   )
+end
+
+# The prefix of the file that holds each module block, by the prefix of the block (State.Cx.homes).
+def homes(modules: List[Linker.LinkedModule]) -> Map[String, String]
+  prefixes: Map[String, String] = {}
+  for module in modules
+    prefixes = prefixes.put(module.key, module.prefix)
+  end
+
+  found: Map[String, String] = {}
+  for module in modules
+    if module.block != ""
+      found = found.put(module.prefix, prefixes.get(Linker.home_key(module), module.prefix))
+    end
+  end
+
+  found
 end
 
 # Whether the value of a constant is the 0 of a stub: the module is a stub and the value is a 0 that the cache cut
@@ -272,7 +291,8 @@ def run(
 
     for decl in module.declarations
       case decl
-        Ast.Decl.Struct(node) -> st = try DefaultChecks.check_field_types(cx.with(file: module.file), st, node)
+        Ast.Decl.Struct(node) ->
+          st = try DefaultChecks.check_field_types(State.within(cx, module.file, module.prefix), st, node)
         _ -> st = st
       end
     end
@@ -288,7 +308,7 @@ def run(
       next
     end
 
-    here = cx.with(file: module.file)
+    here = State.within(cx, module.file, module.prefix)
     for decl in module.declarations
       case decl
         Ast.Decl.Function(node) ->
@@ -365,7 +385,7 @@ def json_needs(cx: State.Cx, st: State.St, modules: List[Linker.LinkedModule]) -
   passes: List[JsonPass] = []
   for module in modules
     # A body with a name nobody reads still has its needs; the check of the bodies reports the name.
-    here = cx.with(file: module.file, lenient: Set.new([module.file]))
+    here = State.within(cx, module.file, module.prefix).with(lenient: Set.new([module.file]))
     for decl in module.declarations
       case decl
         Ast.Decl.Function(node) if node.type_parameters.size > 0 ->

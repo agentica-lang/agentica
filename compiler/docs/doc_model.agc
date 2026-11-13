@@ -50,7 +50,8 @@ end
 
 ## One top-level declaration. `kind` is "function", "struct", "enum", "alias", "resource", "constant" or "module";
 ## `span` is the whole declaration, `export` included, and `name_span` the name alone. `agentica doc` lists the
-## exported ones only; `agentica outline` lists all of them.
+## exported ones only; `agentica outline` lists all of them. A struct lists its public fields only; private_line is the
+## span of its `private` line when it has private fields, which the readers show as one line.
 export struct Item
   kind: String
   name: String
@@ -60,6 +61,7 @@ export struct Item
   doc: Optional[String]
   span: Source.Span
   detail: Detail
+  private_line: Optional[Source.Span] = none
 end
 
 ## A documented module: its doc and its exported items.
@@ -162,6 +164,7 @@ def reexport_items(node: Ast.ReexportDecl, origins: Map[String, Item]) -> List[I
       span: node.span,
       name_span: node.name_span,
       detail: placed(origin.detail, node.name_span),
+      private_line: origin.private_line.map { |_: Source.Span| node.name_span },
     ),
   ]
 end
@@ -228,7 +231,19 @@ def function_item(
 end
 
 def struct_item(node: Ast.StructDecl, doc: Optional[String], span: Source.Span, exported: Bool, text: String) -> Item
-  fields = node.fields.map do |field: Ast.FieldDecl|
+  shown = node.fields
+  private_line: Optional[Source.Span] = none
+  case node.private_mark
+    some(mark) ->
+      shown = node.fields.take(mark.index)
+      if mark.index < node.fields.size
+        private_line = some(mark.span)
+      end
+
+    none -> shown = shown
+  end
+
+  fields = shown.map do |field: Ast.FieldDecl|
     Field(
       name: field.name,
       span: field.span,
@@ -248,6 +263,7 @@ def struct_item(node: Ast.StructDecl, doc: Optional[String], span: Source.Span, 
     doc: cleaned(chosen(doc, node.doc)),
     span: span,
     detail: Detail.Struct(fields),
+    private_line: private_line,
   )
 end
 

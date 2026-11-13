@@ -120,6 +120,42 @@ export def bytes_inside?(cx: State.Cx, type: ResolvedType) -> Bool
   inside?(cx, type) do |current: ResolvedType| Types.is?(current, "Bytes") end
 end
 
+## CHECK-PRIVATE-FIELD at `span` when the type holds, anywhere in its fields, items or enum payloads, a struct with a
+## private field that the module being checked may not name: a JSON codec reads and writes every field, so only the
+## module of such a struct derives one (Type.codec, JSON.encode, JSON.from, JSON.decode, JSON.schema).
+export def no_private_inside(cx: State.Cx, st: State.St, type: ResolvedType, span: Source.Span) -> Result[Void]
+  pending = [type]
+  seen: Set[String] = Set.new([])
+  at = 0
+  while at < pending.size
+    current = pending[at]
+    at += 1
+    if Types.is?(current, "Map") or Types.is?(current, "ATS")
+      pending = pending.push(Types.key(current)).push(Types.value(current))
+    elsif !Types.unknown?(Types.item(current))
+      pending = pending.push(Types.item(current))
+    end
+
+    pending = pending.concat(Types.args(current))
+    name = Types.name(current)
+    next if seen.include?(name) or !(Types.is?(current, "Struct") or Types.is?(current, "Enum"))
+
+    seen = seen.add(name)
+    hidden = State.private_fields(cx, name)
+    return error(State.private_field(cx, st, name, hidden[0], span)) if hidden.size > 0
+
+    if Types.is?(current, "Struct") and cx.structs.has_key?(name)
+      pending = pending.concat(cx.structs[name].map do |field: Model.Named| field.type end)
+    elsif cx.enums.has_key?(name)
+      for variant in cx.enums[name].variants
+        pending = pending.concat(variant.payload)
+      end
+    end
+  end
+
+  ok()
+end
+
 ## True when a JSON.Field of an Optional sits anywhere in the type, walked as bytes_inside? walks: it picks the help of
 ## a JSON builtin that refuses the type, since JSON writes null for both none and JSON.Field.Null.
 export def optional_json_field_inside?(cx: State.Cx, type: ResolvedType) -> Bool
@@ -167,6 +203,8 @@ export def check_json_needs(
 
   for need in cx.json_needs.get(callee).unwrap_or([])
     bound = substitute(need, found)
+    # The caller that binds the type hands its values to the encoder, so the caller's module decides.
+    try no_private_inside(cx, current, bound, binding_span(need, templates, spans, span))
     if encode_needs(cx, bound).none?
       name = Types.display_name(callee)
       help = "#{name} gives #{Types.to_text(need)} (here #{Types.to_text(bound)}) to JSON.encode or JSON.from"

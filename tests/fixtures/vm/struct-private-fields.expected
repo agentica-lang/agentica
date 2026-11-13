@@ -1,0 +1,13 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 123,
+  "stdout": [
+    "ana 175 true false rob",
+    "Wallet(owner: \"ana\", cents: 175, log: [\"+150\", \"+25\"])",
+    "Wallet(owner: \"rob\", cents: 7, log: [\"+7\"])",
+    "{\"owner\":\"rob\",\"cents\":7,\"log\":[\"+7\"]}",
+    ""
+  ],
+  "stderr": []
+}

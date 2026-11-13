@@ -1,0 +1,22 @@
+## A connection.
+export struct Conn
+  id: Int
+  private: Int = 0
+
+  private
+
+  ## The socket.
+  secret: String
+end
+
+struct First[T]
+  private
+
+  value: T
+end
+
+struct Last
+  a: Int
+
+  private
+end

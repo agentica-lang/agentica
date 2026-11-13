@@ -504,6 +504,7 @@ def json_target(cx: State.Cx, st: State.St, node: Ast.TypeName, refusal: String)
   return error(State.fail(cx, st, "CHECK-TYPE-MISMATCH", refusal, node.span)) if container?(type) and refusal != ""
 
   try json_field_place(cx, st, type, "decode target", node.span)
+  try CheckTypes.no_private_inside(cx, st, type, node.span)
   named = T.is?(type, "Struct") or T.is?(type, "Enum")
   if !(named or container?(type)) or !CheckTypes.decodable?(cx, type)
     return error(
@@ -551,6 +552,7 @@ end
 def check_json_encode(cx: State.Cx, st: State.St, site: State.Site, from: Bool) -> Result[State.Out]
   out = try State.expr(cx, st, site.args[0], T.Type.Unknown)
   try json_field_place(cx, out.st, out.type, "encode argument", Ast.expr_span(site.args[0]))
+  try CheckTypes.no_private_inside(cx, out.st, out.type, Ast.expr_span(site.args[0]))
   needs: Optional[List[T.Type]] = none
   if !cx.prelude and CheckTypes.has_variables?(out.type)
     needs = CheckTypes.encode_needs(cx, out.type)

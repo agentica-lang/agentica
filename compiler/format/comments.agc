@@ -618,7 +618,11 @@ end
 def struct_children(node: Ast.StructDecl) -> List[Part]
   return [] if node.record_of != ""
 
-  node.fields.map do |field: Ast.FieldDecl| Part.Field(field) end
+  fields = node.fields.map do |field: Ast.FieldDecl| Part.Field(field) end
+  case node.private_mark
+    some(found) -> fields.take(found.index).push(Part.Private(found)).concat(fields.drop(found.index))
+    none -> fields
+  end
 end
 
 def resource_children(node: Ast.ResourceDecl) -> List[Part]

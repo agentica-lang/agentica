@@ -195,7 +195,8 @@ is a rule:
   part (constants and re-exports, types and blocks, functions), `private`, then
   the private part (constants, types and blocks, functions), so a re-export or
   an import after `private` is out of order too
-- a second `private` line in a file or a module block (`PARSE-SECOND-PRIVATE`)
+- a second `private` line in a file, a module block or a struct body
+  (`PARSE-SECOND-PRIVATE`)
   Help: everything after the first `private` is private already
 - `export def`, `export NAME = ...` or `export module` in a file or block with
   `private` (`PARSE-UNEXPECTED-TOKEN`, at the `export`)
@@ -374,6 +375,12 @@ is a rule:
   or block with `private`), `... add export to it there` (without), only the
   first part for a `std/` module or a package; for a name that the module only
   imports, `add export Url.parse to "m.agc" to re-export it`
+- `conn.socket`, `Conn(id: 1)`, `conn.with(socket: s)`, `Conn.codec` or
+  `JSON.encode(conn)` outside the module that declares `Conn`, when `socket`
+  is after the `private` line of `Conn` (`CHECK-PRIVATE-FIELD`, at the field
+  name, or at `Conn` for a constructor that leaves the private fields out)
+  Help: only that module reads, sets or gives a private field; call one of its
+  functions instead
 - `Logger.error(...)` (`CHECK-IMPORT-NAME`)
   Help: `Logger.err(...)`; `error` is a reserved name, so the function for the
   error level is `err`

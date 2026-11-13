@@ -19,9 +19,9 @@ export def json(module: String, documented: DocModel.Module) -> JSON.Value
   })
 end
 
-## `{kind, name, signature, summary, doc, span}` and, by kind, the parameters and the result, the fields or the
-## variants, or the `items` of a module block. `located` adds what `agentica outline` lists: `exported` and the
-## `name_span` of the item and of each field or variant.
+## `{kind, name, signature, summary, doc, span}` and, by kind, the parameters and the result, the fields (the public
+## ones) and `private_fields` or the variants, or the `items` of a module block. `located` adds what `agentica outline`
+## lists: `exported` and the `name_span` of the item and of each field or variant.
 export def item_json(module: String, item: Model.Item, located: Bool) -> JSON.Value
   fields: Map[String, JSON.Value] = {
     "kind": JSON.from(item.kind),
@@ -47,6 +47,7 @@ export def item_json(module: String, item: Model.Item, located: Bool) -> JSON.Va
   elsif item.kind == "struct"
     members_json = item.fields.map do |member: Model.Field| field_json(module, member, located) end
     fields = fields.put("fields", JSON.array(members_json))
+    fields = fields.put("private_fields", JSON.from(item.private_range.size > 0))
   elsif item.kind == "enum"
     variants_json = item.variants.map do |variant: Model.Variant| variant_json(module, variant, located) end
     fields = fields.put("variants", JSON.array(variants_json))
@@ -82,6 +83,7 @@ export def help_json(module: String, item: Model.Item) -> JSON.Value
   elsif item.kind == "struct"
     members_json = item.fields.map do |member: Model.Field| field_json(module, member, false) end
     fields = fields.put("fields", JSON.array(members_json))
+    fields = fields.put("private_fields", JSON.from(item.private_range.size > 0))
   elsif item.kind == "enum"
     variants_json = item.variants.map do |variant: Model.Variant| variant_json(module, variant, false) end
     fields = fields.put("variants", JSON.array(variants_json))

@@ -67,6 +67,9 @@ Change style only in code you touch. Restyle untouched code separately.
 - Use `private`, not `export`, for new files: the API goes above it. Keep
   public only the names used by other files. Keep one topic per file; split
   files that grow into several topics.
+- A struct whose fields other modules must not touch (a socket, a counter
+  that must stay in step) puts them after a `private` line in its body, with a
+  blank line before and after, and gives functions that read or change them.
 - Use `import Alias from "path"` for many names or possible collisions;
   `import {a, B} from "path"` for one or two frequent names. Constants read
   through the alias too (`Mod.LIMIT`); import one by name only when used

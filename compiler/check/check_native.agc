@@ -73,7 +73,7 @@ export def check_all(
   for module in modules
     next if clean.include?(module.key)
 
-    here = cx.with(file: module.file)
+    here = State.within(cx, module.file, module.prefix)
     # One walk per block: a module's library, as written, names it.
     blocks: Map[String, Walk] = {}
     for decl in module.declarations

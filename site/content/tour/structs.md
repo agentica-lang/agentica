@@ -360,3 +360,58 @@ true
 ```
 
 A struct with a function field (`Fn`), a task, a channel, a handle or a `JSON.Value` inside has no equality: `==` on it is `CHECK-TYPE-MISMATCH`, and the message names the field. A `Float` field follows IEEE 754, so a struct that holds a NaN is not equal to itself.
+
+## Private fields
+
+A `private` line in a struct body, alone with a blank line before and after, makes the fields after it private to the module that declares the struct: its file, or the `module` block it is in. That module reads, sets and gives them as usual. Elsewhere the value can be passed, stored, sent, compared and printed, but its private fields cannot be read, given or set with `with`, and the struct is built only by the module's functions:
+
+```agentica
+module Bank
+  export struct Account
+    owner: String
+
+    private
+
+    cents: Int
+  end
+
+  export def open(owner: String) -> Account = Account(owner: owner, cents: 0)
+
+  export def deposit(account: Account, cents: Int) -> Account = account.with(cents: account.cents + cents)
+
+  export def balance(account: Account) -> Int = account.cents
+end
+
+def main() -> Void
+  account = Bank.deposit(Bank.open("Ana"), 150)
+  puts("#{account.owner} #{Bank.balance(account)}")
+  puts(account)
+end
+```
+
+```output
+Ana 150
+Account(owner: "Ana", cents: 150)
+```
+
+`==` compares every field, and `inspect`, `to_s` and interpolation show every field. Outside the module, `account.cents`, `Account(owner: "Bo")`, `account.with(cents: 0)`, `Account.codec` and `JSON.encode(account)` are `CHECK-PRIVATE-FIELD`:
+
+```agentica {expect="CHECK-PRIVATE-FIELD"}
+module Bank
+  export struct Account
+    owner: String
+
+    private
+
+    cents: Int
+  end
+
+  export def open(owner: String) -> Account = Account(owner: owner, cents: 0)
+end
+
+def main() -> Void
+  puts(Bank.open("Ana").cents)
+end
+```
+
+`agentica doc` lists the public fields and says that the struct has private fields.

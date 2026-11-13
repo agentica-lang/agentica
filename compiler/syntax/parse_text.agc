@@ -147,6 +147,7 @@ export def print_decl(out: List[String], at: Margin, role: String, decl: Ast.Dec
         attrs += " layout=#{Text.quote(node.layout)}"
       end
 
+      attrs += private_attr(node.private_mark)
       lines = out.push(head(at, role, "struct-decl", node.id, node.span, attrs))
       for field in node.fields
         lines = print_field(lines, child, field)

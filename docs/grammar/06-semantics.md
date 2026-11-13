@@ -560,6 +560,28 @@ loop. Any other type name is an error: an enum or a resource is
 itself), and a name that is no declared type, or a builtin type such as `Int`,
 is `CHECK-UNKNOWN-NAME`.
 
+### Private fields
+
+The fields after the `private` line of a struct body are private to the module
+that declares the struct: its file, or the `module` block it is declared in
+(code of the file outside the block is outside). The module blocks of a file
+see the private names of the file, so they are inside for a struct declared at
+the top of the file. A re-export
+(`export Alias.Type`) does not change that module. Outside it, naming a private
+field is `CHECK-PRIVATE-FIELD` at the field name: reading it (`conn.socket`),
+calling an `Fn` field, giving it in a constructor or setting it with `with`.
+A struct with a private field is built only in its module, even when every
+private field has a default: a constructor elsewhere that leaves them out is
+`CHECK-PRIVATE-FIELD` at the struct name. `Type.members`, `Type.codec`,
+`JSON.encode`, `JSON.from`, `JSON.decode` and `JSON.schema` of a type that holds
+such a struct (in a field, an item or an enum payload) are `CHECK-PRIVATE-FIELD`
+outside its module, and so is a call that hands one to a generic function that
+encodes it; in its module they cover every field. Outside the module the value
+can still be passed, stored, sent over a `Channel`, compared and updated in its
+public fields with `with`. `==` compares every field, and `inspect`, `to_s` and
+interpolation show every field. `agentica doc`, `outline` and `help` list the
+public fields, then a line that says the struct has private fields.
+
 A list index runs from zero to length minus one; a negative or out-of-range
 index is `RUNTIME-INDEX-OUT-OF-RANGE`. Indexing takes O(log32 n) time, at most
 four steps for a million items; `for` visits the items in order. `for` iterates

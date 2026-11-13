@@ -760,6 +760,9 @@ def check_struct_construct(cx: State.Cx, st: State.St, node: Ast.Construct, expe
   parameters = cx.struct_params.get(name, [])
   known = expected_substitutions("Struct", name, parameters, expected)
   checked = try check_named_fields(cx, st, name, fields.unwrap!, node.args, parameters, known)
+  # A struct with a private field is built only in its module, even when every private field has a default.
+  hidden = State.private_fields(cx, name)
+  return error(State.private_field(cx, checked.st, name, hidden[0], type_name_span(cx, node))) if hidden.size > 0
   # A field with a default may be left out: the lowering fills it in at this construction.
   no_defaults: Set[String] = Set.new([])
   defaulted = cx.field_defaults.get(name, no_defaults)
@@ -828,6 +831,7 @@ def check_named_fields(
   current = st
   found = known
   seen: Set[String] = Set.new([])
+  hidden = State.private_fields(cx, name)
   for arg in args
     field = find_field(fields, arg.name)
     if !field.ok?
@@ -838,10 +842,12 @@ def check_named_fields(
           "CHECK-UNKNOWN-FIELD",
           "\"#{T.written_type(name)}\" has no field \"#{arg.name}\"",
           arg.span,
-          Help.field_help(arg.name, fields),
+          Help.field_help(arg.name, State.shown_fields(cx, name, fields)),
         ),
       )
     end
+
+    return error(State.private_field(cx, current, name, arg.name, name_span(arg))) if hidden.include?(arg.name)
 
     if seen.include?(arg.name)
       return error(State.fail(cx, current, "CHECK-DUPLICATE-FIELD", "field \"#{arg.name}\" is given twice", arg.span))
@@ -890,4 +896,19 @@ def updatable?(cx: State.Cx, visible: Optional[List[String]], name: String) -> B
     some(names) -> RECORDS.has_key?(name) or names.any? do |item: String| item == name end
     none -> true
   end
+end
+
+# The span of the name of a `name: value` argument, which starts the argument.
+def name_span(arg: Ast.NamedArg) -> Source.Span
+  start = arg.span.start
+  size = arg.name.length
+  arg.span.with(stop: Source.Position(offset: start.offset + size, line: start.line, column: start.column + size))
+end
+
+# The span of the struct name that starts a construction, as written (`Conn` or `Net.Conn`): up to its `(`.
+def type_name_span(cx: State.Cx, node: Ast.Construct) -> Source.Span
+  start = node.span.start
+  written = cx.texts.get(cx.file, "").slice(start.offset, node.span.stop.offset - start.offset)
+  size = written.index_of("(").unwrap_or(written.length)
+  node.span.with(stop: Source.Position(offset: start.offset + size, line: start.line, column: start.column + size))
 end

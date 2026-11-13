@@ -43,6 +43,8 @@ end
 ## `range` is the whole declaration, `export` included, and `name_range` the name alone. `doc` is the whole text of the
 ## `##` block ("" for none) and `summary` its first paragraph on one line. A function has `parameters` and `result`, a
 ## struct its `fields`, an enum its `variants` and a module block the `items` it declares; the other lists are empty.
+## A struct lists its public fields only, and `private_range` holds the range of its `private` line when it has private
+## fields (empty otherwise).
 export struct Item
   kind: String
   name: String
@@ -57,6 +59,7 @@ export struct Item
   fields: List[Field]
   variants: List[Variant]
   items: List[Item]
+  private_range: List[Diagnostics.Region] = []
 end
 
 ## One name of an import list: `name` in the module, `local` in the file.

@@ -70,6 +70,36 @@ def connect(id: Int) -> Int = id + BUFFER
 - Alias names are uppercase and cannot collide with declarations, other aliases,
   imported names or builtin names.
 
+## Private fields
+
+A `private` line in a struct body (blank line before and after) makes the
+fields after it private to the declaring module: its file (the file's
+`module` blocks included), or the `module` block it is in. Use it to keep a handle or a counter inside, reached only through the
+module's functions:
+
+```agentica
+struct Conn
+  id: Int
+
+  private
+
+  socket: Int
+end
+
+def open(id: Int) -> Conn = Conn(id: id, socket: 3)
+
+def socket_of(conn: Conn) -> Int = conn.socket
+```
+
+- Outside the module, reading, giving or setting (`with`) a private field is
+  `CHECK-PRIVATE-FIELD`, and so is building the struct at all (even when the
+  private fields have defaults), `T.members`, `T.codec` and JSON
+  encoding or decoding of a type that holds it. Inside, all of them work.
+- The value can still be passed, stored, sent, compared (`==` sees every
+  field) and printed (`inspect`, `to_s` and interpolation show every field).
+- `agentica doc`, `outline` and `help` list the public fields and a line "and
+  private fields".
+
 ## Importing names
 
 `import {User, greet} from "models"` brings exported names in, used bare:

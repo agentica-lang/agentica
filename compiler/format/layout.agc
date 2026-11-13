@@ -548,11 +548,22 @@ def default_doc(c: Context, value: Optional[Ast.Expr]) -> List[Docs.Doc]
   end
 end
 
+# A struct, with its `private` line between its fields as the source has it.
 def struct_doc(c: Context, node: Ast.StructDecl) -> Docs.Doc
   key = Comments.key_of("StructDecl", node.span)
   items: List[Item] = []
+  at = 0
   for field in node.fields
+    if private_at?(node.private_mark, at)
+      items = items.concat(private_items(c, node.private_mark.unwrap!))
+    end
+
     items = items.concat(field_items(c, field))
+    at += 1
+  end
+
+  if private_at?(node.private_mark, at)
+    items = items.concat(private_items(c, node.private_mark.unwrap!))
   end
 
   items = items.concat(dangling_items(c, key))
