@@ -114,6 +114,56 @@ end
 true
 ```
 
+## System.subscribe
+
+```signature
+System.subscribe(signals: List[System.Signal]) -> Result[Channel[System.Signal]]
+```
+
+Receives the listed operating system signals as values on a new channel, instead of letting them stop the program. `System.Signal` is an enum: `Term`, `Int` (Ctrl-C), `Hup`, `Usr1`, `Usr2`, `Quit` and `Kill`; the first five can be subscribed to. A program that must clean up on Ctrl-C or on a container stop receives the first value, cleans up, and exits with `128 + System.signal_number(signal)`, the code a shell expects.
+
+- The channel holds one pending value per signal: a value is queued only when that signal has none waiting, so a burst of one signal gives one value and the signal never waits for the program. Count presses with another design.
+- Each subscription gets every signal it lists, so two tasks that subscribe to `Term` both get it. A signal listed twice counts once.
+- The calling task owns the channel, like a handle. When that task ends, in any way, or the channel is closed, the subscription ends: the values still queued can be received, then `recv` returns `channel: closed`. When the last subscription to a signal ends, that signal stops the program again. On macOS with more than one scheduler, a signal that comes after a task crashed may not stop the program yet ([#1529](https://github.com/agentica-lang/agentica/issues/1529)).
+- A signal that comes before the subscription stops the program, as it does without one. While a subscription is open the run waits for its signals, so a program whose tasks all wait for one does not end.
+- `send` on the channel, or on its address, returns `error("signal: channel is read only")` with kind `argument`.
+- `Quit` or `Kill` in the list stops the run with `RUNTIME-INVALID-SIGNAL`. `Quit` (`Ctrl-\`) is the force stop: it stops the child programs, writes the files and exits with 131, also in a program that subscribed to `Term` and `Int`. `Kill` cannot be caught.
+- An empty list returns `error("signal: no signals")` with kind `argument`. A signal that the program started with ignored (`nohup`; `Int` and `Quit` for a job that a shell runs in the background) returns `error("signal: ignored when the program started")` with kind `system.signal`. On Windows every call returns `error("signal: not supported on this system")` with kind `system.signal`, and Ctrl-C and Ctrl-Break stop the program.
+- It needs no flag, also under `--sandbox`: it only changes what the program does with its own signals.
+- `SIGPIPE`, `SIGCHLD` and the signals of the VM's garbage collector have no `System.Signal` value, so a program cannot take them. A program started with `Process.spawn` starts with the default action for every signal.
+
+```agentica
+def main() -> Void
+  signals = System.subscribe([System.Signal.Term]).unwrap!
+  case signals.recv(100)
+    ok(signal) -> System.exit(128 + System.signal_number(signal))
+    error(e) -> puts(e.message)
+  end
+end
+```
+
+```output
+channel: timed out
+```
+
+## System.signal_number
+
+```signature
+System.signal_number(signal: System.Signal) -> Int
+```
+
+The number of the signal: `Term` is 15, `Int` 2, `Hup` 1, `Quit` 3 and `Kill` 9. `Usr1` and `Usr2` are 10 and 12 on Linux and Windows, 30 and 31 on macOS. A process that a signal ended has the exit code `128 +` that number.
+
+```agentica
+def main() -> Void
+  puts(System.signal_number(System.Signal.Term))
+end
+```
+
+```output
+15
+```
+
 ## Std.source
 
 ```signature

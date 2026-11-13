@@ -53,9 +53,11 @@ Process.parent_send(text: String, timeout_ms: Int) -> Result[Void]
 - Windows runs only `.exe` and `.com` programs (`.bat` and `.cmd` never run:
   start `cmd.exe` by name for a shell). A command with `\`, `/` or a drive is
   a path, not searched in `PATH`. A bare name tries `.exe` before `.com`.
-- A signal (`SIGINT`, `SIGTERM`, `SIGHUP`) to the VM or to `agentica` kills its
-  running children, then writes open files, before it ends by that signal; a
-  second signal ends it at once, never before the children are stopped.
+- A signal (`SIGINT`, `SIGTERM`, `SIGHUP`, `SIGUSR1`, `SIGUSR2`) that the
+  program has not subscribed to (below), to the VM or to `agentica`, kills its
+  running children, then writes open files, before it ends by that signal;
+  `SIGQUIT` does the same and exits with 131. A second signal ends it at once,
+  never before the children are stopped.
 - Timeouts are positive milliseconds, including lock wait. Read and write locks
   are independent. A timeout after starting stream I/O kills and closes the
   child; timing out while waiting for its lock preserves it. Waiting for exit
@@ -188,3 +190,31 @@ System.pid() -> Int                              # the process id of this progra
   `System.env("HOME")`. No call lists the variables.
 - `System.pid` needs no flag. Pass it to a VM you start with `--driver-pid`:
   that VM checks that its parent is this process.
+
+## Signals
+
+```text
+System.subscribe(signals: List[System.Signal]) -> Result[Channel[System.Signal]]
+System.signal_number(signal: System.Signal) -> Int   # Term 15, Int 2, Hup 1, Quit 3, Kill 9
+```
+
+- `System.Signal` is `Term`, `Int`, `Hup`, `Usr1`, `Usr2`, `Quit`, `Kill`. A
+  subscribed signal arrives as a value on the channel and does not stop the
+  program; exit with `128 + System.signal_number(sig)` after the cleanup.
+- One pending value per signal: a burst gives one value. Every subscription
+  to a signal gets it. The calling task owns the channel: its end or
+  `ch.close` ends the subscription, and the signal stops the program again.
+- `Quit` or `Kill` in the list is `RUNTIME-INVALID-SIGNAL`; `Quit` (`Ctrl-\`)
+  stays the force stop (exit 131). An empty list is an `argument` error; a
+  signal ignored at start (`nohup`, `Int` in a background shell job) is a
+  `system.signal` error; Windows returns a `system.signal` error. `send` on
+  the channel is an `argument` error. No flag needed, also under `--sandbox`.
+
+```agentica
+def main() -> Void
+  signals = System.subscribe([System.Signal.Term, System.Signal.Int]).unwrap!
+  sig = signals.recv(3600000).unwrap!
+  IO.warn("stopping on #{sig}")
+  System.exit(128 + System.signal_number(sig))
+end
+```

@@ -697,10 +697,15 @@ void agc_task_observe(agc_vm *vm, agc_task *t) {
 }
 
 /* A stop signal ends the run between turns as an exit with 128 + signal;
-   agc_launch_exit (vm/launch.c) then raises it again after the exit path. */
-static void check_stop(agc_vm *vm) {
+   agc_launch_exit (vm/launch.c) then raises it again after the exit path. A subscribed signal goes to its channels
+   first (agc_signals_deliver), here too: one that no channel wants any more becomes a stop signal there. True when a
+   signal was delivered: its receiver may now be in this scheduler's slot or queue, so an idle scheduler looks again
+   before it waits. */
+static bool check_stop(agc_vm *vm) {
+  bool delivered = agc_io_signals_pending() && agc_signals_deliver(vm);
   int sig = agc_io_stop_signal();
   if (sig) agc_stop(vm, sig);
+  return delivered;
 }
 
 /* A popped task that may run, or NULL when it was ended instead (see agc_task_next). */
@@ -905,8 +910,7 @@ static void sched_turns(agc_vm *vm, void (*thread)(void *arg)) {
         (void)agc_io_service(vm);
         continue;
       }
-      check_stop(vm);
-      if (agc_timers_run(vm)) continue;
+      if (check_stop(vm) || agc_timers_run(vm)) continue;
       /* The slot is empty here (agc_task_next takes it whenever the queue is empty), so the spin and the wait never
          leave a task of this scheduler behind. */
       t = agc_runq_spin(q);
@@ -1026,10 +1030,9 @@ agc_outcome agc_vm_run(agc_vm *vm) {
     for (;;) {
       agc_task *t = agc_task_next(vm);
       if (!t) {
-        check_stop(vm);
-        if (agc_timers_run(vm)) continue;
+        if (check_stop(vm) || agc_timers_run(vm)) continue;
         if (!idle_wait(vm)) {
-          check_stop(vm);
+          if (check_stop(vm)) continue;
           AGC_TRACE(&vm->rt->trace, AGC_TRACE_SCHED, "stall pending=%" PRIu64, pending_tasks(vm) + 1);
           agc_fail(vm, "RUNTIME-INTERNAL", "every task is waiting and nothing can wake them", 0);
         }

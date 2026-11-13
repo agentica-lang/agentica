@@ -51,7 +51,9 @@ KNOWN_ISSUE = re.compile(r"known-issue: #(\d+) \S")
 
 # The open issues that a known-issue skip may name: number -> what is missing. Closing an issue removes its skips and
 # its line here in the same pull request.
-KNOWN_ISSUES: dict[int, str] = {}
+KNOWN_ISSUES: dict[int, str] = {
+    1529: "macOS, several schedulers: a stop signal after a task crash is lost (tests/test_vm_signals.py)",
+}
 
 # Reasons that only mean "this case belongs to the other tier" (tests/conftest.py, tests/agentica_test.py).
 TIER_REASONS = ("not selected in this test tier", "slow tier only", "fast tier only", "no cases in this tier")
@@ -83,7 +85,7 @@ _NEEDS_POSIX = frozenset({
     "tests/test_vm_os.py", "tests/test_vm_stdout.py", "tests/test_vm_stop.py", "tests/test_vm_lazy_io.py",
     "tests/test_vm_multicore.py", "tests/test_bytecode_cache.py", "tests/test_check_cache.py",
     "tests/test_cli_coverage.py", "tests/test_vm_native.py", "tests/test_vm_http_proxy.py", "tests/test_vm_crypto.py",
-    "tests/test_vm_dns.py", "tests/test_error_kinds.py",
+    "tests/test_vm_dns.py", "tests/test_error_kinds.py", "tests/test_vm_signals.py",
 })
 _NEEDS_LINUX = frozenset({
     "tests/test_vm_diff_8.py", "tests/test_single_binary.py", "tests/test_vm_file_open_block.py", "tests/test_vm_native.py",
@@ -181,7 +183,7 @@ AREAS = {
             "tests/test_process.py", "tests/test_process_bdd.py", "tests/test_process_lifecycle.py",
             "tests/test_process_windows.py", "tests/test_vm_child_channel.py",
             "tests/test_vm_child_channel_posix.py", "tests/test_vm_stop.py", "tests/test_vm_test_protocol.py",
-            "tests/test_platform_bootstrap.py", "tests/test_windows_console_stop.py",
+            "tests/test_platform_bootstrap.py", "tests/test_windows_console_stop.py", "tests/test_vm_signals.py",
             "tests/test_windows_process_cleanup.py",
         ],
     ),
@@ -221,6 +223,7 @@ EXCLUDED = {
     "tests/test_docker_tests.py": "the Docker launcher of the Linux developer container, not the product",
     "tests/test_release_tools.py": "tools/release.py packing; release.yml runs the packages on all four systems",
     "tests/test_shard_tests.py": "tools/shard_tests.py, the split of the test modules over the CI runners",
+    "tests/test_ci_tools.py": "tools/ci_systems.py and tools/probe.py, the system picker and the probe of CI",
     "tests/test_coverage_tool.py": "tools/coverage.py: needs gcc/gcov and clang with llvm-cov; Linux `make test`",
     "tests/test_layout_check.py": "tools/layout_check.py, a binutils check of the Linux x86-64 build that ci.yml runs",
     "tests/test_site_examples.py": "the code blocks of the site, checked with the site build",

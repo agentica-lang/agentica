@@ -1,7 +1,9 @@
 /*
  * The Channel builtins: a GC ring of values, with FIFOs of the receivers and
  * senders that wait for it. A call that must wait parks its task on the
- * scheduler. Core layer. Design: docs/vm/10-io-scheduler.md §10.2.2 (Channel waits).
+ * scheduler. Also the signal channels of System.subscribe and their delivery.
+ * Core layer. Design: docs/vm/10-io-scheduler.md §10.2.2 (Channel waits, Stop
+ * signals).
  */
 #include "core.h"
 
@@ -33,6 +35,10 @@ struct agc_channel {
   agc_task *receivers, *receivers_tail, *senders, *senders_tail;
   /* The channel's one address, made by its first channel.address; NULL before. */
   const address *address;
+  /* A signal channel (System.subscribe): the AGC_SIGNAL_* bits it wants, 0 for a plain channel, and the next one of
+     rt->signal_channels. Cleared by the close, so a closed channel is on no list. Under rt->sync. */
+  unsigned signals;
+  agc_channel *signal_next;
 };
 
 static agc_value ok_void(void) { return agc_result_value(true, agc_void()); }
@@ -44,6 +50,9 @@ static agc_value gone_error(agc_vm *vm) { return agc_error(vm, AGC_KIND_CHANNEL_
 static agc_value closed_error(agc_vm *vm) { return agc_error(vm, AGC_KIND_CHANNEL_CLOSED, "channel: closed"); }
 
 static agc_value timed_out_error(agc_vm *vm) { return agc_error(vm, AGC_KIND_CHANNEL_TIMEOUT, "channel: timed out"); }
+
+/* The values of a signal channel come only from the signals it wants. */
+static agc_value read_only_error(agc_vm *vm) { return agc_error(vm, AGC_KIND_ARGUMENT, "signal: channel is read only"); }
 
 static void grow(agc_vm *vm, agc_channel *c) {
   size_t slots = agc_size_mul(c->slots, 2);
@@ -196,6 +205,7 @@ static agc_value builtin_new(agc_vm *vm, agc_value *args, uint32_t span) {
 /* The send of Channel.send and Address.send, after the timeout is checked. */
 static agc_value send_value(agc_vm *vm, agc_channel *c, agc_value v, int64_t timeout) {
   agc_task *t = vm->task;
+  if (c->signals) return read_only_error(vm);
   if (resumed(t, c)) {
     leave_queue(vm, c, t);
     if (c->closed) {
@@ -305,9 +315,28 @@ static agc_value builtin_recv(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_void();
 }
 
+/* The subscribed signals of the run: the union of the masks of its signal channels. */
+static unsigned subscribed(const agc_vm *vm) {
+  unsigned mask = 0;
+  for (const agc_channel *c = vm->rt->signal_channels; c; c = c->signal_next) mask |= c->signals;
+  return mask;
+}
+
+/* The end of a subscription: off the list, then the process mask without it, so a signal that only this channel
+   wanted takes the stop path again. */
+static void unsubscribe(agc_vm *vm, agc_channel *c) {
+  agc_channel **at = &vm->rt->signal_channels;
+  while (*at && *at != c) at = &(*at)->signal_next;
+  if (*at) *at = c->signal_next;
+  c->signal_next = NULL;
+  c->signals = 0;
+  agc_io_signals_set(vm, subscribed(vm));
+}
+
 static void shut(agc_vm *vm, agc_channel *c) {
   if (c->closed) return;
   c->closed = true;
+  if (c->signals) unsubscribe(vm, c);
   if (c->state) {
     agc_unregister(vm, c->state);
     c->state = NULL;
@@ -364,10 +393,104 @@ bool agc_channel_abandoned(agc_vm *vm, const agc_channel *c) {
 /* A send that never waits, for the notice of a monitor (vm/task.c): the value goes to a waiting receiver, else into the
    ring, past the capacity when the channel is full, so an open channel never loses a notice. Senders still wait until
    the count is below the capacity, so the ring holds at most one value more than the capacity per monitor of the
-   channel. False, and nothing sent, when the channel is closed. */
+   channel. False, and nothing sent, when the channel is closed or a signal channel (System.subscribe). */
 bool agc_channel_offer(agc_vm *vm, agc_channel *c, agc_value v) {
   agc_sync_assert(vm);
-  return !c->closed && deliver(vm, c, v, true);
+  return !c->closed && !c->signals && deliver(vm, c, v, true);
+}
+
+/* The variant ids of System.Signal, by AGC_SIGNAL_* index, found by name the first time (under rt->sync, as every
+   signal row is shared): a forged program without the enum fails here with RUNTIME-INTERNAL. */
+static const uint32_t *signal_variants(agc_vm *vm) {
+  static const char *const names[AGC_SIGNAL_COUNT] = {"Term", "Int", "Hup", "Usr1", "Usr2", "Quit", "Kill"};
+  agc_runtime *rt = vm->rt;
+  if (!rt->signal_found) {
+    for (unsigned k = 0; k < AGC_SIGNAL_COUNT; k++)
+      rt->signal_variants[k] = agc_builtin_variant(vm, "System.Signal", names[k], 0);
+    rt->signal_found = true;
+  }
+  return rt->signal_variants;
+}
+
+/* The AGC_SIGNAL_* index of a System.Signal value. */
+static unsigned signal_index(agc_vm *vm, agc_value v) {
+  const uint32_t *ids = signal_variants(vm);
+  uint32_t variant = agc_as_enum(vm, v)->variant;
+  for (unsigned k = 0; k < AGC_SIGNAL_COUNT; k++)
+    if (ids[k] == variant) return k;
+  agc_fail(vm, "RUNTIME-INTERNAL", "invalid bytecode: not a System.Signal value", 0);
+}
+
+/* System.subscribe(signals): a new channel that receives each listed signal, owned by the calling task like a handle,
+   so its end (any end) or Channel.close ends the subscription. Its capacity is the number of signals, one pending
+   value each (agc_signals_deliver). Quit (the VM's force stop) and Kill cannot be caught. */
+static agc_value builtin_subscribe(agc_vm *vm, agc_value *args, uint32_t span) {
+  const agc_list *list = agc_as_list(vm, args[0]);
+  size_t n = agc_list_len(list);
+  agc_charge(vm, n);
+  unsigned mask = 0;
+  for (size_t k = 0; k < n; k++) {
+    unsigned index = signal_index(vm, agc_list_get(list, k));
+    if (index >= AGC_SIGNAL_DELIVERED)
+      agc_fail(vm, "RUNTIME-INVALID-SIGNAL", "System.Signal.Quit and System.Signal.Kill cannot be subscribed to",
+               span + 1);
+    mask |= 1u << index;
+  }
+  if (!mask) return agc_error(vm, AGC_KIND_ARGUMENT, "signal: no signals");
+  if (!agc_io_signals_supported())
+    return agc_error(vm, AGC_KIND_SYSTEM_SIGNAL, "signal: not supported on this system");
+  if (mask & agc_io_signals_ignored())
+    return agc_error(vm, AGC_KIND_SYSTEM_SIGNAL, "signal: ignored when the program started");
+  size_t capacity = 0;
+  for (unsigned k = 0; k < AGC_SIGNAL_DELIVERED; k++) capacity += (mask >> k) & 1u;
+  agc_channel *c = agc_alloc(sizeof(agc_channel));
+  c->capacity = c->slots = capacity;
+  c->ring = agc_alloc(agc_size_mul(c->slots, sizeof(entry)));
+  c->signals = mask;
+  agc_own(vm, agc_channel_claim(vm, c), close_owned);
+  c->signal_next = vm->rt->signal_channels;
+  vm->rt->signal_channels = c;
+  agc_io_signals_set(vm, subscribed(vm));
+  return agc_result_value(true, agc_channel_value(c));
+}
+
+/* System.signal_number(signal): the OS number, so 128 + it is the exit code of a process that the signal ended. */
+static agc_value builtin_signal_number(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  return agc_int(agc_io_signal_number(signal_index(vm, args[0])));
+}
+
+/* Whether a value of the signal VARIANT waits in the ring: a signal is queued only when it has no pending value, so a
+   burst gives one value per signal and the ring never fills. */
+static bool queued(agc_vm *vm, const agc_channel *c, uint32_t variant) {
+  for (size_t k = 0; k < c->count; k++)
+    if (agc_as_enum(vm, c->ring[(c->head + k) % c->slots].value)->variant == variant) return true;
+  return false;
+}
+
+/* Between turns (check_stop in vm/task.c): each signal the handler recorded goes to every channel that wants it, as
+   one value at most, without waiting. A signal that no channel wants any more (its last subscription ended after the
+   handler saw it) takes the stop path instead. */
+bool agc_signals_deliver(agc_vm *vm) {
+  unsigned pending = agc_io_signals_take();
+  if (!pending) return false;
+  bool delivered = false;
+  agc_runtime *rt = vm->rt;
+  agc_sync_take(vm);
+  for (unsigned k = 0; k < AGC_SIGNAL_DELIVERED; k++) {
+    if (!(pending & (1u << k))) continue;
+    bool wanted = false;
+    for (agc_channel *c = rt->signal_channels; c; c = c->signal_next) {
+      if (!(c->signals & (1u << k))) continue;
+      wanted = true;
+      uint32_t variant = rt->signal_variants[k];
+      if (!queued(vm, c, variant))
+        delivered |= deliver(vm, c, agc_enum_value(rt->program->variants[variant].shared), false);
+    }
+    if (!wanted) agc_io_signals_stop(k);
+  }
+  agc_sync_drop(vm);
+  return delivered;
 }
 
 void agc_channel_leave(agc_vm *vm, agc_task *t) {
@@ -395,6 +518,8 @@ const agc_builtin agc_channel_builtins[] = {
   {"Channel.empty?", 1, builtin_empty, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"Channel.address", 1, builtin_address, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"Address.send", 3, builtin_address_send, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"System.subscribe", 1, builtin_subscribe, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"System.signal_number", 1, builtin_signal_number, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
 };
 
 const size_t agc_channel_builtin_count = sizeof agc_channel_builtins / sizeof agc_channel_builtins[0];

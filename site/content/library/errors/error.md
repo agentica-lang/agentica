@@ -71,7 +71,7 @@ The errors of the builtins have these kinds. A kind is never renamed, so a progr
 | `task`, `channel` | `task.crashed`, `task.cancelled`, `task.timeout`, `channel.closed`, `channel.timeout`, `channel.gone` |
 | `json`, `number`, `text` | `json.parse`, `json.decode`, `number.parse`, `number.range`, `text.encoding` |
 | `zlib`, `crypto` | `zlib.data`, `zlib.too_large`, `crypto.auth`, `crypto.key`, `crypto.failed` |
-| `system`, `native`, `test` | `system.env`, `native.failed`, `native.timeout`, `test.failed` |
+| `system`, `native`, `test` | `system.env`, `system.signal`, `native.failed`, `native.timeout`, `test.failed` |
 | `denied` | `denied.env`, `denied.fs`, `denied.net`, `denied.run`: a call that a flag refuses, one kind per flag (see below) |
 
 The calls that a `--deny-*` flag turns off return an error of the `denied` family: `denied.env` for `--deny-env` (`System.env`), `denied.fs` for `--deny-fs` (`File`, `Dir`, `Path` calls that touch the disk, a `TLS` context built from files, `Process.spawn` with `out:` or `err:` files), `denied.net` for `--deny-net` (`TCP`, `TLS`, `HttpWire`, `DNS` and `std/http`) and `denied.run` for `--deny-run` (`Process`). `--sandbox` is every one of these flags, so each call gets the kind of its own flag, and `e.is_a?("denied")` matches them all. The message keeps its text (`denied: --deny-fs turns off file access`). A program that uses native code under `--deny-native` (which every `--deny-*` flag turns on) does not run: it stops at its start with `RUNTIME-NATIVE-DENIED`, so there is no error to branch on.

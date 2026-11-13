@@ -297,11 +297,36 @@ The Windows jobs set up MSYS2 with `.github/actions/msys2`, not
 60 s and 180 s) because the MSYS2 servers answer 504 now and then, and each
 attempt uses its own `location`, since the action refuses a folder that exists.
 
-A flaky test on one system: open a do-not-merge experiment PR with that
+A flaky test on one system: probe it there first (`repeat`, below); else open
+a do-not-merge experiment PR with that
 system's `platform:<system>` label that loops the suspect command alone, then
 under load (several loops beside other test loops); causes often show only
 under load. If it cannot be reproduced, make the failure message carry what the
 next case needs (exit code, folder contents).
+
+## Probe (`probe.yml`)
+
+A manual run of a branch on chosen systems: one build per system (the
+linkage, the restored caches and the test settings of Platforms), then `make
+probe`, which runs the chosen tests, make target or program
+(`tools/probe.py`). Use it instead of debug commits through Platforms. It
+runs the branch's version of the file:
+
+```sh
+gh workflow run probe.yml --ref BRANCH -f systems=macos-arm64 -f tests="tests/test_vm_bits.py"
+gh workflow run probe.yml --ref BRANCH -f systems=macos -f repeat=5 \
+  -f tests="tests/test_process.py::test_name tests/test_vm_tcp.py" -f k="not slow_peer"
+gh workflow run probe.yml --ref BRANCH -f systems=all -f target=vm-test -f program=examples/classify.agc
+```
+
+`systems` takes the platform names of `tools/ci_systems.py` (the table
+Platforms uses) or `linux`, `windows`, `macos`, `all`; `repeat` stops at the
+first round that fails; `schedulers` pins the VMs' scheduler count. Follow it
+with `gh run list -w probe.yml -b BRANCH -L 1`, `gh run watch ID` and
+`gh run view ID --log-failed`; a failed system uploads `build/probe/` (the JUnit
+files and, on macOS, the crash reports) as `probe-<system>`. The same checks
+run locally: `make probe TESTS=... [K=...] [TARGET=...] [PROGRAM=...]
+[REPEAT=N] [SCHEDULERS=N]`.
 
 ## Caches and `master` pushes
 

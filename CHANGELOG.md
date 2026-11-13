@@ -10,6 +10,15 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `System.subscribe([System.Signal.Term, System.Signal.Int])` gives a channel
+  that receives those signals instead of letting them stop the program, and
+  `System.signal_number` gives a signal's number (#1477).
+
+### Changed
+
+- `SIGUSR1` and `SIGUSR2` stop the program the way `SIGTERM` does (children
+  stopped, files written) instead of ending it at once, and `SIGQUIT` does the
+  same and exits with 131 instead of dumping core (#1477).
 - `std/actor`: `Actor.Timeout`, a receive timeout that wakes an actor when no message came in time (#1523).
 
 ### Changed

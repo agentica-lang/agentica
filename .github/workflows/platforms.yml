@@ -51,30 +51,16 @@ jobs:
       count: ${{ steps.pick.outputs.count }}
       all: ${{ steps.pick.outputs.all }}
     steps:
+      # The table of the five systems is tools/ci_systems.py, which probe.yml picks from too; only that file is checked out.
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: tools/ci_systems.py
+          sparse-checkout-cone-mode: false
       - id: pick
         env:
           ALL: ${{ github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'platforms') }}
           LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
-        shell: python3 {0}
-        run: |
-          import json, os
-          systems = [
-              {"platform": "linux-x86_64", "runner": "ubuntu-latest", "make": "make", "python": "python3", "shell": "bash"},
-              {"platform": "linux-arm64", "runner": "ubuntu-24.04-arm", "make": "make", "python": "python3", "shell": "bash"},
-              {"platform": "windows-x86_64", "runner": "windows-2025", "make": "make", "python": "python", "shell": "msys2 {0}"},
-              {"platform": "macos-x86_64", "runner": "macos-15-intel", "make": "gmake", "python": "python3", "shell": "bash"},
-              {"platform": "macos-arm64", "runner": "macos-latest", "make": "gmake", "python": "python3", "shell": "bash"},
-          ]
-          # Linux has no label of its own (ci.yml tests Linux x86_64; Linux ARM64 runs with `platforms`).
-          labelled = {"windows-x86_64", "macos-x86_64", "macos-arm64"}
-          if os.environ["ALL"] != "true":
-              names = {label.removeprefix("platform:") for label in json.loads(os.environ["LABELS"] or "[]")}
-              systems = [s for s in systems if s["platform"] in labelled & names]
-          with open(os.environ["GITHUB_OUTPUT"], "a") as out:
-              out.write(f"matrix={json.dumps({'include': systems})}\n")
-              out.write(f"count={len(systems)}\n")
-              out.write(f"all={'true' if len(systems) == 5 else 'false'}\n")
-          print("systems:", ", ".join(s["platform"] for s in systems) or "none")
+        run: python3 tools/ci_systems.py platforms >> "$GITHUB_OUTPUT"
 
   conformance:
     name: conformance ${{ matrix.platform }}
