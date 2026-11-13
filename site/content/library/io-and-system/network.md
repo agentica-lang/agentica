@@ -32,7 +32,7 @@ end
 ```output
 ok(["127.0.0.1"])
 ok(["2001:db8::1"])
-error("network: the host name is empty")
+error("network: the host name is empty", kind: "argument")
 ```
 
 ## TCP

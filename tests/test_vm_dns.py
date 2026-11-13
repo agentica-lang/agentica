@@ -78,8 +78,8 @@ def test_dns_lookup_removes_duplicates_reports_not_found_and_survives_a_lookup_g
     assert (result.code, result.stderr) == (0, ""), result
     assert result.stdout.splitlines() == [
         'ok(["127.0.0.2", "127.0.0.1"])',
-        'error("network: host not found\\n  host: missing.test\\n  system error: unknown node or service")',
-        'error("network: operation timed out")',
+        'error("network: host not found\\n  host: missing.test\\n  system error: unknown node or service", kind: "net.host_not_found")',
+        'error("network: operation timed out", kind: "net.timeout")',
         'ok(["127.0.0.1"])',
         "end",
     ]

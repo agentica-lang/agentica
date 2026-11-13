@@ -184,7 +184,7 @@ end
 
 ```output
 ok(42)
-error("cannot convert \"4x\" to Int")
+error("cannot convert \"4x\" to Int", kind: "number.parse")
 43
 2.5
 ```

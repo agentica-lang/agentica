@@ -118,7 +118,7 @@ def test_private_create_and_mkdir_set_owner_only_modes_and_never_reuse_a_path(ro
     try:
         lines = run_program(root, work, MODES_PROGRAM, "modes", root)
         assert lines[:8] == ["true", "false", "false", "true", "true", "true", "false", "false"]
-        assert lines[8] == 'error("filesystem: mode must be read, write, append, or create_private")'
+        assert lines[8] == 'error("filesystem: mode must be read, write, append, or create_private", kind: "argument")'
         secret = root / "private" / "secret.bin"
         if not WINDOWS:
             assert stat.S_IMODE((root / "private").stat().st_mode) == 0o700
@@ -274,7 +274,7 @@ def test_a_child_does_not_keep_the_lock_after_the_handle_closes(root, work, adop
 def test_try_lock_refuses_what_is_not_a_regular_file(root, work):
     os.mkfifo(root / "fifo")
     lines = run_program(root, work, DEVICE_LOCK_PROGRAM, "devicelock", root)
-    assert lines == ['error("filesystem: only a regular file can be locked")'] * 2
+    assert lines == ['error("filesystem: only a regular file can be locked", kind: "io.failed")'] * 2
 
 def test_make_directory_error_names_the_path_and_os_reason(root, work):
     text = """\
@@ -286,7 +286,7 @@ end
     lines = run_program(root, work, text, "make-directory-error", root)
     assert lines == [
         'error("filesystem: cannot make directory\\n  path: %s/missing/x\\n  system error: '
-        'No such file or directory; errno=2")' % root.as_posix()]
+        'No such file or directory; errno=2", kind: "io.not_found", code: 2)' % root.as_posix()]
     assert not (root / "missing").exists()
 
 def test_children_never_get_the_metrics_variables_but_the_program_reads_them(root, work):

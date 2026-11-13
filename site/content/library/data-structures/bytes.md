@@ -74,7 +74,7 @@ end
 ```output
 ok("hé")
 ok("hé")
-error("invalid UTF-16LE at byte 2")
+error("invalid UTF-16LE at byte 2", kind: "text.encoding")
 false
 ```
 

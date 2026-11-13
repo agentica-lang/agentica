@@ -75,7 +75,7 @@ end
 ```output
 ok("echo: hello")
 ok("hello")
-error("network: end of input")
+error("network: end of input", kind: "net.eof")
 ```
 
 `echo` never closes the connection. Its end does, so the client reads the end of the input.
@@ -361,7 +361,7 @@ end
 ```
 
 ```output
-error("task: cancelled")
+error("task: cancelled", kind: "task.cancelled")
 ```
 
 ## Task.monitor

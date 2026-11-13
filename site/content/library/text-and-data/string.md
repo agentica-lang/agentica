@@ -441,7 +441,7 @@ end
 [104, 0, 233, 0]
 [254, 255, 0, 104, 0, 233]
 [104, 233]
-error("cannot encode U+20AC in Latin-1 at index 1")
+error("cannot encode U+20AC in Latin-1 at index 1", kind: "text.encoding")
 ```
 
 ## bytesize

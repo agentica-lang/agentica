@@ -331,6 +331,6 @@ end
 
 ```output
 ok([10, 20])
-error("cannot convert \"x\" to Int")
-error("cannot convert \"x\" to Int")
+error("cannot convert \"x\" to Int", kind: "number.parse")
+error("cannot convert \"x\" to Int", kind: "number.parse")
 ```

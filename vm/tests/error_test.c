@@ -131,7 +131,7 @@ static void test_location(void) {
   shapes->span_table[1].start_column = 10;
   check(agc_error_location(&vm), "std/x.agc:4294967295:10");
   shapes->span_table[1] = kept_span;
-  agc_struct *e = error_of(agc_error(&vm, "io.not_found", "no file"));
+  agc_struct *e = error_of(agc_error(&vm, AGC_KIND_IO_NOT_FOUND, "no file"));
   assert(e->type == vm.rt->error_struct && e->n == AGC_ERROR_FIELDS);
   check(agc_as_string(&vm, e->fields[AGC_ERROR_KIND]), "io.not_found");
   check(agc_as_string(&vm, e->fields[AGC_ERROR_MESSAGE]), "no file");
@@ -268,7 +268,7 @@ static void test_is_a(void) {
 static void test_fallback(void) {
   uint32_t found = vm.rt->error_struct;
   vm.rt->error_struct = UINT32_MAX;
-  agc_value s = payload(agc_error(&vm, "io.not_found", "no file"));
+  agc_value s = payload(agc_error(&vm, AGC_KIND_IO_NOT_FOUND, "no file"));
   check(agc_as_string(&vm, s), "no file");
   check(agc_debug(&vm, agc_result_value(false, s)), "error(\"no file\")");
   check(agc_error_halt_text(&vm, s), "no file");

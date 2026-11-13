@@ -229,7 +229,7 @@ def test_a_read_stuck_on_a_fifo_times_out_closes_the_handle_and_does_not_hold_th
         started = time.monotonic()
         result = run_vm(Fixture(args=(str(fifo),)), bytecode, None, cwd=tmp_path)
         assert outcome(result)[:3] == (
-            0, "error(\"filesystem: operation timed out\")\nerror(\"filesystem: file handle is closed\")\nok()\n"
+            0, "error(\"filesystem: operation timed out\", kind: \"io.timeout\")\nerror(\"filesystem: file handle is closed\", kind: \"io.closed\")\nok()\n"
             "done\n", "")
         assert time.monotonic() - started < scaled(20)
     finally:
@@ -257,7 +257,7 @@ def test_closing_a_captured_vm_child_sends_sigterm_first_so_the_child_stops_its_
         lines = words(result[1])
         pids.extend(word for word in (lines[0].split() if lines else []) if word.isdigit())
         assert result[0] == 0, mode
-        assert lines[1:] == ([] if mode == "close" else ['error("process: operation timed out")']), mode
+        assert lines[1:] == ([] if mode == "close" else ['error("process: operation timed out", kind: "process.timeout")']), mode
         assert len(pids) == 2, mode
         for pid in pids:
             assert gone(pid), "%s: %s" % (mode, pid)
@@ -312,7 +312,7 @@ def test_an_output_timeout_keeps_the_captured_child_and_output_decodes_invalid_u
         "  Process.close(p)\nend\n")
     child = PYTHON_OUTPUT_CHILD if os.name == "nt" else SHELL_OUTPUT_CHILD
     assert run_vm(PLAIN, bytecode, None, extra=child, cwd=tmp_path) == \
-        (0, "error(\"process: operation timed out\")\n\"hi\\n\" 1 65533 false\n", "")
+        (0, "error(\"process: operation timed out\", kind: \"process.timeout\")\n\"hi\\n\" 1 65533 false\n", "")
 
 
 @pytest.mark.skipif(UNDER_WINE, reason="Wine runs the Windows binary: no /bin/sh child, no console to break")

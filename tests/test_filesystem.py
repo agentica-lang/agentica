@@ -402,8 +402,8 @@ def main() -> Void
   IO.print("main done\n")
 end
 """, fifo, out, one_pool_thread=True)
-    assert (code, output) == (0, 'error("filesystem: operation timed out")\n'
-                                  'error("filesystem: operation timed out")\nmain done\n'), errors
+    assert (code, output) == (0, 'error("filesystem: operation timed out", kind: "io.timeout")\n'
+                                  'error("filesystem: operation timed out", kind: "io.timeout")\nmain done\n'), errors
     assert out.read_text() == "flushed"
 
 
@@ -445,7 +445,7 @@ def main() -> Void
   IO.inspect(String.length(text))
 end
 """, first, second, one_pool_thread=True)
-    assert (code, output) == (0, 'ok("hello")\nerror("filesystem: end of file")\nok()\n81920\n'), errors
+    assert (code, output) == (0, 'ok("hello")\nerror("filesystem: end of file", kind: "io.eof")\nok()\n81920\n'), errors
 
 
 @no_fifo
@@ -587,7 +587,7 @@ def test_a_cancelled_stdin_reader_leaves_its_read_to_the_next_reader_and_eof_rea
     child.close_stdin()
     assert child.wait(VM_WAIT_SECONDS) == 0, child.stderr_text()
     lines = child.stdout_text().splitlines()
-    assert lines == ['error("IO.gets reached the end of input")'] * 2 + ["5"], lines
+    assert lines == ['error("IO.gets reached the end of input", kind: "io.eof")'] * 2 + ["5"], lines
 
 
 @host_only(WINDOWS, "the VM's pipes are reopened through the folder of its descriptors; Windows has none "

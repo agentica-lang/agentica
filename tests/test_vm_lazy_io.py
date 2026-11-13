@@ -146,8 +146,8 @@ def test_max_steps_ends_a_pipeline_over_a_file_and_the_end_of_the_run_closes_it(
 
 @FIFO
 @pytest.mark.parametrize("mode,peer_mode,expected", (
-    ("cancel", "idle", 'error("task: timed out")'),
-    ("timeout", "stall", 'error("filesystem: operation timed out")'),
+    ("cancel", "idle", 'error("task: timed out", kind: "task.timeout")'),
+    ("timeout", "stall", 'error("filesystem: operation timed out", kind: "io.timeout")'),
 ), ids=("cancel-while-parked-on-a-read", "read-timeout"))
 def test_a_terminal_parked_on_a_file_read_ends_and_releases_the_file(tmp_path, request, mode, peer_mode, expected):
     _, fifo = start_fifo_peer(tmp_path, peer_mode, request)
@@ -183,7 +183,7 @@ def test_a_cancel_while_write_lines_is_parked_on_a_write_closes_the_file(tmp_pat
     _, fifo = start_fifo_peer(tmp_path, "idle", request)
     bytecode = compile_text(WRITE_PARKED, "write_parked", tmp_path)
     result, events = traced(tmp_path, bytecode, args=[str(fifo)])
-    assert (result.code, result.stdout) == (0, 'error("task: timed out")\n'), result.stderr
+    assert (result.code, result.stdout) == (0, 'error("task: timed out", kind: "task.timeout")\n'), result.stderr
     opened = [handle for kind, handle in events if kind == "open"]
     assert len(opened) == 1, events
     assert ("close", opened[0]) in events, events

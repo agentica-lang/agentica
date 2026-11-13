@@ -526,7 +526,7 @@ def test_timed_channel_waits_keep_their_deadlines_and_a_pending_wait_is_cancelle
     bytecode = program(tmp_path, "timed_waits", TIMED_WAITS)
     result = run([*vm_command(), "--schedulers", schedulers, "--", bytecode], env=vm_environment({}),
                  timeout=scaled(60))
-    expected = '%d 2000\ntrue\nerror("channel: timed out")\n' % (2000 * 2001 // 2)
+    expected = '%d 2000\ntrue\nerror("channel: timed out", kind: "channel.timeout")\n' % (2000 * 2001 // 2)
     assert (result.code, result.stdout, result.stderr) == (0, expected, "")
 
 
@@ -907,7 +907,7 @@ def test_a_task_cancelled_on_another_scheduler_spawns_only_cancelled_children(tm
     bytecode = program(tmp_path, "spawns_after_cancel", SPAWNS_AFTER_CANCEL % SPAWN_FORMS[form])
     for _ in range(repeats):
         result = vm(bytecode)
-        timed_out = ", ".join(['error("task: timed out")'] * 3)
+        timed_out = ", ".join(['error("task: timed out", kind: "task.timeout")'] * 3)
         assert (result.code, result.stdout) == (0, "[%s]\n0\n" % timed_out), result.stderr
 
 
@@ -1074,7 +1074,7 @@ def test_fifos_are_read_through_the_io_thread(tmp_path, repeats):
             for w in writers:
                 w.join()
         assert (result.code, result.stdout, result.stderr) == (
-            0, "3000\n100000\nerror(\"filesystem: operation timed out\")\n", "")
+            0, "3000\n100000\nerror(\"filesystem: operation timed out\", kind: \"io.timeout\")\n", "")
 
 
 BLOCKED = """\
@@ -1120,7 +1120,7 @@ def test_task_map_cancels_tasks_blocked_on_a_fifo(tmp_path, repeats, per_call_ms
         finally:
             os.close(held)
         assert (result.code, result.stdout, result.stderr) == (
-            0, "8\n0\nerror(\"filesystem: operation timed out\")\n", "")
+            0, "8\n0\nerror(\"filesystem: operation timed out\", kind: \"io.timeout\")\n", "")
 
 
 # Processes, the child channel and the Test protocol run on several schedulers: every libuv step is a request to the
@@ -1248,8 +1248,8 @@ def test_process_waits_cancelled_from_other_schedulers_end_and_the_owner_kills_i
     # each task ends cancelled. The read keeps the reader lock until its job ends, so main's read times out on it; the
     # close ends every job and the run. A task that owns a child is cancelled: its end kills the child.
     bytecode = program(tmp_path, "proc_cancel", PROC_CANCEL)
-    expected = ['error("task: cancelled")'] * 3 + ['error("process: operation timed out")',
-                                                    'error("process: process is closed")', 'error("task: cancelled")',
+    expected = ['error("task: cancelled", kind: "task.cancelled")'] * 3 + ['error("process: operation timed out", kind: "process.timeout")',
+                                                    'error("process: process is closed", kind: "process.closed")', 'error("task: cancelled", kind: "task.cancelled")',
                                                     'ok("gone")']
     for _ in range(repeats):
         result = vm(bytecode, args=CHILD_ARGS, timeout=60)
@@ -1300,8 +1300,8 @@ def test_process_exits_and_lines_that_race_a_deadline_give_the_result_or_the_tim
     # which closes the child, so the next read finds it closed; never the timeout and then the line. On Windows the
     # Python children take 50 ms or more to start, so there the case covers only the timeout branch.
     bytecode = program(tmp_path, "proc_deadline", PROC_DEADLINE)
-    waits = {"ok(4)", 'error("process: operation timed out")'}
-    reads = {'ok("hi")', 'error("process: operation timed out") then error("process: process is closed")'}
+    waits = {"ok(4)", 'error("process: operation timed out", kind: "process.timeout")'}
+    reads = {'ok("hi")', 'error("process: operation timed out", kind: "process.timeout") then error("process: process is closed", kind: "process.closed")'}
     for _ in range(repeats):
         result = vm(bytecode, args=DEADLINE_CHILDREN, timeout=60)
         assert (result.code, result.stderr) == (0, "")
@@ -1437,7 +1437,7 @@ def test_the_child_channel_between_two_runs_on_several_schedulers(tmp_path, repe
     # schedulers). The parent closes its side, the child reads the end, says so and exits 0.
     bytecode = program(tmp_path, "proc_channel", PROC_CHANNEL)
     replies = ",".join(sorted("echo:%d" % (base + k) for base in (0, 100, 200, 300) for k in range(25)))
-    expected = "ok()\n%s\nok(\"end:process: end of input\")\nerror(\"process: end of input\")\nok(0)\n" % replies
+    expected = "ok()\n%s\nok(\"end:process: end of input\")\nerror(\"process: end of input\", kind: \"process.eof\")\nok(0)\n" % replies
     for _ in range(repeats):
         result = vm(bytecode, args=(vm_command()[0], bytecode), env=MULTICORE_CHILDREN, timeout=60)
         assert (result.code, result.stdout, result.stderr) == (0, expected, "")
@@ -1531,12 +1531,12 @@ def test_a_close_ends_channel_calls_parked_on_other_schedulers(tmp_path, repeats
     # that reaches a task on another scheduler lands a little later, so main waits for the count to reach 0; a task
     # left behind hangs the run until the timeout.
     bytecode = program(tmp_path, "proc_channel_close", PROC_CHANNEL_CLOSE)
-    reads = {'error("process: channel is closed")', 'error("process: process is closed")'}
+    reads = {'error("process: channel is closed", kind: "process.closed")', 'error("process: process is closed", kind: "process.closed")'}
     for _ in range(repeats):
         result = vm(bytecode, args=CHILD_ARGS, timeout=60)
         assert result.code == 0, result.stderr
         started, read, send, crashed, pending = result.stdout.splitlines()
-        assert (started, send, crashed, pending) == ("started", 'error("process: channel is closed")', "false", "0")
+        assert (started, send, crashed, pending) == ("started", 'error("process: channel is closed", kind: "process.closed")', "false", "0")
         assert read in reads
         assert "RUNTIME-DIVISION-BY-ZERO" in result.stderr
 
@@ -1934,7 +1934,7 @@ def test_net_waits_cancelled_from_other_schedulers_end_and_free_their_port(tmp_p
     # Windows takes a 64 MiB send into its buffers at once (as in test_vm_tcp.py), so there the send may end first,
     # and on Windows this case does not prove that a parked send is cancelled; the other systems do.
     bytecode = program(tmp_path, "net_cancel", NET_CANCEL)
-    timed_out = 'error("task: timed out")'
+    timed_out = 'error("task: timed out", kind: "task.timeout")'
     sends = {timed_out, 'ok("sent")'} if WINDOWS else {timed_out}
     for _ in range(repeats):
         result = vm(bytecode, args=(TLS_DIR,))
@@ -2037,7 +2037,7 @@ def test_net_deadlines_that_pass_during_a_step_give_the_result_or_the_timeout(tm
     # A read whose 20 ms deadline races a writer task that sends at 14 to 25 ms: the line, or the timeout and then a
     # closed socket, never both. TLS connects whose deadline (1 to 24 ms) falls in the handshake: ok or the timeout.
     bytecode = program(tmp_path, "net_deadline", NET_DEADLINE)
-    reads = {"late", 'network: operation timed out then error("network: socket is closed")'}
+    reads = {"late", 'network: operation timed out then error("network: socket is closed", kind: "net.closed")'}
     dials = {"ok", "network: operation timed out"}
     for _ in range(repeats):
         result = vm(bytecode, args=(TLS_DIR,))
@@ -2124,7 +2124,7 @@ def test_a_close_from_another_scheduler_ends_parked_reads_and_sends(tmp_path, re
     # a third task closes the socket. Both waits end with the closed error. Then a task that owns a listener crashes,
     # and the listener's port can be bound again.
     bytecode = program(tmp_path, "net_close", NET_CLOSE)
-    expected = '\n'.join(['error("network: socket is closed")'] * 6 + ["owner crashed", "true", ""])
+    expected = '\n'.join(['error("network: socket is closed", kind: "net.closed")'] * 6 + ["owner crashed", "true", ""])
     for _ in range(repeats):
         result = vm(bytecode, args=(TLS_DIR,))
         assert (result.code, result.stdout) == (0, expected), result.stderr
@@ -2356,8 +2356,8 @@ def test_handles_of_a_crashed_owner_are_closed_when_its_await_returns(tmp_path, 
     # rt->sync, and the FIFO inbox orders the close first either way); the descendant cases below cover the gap that
     # order did leave. Each run checks 40 rounds of each kind.
     bytecode = program(tmp_path, "owner_crash", OWNER_CRASH)
-    expected = ['accept: network: listener is closed x40', 'peer: error("network: end of input") x40',
-                'send: error("network: socket is closed") x40', 'wait: error("process: process is closed") x40']
+    expected = ['accept: network: listener is closed x40', 'peer: error("network: end of input", kind: "net.eof") x40',
+                'send: error("network: socket is closed", kind: "net.closed") x40', 'wait: error("process: process is closed", kind: "process.closed") x40']
     for _ in range(repeats):
         result = vm(bytecode, args=(PYTHON,), timeout=120)
         assert (result.code, result.stdout.splitlines()) == (0, expected), result.stderr
@@ -2619,7 +2619,7 @@ def test_one_cancel_of_a_deep_line_with_a_busy_leaf_costs_linear_time(tmp_path):
     bytecode = program(tmp_path, "deep_cancel", DEEP_CANCEL)
     result = vm(bytecode, args=["32000"], timeout=scaled(120))
     lines = result.stdout.splitlines()
-    assert (result.code, lines[1:]) == (0, ["error(\"task: cancelled\")"]), result.stderr
+    assert (result.code, lines[1:]) == (0, ["error(\"task: cancelled\", kind: \"task.cancelled\")"]), result.stderr
     assert int(lines[0].removeprefix("cancel ")) < scaled(1500), lines[0]
 
 
@@ -2780,7 +2780,7 @@ def test_waits_on_live_connections_are_no_stall_on_several_schedulers(tmp_path):
                 process.kill()
                 process.wait()
     assert (process.returncode, out, err) == (
-        0, 'error("network: operation timed out")\nerror("network: end of input")\n', "")
+        0, 'error("network: operation timed out", kind: "net.timeout")\nerror("network: end of input", kind: "net.eof")\n', "")
 
 
 def test_the_profile_and_blocking_output_take_one_scheduler_and_refuse_a_chosen_count(tmp_path):

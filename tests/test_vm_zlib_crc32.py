@@ -113,7 +113,7 @@ def test_crc32_rejects_a_seed_outside_0_to_2_to_the_32(tmp_path):
         result = run_body(tmp_path, "seed-%s.agc" % seed,
                           "def main() -> Void\n  puts(Zlib.crc32(\"abc\".bytes, %s))\nend\n" % seed)
         assert result.code == 0, result.stderr
-        assert result.stdout == 'error("zlib: seed must be between 0 and 4294967295")\n', result.stdout
+        assert result.stdout == 'error("zlib: seed must be between 0 and 4294967295", kind: "argument")\n', result.stdout
 
 
 def test_crc32_rejects_more_than_1_mib_of_input(tmp_path):
@@ -123,7 +123,7 @@ def test_crc32_rejects_more_than_1_mib_of_input(tmp_path):
             "end\n")
     result = run_body(tmp_path, "huge.agc", body)
     assert result.code == 0, result.stderr
-    assert result.stdout == 'error("zlib: input exceeds 1048576 bytes")\n', result.stdout
+    assert result.stdout == 'error("zlib: input exceeds 1048576 bytes", kind: "zlib.too_large")\n', result.stdout
 
 
 def test_crc32_accepts_exactly_1_mib_of_input(peer):
