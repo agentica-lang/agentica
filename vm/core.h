@@ -457,7 +457,8 @@ bool agc_poll_one_wait(void);
 size_t agc_block_word(const char *name, size_t len);
 void agc_stack_capture(const agc_vm *vm, agc_outcome *outcome);
 /* Where an error built in C is made: "path:line:col" of the call that the innermost frame of the current task makes,
-   skipping prelude and native frames as a stack trace does, with the source name the file stores (not joined with
+   skipping prelude and native frames as a stack trace does, and the frame of an extern function that is calling C
+   (so an error of a native module points at the user's call), with the source name the file stores (not joined with
    --source-root). The empty String when no frame of the program runs (a detached job's done half, whose value is
    dropped; a C test). */
 agc_string *agc_error_location(const agc_vm *vm);
