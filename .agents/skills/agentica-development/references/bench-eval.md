@@ -81,9 +81,8 @@ broadcast sent as `Text` and as `HTTP.prepare`.
 
 ## Agent evaluation
 
-`python3 tests/eval/run.py --help` (not part of `make test`).
-`--check-references` grades every `reference.*` of `tests/eval/tasks/` in the
-Docker sandbox without a model and exits 1 on a failure; run it after any
-change to a task, `tests/eval/run.py`, the Dockerfile or the VM
-(`make eval-references` is the same with `--jobs 8`; it is not in CI). The arms,
-the task layout, the sandboxes and the details are in `docs/eval.md`.
+Not part of `make test`; the arms, the task layout and the sandboxes are in
+`docs/eval.md`. After any change to a task, `tests/eval/run.py`, the Dockerfile
+or the VM, run `make eval-references` (`run.py --check-references --jobs 8`: it
+grades every `reference.*` in the Docker sandbox without a model and exits 1 on
+a failure; not in CI).

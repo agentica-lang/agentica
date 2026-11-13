@@ -248,22 +248,21 @@ in that clone (`docs/settings.md`, `docs/suppressions.md`).
   cchecker-update-baseline` (the diff is the review, and the PR says why each
   new entry is accepted). Each reason is one line a reviewer can check.
 - Marks: `vm/cchecker.h` is a copy of `include/cchecker.h` of the pinned
-  release; its macros are empty in every build but cchecker's own AST dump
-  (`CCHECKER_AST`). Put `CC_OWNS` on a function that returns malloc memory and
-  on the fields and parameters that own it; `CC_OWNS_OUT` on a `char **out`
-  parameter that hands an owned pointer to the caller (`agc_remove_tree`);
-  `CC_FREES` on the parameter of a function that frees it; `CC_GC_ALLOC` on an
-  allocator of the collector; `CC_ACQUIRES(lock)` or `CC_RELEASES(lock)` on a
-  function that takes a lock for its caller or drops the caller's
+  release, and its header comment says what each macro means; they are empty in
+  every build but cchecker's own AST dump (`CCHECKER_AST`). Settings first
+  (`cchecker.toml`); a mark is for what they cannot say. In this tree:
+  `CC_OWNS` on a function that returns malloc memory and on the fields and
+  parameters that own it, `CC_OWNS_OUT` on a `char **out` handing an owned
+  pointer to the caller (`agc_remove_tree`), `CC_FREES` on a parameter that is
+  freed, `CC_GC_ALLOC` on a collector allocator, `CC_ACQUIRES(lock)` and
+  `CC_RELEASES(lock)` on a function that takes or drops its caller's lock
   (`agc_lock_take`, `leave_with`). `CC_JUMPS` goes on a raise that never
-  returns: cchecker infers from it which functions may jump out, and checks
-  what they hold there. The raises have it: `agc_wrong_tag` (vm/value.h) and
-  `agc_fail` and its family (vm/port.h).
+  returns (`agc_wrong_tag`, `agc_fail` and its family): cchecker infers from it
+  which functions may jump out and checks what they hold there.
   `CC_JUMP_RELEASES` goes on a lock helper whose lock the scheduler gives back
-  after a jump (`agc_sync_reset`: `agc_sync_take`, `stream_take`). A function
-  that takes or drops a lock only on some paths (by a flag or a count) gets an
-  ignore with the reason. Settings first (`cchecker.toml`); a mark is for what
-  they cannot say.
+  after a jump (`agc_sync_take`, `stream_take`). A function that takes or drops
+  a lock only on some paths (by a flag or a count) gets an ignore with the
+  reason.
 - To move to a new release, change `CCHECKER_VERSION` and `CCHECKER_COMMIT`
   (`git ls-remote https://github.com/agentica-lang/cchecker 'X^{}' X`), copy
   its `include/cchecker.h` over `vm/cchecker.h`, run
@@ -331,37 +330,37 @@ next case needs (exit code, folder contents).
 ## Other workflows
 
 `jit-soak.yml` and `platforms.yml` describe themselves in their headers;
-`site-examples.yml` and `pages.yml`: `references/site.md`.
+`site-examples.yml` and `pages.yml`: `references/site.md`. What the workflows
+do not say:
 
-- `fuzz.yml` (by hand) runs `make vm-libfuzz-run` for an hour with a random
-  seed; `vm-libfuzz-run` runs each input in the interpreter, then on Linux
-  x86-64 with the JIT, and compares the outputs. The link wraps
-  `agc_jit_mem_reserve` so each input's code memory is unmapped
+- `fuzz.yml` (by hand, an hour by default): `vm-libfuzz-run` runs each input in
+  the interpreter, then on Linux x86-64 with the JIT, and compares the outputs.
+  The link wraps `agc_jit_mem_reserve` so each input's code memory is unmapped
   (`vm/fuzz_libfuzzer.c`). Seeds: `tests/fixtures/vm/` and
   `tests/fixtures/fuzz/`.
 - `sweep.yml` (weekly, and by hand) runs `make sweep-full` and
   `vm-jit-self-compile` (the front end compiles itself under `--jit on` and
   `always`, through the test-only `AGENTICA_VM_TEST_FRONT_END_JIT`), and its
   `jit-stress` job runs the JIT goldens on the GC stress and ASan binaries.
-- `jit-soak.yml` is the only daily schedule: `make test-jit-off` runs the tests
-  with `AGENTICA_JIT=off`. A canary in `tests/test_vm_jit.py` fails if the
-  variable stops reaching the VMs. A test that needs one mode passes `--jit`
-  itself (the flag wins).
+- `jit-soak.yml` is the only daily schedule (`make test-jit-off`:
+  `AGENTICA_JIT=off`). A canary in `tests/test_vm_jit.py` fails if the variable
+  stops reaching the VMs. A test that needs one mode passes `--jit` itself (the
+  flag wins).
 
 ## Release (`release.yml`)
 
-The header of `release.yml` lists the five packages. They are built from stage0
-with vendored libgc, OpenSSL and zlib (Linux: pinned `zig cc` against glibc
+The header of `release.yml` lists the five packages and how each is built from
+stage0 (vendored libgc, OpenSSL and zlib; Linux: pinned `zig cc` against glibc
 2.28; macOS: ad hoc `codesign`, no notarization). The steps are `mk/release.mk`
-targets; the Linux jobs also run the full golden sweep, `test-distribution` and
-the examples.
+targets (`release-check`, `release-package`, `release-smoke`; run them locally
+before a release tag); the Linux jobs also run the full golden sweep,
+`test-distribution` and the examples.
 
-- `make release-check` (`tools/release-check.sh`) checks the binary in its own
-  format: the architecture, the libraries it imports (no `libssl`,
-  `libcrypto`, `libgc` or `libz`, on the binary and on the unpacked archive),
-  the glibc floor (`objdump -T`, OpenSSL's symbols included) or the Mach-O
-  `minos` (a link target, not proof that every API is safe on macOS 12), and
-  the hardening. A change of a floor or of the allowed DLLs goes there.
+- `make release-check` (`tools/release-check.sh`) checks the stripped binary:
+  the architecture, no import of `libssl`, `libcrypto`, `libgc` or `libz`, the
+  glibc floor (`objdump -T`, OpenSSL's symbols included) or the Mach-O `minos`
+  (a link target, not proof that every API is safe on macOS 12), and the
+  hardening. A change of a floor or of the allowed DLLs goes there.
 - `ZIG_VERSION` and `ZIG_SHA256` pin the Linux compiler; macOS builds use
   `MACOSX_DEPLOYMENT_TARGET=12.0`. The `collect` job checks that exactly the
   five archives of `VERSION` exist and writes `SHA256SUMS`.
@@ -370,13 +369,11 @@ the examples.
   replaces glibc's. On Linux arm64 `__clear_cache` was such a helper, so
   `vm/jit/mem_posix.c` defines it; release-check fails when `__stack_chk_fail`
   is not glibc's.
-- `tools/release.py package` writes the archive with `LICENSE`, `NOTICE`,
-  `licenses/` (`LICENSE_FILES`; a new third-party library adds its license
-  there) and `include/agentica_native.h`. The archive is reproducible; the
-  binary is not.
-- `tools/release.py smoke` (`python -I`) runs the extracted binary from a path
-  with spaces and non-ASCII letters, with a system-only `PATH`. TLS is covered
-  by the OpenSSL version line only.
+- `tools/release.py package` writes the reproducible archive (the binary is
+  not); a new third-party library adds its license to `LICENSE_FILES` there.
+  `tools/release.py smoke` runs the extracted binary from a path with spaces
+  and non-ASCII letters, with a system-only `PATH`. TLS is covered by the
+  OpenSSL version line only.
 - `publish` runs only for a tag push equal to `VERSION`, after all five
   builds pass, and creates the GitHub Release with empty notes.
 
@@ -387,7 +384,7 @@ uploads; `agentica-release`).
 `VERSION` (one line, no `v`) is the single source of the version: C gets it as
 `AGC_VERSION`, the front end as `Settings.version` (`--version V`), and each
 `.agcb` header carries it. Keep it equal to the Git tag. Cutting a release:
-`.agents/skills/agentica-release/`; CHANGELOG entries: `AGENTS.md`.
+`.agents/skills/agentica-release/`.
 
 ## Copy-paste check (jscpd)
 

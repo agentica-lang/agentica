@@ -92,18 +92,13 @@ the programming skill or the site).
 
 ## Runner (`stdlib/test/runner.agc`)
 
-- Reads the config, lists the steps with one child that has a channel
-  (`--agentica-bdd list`; output over the cap while listing closes the child:
-  `RUNTIME-BDD-OUTPUT-LIMIT`), compiles the patterns, reads each `.feature`,
-  and runs every resolved scenario in its own child VM (`--agentica-bdd
-  scenario`, `--max-steps` 1,000,000 per step plus one, 30 s deadline), then
-  prints `Report.json` or `Report.text` and exits with `Report.exit_code`.
-  The files run in order, or `--jobs N` at a time with `Task.map` in
-  `run_entries`; the results are in file order.
-- The child talks over a channel (`Process.spawn_channel`, stdin closed at
-  once): an init line, then one step line per step (`Process.channel_send`);
-  the child answers with JSON line records (`assert`, `step`, `fail`, `end`,
-  `ready`, `skip`, `after`) read with `Process.channel_read_line`. After `end`
+- The flow (list child, scenario children, the report and its exit code) is
+  `docs/bdd.md` ("How a run works"). Output over the cap while listing closes
+  the child: `RUNTIME-BDD-OUTPUT-LIMIT`. The files run in order, or `--jobs N`
+  at a time with `Task.map` in `run_entries`; the results are in file order.
+- The runner reads the child's records with `Process.channel_read_line` and
+  sends the init and step lines with `Process.channel_send` (the records are in
+  `docs/bdd.md`). After `end`
   or `fail` the runner reads the handler's output with `Process.read_available`
   and fails the step with `RUNTIME-BDD-OUTPUT-LIMIT` when a cap was hit. An
   `end` whose `index` is not the current step is a `RUNTIME-BDD-INFRA` protocol
@@ -126,10 +121,9 @@ the programming skill or the site).
   file's `output`), the `--only` filter, then one run child (`--max-steps`
   1,000,000 x (tests + 1)) that gets one index per test with
   `Process.channel_send`. `await_ready` waits up to 30 s for the child's
-  `ready` before the first index, so a test's time leaves out the child's
-  start. Otherwise a file error with what the child printed: another record is
-  `RUNTIME-BDD-INFRA`, no `ready` in 30 s `RUNTIME-TEST-TIMEOUT`, an early end
-  the child's crash diagnostic. Tests are walked through a `Map[Int, UnitTest]`.
+  `ready` before the first index (`docs/bdd.md`, "Unit test files"); an early
+  end of the child is its crash diagnostic. Tests are walked through a
+  `Map[Int, UnitTest]`.
 - `await_test` reads the record, then the printed stdout with
   `Process.read_available` (the child flushes before it sends the record, so the
   order is fixed); the last 64 Ki characters go to `output` for a failed test.

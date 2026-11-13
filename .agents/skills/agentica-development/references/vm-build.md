@@ -31,22 +31,17 @@ make compile-commands                # compile_commands.json (gitignored) with t
 ```
 
 - The `changes` job decides when the C half runs: `references/ci.md`.
-- `agentica file.agc` runs in one process (`docs/vm/08-loader-and-cli.md` §9):
-  the front end of the binary (`compiler/front_end.agc`) compiles in memory and
-  hands the bytes to C with `FrontEnd.hand_off`; `vm/agentica.c` runs them in a
-  new runtime. A `LOWER-UNSUPPORTED` is printed like any diagnostic, exit 1.
-  `agentica run [FLAGS] -- file.agcb [ARGS...]` runs a compiled file: C handles
-  it when `run` is the first word, with the VM flags (`dist/agentica run` alone
-  lists them) and the hidden `--driver-pid PID` and `--embedded NAME` (§9 of the
-  same doc). `agentica test` runs the BDD driver in the front end, which starts
-  the runner with `self_path run --driver-pid ... --embedded runner`
-  (`references/bdd.md`). A new VM option goes in `agc_launch_parse` and in the
-  pass-through list of the front end (`compiler/app/cli_options.agc` and the
-  hand-off check in `vm/agentica.c`). A new builtin goes into `VM_BUILTINS` with
-  its C implementation. `AGENTICA_VM_BINARY` is a test knob only (the Python
-  tests run that build of the binary: the GC stress, the vendored link, a
-  sanitizer build). `tests/test_vm_diff_8.py` checks the CLI against the
-  goldens.
+- `agentica file.agc` (the front end compiles in memory and hands the bytes
+  to a new runtime), `agentica run [FLAGS] -- file.agcb` (`dist/agentica run`
+  alone lists the flags) and the hidden `--driver-pid` and `--embedded`:
+  `docs/vm/08-loader-and-cli.md` §9 and `references/vm-core.md` ("Launch").
+  `agentica test` runs the BDD driver (`references/bdd.md`). A new VM option
+  goes in `agc_launch_parse` and in the pass-through list of the front end
+  (`compiler/app/cli_options.agc` and the hand-off check in `vm/agentica.c`). A
+  new builtin goes into `VM_BUILTINS` with its C implementation.
+  `AGENTICA_VM_BINARY` is a test knob only (the Python tests run that build of
+  the binary: the GC stress, the vendored link, a sanitizer build).
+  `tests/test_vm_diff_8.py` checks the CLI against the goldens.
 
 - Each mode compiles once into `$(VM_BUILD)/obj/` and links every binary from
   there, through ccache when it is there (`CCACHE=` turns it off when a ccache

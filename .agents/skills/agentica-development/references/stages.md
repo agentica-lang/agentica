@@ -32,7 +32,7 @@ wrong:
 - `&&`, `||` and `!` are the kinds `and`, `or` and `not`; a `!` glued to a name
   stays in the name.
 - `->` is `arrow` after a token of `ENDS_EXPRESSION` (or after `if`), and
-  `lambda-arrow` anywhere else; the `{` right after it, or after its `(...)`,
+  `lambda-arrow` anywhere else (`docs/grammar/04-lexical.md`); the `{` after it
   opens the `LAMBDA_BODY` frame, where line breaks are statement breaks.
 - The parser desugars `x op= e` into `binding x #f (binary op ...)`, and reads
   `true`, `false` and `nil` from their kind, not from `value`.
@@ -77,22 +77,13 @@ diagnostics keep their original code and span.
 
 `lex: String -> Outcome[List[Token]]`. One pass over the source:
 
-- CRLF normalizes to one newline; a lone carriage return is
-  `LEX-UNEXPECTED-CHAR`. `NL` is suppressed inside `()`, `[]` and `{}`; a final
-  `NL` is synthesized before `EOF`.
-- A line whose first non-blank characters are `##` starts a doc block: the lexer
-  looks back over blanks to the line break and reads the consecutive doc lines
-  into one `DOC` token (`###` keeps its third `#`). A `##` after code is a plain
-  comment. A bare carriage return after a doc line is still
-  `LEX-UNEXPECTED-CHAR`. A `DOC` inside brackets is emitted; the parser rejects
-  it there.
-- A lowercase name may end in `?` or `!`; `!` followed by `=` stays an operator,
-  so `a!=b` is `a != b`. The parser rejects suffixes on bindings, parameters and
-  fields.
-- Number literals drop the `_`s from the value; `LEX-INVALID-NUMBER` spans the
-  literal as written. A `.` followed by a digit or `_` continues a number, so
-  `1_000.times` and `1_000..2_000` are not Floats. The text conversions
-  (`String.to_i`, JSON) reject `_`.
+- Newlines, doc lines, `?`/`!` name suffixes and number literals follow
+  `docs/grammar/04-lexical.md`. What it does not say: a lone carriage return is
+  `LEX-UNEXPECTED-CHAR`; a `DOC` token is made from consecutive doc lines (the
+  lexer looks back over blanks to the line break) and emitted inside brackets
+  too, where the parser rejects it; the parser rejects `?`/`!` suffixes on
+  bindings, parameters and fields; `LEX-INVALID-NUMBER` spans the literal as
+  written; the text conversions (`String.to_i`, JSON) reject `_`.
 - Heredoc `<<~NAME` yields the string tokens at the opener's place, all with the
   span of `<<~NAME`; `#{...}` pieces in a body are lexed by the main loop
   (`lex_from`, `stop_depth`) and keep their real positions, so spans inside a
@@ -200,7 +191,7 @@ name.
 - `import_use.agc` runs after the rewrite of each file: `CHECK-UNUSED-IMPORT`
   (a regex literal or `<<~EAG` template uses the import of `std/regex` or
   `std/eag`) and `CHECK-IMPORT-NAME` for an alias written without a member.
-  `Settings.unused_imports` is off for the query commands, for the root file
+  `Settings.unused` is off for the query commands, for the root file
   only, so an imported file stays strict and still enters the check cache. It
   reads the parser's tree, so a file read from a check cache stub
   (`Module.stubbed`) is skipped.

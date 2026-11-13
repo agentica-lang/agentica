@@ -28,12 +28,12 @@ This file says how to work and which reference to read; the tree is in
   user-facing text (help, diagnostics, docs, site, skills) shows only the
   Ruby form (`list.select`, not `List.filter`). A habit from another
   language (`trim`, `len`) gets a `help:` hint (`foreign_kind_methods`,
-  `foreign_names`), not a second accepted form. An old Agentica name gets no
-  hint: it is an unknown name with the usual did-you-mean. The
-  VM keys (`implementation`) keep the old names: stage0 and compiled bytecode
-  import them. Exception: Ruby's own synonyms are all
-  accepted (`length`/`size`, `collect`, `inject`, `detect`, `member?`;
-  `ruby_synonyms`), and texts show only the most common one.
+  `foreign_names`), not a second accepted form; an old Agentica name gets no
+  hint, it is an unknown name with the usual did-you-mean. The VM keys
+  (`implementation`) keep the old names: stage0 and compiled bytecode import
+  them. Exception: Ruby's own synonyms are all accepted (`length`/`size`,
+  `collect`, `inject`, `detect`, `member?`; `ruby_synonyms`), and texts show
+  only the most common one.
 
 ## Finding code
 
@@ -63,10 +63,10 @@ One pytest process runs per module, so keep xdist off.
 
 ## Stage contract
 
-Entries: `Lexer.lex`, `Parser.parse`, `Linker.link_file`, `Checker.check`,
-`Lowering.lower`, `Writer.write` (`references/stages.md`); the contract is in
-`AGENTS.md` ("Stages"). `compiler/app/cli.agc` prints the diagnostic and exits
-1. Thread spans through; an impossible state is a `*-INTERNAL` diagnostic.
+The contract is in `AGENTS.md` ("Stages"); the entry points (`Lexer.lex` ...
+`Writer.write`) are in `references/stages.md`. `compiler/app/cli.agc` prints
+the diagnostic and exits 1. Thread spans through; an impossible state is a
+`*-INTERNAL` diagnostic.
 
 ## Where new code goes
 
@@ -103,15 +103,11 @@ Recipes: `references/frontend.md` ("Common tasks"). Homes:
 
 ## VM rules in short
 
-- Goldens are the contract: exit code, stdout, the program's stderr and the
-  diagnostic code. Messages, spans and step counts may change.
-- Every `.agcb` is untrusted: no memory error or UB whatever it holds.
-- Out-of-subset programs fail with `LOWER-UNSUPPORTED`.
+- Goldens are the contract; every `.agcb` is untrusted (`references/vm.md`).
 - A change to the VM core (scheduler, loop, I/O, end of run) is checked against
   `docs/vm/14-core-invariants.md` (wait, timeout, cancel, end, handle owner) and
-  the thread model of `docs/vm/16-architecture.md`.
-- No new `vm/` subsystem without a demonstrated use case
-  (`docs/vm/14-core-invariants.md` §14.6).
+  the thread model of `docs/vm/16-architecture.md`. No new `vm/` subsystem
+  without a demonstrated use case (§14.6).
 - Details: `references/vm.md`, then the file its "Read next" table names.
 
 ## When to read a reference
@@ -121,7 +117,7 @@ Recipes: `references/frontend.md` ("Common tasks"). Homes:
 | `repo-map.md` | which file in `compiler/`, `vm/`, `tests/` or `stdlib/` owns something |
 | `frontend.md` | compiler edit recipes, the stage and golden contract, gotchas, refreeze; differential checks for speed changes |
 | `stages.md` | token kinds, diagnostic codes, AST nodes, per-stage notes, the command line |
-| `language-notes.md` | core language rules: Result and `try`, collections, ranges, modules, methods, interpolation, blocks, hints, enums, functions |
+| `language-notes.md` | core language rules: Result and `try`, collections, ranges, modules, methods, interpolation, blocks, hints, enums |
 | `library-notes.md` | a library area (stdio, JSON, tasks, TCP/TLS/HTTP, logging, files, processes, bits, std/binary, std/toml) or `stdlib/` style |
 | `bdd.md` | `agentica test`: the driver, `std/bdd`, `stdlib/test/`, step programs |
 | `vm.md` | any VM work: pipeline, layers, rules, index of `vm-*.md` |

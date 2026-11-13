@@ -84,17 +84,14 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 
 ## Tasks, cancellation and crashes (`vm/task.c`)
 
-- Each task has a `parent` and a `children` list. A task that ends hands its
-  running children to its parent.
-- `agc_task_cancel` cancels a task and its descendants, children first (the
-  claim protocol is §16.9). A task spawned during the canceller's turn starts
-  cancelled (`spawn_child` reads the parent's flag under `rt->sync`).
+- Cancel and parent/children rules: `docs/vm/10-io-scheduler.md` §10.2.1
+  ("Cancellation") and §16.9 (the claim protocol). A task spawned during the
+  canceller's turn starts cancelled (`spawn_child` reads the parent's flag under
+  `rt->sync`).
 - `Task.cancel` (`builtin_cancel`, `shared`) walks the tree through
   `cancel_tree`. It never waits. A caller that cancels itself or an ancestor
   stops after the call (`yield`). The `task-cancel-*` fixtures run at N = 1 and
   N = 4; their output must not depend on timing.
-- `Task.await` on a cancelled task halts with `RUNTIME-TASK-CANCELLED` at the
-  call.
 - A crash runs `run_turn` under one `setjmp`. `fatal` decides what still ends
   the run (`main`, an exit, `RUNTIME-STEP-LIMIT`, `RUNTIME-INTERNAL`). Otherwise
   `crash` stores and prints the crash, unlinks the task, cancels its descendants
@@ -152,34 +149,13 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 
 ## Task.map (`vm/task_map.c`)
 
-- A stepper on the caller that starts, times and cancels the items
-  (`agc_task_map_builtins`, `docs/vm/10-io-scheduler.md` §10.2.1; core layer).
-  The group is a GC `map_group` whose first member is the `agc_stepper`,
-  installed on the caller by `agc_task_stepper`.
-- Arguments are checked first, in order: `limit` (1 to 1024,
-  `RUNTIME-INVALID-COUNT` at `span + 2`), then `timeout_ms` (above 0,
-  `RUNTIME-INVALID-DURATION` at `span + 3`). An empty list returns itself.
-- `map_step` runs on the caller at each wake. It collects the ended items into
-  their slots, expires the oldest running item past its deadline (its slot
-  becomes `error("task: timed out")`, then `agc_task_cancel`), starts items up
-  to `limit` (with the caller as parent), and, when every slot is set, charges
-  `count` and ends with the list. Otherwise it sets one timer for the oldest
-  deadline. One timer is enough: every item has the same timeout and starts in
-  input order.
-- An item reports through the task's end hook (`end`, `end_data`, called by
-  `finish_task` for a return, a crash or a cancel). `item_ended` ignores an item
-  that already timed out. Otherwise it moves the item to the ended list and
-  wakes the caller, also for a cancel: an item can be cancelled alone through
-  its `Task.current` handle, and its slot is `error("task: cancelled")`. A
-  cancel of the caller's tree ends the items first; the woken caller is ended by
-  the same walk and never collects. A crash is observed, and its slot becomes
-  `error(t->crash)`. A non-`Result` result is
-  `RUNTIME-INTERNAL`. An item that ends after its deadline but before the caller
-  runs keeps its result.
-- An item with a file close pending (`closing`) is not settled, as in
-  `Task.await`: `item_ended` puts the hook back on the task, and
-  `agc_task_close_done` calls it when the last close ends. If the deadline comes
-  first, the item is settled as timed out without waiting for the close.
+The design (a stepper on the caller, the deadlines, the end hook, cancel and
+pending closes) is `docs/vm/10-io-scheduler.md` §10.2.1 (Task.map). Rules for
+the code: arguments are checked first, in order: `limit` (1 to 1024,
+`RUNTIME-INVALID-COUNT` at `span + 2`), then `timeout_ms` (above 0,
+`RUNTIME-INVALID-DURATION` at `span + 3`); an empty list returns itself. A
+non-`Result` item result is `RUNTIME-INTERNAL`. The group is a GC `map_group`
+whose first member is the `agc_stepper`, installed by `agc_task_stepper`.
 
 ## Channels (`vm/channel.c`)
 

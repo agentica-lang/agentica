@@ -344,14 +344,10 @@ blank and comment lines, so several `NL` can appear between statements. The
 parser skips stray `NL` at top level and between statements; keep that skip when
 adding statement forms.
 
-A line that starts with `.name` drops the NL before it (`dot_follows?`, in the
-`CharClass.Newline` arm of `lex_from`) when the last token is in
-`ENDS_EXPRESSION` and is not a type name after `->` or `:` (`ends_in_type?`).
-The look-ahead skips `#` comment lines; a blank line or a `##` line stops it. A
-block head (`if`, `elsif`, `while`, `case`, `for` as the first token of the
-statement, tracked by `head_at`) never joins. Any other leading dot stays, and
-the parser rejects it (`PARSE-UNEXPECTED-TOKEN` at the dot, or at the line break
-after an operator). Do not use the form in `compiler/` until
+The leading-dot rule of `docs/grammar/04-lexical.md` is `dot_follows?` (in the
+`CharClass.Newline` arm of `lex_from`), with `ENDS_EXPRESSION`, `ends_in_type?`
+and `head_at` (the block head that never joins); any other leading dot stays and
+the parser rejects it. Do not use the form in `compiler/` until
 `bootstrap/stage0.agcb` lexes it.
 
 A `##` block is one `DOC` followed by the NL of its last line, not a blank line.
@@ -361,9 +357,9 @@ Inline test programs end their top-level `end` with `end\n\n`
 ## Comments and style
 
 Style and comments follow `.agents/skills/agentica-code-guidelines/`: a `##`
-block on each `def`, `struct` or `enum` you add or touch in `compiler/**/*.agc`
-(`[style]` of `compiler/agentica.toml` sets the 119-column limit,
-`CHECK-LINE-TOO-LONG` in `make check-compiler`).
+block on each `def`, `struct` or `enum` you add or touch in `compiler/**/*.agc`.
+`make check-compiler` enforces the 119-column limit (`CHECK-LINE-TOO-LONG`,
+`[style]` of `compiler/agentica.toml`).
 
 ## The command line in Agentica
 

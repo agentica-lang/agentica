@@ -114,33 +114,19 @@ A function signature (`Name.fn(a: T) -> R`) goes in a `signature` fence, not
 
 ## Versions
 
-Pages serves one site per final release (`/0.24.3/`, ...), `/dev/` (the tree
-that runs: `master`) and the latest release again at the root.
-`tools/site_versions.py` (`make site-versions`) builds them all:
+Pages serves one site per final release (`/0.24.3/`, ...), `/dev/` (`master`)
+and the latest release again at the root. `tools/site_versions.py`
+(`make site-versions`; its docstring has the rules for tags, retries and the
+cache) builds them all. What it does not say:
 
-- Each `X.Y.Z` tag is built from its own tree with its own `make site`, using
-  the Hugo and Dart Sass pinned in that tag's `pages.yml` (keep the four `env`
-  names of the `build` job). Only a tree with no site (`0.1.0`) that is older
-  than every built tag is left out, and the job summary names it. Any other
-  failure of a tag (or a no-site tag newer than a built one) is tried once more
-  and then fails the run, as does a run in which no tag built: a release must
-  not vanish from a deploy. Pre-releases and `bootstrap-racket` are not
-  versions.
-- The output of a tag is cached by commit sha and base URL (Hugo bakes the
-  base URL into every link, so the root copy of the latest release is a
-  second build). `dev` is never cached. Locally the cache is in
-  `build/site-versions/cache`, pruned to the current builds each run; in CI
-  `actions/cache` restores the newest entry, and a run that is not a pull
-  request saves one only when it built something new.
+- Each tag is built with the Hugo and Dart Sass pinned in that tag's
+  `pages.yml`: keep the four `env` names of its `build` job.
 - The selector and the banner (`site/versions/selector.{js,css}`) are not part
-  of a build. The assembly copies them to `/_versions/` and adds their
-  `<link>` and `<script>` tags to every HTML page, so a cached old build loads
-  the current ones;
-  they read `/versions.json`, which the assembly writes. A fix to them applies
-  to every version at the next deploy. They use only the `.site-header`, its
-  `.version` link and the color tokens (`_tokens.scss` of the docs theme);
-  each old release carries its own copy of them.
-- `make site-versions` writes `build/site-versions/public`; serve it with
+  of a build: the assembly copies them to `/_versions/` and adds their tags to
+  every HTML page, so a fix applies to every version at the next deploy. They
+  use only the `.site-header`, its `.version` link and the color tokens
+  (`_tokens.scss` of the docs theme); each old release carries its own copy.
+- Serve a local build with
   `python3 -m http.server 8000 -d build/site-versions/public`.
 
 A new release shows up in the next run of `pages.yml`.

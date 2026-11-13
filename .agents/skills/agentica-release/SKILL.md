@@ -6,8 +6,8 @@ description: >-
   publishes the five native archives, the hand-written release notes, the
   GitHub Pages rebuild and the post-release checks. Use when asked to make,
   tag, publish or announce a release, a beta or a patch release (for example
-  "release 0.5.0-beta.1"). Not for building or testing packages locally (release
-  targets: references/ci.md of agentica-development).
+  "release 0.5.0-beta.1"). Not for building or testing packages outside a
+  release (release targets: references/ci.md of agentica-development).
 ---
 
 # Agentica release
@@ -30,7 +30,11 @@ check before it fails.
 
 ## 1. Version bump PR
 
-Make a worktree from `origin/master` (a patch: §6; never switch the main
+First, with the agentica lines frozen, run the documentation pruning pass and
+merge its PR: the site is built once per release tag from that tag's tree
+(`tools/site_versions.py`), so a later pruning shows only in `dev`.
+
+Then make a worktree from `origin/master` (a patch: §6; never switch the main
 checkout) on a branch such as `release/<version>`. Change only:
 
 1. `VERSION`: the new version, one line.
@@ -61,7 +65,9 @@ Wrap every build in a memory cap (`agentica-dev-workflow` §1).
 
 ## 2. Tag and publish
 
-Right after the PR merges, tag its merge commit (no master checkout needed):
+Right after the PR merges, check the merge commit with `make release-package
+release-smoke` (in a worktree of it, under a memory cap; two of the steps
+`release.yml` runs on each system), then tag it (no master checkout needed):
 
 ```bash
 git fetch origin

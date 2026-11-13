@@ -27,7 +27,9 @@ glob. A `vm/tests/*.c` file includes what it uses.
 
 ## Rules every change keeps
 
-**Goldens, not parity** (`docs/vm/README.md` §1). Peers for protocol work use a
+**Goldens, not parity** (`docs/vm/README.md` §1). A golden holds the exit
+code, stdout, the program's stderr and the diagnostic code; messages, spans and
+step counts may change. Peers for protocol work use a
 library that does the protocol (Node's `http` for chunked bodies: Python's
 `http.server` does not decode them); raw or hostile cases use the test file's
 language. When a library message changes, switch the fixtures that print it to
