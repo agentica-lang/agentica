@@ -269,7 +269,7 @@ typedef struct {
 } agc_listener;
 
 /* An HttpWire.Client: the jobs channel of its owner task and its HttpWire.ClientOptions (vm/http_service.c), and the
-   system-trust TLS context that its https connections share when the options name no TlsContext (vm/tcp.c's, opaque
+   system-trust TLS context that its https connections share when the options name no TLS.Context (vm/tcp.c's, opaque
    here: made by the first HttpWire.connect_tls, given back by HttpWire.drop_tls, which sets tls_dropped; both under
    rt->sync). The service task drops it once the client is closed and its pool has ended; a client never closed keeps
    it until the run ends. */
@@ -280,7 +280,7 @@ typedef struct {
 } agc_http_client;
 
 /* HttpWire.ClientOptions as the record of compiler/catalog/builtins_data.agc lays it out: timeout_ms,
-   idle_timeout_ms, max_connections, max_body_bytes, proxy, tls (Optional[TlsContext]). HttpWire.service checks the
+   idle_timeout_ms, max_connections, max_body_bytes, proxy, tls (Optional[TLS.Context]). HttpWire.service checks the
    shape, since the std-only rule lives in the front end and bytecode can call the builtin with any struct. */
 #define AGC_HTTP_OPTIONS_FIELDS 6
 #define AGC_HTTP_OPTION_PROXY 4
@@ -304,7 +304,7 @@ typedef struct {
   agc_task *group;
 } agc_http_server;
 
-/* A TlsContext (vm/tls_context.c): an atomic GC block (no GC pointer in it) with one count on the native TLS config
+/* A TLS.Context (vm/tls_context.c): an atomic GC block (no GC pointer in it) with one count on the native TLS config
    of its role, which `release` gives back. It has no close: a Boehm finalizer gives the count back once no value
    reaches the block, run between turns (agc_gc_finalize_pending), never inside a collection; the sockets and
    listeners made from it hold counts of their own. The one GC finalizer of the VM
@@ -562,7 +562,7 @@ void agc_gc_resume(void);
 bool agc_gc_stats(agc_gc_info *info);
 void agc_gc_measure(void);
 void agc_gc_collect(void);
-/* Runs the GC finalizers that are due (a TlsContext no value reaches); a scheduler calls it between turns. */
+/* Runs the GC finalizers that are due (a TLS.Context no value reaches); a scheduler calls it between turns. */
 void agc_gc_finalize_pending(void);
 /* A weak reference to a GC object (an Address's channel): it does not keep the object alive, and the collector clears
    it once nothing else reaches the object, so agc_weak_get then gives NULL. The build without the collector never

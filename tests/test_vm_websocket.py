@@ -329,7 +329,7 @@ def main() -> Void
   options = HTTP.ServerOptions(request_timeout_ms: WRITE_MS, idle_timeout_ms: 10000, max_connections: 16)
   server = Result.unwrap!(HTTP.serve("127.0.0.1", 0, &app, options))
   certs = System.args()[0]
-  secure = Result.unwrap!(HTTP.serve_tls("127.0.0.1", 0, TLS.server_context(TlsServerOptions(cert_file: certs + "/server.pem", key_file: certs + "/server-key.pem")).unwrap!, &app, options))
+  secure = Result.unwrap!(HTTP.serve_tls("127.0.0.1", 0, TLS.server_context(TLS.ServerOptions(cert_file: certs + "/server.pem", key_file: certs + "/server-key.pem")).unwrap!, &app, options))
   puts("#{HTTP.local_port(server)} #{HTTP.local_port(secure)}")
   IO.flush()
   IO.read()

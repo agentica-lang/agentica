@@ -106,8 +106,8 @@ def old_form_help(name: String, node: Ast.Call) -> String
 
   if name == "TLS.listen" and node.args.size == 4
     return (
-      "a TlsContext holds the PEM files: build one with " +
-      "TLS.server_context(TlsServerOptions(cert_file: c, key_file: k))"
+      "a TLS.Context holds the PEM files: build one with " +
+      "TLS.server_context(TLS.ServerOptions(cert_file: c, key_file: k))"
     )
   end
 

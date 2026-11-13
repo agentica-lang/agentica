@@ -159,29 +159,29 @@ Closing twice is fine. Close early only when it must not wait for the task to en
 
 ```signature
 TLS.alpn(socket: TCP.Socket) -> String
-TLS.client_context(options: TlsClientOptions) -> Result[TlsContext]
-TLS.server_context(options: TlsServerOptions) -> Result[TlsContext]
-TLS.connect(host: String, port: Int, context: TlsContext, timeout_ms: Int) -> Result[TCP.Socket]
-TLS.listen(host: String, port: Int, context: TlsContext) -> Result[TCP.Listener]
-TLS.upgrade(socket: TCP.Socket, context: TlsContext, host: String, timeout_ms: Int) -> Result[TCP.Socket]
+TLS.client_context(options: TLS.ClientOptions) -> Result[TLS.Context]
+TLS.server_context(options: TLS.ServerOptions) -> Result[TLS.Context]
+TLS.connect(host: String, port: Int, context: TLS.Context, timeout_ms: Int) -> Result[TCP.Socket]
+TLS.listen(host: String, port: Int, context: TLS.Context) -> Result[TCP.Listener]
+TLS.upgrade(socket: TCP.Socket, context: TLS.Context, host: String, timeout_ms: Int) -> Result[TCP.Socket]
 ```
 
 ```text
-struct TlsClientOptions
+struct TLS.ClientOptions
   ca_file: String = ""
   cert_file: String = ""
   key_file: String = ""
   alpn: List[String] = []
 end
 
-struct TlsServerOptions
+struct TLS.ServerOptions
   cert_file: String
   key_file: String
   alpn: List[String] = []
 end
 ```
 
-A `TlsContext` is the TLS setup of one role, built once and shared by every socket, listener and HTTP client made from it. `HTTP.ClientOptions` holds one, so `JSON.schema`, `JSON.decode` and `JSON.encode` refuse it. TLS sockets and listeners use the same `TCP` functions, with the same limits and timeouts.
+A `TLS.Context` is the TLS setup of one role, built once and shared by every socket, listener and HTTP client made from it. `HTTP.ClientOptions` holds one, so `JSON.schema`, `JSON.decode` and `JSON.encode` refuse it. TLS sockets and listeners use the same `TCP` functions, with the same limits and timeouts.
 
 - `TLS.client_context` and `TLS.server_context` read and check the PEM files when they run, so a bad file fails there, not at each connect. A file that changes later does not change the context: build a new one.
 - `TLS.connect` takes a client context and `TLS.listen` a server context; the other role stops the program with `RUNTIME-TLS-CONTEXT-ROLE`. A context stays valid while a socket or listener made from it is open.
@@ -203,7 +203,7 @@ A client that speaks HTTP/2 offers it first and reads which protocol the server 
 
 ```agentica {mode="check"}
 def protocol(host: String) -> Result[String]
-  context = try TLS.client_context(TlsClientOptions(alpn: ["h2", "http/1.1"]))
+  context = try TLS.client_context(TLS.ClientOptions(alpn: ["h2", "http/1.1"]))
   socket = try TLS.connect(host, 443, context, 5000)
   ok(TLS.alpn(socket))
 end
@@ -231,7 +231,7 @@ def reply(socket: TCP.Socket) -> Result[String]
   ok(line)
 end
 
-def starttls(host: String, context: TlsContext) -> Result[TCP.Socket]
+def starttls(host: String, context: TLS.Context) -> Result[TCP.Socket]
   plain = try TCP.connect(host, 587, 5000)
   try reply(plain)
   try TCP.send(plain, "EHLO client.example\r\n", 5000)
@@ -246,7 +246,7 @@ end
 
 ```agentica {mode="check"}
 def main() -> Void
-  context = TLS.client_context(TlsClientOptions()).unwrap!
+  context = TLS.client_context(TLS.ClientOptions()).unwrap!
   socket = TLS.connect("example.com", 443, context, 5000).unwrap!
   _ = TCP.send(socket, "HEAD / HTTP/1.1\r\nHost: example.com\r\nConnection: close\r\n\r\n", 5000)
   puts(TCP.read_line(socket, 5000))
@@ -281,7 +281,7 @@ A client reuses open connections for the same scheme, host and port. Every field
 | `max_connections` | 4, per host | positive, at most 65536 |
 | `max_body_bytes` | 1 MiB | positive, at most 64 MiB |
 | `proxy` | `""`: no proxy | an `http://host:port` origin, see below |
-| `tls` | `none`: the system's CA certificates | a client `TlsContext` |
+| `tls` | `none`: the system's CA certificates | a client `TLS.Context` |
 
 - Calls wait in FIFO order for a `max_connections` slot. A call in flight when `close_client` runs fails with `http: client is closed` (unless a connection had already started sending it).
 - `proxy` is an `http://host:port` origin with no path or query, else the call is an `error`. `http://` requests go to it in absolute form and share its connections; an `https://` request opens a `CONNECT` tunnel (one per target host and port) and speaks TLS to the target inside it, verified as without a proxy. This holds for `HTTP.client` and every call that takes a client or options.
@@ -305,7 +305,7 @@ Clients that trust the same CA file share one context: build it once and pass it
 import HTTP from "std/http"
 
 def main() -> Void
-  tls = TLS.client_context(TlsClientOptions(ca_file: "ca.pem")).unwrap!
+  tls = TLS.client_context(TLS.ClientOptions(ca_file: "ca.pem")).unwrap!
   client = HTTP.client(HTTP.ClientOptions(tls: some(tls))).unwrap!
   HTTP.close_client(client)
 end
@@ -525,12 +525,12 @@ The server is in `std/http` too. `serve` serves every kind of route on one port:
 
 ```signature
 HTTP.serve(host: String, port: Int, app: HTTP.App, options: HTTP.ServerOptions = HTTP.ServerOptions()) -> Result[HTTP.Server]
-HTTP.serve_tls(host: String, port: Int, tls: TlsContext, app: HTTP.App, options: HTTP.ServerOptions = HTTP.ServerOptions()) -> Result[HTTP.Server]
+HTTP.serve_tls(host: String, port: Int, tls: TLS.Context, app: HTTP.App, options: HTTP.ServerOptions = HTTP.ServerOptions()) -> Result[HTTP.Server]
 HTTP.app(handler: HTTP.Handler, max_body_bytes: Int = 1048576) -> HTTP.App
 HTTP.local_port(server: HTTP.Server) -> Int
 ```
 
-- `serve` returns at once and serves in the background; `serve_tls` does the same over TLS with a server `TlsContext` (`TLS.server_context`). Port 0 picks a free port (`local_port`).
+- `serve` returns at once and serves in the background; `serve_tls` does the same over TLS with a server `TLS.Context` (`TLS.server_context`). Port 0 picks a free port (`local_port`).
 - The app, an `HTTP.App`, decides for each request how to read the body and how to answer. `HTTP.App` is `Fn[HTTP.Request, HTTP.RequestBody, Result[HTTP.Answer]]`: it gets the request with an empty `body` and the body on a channel ([request bodies](#request-bodies)).
 - `HTTP.Answer` is an enum. `Answer.Whole(response)` answers with an `HTTP.Response`. `Answer.Stream(response)` sends an `HTTP.StreamResponse`, whose body arrives on a channel ([streamed responses](#streamed-responses-and-server-sent-events)). `Answer.Upgrade(upgrade)` takes what [`accept_websocket`](#websockets) returns: its `Accept` runs the WebSocket on the connection, and its `Reply` is sent as `Whole`.
 - `HTTP.app(handler, max_body_bytes)` makes an `App` from a `Handler`, for routes that take the request whole. It reads the body first, at most `max_body_bytes` (1 MiB unless given, whatever the server's cap; a negative limit counts as 0), and calls `handler` with it. A body that is larger, by its `Content-Length` or as it arrives, gets a `413`, a chunk line or trailer section over the head limits a `431`, and a bad chunk a `400`. These answers come with `Connection: close`, and `handler` is not called. A body that is cut or stalls (the client left, a timeout) closes the connection.

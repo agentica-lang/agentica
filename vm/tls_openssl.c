@@ -28,7 +28,7 @@
 /* The wire form of the ALPN list http/1.1 alone (agc_tls_config_http1). */
 #define HTTP1_WIRE "\x08http/1.1"
 
-/* A config is shared by counts (agc_tls_config_ref): a TlsContext value, each socket or listener made from it and an
+/* A config is shared by counts (agc_tls_config_ref): a TLS.Context value, each socket or listener made from it and an
    HTTP client's lazy context each hold one, on any thread; the last agc_tls_config_free frees it. An SSL takes its own
    count on the SSL_CTX (SSL_new). */
 struct agc_tls_config {

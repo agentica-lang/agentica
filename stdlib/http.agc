@@ -980,7 +980,7 @@ end
 export def serve_tls(
   host: String,
   port: Int,
-  tls: TlsContext,
+  tls: TLS.Context,
   app: App,
   options: HttpWire.ServerOptions = HttpWire.ServerOptions(),
 ) -> Result[HttpWire.Server]
@@ -1457,7 +1457,7 @@ def open_socket(where: Target, options: HttpWire.ClientOptions) -> Result[TCP.So
     case options.tls
       some(context) -> return HttpWire.connect_context(where.host, where.port, context, options.timeout_ms)
       none ->
-        context = try TLS.client_context(TlsClientOptions())
+        context = try TLS.client_context(TLS.ClientOptions())
         return HttpWire.connect_context(where.host, where.port, context, options.timeout_ms)
     end
   end
@@ -1525,10 +1525,10 @@ def tunnel_context(where: Target, options: HttpWire.ClientOptions) -> Result[TCP
   closing_on_error(upgraded, socket, options, where.host, where.port)
 end
 
-def tunnel_trust(options: HttpWire.ClientOptions) -> Result[TlsContext]
+def tunnel_trust(options: HttpWire.ClientOptions) -> Result[TLS.Context]
   case options.tls
     some(context) -> ok(context)
-    none -> TLS.client_context(TlsClientOptions())
+    none -> TLS.client_context(TLS.ClientOptions())
   end
 end
 

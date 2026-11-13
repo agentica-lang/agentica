@@ -34,7 +34,7 @@ end
 
 def main() -> Void
   dir = System.args()[0]
-  listener = Result.unwrap!(TLS.listen("127.0.0.1", 0, TLS.server_context(TlsServerOptions(cert_file: "#{dir}/server.pem", key_file: "#{dir}/server-key.pem")).unwrap!))
+  listener = Result.unwrap!(TLS.listen("127.0.0.1", 0, TLS.server_context(TLS.ServerOptions(cert_file: "#{dir}/server.pem", key_file: "#{dir}/server-key.pem")).unwrap!))
   puts(TCP.local_port(listener))
   IO.flush()
   a = Task.spawn_owning(&serve, Result.unwrap!(TCP.accept(listener, 10000)))
@@ -56,7 +56,7 @@ PYTHON_CLIENT_PROGRAM = """\
 def main() -> Void
   dir = System.args()[0]
   port = Result.unwrap!(IO.gets()).to_i!
-  socket = Result.unwrap!(TLS.connect("localhost", port, TLS.client_context(TlsClientOptions(ca_file: "#{dir}/ca.pem")).unwrap!, 5000))
+  socket = Result.unwrap!(TLS.connect("localhost", port, TLS.client_context(TLS.ClientOptions(ca_file: "#{dir}/ca.pem")).unwrap!, 5000))
   Result.unwrap!(TCP.send(socket, "from agentica\\n", 5000))
   puts(Result.unwrap!(TCP.read_line(socket, 5000)))
   IO.inspect(TCP.read_line(socket, 5000))
@@ -77,15 +77,15 @@ def main() -> Void
   dir = System.args()[0]
   port = Result.unwrap!(IO.gets()).to_i!
   ca = "#{dir}/ca.pem"
-  puts(Result.unwrap!(talk(TLS.connect("localhost", port, TLS.client_context(TlsClientOptions(ca_file: ca, cert_file: "#{dir}/client.pem", key_file: "#{dir}/client-key.pem")).unwrap!, 5000))))
+  puts(Result.unwrap!(talk(TLS.connect("localhost", port, TLS.client_context(TLS.ClientOptions(ca_file: ca, cert_file: "#{dir}/client.pem", key_file: "#{dir}/client-key.pem")).unwrap!, 5000))))
   # Under TLS 1.3 the server's refusal comes after the client's side of the handshake: the connect or the first
   # read fails.
-  puts(Result.ok?(talk(TLS.connect("localhost", port, TLS.client_context(TlsClientOptions(ca_file: ca)).unwrap!, 5000))))
+  puts(Result.ok?(talk(TLS.connect("localhost", port, TLS.client_context(TLS.ClientOptions(ca_file: ca)).unwrap!, 5000))))
 end
 """
 
 STARTTLS_CLIENT_PROGRAM = """\
-def starttls(port: Int, tls: TlsContext, timeout_ms: Int) -> Result[TCP.Socket]
+def starttls(port: Int, tls: TLS.Context, timeout_ms: Int) -> Result[TCP.Socket]
   plain = try TCP.connect("127.0.0.1", port, 5000)
   try TCP.send(plain, "STARTTLS\\n", 5000)
   puts(try TCP.read_line(plain, 5000))
@@ -95,7 +95,7 @@ end
 def main() -> Void
   dir = System.args()[0]
   port = IO.gets().unwrap!.to_i!
-  tls = TLS.client_context(TlsClientOptions(ca_file: "#{dir}/ca.pem")).unwrap!
+  tls = TLS.client_context(TLS.ClientOptions(ca_file: "#{dir}/ca.pem")).unwrap!
   socket = starttls(port, tls, 5000).unwrap!
   TCP.send(socket, "from agentica\\n", 5000).unwrap!
   puts(TCP.read_line(socket, 5000).unwrap!)
@@ -109,7 +109,7 @@ end
 STARTTLS_SERVER_PROGRAM = """\
 def main() -> Void
   dir = System.args()[0]
-  server = TLS.server_context(TlsServerOptions(cert_file: "#{dir}/server.pem", key_file: "#{dir}/server-key.pem"))
+  server = TLS.server_context(TLS.ServerOptions(cert_file: "#{dir}/server.pem", key_file: "#{dir}/server-key.pem"))
   listener = TCP.listen("127.0.0.1", 0).unwrap!
   puts(TCP.local_port(listener))
   IO.flush()
@@ -126,7 +126,7 @@ end
 
 ALPN_CLIENT_PROGRAM = """\
 def offer(port: Int, ca: String, alpn: List[String]) -> Result[String]
-  socket = try TLS.connect("localhost", port, try TLS.client_context(TlsClientOptions(ca_file: ca, alpn: alpn)), 5000)
+  socket = try TLS.connect("localhost", port, try TLS.client_context(TLS.ClientOptions(ca_file: ca, alpn: alpn)), 5000)
   line = try TCP.read_line(socket, 5000)
   return ok("#{TLS.alpn(socket)} #{line}")
 end
@@ -142,7 +142,7 @@ end
 ALPN_SERVER_PROGRAM = """\
 def main() -> Void
   dir = System.args()[0]
-  options = TlsServerOptions(cert_file: "#{dir}/server.pem", key_file: "#{dir}/server-key.pem", alpn: ["h2", "http/1.1"])
+  options = TLS.ServerOptions(cert_file: "#{dir}/server.pem", key_file: "#{dir}/server-key.pem", alpn: ["h2", "http/1.1"])
   listener = TLS.listen("127.0.0.1", 0, TLS.server_context(options).unwrap!).unwrap!
   puts(TCP.local_port(listener))
   IO.flush()
@@ -166,7 +166,7 @@ end
 
 def main() -> Void
   base = "https://localhost:#{Result.unwrap!(IO.gets())}"
-  options = HTTP.ClientOptions(timeout_ms: 20000, idle_timeout_ms: 20000, max_connections: 4, max_body_bytes: 1024, tls: some(TLS.client_context(TlsClientOptions(ca_file: "#{System.args()[0]}/ca.pem")).unwrap!))
+  options = HTTP.ClientOptions(timeout_ms: 20000, idle_timeout_ms: 20000, max_connections: 4, max_body_bytes: 1024, tls: some(TLS.client_context(TLS.ClientOptions(ca_file: "#{System.args()[0]}/ca.pem")).unwrap!))
   pool = Result.unwrap!(HTTP.client(options))
   puts(String.from_bytes(Result.unwrap!(HTTP.get(pool, "#{base}/a")).body).unwrap!)
   Task.spawn(&hang, Call(pool: pool, url: "#{base}/hang"))
@@ -196,7 +196,7 @@ end
 def main() -> Void
   base = "https://localhost:#{Result.unwrap!(IO.gets())}"
   ca = System.args()[1]
-  tls = Result.unwrap!(TLS.client_context(TlsClientOptions(ca_file: ca)))
+  tls = Result.unwrap!(TLS.client_context(TLS.ClientOptions(ca_file: ca)))
   options = HTTP.ClientOptions(tls: some(tls), timeout_ms: 20000)
   pool = Result.unwrap!(HTTP.client(options))
   puts(show(HTTP.get(pool, base + "/first")))
@@ -213,7 +213,7 @@ def main() -> Void
   puts(show(HTTP.get(pool, base + "/last")))
   other = Result.unwrap!(HTTP.client(options))
   puts(show(HTTP.get(other, base + "/other")))
-  puts(TLS.client_context(TlsClientOptions(ca_file: ca)).message.start_with?("network: cannot load ca_file"))
+  puts(TLS.client_context(TLS.ClientOptions(ca_file: ca)).message.start_with?("network: cannot load ca_file"))
   # A client with no context builds one with the system trust (SSL_CERT_FILE here) for its first https connection
   # and shares it with the next.
   plain = Result.unwrap!(HTTP.client(HTTP.ClientOptions(timeout_ms: 20000)))
@@ -279,7 +279,7 @@ end
 
 def main() -> Void
   listener = Result.unwrap!(TCP.listen("127.0.0.1", 0))
-  options = HTTP.ClientOptions(tls: some(TLS.client_context(TlsClientOptions(ca_file: "#{System.args()[0]}/ca.pem")).unwrap!), timeout_ms: 5000)
+  options = HTTP.ClientOptions(tls: some(TLS.client_context(TLS.ClientOptions(ca_file: "#{System.args()[0]}/ca.pem")).unwrap!), timeout_ms: 5000)
   pool = Result.unwrap!(HTTP.client(options))
   call = Task.spawn(&get, Call(pool: pool, url: "https://127.0.0.1:#{TCP.local_port(listener)}/"))
   # The server never answers the ClientHello: the client's connection is in its handshake when the client closes.
@@ -300,7 +300,7 @@ struct Dial
 end
 
 def dial(d: Dial) -> Result[TCP.Socket]
-  return TLS.connect("localhost", d.port, TLS.client_context(TlsClientOptions(ca_file: d.ca)).unwrap!, 5000)
+  return TLS.connect("localhost", d.port, TLS.client_context(TLS.ClientOptions(ca_file: d.ca)).unwrap!, 5000)
 end
 
 def show(dir: String, r: Result[TCP.Socket]) -> String
@@ -311,7 +311,7 @@ def show(dir: String, r: Result[TCP.Socket]) -> String
 end
 
 def handshake(dir: String, name: String, ca: String) -> Void
-  listener = Result.unwrap!(TLS.listen("127.0.0.1", 0, TLS.server_context(TlsServerOptions(cert_file: "#{dir}/#{name}.pem", key_file: "#{dir}/#{name}-key.pem")).unwrap!))
+  listener = Result.unwrap!(TLS.listen("127.0.0.1", 0, TLS.server_context(TLS.ServerOptions(cert_file: "#{dir}/#{name}.pem", key_file: "#{dir}/#{name}-key.pem")).unwrap!))
   task = Task.spawn(&dial, Dial(port: TCP.local_port(listener), ca: ca))
   accepted = TCP.accept(listener, 5000)
   puts("#{name}: #{show(dir, Task.await(task))}")
@@ -332,14 +332,14 @@ def main() -> Void
   handshake(dir, "server", ca)
   handshake(dir, "wrong-host", ca)
   handshake(dir, "server", "#{dir}/self-signed.pem")
-  IO.inspect(TLS.server_context(TlsServerOptions(cert_file: "#{dir}/server-key.pem", key_file: "#{dir}/server-key.pem")).ok?)
-  IO.inspect(TLS.server_context(TlsServerOptions(cert_file: "#{dir}/server.pem", key_file: "#{dir}/server.pem")).ok?)
-  puts(String.replace(TLS.client_context(TlsClientOptions(ca_file: "#{dir}/missing.pem")).message, dir, "<tls>"))
+  IO.inspect(TLS.server_context(TLS.ServerOptions(cert_file: "#{dir}/server-key.pem", key_file: "#{dir}/server-key.pem")).ok?)
+  IO.inspect(TLS.server_context(TLS.ServerOptions(cert_file: "#{dir}/server.pem", key_file: "#{dir}/server.pem")).ok?)
+  puts(String.replace(TLS.client_context(TLS.ClientOptions(ca_file: "#{dir}/missing.pem")).message, dir, "<tls>"))
   plain = Result.unwrap!(TCP.listen("127.0.0.1", 0))
   server = Task.spawn(&plain_server, plain)
-  puts("plain server: #{show(dir, TLS.connect("127.0.0.1", TCP.local_port(plain), TLS.client_context(TlsClientOptions(ca_file: ca)).unwrap!, 5000))}")
+  puts("plain server: #{show(dir, TLS.connect("127.0.0.1", TCP.local_port(plain), TLS.client_context(TLS.ClientOptions(ca_file: ca)).unwrap!, 5000))}")
   Task.await(server)
-  secure = Result.unwrap!(TLS.listen("127.0.0.1", 0, TLS.server_context(TlsServerOptions(cert_file: "#{dir}/server.pem", key_file: "#{dir}/server-key.pem")).unwrap!))
+  secure = Result.unwrap!(TLS.listen("127.0.0.1", 0, TLS.server_context(TLS.ServerOptions(cert_file: "#{dir}/server.pem", key_file: "#{dir}/server-key.pem")).unwrap!))
   raw = Result.unwrap!(TCP.connect("127.0.0.1", TCP.local_port(secure), 5000))
   Result.unwrap!(TCP.send(raw, "GET / HTTP/1.1\\r\\nHost: x\\r\\n\\r\\n", 5000))
   puts("plain client: #{show(dir, TCP.accept(secure, 5000))}")
@@ -348,14 +348,14 @@ end
 
 LIMITS_PROGRAM = """\
 def wait(port: Int) -> Void
-  waiting = Result.unwrap!(TLS.connect("localhost", port, TLS.client_context(TlsClientOptions(ca_file: "#{System.args()[0]}/ca.pem")).unwrap!, 5000))
+  waiting = Result.unwrap!(TLS.connect("localhost", port, TLS.client_context(TLS.ClientOptions(ca_file: "#{System.args()[0]}/ca.pem")).unwrap!, 5000))
   IO.inspect(TCP.read_line(waiting, 30))
   IO.inspect(TCP.recv_bytes(waiting, 1, 1000))
 end
 
 def main() -> Void
   dir = System.args()[0]
-  listener = Result.unwrap!(TLS.listen("127.0.0.1", 0, TLS.server_context(TlsServerOptions(cert_file: "#{dir}/server.pem", key_file: "#{dir}/server-key.pem")).unwrap!))
+  listener = Result.unwrap!(TLS.listen("127.0.0.1", 0, TLS.server_context(TLS.ServerOptions(cert_file: "#{dir}/server.pem", key_file: "#{dir}/server-key.pem")).unwrap!))
   task = Task.spawn(&wait, TCP.local_port(listener))
   quiet = Result.unwrap!(TCP.accept(listener, 5000))
   Task.await(task)
@@ -375,7 +375,7 @@ struct Flood
 end
 
 def connect(port: Int) -> TCP.Socket
-  return Result.unwrap!(TLS.connect("localhost", port, TLS.client_context(TlsClientOptions(ca_file: "#{System.args()[0]}/ca.pem")).unwrap!, 5000))
+  return Result.unwrap!(TLS.connect("localhost", port, TLS.client_context(TLS.ClientOptions(ca_file: "#{System.args()[0]}/ca.pem")).unwrap!, 5000))
 end
 
 def hold(port: Int) -> Result[String]
@@ -396,7 +396,7 @@ end
 
 def main() -> Void
   dir = System.args()[0]
-  listener = Result.unwrap!(TLS.listen("127.0.0.1", 0, TLS.server_context(TlsServerOptions(cert_file: "#{dir}/server.pem", key_file: "#{dir}/server-key.pem")).unwrap!))
+  listener = Result.unwrap!(TLS.listen("127.0.0.1", 0, TLS.server_context(TLS.ServerOptions(cert_file: "#{dir}/server.pem", key_file: "#{dir}/server-key.pem")).unwrap!))
   port = TCP.local_port(listener)
   Task.spawn(&hold, port)
   silent = Result.unwrap!(TCP.accept(listener, 5000))
@@ -423,11 +423,11 @@ def ca() -> String
 end
 
 def dial(port: Int) -> Result[TCP.Socket]
-  return TLS.connect("localhost", port, TLS.client_context(TlsClientOptions(ca_file: ca())).unwrap!, 30000)
+  return TLS.connect("localhost", port, TLS.client_context(TLS.ClientOptions(ca_file: ca())).unwrap!, 30000)
 end
 
 def read(port: Int) -> Result[String]
-  socket = Result.unwrap!(TLS.connect("localhost", port, TLS.client_context(TlsClientOptions(ca_file: ca())).unwrap!, 30000))
+  socket = Result.unwrap!(TLS.connect("localhost", port, TLS.client_context(TLS.ClientOptions(ca_file: ca())).unwrap!, 30000))
   return TCP.read_line(socket, 60000)
 end
 
@@ -447,7 +447,7 @@ end
 def main() -> Void
   dir = System.args()[0]
   raw = Result.unwrap!(TCP.listen("127.0.0.1", 0))
-  secure = Result.unwrap!(TLS.listen("127.0.0.1", 0, TLS.server_context(TlsServerOptions(cert_file: "#{dir}/server.pem", key_file: "#{dir}/server-key.pem")).unwrap!))
+  secure = Result.unwrap!(TLS.listen("127.0.0.1", 0, TLS.server_context(TLS.ServerOptions(cert_file: "#{dir}/server.pem", key_file: "#{dir}/server-key.pem")).unwrap!))
   server = Task.spawn_owning(&serve, secure)
   ports = Ports(raw: TCP.local_port(raw), secure: TCP.local_port(secure))
   puts(Task.await(Task.spawn(&parent, ports)).ok?)
@@ -466,9 +466,9 @@ end
 TRUST_PROGRAM = """\
 def main() -> Void
   dir = System.args()[0]
-  listener = Result.unwrap!(TLS.listen("127.0.0.1", 0, TLS.server_context(TlsServerOptions(cert_file: "#{dir}/server.pem", key_file: "#{dir}/server-key.pem")).unwrap!))
+  listener = Result.unwrap!(TLS.listen("127.0.0.1", 0, TLS.server_context(TLS.ServerOptions(cert_file: "#{dir}/server.pem", key_file: "#{dir}/server-key.pem")).unwrap!))
   task = Task.spawn(&accept_one, listener)
-  IO.inspect(Result.ok?(TLS.connect("localhost", TCP.local_port(listener), TLS.client_context(TlsClientOptions()).unwrap!, 5000)))
+  IO.inspect(Result.ok?(TLS.connect("localhost", TCP.local_port(listener), TLS.client_context(TLS.ClientOptions()).unwrap!, 5000)))
   Task.await(task)
 end
 
@@ -482,7 +482,7 @@ end
 def client_program(ports):
     """The Agentica client that dials every Node server in turn (ports maps a server name to its port)."""
     def dial(name, host="localhost"):
-        return 'TLS.connect("%s", %d, TLS.client_context(TlsClientOptions(ca_file: ca)).unwrap!, 5000)' % (host, ports[name])
+        return 'TLS.connect("%s", %d, TLS.client_context(TLS.ClientOptions(ca_file: ca)).unwrap!, 5000)' % (host, ports[name])
 
     return "".join(line + "\n" for line in [
         'def show(r: Result[TCP.Socket]) -> Void',
@@ -529,8 +529,8 @@ def client_program(ports):
         '  show(%s)' % dial("self"),
         '  show(%s)' % dial("old"),
         '  show(%s)' % dial("plain"),
-        '  show(TLS.connect("localhost", %d, TLS.client_context(TlsClientOptions(ca_file: ca)).unwrap!, 200))' % ports["stall"],
-        '  show(TLS.connect("localhost", %d, TLS.client_context(TlsClientOptions()).unwrap!, 5000))' % ports["echo"],
+        '  show(TLS.connect("localhost", %d, TLS.client_context(TLS.ClientOptions(ca_file: ca)).unwrap!, 200))' % ports["stall"],
+        '  show(TLS.connect("localhost", %d, TLS.client_context(TLS.ClientOptions()).unwrap!, 5000))' % ports["echo"],
         'end'])
 
 
@@ -837,12 +837,12 @@ def test_https_waiters_on_a_clients_system_context_build_and_one_leaves(tmp_path
 
 DROPPED_CONTEXT_PROGRAM = """\
 def listener_of(dir: String) -> TCP.Listener
-  server = TLS.server_context(TlsServerOptions(cert_file: "#{dir}/server.pem", key_file: "#{dir}/server-key.pem"))
+  server = TLS.server_context(TLS.ServerOptions(cert_file: "#{dir}/server.pem", key_file: "#{dir}/server-key.pem"))
   return TLS.listen("127.0.0.1", 0, server.unwrap!).unwrap!
 end
 
 def dial(dir: String, port: Int) -> TCP.Socket
-  tls = TLS.client_context(TlsClientOptions(ca_file: "#{dir}/ca.pem")).unwrap!
+  tls = TLS.client_context(TLS.ClientOptions(ca_file: "#{dir}/ca.pem")).unwrap!
   return TLS.connect("localhost", port, tls, 5000).unwrap!
 end
 
@@ -904,8 +904,8 @@ def test_a_context_of_the_wrong_role_is_runtime_tls_context_role_at_its_argument
     header = 'import HTTP from "std/http"\n' if "HTTP." in call else "# no import\n"
     program.write_text(
         header + '\ndef main() -> Void\n  dir = System.args()[0]\n'
-        '  client = TLS.client_context(TlsClientOptions()).unwrap!\n'
-        '  server = TLS.server_context(TlsServerOptions(cert_file: "#{dir}/server.pem", '
+        '  client = TLS.client_context(TLS.ClientOptions()).unwrap!\n'
+        '  server = TLS.server_context(TLS.ServerOptions(cert_file: "#{dir}/server.pem", '
         'key_file: "#{dir}/server-key.pem")).unwrap!\n'
         f"  IO.inspect({call})\n  _ = client\n  _ = server\nend\n", encoding="utf-8")
     result = run(cli() + ["--json", "main.agc", CERTS], cwd=tmp_path, env=vm_environment())
@@ -930,11 +930,11 @@ def test_an_alpn_other_than_http_1_1_is_runtime_tls_context_alpn_in_std_http(tmp
     program = tmp_path / "main.agc"
     program.write_text(
         'import HTTP from "std/http"\n\n'
-        "def client(alpn: List[String]) -> TlsContext\n"
-        "  return TLS.client_context(TlsClientOptions(alpn: alpn)).unwrap!\nend\n\n"
-        "def server(alpn: List[String]) -> TlsContext\n"
+        "def client(alpn: List[String]) -> TLS.Context\n"
+        "  return TLS.client_context(TLS.ClientOptions(alpn: alpn)).unwrap!\nend\n\n"
+        "def server(alpn: List[String]) -> TLS.Context\n"
         "  dir = System.args()[0]\n"
-        '  options = TlsServerOptions(cert_file: "#{dir}/server.pem", key_file: "#{dir}/server-key.pem", alpn: alpn)\n'
+        '  options = TLS.ServerOptions(cert_file: "#{dir}/server.pem", key_file: "#{dir}/server-key.pem", alpn: alpn)\n'
         "  return TLS.server_context(options).unwrap!\nend\n\n"
         "def answer(request: HTTP.Request) -> Result[HTTP.Response]\n"
         "  return ok(HTTP.Response(status: 200, headers: [], body: request.path.bytes))\nend\n\n"

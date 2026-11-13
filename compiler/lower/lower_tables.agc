@@ -109,7 +109,7 @@ export NATIVE_LAYOUTS = Set.new(["Native.size_of", "Native.get_struct", "Native.
 export BUILTIN_STRUCTS = [
   "File.Info", "HttpWire.Header", "HttpWire.Request", "HttpWire.Response", "HttpWire.ClientOptions",
   "HttpWire.ServerOptions", "Process.Output", "LogRegistry.Event", "HttpWire.Head", "HttpWire.Chunk", "HttpWire.Reply",
-  "HttpWire.Job", "HttpWire.ResponseHead", "StructMember", "Codec.Info", "TlsClientOptions", "TlsServerOptions",
+  "HttpWire.Job", "HttpWire.ResponseHead", "StructMember", "Codec.Info", "TLS.ClientOptions", "TLS.ServerOptions",
   "TaskDown", "Process.Options", "Error",
 ]
 

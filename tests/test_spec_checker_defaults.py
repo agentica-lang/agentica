@@ -228,19 +228,19 @@ SINGLE_FILE = [
      main_with('  o = Process.Options(dir: "d")\n'), "CHECK-UNKNOWN-FIELD", 'dir: "d"'),
     ("Process.spawn_captured still needs its command and arguments",
      main_with('  c = Process.spawn_captured("ls")\n'), "CHECK-ARITY", 'Process.spawn_captured("ls")'),
-    ("TlsClientOptions may leave out every field, and HTTP.ClientOptions its tls, which is none",
-     main_with('  a = TLS.client_context(TlsClientOptions())\n  _b = TlsClientOptions(ca_file: "ca.pem")\n'
-               '  c = HTTP.ClientOptions()\n  _d: Optional[TlsContext] = c.tls\n'
+    ("TLS.ClientOptions may leave out every field, and HTTP.ClientOptions its tls, which is none",
+     main_with('  a = TLS.client_context(TLS.ClientOptions())\n  _b = TLS.ClientOptions(ca_file: "ca.pem")\n'
+               '  c = HTTP.ClientOptions()\n  _d: Optional[TLS.Context] = c.tls\n'
                '  _e = HTTP.ClientOptions(tls: some(a.unwrap!))\n', HTTP), None, None),
     ("alpn is a list of protocol names that both options records may leave out",
-     main_with('  _a = TlsClientOptions(alpn: ["h2", "http/1.1"])\n'
-               '  b = TlsServerOptions(cert_file: "c.pem", key_file: "k.pem")\n  _c: List[String] = b.alpn\n'),
+     main_with('  _a = TLS.ClientOptions(alpn: ["h2", "http/1.1"])\n'
+               '  b = TLS.ServerOptions(cert_file: "c.pem", key_file: "k.pem")\n  _c: List[String] = b.alpn\n'),
      None, None),
     ("alpn takes a list of names, not one name",
-     main_with('  a = TlsClientOptions(alpn: "h2")\n'), "CHECK-TYPE-MISMATCH", '"h2"'),
-    ("TlsServerOptions has no default key pair",
-     main_with('  a = TlsServerOptions(cert_file: "c.pem")\n'), "CHECK-MISSING-FIELD", 'TlsServerOptions(cert_file: "c.pem")'),
-    ("HTTP.ClientOptions holds a TlsContext, so JSON cannot decode it",
+     main_with('  a = TLS.ClientOptions(alpn: "h2")\n'), "CHECK-TYPE-MISMATCH", '"h2"'),
+    ("TLS.ServerOptions has no default key pair",
+     main_with('  a = TLS.ServerOptions(cert_file: "c.pem")\n'), "CHECK-MISSING-FIELD", 'TLS.ServerOptions(cert_file: "c.pem")'),
+    ("HTTP.ClientOptions holds a TLS.Context, so JSON cannot decode it",
      main_with('  puts(JSON.decode("{}", HTTP.ClientOptions).ok?)\n', HTTP), "CHECK-NOT-DECODABLE",
      "HTTP.ClientOptions"),
     ("File.open still needs its path",
@@ -485,12 +485,12 @@ def test_programs_of_several_files(title, files, code, file, text, several_files
 # The forms before contexts and before Process.Options, and a context where its Optional goes, carry a help: (title,
 # program, code, text the range covers). Only the presence of the help is asserted, not its text.
 HELPED = [
-    ("a TlsContext where HTTP.ClientOptions takes its Optional",
-     main_with('  c = TLS.client_context(TlsClientOptions()).unwrap!\n  a = HTTP.ClientOptions(tls: c)\n', HTTP),
+    ("a TLS.Context where HTTP.ClientOptions takes its Optional",
+     main_with('  c = TLS.client_context(TLS.ClientOptions()).unwrap!\n  a = HTTP.ClientOptions(tls: c)\n', HTTP),
      "CHECK-TYPE-MISMATCH", "c"),
-    ("a CA file where HTTP.ClientOptions takes an Optional[TlsContext]",
+    ("a CA file where HTTP.ClientOptions takes an Optional[TLS.Context]",
      main_with('  a = HTTP.ClientOptions(tls: "ca.pem")\n', HTTP), "CHECK-TYPE-MISMATCH", '"ca.pem"'),
-    ("a CA file where TLS.connect takes a TlsContext",
+    ("a CA file where TLS.connect takes a TLS.Context",
      main_with('  a = TLS.connect("h", 1, "", 50)\n'), "CHECK-TYPE-MISMATCH", '""'),
     ("a timeout where the spawns take Process.Options",
      main_with('  a = Process.spawn("ls", [], 5000)\n'), "CHECK-TYPE-MISMATCH", "5000"),

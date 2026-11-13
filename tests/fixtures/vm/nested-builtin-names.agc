@@ -18,7 +18,7 @@ def main() -> Void
   puts(old)
   puts(label(Patch(age: JSON.Field.Value(3)).age))
   puts(label(JSON.Field.Null))
-  options: TlsClientOptions = TLS.ClientOptions(alpn: ["h2"])
+  options: TLS.ClientOptions = TLS.ClientOptions(alpn: ["h2"])
   puts(options.alpn)
   first = System.Profile.steps()
   inside = System.Profile.measure("steps") do System.Profile.steps() end

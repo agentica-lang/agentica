@@ -32,18 +32,18 @@ TCP.close_listener(listener: TCP.Listener) -> Void
 TCP.local_port(listener: TCP.Listener) -> Int
 TCP.remote_address(socket: TCP.Socket) -> String
 TLS.alpn(socket: TCP.Socket) -> String
-TLS.client_context(options: TlsClientOptions) -> Result[TlsContext]
-TLS.server_context(options: TlsServerOptions) -> Result[TlsContext]
-TLS.connect(host: String, port: Int, context: TlsContext, timeout_ms: Int) -> Result[TCP.Socket]
-TLS.listen(host: String, port: Int, context: TlsContext) -> Result[TCP.Listener]
-TLS.upgrade(socket: TCP.Socket, context: TlsContext, host: String, timeout_ms: Int) -> Result[TCP.Socket]
+TLS.client_context(options: TLS.ClientOptions) -> Result[TLS.Context]
+TLS.server_context(options: TLS.ServerOptions) -> Result[TLS.Context]
+TLS.connect(host: String, port: Int, context: TLS.Context, timeout_ms: Int) -> Result[TCP.Socket]
+TLS.listen(host: String, port: Int, context: TLS.Context) -> Result[TCP.Listener]
+TLS.upgrade(socket: TCP.Socket, context: TLS.Context, host: String, timeout_ms: Int) -> Result[TCP.Socket]
 
-TlsClientOptions(ca_file: String = "", cert_file: String = "", key_file: String = "",
+TLS.ClientOptions(ca_file: String = "", cert_file: String = "", key_file: String = "",
                  alpn: List[String] = [])
-TlsServerOptions(cert_file: String, key_file: String, alpn: List[String] = [])
+TLS.ServerOptions(cert_file: String, key_file: String, alpn: List[String] = [])
 ```
 
-- A `TlsContext` is the TLS setup of one role, built once (the PEM files are
+- A `TLS.Context` is the TLS setup of one role, built once (the PEM files are
   read and checked then) and shared by every socket, listener and HTTP client
   made from it. A file changed later needs a new context. `TLS.connect` takes a
   client context and `TLS.listen` a server one; the other role is
@@ -121,7 +121,7 @@ HTTP.Header(name: String, value: String)
 HTTP.Response(status: Int, headers: List[HTTP.Header], body: Bytes)
 DownloadOptions(timeout_ms: Int = 30000, max_total_bytes: Int = 268435456)
 Download(status: Int, headers: List[HTTP.Header], bytes_written: Int)
-HTTP.ClientOptions(timeout_ms: Int = 30000, idle_timeout_ms: Int = 30000, max_connections: Int = 4, max_body_bytes: Int = 1048576, proxy: String = "", tls: Optional[TlsContext] = none)
+HTTP.ClientOptions(timeout_ms: Int = 30000, idle_timeout_ms: Int = 30000, max_connections: Int = 4, max_body_bytes: Int = 1048576, proxy: String = "", tls: Optional[TLS.Context] = none)
 ```
 
 - Every call is whole: it returns after the full body is read, as `Bytes` of at
@@ -189,7 +189,7 @@ HTTP.ClientOptions(timeout_ms: Int = 30000, idle_timeout_ms: Int = 30000, max_co
 
 ```text
 HTTP.serve(host: String, port: Int, app: HTTP.App, options: HTTP.ServerOptions = HTTP.ServerOptions()) -> Result[HTTP.Server]
-HTTP.serve_tls(host: String, port: Int, tls: TlsContext, app: HTTP.App, options: HTTP.ServerOptions = HTTP.ServerOptions()) -> Result[HTTP.Server]
+HTTP.serve_tls(host: String, port: Int, tls: TLS.Context, app: HTTP.App, options: HTTP.ServerOptions = HTTP.ServerOptions()) -> Result[HTTP.Server]
 HTTP.app(handler: HTTP.Handler, max_body_bytes: Int = 1048576) -> HTTP.App
 HTTP.local_port(server: HTTP.Server) -> Int
 HTTP.wait(server: HTTP.Server) -> Result[Void]
@@ -246,7 +246,7 @@ return `HTTP.Answer.Upgrade`, `.Stream` or `.Whole`, or call
   itself. It returns a lambda, `->(request) { step(next, request) }`; keep
   the lambda to one call and put the work in a named `step`. Stack them:
   `logged(guarded(&hello))`. An `App` middleware is `App -> App`.
-- `serve` (TCP) and `serve_tls` (a server `TlsContext`) return at once and
+- `serve` (TCP) and `serve_tls` (a server `TLS.Context`) return at once and
   serve in the background. Port 0 picks a free port (`local_port`). Each
   connection runs in its own task, with keep-alive.
 - `HTTP.app(handler, max_body_bytes)` reads the body whole (1 MiB unless

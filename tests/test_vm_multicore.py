@@ -1752,7 +1752,7 @@ def open(d: Dial) -> Result[TCP.Socket]
   if d.ca == ""
     return TCP.connect("127.0.0.1", d.port, 10000)
   end
-  return TLS.connect("localhost", d.port, TLS.client_context(TlsClientOptions(ca_file: d.ca)).unwrap!, 10000)
+  return TLS.connect("localhost", d.port, TLS.client_context(TLS.ClientOptions(ca_file: d.ca)).unwrap!, 10000)
 end
 
 def serve(socket: TCP.Socket) -> Int
@@ -1807,7 +1807,7 @@ def main() -> Void
     dir = args[2]
     ca = "#{dir}/ca.pem"
     TCP.close_listener(listener)
-    listener = TLS.listen("127.0.0.1", 0, TLS.server_context(TlsServerOptions(cert_file: "#{dir}/server.pem", key_file: "#{dir}/server-key.pem")).unwrap!).unwrap!
+    listener = TLS.listen("127.0.0.1", 0, TLS.server_context(TLS.ServerOptions(cert_file: "#{dir}/server.pem", key_file: "#{dir}/server-key.pem")).unwrap!).unwrap!
   end
   acceptor = Task.spawn(&accept_all, listener)
   d = Dial(port: TCP.local_port(listener), ca: ca, lines: lines)
@@ -1861,7 +1861,7 @@ def wait(w: Wait) -> Result[String]
     return ok("accepted")
   end
   if w.kind == "handshake"
-    socket = try TLS.connect("localhost", w.port, TLS.client_context(TlsClientOptions(ca_file: w.ca)).unwrap!, 60000)
+    socket = try TLS.connect("localhost", w.port, TLS.client_context(TLS.ClientOptions(ca_file: w.ca)).unwrap!, 60000)
     TCP.close(socket)
     return ok("handshaken")
   end
@@ -1970,7 +1970,7 @@ def race(socket: TCP.Socket) -> String
 end
 
 def dial(d: Dial) -> String
-  case TLS.connect("localhost", d.port, TLS.client_context(TlsClientOptions(ca_file: d.ca)).unwrap!, d.deadline)
+  case TLS.connect("localhost", d.port, TLS.client_context(TLS.ClientOptions(ca_file: d.ca)).unwrap!, d.deadline)
     ok(socket) ->
       TCP.close(socket)
       return "ok"
@@ -2014,7 +2014,7 @@ def main() -> Void
   end
   puts("--")
   dir = System.args()[0]
-  secure = TLS.listen("127.0.0.1", 0, TLS.server_context(TlsServerOptions(cert_file: "#{dir}/server.pem", key_file: "#{dir}/server-key.pem")).unwrap!).unwrap!
+  secure = TLS.listen("127.0.0.1", 0, TLS.server_context(TLS.ServerOptions(cert_file: "#{dir}/server.pem", key_file: "#{dir}/server-key.pem")).unwrap!).unwrap!
   server = Task.spawn(&serve_tls, secure)
   dials: Map[String, Int] = {}
   k = 1
@@ -2078,7 +2078,7 @@ def open(d: Dial) -> Result[TCP.Socket]
   if d.ca == ""
     return TCP.connect("127.0.0.1", d.port, 5000)
   end
-  return TLS.connect("localhost", d.port, TLS.client_context(TlsClientOptions(ca_file: d.ca)).unwrap!, 5000)
+  return TLS.connect("localhost", d.port, TLS.client_context(TLS.ClientOptions(ca_file: d.ca)).unwrap!, 5000)
 end
 
 def own(listener: TCP.Listener) -> Result[Int]
@@ -2104,7 +2104,7 @@ end
 def main() -> Void
   dir = System.args()[0]
   parked(TCP.listen("127.0.0.1", 0).unwrap!, "")
-  parked(TLS.listen("127.0.0.1", 0, TLS.server_context(TlsServerOptions(cert_file: "#{dir}/server.pem", key_file: "#{dir}/server-key.pem")).unwrap!).unwrap!, "#{dir}/ca.pem")
+  parked(TLS.listen("127.0.0.1", 0, TLS.server_context(TLS.ServerOptions(cert_file: "#{dir}/server.pem", key_file: "#{dir}/server-key.pem")).unwrap!).unwrap!, "#{dir}/ca.pem")
   listener = TCP.listen("127.0.0.1", 0).unwrap!
   port = TCP.local_port(listener)
   case Task.await(Task.spawn_owning(&own, listener))
@@ -2634,7 +2634,7 @@ end
 def main() -> Void
   dir = System.args()[0]
   plain = TCP.listen("127.0.0.1", 0).unwrap!
-  secure = TLS.listen("127.0.0.1", 0, TLS.server_context(TlsServerOptions(cert_file: "#{dir}/server.pem", key_file: "#{dir}/server-key.pem")).unwrap!).unwrap!
+  secure = TLS.listen("127.0.0.1", 0, TLS.server_context(TLS.ServerOptions(cert_file: "#{dir}/server.pem", key_file: "#{dir}/server-key.pem")).unwrap!).unwrap!
   puts("#{TCP.local_port(plain)} #{TCP.local_port(secure)}")
   one = TCP.accept(plain, 10000).unwrap!
   two = TCP.accept(secure, 10000).unwrap!
@@ -2692,7 +2692,7 @@ end
 
 def main() -> Void
   dir = System.args()[0]
-  socket = TLS.connect("localhost", System.args()[1].to_i!, TLS.client_context(TlsClientOptions(ca_file: "#{dir}/ca.pem")).unwrap!, 5000).unwrap!
+  socket = TLS.connect("localhost", System.args()[1].to_i!, TLS.client_context(TLS.ClientOptions(ca_file: "#{dir}/ca.pem")).unwrap!, 5000).unwrap!
   Task.spawn(&churn, "#{dir}/ca.pem")
   Task.spawn(&churn, "#{dir}/ca.pem")
   TCP.send(socket, "hello\n", 5000).unwrap!
@@ -2986,7 +2986,7 @@ def main() -> Void
   requests = args[2].to_i!
   options = HTTP.ServerOptions(request_timeout_ms: 10000, idle_timeout_ms: 10000, max_connections: 8, max_body_bytes: 1024)
   plain = HTTP.serve("127.0.0.1", 0, HTTP.app(&handle), options).unwrap!
-  secure = HTTP.serve_tls("127.0.0.1", 0, TLS.server_context(TlsServerOptions(cert_file: certs + "/server.pem", key_file: certs + "/server-key.pem")).unwrap!, HTTP.app(&handle), options).unwrap!
+  secure = HTTP.serve_tls("127.0.0.1", 0, TLS.server_context(TLS.ServerOptions(cert_file: certs + "/server.pem", key_file: certs + "/server-key.pem")).unwrap!, HTTP.app(&handle), options).unwrap!
   puts(phase("http://127.0.0.1:#{HTTP.local_port(plain)}", clients, requests))
   puts(phase("https://localhost:#{HTTP.local_port(secure)}", clients, requests))
   # The server closes under load: each caller sends GETs until one fails. Answers came before the close (so it came

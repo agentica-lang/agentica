@@ -42,6 +42,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   unknown, and a program may take it.
 - **Breaking:** `Socket` and `Listener` are `TCP.Socket` and `TCP.Listener`
   (#1182); the old names are unknown, and a program may take them.
+- **Breaking:** `TlsContext`, `TlsClientOptions` and `TlsServerOptions` are
+  `TLS.Context`, `TLS.ClientOptions` and `TLS.ServerOptions` (#1182); the old
+  names are unknown, and a program may take them.
 
 ## [0.31.0-alpha.1] - 2026-11-12
 

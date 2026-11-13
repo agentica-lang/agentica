@@ -71,7 +71,7 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   callback frees it (the `vm/tcp.c` pattern). Errors go through
   `agc_host_error` (`vm/tcp.c`), as `TCP.connect` reports them.
 - `vm/tls_context.c`: `TLS.client_context`/`TLS.server_context` build a
-  `TlsContext` (a refcounted `agc_tls_config`, freed by a GC finalizer run on
+  `TLS.Context` (a refcounted `agc_tls_config`, freed by a GC finalizer run on
   demand) in one pool job; `agc_tls_context_check` checks the role
   (`RUNTIME-TLS-CONTEXT-ROLE`) before the host's name is copied, and the socket
   or listener takes a count with `agc_tls_config_ref`.
