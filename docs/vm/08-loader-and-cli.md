@@ -212,7 +212,10 @@ stages.
 - **Two runs in one process.** `agentica [--front-end FILE.agcb] WORDS...` loads
   the front end (the carried one, or `FILE`; `--front-end` must be the first
   word and is in no help) and runs it in a first runtime with the arguments
-  `--version V --self PATH [--embedded-bdd] -- WORDS...`. A lone
+  `--version V --self PATH [--embedded-bdd] -- WORDS...`, or
+  `--version V -- WORDS...` for `FILE`. With no `--self` the front end uses no
+  bytecode or check cache, whose key names the binary but not the front end
+  (#1489), and cannot run `agentica test`. A lone
   `agentica --version` is answered by C before anything else is opened. The
   front end has no step limit, no channel to a parent process, and no standard
   input stream until `FrontEnd.stdin_bytes` opens it (before that `IO.gets`

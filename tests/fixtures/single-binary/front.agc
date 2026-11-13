@@ -13,15 +13,9 @@
 #   too-many-arguments   hands over more arguments than the driver takes
 
 def main() -> Void
-  # The binary puts `--version V --self PATH [--embedded-bdd] --` before the words.
-  words = System.args().drop(5)
-  if words.size > 0
-    if words[0] == "--embedded-bdd"
-      words = System.args().drop(6)
-    elsif words[0] == "--"
-      words = words.drop(1)
-    end
-  end
+  # The binary puts `--version V --` before the words: a front end of --front-end gets no --self and no
+  # --embedded-bdd.
+  words = System.args().drop(3)
   if words.size == 0
     System.exit(2)
   elsif words[0] == "inputs"

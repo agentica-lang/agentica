@@ -1417,7 +1417,7 @@ static bool same_file(int a, int b) {
 }
 
 /* Opens the files of `out` and `err` (empty: the pipe) into FILES; NULL, or the error of the one that failed, with
-   nothing left open (*problem: its errno, or the refusal's EISDIR or ELOOP, else 0; *refused: the path was
+   nothing left open (*problem: its errno, or the refusal's EISDIR or ELOOP, else 0; *refused_at: the path was
    refused). */
 static const char *open_targets(agc_vm *vm, const agc_string *out, const agc_string *err, int files[2], int *problem,
                                 bool *refused_at) {

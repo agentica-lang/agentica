@@ -11,7 +11,7 @@ import stat
 
 import pytest
 
-from tests.agentica_test import POSIX_PYTHON, WINDOWS, cli, host_only, run, vm_environment
+from tests.agentica_test import POSIX_PYTHON, STAGE2, WINDOWS, cli, host_only, require, run, vm_environment
 from tests.package_support import Workspace, dependency
 
 HEAD_BYTES = 18
@@ -167,6 +167,29 @@ def test_no_cache_neither_reads_nor_writes_and_the_variable_moves_the_entries(sr
     assert stamp(entry) == kept
     again = agentica(src, "main.agc", **extra)
     assert again.stdout == "from the entry\n", again.stderr
+
+
+def test_a_front_end_given_with_front_end_neither_reads_nor_writes_the_entry(src, tmp_path):
+    """The key of an entry names the binary, not the front end, so one from --front-end uses no cache (#1489)."""
+    require(STAGE2.is_file(), "the front end is not built (%s): run make" % STAGE2)
+    agentica(src, "main.agc")
+    folder = src / "_build" / "bytecode"
+    entry = only_entry(folder)
+    other = compiled(tmp_path, "other", program("from the entry"))
+    swap_program(entry, other)
+    kept = stamp(entry)
+    given = agentica(src, "--front-end", STAGE2, "main.agc")
+    assert (given.code, given.stdout) == (0, "one\n"), given.stderr
+    assert stamp(entry) == kept
+    entry.unlink()
+    for _ in range(2):
+        given = agentica(src, "--front-end", STAGE2, "main.agc")
+        assert (given.code, given.stdout) == (0, "one\n"), given.stderr
+        assert entries(folder) == []
+    # The binary's own front end still writes and reads the entry.
+    assert agentica(src, "main.agc").stdout == "one\n"
+    swap_program(only_entry(folder), other)
+    assert agentica(src, "main.agc").stdout == "from the entry\n"
 
 
 @host_only(WINDOWS, "the folder is made read-only with its mode bits")
