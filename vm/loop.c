@@ -1320,6 +1320,8 @@ static void dbg_line(const char *what, long a, long b, long c, long d) {
   (void)!write(2, buf, n);
 }
 
+static atomic_long dbg_handler_calls;
+
 static long dbg_thread(void) {
 #ifdef __APPLE__
   return (long)pthread_mach_thread_np(pthread_self());
@@ -1334,6 +1336,7 @@ static long dbg_thread(void) {
    lives (a driven VM whose driver is gone takes the stop path, PR_SET_PDEATHSIG's signal included). */
 static void stop_requested(int sig) {
   int saved = errno;
+  atomic_fetch_add(&dbg_handler_calls, 1);
   dbg_line("handler sig thread wake_pending wake", sig, dbg_thread(),
            stop_status()->wake ? (long)atomic_load((_Atomic int *)&stop_status()->wake->pending) : -1,
            stop_status()->wake != NULL);
@@ -1448,6 +1451,11 @@ void agc_io_children_stopped(void) {
 void agc_io_thread_signals(void) {
   sigset_t saved;
   agc_io_block_stop(&saved);
+  /* DEBUG #1529: mark a scheduler's mask with SIGWINCH, to tell it from a handler's mask. */
+  sigset_t mark;
+  sigemptyset(&mark);
+  sigaddset(&mark, SIGWINCH);
+  pthread_sigmask(SIG_BLOCK, &mark, NULL);
 }
 
 /* On the loop's thread: the wake handle keeps the loop alive while a signal is subscribed, so a run whose tasks all
@@ -2102,14 +2110,15 @@ static bool stalled(agc_vm *vm) {
 /* DEBUG #1529: say when the stop signals' blocked state of this thread changes, and where. */
 static void dbg_mask(const char *where, long step) {
   if (!dbg_loop_known || !pthread_equal(pthread_self(), dbg_loop_thread)) return;
-  static int last = -1;
+  static long last = -1;
   sigset_t cur;
   pthread_sigmask(SIG_BLOCK, NULL, &cur);
-  int now = (sigismember(&cur, SIGTERM) ? 1 : 0) | (sigismember(&cur, SIGINT) ? 2 : 0) |
-            (sigismember(&cur, SIGUSR1) ? 4 : 0) | (sigismember(&cur, SIGPROF) ? 8 : 0);
+  long now = 0;
+  for (int k = 1; k < 32; k++)
+    if (sigismember(&cur, k)) now |= 1L << k;
   if (now == last) return;
   last = now;
-  dbg_line(where, step, now, dbg_thread(), 0);
+  dbg_line(where, step, now, dbg_thread(), (long)atomic_load(&dbg_handler_calls));
 }
 
 void agc_dbg_mask(const char *where) { dbg_mask(where, -7); }
