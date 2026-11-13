@@ -9,9 +9,6 @@ import Builtins from "builtins"
 import {ENUMS, JSON_VALUE, OPAQUE_TYPES, OPERATOR_ONLY, PRELUDE_ONLY, PUBLIC_NAMES, RECORDS, STD_ONLY} from "builtins"
 import {TYPE_DESCRIPTIONS} from "builtins_data"
 
-## A builtin type a program can name, as `help NAME` shows it: kind is "struct" (a record, with its fields), "enum"
-## (with its variants) or "opaque" (a handle or a value with no fields, such as File.Handle and JSON.Value).
-## signature is how it is declared (`struct File.Info`, `enum JSON.Field[T]`, `type File.Handle`).
 struct TypeRow
   name: String
   kind: String
@@ -37,8 +34,6 @@ def catalog(ruby: Fn[Model.Builtin, String]) -> JSON.Value
   JSON.array(PUBLIC_NAMES.concat(PUBLIC_TYPES).sort.map do |name: String| entry_json(name, ruby) end)
 end
 
-## The builtin type called `name` that a program can name: a record, enum or opaque type of the catalog that is not
-## std-only (HttpWire.Request is HTTP.Request of std/http, which `help std/http.Request` shows), or JSON.Value.
 def builtin_type(name: String) -> Optional[TypeRow]
   return none if !PUBLIC_TYPES.include?(name)
 
@@ -66,11 +61,8 @@ def builtin_type(name: String) -> Optional[TypeRow]
   some(row)
 end
 
-## The builtin types a program can name, sorted.
 def public_types() -> List[String] = PUBLIC_TYPES
 
-## The JSON of a builtin type, in the shape of a struct or an enum of `help std/MODULE.NAME --json`: `name`, `kind`,
-## `signature` and `description`, and the `fields` of a struct or the `variants` of an enum.
 def type_json(row: TypeRow) -> JSON.Value
   fields = {
     "name": JSON.from(row.name),
@@ -88,7 +80,6 @@ def type_json(row: TypeRow) -> JSON.Value
   JSON.object(fields)
 end
 
-## The text of a field with its default (`timeout_ms: Int = 30000`) or of a variant with its payload (`Value(T)`).
 def field_text(field: Model.Named) -> String
   return "#{field.name}: #{Types.to_text(field.type)}" if !Builtins.default_present?(field.default)
 
@@ -120,13 +111,11 @@ end
 
 private
 
-# The builtin types `help` lists, sorted.
 PUBLIC_TYPES = TYPE_NAMES.filter do |name: String| !STD_ONLY.has_key?(name.split(".")[0]) end
 
 TYPE_NAMES = RECORDS.keys.concat(ENUMS.keys).concat(OPAQUE_TYPES.to_a).push(JSON_VALUE).sort
 
-# `unwrap!` cannot fail: a name of the catalog is a public builtin (PUBLIC_NAMES, keys of the ENTRIES that
-# `Builtins.lookup` reads) or one of PUBLIC_TYPES.
+# `unwrap!` cannot fail: a name that is not a type is one of PUBLIC_NAMES.
 def entry_json(name: String, ruby: Fn[Model.Builtin, String]) -> JSON.Value
   case builtin_type(name)
     some(row) -> type_json(row)
@@ -134,8 +123,6 @@ def entry_json(name: String, ruby: Fn[Model.Builtin, String]) -> JSON.Value
   end
 end
 
-# A field as `help std/MODULE.NAME --json` writes one: `default` is its source text or null, and a builtin field has
-# no doc.
 def field_json(field: Model.Named) -> JSON.Value
   default = JSON.null()
   if Builtins.default_present?(field.default)

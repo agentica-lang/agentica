@@ -54,8 +54,6 @@ end
 
 private
 
-# A builtin type as `help std/MODULE.NAME` shows a struct or an enum: the declaration, the description, and a line per
-# field or variant.
 def type_reply(row: CatalogJson.TypeRow, as_json: Bool) -> Reply.Reply
   return Reply.printed("#{JSON.encode(CatalogJson.type_json(row))}\n") if as_json
 

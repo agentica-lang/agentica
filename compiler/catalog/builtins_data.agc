@@ -306,8 +306,6 @@ OPAQUE_TYPES: List[String] = [
   "TLS.Context", "C.Pointer", "TaskRef", "Native.Mutex",
 ]
 
-## The description that `agentica help NAME` gives a builtin type a program can name: each record, enum and opaque
-## type above that is not std-only, and JSON.Value. tests/test_cli_forms.py checks that each has one.
 TYPE_DESCRIPTIONS: Map[String, String] = {
   "Await": "What Task.await with a timeout returns: Done with the task's value, or TimedOut.",
   "C.Pointer": "A C pointer of native code, from an extern call or Native.memory_pointer.",
