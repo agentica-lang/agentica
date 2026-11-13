@@ -8,95 +8,82 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.31.0] - 2026-11-13
+
+The first stable release since 0.30.1, with the changes of `0.31.0-alpha.1`
+below.
+
 ### Added
 
 - A `private` line in a struct body makes the fields after it private to the
-  module that declares the struct: outside it they cannot be read, given or
-  set, and the struct is built only by that module (`CHECK-PRIVATE-FIELD`,
-  #1344).
+  module that declares the struct (`CHECK-PRIVATE-FIELD`, #1344).
 - A `private` line in a file or a module block makes every declaration above
-  it public and every one after it private, as in Ruby; reaching a private
-  name says how to make it public (#1502).
+  it public and every one after it private, as in Ruby (#1502).
 - `agentica = "0.31.0"` in `agentica.toml` names the oldest Agentica a project
-  or package needs; an older one stops with `PKG-AGENTICA-TOO-OLD` (#1469). A
-  workspace member also checks the root's key (#1474).
-  Releases up to 0.31.0-alpha.1 refuse the key as unknown.
-- A failed Result holds an `Error` record, whose `location` says where it was
-  made; `error(e)` passes one on as a Result of another type (#671).
+  or package needs; an older one stops with `PKG-AGENTICA-TOO-OLD` (#1469,
+  #1474).
+- A failed Result holds an `Error` record with kind, message, code, details,
+  cause and `location`; `error(e)` passes one on as a Result of another type
+  (#671).
 - `error("unique failed", kind: "db.constraint", code: 19)` sets the kind,
-  code, details and cause of the Error it builds, and `e.is_a?("db")` matches a
-  family of kinds (#671).
-- Calls take named arguments after the positional ones, for any function,
-  `std/` function or builtin: `check(gen, verbose: true)` (#1163).
-- `agentica refs` on a parameter lists each `name:` at a call that gives it, and
-  `type-at` on that name answers as on the parameter (#1497).
-- `agentica lint` marks `e.is_a?("io.notfound")`, a builtin family with a kind
-  it does not have, as `LINT-ERROR-KIND` with the nearest kind (#671).
+  code, details and cause, and `e.is_a?("db")` matches a family of kinds
+  (#671).
+- Calls take named arguments after the positional ones, for any function:
+  `check(gen, verbose: true)` (#1163).
+- `agentica refs` and `type-at` follow a `name:` at a call to its parameter
+  (#1497).
+- `agentica lint` marks a kind that a builtin family does not have, such as
+  `e.is_a?("io.notfound")`, as `LINT-ERROR-KIND` (#671).
 
 ### Changed
 
 - Builtin and `std/` parameters have full names for named arguments:
-  `list.map(block: ...)`, `Process.wait(process: ...)`, not `f:` or `p:` (#1503).
+  `list.map(block: ...)`, not `f:` (#1503).
 - **Breaking:** the errors of the builtins have kinds such as `io.not_found`,
-  `net.timeout` and `argument`, and an OS error has its errno as `code` (an
-  HTTP head refused by `HttpWire` its status). A printed failed Result shows
-  `kind:` and `code:`, `==` with `error("same text")` no longer holds, and
-  `e.kind == "error"` and `e.is_a?("error")` no longer match builtin errors:
+  `net.timeout` and `argument`, and an OS error has its errno as `code`:
+  `==` with `error("same text")` and `e.kind == "error"` no longer match, so
   branch on `e.kind` or `e.is_a?`, not on the message (#671).
 - **Breaking:** the errors of `std/` have kinds too (`http.too_large`,
-  `archive.unsafe`, `toml.parse`, `regex.syntax`, `option_parser.parse`, ...),
-  so `==` with `error("same text")` no longer holds for them; a `std/` function
-  that passes on a builtin's error keeps its kind and code (#671).
-- **Breaking:** a call that `--deny-env`, `--deny-fs`, `--deny-net` or
-  `--deny-run` (or `--sandbox`) refuses returns an error of kind `denied.env`,
-  `denied.fs`, `denied.net` or `denied.run`, not `error`; `e.is_a?("denied")`
-  matches all four and the message is unchanged (#671).
-- **Breaking:** `export` before a declaration (`export def`, `export struct`,
-  `export NAME = ...`, a member of an extern block) is `PARSE-UNEXPECTED-TOKEN`:
-  a declaration is public unless it comes after `private`, so a file with no
-  `private` is public as a whole (it exported only what it marked before), and
-  an extern block is public or private as a whole. `export Alias.name` still
-  re-exports a name; an `import` after a re-export is `CHECK-DECL-ORDER`, and a
-  re-export may follow a constant. `agentica outline` prints `private ` before a private
-  declaration, not `export ` before a public one, and a re-export as
-  `export Alias.name` (#1502).
-- A size limit of the HTTP client and server (a head line, the count of
-  headers, a header line, a body or a chunk line) is `http.too_large`, not
-  `http.protocol`, with the code 431 for a head and 413 for a body (#1499).
-- **Breaking:** `error(e)` in a `case` binds an `Error` (kind, message, code,
-  details, cause, location), not a String: use `e.message` for the text, and
-  `error(e) if e.message == "x"` for `error("x") ->`; `"#{e}"` and `puts(e)`
-  still give the message, but `e.inspect` gives `error("boom")` (was
-  `"boom"`) and `JSON.encode(e)` gives the record (was `"boom"`).
-- `BDD.given_program` compiles each program once per run and starts its
-  bytecode, instead of going through the front end in every scenario (#1458).
-  When such a start fails, its message begins with `agentica run:`.
-- `agentica compile` reads and writes the bytecode cache, as a run does (not
-  under a `--deny-*` flag or `--sandbox`), so it creates `_build/` in the
-  project folder or beside the file.
-- The bytecode cache keys on the C compiler file that a native build would run
-  (`CC`, else `cc` found in `PATH`), and `BDD.given_program` on `PATH`: another
-  compiler makes a new build.
+  `toml.parse`, `regex.syntax`, ...), so `==` with `error("same text")` no
+  longer holds for them (#671).
+- **Breaking:** a call that `--deny-env`, `--deny-fs`, `--deny-net`,
+  `--deny-run` or `--sandbox` refuses returns an error of kind `denied.env`,
+  `denied.fs`, `denied.net` or `denied.run`; `e.is_a?("denied")` matches all
+  four (#671).
+- **Breaking:** `export` before a declaration is `PARSE-UNEXPECTED-TOKEN`: a
+  declaration is public unless it comes after `private`, and `export
+  Alias.name` still re-exports a name (#1502).
+- **Breaking:** a file with no `private` is public as a whole (it exported
+  only what it marked before), and an `import` after a re-export is
+  `CHECK-DECL-ORDER` (#1502).
+- `agentica outline` prints `private ` before a private declaration, and a
+  re-export as `export Alias.name` (#1502).
+- **Breaking:** `error(e)` in a `case` binds an `Error`, not a String: use
+  `e.message` for the text; `e.inspect` and `JSON.encode(e)` show the record.
+- A size limit of the HTTP client and server is `http.too_large` (code 431 for
+  a head, 413 for a body), not `http.protocol` (#1499).
+- `BDD.given_program` compiles each program once per run (#1458).
+- `agentica compile` reads and writes the bytecode cache as a run does, so it
+  creates `_build/`; the cache keys on the C compiler a native build would
+  run.
 - **Breaking:** `Json` and `JsonField` are `JSON.Value` and `JSON.Field`
-  (#1182); the old names are unknown and a program may take them. `inspect` shows a JSON value as
-  `<JSON.Value>`.
+  (#1182); the old names are unknown.
 - **Breaking:** `FileInfo` and `FileHandle` are `File.Info` and `File.Handle`
-  (#1182); the old names are unknown and a program may take them.
+  (#1182); the old names are unknown.
 - **Breaking:** `ProcessOutput` is `Process.Output` (#1182); the old name is
-  unknown and a program may take it.
+  unknown.
 - **Breaking:** `Socket` and `Listener` are `TCP.Socket` and `TCP.Listener`
-  (#1182); the old names are unknown, and a program may take them.
+  (#1182); the old names are unknown.
 - **Breaking:** `TlsContext`, `TlsClientOptions` and `TlsServerOptions` are
   `TLS.Context`, `TLS.ClientOptions` and `TLS.ServerOptions` (#1182); the old
-  names are unknown, and a program may take them.
-- **Breaking:** `TestCase` is `Test.Case` (#1182); the old name is unknown,
-  and a program may take it.
+  names are unknown.
+- **Breaking:** `TestCase` is `Test.Case` (#1182); the old name is unknown.
 - **Breaking:** `Profile.measure` and `Profile.steps` are
   `System.Profile.measure` and `System.Profile.steps` (#1182); `Profile` is
-  unknown, and a program may take it.
+  unknown.
 - Old Agentica names (`Digest.sha256`, `LogEvent`, `HttpRequest`,
-  `HTTP.listen`, `Native.string_at`, `JSON.Codec`) no longer get a migration
-  hint: they are unknown names with the usual did-you-mean.
+  `HTTP.listen`, `Native.string_at`, `JSON.Codec`) get no migration hint, only
+  the usual did-you-mean.
 
 ### Fixed
 
@@ -1539,7 +1526,8 @@ First release of Agentica, a statically typed language designed for AI agents.
 - `main` returns `Void`; maps preserve insertion order and support fallible
   lookups.
 
-[unreleased]: https://github.com/agentica-lang/agentica/compare/0.31.0-alpha.1...HEAD
+[unreleased]: https://github.com/agentica-lang/agentica/compare/0.31.0...HEAD
+[0.31.0]: https://github.com/agentica-lang/agentica/compare/0.31.0-alpha.1...0.31.0
 [0.31.0-alpha.1]: https://github.com/agentica-lang/agentica/compare/0.30.1...0.31.0-alpha.1
 [0.30.1]: https://github.com/agentica-lang/agentica/compare/0.30.0...0.30.1
 [0.30.0]: https://github.com/agentica-lang/agentica/compare/0.29.0...0.30.0
