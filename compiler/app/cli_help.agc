@@ -1,6 +1,6 @@
 ## `agentica help`: the summary of the commands and the namespaces of the builtins, or the signature and description
-## of one builtin (as text, or as JSON with `--json`). It reads the builtin catalog (builtins.agc), the one description
-## of the builtins.
+## of one builtin, or the declaration of one builtin type (as text, or as JSON with `--json`). It reads the builtin
+## catalog (builtins.agc), the one description of the builtins.
 
 import Builtins from "../catalog/builtins"
 import {CALLABLE_NAMES, OPERATOR_ONLY, PUBLIC_NAMES} from "../catalog/builtins"
@@ -14,8 +14,9 @@ import Reply from "cli_reply"
 import Texts from "cli_text"
 
 ## Runs `agentica help` for `words`, the words from `help` on, in the style `--json` or `--ai` gave in front of it.
-## A trailing `--json` asks for the JSON form: of the one builtin, or of every public builtin as an array (sorted by
-## name, each element as `help NAME --json` prints it) when there is no NAME. Nothing else takes an option.
+## A trailing `--json` asks for the JSON form: of the one builtin or builtin type, or of every public builtin and
+## builtin type as an array (sorted by name, each element as `help NAME --json` prints it) when there is no NAME.
+## Nothing else takes an option.
 ## A NAME that is not a builtin but a name from another language (`strip`, `String.to_i`, `value!`) answers with the
 ## builtins it stands for (cli_alias.agc), each under a line such as "`NAME` is written `.strip`" when NAME is not how
 ## Ruby writes it, then the hints of the checker for that name on other types; as JSON it is {"alias": NAME,
@@ -38,6 +39,11 @@ def help(words: List[String], style: String) -> Reply.Reply
   end
 
   name = rest[1]
+  case CatalogJson.builtin_type(name)
+    some(row) -> return type_reply(row, as_json)
+    none -> name = name
+  end
+
   entry = CatalogJson.public(name)
   return renamed(name, as_json) if !entry.ok?
 
@@ -47,6 +53,16 @@ def help(words: List[String], style: String) -> Reply.Reply
 end
 
 private
+
+# A builtin type as `help std/MODULE.NAME` shows a struct or an enum: the declaration, the description, and a line per
+# field or variant.
+def type_reply(row: CatalogJson.TypeRow, as_json: Bool) -> Reply.Reply
+  return Reply.printed("#{JSON.encode(CatalogJson.type_json(row))}\n") if as_json
+
+  parts = row.fields.map(&CatalogJson.field_text).concat(row.variants.map(&CatalogJson.variant_text))
+  lines = [row.signature, row.description].concat(parts.map do |part: String| "- `#{part}`" end)
+  Reply.printed("#{lines.join("\n")}\n")
+end
 
 # The answer for a name that is no builtin: the hint of the checker for a name from another language that has one
 # (`int`, `Hash.new`: its targets could mislead), else the builtins it stands for, else the unknown-builtin error.
@@ -179,6 +195,7 @@ def namespaces_text() -> String
     "Builtins: agentica help NAME prints one signature (NAME is Namespace.function, or a bare function).",
     "  namespaces: #{spaces.join(" ")}",
     "  bare functions: #{bare.join(" ")}",
+    "  types: #{CatalogJson.public_types().join(" ")}",
     [
       "  std modules written in Agentica (import \"std/http\", \"std/queue\", \"std/binary\", \"std/toml\", ",
       "\"std/bdd\") are not in this catalog: agentica help std/MODULE lists one.",

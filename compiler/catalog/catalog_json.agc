@@ -1,12 +1,25 @@
-## The JSON form of the builtin catalog (builtins.agc): the object of one builtin and the array of every public one.
-## `agentica help NAME --json`, `agentica help --json` and the `help` object of `agentica type-at` all print these, so
-## a client reads the three with one parser. It lives in catalog/ so that the stages that answer queries (query/) can
-## use it without importing the command line (app/).
+## The JSON form of the builtin catalog (builtins.agc): the object of one builtin or builtin type and the array
+## of every public one. `agentica help NAME --json`, `agentica help --json` and the `help` object of
+## `agentica type-at` all print these, so a client reads the three with one parser. It lives in catalog/ so that the
+## stages that answer queries (query/) can use it without importing the command line (app/).
 
 import Types from "../syntax/types"
 import Model from "builtin_model"
 import Builtins from "builtins"
-import {OPERATOR_ONLY, PRELUDE_ONLY, PUBLIC_NAMES} from "builtins"
+import {ENUMS, JSON_VALUE, OPAQUE_TYPES, OPERATOR_ONLY, PRELUDE_ONLY, PUBLIC_NAMES, RECORDS, STD_ONLY} from "builtins"
+import {TYPE_DESCRIPTIONS} from "builtins_data"
+
+## A builtin type a program can name, as `help NAME` shows it: kind is "struct" (a record, with its fields), "enum"
+## (with its variants) or "opaque" (a handle or a value with no fields, such as File.Handle and JSON.Value).
+## signature is how it is declared (`struct File.Info`, `enum JSON.Field[T]`, `type File.Handle`).
+struct TypeRow
+  name: String
+  kind: String
+  signature: String
+  description: String
+  fields: List[Model.Named]
+  variants: List[Model.Variant]
+end
 
 ## The public builtin called `name`, or an error: a name in a std-only module (`HttpWire.service`), a prelude-only
 ## helper or a builtin written as an operator (List.concat is `+`) is not a public name, and neither is one that the
@@ -18,10 +31,74 @@ def public(name: String) -> Result[Model.Builtin]
   Builtins.lookup(name).to_result("unknown builtin")
 end
 
-## Every public builtin, in name order, each as `builtin` gives it.
+## Every public builtin and builtin type, in name order, each as `builtin` or `type_json` gives it. A type row has a
+## `kind` and a function row has none, so a client tells them apart by it.
 def catalog(ruby: Fn[Model.Builtin, String]) -> JSON.Value
-  # `unwrap!` cannot fail: PUBLIC_NAMES are keys of the same ENTRIES that `Builtins.lookup` reads.
-  JSON.array(PUBLIC_NAMES.sort.map do |name: String| builtin(Builtins.lookup(name).unwrap!, ruby) end)
+  JSON.array(PUBLIC_NAMES.concat(PUBLIC_TYPES).sort.map do |name: String| entry_json(name, ruby) end)
+end
+
+## The builtin type called `name` that a program can name: a record, enum or opaque type of the catalog that is not
+## std-only (HttpWire.Request is HTTP.Request of std/http, which `help std/http.Request` shows), or JSON.Value.
+def builtin_type(name: String) -> Optional[TypeRow]
+  return none if !PUBLIC_TYPES.include?(name)
+
+  row = TypeRow(
+    name: name,
+    kind: "opaque",
+    signature: "type #{name}",
+    description: TYPE_DESCRIPTIONS.get(name).unwrap_or(""),
+    fields: [],
+    variants: [],
+  )
+
+  return some(row.with(kind: "struct", signature: "struct #{name}", fields: RECORDS[name])) if RECORDS.has_key?(name)
+
+  if ENUMS.has_key?(name)
+    definition = ENUMS[name]
+    parameters = ""
+    if definition.parameters.size > 0
+      parameters = "[#{definition.parameters.join(", ")}]"
+    end
+
+    return some(row.with(kind: "enum", signature: "enum #{name}#{parameters}", variants: definition.variants))
+  end
+
+  some(row)
+end
+
+## The builtin types a program can name, sorted.
+def public_types() -> List[String] = PUBLIC_TYPES
+
+## The JSON of a builtin type, in the shape of a struct or an enum of `help std/MODULE.NAME --json`: `name`, `kind`,
+## `signature` and `description`, and the `fields` of a struct or the `variants` of an enum.
+def type_json(row: TypeRow) -> JSON.Value
+  fields = {
+    "name": JSON.from(row.name),
+    "kind": JSON.from(row.kind),
+    "signature": JSON.from(row.signature),
+    "description": JSON.from(row.description),
+  }
+
+  if row.kind == "struct"
+    fields = fields.put("fields", JSON.array(row.fields.map do |field: Model.Named| field_json(field) end))
+  elsif row.kind == "enum"
+    fields = fields.put("variants", JSON.array(row.variants.map do |variant: Model.Variant| variant_json(variant) end))
+  end
+
+  JSON.object(fields)
+end
+
+## The text of a field with its default (`timeout_ms: Int = 30000`) or of a variant with its payload (`Value(T)`).
+def field_text(field: Model.Named) -> String
+  return "#{field.name}: #{Types.to_text(field.type)}" if !Builtins.default_present?(field.default)
+
+  "#{field.name}: #{Types.to_text(field.type)} = #{Builtins.default_text(field.default)}"
+end
+
+def variant_text(variant: Model.Variant) -> String
+  return variant.name if variant.payload.size == 0
+
+  "#{variant.name}(#{variant.payload.map(&Types.to_text).join(", ")})"
 end
 
 ## The JSON of a builtin: one object for a builtin with one form, else the name, the description and the effects of
@@ -42,6 +119,44 @@ def builtin(entry: Model.Builtin, ruby: Fn[Model.Builtin, String]) -> JSON.Value
 end
 
 private
+
+# The builtin types `help` lists, sorted.
+PUBLIC_TYPES = TYPE_NAMES.filter do |name: String| !STD_ONLY.has_key?(name.split(".")[0]) end
+
+TYPE_NAMES = RECORDS.keys.concat(ENUMS.keys).concat(OPAQUE_TYPES.to_a).push(JSON_VALUE).sort
+
+# `unwrap!` cannot fail: a name of the catalog is a public builtin (PUBLIC_NAMES, keys of the ENTRIES that
+# `Builtins.lookup` reads) or one of PUBLIC_TYPES.
+def entry_json(name: String, ruby: Fn[Model.Builtin, String]) -> JSON.Value
+  case builtin_type(name)
+    some(row) -> type_json(row)
+    none -> builtin(Builtins.lookup(name).unwrap!, ruby)
+  end
+end
+
+# A field as `help std/MODULE.NAME --json` writes one: `default` is its source text or null, and a builtin field has
+# no doc.
+def field_json(field: Model.Named) -> JSON.Value
+  default = JSON.null()
+  if Builtins.default_present?(field.default)
+    default = JSON.from(Builtins.default_text(field.default))
+  end
+
+  JSON.object({
+    "name": JSON.from(field.name),
+    "type": JSON.from(Types.to_text(field.type)),
+    "default": default,
+    "doc": JSON.null(),
+  })
+end
+
+def variant_json(variant: Model.Variant) -> JSON.Value
+  JSON.object({
+    "name": JSON.from(variant.name),
+    "payload": JSON.array(variant.payload.map do |type: Types.Type| JSON.from(Types.to_text(type)) end),
+    "doc": JSON.null(),
+  })
+end
 
 def form_json(form: Model.Builtin, ruby: Fn[Model.Builtin, String]) -> JSON.Value
   parameters = form.parameters.map do |parameter: Model.Named| parameter_json(parameter) end

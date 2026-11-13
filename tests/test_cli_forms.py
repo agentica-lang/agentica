@@ -80,6 +80,7 @@ OPTIONS = [
     ["--ai", "help", "Json.get"], ["--ai", "help", "Nope.frobnicate"],
     ["help", "std/nope"], ["help", "std"], ["--json", "help", "std/queue."], ["help", "HttpWire.service"], ["help", "__fail_arg"], ["help", "Native.string_at"],
     ["help", "List.concat"], ["--json", "help", "List.concat"], ["help", "concat"],
+    ["help", "File.Info"], ["help", "JSON.Field"], ["help", "File.Handle"], ["help", "HttpWire.Request"],
     ["--max-steps"], ["--max-steps", "x", "ok.agc"], ["--max-steps", "0", "ok.agc"], ["--max-steps", "007", "ok.agc"],
     ["--max-steps", "-1", "ok.agc"], ["--max-steps", "1.5", "ok.agc"], ["--max-steps", "#e3", "ok.agc"],
     ["--max-steps", "1", "check", "loop.agc"],
@@ -262,12 +263,37 @@ def test_help_json_without_a_name_is_every_entry_as_help_name_json_prints_it(wor
     with ThreadPoolExecutor(JOBS) as pool:
         single = list(pool.map(one, names))
     assert [entry for entry, found in zip(catalog, single) if entry != found] == []
-    # A builtin with several forms keeps its `overloads`, as `help NAME --json` shows it; every other entry has its
-    # Ruby form (`ruby`, null for a builtin that is no method).
+    # A builtin with several forms keeps its `overloads`, as `help NAME --json` shows it; every other function has
+    # its Ruby form (`ruby`, null for a builtin that is no method). A builtin type has a `kind` instead.
     assert any("overloads" in entry for entry in catalog)
-    assert [entry["name"] for entry in catalog if "overloads" not in entry and "ruby" not in entry] == []
+    functions = [entry for entry in catalog if "kind" not in entry]
+    assert [entry["name"] for entry in functions if "overloads" not in entry and "ruby" not in entry] == []
     # Private (`__`) names and std-only names stay out, as `help NAME` refuses them.
     assert not [name for name in names if name.startswith("__")] and "Http.get" not in names
+
+
+# `help --json` lists the builtin types a program can name next to the functions, in the shape `help std/MODULE.NAME
+# --json` gives a struct or an enum (#1532): a record with its fields, an enum with its variants, an opaque type
+# alone. The std-only records (HttpWire.Request is HTTP.Request of std/http) stay out.
+def test_help_json_lists_the_builtin_types_with_their_fields_and_variants(workspace):
+    catalog = json.loads(workspace.observe(["help", "--json"])["stdout"])
+    types = {entry["name"]: entry for entry in catalog if "kind" in entry}
+    wanted = {"File.Info", "File.Handle", "JSON.Value", "JSON.Field", "Process.Options", "TaskExit", "Error"}
+    assert wanted <= set(types)
+    assert not [name for name in types if name.startswith(("HttpWire.", "LogRegistry."))]
+    shapes = {"struct": {"fields"}, "enum": {"variants"}, "opaque": set()}
+    for entry in types.values():
+        assert set(entry) == {"name", "kind", "signature", "description"} | shapes[entry["kind"]], entry
+        assert entry["description"] and entry["signature"].split(" ")[1].startswith(entry["name"]), entry
+    info = types["File.Info"]
+    assert (info["kind"], info["signature"]) == ("struct", "struct File.Info")
+    assert info["fields"][1] == {"name": "size_bytes", "type": "Int", "default": None, "doc": None}
+    assert types["Process.Options"]["fields"][0]["default"] == "30000"
+    field = types["JSON.Field"]
+    assert (field["kind"], field["signature"]) == ("enum", "enum JSON.Field[T]")
+    assert [(variant["name"], variant["payload"]) for variant in field["variants"]] == [
+        ("Absent", []), ("Null", []), ("Value", ["T"])]
+    assert (types["File.Handle"]["kind"], types["JSON.Value"]["kind"]) == ("opaque", "opaque")
 
 
 if __name__ == "__main__":

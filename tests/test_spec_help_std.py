@@ -133,6 +133,8 @@ SHORT_NAMES = {("OpenSSL.KDF.scrypt", "n"), ("OpenSSL.KDF.scrypt", "r"), ("OpenS
 def test_every_builtin_and_std_parameter_name_has_two_characters_or_more(tmp_path):
     found = set()
     for builtin in json.loads(run(cli() + ["help", "--json"], env=vm_environment(), cwd=tmp_path).stdout):
+        if "kind" in builtin:
+            continue  # a builtin type: it has fields, not parameters
         for form in builtin.get("overloads", [builtin]):
             found |= {(form["name"], parameter["name"]) for parameter in form["parameters"]}
     modules = (ROOT / "stdlib" / "MODULES").read_text(encoding="utf-8").split()
