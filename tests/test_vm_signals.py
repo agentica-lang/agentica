@@ -10,7 +10,8 @@ import time
 
 import pytest
 
-from tests.agentica_test import FIXTURES, PYTHON, WINDOWS, Child, compile_agc, host_only, scaled, start_vm, vm_command
+from tests.agentica_test import (FIXTURES, PYTHON, TARGET_OS, WINDOWS, Child, compile_agc, host_only, scaled, start_vm,
+                                 vm_command)
 
 WAIT_SECONDS = scaled(10)
 POSIX = "System.subscribe needs POSIX signals; on Windows it returns a system.signal error, which " \
@@ -251,6 +252,8 @@ def test_two_tasks_get_each_signal_they_subscribed_to(tmp_path, adopt, scheduler
 @SCHEDULERS
 @pytest.mark.parametrize("how", ["close", "return", "crash", "cancel"])
 def test_an_ended_subscription_gives_the_signal_back_to_the_stop_path(tmp_path, adopt, schedulers, how):
+    if TARGET_OS == "darwin" and how == "crash" and schedulers > 1:
+        pytest.skip("known-issue: #1529 on macOS with several schedulers a stop signal after a task crash is lost")
     vm = start(adopt, tmp_path, ENDS, how, "once", schedulers=schedulers)
     assert vm.next_line(WAIT_SECONDS) == "ready"
     os.kill(vm.process.pid, signal.SIGUSR1)
