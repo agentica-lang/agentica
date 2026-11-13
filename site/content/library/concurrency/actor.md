@@ -164,7 +164,7 @@ false
 
 ## Monitors and timers
 
-There is no `select`: whatever an actor waits for comes in as a variant of its message enum. `Task.monitor(task, actor.inbox) do |down| Msg.Down(down) end` sends a notice into the inbox when the task ends; a notice that finds the inbox full is dropped, so give it room. A timer is a task that sleeps, then casts to the address.
+There is no `select`: whatever an actor waits for comes in as a variant of its message enum. `Task.monitor(task, actor.inbox) do |down| Msg.Down(down) end` sends a notice into the inbox when the task ends; a notice that finds the inbox full still goes in, past its capacity. A timer is a task that sleeps, then casts to the address.
 
 ```agentica
 import Actor from "std/actor"

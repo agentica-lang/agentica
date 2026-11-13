@@ -305,12 +305,13 @@ static agc_value monitor_down(agc_vm *vm, const agc_task *t) {
 }
 
 /* The end hook of a monitor's task: a wrap that returned has its value offered to the channel, and a crash whose notice
-   went in counts as observed, like an await of it. A wrap that crashed is reported as any task crash; its notice is
-   lost. */
+   went in counts as observed, like an await of it, unless the monitor came through a TaskRef (`observes` is false),
+   which cannot await the task either. A wrap that crashed is reported as any task crash; its notice is lost. */
 static void monitor_sent(agc_vm *vm, agc_task *runner) {
   agc_monitor *m = runner->end_data;
   if (runner->crashed || runner->cancelled) return;
-  if (agc_channel_offer(vm, m->channel, runner->result) && m->target->crashed) agc_task_observe(vm, m->target);
+  if (agc_channel_offer(vm, m->channel, runner->result) && m->observes && m->target->crashed)
+    agc_task_observe(vm, m->target);
 }
 
 /* Runs wrap(TaskDown) in a service task (service_root), whatever task or scheduler ends the target, and with no wait:
@@ -1476,7 +1477,7 @@ static void down_types(agc_vm *vm) {
 
 /* Task.monitor(task, channel, wrap): fires at once for a task that has settled, else when it settles (settle). The
    wrap is checked as the call of its task will make it (call_value in vm/interp.c), so that call cannot fail. */
-static agc_value builtin_monitor(agc_vm *vm, agc_value *args, uint32_t span) {
+static agc_value monitor(agc_vm *vm, agc_value *args, uint32_t span, bool observes) {
   agc_task *target = agc_as_task(vm, args[0]);
   agc_channel *channel = agc_as_channel(vm, args[1]);
   const agc_fn *fn = agc_as_fn(vm, args[2]);
@@ -1490,6 +1491,7 @@ static agc_value builtin_monitor(agc_vm *vm, agc_value *args, uint32_t span) {
   m->channel = channel;
   m->wrap = args[2];
   m->span = span;
+  m->observes = observes;
   if (target->state == AGC_TASK_DONE && !target->closing) {
     monitor_fire(vm, m);
     return agc_void();
@@ -1497,6 +1499,14 @@ static agc_value builtin_monitor(agc_vm *vm, agc_value *args, uint32_t span) {
   m->next = target->monitors;
   target->monitors = m;
   return agc_void();
+}
+
+static agc_value builtin_monitor(agc_vm *vm, agc_value *args, uint32_t span) { return monitor(vm, args, span, true); }
+
+/* Task.monitor of a TaskRef (Task.current), which lowering picks by the type of the task: its notice does not observe
+   a crash, since only the holder of the Task[R] can await it. */
+static agc_value builtin_monitor_ref(agc_vm *vm, agc_value *args, uint32_t span) {
+  return monitor(vm, args, span, false);
 }
 
 static agc_value builtin_current(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -1525,6 +1535,7 @@ const agc_builtin agc_task_builtins[] = {
   {"Task.monitor", 3, builtin_monitor, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"Task.current", 0, builtin_current, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"Task.id", 1, builtin_id, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"Task.monitor_ref", 3, builtin_monitor_ref, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
 };
 
 const size_t agc_task_builtin_count = sizeof agc_task_builtins / sizeof agc_task_builtins[0];
