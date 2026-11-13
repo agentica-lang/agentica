@@ -27,9 +27,14 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
-- The `location` of an error that a function of an `extern module` block returns is the place of the call, not of the declaration (#1466).
 - **Breaking:** `std/actor`: a call that times out closes its reply channel, and `Actor.reply` gives whether the caller gets the value (a `Bool`) and closes the channel, so an answer to a call that gave up is never lost. Only `&Actor.reply` used as a `Fn[..., Void]` value no longer checks (#1523).
-- **Breaking:** `Task.monitor`: a notice that finds its channel full goes in past the capacity instead of being dropped, and a monitor through a `TaskRef` (`Task.current`) no longer marks the crash of the task as observed (#1522).
+
+## [0.31.1] - 2026-11-13
+
+### Fixed
+
+- The `location` of an error that a function of an `extern module` block returns is the place of the call, not of the declaration (#1466).
+- `Task.monitor`: a notice that finds its channel full goes in past the capacity instead of being dropped, and a crash seen only through a monitor of a `TaskRef` (`Task.current`) is now reported as not observed (#1522).
 
 ### Fixed
 
@@ -1553,7 +1558,8 @@ First release of Agentica, a statically typed language designed for AI agents.
 - `main` returns `Void`; maps preserve insertion order and support fallible
   lookups.
 
-[unreleased]: https://github.com/agentica-lang/agentica/compare/0.31.0...HEAD
+[unreleased]: https://github.com/agentica-lang/agentica/compare/0.31.1...HEAD
+[0.31.1]: https://github.com/agentica-lang/agentica/compare/0.31.0...0.31.1
 [0.31.0]: https://github.com/agentica-lang/agentica/compare/0.31.0-alpha.1...0.31.0
 [0.31.0-alpha.1]: https://github.com/agentica-lang/agentica/compare/0.30.1...0.31.0-alpha.1
 [0.30.1]: https://github.com/agentica-lang/agentica/compare/0.30.0...0.30.1
