@@ -1,6 +1,6 @@
 ## The civil date and time in UTC of a count of milliseconds since the Unix epoch, the value of `Time.now_ms`.
 ##
-## Interim: the builtin `Time` functions of #985 (`Time.format`, `Time.from_unix`) replace this module when they land.
+## Interim: builtin `Time` functions of #985 (`Time.format`, `Time.from_unix`) will replace this module as they land.
 ##
 ## Import it with `import UTC from "std/utc"`. The name `Time` belongs to the builtin, so the module has another
 ## one. `parts` is the fields of Ruby's `Time#utc` (`year`, `month`, `day`, `hour`, `min`, `sec`, here with the
