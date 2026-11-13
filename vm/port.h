@@ -604,7 +604,7 @@ struct agc_task {
    no longjmp crosses compiled code, which has no unwind info for Windows x64. Only the fuzz build's hard allocation
    limit (longjmp(*on_limit) in vm/value.c, Linux) may cross it, leaving jit_catch set, and agc_fuzz_one then discards
    the vm. POSIX takes sigsetjmp without the signal mask, as macOS's setjmp saves the mask with a system call at each
-   call; Windows has setjmp only. */
+   call and its longjmp restores it on every thread of the process (#1529); Windows has setjmp only. */
 #ifdef _WIN32
 typedef jmp_buf agc_catch_buf;
 #define AGC_CATCH(buf) setjmp(buf)
@@ -692,7 +692,7 @@ struct agc_vm {
   agc_timers timers;
   /* Set only while compiled code runs a builtin (agc_jit_call_builtin): a failure or an exit jumps there first. */
   agc_catch_buf *jit_catch;
-  jmp_buf fail, turn;
+  agc_catch_buf fail, turn;
   /* Set while run_compiled runs compiled code, in the builds of AGC_LEAF_CHECK only (vm/port.h): a failure or an exit
      with no jit_catch would longjmp across it, which unwind aborts on, so a helper that fails where it must not shows
      on every system and not only as a crash on Windows x64. A callback of native code and an I/O pause clear it while

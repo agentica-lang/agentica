@@ -2030,7 +2030,7 @@ static bool stalled(agc_vm *vm) {
 void agc_io_serve(agc_vm *vm) {
   agc_runtime *rt = vm->rt;
   agc_loop *loop = rt->loop;
-  if (setjmp(vm->fail) != 0) {
+  if (AGC_CATCH(vm->fail) != 0) {
     agc_sync_reset(vm);
     agc_run_over_untasked(vm);
     return;
