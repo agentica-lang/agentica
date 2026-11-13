@@ -8,6 +8,18 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `System.subscribe([System.Signal.Term, System.Signal.Int])` gives a channel
+  that receives those signals instead of letting them stop the program, and
+  `System.signal_number` gives a signal's number (#1477).
+
+### Changed
+
+- `SIGUSR1` and `SIGUSR2` stop the program the way `SIGTERM` does (children
+  stopped, files written) instead of ending it at once, and `SIGQUIT` does the
+  same and exits with 131 instead of dumping core (#1477).
+
 ## [0.31.0] - 2026-11-13
 
 The first stable release since 0.30.1, with the changes of `0.31.0-alpha.1`

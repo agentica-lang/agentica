@@ -212,7 +212,7 @@ section says how the scheduler and the loop keep them.
   for a handle operation, closes the handle.
 - **Thread-pool threads** run only the `work` half, on `malloc` memory.
   `UV_USE_IO_URING` is set to `0` (unless already set) before the loop is made,
-  so libuv uses its thread pool and epoll. `SIGINT`, `SIGTERM` and `SIGHUP` are
+  so libuv uses its thread pool and epoll. The stop signals are
   blocked around every pool start, and in the `tcp.c` threads. So the stop
   handler, which may run on any thread, touches only lock-free atomics and
   async-signal-safe calls.
@@ -269,10 +269,11 @@ section says how the scheduler and the loop keep them.
     destructor never joins the pool. Killing the children first means data
     buffered for a FIFO's reader is lost. `agc_io_close`, which closes every
     resource and frees the loop, is only for the in-process harnesses.
-- **Stop signals.** One `sigaction` handler covers `SIGINT`, `SIGTERM` and
-  `SIGHUP`, except a signal the VM started ignored (`nohup`), over one
-  process-wide record (`stop_status()` in `vm/loop.c`, lock-free atomics). The
-  first signal is stored and wakes the loop. The scheduler checks it after every
+- **Stop signals.** One `sigaction` handler covers `SIGINT`, `SIGTERM`,
+  `SIGHUP`, `SIGUSR1`, `SIGUSR2` and `SIGQUIT`, except a signal the VM started
+  ignored (`nohup`), over one process-wide record (`stop_status()` in
+  `vm/loop.c`, lock-free atomics). The first signal is stored and wakes the
+  loop. The scheduler checks it after every
   turn, before it waits and before it reports a stall, and the run ends as an
   exit with code 128 + signal: `end_run` runs the steps above, then raises the
   signal again with its default action. A second signal ends the VM at once
@@ -282,6 +283,26 @@ section says how the scheduler and the loop keep them.
   as a second one. The handler has no `SA_RESTART`, so a blocking fallback write
   that nobody reads returns `EINTR` and is not retried; a stream on the loop has
   no blocked write. A CPU-bound task delays the stop by at most one turn.
+  `SIGQUIT` ends as an exit with 131 (`_exit`), never by raising it again, so
+  it leaves no core dump.
+- **Subscribed signals** (`System.subscribe`, `vm/channel.c`). The record also
+  holds two masks: `subscribed`, which the schedulers write under `rt->sync`,
+  and `pending`. While no stop has begun and the driver lives, the handler
+  only sets the signal's bit in `pending` and wakes the loop with the same
+  `uv_async_send`. A scheduler takes the mask where it checks for a stop
+  (`check_stop`, `vm/task.c`), so between turns; at N > 1 the I/O thread,
+  which takes the signals, nudges a sleeping scheduler. The scheduler gives
+  each signal to every open signal channel that wants it, as one value at
+  most (the value is offered only when the ring holds none of that signal),
+  without waiting; a signal that no channel wants any more goes down the stop
+  path. A signal channel belongs to its task like a handle: its close, or the
+  task's end, takes it off `rt->signal_channels` and recomputes `subscribed`.
+  While `subscribed` is not empty the wake handle is referenced, so a run
+  whose tasks all wait for a signal sleeps in the loop instead of stalling. A
+  subscribed signal has `SA_RESTART`, so it never breaks a blocking write
+  (glibc empties a `FILE` buffer on a failed write, so a retry would lose
+  bytes). The end of the run drops every subscription first, so a signal
+  during the exit path is a stop signal. Windows has no subscription.
 - **Per-handle lock.** A `FileHandle` has a `holder` (the job in flight, or a
   socket's direct send, §10.3.1), a `next_owner` task, and a FIFO of waiting
   tasks, all in GC memory. Every handle builtin checks its arguments and timeout

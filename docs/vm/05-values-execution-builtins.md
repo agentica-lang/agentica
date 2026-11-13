@@ -235,8 +235,9 @@ dispatch, is the limit.
 - Cleanup is one exit path (`agc_launch_settle` in `vm/launch.c`, 10.2.2): kill
   and reap the children, flush stdout, stderr and the files, then `_exit`. It
   runs on a normal end, on `System.exit`, on a diagnostic, on the step limit and
-  on `SIGINT`, `SIGTERM` and `SIGHUP`. After a stop signal the VM ends by that
-  signal. A second stop signal ends it at once, but only after the children are
+  on a stop signal (`SIGINT`, `SIGTERM`, `SIGHUP`, `SIGUSR1`, `SIGUSR2`, or
+  `SIGQUIT`, which exits with 131) that no `System.subscribe` takes. After a
+  stop signal the VM ends by that signal. A second stop signal ends it at once, but only after the children are
   stopped. The out-of-memory and GC abort exits (6.3) and `SIGKILL` run no
   cleanup.
 - On Windows, `SIGINT`, `SIGBREAK` and `SIGHUP` take the same path

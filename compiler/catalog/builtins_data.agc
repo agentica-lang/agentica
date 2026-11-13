@@ -273,6 +273,19 @@ ENUMS: List[Model.EnumDef] = [
     ],
   ),
   Model.EnumDef(
+    name: "System.Signal",
+    parameters: [],
+    variants: [
+      Model.Variant(name: "Term", payload: []),
+      Model.Variant(name: "Int", payload: []),
+      Model.Variant(name: "Hup", payload: []),
+      Model.Variant(name: "Usr1", payload: []),
+      Model.Variant(name: "Usr2", payload: []),
+      Model.Variant(name: "Quit", payload: []),
+      Model.Variant(name: "Kill", payload: []),
+    ],
+  ),
+  Model.EnumDef(
     name: "TaskExit",
     parameters: [],
     variants: [
@@ -402,6 +415,7 @@ ERROR_KINDS: List[String] = [
   "denied.fs",
   "denied.net",
   "denied.run",
+  "system.signal",
   "archive.format",
   "archive.not_found",
   "archive.timeout",
@@ -427,9 +441,9 @@ private
 ## Every builtin, sorted by name; the Zlib rows, the ATS rows, the Base64 and hex rows, the digest rows, the HMAC rows,
 ## the OpenSSL.Random rows, the OpenSSL.HMAC.secure_compare row, the Bytes rows, the Cipher and CMAC rows, the AES-GCM
 ## and KDF rows, the Optional rows, the text codec rows, the task monitor rows, the Native.Mutex rows, the RSA row, the
-## Range Enumerable rows, the DNS row and then the String distance rows are appended last, in contract order, so the
-## positions of the existing rows never shift. A builtin of a family (FAMILIES) is named Family.Member.fn, such as
-## OpenSSL.Cipher.aes_256_gcm_encrypt.
+## Range Enumerable rows, the DNS row, the String distance rows and then the signal rows are appended last, in contract
+## order, so the positions of the existing rows never shift. A builtin of a family (FAMILIES) is named
+## Family.Member.fn, such as OpenSSL.Cipher.aes_256_gcm_encrypt.
 BUILTIN_GROUP_1 = ROWS_1.concat(ROWS_2.concat(ROWS_3.concat(ROWS_4.concat(ROWS_5))))
 BUILTIN_GROUP_2 = ROWS_6.concat(ROWS_7.concat(ROWS_8.concat(ROWS_9.concat(ROWS_10))))
 BUILTIN_GROUP_3 = ROWS_11.concat(ROWS_12.concat(ROWS_13.concat(ROWS_14.concat(ROWS_15))))
@@ -444,7 +458,7 @@ BUILTIN_GROUP_11 = ROWS_51.concat(ROWS_52.concat(ROWS_53.concat(ROWS_54.concat(R
 BUILTIN_GROUP_12 = ROWS_56.concat(ROWS_57.concat(ROWS_58.concat(ROWS_59.concat(ROWS_60))))
 BUILTIN_GROUP_13 = ROWS_61.concat(ROWS_62.concat(ROWS_63.concat(ROWS_64.concat(ROWS_65))))
 BUILTIN_GROUP_14 = ROWS_66.concat(ROWS_67.concat(ROWS_68.concat(ROWS_69.concat(ROWS_70))))
-BUILTIN_GROUP_15 = ROWS_71.concat(ROWS_72)
+BUILTIN_GROUP_15 = ROWS_71.concat(ROWS_72.concat(ROWS_73))
 BUILTIN_GROUPS_1 = BUILTIN_GROUP_1.concat(BUILTIN_GROUP_2.concat(BUILTIN_GROUP_3))
 BUILTIN_GROUPS_2 = BUILTIN_GROUP_4.concat(BUILTIN_GROUP_5.concat(BUILTIN_GROUP_6))
 BUILTIN_GROUPS_3 = BUILTIN_GROUP_7.concat(BUILTIN_GROUP_8.concat(BUILTIN_GROUP_9))
@@ -7115,6 +7129,34 @@ ROWS_72: List[Model.Builtin] = [
       "The Jaro-Winkler similarity in characters, from 0.0 to 1.0; a common prefix of up to 4 characters raises it " +
       "when the Jaro similarity is above 0.7; two empty strings give 1.0."
     ),
+    alternatives: [],
+  ),
+]
+
+## The signal rows (System.subscribe, issue #1477); appended last so the positions of the existing rows never shift.
+ROWS_73: List[Model.Builtin] = [
+  Model.Builtin(
+    name: "System.subscribe",
+    parameters: [Model.Named(name: "signals", type: Types.Type.List(Types.Type.Enum("System.Signal", [])))],
+    result: Types.Type.Result(Types.Type.Channel(Types.Type.Enum("System.Signal", []))),
+    rule: Model.Rule.Plain,
+    implementation: "System.subscribe",
+    effects: ["process"],
+    description: (
+      "Receive the listed OS signals on a new channel (one pending value per signal) instead of stopping the " +
+      "program; the calling task owns it, and its end or Channel.close ends the subscription; Quit and Kill are " +
+      "RUNTIME-INVALID-SIGNAL; VM only."
+    ),
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "System.signal_number",
+    parameters: [Model.Named(name: "signal", type: Types.Type.Enum("System.Signal", []))],
+    result: Types.Type.Int,
+    rule: Model.Rule.Plain,
+    implementation: "System.signal_number",
+    effects: [],
+    description: "The OS number of a signal (Term is 15), so 128 + it is the exit code a signal gives; VM only.",
     alternatives: [],
   ),
 ]

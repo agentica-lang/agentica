@@ -334,6 +334,8 @@ System.env
 System.exit
 System.os
 System.pid
+System.signal_number
+System.subscribe
 TCP.accept
 TCP.close
 TCP.close_listener

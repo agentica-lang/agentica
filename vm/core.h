@@ -321,6 +321,21 @@ bool agc_io_close(agc_vm *vm);
 void agc_io_watch_stop(agc_vm *vm, int64_t driver);
 int agc_io_stop_signal(void);
 void agc_io_children_stopped(void);
+/* The subscribed signals (docs/vm/10-io-scheduler.md §10.2.2, "Stop signals"), masks by AGC_SIGNAL_* bit. The handler
+ * records a subscribed signal in a pending mask and wakes the loop; a scheduler takes the mask between turns
+ * (agc_signals_deliver, vm/channel.c, true when it gave a channel a value). `set` stores the subscribed mask and keeps the loop alive while it is not 0;
+ * `stop` sends a taken signal that no channel wants any more down the stop path; `end` drops every subscription at the
+ * end of the run, so a later signal takes the stop path. `supported` is false where signals cannot be subscribed to
+ * (Windows); `ignored` holds the signals the VM started ignored (nohup); `number` is the OS number of a variant. */
+void agc_io_signals_set(agc_vm *vm, unsigned mask);
+bool agc_io_signals_pending(void);
+unsigned agc_io_signals_take(void);
+void agc_io_signals_stop(unsigned index);
+void agc_io_signals_end(agc_vm *vm);
+bool agc_io_signals_supported(void);
+unsigned agc_io_signals_ignored(void);
+int agc_io_signal_number(unsigned index);
+bool agc_signals_deliver(agc_vm *vm);
 #if !defined(_WIN32)
 /* Dies by the stop signal SIG in the calling thread (default action, SIG unblocked, raise); returns only if the
    signal does not end the process. */

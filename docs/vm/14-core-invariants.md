@@ -209,7 +209,8 @@ flush. **When `main` ends, the program ends.** The steps are:
 Nothing else is joined or drained: no task is awaited, no pool job other than
 the file flush and the compute calls of step 3 is waited for, no socket is read
 to its end. `System.exit` and a crash of `main` take the same path, and so does
-the first stop signal (SIGTERM, SIGINT, SIGHUP). After a stop signal the flush
+the first stop signal (§10.2.2: SIGTERM, SIGINT, SIGHUP, SIGUSR1, SIGUSR2,
+SIGQUIT). After a stop signal the flush
 of stdout and stderr is one non-blocking write per stream, because a reader that
 never reads would otherwise hold the stopped VM for the whole flush limit. Files
 keep their wait. A second stop signal exits at once without flushing, so a stuck

@@ -85,7 +85,7 @@ _NEEDS_POSIX = frozenset({
     "tests/test_vm_os.py", "tests/test_vm_stdout.py", "tests/test_vm_stop.py", "tests/test_vm_lazy_io.py",
     "tests/test_vm_multicore.py", "tests/test_bytecode_cache.py", "tests/test_check_cache.py",
     "tests/test_cli_coverage.py", "tests/test_vm_native.py", "tests/test_vm_http_proxy.py", "tests/test_vm_crypto.py",
-    "tests/test_vm_dns.py", "tests/test_error_kinds.py",
+    "tests/test_vm_dns.py", "tests/test_error_kinds.py", "tests/test_vm_signals.py",
 })
 _NEEDS_LINUX = frozenset({
     "tests/test_vm_diff_8.py", "tests/test_single_binary.py", "tests/test_vm_file_open_block.py", "tests/test_vm_native.py",
@@ -183,7 +183,7 @@ AREAS = {
             "tests/test_process.py", "tests/test_process_bdd.py", "tests/test_process_lifecycle.py",
             "tests/test_process_windows.py", "tests/test_vm_child_channel.py",
             "tests/test_vm_child_channel_posix.py", "tests/test_vm_stop.py", "tests/test_vm_test_protocol.py",
-            "tests/test_platform_bootstrap.py", "tests/test_windows_console_stop.py",
+            "tests/test_platform_bootstrap.py", "tests/test_windows_console_stop.py", "tests/test_vm_signals.py",
             "tests/test_windows_process_cleanup.py",
         ],
     ),
