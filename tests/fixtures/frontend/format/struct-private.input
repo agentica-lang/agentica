@@ -1,0 +1,36 @@
+## A connection.
+export struct Conn
+  id: Int # the id
+  peer: String
+  # before private
+
+
+  private
+  # after private
+
+  ## The socket.
+  secret: String
+  timeout_ms: Int = 5
+end
+
+struct First
+  private
+
+  a: Int
+end
+
+struct Last
+  a: Int
+
+  private
+end
+
+module M
+  export struct S
+    a: Int
+
+    private
+
+    b: Int
+  end
+end

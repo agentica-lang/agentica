@@ -1,0 +1,16 @@
+program #15 0:1:1-195:23:1
+  declaration: export-decl #8 17:2:1-115:11:1 doc="A connection."
+    declaration: struct-decl #7 24:2:8-115:11:1 name="Conn" private-at=2
+      field: field-decl #1 38:3:3-46:4:1 name="id"
+        type: type-ref #0 42:3:7-45:3:10 name="Int"
+      field: field-decl #4 48:4:3-65:5:1 name="private"
+        type: type-ref #2 57:4:12-60:4:15 name="Int"
+        default: literal #3 63:4:18-64:4:19 value=int:0
+      field: field-decl #6 96:9:3-111:10:1 name="secret" doc="The socket."
+        type: type-ref #5 104:9:11-110:9:17 name="String"
+  declaration: struct-decl #11 116:12:1-158:17:1 name="First" type-parameters=["T"] private-at=0
+    field: field-decl #10 145:15:3-154:16:1 name="value"
+      type: type-ref #9 152:15:10-153:15:11 name="T"
+  declaration: struct-decl #14 159:18:1-195:23:1 name="Last" private-at=1
+    field: field-decl #13 173:19:3-180:20:1 name="a"
+      type: type-ref #12 176:19:6-179:19:9 name="Int"
