@@ -360,6 +360,7 @@ Task.current
 Task.id
 Task.map
 Task.monitor
+Task.monitor_ref
 Task.pending_count
 Task.sleep
 Task.spawn

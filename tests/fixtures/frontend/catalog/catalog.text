@@ -933,7 +933,7 @@ builtin Task.current forms=1
 builtin Task.id forms=1
   Task.id(task: Task[R]) -> Int shape=(Task(Var(R))) -> Int rule=TaskTarget impl="Task.id" effects=[] desc="Return the number that identifies the task (or TaskRef) in this run, the task_id of its TaskDown."
 builtin Task.monitor forms=1
-  Task.monitor(task: Task[R], channel: Channel[M], message: Fn[TaskDown, M]) -> Void shape=(Task(Var(R)), Channel(Var(M)), Fn([Struct(TaskDown)], Var(M))) -> Void rule=TaskMonitor impl="Task.monitor" effects=["concurrency"] desc="When the task (or TaskRef) ends (returns, crashes or is cancelled), send message(TaskDown) into the channel once, without waiting; at once for a task that has ended; dropped when the channel is closed or full; VM only."
+  Task.monitor(task: Task[R], channel: Channel[M], message: Fn[TaskDown, M]) -> Void shape=(Task(Var(R)), Channel(Var(M)), Fn([Struct(TaskDown)], Var(M))) -> Void rule=TaskMonitor impl="Task.monitor" effects=["concurrency"] desc="When the task (or TaskRef) ends (returns, crashes or is cancelled), send message(TaskDown) into the channel once, without waiting; at once for a task that has ended; past the capacity of a full channel, dropped when it is closed; VM only."
 builtin Native.mutex forms=1
   Native.mutex() -> Native.Mutex shape=() -> Opaque(Native.Mutex) rule=Plain impl="Native.mutex" effects=["native"] desc="A new Native.Mutex, for the calls of a native library that is not thread-safe: native calls run on several schedulers at once."
 builtin Native.Mutex.synchronize forms=1
