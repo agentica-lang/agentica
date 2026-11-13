@@ -147,7 +147,7 @@ static agc_value start_build(agc_vm *vm, agc_value options, bool server, uint32_
   const agc_string *field[CLIENT_FIELDS - 1] = {NULL};
   size_t paths = server ? SERVER_FIELDS - 1 : CLIENT_FIELDS - 1;
   for (size_t k = 0; k < paths; k++) field[k] = agc_as_string(vm, o->fields[k]);
-  if (vm->rt->deny_net) return agc_error(vm, AGC_KIND_ERROR, AGC_DENIED_NET);
+  if (vm->rt->deny_net) return agc_error(vm, AGC_KIND_DENIED_NET, AGC_DENIED_NET);
   agc_value alpn = o->fields[server ? 2 : 3];
   size_t alpn_len;
   const char *refused = alpn_size(vm, alpn, &alpn_len);
@@ -172,7 +172,7 @@ static agc_value start_build(agc_vm *vm, agc_value options, bool server, uint32_
   agc_error_kind kind = AGC_KIND_ARGUMENT;
   if (!refused && vm->rt->deny_fs && (b->ca || b->cert)) {
     refused = AGC_DENIED_FS;
-    kind = AGC_KIND_ERROR;
+    kind = AGC_KIND_DENIED_FS;
   }
   if (refused) {
     free_build(b);

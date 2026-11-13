@@ -40,7 +40,7 @@ char *agc_system_env(const char *name) {
 
 static agc_value builtin_env(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
-  if (vm->rt->deny_env) return agc_error(vm, AGC_KIND_ERROR, AGC_DENIED_ENV);
+  if (vm->rt->deny_env) return agc_error(vm, AGC_KIND_DENIED_ENV, AGC_DENIED_ENV);
   const agc_string *name = agc_as_string(vm, args[0]);
   if (!name->bytes || memchr(name->data, 0, name->bytes) || memchr(name->data, '=', name->bytes))
     return agc_error(vm, AGC_KIND_ARGUMENT,

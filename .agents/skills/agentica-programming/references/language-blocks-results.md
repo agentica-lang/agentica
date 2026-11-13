@@ -98,10 +98,11 @@ error(error: Error) -> Result[T]
   `task.timeout`, `channel.*` (`closed`, `timeout`, `gone`), `json.parse`,
   `json.decode`, `number.parse`, `number.range`, `text.encoding`, `zlib.data`,
   `zlib.too_large`, `crypto.*` (`auth`, `key`, `failed`), `system.env`,
-  `native.failed`, `native.timeout`, `test.failed`. The rest (`--deny-*`, a
-  find with no match) keep `"error"`. An OS error has its errno as `code`
-  (the number differs between systems; the kind does not), a refused HTTP head
-  its status.
+  `native.failed`, `native.timeout`, `test.failed`, and the refusals of the
+  `--deny-*` flags, `denied.env`, `denied.fs`, `denied.net` and `denied.run`
+  (`e.is_a?("denied")` matches all). A find with no match keeps `"error"`. An
+  OS error has its errno as `code` (the number differs between systems; the
+  kind does not), a refused HTTP head its status.
 - `std/` kinds: `http.*` and `net.timeout` (std/http), `archive.format`,
   `archive.unsafe`, `archive.too_large`, `archive.timeout`,
   `archive.not_found`, `toml.parse`, `toml.decode`, `regex.syntax`,

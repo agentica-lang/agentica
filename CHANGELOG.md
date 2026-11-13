@@ -47,6 +47,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   `archive.unsafe`, `toml.parse`, `regex.syntax`, `option_parser.parse`, ...),
   so `==` with `error("same text")` no longer holds for them; a `std/` function
   that passes on a builtin's error keeps its kind and code (#671).
+- **Breaking:** a call that `--deny-env`, `--deny-fs`, `--deny-net` or
+  `--deny-run` (or `--sandbox`) refuses returns an error of kind `denied.env`,
+  `denied.fs`, `denied.net` or `denied.run`, not `error`; `e.is_a?("denied")`
+  matches all four and the message is unchanged (#671).
 - A size limit of the HTTP client and server (a head line, the count of
   headers, a header line, a body or a chunk line) is `http.too_large`, not
   `http.protocol`, with the code 431 for a head and 413 for a body (#1499).

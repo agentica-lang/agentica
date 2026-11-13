@@ -99,8 +99,8 @@ Read first: `references/vm.md` and `references/vm-c.md`.
    `vm->rt->no_files` first in file builtins and in `TCP.connect` and
    `TCP.listen`, so the fuzzer never touches the disk or the network, and then
    the `--deny-*` flag of the family (`rt->deny_fs`, `deny_net`, `deny_env`,
-   `deny_run`), returning its `denied: --deny-X` error before anything is
-   opened.
+   `deny_run`), returning its `denied: --deny-X` error (kind `denied.X`:
+   `AGC_KIND_DENIED_FS`, `_NET`, `_ENV`, `_RUN`) before anything is opened.
 
 Rules for the C code:
 
