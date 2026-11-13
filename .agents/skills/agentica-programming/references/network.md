@@ -83,6 +83,10 @@ TLS.ServerOptions(cert_file: String, key_file: String, alpn: List[String] = [])
   reads and the order of writes. A timeout during active I/O closes the socket
   (later calls fail at once with `network: socket is closed`); one only waiting
   for the lock does not. Failures are Results; close is idempotent.
+- A function rewired onto a richer path (a new reader of refused answers, say)
+  keeps its old latency and starts no blocking I/O: what the new caller needs,
+  such as reading a body, is opt-in. Test that it still returns fast when the
+  peer stalls.
 - Send encodes UTF-8 and flushes; `send_bytes` takes a `Bytes` of at most 1 MiB.
   `recv_bytes` accepts 1..1048576 and returns the available data up to that
   count as `Bytes`, empty at EOF. TCP is a stream, not messages. Without
