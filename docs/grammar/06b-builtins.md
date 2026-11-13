@@ -121,7 +121,7 @@ checker enforces:
   follows the rules of an `Fn` value: it may be a parameter, a struct field or a
   list item, and it has no `to_s`, `inspect` or equality and is no constant or
   `ATS` value. `IO.inspect` of a type that holds a codec is
-  `CHECK-TYPE-MISMATCH`. `JSON.codec(T)` gets a help that shows `T.codec`.
+  `CHECK-TYPE-MISMATCH`.
 
 #### Optional values in JSON
 

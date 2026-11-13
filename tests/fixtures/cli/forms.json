@@ -915,7 +915,7 @@
  },
  "[[\"help\", \"Native.string_at\"], {}]": {
   "code": 2,
-  "stderr": "agentica: unknown builtin Native.string_at; use Native.get_string(p, 0) for Native.string_at(p), and Native.get_string(p, 0, length) for Native.string_at(p, length): its second argument is an offset\n",
+  "stderr": "agentica: unknown builtin Native.string_at\n",
   "stdout": "",
   "written": []
  },

@@ -5278,7 +5278,7 @@
       "help": true
     }
   ],
-  "the removed Request and HttpWriter types point to the std/http handler": [
+  "the Request type points to the std/http handler; HttpWriter is an unknown type": [
     {
       "program": [
         "def handle(x: Request) -> Void",
@@ -5303,7 +5303,9 @@
         ""
       ],
       "code": "CHECK-UNKNOWN-TYPE",
-      "help": true
+      "start": [1, 15],
+      "covers": "HttpWriter",
+      "help": false
     }
   ],
   "the section 8 programs pass": [
@@ -11442,7 +11444,7 @@
       "code": null
     }
   ],
-  "The Digest hashes take a Bytes; the plain form gives a Bytes, the _hexdigest form a String; Crypto.sha256 is unknown with a help; Crypto is a free name": [
+  "The Digest hashes take a Bytes; the plain form gives a Bytes, the _hexdigest form a String; Crypto.sha256 is unknown with no help; Crypto is a free name": [
     {
       "program": [
         "def main() -> Void",
@@ -11560,7 +11562,7 @@
       "code": "CHECK-UNKNOWN-NAME",
       "start": [2, 8],
       "covers": "Crypto.sha256(\"a\".bytes)",
-      "help": true
+      "help": false
     },
     {
       "program": [
@@ -14041,7 +14043,7 @@
     }
   ],
 
-  "Family.Member.fn calls a builtin of a family, with or without parentheses and through |>; a member the family lacks, an unknown function of a member, a member written as a type and a module that moved into OpenSSL are errors with a help; OpenSSL is a reserved name": [
+  "Family.Member.fn calls a builtin of a family, with or without parentheses and through |>; a member the family lacks, an unknown function of a member, and a member written as a type are errors with a help; an old module name (Cipher, SecureRandom, Digest) is unknown with no help; OpenSSL is a reserved name": [
     {
       "program": [
         "def main() -> Void",
@@ -14129,7 +14131,7 @@
       "code": "CHECK-UNKNOWN-NAME",
       "start": [3, 7],
       "covers": "Cipher.aes_256_gcm_encrypt(k, k, k)",
-      "help": true
+      "help": false
     },
     {
       "program": [
@@ -14140,7 +14142,7 @@
       "code": "CHECK-UNKNOWN-NAME",
       "start": [2, 7],
       "covers": "SecureRandom.uuid",
-      "help": true
+      "help": false
     },
     {
       "program": [
@@ -14150,21 +14152,6 @@
       ],
       "code": "CHECK-UNKNOWN-NAME",
       "start": [2, 8],
-      "covers": "Digest.sha256_hexdigest(\"a\".bytes)",
-      "help": true
-    },
-    {
-      "program": [
-        "struct Digest",
-        "  n: Int",
-        "end",
-        "",
-        "def main() -> Void",
-        "  puts(Digest.sha256_hexdigest(\"a\".bytes))",
-        "end"
-      ],
-      "code": "CHECK-UNKNOWN-NAME",
-      "start": [6, 8],
       "covers": "Digest.sha256_hexdigest(\"a\".bytes)",
       "help": false
     },

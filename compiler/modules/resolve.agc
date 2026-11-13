@@ -211,18 +211,14 @@ def qualified(cx: Context, alias: String, member: String, want: Want, span: Sour
     return imported(cx, cx.modules[target], member, want, span)
   elsif STD_ONLY.has_key?(alias) and !Resolve.embedded?(cx.me.key)
     return error(std_only_failure(cx, alias, member, want, span))
-  elsif family?(cx, alias) and !(alias == "JSON" and member == "Codec")
+  elsif family?(cx, alias)
     return family_member(cx, alias, member, want, span)
   elsif function_wanted?(want) or std_record?(alias, member, want) or builtin_type?(alias, member, want)
     return ok("#{alias}.#{member}")
   end
 
-  message = "unknown module alias"
-  if alias == "JSON" and member == "Codec"
-    message = "JSON.Codec no longer exists"
-  end
-
-  error(Failure.fail_at(site(cx, span), "CHECK-IMPORT-NAME", message, Failure.hint(alias_help(alias, member, hint))))
+  help = Failure.hint(alias_help(alias, hint))
+  error(Failure.fail_at(site(cx, span), "CHECK-IMPORT-NAME", "unknown module alias", help))
 end
 
 # Family.Member: a builtin type of the family where a type or an enum is wanted (JSON.Field), or a function of the
@@ -369,10 +365,8 @@ def wanted_word(want: Want) -> String
   end
 end
 
-def alias_help(alias: String, member: String, hint: Bool) -> String
-  if alias == "JSON" and member == "Codec"
-    return "the codec type is Codec[T], and the codec of a type is T.codec"
-  elsif alias == "BDD"
+def alias_help(alias: String, hint: Bool) -> String
+  if alias == "BDD"
     return "import BDD from \"std/bdd\""
   elsif alias == "HTTP"
     return "import HTTP from \"std/http\""
@@ -382,8 +376,6 @@ def alias_help(alias: String, member: String, hint: Bool) -> String
     return "an Optional is written some(value) or none"
   elsif alias == "Math"
     return "Math has only Math.sqrt; write pi as 3.141592653589793 and e as 2.718281828459045"
-  elsif Builtins.moved_type(alias) != ""
-    return Builtins.moved_type(alias)
   elsif RESERVED.include?(alias)
     return "#{alias} is a builtin name, so it is no import alias, and it has no such constant or type"
   elsif hint

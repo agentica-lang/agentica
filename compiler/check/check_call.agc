@@ -564,11 +564,10 @@ def arity_failure(cx: State.Cx, st: State.St, node: Ast.Call, signature: State.S
 end
 
 # The help of an unknown function: a name of another language, a module that needs an import, the help of a method of
-# another language, or a close name. A type of the program named like a module that moved into a family (struct
-# Digest) gets no move hint.
+# another language, or a close name.
 def unknown_function_help(cx: State.Cx, name: String) -> String
   help = Help.foreign(cx.help, name)
-  if help != "" and !(help == Help.moved(name) and program_type?(cx, name.split(".")[0]))
+  if help != ""
     return help
   elsif name.start_with?("Agent.")
     return (
@@ -586,12 +585,6 @@ def unknown_function_help(cx: State.Cx, name: String) -> String
   return method_help.unwrap! if method_help.some?
 
   Help.near(name, cx.functions.keys, CALLABLE_NAMES)
-end
-
-# True when the program declares or imports a struct or an enum of that name; an imported one is keyed @N::Name.
-def program_type?(cx: State.Cx, name: String) -> Bool
-  suffix = "::#{name}"
-  cx.structs.keys.concat(cx.enums.keys).any? do |key: String| key == name or key.end_with?(suffix) end
 end
 
 def unknown_enum_help(name: String) -> String

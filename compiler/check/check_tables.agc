@@ -78,7 +78,6 @@ end
 export def foreign_names() -> Map[String, String]
   {
     "Array.new": "use a list literal with a type: xs: List[Int] = []",
-    "Crypto.sha256": "use OpenSSL.Digest.sha256(data), or OpenSSL.Digest.sha256_hexdigest(data) for the hex text",
     "Enumerator.new": (
       "write the producer as a task that sends into a channel: ch: Channel[Int] = Channel.new(8), " +
       "Task.spawn(&produce, ch), then ch.recv(timeout_ms)"
@@ -90,14 +89,9 @@ export def foreign_names() -> Map[String, String]
     "Float.from_int": "use n.to_f",
     "Float.to_string": "use x.to_s",
     "Hash.new": "use a map literal with a type: m: Map[String, Int] = {}",
-    "HttpWriter": (
-      "a std/http handler returns its whole response: " +
-      "return ok(HTTP.Response(status: 200, headers: [], body: text.bytes))"
-    ),
     "Int.parse": "use s.to_i (a Result) or s.to_i!",
     "Int.to_float": "use n.to_f",
     "Int.to_string": "use n.to_s",
-    "JSON.codec": "use the codec of the type: User.codec",
     "List.empty": "use a list literal with a type: xs: List[Int] = []",
     "List.new": "use a list literal with a type: xs: List[Int] = []",
     "Map.empty": "use a map literal with a type: m: Map[String, Int] = {}",
@@ -130,13 +124,6 @@ export def foreign_names() -> Map[String, String]
       "def tan(x: C.Double) -> C.Double"
     ),
     "Mutex.new": "keep the state in one owner task that receives messages on a Channel, and send it requests",
-    "Native.bytes_at": (
-      "use Native.get_bytes(p, 0, length) for Native.bytes_at(p, length): its second argument is an offset"
-    ),
-    "Native.string_at": (
-      "use Native.get_string(p, 0) for Native.string_at(p), and Native.get_string(p, 0, length) for " +
-      "Native.string_at(p, length): its second argument is an offset"
-    ),
     "None": "use nil",
     "Parallel.map": "use Task.map(items, limit, timeout_ms) do |x| ... end, where the block gives a Result",
     "Request": "a std/http handler takes an HTTP.Request: def handle(request: HTTP.Request) -> Result[HTTP.Response]",
@@ -166,20 +153,6 @@ export def foreign_names() -> Map[String, String]
     "read_line": "use gets, which returns Result[String]; gets! halts at the end of input",
     "readline": "use gets, which returns Result[String]; gets! halts at the end of input",
     "str": "use x.to_s, or interpolation: \"\#{x}\"",
-  }
-end
-
-## The builtin modules that moved into a family, with the member that holds their functions now: Digest.sha256 is
-## OpenSSL.Digest.sha256.
-export def moved_modules() -> Map[String, String]
-  {
-    "CMAC": "OpenSSL.CMAC",
-    "Cipher": "OpenSSL.Cipher",
-    "Digest": "OpenSSL.Digest",
-    "HMAC": "OpenSSL.HMAC",
-    "KDF": "OpenSSL.KDF",
-    "RSA": "OpenSSL.RSA",
-    "SecureRandom": "OpenSSL.Random",
   }
 end
 

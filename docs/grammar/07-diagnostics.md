@@ -356,11 +356,7 @@ is a rule:
 - `Logger.error(...)` (`CHECK-IMPORT-NAME`)
   Help: `Logger.err(...)`; `error` is a reserved name, so the function for the
   error level is `err`
-- `HTTP.respond(writer, ...)`, `HTTP.begin`, `HTTP.write`, `HTTP.write_bytes`
-  with the import (`CHECK-IMPORT-NAME`)
-  Help: a handler that returns its whole response: `return
-  ok(HTTP.Response(status: 200, headers: [], body: text.bytes))`
-- `Request` or `HttpWriter` as a type (`CHECK-UNKNOWN-TYPE`)
+- `Request` as a type (`CHECK-UNKNOWN-TYPE`)
   Help: `def handle(request: HTTP.Request) -> Result[HTTP.Response]`
 - a type alias cycle (`CHECK-TYPE-ALIAS-CYCLE`)
   Help: break the cycle; aliases expand to the type they name, so `type Names =

@@ -787,7 +787,7 @@ def bind_name(
         Failure.Site(file: file, span: entry.span),
         "CHECK-IMPORT-NAME",
         "unknown or private imported name",
-        ImportHelp.unknown_listed_help(target.key, target.public, entry.name),
+        ImportHelp.unknown_import_help(target.key, target.public, entry.name),
       ),
     )
   end

@@ -7,7 +7,6 @@ import {CALLABLE_NAMES, OPERATOR_ONLY, PUBLIC_NAMES} from "../catalog/builtins"
 import Model from "../catalog/builtin_model"
 import RubyForm from "../check/ruby_form"
 import CatalogJson from "../catalog/catalog_json"
-import Help from "../check/check_help"
 import Tables from "../check/check_tables"
 import Suggest from "../syntax/suggest"
 import Alias from "cli_alias"
@@ -143,10 +142,6 @@ def suggestion(name: String) -> String
   hint = Tables.foreign_names().get(name)
   if hint.none?
     hint = Tables.foreign_kind_methods().get(name)
-  end
-
-  if hint.none? and Help.moved(name) != ""
-    hint = some(Help.moved(name))
   end
 
   return "; #{hint.unwrap!}" if hint.some?
