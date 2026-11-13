@@ -9,7 +9,6 @@ import {
   ENUMS as DATA_ENUMS,
   FAMILIES as DATA_FAMILIES,
   HANDLE_TYPES,
-  MOVED_TYPES,
   OPAQUE_TYPES as DATA_OPAQUE_TYPES,
   RECORDS as DATA_RECORDS,
   RESERVED_TYPE_NAMES,
@@ -56,8 +55,6 @@ export RESERVED = Set.new(RESERVED_TYPE_NAMES)
 
 export STD_ONLY = STD_ONLY_IMPORTS
 
-export MOVED = MOVED_TYPES
-
 export PRELUDE: Map[String, Model.PreludeRow] = PRELUDE_ROWS.reduce(EMPTY_PRELUDE) do |found, row|
   found.put(row.name, row)
 end
@@ -90,26 +87,6 @@ export CALLABLE_NAMES = PUBLIC_NAMES.filter do |name|
 end
 
 export BARE_NAMES = Set.new(ENTRIES.keys.filter do |name| !name.include?(".") end)
-
-## The help for a builtin type that moved into a std-only family (MOVED_TYPES), written as the alias of the std module
-## that re-exports it (LogEvent is Logger.Event now), or "" for another name.
-export def moved_type(name: String) -> String
-  return "" if !MOVED.has_key?(name)
-
-  parts = MOVED[name].split(".")
-  wrapper = STD_ONLY[parts[0]]
-  "#{name} is #{wrapper[1]}.#{parts[1]} now: import #{wrapper[1]} from \"#{wrapper[0]}\""
-end
-
-## The help for a moved type written in an import list (import {HttpResponse} from "std/http"): the import list form
-## of the new name, or "" for another name.
-export def moved_import(name: String) -> String
-  return "" if !MOVED.has_key?(name)
-
-  parts = MOVED[name].split(".")
-  wrapper = STD_ONLY[parts[0]]
-  "#{name} is #{wrapper[1]}.#{parts[1]} now: import {#{parts[1]}} from \"#{wrapper[0]}\""
-end
 
 ## Whether a program may not declare an enum of this name: a std-only family with a record of its own
 ## (LogRegistry.Event). After linking, a construction of that record and of a variant Event of the program's enum would

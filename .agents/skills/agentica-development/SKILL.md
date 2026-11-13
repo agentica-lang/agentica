@@ -26,9 +26,10 @@ This file says how to work and which reference to read; the tree is in
   few keep an older Agentica name with the Ruby name as its alias
   (`List.filter` and `select`; `method_aliases` in `check_tables.agc`). Every
   user-facing text (help, diagnostics, docs, site, skills) shows only the
-  Ruby form (`list.select`, not `List.filter`). A non-Ruby habit or an old
-  name (`trim`, `String.from_int`) gets a `help:` hint
-  (`foreign_kind_methods`, `foreign_names`), not a second accepted form. The
+  Ruby form (`list.select`, not `List.filter`). A habit from another
+  language (`trim`, `len`) gets a `help:` hint (`foreign_kind_methods`,
+  `foreign_names`), not a second accepted form. An old Agentica name gets no
+  hint: it is an unknown name with the usual did-you-mean. The
   VM keys (`implementation`) keep the old names: stage0 and compiled bytecode
   import them. Exception: Ruby's own synonyms are all
   accepted (`length`/`size`, `collect`, `inject`, `detect`, `member?`;

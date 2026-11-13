@@ -377,21 +377,6 @@ export STD_ONLY_IMPORTS: Map[String, List[String]] = {
   "RegexEngine": ["std/regex", "Regex"],
 }
 
-## The builtin types that moved into a std-only family, with their new name there. A std module re-exports each one,
-## so a program writes the alias of that module: LogEvent is LogRegistry.Event, which std/logger re-exports as
-## Logger.Event.
-export MOVED_TYPES: Map[String, String] = {
-  "LogEvent": "LogRegistry.Event",
-  "LogLevel": "LogRegistry.Level",
-  "Header": "HttpWire.Header",
-  "HttpClient": "HttpWire.Client",
-  "HttpClientOptions": "HttpWire.ClientOptions",
-  "HttpRequest": "HttpWire.Request",
-  "HttpResponse": "HttpWire.Response",
-  "HttpServer": "HttpWire.Server",
-  "HttpServerOptions": "HttpWire.ServerOptions",
-}
-
 ROWS_1: List[Model.Builtin] = [
   Model.Builtin(
     name: "Address.send",

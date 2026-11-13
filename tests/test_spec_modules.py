@@ -278,20 +278,14 @@ class TestModuleRules:
             "root.agc": 'import Domain from "option"\ndef main() -> Void\n'
                         '  value: Domain.Option[Int] = Domain.Option.Some(1)\nend\n\n'}), "CHECK-IMPORT-NAME")
 
-    def test_removed_std_http_server_calls_are_rejected_by_name(self):
-        cases = [("  HTTP.respond(1, 200, [], \"hi\", 1000)\n", True),
-                 ("  HTTP.begin(1, 200, [], 1000)\n", True),
-                 ("  HTTP.listen(\"127.0.0.1\", 0, 1)\n", True),
-                 ("  HTTP.listen_stream_tls(\"127.0.0.1\", 0, 1, 2)\n", True),
-                 ("  HTTP.listen_upload(\"127.0.0.1\", 0, 1)\n", True),
-                 ("  HTTP.upgrade_only(1)\n", True),
-                 ("  x: HTTP.UpgradeHandler = nil\n", True),
-                 ("  HTTP.nothing(1)\n", False)]
+    def test_removed_std_http_server_calls_are_unknown_with_no_migration_help(self):
+        cases = ["  HTTP.respond(1, 200, [], \"hi\", 1000)\n", "  HTTP.listen(\"127.0.0.1\", 0, 1)\n",
+                 "  HTTP.upgrade_only(1)\n", "  x: HTTP.UpgradeHandler = nil\n"]
         results = self.checks([({"root.agc": 'import HTTP from "std/http"\ndef main() -> Void\n' + body + "end\n\n"},
-                                "root.agc", None) for body, _help in cases])
-        for (body, has_help), checked in zip(cases, results):
+                                "root.agc", None) for body in cases])
+        for body, checked in zip(cases, results):
             problem = self.assert_rejected(checked, "CHECK-IMPORT-NAME", line=3)
-            assert ("help" in problem) == has_help
+            assert "help" not in problem, body
 
     def test_a_wrong_imported_name_suggests_the_closest_export_never_a_private_name(self):
         module = ("struct Secret\n  value: Int\nend\n\nexport struct Public\n  a: Int\nend\n\n"
@@ -322,7 +316,7 @@ class TestModuleRules:
     def test_std_logger_exports_its_event_and_level_and_log_registry_stays_internal(self):
         """std/logger re-exports the builtin LogRegistry.Event and LogRegistry.Level as Logger.Event and Logger.Level
         (import Logger, or import {Event, Level}). LogRegistry is internal to std/, as a call, a type or a re-export,
-        and the old names LogEvent and LogLevel are unknown, with a help that names the new ones."""
+        and the old names LogEvent and LogLevel are unknown."""
         uses = ('import Logger from "std/logger"\nimport {Event, Level} from "std/logger"\n\n'
                 "def shown(event: Logger.Event) -> Void\n  puts(event.message)\nend\n\n"
                 "def rank(level: Level) -> Int\n  case level\n    Logger.Level.Debug -> 0\n    Level.Info -> 1\n"
@@ -332,7 +326,7 @@ class TestModuleRules:
                 "  shown(event)\n  puts(rank(event.level))\nend\n\n")
         logger = 'import Logger from "std/logger"\n\n'
         in_lib = 'import Lib from "lib"\n\ndef main() -> Void\n  Lib.f()\nend\n\n'
-        # (files, code, span, file of the error, whether the help must name the new type)
+        # (files, code, span, file of the error, whether a help is due)
         cases = [
             ({"root.agc": uses}, None, None, None, False),
             ({"root.agc": "def main() -> Void\n  x = LogRegistry.level()\nend\n\n"}, "CHECK-UNKNOWN-NAME",
@@ -343,12 +337,13 @@ class TestModuleRules:
             ({"root.agc": logger + 'def main() -> Void\n  Logger.error("x")\nend\n\n'}, "CHECK-IMPORT-NAME", None, None,
              False),
             ({"root.agc": "def f(e: LogEvent) -> Void\nend\n\n" + MAIN}, "CHECK-UNKNOWN-TYPE", ((1, 10), (1, 18)), None,
-             True),
+             False),
             ({"root.agc": in_lib, "lib.agc": "export def f() -> Void\n  e: LogEvent = 1\nend\n"}, "CHECK-UNKNOWN-TYPE",
-             ((2, 6), (2, 14)), "lib.agc", True),
+             ((2, 6), (2, 14)), "lib.agc", False),
             ({"root.agc": logger + "def main() -> Void\n  Logger.set_level(LogLevel.Info)\nend\n\n"},
-             "CHECK-IMPORT-NAME", ((4, 20), (4, 33)), None, True),
-            ({"root.agc": 'import {LogEvent} from "std/logger"\n\n' + MAIN}, "CHECK-IMPORT-NAME", None, None, True),
+             "CHECK-IMPORT-NAME", ((4, 20), (4, 33)), None, False),
+            ({"root.agc": 'import {LogEvent} from "std/logger"\n\n' + MAIN}, "CHECK-IMPORT-NAME", ((1, 9), (1, 17)),
+             None, False),
         ]
         self.assert_cases(cases)
 
@@ -470,10 +465,10 @@ class TestModuleRules:
              ((1, 10), (1, 25)), None, True),
         ])
 
-    def test_std_http_exports_its_records_and_handles_and_the_old_names_are_unknown_with_a_help(self):
+    def test_std_http_exports_its_records_and_handles_and_the_old_names_are_unknown(self):
         """std/http re-exports the builtin HttpWire records and handles as HTTP.Request, HTTP.Response, HTTP.Header,
         HTTP.ClientOptions, HTTP.ServerOptions, HTTP.Client and HTTP.Server (import HTTP, or import {Request, ...}).
-        The old names (HttpRequest, Header, HttpClient, ...) are unknown, with a help that names the new ones."""
+        The old names (HttpRequest, Header, HttpClient, ...) are unknown."""
         uses = ('import HTTP from "std/http"\nimport {Request, Response, Header, Client} from "std/http"\n\n'
                 "def handle(request: Request) -> Result[HTTP.Response]\n"
                 '  return ok(Response(status: 200, headers: [Header(name: "a", value: request.path)], body: "".bytes))\n'
@@ -482,19 +477,18 @@ class TestModuleRules:
                 "def main() -> Void\n  _o = HTTP.ServerOptions(max_connections: 1)\n  _h: HTTP.Header = Header(name: \"a\", "
                 "value: \"\").with(value: \"b\")\nend\n\n")
         http = 'import HTTP from "std/http"\n\n'
-        # (files, code, span, file of the error, whether a help is due): each old name has the help.
+        # (files, code, span, file of the error, whether a help is due)
         cases = [
             ({"root.agc": uses}, None, None, None, False),
             ({"root.agc": "def f(r: HttpRequest) -> Void\nend\n\n" + MAIN}, "CHECK-UNKNOWN-TYPE", ((1, 10), (1, 21)),
-             None, True),
-            ({"root.agc": "def f(c: HttpClient) -> Void\nend\n\n" + MAIN}, "CHECK-UNKNOWN-TYPE", ((1, 10), (1, 20)),
-             None, True),
+             None, False),
             ({"root.agc": http + 'def main() -> Void\n  puts(HTTP.proxy_from_env("x"))\n  h = Header(name: "a", value: "b")\n'
-              "end\n\n"}, "CHECK-UNKNOWN-TYPE", None, None, True),
+              "end\n\n"}, "CHECK-UNKNOWN-TYPE", ((5, 7), (5, 36)), None, False),
             ({"root.agc": 'import Lib from "lib"\n\ndef main() -> Void\n  Lib.f()\nend\n\n',
               "lib.agc": "export def f() -> Void\n  o: HttpServerOptions = 1\nend\n"}, "CHECK-UNKNOWN-TYPE",
-             ((2, 6), (2, 23)), "lib.agc", True),
-            ({"root.agc": 'import {HttpResponse} from "std/http"\n\n' + MAIN}, "CHECK-IMPORT-NAME", None, None, True),
+             ((2, 6), (2, 23)), "lib.agc", False),
+            ({"root.agc": 'import {HttpResponse} from "std/http"\n\n' + MAIN}, "CHECK-IMPORT-NAME", ((1, 9), (1, 21)),
+             None, False),
         ]
         self.assert_cases(cases)
 

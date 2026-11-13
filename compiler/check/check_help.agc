@@ -2,8 +2,6 @@
 ## that depend only on types or names. A help is a String, and "" means there is none.
 
 import Model from "../catalog/builtin_model"
-import Builtins from "../catalog/builtins"
-import {ENTRIES} from "../catalog/builtins"
 import RubyForm from "ruby_form"
 import Suggest from "../syntax/suggest"
 import Types from "../syntax/types"
@@ -83,28 +81,8 @@ export def conversion(expected: Types.Type, actual: Types.Type) -> String
   convert_help(expected, actual)
 end
 
-## The help for a name another language has but Agentica does not, or for a builtin that moved into a family, or "".
-export def foreign(tables: Tables, name: String) -> String
-  found = tables.foreign_names.get(name)
-  return found.unwrap! if found.some?
-
-  return Builtins.moved_type(name) if Builtins.moved_type(name) != ""
-
-  moved(name)
-end
-
-## The help for Module.fn of a builtin module that moved into a family (Digest.sha256 is OpenSSL.Digest.sha256), or
-## "".
-export def moved(name: String) -> String
-  parts = name.split(".")
-  member = Data.moved_modules().get(parts[0])
-  return "" if parts.size != 2 or member.none?
-
-  written = "#{member.unwrap!}.#{parts[1]}"
-  return "#{parts[0]} is #{member.unwrap!} now: use #{written}" if ENTRIES.has_key?(written)
-
-  "#{parts[0]} is #{member.unwrap!} now: its functions are written #{member.unwrap!}.NAME"
-end
+## The help for a name another language has but Agentica does not, or "".
+export def foreign(tables: Tables, name: String) -> String = tables.foreign_names.get(name, "")
 
 ## The "did you mean" help for the closest of the candidates and the shared names, or "". A builtin that has a Ruby
 ## method form is offered in it (`list.select`, not `List.filter`).

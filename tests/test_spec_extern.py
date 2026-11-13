@@ -494,8 +494,7 @@ def test_resources_and_pointers_are_opaque(checked, body, code, start, stop):
 
 # Native.get_string and get_bytes read memory at a C.Pointer (not a resource) with an Int offset and length, get_bytes
 # gives and put_bytes writes a Bytes (a List[Int] is CHECK-TYPE-MISMATCH), and Native.pointer makes a C.Pointer of an Int; a wrong argument is CHECK-TYPE-MISMATCH at it,
-# and a wrong count CHECK-ARITY. The old names string_at and bytes_at are CHECK-UNKNOWN-NAME, with a help that gives
-# the call with offset 0.
+# and a wrong count CHECK-ARITY.
 @table("body, code, start, stop", [
     ("  s: String = Native.get_string(db_handle(db_open().unwrap!), 1, 3)\n"
      "  b: Bytes = Native.get_bytes(Native.pointer(-1), 0, 0)\n"
@@ -523,10 +522,12 @@ def puts_in_opener(call):
     return OPENER % ("  puts(%s)" % call)
 
 
-# The old names carry the help that gives the new call (its presence, not its text).
+# The old names are unknown functions with no migration help.
 @table("call", ["Native.string_at(Native.null(), 3)", "Native.bytes_at(Native.null(), 3).size"], puts_in_opener)
-def test_the_old_memory_names_have_a_help(checked, call):
-    assert checked(puts_in_opener(call)).get("help")
+def test_the_old_memory_names_are_unknown(checked, call):
+    found = checked(puts_in_opener(call))
+    assert found["code"] == "CHECK-UNKNOWN-NAME"
+    assert "help" not in found
 
 
 IN_LIBDB = 'extern "/opt/libdb.so"\n%s\nend\n'

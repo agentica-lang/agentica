@@ -64,7 +64,7 @@ def test_the_highlighter_needs_no_list_of_reserved_type_names():
 
 def test_every_builtin_type_a_std_module_re_exports_has_its_written_name():
     # REEXPORTED_TYPES (compiler/syntax/types.agc) is the one table of the written names: it holds each
-    # `export Family.Type` of stdlib/, written as the alias of STD_ONLY_IMPORTS and the member, and each MOVED_TYPES target.
+    # `export Family.Type` of stdlib/, written as the alias of STD_ONLY_IMPORTS and the member.
     def table(path, name):
         text = (ROOT / "compiler" / path).read_text(encoding="utf-8")
         return re.search(r"^export %s: Map\[.*?\] = \{(.*?)^\}" % name, text, flags=re.M | re.S).group(1)
@@ -88,8 +88,6 @@ def test_every_builtin_type_a_std_module_re_exports_has_its_written_name():
     handles = {name: shown for name, shown in written.items() if '"<%s>"' % shown in text_c}
     assert printed == {name: shown for name, shown in written.items() if name not in handles}
     assert sorted(handles) == ["HttpWire.Client", "HttpWire.Server"]
-    moved = re.findall(r'"\w+": "([^"]+)"', table("catalog/builtins_data.agc", "MOVED_TYPES"))
-    assert set(moved) <= set(written)
 
 
 def test_every_builtin_implementation_is_one_the_vm_has():

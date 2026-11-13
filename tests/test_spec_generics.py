@@ -365,8 +365,8 @@ CODEC_RULES = {
         with_codec("puts(JSON.encode(Holder(codec: c)))", header="struct Holder\n  codec: Codec[User]\nend\n\n"),
         "CHECK-NOT-ENCODABLE", "Holder(codec: c)"),
     "Codec needs its type argument": (with_codec("d: Codec = c"), "CHECK-UNKNOWN-TYPE", "Codec"),
-    "JSON.Codec is removed": (with_codec("d: JSON.Codec[User] = c"), "CHECK-IMPORT-NAME", "JSON.Codec[User]"),
-    "JSON.codec is removed": (with_codec("d = JSON.codec(User)"), "CHECK-UNKNOWN-NAME", "JSON.codec(User)"),
+    "JSON.Codec is an unknown member": (with_codec("d: JSON.Codec[User] = c"), "CHECK-UNKNOWN-NAME", "JSON.Codec[User]"),
+    "JSON.codec is unknown": (with_codec("d = JSON.codec(User)"), "CHECK-UNKNOWN-NAME", "JSON.codec(User)"),
     "a struct cannot be named Codec": (
         "struct Codec\n  n: Int\nend\n\n" + main("puts(1)"), "CHECK-REDEFINED-NAME", None),
     "a codec cannot be inspected": (with_codec("IO.inspect(c)"), "CHECK-TYPE-MISMATCH", "c"),

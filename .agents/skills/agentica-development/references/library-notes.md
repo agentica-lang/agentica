@@ -291,9 +291,8 @@ tasks, TCP, TLS and HTTP, files and paths, processes. VM internals are in
   with the std module to import. A public raw layer would be a second way to
   do the same job. A type of one reaches users through a re-export of its std
   module (`export LogRegistry.Event`, `bind_reexports` in `modules.agc`), so
-  it reserves no name; a type that moved there goes in `MOVED_TYPES`
-  (`builtins_data.agc`) for the old-name help. A std-only family with records
-  of its own reserves its name for enums (`Builtins.record_family?`). A new
+  it reserves no name. A std-only family with records of its own reserves its
+  name for enums (`Builtins.record_family?`). A new
   re-export also goes in `REEXPORTED_TYPES` (`compiler/syntax/types.agc`):
   messages, `help`, `doc` and the queries print it as `HTTP.Request`; a
   record or enum also goes in `written_names` of `vm/text.c` (a handle in

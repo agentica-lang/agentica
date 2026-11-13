@@ -53,6 +53,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - **Breaking:** `Profile.measure` and `Profile.steps` are
   `System.Profile.measure` and `System.Profile.steps` (#1182); `Profile` is
   unknown, and a program may take it.
+- Old Agentica names (`Digest.sha256`, `LogEvent`, `HttpRequest`,
+  `HTTP.listen`, `Native.string_at`, `JSON.Codec`) no longer get a migration
+  hint: they are unknown names with the usual did-you-mean.
 
 ## [0.31.0-alpha.1] - 2026-11-12
 
