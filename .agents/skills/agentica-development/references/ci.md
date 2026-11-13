@@ -212,12 +212,8 @@ without `vm/tests/`, so every run is a full run, which checks the names of the
 settings and reports a stale ignore of the rules). It is an Agentica program:
 `make cchecker` clones the tag pinned in `mk/vm-test.mk` (`CCHECKER_VERSION`,
 checked against `CCHECKER_COMMIT`; the release has no binary) into
-`build/cchecker/`, and needs gcc 10+, clang and clang-tidy. Until Agentica
-0.31.0 final it runs on a released Agentica (`CCHECKER_AGENTICA_VERSION`, which
-`make cchecker-agentica` downloads and checks against the `SHA256SUMS` of the
-release), not on `dist/agentica`, so a language change does not break it
-(#1490 moves it back). Set `CCHECKER_AGENTICA=/path/to/agentica` to use a
-binary you have and skip the download. A run takes 3 to 5 minutes. Its docs are
+`build/cchecker/`, and needs gcc 10+, clang and clang-tidy; `dist/agentica`
+runs it (`make` first). A run takes 3 to 5 minutes. Its docs are
 in that clone (`docs/settings.md`, `docs/suppressions.md`).
 
 - `cchecker.toml` holds the settings (`[library]`, `[roots]`, `[assume]`);
@@ -228,8 +224,7 @@ in that clone (`docs/settings.md`, `docs/suppressions.md`).
 - The CI job `cchecker` runs when `vm/`, the build files, `.clang-tidy` or those
   two files change, and blocks: `test` needs it (skipped counts only when it
   did not run). A clone step tries the pinned tag three times, so a network
-  failure shows there (a commit that is not the pinned one fails at once); a
-  step of its own downloads the release of Agentica the same way.
+  failure shows there (a commit that is not the pinned one fails at once).
   The step fails when cchecker exits non-zero (the JSON says which: new
   findings, a stale ignore included, or a tool error), and the print step
   fails on an empty or invalid JSON. It prints the new findings, the tool errors and the
