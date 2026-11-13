@@ -35,6 +35,8 @@ end
 ## when it is false, and then for the root files only (the imported files keep the rule): an editor adds an import, or
 ## a name, before it writes the first use. test_file says that the root file is a test file (`agentica test` and
 ## `agentica check` decide by its name): when it has no `main`, its `test_*` functions are its tests (test_main.agc).
+## test_build says that the root file is the step program of `agentica test` (or a `steps.agc` that `check` reads): it
+## and a test file may import the test group of the project's manifest (`group = "test"`), which no other build may.
 ## native_denied says that a --deny-* flag is on, so the VM refuses native code: no module is built, and the bytecode
 ## cache keeps the programs of such runs apart.
 struct Settings
@@ -46,6 +48,7 @@ struct Settings
   self_path: String
   unused: Bool
   test_file: Bool
+  test_build: Bool
   native_denied: Bool
 end
 
@@ -61,6 +64,7 @@ def settings(workspace: Workspace.Workspace, stdlib: String, env: Env) -> Settin
     self_path: "",
     unused: true,
     test_file: false,
+    test_build: false,
     native_denied: false,
   )
 end
@@ -77,6 +81,7 @@ def embedded_settings(workspace: Workspace.Workspace, env: Env, version: String,
     self_path: "",
     unused: true,
     test_file: false,
+    test_build: false,
     native_denied: false,
   )
 end

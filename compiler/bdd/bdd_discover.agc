@@ -2,6 +2,7 @@
 ## under the folders named there. Problems come back as entries too, so the report
 ## shows them next to the files that run.
 
+import TestFiles from "../modules/test_files"
 import {IO_TIMEOUT} from "bdd_files"
 
 ## One feature file or test file, or one problem of the search, as the runner reads it (stdlib/test/runner.agc,
@@ -18,7 +19,7 @@ end
 
 ## The kind of a path by its name: "tests" for `_test.agc`, "feature" for `.feature`, else "".
 def kind_of(path: String) -> String
-  if test_file?(path)
+  if TestFiles.test_file?(path)
     return "tests"
   elsif path.end_with?(".feature")
     return "feature"
@@ -26,9 +27,6 @@ def kind_of(path: String) -> String
 
   ""
 end
-
-## True for the name of a unit test file, `*_test.agc`.
-def test_file?(path: String) -> Bool = path.end_with?("_test.agc")
 
 ## The entries for the given paths: first the problems in the order they were met, then the files sorted by path, each
 ## once. A path is made absolute without following links. A folder is searched for the files whose names fit, in every

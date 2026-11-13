@@ -3,7 +3,9 @@
 ## `sqlite = { git = "https://host/owner/repo", tag = "v1.2.0" }`, with exactly one of `tag` and `ref`, and an optional
 ## `subdir`: the folder of the repository that is the package. The root project's manifest may also write
 ## `name = { path = "../x" }` (a folder on this machine, read in place) and `override = true` (its source wins over any
-## other source of the name in the tree); `require_package` refuses both in the manifest of a package. A failure is
+## other source of the name in the tree); `require_package` refuses both in the manifest of a package. Any dependency
+## may say `group = "test"` (Bundler's `group: :test`): only the tests of the project import it, and a project that
+## depends on the package neither fetches nor locks it (`needed`). A failure is
 ## PKG-MANIFEST-INVALID, with the file and the key path (toml_read.agc). The `[workspace]` table is known here but read
 ## by members.agc, and only for the project's manifest: the manifest of a package skips it. `[native]` is the other way
 ## round: only a package's is used. `[tool.NAME]` belongs to other tools: only its shape is checked. `agentica` is the
@@ -19,12 +21,16 @@ import PackageHash from "package_hash"
 import Toml from "std/toml"
 import Reader from "toml_read"
 
+## The one group a dependency can be in: the tests of the project.
+TEST_GROUP = "test"
+
 ## A direct dependency: the local name (the segment after `pkg/` in an import) and where it comes from. override is
-## true when the manifest says `override = true`.
+## true when the manifest says `override = true`, and test when it says `group = "test"`.
 struct Dependency
   name: String
   source: GitSource.Source
   override: Bool
+  test: Bool
 end
 
 ## Where a native library is on one system: `file`, a path inside the package's native/ folder, `system`, one or more
@@ -127,6 +133,19 @@ end
 ## The local names of the dependencies, in the order of the file.
 def names(manifest: Manifest) -> List[String] = manifest.dependencies.map do |dependency| dependency.name end
 
+## The local names of the dependencies a program that is not a test may import: those not in the test group.
+def program_names(manifest: Manifest) -> List[String] = names(manifest.with(dependencies: needed(manifest)))
+
+## The local names of the dependencies in the test group, which only the tests of the project import.
+def test_names(manifest: Manifest) -> List[String]
+  tests = manifest.dependencies.select do |dependency| dependency.test end
+  tests.map do |dependency| dependency.name end
+end
+
+## The dependencies that a project which depends on this package needs: all but the test group, which is the package's
+## own.
+def needed(manifest: Manifest) -> List[Dependency] = manifest.dependencies.select do |dependency| !dependency.test end
+
 ## Whether the manifest declares a downloaded native artifact on any system: a `[native]` row with
 ## `url`+`sha256`+`member`. Such a project needs a lock even with no dependencies.
 def has_downloaded(manifest: Manifest) -> Bool
@@ -144,7 +163,7 @@ private
 # The keys the manifest knows, and those of [style] and of a dependency.
 TOP_KEYS = ["name", "agentica", "dependencies", "native", "style", "workspace", "tool"]
 STYLE_KEYS = ["max_line_width", "blank_line_after_end"]
-DEPENDENCY_KEYS = ["git", "tag", "ref", "subdir", "path", "override"]
+DEPENDENCY_KEYS = ["git", "tag", "ref", "subdir", "path", "override", "group"]
 GIT_KEYS = ["git", "tag", "ref", "subdir"]
 PLACE_KEYS = ["file", "system", "url", "sha256", "member"]
 # The systems a native library can be named for. The key is the whole system: a macOS file is a universal binary.
@@ -232,8 +251,8 @@ def dependencies_of(reading: Reader.Reading, root: Map[String, Toml.Value]) -> R
   ok(found)
 end
 
-# One dependency: a git source (`git`, exactly one of `tag` and `ref`, and an optional `subdir`) or a `path`, and an
-# optional `override`; any other key, such as a branch, is refused.
+# One dependency: a git source (`git`, exactly one of `tag` and `ref`, and an optional `subdir`) or a `path`, an
+# optional `override` and an optional `group`; any other key, such as a branch, is refused.
 def dependency_of(reading: Reader.Reading, name: String, value: Toml.Value, path: String) -> Result[Dependency]
   entries = try Reader.table(reading, value, path)
   try Reader.known_keys(reading, entries, DEPENDENCY_KEYS, path)
@@ -242,13 +261,28 @@ def dependency_of(reading: Reader.Reading, name: String, value: Toml.Value, path
     override = try Reader.boolean(reading, entries["override"], Reader.child(path, "override"))
   end
 
+  test = try test_group_of(reading, entries, path)
   if entries.has_key?("path")
     source = try path_source_of(reading, entries, path)
-    return ok(Dependency(name: name, source: source, override: override))
+    return ok(Dependency(name: name, source: source, override: override, test: test))
   end
 
   source = try git_source_of(reading, entries, path)
-  ok(Dependency(name: name, source: source, override: override))
+  ok(Dependency(name: name, source: source, override: override, test: test))
+end
+
+# `group = "test"`, or false when the key is left out. `test` is the only group.
+def test_group_of(reading: Reader.Reading, entries: Map[String, Toml.Value], path: String) -> Result[Bool]
+  return ok(false) if !entries.has_key?("group")
+
+  here = Reader.child(path, "group")
+  group = try Reader.text(reading, entries["group"], here)
+  if group != TEST_GROUP
+    help = "write group = \"#{TEST_GROUP}\" for a dependency that only the tests import, or leave the key out"
+    return error(Reader.fail_help(reading, here, "not a group", help))
+  end
+
+  ok(true)
 end
 
 # A dependency that is a folder on this machine: `path` and nothing of a git source.

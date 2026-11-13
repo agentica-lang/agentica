@@ -20,10 +20,13 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   stopped, files written) instead of ending it at once, and `SIGQUIT` does the
   same and exits with 131 instead of dumping core (#1477).
 - `std/actor`: `Actor.Timeout`, a receive timeout that wakes an actor when no message came in time (#1523).
+- Test-only dependencies: `group = "test"` on a dependency of `agentica.toml` (`agentica add ... --group test`); only the tests import it, and projects that depend on the package do not fetch it (#1196).
 
 ### Changed
 
+- The `location` of an error that a function of an `extern module` block returns is the place of the call, not of the declaration (#1466).
 - **Breaking:** `std/actor`: a call that times out closes its reply channel, and `Actor.reply` gives whether the caller gets the value (a `Bool`) and closes the channel, so an answer to a call that gave up is never lost. Only `&Actor.reply` used as a `Fn[..., Void]` value no longer checks (#1523).
+- **Breaking:** `Task.monitor`: a notice that finds its channel full goes in past the capacity instead of being dropped, and a monitor through a `TaskRef` (`Task.current`) no longer marks the crash of the task as observed (#1522).
 
 ## [0.31.0] - 2026-11-13
 

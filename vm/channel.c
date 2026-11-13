@@ -390,11 +390,13 @@ bool agc_channel_abandoned(agc_vm *vm, const agc_channel *c) {
   return c->abandoned;
 }
 
-/* A send that never waits, for the notice of a monitor (vm/task.c): the value goes to a waiting receiver or into a free
-   slot, as Channel.send would put it; false, and nothing sent, when the channel is closed or full. */
+/* A send that never waits, for the notice of a monitor (vm/task.c): the value goes to a waiting receiver, else into the
+   ring, past the capacity when the channel is full, so an open channel never loses a notice. Senders still wait until
+   the count is below the capacity, so the ring holds at most one value more than the capacity per monitor of the
+   channel. False, and nothing sent, when the channel is closed or a signal channel (System.subscribe). */
 bool agc_channel_offer(agc_vm *vm, agc_channel *c, agc_value v) {
   agc_sync_assert(vm);
-  return !c->closed && !c->signals && deliver(vm, c, v, false);
+  return !c->closed && !c->signals && deliver(vm, c, v, true);
 }
 
 /* The variant ids of System.Signal, by AGC_SIGNAL_* index, found by name the first time (under rt->sync, as every

@@ -1,7 +1,8 @@
 /*
  * The Channel builtins, called directly with hand-made tasks and no bytecode: ring growth and its turn cost,
- * wrap-around, capacity and waiter order, when a channel counts as abandoned by its receiver, when a wait's clock
- * starts, and addresses (one per channel, a send that waits, closed, another run, a channel the collector freed).
+ * wrap-around, capacity and waiter order, a monitor's notice past the capacity, when a channel counts as abandoned by
+ * its receiver, when a wait's clock starts, and addresses (one per channel, a send that waits, closed, another run, a
+ * channel the collector freed).
  */
 #include "../core.h"
 #include "test_support.h"
@@ -265,6 +266,15 @@ static void test_values_back_into_wrapped_ring(void) {
   assert(failed(recv(main_task, ch, 0), "channel: timed out"));
 }
 
+/* The sender at the head of the run queue was given a slot: it runs again and its send of VALUE goes in. */
+static void send_reserved(agc_task *sender, agc_value ch, int64_t value) {
+  assert(ready_head() == sender && sender->channel.reserved);
+  assert(next_ready() == sender);
+  settle();
+  agc_value args[3] = {ch, agc_int(value), agc_int(5000)};
+  assert(sent(now(sender, SEND, args)));
+}
+
 static void test_sender_waits_while_over_capacity(void) {
   agc_value ch = make_channel(2);
   agc_task *receiver = agc_test_task(), *sender = agc_test_task();
@@ -277,14 +287,40 @@ static void test_sender_waits_while_over_capacity(void) {
   assert(got(recv(main_task, ch, 0), 1));
   assert(!ready_head());
   assert(got(recv(main_task, ch, 0), 2));
-  assert(ready_head() == sender && sender->channel.reserved);
-  assert(next_ready() == sender);
-  settle();
-  agc_value args[3] = {ch, agc_int(4), agc_int(5000)};
-  assert(sent(now(sender, SEND, args)));
+  send_reserved(sender, ch, 4);
   assert(got(recv(main_task, ch, 0), 3));
   assert(got(recv(main_task, ch, 0), 4));
   assert(failed(recv(main_task, ch, 0), "channel: timed out"));
+}
+
+/* A monitor's notice (agc_channel_offer) goes into a full channel past its capacity, after the values already in it and
+   before a sender that waits for room, which gets a slot only once the count is below the capacity again; a waiting
+   receiver gets the notice at once; a closed channel refuses it. */
+static void test_offer_past_capacity(void) {
+  agc_value ch = make_channel(1);
+  agc_channel *c = agc_as_channel(&vm, ch);
+  agc_task *sender = agc_test_task(), *receiver = agc_test_task();
+  assert(sent(send(main_task, ch, 1, 0)));
+  wait_send(sender, ch, 4, 5000);
+  assert(agc_channel_offer(&vm, c, agc_int(2)));
+  assert(agc_channel_offer(&vm, c, agc_int(3)));
+  assert(failed(send(main_task, ch, 9, 0), "channel: timed out"));
+  assert(got(recv(main_task, ch, 0), 1));
+  assert(got(recv(main_task, ch, 0), 2));
+  assert(!ready_head());
+  assert(got(recv(main_task, ch, 0), 3));
+  send_reserved(sender, ch, 4);
+  assert(got(recv(main_task, ch, 0), 4));
+  wait_recv(receiver, ch, 5000);
+  assert(agc_channel_offer(&vm, c, agc_int(5)));
+  assert(ready_head() == receiver && receiver->channel.reserved && agc_as_int(&vm, receiver->channel.value) == 5);
+  assert(next_ready() == receiver);
+  settle();
+  agc_value wait_args[2] = {ch, agc_int(5000)};
+  assert(got(now(receiver, RECV, wait_args), 5));
+  close_channel(ch);
+  assert(!agc_channel_offer(&vm, c, agc_int(6)));
+  assert(empty(ch));
 }
 
 static agc_value free_slot_for_senders(agc_task *a, agc_task *b) {
@@ -651,6 +687,7 @@ int main(void) {
   test_value_back_to_full_buffer();
   test_values_back_into_wrapped_ring();
   test_sender_waits_while_over_capacity();
+  test_offer_past_capacity();
   test_reserved_sender_to_receiver();
   test_cancelled_sender();
   test_cancelled_sender_frees_slot();

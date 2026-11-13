@@ -10,6 +10,7 @@ import DiagnosticModel from "../diagnostics/diagnostic_model"
 import Problems from "../diagnostics/problem"
 import Env from "../modules/link_env"
 import Linker from "../modules/linker"
+import TestFiles from "../modules/test_files"
 import Outline from "../query/outline"
 import PartialAt from "../query/partial_at"
 import QueryFiles from "../query/query_files"
@@ -81,9 +82,11 @@ enum Bodied
 end
 
 ## Links and checks the file at `path`, as `agentica check` does: every rule of a build except that the program
-## declares a `main`, so a library file passes. `cache` (cache.agc) only saves work: `Cache.empty()` gives the same
-## answer.
-def check(cache: Cache.Cache, settings: Env.Settings, path: String) -> Verdict
+## declares a `main`, so a library file passes. A test file (`*_test.agc`) is checked as one, and it and a `steps.agc`
+## may import the test group of the manifest (modules/test_files.agc). `cache` (cache.agc) only saves work:
+## `Cache.empty()` gives the same answer.
+def check(cache: Cache.Cache, given: Env.Settings, path: String) -> Verdict
+  settings = TestFiles.for_root(given, path)
   case Front.read_root(settings.workspace, path)
     Front.Root.Unreadable(_) -> Verdict.Unreadable
     Front.Root.Invalid(problem) -> Verdict.Rejected(problem)
@@ -125,7 +128,7 @@ end
 ## The `extern module "NAME"` blocks of the file at `path` (never a `std/` module), linked and checked with what it
 ## imports and without requiring `main`, described for a code generator: native_modules.agc. `cache` only saves work.
 def native_modules(cache: Cache.Cache, settings: Env.Settings, path: String) -> Natived
-  settings = for_query(settings)
+  settings = for_query(settings, path)
   case Front.read_root(settings.workspace, path)
     Front.Root.Unreadable(_) -> Natived.Unreadable
     Front.Root.Invalid(problem) -> Natived.Rejected(problem)
@@ -145,7 +148,7 @@ end
 ## The functions of the file at `path` (never a `std/` module) with their bodies as a typed tree, linked and checked
 ## with what it imports and without requiring `main`: bodies.agc. Experimental. `cache` only saves work.
 def bodies(cache: Cache.Cache, settings: Env.Settings, path: String) -> Bodied
-  settings = for_query(settings)
+  settings = for_query(settings, path)
   case Front.read_root(settings.workspace, path)
     Front.Root.Unreadable(_) -> Bodied.Unreadable
     Front.Root.Invalid(problem) -> Bodied.Rejected(problem)
@@ -171,7 +174,7 @@ end
 ## The type and the definition at the position `asked` of a file of the disk (never a `std/` module), linked and
 ## checked with what it imports and without requiring `main`. `cache` only saves work, as for `check`.
 def type_at(cache: Cache.Cache, settings: Env.Settings, asked: QueryPosition.Asked) -> Typed
-  settings = for_query(settings)
+  settings = for_query(settings, asked.file)
   case position_front(cache, settings, asked, true)
     Fronted.Unreadable -> Typed.Unreadable
     Fronted.Rejected(problem) -> Typed.Rejected(problem)
@@ -187,7 +190,7 @@ end
 ## that the link cannot name are the first problem, as for `type_at`; a position on no expression is
 ## QUERY-NO-EXPRESSION.
 def type_at_partial(cache: Cache.Cache, settings: Env.Settings, asked: QueryPosition.Asked) -> Typed
-  settings = for_query(settings)
+  settings = for_query(settings, asked.file)
   case partial_front(cache, settings, asked)
     Partly.Unreadable -> Typed.Unreadable
     Partly.Rejected(problem) -> Typed.Rejected(problem)
@@ -211,7 +214,7 @@ end
 ## position in a function that did not check that the link cannot name. Any other position that names nothing is
 ## QUERY-NO-EXPRESSION.
 def refs_partial(cache: Cache.Cache, settings: Env.Settings, asked: QueryPosition.Asked) -> Referenced
-  settings = for_query(settings)
+  settings = for_query(settings, asked.file)
   case partial_front(cache, settings, asked)
     Partly.Unreadable -> Referenced.Unreadable
     Partly.Rejected(problem) -> Referenced.Rejected(problem)
@@ -234,7 +237,7 @@ end
 ## and checked as for `type_at`) and what it imports; a file that only imports it is not seen: `refs_at` adds files.
 ## `cache` only saves work.
 def refs(cache: Cache.Cache, settings: Env.Settings, asked: QueryPosition.Asked) -> Referenced
-  settings = for_query(settings)
+  settings = for_query(settings, asked.file)
   case position_front(cache, settings, asked, false)
     Fronted.Unreadable -> Referenced.Unreadable
     Fronted.Rejected(problem) -> Referenced.Rejected(problem)
@@ -254,7 +257,7 @@ def refs_at(
   paths: List[String],
   usage: String,
 ) -> Referenced
-  settings = for_query(settings)
+  settings = for_query(settings, asked.file)
   return refs(cache, settings, asked) if paths.size == 0
 
   case Front.read_root(settings.workspace, asked.file)
@@ -292,7 +295,7 @@ def refs_named(
   buffer: String,
   usage: String,
 ) -> Referenced
-  settings = for_query(settings)
+  settings = for_query(settings, "")
   return Referenced.Rejected(QueryOptions.refusal("missing NAME or FILE:LINE:COL", usage)) if name == ""
 
   case SymbolPaths.expand(settings.workspace, paths, buffer, usage)
@@ -322,7 +325,7 @@ def symbol(
   buffer: String,
   usage: String,
 ) -> Found
-  settings = for_query(settings)
+  settings = for_query(settings, "")
   return Found.Rejected(QueryOptions.refusal("missing NAME", usage)) if name == ""
 
   case SymbolPaths.expand(settings.workspace, paths, buffer, usage)
@@ -508,6 +511,10 @@ def shown(settings: Env.Settings, match: Symbol.Match) -> Symbol.Match
   match.with(file: QueryFiles.display(settings, match.file, true))
 end
 
-# The settings of a query: an import or a variable that nothing uses yet is not an error in the file asked about,
-# since an editor adds the name first. The files it imports keep the rule, and `check` keeps refusing it everywhere.
-def for_query(settings: Env.Settings) -> Env.Settings = settings.with(unused: false)
+# The settings of a query about the file `root` ("" for a search over many files): an import or a variable that
+# nothing uses yet is not an error in the file asked about, since an editor adds the name first. The files it imports
+# keep the rule, and `check` keeps refusing it everywhere. A test file is read as `check` reads it, so it may import
+# the test group of the manifest (modules/test_files.agc).
+def for_query(settings: Env.Settings, root: String) -> Env.Settings
+  TestFiles.for_root(settings, root).with(unused: false)
+end

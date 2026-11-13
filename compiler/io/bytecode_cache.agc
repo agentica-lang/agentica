@@ -254,6 +254,12 @@ def entry_for(settings: Env.Settings, root: String) -> Result[Entry]
     named = root
   end
 
+  # A step program may import the test group of the manifest, which a run of the same file may not.
+  if settings.test_build
+    root = "steps #{root}"
+    named = root
+  end
+
   # Under a --deny-* flag no module is built (Settings.native_denied), so the program names a library to build by its
   # bare name, which the VM refuses with the rest of the native code: it has an entry of its own, never a plain run's.
   if settings.native_denied

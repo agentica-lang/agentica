@@ -56,7 +56,8 @@ the `Ref`; there are no methods.
 - A crash in a handler ends the actor (its diagnostic prints, `terminate` does
   not run, queued messages are lost). A crash nothing observes fails the run
   when `main` returns: observe it with `Actor.stop`, `Task.await(ref.task)` or
-  `Task.monitor(ref.task, ...)`. A monitor notice into a full inbox is dropped.
+  `Task.monitor(ref.task, ...)`. A monitor notice into a full inbox still goes
+  in, past its capacity.
 - The actor is a child of the task that calls `start`: a crash or cancel of
   that task cancels it. Start long-lived actors from `main` or a supervisor.
 - `timeout_ms` of `stop` must be above 0 (`RUNTIME-INVALID-DURATION`); give

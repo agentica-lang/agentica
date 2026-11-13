@@ -40,12 +40,20 @@ struct Origin
   library: Bool
 end
 
-## A package that the build has loaded and hashed: the same fields as its Origin, and the names its own manifest
-## declares, which its files may import.
+## The names a manifest declares: those a program may import, and its test group (`group = "test"`), which only its
+## own tests import.
+struct Names
+  program: List[String]
+  tests: List[String]
+end
+
+## A package that the build has loaded and hashed: the same fields as its Origin, the names its own manifest declares,
+## which its files may import, and its test group, which they may not.
 struct Opened
   root: String
   label: String
   names: List[String]
+  tests: List[String]
   natives: Map[String, NativeLibrary.Target]
   watched: List[String]
   probed: List[String]
@@ -59,7 +67,8 @@ end
 ## `style_dir`, the folder of the manifest when it asks for a `[style]` rule ("" when it does not, or when there is
 ## no manifest), with the rules it asks for: `blank_line_after_end` and `max_line_width` (0 for no limit).
 ## `agentica` is the running Agentica version, which the `agentica` key of each package's manifest is checked against
-## ("" checks nothing).
+## ("" checks nothing). `tests` are the names of the project's test group (`group = "test"`) that this build may not
+## import: all of them, until `with_tests` says the build is a test.
 struct Scope
   deps: String
   os: String
@@ -67,9 +76,10 @@ struct Scope
   watched: List[String]
   probed: List[String]
   direct: List[String]
+  tests: List[String]
   lock: Lock.Lock
   members: Members.Members
-  declared: Map[String, List[String]]
+  declared: Map[String, Names]
   opened: Map[String, Opened]
   native_root: String
   style_dir: String
@@ -103,6 +113,7 @@ def scope_of(project: Project.Project) -> Scope
         watched: [],
         probed: [],
         direct: [],
+        tests: [],
         lock: Lock.Lock(file: "", packages: [], artifacts: []),
         members: Members.empty(),
         declared: {},
@@ -121,6 +132,7 @@ def scope_of(project: Project.Project) -> Scope
         watched: [],
         probed: [],
         direct: Project.direct_names(project),
+        tests: Project.test_names(project),
         lock: found.lock,
         members: found.members,
         declared: {},
@@ -133,6 +145,10 @@ def scope_of(project: Project.Project) -> Scope
       )
   end
 end
+
+## The scope of a test build (a `*_test.agc` file, the step program of `agentica test`): the files of the project may
+## import the test group too.
+def with_tests(scope: Scope) -> Scope = scope.with(direct: scope.direct.concat(scope.tests), tests: [])
 
 ## The scope with the native libraries of the project's own manifest ([native], for this system). Its files are the
 ## project's own, so they are not hashed; the files of its native/ folder are watched by the bytecode cache.
@@ -207,10 +223,17 @@ end
 ## Tells how the `pkg/` import path file (ending in .agc, a valid library path) reads. A declared name is a package,
 ## and it shadows the library roots for that name. An undeclared name is a library for a file of the project, and
 ## CHECK-IMPORT-PACKAGE for a file of a package, which reaches nothing its manifest does not declare. `pkg/name` alone,
-## naming no module, is CHECK-IMPORT-PATH when `name` is declared.
+## naming no module, is CHECK-IMPORT-PATH when `name` is declared. A name of the project's test group is
+## CHECK-IMPORT-PACKAGE for a file of the project in a build that is not a test.
 def match_import(scope: Scope, origin: Origin, file: String, site: Failure.Site) -> Result[Match]
   names = allowed_names(scope, origin)
   parts = file.split("/")
+  if origin.package == "" and parts.size > 2 and declared?(scope.tests, parts[1])
+    message = "#{parts[1]} is in the test group of agentica.toml, so only the tests import it"
+    help = "import it from a *_test.agc file or the step program, or leave group = \"test\" out of agentica.toml"
+    return error(missing(site, message, help))
+  end
+
   if parts.size == 2
     stem = parts[1].slice(0, parts[1].length - 4)
     if declared?(names, stem)
@@ -220,7 +243,11 @@ def match_import(scope: Scope, origin: Origin, file: String, site: Failure.Site)
     return ok(Match.Package(parts[1], parts.drop(2).join("/")))
   end
 
-  if origin.package != ""
+  if origin.package != "" and declared?(package_tests(scope, origin), parts[1])
+    message = "#{parts[1]} is in the test group of the agentica.toml of #{origin.package}"
+    help = "only the tests of #{origin.package} import it; a project that depends on the package does not fetch it"
+    return error(missing(site, message, help))
+  elsif origin.package != ""
     message = "a file of a package imports only the packages its agentica.toml declares"
     return error(missing(site, message, "declare #{parts[1]} in the agentica.toml of #{origin.package}"))
   end
@@ -305,7 +332,7 @@ def check_folders(workspace: Workspace.Workspace, scope: Scope, folders: Map[Str
     real = workspace.real_path.call(folders[locked.name])
     if real.ok? and workspace.directory_exists.call(real.unwrap!)
       case shape_of(workspace, real.unwrap!)
-        Shape.Absent -> declared = declared.put(locked.name, [])
+        Shape.Absent -> declared = declared.put(locked.name, Names(program: [], tests: []))
         Shape.Regular ->
           names = try read_names(workspace, scope, locked.name, real.unwrap!)
           declared = declared.put(locked.name, names)
@@ -408,7 +435,8 @@ def load(workspace: Workspace.Workspace, scope: Scope, locked: Lock.Locked, site
     Opened(
       root: real.unwrap!,
       label: Lock.label(locked),
-      names: names,
+      names: names.program,
+      tests: names.tests,
       natives: native.targets,
       watched: watched,
       probed: native.probed,
@@ -471,7 +499,7 @@ def names_of(
   locked: Lock.Locked,
   root: String,
   site: Failure.Site,
-) -> Result[List[String]]
+) -> Result[Names]
   return ok(scope.declared[locked.name]) if scope.declared.has_key?(locked.name)
 
   declared_names(workspace, scope, locked.name, root, site)
@@ -488,9 +516,9 @@ def declared_names(
   package: String,
   root: String,
   site: Failure.Site,
-) -> Result[List[String]]
+) -> Result[Names]
   case shape_of(workspace, root)
-    Shape.Absent -> ok([])
+    Shape.Absent -> ok(Names(program: [], tests: []))
     Shape.Regular -> read_names(workspace, scope, package, root)
     Shape.Unsafe(name) ->
       message = "#{name} in the package is not a regular file"
@@ -532,10 +560,10 @@ end
 
 # The names the manifest of the package `name` declares, after its checks: the running Agentica version first
 # (PKG-AGENTICA-TOO-OLD), then the lock.
-def read_names(workspace: Workspace.Workspace, scope: Scope, name: String, root: String) -> Result[List[String]]
+def read_names(workspace: Workspace.Workspace, scope: Scope, name: String, root: String) -> Result[Names]
   manifest = try Manifest.read_checked(workspace, Paths.join(root, MANIFEST_FILE), name, scope.agentica)
   try Project.check_dependencies(scope.lock, manifest, scope.members, true)
-  ok(Manifest.names(manifest))
+  ok(Names(program: Manifest.program_names(manifest), tests: Manifest.test_names(manifest)))
 end
 
 def declared?(names: List[String], name: String) -> Bool = names.any? do |declared| declared == name end
@@ -557,6 +585,13 @@ def allowed_names(scope: Scope, origin: Origin) -> List[String]
   end
 
   scope.opened[origin.package].names
+end
+
+# The test group of the package a file belongs to, which its files may not import.
+def package_tests(scope: Scope, origin: Origin) -> List[String]
+  return [] if !scope.opened.has_key?(origin.package)
+
+  scope.opened[origin.package].tests
 end
 
 # The folder of the manifest when it asks for a style rule, else "".

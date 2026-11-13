@@ -1,0 +1,15 @@
+{
+  "exit": 1,
+  "code": null,
+  "steps": 40,
+  "stdout": [
+    "ok(\"down TaskExit.Crashed\")",
+    "true",
+    ""
+  ],
+  "stderr": [
+    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/task-monitor-ref.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":14,\"line\":5},\"start\":{\"column\":13,\"line\":5}},\"spawned_at\":{\"column\":11,\"file\":\"@fixtures/vm/task-monitor-ref.agc\",\"line\":11},\"stack\":[{\"column\":13,\"file\":\"@fixtures/vm/task-monitor-ref.agc\",\"function\":\"caller\",\"line\":5}],\"task\":true}",
+    "{\"unobserved_crashes\":1,\"first\":\"task crashed: RUNTIME-DIVISION-BY-ZERO at @fixtures/vm/task-monitor-ref.agc:5:13: division by zero\"}",
+    ""
+  ]
+}

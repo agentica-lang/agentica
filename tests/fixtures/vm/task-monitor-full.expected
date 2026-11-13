@@ -1,0 +1,18 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 85,
+  "stdout": [
+    "error(\"channel: timed out\", kind: \"channel.timeout\")",
+    "ok(\"busy\")",
+    "[\"down TaskExit.Crashed\", \"down TaskExit.Ok\"]",
+    "ok()",
+    "ok(\"room\")",
+    "5",
+    ""
+  ],
+  "stderr": [
+    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/task-monitor-full.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":14,\"line\":5},\"start\":{\"column\":13,\"line\":5}},\"spawned_at\":{\"column\":13,\"file\":\"@fixtures/vm/task-monitor-full.agc\",\"line\":12},\"stack\":[{\"column\":13,\"file\":\"@fixtures/vm/task-monitor-full.agc\",\"function\":\"divide\",\"line\":5}],\"task\":true}",
+    ""
+  ]
+}
