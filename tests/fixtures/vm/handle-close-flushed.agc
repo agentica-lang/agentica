@@ -1,10 +1,10 @@
 struct Job
   path: String
   n: Int
-  files: Channel[FileHandle]
+  files: Channel[File.Handle]
 end
 
-def write_and_return(job: Job) -> FileHandle
+def write_and_return(job: Job) -> File.Handle
   file = Result.unwrap!(File.open(job.path, "write", 5000))
   Result.unwrap!(File.write(file, "returned #{job.n}\n", 5000))
   return file
@@ -29,7 +29,7 @@ end
 
 def main() -> Void
   path = Result.unwrap!(Path.join([System.args()[0], "flushed.txt"]))
-  files: Channel[FileHandle] = Channel.new(1)
+  files: Channel[File.Handle] = Channel.new(1)
 
   stale = 0
   for n in 0...200

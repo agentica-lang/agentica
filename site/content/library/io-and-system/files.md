@@ -10,7 +10,7 @@ Every file function takes a timeout in milliseconds and returns a `Result`. It d
 - With `--deny-fs` (or `--sandbox`), every call on this page except `Path.join`, and `Lazy.write_lines` and `Lazy.write_bytes`, returns an error that begins with `denied: --deny-fs`.
 - Regular files use a pool of 4 threads, shared with DNS lookups and TLS certificate loading, so calls wait for a free thread when many run. Raise it (at most 1024) before the program starts: `UV_THREADPOOL_SIZE=16 agentica app.agc`.
 - Pipes, FIFOs and terminals skip the pool and wait on the event loop, so their timeout always ends the wait. `File.read_text` of a pipe reads until the writer closes it.
-- File calls accept regular files and symbolic links to them, and also FIFOs, pipes and devices that can wait. They reject directories, a missing path for a read, and a path that reopens a pipe the VM made for itself. `FileHandle` and `FileInfo` are reserved names, and a file handle is opaque.
+- File calls accept regular files and symbolic links to them, and also FIFOs, pipes and devices that can wait. They reject directories, a missing path for a read, and a path that reopens a pipe the VM made for itself. `File` is a reserved name, with the members `File.Handle` and `File.Info`; a file handle is opaque.
 
 ## File.write_text
 
@@ -100,10 +100,10 @@ end
 ## File.stat
 
 ```signature
-File.stat(path: String, timeout_ms: Int = 30000) -> Result[FileInfo]
+File.stat(path: String, timeout_ms: Int = 30000) -> Result[File.Info]
 ```
 
-Gives a `FileInfo`: `kind`, `size_bytes`, `modified_seconds`, `mode`, `user_id`, `group_id`. A symbolic link is followed.
+Gives a `File.Info`: `kind`, `size_bytes`, `modified_seconds`, `mode`, `user_id`, `group_id`. A symbolic link is followed.
 
 - `kind` is Ruby's `File::Stat#ftype` name: `"file"` (a regular file only), `"directory"`, `"fifo"`, `"socket"`, `"characterSpecial"` (such as `/dev/null`), `"blockSpecial"` or `"unknown"`. Windows gives `"file"`, `"directory"`, `"link"` (`File.lstat` of a reparse point) and `"characterSpecial"` for `NUL`. Check `kind == "file"` before reading a path you did not make: a read of a FIFO can wait for a writer.
 
@@ -120,7 +120,7 @@ end
 ## File.lstat
 
 ```signature
-File.lstat(path: String, timeout_ms: Int = 30000) -> Result[FileInfo]
+File.lstat(path: String, timeout_ms: Int = 30000) -> Result[File.Info]
 ```
 
 Like `File.stat`, but a symbolic link is not followed: `kind` is `"link"`, `size_bytes` is the length of the link text, the other fields are the link's own.
@@ -128,8 +128,8 @@ Like `File.stat`, but a symbolic link is not followed: `kind` is `"link"`, `size
 ## File.open and File.close
 
 ```signature
-File.open(path: String, mode: String = "read", timeout_ms: Int = 30000) -> Result[FileHandle]
-File.close(handle: FileHandle, timeout_ms: Int = 30000) -> Result[Void]
+File.open(path: String, mode: String = "read", timeout_ms: Int = 30000) -> Result[File.Handle]
+File.close(handle: File.Handle, timeout_ms: Int = 30000) -> Result[Void]
 ```
 
 Opens a file for streaming.
@@ -189,8 +189,8 @@ end
 ## File.write and File.flush
 
 ```signature
-File.write(handle: FileHandle, text: String, timeout_ms: Int = 30000) -> Result[Void]
-File.flush(handle: FileHandle, timeout_ms: Int = 30000) -> Result[Void]
+File.write(handle: File.Handle, text: String, timeout_ms: Int = 30000) -> Result[Void]
+File.flush(handle: File.Handle, timeout_ms: Int = 30000) -> Result[Void]
 ```
 
 `write` adds text to an open file. `flush` sends what is buffered to the disk.
@@ -214,7 +214,7 @@ end
 ## File.try_lock
 
 ```signature
-File.try_lock(handle: FileHandle, timeout_ms: Int = 30000) -> Result[Bool]
+File.try_lock(handle: File.Handle, timeout_ms: Int = 30000) -> Result[Bool]
 ```
 
 Takes an exclusive lock on the open file, without waiting. `ok(true)` means it is yours (also if this handle already holds it), `ok(false)` that another handle or process holds it.
@@ -239,7 +239,7 @@ end
 ## File.read_line
 
 ```signature
-File.read_line(handle: FileHandle, timeout_ms: Int = 30000) -> Result[String]
+File.read_line(handle: File.Handle, timeout_ms: Int = 30000) -> Result[String]
 ```
 
 Reads one line without its line ending (LF or CRLF; a final line without one counts). The text is strict UTF-8. At the end of the file, or on invalid UTF-8, it gives an error result. Loop with `while line.ok?`, or use `File.each_line`.
@@ -273,8 +273,8 @@ end
 ## File.read_bytes and File.write_bytes
 
 ```signature
-File.read_bytes(handle: FileHandle, max_bytes: Int, timeout_ms: Int = 30000) -> Result[Bytes]
-File.write_bytes(handle: FileHandle, bytes: Bytes, timeout_ms: Int = 30000) -> Result[Void]
+File.read_bytes(handle: File.Handle, max_bytes: Int, timeout_ms: Int = 30000) -> Result[Bytes]
+File.write_bytes(handle: File.Handle, bytes: Bytes, timeout_ms: Int = 30000) -> Result[Void]
 ```
 
 Both take and give a [`Bytes`](/library/data-structures/bytes/). `read_bytes` reads 1 to 1048576 bytes and gives empty bytes at the end of the file; `write_bytes` writes at most 1048576 bytes per call.

@@ -640,9 +640,20 @@ uint32_t agc_error_struct(const agc_program *program) {
   return found != UINT32_MAX && error_types(program, found) ? found : UINT32_MAX;
 }
 
+/* The builtin records that #1182 renamed, with the name that the bytecode of an older front end (the checked-in
+   stage0, which compiles the first front end of a build) gives them. */
+static const char *const renamed_structs[][2] = {
+    {"File.Info", "FileInfo"},
+};
+
 uint32_t agc_builtin_struct(agc_vm *vm, const char *name, const char *const *fields, uint32_t count) {
   uint32_t found = find_struct(vm->rt->program, name, fields, count);
   if (found != UINT32_MAX) return found;
+  for (size_t k = 0; k < sizeof renamed_structs / sizeof renamed_structs[0]; k++)
+    if (strcmp(name, renamed_structs[k][0]) == 0) {
+      found = find_struct(vm->rt->program, renamed_structs[k][1], fields, count);
+      if (found != UINT32_MAX) return found;
+    }
   size_t size = agc_size_add(strlen(name), 48);
   char *message = agc_alloc_atomic(size);
   snprintf(message, size, "invalid bytecode: the %s struct is missing", name);

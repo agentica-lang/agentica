@@ -2,7 +2,7 @@ def at(dir: String, name: String) -> String
   return Result.unwrap!(Path.join([dir, name]))
 end
 
-def describe(label: String, result: Result[FileInfo]) -> Void
+def describe(label: String, result: Result[File.Info]) -> Void
   if result.ok?
     info = Result.unwrap!(result)
     puts("#{label} #{info.kind} #{info.size_bytes}")

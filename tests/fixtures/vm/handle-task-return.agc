@@ -7,7 +7,7 @@ def dial_and_return(port: Int) -> Socket
   return Result.unwrap!(TCP.connect("127.0.0.1", port, 5000))
 end
 
-def open_and_return(path: String) -> FileHandle
+def open_and_return(path: String) -> File.Handle
   return Result.unwrap!(File.open(path, "write", 5000))
 end
 
@@ -15,7 +15,7 @@ def listen_and_return(host: String) -> Listener
   return Result.unwrap!(TCP.listen(host, 0))
 end
 
-def write_to(file: FileHandle) -> Result[Void]
+def write_to(file: File.Handle) -> Result[Void]
   return File.write(file, "from the helper\n", 5000)
 end
 

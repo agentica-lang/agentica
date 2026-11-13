@@ -181,7 +181,7 @@ end
 # (LOCK_WAIT_MS), so a run that starts waiting just after a build began does not give up before that build ends. The
 # file is made private like the rest of the cache, or must already be (private_kind): another user that could open it
 # could hold its lock and stall every first build.
-def locked(request: Workspace.BuildRequest, path: String, user: Int) -> Result[FileHandle]
+def locked(request: Workspace.BuildRequest, path: String, user: Int) -> Result[File.Handle]
   help = "remove the file #{path}"
   opened = File.open(path, "create_private", FILE_TIMEOUT_MS)
   if !opened.ok?

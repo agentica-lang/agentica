@@ -39,7 +39,7 @@ end
 """
 
 LSTAT_PROGRAM = """\
-def show(label: String, r: Result[FileInfo]) -> Void
+def show(label: String, r: Result[File.Info]) -> Void
   if r.ok?
     info = Result.unwrap!(r)
     puts("#{label} #{info.kind} #{info.size_bytes} #{info.mode} #{info.user_id} #{info.group_id} #{info.modified_seconds}")

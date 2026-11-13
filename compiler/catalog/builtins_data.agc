@@ -59,7 +59,7 @@ export RECORDS: List[Model.Record] = [
     ],
   ),
   Model.Record(
-    name: "FileInfo",
+    name: "File.Info",
     fields: [
       Model.Named(name: "kind", type: Types.Type.String),
       Model.Named(name: "size_bytes", type: Types.Type.Int),
@@ -310,12 +310,12 @@ export ENUMS: List[Model.EnumDef] = [
 ]
 
 ## The handle types a task can be given with Task.spawn_owning.
-export HANDLE_TYPES: List[String] = ["Socket", "Listener", "HttpWire.Server", "FileHandle", "Process"]
+export HANDLE_TYPES: List[String] = ["Socket", "Listener", "HttpWire.Server", "File.Handle", "Process"]
 
 ## The builtin types with no structure: handles, TestCase, TlsContext, C.Pointer (a C pointer of native code),
 ## TaskRef (the running task, from Task.current) and Native.Mutex (the lock of a native library).
 export OPAQUE_TYPES: List[String] = [
-  "Socket", "Listener", "HttpWire.Client", "HttpWire.Server", "FileHandle", "Process", "TestCase", "TlsContext",
+  "Socket", "Listener", "HttpWire.Client", "HttpWire.Server", "File.Handle", "Process", "TestCase", "TlsContext",
   "C.Pointer", "TaskRef", "Native.Mutex",
 ]
 
@@ -331,8 +331,6 @@ export RESERVED_TYPE_NAMES: List[String] = [
   "Dir",
   "Error",
   "File",
-  "FileHandle",
-  "FileInfo",
   "Float",
   "Fn",
   "IO",
@@ -378,7 +376,7 @@ export RESERVED_TYPE_NAMES: List[String] = [
 ## Family.Member: a group of functions (the rows named Family.Member.fn) or a builtin type named Family.Member (a
 ## record, an enum or an opaque type). A new member, or a new function of a member, only adds its rows or its type and
 ## reserves no name.
-export FAMILIES: List[String] = ["JSON", "OpenSSL"]
+export FAMILIES: List[String] = ["File", "JSON", "OpenSSL"]
 
 ## The modules only std/ may call: each name with the std module that wraps it and the alias its help shows.
 export STD_ONLY_IMPORTS: Map[String, List[String]] = {
@@ -403,11 +401,9 @@ export MOVED_TYPES: Map[String, String] = {
 }
 
 ## The nested names of the builtin types (and of the Profile functions) that keep their old name for now: a program
-## may write either, File.Info or FileInfo, and the linker turns the nested name into the old one, which the checker,
+## may write either, File.Info or File.Info, and the linker turns the nested name into the old one, which the checker,
 ## the lowering and the VM know (#1182). A value still prints with the old name until its family moves.
 export NESTED_NAMES: Map[String, String] = {
-  "File.Handle": "FileHandle",
-  "File.Info": "FileInfo",
   "Process.Output": "ProcessOutput",
   "System.Profile": "Profile",
   "TCP.Listener": "Listener",
@@ -617,7 +613,7 @@ ROWS_3: List[Model.Builtin] = [
   Model.Builtin(
     name: "File.close",
     parameters: [
-      Model.Named(name: "handle", type: Types.Type.Opaque("FileHandle")),
+      Model.Named(name: "handle", type: Types.Type.Opaque("File.Handle")),
       Model.Named(name: "timeout_ms", type: Types.Type.Int, default: Model.Default.Whole(30000)),
     ],
     result: Types.Type.Result(Types.Type.Void),
@@ -651,7 +647,7 @@ ROWS_4: List[Model.Builtin] = [
   Model.Builtin(
     name: "File.flush",
     parameters: [
-      Model.Named(name: "handle", type: Types.Type.Opaque("FileHandle")),
+      Model.Named(name: "handle", type: Types.Type.Opaque("File.Handle")),
       Model.Named(name: "timeout_ms", type: Types.Type.Int, default: Model.Default.Whole(30000)),
     ],
     result: Types.Type.Result(Types.Type.Void),
@@ -684,7 +680,7 @@ ROWS_4: List[Model.Builtin] = [
       Model.Named(name: "path", type: Types.Type.String),
       Model.Named(name: "timeout_ms", type: Types.Type.Int, default: Model.Default.Whole(30000)),
     ],
-    result: Types.Type.Result(Types.Type.Struct("FileInfo", [])),
+    result: Types.Type.Result(Types.Type.Struct("File.Info", [])),
     rule: Model.Rule.Plain,
     implementation: "File.lstat",
     effects: ["filesystem"],
@@ -701,7 +697,7 @@ ROWS_5: List[Model.Builtin] = [
       Model.Named(name: "mode", type: Types.Type.String, default: Model.Default.Text("read")),
       Model.Named(name: "timeout_ms", type: Types.Type.Int, default: Model.Default.Whole(30000)),
     ],
-    result: Types.Type.Result(Types.Type.Opaque("FileHandle")),
+    result: Types.Type.Result(Types.Type.Opaque("File.Handle")),
     rule: Model.Rule.Plain,
     implementation: "File.open",
     effects: ["filesystem"],
@@ -718,7 +714,7 @@ ROWS_5: List[Model.Builtin] = [
           Model.Named(name: "timeout_ms", type: Types.Type.Int, default: Model.Default.Whole(30000)),
           Model.Named(
             name: "f",
-            type: Types.Type.Fn([Types.Type.Opaque("FileHandle")], Types.Type.Result(Types.Type.Var("A"))),
+            type: Types.Type.Fn([Types.Type.Opaque("File.Handle")], Types.Type.Result(Types.Type.Var("A"))),
           ),
         ],
         result: Types.Type.Result(Types.Type.Var("A")),
@@ -736,7 +732,7 @@ ROWS_5: List[Model.Builtin] = [
   Model.Builtin(
     name: "File.read_bytes",
     parameters: [
-      Model.Named(name: "handle", type: Types.Type.Opaque("FileHandle")),
+      Model.Named(name: "handle", type: Types.Type.Opaque("File.Handle")),
       Model.Named(name: "max_bytes", type: Types.Type.Int),
       Model.Named(name: "timeout_ms", type: Types.Type.Int, default: Model.Default.Whole(30000)),
     ],
@@ -750,7 +746,7 @@ ROWS_5: List[Model.Builtin] = [
   Model.Builtin(
     name: "File.read_line",
     parameters: [
-      Model.Named(name: "handle", type: Types.Type.Opaque("FileHandle")),
+      Model.Named(name: "handle", type: Types.Type.Opaque("File.Handle")),
       Model.Named(name: "timeout_ms", type: Types.Type.Int, default: Model.Default.Whole(30000)),
     ],
     result: Types.Type.Result(Types.Type.String),
@@ -815,7 +811,7 @@ ROWS_6: List[Model.Builtin] = [
       Model.Named(name: "path", type: Types.Type.String),
       Model.Named(name: "timeout_ms", type: Types.Type.Int, default: Model.Default.Whole(30000)),
     ],
-    result: Types.Type.Result(Types.Type.Struct("FileInfo", [])),
+    result: Types.Type.Result(Types.Type.Struct("File.Info", [])),
     rule: Model.Rule.Plain,
     implementation: "File.stat",
     effects: ["filesystem"],
@@ -828,7 +824,7 @@ ROWS_6: List[Model.Builtin] = [
   Model.Builtin(
     name: "File.try_lock",
     parameters: [
-      Model.Named(name: "handle", type: Types.Type.Opaque("FileHandle")),
+      Model.Named(name: "handle", type: Types.Type.Opaque("File.Handle")),
       Model.Named(name: "timeout_ms", type: Types.Type.Int, default: Model.Default.Whole(30000)),
     ],
     result: Types.Type.Result(Types.Type.Bool),
@@ -847,7 +843,7 @@ ROWS_7: List[Model.Builtin] = [
   Model.Builtin(
     name: "File.write",
     parameters: [
-      Model.Named(name: "handle", type: Types.Type.Opaque("FileHandle")),
+      Model.Named(name: "handle", type: Types.Type.Opaque("File.Handle")),
       Model.Named(name: "text", type: Types.Type.String),
       Model.Named(name: "timeout_ms", type: Types.Type.Int, default: Model.Default.Whole(30000)),
     ],
@@ -861,7 +857,7 @@ ROWS_7: List[Model.Builtin] = [
   Model.Builtin(
     name: "File.write_bytes",
     parameters: [
-      Model.Named(name: "handle", type: Types.Type.Opaque("FileHandle")),
+      Model.Named(name: "handle", type: Types.Type.Opaque("File.Handle")),
       Model.Named(name: "bytes", type: Types.Type.Bytes),
       Model.Named(name: "timeout_ms", type: Types.Type.Int, default: Model.Default.Whole(30000)),
     ],

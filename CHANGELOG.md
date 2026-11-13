@@ -36,6 +36,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - **Breaking:** `Json` and `JsonField` are `JSON.Value` and `JSON.Field`
   (#1182); the old names are unknown, and a program may take them. `inspect`
   shows a JSON value as `<JSON.Value>`.
+- **Breaking:** `FileInfo` and `FileHandle` are `File.Info` and `File.Handle`
+  (#1182); the old names are unknown, and a program may take them.
 
 ## [0.31.0-alpha.1] - 2026-11-12
 

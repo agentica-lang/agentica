@@ -1,4 +1,4 @@
-def reader(input: FileHandle) -> Int
+def reader(input: File.Handle) -> Int
   count = 0
   running = true
   while running

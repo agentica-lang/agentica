@@ -80,8 +80,8 @@ end
 ## alias of the same name wins, though a family name is reserved, so only std/ internals could take one.
 export def family?(cx: Context, name: String) -> Bool = FAMILY_MEMBERS.has_key?(name) and !cx.me.aliases.has_key?(name)
 
-## The old builtin name of the nested name Alias.Member (NESTED_NAMES: File.Info is FileInfo), or "" when it is none or
-## the file has an import alias of that name.
+## The old builtin name of the nested name Alias.Member (NESTED_NAMES: TCP.Socket is Socket), or "" when it is none
+## or the file has an import alias of that name.
 export def nested(cx: Context, alias: String, member: String) -> String
   return "" if cx.me.aliases.has_key?(alias)
 
@@ -150,7 +150,7 @@ export def alias_constant_identity(cx: Context, name: String) -> String
 end
 
 ## True when the name is a type that the file declares or imports by name (a struct, enum, type alias or resource), or
-## a builtin record such as FileInfo.
+## a builtin record such as File.Info.
 export def declared_type?(cx: Context, name: String) -> Bool
   return right_kind?(cx.me.names[name], Want.Type) if cx.me.names.has_key?(name)
 

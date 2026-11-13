@@ -246,7 +246,7 @@ SINGLE_FILE = [
     ("File.open still needs its path",
      main_with("  puts(File.open())\n"), "CHECK-ARITY", "File.open()"),
     ("File.open with a block takes the block form, which may leave out the mode and the timeout too",
-     'def size(f: FileHandle) -> Result[Int]\n  return ok((try File.read_line(f)).size)\nend\n\n'
+     'def size(f: File.Handle) -> Result[Int]\n  return ok((try File.read_line(f)).size)\nend\n\n'
      + main_with('  a = File.open("a.txt") do |f|\n    ok(try File.read_line(f))\n  end\n  puts(a)\n'
                  '  b: Result[List[Int]] = File.open("a.txt", "write") do |_|\n    ok([])\n  end\n  puts(b)\n'
                  '  c = File.open("a.txt", "append", 50) do |f|\n    try File.write(f, "x")\n    ok()\n  end\n'
@@ -259,7 +259,7 @@ SINGLE_FILE = [
     ("the expected type of File.open with a block is the Result its block gives",
      main_with('  r: Result[Int] = File.open("a.txt") do |_|\n    ok("s")\n  end\n  puts(r)\n'),
      "CHECK-TYPE-MISMATCH", '"s"'),
-    ("the block of File.open gets a FileHandle",
+    ("the block of File.open gets a File.Handle",
      main_with('  puts(File.open("a.txt") do |f|\n    ok(File.read_text(f))\n  end)\n'), "CHECK-TYPE-MISMATCH", "f"),
     # Function values of builtins (&Time.now_ms, &Int.to_s).
     ("a builtin function is a function value of its type",

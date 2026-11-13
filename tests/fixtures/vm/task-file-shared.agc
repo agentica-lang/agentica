@@ -1,7 +1,7 @@
 # Two tasks read one shared file handle: each line goes to exactly one of them. Each task reads its first line, then
 # waits until both have one, so both get lines whatever the interleaving (a line already in the buffer is read
 # without an I/O job, so one task could otherwise read all 60 first).
-def read_all(input: FileHandle, ready: Channel[Int], go: Channel[Int]) -> List[Int]
+def read_all(input: File.Handle, ready: Channel[Int], go: Channel[Int]) -> List[Int]
   got: List[Int] = []
   running = true
   first = true

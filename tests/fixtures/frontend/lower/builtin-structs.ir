@@ -1,6 +1,6 @@
 program 0:1:1-10:1 entry=0 globals=0
 source 0 "builtin-structs.agc" chars=206
-struct s0 "FileInfo" ["kind","size_bytes","modified_seconds","mode","user_id","group_id"] types=[String, Int, Int, Int, Int, Int]
+struct s0 "File.Info" ["kind","size_bytes","modified_seconds","mode","user_id","group_id"] types=[String, Int, Int, Int, Int, Int]
 struct s1 "ProcessOutput" ["stdout","stderr","truncated"] types=[String, String, Bool]
 struct s2 "Error" ["kind","message","code","details","cause","location"] types=[String, String, Optional(Int), Map(String, String), Optional(Struct(Error)), String]
 enum "Optional" v0="None"/0 v1="Some"/1

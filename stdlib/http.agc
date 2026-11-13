@@ -3880,7 +3880,7 @@ end
 # The response head (after at most MAX_INTERIM interim ones) streamed into the file.
 def stream_download(
   socket: Socket,
-  out: FileHandle,
+  out: File.Handle,
   options: DownloadOptions,
   deadline: Int,
   denied: String,
@@ -3904,7 +3904,7 @@ def stream_download(
 end
 
 # Closes both handles after a failure and reports it; the partial file stays for inspection.
-def fail_download(socket: Socket, out: FileHandle, deadline: Int, message: String) -> Result[Download]
+def fail_download(socket: Socket, out: File.Handle, deadline: Int, message: String) -> Result[Download]
   _ = File.close(out, larger(deadline - Time.monotonic_ms(), 1))
   TCP.close(socket)
   error(message)
@@ -3938,7 +3938,7 @@ def read_head_of(socket: Socket, head_only: Bool, budget: Int, deadline: Int) ->
 end
 
 # Streams the body framing of head into the file and counts its bytes.
-def save_body(socket: Socket, out: FileHandle, head: HttpWire.ResponseHead, budget: Int, deadline: Int) -> Result[Int]
+def save_body(socket: Socket, out: File.Handle, head: HttpWire.ResponseHead, budget: Int, deadline: Int) -> Result[Int]
   return save_chunked(socket, out, budget, deadline) if head.chunked
   return save_until_close(socket, out, budget, deadline) if head.until_close
   save_length(socket, out, head.length, budget, deadline)
@@ -3950,14 +3950,14 @@ def recv_body(socket: Socket, most: Int, deadline: Int) -> Result[Bytes]
 end
 
 # Appends data to the download within the whole-call deadline.
-def write_body(out: FileHandle, data: Bytes, deadline: Int) -> Result[Void]
+def write_body(out: File.Handle, data: Bytes, deadline: Int) -> Result[Void]
   left = deadline - Time.monotonic_ms()
   return error(TIMED_OUT) if left <= 0
   File.write_bytes(out, data, left)
 end
 
 # Appends data without letting the file grow past the budget: writes what fits, then reports TOO_LARGE.
-def write_bounded(out: FileHandle, data: Bytes, written: Int, budget: Int, deadline: Int) -> Result[Int]
+def write_bounded(out: File.Handle, data: Bytes, written: Int, budget: Int, deadline: Int) -> Result[Int]
   room = budget - written
   if data.size > room
     if room > 0
@@ -3970,7 +3970,7 @@ def write_bounded(out: FileHandle, data: Bytes, written: Int, budget: Int, deadl
 end
 
 # A Content-Length body: the head already refused one over the budget, so the count only follows it.
-def save_length(socket: Socket, out: FileHandle, length: Int, budget: Int, deadline: Int) -> Result[Int]
+def save_length(socket: Socket, out: File.Handle, length: Int, budget: Int, deadline: Int) -> Result[Int]
   left = length
   written = 0
   while left > 0
@@ -3983,7 +3983,7 @@ def save_length(socket: Socket, out: FileHandle, length: Int, budget: Int, deadl
 end
 
 # A chunked body: framing goes through the decoder, whose runs say which bytes of each read are body.
-def save_chunked(socket: Socket, out: FileHandle, budget: Int, deadline: Int) -> Result[Int]
+def save_chunked(socket: Socket, out: File.Handle, budget: Int, deadline: Int) -> Result[Int]
   data = NO_BYTES
   state = HttpWire.chunked(budget)
   written = 0
@@ -4007,7 +4007,7 @@ def save_chunked(socket: Socket, out: FileHandle, budget: Int, deadline: Int) ->
 end
 
 # Appends the runs of data (start, length pairs) to the download.
-def write_runs(out: FileHandle, data: Bytes, runs: List[Int], written: Int, budget: Int, deadline: Int) -> Result[Int]
+def write_runs(out: File.Handle, data: Bytes, runs: List[Int], written: Int, budget: Int, deadline: Int) -> Result[Int]
   at = 0
   while at < List.size(runs)
     piece = data.slice(List.at(runs, at), List.at(runs, at + 1))
@@ -4018,7 +4018,7 @@ def write_runs(out: FileHandle, data: Bytes, runs: List[Int], written: Int, budg
 end
 
 # A body that ends with the connection: over TLS the end must be the peer's close_notify.
-def save_until_close(socket: Socket, out: FileHandle, budget: Int, deadline: Int) -> Result[Int]
+def save_until_close(socket: Socket, out: File.Handle, budget: Int, deadline: Int) -> Result[Int]
   written = 0
   while true
     data = try recv_body(socket, BODY_READ_BYTES, deadline)

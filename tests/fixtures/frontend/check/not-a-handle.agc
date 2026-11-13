@@ -21,7 +21,7 @@ def serve(socket: Socket) -> Result[String]
   return TCP.read_line(socket, 10)
 end
 
-def edit(file: FileHandle) -> Void
+def edit(file: File.Handle) -> Void
 end
 
 def watch(p: Process) -> Void

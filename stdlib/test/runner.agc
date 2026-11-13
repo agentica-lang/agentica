@@ -183,7 +183,7 @@ end
 
 # The `--tags` expression: the line after the entries, a JSON string. No line is no filter; a line that cannot be read
 # is a failure, so a run never goes on without the filter that was asked for.
-def read_tags(handle: FileHandle) -> Result[String]
+def read_tags(handle: File.Handle) -> Result[String]
   line = File.read_line(handle, 5000)
   if !line.ok?
     return ok("") if line.message == "filesystem: end of file"
@@ -199,7 +199,7 @@ end
 
 # The `--jobs` line, after the tags line: a JSON integer. A missing or unusable line is one job at a time, the
 # behaviour without the flag.
-def read_jobs(handle: FileHandle) -> Int
+def read_jobs(handle: File.Handle) -> Int
   line = File.read_line(handle, 5000)
   return 1 if !line.ok?
 
@@ -211,7 +211,7 @@ end
 
 # The `--coverage` line, after the timing line: the folder for the LCOV part of each child, as a JSON string. A missing
 # line is no coverage.
-def read_coverage(handle: FileHandle) -> String
+def read_coverage(handle: File.Handle) -> String
   line = File.read_line(handle, 5000)
   return "" if !line.ok?
 
@@ -228,7 +228,7 @@ def covered_run(config: Config, parts: String, entries: List[Entry]) -> Coverage
 end
 
 # The `--timing` line, after the jobs line: a JSON boolean. A missing or unusable line is no timing.
-def read_timing(handle: FileHandle) -> Bool
+def read_timing(handle: File.Handle) -> Bool
   line = File.read_line(handle, 5000)
   return false if !line.ok?
 

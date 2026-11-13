@@ -262,14 +262,14 @@ def close_budget(deadline: Int) -> Int
   smaller(left, CLOSE_MS)
 end
 
-def close_file(handle: FileHandle, budget: Int) -> Void
+def close_file(handle: File.Handle, budget: Int) -> Void
   case File.close(handle, budget)
     ok(_) -> return
     error(_) -> return
   end
 end
 
-def stat_src(src: String, deadline: Int) -> Result[FileInfo]
+def stat_src(src: String, deadline: Int) -> Result[File.Info]
   case File.lstat(src, try time_left(deadline))
     ok(found) -> ok(found)
     error(message) -> error("archive: cannot use #{src}: #{message}")

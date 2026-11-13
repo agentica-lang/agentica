@@ -1,4 +1,4 @@
-def one_line(input: FileHandle) -> Bool
+def one_line(input: File.Handle) -> Bool
   return Result.ok?(File.read_line(input, 60000))
 end
 

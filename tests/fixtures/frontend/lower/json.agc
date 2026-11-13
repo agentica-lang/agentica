@@ -9,7 +9,7 @@ struct Item
   title: String
   tags: List[Tag]
   attrs: Map[String, List[Int]]
-  next: List[FileInfo]
+  next: List[File.Info]
 end
 
 struct Plain

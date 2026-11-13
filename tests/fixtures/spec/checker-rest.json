@@ -2704,7 +2704,7 @@
         "",
         ""
       ],
-      "code": "CHECK-REDEFINED-NAME"
+      "code": null
     },
     {
       "program": [
@@ -2716,7 +2716,7 @@
         "",
         ""
       ],
-      "code": "CHECK-REDEFINED-NAME"
+      "code": null
     }
   ],
   "File.read_bytes, File.write_bytes and File.sha256 use Bytes": [
@@ -3220,7 +3220,7 @@
         "  return TCP.read_line(socket, 10)",
         "end",
         "",
-        "def edit(file: FileHandle) -> Void",
+        "def edit(file: File.Handle) -> Void",
         "end",
         "",
         "def watch(p: Process) -> Void",
@@ -3281,7 +3281,7 @@
         "  return TCP.read_line(socket, 10)",
         "end",
         "",
-        "def edit(file: FileHandle) -> Void",
+        "def edit(file: File.Handle) -> Void",
         "end",
         "",
         "def watch(p: Process) -> Void",
@@ -3337,7 +3337,7 @@
         "  return TCP.read_line(socket, 10)",
         "end",
         "",
-        "def edit(file: FileHandle) -> Void",
+        "def edit(file: File.Handle) -> Void",
         "end",
         "",
         "def watch(p: Process) -> Void",
@@ -3391,7 +3391,7 @@
         "  return TCP.read_line(socket, 10)",
         "end",
         "",
-        "def edit(file: FileHandle) -> Void",
+        "def edit(file: File.Handle) -> Void",
         "end",
         "",
         "def watch(p: Process) -> Void",
@@ -3445,7 +3445,7 @@
         "  return TCP.read_line(socket, 10)",
         "end",
         "",
-        "def edit(file: FileHandle) -> Void",
+        "def edit(file: File.Handle) -> Void",
         "end",
         "",
         "def watch(p: Process) -> Void",
@@ -3499,7 +3499,7 @@
         "  return TCP.read_line(socket, 10)",
         "end",
         "",
-        "def edit(file: FileHandle) -> Void",
+        "def edit(file: File.Handle) -> Void",
         "end",
         "",
         "def watch(p: Process) -> Void",
@@ -3553,7 +3553,7 @@
         "  return TCP.read_line(socket, 10)",
         "end",
         "",
-        "def edit(file: FileHandle) -> Void",
+        "def edit(file: File.Handle) -> Void",
         "end",
         "",
         "def watch(p: Process) -> Void",
@@ -3607,7 +3607,7 @@
         "  return TCP.read_line(socket, 10)",
         "end",
         "",
-        "def edit(file: FileHandle) -> Void",
+        "def edit(file: File.Handle) -> Void",
         "end",
         "",
         "def watch(p: Process) -> Void",
@@ -3661,7 +3661,7 @@
         "  return TCP.read_line(socket, 10)",
         "end",
         "",
-        "def edit(file: FileHandle) -> Void",
+        "def edit(file: File.Handle) -> Void",
         "end",
         "",
         "def watch(p: Process) -> Void",
@@ -3715,7 +3715,7 @@
         "  return TCP.read_line(socket, 10)",
         "end",
         "",
-        "def edit(file: FileHandle) -> Void",
+        "def edit(file: File.Handle) -> Void",
         "end",
         "",
         "def watch(p: Process) -> Void",
@@ -3773,7 +3773,7 @@
         "  return TCP.read_line(socket, 10)",
         "end",
         "",
-        "def edit(file: FileHandle) -> Void",
+        "def edit(file: File.Handle) -> Void",
         "end",
         "",
         "def watch(p: Process) -> Void",
@@ -14198,7 +14198,7 @@
         "  end",
         "end",
         "",
-        "def size(info: File.Info, same: FileInfo) -> Int = info.size_bytes + same.size_bytes",
+        "def size(info: File.Info, same: File.Info) -> Int = info.size_bytes + same.size_bytes",
         "",
         "def handles(h: File.Handle, s: TCP.Socket, l: TCP.Listener, c: TLS.Context, t: Test.Case, o: Process.Output) -> Void",
         "end",
@@ -14334,6 +14334,84 @@
         "",
         "def main() -> Void",
         "  puts(Json(a: 1))",
+        "end",
+        ""
+      ],
+      "code": null
+    }
+  ],
+  "The File family: File.Info and File.Handle; the old names FileInfo and FileHandle are unknown and free": [
+    {
+      "program": [
+        "def size(info: File.Info) -> Int = info.size_bytes",
+        "",
+        "def main() -> Void",
+        "  read: Fn[File.Handle, Int, Result[String]] = &File.read_line",
+        "  puts(\"#{size(File.stat(\"x\").unwrap!)} FileInfo\")",
+        "  _r = read",
+        "end",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def size(info: FileInfo) -> Int = info.size_bytes",
+        "",
+        "def main() -> Void",
+        "end",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-TYPE",
+      "start": [1, 16],
+      "covers": "FileInfo"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  puts(FileHandle.close(1))",
+        "end",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-NAME",
+      "start": [2, 8],
+      "covers": "FileHandle.close(1)"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x: File.Infoo = File.stat(\"x\").unwrap!",
+        "end",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-NAME",
+      "start": [2, 6],
+      "covers": "File.Infoo",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  puts(File.Info.size)",
+        "end",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-NAME",
+      "start": [2, 8],
+      "covers": "File.Info.size"
+    },
+    {
+      "program": [
+        "struct FileInfo",
+        "  a: Int",
+        "end",
+        "",
+        "struct FileHandle",
+        "  b: Int",
+        "end",
+        "",
+        "def main() -> Void",
+        "  puts(\"#{FileInfo(a: 1)} #{FileHandle(b: 2)}\")",
         "end",
         ""
       ],

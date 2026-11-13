@@ -1,10 +1,10 @@
 program 0:1:1-34:1 entry=0 globals=0
-source 0 "json.agc" chars=522
+source 0 "json.agc" chars=523
 struct s0 "Tag" ["name"] types=[String]
-struct s1 "Item" ["id","price","fine","title","tags","attrs","next"] types=[Int, Float, Bool, String, List(Struct(Tag)), Map(String, List(Int)), List(Struct(FileInfo))]
+struct s1 "Item" ["id","price","fine","title","tags","attrs","next"] types=[Int, Float, Bool, String, List(Struct(Tag)), Map(String, List(Int)), List(Struct(File.Info))]
 struct s2 "Plain" ["note","flags"] types=[String, Map(String, Bool)]
 struct s3 "Skipped" ["items","status"]
-struct s4 "FileInfo" ["kind","size_bytes","modified_seconds","mode","user_id","group_id"] types=[String, Int, Int, Int, Int, Int]
+struct s4 "File.Info" ["kind","size_bytes","modified_seconds","mode","user_id","group_id"] types=[String, Int, Int, Int, Int, Int]
 struct s5 "Error" ["kind","message","code","details","cause","location"] types=[String, String, Optional(Int), Map(String, String), Optional(Struct(Error)), String]
 enum "Optional" v0="None"/0 v1="Some"/1
 enum "TaskExit" v2="Ok"/0 v3="Crashed"/0 v4="Cancelled"/0

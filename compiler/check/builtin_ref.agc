@@ -7,7 +7,7 @@
 ## other is refused with a help that names the block to write instead.
 
 import Model from "../catalog/builtin_model"
-import {ENTRIES, JSON_VALUE, PUBLIC_NAMES} from "../catalog/builtins"
+import {ENTRIES, FAMILY_TYPES, JSON_VALUE, PUBLIC_NAMES} from "../catalog/builtins"
 import T from "../syntax/types"
 import RubyForm from "ruby_form"
 import Tables from "check_tables"
@@ -124,11 +124,11 @@ def plain?(rule: Model.Rule) -> Bool
   end
 end
 
-# True when the prelude file can write the type: an opaque type of one word (FileHandle), no task, channel or lazy
-# value, and no type variable (no generic builtin has the plain rule).
+# True when the prelude file can write the type: an opaque type of one word or of a builtin family (File.Handle), no
+# task, channel or lazy value, and no type variable (no generic builtin has the plain rule).
 def writable?(type: T.Type) -> Bool
   case type
-    T.Type.Opaque(name) -> !name.include?(".")
+    T.Type.Opaque(name) -> !name.include?(".") or FAMILY_TYPES.include?(name)
     T.Type.Task(_) -> false
     T.Type.Channel(_) -> false
     T.Type.Lazy(_) -> false

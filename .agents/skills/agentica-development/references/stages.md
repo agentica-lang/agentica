@@ -307,7 +307,7 @@ into its slot; an assignment to an existing local goes through a temporary and
   and checks the outer node's type, since the checker's synthetic call is not in
   the types table. A `TypedTarget` lowers its expression and checks its recorded
   type.
-- Builtin records the VM finds by name (`agc_builtin_struct`, e.g. `FileInfo`,
+- Builtin records the VM finds by name (`agc_builtin_struct`, e.g. `File.Info`,
   `HttpWire.Response`) are appended to the program's structs when a checked
   type mentions them, with the records they need (`HttpWire.Response` needs
   `HttpWire.Header`).
