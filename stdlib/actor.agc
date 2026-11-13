@@ -18,8 +18,8 @@ struct Behaviour[S, M]
 end
 
 ## A receive timeout. After `init` and after each message, `after_ms` gives how long the actor waits for the next
-## one in that state (above 0; none waits without a limit). When none comes in that time, `handle` runs with the
-## state, in place of a message. The actor's own loop waits: there is no timer task.
+## one in that state (0 or less: only a message already waiting; none: no limit). When none comes in that time,
+## `handle` runs with the state, in place of a message. The actor's own loop waits: there is no timer task.
 struct Timeout[S]
   after_ms: Fn[S, Optional[Int]]
   handle: Fn[S, Step[S]]
@@ -58,9 +58,14 @@ def continue[S](state: S) -> Step[S] = Step.Continue(state)
 ## The step that ends the actor with `state`: it runs `terminate` and handles no more messages.
 def done[S](state: S) -> Step[S] = Step.Done(state)
 
-## Answers a `call` and says whether the caller gets the value. It never waits. A caller that gave up closed the
-## channel, and a second answer to one call finds it full: both give false, and the value is still the actor's.
-def reply[R](channel: Channel[R], value: R) -> Bool = channel.send(value, 0).ok?
+## Answers a `call` and says whether the caller gets the value. It never waits, and it closes the channel: a call
+## has one answer. A caller that gave up closed the channel, and a second answer finds it closed: both give false, and
+## the value is still the actor's. A closed channel still gives its caller the answer it holds.
+def reply[R](channel: Channel[R], value: R) -> Bool
+  sent = channel.send(value, 0).ok?
+  channel.close
+  sent
+end
 
 ## Sends a message, waiting at most `timeout_ms` for room in the inbox. Errors: `actor: timeout` when the inbox stays
 ## full, `address: gone` when the actor has ended.
@@ -163,18 +168,14 @@ def run[S, M](setup: Setup[S, M]) -> Result[Void]
   ok()
 end
 
-# How long the actor waits for a message in `state`: none without a timeout. A wait of 0 or less is a bug of the
-# behaviour, so the actor crashes with it, as with a runtime error in a handler.
+# How long the actor waits for a message in `state`: none without a timeout. A wait of 0 or less takes only a message
+# that is already waiting (`recv(0)`), as Erlang's `after 0`: a deadline kept in the state may have passed.
 def waiting[S](timeout: Optional[Timeout[S]], state: S) -> Optional[Int]
   case timeout
     some(t) ->
-      ms = t.after_ms.call(state)
-      case ms
-        some(n) if n <= 0 ->
-          bad: Result[Int] = error("actor: after_ms must be above 0, not #{n}", kind: "argument")
-          _ = bad.unwrap!
-          none
-        _ -> ms
+      case t.after_ms.call(state)
+        some(ms) -> some([ms, 0].max.unwrap!)
+        none -> none
       end
     none -> none
   end
