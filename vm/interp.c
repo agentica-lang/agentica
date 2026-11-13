@@ -81,7 +81,8 @@ static _Noreturn void unwind(agc_vm *vm) {
 #if AGC_LEAF_CHECK
   if (vm->in_code) agc_internal_abort("a failure would longjmp across compiled code");
 #endif
-  longjmp(vm->in_turn ? vm->turn : vm->fail, 1);
+  if (vm->in_turn) AGC_THROW(vm->turn);
+  AGC_THROW(vm->fail);
 }
 
 static _Noreturn void raise_failure(agc_vm *vm) {
@@ -2105,7 +2106,7 @@ NESTED bool agc_task_run_nested(agc_vm *vm, agc_value fn, const agc_value *args,
   uint32_t sync_depth = vm->sync_depth;
   agc_lock *stream_lock = vm->stream_lock;
   agc_outcome outcome = *vm->outcome;
-  jmp_buf turn;
+  agc_catch_buf turn;
   memcpy(turn, vm->turn, sizeof turn);
   agc_frame_segment below = {frames, frame_count, t->below};
 
@@ -2141,7 +2142,7 @@ NESTED bool agc_task_run_nested(agc_vm *vm, agc_value fn, const agc_value *args,
   t->callbacks++;
   /* Volatile: set after the setjmp and read after a longjmp to it. */
   volatile bool ok = false;
-  if (setjmp(vm->turn) == 0) {
+  if (AGC_CATCH(vm->turn) == 0) {
     ok = run_nested(vm, t, &ns->barrier, fn, args, argc, span);
     if (ok)
       *result = ns->barrier.value;

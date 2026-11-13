@@ -14,6 +14,7 @@ import {
   RECORDS as DATA_RECORDS,
   RESERVED_TYPE_NAMES,
   STD_ONLY_IMPORTS,
+  TYPE_DESCRIPTIONS as DATA_TYPE_DESCRIPTIONS,
 } from "builtins_data"
 import {PRELUDE_ONLY as DATA_PRELUDE_ONLY, ROWS as PRELUDE_ROWS} from "prelude_data"
 
@@ -32,6 +33,11 @@ OPAQUE_TYPES = Set.new(DATA_OPAQUE_TYPES)
 ## The builtin type of a family that is a type of its own in the checker, not a record, enum or opaque type: JSON.Value
 ## is Types.Type.Json.
 JSON_VALUE = "JSON.Value"
+
+## Every builtin type: the records, enums and opaque types, and JSON.Value.
+TYPE_NAMES = RECORDS.keys.concat(ENUMS.keys).concat(DATA_OPAQUE_TYPES).concat([JSON_VALUE])
+
+TYPE_DESCRIPTIONS = DATA_TYPE_DESCRIPTIONS
 
 FAMILY_TYPES = Set.new(FAMILY_TYPE_NAMES)
 
@@ -338,13 +344,10 @@ EMPTY_ENUMS: Map[String, Model.EnumDef] = {}
 EMPTY_PRELUDE: Map[String, Model.PreludeRow] = {}
 EMPTY_FAMILIES: Map[String, List[String]] = {}
 
-## The builtin types of a family (Family.Member): the records, enums and opaque types whose name starts with a family,
-## and JSON.Value.
-FAMILY_TYPE_NAMES = RECORDS.keys
-  .concat(ENUMS.keys)
-  .concat(DATA_OPAQUE_TYPES)
-  .concat([JSON_VALUE])
-  .filter do |name: String| name.include?(".") and DATA_FAMILIES.include?(name.split(".")[0]) end
+## The builtin types of a family (Family.Member): the types of TYPE_NAMES whose name starts with a family.
+FAMILY_TYPE_NAMES = TYPE_NAMES.filter do |name: String|
+  name.include?(".") and DATA_FAMILIES.include?(name.split(".")[0])
+end
 
 # True for the `none` default.
 def none_default?(value: Model.Default) -> Bool

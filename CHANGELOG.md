@@ -13,6 +13,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `System.subscribe([System.Signal.Term, System.Signal.Int])` gives a channel
   that receives those signals instead of letting them stop the program, and
   `System.signal_number` gives a signal's number (#1477).
+- `agentica help File.Info` prints a builtin type with its fields or variants,
+  and `agentica help --json` lists the builtin types too, each with a `kind`
+  (#1532).
 
 ### Changed
 
@@ -31,6 +34,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 ### Fixed
 
 - `System.subscribe`: a listed signal that was ignored when the program started stays ignored, and the call subscribes the others instead of failing (#1533).
+- On macOS, with more than one scheduler, a stop signal after a task crash stops the program again (#1529).
 
 ## [0.31.0] - 2026-11-13
 

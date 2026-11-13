@@ -651,7 +651,7 @@ static bool fatal(const agc_vm *vm, const agc_task *t) {
 }
 
 static bool run_turn(agc_vm *vm, agc_task *t, agc_turn_result *r) {
-  if (setjmp(vm->turn)) {
+  if (AGC_CATCH(vm->turn)) {
     vm->in_turn = false;
     agc_sync_reset(vm);
     return false;
@@ -773,7 +773,7 @@ bool agc_task_end_turn(agc_vm *vm, agc_task *t, agc_turn_result r, bool ran) {
   trace_gc(vm, "turn");
   bool main_done = false;
   if (!ran) {
-    if (fatal(vm, t)) longjmp(vm->fail, 1);
+    if (fatal(vm, t)) AGC_THROW(vm->fail);
     agc_sync_take(vm);
     /* A task cancelled during its turn ends as cancelled even when the turn failed: the failure may come from the
        cancel itself (Task.await of a child that the walk ended, or that started cancelled), and a task the cancel
@@ -945,7 +945,7 @@ static void sched_main(void *arg) {
   /* Registering reads the thread's stack bounds (pthread_getattr_np), which allocates: under a low ulimit -v it fails
      as the thread start itself can, and ends the same way. */
   if (!agc_gc_thread_enter()) agc_thread_start_failed("a scheduler thread", 0, SCHEDULERS_FIX);
-  if (setjmp(vm->fail) == 0) {
+  if (AGC_CATCH(vm->fail) == 0) {
     sched_turns(vm, sched_main);
   } else {
     agc_sync_reset(vm);
@@ -960,7 +960,7 @@ static agc_outcome run_threads(agc_vm *vm) {
   size_t n = (size_t)rt->schedulers;
   /* A failure of the setup (the loop cannot be made: no descriptor left) ends the run here, before any scheduler
      starts; agc_io_serve sets its own target once they run. */
-  if (setjmp(vm->fail) != 0) {
+  if (AGC_CATCH(vm->fail) != 0) {
     agc_sync_reset(vm);
     agc_io_hand_off(vm, false);
     trace_end(vm);
@@ -1005,7 +1005,7 @@ static agc_outcome run_threads(agc_vm *vm) {
   vm->outcome = &rt->outcome;
   /* One thread again: what the I/O thread hands over now it ends itself, and the detached jobs still listed. */
   agc_io_hand_off(vm, false);
-  if (setjmp(vm->fail) == 0) {
+  if (AGC_CATCH(vm->fail) == 0) {
     (void)agc_io_service(vm);
     if (rt->outcome.kind == AGC_DONE && agc_report_unobserved(vm)) {
       rt->outcome.kind = AGC_EXITED;
@@ -1022,7 +1022,7 @@ static agc_outcome run_threads(agc_vm *vm) {
 agc_outcome agc_vm_run(agc_vm *vm) {
   AGC_TRACE(&vm->rt->trace, AGC_TRACE_SCHED, "run schedulers=%" PRId64, vm->rt->schedulers);
   if (vm->rt->schedulers > 1) return run_threads(vm);
-  if (setjmp(vm->fail) == 0) {
+  if (AGC_CATCH(vm->fail) == 0) {
     agc_profile_start(vm);
     agc_task_enter(vm, vm->rt->main, vm->rt->program->entry);
     trace_spawn(vm, vm->rt->main, NULL);

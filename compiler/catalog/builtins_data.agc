@@ -306,6 +306,32 @@ OPAQUE_TYPES: List[String] = [
   "TLS.Context", "C.Pointer", "TaskRef", "Native.Mutex",
 ]
 
+TYPE_DESCRIPTIONS: Map[String, String] = {
+  "Await": "What Task.await with a timeout returns: Done with the task's value, or TimedOut.",
+  "C.Pointer": "A C pointer of native code, from an extern call or Native.memory_pointer.",
+  "Codec.Info": "What T.codec returns for a struct T: its name and its members, in declaration order.",
+  "Error": "The payload of a failed Result: its kind, message, code, details, cause and the place it was made.",
+  "File.Handle": "An open file, from File.open; File.close closes it.",
+  "File.Info": "What File.stat returns: the kind, byte size, modification time, permission bits and owner of a file.",
+  "JSON.Field": "A field of a JSON struct that may be missing or null: Absent, Null or Value(T).",
+  "JSON.Value": "A JSON document of any shape, from JSON.parse; the JSON functions read it.",
+  "Native.Mutex": "The lock of a native library, from Native.mutex; synchronize runs a block holding it.",
+  "Process": "A program started by Process.spawn, Process.spawn_captured or Process.spawn_channel.",
+  "Process.Options": "The options of Process.spawn, spawn_captured and spawn_channel; give only the fields you need.",
+  "Process.Output": "What Process.output returns: the unread stdout, all stderr and whether output was dropped.",
+  "StructMember": "A member of a struct as T.codec lists it: its name and its type as written.",
+  "System.Signal": "A signal of the operating system, which System.subscribe delivers on a channel.",
+  "TCP.Listener": "A listening TCP socket, from TCP.listen or TLS.listen; TCP.accept takes its connections.",
+  "TCP.Socket": "A connected TCP socket, from TCP.connect, TCP.accept or TLS.connect.",
+  "TLS.ClientOptions": "The options of TLS.client_context: the CA file, a client certificate and key, and ALPN.",
+  "TLS.Context": "The certificates and settings of TLS connections, from TLS.client_context or TLS.server_context.",
+  "TLS.ServerOptions": "The options of TLS.server_context: the certificate and key files, and ALPN.",
+  "TaskDown": "The notice that Task.monitor sends when a watched task ends: how it ended and, for a crash, where.",
+  "TaskExit": "How a task ended: Ok, Crashed or Cancelled.",
+  "TaskRef": "The running task, from Task.current, which Task.monitor, Task.cancel and id take.",
+  "Test.Case": "A test case, from Test.test; Test.run runs a list of them.",
+}
+
 ## The type names no declaration or import alias may take.
 RESERVED_TYPE_NAMES: List[String] = [
   "ATS",

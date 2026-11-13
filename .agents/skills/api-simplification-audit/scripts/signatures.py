@@ -47,6 +47,8 @@ def std_modules(root):
 
 def rows(binary, root):
     for entry in run_json(binary, "help", "--json"):
+        if "kind" in entry:
+            continue
         if "parameters" not in entry:
             # A builtin with overloads (Task.await, Map.get...): never a default candidate by rule.
             yield ("overloads", entry["name"], 0, "", "", None, "")

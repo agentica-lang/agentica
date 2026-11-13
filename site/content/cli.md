@@ -87,6 +87,8 @@ string.split(separator: String) -> List[String]
 Split text; an empty separator gives characters.
 ```
 
+A builtin type works too: `agentica help File.Info` prints its declaration, its description and its fields (or an enum's variants), as `help std/MODULE.NAME` prints a struct. `agentica help --json` prints every builtin and builtin type as one array, sorted by name; a type has a `kind` (`struct`, `enum` or `opaque`) and its `fields` or `variants`, and a function has no `kind`.
+
 ## Read a module's API
 
 ```sh

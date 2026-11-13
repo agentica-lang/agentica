@@ -212,6 +212,29 @@ def test_a_stop_signal_the_vm_inherited_as_ignored_stays_ignored(tmp_path, adopt
     assert vm.process.poll() is None, "the ignored signals do not stop the VM"
 
 
+# On macOS the crash used to block the stop signals of every thread (#1529).
+CRASH_THEN_SLEEP = """\
+def main() -> Void
+  downs: Channel[String] = Channel.new(1)
+  t = Task.spawn do _ = [1][5] end
+  Task.monitor(t, downs) do |down| down.reason.to_s end
+  downs.recv(5000).unwrap!
+  puts("ready")
+  IO.flush()
+  Task.sleep(30000)
+end
+"""
+
+
+@host_only(WINDOWS, "SIGTERM; Windows has Ctrl+Break, and its console handler does not depend on a thread's signal mask")
+@pytest.mark.parametrize("schedulers", [1, 4])
+def test_a_stop_signal_after_a_task_crash_still_stops_the_run(tmp_path, adopt, schedulers):
+    vm = adopt(start_vm(bytecode(CRASH_THEN_SLEEP, tmp_path), flags=("--schedulers", str(schedulers))))
+    assert vm.next_line(WAIT_SECONDS) == "ready"
+    os.kill(vm.process.pid, signal.SIGTERM)
+    assert vm.wait(WAIT_SECONDS) == -signal.SIGTERM
+
+
 @host_only(WINDOWS, "SIGALRM does not exist on Windows")
 def test_an_outside_sigalrm_keeps_its_default_action(tmp_path, adopt):
     vm = adopt(start_vm(bytecode(READY_AND_SLEEP, tmp_path)))

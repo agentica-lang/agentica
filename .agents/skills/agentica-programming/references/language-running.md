@@ -20,7 +20,8 @@ the list of commands and flags.
   correctness. For CI, `fmt --check` and `lint --strict` exit 1 on a change.
 - `--ai` prints a diagnostic as compact text, `--json` as one object (the last
   stderr line, after the program's own stderr). Put them before the file.
-- `agentica help NAME` prints a builtin's signature (unknown name: exit 2);
+- `agentica help NAME` prints a builtin's signature, or a builtin type's
+  fields or variants (`File.Info`) (unknown name: exit 2);
   `agentica doc PATH` the exported API of a file or `std/` module;
   `agentica help std/MODULE[.NAME]` the exports of a module or one export with
   its doc.
