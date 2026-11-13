@@ -5,7 +5,7 @@
   "stdout": [
     "hello alpha",
     "hello beta",
-    "error(\"network: operation timed out\")",
+    "error(\"network: operation timed out\", kind: \"net.timeout\")",
     "ok()",
     "ok(\"ping\")",
     "ok(\"pong\")",

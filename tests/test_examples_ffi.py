@@ -62,7 +62,7 @@ def test_records_and_buffers_cross_a_struct_a_resource_and_a_float_buffer(tmp_pa
     path = stage(tmp_path, library, "records_and_buffers.agc")
     check_program(path, tmp_path)
     assert run_program(path, tmp_path) == "%d\n%d\n%s\n%s\n" % (
-        4 + 3, 10 + 5 - 2, 'error("demo_acc_open returned NULL")', sum(k * 0.5 for k in range(4)))
+        4 + 3, 10 + 5 - 2, 'error("demo_acc_open returned NULL", kind: "native.failed")', sum(k * 0.5 for k in range(4)))
 
 
 @NATIVE_CALLS

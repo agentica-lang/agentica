@@ -3,7 +3,7 @@
   "code": null,
   "steps": 51,
   "stdout": [
-    "[ok(10), error(\"task: cancelled\"), ok(30), ok(40)]",
+    "[ok(10), error(\"task: cancelled\", kind: \"task.cancelled\"), ok(30), ok(40)]",
     ""
   ],
   "stderr": []

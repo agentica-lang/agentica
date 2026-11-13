@@ -3,8 +3,8 @@
   "code": null,
   "steps": 120,
   "stdout": [
-    "error(\"process: channel is closed\")",
-    "error(\"process: channel is closed\")",
+    "error(\"process: channel is closed\", kind: \"process.closed\")",
+    "error(\"process: channel is closed\", kind: \"process.closed\")",
     "false",
     "0",
     ""

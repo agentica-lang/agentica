@@ -111,7 +111,7 @@ end
 ```output
 ok()
 ok()
-error("expected [1, 3]; actual [1, 2]")
+error("expected [1, 3]; actual [1, 2]", kind: "test.failed")
 ```
 
 A failed assertion counts against the test it runs in (its own task, or a task spawned inside it), even when its result is not used, so `_ = Test.eq(a, b)` still fails the test. A dropped Result is `CHECK-UNUSED-RESULT`: `try` an assertion that is followed by another statement, and leave it as the last statement of a test block. Outside a test, an assertion only returns its result.
@@ -133,7 +133,7 @@ end
 
 ```output
 ok()
-expected ok; actual error("cannot convert \"x\" to Int")
+expected ok; actual error("cannot convert \"x\" to Int", kind: "number.parse")
 ```
 
 ## Test.error?

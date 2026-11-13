@@ -244,8 +244,8 @@ agc_json_status agc_json_parse(agc_vm *vm, const uint8_t *s, size_t len, agc_val
 
 static agc_value ok(agc_value v) { return agc_result_value(true, v); }
 
-static agc_value failure(agc_vm *vm, const char *text) {
-  return agc_error_string(vm, "error", agc_json_ascii(text, strlen(text)));
+static agc_value failure(agc_vm *vm, agc_error_kind kind, const char *text) {
+  return agc_error_string(vm, kind, agc_json_ascii(text, strlen(text)));
 }
 
 const char *agc_json_status_message(agc_json_status status) {
@@ -263,7 +263,7 @@ static agc_value builtin_parse(agc_vm *vm, agc_value *args, uint32_t span) {
   const agc_string *s = agc_as_string(vm, args[0]);
   agc_value out;
   agc_json_status status = agc_json_parse(vm, (const uint8_t *)s->data, s->bytes, &out);
-  return status == AGC_JSON_PARSED ? ok(out) : failure(vm, agc_json_status_message(status));
+  return status == AGC_JSON_PARSED ? ok(out) : failure(vm, AGC_KIND_JSON_PARSE, agc_json_status_message(status));
 }
 
 /* The struct or enum that JSON.decode and JSON.schema name by its linked name: structs first, then enums. */
@@ -303,7 +303,7 @@ static agc_value builtin_decode(agc_vm *vm, agc_value *args, uint32_t span) {
   const agc_string *s = agc_as_string(vm, args[0]);
   agc_value root;
   agc_json_status status = agc_json_parse(vm, (const uint8_t *)s->data, s->bytes, &root);
-  if (status != AGC_JSON_PARSED) return failure(vm, agc_json_status_message(status));
+  if (status != AGC_JSON_PARSED) return failure(vm, AGC_KIND_JSON_PARSE, agc_json_status_message(status));
   return agc_json_decode(vm, root, kind, type);
 }
 
@@ -335,25 +335,26 @@ static agc_value builtin_get(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   const agc_json *j = agc_as_json(vm, args[0]);
   agc_string *key = agc_as_string(vm, args[1]);
-  if (j->kind != AGC_JSON_OBJECT) return failure(vm, "expected a JSON object");
+  if (j->kind != AGC_JSON_OBJECT) return failure(vm, AGC_KIND_JSON_DECODE, "expected a JSON object");
   const agc_json_member *member = agc_json_find(j, key);
   if (member) return ok(member->value);
-  return agc_error_string(vm, "error", agc_around("missing JSON key ", key, ""));
+  return agc_error_string(vm, AGC_KIND_JSON_DECODE, agc_around("missing JSON key ", key, ""));
 }
 
 static agc_value builtin_at(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   const agc_json *j = agc_as_json(vm, args[0]);
   int64_t index = agc_as_int(vm, args[1]);
-  if (j->kind != AGC_JSON_ARRAY) return failure(vm, "expected a JSON array");
+  if (j->kind != AGC_JSON_ARRAY) return failure(vm, AGC_KIND_JSON_DECODE, "expected a JSON array");
   const agc_list *items = agc_as_list(vm, j->scalar);
-  if (index < 0 || (uint64_t)index >= agc_list_len(items)) return failure(vm, "JSON array index is out of range");
+  if (index < 0 || (uint64_t)index >= agc_list_len(items))
+    return failure(vm, AGC_KIND_JSON_DECODE, "JSON array index is out of range");
   return ok(agc_list_get(items, (size_t)index));
 }
 
 static agc_value extract(agc_vm *vm, agc_value v, agc_json_kind kind, const char *expected) {
   const agc_json *j = agc_as_json(vm, v);
-  if (j->kind != kind) return failure(vm, expected);
+  if (j->kind != kind) return failure(vm, AGC_KIND_JSON_DECODE, expected);
   return ok(j->scalar);
 }
 
@@ -396,7 +397,7 @@ static agc_value builtin_float(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   double x;
   if (agc_json_to_float(vm, agc_as_json(vm, args[0]), &x)) return ok(agc_float(x));
-  return failure(vm, "expected a JSON number representable as a finite Float");
+  return failure(vm, AGC_KIND_JSON_DECODE, "expected a JSON number representable as a finite Float");
 }
 
 /* Names the kind without encoding: an exact number outside Int (AGC_JSON_BIG) is still "int", so "int" means

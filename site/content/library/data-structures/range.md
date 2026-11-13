@@ -176,7 +176,7 @@ end
 ```output
 ok(1)
 ok(4)
-error("the range is empty")
+error("the range is empty", kind: "argument")
 ```
 
 ## times, upto and downto

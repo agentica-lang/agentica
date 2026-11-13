@@ -399,7 +399,7 @@ def test_out_and_err_send_the_streams_to_files_created_or_truncated(tmp_path):
     err.write_bytes(b"older and longer content\n")
     count = 3 * 1048576  # past the 1 MiB that a pipe read or a captured stream keeps
     text = streams_to(count, agc_literal(out), agc_literal(err))
-    assert output(tmp_path, text) == 'error("process: end of input")\nok(0)\n'
+    assert output(tmp_path, text) == 'error("process: end of input", kind: "process.eof")\nok(0)\n'
     assert out.read_bytes() == b"o" * count
     assert err.read_bytes() == b"err\n"
     if TARGET_OS != "windows":

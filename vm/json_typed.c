@@ -68,7 +68,7 @@ static agc_value decode_error_in(agc_vm *vm, const decode_frame *stack, size_t d
   if (!b.len) agc_json_put(&b, "$", 1);
   agc_json_put(&b, ": expected ", 11);
   agc_json_put(&b, expected, strlen(expected));
-  return agc_error_string(vm, "error", buffer_string(&b));
+  return agc_error_string(vm, AGC_KIND_JSON_DECODE, buffer_string(&b));
 }
 
 static agc_value decode_error(agc_vm *vm, const decode_frame *stack, size_t depth, const char *expected) {

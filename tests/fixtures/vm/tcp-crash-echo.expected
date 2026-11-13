@@ -3,10 +3,10 @@
   "code": null,
   "steps": 140,
   "stdout": [
-    "error(\"network: end of input\")",
+    "error(\"network: end of input\", kind: \"net.eof\")",
     "ok(\"hello 100\")",
     "ok(\"hello\")",
-    "error(\"task crashed: RUNTIME-DIVISION-BY-ZERO at @fixtures/vm/tcp-crash-echo.agc:8:11: division by zero\")",
+    "error(\"task crashed: RUNTIME-DIVISION-BY-ZERO at @fixtures/vm/tcp-crash-echo.agc:8:11: division by zero\", kind: \"task.crashed\")",
     ""
   ],
   "stderr": [

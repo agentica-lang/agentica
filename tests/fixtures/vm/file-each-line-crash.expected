@@ -4,7 +4,7 @@
   "steps": 70,
   "stdout": [
     "dividing first",
-    "error(\"task crashed: RUNTIME-DIVISION-BY-ZERO at @fixtures/vm/file-each-line-crash.agc:5:15: division by zero\")",
+    "error(\"task crashed: RUNTIME-DIVISION-BY-ZERO at @fixtures/vm/file-each-line-crash.agc:5:15: division by zero\", kind: \"task.crashed\")",
     "dividing first",
     ""
   ],

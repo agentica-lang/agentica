@@ -13,7 +13,7 @@ const parseDouble = (text) => {
   return doubled(text);
 };
 
-const shown = (result) => (result[0] === "ok" ? `ok(${result[1]})` : `error("${result[1].replaceAll('"', '\\"')}")`);
+const shown = (result) => (result[0] === "ok" ? `ok(${result[1]})` : `error("${result[1].replaceAll('"', '\\"')}", kind: "number.parse")`);
 
 const sign = (x) => {
   if (x < 0) return "negative";

@@ -3,7 +3,7 @@
   "code": null,
   "steps": 60,
   "stdout": [
-    "error(\"network: end of input\")",
+    "error(\"network: end of input\", kind: \"net.eof\")",
     "parent: task crashed: RUNTIME-DIVISION-BY-ZERO at @fixtures/vm/handle-cancel-closes.agc:9:15: division by zero",
     "0",
     ""

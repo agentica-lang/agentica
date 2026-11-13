@@ -35,8 +35,8 @@ from tests.agentica_test import WINDOWS, cli, compile_agc, run, run_vm, vm_envir
 CAP_1MIB = 1048576
 
 
-def zlib_error(message):
-    return 'error("zlib: %s")\n' % message
+def zlib_error(message, kind="zlib.data"):
+    return 'error("zlib: %s", kind: "%s")\n' % (message, kind)
 
 
 INVALID = zlib_error("invalid compressed data")
@@ -191,11 +191,11 @@ def test_zlib_bytes_take_an_exact_max(bytes_peer, tmp_path):
     result, out = bytes_case(bytes_peer, tmp_path, "fit-deflate", "deflate", b"abc", cap=len(packed))
     assert (result.code, result.stdout, out) == (0, "ok\n", packed), result.stderr
     result, _ = bytes_case(bytes_peer, tmp_path, "tight-deflate", "deflate", b"abc", cap=len(packed) - 1)
-    assert result.stdout == zlib_error("output exceeds max_bytes"), result.stdout
+    assert result.stdout == zlib_error("output exceeds max_bytes", "zlib.too_large"), result.stdout
     result, out = bytes_case(bytes_peer, tmp_path, "fit-inflate", "inflate", packed, cap=3)
     assert (result.code, result.stdout, out) == (0, "ok\n", b"abc"), result.stderr
     result, _ = bytes_case(bytes_peer, tmp_path, "tight-inflate", "inflate", packed, cap=2)
-    assert result.stdout == zlib_error("output exceeds max_bytes"), result.stdout
+    assert result.stdout == zlib_error("output exceeds max_bytes", "zlib.too_large"), result.stdout
 
 
 # Each broken part has its error; how a broken body surfaces (BROKEN, any zlib
@@ -287,7 +287,7 @@ def test_zlib_bytes_reject_a_bad_level(bytes_peer, tmp_path):
     for level in ("-1", "10"):
         result = run_source(tmp_path, "level-%s.agc" % level, body % (level, level), [])
         assert result.code == 0, result.stderr
-        assert result.stdout == zlib_error("level must be between 0 and 9") * 2, result.stdout
+        assert result.stdout == zlib_error("level must be between 0 and 9", "argument") * 2, result.stdout
 
 
 def test_zlib_bytes_reject_input_past_1_mib(tmp_path):
@@ -300,7 +300,7 @@ def test_zlib_bytes_reject_input_past_1_mib(tmp_path):
     )
     result = run_source(tmp_path, "big.agc", body, [])
     assert result.code == 0, result.stderr
-    assert result.stdout == zlib_error("input exceeds 1048576 bytes") * 2, result.stdout
+    assert result.stdout == zlib_error("input exceeds 1048576 bytes", "zlib.too_large") * 2, result.stdout
 
 
 def test_zlib_bytes_reject_a_max_outside_its_bounds(tmp_path):
@@ -315,7 +315,7 @@ def test_zlib_bytes_reject_a_max_outside_its_bounds(tmp_path):
     for bound in ("0", "1048577"):
         result = run_source(tmp_path, "bound-%s.agc" % bound, body % ((bound,) * 4), [])
         assert result.code == 0, result.stderr
-        assert result.stdout == zlib_error("max_bytes must be between 1 and 1048576") * 4, result.stdout
+        assert result.stdout == zlib_error("max_bytes must be between 1 and 1048576", "argument") * 4, result.stdout
 
 
 def test_zlib_bytes_cut_output_past_its_cap(bytes_peer, tmp_path):
@@ -479,12 +479,12 @@ def test_lazy_caps_hold_while_streaming(lazy_peer, tmp_path):
     assert len(bomb) < 100000
     result, out = lazy_case(lazy_peer, tmp_path, "bomb", "gunzip", bomb, 4096, CAP_1MIB)
     assert result.code == 0, result.stderr
-    assert result.stdout == 'error("zlib: output exceeds max_bytes")\n', result.stdout
+    assert result.stdout == 'error("zlib: output exceeds max_bytes", kind: "zlib.too_large")\n', result.stdout
     assert out is not None and len(out) <= CAP_1MIB
     result, out = lazy_case(lazy_peer, tmp_path, "exact", "gunzip", gzip.compress(b"abc"), 1, 3)
     assert (result.code, result.stdout, out) == (0, "ok(3)\n", b"abc"), result.stderr
     result, _ = lazy_case(lazy_peer, tmp_path, "short", "inflate", zlib.compress(b"abc"), 1, 2)
-    assert result.stdout == 'error("zlib: output exceeds max_bytes")\n', result.stdout
+    assert result.stdout == 'error("zlib: output exceeds max_bytes", kind: "zlib.too_large")\n', result.stdout
 
 
 def test_lazy_bad_arguments(tmp_path):
@@ -500,10 +500,10 @@ def test_lazy_bad_arguments(tmp_path):
     )
     result = run_source(tmp_path, "bad-args.agc", body, [tmp_path / "bad-args.agc"])
     assert result.stdout.splitlines() == [
-        'error("zlib: level must be between 0 and 9")',
-        'error("zlib: level must be between 0 and 9")',
-        'error("zlib: max_bytes must be at least 1")',
-        'error("zlib: max_bytes must be at least 1")',
+        'error("zlib: level must be between 0 and 9", kind: "argument")',
+        'error("zlib: level must be between 0 and 9", kind: "argument")',
+        'error("zlib: max_bytes must be at least 1", kind: "argument")',
+        'error("zlib: max_bytes must be at least 1", kind: "argument")',
     ], result.stdout
     assert result.code == 1
     assert "RUNTIME-INVALID-COUNT" in result.stderr, result.stderr
@@ -527,8 +527,8 @@ def test_file_chunks_reads_a_file_and_refuses_what_is_not_regular(tmp_path):
     assert result.stdout.splitlines() == [
         "ok([[0, 255], [97, 98], [128]])",
         "ok([])",
-        'error("filesystem: path does not refer to a regular file")',
-        'error("filesystem: path does not refer to a regular file")',
+        'error("filesystem: path does not refer to a regular file", kind: "io.not_found", code: 2)',
+        'error("filesystem: path does not refer to a regular file", kind: "io.is_directory", code: 21)',
     ], result.stdout
 
 
@@ -539,7 +539,7 @@ def test_file_chunks_refuses_a_fifo_without_waiting(tmp_path):
     body = "def main() -> Void\n  puts(File.chunks(System.args()[0]).to_a)\nend\n"
     result = run_source(tmp_path, "fifo.agc", body, [fifo])
     assert result.code == 0, result.stderr
-    assert result.stdout == 'error("filesystem: path does not refer to a regular file")\n', result.stdout
+    assert result.stdout == 'error("filesystem: path does not refer to a regular file", kind: "io.failed")\n', result.stdout
 
 
 def test_write_bytes_errors(tmp_path):

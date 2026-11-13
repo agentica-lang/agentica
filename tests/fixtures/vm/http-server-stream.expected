@@ -43,7 +43,7 @@
     "HTTP/1.1 200 OK | Content-Type: text/plain | Transfer-Encoding: chunked | Connection: close",
     "1 a",
     "end",
-    "error(\"network: end of input\")",
+    "error(\"network: end of input\", kind: \"net.eof\")",
     "-- a client that leaves stops the producer and frees the connection slot",
     "HTTP/1.1 200 OK | Content-Type: text/plain | Transfer-Encoding: chunked",
     "1 x",
@@ -67,7 +67,7 @@
     "HTTP/1.1 200 OK | Content-Type: text/plain | Transfer-Encoding: chunked",
     "1 x",
     "ok()",
-    "error(\"network: end of input\")",
+    "error(\"network: end of input\", kind: \"net.eof\")",
     ""
   ],
   "stderr": [

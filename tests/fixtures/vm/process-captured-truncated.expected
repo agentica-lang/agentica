@@ -3,8 +3,8 @@
   "code": null,
   "steps": 50,
   "stdout": [
-    "error(\"process: output exceeds 1048576 bytes\")",
-    "error(\"process: output exceeds 1048576 bytes\")",
+    "error(\"process: output exceeds 1048576 bytes\", kind: \"process.too_large\")",
+    "error(\"process: output exceeds 1048576 bytes\", kind: \"process.too_large\")",
     "stdout 1048576, stderr 0, truncated true",
     "ok(0)",
     ""

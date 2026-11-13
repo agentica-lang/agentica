@@ -36,8 +36,8 @@ def test_a_pinned_descriptor_is_refused_unless_it_is_a_channel_and_a_shell_child
     assert answer["spawning_marker_only"]["stdout"] == spawned
     assert answer["spawning"]["exit"] == 0
     assert answer["spawning_marker_only"]["exit"] == 0
-    refused = lines('read: error("process: no parent channel")',
-                    'send: error("process: no parent channel")', "ready")
+    refused = lines('read: error("process: no parent channel", kind: "process.failed")',
+                    'send: error("process: no parent channel", kind: "process.failed")', "ready")
     pinned = answer["pinned"]
     for kind in ("file", "device", "writeonly", "fifo"):
         assert pinned[kind]["exit"] == 0, kind

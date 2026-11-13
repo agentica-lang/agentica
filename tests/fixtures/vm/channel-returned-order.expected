@@ -5,8 +5,8 @@
   "stdout": [
     "ok()",
     "ok()",
-    "error(\"task crashed: RUNTIME-DIVISION-BY-ZERO at @fixtures/vm/channel-returned-order.agc:22:15: division by zero\")",
-    "error(\"task crashed: RUNTIME-DIVISION-BY-ZERO at @fixtures/vm/channel-returned-order.agc:22:15: division by zero\")",
+    "error(\"task crashed: RUNTIME-DIVISION-BY-ZERO at @fixtures/vm/channel-returned-order.agc:22:15: division by zero\", kind: \"task.crashed\")",
+    "error(\"task crashed: RUNTIME-DIVISION-BY-ZERO at @fixtures/vm/channel-returned-order.agc:22:15: division by zero\", kind: \"task.crashed\")",
     "ok(1)",
     "ok(2)",
     ""

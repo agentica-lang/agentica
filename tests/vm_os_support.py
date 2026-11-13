@@ -192,7 +192,7 @@ def rename_never_replaces_and_moves_a_link_as_a_link(root, work):
     os.symlink("target.txt", root / "link")
     lines = run_program(root, work, RENAME_PROGRAM, "rename", root)
     exists = 'error("filesystem: cannot rename path\\n  from: %s/c.txt\\n  to: %s/d.txt\\n  system error: ' \
-             'File exists; errno=17")' % (root, root)
+             'File exists; errno=17", kind: "io.exists", code: 17)' % (root, root)
     assert lines == ["true", exists, "false", "false", "true", "true", "false", "false"]
     assert (root / "b.txt").read_text() == "a"
     assert not (root / "a.txt").exists()

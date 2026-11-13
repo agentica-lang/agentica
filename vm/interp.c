@@ -206,7 +206,7 @@ void agc_vm_init(agc_vm *vm, const agc_program *program, FILE *out, FILE *err, i
   rt->empty_set = agc_set_value(empty);
   rt->empty_string = agc_new_string(0, 0);
   rt->error_struct = agc_error_struct(program);
-  rt->error_kind = agc_make_string("error", 5, 5);
+  rt->kinds = agc_error_kinds();
   for (size_t c = 0; c < AGC_ASCII_CHARS; c++) {
     char ch = (char)c;
     rt->chars[c] = agc_make_string(&ch, 1, 1);

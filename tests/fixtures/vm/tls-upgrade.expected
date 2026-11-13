@@ -4,17 +4,17 @@
   "steps": 251,
   "stdout": [
     "STARTTLS",
-    "error(\"network: socket is closed\")",
-    "error(\"network: the socket is TLS already\")",
+    "error(\"network: socket is closed\", kind: \"net.closed\")",
+    "error(\"network: the socket is TLS already\", kind: \"net.tls\")",
     "ok(\"ready hello\")",
     "ok([\"network: socket is closed\", \"ready hello!\"])",
     "STARTTLS",
     "false",
     "network: TLS handshake failed",
-    "error(\"network: host cannot be empty\")",
-    "error(\"network: timeout must be positive milliseconds\")",
+    "error(\"network: host cannot be empty\", kind: \"argument\")",
+    "error(\"network: timeout must be positive milliseconds\", kind: \"argument\")",
     "ok()",
-    "error(\"network: socket is closed\")",
+    "error(\"network: socket is closed\", kind: \"net.closed\")",
     ""
   ],
   "stderr": []

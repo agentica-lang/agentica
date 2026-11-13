@@ -75,7 +75,7 @@ end
 ```output
 ok("echo: hello")
 ok("hello")
-error("network: end of input")
+error("network: end of input", kind: "net.eof")
 ```
 
 `echo` never closes the connection. Its end does, so the client reads the end of the input.
@@ -89,7 +89,7 @@ Task.await(task: Task[R]) -> R
 Waits for the task and gives its result. Waiting again gives the same value, and `false`, `nil` and `error` are normal results.
 
 - A runtime error in a task other than `main` is a crash. It ends only that task: the error goes to stderr at once, with ` in a task` after the code (`--json` adds `"task": true`), the task's own running tasks are cancelled and its handles close. This is sound because values are immutable: a crashed task cannot leave a shared value half-updated, and the only mutable state lives in handles.
-- Awaiting a crashed task that returns a `Result` gives `error("task crashed: CODE at FILE:LINE:COLUMN: MESSAGE")`. For any other type the waiting task stops with `RUNTIME-TASK-CRASHED`.
+- Awaiting a crashed task that returns a `Result` gives an error of kind `task.crashed` with the message `"task crashed: CODE at FILE:LINE:COLUMN: MESSAGE"`. For any other type the waiting task stops with `RUNTIME-TASK-CRASHED`.
 - A crash that no await sees makes the run exit with code 1 when `main` returns.
 - Awaiting yourself, directly or through other tasks (a handle can arrive over a [Channel](/library/concurrency/channel/), or inside a closure that captures it), stops with `RUNTIME-TASK-AWAIT-CYCLE`.
 
@@ -215,7 +215,7 @@ end
 
 About 200 ms, not 400: a sliding window of two, not batches. Items start in input order.
 
-- An item's `error(...)` does not stop the others. A runtime error (`RUNTIME-DIVISION-BY-ZERO`) crashes only that item: its slot is `error("task crashed: ...")`, the crash counts as observed, and the others go on. An item cancelled on its own (through its `Task.current`) gives `error("task: cancelled")` at once.
+- An item's `error(...)` does not stop the others. A runtime error (`RUNTIME-DIVISION-BY-ZERO`) crashes only that item: its slot is an error of kind `task.crashed` (`"task crashed: ..."`), the crash counts as observed, and the others go on. An item cancelled on its own (through its `Task.current`) gives `error("task: cancelled", kind: "task.cancelled")` at once.
 - The call waits for every item, and the items are children of the caller. To use results as they come, send them over a [Channel](/library/concurrency/channel/).
 - An empty list needs a type like any empty list (`CHECK-EMPTY-LIST-TYPE`). The effect is `concurrency`, like `Task.spawn`.
 
@@ -244,7 +244,7 @@ value 20
 
 `R` comes from the expected type of the call, else from the first `ok(...)` the block gives. If the block gives only `error(...)`, the checker says `CHECK-RESULT-TYPE`: annotate the variable (`results: List[Result[Int]] = Task.map(...)`). A function value works too: `Task.map(ids, 8, 5000, &fetch)`.
 
-`timeout_ms` is per item, from the start of its task to its end, including time spent waiting to run. A slow item is cancelled and its slot is `error("task: timed out")`; a block that returns that same error itself looks the same. An item that ends after its deadline but before the caller looks at the clock keeps its result. There is no total timeout: a call takes at most about `ceil(items / limit) * timeout_ms`.
+`timeout_ms` is per item, from the start of its task to its end, including time spent waiting to run. A slow item is cancelled and its slot is `error("task: timed out", kind: "task.timeout")`; a block that returns that same error itself looks the same. An item that ends after its deadline but before the caller looks at the clock keeps its result. There is no total timeout: a call takes at most about `ceil(items / limit) * timeout_ms`.
 
 ```agentica
 def fetch(n: Int) -> Result[String]
@@ -262,7 +262,7 @@ end
 ```
 
 ```output
-[ok("page 1"), error("task: timed out"), ok("page 3")]
+[ok("page 1"), error("task: timed out", kind: "task.timeout"), ok("page 3")]
 ```
 
 Limits, checked before any item starts (also for an empty list, which gives `[]`):
@@ -361,7 +361,7 @@ end
 ```
 
 ```output
-error("task: cancelled")
+error("task: cancelled", kind: "task.cancelled")
 ```
 
 ## Task.monitor

@@ -14,7 +14,7 @@
     "8: \"��\"",
     "9: \"last ���\"",
     "IO.gets reached the end of input",
-    "error(\"IO.gets reached the end of input\")",
+    "error(\"IO.gets reached the end of input\", kind: \"io.eof\")",
     "true",
     "\"\"",
     ""

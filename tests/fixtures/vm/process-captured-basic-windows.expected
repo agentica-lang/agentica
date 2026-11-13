@@ -3,7 +3,7 @@
   "code": null,
   "steps": 55,
   "stdout": [
-    "error(\"process: executable is unavailable\")",
+    "error(\"process: executable is unavailable\", kind: \"process.not_found\")",
     "ok(0)",
     "true",
     "\"\"",

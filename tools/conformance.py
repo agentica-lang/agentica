@@ -85,7 +85,7 @@ _NEEDS_POSIX = frozenset({
     "tests/test_vm_os.py", "tests/test_vm_stdout.py", "tests/test_vm_stop.py", "tests/test_vm_lazy_io.py",
     "tests/test_vm_multicore.py", "tests/test_bytecode_cache.py", "tests/test_check_cache.py",
     "tests/test_cli_coverage.py", "tests/test_vm_native.py", "tests/test_vm_http_proxy.py", "tests/test_vm_crypto.py",
-    "tests/test_vm_dns.py",
+    "tests/test_vm_dns.py", "tests/test_error_kinds.py",
 })
 _NEEDS_LINUX = frozenset({
     "tests/test_vm_diff_8.py", "tests/test_single_binary.py", "tests/test_vm_file_open_block.py", "tests/test_vm_native.py",
@@ -147,7 +147,7 @@ AREAS = {
             "tests/test_vm_diff_1.py", "tests/test_vm_diff_2.py", "tests/test_vm_diff_3.py",
             "tests/test_vm_diff_4.py", "tests/test_vm_diff_5.py", "tests/test_vm_diff_6.py",
             "tests/test_vm_diff_7.py", "tests/test_vm_bits.py", "tests/test_vm_stack.py", "tests/test_vm_jit.py",
-            "tests/test_vm_equality.py",
+            "tests/test_vm_equality.py", "tests/test_error_kinds.py",
         ],
     ),
     "library": (

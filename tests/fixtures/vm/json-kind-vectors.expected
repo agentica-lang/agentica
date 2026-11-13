@@ -4,7 +4,7 @@
   "steps": 3346,
   "stdout": [
     "47 vectors ok",
-    "int error(\"expected a signed 64-bit JSON integer\")",
+    "int error(\"expected a signed 64-bit JSON integer\", kind: \"json.decode\")",
     "object",
     "[\"int\", \"float\", \"float\"]",
     "null",

@@ -89,6 +89,19 @@ error(e: Error) -> Result[T]
   `e.is_a?("db")` (the kind `db` or any `db.*`; `kind_of?` too) or `e.code`,
   never on the message. `Error(...)` is `CHECK-ERROR-CONSTRUCTOR`; only
   `error(...)` builds one.
+- Builtin errors have kinds: `argument` (a bad argument value), `io.*`
+  (`not_found`, `permission`, `exists`, `is_directory`, `not_directory`,
+  `too_large`, `eof`, `closed`, `timeout`, `failed`), `net.*` (`timeout`,
+  `refused`, `host_not_found`, `closed`, `eof`, `tls`, `failed`), `http.*`
+  (`protocol`, `too_large`, `closed`), `process.*` (`not_found`, `timeout`,
+  `closed`, `eof`, `failed`), `task.crashed`, `task.cancelled`,
+  `task.timeout`, `channel.*` (`closed`, `timeout`, `gone`), `json.parse`,
+  `json.decode`, `number.parse`, `number.range`, `text.encoding`, `zlib.data`,
+  `zlib.too_large`, `crypto.*` (`auth`, `key`, `failed`), `system.env`,
+  `native.failed`, `native.timeout`, `test.failed`. The rest (`--deny-*`, a
+  find with no match) keep `"error"`. An OS error has its errno as `code`
+  (the number differs between systems; the kind does not), a refused HTTP head
+  its status.
 - `e.inspect` and a printed failed Result show `error("text")`, plus the
   fields that are not their default (never `location`). `==` on Errors skips
   `location`. `Error` is a reserved type name (`CHECK-REDEFINED-NAME`).

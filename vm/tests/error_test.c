@@ -1,13 +1,16 @@
 /*
  * The builtin Error record in C (#671): agc_error and its location, the error builtins (error, Result.message,
- * Result.unwrap!, Error.is_a?), printing as the error(...) call, equality without the location, and hostile field values.
+ * Result.unwrap!, Error.is_a?), printing as the error(...) call, equality without the location, hostile field values,
+ * and the kind and code of an errno (agc_errno_kind, agc_system_error).
  */
 #include "../core.h"
+#include "../services.h"
 #include "builtin_test.h"
 #include "test_program.h"
 #include "test_support.h"
 
 #include <assert.h>
+#include <errno.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -128,7 +131,7 @@ static void test_location(void) {
   shapes->span_table[1].start_column = 10;
   check(agc_error_location(&vm), "std/x.agc:4294967295:10");
   shapes->span_table[1] = kept_span;
-  agc_struct *e = error_of(agc_error(&vm, "io.not_found", "no file"));
+  agc_struct *e = error_of(agc_error(&vm, AGC_KIND_IO_NOT_FOUND, "no file"));
   assert(e->type == vm.rt->error_struct && e->n == AGC_ERROR_FIELDS);
   check(agc_as_string(&vm, e->fields[AGC_ERROR_KIND]), "io.not_found");
   check(agc_as_string(&vm, e->fields[AGC_ERROR_MESSAGE]), "no file");
@@ -141,7 +144,7 @@ static void test_location(void) {
   check(agc_as_string(&vm, e->fields[AGC_ERROR_KIND]), "error");
   check(agc_as_string(&vm, e->fields[AGC_ERROR_LOCATION]), "std/x.agc:1:2");
   /* error(e) keeps a located Error as it is, and fills an empty location (lowering leaves it empty in the prelude). */
-  agc_value located = payload(agc_error(&vm, "error", "kept"));
+  agc_value located = payload(agc_error(&vm, AGC_KIND_ERROR, "kept"));
   e->fields[AGC_ERROR_LOCATION] = agc_test_str("app.agc:9:9");
   assert(payload(call("error", agc_struct_value(e))).as.p == e);
   e->fields[AGC_ERROR_LOCATION] = agc_test_str("");
@@ -265,7 +268,7 @@ static void test_is_a(void) {
 static void test_fallback(void) {
   uint32_t found = vm.rt->error_struct;
   vm.rt->error_struct = UINT32_MAX;
-  agc_value s = payload(agc_error(&vm, "io.not_found", "no file"));
+  agc_value s = payload(agc_error(&vm, AGC_KIND_IO_NOT_FOUND, "no file"));
   check(agc_as_string(&vm, s), "no file");
   check(agc_debug(&vm, agc_result_value(false, s)), "error(\"no file\")");
   check(agc_error_halt_text(&vm, s), "no file");
@@ -296,6 +299,39 @@ static void test_shape(void) {
   assert(agc_error_struct(&shapes->program) == 0);
 }
 
+static void kind_is(agc_error_family family, int err, const char *kind) {
+  const char *got = agc_error_kind_name(agc_errno_kind(family, err));
+  if (strcmp(got, kind) != 0) {
+    fprintf(stderr, "errno %d: got %s, want %s\n", err, got, kind);
+    assert(false);
+  }
+}
+
+/* An errno gets the kind of its family; one the table does not name gets the family's `failed` kind. The code is the
+   errno itself, and an error built with a code prints it. */
+static void test_codes(void) {
+  kind_is(AGC_FAMILY_IO, ENOENT, "io.not_found");
+  kind_is(AGC_FAMILY_IO, EACCES, "io.permission");
+  kind_is(AGC_FAMILY_IO, EPERM, "io.permission");
+  kind_is(AGC_FAMILY_IO, EEXIST, "io.exists");
+  kind_is(AGC_FAMILY_IO, EISDIR, "io.is_directory");
+  kind_is(AGC_FAMILY_IO, ENOTDIR, "io.not_directory");
+  kind_is(AGC_FAMILY_IO, ENOSPC, "io.failed");
+  kind_is(AGC_FAMILY_NET, ECONNREFUSED, "net.refused");
+  kind_is(AGC_FAMILY_NET, ECONNRESET, "net.closed");
+  kind_is(AGC_FAMILY_NET, EPIPE, "net.closed");
+  kind_is(AGC_FAMILY_NET, ETIMEDOUT, "net.timeout");
+  kind_is(AGC_FAMILY_NET, EHOSTUNREACH, "net.failed");
+  kind_is(AGC_FAMILY_PROCESS, ENOENT, "process.not_found");
+  kind_is(AGC_FAMILY_PROCESS, EACCES, "process.failed");
+  kind_is(AGC_FAMILY_NATIVE, EIO, "native.failed");
+  agc_struct *e = error_of(agc_system_error(&vm, AGC_FAMILY_NET, "network: connection failed", ECONNREFUSED));
+  check(agc_as_string(&vm, e->fields[AGC_ERROR_KIND]), "net.refused");
+  assert(agc_equal(&vm, e->fields[AGC_ERROR_CODE], some(agc_int(ECONNREFUSED)), 0));
+  check(agc_debug(&vm, agc_error_code(&vm, AGC_KIND_HTTP_TOO_LARGE, text("413 too large"), 413)),
+        "error(\"413 too large\", kind: \"http.too_large\", code: 413)");
+}
+
 int main(void) {
   agc_init();
   shapes = build();
@@ -308,6 +344,7 @@ int main(void) {
   AGC_TEST_RUN(test_is_a());
   AGC_TEST_RUN(test_fallback());
   AGC_TEST_RUN(test_shape());
+  AGC_TEST_RUN(test_codes());
   puts("error tests passed");
   return 0;
 }

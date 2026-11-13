@@ -453,7 +453,7 @@ end
 def test_a_long_search_hands_the_scheduler_back_and_can_be_cancelled(tmp_path):
     """On one scheduler, main gets its turn back while the search of millions of characters runs, and cancels it."""
     result = run_vm(compile_text(CANCEL, "cancel", tmp_path), "--schedulers", "1")
-    assert result.code == 0 and result.stdout == 'error("task: cancelled")\n', result.stderr
+    assert result.code == 0 and result.stdout == 'error("task: cancelled", kind: "task.cancelled")\n', result.stderr
 
 
 @pytest.mark.parametrize("body, code", [

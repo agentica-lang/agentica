@@ -4,8 +4,8 @@
   "steps": 2893,
   "stdout": [
     "handling",
-    "error(\"task crashed: RUNTIME-DIVISION-BY-ZERO at @fixtures/vm/http-server-owner-crash.agc:20:16: division by zero\")",
-    "error(\"network: end of input\")",
+    "error(\"task crashed: RUNTIME-DIVISION-BY-ZERO at @fixtures/vm/http-server-owner-crash.agc:20:16: division by zero\", kind: \"task.crashed\")",
+    "error(\"network: end of input\", kind: \"net.eof\")",
     "client: http: connection closed before the response was complete",
     "ok()",
     "after: refused",

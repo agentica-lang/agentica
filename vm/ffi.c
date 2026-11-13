@@ -1434,7 +1434,7 @@ static agc_value resource_result(agc_vm *vm, const ffi_entry *e, void *pointer, 
   if (!pointer) {
     char message[512];
     snprintf(message, sizeof message, "%s returned NULL", e->symbol);
-    return agc_error(vm, "error", message);
+    return agc_error(vm, AGC_KIND_NATIVE_FAILED, message);
   }
   return agc_result_value(true, make_resource(vm, e->free, free_target(e->free_by_pointer, free_at),
                                               e->free_by_ref, e->resource, pointer, from));
@@ -2805,7 +2805,7 @@ static void wait_drop(void *data) {
 static agc_value wait_done(agc_vm *vm, void *data, agc_value context) {
   (void)context;
   native_wait *w = data;
-  agc_value v = w->err ? agc_system_error(vm, "native: cannot wait on the descriptor", w->err)
+  agc_value v = w->err ? agc_system_error(vm, AGC_FAMILY_NATIVE, "native: cannot wait on the descriptor", w->err)
                        : agc_result_value(true, agc_void());
   wait_drop(w);
   return v;
@@ -2816,7 +2816,7 @@ static agc_value wait_expired(agc_vm *vm, void *data, agc_value context) {
   (void)vm;
   (void)data;
   (void)context;
-  return agc_error(vm, "error", "native: timed out");
+  return agc_error(vm, AGC_KIND_NATIVE_TIMEOUT, "native: timed out");
 }
 
 static void wait_pause(void *data) {
@@ -2847,8 +2847,8 @@ static agc_value native_wait_on(agc_vm *vm, agc_value *args, uint32_t span, bool
   if (vm->rt->no_files) agc_fail(vm, "RUNTIME-NATIVE-DENIED", "native calls are off in this run", span);
   int64_t fd = agc_as_int(vm, args[0]);
   int64_t timeout = agc_as_int(vm, args[1]);
-  if (timeout <= 0) return agc_error(vm, "error", "native: timeout must be positive milliseconds");
-  if (fd < 0 || fd > INT_MAX) return agc_error(vm, "error", "native: invalid descriptor");
+  if (timeout <= 0) return agc_error(vm, AGC_KIND_ARGUMENT, "native: timeout must be positive milliseconds");
+  if (fd < 0 || fd > INT_MAX) return agc_error(vm, AGC_KIND_ARGUMENT, "native: invalid descriptor");
   agc_task_check_wait(vm);
   native_wait *w = malloc(sizeof *w);
   if (!w) agc_out_of_memory();
@@ -2912,7 +2912,7 @@ static agc_value builtin_native_load(agc_vm *vm, agc_value *args, uint32_t span)
   free(library);
   agc_charge(vm, FFI_CALL_COST);
   if (opened) return agc_result_value(true, agc_void());
-  return agc_error_string(vm, "error", loader_text(error));
+  return agc_error_string(vm, AGC_KIND_NATIVE_FAILED, loader_text(error));
 }
 
 /* Native.function?(library, name): whether the library that the front end resolved (as for Native.load) exports the

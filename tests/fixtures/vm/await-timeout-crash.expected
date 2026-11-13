@@ -3,10 +3,10 @@
   "code": "RUNTIME-TASK-CRASHED",
   "steps": 48,
   "stdout": [
-    "Await.Done(error(\"task crashed: RUNTIME-DIVISION-BY-ZERO at @fixtures/vm/await-timeout-crash.agc:2:17: division by zero\"))",
+    "Await.Done(error(\"task crashed: RUNTIME-DIVISION-BY-ZERO at @fixtures/vm/await-timeout-crash.agc:2:17: division by zero\", kind: \"task.crashed\"))",
     "failed: task crashed: RUNTIME-DIVISION-BY-ZERO at @fixtures/vm/await-timeout-crash.agc:2:17: division by zero",
     "false",
-    "Await.Done(error(\"task crashed: RUNTIME-DIVISION-BY-ZERO at @fixtures/vm/await-timeout-crash.agc:2:17: division by zero\"))",
+    "Await.Done(error(\"task crashed: RUNTIME-DIVISION-BY-ZERO at @fixtures/vm/await-timeout-crash.agc:2:17: division by zero\", kind: \"task.crashed\"))",
     "before",
     ""
   ],

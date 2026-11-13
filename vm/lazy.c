@@ -94,9 +94,9 @@ static agc_step lazy_call2(agc_value fn, agc_value first, agc_value second) {
   return (agc_step){.kind = AGC_STEP_CALL2, .value = first, .second = second, .fn = fn};
 }
 
-static agc_value lazy_error(agc_vm *vm, const char *message) {
+static agc_value lazy_error(agc_vm *vm, agc_error_kind kind, const char *message) {
   size_t len = strlen(message);
-  return agc_error_string(vm, "error", agc_make_string(message, len, len));
+  return agc_error_string(vm, kind, agc_make_string(message, len, len));
 }
 
 /* Argument 1 of the prelude function is the bad one: the count of take, drop, first, each_slice and each_cons, the
@@ -304,7 +304,7 @@ static agc_value lazy_finish(agc_vm *vm, lazy_run *run) {
     case LAZY_WRITE_BYTES: return agc_result_value(true, agc_int(run->written));
     case LAZY_FIND: break;
   }
-  return lazy_error(vm, "not found");
+  return lazy_error(vm, AGC_KIND_ERROR, "not found");
 }
 
 /* The calls of a run that touch shared state: the line reader and writer start file jobs and close the handle, a
@@ -498,7 +498,9 @@ static lazy_pull lazy_io(agc_vm *vm, lazy_run *run, const lazy_node *source, agc
     switch (lazy_receive(vm, source, &run->item)) {
       case AGC_RECV_VALUE: return NEXT_ITEM;
       case AGC_RECV_CLOSED: return NEXT_NONE;
-      case AGC_RECV_TIMED_OUT: *call = lazy_end(lazy_error(vm, "channel: timed out")); return NEXT_STEP;
+      case AGC_RECV_TIMED_OUT:
+        *call = lazy_end(lazy_error(vm, AGC_KIND_CHANNEL_TIMEOUT, "channel: timed out"));
+        return NEXT_STEP;
       case AGC_RECV_WAIT: break;
     }
   } else {

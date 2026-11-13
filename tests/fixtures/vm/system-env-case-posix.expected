@@ -3,7 +3,7 @@
   "code": null,
   "steps": 4,
   "stdout": [
-    "error(\"system: environment variable is not set\")",
+    "error(\"system: environment variable is not set\", kind: \"system.env\")",
     ""
   ],
   "stderr": []

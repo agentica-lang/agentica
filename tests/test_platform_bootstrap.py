@@ -176,7 +176,7 @@ def test_standard_input_from_a_file_or_the_null_device_reads_to_its_end(tmp_path
                                 capture_output=True, timeout=scaled(30))
     text = '"one\\ntwo\\n"' if kind == "file" else '""'
     assert (result.returncode, result.stdout.decode()) == (
-        0, '%s\nerror("IO.gets reached the end of input")\n' % text), result.stderr
+        0, '%s\nerror("IO.gets reached the end of input", kind: "io.eof")\n' % text), result.stderr
 
 
 def test_file_locks_are_idempotent_and_released_by_close(tmp_path) -> None:

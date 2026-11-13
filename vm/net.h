@@ -32,7 +32,7 @@ void agc_conn_discard(agc_conn *c);
 agc_value agc_conn_socket(agc_vm *vm, agc_conn *c);
 void agc_net_close(agc_vm *vm, agc_resource *r, const char *why);
 /* The error "network: cannot load WHAT \"PATH\"" of a TLS file that did not load (WHAT names the option, ca_file),
-   with the failure as agc_tls_failure_error adds it. */
+   with the failure as agc_tls_failure_error adds it; a system error of the load is of the io family. */
 agc_value agc_tls_load_error(agc_vm *vm, const char *what, const char *path, const agc_tls_failure *f);
 /* The error Result "HEAD (detail)" of a TLS failure, or HEAD with the system error. */
 agc_value agc_tls_failure_error(agc_vm *vm, const char *head, const agc_tls_failure *f);

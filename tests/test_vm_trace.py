@@ -753,7 +753,7 @@ def test_a_channel_ping_pong_arms_no_timer_and_a_wait_nobody_ends_arms_one_and_f
     path = tmp_path / "ping.trace"
     settings = {"AGENTICA_SCHEDULERS": "1", "AGENTICA_VM_TRACE": "sched", "AGENTICA_VM_TRACE_FILE": path}
     status, out, err = run_vm(vm, bytecode, settings)
-    assert (status, out, err) == (0, b'20100 200\nerror("channel: timed out")\n', b"")
+    assert (status, out, err) == (0, b'20100 200\nerror("channel: timed out", kind: "channel.timeout")\n', b"")
     lines = trace_lines(path)
     arms = [line for line in lines if b" sched timer_arm " in line]
     fires = [line for line in lines if b" sched timer_fire " in line]
