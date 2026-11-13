@@ -362,6 +362,27 @@ def test_a_signal_the_vm_started_ignoring_cannot_be_subscribed_to(tmp_path, adop
     assert vm.wait(WAIT_SECONDS) == 0
 
 
+IGNORED_AND_USR1 = """\
+def main() -> Void
+  signals = System.subscribe([System.Signal.Int, System.Signal.Usr1]).unwrap!
+  puts("subscribed")
+  IO.flush()
+  puts(signals.recv(30000).unwrap!.to_s)
+end
+"""
+
+
+@host_only(WINDOWS, "a signal inherited as ignored (nohup) has no Windows form")
+def test_a_signal_ignored_at_start_stays_ignored_and_the_others_are_subscribed(tmp_path, adopt):
+    code = bytecode(IGNORED_AND_USR1, tmp_path)
+    vm = adopt(Child([PYTHON, FIXTURES / "stop-peer.py", "launch", "ignore", *vm_command(), "--", code]))
+    assert vm.next_line(WAIT_SECONDS) == "subscribed"
+    os.kill(vm.process.pid, signal.SIGINT)
+    os.kill(vm.process.pid, signal.SIGUSR1)
+    assert vm.next_line(WAIT_SECONDS) == "System.Signal.Usr1"
+    assert vm.wait(WAIT_SECONDS) == 0
+
+
 def test_subscribe_answers_on_every_system(tmp_path, adopt):
     """The one case that runs everywhere: Windows has no subscription, and says so with a system.signal error."""
     vm = start(adopt, tmp_path, IGNORED.replace("System.Signal.Int", "System.Signal.Term"))
