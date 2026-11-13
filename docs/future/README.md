@@ -19,8 +19,6 @@ delete its section; section numbers are never renumbered, so gaps stay.
   streams, and `Process.poll_line` (#997).
 - `28-vm-metrics.md`: VM metrics in Prometheus text (#992).
 - `29-tls-context.md`: later TLS options (#993).
-- `41-dates-and-times.md`: builtin `Time` types (#985).
-- `42-sized-numeric-types.md`: sized numeric types (#984).
 - `46-signals.md`: signals (#991).
 - `48-regex.md`: Unicode classes for regex (#990), and the decisions that bound
   it.

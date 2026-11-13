@@ -451,8 +451,8 @@ header and the entry.
   type kind or constant kind does not: an older VM rejects the file as unknown.
   A call `JSON.decode(<JSON.Value>, T)` needs no new kind, so an older VM loads
   such a file and the call fails at run time with a wrong value type. Versions 7
-  and 8 are reserved by `docs/future/42-sized-numeric-types.md` and
-  `docs/future/41-dates-and-times.md`.
+  and 8 are reserved by the sized numeric types (issue #984) and the builtin
+  `Time` types (issue #985).
 - The C loader is the only reader of this format and has no compatibility
   shims, with one exception: it still reads format 5, which has no prelude flag
   (`AGC_FORMAT_PREVIOUS`).

@@ -7,13 +7,15 @@ Tasks, channels and `Address`: `tasks.md`.
 ```text
 import Actor from "std/actor"
 Actor.start(b: Actor.Behaviour[S, M], options: Actor.Options = Actor.Options()) -> Actor.Ref[S, M]
-Actor.Behaviour(init: Fn[S], handle: Fn[S, M, Actor.Step[S]], terminate: Optional[Fn[S, Void]] = none)
+Actor.Behaviour(init: Fn[S], handle: Fn[S, M, Actor.Step[S]],
+  terminate: Optional[Fn[S, Void]] = none, timeout: Optional[Actor.Timeout[S]] = none)
+Actor.Timeout(after_ms: Fn[S, Optional[Int]], handle: Fn[S, Actor.Step[S]])
 Actor.Options(capacity: Int = 1024)
 Actor.continue(state: S) -> Actor.Step[S]
 Actor.done(state: S) -> Actor.Step[S]
 Actor.cast(address: Address[M], message: M, timeout_ms: Int = 5000) -> Result[Void]
 Actor.call(address: Address[M], timeout_ms: Int, make: Fn[Channel[R], M]) -> Result[R]
-Actor.reply(channel: Channel[R], value: R) -> Void
+Actor.reply(channel: Channel[R], value: R) -> Bool
 Actor.stop(actor: Actor.Ref[S, M], timeout_ms: Int) -> Result[Void]
 ```
 
@@ -30,6 +32,18 @@ the `Ref`; there are no methods.
   with `Actor.reply(reply, value)`. The answer type comes from the expected
   type (the function's `Result[Int]`), or else from the variant the block
   builds (`Msg.Get(Channel[Int])`), so the call works in `puts` too.
+- `reply` gives whether the caller gets the value and closes the channel
+  (one answer per call; a second gives `false`). A call that gave up closed
+  its channel, so `reply` gives `false` and the value stays with the actor
+  (put a lent resource back). An answer is never lost (the call returns it,
+  or `reply` gives `false`) unless the caller is cancelled while it waits:
+  then `reply` gives `true` for a value nobody reads.
+- `timeout: some(Actor.Timeout(after_ms: &wait, handle: &tick))`: after
+  `init` and each message, `after_ms(state)` gives the wait (`some(ms)`;
+  0 or less takes only a message already waiting, as Erlang's `after 0`;
+  `none`: no limit); with no message in that time, `handle(state)` gives the
+  next step. A message starts the wait again: for a deadline, keep it in the
+  state and give what is left. No timer task.
 - Errors: `error("actor: timeout")` (inbox full or no answer in time) and
   `error("address: gone")` (the actor ended). A call whose actor crashes, a
   call to its own address from a handler, and two actors calling each other
@@ -47,7 +61,7 @@ the `Ref`; there are no methods.
   that task cancels it. Start long-lived actors from `main` or a supervisor.
 - `timeout_ms` of `stop` must be above 0 (`RUNTIME-INVALID-DURATION`); give
   `call` one above 0 too: `call(addr, 0)` still enqueues the message, then
-  gives `actor: timeout`.
+  usually gives `actor: timeout`.
 - Names: a module keeps `NAMES: ATS[String, Address[Msg]] = ATS.new()` (a
   constant goes before the enum in a module block) and wraps `cast` and `call`
   in its own functions, so callers never see `Msg`.
