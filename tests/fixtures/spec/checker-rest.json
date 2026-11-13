@@ -396,7 +396,7 @@
       "code": "CHECK-REDEFINED-NAME"
     }
   ],
-  "Test assertions need a type with equality; Test and TestCase are reserved": [
+  "Test assertions need a type with equality; Test is reserved and TestCase is free": [
     {
       "program": [
         "struct Box",
@@ -506,7 +506,7 @@
         "",
         ""
       ],
-      "code": "CHECK-REDEFINED-NAME"
+      "code": null
     }
   ],
   "File.each_line takes a block that returns Result[Void], and try works in it": [
@@ -14619,6 +14619,66 @@
         "",
         "def main() -> Void",
         "  puts(\"#{TlsContext(a: 1)} #{TlsServerOptions(b: 2)}\")",
+        "end",
+        ""
+      ],
+      "code": null
+    }
+  ],
+  "The Test family: Test.Case; the old name TestCase is unknown and free": [
+    {
+      "program": [
+        "def adds() -> Test.Case",
+        "  Test.test(\"adds\") do",
+        "    Test.eq(1 + 1, 2)",
+        "  end",
+        "end",
+        "",
+        "def main() -> Void",
+        "  cases: List[Test.Case] = [adds()]",
+        "  puts(\"TestCase\")",
+        "  Test.run(cases)",
+        "end",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def adds() -> TestCase",
+        "  Test.test(\"adds\") do",
+        "    Test.eq(1 + 1, 2)",
+        "  end",
+        "end",
+        "",
+        "def main() -> Void",
+        "end",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-TYPE",
+      "start": [1, 15],
+      "covers": "TestCase"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  Test.run([Test.Cas])",
+        "end",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-NAME",
+      "start": [2, 13],
+      "covers": "Test.Cas",
+      "help": true
+    },
+    {
+      "program": [
+        "struct TestCase",
+        "  name: String",
+        "end",
+        "",
+        "def main() -> Void",
+        "  puts(TestCase(name: \"a\"))",
         "end",
         ""
       ],

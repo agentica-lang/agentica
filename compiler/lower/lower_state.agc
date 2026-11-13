@@ -225,7 +225,7 @@ export def vm_type?(cx: Cx, type: Types.Type) -> Bool
     Types.Type.Struct(name, _) -> cx.user_types.get(name, "") == "Struct"
     Types.Type.Enum(name, _) -> cx.user_types.get(name, "") == "Enum"
     Types.Type.Fn(params, result) -> fn_type?(cx, params, result)
-    # The checker makes an opaque type only from OPAQUE_TYPES (a builtin handle, TestCase, C.Pointer) or a resource of
+    # The checker makes an opaque type only from OPAQUE_TYPES (a builtin handle, Test.Case, C.Pointer) or a resource of
     # an extern block (cx.resources): the VM has them all.
     Types.Type.Opaque(_) -> true
     Types.Type.Int -> true

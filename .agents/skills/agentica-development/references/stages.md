@@ -341,7 +341,7 @@ except that a builtin with no effects whose result is unused is
 not that error (they still return a `Result`, so a dropped one is
 `CHECK-UNUSED-RESULT`). `Test.eq` uses the rule `TestEq`: both arguments have
 one data type (the types with `to_s`, the types with value equality plus
-`JSON.Value`). `TestCase` is opaque and `Test` is reserved.
+`JSON.Value`). `Test.Case` is opaque; `Test` is reserved.
 
 - Every implementation key must be in `VM_BUILTINS` of
   `compiler/lower/lower_tables.agc` (`tests/test_frontend_catalog.py` checks it)

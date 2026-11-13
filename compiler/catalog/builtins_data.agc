@@ -312,10 +312,10 @@ export ENUMS: List[Model.EnumDef] = [
 ## The handle types a task can be given with Task.spawn_owning.
 export HANDLE_TYPES: List[String] = ["TCP.Socket", "TCP.Listener", "HttpWire.Server", "File.Handle", "Process"]
 
-## The builtin types with no structure: handles, TestCase, TLS.Context, C.Pointer (a C pointer of native code),
+## The builtin types with no structure: handles, Test.Case, TLS.Context, C.Pointer (a C pointer of native code),
 ## TaskRef (the running task, from Task.current) and Native.Mutex (the lock of a native library).
 export OPAQUE_TYPES: List[String] = [
-  "TCP.Socket", "TCP.Listener", "HttpWire.Client", "HttpWire.Server", "File.Handle", "Process", "TestCase",
+  "TCP.Socket", "TCP.Listener", "HttpWire.Client", "HttpWire.Server", "File.Handle", "Process", "Test.Case",
   "TLS.Context", "C.Pointer", "TaskRef", "Native.Mutex",
 ]
 
@@ -360,7 +360,6 @@ export RESERVED_TYPE_NAMES: List[String] = [
   "TaskExit",
   "TaskRef",
   "Test",
-  "TestCase",
   "Time",
   "Void",
   "Zlib",
@@ -370,7 +369,7 @@ export RESERVED_TYPE_NAMES: List[String] = [
 ## Family.Member: a group of functions (the rows named Family.Member.fn) or a builtin type named Family.Member (a
 ## record, an enum or an opaque type). A new member, or a new function of a member, only adds its rows or its type and
 ## reserves no name.
-export FAMILIES: List[String] = ["File", "JSON", "OpenSSL", "Process", "TCP", "TLS"]
+export FAMILIES: List[String] = ["File", "JSON", "OpenSSL", "Process", "TCP", "TLS", "Test"]
 
 ## The modules only std/ may call: each name with the std module that wraps it and the alias its help shows.
 export STD_ONLY_IMPORTS: Map[String, List[String]] = {
@@ -397,7 +396,7 @@ export MOVED_TYPES: Map[String, String] = {
 ## The nested names of the builtin types (and of the Profile functions) that keep their old name for now: a program
 ## may write either, File.Info or File.Info, and the linker turns the nested name into the old one, which the checker,
 ## the lowering and the VM know (#1182). A value still prints with the old name until its family moves.
-export NESTED_NAMES: Map[String, String] = {"System.Profile": "Profile", "Test.Case": "TestCase"}
+export NESTED_NAMES: Map[String, String] = {"System.Profile": "Profile"}
 
 ROWS_1: List[Model.Builtin] = [
   Model.Builtin(
@@ -5272,7 +5271,7 @@ ROWS_52: List[Model.Builtin] = [
   ),
   Model.Builtin(
     name: "Test.run",
-    parameters: [Model.Named(name: "tests", type: Types.Type.List(Types.Type.Opaque("TestCase")))],
+    parameters: [Model.Named(name: "tests", type: Types.Type.List(Types.Type.Opaque("Test.Case")))],
     result: Types.Type.Void,
     rule: Model.Rule.Plain,
     implementation: "Test.run",
@@ -5289,7 +5288,7 @@ ROWS_53: List[Model.Builtin] = [
       Model.Named(name: "name", type: Types.Type.String),
       Model.Named(name: "body", type: Types.Type.Fn([], Types.Type.Result(Types.Type.Void))),
     ],
-    result: Types.Type.Opaque("TestCase"),
+    result: Types.Type.Opaque("Test.Case"),
     rule: Model.Rule.Plain,
     implementation: "Test.test",
     effects: [],

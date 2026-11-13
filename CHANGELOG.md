@@ -45,6 +45,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - **Breaking:** `TlsContext`, `TlsClientOptions` and `TlsServerOptions` are
   `TLS.Context`, `TLS.ClientOptions` and `TLS.ServerOptions` (#1182); the old
   names are unknown, and a program may take them.
+- **Breaking:** `TestCase` is `Test.Case` (#1182); the old name is unknown,
+  and a program may take it.
 
 ## [0.31.0-alpha.1] - 2026-11-12
 

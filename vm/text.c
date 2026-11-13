@@ -197,7 +197,7 @@ size_t agc_scalar_text(agc_vm *vm, agc_value v, char text[AGC_SCALAR_TEXT]) {
   if (agc_is(v, AGC_T_LISTENER)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "<TCP.Listener>");
   if (agc_is(v, AGC_T_HTTP_CLIENT)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "<HTTP.Client>");
   if (agc_is(v, AGC_T_TLS_CONTEXT)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "<TLS.Context>");
-  if (agc_is(v, AGC_T_TEST)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "<TestCase>");
+  if (agc_is(v, AGC_T_TEST)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "<Test.Case>");
   if (agc_is(v, AGC_T_HTTP_SERVER)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "<HTTP.Server>");
   if (agc_is(v, AGC_T_CHANNEL)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "<Channel>");
   if (agc_is(v, AGC_T_LAZY)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "<Lazy>");

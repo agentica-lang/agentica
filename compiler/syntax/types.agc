@@ -22,7 +22,7 @@ KEEP_BUILTIN: Map[String, String] = {"": ""}
 NAME_CHARACTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_?!"
 
 ## A resolved type. Opaque holds the name of a handle or other builtin type with no structure (TCP.Socket, Process,
-## TestCase, C.Pointer), or the linked name of a resource of an extern block. Struct and Enum hold the linked name and
+## Test.Case, C.Pointer), or the linked name of a resource of an extern block. Struct and Enum hold the linked name and
 ## carry their type arguments (none for a plain struct or enum). Var is a type variable of a builtin signature, a
 ## generic struct or a generic enum. Fn lists the parameters, then the result. Codec is Codec[T], the codec of a
 ## struct or enum (T.codec). Optional is Optional[T], a value that is some(x) or none. Unknown is no type: the expected

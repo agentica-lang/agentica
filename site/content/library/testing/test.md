@@ -46,20 +46,20 @@ def test_rejects_zero() -> Result[Void] = Test.error?(parse_port("0"))
 
 A file with both `main` and `test_` functions is `CHECK-TEST-MAIN`, so a forgotten `main` never hides tests; with the `main` form, name helpers without the `test_` prefix. Without `main`, a test function takes no parameters and its result is written `Result[Void]` (a type alias of it does not count); anything else is `CHECK-TEST-SIGNATURE`, and a function named just `test_` is `CHECK-TEST-NAME`. `agentica check` applies these rules to `*_test.agc` files. Run as a normal program, a test file with no `main` is `CHECK-MAIN`; in a file of any other name, `test_` functions are ordinary functions.
 
-`Test` and `TestCase` are reserved names. `IO.inspect` of a `TestCase` shows `<TestCase>`.
+`Test` is a reserved name, with the member `Test.Case`. `IO.inspect` of a `Test.Case` shows `<Test.Case>`.
 
 ## Test.test
 
 ```signature
-Test.test(name: String, body: Fn[Result[Void]]) -> TestCase
+Test.test(name: String, body: Fn[Result[Void]]) -> Test.Case
 ```
 
-Builds a test from a name and a block. A `TestCase` keeps the name, the block and the place of the call, which is where the test is reported. Names must not be empty and must be unique within a file; otherwise `Test.run` fails with `RUNTIME-TEST-NAME` at that call.
+Builds a test from a name and a block. A `Test.Case` keeps the name, the block and the place of the call, which is where the test is reported. Names must not be empty and must be unique within a file; otherwise `Test.run` fails with `RUNTIME-TEST-NAME` at that call.
 
 ## Test.run
 
 ```signature
-Test.run(tests: List[TestCase]) -> Void
+Test.run(tests: List[Test.Case]) -> Void
 ```
 
 Serves the test runner and never returns. Call it from `main` itself: in a test or in any other task it fails with `RUNTIME-TEST-RUN` at the call ("call Test.run from main, outside every test").
