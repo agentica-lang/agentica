@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 746,
+  "steps": 792,
   "stdout": [
     "missing file: io.not_found code=2 io=true",
     "directory as file: io.is_directory code=21 io=true",
@@ -10,6 +10,7 @@
     "invalid path: argument code=none io=false",
     "stat missing: io.not_found code=2 io=true",
     "TLS ca_file: io.not_found code=2 io=true",
+    "TLS cert_file: io.not_found code=2 io=true",
     "bad timeout: argument code=none argument=true",
     "parse Int: number.parse code=none number=true",
     "Int range: number.range code=none number=true",
@@ -30,7 +31,7 @@
     ""
   ],
   "stderr": [
-    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/error-kinds.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":17,\"line\":33},\"start\":{\"column\":16,\"line\":33}},\"spawned_at\":{\"column\":43,\"file\":\"@fixtures/vm/error-kinds.agc\",\"line\":68},\"stack\":[{\"column\":16,\"file\":\"@fixtures/vm/error-kinds.agc\",\"function\":\"boom\",\"line\":33}],\"task\":true}",
+    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/error-kinds.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":17,\"line\":33},\"start\":{\"column\":16,\"line\":33}},\"spawned_at\":{\"column\":43,\"file\":\"@fixtures/vm/error-kinds.agc\",\"line\":70},\"stack\":[{\"column\":16,\"file\":\"@fixtures/vm/error-kinds.agc\",\"function\":\"boom\",\"line\":33}],\"task\":true}",
     ""
   ]
 }

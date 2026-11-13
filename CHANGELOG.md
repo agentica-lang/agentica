@@ -65,6 +65,12 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   `HTTP.listen`, `Native.string_at`, `JSON.Codec`) no longer get a migration
   hint: they are unknown names with the usual did-you-mean.
 
+### Fixed
+
+- A run or `compile` with `--front-end FILE` no longer reads or writes the
+  bytecode cache, which could give the program that another front end compiled
+  (#1489).
+
 ## [0.31.0-alpha.1] - 2026-11-12
 
 ### Added
