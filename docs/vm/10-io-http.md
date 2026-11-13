@@ -152,19 +152,17 @@ libuv sockets (`vm/tcp.c`, `vm/net.h`) and has no platform code of its own.
   `close_client` closes `jobs`, and a later call gets `http: client is closed`
   (what still runs: the last item of the differences below).
 - Proxies (the behavior is in the network page). With `proxy` in the options,
-  std/http passes the absolute URL as the target of `encode_request`, which
-  still writes the target's `Host`, and the job names the proxy as its origin,
-  so the owner pools connections by the proxy. An `https` URL keeps the target
-  as the job's origin (one tunnel per target) and the worker, or the call, opens
-  the tunnel itself: `connect_https` sends `CONNECT host:port`, reads only the
-  head of the answer, and then `HttpWire.upgrade_tls` or
-  `HttpWire.upgrade_context` starts TLS on that socket, with the target as the
-  host to verify. The login is cut out of the proxy URL before `parse_url`
-  (which refuses user info) and decoded into one `Proxy-Authorization: Basic`
-  header, never put in the URL, the job or an error; a `Connection` keeps the
-  proxy without user info in its options and the login in a channel, so printing
-  it shows no password. `proxy_from_env(url)` is the only reader of the
-  environment (`System.env`, which std/http may call; the pure `compiler/`
+  std/http passes the absolute URL as the target of `encode_request`, and the
+  job names the proxy as its origin, so the owner pools connections by the
+  proxy. An `https` URL keeps the target as the job's origin (one tunnel per
+  target) and the worker, or the call, opens the tunnel itself: `connect_https`
+  sends `CONNECT host:port`, reads only the head of the answer, and then
+  `HttpWire.upgrade_tls` or `HttpWire.upgrade_context` starts TLS on that
+  socket, with the target as the host to verify. The login is cut out of the
+  proxy URL before `parse_url` and decoded into one `Proxy-Authorization:
+  Basic` header, never put in the URL, the job or an error, so printing a
+  `Connection` shows no password. `proxy_from_env(url)` is the only reader of
+  the environment (`System.env`, which std/http may call; the pure `compiler/`
   folders never import it).
 - The owner keeps, per origin (scheme, host and port), the open count, the idle
   workers and a FIFO of waiting jobs. A job goes to the idle worker freed last,
@@ -196,12 +194,11 @@ libuv sockets (`vm/tcp.c`, `vm/net.h`) and has no platform code of its own.
   is not kept: the next connection tries again. A worker runs a job, answers on
   the job's reply channel, tells the owner on `jobs` whether it keeps the
   connection, then waits on its inbox for `idle_timeout_ms`; the timeout closes
-  the connection and ends the worker. The owner keeps only each worker's last
-  reply channel, so no task keeps a job's body for the worker's life. The worker
-  closes its inbox before its last look at it, so the owner cannot hand a job to
-  a worker that has left: the send fails, and another worker takes the job. When
-  the caller gave up on the reply channel (`HttpWire.awaited?`), the worker
-  closes the connection instead of keeping it.
+  the connection and ends the worker. The worker closes its inbox before its
+  last look at it, so the owner cannot hand a job to a worker that has left: the
+  send fails, and another worker takes the job. When the caller gave up on the
+  reply channel (`HttpWire.awaited?`), the worker closes the connection instead
+  of keeping it.
 - Retry: a job on a reused connection that fails before any response byte (end
   of input, a read or write error) is retried once on a new connection, within
   the same deadline, if its method is `GET`, `HEAD`, `OPTIONS`, `PUT` or
@@ -216,19 +213,18 @@ libuv sockets (`vm/tcp.c`, `vm/net.h`) and has no platform code of its own.
   close-delimited body is not kept either; a `Content-Length` over
   `max_body_bytes` is `http: body exceeds max_body_bytes`. An interim (1xx)
   head comes back as it is, and `std/http` reads at most 15 of them. The body is
-  read with `TCP.recv_bytes` and `chunk` (whose runs say which bytes of a
-  framing read are body) and kept as `Bytes`, whatever it holds.
+  read with `TCP.recv_bytes` and `chunk` and kept as `Bytes`, whatever it holds.
 - A connection is kept only after a complete exchange with no
   `Connection: close` on either side, a framed body, the whole request written
   and nothing after the response: `buffered` must be 0 and `ended` false on
   `HttpWire.ResponseHead` (after a head with no body), and after a body on
   `HttpWire.idle?`, which does not wait for input. Bytes there are a server bug
   or a response nobody asked for, and the next call must not read them; an
-  input that has already ended (`ended`: the end of input, a TCP FIN under TLS,
-  or a read error) would fail the next call. Header names are lowercased and
-  values are Latin-1: `encode_request` and `encode_response` keep a value's
-  characters (up to U+00FF, no control characters) in the head String, and
-  std/http sends the head as Latin-1, one byte per character (obs-text).
+  input that has already ended would fail the next call. Header names are
+  lowercased and values are Latin-1: `encode_request` and `encode_response` keep
+  a value's characters (up to U+00FF, no control characters) in the head
+  String, and std/http sends the head as Latin-1, one byte per character
+  (obs-text).
 - **Over TLS, a close-delimited body must end with `close_notify`.** tcp.c
   records whether the TLS layer closed before the TCP FIN, and `clean_eof?`
   reads it after the end of input. A bare FIN gives `http: truncated HTTP body`.
@@ -244,13 +240,11 @@ Properties of the client that no test checks:
   race.
 - A cancelled caller only stops waiting: its job runs to its end or its
   deadline, and then its connection is closed.
-- After `close_client` no request goes out that a worker had not started:
-  every job still on `jobs`, waiting or in a worker's inbox is answered
-  `http: client is closed`, and a worker checks `jobs.closed?` before it runs
-  a job. A request a worker had already started still runs to its end; its
-  caller also gets `http: client is closed`. The owner may still hand jobs to
-  workers while it takes the messages buffered before the close, but those
-  workers then see the close and send nothing.
+- After `close_client` no request goes out that a worker had not started: every
+  job still on `jobs`, waiting or in a worker's inbox is answered `http: client
+  is closed`, and a worker checks `jobs.closed?` before it runs a job. A request
+  a worker had already started still runs to its end; its caller also gets
+  `http: client is closed`.
 - The client's work is bytecode, so it spends the step budget of
   `--max-steps`.
 
@@ -324,163 +318,114 @@ Properties of the client that no test checks:
   `Test.run` leaves no task running. `accept` returns a socket once fewer than
   `max_connections` are open, and parks otherwise. A TLS socket is returned
   before its handshake, which runs under the first read's or write's timeout.
-- `spawn` is the hand-off of `Task.spawn_owning`
-([handle ownership][task-rules])
-  into the server's group, through the port function `agc_task_spawn_owning`: it
-  starts `f(socket)` as a child of the group and gives it the socket, which the
-  caller (the accept loop of `std/http`) must own, or the call fails with
-  `RUNTIME-HANDLE-NOT-OWNED`. It marks the task `hidden` and sets an end hook
-  that frees the slot and wakes a waiting `accept`. It does not close the
-  socket: the socket belongs to the connection task, so the one close path of
-  [§14.5](14-core-invariants.md#145-handles) closes it when that task ends in
-  any way (return, crash or cancel). There is no group registration of sockets.
+- `spawn` is the hand-off of `Task.spawn_owning` ([handle
+  ownership][task-rules]) into the server's group, through the port function
+  `agc_task_spawn_owning`: it starts `f(socket)` as a child of the group and
+  gives it the socket, which the caller (the accept loop of `std/http`) must
+  own, or the call fails with `RUNTIME-HANDLE-NOT-OWNED`. It marks the task
+  `hidden` and sets an end hook that frees the slot and wakes a waiting
+  `accept`. It does not close the socket: the connection task owns it, so the
+  one close path of [§14.5](14-core-invariants.md#145-handles) closes it when
+  that task ends in any way. There is no group registration of sockets.
 - `close_server` is idempotent. It closes the listener, wakes `accept` (which
   returns `http: server is closed`) and `wait` (which returns `ok()`), and drops
-  the group, which cancels the subtree. Every cancelled task closes the handles
-  it owns as it ends, so the connection sockets close, and so do the sockets a
-  handler's spawned task opened. A server is a handle owned by the task that
-  made it: when that task ends (returns, crashes or is cancelled), the one close
+  the group, which cancels the subtree, so the connection sockets and the
+  sockets a handler's spawned task opened close as those tasks end. A server is
+  a handle owned by the task that made it: when that task ends, the one close
   path runs `close_server` for it, and its port is free. A running task that
   closes its own server stops after that builtin
   (`vm/tests/task_cancel_test.c`).
 
 - `std/http` runs the accept loop in the group. For each socket it spawns the
-  connection loop: read a request's head, run the app, then write its answer.
-  The loop ends when the write returns anything but `ok(true)`.
-- The connection loop reads the head (and the framing checks: 413 over
-  `max_body_bytes`, before any `100 Continue`, then 400, 411, 417 and the `100
-  Continue`), lets a WebSocket handshake through, then spawns a feeder task and
-  calls the app with `RequestBody(pieces, done)`. The feeder reads the socket in
-  steps of at most 64 KiB (each wait is `request_timeout_ms`, also for a piece
-  the app has not taken) and sends each piece, chunked bodies decoded, into an
-  8-slot channel, so memory per connection is about 512 KiB. When the app
-  returns, the server closes `pieces` and waits for the bytes past the body on a
-  one-slot `rest` channel, at most the answer time. A body that had all arrived
-  (an empty chunked one) counts as read whether the app read it or not, and a
-  request with no body counts as read at once; the connection then serves the
-  next request, starting from `rest`. Otherwise the answer gets `Connection:
-  close`, the feeder is cancelled, the input is drained for at most the answer
-  time and the connection closes. `HTTP.app` reads the whole body
-  (`HTTP.read_all`) before it calls its handler.
+  connection loop: read a request's head (the framing checks: 413 over
+  `max_body_bytes` before any `100 Continue`, then 400, 411, 417 and the `100
+  Continue`), let a WebSocket handshake through, spawn a feeder task, call the
+  app with `RequestBody(pieces, done)` and write its answer. The loop ends when
+  the write returns anything but `ok(true)`.
+- The feeder reads the socket in steps of at most 64 KiB (each wait is
+  `request_timeout_ms`, also for a piece the app has not taken) and sends each
+  piece, chunked bodies decoded, into an 8-slot channel, so memory per
+  connection is about 512 KiB. When the app returns, the server closes `pieces`
+  and waits for the bytes past the body on a one-slot `rest` channel, at most
+  the answer time. A body that had all arrived (an empty chunked one) counts as
+  read whether the app read it or not, and a request with no body counts as
+  read at once; the connection then serves the next request, starting from
+  `rest`. Otherwise the answer gets `Connection: close`, the feeder is
+  cancelled, the input is drained for at most the answer time and the
+  connection closes. `HTTP.app` reads the whole body (`HTTP.read_all`) before
+  it calls its handler.
 - The answer goes out as a whole response (`Whole`, with `Connection: close`
   unless the body was read whole), as a stream (`Stream`, same header) or as an
   upgrade (`Upgrade`, only when the body was read whole; otherwise an `Accept`
   is a 500 and a `Reply` closes after it).
-- A `Stream` answer: a body channel that is already closed with its pieces
+- A `Stream` answer whose body channel is already closed with its pieces
   buffered is the whole body and goes out with `Content-Length`. Otherwise the
   head is `encode_response` of the same status and headers with an empty body,
   its `Content-Length: 0` swapped for `Transfer-Encoding: chunked` (so the head
   checks and the C code are the same), and the connection task sends the pieces
-  (`Bytes`, `TCP.send_bytes`) as it takes them from the channel. With `length:
-  some(n)` the head carries `Content-Length: n`, the pieces go out raw, and the
-  pump cuts the connection when the body ends short or a piece would pass `n`;
-  it ends the body when it is full without waiting for the producer to close,
-  since the client has its bytes. A length of 0 never streams. A watcher task,
-  spawned in the group, loops on `TCP.recv_bytes` for the whole stream: the end
-  of the client's input (or a read error) sets a one-slot `left` channel and
-  closes the body channel, which wakes the connection task and fails the
-  producer's next `send`, with no write needed; the pump then sees `left` and
-  sends no last chunk, so the client sees a cut body. Bytes read while the
-  stream runs are dropped (a socket read cannot be stopped without losing
-  bytes), so the bytes of a pipelined request are not kept and the connection
-  closes at the end of the stream, after `close_write` and a drain. When the
-  stream has ended with nothing read, the watcher's pending read is the wait for
-  the next request: its bytes go back as the start of the request, and the
-  connection task waits for them at most `idle_timeout_ms`. HTTP/1.0 never gets
-  here: the parser answers 505.
+  as it takes them from the channel. With `length: some(n)` the head carries
+  `Content-Length: n`, the pieces go out raw, and the pump cuts the connection
+  when the body ends short or a piece would pass `n`; it ends the body when it
+  is full without waiting for the producer to close. A length of 0 never
+  streams. A watcher task loops on `TCP.recv_bytes` for the whole stream: the
+  end of the client's input (or a read error) sets a one-slot `left` channel
+  and closes the body channel, which wakes the connection task and fails the
+  producer's next `send`; the pump then sees `left` and sends no last chunk, so
+  the client sees a cut body. Bytes read while the stream runs are dropped (a
+  socket read cannot be stopped without losing bytes), so the connection
+  closes at the end of the stream, after `close_write` and a drain; when the
+  stream ended with nothing read, the watcher's pending read is the wait for
+  the next request and its bytes go back as the start of it. HTTP/1.0 never
+  gets here: the parser answers 505.
 - An `Upgrade` answer is a `Reply` (served as a whole answer, the connection
   kept) or an `Accept`. An `Accept` writes the 101 head by hand, then runs the
   session in the connection task with two tasks around it. The reader is the
-  only task that reads the socket: it checks each frame head before it reads the
-  payload (masked, no reserved bits, known opcode, control frames whole and at
-  most 125 bytes, the length against `max_message_bytes`), joins fragments,
-  checks UTF-8 and close codes, and sends whole messages to `incoming`; the pong
-  of a ping goes through `outgoing`. The writer is the only task that writes the
-  socket and the one that ends the connection: it reads `outgoing` itself and
-  writes the frames queued at that moment in one write (it stops reading the
-  queue once 64 KiB are reached; a bigger frame goes whole), and it finishes
-  when the handshake is done, on a failed write, or `close_ms` after our close
-  frame. The reader leaves its last word (the answer to the peer's close, a
-  protocol error, the loss of the peer) in a one-slot channel and rouses the
-  writer with a close message in `outgoing` that carries a token random for each
-  connection (a session cannot build it), since a task cannot wait on two
-  channels. That message marks the place in the queue: what follows it is
-  dropped, and the answer to the peer's close goes out after everything that
-  precedes it (unless that ends with a close of the handler, which is then our
-  close). The handler hears the peer's close once the writer finishes the write
-  in progress (a stuck peer: at most `request_timeout_ms`). Every path ends with
-  one `Close` on `incoming`: the peer's, the code of the failure, or 1006. The pure part (the frame codec, the checks and the
-  accept key) is `std/internal/websocket`; a read timeout closes the socket, so
-  `idle_ms` is the timeout of each read and `ping_ms` is the timeout of the
-  writer's wait.
+  only task that reads the socket: it checks each frame before it reads the
+  payload (the frame rules and `max_message_bytes`), joins fragments, checks
+  UTF-8 and close codes, and sends whole messages to `incoming`. The writer is
+  the only task that writes the socket and the one that ends the connection; it
+  writes the frames queued at that moment in one write (up to 64 KiB). The
+  reader leaves its last word in a one-slot channel and rouses the writer with a
+  close message in `outgoing` that carries a token random for each connection
+  (a session cannot build it), since a task cannot wait on two channels. That
+  message marks the place in the queue: what follows it is dropped, and the
+  answer to the peer's close goes out after everything that precedes it. Every
+  path ends with one `Close` on `incoming`: the peer's, the code of the failure,
+  or 1006. The pure part (the frame codec, the checks and the accept key) is
+  `std/internal/websocket`; the options are in the network page.
 
 #### 10.7.3 Errors and status codes
 
-**Server side**, in the order they can happen:
+**Server side**, in the order they can happen. C answers the first six cases.
 
-- **Case:** Malformed or hostile head or body: bad start line, bare LF,
-  obs-fold, bad target or method, bad framing, or not exactly one non-empty
-  `Host` header
-  - **Who:** C
-  - **Answer:** 400, `Connection: close`, empty body, then close. The handler
-    never runs
-
-- **Case:** A line, the head, the header count or the trailers over their limits
-  - **Who:** C
-  - **Answer:** 431, then close
-
-- **Case:** A body over `max_body_bytes` (a `Content-Length` over it is answered
-  before any body byte is read)
-  - **Who:** C
-  - **Answer:** 413, then close
-
-- **Case:** A version `HTTP/[0-9.]+` other than `HTTP/1.1`
-  - **Who:** C
-  - **Answer:** 505, then close
-
-- **Case:** `CONNECT`, `Upgrade` (except a `GET` with one `Upgrade: websocket`,
-  which goes on to the app), a `Transfer-Encoding` other than one `chunked`
-  - **Who:** C
-  - **Answer:** 501, then close
-
-- **Case:** An `Expect` other than `100-continue`
-  - **Who:** C
-  - **Answer:** 417, then close
-
-- **Case:** `Expect: 100-continue` with a `Content-Length` over `max_body_bytes`
-  - **Who:** C
-  - **Answer:** 413, then close, with no 100 Continue first
-
-- **Case:** The client is too slow for `request_timeout_ms` (request or
-  response), or the idle wait ends
-  - **Who:** C
-  - **Answer:** The connection is closed
-
-- **Case:** The handler returns `error(message)`
-  - **Who:** `std/http`
-  - **Answer:** 500, `Connection: close`, empty body. The message is not sent.
-    `http: handler error: <message>` goes to stderr
-
-- **Case:** The handler returns a response that cannot be sent (status outside
-  200 to 599, a bad or framing header, a body with 204 or 304)
-  - **Who:** C refuses, `std/http` answers
-  - **Answer:** 500, `Connection: close`, and `http: invalid response: <reason>`
-    on stderr
-
-- **Case:** A runtime diagnostic in the handler
-  - **Who:** The VM
-  - **Answer:** The connection task crashes (handle ownership). The client sees
-    the close,
-    and the server goes on
-
-- **Case:** A handler that runs a long time
-  - **Who:** None
-  - **Answer:** Never stopped. Its reply is still sent, with a fresh
-    `request_timeout_ms` for the write
-
-- **Case:** Writing the response fails (the client left)
-  - **Who:** C
-  - **Answer:** The connection is closed quietly
+- Malformed or hostile head or body (bad start line, bare LF, obs-fold, bad
+  target or method, bad framing, or not exactly one non-empty `Host` header):
+  400, `Connection: close`, empty body, then close. The handler never runs.
+- A line, the head, the header count or the trailers over their limits: 431,
+  then close.
+- A body over `max_body_bytes` (a `Content-Length` over it is answered before
+  any body byte is read): 413, then close. With `Expect: 100-continue` and a
+  `Content-Length` over it, 413 with no 100 Continue first.
+- A version `HTTP/[0-9.]+` other than `HTTP/1.1`: 505, then close.
+- `CONNECT`, `Upgrade` (except a `GET` with one `Upgrade: websocket`, which goes
+  on to the app), a `Transfer-Encoding` other than one `chunked`: 501, then
+  close.
+- An `Expect` other than `100-continue`: 417, then close.
+- The client is too slow for `request_timeout_ms` (request or response), or the
+  idle wait ends: the connection is closed (C).
+- The handler returns `error(message)` (`std/http`): 500, `Connection: close`,
+  empty body. The message is not sent; `http: handler error: <message>` goes to
+  stderr.
+- The handler returns a response that cannot be sent (status outside 200 to 599,
+  a bad or framing header, a body with 204 or 304): C refuses and `std/http`
+  answers 500, `Connection: close`, with `http: invalid response: <reason>` on
+  stderr.
+- A runtime diagnostic in the handler (the VM): the connection task crashes
+  (handle ownership). The client sees the close, and the server goes on.
+- A handler that runs a long time: never stopped. Its reply is still sent, with
+  a fresh `request_timeout_ms` for the write.
+- Writing the response fails (the client left): the connection is closed
+  quietly (C).
 
 The codes that the hostile-case goldens fix are those 10.6 marks as fixed.
 `IO.warn` lines are program stderr, so the golden fixtures record them.
@@ -494,22 +439,20 @@ the call: `HTTP.text` refuses it. A connection that fails is never pooled.
 
 #### 10.7.4 Tests
 
-- **Goldens** (`tests/fixtures/vm/http-*.agc` and `.expected`) are their own
-  peers: one program runs a server and a client in two tasks, and only `main`
-  prints. A case that depends on a timeout cannot be a golden, since goldens
-  record step counts.
+- **Goldens** (`tests/fixtures/vm/http-*.agc`) are their own peers: one program
+  runs a server and a client in two tasks, and only `main` prints. A case that
+  depends on a timeout cannot be a golden, since goldens record step counts.
 - **The hostile cases of 10.6** run against the VM server, sent by a Python
-  raw-socket peer (`tests/test_vm_http.py`, standard library only), and check
-  the status code and the close. The C unit test (`vm/tests/http_parse_test.c`)
-  covers the same list at the adapter.
-- **Interop on port 0** (`tests/test_vm_http.py`, standard library only): the
-  VM client against Python's `http.server` and an HTTPS server made with
-  Python's `ssl` and the CA of `tests/fixtures/tls/`; the VM server against
-  Python's `http.client` and Node's `http`. Python and Node are required in CI.
+  raw-socket peer (`tests/test_vm_http.py`), and check the status code and the
+  close; the C unit test (`vm/tests/http_parse_test.c`) covers the same list at
+  the adapter.
+- **Interop on port 0** (`tests/test_vm_http.py`): the VM client against
+  Python's `http.server` and an HTTPS server made with the CA of
+  `tests/fixtures/tls/`; the VM server against Python's `http.client` and
+  Node's `http`. Python and Node are required in CI.
 - **Guards**: a user file, a `pkg/` module and a relative import that call
-  `HttpWire.service` each get `CHECK-UNKNOWN-NAME` with the `std/http` help
-  (the `check` spec tests of the modules rules).
-- **Performance** is not a CI gate: `benchmarks/http_bench.py` against
-  `examples/http_server.agc` (`docs/vm-benchmarks.md`).
+  `HttpWire.service` each get `CHECK-UNKNOWN-NAME` with the `std/http` help.
+- **Performance** is not a CI gate (`benchmarks/http_bench.py`,
+  `docs/vm-benchmarks.md`).
 
 [task-rules]: ../../site/content/library/concurrency/task.md

@@ -10,8 +10,9 @@ expected Int, found String
   |              ^^^^
 ```
 
-The prefix is the stage: `LEX-`, `PARSE-`, `CHECK-` (before running), `RUNTIME-`
-(while running), `PKG-` (manifest, lock, package cache). `QUERY-` is a bad
+The prefix is the stage: `LEX-`, `PARSE-`, `CHECK-` (before running),
+`RUNTIME-` (while running), `PKG-` (manifest, lock, package cache;
+`packages.md`). `QUERY-` is a bad
 question to `outline`, `type-at`, `symbol` or `refs`. With `--json`, the
 diagnostic that ends the run is the last stderr line, after the program's own
 stderr. Expected process failures return error Results. Codes without an entry
@@ -150,12 +151,10 @@ lines show. A task's stack ends with `task spawned at file:line:column`.
   column for a TOML syntax error; a missing or unreadable file has only its
   name.
 - `PKG-ROOT-ONLY`: `override = true` or a `path` in the `agentica.toml` of a
-  package; only the root project's manifest may say them (the key path is
-  `dependencies.<name>.override` or `.path`).
-- `PKG-AGENTICA-TOO-OLD`: the `agentica` key of the project's or a package's
-  `agentica.toml`, or the workspace root's, for a member, asks for a newer
-  Agentica than the one running (key path `agentica`); install that version or
-  pin a package version made for this one.
+  package; only the root project's manifest may say them (`packages.md`).
+- `PKG-AGENTICA-TOO-OLD`: an `agentica` key asks for a newer Agentica than the
+  one running (key path `agentica`); install that version or pin a package
+  version made for this one.
 - `QUERY-USAGE`, `QUERY-NOT-FOUND`, `QUERY-AMBIGUOUS-NAME` and
   `QUERY-NO-EXPRESSION`: a bad question to a query command, exit 2
   (`queries.md`).
@@ -169,8 +168,8 @@ lines show. A task's stack ends with `task spawned at file:line:column`.
 - `PKG-NATIVE-PLATFORM`, `PKG-NATIVE-MISSING`, `PKG-NATIVE-ARCHIVE`: a package's
   `[native.NAME]` table has no entry for this system (add `linux`, `macos` or
   `windows`), its `file` is not in the package, a downloaded archive holds no
-  file for its `member`, or the download is not a plain or gzipped TAR or a ZIP.
-  The key path is in the report (`native.NAME.linux.file`).
+  file for its `member`, or the download is not a TAR or a ZIP (key path in the
+  report, `native.NAME.linux.file`).
 - `PKG-NATIVE-BUILD`: a native module's `build` failed (no C compiler, a
   compile error), at `native.NAME.build`. `PKG-NATIVE-UNBUILT` is a warning,
   not an error: an `optional = true` module was not built and the program runs
@@ -202,17 +201,16 @@ lines show. A task's stack ends with `task spawned at file:line:column`.
   the real one (`s.chars` says `s.split("")`, `to_string` says `to_s`).
 - `CHECK-UNUSED-VALUE`: the result of a builtin without effects is ignored
   (`xs.push(1)` alone), or of a struct update.
-- `CHECK-UNUSED-RESULT`: a `Result` is dropped, as a statement or the last
-  statement of a `Void` block, from any call (`Result[Void]` too). Use `try`
-  where it is allowed, a `case`, or `.unwrap!`; `_ = f(...)` drops it on
-  purpose. `IO.inspect(r)` is exempt, and `Task.spawn(&f)` is not a Result.
-- `CHECK-BLOCK-TYPE`: a block parameter has no type from the call, or a lambda
-  parameter none from an `Fn` type, and its uses in the body leave no single
-  type (`x * 2`: Int or String); annotate (`do |x: Int|`, `->(x: Int) { ... }`).
+- `CHECK-UNUSED-RESULT`: a `Result` (`Result[Void]` too) from any call is
+  dropped, as a statement or the last statement of a `Void` block. Use `try`,
+  a `case` or `.unwrap!`; `_ = f(...)` drops it on purpose. `IO.inspect(r)` is
+  exempt, and `Task.spawn(&f)` is not a Result.
+- `CHECK-BLOCK-TYPE`: a block or lambda parameter has no type from the call or
+  the `Fn` type, and its uses leave no single type (`x * 2`: Int or String);
+  annotate (`do |x: Int|`, `->(x: Int) { ... }`).
 - `CHECK-CHAIN-AFTER-END`: `.name`, `[i]` or `|>` after the `end` of a `do`
-  block; pass a lambda and pipe (`xs |> map(->(x) { f(x) }) |> size()`), write
-  a one-line block in braces (`xs.map { |x| f(x) }.size`) or bind the result to
-  a name first.
+  block; use a lambda, a one-line block in braces or bind the result first
+  (`language-blocks-results.md`).
 - `CHECK-LOOP-CONTROL`: `break` or `next` outside a `while`/`for` body, or
   inside a block.
 - `CHECK-UNUSED-VARIABLE`, `CHECK-UNREACHABLE-CODE`,

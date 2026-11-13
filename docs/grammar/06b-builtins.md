@@ -252,31 +252,29 @@ None of them runs the program. The contract that page leaves out:
   selects the function `total`, not the module.
 
 `agentica --max-steps N program.agc` limits a run to N expression or statement
-entries across all tasks; N must be a positive integer. Runs are unlimited by
-default, and checking never spends the budget. Exhaustion is
-`RUNTIME-STEP-LIMIT` at the next node. It is not a wall-clock or blocking-I/O
-timeout. Each scheduler takes steps in batches, so with more than one scheduler
-the limit can trip a little late; `--schedulers 1` keeps the exact count.
+entries across all tasks (N a positive integer; runs are unlimited by default,
+and checking never spends the budget). Exhaustion is `RUNTIME-STEP-LIMIT` at
+the next node. It is not a wall-clock or blocking-I/O timeout. With more than
+one scheduler the limit can trip a little late; `--schedulers 1` keeps the
+exact count.
 
 At the end of a run the VM waits for the buffered writes of every open file, for
 the output of stdout and stderr that a pipe has not taken yet, and then for the
 frees of what native code still owns (see
 [How a run ends](../../site/content/library/concurrency/task.md#how-a-run-ends)).
-The wait is always bounded:
-30000 milliseconds by default. `agentica --flush-timeout MS program.agc` or the
-environment variable `AGENTICA_FLUSH_TIMEOUT_MS` sets it (an integer from 0 to
-86400000; the flag wins, a bad value exits 2, and there is no way to turn the
-limit off). On timeout, the run ends with the same exit code, and stderr gets
+The wait is always bounded by `--flush-timeout MS` or
+`AGENTICA_FLUSH_TIMEOUT_MS` (the flag wins, a bad value exits 2, and there is no
+way to turn the limit off; the default and range are in
+[Command line](../../site/content/cli.md#options)). On timeout, the run ends
+with the same exit code, and stderr gets
 `agentica: file data may not be written: the flush took longer than MS ms` (with
 `--json`, `{"flush_timeout_ms": MS, "warning": "file data may not be
 written"}`); when a native free is what took too long, the warning says `native
 resources may not be freed` instead (both, joined by `and`, when both did).
 
-`agentica --schedulers N program.agc` or the environment variable
-`AGENTICA_SCHEDULERS` sets the number of scheduler threads (an integer from 1 to
-1024; the flag wins over a valid variable, an empty variable counts as unset,
-and a bad value in either exits 2, before the program starts). The default is
-one per logical core the process may use, at most 1024. With more than one,
+`--schedulers N` or `AGENTICA_SCHEDULERS` sets the number of scheduler threads
+(the flag wins over a valid variable, an empty variable counts as unset, and a
+bad value in either exits 2, before the program starts). With more than one,
 tasks run in parallel and their order is not fixed; `--schedulers 1` runs one
 task at a time in the order of a single run queue. The front end always compiles
 on one scheduler. `agentica test` refuses the flag (exit 2); the VMs it starts

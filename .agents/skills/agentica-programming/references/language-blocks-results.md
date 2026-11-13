@@ -1,8 +1,7 @@
 # Blocks, Result and Optional
 
-The exact rule behind a checker error or a core question about blocks,
-closures, `Result`, `try` and `Optional`. Builtin methods and `to_s`:
-`builtins.md`.
+The rules behind the checker errors on blocks, closures, `Result`, `try` and
+`Optional`. Builtin methods and `to_s`: `builtins.md`.
 
 ## Blocks and closures
 
@@ -63,13 +62,7 @@ A lambda is a block written as a value, for a function value of its own:
 
 ## Result and try
 
-```text
-ok(value: T) -> Result[T]
-ok() -> Result[Void]
-error(message: String) -> Result[T]
-error(message: String, kind: String, code: Int, details: Map[String, String], cause: Error) -> Result[T]
-error(error: Error) -> Result[T]
-```
+Signatures: `builtins.md`.
 
 - An expected `Result[T]` checks the payload against T, even for `ok([])`.
 - A failed Result holds an `Error`, a builtin record: `kind: String`
@@ -130,23 +123,18 @@ error(error: Error) -> Result[T]
   or the default's type and evaluates both arguments, left to right, even on
   success. `r.ok?` and `r.message` need a known Result type; `message` is `""`
   for a success.
-- A dropped `Result` from any call is `CHECK-UNUSED-RESULT`: `try` it, `case`
-  it, `.unwrap!`, or write `_ = f(x)`.
 - `ok(false)` and `ok(nil)` are successes. Results nest and hold lists, maps and
   structs; they have no fields or indexing. `r == ok(1)` and `r == error("x")`
   compare the tag and the payload or the Error.
 - Non-bang conversions (`s.to_i`) share the bang forms' syntax and 64-bit
   bounds but return an error on bad text; other runtime errors are not
-  converted. `"x".to_i` is a Result, not `0`.
+  converted.
 - `Result.Ok(x)` and `Result.Err(m)` equal `ok(x)` and `error(m)`, as values and
   `case` patterns (`Result.Ok(_)` also for `Result[Void]`).
 
 ## Optional
 
-```text
-some(value: T) -> Optional[T]
-none -> Optional[T]
-```
+Signatures: `builtins.md`.
 
 - `Optional[T]` is a value that may be missing; it goes anywhere a type does
   (fields, parameters, returns, list and map items) and nests.
@@ -160,15 +148,11 @@ none -> Optional[T]
   `E.A(none)`, `ok(some(n))`). An arm with a literal or a nested variant
   covers nothing, so end with a names-only arm (`E.A(opt)`, `E.A(_)`, `some(n)`)
   or `_`, else `CHECK-NON-EXHAUSTIVE-CASE`.
-- `o.unwrap_or(default)`, `o.unwrap!` (halts with `RUNTIME-UNWRAP-NONE` on
-  `none`), `o.map do |x| x + 1 end`, `o.some?`, `o.none?`,
-  `o.to_result("missing")` (a Result for `try`).
 - `m.get(k)` and `s.index_of(part)` give an Optional. A missing value that is
   normal is an Optional; a failure with a reason is a Result (`List.find` and
   `Lazy.find` give `error("not found")`).
 - `==` compares two Optionals of a type with `==`: `o == none`,
-  `o == some(3)`. Prints as `some(3)` or `none`. JSON writes `none` as `null`
-  and reads `null` or a missing key as `none` (`json.md`).
+  `o == some(3)`. Prints as `some(3)` or `none`; JSON: `json.md`.
 - `some`, `none`, `ok` and `error` cannot name a variable, function or field.
 
 ## Design patterns

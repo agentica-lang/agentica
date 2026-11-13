@@ -98,19 +98,6 @@ value, the whole value of `JSON.encode`).
   `CHECK-JSON-FIELD-PLACE`; `JSON.Field[Optional[T]]` is not encodable or
   decodable. Use `JSON.Field` only to tell a missing key from `null`.
 
-```ruby
-struct Server
-  host: String
-  port: Optional[Int] = none
-end
-
-def main() -> Void
-  server = JSON.decode("{\"host\": \"a\"}", Server).unwrap!
-  puts(server.port)               # none
-  puts(JSON.encode(server))       # {"host":"a","port":null}
-end
-```
-
 ## Optional and nullable fields
 
 A field `age: JSON.Field[Int]` tells an absent key, `null` and a value apart.

@@ -1,18 +1,13 @@
 ## 41. Dates and times
 
 Issue #985, designed and not scheduled. The types are checker changes in
-`compiler/` (owner, 2026-10-15). `std/utc` (`UTC.parts`, `UTC.iso8601`) is the
-stopgap until the `Time` functions replace it. They differ: microseconds, not
-milliseconds; a year outside 1 to 9999 is an error, where `std/utc` writes it
-with its sign; and `Time.format` always writes six fraction digits, where
-`UTC.iso8601` takes a count (0 to 9). No grammar syntax is added: new builtin
-types and new functions of the existing `Time` module. Every name is a proposal
-for the owner to review. The precision is microseconds (owner, 2026-10-15;
-41.8).
-
-Programs compute with dates and times (a due date, a log timestamp, an expiry, a
-time from a JSON API), and have only `Time.now_ms()` and `Time.monotonic_ms()`
-(plus `Time.from_unix` of `File.stat` data through `std/utc`).
+`compiler/` (owner, 2026-10-15). `std/utc` is the stopgap until the `Time`
+functions replace it; they differ from it: microseconds, not milliseconds; a
+year outside 1 to 9999 is an error, where `std/utc` writes it with its sign;
+`Time.format` always writes six fraction digits, where `UTC.iso8601` takes a
+count (0 to 9). No grammar syntax is added: new builtin types and new functions
+of the existing `Time` module. Every name is a proposal for the owner to
+review. The precision is microseconds (owner, 2026-10-15; 41.8).
 
 ### 41.1 Builtins, an exception to "std/ first"
 
@@ -50,10 +45,9 @@ DateTime(year: Int, month: Int, day: Int,
   are the local ones: `dt.hour` is the hour at that offset, and parsing `+02:00`
   keeps `+02:00`.
 
-This follows Python: `date`, `time`, and `datetime` with and without `tzinfo`.
-Elixir has the same four structs (`%Date{}`, `%Time{}`, `%NaiveDateTime{}`,
-`%DateTime{}`). The name here is `TimeOfDay`, because `Time` is the module. The
-names are proposals for the owner to review (41.20).
+This follows Python (`date`, `time`, and `datetime` with and without `tzinfo`)
+and Elixir's four structs. The name is `TimeOfDay` because `Time` is the module
+(41.20).
 
 The fields are flat, not `DateTime(date: Date, ...)`: one level of field access,
 and no nested builtin record in lowering.
@@ -119,9 +113,8 @@ Time.assume_offset(value: NaiveDateTime, offset_minutes: Int)
   matches Python's `datetime(...)` and needs no second value; the fields of a
   valid `Date` can still be passed in (`Time.naive(d.year, d.month, d.day, 19,
   5, 42, 201337)`).
-- No conversion from a `DateTime` or a `NaiveDateTime` to `TimeOfDay` in v1.
-  `Time.time_of_day(dt.hour, dt.minute, dt.second, dt.microsecond).unwrap!`
-  does it; the fields of a valid value are always in range.
+- No conversion from a `DateTime` or a `NaiveDateTime` to `TimeOfDay` in v1:
+  `Time.time_of_day(dt.hour, dt.minute, dt.second, dt.microsecond).unwrap!`.
 - Two aware constructors, because they take different inputs: `datetime` builds
   from numbers, as Python's constructor does with `tzinfo`; `assume_offset`
   gives an offset to a reading that already exists (from `parse_naive` or a
@@ -151,14 +144,13 @@ Time.now() -> DateTime
   not exact inverses at the edges: an aware value at offset -1439 can have an
   instant up to a day past 9999-12-31, so `to_unix_us` can return a value that
   `from_unix_us` rejects.
-- `Time.now()` is the wall clock in UTC. It reads the clock the way
-  `Time.now_ms` does (`timespec_get` with `TIME_UTC`), and it keeps the
-  nanoseconds truncated to microseconds. The resolution is the OS clock's, so a
-  clock coarser than a microsecond leaves zeros in the last digits. If the clock
-  is outside years 1 to 9999 it halts with `RUNTIME-INTERNAL` ("cannot read the
-  clock"), as `Time.now_ms` does for a clock it cannot read. That does not
-  happen on a real machine. A program that wants the number uses
-  `Time.to_unix_us(Time.now())`.
+- `Time.now()` is the wall clock in UTC, read as `Time.now_ms` does and
+  truncated to microseconds. A clock outside years 1 to 9999 halts with
+  `RUNTIME-INTERNAL` ("cannot read the clock"). A program that wants the number
+  uses `Time.to_unix_us(Time.now())`.
+- Durations come from `Time.monotonic_ms` or `Time.monotonic_ns`, never from
+  `Time.now()` or a difference of `DateTime` values: the wall clock can jump.
+  `Time.us_between` is for calendar differences. There is no `elapsed` helper.
 - A naive reading has no Unix time. It goes through `assume_offset` first.
 
 ### 41.5 Offsets and naive values
@@ -267,14 +259,11 @@ Time.days_in_month(year: Int, month: Int) -> Result[Int]
 Time.leap_year?(year: Int) -> Bool
 ```
 
-- Naming: a function of `DateTime` has the plain name. A function that exists
-  for another type too takes that type's suffix: `_naive` for `NaiveDateTime`,
-  `_date` for `Date`, `_time` for `TimeOfDay`. So `format`, `format_naive`,
-  `format_date` and `format_time`; `compare`, `compare_naive`, `compare_date`
-  and `compare_time`; `date_of` and `date_of_naive`. A function that exists for
-  one type keeps its plain name, as `add_days`, `days_between`, `weekday` and
-  `day_of_year` do for `Date`. Each name has one meaning. The `us` in a name is
-  the unit (microseconds), not a type suffix.
+- Naming: a function of `DateTime` has the plain name; one that exists for
+  another type too takes its suffix (`_naive`, `_date`, `_time`): `format*`,
+  `compare*`, `date_of` and `date_of_naive`. A function that exists for one
+  type keeps its plain name (`add_days`, `weekday`). The `us` in a name is the
+  unit, not a type suffix.
 - `add_us` adds to the instant and keeps the offset, so the reading moves.
   `add_days` adds calendar days to a `Date`.
 - Differences are `to - from`, positive when `to` is later, for `days_between`
@@ -319,55 +308,23 @@ Not in v1: `add_months` and `add_years` (41.16), and arithmetic on `TimeOfDay`.
   `parse_time`, with the message `leap second not supported`. This is a chosen
   loss: a leap second cannot be kept, because Unix time has none, and a table of
   leap seconds is as much work as the zone data of 41.16.
-- Precision is microseconds, as in Python and Elixir. The field `microsecond`
-  is 0 to 999999. `Time.now_ms` and `Time.monotonic_ms` keep milliseconds, and
-  so does the input of `std/logger` (`time_ms`), which the logger turns
-  into microseconds with `* 1000` (41.11). Nanoseconds would not fit an Int over
-  the whole range: the latest value is about 2.5e20 ns since 1970, and an Int
-  holds 9.2e18 (`Int` is 64 bits on every target, §42.4), so Unix nanoseconds
-  overflow after the year 2262. Microseconds fit: the latest value is about
-  2.5e17 us, against the 9.2e18 an Int holds.
+- Precision is microseconds, as in Python and Elixir (`microsecond` is 0 to
+  999999). `Time.now_ms`, `Time.monotonic_ms` and the `std/logger` input
+  (`time_ms`) keep milliseconds. Nanoseconds would not fit an `Int` over the
+  whole range (about 2.5e20 ns against 9.2e18, §42.4); microseconds do (about
+  2.5e17).
 - Offsets are fixed. There is no daylight saving time, so every day of a fixed
   offset is 86400000000 us.
 
-### 41.10 Measuring elapsed time
-
-Durations come from the monotonic clock, and the pattern is:
-
-```agentica
-def main() -> Void
-  start = Time.monotonic_ms()
-  Task.sleep(5)
-  puts(Time.monotonic_ms() - start >= 4)
-end
-```
-
-- Never measure a duration with a wall-clock value: `Time.now_ms()`,
-  `Time.now()`, or a difference of two `DateTime` values. The wall clock can
-  jump, so the difference can be negative or wrong. `Time.us_between` is for
-  calendar differences (days until a due date), not for how long code runs.
-- `Time.monotonic_ns` reads the clock `Time.monotonic_ms` reads, in
-  nanoseconds because short work is invisible in milliseconds; not `uv_hrtime`,
-  since a second clock path would let the two builtins disagree.
-- No `elapsed` helper: it would be `Time.monotonic_ms() - start` with a name and
-  would hide which clock it reads (`stdlib/test/runner.agc` writes the
-  subtraction).
-
 ### 41.11 Relation to `std/logger`
 
-`Logger.time_text(ms)` becomes
-`Time.format(Time.from_unix_us(ms * 1000).unwrap!)`: the log's text and the
-`Time` formatter are one code path, and the log time is one native call instead
-of the integer arithmetic the logger describes. A value outside years 1 to 9999
-halts, as any `!` form does, and so does a `ms * 1000` that overflows an Int
-(`*` halts on overflow, as `docs/grammar/06b-builtins.md` says). The log's own
-time always comes from `Time.now_ms()`, which is in range, and the vectors cover
-the edges.
-
-The text changes with this. The time has six fraction digits
-(`2026-10-12T10:15:02.345000Z`), where the logger shows three; the owner decides
-the digits (41.20).
-
+`Logger.time_text(ms)` (today `UTC.iso8601(time_ms, 3)`) becomes
+`Time.format(Time.from_unix_us(ms * 1000).unwrap!)`, so the log's text and the
+`Time` formatter are one code path. A value outside years 1 to 9999 halts, as
+any `!` form does, and so does a `ms * 1000` that overflows an `Int`. The log's
+own time always comes from `Time.now_ms()`, which is in range. The text changes:
+six fraction digits (`2026-10-12T10:15:02.345000Z`) where the logger shows
+three; the owner decides the digits (41.20).
 ### 41.16 Later
 
 - Named time zones, such as `Europe/Madrid`. They need the IANA database. The C
@@ -397,38 +354,25 @@ the digits (41.20).
 
 Without a rule, `JSON.decode` would build a `DateTime` from an object's fields
 with none of the checks of 41.3, since a nested builtin record decodes as a
-struct (`docs/grammar/06b-builtins.md`). `JSON.encode` would write an object,
-not an RFC 3339 or ISO 8601 text. There are two options, and the owner has not
-chosen.
+struct (`docs/grammar/06b-builtins.md`), and `JSON.encode` would write an
+object, not RFC 3339 or ISO 8601 text. There are two options, and the owner has
+not chosen.
 
 - **B (recommended).** A field of type `Date`, `TimeOfDay`, `NaiveDateTime` or
   `DateTime` is a JSON string. `JSON.encode` writes the text of
   `Time.format_date`, `Time.format_time`, `Time.format_naive` or `Time.format`
-  (41.6). `JSON.decode` reads the string with `Time.parse_date`,
-  `Time.parse_time`, `Time.parse_naive` or `Time.parse`, so the checks of 41.3
-  and 41.6 run, and an error names the field path, as the other decode errors
-  do. `JSON.schema` gives a string for each of the four. Reason: the text is the
-  form that other systems write, and the checks run where the text comes in.
-  - Cost: each type gets a type-table kind of its own (`AGC_TYPE_*` in
-    `vm/value.h`, read by `load_types` in `vm/loader.c`), so the `.agcb` format
-    changes. The typed encoder and decoder (`vm/json_typed.c`,
-    `vm/json_value.c`) get a text branch for each kind. The format version
-    order against §42 is the order the two land in.
-  - Top level: `JSON.decode(text, DateTime)` reads a JSON string with
-    `Time.parse` and gives `Result[DateTime]`; text that is not a JSON string is
-    an error. `JSON.encode` of a `DateTime` gives the JSON string.
-- **A (alternative).** In v1, a field of one of the four types is
-  `CHECK-NOT-DECODABLE` for `JSON.decode` and `CHECK-NOT-ENCODABLE` for
-  `JSON.encode`, as Results and other nested types already are
-  (`docs/grammar/06b-builtins.md`). A program converts the value with
-  `Time.format` and `Time.parse` itself. Reason: nothing to design for v1; the
-  cost is one conversion in each program that reads or writes a date.
-  - Cost: one rule in `compiler/`. No new `.agcb` kind and no format change;
-    `vm/json_typed.c` and `vm/json_value.c` do not change.
-  - Top level: `JSON.decode(text, DateTime)` and `JSON.encode` of a `DateTime`
-    are `CHECK-NOT-DECODABLE` and `CHECK-NOT-ENCODABLE`, the same checks as for
-    a field.
-
+  (41.6). `JSON.decode` reads it with the matching `Time.parse*`, so the checks
+  of 41.3 and 41.6 run, and an error names the field path. `JSON.schema` gives
+  a string for each. At the top level, `JSON.decode(text, DateTime)` reads a
+  JSON string with `Time.parse` and gives `Result[DateTime]`. Reason: the text
+  is the form other systems write, and the checks run where the text comes in.
+  Cost: a type-table kind per type (`AGC_TYPE_*` in `vm/value.h`), so the
+  `.agcb` format changes; the order against §42 is the order the two land in.
+- **A.** In v1, a field of one of the four types (or the type at the top level)
+  is `CHECK-NOT-DECODABLE` for `JSON.decode` and `CHECK-NOT-ENCODABLE` for
+  `JSON.encode`, as Results and other nested types already are. A program
+  converts with `Time.format` and `Time.parse` itself. Cost: one conversion in
+  each program that reads or writes a date; no format change.
 ### 41.19 TOML (std/toml)
 
 std/toml keeps the text of a TOML date-time: its

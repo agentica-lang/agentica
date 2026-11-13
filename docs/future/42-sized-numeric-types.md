@@ -1,49 +1,34 @@
 ## 42. Sized numeric types
 
 **Status:** issue #984, designed and not scheduled (the owner's scope of
-2026-10-14). It is a
-checker and VM change, not VM-only. Every name and choice is a proposal for the
-owner to review; each open choice has a recommendation, a reason and the
-rejected options.
+2026-10-14). A checker and VM change, not VM-only. Every name and choice is a
+proposal for the owner to review; each open choice has a recommendation, a
+reason and the rejected options. Phasing is 42.13; `Int` and `Float` stay 64
+bits on every target (42.4, 42.16).
 
 `Int` (signed 64-bit) and `Float` (IEEE binary64) are the only numeric types.
 This section adds `Int8`, `Int16`, `Int32`, `UInt8`, `UInt16`, `UInt32`,
 `UInt64` and `Float32`, with the rules that keep them safe for agents to write.
 
-### 42.1 Summary
-
-Types, literals, conversions, arithmetic and VM choices are argued in 42.4 to
-42.11. Phasing is 42.13: 1 integers, 2 Float32, 3 binary API (breaking), 4
-typed storage (gated by measurement). `Int` and `Float` are 64 bits on every
-target (42.4, 42.16).
-
 ### 42.3 Motivation, and what it costs
 
-- **Memory.** A type alone does not shrink a `List[UInt8]`: stored as 64-bit
-  numbers it costs 8 bytes per item. The memory gain needs typed storage that
-  uses the element width (§42.12); the types are the input that storage needs.
-  `Bytes` covers the byte case.
+- **Memory.** A type alone does not shrink a `List[UInt8]` (8 bytes per item as
+  64-bit numbers); that needs typed storage (§42.12). `Bytes` covers the byte
+  case.
 - **Binary protocols and files.** `std/binary` reads and writes numbers as
-  `Int`, so the width is only a convention in the function name and a run-time
-  range check (`value 70000 does not fit in u16`). With `UInt16` the range is in
-  the type.
-- **Native values.** The FFI has its own `C.Int32`, `C.UInt8` and the like
-  for signatures, but a program value that a native call returns is an `Int`
-  or a `Float` again; sized types keep the width in the program.
-- **Interop.** CBOR's integer major types cover -2^64 to 2^64 - 1
-  (`16-cbor.md` maps `Int` only); other systems use `uint64` IDs and 32-bit
-  floats in their data.
-- **Wrap-around math.** Hashes and checksums need arithmetic that wraps. `+` and
-  `*` halt on overflow, so a 64-bit multiply in a hash (FNV-1a) can only be
-  written today by hand with bit operations.
+  `Int`, so the width is a convention in the function name and a run-time range
+  check. With `UInt16` the range is in the type.
+- **Native values.** A value a native call returns is an `Int` or a `Float`
+  again, though the FFI has `C.Int32` and the like for signatures.
+- **Interop.** CBOR integers cover -2^64 to 2^64 - 1 (`16-cbor.md` maps `Int`
+  only); other systems use `uint64` IDs and 32-bit floats.
+- **Wrap-around math.** Hashes and checksums need arithmetic that wraps, and
+  `+` and `*` halt on overflow, so FNV-1a needs bit operations by hand.
 
-The cost is real: every conversion is one more thing an agent must write. The
-design limits it: literals stay plain (§42.5), conversions are explicit and
-follow one rule (§42.6), and the evaluation rounds measure the binary tasks
-again after step 3 (§42.13). Languages that avoid silent wrong results halt on
-overflow (Rust in debug, Swift, Zig in safe builds), name the wrap operations
-and convert explicitly. Agentica follows that and keeps the rule of §6 that
-there is no implicit conversion.
+The cost is one more conversion for an agent to write. The design limits it:
+literals stay plain (§42.5), conversions are explicit and follow one rule
+(§42.6), and the evaluation rounds measure the binary tasks again after step 3
+(§42.13). Agentica keeps the rule of §6 that there is no implicit conversion.
 
 ### 42.4 Names and aliases
 
@@ -66,7 +51,7 @@ there is no implicit conversion.
   §41.2 are, and a user `struct`, `enum`, type parameter or import alias with
   one of them is `CHECK-REDEFINED-NAME`. Reason: otherwise `Int8(...)` could
   mean two things. A user `struct Int8` checks today, so this is breaking
-  (§42.15). There is no migration path: the language has no external users.
+  (§42.13). There is no migration path: the language has no external users.
 
 ### 42.5 Literals
 
@@ -303,29 +288,23 @@ there is no implicit conversion.
   platform gives the same bits.
 - **Printing (recommended).** `to_s` prints the shortest decimal that reads back
   to the same binary32 value. The Float32 nearest 0.1 prints `0.1`, not
-  `0.10000000149011612`. `agc_float_text` cannot be reused unchanged: it starts
-  at 15 digits, which is right for doubles, because every decimal of 15 digits
-  or fewer reads back through a double. For binary32 the new routine starts at 1
-  digit, stops at 9, and checks each candidate by rounding it to binary32.
-  Reason: that is the shortest form, and it is what a reader expects. An
-  infinity or NaN prints as `Float` does: `+inf.0`, `-inf.0` or `+nan.0`.
+  `0.10000000149011612`. `agc_float_text` starts at 15 digits, right for
+  doubles, so a new routine starts at 1 digit, stops at 9, and checks each
+  candidate by rounding it to binary32. An infinity or NaN prints as `Float`
+  does: `+inf.0`, `-inf.0` or `+nan.0`.
 - **Conversion from `Int` (recommended).** An integer is rounded to binary32
   once, from its 64-bit value: C converts the `int64_t` straight to `float`, not
   through a `double`. A `UInt64` converts the same way, with
   `(float)(uint64_t)`. Through a `double` the result can be wrong.
-  `9007199791611905` (2^53 + 2^29 + 1) rounds to 9007200328482816 (2^53 + 2^30),
-  and through a `double` to 9007199254740992 (2^53). `2^60 + 2^36 + 1` rounds to
-  1152921642045800448 (2^60 + 2^37), and through a `double` to
-  1152921504606846976 (2^60). These are exact integers, not printed text,
-  because a `Float32` prints its short form (Printing, above). The vectors of
-  step 2 test both.
+  `9007199791611905` (2^53 + 2^29 + 1) is such an input: it rounds to 2^53 +
+  2^30 directly and to 2^53 through a `double`. The vectors of step 2 test it.
 - **JSON (recommended).** Encoding uses the same shortest text. Decoding uses a
   correctly rounded `strtof` (glibc's rounds the decimal once), not `strtod`
   followed by a cast, because the cast rounds a second time. Reason: the double
   rounding gives the wrong binary32 in rare ties. The vectors of step 2 test it.
 - **Bits.** `Float32.to_bits(x) -> UInt32` and `Float32.from_bits(bits: UInt32)
   -> Float32` are added in step 2, and the existing `Float.to_bits32` and
-  `Float.from_bits32` (which use `Int`) are removed in step 3 (§42.15). Reason:
+  `Float.from_bits32` (which use `Int`) are removed in step 3 (§42.13). Reason:
   the 32-bit pattern gets one type, and the removal waits until the binary API
   moves.
 - **Open: `Float.to_bits` return type.** It returns `Int` today, signed, and a
@@ -376,80 +355,57 @@ there is no implicit conversion.
 
 ### 42.11 VM representation
 
-The checker knows every type, so the VM can use static types. The design has to
-keep the run-time paths that do not know the type: `inspect`, `to_s`,
-`JSON.encode`, `List.sort`, map keys and equality. Each of them reads the tag
-today. Three options were weighed.
+The checker knows every type, but the run-time paths that do not (`inspect`,
+`to_s`, `JSON.encode`, `List.sort`, map keys, equality) read the tag. Three
+options were weighed.
 
-- **(A) Static types only, no new tags.** Rejected. The generic paths would need
-  the kind passed in, and the VM keeps no types at run time today. Every builtin
-  that handles any value would change.
-- **(B) One `Int` tag, with the kind in the spare bits of the 32-bit tag word.**
-  Rejected. Every `agc_is(v, AGC_T_INT)` would have to mask the word, and a
-  missed mask would give a wrong answer without an error. It saves no memory,
-  since `agc_value` stays 16 bytes.
-- **(C) One tag per kind (recommended).** `AGC_T_INT8`, `AGC_T_INT16`,
-  `AGC_T_INT32`, `AGC_T_UINT8`, `AGC_T_UINT16`, `AGC_T_UINT32`, `AGC_T_UINT64`
-  and `AGC_T_FLOAT32` are added. Reason: each site is explicit, the compiler
-  finds the missed ones, and the value stays 16 bytes (`vm/value.h`).
+- **(A) Static types only, no new tags.** Rejected: the generic paths would
+  need the kind passed in, and the VM keeps no types at run time.
+- **(B) One `Int` tag, with the kind in the spare bits of the tag word.**
+  Rejected: every `agc_is(v, AGC_T_INT)` would have to mask the word, and a
+  missed mask gives a wrong answer without an error. It saves no memory.
+- **(C) One tag per kind (recommended).** `AGC_T_INT8` to `AGC_T_UINT64` and
+  `AGC_T_FLOAT32`. Each site is explicit, the compiler finds the missed ones,
+  and the value stays 16 bytes.
 
-With (C), the operations are:
+With (C):
 
-- **The `Int` opcodes do not change.** `ADD_I`, `SUB_I`, `MUL_I`, `DIV_I`,
-  `MOD_I`, `NEG_I`, `LT_I` and `LE_I` keep their 64-bit overflow checks.
-- **Six narrow kinds: one check opcode.** For `Int8`, `Int16`, `Int32`, `UInt8`,
-  `UInt16` and `UInt32`, the lowering emits the 64-bit operation and then one
-  new opcode, `FIT`, with the kind as an operand. `FIT` halts with
-  `RUNTIME-INTEGER-OVERFLOW` when the value is outside the kind's range. Reason:
-  one check for six types, against six opcodes for each operator.
-- **`UInt64`: unsigned opcodes.** `ADD_U`, `SUB_U`, `MUL_U`, `DIV_U`, `MOD_U`,
-  `LT_U` and `LE_U`, seven new opcodes. Reason: the signed 64-bit operations are
-  wrong above 2^63.
-- **`Float32`: one rounding opcode.** `ROUND_F32` rounds a double to binary32
-  after each float operation (§42.9). `Float32` uses the `_F` opcodes for the
-  rest.
-- **Bit, wrap and conversion operations are C builtins**, rows in `vm/numbers.c`
-  with a row in the catalog. They are not opcodes.
-- **Generic comparison.** `List.sort`, `List.sort_by` and the other generic
-  paths compare by tag. A `UInt64` value compares as unsigned, so
-  `18446744073709551615` sorts after `1`, as `UInt64` comparisons do (§42.7).
-- **Hot path.** The `Int` code is unchanged. A sized operation adds one compare
-  and branch. This is an estimate and is not measured.
-- **Opcodes are appended.** New opcodes at the end of the list do not change the
-  encoding of existing `.agcb` files, and the loader rejects only opcodes it
-  does not know. So they do not change the format version.
-- **Type-table kinds change the format.** Sized struct fields in typed JSON need
-  new type-table kinds (`AGC_TYPE_*` in `vm/value.h`), and the loader rejects an
-  unknown kind. A `Float32` literal needs a new constant kind that holds its
-  decimal text (§42.5): the binary64 constant kind would round twice. So the
-  format version is bumped (the current one is in
-  `docs/vm/03-ir-and-bytecode.md`; the order against §41 is the order the two
-  land in).
-- **GC.** The sized values are not pointers, like `Int`. No change to the
-  collector's setup.
+- The `Int` opcodes do not change.
+- The six narrow kinds emit the 64-bit operation and then one new opcode,
+  `FIT`, with the kind as operand: it halts with `RUNTIME-INTEGER-OVERFLOW`
+  outside the range. One check for six types, not six opcodes per operator.
+- `UInt64` gets unsigned opcodes (`ADD_U`, `SUB_U`, `MUL_U`, `DIV_U`, `MOD_U`,
+  `LT_U`, `LE_U`), since the signed 64-bit operations are wrong above 2^63.
+  Generic comparison (`List.sort`) compares a `UInt64` as unsigned.
+- `Float32` uses the `_F` opcodes plus `ROUND_F32` after each operation (§42.9).
+- Bit, wrap and conversion operations are C builtins in `vm/numbers.c`, not
+  opcodes.
+- The `.agcb` format version is bumped: sized struct fields in typed JSON need
+  new type-table kinds (`AGC_TYPE_*` in `vm/value.h`) that the loader rejects
+  today, and a `Float32` literal needs a constant kind that holds its decimal
+  text (§42.5), since the binary64 constant would round twice. The order
+  against §41 is the order the two land in.
 
 ### 42.12 Storage
 
-**Step 4, gated by measurement.** Typed storage keeps a list of a scalar type at
-its element width (1 byte for `Int8` and `UInt8`, 2 for the 16-bit types, 4 for
-the 32-bit types and `Float32`, 8 for `Int`, `UInt64` and `Float`), with no tag
-per item. The list header holds the element kind, so the paths that have no
-static type (`inspect`, `to_s`, `JSON.encode`, `List.sort`, equality; §42.11)
-read the width from the list, and a read rebuilds the `agc_value`
-(`docs/vm/05-values-execution-builtins.md` §5.5). `Int` and `Float` lists are
-already unboxed at 8 bytes (`docs/vm/17-lists.md` §17.12), so step 4 is for
-`UInt64` and the narrower widths. A `List[UInt8]` of 10 MB would cost
-about 10 MB, against about 160 MB with 16-byte items.
+**Step 4, gated by measurement.** Typed storage keeps a list of a scalar type
+at its element width (1, 2, 4 or 8 bytes) with no tag per item; the list header
+holds the element kind, so the paths with no static type (`inspect`, `to_s`,
+`JSON.encode`, `List.sort`, equality) read the width from the list. `Int` and
+`Float` lists are already unboxed (`docs/vm/17-lists.md` §17.12), so step 4 is
+for `UInt64` and the narrower widths. A `List[UInt8]` of 10 MB would cost about
+10 MB, against about 160 MB with 16-byte items.
 
 **Why not earlier.** It touches every container that holds values, and the
-persistent vector (`docs/vm/17-lists.md` §17.12) would need leaves of more
-widths. The value layout changes only when a measurement says so
-(`docs/vm/05-values-execution-builtins.md` §5.5). The criterion: a
-program that reads a 10 MB file into a `List[UInt8]` has a peak RSS too high for
-its task, measured with the benchmark script, and the list items are the limit.
+persistent vector would need leaves of more widths. The value layout changes
+only when a measurement says so (`docs/vm/05-values-execution-builtins.md`
+§5.5). The criterion: a program that reads a 10 MB file into a `List[UInt8]`
+has a peak RSS too high for its task, measured with the benchmark script, and
+the list items are the limit.
 ### 42.13 Phasing
 
-- **Step 1: integer types.** The types, reserved names, literals in context,
+- **Step 1: integer types.** The types, reserved names (breaking: a user
+  `struct Int8` or `Int64` becomes `CHECK-REDEFINED-NAME`), literals in context,
   arithmetic, comparisons, printing, conversions, bit and wrap methods, JSON and
   map keys. No storage change.
 - **Step 2: Float32.** Type, literals (with `CHECK-FLOAT-RANGE`), `ROUND_F32`,
@@ -461,20 +417,6 @@ its task, measured with the benchmark script, and the list items are the limit.
 Tests: `strtof` against exact rounding on every release target, the Windows
 UCRT included; subnormal `Float32` results against exact rational rounding; the
 Python peer computes with `fractions.Fraction`, never through a `double`.
-
-### 42.15 Breaking changes
-
-- **Reserved names (step 1).** `Int8` to `UInt64`, `Float32`, `Int64` and
-  `Float64` become reserved. A user `struct` with one of those names is
-  `CHECK-REDEFINED-NAME`.
-- **Binary API (step 3).** The `std/binary` readers and writers take and return
-  the sized types.
-- **Float bit builtins (step 3).** `Float.to_bits32` and `Float.from_bits32` are
-  removed in favour of `Float32.to_bits` and `from_bits`. `Float.to_bits`
-  changes only if the owner decides on `UInt64` (§42.17).
-- **No change to existing literals or `Int` results.** An existing program that
-  uses `Int` does not change its meaning. Its literals stay `Int`, and its JSON
-  `Int` fields stay the same.
 
 ### 42.16 Later and not planned
 
@@ -494,14 +436,10 @@ Not planned:
   conversion errors invisible to agents.
 - **A `Byte` alias** (§42.4) and **an unsigned `Int`** (`UInt64` covers the
   range above `Int`).
-- **A target-dependent `Int` width.** The owner confirmed `Int` and `Float` stay
-  64-bit on every target; a 32-bit option could be revisited only if an old
-  32-bit architecture becomes a target (none is planned). Rationale (the
-  author's): the VM stores `Int` as `int64_t` and `Float` as `double`, which C
-  provides on 32-bit CPUs too, but a 32-bit build must compute `Float` in
-  hardware double (SSE2, VFP; x87 gives other results), and a 32-bit `Int`
-  option would make one program overflow on one target and not another, and
-  `.agcb` files would not move between them.
+- **A target-dependent `Int` width.** The owner confirmed `Int` and `Float`
+  stay 64-bit on every target: a 32-bit `Int` would overflow on one target and
+  not on another, and `.agcb` files would not move between them. Revisit only
+  if a 32-bit architecture becomes a target (none is planned).
 
 ### 42.17 Questions for the owner
 

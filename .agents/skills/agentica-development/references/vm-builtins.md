@@ -15,9 +15,7 @@ Read first: `references/vm.md` and `references/vm-c.md`.
    `Family.Member.fn(...)` into a call of that row (`modules/resolve.agc`,
    `rewrite.agc`). A new builtin never adds a name to `RESERVED_TYPE_NAMES`:
    put it in a family or an existing namespace. A new family (one name in
-   `FAMILIES` and `RESERVED_TYPE_NAMES`) needs its own issue. A builtin record
-   the VM builds by name that gets a new name keeps its old one in
-   `renamed_structs` (`vm/builtins.c`) while the checked-in stage0 uses it.
+   `FAMILIES` and `RESERVED_TYPE_NAMES`) needs its own issue.
 1. `compiler/lower/lower_tables.agc`: add the key to `VM_BUILTINS` (a call of
    any other builtin is `LOWER-UNSUPPORTED`), and a builtin record the VM
    builds to `BUILTIN_STRUCTS` (`STRUCT_NEEDS` for the records it contains).

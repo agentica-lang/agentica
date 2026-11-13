@@ -110,5 +110,4 @@ Write the report as one GitHub tracking issue on agentica-lang/agentica:
 - check for an existing issue first (`gh issue list --search "API
   simplification"`) and update it rather than open a second one.
 
-Give the owner the issue link and the top three items. Open no PR until the
-owner picks items.
+Give the owner the issue link and the top three items.

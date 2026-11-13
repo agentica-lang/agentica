@@ -72,30 +72,26 @@ and `NOTICE` with the third-party licenses.
 The modes (`AGENTICA_OPENSSL`) are in §11. `vm/tls_openssl.c` stops with
 `#error` on an older OpenSSL or on LibreSSL.
 
-The vendored build (`mk/vm.mk`, `OSSL_OPTS`):
+The vendored build (`mk/vm.mk`, `OSSL_OPTS`, the source of the flags):
 
 - Configure runs out of tree in `$(VM_BUILD)/openssl/` with the mode's compiler
-  (`VM_CC`), with the parent's `MAKEFLAGS`, `CC`, `CFLAGS` and `LDFLAGS`
-  cleared, so nothing leaks in. It needs Perl 5 with its core modules.
-- Static libraries only, no loadable code, no legacy provider, no automatic
-  `openssl.cnf` loading, no parts TLS does not use, and `no-deprecated`, so only
-  the 3.x API is visible. The libraries are PIC, so the PIE link works.
+  and the parent's `MAKEFLAGS`, `CC`, `CFLAGS` and `LDFLAGS` cleared. It needs
+  Perl 5. Static, PIC libraries, `no-deprecated`, no legacy provider and no
+  automatic `openssl.cnf` loading.
 - The sanitizer mode builds OpenSSL with clang and `-g -fno-omit-frame-pointer`
   but without `-fsanitize`: an instrumented OpenSSL would make the sanitizer job
   much slower. ASan still wraps OpenSSL's `memcpy` and friends, so an overflow
   into a buffer the VM hands to OpenSSL is still caught.
 - The libraries depend only on the stamp (`$(VM_BUILD)/openssl-flags`: command
   lines, compiler version, `VERSION.dat`, submodule commit), not on source
-  times, so toggling `TRACE` or touching sources never rebuilds OpenSSL. After
-  editing OpenSSL sources by hand, remove `$(VM_BUILD)/openssl`.
+  times. After editing OpenSSL sources by hand, remove `$(VM_BUILD)/openssl`.
 - Initialization uses `OPENSSL_INIT_NO_LOAD_CONFIG | OPENSSL_INIT_NO_ATEXIT`:
   the built-in `OPENSSLDIR` points at the build machine, and the VM may end with
   `_exit` while a pool thread still runs. Contexts set TLS 1.2 and security
   level 2 as minimums.
 - Bumping: check out the new 3.5.x tag inside `vm/third_party/openssl`,
-  `git add` it and rebuild; the changed `VERSION.dat` changes the stamp and the
-  CI keys. Then rerun the TLS, sanitizer and diff tests. The next LTS line is a
-  reviewed change of its own.
+  `git add` it and rebuild, then rerun the TLS, sanitizer and diff tests. The
+  next LTS line is a reviewed change of its own.
 - Rejected: loading OpenSSL with `dlopen` only when a program uses TLS. It is
   more complex, and the static build costs only about 6 MB more.
 

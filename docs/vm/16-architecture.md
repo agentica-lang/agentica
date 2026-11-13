@@ -243,11 +243,11 @@ so a task can have two wakers at once.
 **The first to set the outcome wins** (§16.5). Two wakers can race, for example
 a hand-on and a lock deadline; the loser's wake is stale. A wait can hold two
 registrations, a place in a list and a timer. The winner takes the task out of
-the list before it pushes it. A timer that wins does so under the list's lock,
-or by a request to the list's owner. So the task is never in a list and in the
-run queue at once. If the timer of a job is still armed, the resumed task posts
-a request to stop it (§16.4), and the job is freed by its reference count
-(§16.5). A timer of the task (§16.9, "Timers") is disarmed by `resume` under
+the list before it pushes it (a timer that wins does so under the list's lock,
+or by a request to the list's owner), so the task is never in a list and in the
+run queue at once. A job's timer that is still armed is stopped by a request
+the resumed task posts (§16.4), and the job is freed by its reference count
+(§16.5); a timer of the task (§16.9, "Timers") is disarmed by `resume` under
 `rt->sync`. A resumed task still re-checks its wait condition (§10.2.3), so a
 late wake is only a hint.
 
@@ -340,15 +340,15 @@ one exit path are as in §16.1 to §16.6. What differs:
   the `done` half on the scheduler that resumes the task. A dirty call of a
   native module (`vm/native_module.c`) is the exception: the job's context is
   the List of its arguments, a GC root until the job ends, detached or not, so
-  C reads them in place; what C makes is staged in `malloc` memory (nodes, and
-  their bytes in an arena) and built into values by the `done` half, outside
-  `rt->sync`, or dropped, with the states of the resources it made freed, when
-  no task takes it. An item that ends goes
-  back to the loop's thread through the pool's own inbox, which exists at N = 1
-  too and keeps the loop alive only while items run. So a compute job is a pool
-  job: no deadline, no cancel half, and a cancel detaches it. A detached item
-  still in the queue skips its `work`; a running one drops the result once the
-  call returns. What the end of the run waits for is in §14.4 (steps 0 and 3).
+  C reads them in place; what C makes is staged in `malloc` memory and built
+  into values by the `done` half, outside `rt->sync`, or dropped, with the
+  states of the resources it made freed, when no task takes it. An item that
+  ends goes back to the loop's thread through the pool's own inbox, which
+  exists at N = 1 too and keeps the loop alive only while items run. So a
+  compute job is a pool job: no deadline, no cancel half, and a cancel detaches
+  it. A detached item still in the queue skips its `work`; a running one drops
+  the result once the call returns. What the end of the run waits for is in
+  §14.4 (steps 0 and 3).
   - At N > 1 a compute job skips the I/O thread. The builtin runs with
     `rt->sync` held, so its job waits in `vm->direct`, and `run_task` gives it
     to the pool once the turn is over (`agc_io_submit_direct`, no START). On the
@@ -423,20 +423,19 @@ one exit path are as in §16.1 to §16.6. What differs:
   scheduler's one `pending` slot, and the scheduler starts its clock at the end
   of its next turn, at its next such park, or before it sleeps. A task woken
   before then drops the entry, so a wait that the peer ends in its next turn
-  never reads the clock (a system call on a host with an HPET clock source). The
-  scheduler fires its due timers at its turn boundary and when its run queue is
-  empty (`agc_timers_run`), by waking the task like any waker. A deadline that
-  the coarse clock shows ahead costs no clock read (`clock_before`, with two
-  ticks plus 2 ms of margin). Every change to a heap is made with `rt->sync`
-  held, so any scheduler can remove the entry at once: the task leaves the heap
-  when it resumes (`resume`) or is cancelled (`unlink_task`), under the lock the
-  fire takes, and a fire never wakes a task that has left the wait. When
-  `rt->sync` is split, a removal from a scheduler that is not the owner becomes
-  lazy: the CAS of an outcome decides, the owner drops the dead entry when it
-  pops it, and the heap is rebuilt when the dead entries are twice the live
-  ones. A due timer fires at the owner's next turn boundary or idle step, so it
-  is late by at most the rest of the current turn and one poll of the loop. At
-  N = 1 an idle scheduler runs the loop once, bounded by the nearest deadline
+  never reads the clock. The scheduler fires its due timers at its turn boundary
+  and when its run queue is empty (`agc_timers_run`), by waking the task like
+  any waker. A deadline that the coarse clock shows ahead costs no clock read
+  (`clock_before`). Every change to a heap is made with `rt->sync` held, so any
+  scheduler can remove the entry at once: the task leaves the heap when it
+  resumes (`resume`) or is cancelled (`unlink_task`), under the lock the fire
+  takes, and a fire never wakes a task that has left the wait. When `rt->sync`
+  is split, a removal from a scheduler that is not the owner becomes lazy: the
+  CAS of an outcome decides, the owner drops the dead entry when it pops it, and
+  the heap is rebuilt when the dead entries are twice the live ones. A due timer
+  fires at the owner's next turn boundary or idle step, so it is late by at most
+  the rest of the current turn and one poll of the loop. At N = 1 an idle
+  scheduler runs the loop once, bounded by the nearest deadline
   (`agc_io_run_for`); at N > 1 it waits on the run queue until its nearest
   deadline (`agc_runq_wait_until`). An armed timer counts as work for the stall
   check (`vm->timers.next_due`, `rt->timers_armed`), except a service task's
@@ -496,25 +495,22 @@ one exit path are as in §16.1 to §16.6. What differs:
     scheduler wakes (`agc_task_wake`) goes into that slot when it is free, and
     to the global queue when it is full. A spawn, a yield and every wake by the
     I/O thread go to the queue. The slot is off at N = 1. `agc_task_next` takes
-    the slot first, at most `RUNNEXT_LIMIT` (3) times in a row, then pops the
-    queue once and resets the count; with the queue empty it takes the slot
-    after all. So two tasks that wake each other run on one core, taking the
-    queue's lock only every fourth pick, with no futex wake. Only the owner
-    thread touches the slot. A task in a slot is READY like a queued one: it
-    counts as pending, so the owner never waits while its slot is full and the
-    stall check never sees it idle. A cancel by the owner takes it out of the
-    slot and ends it; a cancel from another thread leaves it to the owner's
-    `agc_task_next`.
+    the slot first, at most `RUNNEXT_LIMIT` times in a row, then pops the queue
+    once and resets the count; with the queue empty it takes the slot after all.
+    So two tasks that wake each other run on one core, taking the queue's lock
+    only every few picks, with no futex wake. Only the owner thread touches the
+    slot. A task in a slot is READY like a queued one: it counts as pending, so
+    the owner never waits while its slot is full and the stall check never sees
+    it idle. A cancel by the owner takes it out of the slot and ends it; a
+    cancel from another thread leaves it to the owner's `agc_task_next`.
   - An idle scheduler spins before it waits on the condvar (`agc_runq_spin`). It
-    polls the queue's atomic `work` flag, not the lock, with CPU pauses whose
-    runs double up to 32, for `SPIN_BUDGET_US` (10 µs). It counts pauses and
-    reads no clock (`agc_pauses_for` times the pause once, since a clock read is
-    a system call on a machine with no usable TSC), and never sleeps. At most
-    half the schedulers (at least one) spin at once, and none spin at N = 1. A
-    push or a nudge reads the count of spinners under the queue's lock and skips
-    the condvar signal while one spins. No wake is lost: a spinner leaves the
-    count before it takes the lock for its wait, so it either sees `work`, finds
-    the task in that wait, or left before the push read the count, which then
+    polls the queue's atomic `work` flag, not the lock, for `SPIN_BUDGET_US`. It
+    counts pauses and reads no clock, and never sleeps. At most half the
+    schedulers (at least one) spin at once, and none spin at N = 1. A push or a
+    nudge reads the count of spinners under the queue's lock and skips the
+    condvar signal while one spins. No wake is lost: a spinner leaves the count
+    before it takes the lock for its wait, so it either sees `work`, finds the
+    task in that wait, or left before the push read the count, which then
     signals. A spinner may see several pushes that sent no signal, so the wake
     is chained: a scheduler that leaves a spin or a wait with a task, while more
     tasks are queued, signals one more waiter. Spinners do not count as idle for
@@ -522,12 +518,12 @@ one exit path are as in §16.1 to §16.6. What differs:
   - A task whose turn ends ready (a yield, or a wake during its own turn) goes
     back to the queue with `agc_runq_push_own` when its scheduler's slot is
     empty, so that scheduler pops next. If the queue was empty, the push sends
-    no signal and does not set `work`: the task stays on that core. With a plain
-    push, one CPU-bound task would wake an idle scheduler at every turn and move
-    between cores. A timer or a service end at that turn boundary may fill the
-    slot after the push, and the slot's task may hold the thread for long. So
-    the scheduler marks the push (`agc_vm.own_pending`), and when its next pick
-    takes the slot while the mark is set, it sends the skipped wake
+    no signal and does not set `work`: the task stays on that core. With a
+    plain push, one CPU-bound task would wake an idle scheduler at every turn
+    and move between cores. A timer or a service end at that turn boundary may
+    fill the slot after the push, and the slot's task may hold the thread for
+    long, so the scheduler marks the push (`agc_vm.own_pending`), and when its
+    next pick takes the slot while the mark is set, it sends the skipped wake
     (`agc_runq_kick`).
 - **A cancel is a claim.** `cancel_one` (`vm/task.c`) sets the target's atomic
   cancel flag, and then the state says who ends the task. Exactly one party
@@ -552,11 +548,11 @@ one exit path are as in §16.1 to §16.6. What differs:
   turns, strings, numbers, JSON, lists and maps) runs in parallel. It is held
   across the libuv calls that a locked path makes inline at N = 1 (a job start,
   a close); at N > 1 those are requests to the I/O thread, and the lock is not
-  held while the scheduler waits for one. A thread that finds it taken spins for
-  about 10 µs (`SYNC_SPIN_NS`) before it sleeps on the mutex: the sections are
-  short and many, and a futex sleep and wake cost more. It is cheap to split
-  later, when a measurement shows the contention (the `prints`, `ping-pong` and
-  `files` benchmarks, with the locks on). The pieces:
+  held while the scheduler waits for one. A thread that finds it taken spins
+  briefly (`SYNC_SPIN_NS`) before it sleeps on the mutex, since the sections are
+  short and many. It is cheap to split later, when a measurement shows the
+  contention (the `prints`, `ping-pong` and `files` benchmarks, with the locks
+  on). The pieces:
   - What takes the lock is marked per builtin: `agc_builtin.shared`, a flag in
     each row of the builtin tables, so a new row must say `true` or `false`.
     `call_builtin` (`vm/interp.c`) takes `rt->sync` around a row marked shared.
@@ -572,9 +568,9 @@ one exit path are as in §16.1 to §16.6. What differs:
     own lock, taken inside `vm/output.c`.
     `Native.call` (a `def` call) is not marked either: C runs without the lock,
     so calls on several schedulers run at once. It takes `rt->sync` only for its
-    bookkeeping: a site's first call, the holds of a call that makes resources
-    or whose arguments it cannot pin, a callback's count, and a free after the
-    call. Its resources are pinned without the lock (`calls` in
+    bookkeeping (a site's first call, the holds of a call that makes resources
+    or whose arguments it cannot pin, a callback's count, a free after the
+    call). Its resources are pinned without the lock (`calls` in
     `agc_c_resource`, `vm/ffi.c`). A library that is not thread-safe is the
     program's to guard, with a `Native.Mutex` (`vm/mutex.c`), whose waiters
     park.
@@ -595,11 +591,10 @@ one exit path are as in §16.1 to §16.6. What differs:
     modules that way). In that mode the lock placement is checked, not only
     exercised: `agc_lock_drop` aborts when the caller is not the owner, and
     `agc_sync_assert` fails the run with `RUNTIME-INTERNAL` when a mutator of a
-    shared list runs without the lock (`rg agc_sync_assert vm/`). Not yet under
-    the lock: the profiling counters. A socket or a child needs no lock, since
-    the I/O thread owns it (a direct send of a plain socket syncs with it by an
-    atomic state of its own, §10.3.1). The owner of a stream's lock is the
-    calling thread's context, not the stream's own `vm`.
+    shared list runs without the lock (`rg agc_sync_assert vm/`). A socket or a
+    child needs no lock, since the I/O thread owns it (a direct send of a plain
+    socket syncs with it by an atomic state of its own, §10.3.1). The owner of
+    a stream's lock is the calling thread's context, not the stream's own `vm`.
 - **GC threads.** Boehm's thread support, the helpers in `vm/value.c` and who
   registers are in §10.2.3, GC.
 - **The exit path runs on the I/O thread** (`agc_launch_end`, `vm/launch.c`).

@@ -208,9 +208,8 @@ reads is the value the declaring file computed.
 
 Only the root file supplies the executable `main() -> Void`; imported `main`
 functions do not run. Imported calls and tasks share the program's step budget
-and resource ownership. The CLI and `agentica test` use the same loader. There
-are no wildcard imports, package registry, mutable module state, module blocks
-inside module blocks or receiver attachment.
+and resource ownership. There are no wildcard imports, mutable module state or
+receiver attachment.
 
 #### Module blocks
 
@@ -358,11 +357,9 @@ import Sqlite from "pkg/sqlite/db"
   workspace root's manifest, before the root's other keys. The key is read and
   checked right after the TOML parse, before any other key and before the lock,
   so a manifest written for a newer Agentica reports the version it needs rather
-  than a key this one does not know. `run -- FILE.agcb`, `fmt` and `lint` do not check it. The running
-  version is the `VERSION` file as written when the binary was built, so a build
-  of master between releases reports the last release. Releases up to
-  0.31.0-alpha.1 do not know the key and refuse it as an unknown key
-  (`PKG-MANIFEST-INVALID`): a package that still supports them leaves it out.
+  than a key this one does not know. `run -- FILE.agcb`, `fmt` and `lint` do not
+  check it. The running version is the `VERSION` file as written when the binary
+  was built, so a build of master between releases reports the last release.
 - With `max_line_width = N`, `agentica check` and every command that checks a
   program report a line of more than N characters (Unicode code points; a CR
   before the line feed does not count; comments count) as
@@ -420,10 +417,10 @@ import Sqlite from "pkg/sqlite/db"
   that needs another folder of its own repository declares it like any other
   dependency (the same `git`, its own `subdir` and pin). Versions use prefixed
   tags (`postgres-0.1.0`).
-- `path = "../sqlite"` is a dependency on a folder of this machine, as in Mix:
-  relative to the folder of the manifest, or absolute; not empty, with no
-  control character, at most 1024 characters. It excludes `git`, `tag`, `ref`
-  and `subdir` (`PKG-MANIFEST-INVALID` at `dependencies.<name>`), and the
+- `path = "../sqlite"` is a dependency on a folder of this machine: relative to
+  the folder of the manifest, or absolute; not empty, with no control
+  character, at most 1024 characters. It excludes `git`, `tag`, `ref` and
+  `subdir` (`PKG-MANIFEST-INVALID` at `dependencies.<name>`), and the
   folder must hold an `agentica.toml` (else `PKG-MANIFEST-INVALID` at
   `dependencies.<name>.path`, as for a workspace member). Like a workspace
   member it is neither fetched, cached nor copied to `deps/`: the build reads
@@ -519,8 +516,8 @@ import Sqlite from "pkg/sqlite/db"
   (`sha256:` and 64 lowercase hex digits), `workspace = true` for a member
   of the workspace of the project, or `path` in place of the git source for a
   `path` dependency, then `override = true` for an overridden name. A bad lock
-  is `PKG-LOCK-INVALID`, a bad `subdir` too, at `package[n].subdir`; a lock
-  with no `subdir` reads as before. Every dependency of the manifest must be
+  is `PKG-LOCK-INVALID`, a bad `subdir` too, at `package[n].subdir`. Every
+  dependency of the manifest must be
   in the lock with the same `git` (with or without a `.git` at the end), the
   same `subdir` (or none) and the same `tag` or `ref`, or the same `path`, and
   the same `override`, or the lock is `PKG-LOCK-STALE`. The same check runs

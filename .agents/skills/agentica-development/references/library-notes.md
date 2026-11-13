@@ -226,33 +226,21 @@ tasks, TCP, TLS and HTTP, files and paths, processes. VM internals are in
 
 ## std/toml
 
-- `std/toml` (`stdlib/toml.agc`) is pure Agentica, no C. CRLF is turned into LF
-  before reading, so a lone CR is an error everywhere.
-- Floats go through `JSON.parse` and `JSON.float` (`String.to_f` has no
-  exponent and rounds less well). A reader error on a valid float text means a
-  magnitude over the largest float, which is inf, as in `tomllib`. A sign is
-  applied afterwards so that `-0.0` survives.
-- Tables are built as a `Node` tree (`Leaf` sealed, `Tab` with its `Origin`)
-  because `Value` cannot tell which tables a header or a dotted key may still
-  extend. `Origin.Dotted` carries the number of the section that made it: only
-  that section adds keys (the rule set of `tomllib`'s flags).
-- Limits, all 256: arrays and inline tables per value, parts of one header,
-  parts of one dotted key. The encoder refuses the same depths, and `to_json`
-  refuses 2,048 levels, so no value built by a caller halts with
-  `RUNTIME-STACK-OVERFLOW`, and what `encode` writes `parse` reads back.
-- `.gitattributes` marks the toml fixture folders `-text` to keep CRLF.
+`stdlib/toml.agc` is pure Agentica, no C; its comments hold the design (the
+`Node` tree and `Origin` against `Value`, the float path through `JSON.parse`,
+the 256 limits, the `to_json` depth). A change keeps these contracts: the
+encoder refuses the same depths as the reader, so no value built by a caller
+halts with `RUNTIME-STACK-OVERFLOW` and what `encode` writes `parse` reads
+back. `.gitattributes` marks the toml fixture folders `-text` to keep CRLF.
 
 ## std/regex
 
-- `std/regex` (`stdlib/regex.agc`): the parser to a `Node` tree and the
-  compiler to the parallel `ops`/`xs`/`ys` lists of `Program` are Agentica;
-  `x*` with a nullable `x` compiles as `(x+)?`, as in Go (issue 46123). The
-  Pike VM is the std-only builtin `RegexEngine.search` (`vm/regex.c`), a
-  stepper that checks the program on every call (a direct call may pass any
-  lists) and returns flat capture lists; `find_all`'s Go empty-match rules run
-  in C too. Match values are built in Agentica.
-- `Program` is private and holds an empty `Set` (`seal`) so that
-  `JSON.decode` cannot build a `Regex`: `compile` is the only maker.
+- `stdlib/regex.agc` is the parser and compiler in Agentica; the Pike VM is the
+  std-only builtin `RegexEngine.search` (`vm/regex.c`), a stepper that checks
+  the program on every call (a direct call may pass any lists), and
+  `find_all`'s Go empty-match rules run in C too. `Program` holds an empty
+  `Set` (`seal`) so that `JSON.decode` cannot build a `Regex`: `compile` is the
+  only maker.
 - `tests/test_std_regex.py` compares with Python `re` (`re.ASCII`, Go's
   empty-match rules applied to its spans).
 - The front end imports `std/regex` (`compiler/check/check_regex.agc`, listed

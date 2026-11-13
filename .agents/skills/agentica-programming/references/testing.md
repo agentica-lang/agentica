@@ -104,8 +104,7 @@ for a test function with parameters, type parameters or another result;
 - Name the file `*_test.agc` and run `agentica test` (searches `test/` and
   `specs/`), `agentica test test/ports_test.agc`, or `agentica test --only TEXT`
   (tests and scenarios whose name contains `TEXT`). Test files and `.feature`
-  files share one report and the BDD exit codes (0 all passed, 1 a failure or
-  nothing found, 2 usage or infrastructure).
+  files share one report and the BDD exit codes (`bdd.md`).
 - Lines: `PASS file / name`, `FAIL file / name` then `file:line:col [CODE]
   message`, for a crash the call stack, and the test's own stdout indented by
   two spaces; `NOT RUN file / name` for a test not run. A file that fails

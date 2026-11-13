@@ -2,14 +2,15 @@
 
 What the checker enforces and the VM keeps for each core language area: Result
 and `try`, collections, ranges, file modules, methods, interpolation, blocks,
-hints, enums, function values. VM internals are in `references/vm.md`. Read the
+hints, enums. VM internals are in `references/vm.md`. Read the
 section for the area you are changing.
 
 ## Result, propagation, and runtime bounds
 
-- `Result[T]` is builtin, with String errors and contextual `ok`/`error` typing.
-  Forward expected types through the shared call path; do not add global
-  inference or dummy payload types. Untyped errors are `CHECK-RESULT-TYPE`.
+- `Result[T]` is builtin, with contextual `ok`/`error` typing (the error is an
+  `Error`: `docs/grammar/06-semantics.md`). Forward expected types through the
+  shared call path; do not add global inference or dummy payload types. Untyped
+  errors are `CHECK-RESULT-TYPE`.
 - `Optional[T]` is `Types.Type.Optional`, checked like `Result` (`some` and
   `none` are the catalog rules `OptionalSome` and `OptionalNone`; an untyped
   `none` is `CHECK-OPTIONAL-TYPE`). At run time it is a value of the builtin
@@ -33,22 +34,18 @@ section for the area you are changing.
   signatures, including empty lists. Reduce is a left fold with accumulator
   first; its callback result must equal its accumulator type and supplies
   context for the initial value. Map rejects Void results.
-- `List.sort/sort_by` are stable, order strings by code point and put NaN last.
-  The checker allows only Int, Float or String elements/keys. sort_by calls the
-  key once per element; the key callback's parameter type types an empty input
-  list.
-- `Float.to_i/to_i!`: NaN/infinity give
-  RUNTIME-INVALID-NUMBER, out-of-range truncation RUNTIME-INTEGER-OVERFLOW.
-  `Float` works as a builtin module prefix because catalog names are full dotted
-  strings.
-- Random: each run seeds its generator from `--seed` (0..2^31-1) or OS
-  randomness, one generator per task (`references/vm-core.md`). `agentica --seed
-  N test` passes it to the runner, each scenario VM and each program under test.
+- `List.sort/sort_by` (rules: the List library page): the checker allows only
+  Int, Float or String elements/keys; sort_by calls the key once per element,
+  and the key callback's parameter type types an empty input list.
+- `Float` works as a builtin module prefix because catalog names are full
+  dotted strings (`Float.to_i`: `docs/vm/02-reference-behavior.md` §2).
+- Random: seeding and the generator per task are in
+  `docs/vm/05-values-execution-builtins.md` §7.4. `agentica --seed N test`
+  passes the seed to the runner, each scenario VM and each program under test.
 - Generic rules propagate expected types into list construction/updates,
   `List.concat` (it can infer an empty first list from the second) and
   `Map.get`. Keep false/nil lookup payloads distinct from absent keys.
-  `Map.delete` updates both the hash and insertion-order keys; reinsertion goes
-  last; `Map.values` follows `Map.keys` order.
+  `Map.delete` updates both the hash and insertion-order keys.
 
 ## Ranges and sets
 
@@ -277,14 +274,5 @@ section for the area you are changing.
   checked once with `Cx.type_params` set; there `data?` refuses a `Var` (only
   `Cx.prelude` accepts it). The linker keeps the names in
   `Resolve.Context.type_parameters`. `vm_type?` already takes a `Var`.
-- Enum cases require every variant or `_`; all non-enum scrutinees require `_`.
-  An unguarded `_` goes last; a guarded arm, or one with a literal or nested
-  slot, covers nothing and may repeat a pattern. Exhaustive case branches
-  participate in all-path return analysis.
-
-## Function values
-
-- `&name` creates a named `FunctionRef`; `Fn[A, ..., R]` uses the final
-  argument as return type, and `.call(...)` is a dedicated `Invoke` node.
-  Resolve only declared functions; no builtin references, function equality or
-  JSON encoding. Inspect is `<Fn>`.
+- Exhaustiveness is in `docs/grammar/06-semantics.md`. Exhaustive case
+  branches participate in all-path return analysis.

@@ -117,33 +117,28 @@ in a PR that rewrites the goldens.
 - The `Digest`, `HMAC`, `Base64`/hex, `Cipher` and `CMAC` builtins take and give
   `Bytes` (catalog key `<name>.bytes`), use OpenSSL's EVP API
   (`vm/digest_openssl.c`, behind `digest.h`) and charge `AGC_COST_SIZE`
-  (§10.2.1). Those that read only their arguments run without the shared lock.
-  `OpenSSL.HMAC.secure_compare` compares in constant time. The key, IV and input
-  sizes are checked first and give an error `Result`; a library failure is
-  `RUNTIME-INTERNAL` at the call. A two-key `des_ede3` key is expanded to K1 K2
-  K1 and the copy is wiped. An `aes_256_gcm` encrypt writes the tag after the
-  ciphertext; a decrypt wipes the plaintext when the tag is wrong.
+  (§10.2.1). `OpenSSL.HMAC.secure_compare` compares in constant time. Key, IV
+  and input sizes are checked first and give an error `Result`; a library
+  failure is `RUNTIME-INTERNAL` at the call. A two-key `des_ede3` key is
+  expanded to K1 K2 K1 and the copy is wiped. An `aes_256_gcm` encrypt writes
+  the tag after the ciphertext; a decrypt wipes the plaintext when the tag is
+  wrong.
 - `OpenSSL.KDF.pbkdf2_hmac_sha256` and `OpenSSL.KDF.scrypt` check their
   parameters first, their work included (`PBKDF2_MAX_WORK`, `SCRYPT_MAX_WORK` in
   `vm/crypto.c`: a started call cannot be stopped, and it holds a compute pool
   thread), then park the task on a compute job (`agc_io_compute`; refused with
-  `RUNTIME-NATIVE-CALLBACK` inside a callback of native code). `PBKDF2` runs
-  with `pkcs5` set, so no SP 800-132 floors. Password and key copies are wiped.
-  The jobs run without the shared lock.
-- `OpenSSL.RSA.public_encrypt_oaep` reads the first PEM block of at most 64 KiB
-  with `OSSL_DECODER` (public key structures only, no passphrase callback),
-  takes only an `RSA` key of 43 to 2048 bytes (OpenSSL's 16384-bit cap) with an
-  odd modulus and an odd exponent from 3 to 64 bits (OpenSSL takes any exponent
-  below a modulus of 3072 bits or less, which costs a private-key operation),
-  and data of at most its size less 42, and encrypts with OAEP SHA-1 into a
-  stack buffer. A refused input or key is an error `Result`; a failure of the
-  encryption after those checks (memory, the seed draw) is `RUNTIME-INTERNAL`.
-  It runs without the shared lock.
+  `RUNTIME-NATIVE-CALLBACK` inside a callback of native code). Password and key
+  copies are wiped.
+- `OpenSSL.RSA.public_encrypt_oaep` takes a public `RSA` key from the first PEM
+  block of at most 64 KiB (no passphrase callback) of 43 to 2048 bytes, with an
+  odd modulus and an odd exponent from 3 to 64 bits, and data of at most the key
+  size less 42 (OAEP SHA-1). A refused input or key is an error `Result`; a
+  failure of the encryption after those checks is `RUNTIME-INTERNAL`.
 - `OpenSSL.Random.random_bytes(n)` and `hex(n)` check `0 <= n <= 1048576` (else
   `RUNTIME-INVALID-COUNT` at the argument) and draw with `RAND_bytes`; `uuid`
-  draws 16 bytes and sets the version and variant bits. A failed draw is
-  `RUNTIME-INTERNAL`. They run without the shared lock: OpenSSL 3 keeps one
-  generator per thread.
+  sets the version and variant bits. A failed draw is `RUNTIME-INTERNAL`.
+- The crypto builtins that read only their arguments run without the shared
+  lock (OpenSSL 3 keeps one generator per thread).
 
 ### 2.4 Printing values
 
@@ -317,34 +312,31 @@ Every failure is an error value. The checks run in this order:
   It calls `unlink` first: a file or symbolic link goes, and `ENOENT` is `ok()`.
   Other `unlink` errors are reported (`ENOTDIR` for `file/child` included, so
   `link/` never reports `ok()`). Only `EISDIR` starts the tree walk
-  (`agc_remove_tree`, `vm/tree.c`): `openat(O_NOFOLLOW | O_DIRECTORY)` on the
-  root and `unlinkat` on each directory's descriptor, so a link in the tree goes
-  as a link and its target is never touched. At most 128 open levels. A
-  directory is reread while its last pass removed something, since POSIX leaves
-  entries after an unlinked one unspecified; a pass that removed nothing ends
-  with `ENOTEMPTY`. The walk crosses mount points, as `rm -rf` does. A path
-  whose last component is empty, `.` or `..` is refused before anything opens
-  (`agc_tree_refused`); Windows refuses an unsafe path. A failure names the
-  entry that failed, not the root. After a timeout the job runs to its end
-  (14.3).
-- `Path.rename(from, to, timeout_ms)` is one `renameat2(AT_FDCWD, from,
-  AT_FDCWD, to, RENAME_NOREPLACE)` in a pool job. It never replaces: an existing
-  `to`, an empty directory included, is `EEXIST`. The call is atomic, so of
-  several processes racing for one name exactly one wins. A final link moves as
-  a link. The error is `filesystem: cannot rename path`. Without
-  `RENAME_NOREPLACE` the call answers `EINVAL`, which is reported; there is no
-  check-first fallback, since that would race.
+  (`agc_remove_tree`, `vm/tree.c`): `openat(O_NOFOLLOW | O_DIRECTORY)` and
+  `unlinkat` on each directory's descriptor, so a link in the tree goes as a
+  link and its target is never touched. A directory is reread while its last
+  pass removed something (POSIX leaves entries after an unlinked one
+  unspecified); a pass that removed nothing ends with `ENOTEMPTY`. The walk
+  crosses mount points, as `rm -rf` does. A path whose last component is empty,
+  `.` or `..` is refused before anything opens (`agc_tree_refused`). A failure
+  names the entry that failed, not the root. After a timeout the job runs to its
+  end (14.3).
+- `Path.rename(from, to, timeout_ms)` is one `renameat2(..., RENAME_NOREPLACE)`
+  in a pool job. It never replaces: an existing `to`, an empty directory
+  included, is `EEXIST`, so of several processes racing for one name exactly one
+  wins. A final link moves as a link. The error is `filesystem: cannot rename
+  path`. Without `RENAME_NOREPLACE` the call answers `EINVAL`, which is
+  reported; there is no check-first fallback, since that would race.
 - `File.replace(path, data, timeout_ms)` is one pool job (at most 16 MiB). The
   target is found with `uv_fs_realpath` and must be a regular file, so a link
   stays a link. The data goes to `.agc-PID-N.tmp` in the target's folder
   (exclusive, no link followed, mode 0600 while written), then `fchmod` to the
   target's mode, `fsync`, and a rename over the target (`MoveFileExW` on
-  Windows, which refuses a read-only target before anything is written); the
-  folder is then flushed on POSIX. A reader sees the old file or the new one,
-  never neither. A failure removes the new file; a killed process can leave it
-  behind. It works by path, like `Path.rename`: a folder of the path swapped
-  between the `realpath` and the rename by someone with write access to its
-  parent is not defended. After a timeout the job runs to its end (14.3).
+  Windows); the folder is then flushed on POSIX. A reader sees the old file or
+  the new one, never neither. A failure removes the new file; a killed process
+  can leave it behind. It works by path, like `Path.rename`: a folder of the
+  path swapped between the `realpath` and the rename is not defended. After a
+  timeout the job runs to its end (14.3).
 - `Dir.list` drops `.` and `..`, decodes names with U+FFFD and sorts them by
   code point. `Dir.mkdir` creates missing parents with mode 0777; an existing
   directory or file is not an error.
@@ -356,9 +348,8 @@ Every failure is an error value. The checks run in this order:
   exist; a link loop, too many links or a non-directory in the middle fail
   (`filesystem: cannot resolve path`). An empty or NUL path gives
   `filesystem: invalid path`. A relative path starts at the working directory,
-  and the result decodes per byte. macOS fails an absolute form of 1024 bytes
-  or more; on Windows `.` and `..` are dropped before a link is followed and an
-  absolute form of 260 characters or more fails unless `LongPathsEnabled` is 1.
+  and the result decodes per byte. macOS and Windows fail long absolute forms
+  (1024 bytes, 260 characters unless `LongPathsEnabled`).
 - After a timeout on an active handle operation the handle is closed: later
   operations fail with "file handle is closed", and `File.close` gives `ok()`.
 - A timed-out read on a FIFO or device ends at the timeout (10.2.2);

@@ -210,18 +210,11 @@ functions, a thread-local variable (one documented exception), or counting in
 the callers that have the scheduler, which misses allocations made deeper in
 helpers.
 
-### 28.9 Tracing and metrics
+### 28.9 Not planned
 
-Tracing and metrics share the rules and the observe word but answer different
-questions: a trace is every event of one run, read after the fact; metrics are a
-few totals and gauges of a running VM. Metrics never write per-event lines and
-tracing never keeps totals.
-
-### 28.10 Not planned
-
-Push to a Pushgateway, OTLP, OpenMetrics or protobuf formats, gzip, TLS or
-authentication on the endpoint, a configurable path, port or file interval;
-keeping the VM alive for a last scrape; a GC pause histogram (to evaluate if the
-server measurement shows single long pauses matter); per-function or
-per-instruction metrics; labels from program data; metrics defined by programs;
-metrics on platforms other than Linux until those platforms are tested again.
+Beyond the rows of 28.5 and the limits of 28.2: TLS or authentication on the
+endpoint; keeping the VM alive for a last scrape; a GC pause histogram (to
+evaluate if the server measurement shows single long pauses matter); per-
+function or per-instruction metrics; labels from program data; metrics defined
+by programs (28.6); other platforms until they are tested again. Metrics never
+write per-event lines and tracing never keeps totals.

@@ -34,7 +34,7 @@ end
   looked up as `/usr/lib/NAME` (libc and libm are `"libSystem.B.dylib"`); any
   other library needs an absolute path.
 - A package picks its library per system in its `agentica.toml`
-  (`[native.NAME]`, see `modules.md`); `extern "NAME"` in its files opens it. A
+  (`[native.NAME]`, `packages.md`); `extern "NAME"` in its files opens it. A
   `native/` library that loads a sibling: on Linux build it with
   `RPATH=$ORIGIN`, on macOS with `@loader_path`.
 - `Native.load("NAME") -> Result[Void]` opens the library now: `ok` (it stays
@@ -319,21 +319,16 @@ Keep the `extern` layer private and give the user a normal API; guide:
   public `def`s use Ruby names and return `Result` with an error text that
   names the bad value. An out parameter becomes a field of your own struct; a
   yes/no `int` becomes a `name?` function returning `Bool`.
-- A block with a resource or a struct sits with the types, above every function
-  of the file, and its `def`s do not count as functions for `CHECK-DECL-ORDER`.
-  The block is public as a whole, or private after `private`. A block with
-  neither: put it at the end of the file, after `private` to keep its `def`s
-  out of the API. An `extern module` block
-  is all `def`s, its resources included: put it with the functions.
-- A `String` with a NUL stops the program at the C call
-  (`RUNTIME-INVALID-CHARACTER`): check inputs first, or pass
-  `Native.from_string(s)` and `s.bytesize` when C takes a length.
+- An `extern` block is public as a whole, or private after `private`: put one
+  with neither a resource nor a struct at the end of the file, after
+  `private`, to keep its `def`s out of the API; one with either sits with the
+  types, above every function (declaration order above).
+- A `String` with a NUL stops the program at the C call: check inputs first, or
+  pass `Native.from_string(s)` and `s.bytesize` when C takes a length.
 - A table of function pointers: keep the slot numbers as constants, get the
   table once (turn a NULL into an `error`) and never show a `C.Pointer` of a
   function to the caller.
-- No varargs in Agentica: declare each shape of a variadic C function with
-  `...` and `= "symbol"`, keep them private, and give the public `def` a
-  `List[T]`, a struct with defaults, or parameters with defaults. Never let the
-  caller choose a printf format: pass a constant format and the text as `%s`.
-- A package lists the library per system in `agentica.toml` (`[native.NAME]`,
-  see `modules.md`) and the `extern` block says `extern "NAME"`.
+- A variadic C function: keep each `...` shape private and give the public
+  `def` a `List[T]`, a struct with defaults, or parameters with defaults. Never
+  let the caller choose a printf format: pass a constant format and the text as
+  `%s`.

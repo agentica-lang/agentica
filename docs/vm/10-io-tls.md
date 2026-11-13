@@ -87,19 +87,14 @@ reads no `openssl.cnf`, so both builds behave the same.
     each certificate whose valid uses include server authentication, then the
     `CA` store as intermediates, as CPython's `ssl.load_default_certs` does.
     Every view includes the machine's stores. A `CA` certificate is only a chain
-    certificate, never an anchor, so these are left out
-    (`agc_tls_trust_add_intermediate_der`): one whose subject equals its issuer
-    (OpenSSL trusts a self-signed certificate in the store); a copy with the
-    subject and public key of a self-signed anchor already in the store (OpenSSL
-    looks issuers up by name and the store order is not stable); one whose EKU
-    extension excludes server authentication, on every system (OpenSSL would
-    take a store copy first, and a valid intermediate's sibling with the same
-    subject and key would fail a chain the server sends correctly). One whose
-    Crypt32 EKU property alone excludes server authentication is added rejected,
-    so a server that sends it still fails with `VERIFY_UNTRUSTED`; it also
-    shadows same-key siblings, which is taken as the administrator's intent. A
-    root that Windows would download on demand is not in the store until Windows
-    fetched it; `SSL_CERT_FILE` or `ca_file` covers that case.
+    certificate, never an anchor, so a self-signed one, a copy of a self-signed
+    anchor already in the store, and one whose EKU extension excludes server
+    authentication are left out (`agc_tls_trust_add_intermediate_der`; the
+    reasons are in that function's comment). One whose Crypt32 EKU property
+    alone excludes server authentication is added rejected, so a server that
+    sends it still fails with `VERIFY_UNTRUSTED`. A root that Windows would
+    download on demand is not in the store until Windows fetched it;
+    `SSL_CERT_FILE` or `ca_file` covers that case.
 - **Verification (security rule).** The client always verifies the peer; there
   is no verify-none path. An IP-literal host is checked against IP SANs and
   sends no SNI. Any other host gets SNI and hostname verification, with no
@@ -227,14 +222,13 @@ texts.
   life, which costs speed only. `ok()` means every byte reached the kernel's
   send buffer. A failed write (`EPIPE`, `ECONNRESET`) returns `could not write
   to the stream` and leaves the socket open.
-- **Timeouts.** A timed-out read or write closes the socket. Waiting for the
-  lock alone does not. A timed-out connect closes the half-open socket. After
-  that, the next call returns `network: socket is closed` at once.
-- **Close.** `TCP.close` and `TCP.close_listener` are idempotent. They close the
-  link (a pending write ends with `ECANCELED`), free the input buffer, and wake
-  every waiting request with `network: socket is closed` or `network: listener
-  is closed`. Data the program never read makes the kernel answer with RST
-  instead of FIN.
+- **Timeouts and close** (the user rules are in the network page). A timed-out
+  read or write closes the socket; waiting for the lock alone does not. A
+  timed-out connect closes the half-open socket. `TCP.close` and
+  `TCP.close_listener` are idempotent: they close the link (a pending write
+  ends with `ECANCELED`), free the input buffer, and wake every waiting request
+  with the closed error. Data the program never read makes the kernel answer
+  with RST instead of FIN.
 - **End of run.** Sockets and listeners are not closed one by one. The exit path
   (10.2.2) ends with `_exit`, so the OS closes them, also while operations are
   parked. A peer sees FIN, or RST when data was left unread. A DNS lookup still

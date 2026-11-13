@@ -1,7 +1,7 @@
 # Statements and expressions
 
-The exact rule behind a checker error or a core question about statements,
-expressions and operators. Builtin methods and `to_s`: `builtins.md`.
+The rules behind the checker errors on statements, expressions and operators.
+Builtin methods and `to_s`: `builtins.md`.
 
 ## Statements
 

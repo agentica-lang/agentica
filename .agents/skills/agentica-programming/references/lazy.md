@@ -32,8 +32,7 @@ Lazy.with_index(lazy: Lazy[A], block: Fn[A, Int, B]) -> Lazy[B]   # block(item, 
 Lazy.each_slice(lazy: Lazy[A], size: Int) -> Lazy[List[A]]    # last slice shorter; size < 1 is RUNTIME-INVALID-COUNT
 Lazy.each_cons(lazy: Lazy[A], size: Int) -> Lazy[List[A]]     # windows of size neighbours
 Lazy.chunk_while(lazy: Lazy[A], block: Fn[A, A, Bool]) -> Lazy[List[A]]   # new group where block(prev, item) is false
-lazy.deflate(level = 6, raw = false), lazy.inflate(raw = false, max_bytes = 1073741824),
-lazy.gzip(level = 6), lazy.gunzip(max_bytes = 1073741824)    # Bytes chunks, compression.md
+lazy.deflate, lazy.inflate, lazy.gzip, lazy.gunzip           # Bytes chunks: compression.md
 
 # Terminals: always a Result
 Lazy.to_a(lazy: Lazy[A]) -> Result[List[A]]

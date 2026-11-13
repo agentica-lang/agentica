@@ -107,12 +107,9 @@ parser is `agc_launch_parse` (`vm/launch.c`).
 - `--coverage FILE` counts, for each span of the program, the STEPs that ran it
   (`vm/cover.c`). Every scheduler gets a profile that writes no report
   (`agc_profile.cover`), so the run is interpreted by the profiling copy of the
-  turn loop (the JIT is off), where every STEP takes `step_slow`, and its
-  `profile_steps` hook adds one to the counter of each span of the STEP before
-  the frame's pc. The other copies of the loop and its fast path are unchanged.
-  Each scheduler's profile costs about 22 KiB for `ops` and `pairs`
-  (AGC_OP_COUNT² × 8 bytes) and 16 bytes per function and per builtin. The steps
-  that builtins and native loops count are not counted. The hook runs before
+  turn loop (the JIT is off), and its `profile_steps` hook adds one to the
+  counter of each span of the STEP before the frame's pc. The steps that
+  builtins and native loops count are not counted. The hook runs before
   `step_slow` checks `--max-steps`, so the STEP that stops the run with
   `RUNTIME-STEP-LIMIT` is counted as run. A build without trace points (`make
   TRACE=0`) refuses the flag. At the end (`agc_launch_settle`, after the files)
@@ -281,9 +278,8 @@ stages.
   compiled by the first binary with `stage2` as its front end, against the
   `std/` sources of the same build; `make fixed-point` checks that
   `dist/agentica` compiles the same bytes. The first binary of the bootstrap is
-  linked without them (length 0), because it has no `stage2` yet; its front end
-  is stage0, whose driver compiles them from the `std/` sources on every
-  `agentica test`.
+  linked without them, because it has no `stage2` yet; its front end is stage0,
+  whose driver compiles them from the `std/` sources on every `agentica test`.
 
 **VM tracing.**
 
@@ -293,13 +289,10 @@ stages.
   there; if the file cannot be opened, tracing is off). Each `{pid}` of the
   file name is replaced by the process id (`trace_file_name` in
   `vm/launch.c`), so the processes of a test run, which share one
-  environment, write one file each; a name of 4096 bytes or more after that
-  cannot be opened (4095 is the most that fits). The file is opened in append
-  mode, so a reused pid appends to the old file. `make TRACE=0` compiles
-  the trace points out, and `--version` then says `trace off`.
-- The trace file is opened with `O_NONBLOCK` and `O_NOFOLLOW`, and only a
-  regular file owned by the VM's user is taken, so start-up never blocks on a
-  FIFO or a device.
+  environment, write one file each. The file is opened in append mode with
+  `O_NONBLOCK` and `O_NOFOLLOW`, and only a regular file owned by the VM's user
+  is taken, so start-up never blocks on a FIFO or a device. `make TRACE=0`
+  compiles the trace points out, and `--version` then says `trace off`.
 - Every line is valid UTF-8. A text value with a byte that is not part of a
   valid sequence is quoted, and each such byte is written as `\u00XX`. A cut
   line ends with `...` after a whole escape or sequence.
@@ -317,32 +310,23 @@ stages.
   of tracing events, to find where a program spends its steps. The loop of
   `interp.c` is built twice, with and without the hooks, so a run without the
   category costs nothing; with it, every `STEP` takes the slow path of the
-  budget counter, every instruction is counted and every builtin call is
-  timed, so the run is about 1.1 to 1.7 times slower on loops and calls and up
-  to about 15 times on a loop of cheap builtin calls. `vm/profile.c` writes the
-  report when each runtime ends (the front end hands its program over in a
-  second one, so `gc_ms` and `collections`, which count the whole process, in
-  the second report include the front end's). The step of each pass of a range
-  `each`, `times`, `upto`, `downto` or `File.each_line` loop is `<native>`,
-  while `List.map` and `List.each` add no step beyond their callbacks. A
-  builtin is timed for the call itself, so one that parks is timed until it
-  does. A fused `STEP` or `CONST` counts as itself and the instruction after it
-  (§4.2). `Profile.measure` sections are inclusive, and a label inside itself
-  in one task counts each call but its numbers once; a run keeps 4096 labels
-  and later ones share `[overflow]`. With the profile off, `Profile.measure`
-  only has its block called in its place (one step, no native frame).
-  `Profile.steps` is the task's steps, the same with the profile on or off. The
-  profile runs on one scheduler, so its counters need no lock. The report's
-  fields are in `vm/profile.c`.
+  budget counter, every instruction is counted and every builtin call is timed.
+  `vm/profile.c` writes the report when each runtime ends (the front end hands
+  its program over in a second one, so `gc_ms` and `collections`, which count
+  the whole process, in the second report include the front end's); its fields
+  are in that file. The step of each pass of a range `each`, `times`, `upto`,
+  `downto` or `File.each_line` loop is `<native>`, while `List.map` and
+  `List.each` add no step beyond their callbacks. A fused `STEP` or `CONST`
+  counts as itself and the instruction after it (§4.2). `Profile.measure`
+  sections are inclusive; with the profile off, `Profile.measure` only has its
+  block called in its place (one step, no native frame), and `Profile.steps` is
+  the task's steps either way. The profile runs on one scheduler, so its
+  counters need no lock.
 - `AGENTICA_PROFILE_FORMAT=folded` (with `profile`) writes folded stacks to the
   trace output instead of the report: a line per distinct stack, frames
   outermost first joined by `;`, a space and the weight in steps. Each `STEP`
   takes a sample of the running task's frames every `AGENTICA_PROFILE_SAMPLE`
-  steps (1 to 1000000000, default 1000). No timer or signal is involved, so the
-  output is the same on every run and every system. A stack deeper than 512
-  frames keeps the outer and inner halves around `...`, and `;`, `%` and control
-  bytes in a name are written as `%XX`. At most 1,048,576 stacks and 256 MiB of
-  frames are kept; the weight of a later new stack goes to one last
-  `[truncated]` line (`AGENTICA_VM_TEST_PROFILE_STACKS=N` lowers the limit for
-  tests). The front end of `agentica FILE.agc` writes no stacks once it has
-  handed its program over, so the output is the program's.
+  steps (default 1000). No timer or signal is involved, so the output is the
+  same on every run and every system. The limits on depth and on kept stacks
+  are in `vm/profile.c`. The front end of `agentica FILE.agc` writes no stacks
+  once it has handed its program over, so the output is the program's.

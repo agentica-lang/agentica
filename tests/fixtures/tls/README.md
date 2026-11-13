@@ -4,8 +4,8 @@ Test data only: every key here is public and never a deployment key.
 
 `make-certs.sh` writes all of them at once, next to itself. It needs the
 `openssl` command, 3.4 or newer for the expired certificate (`-not_before`
-and `-not_after`). Last regenerated on 2026-10-12 with OpenSSL 3.5.7. Tests
-use the checked-in files; nothing regenerates them during a test run.
+and `-not_after`). Tests use the checked-in files; nothing regenerates them
+during a test run.
 
 - **File:** `ca.pem`
   - **What it is:** test CA (RSA 2048, CN "Agentica Test CA"); its private key
@@ -27,8 +27,7 @@ use the checked-in files; nothing regenerates them during a test run.
 
 - **File:** `chain-root.pem`, `chain-intermediate.pem`, `chain-leaf.pem`
   - **What it is:** a three-level chain (root, intermediate without an EKU
-    extension, leaf for `localhost`) for the CA-store tests; no key is kept.
-    Added on 2026-10-20 with OpenSSL 3.5.7
+    extension, leaf for `localhost`) for the CA-store tests; no key is kept
 
 - **File:** `chain-intermediate-email.pem`
   - **What it is:** a sibling of `chain-intermediate.pem` (same subject and
@@ -42,8 +41,7 @@ use the checked-in files; nothing regenerates them during a test run.
 - **File:** `client-ca.pem`, `client.pem`, `client-key.pem`
   - **What it is:** a client CA (CN "Agentica Test Client CA", no key kept)
     and a client certificate it signs (CN "Agentica Test Client",
-    `clientAuth`) for a client context with a client certificate. Added on
-    2026-10-30 with OpenSSL 3.5.7
+    `clientAuth`) for a client context with a client certificate
 
 The other certificates are valid for 36,500 days, so they do not expire
 during the project's life. They test verified TLS both ways, rejection

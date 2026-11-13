@@ -32,13 +32,11 @@ programs are valid and how they run.
   can be monitored, cancelled and identified, not awaited
 - `Await[T]`: Builtin enum of a timed `Task.await`: `Await.Done(value)` or
   `Await.TimedOut`; matched with `case` like a user enum
-- `Logger.Level`: Builtin enum `LogRegistry.Level`, which `std/logger`
-  re-exports: `Logger.Level.Debug`, `Logger.Level.Info`, `Logger.Level.Warning`
-  and `Logger.Level.Error`, in that order; matched with `case` like a user enum
-- `Logger.Event`: Builtin record `LogRegistry.Event`, which `std/logger`
-  re-exports, that a log handler receives: `level: Logger.Level`, `message:
-  String`, `fields: Map[String, String]`, `time_ms: Int` and `task: Int`; it is
-  not JSON-decodable
+- `Logger.Level` and `Logger.Event`: Builtin enum and record of `std/logger`
+  (`LogRegistry.Level` and `LogRegistry.Event`, re-exported). `Logger.Level` is
+  matched with `case` like a user enum; `Logger.Event`, which a log handler
+  receives, is not JSON-decodable. Their variants and fields are on the
+  [`Logger` page](../../site/content/library/io-and-system/logger.md)
 - `StructMember`: Builtin record of `Type.members`: `name: String` and `type:
   String`, the field name and its type written as source
 - `TaskExit`: Builtin enum of how a task ended: `TaskExit.Ok`,
@@ -583,11 +581,9 @@ interpolation show every field. `agentica doc`, `outline` and `help` list the
 public fields, then a line that says the struct has private fields.
 
 A list index runs from zero to length minus one; a negative or out-of-range
-index is `RUNTIME-INDEX-OUT-OF-RANGE`. Indexing takes O(log32 n) time, at most
-four steps for a million items; `for` visits the items in order. `for` iterates
-a `List` in order, a `Set` in first-insertion order, a `Range`, or a `Bytes`
-byte by byte. The core has
-no slices and no string indexing.
+index is `RUNTIME-INDEX-OUT-OF-RANGE`. `for` iterates a `List` in order, a `Set`
+in first-insertion order, a `Range`, or a `Bytes` byte by byte. The core has no
+slices and no string indexing.
 
 ### Generic structs
 
@@ -650,8 +646,7 @@ name and `Box[Int]` and `Box[String]` would share it; a bare generic struct as
 the target is `CHECK-UNKNOWN-TYPE`. A type argument counts after substitution
 for `JSON.Field` too (rules in `06b-builtins.md`, "Optional and nullable
 fields"). A C struct of an `extern` block takes no type parameters
-(`PARSE-UNEXPECTED-TOKEN` at the `[`). Type parameters exist only in the
-checker: the VM sees a struct of its field names and order, as before.
+(`PARSE-UNEXPECTED-TOKEN` at the `[`).
 
 ### Generic functions
 
@@ -767,7 +762,8 @@ the enclosing function counts as fixed.
 (`M.first_or(xs, 0)`, or `first_or(xs, 0)` after `import {first_or} from "m"`).
 Linking keeps the type parameters local, in the signature and the body: a bare
 `T` does not get the module prefix. Type parameters exist only in the checker:
-the bytecode of a body is the same for any type argument. Not in the language:
+the VM sees one body for any type argument, and structs by field names and
+order. Not in the language:
 constraints on type parameters, type arguments written at a call, generic
 `extern` functions and generic `Map` keys.
 
@@ -826,8 +822,6 @@ more = Map.put(stock, "kiwi", 7)
 - Maps are immutable: there is no `m[key] = value`, and `Map.put` returns a new
   map. There is no `for` over a map; iterate `Map.keys`,
   which is in insertion order.
-- Lookup, `Map.key?` and `Map.put` take effectively constant time;
-  `Map.keys` is O(n).
 
 ### Sets
 
@@ -1000,10 +994,10 @@ total = xs.reduce(0) do |sum, x| sum + x end
   that has `name`, builtin records included (none when a generic one does,
   when nothing has it, or for `to_s` and `inspect`); an operator with a
   literal the literal's type (`x * 2` Int or String, `%` and ranges Int);
-  `and`, `or` and `!` Bool. Other uses name none. With no set, several types left (`x * 2`) or none (`x + 1` and
-  `x.upcase`), `CHECK-BLOCK-TYPE` at the parameter, with the annotation in its
-  help. The body is then checked as if annotated. A wrong number of parameters
-  is `CHECK-ARITY`.
+  `and`, `or` and `!` Bool. Other uses name none. With no set, several types
+  left (`x * 2`) or none (`x + 1` and `x.upcase`), `CHECK-BLOCK-TYPE` at the
+  parameter, with the annotation in its help. The body is then checked as if
+  annotated. A wrong number of parameters is `CHECK-ARITY`.
 - **Result.** `return` leaves the block, not the function. Without `return`, the
   last expression statement is the value. For `map` and `sort_by` the result
   type comes from the body, where every `return` and the last expression must

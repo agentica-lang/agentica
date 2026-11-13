@@ -70,8 +70,7 @@ rules live in `AGENTS.md` and `agentica-development`.
   shell, other agents' runs, and the self-hosted runners.
 - Commits: a summary line, then short bullets; no attribution lines. Never
   rebase or force-push; merge `origin/master` into the branch.
-- No plans under `docs/` (`AGENTS.md`); an agent's own steps go in a local,
-  untracked file.
+- An agent's own plan or steps go in a local, untracked file, not in `docs/`.
 
 ## 2. Review
 
