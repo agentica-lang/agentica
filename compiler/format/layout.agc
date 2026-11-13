@@ -166,7 +166,6 @@ UNARY_LEVEL = 8
 POSTFIX_LEVEL = 9
 # A width no line reaches: a doc laid out in it breaks only where it must.
 UNLIMITED = 1000000
-EXPORT = "export "
 
 # One item of a body: its first and last source lines and its document, whether it is a simple statement whose
 # document is measured (it owes an empty line after it when it took several lines), and whether it is a comment that
@@ -374,7 +373,7 @@ def one_line_body?(c: Context, node: Ast.FunctionDecl) -> Bool
   not (node.span.start.line..last).to_a.any? do |line: Int| c.noted.include?(line) end
 end
 
-# A one-line def of the source, exported or not.
+# A one-line def of the source, public or not.
 def one_line_def?(decl: Ast.Decl) -> Bool
   case decl
     Ast.Decl.Export(node) -> one_line_def?(node.declaration)
@@ -391,7 +390,7 @@ end
 # lines around it.
 def one_line_form(c: Context, decl: Ast.Decl, column: Int) -> Optional[Docs.Doc]
   case decl
-    Ast.Decl.Export(node) -> one_line_form(c, node.declaration, column + EXPORT.length)
+    Ast.Decl.Export(node) -> one_line_form(c, node.declaration, column)
     Ast.Decl.Function(node) ->
       return none if not node.expression and not one_line_body?(c, node)
 
@@ -423,7 +422,7 @@ def decl_doc(c: Context, decl: Ast.Decl, form: Optional[Docs.Doc]) -> Docs.Doc
   case decl
     Ast.Decl.Import(node) -> import_doc(c, node)
     Ast.Decl.Reexport(node) -> text("export #{node.alias}.#{node.name}")
-    Ast.Decl.Export(node) -> Docs.Doc.Concat([text(EXPORT), decl_doc(c, node.declaration, form)])
+    Ast.Decl.Export(node) -> decl_doc(c, node.declaration, form)
     Ast.Decl.Function(node) ->
       case form
         some(line) -> line
@@ -618,12 +617,7 @@ def variant_items(c: Context, variant: Ast.EnumVariant) -> List[Item]
 end
 
 def constant_doc(c: Context, node: Ast.ConstDecl) -> Docs.Doc
-  parts: List[Docs.Doc] = []
-  if node.exported
-    parts = parts.push(text("export "))
-  end
-
-  parts = parts.push(text(node.name))
+  parts = [text(node.name)]
   case node.type
     some(type) -> parts = parts.concat([text(": "), type_doc(c, type)])
     none -> parts = parts

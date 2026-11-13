@@ -224,26 +224,21 @@ def reexports_of(declarations: List[Ast.Decl]) -> List[Ast.ReexportDecl]
   found
 end
 
-## CHECK-DECL-ORDER, in file, for the first declaration that comes after a later group. The groups are: imports and
-## re-exports, then constants, then struct, enum, type alias, resource and module block (exported or not), then export
-## def, then def. In a scope with `private` (`mark`) they are: imports; the public part (constants and re-exports,
-## types and module blocks, functions); then the private part (constants, types and module blocks, functions).
-## The span is of the declaration out of place; the help names the group it belongs to. The functions of an extern
-## block that declares a resource are in the group of the types, with the resource; a resource of an extern module
-## block is in the group of a def (exported or not), with the block's functions. The record of an extern function
-## with out parameters (Ast.StructDecl.record_of) goes with its function, so it has no group. This is a style rule with
-## no meaning for evaluation.
+## CHECK-DECL-ORDER, in file, for the first declaration that comes after a later group. The groups are: imports; the
+## public part (constants and re-exports, then struct, enum, type alias, resource and module block, then functions);
+## and, in a scope with `private` (`mark`), the private part in the same order. The span is of the declaration out of
+## place; the help names the group it belongs to. The functions of an extern block that declares a resource are in the
+## group of the types, with the resource; a resource of an extern module block is in the group of a function, with the
+## block's functions. The record of an extern function with out parameters (Ast.StructDecl.record_of) goes with its
+## function, so it has no group. This is a style rule with no meaning for evaluation.
 def check_order(file: String, declarations: List[Ast.Decl], mark: Optional[Ast.PrivateMark]) -> Result[Void]
   highest = 0
   at = 0
   for decl in declarations
-    group = rank(decl)
-    if mark.some?
-      private_part = at >= mark.unwrap!.index
-      group = split_rank(decl, group, private_part)
-      if private_part and highest < PRIVATE_PART
-        highest = PRIVATE_PART
-      end
+    private_part = mark.some? and at >= mark.unwrap!.index
+    group = rank(decl, private_part)
+    if private_part and highest < PRIVATE_PART
+      highest = PRIVATE_PART
     end
 
     if record?(unwrap(decl))
@@ -251,12 +246,13 @@ def check_order(file: String, declarations: List[Ast.Decl], mark: Optional[Ast.P
     end
 
     if group < highest
-      help = order_help(group)
-      if mark.some?
-        help = split_order_help(decl, group)
-      end
+      problem = Diag.fail(
+        "CHECK-DECL-ORDER",
+        "declaration is out of order",
+        span_of(decl),
+        Diag.Help.Hint(order_help(decl, group)),
+      )
 
-      problem = Diag.fail("CHECK-DECL-ORDER", "declaration is out of order", span_of(decl), Diag.Help.Hint(help))
       return error(Failure.from_stage(file, problem))
     end
 
@@ -275,82 +271,53 @@ private
 # The first group of the private part, in a scope with `private` (check_order).
 PRIVATE_PART = 4
 
-# The group of a declaration in a scope with `private`, from its group in a scope without (`plain`): imports 0,
-# re-exports and constants 1, types 2, functions 3, each but the imports and the re-exports 3 more after `private`.
-def split_rank(decl: Ast.Decl, plain: Int, private_part: Bool) -> Int
+# The group of a declaration: imports 0, re-exports and constants 1, types and module blocks 2, functions 3; each but
+# the imports and the re-exports 3 more in the private part. A resource of an extern module block takes the place of
+# a function, as its functions do, so the block ranks as one unit with them; a resource of an extern block ranks with
+# the types.
+def rank(decl: Ast.Decl, private_part: Bool) -> Int
+  group = plain_rank(decl)
+  case decl
+    Ast.Decl.Import(_) -> return group
+    Ast.Decl.Reexport(_) -> return group
+    _ -> group = group
+  end
+
+  return group + 3 if private_part
+
+  group
+end
+
+def plain_rank(decl: Ast.Decl) -> Int
   case decl
     Ast.Decl.Import(_) -> 0
     Ast.Decl.Reexport(_) -> 1
-    _ ->
-      group = plain
-      if group > 3
-        group = 3
-      end
-
-      return group + 3 if private_part
-
-      group
-  end
-end
-
-def split_order_help(decl: Ast.Decl, group: Int) -> String
-  case decl
-    Ast.Decl.Import(_) -> "imports come first, before any declaration and before private"
-    Ast.Decl.Reexport(_) -> "a re-export is public: write it above private, with the constants"
-    _ ->
-      case group
-        1 -> "constants come right after the imports and before private"
-        2 -> "structs, enums, type aliases, resources and modules come before functions, above private"
-        3 -> "the public functions come last above private"
-        4 -> "the private constants come right after private"
-        5 -> "the private structs, enums, type aliases, resources and modules come before the private functions"
-        _ -> "a function comes after the constants and types of its part"
-      end
-  end
-end
-
-# A resource of an extern module block takes the place of a def, as its functions do, so the block ranks as one unit
-# with the functions; a resource of an extern block ranks with the types.
-def rank(decl: Ast.Decl) -> Int
-  case decl
-    Ast.Decl.Import(_) -> 0
-    Ast.Decl.Reexport(_) -> 0
     Ast.Decl.Constant(_) -> 1
     Ast.Decl.Struct(_) -> 2
     Ast.Decl.Enum(_) -> 2
     Ast.Decl.TypeAlias(_) -> 2
     Ast.Decl.Module(_) -> 2
-    Ast.Decl.Resource(node) -> resource_rank(node, 4)
-    Ast.Decl.Export(node) ->
-      case node.declaration
-        Ast.Decl.Struct(_) -> 2
-        Ast.Decl.Enum(_) -> 2
-        Ast.Decl.TypeAlias(_) -> 2
-        Ast.Decl.Module(_) -> 2
-        Ast.Decl.Resource(inner) -> resource_rank(inner, 3)
-        Ast.Decl.Function(inner) -> function_rank(inner, 3)
-        _ -> 3
-      end
-
-    Ast.Decl.Function(node) -> function_rank(node, 4)
+    Ast.Decl.Resource(node) -> resource_rank(node)
+    Ast.Decl.Export(node) -> plain_rank(node.declaration)
+    Ast.Decl.Function(node) -> function_rank(node)
   end
 end
 
-def resource_rank(resource: Ast.ResourceDecl, plain: Int) -> Int
-  return plain if resource.module != ""
+def resource_rank(resource: Ast.ResourceDecl) -> Int
+  return 3 if resource.module != ""
 
   2
 end
 
-# A function takes the rank of its kind (3 exported, 4 private), except one of an extern block that declares a
-# resource or a struct: the block sits with the types, as a whole.
-def function_rank(function: Ast.FunctionDecl, plain: Int) -> Int
+# A function is in the group of the functions, except one of an extern block that declares a resource or a struct: the
+# block sits with the types, as a whole.
+def function_rank(function: Ast.FunctionDecl) -> Int
   case function.native
     some(link) ->
       return 2 if link.with_types
 
-      plain
-    none -> plain
+      3
+    none -> 3
   end
 end
 
@@ -362,12 +329,19 @@ def record?(decl: Ast.Decl) -> Bool
   end
 end
 
-def order_help(group: Int) -> String
-  case group
-    0 -> "imports come first, before any constant, struct, enum, type alias or function"
-    1 -> "constants come right after the imports"
-    2 -> "structs, enums, type aliases, resources and modules come before functions"
-    _ -> "exported functions come before private functions"
+def order_help(decl: Ast.Decl, group: Int) -> String
+  case decl
+    Ast.Decl.Import(_) -> "imports come first, before any declaration and before private"
+    Ast.Decl.Reexport(_) -> "a re-export is public: write it above private, with the constants"
+    _ ->
+      case group
+        1 -> "constants come right after the imports and the re-exports"
+        2 -> "structs, enums, type aliases, resources and modules come before functions"
+        3 -> "the public functions come last above private"
+        4 -> "the private constants come right after private"
+        5 -> "the private structs, enums, type aliases, resources and modules come before the private functions"
+        _ -> "a function comes after the constants and types of its part"
+      end
   end
 end
 

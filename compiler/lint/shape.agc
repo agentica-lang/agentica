@@ -68,5 +68,3 @@ def read_name(expr: Ast.Expr) -> Optional[String]
     _ -> none
   end
 end
-
-private

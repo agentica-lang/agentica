@@ -9,5 +9,3 @@ PRELUDE_PREFIX = "<prelude>/"
 ## The name, in the lowered program, of the prelude function with this key: "list::find" is the function find of
 ## stdlib/prelude/list.agc. The prefix cannot start the name of a function of a program.
 def prelude_name(key: String) -> String = "@prelude::" + key
-
-private

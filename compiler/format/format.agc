@@ -18,7 +18,6 @@
 
 import Style from "../check/check_style"
 import Diag from "../diagnostics/diagnostic"
-import Ast from "../syntax/ast"
 import Lexer from "../syntax/lexer"
 import ParseText from "../syntax/parse_text"
 import Parser from "../syntax/parser"
@@ -59,8 +58,7 @@ def unchecked_text(text: String, settings: Settings) -> Diag.Outcome[String]
     Diag.Outcome.Done(scanned) ->
       case Parser.parse(scanned.tokens, 0)
         Diag.Outcome.Failed(problem) -> Diag.Outcome.Failed(problem)
-        Diag.Outcome.Done(parsed) ->
-          program = as_written(parsed)
+        Diag.Outcome.Done(program) ->
           attachment = Comments.attach(program, scanned.tokens, scanned.comments)
           context = Layout.context(input, scanned.tokens, attachment, settings.width)
           output = Docs.render(Layout.program_doc(context, program), settings.width)
@@ -87,32 +85,6 @@ def tree_text(text: String) -> Diag.Outcome[String]
 end
 
 private
-
-# The tree as the text wrote it: in a file or module block with `private`, the parser made each declaration above it
-# public (Ast.PrivateMark), and the layout must not write the `export` that the text did not have.
-def as_written(program: Ast.Program) -> Ast.Program
-  program.with(declarations: written_scope(program.declarations, program.private_mark.some?))
-end
-
-def written_scope(declarations: List[Ast.Decl], marked: Bool) -> List[Ast.Decl]
-  declarations.map do |decl: Ast.Decl| written_decl(decl, marked) end
-end
-
-def written_decl(decl: Ast.Decl, marked: Bool) -> Ast.Decl
-  case decl
-    Ast.Decl.Export(node) ->
-      return written_decl(node.declaration, marked) if marked
-
-      Ast.Decl.Export(node.with(declaration: written_decl(node.declaration, false)))
-    Ast.Decl.Constant(node) ->
-      return Ast.Decl.Constant(node.with(exported: false)) if marked
-
-      decl
-    Ast.Decl.Module(node) ->
-      Ast.Decl.Module(node.with(declarations: written_scope(node.declarations, node.private_mark.some?)))
-    _ -> decl
-  end
-end
 
 # `output` with an empty line after each bare `end` that the style rule asks one for. The output lexes, since the
 # layout keeps every token.

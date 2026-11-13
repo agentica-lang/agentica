@@ -2691,7 +2691,7 @@ def parse_one_line_def(e: Base.Env, pos: Int, shape: FunctionShape, doc: Optiona
   decl_at(node, stop, value.ids + 1)
 end
 
-# extern "library" NL, then [##doc] [export] members, then end. A member is [compute] def, a function with no body
+# extern "library" NL, then [##doc] members, then end. A member is [compute] def, a function with no body
 # (Ast.Native), so the later stages see ordinary functions, resource Name, free: c_name, or struct Name ... end, a C
 # struct passed by value. A resource or a struct names a type that the members below it may use; no def of the block
 # may be the free function of a resource, which the VM alone calls. `extern module "NAME"` declares functions of a
@@ -2760,35 +2760,14 @@ def parse_extern_block(e: Base.Env, pos: Int, ids: Int) -> Result[DeclsAt]
       looping = false
     else
       taken = try documented(e, cursor, "extern")
-      at = taken.pos
-      exported = e.tokens[at].kind == "export"
-      if exported
-        at += 1
-      end
-
-      taken_member = try extern_member(e, at, next_id, taken.doc, block)
+      try no_export(e, taken.pos)
+      taken_member = try extern_member(e, taken.pos, next_id, taken.doc, block)
       member = taken_member.decl
       block = taken_member.block
-      node = member.node
-      member_ids = member.ids
-      span = Base.span_from(e, taken.pos, member.pos)
-      if exported
-        node = Ast.Decl.Export(Ast.ExportDecl(id: member_ids, declaration: member.node, doc: taken.doc, span: span))
-        member_ids += 1
-      end
-
-      nodes = nodes.push(node)
+      nodes = nodes.push(member.node)
       # The record comes after its function, so a lookup by the name's position finds the function first.
-      for record in taken_member.records
-        if exported
-          wrapped = Ast.ExportDecl(id: member_ids, declaration: record, doc: record_doc(record), span: span)
-          nodes = nodes.push(Ast.Decl.Export(wrapped))
-          member_ids += 1
-        else
-          nodes = nodes.push(record)
-        end
-      end
-
+      nodes = nodes.concat(taken_member.records)
+      member_ids = member.ids
       cursor = member.pos
       next_id = member_ids
     end
@@ -2811,7 +2790,7 @@ def declares_types?(e: Base.Env, pos: Int) -> Bool
   false
 end
 
-# One member of an extern block at pos (after its doc and export), and the block with it.
+# One member of an extern block at pos (after its doc), and the block with it.
 def extern_member(e: Base.Env, pos: Int, ids: Int, doc: Optional[String], block: ExternBlock) -> Result[MemberAt]
   if block.module
     member = try parse_module_member(e, pos, ids, doc, block)
@@ -2821,7 +2800,7 @@ def extern_member(e: Base.Env, pos: Int, ids: Int, doc: Optional[String], block:
   parse_extern_member(e, pos, ids, doc, block)
 end
 
-# One member of an extern block that is not a module block at pos (after its doc and export), and the block with it.
+# One member of an extern block that is not a module block at pos (after its doc), and the block with it.
 def parse_extern_member(e: Base.Env, pos: Int, ids: Int, doc: Optional[String], block: ExternBlock) -> Result[MemberAt]
   if resource_start?(e, pos)
     member = try parse_resource(e, pos, ids, doc, block)
@@ -3516,7 +3495,7 @@ def parse_extern_function(
   ok(ExternAt(decl: decl, symbol: symbol, records: records))
 end
 
-# One member of an `extern module "NAME"` block at pos (after its doc and export): a resource or a [compute] def. A
+# One member of an `extern module "NAME"` block at pos (after its doc): a resource or a [compute] def. A
 # callback or a struct is PARSE-EXTERN-MODULE at its first word: the types that cross are the program's own.
 def parse_module_member(e: Base.Env, pos: Int, ids: Int, doc: Optional[String], block: ExternBlock) -> Result[DeclAt]
   return parse_module_resource(e, pos, ids, doc, block) if resource_start?(e, pos)
@@ -3890,14 +3869,6 @@ def other_side?(params: ParamsAt, index: Int) -> Bool
   false
 end
 
-# The doc of a record, which its export repeats.
-def record_doc(record: Ast.Decl) -> Optional[String]
-  case record
-    Ast.Decl.Struct(node) -> node.doc
-    _ -> none
-  end
-end
-
 # The name of the record of an extern function with out parameters: its name in CamelCase (sqlite3_open is
 # Sqlite3Open), or "" when that does not start with a letter.
 def record_name(name: String) -> String
@@ -4268,22 +4239,6 @@ def parse_type_alias_decl(e: Base.Env, pos: Int, ids: Int, doc: Optional[String]
   decl_at(node, stop, target.ids + 1)
 end
 
-def parse_exportable(e: Base.Env, pos: Int, ids: Int) -> Result[DeclAt]
-  kind = e.tokens[pos].kind
-  absent: Optional[String] = none
-  return parse_function_decl(e, pos, ids, absent) if kind == "def"
-
-  return parse_struct_decl(e, pos, ids, absent) if kind == "struct"
-
-  return parse_enum_decl(e, pos, ids, absent) if kind == "enum"
-
-  return parse_type_alias_decl(e, pos, ids, absent) if kind == "name" and e.tokens[pos].lexeme == "type"
-
-  return parse_module_decl(e, pos, ids, absent) if module_start?(e, pos)
-
-  error(Base.unexpected(e, pos, "export requires def, struct, enum, type, module, or a constant"))
-end
-
 # A constant starts with a type-name token followed by `=` or `:` (docs/grammar/06-semantics.md). The name
 # is checked when it is parsed, so `Limit = 1` is PARSE-CONSTANT-NAME and not a statement.
 def constant_start?(e: Base.Env, at: Int) -> Bool
@@ -4291,7 +4246,7 @@ def constant_start?(e: Base.Env, at: Int) -> Bool
   Base.kind_at(e, at) == "type-name" and (following == "assign" or following == "colon")
 end
 
-# Whether the declaration after the doc block and the `export` that may start at `at` is a constant: the blank line
+# Whether the declaration after the doc block that may start at `at` is a constant: the blank line
 # rule lets constants follow each other.
 def constant_follows?(e: Base.Env, at: Int) -> Bool
   cursor = at
@@ -4299,23 +4254,15 @@ def constant_follows?(e: Base.Env, at: Int) -> Bool
     cursor += 2
   end
 
-  if Base.kind_at(e, cursor) == "export"
-    cursor += 1
-  end
-
   constant_start?(e, cursor)
 end
 
-# Whether a one-line def starts at `at`, after its doc block and `export`: a `def` whose signature, outside its
+# Whether a one-line def starts at `at`, after its doc block: a `def` whose signature, outside its
 # parentheses and brackets, has `->` and then `=` before the end of its line.
 def one_line_def_follows?(e: Base.Env, at: Int) -> Bool
   cursor = at
   if Base.kind_at(e, cursor) == "DOC"
     cursor += 2
-  end
-
-  if Base.kind_at(e, cursor) == "export"
-    cursor += 1
   end
 
   return false if Base.kind_at(e, cursor) != "def"
@@ -4377,15 +4324,8 @@ def constant_name_help(text: String) -> String
   "write constant names in capitals with underscores: use #{suggestion}"
 end
 
-# [export] NAME[: Type] = value. name_at is the name token, start the first token (the export, or the name).
-def parse_constant_decl(
-  e: Base.Env,
-  name_at: Int,
-  start: Int,
-  ids: Int,
-  doc: Optional[String],
-  exported: Bool,
-) -> Result[DeclAt]
+# NAME[: Type] = value. name_at is the name token. The scope's `private` line decides whether it is public (publish).
+def parse_constant_decl(e: Base.Env, name_at: Int, ids: Int, doc: Optional[String]) -> Result[DeclAt]
   name = e.tokens[name_at].lexeme
   if !Base.constant_name?(name)
     return error(
@@ -4419,9 +4359,9 @@ def parse_constant_decl(
       name_span: e.tokens[name_at].span,
       type: type,
       value: value.node,
-      exported: exported,
+      exported: false,
       doc: doc,
-      span: Base.span_from(e, start, stop),
+      span: Base.span_from(e, name_at, stop),
     ),
   )
 
@@ -4430,18 +4370,8 @@ end
 
 def parse_declaration(e: Base.Env, pos: Int, ids: Int, doc: Optional[String]) -> Result[DeclAt]
   kind = e.tokens[pos].kind
-  return parse_constant_decl(e, pos + 1, pos, ids, doc, true) if kind == "export" and constant_start?(e, pos + 1)
-
-  return parse_constant_decl(e, pos, pos, ids, doc, false) if constant_start?(e, pos)
-
-  if kind == "export"
-    parsed = try parse_exportable(e, pos + 1, ids)
-    node = Ast.Decl.Export(
-      Ast.ExportDecl(id: parsed.ids, declaration: parsed.node, doc: doc, span: Base.span_from(e, pos, parsed.pos)),
-    )
-
-    return decl_at(node, parsed.pos, parsed.ids)
-  end
+  try no_export(e, pos)
+  return parse_constant_decl(e, pos, ids, doc) if constant_start?(e, pos)
 
   return parse_function_decl(e, pos, ids, doc) if kind == "def"
 
@@ -4482,15 +4412,11 @@ def parse_module_decl(e: Base.Env, pos: Int, ids: Int, doc: Optional[String]) ->
   decl_at(node, stop, body.ids)
 end
 
-# The `module` of a module block inside another one, after its doc block and `export`, or -1.
+# The `module` of a module block inside another one, after its doc block, or -1.
 def nested_module_at(e: Base.Env, at: Int) -> Int
   cursor = at
   if Base.kind_at(e, cursor) == "DOC"
     cursor += 2
-  end
-
-  if Base.kind_at(e, cursor) == "export"
-    cursor += 1
   end
 
   return cursor if module_start?(e, cursor)
@@ -4569,7 +4495,7 @@ def top_level_help(token: Tokens.Token) -> String
   return "this else has no matching if" if kind == "else" or kind == "elsif"
   (
     "statements go inside a function: def main() -> Void ... end; " +
-    "a file holds only def, struct, enum, type aliases, import, export and constants (NAME = value)"
+    "a file holds only def, struct, enum, type aliases, import, re-export and constants (NAME = value)"
   )
 end
 
@@ -4730,8 +4656,8 @@ def import_word(e: Base.Env, at: Int, description: String) -> Result[Int]
   error(Base.found(e, at, description))
 end
 
-# `export` followed by a type name and a dot is a re-export. Today `export` is followed only by def, struct, enum, type
-# or a constant (a type name and `=` or `:`), so there is no clash.
+# `export` followed by a type name and a dot is a re-export. Before a declaration `export` is refused (no_export), so a
+# constant (a type name and `=` or `:`) after it is not a clash.
 def reexport_start?(e: Base.Env, at: Int) -> Bool
   Base.kind_at(e, at) == "export" and Base.kind_at(e, at + 1) == "type-name" and Base.kind_at(e, at + 2) == "dot"
 end
@@ -4783,8 +4709,6 @@ def parse_body(e: Base.Env, start: Int, first_id: Int, nested: Bool) -> Result[B
   private_mark: Optional[Ast.PrivateMark] = none
   after_private = false
   after_import = false
-  # The token of the first `export` written on a declaration of this scope, or -1: refused in a scope with `private`.
-  first_export = -1
   after_declaration = false
   after_constant = false
   after_one_line = false
@@ -4876,7 +4800,6 @@ def parse_body(e: Base.Env, start: Int, first_id: Int, nested: Bool) -> Result[B
         )
       end
 
-      try no_written_export(e, first_export)
       private_mark = some(Ast.PrivateMark(index: declarations.size, span: e.tokens[cursor].span))
       cursor += 1
       if Base.kind_at(e, cursor) == "NL"
@@ -4887,27 +4810,12 @@ def parse_body(e: Base.Env, start: Int, first_id: Int, nested: Bool) -> Result[B
       after_private = true
     elsif extern_start?(e, cursor)
       block = try parse_extern_block(e, cursor, next_id)
-      if first_export < 0
-        first_export = export_between(e, cursor, block.pos)
-      end
-
       declarations = declarations.concat(block.nodes)
       cursor = block.pos
       next_id = block.ids
       after_declaration = true
-      if private_mark.some?
-        try no_written_export(e, first_export)
-      end
     elsif declaration_start?(e, cursor) or kind == "DOC"
       taken = try documented(e, cursor, "declaration")
-      if first_export < 0 and e.tokens[taken.pos].kind == "export"
-        first_export = taken.pos
-      end
-
-      if private_mark.some?
-        try no_written_export(e, first_export)
-      end
-
       parsed = try parse_declaration(e, taken.pos, next_id, taken.doc)
       declarations = declarations.push(parsed.node)
       cursor = parsed.pos
@@ -4929,13 +4837,15 @@ def parse_body(e: Base.Env, start: Int, first_id: Int, nested: Bool) -> Result[B
     end
   end
 
+  public_count = declarations.size
   case private_mark
-    some(mark) ->
-      published = publish(declarations, mark.index, next_id)
-      declarations = published.nodes
-      next_id = published.ids
-    none -> next_id = next_id
+    some(mark) -> public_count = mark.index
+    none -> public_count = declarations.size
   end
+
+  published = publish(declarations, public_count, next_id)
+  declarations = published.nodes
+  next_id = published.ids
 
   ok(BodyAt(declarations: declarations, module_doc: module_doc, pos: cursor, ids: next_id, private_mark: private_mark))
 end
@@ -4947,36 +4857,23 @@ def private_start?(e: Base.Env, at: Int) -> Bool
   e.tokens[at].kind == "name" and e.tokens[at].lexeme == "private" and (next == "NL" or next == "EOF")
 end
 
-# In a scope with `private`, a declaration above it is public: an `export` written on one (the token at `at`, or -1 for
-# none) is refused.
-def no_written_export(e: Base.Env, at: Int) -> Result[Void]
-  return ok() if at < 0
+# `export` before a declaration is refused: a declaration is public unless it comes after `private`.
+def no_export(e: Base.Env, at: Int) -> Result[Void]
+  return ok() if e.tokens[at].kind != "export"
 
   error(
     Base.unexpected_help(
       e,
       at,
-      "export on a declaration in a file or module block with private",
-      "every declaration above private is public: remove export (export Alias.name still re-exports a name)",
+      "export before a declaration",
+      "remove export: a declaration is public unless it comes after private (export Alias.name re-exports a name)",
     ),
   )
 end
 
-# The first `export` token of an extern block, from `start` to `stop`, or -1.
-def export_between(e: Base.Env, start: Int, stop: Int) -> Int
-  at = start
-  while at < stop
-    return at if e.tokens[at].kind == "export"
-
-    at += 1
-  end
-
-  -1
-end
-
-# The declarations of a scope with `private`: each one before `index` that is not an import or a re-export becomes
-# public, as `export` would make it, with node ids from `ids` on (after every id of the scope, so they stay unique).
-# The ExportDecl takes the doc and the span of the declaration, which keeps its doc too.
+# The declarations of a scope, public before `index` (every one of a scope with no `private`): each one that is not an
+# import or a re-export becomes an ExportDecl, with node ids from `ids` on (after every id of the scope, so they stay
+# unique). The ExportDecl takes the doc and the span of the declaration, which keeps its doc too.
 def publish(declarations: List[Ast.Decl], index: Int, ids: Int) -> DeclsAt
   nodes: List[Ast.Decl] = []
   next_id = ids
@@ -4987,7 +4884,6 @@ def publish(declarations: List[Ast.Decl], index: Int, ids: Int) -> DeclsAt
       case decl
         Ast.Decl.Import(_) -> node = decl
         Ast.Decl.Reexport(_) -> node = decl
-        Ast.Decl.Export(_) -> node = decl
         Ast.Decl.Constant(inner) -> node = Ast.Decl.Constant(inner.with(exported: true))
         _ ->
           node = Ast.Decl.Export(
@@ -5012,7 +4908,7 @@ def constant?(decl: Ast.Decl) -> Bool
   end
 end
 
-# A one-line def (`def name() -> Type = value`), exported or not.
+# A one-line def (`def name() -> Type = value`), public or private.
 def one_line_def?(decl: Ast.Decl) -> Bool
   case decl
     Ast.Decl.Function(node) -> node.expression

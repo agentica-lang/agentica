@@ -175,9 +175,9 @@ def std_only_help(family: String) -> String
 end
 
 ## The help of CHECK-IMPORT-NAME for `member`, which the module `target` does not export. A name it declares is private
-## there: the help says how to open it, above `private` in a scope that has one and with `export` in one that has not,
-## and for a std/ module or a package, which the user does not edit, only that it is private. A name that a file only
-## imports gets the re-export that passes it on. Any other name gets the did-you-mean over the exports.
+## there: the help says to move it above `private`, and for a std/ module or a package, which the user does not edit,
+## only that it is private. A name that a file only imports gets the re-export that passes it on. Any other name gets
+## the did-you-mean over the exports.
 def import_name_help(modules: Map[String, Module], target: Module, member: String) -> Diag.Help
   place = "\"#{target.name}\""
   if target.block != ""
@@ -188,11 +188,7 @@ def import_name_help(modules: Map[String, Module], target: Module, member: Strin
   if target.names.has_key?(member)
     return Diag.Help.Hint("#{member} is private in #{place}") if library
 
-    if target.program.private_mark.some?
-      return Diag.Help.Hint("#{member} is private in #{place}: move it above private there")
-    end
-
-    return Diag.Help.Hint("#{member} is private in #{place}: add export to it there")
+    return Diag.Help.Hint("#{member} is private in #{place}: move it above private there")
   end
 
   if target.block == "" and block_holding(modules, target, member) != ""

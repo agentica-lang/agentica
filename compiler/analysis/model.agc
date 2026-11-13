@@ -40,7 +40,7 @@ struct Variant
 end
 
 ## One top-level declaration. `kind` is "function", "struct", "enum", "alias", "resource", "constant" or "module";
-## `range` is the whole declaration, `export` included, and `name_range` the name alone. `doc` is the whole text of the
+## `range` is the whole declaration, and `name_range` the name alone. `doc` is the whole text of the
 ## `##` block ("" for none) and `summary` its first paragraph on one line. A function has `parameters` and `result`, a
 ## struct its `fields`, an enum its `variants` and a module block the `items` it declares; the other lists are empty.
 ## A struct lists its public fields only, and `private_range` holds the range of its `private` line when it has private
@@ -210,7 +210,7 @@ end
 ## subsequence of the block's `types` order: for a parameter `A{b: B}`, `B{c: C}` and a result `C` the block lists
 ## A, C, B but `types_in` is A, B, C, so do not merge them by position. A type in `types_out` only is made by the
 ## module and never read, and one in `types_in` only is read and never made. `doc` is the whole `##` text ("" for
-## none), `range` the whole declaration, `export` included, and `name_range` the name alone.
+## none), `range` the whole declaration, and `name_range` the name alone.
 struct NativeFunction
   name: String
   name_range: Diagnostics.Region
@@ -363,5 +363,3 @@ struct Bodies
   modules: List[BodyModule]
   functions: List[Body]
 end
-
-private

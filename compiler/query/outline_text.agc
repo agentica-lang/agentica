@@ -27,16 +27,17 @@ end
 ## `file:line:column`, the start of `range`, which `rg` prints in front of a hit.
 def place(file: String, range: DiagnosticModel.Region) -> String = "#{file}:#{range.start.line}:#{range.start.column}"
 
-## The declaration with `export` when it has one; a function with `def`, since its signature does not hold it.
+## The declaration with `private` when it is private (below the `private` line of its file or block); a function with
+## `def`, since its signature does not hold it.
 def declaration_text(kind: String, exported: Bool, signature: String) -> String
   head = signature
   if kind == "function"
     head = "def #{head}"
   end
 
-  return "export #{head}" if exported
+  return head if exported
 
-  head
+  "private #{head}"
 end
 
 ## `field Struct.name: Type`, with ` = default` as written when `default` is not "".

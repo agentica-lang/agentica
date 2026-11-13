@@ -3,8 +3,8 @@
 ## the JSON form lists. It is built from the parsed program only: nothing is linked or checked.
 ##
 ## A doc is the text of the `##` block with the markers removed (an `Optional`, as on the syntax tree) and its leading
-## and trailing blank lines dropped (`cleaned`); the lexer already strips the one space after each `##`. The doc of an
-## exported declaration sits on its ExportDecl, not on the declaration inside it (parser.agc, parse_declaration), so
+## and trailing blank lines dropped (`cleaned`); the lexer already strips the one space after each `##`. The doc of a
+## public declaration sits on its ExportDecl, not on the declaration inside it (parser.agc, publish), so
 ## `item_of` reads the outer doc first and the inner one when there is none. `of_program` takes the source `text` for
 ## the default values of the parameters.
 
@@ -49,7 +49,7 @@ enum Detail
 end
 
 ## One top-level declaration. `kind` is "function", "struct", "enum", "alias", "resource", "constant" or "module";
-## `span` is the whole declaration, `export` included, and `name_span` the name alone. `agentica doc` lists the
+## `span` is the whole declaration, and `name_span` the name alone. `agentica doc` lists the
 ## exported ones only; `agentica outline` lists all of them. A struct lists its public fields only; private_line is the
 ## span of its `private` line when it has private fields, which the readers show as one line.
 struct Item

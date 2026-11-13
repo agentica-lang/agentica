@@ -54,10 +54,10 @@ struct Program
 end
 
 ## The `private` line of a file or a module block (docs/grammar/05b-modules.md): index is the number of declarations
-## before it. In a scope with it the parser has wrapped each declaration before it in an ExportDecl (or set
-## ConstDecl.exported), and the ones after it stay private, so every reader of the exports gives the same answer for
-## both forms; `export` on a declaration is refused there. The wrap keeps the declaration's own doc, and the ExportDecl
-## has its span. In a struct body (StructDecl.private_mark) index is the number of fields before it, and nothing is
+## before it. The parser has wrapped each declaration before it (every one in a scope with no `private`) in an
+## ExportDecl (or set ConstDecl.exported), and the ones after it stay private, so every reader of the exports reads the
+## same tree; `export` on a declaration is refused. The wrap keeps the declaration's own doc, and the ExportDecl has
+## its span. In a struct body (StructDecl.private_mark) index is the number of fields before it, and nothing is
 ## wrapped.
 struct PrivateMark
   index: Int
@@ -108,7 +108,8 @@ struct ReexportDecl
   span: Source.Span
 end
 
-## export before a def, struct or enum; its doc is the doc of the declaration.
+## A public declaration, wrapped by the parser (it is above `private`, or the scope has none); its doc is the doc of
+## the declaration.
 struct ExportDecl
   id: Int
   declaration: Decl
@@ -117,8 +118,8 @@ struct ExportDecl
 end
 
 ## A module block: `module Name ... end` at the top level of a file, a namespace for the declarations inside it
-## (docs/grammar/05b-modules.md). `export module Name` wraps it in an ExportDecl. The linker makes a module of its own
-## of the declarations.
+## (docs/grammar/05b-modules.md). A block above `private` is wrapped in an ExportDecl. The linker makes a module of
+## its own of the declarations.
 struct ModuleDecl
   id: Int
   name: String
@@ -129,9 +130,9 @@ struct ModuleDecl
   private_mark: Optional[PrivateMark] = none
 end
 
-## A module constant: [export] NAME[: Type] = value (docs/grammar/06-semantics.md). Unlike the other declarations
-## it is not wrapped by an ExportDecl: exported says whether `export` was written (or the constant is above `private`),
-## and the span starts at it. The linker clears exported.
+## A module constant: NAME[: Type] = value (docs/grammar/06-semantics.md). Unlike the other declarations
+## it is not wrapped by an ExportDecl: exported says whether the constant is public (above `private`). The linker
+## clears exported.
 struct ConstDecl
   id: Int
   name: String
