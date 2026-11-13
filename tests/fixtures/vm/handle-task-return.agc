@@ -3,7 +3,7 @@ def dial(port: Int) -> Void
   Result.unwrap!(TCP.send(socket, "hello\n", 5000))
 end
 
-def dial_and_return(port: Int) -> Socket
+def dial_and_return(port: Int) -> TCP.Socket
   return Result.unwrap!(TCP.connect("127.0.0.1", port, 5000))
 end
 
@@ -11,7 +11,7 @@ def open_and_return(path: String) -> File.Handle
   return Result.unwrap!(File.open(path, "write", 5000))
 end
 
-def listen_and_return(host: String) -> Listener
+def listen_and_return(host: String) -> TCP.Listener
   return Result.unwrap!(TCP.listen(host, 0))
 end
 

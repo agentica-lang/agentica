@@ -1,8 +1,8 @@
 # TCP, TLS and HTTP
 
-`TCP`, `TLS`, `Socket` and `Listener` are reserved. Handles are opaque (no
-constructor, equality, fields or JSON). A handle belongs
-to the task that opened it and closes when that task or the run ends
+`TCP` and `TLS` are reserved; `TCP.Socket` and `TCP.Listener` are members of
+`TCP`. Handles are opaque (no constructor, equality, fields or JSON). A handle
+belongs to the task that opened it and closes when that task or the run ends
 (`tasks.md`). A server loop gives each connection its own task with
 `Task.spawn_owning(&serve, socket)`, so a crash closes only that connection.
 
@@ -19,24 +19,24 @@ names a file returns `denied: --deny-fs`.
 
 ```text
 DNS.lookup(host: String, timeout_ms: Int = 30000) -> Result[List[String]]
-TCP.connect(host: String, port: Int, timeout_ms: Int) -> Result[Socket]
-TCP.listen(host: String, port: Int) -> Result[Listener]
-TCP.accept(listener: Listener, timeout_ms: Int) -> Result[Socket]
-TCP.send(socket: Socket, text: String, timeout_ms: Int) -> Result[Void]
-TCP.send_bytes(socket: Socket, bytes: Bytes, timeout_ms: Int) -> Result[Void]
-TCP.recv_bytes(socket: Socket, max_bytes: Int, timeout_ms: Int) -> Result[Bytes]
-TCP.recv_bytes(socket: Socket, max_bytes: Int) -> Result[Bytes]   # no time limit
-TCP.read_line(socket: Socket, timeout_ms: Int) -> Result[String]
-TCP.close(socket: Socket) -> Void
-TCP.close_listener(listener: Listener) -> Void
-TCP.local_port(listener: Listener) -> Int
-TCP.remote_address(socket: Socket) -> String
-TLS.alpn(socket: Socket) -> String
+TCP.connect(host: String, port: Int, timeout_ms: Int) -> Result[TCP.Socket]
+TCP.listen(host: String, port: Int) -> Result[TCP.Listener]
+TCP.accept(listener: TCP.Listener, timeout_ms: Int) -> Result[TCP.Socket]
+TCP.send(socket: TCP.Socket, text: String, timeout_ms: Int) -> Result[Void]
+TCP.send_bytes(socket: TCP.Socket, bytes: Bytes, timeout_ms: Int) -> Result[Void]
+TCP.recv_bytes(socket: TCP.Socket, max_bytes: Int, timeout_ms: Int) -> Result[Bytes]
+TCP.recv_bytes(socket: TCP.Socket, max_bytes: Int) -> Result[Bytes]   # no time limit
+TCP.read_line(socket: TCP.Socket, timeout_ms: Int) -> Result[String]
+TCP.close(socket: TCP.Socket) -> Void
+TCP.close_listener(listener: TCP.Listener) -> Void
+TCP.local_port(listener: TCP.Listener) -> Int
+TCP.remote_address(socket: TCP.Socket) -> String
+TLS.alpn(socket: TCP.Socket) -> String
 TLS.client_context(options: TlsClientOptions) -> Result[TlsContext]
 TLS.server_context(options: TlsServerOptions) -> Result[TlsContext]
-TLS.connect(host: String, port: Int, context: TlsContext, timeout_ms: Int) -> Result[Socket]
-TLS.listen(host: String, port: Int, context: TlsContext) -> Result[Listener]
-TLS.upgrade(socket: Socket, context: TlsContext, host: String, timeout_ms: Int) -> Result[Socket]
+TLS.connect(host: String, port: Int, context: TlsContext, timeout_ms: Int) -> Result[TCP.Socket]
+TLS.listen(host: String, port: Int, context: TlsContext) -> Result[TCP.Listener]
+TLS.upgrade(socket: TCP.Socket, context: TlsContext, host: String, timeout_ms: Int) -> Result[TCP.Socket]
 
 TlsClientOptions(ca_file: String = "", cert_file: String = "", key_file: String = "",
                  alpn: List[String] = [])

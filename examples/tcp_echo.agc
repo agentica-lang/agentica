@@ -1,4 +1,4 @@
-def echo(socket: Socket) -> Void
+def echo(socket: TCP.Socket) -> Void
   line = TCP.read_line(socket, 30000)
   if Result.ok?(line)
     _ = TCP.send(socket, Result.unwrap!(line) + "\n", 30000)

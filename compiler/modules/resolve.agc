@@ -80,7 +80,7 @@ end
 ## alias of the same name wins, though a family name is reserved, so only std/ internals could take one.
 export def family?(cx: Context, name: String) -> Bool = FAMILY_MEMBERS.has_key?(name) and !cx.me.aliases.has_key?(name)
 
-## The old builtin name of the nested name Alias.Member (NESTED_NAMES: TCP.Socket is Socket), or "" when it is none
+## The old builtin name of the nested name Alias.Member (NESTED_NAMES: TCP.Socket is TCP.Socket), or "" when it is none
 ## or the file has an import alias of that name.
 export def nested(cx: Context, alias: String, member: String) -> String
   return "" if cx.me.aliases.has_key?(alias)

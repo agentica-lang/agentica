@@ -1748,14 +1748,14 @@ NET_ECHO = r"""struct Dial
   lines: Int
 end
 
-def open(d: Dial) -> Result[Socket]
+def open(d: Dial) -> Result[TCP.Socket]
   if d.ca == ""
     return TCP.connect("127.0.0.1", d.port, 10000)
   end
   return TLS.connect("localhost", d.port, TLS.client_context(TlsClientOptions(ca_file: d.ca)).unwrap!, 10000)
 end
 
-def serve(socket: Socket) -> Int
+def serve(socket: TCP.Socket) -> Int
   count = 0
   line = TCP.read_line(socket, 10000)
   while line.ok?
@@ -1767,7 +1767,7 @@ def serve(socket: Socket) -> Int
   return count
 end
 
-def accept_all(listener: Listener) -> Int
+def accept_all(listener: TCP.Listener) -> Int
   servers: List[Task[Int]] = []
   socket = TCP.accept(listener, 10000)
   while socket.ok?
@@ -1946,7 +1946,7 @@ def test_net_waits_cancelled_from_other_schedulers_end_and_free_their_port(tmp_p
 
 
 NET_DEADLINE = r"""struct Late
-  socket: Socket
+  socket: TCP.Socket
   delay: Int
 end
 
@@ -1961,7 +1961,7 @@ def write_late(l: Late) -> Result[Void]
   return TCP.send(l.socket, "late\n", 5000)
 end
 
-def race(socket: Socket) -> String
+def race(socket: TCP.Socket) -> String
   got = TCP.read_line(socket, 20)
   case got
     ok(line) -> return line
@@ -1978,7 +1978,7 @@ def dial(d: Dial) -> String
   end
 end
 
-def serve_tls(listener: Listener) -> Int
+def serve_tls(listener: TCP.Listener) -> Int
   count = 0
   socket = TCP.accept(listener, 2000)
   while socket.ok? || socket.message != "network: listener is closed"
@@ -2061,33 +2061,33 @@ def big() -> String
   return text
 end
 
-def read(socket: Socket) -> Result[String]
+def read(socket: TCP.Socket) -> Result[String]
   return TCP.read_line(socket, 60000)
 end
 
-def write(socket: Socket) -> Result[Void]
+def write(socket: TCP.Socket) -> Result[Void]
   return TCP.send(socket, big(), 60000)
 end
 
-def closer(socket: Socket) -> Void
+def closer(socket: TCP.Socket) -> Void
   Task.sleep(100)
   TCP.close(socket)
 end
 
-def open(d: Dial) -> Result[Socket]
+def open(d: Dial) -> Result[TCP.Socket]
   if d.ca == ""
     return TCP.connect("127.0.0.1", d.port, 5000)
   end
   return TLS.connect("localhost", d.port, TLS.client_context(TlsClientOptions(ca_file: d.ca)).unwrap!, 5000)
 end
 
-def own(listener: Listener) -> Result[Int]
+def own(listener: TCP.Listener) -> Result[Int]
   Task.sleep(10)
   zero = 0
   return ok(1 / zero)
 end
 
-def parked(listener: Listener, ca: String) -> Void
+def parked(listener: TCP.Listener, ca: String) -> Void
   dial = Task.spawn(&open, Dial(port: TCP.local_port(listener), ca: ca))
   far = TCP.accept(listener, 5000).unwrap!
   near = Task.await(dial).unwrap!
@@ -2131,7 +2131,7 @@ def test_a_close_from_another_scheduler_ends_parked_reads_and_sends(tmp_path, re
 
 
 NET_ORDER = r"""struct Job
-  socket: Socket
+  socket: TCP.Socket
   id: Int
   count: Int
 end
@@ -2149,7 +2149,7 @@ def writer(job: Job) -> Result[Int]
 end
 
 # Waits for the peer's "bye" (it has read every line), then closes the socket.
-def finish(socket: Socket) -> Result[Void]
+def finish(socket: TCP.Socket) -> Result[Void]
   line = try TCP.read_line(socket, 60000)
   TCP.close(socket)
   if line != "bye"
@@ -2167,7 +2167,7 @@ def main() -> Void
   listener = TCP.listen("127.0.0.1", 0).unwrap!
   puts(TCP.local_port(listener))
   IO.flush()
-  accepted: List[Socket] = []
+  accepted: List[TCP.Socket] = []
   jobs: List[Task[Result[Int]]] = []
   k = 0
   while k < sockets
@@ -2275,11 +2275,11 @@ OWNER_CRASH = r"""def crash() -> Result[Int]
   return ok(1 / zero)
 end
 
-def own_listener(listener: Listener) -> Result[Int]
+def own_listener(listener: TCP.Listener) -> Result[Int]
   return crash()
 end
 
-def own_socket(socket: Socket) -> Result[Int]
+def own_socket(socket: TCP.Socket) -> Result[Int]
   return crash()
 end
 
@@ -2287,7 +2287,7 @@ def own_process(p: Process) -> Result[Int]
   return crash()
 end
 
-def accepted(got: Result[Socket]) -> String
+def accepted(got: Result[TCP.Socket]) -> String
   case got
     ok(socket) ->
       TCP.close(socket)
@@ -2333,7 +2333,7 @@ def main() -> Void
 end
 """
 
-OWNER_CRASH_PORT = r"""def own(listener: Listener) -> Result[Int]
+OWNER_CRASH_PORT = r"""def own(listener: TCP.Listener) -> Result[Int]
   zero = 0
   return ok(1 / zero)
 end
@@ -2389,7 +2389,7 @@ OWNER_DESCENDANTS = r"""struct Ending
   down: Channel[Channel[Int]]
 end
 
-def spin(listener: Listener) -> Result[Int]
+def spin(listener: TCP.Listener) -> Result[Int]
   k = 0
   while k < 50000000
     k = k + 1
@@ -2397,7 +2397,7 @@ def spin(listener: Listener) -> Result[Int]
   return ok(k)
 end
 
-def wait(listener: Listener) -> Result[Int]
+def wait(listener: TCP.Listener) -> Result[Int]
   case TCP.accept(listener, 60000)
     ok(socket) -> TCP.close(socket)
     error(_) -> return ok(0)
@@ -2410,34 +2410,34 @@ def crash() -> Result[Int]
   return ok(1 / zero)
 end
 
-def crash_busy(listener: Listener) -> Result[Int]
+def crash_busy(listener: TCP.Listener) -> Result[Int]
   Task.spawn_owning(&spin, listener)
   return crash()
 end
 
-def crash_wait(listener: Listener) -> Result[Int]
+def crash_wait(listener: TCP.Listener) -> Result[Int]
   Task.spawn_owning(&wait, listener)
   return crash()
 end
 
-def cancel_busy(listener: Listener) -> Result[Int]
+def cancel_busy(listener: TCP.Listener) -> Result[Int]
   Task.spawn_owning(&spin, listener)
   Task.sleep(60000)
   return ok(0)
 end
 
-def middle(listener: Listener) -> Result[Int]
+def middle(listener: TCP.Listener) -> Result[Int]
   Task.spawn_owning(&spin, listener)
   return spin(listener)
 end
 
-def crash_nested(listener: Listener) -> Result[Int]
+def crash_nested(listener: TCP.Listener) -> Result[Int]
   Task.spawn_owning(&middle, listener)
   Task.sleep(2)
   return crash()
 end
 
-def cancel_nested(listener: Listener) -> Result[Int]
+def cancel_nested(listener: TCP.Listener) -> Result[Int]
   Task.spawn_owning(&middle, listener)
   Task.sleep(60000)
   return ok(0)
@@ -2487,7 +2487,7 @@ def sent(got: Result[Void]) -> String
   end
 end
 
-def start(kind: String, listener: Listener) -> Task[Result[Int]]
+def start(kind: String, listener: TCP.Listener) -> Task[Result[Int]]
   case kind
     "crash-busy" -> return Task.spawn_owning(&crash_busy, listener)
     "crash-wait" -> return Task.spawn_owning(&crash_wait, listener)
@@ -2497,7 +2497,7 @@ def start(kind: String, listener: Listener) -> Task[Result[Int]]
   end
 end
 
-def accepted(got: Result[Socket]) -> String
+def accepted(got: Result[TCP.Socket]) -> String
   case got
     ok(socket) ->
       TCP.close(socket)
@@ -2623,11 +2623,11 @@ def test_one_cancel_of_a_deep_line_with_a_busy_leaf_costs_linear_time(tmp_path):
     assert int(lines[0].removeprefix("cancel ")) < scaled(1500), lines[0]
 
 
-NET_STOP = r"""def read(socket: Socket) -> Result[String]
+NET_STOP = r"""def read(socket: TCP.Socket) -> Result[String]
   return TCP.read_line(socket, 60000)
 end
 
-def accept(listener: Listener) -> Result[Socket]
+def accept(listener: TCP.Listener) -> Result[TCP.Socket]
   return TCP.accept(listener, 60000)
 end
 
@@ -2740,7 +2740,7 @@ def test_a_tls_close_right_before_main_returns_still_sends_close_notify(tmp_path
         assert (result.code, outcome) == (0, ["close_notify"]), result.stderr
 
 
-NET_STALL = r"""def accept(listener: Listener) -> Result[Socket]
+NET_STALL = r"""def accept(listener: TCP.Listener) -> Result[TCP.Socket]
   return TCP.accept(listener, 60000)
 end
 

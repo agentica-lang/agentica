@@ -310,13 +310,13 @@ export ENUMS: List[Model.EnumDef] = [
 ]
 
 ## The handle types a task can be given with Task.spawn_owning.
-export HANDLE_TYPES: List[String] = ["Socket", "Listener", "HttpWire.Server", "File.Handle", "Process"]
+export HANDLE_TYPES: List[String] = ["TCP.Socket", "TCP.Listener", "HttpWire.Server", "File.Handle", "Process"]
 
 ## The builtin types with no structure: handles, TestCase, TlsContext, C.Pointer (a C pointer of native code),
 ## TaskRef (the running task, from Task.current) and Native.Mutex (the lock of a native library).
 export OPAQUE_TYPES: List[String] = [
-  "Socket", "Listener", "HttpWire.Client", "HttpWire.Server", "File.Handle", "Process", "TestCase", "TlsContext",
-  "C.Pointer", "TaskRef", "Native.Mutex",
+  "TCP.Socket", "TCP.Listener", "HttpWire.Client", "HttpWire.Server", "File.Handle", "Process", "TestCase",
+  "TlsContext", "C.Pointer", "TaskRef", "Native.Mutex",
 ]
 
 ## The type names no declaration or import alias may take.
@@ -338,7 +338,6 @@ export RESERVED_TYPE_NAMES: List[String] = [
   "JSON",
   "Lazy",
   "List",
-  "Listener",
   "Map",
   "Math",
   "Nil",
@@ -351,7 +350,6 @@ export RESERVED_TYPE_NAMES: List[String] = [
   "Range",
   "Result",
   "Set",
-  "Socket",
   "String",
   "StructMember",
   "System",
@@ -375,7 +373,7 @@ export RESERVED_TYPE_NAMES: List[String] = [
 ## Family.Member: a group of functions (the rows named Family.Member.fn) or a builtin type named Family.Member (a
 ## record, an enum or an opaque type). A new member, or a new function of a member, only adds its rows or its type and
 ## reserves no name.
-export FAMILIES: List[String] = ["File", "JSON", "OpenSSL", "Process"]
+export FAMILIES: List[String] = ["File", "JSON", "OpenSSL", "Process", "TCP"]
 
 ## The modules only std/ may call: each name with the std module that wraps it and the alias its help shows.
 export STD_ONLY_IMPORTS: Map[String, List[String]] = {
@@ -404,8 +402,6 @@ export MOVED_TYPES: Map[String, String] = {
 ## the lowering and the VM know (#1182). A value still prints with the old name until its family moves.
 export NESTED_NAMES: Map[String, String] = {
   "System.Profile": "Profile",
-  "TCP.Listener": "Listener",
-  "TCP.Socket": "Socket",
   "TLS.ClientOptions": "TlsClientOptions",
   "TLS.Context": "TlsContext",
   "TLS.ServerOptions": "TlsServerOptions",
@@ -1062,7 +1058,7 @@ ROWS_9: List[Model.Builtin] = [
   Model.Builtin(
     name: "HttpWire.accept",
     parameters: [Model.Named(name: "server", type: Types.Type.Opaque("HttpWire.Server"))],
-    result: Types.Type.Result(Types.Type.Opaque("Socket")),
+    result: Types.Type.Result(Types.Type.Opaque("TCP.Socket")),
     rule: Model.Rule.Plain,
     implementation: "HttpWire.accept",
     effects: ["network"],
@@ -1129,7 +1125,7 @@ ROWS_9: List[Model.Builtin] = [
 ROWS_10: List[Model.Builtin] = [
   Model.Builtin(
     name: "HttpWire.clean_eof?",
-    parameters: [Model.Named(name: "socket", type: Types.Type.Opaque("Socket"))],
+    parameters: [Model.Named(name: "socket", type: Types.Type.Opaque("TCP.Socket"))],
     result: Types.Type.Bool,
     rule: Model.Rule.Plain,
     implementation: "HttpWire.clean_eof?",
@@ -1149,7 +1145,7 @@ ROWS_10: List[Model.Builtin] = [
   ),
   Model.Builtin(
     name: "HttpWire.close_write",
-    parameters: [Model.Named(name: "socket", type: Types.Type.Opaque("Socket"))],
+    parameters: [Model.Named(name: "socket", type: Types.Type.Opaque("TCP.Socket"))],
     result: Types.Type.Void,
     rule: Model.Rule.Plain,
     implementation: "HttpWire.close_write",
@@ -1165,7 +1161,7 @@ ROWS_10: List[Model.Builtin] = [
       Model.Named(name: "port", type: Types.Type.Int),
       Model.Named(name: "timeout_ms", type: Types.Type.Int),
     ],
-    result: Types.Type.Result(Types.Type.Opaque("Socket")),
+    result: Types.Type.Result(Types.Type.Opaque("TCP.Socket")),
     rule: Model.Rule.Plain,
     implementation: "HttpWire.connect_tls",
     effects: ["network"],
@@ -1180,7 +1176,7 @@ ROWS_10: List[Model.Builtin] = [
       Model.Named(name: "context", type: Types.Type.Opaque("TlsContext")),
       Model.Named(name: "timeout_ms", type: Types.Type.Int),
     ],
-    result: Types.Type.Result(Types.Type.Opaque("Socket")),
+    result: Types.Type.Result(Types.Type.Opaque("TCP.Socket")),
     rule: Model.Rule.Plain,
     implementation: "HttpWire.connect_context",
     effects: ["network"],
@@ -1201,11 +1197,11 @@ ROWS_10: List[Model.Builtin] = [
     name: "HttpWire.upgrade_tls",
     parameters: [
       Model.Named(name: "client", type: Types.Type.Opaque("HttpWire.Client")),
-      Model.Named(name: "socket", type: Types.Type.Opaque("Socket")),
+      Model.Named(name: "socket", type: Types.Type.Opaque("TCP.Socket")),
       Model.Named(name: "host", type: Types.Type.String),
       Model.Named(name: "timeout_ms", type: Types.Type.Int),
     ],
-    result: Types.Type.Result(Types.Type.Opaque("Socket")),
+    result: Types.Type.Result(Types.Type.Opaque("TCP.Socket")),
     rule: Model.Rule.Plain,
     implementation: "HttpWire.upgrade_tls",
     effects: ["network"],
@@ -1215,12 +1211,12 @@ ROWS_10: List[Model.Builtin] = [
   Model.Builtin(
     name: "HttpWire.upgrade_context",
     parameters: [
-      Model.Named(name: "socket", type: Types.Type.Opaque("Socket")),
+      Model.Named(name: "socket", type: Types.Type.Opaque("TCP.Socket")),
       Model.Named(name: "context", type: Types.Type.Opaque("TlsContext")),
       Model.Named(name: "host", type: Types.Type.String),
       Model.Named(name: "timeout_ms", type: Types.Type.Int),
     ],
-    result: Types.Type.Result(Types.Type.Opaque("Socket")),
+    result: Types.Type.Result(Types.Type.Opaque("TCP.Socket")),
     rule: Model.Rule.Plain,
     implementation: "HttpWire.upgrade_context",
     effects: ["network"],
@@ -1279,7 +1275,7 @@ ROWS_10: List[Model.Builtin] = [
   Model.Builtin(
     name: "HttpWire.idle?",
     parameters: [
-      Model.Named(name: "socket", type: Types.Type.Opaque("Socket")),
+      Model.Named(name: "socket", type: Types.Type.Opaque("TCP.Socket")),
       Model.Named(name: "timeout_ms", type: Types.Type.Int),
     ],
     result: Types.Type.Result(Types.Type.Bool),
@@ -1328,7 +1324,7 @@ ROWS_11: List[Model.Builtin] = [
   Model.Builtin(
     name: "HttpWire.read_head",
     parameters: [
-      Model.Named(name: "socket", type: Types.Type.Opaque("Socket")),
+      Model.Named(name: "socket", type: Types.Type.Opaque("TCP.Socket")),
       Model.Named(name: "rest", type: Types.Type.Bytes),
       Model.Named(name: "max_body_bytes", type: Types.Type.Int),
       Model.Named(name: "timeout_ms", type: Types.Type.Int),
@@ -1346,7 +1342,7 @@ ROWS_11: List[Model.Builtin] = [
   Model.Builtin(
     name: "HttpWire.read_response",
     parameters: [
-      Model.Named(name: "socket", type: Types.Type.Opaque("Socket")),
+      Model.Named(name: "socket", type: Types.Type.Opaque("TCP.Socket")),
       Model.Named(name: "head_only", type: Types.Type.Bool),
       Model.Named(name: "max_body_bytes", type: Types.Type.Int),
       Model.Named(name: "timeout_ms", type: Types.Type.Int),
@@ -1364,7 +1360,7 @@ ROWS_11: List[Model.Builtin] = [
   Model.Builtin(
     name: "HttpWire.server",
     parameters: [
-      Model.Named(name: "listener", type: Types.Type.Opaque("Listener")),
+      Model.Named(name: "listener", type: Types.Type.Opaque("TCP.Listener")),
       Model.Named(name: "max_connections", type: Types.Type.Int),
       Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Opaque("HttpWire.Server")], Types.Type.Void)),
     ],
@@ -1396,8 +1392,8 @@ ROWS_11: List[Model.Builtin] = [
     name: "HttpWire.spawn",
     parameters: [
       Model.Named(name: "server", type: Types.Type.Opaque("HttpWire.Server")),
-      Model.Named(name: "socket", type: Types.Type.Opaque("Socket")),
-      Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Opaque("Socket")], Types.Type.Void)),
+      Model.Named(name: "socket", type: Types.Type.Opaque("TCP.Socket")),
+      Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Opaque("TCP.Socket")], Types.Type.Void)),
     ],
     result: Types.Type.Void,
     rule: Model.Rule.Plain,
@@ -4858,10 +4854,10 @@ ROWS_46: List[Model.Builtin] = [
   Model.Builtin(
     name: "TCP.accept",
     parameters: [
-      Model.Named(name: "listener", type: Types.Type.Opaque("Listener")),
+      Model.Named(name: "listener", type: Types.Type.Opaque("TCP.Listener")),
       Model.Named(name: "timeout_ms", type: Types.Type.Int),
     ],
-    result: Types.Type.Result(Types.Type.Opaque("Socket")),
+    result: Types.Type.Result(Types.Type.Opaque("TCP.Socket")),
     rule: Model.Rule.Plain,
     implementation: "TCP.accept",
     effects: ["network"],
@@ -4870,7 +4866,7 @@ ROWS_46: List[Model.Builtin] = [
   ),
   Model.Builtin(
     name: "TCP.close",
-    parameters: [Model.Named(name: "socket", type: Types.Type.Opaque("Socket"))],
+    parameters: [Model.Named(name: "socket", type: Types.Type.Opaque("TCP.Socket"))],
     result: Types.Type.Void,
     rule: Model.Rule.Plain,
     implementation: "TCP.close",
@@ -4880,7 +4876,7 @@ ROWS_46: List[Model.Builtin] = [
   ),
   Model.Builtin(
     name: "TCP.close_listener",
-    parameters: [Model.Named(name: "listener", type: Types.Type.Opaque("Listener"))],
+    parameters: [Model.Named(name: "listener", type: Types.Type.Opaque("TCP.Listener"))],
     result: Types.Type.Void,
     rule: Model.Rule.Plain,
     implementation: "TCP.close_listener",
@@ -4898,7 +4894,7 @@ ROWS_47: List[Model.Builtin] = [
       Model.Named(name: "port", type: Types.Type.Int),
       Model.Named(name: "timeout_ms", type: Types.Type.Int),
     ],
-    result: Types.Type.Result(Types.Type.Opaque("Socket")),
+    result: Types.Type.Result(Types.Type.Opaque("TCP.Socket")),
     rule: Model.Rule.Plain,
     implementation: "TCP.connect",
     effects: ["network"],
@@ -4908,7 +4904,7 @@ ROWS_47: List[Model.Builtin] = [
   Model.Builtin(
     name: "TCP.listen",
     parameters: [Model.Named(name: "host", type: Types.Type.String), Model.Named(name: "port", type: Types.Type.Int)],
-    result: Types.Type.Result(Types.Type.Opaque("Listener")),
+    result: Types.Type.Result(Types.Type.Opaque("TCP.Listener")),
     rule: Model.Rule.Plain,
     implementation: "TCP.listen",
     effects: ["network"],
@@ -4917,7 +4913,7 @@ ROWS_47: List[Model.Builtin] = [
   ),
   Model.Builtin(
     name: "TCP.local_port",
-    parameters: [Model.Named(name: "listener", type: Types.Type.Opaque("Listener"))],
+    parameters: [Model.Named(name: "listener", type: Types.Type.Opaque("TCP.Listener"))],
     result: Types.Type.Int,
     rule: Model.Rule.Plain,
     implementation: "TCP.local_port",
@@ -4927,7 +4923,7 @@ ROWS_47: List[Model.Builtin] = [
   ),
   Model.Builtin(
     name: "TCP.remote_address",
-    parameters: [Model.Named(name: "socket", type: Types.Type.Opaque("Socket"))],
+    parameters: [Model.Named(name: "socket", type: Types.Type.Opaque("TCP.Socket"))],
     result: Types.Type.String,
     rule: Model.Rule.Plain,
     implementation: "TCP.remote_address",
@@ -4938,7 +4934,7 @@ ROWS_47: List[Model.Builtin] = [
   Model.Builtin(
     name: "TCP.read_line",
     parameters: [
-      Model.Named(name: "socket", type: Types.Type.Opaque("Socket")),
+      Model.Named(name: "socket", type: Types.Type.Opaque("TCP.Socket")),
       Model.Named(name: "timeout_ms", type: Types.Type.Int),
     ],
     result: Types.Type.Result(Types.Type.String),
@@ -4954,7 +4950,7 @@ ROWS_48: List[Model.Builtin] = [
   Model.Builtin(
     name: "TCP.recv_bytes",
     parameters: [
-      Model.Named(name: "socket", type: Types.Type.Opaque("Socket")),
+      Model.Named(name: "socket", type: Types.Type.Opaque("TCP.Socket")),
       Model.Named(name: "max_bytes", type: Types.Type.Int),
       Model.Named(name: "timeout_ms", type: Types.Type.Int),
     ],
@@ -4967,7 +4963,7 @@ ROWS_48: List[Model.Builtin] = [
       Model.Builtin(
         name: "TCP.recv_bytes",
         parameters: [
-          Model.Named(name: "socket", type: Types.Type.Opaque("Socket")),
+          Model.Named(name: "socket", type: Types.Type.Opaque("TCP.Socket")),
           Model.Named(name: "max_bytes", type: Types.Type.Int),
         ],
         result: Types.Type.Result(Types.Type.Bytes),
@@ -4982,7 +4978,7 @@ ROWS_48: List[Model.Builtin] = [
   Model.Builtin(
     name: "TCP.send",
     parameters: [
-      Model.Named(name: "socket", type: Types.Type.Opaque("Socket")),
+      Model.Named(name: "socket", type: Types.Type.Opaque("TCP.Socket")),
       Model.Named(name: "text", type: Types.Type.String),
       Model.Named(name: "timeout_ms", type: Types.Type.Int),
     ],
@@ -4996,7 +4992,7 @@ ROWS_48: List[Model.Builtin] = [
   Model.Builtin(
     name: "TCP.send_bytes",
     parameters: [
-      Model.Named(name: "socket", type: Types.Type.Opaque("Socket")),
+      Model.Named(name: "socket", type: Types.Type.Opaque("TCP.Socket")),
       Model.Named(name: "bytes", type: Types.Type.Bytes),
       Model.Named(name: "timeout_ms", type: Types.Type.Int),
     ],
@@ -5012,7 +5008,7 @@ ROWS_48: List[Model.Builtin] = [
 ROWS_49: List[Model.Builtin] = [
   Model.Builtin(
     name: "TLS.alpn",
-    parameters: [Model.Named(name: "socket", type: Types.Type.Opaque("Socket"))],
+    parameters: [Model.Named(name: "socket", type: Types.Type.Opaque("TCP.Socket"))],
     result: Types.Type.String,
     rule: Model.Rule.Plain,
     implementation: "TLS.alpn",
@@ -5041,7 +5037,7 @@ ROWS_49: List[Model.Builtin] = [
       Model.Named(name: "context", type: Types.Type.Opaque("TlsContext")),
       Model.Named(name: "timeout_ms", type: Types.Type.Int),
     ],
-    result: Types.Type.Result(Types.Type.Opaque("Socket")),
+    result: Types.Type.Result(Types.Type.Opaque("TCP.Socket")),
     rule: Model.Rule.Plain,
     implementation: "TLS.connect",
     effects: ["network"],
@@ -5055,7 +5051,7 @@ ROWS_49: List[Model.Builtin] = [
       Model.Named(name: "port", type: Types.Type.Int),
       Model.Named(name: "context", type: Types.Type.Opaque("TlsContext")),
     ],
-    result: Types.Type.Result(Types.Type.Opaque("Listener")),
+    result: Types.Type.Result(Types.Type.Opaque("TCP.Listener")),
     rule: Model.Rule.Plain,
     implementation: "TLS.listen",
     effects: ["network"],
@@ -5078,12 +5074,12 @@ ROWS_49: List[Model.Builtin] = [
   Model.Builtin(
     name: "TLS.upgrade",
     parameters: [
-      Model.Named(name: "socket", type: Types.Type.Opaque("Socket")),
+      Model.Named(name: "socket", type: Types.Type.Opaque("TCP.Socket")),
       Model.Named(name: "context", type: Types.Type.Opaque("TlsContext")),
       Model.Named(name: "host", type: Types.Type.String),
       Model.Named(name: "timeout_ms", type: Types.Type.Int),
     ],
-    result: Types.Type.Result(Types.Type.Opaque("Socket")),
+    result: Types.Type.Result(Types.Type.Opaque("TCP.Socket")),
     rule: Model.Rule.Plain,
     implementation: "TLS.upgrade",
     effects: ["network"],

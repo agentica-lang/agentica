@@ -23,7 +23,7 @@ PYTHON_PEER = FIXTURES / "tls-peer.py"
 CERTS = FIXTURES / "tls"
 
 SERVER_PROGRAM = """\
-def serve(socket: Socket) -> Void
+def serve(socket: TCP.Socket) -> Void
   line = TCP.read_line(socket, 10000)
   while Result.ok?(line)
     Result.unwrap!(TCP.send(socket, "hello #{Result.unwrap!(line)}\\n", 10000))
@@ -65,7 +65,7 @@ end
 """
 
 MTLS_CLIENT_PROGRAM = """\
-def talk(opened: Result[Socket]) -> Result[String]
+def talk(opened: Result[TCP.Socket]) -> Result[String]
   socket = try opened
   try TCP.send(socket, "hi\\n", 5000)
   line = try TCP.read_line(socket, 5000)
@@ -85,7 +85,7 @@ end
 """
 
 STARTTLS_CLIENT_PROGRAM = """\
-def starttls(port: Int, tls: TlsContext, timeout_ms: Int) -> Result[Socket]
+def starttls(port: Int, tls: TlsContext, timeout_ms: Int) -> Result[TCP.Socket]
   plain = try TCP.connect("127.0.0.1", port, 5000)
   try TCP.send(plain, "STARTTLS\\n", 5000)
   puts(try TCP.read_line(plain, 5000))
@@ -299,11 +299,11 @@ struct Dial
   ca: String
 end
 
-def dial(d: Dial) -> Result[Socket]
+def dial(d: Dial) -> Result[TCP.Socket]
   return TLS.connect("localhost", d.port, TLS.client_context(TlsClientOptions(ca_file: d.ca)).unwrap!, 5000)
 end
 
-def show(dir: String, r: Result[Socket]) -> String
+def show(dir: String, r: Result[TCP.Socket]) -> String
   case r
     ok(_) -> return "ok"
     error(e) -> return String.replace(e.message, dir, "<tls>")
@@ -319,7 +319,7 @@ def handshake(dir: String, name: String, ca: String) -> Void
   TCP.close_listener(listener)
 end
 
-def plain_server(listener: Listener) -> Void
+def plain_server(listener: TCP.Listener) -> Void
   socket = Result.unwrap!(TCP.accept(listener, 5000))
   Result.unwrap!(TCP.send(socket, "hello\\n", 5000))
   _ = TCP.recv_bytes(socket, 4096, 5000)
@@ -374,7 +374,7 @@ struct Flood
   chunk: String
 end
 
-def connect(port: Int) -> Socket
+def connect(port: Int) -> TCP.Socket
   return Result.unwrap!(TLS.connect("localhost", port, TLS.client_context(TlsClientOptions(ca_file: "#{System.args()[0]}/ca.pem")).unwrap!, 5000))
 end
 
@@ -382,7 +382,7 @@ def hold(port: Int) -> Result[String]
   return TCP.read_line(connect(port), 5000)
 end
 
-def wait_accept(listener: Listener) -> Bool
+def wait_accept(listener: TCP.Listener) -> Bool
   return Result.ok?(TCP.accept(listener, 5000))
 end
 
@@ -422,7 +422,7 @@ def ca() -> String
   return "#{System.args()[0]}/ca.pem"
 end
 
-def dial(port: Int) -> Result[Socket]
+def dial(port: Int) -> Result[TCP.Socket]
   return TLS.connect("localhost", port, TLS.client_context(TlsClientOptions(ca_file: ca())).unwrap!, 30000)
 end
 
@@ -431,7 +431,7 @@ def read(port: Int) -> Result[String]
   return TCP.read_line(socket, 60000)
 end
 
-def serve(listener: Listener) -> Bool
+def serve(listener: TCP.Listener) -> Bool
   socket = Result.unwrap!(TCP.accept(listener, 30000))
   return TCP.read_line(socket, 60000).ok?
 end
@@ -472,7 +472,7 @@ def main() -> Void
   Task.await(task)
 end
 
-def accept_one(listener: Listener) -> Bool
+def accept_one(listener: TCP.Listener) -> Bool
   return Result.ok?(TCP.accept(listener, 5000))
 end
 """
@@ -485,7 +485,7 @@ def client_program(ports):
         return 'TLS.connect("%s", %d, TLS.client_context(TlsClientOptions(ca_file: ca)).unwrap!, 5000)' % (host, ports[name])
 
     return "".join(line + "\n" for line in [
-        'def show(r: Result[Socket]) -> Void',
+        'def show(r: Result[TCP.Socket]) -> Void',
         '  case r',
         '    ok(_) -> puts("ok")',
         '    error(m) -> puts(m)',
@@ -719,7 +719,7 @@ def test_timeouts_close_a_tls_socket_a_pending_handshake_times_out_a_closed_list
 def test_main_returns_while_tls_tasks_wait_the_run_ends_without_draining_them(tmp_path):
     trace, env = trace_env(tmp_path)
     result = run_text(tmp_path, "exit", EXIT_PROGRAM, env)
-    assert (result.code, result.stdout) == (0, "<Socket>\n<Socket>\n<Socket>\ndone\n"), result.stderr
+    assert (result.code, result.stdout) == (0, "<TCP.Socket>\n<TCP.Socket>\n<TCP.Socket>\ndone\n"), result.stderr
     text = trace.read_text()
 
     def count(pattern):
@@ -836,12 +836,12 @@ def test_https_waiters_on_a_clients_system_context_build_and_one_leaves(tmp_path
 
 
 DROPPED_CONTEXT_PROGRAM = """\
-def listener_of(dir: String) -> Listener
+def listener_of(dir: String) -> TCP.Listener
   server = TLS.server_context(TlsServerOptions(cert_file: "#{dir}/server.pem", key_file: "#{dir}/server-key.pem"))
   return TLS.listen("127.0.0.1", 0, server.unwrap!).unwrap!
 end
 
-def dial(dir: String, port: Int) -> Socket
+def dial(dir: String, port: Int) -> TCP.Socket
   tls = TLS.client_context(TlsClientOptions(ca_file: "#{dir}/ca.pem")).unwrap!
   return TLS.connect("localhost", port, tls, 5000).unwrap!
 end
@@ -856,7 +856,7 @@ def churn() -> Int
   return total
 end
 
-def echo(listener: Listener) -> Result[Void]
+def echo(listener: TCP.Listener) -> Result[Void]
   socket = try TCP.accept(listener, 5000)
   try TCP.send(socket, try TCP.read_line(socket, 5000) + "!\\n", 5000)
   TCP.close(socket)

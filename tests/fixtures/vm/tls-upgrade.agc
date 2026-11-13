@@ -10,7 +10,7 @@ def starttls(port: Int, tls: TlsContext, host: String) -> Result[List[String]]
   return ok([TCP.send(plain, "plain\n", 5000).message, reply])
 end
 
-def answer(listener: Listener, server: TlsContext) -> Result[String]
+def answer(listener: TCP.Listener, server: TlsContext) -> Result[String]
   plain = try TCP.accept(listener, 5000)
   puts(try TCP.read_line(plain, 5000))
   try TCP.send(plain, "ready\n", 5000)

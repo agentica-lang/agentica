@@ -4,7 +4,7 @@ def options(connections: Int, body: Int) -> HTTP.ClientOptions
   return HTTP.ClientOptions(timeout_ms: 5000, idle_timeout_ms: 5000, max_connections: connections, max_body_bytes: body)
 end
 
-def serve(listener: Listener) -> Void
+def serve(listener: TCP.Listener) -> Void
   socket = Result.unwrap!(TCP.accept(listener, 5000))
   line = Result.unwrap!(TCP.read_line(socket, 5000))
   while line != ""

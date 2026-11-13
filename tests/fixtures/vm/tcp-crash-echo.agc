@@ -3,7 +3,7 @@ struct Client
   line: String
 end
 
-def echo(socket: Socket) -> Result[String]
+def echo(socket: TCP.Socket) -> Result[String]
   line = TCP.read_line(socket, 5000).unwrap!
   n = 100 / (line.length - 4)
   _ = TCP.send(socket, "#{line} #{n}\n", 5000)

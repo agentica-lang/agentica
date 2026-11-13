@@ -64,7 +64,7 @@ def streamed(route: Fn[HTTP.Request, Result[HTTP.StreamResponse]]) -> HTTP.App
 end
 
 # The status line and the headers, without the Date, which differs on every run.
-def head_of(socket: Socket) -> String
+def head_of(socket: TCP.Socket) -> String
   lines: List[String] = []
   line = TCP.read_line(socket, 5000).unwrap!
   while line != ""

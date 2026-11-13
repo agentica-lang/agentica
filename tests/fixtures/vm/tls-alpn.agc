@@ -7,19 +7,19 @@ def offer(port: Int, alpn: List[String], ca: String) -> Result[String]
   return TCP.read_line(socket, 5000)
 end
 
-def answer(listener: Listener) -> Result[String]
+def answer(listener: TCP.Listener) -> Result[String]
   socket = try TCP.accept(listener, 5000)
   line = try TCP.read_line(socket, 5000)
   try TCP.send(socket, "#{TLS.alpn(socket)}\n", 5000)
   return ok(line)
 end
 
-def serve(dir: String, alpn: List[String]) -> Listener
+def serve(dir: String, alpn: List[String]) -> TCP.Listener
   options = TlsServerOptions(cert_file: "#{dir}/server.pem", key_file: "#{dir}/server-key.pem", alpn: alpn)
   return TLS.listen("127.0.0.1", 0, TLS.server_context(options).unwrap!).unwrap!
 end
 
-def talk(listener: Listener, alpn: List[String], ca: String) -> Void
+def talk(listener: TCP.Listener, alpn: List[String], ca: String) -> Void
   port = TCP.local_port(listener)
   client = Task.spawn do offer(port, alpn, ca) end
   IO.inspect([answer(listener), Task.await(client)])

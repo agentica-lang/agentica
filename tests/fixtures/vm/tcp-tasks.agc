@@ -11,13 +11,13 @@ def client(hello: Hello) -> String
   return reply
 end
 
-def serve(socket: Socket) -> Void
+def serve(socket: TCP.Socket) -> Void
   name = Result.unwrap!(TCP.read_line(socket, 5000))
   Result.unwrap!(TCP.send(socket, "hello #{name}\n", 5000))
   TCP.close(socket)
 end
 
-def wait_line(socket: Socket) -> Result[String]
+def wait_line(socket: TCP.Socket) -> Result[String]
   return TCP.read_line(socket, 5000)
 end
 

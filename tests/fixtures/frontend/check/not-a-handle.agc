@@ -1,5 +1,5 @@
 struct Job
-  socket: Socket
+  socket: TCP.Socket
 end
 
 struct Crate
@@ -17,7 +17,7 @@ def identity(n: Int) -> Int
   return n
 end
 
-def serve(socket: Socket) -> Result[String]
+def serve(socket: TCP.Socket) -> Result[String]
   return TCP.read_line(socket, 10)
 end
 
@@ -27,13 +27,13 @@ end
 def watch(p: Process) -> Void
 end
 
-def accept_one(l: Listener) -> Void
+def accept_one(l: TCP.Listener) -> Void
 end
 
 def job(j: Job) -> Void
 end
 
-def many(sockets: List[Socket]) -> Void
+def many(sockets: List[TCP.Socket]) -> Void
 end
 
 def main() -> Void
