@@ -582,7 +582,7 @@ def test_deny_fs_refuses_file_chunks_and_write_bytes_but_not_the_steps(tmp_path)
     dst = tmp_path / "dst.bin"
     result = run(cli() + ["--deny-fs", str(source), str(src), str(dst)], env=vm_environment())
     assert result.code == 0, result.stderr
-    denied = 'error("denied: --deny-fs turns off file access")'
+    denied = 'error("denied: --deny-fs turns off file access", kind: "denied.fs")'
     assert result.stdout.splitlines() == [denied, denied, "ok([[104, 105]])"], result.stdout
     assert not dst.exists()
 

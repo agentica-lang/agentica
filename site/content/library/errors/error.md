@@ -62,7 +62,7 @@ The errors of the builtins have these kinds. A kind is never renamed, so a progr
 
 | Family | Kinds |
 |---|---|
-| `error` | the default: `error("text")`, `o.to_result(...)`, `List.find` and `Lazy.find` with no match, a missing key of an `Ats` table, a logger handler name that is taken or missing, `Task.unobserved_crash` with none, a native module's `an_error` and the `--deny-*` refusals |
+| `error` | the default: `error("text")`, `o.to_result(...)`, `List.find` and `Lazy.find` with no match, a missing key of an `Ats` table, a logger handler name that is taken or missing, `Task.unobserved_crash` with none and a native module's `an_error` |
 | `argument` | `argument` |
 | `io` | `io.not_found`, `io.permission`, `io.exists`, `io.is_directory`, `io.not_directory`, `io.too_large`, `io.eof`, `io.closed`, `io.timeout`, `io.failed` |
 | `net` | `net.timeout`, `net.refused`, `net.host_not_found`, `net.closed`, `net.eof`, `net.tls`, `net.too_large`, `net.failed` |
@@ -72,6 +72,9 @@ The errors of the builtins have these kinds. A kind is never renamed, so a progr
 | `json`, `number`, `text` | `json.parse`, `json.decode`, `number.parse`, `number.range`, `text.encoding` |
 | `zlib`, `crypto` | `zlib.data`, `zlib.too_large`, `crypto.auth`, `crypto.key`, `crypto.failed` |
 | `system`, `native`, `test` | `system.env`, `native.failed`, `native.timeout`, `test.failed` |
+| `denied` | `denied.env`, `denied.fs`, `denied.net`, `denied.run`: a call that a flag refuses, one kind per flag (see below) |
+
+The calls that a `--deny-*` flag turns off return an error of the `denied` family: `denied.env` for `--deny-env` (`System.env`), `denied.fs` for `--deny-fs` (`File`, `Dir`, `Path` calls that touch the disk, a `TLS` context built from files, `Process.spawn` with `out:` or `err:` files), `denied.net` for `--deny-net` (`TCP`, `TLS`, `HttpWire`, `DNS` and `std/http`) and `denied.run` for `--deny-run` (`Process`). `--sandbox` is every one of these flags, so each call gets the kind of its own flag, and `e.is_a?("denied")` matches them all. The message keeps its text (`denied: --deny-fs turns off file access`). A program that uses native code under `--deny-native` (which every `--deny-*` flag turns on) does not run: it stops at its start with `RUNTIME-NATIVE-DENIED`, so there is no error to branch on.
 
 An error of the operating system (`File`, `Dir`, `TCP`, `TLS`, `Process`) has the errno as its `code` and a kind picked from it: `ENOENT` is `io.not_found` (`process.not_found` for a program), `EACCES` and `EPERM` are `io.permission`, `ECONNREFUSED` is `net.refused`, `ECONNRESET` and `EPIPE` are `net.closed`. An errno with no kind of its own gets the family's `failed` kind, with the errno still as the code. The number is the system's own, so `ECONNREFUSED` is 111 on Linux, 61 on macOS and 107 on Windows; the kind is the same everywhere. A host that is not found has no code. A refused HTTP head has its status as the code (`400`, `413`, ...). Every size limit of HTTP (a head, a header line, the count of headers, a body or a chunk line, read or written) is `http.too_large`, with the code `431` for a head and `413` for a body; a response head that `std/http`'s server cannot write has no code.
 

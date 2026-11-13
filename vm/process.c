@@ -1490,7 +1490,7 @@ static bool begin_spawn(void *data, agc_io_job *job) {
 static agc_value spawn_child(agc_vm *vm, const agc_value *args, const agc_string *dir, int64_t timeout, bool captured,
                              bool channel, const agc_map *env, const agc_string *out, const agc_string *err,
                              bool group) {
-  if (vm->rt->deny_run) return agc_error(vm, AGC_KIND_ERROR, "denied: --deny-run turns off starting programs");
+  if (vm->rt->deny_run) return agc_error(vm, AGC_KIND_DENIED_RUN, "denied: --deny-run turns off starting programs");
   bool files = out->bytes || err->bytes;
   if (files && captured) return agc_error(vm, AGC_KIND_ARGUMENT, "process: out and err need Process.spawn");
   const agc_string *command = agc_as_string(vm, args[0]);
@@ -1516,7 +1516,7 @@ static agc_value spawn_child(agc_vm *vm, const agc_value *args, const agc_string
   size_t pair_count;
   const char *env_text = env_problem(vm, env, &pairs, &pair_count);
   if (env_text) return agc_error(vm, AGC_KIND_ARGUMENT, env_text);
-  if (files && vm->rt->deny_fs) return agc_error(vm, AGC_KIND_ERROR, AGC_DENIED_FS);
+  if (files && vm->rt->deny_fs) return agc_error(vm, AGC_KIND_DENIED_FS, AGC_DENIED_FS);
   if (files && (!no_nul(out) || !no_nul(err)))
     return agc_error(vm, AGC_KIND_ARGUMENT, "process: out and err cannot contain NUL");
   agc_process *pr = agc_alloc(sizeof(agc_process));
