@@ -53,11 +53,28 @@ def connect(id: Int) -> Int = id + BUFFER
   (above `private`), or which `export Alias.name` would pass on a name the
   module only imports.
 
+- Through the alias: `Models.User` in annotations and JSON type arguments,
+  `Models.User(name: "Ana")` to construct, `Models.greet(user)` to call,
+  `&Models.greet` for a callback; imported enums: `Models.Change[T]`,
+  `Models.Change.Added(value)`, and `Models.Change.Added(item)` in a pattern.
+  Local names stay unqualified inside their own file.
+- Re-export: `export Url.parse` or `export Url.Address` (after the imports and
+  above `private`, `Url` an alias of this file) passes on a name of an imported
+  module, so a facade file collects an API. The importer gets the original
+  declaration (`Web.Address` and `Url.Address` are one type, `&Web.parse` is
+  `&Url.parse`); the file adds no local name. No `as`, no wildcard. An unknown
+  alias or name is `CHECK-IMPORT-NAME`; a name that is also a declaration,
+  re-export or alias of the file is `CHECK-REDEFINED-NAME`, so the alias must
+  differ from the names it re-exports: `import V from "value"` with `export
+  V.Value`, not `import Value ...` with `export Value.Value`.
+- Alias names are uppercase and cannot collide with declarations, other aliases,
+  imported names or builtin names.
+
 ## Private fields
 
 A `private` line in a struct body (blank line before and after) makes the
-fields after it private to the declaring module: its file, or its `module`
-block. Use it to keep a handle or a counter inside, reached only through the
+fields after it private to the declaring module: its file (the file's
+`module` blocks included), or the `module` block it is in. Use it to keep a handle or a counter inside, reached only through the
 module's functions:
 
 ```agentica
@@ -82,23 +99,6 @@ def socket_of(conn: Conn) -> Int = conn.socket
   field) and printed (`inspect`, `to_s` and interpolation show every field).
 - `agentica doc`, `outline` and `help` list the public fields and a line "and
   private fields".
-
-- Through the alias: `Models.User` in annotations and JSON type arguments,
-  `Models.User(name: "Ana")` to construct, `Models.greet(user)` to call,
-  `&Models.greet` for a callback; imported enums: `Models.Change[T]`,
-  `Models.Change.Added(value)`, and `Models.Change.Added(item)` in a pattern.
-  Local names stay unqualified inside their own file.
-- Re-export: `export Url.parse` or `export Url.Address` (after the imports and
-  above `private`, `Url` an alias of this file) passes on a name of an imported
-  module, so a facade file collects an API. The importer gets the original
-  declaration (`Web.Address` and `Url.Address` are one type, `&Web.parse` is
-  `&Url.parse`); the file adds no local name. No `as`, no wildcard. An unknown
-  alias or name is `CHECK-IMPORT-NAME`; a name that is also a declaration,
-  re-export or alias of the file is `CHECK-REDEFINED-NAME`, so the alias must
-  differ from the names it re-exports: `import V from "value"` with `export
-  V.Value`, not `import Value ...` with `export Value.Value`.
-- Alias names are uppercase and cannot collide with declarations, other aliases,
-  imported names or builtin names.
 
 ## Importing names
 

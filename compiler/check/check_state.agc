@@ -123,15 +123,15 @@ end
 ## the fields of a generic struct, the variants of a generic enum or the signature and body of a generic function are
 ## checked). file is the file of the declaration being checked, prefix the prefix of the linked names of its module
 ## (Linker.LinkedModule.prefix: "" for the root file), which tells whether a private field of a struct is visible
-## (private_fields), texts the source of every file by name. expression checks an expression: the cycle between
-## expressions and statements goes through this field (check_expr.agc puts its own function here), because a module
-## cannot import one that imports it. prelude is true while the files of the compiler prelude are checked
-## (check_prelude.agc): their type variables are opaque types, and a Map key or Set element may be one. json_needs
-## holds, by linked name, what each generic function needs of its type arguments for the JSON.encode and JSON.from
-## calls of its body and of the generic functions it calls (checker.agc computes it before the bodies are checked):
-## each is a type variable, or an Optional, JSON.Field or Map key of one, that must be encodable once the variables are
-## bound. lenient is the files in which a name that nothing reads is no error (CHECK-UNUSED-VARIABLE): the roots of a
-## query, as for an unused import.
+## (private_fields), homes the prefix of the file of each module block by the prefix of the block, texts the source of
+## every file by name. expression checks an expression: the cycle between expressions and statements goes through this
+## field (check_expr.agc puts its own function here), because a module cannot import one that imports it. prelude is
+## true while the files of the compiler prelude are checked (check_prelude.agc): their type variables are opaque types,
+## and a Map key or Set element may be one. json_needs holds, by linked name, what each generic function needs of its
+## type arguments for the JSON.encode and JSON.from calls of its body and of the generic functions it calls
+## (checker.agc computes it before the bodies are checked): each is a type variable, or an Optional, JSON.Field or Map
+## key of one, that must be encodable once the variables are bound. lenient is the files in which a name that nothing
+## reads is no error (CHECK-UNUSED-VARIABLE): the roots of a query, as for an unused import.
 export struct Cx
   help: Help.Tables
   structs: Map[String, List[Model.Named]]
@@ -150,6 +150,7 @@ export struct Cx
   type_params: List[String]
   file: String
   prefix: String
+  homes: Map[String, String]
   texts: Map[String, String]
   expression: Fn[Cx, St, Ast.Expr, Types.Type, Bool, Result[Out]]
   prelude: Bool
@@ -488,14 +489,26 @@ end
 export def within(cx: Cx, file: String, prefix: String) -> Cx = cx.with(file: file, prefix: prefix)
 
 ## The private fields of the struct `name` that the module being checked may not name: none in the module that declares
-## the struct (its linked name has that module's prefix) and for a builtin record.
+## the struct (its linked name has that module's prefix), in a module block of the file that declares it at its top
+## level (a block sees the file's private names), and for a builtin record. A struct declared in a block keeps its
+## private fields from the rest of the file.
 export def private_fields(cx: Cx, name: String) -> List[String]
   site = cx.field_sites.get(name)
   return [] if site.none? or site.unwrap!.hidden.size == 0
 
-  return [] if name.slice(0, name.length - Types.display_name(name).length) == cx.prefix
+  declared = name.slice(0, name.length - Types.display_name(name).length)
+  return [] if declared == cx.prefix or declared == cx.homes.get(cx.prefix, cx.prefix)
 
   site.unwrap!.hidden
+end
+
+## The fields of the struct `name` that a help may show here: the private ones are left out outside the struct's
+## module.
+export def shown_fields(cx: Cx, name: String, fields: List[Model.Named]) -> List[Model.Named]
+  hidden = private_fields(cx, name)
+  return fields if hidden.size == 0
+
+  fields.select do |field: Model.Named| !hidden.include?(field.name) end
 end
 
 ## CHECK-PRIVATE-FIELD at `span`, for the private field `field` of the struct `name` named outside its module.

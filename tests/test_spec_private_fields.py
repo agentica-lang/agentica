@@ -6,6 +6,7 @@ module that declares the struct (its file, or its module block): outside it they
 constructor, set with `with` or reach a JSON codec, and the struct cannot be built.
 """
 import json
+import os
 
 import pytest
 
@@ -24,6 +25,19 @@ export struct Conn
   timeout_ms: Int = 5
 end
 
+export struct Job
+  name: String
+
+  private
+
+  run: Fn[Int, Int]
+end
+
+export enum Slot
+  Empty
+  Held(Conn)
+end
+
 export struct Box[T]
   label: String
 
@@ -39,6 +53,8 @@ export def secret_of(c: Conn) -> String = c.with(secret: c.secret + "!", timeout
 export def codec() -> Codec[Conn] = Conn.codec
 
 export def encode(c: Conn) -> String = JSON.encode(c) + Conn.members.size.to_s
+
+export def job() -> Job = Job(name: "j", run: ->(x: Int) { x + 1 })
 
 export def box[T](value: T) -> Box[T] = Box(label: "b", value: value)
 
@@ -83,6 +99,38 @@ end
 """
 
 
+# A struct at the top of a file, which the file's blocks see whole, and one inside a block, which the other blocks of
+# the file do not.
+FILE_STRUCT = """struct Conn
+  id: Int
+
+  private
+
+  secret: String
+end
+
+module Inner
+  export struct Key
+    id: Int
+
+    private
+
+    key: String
+  end
+
+  export def make() -> Key = Key(id: 1, key: "k")
+end
+
+module Pool
+  export def peek(c: Conn) -> String = %s
+end
+
+def main() -> Void
+  puts(Pool.peek(Conn(id: 1, secret: "s")))
+end
+"""
+
+
 def outside(line):
     return {"main.agc": f'import L from "lib"\n\ndef main() -> Void\n  c = L.open(1)\n  {line}\nend\n', "lib.agc": LIB}
 
@@ -102,7 +150,14 @@ CASES = [
      "CHECK-PRIVATE-FIELD", (5, 8), (5, 14)),
     ("with of a private field", outside('puts(c.with(secret: "s").id)'), "CHECK-PRIVATE-FIELD", (5, 15), (5, 21)),
     ("codec", outside("puts(L.Conn.codec.members.size)"), "CHECK-PRIVATE-FIELD", (5, 8), (5, 14)),
-    ("members", outside("puts(L.Conn.members.size)"), "CHECK-PRIVATE-FIELD", (5, 8), (5, 22)),
+    ("members", outside("puts(L.Conn.members.size)"), "CHECK-PRIVATE-FIELD", (5, 8), (5, 14)),
+    ("JSON.from", outside("puts(JSON.from(c))"), "CHECK-PRIVATE-FIELD", (5, 18), (5, 19)),
+    ("JSON.schema", outside("puts(JSON.schema(L.Conn))"), "CHECK-PRIVATE-FIELD", (5, 20), (5, 26)),
+    ("an enum payload", outside("puts(JSON.encode(L.Slot.Held(c)))"), "CHECK-PRIVATE-FIELD", (5, 20), (5, 34)),
+    ("a call of an Fn field", outside("puts(L.job().run(1))"), "CHECK-PRIVATE-FIELD", (5, 16), (5, 19)),
+    ("a typo names no private field", outside("puts(c.secrt)"), "CHECK-UNKNOWN-FIELD", (5, 8), (5, 15)),
+    ("a typo in with names no private field", outside('puts(c.with(secrt: "s").id)'), "CHECK-UNKNOWN-FIELD",
+     (5, 15), (5, 25)),
     ("JSON.encode", outside("puts(JSON.encode([c]))"), "CHECK-PRIVATE-FIELD", (5, 20), (5, 23)),
     ("JSON.decode", outside('puts(JSON.decode("{}", L.Conn).ok?)'), "CHECK-PRIVATE-FIELD", (5, 26), (5, 32)),
     ("a generic encoder of the module", outside("puts(L.dump(c))"), "CHECK-PRIVATE-FIELD", (5, 15), (5, 16)),
@@ -112,6 +167,9 @@ CASES = [
     ("a module block: construct", block("puts(Net.Sock(fd: 1).fd)"), "CHECK-PRIVATE-FIELD", (18, 8), (18, 16)),
     ("a module block: with", block('puts(s.with(key: "k").fd)'), "CHECK-PRIVATE-FIELD", (18, 15), (18, 18)),
     ("a module block: encode", block("puts(JSON.encode(s))"), "CHECK-PRIVATE-FIELD", (18, 20), (18, 21)),
+    ("a block reads a struct of its file", FILE_STRUCT % "c.secret", None, None, None),
+    ("a struct of a block is private to the block", FILE_STRUCT % "Inner.make().key", "CHECK-PRIVATE-FIELD",
+     (22, 53), (22, 56)),
     ("a re-export keeps the declaring module",
      {"main.agc": 'import F from "facade"\n\ndef main() -> Void\n  puts(F.open(1).secret)\nend\n', "lib.agc": LIB,
       "facade.agc": 'import L from "lib"\n\nexport L.Conn\nexport L.open\n'},
@@ -147,6 +205,26 @@ def test_private_field_rule(checked, name, files, code, start, stop):
     found = problem["range"]
     assert (found["start"]["line"], found["start"]["column"]) == start
     assert (found["end"]["line"], found["end"]["column"]) == stop
+
+
+@pytest.mark.parametrize("line", ["puts(c.secrt)", 'puts(c.with(secrt: "s").id)'])
+def test_a_typo_outside_does_not_suggest_a_private_field(checked, line):
+    help_text = checked(outside(line))["help"]
+    assert "peer" in help_text and "secret" not in help_text, help_text
+
+
+def test_a_warm_check_cache_gives_the_same_answers(tmp_path):
+    (tmp_path / "lib.agc").write_text(LIB, encoding="utf-8")
+    main = tmp_path / "main.agc"
+    build = tmp_path / "build"
+    env = {**os.environ, "AGENTICA_BUILD_DIR": str(build)}
+    for line in ["puts(c.id)", "puts(c.secret)", 'puts(L.Conn(id: 1, peer: "p").id)', "puts(c.id)"]:
+        main.write_text(outside(line)["main.agc"], encoding="utf-8")
+        cold, warm, again = (run(cli() + ["--json", *flags, "check", str(main)], cwd=tmp_path, env=env)
+                             for flags in (["--no-cache"], [], []))
+        assert (cold.code, cold.stdout, cold.stderr) == (warm.code, warm.stdout, warm.stderr), line
+        assert (warm.code, warm.stdout, warm.stderr) == (again.code, again.stdout, again.stderr), line
+    assert any(build.rglob("*")), "the warm runs wrote no check cache"
 
 
 def test_a_struct_with_private_fields_travels_outside_its_module(tmp_path):

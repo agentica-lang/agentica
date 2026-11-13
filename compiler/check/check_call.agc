@@ -842,7 +842,7 @@ def check_named_fields(
           "CHECK-UNKNOWN-FIELD",
           "\"#{T.written_type(name)}\" has no field \"#{arg.name}\"",
           arg.span,
-          Help.field_help(arg.name, fields),
+          Help.field_help(arg.name, State.shown_fields(cx, name, fields)),
         ),
       )
     end

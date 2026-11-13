@@ -128,7 +128,7 @@ def check_members(cx: State.Cx, st: State.St, node: Ast.FieldAccess, type_name: 
   fields = cx.structs.get(name)
   hidden = State.private_fields(cx, name)
   if fields.some? and !cx.aliases.has_key?(name) and hidden.size > 0
-    return error(State.private_field(cx, st, name, hidden[0], node.span))
+    return error(State.private_field(cx, st, name, hidden[0], type_name.span))
   elsif fields.some? and !cx.aliases.has_key?(name)
     resolved = State.record_resolved(st, node.id, State.Resolved.Members(fields.unwrap!))
     return ok(State.Out(st: resolved, type: T.Type.List(T.Type.Struct("StructMember", []))))
@@ -195,7 +195,7 @@ def check_struct_field(cx: State.Cx, st: State.St, node: Ast.FieldAccess, target
   fields = CheckTypes.fields_of(cx, target)
   field = Calls.find_field(fields, node.name)
   if !field.ok?
-    help = Help.field_help(node.name, fields)
+    help = Help.field_help(node.name, State.shown_fields(cx, T.name(target), fields))
     if T.error?(target) and Names.resolve_method(cx, "String", node.name) != ""
       # e.size or e.strip on the payload of error(e), which was a String before it was an Error.
       help = "an Error is not a String: call #{node.name} on its text, e.message.#{node.name}"
@@ -387,7 +387,7 @@ end
 
 # A struct has no methods: the help says what the name could be instead.
 def struct_help(cx: State.Cx, target: T.Type, name: String) -> String
-  fields = CheckTypes.fields_of(cx, target)
+  fields = State.shown_fields(cx, T.name(target), CheckTypes.fields_of(cx, target))
   field = Calls.find_field(fields, name)
   if field.ok?
     # A field that a function shares its name with is the likelier mistake, so it comes first.

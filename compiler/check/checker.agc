@@ -191,12 +191,30 @@ def start(linked: Linker.Linked) -> State.Cx
     type_params: [],
     file: linked.modules[0].file,
     prefix: linked.modules[0].prefix,
+    homes: homes(linked.modules),
     texts: texts,
     expression: &Expr.check_expression,
     prelude: false,
     json_needs: {},
     lenient: Set.new([]),
   )
+end
+
+# The prefix of the file that holds each module block, by the prefix of the block (State.Cx.homes).
+def homes(modules: List[Linker.LinkedModule]) -> Map[String, String]
+  prefixes: Map[String, String] = {}
+  for module in modules
+    prefixes = prefixes.put(module.key, module.prefix)
+  end
+
+  found: Map[String, String] = {}
+  for module in modules
+    if module.block != ""
+      found = found.put(module.prefix, prefixes.get(Linker.home_key(module), module.prefix))
+    end
+  end
+
+  found
 end
 
 # Whether the value of a constant is the 0 of a stub: the module is a stub and the value is a 0 that the cache cut

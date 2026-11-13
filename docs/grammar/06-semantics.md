@@ -564,7 +564,9 @@ is `CHECK-UNKNOWN-NAME`.
 
 The fields after the `private` line of a struct body are private to the module
 that declares the struct: its file, or the `module` block it is declared in
-(code of the file outside the block is outside). A re-export
+(code of the file outside the block is outside). The module blocks of a file
+see the private names of the file, so they are inside for a struct declared at
+the top of the file. A re-export
 (`export Alias.Type`) does not change that module. Outside it, naming a private
 field is `CHECK-PRIVATE-FIELD` at the field name: reading it (`conn.socket`),
 calling an `Fn` field, giving it in a constructor or setting it with `with`.
