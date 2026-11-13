@@ -23,6 +23,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   `std/` function or builtin: `check(gen, verbose: true)` (#1163).
 - `agentica refs` on a parameter lists each `name:` at a call that gives it, and
   `type-at` on that name answers as on the parameter (#1497).
+- `agentica lint` marks `e.is_a?("io.notfound")`, a builtin family with a kind
+  it does not have, as `LINT-ERROR-KIND` with the nearest kind (#671).
 
 ### Changed
 

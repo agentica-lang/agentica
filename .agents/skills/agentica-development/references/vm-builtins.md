@@ -83,7 +83,11 @@ Read first: `references/vm.md` and `references/vm-c.md`.
    "Builtins"): a builtin whose work grows with its input takes `AGC_COST_SIZE`
    or charges `agc_charge` from inside; never touch `steps_left` for that. CPU
    work with no wait (`OpenSSL.Digest.sha256`, a sort) stays on the scheduler
-   with that cost; the libuv pool is for blocking calls. The last field, `leaf`,
+   with that cost; the libuv pool is for blocking calls. Work that grows faster
+   than linearly (a product of lengths, backtracking) is a stepper like
+   `vm/regex.c`: it yields between turns and honours `--max-steps`, which turn
+   cost alone does not stop; test it with counted resumes, not wall-clock time.
+   The last field, `leaf`,
    marks a plain C call that never parks, starts a stepper or a block, charges
    turn cost (a map lookup charges for a String key) or counts a step:
    `CALL_BUILTIN` stores its result and skips the generic tail. A leaf row is

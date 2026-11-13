@@ -7,6 +7,7 @@ import Model from "builtin_model"
 import {
   BUILTIN_ROWS,
   ENUMS as DATA_ENUMS,
+  ERROR_KINDS as DATA_ERROR_KINDS,
   FAMILIES as DATA_FAMILIES,
   HANDLE_TYPES,
   OPAQUE_TYPES as DATA_OPAQUE_TYPES,
@@ -54,6 +55,9 @@ export HANDLES = Set.new(HANDLE_TYPES)
 export RESERVED = Set.new(RESERVED_TYPE_NAMES)
 
 export STD_ONLY = STD_ONLY_IMPORTS
+
+## The kinds of the errors that the builtins and std/ build.
+export ERROR_KINDS = DATA_ERROR_KINDS
 
 export PRELUDE: Map[String, Model.PreludeRow] = PRELUDE_ROWS.reduce(EMPTY_PRELUDE) do |found, row|
   found.put(row.name, row)
