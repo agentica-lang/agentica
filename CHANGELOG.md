@@ -47,6 +47,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   names are unknown, and a program may take them.
 - **Breaking:** `TestCase` is `Test.Case` (#1182); the old name is unknown,
   and a program may take it.
+- **Breaking:** `Profile.measure` and `Profile.steps` are
+  `System.Profile.measure` and `System.Profile.steps` (#1182); `Profile` is
+  unknown, and a program may take it.
 
 ## [0.31.0-alpha.1] - 2026-11-12
 

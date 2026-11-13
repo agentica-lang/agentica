@@ -51,7 +51,7 @@ broadcast sent as `Text` and as `HTTP.prepare`.
   `pair` rows at its end (`docs/vm/08-loader-and-cli.md` §9) say what to fuse
   or open-code.
 - Profile CPU time with `perf` when the steps do not explain the wall time:
-  `Profile` and the step report do not count time inside builtins. Use a
+  `System.Profile` and the step report do not count time inside builtins. Use a
   local `make` build of `dist/agentica`, since release archives are stripped.
   Common entries:
   - `GC_malloc_kind` and other libgc symbols: allocation.

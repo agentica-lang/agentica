@@ -71,7 +71,7 @@ def main() -> Void
   puts(worker(3))
   puts(Task.await(a))
   puts(Task.await(b))
-  puts("steps #{Profile.steps()}")
+  puts("steps #{System.Profile.steps()}")
 end
 """.replace("LONG", LONG)
 
@@ -220,7 +220,7 @@ def main() -> Void
   end
   puts(sum)
   puts(spin(40000))
-  puts("steps #{Profile.steps()}")
+  puts("steps #{System.Profile.steps()}")
 end
 """
 
@@ -353,7 +353,7 @@ def main() -> Void
   shapes = [Shape.Dot, Shape.Box(2, 3)]
   results: List[Result[Int]] = [ok(4), error("no"), ok(-2)]
   puts(scan(points, shapes, results, 2000))
-  puts("steps #{Profile.steps()}")
+  puts("steps #{System.Profile.steps()}")
 end
 """
 
@@ -441,7 +441,7 @@ def main() -> Void
     i += 1
   end
   puts(total)
-  puts("steps #{Profile.steps()}")
+  puts("steps #{System.Profile.steps()}")
 end
 """
 
@@ -489,7 +489,7 @@ def worker(id: Int) -> Int
     puts("task #{id} round #{round} total #{total}")
     round += 1
   end
-  puts("task #{id} steps #{Profile.steps()}")
+  puts("task #{id} steps #{System.Profile.steps()}")
   return total
 end
 
@@ -540,7 +540,7 @@ def worker(id: Int) -> Int
     puts("task #{id} round #{round} total #{total}")
     round += 1
   end
-  puts("task #{id} steps #{Profile.steps()}")
+  puts("task #{id} steps #{System.Profile.steps()}")
   return total
 end
 
@@ -584,7 +584,7 @@ def worker(id: Int) -> Int
     puts("task #{id} round #{round} total #{total}")
     round += 1
   end
-  puts("task #{id} steps #{Profile.steps()}")
+  puts("task #{id} steps #{System.Profile.steps()}")
   return total
 end
 
@@ -639,7 +639,7 @@ def main() -> Void
     ok(j) -> puts(j.to_s)
     error(_) -> puts("parse failed")
   end
-  puts("steps #{Profile.steps()}")
+  puts("steps #{System.Profile.steps()}")
 end
 """
 
@@ -943,7 +943,7 @@ def main() -> Void
     i += 1
   end
   puts(total)
-  puts("steps #{Profile.steps()}")
+  puts("steps #{System.Profile.steps()}")
 end
 """
 
@@ -991,7 +991,7 @@ def main() -> Void
     i += 1
   end
   puts(total)
-  puts("steps #{Profile.steps()}")
+  puts("steps #{System.Profile.steps()}")
 end
 """, "rare_callee", tmp_path)
     on = compiled(bytecode, tmp_path, "on")
@@ -1025,7 +1025,7 @@ def main() -> Void
     i += 1
   end
   puts(total)
-  puts("steps #{Profile.steps()}")
+  puts("steps #{System.Profile.steps()}")
 end
 """, "loop_free_blocks", tmp_path)
     on = compiled(bytecode, tmp_path, "on")
@@ -1126,7 +1126,7 @@ def main() -> Void
     total = total + (i..i).size * (i..i + 1).size / 2
     i += 1
   end
-  first = Profile.steps()
+  first = System.Profile.steps()
   k = 0
   while k < {calls}
     total = total + pad(k, 6).length
@@ -1134,7 +1134,7 @@ def main() -> Void
   end
   puts(total)
   puts(first)
-  puts(Profile.steps())
+  puts(System.Profile.steps())
 end
 """, "plain_until_live", tmp_path)
     code, stdout, stderr = assert_same(bytecode)
@@ -1173,7 +1173,7 @@ def main() -> Void
     i += 1
   end
   puts(total)
-  puts(Profile.steps())
+  puts(System.Profile.steps())
 end
 """, "sample_backoff", tmp_path)
     code, stdout, stderr = assert_same(bytecode)
@@ -1505,7 +1505,7 @@ def main() -> Void
   t = Task.spawn(&work, 2)
   puts(work(1))
   puts(Task.await(t))
-  puts("steps #{Profile.steps()}")
+  puts("steps #{System.Profile.steps()}")
 end
 """
 
@@ -1564,7 +1564,7 @@ end
 
 
 def test_string_code_runs_in_compiled_code_without_leaving(tmp_path):
-    bytecode = compile_text(CODES.replace("END", 'puts(_warm)\n  puts("steps #{Profile.steps()}")'), "codes", tmp_path)
+    bytecode = compile_text(CODES.replace("END", 'puts(_warm)\n  puts("steps #{System.Profile.steps()}")'), "codes", tmp_path)
     code, stdout, _ = assert_same(bytecode)
     assert code == 0 and stdout.startswith("before\n904000\n"), stdout
     assert compiled(bytecode, tmp_path, "on") == (["letter", "scan"] if jit_host() else [])
@@ -1652,7 +1652,7 @@ end
 def main() -> Void
   puts(check(3000, -1))
   puts(walk(["4", "5"], 2000, 1500).ok?)
-  puts("steps #{Profile.steps()}")
+  puts("steps #{System.Profile.steps()}")
   puts(check(3000, 2500))
 end
 """
@@ -1814,7 +1814,7 @@ def main() -> Void
   t = Task.spawn(&work, 2)
   puts(work(1))
   puts(Task.await(t))
-  puts("steps #{Profile.steps()}")
+  puts("steps #{System.Profile.steps()}")
 end
 """
 
@@ -1914,7 +1914,7 @@ def test_step_limits_stop_a_loop_of_times_at_every_step_as_in_the_interpreter(tm
     i += 1
   end
   puts(total)
-  puts("steps #{Profile.steps()}")
+  puts("steps #{System.Profile.steps()}")
 end
 """, "times_steps", tmp_path)
     code, stdout, _ = assert_same(bytecode)
@@ -1961,7 +1961,7 @@ def main() -> Void
   t = Task.spawn(&work, 2)
   puts(work(1))
   puts(Task.await(t))
-  puts("steps #{Profile.steps()}")
+  puts("steps #{System.Profile.steps()}")
 end
 """
 
@@ -2018,7 +2018,7 @@ def main() -> Void
   end
   puts(total)
   puts([2, 0, 1].map(&f))
-  puts("steps #{Profile.steps()}")
+  puts("steps #{System.Profile.steps()}")
 end
 """
 
@@ -2111,7 +2111,7 @@ def main() -> Void
   y = Task.spawn(&drive, 2)
   puts(Task.await(x) + Task.await(y))
   puts(is_even(1000001))
-  puts("steps #{Profile.steps()}")
+  puts("steps #{System.Profile.steps()}")
 end
 """
 
@@ -2193,7 +2193,7 @@ end
 def main() -> Void
   puts(chain(1000000, 0))
   puts(is_even(1000001))
-  puts("steps #{Profile.steps()}")
+  puts("steps #{System.Profile.steps()}")
 end
 """, "self_tail", tmp_path)
     assert compiled(bytecode, tmp_path, "on") == (["chain"] if jit_host() else [])
@@ -2239,7 +2239,7 @@ def main() -> Void
     r += 1
   end
   puts(sum)
-  puts("steps #{Profile.steps()}")
+  puts("steps #{System.Profile.steps()}")
 end
 """, "budget", tmp_path)
     lines = jit_trace(bytecode, tmp_path, "on")
@@ -2320,7 +2320,7 @@ def main() -> Void
   x = Task.spawn(&worker, 1)
   y = Task.spawn(&worker, 2)
   puts(Task.await(x) + Task.await(y))
-  puts("steps #{Profile.steps()}")
+  puts("steps #{System.Profile.steps()}")
 end
 """
 

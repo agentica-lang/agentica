@@ -452,9 +452,9 @@ header and the entry.
 - The VM accepts only its own format version and Agentica version. Any change to
   the layout or to an opcode's meaning bumps the format version. A new opcode,
   type kind or constant kind does not: an older VM rejects the file as unknown.
-  A call `JSON.decode(<Json>, T)` needs no new kind, so an older VM loads such a
-  file and the call fails at run time with a wrong value type. Versions 7 and 8
-  are reserved by `docs/future/42-sized-numeric-types.md` and
+  A call `JSON.decode(<JSON.Value>, T)` needs no new kind, so an older VM loads
+  such a file and the call fails at run time with a wrong value type. Versions 7
+  and 8 are reserved by `docs/future/42-sized-numeric-types.md` and
   `docs/future/41-dates-and-times.md`.
 - The C loader is the only reader of this format and has no compatibility
   shims, with one exception: it still reads format 5, which has no prelude flag

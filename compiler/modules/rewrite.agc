@@ -359,11 +359,11 @@ def rewrite_regex(cx: Resolve.Context, node: Ast.RegexLit) -> Ast.RegexLit
   end
 end
 
-# x |> A.B.c() whose head A.B is no member of a builtin family (nor System.Profile): the parser makes it the piped
-# call A.B.c without knowing the families (Parser.pipe_insert), so the linker gives the parser's PARSE-PIPE-TARGET.
+# x |> A.B.c() whose head A is no builtin family: the parser makes it the piped call A.B.c without knowing the
+# families (Parser.pipe_insert), so the linker gives the parser's PARSE-PIPE-TARGET.
 def bad_pipe_target?(cx: Resolve.Context, node: Ast.Call) -> Bool
   parts = node.name.split(".")
-  node.piped and parts.size == 3 and !Resolve.family?(cx, parts[0]) and Resolve.nested(cx, parts[0], parts[1]) == ""
+  node.piped and parts.size == 3 and !Resolve.family?(cx, parts[0])
 end
 
 # PARSE-PIPE-TARGET at the right side of |>, as the parser reports it.
@@ -623,9 +623,6 @@ def family_member(cx: Resolve.Context, target: Ast.Expr, method: String) -> Stri
       parts = node.name.split(".")
       if parts.size == 2 and Resolve.family?(cx, parts[0]) and called_member?(parts[0], parts[1], method)
         return node.name
-      elsif parts.size == 2 and nested_group?(cx, parts[0], parts[1])
-        # System.Profile.fn(args), which is Profile.fn(args).
-        return node.name
       elsif parts.size == 2 and Resolve.aliased_block(cx, parts[0], parts[1]) != ""
         # Alias.Block.fn(args): a function of a module block that the module under the alias exports.
         return node.name
@@ -640,12 +637,6 @@ end
 # any method but codec and members.
 def called_member?(family: String, member: String, method: String) -> Bool
   !Builtins.member_type?(family, member) or (method != "codec" and method != "members")
-end
-
-# True when Alias.Member is the nested name of a group of builtin functions (System.Profile), not of a type.
-def nested_group?(cx: Resolve.Context, alias: String, member: String) -> Bool
-  old = Resolve.nested(cx, alias, member)
-  old != "" and !Builtins.type_named?(old)
 end
 
 # Family.Member.fn(args), or Family.Member.fn with no parentheses: the call of the builtin Family.Member.fn, with the

@@ -11239,7 +11239,7 @@
       "covers": "\"1000\""
     }
   ],
-  "Profile.measure gives the value of a block of no parameters and Profile.steps an Int": [
+  "System.Profile.measure gives the value of a block of no parameters and System.Profile.steps an Int": [
     {
       "program": [
         "def parse(text: String) -> Result[Int]",
@@ -11252,13 +11252,13 @@
         "end",
         "",
         "def main() -> Void",
-        "  n = Profile.measure(\"sum\") do 1 + 2 end",
-        "  r: Result[Int] = Profile.measure(\"parse\") do",
+        "  n = System.Profile.measure(\"sum\") do 1 + 2 end",
+        "  r: Result[Int] = System.Profile.measure(\"parse\") do",
         "    v = try parse(\"4\")",
         "    ok(v + n)",
         "  end",
-        "  m = Profile.measure(\"fn\", &three)",
-        "  s: Int = Profile.steps()",
+        "  m = System.Profile.measure(\"fn\", &three)",
+        "  s: Int = System.Profile.steps()",
         "  puts(n + m + s + r.unwrap_or(0))",
         "end"
       ],
@@ -11276,11 +11276,11 @@
         "end",
         "",
         "def main() -> Void",
-        "  n = Profile.measure(7) do 1 end",
+        "  n = System.Profile.measure(7) do 1 end",
         "end"
       ],
       "code": "CHECK-TYPE-MISMATCH",
-      "start": [11, 23],
+      "start": [11, 30],
       "covers": "7",
       "expected": "String",
       "actual": "Int"
@@ -11297,11 +11297,11 @@
         "end",
         "",
         "def main() -> Void",
-        "  n = Profile.measure(\"x\") do |k| k end",
+        "  n = System.Profile.measure(\"x\") do |k| k end",
         "end"
       ],
       "code": "CHECK-ARITY",
-      "start": [11, 28],
+      "start": [11, 35],
       "covers": "do |k| k end"
     },
     {
@@ -11316,12 +11316,12 @@
         "end",
         "",
         "def main() -> Void",
-        "  n = Profile.measure(\"x\")",
+        "  n = System.Profile.measure(\"x\")",
         "end"
       ],
       "code": "CHECK-ARITY",
       "start": [11, 7],
-      "covers": "Profile.measure(\"x\")"
+      "covers": "System.Profile.measure(\"x\")"
     },
     {
       "program": [
@@ -11335,11 +11335,11 @@
         "end",
         "",
         "def main() -> Void",
-        "  n: Int = Profile.measure(\"x\") do \"text\" end",
+        "  n: Int = System.Profile.measure(\"x\") do \"text\" end",
         "end"
       ],
       "code": "CHECK-TYPE-MISMATCH",
-      "start": [11, 36],
+      "start": [11, 43],
       "covers": "\"text\"",
       "expected": "Int",
       "actual": "String"
@@ -11356,7 +11356,7 @@
         "end",
         "",
         "def main() -> Void",
-        "  r = Profile.measure(\"x\") do",
+        "  r = System.Profile.measure(\"x\") do",
         "    v = try parse(\"4\")",
         "    ok(v)",
         "  end",
@@ -11382,11 +11382,11 @@
         "end",
         "",
         "def main() -> Void",
-        "  n = Profile.measure(\"x\", &twice)",
+        "  n = System.Profile.measure(\"x\", &twice)",
         "end"
       ],
       "code": "CHECK-TYPE-MISMATCH",
-      "start": [15, 28],
+      "start": [15, 35],
       "covers": "&twice"
     },
     {
@@ -11401,12 +11401,12 @@
         "end",
         "",
         "def main() -> Void",
-        "  n = Profile.steps(1)",
+        "  n = System.Profile.steps(1)",
         "end"
       ],
       "code": "CHECK-ARITY",
       "start": [11, 7],
-      "covers": "Profile.steps(1)"
+      "covers": "System.Profile.steps(1)"
     },
     {
       "program": [
@@ -11420,12 +11420,12 @@
         "end",
         "",
         "def main() -> Void",
-        "  s: String = Profile.steps()",
+        "  s: String = System.Profile.steps()",
         "end"
       ],
       "code": "CHECK-TYPE-MISMATCH",
       "start": [11, 15],
-      "covers": "Profile.steps()",
+      "covers": "System.Profile.steps()",
       "expected": "String",
       "actual": "Int"
     },
@@ -11439,8 +11439,7 @@
         "  puts(1)",
         "end"
       ],
-      "code": "CHECK-REDEFINED-NAME",
-      "start": [1, 1]
+      "code": null
     }
   ],
   "The Digest hashes take a Bytes; the plain form gives a Bytes, the _hexdigest form a String; Crypto.sha256 is unknown with a help; Crypto is a free name": [
@@ -14183,7 +14182,7 @@
       "start": [1, 1]
     }
   ],
-  "A nested builtin name (File.Info, JSON.Value, JSON.Field, TCP.Socket, TLS.ClientOptions, System.Profile.steps, ...) is the old builtin, which keeps its name": [
+  "A nested builtin name (File.Info, JSON.Value, JSON.Field, TCP.Socket, TLS.ClientOptions, System.Profile.steps, ...) names the builtin in a type, a construction, a pattern and a call": [
     {
       "program": [
         "struct Patch",
@@ -14679,6 +14678,67 @@
         "",
         "def main() -> Void",
         "  puts(TestCase(name: \"a\"))",
+        "end",
+        ""
+      ],
+      "code": null
+    }
+  ],
+  "The System family: System.Profile; the old name Profile is unknown and free": [
+    {
+      "program": [
+        "def main() -> Void",
+        "  n = System.Profile.measure(\"sum\") do 1 + 2 end",
+        "  s: Int = System.Profile.steps()",
+        "  m = \"pipe\" |> System.Profile.measure() do 4 end",
+        "  puts(\"#{n + s + m} Profile.steps\")",
+        "end",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  puts(Profile.steps())",
+        "end",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-NAME",
+      "start": [2, 8],
+      "covers": "Profile.steps()"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  puts(System.Profile.stepz())",
+        "end",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-NAME",
+      "start": [2, 8],
+      "covers": "System.Profile.stepz()"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  puts(System.Profil.steps())",
+        "end",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-NAME",
+      "start": [2, 8],
+      "covers": "System.Profil",
+      "help": true
+    },
+    {
+      "program": [
+        "struct Profile",
+        "  name: String",
+        "end",
+        "",
+        "def main() -> Void",
+        "  puts(Profile(name: \"a\"))",
         "end",
         ""
       ],

@@ -79,7 +79,7 @@ Read only what the task needs.
 | `lazy.md` | Lazy pipelines, endless sources, big files |
 | `testing.md` | unit tests (`Test`, `*_test.agc`) |
 | `bdd.md` | `.feature` specs and step programs |
-| `performance.md` | slow code, `Profile`, step costs |
+| `performance.md` | slow code, `System.Profile`, step costs |
 | `binary.md` | bit operations, the `OpenSSL` family (`Digest` hashes, `HMAC`, `Cipher` for AES-GCM and Triple DES, `CMAC`, password hashing with `KDF`, `RSA`, secure `Random`), `Base64`, hex, `std/binary` |
 | `logger.md` | `std/logger` |
 | `toml.md` | `std/toml` |

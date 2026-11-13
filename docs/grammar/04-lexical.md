@@ -85,14 +85,14 @@ aliases or module names (`RESERVED_TYPE_NAMES` in
 `compiler/catalog/builtins_data.agc`): `ATS`, `Await`, `Base64`, `Bool`,
 `Bytes`, `Channel`, `Codec`, `Dir`, `Error`, `File`, `Float`, `Fn`, `IO`, `Int`,
 `JSON`, `Lazy`, `List`, `Map`, `Math`, `Nil`, `OpenSSL`, `Optional`, `Path`,
-`Process`, `Profile`, `Random`, `Range`, `Result`, `Set`, `String`,
-`StructMember`, `System`, `TCP`, `TLS`, `Task`, `TaskDown`, `TaskExit`,
-`TaskRef`, `Test`, `Time`, `Void` and `Zlib`. A builtin family reserves only its
-own name: its members are written `Family.Member`, such as `OpenSSL.Cipher`, and
-its functions `Family.Member.fn`, such as `OpenSSL.Cipher.aes_256_gcm_encrypt`
-(§6, "Minimal builtin functions"), so `Cipher` or `Digest` inside a family
-reserve nothing. `LogRegistry` and `HttpWire`, the std-only families of
-`std/logger` and `std/http`, are not reserved, but an `enum` of either name is
+`Process`, `Random`, `Range`, `Result`, `Set`, `String`, `StructMember`,
+`System`, `TCP`, `TLS`, `Task`, `TaskDown`, `TaskExit`, `TaskRef`, `Test`,
+`Time`, `Void` and `Zlib`. A builtin family reserves only its own name: its
+members are written `Family.Member`, such as `OpenSSL.Cipher`, and its functions
+`Family.Member.fn`, such as `OpenSSL.Cipher.aes_256_gcm_encrypt` (§6, "Minimal
+builtin functions"), so `Cipher` or `Digest` inside a family reserve nothing.
+`LogRegistry` and `HttpWire`, the std-only families of `std/logger` and
+`std/http`, are not reserved, but an `enum` of either name is
 `CHECK-REDEFINED-NAME`: its variants would clash with the family's records
 (`LogRegistry.Event`, `HttpWire.Response`). A struct or a type alias may take
 the name. `HTTP` is not reserved: it is the usual alias of `std/http`. `ok`,

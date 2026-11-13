@@ -118,7 +118,7 @@ for a test function with parameters, type parameters or another result;
   test file is a file error; the other files still run.
 - A file runs with `--max-steps` 1,000,000 x (the tests it runs + 1), shared by
   its tests (`RUNTIME-STEP-LIMIT` ends the file), so `--only` lowers it:
-  measure a heavy test with `Profile.steps`.
+  measure a heavy test with `System.Profile.steps`.
 - A passed test's output is dropped; a failed one shows the last 64 Ki
   characters. Stdout is limited to 1 MiB per test and stderr to 1 MiB for the
   whole file: past a limit the running test (or the file) fails with

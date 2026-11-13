@@ -31,17 +31,16 @@ FILE.agc`, `agentica check FILE`, `agentica run -- FILE.agcb`). Its first line
 is `total wall_ms= steps= calls= builtin_calls= builtin_ms= gc_ms=
 collections=`; then `fn` rows (a block is `block@FILE:LINE:COL`, a lambda
 `lambda@FILE:LINE:COL`), `file` rows, `builtin calls= us= name=` rows and the
-`section` rows of `Profile.measure`; the `events`, `op` and `pair` rows at the
-end are for work on the VM. `agentica
-FILE.agc` prints the front end's report, then the program's (its `steps` are its
-own, while `gc_ms` and `collections` count the whole process).
-`AGENTICA_VM_TRACE_FILE=PATH` writes the report to a file. Steps repeat exactly
-from run to run; wall time does not, so compare steps. A profiled run is slower
-(up to about 15 times for a loop of cheap builtin calls, since each is timed):
-rank builtins with the `builtin ... us=` rows, then time the program without the
-profiler. A `<native>` row is the steps of a range loop such as `(0...n).each`,
-one per item (the block's own steps are on its `block@` row); a list's `each`
-and `map` add none.
+`section` rows of `System.Profile.measure`; the `events`, `op` and `pair` rows
+at the end are for work on the VM. `agentica FILE.agc` prints the front end's
+report, then the program's (its `steps` are its own, while `gc_ms` and
+`collections` count the whole process). `AGENTICA_VM_TRACE_FILE=PATH` writes the
+report to a file. Steps repeat exactly from run to run; wall time does not, so
+compare steps. A profiled run is slower (up to about 15 times for a loop of
+cheap builtin calls, since each is timed): rank builtins with the `builtin ...
+us=` rows, then time the program without the profiler. A `<native>` row is the
+steps of a range loop such as `(0...n).each`, one per item (the block's own
+steps are on its `block@` row); a list's `each` and `map` add none.
 
 Costs in steps: `while chars[i] == "a"` 9 per character (a sentinel after the
 last element takes `i < size` out of the loop); `xs.push(x)` 4; `Map.get(k, d)`
@@ -54,15 +53,15 @@ call) before tuning a helper.
 ## Sections, step budgets and flame graphs
 
 ```text
-Profile.measure(label: String, block: Fn[T]) -> T   # runs the block once; a section row with the profile on
-Profile.steps() -> Int                              # steps of this task so far; the same on every run
+System.Profile.measure(label: String, block: Fn[T]) -> T   # runs the block once; a section row with the profile on
+System.Profile.steps() -> Int                              # steps of this task so far; the same on every run
 ```
 
-`Profile.measure(label) do ... end` gives the block's value (a block of no
-parameters, or `&f`). With the profile, each label adds a `section calls=
+`System.Profile.measure(label) do ... end` gives the block's value (a block of
+no parameters, or `&f`). With the profile, each label adds a `section calls=
 steps= us= gc_ms= name=LABEL` row after the builtin rows (up to 30, most steps
 first). Without it the call is one block call (one step), so it can stay in the
-code; `Profile.steps()` works with or without the profile.
+code; `System.Profile.steps()` works with or without the profile.
 
 - A run keeps 4096 labels: do not build labels from data.
 - Sections are inclusive. In one task, a label inside itself (recursion) counts
@@ -70,14 +69,14 @@ code; `Profile.steps()` works with or without the profile.
 - `steps` are the running task's; `us` and `gc_ms` are wall time, which goes on
   while the task waits.
 - A block that uses `try` needs a `Result` type from the call: `r: Result[Int] =
-  Profile.measure("parse") do ... end`, else `CHECK-TRY-CONTEXT`.
+  System.Profile.measure("parse") do ... end`, else `CHECK-TRY-CONTEXT`.
 
 Hold code to a step budget in a test:
 
 ```ruby
-before = Profile.steps()
+before = System.Profile.steps()
 parse(text)
-used = Profile.steps() - before
+used = System.Profile.steps() - before
 try Test.assert(used < 50000, "parse took #{used} steps")
 ```
 
@@ -99,7 +98,8 @@ writes `/tmp/perf-PID.map`, so `perf report` names the compiled functions
 
 - Frames: `name@FILE:LINE` for a function, `block@FILE:LINE:COL` for a block,
   `lambda@FILE:LINE:COL` for a lambda, the builtin's name for a native loop or
-  callback (`Int.times`, `List.map`), `measure:LABEL` for a `Profile.measure`.
+  callback (`Int.times`, `List.map`), `measure:LABEL` for a
+  `System.Profile.measure`.
 - One sample every 1000 steps, weight 1000; `AGENTICA_PROFILE_SAMPLE=N` sets N
   (1 counts every step, so the weights add up to the report's `steps`). There is
   no time weight, so the file is the same on every run.

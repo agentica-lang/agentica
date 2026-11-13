@@ -68,7 +68,7 @@ Under `agentica test`, the runner talks to the file on a channel of its own (see
 
 - Name the file `*_test.agc`. `agentica test` finds such files in `test/` by default and prints one line per test: `PASS file / name`, or `FAIL file / name` with the diagnostic and the output of the test below it.
 - Each test runs in its own task, so a crash fails only that test. Each test has 30 seconds (`RUNTIME-TEST-TIMEOUT`), and `main` has 30 seconds to reach `Test.run` (a file error with the same code). A test that exits, hits its step limit or times out ends the file's run, and the tests after it are `NOT RUN`.
-- A file runs with `--max-steps` 1,000,000 times the number of tests it runs plus one, shared by all its tests, so `--only` lowers it; `Profile.steps` measures a test.
+- A file runs with `--max-steps` 1,000,000 times the number of tests it runs plus one, shared by all its tests, so `--only` lowers it; `System.Profile.steps` measures a test.
 - A file that exits, crashes or never calls `Test.run` is a file error that shows what it printed.
 - A test that times out keeps the output it printed, up to 1 MiB. A test that prints more than 1 MiB fails at once with `RUNTIME-BDD-OUTPUT-LIMIT`, even if it never ends, and shows no output.
 - Run as a normal program, the file prints `run this file with agentica test` on stderr and exits 2.
