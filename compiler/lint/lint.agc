@@ -27,10 +27,11 @@ struct Item
   chained: Bool
 end
 
-# What the walk of some roots found: suggestions, and the qualified names it saw.
+# What the walk of some roots found: suggestions, and the qualified names and the kind literals it saw.
 struct Scan
   found: List[Problems.Problem]
   mentions: List[Qualified.Mention]
+  kinds: List[Kinds.Seen]
 end
 
 ## The suggestions for the text of `file`, in source order, or the first lexer or parser diagnostic.
@@ -48,6 +49,7 @@ end
 def of_program(file: String, program: Ast.Program) -> List[Problems.Problem]
   found: List[Problems.Problem] = []
   mentions: List[Qualified.Mention] = []
+  kinds: List[Kinds.Seen] = []
   imports: List[Ast.ImportDecl] = []
   aliases = module_aliases(program)
   functions = file_functions(program)
@@ -69,11 +71,11 @@ def of_program(file: String, program: Ast.Program) -> List[Problems.Problem]
     for mention in scan.mentions
       mentions = mentions.push(mention)
     end
+
+    kinds = kinds.concat(scan.kinds)
   end
 
-  for suggestion in Qualified.suggestions(file, mentions, imports)
-    found = found.push(suggestion)
-  end
+  found = found.concat(Qualified.suggestions(file, mentions, imports)).concat(Kinds.suggestions(file, kinds))
 
   found.sort_by do |suggestion: Problems.Problem| suggestion.span.start.offset end
 end
@@ -129,7 +131,7 @@ def scan_decl(file: String, decl: Ast.Decl, aliases: Set[String], functions: Set
       roots = node.body.map do |stmt: Ast.Stmt| Walk.Node.Stmt(stmt) end
       scan(file, roots, function_locals(node, roots, aliases), aliases, functions)
     Ast.Decl.Constant(node) -> scan(file, [Walk.Node.Expr(node.value)], Stmts.Locals(origins: {}), aliases, functions)
-    _ -> Scan(found: [], mentions: [])
+    _ -> Scan(found: [], mentions: [], kinds: [])
   end
 end
 
@@ -142,6 +144,7 @@ def scan(
 ) -> Scan
   found: List[Problems.Problem] = []
   mentions: List[Qualified.Mention] = []
+  kinds: List[Kinds.Seen] = []
   work: List[Item] = roots.map do |node: Walk.Node| Item(node: node, path: [], chained: false) end
   at = 0
   while at < work.size
@@ -155,12 +158,17 @@ def scan(
       mentions = mentions.push(mention)
     end
 
+    case item.node
+      Walk.Node.Expr(expr) -> kinds = kinds.concat(Kinds.seen(expr, functions))
+      Walk.Node.Stmt(_) -> kinds = kinds
+    end
+
     for child in children(item, aliases)
       work = work.push(child)
     end
   end
 
-  Scan(found: found, mentions: mentions)
+  Scan(found: found, mentions: mentions, kinds: kinds)
 end
 
 def suggestions(
@@ -171,8 +179,7 @@ def suggestions(
   functions: Set[String],
 ) -> List[Problems.Problem]
   case item.node
-    Walk.Node.Expr(expr) ->
-      Exprs.suggestions(file, expr, item.chained, aliases, functions).concat(Kinds.suggestions(file, expr, functions))
+    Walk.Node.Expr(expr) -> Exprs.suggestions(file, expr, item.chained, aliases, functions)
     Walk.Node.Stmt(stmt) -> Stmts.suggestions(file, stmt, item.path, locals)
   end
 end

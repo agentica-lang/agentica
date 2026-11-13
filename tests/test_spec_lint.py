@@ -518,6 +518,9 @@ KIND_CASES = [
     ('e.is_a?("io.notfound")', True),
     ('e.kind_of?("net.timeot")', True),
     ('Error.is_a?(e, "toml.prase")', True),
+    ('e.is_a?(family: "io.notfound")', True),
+    ('Error.is_a?(e, family: "io.notfound")', True),
+    ('e.is_a?(family: "io.not_found")', False),
     ('e.is_a?("error.other")', True),
     ('e.is_a?("io")', False),
     ('e.is_a?("io.not_found")', False),
@@ -552,6 +555,25 @@ def test_the_kind_help_is_the_nearest_kind_or_the_kinds_of_the_family(tmp_path):
     assert found[0]["help"] != found[1]["help"]
 
 
-def test_a_file_that_defines_is_a_keeps_its_own_method(tmp_path):
-    source = 'def is_a?(box: Int, label: String) -> Bool = true\n\ndef f(n: Int) -> Bool\n  n.is_a?("io.x")\nend\n'
-    assert suggested(tmp_path / "own.agc", source) == {}
+def test_a_piped_is_a_in_a_file_that_defines_one_is_its_own_and_the_method_form_still_lints(tmp_path):
+    source = (
+        "def is_a?(box: Int, label: String) -> Bool = true\n\n"
+        "def f(e: Error, n: Int) -> List[Bool]\n"
+        '  [n |> is_a?("io.x"), e.is_a?("io.y")]\n'
+        "end\n"
+    )
+    found = suggested(tmp_path / "own.agc", source)
+    assert found["LINT-ERROR-KIND"] == [where(source, '"io.y"')]
+
+
+def test_a_kind_that_the_file_creates_in_a_builtin_family_is_known(tmp_path):
+    source = (
+        "def f(n: Int) -> Result[Int]\n"
+        '  return error("negative", kind: "number.negative") if n < 0\n\n'
+        "  ok(n)\n"
+        "end\n\n"
+        "def g(e: Error) -> List[Bool]\n"
+        '  [e.is_a?("number.negative"), e.is_a?("number.positive")]\n'
+        "end\n"
+    )
+    assert suggested(tmp_path / "made.agc", source) == {"LINT-ERROR-KIND": [where(source, '"number.positive"')]}

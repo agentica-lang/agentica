@@ -74,7 +74,7 @@ lint: 1 suggestion in 1 of 12 files
 | `LINT-TO-S-CONCAT` | interpolation, not `"n=" + n.to_s` |
 | `LINT-STRING-APPEND-IN-LOOP` | `push` and one `join`, not `s = s + piece` in a `for` or `while` loop, which copies the text on every pass |
 
-It also marks a likely typo that `check` cannot call an error: `LINT-ERROR-KIND` is an `is_a?` or `kind_of?` text literal whose first part is a family of the builtins and `std/` (`io`, `net`, `http`, `archive`, ...) but that is neither that family nor one of its [kinds](/library/errors/error/), as `e.is_a?("io.notfound")`; the help names the nearest kind. A family of your own (`db.constraint`) and a kind computed at run time are not marked.
+It also marks a likely typo that `check` cannot call an error: `LINT-ERROR-KIND` is an `is_a?` or `kind_of?` text literal whose first part is a family of the builtins and `std/` (`io`, `net`, `http`, `archive`, ...) but that is neither that family nor one of its [kinds](/library/errors/error/), as `e.is_a?("io.notfound")`; the help names the nearest kind. A kind in a builtin family that the file does not create with `kind:` is marked, so a new kind such as `error("x", kind: "number.negative")` is known in its file. A family of your own (`db.constraint`) and a kind computed at run time are not marked.
 
 ## Look up a builtin
 

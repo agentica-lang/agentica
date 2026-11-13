@@ -122,8 +122,9 @@ lines show. A task's stack ends with `task spawned at file:line:column`.
   `e.is_a?("...")` that is not a dotted name of `a-z`, `0-9`, `_`.
   `CHECK-ERROR-CONSTRUCTOR`: `Error(...)`; build one with `error(...)`.
   `LINT-ERROR-KIND` (a suggestion of `agentica lint`): an `is_a?` literal of
-  a builtin family (`io`, `net`, ...) that is no kind of it, as
-  `"io.notfound"`; the help names the nearest kind.
+  a builtin family (`io`, `net`, ...) that is no kind of it and that the file
+  does not create with `kind:`, as `"io.notfound"`; the help names the nearest
+  kind.
 - `CHECK-CASE-ARM-BINDING`: an arm of several patterns (`a, b ->`) binds a
   name; write `_`, or one arm per pattern.
 - `CHECK-MAP-KEY-TYPE`, `CHECK-SET-ELEMENT-TYPE`: a `Map` or `ATS` key or a
