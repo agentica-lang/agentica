@@ -99,6 +99,10 @@ static const char *const kind_names[AGC_KIND_COUNT] = {
   [AGC_KIND_NATIVE_FAILED] = "native.failed",
   [AGC_KIND_NATIVE_TIMEOUT] = "native.timeout",
   [AGC_KIND_TEST_FAILED] = "test.failed",
+  [AGC_KIND_DENIED_ENV] = "denied.env",
+  [AGC_KIND_DENIED_FS] = "denied.fs",
+  [AGC_KIND_DENIED_NET] = "denied.net",
+  [AGC_KIND_DENIED_RUN] = "denied.run",
 };
 
 #ifdef AGC_NO_GC

@@ -1403,7 +1403,7 @@ static void no_network(agc_vm *vm, uint32_t span) {
    to accept on. A TLS.Context read its files when it was built (TLS.client_context, under --deny-fs). */
 static agc_value net_denied(agc_vm *vm, uint32_t span) {
   no_network(vm, span);
-  if (vm->rt->deny_net) return agc_error(vm, AGC_KIND_ERROR, AGC_DENIED_NET);
+  if (vm->rt->deny_net) return agc_error(vm, AGC_KIND_DENIED_NET, AGC_DENIED_NET);
   return agc_void();
 }
 

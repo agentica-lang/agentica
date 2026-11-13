@@ -197,3 +197,80 @@ def test_stat_process_and_long_lines_take_the_kind_of_the_failure(tmp_path, work
         ]
     finally:
         locked.chmod(0o700)
+
+
+# The calls that a --deny-* flag turns off (#671). Each group is the builtins of one flag, and every one of them takes
+# the kind of that flag; "mixed" is two calls that two flags turn off (a TLS context built from a file, and a program
+# started with a file for its output), so under --sandbox the flag that the builtin checks first gives its kind.
+DENIED_PROGRAM = """\
+import HTTP from "std/http"
+
+def show[T](label: String, result: Result[T]) -> Void
+  case result
+    ok(_) -> puts("#{label}: ok")
+    error(e) -> puts("#{label}: #{e.kind} #{e.is_a?("denied")} #{e.message.start_with?("denied: --deny-")}")
+  end
+end
+
+def main() -> Void
+  dir = System.args()[0]
+  case System.args()[1]
+    "env" -> show("env", System.env("AGENTICA_DENIED_UNSET"))
+    "fs" ->
+      show("read", File.read_text(dir + "/a.txt", 5000))
+      show("write", File.write_text(dir + "/a.txt", "x", 5000))
+      show("stat", File.stat(dir, 5000))
+      show("list", Dir.list(dir, 5000))
+      show("open", File.open(dir + "/a.txt", "read", 5000))
+    "net" ->
+      show("connect", TCP.connect("127.0.0.1", 1, 5000))
+      show("listen", TCP.listen("127.0.0.1", 0))
+      show("dns", DNS.lookup("127.0.0.1", 5000))
+      show("tls", TLS.client_context(TLS.ClientOptions()))
+      show("http", HTTP.get_response("http://127.0.0.1:1/"))
+    "run" ->
+      show("spawn", Process.spawn("true", [], Process.Options(timeout_ms: 5000)))
+      show("captured", Process.spawn_captured("true", [], Process.Options(timeout_ms: 5000)))
+    "mixed" ->
+      show("tls with a file", TLS.client_context(TLS.ClientOptions(ca_file: dir + "/ca.pem")))
+      show("spawn with out", Process.spawn("true", [], Process.Options(timeout_ms: 5000, out: dir + "/out.txt")))
+    _ -> puts("unknown group")
+  end
+end
+"""
+
+GROUPS = {
+    "env": ["env"],
+    "fs": ["read", "write", "stat", "list", "open"],
+    "net": ["connect", "listen", "dns", "tls", "http"],
+    "run": ["spawn", "captured"],
+}
+
+
+@pytest.mark.parametrize("flag,group,kind", [
+    ("--deny-env", "env", "denied.env"),
+    ("--deny-fs", "fs", "denied.fs"),
+    ("--deny-net", "net", "denied.net"),
+    ("--deny-run", "run", "denied.run"),
+    ("--sandbox", "env", "denied.env"),
+    ("--sandbox", "fs", "denied.fs"),
+    ("--sandbox", "net", "denied.net"),
+    ("--sandbox", "run", "denied.run"),
+])
+def test_a_refused_call_has_the_kind_of_its_flag(flag, group, kind, tmp_path, work):
+    expected = [f"{label}: {kind} true true" for label in GROUPS[group]]
+    assert run_program(tmp_path, work, DENIED_PROGRAM, "denied", tmp_path, group, flags=[flag]) == expected
+
+
+@pytest.mark.parametrize("flag,tls,spawn", [
+    ("--deny-fs", "denied.fs", "denied.fs"),
+    ("--sandbox", "denied.net", "denied.run"),
+])
+def test_a_call_that_two_flags_refuse_has_the_kind_of_the_first_it_checks(flag, tls, spawn, tmp_path, work):
+    assert run_program(tmp_path, work, DENIED_PROGRAM, "denied_mixed", tmp_path, "mixed", flags=[flag]) == [
+        f"tls with a file: {tls} true true", f"spawn with out: {spawn} true true"]
+
+
+def test_a_flag_refuses_only_its_own_calls(tmp_path, work):
+    lines = run_program(tmp_path, work, DENIED_PROGRAM, "denied_other", tmp_path, "fs", flags=["--deny-net"])
+    assert lines == ["read: io.not_found false false", "write: ok", "stat: ok", "list: ok", "open: ok"]
