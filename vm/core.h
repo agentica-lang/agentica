@@ -316,7 +316,6 @@ void agc_io_wake(agc_vm *vm);
 void agc_io_wake_idle(void *vm);
 /* Blocks the stop signals on the calling thread, so that only the I/O thread handles them. No-op on Windows. */
 void agc_io_thread_signals(void);
-void agc_dbg_mask(const char *where);
 bool agc_io_close(agc_vm *vm);
 
 void agc_io_watch_stop(agc_vm *vm, int64_t driver);

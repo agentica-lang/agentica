@@ -477,7 +477,6 @@ static void end_wait(job *j, agc_job_outcome outcome) {
 /* A job's `more` step (agc_io_start_then) may keep it waiting on the loop after its pool work (a descriptor that can
    wait forever); agc_io_ready ends it. A job that has an outcome already, or no task, does not start another wait. */
 static void work_finished(uv_work_t *req, int status) {
-  agc_dbg_mask("work_finished-in");
   (void)status;
   job *j = (job *)(void *)req;
   if (agc_job_outcome_of(&j->outcome) == AGC_JOB_PENDING && !atomic_load(&j->detached) && j->more &&
@@ -486,7 +485,6 @@ static void work_finished(uv_work_t *req, int status) {
     return;
   }
   end_wait(j, AGC_JOB_DONE);
-  agc_dbg_mask("work_finished-out");
 }
 
 /* Every submit to the libuv pool goes through pool_enter and pool_leave: the pool's threads start at the first submit,
@@ -637,7 +635,6 @@ static int submit_compute(agc_loop *loop, job *j) {
 
 /* The deadline of the job's work or wait has passed: the job has timed out. */
 static void timer_fired(uv_timer_t *timer) {
-  agc_dbg_mask("timer_fired-in");
   job *j = timer_job((uv_handle_t *)timer);
   /* The loop's time, which reached the deadline (timer_length), raises the floor of Time.monotonic_ms before the task
      wakes, so the wait it measures is never shorter than its timeout. */
@@ -652,7 +649,6 @@ static void timer_fired(uv_timer_t *timer) {
   note_end(j);
   (void)agc_job_settle(&j->outcome, AGC_JOB_EXPIRED);
   mark_ready(j);
-  agc_dbg_mask("timer_fired-out");
 }
 
 /* The job may have been waiting for this close to be freed: put it back on the dead list if nobody holds it. */
@@ -1372,7 +1368,6 @@ static void stop_requested(int sig) {
 }
 
 static void stop_woken(uv_async_t *wake) {
-  agc_dbg_mask("stop_woken-in");
   agc_loop *loop = wake->data;
   dbg_line("woken signal now thread x", atomic_load(&stop_status()->signal), atomic_load(&stop_status()->now),
            dbg_thread(), 0);
@@ -1386,7 +1381,6 @@ static void stop_woken(uv_async_t *wake) {
     agc_io_die_by(sig);
     _exit(128 + sig);
   }
-  agc_dbg_mask("stop_woken-out");
 }
 
 #if defined(__APPLE__)
@@ -1598,11 +1592,9 @@ void agc_io_signals_end(agc_vm *vm) {
 
 #if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
 static void poll_ready(uv_poll_t *handle, int status, int events) {
-  agc_dbg_mask("poll_ready-in");
   (void)events;
   agc_poller *p = (agc_poller *)(void *)handle;
   p->ready(p->data, status);
-  agc_dbg_mask("poll_ready-out");
 }
 
 static void poller_closed(uv_handle_t *handle) {
@@ -1613,14 +1605,12 @@ static void poller_closed(uv_handle_t *handle) {
 
 #ifdef __APPLE__
 static void poll_tick(uv_timer_t *timer) {
-  agc_dbg_mask("poll_tick-in");
   agc_poller *p = timer->data;
   struct pollfd fd = {.fd = p->fd, .events = p->writing ? POLLOUT : POLLIN};
   int rc = poll(&fd, 1, 0);
   if (rc < 0 && errno != EINTR) p->ready(p->data, -errno);
   else if (rc > 0 || (rc == 0 && p->named))
     p->ready(p->data, fd.revents & POLLNVAL ? UV_EBADF : 0);
-  agc_dbg_mask("poll_tick-out");
 }
 #endif
 
@@ -1677,7 +1667,6 @@ static void poller_unmade(uv_handle_t *handle) { free(handle->data); }
    and can fall back: a file's `more` step, the stdin poller set up before the schedulers start, and the standard
    streams at launch. */
 static agc_poller *poller_open(agc_vm *vm, int fd, bool probe, int *err) {
-  agc_dbg_mask("poller_open-in");
   agc_loop *loop = loop_of(vm);
   if (!on_io_thread(loop)) agc_internal_abort("a scheduler thread opened a poller");
   agc_poller *p = calloc(1, sizeof(agc_poller));
@@ -1698,7 +1687,6 @@ static agc_poller *poller_open(agc_vm *vm, int fd, bool probe, int *err) {
     return NULL;
   }
   return p;
-  agc_dbg_mask("poller_open-out");
 }
 
 agc_poller *agc_poller_open(agc_vm *vm, int fd, int *err) { return poller_open(vm, fd, true, err); }
@@ -2101,7 +2089,6 @@ static bool stalled(agc_vm *vm) {
    (agc_fail in sweep) ends the run too. */
 /* DEBUG #1529: say when the stop signals' blocked state of this thread changes, and where. */
 static void dbg_mask(const char *where, long step) {
-  if (!dbg_loop_known || !pthread_equal(pthread_self(), dbg_loop_thread)) return;
   static int last = -1;
   sigset_t cur;
   pthread_sigmask(SIG_BLOCK, NULL, &cur);
@@ -2111,8 +2098,6 @@ static void dbg_mask(const char *where, long step) {
   last = now;
   dbg_line(where, step, now, dbg_thread(), 0);
 }
-
-void agc_dbg_mask(const char *where) { dbg_mask(where, -7); }
 
 static void dbg_tick(uv_timer_t *timer) {
   (void)timer;

@@ -34,9 +34,7 @@ bool agc_inbox_run(agc_inbox *in) {
 
 static void woken(uv_async_t *wake) {
   agc_inbox *in = wake->data;
-  agc_dbg_mask("inbox-in");
   (void)agc_inbox_run(in);
-  agc_dbg_mask("inbox-out");
 }
 
 static void closed(uv_handle_t *handle) {
