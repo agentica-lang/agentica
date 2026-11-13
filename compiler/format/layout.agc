@@ -1598,8 +1598,6 @@ def call_doc(c: Context, node: Ast.Call) -> Docs.Doc = call_doc_keyed(c, node, C
 
 # `call_doc`, where `key` holds the dangling comments of an empty argument list: the call's own, or its pipe stage's.
 def call_doc_keyed(c: Context, node: Ast.Call, key: String) -> Docs.Doc
-  return named_call_doc(c, node, key) if node.named.size > 0
-
   args = node.args
   block: List[Docs.Doc] = []
   if args.size > 0
@@ -1609,6 +1607,10 @@ def call_doc_keyed(c: Context, node: Ast.Call, key: String) -> Docs.Doc
         args = args.take(args.size - 1)
       _ -> block = block
     end
+  end
+
+  if node.named.size > 0
+    return Docs.Doc.Concat([text(call_name(c, node)), named_arguments(c, args, node.named, key)].concat(block))
   end
 
   # The empty `()` before a block goes, except where the parser needs it: a pipe stage, a block word and a plain name
@@ -1647,11 +1649,11 @@ end
 
 # The arguments of a call. A sole argument that is a list or map literal hugs the parentheses, `Set.new([`, and
 # breaks inside its own brackets.
-# error(...) or Result.Err(...) with named arguments, which follow the positional ones.
-def named_call_doc(c: Context, node: Ast.Call, key: String) -> Docs.Doc
-  shown = node.args.map do |arg: Ast.Expr| expr_doc(c, arg, true) end
-  shown = shown.concat(node.named.map do |arg: Ast.NamedArg| named_doc(c, arg) end)
-  Docs.Doc.Concat([text(call_name(c, node)), listed(text("("), shown, text(")"), dangling_comments(c, key))])
+# The arguments of a call with named arguments, which follow the positional ones.
+def named_arguments(c: Context, args: List[Ast.Expr], named: List[Ast.NamedArg], key: String) -> Docs.Doc
+  shown = args.map do |arg: Ast.Expr| expr_doc(c, arg, true) end
+  shown = shown.concat(named.map do |arg: Ast.NamedArg| named_doc(c, arg) end)
+  listed(text("("), shown, text(")"), dangling_comments(c, key))
 end
 
 def arguments(c: Context, args: List[Ast.Expr], key: String) -> Docs.Doc
@@ -1826,9 +1828,16 @@ def method_link(c: Context, node: Ast.MethodCall) -> Link
   end
 
   name = text(".#{node.name}")
-  return Link(doc: name, block: block, call: true, breaks: true) if args.size == 0 and block.size > 0
+  if args.size == 0 and node.named.size == 0 and block.size > 0
+    return Link(doc: name, block: block, call: true, breaks: true)
+  end
 
-  shown = Docs.Doc.Concat([name, arguments(c, args, Comments.key_of("MethodCall", node.span))])
+  key = Comments.key_of("MethodCall", node.span)
+  shown = Docs.Doc.Concat([name, arguments(c, args, key)])
+  if node.named.size > 0
+    shown = Docs.Doc.Concat([name, named_arguments(c, args, node.named, key)])
+  end
+
   Link(doc: shown, block: block, call: true, breaks: true)
 end
 

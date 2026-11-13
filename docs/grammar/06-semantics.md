@@ -247,8 +247,8 @@ operate on `Result[Void]`. The timed `Task.await(task, timeout_ms)` on a
 ### Functions and entry point
 
 - Functions can be called before their declaration, and can be recursive.
-  Arguments are positional: there is no overloading or named argument for
-  ordinary functions. A parameter may have a default value (below).
+  There is no overloading. A parameter may have a default value, and an
+  argument may be given by name (below).
 - A function with a non-`Void` return type must give a value on every reachable
   path. A loop does not guarantee one.
 - The value of such a function is its last expression, unless a `return` leaves
@@ -308,6 +308,37 @@ The type of a default is checked against the type of its parameter like an
 initializer: `[]` and `{}` take the parameter type as their expected type, and a
 mismatch is `CHECK-TYPE-MISMATCH` at the default. A default is built at each
 call, so no call shares a value with another.
+
+### Named arguments
+
+```agentica
+def check(gen: Gen, runs: Int = 100, seed: Int = 0, verbose: Bool = false) -> Report
+
+check(gen, verbose: true)        # runs and seed keep their defaults
+check(gen, 200, verbose: true)   # positional first, then named
+```
+
+A call may give any argument as `name: value`, where `name` is a parameter of
+the function: definitions do not change, so every function of the program, of
+`std/` and every builtin takes names. The positional arguments come first and
+fill the parameters from the left; a positional argument after a named one is
+`PARSE-UNEXPECTED-TOKEN` at that argument. Each named argument fills the
+parameter of its name, in any order, and a parameter left out takes its
+default. A trailing block fills the parameter it fills in a positional call.
+The arguments run in the order they are written, not in the order of the
+parameters.
+
+A name that is no parameter is `CHECK-UNKNOWN-ARGUMENT`, and a parameter given
+twice (two names, or a name and a position) is `CHECK-REPEATED-ARGUMENT`, both
+at the named argument. A parameter without a default that no argument fills is
+`CHECK-MISSING-ARGUMENT` at the call. A parameter named `_` has no name.
+
+Names are not part of an `Fn` type: a function value is called with positional
+arguments only. `f.call(x: 1)` is `PARSE-UNEXPECTED-TOKEN`, and a named argument
+to an `Fn` field of a struct (`s.run(x: 1)`) is `CHECK-UNKNOWN-ARGUMENT`. Struct
+construction, `.with(...)` and the named arguments of `error(...)` keep their
+own rules. The call is a positional call once checked: names cost nothing at
+run time.
 
 A call to a function with `N` parameters without a default and `M` in all takes
 `N` to `M` arguments; any other count is `CHECK-ARITY`. Arguments fill the
@@ -807,9 +838,8 @@ puts(seen)
 - `error(message, kind:, code:, details:, cause:)`: after a `String` message
   come named arguments, in any order, each optional: `kind: String`,
   `code: Int`, `details: Map[String, String]` and `cause: Error`. `code` and
-  `cause` are stored as `some(...)`. They are the only calls with named
-  arguments, with `Result.Err(...)`; a named argument elsewhere is
-  `PARSE-UNEXPECTED-TOKEN`, as is a positional one after a named one. An
+  `cause` are stored as `some(...)`, and the same holds for `Result.Err(...)`.
+  A positional argument after a named one is `PARSE-UNEXPECTED-TOKEN`. An
   unknown name (`location` too) is `CHECK-UNKNOWN-FIELD`; `message` or a
   repeated name is `CHECK-DUPLICATE-FIELD`; a named argument after an `Error`
   is `CHECK-ARITY`; `code: some(19)` is `CHECK-TYPE-MISMATCH`.

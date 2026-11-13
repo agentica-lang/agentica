@@ -19,6 +19,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `error("unique failed", kind: "db.constraint", code: 19)` sets the kind,
   code, details and cause of the Error it builds, and `e.is_a?("db")` matches a
   family of kinds (#671).
+- Calls take named arguments after the positional ones, for any function,
+  `std/` function or builtin: `check(gen, verbose: true)` (#1163).
 
 ### Changed
 

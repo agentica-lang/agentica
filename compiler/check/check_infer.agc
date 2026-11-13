@@ -127,21 +127,30 @@ def binding_use(cx: State.Cx, st: State.St, binding: Ast.Binding, name: String) 
 end
 
 # The parameter as an argument of a function of the program, or of a builtin with one form and no rule of its own.
-def call_uses(cx: State.Cx, call: Ast.Call, name: String) -> List[Allows]
+def call_uses(cx: State.Cx, written: Ast.Call, name: String) -> List[Allows]
   params: List[T.Type] = []
-  count = call.args.size
+  call = written
   case cx.functions.get(call.name)
     some(signature) ->
       shape = signature.shape
+      if call.named.size > 0
+        binding = Defaults.bind(signature.names, shape, call.args, call.named)
+        return [] if binding.code != ""
+
+        call = Defaults.bound(call, binding.slots)
+      end
+
+      count = call.args.size
       return [] if count < shape.required or count > shape.total
 
       for index in 0...count
-        params = params.push(signature.params[Defaults.param_of(shape, count, index)])
+        params = params.push(signature.params[Defaults.param_of(shape, call.slots, count, index)])
       end
 
     none ->
+      count = call.args.size
       entry = ENTRIES.get(call.name)
-      return [] if !plain_builtin?(entry, count)
+      return [] if call.named.size > 0 or !plain_builtin?(entry, count)
 
       params = entry.unwrap!.parameters.map do |param: Model.Named| param.type end
   end

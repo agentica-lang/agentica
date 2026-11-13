@@ -20,7 +20,7 @@ end
 Hello, Ana!
 ```
 
-Calls always use parentheses, also with no arguments: `main()`, `puts("hi")`. Arguments are given by position, and trailing parameters can have default values (see below).
+Calls always use parentheses, also with no arguments: `main()`, `puts("hi")`. Arguments are given by position or by name, and trailing parameters can have default values (see below).
 
 ## return
 
@@ -331,6 +331,43 @@ def main() -> Void
 end
 ```
 
+## Named arguments
+
+Any argument can be given by the name of its parameter, `name: value`. A call can then set one default and keep the ones before it:
+
+```agentica
+def check(name: String, runs: Int = 100, seed: Int = 0, verbose: Bool = false) -> String
+  "#{name}: #{runs} runs, seed #{seed}, verbose #{verbose}"
+end
+
+def main() -> Void
+  puts(check("sort", verbose: true))
+  puts(check("sort", 200, seed: 7))
+  puts(check(seed: 1, name: "map"))
+  puts(["a", "b"].join(separator: "-"))
+end
+```
+
+```output
+sort: 100 runs, seed 0, verbose true
+sort: 200 runs, seed 7, verbose false
+map: 100 runs, seed 1, verbose false
+a-b
+```
+
+- Positional arguments come first; a positional argument after a named one is `PARSE-UNEXPECTED-TOKEN`. Named ones come in any order and run in the order they are written.
+- A name that is no parameter is `CHECK-UNKNOWN-ARGUMENT`, a parameter given twice (by name, or by position and by name) is `CHECK-REPEATED-ARGUMENT`, and a parameter with no default and no argument is `CHECK-MISSING-ARGUMENT`.
+- A trailing block works as in a positional call: `each_line("a.txt", timeout_ms: 50) do |line| ... end`.
+- Builtins and `std/` functions take names too. A function value does not: its `Fn` type has no names, so `f.call(1)` stays positional.
+
+```agentica {expect="CHECK-UNKNOWN-ARGUMENT"}
+def label(id: Int, prefix: String = "item") -> String = "#{prefix} #{id}"
+
+def main() -> Void
+  puts(label(1, prefx: "row"))
+end
+```
+
 ## Type parameters
 
 A function can take type parameters after its name, so one definition works on any type. The call gives no type arguments: the checker finds them from the arguments.
@@ -398,4 +435,4 @@ A type parameter is a type name that no struct, enum or alias of the file has (`
 
 ## No overloading
 
-A name has one definition: no overloading, no keyword arguments and no methods on your own types. Use a default value instead of a second version.
+A name has one definition: no overloading and no methods on your own types. Use a default value instead of a second version.

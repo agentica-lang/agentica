@@ -68,7 +68,7 @@ def expr_children(expr: Ast.Expr) -> List[Node]
     Ast.Expr.ListLit(node) -> exprs(node.elements)
     Ast.Expr.MapLit(node) -> entries(node.entries)
     Ast.Expr.FieldAccess(node) -> [Node.Expr(node.target)]
-    Ast.Expr.MethodCall(node) -> [Node.Expr(node.target)].concat(exprs(node.args))
+    Ast.Expr.MethodCall(node) -> [Node.Expr(node.target)].concat(exprs(node.args)).concat(named_values(node.named))
     Ast.Expr.Interpolation(node) -> interpolated(node.parts)
     Ast.Expr.BlockLit(node) -> stmts(node.body)
     Ast.Expr.Index(node) -> [Node.Expr(node.target), Node.Expr(node.index)]

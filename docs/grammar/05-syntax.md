@@ -417,7 +417,7 @@ multiplicative_expr = unary_expr,
 unary_expr       = ( "-" | "not" | "!" | "try" ), unary_expr | postfix_expr ;
 postfix_expr     = primary, { ".", NAME
                             | ".", "with", "(", named_arguments, ")"
-                            | ".", NAME, "(", [ arguments ], ")"
+                            | ".", NAME, "(", [ call_arguments ], ")"
                             | "[", expression, "]"
                             | block | brace_block } ;
 block            = "do", [ "|", block_param, { ",", block_param }, "|" ],
@@ -432,7 +432,7 @@ lambda_body      = NL, { statement } | simple_statement ;
 
 primary          = literal
                  | "&", ( NAME | TYPE_NAME, ".", [ TYPE_NAME, "." ], NAME )
-                 | NAME, [ "(", [ arguments ], ")" ]
+                 | NAME, [ "(", [ call_arguments ], ")" ]
                  | TYPE_NAME, ".", TYPE_NAME, ".", TYPE_NAME, [ "(", [ arguments ], ")" ]
                  | TYPE_NAME, ".", TYPE_NAME, "(", [ arguments ], ")"
                  | qualified_type, "(", [ named_arguments ], ")"
@@ -443,6 +443,8 @@ primary          = literal
                  | "(", expression, ")" ;
 
 arguments        = expression, { ",", expression }, [ "," ] ;
+call_arguments   = arguments | named_arguments
+                 | expression, { ",", expression }, ",", named_arguments ;
 named_arguments  = named_argument, { ",", named_argument }, [ "," ] ;
 named_argument   = NAME, ":", expression ;
 list_literal     = "[", [ arguments ], "]" ;

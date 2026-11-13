@@ -42,6 +42,7 @@ export struct Checked
   bodies: Map[Int, String]
   step_tries: Set[Int]
   bound: Map[Int, List[T.Type]]
+  slots: Map[Int, List[Int]] = {}
 end
 
 ## What `check_recovering` learned: the types of the functions that passed, and the problems of those that did not with
@@ -316,6 +317,7 @@ def run(
     bodies: attached.st.bodies,
     step_tries: attached.st.step_tries,
     bound: attached.st.bound,
+    slots: attached.st.slots,
   )
 
   ok(Recovered(checked: checked, problems: problems, failed: failed))
@@ -386,6 +388,7 @@ def taking(linked: Linker.Linked, reusing: Optional[Reusing]) -> Reuse.Taken
         bound: before.checked.bound,
         bodies: before.checked.bodies,
         step_tries: before.checked.step_tries,
+        slots: before.checked.slots,
       )
 
       Reuse.take(linked, before.linked, old, before.checked.constant_types, found.clean)

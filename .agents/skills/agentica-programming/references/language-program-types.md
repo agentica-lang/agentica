@@ -150,8 +150,8 @@ end
   (`PARSE-MISSING-BLANK-LINE`). Every parameter and the return type need an
   annotation.
 - Structs, enums and functions are top level only. Structs, enums, aliases and
-  functions take type parameters. There are no user methods, nested functions,
-  keyword arguments or overloads. Closures are blocks.
+  functions take type parameters. There are no user methods, nested functions
+  or overloads. Closures are blocks.
 - A struct field may have a default: `retries: Int = 3`, left out in a
   constructor (`Options(name: "a")`; `CHECK-MISSING-FIELD` for one without). It
   follows the rules of a parameter default below, except a struct built with no
@@ -209,6 +209,15 @@ end
   (`CHECK-ARITY`). A function value takes every argument (`.call` needs all).
   `main` and blocks take no defaults. A builtin can have defaults too
   (`agentica help NAME` shows them).
+- Any argument may be named after its parameter, positional ones first:
+  `check(gen, verbose: true)` leaves `runs` and `seed` at their defaults;
+  `xs.join(separator: "-")` and `std/` functions take names too. Arguments run
+  in written order. A named argument before a positional one is
+  `PARSE-UNEXPECTED-TOKEN`; an unknown name `CHECK-UNKNOWN-ARGUMENT`; a
+  parameter given twice (name and position too) `CHECK-REPEATED-ARGUMENT`; a
+  required parameter left out `CHECK-MISSING-ARGUMENT`. A trailing block works
+  as usual. Function values take no names (`f.call(1)`); struct construction
+  and `.with(...)` are unchanged.
 - Nesting goes 1000 levels at most (`PARSE-TOO-DEEP`, `CHECK-TOO-DEEP`); each
   operator of a chain counts a level, so 1,000 `+` already fail.
 - Calls nest 10000 deep at most (`RUNTIME-STACK-OVERFLOW`). Tail calls do not

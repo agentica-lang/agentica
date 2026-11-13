@@ -1,0 +1,75 @@
+program 0:1:1-10:1 entry=1 globals=0
+source 0 "named-arguments.agc" chars=269
+struct s0 "Error" ["kind","message","code","details","cause","location"] types=[String, String, Optional(Int), Map(String, String), Optional(Struct(Error)), String]
+enum "Optional" v0="None"/0 v1="Some"/1
+fn0 "check" params=4 captures=0 slots=6 @ 0:1:1-4:1
+    step @ 0:2:3-2:39
+    step @ 0:2:3-2:39
+    step @ 0:2:6-2:10
+    move r4 r0 @ 0:2:6-2:10
+    const r5 " " @ 0:2:3-2:39
+    concat r4 r4 r5 @ 0:2:3-2:39
+    step @ 0:2:14-2:18
+    move r5 r1 @ 0:2:14-2:18
+    to-text r5 r5 @ 0:2:3-2:39
+    concat r4 r4 r5 @ 0:2:3-2:39
+    const r5 " " @ 0:2:3-2:39
+    concat r4 r4 r5 @ 0:2:3-2:39
+    step @ 0:2:22-2:26
+    move r5 r2 @ 0:2:22-2:26
+    to-text r5 r5 @ 0:2:3-2:39
+    concat r4 r4 r5 @ 0:2:3-2:39
+    const r5 " " @ 0:2:3-2:39
+    concat r4 r4 r5 @ 0:2:3-2:39
+    step @ 0:2:30-2:37
+    move r5 r3 @ 0:2:30-2:37
+    to-text r5 r5 @ 0:2:3-2:39
+    concat r4 r4 r5 @ 0:2:3-2:39
+    return r4 @ 0:2:3-2:39
+    const r4 void @ 0:1:1-4:1
+    return r4 @ 0:1:1-4:1
+fn1 "main" params=0 captures=0 slots=5 entry @ 0:5:1-10:1
+    step @ 0:6:3-7:1
+    step @ 0:6:3-6:37
+    step @ 0:6:8-6:36
+    step @ 0:1:37-1:40
+    const r2 int:100 @ 0:1:37-1:40
+    step @ 0:1:54-1:55
+    const r3 int:0 @ 0:1:54-1:55
+    step @ 0:6:14-6:20
+    const r1 "sort" @ 0:6:14-6:20
+    step @ 0:6:31-6:35
+    const r4 true @ 0:6:31-6:35
+    call r1 fn0 @ 0:6:8-6:36
+    move r0 r1 @ 0:6:8-6:36
+    call-builtin r0 "puts" 1 @ 0:6:3-6:37 0:6:8-6:36
+    step @ 0:7:3-8:1
+    step @ 0:7:3-7:36
+    step @ 0:7:8-7:35
+    step @ 0:1:37-1:40
+    const r2 int:100 @ 0:1:37-1:40
+    step @ 0:1:73-1:78
+    const r4 false @ 0:1:73-1:78
+    step @ 0:7:20-7:21
+    const r3 int:1 @ 0:7:20-7:21
+    step @ 0:7:29-7:34
+    const r1 "map" @ 0:7:29-7:34
+    call r1 fn0 @ 0:7:8-7:35
+    move r0 r1 @ 0:7:8-7:35
+    call-builtin r0 "puts" 1 @ 0:7:3-7:36 0:7:8-7:35
+    step @ 0:8:3-9:1
+    step @ 0:8:3-8:40
+    step @ 0:8:8-8:39
+    step @ 0:8:8-8:18
+    step @ 0:8:9-8:12
+    const r3 "a" @ 0:8:9-8:12
+    step @ 0:8:14-8:17
+    const r4 "b" @ 0:8:14-8:17
+    list r1 r3 2 @ 0:8:8-8:18
+    step @ 0:8:35-8:38
+    const r2 "-" @ 0:8:35-8:38
+    call-builtin r1 "String.join" 2 @ 0:8:8-8:39 0:8:8-8:18 0:8:35-8:38
+    move r0 r1 @ 0:8:8-8:39
+    call-builtin r0 "puts" 1 @ 0:8:3-8:40 0:8:8-8:39
+    const r0 void @ 0:5:1-10:1
+    return r0 @ 0:5:1-10:1

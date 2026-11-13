@@ -1,0 +1,1 @@
+ERROR CHECK-MISSING-ARGUMENT 99:4:8-113:4:22 "join is missing the argument \"xs\"" "give it by position or by name: xs: value" signature="main() -> Void" file="named-missing-argument.agc"

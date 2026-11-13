@@ -1,0 +1,27 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 361,
+  "stdout": [
+    "b",
+    "a",
+    "12",
+    "12",
+    "sort 100 7 true",
+    "sort 200 7 true",
+    "map 100 3 false",
+    "x",
+    "5",
+    "a.txt 50",
+    "Point(x: 3, y: 5)",
+    "Point(x: 3, y: 15)",
+    "Point(x: 12, y: 14)",
+    "10",
+    "a-b",
+    "[[1, 2], [3]]",
+    "15",
+    "db.constraint boom 19",
+    ""
+  ],
+  "stderr": []
+}
