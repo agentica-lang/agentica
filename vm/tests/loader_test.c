@@ -549,7 +549,7 @@ static buffer type_tables(int which) {
   } else {
     u32(&t, which == 8 ? 0x10000000 : 3);
     u8(&t, 0);
-    u8(&t, which == 1 ? 10 : which >= 19 ? 8 : which >= 13 ? 7 : 4);
+    u8(&t, which == 1 ? 10 : which >= 19 && which != 26 ? 8 : which >= 13 ? 7 : 4);
     u32(&t, which == 2 ? 1 : 0);
     u8(&t, 6);
     u32(&t, which == 3 ? 2 : 0);
@@ -572,8 +572,9 @@ static buffer type_tables(int which) {
     u32(&t, 2);
   }
   /* 13: a JSON.Field type (kind 7) and no enum; 14: with the JSON.Field enum; 15 to 18: a JSON.Field enum of the
-     wrong shape (Value without its payload, a fourth variant, Null before Absent) or a second one, under the name
-     JsonField of an older front end (the checked-in stage0), which counts as the same enum. 19: an
+     wrong shape (Value without its payload, a fourth variant, Null before Absent) or a second one; 26: a JSON.Field
+     type and an enum of the right shape named JsonField (a user's, or the builtin of a front end before 0.31), which
+     is a plain enum, not the builtin one. 19: an
      Optional type (kind 8) and no enum; 20: with the Optional enum; 21: an enum named Optional of another shape (Some
      without its payload), which is not the builtin one; 22: two Optional enums. 23: a List target name (a `[`) on Q,
      which has two fields; 24: one on P, which has one; 25: one on a Q of no fields. */
@@ -581,7 +582,7 @@ static buffer type_tables(int which) {
     u32(&t, 0);
     return t;
   }
-  if (which >= 20) {
+  if (which >= 20 && which != 26) {
     u32(&t, which == 22 ? 2 : 1);
     for (int copy = 0; copy < (which == 22 ? 2 : 1); copy++) {
       str(&t, "Optional");
@@ -595,7 +596,7 @@ static buffer type_tables(int which) {
   }
   u32(&t, which == 18 ? 2 : 1);
   for (int copy = 0; copy < (which == 18 ? 2 : 1); copy++) {
-    str(&t, copy == 1 ? "JsonField" : "JSON.Field");
+    str(&t, which == 26 ? "JsonField" : "JSON.Field");
     u32(&t, which == 16 ? 4 : 3);
     str(&t, which == 17 ? "Null" : "Absent");
     u32(&t, 0);
@@ -2144,6 +2145,7 @@ int main(void) {
   assert(!loads_types(23, "a List or Map JSON target needs one field"));
   assert(loads_types(24, NULL));
   assert(!loads_types(25, "a List or Map JSON target needs one field"));
+  assert(!loads_types(26, "JSON.Field type without the JSON.Field enum"));
   buffer typed = type_tables(0);
   s = base();
   s.tables = &typed;
