@@ -4,6 +4,9 @@
 
 import {IO_TIMEOUT} from "bdd_files"
 
+## The name of the step program that `agentica test` finds by itself in the folders of the features.
+STEPS_FILE = "steps.agc"
+
 ## One feature file or test file, or one problem of the search, as the runner reads it (stdlib/test/runner.agc,
 ## `Entry`): `problem` is "" for a file to run; `kind` is "tests", "feature" or "" (neither); `bytecode`, `source_root`
 ## and `front_end` are filled in by the driver for a test file.
@@ -29,6 +32,11 @@ end
 
 ## True for the name of a unit test file, `*_test.agc`.
 def test_file?(path: String) -> Bool = path.end_with?("_test.agc")
+
+## True for the name of that step program, `steps.agc`, as a path of any system.
+def steps_file?(path: String) -> Bool
+  path == STEPS_FILE or path.end_with?("/#{STEPS_FILE}") or path.end_with?("\\#{STEPS_FILE}")
+end
 
 ## The entries for the given paths: first the problems in the order they were met, then the files sorted by path, each
 ## once. A path is made absolute without following links. A folder is searched for the files whose names fit, in every

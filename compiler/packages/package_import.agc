@@ -59,7 +59,8 @@ end
 ## `style_dir`, the folder of the manifest when it asks for a `[style]` rule ("" when it does not, or when there is
 ## no manifest), with the rules it asks for: `blank_line_after_end` and `max_line_width` (0 for no limit).
 ## `agentica` is the running Agentica version, which the `agentica` key of each package's manifest is checked against
-## ("" checks nothing).
+## ("" checks nothing). `tests` are the names of the project's test group (`group = "test"`) that this build may not
+## import: all of them, until `with_tests` says the build is a test.
 struct Scope
   deps: String
   os: String
@@ -67,6 +68,7 @@ struct Scope
   watched: List[String]
   probed: List[String]
   direct: List[String]
+  tests: List[String]
   lock: Lock.Lock
   members: Members.Members
   declared: Map[String, List[String]]
@@ -103,6 +105,7 @@ def scope_of(project: Project.Project) -> Scope
         watched: [],
         probed: [],
         direct: [],
+        tests: [],
         lock: Lock.Lock(file: "", packages: [], artifacts: []),
         members: Members.empty(),
         declared: {},
@@ -121,6 +124,7 @@ def scope_of(project: Project.Project) -> Scope
         watched: [],
         probed: [],
         direct: Project.direct_names(project),
+        tests: Project.test_names(project),
         lock: found.lock,
         members: found.members,
         declared: {},
@@ -133,6 +137,10 @@ def scope_of(project: Project.Project) -> Scope
       )
   end
 end
+
+## The scope of a test build (a `*_test.agc` file, the step program of `agentica test`): the files of the project may
+## import the test group too.
+def with_tests(scope: Scope) -> Scope = scope.with(direct: scope.direct.concat(scope.tests), tests: [])
 
 ## The scope with the native libraries of the project's own manifest ([native], for this system). Its files are the
 ## project's own, so they are not hashed; the files of its native/ folder are watched by the bytecode cache.
@@ -207,10 +215,17 @@ end
 ## Tells how the `pkg/` import path file (ending in .agc, a valid library path) reads. A declared name is a package,
 ## and it shadows the library roots for that name. An undeclared name is a library for a file of the project, and
 ## CHECK-IMPORT-PACKAGE for a file of a package, which reaches nothing its manifest does not declare. `pkg/name` alone,
-## naming no module, is CHECK-IMPORT-PATH when `name` is declared.
+## naming no module, is CHECK-IMPORT-PATH when `name` is declared. A name of the project's test group is
+## CHECK-IMPORT-PACKAGE for a file of the project in a build that is not a test.
 def match_import(scope: Scope, origin: Origin, file: String, site: Failure.Site) -> Result[Match]
   names = allowed_names(scope, origin)
   parts = file.split("/")
+  if origin.package == "" and parts.size > 2 and declared?(scope.tests, parts[1])
+    message = "#{parts[1]} is in the test group of agentica.toml, so only the tests import it"
+    help = "import it from a *_test.agc file or the step program, or leave group = \"test\" out of agentica.toml"
+    return error(missing(site, message, help))
+  end
+
   if parts.size == 2
     stem = parts[1].slice(0, parts[1].length - 4)
     if declared?(names, stem)
@@ -535,7 +550,7 @@ end
 def read_names(workspace: Workspace.Workspace, scope: Scope, name: String, root: String) -> Result[List[String]]
   manifest = try Manifest.read_checked(workspace, Paths.join(root, MANIFEST_FILE), name, scope.agentica)
   try Project.check_dependencies(scope.lock, manifest, scope.members, true)
-  ok(Manifest.names(manifest))
+  ok(Manifest.program_names(manifest))
 end
 
 def declared?(names: List[String], name: String) -> Bool = names.any? do |declared| declared == name end

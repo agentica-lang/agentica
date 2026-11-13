@@ -61,7 +61,7 @@ EMBEDDED_STEPS_SOURCE = "std/bdd.agc"
 DEFAULT_PATHS = ["specs/", "test/"]
 
 # The file that is the step program when --steps is not given and a searched folder holds it.
-DEFAULT_STEPS_FILE = "steps.agc"
+DEFAULT_STEPS_FILE = Discover.STEPS_FILE
 
 # The step program, compiled: where its bytecode is (nothing is written when it did not compile; "" when it is the
 # default one that the binary carries), the source the runner names in reports, the folder for the VM's --source-root,
@@ -254,7 +254,9 @@ def empty_message(given: List[String]) -> String
 end
 
 # The step program: the file of --steps, or the default one written in the run directory.
-def compile_steps(directory: String, options: Opts.Options, settings: Env.Settings) -> Result[Steps]
+def compile_steps(directory: String, options: Opts.Options, given_settings: Env.Settings) -> Result[Steps]
+  # The step program is a test: it may import the test group of the manifest.
+  settings = given_settings.with(test_build: true)
   source = "#{directory}/steps.agc"
   root = ""
   compiled = Pipeline.Compiled.Bytes("".bytes)

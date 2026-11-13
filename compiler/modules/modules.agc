@@ -383,6 +383,10 @@ def load_root(settings: Env.Settings, walk: Walk, root: String) -> Result[Walk]
   )
 
   scope = try Packages.check_manifests(workspace, base)
+  if settings.test_file or settings.test_build
+    scope = Packages.with_tests(scope)
+  end
+
   scope = Packages.with_project_natives(workspace, scope, project)
   build = Resolve.Build(libs_dir: Project.library_dir(project, root_dir), scope: scope)
   first = Parsed(

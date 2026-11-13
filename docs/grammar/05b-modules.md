@@ -400,8 +400,8 @@ import Sqlite from "pkg/sqlite/db"
   `ref` (7 to 64 lowercase hex digits of a commit), and optionally `subdir`
   (next item), or a `path` instead of all of those (the item after the next).
   A branch, a version range or another key is `PKG-MANIFEST-INVALID`, at the
-  key path (`dependencies.sqlite.branch`). `override = true` is the only other
-  key (the item on `override`).
+  key path (`dependencies.sqlite.branch`). `override = true` and
+  `group = "test"` are the only other keys (their items below).
 - `subdir` says that the package is a folder of the repository, not the
   repository itself, so one repository can hold many packages. It is a relative
   path of plain folder names joined by `/` (`"postgres"`, `"libs/sql"`). Each
@@ -448,6 +448,19 @@ import Sqlite from "pkg/sqlite/db"
   `(another source asked by A, B)` when packages asked for another source.
   `PKG-SOURCE-CONFLICT` has a help that suggests `override = true` in the
   root manifest.
+- `group = "test"` (Bundler's `group: :test`) puts a dependency in the test
+  group: only the tests of the project import it. `test` is the only group; any
+  other value is `PKG-MANIFEST-INVALID` at `dependencies.<name>.group`. The
+  project locks, fetches and installs its test group like any dependency, with
+  the same lock entry (no key says the group). Only a test build imports it:
+  the `*_test.agc` files and the step program that `agentica test` compiles
+  (and `agentica check` of a `*_test.agc` file or of a `steps.agc`), with the
+  files they import. In any other build an import of it from a file of the
+  project is `CHECK-IMPORT-PACKAGE` at the import. The test group of a package
+  is its own: a project that depends on the package does not resolve, fetch or
+  lock it, does not check it against its lock, and the files of the package
+  cannot import it. A name of the test group that another package needs is one
+  source in the build, as for any name.
 - A repository of packages can be a workspace, like an npm workspace. Its root
   `agentica.toml` has a `[workspace]` table with `repository`, the `git` URL of
   the repository (the rules of a dependency's `git`), and `members`, a
@@ -604,7 +617,8 @@ import Sqlite from "pkg/sqlite/db"
   `1 native artifact ready` (or `N native artifacts ready`); else `nothing to
   install`. The command starts git even under `--deny-run`, which only limits
   programs.
-- `agentica add NAME URL --tag TAG` (or `--ref COMMIT`, and `--subdir DIR`) and
+- `agentica add NAME URL --tag TAG` (or `--ref COMMIT`, `--subdir DIR` and
+  `--group test`) and
   `agentica update [NAME]` write the lock; they are the only commands that do.
   Both work on the project of the working folder (no manifest is
   `PKG-MANIFEST-MISSING`), read the lock without checking it against the
@@ -631,21 +645,22 @@ import Sqlite from "pkg/sqlite/db"
   when it is empty), in the layout above, so it has the same bytes when nothing
   changed.
   - `add` takes the local name, the `https://` URL and `--tag` or `--ref`, in
-    that order, then `--subdir DIR` if the package is a folder of the
-    repository. The commit of `--ref` is the whole id (40 or, for SHA-256, 64
-    digits), since git fetches no abbreviation (a package whose manifest asks
-    for a part of an id that the lock lacks is `PKG-FETCH` at
-    `dependencies.<name>.ref` of that manifest). The tag of a SHA-1 repository
-    is fetched; a SHA-256 repository takes `--ref`. A name, URL, tag or commit
-    that the manifest would refuse, or any other words, are a usage error (exit
-    code 2). A name that is a dependency already is `PKG-DEPENDENCY-EXISTS`. The
-    manifest gets one new line, `NAME = { git = "URL", tag = "TAG" }` (with
-    `subdir = "DIR"` last when asked), after the last entry of `[dependencies]`
-    (or in a new `[dependencies]` table at the end of the file); no other byte
-    changes, so comments, blank lines, the order of the keys and the line
-    endings stay. The new text is read as a manifest before it is saved, and a
-    layout the edit cannot handle (the table written as `dependencies = {}`,
-    say) is `PKG-MANIFEST-EDIT`: write the line by hand.
+    that order, then `--subdir DIR` if the package is a folder of the repository
+    and `--group test` for the test group. The commit of `--ref` is the whole id
+    (40 or, for SHA-256, 64 digits), since git fetches no abbreviation (a
+    package whose manifest asks for a part of an id that the lock lacks is
+    `PKG-FETCH` at `dependencies.<name>.ref` of that manifest). The tag of a
+    SHA-1 repository is fetched; a SHA-256 repository takes `--ref`. A name,
+    URL, tag or commit that the manifest would refuse, or any other words, are a
+    usage error (exit code 2). A name that is a dependency already is
+    `PKG-DEPENDENCY-EXISTS`. The manifest gets one new line, `NAME = { git =
+    "URL", tag = "TAG" }` (with `subdir = "DIR"` and then `group = "test"` last
+    when asked), after the last entry of `[dependencies]` (or in a new
+    `[dependencies]` table at the end of the file); no other byte changes, so
+    comments, blank lines, the order of the keys and the line endings stay. The
+    new text is read as a manifest before it is saved, and a layout the edit
+    cannot handle (the table written as `dependencies = {}`, say) is
+    `PKG-MANIFEST-EDIT`: write the line by hand.
   - `update` takes no word or the name of a dependency of the manifest (else
     `PKG-DEPENDENCY-UNKNOWN`). It fetches the tag pins again, all of them or
     the one named, and takes the commit they point to now, so a moved tag is

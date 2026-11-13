@@ -648,10 +648,11 @@ def program(session: Session, verb: String, rest: List[String]) -> Int
 end
 
 # The settings `check` reads `file` with: the check cache, and a `*_test.agc` file is a test file, as for `agentica
-# test`, so its `test_*` functions are checked as tests.
+# test`, so its `test_*` functions are checked as tests. A test file and a `steps.agc` may import the test group of the
+# manifest, as they do under `agentica test`.
 def check_settings(session: Session, file: String) -> Env.Settings
   settings = CheckCache.attach(session.settings, file, !session.options.no_cache)
-  settings.with(test_file: Discover.test_file?(file))
+  settings.with(test_file: Discover.test_file?(file), test_build: Discover.steps_file?(file))
 end
 
 # The bytecode cache (io/bytecode_cache.agc) serves a run and `compile` (whose bytes are the ones a fresh compile
