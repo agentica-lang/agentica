@@ -60,7 +60,7 @@ end
 """
 
 
-@pytest.mark.skipif(WINDOWS or os.geteuid() == 0, reason="a mode of 000 stops no read on Windows or as root")
+@pytest.mark.skipif(WINDOWS or os.geteuid() == 0, reason="host-only: a mode of 000 stops no read on Windows or as root")
 def test_a_file_without_read_permission_is_io_permission(tmp_path, work):
     locked = tmp_path / "locked.txt"
     locked.write_text("secret", encoding="utf-8")
