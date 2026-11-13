@@ -1,0 +1,45 @@
+name: Probe
+
+# A stub, so that `gh workflow run probe.yml --ref BRANCH` can start the branch's version of this workflow (GitHub
+# needs a file of this name with workflow_dispatch on the default branch). The real probe replaces it.
+on:
+  workflow_dispatch:
+    inputs:
+      systems:
+        description: Systems to run on
+        type: string
+        default: macos-arm64
+      tests:
+        description: Test modules or pytest node ids
+        type: string
+        default: ''
+      k:
+        description: A pytest -k expression
+        type: string
+        default: ''
+      target:
+        description: A make target with its arguments
+        type: string
+        default: ''
+      program:
+        description: An .agc file to build and run
+        type: string
+        default: ''
+      repeat:
+        description: How many times to run
+        type: string
+        default: '1'
+      schedulers:
+        description: Scheduler count for the VMs
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  stub:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: echo "probe.yml on the default branch is a stub; run the branch's version with gh workflow run probe.yml --ref BRANCH"
