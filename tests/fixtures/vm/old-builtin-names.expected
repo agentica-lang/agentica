@@ -1,0 +1,16 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 56,
+  "stdout": [
+    "Box(mine: JsonField.Value(2), theirs: JsonField.Null, real: JSON.Field.Absent)",
+    "{\"mine\":{\"tag\":\"Value\",\"values\":[2]},\"theirs\":{\"tag\":\"Null\",\"values\":[]}}",
+    "{\"mine\":{\"tag\":\"Absent\",\"values\":[]},\"theirs\":{\"tag\":\"Value\",\"values\":[1]},\"real\":null}",
+    "Box(mine: JsonField.Null, theirs: JsonField.Absent, real: JSON.Field.Value(7))",
+    "FileInfo(kind: \"directory\", size_bytes: 1, modified_seconds: 2, mode: 3, user_id: 4, group_id: 5)",
+    "ProcessOutput(stdout: \"a\", stderr: \"b\", truncated: false)",
+    "Process.Output(stdout: \"a\", stderr: \"b\", truncated: false)",
+    ""
+  ],
+  "stderr": []
+}

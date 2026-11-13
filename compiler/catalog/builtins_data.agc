@@ -331,15 +331,11 @@ export RESERVED_TYPE_NAMES: List[String] = [
   "Dir",
   "Error",
   "File",
-  # FileInfo, JsonField and ProcessOutput stay reserved while the VM still takes them for File.Info, JSON.Field and
-  # Process.Output (the bytecode of stage0 names them so); #1491 removes that and frees the names.
-  "FileInfo",
   "Float",
   "Fn",
   "IO",
   "Int",
   "JSON",
-  "JsonField",
   "Lazy",
   "List",
   "Map",
@@ -349,7 +345,6 @@ export RESERVED_TYPE_NAMES: List[String] = [
   "Optional",
   "Path",
   "Process",
-  "ProcessOutput",
   "Random",
   "Range",
   "Result",

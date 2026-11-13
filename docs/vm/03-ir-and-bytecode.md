@@ -81,9 +81,9 @@ code does not show:
 - `RUNTIME-INDEX-OUT-OF-RANGE` and `RUNTIME-KEY-NOT-FOUND` point at the index
   expression's span.
 
-The builtin record types (`FileInfo`, `HttpWire.Header`, `HttpWire.Request`,
+The builtin record types (`File.Info`, `HttpWire.Header`, `HttpWire.Request`,
 `HttpWire.Response`, `HttpWire.ClientOptions`, `HttpWire.ServerOptions`,
-`ProcessOutput`, `LogRegistry.Event`, `StructMember`) join the struct table
+`Process.Output`, `LogRegistry.Event`, `StructMember`) join the struct table
 only when the program names them or a checked type mentions them. Then they
 lower like user structs.
 
@@ -383,12 +383,13 @@ header and the entry.
 
 - **Section:** Types
   - **Entry:** `u32` type count. Each entry is a `u8` kind (0 Int, 1 Float, 2
-    Bool, 3 String, 4 List, 5 Map with String keys, 6 Struct, 7 JsonField, 8
+    Bool, 3 String, 4 List, 5 Map with String keys, 6 Struct, 7 JSON.Field, 8
     Optional, 9 Enum) and, for 4 to 9, a `u32` operand: the item, value,
-    `JsonField` or `Optional` payload type index (smaller than the entry's own),
-    the struct index or the enum index. A file with a kind 7 entry has the
-    `JsonField` enum (Absent, Null, Value, with arities 0, 0 and 1) in its Enums
-    section, at most once; one with a kind 8 entry has the `Optional` enum
+    `JSON.Field` or `Optional` payload type index (smaller than the entry's
+    own), the struct index or the enum index. A file with a kind 7 entry has
+    the `JSON.Field` enum (by that name; Absent, Null, Value, with arities 0, 0
+    and 1) in its Enums section, at most once; an enum named `JsonField` is a
+    plain enum; one with a kind 8 entry has the `Optional` enum
     (None, Some, with arities 0 and 1), at most once. Then a `u32` count of
     decodable structs, each a `u32` struct index (increasing), the `str` linked
     name and one `u32` type index per field. A linked name with a `[`

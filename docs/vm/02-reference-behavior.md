@@ -233,8 +233,8 @@ The user-facing rules (which fields are required, the `JsonField` and
 - A `JsonField[T]` field (type kind 7) is `Absent` when its key is missing and
   `Null` for JSON `null`; the encoders leave out the key of an `Absent` struct
   field, write `null` for `Null` and the payload for `Value`. They know the
-  variants by the ids of the `JsonField` enum, which the loader finds and checks
-  (Absent, Null, Value with arities 0, 0, 1).
+  variants by the ids of the `JSON.Field` enum, which the loader finds by that
+  name and checks (Absent, Null, Value with arities 0, 0, 1).
 - An `Optional[T]` (type kind 8) may be any type of the table, not only a field.
   The encoders write `none` as `null` and `some(x)` as `x`, at any depth and for
   the root, so `some(none)` is `null`. The loader finds the builtin `Optional`

@@ -78,7 +78,7 @@ does not make obvious:
   only the tables (4.2). The C creators of a record go through
   `agc_builtin_struct`, which checks the name, the count and the field names.
 - A builtin that reads a builtin record (`HttpWire.Header`, `HttpWire.Request`,
-  `HttpWire.Response`, `FileInfo`, `ProcessOutput`) finds its struct by exact
+  `HttpWire.Response`, `File.Info`, `Process.Output`) finds its struct by exact
   name and fields (`agc_builtin_struct`, `vm/builtins.c`). If the struct is
   missing, it fails with `RUNTIME-INTERNAL`. The loader does not check these
   records.

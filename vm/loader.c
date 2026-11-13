@@ -491,14 +491,15 @@ static void load_types(reader *r, agc_program *p) {
 }
 
 /* The builtin JSON.Field enum, by its display name (a dotted name, so no user enum has it): exactly Absent, Null and
-   Value(T) in that order, at most once. A type of kind JSON.Field needs it, since typed JSON builds its variants. The
-   bytecode of a front end before 0.31 (the checked-in stage0) names it JsonField. */
+   Value(T) in that order, at most once. A type of kind JSON.Field needs it, since typed JSON builds its variants. Only
+   the dotted name counts: an enum named JsonField (a user's, or the builtin of a front end before 0.31) is a plain
+   enum. */
 static void find_json_field(reader *r, agc_program *p) {
   static const char *const names[] = {"Absent", "Null", "Value"};
   p->json_field = UINT32_MAX;
   for (uint32_t i = 0; i < p->enum_count; i++) {
     const agc_enum_def *d = &p->enums[i];
-    if (!same_text(d->name, "JSON.Field") && !same_text(d->name, "JsonField")) continue;
+    if (!same_text(d->name, "JSON.Field")) continue;
     if (p->json_field != UINT32_MAX) reject(r, "duplicate JSON.Field enum");
     if (d->count != 3) reject(r, "bad JSON.Field enum");
     for (uint32_t k = 0; k < 3; k++) {

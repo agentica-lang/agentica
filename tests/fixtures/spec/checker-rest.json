@@ -2716,8 +2716,7 @@
         "",
         ""
       ],
-      "code": "CHECK-REDEFINED-NAME",
-      "start": [1, 1]
+      "code": null
     }
   ],
   "File.read_bytes, File.write_bytes and File.sha256 use Bytes": [
@@ -13075,7 +13074,7 @@
       "covers": "Conn.members"
     }
   ],
-  "JSON.Field is optional and nullable only as a direct struct field of a JSON type; its old name JsonField stays reserved": [
+  "JSON.Field is optional and nullable only as a direct struct field of a JSON type; its old name JsonField is free": [
     {
       "program": [
         "struct W",
@@ -13272,8 +13271,7 @@
         "end",
         ""
       ],
-      "code": "CHECK-REDEFINED-NAME",
-      "start": [1, 1]
+      "code": null
     },
     {
       "program": [
@@ -13286,8 +13284,7 @@
         "end",
         ""
       ],
-      "code": "CHECK-REDEFINED-NAME",
-      "start": [1, 1]
+      "code": null
     },
     {
       "program": [
@@ -14240,7 +14237,7 @@
       "covers": "System.Profile.stepz()"
     }
   ],
-  "The JSON family: JSON.Value and JSON.Field; the old names Json and JsonField are unknown, Json is free and JsonField stays reserved": [
+  "The JSON family: JSON.Value and JSON.Field; the old names Json and JsonField are unknown, Json and JsonField are free": [
     {
       "program": [
         "struct Patch",
@@ -14326,6 +14323,30 @@
     },
     {
       "program": [
+        "enum JsonField",
+        "  Absent",
+        "  Null",
+        "  Value(Int)",
+        "end",
+        "",
+        "struct Box",
+        "  mine: JsonField",
+        "  real: JSON.Field[Int]",
+        "end",
+        "",
+        "def main() -> Void",
+        "  box = Box(mine: JsonField.Value(1), real: JSON.Field.Value(2))",
+        "  case box.real",
+        "    JSON.Field.Value(n) -> puts(n)",
+        "    _ -> puts(JSON.encode(box))",
+        "  end",
+        "end",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
         "struct Json",
         "  a: Int",
         "end",
@@ -14339,11 +14360,10 @@
         "end",
         ""
       ],
-      "code": "CHECK-REDEFINED-NAME",
-      "start": [5, 1]
+      "code": null
     }
   ],
-  "The File family: File.Info and File.Handle; the old names FileInfo and FileHandle are unknown, FileHandle is free and FileInfo stays reserved": [
+  "The File family: File.Info and File.Handle; the old names FileInfo and FileHandle are unknown, both are free": [
     {
       "program": [
         "def size(info: File.Info) -> Int = info.size_bytes",
@@ -14418,8 +14438,7 @@
         "end",
         ""
       ],
-      "code": "CHECK-REDEFINED-NAME",
-      "start": [1, 1]
+      "code": null
     },
     {
       "program": [
@@ -14436,7 +14455,7 @@
       "help": false
     }
   ],
-  "The Process family: Process.Output; the old name ProcessOutput is unknown and stays reserved": [
+  "The Process family: Process.Output; the old name ProcessOutput is unknown and free": [
     {
       "program": [
         "def text(o: Process.Output) -> String = \"#{o.stdout} #{o.truncated} ProcessOutput\"",
@@ -14493,8 +14512,7 @@
         "end",
         ""
       ],
-      "code": "CHECK-REDEFINED-NAME",
-      "start": [1, 1]
+      "code": null
     }
   ],
   "The TCP family: TCP.Socket and TCP.Listener; the old names Socket and Listener are unknown and free": [
