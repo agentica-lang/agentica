@@ -1,6 +1,5 @@
-"""`agentica test` cases that need a POSIX system: file modes and links, a shell script that logs how the binary is
-started (a known issue on Windows, #1485), and the first binary of the bootstrap (its driver is the one of stage0, which
-does not know the Windows temporary folder).
+"""`agentica test` cases that need a POSIX system: file modes and links, and the first binary of the bootstrap (its
+driver is the one of stage0, which does not know the Windows temporary folder).
 
 On Windows the cases that need a mode bit or a name that is not valid UTF-8 are skipped (host-only): a temporary
 folder that cannot be written with chmod has a counterpart in tests/test_windows_process_cleanup.py (an access list).
@@ -13,7 +12,7 @@ import os
 
 import pytest
 
-from tests.agentica_test import ROOT, WINDOWS, binary, host_only, known_issue, run, vm_environment
+from tests.agentica_test import ROOT, WINDOWS, host_only, run, vm_environment
 from tests.test_bdd import (  # noqa: F401  (bdd is the fixture of that module)
     ADDS_TEST, HANDLERS, BddCli, assert_unwritable_temporary_is_an_infrastructure_error, bdd)
 
@@ -93,32 +92,3 @@ def test_the_first_binary_of_the_bootstrap_still_tests_with_the_driver_of_stage0
     result = run([BOOTSTRAP, "run", "--embedded", "runner", "--", "config.jsonl"], env=vm_environment())
     assert (result.code, result.stdout) == (2, "")
     assert result.stderr != ""
-
-
-@known_issue(WINDOWS, 1485, "the stand-in that counts the starts of the binary is a shell script; Windows has none")
-def test_a_program_under_test_is_compiled_once_and_every_scenario_starts_its_bytecode(bdd):
-    """Each scenario starts the program with `agentica run -- BYTECODE`; one `agentica compile` per run made it (#1458).
-    A program that does not compile still starts through the front end, which prints its diagnostic."""
-    steps = 'Given the Agentica program "%s"\nWhen I close stdin\nThen I receive the line "hi" within 5000 milliseconds\n'
-    broken = 'Given the Agentica program "broken.agc"\nThen the program exits with code 1 within 5000 milliseconds\n'
-    scenarios = "".join("Scenario: s%d\n%s" % (n, steps % "hello.agc") for n in range(3))
-    directory = bdd.suite({
-        "hello.agc": 'def main() -> Void\n  puts("hi")\nend\n',
-        "broken.agc": 'def main() -> Void\n  puts(1 + "a")\nend\n',
-        "a.feature": "Feature: A\n" + scenarios + "Scenario: b1\n" + broken + "Scenario: b2\n" + broken})
-    log = directory / "starts.log"
-    wrapper = directory / "agentica.sh"
-    wrapper.write_text("#!/bin/sh\nprintf '%%s\\n' \"$*\" >> '%s'\nexec '%s' \"$@\"\n" % (log, binary()))
-    os.chmod(wrapper, 0o700)
-    status, report = bdd.json_test(directory, binary_path=str(wrapper))
-    assert (status, report["passed"]) == (0, 5), report
-    starts = [line.split() for line in log.read_text().splitlines()]
-
-    def kinds(source):
-        return ["compile" if words[0] == "compile" else "front end" for words in starts if str(source) in words]
-
-    assert kinds(directory / "hello.agc") == ["compile"], starts
-    runs = [words for words in starts if words[0] == "run" and words[-1].endswith(".agcb") and "--source-root" in words]
-    assert [words[words.index("--source-root") + 1] for words in runs] == [str(directory)] * 3, starts
-    # The broken program: one compile that fails, then the front end for each of its two scenarios.
-    assert kinds(directory / "broken.agc") == ["compile", "front end", "front end"], starts

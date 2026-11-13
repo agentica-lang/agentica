@@ -760,7 +760,7 @@ def test_a_run_removes_the_folder_of_an_ended_run_and_leaves_the_folder_of_a_liv
     assert (outside / "lock").read_text() == "keep"
 
 
-not_wine = pytest.mark.skipif(UNDER_WINE, reason="Wine runs the Windows binary, which starts neither a shell script nor node")
+not_wine = pytest.mark.skipif(UNDER_WINE, reason="Wine runs the Windows binary, which starts no shell script, node or stand-in built for Linux")
 
 
 def fake_binary(directory, script):
@@ -789,6 +789,40 @@ def fake_binary(directory, script):
     preload.write_text("const fs = require('fs');\nfs.writeSync(2, %s.join('\\n') + '\\n');\nprocess.exit(3);\n"
                        % json.dumps(script), encoding="utf-8")
     return str(fake), {"NODE_OPTIONS": '--require "%s"' % preload.as_posix()}
+
+
+@not_wine
+def test_a_program_under_test_is_compiled_once_and_every_scenario_starts_its_bytecode(bdd):
+    """Each scenario starts the program with `agentica run -- BYTECODE`; one `agentica compile` per run made it (#1458).
+    A program that does not compile still starts through the front end, which prints its diagnostic. A C stand-in for
+    the binary logs how it is started (tests/fixtures/bdd_logged_binary.c), so the case runs on every system."""
+    steps = 'Given the Agentica program "%s"\nWhen I close stdin\nThen I receive the line "hi" within 5000 milliseconds\n'
+    broken = 'Given the Agentica program "broken.agc"\nThen the program exits with code 1 within 5000 milliseconds\n'
+    scenarios = "".join("Scenario: s%d\n%s" % (n, steps % "hello.agc") for n in range(3))
+    directory = bdd.suite({
+        "hello.agc": 'def main() -> Void\n  puts("hi")\nend\n',
+        "broken.agc": 'def main() -> Void\n  puts(1 + "a")\nend\n',
+        "a.feature": "Feature: A\n" + scenarios + "Scenario: b1\n" + broken + "Scenario: b2\n" + broken})
+    log = directory / "starts.log"
+    stand_in = directory / ("agentica-logged.exe" if os.name == "nt" else "agentica-logged")
+    built = run([tool("gcc" if os.name == "nt" else "cc"), "-o", str(stand_in),
+                 str(TESTS / "fixtures" / "bdd_logged_binary.c"), "-DLOGGED_REAL=%s" % json.dumps(str(binary())),
+                 "-DLOGGED_LOG=%s" % json.dumps(str(log))])
+    assert built.code == 0, built
+    status, report = bdd.json_test(directory, binary_path=str(stand_in))
+    assert (status, report["passed"]) == (0, 5), report
+    starts = [line.split("\t") for line in log.read_text(encoding="utf-8").splitlines()]
+
+    def kinds(source):
+        return ["compile" if words[0] == "compile" else "front end"
+                for words in starts if source in (Path(word).name for word in words)]
+
+    assert kinds("hello.agc") == ["compile"], starts
+    runs = [words for words in starts if words[0] == "run" and words[-1].endswith(".agcb") and "--source-root" in words]
+    roots = [os.path.normcase(os.path.realpath(words[words.index("--source-root") + 1])) for words in runs]
+    assert roots == [os.path.normcase(str(directory))] * 3, starts
+    # The broken program: one compile that fails, then the front end for each of its two scenarios.
+    assert kinds("broken.agc") == ["compile", "front end", "front end"], starts
 
 
 @not_wine
