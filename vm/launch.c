@@ -307,6 +307,9 @@ int agc_launch_settle(agc_vm *vm, agc_outcome *outcome) {
   /* With several schedulers agc_run_over has set it already; at one, nothing has. From here no queued compute job
      starts (run_compute in vm/loop.c). */
   atomic_store_explicit(&vm->rt->over, true, memory_order_release);
+  /* No task reads a signal channel any more: from here a subscribed signal takes the stop path, as without a
+     subscription (a second one ends a stuck flush). */
+  agc_io_signals_end(vm);
   agc_ffi_stop_queued(vm);
   agc_processes_stop(vm);
   agc_io_children_stopped();

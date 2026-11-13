@@ -74,7 +74,7 @@ Read only what the task needs.
 | `bytes.md` | `Bytes`: `s.bytes`, slicing, joining, keys |
 | `compression.md` | Zlib bytes and Lazy byte streams (deflate, zlib, gzip) |
 | `archive.md` | `std/archive` (TAR/ZIP extraction by allowlist) |
-| `processes.md` | Process, `IO.read_bytes`, flush, `System.env/os/pid` |
+| `processes.md` | Process, `IO.read_bytes`, flush, `System.env/os/pid`, signals (`System.subscribe`) |
 | `network.md` | TCP, TLS, DNS |
 | `http.md` | `std/http`: client, server, streaming, WebSocket |
 | `tasks.md` | Task, `Task.map`, Channel, ATS tables, timeouts, cancel, monitors, who owns state |

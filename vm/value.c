@@ -103,6 +103,7 @@ static const char *const kind_names[AGC_KIND_COUNT] = {
   [AGC_KIND_DENIED_FS] = "denied.fs",
   [AGC_KIND_DENIED_NET] = "denied.net",
   [AGC_KIND_DENIED_RUN] = "denied.run",
+  [AGC_KIND_SYSTEM_SIGNAL] = "system.signal",
 };
 
 #ifdef AGC_NO_GC

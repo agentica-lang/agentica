@@ -60,6 +60,14 @@ def catalog():
 
 
 @lru_cache(maxsize=None)
+def family_types():
+    """The builtin types named Family.Member (a record, an enum or an opaque type of the catalog, such as
+    System.Signal), which `agentica help` does not list: every quoted Type.Name of the catalog's data file."""
+    text = (ROOT / "compiler" / "catalog" / "builtins_data.agc").read_text(encoding="utf-8")
+    return frozenset(re.findall(r'"([A-Z][A-Za-z0-9]*\.[A-Z][A-Za-z0-9]*)"', text))
+
+
+@lru_cache(maxsize=None)
 def known_alias(name):
     """True when `agentica help NAME` knows the name: a builtin or a Ruby alias of one (`String.strip`)."""
     return run(cli() + ["help", name]).code == 0
@@ -86,6 +94,8 @@ def stale_names(texts, declared=frozenset()):
                 # Family.Member or Family.Member.fn; another Type.Name is an enum variant or a type (TaskExit.Ok,
                 # C.Pointer), which the checker owns.
                 member = "%s.%s" % (namespace, second)
+                if member in family_types():
+                    continue
                 if namespace in families and member not in members:
                     found.add(member)
                 elif namespace in families and third and "%s.%s" % (member, third) not in names:
