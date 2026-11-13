@@ -83,7 +83,11 @@ def member_lines(file: String, item: Model.Item) -> List[String]
   end
 
   variants = item.variants.map do |variant: Model.Variant| variant_line(file, item.name, variant) end
-  fields.concat(variants)
+  hidden = item.private_range.map do |range: DiagnosticModel.Region|
+    "#{place(file, range)} private fields of #{item.name}"
+  end
+
+  fields.concat(variants).concat(hidden)
 end
 
 def variant_line(file: String, enum_name: String, variant: Model.Variant) -> String

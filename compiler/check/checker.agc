@@ -190,6 +190,7 @@ def start(linked: Linker.Linked) -> State.Cx
     const_sites: sites,
     type_params: [],
     file: linked.modules[0].file,
+    prefix: linked.modules[0].prefix,
     texts: texts,
     expression: &Expr.check_expression,
     prelude: false,
@@ -272,7 +273,8 @@ def run(
 
     for decl in module.declarations
       case decl
-        Ast.Decl.Struct(node) -> st = try DefaultChecks.check_field_types(cx.with(file: module.file), st, node)
+        Ast.Decl.Struct(node) ->
+          st = try DefaultChecks.check_field_types(State.within(cx, module.file, module.prefix), st, node)
         _ -> st = st
       end
     end
@@ -288,7 +290,7 @@ def run(
       next
     end
 
-    here = cx.with(file: module.file)
+    here = State.within(cx, module.file, module.prefix)
     for decl in module.declarations
       case decl
         Ast.Decl.Function(node) ->
@@ -365,7 +367,7 @@ def json_needs(cx: State.Cx, st: State.St, modules: List[Linker.LinkedModule]) -
   passes: List[JsonPass] = []
   for module in modules
     # A body with a name nobody reads still has its needs; the check of the bodies reports the name.
-    here = cx.with(file: module.file, lenient: Set.new([module.file]))
+    here = State.within(cx, module.file, module.prefix).with(lenient: Set.new([module.file]))
     for decl in module.declarations
       case decl
         Ast.Decl.Function(node) if node.type_parameters.size > 0 ->

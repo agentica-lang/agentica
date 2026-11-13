@@ -57,7 +57,8 @@ end
 ## before it. In a scope with it the parser has wrapped each declaration before it in an ExportDecl (or set
 ## ConstDecl.exported), and the ones after it stay private, so every reader of the exports gives the same answer for
 ## both forms; `export` on a declaration is refused there. The wrap keeps the declaration's own doc, and the ExportDecl
-## has its span.
+## has its span. In a struct body (StructDecl.private_mark) index is the number of fields before it, and nothing is
+## wrapped.
 export struct PrivateMark
   index: Int
   span: Source.Span
@@ -217,7 +218,9 @@ end
 ## (none for Void), then one field per out parameter, named after it. The record has the function's span and name
 ## span, and comes right after the function. layout is "" for every struct but a C struct of an extern block, which has
 ## its layout code (Native.codes): { then the code of each field in order, then }. type_parameters are the names of
-## a generic struct (struct Box[T]); empty for any other, and always for a record or a C struct.
+## a generic struct (struct Box[T]); empty for any other, and always for a record or a C struct. private_mark is the
+## `private` line of the body: the fields from its index on are private to the module that declares the struct
+## (CHECK-PRIVATE-FIELD).
 export struct StructDecl
   id: Int
   name: String
@@ -228,6 +231,7 @@ export struct StructDecl
   record_of: String
   layout: String
   span: Source.Span
+  private_mark: Optional[PrivateMark] = none
 end
 
 ## One field of a struct, with its default value when `name: Type = expression` gave one. Like a parameter default, it

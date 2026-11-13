@@ -21,11 +21,15 @@ export def text(module: String, documented: Model.Module) -> String
   "#{blocks.join("\n\n")}\n"
 end
 
-## One list line per field or variant: `signature` and, when it has a doc, a dash and the doc. `agentica help std/`
-## prints the same lines.
-export def part_lines(detail: Model.Detail) -> List[String]
-  case detail
-    Model.Detail.Struct(fields) -> fields.map do |field: Model.Field| part_line(field_signature(field), field.doc) end
+## One list line per field or variant: `signature` and, when it has a doc, a dash and the doc, then a line that says a
+## struct has private fields, which are not listed. `agentica help std/` prints the same lines.
+export def part_lines(item: Model.Item) -> List[String]
+  case item.detail
+    Model.Detail.Struct(fields) ->
+      lines = fields.map do |field: Model.Field| part_line(field_signature(field), field.doc) end
+      return lines.push("- and private fields") if item.private_line.some?
+
+      lines
     Model.Detail.Enum(variants) -> variants.map do |variant: Model.Variant| variant_line(variant) end
     Model.Detail.Function(_, _) -> []
     Model.Detail.Module(_) -> []
@@ -41,7 +45,7 @@ def item_blocks(item: Model.Item) -> List[String]
     none -> blocks = blocks
   end
 
-  parts = part_lines(item.detail)
+  parts = part_lines(item)
   if parts.size > 0
     blocks = blocks.push(parts.join("\n"))
   end

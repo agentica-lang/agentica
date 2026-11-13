@@ -136,7 +136,7 @@ def item_reply(path: String, item: DocModel.Item, as_json: Bool) -> Reply.Reply
     none -> blocks = blocks
   end
 
-  parts = DocText.part_lines(item.detail)
+  parts = DocText.part_lines(item)
   if parts.size > 0
     blocks = blocks.push(parts.join("\n"))
   end

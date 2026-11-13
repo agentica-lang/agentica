@@ -35,6 +35,8 @@ export def check_method(cx: State.Cx, st: State.St, node: Ast.MethodCall, expect
   field = fn_field(cx, target.type, node.name)
   if field.some? and piped
     return error(unknown_piped(cx, target.st, target.type, node.target, node.name, node.span, ""))
+  elsif field.some? and State.private_fields(cx, T.name(target.type)).include?(node.name)
+    return error(State.private_field(cx, target.st, T.name(target.type), node.name, node.name_span))
   elsif field.some?
     return check_field_call(cx, target.st, node, field.unwrap!)
   end
@@ -114,7 +116,8 @@ end
 
 # Type.members: the fields of a struct type, in declaration order, as a List[StructMember]. Lowering builds the list
 # from the fields recorded here, so the program needs no runtime support. An alias is refused as a struct
-# construction is (CHECK-UNKNOWN-TYPE); an enum or a resource has no members (CHECK-UNKNOWN-METHOD).
+# construction is (CHECK-UNKNOWN-TYPE); an enum or a resource has no members (CHECK-UNKNOWN-METHOD). Outside the module
+# of a struct with private fields it is CHECK-PRIVATE-FIELD, as Type.codec is.
 def check_members(cx: State.Cx, st: State.St, node: Ast.FieldAccess, type_name: Ast.TypeName) -> Result[State.Out]
   if type_name.args.size > 0
     return error(State.fail(cx, st, "CHECK-TYPE-MISMATCH", "members requires a struct name", type_name.span))
@@ -123,7 +126,10 @@ def check_members(cx: State.Cx, st: State.St, node: Ast.FieldAccess, type_name: 
   name = type_name.name
   display = T.display_name(name)
   fields = cx.structs.get(name)
-  if fields.some? and !cx.aliases.has_key?(name)
+  hidden = State.private_fields(cx, name)
+  if fields.some? and !cx.aliases.has_key?(name) and hidden.size > 0
+    return error(State.private_field(cx, st, name, hidden[0], node.span))
+  elsif fields.some? and !cx.aliases.has_key?(name)
     resolved = State.record_resolved(st, node.id, State.Resolved.Members(fields.unwrap!))
     return ok(State.Out(st: resolved, type: T.Type.List(T.Type.Struct("StructMember", []))))
   end
@@ -156,7 +162,8 @@ end
 
 # Type.codec: the codec of a struct or enum JSON.decode takes, a Codec[T]. Lowering builds the codec from the name and
 # the fields recorded here (none for an enum): the members of the codec are the ones Type.members gives. A type that
-# cannot be decoded is CHECK-NOT-DECODABLE, as for JSON.decode.
+# cannot be decoded is CHECK-NOT-DECODABLE, as for JSON.decode. A codec reads and writes every field, so a type that
+# holds a struct with private fields is CHECK-PRIVATE-FIELD outside that struct's module.
 def check_codec(cx: State.Cx, st: State.St, node: Ast.FieldAccess, type_name: Ast.TypeName) -> Result[State.Out]
   type = try Rules.check_codec_of(cx, st, type_name)
   name = T.name(T.item(type))
@@ -174,7 +181,11 @@ end
 def field_target?(cx: State.Cx, target: T.Type, name: String) -> Bool
   return false if !T.is?(target, "Struct")
 
-  return Calls.find_field(cx.structs[T.name(target)], name).ok? if name == "to_s" or name == "inspect"
+  if name == "to_s" or name == "inspect"
+    # A private field named to_s or inspect is not seen outside its module, so the name is the method there.
+    owner = T.name(target)
+    return Calls.find_field(cx.structs[owner], name).ok? and !State.private_fields(cx, owner).include?(name)
+  end
 
   true
 end
@@ -200,6 +211,10 @@ def check_struct_field(cx: State.Cx, st: State.St, node: Ast.FieldAccess, target
         help,
       ),
     )
+  end
+
+  if State.private_fields(cx, T.name(target)).include?(node.name)
+    return error(State.private_field(cx, st, T.name(target), node.name, node.name_span))
   end
 
   ok(State.Out(st: st, type: field.unwrap!.type))

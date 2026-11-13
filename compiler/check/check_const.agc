@@ -26,10 +26,12 @@ export struct Done
   order: List[String]
 end
 
-# A constant with the file it is declared in, and whether an earlier check already did it (check_reuse.agc).
+# A constant with the file and the module prefix it is declared in, and whether an earlier check already did it
+# (check_reuse.agc).
 struct Entry
   decl: Ast.ConstDecl
   file: String
+  prefix: String
   kept: Bool
 end
 
@@ -70,7 +72,9 @@ def collect(modules: List[Linker.LinkedModule], kept: Set[String]) -> List[Entry
     for decl in module.declarations
       case decl
         Ast.Decl.Constant(node) ->
-          found = found.push(Entry(decl: node, file: module.file, kept: kept.include?(module.key)))
+          found = found.push(
+            Entry(decl: node, file: module.file, prefix: module.prefix, kept: kept.include?(module.key)),
+          )
         _ -> found = found
       end
     end
@@ -80,7 +84,7 @@ def collect(modules: List[Linker.LinkedModule], kept: Set[String]) -> List[Entry
 end
 
 def check_one(done: Done, entry: Entry) -> Result[Done]
-  here = done.cx.with(file: entry.file)
+  here = State.within(done.cx, entry.file, entry.prefix)
   declared = T.Type.Unknown
   case entry.decl.type
     some(annotation) -> declared = try CheckTypes.resolve_type(here, done.st, annotation, false)

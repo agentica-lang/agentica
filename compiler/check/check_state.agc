@@ -105,29 +105,33 @@ end
 ## Where the fields of a struct are declared: the file, and the span of each field in declaration order (the same
 ## order as Cx.structs). A diagnostic that points at a field of a struct from another file leaves the note out, because
 ## a note holds a span and no file.
+## hidden holds the private fields, the ones after the `private` line of the struct (CHECK-PRIVATE-FIELD).
 export struct FieldSite
   file: String
   spans: List[Source.Span]
+  hidden: List[String] = []
 end
 
 ## What is fixed while the declarations are checked. structs and enums hold the builtin ones and the program's;
-## struct_params the type parameters of each generic struct (a plain struct has no entry); field_sites where the
-## fields of each struct of the program are declared (a builtin record has none); c_structs the C structs of
-## the extern blocks (Ast.StructDecl.layout), by linked name; callbacks the Fn type that the function of each callback
-## of the extern blocks takes (Ast.Callback), by linked name; natives the functions of the extern blocks, by linked
-## name; field_defaults the names of the fields that have a default value, by struct; functions the program's;
-## constants the type of each module constant by linked name, which grows as the initializers are checked in order;
-## const_sites where each module constant is declared and its value, by linked name.
-## type_params are the type parameters in scope (while the fields of a generic struct, the variants of a generic enum
-## or the signature and body of a generic function are checked). file is the file of the declaration being checked,
-## texts the source of every file by name. expression checks an expression: the cycle between expressions and
-## statements goes through this field (check_expr.agc puts its own function here), because a module cannot import one
-## that imports it. prelude is true while the files of the compiler prelude are checked (check_prelude.agc): their type
-## variables are opaque types, and a Map key or Set element may be one. json_needs holds, by linked name, what each
-## generic function needs of its type arguments for the JSON.encode and JSON.from calls of its body and of the generic
-## functions it calls (checker.agc computes it before the bodies are checked): each is a type variable, or an Optional,
-## JSON.Field or Map key of one, that must be encodable once the variables are bound. lenient is the files in which a
-## name that nothing reads is no error (CHECK-UNUSED-VARIABLE): the roots of a query, as for an unused import.
+## struct_params the type parameters of each generic struct (a plain struct has no entry); field_sites where the fields
+## of each struct of the program are declared (a builtin record has none); c_structs the C structs of the extern blocks
+## (Ast.StructDecl.layout), by linked name; callbacks the Fn type that the function of each callback of the extern
+## blocks takes (Ast.Callback), by linked name; natives the functions of the extern blocks, by linked name;
+## field_defaults the names of the fields that have a default value, by struct; functions the program's; constants the
+## type of each module constant by linked name, which grows as the initializers are checked in order; const_sites where
+## each module constant is declared and its value, by linked name. type_params are the type parameters in scope (while
+## the fields of a generic struct, the variants of a generic enum or the signature and body of a generic function are
+## checked). file is the file of the declaration being checked, prefix the prefix of the linked names of its module
+## (Linker.LinkedModule.prefix: "" for the root file), which tells whether a private field of a struct is visible
+## (private_fields), texts the source of every file by name. expression checks an expression: the cycle between
+## expressions and statements goes through this field (check_expr.agc puts its own function here), because a module
+## cannot import one that imports it. prelude is true while the files of the compiler prelude are checked
+## (check_prelude.agc): their type variables are opaque types, and a Map key or Set element may be one. json_needs
+## holds, by linked name, what each generic function needs of its type arguments for the JSON.encode and JSON.from
+## calls of its body and of the generic functions it calls (checker.agc computes it before the bodies are checked):
+## each is a type variable, or an Optional, JSON.Field or Map key of one, that must be encodable once the variables are
+## bound. lenient is the files in which a name that nothing reads is no error (CHECK-UNUSED-VARIABLE): the roots of a
+## query, as for an unused import.
 export struct Cx
   help: Help.Tables
   structs: Map[String, List[Model.Named]]
@@ -145,6 +149,7 @@ export struct Cx
   const_sites: Map[String, ConstSite]
   type_params: List[String]
   file: String
+  prefix: String
   texts: Map[String, String]
   expression: Fn[Cx, St, Ast.Expr, Types.Type, Bool, Result[Out]]
   prelude: Bool
@@ -477,6 +482,33 @@ export def hint_of(text: String) -> Diag.Help
   return Diag.Help.NoHelp if text == ""
 
   Diag.Help.Hint(text)
+end
+
+## The context for a declaration of the module with that file and prefix (Linker.LinkedModule).
+export def within(cx: Cx, file: String, prefix: String) -> Cx = cx.with(file: file, prefix: prefix)
+
+## The private fields of the struct `name` that the module being checked may not name: none in the module that declares
+## the struct (its linked name has that module's prefix) and for a builtin record.
+export def private_fields(cx: Cx, name: String) -> List[String]
+  site = cx.field_sites.get(name)
+  return [] if site.none? or site.unwrap!.hidden.size == 0
+
+  return [] if name.slice(0, name.length - Types.display_name(name).length) == cx.prefix
+
+  site.unwrap!.hidden
+end
+
+## CHECK-PRIVATE-FIELD at `span`, for the private field `field` of the struct `name` named outside its module.
+export def private_field(cx: Cx, st: St, name: String, field: String, span: Source.Span) -> String
+  struct_name = Types.written_type(name)
+  fail_help(
+    cx,
+    st,
+    "CHECK-PRIVATE-FIELD",
+    "the field \"#{field}\" of \"#{struct_name}\" is private to the module that declares it",
+    span,
+    "only that module reads, sets or gives a private field; call one of its functions instead",
+  )
 end
 
 def introduce_slot(

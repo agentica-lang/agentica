@@ -62,7 +62,8 @@ export def attach(settings: Env.Settings, base: State.Cx, st: State.St) -> Resul
   for module in modules
     for decl in module.declarations
       case decl
-        Ast.Decl.Function(node) -> grown = try Statements.check_function(cx.with(file: module.file), grown, node)
+        Ast.Decl.Function(node) ->
+          grown = try Statements.check_function(State.within(cx, module.file, module.prefix), grown, node)
         _ -> grown = grown
       end
     end

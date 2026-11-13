@@ -4100,18 +4100,47 @@ def parse_struct(e: Base.Env, pos: Int, ids: Int, doc: Optional[String], generic
 
   cursor = try Base.expect(e, parameters.pos, "NL", "a newline after the struct name", false)
   fields: List[Ast.FieldDecl] = []
+  private_mark: Optional[Ast.PrivateMark] = none
+  # The token after a field or after `private`, where another field or `private` needs a blank line first.
+  touching = -1
   next_id = ids
   looping = true
   while looping
+    kind = e.tokens[cursor].kind
+    if cursor == touching and (kind == "name" or kind == "DOC") and (private_mark.some? or private_start?(e, cursor))
+      try private_blank_line(e, cursor, private_mark, fields.size)
+    end
+
     cursor = Base.skip_newlines(e, cursor)
     kind = e.tokens[cursor].kind
     if kind == "end" or kind == "EOF"
       looping = false
+    elsif generic and private_start?(e, cursor)
+      if private_mark.some?
+        return error(
+          Base.bail(
+            e,
+            cursor,
+            "PARSE-SECOND-PRIVATE",
+            "a struct has one private line",
+            Base.hint("every field after the first private is private already: remove this one"),
+          ),
+        )
+      end
+
+      private_mark = some(Ast.PrivateMark(index: fields.size, span: e.tokens[cursor].span))
+      cursor += 1
+      if Base.kind_at(e, cursor) == "NL"
+        cursor += 1
+      end
+
+      touching = cursor
     elsif kind == "name" or kind == "DOC"
       taken = try documented(e, cursor, "field")
       field = try parse_field_decl(e, taken.pos, next_id, taken.doc)
       fields = fields.push(field.node)
       cursor = field.pos
+      touching = cursor
       next_id = field.ids
     elsif Base.reserved_name_at?(e, cursor)
       return error(Base.reserved_name(e, cursor, "a field name"))
@@ -4132,9 +4161,24 @@ def parse_struct(e: Base.Env, pos: Int, ids: Int, doc: Optional[String], generic
     record_of: "",
     layout: "",
     span: Base.span_from(e, pos, stop),
+    private_mark: private_mark,
   )
 
   ok(StructAt(node: node, pos: stop, ids: next_id))
+end
+
+# PARSE-MISSING-BLANK-LINE at a field or `private` that directly follows a field or `private` of a struct with a
+# `private` line, which stands apart from the fields around it. mark is the line read so far (none when the token at
+# `at` is that line), and count the number of fields read.
+def private_blank_line(e: Base.Env, at: Int, mark: Optional[Ast.PrivateMark], count: Int) -> Result[Void]
+  return ok() if mark.some? and mark.unwrap!.index < count
+
+  where = "after private"
+  if mark.none?
+    where = "before private"
+  end
+
+  error(Base.bail(e, at, "PARSE-MISSING-BLANK-LINE", "expected a blank line #{where}", Diag.Help.NoHelp))
 end
 
 # The [T, U] after the name of a struct, enum, alias or function, with the span of each name; none when the next token

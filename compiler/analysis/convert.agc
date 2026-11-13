@@ -15,6 +15,7 @@ import Symbol from "../query/symbol"
 import SymbolLink from "../query/symbol_link"
 import TypeAt from "../query/type_at"
 import Ast from "../syntax/ast"
+import Source from "../syntax/source"
 import Model from "model"
 
 # The version of each shape.
@@ -77,6 +78,7 @@ export def item(declared: DocModel.Item) -> Model.Item
     fields: fields,
     variants: variants,
     items: items,
+    private_range: declared.private_line.map { |span: Source.Span| [DiagnosticModel.range_of(span)] }.unwrap_or([]),
   )
 end
 
