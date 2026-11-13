@@ -32,6 +32,31 @@ def counter(w: World, name: String) -> Supervisor.Child
   Supervisor.child(name, behaviour) do |address| register(w, name, address) end
 end
 
+# A child whose receive timeout sets its count to 100 once, 30 ms after its init.
+def ticker(w: World, name: String) -> Supervisor.Child
+  timeout: Actor.Timeout[Int] = Actor.Timeout(after_ms: &tick_after, handle: ->(_count) { Actor.continue(100) })
+  behaviour: Actor.Behaviour[Int, Msg] = Actor.Behaviour(init: -> { 0 }, handle: &handle, timeout: some(timeout))
+  Supervisor.child(name, behaviour) do |address| register(w, name, address) end
+end
+
+def tick_after(count: Int) -> Optional[Int]
+  return none if count >= 100
+
+  some(30)
+end
+
+# Asks until the child's count is `n`. Each question is a message, which starts the wait of the timeout again, so the
+# questions are further apart than that wait.
+def reaches(w: World, name: String, n: Int) -> Result[Void]
+  for _ in 1..100
+    return ok() if get(w, name).unwrap_or(0) == n
+
+    Task.sleep(50)
+  end
+
+  error("#{name} did not reach #{n}")
+end
+
 def register(w: World, name: String, address: Address[Msg]) -> Void
   w.starts.add(name, 1)
   w.names.put(name, address)
@@ -247,4 +272,14 @@ def test_failed_starts_in_a_row_make_the_supervisor_give_up_whatever_their_pace(
   down = try downs.recv(5000)
   try Test.eq(down.message, "supervisor: slow failed to start 3 times in a row")
   Test.eq(Supervisor.stop(sup, 5000), error("supervisor: slow failed to start 3 times in a row", kind: "task.crashed"))
+end
+
+def test_a_restarted_child_starts_its_receive_timeout_again() -> Result[Void]
+  w = world()
+  sup = Supervisor.start([ticker(w, "ticker")])
+  try reaches(w, "ticker", 100)
+  try cast(w, "ticker", Msg.Divide(0))
+  try started(w, "ticker", 2)
+  try reaches(w, "ticker", 100)
+  Test.eq(Supervisor.stop(sup, 5000), ok())
 end
