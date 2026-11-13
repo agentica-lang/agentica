@@ -1551,7 +1551,7 @@ First release of Agentica, a statically typed language designed for AI agents.
 - `main` returns `Void`; maps preserve insertion order and support fallible
   lookups.
 
-[unreleased]: https://github.com/agentica-lang/agentica/compare/0.31.0...HEAD
+[unreleased]: https://github.com/agentica-lang/agentica/compare/0.31.1...HEAD
 [0.31.1]: https://github.com/agentica-lang/agentica/compare/0.31.0...0.31.1
 [0.31.0]: https://github.com/agentica-lang/agentica/compare/0.31.0-alpha.1...0.31.0
 [0.31.0-alpha.1]: https://github.com/agentica-lang/agentica/compare/0.30.1...0.31.0-alpha.1
