@@ -253,22 +253,39 @@ def test_two_tasks_get_each_signal_they_subscribed_to(tmp_path, adopt, scheduler
 def test_an_ended_subscription_gives_the_signal_back_to_the_stop_path(tmp_path, adopt, schedulers, how):
     vm = start(adopt, tmp_path, ENDS, how, "once", schedulers=schedulers, env={"AGENTICA_VM_TRACE": "sched,io"})
     assert vm.next_line(WAIT_SECONDS) == "ready"
+    import subprocess, sys
+
+    def ps(label):
+        if sys.platform == "darwin":
+            text = subprocess.run(["ps", "-o", "pid,sig,sigmask,sigignore,sigcatch", "-p", str(vm.process.pid)],
+                                  capture_output=True, text=True)
+            print("ps", label, how, schedulers, text.stdout, text.stderr)
+
+    ps("before")
     os.kill(vm.process.pid, signal.SIGUSR1)
     try:
         code = vm.process.wait(scaled(3))
     except Exception:
-        import subprocess, sys
         if sys.platform == "darwin":
             print(subprocess.run(["sample", str(vm.process.pid), "2"], capture_output=True, text=True).stdout)
+        ps("hung")
         os.kill(vm.process.pid, signal.SIGUSR1)
         time.sleep(2)
         print("after second USR1:", vm.process.poll())
+        ps("second")
+        os.kill(vm.process.pid, signal.SIGTERM)
+        time.sleep(2)
+        print("after TERM:", vm.process.poll())
+        ps("term")
         if vm.process.poll() is None:
             vm.process.kill()
         vm.process.wait()
         time.sleep(1)
         print(vm.stderr_text()[-20000:])
         raise
+    if sys.platform == "darwin" and how == "return" and schedulers == 4:
+        print(vm.stderr_text()[-5000:])
+        raise AssertionError("debug: show the passing case")
     assert code == -signal.SIGUSR1
 
 
