@@ -53,15 +53,15 @@ Random.seed() -> Int                    # the run's seed (0..2147483647), the sa
 Int.times(int: Int, block: Fn[Int, Void]) -> Void        # 0 .. int - 1; nothing when int <= 0
 Int.upto(from: Int, to: Int, block: Fn[Int, Void]) -> Void   # both ends included; nothing when to < from
 Int.downto(from: Int, to: Int, block: Fn[Int, Void]) -> Void   # both ends included; nothing when to > from
-n.to_f() -> Float                                        # Int
-x.to_i() -> Result[Int]                                  # Float; truncates; NaN, infinity, overflow are errors
-x.to_i!() -> Int                                         # same, but halts (RUNTIME-INVALID-NUMBER)
-n.abs() -> Int                                           # also x.abs -> Float; the least Int overflows
-n.pow(exponent: Int) -> Int                              # no `**`; negative exponent: RUNTIME-INVALID-COUNT
-a.gcd(b: Int) -> Int                                     # never negative; 0.gcd(0) is 0
+int.to_f() -> Float                                      # Int
+float.to_i() -> Result[Int]                              # Float; truncates; NaN, infinity, overflow are errors
+float.to_i!() -> Int                                     # same, but halts (RUNTIME-INVALID-NUMBER)
+int.abs() -> Int                                         # also float.abs -> Float; the least Int overflows
+int.pow(exponent: Int) -> Int                            # no `**`; negative exponent: RUNTIME-INVALID-COUNT
+int.gcd(other: Int) -> Int                               # never negative; 0.gcd(0) is 0
 int.clamp(min: Int, max: Int) -> Int                     # also on Float; min > max: RUNTIME-INVALID-RANGE
-x.floor() -> Int                                         # also ceil, round (halves away from zero); Float only
-Math.sqrt(x: Float) -> Float                             # negative x: RUNTIME-INVALID-NUMBER
+float.floor() -> Int                                     # also ceil, round (halves away from zero); Float only
+Math.sqrt(float: Float) -> Float                         # negative float: RUNTIME-INVALID-NUMBER
 ```
 
 `floor`, `ceil` and `round` halt like `to_i!` on NaN, infinity or a result
@@ -88,14 +88,14 @@ String.index_of(string: String, part: String) -> Optional[Int]   # first match; 
 String.at(string: String, index: Int) -> String          # one character; halts outside
 String.reverse(string: String) -> String
 s * n -> String                                          # n copies; n < 0 or over 256 MiB halts (RUNTIME-INVALID-COUNT)
-c.code() -> Int                                          # code point of one character; other lengths halt
-String.compare(a: String, b: String) -> Int              # -1, 0 or 1 in sort order; also a.compare(b)
+string.code() -> Int                                     # code point of one character; other lengths halt
+String.compare(string: String, other: String) -> Int              # -1, 0 or 1 in sort order; also a.compare(b)
 string.edit_distance(other: String) -> Int               # Levenshtein, in characters
 string.edit_distance(other: String, max: Int) -> Int     # max + 1 once past max (fast); max < 0 fails with RUNTIME-INVALID-COUNT
 string.jaro_winkler(other: String) -> Float              # 0.0 to 1.0; "" and "" give 1.0
-String.from_code(n: Int) -> String                       # Unicode scalar value; halts otherwise
-n.to_s() -> String                                       # Int
-x.to_s() -> String                                       # Float
+String.from_code(code: Int) -> String                       # Unicode scalar value; halts otherwise
+int.to_s() -> String                                     # Int
+float.to_s() -> String                                   # Float
 String.from_bytes(data: Bytes) -> Result[String]         # strict UTF-8; binary.md
 string.encode(encoding: String) -> Result[Bytes]         # b.decode(encoding) back; bytes.md
 string.to_i() -> Result[Int]                             # signed decimal; overflow is an error
@@ -238,10 +238,10 @@ ok(value: T) -> Result[T]
 ok() -> Result[Void]
 error(message: String) -> Result[T]                      # needs an expected Result type
 error(e: Error) -> Result[T]                             # the same Error, as a Result of another type
-r.ok?() -> Bool
-r.unwrap!() -> T                                         # halts with RUNTIME-UNWRAP-ERROR on error
+result.ok?() -> Bool
+result.unwrap!() -> T                                    # halts with RUNTIME-UNWRAP-ERROR on error
 result.unwrap_or(default: T) -> T
-r.message() -> String                                    # the error message, or "" for success
+result.message() -> String                               # the error message, or "" for success
 ```
 
 `r.is_err?`, `r.error?`, `r.value!` and `r.ok!` do not exist: write `!r.ok?` and

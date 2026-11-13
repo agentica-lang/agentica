@@ -338,7 +338,7 @@ end
 ## Path.join
 
 ```signature
-Path.join(parts: List[String]) -> Result[String]
+Path.join(list: List[String]) -> Result[String]
 ```
 
 Joins parts with the separator of the system.

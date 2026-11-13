@@ -152,7 +152,7 @@
  "[[\"--ai\", \"help\", \"Json.get\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "j.get(key: String) -> Result[JSON.Value]\nRead an object member; wrong kind or missing key returns an error.\n",
+  "stdout": "json.get(key: String) -> Result[JSON.Value]\nRead an object member; wrong kind or missing key returns an error.\n",
   "written": []
  },
  "[[\"--ai\", \"help\", \"Nope.frobnicate\"], {}]": {
@@ -856,13 +856,13 @@
  "[[\"help\", \"Json.get\", \"--json\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "{\"alias\":\"Json.get\",\"builtins\":[{\"arity\":2,\"description\":\"Read an object member; wrong kind or missing key returns an error.\",\"effects\":[],\"name\":\"JSON.get\",\"parameters\":[{\"name\":\"j\",\"type\":\"JSON.Value\"},{\"name\":\"key\",\"type\":\"String\"}],\"result\":\"Result[JSON.Value]\",\"ruby\":\"j.get(key: String) -> Result[JSON.Value]\",\"signature\":\"JSON.get(j: JSON.Value, key: String) -> Result[JSON.Value]\"}],\"hints\":{}}\n",
+  "stdout": "{\"alias\":\"Json.get\",\"builtins\":[{\"arity\":2,\"description\":\"Read an object member; wrong kind or missing key returns an error.\",\"effects\":[],\"name\":\"JSON.get\",\"parameters\":[{\"name\":\"json\",\"type\":\"JSON.Value\"},{\"name\":\"key\",\"type\":\"String\"}],\"result\":\"Result[JSON.Value]\",\"ruby\":\"json.get(key: String) -> Result[JSON.Value]\",\"signature\":\"JSON.get(json: JSON.Value, key: String) -> Result[JSON.Value]\"}],\"hints\":{}}\n",
   "written": []
  },
  "[[\"help\", \"Json.get\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "j.get(key: String) -> Result[JSON.Value]\nRead an object member; wrong kind or missing key returns an error.\n",
+  "stdout": "json.get(key: String) -> Result[JSON.Value]\nRead an object member; wrong kind or missing key returns an error.\n",
   "written": []
  },
  "[[\"help\", \"List.concat\"], {}]": {
@@ -928,13 +928,13 @@
  "[[\"help\", \"Result.ok?\", \"--json\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "{\"arity\":1,\"description\":\"Check whether a Result succeeded.\",\"effects\":[],\"name\":\"Result.ok?\",\"parameters\":[{\"name\":\"r\",\"type\":\"Result[T]\"}],\"result\":\"Bool\",\"ruby\":\"r.ok?() -> Bool\",\"signature\":\"Result.ok?(r: Result[T]) -> Bool\"}\n",
+  "stdout": "{\"arity\":1,\"description\":\"Check whether a Result succeeded.\",\"effects\":[],\"name\":\"Result.ok?\",\"parameters\":[{\"name\":\"result\",\"type\":\"Result[T]\"}],\"result\":\"Bool\",\"ruby\":\"result.ok?() -> Bool\",\"signature\":\"Result.ok?(result: Result[T]) -> Bool\"}\n",
   "written": []
  },
  "[[\"help\", \"Result.ok?\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "r.ok?() -> Bool\nCheck whether a Result succeeded.\n",
+  "stdout": "result.ok?() -> Bool\nCheck whether a Result succeeded.\n",
   "written": []
  },
  "[[\"help\", \"Strin.split\"], {}]": {
@@ -952,13 +952,13 @@
  "[[\"help\", \"String.compare\", \"--json\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "{\"arity\":2,\"description\":\"Compare two Strings in the order of sort: -1, 0 or 1.\",\"effects\":[],\"name\":\"String.compare\",\"parameters\":[{\"name\":\"a\",\"type\":\"String\"},{\"name\":\"b\",\"type\":\"String\"}],\"result\":\"Int\",\"ruby\":\"a.compare(b: String) -> Int\",\"signature\":\"String.compare(a: String, b: String) -> Int\"}\n",
+  "stdout": "{\"arity\":2,\"description\":\"Compare two Strings in the order of sort: -1, 0 or 1.\",\"effects\":[],\"name\":\"String.compare\",\"parameters\":[{\"name\":\"string\",\"type\":\"String\"},{\"name\":\"other\",\"type\":\"String\"}],\"result\":\"Int\",\"ruby\":\"string.compare(other: String) -> Int\",\"signature\":\"String.compare(string: String, other: String) -> Int\"}\n",
   "written": []
  },
  "[[\"help\", \"String.compare\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "a.compare(b: String) -> Int\nCompare two Strings in the order of sort: -1, 0 or 1.\n",
+  "stdout": "string.compare(other: String) -> Int\nCompare two Strings in the order of sort: -1, 0 or 1.\n",
   "written": []
  },
  "[[\"help\", \"String.split\", \"--json\"], {}]": {
@@ -1066,7 +1066,7 @@
  "[[\"help\", \"concat\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "Bytes.concat(parts: List[Bytes]) -> Bytes\nJoin the parts in order in one copy; prefer it to + in a loop.\n\nList.concat: join two lists with +: xs + ys is a new list, and both stay as they were\n\nString.concat: strings are immutable; join two strings with + and assign the result: a = a + b\n",
+  "stdout": "Bytes.concat(list: List[Bytes]) -> Bytes\nJoin the parts in order in one copy; prefer it to + in a loop.\n\nList.concat: join two lists with +: xs + ys is a new list, and both stay as they were\n\nString.concat: strings are immutable; join two strings with + and assign the result: a = a + b\n",
   "written": []
  },
  "[[\"help\", \"contains\", \"--json\"], {}]": {
@@ -1198,13 +1198,13 @@
  "[[\"help\", \"join\", \"--json\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "{\"alias\":\"join\",\"builtins\":[{\"arity\":2,\"description\":\"Join text elements.\",\"effects\":[],\"name\":\"List.join\",\"parameters\":[{\"name\":\"list\",\"type\":\"List[String]\"},{\"name\":\"separator\",\"type\":\"String\"}],\"result\":\"String\",\"ruby\":\"list.join(separator: String) -> String\",\"signature\":\"List.join(list: List[String], separator: String) -> String\"},{\"arity\":1,\"description\":\"Join path parts using host path semantics.\",\"effects\":[\"filesystem\"],\"name\":\"Path.join\",\"parameters\":[{\"name\":\"parts\",\"type\":\"List[String]\"}],\"result\":\"Result[String]\",\"ruby\":null,\"signature\":\"Path.join(parts: List[String]) -> Result[String]\"}],\"hints\":{}}\n",
+  "stdout": "{\"alias\":\"join\",\"builtins\":[{\"arity\":2,\"description\":\"Join text elements.\",\"effects\":[],\"name\":\"List.join\",\"parameters\":[{\"name\":\"list\",\"type\":\"List[String]\"},{\"name\":\"separator\",\"type\":\"String\"}],\"result\":\"String\",\"ruby\":\"list.join(separator: String) -> String\",\"signature\":\"List.join(list: List[String], separator: String) -> String\"},{\"arity\":1,\"description\":\"Join path parts using host path semantics.\",\"effects\":[\"filesystem\"],\"name\":\"Path.join\",\"parameters\":[{\"name\":\"list\",\"type\":\"List[String]\"}],\"result\":\"Result[String]\",\"ruby\":null,\"signature\":\"Path.join(list: List[String]) -> Result[String]\"}],\"hints\":{}}\n",
   "written": []
  },
  "[[\"help\", \"join\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "list.join(separator: String) -> String\nJoin text elements.\n\nPath.join(parts: List[String]) -> Result[String]\nJoin path parts using host path semantics.\n",
+  "stdout": "list.join(separator: String) -> String\nJoin text elements.\n\nPath.join(list: List[String]) -> Result[String]\nJoin path parts using host path semantics.\n",
   "written": []
  },
  "[[\"help\", \"key?\", \"--json\"], {}]": {
@@ -1270,13 +1270,13 @@
  "[[\"help\", \"ok?\", \"--json\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "{\"alias\":\"ok?\",\"builtins\":[{\"arity\":1,\"description\":\"Check whether a Result succeeded.\",\"effects\":[],\"name\":\"Result.ok?\",\"parameters\":[{\"name\":\"r\",\"type\":\"Result[T]\"}],\"result\":\"Bool\",\"ruby\":\"r.ok?() -> Bool\",\"signature\":\"Result.ok?(r: Result[T]) -> Bool\"},{\"arity\":1,\"description\":\"Check that a Result is ok; a failure is recorded on the test.\",\"effects\":[\"test\"],\"name\":\"Test.ok?\",\"parameters\":[{\"name\":\"result\",\"type\":\"Result[T]\"}],\"result\":\"Result[Void]\",\"ruby\":null,\"signature\":\"Test.ok?(result: Result[T]) -> Result[Void]\"}],\"hints\":{\"Optional.ok?\":\"an Optional has some? and none? (m.get(k) and s.index_of(part) give an Optional)\"}}\n",
+  "stdout": "{\"alias\":\"ok?\",\"builtins\":[{\"arity\":1,\"description\":\"Check whether a Result succeeded.\",\"effects\":[],\"name\":\"Result.ok?\",\"parameters\":[{\"name\":\"result\",\"type\":\"Result[T]\"}],\"result\":\"Bool\",\"ruby\":\"result.ok?() -> Bool\",\"signature\":\"Result.ok?(result: Result[T]) -> Bool\"},{\"arity\":1,\"description\":\"Check that a Result is ok; a failure is recorded on the test.\",\"effects\":[\"test\"],\"name\":\"Test.ok?\",\"parameters\":[{\"name\":\"result\",\"type\":\"Result[T]\"}],\"result\":\"Result[Void]\",\"ruby\":null,\"signature\":\"Test.ok?(result: Result[T]) -> Result[Void]\"}],\"hints\":{\"Optional.ok?\":\"an Optional has some? and none? (m.get(k) and s.index_of(part) give an Optional)\"}}\n",
   "written": []
  },
  "[[\"help\", \"ok?\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "r.ok?() -> Bool\nCheck whether a Result succeeded.\n\nTest.ok?(result: Result[T]) -> Result[Void]\nCheck that a Result is ok; a failure is recorded on the test.\n\nOptional.ok?: an Optional has some? and none? (m.get(k) and s.index_of(part) give an Optional)\n",
+  "stdout": "result.ok?() -> Bool\nCheck whether a Result succeeded.\n\nTest.ok?(result: Result[T]) -> Result[Void]\nCheck that a Result is ok; a failure is recorded on the test.\n\nOptional.ok?: an Optional has some? and none? (m.get(k) and s.index_of(part) give an Optional)\n",
   "written": []
  },
  "[[\"help\", \"push\", \"--json\"], {}]": {
@@ -1378,13 +1378,13 @@
  "[[\"help\", \"to_i\", \"--json\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "{\"alias\":\"to_i\",\"builtins\":[{\"arity\":1,\"description\":\"Truncate toward zero; NaN, infinity or overflow return an error.\",\"effects\":[],\"name\":\"Float.to_i\",\"parameters\":[{\"name\":\"x\",\"type\":\"Float\"}],\"result\":\"Result[Int]\",\"ruby\":\"x.to_i() -> Result[Int]\",\"signature\":\"Float.to_i(x: Float) -> Result[Int]\"},{\"arity\":1,\"description\":\"Parse signed decimal Int as a Result.\",\"effects\":[],\"name\":\"String.to_i\",\"parameters\":[{\"name\":\"string\",\"type\":\"String\"}],\"result\":\"Result[Int]\",\"ruby\":\"string.to_i() -> Result[Int]\",\"signature\":\"String.to_i(string: String) -> Result[Int]\"}],\"hints\":{}}\n",
+  "stdout": "{\"alias\":\"to_i\",\"builtins\":[{\"arity\":1,\"description\":\"Truncate toward zero; NaN, infinity or overflow return an error.\",\"effects\":[],\"name\":\"Float.to_i\",\"parameters\":[{\"name\":\"float\",\"type\":\"Float\"}],\"result\":\"Result[Int]\",\"ruby\":\"float.to_i() -> Result[Int]\",\"signature\":\"Float.to_i(float: Float) -> Result[Int]\"},{\"arity\":1,\"description\":\"Parse signed decimal Int as a Result.\",\"effects\":[],\"name\":\"String.to_i\",\"parameters\":[{\"name\":\"string\",\"type\":\"String\"}],\"result\":\"Result[Int]\",\"ruby\":\"string.to_i() -> Result[Int]\",\"signature\":\"String.to_i(string: String) -> Result[Int]\"}],\"hints\":{}}\n",
   "written": []
  },
  "[[\"help\", \"to_i\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "x.to_i() -> Result[Int]\nTruncate toward zero; NaN, infinity or overflow return an error.\n\nstring.to_i() -> Result[Int]\nParse signed decimal Int as a Result.\n",
+  "stdout": "float.to_i() -> Result[Int]\nTruncate toward zero; NaN, infinity or overflow return an error.\n\nstring.to_i() -> Result[Int]\nParse signed decimal Int as a Result.\n",
   "written": []
  },
  "[[\"help\", \"to_int\", \"--json\"], {}]": {
@@ -1426,13 +1426,13 @@
  "[[\"help\", \"value!\", \"--json\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "{\"alias\":\"value!\",\"builtins\":[{\"arity\":1,\"description\":\"Return x of some(x); halt on none.\",\"effects\":[],\"name\":\"Optional.unwrap!\",\"parameters\":[{\"name\":\"optional\",\"type\":\"Optional[T]\"}],\"result\":\"T\",\"ruby\":\"optional.unwrap!() -> T\",\"signature\":\"Optional.unwrap!(optional: Optional[T]) -> T\"},{\"arity\":1,\"description\":\"Return the success value; halt on error.\",\"effects\":[],\"name\":\"Result.unwrap!\",\"parameters\":[{\"name\":\"r\",\"type\":\"Result[T]\"}],\"result\":\"T\",\"ruby\":\"r.unwrap!() -> T\",\"signature\":\"Result.unwrap!(r: Result[T]) -> T\"}],\"hints\":{}}\n",
+  "stdout": "{\"alias\":\"value!\",\"builtins\":[{\"arity\":1,\"description\":\"Return x of some(x); halt on none.\",\"effects\":[],\"name\":\"Optional.unwrap!\",\"parameters\":[{\"name\":\"optional\",\"type\":\"Optional[T]\"}],\"result\":\"T\",\"ruby\":\"optional.unwrap!() -> T\",\"signature\":\"Optional.unwrap!(optional: Optional[T]) -> T\"},{\"arity\":1,\"description\":\"Return the success value; halt on error.\",\"effects\":[],\"name\":\"Result.unwrap!\",\"parameters\":[{\"name\":\"result\",\"type\":\"Result[T]\"}],\"result\":\"T\",\"ruby\":\"result.unwrap!() -> T\",\"signature\":\"Result.unwrap!(result: Result[T]) -> T\"}],\"hints\":{}}\n",
   "written": []
  },
  "[[\"help\", \"value!\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "`Optional.value!` is written `.unwrap!`\noptional.unwrap!() -> T\nReturn x of some(x); halt on none.\n\n`Result.value!` is written `.unwrap!`\nr.unwrap!() -> T\nReturn the success value; halt on error.\n",
+  "stdout": "`Optional.value!` is written `.unwrap!`\noptional.unwrap!() -> T\nReturn x of some(x); halt on none.\n\n`Result.value!` is written `.unwrap!`\nresult.unwrap!() -> T\nReturn the success value; halt on error.\n",
   "written": []
  },
  "[[\"help\"], {}]": {

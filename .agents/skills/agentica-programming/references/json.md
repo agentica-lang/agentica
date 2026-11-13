@@ -16,15 +16,15 @@ codec.decode(json: JSON.Value) -> Result[T]
 codec.encode(value: T) -> String
 codec.from(value: T) -> JSON.Value
 codec.members -> List[StructMember]
-JSON.parse(s: String) -> Result[JSON.Value]
+JSON.parse(text: String) -> Result[JSON.Value]
 JSON.encode(value: T) -> String
-JSON.get(j: JSON.Value, key: String) -> Result[JSON.Value]
-JSON.at(j: JSON.Value, index: Int) -> Result[JSON.Value]
-JSON.string(j: JSON.Value) -> Result[String]
-JSON.int(j: JSON.Value) -> Result[Int]
-JSON.float(j: JSON.Value) -> Result[Float]
-JSON.bool(j: JSON.Value) -> Result[Bool]
-JSON.list(j: JSON.Value) -> Result[List[JSON.Value]]
+JSON.get(json: JSON.Value, key: String) -> Result[JSON.Value]
+JSON.at(json: JSON.Value, index: Int) -> Result[JSON.Value]
+JSON.string(json: JSON.Value) -> Result[String]
+JSON.int(json: JSON.Value) -> Result[Int]
+JSON.float(json: JSON.Value) -> Result[Float]
+JSON.bool(json: JSON.Value) -> Result[Bool]
+JSON.list(json: JSON.Value) -> Result[List[JSON.Value]]
 ```
 
 ## Building

@@ -60,29 +60,29 @@ builtin File.write_bytes forms=1
 builtin File.write_text forms=1
   File.write_text(path: String, text: String, timeout_ms: Int = 30000) -> Result[Void] shape=(String, String, Int = 30000) -> Result(Void) rule=Plain impl="File.write_text" effects=["filesystem"] desc="Overwrite a file with at most 1 MiB of UTF-8 text."
 builtin Float.abs forms=1
-  Float.abs(x: Float) -> Float shape=(Float) -> Float rule=Plain impl="Float.abs" effects=[] desc="The absolute value; -0.0 gives 0.0 and NaN stays NaN."
+  Float.abs(float: Float) -> Float shape=(Float) -> Float rule=Plain impl="Float.abs" effects=[] desc="The absolute value; -0.0 gives 0.0 and NaN stays NaN."
 builtin Float.ceil forms=1
-  Float.ceil(x: Float) -> Int shape=(Float) -> Int rule=Plain impl="Float.ceil" effects=[] desc="The least Int >= x; NaN, an infinity or a value outside Int halts, as in to_i!."
+  Float.ceil(float: Float) -> Int shape=(Float) -> Int rule=Plain impl="Float.ceil" effects=[] desc="The least Int >= float; NaN, an infinity or a value outside Int halts, as in to_i!."
 builtin Float.clamp forms=1
   Float.clamp(float: Float, min: Float, max: Float) -> Float shape=(Float, Float, Float) -> Float rule=Plain impl="Float.clamp" effects=[] desc="float limited to min..max; min > max or a NaN bound halts; a NaN float stays NaN."
 builtin Float.floor forms=1
-  Float.floor(x: Float) -> Int shape=(Float) -> Int rule=Plain impl="Float.floor" effects=[] desc="The greatest Int <= x; NaN, an infinity or a value outside Int halts, as in to_i!."
+  Float.floor(float: Float) -> Int shape=(Float) -> Int rule=Plain impl="Float.floor" effects=[] desc="The greatest Int <= float; NaN, an infinity or a value outside Int halts, as in to_i!."
 builtin Float.from_bits forms=1
   Float.from_bits(bits: Int) -> Float shape=(Int) -> Float rule=Plain impl="Float.from_bits" effects=[] desc="Read the 64 bits of an Int as a binary64 Float; any NaN pattern gives NaN."
 builtin Float.from_bits32 forms=1
   Float.from_bits32(bits: Int) -> Float shape=(Int) -> Float rule=Plain impl="Float.from_bits32" effects=[] desc="Read 32 bits as a binary32 and widen it exactly; bits outside 0 to 4294967295 halt."
 builtin Int.to_f forms=1
-  Int.to_f(n: Int) -> Float shape=(Int) -> Float rule=Plain impl="Float.from_int" effects=[] desc="Convert an Int to the nearest Float."
+  Int.to_f(int: Int) -> Float shape=(Int) -> Float rule=Plain impl="Float.from_int" effects=[] desc="Convert an Int to the nearest Float."
 builtin Float.round forms=1
-  Float.round(x: Float) -> Int shape=(Float) -> Int rule=Plain impl="Float.round" effects=[] desc="The nearest Int, halves away from zero; NaN, an infinity or a value outside Int halts, as in to_i!."
+  Float.round(float: Float) -> Int shape=(Float) -> Int rule=Plain impl="Float.round" effects=[] desc="The nearest Int, halves away from zero; NaN, an infinity or a value outside Int halts, as in to_i!."
 builtin Float.to_bits forms=1
-  Float.to_bits(x: Float) -> Int shape=(Float) -> Int rule=Plain impl="Float.to_bits" effects=[] desc="The 64 IEEE 754 binary64 bits as an Int; every NaN gives the canonical 9221120237041090560."
+  Float.to_bits(float: Float) -> Int shape=(Float) -> Int rule=Plain impl="Float.to_bits" effects=[] desc="The 64 IEEE 754 binary64 bits as an Int; every NaN gives the canonical 9221120237041090560."
 builtin Float.to_bits32 forms=1
-  Float.to_bits32(x: Float) -> Int shape=(Float) -> Int rule=Plain impl="Float.to_bits32" effects=[] desc="Round to binary32 (ties to even) and give its 32 bits as an Int from 0 to 4294967295; every NaN gives 2143289344."
+  Float.to_bits32(float: Float) -> Int shape=(Float) -> Int rule=Plain impl="Float.to_bits32" effects=[] desc="Round to binary32 (ties to even) and give its 32 bits as an Int from 0 to 4294967295; every NaN gives 2143289344."
 builtin Float.to_i forms=1
-  Float.to_i(x: Float) -> Result[Int] shape=(Float) -> Result(Int) rule=Plain impl="Float.to_int" effects=[] desc="Truncate toward zero; NaN, infinity or overflow return an error."
+  Float.to_i(float: Float) -> Result[Int] shape=(Float) -> Result(Int) rule=Plain impl="Float.to_int" effects=[] desc="Truncate toward zero; NaN, infinity or overflow return an error."
 builtin Float.to_i! forms=1
-  Float.to_i!(x: Float) -> Int shape=(Float) -> Int rule=Plain impl="Float.to_int!" effects=[] desc="Truncate toward zero; halt on NaN, infinity or overflow."
+  Float.to_i!(float: Float) -> Int shape=(Float) -> Int rule=Plain impl="Float.to_int!" effects=[] desc="Truncate toward zero; halt on NaN, infinity or overflow."
 builtin FrontEnd.hand_off forms=1
   FrontEnd.hand_off(program: Bytes, options: List[String], arguments: List[String]) -> Result[Void] shape=(Bytes, List(String), List(String)) -> Result(Void) rule=Plain impl="FrontEnd.hand_off.bytes" effects=["process"] desc="Front end only: hand the compiled program, the VM options and the program arguments to the VM, which ends this run and runs the program in a new one; it returns an error only when an argument cannot be passed on (a program too large to load, or a character 0 in a word). Any other program fails with RUNTIME-FRONT-END-ONLY."
 builtin FrontEnd.std_source forms=1
@@ -162,29 +162,29 @@ builtin IO.read_bytes forms=1
 builtin IO.warn forms=1
   IO.warn(value: T) -> Void shape=(Var(T)) -> Void rule=Show impl="IO.warn" effects=["stderr"] desc="Write a value and a newline to stderr; non-String values print as in interpolation."
 builtin Int.abs forms=1
-  Int.abs(n: Int) -> Int shape=(Int) -> Int rule=Plain impl="Int.abs" effects=[] desc="The absolute value; the least Int halts with an overflow."
+  Int.abs(int: Int) -> Int shape=(Int) -> Int rule=Plain impl="Int.abs" effects=[] desc="The absolute value; the least Int halts with an overflow."
 builtin Int.bit_and forms=1
-  Int.bit_and(a: Int, b: Int) -> Int shape=(Int, Int) -> Int rule=Plain impl="Int.bit_and" effects=[] desc="Bitwise and of the 64-bit two's complement forms."
+  Int.bit_and(int: Int, other: Int) -> Int shape=(Int, Int) -> Int rule=Plain impl="Int.bit_and" effects=[] desc="Bitwise and of the 64-bit two's complement forms."
 builtin Int.bit_not forms=1
-  Int.bit_not(a: Int) -> Int shape=(Int) -> Int rule=Plain impl="Int.bit_not" effects=[] desc="Flip every bit; the same as -1 - a."
+  Int.bit_not(int: Int) -> Int shape=(Int) -> Int rule=Plain impl="Int.bit_not" effects=[] desc="Flip every bit; the same as -1 - int."
 builtin Int.bit_or forms=1
-  Int.bit_or(a: Int, b: Int) -> Int shape=(Int, Int) -> Int rule=Plain impl="Int.bit_or" effects=[] desc="Bitwise or of the 64-bit two's complement forms."
+  Int.bit_or(int: Int, other: Int) -> Int shape=(Int, Int) -> Int rule=Plain impl="Int.bit_or" effects=[] desc="Bitwise or of the 64-bit two's complement forms."
 builtin Int.bit_xor forms=1
-  Int.bit_xor(a: Int, b: Int) -> Int shape=(Int, Int) -> Int rule=Plain impl="Int.bit_xor" effects=[] desc="Bitwise exclusive or of the 64-bit two's complement forms."
+  Int.bit_xor(int: Int, other: Int) -> Int shape=(Int, Int) -> Int rule=Plain impl="Int.bit_xor" effects=[] desc="Bitwise exclusive or of the 64-bit two's complement forms."
 builtin Int.clamp forms=1
   Int.clamp(int: Int, min: Int, max: Int) -> Int shape=(Int, Int, Int) -> Int rule=Plain impl="Int.clamp" effects=[] desc="int limited to min..max; min > max halts."
 builtin Int.downto forms=1
   Int.downto(from: Int, to: Int, block: Fn[Int, Void]) -> Void shape=(Int, Int, Fn([Int], Void)) -> Void rule=Plain impl="Int.downto" effects=[] desc="Call block with from down to to; nothing when to > from."
 builtin Int.gcd forms=1
-  Int.gcd(a: Int, b: Int) -> Int shape=(Int, Int) -> Int rule=Plain impl="Int.gcd" effects=[] desc="The greatest common divisor, never negative; gcd of 0 and 0 is 0; a result of 2^63 halts."
+  Int.gcd(int: Int, other: Int) -> Int shape=(Int, Int) -> Int rule=Plain impl="Int.gcd" effects=[] desc="The greatest common divisor, never negative; gcd of 0 and 0 is 0; a result of 2^63 halts."
 builtin Int.pow forms=1
-  Int.pow(n: Int, exponent: Int) -> Int shape=(Int, Int) -> Int rule=Plain impl="Int.pow" effects=[] desc="n to the power exponent; a negative exponent or an overflow halts."
+  Int.pow(int: Int, exponent: Int) -> Int shape=(Int, Int) -> Int rule=Plain impl="Int.pow" effects=[] desc="int to the power exponent; a negative exponent or an overflow halts."
 builtin Int.shift_left forms=1
-  Int.shift_left(a: Int, count: Int) -> Int shape=(Int, Int) -> Int rule=Plain impl="Int.shift_left" effects=[] desc="Shift bits left; bits that leave the top are dropped, so it wraps; a count of 64 or more gives 0; a negative count halts."
+  Int.shift_left(int: Int, count: Int) -> Int shape=(Int, Int) -> Int rule=Plain impl="Int.shift_left" effects=[] desc="Shift bits left; bits that leave the top are dropped, so it wraps; a count of 64 or more gives 0; a negative count halts."
 builtin Int.shift_right forms=1
-  Int.shift_right(a: Int, count: Int) -> Int shape=(Int, Int) -> Int rule=Plain impl="Int.shift_right" effects=[] desc="Arithmetic shift right, copying the sign bit; a count of 64 or more gives 0 or -1; a negative count halts."
+  Int.shift_right(int: Int, count: Int) -> Int shape=(Int, Int) -> Int rule=Plain impl="Int.shift_right" effects=[] desc="Arithmetic shift right, copying the sign bit; a count of 64 or more gives 0 or -1; a negative count halts."
 builtin Int.shift_right_unsigned forms=1
-  Int.shift_right_unsigned(a: Int, count: Int) -> Int shape=(Int, Int) -> Int rule=Plain impl="Int.shift_right_unsigned" effects=[] desc="Logical shift right, bringing in zeros; a count of 64 or more gives 0; a negative count halts."
+  Int.shift_right_unsigned(int: Int, count: Int) -> Int shape=(Int, Int) -> Int rule=Plain impl="Int.shift_right_unsigned" effects=[] desc="Logical shift right, bringing in zeros; a count of 64 or more gives 0; a negative count halts."
 builtin Int.times forms=1
   Int.times(int: Int, block: Fn[Int, Void]) -> Void shape=(Int, Fn([Int], Void)) -> Void rule=Plain impl="Int.times" effects=[] desc="Call block with 0 to int - 1; nothing when int <= 0."
 builtin Int.upto forms=1
@@ -192,9 +192,9 @@ builtin Int.upto forms=1
 builtin JSON.array forms=1
   JSON.array(items: List[JSON.Value]) -> JSON.Value shape=(List(JSON.Value)) -> JSON.Value rule=Plain impl="JSON.array" effects=[] desc="Build a JSON array from JSON values."
 builtin JSON.at forms=1
-  JSON.at(j: JSON.Value, index: Int) -> Result[JSON.Value] shape=(JSON.Value, Int) -> Result(JSON.Value) rule=Plain impl="JSON.at" effects=[] desc="Read an array element; wrong kind or bad index returns an error."
+  JSON.at(json: JSON.Value, index: Int) -> Result[JSON.Value] shape=(JSON.Value, Int) -> Result(JSON.Value) rule=Plain impl="JSON.at" effects=[] desc="Read an array element; wrong kind or bad index returns an error."
 builtin JSON.bool forms=1
-  JSON.bool(j: JSON.Value) -> Result[Bool] shape=(JSON.Value) -> Result(Bool) rule=Plain impl="JSON.bool" effects=[] desc="Extract a JSON boolean; wrong kind returns an error."
+  JSON.bool(json: JSON.Value) -> Result[Bool] shape=(JSON.Value) -> Result(Bool) rule=Plain impl="JSON.bool" effects=[] desc="Extract a JSON boolean; wrong kind returns an error."
 builtin Codec.decode forms=2
   Codec.decode(codec: Codec[T], text: String) -> Result[T] shape=(Codec(Var(T)), String) -> Result(Var(T)) rule=CodecDecode impl="JSON.decode" effects=[] desc="Decode JSON text into the codec's struct, as JSON.decode does."
   Codec.decode(codec: Codec[T], json: JSON.Value) -> Result[T] shape=(Codec(Var(T)), JSON.Value) -> Result(Var(T)) rule=CodecDecode impl="JSON.decode" effects=[] desc="Decode a JSON.Value into the codec's struct, as JSON.decode does."
@@ -210,17 +210,17 @@ builtin JSON.decode forms=2
 builtin JSON.encode forms=1
   JSON.encode(value: T) -> String shape=(Var(T)) -> String rule=JsonEncode impl="JSON.encode" effects=[] desc="Encode JSON-compatible values; halt on non-finite Float values."
 builtin JSON.float forms=1
-  JSON.float(j: JSON.Value) -> Result[Float] shape=(JSON.Value) -> Result(Float) rule=Plain impl="JSON.float" effects=[] desc="Extract a finite Float from a JSON number; wrong kind or overflow returns an error."
+  JSON.float(json: JSON.Value) -> Result[Float] shape=(JSON.Value) -> Result(Float) rule=Plain impl="JSON.float" effects=[] desc="Extract a finite Float from a JSON number; wrong kind or overflow returns an error."
 builtin JSON.from forms=1
   JSON.from(value: T) -> JSON.Value shape=(Var(T)) -> JSON.Value rule=JsonFrom impl="JSON.from" effects=[] desc="Convert JSON-compatible data to a JSON value."
 builtin JSON.get forms=1
-  JSON.get(j: JSON.Value, key: String) -> Result[JSON.Value] shape=(JSON.Value, String) -> Result(JSON.Value) rule=Plain impl="JSON.get" effects=[] desc="Read an object member; wrong kind or missing key returns an error."
+  JSON.get(json: JSON.Value, key: String) -> Result[JSON.Value] shape=(JSON.Value, String) -> Result(JSON.Value) rule=Plain impl="JSON.get" effects=[] desc="Read an object member; wrong kind or missing key returns an error."
 builtin JSON.int forms=1
-  JSON.int(j: JSON.Value) -> Result[Int] shape=(JSON.Value) -> Result(Int) rule=Plain impl="JSON.int" effects=[] desc="Extract a signed 64-bit JSON integer; wrong kind or overflow returns an error."
+  JSON.int(json: JSON.Value) -> Result[Int] shape=(JSON.Value) -> Result(Int) rule=Plain impl="JSON.int" effects=[] desc="Extract a signed 64-bit JSON integer; wrong kind or overflow returns an error."
 builtin JSON.kind forms=1
   JSON.kind(value: JSON.Value) -> String shape=(JSON.Value) -> String rule=Plain impl="JSON.kind" effects=[] desc="Name the JSON kind: null, bool, int, float, string, array or object."
 builtin JSON.list forms=1
-  JSON.list(j: JSON.Value) -> Result[List[JSON.Value]] shape=(JSON.Value) -> Result(List(JSON.Value)) rule=Plain impl="JSON.list" effects=[] desc="Extract an array as a list of opaque JSON values; wrong kind returns an error."
+  JSON.list(json: JSON.Value) -> Result[List[JSON.Value]] shape=(JSON.Value) -> Result(List(JSON.Value)) rule=Plain impl="JSON.list" effects=[] desc="Extract an array as a list of opaque JSON values; wrong kind returns an error."
 builtin JSON.null forms=1
   JSON.null() -> JSON.Value shape=() -> JSON.Value rule=Plain impl="JSON.null" effects=[] desc="Return JSON null."
 builtin JSON.null? forms=1
@@ -228,11 +228,11 @@ builtin JSON.null? forms=1
 builtin JSON.object forms=1
   JSON.object(fields: Map[String, JSON.Value]) -> JSON.Value shape=(Map(String, JSON.Value)) -> JSON.Value rule=Plain impl="JSON.object" effects=[] desc="Build a JSON object from JSON values."
 builtin JSON.parse forms=1
-  JSON.parse(s: String) -> Result[JSON.Value] shape=(String) -> Result(JSON.Value) rule=Plain impl="JSON.parse" effects=[] desc="Parse exactly one JSON value; invalid input returns an error."
+  JSON.parse(text: String) -> Result[JSON.Value] shape=(String) -> Result(JSON.Value) rule=Plain impl="JSON.parse" effects=[] desc="Parse exactly one JSON value; invalid input returns an error."
 builtin JSON.schema forms=1
   JSON.schema(type: T) -> JSON.Value shape=(Var(T)) -> JSON.Value rule=JsonSchema impl="JSON.schema" effects=[] desc="Describe a decodable struct with JSON Schema."
 builtin JSON.string forms=1
-  JSON.string(j: JSON.Value) -> Result[String] shape=(JSON.Value) -> Result(String) rule=Plain impl="JSON.string" effects=[] desc="Extract a JSON string; wrong kind returns an error."
+  JSON.string(json: JSON.Value) -> Result[String] shape=(JSON.Value) -> Result(String) rule=Plain impl="JSON.string" effects=[] desc="Extract a JSON string; wrong kind returns an error."
 builtin Lazy.chunk_while forms=1
   Lazy.chunk_while(lazy: Lazy[A], block: Fn[A, A, Bool]) -> Lazy[List[A]] shape=(Lazy(Var(A)), Fn([Var(A), Var(A)], Bool)) -> Lazy(List(Var(A))) rule=Prelude impl="" effects=[] desc="Lazy step: group runs of items, a new group where block(previous, item) is false."
 builtin Lazy.deflate forms=1
@@ -399,7 +399,7 @@ builtin Map.size forms=1
 builtin Map.values forms=1
   Map.values(map: Map[K, V]) -> List[V] shape=(Map(Var(K), Var(V))) -> List(Var(V)) rule=MapValues impl="Map.values" effects=[] desc="Return values in insertion order."
 builtin Math.sqrt forms=1
-  Math.sqrt(x: Float) -> Float shape=(Float) -> Float rule=Plain impl="Math.sqrt" effects=[] desc="The square root; a negative x halts; -0.0 gives -0.0 and NaN stays NaN."
+  Math.sqrt(float: Float) -> Float shape=(Float) -> Float rule=Plain impl="Math.sqrt" effects=[] desc="The square root; a negative float halts; -0.0 gives -0.0 and NaN stays NaN."
 builtin Native.address forms=1
   Native.address(pointer: C.Pointer) -> Int shape=(Opaque(C.Pointer)) -> Int rule=Plain impl="Native.address" effects=["native"] desc="The integer value of the C.Pointer, the inverse of Native.pointer: subtract two to count the bytes between them. A freed owned buffer is RUNTIME-NATIVE-CLOSED."
 builtin Native.callback forms=1
@@ -500,7 +500,7 @@ builtin Native.wait_writable forms=1
 builtin Path.cwd forms=1
   Path.cwd() -> Result[String] shape=() -> Result(String) rule=Plain impl="Path.cwd" effects=["filesystem"] desc="Return the current working directory."
 builtin Path.join forms=1
-  Path.join(parts: List[String]) -> Result[String] shape=(List(String)) -> Result(String) rule=Plain impl="Path.join" effects=["filesystem"] desc="Join path parts using host path semantics."
+  Path.join(list: List[String]) -> Result[String] shape=(List(String)) -> Result(String) rule=Plain impl="Path.join" effects=["filesystem"] desc="Join path parts using host path semantics."
 builtin Path.real forms=1
   Path.real(path: String) -> Result[String] shape=(String) -> Result(String) rule=Plain impl="Path.real" effects=["filesystem"] desc="Return the absolute canonical path with every symbolic link resolved; the path must exist."
 builtin Path.remove forms=1
@@ -572,11 +572,11 @@ builtin Range.to_a forms=1
 builtin Error.is_a? forms=1
   Error.is_a?(error: Error, family: String) -> Bool shape=(Struct(Error), String) -> Bool rule=ErrorKind impl="Error.is_a?" effects=[] desc="Whether the kind is the family or one of its dotted kinds: is_a?(\"db\") takes db.constraint."
 builtin Result.message forms=1
-  Result.message(r: Result[T]) -> String shape=(Result(Var(T))) -> String rule=ResultMessage impl="Result.message" effects=[] desc="Return an error message, or empty text for success."
+  Result.message(result: Result[T]) -> String shape=(Result(Var(T))) -> String rule=ResultMessage impl="Result.message" effects=[] desc="Return an error message, or empty text for success."
 builtin Result.ok? forms=1
-  Result.ok?(r: Result[T]) -> Bool shape=(Result(Var(T))) -> Bool rule=ResultOk impl="Result.ok?" effects=[] desc="Check whether a Result succeeded."
+  Result.ok?(result: Result[T]) -> Bool shape=(Result(Var(T))) -> Bool rule=ResultOk impl="Result.ok?" effects=[] desc="Check whether a Result succeeded."
 builtin Result.unwrap! forms=1
-  Result.unwrap!(r: Result[T]) -> T shape=(Result(Var(T))) -> Var(T) rule=ResultUnwrap impl="Result.unwrap!" effects=[] desc="Return the success value; halt on error."
+  Result.unwrap!(result: Result[T]) -> T shape=(Result(Var(T))) -> Var(T) rule=ResultUnwrap impl="Result.unwrap!" effects=[] desc="Return the success value; halt on error."
 builtin Result.unwrap_or forms=1
   Result.unwrap_or(result: Result[T], default: T) -> T shape=(Result(Var(T)), Var(T)) -> Var(T) rule=ResultDefault impl="Result.unwrap_or" effects=[] desc="Return success or default; both arguments run eagerly."
 builtin Set.add forms=1
@@ -608,9 +608,9 @@ builtin String.at forms=1
 builtin String.bytesize forms=1
   String.bytesize(string: String) -> Int shape=(String) -> Int rule=Plain impl="String.bytesize" effects=[] desc="Count UTF-8 bytes."
 builtin String.code forms=1
-  String.code(c: String) -> Int shape=(String) -> Int rule=Plain impl="String.code" effects=[] desc="Return the code point of a one-character string; other lengths halt."
+  String.code(string: String) -> Int shape=(String) -> Int rule=Plain impl="String.code" effects=[] desc="Return the code point of a one-character string; other lengths halt."
 builtin String.compare forms=1
-  String.compare(a: String, b: String) -> Int shape=(String, String) -> Int rule=Plain impl="String.compare" effects=[] desc="Compare two Strings in the order of sort: -1, 0 or 1."
+  String.compare(string: String, other: String) -> Int shape=(String, String) -> Int rule=Plain impl="String.compare" effects=[] desc="Compare two Strings in the order of sort: -1, 0 or 1."
 builtin String.include? forms=1
   String.include?(string: String, part: String) -> Bool shape=(String, String) -> Bool rule=Plain impl="String.contains?" effects=[] desc="Check for a substring."
 builtin String.downcase forms=1
@@ -622,11 +622,11 @@ builtin String.end_with? forms=1
 builtin String.from_bytes forms=1
   String.from_bytes(data: Bytes) -> Result[String] shape=(Bytes) -> Result(String) rule=Plain impl="String.from_bytes.bytes" effects=[] desc="Decode UTF-8 strictly; invalid bytes or incomplete sequences return an error."
 builtin String.from_code forms=1
-  String.from_code(n: Int) -> String shape=(Int) -> String rule=Plain impl="String.from_code" effects=[] desc="Build a one-character string from a Unicode scalar value; invalid values halt."
+  String.from_code(code: Int) -> String shape=(Int) -> String rule=Plain impl="String.from_code" effects=[] desc="Build a one-character string from a Unicode scalar value; invalid values halt."
 builtin Float.to_s forms=1
-  Float.to_s(x: Float) -> String shape=(Float) -> String rule=Plain impl="String.from_float" effects=[] desc="Convert a Float to text."
+  Float.to_s(float: Float) -> String shape=(Float) -> String rule=Plain impl="String.from_float" effects=[] desc="Convert a Float to text."
 builtin Int.to_s forms=1
-  Int.to_s(n: Int) -> String shape=(Int) -> String rule=Plain impl="String.from_int" effects=[] desc="Convert an Int to text."
+  Int.to_s(int: Int) -> String shape=(Int) -> String rule=Plain impl="String.from_int" effects=[] desc="Convert an Int to text."
 builtin String.index_of forms=1
   String.index_of(string: String, part: String) -> Optional[Int] shape=(String, String) -> Optional(Int) rule=Plain impl="String.index_of.optional" effects=[] desc="Find the first character index of part as some(index), or none when part is absent."
 builtin List.join forms=1
@@ -863,19 +863,19 @@ builtin OpenSSL.HMAC.sha512 forms=1
 builtin OpenSSL.HMAC.sha512_hexdigest forms=1
   OpenSSL.HMAC.sha512_hexdigest(key: Bytes, data: Bytes) -> String shape=(Bytes, Bytes) -> String rule=Plain impl="OpenSSL.HMAC.sha512_hexdigest.bytes" effects=[] desc="HMAC-SHA512 (RFC 2104) of data (bytes) under a key of any length; returns the MAC as 128 lowercase hex digits; VM only."
 builtin OpenSSL.Random.random_bytes forms=1
-  OpenSSL.Random.random_bytes(n: Int = 16) -> Bytes shape=(Int = 16) -> Bytes rule=Plain impl="OpenSSL.Random.random_bytes.bytes" effects=["random"] desc="Draw n bytes (0..1048576, 16 by default) from the system's secure random source (OpenSSL RAND_bytes), for keys, salts and tokens; unlike Random, never seeded; VM only."
+  OpenSSL.Random.random_bytes(count: Int = 16) -> Bytes shape=(Int = 16) -> Bytes rule=Plain impl="OpenSSL.Random.random_bytes.bytes" effects=["random"] desc="Draw count bytes (0..1048576, 16 by default) from the system's secure random source (OpenSSL RAND_bytes), for keys, salts and tokens; unlike Random, never seeded; VM only."
 builtin OpenSSL.Random.hex forms=1
-  OpenSSL.Random.hex(n: Int = 16) -> String shape=(Int = 16) -> String rule=Plain impl="OpenSSL.Random.hex" effects=["random"] desc="Draw n secure random bytes (0..1048576, 16 by default) and give them as 2n lowercase hex digits; VM only."
+  OpenSSL.Random.hex(count: Int = 16) -> String shape=(Int = 16) -> String rule=Plain impl="OpenSSL.Random.hex" effects=["random"] desc="Draw count secure random bytes (0..1048576, 16 by default) and give them as 2 * count lowercase hex digits; VM only."
 builtin OpenSSL.Random.uuid forms=1
   OpenSSL.Random.uuid() -> String shape=() -> String rule=Plain impl="OpenSSL.Random.uuid" effects=["random"] desc="Draw a random version 4 UUID (RFC 9562) as 36 lowercase characters; VM only."
 builtin OpenSSL.HMAC.secure_compare forms=1
-  OpenSSL.HMAC.secure_compare(a: Bytes, b: Bytes) -> Bool shape=(Bytes, Bytes) -> Bool rule=Plain impl="OpenSSL.HMAC.secure_compare.bytes" effects=[] desc="Whether the bytes a and b are the same, in constant time: it compares their SHA-256 digests with OpenSSL CRYPTO_memcmp, so the time never depends on the bytes; for checking MACs and tokens; VM only."
+  OpenSSL.HMAC.secure_compare(bytes: Bytes, other: Bytes) -> Bool shape=(Bytes, Bytes) -> Bool rule=Plain impl="OpenSSL.HMAC.secure_compare.bytes" effects=[] desc="Whether bytes and other are the same, in constant time: it compares their SHA-256 digests with OpenSSL CRYPTO_memcmp, so the time never depends on the bytes; for checking MACs and tokens; VM only."
 builtin Bytes.at forms=1
   Bytes.at(bytes: Bytes, index: Int) -> Int shape=(Bytes, Int) -> Int rule=Plain impl="Bytes.at" effects=[] desc="Read the byte at a zero-based index as an Int (0..255); an index outside the bytes halts."
 builtin Bytes.concat forms=1
-  Bytes.concat(parts: List[Bytes]) -> Bytes shape=(List(Bytes)) -> Bytes rule=Plain impl="Bytes.concat" effects=[] desc="Join the parts in order in one copy; prefer it to + in a loop."
+  Bytes.concat(list: List[Bytes]) -> Bytes shape=(List(Bytes)) -> Bytes rule=Plain impl="Bytes.concat" effects=[] desc="Join the parts in order in one copy; prefer it to + in a loop."
 builtin Bytes.drop forms=1
-  Bytes.drop(bytes: Bytes, n: Int) -> Bytes shape=(Bytes, Int) -> Bytes rule=Plain impl="Bytes.drop" effects=[] desc="Copy the bytes after the first n; n above the length gives empty bytes, a negative n halts."
+  Bytes.drop(bytes: Bytes, count: Int) -> Bytes shape=(Bytes, Int) -> Bytes rule=Plain impl="Bytes.drop" effects=[] desc="Copy the bytes after the first count; count above the length gives empty bytes, a negative count halts."
 builtin Bytes.each forms=1
   Bytes.each(bytes: Bytes, block: Fn[Int, Void]) -> Void shape=(Bytes, Fn([Int], Void)) -> Void rule=Prelude impl="" effects=[] desc="Call block on each byte in order; returns nothing."
 builtin Bytes.empty? forms=1
@@ -887,7 +887,7 @@ builtin Bytes.length forms=1
 builtin Bytes.slice forms=1
   Bytes.slice(bytes: Bytes, start: Int, length: Int) -> Bytes shape=(Bytes, Int, Int) -> Bytes rule=Plain impl="Bytes.slice" effects=[] desc="Copy a byte range; halt outside bounds."
 builtin Bytes.take forms=1
-  Bytes.take(bytes: Bytes, n: Int) -> Bytes shape=(Bytes, Int) -> Bytes rule=Plain impl="Bytes.take" effects=[] desc="Copy the first n bytes; n above the length gives all of them, a negative n halts."
+  Bytes.take(bytes: Bytes, count: Int) -> Bytes shape=(Bytes, Int) -> Bytes rule=Plain impl="Bytes.take" effects=[] desc="Copy the first count bytes; count above the length gives all of them, a negative count halts."
 builtin Bytes.to_a forms=1
   Bytes.to_a(bytes: Bytes) -> List[Int] shape=(Bytes) -> List(Int) rule=Plain impl="Bytes.to_a" effects=[] desc="List the bytes as Ints (0..255); the way to map, select and the other List methods."
 builtin String.bytes forms=1

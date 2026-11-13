@@ -50,7 +50,7 @@ error("broken")
 ## Result.ok?
 
 ```signature
-Result.ok?(r: Result[T]) -> Bool
+Result.ok?(result: Result[T]) -> Bool
 ```
 
 ```agentica
@@ -68,7 +68,7 @@ false
 ## Result.unwrap!
 
 ```signature
-Result.unwrap!(r: Result[T]) -> T
+Result.unwrap!(result: Result[T]) -> T
 ```
 
 Gives the value, or stops the program with `RUNTIME-UNWRAP-ERROR`.
@@ -106,7 +106,7 @@ end
 ## Result.message
 
 ```signature
-Result.message(r: Result[T]) -> String
+Result.message(result: Result[T]) -> String
 ```
 
 Gives the `message` of the error, or `""` for a success.

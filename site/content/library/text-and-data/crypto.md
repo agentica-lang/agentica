@@ -79,7 +79,7 @@ OpenSSL.HMAC.sha256(key: Bytes, data: Bytes) -> Bytes
 OpenSSL.HMAC.sha256_hexdigest(key: Bytes, data: Bytes) -> String
 OpenSSL.HMAC.sha512(key: Bytes, data: Bytes) -> Bytes
 OpenSSL.HMAC.sha512_hexdigest(key: Bytes, data: Bytes) -> String
-OpenSSL.HMAC.secure_compare(a: Bytes, b: Bytes) -> Bool
+OpenSSL.HMAC.secure_compare(bytes: Bytes, other: Bytes) -> Bool
 ```
 
 `OpenSSL.HMAC.sha256` gives the HMAC-SHA256 (RFC 2104) of `data` under `key`: a `Bytes` of 32 bytes. `OpenSSL.HMAC.sha512` gives the 64 of HMAC-SHA512. Each `_hexdigest` form gives the same MAC as lowercase hex, as Ruby's `OpenSSL::HMAC.hexdigest("SHA256", key, data)` does. The key can have any length, empty included; a key longer than the hash's block (64 bytes for SHA-256, 128 for SHA-512) is hashed first, as RFC 2104 says. They sign webhook payloads, JSON Web Tokens with HS256 (the MAC in unpadded base64url) and signed URLs.
@@ -308,12 +308,12 @@ false
 ## Random
 
 ```signature
-OpenSSL.Random.random_bytes(n: Int = 16) -> Bytes
-OpenSSL.Random.hex(n: Int = 16) -> String
+OpenSSL.Random.random_bytes(count: Int = 16) -> Bytes
+OpenSSL.Random.hex(count: Int = 16) -> String
 OpenSSL.Random.uuid() -> String
 ```
 
-`OpenSSL.Random.random_bytes(n)` gives a `Bytes` of `n` bytes from the secure random generator of OpenSSL (`RAND_bytes`), which the system seeds. `OpenSSL.Random.hex(n)` gives `n` such bytes as `2n` lowercase hex digits. `OpenSSL.Random.uuid` gives a random version 4 UUID (RFC 9562): 36 lowercase characters such as `"2ddb7c9f-b237-4edc-b8ae-d3a42c7135f5"`. Without an argument, `random_bytes` and `hex` draw 16 bytes, as in Ruby.
+`OpenSSL.Random.random_bytes(count)` gives a `Bytes` of `count` bytes from the secure random generator of OpenSSL (`RAND_bytes`), which the system seeds. `OpenSSL.Random.hex(count)` gives `count` such bytes as `2 * count` lowercase hex digits. `OpenSSL.Random.uuid` gives a random version 4 UUID (RFC 9562): 36 lowercase characters such as `"2ddb7c9f-b237-4edc-b8ae-d3a42c7135f5"`. Without an argument, `random_bytes` and `hex` draw 16 bytes, as in Ruby.
 
 ```agentica
 def main() -> Void
@@ -336,9 +336,9 @@ end
 Each run gives other values.
 
 - Use `OpenSSL.Random` for keys, salts, session tokens, password reset links and IDs that must not be guessed. [`Random`](/library/io-and-system/system/#randomint) is seeded and `--seed` repeats it, so it is not for secrets.
-- `n` must be from 0 to 1048576 (1 MiB); any other `n` stops the program with `RUNTIME-INVALID-COUNT` at the argument. A key or a token needs 16 to 64 bytes.
+- `count` must be from 0 to 1048576 (1 MiB); any other `count` stops the program with `RUNTIME-INVALID-COUNT` at the argument. A key or a token needs 16 to 64 bytes.
 - If the system cannot give random bytes, the call stops the program with `RUNTIME-INTERNAL`. It never gives weak bytes instead.
-- The calls have the `random` effect label, so a module constant cannot call them. The time of `random_bytes` and `hex` grows with `n`.
+- The calls have the `random` effect label, so a module constant cannot call them. The time of `random_bytes` and `hex` grows with `count`.
 
 ```agentica {expect="RUNTIME-INVALID-COUNT"}
 def main() -> Void

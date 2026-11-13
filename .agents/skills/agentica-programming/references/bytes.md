@@ -21,7 +21,7 @@ b.at(i), b[i] -> Int                      # halts outside the bytes (RUNTIME-IND
 b.slice(start, length) -> Bytes           # halts outside the bounds
 b.take(n), b.drop(n) -> Bytes             # clamp to the length; n < 0 is RUNTIME-INVALID-COUNT
 a + b -> Bytes
-Bytes.concat(parts: List[Bytes]) -> Bytes # one copy
+Bytes.concat(list: List[Bytes]) -> Bytes  # one copy
 b.each do |byte| ... end                  # Void
 for byte in b ... end
 b.decode(encoding) -> Result[String]      # text in an encoding; see below

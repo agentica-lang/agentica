@@ -126,24 +126,8 @@ def test_an_unknown_module_or_name_is_a_query_diagnostic(tmp_path):
 
 
 # Named arguments make parameter names public: every builtin and std/ parameter name has at least two characters.
-# scrypt keeps its own n, r and p. PENDING are the one-letter names that #1503 did not list, kept until the owner
-# picks their names.
-SHORT_NAMES = {
-    ("OpenSSL.KDF.scrypt", "n"), ("OpenSSL.KDF.scrypt", "r"), ("OpenSSL.KDF.scrypt", "p"),
-}
-PENDING = {
-    ("Bytes.drop", "n"), ("Bytes.take", "n"), ("Math.sqrt", "x"), ("JSON.parse", "s"),
-    ("OpenSSL.HMAC.secure_compare", "a"), ("OpenSSL.HMAC.secure_compare", "b"),
-    ("OpenSSL.Random.hex", "n"), ("OpenSSL.Random.random_bytes", "n"),
-    ("Result.message", "r"), ("Result.ok?", "r"), ("Result.unwrap!", "r"),
-    ("String.code", "c"), ("String.compare", "a"), ("String.compare", "b"), ("String.from_code", "n"),
-    ("std/test/child.read_records", "p"),
-} | {(f"Float.{name}", "x") for name in ("abs", "ceil", "floor", "round", "to_bits", "to_bits32", "to_i", "to_i!", "to_s")} \
-  | {(f"Int.{name}", "n") for name in ("abs", "pow", "to_f", "to_s")} \
-  | {(f"Int.{name}", "a") for name in ("bit_and", "bit_not", "bit_or", "bit_xor", "gcd", "shift_left", "shift_right",
-                                       "shift_right_unsigned")} \
-  | {(f"Int.{name}", "b") for name in ("bit_and", "bit_or", "bit_xor", "gcd")} \
-  | {(f"JSON.{name}", "j") for name in ("at", "bool", "float", "get", "int", "list", "string")}
+# scrypt keeps its own n, r and p.
+SHORT_NAMES = {("OpenSSL.KDF.scrypt", "n"), ("OpenSSL.KDF.scrypt", "r"), ("OpenSSL.KDF.scrypt", "p")}
 
 
 def test_every_builtin_and_std_parameter_name_has_two_characters_or_more(tmp_path):
@@ -157,4 +141,4 @@ def test_every_builtin_and_std_parameter_name_has_two_characters_or_more(tmp_pat
         assert documented.code == 0, documented.stderr
         for item in json.loads(documented.stdout)["items"]:
             found |= {(f"std/{module}.{item['name']}", parameter["name"]) for parameter in item.get("parameters", [])}
-    assert {pair for pair in found if len(pair[1]) < 2} == SHORT_NAMES | PENDING
+    assert {pair for pair in found if len(pair[1]) < 2} == SHORT_NAMES

@@ -15,8 +15,8 @@ To read numbers from text, see [to_i and to_f](/library/text-and-data/string/#to
 ## to_s
 
 ```signature
-Int.to_s(n: Int) -> String
-Float.to_s(x: Float) -> String
+Int.to_s(int: Int) -> String
+Float.to_s(float: Float) -> String
 ```
 
 The text of a number, as `puts` and interpolation write it.
@@ -36,7 +36,7 @@ end
 ## to_f
 
 ```signature
-Int.to_f(n: Int) -> Float
+Int.to_f(int: Int) -> Float
 ```
 
 ```agentica
@@ -55,7 +55,7 @@ end
 ## to_i
 
 ```signature
-Float.to_i(x: Float) -> Result[Int]
+Float.to_i(float: Float) -> Result[Int]
 ```
 
 Cuts off the decimals, toward zero. A value that does not fit in an `Int`, or that is not a number (NaN or an infinity), gives an error Result.
@@ -77,7 +77,7 @@ false
 ## to_i!
 
 ```signature
-Float.to_i!(x: Float) -> Int
+Float.to_i!(float: Float) -> Int
 ```
 
 Like `to_i`, but gives the `Int` itself and stops the program on a bad value, with `RUNTIME-INVALID-NUMBER` or `RUNTIME-INTEGER-OVERFLOW`.
@@ -97,10 +97,10 @@ end
 ## abs, pow and gcd
 
 ```signature
-Int.abs(n: Int) -> Int
-Float.abs(x: Float) -> Float
-Int.pow(n: Int, exponent: Int) -> Int
-Int.gcd(a: Int, b: Int) -> Int
+Int.abs(int: Int) -> Int
+Float.abs(float: Float) -> Float
+Int.pow(int: Int, exponent: Int) -> Int
+Int.gcd(int: Int, other: Int) -> Int
 ```
 
 - `abs` of the least `Int`, `-9223372036854775808`, does not fit and is `RUNTIME-INTEGER-OVERFLOW`, as `-n` is. `Float.abs` clears the sign, so `-0.0` gives `0.0`, and a NaN stays NaN.
@@ -140,7 +140,7 @@ Int.clamp(int: Int, min: Int, max: Int) -> Int
 Float.clamp(float: Float, min: Float, max: Float) -> Float
 ```
 
-Gives `min` when the number is below it, `max` when above it, and the number itself otherwise. `min > max` stops the program with `RUNTIME-INVALID-RANGE`, as in Ruby (an `ArgumentError` there). On a `Float`, a NaN bound is `RUNTIME-INVALID-RANGE` too, and a NaN `x` comes back as NaN.
+Gives `min` when the number is below it, `max` when above it, and the number itself otherwise. `min > max` stops the program with `RUNTIME-INVALID-RANGE`, as in Ruby (an `ArgumentError` there). On a `Float`, a NaN bound is `RUNTIME-INVALID-RANGE` too, and a NaN `float` comes back as NaN.
 
 ```agentica
 def main() -> Void
@@ -166,9 +166,9 @@ end
 ## floor, ceil and round
 
 ```signature
-Float.floor(x: Float) -> Int
-Float.ceil(x: Float) -> Int
-Float.round(x: Float) -> Int
+Float.floor(float: Float) -> Int
+Float.ceil(float: Float) -> Int
+Float.round(float: Float) -> Int
 ```
 
 They give an `Int`, as Ruby's `Float#floor` gives an `Integer`. `floor` goes down, `ceil` goes up, and `round` goes to the nearest whole number, with halves away from zero: `2.5.round` is `3` and `(-2.5).round` is `-3`. Like `x.to_i!`, NaN or an infinity is `RUNTIME-INVALID-NUMBER` and a result outside `Int` is `RUNTIME-INTEGER-OVERFLOW`. `round` takes no number of digits; for two decimals write `(x * 100.0).round.to_f / 100.0`.
@@ -196,10 +196,10 @@ end
 ## Math.sqrt
 
 ```signature
-Math.sqrt(x: Float) -> Float
+Math.sqrt(float: Float) -> Float
 ```
 
-The square root. A negative `x` stops the program with `RUNTIME-INVALID-NUMBER` at the argument, as Ruby raises `Math::DomainError`. `-0.0` gives `-0.0`, infinity gives infinity, and a NaN stays NaN. For an `Int`, convert first: `Math.sqrt(n.to_f)`.
+The square root. A negative `float` stops the program with `RUNTIME-INVALID-NUMBER` at the argument, as Ruby raises `Math::DomainError`. `-0.0` gives `-0.0`, infinity gives infinity, and a NaN stays NaN. For an `Int`, convert first: `Math.sqrt(n.to_f)`.
 
 ```agentica
 def main() -> Void
@@ -224,10 +224,10 @@ end
 ## Int.bit_and, Int.bit_or and Int.bit_xor
 
 ```signature
-Int.bit_and(a: Int, b: Int) -> Int
-Int.bit_or(a: Int, b: Int) -> Int
-Int.bit_xor(a: Int, b: Int) -> Int
-Int.bit_not(a: Int) -> Int
+Int.bit_and(int: Int, other: Int) -> Int
+Int.bit_or(int: Int, other: Int) -> Int
+Int.bit_xor(int: Int, other: Int) -> Int
+Int.bit_not(int: Int) -> Int
 ```
 
 Combine the bits of two numbers, bit by bit. They never fail. `Int.bit_not(a)` flips every bit and is the same as `-1 - a`. A negative number has its sign bit set, so `Int.bit_and(-1, 255)` is `255`.
@@ -254,15 +254,15 @@ true
 ## Int.shift_left, Int.shift_right and Int.shift_right_unsigned
 
 ```signature
-Int.shift_left(a: Int, count: Int) -> Int
-Int.shift_right(a: Int, count: Int) -> Int
-Int.shift_right_unsigned(a: Int, count: Int) -> Int
+Int.shift_left(int: Int, count: Int) -> Int
+Int.shift_right(int: Int, count: Int) -> Int
+Int.shift_right_unsigned(int: Int, count: Int) -> Int
 ```
 
-- `shift_left(a, n)` is the low 64 bits of `a * 2^n`: bits that leave the top are dropped and bit 63 becomes the sign, so `1.shift_left(63)` is `-9223372036854775808`. Use `x * 2` for an overflow check.
+- `shift_left(int, count)` is the low 64 bits of `int * 2^count`: bits that leave the top are dropped and bit 63 becomes the sign, so `1.shift_left(63)` is `-9223372036854775808`. Use `x * 2` for an overflow check.
 - `shift_right` is arithmetic (the sign bit comes in), so it rounds toward minus infinity: `(-7).shift_right(1)` is `-4`.
-- `shift_right_unsigned` is logical (zeros come in): it reads `a` as an unsigned 64-bit number. `(-1).shift_right_unsigned(64 - n)` masks the low `n` bits.
-- A count of 64 or more shifts every bit out: the result is `0`, or `-1` for `shift_right` of a negative `a`. A negative count is `RUNTIME-INVALID-COUNT`.
+- `shift_right_unsigned` is logical (zeros come in): it reads `int` as an unsigned 64-bit number. `(-1).shift_right_unsigned(64 - n)` masks the low `n` bits.
+- A count of 64 or more shifts every bit out: the result is `0`, or `-1` for `shift_right` of a negative `int`. A negative count is `RUNTIME-INVALID-COUNT`.
 
 ```agentica
 def main() -> Void
@@ -299,11 +299,11 @@ end
 ## Float.to_bits and Float.from_bits
 
 ```signature
-Float.to_bits(x: Float) -> Int
+Float.to_bits(float: Float) -> Int
 Float.from_bits(bits: Int) -> Float
 ```
 
-`to_bits` gives the IEEE 754 binary64 bits of `x` as a two's complement `Int` (`1.0` is `4607182418800017408`, `-0.0` is `-9223372036854775808`). Every NaN gives the quiet NaN `9221120237041090560`. `x.to_bits < 0` tests the sign bit of every value except NaN (test NaN with `x != x`), and `to_bits` tells `-0.0` from `0.0`.
+`to_bits` gives the IEEE 754 binary64 bits of `float` as a two's complement `Int` (`1.0` is `4607182418800017408`, `-0.0` is `-9223372036854775808`). Every NaN gives the quiet NaN `9221120237041090560`. `x.to_bits < 0` tests the sign bit of every value except NaN (test NaN with `x != x`), and `to_bits` tells `-0.0` from `0.0`.
 
 `from_bits` reads the 64 bits of any `Int` as a binary64; subnormals, infinities and `-0.0` come back exactly, and any NaN pattern gives NaN. So `Float.to_bits(Float.from_bits(n)) == n` for every `n` except NaN patterns other than the quiet NaN.
 
@@ -332,11 +332,11 @@ true
 ## Float.to_bits32 and Float.from_bits32
 
 ```signature
-Float.to_bits32(x: Float) -> Int
+Float.to_bits32(float: Float) -> Int
 Float.from_bits32(bits: Int) -> Float
 ```
 
-`to_bits32` rounds `x` to binary32, to nearest with ties to even, and gives its 32 bits as an `Int` from 0 to 4294967295. A magnitude of `2^128 - 2^103` or more becomes infinity with the same sign. A very small one rounds to a subnormal or to zero and keeps its sign. Every NaN gives `2143289344`.
+`to_bits32` rounds `float` to binary32, to nearest with ties to even, and gives its 32 bits as an `Int` from 0 to 4294967295. A magnitude of `2^128 - 2^103` or more becomes infinity with the same sign. A very small one rounds to a subnormal or to zero and keeps its sign. Every NaN gives `2143289344`.
 
 `from_bits32` reads 32 bits as a binary32 and widens it to a `Float`, which is always exact. An `Int` outside `0 .. 4294967295` is `RUNTIME-INVALID-NUMBER` at the argument. So `Float.to_bits32(Float.from_bits32(n)) == n` for every `n` except NaN patterns other than `2143289344`.
 

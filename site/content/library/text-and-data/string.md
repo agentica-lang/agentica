@@ -256,8 +256,8 @@ true
 ## code and from_code
 
 ```signature
-String.code(c: String) -> Int
-String.from_code(n: Int) -> String
+String.code(string: String) -> Int
+String.from_code(code: Int) -> String
 ```
 
 `code` gives the Unicode number of a one-character string. `from_code` goes the other way, from a scalar value (0 to 0x10FFFF, no surrogates). Other input stops the program with `RUNTIME-INVALID-CHARACTER`.
@@ -277,7 +277,7 @@ b
 ## compare
 
 ```signature
-String.compare(a: String, b: String) -> Int
+String.compare(string: String, other: String) -> Int
 ```
 
 Gives `-1`, `0` or `1`, in the order `sort` uses: by code point, so `"B"` comes before `"a"`. It is also a method: `a.compare(b)`.
