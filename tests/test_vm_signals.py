@@ -260,11 +260,7 @@ def test_an_ended_subscription_gives_the_signal_back_to_the_stop_path(tmp_path, 
         import subprocess, sys
         if sys.platform == "darwin":
             print(subprocess.run(["sample", str(vm.process.pid), "2"], capture_output=True, text=True).stdout)
-        os.kill(vm.process.pid, signal.SIGUSR1)
-        time.sleep(2)
-        print("after second USR1:", vm.process.poll())
-        if vm.process.poll() is None:
-            vm.process.kill()
+        vm.process.kill()
         vm.process.wait()
         time.sleep(1)
         print(vm.stderr_text()[-20000:])
