@@ -40,16 +40,17 @@ char *agc_system_env(const char *name) {
 
 static agc_value builtin_env(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
-  if (vm->rt->deny_env) return agc_error(vm, "error", AGC_DENIED_ENV);
+  if (vm->rt->deny_env) return agc_error(vm, AGC_KIND_ERROR, AGC_DENIED_ENV);
   const agc_string *name = agc_as_string(vm, args[0]);
   if (!name->bytes || memchr(name->data, 0, name->bytes) || memchr(name->data, '=', name->bytes))
-    return agc_error(vm, "error", "system: environment variable name must be nonempty and cannot contain = or NUL");
+    return agc_error(vm, AGC_KIND_ARGUMENT,
+                     "system: environment variable name must be nonempty and cannot contain = or NUL");
   if (same_name(name, AGC_CHANNEL_ENV) || (vm->rt->drop_uring_env && same_name(name, "UV_USE_IO_URING")))
-    return agc_error(vm, "error", "system: environment variable is not set");
+    return agc_error(vm, AGC_KIND_SYSTEM_ENV, "system: environment variable is not set");
   char *key = agc_cstr(name);
   char *value = agc_system_env(key);
   free(key);
-  if (!value) return agc_error(vm, "error", "system: environment variable is not set");
+  if (!value) return agc_error(vm, AGC_KIND_SYSTEM_ENV, "system: environment variable is not set");
   agc_string *text = agc_utf8_decode((const uint8_t *)value, strlen(value), "\xEF\xBF\xBD", false);
   free(value);
   return agc_result_value(true, agc_string_value(text));

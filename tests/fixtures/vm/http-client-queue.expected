@@ -3,7 +3,7 @@
   "code": null,
   "steps": 3718,
   "stdout": [
-    "[error(\"task: timed out\")]",
+    "[error(\"task: timed out\", kind: \"task.timeout\")]",
     "ok(HTTP.Response(status: 200, headers: [HTTP.Header(name: \"content-length\", value: \"2\")], body: <Bytes 2 6f6b>))",
     "ok(HTTP.Response(status: 200, headers: [HTTP.Header(name: \"content-length\", value: \"2\")], body: <Bytes 2 6f6b>))",
     "GET /slow HTTP/1.1",

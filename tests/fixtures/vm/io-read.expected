@@ -7,9 +7,9 @@
     "eof? false",
     "ok(<Bytes 0>)",
     "ok(<Bytes 3 74776f>)",
-    "error(\"byte count must be between 0 and 1048576\")",
-    "error(\"byte count must be between 0 and 1048576\")",
-    "error(\"byte count must be between 0 and 1048576\")",
+    "error(\"byte count must be between 0 and 1048576\", kind: \"argument\")",
+    "error(\"byte count must be between 0 and 1048576\", kind: \"argument\")",
+    "error(\"byte count must be between 0 and 1048576\", kind: \"argument\")",
     "ok(<Bytes 10 e282ac0d0a7468726565>)",
     ""
   ],

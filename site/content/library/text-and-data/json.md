@@ -89,7 +89,7 @@ end
 
 ```output
 ok(Point(x: 1, y: 2))
-error("y: expected required field")
+error("y: expected required field", kind: "json.decode")
 ```
 
 A top-level JSON array or object of items decodes in one call. An error path starts at the index or key:
@@ -109,7 +109,7 @@ end
 
 ```output
 [Point(x: 1, y: 2), Point(x: 3, y: 4)]
-error("[\"a\"].y: expected required field")
+error("[\"a\"].y: expected required field", kind: "json.decode")
 ```
 
 ## JSON.schema
@@ -330,8 +330,8 @@ end
 
 ```output
 ok(Shape.Empty)
-error("values: expected array of 2 items")
-error("tag: expected one of Circle, Rect, Empty")
+error("values: expected array of 2 items", kind: "json.decode")
+error("tag: expected one of Circle, Rect, Empty", kind: "json.decode")
 ```
 
 ## JSON.parse

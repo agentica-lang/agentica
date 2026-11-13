@@ -177,9 +177,9 @@ bool agc_http_list_closes(agc_vm *vm, const agc_list *headers) {
   return false;
 }
 
-agc_value agc_http_error_result(agc_vm *vm, const char *prefix, const char *reason) {
+agc_value agc_http_error_result(agc_vm *vm, agc_error_kind kind, const char *prefix, const char *reason) {
   size_t size = agc_size_add(strlen(prefix), strlen(reason) + 1);
   char *text = agc_alloc_atomic(size);
   snprintf(text, size, "%s%s", prefix, reason);
-  return agc_error(vm, "error", text);
+  return agc_error(vm, kind, text);
 }

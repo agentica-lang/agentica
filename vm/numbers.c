@@ -59,7 +59,7 @@ static agc_value float_value_to_int(agc_vm *vm, double x, uint32_t span, bool ba
   }
   if (bang) agc_fail(vm, code, message, span);
   size_t n = strlen(message);
-  return agc_error_string(vm, "error", agc_make_string(message, n, n));
+  return agc_error_string(vm, AGC_KIND_NUMBER_RANGE, agc_make_string(message, n, n));
 }
 
 static agc_value builtin_float_to_int(agc_vm *vm, agc_value *args, uint32_t span) {

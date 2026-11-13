@@ -27,7 +27,7 @@ static char **copy_words(agc_vm *vm, const agc_list *list, const char *what, agc
     if (word->bytes && memchr(word->data, 0, word->bytes)) {
       char message[96];
       snprintf(message, sizeof message, "%s %zu has a character 0", what, k + 1);
-      *refused = agc_error(vm, "error", message);
+      *refused = agc_error(vm, AGC_KIND_ERROR, message);
       return NULL;
     }
     char *copy = agc_alloc_atomic(agc_size_add(word->bytes, 1));
@@ -50,9 +50,9 @@ static agc_value builtin_hand_off(agc_vm *vm, agc_value *args, uint32_t span) {
   const uint8_t *bytes = agc_bytes_data(vm, args[0], &len);
   const agc_list *options = agc_as_list(vm, args[1]);
   const agc_list *arguments = agc_as_list(vm, args[2]);
-  if (agc_list_len(options) > AGC_FRONT_END_MAX_OPTIONS) return agc_error(vm, "error", "too many options");
-  if (agc_list_len(arguments) > AGC_FRONT_END_MAX_ARGUMENTS) return agc_error(vm, "error", "too many arguments");
-  if (len > AGC_MAX_FILE_BYTES) return agc_error(vm, "error", "the program is too large");
+  if (agc_list_len(options) > AGC_FRONT_END_MAX_OPTIONS) return agc_error(vm, AGC_KIND_ERROR, "too many options");
+  if (agc_list_len(arguments) > AGC_FRONT_END_MAX_ARGUMENTS) return agc_error(vm, AGC_KIND_ERROR, "too many arguments");
+  if (len > AGC_MAX_FILE_BYTES) return agc_error(vm, AGC_KIND_ERROR, "the program is too large");
   agc_value refused = agc_void();
   char **option_words = copy_words(vm, options, "option", &refused);
   if (!option_words) return refused;
@@ -74,13 +74,13 @@ static agc_value std_source(agc_vm *vm, agc_value path_value) {
   const agc_runtime *rt = vm->rt;
   /* The type check comes first, so a non-String argument fails the same way in every binary. */
   const agc_string *path = agc_as_string(vm, path_value);
-  if (!rt->std_count) return agc_error(vm, "error", "this binary carries no std sources");
+  if (!rt->std_count) return agc_error(vm, AGC_KIND_ERROR, "this binary carries no std sources");
   for (size_t k = 0; k < rt->std_count; k++) {
     const agc_std_source *source = &rt->std[k];
     if (strlen(source->path) != path->bytes || memcmp(source->path, path->data, path->bytes) != 0) continue;
     return agc_result_value(true, agc_string_value(agc_utf8_decode(source->data, source->len, "\xEF\xBF\xBD", false)));
   }
-  return agc_error(vm, "error", "no such std source");
+  return agc_error(vm, AGC_KIND_ERROR, "no such std source");
 }
 
 static agc_value builtin_std_source(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -105,11 +105,11 @@ static agc_value builtin_stdin_bytes(agc_vm *vm, agc_value *args, uint32_t span)
   const agc_bytes *bytes = NULL;
   agc_input_status status = agc_input_whole(vm, AGC_FRONT_END_MAX_STDIN, &bytes);
   if (status == AGC_INPUT_WAIT) return agc_void();
-  if (status == AGC_INPUT_FAILED) return agc_error(vm, "error", "cannot read standard input");
+  if (status == AGC_INPUT_FAILED) return agc_error(vm, AGC_KIND_ERROR, "cannot read standard input");
   if (!bytes) {
     char message[64];
     snprintf(message, sizeof message, "standard input is larger than %zu bytes", AGC_FRONT_END_MAX_STDIN);
-    return agc_error(vm, "error", message);
+    return agc_error(vm, AGC_KIND_ERROR, message);
   }
   return agc_result_value(true, agc_bytes_value(bytes));
 }

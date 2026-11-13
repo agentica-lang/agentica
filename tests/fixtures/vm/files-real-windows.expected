@@ -4,8 +4,8 @@
   "steps": 190,
   "stdout": [
     "\"<root>/a\"",
-    "error(\"filesystem: cannot resolve path\\n  path: @tmp/a/b/c/f.txt/\\n  system error: No such file or directory; errno=2\")",
-    "error(\"filesystem: cannot resolve path\\n  path: @tmp/a/b/c/f.txt/x\\n  system error: No such file or directory; errno=2\")",
+    "error(\"filesystem: cannot resolve path\\n  path: @tmp/a/b/c/f.txt/\\n  system error: No such file or directory; errno=2\", kind: \"io.not_found\", code: 2)",
+    "error(\"filesystem: cannot resolve path\\n  path: @tmp/a/b/c/f.txt/x\\n  system error: No such file or directory; errno=2\", kind: \"io.not_found\", code: 2)",
     "true",
     "true",
     ""

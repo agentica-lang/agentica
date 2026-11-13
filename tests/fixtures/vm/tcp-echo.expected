@@ -8,13 +8,13 @@
     "true",
     "ok(\"hello\")",
     "ok(\"ñ😀\")",
-    "error(\"invalid UTF-8 at byte 3\")",
+    "error(\"invalid UTF-8 at byte 3\", kind: \"text.encoding\")",
     "echo hello ñ😀",
     "ok(<Bytes 2 0102>)",
     "ok(<Bytes 1 03>)",
     "ok(\"last\\r\")",
     "ok(<Bytes 0>)",
-    "error(\"network: end of input\")",
+    "error(\"network: end of input\", kind: \"net.eof\")",
     ""
   ],
   "stderr": []

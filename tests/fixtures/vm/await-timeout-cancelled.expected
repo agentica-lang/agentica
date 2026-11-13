@@ -5,9 +5,9 @@
   "stdout": [
     "Await.TimedOut",
     "Await.TimedOut",
-    "error(\"task crashed: RUNTIME-DIVISION-BY-ZERO at @fixtures/vm/await-timeout-cancelled.agc:22:15: division by zero\")",
-    "error(\"task crashed: RUNTIME-TASK-CANCELLED at @fixtures/vm/await-timeout-cancelled.agc:26:8: task was cancelled\")",
-    "Await.Done(error(\"task: cancelled\"))",
+    "error(\"task crashed: RUNTIME-DIVISION-BY-ZERO at @fixtures/vm/await-timeout-cancelled.agc:22:15: division by zero\", kind: \"task.crashed\")",
+    "error(\"task crashed: RUNTIME-TASK-CANCELLED at @fixtures/vm/await-timeout-cancelled.agc:26:8: task was cancelled\", kind: \"task.crashed\")",
+    "Await.Done(error(\"task: cancelled\", kind: \"task.cancelled\"))",
     "the caller is unaffected",
     ""
   ],

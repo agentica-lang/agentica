@@ -15,9 +15,9 @@ language and the checker:
   data, not a handle: a channel passed as its address in that argument is
   shared, not handed over.
 - A runtime error in a task other than `main` is a crash that ends only that
-  task. `Task.await` of a crashed or cancelled task returns `error(text)` when
-  the result type is a `Result`, and halts with `RUNTIME-TASK-CRASHED` or
-  `RUNTIME-TASK-CANCELLED` otherwise.
+  task. `Task.await` of a crashed or cancelled task returns an error of kind
+  `task.crashed` or `task.cancelled` when the result type is a `Result`, and
+  halts with `RUNTIME-TASK-CRASHED` or `RUNTIME-TASK-CANCELLED` otherwise.
 - `Await[T]` (`Await.Done(value)` and `Await.TimedOut`, written without
   parentheses), `TaskRef`, `TaskDown` and `TaskExit` are reserved: a struct,
   enum, type parameter or import alias with one of these names is

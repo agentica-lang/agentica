@@ -13,8 +13,8 @@
     "thousand",
     "minus thousand",
     "other",
-    "error(\"cannot convert \\\"1_000\\\" to Int\")",
-    "error(\"cannot convert \\\"1_0.5\\\" to Float\")",
+    "error(\"cannot convert \\\"1_000\\\" to Int\", kind: \"number.parse\")",
+    "error(\"cannot convert \\\"1_0.5\\\" to Float\", kind: \"number.parse\")",
     ""
   ],
   "stderr": []

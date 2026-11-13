@@ -125,7 +125,7 @@ def test_sha256_rejects_a_timeout_that_is_not_positive(tmp_path, timeout):
     )
     result = run(cli() + [str(source)], env=vm_environment())
     assert (result.code, result.stdout) == (
-        0, 'error("filesystem: timeout must be positive milliseconds")\n'), result.stderr
+        0, 'error("filesystem: timeout must be positive milliseconds", kind: "argument")\n'), result.stderr
 
 
 def test_sha256_rejects_an_empty_path(tmp_path):
@@ -207,4 +207,4 @@ def test_sha256_of_a_task_cancelled_before_it_runs_is_cancelled(tmp_path):
         encoding="utf-8",
     )
     result = run(cli() + [str(source), str(target)], env=vm_environment())
-    assert (result.code, result.stdout) == (0, 'error("task: cancelled")\n'), result.stderr
+    assert (result.code, result.stdout) == (0, 'error("task: cancelled", kind: "task.cancelled")\n'), result.stderr

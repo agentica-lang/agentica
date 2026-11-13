@@ -3,7 +3,7 @@
   "code": "RUNTIME-END-OF-INPUT",
   "steps": 21,
   "stdout": [
-    "prompt> error(\"IO.gets reached the end of input\")",
+    "prompt> error(\"IO.gets reached the end of input\", kind: \"io.eof\")",
     "ok(<Bytes 0>)",
     "true",
     ""

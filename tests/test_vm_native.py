@@ -1154,7 +1154,7 @@ end
     source = program(tmp_path, (COMPUTE_EXTERN + PEER_WAITING).format(library=literal(peer)) + main)
     result = agentica("--schedulers", schedulers, source)
     assert (result.code, result.stderr) == (0, "")
-    assert result.stdout.split("\n") == ['error("task: cancelled")', "0", "ddd", ""]
+    assert result.stdout.split("\n") == ['error("task: cancelled", kind: "task.cancelled")', "0", "ddd", ""]
 
 
 @NATIVE_CALLS
@@ -1523,7 +1523,7 @@ end
     result = agentica(program(tmp_path, RESOURCE_EXTERN.format(library=literal(peer)) + main))
     assert (result.code, result.stderr) == (0, "")
     assert result.stdout.split("\n") == [
-        "<Res>", "7", "1", 'error("peer_res_open returned NULL")', "258", "0", "true", "false", "42", "<C.Pointer>", "",
+        "<Res>", "7", "1", 'error("peer_res_open returned NULL", kind: "native.failed")', "258", "0", "true", "false", "42", "<C.Pointer>", "",
     ]
 
 
@@ -1638,7 +1638,7 @@ def test_a_free_ref_function_gets_the_address_of_the_handle_once(tmp_path, peer)
     result = agentica("--schedulers", "4", program(tmp_path, REF_FREE_EXTERN.format(library=literal(peer))))
     assert (result.code, result.stderr) == (0, "")
     assert result.stdout.split("\n") == [
-        "5", "3", "[3, 0, 0]", '[error("task: cancelled"), error("task: cancelled")]', "[3, 0, 0]", "ok(9)",
+        "5", "3", "[3, 0, 0]", '[error("task: cancelled", kind: "task.cancelled"), error("task: cancelled", kind: "task.cancelled")]', "[3, 0, 0]", "ok(9)",
         "[6, 0, 0]", "",
     ]
 
@@ -2193,7 +2193,7 @@ end
 @NATIVE_CALLS
 @pytest.mark.parametrize("schedulers", ["1", "4"])
 @pytest.mark.parametrize("spawn, stop, awaited", [
-    ("Task.spawn_owning", "Task.cancel(holder)", 'error("task: cancelled")'),
+    ("Task.spawn_owning", "Task.cancel(holder)", 'error("task: cancelled", kind: "task.cancelled")'),
     ("Task.spawn", "Native.close(res)", "ok(9)"),
     ("Task.spawn", "Task.await(Task.spawn(&use_and_close, res))", "ok(9)"),
 ])
@@ -2581,7 +2581,7 @@ end
 """
     source = program(tmp_path, (RESOURCE_EXTERN + PEER_WAITING).format(library=literal(peer)) + main)
     result = agentica("--schedulers", "2", source)
-    assert (result.code, result.stdout, result.stderr) == (0, 'error("task: cancelled")\n1\n', "")
+    assert (result.code, result.stdout, result.stderr) == (0, 'error("task: cancelled", kind: "task.cancelled")\n1\n', "")
 
 
 # Calls queued behind busy pool threads (one per scheduler) and cancelled there are never made, so their `done` builds
@@ -3140,7 +3140,7 @@ end
 """
     source = program(tmp_path, (OUT_EXTERN + PEER_WAITING).format(library=literal(peer)) + main)
     result = agentica("--schedulers", schedulers, source)
-    assert (result.code, result.stdout, result.stderr) == (0, 'error("task: cancelled")\n1\nok(4)\n2\n', "")
+    assert (result.code, result.stdout, result.stderr) == (0, 'error("task: cancelled", kind: "task.cancelled")\n1\nok(4)\n2\n', "")
 
 
 API_EXTERN = """# The slots of the peer's table (peer_api in peer.c), one pointer each.
@@ -3303,7 +3303,7 @@ end
     result = agentica("--schedulers", schedulers, source)
     assert (result.code, result.stderr) == (0, "")
     assert result.stdout.split("\n") == [
-        "55", "10", 'error("task: cancelled")', "11", 'error("task: cancelled")', "12", "",
+        "55", "10", 'error("task: cancelled", kind: "task.cancelled")', "11", 'error("task: cancelled", kind: "task.cancelled")', "12", "",
     ]
 
 
@@ -3622,9 +3622,9 @@ end
     result = run_wait(tmp_path, peer, main, "--schedulers", schedulers)
     assert (result.code, result.stderr) == (0, "")
     lines = result.stdout.split("\n")
-    second = 'error("native: cannot wait on the descriptor' if WINDOWS else 'error("native: timed out")'
+    second = 'error("native: cannot wait on the descriptor' if WINDOWS else 'error("native: timed out", kind: "native.timeout")'
     assert lines[0].startswith(second), result.stdout
-    assert lines[1:] == ["1", "ok()", "1", 'error("native: timed out")', "1", "ok()", "1", ""], result.stdout
+    assert lines[1:] == ["1", "ok()", "1", 'error("native: timed out", kind: "native.timeout")', "1", "ok()", "1", ""], result.stdout
 
 
 # The wait polls a new open of the pipe, so the native code's descriptors keep their flags: a blocking descriptor (a
@@ -3643,7 +3643,7 @@ def test_a_wait_leaves_the_flags_of_the_descriptor_alone(tmp_path, peer):
 end
 """
     result = run_wait(tmp_path, peer, main)
-    assert (result.code, result.stdout, result.stderr) == (0, 'error("native: timed out")\nok()\n0\n0\n', "")
+    assert (result.code, result.stdout, result.stderr) == (0, 'error("native: timed out", kind: "native.timeout")\nok()\n0\n0\n', "")
 
 
 @NATIVE_CALLS
@@ -3666,8 +3666,9 @@ end
     result = run_wait(tmp_path, peer, main)
     assert (result.code, result.stderr) == (0, "")
     assert result.stdout.split("\n") == [
-        'error("native: timed out")', 'error("native: timed out")',
-        'error("native: timeout must be positive milliseconds")', 'error("native: invalid descriptor")',
+        'error("native: timed out", kind: "native.timeout")', 'error("native: timed out", kind: "native.timeout")',
+        'error("native: timeout must be positive milliseconds", kind: "argument")',
+        'error("native: invalid descriptor", kind: "argument")',
         "native: cannot wait on the descriptor", "native: cannot wait on the descriptor", "",
     ]
 
@@ -3702,7 +3703,7 @@ end
     result = agentica(program(tmp_path, text), tmp_path / "fifo")
     assert (result.code, result.stderr) == (0, "")
     assert result.stdout.split("\n") == [
-        'error("native: timed out")', "1", "ok()", 'error("native: timed out")', "0", "1", "ok()", "",
+        'error("native: timed out", kind: "native.timeout")', "1", "ok()", 'error("native: timed out", kind: "native.timeout")', "0", "1", "ok()", "",
     ]
 
 
@@ -3737,7 +3738,7 @@ end
 """
     result = run_wait(tmp_path, peer, main, "--schedulers", schedulers)
     assert (result.code, result.stderr) == (0, "")
-    assert result.stdout.split("\n") == ["1", 'error("task: cancelled")', "0", "ok()", "1", ""]
+    assert result.stdout.split("\n") == ["1", 'error("task: cancelled", kind: "task.cancelled")', "0", "ok()", "1", ""]
 
 
 @NATIVE_CALLS
@@ -4298,7 +4299,7 @@ def test_a_parent_send_refused_in_a_callback_keeps_its_write(tmp_path, peer):
     source = program(tmp_path, CALLBACK_PARENT_SEND % literal(peer))
     result = agentica(source, cli()[0], source)
     assert (result.code, result.stderr) == (0, "")
-    assert result.stdout == 'false\nerror("process: the channel is in use")\n1000000\nafter\nok()\n0\n'
+    assert result.stdout == 'false\nerror("process: the channel is in use", kind: "process.failed")\n1000000\nafter\nok()\n0\n'
 
 
 CALLBACK_PUTS = """extern "%s"

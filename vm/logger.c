@@ -19,7 +19,7 @@ static agc_value taken_error(agc_vm *vm, const agc_string *name, const char *bef
   agc_string *head = agc_make_string(before, strlen(before), strlen(before));
   agc_string *tail = agc_make_string(after, strlen(after), strlen(after));
   agc_string *text = agc_concat(agc_concat(head, name), tail);
-  return agc_error_string(vm, "error", text);
+  return agc_error_string(vm, AGC_KIND_ERROR, text);
 }
 
 static bool find(agc_vm *vm, const agc_string *name, size_t *at) {

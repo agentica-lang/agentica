@@ -8,7 +8,7 @@
     "\"\"",
     "ok(<Bytes 0>)",
     "true",
-    "error(\"IO.gets reached the end of input\")",
+    "error(\"IO.gets reached the end of input\", kind: \"io.eof\")",
     ""
   ],
   "stderr": []

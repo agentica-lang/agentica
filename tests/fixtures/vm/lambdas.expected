@@ -18,7 +18,7 @@
     "42",
     "[\"1st\", \"2st\"]",
     "ok(42)",
-    "error(\"cannot convert \\\"x\\\" to Int\")",
+    "error(\"cannot convert \\\"x\\\" to Int\", kind: \"number.parse\")",
     "12",
     "10",
     "100",

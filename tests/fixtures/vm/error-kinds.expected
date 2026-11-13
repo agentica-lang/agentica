@@ -1,0 +1,36 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 746,
+  "stdout": [
+    "missing file: io.not_found code=2 io=true",
+    "directory as file: io.is_directory code=21 io=true",
+    "directory as text: io.is_directory code=21 io=true",
+    "existing file: io.exists code=17 io=true",
+    "invalid path: argument code=none io=false",
+    "stat missing: io.not_found code=2 io=true",
+    "TLS ca_file: io.not_found code=2 io=true",
+    "bad timeout: argument code=none argument=true",
+    "parse Int: number.parse code=none number=true",
+    "Int range: number.range code=none number=true",
+    "bad UTF-8: text.encoding code=none text=true",
+    "parse JSON: json.parse code=none json=true",
+    "decode JSON: json.decode code=none json=true",
+    "inflate: zlib.data code=none zlib=true",
+    "environment: system.env code=none system=true",
+    "channel timeout: channel.timeout code=none channel=true",
+    "channel closed: channel.closed code=none channel=true",
+    "task crashed: task.crashed code=none task=true",
+    "end of input: net.eof code=none net=true",
+    "closed socket: net.closed code=none net=true",
+    "long line: net.too_large code=none net=true",
+    "read timeout: net.timeout code=none net=true",
+    "refused: net.refused code=true",
+    "no program: process.not_found code=none process=true",
+    ""
+  ],
+  "stderr": [
+    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/error-kinds.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":17,\"line\":33},\"start\":{\"column\":16,\"line\":33}},\"spawned_at\":{\"column\":43,\"file\":\"@fixtures/vm/error-kinds.agc\",\"line\":68},\"stack\":[{\"column\":16,\"file\":\"@fixtures/vm/error-kinds.agc\",\"function\":\"boom\",\"line\":33}],\"task\":true}",
+    ""
+  ]
+}

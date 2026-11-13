@@ -566,18 +566,18 @@ def test_client_against_node_tls_servers_data_eof_resets_limits_timeouts_and_ver
         "ñ",
         "ñ😀",
         'ok("tail")',
-        'error("network: end of input")',
+        'error("network: end of input", kind: "net.eof")',
         "ok(<Bytes 0>)",
         'ok("abc")',
         'ok("partial")',
-        'error("network: end of input")',
+        'error("network: end of input", kind: "net.eof")',
         ("prefix", 'error("could not read from the stream\\n  system error: '),
         "100000",
         "100000 true",
-        'error("network: line exceeds 1048576 bytes")',
-        'error("network: socket is closed")',
-        'error("network: operation timed out")',
-        'error("network: socket is closed")',
+        'error("network: line exceeds 1048576 bytes", kind: "net.too_large")',
+        'error("network: socket is closed", kind: "net.closed")',
+        'error("network: operation timed out", kind: "net.timeout")',
+        'error("network: socket is closed", kind: "net.closed")',
         "network: TLS connect failed (certificate verify failed: hostname mismatch)",
         "network: TLS connect failed (certificate verify failed: certificate has expired)",
         "network: TLS connect failed (certificate verify failed: self-signed certificate)",
@@ -615,7 +615,7 @@ def test_server_serves_node_clients_tls_13_and_12_and_python_and_fails_an_untrus
 def test_client_against_a_python_tls_12_server_closed_with_close_notify(tmp_path, adopt):
     server, port = python_server(adopt, "server")
     result = run_text(tmp_path, "python-client", PYTHON_CLIENT_PROGRAM, stdin=port + "\n")
-    assert (result.code, result.stdout) == (0, 'python TLSv1.2 FROM AGENTICA\nerror("network: end of input")\n'), \
+    assert (result.code, result.stdout) == (0, 'python TLSv1.2 FROM AGENTICA\nerror("network: end of input", kind: "net.eof")\n'), \
         result.stderr
     assert server.wait() == 0
 
@@ -632,8 +632,8 @@ def test_starttls_both_ways_against_python_data_before_the_handshake_and_a_hands
     server, port = python_server(adopt, "starttls")
     result = run_text(tmp_path, "starttls-client", STARTTLS_CLIENT_PROGRAM, stdin=port + "\n")
     assert (result.code, result.stdout) == (0, "220 ready\npython TLSv1.3 FROM AGENTICA\n127.0.0.1\n220 ready\n"
-                                            'error("network: data came before the TLS handshake")\n220 ready\n'
-                                            'error("network: operation timed out")\n'), result.stderr
+                                            'error("network: data came before the TLS handshake", kind: "net.tls")\n220 ready\n'
+                                            'error("network: operation timed out", kind: "net.timeout")\n'), result.stderr
     assert server.wait() == 0
     vm = adopt(start_vm(compile_text(STARTTLS_SERVER_PROGRAM, "starttls-server", tmp_path), CERTS))
     python = run([PYTHON, PYTHON_PEER, "starttls-client", vm.next_line()], timeout=scaled(30))
@@ -710,10 +710,10 @@ def test_handshake_and_load_errors_on_both_sides_of_a_vm_client_and_server(tmp_p
 
 def test_timeouts_close_a_tls_socket_a_pending_handshake_times_out_a_closed_listener_stays_closed(tmp_path):
     result = run_text(tmp_path, "limits", LIMITS_PROGRAM)
-    assert (result.code, result.stdout) == (0, 'error("network: operation timed out")\n'
-                                              'error("network: socket is closed")\n'
-                                              'error("network: operation timed out")\n'
-                                              'error("network: listener is closed")\n'), result.stderr
+    assert (result.code, result.stdout) == (0, 'error("network: operation timed out", kind: "net.timeout")\n'
+                                              'error("network: socket is closed", kind: "net.closed")\n'
+                                              'error("network: operation timed out", kind: "net.timeout")\n'
+                                              'error("network: listener is closed", kind: "net.closed")\n'), result.stderr
 
 
 def test_main_returns_while_tls_tasks_wait_the_run_ends_without_draining_them(tmp_path):

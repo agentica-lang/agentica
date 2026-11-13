@@ -10,12 +10,12 @@
     "false",
     "[ok(\"\"), ok(\"\")]",
     "\"\"",
-    "error(\"network: an ALPN protocol name is 1 to 255 bytes\")",
+    "error(\"network: an ALPN protocol name is 1 to 255 bytes\", kind: \"argument\")",
     "true",
-    "error(\"network: an ALPN protocol name is 1 to 255 bytes\")",
+    "error(\"network: an ALPN protocol name is 1 to 255 bytes\", kind: \"argument\")",
     "true",
-    "error(\"network: the ALPN protocols take more than 65535 bytes\")",
-    "error(\"network: an ALPN protocol name is 1 to 255 bytes\")",
+    "error(\"network: the ALPN protocols take more than 65535 bytes\", kind: \"argument\")",
+    "error(\"network: an ALPN protocol name is 1 to 255 bytes\", kind: \"argument\")",
     ""
   ],
   "stderr": []

@@ -5,10 +5,10 @@
   "stdout": [
     "1048576",
     "ok()",
-    "error(\"network: line exceeds 1048576 bytes\")",
-    "error(\"network: socket is closed\")",
+    "error(\"network: line exceeds 1048576 bytes\", kind: \"net.too_large\")",
+    "error(\"network: socket is closed\", kind: \"net.closed\")",
     "ok()",
-    "error(\"network: end of input\")",
+    "error(\"network: end of input\", kind: \"net.eof\")",
     ""
   ],
   "stderr": []

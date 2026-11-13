@@ -121,11 +121,17 @@ CC_OWNS char *agc_host_path(agc_vm *vm, const agc_string *s);
 /* Opens PATH (a program's path, relative to its folder) to write from the start, created or truncated as
    File.write_text opens it, with the guards of the File calls: an empty path, NUL, a Windows device path (\\.\ or
    \\?\), a folder, a link loop, the VM's stdout or stderr by its descriptor name (/proc/self/fd/N) or a pipe the VM
-   made gives -1 with *refused set; another failure gives -1 with errno. The descriptor may be nonblocking
-   (agc_fs_blocking). */
+   made gives -1 with *refused set and errno EISDIR for a folder, ELOOP for a link loop, else 0; another failure
+   gives -1 with errno. The descriptor may be nonblocking (agc_fs_blocking). */
 int agc_files_open_output(agc_vm *vm, const agc_string *path, bool *refused);
 agc_value agc_utf8_error(agc_vm *vm, const uint8_t *data, size_t len);
-agc_value agc_system_error(agc_vm *vm, const char *what, int err);
+/* The family of an OS error, which picks the kind of its errno (agc_errno_kind). */
+typedef enum { AGC_FAMILY_IO, AGC_FAMILY_NET, AGC_FAMILY_PROCESS, AGC_FAMILY_NATIVE } agc_error_family;
+/* The kind of errno ERR in FAMILY: a portable name (io.not_found for ENOENT), or the family's `failed` kind for an
+   errno the table does not name. */
+agc_error_kind agc_errno_kind(agc_error_family family, int err);
+/* WHAT, the system's text of ERR and `errno=ERR`, as an error of agc_errno_kind with ERR as its code. */
+agc_value agc_system_error(agc_vm *vm, agc_error_family family, const char *what, int err);
 bool agc_tree_refused(const char *path);
 /* Removes the tree at path; on a failure inside it, *failed is a malloc'd path of the entry that failed, else NULL. */
 int agc_remove_tree(const char *path, CC_OWNS_OUT char **failed);
@@ -135,12 +141,13 @@ bool agc_each_fd(bool (*visit)(int fd, void *data), void *data);
 
 struct uv_stream_s;
 struct uv_write_s;
-/* The area that starts a stream's timeout errors: TCP is `network:`, a process and the child channel `process:`. */
+/* The area of a stream, which starts its timeout errors and picks the family of its kinds: TCP is `network:` (net), a
+   process and the child channel `process:` (process). */
 typedef enum { AGC_STREAM_NETWORK, AGC_STREAM_PROCESS } agc_stream_area;
 agc_value agc_stream_bad_timeout(agc_vm *vm, agc_stream_area area);
 agc_value agc_stream_timed_out(agc_vm *vm, agc_stream_area area);
 /* The result of a finished write: Ok(Void), or the write error for a negative libuv status. */
-agc_value agc_stream_written(agc_vm *vm, int status);
+agc_value agc_stream_written(agc_vm *vm, agc_stream_area area, int status);
 agc_resource *agc_new_lock(agc_vm *vm);
 bool agc_stream_lock(agc_vm *vm, agc_resource *lock, agc_stream_area area, int64_t *timeout, agc_value *result);
 size_t agc_inbuf_pending(const agc_inbuf *b);
@@ -150,20 +157,22 @@ size_t agc_inbuf_want(const agc_inbuf *b, bool line, size_t count);
 uint8_t *agc_inbuf_room(agc_inbuf *b, size_t want);
 void agc_inbuf_got(agc_inbuf *b, int64_t n, bool eof);
 bool agc_inbuf_unread(agc_inbuf *b, const uint8_t *data, size_t len);
-agc_value agc_inbuf_line(agc_vm *vm, agc_inbuf *b, const char *too_long, const char *at_end, bool *over);
+agc_value agc_inbuf_line(agc_vm *vm, agc_stream_area area, agc_inbuf *b, const char *too_long, const char *at_end,
+                         bool *over);
 /* The data and length of a Bytes argument of TCP, Process and HttpWire, which the argument keeps alive; NULL when it
    has more than limit bytes. */
 const uint8_t *agc_stream_bytes(agc_vm *vm, agc_value arg, size_t limit, size_t *len);
 /* A byte read's value is a Bytes. */
-agc_value agc_inbuf_bytes(agc_vm *vm, agc_inbuf *b, size_t count);
+agc_value agc_inbuf_bytes(agc_vm *vm, agc_stream_area area, agc_inbuf *b, size_t count);
 void agc_inbuf_take(agc_inbuf *b, size_t n);
 /* For a protocol whose every record ends in LF (the child channel): at the end of input, drops a final line that has no
    LF (at most the line limit; a longer one is `over`, a read error is reported as such) and says so. */
 bool agc_inbuf_drop_unterminated(agc_inbuf *b);
 void agc_inbuf_cut_line(agc_inbuf *b, agc_inbuf_cut *cut);
 void agc_inbuf_cut_bytes(agc_inbuf *b, size_t count, agc_inbuf_cut *cut);
-agc_value agc_inbuf_cut_line_value(agc_vm *vm, const agc_inbuf_cut *cut, const char *too_long, const char *at_end);
-agc_value agc_inbuf_cut_bytes_value(agc_vm *vm, const agc_inbuf_cut *cut);
+agc_value agc_inbuf_cut_line_value(agc_vm *vm, agc_stream_area area, const agc_inbuf_cut *cut, const char *too_long,
+                                   const char *at_end);
+agc_value agc_inbuf_cut_bytes_value(agc_vm *vm, agc_stream_area area, const agc_inbuf_cut *cut);
 void agc_inbuf_cut_free(agc_inbuf_cut *cut);
 int agc_stream_write(struct uv_stream_s *stream, struct uv_write_s *req, uint8_t **copy, const uint8_t *data,
                      size_t len, void (*done)(struct uv_write_s *req, int status));

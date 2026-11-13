@@ -92,7 +92,7 @@ end
 
 ```output
 ok(5)
-error("cannot convert \"three\" to Int")
+error("cannot convert \"three\" to Int", kind: "number.parse")
 ```
 
 ## Results with no value

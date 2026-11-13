@@ -237,7 +237,8 @@ def system_error(name):
 
 
 REFUSED_HEAD = "network: connection failed\n  host: 127.0.0.1\n  port: %d\n"
-RESET = 'error("could not read from the stream\\n  %s")\n' % system_error("ECONNRESET")
+RESET = 'error("could not read from the stream\\n  %s", kind: "net.closed", code: %d)\n' % (
+    system_error("ECONNRESET"), errno_number("ECONNRESET"))
 
 def start_peer(adopt, node):
     """The Node servers: returns (peer, ports); the peer prints events such as `closed watch`."""
@@ -275,15 +276,15 @@ def test_client_reads_fragments_eof_resets_long_lines_and_timeouts_from_node_pee
     assert result.stdout == ("ñ\n"
                              "ñ😀\n"
                              'ok("tail")\n'
-                             'error("network: end of input")\n'
+                             'error("network: end of input", kind: "net.eof")\n'
                              "ok(<Bytes 0>)\n"
                              + RESET +
-                             'error("network: line exceeds 1048576 bytes")\n'
-                             'error("network: socket is closed")\n'
-                             'error("network: operation timed out")\n'
-                             'error("network: socket is closed")\n'
-                             'error("network: operation timed out")\n'
-                             'error("network: socket is closed")\n'
+                             'error("network: line exceeds 1048576 bytes", kind: "net.too_large")\n'
+                             'error("network: socket is closed", kind: "net.closed")\n'
+                             'error("network: operation timed out", kind: "net.timeout")\n'
+                             'error("network: socket is closed", kind: "net.closed")\n'
+                             'error("network: operation timed out", kind: "net.timeout")\n'
+                             'error("network: socket is closed", kind: "net.closed")\n'
                              + RESET +
                              (REFUSED_HEAD % ports["refused"]) + "  %s\n" % system_error("ECONNREFUSED"))
 
@@ -747,12 +748,12 @@ def test_listener_takes_every_connection_that_waited_in_its_backlog(tmp_path, ad
         time.sleep(0.3)
         go(vm)
         assert [read_reply(client) for client in clients] == [b"answered\n"] * count
-        assert vm.next_line() == 'error("network: operation timed out")'
+        assert vm.next_line() == 'error("network: operation timed out", kind: "net.timeout")'
         assert vm.next_line() == "false"
         pending = socket.create_connection(("127.0.0.1", port), timeout=scaled(10))
         clients.append(pending)
         go(vm)
-        assert vm.next_line() == 'error("network: listener is closed")'
+        assert vm.next_line() == 'error("network: listener is closed", kind: "net.closed")'
         assert read_reply(pending) == b""
         vm.close_stdin()
         assert vm.wait() == 0, vm.stderr_text()
@@ -794,8 +795,8 @@ def test_a_cancelled_accept_or_read_leaves_its_place_at_once(tmp_path):
     connection goes to the live accept, and the line sent after the cancel reaches the next read. Before, the dead
     accept took the connection and closed it, and the dead read kept the reader lock, so both live calls timed out."""
     result = run_text(tmp_path, "cancelled_waits", CANCELLED_WAITS_PROGRAM)
-    assert (result.code, result.stdout) == (0, '[error("task: timed out")]\nok("first")\n'
-                                               '[error("task: timed out")]\nok("kept")\n'), result.stderr
+    assert (result.code, result.stdout) == (0, '[error("task: timed out", kind: "task.timeout")]\nok("first")\n'
+                                               '[error("task: timed out", kind: "task.timeout")]\nok("kept")\n'), result.stderr
 
 
 IDLE_PROGRAM = """\

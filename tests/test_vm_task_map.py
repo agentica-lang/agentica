@@ -322,7 +322,7 @@ end
 """
 
 
-TIMED_OUT = '[error("task: timed out")]'
+TIMED_OUT = '[error("task: timed out", kind: "task.timeout")]'
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -462,7 +462,7 @@ def test_http_requests_overlap_within_the_limit_and_come_back_in_input_order(tmp
 def test_an_item_that_times_out_is_cancelled_with_everything_it_started(tmp_path):
     started = time.monotonic()
     lines = run_lines(tmp_path, TIMEOUT_PROGRAM, "timeout")
-    assert lines == ['[ok(1), error("task: timed out"), error("task: timed out"), ok(4)]', "main done"]
+    assert lines == ['[ok(1), error("task: timed out", kind: "task.timeout"), error("task: timed out", kind: "task.timeout"), ok(4)]', "main done"]
     assert time.monotonic() - started < scaled(30), "the item that sleeps 60 s does not hold the run"
 
 
@@ -542,7 +542,7 @@ def test_a_value_handed_to_an_item_before_its_deadline_is_kept_when_the_deadline
     # The item runs before the caller of Task.map looks at the clock, so it keeps the value, and receiver 2 gets
     # nothing: the value is neither lost nor copied.
     assert "[ok(7)]" in lines
-    assert 'error("channel: timed out")' in lines
+    assert 'error("channel: timed out", kind: "channel.timeout")' in lines
     assert "ok(7)" not in lines
 
 

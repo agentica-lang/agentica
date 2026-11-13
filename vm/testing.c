@@ -39,7 +39,7 @@ static agc_value failed(agc_vm *vm, uint32_t span, agc_string *message, agc_stri
   }
   agc_string *text = expected ? agc_concat(lit("expected "), expected) : message;
   if (actual) text = agc_concat(agc_concat(text, lit("; actual ")), actual);
-  return agc_error_string(vm, "error", text);
+  return agc_error_string(vm, AGC_KIND_TEST_FAILED, text);
 }
 
 static agc_value builtin_test(agc_vm *vm, agc_value *args, uint32_t span) {

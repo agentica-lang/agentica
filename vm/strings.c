@@ -357,7 +357,9 @@ agc_string *agc_around(const char *before, const agc_string *part, const char *a
   return s;
 }
 
-static agc_value failure(agc_vm *vm, agc_string *message) { return agc_error_string(vm, "error", message); }
+static agc_value failure(agc_vm *vm, agc_error_kind kind, agc_string *message) {
+  return agc_error_string(vm, kind, message);
+}
 
 /* In plain_leaves (vm/jit/jit.c): it must never agc_fail once its argument tags are right. */
 static agc_value builtin_length(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -630,7 +632,8 @@ static agc_value builtin_from_bytes(agc_vm *vm, agc_value *args, uint32_t span) 
   (void)span;
   size_t n, chars;
   const uint8_t *data = agc_bytes_data(vm, args[0], &n);
-  if (!agc_utf8_chars(data, n, &chars)) return failure(vm, ascii("invalid or incomplete UTF-8"));
+  if (!agc_utf8_chars(data, n, &chars))
+    return failure(vm, AGC_KIND_TEXT_ENCODING, ascii("invalid or incomplete UTF-8"));
   return agc_result_value(true, agc_string_value(agc_small_string(vm, (const char *)data, n, chars)));
 }
 
@@ -643,7 +646,7 @@ static agc_value to_int(agc_vm *vm, agc_value *args, uint32_t span, bool bang) {
   agc_string *message =
     invalid ? agc_around("cannot convert ", s, " to Int") : ascii("Int result is outside the 64-bit range");
   if (bang) agc_fail_text(vm, invalid ? "RUNTIME-INVALID-NUMBER" : "RUNTIME-INTEGER-OVERFLOW", message, span);
-  return failure(vm, message);
+  return failure(vm, invalid ? AGC_KIND_NUMBER_PARSE : AGC_KIND_NUMBER_RANGE, message);
 }
 
 static agc_value builtin_to_int(agc_vm *vm, agc_value *args, uint32_t span) { return to_int(vm, args, span, false); }
@@ -659,7 +662,7 @@ static agc_value to_float(agc_vm *vm, agc_value *args, uint32_t span, bool bang)
     return bang ? agc_float(x) : agc_result_value(true, agc_float(x));
   agc_string *message = agc_around("cannot convert ", s, " to Float");
   if (bang) agc_fail_text(vm, "RUNTIME-INVALID-NUMBER", message, span);
-  return failure(vm, message);
+  return failure(vm, AGC_KIND_NUMBER_PARSE, message);
 }
 
 static agc_value builtin_to_float(agc_vm *vm, agc_value *args, uint32_t span) {

@@ -397,7 +397,7 @@ def test_a_fifo_that_stalls_times_out_one_read_with_a_line_half_read_and_the_des
     _, fifo = start_fifo_peer(tmp_path, "stall", request)
     result = run_program(tmp_path, "fifo", FIFO_PROGRAM, fifo, "1200")
     assert result.code == 0, result.stderr
-    assert result.stdout == '"first"\nerror("filesystem: operation timed out")\ntrue\n'
+    assert result.stdout == '"first"\nerror("filesystem: operation timed out", kind: "io.timeout")\ntrue\n'
 
 
 @needs_fifo

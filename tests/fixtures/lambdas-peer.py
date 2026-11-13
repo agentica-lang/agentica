@@ -38,7 +38,7 @@ def parse_double(text):
 def shown(result):
     if result[0] == "ok":
         return "ok(%d)" % result[1]
-    return 'error("%s")' % result[1].replace('"', '\\"')
+    return 'error("%s", kind: "number.parse")' % result[1].replace('"', '\\"')
 
 
 def first(xs):

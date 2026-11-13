@@ -41,7 +41,7 @@ end
 aGVsbG8sIHdvcmxk
 -_8
 hello, world
-error("invalid base64")
+error("invalid base64", kind: "argument")
 [104, 101, 108, 108, 111]
 ```
 

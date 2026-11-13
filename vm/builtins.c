@@ -56,7 +56,7 @@ static agc_value builtin_gets(agc_vm *vm, agc_value *args, uint32_t span) {
   if (status == AGC_INPUT_WAIT) return agc_void();
   if (status == AGC_INPUT_OK) return agc_result_value(true, agc_string_value(line));
   size_t n = sizeof end_of_input - 1;
-  return agc_error_string(vm, "error", agc_make_string(end_of_input, n, n));
+  return agc_error_string(vm, AGC_KIND_IO_EOF, agc_make_string(end_of_input, n, n));
 }
 
 static agc_value builtin_gets_bang(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -76,20 +76,21 @@ static agc_value builtin_read(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_string_value(text);
 }
 
-static agc_value text_error(agc_vm *vm, const char *text) {
+static agc_value text_error(agc_vm *vm, agc_error_kind kind, const char *text) {
   size_t n = strlen(text);
-  return agc_error_string(vm, "error", agc_make_string(text, n, n));
+  return agc_error_string(vm, kind, agc_make_string(text, n, n));
 }
 
 /* IO.read_bytes(count): up to count bytes of stdin, as a Bytes. */
 static agc_value builtin_read_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   int64_t count = agc_as_int(vm, args[0]);
-  if (count < 0 || count > AGC_MAX_READ_BYTES) return text_error(vm, "byte count must be between 0 and 1048576");
+  if (count < 0 || count > AGC_MAX_READ_BYTES)
+    return text_error(vm, AGC_KIND_ARGUMENT, "byte count must be between 0 and 1048576");
   const agc_bytes *bytes = NULL;
   agc_input_status status = agc_input_bytes(vm, (size_t)count, &bytes);
   if (status == AGC_INPUT_WAIT) return agc_void();
-  if (status == AGC_INPUT_FAILED) return text_error(vm, "input read failed");
+  if (status == AGC_INPUT_FAILED) return text_error(vm, AGC_KIND_IO_FAILED, "input read failed");
   return agc_result_value(true, agc_bytes_value(bytes));
 }
 
@@ -382,7 +383,7 @@ static agc_value builtin_error(agc_vm *vm, agc_value *args, uint32_t span) {
   if (!agc_is_error(vm, args[0])) {
     agc_string *message = agc_as_string(vm, args[0]);
     if (vm->rt->error_struct == UINT32_MAX) return agc_result_value(false, args[0]);
-    return agc_error_string(vm, "error", message);
+    return agc_error_string(vm, AGC_KIND_ERROR, message);
   }
   const agc_struct *e = agc_as_struct(vm, args[0]);
   if (agc_as_string(vm, e->fields[AGC_ERROR_LOCATION])->bytes) return agc_result_value(false, args[0]);
@@ -485,7 +486,8 @@ static agc_value builtin_range_include(agc_vm *vm, agc_value *args, uint32_t spa
 
 static agc_value range_end(agc_vm *vm, agc_value v, bool first_end) {
   int64_t first, last;
-  if (!agc_range_bounds(agc_as_range(vm, v), &first, &last)) return text_error(vm, "the range is empty");
+  if (!agc_range_bounds(agc_as_range(vm, v), &first, &last))
+    return text_error(vm, AGC_KIND_ARGUMENT, "the range is empty");
   return agc_result_value(true, agc_int(first_end ? first : last));
 }
 

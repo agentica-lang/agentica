@@ -4,16 +4,16 @@
   "steps": 151,
   "stdout": [
     "true",
-    "error(\"process: executable is unavailable\")",
-    "error(\"process: directory is unavailable\")",
-    "error(\"process: chdir must be nonempty and cannot contain NUL\")",
+    "error(\"process: executable is unavailable\", kind: \"process.not_found\")",
+    "error(\"process: directory is unavailable\", kind: \"process.not_found\")",
+    "error(\"process: chdir must be nonempty and cannot contain NUL\", kind: \"argument\")",
     "ok(\"one\")",
     "ok(Process.Output(stdout: \"two\\nthree\\n\", stderr: \"oops\\n\", truncated: false))",
     "ok(Process.Output(stdout: \"two\\nthree\\n\", stderr: \"oops\\n\", truncated: false))",
     "ok(\"two\")",
     "ok(3)",
-    "error(\"process: process is closed\")",
-    "error(\"process: output is not captured\")",
+    "error(\"process: process is closed\", kind: \"process.closed\")",
+    "error(\"process: output is not captured\", kind: \"process.failed\")",
     ""
   ],
   "stderr": []
