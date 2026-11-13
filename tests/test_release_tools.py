@@ -195,3 +195,9 @@ def test_each_smoke_program_checks_clean(tmp_path, name):
     result = run(cli() + ["--json", "check", "smoke.agc"], env=vm_environment(), cwd=tmp_path)
     assert (result.code, result.stderr) == (0, ""), result.stdout
     assert json.loads(result.stdout) == {"ok": True}
+
+
+def test_the_builtin_help_of_the_smoke_check_matches_the_binary():
+    """The smoke check runs only in release.yml: a rename of the help text (the receiver `s` to `string`) broke 0.31.0."""
+    result = run(cli() + ["help", "String.split"], env=vm_environment())
+    assert (result.code, release.HELP_SPLIT in result.stdout) == (0, True), result.stdout

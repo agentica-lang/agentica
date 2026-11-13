@@ -48,6 +48,9 @@ LICENSE_FILES = (
     "licenses/picohttpparser/LICENSE", "licenses/openssl/LICENSE.txt", "licenses/unicode/LICENSE.txt",
     "licenses/libffi/LICENSE", "licenses/zlib/LICENSE",
 )
+# `agentica help String.split` shows the Ruby form of a builtin with its named-argument receiver (`string.split(`),
+# not the internal name. The smoke check and tests/test_release_tools.py share this text.
+HELP_SPLIT = "string.split("
 DEFAULT_MTIME = 315619200  # 1980-01-02, the first date a zip can hold
 
 # The folders of the smoke test: spaces and non-ASCII letters, like a real user's.
@@ -425,8 +428,7 @@ def smoke(archive: Path, platform: str, binary: Path | None) -> None:
         out = s.run("--help")
         s.expect("--help lists the commands", "agentica check" in out.stdout and "agentica test" in out.stdout, out)
         out = s.run("help", "String.split")
-        # help shows the Ruby form of a builtin (`s.split(...)`), not its internal name.
-        s.expect("help NAME describes a builtin", "s.split(" in out.stdout, out)
+        s.expect("help NAME describes a builtin", HELP_SPLIT in out.stdout, out)
 
         (work / "hola mundo ✓.agc").write_text(HELLO, encoding="utf-8")
         (work / "bad.agc").write_text(BAD, encoding="utf-8")
