@@ -212,9 +212,7 @@ def test_a_stop_signal_the_vm_inherited_as_ignored_stays_ignored(tmp_path, adopt
     assert vm.process.poll() is None, "the ignored signals do not stop the VM"
 
 
-# A task crashes on a scheduler, then main waits: the failure's jump back to the turn must not change the signal mask of
-# the other threads (macOS's longjmp put the mask back for the whole process, and the I/O thread lost the stop signals,
-# #1529).
+# On macOS the crash used to block the stop signals of every thread (#1529).
 CRASH_THEN_SLEEP = """\
 def main() -> Void
   downs: Channel[String] = Channel.new(1)
