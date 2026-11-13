@@ -80,7 +80,7 @@ def test_remove_deletes_links_as_links_never_follows_them_and_refuses_unsafe_roo
         root,
         cwd=root / "guarded" / "sub",
     )
-    refused = 'error("filesystem: refusing to remove /, . or ..")'
+    refused = 'error("filesystem: refusing to remove /, . or ..", kind: "argument")'
     assert lines == [
         "ok()",
         "ok()",
@@ -93,7 +93,7 @@ def test_remove_deletes_links_as_links_never_follows_them_and_refuses_unsafe_roo
         refused,
         refused,
         refused,
-        'error("filesystem: directory tree is deeper than 128 levels")',
+        'error("filesystem: directory tree is deeper than 128 levels", kind: "io.failed")',
         "ok()",
         "ok()",
         "ok()",
@@ -126,7 +126,7 @@ end
         lines = run_program(root, work, text, "named", root)
         assert lines == [
             'error("filesystem: cannot remove path\\n  path: %s/tree/a/locked/f.txt\\n  system error: '
-            'Permission denied; errno=13")' % root
+            'Permission denied; errno=13", kind: "io.permission", code: 13)' % root
         ]
         assert (tree / "a" / "locked" / "f.txt").exists()
     finally:
@@ -144,7 +144,7 @@ end
     lines = run_program(root, work, text, "remove-error", root)
     assert lines == [
         'error("filesystem: cannot remove path\\n  path: %s/plain.txt/x\\n  system error: '
-        'Not a directory; errno=20")' % root
+        'Not a directory; errno=20", kind: "io.not_directory", code: 20)' % root
     ]
     assert path.read_text() == "plain"
 

@@ -831,6 +831,8 @@ bool agc_same_bytes(agc_vm *vm, const agc_bytes *x, const agc_bytes *y);
 agc_value agc_error_value(const char *message);
 /* The text of KIND, a dotted name ("io.not_found"). */
 const char *agc_error_kind_name(agc_error_kind kind);
+/* The String of every kind, indexed by agc_error_kind: agc_vm_init keeps them as the run's shared kinds (rt->kinds). */
+agc_string **agc_error_kinds(void);
 /* The failed Result of an error built in C: an Error of KIND (AGC_KIND_ERROR, "error", by default) with MESSAGE, no code,
    no details, no cause and the location of the builtin call (agc_error_location), when the program has the Error
    struct; else a String payload with MESSAGE alone. */

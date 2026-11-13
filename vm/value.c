@@ -737,6 +737,15 @@ agc_value agc_error_value(const char *message) {
 
 const char *agc_error_kind_name(agc_error_kind kind) { return kind_names[kind]; }
 
+agc_string **agc_error_kinds(void) {
+  agc_string **kinds = agc_alloc(sizeof(agc_string *) * AGC_KIND_COUNT);
+  for (size_t k = 0; k < AGC_KIND_COUNT; k++) {
+    size_t n = strlen(kind_names[k]);
+    kinds[k] = agc_make_string(kind_names[k], n, n);
+  }
+  return kinds;
+}
+
 /* The empty map, none and the kinds are the run's shared values (agc_vm_init and the loader made them before any
    thread), so an error built on any scheduler allocates only its struct, its location and a code that it has. */
 static agc_value error_of(agc_vm *vm, agc_error_kind kind, agc_string *message, bool coded, int64_t code) {
