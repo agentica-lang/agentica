@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 8876,
+  "steps": 8890,
   "stdout": [
     "regex syntax: regex.syntax code=none regex=true",
     "regex template: regex.syntax code=none regex=true",
@@ -12,7 +12,7 @@
     "help: option_parser.help code=none option_parser=true",
     "bad specification: argument code=none argument=true",
     "truncated tar: archive.format code=none archive=true",
-    "member with ..: archive.unsafe code=none archive=true",
+    "member with ..: argument code=none argument=true",
     "missing tar: io.not_found code=2 io=true",
     "short zip: archive.format code=none archive=true",
     "frame over the limit: binary.too_large code=none binary=true",

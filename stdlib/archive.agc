@@ -455,8 +455,7 @@ def parse_pax(data: Bytes, entry: Int, is_global: Bool, ctx: Ctx) -> Result[Ctx]
 end
 
 # Checks one relative path after its leading `./` is gone: no absolute, drive, UNC, backslash, colon or NUL content
-# and no empty, `.` or `..` segments. `name` and `suffix` shape the error, an `archive.unsafe` one for a member as for
-# an entry.
+# and no empty, `.` or `..` segments. `name` and `suffix` shape the `archive.unsafe` error.
 def check_relative(path: String, name: String, suffix: String) -> Result[String]
   return error("archive: #{name} is absolute#{suffix}", kind: "archive.unsafe") if path.start_with?("/")
   for b in path.bytes
@@ -488,7 +487,11 @@ def normalize_selector(text: String) -> Result[String]
   if path == "" or path == "."
     return error("archive: a member must name a file, not the root: #{text}", kind: "argument")
   end
-  check_relative(path, "member #{text}", "")
+  # A bad name given by the caller is a bad argument; only an entry of the archive is `archive.unsafe`.
+  case check_relative(path, "member #{text}", "")
+    ok(safe) -> ok(safe)
+    error(e) -> error(e.with(kind: "argument"))
+  end
 end
 
 # Decodes entry name bytes for matching: one leading `./` and any trailing `/` characters are removed, and anything

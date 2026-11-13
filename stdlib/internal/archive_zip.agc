@@ -389,8 +389,7 @@ def le_bytes(value: Int, what: String) -> Result[Bytes]
 end
 
 # Checks one relative path after its leading `./` is gone: no absolute, drive, UNC, backslash, colon or NUL content
-# and no empty, `.` or `..` segments. `name` and `suffix` shape the error, an `archive.unsafe` one for a member as for
-# an entry.
+# and no empty, `.` or `..` segments. `name` and `suffix` shape the `archive.unsafe` error.
 def check_relative(path: String, name: String, suffix: String) -> Result[String]
   return error("archive: #{name} is absolute#{suffix}", kind: "archive.unsafe") if path.start_with?("/")
   for b in path.bytes
@@ -422,7 +421,11 @@ def normalize_selector(text: String) -> Result[String]
   if path == "" or path == "."
     return error("archive: a member must name a file, not the root: #{text}", kind: "argument")
   end
-  check_relative(path, "member #{text}", "")
+  # A bad name given by the caller is a bad argument; only an entry of the archive is `archive.unsafe`.
+  case check_relative(path, "member #{text}", "")
+    ok(safe) -> ok(safe)
+    error(e) -> error(e.with(kind: "argument"))
+  end
 end
 
 # Validates the whole allowlist: 1 to 256 safe members, no exact, normalized or case-only repeats.
@@ -1063,8 +1066,7 @@ end
 
 # The error of the inflate pipeline as std/archive words it: its own errors as they are, a refusal of zlib as an
 # `archive.format` error, and any other error with its own kind. The zlib texts matched here are the ones vm/zlib.c
-# gives (agc_zstep_next): keep them in
-# step.
+# gives (agc_zstep_next): keep them in step.
 def inflate_error(e: Error, canon: String) -> Error
   message = e.message
   return e if message.start_with?("archive: ")

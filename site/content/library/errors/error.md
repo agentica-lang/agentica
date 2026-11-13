@@ -96,14 +96,14 @@ The `std/` modules give these kinds. A `std/` function that passes on the error 
 | Module | Kinds |
 |---|---|
 | `std/http` | `http.protocol` (a refused head has its status as the code; a proxy's 407 too), `http.too_large`, `http.closed`, `net.timeout`, `net.eof`, `net.failed`, `text.encoding` (`HTTP.text`), `argument` |
-| `std/archive` | `archive.format` (truncated or invalid data), `archive.unsafe` (a member or entry path that is not a safe relative path, or one that leaves the destination), `archive.too_large`, `archive.timeout`, `archive.not_found` (a member the archive does not hold), `argument` |
+| `std/archive` | `archive.format` (truncated or invalid data), `archive.unsafe` (an entry path that is not a safe relative path, or one that leaves the destination), `archive.too_large`, `archive.timeout`, `archive.not_found` (a member the archive does not hold), `argument` (an option or a member name out of range or unsafe) |
 | `std/toml` | `toml.parse` (`parse`), `toml.decode` (`get` and `to_json`), `argument` (`encode`) |
 | `std/regex` | `regex.syntax` (a pattern or a `replace` template), `argument` (`named` with no such group) |
 | `std/option_parser` | `option_parser.parse` (a mistake in the words), `option_parser.help` (`--help`), `argument` (a bad specification) |
 | `std/actor`, `std/supervisor` | `channel.timeout`, `channel.gone` (the actor has ended), `task.timeout` (`stop`) |
 | `std/binary` | `binary.too_large` (a frame length over `max`), `number.range`, `argument` |
 | `std/uri`, `std/cookie` | `text.encoding`, `argument` |
-| `std/bdd` | `process.eof`, `process.timeout` (`read_line`), `argument` |
+| `std/bdd` | `process.eof`, `process.timeout` (`read_line`), `process.failed`, `io.exists`, `json.decode`, `argument` |
 
 ## is_a?
 

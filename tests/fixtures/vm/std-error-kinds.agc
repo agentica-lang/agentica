@@ -39,7 +39,7 @@ def main() -> Void
   tar = at(dir, "short.tar")
   _ = File.write_text(tar, "not a tar header", 5000)
   show("truncated tar", "archive", Archive.extract_tar(tar, ["a.txt"], at(dir, "out1")))
-  show("member with ..", "archive", Archive.extract_tar(tar, ["../a.txt"], at(dir, "out2")))
+  show("member with ..", "argument", Archive.extract_tar(tar, ["../a.txt"], at(dir, "out2")))
   show("missing tar", "io", Archive.extract_tar(at(dir, "missing.tar"), ["a.txt"], at(dir, "out3")))
   show("short zip", "archive", Archive.extract_zip(tar, ["a.txt"], at(dir, "out4")))
   show("frame over the limit", "binary", Binary.read_frame_length(Binary.frame("abc".bytes).unwrap!, 0, 2))

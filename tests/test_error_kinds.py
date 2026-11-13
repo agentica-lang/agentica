@@ -55,31 +55,73 @@ def test_the_error_page_lists_every_kind():
 # A string literal, also one cut by an interpolation that holds a string (`"#{xs.join(", ")}"`): blanking each one
 # keeps the parentheses of the code balanced.
 STRING = re.compile(r'"(?:[^"\\]|\\.)*"')
+COMMENT_LINE = re.compile(r"^[ \t]*#.*$", re.M)
+
+# `kind: "..."` literals of stdlib/ that are not the kind of an Error: the `kind` field of a report row.
+NOT_ERROR_KINDS = {"feature", "tests"}
+
+# The `error("...")` literals of stdlib/ that keep the default kind `error`, by file and message, with the reason.
+DEFAULT_KIND = {
+    ("regex.agc", "no match"): "no match, as List.find",
+    ("bdd/match.agc", "no match"): "no match, as List.find",
+    ("test/child.agc", "no diagnostic"): "nothing found, as List.find",
+    ("prelude/list.agc", "not found"): "List.find, a builtin row of the `error` kind",
+    ("prelude/range.agc", "not found"): "Range.find, a builtin row of the `error` kind",
+    ("prelude/optional.agc", "unwrap! on none"): "the text of a halt, never returned",
+    ("http.agc", ""): "the seed of a Result variable, always replaced before it is read",
+    ("bdd.agc", "start a program before using its streams"): "the text of a halt, never returned",
+    ("bdd.agc", '#{code}: #{JSON.string(fields["message"]).unwrap_or("")}'): "the text of a halt, never returned",
+    ("queue.agc", "queue is empty"): "outside the std/ modules of #671",
+    ("analysis.agc", "the cache holds no entry for #{path}"): "outside the std/ modules of #671",
+}
 
 
-def std_kinds():
-    """The `kind:` literals of the `error(...)` calls in stdlib/."""
-    found = set()
+def calls(name):
+    """(file, call text) of each call of `name` in the code of stdlib/, comments left out."""
+    found = []
     for path in sorted(STDLIB.rglob("*.agc")):
-        text = path.read_text(encoding="utf-8")
+        text = COMMENT_LINE.sub(lambda m: " " * len(m.group()), path.read_text(encoding="utf-8"))
         code = STRING.sub(lambda m: '"' + " " * (len(m.group()) - 2) + '"', text)
-        for call in re.finditer(r"\berror\(", code):
+        for call in re.finditer(rf"\b{name}\(", code):
             depth, at = 0, call.end() - 1
             while True:
                 depth += {"(": 1, ")": -1}.get(code[at], 0)
                 if depth == 0:
                     break
                 at += 1
-            found.update(re.findall(r'\bkind: "([^"]*)"', text[call.start():at]))
+            found.append((path.relative_to(STDLIB).as_posix(), text[call.start():at + 1]))
+    return found
+
+
+def std_kinds():
+    """Every `kind: "..."` literal of stdlib/ (in `error(...)` and in `e.with(...)`) and the kind that `add_cap` of
+    std/internal/archive_zip takes as its last argument."""
+    found = set()
+    for path in sorted(STDLIB.rglob("*.agc")):
+        found.update(re.findall(r'\bkind: "([^"]*)"', path.read_text(encoding="utf-8")))
+    found -= NOT_ERROR_KINDS
+    for _file, call in calls("add_cap"):
+        if not call.startswith("add_cap(a: Int"):
+            found.add(re.search(r'"([^"]*)"\s*,?\s*\)$', call).group(1))
     return found
 
 
 def test_the_error_page_lists_every_std_kind():
     used = std_kinds()
-    assert "archive.unsafe" in used and "regex.syntax" in used
+    assert {"archive.unsafe", "regex.syntax", "archive.format", "archive.too_large"} <= used
     assert [kind for kind in sorted(used) if not DOTTED.fullmatch(kind)] == []
     page = PAGE.read_text(encoding="utf-8")
     assert [kind for kind in sorted(used) if f"`{kind}`" not in page] == []
+
+
+def test_every_std_error_literal_names_its_kind():
+    kindless = set()
+    for file, call in calls("error"):
+        literal = re.fullmatch(r'error\(\s*"((?:[^"\\]|\\.|#\{[^}]*\})*)"\s*,?\s*\)', call, re.S)
+        if literal:
+            kindless.add((file, literal.group(1)))
+    assert sorted(kindless - set(DEFAULT_KIND)) == []
+    assert sorted(set(DEFAULT_KIND) - kindless) == []
 
 
 PERMISSION_PROGRAM = """\
