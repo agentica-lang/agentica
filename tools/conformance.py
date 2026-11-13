@@ -51,7 +51,9 @@ KNOWN_ISSUE = re.compile(r"known-issue: #(\d+) \S")
 
 # The open issues that a known-issue skip may name: number -> what is missing. Closing an issue removes its skips and
 # its line here in the same pull request.
-KNOWN_ISSUES: dict[int, str] = {}
+KNOWN_ISSUES: dict[int, str] = {
+    1485: "the compile-once BDD test has no stand-in for the binary on Windows",
+}
 
 # Reasons that only mean "this case belongs to the other tier" (tests/conftest.py, tests/agentica_test.py).
 TIER_REASONS = ("not selected in this test tier", "slow tier only", "fast tier only", "no cases in this tier")
