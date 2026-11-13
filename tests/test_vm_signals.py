@@ -251,21 +251,10 @@ def test_two_tasks_get_each_signal_they_subscribed_to(tmp_path, adopt, scheduler
 @SCHEDULERS
 @pytest.mark.parametrize("how", ["close", "return", "crash", "cancel"])
 def test_an_ended_subscription_gives_the_signal_back_to_the_stop_path(tmp_path, adopt, schedulers, how):
-    vm = start(adopt, tmp_path, ENDS, how, "once", schedulers=schedulers, env={"AGENTICA_VM_TRACE": "sched,io"})
+    vm = start(adopt, tmp_path, ENDS, how, "once", schedulers=schedulers)
     assert vm.next_line(WAIT_SECONDS) == "ready"
     os.kill(vm.process.pid, signal.SIGUSR1)
-    try:
-        code = vm.process.wait(scaled(3))
-    except Exception:
-        import subprocess, sys
-        if sys.platform == "darwin":
-            print(subprocess.run(["sample", str(vm.process.pid), "2"], capture_output=True, text=True).stdout)
-        vm.process.kill()
-        vm.process.wait()
-        time.sleep(1)
-        print(vm.stderr()[-20000:])
-        raise
-    assert code == -signal.SIGUSR1
+    assert vm.wait(WAIT_SECONDS) == -signal.SIGUSR1
 
 
 @host_only(WINDOWS, POSIX)
