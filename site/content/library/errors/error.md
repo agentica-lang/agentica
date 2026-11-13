@@ -108,7 +108,7 @@ The `std/` modules give these kinds. A `std/` function that passes on the error 
 ## is_a?
 
 ```signature
-e.is_a?(family: String) -> Bool
+error.is_a?(family: String) -> Bool
 ```
 
 True when the kind is `family` or starts with `family` and a dot, so `e.is_a?("db")` takes `db` and `db.constraint` but not `dbx`: the family plays the part of an exception class and its subclasses. `kind_of?` is the same method.

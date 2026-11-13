@@ -10,12 +10,12 @@ export struct Records
   problem: String
 end
 
-## Reads the channel records of the child `p` until a read fails or the `deadline` passes (a `Time.monotonic_ms`
+## Reads the channel records of the child `process` until a read fails or the `deadline` passes (a `Time.monotonic_ms`
 ## value). Lines that are not JSON are skipped.
-export def read_records(p: Process, deadline: Int) -> Records
+export def read_records(process: Process, deadline: Int) -> Records
   items: List[JSON.Value] = []
   while true
-    line = Process.channel_read_line(p, left(deadline))
+    line = Process.channel_read_line(process, left(deadline))
     return Records(items: items, problem: line.message) if not line.ok?
     record = record_of(line.unwrap!)
     if not JSON.null?(record)

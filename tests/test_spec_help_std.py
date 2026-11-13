@@ -3,7 +3,7 @@ their `##` docs. The cases read the JSON form and assert fields, codes and exit
 codes, never message text; one case reads the text form."""
 import json
 
-from tests.agentica_test import cli, run, vm_environment
+from tests.agentica_test import ROOT, cli, run, vm_environment
 from tests.span_support import problem
 
 
@@ -32,9 +32,9 @@ def test_one_function_has_the_fields_of_a_builtin_help(tmp_path):
     assert result.code == 0, result.stderr
     item = json.loads(result.stdout)
     assert item["name"] == "pop" and item["kind"] == "function" and item["module"] == "std/queue"
-    assert item["signature"] == "pop(q: QueueState) -> Result[Popped]"
+    assert item["signature"] == "pop(queue: QueueState) -> Result[Popped]"
     assert (item["arity"], item["result"]) == (1, "Result[Popped]")
-    assert item["parameters"] == [{"name": "q", "type": "QueueState", "default": None}]
+    assert item["parameters"] == [{"name": "queue", "type": "QueueState", "default": None}]
     assert item["description"].startswith("Takes the oldest value.")
     assert item["summary"] == item["description"]
     assert "effects" not in item
@@ -101,7 +101,7 @@ def test_text_form(tmp_path):
     assert listed.code == 0, listed.stderr
     lines = listed.stdout.split("\n")
     assert lines[0] == "std/queue"
-    assert "  pop(q: QueueState) -> Result[Popped]" in lines
+    assert "  pop(queue: QueueState) -> Result[Popped]" in lines
     # A list line is the first sentence only; the JSON summary keeps the whole paragraph.
     assert "      Takes the oldest value." in lines
     long = help_std(["std/mime"], cwd=tmp_path).stdout.split("\n")
@@ -109,7 +109,7 @@ def test_text_form(tmp_path):
     assert shown.endswith("…") and len(shown) <= 6 + 101
     one = help_std(["std/queue.pop"], cwd=tmp_path)
     lines = one.stdout.split("\n")
-    assert lines[0] == "pop(q: QueueState) -> Result[Popped]"
+    assert lines[0] == "pop(queue: QueueState) -> Result[Popped]"
     assert lines[1].startswith("Takes the oldest value.")
 
 
@@ -123,3 +123,22 @@ def test_an_unknown_module_or_name_is_a_query_diagnostic(tmp_path):
     assert help_std(["std/queue.nope"], cwd=tmp_path).code == 2
     # A missing name after the dot is a mistake in the words.
     problem(help_std(["std/queue."], "--json", cwd=tmp_path), "QUERY-USAGE", 2)
+
+
+# Named arguments make parameter names public: every builtin and std/ parameter name has at least two characters.
+# scrypt keeps its own n, r and p.
+SHORT_NAMES = {("OpenSSL.KDF.scrypt", "n"), ("OpenSSL.KDF.scrypt", "r"), ("OpenSSL.KDF.scrypt", "p")}
+
+
+def test_every_builtin_and_std_parameter_name_has_two_characters_or_more(tmp_path):
+    found = set()
+    for builtin in json.loads(run(cli() + ["help", "--json"], env=vm_environment(), cwd=tmp_path).stdout):
+        for form in builtin.get("overloads", [builtin]):
+            found |= {(form["name"], parameter["name"]) for parameter in form["parameters"]}
+    modules = (ROOT / "stdlib" / "MODULES").read_text(encoding="utf-8").split()
+    for module in [name.removesuffix(".agc") for name in modules if not name.startswith(("prelude/", "internal/"))]:
+        documented = run(cli() + ["--json", "doc", f"std/{module}"], env=vm_environment(), cwd=tmp_path)
+        assert documented.code == 0, documented.stderr
+        for item in json.loads(documented.stdout)["items"]:
+            found |= {(f"std/{module}.{item['name']}", parameter["name"]) for parameter in item.get("parameters", [])}
+    assert {pair for pair in found if len(pair[1]) < 2} == SHORT_NAMES

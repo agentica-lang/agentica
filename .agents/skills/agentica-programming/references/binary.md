@@ -13,7 +13,7 @@ Binary.write_u8(value: Int) -> Result[Bytes]
 Binary.write_i8(value: Int) -> Result[Bytes]
 Binary.write_u16_be(value: Int) -> Result[Bytes]  # also _le, i16, u32, i32, u64
 Binary.write_i64_be(value: Int) -> Bytes          # also _le; cannot fail
-Binary.write_f32_be(x: Float) -> Bytes            # also _le, f64; cannot fail
+Binary.write_f32_be(value: Float) -> Bytes        # also _le, f64; cannot fail
 Binary.frame(payload: Bytes) -> Result[Bytes]
 Binary.read_frame_length(data: Bytes, offset: Int, max: Int) -> Result[Int]
 ```
@@ -42,16 +42,16 @@ Binary.read_frame_length(data: Bytes, offset: Int, max: Int) -> Result[Int]
 ## Bit operations
 
 ```text
-Int.bit_and(a: Int, b: Int) -> Int                       # 64-bit two's complement
-Int.bit_or(a: Int, b: Int) -> Int
-Int.bit_xor(a: Int, b: Int) -> Int
-Int.bit_not(a: Int) -> Int                               # -1 - a
-Int.shift_left(a: Int, count: Int) -> Int                # wraps; 64 or more gives 0
-Int.shift_right(a: Int, count: Int) -> Int               # arithmetic, rounds down; 64 or more gives 0 or -1
-Int.shift_right_unsigned(a: Int, count: Int) -> Int      # logical; 64 or more gives 0
-Float.to_bits(x: Float) -> Int                           # binary64 bits as an Int; every NaN gives 9221120237041090560
+Int.bit_and(int: Int, other: Int) -> Int                 # 64-bit two's complement
+Int.bit_or(int: Int, other: Int) -> Int
+Int.bit_xor(int: Int, other: Int) -> Int
+Int.bit_not(int: Int) -> Int                             # -1 - int
+Int.shift_left(int: Int, count: Int) -> Int              # wraps; 64 or more gives 0
+Int.shift_right(int: Int, count: Int) -> Int             # arithmetic, rounds down; 64 or more gives 0 or -1
+Int.shift_right_unsigned(int: Int, count: Int) -> Int    # logical; 64 or more gives 0
+Float.to_bits(float: Float) -> Int                       # binary64 bits as an Int; every NaN gives 9221120237041090560
 Float.from_bits(bits: Int) -> Float                      # any Int; any NaN pattern gives NaN
-Float.to_bits32(x: Float) -> Int                         # rounds to binary32; 0..4294967295; every NaN gives 2143289344
+Float.to_bits32(float: Float) -> Int                     # rounds to binary32; 0..4294967295; every NaN gives 2143289344
 Float.from_bits32(bits: Int) -> Float                    # exact; bits outside 0..4294967295 halt (RUNTIME-INVALID-NUMBER)
 ```
 
@@ -80,9 +80,9 @@ Float.from_bits32(bits: Int) -> Float                    # exact; bits outside 0
   `OpenSSL.HMAC.sha512(key, data)` return the 32 or 64 bytes of the HMAC;
   `OpenSSL.HMAC.sha256_hexdigest(key, data) -> String` and `sha512_hexdigest`
   return them as lowercase hex. Any key length works.
-- `OpenSSL.HMAC.secure_compare(a: Bytes, b: Bytes) -> Bool` compares bytes in
-  constant time: check a received MAC, signature or token with it, never with
-  `==`. Other lengths give `false`.
+- `OpenSSL.HMAC.secure_compare(bytes: Bytes, other: Bytes) -> Bool` compares
+  bytes in constant time: check a received MAC, signature or token with it,
+  never with `==`. Other lengths give `false`.
 - Triple DES CBC and CMAC are for payment formats (PIN blocks, key check
   values, ISO 8583 MACs), not for new designs. Each gives an `error(...)` for a
   wrong key, IV or data size, never partial output:
@@ -153,12 +153,12 @@ OpenSSL.Digest.hexdecode(text: String) -> Result[Bytes]  # either case
 ## Secure random
 
 ```text
-OpenSSL.Random.random_bytes(n: Int = 16) -> Bytes  # OpenSSL RAND_bytes
-OpenSSL.Random.hex(n: Int = 16) -> String          # 2n lowercase hex digits
+OpenSSL.Random.random_bytes(count: Int = 16) -> Bytes  # OpenSSL RAND_bytes
+OpenSSL.Random.hex(count: Int = 16) -> String      # 2 * count lowercase hex digits
 OpenSSL.Random.uuid() -> String                    # version 4, 36 chars
 ```
 
 - Use `OpenSSL.Random` (Ruby's `SecureRandom`) for keys, salts, tokens and
   IDs: `Random` is seeded and `--seed` repeats it, so it is not for secrets.
-- `n` outside 0..1048576 halts (`RUNTIME-INVALID-COUNT`). A module constant
+- `count` outside 0..1048576 halts (`RUNTIME-INVALID-COUNT`). A module constant
   cannot call them.

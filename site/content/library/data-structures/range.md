@@ -46,9 +46,9 @@ false
 ## Enumerable methods
 
 ```signature
-Range.map(range: Range, f: Fn[Int, B]) -> List[B]
-Range.select(range: Range, f: Fn[Int, Bool]) -> List[Int]
-Range.reduce(range: Range, initial: B, f: Fn[B, Int, B]) -> B
+Range.map(range: Range, block: Fn[Int, B]) -> List[B]
+Range.select(range: Range, block: Fn[Int, Bool]) -> List[Int]
+Range.reduce(range: Range, initial: B, block: Fn[B, Int, B]) -> B
 Range.sum(range: Range) -> Int
 Range.min(range: Range) -> Optional[Int]
 Range.max(range: Range) -> Optional[Int]
@@ -139,7 +139,7 @@ false
 ## each
 
 ```signature
-Range.each(range: Range, f: Fn[Int, Void]) -> Void
+Range.each(range: Range, block: Fn[Int, Void]) -> Void
 ```
 
 Calls the block with each value, in order.
@@ -182,9 +182,9 @@ error("the range is empty", kind: "argument")
 ## times, upto and downto
 
 ```signature
-Int.times(n: Int, f: Fn[Int, Void]) -> Void
-Int.upto(from: Int, to: Int, f: Fn[Int, Void]) -> Void
-Int.downto(from: Int, to: Int, f: Fn[Int, Void]) -> Void
+Int.times(int: Int, block: Fn[Int, Void]) -> Void
+Int.upto(from: Int, to: Int, block: Fn[Int, Void]) -> Void
+Int.downto(from: Int, to: Int, block: Fn[Int, Void]) -> Void
 ```
 
 Methods on `Int` for loops. `n.times` calls the block with `0` to `n - 1`, and nothing when `n <= 0`. `a.upto(b)` counts from `a` up to `b`, and `a.downto(b)` from `a` down to `b`, both ends included; they do nothing when the end is already past. A negative receiver needs parentheses: `(-2).upto(2)`.

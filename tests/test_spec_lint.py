@@ -520,6 +520,8 @@ KIND_CASES = [
     ('Error.is_a?(e, "toml.prase")', True),
     ('e.is_a?(family: "io.notfound")', True),
     ('Error.is_a?(e, family: "io.notfound")', True),
+    ('Error.is_a?(error: e, family: "io.notfound")', True),
+    ('Error.is_a?("io.notfound", error: e)', True),
     ('e.is_a?(family: "io.not_found")', False),
     ('e.is_a?("error.other")', True),
     ('e.is_a?("io")', False),

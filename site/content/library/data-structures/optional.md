@@ -152,7 +152,7 @@ none
 ## Optional.unwrap_or
 
 ```signature
-Optional.unwrap_or(o: Optional[T], default: T) -> T
+Optional.unwrap_or(optional: Optional[T], default: T) -> T
 ```
 
 Gives the value, or the default for `none`. The default is always computed.
@@ -173,7 +173,7 @@ end
 ## Optional.unwrap!
 
 ```signature
-Optional.unwrap!(o: Optional[T]) -> T
+Optional.unwrap!(optional: Optional[T]) -> T
 ```
 
 Gives the value, or stops the program with `RUNTIME-UNWRAP-NONE`.
@@ -191,7 +191,7 @@ end
 ## Optional.map
 
 ```signature
-Optional.map(o: Optional[T], f: Fn[T, U]) -> Optional[U]
+Optional.map(optional: Optional[T], block: Fn[T, U]) -> Optional[U]
 ```
 
 Gives `some` of the block's value, or `none` without calling the block.
@@ -212,8 +212,8 @@ none
 ## Optional.some? and Optional.none?
 
 ```signature
-Optional.some?(o: Optional[T]) -> Bool
-Optional.none?(o: Optional[T]) -> Bool
+Optional.some?(optional: Optional[T]) -> Bool
+Optional.none?(optional: Optional[T]) -> Bool
 ```
 
 ```agentica
@@ -232,7 +232,7 @@ true
 ## Optional.to_result
 
 ```signature
-Optional.to_result(o: Optional[T], message: String) -> Result[T]
+Optional.to_result(optional: Optional[T], message: String) -> Result[T]
 ```
 
 Gives `ok(value)`, or `error(message)` for `none`, so `try` can pass the error on.

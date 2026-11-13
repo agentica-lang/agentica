@@ -31,6 +31,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Builtin and `std/` parameters have full names for named arguments:
+  `list.map(block: ...)`, `Process.wait(process: ...)`, not `f:` or `p:` (#1503).
 - **Breaking:** the errors of the builtins have kinds such as `io.not_found`,
   `net.timeout` and `argument`, and an OS error has its errno as `code` (an
   HTTP head refused by `HttpWire` its status). A printed failed Result shows

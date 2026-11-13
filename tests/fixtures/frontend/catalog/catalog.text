@@ -29,7 +29,7 @@ builtin File.chunks forms=1
 builtin File.close forms=1
   File.close(handle: File.Handle, timeout_ms: Int = 30000) -> Result[Void] shape=(Opaque(File.Handle), Int = 30000) -> Result(Void) rule=Plain impl="File.close" effects=["filesystem"] desc="Flush and close a file handle idempotently."
 builtin File.each_line forms=1
-  File.each_line(path: String, buffer_bytes: Int = 65536, timeout_ms: Int = 30000, f: Fn[String, Result[Void]]) -> Result[Void] shape=(String, Int = 65536, Int = 30000, Fn([String], Result(Void))) -> Result(Void) rule=Plain impl="File.each_line" effects=["filesystem"] desc="Call the block once for each line of a file, in order, reading blocks of buffer_bytes (1024 to 16777216, also the longest line); the block returns Result[Void] and an error stops the call; VM only."
+  File.each_line(path: String, buffer_bytes: Int = 65536, timeout_ms: Int = 30000, block: Fn[String, Result[Void]]) -> Result[Void] shape=(String, Int = 65536, Int = 30000, Fn([String], Result(Void))) -> Result(Void) rule=Plain impl="File.each_line" effects=["filesystem"] desc="Call the block once for each line of a file, in order, reading blocks of buffer_bytes (1024 to 16777216, also the longest line); the block returns Result[Void] and an error stops the call; VM only."
 builtin File.flush forms=1
   File.flush(handle: File.Handle, timeout_ms: Int = 30000) -> Result[Void] shape=(Opaque(File.Handle), Int = 30000) -> Result(Void) rule=Plain impl="File.flush" effects=["filesystem"] desc="Flush pending file output."
 builtin File.foreach forms=1
@@ -38,7 +38,7 @@ builtin File.lstat forms=1
   File.lstat(path: String, timeout_ms: Int = 30000) -> Result[File.Info] shape=(String, Int = 30000) -> Result(Struct(File.Info)) rule=Plain impl="File.lstat" effects=["filesystem"] desc="Like File.stat, but a symbolic link is described itself and has kind \"link\"; VM only."
 builtin File.open forms=2
   File.open(path: String, mode: String = "read", timeout_ms: Int = 30000) -> Result[File.Handle] shape=(String, String = "read", Int = 30000) -> Result(Opaque(File.Handle)) rule=Plain impl="File.open" effects=["filesystem"] desc="Open a regular file for read, write, append or create_private with a deadline; create_private makes a new file only the current user can use and fails when the path exists."
-  File.open(path: String, mode: String = "read", timeout_ms: Int = 30000, f: Fn[File.Handle, Result[A]]) -> Result[A] shape=(String, String = "read", Int = 30000, Fn([Opaque(File.Handle)], Result(Var(A)))) -> Result(Var(A)) rule=Prelude impl="" effects=["filesystem"] desc="Open the file, call the block with the handle, and close the handle when the block ends, with ok or error; gives the block's Result, or the close error after an ok block; VM only."
+  File.open(path: String, mode: String = "read", timeout_ms: Int = 30000, block: Fn[File.Handle, Result[A]]) -> Result[A] shape=(String, String = "read", Int = 30000, Fn([Opaque(File.Handle)], Result(Var(A)))) -> Result(Var(A)) rule=Prelude impl="" effects=["filesystem"] desc="Open the file, call the block with the handle, and close the handle when the block ends, with ok or error; gives the block's Result, or the close error after an ok block; VM only."
 builtin File.read_bytes forms=1
   File.read_bytes(handle: File.Handle, max_bytes: Int, timeout_ms: Int = 30000) -> Result[Bytes] shape=(Opaque(File.Handle), Int, Int = 30000) -> Result(Bytes) rule=Plain impl="File.read_bytes.bytes" effects=["filesystem"] desc="Read up to max_bytes; empty means EOF."
 builtin File.read_line forms=1
@@ -60,29 +60,29 @@ builtin File.write_bytes forms=1
 builtin File.write_text forms=1
   File.write_text(path: String, text: String, timeout_ms: Int = 30000) -> Result[Void] shape=(String, String, Int = 30000) -> Result(Void) rule=Plain impl="File.write_text" effects=["filesystem"] desc="Overwrite a file with at most 1 MiB of UTF-8 text."
 builtin Float.abs forms=1
-  Float.abs(x: Float) -> Float shape=(Float) -> Float rule=Plain impl="Float.abs" effects=[] desc="The absolute value; -0.0 gives 0.0 and NaN stays NaN."
+  Float.abs(float: Float) -> Float shape=(Float) -> Float rule=Plain impl="Float.abs" effects=[] desc="The absolute value; -0.0 gives 0.0 and NaN stays NaN."
 builtin Float.ceil forms=1
-  Float.ceil(x: Float) -> Int shape=(Float) -> Int rule=Plain impl="Float.ceil" effects=[] desc="The least Int >= x; NaN, an infinity or a value outside Int halts, as in to_i!."
+  Float.ceil(float: Float) -> Int shape=(Float) -> Int rule=Plain impl="Float.ceil" effects=[] desc="The least Int >= float; NaN, an infinity or a value outside Int halts, as in to_i!."
 builtin Float.clamp forms=1
-  Float.clamp(x: Float, min: Float, max: Float) -> Float shape=(Float, Float, Float) -> Float rule=Plain impl="Float.clamp" effects=[] desc="x limited to min..max; min > max or a NaN bound halts; a NaN x stays NaN."
+  Float.clamp(float: Float, min: Float, max: Float) -> Float shape=(Float, Float, Float) -> Float rule=Plain impl="Float.clamp" effects=[] desc="float limited to min..max; min > max or a NaN bound halts; a NaN float stays NaN."
 builtin Float.floor forms=1
-  Float.floor(x: Float) -> Int shape=(Float) -> Int rule=Plain impl="Float.floor" effects=[] desc="The greatest Int <= x; NaN, an infinity or a value outside Int halts, as in to_i!."
+  Float.floor(float: Float) -> Int shape=(Float) -> Int rule=Plain impl="Float.floor" effects=[] desc="The greatest Int <= float; NaN, an infinity or a value outside Int halts, as in to_i!."
 builtin Float.from_bits forms=1
   Float.from_bits(bits: Int) -> Float shape=(Int) -> Float rule=Plain impl="Float.from_bits" effects=[] desc="Read the 64 bits of an Int as a binary64 Float; any NaN pattern gives NaN."
 builtin Float.from_bits32 forms=1
   Float.from_bits32(bits: Int) -> Float shape=(Int) -> Float rule=Plain impl="Float.from_bits32" effects=[] desc="Read 32 bits as a binary32 and widen it exactly; bits outside 0 to 4294967295 halt."
 builtin Int.to_f forms=1
-  Int.to_f(n: Int) -> Float shape=(Int) -> Float rule=Plain impl="Float.from_int" effects=[] desc="Convert an Int to the nearest Float."
+  Int.to_f(int: Int) -> Float shape=(Int) -> Float rule=Plain impl="Float.from_int" effects=[] desc="Convert an Int to the nearest Float."
 builtin Float.round forms=1
-  Float.round(x: Float) -> Int shape=(Float) -> Int rule=Plain impl="Float.round" effects=[] desc="The nearest Int, halves away from zero; NaN, an infinity or a value outside Int halts, as in to_i!."
+  Float.round(float: Float) -> Int shape=(Float) -> Int rule=Plain impl="Float.round" effects=[] desc="The nearest Int, halves away from zero; NaN, an infinity or a value outside Int halts, as in to_i!."
 builtin Float.to_bits forms=1
-  Float.to_bits(x: Float) -> Int shape=(Float) -> Int rule=Plain impl="Float.to_bits" effects=[] desc="The 64 IEEE 754 binary64 bits as an Int; every NaN gives the canonical 9221120237041090560."
+  Float.to_bits(float: Float) -> Int shape=(Float) -> Int rule=Plain impl="Float.to_bits" effects=[] desc="The 64 IEEE 754 binary64 bits as an Int; every NaN gives the canonical 9221120237041090560."
 builtin Float.to_bits32 forms=1
-  Float.to_bits32(x: Float) -> Int shape=(Float) -> Int rule=Plain impl="Float.to_bits32" effects=[] desc="Round to binary32 (ties to even) and give its 32 bits as an Int from 0 to 4294967295; every NaN gives 2143289344."
+  Float.to_bits32(float: Float) -> Int shape=(Float) -> Int rule=Plain impl="Float.to_bits32" effects=[] desc="Round to binary32 (ties to even) and give its 32 bits as an Int from 0 to 4294967295; every NaN gives 2143289344."
 builtin Float.to_i forms=1
-  Float.to_i(x: Float) -> Result[Int] shape=(Float) -> Result(Int) rule=Plain impl="Float.to_int" effects=[] desc="Truncate toward zero; NaN, infinity or overflow return an error."
+  Float.to_i(float: Float) -> Result[Int] shape=(Float) -> Result(Int) rule=Plain impl="Float.to_int" effects=[] desc="Truncate toward zero; NaN, infinity or overflow return an error."
 builtin Float.to_i! forms=1
-  Float.to_i!(x: Float) -> Int shape=(Float) -> Int rule=Plain impl="Float.to_int!" effects=[] desc="Truncate toward zero; halt on NaN, infinity or overflow."
+  Float.to_i!(float: Float) -> Int shape=(Float) -> Int rule=Plain impl="Float.to_int!" effects=[] desc="Truncate toward zero; halt on NaN, infinity or overflow."
 builtin FrontEnd.hand_off forms=1
   FrontEnd.hand_off(program: Bytes, options: List[String], arguments: List[String]) -> Result[Void] shape=(Bytes, List(String), List(String)) -> Result(Void) rule=Plain impl="FrontEnd.hand_off.bytes" effects=["process"] desc="Front end only: hand the compiled program, the VM options and the program arguments to the VM, which ends this run and runs the program in a new one; it returns an error only when an argument cannot be passed on (a program too large to load, or a character 0 in a word). Any other program fails with RUNTIME-FRONT-END-ONLY."
 builtin FrontEnd.std_source forms=1
@@ -134,11 +134,11 @@ builtin HttpWire.read_head forms=1
 builtin HttpWire.read_response forms=1
   HttpWire.read_response(socket: TCP.Socket, head_only: Bool, max_body_bytes: Int, timeout_ms: Int) -> Result[HttpWire.ResponseHead] shape=(Opaque(TCP.Socket), Bool, Int, Int) -> Result(Struct(HttpWire.ResponseHead)) rule=Plain impl="HttpWire.read_response" effects=["network"] desc="Internal to std/http: read and parse the next response head, with the framing of a response to HEAD when head_only; an interim (1xx) head comes back as it is."
 builtin HttpWire.server forms=1
-  HttpWire.server(listener: TCP.Listener, max_connections: Int, f: Fn[HTTP.Server, Void]) -> HTTP.Server shape=(Opaque(TCP.Listener), Int, Fn([Opaque(HttpWire.Server)], Void)) -> Opaque(HttpWire.Server) rule=Plain impl="HttpWire.server" effects=["network"] desc="Internal to std/http: make a server's task group on a listener and run f, its accept loop, in it."
+  HttpWire.server(listener: TCP.Listener, max_connections: Int, block: Fn[HTTP.Server, Void]) -> HTTP.Server shape=(Opaque(TCP.Listener), Int, Fn([Opaque(HttpWire.Server)], Void)) -> Opaque(HttpWire.Server) rule=Plain impl="HttpWire.server" effects=["network"] desc="Internal to std/http: make a server's task group on a listener and run block, its accept loop, in it."
 builtin HttpWire.service forms=1
-  HttpWire.service(jobs: Channel[HttpWire.Job], options: HTTP.ClientOptions, f: Fn[HTTP.Client, Void]) -> HTTP.Client shape=(Channel(Struct(HttpWire.Job)), Struct(HttpWire.ClientOptions), Fn([Opaque(HttpWire.Client)], Void)) -> Opaque(HttpWire.Client) rule=Plain impl="HttpWire.service" effects=["concurrency"] desc="Internal to std/http: run f(client), a client's owner task, outside every caller's task tree, as the owner of jobs; the client keeps jobs and options."
+  HttpWire.service(jobs: Channel[HttpWire.Job], options: HTTP.ClientOptions, block: Fn[HTTP.Client, Void]) -> HTTP.Client shape=(Channel(Struct(HttpWire.Job)), Struct(HttpWire.ClientOptions), Fn([Opaque(HttpWire.Client)], Void)) -> Opaque(HttpWire.Client) rule=Plain impl="HttpWire.service" effects=["concurrency"] desc="Internal to std/http: run block(client), a client's owner task, outside every caller's task tree, as the owner of jobs; the client keeps jobs and options."
 builtin HttpWire.spawn forms=1
-  HttpWire.spawn(server: HTTP.Server, socket: TCP.Socket, f: Fn[TCP.Socket, Void]) -> Void shape=(Opaque(HttpWire.Server), Opaque(TCP.Socket), Fn([Opaque(TCP.Socket)], Void)) -> Void rule=Plain impl="HttpWire.spawn" effects=["network"] desc="Internal to std/http: run a connection task in the server's group."
+  HttpWire.spawn(server: HTTP.Server, socket: TCP.Socket, block: Fn[TCP.Socket, Void]) -> Void shape=(Opaque(HttpWire.Server), Opaque(TCP.Socket), Fn([Opaque(TCP.Socket)], Void)) -> Void rule=Plain impl="HttpWire.spawn" effects=["network"] desc="Internal to std/http: run a connection task in the server's group."
 builtin HttpWire.wait forms=1
   HttpWire.wait(server: HTTP.Server) -> Result[Void] shape=(Opaque(HttpWire.Server)) -> Result(Void) rule=Plain impl="HttpWire.wait" effects=["network"] desc="Internal to std/http: wait until the server is closed."
 builtin IO.eof? forms=1
@@ -162,41 +162,41 @@ builtin IO.read_bytes forms=1
 builtin IO.warn forms=1
   IO.warn(value: T) -> Void shape=(Var(T)) -> Void rule=Show impl="IO.warn" effects=["stderr"] desc="Write a value and a newline to stderr; non-String values print as in interpolation."
 builtin Int.abs forms=1
-  Int.abs(n: Int) -> Int shape=(Int) -> Int rule=Plain impl="Int.abs" effects=[] desc="The absolute value; the least Int halts with an overflow."
+  Int.abs(int: Int) -> Int shape=(Int) -> Int rule=Plain impl="Int.abs" effects=[] desc="The absolute value; the least Int halts with an overflow."
 builtin Int.bit_and forms=1
-  Int.bit_and(a: Int, b: Int) -> Int shape=(Int, Int) -> Int rule=Plain impl="Int.bit_and" effects=[] desc="Bitwise and of the 64-bit two's complement forms."
+  Int.bit_and(int: Int, other: Int) -> Int shape=(Int, Int) -> Int rule=Plain impl="Int.bit_and" effects=[] desc="Bitwise and of the 64-bit two's complement forms."
 builtin Int.bit_not forms=1
-  Int.bit_not(a: Int) -> Int shape=(Int) -> Int rule=Plain impl="Int.bit_not" effects=[] desc="Flip every bit; the same as -1 - a."
+  Int.bit_not(int: Int) -> Int shape=(Int) -> Int rule=Plain impl="Int.bit_not" effects=[] desc="Flip every bit; the same as -1 - int."
 builtin Int.bit_or forms=1
-  Int.bit_or(a: Int, b: Int) -> Int shape=(Int, Int) -> Int rule=Plain impl="Int.bit_or" effects=[] desc="Bitwise or of the 64-bit two's complement forms."
+  Int.bit_or(int: Int, other: Int) -> Int shape=(Int, Int) -> Int rule=Plain impl="Int.bit_or" effects=[] desc="Bitwise or of the 64-bit two's complement forms."
 builtin Int.bit_xor forms=1
-  Int.bit_xor(a: Int, b: Int) -> Int shape=(Int, Int) -> Int rule=Plain impl="Int.bit_xor" effects=[] desc="Bitwise exclusive or of the 64-bit two's complement forms."
+  Int.bit_xor(int: Int, other: Int) -> Int shape=(Int, Int) -> Int rule=Plain impl="Int.bit_xor" effects=[] desc="Bitwise exclusive or of the 64-bit two's complement forms."
 builtin Int.clamp forms=1
-  Int.clamp(n: Int, min: Int, max: Int) -> Int shape=(Int, Int, Int) -> Int rule=Plain impl="Int.clamp" effects=[] desc="n limited to min..max; min > max halts."
+  Int.clamp(int: Int, min: Int, max: Int) -> Int shape=(Int, Int, Int) -> Int rule=Plain impl="Int.clamp" effects=[] desc="int limited to min..max; min > max halts."
 builtin Int.downto forms=1
-  Int.downto(from: Int, to: Int, f: Fn[Int, Void]) -> Void shape=(Int, Int, Fn([Int], Void)) -> Void rule=Plain impl="Int.downto" effects=[] desc="Call f with from down to to; nothing when to > from."
+  Int.downto(from: Int, to: Int, block: Fn[Int, Void]) -> Void shape=(Int, Int, Fn([Int], Void)) -> Void rule=Plain impl="Int.downto" effects=[] desc="Call block with from down to to; nothing when to > from."
 builtin Int.gcd forms=1
-  Int.gcd(a: Int, b: Int) -> Int shape=(Int, Int) -> Int rule=Plain impl="Int.gcd" effects=[] desc="The greatest common divisor, never negative; gcd of 0 and 0 is 0; a result of 2^63 halts."
+  Int.gcd(int: Int, other: Int) -> Int shape=(Int, Int) -> Int rule=Plain impl="Int.gcd" effects=[] desc="The greatest common divisor, never negative; gcd of 0 and 0 is 0; a result of 2^63 halts."
 builtin Int.pow forms=1
-  Int.pow(n: Int, exponent: Int) -> Int shape=(Int, Int) -> Int rule=Plain impl="Int.pow" effects=[] desc="n to the power exponent; a negative exponent or an overflow halts."
+  Int.pow(int: Int, exponent: Int) -> Int shape=(Int, Int) -> Int rule=Plain impl="Int.pow" effects=[] desc="int to the power exponent; a negative exponent or an overflow halts."
 builtin Int.shift_left forms=1
-  Int.shift_left(a: Int, count: Int) -> Int shape=(Int, Int) -> Int rule=Plain impl="Int.shift_left" effects=[] desc="Shift bits left; bits that leave the top are dropped, so it wraps; a count of 64 or more gives 0; a negative count halts."
+  Int.shift_left(int: Int, count: Int) -> Int shape=(Int, Int) -> Int rule=Plain impl="Int.shift_left" effects=[] desc="Shift bits left; bits that leave the top are dropped, so it wraps; a count of 64 or more gives 0; a negative count halts."
 builtin Int.shift_right forms=1
-  Int.shift_right(a: Int, count: Int) -> Int shape=(Int, Int) -> Int rule=Plain impl="Int.shift_right" effects=[] desc="Arithmetic shift right, copying the sign bit; a count of 64 or more gives 0 or -1; a negative count halts."
+  Int.shift_right(int: Int, count: Int) -> Int shape=(Int, Int) -> Int rule=Plain impl="Int.shift_right" effects=[] desc="Arithmetic shift right, copying the sign bit; a count of 64 or more gives 0 or -1; a negative count halts."
 builtin Int.shift_right_unsigned forms=1
-  Int.shift_right_unsigned(a: Int, count: Int) -> Int shape=(Int, Int) -> Int rule=Plain impl="Int.shift_right_unsigned" effects=[] desc="Logical shift right, bringing in zeros; a count of 64 or more gives 0; a negative count halts."
+  Int.shift_right_unsigned(int: Int, count: Int) -> Int shape=(Int, Int) -> Int rule=Plain impl="Int.shift_right_unsigned" effects=[] desc="Logical shift right, bringing in zeros; a count of 64 or more gives 0; a negative count halts."
 builtin Int.times forms=1
-  Int.times(n: Int, f: Fn[Int, Void]) -> Void shape=(Int, Fn([Int], Void)) -> Void rule=Plain impl="Int.times" effects=[] desc="Call f with 0 to n - 1; nothing when n <= 0."
+  Int.times(int: Int, block: Fn[Int, Void]) -> Void shape=(Int, Fn([Int], Void)) -> Void rule=Plain impl="Int.times" effects=[] desc="Call block with 0 to int - 1; nothing when int <= 0."
 builtin Int.upto forms=1
-  Int.upto(from: Int, to: Int, f: Fn[Int, Void]) -> Void shape=(Int, Int, Fn([Int], Void)) -> Void rule=Plain impl="Int.upto" effects=[] desc="Call f with from up to to; nothing when to < from."
+  Int.upto(from: Int, to: Int, block: Fn[Int, Void]) -> Void shape=(Int, Int, Fn([Int], Void)) -> Void rule=Plain impl="Int.upto" effects=[] desc="Call block with from up to to; nothing when to < from."
 builtin JSON.array forms=1
   JSON.array(items: List[JSON.Value]) -> JSON.Value shape=(List(JSON.Value)) -> JSON.Value rule=Plain impl="JSON.array" effects=[] desc="Build a JSON array from JSON values."
 builtin JSON.at forms=1
-  JSON.at(j: JSON.Value, index: Int) -> Result[JSON.Value] shape=(JSON.Value, Int) -> Result(JSON.Value) rule=Plain impl="JSON.at" effects=[] desc="Read an array element; wrong kind or bad index returns an error."
+  JSON.at(json: JSON.Value, index: Int) -> Result[JSON.Value] shape=(JSON.Value, Int) -> Result(JSON.Value) rule=Plain impl="JSON.at" effects=[] desc="Read an array element; wrong kind or bad index returns an error."
 builtin JSON.bool forms=1
-  JSON.bool(j: JSON.Value) -> Result[Bool] shape=(JSON.Value) -> Result(Bool) rule=Plain impl="JSON.bool" effects=[] desc="Extract a JSON boolean; wrong kind returns an error."
+  JSON.bool(json: JSON.Value) -> Result[Bool] shape=(JSON.Value) -> Result(Bool) rule=Plain impl="JSON.bool" effects=[] desc="Extract a JSON boolean; wrong kind returns an error."
 builtin Codec.decode forms=2
-  Codec.decode(codec: Codec[T], s: String) -> Result[T] shape=(Codec(Var(T)), String) -> Result(Var(T)) rule=CodecDecode impl="JSON.decode" effects=[] desc="Decode JSON text into the codec's struct, as JSON.decode does."
+  Codec.decode(codec: Codec[T], text: String) -> Result[T] shape=(Codec(Var(T)), String) -> Result(Var(T)) rule=CodecDecode impl="JSON.decode" effects=[] desc="Decode JSON text into the codec's struct, as JSON.decode does."
   Codec.decode(codec: Codec[T], json: JSON.Value) -> Result[T] shape=(Codec(Var(T)), JSON.Value) -> Result(Var(T)) rule=CodecDecode impl="JSON.decode" effects=[] desc="Decode a JSON.Value into the codec's struct, as JSON.decode does."
 builtin Codec.encode forms=1
   Codec.encode(codec: Codec[T], value: T) -> String shape=(Codec(Var(T)), Var(T)) -> String rule=CodecEncode impl="JSON.encode" effects=[] desc="Encode a value of the codec's struct as JSON text, as JSON.encode does."
@@ -205,22 +205,22 @@ builtin Codec.from forms=1
 builtin Codec.members forms=1
   Codec.members(codec: Codec[T]) -> List[StructMember] shape=(Codec(Var(T))) -> List(Struct(StructMember)) rule=CodecMembers impl="Codec.members" effects=[] desc="The fields of the codec's struct, as T.members gives them; empty for an enum."
 builtin JSON.decode forms=2
-  JSON.decode(s: String, type: T) -> Result[T] shape=(String, Var(T)) -> Result(Var(T)) rule=JsonDecode impl="JSON.decode" effects=[] desc="Decode JSON text into a named struct; invalid data returns an error."
+  JSON.decode(text: String, type: T) -> Result[T] shape=(String, Var(T)) -> Result(Var(T)) rule=JsonDecode impl="JSON.decode" effects=[] desc="Decode JSON text into a named struct; invalid data returns an error."
   JSON.decode(json: JSON.Value, type: T) -> Result[T] shape=(JSON.Value, Var(T)) -> Result(Var(T)) rule=JsonDecode impl="JSON.decode" effects=[] desc="Decode a JSON.Value into a named struct, with the rules and errors of its text."
 builtin JSON.encode forms=1
   JSON.encode(value: T) -> String shape=(Var(T)) -> String rule=JsonEncode impl="JSON.encode" effects=[] desc="Encode JSON-compatible values; halt on non-finite Float values."
 builtin JSON.float forms=1
-  JSON.float(j: JSON.Value) -> Result[Float] shape=(JSON.Value) -> Result(Float) rule=Plain impl="JSON.float" effects=[] desc="Extract a finite Float from a JSON number; wrong kind or overflow returns an error."
+  JSON.float(json: JSON.Value) -> Result[Float] shape=(JSON.Value) -> Result(Float) rule=Plain impl="JSON.float" effects=[] desc="Extract a finite Float from a JSON number; wrong kind or overflow returns an error."
 builtin JSON.from forms=1
   JSON.from(value: T) -> JSON.Value shape=(Var(T)) -> JSON.Value rule=JsonFrom impl="JSON.from" effects=[] desc="Convert JSON-compatible data to a JSON value."
 builtin JSON.get forms=1
-  JSON.get(j: JSON.Value, key: String) -> Result[JSON.Value] shape=(JSON.Value, String) -> Result(JSON.Value) rule=Plain impl="JSON.get" effects=[] desc="Read an object member; wrong kind or missing key returns an error."
+  JSON.get(json: JSON.Value, key: String) -> Result[JSON.Value] shape=(JSON.Value, String) -> Result(JSON.Value) rule=Plain impl="JSON.get" effects=[] desc="Read an object member; wrong kind or missing key returns an error."
 builtin JSON.int forms=1
-  JSON.int(j: JSON.Value) -> Result[Int] shape=(JSON.Value) -> Result(Int) rule=Plain impl="JSON.int" effects=[] desc="Extract a signed 64-bit JSON integer; wrong kind or overflow returns an error."
+  JSON.int(json: JSON.Value) -> Result[Int] shape=(JSON.Value) -> Result(Int) rule=Plain impl="JSON.int" effects=[] desc="Extract a signed 64-bit JSON integer; wrong kind or overflow returns an error."
 builtin JSON.kind forms=1
   JSON.kind(value: JSON.Value) -> String shape=(JSON.Value) -> String rule=Plain impl="JSON.kind" effects=[] desc="Name the JSON kind: null, bool, int, float, string, array or object."
 builtin JSON.list forms=1
-  JSON.list(j: JSON.Value) -> Result[List[JSON.Value]] shape=(JSON.Value) -> Result(List(JSON.Value)) rule=Plain impl="JSON.list" effects=[] desc="Extract an array as a list of opaque JSON values; wrong kind returns an error."
+  JSON.list(json: JSON.Value) -> Result[List[JSON.Value]] shape=(JSON.Value) -> Result(List(JSON.Value)) rule=Plain impl="JSON.list" effects=[] desc="Extract an array as a list of opaque JSON values; wrong kind returns an error."
 builtin JSON.null forms=1
   JSON.null() -> JSON.Value shape=() -> JSON.Value rule=Plain impl="JSON.null" effects=[] desc="Return JSON null."
 builtin JSON.null? forms=1
@@ -228,33 +228,33 @@ builtin JSON.null? forms=1
 builtin JSON.object forms=1
   JSON.object(fields: Map[String, JSON.Value]) -> JSON.Value shape=(Map(String, JSON.Value)) -> JSON.Value rule=Plain impl="JSON.object" effects=[] desc="Build a JSON object from JSON values."
 builtin JSON.parse forms=1
-  JSON.parse(s: String) -> Result[JSON.Value] shape=(String) -> Result(JSON.Value) rule=Plain impl="JSON.parse" effects=[] desc="Parse exactly one JSON value; invalid input returns an error."
+  JSON.parse(text: String) -> Result[JSON.Value] shape=(String) -> Result(JSON.Value) rule=Plain impl="JSON.parse" effects=[] desc="Parse exactly one JSON value; invalid input returns an error."
 builtin JSON.schema forms=1
   JSON.schema(type: T) -> JSON.Value shape=(Var(T)) -> JSON.Value rule=JsonSchema impl="JSON.schema" effects=[] desc="Describe a decodable struct with JSON Schema."
 builtin JSON.string forms=1
-  JSON.string(j: JSON.Value) -> Result[String] shape=(JSON.Value) -> Result(String) rule=Plain impl="JSON.string" effects=[] desc="Extract a JSON string; wrong kind returns an error."
+  JSON.string(json: JSON.Value) -> Result[String] shape=(JSON.Value) -> Result(String) rule=Plain impl="JSON.string" effects=[] desc="Extract a JSON string; wrong kind returns an error."
 builtin Lazy.chunk_while forms=1
-  Lazy.chunk_while(lazy: Lazy[A], f: Fn[A, A, Bool]) -> Lazy[List[A]] shape=(Lazy(Var(A)), Fn([Var(A), Var(A)], Bool)) -> Lazy(List(Var(A))) rule=Prelude impl="" effects=[] desc="Lazy step: group runs of items, a new group where f(previous, item) is false."
+  Lazy.chunk_while(lazy: Lazy[A], block: Fn[A, A, Bool]) -> Lazy[List[A]] shape=(Lazy(Var(A)), Fn([Var(A), Var(A)], Bool)) -> Lazy(List(Var(A))) rule=Prelude impl="" effects=[] desc="Lazy step: group runs of items, a new group where block(previous, item) is false."
 builtin Lazy.deflate forms=1
   Lazy.deflate(lazy: Lazy[Bytes], level: Int = 6, raw: Bool = false) -> Lazy[Bytes] shape=(Lazy(Bytes), Int = 6, Bool = false) -> Lazy(Bytes) rule=Prelude impl="" effects=[] desc="Lazy step: compress byte chunks of any size to one zlib stream (RFC 1950), or raw deflate (RFC 1951) when raw is true, at level 0 to 9; VM only."
 builtin Lazy.drop forms=1
   Lazy.drop(lazy: Lazy[A], count: Int) -> Lazy[A] shape=(Lazy(Var(A)), Int) -> Lazy(Var(A)) rule=Prelude impl="" effects=[] desc="Lazy step: skip the first count items; negative counts halt."
 builtin Lazy.drop_while forms=1
-  Lazy.drop_while(lazy: Lazy[A], f: Fn[A, Bool]) -> Lazy[A] shape=(Lazy(Var(A)), Fn([Var(A)], Bool)) -> Lazy(Var(A)) rule=Prelude impl="" effects=[] desc="Lazy step: skip items while f is true, then keep the rest."
+  Lazy.drop_while(lazy: Lazy[A], block: Fn[A, Bool]) -> Lazy[A] shape=(Lazy(Var(A)), Fn([Var(A)], Bool)) -> Lazy(Var(A)) rule=Prelude impl="" effects=[] desc="Lazy step: skip items while block is true, then keep the rest."
 builtin Lazy.each forms=1
-  Lazy.each(lazy: Lazy[A], f: Fn[A, Result[Void]]) -> Result[Void] shape=(Lazy(Var(A)), Fn([Var(A)], Result(Void))) -> Result(Void) rule=Prelude impl="" effects=[] desc="Terminal: call f on each item in order; stops at the first error f returns, which is the result."
+  Lazy.each(lazy: Lazy[A], block: Fn[A, Result[Void]]) -> Result[Void] shape=(Lazy(Var(A)), Fn([Var(A)], Result(Void))) -> Result(Void) rule=Prelude impl="" effects=[] desc="Terminal: call block on each item in order; stops at the first error block returns, which is the result."
 builtin Lazy.each_cons forms=1
   Lazy.each_cons(lazy: Lazy[A], size: Int) -> Lazy[List[A]] shape=(Lazy(Var(A)), Int) -> Lazy(List(Var(A))) rule=Prelude impl="" effects=[] desc="Lazy step: each window of size consecutive items; size below 1 halts."
 builtin Lazy.each_slice forms=1
   Lazy.each_slice(lazy: Lazy[A], size: Int) -> Lazy[List[A]] shape=(Lazy(Var(A)), Int) -> Lazy(List(Var(A))) rule=Prelude impl="" effects=[] desc="Lazy step: slices of size items, the last one shorter; size below 1 halts."
 builtin Lazy.filter forms=1
-  Lazy.filter(lazy: Lazy[A], f: Fn[A, Bool]) -> Lazy[A] shape=(Lazy(Var(A)), Fn([Var(A)], Bool)) -> Lazy(Var(A)) rule=Prelude impl="" effects=[] desc="Lazy step: keep the items whose predicate is true."
+  Lazy.filter(lazy: Lazy[A], block: Fn[A, Bool]) -> Lazy[A] shape=(Lazy(Var(A)), Fn([Var(A)], Bool)) -> Lazy(Var(A)) rule=Prelude impl="" effects=[] desc="Lazy step: keep the items whose predicate is true."
 builtin Lazy.find forms=1
-  Lazy.find(lazy: Lazy[A], f: Fn[A, Bool]) -> Result[A] shape=(Lazy(Var(A)), Fn([Var(A)], Bool)) -> Result(Var(A)) rule=Prelude impl="" effects=[] desc="Terminal: the first item f accepts, else error(\"not found\") when the source ends."
+  Lazy.find(lazy: Lazy[A], block: Fn[A, Bool]) -> Result[A] shape=(Lazy(Var(A)), Fn([Var(A)], Bool)) -> Result(Var(A)) rule=Prelude impl="" effects=[] desc="Terminal: the first item block accepts, else error(\"not found\") when the source ends."
 builtin Lazy.first forms=1
   Lazy.first(lazy: Lazy[A], count: Int) -> Result[List[A]] shape=(Lazy(Var(A)), Int) -> Result(List(Var(A))) rule=Prelude impl="" effects=[] desc="Terminal: the first count items (fewer if the source ends); negative counts halt."
 builtin Lazy.flat_map forms=1
-  Lazy.flat_map(lazy: Lazy[A], f: Fn[A, List[B]]) -> Lazy[B] shape=(Lazy(Var(A)), Fn([Var(A)], List(Var(B)))) -> Lazy(Var(B)) rule=Prelude impl="" effects=[] desc="Lazy step: the items of the lists f returns, in order."
+  Lazy.flat_map(lazy: Lazy[A], block: Fn[A, List[B]]) -> Lazy[B] shape=(Lazy(Var(A)), Fn([Var(A)], List(Var(B)))) -> Lazy(Var(B)) rule=Prelude impl="" effects=[] desc="Lazy step: the items of the lists block returns, in order."
 builtin Lazy.gunzip forms=1
   Lazy.gunzip(lazy: Lazy[Bytes], max_bytes: Int = 1073741824) -> Lazy[Bytes] shape=(Lazy(Bytes), Int = 1073741824) -> Lazy(Bytes) rule=Prelude impl="" effects=[] desc="Lazy step: decompress byte chunks of one gzip member (RFC 1952) with its CRC and size checked; truncation, any trailing byte (a second member too) and output past max_bytes end the run with an error; VM only."
 builtin Lazy.gzip forms=1
@@ -262,55 +262,55 @@ builtin Lazy.gzip forms=1
 builtin Lazy.inflate forms=1
   Lazy.inflate(lazy: Lazy[Bytes], raw: Bool = false, max_bytes: Int = 1073741824) -> Lazy[Bytes] shape=(Lazy(Bytes), Bool = false, Int = 1073741824) -> Lazy(Bytes) rule=Prelude impl="" effects=[] desc="Lazy step: decompress byte chunks of one zlib stream (RFC 1950), or raw deflate (RFC 1951) when raw is true, with its checksum checked; truncation, any trailing byte and output past max_bytes end the run with an error; VM only."
 builtin Lazy.map forms=1
-  Lazy.map(lazy: Lazy[A], f: Fn[A, B]) -> Lazy[B] shape=(Lazy(Var(A)), Fn([Var(A)], Var(B))) -> Lazy(Var(B)) rule=Prelude impl="" effects=[] desc="Lazy step: f applied to each item."
+  Lazy.map(lazy: Lazy[A], block: Fn[A, B]) -> Lazy[B] shape=(Lazy(Var(A)), Fn([Var(A)], Var(B))) -> Lazy(Var(B)) rule=Prelude impl="" effects=[] desc="Lazy step: block applied to each item."
 builtin Lazy.produce forms=1
-  Lazy.produce(seed: A, f: Fn[A, A]) -> Lazy[A] shape=(Var(A), Fn([Var(A)], Var(A))) -> Lazy(Var(A)) rule=Prelude impl="" effects=[] desc="Endless source: seed, f(seed), f(f(seed)) ...; end it with take, take_while, first or find."
+  Lazy.produce(seed: A, block: Fn[A, A]) -> Lazy[A] shape=(Var(A), Fn([Var(A)], Var(A))) -> Lazy(Var(A)) rule=Prelude impl="" effects=[] desc="Endless source: seed, block(seed), block(block(seed)) ...; end it with take, take_while, first or find."
 builtin Lazy.reduce forms=1
-  Lazy.reduce(lazy: Lazy[A], initial: B, f: Fn[B, A, B]) -> Result[B] shape=(Lazy(Var(A)), Var(B), Fn([Var(B), Var(A)], Var(B))) -> Result(Var(B)) rule=Prelude impl="" effects=[] desc="Terminal: fold left from initial in order."
+  Lazy.reduce(lazy: Lazy[A], initial: B, block: Fn[B, A, B]) -> Result[B] shape=(Lazy(Var(A)), Var(B), Fn([Var(B), Var(A)], Var(B))) -> Result(Var(B)) rule=Prelude impl="" effects=[] desc="Terminal: fold left from initial in order."
 builtin Lazy.take forms=1
   Lazy.take(lazy: Lazy[A], count: Int) -> Lazy[A] shape=(Lazy(Var(A)), Int) -> Lazy(Var(A)) rule=Prelude impl="" effects=[] desc="Lazy step: at most count items, then the source stops; negative counts halt."
 builtin Lazy.take_while forms=1
-  Lazy.take_while(lazy: Lazy[A], f: Fn[A, Bool]) -> Lazy[A] shape=(Lazy(Var(A)), Fn([Var(A)], Bool)) -> Lazy(Var(A)) rule=Prelude impl="" effects=[] desc="Lazy step: items while f is true; stops at the first false."
+  Lazy.take_while(lazy: Lazy[A], block: Fn[A, Bool]) -> Lazy[A] shape=(Lazy(Var(A)), Fn([Var(A)], Bool)) -> Lazy(Var(A)) rule=Prelude impl="" effects=[] desc="Lazy step: items while block is true; stops at the first false."
 builtin Lazy.to_a forms=1
   Lazy.to_a(lazy: Lazy[A]) -> Result[List[A]] shape=(Lazy(Var(A))) -> Result(List(Var(A))) rule=Prelude impl="" effects=[] desc="Terminal: every item in a list; never ends on an endless source."
 builtin Lazy.with_index forms=1
-  Lazy.with_index(lazy: Lazy[A], f: Fn[A, Int, B]) -> Lazy[B] shape=(Lazy(Var(A)), Fn([Var(A), Int], Var(B))) -> Lazy(Var(B)) rule=Prelude impl="" effects=[] desc="Lazy step: f(item, index) for each item, the index from 0."
+  Lazy.with_index(lazy: Lazy[A], block: Fn[A, Int, B]) -> Lazy[B] shape=(Lazy(Var(A)), Fn([Var(A), Int], Var(B))) -> Lazy(Var(B)) rule=Prelude impl="" effects=[] desc="Lazy step: block(item, index) for each item, the index from 0."
 builtin Lazy.write_bytes forms=1
   Lazy.write_bytes(lazy: Lazy[Bytes], path: String, timeout_ms: Int = 30000) -> Result[Int] shape=(Lazy(Bytes), String, Int = 30000) -> Result(Int) rule=Prelude impl="" effects=["filesystem"] desc="Terminal: write each byte chunk to a file, created or truncated, and return the bytes written; the file opens before the first item is pulled and is flushed and closed before the terminal returns; VM only."
 builtin Lazy.write_lines forms=1
   Lazy.write_lines(lazy: Lazy[String], path: String, timeout_ms: Int = 30000) -> Result[Void] shape=(Lazy(String), String, Int = 30000) -> Result(Void) rule=Prelude impl="" effects=["filesystem"] desc="Terminal: write each item and a line feed to a file, created or truncated; the file opens before the first item is pulled and is flushed and closed before the terminal returns; VM only."
 builtin List.all? forms=1
-  List.all?(list: List[A], f: Fn[A, Bool]) -> Bool shape=(List(Var(A)), Fn([Var(A)], Bool)) -> Bool rule=ListAll impl="List.all?" effects=[] desc="True when f is true for every element; stops at the first false."
+  List.all?(list: List[A], block: Fn[A, Bool]) -> Bool shape=(List(Var(A)), Fn([Var(A)], Bool)) -> Bool rule=ListAll impl="List.all?" effects=[] desc="True when block is true for every element; stops at the first false."
 builtin List.any? forms=1
-  List.any?(list: List[A], f: Fn[A, Bool]) -> Bool shape=(List(Var(A)), Fn([Var(A)], Bool)) -> Bool rule=ListAny impl="List.any?" effects=[] desc="True when f is true for some element; stops at the first true."
+  List.any?(list: List[A], block: Fn[A, Bool]) -> Bool shape=(List(Var(A)), Fn([Var(A)], Bool)) -> Bool rule=ListAny impl="List.any?" effects=[] desc="True when block is true for some element; stops at the first true."
 builtin List.append forms=1
   List.append(list: List[T], value: T) -> List[T] shape=(List(Var(T)), Var(T)) -> List(Var(T)) rule=ListAppend impl="List.append" effects=[] desc="Return a new list with the value pushed on the end; near constant time."
 builtin List.at forms=1
   List.at(list: List[T], index: Int) -> T shape=(List(Var(T)), Int) -> Var(T) rule=ListAt impl="List.at" effects=[] desc="Read a zero-based index; invalid indexes halt; O(log32 n)."
 builtin List.concat forms=1
-  List.concat(a: List[T], b: List[T]) -> List[T] shape=(List(Var(T)), List(Var(T))) -> List(Var(T)) rule=ListConcat impl="List.concat" effects=[] desc="Concatenate two lists without changing either; O(length of b) when b has at most 32 items, else O(length of a + b)."
+  List.concat(list: List[T], other: List[T]) -> List[T] shape=(List(Var(T)), List(Var(T))) -> List(Var(T)) rule=ListConcat impl="List.concat" effects=[] desc="Concatenate two lists without changing either; O(length of other) when other has at most 32 items, else O(length of list + other)."
 builtin List.drop forms=1
   List.drop(list: List[T], count: Int) -> List[T] shape=(List(Var(T)), Int) -> List(Var(T)) rule=ListCount impl="List.drop" effects=[] desc="Drop up to count elements; negative counts halt."
 builtin List.drop_while forms=1
-  List.drop_while(list: List[A], f: Fn[A, Bool]) -> List[A] shape=(List(Var(A)), Fn([Var(A)], Bool)) -> List(Var(A)) rule=Prelude impl="" effects=[] desc="Drop elements while f is true, then keep the rest; f stops being called at the first false; O(n)."
+  List.drop_while(list: List[A], block: Fn[A, Bool]) -> List[A] shape=(List(Var(A)), Fn([Var(A)], Bool)) -> List(Var(A)) rule=Prelude impl="" effects=[] desc="Drop elements while block is true, then keep the rest; block stops being called at the first false; O(n)."
 builtin List.each forms=1
-  List.each(list: List[A], f: Fn[A, Void]) -> Void shape=(List(Var(A)), Fn([Var(A)], Void)) -> Void rule=ListEach impl="List.each" effects=[] desc="Call f on each element in order; returns nothing."
+  List.each(list: List[A], block: Fn[A, Void]) -> Void shape=(List(Var(A)), Fn([Var(A)], Void)) -> Void rule=ListEach impl="List.each" effects=[] desc="Call block on each element in order; returns nothing."
 builtin List.each_slice forms=1
   List.each_slice(list: List[A], size: Int) -> List[List[A]] shape=(List(Var(A)), Int) -> List(List(Var(A))) rule=Prelude impl="" effects=[] desc="Split into slices of size elements, the last one shorter; size below 1 halts; O(n)."
 builtin List.each_with_index forms=1
-  List.each_with_index(list: List[A], f: Fn[A, Int, Void]) -> Void shape=(List(Var(A)), Fn([Var(A), Int], Void)) -> Void rule=Prelude impl="" effects=[] desc="Call f(element, index) in order, the index from 0; returns nothing."
+  List.each_with_index(list: List[A], block: Fn[A, Int, Void]) -> Void shape=(List(Var(A)), Fn([Var(A), Int], Void)) -> Void rule=Prelude impl="" effects=[] desc="Call block(element, index) in order, the index from 0; returns nothing."
 builtin List.empty? forms=1
   List.empty?(list: List[A]) -> Bool shape=(List(Var(A))) -> Bool rule=Prelude impl="" effects=[] desc="Check whether the list has no elements."
 builtin List.filter forms=1
-  List.filter(list: List[A], f: Fn[A, Bool]) -> List[A] shape=(List(Var(A)), Fn([Var(A)], Bool)) -> List(Var(A)) rule=ListFilter impl="List.filter" effects=[] desc="Keep elements whose predicate is true, in order; O(n)."
+  List.filter(list: List[A], block: Fn[A, Bool]) -> List[A] shape=(List(Var(A)), Fn([Var(A)], Bool)) -> List(Var(A)) rule=ListFilter impl="List.filter" effects=[] desc="Keep elements whose predicate is true, in order; O(n)."
 builtin List.find forms=1
-  List.find(list: List[A], f: Fn[A, Bool]) -> Result[A] shape=(List(Var(A)), Fn([Var(A)], Bool)) -> Result(Var(A)) rule=Prelude impl="" effects=[] desc="The first element f accepts, else error(\"not found\"); f stops being called at the first true; O(n)."
+  List.find(list: List[A], block: Fn[A, Bool]) -> Result[A] shape=(List(Var(A)), Fn([Var(A)], Bool)) -> Result(Var(A)) rule=Prelude impl="" effects=[] desc="The first element block accepts, else error(\"not found\"); block stops being called at the first true; O(n)."
 builtin List.find_index forms=1
-  List.find_index(list: List[A], f: Fn[A, Bool]) -> Optional[Int] shape=(List(Var(A)), Fn([Var(A)], Bool)) -> Optional(Int) rule=Prelude impl="" effects=[] desc="The index of the first element f accepts, else none; f stops being called at the first true; O(n)."
+  List.find_index(list: List[A], block: Fn[A, Bool]) -> Optional[Int] shape=(List(Var(A)), Fn([Var(A)], Bool)) -> Optional(Int) rule=Prelude impl="" effects=[] desc="The index of the first element block accepts, else none; block stops being called at the first true; O(n)."
 builtin List.first forms=1
   List.first(list: List[A]) -> A shape=(List(Var(A))) -> Var(A) rule=Prelude impl="" effects=[] desc="The first element; an empty list halts with RUNTIME-INDEX-OUT-OF-RANGE."
 builtin List.flat_map forms=1
-  List.flat_map(list: List[A], f: Fn[A, List[B]]) -> List[B] shape=(List(Var(A)), Fn([Var(A)], List(Var(B)))) -> List(Var(B)) rule=Prelude impl="" effects=[] desc="Concatenate the lists f returns for each element, in order; O(total)."
+  List.flat_map(list: List[A], block: Fn[A, List[B]]) -> List[B] shape=(List(Var(A)), Fn([Var(A)], List(Var(B)))) -> List(Var(B)) rule=Prelude impl="" effects=[] desc="Concatenate the lists block returns for each element, in order; O(total)."
 builtin List.group_by forms=1
   List.group_by(list: List[A], key: Fn[A, K]) -> Map[K, List[A]] shape=(List(Var(A)), Fn([Var(A)], Var(K))) -> Map(Var(K), List(Var(A))) rule=Prelude impl="" effects=[] desc="Group elements by an Int or String key; keys in order of first appearance, elements in order; O(n)."
 builtin List.include? forms=1
@@ -322,7 +322,7 @@ builtin List.last forms=1
 builtin List.lazy forms=1
   List.lazy(list: List[A]) -> Lazy[A] shape=(List(Var(A))) -> Lazy(Var(A)) rule=Prelude impl="" effects=[] desc="A Lazy over the list: steps run only in a terminal, one item at a time."
 builtin List.map forms=1
-  List.map(list: List[A], f: Fn[A, B]) -> List[B] shape=(List(Var(A)), Fn([Var(A)], Var(B))) -> List(Var(B)) rule=ListMap impl="List.map" effects=[] desc="Map each element in order without changing the input; O(n)."
+  List.map(list: List[A], block: Fn[A, B]) -> List[B] shape=(List(Var(A)), Fn([Var(A)], Var(B))) -> List(Var(B)) rule=ListMap impl="List.map" effects=[] desc="Map each element in order without changing the input; O(n)."
 builtin List.max forms=1
   List.max(list: List[T]) -> Optional[T] shape=(List(Var(T))) -> Optional(Var(T)) rule=Prelude impl="" effects=[] desc="The greatest Int, Float or String, or none for an empty list; a NaN is skipped; O(n)."
 builtin List.max_by forms=1
@@ -332,9 +332,9 @@ builtin List.min forms=1
 builtin List.min_by forms=1
   List.min_by(list: List[A], key: Fn[A, O]) -> Optional[A] shape=(List(Var(A)), Fn([Var(A)], Var(O))) -> Optional(Var(A)) rule=Prelude impl="" effects=[] desc="The element with the least Int, Float or String key, the first on ties, or none for an empty list; O(n)."
 builtin List.partition forms=1
-  List.partition(list: List[A], f: Fn[A, Bool]) -> List[List[A]] shape=(List(Var(A)), Fn([Var(A)], Bool)) -> List(List(Var(A))) rule=Prelude impl="" effects=[] desc="Two lists, [accepted, rejected], each in order; f is called once per element; O(n)."
+  List.partition(list: List[A], block: Fn[A, Bool]) -> List[List[A]] shape=(List(Var(A)), Fn([Var(A)], Bool)) -> List(List(Var(A))) rule=Prelude impl="" effects=[] desc="Two lists, [accepted, rejected], each in order; block is called once per element; O(n)."
 builtin List.reduce forms=1
-  List.reduce(list: List[A], initial: B, f: Fn[B, A, B]) -> B shape=(List(Var(A)), Var(B), Fn([Var(B), Var(A)], Var(B))) -> Var(B) rule=ListReduce impl="List.reduce" effects=[] desc="Fold left with f(accumulator, item); empty lists return initial; O(n)."
+  List.reduce(list: List[A], initial: B, block: Fn[B, A, B]) -> B shape=(List(Var(A)), Var(B), Fn([Var(B), Var(A)], Var(B))) -> Var(B) rule=ListReduce impl="List.reduce" effects=[] desc="Fold left with block(accumulator, item); empty lists return initial; O(n)."
 builtin List.repeat forms=1
   List.repeat(value: T, count: Int) -> List[T] shape=(Var(T), Int) -> List(Var(T)) rule=ListRepeat impl="List.repeat" effects=[] desc="Repeat a value 0..1048576 times; invalid counts halt; O(n)."
 builtin List.reverse forms=1
@@ -352,7 +352,7 @@ builtin List.sum forms=1
 builtin List.take forms=1
   List.take(list: List[T], count: Int) -> List[T] shape=(List(Var(T)), Int) -> List(Var(T)) rule=ListCount impl="List.take" effects=[] desc="Take up to count elements; negative counts halt."
 builtin List.take_while forms=1
-  List.take_while(list: List[A], f: Fn[A, Bool]) -> List[A] shape=(List(Var(A)), Fn([Var(A)], Bool)) -> List(Var(A)) rule=Prelude impl="" effects=[] desc="Keep elements while f is true; f stops being called at the first false; O(n)."
+  List.take_while(list: List[A], block: Fn[A, Bool]) -> List[A] shape=(List(Var(A)), Fn([Var(A)], Bool)) -> List(Var(A)) rule=Prelude impl="" effects=[] desc="Keep elements while block is true; block stops being called at the first false; O(n)."
 builtin List.tally forms=1
   List.tally(list: List[K]) -> Map[K, Int] shape=(List(Var(K))) -> Map(Var(K), Int) rule=Prelude impl="" effects=[] desc="Count equal Int or String elements; keys in order of first appearance; O(n)."
 builtin List.uniq forms=1
@@ -380,11 +380,11 @@ builtin LogRegistry.task_id forms=1
 builtin Map.delete forms=1
   Map.delete(map: Map[K, V], key: K) -> Map[K, V] shape=(Map(Var(K), Var(V)), Var(K)) -> Map(Var(K), Var(V)) rule=MapDelete impl="Map.delete" effects=[] desc="Return a new map without this key; missing keys leave it unchanged."
 builtin Map.each forms=1
-  Map.each(map: Map[K, V], f: Fn[K, V, Void]) -> Void shape=(Map(Var(K), Var(V)), Fn([Var(K), Var(V)], Void)) -> Void rule=Prelude impl="" effects=[] desc="Call f(key, value) for each entry in insertion order; returns nothing."
+  Map.each(map: Map[K, V], block: Fn[K, V, Void]) -> Void shape=(Map(Var(K), Var(V)), Fn([Var(K), Var(V)], Void)) -> Void rule=Prelude impl="" effects=[] desc="Call block(key, value) for each entry in insertion order; returns nothing."
 builtin Map.empty? forms=1
   Map.empty?(map: Map[K, V]) -> Bool shape=(Map(Var(K), Var(V))) -> Bool rule=Prelude impl="" effects=[] desc="Check whether the map has no entries."
 builtin Map.filter forms=1
-  Map.filter(map: Map[K, V], f: Fn[K, V, Bool]) -> Map[K, V] shape=(Map(Var(K), Var(V)), Fn([Var(K), Var(V)], Bool)) -> Map(Var(K), Var(V)) rule=Prelude impl="" effects=[] desc="Keep the entries f accepts, in insertion order; O(n)."
+  Map.filter(map: Map[K, V], block: Fn[K, V, Bool]) -> Map[K, V] shape=(Map(Var(K), Var(V)), Fn([Var(K), Var(V)], Bool)) -> Map(Var(K), Var(V)) rule=Prelude impl="" effects=[] desc="Keep the entries block accepts, in insertion order; O(n)."
 builtin Map.get forms=2
   Map.get(map: Map[K, V], key: K) -> Optional[V] shape=(Map(Var(K), Var(V)), Var(K)) -> Optional(Var(V)) rule=MapGet impl="Map.get.optional" effects=[] desc="Read a value as some(value) or none, or supply an eagerly evaluated default as a third argument."
   Map.get(map: Map[K, V], key: K, default: V) -> V shape=(Map(Var(K), Var(V)), Var(K), Var(V)) -> Var(V) rule=MapGetDefault impl="Map.get" effects=[] desc="Read a value as some(value) or none, or supply an eagerly evaluated default as a third argument."
@@ -399,7 +399,7 @@ builtin Map.size forms=1
 builtin Map.values forms=1
   Map.values(map: Map[K, V]) -> List[V] shape=(Map(Var(K), Var(V))) -> List(Var(V)) rule=MapValues impl="Map.values" effects=[] desc="Return values in insertion order."
 builtin Math.sqrt forms=1
-  Math.sqrt(x: Float) -> Float shape=(Float) -> Float rule=Plain impl="Math.sqrt" effects=[] desc="The square root; a negative x halts; -0.0 gives -0.0 and NaN stays NaN."
+  Math.sqrt(float: Float) -> Float shape=(Float) -> Float rule=Plain impl="Math.sqrt" effects=[] desc="The square root; a negative float halts; -0.0 gives -0.0 and NaN stays NaN."
 builtin Native.address forms=1
   Native.address(pointer: C.Pointer) -> Int shape=(Opaque(C.Pointer)) -> Int rule=Plain impl="Native.address" effects=["native"] desc="The integer value of the C.Pointer, the inverse of Native.pointer: subtract two to count the bytes between them. A freed owned buffer is RUNTIME-NATIVE-CLOSED."
 builtin Native.callback forms=1
@@ -500,7 +500,7 @@ builtin Native.wait_writable forms=1
 builtin Path.cwd forms=1
   Path.cwd() -> Result[String] shape=() -> Result(String) rule=Plain impl="Path.cwd" effects=["filesystem"] desc="Return the current working directory."
 builtin Path.join forms=1
-  Path.join(parts: List[String]) -> Result[String] shape=(List(String)) -> Result(String) rule=Plain impl="Path.join" effects=["filesystem"] desc="Join path parts using host path semantics."
+  Path.join(list: List[String]) -> Result[String] shape=(List(String)) -> Result(String) rule=Plain impl="Path.join" effects=["filesystem"] desc="Join path parts using host path semantics."
 builtin Path.real forms=1
   Path.real(path: String) -> Result[String] shape=(String) -> Result(String) rule=Plain impl="Path.real" effects=["filesystem"] desc="Return the absolute canonical path with every symbolic link resolved; the path must exist."
 builtin Path.remove forms=1
@@ -510,31 +510,31 @@ builtin Path.rename forms=1
 builtin Path.resolve forms=1
   Path.resolve(path: String) -> Result[String] shape=(String) -> Result(String) rule=Plain impl="Path.resolve" effects=["filesystem"] desc="Return a lexical absolute path without resolving symlinks."
 builtin Process.channel_close forms=1
-  Process.channel_close(p: Process, timeout_ms: Int) -> Result[Void] shape=(Opaque(Process), Int) -> Result(Void) rule=Plain impl="Process.channel_close" effects=["subprocess"] desc="Close the sending side of the channel idempotently; the child reads end of input."
+  Process.channel_close(process: Process, timeout_ms: Int) -> Result[Void] shape=(Opaque(Process), Int) -> Result(Void) rule=Plain impl="Process.channel_close" effects=["subprocess"] desc="Close the sending side of the channel idempotently; the child reads end of input."
 builtin Process.channel_read_line forms=1
-  Process.channel_read_line(p: Process, timeout_ms: Int) -> Result[String] shape=(Opaque(Process), Int) -> Result(String) rule=Plain impl="Process.channel_read_line" effects=["subprocess"] desc="Read one line the child wrote on its parent channel; end of input is an error."
+  Process.channel_read_line(process: Process, timeout_ms: Int) -> Result[String] shape=(Opaque(Process), Int) -> Result(String) rule=Plain impl="Process.channel_read_line" effects=["subprocess"] desc="Read one line the child wrote on its parent channel; end of input is an error."
 builtin Process.channel_send forms=1
-  Process.channel_send(p: Process, text: String, timeout_ms: Int) -> Result[Void] shape=(Opaque(Process), String, Int) -> Result(Void) rule=Plain impl="Process.channel_send" effects=["subprocess"] desc="Send at most 1 MiB of UTF-8 text to the child on the channel."
+  Process.channel_send(process: Process, text: String, timeout_ms: Int) -> Result[Void] shape=(Opaque(Process), String, Int) -> Result(Void) rule=Plain impl="Process.channel_send" effects=["subprocess"] desc="Send at most 1 MiB of UTF-8 text to the child on the channel."
 builtin Process.close forms=1
-  Process.close(p: Process) -> Void shape=(Opaque(Process)) -> Void rule=Plain impl="Process.close" effects=["subprocess"] desc="Kill and reap the child and close its streams idempotently."
+  Process.close(process: Process) -> Void shape=(Opaque(Process)) -> Void rule=Plain impl="Process.close" effects=["subprocess"] desc="Kill and reap the child and close its streams idempotently."
 builtin Process.close_stdin forms=1
-  Process.close_stdin(p: Process, timeout_ms: Int) -> Result[Void] shape=(Opaque(Process), Int) -> Result(Void) rule=Plain impl="Process.close_stdin" effects=["subprocess"] desc="Close stdin idempotently after flushing."
+  Process.close_stdin(process: Process, timeout_ms: Int) -> Result[Void] shape=(Opaque(Process), Int) -> Result(Void) rule=Plain impl="Process.close_stdin" effects=["subprocess"] desc="Close stdin idempotently after flushing."
 builtin Process.output forms=1
-  Process.output(p: Process, timeout_ms: Int) -> Result[Process.Output] shape=(Opaque(Process), Int) -> Result(Struct(Process.Output)) rule=Plain impl="Process.output" effects=["subprocess"] desc="Wait for both captured streams to end; return unread stdout, all stderr and the truncated mark."
+  Process.output(process: Process, timeout_ms: Int) -> Result[Process.Output] shape=(Opaque(Process), Int) -> Result(Struct(Process.Output)) rule=Plain impl="Process.output" effects=["subprocess"] desc="Wait for both captured streams to end; return unread stdout, all stderr and the truncated mark."
 builtin Process.parent_read_line forms=1
   Process.parent_read_line(timeout_ms: Int) -> Result[String] shape=(Int) -> Result(String) rule=Plain impl="Process.parent_read_line" effects=["subprocess"] desc="Read one line from the parent channel; an error when the program has no channel."
 builtin Process.parent_send forms=1
   Process.parent_send(text: String, timeout_ms: Int) -> Result[Void] shape=(String, Int) -> Result(Void) rule=Plain impl="Process.parent_send" effects=["subprocess"] desc="Send at most 1 MiB of UTF-8 text to the parent on the channel; an error when the program has no channel."
 builtin Process.read_available forms=1
-  Process.read_available(p: Process, timeout_ms: Int) -> Result[String] shape=(Opaque(Process), Int) -> Result(String) rule=Plain impl="Process.read_available" effects=["subprocess"] desc="Read the captured stdout written so far without waiting for more; timeout_ms bounds only the wait for the reader lock."
+  Process.read_available(process: Process, timeout_ms: Int) -> Result[String] shape=(Opaque(Process), Int) -> Result(String) rule=Plain impl="Process.read_available" effects=["subprocess"] desc="Read the captured stdout written so far without waiting for more; timeout_ms bounds only the wait for the reader lock."
 builtin Process.read_bytes forms=1
-  Process.read_bytes(p: Process, count: Int, timeout_ms: Int) -> Result[Bytes] shape=(Opaque(Process), Int, Int) -> Result(Bytes) rule=Plain impl="Process.read_bytes.bytes" effects=["subprocess"] desc="Read count bytes or fewer at EOF; count is 0..1048576."
+  Process.read_bytes(process: Process, count: Int, timeout_ms: Int) -> Result[Bytes] shape=(Opaque(Process), Int, Int) -> Result(Bytes) rule=Plain impl="Process.read_bytes.bytes" effects=["subprocess"] desc="Read count bytes or fewer at EOF; count is 0..1048576."
 builtin Process.read_line forms=1
-  Process.read_line(p: Process, timeout_ms: Int) -> Result[String] shape=(Opaque(Process), Int) -> Result(String) rule=Plain impl="Process.read_line" effects=["subprocess"] desc="Read a bounded UTF-8 line; empty EOF is an error."
+  Process.read_line(process: Process, timeout_ms: Int) -> Result[String] shape=(Opaque(Process), Int) -> Result(String) rule=Plain impl="Process.read_line" effects=["subprocess"] desc="Read a bounded UTF-8 line; empty EOF is an error."
 builtin Process.send forms=1
-  Process.send(p: Process, text: String, timeout_ms: Int) -> Result[Void] shape=(Opaque(Process), String, Int) -> Result(Void) rule=Plain impl="Process.send" effects=["subprocess"] desc="Send at most 1 MiB of UTF-8 text and flush."
+  Process.send(process: Process, text: String, timeout_ms: Int) -> Result[Void] shape=(Opaque(Process), String, Int) -> Result(Void) rule=Plain impl="Process.send" effects=["subprocess"] desc="Send at most 1 MiB of UTF-8 text and flush."
 builtin Process.send_bytes forms=1
-  Process.send_bytes(p: Process, bytes: Bytes, timeout_ms: Int) -> Result[Void] shape=(Opaque(Process), Bytes, Int) -> Result(Void) rule=Plain impl="Process.send_bytes.bytes" effects=["subprocess"] desc="Send at most 1 MiB of bytes and flush."
+  Process.send_bytes(process: Process, bytes: Bytes, timeout_ms: Int) -> Result[Void] shape=(Opaque(Process), Bytes, Int) -> Result(Void) rule=Plain impl="Process.send_bytes.bytes" effects=["subprocess"] desc="Send at most 1 MiB of bytes and flush."
 builtin Process.spawn forms=1
   Process.spawn(command: String, args: List[String], options: Process.Options = Process.Options()) -> Result[Process] shape=(String, List(String), Struct(Process.Options) = Process.Options()) -> Result(Opaque(Process)) rule=Plain impl="Process.spawn.options" effects=["subprocess"] desc="Start an executable with literal arguments and Process.Options: timeout_ms, chdir, extra env entries, out and err files that get its stdout and stderr when not empty, and pgroup to start it in its own process group, which a stop signals whole; --deny-run makes it an error."
 builtin Process.spawn_captured forms=1
@@ -542,7 +542,7 @@ builtin Process.spawn_captured forms=1
 builtin Process.spawn_channel forms=1
   Process.spawn_channel(command: String, args: List[String], options: Process.Options = Process.Options()) -> Result[Process] shape=(String, List(String), Struct(Process.Options) = Process.Options()) -> Result(Opaque(Process)) rule=Plain impl="Process.spawn_channel.options" effects=["subprocess"] desc="Like spawn_captured, plus a channel: the child reads fd 3, writes fd 4, has AGENTICA_CHANNEL=3,4; VM only."
 builtin Process.wait forms=1
-  Process.wait(p: Process, timeout_ms: Int) -> Result[Int] shape=(Opaque(Process), Int) -> Result(Int) rule=Plain impl="Process.wait" effects=["subprocess"] desc="Wait for exit and stderr forwarding; timeout preserves the child."
+  Process.wait(process: Process, timeout_ms: Int) -> Result[Int] shape=(Opaque(Process), Int) -> Result(Int) rule=Plain impl="Process.wait" effects=["subprocess"] desc="Wait for exit and stderr forwarding; timeout preserves the child."
 builtin System.Profile.measure forms=1
   System.Profile.measure(label: String, block: Fn[T]) -> T shape=(String, Fn([], Var(T))) -> Var(T) rule=ProfileMeasure impl="Profile.measure" effects=[] desc="Run the block and return its value; with AGENTICA_VM_TRACE=profile, its calls, steps, time and GC time go to a section row of the profile under label; VM only."
 builtin System.Profile.steps forms=1
@@ -556,7 +556,7 @@ builtin Random.int forms=1
 builtin Random.seed forms=1
   Random.seed() -> Int shape=() -> Int rule=Plain impl="Random.seed" effects=["random"] desc="The seed of the run, 0..2147483647: the one --seed gave, or the one drawn from the system when there is none; the same in every task, so --seed with it gives the same random numbers."
 builtin Range.each forms=1
-  Range.each(range: Range, f: Fn[Int, Void]) -> Void shape=(Range, Fn([Int], Void)) -> Void rule=Plain impl="Range.each" effects=[] desc="Call f on each value in order; returns nothing."
+  Range.each(range: Range, block: Fn[Int, Void]) -> Void shape=(Range, Fn([Int], Void)) -> Void rule=Plain impl="Range.each" effects=[] desc="Call block on each value in order; returns nothing."
 builtin Range.first forms=1
   Range.first(range: Range) -> Result[Int] shape=(Range) -> Result(Int) rule=Plain impl="Range.first" effects=[] desc="The first value; an error for an empty range."
 builtin Range.include? forms=1
@@ -570,91 +570,91 @@ builtin Range.size forms=1
 builtin Range.to_a forms=1
   Range.to_a(range: Range) -> List[Int] shape=(Range) -> List(Int) rule=Plain impl="Range.to_a" effects=[] desc="List the values in order; at most 1048576 values."
 builtin Error.is_a? forms=1
-  Error.is_a?(e: Error, family: String) -> Bool shape=(Struct(Error), String) -> Bool rule=ErrorKind impl="Error.is_a?" effects=[] desc="Whether the kind is the family or one of its dotted kinds: is_a?(\"db\") takes db.constraint."
+  Error.is_a?(error: Error, family: String) -> Bool shape=(Struct(Error), String) -> Bool rule=ErrorKind impl="Error.is_a?" effects=[] desc="Whether the kind is the family or one of its dotted kinds: is_a?(\"db\") takes db.constraint."
 builtin Result.message forms=1
-  Result.message(r: Result[T]) -> String shape=(Result(Var(T))) -> String rule=ResultMessage impl="Result.message" effects=[] desc="Return an error message, or empty text for success."
+  Result.message(result: Result[T]) -> String shape=(Result(Var(T))) -> String rule=ResultMessage impl="Result.message" effects=[] desc="Return an error message, or empty text for success."
 builtin Result.ok? forms=1
-  Result.ok?(r: Result[T]) -> Bool shape=(Result(Var(T))) -> Bool rule=ResultOk impl="Result.ok?" effects=[] desc="Check whether a Result succeeded."
+  Result.ok?(result: Result[T]) -> Bool shape=(Result(Var(T))) -> Bool rule=ResultOk impl="Result.ok?" effects=[] desc="Check whether a Result succeeded."
 builtin Result.unwrap! forms=1
-  Result.unwrap!(r: Result[T]) -> T shape=(Result(Var(T))) -> Var(T) rule=ResultUnwrap impl="Result.unwrap!" effects=[] desc="Return the success value; halt on error."
+  Result.unwrap!(result: Result[T]) -> T shape=(Result(Var(T))) -> Var(T) rule=ResultUnwrap impl="Result.unwrap!" effects=[] desc="Return the success value; halt on error."
 builtin Result.unwrap_or forms=1
-  Result.unwrap_or(r: Result[T], default: T) -> T shape=(Result(Var(T)), Var(T)) -> Var(T) rule=ResultDefault impl="Result.unwrap_or" effects=[] desc="Return success or default; both arguments run eagerly."
+  Result.unwrap_or(result: Result[T], default: T) -> T shape=(Result(Var(T)), Var(T)) -> Var(T) rule=ResultDefault impl="Result.unwrap_or" effects=[] desc="Return success or default; both arguments run eagerly."
 builtin Set.add forms=1
   Set.add(set: Set[T], value: T) -> Set[T] shape=(Set(Var(T)), Var(T)) -> Set(Var(T)) rule=SetAdd impl="Set.add" effects=[] desc="Return a new set with this element; a member leaves the set unchanged."
 builtin Set.delete forms=1
   Set.delete(set: Set[T], value: T) -> Set[T] shape=(Set(Var(T)), Var(T)) -> Set(Var(T)) rule=SetAdd impl="Set.delete" effects=[] desc="Return a new set without this element; a missing element leaves it unchanged."
 builtin Set.difference forms=1
-  Set.difference(a: Set[T], b: Set[T]) -> Set[T] shape=(Set(Var(T)), Set(Var(T))) -> Set(Var(T)) rule=SetCombine impl="Set.difference" effects=[] desc="Return the elements of a that are not in b, in the order of a."
+  Set.difference(set: Set[T], other: Set[T]) -> Set[T] shape=(Set(Var(T)), Set(Var(T))) -> Set(Var(T)) rule=SetCombine impl="Set.difference" effects=[] desc="Return the elements of set that are not in other, in the order of set."
 builtin Set.empty? forms=1
   Set.empty?(set: Set[T]) -> Bool shape=(Set(Var(T))) -> Bool rule=SetQuery impl="Set.empty?" effects=[] desc="Check whether the set has no elements."
 builtin Set.include? forms=1
   Set.include?(set: Set[T], value: T) -> Bool shape=(Set(Var(T)), Var(T)) -> Bool rule=SetInclude impl="Set.include?" effects=[] desc="Check whether an element is in the set."
 builtin Set.intersection forms=1
-  Set.intersection(a: Set[T], b: Set[T]) -> Set[T] shape=(Set(Var(T)), Set(Var(T))) -> Set(Var(T)) rule=SetCombine impl="Set.intersection" effects=[] desc="Return the elements of a that are also in b, in the order of a."
+  Set.intersection(set: Set[T], other: Set[T]) -> Set[T] shape=(Set(Var(T)), Set(Var(T))) -> Set(Var(T)) rule=SetCombine impl="Set.intersection" effects=[] desc="Return the elements of set that are also in other, in the order of set."
 builtin Set.new forms=1
   Set.new(items: List[T]) -> Set[T] shape=(List(Var(T))) -> Set(Var(T)) rule=SetNew impl="Set.new" effects=[] desc="Build a set from a list of Int or String; duplicates are dropped and the first one keeps its place. An empty list needs an expected type."
 builtin Set.size forms=1
   Set.size(set: Set[T]) -> Int shape=(Set(Var(T))) -> Int rule=SetQuery impl="Set.size" effects=[] desc="Count set elements."
 builtin Set.subset? forms=1
-  Set.subset?(a: Set[T], b: Set[T]) -> Bool shape=(Set(Var(T)), Set(Var(T))) -> Bool rule=SetSubset impl="Set.subset?" effects=[] desc="Check whether every element of a is in b."
+  Set.subset?(set: Set[T], other: Set[T]) -> Bool shape=(Set(Var(T)), Set(Var(T))) -> Bool rule=SetSubset impl="Set.subset?" effects=[] desc="Check whether every element of set is in other."
 builtin Set.to_a forms=1
   Set.to_a(set: Set[T]) -> List[T] shape=(Set(Var(T))) -> List(Var(T)) rule=SetToA impl="Set.to_a" effects=[] desc="Return the elements in first-insertion order."
 builtin Set.union forms=1
-  Set.union(a: Set[T], b: Set[T]) -> Set[T] shape=(Set(Var(T)), Set(Var(T))) -> Set(Var(T)) rule=SetCombine impl="Set.union" effects=[] desc="Return the elements of a, then the elements of b that a lacks."
+  Set.union(set: Set[T], other: Set[T]) -> Set[T] shape=(Set(Var(T)), Set(Var(T))) -> Set(Var(T)) rule=SetCombine impl="Set.union" effects=[] desc="Return the elements of set, then the elements of other that set lacks."
 builtin Std.source forms=1
   Std.source(path: String) -> Result[String] shape=(String) -> Result(String) rule=Plain impl="Std.source" effects=[] desc="The text of a std/ source that this binary carries, by its path in stdlib/ such as queue.agc, bdd/gherkin.agc or prelude/list.agc; an unknown path is an error."
 builtin String.at forms=1
-  String.at(s: String, index: Int) -> String shape=(String, Int) -> String rule=Plain impl="String.at" effects=[] desc="Read one character at a zero-based index; invalid indexes halt."
+  String.at(string: String, index: Int) -> String shape=(String, Int) -> String rule=Plain impl="String.at" effects=[] desc="Read one character at a zero-based index; invalid indexes halt."
 builtin String.bytesize forms=1
-  String.bytesize(s: String) -> Int shape=(String) -> Int rule=Plain impl="String.bytesize" effects=[] desc="Count UTF-8 bytes."
+  String.bytesize(string: String) -> Int shape=(String) -> Int rule=Plain impl="String.bytesize" effects=[] desc="Count UTF-8 bytes."
 builtin String.code forms=1
-  String.code(c: String) -> Int shape=(String) -> Int rule=Plain impl="String.code" effects=[] desc="Return the code point of a one-character string; other lengths halt."
+  String.code(string: String) -> Int shape=(String) -> Int rule=Plain impl="String.code" effects=[] desc="Return the code point of a one-character string; other lengths halt."
 builtin String.compare forms=1
-  String.compare(a: String, b: String) -> Int shape=(String, String) -> Int rule=Plain impl="String.compare" effects=[] desc="Compare two Strings in the order of sort: -1, 0 or 1."
+  String.compare(string: String, other: String) -> Int shape=(String, String) -> Int rule=Plain impl="String.compare" effects=[] desc="Compare two Strings in the order of sort: -1, 0 or 1."
 builtin String.include? forms=1
-  String.include?(s: String, part: String) -> Bool shape=(String, String) -> Bool rule=Plain impl="String.contains?" effects=[] desc="Check for a substring."
+  String.include?(string: String, part: String) -> Bool shape=(String, String) -> Bool rule=Plain impl="String.contains?" effects=[] desc="Check for a substring."
 builtin String.downcase forms=1
-  String.downcase(s: String) -> String shape=(String) -> String rule=Plain impl="String.downcase" effects=[] desc="Lowercase text."
+  String.downcase(string: String) -> String shape=(String) -> String rule=Plain impl="String.downcase" effects=[] desc="Lowercase text."
 builtin String.empty? forms=1
-  String.empty?(s: String) -> Bool shape=(String) -> Bool rule=Prelude impl="" effects=[] desc="Check whether the string has no characters."
+  String.empty?(string: String) -> Bool shape=(String) -> Bool rule=Prelude impl="" effects=[] desc="Check whether the string has no characters."
 builtin String.end_with? forms=1
-  String.end_with?(s: String, suffix: String) -> Bool shape=(String, String) -> Bool rule=Plain impl="String.ends_with?" effects=[] desc="Check a suffix."
+  String.end_with?(string: String, suffix: String) -> Bool shape=(String, String) -> Bool rule=Plain impl="String.ends_with?" effects=[] desc="Check a suffix."
 builtin String.from_bytes forms=1
   String.from_bytes(data: Bytes) -> Result[String] shape=(Bytes) -> Result(String) rule=Plain impl="String.from_bytes.bytes" effects=[] desc="Decode UTF-8 strictly; invalid bytes or incomplete sequences return an error."
 builtin String.from_code forms=1
-  String.from_code(n: Int) -> String shape=(Int) -> String rule=Plain impl="String.from_code" effects=[] desc="Build a one-character string from a Unicode scalar value; invalid values halt."
+  String.from_code(code: Int) -> String shape=(Int) -> String rule=Plain impl="String.from_code" effects=[] desc="Build a one-character string from a Unicode scalar value; invalid values halt."
 builtin Float.to_s forms=1
-  Float.to_s(x: Float) -> String shape=(Float) -> String rule=Plain impl="String.from_float" effects=[] desc="Convert a Float to text."
+  Float.to_s(float: Float) -> String shape=(Float) -> String rule=Plain impl="String.from_float" effects=[] desc="Convert a Float to text."
 builtin Int.to_s forms=1
-  Int.to_s(n: Int) -> String shape=(Int) -> String rule=Plain impl="String.from_int" effects=[] desc="Convert an Int to text."
+  Int.to_s(int: Int) -> String shape=(Int) -> String rule=Plain impl="String.from_int" effects=[] desc="Convert an Int to text."
 builtin String.index_of forms=1
-  String.index_of(s: String, part: String) -> Optional[Int] shape=(String, String) -> Optional(Int) rule=Plain impl="String.index_of.optional" effects=[] desc="Find the first character index of part as some(index), or none when part is absent."
+  String.index_of(string: String, part: String) -> Optional[Int] shape=(String, String) -> Optional(Int) rule=Plain impl="String.index_of.optional" effects=[] desc="Find the first character index of part as some(index), or none when part is absent."
 builtin List.join forms=1
-  List.join(parts: List[String], separator: String) -> String shape=(List(String), String) -> String rule=Plain impl="String.join" effects=[] desc="Join text elements."
+  List.join(list: List[String], separator: String) -> String shape=(List(String), String) -> String rule=Plain impl="String.join" effects=[] desc="Join text elements."
 builtin String.length forms=1
-  String.length(s: String) -> Int shape=(String) -> Int rule=Plain impl="String.length" effects=[] desc="Count Unicode characters."
+  String.length(string: String) -> Int shape=(String) -> Int rule=Plain impl="String.length" effects=[] desc="Count Unicode characters."
 builtin String.replace forms=1
-  String.replace(s: String, from: String, to: String) -> String shape=(String, String, String) -> String rule=Plain impl="String.replace" effects=[] desc="Replace occurrences of text."
+  String.replace(string: String, from: String, to: String) -> String shape=(String, String, String) -> String rule=Plain impl="String.replace" effects=[] desc="Replace occurrences of text."
 builtin String.reverse forms=1
-  String.reverse(s: String) -> String shape=(String) -> String rule=Plain impl="String.reverse" effects=[] desc="Reverse the Unicode characters."
+  String.reverse(string: String) -> String shape=(String) -> String rule=Plain impl="String.reverse" effects=[] desc="Reverse the Unicode characters."
 builtin String.slice forms=1
-  String.slice(s: String, start: Int, length: Int) -> String shape=(String, Int, Int) -> String rule=Plain impl="String.slice" effects=[] desc="Read a character range; halt outside bounds."
+  String.slice(string: String, start: Int, length: Int) -> String shape=(String, Int, Int) -> String rule=Plain impl="String.slice" effects=[] desc="Read a character range; halt outside bounds."
 builtin String.split forms=1
-  String.split(s: String, separator: String) -> List[String] shape=(String, String) -> List(String) rule=Plain impl="String.split" effects=[] desc="Split text; an empty separator gives characters."
+  String.split(string: String, separator: String) -> List[String] shape=(String, String) -> List(String) rule=Plain impl="String.split" effects=[] desc="Split text; an empty separator gives characters."
 builtin String.start_with? forms=1
-  String.start_with?(s: String, prefix: String) -> Bool shape=(String, String) -> Bool rule=Plain impl="String.starts_with?" effects=[] desc="Check a prefix."
+  String.start_with?(string: String, prefix: String) -> Bool shape=(String, String) -> Bool rule=Plain impl="String.starts_with?" effects=[] desc="Check a prefix."
 builtin String.to_f forms=1
-  String.to_f(s: String) -> Result[Float] shape=(String) -> Result(Float) rule=Plain impl="String.to_float" effects=[] desc="Parse signed decimal Float as a Result."
+  String.to_f(string: String) -> Result[Float] shape=(String) -> Result(Float) rule=Plain impl="String.to_float" effects=[] desc="Parse signed decimal Float as a Result."
 builtin String.to_f! forms=1
-  String.to_f!(s: String) -> Float shape=(String) -> Float rule=Plain impl="String.to_float!" effects=[] desc="Parse signed decimal Float; halt on invalid text."
+  String.to_f!(string: String) -> Float shape=(String) -> Float rule=Plain impl="String.to_float!" effects=[] desc="Parse signed decimal Float; halt on invalid text."
 builtin String.to_i forms=1
-  String.to_i(s: String) -> Result[Int] shape=(String) -> Result(Int) rule=Plain impl="String.to_int" effects=[] desc="Parse signed decimal Int as a Result."
+  String.to_i(string: String) -> Result[Int] shape=(String) -> Result(Int) rule=Plain impl="String.to_int" effects=[] desc="Parse signed decimal Int as a Result."
 builtin String.to_i! forms=1
-  String.to_i!(s: String) -> Int shape=(String) -> Int rule=Plain impl="String.to_int!" effects=[] desc="Parse signed decimal Int; halt on invalid text or overflow."
+  String.to_i!(string: String) -> Int shape=(String) -> Int rule=Plain impl="String.to_int!" effects=[] desc="Parse signed decimal Int; halt on invalid text or overflow."
 builtin String.strip forms=1
-  String.strip(s: String) -> String shape=(String) -> String rule=Plain impl="String.trim" effects=[] desc="Strip surrounding whitespace."
+  String.strip(string: String) -> String shape=(String) -> String rule=Plain impl="String.trim" effects=[] desc="Strip surrounding whitespace."
 builtin String.upcase forms=1
-  String.upcase(s: String) -> String shape=(String) -> String rule=Plain impl="String.upcase" effects=[] desc="Uppercase text."
+  String.upcase(string: String) -> String shape=(String) -> String rule=Plain impl="String.upcase" effects=[] desc="Uppercase text."
 builtin System.args forms=1
   System.args() -> List[String] shape=() -> List(String) rule=Plain impl="System.args" effects=["process"] desc="Return program arguments."
 builtin System.env forms=1
@@ -706,7 +706,7 @@ builtin Task.await forms=2
 builtin Task.cancel forms=1
   Task.cancel(task: Task[R]) -> Void shape=(Task(Var(R))) -> Void rule=TaskTarget impl="Task.cancel" effects=["concurrency"] desc="Cancel a task (or TaskRef) and its descendants without waiting: each runs at most the rest of its current turn and closes what it owns; does nothing for a task that has ended; VM only."
 builtin Task.map forms=1
-  Task.map(items: List[A], limit: Int, timeout_ms: Int, f: Fn[A, Result[R]]) -> List[Result[R]] shape=(List(Var(A)), Int, Int, Fn([Var(A)], Result(Var(R)))) -> List(Result(Var(R))) rule=TaskMap impl="Task.map" effects=["concurrency"] desc="Run the block for each item in its own task, at most limit (1 to 1024) at a time, each with its own timeout_ms (positive, from the start of that item); gives one Result per item in input order, an error (task: timed out) for an item that ran out of time, which is cancelled; VM only."
+  Task.map(items: List[A], limit: Int, timeout_ms: Int, block: Fn[A, Result[R]]) -> List[Result[R]] shape=(List(Var(A)), Int, Int, Fn([Var(A)], Result(Var(R)))) -> List(Result(Var(R))) rule=TaskMap impl="Task.map" effects=["concurrency"] desc="Run the block for each item in its own task, at most limit (1 to 1024) at a time, each with its own timeout_ms (positive, from the start of that item); gives one Result per item in input order, an error (task: timed out) for an item that ran out of time, which is cancelled; VM only."
 builtin Task.pending_count forms=1
   Task.pending_count() -> Int shape=() -> Int rule=Plain impl="Task.pending_count" effects=["concurrency"] desc="Count the tasks of this run that have not ended, not counting main; VM only."
 builtin Task.sleep forms=1
@@ -803,7 +803,7 @@ builtin Zlib.gunzip forms=1
 builtin Zlib.crc32 forms=1
   Zlib.crc32(data: Bytes, seed: Int = 0) -> Result[Int] shape=(Bytes, Int = 0) -> Result(Int) rule=Plain impl="Zlib.crc32.bytes" effects=[] desc="CRC32 (RFC 1952) of bytes chained after seed (0 when left out): start with no seed, then give each next chunk the previous result as its seed; empty input returns the seed unchanged; data at most 1048576 bytes, seed 0 to 4294967295; VM only."
 builtin ATS.add forms=1
-  ATS.add(table: ATS[K, Int], key: K, n: Int) -> Int shape=(ATS(Var(K), Int), Var(K), Int) -> Int rule=AtsCall impl="ATS.add" effects=["concurrency"] desc="Add n to the Int value of key (absent counts as 0) and return the new value, atomically; overflow halts with RUNTIME-INTEGER-OVERFLOW and leaves the table unchanged; VM only."
+  ATS.add(table: ATS[K, Int], key: K, by: Int) -> Int shape=(ATS(Var(K), Int), Var(K), Int) -> Int rule=AtsCall impl="ATS.add" effects=["concurrency"] desc="Add the amount by to the Int value of key (absent counts as 0) and return the new value, atomically; overflow halts with RUNTIME-INTEGER-OVERFLOW and leaves the table unchanged; VM only."
 builtin ATS.delete forms=1
   ATS.delete(table: ATS[K, V], key: K) -> Void shape=(ATS(Var(K), Var(V)), Var(K)) -> Void rule=AtsCall impl="ATS.delete" effects=["concurrency"] desc="Remove a key atomically; an absent key is ignored; VM only."
 builtin ATS.get forms=1
@@ -863,21 +863,21 @@ builtin OpenSSL.HMAC.sha512 forms=1
 builtin OpenSSL.HMAC.sha512_hexdigest forms=1
   OpenSSL.HMAC.sha512_hexdigest(key: Bytes, data: Bytes) -> String shape=(Bytes, Bytes) -> String rule=Plain impl="OpenSSL.HMAC.sha512_hexdigest.bytes" effects=[] desc="HMAC-SHA512 (RFC 2104) of data (bytes) under a key of any length; returns the MAC as 128 lowercase hex digits; VM only."
 builtin OpenSSL.Random.random_bytes forms=1
-  OpenSSL.Random.random_bytes(n: Int = 16) -> Bytes shape=(Int = 16) -> Bytes rule=Plain impl="OpenSSL.Random.random_bytes.bytes" effects=["random"] desc="Draw n bytes (0..1048576, 16 by default) from the system's secure random source (OpenSSL RAND_bytes), for keys, salts and tokens; unlike Random, never seeded; VM only."
+  OpenSSL.Random.random_bytes(count: Int = 16) -> Bytes shape=(Int = 16) -> Bytes rule=Plain impl="OpenSSL.Random.random_bytes.bytes" effects=["random"] desc="Draw count bytes (0..1048576, 16 by default) from the system's secure random source (OpenSSL RAND_bytes), for keys, salts and tokens; unlike Random, never seeded; VM only."
 builtin OpenSSL.Random.hex forms=1
-  OpenSSL.Random.hex(n: Int = 16) -> String shape=(Int = 16) -> String rule=Plain impl="OpenSSL.Random.hex" effects=["random"] desc="Draw n secure random bytes (0..1048576, 16 by default) and give them as 2n lowercase hex digits; VM only."
+  OpenSSL.Random.hex(count: Int = 16) -> String shape=(Int = 16) -> String rule=Plain impl="OpenSSL.Random.hex" effects=["random"] desc="Draw count secure random bytes (0..1048576, 16 by default) and give them as 2 * count lowercase hex digits; VM only."
 builtin OpenSSL.Random.uuid forms=1
   OpenSSL.Random.uuid() -> String shape=() -> String rule=Plain impl="OpenSSL.Random.uuid" effects=["random"] desc="Draw a random version 4 UUID (RFC 9562) as 36 lowercase characters; VM only."
 builtin OpenSSL.HMAC.secure_compare forms=1
-  OpenSSL.HMAC.secure_compare(a: Bytes, b: Bytes) -> Bool shape=(Bytes, Bytes) -> Bool rule=Plain impl="OpenSSL.HMAC.secure_compare.bytes" effects=[] desc="Whether the bytes a and b are the same, in constant time: it compares their SHA-256 digests with OpenSSL CRYPTO_memcmp, so the time never depends on the bytes; for checking MACs and tokens; VM only."
+  OpenSSL.HMAC.secure_compare(bytes: Bytes, other: Bytes) -> Bool shape=(Bytes, Bytes) -> Bool rule=Plain impl="OpenSSL.HMAC.secure_compare.bytes" effects=[] desc="Whether bytes and other are the same, in constant time: it compares their SHA-256 digests with OpenSSL CRYPTO_memcmp, so the time never depends on the bytes; for checking MACs and tokens; VM only."
 builtin Bytes.at forms=1
   Bytes.at(bytes: Bytes, index: Int) -> Int shape=(Bytes, Int) -> Int rule=Plain impl="Bytes.at" effects=[] desc="Read the byte at a zero-based index as an Int (0..255); an index outside the bytes halts."
 builtin Bytes.concat forms=1
-  Bytes.concat(parts: List[Bytes]) -> Bytes shape=(List(Bytes)) -> Bytes rule=Plain impl="Bytes.concat" effects=[] desc="Join the parts in order in one copy; prefer it to + in a loop."
+  Bytes.concat(list: List[Bytes]) -> Bytes shape=(List(Bytes)) -> Bytes rule=Plain impl="Bytes.concat" effects=[] desc="Join the parts in order in one copy; prefer it to + in a loop."
 builtin Bytes.drop forms=1
-  Bytes.drop(bytes: Bytes, n: Int) -> Bytes shape=(Bytes, Int) -> Bytes rule=Plain impl="Bytes.drop" effects=[] desc="Copy the bytes after the first n; n above the length gives empty bytes, a negative n halts."
+  Bytes.drop(bytes: Bytes, count: Int) -> Bytes shape=(Bytes, Int) -> Bytes rule=Plain impl="Bytes.drop" effects=[] desc="Copy the bytes after the first count; count above the length gives empty bytes, a negative count halts."
 builtin Bytes.each forms=1
-  Bytes.each(bytes: Bytes, f: Fn[Int, Void]) -> Void shape=(Bytes, Fn([Int], Void)) -> Void rule=Prelude impl="" effects=[] desc="Call f on each byte in order; returns nothing."
+  Bytes.each(bytes: Bytes, block: Fn[Int, Void]) -> Void shape=(Bytes, Fn([Int], Void)) -> Void rule=Prelude impl="" effects=[] desc="Call block on each byte in order; returns nothing."
 builtin Bytes.empty? forms=1
   Bytes.empty?(bytes: Bytes) -> Bool shape=(Bytes) -> Bool rule=Prelude impl="" effects=[] desc="Check whether there are no bytes."
 builtin Bytes.from_list forms=1
@@ -887,11 +887,11 @@ builtin Bytes.length forms=1
 builtin Bytes.slice forms=1
   Bytes.slice(bytes: Bytes, start: Int, length: Int) -> Bytes shape=(Bytes, Int, Int) -> Bytes rule=Plain impl="Bytes.slice" effects=[] desc="Copy a byte range; halt outside bounds."
 builtin Bytes.take forms=1
-  Bytes.take(bytes: Bytes, n: Int) -> Bytes shape=(Bytes, Int) -> Bytes rule=Plain impl="Bytes.take" effects=[] desc="Copy the first n bytes; n above the length gives all of them, a negative n halts."
+  Bytes.take(bytes: Bytes, count: Int) -> Bytes shape=(Bytes, Int) -> Bytes rule=Plain impl="Bytes.take" effects=[] desc="Copy the first count bytes; count above the length gives all of them, a negative count halts."
 builtin Bytes.to_a forms=1
   Bytes.to_a(bytes: Bytes) -> List[Int] shape=(Bytes) -> List(Int) rule=Plain impl="Bytes.to_a" effects=[] desc="List the bytes as Ints (0..255); the way to map, select and the other List methods."
 builtin String.bytes forms=1
-  String.bytes(s: String) -> Bytes shape=(String) -> Bytes rule=Plain impl="String.bytes" effects=[] desc="Give the UTF-8 bytes of the string."
+  String.bytes(string: String) -> Bytes shape=(String) -> Bytes rule=Plain impl="String.bytes" effects=[] desc="Give the UTF-8 bytes of the string."
 builtin OpenSSL.Cipher.des_ede3_cbc_encrypt forms=1
   OpenSSL.Cipher.des_ede3_cbc_encrypt(key: Bytes, iv: Bytes, data: Bytes) -> Result[Bytes] shape=(Bytes, Bytes, Bytes) -> Result(Bytes) rule=Plain impl="OpenSSL.Cipher.des_ede3_cbc_encrypt" effects=[] desc="Encrypt data (bytes) with Triple DES in CBC mode and no padding, for payment formats, not new designs; a key of 16 (two-key) or 24 bytes, an 8-byte iv and data in whole 8-byte blocks, or an error; VM only."
 builtin OpenSSL.Cipher.des_ede3_cbc_decrypt forms=1
@@ -909,17 +909,17 @@ builtin OpenSSL.KDF.pbkdf2_hmac_sha256 forms=1
 builtin OpenSSL.KDF.scrypt forms=1
   OpenSSL.KDF.scrypt(password: Bytes, salt: Bytes, n: Int, r: Int, p: Int, length: Int) -> Result[Bytes] shape=(Bytes, Bytes, Int, Int, Int, Int) -> Result(Bytes) rule=Plain impl="OpenSSL.KDF.scrypt" effects=[] desc="Derive length bytes (1 to 1048576) from a password and a salt with scrypt (RFC 7914): cost n, a power of 2, block size r and parallelization p, in at most 1025 MiB (128 * r * (n + p + 2) bytes) and with r * p * (n + 16) at most 2^25, or an error; VM only."
 builtin Optional.map forms=1
-  Optional.map(o: Optional[T], f: Fn[T, U]) -> Optional[U] shape=(Optional(Var(T)), Fn([Var(T)], Var(U))) -> Optional(Var(U)) rule=Prelude impl="" effects=[] desc="some(f(x)) for some(x), else none; f runs only for some."
+  Optional.map(optional: Optional[T], block: Fn[T, U]) -> Optional[U] shape=(Optional(Var(T)), Fn([Var(T)], Var(U))) -> Optional(Var(U)) rule=Prelude impl="" effects=[] desc="some(block(x)) for some(x), else none; block runs only for some."
 builtin Optional.none? forms=1
-  Optional.none?(o: Optional[T]) -> Bool shape=(Optional(Var(T))) -> Bool rule=Prelude impl="" effects=[] desc="Check whether the value is none."
+  Optional.none?(optional: Optional[T]) -> Bool shape=(Optional(Var(T))) -> Bool rule=Prelude impl="" effects=[] desc="Check whether the value is none."
 builtin Optional.some? forms=1
-  Optional.some?(o: Optional[T]) -> Bool shape=(Optional(Var(T))) -> Bool rule=Prelude impl="" effects=[] desc="Check whether the value is some(x)."
+  Optional.some?(optional: Optional[T]) -> Bool shape=(Optional(Var(T))) -> Bool rule=Prelude impl="" effects=[] desc="Check whether the value is some(x)."
 builtin Optional.to_result forms=1
-  Optional.to_result(o: Optional[T], message: String) -> Result[T] shape=(Optional(Var(T)), String) -> Result(Var(T)) rule=Prelude impl="" effects=[] desc="ok(x) for some(x), else error(message), to join try code."
+  Optional.to_result(optional: Optional[T], message: String) -> Result[T] shape=(Optional(Var(T)), String) -> Result(Var(T)) rule=Prelude impl="" effects=[] desc="ok(x) for some(x), else error(message), to join try code."
 builtin Optional.unwrap! forms=1
-  Optional.unwrap!(o: Optional[T]) -> T shape=(Optional(Var(T))) -> Var(T) rule=Prelude impl="" effects=[] desc="Return x of some(x); halt on none."
+  Optional.unwrap!(optional: Optional[T]) -> T shape=(Optional(Var(T))) -> Var(T) rule=Prelude impl="" effects=[] desc="Return x of some(x); halt on none."
 builtin Optional.unwrap_or forms=1
-  Optional.unwrap_or(o: Optional[T], default: T) -> T shape=(Optional(Var(T)), Var(T)) -> Var(T) rule=Prelude impl="" effects=[] desc="Return x of some(x), else default; both arguments run eagerly."
+  Optional.unwrap_or(optional: Optional[T], default: T) -> T shape=(Optional(Var(T)), Var(T)) -> Var(T) rule=Prelude impl="" effects=[] desc="Return x of some(x), else default; both arguments run eagerly."
 builtin none forms=1
   none() -> Optional[T] shape=() -> Optional(Var(T)) rule=OptionalNone impl="" effects=[] desc="The absent value; needs an expected Optional type."
 builtin some forms=1
@@ -927,13 +927,13 @@ builtin some forms=1
 builtin Bytes.decode forms=1
   Bytes.decode(bytes: Bytes, encoding: String) -> Result[String] shape=(Bytes, String) -> Result(String) rule=Plain impl="Bytes.decode" effects=[] desc="Read the bytes as text in an encoding; invalid bytes or an unknown encoding give an error."
 builtin String.encode forms=1
-  String.encode(s: String, encoding: String) -> Result[Bytes] shape=(String, String) -> Result(Bytes) rule=Plain impl="String.encode" effects=[] desc="Write the text in an encoding; a character it cannot hold or an unknown encoding gives an error."
+  String.encode(string: String, encoding: String) -> Result[Bytes] shape=(String, String) -> Result(Bytes) rule=Plain impl="String.encode" effects=[] desc="Write the text in an encoding; a character it cannot hold or an unknown encoding gives an error."
 builtin Task.current forms=1
   Task.current() -> TaskRef shape=() -> Opaque(TaskRef) rule=Plain impl="Task.current" effects=["concurrency"] desc="Return the running task as a TaskRef, which Task.monitor, Task.cancel and id take but no await, since its result type is not known here; VM only."
 builtin Task.id forms=1
   Task.id(task: Task[R]) -> Int shape=(Task(Var(R))) -> Int rule=TaskTarget impl="Task.id" effects=[] desc="Return the number that identifies the task (or TaskRef) in this run, the task_id of its TaskDown."
 builtin Task.monitor forms=1
-  Task.monitor(task: Task[R], channel: Channel[M], wrap: Fn[TaskDown, M]) -> Void shape=(Task(Var(R)), Channel(Var(M)), Fn([Struct(TaskDown)], Var(M))) -> Void rule=TaskMonitor impl="Task.monitor" effects=["concurrency"] desc="When the task (or TaskRef) ends (returns, crashes or is cancelled), send wrap(TaskDown) into the channel once, without waiting; at once for a task that has ended; dropped when the channel is closed or full; VM only."
+  Task.monitor(task: Task[R], channel: Channel[M], message: Fn[TaskDown, M]) -> Void shape=(Task(Var(R)), Channel(Var(M)), Fn([Struct(TaskDown)], Var(M))) -> Void rule=TaskMonitor impl="Task.monitor" effects=["concurrency"] desc="When the task (or TaskRef) ends (returns, crashes or is cancelled), send message(TaskDown) into the channel once, without waiting; at once for a task that has ended; dropped when the channel is closed or full; VM only."
 builtin Native.mutex forms=1
   Native.mutex() -> Native.Mutex shape=() -> Opaque(Native.Mutex) rule=Plain impl="Native.mutex" effects=["native"] desc="A new Native.Mutex, for the calls of a native library that is not thread-safe: native calls run on several schedulers at once."
 builtin Native.Mutex.synchronize forms=1
@@ -941,25 +941,25 @@ builtin Native.Mutex.synchronize forms=1
 builtin OpenSSL.RSA.public_encrypt_oaep forms=1
   OpenSSL.RSA.public_encrypt_oaep(pem: String, data: Bytes) -> Result[Bytes] shape=(String, Bytes) -> Result(Bytes) rule=Plain impl="OpenSSL.RSA.public_encrypt_oaep" effects=["random"] desc="Encrypt data (bytes) with the RSA public key in pem (PUBLIC KEY or RSA PUBLIC KEY) and OAEP padding with SHA-1; at most the key size less 42 bytes; a bad PEM, a key that is not RSA or data too long is an error; VM only."
 builtin Range.all? forms=1
-  Range.all?(range: Range, f: Fn[Int, Bool]) -> Bool shape=(Range, Fn([Int], Bool)) -> Bool rule=Prelude impl="" effects=[] desc="True when f accepts every value (true for an empty range); f stops at the first false; O(n)."
+  Range.all?(range: Range, block: Fn[Int, Bool]) -> Bool shape=(Range, Fn([Int], Bool)) -> Bool rule=Prelude impl="" effects=[] desc="True when block accepts every value (true for an empty range); block stops at the first false; O(n)."
 builtin Range.any? forms=1
-  Range.any?(range: Range, f: Fn[Int, Bool]) -> Bool shape=(Range, Fn([Int], Bool)) -> Bool rule=Prelude impl="" effects=[] desc="True when f accepts a value; f stops at the first true; O(n)."
+  Range.any?(range: Range, block: Fn[Int, Bool]) -> Bool shape=(Range, Fn([Int], Bool)) -> Bool rule=Prelude impl="" effects=[] desc="True when block accepts a value; block stops at the first true; O(n)."
 builtin Range.drop_while forms=1
-  Range.drop_while(range: Range, f: Fn[Int, Bool]) -> List[Int] shape=(Range, Fn([Int], Bool)) -> List(Int) rule=Prelude impl="" effects=[] desc="List the values from the first one f rejects on; f is not called after it; O(n)."
+  Range.drop_while(range: Range, block: Fn[Int, Bool]) -> List[Int] shape=(Range, Fn([Int], Bool)) -> List(Int) rule=Prelude impl="" effects=[] desc="List the values from the first one block rejects on; block is not called after it; O(n)."
 builtin Range.each_slice forms=1
   Range.each_slice(range: Range, size: Int) -> List[List[Int]] shape=(Range, Int) -> List(List(Int)) rule=Prelude impl="" effects=[] desc="Split into lists of size values, the last one shorter; size below 1 halts; O(n)."
 builtin Range.each_with_index forms=1
-  Range.each_with_index(range: Range, f: Fn[Int, Int, Void]) -> Void shape=(Range, Fn([Int, Int], Void)) -> Void rule=Prelude impl="" effects=[] desc="Call f on each value and its index from 0, in order; O(n)."
+  Range.each_with_index(range: Range, block: Fn[Int, Int, Void]) -> Void shape=(Range, Fn([Int, Int], Void)) -> Void rule=Prelude impl="" effects=[] desc="Call block on each value and its index from 0, in order; O(n)."
 builtin Range.find forms=1
-  Range.find(range: Range, f: Fn[Int, Bool]) -> Result[Int] shape=(Range, Fn([Int], Bool)) -> Result(Int) rule=Prelude impl="" effects=[] desc="The first value f accepts, else error(\"not found\"); f stops being called at the first true; O(n)."
+  Range.find(range: Range, block: Fn[Int, Bool]) -> Result[Int] shape=(Range, Fn([Int], Bool)) -> Result(Int) rule=Prelude impl="" effects=[] desc="The first value block accepts, else error(\"not found\"); block stops being called at the first true; O(n)."
 builtin Range.find_index forms=1
-  Range.find_index(range: Range, f: Fn[Int, Bool]) -> Optional[Int] shape=(Range, Fn([Int], Bool)) -> Optional(Int) rule=Prelude impl="" effects=[] desc="The index of the first value f accepts, or none; O(n)."
+  Range.find_index(range: Range, block: Fn[Int, Bool]) -> Optional[Int] shape=(Range, Fn([Int], Bool)) -> Optional(Int) rule=Prelude impl="" effects=[] desc="The index of the first value block accepts, or none; O(n)."
 builtin Range.flat_map forms=1
-  Range.flat_map(range: Range, f: Fn[Int, List[B]]) -> List[B] shape=(Range, Fn([Int], List(Var(B)))) -> List(Var(B)) rule=Prelude impl="" effects=[] desc="Join the lists f gives for each value, in order; O(n)."
+  Range.flat_map(range: Range, block: Fn[Int, List[B]]) -> List[B] shape=(Range, Fn([Int], List(Var(B)))) -> List(Var(B)) rule=Prelude impl="" effects=[] desc="Join the lists block gives for each value, in order; O(n)."
 builtin Range.group_by forms=1
   Range.group_by(range: Range, key: Fn[Int, K]) -> Map[K, List[Int]] shape=(Range, Fn([Int], Var(K))) -> Map(Var(K), List(Int)) rule=Prelude impl="" effects=[] desc="Group the values by an Int or String key; keys in order of first appearance; O(n)."
 builtin Range.map forms=1
-  Range.map(range: Range, f: Fn[Int, B]) -> List[B] shape=(Range, Fn([Int], Var(B))) -> List(Var(B)) rule=Prelude impl="" effects=[] desc="List what f gives for each value, in order; O(n)."
+  Range.map(range: Range, block: Fn[Int, B]) -> List[B] shape=(Range, Fn([Int], Var(B))) -> List(Var(B)) rule=Prelude impl="" effects=[] desc="List what block gives for each value, in order; O(n)."
 builtin Range.max forms=1
   Range.max(range: Range) -> Optional[Int] shape=(Range) -> Optional(Int) rule=Prelude impl="" effects=[] desc="The last value, or none for an empty range; O(1)."
 builtin Range.max_by forms=1
@@ -969,22 +969,22 @@ builtin Range.min forms=1
 builtin Range.min_by forms=1
   Range.min_by(range: Range, key: Fn[Int, O]) -> Optional[Int] shape=(Range, Fn([Int], Var(O))) -> Optional(Int) rule=Prelude impl="" effects=[] desc="The value with the least Int, Float or String key, the first on ties, or none for an empty range; O(n)."
 builtin Range.partition forms=1
-  Range.partition(range: Range, f: Fn[Int, Bool]) -> List[List[Int]] shape=(Range, Fn([Int], Bool)) -> List(List(Int)) rule=Prelude impl="" effects=[] desc="Split into [accepted, rejected], each in order; O(n)."
+  Range.partition(range: Range, block: Fn[Int, Bool]) -> List[List[Int]] shape=(Range, Fn([Int], Bool)) -> List(List(Int)) rule=Prelude impl="" effects=[] desc="Split into [accepted, rejected], each in order; O(n)."
 builtin Range.reduce forms=1
-  Range.reduce(range: Range, initial: B, f: Fn[B, Int, B]) -> B shape=(Range, Var(B), Fn([Var(B), Int], Var(B))) -> Var(B) rule=Prelude impl="" effects=[] desc="Fold left with f(accumulator, value); an empty range returns initial; O(n)."
+  Range.reduce(range: Range, initial: B, block: Fn[B, Int, B]) -> B shape=(Range, Var(B), Fn([Var(B), Int], Var(B))) -> Var(B) rule=Prelude impl="" effects=[] desc="Fold left with block(accumulator, value); an empty range returns initial; O(n)."
 builtin Range.select forms=1
-  Range.select(range: Range, f: Fn[Int, Bool]) -> List[Int] shape=(Range, Fn([Int], Bool)) -> List(Int) rule=Prelude impl="" effects=[] desc="List the values f accepts, in order; O(n)."
+  Range.select(range: Range, block: Fn[Int, Bool]) -> List[Int] shape=(Range, Fn([Int], Bool)) -> List(Int) rule=Prelude impl="" effects=[] desc="List the values block accepts, in order; O(n)."
 builtin Range.sum forms=1
   Range.sum(range: Range) -> Int shape=(Range) -> Int rule=Prelude impl="" effects=[] desc="Add the values; an empty range gives 0; Int overflow halts; O(n)."
 builtin Range.take_while forms=1
-  Range.take_while(range: Range, f: Fn[Int, Bool]) -> List[Int] shape=(Range, Fn([Int], Bool)) -> List(Int) rule=Prelude impl="" effects=[] desc="List the values before the first one f rejects; f is not called after it; O(n)."
+  Range.take_while(range: Range, block: Fn[Int, Bool]) -> List[Int] shape=(Range, Fn([Int], Bool)) -> List(Int) rule=Prelude impl="" effects=[] desc="List the values before the first one block rejects; block is not called after it; O(n)."
 builtin DNS.lookup forms=1
   DNS.lookup(host: String, timeout_ms: Int = 30000) -> Result[List[String]] shape=(String, Int = 30000) -> Result(List(String)) rule=Plain impl="DNS.lookup" effects=["network"] desc="Resolve a host name with the system resolver: every IPv4 and IPv6 address as text, in its order, without duplicates; an IP literal gives itself."
 builtin String.edit_distance forms=2
-  String.edit_distance(s: String, other: String) -> Int shape=(String, String) -> Int rule=Plain impl="String.edit_distance" effects=[] desc="The Levenshtein distance in characters: the fewest inserts, deletes and replacements of one character that turn s into other; O(n * m) time, O(min(n, m)) memory; or, with max, max + 1 once it passes max."
-  String.edit_distance(s: String, other: String, max: Int) -> Int shape=(String, String, Int) -> Int rule=Plain impl="String.edit_distance" effects=[] desc="The Levenshtein distance, or max + 1 once it passes max, with about n * (2 * max + 1) table cells of work; a negative max fails with RUNTIME-INVALID-COUNT."
+  String.edit_distance(string: String, other: String) -> Int shape=(String, String) -> Int rule=Plain impl="String.edit_distance" effects=[] desc="The Levenshtein distance in characters: the fewest inserts, deletes and replacements of one character that turn string into other; O(n * m) time, O(min(n, m)) memory; or, with max, max + 1 once it passes max."
+  String.edit_distance(string: String, other: String, max: Int) -> Int shape=(String, String, Int) -> Int rule=Plain impl="String.edit_distance" effects=[] desc="The Levenshtein distance, or max + 1 once it passes max, with about n * (2 * max + 1) table cells of work; a negative max fails with RUNTIME-INVALID-COUNT."
 builtin String.jaro_winkler forms=1
-  String.jaro_winkler(s: String, other: String) -> Float shape=(String, String) -> Float rule=Plain impl="String.jaro_winkler" effects=[] desc="The Jaro-Winkler similarity in characters, from 0.0 to 1.0; a common prefix of up to 4 characters raises it when the Jaro similarity is above 0.7; two empty strings give 1.0."
+  String.jaro_winkler(string: String, other: String) -> Float shape=(String, String) -> Float rule=Plain impl="String.jaro_winkler" effects=[] desc="The Jaro-Winkler similarity in characters, from 0.0 to 1.0; a common prefix of up to 4 characters raises it when the Jaro similarity is above 0.7; two empty strings give 1.0."
 record Codec.Info name: String, members: List(Struct(StructMember))
 record Error kind: String = "error", message: String, code: Optional(Int) = none, details: Map(String, String) = {}, cause: Optional(Struct(Error)) = none, location: String = ""
 record File.Info kind: String, size_bytes: Int, modified_seconds: Int, mode: Int, user_id: Int, group_id: Int
@@ -1049,8 +1049,8 @@ ref:Map.get/2 -> Map.get(map: Map[K, V], key: K) -> Optional[V] shape=(Map(Var(K
 ref:Map.get/3 -> Map.get(map: Map[K, V], key: K, default: V) -> V shape=(Map(Var(K), Var(V)), Var(K), Var(V)) -> Var(V) rule=MapGetDefault impl="Map.get" effects=[] desc="Read a value as some(value) or none, or supply an eagerly evaluated default as a third argument."
 ref:Map.get/4 -> -
 ref:Nope/1 -> -
-ref:HttpWire.service/3 -> HttpWire.service(jobs: Channel[HttpWire.Job], options: HTTP.ClientOptions, f: Fn[HTTP.Client, Void]) -> HTTP.Client shape=(Channel(Struct(HttpWire.Job)), Struct(HttpWire.ClientOptions), Fn([Opaque(HttpWire.Client)], Void)) -> Opaque(HttpWire.Client) rule=Plain impl="HttpWire.service" effects=["concurrency"] desc="Internal to std/http: run f(client), a client's owner task, outside every caller's task tree, as the owner of jobs; the client keeps jobs and options."
-ref:List.map/2 -> List.map(list: List[A], f: Fn[A, B]) -> List[B] shape=(List(Var(A)), Fn([Var(A)], Var(B))) -> List(Var(B)) rule=ListMap impl="List.map" effects=[] desc="Map each element in order without changing the input; O(n)."
+ref:HttpWire.service/3 -> HttpWire.service(jobs: Channel[HttpWire.Job], options: HTTP.ClientOptions, block: Fn[HTTP.Client, Void]) -> HTTP.Client shape=(Channel(Struct(HttpWire.Job)), Struct(HttpWire.ClientOptions), Fn([Opaque(HttpWire.Client)], Void)) -> Opaque(HttpWire.Client) rule=Plain impl="HttpWire.service" effects=["concurrency"] desc="Internal to std/http: run block(client), a client's owner task, outside every caller's task tree, as the owner of jobs; the client keeps jobs and options."
+ref:List.map/2 -> List.map(list: List[A], block: Fn[A, B]) -> List[B] shape=(List(Var(A)), Fn([Var(A)], Var(B))) -> List(Var(B)) rule=ListMap impl="List.map" effects=[] desc="Map each element in order without changing the input; O(n)."
 std:HttpWire.service -> true
 std:LogRegistry.level -> true
 std:Http.x -> false

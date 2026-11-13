@@ -9,8 +9,8 @@ This module is interim: the builtin `Time` functions (`Time.format`, `Time.from_
 `std/utc` is written in Agentica: `import UTC from "std/utc"`. It reads the number of milliseconds since the Unix epoch, the value of `Time.now_ms()`, as a date and a time of day in UTC. The name `Time` belongs to the builtin, so the module has another one. `iso8601` is Ruby's `Time#utc.iso8601(n)` and the fields of `parts` are those of `Time#utc` (`year`, `month`, `day`, `hour`, `min`, `sec`, with the names written out). The calendar is the proleptic Gregorian one, Unix time has no leap seconds, and there are no time zones: every answer is UTC. Nothing in it halts, for any `Int`.
 
 ```ruby
-UTC.parts(ms: Int) -> UTC.Parts
-UTC.iso8601(ms: Int, fraction_digits: Int = 0) -> String
+UTC.parts(time_ms: Int) -> UTC.Parts
+UTC.iso8601(time_ms: Int, fraction_digits: Int = 0) -> String
 ```
 
 ```agentica
@@ -35,7 +35,7 @@ end
 
 ## parts
 
-`parts` splits `ms` into a `UTC.Parts`, a struct with the fields `year`, `month` (1 to 12), `day` (1 to 31), `hour` (0 to 23), `minute` (0 to 59), `second` (0 to 59) and `millisecond` (0 to 999). A negative `ms` is a time before 1970. Leap years follow the Gregorian rule (1900 is not one, 2000 is).
+`parts` splits `time_ms` into a `UTC.Parts`, a struct with the fields `year`, `month` (1 to 12), `day` (1 to 31), `hour` (0 to 23), `minute` (0 to 59), `second` (0 to 59) and `millisecond` (0 to 999). A negative `time_ms` is a time before 1970. Leap years follow the Gregorian rule (1900 is not one, 2000 is).
 
 ## iso8601
 

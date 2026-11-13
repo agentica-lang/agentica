@@ -1,8 +1,8 @@
 ## The Bytes methods of the compiler prelude (see list.agc).
 
-def each(bytes: Bytes, f: Fn[Int, Void]) -> Void
+def each(bytes: Bytes, block: Fn[Int, Void]) -> Void
   for byte in bytes
-    f.call(byte)
+    block.call(byte)
   end
 end
 

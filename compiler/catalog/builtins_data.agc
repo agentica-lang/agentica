@@ -662,7 +662,7 @@ ROWS_4: List[Model.Builtin] = [
       Model.Named(name: "path", type: Types.Type.String),
       Model.Named(name: "buffer_bytes", type: Types.Type.Int, default: Model.Default.Whole(65536)),
       Model.Named(name: "timeout_ms", type: Types.Type.Int, default: Model.Default.Whole(30000)),
-      Model.Named(name: "f", type: Types.Type.Fn([Types.Type.String], Types.Type.Result(Types.Type.Void))),
+      Model.Named(name: "block", type: Types.Type.Fn([Types.Type.String], Types.Type.Result(Types.Type.Void))),
     ],
     result: Types.Type.Result(Types.Type.Void),
     rule: Model.Rule.Plain,
@@ -743,7 +743,7 @@ ROWS_5: List[Model.Builtin] = [
           Model.Named(name: "mode", type: Types.Type.String, default: Model.Default.Text("read")),
           Model.Named(name: "timeout_ms", type: Types.Type.Int, default: Model.Default.Whole(30000)),
           Model.Named(
-            name: "f",
+            name: "block",
             type: Types.Type.Fn([Types.Type.Opaque("File.Handle")], Types.Type.Result(Types.Type.Var("A"))),
           ),
         ],
@@ -914,7 +914,7 @@ ROWS_7: List[Model.Builtin] = [
   ),
   Model.Builtin(
     name: "Float.abs",
-    parameters: [Model.Named(name: "x", type: Types.Type.Float)],
+    parameters: [Model.Named(name: "float", type: Types.Type.Float)],
     result: Types.Type.Float,
     rule: Model.Rule.Plain,
     implementation: "Float.abs",
@@ -924,18 +924,18 @@ ROWS_7: List[Model.Builtin] = [
   ),
   Model.Builtin(
     name: "Float.ceil",
-    parameters: [Model.Named(name: "x", type: Types.Type.Float)],
+    parameters: [Model.Named(name: "float", type: Types.Type.Float)],
     result: Types.Type.Int,
     rule: Model.Rule.Plain,
     implementation: "Float.ceil",
     effects: [],
-    description: "The least Int >= x; NaN, an infinity or a value outside Int halts, as in to_i!.",
+    description: "The least Int >= float; NaN, an infinity or a value outside Int halts, as in to_i!.",
     alternatives: [],
   ),
   Model.Builtin(
     name: "Float.clamp",
     parameters: [
-      Model.Named(name: "x", type: Types.Type.Float),
+      Model.Named(name: "float", type: Types.Type.Float),
       Model.Named(name: "min", type: Types.Type.Float),
       Model.Named(name: "max", type: Types.Type.Float),
     ],
@@ -943,17 +943,17 @@ ROWS_7: List[Model.Builtin] = [
     rule: Model.Rule.Plain,
     implementation: "Float.clamp",
     effects: [],
-    description: "x limited to min..max; min > max or a NaN bound halts; a NaN x stays NaN.",
+    description: "float limited to min..max; min > max or a NaN bound halts; a NaN float stays NaN.",
     alternatives: [],
   ),
   Model.Builtin(
     name: "Float.floor",
-    parameters: [Model.Named(name: "x", type: Types.Type.Float)],
+    parameters: [Model.Named(name: "float", type: Types.Type.Float)],
     result: Types.Type.Int,
     rule: Model.Rule.Plain,
     implementation: "Float.floor",
     effects: [],
-    description: "The greatest Int <= x; NaN, an infinity or a value outside Int halts, as in to_i!.",
+    description: "The greatest Int <= float; NaN, an infinity or a value outside Int halts, as in to_i!.",
     alternatives: [],
   ),
   Model.Builtin(
@@ -981,7 +981,7 @@ ROWS_8: List[Model.Builtin] = [
   ),
   Model.Builtin(
     name: "Int.to_f",
-    parameters: [Model.Named(name: "n", type: Types.Type.Int)],
+    parameters: [Model.Named(name: "int", type: Types.Type.Int)],
     result: Types.Type.Float,
     rule: Model.Rule.Plain,
     implementation: "Float.from_int",
@@ -991,7 +991,7 @@ ROWS_8: List[Model.Builtin] = [
   ),
   Model.Builtin(
     name: "Float.round",
-    parameters: [Model.Named(name: "x", type: Types.Type.Float)],
+    parameters: [Model.Named(name: "float", type: Types.Type.Float)],
     result: Types.Type.Int,
     rule: Model.Rule.Plain,
     implementation: "Float.round",
@@ -1001,7 +1001,7 @@ ROWS_8: List[Model.Builtin] = [
   ),
   Model.Builtin(
     name: "Float.to_bits",
-    parameters: [Model.Named(name: "x", type: Types.Type.Float)],
+    parameters: [Model.Named(name: "float", type: Types.Type.Float)],
     result: Types.Type.Int,
     rule: Model.Rule.Plain,
     implementation: "Float.to_bits",
@@ -1011,7 +1011,7 @@ ROWS_8: List[Model.Builtin] = [
   ),
   Model.Builtin(
     name: "Float.to_bits32",
-    parameters: [Model.Named(name: "x", type: Types.Type.Float)],
+    parameters: [Model.Named(name: "float", type: Types.Type.Float)],
     result: Types.Type.Int,
     rule: Model.Rule.Plain,
     implementation: "Float.to_bits32",
@@ -1024,7 +1024,7 @@ ROWS_8: List[Model.Builtin] = [
   ),
   Model.Builtin(
     name: "Float.to_i",
-    parameters: [Model.Named(name: "x", type: Types.Type.Float)],
+    parameters: [Model.Named(name: "float", type: Types.Type.Float)],
     result: Types.Type.Result(Types.Type.Int),
     rule: Model.Rule.Plain,
     implementation: "Float.to_int",
@@ -1037,7 +1037,7 @@ ROWS_8: List[Model.Builtin] = [
 ROWS_9: List[Model.Builtin] = [
   Model.Builtin(
     name: "Float.to_i!",
-    parameters: [Model.Named(name: "x", type: Types.Type.Float)],
+    parameters: [Model.Named(name: "float", type: Types.Type.Float)],
     result: Types.Type.Int,
     rule: Model.Rule.Plain,
     implementation: "Float.to_int!",
@@ -1398,13 +1398,15 @@ ROWS_11: List[Model.Builtin] = [
     parameters: [
       Model.Named(name: "listener", type: Types.Type.Opaque("TCP.Listener")),
       Model.Named(name: "max_connections", type: Types.Type.Int),
-      Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Opaque("HttpWire.Server")], Types.Type.Void)),
+      Model.Named(name: "block", type: Types.Type.Fn([Types.Type.Opaque("HttpWire.Server")], Types.Type.Void)),
     ],
     result: Types.Type.Opaque("HttpWire.Server"),
     rule: Model.Rule.Plain,
     implementation: "HttpWire.server",
     effects: ["network"],
-    description: "Internal to std/http: make a server's task group on a listener and run f, its accept loop, in it.",
+    description: (
+      "Internal to std/http: make a server's task group on a listener and run block, its accept loop, in it."
+    ),
     alternatives: [],
   ),
   Model.Builtin(
@@ -1412,14 +1414,14 @@ ROWS_11: List[Model.Builtin] = [
     parameters: [
       Model.Named(name: "jobs", type: Types.Type.Channel(Types.Type.Struct("HttpWire.Job", []))),
       Model.Named(name: "options", type: Types.Type.Struct("HttpWire.ClientOptions", [])),
-      Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Opaque("HttpWire.Client")], Types.Type.Void)),
+      Model.Named(name: "block", type: Types.Type.Fn([Types.Type.Opaque("HttpWire.Client")], Types.Type.Void)),
     ],
     result: Types.Type.Opaque("HttpWire.Client"),
     rule: Model.Rule.Plain,
     implementation: "HttpWire.service",
     effects: ["concurrency"],
     description: (
-      "Internal to std/http: run f(client), a client's owner task, outside every caller's task tree, as the " +
+      "Internal to std/http: run block(client), a client's owner task, outside every caller's task tree, as the " +
       "owner of jobs; the client keeps jobs and options."
     ),
     alternatives: [],
@@ -1429,7 +1431,7 @@ ROWS_11: List[Model.Builtin] = [
     parameters: [
       Model.Named(name: "server", type: Types.Type.Opaque("HttpWire.Server")),
       Model.Named(name: "socket", type: Types.Type.Opaque("TCP.Socket")),
-      Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Opaque("TCP.Socket")], Types.Type.Void)),
+      Model.Named(name: "block", type: Types.Type.Fn([Types.Type.Opaque("TCP.Socket")], Types.Type.Void)),
     ],
     result: Types.Type.Void,
     rule: Model.Rule.Plain,
@@ -1559,7 +1561,7 @@ ROWS_14: List[Model.Builtin] = [
   ),
   Model.Builtin(
     name: "Int.abs",
-    parameters: [Model.Named(name: "n", type: Types.Type.Int)],
+    parameters: [Model.Named(name: "int", type: Types.Type.Int)],
     result: Types.Type.Int,
     rule: Model.Rule.Plain,
     implementation: "Int.abs",
@@ -1569,7 +1571,7 @@ ROWS_14: List[Model.Builtin] = [
   ),
   Model.Builtin(
     name: "Int.bit_and",
-    parameters: [Model.Named(name: "a", type: Types.Type.Int), Model.Named(name: "b", type: Types.Type.Int)],
+    parameters: [Model.Named(name: "int", type: Types.Type.Int), Model.Named(name: "other", type: Types.Type.Int)],
     result: Types.Type.Int,
     rule: Model.Rule.Plain,
     implementation: "Int.bit_and",
@@ -1579,12 +1581,12 @@ ROWS_14: List[Model.Builtin] = [
   ),
   Model.Builtin(
     name: "Int.bit_not",
-    parameters: [Model.Named(name: "a", type: Types.Type.Int)],
+    parameters: [Model.Named(name: "int", type: Types.Type.Int)],
     result: Types.Type.Int,
     rule: Model.Rule.Plain,
     implementation: "Int.bit_not",
     effects: [],
-    description: "Flip every bit; the same as -1 - a.",
+    description: "Flip every bit; the same as -1 - int.",
     alternatives: [],
   ),
 ]
@@ -1592,7 +1594,7 @@ ROWS_14: List[Model.Builtin] = [
 ROWS_15: List[Model.Builtin] = [
   Model.Builtin(
     name: "Int.bit_or",
-    parameters: [Model.Named(name: "a", type: Types.Type.Int), Model.Named(name: "b", type: Types.Type.Int)],
+    parameters: [Model.Named(name: "int", type: Types.Type.Int), Model.Named(name: "other", type: Types.Type.Int)],
     result: Types.Type.Int,
     rule: Model.Rule.Plain,
     implementation: "Int.bit_or",
@@ -1602,7 +1604,7 @@ ROWS_15: List[Model.Builtin] = [
   ),
   Model.Builtin(
     name: "Int.bit_xor",
-    parameters: [Model.Named(name: "a", type: Types.Type.Int), Model.Named(name: "b", type: Types.Type.Int)],
+    parameters: [Model.Named(name: "int", type: Types.Type.Int), Model.Named(name: "other", type: Types.Type.Int)],
     result: Types.Type.Int,
     rule: Model.Rule.Plain,
     implementation: "Int.bit_xor",
@@ -1613,7 +1615,7 @@ ROWS_15: List[Model.Builtin] = [
   Model.Builtin(
     name: "Int.clamp",
     parameters: [
-      Model.Named(name: "n", type: Types.Type.Int),
+      Model.Named(name: "int", type: Types.Type.Int),
       Model.Named(name: "min", type: Types.Type.Int),
       Model.Named(name: "max", type: Types.Type.Int),
     ],
@@ -1621,7 +1623,7 @@ ROWS_15: List[Model.Builtin] = [
     rule: Model.Rule.Plain,
     implementation: "Int.clamp",
     effects: [],
-    description: "n limited to min..max; min > max halts.",
+    description: "int limited to min..max; min > max halts.",
     alternatives: [],
   ),
   Model.Builtin(
@@ -1629,18 +1631,18 @@ ROWS_15: List[Model.Builtin] = [
     parameters: [
       Model.Named(name: "from", type: Types.Type.Int),
       Model.Named(name: "to", type: Types.Type.Int),
-      Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Int], Types.Type.Void)),
+      Model.Named(name: "block", type: Types.Type.Fn([Types.Type.Int], Types.Type.Void)),
     ],
     result: Types.Type.Void,
     rule: Model.Rule.Plain,
     implementation: "Int.downto",
     effects: [],
-    description: "Call f with from down to to; nothing when to > from.",
+    description: "Call block with from down to to; nothing when to > from.",
     alternatives: [],
   ),
   Model.Builtin(
     name: "Int.gcd",
-    parameters: [Model.Named(name: "a", type: Types.Type.Int), Model.Named(name: "b", type: Types.Type.Int)],
+    parameters: [Model.Named(name: "int", type: Types.Type.Int), Model.Named(name: "other", type: Types.Type.Int)],
     result: Types.Type.Int,
     rule: Model.Rule.Plain,
     implementation: "Int.gcd",
@@ -1650,17 +1652,17 @@ ROWS_15: List[Model.Builtin] = [
   ),
   Model.Builtin(
     name: "Int.pow",
-    parameters: [Model.Named(name: "n", type: Types.Type.Int), Model.Named(name: "exponent", type: Types.Type.Int)],
+    parameters: [Model.Named(name: "int", type: Types.Type.Int), Model.Named(name: "exponent", type: Types.Type.Int)],
     result: Types.Type.Int,
     rule: Model.Rule.Plain,
     implementation: "Int.pow",
     effects: [],
-    description: "n to the power exponent; a negative exponent or an overflow halts.",
+    description: "int to the power exponent; a negative exponent or an overflow halts.",
     alternatives: [],
   ),
   Model.Builtin(
     name: "Int.shift_left",
-    parameters: [Model.Named(name: "a", type: Types.Type.Int), Model.Named(name: "count", type: Types.Type.Int)],
+    parameters: [Model.Named(name: "int", type: Types.Type.Int), Model.Named(name: "count", type: Types.Type.Int)],
     result: Types.Type.Int,
     rule: Model.Rule.Plain,
     implementation: "Int.shift_left",
@@ -1676,7 +1678,7 @@ ROWS_15: List[Model.Builtin] = [
 ROWS_16: List[Model.Builtin] = [
   Model.Builtin(
     name: "Int.shift_right",
-    parameters: [Model.Named(name: "a", type: Types.Type.Int), Model.Named(name: "count", type: Types.Type.Int)],
+    parameters: [Model.Named(name: "int", type: Types.Type.Int), Model.Named(name: "count", type: Types.Type.Int)],
     result: Types.Type.Int,
     rule: Model.Rule.Plain,
     implementation: "Int.shift_right",
@@ -1688,7 +1690,7 @@ ROWS_16: List[Model.Builtin] = [
   ),
   Model.Builtin(
     name: "Int.shift_right_unsigned",
-    parameters: [Model.Named(name: "a", type: Types.Type.Int), Model.Named(name: "count", type: Types.Type.Int)],
+    parameters: [Model.Named(name: "int", type: Types.Type.Int), Model.Named(name: "count", type: Types.Type.Int)],
     result: Types.Type.Int,
     rule: Model.Rule.Plain,
     implementation: "Int.shift_right_unsigned",
@@ -1699,14 +1701,14 @@ ROWS_16: List[Model.Builtin] = [
   Model.Builtin(
     name: "Int.times",
     parameters: [
-      Model.Named(name: "n", type: Types.Type.Int),
-      Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Int], Types.Type.Void)),
+      Model.Named(name: "int", type: Types.Type.Int),
+      Model.Named(name: "block", type: Types.Type.Fn([Types.Type.Int], Types.Type.Void)),
     ],
     result: Types.Type.Void,
     rule: Model.Rule.Plain,
     implementation: "Int.times",
     effects: [],
-    description: "Call f with 0 to n - 1; nothing when n <= 0.",
+    description: "Call block with 0 to int - 1; nothing when int <= 0.",
     alternatives: [],
   ),
   Model.Builtin(
@@ -1714,13 +1716,13 @@ ROWS_16: List[Model.Builtin] = [
     parameters: [
       Model.Named(name: "from", type: Types.Type.Int),
       Model.Named(name: "to", type: Types.Type.Int),
-      Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Int], Types.Type.Void)),
+      Model.Named(name: "block", type: Types.Type.Fn([Types.Type.Int], Types.Type.Void)),
     ],
     result: Types.Type.Void,
     rule: Model.Rule.Plain,
     implementation: "Int.upto",
     effects: [],
-    description: "Call f with from up to to; nothing when to < from.",
+    description: "Call block with from up to to; nothing when to < from.",
     alternatives: [],
   ),
 ]
@@ -1738,7 +1740,7 @@ ROWS_17: List[Model.Builtin] = [
   ),
   Model.Builtin(
     name: "JSON.at",
-    parameters: [Model.Named(name: "j", type: Types.Type.Json), Model.Named(name: "index", type: Types.Type.Int)],
+    parameters: [Model.Named(name: "json", type: Types.Type.Json), Model.Named(name: "index", type: Types.Type.Int)],
     result: Types.Type.Result(Types.Type.Json),
     rule: Model.Rule.Plain,
     implementation: "JSON.at",
@@ -1748,7 +1750,7 @@ ROWS_17: List[Model.Builtin] = [
   ),
   Model.Builtin(
     name: "JSON.bool",
-    parameters: [Model.Named(name: "j", type: Types.Type.Json)],
+    parameters: [Model.Named(name: "json", type: Types.Type.Json)],
     result: Types.Type.Result(Types.Type.Bool),
     rule: Model.Rule.Plain,
     implementation: "JSON.bool",
@@ -1760,7 +1762,7 @@ ROWS_17: List[Model.Builtin] = [
     name: "Codec.decode",
     parameters: [
       Model.Named(name: "codec", type: Types.Type.Codec(Types.Type.Var("T"))),
-      Model.Named(name: "s", type: Types.Type.String),
+      Model.Named(name: "text", type: Types.Type.String),
     ],
     result: Types.Type.Result(Types.Type.Var("T")),
     rule: Model.Rule.CodecDecode,
@@ -1822,7 +1824,7 @@ ROWS_17: List[Model.Builtin] = [
   Model.Builtin(
     name: "JSON.decode",
     parameters: [
-      Model.Named(name: "s", type: Types.Type.String),
+      Model.Named(name: "text", type: Types.Type.String),
       Model.Named(name: "type", type: Types.Type.Var("T")),
     ],
     result: Types.Type.Result(Types.Type.Var("T")),
@@ -1861,7 +1863,7 @@ ROWS_17: List[Model.Builtin] = [
 ROWS_18: List[Model.Builtin] = [
   Model.Builtin(
     name: "JSON.float",
-    parameters: [Model.Named(name: "j", type: Types.Type.Json)],
+    parameters: [Model.Named(name: "json", type: Types.Type.Json)],
     result: Types.Type.Result(Types.Type.Float),
     rule: Model.Rule.Plain,
     implementation: "JSON.float",
@@ -1881,7 +1883,7 @@ ROWS_18: List[Model.Builtin] = [
   ),
   Model.Builtin(
     name: "JSON.get",
-    parameters: [Model.Named(name: "j", type: Types.Type.Json), Model.Named(name: "key", type: Types.Type.String)],
+    parameters: [Model.Named(name: "json", type: Types.Type.Json), Model.Named(name: "key", type: Types.Type.String)],
     result: Types.Type.Result(Types.Type.Json),
     rule: Model.Rule.Plain,
     implementation: "JSON.get",
@@ -1891,7 +1893,7 @@ ROWS_18: List[Model.Builtin] = [
   ),
   Model.Builtin(
     name: "JSON.int",
-    parameters: [Model.Named(name: "j", type: Types.Type.Json)],
+    parameters: [Model.Named(name: "json", type: Types.Type.Json)],
     result: Types.Type.Result(Types.Type.Int),
     rule: Model.Rule.Plain,
     implementation: "JSON.int",
@@ -1911,7 +1913,7 @@ ROWS_18: List[Model.Builtin] = [
   ),
   Model.Builtin(
     name: "JSON.list",
-    parameters: [Model.Named(name: "j", type: Types.Type.Json)],
+    parameters: [Model.Named(name: "json", type: Types.Type.Json)],
     result: Types.Type.Result(Types.Type.List(Types.Type.Json)),
     rule: Model.Rule.Plain,
     implementation: "JSON.list",
@@ -1954,7 +1956,7 @@ ROWS_19: List[Model.Builtin] = [
   ),
   Model.Builtin(
     name: "JSON.parse",
-    parameters: [Model.Named(name: "s", type: Types.Type.String)],
+    parameters: [Model.Named(name: "text", type: Types.Type.String)],
     result: Types.Type.Result(Types.Type.Json),
     rule: Model.Rule.Plain,
     implementation: "JSON.parse",
@@ -1977,7 +1979,7 @@ ROWS_19: List[Model.Builtin] = [
 ROWS_20: List[Model.Builtin] = [
   Model.Builtin(
     name: "JSON.string",
-    parameters: [Model.Named(name: "j", type: Types.Type.Json)],
+    parameters: [Model.Named(name: "json", type: Types.Type.Json)],
     result: Types.Type.Result(Types.Type.String),
     rule: Model.Rule.Plain,
     implementation: "JSON.string",
@@ -1989,13 +1991,13 @@ ROWS_20: List[Model.Builtin] = [
     name: "Lazy.chunk_while",
     parameters: [
       Model.Named(name: "lazy", type: Types.Type.Lazy(Types.Type.Var("A"))),
-      Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Var("A"), Types.Type.Var("A")], Types.Type.Bool)),
+      Model.Named(name: "block", type: Types.Type.Fn([Types.Type.Var("A"), Types.Type.Var("A")], Types.Type.Bool)),
     ],
     result: Types.Type.Lazy(Types.Type.List(Types.Type.Var("A"))),
     rule: Model.Rule.Prelude,
     implementation: "",
     effects: [],
-    description: "Lazy step: group runs of items, a new group where f(previous, item) is false.",
+    description: "Lazy step: group runs of items, a new group where block(previous, item) is false.",
     alternatives: [],
   ),
   Model.Builtin(
@@ -2032,26 +2034,28 @@ ROWS_20: List[Model.Builtin] = [
     name: "Lazy.drop_while",
     parameters: [
       Model.Named(name: "lazy", type: Types.Type.Lazy(Types.Type.Var("A"))),
-      Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Var("A")], Types.Type.Bool)),
+      Model.Named(name: "block", type: Types.Type.Fn([Types.Type.Var("A")], Types.Type.Bool)),
     ],
     result: Types.Type.Lazy(Types.Type.Var("A")),
     rule: Model.Rule.Prelude,
     implementation: "",
     effects: [],
-    description: "Lazy step: skip items while f is true, then keep the rest.",
+    description: "Lazy step: skip items while block is true, then keep the rest.",
     alternatives: [],
   ),
   Model.Builtin(
     name: "Lazy.each",
     parameters: [
       Model.Named(name: "lazy", type: Types.Type.Lazy(Types.Type.Var("A"))),
-      Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Var("A")], Types.Type.Result(Types.Type.Void))),
+      Model.Named(name: "block", type: Types.Type.Fn([Types.Type.Var("A")], Types.Type.Result(Types.Type.Void))),
     ],
     result: Types.Type.Result(Types.Type.Void),
     rule: Model.Rule.Prelude,
     implementation: "",
     effects: [],
-    description: "Terminal: call f on each item in order; stops at the first error f returns, which is the result.",
+    description: (
+      "Terminal: call block on each item in order; stops at the first error block returns, which is the result."
+    ),
     alternatives: [],
   ),
   Model.Builtin(
@@ -2084,7 +2088,7 @@ ROWS_20: List[Model.Builtin] = [
     name: "Lazy.filter",
     parameters: [
       Model.Named(name: "lazy", type: Types.Type.Lazy(Types.Type.Var("A"))),
-      Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Var("A")], Types.Type.Bool)),
+      Model.Named(name: "block", type: Types.Type.Fn([Types.Type.Var("A")], Types.Type.Bool)),
     ],
     result: Types.Type.Lazy(Types.Type.Var("A")),
     rule: Model.Rule.Prelude,
@@ -2097,13 +2101,13 @@ ROWS_20: List[Model.Builtin] = [
     name: "Lazy.find",
     parameters: [
       Model.Named(name: "lazy", type: Types.Type.Lazy(Types.Type.Var("A"))),
-      Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Var("A")], Types.Type.Bool)),
+      Model.Named(name: "block", type: Types.Type.Fn([Types.Type.Var("A")], Types.Type.Bool)),
     ],
     result: Types.Type.Result(Types.Type.Var("A")),
     rule: Model.Rule.Prelude,
     implementation: "",
     effects: [],
-    description: "Terminal: the first item f accepts, else error(\"not found\") when the source ends.",
+    description: "Terminal: the first item block accepts, else error(\"not found\") when the source ends.",
     alternatives: [],
   ),
   Model.Builtin(
@@ -2123,13 +2127,13 @@ ROWS_20: List[Model.Builtin] = [
     name: "Lazy.flat_map",
     parameters: [
       Model.Named(name: "lazy", type: Types.Type.Lazy(Types.Type.Var("A"))),
-      Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Var("A")], Types.Type.List(Types.Type.Var("B")))),
+      Model.Named(name: "block", type: Types.Type.Fn([Types.Type.Var("A")], Types.Type.List(Types.Type.Var("B")))),
     ],
     result: Types.Type.Lazy(Types.Type.Var("B")),
     rule: Model.Rule.Prelude,
     implementation: "",
     effects: [],
-    description: "Lazy step: the items of the lists f returns, in order.",
+    description: "Lazy step: the items of the lists block returns, in order.",
     alternatives: [],
   ),
   Model.Builtin(
@@ -2184,26 +2188,28 @@ ROWS_20: List[Model.Builtin] = [
     name: "Lazy.map",
     parameters: [
       Model.Named(name: "lazy", type: Types.Type.Lazy(Types.Type.Var("A"))),
-      Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Var("A")], Types.Type.Var("B"))),
+      Model.Named(name: "block", type: Types.Type.Fn([Types.Type.Var("A")], Types.Type.Var("B"))),
     ],
     result: Types.Type.Lazy(Types.Type.Var("B")),
     rule: Model.Rule.Prelude,
     implementation: "",
     effects: [],
-    description: "Lazy step: f applied to each item.",
+    description: "Lazy step: block applied to each item.",
     alternatives: [],
   ),
   Model.Builtin(
     name: "Lazy.produce",
     parameters: [
       Model.Named(name: "seed", type: Types.Type.Var("A")),
-      Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Var("A")], Types.Type.Var("A"))),
+      Model.Named(name: "block", type: Types.Type.Fn([Types.Type.Var("A")], Types.Type.Var("A"))),
     ],
     result: Types.Type.Lazy(Types.Type.Var("A")),
     rule: Model.Rule.Prelude,
     implementation: "",
     effects: [],
-    description: "Endless source: seed, f(seed), f(f(seed)) ...; end it with take, take_while, first or find.",
+    description: (
+      "Endless source: seed, block(seed), block(block(seed)) ...; end it with take, take_while, first or find."
+    ),
     alternatives: [],
   ),
   Model.Builtin(
@@ -2211,7 +2217,7 @@ ROWS_20: List[Model.Builtin] = [
     parameters: [
       Model.Named(name: "lazy", type: Types.Type.Lazy(Types.Type.Var("A"))),
       Model.Named(name: "initial", type: Types.Type.Var("B")),
-      Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Var("B"), Types.Type.Var("A")], Types.Type.Var("B"))),
+      Model.Named(name: "block", type: Types.Type.Fn([Types.Type.Var("B"), Types.Type.Var("A")], Types.Type.Var("B"))),
     ],
     result: Types.Type.Result(Types.Type.Var("B")),
     rule: Model.Rule.Prelude,
@@ -2237,13 +2243,13 @@ ROWS_20: List[Model.Builtin] = [
     name: "Lazy.take_while",
     parameters: [
       Model.Named(name: "lazy", type: Types.Type.Lazy(Types.Type.Var("A"))),
-      Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Var("A")], Types.Type.Bool)),
+      Model.Named(name: "block", type: Types.Type.Fn([Types.Type.Var("A")], Types.Type.Bool)),
     ],
     result: Types.Type.Lazy(Types.Type.Var("A")),
     rule: Model.Rule.Prelude,
     implementation: "",
     effects: [],
-    description: "Lazy step: items while f is true; stops at the first false.",
+    description: "Lazy step: items while block is true; stops at the first false.",
     alternatives: [],
   ),
   Model.Builtin(
@@ -2260,13 +2266,13 @@ ROWS_20: List[Model.Builtin] = [
     name: "Lazy.with_index",
     parameters: [
       Model.Named(name: "lazy", type: Types.Type.Lazy(Types.Type.Var("A"))),
-      Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Var("A"), Types.Type.Int], Types.Type.Var("B"))),
+      Model.Named(name: "block", type: Types.Type.Fn([Types.Type.Var("A"), Types.Type.Int], Types.Type.Var("B"))),
     ],
     result: Types.Type.Lazy(Types.Type.Var("B")),
     rule: Model.Rule.Prelude,
     implementation: "",
     effects: [],
-    description: "Lazy step: f(item, index) for each item, the index from 0.",
+    description: "Lazy step: block(item, index) for each item, the index from 0.",
     alternatives: [],
   ),
   Model.Builtin(
@@ -2308,26 +2314,26 @@ ROWS_20: List[Model.Builtin] = [
     name: "List.all?",
     parameters: [
       Model.Named(name: "list", type: Types.Type.List(Types.Type.Var("A"))),
-      Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Var("A")], Types.Type.Bool)),
+      Model.Named(name: "block", type: Types.Type.Fn([Types.Type.Var("A")], Types.Type.Bool)),
     ],
     result: Types.Type.Bool,
     rule: Model.Rule.ListAll,
     implementation: "List.all?",
     effects: [],
-    description: "True when f is true for every element; stops at the first false.",
+    description: "True when block is true for every element; stops at the first false.",
     alternatives: [],
   ),
   Model.Builtin(
     name: "List.any?",
     parameters: [
       Model.Named(name: "list", type: Types.Type.List(Types.Type.Var("A"))),
-      Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Var("A")], Types.Type.Bool)),
+      Model.Named(name: "block", type: Types.Type.Fn([Types.Type.Var("A")], Types.Type.Bool)),
     ],
     result: Types.Type.Bool,
     rule: Model.Rule.ListAny,
     implementation: "List.any?",
     effects: [],
-    description: "True when f is true for some element; stops at the first true.",
+    description: "True when block is true for some element; stops at the first true.",
     alternatives: [],
   ),
   Model.Builtin(
@@ -2362,16 +2368,16 @@ ROWS_21: List[Model.Builtin] = [
   Model.Builtin(
     name: "List.concat",
     parameters: [
-      Model.Named(name: "a", type: Types.Type.List(Types.Type.Var("T"))),
-      Model.Named(name: "b", type: Types.Type.List(Types.Type.Var("T"))),
+      Model.Named(name: "list", type: Types.Type.List(Types.Type.Var("T"))),
+      Model.Named(name: "other", type: Types.Type.List(Types.Type.Var("T"))),
     ],
     result: Types.Type.List(Types.Type.Var("T")),
     rule: Model.Rule.ListConcat,
     implementation: "List.concat",
     effects: [],
     description: (
-      "Concatenate two lists without changing either; O(length of b) when b has at most 32 items, else O(length " +
-      "of a + b)."
+      "Concatenate two lists without changing either; O(length of other) when other has at most 32 items, else " +
+      "O(length of list + other)."
     ),
     alternatives: [],
   ),
@@ -2392,26 +2398,28 @@ ROWS_21: List[Model.Builtin] = [
     name: "List.drop_while",
     parameters: [
       Model.Named(name: "list", type: Types.Type.List(Types.Type.Var("A"))),
-      Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Var("A")], Types.Type.Bool)),
+      Model.Named(name: "block", type: Types.Type.Fn([Types.Type.Var("A")], Types.Type.Bool)),
     ],
     result: Types.Type.List(Types.Type.Var("A")),
     rule: Model.Rule.Prelude,
     implementation: "",
     effects: [],
-    description: "Drop elements while f is true, then keep the rest; f stops being called at the first false; O(n).",
+    description: (
+      "Drop elements while block is true, then keep the rest; block stops being called at the first false; O(n)."
+    ),
     alternatives: [],
   ),
   Model.Builtin(
     name: "List.each",
     parameters: [
       Model.Named(name: "list", type: Types.Type.List(Types.Type.Var("A"))),
-      Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Var("A")], Types.Type.Void)),
+      Model.Named(name: "block", type: Types.Type.Fn([Types.Type.Var("A")], Types.Type.Void)),
     ],
     result: Types.Type.Void,
     rule: Model.Rule.ListEach,
     implementation: "List.each",
     effects: [],
-    description: "Call f on each element in order; returns nothing.",
+    description: "Call block on each element in order; returns nothing.",
     alternatives: [],
   ),
   Model.Builtin(
@@ -2431,13 +2439,13 @@ ROWS_21: List[Model.Builtin] = [
     name: "List.each_with_index",
     parameters: [
       Model.Named(name: "list", type: Types.Type.List(Types.Type.Var("A"))),
-      Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Var("A"), Types.Type.Int], Types.Type.Void)),
+      Model.Named(name: "block", type: Types.Type.Fn([Types.Type.Var("A"), Types.Type.Int], Types.Type.Void)),
     ],
     result: Types.Type.Void,
     rule: Model.Rule.Prelude,
     implementation: "",
     effects: [],
-    description: "Call f(element, index) in order, the index from 0; returns nothing.",
+    description: "Call block(element, index) in order, the index from 0; returns nothing.",
     alternatives: [],
   ),
 ]
@@ -2457,7 +2465,7 @@ ROWS_22: List[Model.Builtin] = [
     name: "List.filter",
     parameters: [
       Model.Named(name: "list", type: Types.Type.List(Types.Type.Var("A"))),
-      Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Var("A")], Types.Type.Bool)),
+      Model.Named(name: "block", type: Types.Type.Fn([Types.Type.Var("A")], Types.Type.Bool)),
     ],
     result: Types.Type.List(Types.Type.Var("A")),
     rule: Model.Rule.ListFilter,
@@ -2470,14 +2478,14 @@ ROWS_22: List[Model.Builtin] = [
     name: "List.find",
     parameters: [
       Model.Named(name: "list", type: Types.Type.List(Types.Type.Var("A"))),
-      Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Var("A")], Types.Type.Bool)),
+      Model.Named(name: "block", type: Types.Type.Fn([Types.Type.Var("A")], Types.Type.Bool)),
     ],
     result: Types.Type.Result(Types.Type.Var("A")),
     rule: Model.Rule.Prelude,
     implementation: "",
     effects: [],
     description: (
-      "The first element f accepts, else error(\"not found\"); f stops being called at the first " +
+      "The first element block accepts, else error(\"not found\"); block stops being called at the first " +
       "true; O(n)."
     ),
     alternatives: [],
@@ -2486,13 +2494,15 @@ ROWS_22: List[Model.Builtin] = [
     name: "List.find_index",
     parameters: [
       Model.Named(name: "list", type: Types.Type.List(Types.Type.Var("A"))),
-      Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Var("A")], Types.Type.Bool)),
+      Model.Named(name: "block", type: Types.Type.Fn([Types.Type.Var("A")], Types.Type.Bool)),
     ],
     result: Types.Type.Optional(Types.Type.Int),
     rule: Model.Rule.Prelude,
     implementation: "",
     effects: [],
-    description: "The index of the first element f accepts, else none; f stops being called at the first true; O(n).",
+    description: (
+      "The index of the first element block accepts, else none; block stops being called at the first true; O(n)."
+    ),
     alternatives: [],
   ),
   Model.Builtin(
@@ -2509,13 +2519,13 @@ ROWS_22: List[Model.Builtin] = [
     name: "List.flat_map",
     parameters: [
       Model.Named(name: "list", type: Types.Type.List(Types.Type.Var("A"))),
-      Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Var("A")], Types.Type.List(Types.Type.Var("B")))),
+      Model.Named(name: "block", type: Types.Type.Fn([Types.Type.Var("A")], Types.Type.List(Types.Type.Var("B")))),
     ],
     result: Types.Type.List(Types.Type.Var("B")),
     rule: Model.Rule.Prelude,
     implementation: "",
     effects: [],
-    description: "Concatenate the lists f returns for each element, in order; O(total).",
+    description: "Concatenate the lists block returns for each element, in order; O(total).",
     alternatives: [],
   ),
   Model.Builtin(
@@ -2584,7 +2594,7 @@ ROWS_22: List[Model.Builtin] = [
     name: "List.map",
     parameters: [
       Model.Named(name: "list", type: Types.Type.List(Types.Type.Var("A"))),
-      Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Var("A")], Types.Type.Var("B"))),
+      Model.Named(name: "block", type: Types.Type.Fn([Types.Type.Var("A")], Types.Type.Var("B"))),
     ],
     result: Types.Type.List(Types.Type.Var("B")),
     rule: Model.Rule.ListMap,
@@ -2649,13 +2659,13 @@ ROWS_22: List[Model.Builtin] = [
     name: "List.partition",
     parameters: [
       Model.Named(name: "list", type: Types.Type.List(Types.Type.Var("A"))),
-      Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Var("A")], Types.Type.Bool)),
+      Model.Named(name: "block", type: Types.Type.Fn([Types.Type.Var("A")], Types.Type.Bool)),
     ],
     result: Types.Type.List(Types.Type.List(Types.Type.Var("A"))),
     rule: Model.Rule.Prelude,
     implementation: "",
     effects: [],
-    description: "Two lists, [accepted, rejected], each in order; f is called once per element; O(n).",
+    description: "Two lists, [accepted, rejected], each in order; block is called once per element; O(n).",
     alternatives: [],
   ),
   Model.Builtin(
@@ -2663,13 +2673,13 @@ ROWS_22: List[Model.Builtin] = [
     parameters: [
       Model.Named(name: "list", type: Types.Type.List(Types.Type.Var("A"))),
       Model.Named(name: "initial", type: Types.Type.Var("B")),
-      Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Var("B"), Types.Type.Var("A")], Types.Type.Var("B"))),
+      Model.Named(name: "block", type: Types.Type.Fn([Types.Type.Var("B"), Types.Type.Var("A")], Types.Type.Var("B"))),
     ],
     result: Types.Type.Var("B"),
     rule: Model.Rule.ListReduce,
     implementation: "List.reduce",
     effects: [],
-    description: "Fold left with f(accumulator, item); empty lists return initial; O(n).",
+    description: "Fold left with block(accumulator, item); empty lists return initial; O(n).",
     alternatives: [],
   ),
   Model.Builtin(
@@ -2775,13 +2785,13 @@ ROWS_24: List[Model.Builtin] = [
     name: "List.take_while",
     parameters: [
       Model.Named(name: "list", type: Types.Type.List(Types.Type.Var("A"))),
-      Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Var("A")], Types.Type.Bool)),
+      Model.Named(name: "block", type: Types.Type.Fn([Types.Type.Var("A")], Types.Type.Bool)),
     ],
     result: Types.Type.List(Types.Type.Var("A")),
     rule: Model.Rule.Prelude,
     implementation: "",
     effects: [],
-    description: "Keep elements while f is true; f stops being called at the first false; O(n).",
+    description: "Keep elements while block is true; block stops being called at the first false; O(n).",
     alternatives: [],
   ),
   Model.Builtin(
@@ -2939,13 +2949,13 @@ ROWS_26: List[Model.Builtin] = [
     name: "Map.each",
     parameters: [
       Model.Named(name: "map", type: Types.Type.Map(Types.Type.Var("K"), Types.Type.Var("V"))),
-      Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Var("K"), Types.Type.Var("V")], Types.Type.Void)),
+      Model.Named(name: "block", type: Types.Type.Fn([Types.Type.Var("K"), Types.Type.Var("V")], Types.Type.Void)),
     ],
     result: Types.Type.Void,
     rule: Model.Rule.Prelude,
     implementation: "",
     effects: [],
-    description: "Call f(key, value) for each entry in insertion order; returns nothing.",
+    description: "Call block(key, value) for each entry in insertion order; returns nothing.",
     alternatives: [],
   ),
   Model.Builtin(
@@ -2962,13 +2972,13 @@ ROWS_26: List[Model.Builtin] = [
     name: "Map.filter",
     parameters: [
       Model.Named(name: "map", type: Types.Type.Map(Types.Type.Var("K"), Types.Type.Var("V"))),
-      Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Var("K"), Types.Type.Var("V")], Types.Type.Bool)),
+      Model.Named(name: "block", type: Types.Type.Fn([Types.Type.Var("K"), Types.Type.Var("V")], Types.Type.Bool)),
     ],
     result: Types.Type.Map(Types.Type.Var("K"), Types.Type.Var("V")),
     rule: Model.Rule.Prelude,
     implementation: "",
     effects: [],
-    description: "Keep the entries f accepts, in insertion order; O(n).",
+    description: "Keep the entries block accepts, in insertion order; O(n).",
     alternatives: [],
   ),
 ]
@@ -3066,12 +3076,12 @@ ROWS_28: List[Model.Builtin] = [
   ),
   Model.Builtin(
     name: "Math.sqrt",
-    parameters: [Model.Named(name: "x", type: Types.Type.Float)],
+    parameters: [Model.Named(name: "float", type: Types.Type.Float)],
     result: Types.Type.Float,
     rule: Model.Rule.Plain,
     implementation: "Math.sqrt",
     effects: [],
-    description: "The square root; a negative x halts; -0.0 gives -0.0 and NaN stays NaN.",
+    description: "The square root; a negative float halts; -0.0 gives -0.0 and NaN stays NaN.",
     alternatives: [],
   ),
   Model.Builtin(
@@ -3848,7 +3858,7 @@ ROWS_28: List[Model.Builtin] = [
   ),
   Model.Builtin(
     name: "Path.join",
-    parameters: [Model.Named(name: "parts", type: Types.Type.List(Types.Type.String))],
+    parameters: [Model.Named(name: "list", type: Types.Type.List(Types.Type.String))],
     result: Types.Type.Result(Types.Type.String),
     rule: Model.Rule.Plain,
     implementation: "Path.join",
@@ -3918,7 +3928,7 @@ ROWS_30: List[Model.Builtin] = [
   Model.Builtin(
     name: "Process.channel_close",
     parameters: [
-      Model.Named(name: "p", type: Types.Type.Opaque("Process")),
+      Model.Named(name: "process", type: Types.Type.Opaque("Process")),
       Model.Named(name: "timeout_ms", type: Types.Type.Int),
     ],
     result: Types.Type.Result(Types.Type.Void),
@@ -3931,7 +3941,7 @@ ROWS_30: List[Model.Builtin] = [
   Model.Builtin(
     name: "Process.channel_read_line",
     parameters: [
-      Model.Named(name: "p", type: Types.Type.Opaque("Process")),
+      Model.Named(name: "process", type: Types.Type.Opaque("Process")),
       Model.Named(name: "timeout_ms", type: Types.Type.Int),
     ],
     result: Types.Type.Result(Types.Type.String),
@@ -3944,7 +3954,7 @@ ROWS_30: List[Model.Builtin] = [
   Model.Builtin(
     name: "Process.channel_send",
     parameters: [
-      Model.Named(name: "p", type: Types.Type.Opaque("Process")),
+      Model.Named(name: "process", type: Types.Type.Opaque("Process")),
       Model.Named(name: "text", type: Types.Type.String),
       Model.Named(name: "timeout_ms", type: Types.Type.Int),
     ],
@@ -3957,7 +3967,7 @@ ROWS_30: List[Model.Builtin] = [
   ),
   Model.Builtin(
     name: "Process.close",
-    parameters: [Model.Named(name: "p", type: Types.Type.Opaque("Process"))],
+    parameters: [Model.Named(name: "process", type: Types.Type.Opaque("Process"))],
     result: Types.Type.Void,
     rule: Model.Rule.Plain,
     implementation: "Process.close",
@@ -3971,7 +3981,7 @@ ROWS_31: List[Model.Builtin] = [
   Model.Builtin(
     name: "Process.close_stdin",
     parameters: [
-      Model.Named(name: "p", type: Types.Type.Opaque("Process")),
+      Model.Named(name: "process", type: Types.Type.Opaque("Process")),
       Model.Named(name: "timeout_ms", type: Types.Type.Int),
     ],
     result: Types.Type.Result(Types.Type.Void),
@@ -3984,7 +3994,7 @@ ROWS_31: List[Model.Builtin] = [
   Model.Builtin(
     name: "Process.output",
     parameters: [
-      Model.Named(name: "p", type: Types.Type.Opaque("Process")),
+      Model.Named(name: "process", type: Types.Type.Opaque("Process")),
       Model.Named(name: "timeout_ms", type: Types.Type.Int),
     ],
     result: Types.Type.Result(Types.Type.Struct("Process.Output", [])),
@@ -4025,7 +4035,7 @@ ROWS_32: List[Model.Builtin] = [
   Model.Builtin(
     name: "Process.read_available",
     parameters: [
-      Model.Named(name: "p", type: Types.Type.Opaque("Process")),
+      Model.Named(name: "process", type: Types.Type.Opaque("Process")),
       Model.Named(name: "timeout_ms", type: Types.Type.Int),
     ],
     result: Types.Type.Result(Types.Type.String),
@@ -4041,7 +4051,7 @@ ROWS_32: List[Model.Builtin] = [
   Model.Builtin(
     name: "Process.read_bytes",
     parameters: [
-      Model.Named(name: "p", type: Types.Type.Opaque("Process")),
+      Model.Named(name: "process", type: Types.Type.Opaque("Process")),
       Model.Named(name: "count", type: Types.Type.Int),
       Model.Named(name: "timeout_ms", type: Types.Type.Int),
     ],
@@ -4055,7 +4065,7 @@ ROWS_32: List[Model.Builtin] = [
   Model.Builtin(
     name: "Process.read_line",
     parameters: [
-      Model.Named(name: "p", type: Types.Type.Opaque("Process")),
+      Model.Named(name: "process", type: Types.Type.Opaque("Process")),
       Model.Named(name: "timeout_ms", type: Types.Type.Int),
     ],
     result: Types.Type.Result(Types.Type.String),
@@ -4071,7 +4081,7 @@ ROWS_33: List[Model.Builtin] = [
   Model.Builtin(
     name: "Process.send",
     parameters: [
-      Model.Named(name: "p", type: Types.Type.Opaque("Process")),
+      Model.Named(name: "process", type: Types.Type.Opaque("Process")),
       Model.Named(name: "text", type: Types.Type.String),
       Model.Named(name: "timeout_ms", type: Types.Type.Int),
     ],
@@ -4085,7 +4095,7 @@ ROWS_33: List[Model.Builtin] = [
   Model.Builtin(
     name: "Process.send_bytes",
     parameters: [
-      Model.Named(name: "p", type: Types.Type.Opaque("Process")),
+      Model.Named(name: "process", type: Types.Type.Opaque("Process")),
       Model.Named(name: "bytes", type: Types.Type.Bytes),
       Model.Named(name: "timeout_ms", type: Types.Type.Int),
     ],
@@ -4165,7 +4175,7 @@ ROWS_34: List[Model.Builtin] = [
   Model.Builtin(
     name: "Process.wait",
     parameters: [
-      Model.Named(name: "p", type: Types.Type.Opaque("Process")),
+      Model.Named(name: "process", type: Types.Type.Opaque("Process")),
       Model.Named(name: "timeout_ms", type: Types.Type.Int),
     ],
     result: Types.Type.Result(Types.Type.Int),
@@ -4259,13 +4269,13 @@ ROWS_35: List[Model.Builtin] = [
     name: "Range.each",
     parameters: [
       Model.Named(name: "range", type: Types.Type.Range),
-      Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Int], Types.Type.Void)),
+      Model.Named(name: "block", type: Types.Type.Fn([Types.Type.Int], Types.Type.Void)),
     ],
     result: Types.Type.Void,
     rule: Model.Rule.Plain,
     implementation: "Range.each",
     effects: [],
-    description: "Call f on each value in order; returns nothing.",
+    description: "Call block on each value in order; returns nothing.",
     alternatives: [],
   ),
   Model.Builtin(
@@ -4334,7 +4344,7 @@ ROWS_36: List[Model.Builtin] = [
   Model.Builtin(
     name: "Error.is_a?",
     parameters: [
-      Model.Named(name: "e", type: Types.Type.Struct("Error", [])),
+      Model.Named(name: "error", type: Types.Type.Struct("Error", [])),
       Model.Named(name: "family", type: Types.Type.String),
     ],
     result: Types.Type.Bool,
@@ -4346,7 +4356,7 @@ ROWS_36: List[Model.Builtin] = [
   ),
   Model.Builtin(
     name: "Result.message",
-    parameters: [Model.Named(name: "r", type: Types.Type.Result(Types.Type.Var("T")))],
+    parameters: [Model.Named(name: "result", type: Types.Type.Result(Types.Type.Var("T")))],
     result: Types.Type.String,
     rule: Model.Rule.ResultMessage,
     implementation: "Result.message",
@@ -4356,7 +4366,7 @@ ROWS_36: List[Model.Builtin] = [
   ),
   Model.Builtin(
     name: "Result.ok?",
-    parameters: [Model.Named(name: "r", type: Types.Type.Result(Types.Type.Var("T")))],
+    parameters: [Model.Named(name: "result", type: Types.Type.Result(Types.Type.Var("T")))],
     result: Types.Type.Bool,
     rule: Model.Rule.ResultOk,
     implementation: "Result.ok?",
@@ -4369,7 +4379,7 @@ ROWS_36: List[Model.Builtin] = [
 ROWS_37: List[Model.Builtin] = [
   Model.Builtin(
     name: "Result.unwrap!",
-    parameters: [Model.Named(name: "r", type: Types.Type.Result(Types.Type.Var("T")))],
+    parameters: [Model.Named(name: "result", type: Types.Type.Result(Types.Type.Var("T")))],
     result: Types.Type.Var("T"),
     rule: Model.Rule.ResultUnwrap,
     implementation: "Result.unwrap!",
@@ -4380,7 +4390,7 @@ ROWS_37: List[Model.Builtin] = [
   Model.Builtin(
     name: "Result.unwrap_or",
     parameters: [
-      Model.Named(name: "r", type: Types.Type.Result(Types.Type.Var("T"))),
+      Model.Named(name: "result", type: Types.Type.Result(Types.Type.Var("T"))),
       Model.Named(name: "default", type: Types.Type.Var("T")),
     ],
     result: Types.Type.Var("T"),
@@ -4422,14 +4432,14 @@ ROWS_38: List[Model.Builtin] = [
   Model.Builtin(
     name: "Set.difference",
     parameters: [
-      Model.Named(name: "a", type: Types.Type.Set(Types.Type.Var("T"))),
-      Model.Named(name: "b", type: Types.Type.Set(Types.Type.Var("T"))),
+      Model.Named(name: "set", type: Types.Type.Set(Types.Type.Var("T"))),
+      Model.Named(name: "other", type: Types.Type.Set(Types.Type.Var("T"))),
     ],
     result: Types.Type.Set(Types.Type.Var("T")),
     rule: Model.Rule.SetCombine,
     implementation: "Set.difference",
     effects: [],
-    description: "Return the elements of a that are not in b, in the order of a.",
+    description: "Return the elements of set that are not in other, in the order of set.",
     alternatives: [],
   ),
   Model.Builtin(
@@ -4458,14 +4468,14 @@ ROWS_38: List[Model.Builtin] = [
   Model.Builtin(
     name: "Set.intersection",
     parameters: [
-      Model.Named(name: "a", type: Types.Type.Set(Types.Type.Var("T"))),
-      Model.Named(name: "b", type: Types.Type.Set(Types.Type.Var("T"))),
+      Model.Named(name: "set", type: Types.Type.Set(Types.Type.Var("T"))),
+      Model.Named(name: "other", type: Types.Type.Set(Types.Type.Var("T"))),
     ],
     result: Types.Type.Set(Types.Type.Var("T")),
     rule: Model.Rule.SetCombine,
     implementation: "Set.intersection",
     effects: [],
-    description: "Return the elements of a that are also in b, in the order of a.",
+    description: "Return the elements of set that are also in other, in the order of set.",
     alternatives: [],
   ),
 ]
@@ -4497,14 +4507,14 @@ ROWS_39: List[Model.Builtin] = [
   Model.Builtin(
     name: "Set.subset?",
     parameters: [
-      Model.Named(name: "a", type: Types.Type.Set(Types.Type.Var("T"))),
-      Model.Named(name: "b", type: Types.Type.Set(Types.Type.Var("T"))),
+      Model.Named(name: "set", type: Types.Type.Set(Types.Type.Var("T"))),
+      Model.Named(name: "other", type: Types.Type.Set(Types.Type.Var("T"))),
     ],
     result: Types.Type.Bool,
     rule: Model.Rule.SetSubset,
     implementation: "Set.subset?",
     effects: [],
-    description: "Check whether every element of a is in b.",
+    description: "Check whether every element of set is in other.",
     alternatives: [],
   ),
   Model.Builtin(
@@ -4523,14 +4533,14 @@ ROWS_40: List[Model.Builtin] = [
   Model.Builtin(
     name: "Set.union",
     parameters: [
-      Model.Named(name: "a", type: Types.Type.Set(Types.Type.Var("T"))),
-      Model.Named(name: "b", type: Types.Type.Set(Types.Type.Var("T"))),
+      Model.Named(name: "set", type: Types.Type.Set(Types.Type.Var("T"))),
+      Model.Named(name: "other", type: Types.Type.Set(Types.Type.Var("T"))),
     ],
     result: Types.Type.Set(Types.Type.Var("T")),
     rule: Model.Rule.SetCombine,
     implementation: "Set.union",
     effects: [],
-    description: "Return the elements of a, then the elements of b that a lacks.",
+    description: "Return the elements of set, then the elements of other that set lacks.",
     alternatives: [],
   ),
   Model.Builtin(
@@ -4548,7 +4558,10 @@ ROWS_40: List[Model.Builtin] = [
   ),
   Model.Builtin(
     name: "String.at",
-    parameters: [Model.Named(name: "s", type: Types.Type.String), Model.Named(name: "index", type: Types.Type.Int)],
+    parameters: [
+      Model.Named(name: "string", type: Types.Type.String),
+      Model.Named(name: "index", type: Types.Type.Int),
+    ],
     result: Types.Type.String,
     rule: Model.Rule.Plain,
     implementation: "String.at",
@@ -4558,7 +4571,7 @@ ROWS_40: List[Model.Builtin] = [
   ),
   Model.Builtin(
     name: "String.bytesize",
-    parameters: [Model.Named(name: "s", type: Types.Type.String)],
+    parameters: [Model.Named(name: "string", type: Types.Type.String)],
     result: Types.Type.Int,
     rule: Model.Rule.Plain,
     implementation: "String.bytesize",
@@ -4568,7 +4581,7 @@ ROWS_40: List[Model.Builtin] = [
   ),
   Model.Builtin(
     name: "String.code",
-    parameters: [Model.Named(name: "c", type: Types.Type.String)],
+    parameters: [Model.Named(name: "string", type: Types.Type.String)],
     result: Types.Type.Int,
     rule: Model.Rule.Plain,
     implementation: "String.code",
@@ -4578,7 +4591,10 @@ ROWS_40: List[Model.Builtin] = [
   ),
   Model.Builtin(
     name: "String.compare",
-    parameters: [Model.Named(name: "a", type: Types.Type.String), Model.Named(name: "b", type: Types.Type.String)],
+    parameters: [
+      Model.Named(name: "string", type: Types.Type.String),
+      Model.Named(name: "other", type: Types.Type.String),
+    ],
     result: Types.Type.Int,
     rule: Model.Rule.Plain,
     implementation: "String.compare",
@@ -4588,7 +4604,10 @@ ROWS_40: List[Model.Builtin] = [
   ),
   Model.Builtin(
     name: "String.include?",
-    parameters: [Model.Named(name: "s", type: Types.Type.String), Model.Named(name: "part", type: Types.Type.String)],
+    parameters: [
+      Model.Named(name: "string", type: Types.Type.String),
+      Model.Named(name: "part", type: Types.Type.String),
+    ],
     result: Types.Type.Bool,
     rule: Model.Rule.Plain,
     implementation: "String.contains?",
@@ -4601,7 +4620,7 @@ ROWS_40: List[Model.Builtin] = [
 ROWS_41: List[Model.Builtin] = [
   Model.Builtin(
     name: "String.downcase",
-    parameters: [Model.Named(name: "s", type: Types.Type.String)],
+    parameters: [Model.Named(name: "string", type: Types.Type.String)],
     result: Types.Type.String,
     rule: Model.Rule.Plain,
     implementation: "String.downcase",
@@ -4611,7 +4630,7 @@ ROWS_41: List[Model.Builtin] = [
   ),
   Model.Builtin(
     name: "String.empty?",
-    parameters: [Model.Named(name: "s", type: Types.Type.String)],
+    parameters: [Model.Named(name: "string", type: Types.Type.String)],
     result: Types.Type.Bool,
     rule: Model.Rule.Prelude,
     implementation: "",
@@ -4622,7 +4641,7 @@ ROWS_41: List[Model.Builtin] = [
   Model.Builtin(
     name: "String.end_with?",
     parameters: [
-      Model.Named(name: "s", type: Types.Type.String),
+      Model.Named(name: "string", type: Types.Type.String),
       Model.Named(name: "suffix", type: Types.Type.String),
     ],
     result: Types.Type.Bool,
@@ -4644,7 +4663,7 @@ ROWS_41: List[Model.Builtin] = [
   ),
   Model.Builtin(
     name: "String.from_code",
-    parameters: [Model.Named(name: "n", type: Types.Type.Int)],
+    parameters: [Model.Named(name: "code", type: Types.Type.Int)],
     result: Types.Type.String,
     rule: Model.Rule.Plain,
     implementation: "String.from_code",
@@ -4654,7 +4673,7 @@ ROWS_41: List[Model.Builtin] = [
   ),
   Model.Builtin(
     name: "Float.to_s",
-    parameters: [Model.Named(name: "x", type: Types.Type.Float)],
+    parameters: [Model.Named(name: "float", type: Types.Type.Float)],
     result: Types.Type.String,
     rule: Model.Rule.Plain,
     implementation: "String.from_float",
@@ -4667,7 +4686,7 @@ ROWS_41: List[Model.Builtin] = [
 ROWS_42: List[Model.Builtin] = [
   Model.Builtin(
     name: "Int.to_s",
-    parameters: [Model.Named(name: "n", type: Types.Type.Int)],
+    parameters: [Model.Named(name: "int", type: Types.Type.Int)],
     result: Types.Type.String,
     rule: Model.Rule.Plain,
     implementation: "String.from_int",
@@ -4677,7 +4696,10 @@ ROWS_42: List[Model.Builtin] = [
   ),
   Model.Builtin(
     name: "String.index_of",
-    parameters: [Model.Named(name: "s", type: Types.Type.String), Model.Named(name: "part", type: Types.Type.String)],
+    parameters: [
+      Model.Named(name: "string", type: Types.Type.String),
+      Model.Named(name: "part", type: Types.Type.String),
+    ],
     result: Types.Type.Optional(Types.Type.Int),
     rule: Model.Rule.Plain,
     implementation: "String.index_of.optional",
@@ -4688,7 +4710,7 @@ ROWS_42: List[Model.Builtin] = [
   Model.Builtin(
     name: "List.join",
     parameters: [
-      Model.Named(name: "parts", type: Types.Type.List(Types.Type.String)),
+      Model.Named(name: "list", type: Types.Type.List(Types.Type.String)),
       Model.Named(name: "separator", type: Types.Type.String),
     ],
     result: Types.Type.String,
@@ -4700,7 +4722,7 @@ ROWS_42: List[Model.Builtin] = [
   ),
   Model.Builtin(
     name: "String.length",
-    parameters: [Model.Named(name: "s", type: Types.Type.String)],
+    parameters: [Model.Named(name: "string", type: Types.Type.String)],
     result: Types.Type.Int,
     rule: Model.Rule.Plain,
     implementation: "String.length",
@@ -4714,7 +4736,7 @@ ROWS_43: List[Model.Builtin] = [
   Model.Builtin(
     name: "String.replace",
     parameters: [
-      Model.Named(name: "s", type: Types.Type.String),
+      Model.Named(name: "string", type: Types.Type.String),
       Model.Named(name: "from", type: Types.Type.String),
       Model.Named(name: "to", type: Types.Type.String),
     ],
@@ -4727,7 +4749,7 @@ ROWS_43: List[Model.Builtin] = [
   ),
   Model.Builtin(
     name: "String.reverse",
-    parameters: [Model.Named(name: "s", type: Types.Type.String)],
+    parameters: [Model.Named(name: "string", type: Types.Type.String)],
     result: Types.Type.String,
     rule: Model.Rule.Plain,
     implementation: "String.reverse",
@@ -4738,7 +4760,7 @@ ROWS_43: List[Model.Builtin] = [
   Model.Builtin(
     name: "String.slice",
     parameters: [
-      Model.Named(name: "s", type: Types.Type.String),
+      Model.Named(name: "string", type: Types.Type.String),
       Model.Named(name: "start", type: Types.Type.Int),
       Model.Named(name: "length", type: Types.Type.Int),
     ],
@@ -4752,7 +4774,7 @@ ROWS_43: List[Model.Builtin] = [
   Model.Builtin(
     name: "String.split",
     parameters: [
-      Model.Named(name: "s", type: Types.Type.String),
+      Model.Named(name: "string", type: Types.Type.String),
       Model.Named(name: "separator", type: Types.Type.String),
     ],
     result: Types.Type.List(Types.Type.String),
@@ -4768,7 +4790,7 @@ ROWS_44: List[Model.Builtin] = [
   Model.Builtin(
     name: "String.start_with?",
     parameters: [
-      Model.Named(name: "s", type: Types.Type.String),
+      Model.Named(name: "string", type: Types.Type.String),
       Model.Named(name: "prefix", type: Types.Type.String),
     ],
     result: Types.Type.Bool,
@@ -4780,7 +4802,7 @@ ROWS_44: List[Model.Builtin] = [
   ),
   Model.Builtin(
     name: "String.to_f",
-    parameters: [Model.Named(name: "s", type: Types.Type.String)],
+    parameters: [Model.Named(name: "string", type: Types.Type.String)],
     result: Types.Type.Result(Types.Type.Float),
     rule: Model.Rule.Plain,
     implementation: "String.to_float",
@@ -4790,7 +4812,7 @@ ROWS_44: List[Model.Builtin] = [
   ),
   Model.Builtin(
     name: "String.to_f!",
-    parameters: [Model.Named(name: "s", type: Types.Type.String)],
+    parameters: [Model.Named(name: "string", type: Types.Type.String)],
     result: Types.Type.Float,
     rule: Model.Rule.Plain,
     implementation: "String.to_float!",
@@ -4800,7 +4822,7 @@ ROWS_44: List[Model.Builtin] = [
   ),
   Model.Builtin(
     name: "String.to_i",
-    parameters: [Model.Named(name: "s", type: Types.Type.String)],
+    parameters: [Model.Named(name: "string", type: Types.Type.String)],
     result: Types.Type.Result(Types.Type.Int),
     rule: Model.Rule.Plain,
     implementation: "String.to_int",
@@ -4810,7 +4832,7 @@ ROWS_44: List[Model.Builtin] = [
   ),
   Model.Builtin(
     name: "String.to_i!",
-    parameters: [Model.Named(name: "s", type: Types.Type.String)],
+    parameters: [Model.Named(name: "string", type: Types.Type.String)],
     result: Types.Type.Int,
     rule: Model.Rule.Plain,
     implementation: "String.to_int!",
@@ -4823,7 +4845,7 @@ ROWS_44: List[Model.Builtin] = [
 ROWS_45: List[Model.Builtin] = [
   Model.Builtin(
     name: "String.strip",
-    parameters: [Model.Named(name: "s", type: Types.Type.String)],
+    parameters: [Model.Named(name: "string", type: Types.Type.String)],
     result: Types.Type.String,
     rule: Model.Rule.Plain,
     implementation: "String.trim",
@@ -4833,7 +4855,7 @@ ROWS_45: List[Model.Builtin] = [
   ),
   Model.Builtin(
     name: "String.upcase",
-    parameters: [Model.Named(name: "s", type: Types.Type.String)],
+    parameters: [Model.Named(name: "string", type: Types.Type.String)],
     result: Types.Type.String,
     rule: Model.Rule.Plain,
     implementation: "String.upcase",
@@ -5190,7 +5212,7 @@ ROWS_50: List[Model.Builtin] = [
       Model.Named(name: "items", type: Types.Type.List(Types.Type.Var("A"))),
       Model.Named(name: "limit", type: Types.Type.Int),
       Model.Named(name: "timeout_ms", type: Types.Type.Int),
-      Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Var("A")], Types.Type.Result(Types.Type.Var("R")))),
+      Model.Named(name: "block", type: Types.Type.Fn([Types.Type.Var("A")], Types.Type.Result(Types.Type.Var("R")))),
     ],
     result: Types.Type.List(Types.Type.Result(Types.Type.Var("R"))),
     rule: Model.Rule.TaskMap,
@@ -5848,15 +5870,15 @@ ROWS_57: List[Model.Builtin] = [
     parameters: [
       Model.Named(name: "table", type: Types.Type.ATS(Types.Type.Var("K"), Types.Type.Int)),
       Model.Named(name: "key", type: Types.Type.Var("K")),
-      Model.Named(name: "n", type: Types.Type.Int),
+      Model.Named(name: "by", type: Types.Type.Int),
     ],
     result: Types.Type.Int,
     rule: Model.Rule.AtsCall,
     implementation: "ATS.add",
     effects: ["concurrency"],
     description: (
-      "Add n to the Int value of key (absent counts as 0) and return the new value, atomically; overflow " +
-      "halts with RUNTIME-INTEGER-OVERFLOW and leaves the table unchanged; VM only."
+      "Add the amount by to the Int value of key (absent counts as 0) and return the new value, atomically; " +
+      "overflow halts with RUNTIME-INTEGER-OVERFLOW and leaves the table unchanged; VM only."
     ),
     alternatives: [],
   ),
@@ -6227,26 +6249,27 @@ ROWS_60: List[Model.Builtin] = [
 ROWS_61: List[Model.Builtin] = [
   Model.Builtin(
     name: "OpenSSL.Random.random_bytes",
-    parameters: [Model.Named(name: "n", type: Types.Type.Int, default: Model.Default.Whole(16))],
+    parameters: [Model.Named(name: "count", type: Types.Type.Int, default: Model.Default.Whole(16))],
     result: Types.Type.Bytes,
     rule: Model.Rule.Plain,
     implementation: "OpenSSL.Random.random_bytes.bytes",
     effects: ["random"],
     description: (
-      "Draw n bytes (0..1048576, 16 by default) from the system's secure random source (OpenSSL RAND_bytes), " +
+      "Draw count bytes (0..1048576, 16 by default) from the system's secure random source (OpenSSL RAND_bytes), " +
       "for keys, salts and tokens; unlike Random, never seeded; VM only."
     ),
     alternatives: [],
   ),
   Model.Builtin(
     name: "OpenSSL.Random.hex",
-    parameters: [Model.Named(name: "n", type: Types.Type.Int, default: Model.Default.Whole(16))],
+    parameters: [Model.Named(name: "count", type: Types.Type.Int, default: Model.Default.Whole(16))],
     result: Types.Type.String,
     rule: Model.Rule.Plain,
     implementation: "OpenSSL.Random.hex",
     effects: ["random"],
     description: (
-      "Draw n secure random bytes (0..1048576, 16 by default) and give them as 2n lowercase hex digits; VM only."
+      "Draw count secure random bytes (0..1048576, 16 by default) and give them as 2 * count lowercase hex " +
+      "digits; VM only."
     ),
     alternatives: [],
   ),
@@ -6266,13 +6289,16 @@ ROWS_61: List[Model.Builtin] = [
 ROWS_62: List[Model.Builtin] = [
   Model.Builtin(
     name: "OpenSSL.HMAC.secure_compare",
-    parameters: [Model.Named(name: "a", type: Types.Type.Bytes), Model.Named(name: "b", type: Types.Type.Bytes)],
+    parameters: [
+      Model.Named(name: "bytes", type: Types.Type.Bytes),
+      Model.Named(name: "other", type: Types.Type.Bytes),
+    ],
     result: Types.Type.Bool,
     rule: Model.Rule.Plain,
     implementation: "OpenSSL.HMAC.secure_compare.bytes",
     effects: [],
     description: (
-      "Whether the bytes a and b are the same, in constant time: it compares their SHA-256 " +
+      "Whether bytes and other are the same, in constant time: it compares their SHA-256 " +
       "digests with OpenSSL CRYPTO_memcmp, so the time never depends on the bytes; for checking MACs and " +
       "tokens; VM only."
     ),
@@ -6294,7 +6320,7 @@ ROWS_63: List[Model.Builtin] = [
   ),
   Model.Builtin(
     name: "Bytes.concat",
-    parameters: [Model.Named(name: "parts", type: Types.Type.List(Types.Type.Bytes))],
+    parameters: [Model.Named(name: "list", type: Types.Type.List(Types.Type.Bytes))],
     result: Types.Type.Bytes,
     rule: Model.Rule.Plain,
     implementation: "Bytes.concat",
@@ -6304,25 +6330,27 @@ ROWS_63: List[Model.Builtin] = [
   ),
   Model.Builtin(
     name: "Bytes.drop",
-    parameters: [Model.Named(name: "bytes", type: Types.Type.Bytes), Model.Named(name: "n", type: Types.Type.Int)],
+    parameters: [Model.Named(name: "bytes", type: Types.Type.Bytes), Model.Named(name: "count", type: Types.Type.Int)],
     result: Types.Type.Bytes,
     rule: Model.Rule.Plain,
     implementation: "Bytes.drop",
     effects: [],
-    description: "Copy the bytes after the first n; n above the length gives empty bytes, a negative n halts.",
+    description: (
+      "Copy the bytes after the first count; count above the length gives empty bytes, a negative count halts."
+    ),
     alternatives: [],
   ),
   Model.Builtin(
     name: "Bytes.each",
     parameters: [
       Model.Named(name: "bytes", type: Types.Type.Bytes),
-      Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Int], Types.Type.Void)),
+      Model.Named(name: "block", type: Types.Type.Fn([Types.Type.Int], Types.Type.Void)),
     ],
     result: Types.Type.Void,
     rule: Model.Rule.Prelude,
     implementation: "",
     effects: [],
-    description: "Call f on each byte in order; returns nothing.",
+    description: "Call block on each byte in order; returns nothing.",
     alternatives: [],
   ),
   Model.Builtin(
@@ -6371,12 +6399,12 @@ ROWS_63: List[Model.Builtin] = [
   ),
   Model.Builtin(
     name: "Bytes.take",
-    parameters: [Model.Named(name: "bytes", type: Types.Type.Bytes), Model.Named(name: "n", type: Types.Type.Int)],
+    parameters: [Model.Named(name: "bytes", type: Types.Type.Bytes), Model.Named(name: "count", type: Types.Type.Int)],
     result: Types.Type.Bytes,
     rule: Model.Rule.Plain,
     implementation: "Bytes.take",
     effects: [],
-    description: "Copy the first n bytes; n above the length gives all of them, a negative n halts.",
+    description: "Copy the first count bytes; count above the length gives all of them, a negative count halts.",
     alternatives: [],
   ),
   Model.Builtin(
@@ -6391,7 +6419,7 @@ ROWS_63: List[Model.Builtin] = [
   ),
   Model.Builtin(
     name: "String.bytes",
-    parameters: [Model.Named(name: "s", type: Types.Type.String)],
+    parameters: [Model.Named(name: "string", type: Types.Type.String)],
     result: Types.Type.Bytes,
     rule: Model.Rule.Plain,
     implementation: "String.bytes",
@@ -6550,19 +6578,19 @@ ROWS_66: List[Model.Builtin] = [
   Model.Builtin(
     name: "Optional.map",
     parameters: [
-      Model.Named(name: "o", type: Types.Type.Optional(Types.Type.Var("T"))),
-      Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Var("T")], Types.Type.Var("U"))),
+      Model.Named(name: "optional", type: Types.Type.Optional(Types.Type.Var("T"))),
+      Model.Named(name: "block", type: Types.Type.Fn([Types.Type.Var("T")], Types.Type.Var("U"))),
     ],
     result: Types.Type.Optional(Types.Type.Var("U")),
     rule: Model.Rule.Prelude,
     implementation: "",
     effects: [],
-    description: "some(f(x)) for some(x), else none; f runs only for some.",
+    description: "some(block(x)) for some(x), else none; block runs only for some.",
     alternatives: [],
   ),
   Model.Builtin(
     name: "Optional.none?",
-    parameters: [Model.Named(name: "o", type: Types.Type.Optional(Types.Type.Var("T")))],
+    parameters: [Model.Named(name: "optional", type: Types.Type.Optional(Types.Type.Var("T")))],
     result: Types.Type.Bool,
     rule: Model.Rule.Prelude,
     implementation: "",
@@ -6572,7 +6600,7 @@ ROWS_66: List[Model.Builtin] = [
   ),
   Model.Builtin(
     name: "Optional.some?",
-    parameters: [Model.Named(name: "o", type: Types.Type.Optional(Types.Type.Var("T")))],
+    parameters: [Model.Named(name: "optional", type: Types.Type.Optional(Types.Type.Var("T")))],
     result: Types.Type.Bool,
     rule: Model.Rule.Prelude,
     implementation: "",
@@ -6583,7 +6611,7 @@ ROWS_66: List[Model.Builtin] = [
   Model.Builtin(
     name: "Optional.to_result",
     parameters: [
-      Model.Named(name: "o", type: Types.Type.Optional(Types.Type.Var("T"))),
+      Model.Named(name: "optional", type: Types.Type.Optional(Types.Type.Var("T"))),
       Model.Named(name: "message", type: Types.Type.String),
     ],
     result: Types.Type.Result(Types.Type.Var("T")),
@@ -6595,7 +6623,7 @@ ROWS_66: List[Model.Builtin] = [
   ),
   Model.Builtin(
     name: "Optional.unwrap!",
-    parameters: [Model.Named(name: "o", type: Types.Type.Optional(Types.Type.Var("T")))],
+    parameters: [Model.Named(name: "optional", type: Types.Type.Optional(Types.Type.Var("T")))],
     result: Types.Type.Var("T"),
     rule: Model.Rule.Prelude,
     implementation: "",
@@ -6606,7 +6634,7 @@ ROWS_66: List[Model.Builtin] = [
   Model.Builtin(
     name: "Optional.unwrap_or",
     parameters: [
-      Model.Named(name: "o", type: Types.Type.Optional(Types.Type.Var("T"))),
+      Model.Named(name: "optional", type: Types.Type.Optional(Types.Type.Var("T"))),
       Model.Named(name: "default", type: Types.Type.Var("T")),
     ],
     result: Types.Type.Var("T"),
@@ -6656,7 +6684,7 @@ ROWS_67: List[Model.Builtin] = [
   Model.Builtin(
     name: "String.encode",
     parameters: [
-      Model.Named(name: "s", type: Types.Type.String),
+      Model.Named(name: "string", type: Types.Type.String),
       Model.Named(name: "encoding", type: Types.Type.String),
     ],
     result: Types.Type.Result(Types.Type.Bytes),
@@ -6698,14 +6726,14 @@ ROWS_68: List[Model.Builtin] = [
     parameters: [
       Model.Named(name: "task", type: Types.Type.Task(Types.Type.Var("R"))),
       Model.Named(name: "channel", type: Types.Type.Channel(Types.Type.Var("M"))),
-      Model.Named(name: "wrap", type: Types.Type.Fn([Types.Type.Struct("TaskDown", [])], Types.Type.Var("M"))),
+      Model.Named(name: "message", type: Types.Type.Fn([Types.Type.Struct("TaskDown", [])], Types.Type.Var("M"))),
     ],
     result: Types.Type.Void,
     rule: Model.Rule.TaskMonitor,
     implementation: "Task.monitor",
     effects: ["concurrency"],
     description: (
-      "When the task (or TaskRef) ends (returns, crashes or is cancelled), send wrap(TaskDown) into the channel " +
+      "When the task (or TaskRef) ends (returns, crashes or is cancelled), send message(TaskDown) into the channel " +
       "once, without waiting; at once for a task that has ended; dropped when the channel is closed or full; VM only."
     ),
     alternatives: [],
@@ -6769,39 +6797,41 @@ ROWS_71: List[Model.Builtin] = [
     name: "Range.all?",
     parameters: [
       Model.Named(name: "range", type: Types.Type.Range),
-      Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Int], Types.Type.Bool)),
+      Model.Named(name: "block", type: Types.Type.Fn([Types.Type.Int], Types.Type.Bool)),
     ],
     result: Types.Type.Bool,
     rule: Model.Rule.Prelude,
     implementation: "",
     effects: [],
-    description: "True when f accepts every value (true for an empty range); f stops at the first false; O(n).",
+    description: (
+      "True when block accepts every value (true for an empty range); block stops at the first false; O(n)."
+    ),
     alternatives: [],
   ),
   Model.Builtin(
     name: "Range.any?",
     parameters: [
       Model.Named(name: "range", type: Types.Type.Range),
-      Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Int], Types.Type.Bool)),
+      Model.Named(name: "block", type: Types.Type.Fn([Types.Type.Int], Types.Type.Bool)),
     ],
     result: Types.Type.Bool,
     rule: Model.Rule.Prelude,
     implementation: "",
     effects: [],
-    description: "True when f accepts a value; f stops at the first true; O(n).",
+    description: "True when block accepts a value; block stops at the first true; O(n).",
     alternatives: [],
   ),
   Model.Builtin(
     name: "Range.drop_while",
     parameters: [
       Model.Named(name: "range", type: Types.Type.Range),
-      Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Int], Types.Type.Bool)),
+      Model.Named(name: "block", type: Types.Type.Fn([Types.Type.Int], Types.Type.Bool)),
     ],
     result: Types.Type.List(Types.Type.Int),
     rule: Model.Rule.Prelude,
     implementation: "",
     effects: [],
-    description: "List the values from the first one f rejects on; f is not called after it; O(n).",
+    description: "List the values from the first one block rejects on; block is not called after it; O(n).",
     alternatives: [],
   ),
   Model.Builtin(
@@ -6818,27 +6848,27 @@ ROWS_71: List[Model.Builtin] = [
     name: "Range.each_with_index",
     parameters: [
       Model.Named(name: "range", type: Types.Type.Range),
-      Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Int, Types.Type.Int], Types.Type.Void)),
+      Model.Named(name: "block", type: Types.Type.Fn([Types.Type.Int, Types.Type.Int], Types.Type.Void)),
     ],
     result: Types.Type.Void,
     rule: Model.Rule.Prelude,
     implementation: "",
     effects: [],
-    description: "Call f on each value and its index from 0, in order; O(n).",
+    description: "Call block on each value and its index from 0, in order; O(n).",
     alternatives: [],
   ),
   Model.Builtin(
     name: "Range.find",
     parameters: [
       Model.Named(name: "range", type: Types.Type.Range),
-      Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Int], Types.Type.Bool)),
+      Model.Named(name: "block", type: Types.Type.Fn([Types.Type.Int], Types.Type.Bool)),
     ],
     result: Types.Type.Result(Types.Type.Int),
     rule: Model.Rule.Prelude,
     implementation: "",
     effects: [],
     description: (
-      "The first value f accepts, else error(\"not found\"); f stops being called at the first " +
+      "The first value block accepts, else error(\"not found\"); block stops being called at the first " +
       "true; O(n)."
     ),
     alternatives: [],
@@ -6847,26 +6877,26 @@ ROWS_71: List[Model.Builtin] = [
     name: "Range.find_index",
     parameters: [
       Model.Named(name: "range", type: Types.Type.Range),
-      Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Int], Types.Type.Bool)),
+      Model.Named(name: "block", type: Types.Type.Fn([Types.Type.Int], Types.Type.Bool)),
     ],
     result: Types.Type.Optional(Types.Type.Int),
     rule: Model.Rule.Prelude,
     implementation: "",
     effects: [],
-    description: "The index of the first value f accepts, or none; O(n).",
+    description: "The index of the first value block accepts, or none; O(n).",
     alternatives: [],
   ),
   Model.Builtin(
     name: "Range.flat_map",
     parameters: [
       Model.Named(name: "range", type: Types.Type.Range),
-      Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Int], Types.Type.List(Types.Type.Var("B")))),
+      Model.Named(name: "block", type: Types.Type.Fn([Types.Type.Int], Types.Type.List(Types.Type.Var("B")))),
     ],
     result: Types.Type.List(Types.Type.Var("B")),
     rule: Model.Rule.Prelude,
     implementation: "",
     effects: [],
-    description: "Join the lists f gives for each value, in order; O(n).",
+    description: "Join the lists block gives for each value, in order; O(n).",
     alternatives: [],
   ),
   Model.Builtin(
@@ -6886,13 +6916,13 @@ ROWS_71: List[Model.Builtin] = [
     name: "Range.map",
     parameters: [
       Model.Named(name: "range", type: Types.Type.Range),
-      Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Int], Types.Type.Var("B"))),
+      Model.Named(name: "block", type: Types.Type.Fn([Types.Type.Int], Types.Type.Var("B"))),
     ],
     result: Types.Type.List(Types.Type.Var("B")),
     rule: Model.Rule.Prelude,
     implementation: "",
     effects: [],
-    description: "List what f gives for each value, in order; O(n).",
+    description: "List what block gives for each value, in order; O(n).",
     alternatives: [],
   ),
   Model.Builtin(
@@ -6951,7 +6981,7 @@ ROWS_71: List[Model.Builtin] = [
     name: "Range.partition",
     parameters: [
       Model.Named(name: "range", type: Types.Type.Range),
-      Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Int], Types.Type.Bool)),
+      Model.Named(name: "block", type: Types.Type.Fn([Types.Type.Int], Types.Type.Bool)),
     ],
     result: Types.Type.List(Types.Type.List(Types.Type.Int)),
     rule: Model.Rule.Prelude,
@@ -6965,26 +6995,26 @@ ROWS_71: List[Model.Builtin] = [
     parameters: [
       Model.Named(name: "range", type: Types.Type.Range),
       Model.Named(name: "initial", type: Types.Type.Var("B")),
-      Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Var("B"), Types.Type.Int], Types.Type.Var("B"))),
+      Model.Named(name: "block", type: Types.Type.Fn([Types.Type.Var("B"), Types.Type.Int], Types.Type.Var("B"))),
     ],
     result: Types.Type.Var("B"),
     rule: Model.Rule.Prelude,
     implementation: "",
     effects: [],
-    description: "Fold left with f(accumulator, value); an empty range returns initial; O(n).",
+    description: "Fold left with block(accumulator, value); an empty range returns initial; O(n).",
     alternatives: [],
   ),
   Model.Builtin(
     name: "Range.select",
     parameters: [
       Model.Named(name: "range", type: Types.Type.Range),
-      Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Int], Types.Type.Bool)),
+      Model.Named(name: "block", type: Types.Type.Fn([Types.Type.Int], Types.Type.Bool)),
     ],
     result: Types.Type.List(Types.Type.Int),
     rule: Model.Rule.Prelude,
     implementation: "",
     effects: [],
-    description: "List the values f accepts, in order; O(n).",
+    description: "List the values block accepts, in order; O(n).",
     alternatives: [],
   ),
   Model.Builtin(
@@ -7001,13 +7031,13 @@ ROWS_71: List[Model.Builtin] = [
     name: "Range.take_while",
     parameters: [
       Model.Named(name: "range", type: Types.Type.Range),
-      Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Int], Types.Type.Bool)),
+      Model.Named(name: "block", type: Types.Type.Fn([Types.Type.Int], Types.Type.Bool)),
     ],
     result: Types.Type.List(Types.Type.Int),
     rule: Model.Rule.Prelude,
     implementation: "",
     effects: [],
-    description: "List the values before the first one f rejects; f is not called after it; O(n).",
+    description: "List the values before the first one block rejects; block is not called after it; O(n).",
     alternatives: [],
   ),
   Model.Builtin(
@@ -7032,20 +7062,23 @@ ROWS_71: List[Model.Builtin] = [
 ROWS_72: List[Model.Builtin] = [
   Model.Builtin(
     name: "String.edit_distance",
-    parameters: [Model.Named(name: "s", type: Types.Type.String), Model.Named(name: "other", type: Types.Type.String)],
+    parameters: [
+      Model.Named(name: "string", type: Types.Type.String),
+      Model.Named(name: "other", type: Types.Type.String),
+    ],
     result: Types.Type.Int,
     rule: Model.Rule.Plain,
     implementation: "String.edit_distance",
     effects: [],
     description: (
       "The Levenshtein distance in characters: the fewest inserts, deletes and replacements of one character that " +
-      "turn s into other; O(n * m) time, O(min(n, m)) memory; or, with max, max + 1 once it passes max."
+      "turn string into other; O(n * m) time, O(min(n, m)) memory; or, with max, max + 1 once it passes max."
     ),
     alternatives: [
       Model.Builtin(
         name: "String.edit_distance",
         parameters: [
-          Model.Named(name: "s", type: Types.Type.String),
+          Model.Named(name: "string", type: Types.Type.String),
           Model.Named(name: "other", type: Types.Type.String),
           Model.Named(name: "max", type: Types.Type.Int),
         ],
@@ -7063,7 +7096,10 @@ ROWS_72: List[Model.Builtin] = [
   ),
   Model.Builtin(
     name: "String.jaro_winkler",
-    parameters: [Model.Named(name: "s", type: Types.Type.String), Model.Named(name: "other", type: Types.Type.String)],
+    parameters: [
+      Model.Named(name: "string", type: Types.Type.String),
+      Model.Named(name: "other", type: Types.Type.String),
+    ],
     result: Types.Type.Float,
     rule: Model.Rule.Plain,
     implementation: "String.jaro_winkler",

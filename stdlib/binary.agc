@@ -108,8 +108,8 @@ export def write_i8(value: Int) -> Result[Bytes]
   ok(pack([value.bit_and(255)]))
 end
 
-## Returns the 2 bytes of `value` as a big-endian unsigned 16-bit integer. Returns an error when `value` is not in
-## `0 .. 65535`.
+## Returns the 2 bytes of `value` as a big-endian unsigned 16-bit integer. Returns an error when `value` is not in `0
+## .. 65535`.
 export def write_u16_be(value: Int) -> Result[Bytes]
   try fits(value, 0, 65535, "u16")
   ok(bytes2_be(value))
@@ -136,8 +136,8 @@ export def write_i16_le(value: Int) -> Result[Bytes]
   ok(bytes2_le(value))
 end
 
-## Returns the 4 bytes of `value` as a big-endian unsigned 32-bit integer. Returns an error when `value` is not in
-## `0 .. 4294967295`.
+## Returns the 4 bytes of `value` as a big-endian unsigned 32-bit integer. Returns an error when `value` is not in `0
+## .. 4294967295`.
 export def write_u32_be(value: Int) -> Result[Bytes]
   try fits(value, 0, 4294967295, "u32")
   ok(bytes4_be(value))
@@ -164,8 +164,8 @@ export def write_i32_le(value: Int) -> Result[Bytes]
   ok(bytes4_le(value))
 end
 
-## Returns the 8 bytes of `value` as a big-endian unsigned 64-bit integer. Returns an error when `value` is not in
-## `0 .. 9223372036854775807`.
+## Returns the 8 bytes of `value` as a big-endian unsigned 64-bit integer. Returns an error when `value` is not in `0
+## .. 9223372036854775807`.
 export def write_u64_be(value: Int) -> Result[Bytes]
   try fits(value, 0, 9223372036854775807, "u64")
   ok(bytes8_be(value))
@@ -184,21 +184,21 @@ export def write_i64_be(value: Int) -> Bytes = bytes8_be(value)
 ## Returns the 8 bytes of `value`, little-endian. It never fails.
 export def write_i64_le(value: Int) -> Bytes = bytes8_le(value)
 
-## Returns the 4 bytes of `x` as a big-endian 32-bit IEEE 754 float. It rounds to the nearest binary32 value. It never
-## fails; every NaN gives the canonical NaN bits.
-export def write_f32_be(x: Float) -> Bytes = bytes4_be(Float.to_bits32(x))
-
-## Returns the 4 bytes of `x` as a little-endian 32-bit IEEE 754 float. It rounds to the nearest binary32 value. It
+## Returns the 4 bytes of `value` as a big-endian 32-bit IEEE 754 float. It rounds to the nearest binary32 value. It
 ## never fails; every NaN gives the canonical NaN bits.
-export def write_f32_le(x: Float) -> Bytes = bytes4_le(Float.to_bits32(x))
+export def write_f32_be(value: Float) -> Bytes = bytes4_be(Float.to_bits32(value))
 
-## Returns the 8 bytes of `x` as a big-endian 64-bit IEEE 754 float. It never fails; every NaN gives the canonical NaN
-## bits.
-export def write_f64_be(x: Float) -> Bytes = bytes8_be(Float.to_bits(x))
+## Returns the 4 bytes of `value` as a little-endian 32-bit IEEE 754 float. It rounds to the nearest binary32 value. It
+## never fails; every NaN gives the canonical NaN bits.
+export def write_f32_le(value: Float) -> Bytes = bytes4_le(Float.to_bits32(value))
 
-## Returns the 8 bytes of `x` as a little-endian 64-bit IEEE 754 float. It never fails; every NaN gives the canonical
+## Returns the 8 bytes of `value` as a big-endian 64-bit IEEE 754 float. It never fails; every NaN gives the canonical
 ## NaN bits.
-export def write_f64_le(x: Float) -> Bytes = bytes8_le(Float.to_bits(x))
+export def write_f64_be(value: Float) -> Bytes = bytes8_be(Float.to_bits(value))
+
+## Returns the 8 bytes of `value` as a little-endian 64-bit IEEE 754 float. It never fails; every NaN gives the
+## canonical NaN bits.
+export def write_f64_le(value: Float) -> Bytes = bytes8_le(Float.to_bits(value))
 
 ## Returns the 4-byte big-endian length of `payload` followed by `payload`. Returns an error when `payload` has more
 ## than 4294967295 bytes.

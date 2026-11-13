@@ -50,18 +50,18 @@ Random.seed() -> Int                    # the run's seed (0..2147483647), the sa
 ## Int, Float
 
 ```text
-Int.times(n: Int, f: Fn[Int, Void]) -> Void              # 0 .. n - 1; nothing when n <= 0
-Int.upto(from: Int, to: Int, f: Fn[Int, Void]) -> Void   # both ends included; nothing when to < from
-Int.downto(from: Int, to: Int, f: Fn[Int, Void]) -> Void # both ends included; nothing when to > from
-n.to_f() -> Float                                        # Int
-x.to_i() -> Result[Int]                                  # Float; truncates; NaN, infinity, overflow are errors
-x.to_i!() -> Int                                         # same, but halts (RUNTIME-INVALID-NUMBER)
-n.abs() -> Int                                           # also x.abs -> Float; the least Int overflows
-n.pow(exponent: Int) -> Int                              # no `**`; negative exponent: RUNTIME-INVALID-COUNT
-a.gcd(b: Int) -> Int                                     # never negative; 0.gcd(0) is 0
-n.clamp(min: Int, max: Int) -> Int                       # also on Float; min > max: RUNTIME-INVALID-RANGE
-x.floor() -> Int                                         # also ceil, round (halves away from zero); Float only
-Math.sqrt(x: Float) -> Float                             # negative x: RUNTIME-INVALID-NUMBER
+Int.times(int: Int, block: Fn[Int, Void]) -> Void        # 0 .. int - 1; nothing when int <= 0
+Int.upto(from: Int, to: Int, block: Fn[Int, Void]) -> Void   # both ends included; nothing when to < from
+Int.downto(from: Int, to: Int, block: Fn[Int, Void]) -> Void   # both ends included; nothing when to > from
+int.to_f() -> Float                                      # Int
+float.to_i() -> Result[Int]                              # Float; truncates; NaN, infinity, overflow are errors
+float.to_i!() -> Int                                     # same, but halts (RUNTIME-INVALID-NUMBER)
+int.abs() -> Int                                         # also float.abs -> Float; the least Int overflows
+int.pow(exponent: Int) -> Int                            # no `**`; negative exponent: RUNTIME-INVALID-COUNT
+int.gcd(other: Int) -> Int                               # never negative; 0.gcd(0) is 0
+int.clamp(min: Int, max: Int) -> Int                     # also on Float; min > max: RUNTIME-INVALID-RANGE
+float.floor() -> Int                                     # also ceil, round (halves away from zero); Float only
+Math.sqrt(float: Float) -> Float                         # negative float: RUNTIME-INVALID-NUMBER
 ```
 
 `floor`, `ceil` and `round` halt like `to_i!` on NaN, infinity or a result
@@ -71,37 +71,37 @@ Bit operations: `binary.md`.
 ## String
 
 ```text
-String.length(s: String) -> Int                          # Unicode characters
-String.bytesize(s: String) -> Int                        # UTF-8 bytes (a C length); no list built
-String.empty?(s: String) -> Bool
-String.upcase(s: String) -> String
-String.downcase(s: String) -> String
-s.strip() -> String
-String.split(s: String, separator: String) -> List[String]   # keeps empty parts; "" gives characters
-parts.join(separator: String) -> String               # List[String]
-s.include?(part: String) -> Bool
-s.start_with?(prefix: String) -> Bool
-s.end_with?(suffix: String) -> Bool
-String.replace(s: String, from: String, to: String) -> String
-String.slice(s: String, start: Int, length: Int) -> String   # bad range halts
-String.index_of(s: String, part: String) -> Optional[Int]    # first match; none if absent
-String.at(s: String, index: Int) -> String               # one character; halts outside
-String.reverse(s: String) -> String
+String.length(string: String) -> Int                     # Unicode characters
+String.bytesize(string: String) -> Int                   # UTF-8 bytes (a C length); no list built
+String.empty?(string: String) -> Bool
+String.upcase(string: String) -> String
+String.downcase(string: String) -> String
+string.strip() -> String
+String.split(string: String, separator: String) -> List[String]   # keeps empty parts; "" gives characters
+list.join(separator: String) -> String                # List[String]
+string.include?(part: String) -> Bool
+string.start_with?(prefix: String) -> Bool
+string.end_with?(suffix: String) -> Bool
+String.replace(string: String, from: String, to: String) -> String
+String.slice(string: String, start: Int, length: Int) -> String   # bad range halts
+String.index_of(string: String, part: String) -> Optional[Int]   # first match; none if absent
+String.at(string: String, index: Int) -> String          # one character; halts outside
+String.reverse(string: String) -> String
 s * n -> String                                          # n copies; n < 0 or over 256 MiB halts (RUNTIME-INVALID-COUNT)
-c.code() -> Int                                          # code point of one character; other lengths halt
-String.compare(a: String, b: String) -> Int              # -1, 0 or 1 in sort order; also a.compare(b)
-s.edit_distance(other: String) -> Int                    # Levenshtein, in characters
-s.edit_distance(other: String, max: Int) -> Int          # max + 1 once past max (fast); max < 0 fails with RUNTIME-INVALID-COUNT
-s.jaro_winkler(other: String) -> Float                   # 0.0 to 1.0; "" and "" give 1.0
-String.from_code(n: Int) -> String                       # Unicode scalar value; halts otherwise
-n.to_s() -> String                                       # Int
-x.to_s() -> String                                       # Float
+string.code() -> Int                                     # code point of one character; other lengths halt
+String.compare(string: String, other: String) -> Int              # -1, 0 or 1 in sort order; also a.compare(b)
+string.edit_distance(other: String) -> Int               # Levenshtein, in characters
+string.edit_distance(other: String, max: Int) -> Int     # max + 1 once past max (fast); max < 0 fails with RUNTIME-INVALID-COUNT
+string.jaro_winkler(other: String) -> Float              # 0.0 to 1.0; "" and "" give 1.0
+String.from_code(code: Int) -> String                       # Unicode scalar value; halts otherwise
+int.to_s() -> String                                     # Int
+float.to_s() -> String                                   # Float
 String.from_bytes(data: Bytes) -> Result[String]         # strict UTF-8; binary.md
-s.encode(encoding: String) -> Result[Bytes]              # b.decode(encoding) back; bytes.md
-s.to_i() -> Result[Int]                                  # signed decimal; overflow is an error
-s.to_f() -> Result[Float]                                # 1.5, 1e+20, +inf.0: reads x.to_s back
-s.to_i!() -> Int                                         # halts on bad text (RUNTIME-INVALID-NUMBER)
-s.to_f!() -> Float
+string.encode(encoding: String) -> Result[Bytes]         # b.decode(encoding) back; bytes.md
+string.to_i() -> Result[Int]                             # signed decimal; overflow is an error
+string.to_f() -> Result[Float]                           # 1.5, 1e+20, +inf.0: reads x.to_s back
+string.to_i!() -> Int                                    # halts on bad text (RUNTIME-INVALID-NUMBER)
+string.to_f!() -> Float
 ```
 
 - `index_of` and `at` count characters, like `length`. Use `code` and
@@ -125,20 +125,20 @@ a + b -> List[T]                                         # a new list; O(length 
 List.take(list: List[T], count: Int) -> List[T]          # count above length is fine; negative halts (RUNTIME-INVALID-COUNT)
 List.drop(list: List[T], count: Int) -> List[T]          # same count rules as take
 List.at(list: List[T], index: Int) -> T                  # halts (RUNTIME-INDEX-OUT-OF-RANGE); O(log32 n)
-List.map(list: List[A], f: Fn[A, B]) -> List[B]          # f returns data, not Void
-list.select(f: Fn[A, Bool]) -> List[A]
-List.reduce(list: List[A], initial: B, f: Fn[B, A, B]) -> B   # folds left: f(acc, item); empty gives initial
-List.each(list: List[A], f: Fn[A, Void]) -> Void
-List.any?(list: List[A], f: Fn[A, Bool]) -> Bool         # stops at the first true
-List.all?(list: List[A], f: Fn[A, Bool]) -> Bool         # stops at the first false
+List.map(list: List[A], block: Fn[A, B]) -> List[B]      # the block returns data, not Void
+list.select(block: Fn[A, Bool]) -> List[A]
+List.reduce(list: List[A], initial: B, block: Fn[B, A, B]) -> B   # folds left: block(acc, item); empty gives initial
+List.each(list: List[A], block: Fn[A, Void]) -> Void
+List.any?(list: List[A], block: Fn[A, Bool]) -> Bool     # stops at the first true
+List.all?(list: List[A], block: Fn[A, Bool]) -> Bool     # stops at the first false
 List.sort(list: List[T]) -> List[T]                      # T is Int, Float or String; stable
 List.sort_by(list: List[A], key: Fn[A, K]) -> List[A]    # key is Int, Float or String; one call per element
-List.find(list: List[A], f: Fn[A, Bool]) -> Result[A]    # ok(first match; stops there) or error("not found")
-List.each_with_index(list: List[A], f: Fn[A, Int, Void]) -> Void   # f(item, index), index from 0
-List.flat_map(list: List[A], f: Fn[A, List[B]]) -> List[B]
-List.partition(list: List[A], f: Fn[A, Bool]) -> List[List[A]]     # [accepted, rejected]
-List.take_while(list: List[A], f: Fn[A, Bool]) -> List[A]          # stops calling f at the first false
-List.drop_while(list: List[A], f: Fn[A, Bool]) -> List[A]
+List.find(list: List[A], block: Fn[A, Bool]) -> Result[A]   # ok(first match; stops there) or error("not found")
+List.each_with_index(list: List[A], block: Fn[A, Int, Void]) -> Void   # block(item, index), index from 0
+List.flat_map(list: List[A], block: Fn[A, List[B]]) -> List[B]
+List.partition(list: List[A], block: Fn[A, Bool]) -> List[List[A]]   # [accepted, rejected]
+List.take_while(list: List[A], block: Fn[A, Bool]) -> List[A]      # stops calling the block at the first false
+List.drop_while(list: List[A], block: Fn[A, Bool]) -> List[A]
 List.each_slice(list: List[A], size: Int) -> List[List[A]]         # no block; size < 1 is RUNTIME-INVALID-COUNT
 List.group_by(list: List[A], key: Fn[A, K]) -> Map[K, List[A]]     # K is Int or String; first-appearance order
 List.tally(list: List[K]) -> Map[K, Int]                 # K is Int or String; first-appearance order
@@ -146,7 +146,7 @@ List.uniq(list: List[K]) -> List[K]                      # K is Int or String; k
 List.sum(list: List[N]) -> N                             # Int or Float; empty gives 0 or 0.0; Int overflow halts
 List.include?(list: List[T], value: T) -> Bool           # any T with ==; also member?; stops at the first match
 List.index(list: List[T], value: T) -> Optional[Int]     # first position of an item == value; none when absent
-List.find_index(list: List[A], f: Fn[A, Bool]) -> Optional[Int]   # the block form of index (index takes no block)
+List.find_index(list: List[A], block: Fn[A, Bool]) -> Optional[Int]   # the block form of index (index takes no block)
 List.min(list: List[T]) -> Optional[T]                   # T Int, Float or String; none when empty; also max
 List.min_by(list: List[A], key: Fn[A, O]) -> Optional[A]   # key Int, Float or String; first wins ties; empty is none
 List.max_by(list: List[A], key: Fn[A, O]) -> Optional[A]   # NaN keys never win unless all are NaN
@@ -177,8 +177,8 @@ Map.get(map: Map[K, V], key: K) -> Optional[V]           # some(value), or none 
 Map.get(map: Map[K, V], key: K, default: V) -> V         # default is evaluated eagerly
 Map.put(map: Map[K, V], key: K, value: V) -> Map[K, V]   # returns a new map
 Map.delete(map: Map[K, V], key: K) -> Map[K, V]          # absent keys are ignored; O(log n) amortized
-Map.each(map: Map[K, V], f: Fn[K, V, Void]) -> Void      # f(key, value) in insertion order
-m.select(f: Fn[K, V, Bool]) -> Map[K, V]                 # keeps the entries f accepts, in order
+Map.each(map: Map[K, V], block: Fn[K, V, Void]) -> Void  # block(key, value) in insertion order
+m.select(block: Fn[K, V, Bool]) -> Map[K, V]             # keeps the entries the block accepts, in order
 ```
 
 - Lookup, `key?` and `put` are effectively constant time. `m[key]` on a missing
@@ -196,10 +196,10 @@ Set.include?(set: Set[T], value: T) -> Bool
 Set.size(set: Set[T]) -> Int                             # O(1)
 Set.empty?(set: Set[T]) -> Bool
 Set.to_a(set: Set[T]) -> List[T]                         # first-insertion order; O(n)
-Set.union(a: Set[T], b: Set[T]) -> Set[T]                # a's elements, then b's that a lacks
-Set.intersection(a: Set[T], b: Set[T]) -> Set[T]         # in a's order
-Set.difference(a: Set[T], b: Set[T]) -> Set[T]           # in a's order
-Set.subset?(a: Set[T], b: Set[T]) -> Bool                # every element of a is in b
+Set.union(set: Set[T], other: Set[T]) -> Set[T]          # set's elements, then other's that set lacks
+Set.intersection(set: Set[T], other: Set[T]) -> Set[T]   # in set's order
+Set.difference(set: Set[T], other: Set[T]) -> Set[T]     # in set's order
+Set.subset?(set: Set[T], other: Set[T]) -> Bool          # every element of set is in other
 ```
 
 - `seen = seen.add(x)`; a bare `seen.add(x)` is `CHECK-UNUSED-VALUE`.
@@ -209,14 +209,14 @@ Set.subset?(a: Set[T], b: Set[T]) -> Bool                # every element of a is
 ## Range
 
 ```text
-Range.size(r: Range) -> Int                              # halts (RUNTIME-INTEGER-OVERFLOW) when it does not fit in Int
-Range.to_a(r: Range) -> List[Int]                        # more than 1048576 values halts (RUNTIME-INVALID-COUNT)
-Range.include?(r: Range, value: Int) -> Bool
-Range.each(r: Range, f: Fn[Int, Void]) -> Void
-Range.first(r: Range) -> Result[Int]                     # error("the range is empty") when empty
-Range.last(r: Range) -> Result[Int]                      # last included value: (1...5).last is ok(4)
-Range.lazy(r: Range) -> Lazy[Int]                        # (1..n).lazy.select { ... }.first(3) (lazy.md)
-Range.map(r: Range, f: Fn[Int, B]) -> List[B]            # as (1..5).to_a.map, without the list first
+Range.size(range: Range) -> Int                          # halts (RUNTIME-INTEGER-OVERFLOW) when it does not fit in Int
+Range.to_a(range: Range) -> List[Int]                    # more than 1048576 values halts (RUNTIME-INVALID-COUNT)
+Range.include?(range: Range, value: Int) -> Bool
+Range.each(range: Range, block: Fn[Int, Void]) -> Void
+Range.first(range: Range) -> Result[Int]                 # error("the range is empty") when empty
+Range.last(range: Range) -> Result[Int]                  # last included value: (1...5).last is ok(4)
+Range.lazy(range: Range) -> Lazy[Int]                    # (1..n).lazy.select { ... }.first(3) (lazy.md)
+Range.map(range: Range, block: Fn[Int, B]) -> List[B]    # as (1..5).to_a.map, without the list first
 ```
 
 - A range has the Enumerable methods of List with Int values: `map`,
@@ -237,11 +237,11 @@ Range.map(r: Range, f: Fn[Int, B]) -> List[B]            # as (1..5).to_a.map, w
 ok(value: T) -> Result[T]
 ok() -> Result[Void]
 error(message: String) -> Result[T]                      # needs an expected Result type
-error(e: Error) -> Result[T]                             # the same Error, as a Result of another type
-r.ok?() -> Bool
-r.unwrap!() -> T                                         # halts with RUNTIME-UNWRAP-ERROR on error
-r.unwrap_or(default: T) -> T
-r.message() -> String                                    # the error message, or "" for success
+error(error: Error) -> Result[T]                         # the same Error, as a Result of another type
+result.ok?() -> Bool
+result.unwrap!() -> T                                    # halts with RUNTIME-UNWRAP-ERROR on error
+result.unwrap_or(default: T) -> T
+result.message() -> String                               # the error message, or "" for success
 ```
 
 `r.is_err?`, `r.error?`, `r.value!` and `r.ok!` do not exist: write `!r.ok?` and
@@ -252,12 +252,12 @@ r.message() -> String                                    # the error message, or
 ```text
 some(value: T) -> Optional[T]
 none -> Optional[T]                                      # needs an expected Optional type
-o.unwrap_or(default: T) -> T
-o.unwrap!() -> T                                         # halts with RUNTIME-UNWRAP-NONE on none
-o.map(f: Fn[T, U]) -> Optional[U]                        # with a block: o.map do |x| x + 1 end
-o.some?() -> Bool
-o.none?() -> Bool
-o.to_result(message: String) -> Result[T]                # ok(x), or error(message) for none
+optional.unwrap_or(default: T) -> T
+optional.unwrap!() -> T                                  # halts with RUNTIME-UNWRAP-NONE on none
+optional.map(block: Fn[T, U]) -> Optional[U]             # with a block: o.map do |x| x + 1 end
+optional.some?() -> Bool
+optional.none?() -> Bool
+optional.to_result(message: String) -> Result[T]         # ok(x), or error(message) for none
 ```
 
 ## Methods and Ruby names

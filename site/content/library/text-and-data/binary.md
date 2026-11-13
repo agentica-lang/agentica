@@ -68,7 +68,7 @@ ok(-257)
 ```signature
 Binary.write_<T>(value: Int) -> Result[Bytes]
 Binary.write_<I64>(value: Int) -> Bytes
-Binary.write_<F>(x: Float) -> Bytes
+Binary.write_<F>(value: Float) -> Bytes
 ```
 
 `<T>` is `u8` or `i8`, or `u16`, `i16`, `u32`, `i32`, `u64` followed by `_be` or `_le`. `<I64>` is `i64_be` or `i64_le`. `<F>` is `f32` or `f64` followed by `_be` or `_le`. A writer returns a new `Bytes` with exactly the bytes of its type; a `Bytes` never changes in place.

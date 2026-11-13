@@ -188,7 +188,7 @@ A `Void` task gives `Await[Void]`: match its payload with `_` (`Await.Done(_)`).
 ## Task.map
 
 ```signature
-Task.map(items: List[A], limit: Int, timeout_ms: Int, f: Fn[A, Result[R]]) -> List[Result[R]]
+Task.map(items: List[A], limit: Int, timeout_ms: Int, block: Fn[A, Result[R]]) -> List[Result[R]]
 ```
 
 Runs the function for each item in its own task, at most `limit` at a time. It gives one `Result` per item, in the order of `items`.
@@ -367,17 +367,17 @@ error("task: cancelled", kind: "task.cancelled")
 ## Task.monitor
 
 ```signature
-Task.monitor(task: Task[R], channel: Channel[M], wrap: Fn[TaskDown, M]) -> Void
+Task.monitor(task: Task[R], channel: Channel[M], message: Fn[TaskDown, M]) -> Void
 ```
 
-When `task` ends for any reason (it returns, crashes or is cancelled), the runtime sends `wrap(TaskDown(...))` into `channel` once. There is no `select`, so the channel is usually the caller's one channel of an enum, with a variant for the notice: `Task.monitor(task, inbox) do |down| Msg.Down(down) end`.
+When `task` ends for any reason (it returns, crashes or is cancelled), the runtime sends `message(TaskDown(...))` into `channel` once. There is no `select`, so the channel is usually the caller's one channel of an enum, with a variant for the notice: `Task.monitor(task, inbox) do |down| Msg.Down(down) end`.
 
 - `TaskDown` is a builtin record: `task_id: Int` (the `task.id` of the task), `reason: TaskExit`, then the diagnostic of a crash: `code: String` (the stable code, such as `RUNTIME-DIVISION-BY-ZERO`, to match on), `message: String`, and `file: String`, `line: Int` and `column: Int` where the error was raised. For `TaskExit.Ok` and `TaskExit.Cancelled` the strings are `""` and the numbers `0`. `TaskExit` is a builtin enum: `TaskExit.Ok`, `TaskExit.Crashed` or `TaskExit.Cancelled`, read as `Task.await` reads the end (a crash first, then a cancel). Both names are reserved.
 - A task that has ended already gets its notice at once, and a task may have several monitors, each with its own notice. A monitor cannot be removed.
 - The send never waits and never fails: when the channel is closed or full at that moment, the notice is dropped without an error. Give the channel room for every notice it may get.
 - A crash whose notice goes into the channel counts as observed, like an await of it, so it does not make the run exit 1. It counts once the notice is in the channel, even if nobody ever receives it.
 - `task` may also be the `TaskRef` of [Task.current](#taskcurrent).
-- The notice comes as soon as the ended task has closed what it owns, as for `Task.await`. `wrap` runs in a task of its own, outside the caller's tree, so a cancel never reaches it; keep it to building the message. A runtime error in `wrap` is a crash of that task, and the notice is lost.
+- The notice comes as soon as the ended task has closed what it owns, as for `Task.await`. The `message` block runs in a task of its own, outside the caller's tree, so a cancel never reaches it; keep it to building the message. A runtime error in `message` is a crash of that task, and the notice is lost.
 
 A coordinator that restarts a worker that crashed:
 

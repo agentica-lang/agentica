@@ -158,7 +158,7 @@ def test_a_name_through_an_import_alias_is_found_in_the_module_the_alias_names(p
 def test_a_std_module_is_named_with_its_std_path_and_its_declarations_come_from_the_embedded_source(program):
     pop = one("std/queue.pop", "orders.agc", cwd=program)
     assert (pop["kind"], pop["module"], pop["span"]["file"]) == ("function", "std/queue.agc", "std/queue.agc")
-    assert pop["signature"] == "pop(q: QueueState) -> Result[Popped]"
+    assert pop["signature"] == "pop(queue: QueueState) -> Result[Popped]"
     field = one("std/queue.Popped.value", "orders.agc", cwd=program)
     assert (field["kind"], field["struct"], field["type"]) == ("field", "Popped", "String")
     # The alias of the file reaches it as well.

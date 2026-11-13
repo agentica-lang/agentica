@@ -180,8 +180,8 @@ end
 signature, effects and description, from the catalog that checking and execution
 use. A parameter with a default also has `default`, its source text (`"0"`),
 and the arity counts every parameter. `ruby` is the signature in the Ruby
-method form (`list.select(f: Fn[A, Bool]) -> List[A]` for `List.filter`), or
-null for a builtin with no method form. The help text and the helps of
+method form (`list.select(block: Fn[A, Bool]) -> List[A]` for `List.filter`),
+or null for a builtin with no method form. The help text and the helps of
 diagnostics write that form too (`list.select`, not `List.filter`), while both
 names stay accepted. Effects are informational (I/O, tasks, or
 `test`). An unknown target exits 2, with a hint when the name is a close

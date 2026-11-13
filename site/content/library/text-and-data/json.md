@@ -44,7 +44,7 @@ end
 ## JSON.decode
 
 ```signature
-JSON.decode(s: String, type: T) -> Result[T]
+JSON.decode(text: String, type: T) -> Result[T]
 JSON.decode(json: JSON.Value, type: T) -> Result[T]
 ```
 
@@ -141,7 +141,7 @@ end
 `User.codec` (on the type, without parentheses, as `User.members`) is the `Codec[User]` of a struct or enum that `JSON.decode` takes.
 
 ```signature
-codec.decode(s: String) -> Result[T]
+codec.decode(text: String) -> Result[T]
 codec.decode(json: JSON.Value) -> Result[T]
 codec.encode(value: T) -> String
 codec.from(value: T) -> JSON.Value
@@ -337,7 +337,7 @@ error("tag: expected one of Circle, Rect, Empty", kind: "json.decode")
 ## JSON.parse
 
 ```signature
-JSON.parse(s: String) -> Result[JSON.Value]
+JSON.parse(text: String) -> Result[JSON.Value]
 ```
 
 Reads exactly one JSON value of any shape, with optional surrounding whitespace (space, tab, CR, LF). Bad JSON gives an error Result: empty input, trailing content, invalid escapes, raw control characters and non-finite numbers are all errors.
@@ -374,8 +374,8 @@ true
 ## JSON.get and JSON.at
 
 ```signature
-JSON.get(j: JSON.Value, key: String) -> Result[JSON.Value]
-JSON.at(j: JSON.Value, index: Int) -> Result[JSON.Value]
+JSON.get(json: JSON.Value, key: String) -> Result[JSON.Value]
+JSON.at(json: JSON.Value, index: Int) -> Result[JSON.Value]
 ```
 
 `get` reads a member of an object; `at` reads an element of an array. A missing key, a bad index or the wrong kind gives an error Result. JSON `false` and `null` are present values.
@@ -397,10 +397,10 @@ false
 ## JSON.string, JSON.int, JSON.float and JSON.bool
 
 ```signature
-JSON.string(j: JSON.Value) -> Result[String]
-JSON.int(j: JSON.Value) -> Result[Int]
-JSON.float(j: JSON.Value) -> Result[Float]
-JSON.bool(j: JSON.Value) -> Result[Bool]
+JSON.string(json: JSON.Value) -> Result[String]
+JSON.int(json: JSON.Value) -> Result[Int]
+JSON.float(json: JSON.Value) -> Result[Float]
+JSON.bool(json: JSON.Value) -> Result[Bool]
 ```
 
 Take a plain value out of a `JSON.Value`. The wrong kind gives an error Result. `JSON.int` needs an integer within 64-bit bounds, so `1.0` is not an `Int`; `JSON.float` rounds to a finite binary64, and overflow is an error. Parsed integers may exceed `Int` until extracted. JSON `null` stays a `JSON.Value`.
@@ -448,7 +448,7 @@ false
 ## JSON.list
 
 ```signature
-JSON.list(j: JSON.Value) -> Result[List[JSON.Value]]
+JSON.list(json: JSON.Value) -> Result[List[JSON.Value]]
 ```
 
 Turns a JSON array into a list of `JSON.Value` values.

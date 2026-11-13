@@ -13390,784 +13390,784 @@ program #7 0:1:1-103:6:1
       body: return-stmt #520 8314:185:48-8330:185:64 implicit
         value: call #519 8314:185:48-8330:185:64 name="@4::bytes8_le" piped=false
           arg: name-ref #518 8324:185:58-8329:185:63 name="value"
-    declaration: function-decl #530 8508:189:8-8576:190:1 name="@4::write_f32_be" expression
-      param: param #524 8525:189:25-8533:189:33 name="x"
-        type: type-ref #523 8528:189:28-8533:189:33 name="Float"
-      result: type-ref #525 8538:189:38-8543:189:43 name="Bytes"
-      body: return-stmt #529 8546:189:46-8575:189:75 implicit
-        value: call #528 8546:189:46-8575:189:75 name="@4::bytes4_be" piped=false
-          arg: call #527 8556:189:56-8574:189:74 name="Float.to_bits32" piped=false
-            arg: name-ref #526 8572:189:72-8573:189:73 name="x"
-    declaration: function-decl #539 8756:193:8-8824:194:1 name="@4::write_f32_le" expression
-      param: param #533 8773:193:25-8781:193:33 name="x"
-        type: type-ref #532 8776:193:28-8781:193:33 name="Float"
-      result: type-ref #534 8786:193:38-8791:193:43 name="Bytes"
-      body: return-stmt #538 8794:193:46-8823:193:75 implicit
-        value: call #537 8794:193:46-8823:193:75 name="@4::bytes4_le" piped=false
-          arg: call #536 8804:193:56-8822:193:74 name="Float.to_bits32" piped=false
-            arg: name-ref #535 8820:193:72-8821:193:73 name="x"
-    declaration: function-decl #548 8960:197:8-9026:198:1 name="@4::write_f64_be" expression
-      param: param #542 8977:197:25-8985:197:33 name="x"
-        type: type-ref #541 8980:197:28-8985:197:33 name="Float"
-      result: type-ref #543 8990:197:38-8995:197:43 name="Bytes"
-      body: return-stmt #547 8998:197:46-9025:197:73 implicit
-        value: call #546 8998:197:46-9025:197:73 name="@4::bytes8_be" piped=false
-          arg: call #545 9008:197:56-9024:197:72 name="Float.to_bits" piped=false
-            arg: name-ref #544 9022:197:70-9023:197:71 name="x"
-    declaration: function-decl #557 9165:201:8-9231:202:1 name="@4::write_f64_le" expression
-      param: param #551 9182:201:25-9190:201:33 name="x"
-        type: type-ref #550 9185:201:28-9190:201:33 name="Float"
-      result: type-ref #552 9195:201:38-9200:201:43 name="Bytes"
-      body: return-stmt #556 9203:201:46-9230:201:73 implicit
-        value: call #555 9203:201:46-9230:201:73 name="@4::bytes8_le" piped=false
-          arg: call #554 9213:201:56-9229:201:72 name="Float.to_bits" piped=false
-            arg: name-ref #553 9227:201:70-9228:201:71 name="x"
-    declaration: function-decl #583 9382:205:8-9606:211:1 name="@4::frame"
-      param: param #560 9392:205:18-9406:205:32 name="payload"
-        type: type-ref #559 9401:205:27-9406:205:32 name="Bytes"
-      result: type-ref #562 9411:205:37-9424:205:50 name="Result"
-        arg: type-ref #561 9418:205:44-9423:205:49 name="Bytes"
-      body: if-stmt #575 9427:206:3-9562:209:1
-        branch: if-branch #574 9427:206:3-9556:208:1
-          condition: binary #566 9430:206:6-9455:206:31 op=greater op-span=9443:206:19-9444:206:20
-            left: field-access #564 9430:206:6-9442:206:18 name="size"
-              target: name-ref #563 9430:206:6-9437:206:13 name="payload"
-            right: literal #565 9445:206:21-9455:206:31 value=int:4294967295
-          body: return-stmt #573 9460:207:5-9556:208:1
-            value: call #572 9467:207:12-9555:207:100 name="error" piped=false
-              arg: interpolation #569 9473:207:18-9536:207:81
+    declaration: function-decl #530 8512:189:8-8588:190:1 name="@4::write_f32_be" expression
+      param: param #524 8529:189:25-8541:189:37 name="value"
+        type: type-ref #523 8536:189:32-8541:189:37 name="Float"
+      result: type-ref #525 8546:189:42-8551:189:47 name="Bytes"
+      body: return-stmt #529 8554:189:50-8587:189:83 implicit
+        value: call #528 8554:189:50-8587:189:83 name="@4::bytes4_be" piped=false
+          arg: call #527 8564:189:60-8586:189:82 name="Float.to_bits32" piped=false
+            arg: name-ref #526 8580:189:76-8585:189:81 name="value"
+    declaration: function-decl #539 8772:193:8-8848:194:1 name="@4::write_f32_le" expression
+      param: param #533 8789:193:25-8801:193:37 name="value"
+        type: type-ref #532 8796:193:32-8801:193:37 name="Float"
+      result: type-ref #534 8806:193:42-8811:193:47 name="Bytes"
+      body: return-stmt #538 8814:193:50-8847:193:83 implicit
+        value: call #537 8814:193:50-8847:193:83 name="@4::bytes4_le" piped=false
+          arg: call #536 8824:193:60-8846:193:82 name="Float.to_bits32" piped=false
+            arg: name-ref #535 8840:193:76-8845:193:81 name="value"
+    declaration: function-decl #548 8988:197:8-9062:198:1 name="@4::write_f64_be" expression
+      param: param #542 9005:197:25-9017:197:37 name="value"
+        type: type-ref #541 9012:197:32-9017:197:37 name="Float"
+      result: type-ref #543 9022:197:42-9027:197:47 name="Bytes"
+      body: return-stmt #547 9030:197:50-9061:197:81 implicit
+        value: call #546 9030:197:50-9061:197:81 name="@4::bytes8_be" piped=false
+          arg: call #545 9040:197:60-9060:197:80 name="Float.to_bits" piped=false
+            arg: name-ref #544 9054:197:74-9059:197:79 name="value"
+    declaration: function-decl #557 9205:201:8-9279:202:1 name="@4::write_f64_le" expression
+      param: param #551 9222:201:25-9234:201:37 name="value"
+        type: type-ref #550 9229:201:32-9234:201:37 name="Float"
+      result: type-ref #552 9239:201:42-9244:201:47 name="Bytes"
+      body: return-stmt #556 9247:201:50-9278:201:81 implicit
+        value: call #555 9247:201:50-9278:201:81 name="@4::bytes8_le" piped=false
+          arg: call #554 9257:201:60-9277:201:80 name="Float.to_bits" piped=false
+            arg: name-ref #553 9271:201:74-9276:201:79 name="value"
+    declaration: function-decl #583 9430:205:8-9654:211:1 name="@4::frame"
+      param: param #560 9440:205:18-9454:205:32 name="payload"
+        type: type-ref #559 9449:205:27-9454:205:32 name="Bytes"
+      result: type-ref #562 9459:205:37-9472:205:50 name="Result"
+        arg: type-ref #561 9466:205:44-9471:205:49 name="Bytes"
+      body: if-stmt #575 9475:206:3-9610:209:1
+        branch: if-branch #574 9475:206:3-9604:208:1
+          condition: binary #566 9478:206:6-9503:206:31 op=greater op-span=9491:206:19-9492:206:20
+            left: field-access #564 9478:206:6-9490:206:18 name="size"
+              target: name-ref #563 9478:206:6-9485:206:13 name="payload"
+            right: literal #565 9493:206:21-9503:206:31 value=int:4294967295
+          body: return-stmt #573 9508:207:5-9604:208:1
+            value: call #572 9515:207:12-9603:207:100 name="error" piped=false
+              arg: interpolation #569 9521:207:18-9584:207:81
                 part: text "payload of "
-                part: field-access #568 9487:207:32-9499:207:44 name="size"
-                  target: name-ref #567 9487:207:32-9494:207:39 name="payload"
+                part: field-access #568 9535:207:32-9547:207:44 name="size"
+                  target: name-ref #567 9535:207:32-9542:207:39 name="payload"
                 part: text " bytes does not fit in a u32 length"
-              arg: named-arg #571 9538:207:83-9554:207:99 name="kind"
-                value: literal #570 9544:207:89-9554:207:99 value=string:"argument"
-      body: return-stmt #582 9564:209:3-9601:209:40 implicit
-        value: call #581 9564:209:3-9601:209:40 name="ok" piped=false
-          arg: binary #580 9567:209:6-9600:209:39 op=plus op-span=9591:209:30-9592:209:31
-            left: call #578 9567:209:6-9590:209:29 name="@4::bytes4_be" piped=false
-              arg: field-access #577 9577:209:16-9589:209:28 name="size"
-                target: name-ref #576 9577:209:16-9584:209:23 name="payload"
-            right: name-ref #579 9593:209:32-9600:209:39 name="payload"
-    declaration: function-decl #625 9813:214:8-10136:220:1 name="@4::read_frame_length"
-      param: param #586 9835:214:30-9846:214:41 name="data"
-        type: type-ref #585 9841:214:36-9846:214:41 name="Bytes"
-      param: param #588 9848:214:43-9859:214:54 name="offset"
-        type: type-ref #587 9856:214:51-9859:214:54 name="Int"
-      param: param #590 9861:214:56-9869:214:64 name="max"
-        type: type-ref #589 9866:214:61-9869:214:64 name="Int"
-      result: type-ref #592 9874:214:69-9885:214:80 name="Result"
-        arg: type-ref #591 9881:214:76-9884:214:79 name="Int"
-      body: if-stmt #603 9888:215:3-9964:216:1 guard
-        branch: if-branch #602 9888:215:3-9963:215:78
-          condition: binary #601 9956:215:71-9963:215:78 op=less op-span=9960:215:75-9961:215:76
-            left: name-ref #599 9956:215:71-9959:215:74 name="max"
-            right: literal #600 9962:215:77-9963:215:78 value=int:0
-          body: return-stmt #598 9888:215:3-9952:215:67
-            value: call #597 9895:215:10-9952:215:67 name="error" piped=false
-              arg: interpolation #594 9901:215:16-9933:215:48
+              arg: named-arg #571 9586:207:83-9602:207:99 name="kind"
+                value: literal #570 9592:207:89-9602:207:99 value=string:"argument"
+      body: return-stmt #582 9612:209:3-9649:209:40 implicit
+        value: call #581 9612:209:3-9649:209:40 name="ok" piped=false
+          arg: binary #580 9615:209:6-9648:209:39 op=plus op-span=9639:209:30-9640:209:31
+            left: call #578 9615:209:6-9638:209:29 name="@4::bytes4_be" piped=false
+              arg: field-access #577 9625:209:16-9637:209:28 name="size"
+                target: name-ref #576 9625:209:16-9632:209:23 name="payload"
+            right: name-ref #579 9641:209:32-9648:209:39 name="payload"
+    declaration: function-decl #625 9861:214:8-10184:220:1 name="@4::read_frame_length"
+      param: param #586 9883:214:30-9894:214:41 name="data"
+        type: type-ref #585 9889:214:36-9894:214:41 name="Bytes"
+      param: param #588 9896:214:43-9907:214:54 name="offset"
+        type: type-ref #587 9904:214:51-9907:214:54 name="Int"
+      param: param #590 9909:214:56-9917:214:64 name="max"
+        type: type-ref #589 9914:214:61-9917:214:64 name="Int"
+      result: type-ref #592 9922:214:69-9933:214:80 name="Result"
+        arg: type-ref #591 9929:214:76-9932:214:79 name="Int"
+      body: if-stmt #603 9936:215:3-10012:216:1 guard
+        branch: if-branch #602 9936:215:3-10011:215:78
+          condition: binary #601 10004:215:71-10011:215:78 op=less op-span=10008:215:75-10009:215:76
+            left: name-ref #599 10004:215:71-10007:215:74 name="max"
+            right: literal #600 10010:215:77-10011:215:78 value=int:0
+          body: return-stmt #598 9936:215:3-10000:215:67
+            value: call #597 9943:215:10-10000:215:67 name="error" piped=false
+              arg: interpolation #594 9949:215:16-9981:215:48
                 part: text "frame limit "
-                part: name-ref #593 9916:215:31-9919:215:34 name="max"
+                part: name-ref #593 9964:215:31-9967:215:34 name="max"
                 part: text " is negative"
-              arg: named-arg #596 9935:215:50-9951:215:66 name="kind"
-                value: literal #595 9941:215:56-9951:215:66 value=string:"argument"
-      body: binding #609 9966:216:3-10010:217:1 name="length"
-        value: try-expr #608 9975:216:12-10009:216:46
-          operand: call #607 9979:216:16-10009:216:46 name="@4::load32_be" piped=false
-            arg: name-ref #604 9989:216:26-9993:216:30 name="data"
-            arg: name-ref #605 9995:216:32-10001:216:38 name="offset"
-            arg: literal #606 10003:216:40-10008:216:45 value=string:"u32"
-      body: if-stmt #621 10012:217:3-10119:218:1 guard
-        branch: if-branch #620 10012:217:3-10118:217:109
-          condition: binary #619 10106:217:97-10118:217:109 op=greater op-span=10113:217:104-10114:217:105
-            left: name-ref #617 10106:217:97-10112:217:103 name="length"
-            right: name-ref #618 10115:217:106-10118:217:109 name="max"
-          body: return-stmt #616 10012:217:3-10102:217:93
-            value: call #615 10019:217:10-10102:217:93 name="error" piped=false
-              arg: interpolation #612 10025:217:16-10075:217:66
+              arg: named-arg #596 9983:215:50-9999:215:66 name="kind"
+                value: literal #595 9989:215:56-9999:215:66 value=string:"argument"
+      body: binding #609 10014:216:3-10058:217:1 name="length"
+        value: try-expr #608 10023:216:12-10057:216:46
+          operand: call #607 10027:216:16-10057:216:46 name="@4::load32_be" piped=false
+            arg: name-ref #604 10037:216:26-10041:216:30 name="data"
+            arg: name-ref #605 10043:216:32-10049:216:38 name="offset"
+            arg: literal #606 10051:216:40-10056:216:45 value=string:"u32"
+      body: if-stmt #621 10060:217:3-10167:218:1 guard
+        branch: if-branch #620 10060:217:3-10166:217:109
+          condition: binary #619 10154:217:97-10166:217:109 op=greater op-span=10161:217:104-10162:217:105
+            left: name-ref #617 10154:217:97-10160:217:103 name="length"
+            right: name-ref #618 10163:217:106-10166:217:109 name="max"
+          body: return-stmt #616 10060:217:3-10150:217:93
+            value: call #615 10067:217:10-10150:217:93 name="error" piped=false
+              arg: interpolation #612 10073:217:16-10123:217:66
                 part: text "frame length "
-                part: name-ref #610 10041:217:32-10047:217:38 name="length"
+                part: name-ref #610 10089:217:32-10095:217:38 name="length"
                 part: text " is above the limit "
-                part: name-ref #611 10070:217:61-10073:217:64 name="max"
-              arg: named-arg #614 10077:217:68-10101:217:92 name="kind"
-                value: literal #613 10083:217:74-10101:217:92 value=string:"binary.too_large"
-      body: return-stmt #624 10121:218:3-10131:218:13 implicit
-        value: call #623 10121:218:3-10131:218:13 name="ok" piped=false
-          arg: name-ref #622 10124:218:6-10130:218:12 name="length"
-    declaration: function-decl #660 10137:221:1-10377:227:1 name="@4::window"
-      param: param #628 10148:221:12-10159:221:23 name="data"
-        type: type-ref #627 10154:221:18-10159:221:23 name="Bytes"
-      param: param #630 10161:221:25-10172:221:36 name="offset"
-        type: type-ref #629 10169:221:33-10172:221:36 name="Int"
-      param: param #632 10174:221:38-10180:221:44 name="n"
-        type: type-ref #631 10177:221:41-10180:221:44 name="Int"
-      param: param #634 10182:221:46-10194:221:58 name="type"
-        type: type-ref #633 10188:221:52-10194:221:58 name="String"
-      result: type-ref #636 10199:221:63-10211:221:75 name="Result"
-        arg: type-ref #635 10206:221:70-10210:221:74 name="Void"
-      body: if-stmt #657 10214:222:3-10366:225:1
-        branch: if-branch #656 10214:222:3-10360:224:1
-          condition: binary #646 10217:222:6-10253:222:42 op=or op-span=10228:222:17-10230:222:19
-            left: binary #639 10217:222:6-10227:222:16 op=less op-span=10224:222:13-10225:222:14
-              left: name-ref #637 10217:222:6-10223:222:12 name="offset"
-              right: literal #638 10226:222:15-10227:222:16 value=int:0
-            right: binary #645 10231:222:20-10253:222:42 op=greater op-span=10238:222:27-10239:222:28
-              left: name-ref #640 10231:222:20-10237:222:26 name="offset"
-              right: binary #644 10240:222:29-10253:222:42 op=minus op-span=10250:222:39-10251:222:40
-                left: field-access #642 10240:222:29-10249:222:38 name="size"
-                  target: name-ref #641 10240:222:29-10244:222:33 name="data"
-                right: name-ref #643 10252:222:41-10253:222:42 name="n"
-          body: return-stmt #655 10258:223:5-10360:224:1
-            value: call #654 10265:223:12-10359:223:106 name="error" piped=false
-              arg: interpolation #651 10271:223:18-10340:223:87
-                part: name-ref #647 10274:223:21-10278:223:25 name="type"
+                part: name-ref #611 10118:217:61-10121:217:64 name="max"
+              arg: named-arg #614 10125:217:68-10149:217:92 name="kind"
+                value: literal #613 10131:217:74-10149:217:92 value=string:"binary.too_large"
+      body: return-stmt #624 10169:218:3-10179:218:13 implicit
+        value: call #623 10169:218:3-10179:218:13 name="ok" piped=false
+          arg: name-ref #622 10172:218:6-10178:218:12 name="length"
+    declaration: function-decl #660 10185:221:1-10425:227:1 name="@4::window"
+      param: param #628 10196:221:12-10207:221:23 name="data"
+        type: type-ref #627 10202:221:18-10207:221:23 name="Bytes"
+      param: param #630 10209:221:25-10220:221:36 name="offset"
+        type: type-ref #629 10217:221:33-10220:221:36 name="Int"
+      param: param #632 10222:221:38-10228:221:44 name="n"
+        type: type-ref #631 10225:221:41-10228:221:44 name="Int"
+      param: param #634 10230:221:46-10242:221:58 name="type"
+        type: type-ref #633 10236:221:52-10242:221:58 name="String"
+      result: type-ref #636 10247:221:63-10259:221:75 name="Result"
+        arg: type-ref #635 10254:221:70-10258:221:74 name="Void"
+      body: if-stmt #657 10262:222:3-10414:225:1
+        branch: if-branch #656 10262:222:3-10408:224:1
+          condition: binary #646 10265:222:6-10301:222:42 op=or op-span=10276:222:17-10278:222:19
+            left: binary #639 10265:222:6-10275:222:16 op=less op-span=10272:222:13-10273:222:14
+              left: name-ref #637 10265:222:6-10271:222:12 name="offset"
+              right: literal #638 10274:222:15-10275:222:16 value=int:0
+            right: binary #645 10279:222:20-10301:222:42 op=greater op-span=10286:222:27-10287:222:28
+              left: name-ref #640 10279:222:20-10285:222:26 name="offset"
+              right: binary #644 10288:222:29-10301:222:42 op=minus op-span=10298:222:39-10299:222:40
+                left: field-access #642 10288:222:29-10297:222:38 name="size"
+                  target: name-ref #641 10288:222:29-10292:222:33 name="data"
+                right: name-ref #643 10300:222:41-10301:222:42 name="n"
+          body: return-stmt #655 10306:223:5-10408:224:1
+            value: call #654 10313:223:12-10407:223:106 name="error" piped=false
+              arg: interpolation #651 10319:223:18-10388:223:87
+                part: name-ref #647 10322:223:21-10326:223:25 name="type"
                 part: text " at offset "
-                part: name-ref #648 10292:223:39-10298:223:45 name="offset"
+                part: name-ref #648 10340:223:39-10346:223:45 name="offset"
                 part: text " is outside bytes of length "
-                part: field-access #650 10329:223:76-10338:223:85 name="size"
-                  target: name-ref #649 10329:223:76-10333:223:80 name="data"
-              arg: named-arg #653 10342:223:89-10358:223:105 name="kind"
-                value: literal #652 10348:223:95-10358:223:105 value=string:"argument"
-      body: return-stmt #659 10368:225:3-10372:225:7 implicit
-        value: call #658 10368:225:3-10372:225:7 name="ok" piped=false
-    declaration: function-decl #689 10378:228:1-10567:232:1 name="@4::fits"
-      param: param #662 10387:228:10-10397:228:20 name="value"
-        type: type-ref #661 10394:228:17-10397:228:20 name="Int"
-      param: param #664 10399:228:22-10407:228:30 name="low"
-        type: type-ref #663 10404:228:27-10407:228:30 name="Int"
-      param: param #666 10409:228:32-10418:228:41 name="high"
-        type: type-ref #665 10415:228:38-10418:228:41 name="Int"
-      param: param #668 10420:228:43-10432:228:55 name="type"
-        type: type-ref #667 10426:228:49-10432:228:55 name="String"
-      result: type-ref #670 10437:228:60-10449:228:72 name="Result"
-        arg: type-ref #669 10444:228:67-10448:228:71 name="Void"
-      body: if-stmt #686 10452:229:3-10556:230:1 guard
-        branch: if-branch #685 10452:229:3-10555:229:106
-          condition: binary #684 10528:229:79-10555:229:106 op=or op-span=10540:229:91-10542:229:93
-            left: binary #680 10528:229:79-10539:229:90 op=less op-span=10534:229:85-10535:229:86
-              left: name-ref #678 10528:229:79-10533:229:84 name="value"
-              right: name-ref #679 10536:229:87-10539:229:90 name="low"
-            right: binary #683 10543:229:94-10555:229:106 op=greater op-span=10549:229:100-10550:229:101
-              left: name-ref #681 10543:229:94-10548:229:99 name="value"
-              right: name-ref #682 10551:229:102-10555:229:106 name="high"
-          body: return-stmt #677 10452:229:3-10524:229:75
-            value: call #676 10459:229:10-10524:229:75 name="error" piped=false
-              arg: interpolation #673 10465:229:16-10505:229:56
+                part: field-access #650 10377:223:76-10386:223:85 name="size"
+                  target: name-ref #649 10377:223:76-10381:223:80 name="data"
+              arg: named-arg #653 10390:223:89-10406:223:105 name="kind"
+                value: literal #652 10396:223:95-10406:223:105 value=string:"argument"
+      body: return-stmt #659 10416:225:3-10420:225:7 implicit
+        value: call #658 10416:225:3-10420:225:7 name="ok" piped=false
+    declaration: function-decl #689 10426:228:1-10615:232:1 name="@4::fits"
+      param: param #662 10435:228:10-10445:228:20 name="value"
+        type: type-ref #661 10442:228:17-10445:228:20 name="Int"
+      param: param #664 10447:228:22-10455:228:30 name="low"
+        type: type-ref #663 10452:228:27-10455:228:30 name="Int"
+      param: param #666 10457:228:32-10466:228:41 name="high"
+        type: type-ref #665 10463:228:38-10466:228:41 name="Int"
+      param: param #668 10468:228:43-10480:228:55 name="type"
+        type: type-ref #667 10474:228:49-10480:228:55 name="String"
+      result: type-ref #670 10485:228:60-10497:228:72 name="Result"
+        arg: type-ref #669 10492:228:67-10496:228:71 name="Void"
+      body: if-stmt #686 10500:229:3-10604:230:1 guard
+        branch: if-branch #685 10500:229:3-10603:229:106
+          condition: binary #684 10576:229:79-10603:229:106 op=or op-span=10588:229:91-10590:229:93
+            left: binary #680 10576:229:79-10587:229:90 op=less op-span=10582:229:85-10583:229:86
+              left: name-ref #678 10576:229:79-10581:229:84 name="value"
+              right: name-ref #679 10584:229:87-10587:229:90 name="low"
+            right: binary #683 10591:229:94-10603:229:106 op=greater op-span=10597:229:100-10598:229:101
+              left: name-ref #681 10591:229:94-10596:229:99 name="value"
+              right: name-ref #682 10599:229:102-10603:229:106 name="high"
+          body: return-stmt #677 10500:229:3-10572:229:75
+            value: call #676 10507:229:10-10572:229:75 name="error" piped=false
+              arg: interpolation #673 10513:229:16-10553:229:56
                 part: text "value "
-                part: name-ref #671 10474:229:25-10479:229:30 name="value"
+                part: name-ref #671 10522:229:25-10527:229:30 name="value"
                 part: text " does not fit in "
-                part: name-ref #672 10499:229:50-10503:229:54 name="type"
-              arg: named-arg #675 10507:229:58-10523:229:74 name="kind"
-                value: literal #674 10513:229:64-10523:229:74 value=string:"argument"
-      body: return-stmt #688 10558:230:3-10562:230:7 implicit
-        value: call #687 10558:230:3-10562:230:7 name="ok" piped=false
-    declaration: function-decl #705 10568:233:1-10662:234:1 name="@4::extend" expression
-      param: param #691 10579:233:12-10589:233:22 name="value"
-        type: type-ref #690 10586:233:19-10589:233:22 name="Int"
-      param: param #693 10591:233:24-10600:233:33 name="bits"
-        type: type-ref #692 10597:233:30-10600:233:33 name="Int"
-      result: type-ref #694 10605:233:38-10608:233:41 name="Int"
-      body: return-stmt #704 10611:233:44-10661:233:94 implicit
-        value: method-call #703 10611:233:44-10661:233:94 name="shift_right"
-          target: method-call #699 10611:233:44-10638:233:71 name="shift_left"
-            target: name-ref #695 10611:233:44-10616:233:49 name="value"
-            arg: binary #698 10628:233:61-10637:233:70 op=minus op-span=10631:233:64-10632:233:65
-              left: literal #696 10628:233:61-10630:233:63 value=int:64
-              right: name-ref #697 10633:233:66-10637:233:70 name="bits"
-          arg: binary #702 10651:233:84-10660:233:93 op=minus op-span=10654:233:87-10655:233:88
-            left: literal #700 10651:233:84-10653:233:86 value=int:64
-            right: name-ref #701 10656:233:89-10660:233:93 name="bits"
-    declaration: function-decl #728 10663:235:1-10795:240:1 name="@4::load8"
-      param: param #707 10673:235:11-10684:235:22 name="data"
-        type: type-ref #706 10679:235:17-10684:235:22 name="Bytes"
-      param: param #709 10686:235:24-10697:235:35 name="offset"
-        type: type-ref #708 10694:235:32-10697:235:35 name="Int"
-      param: param #711 10699:235:37-10711:235:49 name="type"
-        type: type-ref #710 10705:235:43-10711:235:49 name="String"
-      result: type-ref #713 10716:235:54-10727:235:65 name="Result"
-        arg: type-ref #712 10723:235:61-10726:235:64 name="Int"
-      body: expr-stmt #720 10730:236:3-10764:237:1
-        value: try-expr #719 10730:236:3-10763:236:36
-          operand: call #718 10734:236:7-10763:236:36 name="@4::window" piped=false
-            arg: name-ref #714 10741:236:14-10745:236:18 name="data"
-            arg: name-ref #715 10747:236:20-10753:236:26 name="offset"
-            arg: literal #716 10755:236:28-10756:236:29 value=int:1
-            arg: name-ref #717 10758:236:31-10762:236:35 name="type"
-      body: binding #724 10766:237:3-10783:238:1 name="a"
-        value: index-access #723 10770:237:7-10782:237:19
-          target: name-ref #721 10770:237:7-10774:237:11 name="data"
-          index: name-ref #722 10775:237:12-10781:237:18 name="offset"
-      body: return-stmt #727 10785:238:3-10790:238:8 implicit
-        value: call #726 10785:238:3-10790:238:8 name="ok" piped=false
-          arg: name-ref #725 10788:238:6-10789:238:7 name="a"
-    declaration: function-decl #761 10796:241:1-10979:247:1 name="@4::load16_be"
-      param: param #730 10810:241:15-10821:241:26 name="data"
-        type: type-ref #729 10816:241:21-10821:241:26 name="Bytes"
-      param: param #732 10823:241:28-10834:241:39 name="offset"
-        type: type-ref #731 10831:241:36-10834:241:39 name="Int"
-      param: param #734 10836:241:41-10848:241:53 name="type"
-        type: type-ref #733 10842:241:47-10848:241:53 name="String"
-      result: type-ref #736 10853:241:58-10864:241:69 name="Result"
-        arg: type-ref #735 10860:241:65-10863:241:68 name="Int"
-      body: expr-stmt #743 10867:242:3-10901:243:1
-        value: try-expr #742 10867:242:3-10900:242:36
-          operand: call #741 10871:242:7-10900:242:36 name="@4::window" piped=false
-            arg: name-ref #737 10878:242:14-10882:242:18 name="data"
-            arg: name-ref #738 10884:242:20-10890:242:26 name="offset"
-            arg: literal #739 10892:242:28-10893:242:29 value=int:2
-            arg: name-ref #740 10895:242:31-10899:242:35 name="type"
-      body: binding #747 10903:243:3-10920:244:1 name="a"
-        value: index-access #746 10907:243:7-10919:243:19
-          target: name-ref #744 10907:243:7-10911:243:11 name="data"
-          index: name-ref #745 10912:243:12-10918:243:18 name="offset"
-      body: binding #753 10922:244:3-10943:245:1 name="b"
-        value: index-access #752 10926:244:7-10942:244:23
-          target: name-ref #748 10926:244:7-10930:244:11 name="data"
-          index: binary #751 10931:244:12-10941:244:22 op=plus op-span=10938:244:19-10939:244:20
-            left: name-ref #749 10931:244:12-10937:244:18 name="offset"
-            right: literal #750 10940:244:21-10941:244:22 value=int:1
-      body: return-stmt #760 10945:245:3-10974:245:32 implicit
-        value: call #759 10945:245:3-10974:245:32 name="ok" piped=false
-          arg: method-call #758 10948:245:6-10973:245:31 name="bit_or"
-            target: method-call #756 10948:245:6-10963:245:21 name="shift_left"
-              target: name-ref #754 10948:245:6-10949:245:7 name="a"
-              arg: literal #755 10961:245:19-10962:245:20 value=int:8
-            arg: name-ref #757 10971:245:29-10972:245:30 name="b"
-    declaration: function-decl #794 10980:248:1-11163:254:1 name="@4::load16_le"
-      param: param #763 10994:248:15-11005:248:26 name="data"
-        type: type-ref #762 11000:248:21-11005:248:26 name="Bytes"
-      param: param #765 11007:248:28-11018:248:39 name="offset"
-        type: type-ref #764 11015:248:36-11018:248:39 name="Int"
-      param: param #767 11020:248:41-11032:248:53 name="type"
-        type: type-ref #766 11026:248:47-11032:248:53 name="String"
-      result: type-ref #769 11037:248:58-11048:248:69 name="Result"
-        arg: type-ref #768 11044:248:65-11047:248:68 name="Int"
-      body: expr-stmt #776 11051:249:3-11085:250:1
-        value: try-expr #775 11051:249:3-11084:249:36
-          operand: call #774 11055:249:7-11084:249:36 name="@4::window" piped=false
-            arg: name-ref #770 11062:249:14-11066:249:18 name="data"
-            arg: name-ref #771 11068:249:20-11074:249:26 name="offset"
-            arg: literal #772 11076:249:28-11077:249:29 value=int:2
-            arg: name-ref #773 11079:249:31-11083:249:35 name="type"
-      body: binding #780 11087:250:3-11104:251:1 name="a"
-        value: index-access #779 11091:250:7-11103:250:19
-          target: name-ref #777 11091:250:7-11095:250:11 name="data"
-          index: name-ref #778 11096:250:12-11102:250:18 name="offset"
-      body: binding #786 11106:251:3-11127:252:1 name="b"
-        value: index-access #785 11110:251:7-11126:251:23
-          target: name-ref #781 11110:251:7-11114:251:11 name="data"
-          index: binary #784 11115:251:12-11125:251:22 op=plus op-span=11122:251:19-11123:251:20
-            left: name-ref #782 11115:251:12-11121:251:18 name="offset"
-            right: literal #783 11124:251:21-11125:251:22 value=int:1
-      body: return-stmt #793 11129:252:3-11158:252:32 implicit
-        value: call #792 11129:252:3-11158:252:32 name="ok" piped=false
-          arg: method-call #791 11132:252:6-11157:252:31 name="bit_or"
-            target: method-call #789 11132:252:6-11147:252:21 name="shift_left"
-              target: name-ref #787 11132:252:6-11133:252:7 name="b"
-              arg: literal #788 11145:252:19-11146:252:20 value=int:8
-            arg: name-ref #790 11155:252:29-11156:252:30 name="a"
-    declaration: function-decl #847 11164:255:1-11443:263:1 name="@4::load32_be"
-      param: param #796 11178:255:15-11189:255:26 name="data"
-        type: type-ref #795 11184:255:21-11189:255:26 name="Bytes"
-      param: param #798 11191:255:28-11202:255:39 name="offset"
-        type: type-ref #797 11199:255:36-11202:255:39 name="Int"
-      param: param #800 11204:255:41-11216:255:53 name="type"
-        type: type-ref #799 11210:255:47-11216:255:53 name="String"
-      result: type-ref #802 11221:255:58-11232:255:69 name="Result"
-        arg: type-ref #801 11228:255:65-11231:255:68 name="Int"
-      body: expr-stmt #809 11235:256:3-11269:257:1
-        value: try-expr #808 11235:256:3-11268:256:36
-          operand: call #807 11239:256:7-11268:256:36 name="@4::window" piped=false
-            arg: name-ref #803 11246:256:14-11250:256:18 name="data"
-            arg: name-ref #804 11252:256:20-11258:256:26 name="offset"
-            arg: literal #805 11260:256:28-11261:256:29 value=int:4
-            arg: name-ref #806 11263:256:31-11267:256:35 name="type"
-      body: binding #813 11271:257:3-11288:258:1 name="a"
-        value: index-access #812 11275:257:7-11287:257:19
-          target: name-ref #810 11275:257:7-11279:257:11 name="data"
-          index: name-ref #811 11280:257:12-11286:257:18 name="offset"
-      body: binding #819 11290:258:3-11311:259:1 name="b"
-        value: index-access #818 11294:258:7-11310:258:23
-          target: name-ref #814 11294:258:7-11298:258:11 name="data"
-          index: binary #817 11299:258:12-11309:258:22 op=plus op-span=11306:258:19-11307:258:20
-            left: name-ref #815 11299:258:12-11305:258:18 name="offset"
-            right: literal #816 11308:258:21-11309:258:22 value=int:1
-      body: binding #825 11313:259:3-11334:260:1 name="c"
-        value: index-access #824 11317:259:7-11333:259:23
-          target: name-ref #820 11317:259:7-11321:259:11 name="data"
-          index: binary #823 11322:259:12-11332:259:22 op=plus op-span=11329:259:19-11330:259:20
-            left: name-ref #821 11322:259:12-11328:259:18 name="offset"
-            right: literal #822 11331:259:21-11332:259:22 value=int:2
-      body: binding #831 11336:260:3-11357:261:1 name="d"
-        value: index-access #830 11340:260:7-11356:260:23
-          target: name-ref #826 11340:260:7-11344:260:11 name="data"
-          index: binary #829 11345:260:12-11355:260:22 op=plus op-span=11352:260:19-11353:260:20
-            left: name-ref #827 11345:260:12-11351:260:18 name="offset"
-            right: literal #828 11354:260:21-11355:260:22 value=int:3
-      body: return-stmt #846 11359:261:3-11438:261:82 implicit
-        value: call #845 11359:261:3-11438:261:82 name="ok" piped=false
-          arg: method-call #844 11362:261:6-11437:261:81 name="bit_or"
-            target: method-call #842 11362:261:6-11427:261:71 name="bit_or"
-              target: method-call #838 11362:261:6-11403:261:47 name="bit_or"
-                target: method-call #834 11362:261:6-11378:261:22 name="shift_left"
-                  target: name-ref #832 11362:261:6-11363:261:7 name="a"
-                  arg: literal #833 11375:261:19-11377:261:21 value=int:24
-                arg: method-call #837 11386:261:30-11402:261:46 name="shift_left"
-                  target: name-ref #835 11386:261:30-11387:261:31 name="b"
-                  arg: literal #836 11399:261:43-11401:261:45 value=int:16
-              arg: method-call #841 11411:261:55-11426:261:70 name="shift_left"
-                target: name-ref #839 11411:261:55-11412:261:56 name="c"
-                arg: literal #840 11424:261:68-11425:261:69 value=int:8
-            arg: name-ref #843 11435:261:79-11436:261:80 name="d"
-    declaration: function-decl #900 11444:264:1-11723:272:1 name="@4::load32_le"
-      param: param #849 11458:264:15-11469:264:26 name="data"
-        type: type-ref #848 11464:264:21-11469:264:26 name="Bytes"
-      param: param #851 11471:264:28-11482:264:39 name="offset"
-        type: type-ref #850 11479:264:36-11482:264:39 name="Int"
-      param: param #853 11484:264:41-11496:264:53 name="type"
-        type: type-ref #852 11490:264:47-11496:264:53 name="String"
-      result: type-ref #855 11501:264:58-11512:264:69 name="Result"
-        arg: type-ref #854 11508:264:65-11511:264:68 name="Int"
-      body: expr-stmt #862 11515:265:3-11549:266:1
-        value: try-expr #861 11515:265:3-11548:265:36
-          operand: call #860 11519:265:7-11548:265:36 name="@4::window" piped=false
-            arg: name-ref #856 11526:265:14-11530:265:18 name="data"
-            arg: name-ref #857 11532:265:20-11538:265:26 name="offset"
-            arg: literal #858 11540:265:28-11541:265:29 value=int:4
-            arg: name-ref #859 11543:265:31-11547:265:35 name="type"
-      body: binding #866 11551:266:3-11568:267:1 name="a"
-        value: index-access #865 11555:266:7-11567:266:19
-          target: name-ref #863 11555:266:7-11559:266:11 name="data"
-          index: name-ref #864 11560:266:12-11566:266:18 name="offset"
-      body: binding #872 11570:267:3-11591:268:1 name="b"
-        value: index-access #871 11574:267:7-11590:267:23
-          target: name-ref #867 11574:267:7-11578:267:11 name="data"
-          index: binary #870 11579:267:12-11589:267:22 op=plus op-span=11586:267:19-11587:267:20
-            left: name-ref #868 11579:267:12-11585:267:18 name="offset"
-            right: literal #869 11588:267:21-11589:267:22 value=int:1
-      body: binding #878 11593:268:3-11614:269:1 name="c"
-        value: index-access #877 11597:268:7-11613:268:23
-          target: name-ref #873 11597:268:7-11601:268:11 name="data"
-          index: binary #876 11602:268:12-11612:268:22 op=plus op-span=11609:268:19-11610:268:20
-            left: name-ref #874 11602:268:12-11608:268:18 name="offset"
-            right: literal #875 11611:268:21-11612:268:22 value=int:2
-      body: binding #884 11616:269:3-11637:270:1 name="d"
-        value: index-access #883 11620:269:7-11636:269:23
-          target: name-ref #879 11620:269:7-11624:269:11 name="data"
-          index: binary #882 11625:269:12-11635:269:22 op=plus op-span=11632:269:19-11633:269:20
-            left: name-ref #880 11625:269:12-11631:269:18 name="offset"
-            right: literal #881 11634:269:21-11635:269:22 value=int:3
-      body: return-stmt #899 11639:270:3-11718:270:82 implicit
-        value: call #898 11639:270:3-11718:270:82 name="ok" piped=false
-          arg: method-call #897 11642:270:6-11717:270:81 name="bit_or"
-            target: method-call #895 11642:270:6-11707:270:71 name="bit_or"
-              target: method-call #891 11642:270:6-11683:270:47 name="bit_or"
-                target: method-call #887 11642:270:6-11658:270:22 name="shift_left"
-                  target: name-ref #885 11642:270:6-11643:270:7 name="d"
-                  arg: literal #886 11655:270:19-11657:270:21 value=int:24
-                arg: method-call #890 11666:270:30-11682:270:46 name="shift_left"
-                  target: name-ref #888 11666:270:30-11667:270:31 name="c"
-                  arg: literal #889 11679:270:43-11681:270:45 value=int:16
-              arg: method-call #894 11691:270:55-11706:270:70 name="shift_left"
-                target: name-ref #892 11691:270:55-11692:270:56 name="b"
-                arg: literal #893 11704:270:68-11705:270:69 value=int:8
-            arg: name-ref #896 11715:270:79-11716:270:80 name="a"
-    declaration: function-decl #997 11724:273:1-12220:287:1 name="@4::load64_be"
-      param: param #902 11738:273:15-11749:273:26 name="data"
-        type: type-ref #901 11744:273:21-11749:273:26 name="Bytes"
-      param: param #904 11751:273:28-11762:273:39 name="offset"
-        type: type-ref #903 11759:273:36-11762:273:39 name="Int"
-      param: param #906 11764:273:41-11776:273:53 name="type"
-        type: type-ref #905 11770:273:47-11776:273:53 name="String"
-      result: type-ref #908 11781:273:58-11792:273:69 name="Result"
-        arg: type-ref #907 11788:273:65-11791:273:68 name="Int"
-      body: expr-stmt #915 11795:274:3-11829:275:1
-        value: try-expr #914 11795:274:3-11828:274:36
-          operand: call #913 11799:274:7-11828:274:36 name="@4::window" piped=false
-            arg: name-ref #909 11806:274:14-11810:274:18 name="data"
-            arg: name-ref #910 11812:274:20-11818:274:26 name="offset"
-            arg: literal #911 11820:274:28-11821:274:29 value=int:8
-            arg: name-ref #912 11823:274:31-11827:274:35 name="type"
-      body: binding #919 11831:275:3-11848:276:1 name="a"
-        value: index-access #918 11835:275:7-11847:275:19
-          target: name-ref #916 11835:275:7-11839:275:11 name="data"
-          index: name-ref #917 11840:275:12-11846:275:18 name="offset"
-      body: binding #925 11850:276:3-11871:277:1 name="b"
-        value: index-access #924 11854:276:7-11870:276:23
-          target: name-ref #920 11854:276:7-11858:276:11 name="data"
-          index: binary #923 11859:276:12-11869:276:22 op=plus op-span=11866:276:19-11867:276:20
-            left: name-ref #921 11859:276:12-11865:276:18 name="offset"
-            right: literal #922 11868:276:21-11869:276:22 value=int:1
-      body: binding #931 11873:277:3-11894:278:1 name="c"
-        value: index-access #930 11877:277:7-11893:277:23
-          target: name-ref #926 11877:277:7-11881:277:11 name="data"
-          index: binary #929 11882:277:12-11892:277:22 op=plus op-span=11889:277:19-11890:277:20
-            left: name-ref #927 11882:277:12-11888:277:18 name="offset"
-            right: literal #928 11891:277:21-11892:277:22 value=int:2
-      body: binding #937 11896:278:3-11917:279:1 name="d"
-        value: index-access #936 11900:278:7-11916:278:23
-          target: name-ref #932 11900:278:7-11904:278:11 name="data"
-          index: binary #935 11905:278:12-11915:278:22 op=plus op-span=11912:278:19-11913:278:20
-            left: name-ref #933 11905:278:12-11911:278:18 name="offset"
-            right: literal #934 11914:278:21-11915:278:22 value=int:3
-      body: binding #943 11919:279:3-11940:280:1 name="e"
-        value: index-access #942 11923:279:7-11939:279:23
-          target: name-ref #938 11923:279:7-11927:279:11 name="data"
-          index: binary #941 11928:279:12-11938:279:22 op=plus op-span=11935:279:19-11936:279:20
-            left: name-ref #939 11928:279:12-11934:279:18 name="offset"
-            right: literal #940 11937:279:21-11938:279:22 value=int:4
-      body: binding #949 11942:280:3-11963:281:1 name="f"
-        value: index-access #948 11946:280:7-11962:280:23
-          target: name-ref #944 11946:280:7-11950:280:11 name="data"
-          index: binary #947 11951:280:12-11961:280:22 op=plus op-span=11958:280:19-11959:280:20
-            left: name-ref #945 11951:280:12-11957:280:18 name="offset"
-            right: literal #946 11960:280:21-11961:280:22 value=int:5
-      body: binding #955 11965:281:3-11986:282:1 name="g"
-        value: index-access #954 11969:281:7-11985:281:23
-          target: name-ref #950 11969:281:7-11973:281:11 name="data"
-          index: binary #953 11974:281:12-11984:281:22 op=plus op-span=11981:281:19-11982:281:20
-            left: name-ref #951 11974:281:12-11980:281:18 name="offset"
-            right: literal #952 11983:281:21-11984:281:22 value=int:6
-      body: binding #961 11988:282:3-12009:283:1 name="h"
-        value: index-access #960 11992:282:7-12008:282:23
-          target: name-ref #956 11992:282:7-11996:282:11 name="data"
-          index: binary #959 11997:282:12-12007:282:22 op=plus op-span=12004:282:19-12005:282:20
-            left: name-ref #957 11997:282:12-12003:282:18 name="offset"
-            right: literal #958 12006:282:21-12007:282:22 value=int:7
-      body: binding #975 12011:283:3-12094:284:1 name="high"
-        value: method-call #974 12018:283:10-12093:283:85 name="bit_or"
-          target: method-call #972 12018:283:10-12083:283:75 name="bit_or"
-            target: method-call #968 12018:283:10-12059:283:51 name="bit_or"
-              target: method-call #964 12018:283:10-12034:283:26 name="shift_left"
-                target: name-ref #962 12018:283:10-12019:283:11 name="a"
-                arg: literal #963 12031:283:23-12033:283:25 value=int:24
-              arg: method-call #967 12042:283:34-12058:283:50 name="shift_left"
-                target: name-ref #965 12042:283:34-12043:283:35 name="b"
-                arg: literal #966 12055:283:47-12057:283:49 value=int:16
-            arg: method-call #971 12067:283:59-12082:283:74 name="shift_left"
-              target: name-ref #969 12067:283:59-12068:283:60 name="c"
-              arg: literal #970 12080:283:72-12081:283:73 value=int:8
-          arg: name-ref #973 12091:283:83-12092:283:84 name="d"
-      body: binding #989 12096:284:3-12178:285:1 name="low"
-        value: method-call #988 12102:284:9-12177:284:84 name="bit_or"
-          target: method-call #986 12102:284:9-12167:284:74 name="bit_or"
-            target: method-call #982 12102:284:9-12143:284:50 name="bit_or"
-              target: method-call #978 12102:284:9-12118:284:25 name="shift_left"
-                target: name-ref #976 12102:284:9-12103:284:10 name="e"
-                arg: literal #977 12115:284:22-12117:284:24 value=int:24
-              arg: method-call #981 12126:284:33-12142:284:49 name="shift_left"
-                target: name-ref #979 12126:284:33-12127:284:34 name="f"
-                arg: literal #980 12139:284:46-12141:284:48 value=int:16
-            arg: method-call #985 12151:284:58-12166:284:73 name="shift_left"
-              target: name-ref #983 12151:284:58-12152:284:59 name="g"
-              arg: literal #984 12164:284:71-12165:284:72 value=int:8
-          arg: name-ref #987 12175:284:82-12176:284:83 name="h"
-      body: return-stmt #996 12180:285:3-12215:285:38 implicit
-        value: call #995 12180:285:3-12215:285:38 name="ok" piped=false
-          arg: method-call #994 12183:285:6-12214:285:37 name="bit_or"
-            target: method-call #992 12183:285:6-12202:285:25 name="shift_left"
-              target: name-ref #990 12183:285:6-12187:285:10 name="high"
-              arg: literal #991 12199:285:22-12201:285:24 value=int:32
-            arg: name-ref #993 12210:285:33-12213:285:36 name="low"
-    declaration: function-decl #1094 12221:288:1-12717:302:1 name="@4::load64_le"
-      param: param #999 12235:288:15-12246:288:26 name="data"
-        type: type-ref #998 12241:288:21-12246:288:26 name="Bytes"
-      param: param #1001 12248:288:28-12259:288:39 name="offset"
-        type: type-ref #1000 12256:288:36-12259:288:39 name="Int"
-      param: param #1003 12261:288:41-12273:288:53 name="type"
-        type: type-ref #1002 12267:288:47-12273:288:53 name="String"
-      result: type-ref #1005 12278:288:58-12289:288:69 name="Result"
-        arg: type-ref #1004 12285:288:65-12288:288:68 name="Int"
-      body: expr-stmt #1012 12292:289:3-12326:290:1
-        value: try-expr #1011 12292:289:3-12325:289:36
-          operand: call #1010 12296:289:7-12325:289:36 name="@4::window" piped=false
-            arg: name-ref #1006 12303:289:14-12307:289:18 name="data"
-            arg: name-ref #1007 12309:289:20-12315:289:26 name="offset"
-            arg: literal #1008 12317:289:28-12318:289:29 value=int:8
-            arg: name-ref #1009 12320:289:31-12324:289:35 name="type"
-      body: binding #1016 12328:290:3-12345:291:1 name="a"
-        value: index-access #1015 12332:290:7-12344:290:19
-          target: name-ref #1013 12332:290:7-12336:290:11 name="data"
-          index: name-ref #1014 12337:290:12-12343:290:18 name="offset"
-      body: binding #1022 12347:291:3-12368:292:1 name="b"
-        value: index-access #1021 12351:291:7-12367:291:23
-          target: name-ref #1017 12351:291:7-12355:291:11 name="data"
-          index: binary #1020 12356:291:12-12366:291:22 op=plus op-span=12363:291:19-12364:291:20
-            left: name-ref #1018 12356:291:12-12362:291:18 name="offset"
-            right: literal #1019 12365:291:21-12366:291:22 value=int:1
-      body: binding #1028 12370:292:3-12391:293:1 name="c"
-        value: index-access #1027 12374:292:7-12390:292:23
-          target: name-ref #1023 12374:292:7-12378:292:11 name="data"
-          index: binary #1026 12379:292:12-12389:292:22 op=plus op-span=12386:292:19-12387:292:20
-            left: name-ref #1024 12379:292:12-12385:292:18 name="offset"
-            right: literal #1025 12388:292:21-12389:292:22 value=int:2
-      body: binding #1034 12393:293:3-12414:294:1 name="d"
-        value: index-access #1033 12397:293:7-12413:293:23
-          target: name-ref #1029 12397:293:7-12401:293:11 name="data"
-          index: binary #1032 12402:293:12-12412:293:22 op=plus op-span=12409:293:19-12410:293:20
-            left: name-ref #1030 12402:293:12-12408:293:18 name="offset"
-            right: literal #1031 12411:293:21-12412:293:22 value=int:3
-      body: binding #1040 12416:294:3-12437:295:1 name="e"
-        value: index-access #1039 12420:294:7-12436:294:23
-          target: name-ref #1035 12420:294:7-12424:294:11 name="data"
-          index: binary #1038 12425:294:12-12435:294:22 op=plus op-span=12432:294:19-12433:294:20
-            left: name-ref #1036 12425:294:12-12431:294:18 name="offset"
-            right: literal #1037 12434:294:21-12435:294:22 value=int:4
-      body: binding #1046 12439:295:3-12460:296:1 name="f"
-        value: index-access #1045 12443:295:7-12459:295:23
-          target: name-ref #1041 12443:295:7-12447:295:11 name="data"
-          index: binary #1044 12448:295:12-12458:295:22 op=plus op-span=12455:295:19-12456:295:20
-            left: name-ref #1042 12448:295:12-12454:295:18 name="offset"
-            right: literal #1043 12457:295:21-12458:295:22 value=int:5
-      body: binding #1052 12462:296:3-12483:297:1 name="g"
-        value: index-access #1051 12466:296:7-12482:296:23
-          target: name-ref #1047 12466:296:7-12470:296:11 name="data"
-          index: binary #1050 12471:296:12-12481:296:22 op=plus op-span=12478:296:19-12479:296:20
-            left: name-ref #1048 12471:296:12-12477:296:18 name="offset"
-            right: literal #1049 12480:296:21-12481:296:22 value=int:6
-      body: binding #1058 12485:297:3-12506:298:1 name="h"
-        value: index-access #1057 12489:297:7-12505:297:23
-          target: name-ref #1053 12489:297:7-12493:297:11 name="data"
-          index: binary #1056 12494:297:12-12504:297:22 op=plus op-span=12501:297:19-12502:297:20
-            left: name-ref #1054 12494:297:12-12500:297:18 name="offset"
-            right: literal #1055 12503:297:21-12504:297:22 value=int:7
-      body: binding #1072 12508:298:3-12590:299:1 name="low"
-        value: method-call #1071 12514:298:9-12589:298:84 name="bit_or"
-          target: method-call #1069 12514:298:9-12579:298:74 name="bit_or"
-            target: method-call #1065 12514:298:9-12555:298:50 name="bit_or"
-              target: method-call #1061 12514:298:9-12530:298:25 name="shift_left"
-                target: name-ref #1059 12514:298:9-12515:298:10 name="d"
-                arg: literal #1060 12527:298:22-12529:298:24 value=int:24
-              arg: method-call #1064 12538:298:33-12554:298:49 name="shift_left"
-                target: name-ref #1062 12538:298:33-12539:298:34 name="c"
-                arg: literal #1063 12551:298:46-12553:298:48 value=int:16
-            arg: method-call #1068 12563:298:58-12578:298:73 name="shift_left"
-              target: name-ref #1066 12563:298:58-12564:298:59 name="b"
-              arg: literal #1067 12576:298:71-12577:298:72 value=int:8
-          arg: name-ref #1070 12587:298:82-12588:298:83 name="a"
-      body: binding #1086 12592:299:3-12675:300:1 name="high"
-        value: method-call #1085 12599:299:10-12674:299:85 name="bit_or"
-          target: method-call #1083 12599:299:10-12664:299:75 name="bit_or"
-            target: method-call #1079 12599:299:10-12640:299:51 name="bit_or"
-              target: method-call #1075 12599:299:10-12615:299:26 name="shift_left"
-                target: name-ref #1073 12599:299:10-12600:299:11 name="h"
-                arg: literal #1074 12612:299:23-12614:299:25 value=int:24
-              arg: method-call #1078 12623:299:34-12639:299:50 name="shift_left"
-                target: name-ref #1076 12623:299:34-12624:299:35 name="g"
-                arg: literal #1077 12636:299:47-12638:299:49 value=int:16
-            arg: method-call #1082 12648:299:59-12663:299:74 name="shift_left"
-              target: name-ref #1080 12648:299:59-12649:299:60 name="f"
-              arg: literal #1081 12661:299:72-12662:299:73 value=int:8
-          arg: name-ref #1084 12672:299:83-12673:299:84 name="e"
-      body: return-stmt #1093 12677:300:3-12712:300:38 implicit
-        value: call #1092 12677:300:3-12712:300:38 name="ok" piped=false
-          arg: method-call #1091 12680:300:6-12711:300:37 name="bit_or"
-            target: method-call #1089 12680:300:6-12699:300:25 name="shift_left"
-              target: name-ref #1087 12680:300:6-12684:300:10 name="high"
-              arg: literal #1088 12696:300:22-12698:300:24 value=int:32
-            arg: name-ref #1090 12707:300:33-12710:300:36 name="low"
-    declaration: function-decl #1115 12718:303:1-12886:307:1 name="@4::unsigned64"
-      param: param #1096 12733:303:16-12743:303:26 name="value"
-        type: type-ref #1095 12740:303:23-12743:303:26 name="Int"
-      param: param #1098 12745:303:28-12756:303:39 name="offset"
-        type: type-ref #1097 12753:303:36-12756:303:39 name="Int"
-      result: type-ref #1100 12761:303:44-12772:303:55 name="Result"
-        arg: type-ref #1099 12768:303:51-12771:303:54 name="Int"
-      body: if-stmt #1111 12775:304:3-12870:305:1 guard
-        branch: if-branch #1110 12775:304:3-12869:304:97
-          condition: binary #1109 12860:304:88-12869:304:97 op=less op-span=12866:304:94-12867:304:95
-            left: name-ref #1107 12860:304:88-12865:304:93 name="value"
-            right: literal #1108 12868:304:96-12869:304:97 value=int:0
-          body: return-stmt #1106 12775:304:3-12856:304:84
-            value: call #1105 12782:304:10-12856:304:84 name="error" piped=false
-              arg: interpolation #1102 12788:304:16-12833:304:61
+                part: name-ref #672 10547:229:50-10551:229:54 name="type"
+              arg: named-arg #675 10555:229:58-10571:229:74 name="kind"
+                value: literal #674 10561:229:64-10571:229:74 value=string:"argument"
+      body: return-stmt #688 10606:230:3-10610:230:7 implicit
+        value: call #687 10606:230:3-10610:230:7 name="ok" piped=false
+    declaration: function-decl #705 10616:233:1-10710:234:1 name="@4::extend" expression
+      param: param #691 10627:233:12-10637:233:22 name="value"
+        type: type-ref #690 10634:233:19-10637:233:22 name="Int"
+      param: param #693 10639:233:24-10648:233:33 name="bits"
+        type: type-ref #692 10645:233:30-10648:233:33 name="Int"
+      result: type-ref #694 10653:233:38-10656:233:41 name="Int"
+      body: return-stmt #704 10659:233:44-10709:233:94 implicit
+        value: method-call #703 10659:233:44-10709:233:94 name="shift_right"
+          target: method-call #699 10659:233:44-10686:233:71 name="shift_left"
+            target: name-ref #695 10659:233:44-10664:233:49 name="value"
+            arg: binary #698 10676:233:61-10685:233:70 op=minus op-span=10679:233:64-10680:233:65
+              left: literal #696 10676:233:61-10678:233:63 value=int:64
+              right: name-ref #697 10681:233:66-10685:233:70 name="bits"
+          arg: binary #702 10699:233:84-10708:233:93 op=minus op-span=10702:233:87-10703:233:88
+            left: literal #700 10699:233:84-10701:233:86 value=int:64
+            right: name-ref #701 10704:233:89-10708:233:93 name="bits"
+    declaration: function-decl #728 10711:235:1-10843:240:1 name="@4::load8"
+      param: param #707 10721:235:11-10732:235:22 name="data"
+        type: type-ref #706 10727:235:17-10732:235:22 name="Bytes"
+      param: param #709 10734:235:24-10745:235:35 name="offset"
+        type: type-ref #708 10742:235:32-10745:235:35 name="Int"
+      param: param #711 10747:235:37-10759:235:49 name="type"
+        type: type-ref #710 10753:235:43-10759:235:49 name="String"
+      result: type-ref #713 10764:235:54-10775:235:65 name="Result"
+        arg: type-ref #712 10771:235:61-10774:235:64 name="Int"
+      body: expr-stmt #720 10778:236:3-10812:237:1
+        value: try-expr #719 10778:236:3-10811:236:36
+          operand: call #718 10782:236:7-10811:236:36 name="@4::window" piped=false
+            arg: name-ref #714 10789:236:14-10793:236:18 name="data"
+            arg: name-ref #715 10795:236:20-10801:236:26 name="offset"
+            arg: literal #716 10803:236:28-10804:236:29 value=int:1
+            arg: name-ref #717 10806:236:31-10810:236:35 name="type"
+      body: binding #724 10814:237:3-10831:238:1 name="a"
+        value: index-access #723 10818:237:7-10830:237:19
+          target: name-ref #721 10818:237:7-10822:237:11 name="data"
+          index: name-ref #722 10823:237:12-10829:237:18 name="offset"
+      body: return-stmt #727 10833:238:3-10838:238:8 implicit
+        value: call #726 10833:238:3-10838:238:8 name="ok" piped=false
+          arg: name-ref #725 10836:238:6-10837:238:7 name="a"
+    declaration: function-decl #761 10844:241:1-11027:247:1 name="@4::load16_be"
+      param: param #730 10858:241:15-10869:241:26 name="data"
+        type: type-ref #729 10864:241:21-10869:241:26 name="Bytes"
+      param: param #732 10871:241:28-10882:241:39 name="offset"
+        type: type-ref #731 10879:241:36-10882:241:39 name="Int"
+      param: param #734 10884:241:41-10896:241:53 name="type"
+        type: type-ref #733 10890:241:47-10896:241:53 name="String"
+      result: type-ref #736 10901:241:58-10912:241:69 name="Result"
+        arg: type-ref #735 10908:241:65-10911:241:68 name="Int"
+      body: expr-stmt #743 10915:242:3-10949:243:1
+        value: try-expr #742 10915:242:3-10948:242:36
+          operand: call #741 10919:242:7-10948:242:36 name="@4::window" piped=false
+            arg: name-ref #737 10926:242:14-10930:242:18 name="data"
+            arg: name-ref #738 10932:242:20-10938:242:26 name="offset"
+            arg: literal #739 10940:242:28-10941:242:29 value=int:2
+            arg: name-ref #740 10943:242:31-10947:242:35 name="type"
+      body: binding #747 10951:243:3-10968:244:1 name="a"
+        value: index-access #746 10955:243:7-10967:243:19
+          target: name-ref #744 10955:243:7-10959:243:11 name="data"
+          index: name-ref #745 10960:243:12-10966:243:18 name="offset"
+      body: binding #753 10970:244:3-10991:245:1 name="b"
+        value: index-access #752 10974:244:7-10990:244:23
+          target: name-ref #748 10974:244:7-10978:244:11 name="data"
+          index: binary #751 10979:244:12-10989:244:22 op=plus op-span=10986:244:19-10987:244:20
+            left: name-ref #749 10979:244:12-10985:244:18 name="offset"
+            right: literal #750 10988:244:21-10989:244:22 value=int:1
+      body: return-stmt #760 10993:245:3-11022:245:32 implicit
+        value: call #759 10993:245:3-11022:245:32 name="ok" piped=false
+          arg: method-call #758 10996:245:6-11021:245:31 name="bit_or"
+            target: method-call #756 10996:245:6-11011:245:21 name="shift_left"
+              target: name-ref #754 10996:245:6-10997:245:7 name="a"
+              arg: literal #755 11009:245:19-11010:245:20 value=int:8
+            arg: name-ref #757 11019:245:29-11020:245:30 name="b"
+    declaration: function-decl #794 11028:248:1-11211:254:1 name="@4::load16_le"
+      param: param #763 11042:248:15-11053:248:26 name="data"
+        type: type-ref #762 11048:248:21-11053:248:26 name="Bytes"
+      param: param #765 11055:248:28-11066:248:39 name="offset"
+        type: type-ref #764 11063:248:36-11066:248:39 name="Int"
+      param: param #767 11068:248:41-11080:248:53 name="type"
+        type: type-ref #766 11074:248:47-11080:248:53 name="String"
+      result: type-ref #769 11085:248:58-11096:248:69 name="Result"
+        arg: type-ref #768 11092:248:65-11095:248:68 name="Int"
+      body: expr-stmt #776 11099:249:3-11133:250:1
+        value: try-expr #775 11099:249:3-11132:249:36
+          operand: call #774 11103:249:7-11132:249:36 name="@4::window" piped=false
+            arg: name-ref #770 11110:249:14-11114:249:18 name="data"
+            arg: name-ref #771 11116:249:20-11122:249:26 name="offset"
+            arg: literal #772 11124:249:28-11125:249:29 value=int:2
+            arg: name-ref #773 11127:249:31-11131:249:35 name="type"
+      body: binding #780 11135:250:3-11152:251:1 name="a"
+        value: index-access #779 11139:250:7-11151:250:19
+          target: name-ref #777 11139:250:7-11143:250:11 name="data"
+          index: name-ref #778 11144:250:12-11150:250:18 name="offset"
+      body: binding #786 11154:251:3-11175:252:1 name="b"
+        value: index-access #785 11158:251:7-11174:251:23
+          target: name-ref #781 11158:251:7-11162:251:11 name="data"
+          index: binary #784 11163:251:12-11173:251:22 op=plus op-span=11170:251:19-11171:251:20
+            left: name-ref #782 11163:251:12-11169:251:18 name="offset"
+            right: literal #783 11172:251:21-11173:251:22 value=int:1
+      body: return-stmt #793 11177:252:3-11206:252:32 implicit
+        value: call #792 11177:252:3-11206:252:32 name="ok" piped=false
+          arg: method-call #791 11180:252:6-11205:252:31 name="bit_or"
+            target: method-call #789 11180:252:6-11195:252:21 name="shift_left"
+              target: name-ref #787 11180:252:6-11181:252:7 name="b"
+              arg: literal #788 11193:252:19-11194:252:20 value=int:8
+            arg: name-ref #790 11203:252:29-11204:252:30 name="a"
+    declaration: function-decl #847 11212:255:1-11491:263:1 name="@4::load32_be"
+      param: param #796 11226:255:15-11237:255:26 name="data"
+        type: type-ref #795 11232:255:21-11237:255:26 name="Bytes"
+      param: param #798 11239:255:28-11250:255:39 name="offset"
+        type: type-ref #797 11247:255:36-11250:255:39 name="Int"
+      param: param #800 11252:255:41-11264:255:53 name="type"
+        type: type-ref #799 11258:255:47-11264:255:53 name="String"
+      result: type-ref #802 11269:255:58-11280:255:69 name="Result"
+        arg: type-ref #801 11276:255:65-11279:255:68 name="Int"
+      body: expr-stmt #809 11283:256:3-11317:257:1
+        value: try-expr #808 11283:256:3-11316:256:36
+          operand: call #807 11287:256:7-11316:256:36 name="@4::window" piped=false
+            arg: name-ref #803 11294:256:14-11298:256:18 name="data"
+            arg: name-ref #804 11300:256:20-11306:256:26 name="offset"
+            arg: literal #805 11308:256:28-11309:256:29 value=int:4
+            arg: name-ref #806 11311:256:31-11315:256:35 name="type"
+      body: binding #813 11319:257:3-11336:258:1 name="a"
+        value: index-access #812 11323:257:7-11335:257:19
+          target: name-ref #810 11323:257:7-11327:257:11 name="data"
+          index: name-ref #811 11328:257:12-11334:257:18 name="offset"
+      body: binding #819 11338:258:3-11359:259:1 name="b"
+        value: index-access #818 11342:258:7-11358:258:23
+          target: name-ref #814 11342:258:7-11346:258:11 name="data"
+          index: binary #817 11347:258:12-11357:258:22 op=plus op-span=11354:258:19-11355:258:20
+            left: name-ref #815 11347:258:12-11353:258:18 name="offset"
+            right: literal #816 11356:258:21-11357:258:22 value=int:1
+      body: binding #825 11361:259:3-11382:260:1 name="c"
+        value: index-access #824 11365:259:7-11381:259:23
+          target: name-ref #820 11365:259:7-11369:259:11 name="data"
+          index: binary #823 11370:259:12-11380:259:22 op=plus op-span=11377:259:19-11378:259:20
+            left: name-ref #821 11370:259:12-11376:259:18 name="offset"
+            right: literal #822 11379:259:21-11380:259:22 value=int:2
+      body: binding #831 11384:260:3-11405:261:1 name="d"
+        value: index-access #830 11388:260:7-11404:260:23
+          target: name-ref #826 11388:260:7-11392:260:11 name="data"
+          index: binary #829 11393:260:12-11403:260:22 op=plus op-span=11400:260:19-11401:260:20
+            left: name-ref #827 11393:260:12-11399:260:18 name="offset"
+            right: literal #828 11402:260:21-11403:260:22 value=int:3
+      body: return-stmt #846 11407:261:3-11486:261:82 implicit
+        value: call #845 11407:261:3-11486:261:82 name="ok" piped=false
+          arg: method-call #844 11410:261:6-11485:261:81 name="bit_or"
+            target: method-call #842 11410:261:6-11475:261:71 name="bit_or"
+              target: method-call #838 11410:261:6-11451:261:47 name="bit_or"
+                target: method-call #834 11410:261:6-11426:261:22 name="shift_left"
+                  target: name-ref #832 11410:261:6-11411:261:7 name="a"
+                  arg: literal #833 11423:261:19-11425:261:21 value=int:24
+                arg: method-call #837 11434:261:30-11450:261:46 name="shift_left"
+                  target: name-ref #835 11434:261:30-11435:261:31 name="b"
+                  arg: literal #836 11447:261:43-11449:261:45 value=int:16
+              arg: method-call #841 11459:261:55-11474:261:70 name="shift_left"
+                target: name-ref #839 11459:261:55-11460:261:56 name="c"
+                arg: literal #840 11472:261:68-11473:261:69 value=int:8
+            arg: name-ref #843 11483:261:79-11484:261:80 name="d"
+    declaration: function-decl #900 11492:264:1-11771:272:1 name="@4::load32_le"
+      param: param #849 11506:264:15-11517:264:26 name="data"
+        type: type-ref #848 11512:264:21-11517:264:26 name="Bytes"
+      param: param #851 11519:264:28-11530:264:39 name="offset"
+        type: type-ref #850 11527:264:36-11530:264:39 name="Int"
+      param: param #853 11532:264:41-11544:264:53 name="type"
+        type: type-ref #852 11538:264:47-11544:264:53 name="String"
+      result: type-ref #855 11549:264:58-11560:264:69 name="Result"
+        arg: type-ref #854 11556:264:65-11559:264:68 name="Int"
+      body: expr-stmt #862 11563:265:3-11597:266:1
+        value: try-expr #861 11563:265:3-11596:265:36
+          operand: call #860 11567:265:7-11596:265:36 name="@4::window" piped=false
+            arg: name-ref #856 11574:265:14-11578:265:18 name="data"
+            arg: name-ref #857 11580:265:20-11586:265:26 name="offset"
+            arg: literal #858 11588:265:28-11589:265:29 value=int:4
+            arg: name-ref #859 11591:265:31-11595:265:35 name="type"
+      body: binding #866 11599:266:3-11616:267:1 name="a"
+        value: index-access #865 11603:266:7-11615:266:19
+          target: name-ref #863 11603:266:7-11607:266:11 name="data"
+          index: name-ref #864 11608:266:12-11614:266:18 name="offset"
+      body: binding #872 11618:267:3-11639:268:1 name="b"
+        value: index-access #871 11622:267:7-11638:267:23
+          target: name-ref #867 11622:267:7-11626:267:11 name="data"
+          index: binary #870 11627:267:12-11637:267:22 op=plus op-span=11634:267:19-11635:267:20
+            left: name-ref #868 11627:267:12-11633:267:18 name="offset"
+            right: literal #869 11636:267:21-11637:267:22 value=int:1
+      body: binding #878 11641:268:3-11662:269:1 name="c"
+        value: index-access #877 11645:268:7-11661:268:23
+          target: name-ref #873 11645:268:7-11649:268:11 name="data"
+          index: binary #876 11650:268:12-11660:268:22 op=plus op-span=11657:268:19-11658:268:20
+            left: name-ref #874 11650:268:12-11656:268:18 name="offset"
+            right: literal #875 11659:268:21-11660:268:22 value=int:2
+      body: binding #884 11664:269:3-11685:270:1 name="d"
+        value: index-access #883 11668:269:7-11684:269:23
+          target: name-ref #879 11668:269:7-11672:269:11 name="data"
+          index: binary #882 11673:269:12-11683:269:22 op=plus op-span=11680:269:19-11681:269:20
+            left: name-ref #880 11673:269:12-11679:269:18 name="offset"
+            right: literal #881 11682:269:21-11683:269:22 value=int:3
+      body: return-stmt #899 11687:270:3-11766:270:82 implicit
+        value: call #898 11687:270:3-11766:270:82 name="ok" piped=false
+          arg: method-call #897 11690:270:6-11765:270:81 name="bit_or"
+            target: method-call #895 11690:270:6-11755:270:71 name="bit_or"
+              target: method-call #891 11690:270:6-11731:270:47 name="bit_or"
+                target: method-call #887 11690:270:6-11706:270:22 name="shift_left"
+                  target: name-ref #885 11690:270:6-11691:270:7 name="d"
+                  arg: literal #886 11703:270:19-11705:270:21 value=int:24
+                arg: method-call #890 11714:270:30-11730:270:46 name="shift_left"
+                  target: name-ref #888 11714:270:30-11715:270:31 name="c"
+                  arg: literal #889 11727:270:43-11729:270:45 value=int:16
+              arg: method-call #894 11739:270:55-11754:270:70 name="shift_left"
+                target: name-ref #892 11739:270:55-11740:270:56 name="b"
+                arg: literal #893 11752:270:68-11753:270:69 value=int:8
+            arg: name-ref #896 11763:270:79-11764:270:80 name="a"
+    declaration: function-decl #997 11772:273:1-12268:287:1 name="@4::load64_be"
+      param: param #902 11786:273:15-11797:273:26 name="data"
+        type: type-ref #901 11792:273:21-11797:273:26 name="Bytes"
+      param: param #904 11799:273:28-11810:273:39 name="offset"
+        type: type-ref #903 11807:273:36-11810:273:39 name="Int"
+      param: param #906 11812:273:41-11824:273:53 name="type"
+        type: type-ref #905 11818:273:47-11824:273:53 name="String"
+      result: type-ref #908 11829:273:58-11840:273:69 name="Result"
+        arg: type-ref #907 11836:273:65-11839:273:68 name="Int"
+      body: expr-stmt #915 11843:274:3-11877:275:1
+        value: try-expr #914 11843:274:3-11876:274:36
+          operand: call #913 11847:274:7-11876:274:36 name="@4::window" piped=false
+            arg: name-ref #909 11854:274:14-11858:274:18 name="data"
+            arg: name-ref #910 11860:274:20-11866:274:26 name="offset"
+            arg: literal #911 11868:274:28-11869:274:29 value=int:8
+            arg: name-ref #912 11871:274:31-11875:274:35 name="type"
+      body: binding #919 11879:275:3-11896:276:1 name="a"
+        value: index-access #918 11883:275:7-11895:275:19
+          target: name-ref #916 11883:275:7-11887:275:11 name="data"
+          index: name-ref #917 11888:275:12-11894:275:18 name="offset"
+      body: binding #925 11898:276:3-11919:277:1 name="b"
+        value: index-access #924 11902:276:7-11918:276:23
+          target: name-ref #920 11902:276:7-11906:276:11 name="data"
+          index: binary #923 11907:276:12-11917:276:22 op=plus op-span=11914:276:19-11915:276:20
+            left: name-ref #921 11907:276:12-11913:276:18 name="offset"
+            right: literal #922 11916:276:21-11917:276:22 value=int:1
+      body: binding #931 11921:277:3-11942:278:1 name="c"
+        value: index-access #930 11925:277:7-11941:277:23
+          target: name-ref #926 11925:277:7-11929:277:11 name="data"
+          index: binary #929 11930:277:12-11940:277:22 op=plus op-span=11937:277:19-11938:277:20
+            left: name-ref #927 11930:277:12-11936:277:18 name="offset"
+            right: literal #928 11939:277:21-11940:277:22 value=int:2
+      body: binding #937 11944:278:3-11965:279:1 name="d"
+        value: index-access #936 11948:278:7-11964:278:23
+          target: name-ref #932 11948:278:7-11952:278:11 name="data"
+          index: binary #935 11953:278:12-11963:278:22 op=plus op-span=11960:278:19-11961:278:20
+            left: name-ref #933 11953:278:12-11959:278:18 name="offset"
+            right: literal #934 11962:278:21-11963:278:22 value=int:3
+      body: binding #943 11967:279:3-11988:280:1 name="e"
+        value: index-access #942 11971:279:7-11987:279:23
+          target: name-ref #938 11971:279:7-11975:279:11 name="data"
+          index: binary #941 11976:279:12-11986:279:22 op=plus op-span=11983:279:19-11984:279:20
+            left: name-ref #939 11976:279:12-11982:279:18 name="offset"
+            right: literal #940 11985:279:21-11986:279:22 value=int:4
+      body: binding #949 11990:280:3-12011:281:1 name="f"
+        value: index-access #948 11994:280:7-12010:280:23
+          target: name-ref #944 11994:280:7-11998:280:11 name="data"
+          index: binary #947 11999:280:12-12009:280:22 op=plus op-span=12006:280:19-12007:280:20
+            left: name-ref #945 11999:280:12-12005:280:18 name="offset"
+            right: literal #946 12008:280:21-12009:280:22 value=int:5
+      body: binding #955 12013:281:3-12034:282:1 name="g"
+        value: index-access #954 12017:281:7-12033:281:23
+          target: name-ref #950 12017:281:7-12021:281:11 name="data"
+          index: binary #953 12022:281:12-12032:281:22 op=plus op-span=12029:281:19-12030:281:20
+            left: name-ref #951 12022:281:12-12028:281:18 name="offset"
+            right: literal #952 12031:281:21-12032:281:22 value=int:6
+      body: binding #961 12036:282:3-12057:283:1 name="h"
+        value: index-access #960 12040:282:7-12056:282:23
+          target: name-ref #956 12040:282:7-12044:282:11 name="data"
+          index: binary #959 12045:282:12-12055:282:22 op=plus op-span=12052:282:19-12053:282:20
+            left: name-ref #957 12045:282:12-12051:282:18 name="offset"
+            right: literal #958 12054:282:21-12055:282:22 value=int:7
+      body: binding #975 12059:283:3-12142:284:1 name="high"
+        value: method-call #974 12066:283:10-12141:283:85 name="bit_or"
+          target: method-call #972 12066:283:10-12131:283:75 name="bit_or"
+            target: method-call #968 12066:283:10-12107:283:51 name="bit_or"
+              target: method-call #964 12066:283:10-12082:283:26 name="shift_left"
+                target: name-ref #962 12066:283:10-12067:283:11 name="a"
+                arg: literal #963 12079:283:23-12081:283:25 value=int:24
+              arg: method-call #967 12090:283:34-12106:283:50 name="shift_left"
+                target: name-ref #965 12090:283:34-12091:283:35 name="b"
+                arg: literal #966 12103:283:47-12105:283:49 value=int:16
+            arg: method-call #971 12115:283:59-12130:283:74 name="shift_left"
+              target: name-ref #969 12115:283:59-12116:283:60 name="c"
+              arg: literal #970 12128:283:72-12129:283:73 value=int:8
+          arg: name-ref #973 12139:283:83-12140:283:84 name="d"
+      body: binding #989 12144:284:3-12226:285:1 name="low"
+        value: method-call #988 12150:284:9-12225:284:84 name="bit_or"
+          target: method-call #986 12150:284:9-12215:284:74 name="bit_or"
+            target: method-call #982 12150:284:9-12191:284:50 name="bit_or"
+              target: method-call #978 12150:284:9-12166:284:25 name="shift_left"
+                target: name-ref #976 12150:284:9-12151:284:10 name="e"
+                arg: literal #977 12163:284:22-12165:284:24 value=int:24
+              arg: method-call #981 12174:284:33-12190:284:49 name="shift_left"
+                target: name-ref #979 12174:284:33-12175:284:34 name="f"
+                arg: literal #980 12187:284:46-12189:284:48 value=int:16
+            arg: method-call #985 12199:284:58-12214:284:73 name="shift_left"
+              target: name-ref #983 12199:284:58-12200:284:59 name="g"
+              arg: literal #984 12212:284:71-12213:284:72 value=int:8
+          arg: name-ref #987 12223:284:82-12224:284:83 name="h"
+      body: return-stmt #996 12228:285:3-12263:285:38 implicit
+        value: call #995 12228:285:3-12263:285:38 name="ok" piped=false
+          arg: method-call #994 12231:285:6-12262:285:37 name="bit_or"
+            target: method-call #992 12231:285:6-12250:285:25 name="shift_left"
+              target: name-ref #990 12231:285:6-12235:285:10 name="high"
+              arg: literal #991 12247:285:22-12249:285:24 value=int:32
+            arg: name-ref #993 12258:285:33-12261:285:36 name="low"
+    declaration: function-decl #1094 12269:288:1-12765:302:1 name="@4::load64_le"
+      param: param #999 12283:288:15-12294:288:26 name="data"
+        type: type-ref #998 12289:288:21-12294:288:26 name="Bytes"
+      param: param #1001 12296:288:28-12307:288:39 name="offset"
+        type: type-ref #1000 12304:288:36-12307:288:39 name="Int"
+      param: param #1003 12309:288:41-12321:288:53 name="type"
+        type: type-ref #1002 12315:288:47-12321:288:53 name="String"
+      result: type-ref #1005 12326:288:58-12337:288:69 name="Result"
+        arg: type-ref #1004 12333:288:65-12336:288:68 name="Int"
+      body: expr-stmt #1012 12340:289:3-12374:290:1
+        value: try-expr #1011 12340:289:3-12373:289:36
+          operand: call #1010 12344:289:7-12373:289:36 name="@4::window" piped=false
+            arg: name-ref #1006 12351:289:14-12355:289:18 name="data"
+            arg: name-ref #1007 12357:289:20-12363:289:26 name="offset"
+            arg: literal #1008 12365:289:28-12366:289:29 value=int:8
+            arg: name-ref #1009 12368:289:31-12372:289:35 name="type"
+      body: binding #1016 12376:290:3-12393:291:1 name="a"
+        value: index-access #1015 12380:290:7-12392:290:19
+          target: name-ref #1013 12380:290:7-12384:290:11 name="data"
+          index: name-ref #1014 12385:290:12-12391:290:18 name="offset"
+      body: binding #1022 12395:291:3-12416:292:1 name="b"
+        value: index-access #1021 12399:291:7-12415:291:23
+          target: name-ref #1017 12399:291:7-12403:291:11 name="data"
+          index: binary #1020 12404:291:12-12414:291:22 op=plus op-span=12411:291:19-12412:291:20
+            left: name-ref #1018 12404:291:12-12410:291:18 name="offset"
+            right: literal #1019 12413:291:21-12414:291:22 value=int:1
+      body: binding #1028 12418:292:3-12439:293:1 name="c"
+        value: index-access #1027 12422:292:7-12438:292:23
+          target: name-ref #1023 12422:292:7-12426:292:11 name="data"
+          index: binary #1026 12427:292:12-12437:292:22 op=plus op-span=12434:292:19-12435:292:20
+            left: name-ref #1024 12427:292:12-12433:292:18 name="offset"
+            right: literal #1025 12436:292:21-12437:292:22 value=int:2
+      body: binding #1034 12441:293:3-12462:294:1 name="d"
+        value: index-access #1033 12445:293:7-12461:293:23
+          target: name-ref #1029 12445:293:7-12449:293:11 name="data"
+          index: binary #1032 12450:293:12-12460:293:22 op=plus op-span=12457:293:19-12458:293:20
+            left: name-ref #1030 12450:293:12-12456:293:18 name="offset"
+            right: literal #1031 12459:293:21-12460:293:22 value=int:3
+      body: binding #1040 12464:294:3-12485:295:1 name="e"
+        value: index-access #1039 12468:294:7-12484:294:23
+          target: name-ref #1035 12468:294:7-12472:294:11 name="data"
+          index: binary #1038 12473:294:12-12483:294:22 op=plus op-span=12480:294:19-12481:294:20
+            left: name-ref #1036 12473:294:12-12479:294:18 name="offset"
+            right: literal #1037 12482:294:21-12483:294:22 value=int:4
+      body: binding #1046 12487:295:3-12508:296:1 name="f"
+        value: index-access #1045 12491:295:7-12507:295:23
+          target: name-ref #1041 12491:295:7-12495:295:11 name="data"
+          index: binary #1044 12496:295:12-12506:295:22 op=plus op-span=12503:295:19-12504:295:20
+            left: name-ref #1042 12496:295:12-12502:295:18 name="offset"
+            right: literal #1043 12505:295:21-12506:295:22 value=int:5
+      body: binding #1052 12510:296:3-12531:297:1 name="g"
+        value: index-access #1051 12514:296:7-12530:296:23
+          target: name-ref #1047 12514:296:7-12518:296:11 name="data"
+          index: binary #1050 12519:296:12-12529:296:22 op=plus op-span=12526:296:19-12527:296:20
+            left: name-ref #1048 12519:296:12-12525:296:18 name="offset"
+            right: literal #1049 12528:296:21-12529:296:22 value=int:6
+      body: binding #1058 12533:297:3-12554:298:1 name="h"
+        value: index-access #1057 12537:297:7-12553:297:23
+          target: name-ref #1053 12537:297:7-12541:297:11 name="data"
+          index: binary #1056 12542:297:12-12552:297:22 op=plus op-span=12549:297:19-12550:297:20
+            left: name-ref #1054 12542:297:12-12548:297:18 name="offset"
+            right: literal #1055 12551:297:21-12552:297:22 value=int:7
+      body: binding #1072 12556:298:3-12638:299:1 name="low"
+        value: method-call #1071 12562:298:9-12637:298:84 name="bit_or"
+          target: method-call #1069 12562:298:9-12627:298:74 name="bit_or"
+            target: method-call #1065 12562:298:9-12603:298:50 name="bit_or"
+              target: method-call #1061 12562:298:9-12578:298:25 name="shift_left"
+                target: name-ref #1059 12562:298:9-12563:298:10 name="d"
+                arg: literal #1060 12575:298:22-12577:298:24 value=int:24
+              arg: method-call #1064 12586:298:33-12602:298:49 name="shift_left"
+                target: name-ref #1062 12586:298:33-12587:298:34 name="c"
+                arg: literal #1063 12599:298:46-12601:298:48 value=int:16
+            arg: method-call #1068 12611:298:58-12626:298:73 name="shift_left"
+              target: name-ref #1066 12611:298:58-12612:298:59 name="b"
+              arg: literal #1067 12624:298:71-12625:298:72 value=int:8
+          arg: name-ref #1070 12635:298:82-12636:298:83 name="a"
+      body: binding #1086 12640:299:3-12723:300:1 name="high"
+        value: method-call #1085 12647:299:10-12722:299:85 name="bit_or"
+          target: method-call #1083 12647:299:10-12712:299:75 name="bit_or"
+            target: method-call #1079 12647:299:10-12688:299:51 name="bit_or"
+              target: method-call #1075 12647:299:10-12663:299:26 name="shift_left"
+                target: name-ref #1073 12647:299:10-12648:299:11 name="h"
+                arg: literal #1074 12660:299:23-12662:299:25 value=int:24
+              arg: method-call #1078 12671:299:34-12687:299:50 name="shift_left"
+                target: name-ref #1076 12671:299:34-12672:299:35 name="g"
+                arg: literal #1077 12684:299:47-12686:299:49 value=int:16
+            arg: method-call #1082 12696:299:59-12711:299:74 name="shift_left"
+              target: name-ref #1080 12696:299:59-12697:299:60 name="f"
+              arg: literal #1081 12709:299:72-12710:299:73 value=int:8
+          arg: name-ref #1084 12720:299:83-12721:299:84 name="e"
+      body: return-stmt #1093 12725:300:3-12760:300:38 implicit
+        value: call #1092 12725:300:3-12760:300:38 name="ok" piped=false
+          arg: method-call #1091 12728:300:6-12759:300:37 name="bit_or"
+            target: method-call #1089 12728:300:6-12747:300:25 name="shift_left"
+              target: name-ref #1087 12728:300:6-12732:300:10 name="high"
+              arg: literal #1088 12744:300:22-12746:300:24 value=int:32
+            arg: name-ref #1090 12755:300:33-12758:300:36 name="low"
+    declaration: function-decl #1115 12766:303:1-12934:307:1 name="@4::unsigned64"
+      param: param #1096 12781:303:16-12791:303:26 name="value"
+        type: type-ref #1095 12788:303:23-12791:303:26 name="Int"
+      param: param #1098 12793:303:28-12804:303:39 name="offset"
+        type: type-ref #1097 12801:303:36-12804:303:39 name="Int"
+      result: type-ref #1100 12809:303:44-12820:303:55 name="Result"
+        arg: type-ref #1099 12816:303:51-12819:303:54 name="Int"
+      body: if-stmt #1111 12823:304:3-12918:305:1 guard
+        branch: if-branch #1110 12823:304:3-12917:304:97
+          condition: binary #1109 12908:304:88-12917:304:97 op=less op-span=12914:304:94-12915:304:95
+            left: name-ref #1107 12908:304:88-12913:304:93 name="value"
+            right: literal #1108 12916:304:96-12917:304:97 value=int:0
+          body: return-stmt #1106 12823:304:3-12904:304:84
+            value: call #1105 12830:304:10-12904:304:84 name="error" piped=false
+              arg: interpolation #1102 12836:304:16-12881:304:61
                 part: text "u64 at offset "
-                part: name-ref #1101 12805:304:33-12811:304:39 name="offset"
+                part: name-ref #1101 12853:304:33-12859:304:39 name="offset"
                 part: text " does not fit in Int"
-              arg: named-arg #1104 12835:304:63-12855:304:83 name="kind"
-                value: literal #1103 12841:304:69-12855:304:83 value=string:"number.range"
-      body: return-stmt #1114 12872:305:3-12881:305:12 implicit
-        value: call #1113 12872:305:3-12881:305:12 name="ok" piped=false
-          arg: name-ref #1112 12875:305:6-12880:305:11 name="value"
-    declaration: function-decl #1130 12887:308:1-12986:309:1 name="@4::bytes2_be" expression
-      param: param #1117 12901:308:15-12911:308:25 name="value"
-        type: type-ref #1116 12908:308:22-12911:308:25 name="Int"
-      result: type-ref #1118 12916:308:30-12921:308:35 name="Bytes"
-      body: return-stmt #1129 12924:308:38-12985:308:99 implicit
-        value: call #1128 12924:308:38-12985:308:99 name="@4::pack" piped=false
-          arg: list-lit #1127 12929:308:43-12984:308:98
-            element: method-call #1123 12930:308:44-12963:308:77 name="bit_and"
-              target: method-call #1121 12930:308:44-12950:308:64 name="shift_right"
-                target: name-ref #1119 12930:308:44-12935:308:49 name="value"
-                arg: literal #1120 12948:308:62-12949:308:63 value=int:8
-              arg: literal #1122 12959:308:73-12962:308:76 value=int:255
-            element: method-call #1126 12965:308:79-12983:308:97 name="bit_and"
-              target: name-ref #1124 12965:308:79-12970:308:84 name="value"
-              arg: literal #1125 12979:308:93-12982:308:96 value=int:255
-    declaration: function-decl #1145 12987:310:1-13086:311:1 name="@4::bytes2_le" expression
-      param: param #1132 13001:310:15-13011:310:25 name="value"
-        type: type-ref #1131 13008:310:22-13011:310:25 name="Int"
-      result: type-ref #1133 13016:310:30-13021:310:35 name="Bytes"
-      body: return-stmt #1144 13024:310:38-13085:310:99 implicit
-        value: call #1143 13024:310:38-13085:310:99 name="@4::pack" piped=false
-          arg: list-lit #1142 13029:310:43-13084:310:98
-            element: method-call #1136 13030:310:44-13048:310:62 name="bit_and"
-              target: name-ref #1134 13030:310:44-13035:310:49 name="value"
-              arg: literal #1135 13044:310:58-13047:310:61 value=int:255
-            element: method-call #1141 13050:310:64-13083:310:97 name="bit_and"
-              target: method-call #1139 13050:310:64-13070:310:84 name="shift_right"
-                target: name-ref #1137 13050:310:64-13055:310:69 name="value"
-                arg: literal #1138 13068:310:82-13069:310:83 value=int:8
-              arg: literal #1140 13079:310:93-13082:310:96 value=int:255
-    declaration: function-decl #1170 13087:312:1-13283:320:1 name="@4::bytes4_be"
-      param: param #1147 13101:312:15-13111:312:25 name="value"
-        type: type-ref #1146 13108:312:22-13111:312:25 name="Int"
-      result: type-ref #1148 13116:312:30-13121:312:35 name="Bytes"
-      body: return-stmt #1169 13124:313:3-13278:318:5 implicit
-        value: call #1168 13124:313:3-13278:318:5 name="@4::pack" piped=false
-          arg: list-lit #1167 13129:313:8-13277:318:4
-            element: method-call #1153 13135:314:5-13169:314:39 name="bit_and"
-              target: method-call #1151 13135:314:5-13156:314:26 name="shift_right"
-                target: name-ref #1149 13135:314:5-13140:314:10 name="value"
-                arg: literal #1150 13153:314:23-13155:314:25 value=int:24
-              arg: literal #1152 13165:314:35-13168:314:38 value=int:255
-            element: method-call #1158 13175:315:5-13209:315:39 name="bit_and"
-              target: method-call #1156 13175:315:5-13196:315:26 name="shift_right"
-                target: name-ref #1154 13175:315:5-13180:315:10 name="value"
-                arg: literal #1155 13193:315:23-13195:315:25 value=int:16
-              arg: literal #1157 13205:315:35-13208:315:38 value=int:255
-            element: method-call #1163 13215:316:5-13248:316:38 name="bit_and"
-              target: method-call #1161 13215:316:5-13235:316:25 name="shift_right"
-                target: name-ref #1159 13215:316:5-13220:316:10 name="value"
-                arg: literal #1160 13233:316:23-13234:316:24 value=int:8
-              arg: literal #1162 13244:316:34-13247:316:37 value=int:255
-            element: method-call #1166 13254:317:5-13272:317:23 name="bit_and"
-              target: name-ref #1164 13254:317:5-13259:317:10 name="value"
-              arg: literal #1165 13268:317:19-13271:317:22 value=int:255
-    declaration: function-decl #1195 13284:321:1-13480:329:1 name="@4::bytes4_le"
-      param: param #1172 13298:321:15-13308:321:25 name="value"
-        type: type-ref #1171 13305:321:22-13308:321:25 name="Int"
-      result: type-ref #1173 13313:321:30-13318:321:35 name="Bytes"
-      body: return-stmt #1194 13321:322:3-13475:327:5 implicit
-        value: call #1193 13321:322:3-13475:327:5 name="@4::pack" piped=false
-          arg: list-lit #1192 13326:322:8-13474:327:4
-            element: method-call #1176 13332:323:5-13350:323:23 name="bit_and"
-              target: name-ref #1174 13332:323:5-13337:323:10 name="value"
-              arg: literal #1175 13346:323:19-13349:323:22 value=int:255
-            element: method-call #1181 13356:324:5-13389:324:38 name="bit_and"
-              target: method-call #1179 13356:324:5-13376:324:25 name="shift_right"
-                target: name-ref #1177 13356:324:5-13361:324:10 name="value"
-                arg: literal #1178 13374:324:23-13375:324:24 value=int:8
-              arg: literal #1180 13385:324:34-13388:324:37 value=int:255
-            element: method-call #1186 13395:325:5-13429:325:39 name="bit_and"
-              target: method-call #1184 13395:325:5-13416:325:26 name="shift_right"
-                target: name-ref #1182 13395:325:5-13400:325:10 name="value"
-                arg: literal #1183 13413:325:23-13415:325:25 value=int:16
-              arg: literal #1185 13425:325:35-13428:325:38 value=int:255
-            element: method-call #1191 13435:326:5-13469:326:39 name="bit_and"
-              target: method-call #1189 13435:326:5-13456:326:26 name="shift_right"
-                target: name-ref #1187 13435:326:5-13440:326:10 name="value"
-                arg: literal #1188 13453:326:23-13455:326:25 value=int:24
-              arg: literal #1190 13465:326:35-13468:326:38 value=int:255
-    declaration: function-decl #1240 13481:330:1-13837:342:1 name="@4::bytes8_be"
-      param: param #1197 13495:330:15-13505:330:25 name="value"
-        type: type-ref #1196 13502:330:22-13505:330:25 name="Int"
-      result: type-ref #1198 13510:330:30-13515:330:35 name="Bytes"
-      body: return-stmt #1239 13518:331:3-13832:340:5 implicit
-        value: call #1238 13518:331:3-13832:340:5 name="@4::pack" piped=false
-          arg: list-lit #1237 13523:331:8-13831:340:4
-            element: method-call #1203 13529:332:5-13563:332:39 name="bit_and"
-              target: method-call #1201 13529:332:5-13550:332:26 name="shift_right"
-                target: name-ref #1199 13529:332:5-13534:332:10 name="value"
-                arg: literal #1200 13547:332:23-13549:332:25 value=int:56
-              arg: literal #1202 13559:332:35-13562:332:38 value=int:255
-            element: method-call #1208 13569:333:5-13603:333:39 name="bit_and"
-              target: method-call #1206 13569:333:5-13590:333:26 name="shift_right"
-                target: name-ref #1204 13569:333:5-13574:333:10 name="value"
-                arg: literal #1205 13587:333:23-13589:333:25 value=int:48
-              arg: literal #1207 13599:333:35-13602:333:38 value=int:255
-            element: method-call #1213 13609:334:5-13643:334:39 name="bit_and"
-              target: method-call #1211 13609:334:5-13630:334:26 name="shift_right"
-                target: name-ref #1209 13609:334:5-13614:334:10 name="value"
-                arg: literal #1210 13627:334:23-13629:334:25 value=int:40
-              arg: literal #1212 13639:334:35-13642:334:38 value=int:255
-            element: method-call #1218 13649:335:5-13683:335:39 name="bit_and"
-              target: method-call #1216 13649:335:5-13670:335:26 name="shift_right"
-                target: name-ref #1214 13649:335:5-13654:335:10 name="value"
-                arg: literal #1215 13667:335:23-13669:335:25 value=int:32
-              arg: literal #1217 13679:335:35-13682:335:38 value=int:255
-            element: method-call #1223 13689:336:5-13723:336:39 name="bit_and"
-              target: method-call #1221 13689:336:5-13710:336:26 name="shift_right"
-                target: name-ref #1219 13689:336:5-13694:336:10 name="value"
-                arg: literal #1220 13707:336:23-13709:336:25 value=int:24
-              arg: literal #1222 13719:336:35-13722:336:38 value=int:255
-            element: method-call #1228 13729:337:5-13763:337:39 name="bit_and"
-              target: method-call #1226 13729:337:5-13750:337:26 name="shift_right"
-                target: name-ref #1224 13729:337:5-13734:337:10 name="value"
-                arg: literal #1225 13747:337:23-13749:337:25 value=int:16
-              arg: literal #1227 13759:337:35-13762:337:38 value=int:255
-            element: method-call #1233 13769:338:5-13802:338:38 name="bit_and"
-              target: method-call #1231 13769:338:5-13789:338:25 name="shift_right"
-                target: name-ref #1229 13769:338:5-13774:338:10 name="value"
-                arg: literal #1230 13787:338:23-13788:338:24 value=int:8
-              arg: literal #1232 13798:338:34-13801:338:37 value=int:255
-            element: method-call #1236 13808:339:5-13826:339:23 name="bit_and"
-              target: name-ref #1234 13808:339:5-13813:339:10 name="value"
-              arg: literal #1235 13822:339:19-13825:339:22 value=int:255
-    declaration: function-decl #1285 13838:343:1-14194:355:1 name="@4::bytes8_le"
-      param: param #1242 13852:343:15-13862:343:25 name="value"
-        type: type-ref #1241 13859:343:22-13862:343:25 name="Int"
-      result: type-ref #1243 13867:343:30-13872:343:35 name="Bytes"
-      body: return-stmt #1284 13875:344:3-14189:353:5 implicit
-        value: call #1283 13875:344:3-14189:353:5 name="@4::pack" piped=false
-          arg: list-lit #1282 13880:344:8-14188:353:4
-            element: method-call #1246 13886:345:5-13904:345:23 name="bit_and"
-              target: name-ref #1244 13886:345:5-13891:345:10 name="value"
-              arg: literal #1245 13900:345:19-13903:345:22 value=int:255
-            element: method-call #1251 13910:346:5-13943:346:38 name="bit_and"
-              target: method-call #1249 13910:346:5-13930:346:25 name="shift_right"
-                target: name-ref #1247 13910:346:5-13915:346:10 name="value"
-                arg: literal #1248 13928:346:23-13929:346:24 value=int:8
-              arg: literal #1250 13939:346:34-13942:346:37 value=int:255
-            element: method-call #1256 13949:347:5-13983:347:39 name="bit_and"
-              target: method-call #1254 13949:347:5-13970:347:26 name="shift_right"
-                target: name-ref #1252 13949:347:5-13954:347:10 name="value"
-                arg: literal #1253 13967:347:23-13969:347:25 value=int:16
-              arg: literal #1255 13979:347:35-13982:347:38 value=int:255
-            element: method-call #1261 13989:348:5-14023:348:39 name="bit_and"
-              target: method-call #1259 13989:348:5-14010:348:26 name="shift_right"
-                target: name-ref #1257 13989:348:5-13994:348:10 name="value"
-                arg: literal #1258 14007:348:23-14009:348:25 value=int:24
-              arg: literal #1260 14019:348:35-14022:348:38 value=int:255
-            element: method-call #1266 14029:349:5-14063:349:39 name="bit_and"
-              target: method-call #1264 14029:349:5-14050:349:26 name="shift_right"
-                target: name-ref #1262 14029:349:5-14034:349:10 name="value"
-                arg: literal #1263 14047:349:23-14049:349:25 value=int:32
-              arg: literal #1265 14059:349:35-14062:349:38 value=int:255
-            element: method-call #1271 14069:350:5-14103:350:39 name="bit_and"
-              target: method-call #1269 14069:350:5-14090:350:26 name="shift_right"
-                target: name-ref #1267 14069:350:5-14074:350:10 name="value"
-                arg: literal #1268 14087:350:23-14089:350:25 value=int:40
-              arg: literal #1270 14099:350:35-14102:350:38 value=int:255
-            element: method-call #1276 14109:351:5-14143:351:39 name="bit_and"
-              target: method-call #1274 14109:351:5-14130:351:26 name="shift_right"
-                target: name-ref #1272 14109:351:5-14114:351:10 name="value"
-                arg: literal #1273 14127:351:23-14129:351:25 value=int:48
-              arg: literal #1275 14139:351:35-14142:351:38 value=int:255
-            element: method-call #1281 14149:352:5-14183:352:39 name="bit_and"
-              target: method-call #1279 14149:352:5-14170:352:26 name="shift_right"
-                target: name-ref #1277 14149:352:5-14154:352:10 name="value"
-                arg: literal #1278 14167:352:23-14169:352:25 value=int:56
-              arg: literal #1280 14179:352:35-14182:352:38 value=int:255
-    declaration: function-decl #1294 14274:357:1-14343:358:1 name="@4::pack" expression
-      param: param #1288 14283:357:10-14299:357:26 name="items"
-        type: type-ref #1287 14290:357:17-14299:357:26 name="List"
-          arg: type-ref #1286 14295:357:22-14298:357:25 name="Int"
-      result: type-ref #1289 14304:357:31-14309:357:36 name="Bytes"
-      body: return-stmt #1293 14312:357:39-14342:357:69 implicit
-        value: field-access #1292 14312:357:39-14342:357:69 name="unwrap!"
-          target: call #1291 14312:357:39-14334:357:61 name="Bytes.from_list" piped=false
-            arg: name-ref #1290 14328:357:55-14333:357:60 name="items"
+              arg: named-arg #1104 12883:304:63-12903:304:83 name="kind"
+                value: literal #1103 12889:304:69-12903:304:83 value=string:"number.range"
+      body: return-stmt #1114 12920:305:3-12929:305:12 implicit
+        value: call #1113 12920:305:3-12929:305:12 name="ok" piped=false
+          arg: name-ref #1112 12923:305:6-12928:305:11 name="value"
+    declaration: function-decl #1130 12935:308:1-13034:309:1 name="@4::bytes2_be" expression
+      param: param #1117 12949:308:15-12959:308:25 name="value"
+        type: type-ref #1116 12956:308:22-12959:308:25 name="Int"
+      result: type-ref #1118 12964:308:30-12969:308:35 name="Bytes"
+      body: return-stmt #1129 12972:308:38-13033:308:99 implicit
+        value: call #1128 12972:308:38-13033:308:99 name="@4::pack" piped=false
+          arg: list-lit #1127 12977:308:43-13032:308:98
+            element: method-call #1123 12978:308:44-13011:308:77 name="bit_and"
+              target: method-call #1121 12978:308:44-12998:308:64 name="shift_right"
+                target: name-ref #1119 12978:308:44-12983:308:49 name="value"
+                arg: literal #1120 12996:308:62-12997:308:63 value=int:8
+              arg: literal #1122 13007:308:73-13010:308:76 value=int:255
+            element: method-call #1126 13013:308:79-13031:308:97 name="bit_and"
+              target: name-ref #1124 13013:308:79-13018:308:84 name="value"
+              arg: literal #1125 13027:308:93-13030:308:96 value=int:255
+    declaration: function-decl #1145 13035:310:1-13134:311:1 name="@4::bytes2_le" expression
+      param: param #1132 13049:310:15-13059:310:25 name="value"
+        type: type-ref #1131 13056:310:22-13059:310:25 name="Int"
+      result: type-ref #1133 13064:310:30-13069:310:35 name="Bytes"
+      body: return-stmt #1144 13072:310:38-13133:310:99 implicit
+        value: call #1143 13072:310:38-13133:310:99 name="@4::pack" piped=false
+          arg: list-lit #1142 13077:310:43-13132:310:98
+            element: method-call #1136 13078:310:44-13096:310:62 name="bit_and"
+              target: name-ref #1134 13078:310:44-13083:310:49 name="value"
+              arg: literal #1135 13092:310:58-13095:310:61 value=int:255
+            element: method-call #1141 13098:310:64-13131:310:97 name="bit_and"
+              target: method-call #1139 13098:310:64-13118:310:84 name="shift_right"
+                target: name-ref #1137 13098:310:64-13103:310:69 name="value"
+                arg: literal #1138 13116:310:82-13117:310:83 value=int:8
+              arg: literal #1140 13127:310:93-13130:310:96 value=int:255
+    declaration: function-decl #1170 13135:312:1-13331:320:1 name="@4::bytes4_be"
+      param: param #1147 13149:312:15-13159:312:25 name="value"
+        type: type-ref #1146 13156:312:22-13159:312:25 name="Int"
+      result: type-ref #1148 13164:312:30-13169:312:35 name="Bytes"
+      body: return-stmt #1169 13172:313:3-13326:318:5 implicit
+        value: call #1168 13172:313:3-13326:318:5 name="@4::pack" piped=false
+          arg: list-lit #1167 13177:313:8-13325:318:4
+            element: method-call #1153 13183:314:5-13217:314:39 name="bit_and"
+              target: method-call #1151 13183:314:5-13204:314:26 name="shift_right"
+                target: name-ref #1149 13183:314:5-13188:314:10 name="value"
+                arg: literal #1150 13201:314:23-13203:314:25 value=int:24
+              arg: literal #1152 13213:314:35-13216:314:38 value=int:255
+            element: method-call #1158 13223:315:5-13257:315:39 name="bit_and"
+              target: method-call #1156 13223:315:5-13244:315:26 name="shift_right"
+                target: name-ref #1154 13223:315:5-13228:315:10 name="value"
+                arg: literal #1155 13241:315:23-13243:315:25 value=int:16
+              arg: literal #1157 13253:315:35-13256:315:38 value=int:255
+            element: method-call #1163 13263:316:5-13296:316:38 name="bit_and"
+              target: method-call #1161 13263:316:5-13283:316:25 name="shift_right"
+                target: name-ref #1159 13263:316:5-13268:316:10 name="value"
+                arg: literal #1160 13281:316:23-13282:316:24 value=int:8
+              arg: literal #1162 13292:316:34-13295:316:37 value=int:255
+            element: method-call #1166 13302:317:5-13320:317:23 name="bit_and"
+              target: name-ref #1164 13302:317:5-13307:317:10 name="value"
+              arg: literal #1165 13316:317:19-13319:317:22 value=int:255
+    declaration: function-decl #1195 13332:321:1-13528:329:1 name="@4::bytes4_le"
+      param: param #1172 13346:321:15-13356:321:25 name="value"
+        type: type-ref #1171 13353:321:22-13356:321:25 name="Int"
+      result: type-ref #1173 13361:321:30-13366:321:35 name="Bytes"
+      body: return-stmt #1194 13369:322:3-13523:327:5 implicit
+        value: call #1193 13369:322:3-13523:327:5 name="@4::pack" piped=false
+          arg: list-lit #1192 13374:322:8-13522:327:4
+            element: method-call #1176 13380:323:5-13398:323:23 name="bit_and"
+              target: name-ref #1174 13380:323:5-13385:323:10 name="value"
+              arg: literal #1175 13394:323:19-13397:323:22 value=int:255
+            element: method-call #1181 13404:324:5-13437:324:38 name="bit_and"
+              target: method-call #1179 13404:324:5-13424:324:25 name="shift_right"
+                target: name-ref #1177 13404:324:5-13409:324:10 name="value"
+                arg: literal #1178 13422:324:23-13423:324:24 value=int:8
+              arg: literal #1180 13433:324:34-13436:324:37 value=int:255
+            element: method-call #1186 13443:325:5-13477:325:39 name="bit_and"
+              target: method-call #1184 13443:325:5-13464:325:26 name="shift_right"
+                target: name-ref #1182 13443:325:5-13448:325:10 name="value"
+                arg: literal #1183 13461:325:23-13463:325:25 value=int:16
+              arg: literal #1185 13473:325:35-13476:325:38 value=int:255
+            element: method-call #1191 13483:326:5-13517:326:39 name="bit_and"
+              target: method-call #1189 13483:326:5-13504:326:26 name="shift_right"
+                target: name-ref #1187 13483:326:5-13488:326:10 name="value"
+                arg: literal #1188 13501:326:23-13503:326:25 value=int:24
+              arg: literal #1190 13513:326:35-13516:326:38 value=int:255
+    declaration: function-decl #1240 13529:330:1-13885:342:1 name="@4::bytes8_be"
+      param: param #1197 13543:330:15-13553:330:25 name="value"
+        type: type-ref #1196 13550:330:22-13553:330:25 name="Int"
+      result: type-ref #1198 13558:330:30-13563:330:35 name="Bytes"
+      body: return-stmt #1239 13566:331:3-13880:340:5 implicit
+        value: call #1238 13566:331:3-13880:340:5 name="@4::pack" piped=false
+          arg: list-lit #1237 13571:331:8-13879:340:4
+            element: method-call #1203 13577:332:5-13611:332:39 name="bit_and"
+              target: method-call #1201 13577:332:5-13598:332:26 name="shift_right"
+                target: name-ref #1199 13577:332:5-13582:332:10 name="value"
+                arg: literal #1200 13595:332:23-13597:332:25 value=int:56
+              arg: literal #1202 13607:332:35-13610:332:38 value=int:255
+            element: method-call #1208 13617:333:5-13651:333:39 name="bit_and"
+              target: method-call #1206 13617:333:5-13638:333:26 name="shift_right"
+                target: name-ref #1204 13617:333:5-13622:333:10 name="value"
+                arg: literal #1205 13635:333:23-13637:333:25 value=int:48
+              arg: literal #1207 13647:333:35-13650:333:38 value=int:255
+            element: method-call #1213 13657:334:5-13691:334:39 name="bit_and"
+              target: method-call #1211 13657:334:5-13678:334:26 name="shift_right"
+                target: name-ref #1209 13657:334:5-13662:334:10 name="value"
+                arg: literal #1210 13675:334:23-13677:334:25 value=int:40
+              arg: literal #1212 13687:334:35-13690:334:38 value=int:255
+            element: method-call #1218 13697:335:5-13731:335:39 name="bit_and"
+              target: method-call #1216 13697:335:5-13718:335:26 name="shift_right"
+                target: name-ref #1214 13697:335:5-13702:335:10 name="value"
+                arg: literal #1215 13715:335:23-13717:335:25 value=int:32
+              arg: literal #1217 13727:335:35-13730:335:38 value=int:255
+            element: method-call #1223 13737:336:5-13771:336:39 name="bit_and"
+              target: method-call #1221 13737:336:5-13758:336:26 name="shift_right"
+                target: name-ref #1219 13737:336:5-13742:336:10 name="value"
+                arg: literal #1220 13755:336:23-13757:336:25 value=int:24
+              arg: literal #1222 13767:336:35-13770:336:38 value=int:255
+            element: method-call #1228 13777:337:5-13811:337:39 name="bit_and"
+              target: method-call #1226 13777:337:5-13798:337:26 name="shift_right"
+                target: name-ref #1224 13777:337:5-13782:337:10 name="value"
+                arg: literal #1225 13795:337:23-13797:337:25 value=int:16
+              arg: literal #1227 13807:337:35-13810:337:38 value=int:255
+            element: method-call #1233 13817:338:5-13850:338:38 name="bit_and"
+              target: method-call #1231 13817:338:5-13837:338:25 name="shift_right"
+                target: name-ref #1229 13817:338:5-13822:338:10 name="value"
+                arg: literal #1230 13835:338:23-13836:338:24 value=int:8
+              arg: literal #1232 13846:338:34-13849:338:37 value=int:255
+            element: method-call #1236 13856:339:5-13874:339:23 name="bit_and"
+              target: name-ref #1234 13856:339:5-13861:339:10 name="value"
+              arg: literal #1235 13870:339:19-13873:339:22 value=int:255
+    declaration: function-decl #1285 13886:343:1-14242:355:1 name="@4::bytes8_le"
+      param: param #1242 13900:343:15-13910:343:25 name="value"
+        type: type-ref #1241 13907:343:22-13910:343:25 name="Int"
+      result: type-ref #1243 13915:343:30-13920:343:35 name="Bytes"
+      body: return-stmt #1284 13923:344:3-14237:353:5 implicit
+        value: call #1283 13923:344:3-14237:353:5 name="@4::pack" piped=false
+          arg: list-lit #1282 13928:344:8-14236:353:4
+            element: method-call #1246 13934:345:5-13952:345:23 name="bit_and"
+              target: name-ref #1244 13934:345:5-13939:345:10 name="value"
+              arg: literal #1245 13948:345:19-13951:345:22 value=int:255
+            element: method-call #1251 13958:346:5-13991:346:38 name="bit_and"
+              target: method-call #1249 13958:346:5-13978:346:25 name="shift_right"
+                target: name-ref #1247 13958:346:5-13963:346:10 name="value"
+                arg: literal #1248 13976:346:23-13977:346:24 value=int:8
+              arg: literal #1250 13987:346:34-13990:346:37 value=int:255
+            element: method-call #1256 13997:347:5-14031:347:39 name="bit_and"
+              target: method-call #1254 13997:347:5-14018:347:26 name="shift_right"
+                target: name-ref #1252 13997:347:5-14002:347:10 name="value"
+                arg: literal #1253 14015:347:23-14017:347:25 value=int:16
+              arg: literal #1255 14027:347:35-14030:347:38 value=int:255
+            element: method-call #1261 14037:348:5-14071:348:39 name="bit_and"
+              target: method-call #1259 14037:348:5-14058:348:26 name="shift_right"
+                target: name-ref #1257 14037:348:5-14042:348:10 name="value"
+                arg: literal #1258 14055:348:23-14057:348:25 value=int:24
+              arg: literal #1260 14067:348:35-14070:348:38 value=int:255
+            element: method-call #1266 14077:349:5-14111:349:39 name="bit_and"
+              target: method-call #1264 14077:349:5-14098:349:26 name="shift_right"
+                target: name-ref #1262 14077:349:5-14082:349:10 name="value"
+                arg: literal #1263 14095:349:23-14097:349:25 value=int:32
+              arg: literal #1265 14107:349:35-14110:349:38 value=int:255
+            element: method-call #1271 14117:350:5-14151:350:39 name="bit_and"
+              target: method-call #1269 14117:350:5-14138:350:26 name="shift_right"
+                target: name-ref #1267 14117:350:5-14122:350:10 name="value"
+                arg: literal #1268 14135:350:23-14137:350:25 value=int:40
+              arg: literal #1270 14147:350:35-14150:350:38 value=int:255
+            element: method-call #1276 14157:351:5-14191:351:39 name="bit_and"
+              target: method-call #1274 14157:351:5-14178:351:26 name="shift_right"
+                target: name-ref #1272 14157:351:5-14162:351:10 name="value"
+                arg: literal #1273 14175:351:23-14177:351:25 value=int:48
+              arg: literal #1275 14187:351:35-14190:351:38 value=int:255
+            element: method-call #1281 14197:352:5-14231:352:39 name="bit_and"
+              target: method-call #1279 14197:352:5-14218:352:26 name="shift_right"
+                target: name-ref #1277 14197:352:5-14202:352:10 name="value"
+                arg: literal #1278 14215:352:23-14217:352:25 value=int:56
+              arg: literal #1280 14227:352:35-14230:352:38 value=int:255
+    declaration: function-decl #1294 14322:357:1-14391:358:1 name="@4::pack" expression
+      param: param #1288 14331:357:10-14347:357:26 name="items"
+        type: type-ref #1287 14338:357:17-14347:357:26 name="List"
+          arg: type-ref #1286 14343:357:22-14346:357:25 name="Int"
+      result: type-ref #1289 14352:357:31-14357:357:36 name="Bytes"
+      body: return-stmt #1293 14360:357:39-14390:357:69 implicit
+        value: field-access #1292 14360:357:39-14390:357:69 name="unwrap!"
+          target: call #1291 14360:357:39-14382:357:61 name="Bytes.from_list" piped=false
+            arg: name-ref #1290 14376:357:55-14381:357:60 name="items"
   module "std/uri.agc"
     declaration: const-decl #17 1375:18:1-1453:19:1 name="@5::HEX_DIGITS"
       value: list-lit #16 1388:18:14-1452:18:78

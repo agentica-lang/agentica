@@ -148,7 +148,7 @@ end
 ## each
 
 ```signature
-Map.each(map: Map[K, V], f: Fn[K, V, Void]) -> Void
+Map.each(map: Map[K, V], block: Fn[K, V, Void]) -> Void
 ```
 
 Runs the function with each key and value, in insertion order.
@@ -167,7 +167,7 @@ y=2
 ## filter and select
 
 ```signature
-Map.filter(map: Map[K, V], f: Fn[K, V, Bool]) -> Map[K, V]
+Map.filter(map: Map[K, V], block: Fn[K, V, Bool]) -> Map[K, V]
 ```
 
 Keeps the entries for which the function gives `true`, in insertion order. O(n), like `each`. `m.select` is the Ruby name.

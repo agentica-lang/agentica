@@ -138,7 +138,7 @@ def test_an_embedded_std_module_is_named_with_its_extension(tmp_path):
     report = answer("std/queue", cwd=tmp_path)
     assert report["file"] == "std/queue.agc"
     items = items_by_name(report)
-    assert items["pop"]["signature"] == "pop(q: QueueState) -> Result[Popped]"
+    assert items["pop"]["signature"] == "pop(queue: QueueState) -> Result[Popped]"
     assert items["pop"]["exported"] is True
     assert items["pop"]["span"]["file"] == "std/queue.agc"
     assert [f["name"] for f in items["Popped"]["fields"]] == ["value", "remaining"]

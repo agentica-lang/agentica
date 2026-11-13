@@ -21,22 +21,22 @@ end
 export def new() -> QueueState = QueueState(items: [])
 
 ## Returns a queue with `value` added at the back.
-export def push(q: QueueState, value: String) -> QueueState = QueueState(items: List.append(q.items, value))
+export def push(queue: QueueState, value: String) -> QueueState = QueueState(items: List.append(queue.items, value))
 
 ## Takes the oldest value. Returns it with the rest of the queue, or an error when the queue is empty.
-export def pop(q: QueueState) -> Result[Popped]
-  return error("queue is empty") if empty?(q)
-  ok(Popped(value: q.items[0], remaining: QueueState(items: List.drop(q.items, 1))))
+export def pop(queue: QueueState) -> Result[Popped]
+  return error("queue is empty") if empty?(queue)
+  ok(Popped(value: queue.items[0], remaining: QueueState(items: List.drop(queue.items, 1))))
 end
 
 ## Returns the oldest value without removing it, or an error when the queue is empty.
-export def peek(q: QueueState) -> Result[String]
-  return error("queue is empty") if empty?(q)
-  ok(q.items[0])
+export def peek(queue: QueueState) -> Result[String]
+  return error("queue is empty") if empty?(queue)
+  ok(queue.items[0])
 end
 
 ## Returns how many values are in the queue.
-export def size(q: QueueState) -> Int = List.size(q.items)
+export def size(queue: QueueState) -> Int = List.size(queue.items)
 
 ## Returns true when the queue has no values.
-export def empty?(q: QueueState) -> Bool = size(q) == 0
+export def empty?(queue: QueueState) -> Bool = size(queue) == 0

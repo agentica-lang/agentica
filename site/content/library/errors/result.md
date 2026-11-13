@@ -30,7 +30,7 @@ ok("yes")
 ```signature
 error(message: String) -> Result[T]
 error(message: String, kind: String, code: Int, details: Map[String, String], cause: Error) -> Result[T]
-error(e: Error) -> Result[T]
+error(error: Error) -> Result[T]
 ```
 
 With a `String`, it builds a new `Error` with that message, made at this call. The other fields come as named arguments, each optional and in any order; `code` and `cause` are stored as `some(...)` ([Error](/library/errors/error/#kinds)). With an `Error`, it holds that same `Error`, so a `case` arm can pass an error on as a `Result` of another type. The type comes from an annotation, a return type, a parameter or a field.
@@ -50,7 +50,7 @@ error("broken")
 ## Result.ok?
 
 ```signature
-Result.ok?(r: Result[T]) -> Bool
+Result.ok?(result: Result[T]) -> Bool
 ```
 
 ```agentica
@@ -68,7 +68,7 @@ false
 ## Result.unwrap!
 
 ```signature
-Result.unwrap!(r: Result[T]) -> T
+Result.unwrap!(result: Result[T]) -> T
 ```
 
 Gives the value, or stops the program with `RUNTIME-UNWRAP-ERROR`.
@@ -86,7 +86,7 @@ end
 ## Result.unwrap_or
 
 ```signature
-Result.unwrap_or(r: Result[T], default: T) -> T
+Result.unwrap_or(result: Result[T], default: T) -> T
 ```
 
 Gives the value, or the default for an error. The default is always computed.
@@ -106,7 +106,7 @@ end
 ## Result.message
 
 ```signature
-Result.message(r: Result[T]) -> String
+Result.message(result: Result[T]) -> String
 ```
 
 Gives the `message` of the error, or `""` for a success.

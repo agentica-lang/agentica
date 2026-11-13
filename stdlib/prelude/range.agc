@@ -5,38 +5,38 @@
 ## Cost: each function is O(n) in the steps of the VM, n the values it visits, and calls its callback once for each of
 ## them, in order; min and max are O(1).
 
-def map(range: Range, f: Fn[Int, B]) -> List[B]
+def map(range: Range, block: Fn[Int, B]) -> List[B]
   found: List[B] = []
   for item in range
-    found = found.push(f.call(item))
+    found = found.push(block.call(item))
   end
   found
 end
 
-def select(range: Range, f: Fn[Int, Bool]) -> List[Int]
+def select(range: Range, block: Fn[Int, Bool]) -> List[Int]
   found: List[Int] = []
   for item in range
-    if f.call(item)
+    if block.call(item)
       found = found.push(item)
     end
   end
   found
 end
 
-def flat_map(range: Range, f: Fn[Int, List[B]]) -> List[B]
+def flat_map(range: Range, block: Fn[Int, List[B]]) -> List[B]
   found: List[B] = []
   for item in range
-    for part in f.call(item)
+    for part in block.call(item)
       found = found.push(part)
     end
   end
   found
 end
 
-def reduce(range: Range, initial: B, f: Fn[B, Int, B]) -> B
+def reduce(range: Range, initial: B, block: Fn[B, Int, B]) -> B
   total = initial
   for item in range
-    total = f.call(total, item)
+    total = block.call(total, item)
   end
   total
 end
@@ -155,40 +155,40 @@ def max_by_string(range: Range, key: Fn[Int, String]) -> Optional[Int]
   best
 end
 
-def find(range: Range, f: Fn[Int, Bool]) -> Result[Int]
+def find(range: Range, block: Fn[Int, Bool]) -> Result[Int]
   for item in range
-    return ok(item) if f.call(item)
+    return ok(item) if block.call(item)
   end
   error("not found")
 end
 
-def find_index(range: Range, f: Fn[Int, Bool]) -> Optional[Int]
+def find_index(range: Range, block: Fn[Int, Bool]) -> Optional[Int]
   index = 0
   for item in range
-    return some(index) if f.call(item)
+    return some(index) if block.call(item)
     index += 1
   end
   none
 end
 
-def any(range: Range, f: Fn[Int, Bool]) -> Bool
+def any(range: Range, block: Fn[Int, Bool]) -> Bool
   for item in range
-    return true if f.call(item)
+    return true if block.call(item)
   end
   false
 end
 
-def all(range: Range, f: Fn[Int, Bool]) -> Bool
+def all(range: Range, block: Fn[Int, Bool]) -> Bool
   for item in range
-    return false if !f.call(item)
+    return false if !block.call(item)
   end
   true
 end
 
-def each_with_index(range: Range, f: Fn[Int, Int, Void]) -> Void
+def each_with_index(range: Range, block: Fn[Int, Int, Void]) -> Void
   index = 0
   for item in range
-    f.call(item, index)
+    block.call(item, index)
     index += 1
   end
 end
@@ -213,11 +213,11 @@ def each_slice(range: Range, size: Int) -> List[List[Int]]
   slices
 end
 
-def partition(range: Range, f: Fn[Int, Bool]) -> List[List[Int]]
+def partition(range: Range, block: Fn[Int, Bool]) -> List[List[Int]]
   accepted: List[Int] = []
   rejected: List[Int] = []
   for item in range
-    if f.call(item)
+    if block.call(item)
       accepted = accepted.push(item)
     else
       rejected = rejected.push(item)
@@ -236,20 +236,20 @@ def group_by(range: Range, key: Fn[Int, K]) -> Map[K, List[Int]]
   groups
 end
 
-def take_while(range: Range, f: Fn[Int, Bool]) -> List[Int]
+def take_while(range: Range, block: Fn[Int, Bool]) -> List[Int]
   found: List[Int] = []
   for item in range
-    break if !f.call(item)
+    break if !block.call(item)
     found = found.push(item)
   end
   found
 end
 
-def drop_while(range: Range, f: Fn[Int, Bool]) -> List[Int]
+def drop_while(range: Range, block: Fn[Int, Bool]) -> List[Int]
   found: List[Int] = []
   dropping = true
   for item in range
-    if dropping and !f.call(item)
+    if dropping and !block.call(item)
       dropping = false
     end
     if !dropping

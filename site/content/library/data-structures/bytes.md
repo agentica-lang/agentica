@@ -152,11 +152,11 @@ end
 
 ```signature
 Bytes.slice(bytes: Bytes, start: Int, length: Int) -> Bytes
-Bytes.take(bytes: Bytes, n: Int) -> Bytes
-Bytes.drop(bytes: Bytes, n: Int) -> Bytes
+Bytes.take(bytes: Bytes, count: Int) -> Bytes
+Bytes.drop(bytes: Bytes, count: Int) -> Bytes
 ```
 
-`slice` copies a range and stops the program outside the bounds. `take` and `drop` copy the first `n` bytes or the rest, and never stop for a count above the length (a negative count is `RUNTIME-INVALID-COUNT`). All three copy: a result does not keep its source alive.
+`slice` copies a range and stops the program outside the bounds. `take` and `drop` copy the first `count` bytes or the rest, and never stop for a count above the length (a negative count is `RUNTIME-INVALID-COUNT`). All three copy: a result does not keep its source alive.
 
 ```agentica
 def main() -> Void
@@ -179,7 +179,7 @@ end
 
 ```text
 a + b
-Bytes.concat(parts: List[Bytes]) -> Bytes
+Bytes.concat(list: List[Bytes]) -> Bytes
 ```
 
 `+` joins two values. Repeated `+` copies everything each time, so a loop that joins many parts takes quadratic time; join the parts with `Bytes.concat`, which copies once.
@@ -199,7 +199,7 @@ end
 ## each and for
 
 ```signature
-Bytes.each(bytes: Bytes, f: Fn[Int, Void]) -> Void
+Bytes.each(bytes: Bytes, block: Fn[Int, Void]) -> Void
 ```
 
 Calls the block with each byte in order. `for byte in b` does the same and allows assignment in the body.

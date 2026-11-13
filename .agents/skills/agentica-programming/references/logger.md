@@ -20,7 +20,7 @@ Logger.stderr_text(event: Logger.Event) -> Void
 Logger.stderr_json(event: Logger.Event) -> Void
 Logger.format_text(event: Logger.Event) -> String
 Logger.format_json(event: Logger.Event) -> String
-Logger.time_text(ms: Int) -> String
+Logger.time_text(time_ms: Int) -> String
 ```
 
 - `Logger.Level` is an enum, `Logger.Level.Debug < Info < Warning < Error`.
