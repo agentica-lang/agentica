@@ -10,6 +10,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- A `private` line in a file or a module block makes every declaration above
+  it public and every one after it private, as in Ruby; reaching a private
+  name says how to make it public (#1502).
 - `agentica = "0.31.0"` in `agentica.toml` names the oldest Agentica a project
   or package needs; an older one stops with `PKG-AGENTICA-TOO-OLD` (#1469). A
   workspace member also checks the root's key (#1474).

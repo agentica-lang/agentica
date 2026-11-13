@@ -13,7 +13,6 @@ import Source from "../syntax/source"
 import Suggest from "../syntax/suggest"
 import T from "../syntax/types"
 import Declarations from "declarations"
-import ImportHelp from "import_help"
 import Env from "link_env"
 import Failure from "link_failure"
 import Modules from "modules"
@@ -409,7 +408,7 @@ def imported(cx: Context, target: Modules.Module, member: String, want: Want, sp
         site(cx, span),
         "CHECK-IMPORT-NAME",
         "unknown or private imported name",
-        ImportHelp.unknown_import_help(target.key, target.public, member),
+        Modules.import_name_help(cx.modules, target, member),
       ),
     )
   end

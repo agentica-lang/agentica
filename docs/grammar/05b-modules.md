@@ -12,10 +12,51 @@ file is linked once. Cycles are `CHECK-IMPORT-CYCLE`, missing or unreadable
 files are `CHECK-IMPORT-IO`, and invalid paths are `CHECK-IMPORT-PATH`; each is
 located at the import.
 
-`export type Name = Type` exports a type alias, alongside exported structs,
-enums, functions and constants. An importer can use `Models.Names` or import it
+#### Public and private names
+
+A `private` line splits a file: every declaration above it (constant, struct,
+enum, type alias, function, module block) is public, and every declaration
+after it is private to the file. Imports are never public.
+
+```agentica
+LIMIT = 10
+
+def open(id: Int) -> Int = connect(id)
+
+private
+
+BUFFER = 4096
+
+def connect(id: Int) -> Int = id + BUFFER
+```
+
+- `private` is the name `private` alone on its line, at the level of the
+  declarations of a file or a module block; elsewhere it is an ordinary name.
+  `private def f` is `PARSE-TOP-LEVEL-STATEMENT`. A blank line comes before
+  and after it (`PARSE-MISSING-BLANK-LINE`); `agentica fmt` keeps it where it
+  is.
+- A file or block has at most one `private`; a second one is
+  `PARSE-SECOND-PRIVATE` at it. There is no `public` to switch back.
+- In a file or block with `private`, `export` before a declaration is
+  `PARSE-UNEXPECTED-TOKEN` at the `export`. A re-export (`export Alias.name`,
+  below) is public and goes above `private`.
+- A file or block without `private` uses the older form: a declaration is
+  public only when `export` is written before it (`export def`, `export
+  struct`, `export enum`, `export type`, `export NAME = ...`, `export module`),
+  so a file with neither has no public name. Both forms mean the same to an
+  importer, to `agentica doc` and to the queries.
+- Reaching a private name (`M.helper`, `import {helper} from "m"`,
+  `Counter.step`) is `CHECK-IMPORT-NAME` at the name, with a help that says it
+  is private and how to make it public: move it above `private` in a file with
+  `private`, or add `export` in one without. For a name that the module only
+  imports, the help names the re-export that would pass it on (`export
+  Url.parse`). For a `std/` module or a package, which the user does not edit,
+  the help only says that the name is private.
+
+A type alias is public in the same way as a struct, enum, function or constant.
+An importer can use `Models.Names` or import it
 by name with `import {Names} from "models"`; type aliases can also be renamed to
-another capitalized name. Aliases can name private types in exported signatures;
+another capitalized name. Aliases can name private types in public signatures;
 importers can use values of the alias but cannot name or construct the private
 type. Local names stay unqualified. Import aliases are uppercase and cannot
 collide with declarations, other aliases, imported names or builtin names.
@@ -83,7 +124,8 @@ from the same module twice), of a builtin function such as `puts` or `ok`, or of
 a reserved type name such as `Int` or `JSON`; each is `CHECK-REDEFINED-NAME`,
 located at the name in the braces (at the new name of a rename). A name that
 the module does not export, or that is private, is `CHECK-IMPORT-NAME` at the
-name, with a `did you mean` help over the exports only. These checks run when
+name, with the help for a private name (above) or a `did you mean` help over
+the exports only. These checks run when
 the file is loaded, so they are reported at the import, before any use of the
 name. A name used as the wrong kind (an
 imported struct as the enum of a pattern) is `CHECK-TYPE-MISMATCH`, as with an
@@ -111,7 +153,9 @@ struct, enum or type alias) add the name to the exports of the file. There is
 no renaming (`as`) and no wildcard (`export Url.*`): a facade that wants
 another name writes a wrapper function. `export` is followed by a type name
 and a dot only for a re-export, so there is no clash with `export def`,
-`export struct`, `export enum`, `export type` and `export NAME = ...`.
+`export struct`, `export enum`, `export type` and `export NAME = ...`. A
+re-export is public in both forms; in a file with `private` it goes above
+`private`, and one after it is `CHECK-DECL-ORDER`.
 
 - The alias must be an import of this file (`import Url from "url"`; a module
   imported only by names has no alias), otherwise `CHECK-IMPORT-NAME` at the
@@ -142,12 +186,14 @@ and a dot only for a re-export, so there is no clash with `export def`,
 - Re-exports come with the imports, may follow each other and the imports
   directly, and after a declaration need the blank line
   (`PARSE-MISSING-BLANK-LINE`); they are in the first group of
-  `CHECK-DECL-ORDER`. A `##` doc before a re-export is `PARSE-DETACHED-DOC`:
-  the doc stays on the original.
+  `CHECK-DECL-ORDER`, or with the public constants in a file with `private`. A
+  `##` doc before a re-export is `PARSE-DETACHED-DOC`: the doc stays on the
+  original.
 
 #### Constants
 
-`export LIMIT = 100` makes a constant visible, and
+A public constant (`LIMIT = 100` above `private`, or `export LIMIT = 100`) is
+visible, and
 `import {LIMIT} from "limits"` brings it in by name, like any other exported
 name (it can be renamed to another constant name:
 `import {LIMIT as MAX_ITEMS} from "limits"`). A constant is read by its bare
@@ -210,16 +256,20 @@ end
   that the file declares or imports, or the name of a block
   (`CHECK-SHADOWED-NAME`, at the name). Two blocks may declare the same name
   (`A.start` and `B.start`): neither sees the other's names bare.
-- Outside the block (the rest of the file and importers) only its exported
+- A block has its own `private` line, with the rules of a file: what is above
+  it is public, the rest is private to the block. A block without one uses
+  `export`.
+- Outside the block (the rest of the file and importers) only its public
   names are visible, written `Counter.start`, `Counter.Msg.Add(5)`,
   `Counter.LIMIT`, `Counter.Box[Int]`. A private name is `CHECK-IMPORT-NAME`, as
   for a name a file does not export. Uses inside a block count for
   `CHECK-UNUSED-IMPORT`.
-- `export module Counter` lets an importer use it: `import {Counter} from
+- A public block (above the file's `private`, or `export module Counter`)
+  lets an importer use it: `import {Counter} from
   "agents"` binds `Counter` as an alias (`import {Counter as C}` renames it),
   and `import Agents from "agents"` reads `Agents.Counter.start(0)`,
-  `Agents.Counter.Msg.Add(5)` and the type `Agents.Counter.Msg`. A block
-  without `export` is private to its file.
+  `Agents.Counter.Msg.Add(5)` and the type `Agents.Counter.Msg`. Any other
+  block is private to its file.
 - Only the root file's top-level `main` runs, so a block may not declare
   `main` (`CHECK-MAIN`, at the name). There is no mutable module state, and
   `extern module` keeps its meaning.

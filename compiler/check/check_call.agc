@@ -168,7 +168,7 @@ export def check_struct_update(cx: State.Cx, st: State.St, node: Ast.StructUpdat
         "CHECK-IMPORT-NAME",
         "\"#{T.display_name(name)}\" is private to its module, so a value of it cannot be updated here",
         node.span,
-        "export the struct from its module, or add a function there that makes the change",
+        "make the struct public in its module, or add a function there that makes the change",
       ),
     )
   end

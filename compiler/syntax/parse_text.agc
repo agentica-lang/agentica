@@ -83,7 +83,7 @@ export def print_program(program: Ast.Program) -> List[String]
       "program",
       program.id,
       program.span,
-      text_attr(" module-doc=", program.module_doc),
+      text_attr(" module-doc=", program.module_doc) + private_attr(program.private_mark),
     ),
   ]
 
@@ -106,7 +106,7 @@ export def print_decl(out: List[String], at: Margin, role: String, decl: Ast.Dec
       lines = out.push(head(at, role, "export-decl", node.id, node.span, doc_attr(node.doc)))
       print_decl(lines, child, "declaration", node.declaration)
     Ast.Decl.Module(node) ->
-      lines = out.push(head(at, role, "module-decl", node.id, node.span, name_attr(node.name) + doc_attr(node.doc)))
+      lines = out.push(head(at, role, "module-decl", node.id, node.span, module_attrs(node)))
       for inner in node.declarations
         lines = print_decl(lines, child, "declaration", inner)
       end
@@ -216,6 +216,18 @@ export def print_decl(out: List[String], at: Margin, role: String, decl: Ast.Dec
       lines = out.push(head(at, role, "type-alias-decl", node.id, node.span, attrs + doc_attr(node.doc)))
       print_type(lines, child, "target", node.target)
   end
+end
+
+# ` private-at=N` for a scope with a `private` line before its declaration number N, "" for one without.
+def private_attr(mark: Optional[Ast.PrivateMark]) -> String
+  case mark
+    some(found) -> " private-at=#{found.index}"
+    none -> ""
+  end
+end
+
+def module_attrs(node: Ast.ModuleDecl) -> String
+  name_attr(node.name) + doc_attr(node.doc) + private_attr(node.private_mark)
 end
 
 def doc_attr(doc: Optional[String]) -> String = text_attr(" doc=", doc)

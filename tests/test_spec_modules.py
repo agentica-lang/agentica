@@ -290,9 +290,10 @@ class TestModuleRules:
     def test_a_wrong_imported_name_suggests_the_closest_export_never_a_private_name(self):
         module = ("struct Secret\n  value: Int\nend\n\nexport struct Public\n  a: Int\nend\n\n"
                   "export def public() -> Void\nend\n\ndef hidden() -> Void\nend\n\n")
-        # A suggestion is given for a near public name; none for a near private name or a name far from all.
+        # A suggestion is given for a near public name; none for a near private name or a name far from all. A
+        # private name itself gets the help that says how to make it public (test_spec_private.py).
         cases = [("  x = M.publc()\n", True), ("  x = M.Publik(a: 1)\n", True), ("  x: M.Publc = nil\n", True),
-                 ("  x = M.hiden()\n", False), ("  x = M.Secret(value: 1)\n", False), ("  x = M.faraway()\n", False)]
+                 ("  x = M.hiden()\n", False), ("  x = M.Secret(value: 1)\n", True), ("  x = M.faraway()\n", False)]
         results = self.checks([({"module.agc": module,
                                  "root.agc": 'import M from "module"\ndef main() -> Void\n' + body + "end\n\n"},
                                 "root.agc", None) for body, _suggests in cases])

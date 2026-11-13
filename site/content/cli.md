@@ -93,7 +93,7 @@ Split text; an empty separator gives characters.
 agentica doc std/queue    # a file path works too; --json prints one JSON object
 ```
 
-It prints the exported declarations in source order, each with its signature and its `##` doc, and a struct's fields or an enum's variants. It only reads the file, so the module's imports need not exist. Declarations without `export` are left out.
+It prints the exported declarations in source order, each with its signature and its `##` doc, and a struct's fields or an enum's variants. It only reads the file, so the module's imports need not exist. Private declarations (after `private`, or without `export` in a file without `private`) are left out.
 
 To learn one module, `agentica help std/queue` lists its exports with the first sentence of each doc (at most about 100 characters), and `agentica help std/queue.pop` prints the signature and the whole doc of one export (a struct's fields or an enum's variants too). `--json` prints one JSON object, with the whole first paragraph as `summary`. A module or name that does not exist is `QUERY-NOT-FOUND` (exit 2); for a name it offers the closest export.
 

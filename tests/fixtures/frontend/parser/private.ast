@@ -1,0 +1,31 @@
+program #30 0:1:1-223:23:1 private-at=5
+  declaration: import-decl #0 0:1:1-18:2:1 path="m" alias="M"
+  declaration: reexport-decl #1 19:3:1-33:4:1 alias="M" name="open"
+  declaration: const-decl #3 34:5:1-44:6:1 name="LIMIT" exported=true
+    value: literal #2 42:5:9-43:5:10 value=int:1
+  declaration: export-decl #28 57:8:1-91:9:1 doc="Doubles."
+    declaration: function-decl #11 57:8:1-91:9:1 name="double" doc="Doubles." expression
+      param: param #5 68:8:12-74:8:18 name="x"
+        type: type-ref #4 71:8:15-74:8:18 name="Int"
+      result: type-ref #6 79:8:23-82:8:26 name="Int"
+      body: return-stmt #10 85:8:29-90:8:34 implicit
+        value: binary #9 85:8:29-90:8:34 op=multiply op-span=87:8:31-88:8:32
+          left: name-ref #7 85:8:29-86:8:30 name="x"
+          right: literal #8 89:8:33-90:8:34 value=int:2
+  declaration: export-decl #29 92:10:1-172:17:1
+    declaration: module-decl #21 92:10:1-172:17:1 name="Counter" private-at=1
+      declaration: export-decl #20 109:11:3-132:12:1
+        declaration: function-decl #15 109:11:3-132:12:1 name="start" expression
+          result: type-ref #12 124:11:18-127:11:21 name="Int"
+          body: return-stmt #14 130:11:24-131:11:25 implicit
+            value: literal #13 130:11:24-131:11:25 value=int:1
+      declaration: function-decl #19 146:15:3-168:16:1 name="step" expression
+        result: type-ref #16 160:15:17-163:15:20 name="Int"
+        body: return-stmt #18 166:15:23-167:15:24 implicit
+          value: literal #17 166:15:23-167:15:24 value=int:2
+  declaration: const-decl #23 182:20:1-193:21:1 name="BUFFER"
+    value: literal #22 191:20:10-192:20:11 value=int:2
+  declaration: function-decl #27 194:22:1-223:23:1 name="helper" expression
+    result: type-ref #24 210:22:17-213:22:20 name="Int"
+    body: return-stmt #26 216:22:23-222:22:29 implicit
+      value: type-expression #25 216:22:23-222:22:29 name="BUFFER"
