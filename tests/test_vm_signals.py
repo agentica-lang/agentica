@@ -263,7 +263,7 @@ def test_an_ended_subscription_gives_the_signal_back_to_the_stop_path(tmp_path, 
         vm.process.kill()
         vm.process.wait()
         time.sleep(1)
-        print(vm.stderr_text()[-20000:])
+        print(vm.stderr()[-20000:])
         raise
     assert code == -signal.SIGUSR1
 
