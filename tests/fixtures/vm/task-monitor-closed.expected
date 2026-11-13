@@ -4,7 +4,7 @@
   "steps": 44,
   "stdout": [
     "ok(\"down TaskExit.Ok\")",
-    "error(\"channel: closed\")",
+    "error(\"channel: closed\", kind: \"channel.closed\")",
     "1",
     ""
   ],

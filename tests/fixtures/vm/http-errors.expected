@@ -16,9 +16,9 @@
     "error(\"http: the URL must be http:// or https:// with a host, and without user info\")",
     "error(\"http: the URL must be http:// or https:// with a host, and without user info\")",
     "error(\"http: the URL must be http:// or https:// with a host, and without user info\")",
-    "error(\"http: Host, Content-Length, Transfer-Encoding and Connection are set by the client\")",
-    "error(\"http: invalid method\")",
-    "error(\"http: request body exceeds max_body_bytes\")",
+    "error(\"http: Host, Content-Length, Transfer-Encoding and Connection are set by the client\", kind: \"http.protocol\")",
+    "error(\"http: invalid method\", kind: \"http.protocol\")",
+    "error(\"http: request body exceeds max_body_bytes\", kind: \"http.too_large\")",
     "error(\"http: body exceeds max_body_bytes\")",
     "ok(HTTP.Response(status: 200, headers: [HTTP.Header(name: \"content-length\", value: \"1\")], body: <Bytes 1 ff>))",
     ""

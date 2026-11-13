@@ -8,7 +8,7 @@
     "hi ann",
     "hello bob",
     "ok(42)",
-    "error(\"cannot convert \\\"x\\\" to Int\")",
+    "error(\"cannot convert \\\"x\\\" to Int\", kind: \"number.parse\")",
     "12",
     "3",
     ""

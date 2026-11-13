@@ -6,7 +6,7 @@
     "  map 1",
     "  map 2",
     "  map x",
-    "map: error(\"cannot convert \\\"x\\\" to Int\")",
+    "map: error(\"cannot convert \\\"x\\\" to Int\", kind: \"number.parse\")",
     "all good: ok([10, 20])",
     "filter: error(\"no 3\")",
     "take_while: error(\"no 3\")",

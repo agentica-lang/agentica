@@ -4,8 +4,8 @@
   "steps": 35,
   "stdout": [
     "1",
-    "error(\"task crashed: RUNTIME-INVALID-DURATION at @fixtures/vm/await-timeout-invalid.agc:6:25: await timeout must be positive milliseconds\")",
-    "error(\"task crashed: RUNTIME-INVALID-DURATION at @fixtures/vm/await-timeout-invalid.agc:13:25: await timeout must be positive milliseconds\")",
+    "error(\"task crashed: RUNTIME-INVALID-DURATION at @fixtures/vm/await-timeout-invalid.agc:6:25: await timeout must be positive milliseconds\", kind: \"task.crashed\")",
+    "error(\"task crashed: RUNTIME-INVALID-DURATION at @fixtures/vm/await-timeout-invalid.agc:13:25: await timeout must be positive milliseconds\", kind: \"task.crashed\")",
     ""
   ],
   "stderr": [

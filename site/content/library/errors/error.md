@@ -17,9 +17,9 @@ struct Error
 end
 ```
 
-- `kind` is a dotted name for the sort of failure; `error("text")` and the builtins give `"error"`.
+- `kind` is a dotted name for the sort of failure; `error("text")` gives `"error"`, and the builtins give the kinds of [Builtin kinds](#builtin-kinds).
 - `message` is the text for people.
-- `code` is a number such as an exit status or a reply code, or `none`.
+- `code` is a number such as an errno, an HTTP status or a reply code, or `none`.
 - `details` holds extra data as text, `{}` when there is none.
 - `cause` is the error that led to this one, or `none`.
 - `location` is where the error was made, as `path:line:col`.
@@ -55,6 +55,39 @@ main.agc:2:10
 `error(message, kind:, code:, details:, cause:)` takes the other fields as named arguments after the message, each optional and in any order. `code:` takes an `Int` and `cause:` an `Error`, which the call stores as `some(...)`; `location` is never given. `Result.Err(...)` takes the same arguments.
 
 A kind is a dotted name: parts of `a-z`, `0-9` and `_`, each starting with a letter (`db`, `db.constraint`, `io.not_found`). A text literal given as `kind:` (of `error(...)` or `Result.Err(...)`) or to `is_a?` / `kind_of?` that is not one is `CHECK-ERROR-KIND`. Nothing else is checked: a kind computed at run time and a kind set with `e.with(kind: ...)` are kept as they are. A caller branches on the kind or the code, never on the message text.
+
+## Builtin kinds
+
+The errors of the builtins have these kinds. A kind is never renamed, so a program can branch on it. `argument` is a bad argument value: out of range, empty, too large or holding NUL.
+
+| Family | Kinds |
+|---|---|
+| `error` | the default: `error("text")`, `o.to_result(...)`, `List.find` and `Lazy.find` with no match, a missing key of an `Ats` table, a logger handler name that is taken or missing, `Task.unobserved_crash` with none, a native module's `an_error` and the `--deny-*` refusals |
+| `argument` | `argument` |
+| `io` | `io.not_found`, `io.permission`, `io.exists`, `io.is_directory`, `io.not_directory`, `io.too_large`, `io.eof`, `io.closed`, `io.timeout`, `io.failed` |
+| `net` | `net.timeout`, `net.refused`, `net.host_not_found`, `net.closed`, `net.eof`, `net.tls`, `net.failed` |
+| `http` | `http.protocol`, `http.too_large`, `http.closed` |
+| `process` | `process.not_found`, `process.timeout`, `process.closed`, `process.eof`, `process.failed` |
+| `task`, `channel` | `task.crashed`, `task.cancelled`, `task.timeout`, `channel.closed`, `channel.timeout`, `channel.gone` |
+| `json`, `number`, `text` | `json.parse`, `json.decode`, `number.parse`, `number.range`, `text.encoding` |
+| `zlib`, `crypto` | `zlib.data`, `zlib.too_large`, `crypto.auth`, `crypto.key`, `crypto.failed` |
+| `system`, `native`, `test` | `system.env`, `native.failed`, `native.timeout`, `test.failed` |
+
+An error of the operating system (`File`, `Dir`, `TCP`, `TLS`, `Process`) has the errno as its `code` and a kind picked from it: `ENOENT` is `io.not_found` (`process.not_found` for a program), `EACCES` and `EPERM` are `io.permission`, `ECONNREFUSED` is `net.refused`, `ECONNRESET` and `EPIPE` are `net.closed`. An errno with no kind of its own gets the family's `failed` kind, with the errno still as the code. The number is the system's own, so `ECONNREFUSED` is 111 on Linux, 61 on macOS and 107 on Windows; the kind is the same everywhere. A host that is not found has no code. A refused HTTP head has its status as the code (`400`, `413`, ...).
+
+```agentica
+def main() -> Void
+  case File.read_text("missing.txt", 1000)
+    ok(text) -> puts(text)
+    error(e) if e.is_a?("io.not_found") -> puts("no file, code #{e.code}")
+    error(e) -> puts(e.message)
+  end
+end
+```
+
+```output
+no file, code some(2)
+```
 
 ## is_a?
 

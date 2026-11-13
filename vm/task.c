@@ -1338,11 +1338,11 @@ static bool awaits_caller(agc_vm *vm, const agc_task *target) {
 static agc_value outcome(agc_vm *vm, agc_task *target, uint32_t span, bool result) {
   if (target->crashed) {
     agc_task_observe(vm, target);
-    if (result) return agc_error_string(vm, "error", target->crash);
+    if (result) return agc_error_string(vm, AGC_KIND_TASK_CRASHED, target->crash);
     agc_fail_text(vm, "RUNTIME-TASK-CRASHED", target->crash, span);
   }
   if (target->cancelled) {
-    if (result) return agc_error(vm, "error", "task: cancelled");
+    if (result) return agc_error(vm, AGC_KIND_TASK_CANCELLED, "task: cancelled");
     agc_fail(vm, "RUNTIME-TASK-CANCELLED", "task was cancelled", span);
   }
   return target->result;
@@ -1457,7 +1457,7 @@ static agc_value builtin_unobserved_crash(agc_vm *vm, agc_value *args, uint32_t 
   (void)args;
   (void)span;
   const agc_task *t = first_unobserved(vm);
-  if (!t) return agc_error(vm, "error", "no unobserved crash");
+  if (!t) return agc_error(vm, AGC_KIND_ERROR, "no unobserved crash");
   return agc_result_value(true, agc_string_value(t->crash));
 }
 

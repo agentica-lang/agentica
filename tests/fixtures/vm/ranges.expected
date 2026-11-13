@@ -17,7 +17,7 @@
     "-9223372036854775807-9223372036854775808123",
     "[1..5, 1...5, -3..-1, -9223372036854775808...-9223372036854775808]",
     "[4, 0, 9223372036854775807]",
-    "[ok(4), ok(1), error(\"the range is empty\"), error(\"the range is empty\")]",
+    "[ok(4), ok(1), error(\"the range is empty\", kind: \"argument\"), error(\"the range is empty\", kind: \"argument\")]",
     "[true, true, true, false]",
     "1..2 1...2 1..2",
     "[0, 3, 6]",

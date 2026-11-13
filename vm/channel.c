@@ -38,12 +38,12 @@ struct agc_channel {
 static agc_value ok_void(void) { return agc_result_value(true, agc_void()); }
 
 /* A send through an address whose channel the collector has freed: no task can reach that channel any more. */
-static agc_value gone_error(agc_vm *vm) { return agc_error(vm, "error", "address: gone"); }
+static agc_value gone_error(agc_vm *vm) { return agc_error(vm, AGC_KIND_CHANNEL_GONE, "address: gone"); }
 
 /* std/http matches on this text (CHANNEL_CLOSED in stdlib/http.agc). */
-static agc_value closed_error(agc_vm *vm) { return agc_error(vm, "error", "channel: closed"); }
+static agc_value closed_error(agc_vm *vm) { return agc_error(vm, AGC_KIND_CHANNEL_CLOSED, "channel: closed"); }
 
-static agc_value timed_out_error(agc_vm *vm) { return agc_error(vm, "error", "channel: timed out"); }
+static agc_value timed_out_error(agc_vm *vm) { return agc_error(vm, AGC_KIND_CHANNEL_TIMEOUT, "channel: timed out"); }
 
 static void grow(agc_vm *vm, agc_channel *c) {
   size_t slots = agc_size_mul(c->slots, 2);

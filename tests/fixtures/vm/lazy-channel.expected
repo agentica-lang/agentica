@@ -12,8 +12,8 @@
     "  pair [3, 4]",
     "  pair [5]",
     "an error from the block: error(\"an odd one out: [5]\")",
-    "a timeout: error(\"channel: timed out\")",
-    "a cancel while parked: error(\"task: timed out\")",
+    "a timeout: error(\"channel: timed out\", kind: \"channel.timeout\")",
+    "a cancel while parked: error(\"task: timed out\", kind: \"task.timeout\")",
     "the channel still works: ok([\"after\"])",
     ""
   ],

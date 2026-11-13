@@ -110,13 +110,13 @@ static bool find_codec(const agc_string *name, codec_kind *kind) {
 static agc_value unknown_codec(agc_vm *vm, const agc_string *name) {
   agc_string *text =
     agc_around("unknown encoding ", name, "; the agentica-lang/charset package reads the encodings not built in");
-  return agc_error_string(vm, "error", text);
+  return agc_error_string(vm, AGC_KIND_ARGUMENT, text);
 }
 
 static agc_value failure_at(agc_vm *vm, const char *what, codec_kind kind, const char *unit, size_t at) {
   char text[96];
   snprintf(text, sizeof text, "%s %s at %s %zu", what, codec_names[kind], unit, at);
-  return agc_error(vm, "error", text);
+  return agc_error(vm, AGC_KIND_TEXT_ENCODING, text);
 }
 
 static unit_reader reader_of(codec_kind kind, const uint8_t *data, size_t len) {
@@ -291,7 +291,7 @@ static agc_value encode_bytes(agc_vm *vm, const agc_string *s, codec_kind kind) 
     if (byte < 0) {
       char text[96];
       snprintf(text, sizeof text, "cannot encode U+%04" PRIX32 " in %s at index %zu", cp, codec_names[kind], index);
-      return agc_error(vm, "error", text);
+      return agc_error(vm, AGC_KIND_TEXT_ENCODING, text);
     }
     b->data[index] = (uint8_t)byte;
   }

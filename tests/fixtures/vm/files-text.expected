@@ -12,7 +12,7 @@
     "ok(\"\")",
     "file 5 true",
     "directory 0",
-    "error(\"filesystem: path does not exist\")",
+    "error(\"filesystem: path does not exist\", kind: \"io.not_found\")",
     "ok()",
     "ok()",
     "ok()",

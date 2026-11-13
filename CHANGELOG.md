@@ -22,6 +22,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Breaking:** the errors of the builtins have kinds such as `io.not_found`,
+  `net.timeout` and `argument`, and an OS error has its errno as `code` (an
+  HTTP head refused by `HttpWire` its status), so `==` with
+  `error("same text")` no longer holds: compare `r.message` (#671).
 - **Breaking:** `error(e)` in a `case` binds an `Error` (kind, message, code,
   details, cause, location), not a String: use `e.message` for the text, and
   `error(e) if e.message == "x"` for `error("x") ->`; `"#{e}"` and `puts(e)`

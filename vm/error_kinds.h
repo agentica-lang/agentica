@@ -1,0 +1,64 @@
+/*
+ * The kinds of the errors that C builtins build (agc_error, agc_error_code):
+ * dotted names, a contract like a diagnostic code, so a kind is only added,
+ * never renamed. The text of each is in kind_names (vm/value.c), which
+ * agc_vm_init makes into the run's shared Strings, so building an error
+ * allocates no kind. tests/test_error_kinds.py checks that every kind has a
+ * name, is used, and is listed on site/content/library/errors/error.md.
+ * Design: issue #671, section 5.
+ */
+#ifndef AGC_ERROR_KINDS_H
+#define AGC_ERROR_KINDS_H
+
+typedef enum {
+  AGC_KIND_ERROR,
+  AGC_KIND_ARGUMENT,
+  AGC_KIND_IO_NOT_FOUND,
+  AGC_KIND_IO_PERMISSION,
+  AGC_KIND_IO_EXISTS,
+  AGC_KIND_IO_IS_DIRECTORY,
+  AGC_KIND_IO_NOT_DIRECTORY,
+  AGC_KIND_IO_TOO_LARGE,
+  AGC_KIND_IO_EOF,
+  AGC_KIND_IO_CLOSED,
+  AGC_KIND_IO_TIMEOUT,
+  AGC_KIND_IO_FAILED,
+  AGC_KIND_NET_TIMEOUT,
+  AGC_KIND_NET_REFUSED,
+  AGC_KIND_NET_HOST_NOT_FOUND,
+  AGC_KIND_NET_CLOSED,
+  AGC_KIND_NET_EOF,
+  AGC_KIND_NET_TLS,
+  AGC_KIND_NET_FAILED,
+  AGC_KIND_HTTP_PROTOCOL,
+  AGC_KIND_HTTP_TOO_LARGE,
+  AGC_KIND_HTTP_CLOSED,
+  AGC_KIND_PROCESS_NOT_FOUND,
+  AGC_KIND_PROCESS_TIMEOUT,
+  AGC_KIND_PROCESS_CLOSED,
+  AGC_KIND_PROCESS_EOF,
+  AGC_KIND_PROCESS_FAILED,
+  AGC_KIND_TASK_CRASHED,
+  AGC_KIND_TASK_CANCELLED,
+  AGC_KIND_TASK_TIMEOUT,
+  AGC_KIND_CHANNEL_CLOSED,
+  AGC_KIND_CHANNEL_TIMEOUT,
+  AGC_KIND_CHANNEL_GONE,
+  AGC_KIND_JSON_PARSE,
+  AGC_KIND_JSON_DECODE,
+  AGC_KIND_NUMBER_PARSE,
+  AGC_KIND_NUMBER_RANGE,
+  AGC_KIND_TEXT_ENCODING,
+  AGC_KIND_ZLIB_DATA,
+  AGC_KIND_ZLIB_TOO_LARGE,
+  AGC_KIND_CRYPTO_AUTH,
+  AGC_KIND_CRYPTO_KEY,
+  AGC_KIND_CRYPTO_FAILED,
+  AGC_KIND_SYSTEM_ENV,
+  AGC_KIND_NATIVE_FAILED,
+  AGC_KIND_NATIVE_TIMEOUT,
+  AGC_KIND_TEST_FAILED,
+  AGC_KIND_COUNT
+} agc_error_kind;
+
+#endif

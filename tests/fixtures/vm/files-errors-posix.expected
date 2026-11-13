@@ -3,8 +3,8 @@
   "code": null,
   "steps": 94,
   "stdout": [
-    "error(\"filesystem: path does not refer to a regular file\")",
-    "error(\"filesystem: cannot open file for writing\\n  path: @tmp/file.txt/x\\n  system error: Not a directory; errno=20\")",
+    "error(\"filesystem: path does not refer to a regular file\", kind: \"io.not_directory\", code: 20)",
+    "error(\"filesystem: cannot open file for writing\\n  path: @tmp/file.txt/x\\n  system error: Not a directory; errno=20\", kind: \"io.not_directory\", code: 20)",
     "\"  system error: Not a directory; errno=20\"",
     "\"  system error: Not a directory; errno=20\"",
     ""

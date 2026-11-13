@@ -6,8 +6,8 @@
     "ok()",
     "ok(\"ping\")",
     "client: peek, echo ping",
-    "error(\"network: end of input\")",
-    "error(\"network: socket is closed\")",
+    "error(\"network: end of input\", kind: \"net.eof\")",
+    "error(\"network: socket is closed\", kind: \"net.closed\")",
     "not the owner: task crashed: RUNTIME-HANDLE-NOT-OWNED at @fixtures/vm/handle-spawn-owning.agc:21:33: the calling task does not own this handle, or it is closed",
     "ok()",
     "ok(\"still mine\")",
@@ -15,7 +15,7 @@
     "closed: task crashed: RUNTIME-HANDLE-NOT-OWNED at @fixtures/vm/handle-spawn-owning.agc:33:28: the calling task does not own this handle, or it is closed",
     "ok(\"listener handed over\")",
     "ok(\"accepted\")",
-    "error(\"network: listener is closed\")",
+    "error(\"network: listener is closed\", kind: \"net.closed\")",
     ""
   ],
   "stderr": [

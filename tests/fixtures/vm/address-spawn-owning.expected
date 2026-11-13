@@ -12,7 +12,7 @@
     "owning both: ok 3",
     "jobs closed? true, results closed? true",
     "ok(30)",
-    "error(\"channel: closed\")",
+    "error(\"channel: closed\", kind: \"channel.closed\")",
     ""
   ],
   "stderr": []

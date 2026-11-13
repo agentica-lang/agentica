@@ -1194,7 +1194,7 @@ static agc_value build_node(agc_vm *vm, agc_native_dirty *d, staged *s, const ag
   }
   case N_SOME: return agc_optional_make(vm->rt->program, true, resolved(d, built, items[0]));
   case N_OK: return agc_result_value(true, resolved(d, built, items[0]));
-  case N_ERROR: return agc_error_string(vm, "error", agc_as_string(vm, text_of(vm, s)));
+  case N_ERROR: return agc_error_string(vm, AGC_KIND_ERROR, agc_as_string(vm, text_of(vm, s)));
   case N_STRUCT: {
     agc_struct *st = agc_new_struct(s->id, (uint32_t)s->n);
     for (size_t k = 0; k < s->n; k++) st->fields[k] = resolved(d, built, items[k]);
@@ -1414,7 +1414,7 @@ static an_term text_term(an_env *env, uint8_t kind, const char *data, size_t len
   }
   agc_charge_bytes(env->vm, len);
   agc_string *s = agc_small_string(env->vm, data, len, chars);
-  return term_of(kind == N_ERROR ? agc_error_string(env->vm, "error", s) : agc_string_value(s));
+  return term_of(kind == N_ERROR ? agc_error_string(env->vm, AGC_KIND_ERROR, s) : agc_string_value(s));
 }
 
 static an_term api_string(an_env *env, const char *data, size_t len) {

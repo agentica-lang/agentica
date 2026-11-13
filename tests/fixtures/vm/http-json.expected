@@ -7,7 +7,7 @@
     "{\"name\":\"a\",\"value\":\"ñ\"}",
     "ok(HTTP.Header(name: \"a\", value: \"ñ\"))",
     "{\"properties\":{\"name\":{\"type\":\"string\"},\"value\":{\"type\":\"string\"}},\"required\":[\"name\",\"value\"],\"type\":\"object\"}",
-    "error(\"name: expected String\")",
+    "error(\"name: expected String\", kind: \"json.decode\")",
     "ok(Reply(code: 1, headers: [HTTP.Header(name: \"a\", value: \"b\")]))",
     ""
   ],

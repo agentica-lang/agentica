@@ -3,10 +3,10 @@
   "code": null,
   "steps": 72,
   "stdout": [
-    "error(\"process: output exceeds 1048576 bytes\")",
-    "error(\"process: output exceeds 1048576 bytes\")",
+    "error(\"process: output exceeds 1048576 bytes\", kind: \"process.failed\")",
+    "error(\"process: output exceeds 1048576 bytes\", kind: \"process.failed\")",
     "ok(0)",
-    "error(\"process: output exceeds 1048576 bytes\")",
+    "error(\"process: output exceeds 1048576 bytes\", kind: \"process.failed\")",
     "stdout \"done\\n\", stderr 1048576, truncated true",
     ""
   ],

@@ -48,6 +48,56 @@ const char *__asan_default_options(void) { return "detect_leaks=0:allocator_may_
 #endif
 
 static const char oom_line[] = "agentica: out of memory\n";
+/* The text of each agc_error_kind (vm/error_kinds.h). */
+static const char *const kind_names[AGC_KIND_COUNT] = {
+  [AGC_KIND_ERROR] = "error",
+  [AGC_KIND_ARGUMENT] = "argument",
+  [AGC_KIND_IO_NOT_FOUND] = "io.not_found",
+  [AGC_KIND_IO_PERMISSION] = "io.permission",
+  [AGC_KIND_IO_EXISTS] = "io.exists",
+  [AGC_KIND_IO_IS_DIRECTORY] = "io.is_directory",
+  [AGC_KIND_IO_NOT_DIRECTORY] = "io.not_directory",
+  [AGC_KIND_IO_TOO_LARGE] = "io.too_large",
+  [AGC_KIND_IO_EOF] = "io.eof",
+  [AGC_KIND_IO_CLOSED] = "io.closed",
+  [AGC_KIND_IO_TIMEOUT] = "io.timeout",
+  [AGC_KIND_IO_FAILED] = "io.failed",
+  [AGC_KIND_NET_TIMEOUT] = "net.timeout",
+  [AGC_KIND_NET_REFUSED] = "net.refused",
+  [AGC_KIND_NET_HOST_NOT_FOUND] = "net.host_not_found",
+  [AGC_KIND_NET_CLOSED] = "net.closed",
+  [AGC_KIND_NET_EOF] = "net.eof",
+  [AGC_KIND_NET_TLS] = "net.tls",
+  [AGC_KIND_NET_FAILED] = "net.failed",
+  [AGC_KIND_HTTP_PROTOCOL] = "http.protocol",
+  [AGC_KIND_HTTP_TOO_LARGE] = "http.too_large",
+  [AGC_KIND_HTTP_CLOSED] = "http.closed",
+  [AGC_KIND_PROCESS_NOT_FOUND] = "process.not_found",
+  [AGC_KIND_PROCESS_TIMEOUT] = "process.timeout",
+  [AGC_KIND_PROCESS_CLOSED] = "process.closed",
+  [AGC_KIND_PROCESS_EOF] = "process.eof",
+  [AGC_KIND_PROCESS_FAILED] = "process.failed",
+  [AGC_KIND_TASK_CRASHED] = "task.crashed",
+  [AGC_KIND_TASK_CANCELLED] = "task.cancelled",
+  [AGC_KIND_TASK_TIMEOUT] = "task.timeout",
+  [AGC_KIND_CHANNEL_CLOSED] = "channel.closed",
+  [AGC_KIND_CHANNEL_TIMEOUT] = "channel.timeout",
+  [AGC_KIND_CHANNEL_GONE] = "channel.gone",
+  [AGC_KIND_JSON_PARSE] = "json.parse",
+  [AGC_KIND_JSON_DECODE] = "json.decode",
+  [AGC_KIND_NUMBER_PARSE] = "number.parse",
+  [AGC_KIND_NUMBER_RANGE] = "number.range",
+  [AGC_KIND_TEXT_ENCODING] = "text.encoding",
+  [AGC_KIND_ZLIB_DATA] = "zlib.data",
+  [AGC_KIND_ZLIB_TOO_LARGE] = "zlib.too_large",
+  [AGC_KIND_CRYPTO_AUTH] = "crypto.auth",
+  [AGC_KIND_CRYPTO_KEY] = "crypto.key",
+  [AGC_KIND_CRYPTO_FAILED] = "crypto.failed",
+  [AGC_KIND_SYSTEM_ENV] = "system.env",
+  [AGC_KIND_NATIVE_FAILED] = "native.failed",
+  [AGC_KIND_NATIVE_TIMEOUT] = "native.timeout",
+  [AGC_KIND_TEST_FAILED] = "test.failed",
+};
 
 #ifdef AGC_NO_GC
 static void **owned; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
@@ -685,29 +735,33 @@ agc_value agc_error_value(const char *message) {
   return agc_result_value(false, agc_string_value(agc_make_string(message, n, n)));
 }
 
-static agc_string *kind_string(agc_vm *vm, const char *kind) {
-  if (strcmp(kind, "error") == 0) return vm->rt->error_kind;
-  size_t n = strlen(kind);
-  return agc_small_string(vm, kind, n, n);
-}
+const char *agc_error_kind_name(agc_error_kind kind) { return kind_names[kind]; }
 
-/* The empty map, none and the kind "error" are the run's shared values (agc_vm_init and the loader made them before
-   any thread), so an error built on any scheduler allocates only its struct and its location. */
-agc_value agc_error_string(agc_vm *vm, const char *kind, agc_string *message) {
+/* The empty map, none and the kinds are the run's shared values (agc_vm_init and the loader made them before any
+   thread), so an error built on any scheduler allocates only its struct, its location and a code that it has. */
+static agc_value error_of(agc_vm *vm, agc_error_kind kind, agc_string *message, bool coded, int64_t code) {
   const agc_runtime *rt = vm->rt;
   if (rt->error_struct == UINT32_MAX) return agc_result_value(false, agc_string_value(message));
   agc_value none = agc_optional_make(rt->program, false, agc_void());
   agc_struct *e = agc_new_struct(rt->error_struct, AGC_ERROR_FIELDS);
-  e->fields[AGC_ERROR_KIND] = agc_string_value(kind_string(vm, kind));
+  e->fields[AGC_ERROR_KIND] = agc_string_value(rt->kinds[kind]);
   e->fields[AGC_ERROR_MESSAGE] = agc_string_value(message);
-  e->fields[AGC_ERROR_CODE] = none;
+  e->fields[AGC_ERROR_CODE] = coded ? agc_optional_make(rt->program, true, agc_int(code)) : none;
   e->fields[AGC_ERROR_DETAILS] = rt->empty_map;
   e->fields[AGC_ERROR_CAUSE] = none;
   e->fields[AGC_ERROR_LOCATION] = agc_string_value(agc_error_location(vm));
   return agc_result_value(false, agc_struct_value(e));
 }
 
-agc_value agc_error(agc_vm *vm, const char *kind, const char *message) {
+agc_value agc_error_string(agc_vm *vm, agc_error_kind kind, agc_string *message) {
+  return error_of(vm, kind, message, false, 0);
+}
+
+agc_value agc_error_code(agc_vm *vm, agc_error_kind kind, agc_string *message, int64_t code) {
+  return error_of(vm, kind, message, true, code);
+}
+
+agc_value agc_error(agc_vm *vm, agc_error_kind kind, const char *message) {
   size_t n = strlen(message);
   return agc_error_string(vm, kind, agc_utf8_decode((const uint8_t *)message, n, "\xEF\xBF\xBD", false));
 }

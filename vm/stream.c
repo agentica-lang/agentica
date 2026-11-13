@@ -6,6 +6,7 @@
 #include "net_os.h"
 #include "services.h"
 
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -23,30 +24,68 @@
 static const char *const bad_timeout[] = {"network: timeout must be positive milliseconds",
                                           "process: timeout must be positive milliseconds"};
 static const char *const timed_out[] = {"network: operation timed out", "process: operation timed out"};
+static const agc_error_kind timeout_kinds[] = {AGC_KIND_NET_TIMEOUT, AGC_KIND_PROCESS_TIMEOUT};
+static const agc_error_kind eof_kinds[] = {AGC_KIND_NET_EOF, AGC_KIND_PROCESS_EOF};
+static const agc_error_kind failed_kinds[] = {AGC_KIND_NET_FAILED, AGC_KIND_PROCESS_FAILED};
 
 /* The error of a text read whose bytes are not UTF-8: it names the offset (from 0) of the first byte that does not
    start a valid character. */
 agc_value agc_utf8_error(agc_vm *vm, const uint8_t *data, size_t len) {
   char message[64];
   snprintf(message, sizeof message, "invalid UTF-8 at byte %zu", agc_utf8_bad_at(data, len));
-  return agc_error(vm, "error", message);
+  return agc_error(vm, AGC_KIND_TEXT_ENCODING, message);
+}
+
+/* One table for every OS error: the errno values here are the C library's, which file_windows.c and net_windows.c
+   also give on Windows, so a kind means the same on every system while the code is the system's own number. */
+agc_error_kind agc_errno_kind(agc_error_family family, int err) {
+  switch (family) {
+    case AGC_FAMILY_IO:
+      if (err == ENOENT) return AGC_KIND_IO_NOT_FOUND;
+      if (err == EACCES || err == EPERM || err == EROFS) return AGC_KIND_IO_PERMISSION;
+      if (err == EEXIST) return AGC_KIND_IO_EXISTS;
+      if (err == EISDIR) return AGC_KIND_IO_IS_DIRECTORY;
+      if (err == ENOTDIR) return AGC_KIND_IO_NOT_DIRECTORY;
+      if (err == EFBIG) return AGC_KIND_IO_TOO_LARGE;
+      if (err == EBADF) return AGC_KIND_IO_CLOSED;
+      return AGC_KIND_IO_FAILED;
+    case AGC_FAMILY_NET:
+      if (err == ETIMEDOUT) return AGC_KIND_NET_TIMEOUT;
+      if (err == ECONNREFUSED) return AGC_KIND_NET_REFUSED;
+      if (err == ECONNRESET || err == ECONNABORTED || err == EPIPE || err == ENOTCONN) return AGC_KIND_NET_CLOSED;
+      return AGC_KIND_NET_FAILED;
+    case AGC_FAMILY_PROCESS:
+      if (err == ENOENT) return AGC_KIND_PROCESS_NOT_FOUND;
+      if (err == EPIPE) return AGC_KIND_PROCESS_CLOSED;
+      return AGC_KIND_PROCESS_FAILED;
+    case AGC_FAMILY_NATIVE: break;
+  }
+  return AGC_KIND_NATIVE_FAILED;
+}
+
+static agc_error_family family_of(agc_stream_area area) {
+  return area == AGC_STREAM_NETWORK ? AGC_FAMILY_NET : AGC_FAMILY_PROCESS;
 }
 
 #if !defined(__linux__) && !defined(__APPLE__) && !defined(_WIN32)
-agc_value agc_system_error(agc_vm *vm, const char *what, int err) {
-  (void)vm;
-  (void)err;
-  return agc_error(vm, "error", what);
+agc_value agc_system_error(agc_vm *vm, agc_error_family family, const char *what, int err) {
+  size_t n = strlen(what);
+  return agc_error_code(vm, agc_errno_kind(family, err), agc_make_string(what, n, n), err);
 }
 #endif
 
-agc_value agc_stream_bad_timeout(agc_vm *vm, agc_stream_area area) { return agc_error(vm, "error", bad_timeout[area]); }
+agc_value agc_stream_bad_timeout(agc_vm *vm, agc_stream_area area) {
+  return agc_error(vm, AGC_KIND_ARGUMENT, bad_timeout[area]);
+}
 
-agc_value agc_stream_timed_out(agc_vm *vm, agc_stream_area area) { return agc_error(vm, "error", timed_out[area]); }
+agc_value agc_stream_timed_out(agc_vm *vm, agc_stream_area area) {
+  return agc_error(vm, timeout_kinds[area], timed_out[area]);
+}
 
-agc_value agc_stream_written(agc_vm *vm, int status) {
+agc_value agc_stream_written(agc_vm *vm, agc_stream_area area, int status) {
   static const char write_failed[] = "could not write to the stream";
-  return status < 0 ? agc_system_error(vm, write_failed, agc_net_errno(status)) : agc_result_value(true, agc_void());
+  if (status >= 0) return agc_result_value(true, agc_void());
+  return agc_system_error(vm, family_of(area), write_failed, agc_net_errno(status));
 }
 
 agc_resource *agc_new_lock(agc_vm *vm) {
@@ -172,17 +211,18 @@ static agc_cut_status spot_line(agc_inbuf *b, const uint8_t **data, size_t *len,
   return have == 0 ? AGC_CUT_END : AGC_CUT_DATA;
 }
 
-static agc_value line_value(agc_vm *vm, agc_cut_status status, int error, const uint8_t *data, size_t len,
-                            const char *too_long, const char *at_end) {
-  if (status == AGC_CUT_OVER) return agc_error(vm, "error", too_long);
-  if (status == AGC_CUT_FAILED) return agc_system_error(vm, "could not read from the stream", error);
-  if (status == AGC_CUT_END) return agc_error(vm, "error", at_end);
+static agc_value line_value(agc_vm *vm, agc_stream_area area, agc_cut_status status, int error, const uint8_t *data,
+                            size_t len, const char *too_long, const char *at_end) {
+  if (status == AGC_CUT_OVER) return agc_error(vm, failed_kinds[area], too_long);
+  if (status == AGC_CUT_FAILED) return agc_system_error(vm, family_of(area), "could not read from the stream", error);
+  if (status == AGC_CUT_END) return agc_error(vm, eof_kinds[area], at_end);
   size_t chars;
   if (!agc_utf8_chars(data, len, &chars)) return agc_utf8_error(vm, data, len);
   return agc_result_value(true, agc_string_value(agc_small_string(vm, (const char *)data, len, chars)));
 }
 
-agc_value agc_inbuf_line(agc_vm *vm, agc_inbuf *b, const char *too_long, const char *at_end, bool *over) {
+agc_value agc_inbuf_line(agc_vm *vm, agc_stream_area area, agc_inbuf *b, const char *too_long, const char *at_end,
+                         bool *over) {
   const uint8_t *data;
   size_t len, consume;
   agc_cut_status status = spot_line(b, &data, &len, &consume);
@@ -191,7 +231,7 @@ agc_value agc_inbuf_line(agc_vm *vm, agc_inbuf *b, const char *too_long, const c
     b->start += consume;
     b->scanned = 0;
   }
-  return line_value(vm, status, b->error, data, len, too_long, at_end);
+  return line_value(vm, area, status, b->error, data, len, too_long, at_end);
 }
 
 void agc_inbuf_take(agc_inbuf *b, size_t n) {
@@ -214,10 +254,11 @@ const uint8_t *agc_stream_bytes(agc_vm *vm, agc_value arg, size_t limit, size_t 
   return *len <= limit ? data : NULL;
 }
 
-agc_value agc_inbuf_bytes(agc_vm *vm, agc_inbuf *b, size_t count) {
+agc_value agc_inbuf_bytes(agc_vm *vm, agc_stream_area area, agc_inbuf *b, size_t count) {
   size_t have = agc_inbuf_pending(b);
   size_t n = have < count ? have : count;
-  if (n == 0 && count > 0 && b->error) return agc_system_error(vm, "could not read from the stream", b->error);
+  if (n == 0 && count > 0 && b->error)
+    return agc_system_error(vm, family_of(area), "could not read from the stream", b->error);
   agc_value result = agc_result_value(true, read_value(pending_at(b), n));
   agc_inbuf_take(b, n);
   return result;
@@ -252,12 +293,14 @@ void agc_inbuf_cut_bytes(agc_inbuf *b, size_t count, agc_inbuf_cut *cut) {
   if (cut->status == AGC_CUT_DATA) agc_inbuf_take(b, n);
 }
 
-agc_value agc_inbuf_cut_line_value(agc_vm *vm, const agc_inbuf_cut *cut, const char *too_long, const char *at_end) {
-  return line_value(vm, cut->status, cut->error, cut->data, cut->len, too_long, at_end);
+agc_value agc_inbuf_cut_line_value(agc_vm *vm, agc_stream_area area, const agc_inbuf_cut *cut, const char *too_long,
+                                   const char *at_end) {
+  return line_value(vm, area, cut->status, cut->error, cut->data, cut->len, too_long, at_end);
 }
 
-agc_value agc_inbuf_cut_bytes_value(agc_vm *vm, const agc_inbuf_cut *cut) {
-  if (cut->status == AGC_CUT_FAILED) return agc_system_error(vm, "could not read from the stream", cut->error);
+agc_value agc_inbuf_cut_bytes_value(agc_vm *vm, agc_stream_area area, const agc_inbuf_cut *cut) {
+  if (cut->status == AGC_CUT_FAILED)
+    return agc_system_error(vm, family_of(area), "could not read from the stream", cut->error);
   return agc_result_value(true, read_value(cut->data, cut->len));
 }
 

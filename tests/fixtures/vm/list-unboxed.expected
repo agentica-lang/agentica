@@ -277,7 +277,7 @@
     "[1,2,3,4.5]",
     "ok(\"héllo wörld\")",
     "ok(\"hé\")",
-    "error(\"invalid or incomplete UTF-8\")",
+    "error(\"invalid or incomplete UTF-8\", kind: \"text.encoding\")",
     "70",
     "[1521, 1444, 1369]",
     "6",

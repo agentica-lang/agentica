@@ -27,7 +27,7 @@ static agc_value builtin_from_list(agc_vm *vm, agc_value *args, uint32_t span) {
     if (x < 0 || x > 255) {
       char text[96];
       snprintf(text, sizeof text, "item %zu is %" PRId64 ", not a byte (0 to 255)", k, x);
-      return agc_error(vm, "error", text);
+      return agc_error(vm, AGC_KIND_ARGUMENT, text);
     }
     b->data[k] = (uint8_t)x;
   }

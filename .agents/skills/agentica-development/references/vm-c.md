@@ -35,6 +35,13 @@ Each rule names one place in the VM that follows it.
   (`agc_list_set`, `vm/list.c`). Out of memory and a thread that cannot
   start end with one line and status 70 (`agc_out_of_memory`,
   `agc_thread_start_failed`).
+- **An error value has a kind.** `agc_error` takes an `agc_error_kind`
+  (`vm/error_kinds.h`); a new kind goes in that enum, its name in
+  `kind_names` (`vm/value.c`) and the table of
+  `site/content/library/errors/error.md` (`tests/test_error_kinds.py`).
+  An OS error goes through `agc_system_error` with its family, which picks the
+  kind from the errno and keeps the errno as the code (`agc_errno_kind`,
+  `vm/stream.c`).
 - **No C recursion whose depth a value decides.** Printing, comparing, hashing
   and JSON walk nested values with an explicit stack in `agc_alloc` memory
   (`compound_debug`, `vm/text.c`;

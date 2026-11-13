@@ -9,11 +9,11 @@
     "read ok([[97, 98, 99]])",
     "gzip ok([[97, 98, 99]])",
     "exact ok([[97], [98], [99]])",
-    "over error(\"zlib: output exceeds max_bytes\")",
-    "missing -> error(\"filesystem: path does not refer to a regular file\")",
-    "directory -> error(\"filesystem: path does not refer to a regular file\")",
+    "over error(\"zlib: output exceeds max_bytes\", kind: \"zlib.too_large\")",
+    "missing -> error(\"filesystem: path does not refer to a regular file\", kind: \"io.not_found\", code: 2)",
+    "directory -> error(\"filesystem: path does not refer to a regular file\", kind: \"io.is_directory\", code: 21)",
     "into a directory -> false",
-    "zero timeout -> error(\"filesystem: timeout must be positive milliseconds\")",
+    "zero timeout -> error(\"filesystem: timeout must be positive milliseconds\", kind: \"argument\")",
     ""
   ],
   "stderr": []

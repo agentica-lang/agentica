@@ -14,6 +14,7 @@
 #include <string.h>
 
 #include "cchecker.h"
+#include "error_kinds.h"
 #include "trace.h"
 
 /* The first four bytes of every .agcb file. */
@@ -828,11 +829,15 @@ bool agc_same_bytes(agc_vm *vm, const agc_bytes *x, const agc_bytes *y);
 /* A failed Result with MESSAGE as a String payload, the form of a program without the Error struct. Builtins call
    agc_error, which picks the form of the running program; this one is for the C tests. */
 agc_value agc_error_value(const char *message);
-/* The failed Result of an error built in C: an Error of KIND (a dotted name, "error" by default) with MESSAGE, no code,
+/* The text of KIND, a dotted name ("io.not_found"). */
+const char *agc_error_kind_name(agc_error_kind kind);
+/* The failed Result of an error built in C: an Error of KIND (AGC_KIND_ERROR, "error", by default) with MESSAGE, no code,
    no details, no cause and the location of the builtin call (agc_error_location), when the program has the Error
    struct; else a String payload with MESSAGE alone. */
-agc_value agc_error(agc_vm *vm, const char *kind, const char *message);
-agc_value agc_error_string(agc_vm *vm, const char *kind, agc_string *message);
+agc_value agc_error(agc_vm *vm, agc_error_kind kind, const char *message);
+agc_value agc_error_string(agc_vm *vm, agc_error_kind kind, agc_string *message);
+/* agc_error_string with some(CODE) as the code: an errno, an HTTP status. */
+agc_value agc_error_code(agc_vm *vm, agc_error_kind kind, agc_string *message, int64_t code);
 /* Whether V is an Error of the running program (a struct of rt->error_struct). */
 bool agc_is_error(const agc_vm *vm, agc_value v);
 /* The text of an error payload: a String as it is, the message of an Error. Any other value is a wrong tag. */
