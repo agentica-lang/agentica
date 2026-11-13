@@ -453,6 +453,12 @@ typedef enum {
 /* The variants of the builtin JSON.Field enum, in table order from agc_program.json_field. */
 enum { AGC_JSON_FIELD_ABSENT, AGC_JSON_FIELD_NULL, AGC_JSON_FIELD_VALUE };
 
+/* The variants of the builtin JSON.Node enum, in table order from agc_program.json_node. */
+enum {
+  AGC_JSON_NODE_NULL, AGC_JSON_NODE_BOOL, AGC_JSON_NODE_INT, AGC_JSON_NODE_BIG_INT, AGC_JSON_NODE_FLOAT,
+  AGC_JSON_NODE_STRING, AGC_JSON_NODE_ARRAY, AGC_JSON_NODE_OBJECT, AGC_JSON_NODE_COUNT
+};
+
 typedef struct {
   uint32_t kind, arg;
 } agc_type;
@@ -507,6 +513,9 @@ typedef struct {
   /* The variant id of JSON.Field.Absent (Null and Value follow it), or UINT32_MAX when the program has no JSON.Field
      enum. The loader checks the enum's shape, so typed JSON and the encoders trust these three ids. */
   uint32_t json_field;
+  /* The variant id of JSON.Node.Null (the other seven follow it), or UINT32_MAX when the program has no JSON.Node
+     enum; the loader checks the shape. */
+  uint32_t json_node;
   /* The variant id of Optional.None (Some follows it), or UINT32_MAX when the program has no builtin Optional enum.
      The loader checks the shape, so the encoders and typed JSON trust these two ids. */
   uint32_t optional;

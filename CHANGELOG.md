@@ -16,6 +16,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `agentica help File.Info` prints a builtin type with its fields or variants,
   and `agentica help --json` lists the builtin types too, each with a `kind`
   (#1532).
+- `JSON.node(value)` gives a `JSON.Node` enum to walk JSON of unknown shape
+  with `case` (#1115).
 
 ### Changed
 

@@ -86,11 +86,11 @@ the [`Lazy` page](../../site/content/library/data-structures/lazy.md).
 
 ### JSON
 
-`JSON` is reserved; `JSON.Value` and `JSON.Field` are members of its family. A
-`JSON.Value` has no constructor, equality, fields or indexing. The functions,
-their errors, the schema and the text they read and write are in the [`JSON`
-page](../../site/content/library/text-and-data/json.md). The rules that the
-checker enforces:
+`JSON` is reserved; `JSON.Value`, `JSON.Field` and `JSON.Node` are members of
+its family. A `JSON.Value` has no constructor, equality, fields or indexing. The
+functions, their errors, the schema and the text they read and write are in the
+[`JSON` page](../../site/content/library/text-and-data/json.md). The rules that
+the checker enforces:
 
 - `JSON.decode(source, T)` and `JSON.schema(T)` take a named struct or enum
   type, not a value, and so does `T.codec`; bare type names are valid only for
