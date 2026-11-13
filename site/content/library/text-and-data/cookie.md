@@ -50,7 +50,7 @@ end
 ```output
 {"sid": "abc123", "theme": "dark"}
 ok("sid=abc123; Path=/; Max-Age=3600; Secure; HttpOnly; SameSite=Lax")
-error("invalid cookie value (byte 1)")
+error("invalid cookie value (byte 1)", kind: "argument")
 ```
 
 `parse` splits the header on `;`, drops spaces around each piece, and splits a piece on its first `=`. A piece without `=` or with an empty name is skipped, and the first value of a repeated name wins, as in Rack's `parse_cookies_header`. The map keeps the order of the first appearance.

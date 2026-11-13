@@ -1,8 +1,9 @@
 """The kinds of the errors that C builtins build (#671): the enum of vm/error_kinds.h, which the compiler holds every
-C call to, has a dotted name for each kind in vm/value.c; each kind is used, and the Error page lists it.
+C call to, has a dotted name for each kind in vm/value.c; each kind is used, and the Error page lists it. The kinds
+that the `error(...)` calls of stdlib/ name are dotted and on the Error page too.
 
-The kind and the code of real failures are in the golden tests/fixtures/vm/error-kinds.agc; a permission error,
-which a golden cannot make, is here.
+The kind and the code of real failures are in the goldens tests/fixtures/vm/error-kinds.agc and std-error-kinds.agc;
+a permission error, which a golden cannot make, is here.
 """
 import os
 import re
@@ -15,6 +16,7 @@ from tests.vm_os_support import run_program, work  # noqa: F401 (work is a fixtu
 
 ROOT = Path(__file__).resolve().parent.parent
 VM = ROOT / "vm"
+STDLIB = ROOT / "stdlib"
 PAGE = ROOT / "site" / "content" / "library" / "errors" / "error.md"
 DOTTED = re.compile(r"[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*")
 
@@ -48,6 +50,36 @@ def test_every_kind_is_used():
 def test_the_error_page_lists_every_kind():
     page = PAGE.read_text(encoding="utf-8")
     assert [text for text in names().values() if f"`{text}`" not in page] == []
+
+
+# A string literal, also one cut by an interpolation that holds a string (`"#{xs.join(", ")}"`): blanking each one
+# keeps the parentheses of the code balanced.
+STRING = re.compile(r'"(?:[^"\\]|\\.)*"')
+
+
+def std_kinds():
+    """The `kind:` literals of the `error(...)` calls in stdlib/."""
+    found = set()
+    for path in sorted(STDLIB.rglob("*.agc")):
+        text = path.read_text(encoding="utf-8")
+        code = STRING.sub(lambda m: '"' + " " * (len(m.group()) - 2) + '"', text)
+        for call in re.finditer(r"\berror\(", code):
+            depth, at = 0, call.end() - 1
+            while True:
+                depth += {"(": 1, ")": -1}.get(code[at], 0)
+                if depth == 0:
+                    break
+                at += 1
+            found.update(re.findall(r'\bkind: "([^"]*)"', text[call.start():at]))
+    return found
+
+
+def test_the_error_page_lists_every_std_kind():
+    used = std_kinds()
+    assert "archive.unsafe" in used and "regex.syntax" in used
+    assert [kind for kind in sorted(used) if not DOTTED.fullmatch(kind)] == []
+    page = PAGE.read_text(encoding="utf-8")
+    assert [kind for kind in sorted(used) if f"`{kind}`" not in page] == []
 
 
 PERMISSION_PROGRAM = """\

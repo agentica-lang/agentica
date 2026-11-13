@@ -41,11 +41,11 @@ export def compile(text: String) -> Result[Expr]
       group = []
       literal = true
     else
-      return error("unexpected #{word.inspect}; write a tag (@name), not, and, or")
+      return error("unexpected #{word.inspect}; write a tag (@name), not, and, or", kind: "argument")
     end
   end
 
-  return error("the expression must end with a tag") if literal
+  return error("the expression must end with a tag", kind: "argument") if literal
 
   ok(Expr(groups: groups.push(group)))
 end

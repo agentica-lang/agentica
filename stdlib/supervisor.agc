@@ -112,7 +112,7 @@ export def stop(supervisor: Ref, timeout_ms: Int) -> Result[Void]
       end
     Await.TimedOut ->
       Task.cancel(supervisor.task)
-      error("supervisor: timeout")
+      error("supervisor: timeout", kind: "task.timeout")
   end
 end
 
@@ -121,10 +121,14 @@ end
 def reason(result: Result[Void]) -> Result[Void]
   return result if result.ok?
 
-  text = result.message
-  case text.index_of(": supervisor: ")
-    some(at) -> error(text.slice(at + 2, text.length - at - 2))
-    none -> result
+  case result
+    ok(_) -> result
+    error(e) ->
+      text = e.message
+      case text.index_of(": supervisor: ")
+        some(at) -> error(e.with(message: text.slice(at + 2, text.length - at - 2)))
+        none -> result
+      end
   end
 end
 
@@ -145,7 +149,7 @@ def launch[S, M](
   registering = Task.spawn do registered(register, actor.address) end
   if not registered?(registering)
     _ = Actor.stop(actor, 1000)
-    return error("register failed")
+    return error("register failed", kind: "task.crashed")
   end
 
   Task.monitor(actor.task, inbox) do |down| Msg.Down(index, run, down) end

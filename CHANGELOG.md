@@ -28,6 +28,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   `kind:` and `code:`, `==` with `error("same text")` no longer holds, and
   `e.kind == "error"` and `e.is_a?("error")` no longer match builtin errors:
   branch on `e.kind` or `e.is_a?`, not on the message (#671).
+- **Breaking:** the errors of `std/` have kinds too (`http.too_large`,
+  `archive.unsafe`, `toml.parse`, `regex.syntax`, `option_parser.parse`, ...),
+  so `==` with `error("same text")` no longer holds for them; a `std/` function
+  that passes on a builtin's error keeps its kind and code (#671).
 - **Breaking:** `error(e)` in a `case` binds an `Error` (kind, message, code,
   details, cause, location), not a String: use `e.message` for the text, and
   `error(e) if e.message == "x"` for `error("x") ->`; `"#{e}"` and `puts(e)`

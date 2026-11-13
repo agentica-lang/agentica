@@ -151,10 +151,10 @@ export def extract_zip(
   options: Options = Options(),
 ) -> Result[List[Int]]
   if options.timeout_ms <= 0 or options.timeout_ms > 86400000
-    return error("archive: options.timeout_ms must be 1..86400000")
+    return error("archive: options.timeout_ms must be 1..86400000", kind: "argument")
   end
   if options.max_output_bytes <= 0 or options.max_output_bytes > SCAN_BYTES
-    return error("archive: options.max_output_bytes must be 1..1073741824")
+    return error("archive: options.max_output_bytes must be 1..1073741824", kind: "argument")
   end
   Zip.extract_zip(src, members, dest_dir, options.timeout_ms, options.max_output_bytes)
 end
@@ -178,13 +178,15 @@ export def extract_tar(
   options: Options = Options(),
 ) -> Result[List[Int]]
   if options.timeout_ms <= 0 or options.timeout_ms > 86400000
-    return error("archive: options.timeout_ms must be 1..86400000")
+    return error("archive: options.timeout_ms must be 1..86400000", kind: "argument")
   end
   if options.max_output_bytes <= 0 or options.max_output_bytes > SCAN_BYTES
-    return error("archive: options.max_output_bytes must be 1..1073741824")
+    return error("archive: options.max_output_bytes must be 1..1073741824", kind: "argument")
   end
   now = Time.monotonic_ms()
-  return error("archive: the clock is too far ahead for the timeout") if now > INT_MAX - options.timeout_ms
+  if now > INT_MAX - options.timeout_ms
+    return error("archive: the clock is too far ahead for the timeout", kind: "argument")
+  end
   deadline = now + options.timeout_ms
   wanted = try validate_members(members)
   # The destination in the spelling the host join produces: on Windows Path.join turns every `\` into a `/`,
@@ -192,12 +194,12 @@ export def extract_tar(
   # output with this folder literally. Without this a valid destination looks like an escape on Windows.
   joined = try join_one([dest_dir])
   dest = strip_slashes(joined)
-  return error("archive: destination must not be empty") if dest == ""
+  return error("archive: destination must not be empty", kind: "argument") if dest == ""
   info = try stat_src(src, deadline)
-  return error("archive: source is not a regular file: #{src}") if info.kind != "file"
+  return error("archive: source is not a regular file: #{src}", kind: "argument") if info.kind != "file"
   try make_dest(dest, deadline)
   first = try read_first(src, deadline)
-  return error("archive: #{src} is empty, not a TAR archive") if first.size == 0
+  return error("archive: #{src} is empty, not a TAR archive", kind: "archive.format") if first.size == 0
   gzip = false
   if first.size >= 2
     gzip = first[0] == GZIP_FIRST and first[1] == GZIP_SECOND
@@ -239,9 +241,7 @@ export def extract_tar(
     total: 0,
   )
 
-  outcome = scan_all(src, gzip, scan, members)
-  return error(Result.message(outcome)) if !outcome.ok?
-  outcome
+  scan_all(src, gzip, scan, members)
 end
 
 def smaller(a: Int, b: Int) -> Int
@@ -251,7 +251,7 @@ end
 
 def time_left(deadline: Int) -> Result[Int]
   left = deadline - Time.monotonic_ms()
-  return error("archive: operation timed out") if left <= 0
+  return error("archive: operation timed out", kind: "archive.timeout") if left <= 0
   ok(left)
 end
 
@@ -272,7 +272,7 @@ end
 def stat_src(src: String, deadline: Int) -> Result[File.Info]
   case File.lstat(src, try time_left(deadline))
     ok(found) -> ok(found)
-    error(message) -> error("archive: cannot use #{src}: #{message}")
+    error(e) -> error(e.with(message: "archive: cannot use #{src}: #{e.message}"))
   end
 end
 
@@ -282,14 +282,14 @@ def read_first(src: String, deadline: Int) -> Result[Bytes]
     ok(chunks) ->
       return ok("".bytes) if chunks.size == 0
       ok(chunks[0])
-    error(message) -> error("archive: cannot open #{src}: #{message}")
+    error(e) -> error(e.with(message: "archive: cannot open #{src}: #{e.message}"))
   end
 end
 
 def make_dest(dest: String, deadline: Int) -> Result[Void]
   case Dir.mkdir_private(dest, try time_left(deadline))
     ok(_) -> ok()
-    error(message) -> error("archive: cannot create #{dest}: #{message}")
+    error(e) -> error(e.with(message: "archive: cannot create #{dest}: #{e.message}"))
   end
 end
 
@@ -316,10 +316,10 @@ def parse_octal(block: Bytes, offset: Int, length: Int, what: String, entry: Int
         ended = true
       end
     else
-      return error("archive: bad octal #{what} at entry #{entry}") if ended
-      return error("archive: bad octal #{what} at entry #{entry}") if b < 48 or b > 55
+      return error("archive: bad octal #{what} at entry #{entry}", kind: "archive.format") if ended
+      return error("archive: bad octal #{what} at entry #{entry}", kind: "archive.format") if b < 48 or b > 55
       d = b - 48
-      return error("archive: #{what} overflows at entry #{entry}") if value > (INT_MAX - d) / 8
+      return error("archive: #{what} overflows at entry #{entry}", kind: "archive.format") if value > (INT_MAX - d) / 8
       value = value * 8 + d
       seen = true
     end
@@ -328,14 +328,14 @@ def parse_octal(block: Bytes, offset: Int, length: Int, what: String, entry: Int
 end
 
 def parse_decimal(text: Bytes, what: String, entry: Int) -> Result[Int]
-  return error("archive: bad decimal #{what} at entry #{entry}") if text.size == 0
+  return error("archive: bad decimal #{what} at entry #{entry}", kind: "archive.format") if text.size == 0
   value = 0
   stop = text.size - 1
   for i in 0..stop
     b = text[i]
-    return error("archive: bad decimal #{what} at entry #{entry}") if b < 48 or b > 57
+    return error("archive: bad decimal #{what} at entry #{entry}", kind: "archive.format") if b < 48 or b > 57
     d = b - 48
-    return error("archive: #{what} overflows at entry #{entry}") if value > (INT_MAX - d) / 10
+    return error("archive: #{what} overflows at entry #{entry}", kind: "archive.format") if value > (INT_MAX - d) / 10
     value = value * 10 + d
   end
   ok(value)
@@ -361,13 +361,15 @@ def read_header(block: Bytes, entry: Int) -> Result[TarHeader]
       total += block[i]
     end
   end
-  return error("archive: bad header checksum at entry #{entry}") if total != stored
-  return error("archive: unsupported base-256 size at entry #{entry}") if block[124] >= 128
+  return error("archive: bad header checksum at entry #{entry}", kind: "archive.format") if total != stored
+  return error("archive: unsupported base-256 size at entry #{entry}", kind: "archive.format") if block[124] >= 128
   size = try parse_octal(block, 124, 12, "size", entry)
   name_field = trim_nul(slice_range(block, 0, 100))
   prefix = trim_nul(slice_range(block, 345, 500))
   ustar = block[257] == 117 and block[258] == 115 and block[259] == 116 and block[260] == 97 and block[261] == 114
-  return error("archive: unsupported archive variant at entry #{entry}") if !ustar and prefix.size > 0
+  if !ustar and prefix.size > 0
+    return error("archive: unsupported archive variant at entry #{entry}", kind: "archive.format")
+  end
   full = name_field
   if prefix.size > 0
     full = Bytes.concat([prefix, "/".bytes, name_field])
@@ -396,10 +398,14 @@ end
 
 # Applies one PAX record to the local or the global overrides.
 def apply_record(ctx: Ctx, key: Bytes, value: Bytes, entry: Int, is_global: Bool) -> Result[Ctx]
-  return error("archive: sparse entries are not supported at entry #{entry}") if bytes_have(key, SPARSE_KEY)
+  if bytes_have(key, SPARSE_KEY)
+    return error("archive: sparse entries are not supported at entry #{entry}", kind: "archive.format")
+  end
   key_text = try key_text_of(key, entry)
   if key_text == "path"
-    return error("archive: entry name is too long at entry #{entry}") if value.size > NAME_BYTES
+    if value.size > NAME_BYTES
+      return error("archive: entry name is too long at entry #{entry}", kind: "archive.format")
+    end
     return ok(ctx.with(has_global_path: true, global_path: value)) if is_global
     local = ctx.local
     return ok(ctx.with(local: local.with(has_path: true, path: value)))
@@ -427,19 +433,21 @@ def parse_pax(data: Bytes, entry: Int, is_global: Bool, ctx: Ctx) -> Result[Ctx]
       break if data[j] == 32
       j += 1
     end
-    return error("archive: bad PAX record at entry #{entry}") if j == pos or j >= data.size
+    return error("archive: bad PAX record at entry #{entry}", kind: "archive.format") if j == pos or j >= data.size
     length = try parse_decimal(slice_range(data, pos, j), "PAX length", entry)
-    return error("archive: bad PAX record at entry #{entry}") if length <= j - pos + 1 or pos + length > data.size
-    return error("archive: bad PAX record at entry #{entry}") if data[pos + length - 1] != 10
+    if length <= j - pos + 1 or pos + length > data.size
+      return error("archive: bad PAX record at entry #{entry}", kind: "archive.format")
+    end
+    return error("archive: bad PAX record at entry #{entry}", kind: "archive.format") if data[pos + length - 1] != 10
     body_end = pos + length - 1
     eq = j + 1
     while eq < body_end
       break if data[eq] == 61
       eq += 1
     end
-    return error("archive: bad PAX record at entry #{entry}") if eq >= body_end
+    return error("archive: bad PAX record at entry #{entry}", kind: "archive.format") if eq >= body_end
     key = slice_range(data, j + 1, eq)
-    return error("archive: bad PAX record at entry #{entry}") if key.size == 0
+    return error("archive: bad PAX record at entry #{entry}", kind: "archive.format") if key.size == 0
     ctx = try apply_record(ctx, key, slice_range(data, eq + 1, body_end), entry, is_global)
     pos += length
   end
@@ -447,32 +455,39 @@ def parse_pax(data: Bytes, entry: Int, is_global: Bool, ctx: Ctx) -> Result[Ctx]
 end
 
 # Checks one relative path after its leading `./` is gone: no absolute, drive, UNC, backslash, colon or NUL content
-# and no empty, `.` or `..` segments. `name` and `suffix` shape the error.
+# and no empty, `.` or `..` segments. `name` and `suffix` shape the error, an `archive.unsafe` one for a member as for
+# an entry.
 def check_relative(path: String, name: String, suffix: String) -> Result[String]
-  return error("archive: #{name} is absolute#{suffix}") if path.start_with?("/")
+  return error("archive: #{name} is absolute#{suffix}", kind: "archive.unsafe") if path.start_with?("/")
   for b in path.bytes
-    return error("archive: #{name} holds a NUL byte#{suffix}") if b == 0
-    return error("archive: #{name} holds a portable separator#{suffix}") if b == 92 or b == 58
+    return error("archive: #{name} holds a NUL byte#{suffix}", kind: "archive.unsafe") if b == 0
+    return error("archive: #{name} holds a portable separator#{suffix}", kind: "archive.unsafe") if b == 92 or b == 58
   end
   if String.length(path) >= 2
-    return error("archive: #{name} holds a drive letter#{suffix}") if String.slice(path, 1, 1) == ":"
+    if String.slice(path, 1, 1) == ":"
+      return error("archive: #{name} holds a drive letter#{suffix}", kind: "archive.unsafe")
+    end
   end
-  return error("archive: #{name} is a UNC path#{suffix}") if path.start_with?("\\\\")
+  return error("archive: #{name} is a UNC path#{suffix}", kind: "archive.unsafe") if path.start_with?("\\\\")
   for seg in String.split(path, "/")
-    return error("archive: #{name} is not a safe relative path#{suffix}") if seg == "" or seg == "." or seg == ".."
+    if seg == "" or seg == "." or seg == ".."
+      return error("archive: #{name} is not a safe relative path#{suffix}", kind: "archive.unsafe")
+    end
   end
   ok(path)
 end
 
 # Validates one allowlist member: nonempty, short, and a safe relative path after one optional leading `./`.
 def normalize_selector(text: String) -> Result[String]
-  return error("archive: a member must not be empty") if text == ""
-  return error("archive: member is too long: #{text}") if text.bytesize > NAME_BYTES
+  return error("archive: a member must not be empty", kind: "argument") if text == ""
+  return error("archive: member is too long: #{text}", kind: "argument") if text.bytesize > NAME_BYTES
   path = text
   if path.start_with?("./")
     path = String.slice(path, 2, String.length(path) - 2)
   end
-  return error("archive: a member must name a file, not the root: #{text}") if path == "" or path == "."
+  if path == "" or path == "."
+    return error("archive: a member must name a file, not the root: #{text}", kind: "argument")
+  end
   check_relative(path, "member #{text}", "")
 end
 
@@ -497,14 +512,19 @@ end
 
 # Validates the whole allowlist: 1 to 256 safe members, no exact, normalized or case-only repeats.
 def validate_members(members: List[String]) -> Result[List[Wanted]]
-  return error("archive: members must select 1..256 files") if members.size == 0 or members.size > MAX_MEMBERS
+  if members.size == 0 or members.size > MAX_MEMBERS
+    return error("archive: members must select 1..256 files", kind: "argument")
+  end
   wanted: List[Wanted] = []
   for text in members
     canon = try normalize_selector(text)
     for seen in wanted
-      return error("archive: members select the same file twice: #{canon}") if seen.path == canon
+      return error("archive: members select the same file twice: #{canon}", kind: "argument") if seen.path == canon
       if String.downcase(seen.path) == String.downcase(canon)
-        return error("archive: members collide on a case-insensitive system: #{seen.path} and #{canon}")
+        return error(
+          "archive: members collide on a case-insensitive system: #{seen.path} and #{canon}",
+          kind: "argument",
+        )
       end
     end
     wanted = List.append(wanted, Wanted(path: canon, segments: String.split(canon, "/")))
@@ -524,7 +544,7 @@ end
 def key_text_of(key: Bytes, entry: Int) -> Result[String]
   case String.from_bytes(key)
     ok(text) -> ok(text)
-    error(_) -> error("archive: bad PAX key at entry #{entry}")
+    error(_) -> error("archive: bad PAX key at entry #{entry}", kind: "archive.format")
   end
 end
 
@@ -538,7 +558,7 @@ end
 def join_one(parts: List[String]) -> Result[String]
   case Path.join(parts)
     ok(joined) -> ok(joined)
-    error(_) -> error("archive: cannot join a path")
+    error(_) -> error("archive: cannot join a path", kind: "archive.unsafe")
   end
 end
 
@@ -554,7 +574,7 @@ def back_join(dest: String) -> String = "#{dest}\\"
 
 def join_under(dest: String, segments: List[String]) -> Result[String]
   out = try join_one(List.concat([dest], segments))
-  return error("archive: selected path escapes the destination") if !stays_under(out, dest)
+  return error("archive: selected path escapes the destination", kind: "archive.unsafe") if !stays_under(out, dest)
   ok(out)
 end
 
@@ -566,16 +586,18 @@ def make_parents(ctx: Ctx, segments: List[String], deadline: Int) -> Result[Ctx]
   for k in 0..stop
     parts = List.append(parts, segments[k])
     dir = try join_one(parts)
-    return error("archive: selected path escapes the destination") if !stays_under(dir, ctx.dest)
+    if !stays_under(dir, ctx.dest)
+      return error("archive: selected path escapes the destination", kind: "archive.unsafe")
+    end
     fold = String.downcase(dir)
     if Map.has_key?(ctx.seen_fold, fold) and !Map.has_key?(ctx.seen_exact, dir)
-      return error("archive: selected files collide on a case-insensitive system: #{dir}")
+      return error("archive: selected files collide on a case-insensitive system: #{dir}", kind: "archive.unsafe")
     end
     if !Map.has_key?(ctx.seen_exact, dir)
       case Dir.mkdir(dir, try time_left(deadline))
         ok(_) ->
           ctx = ctx.with(seen_fold: Map.put(ctx.seen_fold, fold, true), seen_exact: Map.put(ctx.seen_exact, dir, true))
-        error(message) -> return error("archive: cannot create a parent directory: #{message}")
+        error(e) -> return error(e.with(message: "archive: cannot create a parent directory: #{e.message}"))
       end
     end
   end
@@ -590,9 +612,9 @@ def create_out(out: String, deadline: Int) -> Result[Void]
     ok(handle) ->
       case File.close(handle, close_budget(deadline))
         ok(_) -> ok()
-        error(message) -> error("archive: cannot finish #{out}: #{message}")
+        error(e) -> error(e.with(message: "archive: cannot finish #{out}: #{e.message}"))
       end
-    error(message) -> error("archive: cannot create #{out}: #{message}")
+    error(e) -> error(e.with(message: "archive: cannot create #{out}: #{e.message}"))
   end
 end
 
@@ -605,13 +627,13 @@ def append_out(out: String, piece: Bytes, deadline: Int) -> Result[Void]
         ok(_) ->
           case File.close(handle, close_budget(deadline))
             ok(_) -> ok()
-            error(message) -> error("archive: cannot finish #{out}: #{message}")
+            error(e) -> error(e.with(message: "archive: cannot finish #{out}: #{e.message}"))
           end
-        error(message) ->
+        error(e) ->
           close_file(handle, close_budget(deadline))
-          error("archive: cannot write #{out}: #{message}")
+          error(e.with(message: "archive: cannot write #{out}: #{e.message}"))
       end
-    error(message) -> error("archive: cannot write #{out}: #{message}")
+    error(e) -> error(e.with(message: "archive: cannot write #{out}: #{e.message}"))
   end
 end
 
@@ -630,36 +652,47 @@ def scan_all(src: String, gzip: Bool, scan: Scan, members: List[String]) -> Resu
       try check_end(done)
       try check_missing(done.ctx, members)
       ok(done.ctx.counts)
-    error(message) -> error(stream_error("#{message}", src))
+    error(e) -> error(stream_error(e, src))
   end
 end
 
 # A compressed chunk passes while the file bytes read so far stay within INPUT_BYTES: File.chunks gives CHUNK bytes
 # each, the last one fewer.
 def within_input(chunk: Bytes, index: Int) -> Result[Bytes]
-  return error("archive: compressed input exceeds 268435456 bytes") if index * CHUNK + chunk.size > INPUT_BYTES
+  if index * CHUNK + chunk.size > INPUT_BYTES
+    return error("archive: compressed input exceeds 268435456 bytes", kind: "archive.too_large")
+  end
   ok(chunk)
 end
 
-# The error of the stream as std/archive words it: its own errors as they are, a refusal of the gzip member, or a
-# failed read of the source. The zlib texts matched here are the ones vm/zlib.c gives (agc_zstep_next): keep them in
-# step.
-def stream_error(message: String, src: String) -> String
-  return message if message.start_with?("archive: ")
-  return "archive: trailing bytes after the gzip member" if message == "zlib: trailing bytes after stream end"
-  return "archive: gzip stream is truncated" if message == "zlib: truncated stream"
-  return "archive: decompressed input exceeds 1073741824 bytes" if message == "zlib: output exceeds max_bytes"
-  return "archive: gzip input is invalid: #{message}" if message.start_with?("zlib: ")
-  "archive: cannot read #{src}: #{message}"
+# The error of the stream as std/archive words it: its own errors as they are, a refusal of the gzip member (an
+# `archive.format` error, or `archive.too_large` past the size), or a failed read of the source with its own kind. The
+# zlib texts matched here are the ones vm/zlib.c gives (agc_zstep_next): keep them in step.
+def stream_error(e: Error, src: String) -> Error
+  message = e.message
+  return e if message.start_with?("archive: ")
+  if message == "zlib: trailing bytes after stream end"
+    return e.with(message: "archive: trailing bytes after the gzip member", kind: "archive.format")
+  end
+  if message == "zlib: truncated stream"
+    return e.with(message: "archive: gzip stream is truncated", kind: "archive.format")
+  end
+  if message == "zlib: output exceeds max_bytes"
+    return e.with(message: "archive: decompressed input exceeds 1073741824 bytes", kind: "archive.too_large")
+  end
+  return e.with(message: "archive: gzip input is invalid: #{message}", kind: "archive.format") if e.is_a?("zlib")
+  e.with(message: "archive: cannot read #{src}: #{message}")
 end
 
 # Takes one chunk of the TAR stream: each phase takes what it needs of the bytes held so far, from `at` on, and what
 # a phase still needs more of waits in `carry` for the next chunk. Each phase copies only the bytes it takes (a slice),
 # never the rest of the chunk.
 def feed(sc: Scan, chunk: Bytes, gzip: Bool) -> Result[Scan]
-  return error("archive: operation timed out") if Time.monotonic_ms() >= sc.ctx.deadline
+  return error("archive: operation timed out", kind: "archive.timeout") if Time.monotonic_ms() >= sc.ctx.deadline
   total = sc.total + chunk.size
-  return error("archive: raw input exceeds 1073741824 bytes") if !gzip and total > SCAN_BYTES
+  if !gzip and total > SCAN_BYTES
+    return error("archive: raw input exceeds 1073741824 bytes", kind: "archive.too_large")
+  end
   buf = chunk
   if sc.carry.size > 0
     buf = sc.carry + chunk
@@ -689,7 +722,9 @@ def feed(sc: Scan, chunk: Bytes, gzip: Bool) -> Result[Scan]
       Phase.Trailer ->
         while at < buf.size
           n = smaller(ZERO_RUN.size, buf.size - at)
-          return error("archive: non-zero padding after the archive end") if buf.slice(at, n) != ZERO_RUN.take(n)
+          if buf.slice(at, n) != ZERO_RUN.take(n)
+            return error("archive: non-zero padding after the archive end", kind: "archive.format")
+          end
           at = at + n
         end
     end
@@ -704,7 +739,7 @@ def take_header(sc: Scan, block: Bytes) -> Result[Scan]
     return ok(sc.with(zeros: sc.zeros + 1))
   end
   ctx = sc.ctx
-  return error("archive: too many entries, past 8192") if ctx.entries >= MAX_ENTRIES
+  return error("archive: too many entries, past 8192", kind: "archive.too_large") if ctx.entries >= MAX_ENTRIES
   entry = ctx.entries + 1
   sc = sc.with(zeros: 0, entry: entry, ctx: ctx.with(entries: entry))
   start_entry(sc, try read_header(block, entry))
@@ -716,7 +751,9 @@ def start_entry(sc: Scan, header: TarHeader) -> Result[Scan]
   ctx = sc.ctx
   entry = sc.entry
   if header.typeflag == 120 or header.typeflag == 103 or header.typeflag == 76 or header.typeflag == 75
-    return error("archive: metadata exceeds 65536 bytes at entry #{entry}") if header.size > META_BYTES - ctx.meta_used
+    if header.size > META_BYTES - ctx.meta_used
+      return error("archive: metadata exceeds 65536 bytes at entry #{entry}", kind: "archive.too_large")
+    end
     what = "GNU long name data"
     if header.typeflag == 120 or header.typeflag == 103
       what = "PAX data"
@@ -752,7 +789,9 @@ def start_entry(sc: Scan, header: TarHeader) -> Result[Scan]
   )
 
   canon = match_name_of(raw)
-  return error("archive: entry size exceeds 1073741824 bytes at entry #{entry}") if size > SCAN_BYTES
+  if size > SCAN_BYTES
+    return error("archive: entry size exceeds 1073741824 bytes at entry #{entry}", kind: "archive.too_large")
+  end
   regular = header.typeflag == 48 or header.typeflag == 0 or header.typeflag == 55
   index = -1
   if canon != ""
@@ -761,8 +800,8 @@ def start_entry(sc: Scan, header: TarHeader) -> Result[Scan]
   sc = sc.with(ctx: ctx, phase: Phase.Data, rest: size, size: size, what: "entry data", out: "", index: -1)
   if index >= 0
     try check_relative(canon, "entry name", " at entry #{entry}")
-    return error("archive: the same archive holds #{canon} twice") if ctx.matched[index]
-    return error("archive: member is not a regular file: #{canon}") if !regular
+    return error("archive: the same archive holds #{canon} twice", kind: "archive.format") if ctx.matched[index]
+    return error("archive: member is not a regular file: #{canon}", kind: "archive.unsafe") if !regular
     sc = try open_selected(sc, index, size)
   end
   return end_data(sc) if size == 0
@@ -776,11 +815,11 @@ def open_selected(sc: Scan, index: Int, size: Int) -> Result[Scan]
   out = try join_under(ctx.dest, item.segments)
   fold = String.downcase(out)
   if Map.has_key?(ctx.seen_fold, fold)
-    return error("archive: selected files collide on a case-insensitive system: #{out}")
+    return error("archive: selected files collide on a case-insensitive system: #{out}", kind: "archive.unsafe")
   end
   ctx = try make_parents(ctx, item.segments, ctx.deadline)
   if size > ctx.max_output or ctx.extracted + size > ctx.max_output
-    return error("archive: output exceeds #{ctx.max_output} bytes")
+    return error("archive: output exceeds #{ctx.max_output} bytes", kind: "archive.too_large")
   end
   try create_out(out, ctx.deadline)
   ok(sc.with(ctx: ctx, out: out, index: index, fold: fold, what: "file data of #{item.path}"))
@@ -794,7 +833,9 @@ def take_meta(sc: Scan, data: Bytes) -> Result[Scan]
   else
     if sc.typeflag == 76
       trimmed = trim_nul(data)
-      return error("archive: entry name is too long at entry #{sc.entry}") if trimmed.size > NAME_BYTES
+      if trimmed.size > NAME_BYTES
+        return error("archive: entry name is too long at entry #{sc.entry}", kind: "archive.format")
+      end
       ctx = ctx.with(has_gnu_name: true, gnu_name: trimmed)
     end
   end
@@ -844,14 +885,16 @@ def check_end(sc: Scan) -> Result[Void]
   case sc.phase
     Phase.Trailer -> ok()
     Phase.Header ->
-      return error("archive: truncated archive, missing the two zero end blocks") if sc.carry.size == 0
-      error("archive: truncated TAR data, needed 512 bytes for a header")
+      if sc.carry.size == 0
+        return error("archive: truncated archive, missing the two zero end blocks", kind: "archive.format")
+      end
+      error("archive: truncated TAR data, needed 512 bytes for a header", kind: "archive.format")
     Phase.Data ->
       # The bytes the reader of a whole file wanted when the data ran out: what was left of its CHUNK-sized piece.
       needed = smaller(sc.size - ((sc.size - sc.rest) / CHUNK) * CHUNK, CHUNK)
-      error("archive: truncated TAR data, needed #{needed} bytes for #{sc.what}")
-    Phase.Meta -> error("archive: truncated TAR data, needed #{sc.size} bytes for #{sc.what}")
-    Phase.Pad -> error("archive: truncated TAR data, needed #{sc.size} bytes for #{sc.what}")
+      error("archive: truncated TAR data, needed #{needed} bytes for #{sc.what}", kind: "archive.format")
+    Phase.Meta -> error("archive: truncated TAR data, needed #{sc.size} bytes for #{sc.what}", kind: "archive.format")
+    Phase.Pad -> error("archive: truncated TAR data, needed #{sc.size} bytes for #{sc.what}", kind: "archive.format")
   end
 end
 
@@ -859,7 +902,7 @@ end
 def check_missing(ctx: Ctx, members: List[String]) -> Result[Void]
   stop = ctx.wanted.size - 1
   for i in 0..stop
-    return error("archive: member not found: #{members[i]}") if !ctx.matched[i]
+    return error("archive: member not found: #{members[i]}", kind: "archive.not_found") if !ctx.matched[i]
   end
   ok()
 end

@@ -139,9 +139,9 @@ end
 ```
 
 ```output
-error("u64 at offset 0 does not fit in Int")
+error("u64 at offset 0 does not fit in Int", kind: "number.range")
 ok(-9223372036854775808)
-error("value -1 does not fit in u64")
+error("value -1 does not fit in u64", kind: "argument")
 [127, 255, 255, 255, 255, 255, 255, 255]
 ```
 
@@ -191,8 +191,8 @@ end
 ```output
 [0, 0, 0, 2, 104, 105]
 ok(2)
-error("frame length 70000 is above the limit 65536")
-error("frame limit -1 is negative")
+error("frame length 70000 is above the limit 65536", kind: "binary.too_large")
+error("frame limit -1 is negative", kind: "argument")
 ```
 
 ## Errors
@@ -223,8 +223,8 @@ end
 ```
 
 ```output
-error("u32 at offset 1 is outside bytes of length 4")
-error("u16 at offset -1 is outside bytes of length 4")
-error("value 256 does not fit in u8")
-error("value -32769 does not fit in i16")
+error("u32 at offset 1 is outside bytes of length 4", kind: "argument")
+error("u16 at offset -1 is outside bytes of length 4", kind: "argument")
+error("value 256 does not fit in u8", kind: "argument")
+error("value -32769 does not fit in i16", kind: "argument")
 ```

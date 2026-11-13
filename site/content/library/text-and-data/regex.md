@@ -47,7 +47,7 @@ ok("Lovelace, Ada")
 ["7", "12"]
 true
 true
-error("character 4: missing ')' for the group at character 1")
+error("character 4: missing ')' for the group at character 1", kind: "regex.syntax")
 ```
 
 `Regex.escape(text)` gives a pattern that matches `text` literally. A pattern given to `Regex.compile` is a `String`, so each backslash of the pattern is written twice: `"\\d+"` is the pattern `\d+`.

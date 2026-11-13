@@ -39,7 +39,7 @@ Actor.reply(channel: Channel[R], value: R) -> Void
 
 `cast` puts a message in the inbox and returns; it waits at most `timeout_ms` for room when the inbox is full. `call` makes a reply channel, builds the message around it with the block, sends it and waits for the answer, all within `timeout_ms`. The handler answers with `Actor.reply(channel, value)`, which never waits. Each call has its own reply channel, so an answer that comes after its call timed out never reaches a later call. A `timeout_ms` of 0 tries once: `cast` sends only when there is room, and `call(address, 0)` still puts the message in the inbox, then gives `actor: timeout`. Give `call` a timeout above 0; a negative one is `RUNTIME-INVALID-DURATION`.
 
-Errors: `error("actor: timeout")` when the inbox stays full or the answer does not come in time, and `error("address: gone")` when the actor has ended. A call whose actor crashes or ends before it answers waits for its timeout. A call to the actor's own address from its handler, or two actors that call each other, wait for their timeouts too, since an actor handles one message at a time; send the work to another task instead.
+Errors: `actor: timeout` (kind `channel.timeout`) when the inbox stays full or the answer does not come in time, and `address: gone` (kind `channel.gone`) when the actor has ended. A call whose actor crashes or ends before it answers waits for its timeout. A call to the actor's own address from its handler, or two actors that call each other, wait for their timeouts too, since an actor handles one message at a time; send the work to another task instead.
 
 The type of the answer comes from the expected type (the result type of the function that returns the call, or an annotation), or else from the block: in `Msg.Get(reply)` the variant's payload makes `reply` a `Channel[Int]`, so `puts(Actor.call(address, 1000) do |reply| Msg.Get(reply) end)` works too.
 
@@ -79,7 +79,7 @@ end
 ```output
 ok(10)
 ok()
-error("address: gone")
+error("address: gone", kind: "channel.gone")
 ```
 
 ## Actor.stop
@@ -88,7 +88,7 @@ error("address: gone")
 Actor.stop(actor: Actor.Ref[S, M], timeout_ms: Int) -> Result[Void]
 ```
 
-Closes the inbox and waits at most `timeout_ms` for the actor to end: it handles the messages already in its inbox (so a call that is waiting there gets its answer), runs `terminate` and ends. A `cast` or `call` after the close gives `error("address: gone")`. An actor still running after `timeout_ms` is cancelled and `stop` gives `error("actor: timeout")`. An actor that crashed gives its `task crashed: ...` error, and stopping it observes the crash. Stopping an actor that has ended gives how it ended. `timeout_ms` must be above 0, else `RUNTIME-INVALID-DURATION`.
+Closes the inbox and waits at most `timeout_ms` for the actor to end: it handles the messages already in its inbox (so a call that is waiting there gets its answer), runs `terminate` and ends. A `cast` or `call` after the close gives `error("address: gone")`. An actor still running after `timeout_ms` is cancelled and `stop` gives `actor: timeout` (kind `task.timeout`). An actor that crashed gives its `task crashed: ...` error, and stopping it observes the crash. Stopping an actor that has ended gives how it ended. `timeout_ms` must be above 0, else `RUNTIME-INVALID-DURATION`.
 
 Only the holder of the `Ref` can stop the actor. To stop it through an address, give the message enum a `Stop` variant whose handler gives `Actor.done(state)`.
 

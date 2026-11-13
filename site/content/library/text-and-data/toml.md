@@ -55,8 +55,8 @@ end
 ```output
 ok(Toml.Value.Str("demo"))
 ok(Toml.Value.Str("b.agc"))
-error("no key \"license\" in \"package.license\"")
-error("line 3, column 3: expected '=' after key")
+error("no key \"license\" in \"package.license\"", kind: "toml.decode")
+error("line 3, column 3: expected '=' after key", kind: "toml.parse")
 ```
 
 ## Errors

@@ -174,7 +174,7 @@ end
 ## Calls the service kept under `name` with `request` and returns its result, or an error when there is none.
 export def call(ctx: Context, name: String, request: JSON.Value) -> Result[JSON.Value]
   found = ctx.scenario.services.get(name)
-  return error("missing scenario service") if found.none?
+  return error("missing scenario service", kind: "argument") if found.none?
   found.unwrap!.call(request)
 end
 
@@ -250,9 +250,9 @@ export def read_line(ctx: Context, timeout_ms: Int) -> Result[String]
   line = raw_line(ctx, timeout_ms)
   return line if line.ok?
   if line.message == ended_text()
-    return error("stdout ended before a line")
+    return error("stdout ended before a line", kind: "process.eof")
   elsif line.message == timed_out_text()
-    return error("no line within #{timeout_ms} milliseconds")
+    return error("no line within #{timeout_ms} milliseconds", kind: "process.timeout")
   end
   check(ctx, false, line.message)
   line
@@ -531,7 +531,7 @@ end
 # FILE.agc` does. That is the way for a program that does not compile (the front end prints its diagnostic), under
 # `--deny-fs` (no file here can be looked at) and when the runner gave no folder.
 def compiled(settings: Settings, file: String, env: Map[String, String], options: Process.Options) -> Result[String]
-  return error("no folder for compiled programs") if settings.programs == ""
+  return error("no folder for compiled programs", kind: "argument") if settings.programs == ""
 
   real = try Path.real(file)
   text = try File.read_text(real, 5000)
@@ -540,14 +540,16 @@ def compiled(settings: Settings, file: String, env: Map[String, String], options
   return ok(target) if File.stat(target, 5000).ok?
 
   failed = "#{target}.failed"
-  return error("the program does not compile") if File.stat(failed, 5000).ok?
+  return error("the program does not compile", kind: "process.failed") if File.stat(failed, 5000).ok?
 
   own = try claimed(target)
   args = settings.agentica.drop(1).concat(["compile", real, "-o", own])
   spawned = Process.spawn_captured(settings.agentica[0], args, options)
-  if !spawned.ok?
-    _ = Path.remove(own, 5000)
-    return error(spawned.message)
+  case spawned
+    ok(_) -> nil
+    error(e) ->
+      _ = Path.remove(own, 5000)
+      return error(e)
   end
 
   started = spawned.unwrap!
@@ -559,7 +561,7 @@ def compiled(settings: Settings, file: String, env: Map[String, String], options
     if marked.ok?
       _ = File.close(marked.unwrap!, 5000)
     end
-    return error("the program does not compile")
+    return error("the program does not compile", kind: "process.failed")
   end
 
   moved = Path.rename(own, target, 5000)
@@ -594,7 +596,7 @@ def claimed(target: String) -> Result[String]
     end
   end
 
-  error("no free name for the compiled program")
+  error("no free name for the compiled program", kind: "io.exists")
 end
 
 # `--source-root` for the bytecode of `file`, as the front end gives it for an absolute path: the folder of its real

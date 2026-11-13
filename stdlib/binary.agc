@@ -203,28 +203,30 @@ export def write_f64_le(x: Float) -> Bytes = bytes8_le(Float.to_bits(x))
 ## Returns the 4-byte big-endian length of `payload` followed by `payload`. Returns an error when `payload` has more
 ## than 4294967295 bytes.
 export def frame(payload: Bytes) -> Result[Bytes]
-  return error("payload of #{payload.size} bytes does not fit in a u32 length") if payload.size > 4294967295
+  if payload.size > 4294967295
+    return error("payload of #{payload.size} bytes does not fit in a u32 length", kind: "argument")
+  end
   ok(bytes4_be(payload.size) + payload)
 end
 
 ## Reads the 4-byte big-endian length of a frame at `offset`. Returns an error when `max` is negative, the bytes are
 ## outside `data`, or the length is above `max`. Read the body yourself after it.
 export def read_frame_length(data: Bytes, offset: Int, max: Int) -> Result[Int]
-  return error("frame limit #{max} is negative") if max < 0
+  return error("frame limit #{max} is negative", kind: "argument") if max < 0
   length = try load32_be(data, offset, "u32")
-  return error("frame length #{length} is above the limit #{max}") if length > max
+  return error("frame length #{length} is above the limit #{max}", kind: "binary.too_large") if length > max
   ok(length)
 end
 
 def window(data: Bytes, offset: Int, n: Int, type: String) -> Result[Void]
   if offset < 0 or offset > data.size - n
-    return error("#{type} at offset #{offset} is outside bytes of length #{data.size}")
+    return error("#{type} at offset #{offset} is outside bytes of length #{data.size}", kind: "argument")
   end
   ok()
 end
 
 def fits(value: Int, low: Int, high: Int, type: String) -> Result[Void]
-  return error("value #{value} does not fit in #{type}") if value < low or value > high
+  return error("value #{value} does not fit in #{type}", kind: "argument") if value < low or value > high
   ok()
 end
 
@@ -299,7 +301,7 @@ def load64_le(data: Bytes, offset: Int, type: String) -> Result[Int]
 end
 
 def unsigned64(value: Int, offset: Int) -> Result[Int]
-  return error("u64 at offset #{offset} does not fit in Int") if value < 0
+  return error("u64 at offset #{offset} does not fit in Int", kind: "number.range") if value < 0
   ok(value)
 end
 

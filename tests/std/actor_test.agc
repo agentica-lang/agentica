@@ -100,7 +100,7 @@ def test_a_call_times_out_and_the_next_call_gets_its_own_answer() -> Result[Void
   actor = counter(probe(), Actor.Options())
   try Actor.cast(actor.address, Msg.Add(7))
   late: Result[Int] = Actor.call(actor.address, 50) do |reply| Msg.Nap(1000, reply) end
-  try Test.eq(late, error("actor: timeout"))
+  try Test.eq(late, error("actor: timeout", kind: "channel.timeout"))
   try Test.eq(get(actor.address, 5000), ok(7))
   Test.eq(Actor.stop(actor, 5000), ok())
 end
@@ -114,8 +114,8 @@ def test_stop_handles_the_inbox_runs_terminate_and_the_address_is_gone() -> Resu
 
   try Test.eq(Actor.stop(actor, 5000), ok())
   try Test.eq(p.seen.to_map, {0: 1, 1: 10})
-  try Test.eq(get(actor.address, 1000), error("address: gone"))
-  try Test.eq(Actor.cast(actor.address, Msg.Add(1)), error("address: gone"))
+  try Test.eq(get(actor.address, 1000), error("address: gone", kind: "channel.gone"))
+  try Test.eq(Actor.cast(actor.address, Msg.Add(1)), error("address: gone", kind: "channel.gone"))
   Test.eq(Actor.stop(actor, 1000), ok())
 end
 
@@ -126,7 +126,7 @@ def test_a_handler_that_gives_done_ends_the_actor() -> Result[Void]
   try Actor.cast(actor.address, Msg.Quit)
   try Test.eq(Actor.stop(actor, 5000), ok())
   try Test.eq(p.seen.to_map, {0: 1, 1: 3})
-  Test.eq(get(actor.address, 1000), error("address: gone"))
+  Test.eq(get(actor.address, 1000), error("address: gone", kind: "channel.gone"))
 end
 
 def test_a_crash_in_a_handler_ends_the_actor_and_stop_reports_it() -> Result[Void]
@@ -136,16 +136,16 @@ def test_a_crash_in_a_handler_ends_the_actor_and_stop_reports_it() -> Result[Voi
   stopped = Actor.stop(actor, 5000)
   try Test.assert(stopped.to_s.include?("task crashed: RUNTIME-DIVISION-BY-ZERO"), stopped.to_s)
   try Test.eq(p.seen.to_map, {})
-  Test.eq(get(actor.address, 1000), error("address: gone"))
+  Test.eq(get(actor.address, 1000), error("address: gone", kind: "channel.gone"))
 end
 
 def test_stop_cancels_an_actor_that_does_not_end_in_time() -> Result[Void]
   p = probe()
   actor = counter(p, Actor.Options())
   try Actor.cast(actor.address, Msg.Nap(10_000, Channel.new(1)))
-  try Test.eq(Actor.stop(actor, 50), error("actor: timeout"))
+  try Test.eq(Actor.stop(actor, 50), error("actor: timeout", kind: "task.timeout"))
   try Test.eq(p.seen.to_map, {})
-  Test.eq(get(actor.address, 1000), error("address: gone"))
+  Test.eq(get(actor.address, 1000), error("address: gone", kind: "channel.gone"))
 end
 
 def test_a_monitor_sends_its_notice_into_the_inbox() -> Result[Void]
@@ -164,7 +164,7 @@ def test_an_actor_that_calls_itself_times_out_and_keeps_running() -> Result[Void
   actor = counter(probe(), Actor.Options())
   try Actor.cast(actor.address, Msg.Add(1))
   answer: Result[String] = Actor.call(actor.address, 5000) do |reply| Msg.AskSelf(reply) end
-  try Test.eq(answer, ok("error(\"actor: timeout\")"))
+  try Test.eq(answer, ok("error(\"actor: timeout\", kind: \"channel.timeout\")"))
   try Test.eq(get(actor.address, 5000), ok(1))
   Test.eq(Actor.stop(actor, 5000), ok())
 end

@@ -980,7 +980,7 @@ def test_client_against_threading_http_server_keep_alive_chunked_close_delimited
         "network: operation timed out",
         "true",
         "true",
-        'error("http: client is closed")'], "plain")
+        'error("http: client is closed", kind: "http.closed")'], "plain")
 
 
 def test_client_against_a_python_ssl_server_with_the_clients_ca_file(tmp_path, adopt):
@@ -1012,11 +1012,11 @@ def test_public_connection_reads_bodies_in_pieces_and_serves_a_second_request_on
         "error: http: the body of the last response is not read to its end",
         "hello 127.0.0.1 in 1",
         "true",
-        'error("http: max_bytes must be 1 to 1048576")',
+        'error("http: max_bytes must be 1 to 1048576", kind: "argument")',
         "200 until the end in 4",
         "error: http: the connection is closed",
-        'error("http: the connection is closed")',
-        'error("http: the connection is closed")',
+        'error("http: the connection is closed", kind: "http.closed")',
+        'error("http: the connection is closed", kind: "http.closed")',
         "http: start takes an origin such as http://host:8080, with no path or query",
         "http: the URL must be http:// or https:// with a host, and without user info",
         "error: http: request body exceeds max_body_bytes",

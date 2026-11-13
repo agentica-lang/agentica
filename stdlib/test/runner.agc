@@ -185,14 +185,16 @@ end
 # is a failure, so a run never goes on without the filter that was asked for.
 def read_tags(handle: File.Handle) -> Result[String]
   line = File.read_line(handle, 5000)
-  if !line.ok?
-    return ok("") if line.message == "filesystem: end of file"
+  case line
+    ok(_) -> nil
+    error(e) ->
+      return ok("") if e.is_a?("io.eof")
 
-    return error(line.message)
+      return error(e)
   end
 
   text = JSON.string(JSON.parse(line.unwrap!).unwrap_or(JSON.null()))
-  return error("the line is not a JSON string") if !text.ok?
+  return error("the line is not a JSON string", kind: "json.decode") if !text.ok?
 
   text
 end

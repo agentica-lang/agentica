@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 13130,
+  "steps": 13172,
   "stdout": [
     "HEAD /head: 200 [0 bytes]",
     "/head: 200 [3 bytes]",

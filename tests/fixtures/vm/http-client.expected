@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 7939,
+  "steps": 7962,
   "stdout": [
     "200",
     "<Bytes 5 68656c6c6f>",
@@ -11,8 +11,8 @@
     "ok(HTTP.Response(status: 200, headers: [HTTP.Header(name: \"connection\", value: \"close\")], body: <Bytes 11 756e74696c20636c6f7365>))",
     "ok(HTTP.Response(status: 200, headers: [HTTP.Header(name: \"content-length\", value: \"2\")], body: <Bytes 2 6f6b>))",
     "<Bytes 3 ff0080>",
-    "error(\"http: body is not valid UTF-8\")",
-    "error(\"http: client is closed\")",
+    "error(\"http: body is not valid UTF-8\", kind: \"text.encoding\")",
+    "error(\"http: client is closed\", kind: \"http.closed\")",
     "GET /a?b=1 HTTP/1.1",
     "Host: 127.0.0.1:PORT",
     "DELETE / HTTP/1.1",
