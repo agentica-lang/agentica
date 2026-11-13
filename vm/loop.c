@@ -69,7 +69,7 @@ typedef struct {
 typedef struct {
   atomic_int signal, now;
   atomic_bool held;
-  atomic_uint subscribed, pending, ignored;
+  atomic_uint subscribed, pending, ignored, calls;
 #if defined(_WIN32)
   HANDLE driver;
 #else
@@ -1275,6 +1275,7 @@ static void stop_overdue(uv_timer_t *timer) {
    lives (a driven VM whose driver is gone takes the stop path, PR_SET_PDEATHSIG's signal included). */
 static void stop_requested(int sig) {
   int saved = errno;
+  atomic_fetch_add(&stop_status()->calls, 1);
   bool orphan = stop_status()->driver && getppid() != stop_status()->driver;
   unsigned bit = signal_bit(sig);
   if (!orphan && stop_status()->wake && !atomic_load(&stop_status()->signal) &&
@@ -1414,6 +1415,7 @@ static void restart_subscribed(unsigned mask) {
    signal has SA_RESTART before it is subscribed and keeps it until it is not, so a subscribed signal never gives an
    EINTR. */
 void agc_io_signals_set(agc_vm *vm, unsigned mask) {
+  AGC_TRACE(&vm->rt->trace, AGC_TRACE_IO, "debug signals_set mask=%u", mask);
   restart_subscribed(mask | atomic_load(&stop_status()->subscribed));
   atomic_store(&stop_status()->subscribed, mask);
   restart_subscribed(mask);
@@ -2039,6 +2041,16 @@ void agc_io_serve(agc_vm *vm) {
     (void)agc_inbox_run(loop->inbox);
     uv_run(&loop->uv, loop->ready ? UV_RUN_NOWAIT : UV_RUN_ONCE);
     drain(vm);
+    {
+      static unsigned seen;
+      unsigned calls = atomic_load(&stop_status()->calls);
+      if (calls != seen) {
+        seen = calls;
+        AGC_TRACE(&rt->trace, AGC_TRACE_IO, "debug calls=%u pending=%u subscribed=%u signal=%d now=%d", calls,
+                  atomic_load(&stop_status()->pending), atomic_load(&stop_status()->subscribed),
+                  atomic_load(&stop_status()->signal), atomic_load(&stop_status()->now));
+      }
+    }
     /* A subscribed signal is delivered by a scheduler between turns (agc_signals_deliver): the nudge wakes one that
        sleeps, which then passes its stop check. */
     if (agc_io_signals_pending()) agc_runq_nudge(rt->runq);

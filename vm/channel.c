@@ -485,6 +485,7 @@ bool agc_signals_deliver(agc_vm *vm) {
       if (!queued(vm, c, variant))
         delivered |= deliver(vm, c, agc_enum_value(rt->program->variants[variant].shared), false);
     }
+    AGC_TRACE(&vm->rt->trace, AGC_TRACE_SCHED, "debug deliver k=%u wanted=%d", k, (int)wanted);
     if (!wanted) agc_io_signals_stop(k);
   }
   agc_sync_drop(vm);
