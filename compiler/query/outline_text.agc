@@ -68,6 +68,8 @@ end
 
 # The line of the item, the lines of its fields or variants, and those of the declarations of a module block.
 def item_lines(file: String, item: Model.Item) -> List[String]
+  return ["#{place(file, item.range)} export #{item.reexport}"] if item.reexport != ""
+
   lines = ["#{place(file, item.range)} #{declaration_text(item.kind, item.exported, item.signature)}"]
   lines = lines.concat(member_lines(file, item))
   for inner in item.items

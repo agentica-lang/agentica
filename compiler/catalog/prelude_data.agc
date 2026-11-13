@@ -213,3 +213,5 @@ ROWS: List[Model.PreludeRow] = [
   Model.PreludeRow(name: "Range.take_while", module: "range", limits: [], selector: "", bodies: {"": "take_while"}),
   Model.PreludeRow(name: "String.empty?", module: "string", limits: [], selector: "", bodies: {"": "empty"}),
 ]
+
+private

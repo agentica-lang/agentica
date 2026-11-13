@@ -48,3 +48,5 @@ struct Token
   value: Value
   span: Source.Span
 end
+
+private

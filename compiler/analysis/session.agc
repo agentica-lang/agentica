@@ -77,3 +77,5 @@ def buffered?(session: Session, path: String) -> Bool
   settings = session.settings
   Overlay.holds?(session.buffers, settings.workspace, settings.env.windows, path)
 end
+
+private

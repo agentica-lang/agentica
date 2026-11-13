@@ -56,8 +56,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   a declaration is public unless it comes after `private`, so a file with no
   `private` is public as a whole (it exported only what it marked before), and
   an extern block is public or private as a whole. `export Alias.name` still
-  re-exports a name. `agentica outline` prints `private ` before a private
-  declaration, not `export ` before a public one (#1502).
+  re-exports a name; an `import` after a re-export is `CHECK-DECL-ORDER`, and a
+  re-export may follow a constant. `agentica outline` prints `private ` before a private
+  declaration, not `export ` before a public one, and a re-export as
+  `export Alias.name` (#1502).
 - A size limit of the HTTP client and server (a head line, the count of
   headers, a header line, a body or a chunk line) is `http.too_large`, not
   `http.protocol`, with the code 431 for a head and 413 for a body (#1499).

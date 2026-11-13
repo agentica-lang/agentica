@@ -182,7 +182,8 @@ re-export is public: it goes above `private`, and one after it is
 - Re-exports come with the imports, may follow each other and the imports
   directly, and after a declaration need the blank line
   (`PARSE-MISSING-BLANK-LINE`); they are with the public constants in
-  `CHECK-DECL-ORDER`, after the imports. A
+  `CHECK-DECL-ORDER`, after the imports: an `import` after a re-export is out
+  of order. A
   `##` doc before a re-export is `PARSE-DETACHED-DOC`: the doc stays on the
   original.
 

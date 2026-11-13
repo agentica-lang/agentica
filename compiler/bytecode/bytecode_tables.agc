@@ -43,3 +43,5 @@ NEEDS = {
   "result-value": 2, "range-bounds": 2, "call-value": 2, "call": 2, "tail-call": 2, "closure": 2, "global": 2,
   "global-set": 2, "try-step": 2,
 }
+
+private

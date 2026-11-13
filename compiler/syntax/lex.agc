@@ -3,6 +3,8 @@ import LexText from "lex_text"
 import SourceFile from "source_file"
 import Text from "text"
 
+private
+
 def main() -> Void
   for path in System.args()
     puts("== #{path}")

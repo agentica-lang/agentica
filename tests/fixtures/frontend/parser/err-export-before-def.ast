@@ -1,0 +1,1 @@
+ERROR PARSE-UNEXPECTED-TOKEN 0:1:1-6:1:7 "export before a declaration" "remove export, and put what must stay private after a private line: a declaration is public otherwise"

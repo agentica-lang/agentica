@@ -16,3 +16,5 @@ def unknown_import_help(key: String, exports: Map[String, Declarations.Kind], me
     none -> Diag.Help.NoHelp
   end
 end
+
+private

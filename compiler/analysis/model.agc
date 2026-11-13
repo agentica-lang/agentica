@@ -44,7 +44,8 @@ end
 ## `##` block ("" for none) and `summary` its first paragraph on one line. A function has `parameters` and `result`, a
 ## struct its `fields`, an enum its `variants` and a module block the `items` it declares; the other lists are empty.
 ## A struct lists its public fields only, and `private_range` holds the range of its `private` line when it has private
-## fields (empty otherwise).
+## fields (empty otherwise). `reexport` is `Alias.name` for the item of a re-export (`export Alias.name`) and ""
+## otherwise; the text form of `outline` prints it as written.
 struct Item
   kind: String
   name: String
@@ -60,6 +61,7 @@ struct Item
   variants: List[Variant]
   items: List[Item]
   private_range: List[Diagnostics.Region] = []
+  reexport: String = ""
 end
 
 ## One name of an import list: `name` in the module, `local` in the file.
@@ -363,3 +365,5 @@ struct Bodies
   modules: List[BodyModule]
   functions: List[Body]
 end
+
+private

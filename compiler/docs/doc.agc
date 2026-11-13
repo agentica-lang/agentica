@@ -29,3 +29,5 @@ def of_file(settings: Env.Settings, path: String, text: String) -> Diag.Outcome[
       Diag.Outcome.Done(Model.of_program(program, text, Origins.of_file(settings, path, program)))
   end
 end
+
+private

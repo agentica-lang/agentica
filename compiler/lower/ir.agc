@@ -105,3 +105,5 @@ end
 
 ## The label with that id.
 def label(id: Int, file: Int) -> Instr = Instr(op: "label", args: [id], imm: Imm.Void, name: "", file: file, spans: [])
+
+private

@@ -4867,7 +4867,7 @@ def no_export(e: Base.Env, at: Int) -> Result[Void]
       e,
       at,
       "export before a declaration",
-      "remove export: a declaration is public unless it comes after private (export Alias.name re-exports a name)",
+      "remove export, and put what must stay private after a private line: a declaration is public otherwise",
     ),
   )
 end
@@ -4913,7 +4913,6 @@ end
 def one_line_def?(decl: Ast.Decl) -> Bool
   case decl
     Ast.Decl.Function(node) -> node.expression
-    Ast.Decl.Export(node) -> one_line_def?(node.declaration)
     _ -> false
   end
 end

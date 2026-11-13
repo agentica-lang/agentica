@@ -672,6 +672,14 @@ class TestModuleRules:
         assert after_import[1] is None
         assert start(self.assert_rejected(after_declaration, "PARSE-MISSING-BLANK-LINE")) == (5, 1)
 
+    def test_an_import_after_a_re_export_is_out_of_order_and_a_re_export_may_follow_a_constant(self):
+        files = {"url.agc": self.URL, "other.agc": "def one() -> Int = 1\n"}
+        late = self.check({**files, "root.agc": 'import Url from "url"\nexport Url.parse\nimport Other from "other"\n' + MAIN})
+        assert start(self.assert_rejected(late, "CHECK-DECL-ORDER", file="root.agc")) == (3, 1)
+        after_constant = self.check(
+            {**files, "root.agc": 'import Url from "url"\n\nLIMIT = 1\n\nexport Url.parse\n' + MAIN})
+        assert after_constant[1] is None
+
     def test_a_re_export_next_to_other_forms_a_doc_a_constant_a_cycle_and_its_own_alias(self):
         url = {"url.agc": self.URL}
         value = "struct Value\n  n: Int\nend\n\n"

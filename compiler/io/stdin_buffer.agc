@@ -39,3 +39,5 @@ end
 def over(workspace: Workspace.Workspace, windows: Bool, file: String, buffer: Buffer) -> Workspace.Workspace
   Overlay.over(workspace, [Overlay.buffer(workspace, windows, file, buffer.read)])
 end
+
+private

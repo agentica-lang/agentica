@@ -72,6 +72,7 @@ def item(declared: DocModel.Item) -> Model.Item
     variants: variants,
     items: items,
     private_range: declared.private_line.map { |span: Source.Span| [DiagnosticModel.range_of(span)] }.unwrap_or([]),
+    reexport: declared.reexport,
   )
 end
 

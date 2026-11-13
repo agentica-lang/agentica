@@ -3,6 +3,8 @@ import NativeWorkspace from "../io/native_workspace"
 import Env from "../modules/link_env"
 import LowerText from "lower_text"
 
+private
+
 # `agentica compiler/lower/lower.agc [flags] ROOT...` prints the text form of lowering each root file (lower_text.agc).
 # The flags are those of link.agc: `--stdlib=DIR` (the default is stdlib), `--agentica-path=V`, `--xdg-data-home=V`,
 # `--xdg-cache-home=V`, `--home=V` and `--local-app-data=V`, and `--burn=N`, which starts the lowering N VM calls

@@ -188,7 +188,7 @@ is a rule:
   blank line or `#` comment between; use `#` for a note that documents nothing
 - a function before a `struct`, `enum` or type alias, a constant after a
   declaration that is not an import, a re-export or a constant, an `import`
-  after a declaration (`CHECK-DECL-ORDER`)
+  after a declaration or a re-export (`CHECK-DECL-ORDER`)
   Help: keep the file order: module doc and imports, then the public part
   (constants and re-exports, types and blocks, functions), then `private` and
   the private part (constants, types and blocks, functions), so a re-export or

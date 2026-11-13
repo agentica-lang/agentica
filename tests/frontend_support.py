@@ -397,11 +397,13 @@ def tree_listing(files):
 
 
 def tree_files(directory):
-    """The files below a folder as {relative path: bytes}, without links and without going through them."""
+    """The files below a folder as {relative path: bytes}, without links and without going through them. A `_build/`
+    folder is the cache of a run on the checkout and is git-ignored: it is skipped, so a local run cannot change a
+    manifest."""
     directory = Path(directory)
     found = {}
     for current, folders, names in os.walk(directory):
-        folders[:] = [name for name in folders if not (Path(current) / name).is_symlink()]
+        folders[:] = [name for name in folders if name != "_build" and not (Path(current) / name).is_symlink()]
         for name in names:
             path = Path(current) / name
             if not path.is_symlink():

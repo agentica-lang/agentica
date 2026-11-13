@@ -71,3 +71,5 @@ def of_problem(problem: Problems.Problem) -> Diagnostic
     labels: problem.labels.map do |label: Problems.Label| Label(range: range_of(label.span), text: label.text) end,
   )
 end
+
+private

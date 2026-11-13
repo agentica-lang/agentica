@@ -51,8 +51,8 @@ private
 # The runner is a program of two lines, and the step program a program of one call when no --steps is given. A binary
 # that carries the std/ sources carries these two compiled (compiler/embedded/, made by the Makefile with the same two
 # texts, which tests/test_bdd.py checks), and only a run that reads the std/ sources from a folder compiles them.
-RUNNER_ROOT = "import Runner from \"std/test/runner\"\n\ndef main() -> Void\n  Runner.main()\nend\n"
-DEFAULT_STEPS = "import BDD from \"std/bdd\"\n\ndef main() -> Void\n  BDD.run([])\nend\n"
+RUNNER_ROOT = "import Runner from \"std/test/runner\"\n\nprivate\n\ndef main() -> Void\n  Runner.main()\nend\n"
+DEFAULT_STEPS = "import BDD from \"std/bdd\"\n\nprivate\n\ndef main() -> Void\n  BDD.run([])\nend\n"
 
 # What a report names as the source of the default step program that the binary carries: no file of the run directory.
 EMBEDDED_STEPS_SOURCE = "std/bdd.agc"

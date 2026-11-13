@@ -20,3 +20,5 @@ def internal(program: Ir.Program, message: String) -> String
   found = Failure.problem(program.sources[0].file, "", "BYTECODE-INTERNAL", message, program.span, Diag.Help.NoHelp)
   Failure.pack(found)
 end
+
+private

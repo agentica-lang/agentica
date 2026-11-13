@@ -269,7 +269,7 @@ def test_a_resource_of_an_extern_block_is_a_resource_item(tmp_path):
 
 def test_a_facade_lists_its_reexports_with_the_docs_of_the_originals(tmp_path):
     models = "## Makes a user.\ndef make(name: String) -> Int\n  return 1\nend\n"
-    facade = 'import Models from "models"\n\nexport Models.make\n\ndef hidden() -> Int\n  return 1\nend\n'
+    facade = 'import Models from "models"\n\nexport Models.make\n\nprivate\n\ndef hidden() -> Int\n  return 1\nend\n'
     (tmp_path / "models.agc").write_text(models, encoding="utf-8")
     (tmp_path / "facade.agc").write_text(facade, encoding="utf-8")
     make = items_by_name(answer("facade.agc", cwd=tmp_path))["make"]
@@ -277,8 +277,8 @@ def test_a_facade_lists_its_reexports_with_the_docs_of_the_originals(tmp_path):
     assert (make["span"]["file"], start(make["name_span"]), end(make["name_span"])) == ("facade.agc", (3, 15), (3, 19))
     result = outline("outline", "facade.agc", cwd=tmp_path)
     assert result.stdout.split("\n")[1:3] == [
-        "facade.agc:3:1 def make(name: String) -> Int",
-        "facade.agc:5:1 def hidden() -> Int",
+        "facade.agc:3:1 export Models.make",
+        "facade.agc:7:1 private def hidden() -> Int",
     ]
 
 

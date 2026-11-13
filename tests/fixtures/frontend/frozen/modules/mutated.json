@@ -237,7 +237,7 @@
  {"files":{"root.agc":"import Root from \"root\"\n\nprivate\n\ndef min() -> Void\nend\n"},"fixture":"constants-all-forms"},
  {"files":{"root.agc":"import\n\n A from \"a\"\ndef main() -> Void\n  A.nope()\nend\n\n"},"fixture":"dependency-order-before-names"},
  {"files":{"b.agc":"def ok_ -> Void\nend\n\n"},"fixture":"name-error-in-second-module"},
- {"files":{},"fixture":"order-private-before-export"},
+ {"files":{},"fixture":"order-private-constant-after-function"},
  {"files":{},"fixture":"cycle-three"},
  {"files":{"root.agc":"IO = 1\n\ndef main"},"fixture":"constants-all-forms"},
  {"files":{"calls.agc":"def go() -> Int\n  return helpr()enum \nend\n\ndef helper() -> Int\n  return 1\nend\n\n","root.agc":"import C from \"calls\"\n\ndef h"},"fixture":"dependency-unknown-call"},

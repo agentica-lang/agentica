@@ -3,6 +3,8 @@ import NativeWorkspace from "../io/native_workspace"
 import Env from "../modules/link_env"
 import CheckText from "check_text"
 
+private
+
 # `agentica compiler/check/check.agc [flags] ROOT...` prints the text form of checking each root file (check_text.agc).
 # The flags are those of link.agc: `--stdlib=DIR` (the default is stdlib), `--agentica-path=V`, `--xdg-data-home=V`,
 # `--xdg-cache-home=V`, `--home=V` and `--local-app-data=V`.

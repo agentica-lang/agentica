@@ -60,3 +60,5 @@ def bind(
 
   ok(Bound(st: State.record_slots(st, node.id, binding.slots), node: Defaults.bound(node, binding.slots)))
 end
+
+private

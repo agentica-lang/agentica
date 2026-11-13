@@ -62,6 +62,7 @@ struct Item
   span: Source.Span
   detail: Detail
   private_line: Optional[Source.Span] = none
+  reexport: String = ""
 end
 
 ## A documented module: its doc and its exported items.
@@ -167,6 +168,7 @@ def reexport_items(node: Ast.ReexportDecl, origins: Map[String, Item]) -> List[I
       name_span: node.name_span,
       detail: placed(origin.detail, node.name_span),
       private_line: origin.private_line.map { |_: Source.Span| node.name_span },
+      reexport: "#{node.alias}.#{node.name}",
     ),
   ]
 end

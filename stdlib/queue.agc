@@ -40,3 +40,5 @@ def size(queue: QueueState) -> Int = List.size(queue.items)
 
 ## Returns true when the queue has no values.
 def empty?(queue: QueueState) -> Bool = size(queue) == 0
+
+private
