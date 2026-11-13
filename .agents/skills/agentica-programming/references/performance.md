@@ -111,8 +111,7 @@ writes `/tmp/perf-PID.map`, so `perf report` names the compiled functions
 - A table keyed by dense `Int` ids is faster as a `List` (`List.repeat` once,
   then `set` and `[]`) than as a `Map[Int, T]`. `List.repeat` halts above
   1,048,576 items: build a bigger list from several repeats.
-- `Set.new` costs 7 to 10 µs per element, rising with size; one `include?`
-  about 0.2 µs. Build a large set once and keep it.
+- `Set.new` costs per element: build a large set once and keep it.
 - A builtin runs to the end of its turn, except the resumable ones (`map`,
   `select`, `reduce`, `each`, `any?`, `all?`, `sort_by`), so a 10-second
   `Set.new` stalls every other task. Keep big builds out of code others wait on.
@@ -123,17 +122,15 @@ writes `/tmp/perf-PID.map`, so `perf report` names the compiled functions
 
 ## Hot paths
 
-Rough numbers, measured on Agentica 0.29.0, x86-64 Linux.
-
 - Use `map.get(key, default)`, not `get` plus `unwrap_or`: no Optional is
   built.
 - Do not build many small Bytes pieces in a hot loop. Precompute the fixed
   pieces (a table of headers built once as a module constant) and join them
   with one `Bytes.concat` at the end. `"...#{n}".bytes` builds a String, then
-  copies it (about 280 ns).
-- An immutable `Map#put` copies the nodes on the path (about 0.8 µs at 1,000
-  keys). `ATS` costs about twice a `Map` per operation: use it only for state
-  that tasks really share.
+  copies it.
+- An immutable `Map#put` copies the nodes on the path, and an `ATS` operation
+  costs more than a `Map` one: use `ATS` only for state that tasks really
+  share.
 
 ## Enumerable methods
 

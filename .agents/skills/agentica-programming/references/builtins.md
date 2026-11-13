@@ -44,7 +44,7 @@ Random.seed() -> Int                    # the run's seed (0..2147483647), the sa
   `IO.eof?` consumes nothing. Reads have no timeout; step budgets do not
   interrupt blocking input.
 - `Random` is seeded from the OS unless `--seed N` is given; not for secrets:
-  use `OpenSSL.Random` (`binary.md`). Passing the number from `Random.seed`
+  use `OpenSSL.Random` (`crypto.md`). Passing the number from `Random.seed`
   back with `--seed` gives the same random numbers.
 
 ## Int, Float
@@ -237,6 +237,7 @@ Range.map(range: Range, block: Fn[Int, B]) -> List[B]    # as (1..5).to_a.map, w
 ok(value: T) -> Result[T]
 ok() -> Result[Void]
 error(message: String) -> Result[T]                      # needs an expected Result type
+error(message: String, kind: String, code: Int, details: Map[String, String], cause: Error) -> Result[T]   # named, optional
 error(error: Error) -> Result[T]                         # the same Error, as a Result of another type
 result.ok?() -> Bool
 result.unwrap!() -> T                                    # halts with RUNTIME-UNWRAP-ERROR on error

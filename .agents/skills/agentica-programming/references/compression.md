@@ -12,12 +12,10 @@ Zlib.inflate(data: Bytes, max_bytes: Int = 1048576) -> Result[Bytes]
 Zlib.gzip(data: Bytes, level: Int = 6, max_bytes: Int = 1048576) -> Result[Bytes]
 Zlib.gunzip(data: Bytes, max_bytes: Int = 1048576) -> Result[Bytes]
 Zlib.crc32(data: Bytes, seed: Int = 0) -> Result[Int]
-File.chunks(path: String, size: Int = 65536, timeout_ms: Int = 30000) -> Lazy[Bytes]
 lazy.deflate(level: Int = 6, raw: Bool = false) -> Lazy[Bytes]
 lazy.inflate(raw: Bool = false, max_bytes: Int = 1073741824) -> Lazy[Bytes]
 lazy.gzip(level: Int = 6) -> Lazy[Bytes]
 lazy.gunzip(max_bytes: Int = 1073741824) -> Lazy[Bytes]
-lazy.write_bytes(path: String, timeout_ms: Int = 30000) -> Result[Int]
 ```
 
 ```ruby
@@ -44,6 +42,5 @@ end
   65536 bytes. A decoder's `max_bytes` (at least 1) holds while it streams.
   Truncation, a checksum, a trailing byte, the cap, a bad `level` or
   `max_bytes` end the terminal with an error Result that begins `zlib: `.
-- `File.chunks` reads regular files only, `size` is 1..16777216 (outside it is
-  `RUNTIME-INVALID-COUNT`); `write_bytes` creates or truncates (`lazy.md`).
-  Only these two take `--deny-fs`; the steps and `Zlib` calls run anywhere.
+- `File.chunks` and `write_bytes` (`lazy.md`) are the only ones that take
+  `--deny-fs`; the steps and `Zlib` calls run anywhere.

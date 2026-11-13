@@ -186,7 +186,7 @@ end
 {"name":"Ana","age":25}
 ```
 
-A codec can be a parameter, a struct field or a list item, as a function value can. Like a function value, it cannot be printed or compared, and it cannot be a constant or an `ATS` value. `IO.inspect` refuses a value that holds a codec (`CHECK-TYPE-MISMATCH`; in a generic body, `IO.inspect(x)` of a `T` that is a codec prints the record of its name and members). `Codec` is reserved, as a type name and as an import alias (`import Codec from "..."` is `CHECK-REDEFINED-NAME`; pick another alias). `JSON.codec(User)` and `JSON.Codec[T]` were replaced by `User.codec` and `Codec[T]`.
+A codec can be a parameter, a struct field or a list item, as a function value can. Like a function value, it cannot be printed or compared, and it cannot be a constant or an `ATS` value. `IO.inspect` refuses a value that holds a codec (`CHECK-TYPE-MISMATCH`; in a generic body, `IO.inspect(x)` of a `T` that is a codec prints the record of its name and members). `Codec` is reserved, as a type name and as an import alias (`import Codec from "..."` is `CHECK-REDEFINED-NAME`; pick another alias).
 
 ## Optional values
 

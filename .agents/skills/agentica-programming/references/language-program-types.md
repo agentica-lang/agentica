@@ -1,7 +1,7 @@
 # Program shape, declarations and types
 
-The exact rule behind a checker error or a core question about the top level,
-constants, declarations and types. Builtin methods and `to_s`: `builtins.md`.
+The rules behind the checker errors on the top level, constants, declarations
+and types. Builtin methods and `to_s`: `builtins.md`.
 
 ## Program shape
 
@@ -107,7 +107,7 @@ constants, declarations and types. Builtin methods and `to_s`: `builtins.md`.
 - Builtin records: `File.Info`, `Process.Output`, `StructMember`, `TaskDown`.
   `std/http` exports the builtin `HTTP.Header`, `HTTP.Request`,
   `HTTP.Response`, `HTTP.ClientOptions` and `HTTP.ServerOptions`
-  (`network.md`); they reserve no name.
+  (`http.md`); they reserve no name.
 - Type names start uppercase; variables, functions and fields start lowercase
   or `_`.
 
@@ -170,9 +170,8 @@ end
   type, and so does a parameter no value fixes (`CHECK-ENUM-TYPE-INFERENCE`);
   conflicting values are `CHECK-TYPE-MISMATCH`. Fields, `.with(...)` and
   printing work on the substituted type (`Box[Fn[Int, Int]]` does not print). A
-  parameter is no `Map` key (`CHECK-MAP-KEY-TYPE`). `JSON.encode` takes a
-  generic instance; `JSON.decode` and `JSON.schema` refuse one anywhere in the
-  target (`CHECK-NOT-DECODABLE`).
+  parameter is no `Map` key (`CHECK-MAP-KEY-TYPE`). JSON of a generic
+  instance: `json.md`.
 - A generic function, `def first_or[T](xs: List[T], fallback: T) -> T`, is
   called without type arguments (`first_or[Int](...)` is
   `PARSE-UNEXPECTED-TOKEN`). The checker binds `T` from the typed arguments,
@@ -185,8 +184,7 @@ end
   body `T` is opaque: store, return and pass it on, but no `==`, arithmetic,
   printing, fields or methods (`CHECK-TYPE-MISMATCH`, `CHECK-UNKNOWN-METHOD`),
   and it is no `Map` key or `Set` element; take an `Fn` parameter for
-  behaviour. `JSON.encode(x)` and `JSON.from(x)` work, and each call checks
-  that the bound type is encodable (`CHECK-NOT-ENCODABLE`, references/json.md).
+  behaviour. `JSON.encode(x)` and `JSON.from(x)` work (`json.md`).
   A parameter whose type has a type parameter takes `none`, `[]` or `{}` as its
   default (`x: T = 1` is `CHECK-TYPE-MISMATCH`).
   `&first_or` needs the expected `Fn` type: `xs.select(&name)` has it,

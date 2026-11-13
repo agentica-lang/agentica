@@ -52,7 +52,7 @@ in one command, `for f in cases/*.txt; do agentica p.agc < "$f" || break; done`.
   `end` is `PARSE-UNCLOSED-BLOCK` at the end of the file, or
   `PARSE-UNEXPECTED-TOKEN` at the next `def`: count the `end`s.
 - A method not in `references/` does not exist (`contains?` on a List, `value!`,
-  `len`, the old `trim` and `to_int`): `CHECK-UNKNOWN-METHOD`.
+  `len`, `trim`, `to_int`): `CHECK-UNKNOWN-METHOD`.
 
 ## References
 
@@ -67,31 +67,35 @@ Read only what the task needs.
 | `builtins.md` | IO, Int/Float, String, List, Map, Set, Range, Result, Optional, System, Time, Random, `to_s`; Ruby names |
 | `examples.md` | complete programs to start from |
 | `diagnostics.md` | meaning and fix of a diagnostic code, call stacks |
-| `modules.md` | several files, `module` blocks, private struct fields, `std/`, `pkg/`, packages |
+| `modules.md` | several files, `module` blocks, private struct fields, `std/`, `pkg/` search |
+| `packages.md` | `agentica.toml`, `agentica.lock`, `deps/`, `add`/`install`/`update`, native tables, `[style]` |
 | `json.md` | parse, encode, decode into structs |
 | `files.md` | File, Dir, Path, locks |
-| `bytes.md` | `Bytes`: the byte string type, `s.bytes`, slicing, joining, keys |
+| `bytes.md` | `Bytes`: `s.bytes`, slicing, joining, keys |
 | `compression.md` | Zlib bytes and Lazy byte streams (deflate, zlib, gzip) |
-| `archive.md` | `std/archive` (explicit-allowlist TAR extraction into a new directory) |
+| `archive.md` | `std/archive` (TAR/ZIP extraction by allowlist) |
 | `processes.md` | Process, `IO.read_bytes`, flush, `System.env/os/pid` |
-| `network.md` | TCP, TLS, HTTP client and server |
-| `tasks.md` | Task, `Task.map`, Channel, ATS tables, timeouts, cancel, monitors, who owns state, `std/actor`, `std/supervisor` |
+| `network.md` | TCP, TLS, DNS |
+| `http.md` | `std/http`: client, server, streaming, WebSocket |
+| `tasks.md` | Task, `Task.map`, Channel, ATS tables, timeouts, cancel, monitors, who owns state |
+| `actors.md` | `std/actor`, `std/supervisor` |
 | `lazy.md` | Lazy pipelines, endless sources, big files |
 | `testing.md` | unit tests (`Test`, `*_test.agc`) |
 | `bdd.md` | `.feature` specs and step programs |
 | `performance.md` | slow code, `System.Profile`, step costs |
-| `binary.md` | bit operations, the `OpenSSL` family (`Digest` hashes, `HMAC`, `Cipher` for AES-GCM and Triple DES, `CMAC`, password hashing with `KDF`, `RSA`, secure `Random`), `Base64`, hex, `std/binary` |
+| `binary.md` | bit operations, `std/binary` (integers and floats in bytes, frames), `String.from_bytes` |
+| `crypto.md` | `OpenSSL` (`Digest`, `HMAC`, `Cipher`, `CMAC`, `KDF`, `RSA`, `Random`), `Base64`, hex |
 | `logger.md` | `std/logger` |
 | `toml.md` | `std/toml` |
 | `uri.md` | `std/uri` (percent-encoding, query strings) |
-| `html.md` | `std/html` (HTML escaping) |
-| `cookie.md` | `std/cookie` (`Cookie` and `Set-Cookie` headers) |
-| `option_parser.md` | `std/option_parser` (command-line options and arguments, typed getters, help) |
-| `cache.md` | `std/cache` (a bounded cache of strings that tasks share) |
-| `mime.md` | `std/mime` (media type of a file) |
-| `utc.md` | `std/utc` (Unix ms to UTC date and RFC 3339 text) |
-| `regex.md` | `std/regex` (regular expressions: match, find, replace, split) |
-| `eag.md` | `<<~EAG` templates (Agentica's ERB) and `std/eag` |
+| `html.md` | `std/html` |
+| `cookie.md` | `std/cookie` |
+| `option_parser.md` | `std/option_parser` (command-line options, help) |
+| `cache.md` | `std/cache` (bounded string cache that tasks share) |
+| `mime.md` | `std/mime` |
+| `utc.md` | `std/utc` (Unix ms to UTC date, RFC 3339) |
+| `regex.md` | `std/regex` and `/re/` literals |
+| `eag.md` | `<<~EAG` templates and `std/eag` |
 | `native.md` | C functions (`extern`, `compute def`, `C.Pointer`, memory reads, resources) |
 | `native-modules.md` | C code written for Agentica (`extern module`, the types that cross) |
 | `queries.md` | `outline`, `type-at`, `refs`, `symbol` |
