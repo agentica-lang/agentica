@@ -240,9 +240,12 @@ None of them runs the program. The contract that page leaves out:
   variant, field in a read, a construction and a `with`, constant, type alias,
   resource, local or builtin); the definition is not a reference. The
   linker and the checker decide what a name is, so two fields of one name in
-  two structs, or a name bound in two sibling blocks, are never mixed. A NAME
-  that nothing declares is `QUERY-NOT-FOUND`; one that several declarations
-  answer to is `QUERY-AMBIGUOUS-NAME`, whose help lists each as `FILE:LINE:COL`.
+  two structs, or a name bound in two sibling blocks, are never mixed. A
+  parameter of a function is also used at each call that gives it by name
+  (`verbose` of `check(gen, verbose: true)`, kind `argument`); a position on
+  that name picks the parameter, in `type-at` too. A NAME that nothing
+  declares is `QUERY-NOT-FOUND`; one that several declarations answer to is
+  `QUERY-AMBIGUOUS-NAME`, whose help lists each as `FILE:LINE:COL`.
   A position on a name in a declaration picks it, and so does one on a name of
   an import list (`make` of `import {make} from "models"`), which selects the
   imported declaration; a position on the module alias of `Models.total(u)`

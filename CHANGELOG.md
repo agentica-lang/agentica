@@ -21,6 +21,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   family of kinds (#671).
 - Calls take named arguments after the positional ones, for any function,
   `std/` function or builtin: `check(gen, verbose: true)` (#1163).
+- `agentica refs` on a parameter lists each `name:` at a call that gives it, and
+  `type-at` on that name answers as on the parameter (#1497).
 
 ### Changed
 

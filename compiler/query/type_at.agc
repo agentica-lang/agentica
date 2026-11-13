@@ -3,9 +3,10 @@
 ##
 ## A position must be on a token: a blank between tokens, a comment, the end of a line and anything past the end of the
 ## text hold no expression, even inside the span of one. A local (a parameter, a binding, a loop variable or a pattern
-## name) is answered with its type and a definition at its binding, on a use of the name and on the binding itself. The
-## name of a type in an annotation or a type argument (`Point`, `Models.User`, `List`) is answered with the kind
-## `type`.
+## name) is answered with its type and a definition at its binding, on a use of the name and on the binding itself; so
+## is the name of a named argument at a call of a function of the program, as the parameter it fills
+## (query/named_args.agc). The name of a type in an annotation or a type argument (`Point`, `Models.User`, `List`) is
+## answered with the kind `type`.
 
 import Model from "../catalog/builtin_model"
 import CatalogJson from "../catalog/catalog_json"
@@ -20,6 +21,7 @@ import T from "../syntax/types"
 import At from "at"
 import Definitions from "definitions"
 import Locals from "locals"
+import NamedArgs from "named_args"
 import Position from "query_position"
 import Sites from "sites"
 
@@ -169,8 +171,16 @@ def answer_at(
     some(local) ->
       return nothing(asked, here) if local.local.kind == "discard"
 
-      Diag.Outcome.Done(local_answer(linked, local))
+      Diag.Outcome.Done(local_answer(linked, module, local))
     none ->
+      case NamedArgs.at(linked.modules, checked.slots, checked.bound, offset)
+        some(named) ->
+          return Diag.Outcome.Done(
+            local_answer(linked, named.module, Locals.Found(local: named.local, site: named.site)),
+          )
+        none -> module = module
+      end
+
       # A type is before the expressions: the parameters of a block are inside the block, which holds the position.
       if type_token?(module.text, token, offset)
         found = type_answer(linked, checked, offset)
@@ -241,16 +251,16 @@ def expression_answer(
   end
 end
 
-# A local, on a use or on its binding: `span` is the name there, and the definition is the binding.
-def local_answer(linked: Linker.Linked, at: Locals.Found) -> Answer
-  module = linked.modules[0]
+# A local of `holder`, on a use or on its binding in the root file: `span` is the name there, and the definition is the
+# binding.
+def local_answer(linked: Linker.Linked, holder: Linker.LinkedModule, at: Locals.Found) -> Answer
   type = T.to_text_as(at.local.type, written_prefixes(linked))
   Answer(
     kind: "name",
     span: at.site,
-    text: source_text(module.text, at.site),
+    text: source_text(linked.modules[0].text, at.site),
     type: type,
-    definition: some(Definitions.of_local(module, at.local, type)),
+    definition: some(Definitions.of_local(holder, at.local, type)),
     builtin: none,
   )
 end
