@@ -58,7 +58,11 @@ rg -oNI --no-filename '\b(LEX|PARSE|CHECK|PKG|QUERY|RUNTIME|LOWER|BYTECODE)-[A-Z
   `deps/<name>/` (missing: `CHECK-IMPORT-PACKAGE`) and hashes it, except a
   workspace member (`packages/members.agc`, found from the root's `[workspace]`
   table): it is read from its folder with no hash and locked with
-  `workspace = true`. Hash and link errors are at the import.
+  `workspace = true`. Hash and link errors are at the import. A compatibility
+  gate (the minimum `agentica` version, a format version) is the first check
+  after parsing, before unknown-key, dependency and lock checks, since the
+  order is frozen in every binary shipped; test a newer version together with
+  an unknown key.
 - **Query** (`query/`): `QUERY-USAGE`, `QUERY-NOT-FOUND` and
   `QUERY-AMBIGUOUS-NAME` exit 2 at `<arguments>` (line 1, column 1);
   `QUERY-NO-EXPRESSION` is at the position. `outline` lexes and parses, and
@@ -368,6 +372,10 @@ stays in the binary's process.
 
 - A diagnostic prints in the plain form on stderr with exit 1; a missing file or
   bad usage exits 2. A `QUERY-` problem exits 2 (`reject` takes the status).
+- When one process start becomes two (compile, then run), every `--deny-*`
+  flag and every environment variable the old start honored reaches both, and
+  a cache key covers every input the build reads. Test each flag and variable
+  on the new path.
 - Options of other commands precede the command or file, so program args stay
   intact. `--max-steps` reaches only the VM. The `--deny-*` flags and
   `--sandbox` go to the VM as typed (`Options.deny`); `test` passes them to the

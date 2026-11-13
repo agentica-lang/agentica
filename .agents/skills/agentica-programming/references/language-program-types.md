@@ -72,6 +72,11 @@ constants, declarations and types. Builtin methods and `to_s`: `builtins.md`.
 ## Types
 
 - `Int`: signed 64-bit; overflow is a runtime error. `Float`: IEEE 754 double.
+  With untrusted numbers, compare by subtraction (`len > max - held`, not
+  `held + len > max`) and give a user-set duration or size an upper bound
+  before adding it to a clock (`Time.monotonic_ms() + timeout`). Test a
+  parser with the largest length the wire allows, and options with their
+  largest value.
   `Bool`: `true` / `false` only. `String`: Unicode text. `Nil`: the value `nil`.
 - `Void`: completion without a value; no literal.
 - `List[T]`: homogeneous, immutable, indexed from 0. `Map[K, V]`: immutable,

@@ -41,7 +41,11 @@ Each rule names one place in the VM that follows it.
   `site/content/library/errors/error.md` (`tests/test_error_kinds.py`).
   An OS error goes through `agc_system_error` with its family, which picks the
   kind from the errno and keeps the errno as the code (`agc_errno_kind`,
-  `vm/stream.c`).
+  `vm/stream.c`). Kinds are a contract that is never renamed: put the same OS
+  failure through every builtin that can hit it (stat, read, write, open for
+  output, a TLS file load) and compare kind and code. No bucket collapses
+  errors into one kind with code 0; one family suffix everywhere
+  (`*.too_large`, `*.timeout`).
 - **No C recursion whose depth a value decides.** Printing, comparing, hashing
   and JSON walk nested values with an explicit stack in `agc_alloc` memory
   (`compound_debug`, `vm/text.c`;
