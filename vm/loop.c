@@ -2139,7 +2139,7 @@ void agc_io_serve(agc_vm *vm) {
   dbg_loop_thread = pthread_self();
   dbg_loop_known = true;
   dbg_mask("mask serve-start", 0);
-  if (setjmp(vm->fail) != 0) {
+  if (AGC_CATCH(vm->fail) != 0) {
     agc_sync_reset(vm);
     agc_run_over_untasked(vm);
     return;
