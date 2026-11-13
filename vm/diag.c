@@ -29,10 +29,12 @@ typedef struct {
   size_t len;
 } name_view;
 
-/* skips: how many frames take_frame may pass over (prelude, native) before it stops with no frame. */
+/* skips: how many frames take_frame may pass over (prelude, native) before it stops with no frame. past_extern: pass
+   over the frame of an extern function too while its Native.call runs (in_native_call). */
 typedef struct {
   const agc_program *program;
   uint32_t error_span, skips;
+  bool past_extern;
 } frame_walk;
 
 /* Where a walk of the frames is: below frame `at` of `frames`, then in the segments below (agc_frame_segment, the outer
@@ -171,6 +173,17 @@ static bool same_place(const agc_program *p, uint32_t a, uint32_t b) {
   return x->source == y->source && x->start_line == y->start_line && x->start_column == y->start_column;
 }
 
+/* Whether FRAME is at the call of the Native.call builtin: the frame of a function of an extern block, whose body the
+   lowering writes (compiler/lower/lower_native.agc) with the span of the declaration on every instruction. The place
+   the user knows is the call of that function, in the frame below. */
+static bool in_native_call(const agc_program *p, const agc_frame *frame) {
+  const agc_function *f = &p->functions[frame->function];
+  if (frame->pc == 0 || frame->pc > f->count) return false;
+  agc_instr in = f->code[frame->pc - 1];
+  uint32_t bx = (uint32_t)in.b | ((uint32_t)in.c << 16);
+  return in.op == AGC_OP_CALL_BUILTIN && bx < p->builtin_count && strcmp(p->builtins[bx]->name, AGC_NATIVE_CALL) == 0;
+}
+
 static bool take_frame(const frame_walk *w, frame_cursor *cursor, bool innermost, agc_stack_line *line) {
   const agc_program *p = w->program;
   for (uint32_t skipped = 0;; skipped++) {
@@ -184,6 +197,7 @@ static bool take_frame(const frame_walk *w, frame_cursor *cursor, bool innermost
     /* A prelude frame is skipped like a native one: the user's code called it, and an error in it is reported at the
        user's call (agc_fail), so the line of the user's frame is the place to look at. */
     if (frame->native || frame->function >= p->function_count || p->functions[frame->function].prelude) continue;
+    if (w->past_extern && in_native_call(p, frame)) continue;
     uint32_t span = innermost ? w->error_span : call_span(&p->functions[frame->function], frame->pc);
     line->function = frame->function;
     line->span = span < p->span_count ? span : 0;
@@ -213,7 +227,7 @@ void agc_stack_capture(const agc_vm *vm, agc_outcome *outcome) {
   stack->shown = false;
   if (!vm->in_turn || !t || !t->frames || t->frame_count > t->frame_capacity) return;
   const agc_program *p = vm->rt->program;
-  frame_walk w = {p, outcome->span < p->span_count ? outcome->span : 0, UINT32_MAX};
+  frame_walk w = {p, outcome->span < p->span_count ? outcome->span : 0, UINT32_MAX, false};
   agc_stack_line line;
   uint32_t entries = 0;
   frame_cursor cursor = {t->frames, t->frame_count, t->below};
@@ -252,7 +266,7 @@ agc_string *agc_error_location(const agc_vm *vm) {
   const agc_task *t = vm->task;
   if (!vm->in_turn || !t || !t->frames || t->frame_count > t->frame_capacity) return vm->rt->empty_string;
   const agc_program *p = vm->rt->program;
-  frame_walk w = {p, 0, location_skips};
+  frame_walk w = {p, 0, location_skips, true};
   frame_cursor cursor = {t->frames, t->frame_count, t->below};
   agc_stack_line line;
   /* Not innermost: that span is the failing instruction's, which agc_fail is given; here the frame's pc is the call

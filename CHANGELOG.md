@@ -8,6 +8,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- The `location` of an error that a function of an `extern module` block returns is the place of the call, not of the declaration (#1466).
+
 ## [0.31.0] - 2026-11-13
 
 The first stable release since 0.30.1, with the changes of `0.31.0-alpha.1`
