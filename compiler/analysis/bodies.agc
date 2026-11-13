@@ -250,7 +250,10 @@ def expression(checked: Checker.Checked, expr: Ast.Expr) -> Model.Node
   case expr
     Ast.Expr.Literal(node) -> leaf(literal_kind(node.value), type, span).with(text: literal_text(node.value))
     Ast.Expr.Name(node) -> leaf("local", type, span).with(text: node.name)
-    Ast.Expr.Call(node) -> leaf("call", type, span).with(target: node.name, children: arguments(checked, node.args))
+    Ast.Expr.Call(node) ->
+      # The values of the named arguments of error(...) follow the positional ones.
+      values = node.named.map do |arg: Ast.NamedArg| arg.value end
+      leaf("call", type, span).with(target: node.name, children: arguments(checked, node.args.concat(values)))
     Ast.Expr.MethodCall(node) ->
       case checked.resolved.get(id)
         some(State.Resolved.Call(name, _)) ->

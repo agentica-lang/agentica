@@ -114,6 +114,9 @@ lines show. A task's stack ends with `task spawned at file:line:column`.
 - `CHECK-PATTERN-TYPE`, `CHECK-NON-EXHAUSTIVE-CASE`,
   `CHECK-UNREACHABLE-CASE-ARM`: a pattern that does not fit the value; a `case`
   missing variants or `_`; an arm or a pattern already covered.
+- `CHECK-ERROR-KIND`: a kind literal in `error(..., kind: "...")` or
+  `e.is_a?("...")` that is not a dotted name of `a-z`, `0-9`, `_`.
+  `CHECK-ERROR-CONSTRUCTOR`: `Error(...)`; build one with `error(...)`.
 - `CHECK-CASE-ARM-BINDING`: an arm of several patterns (`a, b ->`) binds a
   name; write `_`, or one arm per pattern.
 - `CHECK-MAP-KEY-TYPE`, `CHECK-SET-ELEMENT-TYPE`: a `Map` or `ATS` key or a

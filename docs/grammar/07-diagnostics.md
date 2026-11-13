@@ -282,6 +282,12 @@ is a rule:
   number of all parameters (`1 to 2 arguments`)
 - `s[0]` on a String (`CHECK-NOT-INDEXABLE`)
   Help: `s.at(i)`, `s.slice(start, length)`, or `s.split("")`
+- `error("x", kind: "Db Constraint")` or `e.is_a?("Db")`, a kind literal that
+  is not a dotted name (`CHECK-ERROR-KIND`, at the literal)
+  Help: a kind is a dotted name such as `db.constraint`: parts of `a-z`, `0-9`
+  and `_` that start with a letter
+- `Error(message: "x")` (`CHECK-ERROR-CONSTRUCTOR`)
+  Help: build an error with `error("text", kind: ...)`
 - `n * 1.5` with an Int `n` (`CHECK-TYPE-MISMATCH`)
   Help: `n.to_f * 1.5`; `x.to_i!` truncates a Float; `s.to_i!` / `n.to_s` for
   String and number

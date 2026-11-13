@@ -60,7 +60,7 @@ def named_values(args: List[Ast.NamedArg]) -> List[Node] = args.map do |arg: Ast
 
 def expr_children(expr: Ast.Expr) -> List[Node]
   case expr
-    Ast.Expr.Call(node) -> exprs(node.args)
+    Ast.Expr.Call(node) -> exprs(node.args).concat(named_values(node.named))
     Ast.Expr.EnumConstructor(node) -> exprs(node.args).concat(named_values(node.named))
     Ast.Expr.Invoke(node) -> [Node.Expr(node.target)].concat(exprs(node.args))
     Ast.Expr.Construct(node) -> named_values(node.args)

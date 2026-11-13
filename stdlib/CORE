@@ -18,6 +18,7 @@ check/check_call.agc
 check/check_collections.agc
 check/check_const.agc
 check/check_defaults.agc
+check/check_error.agc
 check/check_expr.agc
 check/check_flow.agc
 check/check_help.agc
