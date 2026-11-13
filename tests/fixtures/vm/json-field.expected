@@ -15,7 +15,7 @@
     "{\"name\":\"Bo\",\"age\":null}",
     "{\"age\":null,\"name\":\"Bo\"}",
     "{}",
-    "UpdateUser(name: JsonField.Value(\"Bo\"), age: JsonField.Null)",
+    "UpdateUser(name: JSON.Field.Value(\"Bo\"), age: JSON.Field.Null)",
     "{\"properties\":{\"age\":{\"anyOf\":[{\"maximum\":9223372036854775807,\"minimum\":-9223372036854775808,\"type\":\"integer\"},{\"type\":\"null\"}]},\"name\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}]}},\"type\":\"object\"}",
     "keep the title {}",
     "clear the title {\"title\":null}",

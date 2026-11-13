@@ -90,9 +90,9 @@ functions up by name.
   of one field named by `json_list_name` (`List[@2::Point]`); the `[` tells the
   loader to set `json_root`, and `builtin_decode` decodes the root as the field.
   A new decodable kind (enums) needs a new type kind and loader rules; an
-  appended kind keeps the format version, as type kind 7 (`JsonField`) did.
-  `JsonField[T]` is only the direct type of a field (`field_type`), and a
-  program whose decodable structs use it gets the `JsonField` enum in its table
+  appended kind keeps the format version, as type kind 7 (`JSON.Field`) did.
+  `JSON.Field[T]` is only the direct type of a field (`field_type`), and a
+  program whose decodable structs use it gets the `JSON.Field` enum in its table
   even when no expression names it; the loader checks that enum's shape, and
   the encoders find its variants through `agc_program.json_field`.
 - `value.with(...)` lowers to one `STRUCT_WITH`: the receiver

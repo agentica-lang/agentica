@@ -33,7 +33,7 @@ rules those comments do not carry.
   nothing changes. `agc_utf8_offset` keeps each task's one-entry cursor (string,
   code point index, byte offset).
 - `text.c`: `agc_text`, `agc_debug` and `agc_test_text` (the debug form with
-  each Json as its canonical text, for `Test.eq`) share one explicit
+  each JSON.Value as its canonical text, for `Test.eq`) share one explicit
   `agc_alloc`'d stack and a growing String. `agc_write_form` is the one escaper
   of `write`-form Strings.
 - `bytes.c`: results come from `agc_make_bytes` (`agc_empty_bytes` for no
@@ -282,9 +282,9 @@ Core layer; the design (modes, native calls, exits, helper contract) is
   alone (the control-character pass runs first; the finite check comes after the
   trailing check). yyjson reads numbers as raw text so the VM converts them
   itself: never turn on its `ALLOW_*` flags or its writer.
-- A Json is canonical: `agc_json_encode` is the one writer (for `JSON.encode`
-  and the text form of a Json), and `agc_json_finish` sorts members by key bytes
-  and drops repeated keys.
+- A JSON.Value is canonical: `agc_json_encode` is the one writer (for
+  `JSON.encode` and the text form of a JSON.Value), and `agc_json_finish` sorts
+  members by key bytes and drops repeated keys.
 - `Random` is xoshiro256** (`docs/vm/05-values-execution-builtins.md` §7.4). A
   `Random` fixture prints only properties (counts of in-range values, `[0, 1)`
   checks), never drawn numbers.

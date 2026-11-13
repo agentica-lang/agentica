@@ -307,7 +307,7 @@ into its slot; an assignment to an existing local goes through a temporary and
   and checks the outer node's type, since the checker's synthetic call is not in
   the types table. A `TypedTarget` lowers its expression and checks its recorded
   type.
-- Builtin records the VM finds by name (`agc_builtin_struct`, e.g. `FileInfo`,
+- Builtin records the VM finds by name (`agc_builtin_struct`, e.g. `File.Info`,
   `HttpWire.Response`) are appended to the program's structs when a checked
   type mentions them, with the records they need (`HttpWire.Response` needs
   `HttpWire.Header`).
@@ -341,7 +341,7 @@ except that a builtin with no effects whose result is unused is
 not that error (they still return a `Result`, so a dropped one is
 `CHECK-UNUSED-RESULT`). `Test.eq` uses the rule `TestEq`: both arguments have
 one data type (the types with `to_s`, the types with value equality plus
-`Json`). `TestCase` is opaque and `Test` is reserved.
+`JSON.Value`). `Test.Case` is opaque; `Test` is reserved.
 
 - Every implementation key must be in `VM_BUILTINS` of
   `compiler/lower/lower_tables.agc` (`tests/test_frontend_catalog.py` checks it)

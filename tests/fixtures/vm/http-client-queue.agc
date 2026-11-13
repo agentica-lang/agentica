@@ -8,7 +8,7 @@ struct Call
   url: String
 end
 
-def request_line(socket: Socket) -> Result[String]
+def request_line(socket: TCP.Socket) -> Result[String]
   first = try TCP.read_line(socket, 5000)
   line = first
   while line != ""
@@ -17,7 +17,7 @@ def request_line(socket: Socket) -> Result[String]
   return ok(first)
 end
 
-def serve(listener: Listener) -> List[String]
+def serve(listener: TCP.Listener) -> List[String]
   log: List[String] = []
   socket = Result.unwrap!(TCP.accept(listener, 5000))
   open = true

@@ -11,7 +11,7 @@ CLIENTS = 6
 
 PROGRAM = """\
 struct Pool
-  sockets: Channel[Socket]
+  sockets: Channel[TCP.Socket]
   id: Int
 end
 
@@ -31,7 +31,7 @@ def serve(pool: Pool) -> Int
 end
 
 def main() -> Void
-  sockets: Channel[Socket] = Channel.new(2)
+  sockets: Channel[TCP.Socket] = Channel.new(2)
   listener = Result.unwrap!(TCP.listen("127.0.0.1", 0))
   puts(TCP.local_port(listener))
   IO.flush()

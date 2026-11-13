@@ -9,5 +9,5 @@ def main() -> Void
   s = HTTP.ServerOptions(request_timeout_ms: 5)
   puts("#{s.request_timeout_ms} #{s.idle_timeout_ms} #{s.max_connections} #{s.max_body_bytes}")
   puts(HTTP.ServerOptions().inspect)
-  puts(TlsClientOptions(ca_file: "ca.pem").inspect)
+  puts(TLS.ClientOptions(ca_file: "ca.pem").inspect)
 end

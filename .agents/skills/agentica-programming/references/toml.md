@@ -6,7 +6,7 @@ returns a `Result` and none halts.
 ```text
 Toml.parse(text: String) -> Result[Toml.Value]
 Toml.encode(value: Toml.Value) -> Result[String]
-Toml.to_json(value: Toml.Value) -> Result[Json]
+Toml.to_json(value: Toml.Value) -> Result[JSON.Value]
 Toml.get(value: Toml.Value, path: String) -> Result[Toml.Value]
 
 enum Toml.Value

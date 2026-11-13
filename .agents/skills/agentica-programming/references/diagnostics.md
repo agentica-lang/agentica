@@ -181,7 +181,7 @@ lines show. A task's stack ends with `task spawned at file:line:column`.
 - `CHECK-DECL-ORDER`: a declaration out of the file order (imports, constants,
   `struct`/`enum`/aliases, `export def`, `def`).
 - `CHECK-NOT-DECODABLE`, `CHECK-NOT-ENCODABLE`, `CHECK-JSON-FIELD-PLACE`: a JSON
-  target or value with unsupported types; a `JsonField` that is not the direct
+  target or value with unsupported types; a `JSON.Field` that is not the direct
   type of a struct field (`json.md`).
 - `CHECK-PIPE-METHOD`: `x |> String.upcase()`: a builtin with a method form for
   the left value is written with `.` (`x.upcase`) or piped by the method name

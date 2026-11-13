@@ -116,27 +116,27 @@ end
         "Maybe",
     ),
     (
-        "a JsonField in a payload is no JSON field (decode)",
-        'enum E\n  A(JsonField[Int])\nend\n\ndef main() -> Void\n  puts(JSON.decode("{}", E))\nend\n',
+        "a JSON.Field in a payload is no JSON field (decode)",
+        'enum E\n  A(JSON.Field[Int])\nend\n\ndef main() -> Void\n  puts(JSON.decode("{}", E))\nend\n',
         "CHECK-JSON-FIELD-PLACE",
         "E",
     ),
     (
-        "a JsonField in a payload is no JSON field (encode)",
-        "enum E\n  A(JsonField[Int])\nend\n\ndef main() -> Void\n  puts(JSON.encode(E.A(JsonField.Null)))\nend\n",
+        "a JSON.Field in a payload is no JSON field (encode)",
+        "enum E\n  A(JSON.Field[Int])\nend\n\ndef main() -> Void\n  puts(JSON.encode(E.A(JSON.Field.Null)))\nend\n",
         "CHECK-JSON-FIELD-PLACE",
-        "E.A(JsonField.Null)",
+        "E.A(JSON.Field.Null)",
     ),
     (
-        "a JsonField in a list in a payload is no JSON field",
-        "enum E\n  A(List[JsonField[Int]])\nend\n\n"
+        "a JSON.Field in a list in a payload is no JSON field",
+        "enum E\n  A(List[JSON.Field[Int]])\nend\n\n"
         "struct P\n  e: E\nend\n\ndef main() -> Void\n  puts(JSON.schema(P))\nend\n",
         "CHECK-JSON-FIELD-PLACE",
         "P",
     ),
     (
-        "a JsonField as the argument of a generic enum is no JSON field",
-        "enum Maybe[T]\n  Just(T)\n  Nothing\nend\n\nstruct P\n  x: Maybe[JsonField[Int]]\nend\n\n"
+        "a JSON.Field as the argument of a generic enum is no JSON field",
+        "enum Maybe[T]\n  Just(T)\n  Nothing\nend\n\nstruct P\n  x: Maybe[JSON.Field[Int]]\nend\n\n"
         "def main() -> Void\n  puts(JSON.encode(P(x: Maybe.Nothing)))\nend\n",
         "CHECK-JSON-FIELD-PLACE",
         "P(x: Maybe.Nothing)",

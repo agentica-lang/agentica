@@ -1,5 +1,5 @@
 /*
- * TLS.client_context and TLS.server_context: a TlsContext, the TLS config of
+ * TLS.client_context and TLS.server_context: a TLS.Context, the TLS config of
  * one role built once from its options record (the CA file, or a certificate
  * chain and key, read and checked when it is built) and shared by every socket,
  * listener and HttpWire.Client made from it; and the role check of the calls that
@@ -12,7 +12,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-/* TlsClientOptions and TlsServerOptions as compiler/catalog/builtins_data.agc lays them out. */
+/* TLS.ClientOptions and TLS.ServerOptions as compiler/catalog/builtins_data.agc lays them out. */
 #define CLIENT_FIELDS 4
 #define SERVER_FIELDS 3
 /* RFC 7301: a protocol name is 1 to 255 bytes, and the list goes in a 16-bit length. */
@@ -197,7 +197,7 @@ void agc_tls_context_check(agc_vm *vm, agc_value context, bool server, const cha
 void agc_tls_http1_check(agc_vm *vm, const agc_tls_config *config, uint32_t at) {
   if (config && !agc_tls_config_http1(config))
     agc_fail(vm, "RUNTIME-TLS-CONTEXT-ALPN",
-             "std/http speaks only HTTP/1.1, so the alpn of its TlsContext must be [] or [\"http/1.1\"]", at);
+             "std/http speaks only HTTP/1.1, so the alpn of its TLS.Context must be [] or [\"http/1.1\"]", at);
 }
 
 const agc_builtin agc_tls_context_builtins[] = {

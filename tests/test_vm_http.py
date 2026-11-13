@@ -46,7 +46,7 @@ struct Producer
 end
 
 def options(timeout: Int, connections: Int, body: Int, ca: String) -> HTTP.ClientOptions
-  return HTTP.ClientOptions(timeout_ms: timeout, idle_timeout_ms: 5000, max_connections: connections, max_body_bytes: body, tls: some(TLS.client_context(TlsClientOptions(ca_file: ca)).unwrap!))
+  return HTTP.ClientOptions(timeout_ms: timeout, idle_timeout_ms: 5000, max_connections: connections, max_body_bytes: body, tls: some(TLS.client_context(TLS.ClientOptions(ca_file: ca)).unwrap!))
 end
 
 # A body as text; one that is not UTF-8 says so, since these shows print text.
@@ -158,7 +158,7 @@ def main() -> Void
   show(HTTP.get(secure, "http://localhost:#{port}/hello"))
   show(HTTP.get(Result.unwrap!(HTTP.client(options(limit, 1, 1000, certs + "/self-signed.pem"))), "https://localhost:#{port}/hello"))
   # A context reads its CA file when it is built, so a missing one fails there, before any client.
-  puts(TLS.client_context(TlsClientOptions(ca_file: certs + "/missing.pem")).message.split("\\n")[0])
+  puts(TLS.client_context(TLS.ClientOptions(ca_file: certs + "/missing.pem")).message.split("\\n")[0])
 end
 """
 
@@ -515,7 +515,7 @@ def main() -> Void
   options = HTTP.ServerOptions(request_timeout_ms: 2000, idle_timeout_ms: 10000, max_connections: 2, max_body_bytes: 1024)
   server = Result.unwrap!(HTTP.serve("127.0.0.1", 0, HTTP.app(&handle), options))
   certs = System.args()[0]
-  secure = Result.unwrap!(HTTP.serve_tls("127.0.0.1", 0, TLS.server_context(TlsServerOptions(cert_file: certs + "/server.pem", key_file: certs + "/server-key.pem")).unwrap!, HTTP.app(&handle), options))
+  secure = Result.unwrap!(HTTP.serve_tls("127.0.0.1", 0, TLS.server_context(TLS.ServerOptions(cert_file: certs + "/server.pem", key_file: certs + "/server-key.pem")).unwrap!, HTTP.app(&handle), options))
   puts("#{HTTP.local_port(server)} #{HTTP.local_port(secure)}")
   IO.flush()
   IO.read()
@@ -607,7 +607,7 @@ def main() -> Void
   options = HTTP.ServerOptions(request_timeout_ms: 2000, idle_timeout_ms: 10000, max_connections: 8, max_body_bytes: 4194304)
   server = Result.unwrap!(HTTP.serve("127.0.0.1", 0, &app, options))
   certs = System.args()[0]
-  secure = Result.unwrap!(HTTP.serve_tls("127.0.0.1", 0, TLS.server_context(TlsServerOptions(cert_file: certs + "/server.pem", key_file: certs + "/server-key.pem")).unwrap!, &app, options))
+  secure = Result.unwrap!(HTTP.serve_tls("127.0.0.1", 0, TLS.server_context(TLS.ServerOptions(cert_file: certs + "/server.pem", key_file: certs + "/server-key.pem")).unwrap!, &app, options))
   puts("#{HTTP.local_port(server)} #{HTTP.local_port(secure)}")
   IO.flush()
   IO.read()
@@ -806,7 +806,7 @@ def main() -> Void
   options = HTTP.ServerOptions(request_timeout_ms: 300, idle_timeout_ms: 300, max_connections: 8, max_body_bytes: 1024)
   server = Result.unwrap!(HTTP.serve("127.0.0.1", 0, streamed(said), options))
   certs = System.args()[0]
-  secure = Result.unwrap!(HTTP.serve_tls("127.0.0.1", 0, TLS.server_context(TlsServerOptions(cert_file: certs + "/server.pem", key_file: certs + "/server-key.pem")).unwrap!, streamed(said), options))
+  secure = Result.unwrap!(HTTP.serve_tls("127.0.0.1", 0, TLS.server_context(TLS.ServerOptions(cert_file: certs + "/server.pem", key_file: certs + "/server-key.pem")).unwrap!, streamed(said), options))
   puts("#{HTTP.local_port(server)} #{HTTP.local_port(secure)}")
   IO.flush()
   IO.read()
@@ -1544,7 +1544,7 @@ end
 
 def main() -> Void
   certs = System.args()[0]
-  tls = TLS.server_context(TlsServerOptions(cert_file: certs + "/server.pem", key_file: certs + "/server-key.pem")).unwrap!
+  tls = TLS.server_context(TLS.ServerOptions(cert_file: certs + "/server.pem", key_file: certs + "/server-key.pem")).unwrap!
   servers = [
     HTTP.serve("localhost", 0, HTTP.app(&plain)).unwrap!,
     HTTP.serve("localhost", 0, &stream).unwrap!,
@@ -1714,7 +1714,7 @@ def main() -> Void
   )
   server = HTTP.serve("127.0.0.1", 0, &handle, options).unwrap!
   certs = System.args()[0]
-  tls = TLS.server_context(TlsServerOptions(cert_file: certs + "/server.pem", key_file: certs + "/server-key.pem")).unwrap!
+  tls = TLS.server_context(TLS.ServerOptions(cert_file: certs + "/server.pem", key_file: certs + "/server-key.pem")).unwrap!
   secure = HTTP.serve_tls("127.0.0.1", 0, tls, &handle, options).unwrap!
   puts("#{HTTP.local_port(server)} #{HTTP.local_port(secure)}")
   IO.flush()

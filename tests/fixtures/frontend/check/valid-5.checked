@@ -1,68 +1,68 @@
-program #66 0:1:1-585:47:1
+program #66 0:1:1-606:47:1
   module "valid-5.agc"
-    declaration: struct-decl #2 0:1:1-32:4:1 name="Job"
-      field: field-decl #1 13:2:3-28:3:1 name="socket"
-        type: type-ref #0 21:2:11-27:2:17 name="Socket"
-    declaration: struct-decl #6 33:5:1-72:8:1 name="Crate"
-      field: field-decl #5 48:6:3-68:7:1 name="inbox"
-        type: type-ref #4 55:6:10-67:6:22 name="Channel"
-          arg: type-ref #3 63:6:18-66:6:21 name="Int"
-    declaration: function-decl #15 73:9:1-137:12:1 name="feed"
-      param: param #9 82:9:10-101:9:29 name="inbox"
-        type: type-ref #8 89:9:17-101:9:29 name="Channel"
-          arg: type-ref #7 97:9:25-100:9:28 name="Int"
-      result: type-ref #11 106:9:34-117:9:45 name="Result"
-        arg: type-ref #10 113:9:41-116:9:44 name="Int"
-      body: return-stmt #14 120:10:3-133:11:1
-        value: call #13 127:10:10-132:10:15 name="ok" piped=false type=Result(Int)
-          arg: literal #12 130:10:13-131:10:14 value=int:1 type=Int
-    declaration: function-decl #19 138:13:1-170:15:1 name="crate"
-      param: param #17 148:13:11-156:13:19 name="c"
-        type: type-ref #16 151:13:14-156:13:19 name="Crate"
-      result: type-ref #18 161:13:24-165:13:28 name="Void"
-    declaration: function-decl #25 171:16:1-214:19:1 name="identity"
-      param: param #21 184:16:14-190:16:20 name="n"
-        type: type-ref #20 187:16:17-190:16:20 name="Int"
-      result: type-ref #22 195:16:25-198:16:28 name="Int"
-      body: return-stmt #24 201:17:3-210:18:1
-        value: name-ref #23 208:17:10-209:17:11 name="n" type=Int
-    declaration: function-decl #34 215:20:1-298:23:1 name="serve"
-      param: param #27 225:20:11-239:20:25 name="socket"
-        type: type-ref #26 233:20:19-239:20:25 name="Socket"
-      result: type-ref #29 244:20:30-258:20:44 name="Result"
-        arg: type-ref #28 251:20:37-257:20:43 name="String"
-      body: return-stmt #33 261:21:3-294:22:1
-        value: call #32 268:21:10-293:21:35 name="TCP.read_line" piped=false type=Result(String)
-          arg: name-ref #30 282:21:24-288:21:30 name="socket" type=Opaque(Socket)
-          arg: literal #31 290:21:32-292:21:34 value=int:10 type=Int
-    declaration: function-decl #38 299:24:1-338:26:1 name="edit"
-      param: param #36 308:24:10-324:24:26 name="file"
-        type: type-ref #35 314:24:16-324:24:26 name="FileHandle"
-      result: type-ref #37 329:24:31-333:24:35 name="Void"
-    declaration: function-decl #42 339:27:1-373:29:1 name="watch"
-      param: param #40 349:27:11-359:27:21 name="p"
-        type: type-ref #39 352:27:14-359:27:21 name="Process"
-      result: type-ref #41 364:27:26-368:27:30 name="Void"
-    declaration: function-decl #46 374:30:1-414:32:1 name="accept_one"
-      param: param #44 389:30:16-400:30:27 name="l"
-        type: type-ref #43 392:30:19-400:30:27 name="Listener"
-      result: type-ref #45 405:30:32-409:30:36 name="Void"
-    declaration: function-decl #50 415:33:1-443:35:1 name="job"
-      param: param #48 423:33:9-429:33:15 name="j"
-        type: type-ref #47 426:33:12-429:33:15 name="Job"
-      result: type-ref #49 434:33:20-438:33:24 name="Void"
-    declaration: function-decl #55 444:36:1-488:38:1 name="many"
-      param: param #53 453:36:10-474:36:31 name="sockets"
-        type: type-ref #52 462:36:19-474:36:31 name="List"
-          arg: type-ref #51 467:36:24-473:36:30 name="Socket"
-      result: type-ref #54 479:36:36-483:36:40 name="Void"
-    declaration: function-decl #63 489:39:1-559:42:1 name="hand"
-      param: param #57 498:39:10-509:39:21 name="l"
-        type: type-ref #56 501:39:13-509:39:21 name="Listener"
-      result: type-ref #58 514:39:26-518:39:30 name="Void"
-      body: expr-stmt #62 521:40:3-555:41:1
-        value: call #61 521:40:3-554:40:36 name="Task.spawn_owning" piped=false type=Task(Void)
-          arg: function-ref #59 539:40:21-550:40:32 name="accept_one" type=Fn([Opaque(Listener)], Void)
-          arg: name-ref #60 552:40:34-553:40:35 name="l" type=Opaque(Listener)
-    declaration: function-decl #65 560:43:1-584:46:1 name="main"
-      result: type-ref #64 574:43:15-578:43:19 name="Void"
+    declaration: struct-decl #2 0:1:1-36:4:1 name="Job"
+      field: field-decl #1 13:2:3-32:3:1 name="socket"
+        type: type-ref #0 21:2:11-31:2:21 name="TCP.Socket"
+    declaration: struct-decl #6 37:5:1-76:8:1 name="Crate"
+      field: field-decl #5 52:6:3-72:7:1 name="inbox"
+        type: type-ref #4 59:6:10-71:6:22 name="Channel"
+          arg: type-ref #3 67:6:18-70:6:21 name="Int"
+    declaration: function-decl #15 77:9:1-141:12:1 name="feed"
+      param: param #9 86:9:10-105:9:29 name="inbox"
+        type: type-ref #8 93:9:17-105:9:29 name="Channel"
+          arg: type-ref #7 101:9:25-104:9:28 name="Int"
+      result: type-ref #11 110:9:34-121:9:45 name="Result"
+        arg: type-ref #10 117:9:41-120:9:44 name="Int"
+      body: return-stmt #14 124:10:3-137:11:1
+        value: call #13 131:10:10-136:10:15 name="ok" piped=false type=Result(Int)
+          arg: literal #12 134:10:13-135:10:14 value=int:1 type=Int
+    declaration: function-decl #19 142:13:1-174:15:1 name="crate"
+      param: param #17 152:13:11-160:13:19 name="c"
+        type: type-ref #16 155:13:14-160:13:19 name="Crate"
+      result: type-ref #18 165:13:24-169:13:28 name="Void"
+    declaration: function-decl #25 175:16:1-218:19:1 name="identity"
+      param: param #21 188:16:14-194:16:20 name="n"
+        type: type-ref #20 191:16:17-194:16:20 name="Int"
+      result: type-ref #22 199:16:25-202:16:28 name="Int"
+      body: return-stmt #24 205:17:3-214:18:1
+        value: name-ref #23 212:17:10-213:17:11 name="n" type=Int
+    declaration: function-decl #34 219:20:1-306:23:1 name="serve"
+      param: param #27 229:20:11-247:20:29 name="socket"
+        type: type-ref #26 237:20:19-247:20:29 name="TCP.Socket"
+      result: type-ref #29 252:20:34-266:20:48 name="Result"
+        arg: type-ref #28 259:20:41-265:20:47 name="String"
+      body: return-stmt #33 269:21:3-302:22:1
+        value: call #32 276:21:10-301:21:35 name="TCP.read_line" piped=false type=Result(String)
+          arg: name-ref #30 290:21:24-296:21:30 name="socket" type=Opaque(TCP.Socket)
+          arg: literal #31 298:21:32-300:21:34 value=int:10 type=Int
+    declaration: function-decl #38 307:24:1-347:26:1 name="edit"
+      param: param #36 316:24:10-333:24:27 name="file"
+        type: type-ref #35 322:24:16-333:24:27 name="File.Handle"
+      result: type-ref #37 338:24:32-342:24:36 name="Void"
+    declaration: function-decl #42 348:27:1-382:29:1 name="watch"
+      param: param #40 358:27:11-368:27:21 name="p"
+        type: type-ref #39 361:27:14-368:27:21 name="Process"
+      result: type-ref #41 373:27:26-377:27:30 name="Void"
+    declaration: function-decl #46 383:30:1-427:32:1 name="accept_one"
+      param: param #44 398:30:16-413:30:31 name="l"
+        type: type-ref #43 401:30:19-413:30:31 name="TCP.Listener"
+      result: type-ref #45 418:30:36-422:30:40 name="Void"
+    declaration: function-decl #50 428:33:1-456:35:1 name="job"
+      param: param #48 436:33:9-442:33:15 name="j"
+        type: type-ref #47 439:33:12-442:33:15 name="Job"
+      result: type-ref #49 447:33:20-451:33:24 name="Void"
+    declaration: function-decl #55 457:36:1-505:38:1 name="many"
+      param: param #53 466:36:10-491:36:35 name="sockets"
+        type: type-ref #52 475:36:19-491:36:35 name="List"
+          arg: type-ref #51 480:36:24-490:36:34 name="TCP.Socket"
+      result: type-ref #54 496:36:40-500:36:44 name="Void"
+    declaration: function-decl #63 506:39:1-580:42:1 name="hand"
+      param: param #57 515:39:10-530:39:25 name="l"
+        type: type-ref #56 518:39:13-530:39:25 name="TCP.Listener"
+      result: type-ref #58 535:39:30-539:39:34 name="Void"
+      body: expr-stmt #62 542:40:3-576:41:1
+        value: call #61 542:40:3-575:40:36 name="Task.spawn_owning" piped=false type=Task(Void)
+          arg: function-ref #59 560:40:21-571:40:32 name="accept_one" type=Fn([Opaque(TCP.Listener)], Void)
+          arg: name-ref #60 573:40:34-574:40:35 name="l" type=Opaque(TCP.Listener)
+    declaration: function-decl #65 581:43:1-605:46:1 name="main"
+      result: type-ref #64 595:43:15-599:43:19 name="Void"

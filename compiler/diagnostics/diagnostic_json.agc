@@ -9,23 +9,25 @@ import Model from "diagnostic_model"
 import Problems from "problem"
 
 ## The JSON object of the problem.
-export def json(problem: Problems.Problem) -> Json = object(Model.of_problem(problem))
+export def json(problem: Problems.Problem) -> JSON.Value = object(Model.of_problem(problem))
 
 ## The JSON object of a warning: the object of the problem with `"warning": true`. A warning is not an error: the
 ## command goes on (a native module that was not built, io/native_build.agc).
-export def warning(problem: Problems.Problem) -> Json
+export def warning(problem: Problems.Problem) -> JSON.Value
   JSON.object(fields_of(Model.of_problem(problem)).put("warning", JSON.from(true)))
 end
 
 ## The JSON object of a diagnostic.
-export def object(diagnostic: Model.Diagnostic) -> Json = JSON.object(fields_of(diagnostic))
+export def object(diagnostic: Model.Diagnostic) -> JSON.Value = JSON.object(fields_of(diagnostic))
 
 ## The JSON object of a range: `start` and `end`, each with a `line` and a `column`.
-export def range(part: Model.Region) -> Json = JSON.object({"start": position(part.start), "end": position(part.stop)})
+export def range(part: Model.Region) -> JSON.Value
+  JSON.object({"start": position(part.start), "end": position(part.stop)})
+end
 
 ## The `shape` of an answer from a program that does not check (docs/grammar/06b-builtins.md): `partial` is
 ## true and `diagnostics` holds its problems. A complete answer leaves both keys out.
-export def partial(shape: Map[String, Json], diagnostics: List[Model.Diagnostic]) -> Map[String, Json]
+export def partial(shape: Map[String, JSON.Value], diagnostics: List[Model.Diagnostic]) -> Map[String, JSON.Value]
   (
     shape.put("partial", JSON.from(true))
       .put("diagnostics", JSON.array(diagnostics.map do |found: Model.Diagnostic| object(found) end))
@@ -33,8 +35,8 @@ export def partial(shape: Map[String, Json], diagnostics: List[Model.Diagnostic]
 end
 
 # The fields of the object of a diagnostic.
-def fields_of(diagnostic: Model.Diagnostic) -> Map[String, Json]
-  fields: Map[String, Json] = {
+def fields_of(diagnostic: Model.Diagnostic) -> Map[String, JSON.Value]
+  fields: Map[String, JSON.Value] = {
     "code": JSON.from(diagnostic.code),
     "message": JSON.from(diagnostic.message),
     "file": JSON.from(diagnostic.file),
@@ -63,10 +65,12 @@ def fields_of(diagnostic: Model.Diagnostic) -> Map[String, Json]
 end
 
 # A note that the diagnostic does not have is the empty text.
-def note(fields: Map[String, Json], key: String, text: String) -> Map[String, Json]
+def note(fields: Map[String, JSON.Value], key: String, text: String) -> Map[String, JSON.Value]
   return fields if text == ""
 
   fields.put(key, JSON.from(text))
 end
 
-def position(at: Model.Position) -> Json = JSON.object({"line": JSON.from(at.line), "column": JSON.from(at.column)})
+def position(at: Model.Position) -> JSON.Value
+  JSON.object({"line": JSON.from(at.line), "column": JSON.from(at.column)})
+end

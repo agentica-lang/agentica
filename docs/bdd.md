@@ -258,14 +258,13 @@ A step program is a normal program: its `main` builds the list of steps with
   program under test.
 - `BDD.keep(ctx, name, service)` holds a value that is not JSON for the later
   steps of the scenario, such as an open connection. The service is a
-  `Fn[Json, Result[Json]]` that captures the value; `BDD.call(ctx, name,
-  request)` runs it, and a missing name is `error("missing scenario service")`.
-  `Context` is not generic, so the step program's own type cannot travel
-  through it; the closure carries the value.
-  Services start empty in each scenario. Keeping a name again replaces the
-  service; the old handle is not closed and lives until the scenario's child
-  VM ends, or until a `BDD.after` hook closes it. A step still cannot leave a
-  task running.
+  `Fn[JSON.Value, Result[JSON.Value]]` that captures the value; `BDD.call(ctx,
+  name, request)` runs it, and a missing name is `error("missing scenario
+  service")`. `Context` is not generic, so the step program's own type cannot
+  travel through it; the closure carries the value. Services start empty in each
+  scenario. Keeping a name again replaces the service; the old handle is not
+  closed and lives until the scenario's child VM ends, or until a `BDD.after`
+  hook closes it. A step still cannot leave a task running.
 - `BDD.after(ctx, hook)` keeps a `Fn[Context, Result[Void]]` in the context. The
   child runs the hooks, the last registered first, each in its own task
   (`run_after` in `stdlib/bdd.agc`), when the runner closes the channel (a

@@ -1,8 +1,8 @@
-def greet(socket: Socket) -> Result[Void]
+def greet(socket: TCP.Socket) -> Result[Void]
   return TCP.send(socket, "hi\n", 1000)
 end
 
-def handler(socket: Socket) -> Result[Int]
+def handler(socket: TCP.Socket) -> Result[Int]
   _ = Task.await(Task.spawn(&greet, socket))
   zero = 0
   return ok(1 / zero)

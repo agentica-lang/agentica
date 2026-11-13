@@ -9,9 +9,9 @@ end
 
 struct Decoded
   lenient: List[Int]
-  strict: JsonField[List[Int]]
-  urlsafe: JsonField[List[Int]]
-  hex: JsonField[List[Int]]
+  strict: JSON.Field[List[Int]]
+  urlsafe: JSON.Field[List[Int]]
+  hex: JSON.Field[List[Int]]
 end
 
 struct Answers
@@ -19,10 +19,10 @@ struct Answers
   decoded: List[Decoded]
 end
 
-def field(result: Result[Bytes]) -> JsonField[List[Int]]
+def field(result: Result[Bytes]) -> JSON.Field[List[Int]]
   case result
-    ok(bytes) -> return JsonField.Value(bytes.to_a)
-    error(_) -> return JsonField.Null
+    ok(bytes) -> return JSON.Field.Value(bytes.to_a)
+    error(_) -> return JSON.Field.Null
   end
 end
 

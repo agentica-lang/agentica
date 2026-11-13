@@ -182,13 +182,13 @@ STEPS = """def main() -> Void
   size = System.args()[0].to_i!
   a = "ab" * size
   b = "ba" * size
-  before = Profile.steps()
+  before = System.Profile.steps()
   puts(a.edit_distance(b))
-  middle = Profile.steps()
+  middle = System.Profile.steps()
   puts(("a" * size).jaro_winkler("b" * size))
   puts(before)
   puts(middle - before)
-  puts(Profile.steps() - middle)
+  puts(System.Profile.steps() - middle)
 end
 """
 

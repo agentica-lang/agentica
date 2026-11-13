@@ -6,14 +6,14 @@ import Report from "report"
 
 ## The JSON records read from a child's channel, and the message of the error that ended the reading.
 export struct Records
-  items: List[Json]
+  items: List[JSON.Value]
   problem: String
 end
 
 ## Reads the channel records of the child `p` until a read fails or the `deadline` passes (a `Time.monotonic_ms`
 ## value). Lines that are not JSON are skipped.
 export def read_records(p: Process, deadline: Int) -> Records
-  items: List[Json] = []
+  items: List[JSON.Value] = []
   while true
     line = Process.channel_read_line(p, left(deadline))
     return Records(items: items, problem: line.message) if not line.ok?
@@ -26,28 +26,28 @@ export def read_records(p: Process, deadline: Int) -> Records
 end
 
 ## Parses a channel line as JSON. Returns JSON null when it is not valid.
-export def record_of(line: String) -> Json = JSON.parse(line).unwrap_or(JSON.null())
+export def record_of(line: String) -> JSON.Value = JSON.parse(line).unwrap_or(JSON.null())
 
 ## Returns the `event` text of a record, or an empty string when it is missing or not a string.
-export def event_of(record: Json) -> String = text_of(record, "event")
+export def event_of(record: JSON.Value) -> String = text_of(record, "event")
 
 ## Returns the string at `key` in a record, or an empty string when it is missing or not a string.
-export def text_of(record: Json, key: String) -> String
+export def text_of(record: JSON.Value, key: String) -> String
   found = JSON.get(record, key)
   return JSON.string(found.unwrap!).unwrap_or("") if found.ok?
   ""
 end
 
 ## Returns the integer at `key` in a record, or 1 when it is missing or not an integer.
-export def int_of(record: Json, key: String) -> Int
+export def int_of(record: JSON.Value, key: String) -> Int
   found = JSON.get(record, key)
   return JSON.int(found.unwrap!).unwrap_or(1) if found.ok?
   1
 end
 
 ## Returns the diagnostic a crash record carries as `--json` writes it: the code, file, message, range and stack keys.
-export def diagnostic_of(record: Json) -> Json
-  fields: Map[String, Json] = {}
+export def diagnostic_of(record: JSON.Value) -> JSON.Value
+  fields: Map[String, JSON.Value] = {}
   for key in ["code", "file", "message", "range", "spawned_at", "stack", "stack_omitted"]
     found = JSON.get(record, key)
     if found.ok?
@@ -58,7 +58,7 @@ export def diagnostic_of(record: Json) -> Json
 end
 
 ## Returns the string at `key` as a known detail, or an unknown one.
-export def detail_of(record: Json, key: String) -> Report.Detail
+export def detail_of(record: JSON.Value, key: String) -> Report.Detail
   found = JSON.get(record, key)
   return Report.Detail.Known(JSON.string(found.unwrap!).unwrap!) if found.ok? and JSON.string(found.unwrap!).ok?
   Report.Detail.Unknown
@@ -138,7 +138,7 @@ def vm_shape?(line: String, task: Bool) -> Bool
   range = JSON.get(root, "range").unwrap_or(JSON.null())
   start = JSON.get(range, "start").unwrap_or(JSON.null())
   stop = JSON.get(range, "end").unwrap_or(JSON.null())
-  fields: Map[String, Json] = {
+  fields: Map[String, JSON.Value] = {
     "code": JSON.from(text_of(root, "code")),
     "file": JSON.from(text_of(root, "file")),
     "message": JSON.from(text_of(root, "message")),
@@ -157,14 +157,14 @@ def vm_shape?(line: String, task: Bool) -> Bool
   JSON.encode(JSON.object(fields)) == JSON.encode(root)
 end
 
-def trace_kind?(key: String, value: Json) -> Bool
+def trace_kind?(key: String, value: JSON.Value) -> Bool
   return JSON.list(value).ok? if key == "stack"
   return JSON.int(value).ok? if key == "stack_omitted"
   JSON.get(value, "file").ok?
 end
 
-def position(at: Json) -> Json
-  fields: Map[String, Json] = {"line": JSON.from(int_of(at, "line")), "column": JSON.from(int_of(at, "column"))}
+def position(at: JSON.Value) -> JSON.Value
+  fields: Map[String, JSON.Value] = {"line": JSON.from(int_of(at, "line")), "column": JSON.from(int_of(at, "column"))}
   JSON.object(fields)
 end
 
@@ -172,7 +172,7 @@ def summary?(line: String) -> Bool
   parsed = JSON.parse(line)
   return false if not parsed.ok?
   root = parsed.unwrap!
-  fields: Map[String, Json] = {
+  fields: Map[String, JSON.Value] = {
     "unobserved_crashes": JSON.from(int_of(root, "unobserved_crashes")),
     "first": JSON.from(text_of(root, "first")),
   }

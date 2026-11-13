@@ -177,7 +177,7 @@ def answers(session: Analysis.Session, path: String, numbers: List[Int]) -> List
   return lines
 end
 
-def show_text(answer: Result[Json]) -> String
+def show_text(answer: Result[JSON.Value]) -> String
   if answer.ok?
     return JSON.encode(answer.unwrap!)
   end
@@ -205,7 +205,7 @@ def same_region(a: Analysis.Region, b: Analysis.Region) -> Bool
   return JSON.encode(places) == JSON.encode(others)
 end
 
-def show(answer: Result[Json]) -> Void
+def show(answer: Result[JSON.Value]) -> Void
   if answer.ok?
     puts(JSON.encode(answer.unwrap!))
     return
@@ -213,42 +213,42 @@ def show(answer: Result[Json]) -> Void
   IO.warn(JSON.encode(Analysis.diagnostic_json(Analysis.diagnostic(answer.message).unwrap!)))
 end
 
-def outlined(session: Analysis.Session, path: String) -> Result[Json]
+def outlined(session: Analysis.Session, path: String) -> Result[JSON.Value]
   found = try Analysis.outline(session, path)
   return ok(Analysis.outline_json(found))
 end
 
-def natives(session: Analysis.Session, path: String) -> Result[Json]
+def natives(session: Analysis.Session, path: String) -> Result[JSON.Value]
   found = try Analysis.native_modules(session, path)
   return ok(Analysis.native_modules_json(found))
 end
 
-def bodied(session: Analysis.Session, path: String) -> Result[Json]
+def bodied(session: Analysis.Session, path: String) -> Result[JSON.Value]
   found = try Analysis.bodies(session, path)
   return ok(Analysis.bodies_json(found))
 end
 
-def typed(session: Analysis.Session, path: String, line: Int, column: Int) -> Result[Json]
+def typed(session: Analysis.Session, path: String, line: Int, column: Int) -> Result[JSON.Value]
   found = try Analysis.type_at(session, path, line, column)
   return ok(Analysis.type_at_json(found))
 end
 
-def typed_partial(session: Analysis.Session, path: String, line: Int, column: Int) -> Result[Json]
+def typed_partial(session: Analysis.Session, path: String, line: Int, column: Int) -> Result[JSON.Value]
   found = try Analysis.type_at_partial(session, path, line, column)
   return ok(Analysis.type_at_json(found))
 end
 
-def referenced_partial(session: Analysis.Session, path: String, line: Int, column: Int) -> Result[Json]
+def referenced_partial(session: Analysis.Session, path: String, line: Int, column: Int) -> Result[JSON.Value]
   found = try Analysis.refs_partial(session, path, line, column)
   return ok(Analysis.refs_json(found))
 end
 
-def symbols(session: Analysis.Session, name: String, paths: List[String]) -> Result[Json]
+def symbols(session: Analysis.Session, name: String, paths: List[String]) -> Result[JSON.Value]
   found = try Analysis.symbol(session, name, paths)
   return ok(Analysis.symbols_json(found))
 end
 
-def referenced(session: Analysis.Session, path: String, line: Int, column: Int) -> Result[Json]
+def referenced(session: Analysis.Session, path: String, line: Int, column: Int) -> Result[JSON.Value]
   found = try Analysis.refs(session, path, line, column)
   return ok(Analysis.refs_json(found))
 end

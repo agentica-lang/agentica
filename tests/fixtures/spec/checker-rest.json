@@ -396,12 +396,12 @@
       "code": "CHECK-REDEFINED-NAME"
     }
   ],
-  "Test assertions need a type with equality; Test and TestCase are reserved": [
+  "Test assertions need a type with equality; Test is reserved and TestCase is free": [
     {
       "program": [
         "struct Box",
         "  items: List[Int]",
-        "  tags: Map[String, Json]",
+        "  tags: Map[String, JSON.Value]",
         "end",
         "",
         "struct Hook",
@@ -450,7 +450,7 @@
       "program": [
         "struct Box",
         "  items: List[Int]",
-        "  tags: Map[String, Json]",
+        "  tags: Map[String, JSON.Value]",
         "end",
         "",
         "struct Hook",
@@ -506,7 +506,7 @@
         "",
         ""
       ],
-      "code": "CHECK-REDEFINED-NAME"
+      "code": null
     }
   ],
   "File.each_line takes a block that returns Result[Void], and try works in it": [
@@ -1574,7 +1574,7 @@
     {
       "program": [
         "struct Bad",
-        "  value: Json",
+        "  value: JSON.Value",
         "end",
         "",
         "def main() -> Void",
@@ -1618,7 +1618,7 @@
     {
       "program": [
         "struct Bad",
-        "  value: Json",
+        "  value: JSON.Value",
         "end",
         "",
         "def main() -> Void",
@@ -2704,7 +2704,7 @@
         "",
         ""
       ],
-      "code": "CHECK-REDEFINED-NAME"
+      "code": null
     },
     {
       "program": [
@@ -2716,7 +2716,8 @@
         "",
         ""
       ],
-      "code": "CHECK-REDEFINED-NAME"
+      "code": "CHECK-REDEFINED-NAME",
+      "start": [1, 1]
     }
   ],
   "File.read_bytes, File.write_bytes and File.sha256 use Bytes": [
@@ -2894,7 +2895,7 @@
     {
       "program": [
         "def main() -> Void",
-        "  socket = Socket()",
+        "  socket = TCP.Socket()",
         "end",
         "",
         ""
@@ -2927,7 +2928,7 @@
     },
     {
       "program": [
-        "def f(c: TlsContext) -> Void",
+        "def f(c: TLS.Context) -> Void",
         "  JSON.encode(c)",
         "end",
         "",
@@ -3198,7 +3199,7 @@
     {
       "program": [
         "struct Job",
-        "  socket: Socket",
+        "  socket: TCP.Socket",
         "end",
         "",
         "struct Crate",
@@ -3216,29 +3217,29 @@
         "  return n",
         "end",
         "",
-        "def serve(socket: Socket) -> Result[String]",
+        "def serve(socket: TCP.Socket) -> Result[String]",
         "  return TCP.read_line(socket, 10)",
         "end",
         "",
-        "def edit(file: FileHandle) -> Void",
+        "def edit(file: File.Handle) -> Void",
         "end",
         "",
         "def watch(p: Process) -> Void",
         "end",
         "",
-        "def accept_one(l: Listener) -> Void",
+        "def accept_one(l: TCP.Listener) -> Void",
         "end",
         "",
-        "def host(s: Listener) -> Void",
+        "def host(s: TCP.Listener) -> Void",
         "end",
         "",
-        "def pool(client: TlsContext) -> Void",
+        "def pool(client: TLS.Context) -> Void",
         "end",
         "",
         "def job(j: Job) -> Void",
         "end",
         "",
-        "def many(sockets: List[Socket]) -> Void",
+        "def many(sockets: List[TCP.Socket]) -> Void",
         "end",
         "",
         "def main() -> Void",
@@ -3259,7 +3260,7 @@
     {
       "program": [
         "struct Job",
-        "  socket: Socket",
+        "  socket: TCP.Socket",
         "end",
         "",
         "struct Crate",
@@ -3277,29 +3278,29 @@
         "  return n",
         "end",
         "",
-        "def serve(socket: Socket) -> Result[String]",
+        "def serve(socket: TCP.Socket) -> Result[String]",
         "  return TCP.read_line(socket, 10)",
         "end",
         "",
-        "def edit(file: FileHandle) -> Void",
+        "def edit(file: File.Handle) -> Void",
         "end",
         "",
         "def watch(p: Process) -> Void",
         "end",
         "",
-        "def accept_one(l: Listener) -> Void",
+        "def accept_one(l: TCP.Listener) -> Void",
         "end",
         "",
-        "def host(s: Listener) -> Void",
+        "def host(s: TCP.Listener) -> Void",
         "end",
         "",
-        "def pool(client: TlsContext) -> Void",
+        "def pool(client: TLS.Context) -> Void",
         "end",
         "",
         "def job(j: Job) -> Void",
         "end",
         "",
-        "def many(sockets: List[Socket]) -> Void",
+        "def many(sockets: List[TCP.Socket]) -> Void",
         "end",
         "",
         "def main() -> Void",
@@ -3315,7 +3316,7 @@
     {
       "program": [
         "struct Job",
-        "  socket: Socket",
+        "  socket: TCP.Socket",
         "end",
         "",
         "struct Crate",
@@ -3333,29 +3334,29 @@
         "  return n",
         "end",
         "",
-        "def serve(socket: Socket) -> Result[String]",
+        "def serve(socket: TCP.Socket) -> Result[String]",
         "  return TCP.read_line(socket, 10)",
         "end",
         "",
-        "def edit(file: FileHandle) -> Void",
+        "def edit(file: File.Handle) -> Void",
         "end",
         "",
         "def watch(p: Process) -> Void",
         "end",
         "",
-        "def accept_one(l: Listener) -> Void",
+        "def accept_one(l: TCP.Listener) -> Void",
         "end",
         "",
-        "def host(s: Listener) -> Void",
+        "def host(s: TCP.Listener) -> Void",
         "end",
         "",
-        "def pool(client: TlsContext) -> Void",
+        "def pool(client: TLS.Context) -> Void",
         "end",
         "",
         "def job(j: Job) -> Void",
         "end",
         "",
-        "def many(sockets: List[Socket]) -> Void",
+        "def many(sockets: List[TCP.Socket]) -> Void",
         "end",
         "",
         "def main() -> Void",
@@ -3369,7 +3370,7 @@
     {
       "program": [
         "struct Job",
-        "  socket: Socket",
+        "  socket: TCP.Socket",
         "end",
         "",
         "struct Crate",
@@ -3387,29 +3388,29 @@
         "  return n",
         "end",
         "",
-        "def serve(socket: Socket) -> Result[String]",
+        "def serve(socket: TCP.Socket) -> Result[String]",
         "  return TCP.read_line(socket, 10)",
         "end",
         "",
-        "def edit(file: FileHandle) -> Void",
+        "def edit(file: File.Handle) -> Void",
         "end",
         "",
         "def watch(p: Process) -> Void",
         "end",
         "",
-        "def accept_one(l: Listener) -> Void",
+        "def accept_one(l: TCP.Listener) -> Void",
         "end",
         "",
-        "def host(s: Listener) -> Void",
+        "def host(s: TCP.Listener) -> Void",
         "end",
         "",
-        "def pool(client: TlsContext) -> Void",
+        "def pool(client: TLS.Context) -> Void",
         "end",
         "",
         "def job(j: Job) -> Void",
         "end",
         "",
-        "def many(sockets: List[Socket]) -> Void",
+        "def many(sockets: List[TCP.Socket]) -> Void",
         "end",
         "",
         "def main() -> Void",
@@ -3423,7 +3424,7 @@
     {
       "program": [
         "struct Job",
-        "  socket: Socket",
+        "  socket: TCP.Socket",
         "end",
         "",
         "struct Crate",
@@ -3441,29 +3442,29 @@
         "  return n",
         "end",
         "",
-        "def serve(socket: Socket) -> Result[String]",
+        "def serve(socket: TCP.Socket) -> Result[String]",
         "  return TCP.read_line(socket, 10)",
         "end",
         "",
-        "def edit(file: FileHandle) -> Void",
+        "def edit(file: File.Handle) -> Void",
         "end",
         "",
         "def watch(p: Process) -> Void",
         "end",
         "",
-        "def accept_one(l: Listener) -> Void",
+        "def accept_one(l: TCP.Listener) -> Void",
         "end",
         "",
-        "def host(s: Listener) -> Void",
+        "def host(s: TCP.Listener) -> Void",
         "end",
         "",
-        "def pool(client: TlsContext) -> Void",
+        "def pool(client: TLS.Context) -> Void",
         "end",
         "",
         "def job(j: Job) -> Void",
         "end",
         "",
-        "def many(sockets: List[Socket]) -> Void",
+        "def many(sockets: List[TCP.Socket]) -> Void",
         "end",
         "",
         "def main() -> Void",
@@ -3477,7 +3478,7 @@
     {
       "program": [
         "struct Job",
-        "  socket: Socket",
+        "  socket: TCP.Socket",
         "end",
         "",
         "struct Crate",
@@ -3495,29 +3496,29 @@
         "  return n",
         "end",
         "",
-        "def serve(socket: Socket) -> Result[String]",
+        "def serve(socket: TCP.Socket) -> Result[String]",
         "  return TCP.read_line(socket, 10)",
         "end",
         "",
-        "def edit(file: FileHandle) -> Void",
+        "def edit(file: File.Handle) -> Void",
         "end",
         "",
         "def watch(p: Process) -> Void",
         "end",
         "",
-        "def accept_one(l: Listener) -> Void",
+        "def accept_one(l: TCP.Listener) -> Void",
         "end",
         "",
-        "def host(s: Listener) -> Void",
+        "def host(s: TCP.Listener) -> Void",
         "end",
         "",
-        "def pool(client: TlsContext) -> Void",
+        "def pool(client: TLS.Context) -> Void",
         "end",
         "",
         "def job(j: Job) -> Void",
         "end",
         "",
-        "def many(sockets: List[Socket]) -> Void",
+        "def many(sockets: List[TCP.Socket]) -> Void",
         "end",
         "",
         "def main() -> Void",
@@ -3531,7 +3532,7 @@
     {
       "program": [
         "struct Job",
-        "  socket: Socket",
+        "  socket: TCP.Socket",
         "end",
         "",
         "struct Crate",
@@ -3549,29 +3550,29 @@
         "  return n",
         "end",
         "",
-        "def serve(socket: Socket) -> Result[String]",
+        "def serve(socket: TCP.Socket) -> Result[String]",
         "  return TCP.read_line(socket, 10)",
         "end",
         "",
-        "def edit(file: FileHandle) -> Void",
+        "def edit(file: File.Handle) -> Void",
         "end",
         "",
         "def watch(p: Process) -> Void",
         "end",
         "",
-        "def accept_one(l: Listener) -> Void",
+        "def accept_one(l: TCP.Listener) -> Void",
         "end",
         "",
-        "def host(s: Listener) -> Void",
+        "def host(s: TCP.Listener) -> Void",
         "end",
         "",
-        "def pool(client: TlsContext) -> Void",
+        "def pool(client: TLS.Context) -> Void",
         "end",
         "",
         "def job(j: Job) -> Void",
         "end",
         "",
-        "def many(sockets: List[Socket]) -> Void",
+        "def many(sockets: List[TCP.Socket]) -> Void",
         "end",
         "",
         "def main() -> Void",
@@ -3585,7 +3586,7 @@
     {
       "program": [
         "struct Job",
-        "  socket: Socket",
+        "  socket: TCP.Socket",
         "end",
         "",
         "struct Crate",
@@ -3603,29 +3604,29 @@
         "  return n",
         "end",
         "",
-        "def serve(socket: Socket) -> Result[String]",
+        "def serve(socket: TCP.Socket) -> Result[String]",
         "  return TCP.read_line(socket, 10)",
         "end",
         "",
-        "def edit(file: FileHandle) -> Void",
+        "def edit(file: File.Handle) -> Void",
         "end",
         "",
         "def watch(p: Process) -> Void",
         "end",
         "",
-        "def accept_one(l: Listener) -> Void",
+        "def accept_one(l: TCP.Listener) -> Void",
         "end",
         "",
-        "def host(s: Listener) -> Void",
+        "def host(s: TCP.Listener) -> Void",
         "end",
         "",
-        "def pool(client: TlsContext) -> Void",
+        "def pool(client: TLS.Context) -> Void",
         "end",
         "",
         "def job(j: Job) -> Void",
         "end",
         "",
-        "def many(sockets: List[Socket]) -> Void",
+        "def many(sockets: List[TCP.Socket]) -> Void",
         "end",
         "",
         "def main() -> Void",
@@ -3639,7 +3640,7 @@
     {
       "program": [
         "struct Job",
-        "  socket: Socket",
+        "  socket: TCP.Socket",
         "end",
         "",
         "struct Crate",
@@ -3657,29 +3658,29 @@
         "  return n",
         "end",
         "",
-        "def serve(socket: Socket) -> Result[String]",
+        "def serve(socket: TCP.Socket) -> Result[String]",
         "  return TCP.read_line(socket, 10)",
         "end",
         "",
-        "def edit(file: FileHandle) -> Void",
+        "def edit(file: File.Handle) -> Void",
         "end",
         "",
         "def watch(p: Process) -> Void",
         "end",
         "",
-        "def accept_one(l: Listener) -> Void",
+        "def accept_one(l: TCP.Listener) -> Void",
         "end",
         "",
-        "def host(s: Listener) -> Void",
+        "def host(s: TCP.Listener) -> Void",
         "end",
         "",
-        "def pool(client: TlsContext) -> Void",
+        "def pool(client: TLS.Context) -> Void",
         "end",
         "",
         "def job(j: Job) -> Void",
         "end",
         "",
-        "def many(sockets: List[Socket]) -> Void",
+        "def many(sockets: List[TCP.Socket]) -> Void",
         "end",
         "",
         "def main() -> Void",
@@ -3693,7 +3694,7 @@
     {
       "program": [
         "struct Job",
-        "  socket: Socket",
+        "  socket: TCP.Socket",
         "end",
         "",
         "struct Crate",
@@ -3711,32 +3712,32 @@
         "  return n",
         "end",
         "",
-        "def serve(socket: Socket) -> Result[String]",
+        "def serve(socket: TCP.Socket) -> Result[String]",
         "  return TCP.read_line(socket, 10)",
         "end",
         "",
-        "def edit(file: FileHandle) -> Void",
+        "def edit(file: File.Handle) -> Void",
         "end",
         "",
         "def watch(p: Process) -> Void",
         "end",
         "",
-        "def accept_one(l: Listener) -> Void",
+        "def accept_one(l: TCP.Listener) -> Void",
         "end",
         "",
-        "def host(s: Listener) -> Void",
+        "def host(s: TCP.Listener) -> Void",
         "end",
         "",
-        "def pool(client: TlsContext) -> Void",
+        "def pool(client: TLS.Context) -> Void",
         "end",
         "",
         "def job(j: Job) -> Void",
         "end",
         "",
-        "def many(sockets: List[Socket]) -> Void",
+        "def many(sockets: List[TCP.Socket]) -> Void",
         "end",
         "",
-        "def hand(client: TlsContext) -> Void",
+        "def hand(client: TLS.Context) -> Void",
         "  Task.spawn_owning(&pool, client)",
         "end",
         "",
@@ -3751,7 +3752,7 @@
     {
       "program": [
         "struct Job",
-        "  socket: Socket",
+        "  socket: TCP.Socket",
         "end",
         "",
         "struct Crate",
@@ -3769,32 +3770,32 @@
         "  return n",
         "end",
         "",
-        "def serve(socket: Socket) -> Result[String]",
+        "def serve(socket: TCP.Socket) -> Result[String]",
         "  return TCP.read_line(socket, 10)",
         "end",
         "",
-        "def edit(file: FileHandle) -> Void",
+        "def edit(file: File.Handle) -> Void",
         "end",
         "",
         "def watch(p: Process) -> Void",
         "end",
         "",
-        "def accept_one(l: Listener) -> Void",
+        "def accept_one(l: TCP.Listener) -> Void",
         "end",
         "",
-        "def host(s: Listener) -> Void",
+        "def host(s: TCP.Listener) -> Void",
         "end",
         "",
-        "def pool(client: TlsContext) -> Void",
+        "def pool(client: TLS.Context) -> Void",
         "end",
         "",
         "def job(j: Job) -> Void",
         "end",
         "",
-        "def many(sockets: List[Socket]) -> Void",
+        "def many(sockets: List[TCP.Socket]) -> Void",
         "end",
         "",
-        "def hand(l: Listener, s: Listener) -> Void",
+        "def hand(l: TCP.Listener, s: TCP.Listener) -> Void",
         "  Task.spawn_owning(&accept_one, l)",
         "  Task.spawn_owning(&host, s)",
         "end",
@@ -3810,8 +3811,8 @@
     {
       "program": [
         "enum Conn",
-        "  Plain(Socket)",
-        "  Pooled(Box[Socket], Int)",
+        "  Plain(TCP.Socket)",
+        "  Pooled(Box[TCP.Socket], Int)",
         "  Idle",
         "end",
         "",
@@ -3830,7 +3831,7 @@
         "end",
         "",
         "struct Clients",
-        "  all: List[TlsContext]",
+        "  all: List[TLS.Context]",
         "end",
         "",
         "def conn(c: Conn) -> Void",
@@ -3846,8 +3847,8 @@
     {
       "program": [
         "enum Conn",
-        "  Plain(Socket)",
-        "  Pooled(Box[Socket], Int)",
+        "  Plain(TCP.Socket)",
+        "  Pooled(Box[TCP.Socket], Int)",
         "  Idle",
         "end",
         "",
@@ -3866,10 +3867,10 @@
         "end",
         "",
         "struct Clients",
-        "  all: List[TlsContext]",
+        "  all: List[TLS.Context]",
         "end",
         "",
-        "def boxes(m: Map[String, Box[Socket]]) -> Void",
+        "def boxes(m: Map[String, Box[TCP.Socket]]) -> Void",
         "end",
         "",
         "def main() -> Void",
@@ -3882,8 +3883,8 @@
     {
       "program": [
         "enum Conn",
-        "  Plain(Socket)",
-        "  Pooled(Box[Socket], Int)",
+        "  Plain(TCP.Socket)",
+        "  Pooled(Box[TCP.Socket], Int)",
         "  Idle",
         "end",
         "",
@@ -3902,10 +3903,10 @@
         "end",
         "",
         "struct Clients",
-        "  all: List[TlsContext]",
+        "  all: List[TLS.Context]",
         "end",
         "",
-        "def got(r: Result[Socket]) -> Void",
+        "def got(r: Result[TCP.Socket]) -> Void",
         "end",
         "",
         "def main() -> Void",
@@ -3918,8 +3919,8 @@
     {
       "program": [
         "enum Conn",
-        "  Plain(Socket)",
-        "  Pooled(Box[Socket], Int)",
+        "  Plain(TCP.Socket)",
+        "  Pooled(Box[TCP.Socket], Int)",
         "  Idle",
         "end",
         "",
@@ -3938,7 +3939,7 @@
         "end",
         "",
         "struct Clients",
-        "  all: List[TlsContext]",
+        "  all: List[TLS.Context]",
         "end",
         "",
         "def tree(t: Tree) -> Void",
@@ -3956,8 +3957,8 @@
     {
       "program": [
         "enum Conn",
-        "  Plain(Socket)",
-        "  Pooled(Box[Socket], Int)",
+        "  Plain(TCP.Socket)",
+        "  Pooled(Box[TCP.Socket], Int)",
         "  Idle",
         "end",
         "",
@@ -3976,7 +3977,7 @@
         "end",
         "",
         "struct Clients",
-        "  all: List[TlsContext]",
+        "  all: List[TLS.Context]",
         "end",
         "",
         "def point(p: Point) -> Void",
@@ -3994,8 +3995,8 @@
     {
       "program": [
         "enum Conn",
-        "  Plain(Socket)",
-        "  Pooled(Box[Socket], Int)",
+        "  Plain(TCP.Socket)",
+        "  Pooled(Box[TCP.Socket], Int)",
         "  Idle",
         "end",
         "",
@@ -4014,7 +4015,7 @@
         "end",
         "",
         "struct Clients",
-        "  all: List[TlsContext]",
+        "  all: List[TLS.Context]",
         "end",
         "",
         "def clients(c: Clients) -> Void",
@@ -4032,8 +4033,8 @@
     {
       "program": [
         "enum Conn",
-        "  Plain(Socket)",
-        "  Pooled(Box[Socket], Int)",
+        "  Plain(TCP.Socket)",
+        "  Pooled(Box[TCP.Socket], Int)",
         "  Idle",
         "end",
         "",
@@ -4052,7 +4053,7 @@
         "end",
         "",
         "struct Clients",
-        "  all: List[TlsContext]",
+        "  all: List[TLS.Context]",
         "end",
         "",
         "def ints(b: Box[Int]) -> Void",
@@ -4070,7 +4071,7 @@
     {
       "program": [
         "enum Tree",
-        "  Leaf(Socket)",
+        "  Leaf(TCP.Socket)",
         "  Node(List[Tree])",
         "end",
         "",
@@ -4087,7 +4088,7 @@
     {
       "program": [
         "enum Conn",
-        "  Plain(Socket)",
+        "  Plain(TCP.Socket)",
         "  Idle",
         "end",
         "",
@@ -6484,15 +6485,15 @@
     {
       "program": [
         "def main() -> Void",
-        "  parsed: Result[Json] = JSON.parse(\"{}\")",
-        "  j: Json = Result.unwrap!(parsed)",
-        "  _member: Result[Json] = JSON.get(j, \"key\")",
-        "  _item: Result[Json] = JSON.at(j, 0)",
+        "  parsed: Result[JSON.Value] = JSON.parse(\"{}\")",
+        "  j: JSON.Value = Result.unwrap!(parsed)",
+        "  _member: Result[JSON.Value] = JSON.get(j, \"key\")",
+        "  _item: Result[JSON.Value] = JSON.at(j, 0)",
         "  _text: Result[String] = JSON.string(j)",
         "  _integer: Result[Int] = JSON.int(j)",
         "  _decimal: Result[Float] = JSON.float(j)",
         "  _flag: Result[Bool] = JSON.bool(j)",
-        "  _items: Result[List[Json]] = JSON.list(j)",
+        "  _items: Result[List[JSON.Value]] = JSON.list(j)",
         "  _encoded: String = JSON.encode(j)",
         "end",
         "",
@@ -6693,7 +6694,7 @@
     {
       "program": [
         "def main() -> Void",
-        "  x: Json[Int] = Result.unwrap!(JSON.parse(\"1\"))",
+        "  x: JSON.Value[Int] = Result.unwrap!(JSON.parse(\"1\"))",
         "end",
         "",
         ""
@@ -6703,7 +6704,7 @@
     {
       "program": [
         "def main() -> Void",
-        "  x = Json()",
+        "  x = JSON.Value()",
         "end",
         "",
         ""
@@ -6743,7 +6744,7 @@
         "",
         ""
       ],
-      "code": "CHECK-REDEFINED-NAME"
+      "code": null
     },
     {
       "program": [
@@ -11239,7 +11240,7 @@
       "covers": "\"1000\""
     }
   ],
-  "Profile.measure gives the value of a block of no parameters and Profile.steps an Int": [
+  "System.Profile.measure gives the value of a block of no parameters and System.Profile.steps an Int": [
     {
       "program": [
         "def parse(text: String) -> Result[Int]",
@@ -11252,13 +11253,13 @@
         "end",
         "",
         "def main() -> Void",
-        "  n = Profile.measure(\"sum\") do 1 + 2 end",
-        "  r: Result[Int] = Profile.measure(\"parse\") do",
+        "  n = System.Profile.measure(\"sum\") do 1 + 2 end",
+        "  r: Result[Int] = System.Profile.measure(\"parse\") do",
         "    v = try parse(\"4\")",
         "    ok(v + n)",
         "  end",
-        "  m = Profile.measure(\"fn\", &three)",
-        "  s: Int = Profile.steps()",
+        "  m = System.Profile.measure(\"fn\", &three)",
+        "  s: Int = System.Profile.steps()",
         "  puts(n + m + s + r.unwrap_or(0))",
         "end"
       ],
@@ -11276,11 +11277,11 @@
         "end",
         "",
         "def main() -> Void",
-        "  n = Profile.measure(7) do 1 end",
+        "  n = System.Profile.measure(7) do 1 end",
         "end"
       ],
       "code": "CHECK-TYPE-MISMATCH",
-      "start": [11, 23],
+      "start": [11, 30],
       "covers": "7",
       "expected": "String",
       "actual": "Int"
@@ -11297,11 +11298,11 @@
         "end",
         "",
         "def main() -> Void",
-        "  n = Profile.measure(\"x\") do |k| k end",
+        "  n = System.Profile.measure(\"x\") do |k| k end",
         "end"
       ],
       "code": "CHECK-ARITY",
-      "start": [11, 28],
+      "start": [11, 35],
       "covers": "do |k| k end"
     },
     {
@@ -11316,12 +11317,12 @@
         "end",
         "",
         "def main() -> Void",
-        "  n = Profile.measure(\"x\")",
+        "  n = System.Profile.measure(\"x\")",
         "end"
       ],
       "code": "CHECK-ARITY",
       "start": [11, 7],
-      "covers": "Profile.measure(\"x\")"
+      "covers": "System.Profile.measure(\"x\")"
     },
     {
       "program": [
@@ -11335,11 +11336,11 @@
         "end",
         "",
         "def main() -> Void",
-        "  n: Int = Profile.measure(\"x\") do \"text\" end",
+        "  n: Int = System.Profile.measure(\"x\") do \"text\" end",
         "end"
       ],
       "code": "CHECK-TYPE-MISMATCH",
-      "start": [11, 36],
+      "start": [11, 43],
       "covers": "\"text\"",
       "expected": "Int",
       "actual": "String"
@@ -11356,7 +11357,7 @@
         "end",
         "",
         "def main() -> Void",
-        "  r = Profile.measure(\"x\") do",
+        "  r = System.Profile.measure(\"x\") do",
         "    v = try parse(\"4\")",
         "    ok(v)",
         "  end",
@@ -11382,11 +11383,11 @@
         "end",
         "",
         "def main() -> Void",
-        "  n = Profile.measure(\"x\", &twice)",
+        "  n = System.Profile.measure(\"x\", &twice)",
         "end"
       ],
       "code": "CHECK-TYPE-MISMATCH",
-      "start": [15, 28],
+      "start": [15, 35],
       "covers": "&twice"
     },
     {
@@ -11401,12 +11402,12 @@
         "end",
         "",
         "def main() -> Void",
-        "  n = Profile.steps(1)",
+        "  n = System.Profile.steps(1)",
         "end"
       ],
       "code": "CHECK-ARITY",
       "start": [11, 7],
-      "covers": "Profile.steps(1)"
+      "covers": "System.Profile.steps(1)"
     },
     {
       "program": [
@@ -11420,12 +11421,12 @@
         "end",
         "",
         "def main() -> Void",
-        "  s: String = Profile.steps()",
+        "  s: String = System.Profile.steps()",
         "end"
       ],
       "code": "CHECK-TYPE-MISMATCH",
       "start": [11, 15],
-      "covers": "Profile.steps()",
+      "covers": "System.Profile.steps()",
       "expected": "String",
       "actual": "Int"
     },
@@ -11439,8 +11440,7 @@
         "  puts(1)",
         "end"
       ],
-      "code": "CHECK-REDEFINED-NAME",
-      "start": [1, 1]
+      "code": null
     }
   ],
   "The Digest hashes take a Bytes; the plain form gives a Bytes, the _hexdigest form a String; Crypto.sha256 is unknown with a help; Crypto is a free name": [
@@ -13075,11 +13075,11 @@
       "covers": "Conn.members"
     }
   ],
-  "JsonField is optional and nullable only as a direct struct field of a JSON type, and reserves its name": [
+  "JSON.Field is optional and nullable only as a direct struct field of a JSON type; its old name JsonField stays reserved": [
     {
       "program": [
         "struct W",
-        "  items: List[JsonField[Int]]",
+        "  items: List[JSON.Field[Int]]",
         "end",
         "",
         "def main() -> Void",
@@ -13095,7 +13095,7 @@
     {
       "program": [
         "struct B",
-        "  x: List[JsonField[Int]]",
+        "  x: List[JSON.Field[Int]]",
         "end",
         "",
         "struct A",
@@ -13114,7 +13114,7 @@
     {
       "program": [
         "struct B",
-        "  x: JsonField[Int]",
+        "  x: JSON.Field[Int]",
         "end",
         "",
         "struct A",
@@ -13133,7 +13133,7 @@
     {
       "program": [
         "struct W",
-        "  a: JsonField[JsonField[Int]]",
+        "  a: JSON.Field[JSON.Field[Int]]",
         "end",
         "",
         "def main() -> Void",
@@ -13148,7 +13148,7 @@
     {
       "program": [
         "def main() -> Void",
-        "  m: Map[String, JsonField[Int]] = {}",
+        "  m: Map[String, JSON.Field[Int]] = {}",
         "  puts(JSON.encode(m))",
         "end",
         ""
@@ -13160,7 +13160,7 @@
     {
       "program": [
         "def main() -> Void",
-        "  f: JsonField[Int] = JsonField.Value(1)",
+        "  f: JSON.Field[Int] = JSON.Field.Value(1)",
         "  x = JSON.from(f)",
         "end",
         ""
@@ -13172,7 +13172,7 @@
     {
       "program": [
         "struct W",
-        "  items: List[JsonField[Nil]]",
+        "  items: List[JSON.Field[Nil]]",
         "end",
         "",
         "def main() -> Void",
@@ -13187,7 +13187,7 @@
     {
       "program": [
         "struct W",
-        "  a: JsonField[Nil]",
+        "  a: JSON.Field[Nil]",
         "end",
         "",
         "def main() -> Void",
@@ -13202,58 +13202,58 @@
     {
       "program": [
         "struct W",
-        "  a: JsonField[Nil]",
+        "  a: JSON.Field[Nil]",
         "end",
         "",
         "def main() -> Void",
-        "  puts(JSON.encode(W(a: JsonField.Null)))",
+        "  puts(JSON.encode(W(a: JSON.Field.Null)))",
         "end",
         ""
       ],
       "code": "CHECK-NOT-ENCODABLE",
       "start": [6, 20],
-      "covers": "W(a: JsonField.Null)"
+      "covers": "W(a: JSON.Field.Null)"
     },
     {
       "program": [
         "def main() -> Void",
-        "  x = JSON.schema(JsonField)",
+        "  x = JSON.schema(JSON.Field)",
         "end",
         ""
       ],
       "code": "CHECK-UNKNOWN-TYPE",
       "start": [2, 19],
-      "covers": "JsonField"
+      "covers": "JSON.Field"
     },
     {
       "program": [
         "def main() -> Void",
-        "  x = JsonField.Absent",
+        "  x = JSON.Field.Absent",
         "end",
         ""
       ],
       "code": "CHECK-ENUM-TYPE-INFERENCE",
       "start": [2, 7],
-      "covers": "JsonField.Absent"
+      "covers": "JSON.Field.Absent"
     },
     {
       "program": [
         "def main() -> Void",
-        "  x: JsonField[Int] = JsonField.Value(\"s\")",
+        "  x: JSON.Field[Int] = JSON.Field.Value(\"s\")",
         "end",
         ""
       ],
       "code": "CHECK-TYPE-MISMATCH",
-      "start": [2, 39],
+      "start": [2, 41],
       "covers": "\"s\""
     },
     {
       "program": [
         "def main() -> Void",
-        "  x: JsonField[Int] = JsonField.Null",
+        "  x: JSON.Field[Int] = JSON.Field.Null",
         "  case x",
-        "    JsonField.Absent -> puts(\"a\")",
-        "    JsonField.Null -> puts(\"n\")",
+        "    JSON.Field.Absent -> puts(\"a\")",
+        "    JSON.Field.Null -> puts(\"n\")",
         "  end",
         "end",
         ""
@@ -13292,7 +13292,7 @@
     {
       "program": [
         "struct P",
-        "  a: JsonField[Int]",
+        "  a: JSON.Field[Int]",
         "end",
         "",
         "def main() -> Void",
@@ -13303,7 +13303,7 @@
       "code": "CHECK-TYPE-MISMATCH",
       "start": [6, 20],
       "covers": "3",
-      "expected": "String or Json",
+      "expected": "String or JSON.Value",
       "actual": "Int"
     },
     {
@@ -13313,8 +13313,8 @@
         "end",
         "",
         "struct P",
-        "  a: JsonField[Int]",
-        "  b: JsonField[List[Address]]",
+        "  a: JSON.Field[Int]",
+        "  b: JSON.Field[List[Address]]",
         "  c: Int",
         "end",
         "",
@@ -13324,7 +13324,7 @@
         "  puts(JSON.encode(p))",
         "  puts(JSON.from(p))",
         "  puts(JSON.schema(P))",
-        "  q = P(a: JsonField.Absent, b: JsonField.Value([]), c: 2)",
+        "  q = P(a: JSON.Field.Absent, b: JSON.Field.Value([]), c: 2)",
         "  puts(q)",
         "end",
         ""
@@ -14185,7 +14185,7 @@
       "start": [1, 1]
     }
   ],
-  "A nested builtin name (File.Info, JSON.Value, JSON.Field, TCP.Socket, TLS.ClientOptions, System.Profile.steps, ...) is the old builtin, which keeps its name": [
+  "A nested builtin name (File.Info, JSON.Value, JSON.Field, TCP.Socket, TLS.ClientOptions, System.Profile.steps, ...) names the builtin in a type, a construction, a pattern and a call": [
     {
       "program": [
         "struct Patch",
@@ -14200,16 +14200,16 @@
         "  end",
         "end",
         "",
-        "def size(info: File.Info, same: FileInfo) -> Int = info.size_bytes + same.size_bytes",
+        "def size(info: File.Info, same: File.Info) -> Int = info.size_bytes + same.size_bytes",
         "",
         "def handles(h: File.Handle, s: TCP.Socket, l: TCP.Listener, c: TLS.Context, t: Test.Case, o: Process.Output) -> Void",
         "end",
         "",
         "def main() -> Void",
         "  value: JSON.Value = JSON.parse(\"[1]\").unwrap!",
-        "  old: Json = value",
+        "  old: JSON.Value = value",
         "  client = TLS.ClientOptions(alpn: [\"h2\"])",
-        "  server: TlsServerOptions = TLS.ServerOptions(cert_file: \"c.pem\", key_file: \"k.pem\")",
+        "  server: TLS.ServerOptions = TLS.ServerOptions(cert_file: \"c.pem\", key_file: \"k.pem\")",
         "  p = Patch(age: JSON.Field.Value(3))",
         "  n = System.Profile.measure(\"sum\") do 1 + 2 end",
         "  s: Int = System.Profile.steps()",
@@ -14238,6 +14238,531 @@
       "code": "CHECK-UNKNOWN-NAME",
       "start": [2, 8],
       "covers": "System.Profile.stepz()"
+    }
+  ],
+  "The JSON family: JSON.Value and JSON.Field; the old names Json and JsonField are unknown, Json is free and JsonField stays reserved": [
+    {
+      "program": [
+        "struct Patch",
+        "  age: JSON.Field[Int]",
+        "end",
+        "",
+        "def label(f: JSON.Field[Int]) -> String",
+        "  return case f",
+        "    JSON.Field.Absent -> \"keep\"",
+        "    JSON.Field.Null -> \"clear\"",
+        "    JSON.Field.Value(n) -> \"set #{n}\"",
+        "  end",
+        "end",
+        "",
+        "def main() -> Void",
+        "  value: JSON.Value = JSON.parse(\"[1]\").unwrap!",
+        "  puts(\"#{value} #{label(Patch(age: JSON.Field.Value(3)).age)} Json JsonField\")",
+        "end",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x: Json = JSON.parse(\"1\").unwrap!",
+        "end",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-TYPE",
+      "start": [2, 6],
+      "covers": "Json"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = JsonField.Value(1)",
+        "end",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-TYPE",
+      "start": [2, 7]
+    },
+    {
+      "program": [
+        "struct P",
+        "  a: JSON.Field[Int]",
+        "end",
+        "",
+        "def main() -> Void",
+        "  case P(a: JSON.Field.Null).a",
+        "    JsonField.Absent -> puts(1)",
+        "    _ -> puts(2)",
+        "  end",
+        "end",
+        ""
+      ],
+      "code": "CHECK-PATTERN-TYPE",
+      "start": [7, 5]
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x: JSON.Feld[Int] = JSON.Field.Null",
+        "end",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-NAME",
+      "start": [2, 6],
+      "covers": "JSON.Feld[Int]",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  puts(JSON.Value.size)",
+        "end",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-NAME",
+      "start": [2, 8],
+      "covers": "JSON.Value.size"
+    },
+    {
+      "program": [
+        "struct Json",
+        "  a: Int",
+        "end",
+        "",
+        "enum JsonField",
+        "  A",
+        "end",
+        "",
+        "def main() -> Void",
+        "  puts(Json(a: 1))",
+        "end",
+        ""
+      ],
+      "code": "CHECK-REDEFINED-NAME",
+      "start": [5, 1]
+    }
+  ],
+  "The File family: File.Info and File.Handle; the old names FileInfo and FileHandle are unknown, FileHandle is free and FileInfo stays reserved": [
+    {
+      "program": [
+        "def size(info: File.Info) -> Int = info.size_bytes",
+        "",
+        "def main() -> Void",
+        "  read: Fn[File.Handle, Int, Result[String]] = &File.read_line",
+        "  puts(\"#{size(File.stat(\"x\").unwrap!)} FileInfo\")",
+        "  _r = read",
+        "end",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def size(info: FileInfo) -> Int = info.size_bytes",
+        "",
+        "def main() -> Void",
+        "end",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-TYPE",
+      "start": [1, 16],
+      "covers": "FileInfo"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  puts(FileHandle.close(1))",
+        "end",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-NAME",
+      "start": [2, 8],
+      "covers": "FileHandle.close(1)"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x: File.Infoo = File.stat(\"x\").unwrap!",
+        "end",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-NAME",
+      "start": [2, 6],
+      "covers": "File.Infoo",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  puts(File.Info.size)",
+        "end",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-NAME",
+      "start": [2, 8],
+      "covers": "File.Info.size"
+    },
+    {
+      "program": [
+        "struct FileInfo",
+        "  a: Int",
+        "end",
+        "",
+        "struct FileHandle",
+        "  b: Int",
+        "end",
+        "",
+        "def main() -> Void",
+        "  puts(\"#{FileInfo(a: 1)} #{FileHandle(b: 2)}\")",
+        "end",
+        ""
+      ],
+      "code": "CHECK-REDEFINED-NAME",
+      "start": [1, 1]
+    },
+    {
+      "program": [
+        "def size(info: File.Info.Foo) -> Int = 1",
+        "",
+        "def main() -> Void",
+        "  puts(size)",
+        "end",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-TYPE",
+      "start": [1, 16],
+      "covers": "File.Info.Foo",
+      "help": false
+    }
+  ],
+  "The Process family: Process.Output; the old name ProcessOutput is unknown and stays reserved": [
+    {
+      "program": [
+        "def text(o: Process.Output) -> String = \"#{o.stdout} #{o.truncated} ProcessOutput\"",
+        "",
+        "def main() -> Void",
+        "  puts(text(Process.Output(stdout: \"a\", stderr: \"\", truncated: false).with(stdout: \"b\")))",
+        "end",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def text(o: ProcessOutput) -> String = o.stdout",
+        "",
+        "def main() -> Void",
+        "end",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-TYPE",
+      "start": [1, 13],
+      "covers": "ProcessOutput"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  puts(ProcessOutput(stdout: \"a\", stderr: \"\", truncated: false))",
+        "end",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-TYPE",
+      "start": [2, 8]
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x: Process.Outpt = Process.Output(stdout: \"a\", stderr: \"\", truncated: false)",
+        "end",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-NAME",
+      "start": [2, 6],
+      "covers": "Process.Outpt",
+      "help": true
+    },
+    {
+      "program": [
+        "struct ProcessOutput",
+        "  a: Int",
+        "end",
+        "",
+        "def main() -> Void",
+        "  puts(ProcessOutput(a: 1))",
+        "end",
+        ""
+      ],
+      "code": "CHECK-REDEFINED-NAME",
+      "start": [1, 1]
+    }
+  ],
+  "The TCP family: TCP.Socket and TCP.Listener; the old names Socket and Listener are unknown and free": [
+    {
+      "program": [
+        "def serve(listener: TCP.Listener) -> Result[TCP.Socket] = TCP.accept(listener, 1000)",
+        "",
+        "def main() -> Void",
+        "  listener = TCP.listen(\"127.0.0.1\", 0).unwrap!",
+        "  task = Task.spawn_owning(&serve, listener)",
+        "  puts(\"#{Task.await(task).ok?} Socket\")",
+        "end",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def read(socket: Socket) -> Void",
+        "end",
+        "",
+        "def main() -> Void",
+        "end",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-TYPE",
+      "start": [1, 18],
+      "covers": "Socket"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  Listener.close(1)",
+        "end",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-NAME",
+      "start": [2, 3],
+      "covers": "Listener.close(1)"
+    },
+    {
+      "program": [
+        "def read(socket: TCP.Sockett) -> Void",
+        "end",
+        "",
+        "def main() -> Void",
+        "end",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-NAME",
+      "start": [1, 18],
+      "covers": "TCP.Sockett",
+      "help": true
+    },
+    {
+      "program": [
+        "struct Socket",
+        "  fd: Int",
+        "end",
+        "",
+        "enum Listener",
+        "  Open",
+        "end",
+        "",
+        "def main() -> Void",
+        "  puts(Socket(fd: 1))",
+        "end",
+        ""
+      ],
+      "code": null
+    }
+  ],
+  "The TLS family: TLS.Context, TLS.ClientOptions and TLS.ServerOptions; the old names are unknown and free": [
+    {
+      "program": [
+        "def client(options: TLS.ClientOptions) -> Result[TLS.Context] = TLS.client_context(options)",
+        "",
+        "def main() -> Void",
+        "  server = TLS.ServerOptions(cert_file: \"c.pem\", key_file: \"k.pem\")",
+        "  puts(\"#{client(TLS.ClientOptions(alpn: [])).ok?} #{server.cert_file} TlsContext\")",
+        "end",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def connect(context: TlsContext) -> Void",
+        "end",
+        "",
+        "def main() -> Void",
+        "end",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-TYPE",
+      "start": [1, 22],
+      "covers": "TlsContext"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  puts(TLS.client_context(TlsClientOptions()).ok?)",
+        "end",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-TYPE",
+      "start": [2, 27]
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  options: TLS.ClientOptions = 1",
+        "end",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [2, 32],
+      "covers": "1"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x: TLS.Contxt = TLS.client_context(TLS.ClientOptions()).unwrap!",
+        "end",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-NAME",
+      "start": [2, 6],
+      "covers": "TLS.Contxt",
+      "help": true
+    },
+    {
+      "program": [
+        "struct TlsContext",
+        "  a: Int",
+        "end",
+        "",
+        "struct TlsServerOptions",
+        "  b: Int",
+        "end",
+        "",
+        "def main() -> Void",
+        "  puts(\"#{TlsContext(a: 1)} #{TlsServerOptions(b: 2)}\")",
+        "end",
+        ""
+      ],
+      "code": null
+    }
+  ],
+  "The Test family: Test.Case; the old name TestCase is unknown and free": [
+    {
+      "program": [
+        "def adds() -> Test.Case",
+        "  Test.test(\"adds\") do",
+        "    Test.eq(1 + 1, 2)",
+        "  end",
+        "end",
+        "",
+        "def main() -> Void",
+        "  cases: List[Test.Case] = [adds()]",
+        "  puts(\"TestCase\")",
+        "  Test.run(cases)",
+        "end",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def adds() -> TestCase",
+        "  Test.test(\"adds\") do",
+        "    Test.eq(1 + 1, 2)",
+        "  end",
+        "end",
+        "",
+        "def main() -> Void",
+        "end",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-TYPE",
+      "start": [1, 15],
+      "covers": "TestCase"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  Test.run([Test.Cas])",
+        "end",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-NAME",
+      "start": [2, 13],
+      "covers": "Test.Cas",
+      "help": true
+    },
+    {
+      "program": [
+        "struct TestCase",
+        "  name: String",
+        "end",
+        "",
+        "def main() -> Void",
+        "  puts(TestCase(name: \"a\"))",
+        "end",
+        ""
+      ],
+      "code": null
+    }
+  ],
+  "The System family: System.Profile; the old name Profile is unknown and free": [
+    {
+      "program": [
+        "def main() -> Void",
+        "  n = System.Profile.measure(\"sum\") do 1 + 2 end",
+        "  s: Int = System.Profile.steps()",
+        "  m = \"pipe\" |> System.Profile.measure() do 4 end",
+        "  puts(\"#{n + s + m} Profile.steps\")",
+        "end",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  puts(Profile.steps())",
+        "end",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-NAME",
+      "start": [2, 8],
+      "covers": "Profile.steps()"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  puts(System.Profile.stepz())",
+        "end",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-NAME",
+      "start": [2, 8],
+      "covers": "System.Profile.stepz()"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  puts(System.Profil.steps())",
+        "end",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-NAME",
+      "start": [2, 8],
+      "covers": "System.Profil",
+      "help": true
+    },
+    {
+      "program": [
+        "struct Profile",
+        "  name: String",
+        "end",
+        "",
+        "def main() -> Void",
+        "  puts(Profile(name: \"a\"))",
+        "end",
+        ""
+      ],
+      "code": null
     }
   ]
 }

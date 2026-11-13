@@ -6,7 +6,7 @@ description: Functions for List[T]. Each one is also a method on lists.
 
 Lists are immutable: every function gives a new list. `xs.length` is `xs.size`, `push` is `append`, `select` is `filter`.
 
-`xs == ys` is true when the two lists have the same length and equal items in the same order, compared in depth; the item type must have equality (not `Fn`, `Task`, `Channel`, a handle or `Json`).
+`xs == ys` is true when the two lists have the same length and equal items in the same order, compared in depth; the item type must have equality (not `Fn`, `Task`, `Channel`, a handle or `JSON.Value`).
 
 A callback is a block, `&name` or a function variable. It runs once per element, left to right, under the caller's budget. The parameter and return types must match exactly, and a `map` callback returns data, not `Void`. Annotated block parameters let an empty list or an empty `reduce` initial value infer its type. The costs on this page leave out the callback's own work.
 
@@ -363,7 +363,7 @@ end
 List.include?(list: List[T], value: T) -> Bool
 ```
 
-True when an item `==` the value; `member?` is the same method. Items are any type that has `==` (numbers, `Bool`, `String`, `nil`, ranges, `Bytes`, and lists, maps, sets, Optionals, Results, structs and enums of those); a list of functions, `Json` or handles is `CHECK-TYPE-MISMATCH` at the list, and a value of another type is one at the value. It stops at the first match and is O(n). A `Float` follows IEEE 754, so `NaN` is never a member and `-0.0` matches `0.0`. For many lookups in one list, build a `Set` first.
+True when an item `==` the value; `member?` is the same method. Items are any type that has `==` (numbers, `Bool`, `String`, `nil`, ranges, `Bytes`, and lists, maps, sets, Optionals, Results, structs and enums of those); a list of functions, `JSON.Value` or handles is `CHECK-TYPE-MISMATCH` at the list, and a value of another type is one at the value. It stops at the first match and is O(n). A `Float` follows IEEE 754, so `NaN` is never a member and `-0.0` matches `0.0`. For many lookups in one list, build a `Set` first.
 
 ```agentica
 def main() -> Void

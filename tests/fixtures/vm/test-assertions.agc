@@ -88,7 +88,7 @@ def main() -> Void
       Test.run([])
       ok()
     end,
-    Test.test("Json compares as canonical text") do
+    Test.test("JSON.Value compares as canonical text") do
       a = JSON.parse("{\"b\": 1, \"a\": [true, null]}").unwrap!
       b = JSON.parse("{\"a\":[true,null],\"b\":1}").unwrap!
       try Test.eq(a, b)

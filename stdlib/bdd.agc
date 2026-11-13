@@ -54,8 +54,8 @@ end
 # the hook it runs in, not the scenario, on every context, also one that a hook captured when it was registered.
 struct Scenario
   settings: Settings
-  state: Map[String, Json]
-  services: Map[String, Fn[Json, Result[Json]]]
+  state: Map[String, JSON.Value]
+  services: Map[String, Fn[JSON.Value, Result[JSON.Value]]]
   step: StepLine
   program: Program
   env: Map[String, String]
@@ -96,7 +96,7 @@ export def run(steps: List[Step]) -> Void
   if mode == "list"
     check_start()
     all.each do |item|
-      fields: Map[String, Json] = {"event": JSON.from("step"), "pattern": JSON.from(item.pattern)}
+      fields: Map[String, JSON.Value] = {"event": JSON.from("step"), "pattern": JSON.from(item.pattern)}
       deliver(record_text(fields))
     end
 
@@ -148,31 +148,31 @@ export def skip(ctx: Context, reason: String) -> Context
     deliver(after_record(problems))
     System.exit(1)
   end
-  fields: Map[String, Json] = {"event": JSON.from("skip"), "reason": JSON.from(clip(reason))}
+  fields: Map[String, JSON.Value] = {"event": JSON.from("skip"), "reason": JSON.from(clip(reason))}
   deliver(record_text(fields))
   System.exit(0)
   ctx
 end
 
 ## Returns the context with `value` saved under `name`, for the later steps of the same scenario.
-export def set(ctx: Context, name: String, value: Json) -> Context
+export def set(ctx: Context, name: String, value: JSON.Value) -> Context
   with_state(ctx, ctx.scenario.state.put(name, value))
 end
 
 ## Returns the value saved under `name`, or an error when there is none.
-export def get(ctx: Context, name: String) -> Result[Json]
+export def get(ctx: Context, name: String) -> Result[JSON.Value]
   ctx.scenario.state.get(name).to_result("missing scenario state")
 end
 
 ## Returns the context with `service` kept under `name`, for the later steps of the same scenario. A service is a
 ## function from a request to a result, both JSON: the way to keep a value that is not JSON, such as an open database
 ## connection, which the function captures. The handles close when the scenario's child VM ends with the scenario.
-export def keep(ctx: Context, name: String, service: Fn[Json, Result[Json]]) -> Context
+export def keep(ctx: Context, name: String, service: Fn[JSON.Value, Result[JSON.Value]]) -> Context
   with_services(ctx, ctx.scenario.services.put(name, service))
 end
 
 ## Calls the service kept under `name` with `request` and returns its result, or an error when there is none.
-export def call(ctx: Context, name: String, request: Json) -> Result[Json]
+export def call(ctx: Context, name: String, request: JSON.Value) -> Result[JSON.Value]
   found = ctx.scenario.services.get(name)
   return error("missing scenario service") if found.none?
   found.unwrap!.call(request)
@@ -402,7 +402,7 @@ def serve(all: List[Step]) -> Void
     end
 
     probe(ctx)
-    fields: Map[String, Json] = {"event": JSON.from("end"), "index": JSON.from(current.index)}
+    fields: Map[String, JSON.Value] = {"event": JSON.from("end"), "index": JSON.from(current.index)}
     deliver(record_text(fields))
     line = Process.parent_read_line(idle_ms())
   end
@@ -433,7 +433,7 @@ def run_after(ctx: Context) -> List[String]
 end
 
 def after_record(problems: List[String]) -> String
-  fields: Map[String, Json] = {
+  fields: Map[String, JSON.Value] = {
     "event": JSON.from("fail"),
     "code": JSON.from("RUNTIME-BDD-AFTER"),
     "message": JSON.from(clip("after hook failed: #{problems.join("; ")}")),
@@ -661,7 +661,7 @@ def exited(ctx: Context, p: Process) -> Process
   p
 end
 
-def finished(ctx: Context, p: Process) -> ProcessOutput
+def finished(ctx: Context, p: Process) -> Process.Output
   output = Process.output(p, 5000)
   check(ctx, output.ok?, output.message)
   if output.unwrap!.truncated
@@ -704,7 +704,7 @@ end
 def compare(ctx: Context, checked: Result[Void], expected: String, actual: String) -> Context
   emit("assert")
   if not checked.ok?
-    fields: Map[String, Json] = {
+    fields: Map[String, JSON.Value] = {
       "event": JSON.from("fail"),
       "code": JSON.from("RUNTIME-BDD-ASSERTION"),
       "message": JSON.from("BDD assertion failed"),
@@ -722,7 +722,7 @@ def clip(text: String) -> String
   "#{text.slice(0, 65536)}... (#{text.length - 65536} more characters)"
 end
 
-def with_state(ctx: Context, state: Map[String, Json]) -> Context
+def with_state(ctx: Context, state: Map[String, JSON.Value]) -> Context
   Context(
     scenario: Scenario(
       settings: ctx.scenario.settings,
@@ -738,7 +738,7 @@ def with_state(ctx: Context, state: Map[String, Json]) -> Context
   )
 end
 
-def with_services(ctx: Context, services: Map[String, Fn[Json, Result[Json]]]) -> Context
+def with_services(ctx: Context, services: Map[String, Fn[JSON.Value, Result[JSON.Value]]]) -> Context
   Context(
     scenario: Scenario(
       settings: ctx.scenario.settings,
@@ -825,20 +825,30 @@ end
 
 # Fails the scenario at once, for the failures that no hook can follow: before the scenario's context exists.
 def abort(code: String, message: String) -> Void
-  fields: Map[String, Json] = {"event": JSON.from("fail"), "code": JSON.from(code), "message": JSON.from(message)}
+  fields: Map[String, JSON.Value] = {
+    "event": JSON.from("fail"),
+    "code": JSON.from(code),
+    "message": JSON.from(message),
+  }
+
   deliver(record_text(fields))
   System.exit(1)
 end
 
 def halt(ctx: Context, code: String, message: String) -> Void
-  fields: Map[String, Json] = {"event": JSON.from("fail"), "code": JSON.from(code), "message": JSON.from(message)}
+  fields: Map[String, JSON.Value] = {
+    "event": JSON.from("fail"),
+    "code": JSON.from(code),
+    "message": JSON.from(message),
+  }
+
   finish(ctx, fields)
 end
 
 # Ends the scenario with a fail record. The record goes first and the after hooks run after it, so a hook that hangs or
 # dies cannot hide the failure; the runner reads on until the child exits and adds a failed hook to the message. In a
 # hook (`closing?`) it crashes the hook's task instead, which `run_after` turns into that hook's problem.
-def finish(ctx: Context, fields: Map[String, Json]) -> Void
+def finish(ctx: Context, fields: Map[String, JSON.Value]) -> Void
   if closing?(ctx)
     code = JSON.string(fields["code"]).unwrap_or("")
     gone: Result[Void] = error("#{code}: #{JSON.string(fields["message"]).unwrap_or("")}")
@@ -853,7 +863,7 @@ def finish(ctx: Context, fields: Map[String, Json]) -> Void
 end
 
 def emit(event: String) -> Void
-  fields: Map[String, Json] = {"event": JSON.from(event)}
+  fields: Map[String, JSON.Value] = {"event": JSON.from(event)}
   deliver(record_text(fields))
 end
 
@@ -862,7 +872,7 @@ def deliver(text: String) -> Void
   sent = Process.parent_send(text, send_ms())
   if not sent.ok?
     if sent.message == "process: send exceeds 1048576 bytes"
-      fields: Map[String, Json] = {
+      fields: Map[String, JSON.Value] = {
         "event": JSON.from("fail"),
         "code": JSON.from("RUNTIME-BDD-OUTPUT-LIMIT"),
         "message": JSON.from("handler output exceeds 1 MiB"),
@@ -880,7 +890,7 @@ def idle_ms() -> Int = 86400000
 
 def send_ms() -> Int = 5000
 
-def record_text(fields: Map[String, Json]) -> String = "#{JSON.encode(JSON.object(fields))}\n"
+def record_text(fields: Map[String, JSON.Value]) -> String = "#{JSON.encode(JSON.object(fields))}\n"
 
 def ended_text() -> String = "process: end of input"
 

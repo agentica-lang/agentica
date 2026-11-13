@@ -3,7 +3,7 @@
   "code": null,
   "steps": 351,
   "stdout": [
-    "<FileHandle>",
+    "<File.Handle>",
     "ok()",
     "ok()",
     "ok()",

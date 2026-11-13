@@ -2,9 +2,9 @@
 
 `receiver.name(args)` calls a builtin whose first parameter has the receiver's
 type. The checker picks the module from the static type (`String`, `Bytes`,
-`List`, `Map`, `Set`, `Float`, `Result`, `Range`, `Int`, `Json` through `JSON`,
-and `Codec[T]` through `Codec`); there is no dynamic dispatch. `s.strip` is
-`String.strip(s)`, and `n.to_s` is `Int.to_s(n)`. The methods of a codec are
+`List`, `Map`, `Set`, `Float`, `Result`, `Range`, `Int`, `JSON.Value` through
+`JSON`, and `Codec[T]` through `Codec`); there is no dynamic dispatch. `s.strip`
+is `String.strip(s)`, and `n.to_s` is `Int.to_s(n)`. The methods of a codec are
 also functions, `Codec.decode(c, s)`, as `String.upcase` is. Without
 parentheses, `receiver.name` on a non-struct value is a method without arguments
 (`s.length`, `r.ok?`). On a struct, `.name` is a field. Structs and enums have
@@ -26,15 +26,15 @@ for `include?` on `List`, `Set` and `Range`; `include?` and `member?` for `key?`
 (`"abc".to_i` is an error, not `0`), and `to_i!` and `to_f!` halt on bad text.
 An unknown method is `CHECK-UNKNOWN-METHOD`.
 
-`x.to_s` is the text `"#{x}"` gives: a `String` as is, a `Json` as its JSON
-text, an `Error` as its message, and any other data value in its `inspect`
+`x.to_s` is the text `"#{x}"` gives: a `String` as is, a `JSON.Value` as its
+JSON text, an `Error` as its message, and any other data value in its `inspect`
 form (`[1, 2]`, `ok(3)`, `Item(name: "a")`). An `Error` inspects as the
-`error(...)` call that builds it, without the fields that hold their default
-and without `location`, both alone and as the payload of a failed Result.
-Inside a list, a `Json` shows as `<Json>`. Functions, tasks, handles,
+`error(...)` call that builds it, without the fields that hold their default and
+without `location`, both alone and as the payload of a failed Result. Inside a
+list, a `JSON.Value` shows as `<JSON.Value>`. Functions, tasks, handles,
 `C.Pointer` values and resources have no `to_s`, so printing or interpolating
-one is `CHECK-TYPE-MISMATCH`. Unlike Ruby, `nil.to_s` is `"nil"`.
-`x.inspect` keeps a string's quotes; it is for display, not valid source.
+one is `CHECK-TYPE-MISMATCH`. Unlike Ruby, `nil.to_s` is `"nil"`. `x.inspect`
+keeps a string's quotes; it is for display, not valid source.
 
 Values are immutable: a method never changes its receiver, so `xs.push(2)`
 returns a new list. A builtin without effects whose non-Void result is dropped
@@ -86,30 +86,30 @@ the [`Lazy` page](../../site/content/library/data-structures/lazy.md).
 
 ### JSON
 
-`Json`, `JSON` and `JsonField` are reserved. A `Json` value has no constructor,
-equality, fields or indexing. The functions, their errors, the schema and the
-text they read and write are in the
-[`JSON` page](../../site/content/library/text-and-data/json.md). The rules that
-the checker enforces:
+`JSON` is reserved; `JSON.Value` and `JSON.Field` are members of its family. A
+`JSON.Value` has no constructor, equality, fields or indexing. The functions,
+their errors, the schema and the text they read and write are in the [`JSON`
+page](../../site/content/library/text-and-data/json.md). The rules that the
+checker enforces:
 
 - `JSON.decode(source, T)` and `JSON.schema(T)` take a named struct or enum
   type, not a value, and so does `T.codec`; bare type names are valid only for
-  these. `JSON.decode` also takes `List[T]` and `Map[String, T]` of such a
-  type (or of a field type below); `schema` and `codec` refuse them
-  (`CHECK-TYPE-MISMATCH`). Fields and payloads may be Int, Float, Bool,
-  String, lists, String-keyed maps, nested or recursive structs and enums, and
-  `Optional` of those (and `JsonField`, for a struct field); any other nested
+  these. `JSON.decode` also takes `List[T]` and `Map[String, T]` of such a type
+  (or of a field type below); `schema` and `codec` refuse them
+  (`CHECK-TYPE-MISMATCH`). Fields and payloads may be Int, Float, Bool, String,
+  lists, String-keyed maps, nested or recursive structs and enums, and
+  `Optional` of those (and `JSON.Field`, for a struct field); any other nested
   type, a generic struct or enum instance included, is `CHECK-NOT-DECODABLE`.
 - `JSON.encode` and `JSON.from` accept Int, Float, Bool, String, Nil (as
-  `null`), Json, lists, String-keyed maps, `Optional`, structs and user enums of
-  those, whose struct fields may also be `JsonField`. An instance of a generic
-  struct or enum counts by its fields or payloads after substitution
+  `null`), JSON.Value, lists, String-keyed maps, `Optional`, structs and user
+  enums of those, whose struct fields may also be `JSON.Field`. An instance of a
+  generic struct or enum counts by its fields or payloads after substitution
   (`Box[List[Int]]`, `Maybe[Int]`). Results, builtin enums (`TaskExit`) and
   Int-keyed maps are `CHECK-NOT-ENCODABLE`. Untyped empty containers need an
   annotation.
 - A user enum is a tagged object `{"tag": "Rect", "values": [1.0, 2.0]}`: `tag`
   is the variant name and `values` the payloads in order. The page has the
-  errors and the schema (a `oneOf`). A `JsonField` in a payload is
+  errors and the schema (a `oneOf`). A `JSON.Field` in a payload is
   `CHECK-JSON-FIELD-PLACE`.
 - `T.codec` takes the targets of `decode`, with its diagnostics (a value is
   `CHECK-UNKNOWN-METHOD`), and gives a `Codec[T]`: the JSON of `T` and its
@@ -132,48 +132,47 @@ and `JSON.from`. `none` is `null`, `some(x)` is `x`, and a missing key of an
 
 - `Optional[Nil]` is `CHECK-NOT-ENCODABLE` or `CHECK-NOT-DECODABLE`, since
   `some(nil)` would be written as `null`. An `Optional` cannot hold a
-  `JsonField` (`Optional[JsonField[T]]` is `CHECK-JSON-FIELD-PLACE`), and a
-  `JsonField[Optional[T]]` is `CHECK-NOT-ENCODABLE` or `CHECK-NOT-DECODABLE`:
+  `JSON.Field` (`Optional[JSON.Field[T]]` is `CHECK-JSON-FIELD-PLACE`), and a
+  `JSON.Field[Optional[T]]` is `CHECK-NOT-ENCODABLE` or `CHECK-NOT-DECODABLE`:
   use `Optional[T]` when a missing key and `null` mean the same, and
-  `JsonField[T]` when they differ.
+  `JSON.Field[T]` when they differ.
 - `JSON.decode`, `JSON.schema` and `T.codec` take a struct or enum name, so
   a top-level `Optional` is decoded as a field of a struct.
 
-#### Optional and nullable fields (`JsonField`)
+#### Optional and nullable fields (`JSON.Field`)
 
-A struct field of type `JsonField[T]` keeps the three states of a key apart in
-typed JSON: absent, `null`, or a value. `JsonField` is a builtin generic enum:
+A struct field of type `JSON.Field[T]` keeps the three states of a key apart in
+typed JSON: absent, `null`, or a value. `JSON.Field` is a builtin generic enum:
 
 ```agentica
-enum JsonField[T]
+enum JSON.Field[T]
   Absent
   Null
   Value(T)
 end
 ```
 
-- The variants are always qualified (`JsonField.Value(x)`). `Absent` and `Null`
+- The variants are always qualified (`JSON.Field.Value(x)`). `Absent` and `Null`
   need an expected type, like any nullary variant of a generic enum
   (`CHECK-ENUM-TYPE-INFERENCE` otherwise); a struct field gives one. A `case`
   needs the three arms or a `_` arm, which is how a program treats absent and
   null alike.
 - **Where:** in the type of a `JSON.decode` or `JSON.schema` target or of a
-  `JSON.encode` or `JSON.from` argument, `JsonField` may only be the direct type
-  of a struct field. A list item, a map value, an `Optional` item, a nested
-  `JsonField[JsonField[T]]` or the whole argument of `JSON.encode` or
+  `JSON.encode` or `JSON.from` argument, `JSON.Field` may only be the direct
+  type of a struct field. A list item, a map value, an `Optional` item, a nested
+  `JSON.Field[JSON.Field[T]]` or the whole argument of `JSON.encode` or
   `JSON.from` is `CHECK-JSON-FIELD-PLACE`, at the target or argument. A type
-  argument counts after substitution: in `Box[JsonField[Int]]` (`struct Box[T]`
-  with `value: T`) the field is a direct `JsonField` field, but `items: List[T]`
-  or `f: JsonField[T]` with that argument is `CHECK-JSON-FIELD-PLACE`.
+  argument counts after substitution: in `Box[JSON.Field[Int]]` (`struct Box[T]`
+  with `value: T`) the field is a direct `JSON.Field` field, but `items:
+  List[T]` or `f: JSON.Field[T]` with that argument is `CHECK-JSON-FIELD-PLACE`.
   `JSON.decode` and `JSON.schema` still take no generic instance. This check
-  comes first, so `List[JsonField[Nil]]` is `CHECK-JSON-FIELD-PLACE`.
-  `JsonField[Nil]` as a field is `CHECK-NOT-DECODABLE` or
+  comes first, so `List[JSON.Field[Nil]]` is `CHECK-JSON-FIELD-PLACE`.
+  `JSON.Field[Nil]` as a field is `CHECK-NOT-DECODABLE` or
   `CHECK-NOT-ENCODABLE`, since `Value(nil)` would be written as `null`. A bare
-  `JsonField` target is `CHECK-UNKNOWN-TYPE`.
-- Outside JSON, `JsonField[T]` is an ordinary enum value: locals, parameters,
-  lists and maps may hold it, it prints when `T` does (`JsonField.Value(30)`),
-  and it has no `==`. A user `struct JsonField`, `enum JsonField` or `import ...
-  as JsonField` is `CHECK-REDEFINED-NAME`.
+  `JSON.Field` target is `CHECK-UNKNOWN-TYPE`.
+- Outside JSON, `JSON.Field[T]` is an ordinary enum value: locals, parameters,
+  lists and maps may hold it, it prints when `T` does (`JSON.Field.Value(30)`),
+  and it has no `==`.
 
 ### Builtin discovery and execution budget
 

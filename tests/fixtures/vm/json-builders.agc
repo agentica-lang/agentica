@@ -8,7 +8,7 @@ struct Shape
   name: String
   points: List[Point]
   tags: Map[String, Bool]
-  extra: Json
+  extra: JSON.Value
   missing: Nil
 end
 
@@ -27,8 +27,8 @@ def main() -> Void
   puts(JSON.encode(true))
   puts(JSON.encode(-42))
   puts(JSON.encode(1000000000000000000000.0))
-  empty: Map[String, Json] = {}
-  no_items: List[Json] = []
+  empty: Map[String, JSON.Value] = {}
+  no_items: List[JSON.Value] = []
   puts(JSON.object(empty))
   puts(JSON.array(no_items))
   o = JSON.object({"k": JSON.from(1), "j": JSON.array([JSON.from("x"), JSON.null()])})

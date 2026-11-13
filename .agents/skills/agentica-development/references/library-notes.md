@@ -21,35 +21,35 @@ tasks, TCP, TLS and HTTP, files and paths, processes. VM internals are in
 - Typed decoding uses a type-expression AST node accepted only in JSON type
   argument positions. JSON.decode returns located-path Result errors, validates
   signed Int/finite Float bounds, and ignores extra fields. Recursive type
-  validation visits each struct once. The source may be a String or a Json (two
-  catalog forms, one rule and one VM builtin that skips the parse for a Json).
-  JSON.schema uses the same eligibility check, emits 64-bit bounds and
-  $defs/$ref for nested or recursive types, and lists in required every field
-  that is not a JsonField or an Optional. JsonField[T] is only the direct type
-  of a struct field (CHECK-JSON-FIELD-PLACE, checked before the decodable and
-  encodable walks; the walk looks inside Optional). Optional[T] is type kind 8,
-  valid at any depth; the encoders unwrap Optional values anywhere
-  (program->optional, found by the loader), and JsonField[Optional[T]] and
+  validation visits each struct once. The source may be a String or a JSON.Value
+  (two catalog forms, one rule and one VM builtin that skips the parse for a
+  JSON.Value). JSON.schema uses the same eligibility check, emits 64-bit bounds
+  and $defs/$ref for nested or recursive types, and lists in required every
+  field that is not a JSON.Field or an Optional. JSON.Field[T] is only the
+  direct type of a struct field (CHECK-JSON-FIELD-PLACE, checked before the
+  decodable and encodable walks; the walk looks inside Optional). Optional[T] is
+  type kind 8, valid at any depth; the encoders unwrap Optional values anywhere
+  (program->optional, found by the loader), and JSON.Field[Optional[T]] and
   Optional[Nil] are refused by the walks. JSON.from shares encode eligibility
   and non-finite diagnostics.
 
-- `Json` is opaque, not primitive for equality. `Json`, `JSON` and `JsonField`
-  are reserved names.
+- `JSON.Value` is opaque, not primitive for equality. `JSON` is a reserved name;
+  `JSON.Value` and `JSON.Field` are members of its family.
 - Encoding eligibility is checked recursively, including declared struct fields
   and empty containers; a seen-struct path prevents infinite recursion without
   skipping other fields.
 - JSON for enums: a user enum is the tagged object {"tag", "values"}
   (`enum_walk` in check_types.agc for encode and decode, `place_enum` for
-  JsonField in a payload). The writer is the generic walk of vm/json_value.c
+  JSON.Field in a payload). The writer is the generic walk of vm/json_value.c
   (an enum value is an object of two children); decode and schema are in
   vm/json_typed.c. The payload types of a decodable enum are the optional last
   section of the .agcb (docs/vm/03-ir-and-bytecode.md 4.6), type kind 9; only
   the enums that a decode target or a decodable struct reaches are in it
   (`with_reachable_enums` in lower_program.agc), and a program with none writes
   no section.
-- Parse rejects non-finite numbers, while large integer Json payloads remain
-  valid. Non-finite Floats halt encoding with RUNTIME-JSON-ENCODE at the call
-  span.
+- Parse rejects non-finite numbers, while large integer JSON.Value payloads
+  remain valid. Non-finite Floats halt encoding with RUNTIME-JSON-ENCODE at the
+  call span.
 
 ## Lightweight I/O tasks
 

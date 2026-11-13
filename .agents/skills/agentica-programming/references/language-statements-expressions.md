@@ -83,10 +83,10 @@ expressions and operators. Builtin methods and `to_s`: `builtins.md`.
   digit is `LEX-INVALID-NUMBER`), `"text"` (escapes `\" \\ \# \n \r \t`),
   `true`, `false`, `nil`. A minus sign is an operator, not part of the literal;
   an integer that does not fit is `CHECK-INT-RANGE`.
-- Interpolation: `"total: #{n + 1}"`. Strings go in as is, `Json` as its JSON
-  text, other data in their `IO.inspect` form. Keep the expression on one line;
-  `\#{` is literal text. `case` patterns and `import` paths take plain strings
-  only.
+- Interpolation: `"total: #{n + 1}"`. Strings go in as is, `JSON.Value` as its
+  JSON text, other data in their `IO.inspect` form. Keep the expression on one
+  line; `\#{` is literal text. `case` patterns and `import` paths take plain
+  strings only.
 - Heredocs: `<<~NAME`, the text lines, then a line with only `NAME` (capitals,
   digits, `_`; other opener forms are `LEX-UNEXPECTED-CHAR`). The smallest
   indentation among the text lines is removed, and every line, the last too,
@@ -165,7 +165,7 @@ Operators, from highest to lowest precedence:
   lists, maps, sets, Optionals, Results, structs and enums made of those. They
   compare in depth: lists in order, maps and sets in any order, structs field
   by field, enums by variant and payload (`a == b`, `xs == []`, `r == ok(1)`).
-  Fn, Task, Channel, handles, Json and anything that holds one cannot be
+  Fn, Task, Channel, handles, JSON.Value and anything that holds one cannot be
   compared (`CHECK-TYPE-MISMATCH`), nor a generic `T`. A NaN anywhere makes a
   value unequal, even to itself.
 - `&&`, `||`, `!` take Bool and short-circuit; `and`, `or`, `not` are the same.

@@ -324,7 +324,7 @@ end
 # Cx.json_needs: the body of each generic function of every module is checked once with no needs known, which gives
 # what its own JSON.encode and JSON.from calls need and the generic functions it calls; then a callee's needs, bound by
 # each call, become the caller's until nothing changes. A body that fails is left out here: the check of the bodies
-# reports it. A need is a variable of the function or an Optional, JsonField or Map key of one, so a function has a
+# reports it. A need is a variable of the function or an Optional, JSON.Field or Map key of one, so a function has a
 # few at most and the loop ends.
 def json_needs(cx: State.Cx, st: State.St, modules: List[Linker.LinkedModule]) -> Map[String, List[T.Type]]
   needs: Map[String, List[T.Type]] = {}

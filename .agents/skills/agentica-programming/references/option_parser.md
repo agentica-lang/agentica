@@ -2,7 +2,7 @@
 
 `import OP from "std/option_parser"` and `import {Arg, Opt, Kind} from
 "std/option_parser"`. Command-line options in the style of `argparse`, with
-Ruby names. Written in Agentica; no Json.
+Ruby names. Written in Agentica; no JSON.Value.
 
 ```text
 OP.new(program: String, description: String = "", args: List[Arg] = [], opts: List[Opt] = [], rest: String = "") -> Parser

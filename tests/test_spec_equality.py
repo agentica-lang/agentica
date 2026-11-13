@@ -1,5 +1,5 @@
 """== and != through the product CLI: which types have equality (structs, lists, maps, sets, Results, Optionals and
-enums made of data, recursive and generic ones too) and which do not (functions, tasks, channels, handles, Json and
+enums made of data, recursive and generic ones too) and which do not (functions, tasks, channels, handles, JSON.Value and
 anything that holds one), and that both sides have one type. A case is `(program, code, covered text)`: the code of
 the diagnostic and the source text its range covers; a program that must check clean has no code.
 """
@@ -89,7 +89,7 @@ REFUSED = [
     (main("  f: Fn[Int, Int] = &inc\n  puts(f == f)\n"), "CHECK-TYPE-MISMATCH", "=="),
     # A group of types that hold one another has no equality when one of them holds a function.
     (main("  r = Ring(next: [])\n  puts(r == r)\n"), "CHECK-TYPE-MISMATCH", "=="),
-    # Json, tasks, channels and handles have no equality either.
+    # JSON.Value, tasks, channels and handles have no equality either.
     (main('  j = JSON.parse("1").unwrap!\n  puts([j] == [j])\n'), "CHECK-TYPE-MISMATCH", "=="),
     (main("  t = Task.spawn do 1 end\n  puts(t == t)\n"), "CHECK-TYPE-MISMATCH", "=="),
     (main("  c: Channel[Int] = Channel.new(1)\n  puts(c == c)\n"), "CHECK-TYPE-MISMATCH", "=="),

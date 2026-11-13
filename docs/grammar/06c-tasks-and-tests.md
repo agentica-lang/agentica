@@ -65,11 +65,11 @@ its functions) are in the
 
 ### Unit tests (`Test`)
 
-`Test` and `TestCase` are reserved. `Test` is a builtin module that needs no
-import. A test file is a program whose `main` calls `Test.run` with a list of
-`Test.test(name) do ... end` blocks, and the block returns `Result[Void]`. The
-assertions, the report, `Test.run` and the order in which a test fails are in
-the [`Test` page](../../site/content/library/testing/test.md).
+`Test` is reserved; `Test.Case` is its member. `Test` is a builtin module that
+needs no import. A test file is a program whose `main` calls `Test.run` with a
+list of `Test.test(name) do ... end` blocks, and the block returns
+`Result[Void]`. The assertions, the report, `Test.run` and the order in which a
+test fails are in the [`Test` page](../../site/content/library/testing/test.md).
 
 - Test functions: a `*_test.agc` file may have no `main`. Then `agentica test`
   runs its top-level `test_*` functions, in source order, as if `main` called

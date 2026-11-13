@@ -1,5 +1,5 @@
 struct Job
-  socket: Socket
+  socket: TCP.Socket
   text: String
 end
 

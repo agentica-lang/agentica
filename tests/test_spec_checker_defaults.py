@@ -228,25 +228,25 @@ SINGLE_FILE = [
      main_with('  o = Process.Options(dir: "d")\n'), "CHECK-UNKNOWN-FIELD", 'dir: "d"'),
     ("Process.spawn_captured still needs its command and arguments",
      main_with('  c = Process.spawn_captured("ls")\n'), "CHECK-ARITY", 'Process.spawn_captured("ls")'),
-    ("TlsClientOptions may leave out every field, and HTTP.ClientOptions its tls, which is none",
-     main_with('  a = TLS.client_context(TlsClientOptions())\n  _b = TlsClientOptions(ca_file: "ca.pem")\n'
-               '  c = HTTP.ClientOptions()\n  _d: Optional[TlsContext] = c.tls\n'
+    ("TLS.ClientOptions may leave out every field, and HTTP.ClientOptions its tls, which is none",
+     main_with('  a = TLS.client_context(TLS.ClientOptions())\n  _b = TLS.ClientOptions(ca_file: "ca.pem")\n'
+               '  c = HTTP.ClientOptions()\n  _d: Optional[TLS.Context] = c.tls\n'
                '  _e = HTTP.ClientOptions(tls: some(a.unwrap!))\n', HTTP), None, None),
     ("alpn is a list of protocol names that both options records may leave out",
-     main_with('  _a = TlsClientOptions(alpn: ["h2", "http/1.1"])\n'
-               '  b = TlsServerOptions(cert_file: "c.pem", key_file: "k.pem")\n  _c: List[String] = b.alpn\n'),
+     main_with('  _a = TLS.ClientOptions(alpn: ["h2", "http/1.1"])\n'
+               '  b = TLS.ServerOptions(cert_file: "c.pem", key_file: "k.pem")\n  _c: List[String] = b.alpn\n'),
      None, None),
     ("alpn takes a list of names, not one name",
-     main_with('  a = TlsClientOptions(alpn: "h2")\n'), "CHECK-TYPE-MISMATCH", '"h2"'),
-    ("TlsServerOptions has no default key pair",
-     main_with('  a = TlsServerOptions(cert_file: "c.pem")\n'), "CHECK-MISSING-FIELD", 'TlsServerOptions(cert_file: "c.pem")'),
-    ("HTTP.ClientOptions holds a TlsContext, so JSON cannot decode it",
+     main_with('  a = TLS.ClientOptions(alpn: "h2")\n'), "CHECK-TYPE-MISMATCH", '"h2"'),
+    ("TLS.ServerOptions has no default key pair",
+     main_with('  a = TLS.ServerOptions(cert_file: "c.pem")\n'), "CHECK-MISSING-FIELD", 'TLS.ServerOptions(cert_file: "c.pem")'),
+    ("HTTP.ClientOptions holds a TLS.Context, so JSON cannot decode it",
      main_with('  puts(JSON.decode("{}", HTTP.ClientOptions).ok?)\n', HTTP), "CHECK-NOT-DECODABLE",
      "HTTP.ClientOptions"),
     ("File.open still needs its path",
      main_with("  puts(File.open())\n"), "CHECK-ARITY", "File.open()"),
     ("File.open with a block takes the block form, which may leave out the mode and the timeout too",
-     'def size(f: FileHandle) -> Result[Int]\n  return ok((try File.read_line(f)).size)\nend\n\n'
+     'def size(f: File.Handle) -> Result[Int]\n  return ok((try File.read_line(f)).size)\nend\n\n'
      + main_with('  a = File.open("a.txt") do |f|\n    ok(try File.read_line(f))\n  end\n  puts(a)\n'
                  '  b: Result[List[Int]] = File.open("a.txt", "write") do |_|\n    ok([])\n  end\n  puts(b)\n'
                  '  c = File.open("a.txt", "append", 50) do |f|\n    try File.write(f, "x")\n    ok()\n  end\n'
@@ -259,7 +259,7 @@ SINGLE_FILE = [
     ("the expected type of File.open with a block is the Result its block gives",
      main_with('  r: Result[Int] = File.open("a.txt") do |_|\n    ok("s")\n  end\n  puts(r)\n'),
      "CHECK-TYPE-MISMATCH", '"s"'),
-    ("the block of File.open gets a FileHandle",
+    ("the block of File.open gets a File.Handle",
      main_with('  puts(File.open("a.txt") do |f|\n    ok(File.read_text(f))\n  end)\n'), "CHECK-TYPE-MISMATCH", "f"),
     # Function values of builtins (&Time.now_ms, &Int.to_s).
     ("a builtin function is a function value of its type",
@@ -268,7 +268,7 @@ SINGLE_FILE = [
      main_with('  puts([1, 2].map(&Int.to_s))\n  f: Fn[String, String] = &String.strip\n  puts(f.call(" a "))\n'),
      None, None),
     ("a method of a type whose builtins live in another module is written with the type",
-     main_with('  f: Fn[Json, String, Result[Json]] = &Json.get\n  puts(f.call(JSON.parse("{}").unwrap!, "a"))\n'),
+     main_with('  f: Fn[JSON.Value, String, Result[JSON.Value]] = &JSON.Value.get\n  puts(f.call(JSON.parse("{}").unwrap!, "a"))\n'),
      None, None),
     ("a function value of a builtin has the type of the builtin",
      main_with("  f: Fn[String] = &Time.now_ms\n  puts(f.call())\n"), "CHECK-TYPE-MISMATCH", "&Time.now_ms"),
@@ -485,12 +485,12 @@ def test_programs_of_several_files(title, files, code, file, text, several_files
 # The forms before contexts and before Process.Options, and a context where its Optional goes, carry a help: (title,
 # program, code, text the range covers). Only the presence of the help is asserted, not its text.
 HELPED = [
-    ("a TlsContext where HTTP.ClientOptions takes its Optional",
-     main_with('  c = TLS.client_context(TlsClientOptions()).unwrap!\n  a = HTTP.ClientOptions(tls: c)\n', HTTP),
+    ("a TLS.Context where HTTP.ClientOptions takes its Optional",
+     main_with('  c = TLS.client_context(TLS.ClientOptions()).unwrap!\n  a = HTTP.ClientOptions(tls: c)\n', HTTP),
      "CHECK-TYPE-MISMATCH", "c"),
-    ("a CA file where HTTP.ClientOptions takes an Optional[TlsContext]",
+    ("a CA file where HTTP.ClientOptions takes an Optional[TLS.Context]",
      main_with('  a = HTTP.ClientOptions(tls: "ca.pem")\n', HTTP), "CHECK-TYPE-MISMATCH", '"ca.pem"'),
-    ("a CA file where TLS.connect takes a TlsContext",
+    ("a CA file where TLS.connect takes a TLS.Context",
      main_with('  a = TLS.connect("h", 1, "", 50)\n'), "CHECK-TYPE-MISMATCH", '""'),
     ("a timeout where the spawns take Process.Options",
      main_with('  a = Process.spawn("ls", [], 5000)\n'), "CHECK-TYPE-MISMATCH", "5000"),

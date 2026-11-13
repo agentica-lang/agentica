@@ -10,7 +10,7 @@ import DiagnosticJson from "../diagnostics/diagnostic_json"
 import DocJson from "../docs/doc_json"
 
 ## The object of the answer. Every range is in the file of `position`, except that of the definition.
-export def json(found: Model.TypeAt) -> Json
+export def json(found: Model.TypeAt) -> JSON.Value
   file = found.position.file
   shape = {
     "version": JSON.from(found.version),
@@ -34,14 +34,14 @@ export def json(found: Model.TypeAt) -> Json
 end
 
 # The type, or null for a name that only the link could answer.
-def typed(type: String) -> Json
+def typed(type: String) -> JSON.Value
   return JSON.null() if type == ""
 
   JSON.from(type)
 end
 
 # `{file, range, kind, name, name_span}`, or null for what no file declares.
-def definition_json(definition: List[Model.Definition]) -> Json
+def definition_json(definition: List[Model.Definition]) -> JSON.Value
   return JSON.null() if definition.size == 0
 
   found = definition[0]

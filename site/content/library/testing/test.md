@@ -46,20 +46,20 @@ def test_rejects_zero() -> Result[Void] = Test.error?(parse_port("0"))
 
 A file with both `main` and `test_` functions is `CHECK-TEST-MAIN`, so a forgotten `main` never hides tests; with the `main` form, name helpers without the `test_` prefix. Without `main`, a test function takes no parameters and its result is written `Result[Void]` (a type alias of it does not count); anything else is `CHECK-TEST-SIGNATURE`, and a function named just `test_` is `CHECK-TEST-NAME`. `agentica check` applies these rules to `*_test.agc` files. Run as a normal program, a test file with no `main` is `CHECK-MAIN`; in a file of any other name, `test_` functions are ordinary functions.
 
-`Test` and `TestCase` are reserved names. `IO.inspect` of a `TestCase` shows `<TestCase>`.
+`Test` is a reserved name, with the member `Test.Case`. `IO.inspect` of a `Test.Case` shows `<Test.Case>`.
 
 ## Test.test
 
 ```signature
-Test.test(name: String, body: Fn[Result[Void]]) -> TestCase
+Test.test(name: String, body: Fn[Result[Void]]) -> Test.Case
 ```
 
-Builds a test from a name and a block. A `TestCase` keeps the name, the block and the place of the call, which is where the test is reported. Names must not be empty and must be unique within a file; otherwise `Test.run` fails with `RUNTIME-TEST-NAME` at that call.
+Builds a test from a name and a block. A `Test.Case` keeps the name, the block and the place of the call, which is where the test is reported. Names must not be empty and must be unique within a file; otherwise `Test.run` fails with `RUNTIME-TEST-NAME` at that call.
 
 ## Test.run
 
 ```signature
-Test.run(tests: List[TestCase]) -> Void
+Test.run(tests: List[Test.Case]) -> Void
 ```
 
 Serves the test runner and never returns. Call it from `main` itself: in a test or in any other task it fails with `RUNTIME-TEST-RUN` at the call ("call Test.run from main, outside every test").
@@ -68,7 +68,7 @@ Under `agentica test`, the runner talks to the file on a channel of its own (see
 
 - Name the file `*_test.agc`. `agentica test` finds such files in `test/` by default and prints one line per test: `PASS file / name`, or `FAIL file / name` with the diagnostic and the output of the test below it.
 - Each test runs in its own task, so a crash fails only that test. Each test has 30 seconds (`RUNTIME-TEST-TIMEOUT`), and `main` has 30 seconds to reach `Test.run` (a file error with the same code). A test that exits, hits its step limit or times out ends the file's run, and the tests after it are `NOT RUN`.
-- A file runs with `--max-steps` 1,000,000 times the number of tests it runs plus one, shared by all its tests, so `--only` lowers it; `Profile.steps` measures a test.
+- A file runs with `--max-steps` 1,000,000 times the number of tests it runs plus one, shared by all its tests, so `--only` lowers it; `System.Profile.steps` measures a test.
 - A file that exits, crashes or never calls `Test.run` is a file error that shows what it printed.
 - A test that times out keeps the output it printed, up to 1 MiB. A test that prints more than 1 MiB fails at once with `RUNTIME-BDD-OUTPUT-LIMIT`, even if it never ends, and shows no output.
 - Run as a normal program, the file prints `run this file with agentica test` on stderr and exits 2.
@@ -91,9 +91,9 @@ Each test gets its own random generator, seeded from the run's seed and the test
 Test.eq(actual: T, expected: T) -> Result[Void]
 ```
 
-Compares two values of the same type. The type comes from the first argument, so put the actual value first: `Test.eq(r, error("x"))` works, but `Test.eq(error("x"), r)` is `CHECK-RESULT-TYPE`, since `error("x")` does not say what its `ok` type is. The type must have equality: `Int`, `Float`, `Bool`, `String`, `Nil`, `Range`, `Json`, and lists, maps, sets, Results (`Result[Void]` too), structs and enums made of them. Functions, tasks, handles and two different types are `CHECK-TYPE-MISMATCH`. Lists compare in order; maps by key and sets by element, in any order; structs and enums by type, variant and fields, and Floats by IEEE 754. A `Json` compares by its canonical text at any depth.
+Compares two values of the same type. The type comes from the first argument, so put the actual value first: `Test.eq(r, error("x"))` works, but `Test.eq(error("x"), r)` is `CHECK-RESULT-TYPE`, since `error("x")` does not say what its `ok` type is. The type must have equality: `Int`, `Float`, `Bool`, `String`, `Nil`, `Range`, `JSON.Value`, and lists, maps, sets, Results (`Result[Void]` too), structs and enums made of them. Functions, tasks, handles and two different types are `CHECK-TYPE-MISMATCH`. Lists compare in order; maps by key and sets by element, in any order; structs and enums by type, variant and fields, and Floats by IEEE 754. A `JSON.Value` compares by its canonical text at any depth.
 
-When the values differ, the test reports `values are not equal`, and the error text is `expected E; actual A`, with both values in the `inspect` form, except that a `Json` is its JSON text and a `Bytes` is quoted text: printable ASCII as is, other bytes escaped as in a `String` (`\e`, `\xFF`), the first 32 bytes shown (`<Bytes 7 "+OK\r\n\x00\xFF">`). `Test.ok?` gives `expected ok; actual A`, `Test.error?` gives `expected an error; actual A`, and `Test.assert` gives its message. The first recorded failure of a test is the one reported, and `RUNTIME-TEST-ASSERTION` carries `expected` and `actual` for `Test.eq`, only `actual` for `Test.ok?` and `Test.error?`, and neither for `Test.assert`.
+When the values differ, the test reports `values are not equal`, and the error text is `expected E; actual A`, with both values in the `inspect` form, except that a `JSON.Value` is its JSON text and a `Bytes` is quoted text: printable ASCII as is, other bytes escaped as in a `String` (`\e`, `\xFF`), the first 32 bytes shown (`<Bytes 7 "+OK\r\n\x00\xFF">`). `Test.ok?` gives `expected ok; actual A`, `Test.error?` gives `expected an error; actual A`, and `Test.assert` gives its message. The first recorded failure of a test is the one reported, and `RUNTIME-TEST-ASSERTION` carries `expected` and `actual` for `Test.eq`, only `actual` for `Test.ok?` and `Test.error?`, and neither for `Test.assert`.
 
 ```agentica
 struct Point

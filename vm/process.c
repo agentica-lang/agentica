@@ -669,7 +669,7 @@ static agc_value take(agc_vm *vm, proc *p, req_kind kind, size_t count) {
 
 static uint32_t output_struct(agc_vm *vm) {
   static const char *const fields[] = {"stdout", "stderr", "truncated"};
-  return agc_builtin_struct(vm, "ProcessOutput", fields, 3);
+  return agc_builtin_struct(vm, "Process.Output", fields, 3);
 }
 
 static agc_value output_of(agc_vm *vm, const uint8_t *out, size_t out_len, const uint8_t *err, size_t err_len,

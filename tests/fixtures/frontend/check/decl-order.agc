@@ -4,7 +4,7 @@ end
 
 struct Box
   items: List[Int]
-  tags: Map[String, Json]
+  tags: Map[String, JSON.Value]
 end
 
 struct Hook

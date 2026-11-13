@@ -65,8 +65,8 @@ export def build(
   decodable = user_decodable(struct_decls, enum_decls, builtin_types, names)
   wanted = used
   if decodable.values.any? do |types: List[Types.Type]| types.any? do |type: Types.Type| json_field?(type) end end
-    # JSON.decode builds JsonField values, so the enum is in the table even when no expression names it.
-    wanted = used.add("JsonField")
+    # JSON.decode builds JSON.Field values, so the enum is in the table even when no expression names it.
+    wanted = used.add("JSON.Field")
   end
 
   if decodable.values.any? do |types: List[Types.Type]| types.any? do |type: Types.Type| optional_in?(type) end end
@@ -382,7 +382,7 @@ def references_known?(types: List[Types.Type], table: Map[String, List[Types.Typ
   true
 end
 
-# The struct or enum a field type is made of, under any List, Map, Optional or JsonField around it.
+# The struct or enum a field type is made of, under any List, Map, Optional or JSON.Field around it.
 def struct_names_in(type: Types.Type) -> List[String]
   case type
     Types.Type.Struct(name, _) -> [name]
@@ -390,31 +390,31 @@ def struct_names_in(type: Types.Type) -> List[String]
     Types.Type.Optional(item) -> struct_names_in(item)
     Types.Type.Map(_, value) -> struct_names_in(value)
     Types.Type.Enum(name, args) ->
-      return struct_names_in(args[0]) if name == "JsonField"
+      return struct_names_in(args[0]) if name == "JSON.Field"
 
       [name]
     _ -> []
   end
 end
 
-# True for a JsonField field type.
-def json_field?(type: Types.Type) -> Bool = Types.is?(type, "Enum") and Types.name(type) == "JsonField"
+# True for a JSON.Field field type.
+def json_field?(type: Types.Type) -> Bool = Types.is?(type, "Enum") and Types.name(type) == "JSON.Field"
 
-# True when an Optional sits in a field type, under any List, Map or JsonField around it.
+# True when an Optional sits in a field type, under any List, Map or JSON.Field around it.
 def optional_in?(type: Types.Type) -> Bool
   case type
     Types.Type.Optional(_) -> true
     Types.Type.List(item) -> optional_in?(item)
     Types.Type.Map(_, value) -> optional_in?(value)
-    Types.Type.Enum(name, args) -> name == "JsonField" and optional_in?(args[0])
+    Types.Type.Enum(name, args) -> name == "JSON.Field" and optional_in?(args[0])
     _ -> false
   end
 end
 
-# The type of a struct field as JSON.decode builds it, or `none` when it cannot: a JsonField of a JSON type other than
-# an Optional, or a JSON type. JsonField is only allowed here, as the direct type of the field.
+# The type of a struct field as JSON.decode builds it, or `none` when it cannot: a JSON.Field of a JSON type other than
+# an Optional, or a JSON type. JSON.Field is only allowed here, as the direct type of the field.
 def field_type(ref: Ast.TypeRef, kinds: Map[String, String]) -> Optional[Types.Type]
-  if ref.name != "JsonField" or ref.args.size != 1
+  if ref.name != "JSON.Field" or ref.args.size != 1
     return json_field_inner(ref, kinds)
   elsif ref.args[0].name == "Optional"
     return none
@@ -422,12 +422,12 @@ def field_type(ref: Ast.TypeRef, kinds: Map[String, String]) -> Optional[Types.T
 
   value = json_field_inner(ref.args[0], kinds)
   case value
-    some(type) -> some(Types.Type.Enum("JsonField", [type]))
+    some(type) -> some(Types.Type.Enum("JSON.Field", [type]))
     none -> none
   end
 end
 
-# The type of a JSON value as JSON.decode builds it inside a field (the whole field type, or T of a JsonField[T]) or a
+# The type of a JSON value as JSON.decode builds it inside a field (the whole field type, or T of a JSON.Field[T]) or a
 # payload, or `none` when it cannot. kinds maps the names of the structs and enums to "Struct" or "Enum".
 def json_field_inner(ref: Ast.TypeRef, kinds: Map[String, String]) -> Optional[Types.Type]
   args = ref.args

@@ -6,7 +6,7 @@ import Model from "../analysis/model"
 import DocJson from "../docs/doc_json"
 
 ## The object of the answer.
-export def json(found: Model.NativeModules) -> Json
+export def json(found: Model.NativeModules) -> JSON.Value
   blocks = found.blocks.map do |block: Model.NativeBlock| block_json(found.file, block) end
   JSON.object({
     "version": JSON.from(found.version),
@@ -17,7 +17,7 @@ export def json(found: Model.NativeModules) -> Json
 end
 
 # `api` is `{major, minor}`, the least version of the C API that has what the block declares.
-def block_json(file: String, block: Model.NativeBlock) -> Json
+def block_json(file: String, block: Model.NativeBlock) -> JSON.Value
   functions = block.functions.map do |function: Model.NativeFunction| function_json(file, function) end
   resources = block.resources.map do |resource: Model.NativeResource| resource_json(file, resource) end
   types = block.types.map do |type: Model.NativeType| type_json(type) end
@@ -31,7 +31,7 @@ def block_json(file: String, block: Model.NativeBlock) -> Json
   })
 end
 
-def function_json(file: String, function: Model.NativeFunction) -> Json
+def function_json(file: String, function: Model.NativeFunction) -> JSON.Value
   parameters = function.parameters.map do |parameter: Model.NativeParameter|
     JSON.object({"name": JSON.from(parameter.name), "type": JSON.from(parameter.type)})
   end
@@ -51,7 +51,7 @@ def function_json(file: String, function: Model.NativeFunction) -> Json
   })
 end
 
-def resource_json(file: String, resource: Model.NativeResource) -> Json
+def resource_json(file: String, resource: Model.NativeResource) -> JSON.Value
   JSON.object({
     "name": JSON.from(resource.name),
     "exported": JSON.from(resource.exported),
@@ -63,7 +63,7 @@ end
 
 # `members` are the fields of a struct or the variants of an enum, each with its `types`: the type of a field, or the
 # payload of a variant.
-def type_json(type: Model.NativeType) -> Json
+def type_json(type: Model.NativeType) -> JSON.Value
   members = type.members.map do |member: Model.NativeMember|
     JSON.object({
       "name": JSON.from(member.name),

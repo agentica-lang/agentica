@@ -286,7 +286,7 @@ def test_random_seed_is_the_seed_of_the_run_and_replays_it(tmp_path):
     assert agentica("--seed", seed, "seed.agc", cwd=directory).stdout == drawn.stdout
 
 
-# Every gated row a typed program can reach, with the flag that turns it off. The rows that take a FileHandle are left
+# Every gated row a typed program can reach, with the flag that turns it off. The rows that take a File.Handle are left
 # out: only File.open makes one. The TLS rows name files, so --deny-fs alone turns them off too ("files"). The gate
 # fires before anything is resolved or opened, so nothing here connects.
 GATED = (
@@ -317,11 +317,11 @@ GATED = (
     ("TCP.connect", 'TCP.connect("127.0.0.1", 1, 1000)', "--deny-net"),
     ("TCP.listen", 'TCP.listen("127.0.0.1", 0)', "--deny-net"),
     ("DNS.lookup", 'DNS.lookup("127.0.0.1")', "--deny-net"),
-    ("TLS.client_context", 'TLS.client_context(TlsClientOptions(ca_file: "ca.pem"))', "files"),
+    ("TLS.client_context", 'TLS.client_context(TLS.ClientOptions(ca_file: "ca.pem"))', "files"),
     ("TLS.client_context.client_cert",
-     'TLS.client_context(TlsClientOptions(cert_file: "cert.pem", key_file: "key.pem"))', "files"),
-    ("TLS.client_context.system", "TLS.client_context(TlsClientOptions())", "--deny-net"),
-    ("TLS.server_context", 'TLS.server_context(TlsServerOptions(cert_file: "cert.pem", key_file: "key.pem"))',
+     'TLS.client_context(TLS.ClientOptions(cert_file: "cert.pem", key_file: "key.pem"))', "files"),
+    ("TLS.client_context.system", "TLS.client_context(TLS.ClientOptions())", "--deny-net"),
+    ("TLS.server_context", 'TLS.server_context(TLS.ServerOptions(cert_file: "cert.pem", key_file: "key.pem"))',
      "files"),
     ("HttpWire.connect_tls", 'HTTP.get(Result.unwrap!(HTTP.client(HTTP.ClientOptions())), "https://127.0.0.1:1/")',
      "--deny-net"),

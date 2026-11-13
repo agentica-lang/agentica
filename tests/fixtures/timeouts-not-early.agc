@@ -25,7 +25,7 @@ def check(name: String, timeout_ms: Int, started: Int, timed_out: Bool) -> Int
   return 0
 end
 
-def network(listener: Listener, timeout_ms: Int) -> Int
+def network(listener: TCP.Listener, timeout_ms: Int) -> Int
   client = TCP.connect("127.0.0.1", TCP.local_port(listener), 5000).unwrap!
   server = TCP.accept(listener, 5000).unwrap!
   started = Time.monotonic_ns()

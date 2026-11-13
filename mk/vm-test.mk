@@ -356,20 +356,33 @@ vm-lint-gcstress:
 
 # cchecker (https://github.com/agentica-lang/cchecker): the project rules for C (blocking calls on short paths, locks on every
 # path, ownership, collector values) plus gcc -fanalyzer and clang-tidy, over a VM compile database (`make cchecker-db`).
-# It is an Agentica program, so dist/agentica runs it; it needs gcc 10+, clang and clang-tidy on PATH. The release has no
-# binary: the tag is cloned into build/cchecker/ and its commit must be the pinned one (a new release is CCHECKER_VERSION,
-# CCHECKER_COMMIT and its include/cchecker.h copied to vm/cchecker.h). The settings are cchecker.toml, the accepted
-# findings cchecker-baseline.json (references/ci.md of the development skill says how to change both). vm/tests/ is
-# test harness code and not checked: cchecker reads a database of its own without it (CCHECKER_DB), so each run is a
-# full run, which checks the names of the settings and reports a stale ignore of the rules. It exits 1 on a finding
-# that is not in the baseline, which fails the CI job `cchecker`.
+# It is an Agentica program. Until Agentica 0.31.0 final it runs on a released Agentica (CCHECKER_AGENTICA_VERSION), not on
+# dist/agentica, so a language change in a PR (a removed name, a new error payload) does not break the check of the C code: only
+# the interpreter that runs the tool is pinned, the VM code is checked as before. After 0.31.0, move it back to dist/agentica
+# with a cchecker release on 0.31 (https://github.com/agentica-lang/agentica/issues/1490).
+# It needs gcc 10+, clang and clang-tidy on PATH. The cchecker release has no binary: the tag is cloned into build/cchecker/ and
+# its commit must be the pinned one (a new release is CCHECKER_VERSION, CCHECKER_COMMIT and its include/cchecker.h copied to
+# vm/cchecker.h). The settings are cchecker.toml, the accepted findings cchecker-baseline.json (references/ci.md of the
+# development skill says how to change both). vm/tests/ is test harness code and not checked: cchecker reads a database of its
+# own without it (CCHECKER_DB), so each run is a full run, which checks the names of the settings and reports a stale ignore of
+# the rules. It exits 1 on a finding that is not in the baseline, which fails the CI job `cchecker`.
 CCHECKER_VERSION := 0.6.2
 CCHECKER_COMMIT := 9ef291f602526f72d99a0ce52954134997fbed33
 CCHECKER_DIR := build/cchecker/$(CCHECKER_VERSION)
 CCHECKER_FLAGS ?=
 CCHECKER_DB := build/cchecker/compile_commands.json
 
-.PHONY: cchecker cchecker-update-baseline cchecker-clone
+# The Agentica that runs cchecker: the `agentica` binary of this release, or CCHECKER_AGENTICA=/path/to/agentica to use one you
+# have (nothing is downloaded then). The release archive (Linux and macOS, x86-64 and arm64) is checked against the SHA256SUMS
+# of the release.
+CCHECKER_AGENTICA_VERSION := 0.30.1
+CCHECKER_AGENTICA ?=
+CCHECKER_AGENTICA_DIR := build/cchecker/agentica-$(CCHECKER_AGENTICA_VERSION)
+CCHECKER_AGENTICA_BIN := $(or $(CCHECKER_AGENTICA),$(CCHECKER_AGENTICA_DIR)/bin/agentica)
+CCHECKER_AGENTICA_ARCHIVE := agentica-$(CCHECKER_AGENTICA_VERSION)-$(if $(filter Darwin,$(shell uname -s)),macos,linux)-$(if $(filter arm64 aarch64,$(shell uname -m)),arm64,x86_64).tar.gz
+CCHECKER_AGENTICA_URL := https://github.com/agentica-lang/agentica/releases/download/$(CCHECKER_AGENTICA_VERSION)
+
+.PHONY: cchecker cchecker-update-baseline cchecker-clone cchecker-agentica
 
 # An existing clone is trusted by its path: change the version and the commit together.
 $(CCHECKER_DIR)/cchecker.agc:
@@ -378,11 +391,24 @@ $(CCHECKER_DIR)/cchecker.agc:
 	@[ "$$(git -C $(CCHECKER_DIR).tmp rev-parse HEAD)" = "$(CCHECKER_COMMIT)" ] || { echo "cchecker $(CCHECKER_VERSION) is not commit $(CCHECKER_COMMIT)" >&2; rm -rf $(CCHECKER_DIR).tmp; exit 1; }
 	mv $(CCHECKER_DIR).tmp $(CCHECKER_DIR)
 
-# The clone alone, which CI runs as a step of its own (a network failure is then not a failed check).
+# The archive must be the one the SHA256SUMS of the release lists (no entry for it fails too). It is unpacked whole, so the
+# result is the folder of the release with bin/agentica in it.
+$(CCHECKER_AGENTICA_DIR)/bin/agentica:
+	@rm -rf $(CCHECKER_AGENTICA_DIR) $(CCHECKER_AGENTICA_DIR).tmp && mkdir -p $(CCHECKER_AGENTICA_DIR).tmp/unpacked
+	curl -fsSL -o $(CCHECKER_AGENTICA_DIR).tmp/SHA256SUMS $(CCHECKER_AGENTICA_URL)/SHA256SUMS
+	curl -fsSL -o $(CCHECKER_AGENTICA_DIR).tmp/$(CCHECKER_AGENTICA_ARCHIVE) $(CCHECKER_AGENTICA_URL)/$(CCHECKER_AGENTICA_ARCHIVE)
+	@cd $(CCHECKER_AGENTICA_DIR).tmp && grep ' $(CCHECKER_AGENTICA_ARCHIVE)$$' SHA256SUMS > archive.sum && [ -s archive.sum ] \
+	  && { sha256sum -c archive.sum || shasum -a 256 -c archive.sum; } \
+	  || { echo "$(CCHECKER_AGENTICA_ARCHIVE) does not match the SHA256SUMS of Agentica $(CCHECKER_AGENTICA_VERSION)" >&2; exit 1; }
+	tar -xzf $(CCHECKER_AGENTICA_DIR).tmp/$(CCHECKER_AGENTICA_ARCHIVE) -C $(CCHECKER_AGENTICA_DIR).tmp/unpacked --strip-components=1
+	mv $(CCHECKER_AGENTICA_DIR).tmp/unpacked $(CCHECKER_AGENTICA_DIR) && rm -rf $(CCHECKER_AGENTICA_DIR).tmp
+
+# The clone and the release alone, which CI runs as steps of their own (a network failure is then not a failed check).
 cchecker-clone: $(CCHECKER_DIR)/cchecker.agc
+cchecker-agentica: $(CCHECKER_AGENTICA_BIN)
 
 # Run from the root of the checkout: cchecker reads paths relative to the working directory.
-CCHECKER = $(RUN_PROGRAM) dist/agentica$(EXE) $(CCHECKER_DIR)/cchecker.agc -p $(CCHECKER_DB) -c cchecker.toml -j $(JOBS) \
+CCHECKER = $(RUN_PROGRAM) $(CCHECKER_AGENTICA_BIN) $(CCHECKER_DIR)/cchecker.agc -p $(CCHECKER_DB) -c cchecker.toml -j $(JOBS) \
   --baseline cchecker-baseline.json $(CCHECKER_FLAGS)
 
 .PHONY: cchecker-db
@@ -392,11 +418,11 @@ cchecker-db: $(CC_DB_DEPS) | $(CC_DB_ORDER)
 	  > '$(CCHECKER_DB).new' || { rm -f '$(CCHECKER_DB).new'; exit 1; }
 	@mv '$(CCHECKER_DB).new' '$(CCHECKER_DB)'
 
-cchecker: $(PRODUCT) $(CCHECKER_DIR)/cchecker.agc cchecker-db
+cchecker: $(CCHECKER_AGENTICA_BIN) $(CCHECKER_DIR)/cchecker.agc cchecker-db
 	$(CCHECKER)
 
 # Accepts today's findings: rewrites the baseline (the diff is the review).
-cchecker-update-baseline: $(PRODUCT) $(CCHECKER_DIR)/cchecker.agc cchecker-db
+cchecker-update-baseline: $(CCHECKER_AGENTICA_BIN) $(CCHECKER_DIR)/cchecker.agc cchecker-db
 	$(CCHECKER) --update-baseline
 
 vm-layers: $(VM_OBJS) $(VM_OBJ)/agentica.o $(VM_OBJ)/launch.o

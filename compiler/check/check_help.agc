@@ -59,10 +59,10 @@ export def conversion(expected: Types.Type, actual: Types.Type) -> String
   end
 
   # A PEM path where a context goes, as in the TLS forms before contexts (19a): a client or a server one.
-  context = Types.Type.Opaque("TlsContext")
+  context = Types.Type.Opaque("TLS.Context")
   if Types.same?(expected, context) and Types.same?(actual, Types.Type.String)
     return (
-      "a TlsContext holds the PEM files: build one with TLS.client_context(...) to connect " +
+      "a TLS.Context holds the PEM files: build one with TLS.client_context(...) to connect " +
       "or TLS.server_context(...) to listen"
     )
   end
@@ -71,7 +71,7 @@ export def conversion(expected: Types.Type, actual: Types.Type) -> String
   optional_context = Types.is?(expected, "Optional") and Types.same?(Types.item(expected), context)
   if optional_context and Types.same?(actual, Types.Type.String)
     return (
-      "a TlsContext holds the PEM files: pass some(context), with the context from " +
+      "a TLS.Context holds the PEM files: pass some(context), with the context from " +
       "TLS.client_context(...) or TLS.server_context(...)"
     )
   end

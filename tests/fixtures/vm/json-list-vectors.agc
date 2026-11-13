@@ -1,5 +1,5 @@
 # Checks JSON.decode of List and Map targets against the vectors of tests/fixtures/json-list-vectors.py: each document
-# is decoded from its text and from its Json value into the target the vector names, and both must give the peer's
+# is decoded from its text and from its JSON.Value value into the target the vector names, and both must give the peer's
 # encoded text or error message. A "same" vector must come back unchanged up to key order, and the encoded text must
 # decode to itself (the round trip). No struct field is an Optional: the Optional enum is in the table only for the
 # List[Optional[Int]] target.
@@ -21,7 +21,7 @@ def outcome[T](decoded: Result[T]) -> String
   end
 end
 
-# The outcomes of the decode of text into the target, from the text and from its Json value.
+# The outcomes of the decode of text into the target, from the text and from its JSON.Value value.
 def outcomes(target: String, text: String) -> List[String]
   value = JSON.parse(text).unwrap!
   if target == "list"

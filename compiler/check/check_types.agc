@@ -3,7 +3,7 @@
 ## (substitute, unify). These are the helpers that do not depend on the walk of the tree.
 
 import Model from "../catalog/builtin_model"
-import {ENUMS, OPAQUE_TYPES} from "../catalog/builtins"
+import {ENUMS, JSON_VALUE, OPAQUE_TYPES} from "../catalog/builtins"
 import Ast from "../syntax/ast"
 import Source from "../syntax/source"
 import Types from "../syntax/types"
@@ -99,14 +99,14 @@ export def primitive?(type: ResolvedType) -> Bool
   numeric?(type) or Types.is?(type, "Bool") or Types.is?(type, "String") or Types.is?(type, "Nil")
 end
 
-## True for JsonField[T], the builtin enum of an optional and nullable JSON field.
+## True for JSON.Field[T], the builtin enum of an optional and nullable JSON field.
 export def json_field?(type: ResolvedType) -> Bool
-  Types.is?(type, "Enum") and Types.name(type) == "JsonField" and Types.args(type).size == 1
+  Types.is?(type, "Enum") and Types.name(type) == "JSON.Field" and Types.args(type).size == 1
 end
 
-## Where the type has a JsonField that a JSON builtin does not allow, or "" when it has none: JsonField may only be the
-## direct type of a struct field. direct says the type is a struct field's own type, kind names its place when it is
-## not ("list item", "map value", "nested JsonField", "encode argument") and owner the struct field it sits in
+## Where the type has a JSON.Field that a JSON builtin does not allow, or "" when it has none: JSON.Field may only be
+## the direct type of a struct field. direct says the type is a struct field's own type, kind names its place when it
+## is not ("list item", "map value", "nested JSON.Field", "encode argument") and owner the struct field it sits in
 ## ("Wrapper.items", "" outside a struct). Runs before the decodable and encodable tests.
 export def json_field_place(cx: State.Cx, type: ResolvedType, direct: Bool, kind: String, owner: String) -> String
   place_walk(cx, type, direct, kind, owner, {}).place
@@ -120,20 +120,20 @@ export def bytes_inside?(cx: State.Cx, type: ResolvedType) -> Bool
   inside?(cx, type) do |current: ResolvedType| Types.is?(current, "Bytes") end
 end
 
-## True when a JsonField of an Optional sits anywhere in the type, walked as bytes_inside? walks: it picks the help of
-## a JSON builtin that refuses the type, since JSON writes null for both none and JsonField.Null.
+## True when a JSON.Field of an Optional sits anywhere in the type, walked as bytes_inside? walks: it picks the help of
+## a JSON builtin that refuses the type, since JSON writes null for both none and JSON.Field.Null.
 export def optional_json_field_inside?(cx: State.Cx, type: ResolvedType) -> Bool
   inside?(cx, type) do |current: ResolvedType| json_field?(current) and Types.is?(json_item(current), "Optional") end
 end
 
-## True when JSON.encode can write a value of the type: primitives, Json, lists, maps with String keys, structs of
-## those (a generic struct by its fields with the type arguments put in), and JsonField and Optional of an encodable
-## type other than Nil (and other than an Optional, for a JsonField).
+## True when JSON.encode can write a value of the type: primitives, JSON.Value, lists, maps with String keys, structs
+## of those (a generic struct by its fields with the type arguments put in), and JSON.Field and Optional of an
+## encodable type other than Nil (and other than an Optional, for a JSON.Field).
 export def encodable?(cx: State.Cx, type: ResolvedType) -> Bool = encode_walk(cx, type, {}).passes
 
 ## What a type with type variables needs to be encodable once they are bound, or none when no binding makes it
-## encodable (an Fn, a Bytes, a Map with an Int key ...). Each need is a variable, an Optional or JsonField of one (its
-## item must not be a null), or a Map with one as key and String as value (the key must be a String). A variable
+## encodable (an Fn, a Bytes, a Map with an Int key ...). Each need is a variable, an Optional or JSON.Field of one
+## (its item must not be a null), or a Map with one as key and String as value (the key must be a String). A variable
 ## stands for String while the rest of the type is walked: String fits every place of an encodable type.
 export def encode_needs(cx: State.Cx, type: ResolvedType) -> Optional[List[ResolvedType]]
   strings: Map[String, ResolvedType] = {}
@@ -195,8 +195,8 @@ export def add_need(found: List[ResolvedType], need: ResolvedType) -> List[Resol
 end
 
 ## True when JSON.decode can read a value of the type: Int, Float, Bool, String, lists, maps with String keys, plain
-## structs of those, and JsonField and Optional of a decodable type (Nil is not one; nor is an Optional, for a
-## JsonField). A generic struct is not decodable: the schema of the structs is keyed by their bare names, which
+## structs of those, and JSON.Field and Optional of a decodable type (Nil is not one; nor is an Optional, for a
+## JSON.Field). A generic struct is not decodable: the schema of the structs is keyed by their bare names, which
 ## Box[Int] and Box[String] would share.
 export def decodable?(cx: State.Cx, type: ResolvedType) -> Bool = decode_walk(cx, type, {}).passes
 
@@ -222,12 +222,12 @@ export def ats_value_failure(cx: State.Cx, st: State.St, type: ResolvedType, spa
   )
 end
 
-## True for a type that has to_s: the data types. Numbers, Bool, String, nil, Json, ranges, addresses, and lists,
+## True for a type that has to_s: the data types. Numbers, Bool, String, nil, JSON.Value, ranges, addresses, and lists,
 ## maps, sets, Results, structs and enums of those. A type variable is one only in the files of the prelude: in the
 ## body of a generic function it stands for any type, which could be an Fn.
 export def data?(cx: State.Cx, type: ResolvedType) -> Bool = data_walk(cx, type, {}, false).passes
 
-## True for a type that == and != compare: a data type (data?) with no Json inside. Numbers, Bool, String, nil,
+## True for a type that == and != compare: a data type (data?) with no JSON.Value inside. Numbers, Bool, String, nil,
 ## ranges, Bytes, addresses, and lists, maps, sets, Optionals, Results, structs and enums of those. A group of structs
 ## and enums that hold one another is judged as a whole, so the answer does not depend on where the walk starts. As in
 ## data?, a type variable passes only in the files of the prelude, where == on it lowers to Value.equal. List#include?
@@ -706,7 +706,7 @@ def resolve_plain(cx: State.Cx, st: State.St, ref: TypeRef, completion: Bool) ->
     return ok(Types.Type.String)
   elsif name == "Nil"
     return ok(Types.Type.Nil)
-  elsif name == "Json"
+  elsif name == JSON_VALUE
     return ok(Types.Type.Json)
   elsif name == "Range"
     return ok(Types.Type.Range)
@@ -851,7 +851,7 @@ def shared_type_names(cx: State.Cx) -> List[String]
     "Set",
     "Result",
     "Optional",
-    "Json",
+    JSON_VALUE,
     "Fn",
     "Task",
     "Channel",
@@ -897,8 +897,8 @@ end
 
 # json_field_place for one type. seen holds every struct walked in the whole call (place_key), not only the ones on
 # the path: the walk stops at the first place found, so a struct walked before had none, and a recursive type ends.
-# A JsonField that is the argument of a struct is placed by the fields of the struct with the argument put in
-# (place_fields): Box[JsonField[Int]] has a direct JsonField field `value`, and a list item for `items: List[T]`.
+# A JSON.Field that is the argument of a struct is placed by the fields of the struct with the argument put in
+# (place_fields): Box[JSON.Field[Int]] has a direct JSON.Field field `value`, and a list item for `items: List[T]`.
 def place_walk(
   cx: State.Cx,
   type: ResolvedType,
@@ -914,7 +914,7 @@ def place_walk(
       return Placed(place: "#{kind} in #{owner}", seen: seen)
     end
 
-    return place_walk(cx, Types.args(type)[0], false, "nested JsonField", owner, seen)
+    return place_walk(cx, Types.args(type)[0], false, "nested JSON.Field", owner, seen)
   elsif Types.is?(type, "List")
     return place_walk(cx, Types.item(type), false, "list item", owner, seen)
   elsif Types.is?(type, "Optional")
@@ -923,8 +923,8 @@ def place_walk(
     return place_walk(cx, Types.value(type), false, "map value", owner, seen)
   elsif Types.is?(type, "Struct") and cx.structs.has_key?(Types.name(type))
     key = place_key(type)
-    # The type arguments come first and whether or not the struct was seen: Box[Box[JsonField[Int]]] reaches the inner
-    # Box by an argument, and the fields below are walked once for each key. A JsonField argument is walked as a
+    # The type arguments come first and whether or not the struct was seen: Box[Box[JSON.Field[Int]]] reaches the inner
+    # Box by an argument, and the fields below are walked once for each key. A JSON.Field argument is walked as a
     # direct type here and placed by the fields below, which see it in the place of the parameter.
     for argument in Types.args(type)
       found = place_walk(cx, argument, json_field?(argument), "type argument", owner, seen)
@@ -950,7 +950,7 @@ def place_walk(
   Placed(place: "", seen: seen)
 end
 
-# place_walk for an instance of a user enum. A JsonField is never allowed in a payload, whatever the enum's arguments
+# place_walk for an instance of a user enum. A JSON.Field is never allowed in a payload, whatever the enum's arguments
 # are, so an argument is walked as a type of its own (not direct) and the payloads are walked with Int for each
 # parameter, once for each enum.
 def place_enum(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool]) -> Placed
@@ -985,14 +985,14 @@ def place_enum(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool]) -> Pla
   Placed(place: "", seen: seen)
 end
 
-# True for an enum the program declares: not a builtin one (JsonField, TaskExit ...), which JSON handles on its own or
+# True for an enum the program declares: not a builtin one (JSON.Field, TaskExit ...), which JSON handles on its own or
 # not at all.
 def user_enum?(cx: State.Cx, type: ResolvedType) -> Bool
   cx.enums.has_key?(Types.name(type)) and !ENUMS.has_key?(Types.name(type))
 end
 
-# The name of a struct type and a J for each JsonField argument and an I for each other one ("Box[J]"): what the
-# stand-ins of place_fields tell apart, so Box[Int] and Box[JsonField[Int]] are walked once each.
+# The name of a struct type and a J for each JSON.Field argument and an I for each other one ("Box[J]"): what the
+# stand-ins of place_fields tell apart, so Box[Int] and Box[JSON.Field[Int]] are walked once each.
 def place_key(type: ResolvedType) -> String
   name = Types.name(type)
   return "Struct:#{name}" if Types.args(type).size == 0
@@ -1010,9 +1010,9 @@ def place_key(type: ResolvedType) -> String
 end
 
 # The fields of a struct type to place after its type arguments were walked: each type parameter is replaced by a
-# stand-in, JsonField[Int] for a JsonField argument and Int for any other (a nest of generic instances is then walked
+# stand-in, JSON.Field[Int] for a JSON.Field argument and Int for any other (a nest of generic instances is then walked
 # once for each level, as in stand_in_fields). The arguments were walked as types of their own, so what is inside a
-# JsonField or a container is already placed.
+# JSON.Field or a container is already placed.
 def place_fields(cx: State.Cx, type: ResolvedType) -> List[Model.Named]
   name = Types.name(type)
   parameters = cx.struct_params.get(name, [])
@@ -1022,7 +1022,7 @@ def place_fields(cx: State.Cx, type: ResolvedType) -> List[Model.Named]
   index = 0
   while index < parameters.size
     if json_field?(Types.args(type)[index])
-      stand = stand.put(parameters[index], Types.Type.Enum("JsonField", [Types.Type.Int]))
+      stand = stand.put(parameters[index], Types.Type.Enum("JSON.Field", [Types.Type.Int]))
     else
       stand = stand.put(parameters[index], Types.Type.Int)
     end
@@ -1106,8 +1106,8 @@ end
 
 # The walk of a user enum type for the test (0 encodable, 1 decodable), as struct_walk walks a struct: the type
 # arguments first (an encodable generic enum such as Option[Int] has them; a decodable enum has none), then every
-# payload once for each key, with a stand-in for each parameter. A builtin enum other than JsonField, which the callers
-# handle, has no JSON form.
+# payload once for each key, with a stand-in for each parameter. A builtin enum other than JSON.Field, which the
+# callers handle, has no JSON form.
 def enum_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool], test: Int) -> Walk
   return refused(seen) if !user_enum?(cx, type)
 
@@ -1136,22 +1136,22 @@ def enum_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool], test: I
   passed(seen)
 end
 
-# T of a JsonField[T] or an Optional[T].
+# T of a JSON.Field[T] or an Optional[T].
 def json_item(type: ResolvedType) -> ResolvedType
   return Types.args(type)[0] if json_field?(type)
 
   Types.item(type)
 end
 
-# True for a JsonField or an Optional whose T is Nil, or a JsonField of an Optional: JSON would write null for a value
-# that is there, so decode could not give it back.
+# True for a JSON.Field or an Optional whose T is Nil, or a JSON.Field of an Optional: JSON would write null for a
+# value that is there, so decode could not give it back.
 def json_null_item?(type: ResolvedType) -> Bool
   item = json_item(type)
   Types.is?(item, "Nil") or (json_field?(type) and Types.is?(item, "Optional"))
 end
 
-# data? for one type, or equality? when equal is true (Json is then refused). seen holds every struct and enum walked
-# in the whole call ("Struct:name"), not only the ones on the path (struct_walk says why that is sound), and a
+# data? for one type, or equality? when equal is true (JSON.Value is then refused). seen holds every struct and enum
+# walked in the whole call ("Struct:name"), not only the ones on the path (struct_walk says why that is sound), and a
 # recursive type ends.
 def data_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool], equal: Bool) -> Walk
   # An Address names a channel without holding it: a value with no state, so it is data (check_const.agc keeps it out
@@ -1193,7 +1193,7 @@ end
 # as a type of its own, whether or not the struct was seen (Box[Box[Fn[Int, Int]]] reaches the inner Box by an
 # argument). Then every field is tested with a stand-in for each argument (stand_in_fields), once for each key in the
 # whole call (walk_key: the name and which arguments are Nil, the one thing the stand-ins keep), so W[Int] and W[Nil]
-# are walked once each and a JsonField[Nil] behind W[Nil] is found. seen is passed in and returned, and it holds every
+# are walked once each and a JSON.Field[Nil] behind W[Nil] is found. seen is passed in and returned, and it holds every
 # key entered so far, not only the keys on the path: a cluster of structs that use one another is walked once and not
 # once for each path through it. That is sound because a walk is a conjunction that stops at the first failure: a key
 # entered before either passed or aborted the whole walk, and a key still being walked counts as passed, as the type is
@@ -1313,7 +1313,7 @@ def stand_in_fields(cx: State.Cx, type: ResolvedType) -> List[Model.Named]
 end
 
 # A type for each parameter to stand for its argument once the argument was tested: Int, or Nil for a Nil argument,
-# the one thing that a field of the parameter (JsonField[T]) tells apart.
+# the one thing that a field of the parameter (JSON.Field[T]) tells apart.
 def stand_ins(parameters: List[String], args: List[ResolvedType]) -> Map[String, ResolvedType]
   found: Map[String, ResolvedType] = {}
   index = 0

@@ -333,7 +333,7 @@ def read_entry(entry: Entry, settings: Env.Settings) -> Result[Bytes]
   read
 end
 
-def read_whole(handle: FileHandle, entry: Entry, settings: Env.Settings) -> Result[Bytes]
+def read_whole(handle: File.Handle, entry: Entry, settings: Env.Settings) -> Result[Bytes]
   head = try read_exact(handle, HEAD_BYTES)
   size = try text_size(head)
   bytes = try read_exact(handle, size)
@@ -439,7 +439,7 @@ def made_by?(program: Bytes, version: String) -> Bool
 end
 
 # Exactly `count` bytes, or an error when the file ends first.
-def read_exact(handle: FileHandle, count: Int) -> Result[Bytes]
+def read_exact(handle: File.Handle, count: Int) -> Result[Bytes]
   pieces: List[Bytes] = []
   left = count
   while left > 0
@@ -460,7 +460,7 @@ def piece(left: Int) -> Int
 end
 
 # The rest of the file, up to the size the VM takes.
-def read_rest(handle: FileHandle) -> Result[Bytes]
+def read_rest(handle: File.Handle) -> Result[Bytes]
   pieces: List[Bytes] = []
   total = 0
   finished = false

@@ -603,7 +603,7 @@ def main() -> Void
   c = "https://127.0.0.1:#{args[2]}"
   d = "https://127.0.0.1:#{args[3]}"
   dir = args[4]
-  context = TLS.client_context(TlsClientOptions(ca_file: args[5])).unwrap!
+  context = TLS.client_context(TLS.ClientOptions(ca_file: args[5])).unwrap!
   calls(HTTP.ClientOptions(proxy: "http://#{proxy}", tls: some(context)), c, d, dir, "ctx")
   calls(HTTP.ClientOptions(proxy: "http://#{proxy}"), c, d, dir, "sys")
   puts("-- the locked proxy")
@@ -618,7 +618,7 @@ def main() -> Void
   show(HTTP.get_response("#{c}/407", HTTP.ClientOptions(proxy: login, tls: some(context))))
   show(HTTP.get_response("#{c}/seen", HTTP.ClientOptions(tls: some(context))))
   puts("-- the target is verified inside the tunnel")
-  strict = TLS.client_context(TlsClientOptions(ca_file: args[7])).unwrap!
+  strict = TLS.client_context(TLS.ClientOptions(ca_file: args[7])).unwrap!
   case HTTP.get_response("#{c}/hello", HTTP.ClientOptions(proxy: "http://#{proxy}", tls: some(strict)))
     ok(_) -> puts("answered")
     error(e) -> puts(e.message.include?("proxy"))

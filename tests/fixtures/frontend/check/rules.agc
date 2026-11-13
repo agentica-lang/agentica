@@ -34,8 +34,8 @@ def main() -> Void
   downs: Channel[TaskDown] = Channel.new(1)
   Task.monitor(task, downs) do |down| down end
   puts(Task.current.id + task.id)
-  measured = Profile.measure("square") do square(3) end
-  puts(measured + Profile.steps())
+  measured = System.Profile.measure("square") do square(3) end
+  puts(measured + System.Profile.steps())
   doubled = Task.map([1, 2], 2, 100) do |n|
     twice_n = try twice(n)
     ok(twice_n + 1)

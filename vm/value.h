@@ -270,7 +270,7 @@ typedef struct {
 } agc_listener;
 
 /* An HttpWire.Client: the jobs channel of its owner task and its HttpWire.ClientOptions (vm/http_service.c), and the
-   system-trust TLS context that its https connections share when the options name no TlsContext (vm/tcp.c's, opaque
+   system-trust TLS context that its https connections share when the options name no TLS.Context (vm/tcp.c's, opaque
    here: made by the first HttpWire.connect_tls, given back by HttpWire.drop_tls, which sets tls_dropped; both under
    rt->sync). The service task drops it once the client is closed and its pool has ended; a client never closed keeps
    it until the run ends. */
@@ -281,7 +281,7 @@ typedef struct {
 } agc_http_client;
 
 /* HttpWire.ClientOptions as the record of compiler/catalog/builtins_data.agc lays it out: timeout_ms,
-   idle_timeout_ms, max_connections, max_body_bytes, proxy, tls (Optional[TlsContext]). HttpWire.service checks the
+   idle_timeout_ms, max_connections, max_body_bytes, proxy, tls (Optional[TLS.Context]). HttpWire.service checks the
    shape, since the std-only rule lives in the front end and bytecode can call the builtin with any struct. */
 #define AGC_HTTP_OPTIONS_FIELDS 6
 #define AGC_HTTP_OPTION_PROXY 4
@@ -305,7 +305,7 @@ typedef struct {
   agc_task *group;
 } agc_http_server;
 
-/* A TlsContext (vm/tls_context.c): an atomic GC block (no GC pointer in it) with one count on the native TLS config
+/* A TLS.Context (vm/tls_context.c): an atomic GC block (no GC pointer in it) with one count on the native TLS config
    of its role, which `release` gives back. It has no close: a Boehm finalizer gives the count back once no value
    reaches the block, run between turns (agc_gc_finalize_pending), never inside a collection; the sockets and
    listeners made from it hold counts of their own. The one GC finalizer of the VM
@@ -441,7 +441,7 @@ typedef struct {
   uint32_t *spans;
 } agc_function;
 
-/* A JSON field type. AGC_TYPE_JSON_FIELD is JsonField[T], an optional and nullable struct field (arg is T), and
+/* A JSON field type. AGC_TYPE_JSON_FIELD is JSON.Field[T], an optional and nullable struct field (arg is T), and
    AGC_TYPE_OPTIONAL is Optional[T] (null or T, anywhere a type is); both point to an earlier type like List and Map.
    AGC_TYPE_ENUM is a user enum (arg is its index), like STRUCT a leaf of the table: its payload types are in the
    variants (agc_enum_def.payload_types). */
@@ -450,7 +450,7 @@ typedef enum {
   AGC_TYPE_JSON_FIELD, AGC_TYPE_OPTIONAL, AGC_TYPE_ENUM
 } agc_type_kind;
 
-/* The variants of the builtin JsonField enum, in table order from agc_program.json_field. */
+/* The variants of the builtin JSON.Field enum, in table order from agc_program.json_field. */
 enum { AGC_JSON_FIELD_ABSENT, AGC_JSON_FIELD_NULL, AGC_JSON_FIELD_VALUE };
 
 typedef struct {
@@ -504,7 +504,7 @@ typedef struct {
   agc_enum_def *enums;
   agc_variant_def *variants;
   agc_update_def *updates;
-  /* The variant id of JsonField.Absent (Null and Value follow it), or UINT32_MAX when the program has no JsonField
+  /* The variant id of JSON.Field.Absent (Null and Value follow it), or UINT32_MAX when the program has no JSON.Field
      enum. The loader checks the enum's shape, so typed JSON and the encoders trust these three ids. */
   uint32_t json_field;
   /* The variant id of Optional.None (Some follows it), or UINT32_MAX when the program has no builtin Optional enum.
@@ -563,7 +563,7 @@ void agc_gc_resume(void);
 bool agc_gc_stats(agc_gc_info *info);
 void agc_gc_measure(void);
 void agc_gc_collect(void);
-/* Runs the GC finalizers that are due (a TlsContext no value reaches); a scheduler calls it between turns. */
+/* Runs the GC finalizers that are due (a TLS.Context no value reaches); a scheduler calls it between turns. */
 void agc_gc_finalize_pending(void);
 /* A weak reference to a GC object (an Address's channel): it does not keep the object alive, and the collector clears
    it once nothing else reaches the object, so agc_weak_get then gives NULL. The build without the collector never

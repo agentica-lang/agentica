@@ -3,7 +3,7 @@
   "code": null,
   "steps": 20,
   "stdout": [
-    "ok(ProcessOutput(stdout: \"/\\n\", stderr: \"\", truncated: false))",
+    "ok(Process.Output(stdout: \"/\\n\", stderr: \"\", truncated: false))",
     ""
   ],
   "stderr": []

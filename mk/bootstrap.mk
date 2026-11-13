@@ -11,6 +11,8 @@
 #   stage1  compiled by the first binary
 #   stage2  compiled by the first binary with stage1 as its front end (--front-end)
 #   stage3  compiled by the first binary with stage2 as its front end; it must be stage2, byte for byte
+#   The --front-end compiles pass --no-cache: the key of the bytecode cache names the binary, not the front end, so a
+#   later stage would get the program of the one before.
 #   dist/agentica  linked with stage2: the product, carrying stage2 and the two programs of `agentica test` (below)
 # make fixed-point        the above, then dist/agentica compiles the front end and the two programs again; that must be the same bytes
 # make stage0             refresh bootstrap/stage0.agcb from stage2, after the fixed point holds (references/ci.md)
@@ -60,18 +62,18 @@ $(STAGE_DIR)/stage1.agcb: $(STAGE_INPUTS) $(STAGE1_NEEDS)
 
 $(STAGE_DIR)/stage2.agcb: $(STAGE_DIR)/stage1.agcb $(STAGE_INPUTS) $(BOOT)
 	rm -f $@
-	$(RUN_PROGRAM) $(BOOT) --front-end $< compile $(FRONT_END_SRC) -o $@
+	$(RUN_PROGRAM) $(BOOT) --front-end $< --no-cache compile $(FRONT_END_SRC) -o $@
 
 $(STAGE_DIR)/stage3.agcb: $(STAGE_DIR)/stage2.agcb $(STAGE_INPUTS) $(BOOT)
 	rm -f $@
-	$(RUN_PROGRAM) $(BOOT) --front-end $< compile $(FRONT_END_SRC) -o $@
+	$(RUN_PROGRAM) $(BOOT) --front-end $< --no-cache compile $(FRONT_END_SRC) -o $@
 	cmp $(STAGE_DIR)/stage2.agcb $@ || { echo "fixed point: stage2 and stage3 differ" >&2; exit 1; }
 
 # The first binary compiles them with stage2 as its front end, as it compiled stage3: the bytes are the ones dist/agentica
 # makes (make fixed-point checks that).
 $(EMBEDDED_PROGRAMS): $(STAGE_DIR)/%.agcb: compiler/embedded/%.agc $(STAGE_DIR)/stage2.agcb stdlib/MODULES $(STD_FILES) VERSION $(BOOT)
 	rm -f $@
-	$(RUN_PROGRAM) $(BOOT) --front-end $(STAGE_DIR)/stage2.agcb compile $< -o $@
+	$(RUN_PROGRAM) $(BOOT) --front-end $(STAGE_DIR)/stage2.agcb --no-cache compile $< -o $@
 endif
 
 stage1: $(STAGE_DIR)/stage1.agcb

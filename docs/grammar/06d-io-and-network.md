@@ -31,16 +31,16 @@ in the
 
 ### Files and paths
 
-`File`, `Dir`, `Path`, `FileHandle` and `FileInfo` are reserved. A file handle
-is opaque, belongs to one evaluation, and closes when it ends. The host user's
-permissions apply; `--deny-fs` turns these calls off. Every File, Dir and Path
-call that takes `timeout_ms` defaults it to 30000, and `File.open` defaults
-`mode` to `"read"` (see "Default parameter values" in section 6). The calls, the
-platform differences and the errors are in the
+`File`, `Dir` and `Path` are reserved; `File.Handle` and `File.Info` are members
+of `File`. A file handle is opaque, belongs to one evaluation, and closes when
+it ends. The host user's permissions apply; `--deny-fs` turns these calls off.
+Every File, Dir and Path call that takes `timeout_ms` defaults it to 30000, and
+`File.open` defaults `mode` to `"read"` (see "Default parameter values" in
+section 6). The calls, the platform differences and the errors are in the
 [`File, Dir and Path` page](../../site/content/library/io-and-system/files.md);
-the compression calls are in the
-[`Zlib` page](../../site/content/library/text-and-data/zlib.md) (`Zlib` is a
-reserved name).
+the compression calls are in the [`Zlib`
+page](../../site/content/library/text-and-data/zlib.md) (`Zlib` is a reserved
+name).
 
 ### Processes
 

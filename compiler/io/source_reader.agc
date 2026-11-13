@@ -31,7 +31,7 @@ def read_as(path: String, shown: Bool) -> SourceFile.Read
 end
 
 # The bytes of a character that a chunk cuts in two wait in `carry` for the next chunk.
-def read_chunks(handle: FileHandle, shown: Bool) -> SourceFile.Read
+def read_chunks(handle: File.Handle, shown: Bool) -> SourceFile.Read
   parts: List[String] = []
   carry = "".bytes
   finished = false

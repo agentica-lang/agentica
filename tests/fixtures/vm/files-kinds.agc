@@ -1,6 +1,6 @@
-# The kind of a FileInfo is Ruby's File::Stat#ftype name. FIFOs, sockets and links need a host peer to make them
+# The kind of a File.Info is Ruby's File::Stat#ftype name. FIFOs, sockets and links need a host peer to make them
 # (tests/test_vm_os.py); the null device is on every system, as /dev/null or NUL.
-def show(label: String, result: Result[FileInfo]) -> Void
+def show(label: String, result: Result[File.Info]) -> Void
   puts("#{label} #{Result.unwrap!(result).kind}")
 end
 

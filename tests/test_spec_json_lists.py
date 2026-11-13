@@ -57,10 +57,10 @@ CASES = [
         "List[Set[Int]]",
     ),
     (
-        "a JsonField as the item of a List target is no JSON field",
-        main_with('  puts(JSON.decode("[]", List[JsonField[Int]]))\n'),
+        "a JSON.Field as the item of a List target is no JSON field",
+        main_with('  puts(JSON.decode("[]", List[JSON.Field[Int]]))\n'),
         "CHECK-JSON-FIELD-PLACE",
-        "List[JsonField[Int]]",
+        "List[JSON.Field[Int]]",
     ),
     (
         "an unknown item type is reported at its name",

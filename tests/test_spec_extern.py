@@ -575,7 +575,7 @@ def test_a_resource_is_declared_before_use_with_a_c_free_function(checked, membe
 @table("text, start", [
     ('extern "/opt/libdb.so"\n  resource Db, free: db_close\n  resource Db, free: db_free\nend\n', (3, 3)),
     ('struct Db\n  x: Int\nend\n\nextern "/opt/libdb.so"\n  resource Db, free: db_close\nend\n', (6, 3)),
-    ('extern "/opt/libdb.so"\n  resource Socket, free: db_close\nend\n', (2, 3)),
+    ('extern "/opt/libdb.so"\n  resource Process, free: db_close\nend\n', (2, 3)),
 ])
 def test_a_resource_name_is_not_taken_twice(checked, text, start):
     assert at(checked(text))[:2] == ("CHECK-REDEFINED-NAME", start)

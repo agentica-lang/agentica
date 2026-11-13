@@ -108,7 +108,7 @@ struct agc_conn {
   uint8_t *write_data;
   agc_inbuf in;
   request *opener, *reader, *writer, *accepts, *accepts_tail, *handshakes;
-  /* The TLS config of the TlsContext that TLS.connect or TLS.listen took, with a count of the net's own. */
+  /* The TLS config of the TLS.Context that TLS.connect or TLS.listen took, with a count of the net's own. */
   agc_tls_config *config;
   /* An HTTP client's lazy context (HttpWire.connect_tls), instead of `config`: the net holds one count on it, and waits
      in its list (next_waiter) while it is built. */
@@ -163,7 +163,7 @@ static const char write_failed[] = "could not write to the stream";
    its count: it holds its own count, runs to its end and shared_done gives back the last count. A run does not wait
    for it: the run ends through agc_launch_exit. Until it ends, agc_io_close does not settle: the test harness
    retries that close until it does, and the front end's hand-off (agentica.c) fails if a build is still queued. A
-   client whose options name a TlsContext connects with TLS.connect instead (std/http). */
+   client whose options name a TLS.Context connects with TLS.connect instead (std/http). */
 struct tls_shared {
   _Atomic size_t refs;
   agc_tls_config *config, *built;
@@ -1395,7 +1395,7 @@ static void no_network(agc_vm *vm, uint32_t span) {
 
 /* --deny-net, checked before anything is resolved, opened or allocated: the denied error, or Void. Every socket and
    listener starts here (a listener for HttpWire.server comes from TCP.listen or TLS.listen), so a denied run has none
-   to accept on. A TlsContext read its files when it was built (TLS.client_context, under --deny-fs). */
+   to accept on. A TLS.Context read its files when it was built (TLS.client_context, under --deny-fs). */
 static agc_value net_denied(agc_vm *vm, uint32_t span) {
   no_network(vm, span);
   if (vm->rt->deny_net) return agc_error(vm, AGC_KIND_ERROR, AGC_DENIED_NET);
@@ -1452,11 +1452,11 @@ static agc_value connect_net(agc_vm *vm, agc_loop *io, CC_OWNS char *name, int64
   return start_open(vm, n, agc_socket_value(sk), timeout);
 }
 
-static const char client_role[] = "TLS.connect takes a client TlsContext (TLS.client_context), not a server one";
-static const char server_role[] = "TLS.listen takes a server TlsContext (TLS.server_context), not a client one";
+static const char client_role[] = "TLS.connect takes a client TLS.Context (TLS.client_context), not a server one";
+static const char server_role[] = "TLS.listen takes a server TLS.Context (TLS.server_context), not a client one";
 
 /* The checks of a connect to WHERE (host, port), in order: --deny-net, the timeout, the port, the host. Then the socket,
-   with one more count on the config of CONTEXT (a TlsContext, or Void for none) taken only once every check passed,
+   with one more count on the config of CONTEXT (a TLS.Context, or Void for none) taken only once every check passed,
    so an error takes none, or on CLIENT's shared context. Everything that can raise comes before the malloc of the
    host's name. */
 static agc_value checked_connect(agc_vm *vm, const agc_value *where, int64_t timeout, uint32_t span, agc_value context,
@@ -1485,7 +1485,7 @@ static agc_value open_socket(agc_vm *vm, const agc_value *args, uint32_t span, b
 
 /* HttpWire.connect_tls(client, host, port, timeout_ms) (std-only): a TLS connection with the system trust, on the
    context that the client's connections share, so it is built once (#394). After HttpWire.drop_tls a call builds
-   its own context. A client whose options name a TlsContext uses TLS.connect instead. */
+   its own context. A client whose options name a TLS.Context uses TLS.connect instead. */
 static agc_value builtin_connect_tls(agc_vm *vm, agc_value *args, uint32_t span) {
   agc_http_client *c = agc_as_http_client(vm, args[0]);
   return checked_connect(vm, args + 1, agc_as_int(vm, args[3]), span, agc_void(), c);
@@ -1533,7 +1533,7 @@ static agc_value builtin_tls_connect(agc_vm *vm, agc_value *args, uint32_t span)
 }
 
 /* HttpWire.connect_context(host, port, context, timeout_ms) (std-only): TLS.connect, the name std/http uses for a
-   connection on a client TlsContext (HTTP.start, and a client whose options.tls names one), on a context that agrees
+   connection on a client TLS.Context (HTTP.start, and a client whose options.tls names one), on a context that agrees
    on no protocol but HTTP/1.1. */
 static agc_value builtin_connect_context(agc_vm *vm, agc_value *args, uint32_t span) {
   agc_tls_context_check(vm, args[2], false, client_role, span + 3);
@@ -1602,9 +1602,9 @@ static bool begin_upgrade(void *data, agc_io_job *job) {
   return true;
 }
 
-static const char upgrade_role[] = "TLS.upgrade with a server TlsContext takes the host \"\"";
+static const char upgrade_role[] = "TLS.upgrade with a server TLS.Context takes the host \"\"";
 
-/* The checks and the start of an upgrade of SK to TLS, for TLS.upgrade (CONTEXT, a TlsContext) and HttpWire.upgrade_tls
+/* The checks and the start of an upgrade of SK to TLS, for TLS.upgrade (CONTEXT, a TLS.Context) and HttpWire.upgrade_tls
    (CLIENT, an HTTP client whose shared system-trust context is used; CONTEXT is then NULL). A server context with a
    host is a bug in the program, reported first. The checks of the arguments leave the socket as it was; after them the
    plain socket is the request's (its resource is gone, so the program sees it closed), and the handshake runs on a new
@@ -1650,7 +1650,7 @@ static agc_value builtin_tls_upgrade(agc_vm *vm, agc_value *args, uint32_t span)
 }
 
 /* HttpWire.upgrade_context(socket, context, host, timeout_ms) (std-only): TLS.upgrade, the name std/http uses for a
-   tunnel on a client TlsContext, which must agree on no protocol but HTTP/1.1 as HttpWire.connect_context requires. */
+   tunnel on a client TLS.Context, which must agree on no protocol but HTTP/1.1 as HttpWire.connect_context requires. */
 static agc_value builtin_upgrade_context(agc_vm *vm, agc_value *args, uint32_t span) {
   agc_tls_context_check(vm, args[1], false, client_role, span + 2);
   agc_tls_http1_check(vm, agc_as_tls_context(vm, args[1])->config, span + 2);

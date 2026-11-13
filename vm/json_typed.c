@@ -7,7 +7,7 @@
 
 #include <string.h>
 
-/* One open container of the decode: a List, a Map, a struct, an enum variant with payloads, or a JsonField.Value or an
+/* One open container of the decode: a List, a Map, a struct, an enum variant with payloads, or a JSON.Field.Value or an
    Optional some whose T is not a scalar (n is 1 and value holds the decoded T until the frame closes). An enum frame
    walks the "values" array of the variant: items are its items, payload_types their types and tagged the enum being built. */
 typedef struct {
@@ -24,7 +24,7 @@ typedef struct {
   agc_value value;
 } decode_frame;
 
-/* Not a kind of the type table: a JsonField or Optional struct field whose key is missing, decoded as JsonField.Absent
+/* Not a kind of the type table: a JSON.Field or Optional struct field whose key is missing, decoded as JSON.Field.Absent
    or none (arg is the kind of the field's type). */
 #define ABSENT_FIELD UINT32_MAX
 
@@ -47,7 +47,7 @@ static agc_value decode_error_in(agc_vm *vm, const decode_frame *stack, size_t d
       if (b.len) agc_json_put(&b, ".", 1);
       agc_json_put(&b, key->data, key->bytes);
     } else if (f->kind == AGC_TYPE_JSON_FIELD || f->kind == AGC_TYPE_OPTIONAL) {
-      continue; /* JsonField.Value and some add no step to the path */
+      continue; /* JSON.Field.Value and some add no step to the path */
     } else if (f->kind == AGC_TYPE_ENUM) {
       char index[48];
       int n = snprintf(index, sizeof index, "%svalues[%zu]", b.len ? "." : "", f->next);
@@ -76,7 +76,7 @@ static agc_value decode_error(agc_vm *vm, const decode_frame *stack, size_t dept
 }
 
 /* The next child of a List, Map or struct frame and the kind and operand of its type. A missing key is false, except
-   for a JsonField or Optional field, whose kind is then ABSENT_FIELD. */
+   for a JSON.Field or Optional field, whose kind is then ABSENT_FIELD. */
 static bool next_child(const agc_program *p, const decode_frame *f, agc_value *item, uint32_t *kind, uint32_t *arg) {
   uint32_t index = f->arg;
   if (f->kind == AGC_TYPE_LIST) {
@@ -133,7 +133,7 @@ static agc_value frame_value(const agc_program *p, decode_frame *f) {
   return agc_struct_value(f->record);
 }
 
-/* The top kind check that a JsonField or an Optional makes before it decodes its T
+/* The top kind check that a JSON.Field or an Optional makes before it decodes its T
    (docs/vm/02-reference-behavior.md §2.7): the text of the error, with "or null", or NULL when the JSON value has the
    kind T starts with. A failure deeper inside T keeps its own path and text. An Optional T makes its own check. */
 static const char *nullable_mismatch(const agc_json *j, uint32_t kind) {
@@ -416,7 +416,7 @@ static bool required_field(const agc_program *p, uint32_t type) {
   return kind != AGC_TYPE_JSON_FIELD && kind != AGC_TYPE_OPTIONAL;
 }
 
-/* A JsonField or Optional field is not required. With no required field the "required" key is left out, since
+/* A JSON.Field or Optional field is not required. With no required field the "required" key is left out, since
    draft-04 wants a non-empty list there. */
 static agc_value struct_schema(const agc_program *p, const agc_struct_def *def, const agc_value *schemas,
                                agc_value defs) {

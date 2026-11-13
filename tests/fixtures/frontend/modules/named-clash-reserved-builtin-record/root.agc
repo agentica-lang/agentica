@@ -1,4 +1,4 @@
-import {Color as FileInfo} from "lib"
+import {Color as StructMember} from "lib"
 
 def main() -> Void
 end

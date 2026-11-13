@@ -8,7 +8,7 @@ import DiagnosticJson from "../diagnostics/diagnostic_json"
 import DocJson from "../docs/doc_json"
 
 ## The object of the answer.
-export def json(found: Model.Bodies) -> Json
+export def json(found: Model.Bodies) -> JSON.Value
   functions = found.functions.map do |function: Model.Body| function_json(found.file, function) end
   JSON.object({
     "version": JSON.from(found.version),
@@ -23,7 +23,7 @@ export def json(found: Model.Bodies) -> Json
   })
 end
 
-def function_json(file: String, function: Model.Body) -> Json
+def function_json(file: String, function: Model.Body) -> JSON.Value
   params = function.params.map do |param: Model.BodyParam|
     JSON.object({
       "name": JSON.from(param.name),
@@ -47,7 +47,7 @@ def function_json(file: String, function: Model.Body) -> Json
 end
 
 # The object of one node, with its children.
-def node_json(node: Model.Node) -> Json
+def node_json(node: Model.Node) -> JSON.Value
   JSON.object({
     "kind": JSON.from(node.kind),
     "type": type_json(node.type),
@@ -59,7 +59,7 @@ def node_json(node: Model.Node) -> Json
   })
 end
 
-def type_json(type: Model.TypeShape) -> Json
+def type_json(type: Model.TypeShape) -> JSON.Value
   JSON.object({
     "kind": JSON.from(type.kind),
     "name": JSON.from(type.name),

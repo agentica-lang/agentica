@@ -36,7 +36,7 @@ void agc_net_close(agc_vm *vm, agc_resource *r, const char *why);
 agc_value agc_tls_load_error(agc_vm *vm, const char *what, const char *path, const agc_tls_failure *f);
 /* The error Result "HEAD (detail)" of a TLS failure, or HEAD with the system error. */
 agc_value agc_tls_failure_error(agc_vm *vm, const char *head, const agc_tls_failure *f);
-/* RUNTIME-TLS-CONTEXT-ROLE with MESSAGE at span AT (the context argument) unless CONTEXT, a TlsContext, is a server
+/* RUNTIME-TLS-CONTEXT-ROLE with MESSAGE at span AT (the context argument) unless CONTEXT, a TLS.Context, is a server
    context when SERVER and a client one otherwise (vm/tls_context.c). */
 void agc_tls_context_check(agc_vm *vm, agc_value context, bool server, const char *message, uint32_t at);
 /* RUNTIME-TLS-CONTEXT-ALPN at span AT unless CONFIG (NULL for plain TCP) agrees on no protocol but HTTP/1.1, the

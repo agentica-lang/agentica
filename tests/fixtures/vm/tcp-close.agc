@@ -1,8 +1,8 @@
-def wait_line(socket: Socket) -> Result[String]
+def wait_line(socket: TCP.Socket) -> Result[String]
   return TCP.read_line(socket, 60000)
 end
 
-def wait_accept(listener: Listener) -> Result[Socket]
+def wait_accept(listener: TCP.Listener) -> Result[TCP.Socket]
   return TCP.accept(listener, 60000)
 end
 
