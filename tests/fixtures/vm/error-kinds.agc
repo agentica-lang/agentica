@@ -66,6 +66,8 @@ def http_rows() -> Void
     "HTTP/1.1 200 OK\r\n#{"X-Many: 1\r\n" * 101}Content-Length: 0\r\n\r\n",
     "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n1;#{"e" * 9000}\r\nx\r\n0\r\n\r\n",
     "HTTP/1.1 200 OK\r\nContent-Length: 40\r\n\r\n",
+    "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n28\r\n#{"b" * 40}\r\n0\r\n\r\n",
+    "HTTP/1.1 200 OK\r\nConnection: close\r\n\r\n#{"c" * 40}",
     "HTTP/1.1 2x0 OK\r\nContent-Length: 0\r\n\r\n",
   ]
   server = Task.spawn(-> { answer(listener, replies) })
@@ -73,6 +75,8 @@ def http_rows() -> Void
   show("response headers too many", "http", HTTP.get(pool, url))
   show("chunk line too large", "http", HTTP.get(pool, url))
   show("response body too large", "http", HTTP.get(pool, url))
+  show("chunked body too large", "http", HTTP.get(pool, url))
+  show("close-delimited body too large", "http", HTTP.get(pool, url))
   show("response head malformed", "http", HTTP.get(pool, url))
   long = [HTTP.Header(name: "X-Long", value: "a" * 9000)]
   show("request header line too large", "http", HTTP.post(pool, url, "".bytes, long))
