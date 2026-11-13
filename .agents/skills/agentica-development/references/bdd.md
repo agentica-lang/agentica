@@ -54,9 +54,10 @@ the programming skill or the site).
   linker registers its names. The bytecode cache keys such a compile apart
   (`test PATH`). The runner and protocol do not change.
 - Test group: a test file and the step program (`Settings.test_build`, set
-  by `compile_steps`; `check` sets it for `steps.agc`) may import the
-  `group = "test"` dependencies of the manifest (`PackageImport.with_tests`);
-  the bytecode cache keys a step program apart (`steps PATH`).
+  by `compile_steps`) may import the `group = "test"` dependencies of the
+  manifest (`PackageImport.with_tests`); the bytecode cache keys a step
+  program apart (`steps PATH`). `check`, the queries and `std/analysis` decide
+  by the file name (`modules/test_files.agc`: `*_test.agc`, `steps.agc`).
 - Without `--steps`, `default_steps` takes the nearest `steps.agc` from each
   path that holds a feature up to the working directory (two different files
   are a usage report). A broken step program is one `steps` file error and the

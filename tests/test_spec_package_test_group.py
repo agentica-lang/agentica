@@ -85,6 +85,13 @@ def test_the_tests_of_the_project_import_its_test_group_and_nothing_else_does(ws
     assert (tested.code, report["ok"], report["failed"]) == (0, True, 0), tested.stdout + tested.stderr
     for path in ("test/app_test.agc", "specs/steps.agc"):
         assert command(ws, remotes, "check", str(ws.project / path))[1] is None
+    # The queries read a test file as `check` does: `type-at` answers on the use of the test group.
+    typed = command(ws, remotes, "type-at", "%s:5:19" % (ws.project / "test" / "app_test.agc"))[0]
+    assert typed.code == 0, typed.stderr
+    assert json.loads(typed.stdout)["type"] == "Bool"
+    result, problem = command(ws, remotes, "type-at", "%s:4:8" % (ws.project / "main.agc"))
+    assert result.code == 1 and problem["code"] == "CHECK-IMPORT-PACKAGE"
+    assert problem["file"].endswith("helper.agc") and problem["range"]["start"] == {"line": 1, "column": 1}
 
     # A program that is not a test cannot import it, even through a file that a test imports and checked before.
     problem = problem_of(ws, remotes)

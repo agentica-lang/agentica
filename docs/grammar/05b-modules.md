@@ -453,14 +453,17 @@ import Sqlite from "pkg/sqlite/db"
   other value is `PKG-MANIFEST-INVALID` at `dependencies.<name>.group`. The
   project locks, fetches and installs its test group like any dependency, with
   the same lock entry (no key says the group). Only a test build imports it:
-  the `*_test.agc` files and the step program that `agentica test` compiles
-  (and `agentica check` of a `*_test.agc` file or of a `steps.agc`), with the
-  files they import. In any other build an import of it from a file of the
-  project is `CHECK-IMPORT-PACKAGE` at the import. The test group of a package
-  is its own: a project that depends on the package does not resolve, fetch or
-  lock it, does not check it against its lock, and the files of the package
-  cannot import it. A name of the test group that another package needs is one
-  source in the build, as for any name.
+  the `*_test.agc` files and the step program that `agentica test` compiles,
+  with the files they import. `agentica check`, the queries (`type-at`, `refs`)
+  and `std/analysis` decide by the name of the file: a `*_test.agc` file or a
+  `steps.agc`, so a step program given as `agentica test --steps other.agc` is
+  a test only under `agentica test`. In any other build an import of it from a
+  file of the project is `CHECK-IMPORT-PACKAGE` at the import. The test group
+  of a package is its own: a project that depends on the package does not
+  resolve, fetch or lock it, does not check it against its lock, and the files
+  of the package cannot import it (`CHECK-IMPORT-PACKAGE`). A name of the test
+  group that another package needs is one source in the build, as for any
+  name.
 - A repository of packages can be a workspace, like an npm workspace. Its root
   `agentica.toml` has a `[workspace]` table with `repository`, the `git` URL of
   the repository (the rules of a dependency's `git`), and `members`, a

@@ -70,6 +70,7 @@ modules/overlay.agc
 modules/resolve.agc
 modules/resolve_import.agc
 modules/rewrite.agc
+modules/test_files.agc
 modules/test_main.agc
 modules/type_code.agc
 modules/workspace.agc

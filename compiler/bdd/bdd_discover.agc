@@ -2,10 +2,8 @@
 ## under the folders named there. Problems come back as entries too, so the report
 ## shows them next to the files that run.
 
+import TestFiles from "../modules/test_files"
 import {IO_TIMEOUT} from "bdd_files"
-
-## The name of the step program that `agentica test` finds by itself in the folders of the features.
-STEPS_FILE = "steps.agc"
 
 ## One feature file or test file, or one problem of the search, as the runner reads it (stdlib/test/runner.agc,
 ## `Entry`): `problem` is "" for a file to run; `kind` is "tests", "feature" or "" (neither); `bytecode`, `source_root`
@@ -21,21 +19,13 @@ end
 
 ## The kind of a path by its name: "tests" for `_test.agc`, "feature" for `.feature`, else "".
 def kind_of(path: String) -> String
-  if test_file?(path)
+  if TestFiles.test_file?(path)
     return "tests"
   elsif path.end_with?(".feature")
     return "feature"
   end
 
   ""
-end
-
-## True for the name of a unit test file, `*_test.agc`.
-def test_file?(path: String) -> Bool = path.end_with?("_test.agc")
-
-## True for the name of that step program, `steps.agc`, as a path of any system.
-def steps_file?(path: String) -> Bool
-  path == STEPS_FILE or path.end_with?("/#{STEPS_FILE}") or path.end_with?("\\#{STEPS_FILE}")
 end
 
 ## The entries for the given paths: first the problems in the order they were met, then the files sorted by path, each

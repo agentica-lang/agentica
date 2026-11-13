@@ -12,6 +12,7 @@ import Pipeline from "../app/pipeline"
 import DiagnosticJson from "../diagnostics/diagnostic_json"
 import Paths from "../modules/import_path"
 import Env from "../modules/link_env"
+import TestFiles from "../modules/test_files"
 import Compile from "bdd_compile"
 import Discover from "bdd_discover"
 import {IO_TIMEOUT, write_bytes, write_text} from "bdd_files"
@@ -61,7 +62,7 @@ EMBEDDED_STEPS_SOURCE = "std/bdd.agc"
 DEFAULT_PATHS = ["specs/", "test/"]
 
 # The file that is the step program when --steps is not given and a searched folder holds it.
-DEFAULT_STEPS_FILE = Discover.STEPS_FILE
+DEFAULT_STEPS_FILE = TestFiles.STEPS_FILE
 
 # The step program, compiled: where its bytecode is (nothing is written when it did not compile; "" when it is the
 # default one that the binary carries), the source the runner names in reports, the folder for the VM's --source-root,

@@ -329,17 +329,17 @@ A manifest that declares dependencies needs an `agentica.lock` beside it, with t
 - `agentica add NAME URL --tag TAG` (or `--ref COMMIT`, `--subdir DIR`) adds a dependency to `agentica.toml`, the lock and `deps/`.
 - `agentica update [NAME]` fetches the tag pins again and repairs a lock that is out of date.
 
+```sh
+agentica install
+agentica add sqlite https://github.com/owner/sqlite-ac --tag v1.2.0
+agentica update sqlite
+```
+
 A dependency that only the tests use, such as a property-testing package, takes `group = "test"` (`agentica add NAME URL --tag TAG --group test` writes it). The project locks and installs it, but only its `*_test.agc` files and its step program import it; any other program that imports it stops with `CHECK-IMPORT-PACKAGE`. A project that depends on your package never fetches it.
 
 ```toml
 [dependencies]
 prop = { git = "https://github.com/owner/prop", tag = "v1.0.0", group = "test" }
-```
-
-```sh
-agentica install
-agentica add sqlite https://github.com/owner/sqlite-ac --tag v1.2.0
-agentica update sqlite
 ```
 
 A manifest may say which Agentica it needs, as a minimum: `agentica = "0.31.0"` (one SemVer version; `0.31.0-alpha.1` is older than `0.31.0`). When the project, one of its packages or the root of its workspace needs a newer Agentica than the one running, `install`, `check`, `run` and `test` stop with `PKG-AGENTICA-TOO-OLD`.
