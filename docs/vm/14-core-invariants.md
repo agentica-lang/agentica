@@ -75,12 +75,11 @@ Known exceptions (the mechanisms are in §10.2.2):
   final `fflush` is not bounded by the flush limit, and a stop signal interrupts
   the write (`EINTR`) and ends the run (§14.4). A child's stderr goes through
   the same buffer (`agc_output_forward`); in the fallback one libuv pool write
-  at a time takes the chunks of all children in turn, with the blocking
-  `fwrite` under the `FILE`'s lock, and a child's pipe is not read until its
-  chunk is written. A stuck stderr then stops the children and holds one pool
-  thread, which file jobs and name lookups share, but not the I/O thread
-  (§10.2.3, Output). That write starts the pool, so under a low `ulimit` a run
-  can end there with status 70.
+  at a time takes the chunks of all children in turn, and a child's pipe is not
+  read until its chunk is written. A stuck stderr then stops the children and
+  holds one pool thread (shared with file jobs and name lookups), but not the
+  I/O thread (§10.2.3, Output). That write starts the pool, so under a low
+  `ulimit` a run can end there with status 70.
 - **Release flush of a file handle.** When a file job is dropped before its pool
   work ran (its timeout, a cancel, or the flush limit), or a handle is released
   at the end of the run (`release_handles`), `release_state` in `vm/files.c`
@@ -101,12 +100,10 @@ Known exceptions (the mechanisms are in §10.2.2):
   outcome decides between the timeout and the completion. The loop's clock
   counts whole milliseconds. On Linux, where an exact read is a system call
   (timed once per process: a clock source with no vDSO path, such as an HPET),
-  it is the coarse monotonic clock (`agc_uv_clock_getres`,
-  `vm/clock_posix.c`), which costs no clock source read; on other Linux hosts
-  libuv gets `CLOCK_MONOTONIC`. `timer_length` adds the clock's lag (a
-  millisecond, and with the coarse clock its tick and a millisecond more), so
-  the timeout never ends early; with the coarse clock it may end up to about
-  two ticks and 2 ms late.
+  it is the coarse monotonic clock (`agc_uv_clock_getres`, `vm/clock_posix.c`);
+  on other Linux hosts libuv gets `CLOCK_MONOTONIC`. `timer_length` adds the
+  clock's lag, so the timeout never ends early; with the coarse clock it may end
+  up to about two ticks and 2 ms late.
 - **A wait with only a deadline is a task timer.** It arms the task's own timer
   in the scheduler's heap (`agc_task_park_until`, `vm/timers.c`). Such a wait
   has no I/O, so it needs no job, no registry slot and no request to the I/O
@@ -298,23 +295,21 @@ callback type, made at the first handle of the pair and never freed
 any thread at any time, also after every handle is closed, with no use after
 free. Each handle counts in `open` of its pair (atomic) and a close drops it at
 once, held by a call or not; while `open` is 0 the code gives zero and runs
-nothing (a free function, a thread of C's own and the compute pool give zero or
-refuse as before: `callback_entry`). With another handle of the pair open it
-runs, which is harmless: the function takes no captures and runs in the task
-that made the native call. The memory is bounded by the number of distinct
-callback functions and types of the program (the front end's bytecode names each
-once), and for hand-made bytecode by a cap of 4096 pairs, past which
-`Native.callback` fails with `RUNTIME-NATIVE-CALLBACK`. The end of the run frees what is
-still open (§14.4, step 3), but for the callbacks: they have nothing to free.
-A resource of a native module (`resource Name` in an `extern module` block) is
-the same `agc_c_resource` with the row of the module's resource table: its free
-is the module's free function on its state, then `free` of the state, under the
+nothing (`callback_entry`). With another handle of the pair open it runs, which
+is harmless: the function takes no captures and runs in the task that made the
+native call. The memory is bounded by the number of distinct callback functions
+and types of the program, and for hand-made bytecode by a cap of 4096 pairs,
+past which `Native.callback` fails with `RUNTIME-NATIVE-CALLBACK`. The end of
+the run frees what is still open (§14.4, step 3), but for the callbacks. A
+resource of a native module (`resource Name` in an `extern module` block) is the
+same `agc_c_resource` with the row of the module's resource table: its free is
+the module's free function on its state, then `free` of the state, under the
 same rules (owner, holds, pins, the end of the run). A dirty call holds its
 resource arguments as a `compute def` call does, and a resource it makes is
 registered when the `done` half builds the result, owned by the task that takes
 it; a dropped result frees what it made, and the end of the run frees what a
-finished call made for a task that never took it, before the registry.
-There are no GC finalizers.
+finished call made for a task that never took it, before the registry. There
+are no GC finalizers.
 
 A plain TCP socket at N > 1 has a second send path: the scheduler calls `send()`
 itself, with `rt->sync` dropped and the writer lock held without a job

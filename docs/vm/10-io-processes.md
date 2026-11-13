@@ -35,15 +35,14 @@
   `TerminateProcess` for `SIGTERM`, `SIGKILL` and `SIGINT` alike, so the grace
   wait of a captured child ends at once. `exited` records 128 plus the signal
   that was asked for: 137 for the `SIGKILL` of a plain child, 143 for the
-  `SIGTERM` of a captured one (`tests/test_process_windows.py` reads the pair
-  from the `proc` trace); the pair holds only when the stop reached a live
-  child, since after an `ESRCH` the real exit code is recorded. Unless libuv
-  cannot assign its job object (a Windows version without nested jobs), every
-  child it starts is in one job that kills its members when the VM that made it
-  ends. That job has `JOB_OBJECT_LIMIT_SILENT_BREAKAWAY_OK`, so only the direct
-  children are in it, not their subprocesses: the direct children of a VM that
-  is killed die with it, and a child that is itself a VM stops its own children
-  the same way. A grandchild that a VM started never reads the end of its
+  `SIGTERM` of a captured one (`tests/test_process_windows.py`); the pair holds
+  only when the stop reached a live child, since after an `ESRCH` the real exit
+  code is recorded. Unless libuv cannot assign its job object (a Windows version
+  without nested jobs), every child it starts is in one job that kills its
+  members when the VM that made it ends. That job has
+  `JOB_OBJECT_LIMIT_SILENT_BREAKAWAY_OK`, so only the direct children are in it,
+  not their subprocesses: a child that is itself a VM stops its own children the
+  same way, and a grandchild that a VM started never reads the end of its
   channel from the death of its parent there: the parent's job ends it first. A
   parent that is no libuv process, or that spawns with `UV_PROCESS_DETACHED`,
   leaves a child that reads it (`vm/tests/process_test.c`). `Process.close` and
@@ -203,14 +202,12 @@ errors, limits, the half close); this section is the design behind them.
   inherited files (so no `File` call can reach them), removes the variable from
   its own environment, and keeps the streams until the end of the run. On
   Windows it takes only `3,4`, with descriptor 3 a pipe that grants reading and
-  4 one that grants writing; it duplicates both without inheritance and closes
-  the originals. In any other case, such as a regular file, a character device
-  or a pipe the wrong way round, nothing is touched (the descriptors stay as
-  they were) and the child-side builtins return
-  `error("process: no parent channel")`; a one-way descriptor in the wrong place
-  is refused because it would park `Test.run` forever. The libuv handle is
-  attached on first use, so a program that never uses the channel never starts a
-  read.
+  4 one that grants writing. In any other case (a regular file, a character
+  device or a pipe the wrong way round) nothing is touched and the child-side
+  builtins return `error("process: no parent channel")`; a one-way descriptor in
+  the wrong place is refused because it would park `Test.run` forever. The libuv
+  handle is attached on first use, so a program that never uses the channel
+  never starts a read.
 - **Locks and waits.** A parent-side `Process` has two more lock records,
   `channel.reader` and `channel.writer`, so a `channel_read_line` parked on a
   silent child blocks neither `Process.read_line` nor `send` (§14.1); the child

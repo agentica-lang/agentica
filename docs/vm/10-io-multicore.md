@@ -128,20 +128,16 @@ The multicore model (threads, queues and ownership) is in §16
   uses `pthread_once` or happens at start-up. `make vm-lint` enforces this with
   clang-tidy's `cppcoreguidelines-avoid-non-const-global-variables` on `vm/*.c`
   and `vm/*.h` (`vm/tests/.clang-tidy` turns it off for the C tests). The check
-  does not see function-local `static` variables. The exceptions that stay, each
-  marked `// NOLINT(cppcoreguidelines-avoid-non-const-global-variables)`:
-  - the `AGC_NO_GC` block tracking in `vm/value.c` (fuzz and test builds,
-    single-threaded), the fuzz harness static in `vm/fuzz.c`;
-  - the stop state of `vm/loop.c` (lock-free atomics, a pid and the wake
-    handle; a function-local `static`, so not marked), since a signal handler
-    gets no context (10.2.2, Stop signals);
-  - the system trust store in `vm/tls_trust.c` (a `CRYPTO_ONCE` and the list
-    it fills once, read-only after; 10.3 Trust), which every TLS setup job of
-    every runtime shares, so one load serves the process;
-  - the native call of the running thread in `vm/ffi.c` (`current_site`, a
-    `_Thread_local` pointer to a record on that call's C stack), since a
-    callback that C makes gets no context but its own data and must know
-    whether this thread is inside a native call that may run it.
+  does not see function-local `static` variables. The exceptions that stay are
+  marked `// NOLINT(cppcoreguidelines-avoid-non-const-global-variables)` (`rg
+  NOLINT vm/`) or are function-local: the `AGC_NO_GC` block tracking and the
+  fuzz harness (single-threaded builds), the stop state of `vm/loop.c`
+  (lock-free atomics and the wake handle, since a signal handler gets no
+  context, 10.2.2 Stop signals), the system trust store of `vm/tls_trust.c` (a
+  `CRYPTO_ONCE` and a list filled once and read-only after, shared by every
+  runtime), and `current_site` of `vm/ffi.c` (a `_Thread_local` pointer to a
+  record on the C stack of a native call, since a callback gets no context but
+  its own data).
 
   `setenv("UV_USE_IO_URING", "0", 0)` runs once at start-up (`agc_io_init`,
   before any loop exists), since `setenv` is not thread-safe. `agc_io_init`

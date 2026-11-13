@@ -110,10 +110,8 @@ does not make obvious:
 - Roots (runtime, schedulers, program, tasks) live in GC objects reachable from
   the runtime struct, never in mutable static storage (10.2.3).
 - Heap growth: `agc_init` sets the free-space divisor to 2 (libgc's default is
-  3), so more is allocated between collections. The front end's self-compile
-  ran 10% faster with 13% more peak memory. `GC_FREE_SPACE_DIVISOR` in the
-  environment still wins: 3 gives back libgc's default, and 1 is faster still
-  for more memory.
+  3), so more is allocated between collections. `GC_FREE_SPACE_DIVISOR` in the
+  environment still wins.
 - Heap floor: `agc_init` grows the heap to 32 MB (`AGENTICA_GC_HEAP`; libgc's
   `GC_INITIAL_HEAP_SIZE` wins when set), and libgc collects only when that
   space is used up. libgc counts pointer-free bytes at a quarter, so a server
@@ -145,11 +143,7 @@ Why it is safe:
   schedulers read the table with no lock.
 
 Every shared path keeps the turn cost it had, since the cost rule reads sizes
-and not objects. Left out after a measurement: `CONCAT` with an empty side
-returning the other String (no real program gains), `filter` and `map` with
-nothing to return (one small list per call; the edit moved a loop by +12% in
-one link layout, and layouts differ by that much without any edit), and the
-strings of `agc_utf8_decode`, HTTP bodies and `Dir.list`.
+and not objects.
 
 ### 5.5 Why a value is 16 bytes
 
@@ -174,13 +168,11 @@ objects, stack and roots only at 8-byte aligned offsets. Alternatives weighed:
 The direction, if memory or speed ever asks: use the static types, which make
 most tags redundant, as the unboxed `List[Int]` and `List[Float]` do
 (`docs/vm/17-lists.md` §17.12). Typed registers belong to the JIT (§6.4).
-Compact struct fields would store an `Int`, `Float` or `Bool` field in 8 bytes
-with no tag and a pointer field as a bare aligned pointer, and a read rebuilds
-the `agc_value` from the static type. `Int` stays 64-bit, pointers stay aligned
-and visible to the GC, and `agc_value` stays the general form in registers,
-calls and generic code. Measure first (the server benchmark and the
-cross-language benchmarks, wall time and peak RSS): change the value layout
-only if value size, and not lists or dispatch, is the limit.
+`Int` stays 64-bit, pointers stay aligned and visible to the GC, and
+`agc_value` stays the general form in registers, calls and generic code.
+Measure first (wall time and peak RSS on the server and cross-language
+benchmarks): change the value layout only if value size, and not lists or
+dispatch, is the limit.
 
 ## 6. Execution
 
@@ -304,14 +296,11 @@ returns.
   leaves that cannot fail once their arguments pass a check (`plain_leaves` in
   `vm/jit/jit.c`) are called at any depth. Compiled code returns `{status, pc}`
   at its first exit, and `run_compiled` (`vm/interp.c`) handles it as the
-  interpreter handles the instruction at `pc`. The exit kinds are `STEP` (the
-  slow step), `COST`, `INTERPRET`, `RESUME` (a block call whose next step may
-  fail, take a slow step or sort), `CALL`, `CALL_VALUE`, `TAIL_CALL` and
-  `RETURN` (the interpreter's frame transitions), `RETURNED` (a native return,
-  never seen by `run_compiled`), `YIELD` and `RAISE`. A block's `RETURN` to a
-  block call that calls the same function again takes no exit: the block's frame
-  starts over in place (`agc_jit_block_return`), and a turn that its cost ends
-  yields at pc `AGC_JIT_PC_RESTART` so the frame's pc stays 0.
+  interpreter handles the instruction at `pc`; the exit kinds are the
+  `AGC_JIT_EXIT_*` values of `vm/jit/jit.h`. A block's `RETURN` to a block call
+  that calls the same function again takes no exit: the block's frame starts
+  over in place (`agc_jit_block_return`), and a turn that its cost ends yields
+  at pc `AGC_JIT_PC_RESTART` so the frame's pc stays 0.
 - **Helper contract.** The machine code never fails itself. Its `agc_op_*`
   helpers (`vm/core.h`) return an `agc_status`; a status other than `OK` makes
   compiled code return as an exit, and the interpreter raises the failure at the
@@ -347,40 +336,31 @@ returns.
   `AGENTICA_VM_TEST_JIT_BUDGET=N` gives a test a smaller budget.
 - **Perf map.** With `AGENTICA_PERF_MAP=1` (any POSIX host), each function is
   added to `/tmp/perf-PID.map` when its code is published, so `perf report`
-  names compiled code. The file is opened to append with `O_NOFOLLOW` and
-  `O_NONBLOCK` and used only when it is a regular file of the user who runs the
-  VM with one link. The first open of a process empties a map that an earlier
-  process with the same PID left.
+  names compiled code. The file is used only when it is a regular file of the
+  user who runs the VM with one link.
 - **Why the policy.** Each point was measured on `benchmarks/programs/`.
-  - A function without a loop runs each instruction once per entry; the entry,
-    the exit and the `RETURN` cost more than the instructions they save, so a
-    small block or an empty function ran slower compiled. It still gets code for
-    native calls, so a call on a rare path (`Logger.debug`) costs nothing on the
-    common one.
+  - A function without a loop runs each instruction once per entry, so the
+    entry, the exit and the `RETURN` cost more than they save; it still gets
+    code for native calls, so a call on a rare path (`Logger.debug`) costs
+    nothing on the common one.
   - A loop that leaves compiled code often loses: each trip out and back costs
-    more than it saves (`print-lines`, `small-values`, `strings`). A channel or
-    task wait that parks ends the turn and the woken task enters the code only
-    to leave at the same call (`channel-pingpong` ran 1.2 times slower).
-  - A block call does not count as leaving, as compiled code starts it.
+    more than it saves. A task wait that parks ends the turn, and the woken task
+    enters the code only to leave at the same call. A block call does not count
+    as leaving, as compiled code starts it.
   - The jit copy of the turn loop has the same handlers as the plain copy at
     other addresses, and that alone changed the timings of programs that
     compiled nothing. So a run with no function to compile has no JIT
-    (`agc_jit_new` returns NULL). `make layout-check` guards the layout of the
-    plain copy.
-- **Trace.** `AGENTICA_VM_TRACE=jit` (or `all`) writes the `skip`, `compile`,
-  `memory`, `budget` and exit-count lines; `tests/test_vm_jit.py` shows each.
-- **Tests.** `tests/test_vm_jit.py` covers the modes, failures, cancels, turns
-  that end inside compiled code, native and block calls, tail calls and the
-  trace counts. `vm/tests/jit_test.c` covers the emitter, code memory, helpers
-  and exits. `make vm-jit-test` runs the goldens with `AGENTICA_JIT=always` and
-  half the shards with `off`; `make vm-jit-self-compile` compiles the front end
-  under each mode and compares the bytes; `make test-jit-off` runs the
-  conformance areas with `off` (`jit-soak.yml` daily on the five systems).
-  `make vm-libfuzz` (clang, Linux) runs each accepted input with `always` and
-  `on` and compares the result with the interpreter's, for runs that read no
-  clock. `make layout-check` (Linux x86-64, release) compares the layout of the
-  `--jit off` loop with a base revision; an intended move carries the
-  `layout-change` label.
+    (`agc_jit_new` returns NULL), and `make layout-check` guards the layout of
+    the plain copy.
+- **Trace and tests.** `AGENTICA_VM_TRACE=jit` (or `all`) writes the `skip`,
+  `compile`, `memory`, `budget` and exit-count lines. `tests/test_vm_jit.py` and
+  `vm/tests/jit_test.c` cover the modes, failures, cancels, native and block
+  calls, tail calls and the emitter. `make vm-jit-test` runs the goldens per
+  mode, `vm-jit-self-compile` the self-compile and `test-jit-off` the daily soak
+  (their comments in `mk/` say how); the layout check and the workflows are in
+  the development skill's `references/ci.md`. `make vm-libfuzz` compares each
+  accepted input under `always` and `on` with the interpreter's result, for runs
+  that read no clock.
 - **Known limits.**
   - Windows on arm64 and 32-bit hosts run the interpreter. On macOS the code
     pages are sealed with plain `mprotect`, which needs a binary without the
@@ -389,15 +369,10 @@ returns.
   - A builtin that is neither leaf, direct nor a block call (output, tasks,
     channels, files) returns to the turn loop and unwinds the native calls below
     it.
-  - A function with a loop that is called often but whose loop rarely runs still
-    pays the entry and the exit at each call.
   - Until some code is published, only turns that start near a function that may
-    get code, and a turn drawn at random (one in 16 on average, down to one in
-    256 after 8 drawn turns with no entry counted), run the jit copy of the turn
-    loop. Code that runs only inside turns therefore compiles later.
-  - The jit copy interprets slower than the plain copy (it tests the resume pc
-    at each instruction): `logger-disabled` took about 1.4 times as long with
-    nothing compiled (the machine of `docs/vm-benchmarks.md`).
+    get code, and a turn drawn at random, run the jit copy of the turn loop, so
+    code that runs only inside turns compiles later. That copy interprets slower
+    than the plain copy (it tests the resume pc at each instruction).
 
 ## 7. Builtins in C
 

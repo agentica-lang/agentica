@@ -69,8 +69,8 @@ HAMT (`HAMT_BITS 5`, `vm/map.c`). `struct agc_list` and the node types live in
   `agc_list_builder_sized(&b, n)` allocates the final list object and, for n >
   32, the whole trie at once: one array per branch level, then one array of the
   `tail_off(n)` items. The leaves are 32-item slices of that array, so a build
-  makes about 15 allocations for a million items. Separate leaves took six times
-  as long as the flat array for a million items, which is why leaves are slices.
+  makes about 15 allocations for a million items (separate leaves cost several
+  times more).
   `finish` aborts unless exactly n items were pushed; that is a C bug, not a
   program error. Every node a builder writes was created by that builder after
   it began, so writing in place is safe. A later `set` copies the leaf it
@@ -78,9 +78,7 @@ HAMT (`HAMT_BITS 5`, `vm/map.c`). `struct agc_list` and the node types live in
 - **Unknown count.** `filter`, and `Task.map` (results arrive out of order),
   fill a flat staging array and call `agc_list_from_array(items, n)` at the end,
   so the result is right-sized
-  ([§5.4](05-values-execution-builtins.md#54-shared-small-values)). A chunked
-  staging area for `filter` gained 4% when it keeps half of the items and lost
-  3% when it keeps all, so it stays flat.
+  ([§5.4](05-values-execution-builtins.md#54-shared-small-values)).
 
 ### 17.3 Operations
 
@@ -94,8 +92,8 @@ in the code; the points that decide a design:
   shifted tail cannot share leaves.
 - `repeat` shares one leaf in every slot: O(log32 n) in time and memory.
 - `List.sort`, `sort_by` and `Dir.list` go through `agc_sort_by_keys` (§17.11).
-- `agc_equal` uses two cursors in the same order as before, so the first
-  mismatch and the units charged do not change.
+- `agc_equal` uses two cursors, so the first mismatch and the units charged do
+  not change.
 - `inspect`, `to_text`, JSON encode and `JSON.at` use `agc_list_len` and
   `agc_list_get` per item, with one small frame per nesting level, because the
   depth tests nest 1,000,000 deep (`vm/tests/json_test.c`); a cursor in each
@@ -190,19 +188,15 @@ vm-latency`, run alone, must still pass its 250 ms limit.
 - **C unit tests,** `vm/tests/list_test.c` (`make vm-test`, the ASan run and
   `make vm-gc-stress`): every boundary length of §17.2, built both ways, with
   persistence of old versions, `slice`, `concat`, `reverse` and the shared
-  leaves of `agc_list_repeat`. Golden: `tests/fixtures/vm/list-vector.agc`.
-- **Benchmark gates** (`make bench`; programs
-  `benchmarks/programs/list-build.agc` and `list-bulk.agc`): 160,000 pushes in a
-  loop run in under 1 s, and 2n pushes take under 2.5 times as long as n;
-  `maze-bfs` is a no-regression check. Before blaming the list code for a loop
-  slowdown, time the program with another link layout: the same interpreter ran
-  15 to 20% apart on loops with no list operation.
-
-### 17.10 Decisions
-
-`append`, `set` and a small `concat` cost 0 turn units
-(§17.5); `list-build` is the gate of the list benchmark claim; `take`, `drop`
-and a large `concat` stay O(n) with no RRB (§17.11 says what shares leaves).
+  leaves of `agc_list_repeat`; the whole API with Int, Float and boxed items,
+  mixed lists built by hand, and `-0.0`, NaN and the Int limits through each
+  operation. Goldens: `tests/fixtures/vm/list-vector.agc` and
+  `list-unboxed.agc`.
+- **Benchmark gates** (`make bench`; `benchmarks/programs/list-build.agc` and
+  `list-bulk.agc`): 160,000 pushes in a loop run in under 1 s, and 2n pushes
+  take under 2.5 times as long as n; `maze-bfs` is a no-regression check. A loop
+  slowdown may be link layout, not the list code: time the program with another
+  layout first.
 
 ### 17.11 Bulk operations
 
@@ -229,10 +223,6 @@ trie.
   (`rt->chars`) for a one-byte ASCII piece. Strings have no identity
   ([§5.4](05-values-execution-builtins.md#54-shared-small-values)), so a program
   cannot tell. A million-character `split("")` allocates no String.
-- **Inline paths.** `agc_list_builder_push` and `agc_list_cursor_next` are
-  inline in `value.h`, with `agc_list_builder_more` and `agc_list_cursor_fill`
-  as the slow paths, so `map`, `join`, `Range.to_a` and the JSON builders do not
-  call into `list.c` per item.
 
 ### 17.12 Unboxed numeric leaves
 
@@ -311,22 +301,11 @@ meet, the result is boxed, and no operation fails:
   fails as it did before.
 
 **Sort.** `List.sort` of a numeric list puts the raw 8 bytes of each number in
-the entry and builds the result by pushing the sorted words, with the same order
-keys, checks and merge, so the order is the same: stable, `-0.0` equal to `0.0`,
-every NaN last and equal. A second merge on the 8-byte words was no faster for
-Float, because the order key had to be recomputed at every compare. `sort_by`
-and the sort of Strings are unchanged.
+the entry and pushes the sorted words, with the same order keys, checks and
+merge, so the order is the same: stable, `-0.0` equal to `0.0`, every NaN last
+and equal. `sort_by` and the sort of Strings are unchanged.
 
-**Costs.** A numeric item takes 8 bytes instead of 16, so a list of at most 32
-items is 24 + 8k bytes. Step counts, turn costs and the `.agcb` format do not
-change. The boxed path has one more branch: a scattered `sort` of strings
-measured about 5% slower, which was accepted.
-
-**Left as it was.** `filter` still stages `agc_value`s before `from_array` packs
-the result. Registers, calls, structs, maps and Json values stay `agc_value`.
-
-**Tests.** `vm/tests/list_test.c` runs the whole API with Int, Float and boxed
-items over the boundary lengths of §17.2, builds mixed lists by hand at every
-boundary, and checks that `-0.0`, NaN and the limits of Int survive each
-operation. The golden `tests/fixtures/vm/list-unboxed.agc` covers the same
-behavior end to end.
+**Costs.** A numeric item takes 8 bytes instead of 16. Step counts, turn costs
+and the `.agcb` format do not change. `filter` still stages `agc_value`s before
+`from_array` packs the result. Registers, calls, structs, maps and Json values
+stay `agc_value`.

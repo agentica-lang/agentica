@@ -54,9 +54,6 @@ section says how the scheduler and the loop keep them.
   turn only, never from `--max-steps` (`steps_left`). The task yields at the
   next instruction if its turn is spent. File builtins charge nothing: their
   work is I/O, at most 1 MiB per call.
-- **Test switches** (tests only; `rg AGENTICA_VM_TEST_ vm tests mk` lists them).
-  `AGENTICA_VM_TEST_NO_TURN_COST=1` skips the turn-cost charge, so `make
-  vm-latency` can show that the latency test fails without the rule.
 - **Fairness with I/O.** After each turn the scheduler calls
   `uv_run(UV_RUN_NOWAIT)`, so ready I/O and timers wake their tasks while others
   compute; tasks woken during it go behind the queued ones. With N=1 the
@@ -155,8 +152,8 @@ section says how the scheduler and the loop keep them.
   `error("task: cancelled")` for a `Result`). A task that cancels itself
   finishes its builtin and then ends. A cancel spends no step and charges one
   turn unit per cancelled task, to the caller.
-- **Task.map (`vm/task_map.c`, core layer).** The builtin checks `limit` (1
-  to 1024, `RUNTIME-INVALID-COUNT`), then `timeout_ms` (above 0,
+- **Task.map (`vm/task_map.c`, core layer).** The builtin checks `limit` (1 to
+  1024, `RUNTIME-INVALID-COUNT`), then `timeout_ms` (above 0,
   `RUNTIME-INVALID-DURATION`), then the empty list. Otherwise it installs a
   stepper on the caller (`agc_task_stepper`), so the caller is the one task
   parked in the call. Each item is a child of the caller
@@ -179,10 +176,9 @@ section says how the scheduler and the loop keep them.
   may still run writes slots nobody reads. An item with a file close pending is
   not settled: the hook waits, and `agc_task_close_done` calls it when the last
   close ends. If the deadline comes first, the item settles as timed out without
-  waiting for the close, and the hook, when the close ends, finds a settled item
-  and does nothing. An item that ends after its deadline, but before the caller
-  runs, keeps its result. At N>1 the hook runs on the item's scheduler, under
-  `rt->sync` (§16.9, "One coarse lock").
+  waiting for the close. An item that ends after its deadline, but before the
+  caller runs, keeps its result. At N>1 the hook runs on the item's scheduler,
+  under `rt->sync` (§16.9, "One coarse lock").
 - **Stall check (N=1).** If the queue is empty, no libuv handle is alive, no
   timer of a task is armed (§16.9, "Timers"), and `main` is not done, the VM
   fails with `RUNTIME-INTERNAL` ("every task is waiting and nothing can wake
@@ -372,14 +368,13 @@ section says how the scheduler and the loop keep them.
   of the run is not waited for. On Windows every stdin kind is read by one
   thread of the VM's own (`vm/stdio_windows.c`), never by the pool: it does one
   blocking read when a read is asked for and wakes the loop with an async
-  handle. It reads a console with `ReadConsoleW` and hands the text on as UTF-8
-  (a high surrogate waits for its low half; Ctrl+Z at the start of a read is
-  EOF), and anything else with `_read` in binary mode. The handle keeps the loop
-  alive only while a read is out. A cancelled reader leaves the read in flight,
-  as on Unix, and its bytes or EOF go to the next reader. At the end of the run
-  the read is cancelled where Windows can (`CancelSynchronousIo`, a pipe); a
-  read that cannot be cancelled ends with the process, or, in an in-process
-  harness, when input comes, and then touches nothing of the closed loop. Other
+  handle. It reads a console with `ReadConsoleW` and hands the text on as UTF-8,
+  and anything else with `_read` in binary mode. The handle keeps the loop alive
+  only while a read is out. A cancelled reader leaves the read in flight, as on
+  Unix, and its bytes or EOF go to the next reader. At the end of the run the
+  read is cancelled where Windows can (`CancelSynchronousIo`, a pipe); a read
+  that cannot be cancelled ends with the process, or, in an in-process harness,
+  when input comes, and then touches nothing of the closed loop. Other
   unsupported hosts keep a blocking read on the interpreter thread.
 - **stdout and stderr (`vm/output.c`).** Each stream has one output buffer, a
   `malloc`'d ring of 64 KiB (`AGC_OUTPUT_BUFFER`), and one FIFO of waiting
@@ -408,35 +403,31 @@ section says how the scheduler and the loop keep them.
     the VM's own open file description, never on the one the shell and children
     share. A socket is duplicated with `F_DUPFD_CLOEXEC` and written with
     `send(MSG_DONTWAIT | MSG_NOSIGNAL)`. Both are written when the poller says
-    the descriptor is writable; on macOS each write is first guarded by
-    `poll(POLLOUT)` and cut to `PIPE_BUF` (a socket: `SO_SNDLOWAT`), because
-    `send(MSG_DONTWAIT)` alone stalled the loop on such a socket. The poller
-    runs one `external` detached job per writable event; its request holds the
-    stream's index, not a pointer. A regular file, a block device, or a device
-    that epoll refuses with `EPERM` (`/dev/null`, `/dev/full`), is drained by a
-    pool job on the descriptor the process was given, since a reopen would reset
-    the offset and `O_APPEND`. One job runs at a time.
+    the descriptor is writable (on macOS each write is first guarded by
+    `poll(POLLOUT)` and cut to `PIPE_BUF`, because `send(MSG_DONTWAIT)` alone
+    stalled the loop on a socket). The poller runs one `external` detached job
+    per writable event; its request holds the stream's index, not a pointer. A
+    regular file, a block device, or a device that epoll refuses with `EPERM`
+    (`/dev/null`, `/dev/full`), is drained by a pool job on the descriptor the
+    process was given, since a reopen would reset the offset and `O_APPEND`. One
+    job runs at a time.
   - **Windows.** `vm/stdio_windows.c` (`vm/stdio_posix.c` is the Linux and macOS
     side) sorts the descriptor with `uv_guess_handle` into one of four write
-    modes (`agc_write_mode`). A file, or `NUL`, is drained by a pool job on
-    `_write`. A pipe is written by a libuv pipe handle, one request at a time. A
-    console is written by a pool job that converts UTF-8 to UTF-16 and calls
-    `WriteConsoleW`, not by `uv_tty_t`: libuv writes a console on the loop
-    thread, where a paused console (a selection, Ctrl+S) would stop every task
-    and the stop signals. A handle that libuv refuses (a socket, a pipe nobody
-    can write to) also goes to a pool job. Stdout and stderr in this mode hold
-    one pool thread each, so with the default pool of 4 they leave 2 threads for
-    files, DNS and processes. Windows resets a socket when its last handle
-    closes, and the reader loses what it has not read. So just before the exit,
-    a socket given as stdout or stderr gets `shutdown(SD_SEND)`
-    (`agc_output_end`), but only when no write of it is in flight, when this
-    process holds every handle to it (`CompareObjectHandles`, Windows 10 1607
-    and later), and, if it is also stdin, when no read of stdin is in flight. A
-    socket that is not overlapped serializes its I/O, so when it is both stdin
-    and stdout, a blocked read stalls the writes of stdout, and that output is
-    lost after `--flush-timeout`. Where Unix makes one non-blocking write (a
-    stop signal, a final notice), Windows waits for the request up to 200 ms,
-    shared with the other final writes of the exit (`settle`).
+    modes (`agc_write_mode` in `vm/port.h` says which). A console is written by
+    a pool job on `WriteConsoleW`, not by `uv_tty_t`: libuv writes a console on
+    the loop thread, where a paused console (a selection, Ctrl+S) would stop
+    every task and the stop signals. Stdout and stderr in the THREAD mode (a
+    console, or a handle libuv refuses) hold one pool thread each, so with the
+    default pool of 4 they leave 2 for files, DNS and processes. Windows resets
+    a socket when its last handle closes, and the reader loses what it has not
+    read, so just before the exit a socket given as stdout or stderr gets
+    `shutdown(SD_SEND)`, under the conditions of `agc_output_end` and
+    `agc_stdio_end`. A socket that is not overlapped serializes its I/O, so when
+    it is both stdin and stdout, a blocked read stalls the writes of stdout, and
+    that output is lost after `--flush-timeout`. Where Unix makes one
+    non-blocking write (a stop signal, a final notice), Windows waits for the
+    request up to 200 ms, shared with the other final writes of the exit
+    (`settle`).
   - **Descriptor guard.** A `File` path that names the reopened descriptor
     (above 2) through `/proc/self/fd` or `/proc/thread-self/fd` on Linux, or
     through `/dev/fd` elsewhere, is refused with the not-a-regular-file error
@@ -464,16 +455,15 @@ section says how the scheduler and the loop keep them.
     of at most 1 MiB (a notice past that is dropped, so a stuck stderr cannot
     make the VM grow), which moves into the buffer ahead of the waiting writers,
     never between the pieces of a print that holds the stream. The driver
-    diagnostic of a failed run is a kept notice (`AGC_NOTICE_KEPT`), which the 1
-    MiB limit never drops; it is queued after the blocking streams are flushed
-    and before the end-of-run wait, inside a `setjmp` of `vm->fail`, so the
-    flush limit covers it. The flush warnings and the `RUNTIME-INTERNAL`
-    write-error diagnostic are final: `end_run` writes them without blocking,
-    and what a stuck pipe will not take is dropped, so a stuck stderr cannot
-    hold the exit. The flush-timeout warning is known only at the deadline, so
-    it comes after the diagnostic. If a pool job still writes the stream when
-    the flush limit runs out, a final notice is skipped, since a second write
-    could block.
+    diagnostic of a failed run is a kept notice (`AGC_NOTICE_KEPT`), which the
+    limit never drops; it is queued after the blocking streams are flushed and
+    before the end-of-run wait, inside a `setjmp` of `vm->fail`, so the flush
+    limit covers it. The flush warnings and the `RUNTIME-INTERNAL` write-error
+    diagnostic are final: `end_run` writes them without blocking, and what a
+    stuck pipe will not take is dropped, so a stuck stderr cannot hold the exit.
+    The flush-timeout warning is known only at the deadline, so it comes after
+    the diagnostic. If a pool job still writes the stream when the flush limit
+    runs out, a final notice is skipped, since a second write could block.
   - **End of run and stop.** At the end of the run, stdout and stderr drain
     within the flush limit (§14.4). No task runs any more, so a cut print is
     abandoned with the pieces it copied. `agc_output_busy` moves the queued

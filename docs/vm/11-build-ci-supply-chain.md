@@ -9,19 +9,19 @@ behind them.
 
 - `make` compiles `vm/*.c` with `-std=c11 -O2 -Wall -Wextra -Werror` and the
   hardening flags (PIE with full RELRO on Linux), and links `dist/agentica`.
-  The warning flags apply to our own `vm/*.c` only. Each mode compiles
-  into `build/vm/<mode>/obj/`, and `build/vm/flags` holds the compile and link
-  line, so switching between a normal and a sanitizer build relinks.
+  The warning flags apply to our own `vm/*.c` only. `build/vm/flags` holds the
+  compile and link line, so switching between a normal and a sanitizer build
+  relinks.
 - `AGENTICA_GC`, `AGENTICA_OPENSSL` and `AGENTICA_ZLIB` pick `system` (the
   default on Linux: the distro's library, found with `pkg-config`, linked
   dynamically) or `vendored` (the default elsewhere and in the release: built
   from the submodule, linked statically). A stamp checks the system library
-  first: it stops with a message that names the fix when the package is missing
-  or older than `GC_MIN` or `ZLIB_MIN`, and for libgc it links a tiny program
-  that calls `GC_register_my_thread`, so a libgc built without thread support
-  stops the build. The mode of libgc and zlib is not remembered: pass the
-  variable to every make command. `make vm-gc-stress` always uses the vendored
-  GC (it needs `GC_DEBUG`), and `SANITIZE=1` links no libgc.
+  first and stops with a message that names the fix when it is missing or older
+  than `GC_MIN` or `ZLIB_MIN`; for libgc it also links a tiny program that
+  calls `GC_register_my_thread`, so a libgc built without thread support stops
+  the build. The mode of libgc and zlib is not remembered: pass the variable to
+  every make command. `make vm-gc-stress` always uses the vendored GC (it needs
+  `GC_DEBUG`), and `SANITIZE=1` links no libgc.
 - The vendored libgc is built with `-DALL_INTERIOR_POINTERS
   -DNO_EXECUTE_PERMISSION -DGC_THREADS -DGC_BUILTIN_ATOMIC -DPARALLEL_MARK
   -DTHREAD_LOCAL_ALLOC`. `NO_EXECUTE_PERMISSION` keeps the heap without execute
@@ -34,8 +34,6 @@ behind them.
   pointer (16.5), so they stay unregistered; a thread that touches GC memory
   calls `agc_gc_thread_enter` and `agc_gc_thread_leave`. `agc_init` calls
   `GC_set_all_interior_pointers(1)` before `GC_INIT`, so both modes match.
-- The `-g` modes map the checkout to `.` in debug info, so worktrees share
-  ccache hits. The release passes `CCACHE=` and never reads the shared CI cache.
 - `make SANITIZE=1` builds with clang, ASan and UBSan. `agc_alloc` uses `calloc`
   and never frees, so ASan guards every object; libgc is not built
   (`-DAGC_NO_GC`); leak detection is off, and `allocator_may_return_null=1` lets
@@ -74,10 +72,9 @@ behind them.
   (knobs in `mk/vm-test.mk`). A crash, a leak (the run turns the leak check on,
   since `agc_fuzz_one` frees every block of an input), an input past the RSS
   limit, a timeout, or a new `crash-`, `leak-`, `timeout-` or `oom-` file in
-  `crashes/` fails the run (a `slow-unit-` file does not). A timeout can also be
-  a slow input to triage: steps do not bound CPU work (a linear builtin on a
-  large string, once per step).
-- There is no dictionary: libFuzzer learns the magic, the format version and the
+  `crashes/` fails the run. A timeout can also be a slow input to triage: steps
+  do not bound CPU work (a linear builtin on a large string, once per step).
+  There is no dictionary: libFuzzer learns the magic, the format version and the
   builtin names from its comparison hooks.
 - The sanitizer job of each C PR runs it for 60 s on every core. Fork mode is
   not repeatable from its seed: the saved file reproduces a failure, with
