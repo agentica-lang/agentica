@@ -1,0 +1,25 @@
+## A module with a public part and a private part.
+
+import M from "m"
+
+LIMIT = 1
+
+## Doubles a number.
+def double(x: Int) -> Int = helper(x) * 2
+# The rest is internal.
+private
+# right after private
+
+BUFFER = 4096
+
+def helper(x: Int) -> Int = x + M.LIMIT + BUFFER
+
+module Counter
+  def start() -> Int = step(1)  # public
+
+  # before the private part
+  private
+
+
+  def step(n: Int) -> Int = n
+end

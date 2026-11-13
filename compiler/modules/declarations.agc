@@ -6,6 +6,9 @@ import Base from "../syntax/parse_base"
 import Source from "../syntax/source"
 import Failure from "link_failure"
 
+# The first group of the private part, in a scope with `private` (check_order).
+PRIVATE_PART = 4
+
 ## What a top-level declaration is.
 export enum Kind
   Struct
@@ -226,37 +229,82 @@ end
 
 ## CHECK-DECL-ORDER, in file, for the first declaration that comes after a later group. The groups are: imports and
 ## re-exports, then constants, then struct, enum, type alias, resource and module block (exported or not), then export
-## def, then def.
+## def, then def. In a scope with `private` (`mark`) they are: imports; the public part (constants and re-exports,
+## types and module blocks, functions); then the private part (constants, types and module blocks, functions).
 ## The span is of the declaration out of place; the help names the group it belongs to. The functions of an extern
 ## block that declares a resource are in the group of the types, with the resource; a resource of an extern module
 ## block is in the group of a def (exported or not), with the block's functions. The record of an extern function
 ## with out parameters (Ast.StructDecl.record_of) goes with its function, so it has no group. This is a style rule with
 ## no meaning for evaluation.
-export def check_order(file: String, declarations: List[Ast.Decl]) -> Result[Void]
+export def check_order(file: String, declarations: List[Ast.Decl], mark: Optional[Ast.PrivateMark]) -> Result[Void]
   highest = 0
+  at = 0
   for decl in declarations
     group = rank(decl)
+    if mark.some?
+      private_part = at >= mark.unwrap!.index
+      group = split_rank(decl, group, private_part)
+      if private_part and highest < PRIVATE_PART
+        highest = PRIVATE_PART
+      end
+    end
+
     if record?(unwrap(decl))
       group = highest
     end
 
     if group < highest
-      problem = Diag.fail(
-        "CHECK-DECL-ORDER",
-        "declaration is out of order",
-        span_of(decl),
-        Diag.Help.Hint(order_help(group)),
-      )
+      help = order_help(group)
+      if mark.some?
+        help = split_order_help(decl, group)
+      end
 
+      problem = Diag.fail("CHECK-DECL-ORDER", "declaration is out of order", span_of(decl), Diag.Help.Hint(help))
       return error(Failure.from_stage(file, problem))
     end
 
     if group > highest
       highest = group
     end
+
+    at += 1
   end
 
   ok()
+end
+
+# The group of a declaration in a scope with `private`, from its group in a scope without (`plain`): imports 0,
+# re-exports and constants 1, types 2, functions 3, each but the imports and the re-exports 3 more after `private`.
+def split_rank(decl: Ast.Decl, plain: Int, private_part: Bool) -> Int
+  case decl
+    Ast.Decl.Import(_) -> 0
+    Ast.Decl.Reexport(_) -> 1
+    _ ->
+      group = plain
+      if group > 3
+        group = 3
+      end
+
+      return group + 3 if private_part
+
+      group
+  end
+end
+
+def split_order_help(decl: Ast.Decl, group: Int) -> String
+  case decl
+    Ast.Decl.Import(_) -> "imports come first, before any declaration and before private"
+    Ast.Decl.Reexport(_) -> "a re-export is public: write it above private, with the constants"
+    _ ->
+      case group
+        1 -> "constants come right after the imports and before private"
+        2 -> "structs, enums, type aliases, resources and modules come before functions, above private"
+        3 -> "the public functions come last above private"
+        4 -> "the private constants come right after private"
+        5 -> "the private structs, enums, type aliases, resources and modules come before the private functions"
+        _ -> "a function comes after the constants and types of its part"
+      end
+  end
 end
 
 # A resource of an extern module block takes the place of a def, as its functions do, so the block ranks as one unit

@@ -98,6 +98,7 @@ enum Part
   Program(Ast.Program)
   ModuleDoc(Tokens.Token)
   Decl(Ast.Decl)
+  Private(Ast.PrivateMark)
   ImportName(Ast.ImportName)
   Param(Ast.Param)
   Field(Ast.FieldDecl)
@@ -510,6 +511,7 @@ def span_of(part: Part) -> Source.Span
     Part.Program(node) -> node.span
     Part.ModuleDoc(token) -> token.span
     Part.Decl(decl) -> decl_span(decl)
+    Part.Private(mark) -> mark.span
     Part.ImportName(node) -> node.span
     Part.Param(node) -> node.span
     Part.Field(node) -> node.span
@@ -547,6 +549,7 @@ def kind_of(part: Part) -> String
     Part.Program(_) -> "Program"
     Part.ModuleDoc(_) -> "ModuleDoc"
     Part.Decl(decl) -> decl_kind(decl)
+    Part.Private(_) -> "PrivateMark"
     Part.ImportName(_) -> "ImportName"
     Part.Param(_) -> "Param"
     Part.Field(_) -> "FieldDecl"
@@ -567,7 +570,7 @@ end
 # The children of a part, in source order.
 def children_of(part: Part, marks: Marks) -> List[Part]
   case part
-    Part.Program(node) -> module_doc(node, marks).concat(decls(node.declarations))
+    Part.Program(node) -> module_doc(node, marks).concat(scope(node.declarations, node.private_mark))
     Part.Decl(decl) -> decl_children(decl)
     Part.Param(node) -> [Part.Type(node.type)].concat(optional_expr(node.default))
     Part.Field(node) -> [Part.Type(node.type)].concat(optional_expr(node.default))
@@ -605,7 +608,7 @@ def decl_children(decl: Ast.Decl) -> List[Part]
     Ast.Decl.TypeAlias(node) -> [Part.Type(node.target)]
     Ast.Decl.Resource(node) -> resource_children(node)
     Ast.Decl.Constant(node) -> optional_type(node.type).push(Part.Expr(node.value))
-    Ast.Decl.Module(node) -> decls(node.declarations)
+    Ast.Decl.Module(node) -> scope(node.declarations, node.private_mark)
     Ast.Decl.Reexport(_) -> []
   end
 end
@@ -741,6 +744,14 @@ def interpolated(parts: List[Ast.Part]) -> List[Part]
 end
 
 def decls(items: List[Ast.Decl]) -> List[Part] = items.map do |item: Ast.Decl| Part.Decl(item) end
+
+# The declarations of a file or a module block, with its `private` line in its place.
+def scope(items: List[Ast.Decl], mark: Optional[Ast.PrivateMark]) -> List[Part]
+  case mark
+    some(found) -> decls(items.take(found.index)).push(Part.Private(found)).concat(decls(items.drop(found.index)))
+    none -> decls(items)
+  end
+end
 
 def exprs(items: List[Ast.Expr]) -> List[Part] = items.map do |item: Ast.Expr| Part.Expr(item) end
 

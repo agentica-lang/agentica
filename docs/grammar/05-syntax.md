@@ -250,7 +250,11 @@ files and embedded `std/` modules alike: the module doc and the imports first,
 then the constants, then `struct`, `enum`, type alias and `module` block
 declarations (exported or not, in any order among themselves), then `export
 def` functions, then private `def` functions (an extern block that declares a
-resource or a struct goes with the types, as a whole). `type` is contextual in
+resource or a struct goes with the types, as a whole). In a file or module block with a `private`
+line (section 5b) the order is: the imports, then the public part (constants
+and re-exports, then the types and blocks, then the functions), then
+`private`, then the private part (constants, then types and blocks, then
+functions). `type` is contextual in
 an alias declaration and remains an ordinary name elsewhere. The order is a
 style rule only: a function may still call a function, use a struct declared
 later or read a constant in the same group. The first declaration that comes

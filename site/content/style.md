@@ -126,7 +126,7 @@ end
 
 ## Files and docs
 
-A file has a fixed order: its doc and imports, constants, structs, enums, type aliases and extern blocks with a resource, exported functions, then private functions. Sort imports by path. A constant reads through the alias (`Limits.LIMIT`) like the rest; import it by name (`import {LIMIT} from "limits"`) when it is used often, and a file may import one module both ways.
+A file has a fixed order: its doc and imports; the public part (constants, then structs, enums, type aliases, module blocks and extern blocks with a resource, then functions); a `private` line with a blank line before and after it; then the private part in the same order. Use `private` rather than `export` in new files. Sort imports by path. A constant reads through the alias (`Limits.LIMIT`) like the rest; import it by name (`import {LIMIT} from "limits"`) when it is used often, and a file may import one module both ways.
 
 ```agentica {expect="CHECK-DECL-ORDER"}
 # bad
@@ -139,9 +139,9 @@ struct Item
 end
 ```
 
-Keep one topic per file, and export only the names that other files use.
+Keep one topic per file, and make public only the names that other files use.
 
-Document as little as possible. Only public code gets a `##` doc: an exported function, struct or enum, saying what it returns or is, not how. A private function never gets `##`; when it needs a note, use one `#` comment. A field or variant gets a note only when its name does not say enough. A `#` comment says why the code is the way it is, not what the next line does:
+Document as little as possible. Only public code gets a `##` doc: a public function, struct or enum, saying what it returns or is, not how. A private function never gets `##`; when it needs a note, use one `#` comment. A field or variant gets a note only when its name does not say enough. A `#` comment says why the code is the way it is, not what the next line does:
 
 ```agentica {mode="check"}
 # bad

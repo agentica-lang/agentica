@@ -191,7 +191,18 @@ is a rule:
   constant, an `import` after a declaration (`CHECK-DECL-ORDER`)
   Help: keep the file order: module doc and imports, then constants, then
   `struct`, `enum`, type aliases and `module` blocks, then `export def`, then
-  `def`
+  `def`; in a file or block with `private`: imports, the public
+  part (constants and re-exports, types and blocks, functions), `private`, then
+  the private part (constants, types and blocks, functions), so a re-export or
+  an import after `private` is out of order too
+- a second `private` line in a file or a module block (`PARSE-SECOND-PRIVATE`)
+  Help: everything after the first `private` is private already
+- `export def`, `export NAME = ...` or `export module` in a file or block with
+  `private` (`PARSE-UNEXPECTED-TOKEN`, at the `export`)
+  Help: every declaration above `private` is public: remove `export`
+- `private def f`, `private` with more on its line
+  (`PARSE-TOP-LEVEL-STATEMENT`)
+  Help: `private` stands alone on its line
 - `module Inner ... end` inside another `module` block (`PARSE-NESTED-MODULE`)
   Help: write each module block at the top level of the file
 - `Limit = 1`, `X = 1`, `maxDepth = 1` at the top level (`PARSE-CONSTANT-NAME`)
@@ -357,6 +368,12 @@ is a rule:
   (`CHECK-IMPORT-NAME`)
   Help: the help suggests the closest export of `M` (`did you mean "name"?`); it
   never suggests a private name, and it stays empty when no export is close
+- `M.helper`, `import {helper} from "m"` or `Counter.step` when the name is
+  private there (`CHECK-IMPORT-NAME`)
+  Help: `helper is private in "m.agc": move it above private there` (in a file
+  or block with `private`), `... add export to it there` (without), only the
+  first part for a `std/` module or a package; for a name that the module only
+  imports, `add export Url.parse to "m.agc" to re-export it`
 - `Logger.error(...)` (`CHECK-IMPORT-NAME`)
   Help: `Logger.err(...)`; `error` is a reserved name, so the function for the
   error level is `err`

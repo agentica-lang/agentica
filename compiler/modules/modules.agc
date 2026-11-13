@@ -235,6 +235,42 @@ export def std_only_help(family: String) -> String
   "#{family} is internal to #{wrapper[0]}; use import #{wrapper[1]} from \"#{wrapper[0]}\""
 end
 
+## The help of CHECK-IMPORT-NAME for `member`, which the module `target` does not export. A name it declares is private
+## there: the help says how to open it, above `private` in a scope that has one and with `export` in one that has not,
+## and for a std/ module or a package, which the user does not edit, only that it is private. A name that a file only
+## imports gets the re-export that passes it on. Any other name gets the did-you-mean over the exports.
+export def import_name_help(modules: Map[String, Module], target: Module, member: String) -> Diag.Help
+  place = "\"#{target.name}\""
+  if target.block != ""
+    place = "module #{target.block} of \"#{target.name}\""
+  end
+
+  library = target.origin.library or target.origin.package != ""
+  if target.names.has_key?(member)
+    return Diag.Help.Hint("#{member} is private in #{place}") if library
+
+    if target.program.private_mark.some?
+      return Diag.Help.Hint("#{member} is private in #{place}: move it above private there")
+    end
+
+    return Diag.Help.Hint("#{member} is private in #{place}: add export to it there")
+  end
+
+  imported = target.block == "" and imported_alias(modules, target, member) != ""
+  if imported and library
+    return Diag.Help.Hint("#{member} is imported by #{place}, which does not re-export it")
+  elsif imported
+    alias = imported_alias(modules, target, member)
+    return Diag.Help.Hint("add export #{alias}.#{member} to #{place} to re-export it") if alias != "?"
+
+    return Diag.Help.Hint(
+      "#{member} is only imported in #{place}: import its module with an alias there and add export Alias.#{member}",
+    )
+  end
+
+  ImportHelp.unknown_import_help(target.key, target.public, member)
+end
+
 ## Loads the root file and everything it imports. A failure is a packed failure (link_failure.agc): CHECK-IMPORT-*,
 ## CHECK-DECL-ORDER and CHECK-REDEFINED-NAME, or the diagnostic of the lexer or the parser for a file.
 export def load(root: String, settings: Env.Settings) -> Result[Loaded] = load_with(root, settings, no_parses())
@@ -464,7 +500,7 @@ end
 # (`unshadowed`). It has the imports of the file, so a cache that reuses checks sees a change below the file. The file
 # and the importers see only its exports, through the block's name.
 def enter_block(walk: Walk, file: Module, block: Ast.ModuleDecl) -> Result[Walk]
-  try Declarations.check_order(file.file, block.declarations)
+  try Declarations.check_order(file.file, block.declarations, block.private_mark)
   collected = try collect(file.file, block.declarations)
   try unshadowed(file, block.declarations)
   key = block_key(file.key, block.name)
@@ -475,7 +511,14 @@ def enter_block(walk: Walk, file: Module, block: Ast.ModuleDecl) -> Result[Walk]
     end
   end
 
-  program = Ast.Program(id: block.id, declarations: block.declarations, module_doc: none, span: block.span)
+  program = Ast.Program(
+    id: block.id,
+    declarations: block.declarations,
+    module_doc: none,
+    span: block.span,
+    private_mark: block.private_mark,
+  )
+
   module = Module(
     key: key,
     file: file.file,
@@ -578,7 +621,7 @@ def bind_reexports(walk: Walk, module: Module) -> Result[Module]
           at_name,
           "CHECK-IMPORT-NAME",
           "unknown or private imported name",
-          ImportHelp.unknown_import_help(target.key, target.public, decl.name),
+          import_name_help(walk.done, target, decl.name),
         ),
       )
     end
@@ -760,7 +803,7 @@ def bind_names(settings: Env.Settings, walk: Walk, frame: Frame, decl: Ast.Impor
   named = frame.named
   aliases = frame.aliases
   for entry in decl.names
-    bound = try bind_name(settings, frame.with(aliases: aliases), target, entry, named)
+    bound = try bind_name(settings, walk.done, frame.with(aliases: aliases), target, entry, named)
     block = exported_block(target, entry.name)
     # An imported module block is an alias of the file, as `import Counter from "path"` would make.
     if block != ""
@@ -775,6 +818,7 @@ end
 
 def bind_name(
   settings: Env.Settings,
+  modules: Map[String, Module],
   frame: Frame,
   target: Module,
   entry: Ast.ImportName,
@@ -787,7 +831,7 @@ def bind_name(
         Failure.Site(file: file, span: entry.span),
         "CHECK-IMPORT-NAME",
         "unknown or private imported name",
-        ImportHelp.unknown_import_help(target.key, target.public, entry.name),
+        import_name_help(modules, target, entry.name),
       ),
     )
   end
@@ -906,7 +950,7 @@ end
 def enter(settings: Env.Settings, walk: Walk, parsed: Parsed, fresh: Bool) -> Result[Walk]
   key = parsed.key
   program = parsed.program
-  try Declarations.check_order(parsed.file, program.declarations)
+  try Declarations.check_order(parsed.file, program.declarations, program.private_mark)
   collected = try collect(parsed.file, program.declarations)
   count = walk.seen.size + 1
   prefix = "@#{count}::"
@@ -1038,4 +1082,22 @@ def collect(file: String, declarations: List[Ast.Decl]) -> Result[Collected]
   end
 
   ok(Collected(names: names, public: public))
+end
+
+# The alias under which `file` imports a module that exports `member`, "?" when it imports `member` by name from a
+# module it has no alias for, or "" when it does not import `member`.
+def imported_alias(modules: Map[String, Module], file: Module, member: String) -> String
+  for alias in file.aliases.keys.sort
+    key = file.aliases[alias]
+    return alias if modules.has_key?(key) and modules[key].public.has_key?(member)
+  end
+
+  return "" if not file.named.has_key?(member)
+
+  origin = file.named[member].target
+  for alias in file.aliases.keys.sort
+    return alias if file.aliases[alias] == origin
+  end
+
+  "?"
 end

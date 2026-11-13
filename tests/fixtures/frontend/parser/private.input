@@ -1,0 +1,22 @@
+import M from "m"
+
+export M.open
+
+LIMIT = 1
+
+## Doubles.
+def double(x: Int) -> Int = x * 2
+
+module Counter
+  def start() -> Int = 1
+
+  private
+
+  def step() -> Int = 2
+end
+
+private
+
+BUFFER = 2
+
+def helper() -> Int = BUFFER

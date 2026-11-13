@@ -1,1 +1,1 @@
-ERROR CHECK-IMPORT-NAME 8:1:9-13:1:14 "unknown or private imported name" - file="root.agc"
+ERROR CHECK-IMPORT-NAME 8:1:9-13:1:14 "unknown or private imported name" "Point is only imported in \"mid.agc\": import its module with an alias there and add export Alias.Point" file="root.agc"

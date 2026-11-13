@@ -1,24 +1,30 @@
 ---
 title: Modules and imports
 weight: 13
-description: Split a program into files, export declarations and use the standard library.
+description: Split a program into files, make declarations public and use the standard library.
 ---
 
 ## One file, one module
 
-Each `.agc` file is a module. `export` makes a function, struct or enum visible to other files. Everything else stays private.
+Each `.agc` file is a module. Every declaration above a `private` line is public: other files can use it. Everything after `private` stays private to the file.
 
 Save this as `shapes.agc`:
 
 ```agentica {file="shapes.agc"}
-export struct Square
+struct Square
   side: Int
 end
 
-export def area(s: Square) -> Int = s.side * s.side
+def area(s: Square) -> Int = s.side * s.side
+
+private
 
 def secret() -> Int = 42
 ```
+
+`private` stands alone on its line, with a blank line before and after it, once per file. Imports are never public.
+
+A file without `private` uses the older form: only the declarations marked `export` (`export def`, `export struct`, `export enum`, `export type`, `export NAME = ...`, `export module`) are public. `private` replaces it: in a file with `private`, `export` before a declaration is an error.
 
 ## File layout
 
@@ -26,23 +32,29 @@ Each file lists its declarations in this order (`CHECK-DECL-ORDER` otherwise):
 
 ```text
 # module doc and imports
-# constants (see Constants)
-# struct, enum, type alias, module block and extern block with a resource or a struct (its defs too), in any order
-# export def
-# def
+# the public part:
+#   constants and re-exports (see Constants and Re-exports)
+#   struct, enum, type alias, module block and extern block with a resource or a struct (its defs too), in any order
+#   def
+# private
+# the private part, in the same order: constants, then types and blocks, then def
 ```
 
-A blank line goes before each declaration after the first.
+A blank line goes before each declaration after the first. A file without `private` keeps its constants, then its types and blocks, then its `export def` functions, then its other functions.
 
-A private function before an exported one is `CHECK-DECL-ORDER`:
+A struct after a private function is `CHECK-DECL-ORDER`:
 
 ```agentica {expect="CHECK-DECL-ORDER"}
+def main() -> Void
+  puts(secret())
+end
+
+private
+
 def secret() -> Int = 42
 
-export def reveal() -> Int = secret()
-
-def main() -> Void
-  puts(reveal())
+struct Box
+  value: Int
 end
 ```
 
@@ -202,7 +214,7 @@ The alias must be an import of the file, and the module must export the name (`C
 
 ## Module blocks
 
-`module Name ... end` groups declarations under a name, so one file can hold several modules. A block holds constants, structs, enums, type aliases and functions with the layout rules of a file, and `export` marks what is visible outside it. Save this as `agents.agc`:
+`module Name ... end` groups declarations under a name, so one file can hold several modules. A block holds constants, structs, enums, type aliases and functions with the layout rules of a file, its own `private` line included: what is above it is visible outside the block. This example uses the older form, where `export` marks what is visible. Save this as `agents.agc`:
 
 ```agentica {file="agents.agc"}
 export module Counter
@@ -260,7 +272,7 @@ def main() -> Void
 end
 ```
 
-The name of a block follows the rules of an import alias (`CHECK-REDEFINED-NAME`), a block sits at the top level with the structs and enums (a block inside a block is `PARSE-NESTED-MODULE`), and it holds no import, re-export or extern block. A block without `export` is private to its file. Inside a block, a name the file already declares or imports is `CHECK-SHADOWED-NAME` (one name means one thing), and `main` is `CHECK-MAIN`; two blocks may each have a `start`.
+The name of a block follows the rules of an import alias (`CHECK-REDEFINED-NAME`), a block sits at the top level with the structs and enums (a block inside a block is `PARSE-NESTED-MODULE`), and it holds no import, re-export or extern block. A block after the file's `private` line, or a block without `export` in a file without `private`, is private to its file. Inside a block, a name the file already declares or imports is `CHECK-SHADOWED-NAME` (one name means one thing), and `main` is `CHECK-MAIN`; two blocks may each have a `start`.
 
 ## The standard library
 

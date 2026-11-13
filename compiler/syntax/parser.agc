@@ -225,6 +225,7 @@ struct BodyAt
   module_doc: Optional[String]
   pos: Int
   ids: Int
+  private_mark: Optional[Ast.PrivateMark]
 end
 
 struct DeclsAt
@@ -4428,6 +4429,7 @@ def parse_module_decl(e: Base.Env, pos: Int, ids: Int, doc: Optional[String]) ->
       declarations: body.declarations,
       doc: doc,
       span: Base.span_from(e, pos, stop),
+      private_mark: body.private_mark,
     ),
   )
 
@@ -4508,7 +4510,12 @@ def interpolation_end(e: Base.Env, start: Int) -> Int
   at
 end
 
-def top_level_help(kind: String) -> String
+def top_level_help(token: Tokens.Token) -> String
+  kind = token.kind
+  if kind == "name" and token.lexeme == "private"
+    return "private stands alone on its line, and every declaration after it is private"
+  end
+
   if kind == "end"
     return "this end closes nothing: each def, if, while, for, case, struct, enum and do block needs exactly one end"
   end
@@ -4711,7 +4718,15 @@ end
 def parse_program(e: Base.Env, first_id: Int) -> Result[Ast.Program]
   body = try parse_body(e, 0, first_id, false)
   span = Base.span_from(e, 0, body.pos)
-  ok(Ast.Program(id: body.ids, declarations: body.declarations, module_doc: body.module_doc, span: span))
+  ok(
+    Ast.Program(
+      id: body.ids,
+      declarations: body.declarations,
+      module_doc: body.module_doc,
+      span: span,
+      private_mark: body.private_mark,
+    ),
+  )
 end
 
 # The declarations from `start` to the end of the file, or for a module block (`nested`) to the `end` that closes it,
@@ -4719,6 +4734,10 @@ end
 def parse_body(e: Base.Env, start: Int, first_id: Int, nested: Bool) -> Result[BodyAt]
   declarations: List[Ast.Decl] = []
   module_doc: Optional[String] = none
+  private_mark: Optional[Ast.PrivateMark] = none
+  after_private = false
+  # The token of the first `export` written on a declaration of this scope, or -1: refused in a scope with `private`.
+  first_export = -1
   after_declaration = false
   after_constant = false
   after_one_line = false
@@ -4729,19 +4748,16 @@ def parse_body(e: Base.Env, start: Int, first_id: Int, nested: Bool) -> Result[B
     kind = e.tokens[cursor].kind
     if (
       after_declaration and
-      (declaration_start?(e, cursor) or kind == "import" or kind == "DOC") and
+      (declaration_start?(e, cursor) or kind == "import" or kind == "DOC" or private_start?(e, cursor)) and
       !(after_constant and constant_follows?(e, cursor)) and
       !(after_one_line and one_line_def_follows?(e, cursor))
     )
-      return error(
-        Base.bail(
-          e,
-          cursor,
-          "PARSE-MISSING-BLANK-LINE",
-          "expected a blank line after the end of a declaration",
-          Diag.Help.NoHelp,
-        ),
-      )
+      message = "expected a blank line after the end of a declaration"
+      if after_private
+        message = "expected a blank line after private"
+      end
+
+      return error(Base.bail(e, cursor, "PARSE-MISSING-BLANK-LINE", message, Diag.Help.NoHelp))
     end
 
     cursor = Base.skip_newlines(e, cursor)
@@ -4749,6 +4765,7 @@ def parse_body(e: Base.Env, start: Int, first_id: Int, nested: Bool) -> Result[B
     after_declaration = false
     after_constant = false
     after_one_line = false
+    after_private = false
     if kind == "EOF" or (nested and kind == "end")
       looping = false
     elsif nested and (kind == "import" or reexport_start?(e, cursor) or extern_start?(e, cursor))
@@ -4789,14 +4806,51 @@ def parse_body(e: Base.Env, start: Int, first_id: Int, nested: Bool) -> Result[B
       declarations = declarations.push(parsed.node)
       cursor = parsed.pos
       next_id = parsed.ids
+    elsif private_start?(e, cursor)
+      if private_mark.some?
+        return error(
+          Base.bail(
+            e,
+            cursor,
+            "PARSE-SECOND-PRIVATE",
+            "a file or module block has one private line",
+            Base.hint("everything after the first private is private already: remove this one"),
+          ),
+        )
+      end
+
+      try no_written_export(e, first_export)
+      private_mark = some(Ast.PrivateMark(index: declarations.size, span: e.tokens[cursor].span))
+      cursor += 1
+      if Base.kind_at(e, cursor) == "NL"
+        cursor += 1
+      end
+
+      after_declaration = true
+      after_private = true
     elsif extern_start?(e, cursor)
       block = try parse_extern_block(e, cursor, next_id)
+      if first_export < 0
+        first_export = export_between(e, cursor, block.pos)
+      end
+
       declarations = declarations.concat(block.nodes)
       cursor = block.pos
       next_id = block.ids
       after_declaration = true
+      if private_mark.some?
+        try no_written_export(e, first_export)
+      end
     elsif declaration_start?(e, cursor) or kind == "DOC"
       taken = try documented(e, cursor, "declaration")
+      if first_export < 0 and e.tokens[taken.pos].kind == "export"
+        first_export = taken.pos
+      end
+
+      if private_mark.some?
+        try no_written_export(e, first_export)
+      end
+
       parsed = try parse_declaration(e, taken.pos, next_id, taken.doc)
       declarations = declarations.push(parsed.node)
       cursor = parsed.pos
@@ -4812,13 +4866,86 @@ def parse_body(e: Base.Env, start: Int, first_id: Int, nested: Bool) -> Result[B
           "PARSE-TOP-LEVEL-STATEMENT",
           "expected a top-level declaration (def, struct, enum, type alias, constant, or import), " +
           "found #{Base.describe(e.tokens[cursor])}",
-          Base.hint(top_level_help(kind)),
+          Base.hint(top_level_help(e.tokens[cursor])),
         ),
       )
     end
   end
 
-  ok(BodyAt(declarations: declarations, module_doc: module_doc, pos: cursor, ids: next_id))
+  case private_mark
+    some(mark) ->
+      published = publish(declarations, mark.index, next_id)
+      declarations = published.nodes
+      next_id = published.ids
+    none -> next_id = next_id
+  end
+
+  ok(BodyAt(declarations: declarations, module_doc: module_doc, pos: cursor, ids: next_id, private_mark: private_mark))
+end
+
+# `private` alone on its line, at the level of the declarations of a file or a module block, starts the private part.
+# It is a plain name, so a function or a local called private still works.
+def private_start?(e: Base.Env, at: Int) -> Bool
+  next = Base.kind_at(e, at + 1)
+  e.tokens[at].kind == "name" and e.tokens[at].lexeme == "private" and (next == "NL" or next == "EOF")
+end
+
+# In a scope with `private`, a declaration above it is public: an `export` written on one (the token at `at`, or -1 for
+# none) is refused.
+def no_written_export(e: Base.Env, at: Int) -> Result[Void]
+  return ok() if at < 0
+
+  error(
+    Base.unexpected_help(
+      e,
+      at,
+      "export on a declaration in a file or module block with private",
+      "every declaration above private is public: remove export (export Alias.name still re-exports a name)",
+    ),
+  )
+end
+
+# The first `export` token of an extern block, from `start` to `stop`, or -1.
+def export_between(e: Base.Env, start: Int, stop: Int) -> Int
+  at = start
+  while at < stop
+    return at if e.tokens[at].kind == "export"
+
+    at += 1
+  end
+
+  -1
+end
+
+# The declarations of a scope with `private`: each one before `index` that is not an import or a re-export becomes
+# public, as `export` would make it, with node ids from `ids` on (after every id of the scope, so they stay unique).
+# The ExportDecl takes the doc and the span of the declaration, which keeps its doc too.
+def publish(declarations: List[Ast.Decl], index: Int, ids: Int) -> DeclsAt
+  nodes: List[Ast.Decl] = []
+  next_id = ids
+  at = 0
+  for decl in declarations
+    node = decl
+    if at < index
+      case decl
+        Ast.Decl.Import(_) -> node = decl
+        Ast.Decl.Reexport(_) -> node = decl
+        Ast.Decl.Export(_) -> node = decl
+        Ast.Decl.Constant(inner) -> node = Ast.Decl.Constant(inner.with(exported: true))
+        _ ->
+          node = Ast.Decl.Export(
+            Ast.ExportDecl(id: next_id, declaration: decl, doc: Ast.doc_of(decl), span: Ast.decl_span(decl)),
+          )
+
+          next_id += 1
+      end
+    end
+
+    nodes = nodes.push(node)
+    at += 1
+  end
+
+  DeclsAt(nodes: nodes, pos: 0, ids: next_id)
 end
 
 def constant?(decl: Ast.Decl) -> Bool
