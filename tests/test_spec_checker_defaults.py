@@ -523,7 +523,7 @@ def builtin_names():
     """Every public builtin (`agentica help --json`) and every method alias of one (check_tables.agc), sorted."""
     listed = run(cli() + ["help", "--json"])
     assert listed.code == 0, listed.stderr
-    names = {entry["name"] for entry in json.loads(listed.stdout)}
+    names = {entry["name"] for entry in json.loads(listed.stdout) if "kind" not in entry}
     tables = (ROOT / "compiler" / "check" / "check_tables.agc").read_text(encoding="utf-8")
     aliases = tables.split("def method_aliases()", 1)[1].split("\nend\n", 1)[0]
     names.update(re.findall(r'^\s*"([A-Z]\w*\.[a-z_]\w*[?!]?)":', aliases, re.M))

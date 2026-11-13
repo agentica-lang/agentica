@@ -191,8 +191,13 @@ a builtin (`len`, `List.push`, `value!`) is not unknown: it exits 0 with
 the builtins it stands for, and `--json` prints
 `{"alias": NAME, "builtins": [...], "hints": {...}}`, `builtins` holding what
 `help NAME --json` prints for each. `agentica help --json` with no NAME prints
-every public builtin as one JSON array, sorted by name, each element exactly
-what `help NAME --json` prints.
+every public builtin and builtin type as one JSON array, sorted by name, each
+element exactly what `help NAME --json` prints. A builtin type that a program
+can name (`File.Info`, `JSON.Field`, `File.Handle`, `JSON.Value`; not the
+std-only `HttpWire.*` and `LogRegistry.*`) has `name`, `kind` (`struct`,
+`enum` or `opaque`), `signature` (`struct File.Info`), `description`, and the
+`fields` of a struct or the `variants` of an enum in the shape of
+`help std/MODULE.NAME --json`; a function has no `kind`.
 
 The query commands (`doc`, `help std/...`, `outline`, `type-at`, `symbol` and
 `refs`) are described for users in [Command line](../../site/content/cli.md).
