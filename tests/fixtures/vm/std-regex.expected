@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 61948,
+  "steps": 62026,
   "stdout": [
     "a|ab: \"a\" at 0-1, groups [\"a@0\"]",
     "false",
@@ -9,7 +9,7 @@
     "false",
     "(?<y>\\d+)-(?P<m>\\d+)(x)?: \"2024-05\" at 4-11, groups [\"2024-05@4\", \"2024@4\", \"05@9\", \"-\"]",
     "ok(\"2024\")",
-    "error(\"no group named \\\"nope\\\"\")",
+    "error(\"no group named \\\"nope\\\"\", kind: \"argument\")",
     "a{,3}: \"a{,3}\" at 0-5, groups [\"a{,3}@0\"]",
     "a(?i)b: no match",
     "a(?i)b: \"aB\" at 1-3, groups [\"aB@1\"]",
@@ -17,7 +17,7 @@
     "\\x{22}: \"\\\"\" at 1-2, groups [\"\\\"@1\"]",
     "0-0",
     "1-3",
-    "error(\"no group named \\\"x\\\"\")",
+    "error(\"no group named \\\"x\\\"\", kind: \"argument\")",
     "0-0 1-1 2-3 4-4",
     "replace \"-\": \"-a-b-d-\"",
     "[\"a\", \"bc\"]",

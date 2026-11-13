@@ -194,7 +194,7 @@ Try 'tool --help' for more information
 
 ## Help and run!
 
-`--help` or `-h` makes `parse` return an `error` for which `OP.help?(message)` is true; the text of the help is `OP.usage(parser)`. It lists the usage line, the description, and one row for each argument and option, with its short and long names, the value name, the help, and notes in square brackets (so a help text may have its own parentheses): `[default: X]`, `[choices: a, b]` when the value name does not already show them (an argument, or an option with a `metavar`), and `[min: 0, max: 65535]`.
+`--help` or `-h` makes `parse` return an `error` for which `OP.help?(message)` is true and whose kind is `option_parser.help`; the text of the help is `OP.usage(parser)`. A mistake in the words (an unknown option, a bad value) is an `error` of the kind `option_parser.parse`, and a bad specification one of the kind `argument`. It lists the usage line, the description, and one row for each argument and option, with its short and long names, the value name, the help, and notes in square brackets (so a help text may have its own parentheses): `[default: X]`, `[choices: a, b]` when the value name does not already show them (an argument, or an option with a `metavar`), and `[min: 0, max: 65535]`.
 
 ```agentica
 import OP from "std/option_parser"

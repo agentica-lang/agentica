@@ -119,21 +119,21 @@ export def parse(text: String) -> Result[Value]
       end
       close_at = key.pos
       if piece(src, close_at, close_at + closing.length) != closing
-        return error(place(src, close_at, "expected '#{closing}' to end the table header"))
+        return bad_text(src, close_at, "expected '#{closing}' to end the table header")
       end
       section += 1
       opened = open_table(root, key.parts, is_array)
-      return error(place(src, p, opened.message)) if !opened.ok?
+      return bad_text(src, p, opened.message) if !opened.ok?
       root = opened.unwrap!
       header = key.parts
       p = try end_of_line(src, close_at + closing.length)
     else
       key = try parse_key(src, p)
-      return error(place(src, key.pos, "expected '=' after key")) if at(src, key.pos) != 61
+      return bad_text(src, key.pos, "expected '=' after key") if at(src, key.pos) != 61
       value_at = skip_ws(src, key.pos + 1)
       parsed = try parse_value(src, value_at, 0)
       stored = put_key(root, header.concat(key.parts), header.size, parsed.value, section)
-      return error(place(src, p, stored.message)) if !stored.ok?
+      return bad_text(src, p, stored.message) if !stored.ok?
       root = stored.unwrap!
       p = try end_of_line(src, parsed.pos)
     end
@@ -158,7 +158,7 @@ export def encode(value: Value) -> Result[String]
       lines = try emit_table(entries, [], [], CLASS_TABLE)
       return ok("") if lines.size == 0
       ok("#{lines.join("\n")}\n")
-    _ -> error("the root of a TOML document must be a table")
+    _ -> error("the root of a TOML document must be a table", kind: "argument")
   end
 end
 
@@ -176,15 +176,15 @@ export def get(value: Value, path: String) -> Result[Value]
   for part in path.split(".")
     case current
       Value.Table(entries) ->
-        return error("no key \"#{part}\" in \"#{path}\"") if !entries.has_key?(part)
+        return error("no key \"#{part}\" in \"#{path}\"", kind: "toml.decode") if !entries.has_key?(part)
         current = entries[part]
       Value.Array(items) ->
         index = part.to_i
         if !index_segment?(part) or !index.ok? or index.unwrap! >= items.size
-          return error("no index \"#{part}\" in \"#{path}\"")
+          return error("no index \"#{part}\" in \"#{path}\"", kind: "toml.decode")
         end
         current = items[index.unwrap!]
-      _ -> return error("\"#{part}\" in \"#{path}\" is not inside a table or an array")
+      _ -> return error("\"#{part}\" in \"#{path}\" is not inside a table or an array", kind: "toml.decode")
     end
   end
   ok(current)
@@ -210,10 +210,10 @@ def json_of(value: Value, depth: Int) -> Result[JSON.Value]
     Value.Bool(b) -> ok(JSON.from(b))
     Value.DateTime(s) -> ok(JSON.from(s))
     Value.Float(x) ->
-      return error("cannot convert #{float_text(x)} to JSON") if !finite?(x)
+      return error("cannot convert #{float_text(x)} to JSON", kind: "toml.decode") if !finite?(x)
       ok(JSON.from(x))
     Value.Array(items) ->
-      return error("a value nests more than 2048 levels") if depth >= 2048
+      return error("a value nests more than 2048 levels", kind: "toml.decode") if depth >= 2048
       out: List[JSON.Value] = []
       for item in items
         j = try json_of(item, depth + 1)
@@ -221,7 +221,7 @@ def json_of(value: Value, depth: Int) -> Result[JSON.Value]
       end
       ok(JSON.array(out))
     Value.Table(entries) ->
-      return error("a value nests more than 2048 levels") if depth >= 2048
+      return error("a value nests more than 2048 levels", kind: "toml.decode") if depth >= 2048
       out: Map[String, JSON.Value] = {}
       for k in entries.keys
         j = try json_of(entries[k], depth + 1)
@@ -264,6 +264,9 @@ def piece(src: Src, from: Int, to: Int) -> String
   String.slice(src.text, from, stop - from)
 end
 
+# A `toml.parse` error at `pos`.
+def bad_text[T](src: Src, pos: Int, message: String) -> Result[T] = error(place(src, pos, message), kind: "toml.parse")
+
 # A message with its place. It runs only on the error path, so it may scan from the start.
 def place(src: Src, pos: Int, message: String) -> String
   line = 1
@@ -297,7 +300,7 @@ end
 def skip_comment(src: Src, pos: Int) -> Result[Int]
   p = pos
   while at(src, p) != 10 and at(src, p) != -1
-    return error(place(src, p, "control character in a comment")) if has(src, at(src, p), 16)
+    return bad_text(src, p, "control character in a comment") if has(src, at(src, p), 16)
     p += 1
   end
   ok(p)
@@ -331,7 +334,7 @@ def end_of_line(src: Src, pos: Int) -> Result[Int]
   elsif c == 10
     return ok(p + 1)
   end
-  error(place(src, p, "expected a line end after the value"))
+  bad_text(src, p, "expected a line end after the value")
 end
 
 # A dotted key. `pos` of the result is after the key and the spaces that follow it.
@@ -356,9 +359,9 @@ def parse_key(src: Src, pos: Int) -> Result[Key]
       parts = parts.push(piece(src, p, e))
       p = e
     else
-      return error(place(src, p, "expected a key"))
+      return bad_text(src, p, "expected a key")
     end
-    return error(place(src, pos, "a key has more than 256 parts")) if parts.size > max_depth()
+    return bad_text(src, pos, "a key has more than 256 parts") if parts.size > max_depth()
     p = skip_ws(src, p)
     if at(src, p) == 46
       p = skip_ws(src, p + 1)
@@ -366,7 +369,7 @@ def parse_key(src: Src, pos: Int) -> Result[Key]
       return ok(Key(parts: parts, pos: p))
     end
   end
-  error("unreachable")
+  error("unreachable", kind: "toml.parse")
 end
 
 def parse_value(src: Src, pos: Int, depth: Int) -> Result[Parsed]
@@ -399,7 +402,7 @@ def parse_value(src: Src, pos: Int, depth: Int) -> Result[Parsed]
   elsif (c >= 48 and c <= 57) or c == 43 or c == 45 or c == 105 or c == 110
     return parse_number(src, pos)
   end
-  error(place(src, pos, "expected a value"))
+  bad_text(src, pos, "expected a value")
 end
 
 # `word` at `pos`, not followed by another number character (so `truex` is not `true`).
@@ -408,7 +411,7 @@ def word_at(src: Src, pos: Int, word: String) -> Bool
 end
 
 def parse_array(src: Src, pos: Int, depth: Int) -> Result[Parsed]
-  return error(place(src, pos, "arrays and inline tables nest more than 256 levels")) if depth >= max_depth()
+  return bad_text(src, pos, "arrays and inline tables nest more than 256 levels") if depth >= max_depth()
   items: List[Value] = []
   p = try skip_trivia(src, pos + 1)
   while true
@@ -420,38 +423,38 @@ def parse_array(src: Src, pos: Int, depth: Int) -> Result[Parsed]
     if c == 44
       p = try skip_trivia(src, p + 1)
     elsif c != 93
-      return error(place(src, p, "expected ',' or ']' in an array"))
+      return bad_text(src, p, "expected ',' or ']' in an array")
     end
   end
-  error("unreachable")
+  error("unreachable", kind: "toml.parse")
 end
 
 # An inline table lives on one line and has no trailing comma. It is read with the same rules as
 # a document, so dotted keys and duplicates behave the same, then sealed into a Value.
 def parse_inline_table(src: Src, pos: Int, depth: Int) -> Result[Parsed]
-  return error(place(src, pos, "arrays and inline tables nest more than 256 levels")) if depth >= max_depth()
+  return bad_text(src, pos, "arrays and inline tables nest more than 256 levels") if depth >= max_depth()
   node = Node.Tab(empty_tbl(Origin.Header, 0))
   p = skip_ws(src, pos + 1)
   return ok(Parsed(value: to_value(node), pos: p + 1)) if at(src, p) == 125
   while true
     key = try parse_key(src, p)
-    return error(place(src, key.pos, "expected '=' after key")) if at(src, key.pos) != 61
+    return bad_text(src, key.pos, "expected '=' after key") if at(src, key.pos) != 61
     parsed = try parse_value(src, skip_ws(src, key.pos + 1), depth + 1)
     stored = put_key(node, key.parts, 0, parsed.value, 0)
-    return error(place(src, p, stored.message)) if !stored.ok?
+    return bad_text(src, p, stored.message) if !stored.ok?
     node = stored.unwrap!
     p = skip_ws(src, parsed.pos)
     c = at(src, p)
     if c == 44
       p = skip_ws(src, p + 1)
-      return error(place(src, p, "an inline table cannot end with a comma")) if at(src, p) == 125
+      return bad_text(src, p, "an inline table cannot end with a comma") if at(src, p) == 125
     elsif c == 125
       return ok(Parsed(value: to_value(node), pos: p + 1))
     else
-      return error(place(src, p, "expected ',' or '}' in an inline table"))
+      return bad_text(src, p, "expected ',' or '}' in an inline table")
     end
   end
-  error("unreachable")
+  error("unreachable", kind: "toml.parse")
 end
 
 # ---- strings ----
@@ -475,14 +478,14 @@ def basic_string(src: Src, pos: Int) -> Result[Scan]
       i = escaped.pos
       start = i
     elsif c == -1 or c == 10
-      return error(place(src, pos, "unterminated string"))
+      return bad_text(src, pos, "unterminated string")
     elsif has(src, c, 16)
-      return error(place(src, i, "control character in a string"))
+      return bad_text(src, i, "control character in a string")
     else
       i += 1
     end
   end
-  error("unreachable")
+  error("unreachable", kind: "toml.parse")
 end
 
 def literal_string(src: Src, pos: Int) -> Result[Scan]
@@ -494,14 +497,14 @@ def literal_string(src: Src, pos: Int) -> Result[Scan]
     elsif c == 39
       return ok(Scan(text: piece(src, pos + 1, i), pos: i + 1))
     elsif c == -1 or c == 10
-      return error(place(src, pos, "unterminated string"))
+      return bad_text(src, pos, "unterminated string")
     elsif has(src, c, 16)
-      return error(place(src, i, "control character in a string"))
+      return bad_text(src, i, "control character in a string")
     else
       i += 1
     end
   end
-  error("unreachable")
+  error("unreachable", kind: "toml.parse")
 end
 
 # Counts the run of `quote` characters at `pos`, up to 6.
@@ -530,7 +533,7 @@ def multi_basic(src: Src, pos: Int) -> Result[Scan]
       if run < 3
         i += run
       elsif run > 5
-        return error(place(src, i, "too many quotes in a multi-line string"))
+        return bad_text(src, i, "too many quotes in a multi-line string")
       else
         # One or two quotes before the closing three belong to the text.
         parts = parts.push(piece(src, start, i + run - 3))
@@ -553,16 +556,16 @@ def multi_basic(src: Src, pos: Int) -> Result[Scan]
       end
       start = i
     elsif c == -1
-      return error(place(src, pos, "unterminated string"))
+      return bad_text(src, pos, "unterminated string")
     elsif c == 10
       i += 1
     elsif has(src, c, 16)
-      return error(place(src, i, "control character in a string"))
+      return bad_text(src, i, "control character in a string")
     else
       i += 1
     end
   end
-  error("unreachable")
+  error("unreachable", kind: "toml.parse")
 end
 
 def multi_literal(src: Src, pos: Int) -> Result[Scan]
@@ -580,21 +583,21 @@ def multi_literal(src: Src, pos: Int) -> Result[Scan]
       if run < 3
         i += run
       elsif run > 5
-        return error(place(src, i, "too many quotes in a multi-line string"))
+        return bad_text(src, i, "too many quotes in a multi-line string")
       else
         return ok(Scan(text: piece(src, start, i + run - 3), pos: i + run))
       end
     elsif c == -1
-      return error(place(src, pos, "unterminated string"))
+      return bad_text(src, pos, "unterminated string")
     elsif c == 10
       i += 1
     elsif has(src, c, 16)
-      return error(place(src, i, "control character in a string"))
+      return bad_text(src, i, "control character in a string")
     else
       i += 1
     end
   end
-  error("unreachable")
+  error("unreachable", kind: "toml.parse")
 end
 
 # The escape after a backslash; `pos` is at the character after it.
@@ -619,7 +622,7 @@ def read_escape(src: Src, pos: Int) -> Result[Scan]
   elsif c == 85
     return read_unicode(src, pos + 1, 8)
   end
-  error(place(src, pos - 1, "invalid escape in a string"))
+  bad_text(src, pos - 1, "invalid escape in a string")
 end
 
 # `count` hex digits at `pos` that must name a Unicode scalar value (no surrogates).
@@ -627,11 +630,11 @@ def read_unicode(src: Src, pos: Int, count: Int) -> Result[Scan]
   code = 0
   for i in 0...count
     d = hex_value(at(src, pos + i))
-    return error(place(src, pos - 2, "a unicode escape needs #{count} hex digits")) if d < 0
+    return bad_text(src, pos - 2, "a unicode escape needs #{count} hex digits") if d < 0
     code = code * 16 + d
   end
   if code > 1114111 or (code >= 55296 and code <= 57343)
-    return error(place(src, pos - 2, "a unicode escape must be a Unicode scalar value"))
+    return bad_text(src, pos - 2, "a unicode escape must be a Unicode scalar value")
   end
   ok(Scan(text: String.from_code(code), pos: pos + count))
 end
@@ -688,7 +691,7 @@ def parse_number(src: Src, pos: Int) -> Result[Parsed]
     elsif word == "nan"
       return ok(Parsed(value: Value.Float(Float.from_bits(9221120237041090560)), pos: stop))
     end
-    return error(place(src, pos, "invalid number"))
+    return bad_text(src, pos, "invalid number")
   end
   next = at(src, p + 1)
   if p == pos and c == 48 and (next == 120 or next == 111 or next == 98)
@@ -701,13 +704,13 @@ def parse_number(src: Src, pos: Int) -> Result[Parsed]
     return radix_integer(src, pos, p + 2, stop, radix)
   end
   whole = digit_run(src, p)
-  return error(place(src, pos, "invalid number")) if whole == p
-  return error(place(src, pos, "a number cannot have leading zeros")) if whole - p > 1 and c == 48
+  return bad_text(src, pos, "invalid number") if whole == p
+  return bad_text(src, pos, "a number cannot have leading zeros") if whole - p > 1 and c == 48
   j = whole
   is_float = false
   if at(src, j) == 46
     fraction = digit_run(src, j + 1)
-    return error(place(src, pos, "a float needs digits after the point")) if fraction == j + 1
+    return bad_text(src, pos, "a float needs digits after the point") if fraction == j + 1
     j = fraction
     is_float = true
   end
@@ -717,11 +720,11 @@ def parse_number(src: Src, pos: Int) -> Result[Parsed]
       k += 1
     end
     exponent = digit_run(src, k)
-    return error(place(src, pos, "a float needs digits in its exponent")) if exponent == k
+    return bad_text(src, pos, "a float needs digits in its exponent") if exponent == k
     j = exponent
     is_float = true
   end
-  return error(place(src, pos, "invalid number")) if j != stop
+  return bad_text(src, pos, "invalid number") if j != stop
   digits = piece(src, p, stop).replace("_", "")
   return decimal_float(src, pos, digits, negative, stop) if is_float
   sign = ""
@@ -729,7 +732,7 @@ def parse_number(src: Src, pos: Int) -> Result[Parsed]
     sign = "-"
   end
   value = (sign + digits).to_i
-  return error(place(src, pos, "integer out of the 64-bit range")) if !value.ok?
+  return bad_text(src, pos, "integer out of the 64-bit range") if !value.ok?
   ok(Parsed(value: Value.Int(value.unwrap!), pos: stop))
 end
 
@@ -754,19 +757,19 @@ end
 
 # `0x`, `0o` and `0b` integers: digits from `from` up to `stop`, no sign, leading zeros allowed.
 def radix_integer(src: Src, pos: Int, from: Int, stop: Int, radix: Int) -> Result[Parsed]
-  return error(place(src, pos, "an integer needs digits")) if from >= stop
+  return bad_text(src, pos, "an integer needs digits") if from >= stop
   limit = 9223372036854775807
   value = 0
   previous_digit = false
   for i in from...stop
     c = at(src, i)
     if c == 95
-      return error(place(src, pos, "misplaced underscore in a number")) if !previous_digit or i + 1 >= stop
+      return bad_text(src, pos, "misplaced underscore in a number") if !previous_digit or i + 1 >= stop
       previous_digit = false
     else
       d = hex_value(c)
-      return error(place(src, pos, "invalid digit in a number")) if d < 0 or d >= radix
-      return error(place(src, pos, "integer out of the 64-bit range")) if value > (limit - d) / radix
+      return bad_text(src, pos, "invalid digit in a number") if d < 0 or d >= radix
+      return bad_text(src, pos, "integer out of the 64-bit range") if value > (limit - d) / radix
       value = value * radix + d
       previous_digit = true
     end
@@ -809,7 +812,7 @@ def date_time_end(src: Src, pos: Int) -> Result[Int]
   month = number_at(src, pos + 5, 2)
   day = number_at(src, pos + 8, 2)
   if year < 0 or month < 1 or month > 12 or at(src, pos + 7) != 45 or day < 1 or day > days_in_month(year, month)
-    return error(place(src, pos, "invalid date"))
+    return bad_text(src, pos, "invalid date")
   end
   stop = pos + 10
   c = at(src, stop)
@@ -826,7 +829,7 @@ def date_time_end(src: Src, pos: Int) -> Result[Int]
     hours = number_at(src, clock_end + 1, 2)
     minutes = number_at(src, clock_end + 4, 2)
     if hours < 0 or hours > 23 or at(src, clock_end + 3) != 58 or minutes < 0 or minutes > 59
-      return error(place(src, clock_end, "invalid time offset"))
+      return bad_text(src, clock_end, "invalid time offset")
     end
     return ok(clock_end + 6)
   end
@@ -848,7 +851,7 @@ def time_end(src: Src, pos: Int) -> Result[Int]
     at(src, pos + 2) != 58 or
     at(src, pos + 5) != 58
   )
-    return error(place(src, pos, "invalid time"))
+    return bad_text(src, pos, "invalid time")
   end
   stop = pos + 8
   if at(src, stop) == 46
@@ -856,7 +859,7 @@ def time_end(src: Src, pos: Int) -> Result[Int]
     while has(src, at(src, fraction), 1)
       fraction += 1
     end
-    return error(place(src, stop, "a time needs digits after the point")) if fraction == stop + 1
+    return bad_text(src, stop, "a time needs digits after the point") if fraction == stop + 1
     stop = fraction
   end
   ok(stop)
@@ -878,7 +881,7 @@ end
 def open_table(root: Node, path: List[String], is_array: Bool) -> Result[Node]
   case root
     Node.Tab(table) -> header_into(table, path, 0, is_array)
-    _ -> error("internal error: the root is not a table")
+    _ -> error("internal error: the root is not a table", kind: "toml.parse")
   end
 end
 
@@ -903,7 +906,7 @@ def header_into(table: Tbl, path: List[String], i: Int, is_array: Bool) -> Resul
       ok(Node.Tab(table.with(entries: entries.put(seg, replaced))))
     Node.Leaf(_) ->
       held = path.join(".")
-      error("\"#{seg}\" is not a table, so it cannot hold \"#{held}\"")
+      error("\"#{seg}\" is not a table, so it cannot hold \"#{held}\"", kind: "toml.parse")
   end
 end
 
@@ -921,7 +924,7 @@ def header_last(entries: Map[String, Node], seg: String, name: String, is_array:
     return ok(Node.Rows([Node.Tab(empty_tbl(Origin.Header, 0))])) if !entries.has_key?(seg)
     case entries[seg]
       Node.Rows(rows) -> return ok(Node.Rows(rows.push(Node.Tab(empty_tbl(Origin.Header, 0)))))
-      _ -> return error("\"#{name}\" is already defined and is not an array of tables")
+      _ -> return error("\"#{name}\" is already defined and is not an array of tables", kind: "toml.parse")
     end
   end
   return ok(Node.Tab(empty_tbl(Origin.Header, 0))) if !entries.has_key?(seg)
@@ -929,11 +932,11 @@ def header_last(entries: Map[String, Node], seg: String, name: String, is_array:
     Node.Tab(existing) ->
       case existing.origin
         Origin.Implicit -> ok(Node.Tab(existing.with(origin: Origin.Header)))
-        Origin.Header -> error("table \"#{name}\" is already defined")
-        Origin.Dotted -> error("table \"#{name}\" is already defined by dotted keys")
+        Origin.Header -> error("table \"#{name}\" is already defined", kind: "toml.parse")
+        Origin.Dotted -> error("table \"#{name}\" is already defined by dotted keys", kind: "toml.parse")
       end
-    Node.Rows(_) -> error("\"#{name}\" is an array of tables, not a table")
-    Node.Leaf(_) -> error("\"#{name}\" is already defined")
+    Node.Rows(_) -> error("\"#{name}\" is an array of tables, not a table", kind: "toml.parse")
+    Node.Leaf(_) -> error("\"#{name}\" is already defined", kind: "toml.parse")
   end
 end
 
@@ -943,7 +946,7 @@ end
 def put_key(root: Node, full: List[String], header_size: Int, value: Value, section: Int) -> Result[Node]
   case root
     Node.Tab(table) -> put_into(table, full, header_size, 0, value, section)
-    _ -> error("internal error: the root is not a table")
+    _ -> error("internal error: the root is not a table", kind: "toml.parse")
   end
 end
 
@@ -951,7 +954,7 @@ def put_into(table: Tbl, full: List[String], header_size: Int, i: Int, value: Va
   seg = full[i]
   entries = table.entries
   if i == full.size - 1
-    return error("key \"#{seg}\" is already defined") if entries.has_key?(seg)
+    return error("key \"#{seg}\" is already defined", kind: "toml.parse") if entries.has_key?(seg)
     return ok(Node.Tab(table.with(entries: entries.put(seg, Node.Leaf(value)))))
   end
   child = Node.Tab(empty_tbl(Origin.Dotted, section))
@@ -963,10 +966,14 @@ def put_into(table: Tbl, full: List[String], header_size: Int, i: Int, value: Va
       entered = inner
       if i >= header_size
         case inner.origin
-          Origin.Header -> return error("cannot add keys to table \"#{seg}\", which a header defines")
+          Origin.Header ->
+            return error("cannot add keys to table \"#{seg}\", which a header defines", kind: "toml.parse")
           Origin.Dotted ->
             if inner.stamp != section
-              return error("cannot add keys to table \"#{seg}\", which dotted keys defined in an earlier section")
+              return error(
+                "cannot add keys to table \"#{seg}\", which dotted keys defined in an earlier section",
+                kind: "toml.parse",
+              )
             end
           Origin.Implicit -> entered = inner.with(origin: Origin.Dotted, stamp: section)
         end
@@ -974,10 +981,12 @@ def put_into(table: Tbl, full: List[String], header_size: Int, i: Int, value: Va
       sub = try put_into(entered, full, header_size, i + 1, value, section)
       ok(Node.Tab(table.with(entries: entries.put(seg, sub))))
     Node.Rows(rows) ->
-      return error("cannot add keys to the array of tables \"#{seg}\" with dotted keys") if i >= header_size
+      if i >= header_size
+        return error("cannot add keys to the array of tables \"#{seg}\" with dotted keys", kind: "toml.parse")
+      end
       sub = try put_into(last_row(rows), full, header_size, i + 1, value, section)
       ok(Node.Tab(table.with(entries: entries.put(seg, Node.Rows(rows.set(rows.size - 1, sub))))))
-    Node.Leaf(_) -> error("\"#{seg}\" is a value, not a table")
+    Node.Leaf(_) -> error("\"#{seg}\" is a value, not a table", kind: "toml.parse")
   end
 end
 
@@ -1083,10 +1092,10 @@ def inline(value: Value, cls: List[Int], depth: Int) -> Result[String]
     Value.Float(x) -> ok(float_text(x))
     Value.Bool(b) -> ok(b.to_s)
     Value.DateTime(s) ->
-      return error("not a valid TOML date-time: #{quote(s)}") if !valid_date_time?(s, cls)
+      return error("not a valid TOML date-time: #{quote(s)}", kind: "argument") if !valid_date_time?(s, cls)
       ok(s)
     Value.Array(items) ->
-      return error("arrays and inline tables nest more than 256 levels") if depth >= max_depth()
+      return error("arrays and inline tables nest more than 256 levels", kind: "argument") if depth >= max_depth()
       texts: List[String] = []
       for item in items
         text = try inline(item, cls, depth + 1)
@@ -1094,7 +1103,7 @@ def inline(value: Value, cls: List[Int], depth: Int) -> Result[String]
       end
       ok("[#{texts.join(", ")}]")
     Value.Table(entries) ->
-      return error("arrays and inline tables nest more than 256 levels") if depth >= max_depth()
+      return error("arrays and inline tables nest more than 256 levels", kind: "argument") if depth >= max_depth()
       texts: List[String] = []
       for k in entries.keys
         text = try inline(entries[k], cls, depth + 1)
@@ -1127,7 +1136,7 @@ def emit_table(
   out: List[String],
   cls: List[Int],
 ) -> Result[List[String]]
-  return error("tables nest more than 256 levels") if path.size > max_depth()
+  return error("tables nest more than 256 levels", kind: "argument") if path.size > max_depth()
   lines = out
   for k in entries.keys
     v = entries[k]

@@ -99,7 +99,7 @@ end
 ```output
 ok(5)
 ok(0)
-error("address: gone")
+error("address: gone", kind: "channel.gone")
 ok()
 ```
 

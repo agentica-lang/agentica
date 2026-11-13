@@ -99,19 +99,23 @@ end
 
 # The checks of `set_header` that are not about one attribute alone. Returns the first error.
 def check_cookie(cookie: Cookie) -> Result[Bool]
-  return error("invalid cookie name (#{printable(cookie.name)})") if !valid_name?(cookie.name)
+  return error("invalid cookie name (#{printable(cookie.name)})", kind: "argument") if !valid_name?(cookie.name)
   bad_at = bad_value_position(cookie.value)
-  return error("invalid cookie value (byte #{bad_at})") if bad_at >= 0
-  return error("invalid cookie domain (#{printable(cookie.domain)})") if cookie.domain.include?(" ")
+  return error("invalid cookie value (byte #{bad_at})", kind: "argument") if bad_at >= 0
+  return error("invalid cookie domain (#{printable(cookie.domain)})", kind: "argument") if cookie.domain.include?(" ")
   if cookie.same_site != "" and !SAME_SITE_VALUES.include?(cookie.same_site)
-    return error("invalid cookie same_site (#{printable(cookie.same_site)})")
+    return error("invalid cookie same_site (#{printable(cookie.same_site)})", kind: "argument")
   end
-  return error("invalid cookie same_site (None needs secure)") if cookie.same_site == "None" and !cookie.secure
+  if cookie.same_site == "None" and !cookie.secure
+    return error("invalid cookie same_site (None needs secure)", kind: "argument")
+  end
   lower = cookie.name.downcase
   if lower.start_with?("__host-") and !(cookie.secure and cookie.path == "/" and cookie.domain == "")
-    return error("invalid cookie name (__Host- needs secure, path / and no domain)")
+    return error("invalid cookie name (__Host- needs secure, path / and no domain)", kind: "argument")
   end
-  return error("invalid cookie name (__Secure- needs secure)") if lower.start_with?("__secure-") and !cookie.secure
+  if lower.start_with?("__secure-") and !cookie.secure
+    return error("invalid cookie name (__Secure- needs secure)", kind: "argument")
+  end
   ok(true)
 end
 
@@ -145,7 +149,7 @@ end
 def add_attribute(parts: List[String], label: String, field: String, text: String) -> Result[List[String]]
   return ok(parts) if text == ""
   if text != text.strip or !text.bytes.to_a.all? do |byte| byte >= SPACE and byte < DEL and byte != SEMICOLON end
-    return error("invalid cookie #{field} (#{printable(text)})")
+    return error("invalid cookie #{field} (#{printable(text)})", kind: "argument")
   end
   ok(parts.push("#{label}=#{text}"))
 end

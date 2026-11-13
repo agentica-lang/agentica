@@ -686,7 +686,8 @@ def test_a_tls_context_reads_its_ca_file_once_and_a_client_without_one_shares_a_
 
 def test_close_client_while_a_connection_is_in_its_tls_handshake(tmp_path):
     result = run_text(tmp_path, "close-in-handshake", CLOSE_IN_HANDSHAKE_PROGRAM)
-    assert (result.code, result.stdout) == (0, 'error("http: client is closed")\ndone\n'), result.stderr
+    assert (result.code, result.stdout) == (0, 'error("http: client is closed", kind: "http.closed")\ndone\n'), \
+        result.stderr
 
 
 def test_handshake_and_load_errors_on_both_sides_of_a_vm_client_and_server(tmp_path):

@@ -102,6 +102,14 @@ error(e: Error) -> Result[T]
   find with no match) keep `"error"`. An OS error has its errno as `code`
   (the number differs between systems; the kind does not), a refused HTTP head
   its status.
+- `std/` kinds: `http.*` and `net.timeout` (std/http), `archive.format`,
+  `archive.unsafe`, `archive.too_large`, `archive.timeout`,
+  `archive.not_found`, `toml.parse`, `toml.decode`, `regex.syntax`,
+  `option_parser.parse` (a bad command line), `option_parser.help`
+  (`--help`), `binary.too_large`, `channel.gone` and `channel.timeout`
+  (std/actor); a bad argument is `argument`. A std/ function that passes on a
+  builtin's error keeps its kind and code. The table: the Error page of the
+  library.
 - `e.inspect` and a printed failed Result show `error("text")`, plus the
   fields that are not their default (never `location`). `==` on Errors skips
   `location`. `Error` is a reserved type name (`CHECK-REDEFINED-NAME`).

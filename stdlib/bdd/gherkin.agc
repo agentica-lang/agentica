@@ -502,7 +502,7 @@ def read_doc(src: Source, start: Int) -> Outcome[Doc]
 end
 
 def table_row(row: String) -> Result[List[String]]
-  return error("a table row must end with |") if not row.end_with?("|")
+  return error("a table row must end with |", kind: "argument") if not row.end_with?("|")
   body = rest_of(row, 1)
   chars = body.split("")
   ends = (0...chars.size).to_a.filter do |i| chars[i] == "|" and even_run?(chars, i) end
@@ -511,8 +511,8 @@ def table_row(row: String) -> Result[List[String]]
   rest = rest_of(body, starts[ends.size])
   cells = collect(raws.concat([rest]).map(&unescape_cell))
   return cells if not cells.ok?
-  return error("a table row must end with an unescaped |") if rest != ""
-  return error("a table row needs at least one cell") if ends.size == 0
+  return error("a table row must end with an unescaped |", kind: "argument") if rest != ""
+  return error("a table row needs at least one cell", kind: "argument") if ends.size == 0
   ok(cells.unwrap!.take(ends.size).map do |cell| cell.strip end)
 end
 
@@ -526,13 +526,16 @@ end
 
 def unescape_cell(raw: String) -> Result[String]
   parts = raw.split("\\\\").map do |part| part.replace("\\|", "|").replace("\\n", "\n") end
-  return error("invalid table escape") if parts.any? do |part| part.include?("\\") end
+  return error("invalid table escape", kind: "argument") if parts.any? do |part| part.include?("\\") end
   ok(parts.join("\\"))
 end
 
 def collect(results: List[Result[String]]) -> Result[List[String]]
   for result in results
-    return error(result.message) if not result.ok?
+    case result
+      ok(_) -> nil
+      error(e) -> return error(e)
+    end
   end
   ok(results.map do |result| result.unwrap! end)
 end

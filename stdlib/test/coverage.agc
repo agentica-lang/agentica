@@ -119,7 +119,7 @@ export def parse(text: String) -> Result[List[Source]]
     end
 
     colon = line.index_of(":").unwrap_or(-1)
-    return error("not an LCOV line: #{line}") if colon < 0
+    return error("not an LCOV line: #{line}", kind: "argument") if colon < 0
 
     key = line.slice(0, colon)
     value = line.slice(colon + 1, line.length - colon - 1)
@@ -127,15 +127,15 @@ export def parse(text: String) -> Result[List[Source]]
       current = Source(file: value, functions: [], lines: {})
       open = true
     elsif !open
-      return error("an LCOV line outside a record: #{line}")
+      return error("an LCOV line outside a record: #{line}", kind: "argument")
     elsif key == "FN" or key == "FNDA" or key == "DA"
       current = try with_field(current, key, value)
     elsif key != "FNF" and key != "FNH" and key != "LF" and key != "LH"
-      return error("not an LCOV line: #{line}")
+      return error("not an LCOV line: #{line}", kind: "argument")
     end
   end
 
-  return error("the last LCOV record has no end_of_record") if open
+  return error("the last LCOV record has no end_of_record", kind: "argument") if open
 
   ok(found)
 end
@@ -251,7 +251,7 @@ end
 # `source` with one FN (line, name), FNDA (calls, name) or DA (line, count). The totals are counted again on writing.
 def with_field(source: Source, key: String, value: String) -> Result[Source]
   comma = value.index_of(",").unwrap_or(-1)
-  return error("not an LCOV line: #{key}:#{value}") if comma < 0
+  return error("not an LCOV line: #{key}:#{value}", kind: "argument") if comma < 0
 
   number = try value.slice(0, comma).to_i
   name = value.slice(comma + 1, value.length - comma - 1)
@@ -325,7 +325,10 @@ def read_part(path: String) -> Result[List[Source]]
   end
 
   _ = File.close(handle, 5000)
-  return error(line.message) if line.message != "filesystem: end of file"
+  case line
+    ok(_) -> nil
+    error(e) -> return error(e) if !e.is_a?("io.eof")
+  end
 
   sources = try parse(lines.join("\n"))
   ok(sources.map do |source: Source| source.with(file: shown(Path.resolve(source.file).unwrap_or(source.file))) end)
@@ -351,13 +354,11 @@ def write_report(report: String) -> Result[Void]
     return written
   end
 
-  moved = Path.rename(fresh, REPORT, 5000)
-  if !moved.ok?
+  case Path.rename(fresh, REPORT, 5000)
+    ok(_) -> ok()
     # The old report may be gone already, so the new one stays where it is.
-    return error("#{moved.message}; the report is at #{fresh}")
+    error(e) -> error(e.with(message: "#{e.message}; the report is at #{fresh}"))
   end
-
-  moved
 end
 
 # A file gets at most 1 MiB in one write, and a character takes up to 4 bytes.

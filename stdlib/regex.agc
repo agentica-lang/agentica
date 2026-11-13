@@ -168,13 +168,13 @@ end
 ## levels deep and 256 groups.
 export def compile(pattern: String) -> Result[Regex]
   chars = pattern.split("")
-  return error(place(MAX_PATTERN, "the pattern is longer than #{MAX_PATTERN} characters")) if chars.size > MAX_PATTERN
+  return syntax(MAX_PATTERN, "the pattern is longer than #{MAX_PATTERN} characters") if chars.size > MAX_PATTERN
   pat = Pat(chars: chars, codes: chars.map do |c| c.code end, n: chars.size)
   start = St(pos: 0, flags: Flags(fold: false, multi: false, dotall: false), groups: 0, names: {})
   out = try parse_alt(pat, start, 0)
   # parse_alt stops only at the end or at a `)` that closes no group.
-  return error(place(out.st.pos, "unexpected ')'")) if out.st.pos < pat.n
-  return error(place(0, "the pattern needs more than #{MAX_INSTS} instructions")) if size_of(out.node) > MAX_INSTS
+  return syntax(out.st.pos, "unexpected ')'") if out.st.pos < pat.n
+  return syntax(0, "the pattern needs more than #{MAX_INSTS} instructions") if size_of(out.node) > MAX_INSTS
   ok(Regex(source: pattern, program: build(out.node, out.st.groups, out.st.names)))
 end
 
@@ -257,11 +257,12 @@ export def escape(text: String) -> String = text.split("").map(&escape_char).joi
 export def named(m: Match, name: String) -> Result[Group]
   case m.names.get(name)
     some(index) if index >= 0 and index < m.groups.size -> ok(m.groups[index])
-    _ -> error("no group named \"#{name}\"")
+    _ -> error("no group named \"#{name}\"", kind: "argument")
   end
 end
 
-def place(pos: Int, message: String) -> String = "character #{pos + 1}: #{message}"
+# A compile error at character `pos`, counted from 0.
+def syntax[T](pos: Int, message: String) -> Result[T] = error("character #{pos + 1}: #{message}", kind: "regex.syntax")
 
 def ch(pat: Pat, pos: Int) -> String
   return pat.chars[pos] if pos < pat.n
@@ -290,7 +291,7 @@ def parse_cat(pat: Pat, st: St, depth: Int) -> Result[Out]
   while true
     c = ch(pat, cur.pos)
     break if c == "" or c == "|" or c == ")"
-    return error(place(cur.pos, "nothing to repeat before '#{c}'")) if quantifier(pat, cur.pos).some?
+    return syntax(cur.pos, "nothing to repeat before '#{c}'") if quantifier(pat, cur.pos).some?
     atom = try parse_atom(pat, cur, depth)
     cur = atom.st
     if !atom.bare
@@ -313,16 +314,16 @@ def parse_repeat(pat: Pat, atom: Out) -> Result[Out]
     none -> ok(atom)
     some(q) ->
       if q.max != -1 and q.max < q.min
-        return error(place(at, "invalid repetition '#{piece_of(pat, at, q.stop)}'"))
+        return syntax(at, "invalid repetition '#{piece_of(pat, at, q.stop)}'")
       elsif q.min > MAX_COUNT or q.max > MAX_COUNT
-        return error(place(at, "repetition count over #{MAX_COUNT} in '#{piece_of(pat, at, q.stop)}'"))
+        return syntax(at, "repetition count over #{MAX_COUNT} in '#{piece_of(pat, at, q.stop)}'")
       end
       greedy = ch(pat, q.stop) != "?"
       stop = q.stop
       if !greedy
         stop += 1
       end
-      return error(place(stop, "nested repetition '#{piece_of(pat, at, stop + 1)}'")) if quantifier(pat, stop).some?
+      return syntax(stop, "nested repetition '#{piece_of(pat, at, stop + 1)}'") if quantifier(pat, stop).some?
       ok(Out(node: Node.Rep(atom.node, q.min, q.max, greedy), st: atom.st.with(pos: stop)))
   end
 end
@@ -412,7 +413,7 @@ end
 
 def parse_group(pat: Pat, st: St, depth: Int) -> Result[Out]
   open = st.pos
-  return error(place(open, "groups nest more than #{MAX_DEPTH} levels")) if depth >= MAX_DEPTH
+  return syntax(open, "groups nest more than #{MAX_DEPTH} levels") if depth >= MAX_DEPTH
   p = open + 1
   capture = true
   name = ""
@@ -424,11 +425,11 @@ def parse_group(pat: Pat, st: St, depth: Int) -> Result[Out]
       capture = false
       p += 2
     elsif (c == "P" and c2 == "=") or (c == "P" and c2 == ">")
-      return error(place(open, "backreferences are not supported"))
+      return syntax(open, "backreferences are not supported")
     elsif c == "=" or c == "!" or (c == "<" and (c2 == "=" or c2 == "!"))
-      return error(place(open, "lookaround is not supported"))
+      return syntax(open, "lookaround is not supported")
     elsif c == ">"
-      return error(place(open, "atomic groups are not supported"))
+      return syntax(open, "atomic groups are not supported")
     elsif c == "<" or (c == "P" and c2 == "<")
       first = p + 2
       if c == "P"
@@ -440,9 +441,9 @@ def parse_group(pat: Pat, st: St, depth: Int) -> Result[Out]
       end
       name = piece_of(pat, first, close)
       if close >= pat.n or !group_name?(name)
-        return error(place(open, "invalid group name '#{name}'"))
+        return syntax(open, "invalid group name '#{name}'")
       elsif st.names.key?(name)
-        return error(place(open, "duplicate group name \"#{name}\""))
+        return syntax(open, "duplicate group name \"#{name}\"")
       end
       p = close + 1
     else
@@ -457,14 +458,14 @@ def parse_group(pat: Pat, st: St, depth: Int) -> Result[Out]
   names = st.names
   if capture
     index += 1
-    return error(place(open, "more than #{MAX_GROUPS} groups")) if index > MAX_GROUPS
+    return syntax(open, "more than #{MAX_GROUPS} groups") if index > MAX_GROUPS
     if name != ""
       names = names.put(name, index)
     end
   end
   out = try parse_alt(pat, St(pos: p, flags: inner, groups: index, names: names), depth + 1)
   close_at = out.st.pos
-  return error(place(close_at, "missing ')' for the group at character #{open + 1}")) if ch(pat, close_at) != ")"
+  return syntax(close_at, "missing ')' for the group at character #{open + 1}") if ch(pat, close_at) != ")"
   node = out.node
   if capture
     node = Node.Group(out.node, index)
@@ -501,16 +502,16 @@ def parse_flags(pat: Pat, pos: Int, flags: Flags, open: Int) -> Result[FlagScan]
     elsif (c == ")" or c == ":") and letters > 0
       return ok(FlagScan(flags: out, stop: p + 1, scoped: c == ":"))
     elsif c == ""
-      return error(place(pat.n, "missing ')' for the group at character #{open + 1}"))
+      return syntax(pat.n, "missing ')' for the group at character #{open + 1}")
     elsif c == ")" or c == ":"
-      return error(place(p, "missing flag after '(?' or '-'"))
+      return syntax(p, "missing flag after '(?' or '-'")
     else
-      return error(place(p, "unknown flag '#{c}'"))
+      return syntax(p, "unknown flag '#{c}'")
     end
     letters += 1
     p += 1
   end
-  error(place(p, "unknown flag"))
+  syntax(p, "unknown flag")
 end
 
 def parse_class(pat: Pat, st: St) -> Result[Out]
@@ -525,25 +526,23 @@ def parse_class(pat: Pat, st: St) -> Result[Out]
   while true
     c = ch(pat, p)
     if c == ""
-      return error(place(pat.n, "missing ']' for the class at character #{open + 1}"))
+      return syntax(pat.n, "missing ']' for the class at character #{open + 1}")
     elsif c == "]" and !first
       break
     elsif c == "[" and ch(pat, p + 1) == ":" and closes_posix?(pat, p + 2)
-      return error(place(p, "POSIX classes such as [:alpha:] are not supported"))
+      return syntax(p, "POSIX classes such as [:alpha:] are not supported")
     end
     first = false
     low = try class_item(pat, p)
     p = low.stop
     dash = ch(pat, p) == "-" and ch(pat, p + 1) != "]" and ch(pat, p + 1) != ""
     if low.code < 0 and dash
-      return error(place(p, "invalid class range: a class such as \\d cannot end a range"))
+      return syntax(p, "invalid class range: a class such as \\d cannot end a range")
     elsif low.code < 0
       ranges = ranges.concat(low.ranges)
     elsif dash
       high = try class_item(pat, p + 1)
-      if high.code < low.code
-        return error(place(p - 1, "invalid class range '#{piece_of(pat, low.stop - 1, high.stop)}'"))
-      end
+      return syntax(p - 1, "invalid class range '#{piece_of(pat, low.stop - 1, high.stop)}'") if high.code < low.code
       ranges = ranges.concat([low.code, high.code])
       p = high.stop
     else
@@ -581,7 +580,7 @@ def escape_at(pat: Pat, pos: Int, in_class: Bool) -> Result[Esc]
   stop = pos + 2
   code = -1
   if e == ""
-    return error(place(pos, "trailing backslash"))
+    return syntax(pos, "trailing backslash")
   elsif e == "d" or e == "D" or e == "w" or e == "W" or e == "s" or e == "S"
     ranges = DIGIT_RANGES
     if e == "w" or e == "W"
@@ -616,15 +615,15 @@ def escape_at(pat: Pat, pos: Int, in_class: Bool) -> Result[Esc]
   elsif e == "x"
     return hex_escape(pat, pos)
   elsif (digit?(e) and e != "0") or (e == "k" and ch(pat, pos + 2) == "<")
-    return error(place(pos, "backreferences are not supported"))
+    return syntax(pos, "backreferences are not supported")
   elsif e == "p" or e == "P"
-    return error(place(pos, "\\#{e} is not supported yet"))
+    return syntax(pos, "\\#{e} is not supported yet")
   elsif e == "Q" or e == "E"
-    return error(place(pos, "\\Q...\\E is not supported"))
+    return syntax(pos, "\\Q...\\E is not supported")
   elsif punctuation?(pat.codes[pos + 1])
     code = pat.codes[pos + 1]
   else
-    return error(place(pos, "invalid escape \\#{e}"))
+    return syntax(pos, "invalid escape \\#{e}")
   end
   ok(Esc(kind: -1, code: code, ranges: [], stop: stop))
 end
@@ -652,13 +651,13 @@ def hex_escape(pat: Pat, pos: Int) -> Result[Esc]
   end
   count = p - first
   if braced
-    return error(place(pos, "invalid escape \\x: write \\xHH or \\x{H...}")) if count == 0 or ch(pat, p) != "}"
+    return syntax(pos, "invalid escape \\x: write \\xHH or \\x{H...}") if count == 0 or ch(pat, p) != "}"
     if value > MAX_CODE or (value >= 0xD800 and value <= 0xDFFF)
-      return error(place(pos, "#{piece_of(pat, pos, p + 1)} is not a Unicode scalar value"))
+      return syntax(pos, "#{piece_of(pat, pos, p + 1)} is not a Unicode scalar value")
     end
     return ok(Esc(kind: -1, code: value, ranges: [], stop: p + 1))
   end
-  return error(place(pos, "invalid escape \\x: write \\xHH or \\x{H...}")) if count != 2
+  return syntax(pos, "invalid escape \\x: write \\xHH or \\x{H...}") if count != 2
   ok(Esc(kind: -1, code: value, ranges: [], stop: p))
 end
 
@@ -947,7 +946,10 @@ def parse_template(template: String, prog: Program) -> Result[List[Piece]]
         end
         inner = chars.drop(i + 2).take(close - i - 2)
         if close >= n or inner.size == 0
-          return error("template character #{i + 1}: '${' needs a group number or name and a '}'")
+          return error(
+            "template character #{i + 1}: '${' needs a group number or name and a '}'",
+            kind: "regex.syntax",
+          )
         end
         stop = close + 1
         label = inner.join("")
@@ -956,13 +958,16 @@ def parse_template(template: String, prog: Program) -> Result[List[Piece]]
         else
           case prog.names.get(label)
             some(index) -> ref = index
-            none -> return error("no group named \"#{label}\"")
+            none -> return error("no group named \"#{label}\"", kind: "regex.syntax")
           end
         end
       else
-        return error("template character #{i + 1}: '$' starts no group; write $$ for a dollar sign")
+        return error(
+          "template character #{i + 1}: '$' starts no group; write $$ for a dollar sign",
+          kind: "regex.syntax",
+        )
       end
-      return error("no group #{label}") if ref > groups
+      return error("no group #{label}", kind: "regex.syntax") if ref > groups
       if text.size > 0
         pieces = pieces.push(Piece.Text(text.join("")))
         text = []

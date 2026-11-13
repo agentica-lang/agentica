@@ -97,13 +97,15 @@ def compile_one(text: String) -> Result[Pattern]
   for tail in tails
     close = tail.index_of("}")
     if close.some? and not placeholder?(tail.slice(0, close.unwrap!))
-      return error("only {string} and {int} are supported")
+      return error("only {string} and {int} are supported", kind: "argument")
     end
   end
-  return error("unmatched pattern braces") if parts[0].include?("}")
+  return error("unmatched pattern braces", kind: "argument") if parts[0].include?("}")
   for tail in tails
     close = tail.index_of("}")
-    return error("unmatched pattern braces") if close.none? or after(tail, close.unwrap!).include?("}")
+    if close.none? or after(tail, close.unwrap!).include?("}")
+      return error("unmatched pattern braces", kind: "argument")
+    end
   end
   slots = tails.map do |tail|
     close = tail.index_of("}").unwrap!

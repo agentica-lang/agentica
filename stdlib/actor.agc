@@ -67,7 +67,7 @@ end
 export def cast[M](address: Address[M], message: M, timeout_ms: Int = 5000) -> Result[Void]
   case address.send(message, timeout_ms)
     ok(_) -> ok()
-    error(text) -> error(reason("#{text}"))
+    error(e) -> gone_or_timeout(e)
   end
 end
 
@@ -78,11 +78,11 @@ export def call[M, R](address: Address[M], timeout_ms: Int, make: Fn[Channel[R],
   started = Time.monotonic_ms
   try cast(address, make.call(answer), timeout_ms)
   left = timeout_ms - (Time.monotonic_ms - started)
-  return error("actor: timeout") if left <= 0
+  return error("actor: timeout", kind: "channel.timeout") if left <= 0
 
   case answer.recv(left)
     ok(value) -> ok(value)
-    error(_) -> error("actor: timeout")
+    error(_) -> error("actor: timeout", kind: "channel.timeout")
   end
 end
 
@@ -95,15 +95,15 @@ export def stop[S, M](actor: Ref[S, M], timeout_ms: Int) -> Result[Void]
     Await.Done(result) -> result
     Await.TimedOut ->
       Task.cancel(actor.task)
-      error("actor: timeout")
+      error("actor: timeout", kind: "task.timeout")
   end
 end
 
-# A closed inbox and a collected one both mean that the actor has ended.
-def reason(text: String) -> String
-  return "actor: timeout" if text == "channel: timed out"
+# A closed inbox and a collected one both mean that the actor has ended: `channel.gone`.
+def gone_or_timeout(e: Error) -> Result[Void]
+  return error(e.with(message: "actor: timeout")) if e.is_a?("channel.timeout")
 
-  "address: gone"
+  error("address: gone", kind: "channel.gone")
 end
 
 def run[S, M](setup: Setup[S, M]) -> Result[Void]

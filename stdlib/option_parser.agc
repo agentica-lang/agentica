@@ -149,7 +149,8 @@ export def new(
 end
 
 ## Checks the words (normally `System.args()`) against the parser and returns the converted values. An error says
-## what is wrong, or, when `help?` is true for it, that the usage text was asked for.
+## what is wrong, or, when `help?` is true for it, that the usage text was asked for. Its kind is `option_parser.help`
+## for `--help`, `option_parser.parse` for a mistake in the words and `argument` for a bad specification.
 export def parse(parser: Parser, args: List[String]) -> Result[Parsed]
   slots = try slots_of(parser)
   scan = try scan_words(parser, slots, args)
@@ -280,7 +281,7 @@ end
 
 # Ends the program with the message as RUNTIME-UNWRAP-ERROR: its stack names the getter and the line of the caller.
 def bug(message: String) -> Void
-  failed: Result[Int] = error("option_parser: #{message}")
+  failed: Result[Int] = error("option_parser: #{message}", kind: "argument")
   failed.unwrap!
 end
 
@@ -374,7 +375,9 @@ end
 # The slots, once the specification is checked: names and short names are well formed, free and different, every
 # default is valid for its kind and choices, and the name of the rest has no space or control character.
 def slots_of(parser: Parser) -> Result[List[Slot]]
-  return error("option_parser: invalid specification: the program name is empty") if parser.program.empty?
+  if parser.program.empty?
+    return error("option_parser: invalid specification: the program name is empty", kind: "argument")
+  end
   if spaced?(parser.rest)
     try bad_spec(parser, "'#{parser.rest}' is not a valid name for the rest")
   end
@@ -451,7 +454,7 @@ def finite?(limit: Optional[Float]) -> Bool
 end
 
 def bad_spec(parser: Parser, message: String) -> Result[Void]
-  error("#{parser.program}: invalid specification: #{message}")
+  error("#{parser.program}: invalid specification: #{message}", kind: "argument")
 end
 
 def empty_parsed() -> Parsed = Parsed(kinds: {}, strings: {}, ints: {}, floats: {}, flags: {})
@@ -475,7 +478,7 @@ def scan_words(parser: Parser, slots: List[Slot], args: List[String]) -> Result[
       i = i + 1
     else
       step = try read_option(reader, values, i)
-      return error("#{HELP_MARK}#{usage(parser)}") if step.help
+      return error("#{HELP_MARK}#{usage(parser)}", kind: "option_parser.help") if step.help
       values = step.values
       i = step.next
     end
@@ -612,7 +615,7 @@ end
 # is the end of a sentence: the callers say whose value it is.
 def store(parsed: Parsed, slot: Slot, text: String) -> Result[Parsed]
   if !slot.choices.empty? and !slot.choices.any? do |choice| choice == text end
-    return error("'#{text}' is not one of #{slot.choices.join(", ")}")
+    return error("'#{text}' is not one of #{slot.choices.join(", ")}", kind: "option_parser.parse")
   end
   case slot.kind
     Kind.String -> ok(parsed.with(strings: parsed.strings.put(slot.name, text)))
@@ -624,27 +627,27 @@ def store(parsed: Parsed, slot: Slot, text: String) -> Result[Parsed]
         if text.start_with?("-")
           digits = text.slice(1, text.length - 1)
         end
-        return error("'#{text}' does not fit an Int") if digits?(digits)
-        return error("'#{text}' is not an Int")
+        return error("'#{text}' does not fit an Int", kind: "option_parser.parse") if digits?(digits)
+        return error("'#{text}' is not an Int", kind: "option_parser.parse")
       end
       if slot.min.some? and number.unwrap! < slot.min.unwrap!
-        return error("'#{text}' is below the minimum #{slot.min.unwrap!}")
+        return error("'#{text}' is below the minimum #{slot.min.unwrap!}", kind: "option_parser.parse")
       end
       if slot.max.some? and number.unwrap! > slot.max.unwrap!
-        return error("'#{text}' is above the maximum #{slot.max.unwrap!}")
+        return error("'#{text}' is above the maximum #{slot.max.unwrap!}", kind: "option_parser.parse")
       end
       ok(parsed.with(ints: parsed.ints.put(slot.name, number.unwrap!)))
     Kind.Float ->
       number = text.to_f
-      return error("'#{text}' is not a Float") if !number.ok?
+      return error("'#{text}' is not a Float", kind: "option_parser.parse") if !number.ok?
       # to_f reads what Float#to_s writes (`+inf.0`, `+nan.0`) and gives an infinity for a number too big (`1e400`):
       # none of them is a value a limit can hold.
-      return error("'#{text}' does not fit a Float") if !finite?(some(number.unwrap!))
+      return error("'#{text}' does not fit a Float", kind: "option_parser.parse") if !finite?(some(number.unwrap!))
       if slot.min_float.some? and number.unwrap! < slot.min_float.unwrap!
-        return error("'#{text}' is below the minimum #{slot.min_float.unwrap!}")
+        return error("'#{text}' is below the minimum #{slot.min_float.unwrap!}", kind: "option_parser.parse")
       end
       if slot.max_float.some? and number.unwrap! > slot.max_float.unwrap!
-        return error("'#{text}' is above the maximum #{slot.max_float.unwrap!}")
+        return error("'#{text}' is above the maximum #{slot.max_float.unwrap!}", kind: "option_parser.parse")
       end
       ok(parsed.with(floats: parsed.floats.put(slot.name, number.unwrap!)))
     Kind.Flag -> ok(parsed)
@@ -652,7 +655,10 @@ def store(parsed: Parsed, slot: Slot, text: String) -> Result[Parsed]
 end
 
 def failure[T](parser: Parser, message: String) -> Result[T]
-  error("#{parser.program}: #{message}\nTry '#{parser.program} --help' for more information")
+  error(
+    "#{parser.program}: #{message}\nTry '#{parser.program} --help' for more information",
+    kind: "option_parser.parse",
+  )
 end
 
 # The name as the messages and the help show it: --port, or <file> for an argument.

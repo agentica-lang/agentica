@@ -118,7 +118,7 @@ def test_a_crash_restarts_the_child_and_its_name_points_to_the_new_actor() -> Re
   try cast(w, "visits", Msg.Divide(0))
   try started(w, "visits", 2)
   try Test.eq(get(w, "visits"), ok(0))
-  try Test.eq(Actor.cast(old, Msg.Add(1)), error("address: gone"))
+  try Test.eq(Actor.cast(old, Msg.Add(1)), error("address: gone", kind: "channel.gone"))
   Test.eq(Supervisor.stop(sup, 5000), ok())
 end
 
@@ -129,7 +129,7 @@ def test_a_child_that_ends_without_a_crash_stays_down() -> Result[Void]
   try cast(w, "other", Msg.Add(2))
   try Test.eq(get(w, "other"), ok(2))
   try ended(w, "once")
-  try Test.eq(get(w, "once"), error("address: gone"))
+  try Test.eq(get(w, "once"), error("address: gone", kind: "channel.gone"))
   # The supervisor handles the end notice of `once` before the stop, which comes after it in the inbox.
   try Test.eq(Supervisor.stop(sup, 5000), ok())
   Test.eq(w.starts.get("once"), ok(1))
@@ -140,7 +140,7 @@ def test_stop_stops_the_children_in_reverse_order() -> Result[Void]
   sup = Supervisor.start([counter(w, "a"), counter(w, "b"), counter(w, "c")])
   try Test.eq(Supervisor.stop(sup, 5000), ok())
   try Test.eq(w.stopped.to_map, {"": 3, "c": 1, "b": 2, "a": 3})
-  Test.eq(get(w, "a"), error("address: gone"))
+  Test.eq(get(w, "a"), error("address: gone", kind: "channel.gone"))
 end
 
 def test_the_restart_limit_makes_the_supervisor_give_up_and_crash() -> Result[Void]
@@ -158,8 +158,8 @@ def test_the_restart_limit_makes_the_supervisor_give_up_and_crash() -> Result[Vo
   try Test.eq([down.reason.to_s, down.code], ["TaskExit.Crashed", "RUNTIME-UNWRAP-ERROR"])
   try Test.eq(down.message, "supervisor: loop crashed 3 times in 60000 ms")
   try Test.eq(w.stopped.get("other"), ok(1))
-  try Test.eq(get(w, "other"), error("address: gone"))
-  Test.eq(Supervisor.stop(sup, 5000), error("supervisor: loop crashed 3 times in 60000 ms"))
+  try Test.eq(get(w, "other"), error("address: gone", kind: "channel.gone"))
+  Test.eq(Supervisor.stop(sup, 5000), error("supervisor: loop crashed 3 times in 60000 ms", kind: "task.crashed"))
 end
 
 def test_a_failed_start_counts_as_a_crash() -> Result[Void]
@@ -167,7 +167,7 @@ def test_a_failed_start_counts_as_a_crash() -> Result[Void]
   behaviour: Actor.Behaviour[Int, Msg] = Actor.Behaviour(init: -> { 0 }, handle: &handle)
   failing = Supervisor.child("failing", behaviour) do |_address| w.starts.add("failing", 1 / 0) end
   sup = Supervisor.start([failing], Supervisor.Options(max_restarts: 1, within_ms: 60_000))
-  Test.eq(Supervisor.stop(sup, 5000), error("supervisor: failing crashed 2 times in 60000 ms"))
+  Test.eq(Supervisor.stop(sup, 5000), error("supervisor: failing crashed 2 times in 60000 ms", kind: "task.crashed"))
 end
 
 def test_an_init_crash_counts_as_a_crash() -> Result[Void]
@@ -180,7 +180,7 @@ def test_an_init_crash_counts_as_a_crash() -> Result[Void]
   down = try downs.recv(5000)
   try Test.eq(down.message, "supervisor: boom crashed 2 times in 60000 ms")
   try Test.eq(w.starts.get("boom"), ok(2))
-  Test.eq(Supervisor.stop(sup, 5000), error("supervisor: boom crashed 2 times in 60000 ms"))
+  Test.eq(Supervisor.stop(sup, 5000), error("supervisor: boom crashed 2 times in 60000 ms", kind: "task.crashed"))
 end
 
 def test_a_crash_older_than_within_ms_no_longer_counts() -> Result[Void]
@@ -246,5 +246,5 @@ def test_failed_starts_in_a_row_make_the_supervisor_give_up_whatever_their_pace(
   Task.monitor(sup.task, downs) do |down| down end
   down = try downs.recv(5000)
   try Test.eq(down.message, "supervisor: slow failed to start 3 times in a row")
-  Test.eq(Supervisor.stop(sup, 5000), error("supervisor: slow failed to start 3 times in a row"))
+  Test.eq(Supervisor.stop(sup, 5000), error("supervisor: slow failed to start 3 times in a row", kind: "task.crashed"))
 end

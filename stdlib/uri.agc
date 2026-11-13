@@ -93,10 +93,10 @@ def decode(text: String, plus_is_space: Bool) -> Result[String]
   while i < bytes.size
     byte = bytes[i]
     if byte == PERCENT
-      return error("invalid %-encoding (#{text})") if i + 2 >= bytes.size
+      return error("invalid %-encoding (#{text})", kind: "argument") if i + 2 >= bytes.size
       high = hex_value(bytes[i + 1])
       low = hex_value(bytes[i + 2])
-      return error("invalid %-encoding (#{text})") if high < 0 or low < 0
+      return error("invalid %-encoding (#{text})", kind: "argument") if high < 0 or low < 0
       out = out.push(high * 16 + low)
       i = i + 3
     elsif byte == PLUS and plus_is_space
@@ -110,7 +110,7 @@ def decode(text: String, plus_is_space: Bool) -> Result[String]
   # Every item of `out` is a byte (one of `text`, or two hex digits), so Bytes.from_list cannot fail.
   case String.from_bytes(try Bytes.from_list(out))
     ok(decoded) -> ok(decoded)
-    error(_) -> error("invalid UTF-8 after decoding (#{text})")
+    error(_) -> error("invalid UTF-8 after decoding (#{text})", kind: "text.encoding")
   end
 end
 
