@@ -20,7 +20,7 @@ def from_list(list: List[A]) -> Lazy[A] = __lazy_list(list)
 
 def from_range(range: Range) -> Lazy[Int] = __lazy_range(range)
 
-def produce(seed: A, f: Fn[A, A]) -> Lazy[A] = __lazy_produce(seed, f)
+def produce(seed: A, block: Fn[A, A]) -> Lazy[A] = __lazy_produce(seed, block)
 
 # File.foreach. Argument 1 of the call is buffer_bytes: a size outside 1024..16777216 is reported there. The file opens
 # only in a terminal, which closes it before it returns.
@@ -35,13 +35,13 @@ def from_chunks(path: String, size: Int, timeout_ms: Int) -> Lazy[Bytes] = __laz
 # ch.lazy. Argument 1 of the call is timeout_ms: a negative timeout is reported there.
 def from_channel(channel: Channel[A], timeout_ms: Int) -> Lazy[A] = __lazy_channel(channel, timeout_ms)
 
-def map(lazy: Lazy[A], f: Fn[A, B]) -> Lazy[B] = __lazy_map(lazy, f)
+def map(lazy: Lazy[A], block: Fn[A, B]) -> Lazy[B] = __lazy_map(lazy, block)
 
-def filter(lazy: Lazy[A], f: Fn[A, Bool]) -> Lazy[A] = __lazy_test(lazy, 0, f)
+def filter(lazy: Lazy[A], block: Fn[A, Bool]) -> Lazy[A] = __lazy_test(lazy, 0, block)
 
-def take_while(lazy: Lazy[A], f: Fn[A, Bool]) -> Lazy[A] = __lazy_test(lazy, 1, f)
+def take_while(lazy: Lazy[A], block: Fn[A, Bool]) -> Lazy[A] = __lazy_test(lazy, 1, block)
 
-def drop_while(lazy: Lazy[A], f: Fn[A, Bool]) -> Lazy[A] = __lazy_test(lazy, 2, f)
+def drop_while(lazy: Lazy[A], block: Fn[A, Bool]) -> Lazy[A] = __lazy_test(lazy, 2, block)
 
 # Argument 1 of the call is count: a negative count is reported there.
 def take(lazy: Lazy[A], count: Int) -> Lazy[A] = __lazy_count(lazy, 0, count)
@@ -53,11 +53,11 @@ def each_slice(lazy: Lazy[A], size: Int) -> Lazy[List[A]] = __lazy_group(lazy, 0
 
 def each_cons(lazy: Lazy[A], size: Int) -> Lazy[List[A]] = __lazy_group(lazy, 1, size)
 
-def with_index(lazy: Lazy[A], f: Fn[A, Int, B]) -> Lazy[B] = __lazy_with_index(lazy, f)
+def with_index(lazy: Lazy[A], block: Fn[A, Int, B]) -> Lazy[B] = __lazy_with_index(lazy, block)
 
-def flat_map(lazy: Lazy[A], f: Fn[A, List[B]]) -> Lazy[B] = __lazy_flat_map(lazy, f)
+def flat_map(lazy: Lazy[A], block: Fn[A, List[B]]) -> Lazy[B] = __lazy_flat_map(lazy, block)
 
-def chunk_while(lazy: Lazy[A], f: Fn[A, A, Bool]) -> Lazy[List[A]] = __lazy_chunk_while(lazy, f)
+def chunk_while(lazy: Lazy[A], block: Fn[A, A, Bool]) -> Lazy[List[A]] = __lazy_chunk_while(lazy, block)
 
 # The zlib steps: __lazy_zlib(lazy, kind, level, max_bytes) with kind 0 deflate, 1 raw deflate, 2 gzip, 3 inflate,
 # 4 raw inflate, 5 gunzip. A bad level or max_bytes is the error of the terminal, as in Zlib.deflate.
@@ -82,11 +82,11 @@ def to_a(lazy: Lazy[A]) -> Result[List[A]] = __lazy_to_a(lazy)
 # first(n) is take(n) then to_a: the source stops after the n-th item.
 def first(lazy: Lazy[A], count: Int) -> Result[List[A]] = __lazy_to_a(__lazy_count(lazy, 0, count))
 
-def each(lazy: Lazy[A], f: Fn[A, Result[Void]]) -> Result[Void] = __lazy_each(lazy, f)
+def each(lazy: Lazy[A], block: Fn[A, Result[Void]]) -> Result[Void] = __lazy_each(lazy, block)
 
-def reduce(lazy: Lazy[A], initial: B, f: Fn[B, A, B]) -> Result[B] = __lazy_reduce(lazy, initial, f)
+def reduce(lazy: Lazy[A], initial: B, block: Fn[B, A, B]) -> Result[B] = __lazy_reduce(lazy, initial, block)
 
-def find(lazy: Lazy[A], f: Fn[A, Bool]) -> Result[A] = __lazy_find(lazy, f)
+def find(lazy: Lazy[A], block: Fn[A, Bool]) -> Result[A] = __lazy_find(lazy, block)
 
 # write_lines. The path and timeout are checked when the terminal starts, as for File.foreach: a bad one is its error.
 def write_lines(lazy: Lazy[String], path: String, timeout_ms: Int) -> Result[Void]

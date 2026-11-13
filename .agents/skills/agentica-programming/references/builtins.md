@@ -237,7 +237,7 @@ Range.map(range: Range, block: Fn[Int, B]) -> List[B]    # as (1..5).to_a.map, w
 ok(value: T) -> Result[T]
 ok() -> Result[Void]
 error(message: String) -> Result[T]                      # needs an expected Result type
-error(e: Error) -> Result[T]                             # the same Error, as a Result of another type
+error(error: Error) -> Result[T]                         # the same Error, as a Result of another type
 result.ok?() -> Bool
 result.unwrap!() -> T                                    # halts with RUNTIME-UNWRAP-ERROR on error
 result.unwrap_or(default: T) -> T

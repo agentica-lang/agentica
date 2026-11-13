@@ -10,7 +10,7 @@ export struct Records
   problem: String
 end
 
-## Reads the channel records of the child `p` until a read fails or the `deadline` passes (a `Time.monotonic_ms`
+## Reads the channel records of the child `process` until a read fails or the `deadline` passes (a `Time.monotonic_ms`
 ## value). Lines that are not JSON are skipped.
 export def read_records(process: Process, deadline: Int) -> Records
   items: List[JSON.Value] = []

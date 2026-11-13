@@ -8,45 +8,45 @@
 ## the last. Nothing here calls concat, take, drop, reverse, sort, sort_by, Map.keys or Map.values inside a loop or a
 ## callback (tests/test_stdlib_prelude.py reads this file for them), so no function is quadratic.
 
-def find(list: List[A], f: Fn[A, Bool]) -> Result[A]
+def find(list: List[A], block: Fn[A, Bool]) -> Result[A]
   for item in list
-    return ok(item) if f.call(item)
+    return ok(item) if block.call(item)
   end
   error("not found")
 end
 
-def find_index(list: List[A], f: Fn[A, Bool]) -> Optional[Int]
+def find_index(list: List[A], block: Fn[A, Bool]) -> Optional[Int]
   index = 0
   for item in list
-    return some(index) if f.call(item)
+    return some(index) if block.call(item)
     index += 1
   end
   none
 end
 
-def each_with_index(list: List[A], f: Fn[A, Int, Void]) -> Void
+def each_with_index(list: List[A], block: Fn[A, Int, Void]) -> Void
   index = 0
   for item in list
-    f.call(item, index)
+    block.call(item, index)
     index += 1
   end
 end
 
-def flat_map(list: List[A], f: Fn[A, List[B]]) -> List[B]
+def flat_map(list: List[A], block: Fn[A, List[B]]) -> List[B]
   found: List[B] = []
   for item in list
-    for part in f.call(item)
+    for part in block.call(item)
       found = found.push(part)
     end
   end
   found
 end
 
-def partition(list: List[A], f: Fn[A, Bool]) -> List[List[A]]
+def partition(list: List[A], block: Fn[A, Bool]) -> List[List[A]]
   accepted: List[A] = []
   rejected: List[A] = []
   for item in list
-    if f.call(item)
+    if block.call(item)
       accepted = accepted.push(item)
     else
       rejected = rejected.push(item)
@@ -55,20 +55,20 @@ def partition(list: List[A], f: Fn[A, Bool]) -> List[List[A]]
   [accepted, rejected]
 end
 
-# One scan for the length of the prefix, then one take: f is not called after the first false.
-def take_while(list: List[A], f: Fn[A, Bool]) -> List[A]
+# One scan for the length of the prefix, then one take: block is not called after the first false.
+def take_while(list: List[A], block: Fn[A, Bool]) -> List[A]
   count = 0
   for item in list
-    break if !f.call(item)
+    break if !block.call(item)
     count += 1
   end
   list.take(count)
 end
 
-def drop_while(list: List[A], f: Fn[A, Bool]) -> List[A]
+def drop_while(list: List[A], block: Fn[A, Bool]) -> List[A]
   count = 0
   for item in list
-    break if !f.call(item)
+    break if !block.call(item)
     count += 1
   end
   list.drop(count)

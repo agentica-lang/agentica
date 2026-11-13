@@ -19,9 +19,9 @@ def unwrap(value: Optional[A]) -> A
   never.unwrap!
 end
 
-def map(value: Optional[A], f: Fn[A, B]) -> Optional[B]
+def map(value: Optional[A], block: Fn[A, B]) -> Optional[B]
   case value
-    some(item) -> some(f.call(item))
+    some(item) -> some(block.call(item))
     none -> none
   end
 end

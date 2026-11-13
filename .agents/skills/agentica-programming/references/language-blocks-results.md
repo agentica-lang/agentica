@@ -68,7 +68,7 @@ ok(value: T) -> Result[T]
 ok() -> Result[Void]
 error(message: String) -> Result[T]
 error(message: String, kind: String, code: Int, details: Map[String, String], cause: Error) -> Result[T]
-error(e: Error) -> Result[T]
+error(error: Error) -> Result[T]
 ```
 
 - An expected `Result[T]` checks the payload against T, even for `ok([])`.
