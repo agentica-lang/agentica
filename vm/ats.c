@@ -1,9 +1,9 @@
 /*
  * ATS[K, V], the shared tables (docs/grammar/06c-tasks-and-tests.md, "Shared tables"): ATS.new, put, put_new, get,
- * has_key?, delete, clear, add, size, keys and to_map. A table is one atomic pointer to an immutable state: two persistent
- * AVL trees over the same entries, one ordered by key for the lookups and one by insertion number for the snapshots
- * in first-insertion order. A reader loads the pointer; a writer builds the next state from the one it loaded and
- * installs it with compare-and-swap, so each call is atomic on any scheduler without a lock
+ * has_key?, delete, clear, add, size, keys and to_map. A table is one atomic pointer to an immutable state: two
+ * persistent AVL trees over the same entries, one ordered by key for the lookups and one by insertion number for the
+ * snapshots in first-insertion order. A reader loads the pointer; a writer builds the next state from the one it
+ * loaded and installs it with compare-and-swap, so each call is atomic on any scheduler without a lock
  * (docs/vm/10-io-multicore.md §10.2.3). Service layer.
  */
 #include "services.h"

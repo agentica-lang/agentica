@@ -144,6 +144,8 @@ ENTRY_OVERHEAD = 64
 # A task that holds a rotation for longer than this on the cache's clock is taken to have died (cancelled or
 # crashed): another may redo it.
 ROTATION_LEASE_MS = 2_000
+# The key of a slot's ids that holds the token of the rotation that last emptied the slot. Ids start at 1.
+CLEARED = 0
 
 struct Entry
   key: String
@@ -268,9 +270,10 @@ def insert(state: Memory, key: String, value: String) -> Bool
   return false if g < 0
 
   id = state.ids.add(0, 1)
-  entry = Entry(key: key, value: value, at: now(state), id: id, gen: g)
   live = live_in(state, g)
+  mark = live.get(CLEARED).unwrap_or(0)
   live.put(id, size)
+  entry = Entry(key: key, value: value, at: now(state), id: id, gen: g)
   if not slot(state, g).put_new(slot_key(g, key), entry)
     live.delete(id)
     give_back(state, g, size)
@@ -278,11 +281,15 @@ def insert(state: Memory, key: String, value: String) -> Bool
   end
 
   # A task that stalled for two rotations wrote into a table the cache has reused, where its entry is not counted and
-  # its id was wiped, so it just takes the entry out. A task that read the generation as at most one behind is safe:
-  # the rotation that empties its table starts only after the next one is published, which is after this read.
-  if current(state) - g >= 2
+  # its id was wiped. A task that read the generation as at most one behind is safe from that: the rotation that
+  # empties its table starts only after the next one is published, which is after this read. But a late owner (see
+  # rotate) can empty the slot between the two writes above, which the mark shows: the id is then gone and the entry
+  # is not, so no remove could win it. Either way the task takes its entry out; the bytes stay counted until the
+  # generation is dropped.
+  if current(state) - g >= 2 or live.get(CLEARED).unwrap_or(0) != mark
     live.delete(id)
     take_out(state, entry)
+    return false
   end
 
   true
@@ -382,8 +389,11 @@ def rotate(state: Memory, g: Int) -> Bool
   # stay counted until that generation is dropped.
   return false if not owner?(state, g, token)
 
-  live_in(state, g + 1).clear
+  at = now(state)
+  live = live_in(state, g + 1)
+  live.clear
   slot(state, g + 1).clear
+  live.put(CLEARED, token)
 
   # Keys of long dead generations: nothing reads them, and they would pile up. All those up to g - 3 go, not only
   # g - 3, since the rotation from a generation that a late publish skipped never ran. The tables hold a few keys.
@@ -396,7 +406,7 @@ def rotate(state: Memory, g: Int) -> Bool
   end
 
   if state.ttl_ms > 0
-    state.started.put(g + 1, now(state))
+    state.started.put(g + 1, at)
   end
 
   # A late owner can pass this check too and publish after the new owner did. So the publish adds one rather than
@@ -430,6 +440,8 @@ def claim(state: Memory, g: Int) -> Int
   end
 
   owner = state.rotations.get(g).unwrap_or(0)
+  # An owner that was cancelled before it wrote its time has none: the first task that sees it starts the lease.
+  _ = state.claimed.put_new(g, at)
   if owner > 0 and at - state.claimed.get(g).unwrap_or(at) > ROTATION_LEASE_MS and state.deaths.add(owner, 1) == 1
     # The dead owner may have finished while this task decided; nothing has been taken from it yet, so just leave.
     return 0 if current(state) != g
