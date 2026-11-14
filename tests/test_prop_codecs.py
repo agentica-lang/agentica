@@ -6,6 +6,7 @@ import base64
 import binascii
 import json
 import math
+import re
 import struct
 from importlib.util import find_spec
 
@@ -163,12 +164,17 @@ INVALID = object()
 
 
 def python_json(text):
-    """json.loads of `text`, or INVALID where JSON.parse must fail."""
+    """json.loads of `text`, or INVALID where JSON.parse must fail. A mantissa of only zeros is 0.0 whatever its sign
+    (docs/vm/02-reference-behavior.md); a negative number that rounds to zero is -0.0."""
     def refuse(constant):
         raise ValueError(constant)
 
+    def number(digits):
+        mantissa = re.split("[eE]", digits)[0]
+        return 0.0 if mantissa.strip("-0.") == "" else float(digits)
+
     try:
-        value = json.loads(text, parse_constant=refuse)
+        value = json.loads(text, parse_constant=refuse, parse_float=number)
     except ValueError:
         return INVALID
     return value if representable(value) else INVALID
