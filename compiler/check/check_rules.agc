@@ -169,6 +169,10 @@ def old_form_help(name: String, node: Ast.Call) -> String
     return "round gives the nearest Int; format(\"%.2f\", x) writes a Float with 2 digits after the point"
   end
 
+  if node.name == "List.count" and node.args.size <= 1
+    return "xs.size counts all elements; count takes a block and counts those that pass it: xs.count do |x| ... end"
+  end
+
   # The callee lists the catalog forms, which have no named arguments.
   if name == "error"
     return "error takes the message first, then the named arguments: error(\"text\", kind:, code:, details:, cause:)"

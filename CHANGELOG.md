@@ -8,6 +8,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `List.count` takes a block and counts the elements it accepts, as Ruby's `xs.count { |x| ... }` does (#1590).
+
 ### Changed
 
 - Channel messages between tasks scale with the schedulers: a send or a receive no longer takes the runtime's one lock (#1581).
@@ -21,10 +25,6 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `List.uniq` takes `Bytes` items, as `Set.new` does (#1577).
 - `r.error?` on a Result says that a Result has `ok?`, not to unwrap it (#1578).
 - `none` in a `map` block takes the Optional item of the expected list type (#1579).
-
-### Added
-
-- `List.count` takes a block and counts the elements it accepts, as Ruby's `xs.count { |x| ... }` does (#1590).
 
 ## [0.32.0-alpha.1] - 2026-11-14
 

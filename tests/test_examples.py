@@ -448,6 +448,12 @@ def test_an_unknown_method_suggests_the_ruby_method(tmp_path):
         assert suggested in found["help"], expression
 
 
+def test_count_without_a_block_points_to_size(tmp_path):
+    source = "def main() -> Void\n  xs: List[Int] = [1]\n  puts(xs.count)\nend\n"
+    found = check_diagnostic(source, tmp_path)
+    assert found["code"] == "CHECK-ARITY" and "xs.size" in found["help"]
+
+
 def test_new_diagnostics_retain_their_codes_across_the_three_printers(program):
     path = program("")
     for body, code in [
