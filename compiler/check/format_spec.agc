@@ -98,29 +98,25 @@ def conversion(chars: List[String], start: Int) -> Parsed
   end
 
   width = 0
-  digits = 0
   while index < chars.size and digit?(chars[index])
-    if digits < 5
+    if width <= MAX_WIDTH
       width = width * 10 + chars[index].to_i!
     end
 
-    digits += 1
     index += 1
   end
 
-  return bad("the width must be 1 to #{MAX_WIDTH}", start, index) if digits > 0 and width > MAX_WIDTH
+  return bad("the width must be 1 to #{MAX_WIDTH}", start, index) if width > MAX_WIDTH
 
   precision = -1
   if index < chars.size and chars[index] == "."
     index += 1
     precision = 0
-    digits = 0
     while index < chars.size and digit?(chars[index])
-      if digits < 5
+      if precision <= MAX_PRECISION
         precision = precision * 10 + chars[index].to_i!
       end
 
-      digits += 1
       index += 1
     end
 
@@ -131,6 +127,8 @@ def conversion(chars: List[String], start: Int) -> Parsed
 
   kind = chars[index]
   stop = index + 1
+  return bad("%% takes no flag, width or precision", start, stop) if kind == "%"
+
   return bad("unknown conversion %#{kind}; format takes %d, %x, %f, %s and %%", start, stop) if !"dxfs".include?(kind)
 
   return bad("a precision is only for %f, not %#{kind}", start, stop) if precision >= 0 and kind != "f"

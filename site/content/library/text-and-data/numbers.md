@@ -209,6 +209,8 @@ The text of a format string with one argument for each conversion, as Ruby's `fo
 
 The flag `0` pads a number with zeros after its sign, and `-` pads on the right with spaces; without a flag the padding is spaces on the left. `width` is 1 to 1000 and counts characters, as `String.length` does. An `Int` for `%f` is not converted: write `n.to_f`.
 
+Two outputs differ from Ruby: `%x` of a negative number is `-ff` where Ruby writes `..f01`, and `%s` of `nil` is `nil` where Ruby writes an empty string. `%f` rounds an exact tie, such as `format("%.1f", -1.25)`, to even (`-1.2`), except on Windows 10 before version 2004, whose C library rounds it away from zero (`-1.3`).
+
 The format must be a `"..."` string literal on one line, which the checker reads: a conversion it does not know (`%X`, `%e`, the flags `+`, space and `#`, a precision on `d`, `x` or `s`) is `CHECK-FORMAT-SPEC` at that conversion, another first argument is `CHECK-FORMAT-LITERAL`, the wrong number of arguments is `CHECK-ARITY`, and an argument of the wrong type is `CHECK-TYPE-MISMATCH`. A format whose conversions are all a plain `%s` or `%d` is `CHECK-FORMAT-SPEC` too: write `"#{x}"`.
 
 ```agentica

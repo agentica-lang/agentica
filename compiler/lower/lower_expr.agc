@@ -127,7 +127,7 @@ def lower_call(
       end
   end
 
-  if node.name == "format" and !cx.functions.has_key?("format")
+  if node.name == "format"
     out = try lower_format(cx, fx, node, want)
     return ok(out.with(fx: Lowering.emit_at(out.fx, "return", [out.slot], node.span))) if tail
 

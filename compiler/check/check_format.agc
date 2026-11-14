@@ -26,7 +26,7 @@ def check_format(cx: State.Cx, st: State.St, node: Ast.Call) -> Result[State.Out
     )
   end
 
-  text = try literal_text(cx, st, node.args[0])
+  text = try literal_text(cx, st, node)
   parsed = Spec.parse(text.value)
   if parsed.message != ""
     return error(State.fail(cx, st, "CHECK-FORMAT-SPEC", parsed.message, inside(text, parsed.start, parsed.stop)))
@@ -34,12 +34,17 @@ def check_format(cx: State.Cx, st: State.St, node: Ast.Call) -> Result[State.Out
 
   conversions = converts(parsed.pieces)
   if conversions.all? do |c: Spec.Conversion| Spec.bare?(c) end
+    message = "this format only puts values in the text; format is for a width, a precision, a flag or hex"
+    if conversions.size == 0
+      message = "this format has no conversion; format is for a width, a precision, a flag or hex"
+    end
+
     return error(
       State.fail_help(
         cx,
         st,
         "CHECK-FORMAT-SPEC",
-        "this format only puts values in the text; format is for a width, a precision, a flag or hex",
+        message,
         text.span,
         "use interpolation: #{interpolated(cx, parsed.pieces, node.args)}",
       ),
@@ -104,12 +109,20 @@ struct Literal
   offsets: List[Int]
 end
 
-def literal_text(cx: State.Cx, st: State.St, arg: Ast.Expr) -> Result[Literal]
+def literal_text(cx: State.Cx, st: State.St, node: Ast.Call) -> Result[Literal]
+  arg = node.args[0]
   span = Ast.expr_span(arg)
   value = text_value(arg)
   if value.none?
     message = "the format of format(...) must be a string literal"
-    return error(State.fail_help(cx, st, "CHECK-FORMAT-LITERAL", message, span, LITERAL_HELP))
+    help = LITERAL_HELP
+    if node.piped
+      help = "|> passes its value as the first argument, the format string; write format(\"...\", value)"
+    elsif interpolated?(arg)
+      message = "the format of format(...) must be a string literal without \#{...}"
+    end
+
+    return error(State.fail_help(cx, st, "CHECK-FORMAT-LITERAL", message, span, help))
   end
 
   source = cx.texts.get(cx.file).unwrap_or("")
@@ -132,6 +145,13 @@ def text_value(arg: Ast.Expr) -> Optional[String]
       end
 
     _ -> none
+  end
+end
+
+def interpolated?(arg: Ast.Expr) -> Bool
+  case arg
+    Ast.Expr.Interpolation(_) -> true
+    _ -> false
   end
 end
 
