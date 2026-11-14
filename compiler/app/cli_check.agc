@@ -7,18 +7,20 @@ import DiagnosticJson from "../diagnostics/diagnostic_json"
 import Problems from "../diagnostics/problem"
 
 ## What checking one file gave. `file` is the path as it was typed or listed. A `Failed` problem is already named by
-## `file`.
+## `file`. `Skipped` is a file that did not check because a file it imports has a problem that the run shows once, at
+## the second name.
 enum Entry
   Passed(String)
   Unreadable(String)
   Failed(String, Problems.Problem)
+  Skipped(String, String)
 end
 
 ## The usage line of `agentica check`.
 def usage() -> String = USAGE
 
 ## The number of files that did not pass.
-def failures(entries: List[Entry]) -> Int = entries.size - entries.select(&passed?).size
+def failures(entries: List[Entry]) -> Int = entries.select(&failed?).size
 
 ## The exit status of a run: 2 when a file could not be read (a QUERY- problem), else 1 when a file failed, else 0.
 def status(entries: List[Entry]) -> Int
@@ -83,6 +85,7 @@ def json_entry(entry: Entry) -> Map[String, JSON.Value]
       {"file": JSON.from(file), "ok": JSON.from(false), "diagnostic": DiagnosticJson.json(Core.unreadable(file))}
     Entry.Failed(file, problem) ->
       {"file": JSON.from(file), "ok": JSON.from(false), "diagnostic": DiagnosticJson.json(problem)}
+    Entry.Skipped(file, imported) -> {"file": JSON.from(file), "ok": JSON.from(false), "imports": JSON.from(imported)}
   end
 end
 
@@ -91,13 +94,15 @@ def unreadable?(entry: Entry) -> Bool
     Entry.Unreadable(_) -> true
     Entry.Passed(_) -> false
     Entry.Failed(_, _) -> false
+    Entry.Skipped(_, _) -> false
   end
 end
 
-def passed?(entry: Entry) -> Bool
+def failed?(entry: Entry) -> Bool
   case entry
-    Entry.Passed(_) -> true
-    Entry.Unreadable(_) -> false
-    Entry.Failed(_, _) -> false
+    Entry.Passed(_) -> false
+    Entry.Skipped(_, _) -> false
+    Entry.Unreadable(_) -> true
+    Entry.Failed(_, _) -> true
   end
 end

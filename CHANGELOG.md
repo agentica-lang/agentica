@@ -8,6 +8,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- `agentica check` over several files shows a problem of an imported file once, and counts it once (#1566).
+
 ## [0.32.0-alpha.1] - 2026-11-14
 
 ### Added
