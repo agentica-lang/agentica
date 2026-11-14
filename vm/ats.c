@@ -1,6 +1,6 @@
 /*
  * ATS[K, V], the shared tables (docs/grammar/06c-tasks-and-tests.md, "Shared tables"): ATS.new, put, put_new, get,
- * has_key?, delete, add, size, keys and to_map. A table is one atomic pointer to an immutable state: two persistent
+ * has_key?, delete, clear, add, size, keys and to_map. A table is one atomic pointer to an immutable state: two persistent
  * AVL trees over the same entries, one ordered by key for the lookups and one by insertion number for the snapshots
  * in first-insertion order. A reader loads the pointer; a writer builds the next state from the one it loaded and
  * installs it with compare-and-swap, so each call is atomic on any scheduler without a lock
@@ -256,6 +256,13 @@ static agc_value builtin_delete(agc_vm *vm, agc_value *args, uint32_t span) {
 
 static agc_value builtin_add(agc_vm *vm, agc_value *args, uint32_t span) { return update(vm, args, span, CHANGE_ADD); }
 
+/* One store, whatever the size: the old state goes to the collector. A writer that built on it loses its CAS and
+   builds again on the empty state. */
+static agc_value builtin_clear(agc_vm *vm, agc_value *args, uint32_t span) {
+  atomic_store_explicit(&table_arg(vm, args[0], span)->current, &empty_state, memory_order_release);
+  return agc_void();
+}
+
 static agc_value builtin_get(agc_vm *vm, agc_value *args, uint32_t span) {
   table *t = table_arg(vm, args[0], span);
   const node *found = find(vm, load(t)->by_key, key_arg(vm, args[1]));
@@ -349,6 +356,7 @@ const agc_builtin agc_ats_builtins[] = {
   {"ATS.get", 2, builtin_get, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
   {"ATS.has_key?", 2, builtin_has_key, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
   {"ATS.delete", 2, builtin_delete, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
+  {"ATS.clear", 1, builtin_clear, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
   {"ATS.add", 3, builtin_add, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
   {"ATS.size", 1, builtin_size, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
   {"ATS.keys", 1, builtin_keys, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},

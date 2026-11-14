@@ -46,9 +46,7 @@ def table_get(table: ATS[String, String], key: String) -> Optional[String]
 end
 
 def table_clear(table: ATS[String, String]) -> Void
-  for key in table.keys
-    table.delete(key)
-  end
+  table.clear
 end
 
 # A cache of our own over one table, with no limit: it shows that the helpers need only the struct.
@@ -102,13 +100,14 @@ def churn(job: Job) -> Int
   return wrong
 end
 
-# The clock of the takeover test: key 0 of `now` is the time. Once key 1 is set, the second read moves the time past
+# The clock of the takeover test: key 0 of `now` is the time. Once key 1 is set, the fourth read moves the time past
 # the two-second lease of a rotation and has another task put the keys young1 to young5. It depends on the order in
-# which the cache reads its clock: the first read is the claim of a rotation and the second its beat after 1024
-# deletes, so the rotation is taken over in its middle: the new owner publishes, and the young keys go into the
-# generation it published while the old owner is still emptying.
+# which the cache reads its clock in a put that rotates: the lookup, the age of the generation, the claim of the
+# rotation and then the start of the next generation, which the owner reads after it emptied the slot and before it
+# publishes. So the rotation is taken over in its middle: the new owner publishes, and the young keys go into the
+# generation it published while the old owner still holds the rotation.
 def takeover_clock(now: ATS[Int, Int], holder: Channel[Cache.Store]) -> Int
-  if now.get(1).unwrap_or(0) == 1 and now.add(3, 1) == 2
+  if now.get(1).unwrap_or(0) == 1 and now.add(3, 1) == 4
     now.put(2, 1)
     tick(now, 3_000)
     cache = holder.recv(0).unwrap!
@@ -359,8 +358,12 @@ def main() -> Void
     Test.test("a rotation taken over in the middle leaves the entries of the new generation counted and removable") do
       now = clock()
       holder: Channel[Cache.Store] = Channel.new(1)
-      # 1030 entries a generation, so the rotation that drops the first one beats before it is done.
-      options = Cache.Options(max_entries: 2_060, clock: some(-> { takeover_clock(now, holder) }))
+      # 1030 entries a generation, and a time to live that nothing reaches, so the owner reads the clock in its middle.
+      options = Cache.Options(
+        max_entries: 2_060,
+        ttl_ms: 1_000_000_000,
+        clock: some(-> { takeover_clock(now, holder) }),
+      )
       cache = Cache.memory(10_000_000, options)
       _ = holder.send(cache, 0)
       for n in 0...3_090

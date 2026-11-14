@@ -1,4 +1,5 @@
 ATS.add AtsCall
+ATS.clear AtsCall
 ATS.delete AtsCall
 ATS.get AtsCall
 ATS.has_key? AtsCall

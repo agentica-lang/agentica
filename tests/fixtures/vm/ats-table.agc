@@ -34,4 +34,13 @@ def main() -> Void
   same.delete(30)
   IO.inspect(numbers.to_map)
   IO.inspect(holder)
+  t.clear
+  t.clear
+  IO.inspect(t.size)
+  IO.inspect(t.has_key?("a"))
+  IO.inspect(t.to_map)
+  t.put("z", 1)
+  t.put("a", 2)
+  IO.inspect(t.keys)
+  IO.inspect(numbers.size)
 end
