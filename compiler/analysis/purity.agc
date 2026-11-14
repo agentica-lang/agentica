@@ -206,7 +206,7 @@ def named(program: Program, direct: Direct, name: String, span: Source.Span, arg
       end
 
       # A terminal of a Lazy runs the source and the steps that made it, which the caller may have built.
-      if name.start_with?("Lazy.") and !lazy?(builtin.result)
+      if (name.start_with?("Lazy.") or name.start_with?("__lazy_")) and !lazy?(builtin.result)
         made = with_reason(made, FUNCTION_VALUE, name, span)
       end
 
