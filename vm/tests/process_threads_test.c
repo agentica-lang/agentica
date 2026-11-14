@@ -275,6 +275,24 @@ static void test_a_poll_given_up_keeps_the_child_and_the_next_line(void) {
   settle();
 }
 
+/* A poll's task is cancelled after `finish` cut its line: the drop gives the line back, so the next poll reads it. */
+static void test_a_poll_cancelled_after_its_line_gives_the_line_back(void) {
+  assert(agc_io_share(&vm, false));
+  captured("printf 'first\\r\\nsecond\\n'; exec sleep 60");
+  calling polling = call(one, "Process.poll_line", 2, child, agc_int(60000), agc_void(), agc_void());
+  assert(start(&polling));
+  wait_woken(&polling);
+  on_thread(detach_one, NULL);
+  end_detached_job();
+  agc_value bytes = ok_of(step(call(one, "Process.read_bytes.bytes", 3, child, agc_int(7), agc_int(5000), agc_void())));
+  size_t len = 0;
+  const uint8_t *data = agc_bytes_data(&vm, bytes, &len);
+  assert(len == 7 && memcmp(data, "first\r\n", 7) == 0);
+  assert(is_text(ok_of(poll_line(5000)), "second"));
+  close_child();
+  settle();
+}
+
 /* A task parked in a wait is cancelled, then the deadline passes. A scheduler finds the job still waiting and posts
    its cancel; the I/O thread stops the wait (the cancel half, at the deadline), the job comes back dropping, and a
    scheduler ends it with `drop`, which runs on the I/O thread. The child is closed after. */
@@ -366,6 +384,7 @@ int main(void) {
   test_a_wait_cancelled_past_its_deadline();
   test_a_poll_deadline_keeps_the_child_and_its_partial_line();
   test_a_poll_given_up_keeps_the_child_and_the_next_line();
+  test_a_poll_cancelled_after_its_line_gives_the_line_back();
   test_the_channel_through_posted_steps();
   test_a_spawn_in_a_callback();
 #endif

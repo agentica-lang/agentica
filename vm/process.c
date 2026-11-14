@@ -847,11 +847,13 @@ static bool stops_child(req_kind kind) {
   return kind == REQ_LINE || kind == REQ_BYTES || kind == REQ_AVAILABLE || kind == REQ_SEND || kind == REQ_SPAWN;
 }
 
-/* A poll_line keeps the child at its timeout. When its task gave it up after `finish` had cut a line, the line goes
-   back to the front of stdout with its ending, so the next read finds it. */
+/* A poll_line keeps the child when its task gives it up (a timeout or a cancel). When `finish` had cut a line by then,
+   the line goes back to the front of stdout with its ending, so the next read finds it. Until then a captured child's
+   Process.output does not hold that line. */
 static void give_back(request *q) {
   agc_inbuf_cut *cut = &q->cut;
-  if (cut->status != AGC_CUT_DATA || q->closed || q->over) return;
+  const proc *p = q->p;
+  if (cut->status != AGC_CUT_DATA || p->closed || p->out_cut || p->err_cut) return;
   const uint8_t *ending = (const uint8_t *)"\r\n";
   size_t ending_len = cut->taken - cut->len;
   if (!agc_inbuf_unread(&q->p->out_buf, ending + 2 - ending_len, ending_len) ||
@@ -901,7 +903,13 @@ static bool request_cancel(agc_vm *vm, void *data, agc_value context, bool deadl
   (void)context;
   request *q = data;
   q->detached = true;
-  return deadline && q->kind != REQ_SEND;
+  if (q->kind != REQ_POLL) return deadline && q->kind != REQ_SEND;
+  /* Here, before a read that the canceller starts next, so the line keeps its place. */
+  if (q->finished)
+    give_back(q);
+  else if (q->counted)
+    unlink_request(q);
+  return true;
 }
 
 static const agc_io_kind process_io = {NULL,           request_done, request_expired, drop_request, true, "process",
@@ -1110,7 +1118,8 @@ static void alloc_kept(proc *p, agc_inbuf *b, bool cut, uv_buf_t *buf) {
 }
 
 static void keep_scratch(proc *p, agc_inbuf *b, bool *cut, size_t n, const char *pipe) {
-  size_t left = LIMIT - agc_inbuf_pending(b);
+  size_t pending = agc_inbuf_pending(b);
+  size_t left = pending >= LIMIT ? 0 : LIMIT - pending;
   size_t kept = n < left ? n : left;
   uint8_t *to = kept ? agc_inbuf_room(b, kept) : NULL;
   if (to) {
