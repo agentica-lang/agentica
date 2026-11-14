@@ -8,6 +8,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- `List.uniq` takes `Bytes` items, as `Set.new` does (#1577).
+
 ## [0.32.0-alpha.1] - 2026-11-14
 
 ### Added
