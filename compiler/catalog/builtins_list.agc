@@ -71,6 +71,19 @@ ROWS: List[Model.Builtin] = [
     alternatives: [],
   ),
   Model.Builtin(
+    name: "List.count",
+    parameters: [
+      Model.Named(name: "list", type: Types.Type.List(Types.Type.Var("A"))),
+      Model.Named(name: "block", type: Types.Type.Fn([Types.Type.Var("A")], Types.Type.Bool)),
+    ],
+    result: Types.Type.Int,
+    rule: Model.Rule.Prelude,
+    implementation: "",
+    effects: [],
+    description: "The number of elements block accepts; calls block once per element; O(n).",
+    alternatives: [],
+  ),
+  Model.Builtin(
     name: "List.drop",
     parameters: [
       Model.Named(name: "list", type: Types.Type.List(Types.Type.Var("T"))),

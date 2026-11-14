@@ -17,6 +17,16 @@ def find(list: List[A], block: Fn[A, Bool]) -> Result[A]
   error("not found")
 end
 
+def count(list: List[A], block: Fn[A, Bool]) -> Int
+  total = 0
+  for item in list
+    if block.call(item)
+      total += 1
+    end
+  end
+  total
+end
+
 def find_index(list: List[A], block: Fn[A, Bool]) -> Optional[Int]
   index = 0
   for item in list

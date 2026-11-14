@@ -440,13 +440,18 @@ def test_an_unknown_method_suggests_the_ruby_method(tmp_path):
                                   ('"a".includes("a")', "include?"), ('"a".include("a")', "include?"),
                                   ("xs.contains?(1)", "any?"), ("(1..3).drop(1)", "to_a"),
                                   ('"abc".take(2)', "join"), ('"abc".drop(1)', "join"),
-                                  ("xs.count do |x| x > 1 end", "select"), ("xs.count", "select"),
                                   ('"abc".count("a")', "split")]:
         source = ("def main() -> Void\n  xs: List[Int] = [1]\n  m: Map[String, Int] = {}\n"
                   "  r: Result[Int] = ok(1)\n  puts(%s)\nend\n\n" % expression)
         found = check_diagnostic(source, tmp_path)
         assert found["code"] == "CHECK-UNKNOWN-METHOD", expression
         assert suggested in found["help"], expression
+
+
+def test_count_without_a_block_points_to_size(tmp_path):
+    source = "def main() -> Void\n  xs: List[Int] = [1]\n  puts(xs.count)\nend\n"
+    found = check_diagnostic(source, tmp_path)
+    assert found["code"] == "CHECK-ARITY" and "xs.size" in found["help"]
 
 
 def test_new_diagnostics_retain_their_codes_across_the_three_printers(program):
