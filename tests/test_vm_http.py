@@ -1885,3 +1885,135 @@ def test_serve_keeps_a_connection_only_for_a_body_that_arrived_and_upgrades_only
     assert vm.next_line() == "closed 1006"
     finish_serve(vm)
     assert "http: invalid response: an upgrade before the request body was read" in vm.stderr_text()
+
+
+SHUTDOWN_PROGRAM = """\
+import HTTP from "std/http"
+
+def handle(request: HTTP.Request) -> Result[HTTP.Response]
+  if request.path == "/slow"
+    Task.sleep(1500)
+  elsif request.path == "/stuck"
+    Task.sleep(60000)
+  elsif request.path == "/crash"
+    puts([1][5])
+  end
+  ok(HTTP.Response(status: 200, headers: [], body: "done #{request.path}".bytes))
+end
+
+def produce(pieces: Channel[Bytes]) -> Void
+  Task.sleep(300)
+  _ = pieces.send("streamed".bytes, 1000)
+  pieces.close
+end
+
+# /stream answers after 600 ms with a stream whose piece comes 300 ms later.
+def route(request: HTTP.Request, body: HTTP.RequestBody) -> Result[HTTP.Answer]
+  return HTTP.app(&handle).call(request, body) if request.path != "/stream"
+  Task.sleep(600)
+  pieces: Channel[Bytes] = Channel.new(1)
+  _ = Task.spawn(&produce, pieces)
+  ok(HTTP.Answer.Stream(HTTP.StreamResponse(status: 200, headers: [], body: pieces, length: none)))
+end
+
+def stop_too(server: HTTP.Server) -> String
+  Task.sleep(100)
+  HTTP.shutdown(server, 60000)
+  "second call returned"
+end
+
+def main() -> Void
+  server = HTTP.serve("127.0.0.1", 0, &route).unwrap!
+  puts(HTTP.local_port(server))
+  IO.flush()
+  timeout_ms = gets().unwrap!.strip.to_i!
+  second = Task.spawn(&stop_too, server)
+  started = Time.monotonic_ms()
+  HTTP.shutdown(server, timeout_ms)
+  puts("stopped after #{Time.monotonic_ms() - started} ms")
+  puts(Task.await(second))
+end
+"""
+
+
+def refused(port):
+    """Whether a new connection to `port` is refused, within a few seconds of the stop."""
+    deadline = time.monotonic() + scaled(5)
+    while time.monotonic() < deadline:
+        try:
+            socket.create_connection(("127.0.0.1", port), timeout=scaled(2)).close()
+        except ConnectionRefusedError:
+            return True
+        time.sleep(0.02)
+    return False
+
+
+def start_shutdown(tmp_path, adopt):
+    vm = adopt(start_vm(compile_text(SHUTDOWN_PROGRAM, "shutdown", tmp_path), stdin=True))
+    return vm, int(vm.next_line())
+
+
+def stop_in(vm, timeout_ms):
+    vm.process.stdin.write(b"%d\n" % timeout_ms)
+    vm.process.stdin.flush()
+
+
+def stopped_ms(vm, exit_code=0):
+    """The time the first shutdown took; the second call, made while the first drains, returns after it."""
+    stopped = vm.next_line()
+    assert stopped.startswith("stopped after "), stopped
+    assert vm.next_line() == "second call returned"
+    assert vm.wait() == exit_code
+    return int(stopped.split()[2])
+
+
+def test_shutdown_drains_the_requests_in_flight_and_closes_idle_connections_at_once(tmp_path, adopt):
+    """HTTP.shutdown: a slow request and a stream in flight finish with `Connection: close`, a kept-alive idle
+    connection and one that never sent a request close at once, and a new connection is refused; a second call made
+    while the first drains returns when the server is closed."""
+    vm, port = start_shutdown(tmp_path, adopt)
+    # The busy connections come first: the drain must not wait for them before it closes the idle ones.
+    slow = http.client.HTTPConnection("127.0.0.1", port, timeout=scaled(10))
+    slow.request("GET", "/slow")
+    stream = http.client.HTTPConnection("127.0.0.1", port, timeout=scaled(10))
+    stream.request("GET", "/stream")
+    time.sleep(0.1)
+    idle = socket.create_connection(("127.0.0.1", port), timeout=scaled(10))
+    idle.sendall(b"GET /fast HTTP/1.1\r\nHost: x\r\n\r\n")
+    head, rest = raw_answer(idle, False)
+    while len(rest) < len(b"done /fast"):
+        rest += idle.recv(65536)
+    assert b"connection: close" not in head, head
+    fresh = socket.create_connection(("127.0.0.1", port), timeout=scaled(10))
+    time.sleep(0.1)
+    stop_in(vm, 10000)
+    started = time.monotonic()
+    assert idle.recv(65536) == b"" and fresh.recv(65536) == b""
+    assert time.monotonic() - started < scaled(1.0), "the idle connections close before the slow request ends"
+    assert refused(port)
+    for conn, body in ((stream, b"streamed"), (slow, b"done /slow")):
+        response = conn.getresponse()
+        assert (response.status, response.read(), response.getheader("Connection")) == (200, body, "close")
+    assert stopped_ms(vm) < 5000
+    for conn in (idle, fresh, slow, stream):
+        conn.close()
+
+
+def test_shutdown_cancels_a_stuck_handler_at_the_deadline(tmp_path, adopt):
+    vm, port = start_shutdown(tmp_path, adopt)
+    with socket.create_connection(("127.0.0.1", port), timeout=scaled(10)) as stuck:
+        stuck.sendall(b"GET /stuck HTTP/1.1\r\nHost: x\r\n\r\n")
+        time.sleep(0.2)
+        stop_in(vm, 300)
+        assert stuck.recv(65536) == b"", "the handler is cancelled and the connection closed without an answer"
+    assert 300 <= stopped_ms(vm) < 5000
+
+
+def test_shutdown_does_not_wait_for_a_connection_whose_handler_crashed(tmp_path, adopt):
+    vm, port = start_shutdown(tmp_path, adopt)
+    with socket.create_connection(("127.0.0.1", port), timeout=scaled(10)) as crashed:
+        crashed.sendall(b"GET /crash HTTP/1.1\r\nHost: x\r\n\r\n")
+        assert crashed.recv(65536) == b""
+    stop_in(vm, 10000)
+    assert stopped_ms(vm, exit_code=1) < 5000, "the crash ended its connection"
+    assert "RUNTIME-INDEX-OUT-OF-RANGE" in vm.stderr_text()

@@ -13,6 +13,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `System.subscribe([System.Signal.Term, System.Signal.Int])` gives a channel
   that receives those signals instead of letting them stop the program, and
   `System.signal_number` gives a signal's number (#1477).
+- `HTTP.shutdown(server, timeout_ms)` stops a server gracefully: it stops
+  accepting, lets the requests in flight finish up to the deadline (30 s by
+  default), then closes what is left (#1479).
 - `agentica help File.Info` prints a builtin type with its fields or variants,
   and `agentica help --json` lists the builtin types too, each with a `kind`
   (#1532).

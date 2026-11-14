@@ -2,8 +2,10 @@
 
 Issue #991 (one issue per phase). 46a (subscribing, `System.subscribe`, #1477)
 is built: `site/content/library/io-and-system/system.md` and
-`docs/vm/10-io-scheduler.md` §10.2.2. This file keeps the design of 46b and
-46d. Linux first.
+`docs/vm/10-io-scheduler.md` §10.2.2. 46d (the graceful HTTP stop,
+`HTTP.shutdown`, #1479) is built:
+`site/content/library/io-and-system/network.md` and `docs/vm/10-io-http.md`.
+This file keeps the design of 46b. Linux first.
 
 The owner asked for a way to catch the OS stop signal in an Agentica program. A
 container entrypoint should stop its child, run cleanup and exit with the right
@@ -24,9 +26,7 @@ running as PID 1 stays a zombie (`docker run --init` avoids this).
    group if it is late, runs cleanup (which may spawn a process or make an HTTP
    call), and exits with the right code.
 2. **A graceful HTTP server stop.** Stop accepting, and let the requests in
-   flight finish within a deadline. Today `HTTP.close_server` closes every
-   connection and cancels the handlers. A drain is a separate change in
-   `std/http` (46d).
+   flight finish within a deadline: `HTTP.shutdown` (46d, built).
 3. **A CLI that cleans temp files on Ctrl-C:** subscribe to INT, clean up, exit
    130.
 4. **No program code in a C signal handler.** The handler only records the
@@ -119,5 +119,3 @@ takes the default path.
 - **46b: sending.** `Process.signal`, `spawn_group`, `signal_group` and
   `System.signal`, with the pidfd probe and `--deny-run`; the group close and
   the end-of-run group kill.
-- **46d: graceful HTTP stop.** A drain in `std/http` (stop accepting, wait for
-  the handlers up to a deadline), in Agentica, after 46b by the owner's order.
