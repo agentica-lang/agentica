@@ -610,7 +610,9 @@ struct Effects
   now: Fn[Int]
 end
 
-def real_effects() -> Effects = Effects(read_file: ->(path: String) { File.read_text(path) }, now: -> { Time.now_ms() })
+def real_effects() -> Effects
+  Effects(read_file: ->(path: String) { File.read_text(path) }, now: -> { Time.now_ms() })
+end
 
 def banner(effects: Effects, path: String) -> Result[String]
   name = try effects.read_file.call(path)
@@ -622,7 +624,7 @@ def main() -> Void
     Test.test("banner reads the name and the clock") do
       fake = Effects(read_file: ->(_path) { ok("agentica\n") }, now: -> { 42 })
       Test.eq(banner(fake, "name.txt"), ok("agentica at 42"))
-    end
+    end,
   ])
 end
 ```
