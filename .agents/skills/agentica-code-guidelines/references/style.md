@@ -182,3 +182,11 @@ def double_text(text: String) -> Result[Int]
   ok(n * 2)
 end
 ```
+
+## Effects
+
+A test swaps an effect (file, clock, HTTP, random) through a struct of `Fn`
+fields: the effects record. Build the real one once at startup, a test builds
+another; the checker keeps both the same shape. Reference: `Workspace`
+(`compiler/modules/workspace.agc`), built by `compiler/io/host.agc`. Example:
+`site/content/style.md`, section Effects.

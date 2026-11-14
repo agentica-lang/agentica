@@ -600,6 +600,35 @@ A `String` that grows by `+` in a loop is copied on every pass, so the loop is q
 
 Use a `List` for order, a `Set` for membership, a `Map` for lookup by key, and a struct for a record with known fields.
 
+## Effects
+
+Agentica has no monkey patching and a function is not a value, but a lambda is, so a test swaps an effect (a file read, the clock, an HTTP call, a random number) through a struct of `Fn` fields: the effects record. Build the real one once, at startup, from the configuration; a test builds another. The checker makes sure both have the same shape. The compiler does this with `Workspace` (`compiler/modules/workspace.agc`), which `io/host.agc` builds and `app/` passes in. It plays the part of a behaviour plus a mock in other languages. Where a real server on `localhost` port 0 is as simple, use it instead of faking the network.
+
+```agentica {mode="check"}
+struct Effects
+  read_file: Fn[String, Result[String]]
+  now: Fn[Int]
+end
+
+def real_effects() -> Effects
+  Effects(read_file: ->(path: String) { File.read_text(path) }, now: -> { Time.now_ms() })
+end
+
+def banner(effects: Effects, path: String) -> Result[String]
+  name = try effects.read_file.call(path)
+  ok("#{name.strip} at #{effects.now.call()}")
+end
+
+def main() -> Void
+  Test.run([
+    Test.test("banner reads the name and the clock") do
+      fake = Effects(read_file: ->(_path) { ok("agentica\n") }, now: -> { 42 })
+      Test.eq(banner(fake, "name.txt"), ok("agentica at 42"))
+    end,
+  ])
+end
+```
+
 ## Check your code
 
 `agentica fmt` fixes the layout and `agentica check` refuses what is always a mistake. `agentica lint` suggests the rest of this guide that the syntax shows, and never fails the build unless you pass `--strict` (see [Suggest style changes](/cli/#suggest-style-changes)). Its rules, each with the part of the guide it comes from:

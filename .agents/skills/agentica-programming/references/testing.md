@@ -98,6 +98,9 @@ for a test function with parameters, type parameters or another result;
 - Test the functional core in process: feed request bytes to the function the
   server calls, pass the clock as an argument (no sleep), and compare laws to a
   `Map` model. One smoke test of the real binary covers the I/O loop.
+- To fake a file, the clock or a call, pass a struct of `Fn` fields (an
+  effects record: real one at startup, another in the test); see Effects in
+  `site/content/style.md`.
 
 ## Running tests
 
