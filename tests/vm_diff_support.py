@@ -852,7 +852,13 @@ def write_goldens():
                 continue
             fixture = Fixture.of(program)
             bytecode = compile_agc(program, work / (program.stem + ".agcb"))
-            total = total_steps(lambda limit: step_limited(run_fixture_vm(fixture, bytecode, limit, work)))
+            # The count of a kernel-timed fixture differs on every run and only scales its limits: the one already
+            # in the golden stays, so a rewrite changes the file only when the output does.
+            total = None
+            if program.name in KERNEL_TIMED_FIXTURES and expected_file(program).is_file():
+                total = read_golden(program).get("steps")
+            if total is None:
+                total = total_steps(lambda limit: step_limited(run_fixture_vm(fixture, bytecode, limit, work)))
             _save(program, run_fixture_vm(fixture, bytecode, None, work), total)
         for program in selected(runaway_programs()):
             bytecode = compile_agc(program, work / (program.stem + ".agcb"))
