@@ -1,4 +1,4 @@
-# Agentica bytecode VM: design
+# Agentica bytecode VM: design 
 
 The design of the C bytecode VM, which runs every program. The language does not
 change: `docs/grammar/` (index `docs/grammar.md`) stays the contract. The VM is
