@@ -11,6 +11,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 ### Fixed
 
 - `std/analysis`: `Analysis.bodies` gives the arguments of a call in the order they run, each `name: value` as a `named` node, and no `default` placeholders (#1594).
+- `r.error?` on a Result says that a Result has `ok?`, not to unwrap it (#1578).
 - `none` in a `map` block takes the Optional item of the expected list type (#1579).
 
 ## [0.32.0-alpha.1] - 2026-11-14
