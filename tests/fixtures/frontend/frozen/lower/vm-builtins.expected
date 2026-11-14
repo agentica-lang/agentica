@@ -19,7 +19,8 @@ Base64.strict_decode64.bytes
 Base64.strict_encode64.bytes
 Base64.urlsafe_decode64.bytes
 Base64.urlsafe_encode64.bytes
-BddRandom.srand
+BddScenario.srand
+BddScenario.uncount
 Bytes.at
 Bytes.concat
 Bytes.decode

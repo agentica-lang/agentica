@@ -38,7 +38,8 @@ static agc_value builtin_random_seed(agc_vm *vm, agc_value *args, uint32_t span)
   return agc_int((int64_t)vm->rt->seed);
 }
 
-/* BddRandom.srand (std/bdd only): this task's generator starts again from seed, as main's does under --seed (vm/launch.c). */
+/* BddScenario.srand (std/bdd only): this task's generator starts again from seed, as main's does under --seed
+   (vm/launch.c). */
 static agc_value builtin_random_srand(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   agc_random_seed(&vm->task->random, (uint64_t)agc_as_int(vm, args[0]));
@@ -332,7 +333,7 @@ const agc_builtin agc_number_builtins[] = {
   {"Random.int", 2, builtin_random_int, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false},
   {"Random.float", 0, builtin_random_float, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false},
   {"Random.seed", 0, builtin_random_seed, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false},
-  {"BddRandom.srand", 1, builtin_random_srand, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false},
+  {"BddScenario.srand", 1, builtin_random_srand, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false},
   {"Int.abs", 1, builtin_int_abs, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false},
   {"Int.pow", 2, builtin_int_pow, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false},
   {"Int.gcd", 2, builtin_int_gcd, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false},
