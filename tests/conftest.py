@@ -21,6 +21,7 @@ from tests.agentica_test import (
     TestCase,
     TestTimeout,
     cli,
+    forget_processes,
     run,
     scaled,
     tool,
@@ -65,6 +66,10 @@ def pytest_configure(config):
     assign_root(config)
     if hypothesis_settings is not None and SLOW and config.getoption("hypothesis_seed", None) is None:
         config.option.hypothesis_seed = str(random.randrange(2**32))
+
+
+def pytest_runtest_setup(item):
+    forget_processes()
 
 
 _property_collected = False

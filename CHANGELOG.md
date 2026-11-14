@@ -29,6 +29,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 ### Fixed
 
 - `JSON.parse` and `JSON.decode` keep the sign of `-0.0` (#1639).
+- `JSON.decode`, `JSON.schema` and `.codec` take a struct or enum whose field or payload type is a type alias, which stopped with `LOWER-UNSUPPORTED` (#1623).
 - `none` in the block of `Range.map`, `Lazy.map`, `flat_map` and a nested `map` takes the expected Optional type (#1595).
 
 ## [0.32.0-alpha.2] - 2026-11-14

@@ -164,14 +164,25 @@ def suite(tmp_path, files):
 
 
 def kill_at_end(cleanup, pids):
-    """Kill what a failing test would leave running; `pids` is called at the end, when the pids are known."""
+    """Kill what a failing test would leave running; `pids` is called at the end, when the pids are known. Each is a
+    pid and what says when it was alive: the file it was read from, or the time of the process list."""
     def kill():
-        for pid in pids():
+        for pid, since in pids():
             try:
-                kill_process(int(pid))
+                kill_process(int(pid), since)
             except (ProcessLookupError, ValueError):
                 pass
     cleanup(kill)
+
+
+def pid_in(file):
+    return [(file.read_text().strip(), file)] if file.exists() else []
+
+
+def listed(text):
+    """The processes that name `text` now, for kill_at_end."""
+    found = processes_mentioning(text)
+    return [(pid, time.time()) for pid in found]
 
 
 def test_live_json_replies_arrive_before_eof_and_recover_after_errors():
@@ -438,15 +449,15 @@ def test_a_step_runs_a_peer_with_spawn_captured_and_keep_beside_the_program_and_
         report = json_test(directory / "peer.feature", "--steps", directory / "steps.agc")
         assert [item["status"] for item in report_cases(report)] == ["passed"], str(report)
         pids.append(peer_pid.read_text())
-        assert wait_until(lambda: not process_alive(pids[0])), "the peer outlived its scenario"
+        assert wait_until(lambda: not process_alive(pids[0], peer_pid)), "the peer outlived its scenario"
         failed = json_test(directory / "failing.feature", "--steps", directory / "steps.agc")
         assert [item["status"] for item in report_cases(failed)] == ["failed"], str(failed)
         pids.append(peer_pid.read_text())
         assert pids[1] != pids[0]
-        assert wait_until(lambda: not process_alive(pids[1])), "the peer outlived its failed scenario"
+        assert wait_until(lambda: not process_alive(pids[1], peer_pid)), "the peer outlived its failed scenario"
     finally:
         for pid in pids:
-            kill_process(pid)
+            kill_process(pid, peer_pid)
 
 
 AFTER_STEPS = dedent("""\
@@ -620,11 +631,11 @@ def test_a_failed_scenario_leaves_no_process_of_its_program_behind(tmp_path, cle
                            'Then I receive the line "ready" within ' + ms(5000) + ' milliseconds\n'
                            "And the program exits with code 0 within 200 milliseconds\n")})
     pid_file = directory / "pid.txt"
-    kill_at_end(cleanup, lambda: [pid_file.read_text().strip()] if pid_file.exists() else [])
+    kill_at_end(cleanup, lambda: pid_in(pid_file))
     report = json_test(directory / "holder.feature")
     assert codes(report) == ["RUNTIME-BDD-TIMEOUT"]
     pid = pid_file.read_text().strip()
-    assert wait_until(lambda: not process_alive(pid), scaled(5)), pid
+    assert wait_until(lambda: not process_alive(pid, pid_file), scaled(5)), pid
 
 
 @host_only(WINDOWS, "a shared temporary folder is told apart by the sticky bit and group permission bits, and Windows has neither; the Windows runner assumes a private per-user %TEMP% (no shared-folder check there, by design)")
@@ -765,8 +776,7 @@ def test_killing_the_driver_stops_the_runner_the_scenario_vm_and_the_program_and
     # The runner, the VM and the program are not children of the test: kill them if the cleanup under test fails.
     pid_file = directory / "pid.txt"
     program_pid_file = directory / "program-pid.txt"  # Windows only: the holder writes its own pid
-    kill_at_end(cleanup, lambda: processes_mentioning(temporary) + [
-        file.read_text().strip() for file in (pid_file, program_pid_file) if file.exists()])
+    kill_at_end(cleanup, lambda: listed(temporary) + pid_in(pid_file) + pid_in(program_pid_file))
     driver = Child(cli() + ["test", directory / "holder.feature"], env=env)
     cleanup(driver.stop)
     assert wait_until(
@@ -780,13 +790,13 @@ def test_killing_the_driver_stops_the_runner_the_scenario_vm_and_the_program_and
     driver.process.kill()
     driver.process.wait(scaled(20))
     pid = pid_file.read_text().strip()
-    assert wait_until(lambda: not process_alive(pid), scaled(5)), pid
+    assert wait_until(lambda: not process_alive(pid, pid_file), scaled(5)), pid
     assert wait_until(lambda: not processes_mentioning(temporary), scaled(20))
     assert len(os.listdir(temporary)) == 1
     if os.name == "nt":
         # The VM that runs the program under test is gone too, not only the child it started.
         program_pid = program_pid_file.read_text().strip()
-        assert wait_until(lambda: not process_alive(program_pid), scaled(5)), program_pid
+        assert wait_until(lambda: not process_alive(program_pid, program_pid_file), scaled(5)), program_pid
         # Windows sweeps only folders a minute old, with locks of its own: the sweep is checked on folders made by hand
         # in test_a_run_removes_the_folder_of_an_ended_run_and_leaves_the_folder_of_a_live_one (tests/test_bdd.py).
         return
