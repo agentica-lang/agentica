@@ -15,6 +15,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- `agentica check` over several files shows a problem of an imported file once, and counts it once (#1566).
 - `std/analysis`: `Analysis.bodies` gives the arguments of a call in the order they run, each `name: value` as a `named` node, and no `default` placeholders (#1594).
 - `List.uniq` takes `Bytes` items, as `Set.new` does (#1577).
 - `r.error?` on a Result says that a Result has `ok?`, not to unwrap it (#1578).

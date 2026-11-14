@@ -10,7 +10,8 @@ the list of commands and flags.
   `--json` `{"ok":true}`, or the diagnostic). A folder, no path or several
   paths check every `.agc` file, print each failing file's first diagnostic and
   a count line, and exit 1 (2 if a file is unreadable); `--json` prints one
-  object `{ok, checked, failed, files}`. A folder skips hidden folders,
+  object `{ok, checked, failed, files}`. A problem of an imported file shows
+  once, not once per importer. A folder skips hidden folders,
   `agc_libs/`, `_build/`, the `deps/` of a project and symbolic links to files,
   as `symbol` does; `build/` is not skipped.
 - `agentica fmt` formats in place; a file that does not parse is left as it is
