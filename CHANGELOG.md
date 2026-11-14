@@ -10,6 +10,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- `r.error?` on a Result says that a Result has `ok?`, not to unwrap it (#1578).
 - `none` in a `map` block takes the Optional item of the expected list type (#1579).
 
 ## [0.32.0-alpha.1] - 2026-11-14
