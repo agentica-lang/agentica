@@ -9,11 +9,28 @@
 
 #include <inttypes.h>
 
-/* Locking: rt->sync protects every heap. A heap is armed and fired by its own scheduler, but a removal can come from
-   any scheduler (the task resumes on whichever pops it), and the fire and the resume exclude each other under the
-   lock, so a fire never wakes a task that has left the wait. When rt->sync is split, a removal from another scheduler
-   becomes lazy (the CAS of the state decides, the owner drops the dead entry when it pops it and rebuilds the heap
-   when the dead entries are twice the live ones); until then the entry is removed at once, in O(log n). */
+#define COARSE_WAIT_MS 1000
+
+/* Locking: each heap has its own lock, which exists once the VM is shared (agc_timers_share). A heap is armed and
+   fired by its own scheduler, but a removal can come from any scheduler (the task resumes on whichever pops it). The
+   fire holds the lock across the pop and the wake, and the resume takes the lock of the heap the task armed
+   (`timer.home`) whether or not the entry is still there, so a fire never wakes a task that has left the wait.
+   Nothing raises under the lock. Order: rt->sync, then a heap's lock, then the run queue's. */
+CC_ACQUIRES(h->lock->mutex) static void take(agc_vm *vm, agc_timers *h) {
+  if (__builtin_expect(vm->rt->shared, 0)) agc_lock_take_shared(h->lock);
+}
+
+CC_RELEASES(h->lock->mutex) static void drop(agc_vm *vm, agc_timers *h) {
+  if (__builtin_expect(vm->rt->shared, 0)) agc_lock_drop_shared(h->lock);
+}
+
+void agc_timers_share(agc_vm *vm) {
+  if (vm->timers.lock) return;
+  agc_lock *l = agc_lock_new("timers");
+  l->spin = vm->rt->sync->spin;
+  agc_lock_share(l);
+  vm->timers.lock = l;
+}
 
 static bool before(const agc_task *a, const agc_task *b) {
   if (a->timer.deadline != b->timer.deadline) return a->timer.deadline < b->timer.deadline;
@@ -61,11 +78,11 @@ static uint64_t remaining(uint64_t deadline) {
 /* Checks that T may wait on a timer and counts it as armed. A timer is counted as armed before it is counted as weak
    (agc_timers_strong reads them in the other order). */
 static void claim(agc_vm *vm, agc_task *t) {
-  agc_sync_assert(vm);
   if (t->timer.heap) agc_fail(vm, "RUNTIME-INTERNAL", "a task armed two timers", 0);
   /* A job carries its own deadline, and `resume` takes a job's result before it looks at the timer. */
   if (t->parked) agc_fail(vm, "RUNTIME-INTERNAL", "a task parked on a job armed a timer", 0);
   t->timer.timed = true;
+  t->timer.home = &vm->timers;
   atomic_fetch_add_explicit(&vm->rt->timers_armed, 1, memory_order_relaxed);
   if (t->weak_timers) atomic_fetch_add_explicit(&vm->rt->timers_weak, 1, memory_order_relaxed);
 }
@@ -92,9 +109,18 @@ static void insert(agc_vm *vm, agc_timers *h, agc_task *t, uint64_t deadline) {
   AGC_TRACE(&vm->rt->trace, AGC_TRACE_SCHED, "timer_arm task=%" PRIu64 " in_ms=%" PRIu64, t->id, remaining(deadline));
 }
 
-/* Starts the clock of this scheduler's pending wait, with rt->sync held. A task still parked gets its deadline from
-   *NOW, read here once if the caller has not read it (0). A task that was woken already has its wake: its resume ends
-   the wait, so it needs no deadline and the entry is dropped, which is what spares the clock in a ping-pong. */
+/* The start of a wait of LENGTH ms: *NOW, read here once if the caller has not read it (0). A long wait starts at the
+   coarse clock plus its largest lag (clock_before), which reads no clock source: it ends late by at most that lag. */
+static uint64_t wait_start(uint64_t length, uint64_t *now) {
+  uint64_t coarse, tick;
+  if (!*now && length >= COARSE_WAIT_MS && agc_coarse_clock_ms(&coarse, &tick)) return coarse + 2 * tick + 2;
+  if (!*now) *now = agc_clock_ms();
+  return *now;
+}
+
+/* Starts the clock of this scheduler's pending wait, with the heap's lock held. A task that was woken already has its
+   wake: its resume ends the wait, so it needs no deadline and the entry is dropped, which is what spares the clock in
+   a ping-pong. */
 static void start_pending(agc_vm *vm, uint64_t *now) {
   agc_timers *h = &vm->timers;
   agc_task *t = atomic_load_explicit(&h->pending, memory_order_relaxed);
@@ -106,20 +132,20 @@ static void start_pending(agc_vm *vm, uint64_t *now) {
     unclaim(vm, t);
     return;
   }
-  if (!*now) *now = agc_clock_ms();
-  insert(vm, h, t, agc_deadline_ms(*now, t->timer.deadline));
+  insert(vm, h, t, agc_deadline_ms(wait_start(t->timer.deadline, now), t->timer.deadline));
 }
 
 static void arm(agc_vm *vm, agc_task *t, uint64_t deadline) {
   claim(vm, t);
+  take(vm, &vm->timers);
   insert(vm, &vm->timers, t, deadline);
+  drop(vm, &vm->timers);
 }
 
-/* Takes the entry out of whichever heap or pending slot holds it. A task that is not armed is left alone. */
-void agc_timers_disarm(agc_vm *vm, agc_task *t) {
+/* Takes the entry out of whichever heap or pending slot holds it, with the heap's lock held. */
+static void remove_entry(agc_vm *vm, agc_task *t) {
   agc_timers *h = t->timer.heap;
   if (!h) return;
-  agc_sync_assert(vm);
   t->timer.heap = NULL;
   if (t->timer.pending) {
     t->timer.pending = false;
@@ -137,6 +163,16 @@ void agc_timers_disarm(agc_vm *vm, agc_task *t) {
   }
   publish(h);
   unclaim(vm, t);
+}
+
+/* By the thread that runs or ends T. A task that armed no timer is left alone. */
+void agc_timers_disarm(agc_vm *vm, agc_task *t) {
+  agc_timers *h = t->timer.home;
+  if (!h) return;
+  take(vm, h);
+  remove_entry(vm, t);
+  drop(vm, h);
+  t->timer.home = NULL;
 }
 
 /* True when some armed timer is not a weak one (`weak_timers`, the tasks of an HTTP client's tree): the stall checks
@@ -168,11 +204,13 @@ void agc_task_park_within(agc_vm *vm, int64_t timeout_ms) {
   agc_timers *h = &vm->timers;
   claim(vm, t);
   uint64_t now = 0;
+  take(vm, h);
   start_pending(vm, &now);
   t->timer.deadline = (uint64_t)timeout_ms;
   t->timer.pending = true;
   t->timer.heap = h;
   atomic_store_explicit(&h->pending, t, memory_order_relaxed);
+  drop(vm, h);
   agc_task_park(vm, true);
 }
 
@@ -183,13 +221,13 @@ void agc_task_park_within(agc_vm *vm, int64_t timeout_ms) {
    such a run opens no file, process or socket. */
 int64_t agc_timeout_length(const agc_vm *vm, int64_t ms) { return vm->rt->no_files ? 0 : ms; }
 
-/* Starts the pending wait under rt->sync, and returns the clock it read, or 0. */
+/* Starts the pending wait, and returns the clock it read, or 0. */
 static uint64_t settle(agc_vm *vm) {
   uint64_t now = 0;
   if (!atomic_load_explicit(&vm->timers.pending, memory_order_relaxed)) return 0;
-  agc_sync_take(vm);
+  take(vm, &vm->timers);
   start_pending(vm, &now);
-  agc_sync_drop(vm);
+  drop(vm, &vm->timers);
   return now;
 }
 
@@ -218,16 +256,16 @@ bool agc_timers_run(agc_vm *vm) {
   if (!now) now = agc_clock_ms();
   if (now < due) return false;
   bool woke = false;
-  agc_sync_take(vm);
+  take(vm, h);
   while (h->count && h->items[0]->timer.deadline <= now) {
     agc_task *t = h->items[0];
-    agc_timers_disarm(vm, t);
+    remove_entry(vm, t);
     AGC_TRACE(&vm->rt->trace, AGC_TRACE_SCHED, "timer_fire task=%" PRIu64 " late_ms=%" PRIu64, t->id,
               now - t->timer.deadline);
     agc_task_wake(vm, t, "timer");
     woke = true;
   }
-  agc_sync_drop(vm);
+  drop(vm, h);
   return woke;
 }
 

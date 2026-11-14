@@ -29,8 +29,11 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   waiter list, a FIFO, or a job, which `agc_io_start_then` does), then
   `agc_task_park(vm, retry)`. `agc_task_unpark` undoes the mark when the builtin
   does not wait after all.
-- `rt->sync` covers the task tree, waiter lists, channels, `Task.map` groups,
-  the logger table, stdin and the FIFOs. Each output stream has its own lock.
+- `rt->sync` covers the task tree, waiter lists, `Task.map` groups, the logger
+  table, stdin and the FIFOs. Each output stream has its own lock, and so has
+  each channel (one of 64, by address) and each scheduler's timer heap: a send
+  or a receive takes no `rt->sync`. Nothing raises under a channel or heap
+  lock, and neither is held with the other (§16.9, "Channel and timer locks").
   The interpreter takes `rt->sync` around each builtin whose row has `shared`
   set, a stepper step, the halves of a job whose kind says `locked`, and each
   end of a task. `Native.call` runs C without it and pins its resources
@@ -52,9 +55,9 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   read on the loop thread, and a push that skipped its wake is followed by
   `agc_runq_kick` (`vm/core.h`), or the other schedulers sleep on.
 - A new builtin that touches shared state sets `shared` to true in its row.
-  `vm/tests/sync_test.c` checks that the task, `Task.map`, channel, logger,
-  process, duplex, TCP and HTTP rows are marked, that no String, number or JSON
-  row is, and some core and `File` rows.
+  `vm/tests/sync_test.c` checks that the task, `Task.map`, logger, process,
+  duplex, TCP and HTTP rows are marked, and the channel rows that need it,
+  that no String, number or JSON row is, and some core and `File` rows.
 - `vm/inbox.c`: the I/O thread's inbox (`agc_inbox_open`, `agc_inbox_post`,
   `agc_inbox_keep`, `agc_inbox_close`), a locked queue taken whole, with a
   `uv_async_t` that wakes the loop. It exists only at N > 1; at N = 1 a request
@@ -73,8 +76,9 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   before it sleeps. It is dropped if the task was woken first.
 - `agc_timers_run` (at turn boundaries and when idle) starts the clock and wakes
   the due tasks. `resume` and `unlink_task` remove the entry
-  (`agc_timers_disarm`). Every change is made with `rt->sync` held, by any
-  scheduler. The idle step (`idle_wait`) runs the loop until the nearest
+  (`agc_timers_disarm`). Every change is made with the heap's lock held, by any
+  scheduler. A pending wait of 1 s or more starts at the coarse clock plus its
+  lag, with no clock read. The idle step (`idle_wait`) runs the loop until the nearest
   deadline (`agc_io_run_for`), and `agc_runq_wait_until` does the same for a
   scheduler thread. Arm and disarm keep `rt->timers_armed`, which the N > 1
   stall check reads.
