@@ -98,6 +98,13 @@ for a test function with parameters, type parameters or another result;
 - Test the functional core in process: feed request bytes to the function the
   server calls, pass the clock as an argument (no sleep), and compare laws to a
   `Map` model. One smoke test of the real binary covers the I/O loop.
+- Property tests (a law checked on many generated inputs, shrunk to the
+  smallest failure, with a seed to replay) come from the `prop` package:
+  `agentica add prop https://github.com/agentica-lang/packages --tag
+  prop-X.Y.Z --subdir prop --group test` (the newest `prop-*` tag; docs:
+  <https://agentica-lang.github.io/packages/prop/>). Use one for parsers of
+  untrusted bytes, round trips (encode and decode), and lengths or option
+  values at their limits.
 - To fake a file, the clock or a call, pass a struct of `Fn` fields (an
   effects record: real one at startup, another in the test); see Effects in
   `site/content/style.md`.

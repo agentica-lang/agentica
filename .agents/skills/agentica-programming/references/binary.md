@@ -20,6 +20,11 @@ Binary.read_frame_length(data: Bytes, offset: Int, max: Int) -> Result[Int]
 
 - `_be` is big-endian (network order), `_le` little-endian; `u8` and `i8` have
   no suffix. Signed types use two's complement. `offset` is zero-based.
+- Int overflow halts the program (`RUNTIME-INTEGER-OVERFLOW`), so a length,
+  count or offset read from untrusted bytes is checked by subtraction
+  (`len > max - held`), never added first; a product of two such numbers is
+  checked by division (`a > max / b`). Test a parser with the largest length
+  the wire allows.
 - A reader never halts: an `offset` outside the data is an `error(...)`. A
   writer that can fail (a value outside its type) returns a `Result`;
   `write_i64_*`, `write_f32_*` and `write_f64_*` return a plain `Bytes`, so

@@ -132,6 +132,9 @@ a `TaskRef` (only the `Task[R]` holder observes). The `message` block runs in a
 task of its own. Monitor a task after any setup step that can fail: a failed
 start leaves a stale notice in the inbox.
 
+A drain (a graceful stop) never waits on one item while others could end at
+once: first stop every idle one without waiting, then wait for the busy ones.
+
 `Task.current` is the running task as a `TaskRef`: `Task.monitor`,
 `Task.cancel` and `.id` take it, but `Task.await` of it is
 `CHECK-TYPE-MISMATCH`.

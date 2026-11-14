@@ -167,6 +167,9 @@ copy).
   match: free a name there, not before. Match field types, not only names.
 - When `std/` re-exports a builtin type, check that `agentica help` and `doc`
   list it, not only the checker.
+- A rule about "inside the module" (private fields, `private` declarations)
+  is tested both ways between a file and a module block in it: the block is a
+  module of its own (an `@N::` prefix) whose scope is lexical.
 
 ## Common tasks
 

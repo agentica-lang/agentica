@@ -77,6 +77,12 @@ TLS.ServerOptions(cert_file: String, key_file: String, alpn: List[String] = [])
   reads and the order of writes. A timeout during active I/O closes the socket
   (later calls fail at once with `network: socket is closed`); one only waiting
   for the lock does not. Failures are Results; close is idempotent.
+- A user-given timeout or size gets an upper bound in its options check before
+  it is added to a clock (`now + timeout_ms` overflows and halts); test each
+  option with its largest value.
+- An action sent by a reusable id (a server's connection id, a pid, a port)
+  checks the target's identity right before it acts, through one helper that
+  every sender of that action shares: the id may name a new target by then.
 - A function rewired onto a richer path (a new reader of refused answers, say)
   keeps its old latency and starts no blocking I/O: what the new caller needs,
   such as reading a body, is opt-in. Test that it still returns fast when the
