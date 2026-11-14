@@ -514,3 +514,29 @@ def test_alias_parameter_named_like_the_enum_parameter_is_not_a_capture(agentica
         "end\n\n"
     )
     assert agentica_check(text) is None
+
+
+def test_an_alias_field_of_another_module_decodes_as_the_type_it_names(tmp_path):
+    (tmp_path / "lib.agc").write_text("type Tags = List[String]\n\nstruct Item\n  tags: Tags\nend\n", encoding="utf-8")
+    main = tmp_path / "main.agc"
+    main.write_text(
+        'import Lib from "lib"\n\n'
+        "def main() -> Void\n"
+        '  puts(JSON.decode("{\\"tags\\":[\\"t\\"]}", Lib.Item))\n'
+        "end\n",
+        encoding="utf-8",
+    )
+    result = run(cli() + [str(main)], env=vm_environment())
+    assert result.code == 0, result.stderr
+    assert output_lines(result.stdout) == ['ok(Item(tags: ["t"]))']
+
+
+def test_an_alias_of_a_type_json_cannot_build_is_not_decodable(agentica_check):
+    text = (
+        "type Fun = Fn[Int, Int]\n\n"
+        "struct Bad\n  f: Fun\nend\n\n"
+        "def main() -> Void\n"
+        '  puts(JSON.decode("{}", Bad))\n'
+        "end\n"
+    )
+    assert_diagnostic(agentica_check(text), "CHECK-NOT-DECODABLE", (8, 26))
