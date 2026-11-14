@@ -177,6 +177,8 @@ int agc_fuzz_one(const uint8_t *data, size_t len, int jit_mode, FILE *out, FILE 
   /* A mutant's 10,000 steps seldom reach the thresholds of `on`, so here a function with a loop compiles at its second
      entry, after one interpreted, and one without at its first CALL exit from compiled code. */
   if (vm->rt->jit) {
+    /* Half of the inputs, by their last byte, fail across compiled code where the system allows it. */
+    vm->rt->jit_unwinds = AGC_JIT_UNWINDS && (data[len - 1] & 1);
     vm->rt->jit->hot_entries = 2;
     vm->rt->jit->hot_passes = 1;
     vm->rt->jit->hot_calls = 1;

@@ -857,6 +857,7 @@ agc_vm *agc_launch_vm(agc_launch *launch, const agc_program *program, const agc_
     agc_fs_unlink(options->coverage);
   }
   rt->jit = agc_jit_new(program, mode, &rt->trace);
+  rt->jit_unwinds = AGC_JIT_UNWINDS;
   /* Test-only: AGENTICA_VM_TEST_JIT_BUDGET=N gives the JIT a compile budget of N units instead of AGC_JIT_BUDGET, so a
      test can spend it with a small program. parse_count, not strtoull: a new libc import moves the whole text, and so
      the turn loops' layout. */

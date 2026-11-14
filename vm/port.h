@@ -478,6 +478,9 @@ typedef struct {
      flag. Set before the run starts; every scheduler adds to the counters through its profile (agc_profile.cover). */
   agc_cover *cover;
   const char *cover_path;
+  /* A builtin that compiled code calls may fail across it, straight to the turn's target, so the call sets no catch
+     (AGC_JIT_UNWINDS; set before the run starts). False keeps the catch: Windows, and the C tests by default. */
+  bool jit_unwinds;
 } agc_runtime;
 
 /* The life of a task (docs/vm/10-io-multicore.md §10.2.3, "Park and wake protocol"). READY: in the run queue, from a
@@ -605,19 +608,22 @@ struct agc_task {
   struct agc_mutex *mutex_wait, *mutexes;
 };
 
-/* Where agc_fail and agc_exit jump while compiled code calls a builtin (agc_jit_call_builtin, vm/jit/jit.c), so that
-   no longjmp crosses compiled code, which has no unwind info for Windows x64. Only the fuzz build's hard allocation
-   limit (longjmp(*on_limit) in vm/value.c, Linux) may cross it, leaving jit_catch set, and agc_fuzz_one then discards
-   the vm. POSIX takes sigsetjmp without the signal mask, as macOS's setjmp saves the mask with a system call at each
+/* Where agc_fail and agc_exit jump while compiled code calls a builtin (agc_jit_call_builtin, vm/jit/jit.c) in a run
+   without rt->jit_unwinds, so that no longjmp crosses compiled code, which has no unwind info for Windows x64. Only
+   the fuzz build's hard allocation limit (longjmp(*on_limit) in vm/value.c, Linux) may cross it, leaving jit_catch
+   set, and agc_fuzz_one then discards the vm. POSIX takes sigsetjmp without the signal mask, as macOS's setjmp saves the mask with a system call at each
    call and its longjmp restores it on every thread of the process (#1529); Windows has setjmp only. */
 #ifdef _WIN32
 typedef jmp_buf agc_catch_buf;
 #define AGC_CATCH(buf) setjmp(buf)
 #define AGC_THROW(buf) longjmp((buf), 1)
+#define AGC_JIT_UNWINDS false
 #else
 typedef sigjmp_buf agc_catch_buf;
 #define AGC_CATCH(buf) sigsetjmp((buf), 0)
 #define AGC_THROW(buf) siglongjmp((buf), 1)
+/* siglongjmp only restores registers, so it may cross compiled code (agc_runtime.jit_unwinds). */
+#define AGC_JIT_UNWINDS true
 #endif
 
 /* The counters of the profile trace category (AGENTICA_VM_TRACE=profile): calls and steps have one slot for each
