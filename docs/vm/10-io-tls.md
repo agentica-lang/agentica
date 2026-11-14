@@ -222,6 +222,23 @@ texts.
   life, which costs speed only. `ok()` means every byte reached the kernel's
   send buffer. A failed write (`EPIPE`, `ECONNRESET`) returns `could not write
   to the stream` and leaves the socket open.
+- **Buffered writes.** `TCP.write` and `write_bytes` (#1188) put on a plain
+  socket what `send` would park with: the bytes that the kernel did not take go
+  into the socket's write buffer and the call returns. `unsent`, an atomic of
+  the `net`, counts the bytes that a call took and the kernel has not. While it
+  is not 0, every write and send on the socket goes into the buffer and none
+  calls `send()` itself, so bytes keep their order. A scheduler leaves bytes in
+  `pend` under the socket's `out_lock`, the one mutex of a `net`, and posts one
+  step for all that gathers before it runs; the I/O thread moves them behind
+  the write in flight and sends what waits as one write when that one ends. A
+  write waits (a `REQ_FLUSH` request, which holds no lock) only when `unsent`
+  is over the limit (`TCP.write_buffer`, 65536 by default), until half of it
+  is out; `TCP.flush`, and a send that went into the buffer, wait for 0. A
+  failed write of the buffer drops what waited and is kept in `out_error`,
+  the result of the waiting and of every later write and flush. A close drops
+  the buffer; `HttpWire.close_write` waits for its last byte, and `TLS.upgrade`
+  refuses as for a send in progress. A TLS socket has no write buffer: its
+  write is a send.
 - **Timeouts and close** (the user rules are in the network page). A timed-out
   read or write closes the socket; waiting for the lock alone does not. A
   timed-out connect closes the half-open socket. `TCP.close` and

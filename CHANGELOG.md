@@ -15,6 +15,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `List.tally`, `List.group_by` and `Range.group_by` take `Bytes` keys, as `List.uniq` does (#1596).
 - `--max-heap SIZE` ends a run whose memory would grow past `SIZE` (such as `256M`) with `RUNTIME-HEAP-LIMIT` and exit code 70 (#1113).
 - `ATS.clear(table)` removes every key of a shared table in one step, whatever its size (#1108).
+- `TCP.write` and `TCP.write_bytes` return without waiting for a slow peer: the bytes wait in the socket's write buffer (`TCP.write_buffer` sets its limit), and `TCP.flush` waits until they are out (#1188).
 
 ### Changed
 

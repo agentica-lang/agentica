@@ -37,6 +37,9 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   the rest that a partial send parks with. A WebSocket upgrade head clears
   `direct` in `head_value`, so std/http's frames queue on the I/O thread. A
   close or release posts `release_step` through `agc_loop_call`.
+  Of the write buffer (`TCP.write`, §10.3.1) a scheduler touches only the
+  atomics `unsent`, `out_limit` and `out_error`, and `pend` under `out_lock`;
+  the rest (`out`, `out_flight`, `flushers`) is the I/O thread's.
   `finish` copies what the `done` half needs into the request, and
   `request_done` reads only that and posts `drop_request`. `users` changes only
   on the I/O thread (the first count, `own`, excepted). The `net` fields `id`
