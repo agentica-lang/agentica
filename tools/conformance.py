@@ -137,7 +137,7 @@ AREAS = {
             "tests/test_spec_patterns.py", "tests/test_spec_extern.py", "tests/test_spec_generic_structs.py",
             "tests/test_spec_errors.py", "tests/test_spec_package_agentica.py",
             "tests/test_spec_generics.py", "tests/test_spec_bytes.py", "tests/test_spec_optional.py",
-            "tests/test_spec_json_enum.py", "tests/test_spec_json_lists.py",
+            "tests/test_spec_json_enum.py", "tests/test_spec_json_lists.py", "tests/test_spec_json_node.py",
             "tests/test_spec_equality.py", "tests/test_spec_string_repeat.py",
             "tests/test_spec_string_distance.py",
         ],

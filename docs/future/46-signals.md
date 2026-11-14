@@ -43,10 +43,10 @@ callbacks. Receiving is built (46a); the enum is `System.Signal`.
 #### 46.3.4 Sending, groups and other pids
 
 ```text
-Process.signal(process: Process, sig: System.Signal) -> Result[Void]
+Process.signal(process: Process, signal: System.Signal) -> Result[Void]
 Process.spawn_group(command: String, args: List[String], dir: String, timeout_ms: Int) -> Result[Process]
-Process.signal_group(process: Process, sig: System.Signal) -> Result[Void]
-System.signal(pid: Int, sig: System.Signal, comm: String) -> Result[Void]
+Process.signal_group(process: Process, signal: System.Signal) -> Result[Void]
+System.signal(pid: Int, signal: System.Signal, comm: String) -> Result[Void]
 ```
 
 - `Process.signal` signals the child's pid (an exited or closed child is an
@@ -66,10 +66,10 @@ System.signal(pid: Int, sig: System.Signal, comm: String) -> Result[Void]
   its pid cannot be reused, so the group id is safe).
 - `Process.close` and the end of the run send SIGKILL to the whole group of a
   `spawn_group` child (no SIGTERM step: its streams are never captured).
-- `System.signal(pid, sig, comm)` reaches a process that is not a child, such as
+- `System.signal(pid, signal, comm)` reaches a process that is not a child, such as
   the runner's listener (a grandchild found by scanning `/proc/*/comm`).
   Signalling the run.sh group was rejected (it also reaches the job worker), and
-  a check-less `System.signal(pid, sig)` was rejected (pid reuse). The VM opens
+  a check-less `System.signal(pid, signal)` was rejected (pid reuse). The VM opens
   a pidfd with `pidfd_open`, reads `/proc/<pid>/comm`, compares it with `comm`
   (the kernel's 15-byte form; `Runner.Listener` is exactly 15), and sends the
   signal with `pidfd_send_signal` on that same pidfd, so it can only reach the
@@ -110,7 +110,7 @@ first value of `System.subscribe([System.Signal.Term, System.Signal.Int])`
 1-second poll of `Popen.wait` becomes `Task.await(finished, 1000)` with
 `Await.TimedOut` as the tick; `start_new_session=True` becomes
 `Process.spawn_group`, `os.killpg` becomes `Process.signal_group`, and `os.kill`
-on each listener becomes `System.signal(pid, sig, comm)`. The program subscribes
+on each listener becomes `System.signal(pid, signal, comm)`. The program subscribes
 before the child starts, for the whole run. A signal before the subscription
 takes the default path.
 

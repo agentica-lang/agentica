@@ -19,18 +19,22 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `agentica help File.Info` prints a builtin type with its fields or variants,
   and `agentica help --json` lists the builtin types too, each with a `kind`
   (#1532).
-
-### Changed
-
-- `SIGUSR1` and `SIGUSR2` stop the program the way `SIGTERM` does (children
-  stopped, files written) instead of ending it at once, and `SIGQUIT` does the
-  same and exits with 131 instead of dumping core (#1477).
+- `JSON.node(value)` gives a `JSON.Node` enum to walk JSON of unknown shape
+  with `case` (#1115).
 - `std/actor`: `Actor.Timeout`, a receive timeout that wakes an actor when no message came in time (#1523).
 - Test-only dependencies: `group = "test"` on a dependency of `agentica.toml` (`agentica add ... --group test`); only the tests import it, and projects that depend on the package do not fetch it (#1196).
 
 ### Changed
 
+- **Breaking:** `SIGUSR1` and `SIGUSR2` stop the program the way `SIGTERM` does (children
+  stopped, files written) instead of ending it at once, and `SIGQUIT` does the
+  same and exits with 131 instead of dumping core (#1477).
 - **Breaking:** `std/actor`: a call that times out closes its reply channel, and `Actor.reply` gives whether the caller gets the value (a `Bool`) and closes the channel, so an answer to a call that gave up is never lost. Only `&Actor.reply` used as a `Fn[..., Void]` value no longer checks (#1523).
+
+### Fixed
+
+- `System.subscribe`: a listed signal that was ignored when the program started stays ignored, and the call subscribes the others instead of failing (#1533).
+- On macOS, with more than one scheduler, a stop signal after a task crash stops the program again (#1529).
 
 ## [0.31.1] - 2026-11-13
 
@@ -38,11 +42,6 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - The `location` of an error that a function of an `extern module` block returns is the place of the call, not of the declaration (#1466).
 - `Task.monitor`: a notice that finds its channel full goes in past the capacity instead of being dropped, and a crash seen only through a monitor of a `TaskRef` (`Task.current`) is now reported as not observed (#1522).
-
-### Fixed
-
-- `System.subscribe`: a listed signal that was ignored when the program started stays ignored, and the call subscribes the others instead of failing (#1533).
-- On macOS, with more than one scheduler, a stop signal after a task crash stops the program again (#1529).
 
 ## [0.31.0] - 2026-11-13
 

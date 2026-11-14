@@ -418,6 +418,37 @@ static agc_value builtin_kind(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_string_value(agc_json_ascii(name, strlen(name)));
 }
 
+static agc_value builtin_node(agc_vm *vm, agc_value *args, uint32_t span) {
+  const agc_program *p = vm->rt->program;
+  if (p->json_node == UINT32_MAX)
+    agc_fail(vm, "RUNTIME-INTERNAL", "invalid bytecode: the JSON.Node enum is missing", span);
+  const agc_json *j = agc_as_json(vm, args[0]);
+  uint32_t which;
+  agc_value payload = j->scalar;
+  switch (j->kind) {
+    case AGC_JSON_NULL: return agc_enum_value(p->variants[p->json_node + AGC_JSON_NODE_NULL].shared);
+    case AGC_JSON_BOOL: which = AGC_JSON_NODE_BOOL; break;
+    case AGC_JSON_INT: which = AGC_JSON_NODE_INT; break;
+    case AGC_JSON_BIG: which = AGC_JSON_NODE_BIG_INT; break;
+    case AGC_JSON_FLOAT: which = AGC_JSON_NODE_FLOAT; break;
+    case AGC_JSON_STRING: which = AGC_JSON_NODE_STRING; break;
+    case AGC_JSON_ARRAY: which = AGC_JSON_NODE_ARRAY; break;
+    case AGC_JSON_OBJECT: {
+      /* The members are sorted by key (agc_json_find), so the Map gets them in code point order. */
+      agc_map *m = agc_as_map(vm, vm->rt->empty_map);
+      for (size_t k = 0; k < j->count; k++)
+        m = agc_map_put(vm, m, agc_string_value(j->members[k].key), j->members[k].value);
+      which = AGC_JSON_NODE_OBJECT;
+      payload = agc_map_value(m);
+      break;
+    }
+    default: agc_fail(vm, "RUNTIME-INTERNAL", "unknown JSON kind", span);
+  }
+  agc_enum *e = agc_new_enum(p->json_node + which, 1);
+  e->payload[0] = payload;
+  return agc_enum_value(e);
+}
+
 const agc_builtin agc_json_builtins[] = {
   {"JSON.parse", 1, builtin_parse, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
   {"JSON.encode", 1, builtin_encode, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
@@ -436,6 +467,7 @@ const agc_builtin agc_json_builtins[] = {
   {"JSON.decode", 2, builtin_decode, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
   {"JSON.schema", 1, builtin_schema, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
   {"JSON.kind", 1, builtin_kind, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
+  {"JSON.node", 1, builtin_node, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
 };
 
 const size_t agc_json_builtin_count = sizeof agc_json_builtins / sizeof agc_json_builtins[0];

@@ -246,6 +246,8 @@ lines show. A task's stack ends with `task spawned at file:line:column`.
   `IO.eof?()` first, or use `IO.gets`, which gives an error Result.
 - `RUNTIME-INVALID-DURATION`: a negative `Task.sleep` duration or `Channel`
   timeout, a `Task.await` or `Task.map` `timeout_ms` of 0 or less.
+- `RUNTIME-INVALID-SIGNAL`: `System.Signal.Quit` or `System.Signal.Kill` in
+  the list of `System.subscribe`.
 - `RUNTIME-TASK-CANCELLED`, `RUNTIME-TASK-CRASHED`: `Task.await` on a task the
   VM cancelled or that crashed, when `R` is not a `Result`, at the await (the
   message is the crash text). A task can hold a cancelled child's handle by
