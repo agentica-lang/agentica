@@ -142,7 +142,7 @@ List.drop_while(list: List[A], block: Fn[A, Bool]) -> List[A]
 List.each_slice(list: List[A], size: Int) -> List[List[A]]         # no block; size < 1 is RUNTIME-INVALID-COUNT
 List.group_by(list: List[A], key: Fn[A, K]) -> Map[K, List[A]]     # K is Int or String; first-appearance order
 List.tally(list: List[K]) -> Map[K, Int]                 # K is Int or String; first-appearance order
-List.uniq(list: List[K]) -> List[K]                      # K is Int or String; keeps the first of each
+List.uniq(list: List[K]) -> List[K]                      # K is Int, String or Bytes; keeps the first of each
 List.sum(list: List[N]) -> N                             # Int or Float; empty gives 0 or 0.0; Int overflow halts
 List.include?(list: List[T], value: T) -> Bool           # any T with ==; also member?; stops at the first match
 List.index(list: List[T], value: T) -> Optional[Int]     # first position of an item == value; none when absent
