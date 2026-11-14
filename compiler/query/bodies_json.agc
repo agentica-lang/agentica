@@ -1,6 +1,6 @@
-## The JSON form of `Analysis.bodies` (#1159, experimental): `{version, command, file, modules, functions, prelude}`.
-## A module is `{prefix, file}`. A function is `{name, linked, exported, span, name_span, generics, params, result,
-## body, pure, impure}`, with a span `{file, range}`, a parameter `{name, type, range, default}` and a reason of `impure`
+## The JSON form of `Analysis.bodies` (#1159, experimental): `{version, command, file, modules, functions, prelude}`. A
+## module is `{prefix, file}`. A function is `{name, linked, exported, span, name_span, generics, params, result, body,
+## pure, impure}`, with a span `{file, range}`, a parameter `{name, type, range, default}` and a reason of `impure`
 ## `{effect, call, range, through}`. A node is `{kind, type, range, text, target, new, children, prelude}`, and a type
 ## `{kind, name, args}`.
 
