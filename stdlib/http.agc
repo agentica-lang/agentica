@@ -745,10 +745,8 @@ def close_server(server: HttpWire.Server) -> Void
   HttpWire.close_server(server)
 end
 
-## Stops the server gracefully and returns when it is closed. It stops accepting at once (a new connection is refused)
-## and closes the connections that wait for a request. The requests in flight go on and their answers say
-## `Connection: close`. After `timeout_ms` (30 s unless given) it closes what is left as `close_server` does, which
-## cancels the handlers still running. Calling it on a closed server does nothing.
+## Stops accepting, closes the idle connections, lets the requests in flight finish (with `Connection: close`) and,
+## after `timeout_ms`, closes what is left as `close_server` does. Returns when the server is closed.
 def shutdown(server: HttpWire.Server, timeout_ms: Int = 30000) -> Void
   wait_ms = timeout_ms
   if wait_ms < 0
@@ -860,8 +858,8 @@ CLIENT_MAX_BODY = 67108864
 TASK_CANCELLED = "task: cancelled"
 # The error of a connection that a graceful stop ends before its next request.
 SERVER_STOPPING = "http: server is stopping"
-# How often a graceful stop looks whether the requests in flight have ended.
-DRAIN_POLL_MS = 10
+# The size of the accept loop's list of connections at which it first drops the ended ones.
+PRUNE_CONNS = 64
 # The error of `read_all` for a body over its limit, which `body_refusal` answers 413.
 BODY_TOO_LONG = "http: body exceeds max_bytes"
 # The start of the error of a chunked body with a line or trailer section over the head limits, which
@@ -879,6 +877,12 @@ end
 struct Proxy
   target: Target
   login: String
+end
+
+# A connection's `idle` channel and its own task, which it puts there while it waits for a request.
+struct Waiting
+  idle: Channel[TaskRef]
+  me: TaskRef
 end
 
 struct Service
@@ -2065,11 +2069,16 @@ end
 # drains the connections.
 def accept_all(service: Service) -> Void
   conns: List[Channel[TaskRef]] = []
+  prune_at = PRUNE_CONNS
   while true
     case HttpWire.accept(service.server)
       ok(socket) ->
         idle: Channel[TaskRef] = Channel.new(1)
-        conns = open_conns(conns).push(idle)
+        conns = conns.push(idle)
+        if conns.length >= prune_at
+          conns = conns.select do |c| not c.closed? end
+          prune_at = larger(PRUNE_CONNS, 2 * conns.length)
+        end
         HttpWire.spawn(service.server, socket) do |s| serve_tracked(s, service, idle) end
       error(_) ->
         deadline = HttpWire.stopping(service.server)
@@ -2081,34 +2090,34 @@ def accept_all(service: Service) -> Void
   end
 end
 
-# Cancels the connections that wait for a request, waits for the others to end until `deadline`, and closes the
-# server. A connection takes its task back from `idle` when its request starts, so the one taken here was waiting.
+# Waits for each connection to end until `deadline`, then closes the server. A connection's task in `idle` waits for
+# a request, so it is cancelled at once. `idle` closes when its connection ends in any way.
 def drain_server(server: HttpWire.Server, conns: List[Channel[TaskRef]], deadline: Int) -> Void
-  busy: List[Channel[TaskRef]] = []
   for idle in conns
-    case idle.recv(0)
-      ok(task) -> Task.cancel(task)
-      error(_) -> busy = busy.push(idle)
+    while true
+      case idle.recv(larger(0, deadline - Time.monotonic_ms()))
+        ok(task) -> Task.cancel(task)
+        error(_) -> break
+      end
     end
-  end
-  while not open_conns(busy).empty?
-    left = deadline - Time.monotonic_ms()
-    break if left <= 0
-    Task.sleep(smaller(DRAIN_POLL_MS, left))
   end
   HttpWire.close_server(server)
 end
 
-def open_conns(conns: List[Channel[TaskRef]]) -> List[Channel[TaskRef]] = conns.select do |idle| not idle.closed? end
-
+# A monitor closes `idle` when the connection's task ends, also by a crash or a cancel; its message is dropped.
 def serve_tracked(socket: TCP.Socket, service: Service, idle: Channel[TaskRef]) -> Void
-  serve_connection(socket, service, idle)
-  idle.close
+  me = Task.current()
+  Task.monitor(me, idle) do |_|
+    idle.close
+    me
+  end
+
+  serve_connection(socket, service, Waiting(idle: idle, me: me))
 end
 
 # One task per connection: each request's head is read first, then `answer_app` feeds its body to the app and sends
 # the answer. The first request may take `request_timeout_ms` to start, the next ones `idle_timeout_ms`.
-def serve_connection(socket: TCP.Socket, service: Service, idle: Channel[TaskRef]) -> Void
+def serve_connection(socket: TCP.Socket, service: Service, idle: Waiting) -> Void
   options = service.options
   wait_ms = options.request_timeout_ms
   rest = NO_BYTES
@@ -2126,24 +2135,18 @@ end
 
 # A request up to its body: the head read and checked against `max_body_bytes` as the largest body, and `100 Continue`
 # sent when the client waits for it. While it waits for the first byte, the connection's task is in `idle`, where a
-# graceful stop takes it to cancel it; if the stop took it as the byte came, the connection ends.
-def start_request(
-  socket: TCP.Socket,
-  rest: Bytes,
-  first_ms: Int,
-  service: Service,
-  idle: Channel[TaskRef],
-) -> Result[Reading]
+# graceful stop takes it to cancel it; a stop that began before the send, or took the task as the byte came, ends the
+# connection.
+def start_request(socket: TCP.Socket, rest: Bytes, first_ms: Int, service: Service, idle: Waiting) -> Result[Reading]
   options = service.options
   first = rest
   if first.empty?
-    _ = idle.send(Task.current(), 0)
-    # The stop may have begun before the send, and then its drain did not see this connection waiting.
+    _ = idle.idle.send(idle.me, 0)
     stopped = HttpWire.stopping(service.server) >= 0
     if not stopped
       first = try TCP.recv_bytes(socket, 1, first_ms)
     end
-    return error(SERVER_STOPPING, kind: "http.closed") if not Result.ok?(idle.recv(0)) or stopped
+    return error(SERVER_STOPPING, kind: "http.closed") if not Result.ok?(idle.idle.recv(0)) or stopped
     return error(END_OF_INPUT, kind: "net.eof") if first.empty?
   end
   deadline = Time.monotonic_ms() + options.request_timeout_ms
@@ -2259,7 +2262,7 @@ end
 # Sends the answer of an app. `whole` says whether the request body was read whole, and `rest` holds the bytes read
 # past it (the start of the next request). An upgrade needs the whole body: before that, the connection is not free
 # to change protocols, so an `Accept` is refused with a 500 and a `Reply` closes after it. A server that is `stopping`
-# closes the connection after a whole or streamed answer.
+# closes the connection after a whole or streamed answer, and answers an upgrade 503.
 def send_answer(
   socket: TCP.Socket,
   request: HttpWire.Request,
@@ -2280,6 +2283,7 @@ def send_answer(
         Answer.Stream(response) ->
           return answer_stream(socket, incoming, stream_closing_unless(response, whole and not stopping), options)
         Answer.Upgrade(upgrade) ->
+          return Sent(keep: reply_whole(socket, request, closing_answer(503), timeout), rest: NO_BYTES) if stopping
           return answer_upgrade(socket, incoming, upgrade, options) if whole
           case upgrade
             Upgrade.Reply(response) -> reply_whole(socket, request, closing_unless(response, false), timeout)

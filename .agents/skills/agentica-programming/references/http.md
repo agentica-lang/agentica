@@ -195,6 +195,8 @@ return `HTTP.Answer.Upgrade`, `.Stream` or `.Whole`, or call
   accepting at once, closes the idle connections, lets the requests in flight
   finish (their answers say `Connection: close`), and after `timeout_ms` closes
   what is left as `close_server` does. It returns when the server is closed.
+  Never call it from an app (it waits for its own request): send a value on
+  a channel to the task that called `serve`, and call it there.
 
 ### Reading a request body (uploads)
 

@@ -340,9 +340,11 @@ Properties of the client that no test checks:
   rt->sync) and closes the listener, which wakes `accept` with
   `http: server is closed`; the group goes on. `std/http` then drains in its
   accept task: each connection keeps its task in a channel of one while it
-  waits for a request, so the drain takes the waiting ones and cancels them,
-  waits for the others (an answer while stopping says `Connection: close`)
-  until the deadline, and calls `close_server`. A second `stop` does nothing.
+  waits for a request, and a `Task.monitor` of the task closes that channel
+  when the connection ends in any way. The drain receives on each channel
+  until the deadline: a task found there is cancelled, a closed channel is
+  done (an answer while stopping says `Connection: close`). Then it calls
+  `close_server`. A second `stop` does nothing.
 
 - `std/http` runs the accept loop in the group. For each socket it spawns the
   connection loop: read a request's head (the framing checks: 413 over
