@@ -416,21 +416,30 @@ GRANDCHILD = "import subprocess, sys, time; g = subprocess.Popen(['sleep', '60']
              "time.sleep(60)"
 
 
+def zombie(pid):
+    """True when Linux shows PID as a zombie that its new parent has not reaped yet (macOS has no /proc)."""
+    try:
+        with open("/proc/%d/stat" % pid, encoding="utf-8") as stat:
+            return stat.read().rsplit(")", 1)[1].split()[0] == "Z"
+    except FileNotFoundError:
+        return False
+
+
 def gone(pid):
-    """True once PID has exited (a zombie that its new parent has not reaped yet counts as exited)."""
+    """True once PID has exited."""
     deadline = time.monotonic() + WAIT_SECONDS
     while time.monotonic() < deadline:
         try:
-            with open("/proc/%d/stat" % pid, encoding="utf-8") as stat:
-                if stat.read().rsplit(")", 1)[1].split()[0] == "Z":
-                    return True
-        except FileNotFoundError:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return True
+        if zombie(pid):
             return True
         time.sleep(0.05)
     return False
 
 
-@host_only(TARGET_OS != "linux", "the test reads /proc to see the grandchild end; spawn_group itself is POSIX")
+@host_only(WINDOWS, "process groups and POSIX signals; spawn_group returns a system.signal error on Windows")
 @SCHEDULERS
 @pytest.mark.parametrize("how", ["term", "close", "end"])
 def test_a_group_child_shares_stdout_and_its_whole_group_stops(tmp_path, adopt, schedulers, how):
