@@ -308,7 +308,7 @@ end
 
 
 # scan reads fields, list items, enum variants and payloads, Results and Floats (a NaN among them) in compiled code;
-# its loop also calls leaf builtins: List.size, which compiled code calls itself, and Int.bit_xor, which run_compiled
+# its loop also calls leaf builtins: List.size, which compiled code reads itself, and Int.bit_xor, which run_compiled
 # calls at native depth 0, so with `on` the code leaves for the interpreter only at the RETURN.
 READS = """struct Point
   x: Int
@@ -353,6 +353,41 @@ def main() -> Void
   shapes = [Shape.Dot, Shape.Box(2, 3)]
   results: List[Result[Int]] = [ok(4), error("no"), ok(-2)]
   puts(scan(points, shapes, results, 2000))
+  puts("steps #{System.Profile.steps()}")
+end
+"""
+
+# walk reads lists of 5, 32, 33 and 100 items in compiled code: Ints and Floats (stored as 8 bytes each) and Strings
+# (stored as values), from the tail (every item of the short ones) and from the trie of the long ones.
+LIST_READS = """def walk(ints: List[Int], floats: List[Float], words: List[String], rounds: Int) -> Float
+  total = 0.0
+  count = 0
+  round = 0
+  while round < rounds
+    i = 0
+    while i < ints.size
+      count = count + ints[i] + words[i % words.size].size
+      total = total + floats[i % floats.size]
+      i = i + 1
+    end
+    round = round + 1
+  end
+  return total + count.to_f
+end
+
+def main() -> Void
+  ints: List[Int] = []
+  floats: List[Float] = []
+  words: List[String] = []
+  for n in 1..100
+    ints = ints.append(n * 3)
+    floats = floats.append(n.to_f / 4.0)
+    words = words.append("w" * (n % 7))
+    if n == 5 or n == 32 or n == 33 or n == 100
+      puts(walk(ints, floats, words, 300))
+      puts(walk(ints, floats.take(3), words.take(40), 300))
+    end
+  end
   puts("steps #{System.Profile.steps()}")
 end
 """
@@ -1656,6 +1691,14 @@ def main() -> Void
   puts(check(3000, 2500))
 end
 """
+
+
+def test_list_reads_of_every_layout_and_length_run_in_compiled_code(tmp_path):
+    bytecode = compile_text(LIST_READS, "list_reads", tmp_path)
+    assert compiled(bytecode, tmp_path, "on") == (["walk"] if jit_host() else [])
+    code, stdout, stderr = assert_same(bytecode)
+    assert code == 0 and stdout.startswith("19125.0\n18675.0\n543000.0\n"), (stdout, stderr)
+    assert_max_steps_sweep(bytecode, int(stdout.split("steps ")[1]))
 
 
 def test_globals_structs_enums_and_try_run_in_compiled_code(tmp_path):

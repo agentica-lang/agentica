@@ -13,7 +13,7 @@
 enum { RAX, RCX, RDX, RBX, RSP, RBP, RSI, RDI, R8, R9, R10, R11, R12, R13, R14, R15 };
 
 /* Condition codes: the low nibble of jcc (0F 80+cc) and setcc (0F 90+cc). */
-enum { CC_O = 0x0, CC_AE = 0x3, CC_E = 0x4, CC_NE = 0x5, CC_BE = 0x6, CC_A = 0x7, CC_L = 0xC, CC_LE = 0xE };
+enum { CC_O = 0x0, CC_B = 0x2, CC_AE = 0x3, CC_E = 0x4, CC_NE = 0x5, CC_BE = 0x6, CC_A = 0x7, CC_L = 0xC, CC_LE = 0xE };
 
 /* The argument registers of the calling convention: compiled code is called with (vm, R, K, pc), and calls a helper
    with (vm, dst, a, b). Windows x64 also wants 32 bytes of shadow space above the return address. */
@@ -450,8 +450,7 @@ void agc_emit_map(agc_emitter *e, agc_instr in, uint32_t pc) {
 
 /* The instructions that are one call of their opcode HELPER (with R[c] when TWO), the interpreter's own code: the
    Float operators and compares (so NaN, rounding and the result's bits are the C code's), SAME, CONCAT and TO_TEXT
-   (CHARGED: the cost_exit applies their charges, as the interpreter does), LIST_LEN and LIST_GET (with its bounds
-   check, whose INDEX_OUT_OF_RANGE leaves R[b] and R[c] for the message). */
+   (CHARGED: the cost_exit applies their charges, as the interpreter does). */
 void agc_emit_helper(agc_emitter *e, uint64_t helper, bool two, bool charged, agc_instr in, uint32_t pc) {
   call_helper(e, helper, in, two, pc);
   if (charged) cost_exit(e, pc);
@@ -527,6 +526,54 @@ void agc_emit_read(agc_emitter *e, agc_opcode op, agc_instr in, uint32_t pc) {
       store(e, REGS, WORD(in.a), RDX);
       break;
   }
+}
+
+void agc_emit_list_len(agc_emitter *e, uint32_t a, uint32_t b, uint32_t status, uint32_t pc) {
+  compare_imm8(e, false, REGS, TAG(b), AGC_T_LIST);
+  exit_if(e, CC_NE, status, pc);
+  load(e, RCX, REGS, WORD(b));
+  load(e, RAX, RCX, AGC_JIT_LIST_LEN);
+  store_value(e, a, AGC_T_INT);
+}
+
+_Static_assert(AGC_JIT_LIST_TAIL + 8 < 128, "the tail reads below use an 8-bit displacement");
+
+/* rcx = the list, rax = the index, then rax = the index in the tail: an index outside the list (a negative one is
+   above every length as unsigned) or below the tail takes the helper. An item of kind 0 is an agc_value; else the
+   kind is the tag and the item the payload (17.12). */
+void agc_emit_list_get(agc_emitter *e, agc_instr in, uint32_t pc) {
+  compare_imm8(e, false, REGS, TAG(in.b), AGC_T_LIST);
+  size_t not_list = jump_to_patch(e, CC_NE);
+  compare_imm8(e, false, REGS, TAG(in.c), AGC_T_INT);
+  size_t not_int = jump_to_patch(e, CC_NE);
+  load(e, RCX, REGS, WORD(in.b));
+  load(e, RAX, REGS, WORD(in.c));
+  load(e, RDX, RCX, AGC_JIT_LIST_LEN);
+  BYTES(e, 0x48, 0x39, 0xD0); /* cmp rax, rdx */
+  size_t outside = jump_to_patch(e, CC_AE);
+  BYTES(e, 0x48, 0xFF, 0xCA);                                  /* dec rdx */
+  BYTES(e, 0x48, 0x83, 0xE2, (uint8_t)~AGC_JIT_LIST_MASK);     /* and rdx, ~31 */
+  BYTES(e, 0x48, 0x29, 0xD0);                                  /* sub rax, rdx */
+  size_t in_trie = jump_to_patch(e, CC_B);
+  compare_imm8(e, false, RCX, AGC_JIT_LIST_KIND, 0);
+  size_t packed = jump_to_patch(e, CC_NE);
+  BYTES(e, 0x48, 0xC1, 0xE0, 0x04);                            /* shl rax, 4 */
+  BYTES(e, 0x48, 0x8B, 0x54, 0x01, AGC_JIT_LIST_TAIL + 8);     /* mov rdx, [rcx + rax + tail + 8] */
+  BYTES(e, 0x48, 0x8B, 0x44, 0x01, AGC_JIT_LIST_TAIL);         /* mov rax, [rcx + rax + tail] */
+  size_t write = jump_to_patch(e, -1);
+  land(e, packed);
+  BYTES(e, 0x48, 0x8B, 0x54, 0xC1, AGC_JIT_LIST_TAIL);         /* mov rdx, [rcx + rax * 8 + tail] */
+  op_mem(e, false, 0x8B, RAX, RCX, AGC_JIT_LIST_KIND);         /* mov eax, [rcx + kind] */
+  land(e, write);
+  store(e, REGS, TAG(in.a), RAX);
+  store(e, REGS, WORD(in.a), RDX);
+  size_t done = jump_to_patch(e, -1);
+  land(e, not_list);
+  land(e, not_int);
+  land(e, outside);
+  land(e, in_trie);
+  call_helper(e, binary(agc_op_list_get), in, true, pc);
+  land(e, done);
 }
 
 void agc_emit_jump(agc_emitter *e, uint32_t target) {

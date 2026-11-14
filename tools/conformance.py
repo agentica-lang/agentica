@@ -162,7 +162,7 @@ AREAS = {
             "tests/test_std_actor.py", "tests/test_spec_actor_inbox.py", "tests/test_std_analysis.py",
             "tests/test_prop_purity.py",
             "tests/test_std_archive.py", "tests/test_std_archive_zip.py",
-            "tests/test_std_binary.py", "tests/test_std_cache.py", "tests/test_std_cookie.py", "tests/test_std_html.py", "tests/test_std_mime.py",
+            "tests/test_std_binary.py", "tests/test_std_cache.py", "tests/test_std_cookie.py", "tests/test_std_heap.py", "tests/test_std_html.py", "tests/test_std_mime.py",
             "tests/test_std_option_parser.py",
             "tests/test_std_regex.py", "tests/test_std_toml.py", "tests/test_std_uri.py", "tests/test_std_utc.py",
             "tests/test_stdlib_prelude.py",

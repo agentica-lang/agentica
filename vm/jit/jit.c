@@ -63,12 +63,12 @@ typedef struct {
 } plain_leaf;
 
 static const plain_leaf plain_leaves[] = {
-    {"List.size", 1, {{AGC_T_LIST, AGC_T_VOID}, false}},
-    {"List.append", 2, {{AGC_T_LIST, AGC_T_VOID}, false}},
-    {"ok", 1, {{AGC_T_VOID, AGC_T_VOID}, false}},
-    {"Result.ok?", 1, {{AGC_T_RESULT, AGC_T_VOID}, false}},
-    {"String.length", 1, {{AGC_T_STRING, AGC_T_VOID}, false}},
-    {"String.code", 1, {{AGC_T_STRING, AGC_T_VOID}, true}},
+    {"List.size", 1, {{AGC_T_LIST, AGC_T_VOID}, false, true}},
+    {"List.append", 2, {{AGC_T_LIST, AGC_T_VOID}, false, false}},
+    {"ok", 1, {{AGC_T_VOID, AGC_T_VOID}, false, false}},
+    {"Result.ok?", 1, {{AGC_T_RESULT, AGC_T_VOID}, false, false}},
+    {"String.length", 1, {{AGC_T_STRING, AGC_T_VOID}, false, false}},
+    {"String.code", 1, {{AGC_T_STRING, AGC_T_VOID}, true, false}},
 };
 
 /* The rows whose call may park: the turn ends while it waits, for a channel, a task, a timer or stdin (the woken task
@@ -411,13 +411,12 @@ bool agc_emit_patches(agc_emitter *e, size_t epilogue, agc_emit_stub stub, agc_e
    with R[c], and *CHARGED when a charge then leaves to be applied, as the interpreter applies it after the
    instruction. */
 static uint64_t opcode_helper(agc_opcode op, bool *two_operands, bool *charged) {
-  *two_operands = !(op == AGC_OP_NEG_F || op == AGC_OP_LIST_LEN || op == AGC_OP_TO_TEXT);
+  *two_operands = !(op == AGC_OP_NEG_F || op == AGC_OP_TO_TEXT);
   *charged = op == AGC_OP_TO_TEXT || op == AGC_OP_SAME || op == AGC_OP_CONCAT;
   agc_status (*one)(agc_vm *, agc_value *, const agc_value *) = NULL;
   agc_status (*two)(agc_vm *, agc_value *, const agc_value *, const agc_value *) = NULL;
   switch (op) {
     case AGC_OP_NEG_F: one = agc_op_neg_f; break;
-    case AGC_OP_LIST_LEN: one = agc_op_list_len; break;
     case AGC_OP_TO_TEXT: one = agc_op_to_text; break;
     case AGC_OP_ADD_F: two = agc_op_add_f; break;
     case AGC_OP_SUB_F: two = agc_op_sub_f; break;
@@ -426,8 +425,7 @@ static uint64_t opcode_helper(agc_opcode op, bool *two_operands, bool *charged) 
     case AGC_OP_LT_F: two = agc_op_lt_f; break;
     case AGC_OP_LE_F: two = agc_op_le_f; break;
     case AGC_OP_SAME: two = agc_op_same; break;
-    case AGC_OP_CONCAT: two = agc_op_concat; break;
-    default: two = agc_op_list_get; break;
+    default: two = agc_op_concat; break;
   }
   return one ? (uint64_t)(uintptr_t)one : (uint64_t)(uintptr_t)two;
 }
@@ -475,14 +473,14 @@ static size_t emit_function(agc_emitter *e, const agc_jit *jit, const agc_functi
       case AGC_OP_LE_F:
       case AGC_OP_SAME:
       case AGC_OP_CONCAT:
-      case AGC_OP_TO_TEXT:
-      case AGC_OP_LIST_LEN:
-      case AGC_OP_LIST_GET: {
+      case AGC_OP_TO_TEXT: {
         bool two, charged;
         uint64_t helper = opcode_helper(op, &two, &charged);
         agc_emit_helper(e, helper, two, charged, in, pc);
         break;
       }
+      case AGC_OP_LIST_LEN: agc_emit_list_len(e, in.a, in.b, AGC_STATUS_WRONG_TAG, pc); break;
+      case AGC_OP_LIST_GET: agc_emit_list_get(e, in, pc); break;
       case AGC_OP_LIST: agc_emit_list(e, in); break;
       case AGC_OP_CLOSURE:
         /* As for CALL, the loader checks bx. */
@@ -543,7 +541,9 @@ static size_t emit_function(agc_emitter *e, const agc_jit *jit, const agc_functi
         /* As for CALL, the C tests' hand-made code may have no builtin table. */
         const agc_builtin *b = bx < p->builtin_count ? p->builtins[bx] : NULL;
         const agc_jit_plain *plain = b ? agc_jit_plain_of(b) : NULL;
-        if (plain)
+        if (plain && plain->list_len)
+          agc_emit_list_len(e, in.a, in.a, AGC_JIT_EXIT_INTERPRET, pc);
+        else if (plain)
           agc_emit_plain_leaf(e, in, pc, (uint64_t)(uintptr_t)b, f->spans[pc], plain);
         else if (b && (b->direct || b->leaf))
           agc_emit_builtin(e, in, pc, (uint64_t)(uintptr_t)b, f->spans[pc], b->leaf);

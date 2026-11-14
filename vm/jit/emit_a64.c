@@ -565,6 +565,52 @@ void A64(read)(agc_emitter *e, agc_opcode op, agc_instr in, uint32_t pc) {
   }
 }
 
+void A64(list_len)(agc_emitter *e, uint32_t a, uint32_t b, uint32_t status, uint32_t pc) {
+  compare_tag(e, b, AGC_T_LIST);
+  exit_if(e, CC_NE, status, pc);
+  load(e, T2, REGS, WORD(b));
+  load(e, T0, T2, AGC_JIT_LIST_LEN);
+  store_value(e, a, AGC_T_INT, T0);
+}
+
+_Static_assert(AGC_JIT_LIST_MASK == 31, "the and below clears the low 5 bits");
+
+/* x11 = the list, x9 = the index, then x9 = the index in the tail, as on x86-64. */
+void A64(list_get)(agc_emitter *e, agc_instr in, uint32_t pc) {
+  compare_tag(e, in.b, AGC_T_LIST);
+  size_t not_list = skip_if(e, CC_NE);
+  compare_tag(e, in.c, AGC_T_INT);
+  size_t not_int = skip_if(e, CC_NE);
+  load(e, T2, REGS, WORD(in.b));
+  load(e, T0, REGS, WORD(in.c));
+  load(e, T1, T2, AGC_JIT_LIST_LEN);
+  compare(e, T0, T1);
+  size_t outside = skip_if(e, CC_HS);
+  put32(e, 0xD1000400u | (uint32_t)T1 << 5 | (uint32_t)T1);                     /* sub x10, x10, #1 */
+  put32(e, 0x927BE800u | (uint32_t)T1 << 5 | (uint32_t)T1);                     /* and x10, x10, #~31 */
+  put32(e, 0xEB000000u | (uint32_t)T1 << 16 | (uint32_t)T0 << 5 | (uint32_t)T0); /* subs x9, x9, x10 */
+  size_t in_trie = skip_if(e, CC_LO);
+  load32(e, T1, T2, AGC_JIT_LIST_KIND);
+  add_imm(e, T3, T2, AGC_JIT_LIST_TAIL);
+  size_t packed = skip_zero(e, true, false, T1);
+  put32(e, 0x8B001000u | (uint32_t)T0 << 16 | (uint32_t)T3 << 5 | (uint32_t)T3); /* add x12, x12, x9, lsl #4 */
+  load(e, T1, T3, 0);
+  load(e, T0, T3, 8);
+  size_t write = skip(e);
+  land(e, packed);
+  put32(e, 0xF8607800u | (uint32_t)T0 << 16 | (uint32_t)T3 << 5 | (uint32_t)T0); /* ldr x9, [x12, x9, lsl #3] */
+  land(e, write);
+  store(e, REGS, TAG(in.a), T1);
+  store(e, REGS, WORD(in.a), T0);
+  size_t done = skip(e);
+  land(e, not_list);
+  land(e, not_int);
+  land(e, outside);
+  land(e, in_trie);
+  call_helper(e, (uint64_t)(uintptr_t)agc_op_list_get, in, true, pc);
+  land(e, done);
+}
+
 void A64(jump)(agc_emitter *e, uint32_t target) { branch_to(e, AGC_JIT_PATCH_LABEL, target); }
 
 /* JUMP_IF_TRUE (WHEN) or JUMP_IF_FALSE: R[a] must be a Bool, whose payload is 0 or 1. */

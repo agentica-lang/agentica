@@ -459,6 +459,7 @@ ERROR_KINDS: List[String] = [
   "archive.too_large",
   "archive.unsafe",
   "binary.too_large",
+  "heap.empty",
   "option_parser.help",
   "option_parser.parse",
   "regex.syntax",

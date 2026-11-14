@@ -10,6 +10,7 @@ cache.agc
 binary.agc
 cookie.agc
 eag.agc
+heap.agc
 html.agc
 http.agc
 logger.agc
