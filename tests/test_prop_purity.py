@@ -129,6 +129,7 @@ def test_call_arguments_come_in_the_order_written(setup, shape):
     def value(child):
         return child["children"][0] if child["kind"] == "named" else child
 
+    assert all(child["text"] != "" for child in children if child["kind"] == "named")
     assert [(child["kind"], child["text"], int(value(child)["children"][0]["text"])) for child in children] == expected
     starts = [(child["range"]["start"]["line"], child["range"]["start"]["column"]) for child in children]
     assert starts == sorted(starts)

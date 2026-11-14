@@ -300,7 +300,8 @@ end
 ##   receiver of a method first, in the order they run, which is the order written: the positional ones fill the
 ##   parameters from the left, each `name: value` is a `named` node (`text` the parameter, the value its child), and in
 ##   a call with named arguments a trailing block is a `named` node too. A parameter that no argument fills takes its
-##   default.
+##   default: a function of the file has it in its `params`, a builtin in the `parameters` of `agentica help NAME
+##   --json`.
 ##   `type_args` are the types a call of a generic function or builtin binds: for a function, one per type parameter in
 ##   order (its `generics`); for a builtin, one per type variable of its row, in the order they first appear in its
 ##   parameters, then its result (`List.map` is `[A, B]`). A type the call leaves open has the kind `none`. On any
