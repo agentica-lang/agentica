@@ -178,7 +178,8 @@ end
 ## function introduced and must read (by the offset of their span), reads the ones a read has reached, writes the ones
 ## that an assignment set again, and assigning the ones whose assignment is being checked, where a read of the name
 ## itself is no use of it (check_variables.agc). slots holds, by the id of each call with named arguments, the
-## parameter each of its arguments fills in source order (Ast.Call.slots), which the lowering reads.
+## parameter each of its arguments fills in source order (Ast.Call.slots), which the lowering reads. type_args holds
+## the type arguments of each call of a generic function or builtin, by the id of the call (see record_type_args).
 struct St
   types: List[Types.Type]
   resolved: Map[Int, Resolved]
@@ -201,6 +202,7 @@ struct St
   writes: Set[Int]
   assigning: Set[Int]
   slots: Map[Int, List[Int]] = {}
+  type_args: Map[Int, List[Types.Type]] = {}
 end
 
 ## A call of a builtin that has its own rule: the call, its arguments, the form of the builtin that takes that many
@@ -345,6 +347,11 @@ def record_bound(st: St, id: Int, types: List[Types.Type]) -> St = st.with(bound
 
 ## The state with the slots of a call with named arguments recorded.
 def record_slots(st: St, id: Int, slots: List[Int]) -> St = st.with(slots: st.slots.put(id, slots))
+
+## The state with the type arguments of a generic call recorded: those of a function in the order of its type
+## parameters, those of a builtin in the order its type variables first appear in its catalog row (parameters, then
+## result), Unknown for one the call leaves open. For Analysis.bodies; the lowering never reads them.
+def record_type_args(st: St, id: Int, types: List[Types.Type]) -> St = st.with(type_args: st.type_args.put(id, types))
 
 ## The state with the resolution of a node recorded.
 def record_resolved(st: St, id: Int, resolved: Resolved) -> St = st.with(resolved: st.resolved.put(id, resolved))

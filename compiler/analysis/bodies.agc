@@ -3,8 +3,9 @@
 ## linked tree, by node id, and this walk reads them. The type of a node is `Checked.types`, the target of a method
 ## call (and of `data.size`) is `Checked.resolved`, a call by name keeps the name the linker gave it (a builtin's, or a
 ## function's linked name), `data[i]` runs `Builtins.index_builtin` (as the lowering does), and a binding is new when
-## the checker recorded what it introduced in `Checked.bound` (where the result type of a function is too). So no rule
-## of the checker or the lowering is written twice here.
+## the checker recorded what it introduced in `Checked.bound` (where the result type of a function is too), and the
+## type arguments of a generic call are `Checked.type_args`. So no rule of the checker or the lowering is written
+## twice here.
 
 import Builtins from "../catalog/builtins"
 import State from "../check/check_state"
@@ -264,19 +265,19 @@ def expression(checked: Checker.Checked, expr: Ast.Expr) -> Model.Node
     Ast.Expr.Call(node) ->
       # The values of the named arguments of error(...) follow the positional ones.
       given = Defaults.arguments(node.args, node.named)
-      leaf("call", type, span).with(target: node.name, children: bound_arguments(checked, id, given, span))
+      call_leaf(checked, id, type, span, node.name).with(children: bound_arguments(checked, id, given, span))
     Ast.Expr.MethodCall(node) ->
       case checked.resolved.get(id)
         some(State.Resolved.Call(name, _)) ->
           given = [node.target].concat(Defaults.arguments(node.args, node.named))
-          leaf("call", type, span).with(target: name, children: bound_arguments(checked, id, given, span))
+          call_leaf(checked, id, type, span, name).with(children: bound_arguments(checked, id, given, span))
         _ -> other("method", span)
       end
 
     Ast.Expr.FieldAccess(node) ->
       case checked.resolved.get(id)
         some(State.Resolved.Call(name, _)) ->
-          leaf("call", type, span).with(target: name, children: [expression(checked, node.target)])
+          call_leaf(checked, id, type, span, name).with(children: [expression(checked, node.target)])
         _ -> other("field", span)
       end
 
@@ -328,6 +329,12 @@ def expression(checked: Checker.Checked, expr: Ast.Expr) -> Model.Node
     Ast.Expr.RegexLit(_) -> other("regex", span)
     Ast.Expr.EagLit(_) -> other("template", span)
   end
+end
+
+# A call of `target` with the type arguments the checker recorded for it.
+def call_leaf(checked: Checker.Checked, id: Int, type: Types.Type, span: Source.Span, target: String) -> Model.Node
+  type_args = checked.type_args.get(id).unwrap_or([]).map(&shape)
+  leaf("call", type, span).with(target: target, type_args: type_args)
 end
 
 # A text part has no place of its own, so it takes the place of the interpolation.

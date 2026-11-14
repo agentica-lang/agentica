@@ -435,6 +435,8 @@ def check_generic_call(
 
   spans = node.args.map do |arg: Ast.Expr| Ast.expr_span(arg) end
   current = try Types.check_json_needs(cx, current, node.name, found, templates, spans, node.span)
+  solved = signature.type_parameters.map do |name: String| found[name] end
+  current = State.record_type_args(current, node.id, solved)
   ok(State.Out(st: current, type: Types.substitute(signature.result, found)))
 end
 
