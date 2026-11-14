@@ -108,6 +108,7 @@ HTTP.app(handler: HTTP.Handler, max_body_bytes: Int = 1048576) -> HTTP.App
 HTTP.local_port(server: HTTP.Server) -> Int
 HTTP.wait(server: HTTP.Server) -> Result[Void]
 HTTP.close_server(server: HTTP.Server) -> Void
+HTTP.shutdown(server: HTTP.Server, timeout_ms: Int = 30000) -> Void
 HTTP.Answer: Whole(HTTP.Response), Stream(HTTP.StreamResponse), Upgrade(HTTP.Upgrade)
 
 HTTP.RequestBody(pieces: Channel[Bytes], done: Task[Result[Void]])
@@ -190,6 +191,10 @@ return `HTTP.Answer.Upgrade`, `.Stream` or `.Whole`, or call
   run. A server belongs to the task that called `HTTP.serve`: when that task
   ends the server closes and its port is freed, so call `serve` in the task
   that keeps the server, such as `main`.
+- `shutdown` is the graceful stop (for SIGTERM: `System.subscribe`). It stops
+  accepting at once, closes the idle connections, lets the requests in flight
+  finish (their answers say `Connection: close`), and after `timeout_ms` closes
+  what is left as `close_server` does. It returns when the server is closed.
 
 ### Reading a request body (uploads)
 

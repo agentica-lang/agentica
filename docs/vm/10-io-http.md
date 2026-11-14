@@ -335,6 +335,14 @@ Properties of the client that no test checks:
   path runs `close_server` for it, and its port is free. A running task that
   closes its own server stops after that builtin
   (`vm/tests/task_cancel_test.c`).
+- `stop(server, deadline)` starts the graceful stop of `HTTP.shutdown`. It
+  records the deadline (read by `stopping`, -1 while the server accepts, under
+  rt->sync) and closes the listener, which wakes `accept` with
+  `http: server is closed`; the group goes on. `std/http` then drains in its
+  accept task: each connection keeps its task in a channel of one while it
+  waits for a request, so the drain takes the waiting ones and cancels them,
+  waits for the others (an answer while stopping says `Connection: close`)
+  until the deadline, and calls `close_server`. A second `stop` does nothing.
 
 - `std/http` runs the accept loop in the group. For each socket it spawns the
   connection loop: read a request's head (the framing checks: 413 over

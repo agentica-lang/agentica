@@ -47,7 +47,8 @@ Run an example with `dist/agentica examples/<name>.agc`. The
 - [`http_get.agc`](http_get.agc): an HTTP client with `import HTTP from
   "std/http"`.
 - [`http_server.agc`](http_server.agc): an HTTP server with `std/http`;
-  `http_server.agc serve` keeps serving and prints its port.
+  `http_server.agc serve` prints its port and serves until SIGTERM or Ctrl-C,
+  then stops gracefully with `HTTP.shutdown`.
 - [`http_sse.agc`](http_sse.agc): a Server-Sent Events route that streams its
   body from a channel with `HTTP.serve`; `http_sse.agc serve` keeps
   serving and prints its port.

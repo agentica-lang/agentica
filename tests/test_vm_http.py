@@ -1885,3 +1885,86 @@ def test_serve_keeps_a_connection_only_for_a_body_that_arrived_and_upgrades_only
     assert vm.next_line() == "closed 1006"
     finish_serve(vm)
     assert "http: invalid response: an upgrade before the request body was read" in vm.stderr_text()
+
+
+SHUTDOWN_PROGRAM = """\
+import HTTP from "std/http"
+
+def handle(request: HTTP.Request) -> Result[HTTP.Response]
+  if request.path == "/slow"
+    Task.sleep(1500)
+  elsif request.path == "/stuck"
+    Task.sleep(60000)
+  end
+  ok(HTTP.Response(status: 200, headers: [], body: "done #{request.path}".bytes))
+end
+
+def main() -> Void
+  server = HTTP.serve("127.0.0.1", 0, HTTP.app(&handle)).unwrap!
+  puts(HTTP.local_port(server))
+  IO.flush()
+  timeout_ms = gets().unwrap!.strip.to_i!
+  started = Time.monotonic_ms()
+  HTTP.shutdown(server, timeout_ms)
+  puts("stopped after #{Time.monotonic_ms() - started} ms")
+  HTTP.shutdown(server)
+  puts("again")
+end
+"""
+
+
+def refused(port):
+    """Whether a new connection to `port` is refused, within a few seconds of the stop."""
+    deadline = time.monotonic() + scaled(5)
+    while time.monotonic() < deadline:
+        try:
+            socket.create_connection(("127.0.0.1", port), timeout=scaled(2)).close()
+        except ConnectionRefusedError:
+            return True
+        time.sleep(0.02)
+    return False
+
+
+def test_shutdown_drains_the_requests_in_flight_and_closes_idle_connections_at_once(tmp_path, adopt):
+    """HTTP.shutdown: a slow request in flight finishes with `Connection: close`, a kept-alive idle connection and one
+    that never sent a request close at once, and a new connection is refused; a second call does nothing."""
+    vm = adopt(start_vm(compile_text(SHUTDOWN_PROGRAM, "shutdown", tmp_path), stdin=True))
+    port = int(vm.next_line())
+    idle = socket.create_connection(("127.0.0.1", port), timeout=scaled(10))
+    idle.sendall(b"GET /fast HTTP/1.1\r\nHost: x\r\n\r\n")
+    head, rest = raw_answer(idle, False)
+    while len(rest) < len(b"done /fast"):
+        rest += idle.recv(65536)
+    assert b"connection: close" not in head, head
+    fresh = socket.create_connection(("127.0.0.1", port), timeout=scaled(10))
+    slow = http.client.HTTPConnection("127.0.0.1", port, timeout=scaled(10))
+    slow.request("GET", "/slow")
+    time.sleep(0.2)
+    vm.process.stdin.write(b"10000\n")
+    vm.process.stdin.flush()
+    started = time.monotonic()
+    assert idle.recv(65536) == b"" and fresh.recv(65536) == b""
+    assert time.monotonic() - started < scaled(1.0), "the idle connections close before the slow request ends"
+    assert refused(port)
+    response = slow.getresponse()
+    assert (response.status, response.read(), response.getheader("Connection")) == (200, b"done /slow", "close")
+    stopped = vm.next_line()
+    assert stopped.startswith("stopped after ") and int(stopped.split()[2]) < 5000, stopped
+    assert vm.next_line() == "again"
+    assert vm.wait() == 0
+    for conn in (idle, fresh, slow):
+        conn.close()
+
+
+def test_shutdown_cancels_a_stuck_handler_at_the_deadline(tmp_path, adopt):
+    vm = adopt(start_vm(compile_text(SHUTDOWN_PROGRAM, "shutdown", tmp_path), stdin=True))
+    port = int(vm.next_line())
+    with socket.create_connection(("127.0.0.1", port), timeout=scaled(10)) as stuck:
+        stuck.sendall(b"GET /stuck HTTP/1.1\r\nHost: x\r\n\r\n")
+        time.sleep(0.2)
+        vm.process.stdin.write(b"300\n")
+        vm.process.stdin.flush()
+        assert stuck.recv(65536) == b"", "the handler is cancelled and the connection closed without an answer"
+    stopped = vm.next_line()
+    assert stopped.startswith("stopped after ") and 300 <= int(stopped.split()[2]) < 5000, stopped
+    assert vm.wait() == 0
