@@ -193,7 +193,7 @@ def callback_value(
   rule: Model.Rule,
   callback: Ast.Expr,
 ) -> Result[State.Out]
-  result = block_result(rule)
+  result = block_result(rule, T.Type.Unknown)
   if reduces?(rule) or T.unknown?(result) or !generic_reference?(cx, callback)
     return State.expr(cx, st, callback, T.Type.Unknown)
   end
@@ -235,7 +235,7 @@ def block_callback(
 
   return reduce_block(cx, list.st, site, block, element) if reduces?(rule)
 
-  Stmt.check_block_body(cx, list.st, block, some([element]), block_result(rule), receiver)
+  Stmt.check_block_body(cx, list.st, block, some([element]), block_result(rule, site.expected), receiver)
 end
 
 def reduce_block(
@@ -254,15 +254,23 @@ def reduce_block(
   Stmt.check_block_body(cx, accumulator.st, block, some([accumulator.type, element]), accumulator.type, none)
 end
 
-# The result a block of the rule must give: Bool for filter, any? and all?, Void for each, none known for map.
-def block_result(rule: Model.Rule) -> T.Type
+# The result a block of the rule must give: Bool for filter, any? and all?, Void for each, none known for map, except
+# the Optional item of the expected list, which lets `none` in the block take its type.
+def block_result(rule: Model.Rule, expected: T.Type) -> T.Type
   case rule
+    Model.Rule.ListMap -> optional_item(expected)
     Model.Rule.ListFilter -> T.Type.Bool
     Model.Rule.ListAny -> T.Type.Bool
     Model.Rule.ListAll -> T.Type.Bool
     Model.Rule.ListEach -> T.Type.Void
     _ -> T.Type.Unknown
   end
+end
+
+def optional_item(expected: T.Type) -> T.Type
+  return T.Type.Unknown if !T.is?(expected, "List") or !T.is?(T.item(expected), "Optional")
+
+  T.item(expected)
 end
 
 def reduces?(rule: Model.Rule) -> Bool

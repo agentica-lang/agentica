@@ -179,7 +179,7 @@ static void flush_failed(agc_vm *vm, bool natives) {
 }
 
 static void flush_files(agc_vm *vm) {
-  if (setjmp(vm->fail) == 0) {
+  if (AGC_CATCH(vm->fail) == 0) {
     agc_io_flush_files(vm);
     return;
   }
@@ -190,7 +190,7 @@ static void flush_files(agc_vm *vm) {
    stop signal, also one that comes during the wait, the frees do not wait for running compute calls: what they hold is
    not freed. A failure (the loop cannot start) frees nothing more and says so; it is not a timeout. */
 static bool free_natives(agc_vm *vm) {
-  if (setjmp(vm->fail) == 0) return agc_ffi_end(vm, agc_io_stop_signal);
+  if (AGC_CATCH(vm->fail) == 0) return agc_ffi_end(vm, agc_io_stop_signal);
   flush_failed(vm, true);
   return true;
 }
@@ -202,7 +202,7 @@ static void print_outcome(agc_vm *vm, const agc_outcome *outcome, agc_notice_mod
 }
 
 static void announce_outcome(agc_vm *vm, const agc_outcome *outcome) {
-  if (setjmp(vm->fail) == 0) print_outcome(vm, outcome, AGC_NOTICE_KEPT);
+  if (AGC_CATCH(vm->fail) == 0) print_outcome(vm, outcome, AGC_NOTICE_KEPT);
 }
 
 static void cover_flush(cover_file *file) {
@@ -288,7 +288,7 @@ static void coverage_notice(agc_vm *vm) {
    still points at the run's setjmp, whose frame has returned, so goodbye gets its own target. A failure becomes the
    outcome of a run that did not fail, else it is printed beside the run's own. */
 static void say_goodbye(agc_vm *vm, agc_outcome *outcome) {
-  if (setjmp(vm->fail) == 0) {
+  if (AGC_CATCH(vm->fail) == 0) {
     agc_io_goodbye(vm);
     return;
   }

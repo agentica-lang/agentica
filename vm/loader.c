@@ -29,7 +29,7 @@ typedef struct {
   uint64_t start;
   char *error;
   size_t error_size;
-  jmp_buf fail;
+  agc_catch_buf fail;
 } reader;
 
 static uint64_t elapsed_us(uint64_t start) {
@@ -48,7 +48,7 @@ static _Noreturn void reject(reader *r, const char *format, ...) {
   vsnprintf(r->error, r->error_size, format, args);
   va_end(args);
   trace_reject(r);
-  longjmp(r->fail, 1);
+  AGC_THROW(r->fail);
 }
 
 static size_t left(const reader *r) { return r->len - r->pos; }
@@ -836,7 +836,7 @@ static void trace_tables(const agc_trace *tr, const agc_program *p) {
 }
 
 static bool load_guarded(reader *r, agc_program *p) {
-  if (setjmp(r->fail)) return false;
+  if (AGC_CATCH(r->fail)) return false;
   load(r, p);
   return true;
 }

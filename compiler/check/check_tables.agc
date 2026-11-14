@@ -214,6 +214,7 @@ def foreign_kind_methods() -> Map[String, String]
     "Range.drop": "a range has no drop; use (1..5).to_a.drop(n)",
     "Range.reject": "a range has no reject; use (1..5).select do |x| !cond end",
     "Range.take": "a range has no take; use (1..5).to_a.take(n)",
+    "Result.error?": "a Result has ok? and message; write !r.ok? for an error",
     "Set.contains": "use s.include?(x)",
     "Set.contains?": "use s.include?(x)",
     "Set.count": "use s.size",

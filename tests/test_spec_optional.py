@@ -42,6 +42,27 @@ end
         None,
         None,
     ),
+    (
+        "none in a map block takes the Optional item of the expected list",
+        """struct Joint
+  backs: List[Optional[Int]]
+end
+
+def main() -> Void
+  joint = Joint(backs: [1, 2].map do |_| none end)
+  ids: List[Optional[Int]] = [1, 2].map do |i| some(i) end
+  puts("#{joint.backs} #{ids}")
+end
+""",
+        None,
+        None,
+    ),
+    (
+        "a map block of the item type where the list wants Optional items",
+        "def main() -> Void\n  ids: List[Optional[Int]] = [1, 2].map do |i| i end\nend\n",
+        "CHECK-TYPE-MISMATCH",
+        "i",
+    ),
     ("a none with no expected type", "def main() -> Void\n  age = none\nend\n", "CHECK-OPTIONAL-TYPE", "none"),
     (
         "a none where another type is expected",

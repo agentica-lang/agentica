@@ -8,6 +8,16 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.31.2] - 2026-11-14
+
+### Fixed
+
+- A hand-made `.agcb` that interpolates a bad Error fails with `RUNTIME-INTERNAL` under the JIT too (#1561).
+- On macOS, with more than one scheduler, a stop signal after a task crash stops the program again (#1529).
+- `none` in a `map` block takes the Optional item of the expected list type (#1579).
+- `List.uniq` takes `Bytes` items, as `Set.new` does (#1577).
+- `r.error?` on a Result says that a Result has `ok?`, not to unwrap it (#1578).
+
 ## [0.31.1] - 2026-11-13
 
 ### Fixed
@@ -1533,7 +1543,8 @@ First release of Agentica, a statically typed language designed for AI agents.
 - `main` returns `Void`; maps preserve insertion order and support fallible
   lookups.
 
-[unreleased]: https://github.com/agentica-lang/agentica/compare/0.31.1...HEAD
+[unreleased]: https://github.com/agentica-lang/agentica/compare/0.31.2...HEAD
+[0.31.2]: https://github.com/agentica-lang/agentica/compare/0.31.1...0.31.2
 [0.31.1]: https://github.com/agentica-lang/agentica/compare/0.31.0...0.31.1
 [0.31.0]: https://github.com/agentica-lang/agentica/compare/0.31.0-alpha.1...0.31.0
 [0.31.0-alpha.1]: https://github.com/agentica-lang/agentica/compare/0.30.1...0.31.0-alpha.1
