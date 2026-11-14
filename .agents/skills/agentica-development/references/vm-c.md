@@ -13,7 +13,9 @@ Each rule names one place in the VM that follows it.
   exit on overflow; the loader's sums use `uint64_t`. An Int argument is
   checked for a negative value first, then compared as `uint64_t` with what is
   left (`builtin_slice`, `vm/bytes.c`); never cast a negative `int64_t` to
-  `size_t`. Int arithmetic uses `__builtin_*_overflow` (`vm/interp.c`).
+  `size_t`. Int arithmetic uses `__builtin_*_overflow` (`vm/interp.c`). A
+  `cap - used` on `size_t` checks `used <= cap` first: a give-back can push
+  `used` past the cap, and the difference wraps (`LIMIT`, `vm/process.c`).
 - **No undefined behavior.** Shift an unsigned value by a count checked below
   64 (`builtin_int_shift_left`, `vm/numbers.c`). Read a value's bytes as
   another type with `memcpy` (`agc_value_word`, `vm/value.h`), never a
@@ -66,6 +68,10 @@ Each rule names one place in the VM that follows it.
   (`dropped`), and the completion callback frees it; `vm/tcp.c` does the same
   with counts (`settle`, and `shared_done` with `refs`). Test a deadline while
   it runs with a slow shim (`tests/fixtures/dns_shim.c`).
+- **A cancel never loses a result.** A new request kind gets a test that
+  cancels the waiting task, at N = 1 and N = 4, then reads again: data the
+  request already took goes back for the next read, or the docs say it is
+  dropped (`request_cancel`, `vm/tcp.c`; `references/vm-net.md`).
 - **The hot path allocates nothing it can avoid.** Scratch space starts in a
   C-stack array and moves to `agc_alloc` memory only when it grows
   (`agc_equal`, `vm/equal.c`). Flags read on the hot path are plain

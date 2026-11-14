@@ -72,7 +72,9 @@ a pointer. Do not create files under `docs/` unless the user asks for one
 ## 5. Verify
 
 - `rg` the old names, removed symbols and changed numbers across `docs/`,
-  `.agents/`, `site/` and `CHANGELOG.md`; fix every stale hit.
+  `.agents/`, `site/` and `CHANGELOG.md`; fix every stale hit. Old printed
+  text (a type name a value prints, `help` output) is an old name too, and
+  the release smoke of `tools/release.py` reads `help` output.
 - When you move or delete a section, `rg` its path, its heading and its
   section number, and fix every pointer in the same change.
 - Prose wrap (AGENTS.md): 80 columns in `docs/` and `.agents/skills/`; one

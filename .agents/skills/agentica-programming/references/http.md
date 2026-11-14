@@ -160,7 +160,9 @@ return `HTTP.Answer.Upgrade`, `.Stream` or `.Whole`, or call
   a function `Handler -> Handler` that calls `next.call(request)` or answers
   itself. It returns a lambda, `->(request) { step(next, request) }`; keep
   the lambda to one call and put the work in a named `step`. Stack them:
-  `logged(guarded(&hello))`. An `App` middleware is `App -> App`.
+  `logged(guarded(&hello))`. An `App` middleware is `App -> App`. A
+  middleware that reads the body (uploads) wraps only its route and runs after
+  the auth and CSRF checks; test each public route without credentials.
 - `serve` (TCP) and `serve_tls` (a server `TLS.Context`) return at once and
   serve in the background. Port 0 picks a free port (`local_port`). Each
   connection runs in its own task, with keep-alive.
