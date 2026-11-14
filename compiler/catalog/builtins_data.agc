@@ -4128,6 +4128,19 @@ ROWS_31: List[Model.Builtin] = [
 
 ROWS_32: List[Model.Builtin] = [
   Model.Builtin(
+    name: "Process.poll_line",
+    parameters: [
+      Model.Named(name: "process", type: Types.Type.Opaque("Process")),
+      Model.Named(name: "timeout_ms", type: Types.Type.Int),
+    ],
+    result: Types.Type.Result(Types.Type.String),
+    rule: Model.Rule.Plain,
+    implementation: "Process.poll_line",
+    effects: ["subprocess"],
+    description: "Read a bounded UTF-8 line as read_line does, but a timeout keeps the program and its output.",
+    alternatives: [],
+  ),
+  Model.Builtin(
     name: "Process.read_available",
     parameters: [
       Model.Named(name: "process", type: Types.Type.Opaque("Process")),

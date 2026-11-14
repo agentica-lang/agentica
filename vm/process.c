@@ -42,7 +42,7 @@
 #define OWNER(ptr, field) ((proc *)(void *)((char *)(ptr) - offsetof(proc, field)))
 
 typedef enum {
-  REQ_LINE, REQ_BYTES, REQ_SEND, REQ_WAIT, REQ_OUTPUT, REQ_CLOSE, REQ_AVAILABLE, REQ_SPAWN, REQ_STDIN
+  REQ_LINE, REQ_BYTES, REQ_SEND, REQ_WAIT, REQ_OUTPUT, REQ_CLOSE, REQ_AVAILABLE, REQ_SPAWN, REQ_STDIN, REQ_POLL
 } req_kind;
 typedef enum { STOP_NONE, STOP_TERM, STOP_KILLED } stop_state;
 
@@ -223,6 +223,8 @@ static void closed_grace(uv_handle_t *h) {
   handle_gone(p);
 }
 
+static bool line_kind(req_kind kind) { return kind == REQ_LINE || kind == REQ_POLL; }
+
 static bool wait_over(const proc *p) { return p->closed || (p->exited && p->err_done); }
 
 static bool output_over(const proc *p) {
@@ -295,6 +297,7 @@ static bool finish(request *q) {
   bool reads = !q->closed && !q->over;
   switch (q->kind) {
     case REQ_LINE:
+    case REQ_POLL:
       if (reads) agc_inbuf_cut_line(&p->out_buf, &q->cut);
       break;
     case REQ_BYTES:
@@ -323,7 +326,7 @@ static bool finish(request *q) {
       break;
   }
   /* Once readied the request is the job's, and its done half may free it on a scheduler: nothing reads it after. */
-  bool over = q->kind == REQ_LINE && reads && q->cut.status == AGC_CUT_OVER;
+  bool over = line_kind(q->kind) && reads && q->cut.status == AGC_CUT_OVER;
   agc_io_ready(q->job);
   return over;
 }
@@ -597,7 +600,7 @@ static void link_request(request *q, agc_io_job *job) {
   q->job = job;
   q->counted = true;
   p->users++;
-  if (q->kind == REQ_LINE || q->kind == REQ_BYTES || q->kind == REQ_AVAILABLE) {
+  if (line_kind(q->kind) || q->kind == REQ_BYTES || q->kind == REQ_AVAILABLE) {
     p->reader = q;
   } else if (q->kind == REQ_SEND) {
     p->writer = q;
@@ -653,13 +656,13 @@ static void drop_request(void *data) {
 }
 
 static bool read_ready(proc *p, req_kind kind, size_t count) {
-  return p->closed || p->out_cut || p->err_cut || agc_inbuf_ready(&p->out_buf, kind == REQ_LINE, count);
+  return p->closed || p->out_cut || p->err_cut || agc_inbuf_ready(&p->out_buf, line_kind(kind), count);
 }
 
 static agc_value take(agc_vm *vm, proc *p, req_kind kind, size_t count) {
   if (p->closed) return agc_error(vm, AGC_KIND_PROCESS_CLOSED, closed_text);
   if (p->out_cut || p->err_cut) return agc_error(vm, AGC_KIND_PROCESS_TOO_LARGE, over_text);
-  if (kind != REQ_LINE) return agc_inbuf_bytes(vm, AGC_STREAM_PROCESS, &p->out_buf, count);
+  if (!line_kind(kind)) return agc_inbuf_bytes(vm, AGC_STREAM_PROCESS, &p->out_buf, count);
   bool over;
   agc_value line = agc_inbuf_line(vm, AGC_STREAM_PROCESS, &p->out_buf, "process: line exceeds 1048576 bytes",
                                   "process: end of input", &over);
@@ -722,12 +725,13 @@ static agc_value posted_result(agc_vm *vm, const request *q, agc_value context) 
     case REQ_CLOSE:
       return agc_void();
     case REQ_LINE:
+    case REQ_POLL:
     case REQ_BYTES:
       if (q->closed)
         result = agc_error(vm, AGC_KIND_PROCESS_CLOSED, closed_text);
       else if (q->over)
         result = agc_error(vm, AGC_KIND_PROCESS_TOO_LARGE, over_text);
-      else if (q->kind == REQ_LINE)
+      else if (line_kind(q->kind))
         result = agc_inbuf_cut_line_value(vm, AGC_STREAM_PROCESS, &q->cut, "process: line exceeds 1048576 bytes",
                                           "process: end of input");
       else
@@ -772,7 +776,7 @@ static agc_value request_done(agc_vm *vm, void *data, agc_value context) {
   agc_value result;
   if (q->kind == REQ_CLOSE) {
     result = agc_void();
-  } else if (q->kind == REQ_LINE || q->kind == REQ_BYTES) {
+  } else if (line_kind(q->kind) || q->kind == REQ_BYTES) {
     result = take(vm, p, q->kind, q->count);
     agc_charge(vm, agc_value_units(result));
   } else if (p->closed) {
@@ -794,10 +798,22 @@ static bool stops_child(req_kind kind) {
   return kind == REQ_LINE || kind == REQ_BYTES || kind == REQ_AVAILABLE || kind == REQ_SEND || kind == REQ_SPAWN;
 }
 
+/* A poll_line keeps the child at its timeout. When its task gave it up after `finish` had cut a line, the line goes
+   back to the front of stdout with its ending, so the next read finds it. */
+static void give_back(request *q) {
+  agc_inbuf_cut *cut = &q->cut;
+  if (cut->status != AGC_CUT_DATA || q->closed || q->over) return;
+  const uint8_t *ending = (const uint8_t *)"\r\n";
+  size_t ending_len = cut->taken - cut->len;
+  if (!agc_inbuf_unread(&q->p->out_buf, ending + 2 - ending_len, ending_len) ||
+      !agc_inbuf_unread(&q->p->out_buf, cut->data, cut->len))
+    agc_out_of_memory();
+}
+
 /* What a deadline does to a posted request, on the I/O thread: the kind's `pause`, before EXPIRED is published, or
    the step that `expired` posts when the task saw the timeout first. The request leaves its slot. A read or a send
    closes the child even when it was finished: its task got the timeout, so the line or the write status it carries
-   is lost, and the child must then look closed, as at N = 1. */
+   is lost, and the child must then look closed, as at N = 1. A poll_line keeps the child (give_back). */
 static void stop_request(void *data) {
   request *q = data;
   if (!q->posted || q->stopped || !q->counted) return;
@@ -805,6 +821,8 @@ static void stop_request(void *data) {
   unlink_request(q);
   if (q->kind == REQ_CLOSE && !q->finished)
     trace_alive(q->p);
+  else if (q->kind == REQ_POLL && q->finished)
+    give_back(q);
   else if (stops_child(q->kind))
     shut(q->p);
 }
@@ -824,7 +842,7 @@ static agc_value request_expired(agc_vm *vm, void *data, agc_value context) {
     trace_alive(q->p);
     return agc_void();
   }
-  if (q->kind != REQ_WAIT && q->kind != REQ_OUTPUT) shut(q->p);
+  if (q->kind != REQ_WAIT && q->kind != REQ_OUTPUT && q->kind != REQ_POLL) shut(q->p);
   return agc_stream_timed_out(vm, AGC_STREAM_PROCESS);
 }
 
@@ -1669,6 +1687,11 @@ static agc_value builtin_read_line(agc_vm *vm, agc_value *args, uint32_t span) {
   return read_op(vm, args[0], REQ_LINE, 0, agc_as_int(vm, args[1]));
 }
 
+static agc_value builtin_poll_line(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  return read_op(vm, args[0], REQ_POLL, 0, agc_as_int(vm, args[1]));
+}
+
 /* Process.read_bytes: up to count bytes of the child's stdout, as a Bytes. */
 static agc_value builtin_read_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
@@ -1937,6 +1960,7 @@ const agc_builtin agc_process_builtins[] = {
   {"Process.channel_send", 3, builtin_channel_send, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
   {"Process.channel_close", 2, builtin_channel_close, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"Process.read_available", 2, builtin_read_available, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"Process.poll_line", 2, builtin_poll_line, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
 };
 
 const size_t agc_process_builtin_count = sizeof agc_process_builtins / sizeof agc_process_builtins[0];

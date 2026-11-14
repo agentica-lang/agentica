@@ -112,6 +112,31 @@ Read from the program's standard output.
 - `read_line` removes the line ending (LF or CRLF), takes at most 1 MiB and decodes strictly. At the end of output it gives an error, and a line over 1 MiB closes the program.
 - `read_bytes` takes `count` from 0 to 1048576, waits for that many bytes or the end of output, and gives them as [`Bytes`](/library/data-structures/bytes/). At the end of output they are empty.
 
+## Process.poll_line
+
+```signature
+Process.poll_line(process: Process, timeout_ms: Int) -> Result[String]
+```
+
+Reads a line as `read_line` does, but a timeout keeps the program and what it has written of the next line: the error has the kind `process.timeout`, and a later read gets the whole line. At the end of output the kind is `process.eof`. So a loop can do other work between polls.
+
+```agentica {mode="check"}
+def main() -> Void
+  p = Process.spawn("sh", ["-c", "printf 'wor'; sleep 1; echo king"]).unwrap!
+  case Process.poll_line(p, 100)
+    ok(line) -> puts(line)
+    error(e) -> puts(e.kind)
+  end
+
+  puts(Process.poll_line(p, 5000))
+end
+```
+
+```text
+process.timeout
+ok("working")
+```
+
 ## Process.close_stdin
 
 ```signature

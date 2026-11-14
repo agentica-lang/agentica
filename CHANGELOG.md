@@ -10,6 +10,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `Process.poll_line(p, timeout_ms)`: reads a line as `read_line` does, but a timeout keeps the program and its output (#997).
 - `System.subscribe([System.Signal.Term, System.Signal.Int])` gives a channel
   that receives those signals instead of letting them stop the program, and
   `System.signal_number` gives a signal's number (#1477).

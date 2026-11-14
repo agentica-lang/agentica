@@ -234,6 +234,47 @@ static void test_a_read_deadline_stops_the_child_before_the_task_takes_it(void) 
   settle();
 }
 
+static agc_value poll_line(int64_t timeout) {
+  return step(call(one, "Process.poll_line", 2, child, agc_int(timeout), agc_void(), agc_void()));
+}
+
+/* poll_line's deadline passes while only part of a line has come: the `pause` takes the read out of its slot but
+   keeps the child, the next poll finds the whole line, and the program still answers. */
+static void test_a_poll_deadline_keeps_the_child_and_its_partial_line(void) {
+  assert(agc_io_share(&vm, false));
+  captured("printf par; read x; echo tial; read y; echo $y");
+  assert(error_is(poll_line(5), "process: operation timed out"));
+  agc_value sent = step(call(one, "Process.send", 3, child, agc_test_str("go\nback\n"), agc_int(5000), agc_void()));
+  assert(agc_as_result(&vm, sent)->ok);
+  assert(is_text(ok_of(poll_line(5000)), "partial"));
+  assert(is_text(ok_of(poll_line(5000)), "back"));
+  close_child();
+  settle();
+}
+
+/* The task gives a linked poll up (woken by something else): the stop that its `expired` half posts takes the poll out
+   of its slot but keeps the child, so the line that comes after is read whole, CRLF included, by a byte read and the
+   next poll. */
+static void test_a_poll_given_up_keeps_the_child_and_the_next_line(void) {
+  assert(agc_io_share(&vm, false));
+  captured("read x; sleep 0.3; printf 'second\\r\\nthird\\n'; exec sleep 60");
+  calling polling = call(one, "Process.poll_line", 2, child, agc_int(60000), agc_void(), agc_void());
+  assert(start(&polling));
+  (void)agc_io_poll(&vm, false);
+  agc_value sent = step(call(two, "Process.send", 3, child, agc_test_str("go\n"), agc_int(5000), agc_void()));
+  assert(agc_as_result(&vm, sent)->ok);
+  assert(error_is(take(&polling), "process: operation timed out"));
+  wait_ms(600);
+  for (int k = 0; k < 10; k++) (void)agc_io_poll(&vm, false);
+  agc_value bytes = ok_of(step(call(one, "Process.read_bytes.bytes", 3, child, agc_int(8), agc_int(5000), agc_void())));
+  size_t len = 0;
+  const uint8_t *data = agc_bytes_data(&vm, bytes, &len);
+  assert(len == 8 && memcmp(data, "second\r\n", 8) == 0);
+  assert(is_text(ok_of(poll_line(5000)), "third"));
+  close_child();
+  settle();
+}
+
 /* A task parked in a wait is cancelled, then the deadline passes. A scheduler finds the job still waiting and posts
    its cancel; the I/O thread stops the wait (the cancel half, at the deadline), the job comes back dropping, and a
    scheduler ends it with `drop`, which runs on the I/O thread. The child is closed after. */
@@ -323,6 +364,8 @@ int main(void) {
   test_a_read_deadline_before_the_line();
   test_a_read_deadline_stops_the_child_before_the_task_takes_it();
   test_a_wait_cancelled_past_its_deadline();
+  test_a_poll_deadline_keeps_the_child_and_its_partial_line();
+  test_a_poll_given_up_keeps_the_child_and_the_next_line();
   test_the_channel_through_posted_steps();
   test_a_spawn_in_a_callback();
 #endif

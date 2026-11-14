@@ -257,6 +257,25 @@ def test_wait_retries_preserve_children_active_stream_deadlines_abort_them(tmp_p
         "false\nfalse\n"
 
 
+@pytest.mark.parametrize("schedulers", ("1", "4"))
+def test_poll_line_times_out_without_closing_the_child_or_losing_a_partial_line(tmp_path, schedulers):
+    node = tool("node")
+    body = ('  Result.unwrap!(Process.send(p, "par", 5000))\n'
+            "  IO.inspect(Process.poll_line(p, 50))\n"
+            '  Result.unwrap!(Process.send(p, "tial\\r\\nnext\\n", 5000))\n'
+            "  IO.inspect(Process.poll_line(p, 5000))\n"
+            "  IO.inspect(Process.read_bytes(p, 5, 5000))\n"
+            "  Result.unwrap!(Process.close_stdin(p, 5000))\n"
+            "  IO.inspect(Process.poll_line(p, 5000))\n"
+            "  IO.inspect(Process.wait(p, 5000))")
+    assert output(tmp_path, program(node, "echo", body), "peer stderr\n", env={"AGENTICA_SCHEDULERS": schedulers}) == (
+        'error("process: operation timed out", kind: "process.timeout")\n'
+        'ok("partial")\n'
+        "ok(<Bytes 5 6e6578740a>)\n"
+        'error("process: end of input", kind: "process.eof")\n'
+        "ok(0)\n")
+
+
 @pytest.mark.parametrize("operation", (
     "Process.read_line(p, 20)",
     "Process.send_bytes(p, Bytes.from_list(List.repeat(65, 1048576)).unwrap!, 20)",

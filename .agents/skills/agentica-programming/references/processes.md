@@ -11,6 +11,7 @@ Process.spawn(command: String, args: List[String],
 Process.send(process: Process, text: String, timeout_ms: Int) -> Result[Void]
 Process.send_bytes(process: Process, bytes: Bytes, timeout_ms: Int) -> Result[Void]
 Process.read_line(process: Process, timeout_ms: Int) -> Result[String]
+Process.poll_line(process: Process, timeout_ms: Int) -> Result[String]
 Process.read_bytes(process: Process, count: Int, timeout_ms: Int) -> Result[Bytes]
 Process.close_stdin(process: Process, timeout_ms: Int) -> Result[Void]
 Process.wait(process: Process, timeout_ms: Int) -> Result[Int]
@@ -68,6 +69,9 @@ Process.parent_send(text: String, timeout_ms: Int) -> Result[Void]
 - `read_line` takes a line of at most 1 MiB, strips LF/CRLF and decodes strict
   UTF-8. An unterminated final line succeeds; empty EOF is an error; an
   oversized line closes the child.
+- `poll_line` is `read_line` whose timeout keeps the child and any part of a
+  line: the error has kind `process.timeout` (end of output: `process.eof`), so
+  a loop can poll the child between other work.
 - `close_stdin` flushes and closes input, idempotently; later sends fail. `wait`
   returns the host exit code (nonzero too), can be repeated, preserves unread
   stdout and waits for stderr forwarding to finish.
