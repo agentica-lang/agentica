@@ -336,7 +336,7 @@ stops with `RUNTIME-STEP-LIMIT`.
 ### 4.5 Builtin imports
 
 The file lists the builtins it uses as `(key, arity)`. The key is the
-implementation key in `compiler/catalog/builtins_data.agc`, not the written
+implementation key in `compiler/catalog/builtins_<module>.agc`, not the written
 name: `puts` and `IO.puts` both import `"puts"`. Overloads such as `Map.get` and
 `ok` are separate entries by arity. The loader resolves each pair against the C
 table and rejects unknown pairs. There are no internal helper builtins with one

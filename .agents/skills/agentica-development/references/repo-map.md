@@ -21,7 +21,7 @@ compiler/         # the front end: one folder per context (placement and imports
   modules/        # the linker: workspace.agc (the port of the stages to the machine), resolve_import.agc (std/, pkg/, relative; std/internal/ is for std only), link_env.agc (Env, Settings), test_main.agc (the `main` of a test file with `test_*` functions)
   packages/       # manifest, lock, workspace members, cache, hash and native libraries (native_library.agc); no I/O
   check/          # the checker; check_tables.agc (hand-edited); defaults.agc (shared with lowering); check_prelude.agc and prelude_files.agc (stages.md)
-  catalog/        # the builtin catalog (imports only syntax/): builtins_data.agc and prelude_data.agc (by hand)
+  catalog/        # the builtin catalog (imports only syntax/): builtins_data.agc (records, enums), builtins_<module>.agc (rows) and prelude_data.agc (by hand)
   lower/          # the IR and lowering; lower_tables.agc holds VM_BUILTINS
   bytecode/       # the writer; bytecode_tables.agc holds the format and OPCODES (same order as agc_opcode in vm/value.h)
   docs/           # `agentica doc`
