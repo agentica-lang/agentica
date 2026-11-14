@@ -59,7 +59,3 @@ results.
   ports, sockets and contextual services carry state. A handle sent over a
   channel stays owned by the task that opened it; the ownership and
   synchronization rules for the others are open.
-- **`Process.poll_line(process: Process, timeout_ms: Int) -> Result[String]`**
-  may come later (issue #997), so a loop can alternate requests with polling
-  child output. It is not part of the task work, and no application has needed
-  it yet.

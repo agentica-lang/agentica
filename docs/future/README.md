@@ -14,7 +14,7 @@ delete its section; section numbers are never renumbered, so gaps stay.
 - `19-simd.md`: SIMD in the VM (#996).
 - `25-ruby-typed-idioms.md`: what was decided against.
 - `27-iteration-and-concurrency.md`: what was decided against in tasks and
-  streams, and `Process.poll_line` (#997).
+  streams.
 - `28-vm-metrics.md`: VM metrics in Prometheus text (#992).
 - `29-tls-context.md`: later TLS options (#993).
 - `48-regex.md`: Unicode classes for regex (#990), and the decisions that bound

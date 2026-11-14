@@ -37,7 +37,7 @@ typedef struct {
   agc_cut_status status;
   int error;
   uint8_t *data;
-  size_t len;
+  size_t len, taken;
 } agc_inbuf_cut;
 
 typedef enum {
