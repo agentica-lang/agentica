@@ -164,11 +164,30 @@ TCP.write_buffer(socket: TCP.Socket, bytes: Int) -> Result[Void]
 - On a TLS socket `write` is `send`, and `flush` returns at once.
 
 ```agentica
-def broadcast(sockets: List[TCP.Socket], line: String) -> Void
-  for socket in sockets
-    _ = TCP.write(socket, line, 2000)
-  end
+def read_two(listener: TCP.Listener) -> Result[String]
+  client = try TCP.accept(listener, 2000)
+  first = try TCP.read_line(client, 2000)
+  second = try TCP.read_line(client, 2000)
+  TCP.close(client)
+  ok("#{first} #{second}")
 end
+
+def main() -> Void
+  listener = TCP.listen("127.0.0.1", 0).unwrap!
+  reader = Task.spawn(&read_two, listener)
+  socket = TCP.connect("127.0.0.1", TCP.local_port(listener), 2000).unwrap!
+  _ = TCP.write(socket, "one\n", 2000)
+  _ = TCP.write(socket, "two\n", 2000)
+  puts(TCP.flush(socket, 2000))
+  puts(Task.await(reader))
+  TCP.close(socket)
+  TCP.close_listener(listener)
+end
+```
+
+```output
+ok()
+ok("one two")
 ```
 
 ### TCP.close and TCP.close_listener
