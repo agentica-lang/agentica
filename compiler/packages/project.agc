@@ -69,7 +69,7 @@ def find(workspace: Workspace.Workspace, root_dir: String, running: String) -> R
         empty.file,
         "PKG-LOCK-MISSING",
         "#{MANIFEST_FILE} declares dependencies but there is no #{LOCK_FILE}",
-        Failure.hint("write #{LOCK_FILE} beside #{MANIFEST_FILE}, with an entry for each dependency"),
+        Failure.hint("run agentica update to write #{LOCK_FILE}"),
       ),
     )
   end
