@@ -13,10 +13,12 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `Actor.inbox` gives the running actor its own inbox, so `init` can monitor tasks into it (#1525).
 - `List.count` takes a block and counts the elements it accepts, as Ruby's `xs.count { |x| ... }` does (#1590).
 - `List.tally`, `List.group_by` and `Range.group_by` take `Bytes` keys, as `List.uniq` does (#1596).
+- `ATS.clear(table)` removes every key of a shared table in one step, whatever its size (#1108).
 
 ### Changed
 
 - Loops that call builtins such as `Map.get` or `String.slice` are up to 17% faster on Linux and macOS (#1599).
+- `std/cache`: dropping a generation and `Cache.clear` take the same short time whatever the size; a put that dropped 32,000 entries waited about 200 ms (#1108).
 
 ### Fixed
 

@@ -1,4 +1,5 @@
 ATS.add
+ATS.clear
 ATS.delete
 ATS.get
 ATS.has_key?

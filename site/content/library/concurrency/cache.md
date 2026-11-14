@@ -163,7 +163,7 @@ none
 
 Each live generation holds at most half of `max_bytes` and of `max_entries` (at least one entry), so the cache holds between half and all of them; the size of an entry (key, value and the 64 bytes) is compared with `max_bytes / 2`. On a skewed workload (20,000 keys of 1 KB, the popular ones asked far more often, a budget of 10% of the keys) it kept 63% of the requests as hits (37% at a flatter skew). A simulation of the same requests with the whole budget gives 69% and 45% for exact LRU, and 60% and 34% for emptying the whole cache when it is full.
 
-Dropping a generation deletes its entries one by one (the table of `ATS` has no `clear`), which takes about 5 µs an entry: the one task whose put starts it waits, for example 150 ms for 30,000 entries, and the other tasks go on. A put that finds a drop under way in another task, and no room, is dropped: a cache may forget an entry.
+Dropping a generation is one [`ATS.clear`](/library/concurrency/ats/#atsdelete-and-atsclear) of its table, whatever its size, so the put that starts it does not wait and `Cache.clear` takes the same short time. A put that finds a drop under way in another task, and no room, is dropped: a cache may forget an entry.
 
 ## The byte count is exact
 
@@ -171,7 +171,7 @@ The byte count stays exact when tasks race on the same entries: no size is count
 
 - A task cancelled in the middle of a write can leave one uncounted entry, readable until a later drop of its table.
 - A task cancelled between reserving the bytes of an entry and storing it leaves that reservation counted until its generation is dropped.
-- Only the current generation can be dropped. A drop that stalls (its task did not beat for two seconds on the cache's clock, as when it was cancelled) is taken over by one other task; the cache may then skip a generation, and the table it skipped keeps its entries uncounted and unread until a later drop empties it.
+- Only the current generation can be dropped. A drop whose task has held it for two seconds on the cache's clock, as when it was cancelled in the middle, is taken over by one other task. If the first task was only stopped and goes on later, the cache may skip a generation, whose table keeps its entries uncounted and unread until a later drop empties it, or lose the entries of the young generation, whose bytes stay counted until that generation is dropped.
 
 ## Writing another cache
 

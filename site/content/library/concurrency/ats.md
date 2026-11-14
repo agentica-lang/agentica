@@ -13,8 +13,8 @@ An `ATS[K, V]` (Agentica Table Storage) is a table that tasks share and update i
 - `puts`, `print`, interpolation and `==` on a table are `CHECK-TYPE-MISMATCH`, `.to_s` is `CHECK-UNKNOWN-METHOD`, and a struct with a table field is `CHECK-NOT-ENCODABLE` as JSON. `IO.inspect` prints `<ATS>` without the contents. Use `to_map` to see them.
 - The garbage collector frees a table when nothing refers to it. It is not an OS resource, so the owner rule of handle ownership does not apply: the task that made it does not own it, its end does not close it, and `Task.spawn_owning` is not needed. A task reaches a table through a handle it was given or through a constant table. A table belongs to the run that made it, and a call from another run stops with `RUNTIME-ATS-CONTEXT`.
 - There is no size limit and no expiry; a bounded cache is [std/cache](/library/concurrency/cache/), a `std/` module on top of `ATS`, and an expiring one belongs in a module too. Not supported: ordered tables, duplicate keys, a block-based `update`, a compare-and-swap `replace`, and tables shared between OS processes.
-- `put`, `put_new`, `delete` and `add` carry the `concurrency` effect, which also keeps `CHECK-UNUSED-VALUE` away from an ignored `put_new` or `add`.
-- `get`, `put`, `put_new`, `has_key?`, `delete` and `add` take O(log n) in the table size, and `size` O(1). `keys` and `to_map` take their snapshot in O(1) without holding back other tasks, and build their list or map in O(n). A write that loses a race to another task builds its change again; each retry is charged to the task's step budget, so a task under heavy contention yields and cannot spin forever.
+- `put`, `put_new`, `delete`, `clear` and `add` carry the `concurrency` effect, which also keeps `CHECK-UNUSED-VALUE` away from an ignored `put_new` or `add`.
+- `get`, `put`, `put_new`, `has_key?`, `delete` and `add` take O(log n) in the table size, and `size` and `clear` O(1). `keys` and `to_map` take their snapshot in O(1) without holding back other tasks, and build their list or map in O(n). A write that loses a race to another task builds its change again; each retry is charged to the task's step budget, so a task under heavy contention yields and cannot spin forever.
 - In BDD, each scenario runs in its own child VM and runs the step program's `main` again, so a table made in `main` and captured by step blocks is shared by the steps of one scenario and starts fresh in the next. A table cannot go in the JSON state of `BDD.set`.
 
 ## ATS.new
@@ -124,13 +124,33 @@ end
 400
 ```
 
-## ATS.delete
+## ATS.delete and ATS.clear
 
 ```signature
 ATS.delete(table: ATS[K, V], key: K) -> Void
+ATS.clear(table: ATS[K, V]) -> Void
 ```
 
-Removes the key; an absent key is ignored.
+`delete` removes the key; an absent key is ignored. `clear` removes every key in one step, whatever the size of the table: a reader sees the table full or empty, a snapshot taken before keeps its keys, and a write that runs at the same time lands before the clear and is removed, or after it and stays.
+
+```agentica
+def main() -> Void
+  stock: ATS[String, Int] = ATS.new()
+  stock.put("tea", 3)
+  stock.put("milk", 1)
+  before = stock.keys
+  stock.clear
+  puts(stock.size)
+  puts(before)
+  puts(stock.add("tea", 1))
+end
+```
+
+```output
+0
+["tea", "milk"]
+1
+```
 
 ## ATS.size, ATS.keys and ATS.to_map
 

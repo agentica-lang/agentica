@@ -20,6 +20,16 @@ ROWS: List[Model.Builtin] = [
     alternatives: [],
   ),
   Model.Builtin(
+    name: "ATS.clear",
+    parameters: [Model.Named(name: "table", type: Types.Type.ATS(Types.Type.Var("K"), Types.Type.Var("V")))],
+    result: Types.Type.Void,
+    rule: Model.Rule.AtsCall,
+    implementation: "ATS.clear",
+    effects: ["concurrency"],
+    description: "Remove every key atomically, in one step whatever the size; VM only.",
+    alternatives: [],
+  ),
+  Model.Builtin(
     name: "ATS.delete",
     parameters: [
       Model.Named(name: "table", type: Types.Type.ATS(Types.Type.Var("K"), Types.Type.Var("V"))),

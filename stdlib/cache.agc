@@ -54,7 +54,7 @@ def memory(max_bytes: Int, options: Options = Options()) -> Store
   generation.put(0, 0)
   started: ATS[Int, Int] = ATS.new()
   rotations: ATS[Int, Int] = ATS.new()
-  beats: ATS[Int, Int] = ATS.new()
+  claimed: ATS[Int, Int] = ATS.new()
   deaths: ATS[Int, Int] = ATS.new()
   stored: ATS[Int, Int] = ATS.new()
   counted: ATS[Int, Int] = ATS.new()
@@ -75,7 +75,7 @@ def memory(max_bytes: Int, options: Options = Options()) -> Store
     generation: generation,
     started: started,
     rotations: rotations,
-    beats: beats,
+    claimed: claimed,
     deaths: deaths,
     stored: stored,
     counted: counted,
@@ -144,8 +144,8 @@ ENTRY_OVERHEAD = 64
 # A task that holds a rotation for longer than this on the cache's clock is taken to have died (cancelled or
 # crashed): another may redo it.
 ROTATION_LEASE_MS = 2_000
-# A rotation shows it is alive after this many deletes.
-BEAT_EVERY = 1024
+# The key of a slot's ids that holds the token of the rotation that last emptied the slot. Ids start at 1.
+CLEARED = 0
 
 struct Entry
   key: String
@@ -165,7 +165,7 @@ struct Memory
   generation: ATS[Int, Int]
   started: ATS[Int, Int]
   rotations: ATS[Int, Int]
-  beats: ATS[Int, Int]
+  claimed: ATS[Int, Int]
   deaths: ATS[Int, Int]
   stored: ATS[Int, Int]
   counted: ATS[Int, Int]
@@ -270,9 +270,10 @@ def insert(state: Memory, key: String, value: String) -> Bool
   return false if g < 0
 
   id = state.ids.add(0, 1)
-  entry = Entry(key: key, value: value, at: now(state), id: id, gen: g)
   live = live_in(state, g)
+  mark = live.get(CLEARED).unwrap_or(0)
   live.put(id, size)
+  entry = Entry(key: key, value: value, at: now(state), id: id, gen: g)
   if not slot(state, g).put_new(slot_key(g, key), entry)
     live.delete(id)
     give_back(state, g, size)
@@ -280,11 +281,15 @@ def insert(state: Memory, key: String, value: String) -> Bool
   end
 
   # A task that stalled for two rotations wrote into a table the cache has reused, where its entry is not counted and
-  # its id was wiped, so it just takes the entry out. A task that read the generation as at most one behind is safe:
-  # the rotation that empties its table starts only after the next one is published, which is after this read.
-  if current(state) - g >= 2
+  # its id was wiped. A task that read the generation as at most one behind is safe from that: the rotation that
+  # empties its table starts only after the next one is published, which is after this read. But a late owner (see
+  # rotate) can empty the slot between the two writes above, which the mark shows: the id is then gone and the entry
+  # is not, so no remove could win it. Either way the task takes its entry out; the bytes stay counted until the
+  # generation is dropped.
+  if current(state) - g >= 2 or live.get(CLEARED).unwrap_or(0) != mark
     live.delete(id)
     take_out(state, entry)
+    return false
   end
 
   true
@@ -375,15 +380,24 @@ end
 # Moves from generation g to g + 1 when this task wins the right to: it empties the table that g + 1 reuses, which no
 # reader looks at, then publishes. Returns whether this task published.
 def rotate(state: Memory, g: Int) -> Bool
-  before = state.rotations.get(g).unwrap_or(0)
   token = claim(state, g)
   return false if token == 0
 
-  return false if not empty_slot(state, g + 1, g, token)
+  # Both clears are one step each, so a rotation is short. A task whose rotation was taken over, because it stood
+  # still for the whole lease, finds here that it is no longer the owner. If it passes this check just before the
+  # takeover, it empties a slot that may by then hold the young generation: those entries are lost, and their bytes
+  # stay counted until that generation is dropped.
+  return false if not owner?(state, g, token)
+
+  at = now(state)
+  live = live_in(state, g + 1)
+  live.clear
+  slot(state, g + 1).clear
+  live.put(CLEARED, token)
 
   # Keys of long dead generations: nothing reads them, and they would pile up. All those up to g - 3 go, not only
   # g - 3, since the rotation from a generation that a late publish skipped never ran. The tables hold a few keys.
-  for table in [state.started, state.rotations, state.beats, state.stored, state.counted]
+  for table in [state.started, state.rotations, state.claimed, state.stored, state.counted]
     for key in table.keys
       if key <= g - 3
         table.delete(key)
@@ -392,83 +406,47 @@ def rotate(state: Memory, g: Int) -> Bool
   end
 
   if state.ttl_ms > 0
-    state.started.put(g + 1, now(state))
+    state.started.put(g + 1, at)
   end
 
-  # A task whose rotation was taken over, because it stood still for the whole lease, finds it is no longer the owner.
-  # It can still pass this check just before the takeover and publish late, after the new owner did. So the publish
-  # adds one rather than putting g + 1, which could move the generation back: a late one skips a generation, whose
-  # slot then keeps entries that nothing reads or counts until a later rotation empties it.
-  if current(state) == g and state.rotations.get(g).unwrap_or(0) == token
+  # A late owner can pass this check too and publish after the new owner did. So the publish adds one rather than
+  # putting g + 1, which could move the generation back: a late one skips a generation, whose slot then keeps entries
+  # that nothing reads or counts until a later rotation empties it.
+  if owner?(state, g, token)
     _ = state.generation.add(0, 1)
-    # A takeover is over once the generation moved: no one can claim this rotation again, so the arbiter can go.
-    state.deaths.delete(before)
+    # A takeover is over once the generation moved: no one can claim this rotation again, so the arbiters can go.
+    state.deaths.clear
     return true
   end
 
   false
 end
 
-# Empties the table and the ids of the slot of generation `dead`, beating the heart of the rotation from g as it goes.
-# Returns false, stopping, when the rotation was taken over: the new owner empties the table. Until this task sees
-# that, the new owner may have published and the slot may hold a young generation, so it deletes only what belongs to
-# a dead one: a key whose entry is two or more generations behind g (the key names its generation, so the entry read
-# is the one deleted), and an id below its token (ids and tokens share one counter, and every entry of a later
-# generation draws its id after that generation was published, which is after this rotation was claimed).
-def empty_slot(state: Memory, dead: Int, g: Int, token: Int) -> Bool
-  return false if current(state) != g
-
-  table = slot(state, dead)
-  count = 0
-  for key in table.keys
-    found = table.get(key)
-    if found.ok? and found.unwrap!.gen <= g - 2
-      table.delete(key)
-    end
-    count += 1
-    return false if count % BEAT_EVERY == 0 and not beat(state, g, token)
-  end
-
-  live = live_in(state, dead)
-  for id in live.keys
-    if id < token
-      live.delete(id)
-    end
-    count += 1
-    return false if count % BEAT_EVERY == 0 and not beat(state, g, token)
-  end
-
-  true
-end
-
-# Shows that the owner of the rotation from g is alive. Returns false when it is no longer the owner or the generation
-# has moved on, since the table it is emptying is then in use.
-def beat(state: Memory, g: Int, token: Int) -> Bool
-  return false if current(state) != g or state.rotations.get(g).unwrap_or(0) != token
-
-  state.beats.put(g, state.clock.call())
-  true
+def owner?(state: Memory, g: Int, token: Int) -> Bool
+  current(state) == g and state.rotations.get(g).unwrap_or(0) == token
 end
 
 # The right to rotate from generation g, as a token, or 0. Only the rotation from the current generation can be
-# started. The owner beats while it works; a rotation whose owner has not beaten for the lease is taken over by the one
-# task that wins `deaths.add` on its token, so two tasks never take over the same dead owner.
+# started. A rotation whose owner has held it for longer than the lease is taken over by the one task that wins
+# `deaths.add` on its token, so two tasks never take over the same dead owner.
 def claim(state: Memory, g: Int) -> Int
   return 0 if current(state) != g
 
   token = state.ids.add(0, 1)
   at = state.clock.call()
   if state.rotations.put_new(g, token)
-    state.beats.put(g, at)
+    state.claimed.put(g, at)
     return token
   end
 
   owner = state.rotations.get(g).unwrap_or(0)
-  if owner > 0 and at - state.beats.get(g).unwrap_or(at) > ROTATION_LEASE_MS and state.deaths.add(owner, 1) == 1
+  # An owner that was cancelled before it wrote its time has none: the first task that sees it starts the lease.
+  _ = state.claimed.put_new(g, at)
+  if owner > 0 and at - state.claimed.get(g).unwrap_or(at) > ROTATION_LEASE_MS and state.deaths.add(owner, 1) == 1
     # The dead owner may have finished while this task decided; nothing has been taken from it yet, so just leave.
     return 0 if current(state) != g
 
-    state.beats.put(g, at)
+    state.claimed.put(g, at)
     state.rotations.put(g, token)
     return token
   end

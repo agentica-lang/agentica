@@ -1,6 +1,6 @@
 """ATS shared tables on the VM: the semantics of one table against an independent Python model
 (tests/fixtures/ats-peer.py) with String and with Bytes keys, many tasks on four schedulers updating one table with
-exact results, a table that BDD steps capture from main and that starts fresh in each scenario, and, in the slow tier,
+exact results, a table that one task clears while others read and write it, a table that BDD steps capture from main and that starts fresh in each scenario, and, in the slow tier,
 tables made and dropped in a loop whose heap stays bounded.
 """
 import json
@@ -36,6 +36,7 @@ STATEMENTS = {
     "put": "t.put({key}, {v})",
     "put_new": 'puts("put_new {k} #{{t.put_new({key}, {v})}}")',
     "delete": "t.delete({key})",
+    "clear": "t.clear",
     "add": 'puts("add {k} #{{t.add({key}, {v})}}")',
     "get": 'show_get(t, "{k}", {key})',
     "has_key": 'puts("has_key {k} #{{t.has_key?({key})}}")',
@@ -88,6 +89,74 @@ def main() -> Void
   puts("wrong #{wrong}")
   shared = (0...50).to_a.filter do |k| cache.get("key-#{k}").unwrap_or(-1) != k end
   puts("shared wrong #{shared}")
+end
+"""
+
+CLEARED = """\
+struct Job
+  id: Int
+  table: ATS[Int, Int]
+  done: ATS[Int, Int]
+end
+
+# Adds 1 to its own key until the clears are over, then 500 times more. A clear takes the key away whole, so an add
+# gives 1 or the last result plus 1. Returns how many did not.
+def write(job: Job) -> Int
+  wrong = 0
+  last = 0
+  after = 0
+  while after < 500
+    done = job.done.has_key?(0)
+    now = job.table.add(job.id, 1)
+    if now != 1 and now != last + 1
+      wrong += 1
+    end
+
+    last = now
+    if done
+      after += 1
+    end
+  end
+
+  return wrong
+end
+
+# A snapshot holds only writer keys, each once, with a count that some add gave.
+def read(job: Job) -> Int
+  wrong = 0
+  while not job.done.has_key?(0)
+    snapshot = job.table.to_map
+    keys = job.table.keys
+    low = snapshot.values.any? { |n| n < 1 }
+    if low or snapshot.size > 8 or keys.size > 8 or keys.uniq.size != keys.size
+      wrong += 1
+    end
+  end
+
+  return wrong
+end
+
+def clear(job: Job) -> Int
+  for round in 1..3000
+    job.table.clear
+    if round % 100 == 0
+      Task.sleep(1)
+    end
+  end
+
+  job.done.put(0, 1)
+  return 0
+end
+
+def main() -> Void
+  table: ATS[Int, Int] = ATS.new()
+  done: ATS[Int, Int] = ATS.new()
+  tasks = (1..8).to_a.map do |id| Task.spawn(&write, Job(id: id, table: table, done: done)) end
+  tasks = tasks + (1..4).to_a.map do |id| Task.spawn(&read, Job(id: id, table: table, done: done)) end
+  tasks = tasks.push(Task.spawn(&clear, Job(id: 0, table: table, done: done)))
+  puts("wrong #{tasks.map { |task| Task.await(task) }.sum}")
+  puts("size #{table.size}")
+  puts("short #{table.to_map.values.count { |n| n < 500 }}")
 end
 """
 
@@ -145,7 +214,8 @@ end
 
 def operations(seed, count, keys):
     rng = random.Random(seed)
-    names = list(STATEMENTS)
+    # A clear is rare, so the table also gets large between two of them.
+    names = [name for name in STATEMENTS if name != "clear"] * 4 + ["clear"]
     return [[rng.choice(names), rng.choice(keys), rng.randint(-50, 50)] for _ in range(count)]
 
 
@@ -181,6 +251,14 @@ def test_tasks_on_four_schedulers_share_a_counter_and_a_cache(tmp_path):
     # 64 tasks add 2000 each; 50 shared keys are stored once in all; the 32 even tasks keep their 10 own keys.
     assert vm.stdout.splitlines() == [
         "total 128000", "stored 50", "hits 65", "cache 370", "wrong []", "shared wrong []"]
+
+
+@pytest.mark.parametrize("schedulers", ["1", "4"])
+def test_a_clear_next_to_readers_and_writers_takes_whole_entries(tmp_path, schedulers):
+    bytecode = compile_text(CLEARED, "ats_cleared", tmp_path)
+    vm = run_vm(bytecode, "--schedulers", schedulers, env=vm_environment())
+    assert vm.code == 0, vm.stderr
+    assert vm.stdout.splitlines() == ["wrong 0", "size 8", "short 0"]
 
 
 def test_a_table_captured_by_bdd_steps_starts_fresh_in_each_scenario(tmp_path):
