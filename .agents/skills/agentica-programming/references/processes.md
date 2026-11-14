@@ -224,7 +224,10 @@ System.signal(pid: Int, signal: System.Signal, comm: String) -> Result[Void]
   returns `system.signal` errors.
 - `spawn_group` starts the child in a new session with the program's stdin,
   stdout and stderr: its stream calls are `process.failed` errors, and close
-  and the end of the run `SIGKILL` the whole group. `--deny-run` refuses it.
+  and the end of the run `SIGKILL` the whole group. The child has no
+  controlling terminal (`/dev/tty` fails: no `ssh` password prompt, `less`,
+  `sudo`, editor) and shares stdin with the program (a pending `IO.gets` splits
+  the input); flush your output before spawning. `--deny-run` refuses it.
 - `System.signal` reaches a process that is not a child, only while
   `/proc/<pid>/comm` (at most 15 bytes) equals `comm`, through a pidfd, so a
   reused pid is never hit. Linux 5.3+; elsewhere `signal: pidfd is
