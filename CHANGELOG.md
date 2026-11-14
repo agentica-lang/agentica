@@ -8,12 +8,13 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-### Fixed
-
-- `none` in the block of `Range.map`, `Lazy.map`, `flat_map` and a nested `map` takes the expected Optional type (#1595).
 ### Changed
 
 - Loops that call builtins such as `Map.get` or `String.slice` are up to 17% faster on Linux and macOS (#1599).
+
+### Fixed
+
+- `none` in the block of `Range.map`, `Lazy.map`, `flat_map` and a nested `map` takes the expected Optional type (#1595).
 
 ## [0.32.0-alpha.2] - 2026-11-14
 
