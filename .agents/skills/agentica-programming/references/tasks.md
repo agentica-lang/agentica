@@ -104,16 +104,20 @@ the timeout.
 `Task.cancel(task)` stops a task you no longer need (such as an owner task that
 keeps state) without a "stop" message. It does not wait: it marks the task and
 every task it started cancelled and returns. A cancelled task runs at most the
-rest of its current turn: a sleep, channel wait, await or I/O wait ends at once;
-a long loop stops at the end of its turn. Its handles close as for any task end
-(a channel it owns closes, and receivers get `error("channel: closed")`).
-Cancelling an ended task, or twice, does nothing. Any task holding the handle
-may cancel it, also one received on a channel. A cancel is not a crash: no
-report, no exit code change. A timed await does not cancel; the VM also cancels
-a task when an ancestor crashes or its `Task.map` item times out. `Task.await`
-on a cancelled task returns `error("task: cancelled")` when `R` is a `Result`,
-else halts with `RUNTIME-TASK-CANCELLED` at the await: give a task you may
-cancel a `Result` return type when something awaits it.
+rest of its current turn: a sleep, channel wait, await or I/O wait ends at
+once; a long loop stops at the end of its turn. A cancel during the turn wins
+even if the turn returned: an item a consuming call (channel, TCP or process
+read) already took is lost. To stop a reader without loss, read with a timeout
+(`Process.poll_line`, a receive with a timeout) and end the task yourself. Its
+handles close as for any task end (a channel it owns closes, and receivers get
+`error("channel: closed")`). Cancelling an ended task, or twice, does nothing.
+Any task holding the handle may cancel it, also one received on a channel. A
+cancel is not a crash: no report, no exit code change. A timed await does not
+cancel; the VM also cancels a task when an ancestor crashes or its `Task.map`
+item times out. `Task.await` on a cancelled task returns `error("task:
+cancelled")` when `R` is a `Result`, else halts with `RUNTIME-TASK-CANCELLED`
+at the await: give a task you may cancel a `Result` return type when something
+awaits it.
 
 ## Monitors
 
