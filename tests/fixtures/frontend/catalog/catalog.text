@@ -5,11 +5,11 @@ builtin Channel.address forms=1
 builtin Channel.close forms=1
   Channel.close(channel: Channel[T]) -> Void shape=(Channel(Var(T))) -> Void rule=ChannelTarget impl="Channel.close" effects=["concurrency"] desc="Close a channel idempotently; waiting tasks wake, and received values still drain; VM only."
 builtin Channel.closed? forms=1
-  Channel.closed?(channel: Channel[T]) -> Bool shape=(Channel(Var(T))) -> Bool rule=ChannelTarget impl="Channel.closed?" effects=[] desc="True once the channel is closed, even with values still buffered; VM only."
+  Channel.closed?(channel: Channel[T]) -> Bool shape=(Channel(Var(T))) -> Bool rule=ChannelTarget impl="Channel.closed?" effects=["concurrency"] desc="True once the channel is closed, even with values still buffered; VM only."
 builtin Channel.empty? forms=1
-  Channel.empty?(channel: Channel[T]) -> Bool shape=(Channel(Var(T))) -> Bool rule=ChannelTarget impl="Channel.empty?" effects=[] desc="True when no value is left to receive; after closed?, it says the channel is drained; VM only."
+  Channel.empty?(channel: Channel[T]) -> Bool shape=(Channel(Var(T))) -> Bool rule=ChannelTarget impl="Channel.empty?" effects=["concurrency"] desc="True when no value is left to receive; after closed?, it says the channel is drained; VM only."
 builtin Channel.lazy forms=1
-  Channel.lazy(channel: Channel[A], timeout_ms: Int) -> Lazy[A] shape=(Channel(Var(A)), Int) -> Lazy(Var(A)) rule=Prelude impl="" effects=[] desc="Source: the values of the channel until it is closed and drained; each wait for a value obeys timeout_ms, and a timeout ends the terminal with error(\"channel: timed out\"); VM only."
+  Channel.lazy(channel: Channel[A], timeout_ms: Int) -> Lazy[A] shape=(Channel(Var(A)), Int) -> Lazy(Var(A)) rule=Prelude impl="" effects=["concurrency"] desc="Source: the values of the channel until it is closed and drained; each wait for a value obeys timeout_ms, and a timeout ends the terminal with error(\"channel: timed out\"); VM only."
 builtin Channel.new forms=1
   Channel.new(capacity: Int) -> Channel[T] shape=(Int) -> Channel(Var(T)) rule=ChannelNew impl="Channel.new" effects=[] desc="Create a channel that holds 1 to 1048576 values; needs an expected Channel[T] type; VM only."
 builtin Channel.recv forms=1
@@ -25,7 +25,7 @@ builtin Dir.mkdir_private forms=1
 builtin File.append_text forms=1
   File.append_text(path: String, text: String, timeout_ms: Int = 30000) -> Result[Void] shape=(String, String, Int = 30000) -> Result(Void) rule=Plain impl="File.append_text" effects=["filesystem"] desc="Append at most 1 MiB of UTF-8 text."
 builtin File.chunks forms=1
-  File.chunks(path: String, size: Int = 65536, timeout_ms: Int = 30000) -> Lazy[Bytes] shape=(String, Int = 65536, Int = 30000) -> Lazy(Bytes) rule=Prelude impl="" effects=[] desc="Source: the bytes of a regular file in chunks of size bytes (1 to 16777216), the last one shorter; the file opens when a terminal starts and closes before it returns; VM only."
+  File.chunks(path: String, size: Int = 65536, timeout_ms: Int = 30000) -> Lazy[Bytes] shape=(String, Int = 65536, Int = 30000) -> Lazy(Bytes) rule=Prelude impl="" effects=["filesystem"] desc="Source: the bytes of a regular file in chunks of size bytes (1 to 16777216), the last one shorter; the file opens when a terminal starts and closes before it returns; VM only."
 builtin File.close forms=1
   File.close(handle: File.Handle, timeout_ms: Int = 30000) -> Result[Void] shape=(Opaque(File.Handle), Int = 30000) -> Result(Void) rule=Plain impl="File.close" effects=["filesystem"] desc="Flush and close a file handle idempotently."
 builtin File.each_line forms=1
@@ -33,7 +33,7 @@ builtin File.each_line forms=1
 builtin File.flush forms=1
   File.flush(handle: File.Handle, timeout_ms: Int = 30000) -> Result[Void] shape=(Opaque(File.Handle), Int = 30000) -> Result(Void) rule=Plain impl="File.flush" effects=["filesystem"] desc="Flush pending file output."
 builtin File.foreach forms=1
-  File.foreach(path: String, buffer_bytes: Int = 65536, timeout_ms: Int = 30000) -> Lazy[String] shape=(String, Int = 65536, Int = 30000) -> Lazy(String) rule=Prelude impl="" effects=[] desc="Source: the lines of a file, read as File.each_line reads them; the file opens when a terminal starts and closes before it returns; VM only."
+  File.foreach(path: String, buffer_bytes: Int = 65536, timeout_ms: Int = 30000) -> Lazy[String] shape=(String, Int = 65536, Int = 30000) -> Lazy(String) rule=Prelude impl="" effects=["filesystem"] desc="Source: the lines of a file, read as File.each_line reads them; the file opens when a terminal starts and closes before it returns; VM only."
 builtin File.lstat forms=1
   File.lstat(path: String, timeout_ms: Int = 30000) -> Result[File.Info] shape=(String, Int = 30000) -> Result(Struct(File.Info)) rule=Plain impl="File.lstat" effects=["filesystem"] desc="Like File.stat, but a symbolic link is described itself and has kind \"link\"; VM only."
 builtin File.open forms=2
@@ -92,7 +92,7 @@ builtin FrontEnd.stdin_bytes forms=1
 builtin HttpWire.accept forms=1
   HttpWire.accept(server: HTTP.Server) -> Result[TCP.Socket] shape=(Opaque(HttpWire.Server)) -> Result(Opaque(TCP.Socket)) rule=Plain impl="HttpWire.accept" effects=["network"] desc="Internal to std/http: wait for a free slot and the next connection."
 builtin HttpWire.awaited? forms=1
-  HttpWire.awaited?(reply: Channel[Result[HTTP.Response]]) -> Bool shape=(Channel(Result(Struct(HttpWire.Response)))) -> Bool rule=Plain impl="HttpWire.awaited?" effects=[] desc="Internal to std/http: false once a receiver that parked on reply left without a value."
+  HttpWire.awaited?(reply: Channel[Result[HTTP.Response]]) -> Bool shape=(Channel(Result(Struct(HttpWire.Response)))) -> Bool rule=Plain impl="HttpWire.awaited?" effects=["concurrency"] desc="Internal to std/http: false once a receiver that parked on reply left without a value."
 builtin HttpWire.chunk forms=1
   HttpWire.chunk(state: HttpWire.Chunk, data: Bytes, from: Int) -> Result[HttpWire.Chunk] shape=(Struct(HttpWire.Chunk), Bytes, Int) -> Result(Struct(HttpWire.Chunk)) rule=Plain impl="HttpWire.chunk.bytes" effects=[] desc="Internal to std/http: decode the chunked framing in data from offset from; runs holds the start and length of each piece of body; the error is the answer status and the reason."
 builtin HttpWire.chunk_read forms=1
@@ -552,7 +552,7 @@ builtin Process.wait forms=1
 builtin System.Profile.measure forms=1
   System.Profile.measure(label: String, block: Fn[T]) -> T shape=(String, Fn([], Var(T))) -> Var(T) rule=ProfileMeasure impl="Profile.measure" effects=[] desc="Run the block and return its value; with AGENTICA_VM_TRACE=profile, its calls, steps, time and GC time go to a section row of the profile under label; VM only."
 builtin System.Profile.steps forms=1
-  System.Profile.steps() -> Int shape=() -> Int rule=Plain impl="Profile.steps" effects=[] desc="Count the steps this task has run so far; the same on every run, with or without the profile."
+  System.Profile.steps() -> Int shape=() -> Int rule=Plain impl="Profile.steps" effects=["clock"] desc="Count the steps this task has run so far; the same on every run, with or without the profile."
 builtin RegexEngine.search forms=1
   RegexEngine.search(text: String, ops: List[Int], xs: List[Int], ys: List[Int], classes: List[List[Int]], ncap: Int, mode: Int) -> List[Int] shape=(String, List(Int), List(Int), List(Int), List(List(Int)), Int, Int) -> List(Int) rule=Plain impl="RegexEngine.search" effects=[] desc="Internal to std/regex: run a compiled program; mode 0 gives the first end, 1 the captures, 2 all."
 builtin Random.float forms=1
@@ -745,17 +745,17 @@ builtin Time.now_ms forms=1
 builtin __fail_arg forms=1
   __fail_arg(code: String, index: Int, message: String) -> Void shape=(String, Int, String) -> Void rule=Plain impl="__fail_arg" effects=[] desc="Internal to the prelude: halt with a RUNTIME- code at the argument of the call of the program."
 builtin __lazy_channel forms=1
-  __lazy_channel(channel: Channel[A], timeout_ms: Int) -> Lazy[A] shape=(Channel(Var(A)), Int) -> Lazy(Var(A)) rule=Plain impl="__lazy_channel" effects=[] desc="Internal to the prelude: a step or terminal of Lazy (vm/lazy.c)."
+  __lazy_channel(channel: Channel[A], timeout_ms: Int) -> Lazy[A] shape=(Channel(Var(A)), Int) -> Lazy(Var(A)) rule=Plain impl="__lazy_channel" effects=["concurrency"] desc="Internal to the prelude: a step or terminal of Lazy (vm/lazy.c)."
 builtin __lazy_chunk_while forms=1
   __lazy_chunk_while(lazy: Lazy[A], f: Fn[A, A, Bool]) -> Lazy[List[A]] shape=(Lazy(Var(A)), Fn([Var(A), Var(A)], Bool)) -> Lazy(List(Var(A))) rule=Plain impl="__lazy_chunk_while" effects=[] desc="Internal to the prelude: a step or terminal of Lazy (vm/lazy.c)."
 builtin __lazy_chunks forms=1
-  __lazy_chunks(path: String, size: Int, timeout_ms: Int) -> Lazy[Bytes] shape=(String, Int, Int) -> Lazy(Bytes) rule=Plain impl="__lazy_chunks.bytes" effects=[] desc="Internal to the prelude: a step or terminal of Lazy (vm/lazy.c)."
+  __lazy_chunks(path: String, size: Int, timeout_ms: Int) -> Lazy[Bytes] shape=(String, Int, Int) -> Lazy(Bytes) rule=Plain impl="__lazy_chunks.bytes" effects=["filesystem"] desc="Internal to the prelude: a step or terminal of Lazy (vm/lazy.c)."
 builtin __lazy_count forms=1
   __lazy_count(lazy: Lazy[A], kind: Int, count: Int) -> Lazy[A] shape=(Lazy(Var(A)), Int, Int) -> Lazy(Var(A)) rule=Plain impl="__lazy_count" effects=[] desc="Internal to the prelude: a step or terminal of Lazy (vm/lazy.c)."
 builtin __lazy_each forms=1
   __lazy_each(lazy: Lazy[A], f: Fn[A, Result[Void]]) -> Result[Void] shape=(Lazy(Var(A)), Fn([Var(A)], Result(Void))) -> Result(Void) rule=Plain impl="__lazy_each" effects=[] desc="Internal to the prelude: a step or terminal of Lazy (vm/lazy.c)."
 builtin __lazy_file forms=1
-  __lazy_file(path: String, buffer_bytes: Int, timeout_ms: Int) -> Lazy[String] shape=(String, Int, Int) -> Lazy(String) rule=Plain impl="__lazy_file" effects=[] desc="Internal to the prelude: a step or terminal of Lazy (vm/lazy.c)."
+  __lazy_file(path: String, buffer_bytes: Int, timeout_ms: Int) -> Lazy[String] shape=(String, Int, Int) -> Lazy(String) rule=Plain impl="__lazy_file" effects=["filesystem"] desc="Internal to the prelude: a step or terminal of Lazy (vm/lazy.c)."
 builtin __lazy_find forms=1
   __lazy_find(lazy: Lazy[A], f: Fn[A, Bool]) -> Result[A] shape=(Lazy(Var(A)), Fn([Var(A)], Bool)) -> Result(Var(A)) rule=Plain impl="__lazy_find" effects=[] desc="Internal to the prelude: a step or terminal of Lazy (vm/lazy.c)."
 builtin __lazy_flat_map forms=1
@@ -813,11 +813,11 @@ builtin ATS.add forms=1
 builtin ATS.delete forms=1
   ATS.delete(table: ATS[K, V], key: K) -> Void shape=(ATS(Var(K), Var(V)), Var(K)) -> Void rule=AtsCall impl="ATS.delete" effects=["concurrency"] desc="Remove a key atomically; an absent key is ignored; VM only."
 builtin ATS.get forms=1
-  ATS.get(table: ATS[K, V], key: K) -> Result[V] shape=(ATS(Var(K), Var(V)), Var(K)) -> Result(Var(V)) rule=AtsCall impl="ATS.get" effects=[] desc="Read the value of a key, or an error when the key is absent; VM only."
+  ATS.get(table: ATS[K, V], key: K) -> Result[V] shape=(ATS(Var(K), Var(V)), Var(K)) -> Result(Var(V)) rule=AtsCall impl="ATS.get" effects=["concurrency"] desc="Read the value of a key, or an error when the key is absent; VM only."
 builtin ATS.has_key? forms=1
-  ATS.has_key?(table: ATS[K, V], key: K) -> Bool shape=(ATS(Var(K), Var(V)), Var(K)) -> Bool rule=AtsCall impl="ATS.has_key?" effects=[] desc="Check whether a key exists; VM only."
+  ATS.has_key?(table: ATS[K, V], key: K) -> Bool shape=(ATS(Var(K), Var(V)), Var(K)) -> Bool rule=AtsCall impl="ATS.has_key?" effects=["concurrency"] desc="Check whether a key exists; VM only."
 builtin ATS.keys forms=1
-  ATS.keys(table: ATS[K, V]) -> List[K] shape=(ATS(Var(K), Var(V))) -> List(Var(K)) rule=AtsCall impl="ATS.keys" effects=[] desc="A snapshot of the keys in first-insertion order; VM only."
+  ATS.keys(table: ATS[K, V]) -> List[K] shape=(ATS(Var(K), Var(V))) -> List(Var(K)) rule=AtsCall impl="ATS.keys" effects=["concurrency"] desc="A snapshot of the keys in first-insertion order; VM only."
 builtin ATS.new forms=1
   ATS.new() -> ATS[K, V] shape=() -> ATS(Var(K), Var(V)) rule=AtsNew impl="ATS.new" effects=[] desc="Create an empty shared table that tasks update in place; needs an expected ATS[K, V] type; VM only."
 builtin ATS.put forms=1
@@ -825,9 +825,9 @@ builtin ATS.put forms=1
 builtin ATS.put_new forms=1
   ATS.put_new(table: ATS[K, V], key: K, value: V) -> Bool shape=(ATS(Var(K), Var(V)), Var(K), Var(V)) -> Bool rule=AtsCall impl="ATS.put_new" effects=["concurrency"] desc="Insert the value only when the key is absent, atomically; false leaves the table unchanged; VM only."
 builtin ATS.size forms=1
-  ATS.size(table: ATS[K, V]) -> Int shape=(ATS(Var(K), Var(V))) -> Int rule=AtsCall impl="ATS.size" effects=[] desc="Count the entries of the table (a snapshot); VM only."
+  ATS.size(table: ATS[K, V]) -> Int shape=(ATS(Var(K), Var(V))) -> Int rule=AtsCall impl="ATS.size" effects=["concurrency"] desc="Count the entries of the table (a snapshot); VM only."
 builtin ATS.to_map forms=1
-  ATS.to_map(table: ATS[K, V]) -> Map[K, V] shape=(ATS(Var(K), Var(V))) -> Map(Var(K), Var(V)) rule=AtsCall impl="ATS.to_map" effects=[] desc="A snapshot of the table as a Map in first-insertion order; VM only."
+  ATS.to_map(table: ATS[K, V]) -> Map[K, V] shape=(ATS(Var(K), Var(V))) -> Map(Var(K), Var(V)) rule=AtsCall impl="ATS.to_map" effects=["concurrency"] desc="A snapshot of the table as a Map in first-insertion order; VM only."
 builtin Base64.encode64 forms=1
   Base64.encode64(data: Bytes) -> String shape=(Bytes) -> String rule=Plain impl="Base64.encode64.bytes" effects=[] desc="Encode bytes as padded base64 (RFC 4648) in lines of 60 characters, each ending in a newline, as Ruby does; VM only."
 builtin Base64.strict_encode64 forms=1

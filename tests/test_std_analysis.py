@@ -1128,9 +1128,13 @@ def test_bodies_read_a_std_module_as_the_binary_carries_it(driver, project):
     assert (err, [function["name"] for function in json.loads(out)["functions"]]) == ("", ["one"])
 
 
-# Purity through calls into another file, a cycle, a function value, a reference `&name`, a loop and an extern
-# function.
+# Purity through calls into another file, a cycle, function values (a parameter, a field, one given to a builtin, a
+# Lazy terminal), a reference `&name`, a loop, an extern function, file and channel sources and an ATS read.
 PURITY = """import Util from "util_log"
+
+struct Handler
+  run: Fn[Int, Int]
+end
 
 extern module "other"
   def twice(n: Int) -> Int
@@ -1167,6 +1171,20 @@ def loop(n: Int) -> Int
 end
 
 def native(n: Int) -> Int = twice(n)
+
+def field(h: Handler) -> Int = h.run(1)
+
+def lines(path: String) -> Lazy[String] = File.foreach(path)
+
+def drain(ch: Channel[Int]) -> Lazy[Int] = ch.lazy(100)
+
+def peek(t: ATS[String, Int]) -> Bool = t.has_key?("a")
+
+def map_with(xs: List[Int], f: Fn[Int, Int]) -> List[Int] = xs.map(f)
+
+def head(source: Lazy[String]) -> Result[List[String]] = source.first(1)
+
+def steps() -> Result[List[Int]] = [1, 2].lazy.map { |x| x + 1 }.to_a
 """
 
 
@@ -1179,18 +1197,25 @@ def test_bodies_say_why_a_function_is_not_pure(driver, project):
                                           reason["through"]) for reason in function["impure"]])
                for name, function in functions.items()}
     puts = ("stdout", "puts", 2)
-    read = ("filesystem", "File.read_text", 25)
+    read = ("filesystem", "File.read_text", 29)
     assert reasons == {
         "add": (True, []),
         "outer": (False, [(*puts, ["middle", f"{prefix}log"])]),
         "middle": (False, [(*puts, [f"{prefix}log"])]),
         "ping": (True, []),
         "pong": (True, []),
-        "apply": (False, [("function-value", "call", 20, [])]),
+        "apply": (False, [("function-value", "call", 24, [])]),
         "refs": (False, [(*read, ["touch"])]),
         "touch": (False, [(*read, [])]),
         "loop": (False, [(*puts, [f"{prefix}log"])]),
-        "native": (False, [("native", "twice", 37, [])]),
+        "native": (False, [("native", "twice", 41, [])]),
+        "field": (False, [("function-value", "call", 43, [])]),
+        "lines": (False, [("filesystem", "File.foreach", 45, [])]),
+        "drain": (False, [("concurrency", "Channel.lazy", 47, [])]),
+        "peek": (False, [("concurrency", "ATS.has_key?", 49, [])]),
+        "map_with": (False, [("function-value", "List.map", 51, [])]),
+        "head": (False, [("function-value", "Lazy.first", 53, [])]),
+        "steps": (False, [("function-value", "Lazy.to_a", 55, [])]),
     }
 
 

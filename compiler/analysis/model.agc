@@ -345,10 +345,10 @@ struct BodyModule
 end
 
 ## Why a function of `bodies` is not pure: the `effect` of the call (a builtin's effect such as `filesystem`, `native`
-## for a function of an `extern module`, `function-value` for a call of a function value), what it calls (a builtin, a
-## linked function name, or `call`) and its `range`. `through` is the chain of linked function names from the first one
-## the function calls to the one that makes the call, which is in the file of its prefix; empty when the function
-## makes it itself.
+## for a function of an `extern module`, `function-value` for a call that may run a function value, `unresolved` for a
+## call the checker did not resolve), what it calls (a builtin, a linked function name, or `call`) and its `range`.
+## `through` is the chain of linked function names from the first one the function calls to the one that makes the
+## call, which is in the file of its prefix; empty when the function makes it itself.
 struct Reason
   effect: String
   call: String
