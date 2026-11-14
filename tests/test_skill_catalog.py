@@ -62,8 +62,8 @@ def catalog():
 @lru_cache(maxsize=None)
 def family_types():
     """The builtin types named Family.Member (a record, an enum or an opaque type of the catalog, such as
-    System.Signal), which catalog() leaves out: every quoted Type.Name of the catalog's data file."""
-    text = (ROOT / "compiler" / "catalog" / "builtins_data.agc").read_text(encoding="utf-8")
+    System.Signal), which catalog() leaves out: every quoted Type.Name of the catalog's files."""
+    text = "".join(path.read_text(encoding="utf-8") for path in sorted((ROOT / "compiler" / "catalog").glob("builtins_*.agc")))
     return frozenset(re.findall(r'"([A-Z][A-Za-z0-9]*\.[A-Z][A-Za-z0-9]*)"', text))
 
 

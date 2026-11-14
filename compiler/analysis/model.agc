@@ -299,6 +299,10 @@ end
 ##   `Bytes.length` for `data.size`, `Bytes.at` for `data[i]`, `ok`, `some`); the children are the arguments, the
 ##   receiver of a method first. A call with named arguments (`f(1, size: 2)`) has them in parameter order, and a
 ##   parameter it leaves out before the last one it gives is a `default` node, which takes the parameter's default.
+##   `type_args` are the types a call of a generic function or builtin binds: for a function, one per type parameter in
+##   order (its `generics`); for a builtin, one per type variable of its row, in the order they first appear in its
+##   parameters, then its result (`List.map` is `[A, B]`). A type the call leaves open has the kind `none`. On any
+##   other node `type_args` is an empty list.
 ## - `index`: `target[index]` on a List or Map; the children are the target and the index.
 ## - `op`: a binary operator, `text` as written (`+`, `-`, `<=`, `==`, `!=`, ...); the two children carry their own
 ##   types. `and`, `or`, `not` (`text` `!`) and `neg` (`text` `-`) are their own kinds. A minus before a number literal
@@ -325,6 +329,7 @@ struct Node
   target: String
   new: Bool
   children: List[Node]
+  type_args: List[TypeShape] = []
 end
 
 ## One parameter of a function of `bodies`, with its resolved type and its default value (one node, or none). The

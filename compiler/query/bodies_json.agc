@@ -1,8 +1,8 @@
 ## The JSON form of `Analysis.bodies` (#1159, experimental): `{version, command, file, modules, functions}`. A module
 ## is `{prefix, file}`. A function is `{name, linked, exported, span, name_span, generics, params, result, body, pure,
 ## impure}`, with a span `{file, range}`, a parameter `{name, type, range, default}` and a reason of `impure` `{effect,
-## call, range, through}`. A node is `{kind, type, range, text, target,
-## new, children}`, and a type `{kind, name, args}`.
+## call, range, through}`. A node is `{kind, type, range, text, target, new, children, type_args}`, and a type
+## `{kind, name, args}`.
 
 import Model from "../analysis/model"
 import DiagnosticJson from "../diagnostics/diagnostic_json"
@@ -70,6 +70,7 @@ def node_json(node: Model.Node) -> JSON.Value
     "target": JSON.from(node.target),
     "new": JSON.from(node.new),
     "children": JSON.array(node.children.map(&node_json)),
+    "type_args": JSON.array(node.type_args.map(&type_json)),
   })
 end
 

@@ -78,7 +78,7 @@ Recipes: `references/frontend.md` ("Common tasks"). Homes:
   `PARSE-`, `CHECK-`, `RUNTIME-`, `LOWER-`, `BYTECODE-`, `stages.md`), or
   `PKG-` (`Failure.fail_key` for a key path in `agentica.toml` or
   `agentica.lock`). Its `help:` names the Ruby form.
-- Builtin: catalog row in `compiler/catalog/builtins_data.agc` (golden in
+- Builtin: catalog row in `compiler/catalog/builtins_<module>.agc` (golden in
   `tests/fixtures/frontend/catalog/`), checker rule, `VM_BUILTINS` in
   `compiler/lower/lower_tables.agc` (`tests/test_frontend_catalog.py` checks
   every key), C in `vm/`, a golden (`references/vm-builtins.md`). Name it as
@@ -92,7 +92,7 @@ Recipes: `references/frontend.md` ("Common tasks"). Homes:
   `compiler/app/pipeline.agc`, with `tests/test_spec_<area>.py` and
   `tests/test_frontend_<stage>.py`.
 - Prelude method (List, Map, Lazy): a `Rule.Prelude` row in
-  `builtins_data.agc`, an entry in `compiler/catalog/prelude_data.agc`, and a
+  `builtins_<module>.agc`, an entry in `compiler/catalog/prelude_data.agc`, and a
   body in `stdlib/prelude/` (`references/stages.md`, "Compiler prelude").
 - `std/` module: `stdlib/<name>.agc`, listed in `stdlib/MODULES`, with a doc on
   the module and each export (`references/library-notes.md`).

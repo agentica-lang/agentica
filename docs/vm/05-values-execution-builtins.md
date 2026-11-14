@@ -393,7 +393,7 @@ into their GC state.
 ### 7.2 Scope
 
 The C builtins are in `vm/*.c`, with one table per module. The catalog and the
-implementation keys are in `compiler/catalog/builtins_data.agc`. BDD has no C
+implementation keys are in `compiler/catalog/builtins_<module>.agc`. BDD has no C
 builtins: it is written in Agentica (`std/bdd`, `docs/bdd.md`). A channel call
 that must wait, and `Task.map`, need the event loop. The event loop, files,
 processes, TCP, TLS and every `HttpWire` builtin (the pure helpers, the client

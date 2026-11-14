@@ -1,4 +1,4 @@
-## The data types of the builtin catalog. The rows themselves are builtins_data.agc, edited by hand.
+## The data types of the builtin catalog. The rows are builtins_<module>.agc, edited by hand.
 
 import Types from "../syntax/types"
 

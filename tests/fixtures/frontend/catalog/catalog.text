@@ -1,5 +1,59 @@
 builtin Address.send forms=1
   Address.send(address: Address[T], value: T, timeout_ms: Int) -> Result[Void] shape=(Address(Var(T)), Var(T), Int) -> Result(Void) rule=AddressSend impl="Address.send" effects=["concurrency"] desc="Send to the channel of the address as Channel#send does; error(\"address: gone\") once the channel is collected; VM only."
+builtin ATS.add forms=1
+  ATS.add(table: ATS[K, Int], key: K, by: Int) -> Int shape=(ATS(Var(K), Int), Var(K), Int) -> Int rule=AtsCall impl="ATS.add" effects=["concurrency"] desc="Add the amount by to the Int value of key (absent counts as 0) and return the new value, atomically; overflow halts with RUNTIME-INTEGER-OVERFLOW and leaves the table unchanged; VM only."
+builtin ATS.delete forms=1
+  ATS.delete(table: ATS[K, V], key: K) -> Void shape=(ATS(Var(K), Var(V)), Var(K)) -> Void rule=AtsCall impl="ATS.delete" effects=["concurrency"] desc="Remove a key atomically; an absent key is ignored; VM only."
+builtin ATS.get forms=1
+  ATS.get(table: ATS[K, V], key: K) -> Result[V] shape=(ATS(Var(K), Var(V)), Var(K)) -> Result(Var(V)) rule=AtsCall impl="ATS.get" effects=[] desc="Read the value of a key, or an error when the key is absent; VM only."
+builtin ATS.has_key? forms=1
+  ATS.has_key?(table: ATS[K, V], key: K) -> Bool shape=(ATS(Var(K), Var(V)), Var(K)) -> Bool rule=AtsCall impl="ATS.has_key?" effects=[] desc="Check whether a key exists; VM only."
+builtin ATS.keys forms=1
+  ATS.keys(table: ATS[K, V]) -> List[K] shape=(ATS(Var(K), Var(V))) -> List(Var(K)) rule=AtsCall impl="ATS.keys" effects=[] desc="A snapshot of the keys in first-insertion order; VM only."
+builtin ATS.new forms=1
+  ATS.new() -> ATS[K, V] shape=() -> ATS(Var(K), Var(V)) rule=AtsNew impl="ATS.new" effects=[] desc="Create an empty shared table that tasks update in place; needs an expected ATS[K, V] type; VM only."
+builtin ATS.put forms=1
+  ATS.put(table: ATS[K, V], key: K, value: V) -> Void shape=(ATS(Var(K), Var(V)), Var(K), Var(V)) -> Void rule=AtsCall impl="ATS.put" effects=["concurrency"] desc="Insert or replace the value of a key atomically; VM only."
+builtin ATS.put_new forms=1
+  ATS.put_new(table: ATS[K, V], key: K, value: V) -> Bool shape=(ATS(Var(K), Var(V)), Var(K), Var(V)) -> Bool rule=AtsCall impl="ATS.put_new" effects=["concurrency"] desc="Insert the value only when the key is absent, atomically; false leaves the table unchanged; VM only."
+builtin ATS.size forms=1
+  ATS.size(table: ATS[K, V]) -> Int shape=(ATS(Var(K), Var(V))) -> Int rule=AtsCall impl="ATS.size" effects=[] desc="Count the entries of the table (a snapshot); VM only."
+builtin ATS.to_map forms=1
+  ATS.to_map(table: ATS[K, V]) -> Map[K, V] shape=(ATS(Var(K), Var(V))) -> Map(Var(K), Var(V)) rule=AtsCall impl="ATS.to_map" effects=[] desc="A snapshot of the table as a Map in first-insertion order; VM only."
+builtin Base64.encode64 forms=1
+  Base64.encode64(data: Bytes) -> String shape=(Bytes) -> String rule=Plain impl="Base64.encode64.bytes" effects=[] desc="Encode bytes as padded base64 (RFC 4648) in lines of 60 characters, each ending in a newline, as Ruby does; VM only."
+builtin Base64.strict_encode64 forms=1
+  Base64.strict_encode64(data: Bytes) -> String shape=(Bytes) -> String rule=Plain impl="Base64.strict_encode64.bytes" effects=[] desc="Encode bytes as padded base64 (RFC 4648) on one line with no newline; VM only."
+builtin Base64.urlsafe_encode64 forms=1
+  Base64.urlsafe_encode64(data: Bytes, padding: Bool = true) -> String shape=(Bytes, Bool = true) -> String rule=Plain impl="Base64.urlsafe_encode64.bytes" effects=[] desc="Encode bytes as base64url (RFC 4648 section 5), with the = padding unless padding is false; VM only."
+builtin Base64.decode64 forms=1
+  Base64.decode64(text: String) -> Bytes shape=(String) -> Bytes rule=Plain impl="Base64.decode64.bytes" effects=[] desc="Decode base64 leniently, as Ruby does: other characters are skipped and a = in a group's last two places ends the text; never an error; VM only."
+builtin Base64.strict_decode64 forms=1
+  Base64.strict_decode64(text: String) -> Result[Bytes] shape=(String) -> Result(Bytes) rule=Plain impl="Base64.strict_decode64.bytes" effects=[] desc="Decode padded base64 (RFC 4648) with nothing else in the text, or error(\"invalid base64\"); VM only."
+builtin Base64.urlsafe_decode64 forms=1
+  Base64.urlsafe_decode64(text: String) -> Result[Bytes] shape=(String) -> Result(Bytes) rule=Plain impl="Base64.urlsafe_decode64.bytes" effects=[] desc="Decode base64url (RFC 4648 section 5), padded or not, or error(\"invalid base64\"); VM only."
+builtin Bytes.at forms=1
+  Bytes.at(bytes: Bytes, index: Int) -> Int shape=(Bytes, Int) -> Int rule=Plain impl="Bytes.at" effects=[] desc="Read the byte at a zero-based index as an Int (0..255); an index outside the bytes halts."
+builtin Bytes.concat forms=1
+  Bytes.concat(list: List[Bytes]) -> Bytes shape=(List(Bytes)) -> Bytes rule=Plain impl="Bytes.concat" effects=[] desc="Join the parts in order in one copy; prefer it to + in a loop."
+builtin Bytes.drop forms=1
+  Bytes.drop(bytes: Bytes, count: Int) -> Bytes shape=(Bytes, Int) -> Bytes rule=Plain impl="Bytes.drop" effects=[] desc="Copy the bytes after the first count; count above the length gives empty bytes, a negative count halts."
+builtin Bytes.each forms=1
+  Bytes.each(bytes: Bytes, block: Fn[Int, Void]) -> Void shape=(Bytes, Fn([Int], Void)) -> Void rule=Prelude impl="" effects=[] desc="Call block on each byte in order; returns nothing."
+builtin Bytes.empty? forms=1
+  Bytes.empty?(bytes: Bytes) -> Bool shape=(Bytes) -> Bool rule=Prelude impl="" effects=[] desc="Check whether there are no bytes."
+builtin Bytes.from_list forms=1
+  Bytes.from_list(list: List[Int]) -> Result[Bytes] shape=(List(Int)) -> Result(Bytes) rule=Plain impl="Bytes.from_list" effects=[] desc="Make bytes from a list of Ints; an item outside 0..255 gives an error with its index."
+builtin Bytes.length forms=1
+  Bytes.length(bytes: Bytes) -> Int shape=(Bytes) -> Int rule=Plain impl="Bytes.length" effects=[] desc="Count the bytes."
+builtin Bytes.slice forms=1
+  Bytes.slice(bytes: Bytes, start: Int, length: Int) -> Bytes shape=(Bytes, Int, Int) -> Bytes rule=Plain impl="Bytes.slice" effects=[] desc="Copy a byte range; halt outside bounds."
+builtin Bytes.take forms=1
+  Bytes.take(bytes: Bytes, count: Int) -> Bytes shape=(Bytes, Int) -> Bytes rule=Plain impl="Bytes.take" effects=[] desc="Copy the first count bytes; count above the length gives all of them, a negative count halts."
+builtin Bytes.to_a forms=1
+  Bytes.to_a(bytes: Bytes) -> List[Int] shape=(Bytes) -> List(Int) rule=Plain impl="Bytes.to_a" effects=[] desc="List the bytes as Ints (0..255); the way to map, select and the other List methods."
+builtin Bytes.decode forms=1
+  Bytes.decode(bytes: Bytes, encoding: String) -> Result[String] shape=(Bytes, String) -> Result(String) rule=Plain impl="Bytes.decode" effects=[] desc="Read the bytes as text in an encoding; invalid bytes or an unknown encoding give an error."
 builtin Channel.address forms=1
   Channel.address(channel: Channel[T]) -> Address[T] shape=(Channel(Var(T))) -> Address(Var(T)) rule=ChannelAddress impl="Channel.address" effects=[] desc="A send-only reference to the channel, which is data and does not keep the channel alive; VM only."
 builtin Channel.close forms=1
@@ -16,12 +70,87 @@ builtin Channel.recv forms=1
   Channel.recv(channel: Channel[T], timeout_ms: Int) -> Result[T] shape=(Channel(Var(T)), Int) -> Result(Var(T)) rule=ChannelRecv impl="Channel.recv" effects=["concurrency"] desc="Take the oldest value; wait up to timeout_ms; error(\"channel: closed\") once closed and empty, error(\"channel: timed out\"); VM only."
 builtin Channel.send forms=1
   Channel.send(channel: Channel[T], value: T, timeout_ms: Int) -> Result[Void] shape=(Channel(Var(T)), Var(T), Int) -> Result(Void) rule=ChannelSend impl="Channel.send" effects=["concurrency"] desc="Add a value in order; wait for room up to timeout_ms; error(\"channel: closed\") or error(\"channel: timed out\"); VM only."
+builtin Codec.decode forms=2
+  Codec.decode(codec: Codec[T], text: String) -> Result[T] shape=(Codec(Var(T)), String) -> Result(Var(T)) rule=CodecDecode impl="JSON.decode" effects=[] desc="Decode JSON text into the codec's struct, as JSON.decode does."
+  Codec.decode(codec: Codec[T], json: JSON.Value) -> Result[T] shape=(Codec(Var(T)), JSON.Value) -> Result(Var(T)) rule=CodecDecode impl="JSON.decode" effects=[] desc="Decode a JSON.Value into the codec's struct, as JSON.decode does."
+builtin Codec.encode forms=1
+  Codec.encode(codec: Codec[T], value: T) -> String shape=(Codec(Var(T)), Var(T)) -> String rule=CodecEncode impl="JSON.encode" effects=[] desc="Encode a value of the codec's struct as JSON text, as JSON.encode does."
+builtin Codec.from forms=1
+  Codec.from(codec: Codec[T], value: T) -> JSON.Value shape=(Codec(Var(T)), Var(T)) -> JSON.Value rule=CodecEncode impl="JSON.from" effects=[] desc="Convert a value of the codec's struct to a JSON.Value, as JSON.from does."
+builtin Codec.members forms=1
+  Codec.members(codec: Codec[T]) -> List[StructMember] shape=(Codec(Var(T))) -> List(Struct(StructMember)) rule=CodecMembers impl="Codec.members" effects=[] desc="The fields of the codec's struct, as T.members gives them; empty for an enum."
+builtin __fail_arg forms=1
+  __fail_arg(code: String, index: Int, message: String) -> Void shape=(String, Int, String) -> Void rule=Plain impl="__fail_arg" effects=[] desc="Internal to the prelude: halt with a RUNTIME- code at the argument of the call of the program."
+builtin __lazy_channel forms=1
+  __lazy_channel(channel: Channel[A], timeout_ms: Int) -> Lazy[A] shape=(Channel(Var(A)), Int) -> Lazy(Var(A)) rule=Plain impl="__lazy_channel" effects=[] desc="Internal to the prelude: a step or terminal of Lazy (vm/lazy.c)."
+builtin __lazy_chunk_while forms=1
+  __lazy_chunk_while(lazy: Lazy[A], f: Fn[A, A, Bool]) -> Lazy[List[A]] shape=(Lazy(Var(A)), Fn([Var(A), Var(A)], Bool)) -> Lazy(List(Var(A))) rule=Plain impl="__lazy_chunk_while" effects=[] desc="Internal to the prelude: a step or terminal of Lazy (vm/lazy.c)."
+builtin __lazy_chunks forms=1
+  __lazy_chunks(path: String, size: Int, timeout_ms: Int) -> Lazy[Bytes] shape=(String, Int, Int) -> Lazy(Bytes) rule=Plain impl="__lazy_chunks.bytes" effects=[] desc="Internal to the prelude: a step or terminal of Lazy (vm/lazy.c)."
+builtin __lazy_count forms=1
+  __lazy_count(lazy: Lazy[A], kind: Int, count: Int) -> Lazy[A] shape=(Lazy(Var(A)), Int, Int) -> Lazy(Var(A)) rule=Plain impl="__lazy_count" effects=[] desc="Internal to the prelude: a step or terminal of Lazy (vm/lazy.c)."
+builtin __lazy_each forms=1
+  __lazy_each(lazy: Lazy[A], f: Fn[A, Result[Void]]) -> Result[Void] shape=(Lazy(Var(A)), Fn([Var(A)], Result(Void))) -> Result(Void) rule=Plain impl="__lazy_each" effects=[] desc="Internal to the prelude: a step or terminal of Lazy (vm/lazy.c)."
+builtin __lazy_file forms=1
+  __lazy_file(path: String, buffer_bytes: Int, timeout_ms: Int) -> Lazy[String] shape=(String, Int, Int) -> Lazy(String) rule=Plain impl="__lazy_file" effects=[] desc="Internal to the prelude: a step or terminal of Lazy (vm/lazy.c)."
+builtin __lazy_find forms=1
+  __lazy_find(lazy: Lazy[A], f: Fn[A, Bool]) -> Result[A] shape=(Lazy(Var(A)), Fn([Var(A)], Bool)) -> Result(Var(A)) rule=Plain impl="__lazy_find" effects=[] desc="Internal to the prelude: a step or terminal of Lazy (vm/lazy.c)."
+builtin __lazy_flat_map forms=1
+  __lazy_flat_map(lazy: Lazy[A], f: Fn[A, List[B]]) -> Lazy[B] shape=(Lazy(Var(A)), Fn([Var(A)], List(Var(B)))) -> Lazy(Var(B)) rule=Plain impl="__lazy_flat_map" effects=[] desc="Internal to the prelude: a step or terminal of Lazy (vm/lazy.c)."
+builtin __lazy_group forms=1
+  __lazy_group(lazy: Lazy[A], kind: Int, size: Int) -> Lazy[List[A]] shape=(Lazy(Var(A)), Int, Int) -> Lazy(List(Var(A))) rule=Plain impl="__lazy_group" effects=[] desc="Internal to the prelude: a step or terminal of Lazy (vm/lazy.c)."
+builtin __lazy_list forms=1
+  __lazy_list(list: List[A]) -> Lazy[A] shape=(List(Var(A))) -> Lazy(Var(A)) rule=Plain impl="__lazy_list" effects=[] desc="Internal to the prelude: a step or terminal of Lazy (vm/lazy.c)."
+builtin __lazy_map forms=1
+  __lazy_map(lazy: Lazy[A], f: Fn[A, B]) -> Lazy[B] shape=(Lazy(Var(A)), Fn([Var(A)], Var(B))) -> Lazy(Var(B)) rule=Plain impl="__lazy_map" effects=[] desc="Internal to the prelude: a step or terminal of Lazy (vm/lazy.c)."
+builtin __lazy_produce forms=1
+  __lazy_produce(seed: A, f: Fn[A, A]) -> Lazy[A] shape=(Var(A), Fn([Var(A)], Var(A))) -> Lazy(Var(A)) rule=Plain impl="__lazy_produce" effects=[] desc="Internal to the prelude: a step or terminal of Lazy (vm/lazy.c)."
+builtin __lazy_range forms=1
+  __lazy_range(range: Range) -> Lazy[Int] shape=(Range) -> Lazy(Int) rule=Plain impl="__lazy_range" effects=[] desc="Internal to the prelude: a step or terminal of Lazy (vm/lazy.c)."
+builtin __lazy_reduce forms=1
+  __lazy_reduce(lazy: Lazy[A], initial: B, f: Fn[B, A, B]) -> Result[B] shape=(Lazy(Var(A)), Var(B), Fn([Var(B), Var(A)], Var(B))) -> Result(Var(B)) rule=Plain impl="__lazy_reduce" effects=[] desc="Internal to the prelude: a step or terminal of Lazy (vm/lazy.c)."
+builtin __lazy_test forms=1
+  __lazy_test(lazy: Lazy[A], kind: Int, f: Fn[A, Bool]) -> Lazy[A] shape=(Lazy(Var(A)), Int, Fn([Var(A)], Bool)) -> Lazy(Var(A)) rule=Plain impl="__lazy_test" effects=[] desc="Internal to the prelude: a step or terminal of Lazy (vm/lazy.c)."
+builtin __lazy_to_a forms=1
+  __lazy_to_a(lazy: Lazy[A]) -> Result[List[A]] shape=(Lazy(Var(A))) -> Result(List(Var(A))) rule=Plain impl="__lazy_to_a" effects=[] desc="Internal to the prelude: a step or terminal of Lazy (vm/lazy.c)."
+builtin __lazy_with_index forms=1
+  __lazy_with_index(lazy: Lazy[A], f: Fn[A, Int, B]) -> Lazy[B] shape=(Lazy(Var(A)), Fn([Var(A), Int], Var(B))) -> Lazy(Var(B)) rule=Plain impl="__lazy_with_index" effects=[] desc="Internal to the prelude: a step or terminal of Lazy (vm/lazy.c)."
+builtin __lazy_write_bytes forms=1
+  __lazy_write_bytes(lazy: Lazy[Bytes], path: String, timeout_ms: Int) -> Result[Int] shape=(Lazy(Bytes), String, Int) -> Result(Int) rule=Plain impl="__lazy_write_bytes.bytes" effects=["filesystem"] desc="Internal to the prelude: a step or terminal of Lazy (vm/lazy.c)."
+builtin __lazy_write_lines forms=1
+  __lazy_write_lines(lazy: Lazy[String], path: String, timeout_ms: Int) -> Result[Void] shape=(Lazy(String), String, Int) -> Result(Void) rule=Plain impl="__lazy_write_lines" effects=["filesystem"] desc="Internal to the prelude: a step or terminal of Lazy (vm/lazy.c)."
+builtin __lazy_zlib forms=1
+  __lazy_zlib(lazy: Lazy[Bytes], kind: Int, level: Int, max_bytes: Int) -> Lazy[Bytes] shape=(Lazy(Bytes), Int, Int, Int) -> Lazy(Bytes) rule=Plain impl="__lazy_zlib.bytes" effects=[] desc="Internal to the prelude: a step or terminal of Lazy (vm/lazy.c)."
+builtin error forms=2
+  error(message: String) -> Result[T] shape=(String) -> Result(Var(T)) rule=Error impl="error" effects=[] desc="A failed Result holding a new Error: the message, then optional kind:, code:, details:, cause:."
+  error(error: Error) -> Result[T] shape=(Struct(Error)) -> Result(Var(T)) rule=Error impl="error" effects=[] desc="A failed Result holding the Error given, unchanged; needs an expected Result type."
+builtin gets forms=1
+  gets() -> Result[String] shape=() -> Result(String) rule=Plain impl="IO.gets" effects=["stdin"] desc="Read a line as a Result; EOF is an error value."
+builtin gets! forms=1
+  gets!() -> String shape=() -> String rule=Plain impl="IO.gets!" effects=["stdin"] desc="Read a line; halt at EOF."
+builtin ok forms=2
+  ok(value: T) -> Result[T] shape=(Var(T)) -> Result(Var(T)) rule=Ok impl="ok" effects=[] desc="Construct a successful Result."
+  ok() -> Result[Void] shape=() -> Result(Void) rule=OkVoid impl="ok" effects=[] desc="Construct successful completion."
+builtin print forms=1
+  print(value: T) -> Void shape=(Var(T)) -> Void rule=Show impl="IO.print" effects=["stdout"] desc="Write a value without a newline; non-String values print as in interpolation."
+builtin puts forms=1
+  puts(value: T) -> Void shape=(Var(T)) -> Void rule=Show impl="puts" effects=["stdout"] desc="Write a value and a newline; non-String values print as in interpolation."
+builtin none forms=1
+  none() -> Optional[T] shape=() -> Optional(Var(T)) rule=OptionalNone impl="" effects=[] desc="The absent value; needs an expected Optional type."
+builtin some forms=1
+  some(value: T) -> Optional[T] shape=(Var(T)) -> Optional(Var(T)) rule=OptionalSome impl="" effects=[] desc="Construct a present Optional value."
+builtin format forms=1
+  format(format: String) -> String shape=(String) -> String rule=Format impl="" effects=[] desc="The text of a format string literal with one argument per conversion, as Ruby's format: %[flags][width][.precision]type with the flags - and 0, the types d (Int), x (Int, hex), f (Float) and s (any value with to_s), and %% for a %: format(\"%-8s|%6.2f|%03d\", name, price, n)."
 builtin Dir.list forms=1
   Dir.list(path: String, timeout_ms: Int = 30000) -> Result[List[String]] shape=(String, Int = 30000) -> Result(List(String)) rule=Plain impl="Dir.list" effects=["filesystem"] desc="List immediate entry names in sorted order."
 builtin Dir.mkdir forms=1
   Dir.mkdir(path: String, timeout_ms: Int = 30000) -> Result[Void] shape=(String, Int = 30000) -> Result(Void) rule=Plain impl="Dir.mkdir" effects=["filesystem"] desc="Create a directory and missing parents; existing directories succeed."
 builtin Dir.mkdir_private forms=1
   Dir.mkdir_private(path: String, timeout_ms: Int = 30000) -> Result[Void] shape=(String, Int = 30000) -> Result(Void) rule=Plain impl="Dir.mkdir_private" effects=["filesystem"] desc="Create one directory only the current user can use; an existing path or a missing parent is an error; VM only."
+builtin DNS.lookup forms=1
+  DNS.lookup(host: String, timeout_ms: Int = 30000) -> Result[List[String]] shape=(String, Int = 30000) -> Result(List(String)) rule=Plain impl="DNS.lookup" effects=["network"] desc="Resolve a host name with the system resolver: every IPv4 and IPv6 address as text, in its order, without duplicates; an IP literal gives itself."
+builtin Error.is_a? forms=1
+  Error.is_a?(error: Error, family: String) -> Bool shape=(Struct(Error), String) -> Bool rule=ErrorKind impl="Error.is_a?" effects=[] desc="Whether the kind is the family or one of its dotted kinds: is_a?(\"db\") takes db.constraint."
 builtin File.append_text forms=1
   File.append_text(path: String, text: String, timeout_ms: Int = 30000) -> Result[Void] shape=(String, String, Int = 30000) -> Result(Void) rule=Plain impl="File.append_text" effects=["filesystem"] desc="Append at most 1 MiB of UTF-8 text."
 builtin File.chunks forms=1
@@ -71,8 +200,6 @@ builtin Float.from_bits forms=1
   Float.from_bits(bits: Int) -> Float shape=(Int) -> Float rule=Plain impl="Float.from_bits" effects=[] desc="Read the 64 bits of an Int as a binary64 Float; any NaN pattern gives NaN."
 builtin Float.from_bits32 forms=1
   Float.from_bits32(bits: Int) -> Float shape=(Int) -> Float rule=Plain impl="Float.from_bits32" effects=[] desc="Read 32 bits as a binary32 and widen it exactly; bits outside 0 to 4294967295 halt."
-builtin Int.to_f forms=1
-  Int.to_f(int: Int) -> Float shape=(Int) -> Float rule=Plain impl="Float.from_int" effects=[] desc="Convert an Int to the nearest Float."
 builtin Float.round forms=1
   Float.round(float: Float) -> Int shape=(Float) -> Int rule=Plain impl="Float.round" effects=[] desc="The nearest Int, halves away from zero; NaN, an infinity or a value outside Int halts, as in to_i!."
 builtin Float.to_bits forms=1
@@ -83,6 +210,8 @@ builtin Float.to_i forms=1
   Float.to_i(float: Float) -> Result[Int] shape=(Float) -> Result(Int) rule=Plain impl="Float.to_int" effects=[] desc="Truncate toward zero; NaN, infinity or overflow return an error."
 builtin Float.to_i! forms=1
   Float.to_i!(float: Float) -> Int shape=(Float) -> Int rule=Plain impl="Float.to_int!" effects=[] desc="Truncate toward zero; halt on NaN, infinity or overflow."
+builtin Float.to_s forms=1
+  Float.to_s(float: Float) -> String shape=(Float) -> String rule=Plain impl="String.from_float" effects=[] desc="Convert a Float to text."
 builtin FrontEnd.hand_off forms=1
   FrontEnd.hand_off(program: Bytes, options: List[String], arguments: List[String]) -> Result[Void] shape=(Bytes, List(String), List(String)) -> Result(Void) rule=Plain impl="FrontEnd.hand_off.bytes" effects=["process"] desc="Front end only: hand the compiled program, the VM options and the program arguments to the VM, which ends this run and runs the program in a new one; it returns an error only when an argument cannot be passed on (a program too large to load, or a character 0 in a word). Any other program fails with RUNTIME-FRONT-END-ONLY."
 builtin FrontEnd.std_source forms=1
@@ -145,26 +274,8 @@ builtin HttpWire.stopping forms=1
   HttpWire.stopping(server: HTTP.Server) -> Int shape=(Opaque(HttpWire.Server)) -> Int rule=Plain impl="HttpWire.stopping" effects=["network"] desc="Internal to std/http: the deadline of a graceful stop, -1 while the server accepts."
 builtin HttpWire.wait forms=1
   HttpWire.wait(server: HTTP.Server) -> Result[Void] shape=(Opaque(HttpWire.Server)) -> Result(Void) rule=Plain impl="HttpWire.wait" effects=["network"] desc="Internal to std/http: wait until the server is closed."
-builtin IO.eof? forms=1
-  IO.eof?() -> Bool shape=() -> Bool rule=Plain impl="IO.eof?" effects=["stdin"] desc="Peek for EOF without consuming a byte; may block, not a readiness poll."
-builtin IO.flush forms=1
-  IO.flush() -> Void shape=() -> Void rule=Plain impl="IO.flush" effects=["stdout"] desc="Flush buffered standard output."
-builtin IO.gets forms=1
-  IO.gets() -> Result[String] shape=() -> Result(String) rule=Plain impl="IO.gets" effects=["stdin"] desc="Read a line as a Result; EOF is an error value."
-builtin IO.gets! forms=1
-  IO.gets!() -> String shape=() -> String rule=Plain impl="IO.gets!" effects=["stdin"] desc="Read a line; halt at EOF."
-builtin IO.inspect forms=1
-  IO.inspect(value: T) -> T shape=(Var(T)) -> Var(T) rule=Identity impl="IO.inspect" effects=["stdout"] desc="Print a stable debug form and return the value."
-builtin IO.print forms=1
-  IO.print(value: T) -> Void shape=(Var(T)) -> Void rule=Show impl="IO.print" effects=["stdout"] desc="Write a value without a newline; non-String values print as in interpolation."
-builtin IO.puts forms=1
-  IO.puts(value: T) -> Void shape=(Var(T)) -> Void rule=Show impl="puts" effects=["stdout"] desc="Write a value and a newline; non-String values print as in interpolation."
-builtin IO.read forms=1
-  IO.read() -> String shape=() -> String rule=Plain impl="IO.read" effects=["stdin"] desc="Read all remaining text until EOF."
-builtin IO.read_bytes forms=1
-  IO.read_bytes(count: Int) -> Result[Bytes] shape=(Int) -> Result(Bytes) rule=Plain impl="IO.read_bytes.bytes" effects=["stdin"] desc="Read count bytes or fewer at EOF; count must be 0..1048576. EOF gives empty bytes."
-builtin IO.warn forms=1
-  IO.warn(value: T) -> Void shape=(Var(T)) -> Void rule=Show impl="IO.warn" effects=["stderr"] desc="Write a value and a newline to stderr; non-String values print as in interpolation."
+builtin Int.to_f forms=1
+  Int.to_f(int: Int) -> Float shape=(Int) -> Float rule=Plain impl="Float.from_int" effects=[] desc="Convert an Int to the nearest Float."
 builtin Int.abs forms=1
   Int.abs(int: Int) -> Int shape=(Int) -> Int rule=Plain impl="Int.abs" effects=[] desc="The absolute value; the least Int halts with an overflow."
 builtin Int.bit_and forms=1
@@ -193,21 +304,34 @@ builtin Int.times forms=1
   Int.times(int: Int, block: Fn[Int, Void]) -> Void shape=(Int, Fn([Int], Void)) -> Void rule=Plain impl="Int.times" effects=[] desc="Call block with 0 to int - 1; nothing when int <= 0."
 builtin Int.upto forms=1
   Int.upto(from: Int, to: Int, block: Fn[Int, Void]) -> Void shape=(Int, Int, Fn([Int], Void)) -> Void rule=Plain impl="Int.upto" effects=[] desc="Call block with from up to to; nothing when to < from."
+builtin Int.to_s forms=1
+  Int.to_s(int: Int) -> String shape=(Int) -> String rule=Plain impl="String.from_int" effects=[] desc="Convert an Int to text."
+builtin IO.eof? forms=1
+  IO.eof?() -> Bool shape=() -> Bool rule=Plain impl="IO.eof?" effects=["stdin"] desc="Peek for EOF without consuming a byte; may block, not a readiness poll."
+builtin IO.flush forms=1
+  IO.flush() -> Void shape=() -> Void rule=Plain impl="IO.flush" effects=["stdout"] desc="Flush buffered standard output."
+builtin IO.gets forms=1
+  IO.gets() -> Result[String] shape=() -> Result(String) rule=Plain impl="IO.gets" effects=["stdin"] desc="Read a line as a Result; EOF is an error value."
+builtin IO.gets! forms=1
+  IO.gets!() -> String shape=() -> String rule=Plain impl="IO.gets!" effects=["stdin"] desc="Read a line; halt at EOF."
+builtin IO.inspect forms=1
+  IO.inspect(value: T) -> T shape=(Var(T)) -> Var(T) rule=Identity impl="IO.inspect" effects=["stdout"] desc="Print a stable debug form and return the value."
+builtin IO.print forms=1
+  IO.print(value: T) -> Void shape=(Var(T)) -> Void rule=Show impl="IO.print" effects=["stdout"] desc="Write a value without a newline; non-String values print as in interpolation."
+builtin IO.puts forms=1
+  IO.puts(value: T) -> Void shape=(Var(T)) -> Void rule=Show impl="puts" effects=["stdout"] desc="Write a value and a newline; non-String values print as in interpolation."
+builtin IO.read forms=1
+  IO.read() -> String shape=() -> String rule=Plain impl="IO.read" effects=["stdin"] desc="Read all remaining text until EOF."
+builtin IO.read_bytes forms=1
+  IO.read_bytes(count: Int) -> Result[Bytes] shape=(Int) -> Result(Bytes) rule=Plain impl="IO.read_bytes.bytes" effects=["stdin"] desc="Read count bytes or fewer at EOF; count must be 0..1048576. EOF gives empty bytes."
+builtin IO.warn forms=1
+  IO.warn(value: T) -> Void shape=(Var(T)) -> Void rule=Show impl="IO.warn" effects=["stderr"] desc="Write a value and a newline to stderr; non-String values print as in interpolation."
 builtin JSON.array forms=1
   JSON.array(items: List[JSON.Value]) -> JSON.Value shape=(List(JSON.Value)) -> JSON.Value rule=Plain impl="JSON.array" effects=[] desc="Build a JSON array from JSON values."
 builtin JSON.at forms=1
   JSON.at(json: JSON.Value, index: Int) -> Result[JSON.Value] shape=(JSON.Value, Int) -> Result(JSON.Value) rule=Plain impl="JSON.at" effects=[] desc="Read an array element; wrong kind or bad index returns an error."
 builtin JSON.bool forms=1
   JSON.bool(json: JSON.Value) -> Result[Bool] shape=(JSON.Value) -> Result(Bool) rule=Plain impl="JSON.bool" effects=[] desc="Extract a JSON boolean; wrong kind returns an error."
-builtin Codec.decode forms=2
-  Codec.decode(codec: Codec[T], text: String) -> Result[T] shape=(Codec(Var(T)), String) -> Result(Var(T)) rule=CodecDecode impl="JSON.decode" effects=[] desc="Decode JSON text into the codec's struct, as JSON.decode does."
-  Codec.decode(codec: Codec[T], json: JSON.Value) -> Result[T] shape=(Codec(Var(T)), JSON.Value) -> Result(Var(T)) rule=CodecDecode impl="JSON.decode" effects=[] desc="Decode a JSON.Value into the codec's struct, as JSON.decode does."
-builtin Codec.encode forms=1
-  Codec.encode(codec: Codec[T], value: T) -> String shape=(Codec(Var(T)), Var(T)) -> String rule=CodecEncode impl="JSON.encode" effects=[] desc="Encode a value of the codec's struct as JSON text, as JSON.encode does."
-builtin Codec.from forms=1
-  Codec.from(codec: Codec[T], value: T) -> JSON.Value shape=(Codec(Var(T)), Var(T)) -> JSON.Value rule=CodecEncode impl="JSON.from" effects=[] desc="Convert a value of the codec's struct to a JSON.Value, as JSON.from does."
-builtin Codec.members forms=1
-  Codec.members(codec: Codec[T]) -> List[StructMember] shape=(Codec(Var(T))) -> List(Struct(StructMember)) rule=CodecMembers impl="Codec.members" effects=[] desc="The fields of the codec's struct, as T.members gives them; empty for an enum."
 builtin JSON.decode forms=2
   JSON.decode(text: String, type: T) -> Result[T] shape=(String, Var(T)) -> Result(Var(T)) rule=JsonDecode impl="JSON.decode" effects=[] desc="Decode JSON text into a named struct; invalid data returns an error."
   JSON.decode(json: JSON.Value, type: T) -> Result[T] shape=(JSON.Value, Var(T)) -> Result(Var(T)) rule=JsonDecode impl="JSON.decode" effects=[] desc="Decode a JSON.Value into a named struct, with the rules and errors of its text."
@@ -363,6 +487,8 @@ builtin List.tally forms=1
   List.tally(list: List[K]) -> Map[K, Int] shape=(List(Var(K))) -> Map(Var(K), Int) rule=Prelude impl="" effects=[] desc="Count equal Int or String elements; keys in order of first appearance; O(n)."
 builtin List.uniq forms=1
   List.uniq(list: List[K]) -> List[K] shape=(List(Var(K))) -> List(Var(K)) rule=Prelude impl="" effects=[] desc="Drop repeated Int or String elements, keeping the first of each; O(n)."
+builtin List.join forms=1
+  List.join(list: List[String], separator: String) -> String shape=(List(String), String) -> String rule=Plain impl="String.join" effects=[] desc="Join text elements."
 builtin LogRegistry.attach forms=1
   LogRegistry.attach(name: String, rank: Int, handler: Fn[Logger.Event, Void]) -> Result[Void] shape=(String, Int, Fn([Struct(LogRegistry.Event)], Void)) -> Result(Void) rule=Plain impl="LogRegistry.attach" effects=["logging"] desc="Internal to std/logger: attach a named handler at a rank; a name in use is an error."
 builtin LogRegistry.detach forms=1
@@ -503,6 +629,76 @@ builtin Native.wait_readable forms=1
   Native.wait_readable(fd: Int, timeout_ms: Int) -> Result[Void] shape=(Int, Int) -> Result(Void) rule=Plain impl="Native.wait_readable" effects=["native"] desc="Park this task until the descriptor fd of native code can be read, at most positive timeout_ms (error native: timed out); Linux only, refused by --deny-native."
 builtin Native.wait_writable forms=1
   Native.wait_writable(fd: Int, timeout_ms: Int) -> Result[Void] shape=(Int, Int) -> Result(Void) rule=Plain impl="Native.wait_writable" effects=["native"] desc="Park this task until the descriptor fd of native code can be written, at most positive timeout_ms (error native: timed out); Linux only, refused by --deny-native."
+builtin Native.mutex forms=1
+  Native.mutex() -> Native.Mutex shape=() -> Opaque(Native.Mutex) rule=Plain impl="Native.mutex" effects=["native"] desc="A new Native.Mutex, for the calls of a native library that is not thread-safe: native calls run on several schedulers at once."
+builtin Native.Mutex.synchronize forms=1
+  Native.Mutex.synchronize(mutex: Native.Mutex, block: Fn[T]) -> T shape=(Opaque(Native.Mutex), Fn([], Var(T))) -> Var(T) rule=NativeSynchronize impl="Native.Mutex.synchronize" effects=["native"] desc="Run the block with the mutex held and return its value; a task that waits for it parks, so other tasks run; a task that holds it already is RUNTIME-NATIVE-MUTEX."
+builtin OpenSSL.Digest.hexdecode forms=1
+  OpenSSL.Digest.hexdecode(text: String) -> Result[Bytes] shape=(String) -> Result(Bytes) rule=Plain impl="OpenSSL.Digest.hexdecode.bytes" effects=[] desc="Decode an even number of hex digits in either case to bytes, or an error for any other text; VM only."
+builtin OpenSSL.Digest.hexencode forms=1
+  OpenSSL.Digest.hexencode(data: Bytes) -> String shape=(Bytes) -> String rule=Plain impl="OpenSSL.Digest.hexencode.bytes" effects=[] desc="Encode bytes as two lowercase hex digits each; VM only."
+builtin OpenSSL.Digest.md5 forms=1
+  OpenSSL.Digest.md5(data: Bytes) -> Bytes shape=(Bytes) -> Bytes rule=Plain impl="OpenSSL.Digest.md5.bytes" effects=[] desc="Hash bytes with MD5 and return the 16 bytes of the digest; for compatibility (ETags, old APIs), not for security; VM only."
+builtin OpenSSL.Digest.md5_hexdigest forms=1
+  OpenSSL.Digest.md5_hexdigest(data: Bytes) -> String shape=(Bytes) -> String rule=Plain impl="OpenSSL.Digest.md5_hexdigest.bytes" effects=[] desc="Hash bytes with MD5 and return the digest as 32 lowercase hex digits; for compatibility (ETags, old APIs), not for security; VM only."
+builtin OpenSSL.Digest.sha1 forms=1
+  OpenSSL.Digest.sha1(data: Bytes) -> Bytes shape=(Bytes) -> Bytes rule=Plain impl="OpenSSL.Digest.sha1.bytes" effects=[] desc="Hash bytes with SHA-1 and return the 20 bytes of the digest; for compatibility (git, old APIs), not for security; VM only."
+builtin OpenSSL.Digest.sha1_hexdigest forms=1
+  OpenSSL.Digest.sha1_hexdigest(data: Bytes) -> String shape=(Bytes) -> String rule=Plain impl="OpenSSL.Digest.sha1_hexdigest.bytes" effects=[] desc="Hash bytes with SHA-1 and return the digest as 40 lowercase hex digits; for compatibility (git, old APIs), not for security; VM only."
+builtin OpenSSL.Digest.sha256 forms=1
+  OpenSSL.Digest.sha256(data: Bytes) -> Bytes shape=(Bytes) -> Bytes rule=Plain impl="OpenSSL.Digest.sha256.bytes" effects=[] desc="Hash bytes with SHA-256 and return the 32 bytes of the digest; VM only."
+builtin OpenSSL.Digest.sha256_hexdigest forms=1
+  OpenSSL.Digest.sha256_hexdigest(data: Bytes) -> String shape=(Bytes) -> String rule=Plain impl="OpenSSL.Digest.sha256_hexdigest.bytes" effects=[] desc="Hash bytes with SHA-256 and return the digest as 64 lowercase hex digits; VM only."
+builtin OpenSSL.Digest.sha512 forms=1
+  OpenSSL.Digest.sha512(data: Bytes) -> Bytes shape=(Bytes) -> Bytes rule=Plain impl="OpenSSL.Digest.sha512.bytes" effects=[] desc="Hash bytes with SHA-512 and return the 64 bytes of the digest; VM only."
+builtin OpenSSL.Digest.sha512_hexdigest forms=1
+  OpenSSL.Digest.sha512_hexdigest(data: Bytes) -> String shape=(Bytes) -> String rule=Plain impl="OpenSSL.Digest.sha512_hexdigest.bytes" effects=[] desc="Hash bytes with SHA-512 and return the digest as 128 lowercase hex digits; VM only."
+builtin OpenSSL.HMAC.sha256 forms=1
+  OpenSSL.HMAC.sha256(key: Bytes, data: Bytes) -> Bytes shape=(Bytes, Bytes) -> Bytes rule=Plain impl="OpenSSL.HMAC.sha256.bytes" effects=[] desc="HMAC-SHA256 (RFC 2104) of data (bytes) under a key of any length; returns the 32 bytes of the MAC; VM only."
+builtin OpenSSL.HMAC.sha256_hexdigest forms=1
+  OpenSSL.HMAC.sha256_hexdigest(key: Bytes, data: Bytes) -> String shape=(Bytes, Bytes) -> String rule=Plain impl="OpenSSL.HMAC.sha256_hexdigest.bytes" effects=[] desc="HMAC-SHA256 (RFC 2104) of data (bytes) under a key of any length; returns the MAC as 64 lowercase hex digits; VM only."
+builtin OpenSSL.HMAC.sha512 forms=1
+  OpenSSL.HMAC.sha512(key: Bytes, data: Bytes) -> Bytes shape=(Bytes, Bytes) -> Bytes rule=Plain impl="OpenSSL.HMAC.sha512.bytes" effects=[] desc="HMAC-SHA512 (RFC 2104) of data (bytes) under a key of any length; returns the 64 bytes of the MAC; VM only."
+builtin OpenSSL.HMAC.sha512_hexdigest forms=1
+  OpenSSL.HMAC.sha512_hexdigest(key: Bytes, data: Bytes) -> String shape=(Bytes, Bytes) -> String rule=Plain impl="OpenSSL.HMAC.sha512_hexdigest.bytes" effects=[] desc="HMAC-SHA512 (RFC 2104) of data (bytes) under a key of any length; returns the MAC as 128 lowercase hex digits; VM only."
+builtin OpenSSL.Random.random_bytes forms=1
+  OpenSSL.Random.random_bytes(count: Int = 16) -> Bytes shape=(Int = 16) -> Bytes rule=Plain impl="OpenSSL.Random.random_bytes.bytes" effects=["random"] desc="Draw count bytes (0..1048576, 16 by default) from the system's secure random source (OpenSSL RAND_bytes), for keys, salts and tokens; unlike Random, never seeded; VM only."
+builtin OpenSSL.Random.hex forms=1
+  OpenSSL.Random.hex(count: Int = 16) -> String shape=(Int = 16) -> String rule=Plain impl="OpenSSL.Random.hex" effects=["random"] desc="Draw count secure random bytes (0..1048576, 16 by default) and give them as 2 * count lowercase hex digits; VM only."
+builtin OpenSSL.Random.uuid forms=1
+  OpenSSL.Random.uuid() -> String shape=() -> String rule=Plain impl="OpenSSL.Random.uuid" effects=["random"] desc="Draw a random version 4 UUID (RFC 9562) as 36 lowercase characters; VM only."
+builtin OpenSSL.HMAC.secure_compare forms=1
+  OpenSSL.HMAC.secure_compare(bytes: Bytes, other: Bytes) -> Bool shape=(Bytes, Bytes) -> Bool rule=Plain impl="OpenSSL.HMAC.secure_compare.bytes" effects=[] desc="Whether bytes and other are the same, in constant time: it compares their SHA-256 digests with OpenSSL CRYPTO_memcmp, so the time never depends on the bytes; for checking MACs and tokens; VM only."
+builtin OpenSSL.Cipher.des_ede3_cbc_encrypt forms=1
+  OpenSSL.Cipher.des_ede3_cbc_encrypt(key: Bytes, iv: Bytes, data: Bytes) -> Result[Bytes] shape=(Bytes, Bytes, Bytes) -> Result(Bytes) rule=Plain impl="OpenSSL.Cipher.des_ede3_cbc_encrypt" effects=[] desc="Encrypt data (bytes) with Triple DES in CBC mode and no padding, for payment formats, not new designs; a key of 16 (two-key) or 24 bytes, an 8-byte iv and data in whole 8-byte blocks, or an error; VM only."
+builtin OpenSSL.Cipher.des_ede3_cbc_decrypt forms=1
+  OpenSSL.Cipher.des_ede3_cbc_decrypt(key: Bytes, iv: Bytes, data: Bytes) -> Result[Bytes] shape=(Bytes, Bytes, Bytes) -> Result(Bytes) rule=Plain impl="OpenSSL.Cipher.des_ede3_cbc_decrypt" effects=[] desc="Decrypt data (bytes) with Triple DES in CBC mode and no padding, for payment formats, not new designs; a key of 16 (two-key) or 24 bytes, an 8-byte iv and data in whole 8-byte blocks, or an error; VM only."
+builtin OpenSSL.CMAC.aes forms=1
+  OpenSSL.CMAC.aes(key: Bytes, data: Bytes) -> Result[Bytes] shape=(Bytes, Bytes) -> Result(Bytes) rule=Plain impl="OpenSSL.CMAC.aes" effects=[] desc="CMAC (NIST SP 800-38B, RFC 4493) of data (bytes) with AES-128, -192 or -256 by the key size (16, 24 or 32 bytes); the full 16-byte tag, or an error for another key size; VM only."
+builtin OpenSSL.CMAC.des_ede3 forms=1
+  OpenSSL.CMAC.des_ede3(key: Bytes, data: Bytes) -> Result[Bytes] shape=(Bytes, Bytes) -> Result(Bytes) rule=Plain impl="OpenSSL.CMAC.des_ede3" effects=[] desc="CMAC (NIST SP 800-38B) of data (bytes) with Triple DES, for payment formats; a key of 16 (two-key) or 24 bytes; the full 8-byte tag, or an error for another key size; VM only."
+builtin OpenSSL.Cipher.aes_256_gcm_encrypt forms=1
+  OpenSSL.Cipher.aes_256_gcm_encrypt(key: Bytes, iv: Bytes, data: Bytes, auth_data: Bytes = "".bytes) -> Result[Bytes] shape=(Bytes, Bytes, Bytes, Bytes = "".bytes) -> Result(Bytes) rule=Plain impl="OpenSSL.Cipher.aes_256_gcm_encrypt" effects=[] desc="Encrypt data (bytes) with AES-256-GCM: a 32-byte key, a 12-byte iv never reused under the key and optional auth_data, authenticated but not encrypted; the ciphertext with the 16-byte tag appended; VM only."
+builtin OpenSSL.Cipher.aes_256_gcm_decrypt forms=1
+  OpenSSL.Cipher.aes_256_gcm_decrypt(key: Bytes, iv: Bytes, data: Bytes, auth_data: Bytes = "".bytes) -> Result[Bytes] shape=(Bytes, Bytes, Bytes, Bytes = "".bytes) -> Result(Bytes) rule=Plain impl="OpenSSL.Cipher.aes_256_gcm_decrypt" effects=[] desc="Decrypt AES-256-GCM data (the ciphertext with its 16-byte tag appended) under the same key, iv and auth_data; a tag that does not match is an error, never partial plaintext; VM only."
+builtin OpenSSL.KDF.pbkdf2_hmac_sha256 forms=1
+  OpenSSL.KDF.pbkdf2_hmac_sha256(password: Bytes, salt: Bytes, iterations: Int, length: Int) -> Result[Bytes] shape=(Bytes, Bytes, Int, Int) -> Result(Bytes) rule=Plain impl="OpenSSL.KDF.pbkdf2_hmac_sha256" effects=[] desc="Derive length bytes (1 to 1048576) from a password and a salt with PBKDF2-HMAC-SHA256 (RFC 8018) and at least 1 iteration, iterations * ceil(length / 32) at most 50000000; a password or salt over 1048576 bytes is an error; VM only."
+builtin OpenSSL.KDF.scrypt forms=1
+  OpenSSL.KDF.scrypt(password: Bytes, salt: Bytes, n: Int, r: Int, p: Int, length: Int) -> Result[Bytes] shape=(Bytes, Bytes, Int, Int, Int, Int) -> Result(Bytes) rule=Plain impl="OpenSSL.KDF.scrypt" effects=[] desc="Derive length bytes (1 to 1048576) from a password and a salt with scrypt (RFC 7914): cost n, a power of 2, block size r and parallelization p, in at most 1025 MiB (128 * r * (n + p + 2) bytes) and with r * p * (n + 16) at most 2^25, or an error; VM only."
+builtin OpenSSL.RSA.public_encrypt_oaep forms=1
+  OpenSSL.RSA.public_encrypt_oaep(pem: String, data: Bytes) -> Result[Bytes] shape=(String, Bytes) -> Result(Bytes) rule=Plain impl="OpenSSL.RSA.public_encrypt_oaep" effects=["random"] desc="Encrypt data (bytes) with the RSA public key in pem (PUBLIC KEY or RSA PUBLIC KEY) and OAEP padding with SHA-1; at most the key size less 42 bytes; a bad PEM, a key that is not RSA or data too long is an error; VM only."
+builtin Optional.map forms=1
+  Optional.map(optional: Optional[T], block: Fn[T, U]) -> Optional[U] shape=(Optional(Var(T)), Fn([Var(T)], Var(U))) -> Optional(Var(U)) rule=Prelude impl="" effects=[] desc="some(block(x)) for some(x), else none; block runs only for some."
+builtin Optional.none? forms=1
+  Optional.none?(optional: Optional[T]) -> Bool shape=(Optional(Var(T))) -> Bool rule=Prelude impl="" effects=[] desc="Check whether the value is none."
+builtin Optional.some? forms=1
+  Optional.some?(optional: Optional[T]) -> Bool shape=(Optional(Var(T))) -> Bool rule=Prelude impl="" effects=[] desc="Check whether the value is some(x)."
+builtin Optional.to_result forms=1
+  Optional.to_result(optional: Optional[T], message: String) -> Result[T] shape=(Optional(Var(T)), String) -> Result(Var(T)) rule=Prelude impl="" effects=[] desc="ok(x) for some(x), else error(message), to join try code."
+builtin Optional.unwrap! forms=1
+  Optional.unwrap!(optional: Optional[T]) -> T shape=(Optional(Var(T))) -> Var(T) rule=Prelude impl="" effects=[] desc="Return x of some(x); halt on none."
+builtin Optional.unwrap_or forms=1
+  Optional.unwrap_or(optional: Optional[T], default: T) -> T shape=(Optional(Var(T)), Var(T)) -> Var(T) rule=Prelude impl="" effects=[] desc="Return x of some(x), else default; both arguments run eagerly."
 builtin Path.cwd forms=1
   Path.cwd() -> Result[String] shape=() -> Result(String) rule=Plain impl="Path.cwd" effects=["filesystem"] desc="Return the current working directory."
 builtin Path.join forms=1
@@ -551,12 +747,12 @@ builtin Process.spawn_channel forms=1
   Process.spawn_channel(command: String, args: List[String], options: Process.Options = Process.Options()) -> Result[Process] shape=(String, List(String), Struct(Process.Options) = Process.Options()) -> Result(Opaque(Process)) rule=Plain impl="Process.spawn_channel.options" effects=["subprocess"] desc="Like spawn_captured, plus a channel: the child reads fd 3, writes fd 4, has AGENTICA_CHANNEL=3,4; VM only."
 builtin Process.wait forms=1
   Process.wait(process: Process, timeout_ms: Int) -> Result[Int] shape=(Opaque(Process), Int) -> Result(Int) rule=Plain impl="Process.wait" effects=["subprocess"] desc="Wait for exit and stderr forwarding; timeout preserves the child."
-builtin System.Profile.measure forms=1
-  System.Profile.measure(label: String, block: Fn[T]) -> T shape=(String, Fn([], Var(T))) -> Var(T) rule=ProfileMeasure impl="Profile.measure" effects=[] desc="Run the block and return its value; with AGENTICA_VM_TRACE=profile, its calls, steps, time and GC time go to a section row of the profile under label; VM only."
-builtin System.Profile.steps forms=1
-  System.Profile.steps() -> Int shape=() -> Int rule=Plain impl="Profile.steps" effects=[] desc="Count the steps this task has run so far; the same on every run, with or without the profile."
-builtin RegexEngine.search forms=1
-  RegexEngine.search(text: String, ops: List[Int], xs: List[Int], ys: List[Int], classes: List[List[Int]], ncap: Int, mode: Int) -> List[Int] shape=(String, List(Int), List(Int), List(Int), List(List(Int)), Int, Int) -> List(Int) rule=Plain impl="RegexEngine.search" effects=[] desc="Internal to std/regex: run a compiled program; mode 0 gives the first end, 1 the captures, 2 all."
+builtin Process.signal forms=1
+  Process.signal(process: Process, signal: System.Signal) -> Result[Void] shape=(Opaque(Process), Enum(System.Signal, [])) -> Result(Void) rule=Plain impl="Process.signal" effects=["subprocess"] desc="Send a signal to the child; a closed or exited child is an error; POSIX, VM only."
+builtin Process.spawn_group forms=1
+  Process.spawn_group(command: String, args: List[String], dir: String = ".", timeout_ms: Int = 30000) -> Result[Process] shape=(String, List(String), String = ".", Int = 30000) -> Result(Opaque(Process)) rule=Plain impl="Process.spawn_group" effects=["subprocess"] desc="Start an executable in a new session, so it leads its own process group, with the program's stdin, stdout and stderr; Process.close and the end of the run kill the whole group; --deny-run makes it an error; POSIX, VM only."
+builtin Process.signal_group forms=1
+  Process.signal_group(process: Process, signal: System.Signal) -> Result[Void] shape=(Opaque(Process), Enum(System.Signal, [])) -> Result(Void) rule=Plain impl="Process.signal_group" effects=["subprocess"] desc="Send a signal to the process group that the child leads (Process.spawn_group, or pgroup: true); an error once the child has exited; POSIX, VM only."
 builtin Random.float forms=1
   Random.float() -> Float shape=() -> Float rule=Plain impl="Random.float" effects=["random"] desc="Pick a uniform Float in 0.0 up to, but not including, 1.0."
 builtin Random.int forms=1
@@ -577,8 +773,46 @@ builtin Range.size forms=1
   Range.size(range: Range) -> Int shape=(Range) -> Int rule=Plain impl="Range.size" effects=[] desc="Count the values; halts when the count does not fit in Int."
 builtin Range.to_a forms=1
   Range.to_a(range: Range) -> List[Int] shape=(Range) -> List(Int) rule=Plain impl="Range.to_a" effects=[] desc="List the values in order; at most 1048576 values."
-builtin Error.is_a? forms=1
-  Error.is_a?(error: Error, family: String) -> Bool shape=(Struct(Error), String) -> Bool rule=ErrorKind impl="Error.is_a?" effects=[] desc="Whether the kind is the family or one of its dotted kinds: is_a?(\"db\") takes db.constraint."
+builtin Range.all? forms=1
+  Range.all?(range: Range, block: Fn[Int, Bool]) -> Bool shape=(Range, Fn([Int], Bool)) -> Bool rule=Prelude impl="" effects=[] desc="True when block accepts every value (true for an empty range); block stops at the first false; O(n)."
+builtin Range.any? forms=1
+  Range.any?(range: Range, block: Fn[Int, Bool]) -> Bool shape=(Range, Fn([Int], Bool)) -> Bool rule=Prelude impl="" effects=[] desc="True when block accepts a value; block stops at the first true; O(n)."
+builtin Range.drop_while forms=1
+  Range.drop_while(range: Range, block: Fn[Int, Bool]) -> List[Int] shape=(Range, Fn([Int], Bool)) -> List(Int) rule=Prelude impl="" effects=[] desc="List the values from the first one block rejects on; block is not called after it; O(n)."
+builtin Range.each_slice forms=1
+  Range.each_slice(range: Range, size: Int) -> List[List[Int]] shape=(Range, Int) -> List(List(Int)) rule=Prelude impl="" effects=[] desc="Split into lists of size values, the last one shorter; size below 1 halts; O(n)."
+builtin Range.each_with_index forms=1
+  Range.each_with_index(range: Range, block: Fn[Int, Int, Void]) -> Void shape=(Range, Fn([Int, Int], Void)) -> Void rule=Prelude impl="" effects=[] desc="Call block on each value and its index from 0, in order; O(n)."
+builtin Range.find forms=1
+  Range.find(range: Range, block: Fn[Int, Bool]) -> Result[Int] shape=(Range, Fn([Int], Bool)) -> Result(Int) rule=Prelude impl="" effects=[] desc="The first value block accepts, else error(\"not found\"); block stops being called at the first true; O(n)."
+builtin Range.find_index forms=1
+  Range.find_index(range: Range, block: Fn[Int, Bool]) -> Optional[Int] shape=(Range, Fn([Int], Bool)) -> Optional(Int) rule=Prelude impl="" effects=[] desc="The index of the first value block accepts, or none; O(n)."
+builtin Range.flat_map forms=1
+  Range.flat_map(range: Range, block: Fn[Int, List[B]]) -> List[B] shape=(Range, Fn([Int], List(Var(B)))) -> List(Var(B)) rule=Prelude impl="" effects=[] desc="Join the lists block gives for each value, in order; O(n)."
+builtin Range.group_by forms=1
+  Range.group_by(range: Range, key: Fn[Int, K]) -> Map[K, List[Int]] shape=(Range, Fn([Int], Var(K))) -> Map(Var(K), List(Int)) rule=Prelude impl="" effects=[] desc="Group the values by an Int or String key; keys in order of first appearance; O(n)."
+builtin Range.map forms=1
+  Range.map(range: Range, block: Fn[Int, B]) -> List[B] shape=(Range, Fn([Int], Var(B))) -> List(Var(B)) rule=Prelude impl="" effects=[] desc="List what block gives for each value, in order; O(n)."
+builtin Range.max forms=1
+  Range.max(range: Range) -> Optional[Int] shape=(Range) -> Optional(Int) rule=Prelude impl="" effects=[] desc="The last value, or none for an empty range; O(1)."
+builtin Range.max_by forms=1
+  Range.max_by(range: Range, key: Fn[Int, O]) -> Optional[Int] shape=(Range, Fn([Int], Var(O))) -> Optional(Int) rule=Prelude impl="" effects=[] desc="The value with the greatest Int, Float or String key, the first on ties, or none for an empty range; O(n)."
+builtin Range.min forms=1
+  Range.min(range: Range) -> Optional[Int] shape=(Range) -> Optional(Int) rule=Prelude impl="" effects=[] desc="The first value, or none for an empty range; O(1)."
+builtin Range.min_by forms=1
+  Range.min_by(range: Range, key: Fn[Int, O]) -> Optional[Int] shape=(Range, Fn([Int], Var(O))) -> Optional(Int) rule=Prelude impl="" effects=[] desc="The value with the least Int, Float or String key, the first on ties, or none for an empty range; O(n)."
+builtin Range.partition forms=1
+  Range.partition(range: Range, block: Fn[Int, Bool]) -> List[List[Int]] shape=(Range, Fn([Int], Bool)) -> List(List(Int)) rule=Prelude impl="" effects=[] desc="Split into [accepted, rejected], each in order; O(n)."
+builtin Range.reduce forms=1
+  Range.reduce(range: Range, initial: B, block: Fn[B, Int, B]) -> B shape=(Range, Var(B), Fn([Var(B), Int], Var(B))) -> Var(B) rule=Prelude impl="" effects=[] desc="Fold left with block(accumulator, value); an empty range returns initial; O(n)."
+builtin Range.select forms=1
+  Range.select(range: Range, block: Fn[Int, Bool]) -> List[Int] shape=(Range, Fn([Int], Bool)) -> List(Int) rule=Prelude impl="" effects=[] desc="List the values block accepts, in order; O(n)."
+builtin Range.sum forms=1
+  Range.sum(range: Range) -> Int shape=(Range) -> Int rule=Prelude impl="" effects=[] desc="Add the values; an empty range gives 0; Int overflow halts; O(n)."
+builtin Range.take_while forms=1
+  Range.take_while(range: Range, block: Fn[Int, Bool]) -> List[Int] shape=(Range, Fn([Int], Bool)) -> List(Int) rule=Prelude impl="" effects=[] desc="List the values before the first one block rejects; block is not called after it; O(n)."
+builtin RegexEngine.search forms=1
+  RegexEngine.search(text: String, ops: List[Int], xs: List[Int], ys: List[Int], classes: List[List[Int]], ncap: Int, mode: Int) -> List[Int] shape=(String, List(Int), List(Int), List(Int), List(List(Int)), Int, Int) -> List(Int) rule=Plain impl="RegexEngine.search" effects=[] desc="Internal to std/regex: run a compiled program; mode 0 gives the first end, 1 the captures, 2 all."
 builtin Result.message forms=1
   Result.message(result: Result[T]) -> String shape=(Result(Var(T))) -> String rule=ResultMessage impl="Result.message" effects=[] desc="Return an error message, or empty text for success."
 builtin Result.ok? forms=1
@@ -631,14 +865,8 @@ builtin String.from_bytes forms=1
   String.from_bytes(data: Bytes) -> Result[String] shape=(Bytes) -> Result(String) rule=Plain impl="String.from_bytes.bytes" effects=[] desc="Decode UTF-8 strictly; invalid bytes or incomplete sequences return an error."
 builtin String.from_code forms=1
   String.from_code(code: Int) -> String shape=(Int) -> String rule=Plain impl="String.from_code" effects=[] desc="Build a one-character string from a Unicode scalar value; invalid values halt."
-builtin Float.to_s forms=1
-  Float.to_s(float: Float) -> String shape=(Float) -> String rule=Plain impl="String.from_float" effects=[] desc="Convert a Float to text."
-builtin Int.to_s forms=1
-  Int.to_s(int: Int) -> String shape=(Int) -> String rule=Plain impl="String.from_int" effects=[] desc="Convert an Int to text."
 builtin String.index_of forms=1
   String.index_of(string: String, part: String) -> Optional[Int] shape=(String, String) -> Optional(Int) rule=Plain impl="String.index_of.optional" effects=[] desc="Find the first character index of part as some(index), or none when part is absent."
-builtin List.join forms=1
-  List.join(list: List[String], separator: String) -> String shape=(List(String), String) -> String rule=Plain impl="String.join" effects=[] desc="Join text elements."
 builtin String.length forms=1
   String.length(string: String) -> Int shape=(String) -> Int rule=Plain impl="String.length" effects=[] desc="Count Unicode characters."
 builtin String.replace forms=1
@@ -663,6 +891,19 @@ builtin String.strip forms=1
   String.strip(string: String) -> String shape=(String) -> String rule=Plain impl="String.trim" effects=[] desc="Strip surrounding whitespace."
 builtin String.upcase forms=1
   String.upcase(string: String) -> String shape=(String) -> String rule=Plain impl="String.upcase" effects=[] desc="Uppercase text."
+builtin String.bytes forms=1
+  String.bytes(string: String) -> Bytes shape=(String) -> Bytes rule=Plain impl="String.bytes" effects=[] desc="Give the UTF-8 bytes of the string."
+builtin String.encode forms=1
+  String.encode(string: String, encoding: String) -> Result[Bytes] shape=(String, String) -> Result(Bytes) rule=Plain impl="String.encode" effects=[] desc="Write the text in an encoding; a character it cannot hold or an unknown encoding gives an error."
+builtin String.edit_distance forms=2
+  String.edit_distance(string: String, other: String) -> Int shape=(String, String) -> Int rule=Plain impl="String.edit_distance" effects=[] desc="The Levenshtein distance in characters: the fewest inserts, deletes and replacements of one character that turn string into other; O(n * m) time, O(min(n, m)) memory; or, with max, max + 1 once it passes max."
+  String.edit_distance(string: String, other: String, max: Int) -> Int shape=(String, String, Int) -> Int rule=Plain impl="String.edit_distance" effects=[] desc="The Levenshtein distance, or max + 1 once it passes max, with about n * (2 * max + 1) table cells of work; a negative max fails with RUNTIME-INVALID-COUNT."
+builtin String.jaro_winkler forms=1
+  String.jaro_winkler(string: String, other: String) -> Float shape=(String, String) -> Float rule=Plain impl="String.jaro_winkler" effects=[] desc="The Jaro-Winkler similarity in characters, from 0.0 to 1.0; a common prefix of up to 4 characters raises it when the Jaro similarity is above 0.7; two empty strings give 1.0."
+builtin System.Profile.measure forms=1
+  System.Profile.measure(label: String, block: Fn[T]) -> T shape=(String, Fn([], Var(T))) -> Var(T) rule=ProfileMeasure impl="Profile.measure" effects=[] desc="Run the block and return its value; with AGENTICA_VM_TRACE=profile, its calls, steps, time and GC time go to a section row of the profile under label; VM only."
+builtin System.Profile.steps forms=1
+  System.Profile.steps() -> Int shape=() -> Int rule=Plain impl="Profile.steps" effects=[] desc="Count the steps this task has run so far; the same on every run, with or without the profile."
 builtin System.args forms=1
   System.args() -> List[String] shape=() -> List(String) rule=Plain impl="System.args" effects=["process"] desc="Return program arguments."
 builtin System.env forms=1
@@ -673,6 +914,36 @@ builtin System.os forms=1
   System.os() -> String shape=() -> String rule=Plain impl="System.os" effects=["process"] desc="Return the operating system: linux, macos, windows, or the lowercase name uname gives on another system; VM only."
 builtin System.pid forms=1
   System.pid() -> Int shape=() -> Int rule=Plain impl="System.pid" effects=["process"] desc="Return the process id of this program; VM only."
+builtin System.subscribe forms=1
+  System.subscribe(signals: List[System.Signal]) -> Result[Channel[System.Signal]] shape=(List(Enum(System.Signal, []))) -> Result(Channel(Enum(System.Signal, []))) rule=Plain impl="System.subscribe" effects=["process"] desc="Receive the listed OS signals on a new channel (one pending value per signal) instead of stopping the program; the calling task owns it, and its end or Channel.close ends the subscription; Quit and Kill are RUNTIME-INVALID-SIGNAL; VM only."
+builtin System.signal_number forms=1
+  System.signal_number(signal: System.Signal) -> Int shape=(Enum(System.Signal, [])) -> Int rule=Plain impl="System.signal_number" effects=[] desc="The OS number of a signal (Term is 15), so 128 + it is the exit code a signal gives; VM only."
+builtin System.signal forms=1
+  System.signal(pid: Int, signal: System.Signal, comm: String) -> Result[Void] shape=(Int, Enum(System.Signal, []), String) -> Result(Void) rule=Plain impl="System.signal" effects=["process"] desc="Send a signal to the process PID only while its name (/proc/PID/comm, at most 15 bytes) is comm, through a pidfd so it never reaches another process; --deny-run makes it an error; Linux 5.3 or later, VM only."
+builtin Task.await forms=2
+  Task.await(task: Task[R]) -> R shape=(Task(Var(R))) -> Var(R) rule=TaskAwait impl="Task.await" effects=["concurrency"] desc="Wait for a task and return its cached result; a crashed task gives error(text) when R is a Result, else RUNTIME-TASK-CRASHED."
+  Task.await(task: Task[R], timeout_ms: Int) -> Await[R] shape=(Task(Var(R)), Int) -> Enum(Await, [Var(R)]) rule=TaskAwaitTimeout impl="Task.await" effects=["concurrency"] desc="Wait for a task for at most timeout_ms; Await.Done(value) with its cached result, or Await.TimedOut, and the task keeps running; timeout_ms must be positive."
+builtin Task.cancel forms=1
+  Task.cancel(task: Task[R]) -> Void shape=(Task(Var(R))) -> Void rule=TaskTarget impl="Task.cancel" effects=["concurrency"] desc="Cancel a task (or TaskRef) and its descendants without waiting: each runs at most the rest of its current turn and closes what it owns; does nothing for a task that has ended; VM only."
+builtin Task.map forms=1
+  Task.map(items: List[A], limit: Int, timeout_ms: Int, block: Fn[A, Result[R]]) -> List[Result[R]] shape=(List(Var(A)), Int, Int, Fn([Var(A)], Result(Var(R)))) -> List(Result(Var(R))) rule=TaskMap impl="Task.map" effects=["concurrency"] desc="Run the block for each item in its own task, at most limit (1 to 1024) at a time, each with its own timeout_ms (positive, from the start of that item); gives one Result per item in input order, an error (task: timed out) for an item that ran out of time, which is cancelled; VM only."
+builtin Task.pending_count forms=1
+  Task.pending_count() -> Int shape=() -> Int rule=Plain impl="Task.pending_count" effects=["concurrency"] desc="Count the tasks of this run that have not ended, not counting main; VM only."
+builtin Task.sleep forms=1
+  Task.sleep(milliseconds: Int) -> Void shape=(Int) -> Void rule=Plain impl="Task.sleep" effects=["concurrency"] desc="Suspend this task for nonnegative milliseconds; zero yields execution."
+builtin Task.spawn forms=2
+  Task.spawn(function: Fn[R]) -> Task[R] shape=(Fn([], Var(R))) -> Task(Var(R)) rule=TaskSpawn impl="Task.spawn" effects=["concurrency"] desc="Start a function with no argument in a lightweight task."
+  Task.spawn(function: Fn[A, R], argument: A) -> Task[R] shape=(Fn([Var(A)], Var(R)), Var(A)) -> Task(Var(R)) rule=TaskSpawn impl="Task.spawn" effects=["concurrency"] desc="Start a function with one argument in a lightweight task."
+builtin Task.spawn_owning forms=1
+  Task.spawn_owning(function: Fn[A, R], handle: A) -> Task[R] shape=(Fn([Var(A)], Var(R)), Var(A)) -> Task(Var(R)) rule=TaskSpawnOwning impl="Task.spawn_owning" effects=["concurrency"] desc="Like Task.spawn, and gives the handle or Channel argument, or every one that a struct, enum, List, Map or Result argument holds, to the new task; the calling task must own each one (an unowned Channel counts); VM only."
+builtin Task.unobserved_crash forms=1
+  Task.unobserved_crash() -> Result[String] shape=() -> Result(String) rule=Plain impl="Task.unobserved_crash" effects=["concurrency"] desc="Return the text of the first task crash no await has observed, or an error."
+builtin Task.current forms=1
+  Task.current() -> TaskRef shape=() -> Opaque(TaskRef) rule=Plain impl="Task.current" effects=["concurrency"] desc="Return the running task as a TaskRef, which Task.monitor, Task.cancel and id take but no await, since its result type is not known here; VM only."
+builtin Task.id forms=1
+  Task.id(task: Task[R]) -> Int shape=(Task(Var(R))) -> Int rule=TaskTarget impl="Task.id" effects=[] desc="Return the number that identifies the task (or TaskRef) in this run, the task_id of its TaskDown."
+builtin Task.monitor forms=1
+  Task.monitor(task: Task[R], channel: Channel[M], message: Fn[TaskDown, M]) -> Void shape=(Task(Var(R)), Channel(Var(M)), Fn([Struct(TaskDown)], Var(M))) -> Void rule=TaskMonitor impl="Task.monitor" effects=["concurrency"] desc="When the task (or TaskRef) ends (returns, crashes or is cancelled), send message(TaskDown) into the channel once, without waiting; at once for a task that has ended; past the capacity of a full channel, dropped when it is closed or a signal channel; a crash counts as observed only through a Task[R]; VM only."
 builtin TCP.accept forms=1
   TCP.accept(listener: TCP.Listener, timeout_ms: Int) -> Result[TCP.Socket] shape=(Opaque(TCP.Listener), Int) -> Result(Opaque(TCP.Socket)) rule=Plain impl="TCP.accept" effects=["network"] desc="Accept a TCP or TLS connection."
 builtin TCP.close forms=1
@@ -696,36 +967,6 @@ builtin TCP.send forms=1
   TCP.send(socket: TCP.Socket, text: String, timeout_ms: Int) -> Result[Void] shape=(Opaque(TCP.Socket), String, Int) -> Result(Void) rule=Plain impl="TCP.send" effects=["network"] desc="Send UTF-8 text and flush."
 builtin TCP.send_bytes forms=1
   TCP.send_bytes(socket: TCP.Socket, bytes: Bytes, timeout_ms: Int) -> Result[Void] shape=(Opaque(TCP.Socket), Bytes, Int) -> Result(Void) rule=Plain impl="TCP.send_bytes.bytes" effects=["network"] desc="Send bytes and flush, at most 1 MiB per call."
-builtin TLS.alpn forms=1
-  TLS.alpn(socket: TCP.Socket) -> String shape=(Opaque(TCP.Socket)) -> String rule=Plain impl="TLS.alpn" effects=["network"] desc="Return the protocol that ALPN selected in the TLS handshake, or \"\" for none."
-builtin TLS.client_context forms=1
-  TLS.client_context(options: TLS.ClientOptions) -> Result[TLS.Context] shape=(Struct(TLS.ClientOptions)) -> Result(Opaque(TLS.Context)) rule=Plain impl="TLS.client_context" effects=["network"] desc="Build a client TLS.Context once, for many connections: the PEM CA file (empty: system trust) and an optional client certificate and key are read and checked now; VM only."
-builtin TLS.connect forms=1
-  TLS.connect(host: String, port: Int, context: TLS.Context, timeout_ms: Int) -> Result[TCP.Socket] shape=(String, Int, Opaque(TLS.Context), Int) -> Result(Opaque(TCP.Socket)) rule=Plain impl="TLS.connect" effects=["network"] desc="Connect with a client TLS.Context; the certificate and the hostname are always verified."
-builtin TLS.listen forms=1
-  TLS.listen(host: String, port: Int, context: TLS.Context) -> Result[TCP.Listener] shape=(String, Int, Opaque(TLS.Context)) -> Result(Opaque(TCP.Listener)) rule=Plain impl="TLS.listen" effects=["network"] desc="Listen with a server TLS.Context, its certificate chain and key."
-builtin TLS.server_context forms=1
-  TLS.server_context(options: TLS.ServerOptions) -> Result[TLS.Context] shape=(Struct(TLS.ServerOptions)) -> Result(Opaque(TLS.Context)) rule=Plain impl="TLS.server_context" effects=["network"] desc="Build a server TLS.Context once, for many listeners: the PEM certificate chain and the key are read and checked now; VM only."
-builtin TLS.upgrade forms=1
-  TLS.upgrade(socket: TCP.Socket, context: TLS.Context, host: String, timeout_ms: Int) -> Result[TCP.Socket] shape=(Opaque(TCP.Socket), Opaque(TLS.Context), String, Int) -> Result(Opaque(TCP.Socket)) rule=Plain impl="TLS.upgrade" effects=["network"] desc="Start TLS on an open TCP socket (STARTTLS), on the side the context's role names; a server context takes the host \"\". The plain socket is closed once the arguments pass their checks."
-builtin Task.await forms=2
-  Task.await(task: Task[R]) -> R shape=(Task(Var(R))) -> Var(R) rule=TaskAwait impl="Task.await" effects=["concurrency"] desc="Wait for a task and return its cached result; a crashed task gives error(text) when R is a Result, else RUNTIME-TASK-CRASHED."
-  Task.await(task: Task[R], timeout_ms: Int) -> Await[R] shape=(Task(Var(R)), Int) -> Enum(Await, [Var(R)]) rule=TaskAwaitTimeout impl="Task.await" effects=["concurrency"] desc="Wait for a task for at most timeout_ms; Await.Done(value) with its cached result, or Await.TimedOut, and the task keeps running; timeout_ms must be positive."
-builtin Task.cancel forms=1
-  Task.cancel(task: Task[R]) -> Void shape=(Task(Var(R))) -> Void rule=TaskTarget impl="Task.cancel" effects=["concurrency"] desc="Cancel a task (or TaskRef) and its descendants without waiting: each runs at most the rest of its current turn and closes what it owns; does nothing for a task that has ended; VM only."
-builtin Task.map forms=1
-  Task.map(items: List[A], limit: Int, timeout_ms: Int, block: Fn[A, Result[R]]) -> List[Result[R]] shape=(List(Var(A)), Int, Int, Fn([Var(A)], Result(Var(R)))) -> List(Result(Var(R))) rule=TaskMap impl="Task.map" effects=["concurrency"] desc="Run the block for each item in its own task, at most limit (1 to 1024) at a time, each with its own timeout_ms (positive, from the start of that item); gives one Result per item in input order, an error (task: timed out) for an item that ran out of time, which is cancelled; VM only."
-builtin Task.pending_count forms=1
-  Task.pending_count() -> Int shape=() -> Int rule=Plain impl="Task.pending_count" effects=["concurrency"] desc="Count the tasks of this run that have not ended, not counting main; VM only."
-builtin Task.sleep forms=1
-  Task.sleep(milliseconds: Int) -> Void shape=(Int) -> Void rule=Plain impl="Task.sleep" effects=["concurrency"] desc="Suspend this task for nonnegative milliseconds; zero yields execution."
-builtin Task.spawn forms=2
-  Task.spawn(function: Fn[R]) -> Task[R] shape=(Fn([], Var(R))) -> Task(Var(R)) rule=TaskSpawn impl="Task.spawn" effects=["concurrency"] desc="Start a function with no argument in a lightweight task."
-  Task.spawn(function: Fn[A, R], argument: A) -> Task[R] shape=(Fn([Var(A)], Var(R)), Var(A)) -> Task(Var(R)) rule=TaskSpawn impl="Task.spawn" effects=["concurrency"] desc="Start a function with one argument in a lightweight task."
-builtin Task.spawn_owning forms=1
-  Task.spawn_owning(function: Fn[A, R], handle: A) -> Task[R] shape=(Fn([Var(A)], Var(R)), Var(A)) -> Task(Var(R)) rule=TaskSpawnOwning impl="Task.spawn_owning" effects=["concurrency"] desc="Like Task.spawn, and gives the handle or Channel argument, or every one that a struct, enum, List, Map or Result argument holds, to the new task; the calling task must own each one (an unowned Channel counts); VM only."
-builtin Task.unobserved_crash forms=1
-  Task.unobserved_crash() -> Result[String] shape=() -> Result(String) rule=Plain impl="Task.unobserved_crash" effects=["concurrency"] desc="Return the text of the first task crash no await has observed, or an error."
 builtin Test.assert forms=1
   Test.assert(condition: Bool, message: String) -> Result[Void] shape=(Bool, String) -> Result(Void) rule=Plain impl="Test.assert" effects=["test"] desc="Check a condition; a failure with message is recorded on the test."
 builtin Test.eq forms=1
@@ -744,62 +985,18 @@ builtin Time.monotonic_ns forms=1
   Time.monotonic_ns() -> Int shape=() -> Int rule=Plain impl="Time.monotonic_ns" effects=["clock"] desc="Read nanoseconds from the clock of Time.monotonic_ms; same origin, never goes backward; use for short durations."
 builtin Time.now_ms forms=1
   Time.now_ms() -> Int shape=() -> Int rule=Plain impl="Time.now_ms" effects=["clock"] desc="Read wall-clock milliseconds since the Unix epoch; may jump."
-builtin __fail_arg forms=1
-  __fail_arg(code: String, index: Int, message: String) -> Void shape=(String, Int, String) -> Void rule=Plain impl="__fail_arg" effects=[] desc="Internal to the prelude: halt with a RUNTIME- code at the argument of the call of the program."
-builtin __lazy_channel forms=1
-  __lazy_channel(channel: Channel[A], timeout_ms: Int) -> Lazy[A] shape=(Channel(Var(A)), Int) -> Lazy(Var(A)) rule=Plain impl="__lazy_channel" effects=[] desc="Internal to the prelude: a step or terminal of Lazy (vm/lazy.c)."
-builtin __lazy_chunk_while forms=1
-  __lazy_chunk_while(lazy: Lazy[A], f: Fn[A, A, Bool]) -> Lazy[List[A]] shape=(Lazy(Var(A)), Fn([Var(A), Var(A)], Bool)) -> Lazy(List(Var(A))) rule=Plain impl="__lazy_chunk_while" effects=[] desc="Internal to the prelude: a step or terminal of Lazy (vm/lazy.c)."
-builtin __lazy_chunks forms=1
-  __lazy_chunks(path: String, size: Int, timeout_ms: Int) -> Lazy[Bytes] shape=(String, Int, Int) -> Lazy(Bytes) rule=Plain impl="__lazy_chunks.bytes" effects=[] desc="Internal to the prelude: a step or terminal of Lazy (vm/lazy.c)."
-builtin __lazy_count forms=1
-  __lazy_count(lazy: Lazy[A], kind: Int, count: Int) -> Lazy[A] shape=(Lazy(Var(A)), Int, Int) -> Lazy(Var(A)) rule=Plain impl="__lazy_count" effects=[] desc="Internal to the prelude: a step or terminal of Lazy (vm/lazy.c)."
-builtin __lazy_each forms=1
-  __lazy_each(lazy: Lazy[A], f: Fn[A, Result[Void]]) -> Result[Void] shape=(Lazy(Var(A)), Fn([Var(A)], Result(Void))) -> Result(Void) rule=Plain impl="__lazy_each" effects=[] desc="Internal to the prelude: a step or terminal of Lazy (vm/lazy.c)."
-builtin __lazy_file forms=1
-  __lazy_file(path: String, buffer_bytes: Int, timeout_ms: Int) -> Lazy[String] shape=(String, Int, Int) -> Lazy(String) rule=Plain impl="__lazy_file" effects=[] desc="Internal to the prelude: a step or terminal of Lazy (vm/lazy.c)."
-builtin __lazy_find forms=1
-  __lazy_find(lazy: Lazy[A], f: Fn[A, Bool]) -> Result[A] shape=(Lazy(Var(A)), Fn([Var(A)], Bool)) -> Result(Var(A)) rule=Plain impl="__lazy_find" effects=[] desc="Internal to the prelude: a step or terminal of Lazy (vm/lazy.c)."
-builtin __lazy_flat_map forms=1
-  __lazy_flat_map(lazy: Lazy[A], f: Fn[A, List[B]]) -> Lazy[B] shape=(Lazy(Var(A)), Fn([Var(A)], List(Var(B)))) -> Lazy(Var(B)) rule=Plain impl="__lazy_flat_map" effects=[] desc="Internal to the prelude: a step or terminal of Lazy (vm/lazy.c)."
-builtin __lazy_group forms=1
-  __lazy_group(lazy: Lazy[A], kind: Int, size: Int) -> Lazy[List[A]] shape=(Lazy(Var(A)), Int, Int) -> Lazy(List(Var(A))) rule=Plain impl="__lazy_group" effects=[] desc="Internal to the prelude: a step or terminal of Lazy (vm/lazy.c)."
-builtin __lazy_list forms=1
-  __lazy_list(list: List[A]) -> Lazy[A] shape=(List(Var(A))) -> Lazy(Var(A)) rule=Plain impl="__lazy_list" effects=[] desc="Internal to the prelude: a step or terminal of Lazy (vm/lazy.c)."
-builtin __lazy_map forms=1
-  __lazy_map(lazy: Lazy[A], f: Fn[A, B]) -> Lazy[B] shape=(Lazy(Var(A)), Fn([Var(A)], Var(B))) -> Lazy(Var(B)) rule=Plain impl="__lazy_map" effects=[] desc="Internal to the prelude: a step or terminal of Lazy (vm/lazy.c)."
-builtin __lazy_produce forms=1
-  __lazy_produce(seed: A, f: Fn[A, A]) -> Lazy[A] shape=(Var(A), Fn([Var(A)], Var(A))) -> Lazy(Var(A)) rule=Plain impl="__lazy_produce" effects=[] desc="Internal to the prelude: a step or terminal of Lazy (vm/lazy.c)."
-builtin __lazy_range forms=1
-  __lazy_range(range: Range) -> Lazy[Int] shape=(Range) -> Lazy(Int) rule=Plain impl="__lazy_range" effects=[] desc="Internal to the prelude: a step or terminal of Lazy (vm/lazy.c)."
-builtin __lazy_reduce forms=1
-  __lazy_reduce(lazy: Lazy[A], initial: B, f: Fn[B, A, B]) -> Result[B] shape=(Lazy(Var(A)), Var(B), Fn([Var(B), Var(A)], Var(B))) -> Result(Var(B)) rule=Plain impl="__lazy_reduce" effects=[] desc="Internal to the prelude: a step or terminal of Lazy (vm/lazy.c)."
-builtin __lazy_test forms=1
-  __lazy_test(lazy: Lazy[A], kind: Int, f: Fn[A, Bool]) -> Lazy[A] shape=(Lazy(Var(A)), Int, Fn([Var(A)], Bool)) -> Lazy(Var(A)) rule=Plain impl="__lazy_test" effects=[] desc="Internal to the prelude: a step or terminal of Lazy (vm/lazy.c)."
-builtin __lazy_to_a forms=1
-  __lazy_to_a(lazy: Lazy[A]) -> Result[List[A]] shape=(Lazy(Var(A))) -> Result(List(Var(A))) rule=Plain impl="__lazy_to_a" effects=[] desc="Internal to the prelude: a step or terminal of Lazy (vm/lazy.c)."
-builtin __lazy_with_index forms=1
-  __lazy_with_index(lazy: Lazy[A], f: Fn[A, Int, B]) -> Lazy[B] shape=(Lazy(Var(A)), Fn([Var(A), Int], Var(B))) -> Lazy(Var(B)) rule=Plain impl="__lazy_with_index" effects=[] desc="Internal to the prelude: a step or terminal of Lazy (vm/lazy.c)."
-builtin __lazy_write_bytes forms=1
-  __lazy_write_bytes(lazy: Lazy[Bytes], path: String, timeout_ms: Int) -> Result[Int] shape=(Lazy(Bytes), String, Int) -> Result(Int) rule=Plain impl="__lazy_write_bytes.bytes" effects=["filesystem"] desc="Internal to the prelude: a step or terminal of Lazy (vm/lazy.c)."
-builtin __lazy_write_lines forms=1
-  __lazy_write_lines(lazy: Lazy[String], path: String, timeout_ms: Int) -> Result[Void] shape=(Lazy(String), String, Int) -> Result(Void) rule=Plain impl="__lazy_write_lines" effects=["filesystem"] desc="Internal to the prelude: a step or terminal of Lazy (vm/lazy.c)."
-builtin __lazy_zlib forms=1
-  __lazy_zlib(lazy: Lazy[Bytes], kind: Int, level: Int, max_bytes: Int) -> Lazy[Bytes] shape=(Lazy(Bytes), Int, Int, Int) -> Lazy(Bytes) rule=Plain impl="__lazy_zlib.bytes" effects=[] desc="Internal to the prelude: a step or terminal of Lazy (vm/lazy.c)."
-builtin error forms=2
-  error(message: String) -> Result[T] shape=(String) -> Result(Var(T)) rule=Error impl="error" effects=[] desc="A failed Result holding a new Error: the message, then optional kind:, code:, details:, cause:."
-  error(error: Error) -> Result[T] shape=(Struct(Error)) -> Result(Var(T)) rule=Error impl="error" effects=[] desc="A failed Result holding the Error given, unchanged; needs an expected Result type."
-builtin gets forms=1
-  gets() -> Result[String] shape=() -> Result(String) rule=Plain impl="IO.gets" effects=["stdin"] desc="Read a line as a Result; EOF is an error value."
-builtin gets! forms=1
-  gets!() -> String shape=() -> String rule=Plain impl="IO.gets!" effects=["stdin"] desc="Read a line; halt at EOF."
-builtin ok forms=2
-  ok(value: T) -> Result[T] shape=(Var(T)) -> Result(Var(T)) rule=Ok impl="ok" effects=[] desc="Construct a successful Result."
-  ok() -> Result[Void] shape=() -> Result(Void) rule=OkVoid impl="ok" effects=[] desc="Construct successful completion."
-builtin print forms=1
-  print(value: T) -> Void shape=(Var(T)) -> Void rule=Show impl="IO.print" effects=["stdout"] desc="Write a value without a newline; non-String values print as in interpolation."
-builtin puts forms=1
-  puts(value: T) -> Void shape=(Var(T)) -> Void rule=Show impl="puts" effects=["stdout"] desc="Write a value and a newline; non-String values print as in interpolation."
+builtin TLS.alpn forms=1
+  TLS.alpn(socket: TCP.Socket) -> String shape=(Opaque(TCP.Socket)) -> String rule=Plain impl="TLS.alpn" effects=["network"] desc="Return the protocol that ALPN selected in the TLS handshake, or \"\" for none."
+builtin TLS.client_context forms=1
+  TLS.client_context(options: TLS.ClientOptions) -> Result[TLS.Context] shape=(Struct(TLS.ClientOptions)) -> Result(Opaque(TLS.Context)) rule=Plain impl="TLS.client_context" effects=["network"] desc="Build a client TLS.Context once, for many connections: the PEM CA file (empty: system trust) and an optional client certificate and key are read and checked now; VM only."
+builtin TLS.connect forms=1
+  TLS.connect(host: String, port: Int, context: TLS.Context, timeout_ms: Int) -> Result[TCP.Socket] shape=(String, Int, Opaque(TLS.Context), Int) -> Result(Opaque(TCP.Socket)) rule=Plain impl="TLS.connect" effects=["network"] desc="Connect with a client TLS.Context; the certificate and the hostname are always verified."
+builtin TLS.listen forms=1
+  TLS.listen(host: String, port: Int, context: TLS.Context) -> Result[TCP.Listener] shape=(String, Int, Opaque(TLS.Context)) -> Result(Opaque(TCP.Listener)) rule=Plain impl="TLS.listen" effects=["network"] desc="Listen with a server TLS.Context, its certificate chain and key."
+builtin TLS.server_context forms=1
+  TLS.server_context(options: TLS.ServerOptions) -> Result[TLS.Context] shape=(Struct(TLS.ServerOptions)) -> Result(Opaque(TLS.Context)) rule=Plain impl="TLS.server_context" effects=["network"] desc="Build a server TLS.Context once, for many listeners: the PEM certificate chain and the key are read and checked now; VM only."
+builtin TLS.upgrade forms=1
+  TLS.upgrade(socket: TCP.Socket, context: TLS.Context, host: String, timeout_ms: Int) -> Result[TCP.Socket] shape=(Opaque(TCP.Socket), Opaque(TLS.Context), String, Int) -> Result(Opaque(TCP.Socket)) rule=Plain impl="TLS.upgrade" effects=["network"] desc="Start TLS on an open TCP socket (STARTTLS), on the side the context's role names; a server context takes the host \"\". The plain socket is closed once the arguments pass their checks."
 builtin Zlib.deflate forms=1
   Zlib.deflate(data: Bytes, level: Int = 6, max_bytes: Int = 1048576) -> Result[Bytes] shape=(Bytes, Int = 6, Int = 1048576) -> Result(Bytes) rule=Plain impl="Zlib.deflate.bytes" effects=[] desc="Compress bytes to one zlib stream (RFC 1950) at level 0 to 9; empty input is valid; data at most 1048576 bytes, the output at most max_bytes, 1 to 1048576; VM only."
 builtin Zlib.inflate forms=1
@@ -810,203 +1007,6 @@ builtin Zlib.gunzip forms=1
   Zlib.gunzip(data: Bytes, max_bytes: Int = 1048576) -> Result[Bytes] shape=(Bytes, Int = 1048576) -> Result(Bytes) rule=Plain impl="Zlib.gunzip.bytes" effects=[] desc="Decompress one gzip member (RFC 1952) with its CRC and size checked; empty input, truncation and any trailing byte (a second member too) are errors; data at most 1048576 bytes, the output at most max_bytes, 1 to 1048576; VM only."
 builtin Zlib.crc32 forms=1
   Zlib.crc32(data: Bytes, seed: Int = 0) -> Result[Int] shape=(Bytes, Int = 0) -> Result(Int) rule=Plain impl="Zlib.crc32.bytes" effects=[] desc="CRC32 (RFC 1952) of bytes chained after seed (0 when left out): start with no seed, then give each next chunk the previous result as its seed; empty input returns the seed unchanged; data at most 1048576 bytes, seed 0 to 4294967295; VM only."
-builtin ATS.add forms=1
-  ATS.add(table: ATS[K, Int], key: K, by: Int) -> Int shape=(ATS(Var(K), Int), Var(K), Int) -> Int rule=AtsCall impl="ATS.add" effects=["concurrency"] desc="Add the amount by to the Int value of key (absent counts as 0) and return the new value, atomically; overflow halts with RUNTIME-INTEGER-OVERFLOW and leaves the table unchanged; VM only."
-builtin ATS.delete forms=1
-  ATS.delete(table: ATS[K, V], key: K) -> Void shape=(ATS(Var(K), Var(V)), Var(K)) -> Void rule=AtsCall impl="ATS.delete" effects=["concurrency"] desc="Remove a key atomically; an absent key is ignored; VM only."
-builtin ATS.get forms=1
-  ATS.get(table: ATS[K, V], key: K) -> Result[V] shape=(ATS(Var(K), Var(V)), Var(K)) -> Result(Var(V)) rule=AtsCall impl="ATS.get" effects=[] desc="Read the value of a key, or an error when the key is absent; VM only."
-builtin ATS.has_key? forms=1
-  ATS.has_key?(table: ATS[K, V], key: K) -> Bool shape=(ATS(Var(K), Var(V)), Var(K)) -> Bool rule=AtsCall impl="ATS.has_key?" effects=[] desc="Check whether a key exists; VM only."
-builtin ATS.keys forms=1
-  ATS.keys(table: ATS[K, V]) -> List[K] shape=(ATS(Var(K), Var(V))) -> List(Var(K)) rule=AtsCall impl="ATS.keys" effects=[] desc="A snapshot of the keys in first-insertion order; VM only."
-builtin ATS.new forms=1
-  ATS.new() -> ATS[K, V] shape=() -> ATS(Var(K), Var(V)) rule=AtsNew impl="ATS.new" effects=[] desc="Create an empty shared table that tasks update in place; needs an expected ATS[K, V] type; VM only."
-builtin ATS.put forms=1
-  ATS.put(table: ATS[K, V], key: K, value: V) -> Void shape=(ATS(Var(K), Var(V)), Var(K), Var(V)) -> Void rule=AtsCall impl="ATS.put" effects=["concurrency"] desc="Insert or replace the value of a key atomically; VM only."
-builtin ATS.put_new forms=1
-  ATS.put_new(table: ATS[K, V], key: K, value: V) -> Bool shape=(ATS(Var(K), Var(V)), Var(K), Var(V)) -> Bool rule=AtsCall impl="ATS.put_new" effects=["concurrency"] desc="Insert the value only when the key is absent, atomically; false leaves the table unchanged; VM only."
-builtin ATS.size forms=1
-  ATS.size(table: ATS[K, V]) -> Int shape=(ATS(Var(K), Var(V))) -> Int rule=AtsCall impl="ATS.size" effects=[] desc="Count the entries of the table (a snapshot); VM only."
-builtin ATS.to_map forms=1
-  ATS.to_map(table: ATS[K, V]) -> Map[K, V] shape=(ATS(Var(K), Var(V))) -> Map(Var(K), Var(V)) rule=AtsCall impl="ATS.to_map" effects=[] desc="A snapshot of the table as a Map in first-insertion order; VM only."
-builtin Base64.encode64 forms=1
-  Base64.encode64(data: Bytes) -> String shape=(Bytes) -> String rule=Plain impl="Base64.encode64.bytes" effects=[] desc="Encode bytes as padded base64 (RFC 4648) in lines of 60 characters, each ending in a newline, as Ruby does; VM only."
-builtin Base64.strict_encode64 forms=1
-  Base64.strict_encode64(data: Bytes) -> String shape=(Bytes) -> String rule=Plain impl="Base64.strict_encode64.bytes" effects=[] desc="Encode bytes as padded base64 (RFC 4648) on one line with no newline; VM only."
-builtin Base64.urlsafe_encode64 forms=1
-  Base64.urlsafe_encode64(data: Bytes, padding: Bool = true) -> String shape=(Bytes, Bool = true) -> String rule=Plain impl="Base64.urlsafe_encode64.bytes" effects=[] desc="Encode bytes as base64url (RFC 4648 section 5), with the = padding unless padding is false; VM only."
-builtin Base64.decode64 forms=1
-  Base64.decode64(text: String) -> Bytes shape=(String) -> Bytes rule=Plain impl="Base64.decode64.bytes" effects=[] desc="Decode base64 leniently, as Ruby does: other characters are skipped and a = in a group's last two places ends the text; never an error; VM only."
-builtin Base64.strict_decode64 forms=1
-  Base64.strict_decode64(text: String) -> Result[Bytes] shape=(String) -> Result(Bytes) rule=Plain impl="Base64.strict_decode64.bytes" effects=[] desc="Decode padded base64 (RFC 4648) with nothing else in the text, or error(\"invalid base64\"); VM only."
-builtin Base64.urlsafe_decode64 forms=1
-  Base64.urlsafe_decode64(text: String) -> Result[Bytes] shape=(String) -> Result(Bytes) rule=Plain impl="Base64.urlsafe_decode64.bytes" effects=[] desc="Decode base64url (RFC 4648 section 5), padded or not, or error(\"invalid base64\"); VM only."
-builtin OpenSSL.Digest.hexdecode forms=1
-  OpenSSL.Digest.hexdecode(text: String) -> Result[Bytes] shape=(String) -> Result(Bytes) rule=Plain impl="OpenSSL.Digest.hexdecode.bytes" effects=[] desc="Decode an even number of hex digits in either case to bytes, or an error for any other text; VM only."
-builtin OpenSSL.Digest.hexencode forms=1
-  OpenSSL.Digest.hexencode(data: Bytes) -> String shape=(Bytes) -> String rule=Plain impl="OpenSSL.Digest.hexencode.bytes" effects=[] desc="Encode bytes as two lowercase hex digits each; VM only."
-builtin OpenSSL.Digest.md5 forms=1
-  OpenSSL.Digest.md5(data: Bytes) -> Bytes shape=(Bytes) -> Bytes rule=Plain impl="OpenSSL.Digest.md5.bytes" effects=[] desc="Hash bytes with MD5 and return the 16 bytes of the digest; for compatibility (ETags, old APIs), not for security; VM only."
-builtin OpenSSL.Digest.md5_hexdigest forms=1
-  OpenSSL.Digest.md5_hexdigest(data: Bytes) -> String shape=(Bytes) -> String rule=Plain impl="OpenSSL.Digest.md5_hexdigest.bytes" effects=[] desc="Hash bytes with MD5 and return the digest as 32 lowercase hex digits; for compatibility (ETags, old APIs), not for security; VM only."
-builtin OpenSSL.Digest.sha1 forms=1
-  OpenSSL.Digest.sha1(data: Bytes) -> Bytes shape=(Bytes) -> Bytes rule=Plain impl="OpenSSL.Digest.sha1.bytes" effects=[] desc="Hash bytes with SHA-1 and return the 20 bytes of the digest; for compatibility (git, old APIs), not for security; VM only."
-builtin OpenSSL.Digest.sha1_hexdigest forms=1
-  OpenSSL.Digest.sha1_hexdigest(data: Bytes) -> String shape=(Bytes) -> String rule=Plain impl="OpenSSL.Digest.sha1_hexdigest.bytes" effects=[] desc="Hash bytes with SHA-1 and return the digest as 40 lowercase hex digits; for compatibility (git, old APIs), not for security; VM only."
-builtin OpenSSL.Digest.sha256 forms=1
-  OpenSSL.Digest.sha256(data: Bytes) -> Bytes shape=(Bytes) -> Bytes rule=Plain impl="OpenSSL.Digest.sha256.bytes" effects=[] desc="Hash bytes with SHA-256 and return the 32 bytes of the digest; VM only."
-builtin OpenSSL.Digest.sha256_hexdigest forms=1
-  OpenSSL.Digest.sha256_hexdigest(data: Bytes) -> String shape=(Bytes) -> String rule=Plain impl="OpenSSL.Digest.sha256_hexdigest.bytes" effects=[] desc="Hash bytes with SHA-256 and return the digest as 64 lowercase hex digits; VM only."
-builtin OpenSSL.Digest.sha512 forms=1
-  OpenSSL.Digest.sha512(data: Bytes) -> Bytes shape=(Bytes) -> Bytes rule=Plain impl="OpenSSL.Digest.sha512.bytes" effects=[] desc="Hash bytes with SHA-512 and return the 64 bytes of the digest; VM only."
-builtin OpenSSL.Digest.sha512_hexdigest forms=1
-  OpenSSL.Digest.sha512_hexdigest(data: Bytes) -> String shape=(Bytes) -> String rule=Plain impl="OpenSSL.Digest.sha512_hexdigest.bytes" effects=[] desc="Hash bytes with SHA-512 and return the digest as 128 lowercase hex digits; VM only."
-builtin OpenSSL.HMAC.sha256 forms=1
-  OpenSSL.HMAC.sha256(key: Bytes, data: Bytes) -> Bytes shape=(Bytes, Bytes) -> Bytes rule=Plain impl="OpenSSL.HMAC.sha256.bytes" effects=[] desc="HMAC-SHA256 (RFC 2104) of data (bytes) under a key of any length; returns the 32 bytes of the MAC; VM only."
-builtin OpenSSL.HMAC.sha256_hexdigest forms=1
-  OpenSSL.HMAC.sha256_hexdigest(key: Bytes, data: Bytes) -> String shape=(Bytes, Bytes) -> String rule=Plain impl="OpenSSL.HMAC.sha256_hexdigest.bytes" effects=[] desc="HMAC-SHA256 (RFC 2104) of data (bytes) under a key of any length; returns the MAC as 64 lowercase hex digits; VM only."
-builtin OpenSSL.HMAC.sha512 forms=1
-  OpenSSL.HMAC.sha512(key: Bytes, data: Bytes) -> Bytes shape=(Bytes, Bytes) -> Bytes rule=Plain impl="OpenSSL.HMAC.sha512.bytes" effects=[] desc="HMAC-SHA512 (RFC 2104) of data (bytes) under a key of any length; returns the 64 bytes of the MAC; VM only."
-builtin OpenSSL.HMAC.sha512_hexdigest forms=1
-  OpenSSL.HMAC.sha512_hexdigest(key: Bytes, data: Bytes) -> String shape=(Bytes, Bytes) -> String rule=Plain impl="OpenSSL.HMAC.sha512_hexdigest.bytes" effects=[] desc="HMAC-SHA512 (RFC 2104) of data (bytes) under a key of any length; returns the MAC as 128 lowercase hex digits; VM only."
-builtin OpenSSL.Random.random_bytes forms=1
-  OpenSSL.Random.random_bytes(count: Int = 16) -> Bytes shape=(Int = 16) -> Bytes rule=Plain impl="OpenSSL.Random.random_bytes.bytes" effects=["random"] desc="Draw count bytes (0..1048576, 16 by default) from the system's secure random source (OpenSSL RAND_bytes), for keys, salts and tokens; unlike Random, never seeded; VM only."
-builtin OpenSSL.Random.hex forms=1
-  OpenSSL.Random.hex(count: Int = 16) -> String shape=(Int = 16) -> String rule=Plain impl="OpenSSL.Random.hex" effects=["random"] desc="Draw count secure random bytes (0..1048576, 16 by default) and give them as 2 * count lowercase hex digits; VM only."
-builtin OpenSSL.Random.uuid forms=1
-  OpenSSL.Random.uuid() -> String shape=() -> String rule=Plain impl="OpenSSL.Random.uuid" effects=["random"] desc="Draw a random version 4 UUID (RFC 9562) as 36 lowercase characters; VM only."
-builtin OpenSSL.HMAC.secure_compare forms=1
-  OpenSSL.HMAC.secure_compare(bytes: Bytes, other: Bytes) -> Bool shape=(Bytes, Bytes) -> Bool rule=Plain impl="OpenSSL.HMAC.secure_compare.bytes" effects=[] desc="Whether bytes and other are the same, in constant time: it compares their SHA-256 digests with OpenSSL CRYPTO_memcmp, so the time never depends on the bytes; for checking MACs and tokens; VM only."
-builtin Bytes.at forms=1
-  Bytes.at(bytes: Bytes, index: Int) -> Int shape=(Bytes, Int) -> Int rule=Plain impl="Bytes.at" effects=[] desc="Read the byte at a zero-based index as an Int (0..255); an index outside the bytes halts."
-builtin Bytes.concat forms=1
-  Bytes.concat(list: List[Bytes]) -> Bytes shape=(List(Bytes)) -> Bytes rule=Plain impl="Bytes.concat" effects=[] desc="Join the parts in order in one copy; prefer it to + in a loop."
-builtin Bytes.drop forms=1
-  Bytes.drop(bytes: Bytes, count: Int) -> Bytes shape=(Bytes, Int) -> Bytes rule=Plain impl="Bytes.drop" effects=[] desc="Copy the bytes after the first count; count above the length gives empty bytes, a negative count halts."
-builtin Bytes.each forms=1
-  Bytes.each(bytes: Bytes, block: Fn[Int, Void]) -> Void shape=(Bytes, Fn([Int], Void)) -> Void rule=Prelude impl="" effects=[] desc="Call block on each byte in order; returns nothing."
-builtin Bytes.empty? forms=1
-  Bytes.empty?(bytes: Bytes) -> Bool shape=(Bytes) -> Bool rule=Prelude impl="" effects=[] desc="Check whether there are no bytes."
-builtin Bytes.from_list forms=1
-  Bytes.from_list(list: List[Int]) -> Result[Bytes] shape=(List(Int)) -> Result(Bytes) rule=Plain impl="Bytes.from_list" effects=[] desc="Make bytes from a list of Ints; an item outside 0..255 gives an error with its index."
-builtin Bytes.length forms=1
-  Bytes.length(bytes: Bytes) -> Int shape=(Bytes) -> Int rule=Plain impl="Bytes.length" effects=[] desc="Count the bytes."
-builtin Bytes.slice forms=1
-  Bytes.slice(bytes: Bytes, start: Int, length: Int) -> Bytes shape=(Bytes, Int, Int) -> Bytes rule=Plain impl="Bytes.slice" effects=[] desc="Copy a byte range; halt outside bounds."
-builtin Bytes.take forms=1
-  Bytes.take(bytes: Bytes, count: Int) -> Bytes shape=(Bytes, Int) -> Bytes rule=Plain impl="Bytes.take" effects=[] desc="Copy the first count bytes; count above the length gives all of them, a negative count halts."
-builtin Bytes.to_a forms=1
-  Bytes.to_a(bytes: Bytes) -> List[Int] shape=(Bytes) -> List(Int) rule=Plain impl="Bytes.to_a" effects=[] desc="List the bytes as Ints (0..255); the way to map, select and the other List methods."
-builtin String.bytes forms=1
-  String.bytes(string: String) -> Bytes shape=(String) -> Bytes rule=Plain impl="String.bytes" effects=[] desc="Give the UTF-8 bytes of the string."
-builtin OpenSSL.Cipher.des_ede3_cbc_encrypt forms=1
-  OpenSSL.Cipher.des_ede3_cbc_encrypt(key: Bytes, iv: Bytes, data: Bytes) -> Result[Bytes] shape=(Bytes, Bytes, Bytes) -> Result(Bytes) rule=Plain impl="OpenSSL.Cipher.des_ede3_cbc_encrypt" effects=[] desc="Encrypt data (bytes) with Triple DES in CBC mode and no padding, for payment formats, not new designs; a key of 16 (two-key) or 24 bytes, an 8-byte iv and data in whole 8-byte blocks, or an error; VM only."
-builtin OpenSSL.Cipher.des_ede3_cbc_decrypt forms=1
-  OpenSSL.Cipher.des_ede3_cbc_decrypt(key: Bytes, iv: Bytes, data: Bytes) -> Result[Bytes] shape=(Bytes, Bytes, Bytes) -> Result(Bytes) rule=Plain impl="OpenSSL.Cipher.des_ede3_cbc_decrypt" effects=[] desc="Decrypt data (bytes) with Triple DES in CBC mode and no padding, for payment formats, not new designs; a key of 16 (two-key) or 24 bytes, an 8-byte iv and data in whole 8-byte blocks, or an error; VM only."
-builtin OpenSSL.CMAC.aes forms=1
-  OpenSSL.CMAC.aes(key: Bytes, data: Bytes) -> Result[Bytes] shape=(Bytes, Bytes) -> Result(Bytes) rule=Plain impl="OpenSSL.CMAC.aes" effects=[] desc="CMAC (NIST SP 800-38B, RFC 4493) of data (bytes) with AES-128, -192 or -256 by the key size (16, 24 or 32 bytes); the full 16-byte tag, or an error for another key size; VM only."
-builtin OpenSSL.CMAC.des_ede3 forms=1
-  OpenSSL.CMAC.des_ede3(key: Bytes, data: Bytes) -> Result[Bytes] shape=(Bytes, Bytes) -> Result(Bytes) rule=Plain impl="OpenSSL.CMAC.des_ede3" effects=[] desc="CMAC (NIST SP 800-38B) of data (bytes) with Triple DES, for payment formats; a key of 16 (two-key) or 24 bytes; the full 8-byte tag, or an error for another key size; VM only."
-builtin OpenSSL.Cipher.aes_256_gcm_encrypt forms=1
-  OpenSSL.Cipher.aes_256_gcm_encrypt(key: Bytes, iv: Bytes, data: Bytes, auth_data: Bytes = "".bytes) -> Result[Bytes] shape=(Bytes, Bytes, Bytes, Bytes = "".bytes) -> Result(Bytes) rule=Plain impl="OpenSSL.Cipher.aes_256_gcm_encrypt" effects=[] desc="Encrypt data (bytes) with AES-256-GCM: a 32-byte key, a 12-byte iv never reused under the key and optional auth_data, authenticated but not encrypted; the ciphertext with the 16-byte tag appended; VM only."
-builtin OpenSSL.Cipher.aes_256_gcm_decrypt forms=1
-  OpenSSL.Cipher.aes_256_gcm_decrypt(key: Bytes, iv: Bytes, data: Bytes, auth_data: Bytes = "".bytes) -> Result[Bytes] shape=(Bytes, Bytes, Bytes, Bytes = "".bytes) -> Result(Bytes) rule=Plain impl="OpenSSL.Cipher.aes_256_gcm_decrypt" effects=[] desc="Decrypt AES-256-GCM data (the ciphertext with its 16-byte tag appended) under the same key, iv and auth_data; a tag that does not match is an error, never partial plaintext; VM only."
-builtin OpenSSL.KDF.pbkdf2_hmac_sha256 forms=1
-  OpenSSL.KDF.pbkdf2_hmac_sha256(password: Bytes, salt: Bytes, iterations: Int, length: Int) -> Result[Bytes] shape=(Bytes, Bytes, Int, Int) -> Result(Bytes) rule=Plain impl="OpenSSL.KDF.pbkdf2_hmac_sha256" effects=[] desc="Derive length bytes (1 to 1048576) from a password and a salt with PBKDF2-HMAC-SHA256 (RFC 8018) and at least 1 iteration, iterations * ceil(length / 32) at most 50000000; a password or salt over 1048576 bytes is an error; VM only."
-builtin OpenSSL.KDF.scrypt forms=1
-  OpenSSL.KDF.scrypt(password: Bytes, salt: Bytes, n: Int, r: Int, p: Int, length: Int) -> Result[Bytes] shape=(Bytes, Bytes, Int, Int, Int, Int) -> Result(Bytes) rule=Plain impl="OpenSSL.KDF.scrypt" effects=[] desc="Derive length bytes (1 to 1048576) from a password and a salt with scrypt (RFC 7914): cost n, a power of 2, block size r and parallelization p, in at most 1025 MiB (128 * r * (n + p + 2) bytes) and with r * p * (n + 16) at most 2^25, or an error; VM only."
-builtin Optional.map forms=1
-  Optional.map(optional: Optional[T], block: Fn[T, U]) -> Optional[U] shape=(Optional(Var(T)), Fn([Var(T)], Var(U))) -> Optional(Var(U)) rule=Prelude impl="" effects=[] desc="some(block(x)) for some(x), else none; block runs only for some."
-builtin Optional.none? forms=1
-  Optional.none?(optional: Optional[T]) -> Bool shape=(Optional(Var(T))) -> Bool rule=Prelude impl="" effects=[] desc="Check whether the value is none."
-builtin Optional.some? forms=1
-  Optional.some?(optional: Optional[T]) -> Bool shape=(Optional(Var(T))) -> Bool rule=Prelude impl="" effects=[] desc="Check whether the value is some(x)."
-builtin Optional.to_result forms=1
-  Optional.to_result(optional: Optional[T], message: String) -> Result[T] shape=(Optional(Var(T)), String) -> Result(Var(T)) rule=Prelude impl="" effects=[] desc="ok(x) for some(x), else error(message), to join try code."
-builtin Optional.unwrap! forms=1
-  Optional.unwrap!(optional: Optional[T]) -> T shape=(Optional(Var(T))) -> Var(T) rule=Prelude impl="" effects=[] desc="Return x of some(x); halt on none."
-builtin Optional.unwrap_or forms=1
-  Optional.unwrap_or(optional: Optional[T], default: T) -> T shape=(Optional(Var(T)), Var(T)) -> Var(T) rule=Prelude impl="" effects=[] desc="Return x of some(x), else default; both arguments run eagerly."
-builtin none forms=1
-  none() -> Optional[T] shape=() -> Optional(Var(T)) rule=OptionalNone impl="" effects=[] desc="The absent value; needs an expected Optional type."
-builtin some forms=1
-  some(value: T) -> Optional[T] shape=(Var(T)) -> Optional(Var(T)) rule=OptionalSome impl="" effects=[] desc="Construct a present Optional value."
-builtin Bytes.decode forms=1
-  Bytes.decode(bytes: Bytes, encoding: String) -> Result[String] shape=(Bytes, String) -> Result(String) rule=Plain impl="Bytes.decode" effects=[] desc="Read the bytes as text in an encoding; invalid bytes or an unknown encoding give an error."
-builtin String.encode forms=1
-  String.encode(string: String, encoding: String) -> Result[Bytes] shape=(String, String) -> Result(Bytes) rule=Plain impl="String.encode" effects=[] desc="Write the text in an encoding; a character it cannot hold or an unknown encoding gives an error."
-builtin Task.current forms=1
-  Task.current() -> TaskRef shape=() -> Opaque(TaskRef) rule=Plain impl="Task.current" effects=["concurrency"] desc="Return the running task as a TaskRef, which Task.monitor, Task.cancel and id take but no await, since its result type is not known here; VM only."
-builtin Task.id forms=1
-  Task.id(task: Task[R]) -> Int shape=(Task(Var(R))) -> Int rule=TaskTarget impl="Task.id" effects=[] desc="Return the number that identifies the task (or TaskRef) in this run, the task_id of its TaskDown."
-builtin Task.monitor forms=1
-  Task.monitor(task: Task[R], channel: Channel[M], message: Fn[TaskDown, M]) -> Void shape=(Task(Var(R)), Channel(Var(M)), Fn([Struct(TaskDown)], Var(M))) -> Void rule=TaskMonitor impl="Task.monitor" effects=["concurrency"] desc="When the task (or TaskRef) ends (returns, crashes or is cancelled), send message(TaskDown) into the channel once, without waiting; at once for a task that has ended; past the capacity of a full channel, dropped when it is closed or a signal channel; a crash counts as observed only through a Task[R]; VM only."
-builtin Native.mutex forms=1
-  Native.mutex() -> Native.Mutex shape=() -> Opaque(Native.Mutex) rule=Plain impl="Native.mutex" effects=["native"] desc="A new Native.Mutex, for the calls of a native library that is not thread-safe: native calls run on several schedulers at once."
-builtin Native.Mutex.synchronize forms=1
-  Native.Mutex.synchronize(mutex: Native.Mutex, block: Fn[T]) -> T shape=(Opaque(Native.Mutex), Fn([], Var(T))) -> Var(T) rule=NativeSynchronize impl="Native.Mutex.synchronize" effects=["native"] desc="Run the block with the mutex held and return its value; a task that waits for it parks, so other tasks run; a task that holds it already is RUNTIME-NATIVE-MUTEX."
-builtin OpenSSL.RSA.public_encrypt_oaep forms=1
-  OpenSSL.RSA.public_encrypt_oaep(pem: String, data: Bytes) -> Result[Bytes] shape=(String, Bytes) -> Result(Bytes) rule=Plain impl="OpenSSL.RSA.public_encrypt_oaep" effects=["random"] desc="Encrypt data (bytes) with the RSA public key in pem (PUBLIC KEY or RSA PUBLIC KEY) and OAEP padding with SHA-1; at most the key size less 42 bytes; a bad PEM, a key that is not RSA or data too long is an error; VM only."
-builtin Range.all? forms=1
-  Range.all?(range: Range, block: Fn[Int, Bool]) -> Bool shape=(Range, Fn([Int], Bool)) -> Bool rule=Prelude impl="" effects=[] desc="True when block accepts every value (true for an empty range); block stops at the first false; O(n)."
-builtin Range.any? forms=1
-  Range.any?(range: Range, block: Fn[Int, Bool]) -> Bool shape=(Range, Fn([Int], Bool)) -> Bool rule=Prelude impl="" effects=[] desc="True when block accepts a value; block stops at the first true; O(n)."
-builtin Range.drop_while forms=1
-  Range.drop_while(range: Range, block: Fn[Int, Bool]) -> List[Int] shape=(Range, Fn([Int], Bool)) -> List(Int) rule=Prelude impl="" effects=[] desc="List the values from the first one block rejects on; block is not called after it; O(n)."
-builtin Range.each_slice forms=1
-  Range.each_slice(range: Range, size: Int) -> List[List[Int]] shape=(Range, Int) -> List(List(Int)) rule=Prelude impl="" effects=[] desc="Split into lists of size values, the last one shorter; size below 1 halts; O(n)."
-builtin Range.each_with_index forms=1
-  Range.each_with_index(range: Range, block: Fn[Int, Int, Void]) -> Void shape=(Range, Fn([Int, Int], Void)) -> Void rule=Prelude impl="" effects=[] desc="Call block on each value and its index from 0, in order; O(n)."
-builtin Range.find forms=1
-  Range.find(range: Range, block: Fn[Int, Bool]) -> Result[Int] shape=(Range, Fn([Int], Bool)) -> Result(Int) rule=Prelude impl="" effects=[] desc="The first value block accepts, else error(\"not found\"); block stops being called at the first true; O(n)."
-builtin Range.find_index forms=1
-  Range.find_index(range: Range, block: Fn[Int, Bool]) -> Optional[Int] shape=(Range, Fn([Int], Bool)) -> Optional(Int) rule=Prelude impl="" effects=[] desc="The index of the first value block accepts, or none; O(n)."
-builtin Range.flat_map forms=1
-  Range.flat_map(range: Range, block: Fn[Int, List[B]]) -> List[B] shape=(Range, Fn([Int], List(Var(B)))) -> List(Var(B)) rule=Prelude impl="" effects=[] desc="Join the lists block gives for each value, in order; O(n)."
-builtin Range.group_by forms=1
-  Range.group_by(range: Range, key: Fn[Int, K]) -> Map[K, List[Int]] shape=(Range, Fn([Int], Var(K))) -> Map(Var(K), List(Int)) rule=Prelude impl="" effects=[] desc="Group the values by an Int or String key; keys in order of first appearance; O(n)."
-builtin Range.map forms=1
-  Range.map(range: Range, block: Fn[Int, B]) -> List[B] shape=(Range, Fn([Int], Var(B))) -> List(Var(B)) rule=Prelude impl="" effects=[] desc="List what block gives for each value, in order; O(n)."
-builtin Range.max forms=1
-  Range.max(range: Range) -> Optional[Int] shape=(Range) -> Optional(Int) rule=Prelude impl="" effects=[] desc="The last value, or none for an empty range; O(1)."
-builtin Range.max_by forms=1
-  Range.max_by(range: Range, key: Fn[Int, O]) -> Optional[Int] shape=(Range, Fn([Int], Var(O))) -> Optional(Int) rule=Prelude impl="" effects=[] desc="The value with the greatest Int, Float or String key, the first on ties, or none for an empty range; O(n)."
-builtin Range.min forms=1
-  Range.min(range: Range) -> Optional[Int] shape=(Range) -> Optional(Int) rule=Prelude impl="" effects=[] desc="The first value, or none for an empty range; O(1)."
-builtin Range.min_by forms=1
-  Range.min_by(range: Range, key: Fn[Int, O]) -> Optional[Int] shape=(Range, Fn([Int], Var(O))) -> Optional(Int) rule=Prelude impl="" effects=[] desc="The value with the least Int, Float or String key, the first on ties, or none for an empty range; O(n)."
-builtin Range.partition forms=1
-  Range.partition(range: Range, block: Fn[Int, Bool]) -> List[List[Int]] shape=(Range, Fn([Int], Bool)) -> List(List(Int)) rule=Prelude impl="" effects=[] desc="Split into [accepted, rejected], each in order; O(n)."
-builtin Range.reduce forms=1
-  Range.reduce(range: Range, initial: B, block: Fn[B, Int, B]) -> B shape=(Range, Var(B), Fn([Var(B), Int], Var(B))) -> Var(B) rule=Prelude impl="" effects=[] desc="Fold left with block(accumulator, value); an empty range returns initial; O(n)."
-builtin Range.select forms=1
-  Range.select(range: Range, block: Fn[Int, Bool]) -> List[Int] shape=(Range, Fn([Int], Bool)) -> List(Int) rule=Prelude impl="" effects=[] desc="List the values block accepts, in order; O(n)."
-builtin Range.sum forms=1
-  Range.sum(range: Range) -> Int shape=(Range) -> Int rule=Prelude impl="" effects=[] desc="Add the values; an empty range gives 0; Int overflow halts; O(n)."
-builtin Range.take_while forms=1
-  Range.take_while(range: Range, block: Fn[Int, Bool]) -> List[Int] shape=(Range, Fn([Int], Bool)) -> List(Int) rule=Prelude impl="" effects=[] desc="List the values before the first one block rejects; block is not called after it; O(n)."
-builtin DNS.lookup forms=1
-  DNS.lookup(host: String, timeout_ms: Int = 30000) -> Result[List[String]] shape=(String, Int = 30000) -> Result(List(String)) rule=Plain impl="DNS.lookup" effects=["network"] desc="Resolve a host name with the system resolver: every IPv4 and IPv6 address as text, in its order, without duplicates; an IP literal gives itself."
-builtin String.edit_distance forms=2
-  String.edit_distance(string: String, other: String) -> Int shape=(String, String) -> Int rule=Plain impl="String.edit_distance" effects=[] desc="The Levenshtein distance in characters: the fewest inserts, deletes and replacements of one character that turn string into other; O(n * m) time, O(min(n, m)) memory; or, with max, max + 1 once it passes max."
-  String.edit_distance(string: String, other: String, max: Int) -> Int shape=(String, String, Int) -> Int rule=Plain impl="String.edit_distance" effects=[] desc="The Levenshtein distance, or max + 1 once it passes max, with about n * (2 * max + 1) table cells of work; a negative max fails with RUNTIME-INVALID-COUNT."
-builtin String.jaro_winkler forms=1
-  String.jaro_winkler(string: String, other: String) -> Float shape=(String, String) -> Float rule=Plain impl="String.jaro_winkler" effects=[] desc="The Jaro-Winkler similarity in characters, from 0.0 to 1.0; a common prefix of up to 4 characters raises it when the Jaro similarity is above 0.7; two empty strings give 1.0."
-builtin System.subscribe forms=1
-  System.subscribe(signals: List[System.Signal]) -> Result[Channel[System.Signal]] shape=(List(Enum(System.Signal, []))) -> Result(Channel(Enum(System.Signal, []))) rule=Plain impl="System.subscribe" effects=["process"] desc="Receive the listed OS signals on a new channel (one pending value per signal) instead of stopping the program; the calling task owns it, and its end or Channel.close ends the subscription; Quit and Kill are RUNTIME-INVALID-SIGNAL; VM only."
-builtin System.signal_number forms=1
-  System.signal_number(signal: System.Signal) -> Int shape=(Enum(System.Signal, [])) -> Int rule=Plain impl="System.signal_number" effects=[] desc="The OS number of a signal (Term is 15), so 128 + it is the exit code a signal gives; VM only."
-builtin format forms=1
-  format(format: String) -> String shape=(String) -> String rule=Format impl="" effects=[] desc="The text of a format string literal with one argument per conversion, as Ruby's format: %[flags][width][.precision]type with the flags - and 0, the types d (Int), x (Int, hex), f (Float) and s (any value with to_s), and %% for a %: format(\"%-8s|%6.2f|%03d\", name, price, n)."
-builtin Process.signal forms=1
-  Process.signal(process: Process, signal: System.Signal) -> Result[Void] shape=(Opaque(Process), Enum(System.Signal, [])) -> Result(Void) rule=Plain impl="Process.signal" effects=["subprocess"] desc="Send a signal to the child; a closed or exited child is an error; POSIX, VM only."
-builtin Process.spawn_group forms=1
-  Process.spawn_group(command: String, args: List[String], dir: String = ".", timeout_ms: Int = 30000) -> Result[Process] shape=(String, List(String), String = ".", Int = 30000) -> Result(Opaque(Process)) rule=Plain impl="Process.spawn_group" effects=["subprocess"] desc="Start an executable in a new session, so it leads its own process group, with the program's stdin, stdout and stderr; Process.close and the end of the run kill the whole group; --deny-run makes it an error; POSIX, VM only."
-builtin Process.signal_group forms=1
-  Process.signal_group(process: Process, signal: System.Signal) -> Result[Void] shape=(Opaque(Process), Enum(System.Signal, [])) -> Result(Void) rule=Plain impl="Process.signal_group" effects=["subprocess"] desc="Send a signal to the process group that the child leads (Process.spawn_group, or pgroup: true); an error once the child has exited; POSIX, VM only."
-builtin System.signal forms=1
-  System.signal(pid: Int, signal: System.Signal, comm: String) -> Result[Void] shape=(Int, Enum(System.Signal, []), String) -> Result(Void) rule=Plain impl="System.signal" effects=["process"] desc="Send a signal to the process PID only while its name (/proc/PID/comm, at most 15 bytes) is comm, through a pidfd so it never reaches another process; --deny-run makes it an error; Linux 5.3 or later, VM only."
 record Codec.Info name: String, members: List(Struct(StructMember))
 record Error kind: String = "error", message: String, code: Optional(Int) = none, details: Map(String, String) = {}, cause: Optional(Struct(Error)) = none, location: String = ""
 record File.Info kind: String, size_bytes: Int, modified_seconds: Int, mode: Int, user_id: Int, group_id: Int
@@ -1033,7 +1033,7 @@ enum JSON.Node parameters=[] variants=Null | Bool(Bool) | Int(Int) | BigInt(Stri
 enum LogRegistry.Level parameters=[] variants=Debug | Info | Warning | Error
 enum System.Signal parameters=[] variants=Term | Int | Hup | Usr1 | Usr2 | Quit | Kill
 enum TaskExit parameters=[] variants=Ok | Crashed | Cancelled
-public ["Address.send", "Channel.address", "Channel.close", "Channel.closed?", "Channel.empty?", "Channel.lazy", "Channel.new", "Channel.recv", "Channel.send", "Dir.list", "Dir.mkdir", "Dir.mkdir_private", "File.append_text", "File.chunks", "File.close", "File.each_line", "File.flush", "File.foreach", "File.lstat", "File.open", "File.read_bytes", "File.read_line", "File.read_text", "File.replace", "File.sha256", "File.stat", "File.try_lock", "File.write", "File.write_bytes", "File.write_text", "Float.abs", "Float.ceil", "Float.clamp", "Float.floor", "Float.from_bits", "Float.from_bits32", "Int.to_f", "Float.round", "Float.to_bits", "Float.to_bits32", "Float.to_i", "Float.to_i!", "FrontEnd.hand_off", "FrontEnd.std_source", "FrontEnd.stdin_bytes", "IO.eof?", "IO.flush", "IO.gets", "IO.gets!", "IO.inspect", "IO.print", "IO.puts", "IO.read", "IO.read_bytes", "IO.warn", "Int.abs", "Int.bit_and", "Int.bit_not", "Int.bit_or", "Int.bit_xor", "Int.clamp", "Int.downto", "Int.gcd", "Int.pow", "Int.shift_left", "Int.shift_right", "Int.shift_right_unsigned", "Int.times", "Int.upto", "JSON.array", "JSON.at", "JSON.bool", "Codec.decode", "Codec.encode", "Codec.from", "Codec.members", "JSON.decode", "JSON.encode", "JSON.float", "JSON.from", "JSON.get", "JSON.int", "JSON.kind", "JSON.list", "JSON.node", "JSON.null", "JSON.null?", "JSON.object", "JSON.parse", "JSON.schema", "JSON.string", "Lazy.chunk_while", "Lazy.deflate", "Lazy.drop", "Lazy.drop_while", "Lazy.each", "Lazy.each_cons", "Lazy.each_slice", "Lazy.filter", "Lazy.find", "Lazy.first", "Lazy.flat_map", "Lazy.gunzip", "Lazy.gzip", "Lazy.inflate", "Lazy.map", "Lazy.produce", "Lazy.reduce", "Lazy.take", "Lazy.take_while", "Lazy.to_a", "Lazy.with_index", "Lazy.write_bytes", "Lazy.write_lines", "List.all?", "List.any?", "List.append", "List.at", "List.drop", "List.drop_while", "List.each", "List.each_slice", "List.each_with_index", "List.empty?", "List.filter", "List.find", "List.find_index", "List.first", "List.flat_map", "List.group_by", "List.include?", "List.index", "List.last", "List.lazy", "List.map", "List.max", "List.max_by", "List.min", "List.min_by", "List.partition", "List.reduce", "List.repeat", "List.reverse", "List.set", "List.size", "List.sort", "List.sort_by", "List.sum", "List.take", "List.take_while", "List.tally", "List.uniq", "Map.delete", "Map.each", "Map.empty?", "Map.filter", "Map.get", "Map.has_key?", "Map.keys", "Map.put", "Map.size", "Map.values", "Math.sqrt", "Native.address", "Native.callback", "Native.close", "Native.closed?", "Native.free", "Native.from_string", "Native.get_array_of_float32", "Native.get_array_of_float64", "Native.get_array_of_int32", "Native.get_array_of_int64", "Native.get_bytes", "Native.get_float32", "Native.get_float64", "Native.get_int16", "Native.get_int32", "Native.get_int64", "Native.get_int8", "Native.get_pointer", "Native.get_string", "Native.get_struct", "Native.get_uint16", "Native.get_uint32", "Native.get_uint8", "Native.load", "Native.function?", "Native.memory_pointer", "Native.null", "Native.null?", "Native.offset", "Native.pointer", "Native.put_array_of_float32", "Native.put_array_of_float64", "Native.put_array_of_int32", "Native.put_array_of_int64", "Native.put_bytes", "Native.put_float32", "Native.put_float64", "Native.put_int16", "Native.put_int32", "Native.put_int64", "Native.put_int8", "Native.put_pointer", "Native.put_string", "Native.put_struct", "Native.size_of", "Native.wait_readable", "Native.wait_writable", "Path.cwd", "Path.join", "Path.real", "Path.remove", "Path.rename", "Path.resolve", "Process.channel_close", "Process.channel_read_line", "Process.channel_send", "Process.close", "Process.close_stdin", "Process.output", "Process.parent_read_line", "Process.parent_send", "Process.poll_line", "Process.read_available", "Process.read_bytes", "Process.read_line", "Process.send", "Process.send_bytes", "Process.spawn", "Process.spawn_captured", "Process.spawn_channel", "Process.wait", "System.Profile.measure", "System.Profile.steps", "Random.float", "Random.int", "Random.seed", "Range.each", "Range.first", "Range.include?", "Range.lazy", "Range.last", "Range.size", "Range.to_a", "Error.is_a?", "Result.message", "Result.ok?", "Result.unwrap!", "Result.unwrap_or", "Set.add", "Set.delete", "Set.difference", "Set.empty?", "Set.include?", "Set.intersection", "Set.new", "Set.size", "Set.subset?", "Set.to_a", "Set.union", "Std.source", "String.at", "String.bytesize", "String.code", "String.compare", "String.include?", "String.downcase", "String.empty?", "String.end_with?", "String.from_bytes", "String.from_code", "Float.to_s", "Int.to_s", "String.index_of", "List.join", "String.length", "String.replace", "String.reverse", "String.slice", "String.split", "String.start_with?", "String.to_f", "String.to_f!", "String.to_i", "String.to_i!", "String.strip", "String.upcase", "System.args", "System.env", "System.exit", "System.os", "System.pid", "TCP.accept", "TCP.close", "TCP.close_listener", "TCP.connect", "TCP.listen", "TCP.local_port", "TCP.remote_address", "TCP.read_line", "TCP.recv_bytes", "TCP.send", "TCP.send_bytes", "TLS.alpn", "TLS.client_context", "TLS.connect", "TLS.listen", "TLS.server_context", "TLS.upgrade", "Task.await", "Task.cancel", "Task.map", "Task.pending_count", "Task.sleep", "Task.spawn", "Task.spawn_owning", "Task.unobserved_crash", "Test.assert", "Test.eq", "Test.error?", "Test.ok?", "Test.run", "Test.test", "Time.monotonic_ms", "Time.monotonic_ns", "Time.now_ms", "error", "gets", "gets!", "ok", "print", "puts", "Zlib.deflate", "Zlib.inflate", "Zlib.gzip", "Zlib.gunzip", "Zlib.crc32", "ATS.add", "ATS.delete", "ATS.get", "ATS.has_key?", "ATS.keys", "ATS.new", "ATS.put", "ATS.put_new", "ATS.size", "ATS.to_map", "Base64.encode64", "Base64.strict_encode64", "Base64.urlsafe_encode64", "Base64.decode64", "Base64.strict_decode64", "Base64.urlsafe_decode64", "OpenSSL.Digest.hexdecode", "OpenSSL.Digest.hexencode", "OpenSSL.Digest.md5", "OpenSSL.Digest.md5_hexdigest", "OpenSSL.Digest.sha1", "OpenSSL.Digest.sha1_hexdigest", "OpenSSL.Digest.sha256", "OpenSSL.Digest.sha256_hexdigest", "OpenSSL.Digest.sha512", "OpenSSL.Digest.sha512_hexdigest", "OpenSSL.HMAC.sha256", "OpenSSL.HMAC.sha256_hexdigest", "OpenSSL.HMAC.sha512", "OpenSSL.HMAC.sha512_hexdigest", "OpenSSL.Random.random_bytes", "OpenSSL.Random.hex", "OpenSSL.Random.uuid", "OpenSSL.HMAC.secure_compare", "Bytes.at", "Bytes.concat", "Bytes.drop", "Bytes.each", "Bytes.empty?", "Bytes.from_list", "Bytes.length", "Bytes.slice", "Bytes.take", "Bytes.to_a", "String.bytes", "OpenSSL.Cipher.des_ede3_cbc_encrypt", "OpenSSL.Cipher.des_ede3_cbc_decrypt", "OpenSSL.CMAC.aes", "OpenSSL.CMAC.des_ede3", "OpenSSL.Cipher.aes_256_gcm_encrypt", "OpenSSL.Cipher.aes_256_gcm_decrypt", "OpenSSL.KDF.pbkdf2_hmac_sha256", "OpenSSL.KDF.scrypt", "Optional.map", "Optional.none?", "Optional.some?", "Optional.to_result", "Optional.unwrap!", "Optional.unwrap_or", "none", "some", "Bytes.decode", "String.encode", "Task.current", "Task.id", "Task.monitor", "Native.mutex", "Native.Mutex.synchronize", "OpenSSL.RSA.public_encrypt_oaep", "Range.all?", "Range.any?", "Range.drop_while", "Range.each_slice", "Range.each_with_index", "Range.find", "Range.find_index", "Range.flat_map", "Range.group_by", "Range.map", "Range.max", "Range.max_by", "Range.min", "Range.min_by", "Range.partition", "Range.reduce", "Range.select", "Range.sum", "Range.take_while", "DNS.lookup", "String.edit_distance", "String.jaro_winkler", "System.subscribe", "System.signal_number", "format", "Process.signal", "Process.spawn_group", "Process.signal_group", "System.signal"]
+public ["Address.send", "ATS.add", "ATS.delete", "ATS.get", "ATS.has_key?", "ATS.keys", "ATS.new", "ATS.put", "ATS.put_new", "ATS.size", "ATS.to_map", "Base64.encode64", "Base64.strict_encode64", "Base64.urlsafe_encode64", "Base64.decode64", "Base64.strict_decode64", "Base64.urlsafe_decode64", "Bytes.at", "Bytes.concat", "Bytes.drop", "Bytes.each", "Bytes.empty?", "Bytes.from_list", "Bytes.length", "Bytes.slice", "Bytes.take", "Bytes.to_a", "Bytes.decode", "Channel.address", "Channel.close", "Channel.closed?", "Channel.empty?", "Channel.lazy", "Channel.new", "Channel.recv", "Channel.send", "Codec.decode", "Codec.encode", "Codec.from", "Codec.members", "error", "gets", "gets!", "ok", "print", "puts", "none", "some", "format", "Dir.list", "Dir.mkdir", "Dir.mkdir_private", "DNS.lookup", "Error.is_a?", "File.append_text", "File.chunks", "File.close", "File.each_line", "File.flush", "File.foreach", "File.lstat", "File.open", "File.read_bytes", "File.read_line", "File.read_text", "File.replace", "File.sha256", "File.stat", "File.try_lock", "File.write", "File.write_bytes", "File.write_text", "Float.abs", "Float.ceil", "Float.clamp", "Float.floor", "Float.from_bits", "Float.from_bits32", "Float.round", "Float.to_bits", "Float.to_bits32", "Float.to_i", "Float.to_i!", "Float.to_s", "FrontEnd.hand_off", "FrontEnd.std_source", "FrontEnd.stdin_bytes", "Int.to_f", "Int.abs", "Int.bit_and", "Int.bit_not", "Int.bit_or", "Int.bit_xor", "Int.clamp", "Int.downto", "Int.gcd", "Int.pow", "Int.shift_left", "Int.shift_right", "Int.shift_right_unsigned", "Int.times", "Int.upto", "Int.to_s", "IO.eof?", "IO.flush", "IO.gets", "IO.gets!", "IO.inspect", "IO.print", "IO.puts", "IO.read", "IO.read_bytes", "IO.warn", "JSON.array", "JSON.at", "JSON.bool", "JSON.decode", "JSON.encode", "JSON.float", "JSON.from", "JSON.get", "JSON.int", "JSON.kind", "JSON.list", "JSON.node", "JSON.null", "JSON.null?", "JSON.object", "JSON.parse", "JSON.schema", "JSON.string", "Lazy.chunk_while", "Lazy.deflate", "Lazy.drop", "Lazy.drop_while", "Lazy.each", "Lazy.each_cons", "Lazy.each_slice", "Lazy.filter", "Lazy.find", "Lazy.first", "Lazy.flat_map", "Lazy.gunzip", "Lazy.gzip", "Lazy.inflate", "Lazy.map", "Lazy.produce", "Lazy.reduce", "Lazy.take", "Lazy.take_while", "Lazy.to_a", "Lazy.with_index", "Lazy.write_bytes", "Lazy.write_lines", "List.all?", "List.any?", "List.append", "List.at", "List.drop", "List.drop_while", "List.each", "List.each_slice", "List.each_with_index", "List.empty?", "List.filter", "List.find", "List.find_index", "List.first", "List.flat_map", "List.group_by", "List.include?", "List.index", "List.last", "List.lazy", "List.map", "List.max", "List.max_by", "List.min", "List.min_by", "List.partition", "List.reduce", "List.repeat", "List.reverse", "List.set", "List.size", "List.sort", "List.sort_by", "List.sum", "List.take", "List.take_while", "List.tally", "List.uniq", "List.join", "Map.delete", "Map.each", "Map.empty?", "Map.filter", "Map.get", "Map.has_key?", "Map.keys", "Map.put", "Map.size", "Map.values", "Math.sqrt", "Native.address", "Native.callback", "Native.close", "Native.closed?", "Native.free", "Native.from_string", "Native.get_array_of_float32", "Native.get_array_of_float64", "Native.get_array_of_int32", "Native.get_array_of_int64", "Native.get_bytes", "Native.get_float32", "Native.get_float64", "Native.get_int16", "Native.get_int32", "Native.get_int64", "Native.get_int8", "Native.get_pointer", "Native.get_string", "Native.get_struct", "Native.get_uint16", "Native.get_uint32", "Native.get_uint8", "Native.load", "Native.function?", "Native.memory_pointer", "Native.null", "Native.null?", "Native.offset", "Native.pointer", "Native.put_array_of_float32", "Native.put_array_of_float64", "Native.put_array_of_int32", "Native.put_array_of_int64", "Native.put_bytes", "Native.put_float32", "Native.put_float64", "Native.put_int16", "Native.put_int32", "Native.put_int64", "Native.put_int8", "Native.put_pointer", "Native.put_string", "Native.put_struct", "Native.size_of", "Native.wait_readable", "Native.wait_writable", "Native.mutex", "Native.Mutex.synchronize", "OpenSSL.Digest.hexdecode", "OpenSSL.Digest.hexencode", "OpenSSL.Digest.md5", "OpenSSL.Digest.md5_hexdigest", "OpenSSL.Digest.sha1", "OpenSSL.Digest.sha1_hexdigest", "OpenSSL.Digest.sha256", "OpenSSL.Digest.sha256_hexdigest", "OpenSSL.Digest.sha512", "OpenSSL.Digest.sha512_hexdigest", "OpenSSL.HMAC.sha256", "OpenSSL.HMAC.sha256_hexdigest", "OpenSSL.HMAC.sha512", "OpenSSL.HMAC.sha512_hexdigest", "OpenSSL.Random.random_bytes", "OpenSSL.Random.hex", "OpenSSL.Random.uuid", "OpenSSL.HMAC.secure_compare", "OpenSSL.Cipher.des_ede3_cbc_encrypt", "OpenSSL.Cipher.des_ede3_cbc_decrypt", "OpenSSL.CMAC.aes", "OpenSSL.CMAC.des_ede3", "OpenSSL.Cipher.aes_256_gcm_encrypt", "OpenSSL.Cipher.aes_256_gcm_decrypt", "OpenSSL.KDF.pbkdf2_hmac_sha256", "OpenSSL.KDF.scrypt", "OpenSSL.RSA.public_encrypt_oaep", "Optional.map", "Optional.none?", "Optional.some?", "Optional.to_result", "Optional.unwrap!", "Optional.unwrap_or", "Path.cwd", "Path.join", "Path.real", "Path.remove", "Path.rename", "Path.resolve", "Process.channel_close", "Process.channel_read_line", "Process.channel_send", "Process.close", "Process.close_stdin", "Process.output", "Process.parent_read_line", "Process.parent_send", "Process.poll_line", "Process.read_available", "Process.read_bytes", "Process.read_line", "Process.send", "Process.send_bytes", "Process.spawn", "Process.spawn_captured", "Process.spawn_channel", "Process.wait", "Process.signal", "Process.spawn_group", "Process.signal_group", "Random.float", "Random.int", "Random.seed", "Range.each", "Range.first", "Range.include?", "Range.lazy", "Range.last", "Range.size", "Range.to_a", "Range.all?", "Range.any?", "Range.drop_while", "Range.each_slice", "Range.each_with_index", "Range.find", "Range.find_index", "Range.flat_map", "Range.group_by", "Range.map", "Range.max", "Range.max_by", "Range.min", "Range.min_by", "Range.partition", "Range.reduce", "Range.select", "Range.sum", "Range.take_while", "Result.message", "Result.ok?", "Result.unwrap!", "Result.unwrap_or", "Set.add", "Set.delete", "Set.difference", "Set.empty?", "Set.include?", "Set.intersection", "Set.new", "Set.size", "Set.subset?", "Set.to_a", "Set.union", "Std.source", "String.at", "String.bytesize", "String.code", "String.compare", "String.include?", "String.downcase", "String.empty?", "String.end_with?", "String.from_bytes", "String.from_code", "String.index_of", "String.length", "String.replace", "String.reverse", "String.slice", "String.split", "String.start_with?", "String.to_f", "String.to_f!", "String.to_i", "String.to_i!", "String.strip", "String.upcase", "String.bytes", "String.encode", "String.edit_distance", "String.jaro_winkler", "System.Profile.measure", "System.Profile.steps", "System.args", "System.env", "System.exit", "System.os", "System.pid", "System.subscribe", "System.signal_number", "System.signal", "Task.await", "Task.cancel", "Task.map", "Task.pending_count", "Task.sleep", "Task.spawn", "Task.spawn_owning", "Task.unobserved_crash", "Task.current", "Task.id", "Task.monitor", "TCP.accept", "TCP.close", "TCP.close_listener", "TCP.connect", "TCP.listen", "TCP.local_port", "TCP.remote_address", "TCP.read_line", "TCP.recv_bytes", "TCP.send", "TCP.send_bytes", "Test.assert", "Test.eq", "Test.error?", "Test.ok?", "Test.run", "Test.test", "Time.monotonic_ms", "Time.monotonic_ns", "Time.now_ms", "TLS.alpn", "TLS.client_context", "TLS.connect", "TLS.listen", "TLS.server_context", "TLS.upgrade", "Zlib.deflate", "Zlib.inflate", "Zlib.gzip", "Zlib.gunzip", "Zlib.crc32"]
 bare ["__fail_arg", "__lazy_channel", "__lazy_chunk_while", "__lazy_chunks", "__lazy_count", "__lazy_each", "__lazy_file", "__lazy_find", "__lazy_flat_map", "__lazy_group", "__lazy_list", "__lazy_map", "__lazy_produce", "__lazy_range", "__lazy_reduce", "__lazy_test", "__lazy_to_a", "__lazy_with_index", "__lazy_write_bytes", "__lazy_write_lines", "__lazy_zlib", "error", "format", "gets", "gets!", "none", "ok", "print", "puts", "some"]
 opaque ["C.Pointer", "File.Handle", "HttpWire.Client", "HttpWire.Server", "Native.Mutex", "Process", "TCP.Listener", "TCP.Socket", "TLS.Context", "TaskRef", "Test.Case"]
 handles ["File.Handle", "HttpWire.Server", "Process", "TCP.Listener", "TCP.Socket"]

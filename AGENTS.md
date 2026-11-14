@@ -110,7 +110,7 @@ stay.
   the file and key path, when it matters), never message text.
 - `compiler/` is the front end: every language change (syntax, checker rule,
   builtin row, builtin record or enum entry, message text) goes there, with its
-  golden. The files `builtins_data.agc`, `check_tables.agc` and
+  golden. The files `builtins_data.agc`, `builtins_<module>.agc`, `check_tables.agc` and
   `unicode_table.agc` are edited by hand. `vm/unicode_data.c` is frozen
   checked-in data (see its header). These rules are defaults, which a PR may
   relax when following them costs more than it saves; the PR says which rule it
