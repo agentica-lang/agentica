@@ -9,6 +9,7 @@ import os
 import re
 import subprocess
 import threading
+import time
 
 from tests.agentica_test import scaled
 
@@ -20,6 +21,8 @@ CHILD = ("import os, signal, sys, time; signal.signal(signal.SIGBREAK, signal.SI
          "signal.signal(signal.SIGINT, signal.SIG_IGN); "
          "len(sys.argv) > 1 and open(sys.argv[1], 'w').write(str(os.getpid())); "
          "print(os.getpid(), flush=True); time.sleep(60)")
+
+NUDGE_SECONDS = 1
 
 # The sequences a pseudo console adds around the text: CSI (colors, cursor), OSC (title) and the like.
 ESCAPES = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[()][A-Z0-9]|\x1b[=>]")
@@ -88,7 +91,9 @@ def close_handle(handle):
 def run_on_console(command, env, limit, typed=None, during=None):
     """Runs the command with a pseudo console as its console, standard input and standard output.
 
-    `typed` is text typed into the console after the start (a line ends with a carriage return, the Enter key).
+    `typed` is text typed into the console after the start (a line ends with a carriage return, the Enter key). The
+    pseudo console sometimes keeps the last bytes typed until more input comes (#1433), so while the command runs a
+    space is typed every NUDGE_SECONDS: it comes after all of `typed`, so a command that reads only that never sees it.
     `during(type_text)` runs after the start, while the command runs: it waits for what the test needs (a file the
     command writes) and types, with type_text, what the test wants the console to receive. The character 3 is
     Ctrl+C: the console turns it into a CTRL_C_EVENT for every process attached to it, as the keys do on a terminal.
@@ -153,8 +158,13 @@ def run_on_console(command, env, limit, typed=None, during=None):
             type_text(typed)
         if during:
             during(type_text)
-        if kernel32.WaitForSingleObject(info.hProcess, int(limit * 1000)) != 0:
-            kernel32.TerminateProcess(info.hProcess, 1)
+        deadline = time.monotonic() + limit
+        wait_ms = int((NUDGE_SECONDS if typed else limit) * 1000)
+        while kernel32.WaitForSingleObject(info.hProcess, wait_ms) != 0:
+            if not typed or time.monotonic() >= deadline:
+                kernel32.TerminateProcess(info.hProcess, 1)
+                break
+            type_text(" ")
         code = wintypes.DWORD()
         kernel32.GetExitCodeProcess(info.hProcess, ctypes.byref(code))
         kernel32.ClosePseudoConsole(console)

@@ -283,10 +283,9 @@ def expression(checked: Checker.Checked, expr: Ast.Expr) -> Model.Node
       operand = expression(checked, node.operand)
       return leaf("not", type, span).with(text: "!", children: [operand]) if node.op == "not"
 
-      # -9223372036854775808 only fits under its minus, so its digits have no type of their own: it is one literal.
-      if operand.kind == "int" and operand.type.kind == "none"
-        return operand.with(type: shape(type), range: DiagnosticModel.range_of(span), text: "-#{operand.text}")
-      end
+      # -9223372036854775808 only fits under its minus: it is one literal.
+      huge = huge_digits(node.operand)
+      return leaf("int", type, span).with(text: "-#{huge}") if huge != ""
 
       leaf("neg", type, span).with(text: "-", children: [operand])
     Ast.Expr.Binary(node) ->
@@ -359,6 +358,19 @@ def bound_arguments(checked: Checker.Checked, id: Int, given: List[Ast.Expr], sp
   end
 
   nodes
+end
+
+# The digits of an Int literal too large to stand without its minus, or "".
+def huge_digits(expr: Ast.Expr) -> String
+  case expr
+    Ast.Expr.Literal(node) ->
+      case node.value
+        Ast.LitValue.Huge(digits) -> digits
+        _ -> ""
+      end
+
+    _ -> ""
+  end
 end
 
 def literal_kind(value: Ast.LitValue) -> String

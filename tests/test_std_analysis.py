@@ -1080,11 +1080,8 @@ def bodies_of(driver, project, path):
     return answer, {function["name"]: function for function in answer["functions"]}
 
 
-def test_bodies_give_the_typed_tree_of_the_binary_readers(driver, project):
-    # A copy of std/binary as a file of the disk; the golden is the tree of the readers that the Lean translator starts
-    # from, so a change of their source or of the shape shows here.
-    shutil.copy(ROOT / "stdlib" / "binary.agc", project / "binary.agc")
-    _answer, functions = bodies_of(driver, project, "binary.agc")
+def readers_tree(functions):
+    """The tree of the readers that the Lean translator starts from, as the golden binary_readers.tree writes it."""
     lines = []
     for name in ("read_u16_le", "load16_le", "window"):
         function = functions[name]
@@ -1093,8 +1090,46 @@ def test_bodies_give_the_typed_tree_of_the_binary_readers(driver, project):
         lines.append(f"{function['linked']} exported={function['exported']} ({params}) -> {result}")
         for node in function["body"]:
             lines += tree_text(node)
+    return "\n".join(lines) + "\n"
+
+
+def test_bodies_give_the_typed_tree_of_the_binary_readers(driver, project):
+    # A copy of std/binary as a file of the disk; the golden is the tree of the readers that the Lean translator starts
+    # from, so a change of their source or of the shape shows here.
+    shutil.copy(ROOT / "stdlib" / "binary.agc", project / "binary.agc")
+    _answer, functions = bodies_of(driver, project, "binary.agc")
     golden = ROOT / "tests" / "fixtures" / "analysis" / "binary_readers.tree"
-    assert "\n".join(lines) + "\n" == golden.read_text()
+    assert readers_tree(functions) == golden.read_text()
+
+
+def test_bodies_read_a_std_module_as_the_binary_carries_it(driver, project):
+    # `std/binary` is the module of the binary, not a file of the disk: the same tree as its copy, named by its key.
+    (project / "std").mkdir()
+    (project / "std" / "binary.agc").write_text('def read_u16_le(data: Bytes) -> Int = 0\n')
+    out, err = library(driver, project, "bodies", "std/binary")
+    answer = json.loads(out)
+    assert (err, answer["file"], answer["modules"]) == ("", "std/binary.agc", [{"prefix": "", "file": "std/binary.agc"}])
+    functions = {function["name"]: function for function in answer["functions"]}
+    golden = ROOT / "tests" / "fixtures" / "analysis" / "binary_readers.tree"
+    assert readers_tree(functions) == golden.read_text()
+    # A module of std/internal/ is private to std/, and a missing one cannot be read.
+    for path in ("std/internal/compiler/analysis/bodies", "std/absent"):
+        out, err = library(driver, project, "bodies", path)
+        assert (out, json.loads(err)["code"]) == ("", "QUERY-USAGE")
+
+
+def test_bodies_name_each_module_a_nested_import_reaches(driver, project):
+    (project / "lib").mkdir()
+    write_files(project, {
+        "lib/inner.agc": 'import Binary from "std/binary"\n\n'
+                         'def first(data: Bytes) -> Int = Binary.read_u8(data, 0).unwrap_or(0)\n',
+        "outer.agc": 'import Inner from "lib/inner"\n\ndef go(data: Bytes) -> Int = Inner.first(data)\n',
+    })
+    answer, functions = bodies_of(driver, project, "outer.agc")
+    files = {module["prefix"]: module["file"] for module in answer["modules"]}
+    assert sorted(files.values()) == ["lib/inner.agc", "outer.agc", "std/binary.agc"]
+    target = functions["go"]["body"][0]["children"][0]["target"]
+    assert files[target.split("::")[0] + "::"] == "lib/inner.agc"
 
 
 def test_bodies_resolve_calls_bindings_patterns_and_mark_what_they_do_not_cover(driver, project):
