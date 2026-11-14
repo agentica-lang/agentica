@@ -1059,6 +1059,22 @@ static __attribute__((noinline)) bool caught(agc_vm *vm, const agc_builtin *b, a
   return true;
 }
 
+/* B's call into *RESULT. With CATCH a failure comes back as false; without, it jumps from the builtin to the turn's
+   target, across the compiled code (rt->jit_unwinds), and the call costs no setjmp (#1599). */
+static inline bool called(agc_vm *vm, const agc_builtin *b, agc_value *args, uint32_t span, agc_value *result,
+                          bool catch) {
+  if (catch) return caught(vm, b, args, span, result);
+#if AGC_LEAF_CHECK
+  bool in_code = vm->in_code;
+  vm->in_code = false;
+#endif
+  *result = b->fn(vm, args, span);
+#if AGC_LEAF_CHECK
+  vm->in_code = in_code;
+#endif
+  return true;
+}
+
 uint32_t agc_jit_call_builtin(agc_vm *vm, agc_value *args, const agc_builtin *b, uint64_t where) {
   agc_task *t = vm->task;
   uint32_t span = (uint32_t)(where >> 32);
@@ -1071,7 +1087,7 @@ uint32_t agc_jit_call_builtin(agc_vm *vm, agc_value *args, const agc_builtin *b,
   bool retry = t->retry;
 #endif
   agc_value result;
-  if (!caught(vm, b, args, span, &result)) return AGC_JIT_EXIT_RAISE;
+  if (!called(vm, b, args, span, &result, !vm->rt->jit_unwinds)) return AGC_JIT_EXIT_RAISE;
 #if AGC_LEAF_CHECK
   if (t->parking || t->retry != retry) direct_broken(b, "parked");
   if (t->stepper) direct_broken(b, "started a stepper");
@@ -1084,7 +1100,7 @@ uint32_t agc_jit_call_builtin(agc_vm *vm, agc_value *args, const agc_builtin *b,
   return vm->yield ? AGC_JIT_EXIT_YIELD : AGC_STATUS_OK;
 }
 
-uint32_t agc_jit_call_leaf(agc_vm *vm, agc_value *args, const agc_builtin *b, uint64_t where) {
+static uint32_t call_leaf(agc_vm *vm, agc_value *args, const agc_builtin *b, uint64_t where, bool catch) {
   agc_task *t = vm->task;
   t->frames[t->frame_count - 1].pc = (uint32_t)where;
 #if AGC_LEAF_CHECK
@@ -1095,7 +1111,7 @@ uint32_t agc_jit_call_leaf(agc_vm *vm, agc_value *args, const agc_builtin *b, ui
   bool yielded = vm->yield, retry = t->retry;
 #endif
   agc_value result;
-  if (!caught(vm, b, args, (uint32_t)(where >> 32), &result)) return AGC_JIT_EXIT_RAISE;
+  if (!called(vm, b, args, (uint32_t)(where >> 32), &result, catch)) return AGC_JIT_EXIT_RAISE;
 #if AGC_LEAF_CHECK
   if (t->parking || t->retry != retry || t->stepper || t->frame_count != frames || vm->sync_depth != depth ||
       t->turn_cost != cost || vm->next_stop != stop || vm->turn_left != left || vm->yield != yielded)
@@ -1105,10 +1121,14 @@ uint32_t agc_jit_call_leaf(agc_vm *vm, agc_value *args, const agc_builtin *b, ui
   return AGC_STATUS_OK;
 }
 
+uint32_t agc_jit_call_leaf(agc_vm *vm, agc_value *args, const agc_builtin *b, uint64_t where) {
+  return call_leaf(vm, args, b, where, !vm->rt->jit_unwinds);
+}
+
 void agc_jit_call_plain(agc_vm *vm, agc_value *args, const agc_builtin *b, uint64_t where) {
 #if AGC_LEAF_CHECK
   /* The checked builds catch it anyway, and stop when a row of plain_leaves failed or broke the leaf rule. */
-  if (agc_jit_call_leaf(vm, args, b, where) != AGC_STATUS_OK) direct_broken(b, "failed with the tags it needs");
+  if (call_leaf(vm, args, b, where, true) != AGC_STATUS_OK) direct_broken(b, "failed with the tags it needs");
 #else
   (void)where;
   args[0] = b->fn(vm, args, 0);

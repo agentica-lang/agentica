@@ -307,12 +307,17 @@ returns.
   compiled code return as an exit, and the interpreter raises the failure at the
   span of the instruction at `pc` (`WRONG_TAG` at span 0), after `run_compiled`
   sets `frame->pc` past that instruction for the stack trace. Helpers charge no
-  step and no turn cost; the caller does. Compiled code never calls `agc_fail`:
-  on Windows x64, `longjmp` unwinds the stack, and JIT frames have no unwind
-  info. A direct or leaf builtin is called through `agc_jit_call_builtin` or
-  `agc_jit_call_leaf`, which set `vm->jit_catch`, so a failure jumps back to
-  them and not across compiled code. The builtin's registers stay in the
-  frame's register file during the call, so the collector sees them.
+  step and no turn cost; the caller does. Compiled code never calls `agc_fail`
+  itself. A direct or leaf builtin is called through `agc_jit_call_builtin` or
+  `agc_jit_call_leaf`. On Windows x64 `longjmp` unwinds the stack, and JIT
+  frames have no unwind info, so there the call sets `vm->jit_catch`: a
+  failure jumps back to it and not across compiled code. Elsewhere
+  `siglongjmp` only restores registers, so the call sets no catch
+  (`rt->jit_unwinds`) and a failure jumps from the builtin to the turn's
+  target: the frames it crosses hold nothing to undo, and a `setjmp` per call
+  cost up to 17% of a loop of direct builtins (#1599). The builtin's registers
+  stay in the frame's register file during the call, so the collector sees
+  them.
 - **Code.** Each instruction has fixed code, emitted in one pass over the
   bytecode; the register conventions are in the headers of `vm/jit/emit_x64.c`
   and `vm/jit/emit_a64.c`. On arm64 the thread that runs compiled code first

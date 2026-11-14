@@ -221,9 +221,11 @@ void agc_jit_report(agc_jit *jit);
    which becomes the top frame's pc first (the stack trace and the error's span read it). It charges the cost of an
    AGC_COST_SIZE row and applies the task's turn cost. It answers AGC_STATUS_OK, the result in ARGS[0], for the code
    to go on; AGC_JIT_EXIT_YIELD when the call ended the turn (the result written); AGC_JIT_EXIT_RAISE when the builtin
-   failed or exited: agc_fail recorded the failure and the stack and jumped to vm->jit_catch, here, so no longjmp
-   crosses compiled code, and run_compiled hands it on. The call either completes or raises, as in the interpreter;
-   a direct row never parks, starts a stepper or a native frame, or moves the frames, so nothing is left half done. */
+   failed or exited with rt->jit_unwinds false: agc_fail recorded the failure and the stack and jumped to
+   vm->jit_catch, here, so no longjmp crosses compiled code, and run_compiled hands it on. With rt->jit_unwinds no
+   catch is set, and the failure jumps to the turn's target from the builtin. The call either completes or raises, as
+   in the interpreter; a direct row never parks, starts a stepper or a native frame, or moves the frames, so nothing
+   is left half done. */
 uint32_t agc_jit_call_builtin(agc_vm *vm, agc_value *args, const agc_builtin *b, uint64_t where);
 /* The CALL_BUILTIN of a leaf row (agc_builtin.leaf) in compiled code, as the interpreter's call_leaf runs it, with
    ARGS and WHERE as for agc_jit_call_builtin. A leaf charges no cost, counts no step and never ends the turn, so it
