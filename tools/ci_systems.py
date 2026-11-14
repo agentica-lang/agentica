@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """The systems of the CI matrices: one table that platforms.yml and probe.yml both pick from.
 
-    ci_systems.py platforms     the systems of a Platforms run: ALL (true or false) and LABELS (a JSON list of the
-                                pull request's labels) come from the environment
+    ci_systems.py platforms     the systems of a Platforms run: all five when ALL is true in the environment, else none
     ci_systems.py probe SPEC    the systems of a probe: SPEC is a comma or space separated list of platform names
                                 and the shorthands linux, windows, macos and all; an unknown name exits 2
 
@@ -22,16 +21,11 @@ SYSTEMS = [
     {"platform": "macos-arm64", "runner": "macos-latest", "make": "gmake", "python": "python3", "shell": "bash"},
 ]
 NAMES = [s["platform"] for s in SYSTEMS]
-# Linux has no label of its own (ci.yml tests Linux x86_64; Linux ARM64 runs with `platforms`).
-LABELLED = {"windows-x86_64", "macos-x86_64", "macos-arm64"}
 
 
-def platforms(all_systems, labels):
-    """The systems of a Platforms run: all five, or those of the `platform:<system>` labels."""
-    if all_systems:
-        return list(SYSTEMS)
-    names = {label.removeprefix("platform:") for label in labels}
-    return [s for s in SYSTEMS if s["platform"] in LABELLED & names]
+def platforms(all_systems):
+    """The systems of a Platforms run: all five or none (tools/ci_changes.py decides for a pull request)."""
+    return list(SYSTEMS) if all_systems else []
 
 
 def probe(spec):
@@ -60,9 +54,7 @@ def output_lines(systems):
 
 def main(argv):
     if argv[:1] == ["platforms"] and len(argv) == 1:
-        # LABELS is read only for a pull request without `platforms` (ALL is true on the other events).
-        all_systems = os.environ.get("ALL") == "true"
-        systems = platforms(all_systems, [] if all_systems else json.loads(os.environ.get("LABELS") or "[]"))
+        systems = platforms(os.environ.get("ALL") == "true")
     elif argv[:1] == ["probe"] and len(argv) == 2:
         try:
             systems = probe(argv[1])
