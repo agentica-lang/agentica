@@ -685,7 +685,7 @@ end
 def lower_type_name(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.TypeName, want: Int) -> Result[Lowering.Out]
   name = node.name
   type = Lowering.type_of(cx, Ast.Expr.TypeName(node))
-  if Types.is?(type, "List") or Types.is?(type, "Map")
+  if Types.is?(type, "List") or Types.is?(type, "Map") or (Types.is?(type, "Struct") and Types.args(type).size > 0)
     name = Program.json_list_name(type)
   elsif Types.is?(type, "Struct") or Types.is?(type, "Enum")
     name = Types.name(type)

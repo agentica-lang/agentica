@@ -1,0 +1,21 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 87,
+  "stdout": [
+    "{\"id\":{\"value\":7},\"tags\":{\"value\":[\"a\",\"b\"]},\"pair\":{\"first\":{\"value\":1},\"second\":null},\"tree\":{\"label\":\"root\",\"kids\":[{\"label\":\"leaf\",\"kids\":[]}]},\"note\":{}}",
+    "ok(Order(id: Box(value: 7), tags: Box(value: [\"a\", \"b\"]), pair: Pair(first: Box(value: 1), second: none), tree: Tree(label: \"root\", kids: [Tree(label: \"leaf\", kids: [])]), note: Box(value: JSON.Field.Absent)))",
+    "true",
+    "ok(Box(value: 3))",
+    "ok(Box(value: JSON.Field.Null))",
+    "ok([Box(value: \"x\"), Box(value: \"y\")])",
+    "error(\"value: expected signed 64-bit Int\", kind: \"json.decode\")",
+    "error(\"first.value: expected signed 64-bit Int\", kind: \"json.decode\")",
+    "error(\"kids[0].label: expected String\", kind: \"json.decode\")",
+    "{\"$defs\":{\"Box[Int]\":{\"properties\":{\"value\":{\"maximum\":9223372036854775807,\"minimum\":-9223372036854775808,\"type\":\"integer\"}},\"required\":[\"value\"],\"type\":\"object\"},\"Box[JSON.Field[String]]\":{\"properties\":{\"value\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}]}},\"type\":\"object\"},\"Box[List[String]]\":{\"properties\":{\"value\":{\"items\":{\"type\":\"string\"},\"type\":\"array\"}},\"required\":[\"value\"],\"type\":\"object\"},\"Pair[Box[Int], Optional[String]]\":{\"properties\":{\"first\":{\"$ref\":\"#/$defs/Box[Int]\"},\"second\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}]}},\"required\":[\"first\"],\"type\":\"object\"},\"Tree[String]\":{\"properties\":{\"kids\":{\"items\":{\"$ref\":\"#/$defs/Tree[String]\"},\"type\":\"array\"},\"label\":{\"type\":\"string\"}},\"required\":[\"label\",\"kids\"],\"type\":\"object\"}},\"properties\":{\"id\":{\"$ref\":\"#/$defs/Box[Int]\"},\"note\":{\"$ref\":\"#/$defs/Box[JSON.Field[String]]\"},\"pair\":{\"$ref\":\"#/$defs/Pair[Box[Int], Optional[String]]\"},\"tags\":{\"$ref\":\"#/$defs/Box[List[String]]\"},\"tree\":{\"$ref\":\"#/$defs/Tree[String]\"}},\"required\":[\"id\",\"tags\",\"pair\",\"tree\",\"note\"],\"type\":\"object\"}",
+    "{\"properties\":{\"value\":{\"maximum\":9223372036854775807,\"minimum\":-9223372036854775808,\"type\":\"integer\"}},\"required\":[\"value\"],\"type\":\"object\"}",
+    "ok(Box(value: \"c\"))",
+    ""
+  ],
+  "stderr": []
+}

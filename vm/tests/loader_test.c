@@ -549,7 +549,7 @@ static buffer type_tables(int which) {
   } else {
     u32(&t, which == 8 ? 0x10000000 : 3);
     u8(&t, 0);
-    u8(&t, which == 1 ? 10 : which >= 27 ? 4 : which >= 19 && which != 26 ? 8 : which >= 13 ? 7 : 4);
+    u8(&t, which == 1 ? 11 : which >= 27 ? 4 : which >= 19 && which != 26 ? 8 : which >= 13 ? 7 : 4);
     u32(&t, which == 2 ? 1 : 0);
     u8(&t, 6);
     u32(&t, which == 3 ? 2 : 0);
@@ -1204,6 +1204,18 @@ static buffer enum_tail(uint32_t first, const char *first_name, uint32_t second,
   return t;
 }
 
+/* The program of a file that loads, whose every shorter prefix is refused. */
+static agc_program *loaded_whole(spec s) {
+  buffer file = build(s);
+  agc_program *p;
+  char error[160] = "";
+  assert(agc_load(file.data, file.len, &p, error, sizeof error));
+  agc_program *cut;
+  for (size_t n = 0; n < file.len; n++) assert(!agc_load(file.data, n, &cut, error, sizeof error));
+  free(file.data);
+  return p;
+}
+
 static bool loads_enums(uint32_t enum_arg, const buffer *tail, const char *reason) {
   buffer t = enum_tables(enum_arg);
   spec s = base();
@@ -1360,15 +1372,10 @@ static void json_enum_tests(void) {
   s.trailing = true;
   assert(!loads(s, "trailing bytes"));
   s.trailing = false;
-  buffer file = build(s);
-  agc_program *p;
-  char error[160] = "";
-  assert(agc_load(file.data, file.len, &p, error, sizeof error));
+  agc_program *p = loaded_whole(s);
   assert(p->enums[0].json_name->bytes == 1 && p->enums[1].json_name->bytes == 1);
   assert(p->enums[0].payload_types[0] == 0 && p->variants[1].arity == 0);
   assert(p->enums[1].payload_types[1] == 0);
-  for (size_t n = 0; n < file.len; n++) assert(!agc_load(file.data, n, &p, error, sizeof error));
-  free(file.data);
   free(t.data);
   free(good.data);
   free(one.data);
@@ -1380,6 +1387,95 @@ static void json_enum_tests(void) {
   free(big.data);
   free(empty.data);
   free(three.data);
+}
+
+/* The Instances section (docs/vm/03-ir-and-bytecode.md 4.6). The tables have the struct Box(value), an Int type (0) and
+   a type of kind instance (1) of instance `instance_arg`, and no decodable struct or enum. */
+static buffer instance_tables(uint32_t kind, uint32_t instance_arg) {
+  buffer t;
+  t.data = malloc(512);
+  assert(t.data);
+  t.len = 0;
+  u32(&t, 1);
+  str(&t, "Box");
+  u32(&t, 1);
+  str(&t, "value");
+  u32(&t, 2);
+  u8(&t, AGC_TYPE_INT);
+  u8(&t, (uint8_t)kind);
+  u32(&t, instance_arg);
+  u32(&t, 0);
+  u32(&t, 0);
+  return t;
+}
+
+/* An empty Decodable enums section, then the instances: each of struct `index`, named `names[k]`, with the field type
+   `field`. */
+static buffer instance_tail(uint32_t count, uint32_t index, const char *const *names, uint32_t field) {
+  buffer t;
+  t.data = malloc(512);
+  assert(t.data);
+  t.len = 0;
+  u32(&t, 0);
+  u32(&t, count);
+  for (uint32_t k = 0; k < count; k++) {
+    u32(&t, index);
+    str(&t, names[k]);
+    u32(&t, field);
+  }
+  return t;
+}
+
+static bool loads_instances(uint32_t kind, uint32_t instance_arg, const buffer *tail, const char *reason) {
+  buffer t = instance_tables(kind, instance_arg);
+  spec s = base();
+  s.tables = &t;
+  s.tail = tail;
+  bool ok = loads(s, reason);
+  free(t.data);
+  return ok;
+}
+
+static void json_instance_tests(void) {
+  static const char *const one[] = {"Box[Int]"};
+  static const char *const twice[] = {"Box[Int]", "Box[Int]"};
+  buffer good = instance_tail(1, 0, one, 0);
+  assert(loads_instances(AGC_TYPE_INSTANCE, 0, &good, NULL));
+  assert(!loads_instances(AGC_TYPE_INSTANCE + 1, 0, &good, "unknown type kind"));
+  assert(!loads_instances(AGC_TYPE_INSTANCE, 1, &good, "instance index out of range"));
+  assert(!loads_instances(AGC_TYPE_INSTANCE, 0, NULL, "instance index out of range"));
+  buffer range = instance_tail(1, 1, one, 0);
+  assert(!loads_instances(AGC_TYPE_INSTANCE, 0, &range, "struct index out of range"));
+  buffer type = instance_tail(1, 0, one, 2);
+  assert(!loads_instances(AGC_TYPE_INSTANCE, 0, &type, "type index out of range"));
+  buffer same = instance_tail(2, 0, twice, 0);
+  assert(!loads_instances(AGC_TYPE_INSTANCE, 0, &same, "duplicate JSON type name"));
+  buffer empty = instance_tail(0, 0, one, 0);
+  assert(!loads_instances(AGC_TYPE_INSTANCE, 0, &empty, "empty struct instances section"));
+  /* An empty enums section is allowed only before the instances. */
+  buffer bare = instance_tail(0, 0, one, 0);
+  bare.len = 4;
+  assert(!loads_instances(AGC_TYPE_INSTANCE, 0, &bare, "empty decodable enums section"));
+  buffer big = instance_tail(1, 0, one, 0);
+  big.data[4] = 0xff;
+  big.data[5] = 0xff;
+  assert(!loads_instances(AGC_TYPE_INSTANCE, 0, &big, "struct instance count exceeds the file"));
+
+  buffer t = instance_tables(AGC_TYPE_INSTANCE, 0);
+  spec s = base();
+  s.tables = &t;
+  s.tail = &good;
+  agc_program *p = loaded_whole(s);
+  assert(p->instance_count == 1 && p->instances[0].struct_index == 0 && p->instances[0].field_types[0] == 0);
+  assert(is_name(p->instances[0].json_name, "Box[Int]") && !p->structs[0].json_name);
+  free(t.data);
+  free(good.data);
+  free(range.data);
+  free(type.data);
+  free(same.data);
+  free(empty.data);
+  free(bare.data);
+  free(big.data);
 }
 
 /* The file of one row; t and u hold the tables and updates it may point to, and the caller frees them. */
@@ -2135,7 +2231,7 @@ int main(void) {
   assert(range_wrong.kind == AGC_FAILED && strcmp(range_wrong.code, "RUNTIME-INTERNAL") == 0);
 
   assert(loads_types(0, NULL));
-  assert(!loads_types(1, "unknown type kind 10"));
+  assert(!loads_types(1, "unknown type kind 11"));
   assert(!loads_types(2, "element type is not an earlier type"));
   assert(!loads_types(3, "struct index out of range"));
   assert(!loads_types(4, "type index out of range"));
@@ -2254,6 +2350,7 @@ int main(void) {
   line_index_tests();
   table_count_tests();
   json_enum_tests();
+  json_instance_tests();
   error_struct_tests();
   stored_name_tests();
   collector_tests();

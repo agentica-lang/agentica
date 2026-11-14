@@ -9,12 +9,14 @@
 
 /* One open container of the decode: a List, a Map, a struct, an enum variant with payloads, or a JSON.Field.Value or an
    Optional some whose T is not a scalar (n is 1 and value holds the decoded T until the frame closes). An enum frame
-   walks the "values" array of the variant: items are its items, payload_types their types and tagged the enum being built. */
+   walks the "values" array of the variant: items are its items, payload_types their types and tagged the enum being built.
+   A struct frame reads its fields as field_types, those of the struct or of the instance it was opened for. */
 typedef struct {
   const agc_json *node;
   const agc_list *items;
   const agc_struct_def *def;
   const uint32_t *payload_types;
+  const uint32_t *field_types;
   uint32_t kind, arg;
   size_t next, n;
   agc_list_builder list;
@@ -87,7 +89,7 @@ static bool next_child(const agc_program *p, const decode_frame *f, agc_value *i
   } else if (f->kind == AGC_TYPE_MAP) {
     *item = f->node->members[f->next].value;
   } else {
-    index = f->def->field_types[f->next];
+    index = f->field_types[f->next];
     const agc_json_member *member = agc_json_find(f->node, f->def->fields[f->next]);
     uint32_t field = p->types[index].kind;
     if (!member && field != AGC_TYPE_JSON_FIELD && field != AGC_TYPE_OPTIONAL) return false;
@@ -157,6 +159,7 @@ static void open_frame(agc_vm *vm, decode_frame *f, const agc_json *node, uint32
   f->items = NULL;
   f->def = NULL;
   f->payload_types = NULL;
+  f->field_types = NULL;
   f->list = (agc_list_builder){0};
   f->record = NULL;
   f->tagged = NULL;
@@ -174,7 +177,16 @@ static void open_frame(agc_vm *vm, decode_frame *f, const agc_json *node, uint32
     f->n = node->count;
     f->map = agc_as_map(vm, vm->rt->empty_map);
   } else {
-    f->def = &vm->rt->program->structs[arg];
+    const agc_program *p = vm->rt->program;
+    if (kind == AGC_TYPE_INSTANCE) {
+      const agc_instance_def *instance = &p->instances[arg];
+      f->kind = AGC_TYPE_STRUCT;
+      f->arg = arg = instance->struct_index;
+      f->field_types = instance->field_types;
+    } else {
+      f->field_types = p->structs[arg].field_types;
+    }
+    f->def = &p->structs[arg];
     f->n = f->def->count;
     f->record = agc_new_struct(arg, f->def->count);
   }
@@ -392,6 +404,7 @@ static agc_value type_schema(const agc_program *p, const agc_type *t, const agc_
   if (t->kind == AGC_TYPE_STRING) return typed("string");
   if (t->kind == AGC_TYPE_STRUCT) return reference(p->structs[t->arg].json_name);
   if (t->kind == AGC_TYPE_ENUM) return reference(p->enums[t->arg].json_name);
+  if (t->kind == AGC_TYPE_INSTANCE) return reference(p->instances[t->arg].json_name);
   if (t->kind == AGC_TYPE_JSON_FIELD || t->kind == AGC_TYPE_OPTIONAL) {
     agc_list_builder choices;
     agc_list_builder_sized(&choices, 2);
@@ -418,14 +431,14 @@ static bool required_field(const agc_program *p, uint32_t type) {
 
 /* A JSON.Field or Optional field is not required. With no required field the "required" key is left out, since
    draft-04 wants a non-empty list there. */
-static agc_value struct_schema(const agc_program *p, const agc_struct_def *def, const agc_value *schemas,
-                               agc_value defs) {
+static agc_value struct_schema(const agc_program *p, const agc_struct_def *def, const uint32_t *field_types,
+                               const agc_value *schemas, agc_value defs) {
   agc_json_member *properties = agc_alloc(agc_size_mul(def->count, sizeof(agc_json_member)));
   size_t needed = 0;
   for (uint32_t k = 0; k < def->count; k++) {
     properties[k].key = def->fields[k];
-    properties[k].value = schemas[def->field_types[k]];
-    if (required_field(p, def->field_types[k])) needed++;
+    properties[k].value = schemas[field_types[k]];
+    if (required_field(p, field_types[k])) needed++;
   }
   const char *keys[4] = {"type", "properties"};
   agc_value values[4] = {json_text("object"), agc_json_object(properties, def->count)};
@@ -434,7 +447,7 @@ static agc_value struct_schema(const agc_program *p, const agc_struct_def *def, 
     agc_list_builder required;
     agc_list_builder_sized(&required, needed);
     for (uint32_t k = 0; k < def->count; k++)
-      if (required_field(p, def->field_types[k]))
+      if (required_field(p, field_types[k]))
         agc_list_builder_push(&required, agc_json_leaf(AGC_JSON_STRING, agc_string_value(def->fields[k])));
     keys[n] = "required";
     values[n++] = agc_json_array(agc_list_builder_finish(&required));
@@ -446,14 +459,20 @@ static agc_value struct_schema(const agc_program *p, const agc_struct_def *def, 
   return object_of(n, keys, values);
 }
 
-/* The structs and enums to describe in $defs are numbered together: a struct by its index and an enum by
-   struct_count plus its index. */
-static void mark_type(const agc_program *p, uint32_t t, bool *needed, bool *seen, uint32_t *queue, size_t *count) {
+/* The structs, enums and instances to describe in $defs are numbered together: a struct by its index, an enum by
+   struct_count plus its index and an instance by struct_count plus enum_count plus its index. */
+static size_t def_id(const agc_program *p, uint32_t kind, uint32_t index) {
+  if (kind == AGC_TYPE_STRUCT) return index;
+  if (kind == AGC_TYPE_ENUM) return (size_t)p->struct_count + index;
+  return (size_t)p->struct_count + p->enum_count + index;
+}
+
+static void mark_type(const agc_program *p, uint32_t t, bool *needed, bool *seen, size_t *queue, size_t *count) {
   while (!needed[t]) {
     needed[t] = true;
     const agc_type *type = &p->types[t];
-    if (type->kind == AGC_TYPE_STRUCT || type->kind == AGC_TYPE_ENUM) {
-      uint32_t id = type->kind == AGC_TYPE_STRUCT ? type->arg : p->struct_count + type->arg;
+    if (type->kind == AGC_TYPE_STRUCT || type->kind == AGC_TYPE_ENUM || type->kind == AGC_TYPE_INSTANCE) {
+      size_t id = def_id(p, type->kind, type->arg);
       if (!seen[id]) {
         seen[id] = true;
         queue[(*count)++] = id;
@@ -526,21 +545,25 @@ static agc_value enum_schema(const agc_program *p, const agc_enum_def *def, cons
 
 agc_value agc_json_schema(agc_vm *vm, uint32_t kind, uint32_t index) {
   const agc_program *p = vm->rt->program;
-  uint32_t total = p->struct_count + p->enum_count;
+  size_t enums_at = p->struct_count, instances_at = enums_at + p->enum_count;
+  size_t total = instances_at + p->instance_count;
   bool *needed = agc_alloc_atomic(p->type_count);
   memset(needed, 0, p->type_count);
   bool *seen = agc_alloc_atomic(total);
   memset(seen, 0, total);
-  uint32_t *queue = agc_alloc_atomic(agc_size_mul(total, sizeof(uint32_t)));
+  size_t *queue = agc_alloc_atomic(agc_size_mul(total, sizeof(size_t)));
   size_t count = 0;
-  uint32_t root = kind == AGC_TYPE_STRUCT ? index : p->struct_count + index;
-  uint32_t current = root;
+  size_t current = def_id(p, kind, index);
   for (size_t head = 0;; current = queue[head++]) {
-    if (current < p->struct_count) {
+    if (current < enums_at) {
       const agc_struct_def *def = &p->structs[current];
       for (uint32_t k = 0; k < def->count; k++) mark_type(p, def->field_types[k], needed, seen, queue, &count);
+    } else if (current >= instances_at) {
+      const agc_instance_def *instance = &p->instances[current - instances_at];
+      uint32_t fields = p->structs[instance->struct_index].count;
+      for (uint32_t k = 0; k < fields; k++) mark_type(p, instance->field_types[k], needed, seen, queue, &count);
     } else {
-      const agc_enum_def *def = &p->enums[current - p->struct_count];
+      const agc_enum_def *def = &p->enums[current - enums_at];
       uint32_t items = 0;
       for (uint32_t k = 0; k < def->count; k++) items += p->variants[def->first + k].arity;
       for (uint32_t j = 0; j < items; j++) mark_type(p, def->payload_types[j], needed, seen, queue, &count);
@@ -554,17 +577,26 @@ agc_value agc_json_schema(agc_vm *vm, uint32_t kind, uint32_t index) {
   if (count) {
     agc_json_member *members = agc_alloc(agc_size_mul(count, sizeof(agc_json_member)));
     for (size_t i = 0; i < count; i++) {
-      uint32_t id = queue[i];
-      if (id < p->struct_count) {
+      size_t id = queue[i];
+      if (id < enums_at) {
         members[i].key = p->structs[id].json_name;
-        members[i].value = struct_schema(p, &p->structs[id], schemas, agc_void());
+        members[i].value = struct_schema(p, &p->structs[id], p->structs[id].field_types, schemas, agc_void());
+      } else if (id >= instances_at) {
+        const agc_instance_def *instance = &p->instances[id - instances_at];
+        members[i].key = instance->json_name;
+        members[i].value =
+            struct_schema(p, &p->structs[instance->struct_index], instance->field_types, schemas, agc_void());
       } else {
-        members[i].key = p->enums[id - p->struct_count].json_name;
-        members[i].value = enum_schema(p, &p->enums[id - p->struct_count], schemas, agc_void());
+        members[i].key = p->enums[id - enums_at].json_name;
+        members[i].value = enum_schema(p, &p->enums[id - enums_at], schemas, agc_void());
       }
     }
     defs = agc_json_object(members, count);
   }
   if (kind == AGC_TYPE_ENUM) return enum_schema(p, &p->enums[index], schemas, defs);
-  return struct_schema(p, &p->structs[index], schemas, defs);
+  if (kind == AGC_TYPE_INSTANCE) {
+    const agc_instance_def *instance = &p->instances[index];
+    return struct_schema(p, &p->structs[instance->struct_index], instance->field_types, schemas, defs);
+  }
+  return struct_schema(p, &p->structs[index], p->structs[index].field_types, schemas, defs);
 }

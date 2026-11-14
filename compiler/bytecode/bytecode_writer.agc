@@ -91,12 +91,16 @@ def build(program: Ir.Program, version: String) -> Result[Bytes]
   joined
 end
 
-# The decodable enums, after the entry: a count and the records, written only when some enum can be decoded, so a
-# program without one has the bytes it always had.
+# The decodable enums, after the entry: a count and the records, then the struct instances the same way. Each is
+# written only when there is one to decode, so a program without one has the bytes it always had; the enums section
+# is empty (a count of 0) only before the instances.
 def decodable_enums(out: Wire.Chunks, json: JsonTypes.Section) -> Wire.Chunks
-  return out if json.enums_count == 0
+  return out if json.enums_count == 0 and json.instances_count == 0
 
-  Wire.add_all(Wire.add(out, Wire.u32(json.enums_count)), json.enums)
+  enums = Wire.add_all(Wire.add(out, Wire.u32(json.enums_count)), json.enums)
+  return enums if json.instances_count == 0
+
+  Wire.add_all(Wire.add(enums, Wire.u32(json.instances_count)), json.instances)
 end
 
 # The first limits of the format, in this order. The limits of the types, the registers and the updates are met

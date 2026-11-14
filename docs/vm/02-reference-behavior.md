@@ -246,6 +246,9 @@ The user-facing rules (which fields are required, the `JsonField` and
   `array`, and has `array of N items`. A payload error has the path
   `<object>.values[i]` and then its own path. A variant with no payload may
   leave `values` out, and it is then the shared value.
+- A struct instance (type kind 10, `Box[Int]`) decodes as a struct of its
+  generic struct, with the instance's field types; errors and the schema treat
+  it as a struct, and `$defs` names it with its arguments (`Box[Int]`).
 - Errors are values `"<path>: expected <what>"`. The path is `$`, `a.b` for
   fields, `a[3]` for list items and `a["k"]` for map keys. `<what>` is `object`,
   `array`, `required field`, `signed 64-bit Int` (a JSON float, or an integer

@@ -1,6 +1,6 @@
 # A JSON.Field that comes from a type argument is a direct field after substitution: Box[JSON.Field[Int]] encodes like
 # Plain, the same struct with `value: JSON.Field[Int]` written out, whose decode and schema are in json-field.agc
-# (JSON.decode and JSON.schema take no generic instance).
+# (json-decode-generic.agc decodes generic instances).
 struct Box[T]
   value: T
   tag: String

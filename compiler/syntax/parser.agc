@@ -1592,6 +1592,13 @@ def parse_qualified_member(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprA
     return enum_constructor_node(e, pos, name, member, args, args.pos)
   end
 
+  if kind == "left-bracket" and !Base.constant_name?(member)
+    # Alias.Box[Int]: the type arguments of a type of a module, as after a bare type name.
+    type = try Base.parse_type(e, pos, ids)
+    node = Ast.TypeName(id: type.node.id, name: qualified, args: type.node.args, span: type.node.span)
+    return ok(Base.ExprAt(node: Ast.Expr.TypeName(node), pos: type.pos, ids: type.ids))
+  end
+
   expr_at(
     Ast.Expr.TypeName(Ast.TypeName(id: ids, name: qualified, args: [], span: Base.span_from(e, pos, cursor))),
     cursor,
@@ -1669,9 +1676,9 @@ def parse_construct(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
     return parse_module_call(e, pos, ids)
   end
 
-  if e.tokens[after].kind == "left-bracket" and (name.lexeme == "List" or name.lexeme == "Map")
-    # List[T] and Map[K, V] are no values, so the bracket holds their type arguments (a JSON.decode target), never an
-    # index.
+  if e.tokens[after].kind == "left-bracket" and !Base.constant_name?(name.lexeme)
+    # A type name is no value, so the bracket holds its type arguments (a JSON.decode target: List[T], Box[Int]), never
+    # an index.
     type = try Base.parse_type(e, pos, ids)
     node = Ast.TypeName(id: type.node.id, name: name.lexeme, args: type.node.args, span: type.node.span)
     return ok(Base.ExprAt(node: Ast.Expr.TypeName(node), pos: type.pos, ids: type.ids))
