@@ -260,7 +260,7 @@ in that clone (`docs/settings.md`, `docs/suppressions.md`).
 
 ## Conformance matrix (`platforms.yml`)
 
-The header of `platforms.yml` says what it runs; which label a PR takes:
+The header of `platforms.yml` says what it runs; which PRs run it:
 `agentica-dev-workflow` §4. No step checks or
 regenerates the frozen `vm/unicode_data.c`. Not in the matrix: the Docker
 and Wine groups, the slow tier, sanitizers, fuzz and gc-stress (`ci.yml`,
@@ -292,9 +292,8 @@ The Windows jobs set up MSYS2 with `.github/actions/msys2`, not
 60 s and 180 s) because the MSYS2 servers answer 504 now and then, and each
 attempt uses its own `location`, since the action refuses a folder that exists.
 
-A flaky test on one system: probe it there first (`repeat`, below); else open
-a do-not-merge experiment PR with that
-system's `platform:<system>` label that loops the suspect command alone, then
+A flaky test on one system: probe it there first (`repeat`, below); else loop
+the suspect command alone with the Probe's `target` or `program`, then
 under load (several loops beside other test loops); causes often show only
 under load. If it cannot be reproduced, make the failure message carry what the
 next case needs (exit code, folder contents).
