@@ -43,4 +43,8 @@ def main() -> Void
   t.put("a", 2)
   IO.inspect(t.keys)
   IO.inspect(numbers.size)
+  IO.inspect(numbers.push(7, "w"))
+  IO.inspect(numbers.push(8, "new"))
+  IO.inspect(ATS.push(numbers, 8, "newer"))
+  IO.inspect(numbers.to_map)
 end

@@ -89,6 +89,23 @@ ROWS: List[Model.Builtin] = [
     alternatives: [],
   ),
   Model.Builtin(
+    name: "ATS.push",
+    parameters: [
+      Model.Named(name: "table", type: Types.Type.ATS(Types.Type.Var("K"), Types.Type.List(Types.Type.Var("E")))),
+      Model.Named(name: "key", type: Types.Type.Var("K")),
+      Model.Named(name: "value", type: Types.Type.Var("E")),
+    ],
+    result: Types.Type.Int,
+    rule: Model.Rule.AtsCall,
+    implementation: "ATS.push",
+    effects: ["concurrency"],
+    description: (
+      "Append value to the list of key (absent counts as an empty list) and return the new length, atomically; " +
+      "VM only."
+    ),
+    alternatives: [],
+  ),
+  Model.Builtin(
     name: "ATS.put",
     parameters: [
       Model.Named(name: "table", type: Types.Type.ATS(Types.Type.Var("K"), Types.Type.Var("V"))),

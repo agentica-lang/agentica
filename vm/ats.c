@@ -1,6 +1,6 @@
 /*
  * ATS[K, V], the shared tables (docs/grammar/06c-tasks-and-tests.md, "Shared tables"): ATS.new, put, put_new, get,
- * has_key?, delete, clear, add, size, keys and to_map. A table is a hash table that keeps insertion order, as
+ * has_key?, delete, clear, add, push, size, keys and to_map. A table is a hash table that keeps insertion order, as
  * CPython's dict does: an array of entries in the order they were put, and an index of slots that point into it.
  * A call takes the table's read-write lock (one of 64, by address, vm/sync.c), so readers run together and a write
  * is alone, and nothing raises or runs user code while it is held (docs/vm/10-io-multicore.md §10.2.3). Service
@@ -60,6 +60,12 @@ static size_t lookup(const table *t, uint64_t hash, agc_value key) {
     if (e == EMPTY) return SIZE_MAX;
     if (e != DEAD && t->entries[e].hash == hash && agc_key_same(t->entries[e].key, key)) return at;
   }
+}
+
+/* The entry of key, or NULL; *at gets its slot. */
+static entry *entry_of(const table *t, uint64_t hash, agc_value key, size_t *at) {
+  *at = lookup(t, hash, key);
+  return *at == SIZE_MAX ? NULL : &t->entries[t->index[*at]];
 }
 
 /* Points the first EMPTY slot of hash's probe at entry number e. */
@@ -133,8 +139,8 @@ static agc_value update(agc_vm *vm, agc_value *args, uint32_t span, change c) {
   bool overflow = false;
   size_t moved = 0;
   agc_table_lock(vm->rt, t, true);
-  size_t at = lookup(t, hash, key);
-  entry *found = at == SIZE_MAX ? NULL : &t->entries[t->index[at]];
+  size_t at = 0;
+  entry *found = entry_of(t, hash, key, &at);
   switch (c) {
     case CHANGE_PUT:
       if (found) found->value = args[2];
@@ -192,14 +198,44 @@ static agc_value builtin_clear(agc_vm *vm, agc_value *args, uint32_t span) {
 }
 
 /* Whether the table holds key, and its value in *value. */
+static bool read_at(agc_vm *vm, table *t, uint64_t hash, agc_value key, agc_value *value) {
+  agc_table_lock(vm->rt, t, false);
+  size_t at = 0;
+  const entry *found = entry_of(t, hash, key, &at);
+  if (found) *value = found->value;
+  agc_table_unlock(vm->rt, t, false);
+  return found != NULL;
+}
+
 static bool read_key(agc_vm *vm, agc_value *args, uint32_t span, agc_value *value) {
   table *t = table_arg(vm, args[0], span);
-  uint64_t hash = agc_key_hash(vm, args[1]);
-  agc_table_lock(vm->rt, t, false);
-  size_t at = lookup(t, hash, args[1]);
-  if (at != SIZE_MAX) *value = t->entries[t->index[at]].value;
-  agc_table_unlock(vm->rt, t, false);
-  return at != SIZE_MAX;
+  return read_at(vm, t, agc_key_hash(vm, args[1]), args[1], value);
+}
+
+/* Appending to a list allocates and, on a value that is not a List (forged bytecode), raises, so it runs with no
+   lock: the call reads the list, builds the longer one, and stores it only if the key still holds the list it read
+   (the same object: lists never change). Else another call came first and it starts again, which is charged. */
+static agc_value builtin_push(agc_vm *vm, agc_value *args, uint32_t span) {
+  table *t = table_arg(vm, args[0], span);
+  agc_value key = args[1];
+  uint64_t hash = agc_key_hash(vm, key);
+  for (;;) {
+    agc_value seen = agc_void();
+    bool had = read_at(vm, t, hash, key, &seen);
+    agc_list *next = had ? agc_list_append(agc_as_list(vm, seen), args[2]) : agc_list_from_array(&args[2], 1);
+    size_t moved = 0;
+    agc_table_lock(vm->rt, t, true);
+    size_t at = 0;
+    entry *found = entry_of(t, hash, key, &at);
+    bool same = found ? had && found->value.tag == seen.tag && agc_value_word(found->value) == agc_value_word(seen)
+                      : !had;
+    if (same && found) found->value = agc_list_value(next);
+    else if (same) moved = append(t, hash, key, agc_list_value(next));
+    agc_table_unlock(vm->rt, t, true);
+    agc_charge(vm, moved);
+    if (same) return agc_int((int64_t)agc_list_len(next));
+    agc_charge(vm, 1);
+  }
 }
 
 static agc_value builtin_get(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -299,6 +335,7 @@ const agc_builtin agc_ats_builtins[] = {
   {"ATS.size", 1, builtin_size, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
   {"ATS.keys", 1, builtin_keys, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
   {"ATS.to_map", 1, builtin_to_map, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
+  {"ATS.push", 3, builtin_push, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
 };
 
 const size_t agc_ats_builtin_count = sizeof agc_ats_builtins / sizeof agc_ats_builtins[0];

@@ -1,7 +1,7 @@
 /* ATS tables (vm/ats.c): order and snapshots with the invariants of the index and the entries, growth and shrinking,
    keys of mixed tags as forged bytecode may pass them, an add that fails and leaves the table unchanged, the run
-   check, threads that update one table at once with exact totals, and threads that write while one clears (both also
-   under TSan). */
+   check, threads that update one table at once with exact totals, that write while one clears and that push to
+   one list (all also under TSan). */
 #include "../core.h"
 #include "../services.h"
 #include "io_harness.h"
@@ -260,6 +260,45 @@ static void test_threads(void) {
     }
 }
 
+/* Every thread pushes to one shared key and to a key of its own: no item is lost, and each own list is in order. */
+static void pusher(void *arg) {
+  intptr_t k = (intptr_t)arg;
+  agc_vm *v = &workers[k];
+  assert(agc_gc_thread_enter());
+  uv_barrier_wait(&gate);
+  for (int r = 0; r < ROUNDS; r++) {
+    agc_value all[3] = {shared_table, agc_test_str("all"), agc_int(r)};
+    assert(agc_as_int(v, call_on(v, "ATS.push", 3, all)) >= r + 1);
+    agc_value own[3] = {shared_table, agc_int(k), agc_int(r)};
+    assert(agc_as_int(v, call_on(v, "ATS.push", 3, own)) == r + 1);
+  }
+  agc_gc_thread_leave();
+}
+
+static const agc_list *list_at(agc_value t, agc_value key) {
+  agc_value args[2] = {t, key};
+  const agc_result *r = agc_as_result(&vm, call("ATS.get", 2, args));
+  assert(r->ok);
+  return agc_as_list(&vm, r->value);
+}
+
+static void test_push(void) {
+  race(pusher, pusher);
+  assert(agc_ats_valid(&vm, shared_table) && size_of(shared_table) == THREADS + 1);
+  assert(agc_list_len(list_at(shared_table, agc_test_str("all"))) == (size_t)THREADS * ROUNDS);
+  for (int64_t k = 0; k < THREADS; k++) {
+    const agc_list *own = list_at(shared_table, agc_int(k));
+    assert(agc_list_len(own) == ROUNDS);
+    for (size_t r = 0; r < ROUNDS; r += 97) assert(agc_as_int(&vm, agc_list_get(own, r)) == (int64_t)r);
+  }
+  /* Forged bytecode can push to a key that holds no list: it fails and the value stays. */
+  agc_value t = call("ATS.new", 0, NULL);
+  put(t, agc_int(1), 5);
+  agc_value args[3] = {t, agc_int(1), agc_int(6)};
+  fails("ATS.push", 3, args, "RUNTIME-INTERNAL");
+  assert(get_int(t, agc_int(1)) == 5);
+}
+
 static atomic_bool clearing_done;
 
 /* Clears the table while the other threads add to it. */
@@ -311,6 +350,7 @@ int main(void) {
   test_other_run();
   test_threads();
   test_clear_races_writers();
+  test_push();
   puts("ats tests passed");
   return 0;
 }

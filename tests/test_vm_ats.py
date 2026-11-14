@@ -1,6 +1,6 @@
 """ATS shared tables on the VM: the semantics of one table against an independent Python model
 (tests/fixtures/ats-peer.py) with String and with Bytes keys, many tasks on four schedulers updating one table with
-exact results, a table that one task clears while others read and write it, a table that BDD steps capture from main and that starts fresh in each scenario, and, in the slow tier,
+exact results, a table that one task clears while others read and write it, tasks that push to one list, a table that BDD steps capture from main and that starts fresh in each scenario, and, in the slow tier,
 tables made and dropped in a loop whose heap stays bounded.
 """
 import json
@@ -160,6 +160,31 @@ def main() -> Void
 end
 """
 
+PUSHED = """\
+struct Job
+  id: Int
+  groups: ATS[String, List[Int]]
+end
+
+def work(job: Job) -> Int
+  for n in 0...500
+    _ = job.groups.push("all", n)
+    _ = job.groups.push("task-#{job.id}", n)
+  end
+
+  return job.groups.get("task-#{job.id}").unwrap!.size
+end
+
+def main() -> Void
+  groups: ATS[String, List[Int]] = ATS.new()
+  tasks = (0...16).to_a.map do |id| Task.spawn(&work, Job(id: id, groups: groups)) end
+  puts("own #{tasks.map { |task| Task.await(task) }.sum}")
+  all = groups.get("all").unwrap!
+  puts("all #{all.size} #{all.sum}")
+  puts("ordered #{groups.get("task-3").unwrap! == (0...500).to_a}")
+end
+"""
+
 STEPS = """\
 import BDD from "std/bdd"
 
@@ -259,6 +284,15 @@ def test_a_clear_next_to_readers_and_writers_takes_whole_entries(tmp_path, sched
     vm = run_vm(bytecode, "--schedulers", schedulers, env=vm_environment())
     assert vm.code == 0, vm.stderr
     assert vm.stdout.splitlines() == ["wrong 0", "size 8", "short 0"]
+
+
+@pytest.mark.parametrize("schedulers", ["1", "4"])
+def test_tasks_that_push_to_one_list_lose_no_item(tmp_path, schedulers):
+    bytecode = compile_text(PUSHED, "ats_pushed", tmp_path)
+    vm = run_vm(bytecode, "--schedulers", schedulers, env=vm_environment())
+    assert vm.code == 0, vm.stderr
+    # 16 tasks push 0...500 to a shared list and to a list of their own.
+    assert vm.stdout.splitlines() == ["own 8000", "all 8000 %d" % (16 * sum(range(500))), "ordered true"]
 
 
 def test_a_table_captured_by_bdd_steps_starts_fresh_in_each_scenario(tmp_path):
