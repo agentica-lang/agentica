@@ -210,6 +210,13 @@ static void test_printing(void) {
   agc_value odd = make("error", "odd", agc_int(7), agc_list_value(agc_list_from_array(NULL, 0)), agc_bool(true));
   agc_as_struct(&vm, odd)->fields[AGC_ERROR_KIND] = agc_int(5);
   check(agc_debug(&vm, odd), "error(\"odd\", kind: 5, code: 7, details: [], cause: true)");
+  /* TO_TEXT of an Error whose message is not a String (#1561): WRONG_TAG, never a failure that would longjmp out of
+     JIT code. */
+  agc_as_struct(&vm, odd)->fields[AGC_ERROR_MESSAGE] = agc_int(5);
+  assert(!agc_text_checked(&vm, odd, &interpolated));
+  agc_value mark = agc_nil(), dst = mark;
+  assert(agc_op_to_text(&vm, &dst, &odd) == AGC_STATUS_WRONG_TAG);
+  assert(agc_is(dst, AGC_T_NIL));
 }
 
 /* == compares kind, message, code, details and cause, never the location. */
