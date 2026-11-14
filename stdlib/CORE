@@ -6,6 +6,7 @@ analysis/front.agc
 analysis/model.agc
 analysis/native_modules.agc
 analysis/partial.agc
+analysis/purity.agc
 analysis/session.agc
 catalog/builtin_model.agc
 catalog/builtins.agc

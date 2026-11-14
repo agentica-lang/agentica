@@ -406,7 +406,8 @@ def position_front(cache: Cache.Cache, settings: Env.Settings, asked: QueryPosit
 end
 
 # The workspace of `settings` in which the std/ module `typed` is a root file whose key is `key` (`std/NAME.agc`): the
-# loader then reads it as it reads an import of it, and it may do what only std/ may. The folder `std` has no project.
+# loader then reads it as it reads an import of it, and it may do what only std/ may. No file under the relative folder
+# `std/` of the disk exists for it (an agentica.toml there, or a local copy of a module), so the provider answers.
 def std_root(settings: Env.Settings, typed: String, key: String) -> Workspace.Workspace
   workspace = settings.workspace
   workspace.with(
