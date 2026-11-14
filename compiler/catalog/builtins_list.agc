@@ -491,7 +491,7 @@ ROWS: List[Model.Builtin] = [
     rule: Model.Rule.Prelude,
     implementation: "",
     effects: [],
-    description: "Drop repeated Int or String elements, keeping the first of each; O(n).",
+    description: "Drop repeated Int, String or Bytes elements, keeping the first of each; O(n).",
     alternatives: [],
   ),
   Model.Builtin(

@@ -138,7 +138,9 @@ ROWS: List[Model.PreludeRow] = [
   Model.PreludeRow(
     name: "List.uniq",
     module: "list",
-    limits: [Model.Limit(variable: "K", allowed: [Types.Type.Int, Types.Type.String], what: "items")],
+    limits: [
+      Model.Limit(variable: "K", allowed: [Types.Type.Int, Types.Type.String, Types.Type.Bytes], what: "items"),
+    ],
     selector: "",
     bodies: {"": "uniq"},
   ),
