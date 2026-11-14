@@ -8,12 +8,14 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- Loops that call builtins such as `Map.get` or `String.slice` are up to 17% faster on Linux and macOS (#1599).
+
 ## [0.32.0-alpha.2] - 2026-11-14
 
 ### Changed
 
-- Loops that call builtins such as `Map.get` or `String.slice` are up to 17% faster on Linux and macOS (#1599).
-- Channel messages between tasks scale with the schedulers: a send or a receive no longer takes the runtime's one lock (#1581).
 - On Linux hosts whose exact clock is a system call (`hpet`), a channel timeout of a second or more may end up to two ticks and 2 ms late (#1581).
 - On Linux hosts whose exact clock is a system call (an `hpet` clock source), a channel timeout of a second or more reads no clock: it may end up to two ticks and 2 ms late (10 ms at 250 Hz), and so after a shorter timer due that much later (#1581).
 
