@@ -51,19 +51,23 @@ end
 
 ## Returns the Doc String under the current step. Ends the scenario with an error when the step has none.
 def doc_string(ctx: Context) -> String
-  return ctx.scenario.step.doc if ctx.scenario.step.has_doc
-  halt(ctx, "RUNTIME-BDD-CONTEXT", "this step has no Doc String")
-  ""
+  case ctx.scenario.step.doc
+    JSON.Field.Value(text) -> text
+    _ ->
+      halt(ctx, "RUNTIME-BDD-CONTEXT", "this step has no Doc String")
+      ""
+  end
 end
 
 ## Returns the Data Table under the current step as rows of cells. Ends the scenario with an error when the step has
 ## none.
 def table(ctx: Context) -> List[List[String]]
-  rows: List[List[String]] = ctx.scenario.step.table
-  if not ctx.scenario.step.has_table
-    halt(ctx, "RUNTIME-BDD-CONTEXT", "this step has no Data Table")
+  case ctx.scenario.step.table
+    JSON.Field.Value(rows) -> rows
+    _ ->
+      halt(ctx, "RUNTIME-BDD-CONTEXT", "this step has no Data Table")
+      []
   end
-  rows
 end
 
 ## Fails the scenario with `message` when `condition` is false. Returns the context.
@@ -293,10 +297,8 @@ struct StepLine
   definition: Int
   pattern: String
   captures: List[String]
-  has_doc: Bool
-  doc: String
-  has_table: Bool
-  table: List[List[String]]
+  doc: JSON.Field[String]
+  table: JSON.Field[List[List[String]]]
 end
 
 enum Program
@@ -358,16 +360,13 @@ def serve(all: List[Step]) -> Void
   if not settings.ok?
     abort("RUNTIME-BDD-INFRA", "invalid scenario settings: #{settings.message}")
   end
-  empty: List[List[String]] = []
   blank = StepLine(
     index: 0,
     definition: 0,
     pattern: "",
     captures: [],
-    has_doc: false,
-    doc: "",
-    has_table: false,
-    table: empty,
+    doc: JSON.Field.Absent,
+    table: JSON.Field.Absent,
   )
 
   no_hooks: List[Fn[Context, Result[Void]]] = []

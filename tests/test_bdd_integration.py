@@ -256,6 +256,34 @@ def test_a_step_reads_the_next_line_as_a_result_that_fails_at_the_end_of_the_out
     assert codes(report)[2:] == ["RUNTIME-BDD-IO", "RUNTIME-BDD-CONTEXT"]
 
 
+def test_a_step_reads_its_doc_string_or_table_and_one_without_ends_with_a_context_error(tmp_path):
+    directory = suite(tmp_path, {
+        "steps.agc": dedent("""\
+            import BDD from "std/bdd"
+
+            def main() -> Void
+              BDD.run([
+                BDD.step("the doc is {string}") do |ctx, args|
+                  BDD.assert(ctx, BDD.doc_string(ctx) == args[0], "wrong doc")
+                end,
+                BDD.step("the table has {int} rows") do |ctx, args|
+                  BDD.assert(ctx, BDD.table(ctx).size == args[0].to_i!, "wrong table")
+                end,
+              ])
+            end
+            """),
+        "parts.feature": (
+            'Feature: Parts\nScenario: doc\nThen the doc is "a"\n"""\na\n"""\n'
+            'Scenario: empty doc\nThen the doc is ""\n"""\n"""\n'
+            "Scenario: table\nThen the table has 2 rows\n| a |\n| b |\n"
+            'Scenario: no doc\nThen the doc is "a"\n'
+            "Scenario: a table for a doc\nThen the doc is \"a\"\n| a |\n"
+            "Scenario: no table\nThen the table has 0 rows\n")})
+    report = json_test(directory / "parts.feature", "--steps", directory / "steps.agc")
+    assert [item["status"] for item in report_cases(report)] == ["passed"] * 3 + ["failed"] * 3
+    assert codes(report)[3:] == ["RUNTIME-BDD-CONTEXT"] * 3
+
+
 def test_a_seed_given_or_drawn_reaches_step_handlers_and_programs_under_test(tmp_path):
     draw = 'Random.int(1, 1000000).to_s + " " + Random.int(1, 1000000).to_s'
     directory = suite(tmp_path, {
