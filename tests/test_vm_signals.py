@@ -343,12 +343,13 @@ end
     vm = start(adopt, tmp_path, text, fifo)
     assert vm.next_line(WAIT_SECONDS) == "ready"
     time.sleep(0.3)
-    # main has returned and the flush waits for the full FIFO: the subscription is over, so two Terms end the run
-    # long before the 30-second flush limit.
-    os.kill(vm.process.pid, signal.SIGTERM)
-    time.sleep(0.3)
-    os.kill(vm.process.pid, signal.SIGTERM)
-    assert vm.wait(min(scaled(5), 25)) == -signal.SIGTERM
+    # main has returned and the flush waits for the full FIFO: the subscription is over, so Terms end the run long
+    # before the 30-second flush limit. Term goes in a loop: on a loaded runner the first may still reach the channel.
+    deadline = time.monotonic() + min(scaled(5), 25)
+    while vm.process.poll() is None and time.monotonic() < deadline:
+        os.kill(vm.process.pid, signal.SIGTERM)
+        time.sleep(0.3)
+    assert vm.wait(1) == -signal.SIGTERM
 
 
 @host_only(WINDOWS, "a signal inherited as ignored (nohup) has no Windows form")

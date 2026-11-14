@@ -2831,6 +2831,50 @@ def main() -> Void
     assert notes_of(notes) == ["a", ""]
 
 
+SIGNAL_IN_CALLBACK = """extern "%s"
+  callback Step(x: C.Int32) -> C.Int32
+  def peer_call_maybe(fn: Optional[Step], x: C.Int32) -> C.Int32
+end
+
+def poll(_x: Int) -> Int
+  signals = System.subscribe([System.Signal.Term]).unwrap!
+  puts("ready")
+  IO.flush()
+  began = Time.now_ms()
+  while Time.now_ms() - began < 20_000
+    case signals.recv(0)
+      ok(_) -> return 1
+      error(_) -> nil
+    end
+  end
+
+  return 0
+end
+
+def main() -> Void
+  puts(peer_call_maybe(some(Native.callback(Step, &poll)), 0))
+end
+"""
+
+
+# A subscribed signal reaches its channel while a callback of native code runs, not only once C returns: the callback
+# polls with recv(0) and its turns end at the nested boundary, which delivers the signal.
+@NATIVE_CALLS
+@host_only(WINDOWS, "Windows has no POSIX signals")
+def test_a_subscribed_signal_reaches_a_callback_that_polls(tmp_path, peer):
+    source = program(tmp_path, SIGNAL_IN_CALLBACK % literal(peer))
+    child = subprocess.Popen(cli() + ["--schedulers", "1", str(source)], stdout=subprocess.PIPE,
+                             env=vm_environment(), text=True)
+    try:
+        assert child.stdout.readline() == "ready\n"
+        child.send_signal(signal.SIGTERM)
+        assert child.stdout.readline() == "1\n"
+        assert child.wait(timeout=20) == 0
+    finally:
+        child.kill()
+        child.wait()
+
+
 OUT_EXTERN = """extern "{library}"
   resource Res, free: peer_res_free
   def peer_out_all(
