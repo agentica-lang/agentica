@@ -131,6 +131,7 @@ JSON.get
 JSON.int
 JSON.kind
 JSON.list
+JSON.node
 JSON.null
 JSON.null?
 JSON.object

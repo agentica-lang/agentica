@@ -263,6 +263,20 @@ ENUMS: List[Model.EnumDef] = [
     ],
   ),
   Model.EnumDef(
+    name: "JSON.Node",
+    parameters: [],
+    variants: [
+      Model.Variant(name: "Null", payload: []),
+      Model.Variant(name: "Bool", payload: [Types.Type.Bool]),
+      Model.Variant(name: "Int", payload: [Types.Type.Int]),
+      Model.Variant(name: "BigInt", payload: [Types.Type.String]),
+      Model.Variant(name: "Float", payload: [Types.Type.Float]),
+      Model.Variant(name: "String", payload: [Types.Type.String]),
+      Model.Variant(name: "Array", payload: [Types.Type.List(Types.Type.Json)]),
+      Model.Variant(name: "Object", payload: [Types.Type.Map(Types.Type.String, Types.Type.Json)]),
+    ],
+  ),
+  Model.EnumDef(
     name: "LogRegistry.Level",
     parameters: [],
     variants: [
@@ -314,6 +328,7 @@ TYPE_DESCRIPTIONS: Map[String, String] = {
   "File.Handle": "An open file, from File.open; File.close closes it.",
   "File.Info": "What File.stat returns: the kind, byte size, modification time, permission bits and owner of a file.",
   "JSON.Field": "A field of a JSON struct that may be missing or null: Absent, Null or Value(T).",
+  "JSON.Node": "One level of a JSON.Value, from JSON.node, to match with case.",
   "JSON.Value": "A JSON document of any shape, from JSON.parse; the JSON functions read it.",
   "Native.Mutex": "The lock of a native library, from Native.mutex; synchronize runs a block holding it.",
   "Process": "A program started by Process.spawn, Process.spawn_captured or Process.spawn_channel.",
@@ -1989,6 +2004,16 @@ ROWS_18: List[Model.Builtin] = [
     implementation: "JSON.list",
     effects: [],
     description: "Extract an array as a list of opaque JSON values; wrong kind returns an error.",
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "JSON.node",
+    parameters: [Model.Named(name: "value", type: Types.Type.Json)],
+    result: Types.Type.Enum("JSON.Node", []),
+    rule: Model.Rule.Plain,
+    implementation: "JSON.node",
+    effects: [],
+    description: "Open one level of a JSON value as a JSON.Node to match with case; never fails.",
     alternatives: [],
   ),
 ]

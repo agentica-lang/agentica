@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 3346,
+  "steps": 4060,
   "stdout": [
     "47 vectors ok",
     "int error(\"expected a signed 64-bit JSON integer\", kind: \"json.decode\")",
