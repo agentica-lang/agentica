@@ -2,7 +2,7 @@
  * The Channel builtins, called directly with hand-made tasks and no bytecode: ring growth and its turn cost,
  * wrap-around, capacity and waiter order, a monitor's notice past the capacity, when a channel counts as abandoned by
  * its receiver, when a wait's clock starts, and addresses (one per channel, a send that waits, closed, another run, a
- * channel the collector freed).
+ * channel the collector freed). All of it again in a shared VM, where the channel and timer locks are real.
  */
 #include "../core.h"
 #include "test_support.h"
@@ -664,19 +664,7 @@ static void test_address_gone(void) {
 }
 #endif
 
-int main(void) {
-  agc_test_deadline(300);
-  agc_init();
-  agc_io_init();
-  agc_vm_init(&vm, NULL, stdout, stderr, INT64_MAX);
-  main_task = vm.task;
-  static const char *names[COUNT] = {"Channel.new",    "Channel.send",    "Channel.recv",    "Channel.close",
-                                     "Channel.closed?", "Channel.empty?", "Channel.address", "Address.send"};
-  static const uint32_t arities[COUNT] = {1, 3, 2, 1, 1, 1, 1, 3};
-  for (int k = 0; k < COUNT; k++) {
-    calls[k] = agc_find_builtin((const uint8_t *)names[k], strlen(names[k]), arities[k]);
-    assert(calls[k]);
-  }
+static void all(void) {
   test_ring();
   test_receiver_order();
   test_sender_order();
@@ -705,6 +693,27 @@ int main(void) {
 #ifndef AGC_NO_GC
   test_address_gone();
 #endif
+}
+
+int main(void) {
+  agc_test_deadline(300);
+  agc_init();
+  agc_io_init();
+  agc_vm_init(&vm, NULL, stdout, stderr, INT64_MAX);
+  main_task = vm.task;
+  static const char *names[COUNT] = {"Channel.new",    "Channel.send",    "Channel.recv",    "Channel.close",
+                                     "Channel.closed?", "Channel.empty?", "Channel.address", "Address.send"};
+  static const uint32_t arities[COUNT] = {1, 3, 2, 1, 1, 1, 1, 3};
+  for (int k = 0; k < COUNT; k++) {
+    calls[k] = agc_find_builtin((const uint8_t *)names[k], strlen(names[k]), arities[k]);
+    assert(calls[k]);
+  }
+  all();
+  /* Again with every lock on, under rt->sync as a close or a cancel holds it: a mutator without its lock aborts. */
+  agc_share(&vm);
+  agc_sync_take(&vm);
+  all();
+  agc_sync_drop(&vm);
   assert(agc_io_close(&vm));
   puts("channel tests passed");
   return 0;

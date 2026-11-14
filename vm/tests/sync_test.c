@@ -30,7 +30,8 @@ static _Atomic int reset_taken;
 
 /* The rows whose mark differs from their table's, checked one by one. Task.spawn_owning walks its argument without
    rt->sync and takes the lock itself to hand the handles over. LogRegistry.level, .floor and .lowest are leaves that
-   read atomics, which the writers change under it. */
+   read atomics, which the writers change under it. A send, a receive and the reads of a channel take the channel's
+   lock, not rt->sync. */
 static const struct {
   const char *name;
   uint32_t arity;
@@ -40,6 +41,8 @@ static const struct {
     {"puts", 1, false},            {"File.read_text", 2, false}, {"File.write_text", 3, false},
     {"File.stat", 2, false},       {"Path.join", 1, false},  {"Task.spawn_owning", 2, false},
     {"LogRegistry.level", 0, false}, {"LogRegistry.floor", 0, false}, {"LogRegistry.lowest", 0, false},
+    {"Channel.new", 1, false},     {"Channel.send", 3, false}, {"Channel.recv", 2, false},
+    {"Channel.closed?", 1, false}, {"Channel.empty?", 1, false}, {"Address.send", 3, false},
 };
 
 /* Before agc_share nothing is taken: the count stays 0 and a drop without a take is harmless. */

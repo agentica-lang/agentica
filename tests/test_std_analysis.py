@@ -1404,6 +1404,26 @@ def test_bodies_walk_a_large_module(driver, project):
     assert err == "" and {"while", "for", "lambda", "struct", "list", "field"} <= found
 
 
+# Named arguments run in the order written (#1594): b before a, the block after `initial`.
+NAMED_ORDER = """def sub2(a: Int, b: Int) -> Int = a - b
+
+def use(x: Int, data: Bytes) -> Int = sub2(b: x + 9223372036854775807, a: data[5])
+
+def red(xs: List[Int]) -> Int = xs.reduce(initial: 0) do |acc, v| acc + v end
+"""
+
+
+def test_bodies_give_call_arguments_in_the_order_they_run(driver, project):
+    write_files(project, {"named_order.agc": NAMED_ORDER})
+    _answer, functions = bodies_of(driver, project, "named_order.agc")
+    call = functions["use"]["body"][0]["children"][0]
+    assert [(child["kind"], child["text"], child["children"][0]["kind"]) for child in call["children"]] == [
+        ("named", "b", "op"), ("named", "a", "call")]
+    reduce = functions["red"]["body"][0]["children"][0]
+    assert [(child["kind"], child["text"]) for child in reduce["children"]] == [
+        ("local", "xs"), ("named", "initial"), ("named", "block")]
+
+
 def test_bodies_name_each_module_a_nested_import_reaches(driver, project):
     (project / "lib").mkdir()
     write_files(project, {

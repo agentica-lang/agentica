@@ -3,11 +3,17 @@
  * senders that wait for it. A call that must wait parks its task on the
  * scheduler. Also the signal channels of System.subscribe and their delivery.
  * Core layer. Design: docs/vm/10-io-scheduler.md §10.2.2 (Channel waits, Stop
- * signals).
+ * signals); the locks: docs/vm/16-architecture.md §16.9.
  */
 #include "core.h"
 
 #define FIRST_SLOTS 8
+
+_Static_assert(AGC_CHANNEL_LOCKS == 64, "lock_of keeps 6 bits");
+
+/* How a send or a receive ended while it held the channel's lock; the caller builds the value, parks or refuses after
+   it drops the lock, so nothing raises under it. */
+typedef enum { DONE, CLOSED, TIMED_OUT, READ_ONLY, WAIT, REFUSED } status;
 
 typedef struct {
   agc_value value;
@@ -23,6 +29,10 @@ typedef struct {
   agc_weak *channel;
 } address;
 
+/* Under the channel's lock (lock_of): the ring, the counts, the reservations, the flags, both FIFOs and the `channel`
+   wait of each task queued on them. `state`, `address`, `signals` and `signal_next` stay under rt->sync, and
+   `read_only` never changes. A path that holds rt->sync takes the channel's lock after it; no path holds two channel
+   locks, and nothing takes rt->sync or a timer heap's lock under one. */
 struct agc_channel {
   entry *ring;
   size_t slots, head, count, capacity;
@@ -30,7 +40,7 @@ struct agc_channel {
   uint64_t sent;
   /* A receiver that had parked left without a value: its recv timed out or its task was cancelled. std/http reads
      it (HttpWire.awaited?) to tell a caller that gave up from one that has not parked yet. */
-  bool closed, abandoned;
+  bool closed, abandoned, read_only;
   agc_resource *state;
   agc_task *receivers, *receivers_tail, *senders, *senders_tail;
   /* The channel's one address, made by its first channel.address; NULL before. */
@@ -53,6 +63,23 @@ static agc_value timed_out_error(agc_vm *vm) { return agc_error(vm, AGC_KIND_CHA
 
 /* The values of a signal channel come only from the signals it wants. */
 static agc_value read_only_error(agc_vm *vm) { return agc_error(vm, AGC_KIND_ARGUMENT, "signal: channel is read only"); }
+
+static agc_lock *lock_of(const agc_vm *vm, const agc_channel *c) {
+  return vm->rt->channel_locks[(((uint64_t)(uintptr_t)c >> 4) * UINT64_C(0x9E3779B97F4A7C15)) >> 58];
+}
+
+static void lock(agc_vm *vm, const agc_channel *c) {
+  if (__builtin_expect(vm->rt->shared, 0)) agc_lock_take_shared(lock_of(vm, c));
+}
+
+static void unlock(agc_vm *vm, const agc_channel *c) {
+  if (__builtin_expect(vm->rt->shared, 0)) agc_lock_drop_shared(lock_of(vm, c));
+}
+
+static void assert_locked(const agc_vm *vm, const agc_channel *c) {
+  if (__builtin_expect(vm->rt->shared, 0) && !agc_lock_held(lock_of(vm, c)))
+    agc_internal_abort("a channel changed without its lock");
+}
 
 static void grow(agc_vm *vm, agc_channel *c) {
   size_t slots = agc_size_mul(c->slots, 2);
@@ -93,10 +120,8 @@ static agc_value pop_front(agc_channel *c) {
   return v;
 }
 
-/* The waiter queues change under rt->sync, like every shared list: pop_live, leave_queue and the enqueue in `wait`
-   check it. */
-static agc_task *pop_live(agc_vm *vm, agc_task **head, agc_task **tail) {
-  agc_sync_assert(vm);
+static agc_task *pop_live(agc_vm *vm, agc_channel *c, agc_task **head, agc_task **tail) {
+  assert_locked(vm, c);
   while (*head) {
     agc_task *t = *head;
     agc_task_remove(head, tail, t);
@@ -105,8 +130,20 @@ static agc_task *pop_live(agc_vm *vm, agc_task **head, agc_task **tail) {
   return NULL;
 }
 
+/* The waker holds the channel's lock across the wake, so the woken task's retry, which takes it, comes after. */
+static void wake_all(agc_vm *vm, agc_task **head, agc_task **tail) {
+  agc_task *t = *head;
+  *head = *tail = NULL;
+  while (t) {
+    agc_task *next = t->wait_next;
+    t->wait_next = NULL;
+    agc_task_wake(vm, t, "channel");
+    t = next;
+  }
+}
+
 static bool reserve_value(agc_vm *vm, agc_channel *c, agc_value v, uint64_t seq) {
-  agc_task *t = pop_live(vm, &c->receivers, &c->receivers_tail);
+  agc_task *t = pop_live(vm, c, &c->receivers, &c->receivers_tail);
   if (!t) return false;
   t->channel.value = v;
   t->channel.seq = seq;
@@ -116,7 +153,7 @@ static bool reserve_value(agc_vm *vm, agc_channel *c, agc_value v, uint64_t seq)
 }
 
 static bool reserve_slot(agc_vm *vm, agc_channel *c) {
-  agc_task *t = pop_live(vm, &c->senders, &c->senders_tail);
+  agc_task *t = pop_live(vm, c, &c->senders, &c->senders_tail);
   if (!t) return false;
   t->channel.reserved = true;
   agc_task_wake(vm, t, "channel");
@@ -146,12 +183,11 @@ static agc_value take(agc_vm *vm, agc_channel *c) {
 }
 
 static void drained(agc_vm *vm, agc_channel *c) {
-  if (c->closed && c->count == 0 && c->reserved_values == 0)
-    agc_task_wake_all(vm, &c->receivers, &c->receivers_tail, "channel");
+  if (c->closed && c->count == 0 && c->reserved_values == 0) wake_all(vm, &c->receivers, &c->receivers_tail);
 }
 
 static void leave_queue(agc_vm *vm, agc_channel *c, agc_task *t) {
-  agc_sync_assert(vm);
+  assert_locked(vm, c);
   if (t->channel.reserved) return;
   if (t->channel.sending)
     agc_task_remove(&c->senders, &c->senders_tail, t);
@@ -167,18 +203,14 @@ static void check_timeout(agc_vm *vm, int64_t timeout, uint32_t span) {
   if (timeout < 0) agc_fail(vm, "RUNTIME-INVALID-DURATION", AGC_CHANNEL_BAD_TIMEOUT, span);
 }
 
-static agc_value wait(agc_vm *vm, agc_channel *c, agc_task *t, int64_t timeout, bool sending) {
-  if (timeout == 0) {
+/* With the channel's lock held. A waiter is woken with a reservation, by a close, or by its timer. The first two never
+   get here, so a resumed waiter's timer fired: it timed out. */
+static status wait(agc_vm *vm, agc_channel *c, agc_task *t, int64_t timeout, bool sending) {
+  if (timeout == 0 || resumed(t, c)) {
     stop_waiting(t);
-    return timed_out_error(vm);
+    return TIMED_OUT;
   }
-  /* A waiter is woken with a reservation, by a close, or by its timer. The first two never get here, so a resumed
-     waiter's timer fired: it timed out. */
-  if (resumed(t, c)) {
-    stop_waiting(t);
-    return timed_out_error(vm);
-  }
-  agc_sync_assert(vm);
+  if (t->callbacks) return REFUSED;
   agc_task_parking(vm);
   t->channel.channel = c;
   t->channel.sending = sending;
@@ -187,8 +219,13 @@ static agc_value wait(agc_vm *vm, agc_channel *c, agc_task *t, int64_t timeout, 
     agc_task_enqueue(&c->senders, &c->senders_tail, t);
   else
     agc_task_enqueue(&c->receivers, &c->receivers_tail, t);
-  agc_task_park_within(vm, agc_timeout_length(vm, timeout));
-  return agc_void();
+  return WAIT;
+}
+
+/* After the lock is dropped: a wake that comes before the park finds the task PARKING. */
+static void park(agc_vm *vm, status s, int64_t timeout) {
+  if (s == REFUSED) agc_task_refuse_wait(vm);
+  if (s == WAIT) agc_task_park_within(vm, agc_timeout_length(vm, timeout));
 }
 
 static agc_value builtin_new(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -202,33 +239,45 @@ static agc_value builtin_new(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_channel_value(c);
 }
 
-/* The send of Channel.send and Address.send, after the timeout is checked. */
-static agc_value send_value(agc_vm *vm, agc_channel *c, agc_value v, int64_t timeout) {
+static status send_locked(agc_vm *vm, agc_channel *c, agc_value v, int64_t timeout) {
   agc_task *t = vm->task;
-  if (c->signals) return read_only_error(vm);
+  if (c->read_only && !c->closed) return READ_ONLY;
   if (resumed(t, c)) {
     leave_queue(vm, c, t);
-    if (c->closed) {
-      stop_waiting(t);
-      return closed_error(vm);
-    }
-    if (t->channel.reserved) {
+    if (!c->closed && t->channel.reserved) {
       stop_waiting(t);
       c->reserved_slots--;
       deliver(vm, c, v, true);
       offer_slot(vm, c);
-      return ok_void();
+      return DONE;
     }
   }
   if (c->closed) {
     stop_waiting(t);
-    return closed_error(vm);
+    return CLOSED;
   }
   if (deliver(vm, c, v, false)) {
     stop_waiting(t);
-    return ok_void();
+    return DONE;
   }
   return wait(vm, c, t, timeout, true);
+}
+
+/* The send of Channel.send and Address.send, after the timeout is checked. */
+static agc_value send_value(agc_vm *vm, agc_channel *c, agc_value v, int64_t timeout) {
+  lock(vm, c);
+  status s = send_locked(vm, c, v, timeout);
+  unlock(vm, c);
+  switch (s) {
+    case DONE: return ok_void();
+    case CLOSED: return closed_error(vm);
+    case TIMED_OUT: return timed_out_error(vm);
+    case READ_ONLY: return read_only_error(vm);
+    case WAIT:
+    case REFUSED: break;
+  }
+  park(vm, s, timeout);
+  return agc_void();
 }
 
 static agc_value builtin_send(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -255,9 +304,7 @@ static agc_value builtin_address(agc_vm *vm, agc_value *args, uint32_t span) {
 }
 
 /* Address.send: Channel.send on the address's channel while it lives. A parked sender holds its channel
-   (agc_task.channel), so the retry after its wake finds it again. The row is shared: the weak read takes the
-   collector's alloc lock while rt->sync is held (the order every allocation under rt->sync already takes), and
-   send_value needs rt->sync, as Channel.send does. */
+   (agc_task.channel), so the retry after its wake finds it again. */
 static agc_value builtin_address_send(agc_vm *vm, agc_value *args, uint32_t span) {
   const address *a = agc_as_address(vm, args[0]);
   if (a->rt != vm->rt) agc_fail(vm, "RUNTIME-ADDRESS-CONTEXT", "the address belongs to another run", span + 1);
@@ -271,9 +318,7 @@ static agc_value builtin_address_send(agc_vm *vm, agc_value *args, uint32_t span
 /* The number an address prints with (<Address 1>), counted per run from 1. */
 uint64_t agc_address_id(agc_vm *vm, agc_value v) { return ((const address *)agc_as_address(vm, v))->id; }
 
-/* The receive of Channel.recv and of a Lazy over a channel (port.h). */
-agc_recv_status agc_channel_receive(agc_vm *vm, agc_channel *c, int64_t timeout, agc_value *out) {
-  agc_sync_assert(vm);
+static status receive_locked(agc_vm *vm, agc_channel *c, int64_t timeout, agc_value *out) {
   agc_task *t = vm->task;
   bool parked = resumed(t, c);
   if (parked) {
@@ -283,22 +328,37 @@ agc_recv_status agc_channel_receive(agc_vm *vm, agc_channel *c, int64_t timeout,
       stop_waiting(t);
       c->reserved_values--;
       drained(vm, c);
-      return AGC_RECV_VALUE;
+      return DONE;
     }
   }
   if (c->count > 0) {
     stop_waiting(t);
     *out = take(vm, c);
-    return AGC_RECV_VALUE;
+    return DONE;
   }
   if (c->closed && c->reserved_values == 0) {
     stop_waiting(t);
-    return AGC_RECV_CLOSED;
+    return CLOSED;
   }
-  agc_value result = wait(vm, c, t, timeout, false);
+  status s = wait(vm, c, t, timeout, false);
   /* Woken by its deadline, the receiver did not park again: it timed out. */
-  if (parked && !resumed(t, c)) c->abandoned = true;
-  return agc_is(result, AGC_T_VOID) ? AGC_RECV_WAIT : AGC_RECV_TIMED_OUT;
+  if (parked && s == TIMED_OUT) c->abandoned = true;
+  return s;
+}
+
+/* The receive of Channel.recv and of a Lazy over a channel (port.h). */
+agc_recv_status agc_channel_receive(agc_vm *vm, agc_channel *c, int64_t timeout, agc_value *out) {
+  lock(vm, c);
+  status s = receive_locked(vm, c, timeout, out);
+  unlock(vm, c);
+  switch (s) {
+    case DONE: return AGC_RECV_VALUE;
+    case CLOSED: return AGC_RECV_CLOSED;
+    case TIMED_OUT: return AGC_RECV_TIMED_OUT;
+    default: break;
+  }
+  park(vm, s, timeout);
+  return AGC_RECV_WAIT;
 }
 
 static agc_value builtin_recv(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -333,17 +393,23 @@ static void unsubscribe(agc_vm *vm, agc_channel *c) {
   agc_io_signals_set(vm, subscribed(vm));
 }
 
+/* With rt->sync held, as the registry entry and the signal list need. */
 static void shut(agc_vm *vm, agc_channel *c) {
-  if (c->closed) return;
-  c->closed = true;
+  lock(vm, c);
+  bool was_closed = c->closed;
+  if (!was_closed) {
+    c->closed = true;
+    c->reserved_slots = 0;
+    wake_all(vm, &c->senders, &c->senders_tail);
+    drained(vm, c);
+  }
+  unlock(vm, c);
+  if (was_closed) return;
   if (c->signals) unsubscribe(vm, c);
   if (c->state) {
     agc_unregister(vm, c->state);
     c->state = NULL;
   }
-  c->reserved_slots = 0;
-  agc_task_wake_all(vm, &c->senders, &c->senders_tail, "channel");
-  drained(vm, c);
 }
 
 static void close_owned(agc_vm *vm, agc_resource *r, agc_task *ender) {
@@ -361,7 +427,11 @@ static agc_value builtin_close(agc_vm *vm, agc_value *args, uint32_t span) {
    that the reader has gone before its next send fails. */
 static agc_value builtin_closed(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
-  return agc_bool(agc_as_channel(vm, args[0])->closed);
+  const agc_channel *c = agc_as_channel(vm, args[0]);
+  lock(vm, c);
+  bool closed = c->closed;
+  unlock(vm, c);
+  return agc_bool(closed);
 }
 
 /* No value is left to receive: none in the ring and none handed to a woken receiver that has not taken it yet (it may
@@ -370,7 +440,10 @@ static agc_value builtin_closed(agc_vm *vm, agc_value *args, uint32_t span) {
 static agc_value builtin_empty(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   const agc_channel *c = agc_as_channel(vm, args[0]);
-  return agc_bool(c->count == 0 && c->reserved_values == 0);
+  lock(vm, c);
+  bool empty = c->count == 0 && c->reserved_values == 0;
+  unlock(vm, c);
+  return agc_bool(empty);
 }
 
 agc_resource *agc_channel_claim(agc_vm *vm, agc_channel *c) {
@@ -386,8 +459,10 @@ agc_resource *agc_channel_claim(agc_vm *vm, agc_channel *c) {
 /* Whether a receiver that had parked on c left without a value (a recv timeout or a cancel). A receiver that has
    not parked yet does not count, so a sender cannot mistake a caller that is still on its way for one that left. */
 bool agc_channel_abandoned(agc_vm *vm, const agc_channel *c) {
-  agc_sync_assert(vm);
-  return c->abandoned;
+  lock(vm, c);
+  bool abandoned = c->abandoned;
+  unlock(vm, c);
+  return abandoned;
 }
 
 /* A send that never waits, for the notice of a monitor (vm/task.c): the value goes to a waiting receiver, else into the
@@ -395,8 +470,10 @@ bool agc_channel_abandoned(agc_vm *vm, const agc_channel *c) {
    the count is below the capacity, so the ring holds at most one value more than the capacity per monitor of the
    channel. False, and nothing sent, when the channel is closed or a signal channel (System.subscribe). */
 bool agc_channel_offer(agc_vm *vm, agc_channel *c, agc_value v) {
-  agc_sync_assert(vm);
-  return !c->closed && !c->signals && deliver(vm, c, v, true);
+  lock(vm, c);
+  bool sent = !c->closed && !c->read_only && deliver(vm, c, v, true);
+  unlock(vm, c);
+  return sent;
 }
 
 /* The variant ids of System.Signal, by AGC_SIGNAL_* index, found by name the first time (under rt->sync, as every
@@ -450,6 +527,7 @@ static agc_value builtin_subscribe(agc_vm *vm, agc_value *args, uint32_t span) {
   c->capacity = c->slots = capacity;
   c->ring = agc_alloc(agc_size_mul(c->slots, sizeof(entry)));
   c->signals = mask;
+  c->read_only = true;
   agc_own(vm, agc_channel_claim(vm, c), close_owned);
   c->signal_next = vm->rt->signal_channels;
   vm->rt->signal_channels = c;
@@ -487,8 +565,10 @@ bool agc_signals_deliver(agc_vm *vm) {
       if (!(c->signals & (1u << k))) continue;
       wanted = true;
       uint32_t variant = rt->signal_variants[k];
+      lock(vm, c);
       if (!queued(vm, c, variant))
         delivered |= deliver(vm, c, agc_enum_value(rt->program->variants[variant].shared), false);
+      unlock(vm, c);
     }
     if (!wanted) agc_io_signals_stop(k);
   }
@@ -498,29 +578,30 @@ bool agc_signals_deliver(agc_vm *vm) {
 
 void agc_channel_leave(agc_vm *vm, agc_task *t) {
   agc_sync_assert(vm);
+  agc_channel *c = t->channel.channel;
+  lock(vm, c);
   const agc_channel_wait w = t->channel;
-  agc_channel *c = w.channel;
   leave_queue(vm, c, t);
   stop_waiting(t);
   if (!w.sending) c->abandoned = true;
-  if (!w.reserved) return;
-  if (w.sending) {
+  if (w.reserved && w.sending) {
     if (!c->closed && !reserve_slot(vm, c)) c->reserved_slots--;
-  } else if (!reserve_value(vm, c, w.value, w.seq)) {
+  } else if (w.reserved && !reserve_value(vm, c, w.value, w.seq)) {
     give_back(vm, c, w.value, w.seq);
     c->reserved_values--;
   }
+  unlock(vm, c);
 }
 
 const agc_builtin agc_channel_builtins[] = {
-  {"Channel.new", 1, builtin_new, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
-  {"Channel.send", 3, builtin_send, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
-  {"Channel.recv", 2, builtin_recv, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"Channel.new", 1, builtin_new, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
+  {"Channel.send", 3, builtin_send, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
+  {"Channel.recv", 2, builtin_recv, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
   {"Channel.close", 1, builtin_close, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
-  {"Channel.closed?", 1, builtin_closed, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
-  {"Channel.empty?", 1, builtin_empty, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"Channel.closed?", 1, builtin_closed, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
+  {"Channel.empty?", 1, builtin_empty, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
   {"Channel.address", 1, builtin_address, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
-  {"Address.send", 3, builtin_address_send, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"Address.send", 3, builtin_address_send, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
   {"System.subscribe", 1, builtin_subscribe, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"System.signal_number", 1, builtin_signal_number, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
 };

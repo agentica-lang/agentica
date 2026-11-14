@@ -74,7 +74,7 @@ static const plain_leaf plain_leaves[] = {
 /* The rows whose call may park: the turn ends while it waits, for a channel, a task, a timer or stdin (the woken task
    runs the call again) or for an I/O job on the loop or the thread pool (files, paths, processes, sockets, a native
    call or wait). Sorted by strcmp for bsearch; a name stands for each of its arities. Not listed: the `shared` rows
-   that never park (Channel.new, Channel.closed?, Task.cancel, the logger, ...), the output rows (puts, IO.print, ...),
+   that never park (Channel.close, Task.cancel, the logger, ...), the output rows (puts, IO.print, ...),
    which park only while the output is backed up, and the steppers (File.each_line, Task.map, the Lazy terminals),
    whose call leaves the code once, however often they wait inside it. vm/tests/jit_test.c checks that the list is
    sorted and that each name is a row of the builtin tables. */
