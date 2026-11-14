@@ -130,7 +130,7 @@ end
 ATS.push(table: ATS[K, List[E]], key: K, value: E) -> Int
 ```
 
-Appends `value` to the list of the key, an absent key counting as an empty list, and gives the new length. The read and the write are one atomic step, so tasks that push to the same key at the same time lose no item; a `get` followed by a `put` can lose one. It works only on a table whose values are lists, else `CHECK-TYPE-MISMATCH`.
+Appends `value` to the list of the key, an absent key counting as an empty list, and gives the new length. The read and the write are one atomic step, so tasks that push to the same key at the same time lose no item; a `get` followed by a `put` can lose one. A push builds its new list first and starts again when another task changed the key meanwhile, so many tasks that push to one key at the same time repeat work: give each its own key when the lists are long. It works only on a table whose values are lists, else `CHECK-TYPE-MISMATCH`.
 
 ```agentica
 def main() -> Void

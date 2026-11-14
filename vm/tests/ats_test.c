@@ -285,7 +285,11 @@ static const agc_list *list_at(agc_value t, agc_value key) {
 static void test_push(void) {
   race(pusher, pusher);
   assert(agc_ats_valid(&vm, shared_table) && size_of(shared_table) == THREADS + 1);
-  assert(agc_list_len(list_at(shared_table, agc_test_str("all"))) == (size_t)THREADS * ROUNDS);
+  const agc_list *all = list_at(shared_table, agc_test_str("all"));
+  assert(agc_list_len(all) == (size_t)THREADS * ROUNDS);
+  static int seen[ROUNDS];
+  for (size_t k = 0; k < agc_list_len(all); k++) seen[agc_as_int(&vm, agc_list_get(all, k))]++;
+  for (size_t r = 0; r < ROUNDS; r++) assert(seen[r] == THREADS);
   for (int64_t k = 0; k < THREADS; k++) {
     const agc_list *own = list_at(shared_table, agc_int(k));
     assert(agc_list_len(own) == ROUNDS);

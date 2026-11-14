@@ -239,6 +239,7 @@ uint32_t agc_jit_call_leaf(agc_vm *vm, agc_value *args, const agc_builtin *b, ui
 typedef struct {
   uint8_t tags[2];
   bool one_char;
+  bool list_len; /* List.size: compiled code reads the length itself, with no call */
 } agc_jit_plain;
 /* The checks of B, or NULL when B is not one of the leaf rows that cannot fail once those checks pass (plain_leaves
    in jit.c). */
@@ -372,6 +373,10 @@ _Static_assert(AGC_JIT_FIELD_SIZE(agc_task, frame_count) == 4 && AGC_JIT_FIELD_S
                "the native CALL reads the task's counts with these sizes");
 #endif
 
+/* The agc_list fields that compiled LIST_LEN and LIST_GET read (list_impl.h is private to the list code, so interp.c
+   checks these against the struct): len is a qword, kind a dword, and tail the first item. */
+enum { AGC_JIT_LIST_LEN = 0, AGC_JIT_LIST_KIND = 20, AGC_JIT_LIST_TAIL = 24, AGC_JIT_LIST_MASK = AGC_LIST_WIDTH - 1 };
+
 /* Before a thread runs compiled code, which another thread may have written and sealed: on arm64 the seal's cache
    maintenance reaches every core, but a core may still hold instructions it fetched before, so the thread that runs
    the code synchronizes its context first (isb). Nothing on x86-64, whose instruction fetch is coherent. */
@@ -469,6 +474,11 @@ void agc_emit_int(agc_emitter *e, agc_opcode op, agc_instr in, uint32_t pc);
 void agc_emit_equal(agc_emitter *e, agc_opcode op, agc_instr in, uint32_t pc);
 void agc_emit_helper(agc_emitter *e, uint64_t helper, bool two, bool charged, agc_instr in, uint32_t pc);
 void agc_emit_read(agc_emitter *e, agc_opcode op, agc_instr in, uint32_t pc);
+/* R[a] = the length of the list in R[b]; any other tag leaves with STATUS. */
+void agc_emit_list_len(agc_emitter *e, uint32_t a, uint32_t b, uint32_t status, uint32_t pc);
+/* LIST_GET: an item of the tail inline (every item of a list of up to 32), for both item layouts; an item of the
+   trie, a wrong tag and an index outside the list go through agc_op_list_get. */
+void agc_emit_list_get(agc_emitter *e, agc_instr in, uint32_t pc);
 void agc_emit_map_get(agc_emitter *e, agc_instr in, uint32_t pc);
 void agc_emit_list(agc_emitter *e, agc_instr in);
 /* CLOSURE of function bx, which holds CAPTURES values: a call of agc_jit_closure. */

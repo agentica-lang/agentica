@@ -885,7 +885,7 @@ static AGC_JIT_CALLER void int_rules(void) {
 }
 
 /* The instructions that call their opcode helper: the C code's results (NaN compares false, -0.0 keeps its sign) and
-   statuses (a Float division by zero, a list index outside the list, a wrong tag). */
+   statuses (a Float division by zero, a wrong tag); then the list reads. */
 static AGC_JIT_CALLER void helpers(void) {
   agc_value nan = agc_float(NAN), two = agc_float(2.0), any = agc_nil();
   agc_value items[3] = {agc_int(7), agc_int(8), agc_int(9)};
@@ -955,6 +955,40 @@ static AGC_JIT_CALLER void helpers(void) {
   binary(AGC_OP_LIST_GET, list, agc_int(3), AGC_STATUS_INDEX_OUT_OF_RANGE, any);
   binary(AGC_OP_LIST_GET, list, agc_int(-1), AGC_STATUS_INDEX_OUT_OF_RANGE, any);
   binary(AGC_OP_LIST_GET, list, two, AGC_STATUS_WRONG_TAG, any);
+  binary(AGC_OP_LIST_GET, agc_int(3), agc_int(0), AGC_STATUS_WRONG_TAG, any);
+  binary(AGC_OP_LIST_GET, vm.rt->empty_list, agc_int(0), AGC_STATUS_INDEX_OUT_OF_RANGE, any);
+  /* The tail is read inline in both item layouts (Ints or Floats as 8 bytes, any other list as agc_values), and the
+     trie of a list above 32 items through the helper. */
+  agc_value floats[2] = {agc_float(1.5), agc_float(-0.0)};
+  binary(AGC_OP_LIST_GET, agc_list_value(agc_list_from_array(floats, 2)), agc_int(1), AGC_STATUS_OK, agc_float(-0.0));
+  agc_value mixed[3] = {agc_int(7), hello, agc_float(1.5)};
+  agc_value mixed_list = agc_list_value(agc_list_from_array(mixed, 3));
+  binary(AGC_OP_LIST_GET, mixed_list, agc_int(0), AGC_STATUS_OK, agc_int(7));
+  binary(AGC_OP_LIST_GET, mixed_list, agc_int(1), AGC_STATUS_OK, hello);
+  binary(AGC_OP_LIST_GET, mixed_list, agc_int(2), AGC_STATUS_OK, agc_float(1.5));
+  enum { LONG = 70 };
+  agc_value ints[LONG], values[LONG];
+  for (int64_t k = 0; k < LONG; k++) ints[k] = values[k] = agc_int(k * 3);
+  values[LONG - 1] = hello;
+  agc_value long_ints = agc_list_value(agc_list_from_array(ints, LONG));
+  agc_value long_values = agc_list_value(agc_list_from_array(values, LONG));
+  static const int64_t at[] = {0, 31, 32, 63, 64, 68};
+  for (size_t k = 0; k < sizeof at / sizeof at[0]; k++) {
+    binary(AGC_OP_LIST_GET, long_ints, agc_int(at[k]), AGC_STATUS_OK, agc_int(at[k] * 3));
+    binary(AGC_OP_LIST_GET, long_values, agc_int(at[k]), AGC_STATUS_OK, agc_int(at[k] * 3));
+  }
+  binary(AGC_OP_LIST_GET, long_values, agc_int(LONG - 1), AGC_STATUS_OK, hello);
+  binary(AGC_OP_LIST_GET, long_ints, agc_int(LONG), AGC_STATUS_INDEX_OUT_OF_RANGE, any);
+  binary(AGC_OP_LIST_GET, long_ints, agc_int(INT64_MIN), AGC_STATUS_INDEX_OUT_OF_RANGE, any);
+  binary(AGC_OP_LIST_LEN, long_values, any, AGC_STATUS_OK, agc_int(LONG));
+  /* List.size is read by the code itself; another tag leaves for the interpreter with the window as it was. */
+  const agc_builtin *size = agc_find_builtin((const uint8_t *)"List.size", 9, 1);
+  assert(size && agc_jit_plain_of(size) && agc_jit_plain_of(size)->list_len);
+  agc_value got;
+  expect_exit(plain_call(size, long_ints, &got), AGC_JIT_EXIT_RETURN, 1);
+  assert(same_bits(got, agc_int(LONG)));
+  expect_exit(plain_call(size, two, &got), AGC_JIT_EXIT_INTERPRET, 0);
+  assert(same_bits(got, two));
 }
 
 /* The reads without a helper (R3 = R1 read at index or variant 2): a wrong tag or an index past the count leaves for
