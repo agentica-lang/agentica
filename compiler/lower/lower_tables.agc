@@ -84,7 +84,7 @@ VM_BUILTINS = Set.new([
   "Task.current", "Task.id", "Task.monitor", "OpenSSL.RSA.public_encrypt_oaep", "String.edit_distance",
   "String.jaro_winkler", "Error.is_a?", "System.subscribe", "System.signal_number", "Task.monitor_ref", "Format.int",
   "Format.float", "Format.text", "Process.signal", "Process.spawn_group", "Process.signal_group", "System.signal",
-  "Process.poll_line",
+  "Process.poll_line", "ActorInbox.set", "ActorInbox.get",
 ])
 
 ## The instruction of an operator on two Ints, by the token kind of the operator. `>` and `>=` use the instruction of

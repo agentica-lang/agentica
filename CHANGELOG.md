@@ -10,6 +10,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `Actor.inbox` gives the running actor its own inbox, so `init` can monitor tasks into it (#1525).
 - `List.count` takes a block and counts the elements it accepts, as Ruby's `xs.count { |x| ... }` does (#1590).
 - `List.tally`, `List.group_by` and `Range.group_by` take `Bytes` keys, as `List.uniq` does (#1596).
 

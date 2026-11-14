@@ -8,6 +8,7 @@ import Types from "../syntax/types"
 ## PreludeRow says which): the arguments are matched against the type variables of the row.
 enum Rule
   Plain
+  ActorInbox
   AddressSend
   AtsCall
   AtsNew
