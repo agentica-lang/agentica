@@ -7,7 +7,7 @@ std/bdd, which run processes and read files); they are not front-end stages. Fil
 adapters and may do I/O. See "Pure core, one port" in references/frontend.md of the development skill.
 
 Two rules, both read from the tokens of the real lexer (compiler/syntax/lex.agc), so a string, an interpolation inside
-a string, a heredoc, a comment and the builtin data rows (`"File.open"` in builtins_data.agc) are read as what they are:
+a string, a heredoc, a comment and the builtin data rows (`"File.open"` in builtins_file.agc) are read as what they are:
 
 - Calls: a core file may not use a builtin module that reads or changes the outside world (`File`, `Dir`, `Process`,
   `System`, `FrontEnd`, `IO`, `TCP`, `TLS`, `HttpWire`, `Time`, `Random`, `Task`, `Channel`, `Profile`, `LogRegistry`),

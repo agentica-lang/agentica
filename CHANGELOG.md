@@ -27,6 +27,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `JSON.node(value)` gives a `JSON.Node` enum to walk JSON of unknown shape
   with `case` (#1115).
 - `std/analysis`: `Analysis.bodies(session, "std/binary")` reads a `std/` module as the binary carries it (#1159).
+- `std/analysis`: a `call` node of `Analysis.bodies` has the `type_args` of a generic function or builtin (#1159).
 - `std/analysis`: each function of `Analysis.bodies` says whether it is `pure`, and why not in `impure`, through every call (#1159).
 - `std/analysis`: `Analysis.bodies` gives the bodies of the prelude functions that the calls of builtins written in Agentica run (`List.sum`, `File.foreach`), named in each `call` node's `prelude` (#1159).
 - `std/actor`: `Actor.Timeout`, a receive timeout that wakes an actor when no message came in time (#1523).

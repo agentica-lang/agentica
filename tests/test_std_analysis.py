@@ -3,14 +3,16 @@ and the command line runs the same code, so the answers are the same bytes. The 
 fixtures/analysis/driver.agc) that calls the library, and the CLI with `--json` on the same files, and compare both
 streams. The driver is compiled once for the module (it compiles the core of the front end with it); each case is a run
 of its bytecode. That cost bounds the breadth: a few questions of the spec tests of each command stand for them."""
+import itertools
 import json
 import re
 import shutil
 from pathlib import Path
 
 import pytest
+from hypothesis import given, settings, strategies as st
 
-from tests.agentica_test import ROOT, cli, compile_agc, run, run_vm, vm_environment, write_files
+from tests.agentica_test import ROOT, SLOW, cli, compile_agc, run, run_vm, start_vm, vm_environment, write_files
 from tests.test_spec_partial import APP, BAD_DECLARATIONS, FIXED, MODELS as PARTIAL_MODELS
 from tests.test_spec_type_at import AGENTS, MODELS, ORDERS, where, write_agents
 
@@ -1442,3 +1444,97 @@ def test_bodies_name_the_modules_defaults_and_values_a_translator_needs(driver, 
     function = json.loads(library(driver, project, "bodies", "calls.agc")[0])["functions"][0]
     assert function["span"]["file"] == function["name_span"]["file"] == "calls.agc"
     assert function["name_span"]["range"] == {"start": {"line": 4, "column": 5}, "end": {"line": 4, "column": 10}}
+
+
+# Generic calls: a function, a call nested in another, a type inferred from a lambda, a builtin of the catalog and a
+# call inside a generic function, whose type argument is the caller's own type parameter.
+GENERICS = """def wrap[T](item: T) -> List[T]
+  return [item]
+end
+
+def apply[A, B](item: A, f: Fn[A, B]) -> B
+  return f.call(item)
+end
+
+def again[T](item: T) -> List[T]
+  return wrap(item)
+end
+
+def use(xs: List[Int]) -> List[String]
+  nested = wrap(wrap(1))
+  label = apply(2, ->(n: Int) { n.to_s })
+  _ = nested
+  return xs.map do |x| "#{x}#{label}" end
+end
+"""
+
+
+def test_bodies_give_the_type_arguments_of_each_generic_call(driver, project):
+    write_files(project, {"generics.agc": GENERICS})
+    _answer, functions = bodies_of(driver, project, "generics.agc")
+    body = functions["use"]["body"]
+    outer = body[0]["children"][0]
+    inner = outer["children"][0]
+    assert [type_text(arg) for arg in outer["type_args"]] == ["List[Int]"]
+    assert [type_text(arg) for arg in inner["type_args"]] == ["Int"]
+    applied = body[1]["children"][0]
+    assert (applied["target"], [type_text(arg) for arg in applied["type_args"]]) == ("apply", ["Int", "String"])
+    mapped = body[3]["children"][0]
+    assert (mapped["target"], [type_text(arg) for arg in mapped["type_args"]]) == ("List.map", ["Int", "String"])
+    # A call of a function with no type parameters has none; in a generic function the argument is its own variable.
+    assert body[1]["children"][0]["children"][0]["type_args"] == []
+    assert functions["again"]["body"][0]["children"][0]["type_args"] == [{"kind": "var", "name": "T", "args": []}]
+
+
+# A value of each generated type, and the type as `type_text` writes it.
+VALUES = st.recursive(
+    st.sampled_from([("1", "Int"), ('"a"', "String"), ("true", "Bool")]),
+    lambda inner: st.one_of(
+        inner.map(lambda value: (f"[{value[0]}]", f"List[{value[1]}]")),
+        inner.map(lambda value: (f"some({value[0]})", f"Optional[{value[1]}]")),
+        inner.map(lambda value: (f'{{"k": {value[0]}}}', f"Map[String,{value[1]}]")),
+        inner.map(lambda value: (f"ok({value[0]})", f"Result[{value[1]}]")),
+    ),
+    max_leaves=4,
+)
+
+# The calls made with a value `v` of type `T`, and the type arguments each binds: a generic function, and builtins whose
+# rules solve their variables each their own way.
+GENERIC_CALLS = [
+    ("wrap({v})", lambda t: [t]),
+    ("[{v}].first", lambda t: [t]),
+    ("some({v}).unwrap_or({v})", lambda t: [t]),
+    ('{{"k": {v}}}.get("k")', lambda t: ["String", t]),
+]
+
+
+# A new file name for each example, so no answer comes from the cache of an earlier one.
+SERVED = itertools.count()
+
+
+@pytest.fixture(scope="module")
+def bodies_server(driver, tmp_path_factory):
+    """One driver VM that answers `bodies` for each path written to its stdin, in its own directory."""
+    work = tmp_path_factory.mktemp("agentica-bodies-")
+    vm = start_vm(driver, "serve", stdin=True, cwd=work)
+    yield vm, work
+    vm.close_stdin()
+    vm.wait()
+
+
+@settings(max_examples=200 if SLOW else 20)
+@given(values=st.lists(VALUES, min_size=1, max_size=4))
+def test_bodies_type_arguments_are_the_types_of_the_values_given(bodies_server, values):
+    # The oracle is the generator: each call binds its variables to the type it built the value of.
+    vm, work = bodies_server
+    lines = [f"  _ = {call.format(v=value)}" for value, _ in values for call, _ in GENERIC_CALLS]
+    source = GENERICS.split("def apply")[0] + "def use() -> Void\n" + "".join(line + "\n" for line in lines) + "end\n"
+    name = f"values_{next(SERVED)}.agc"
+    write_files(work, {name: source})
+    vm.process.stdin.write((name + "\n").encode())
+    vm.process.stdin.flush()
+    answer = vm.next_line()
+    assert not answer.startswith("error "), (source, answer)
+    use = [function for function in json.loads(answer)["functions"] if function["name"] == "use"][0]
+    found = [[type_text(arg) for arg in node["children"][0]["type_args"]] for node in use["body"]]
+    assert found == [types(type) for _, type in values for _, types in GENERIC_CALLS], source

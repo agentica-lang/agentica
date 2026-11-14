@@ -63,7 +63,8 @@ def check_builtin_call(
 
   try check_block_target(cx, current, node, form)
   site = State.Site(node: node, args: node.args, selected: form, expected: expected)
-  check_rule(cx, current, site, form.rule)
+  out = try check_rule(cx, current, site, form.rule)
+  ok(with_type_args(out, node, form))
 end
 
 ## CHECK-TYPE-MISMATCH unless the type can be printed or interpolated (it has to_s).
@@ -685,4 +686,68 @@ def list_rule?(rule: Model.Rule) -> Bool
     Model.Rule.ListAll -> true
     _ -> false
   end
+end
+
+# The type arguments of a call of a builtin whose row has type variables, read back from the types the rule gave the
+# call and its arguments (each rule solves them its own way). It adds no failure, and its cost is the size of the row.
+def with_type_args(out: State.Out, node: Ast.Call, form: Model.Builtin) -> State.Out
+  generic = (
+    CheckTypes.has_variables?(form.result) or
+    form.parameters.any? do |param: Model.Named| CheckTypes.has_variables?(param.type) end
+  )
+
+  return out if !generic
+
+  names = row_variables(form)
+  templates = form.parameters.map do |param: Model.Named| param.type end
+  shape = Defaults.builtin_shape(form)
+  count = node.args.size
+  found = read_back(form.result, out.type, {})
+  for index in 0...count
+    param = Defaults.param_of(shape, node.slots, count, index)
+    id = Ast.expr_id(node.args[index])
+    if param < templates.size and id >= 0 and id < out.st.types.size
+      found = read_back(templates[param], out.st.types[id], found)
+    end
+  end
+
+  solved = names.map do |name: String| found.get(name, T.Type.Unknown) end
+  out.with(st: State.record_type_args(out.st, node.id, solved))
+end
+
+# The type variables of a row, once each, as they first appear in its parameters, then its result.
+def row_variables(form: Model.Builtin) -> List[String]
+  templates = form.parameters.map do |param: Model.Named| param.type end
+  names: List[String] = []
+  for name in templates.flat_map(&CheckTypes.variable_names).concat(CheckTypes.variable_names(form.result))
+    if !names.include?(name)
+      names = names.push(name)
+    end
+  end
+
+  names
+end
+
+# The variables of the template bound to the parts of actual at their places. The first binding of each is kept, even
+# one with Unknown inside: the call's own type is read first and is the most complete. It walks the template only, so
+# a deep actual type costs nothing more.
+def read_back(template: T.Type, actual: T.Type, found: Map[String, T.Type]) -> Map[String, T.Type]
+  return found if T.unknown?(actual)
+
+  if T.is?(template, "Var")
+    return found if found.has_key?(T.name(template))
+
+    return found.put(T.name(template), actual)
+  end
+
+  pairs = CheckTypes.parts(template)
+  others = CheckTypes.parts(actual)
+  return found if T.tag(template) != T.tag(actual) or T.name(template) != T.name(actual) or pairs.size != others.size
+
+  learned = found
+  for index in 0...pairs.size
+    learned = read_back(pairs[index], others[index], learned)
+  end
+
+  learned
 end
