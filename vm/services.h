@@ -227,7 +227,7 @@ extern const agc_builtin agc_lazy_builtins[];
 extern const size_t agc_lazy_builtin_count;
 extern const agc_builtin agc_ats_builtins[];
 extern const size_t agc_ats_builtin_count;
-/* True when both trees of the ATS table v are valid AVL trees holding its size (vm/ats.c; for the C test). */
+/* True when the index and the entries of the ATS table v agree, with its size (vm/ats.c; for the C test). */
 bool agc_ats_valid(agc_vm *vm, agc_value v);
 CC_OWNS char *agc_system_env(const char *name);
 /* Size of the buffers that hold an operating system name. */

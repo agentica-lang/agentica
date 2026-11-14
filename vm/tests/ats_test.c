@@ -204,6 +204,7 @@ static void worker(void *arg) {
 
 /* Runs first on thread 0 and rest on the others, over a new shared table, and waits for them. */
 static void race(uv_thread_cb first, uv_thread_cb rest) {
+  agc_share(&vm);
   shared_table = call("ATS.new", 0, NULL);
   for (int k = 0; k < THREADS; k++) {
     workers[k] = vm;

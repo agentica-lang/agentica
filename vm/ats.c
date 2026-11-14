@@ -1,41 +1,37 @@
 /*
  * ATS[K, V], the shared tables (docs/grammar/06c-tasks-and-tests.md, "Shared tables"): ATS.new, put, put_new, get,
- * has_key?, delete, clear, add, size, keys and to_map. A table is one atomic pointer to an immutable state: two persistent
- * AVL trees over the same entries, one ordered by key for the lookups and one by insertion number for the snapshots
- * in first-insertion order. A reader loads the pointer; a writer builds the next state from the one it loaded and
- * installs it with compare-and-swap, so each call is atomic on any scheduler without a lock
- * (docs/vm/10-io-multicore.md §10.2.3). Service layer.
+ * has_key?, delete, clear, add, size, keys and to_map. A table is a hash table that keeps insertion order, as
+ * CPython's dict does: an array of entries in the order they were put, and an index of slots that point into it.
+ * A call takes the table's read-write lock (one of 64, by address, vm/sync.c), so readers run together and a write
+ * is alone, and nothing raises or runs user code while it is held (docs/vm/10-io-multicore.md §10.2.3). Service
+ * layer.
  */
 #include "services.h"
 
 #include <stdatomic.h>
 
-/* An AVL tree of n entries is at most 1.44 * log2(n + 2) high, so 96 levels hold more entries than memory can: the
-   explicit stack of a walk and the recursion of insert and erase stay within it. */
-#define MAX_HEIGHT 96
+/* What an index slot holds besides the number of an entry. */
+#define EMPTY UINT32_MAX
+#define DEAD (UINT32_MAX - 1)
+#define MIN_SLOTS ((size_t)8)
+/* More slots than this would need entry numbers that EMPTY and DEAD take. */
+#define MAX_SLOTS ((size_t)1 << 31)
 
+/* A deleted entry has a Void key, which no live one has, and stays in its place until the next rebuild. */
 typedef struct {
   agc_value key, value;
-  uint64_t seq; /* the insertion number: a key put again after a delete gets a new one */
+  uint64_t hash;
 } entry;
 
-typedef struct node node;
-
-struct node {
-  const node *left, *right;
-  entry e;
-  uint32_t height;
-};
-
-/* Never changes once a table holds it, so a reader needs no lock and a snapshot is the pointer. */
+/* All but rt and size change only under the write lock. `slots` is a power of two (0 for a table never written or
+   just cleared), `cap` two thirds of it, and `used` the entries filled, the deleted ones among them: an entry takes
+   one slot for good, so at most `cap` slots are not EMPTY and a probe always ends. */
 typedef struct {
-  const node *by_key, *by_seq;
-  int64_t size;
-  uint64_t next_seq;
-} state;
-
-typedef struct {
-  _Atomic(const state *) current;
+  entry *entries;
+  uint32_t *index;
+  size_t slots, cap, used;
+  /* Written under the write lock, read by ATS.size without one. */
+  _Atomic int64_t size;
   /* The run that made the table: another run's call is RUNTIME-ATS-CONTEXT. One run is one execution on the VM, so no
      value reaches another today; the check guards any later way to pass values between them. */
   const agc_runtime *rt;
@@ -43,112 +39,9 @@ typedef struct {
 
 typedef enum { CHANGE_PUT, CHANGE_PUT_NEW, CHANGE_DELETE, CHANGE_ADD } change;
 
-static const state empty_state = {NULL, NULL, 0, 0};
-
 static agc_string *ascii(const char *text) {
   size_t n = strlen(text);
   return agc_make_string(text, n, n);
-}
-
-static uint32_t height(const node *n) { return n ? n->height : 0; }
-
-static const node *make(const node *left, const node *right, entry e) {
-  node *n = agc_alloc(sizeof *n);
-  uint32_t l = height(left), r = height(right);
-  n->left = left;
-  n->right = right;
-  n->e = e;
-  n->height = (l > r ? l : r) + 1;
-  return n;
-}
-
-/* A node over two subtrees whose heights differ by at most 2, rotated back to AVL balance. */
-static const node *balance(const node *left, const node *right, entry e) {
-  uint32_t l = height(left), r = height(right);
-  if (l > r + 1) {
-    if (height(left->left) >= height(left->right)) return make(left->left, make(left->right, right, e), left->e);
-    return make(make(left->left, left->right->left, left->e), make(left->right->right, right, e), left->right->e);
-  }
-  if (r > l + 1) {
-    if (height(right->right) >= height(right->left)) return make(make(left, right->left, e), right->right, right->e);
-    return make(make(left, right->left->left, e), make(right->left->right, right->right, right->e), right->left->e);
-  }
-  return make(left, right, e);
-}
-
-/* The order of two byte strings: by the first byte that differs (unsigned), then the shorter first. */
-static int compare_spans(const void *a, size_t a_len, const void *b, size_t b_len) {
-  size_t n = a_len < b_len ? a_len : b_len;
-  int c = n ? memcmp(a, b, n) : 0;
-  if (c) return c < 0 ? -1 : 1;
-  return (a_len > b_len) - (a_len < b_len);
-}
-
-/* The rank of a key's tag: key_arg lets only these three in. */
-static int key_rank(agc_value key) {
-  if (agc_is(key, AGC_T_INT)) return 0;
-  return agc_is(key, AGC_T_STRING) ? 1 : 2;
-}
-
-/* Keys are Int, String or Bytes. Typed code never mixes them in one table; forged bytecode may, so keys of different
-   tags sort by tag (Int, String, Bytes) and are never equal, and every comparison stays defined. */
-static int compare_keys(agc_vm *vm, agc_value a, agc_value b) {
-  int a_rank = key_rank(a), b_rank = key_rank(b);
-  if (a_rank != b_rank) return a_rank < b_rank ? -1 : 1;
-  if (a_rank == 0) {
-    int64_t x = agc_as_int(vm, a), y = agc_as_int(vm, b);
-    return (x > y) - (x < y);
-  }
-  if (a_rank == 1) {
-    const agc_string *s = agc_as_string(vm, a), *t = agc_as_string(vm, b);
-    return compare_spans(s->data, s->bytes, t->data, t->bytes);
-  }
-  const agc_bytes *x = agc_as_bytes(vm, a), *y = agc_as_bytes(vm, b);
-  return compare_spans(x->data, x->len, y->data, y->len);
-}
-
-static int order(agc_vm *vm, bool by_seq, entry probe, const node *n) {
-  if (by_seq) return (probe.seq > n->e.seq) - (probe.seq < n->e.seq);
-  return compare_keys(vm, probe.key, n->e.key);
-}
-
-/* The tree with e in place of the entry of the same order, or added. */
-static const node *insert(agc_vm *vm, const node *t, bool by_seq, entry e) { // NOLINT(misc-no-recursion)
-  if (!t) return make(NULL, NULL, e);
-  int c = order(vm, by_seq, e, t);
-  if (c < 0) return balance(insert(vm, t->left, by_seq, e), t->right, t->e);
-  if (c > 0) return balance(t->left, insert(vm, t->right, by_seq, e), t->e);
-  return make(t->left, t->right, e);
-}
-
-static const node *remove_min(const node *t, entry *min) { // NOLINT(misc-no-recursion)
-  if (!t->left) {
-    *min = t->e;
-    return t->right;
-  }
-  return balance(remove_min(t->left, min), t->right, t->e);
-}
-
-/* The tree without the entry of e's order, which it holds. */
-static const node *erase(agc_vm *vm, const node *t, bool by_seq, entry e) { // NOLINT(misc-no-recursion)
-  if (!t) return NULL;
-  int c = order(vm, by_seq, e, t);
-  if (c < 0) return balance(erase(vm, t->left, by_seq, e), t->right, t->e);
-  if (c > 0) return balance(t->left, erase(vm, t->right, by_seq, e), t->e);
-  if (!t->left) return t->right;
-  if (!t->right) return t->left;
-  entry min;
-  const node *right = remove_min(t->right, &min);
-  return balance(t->left, right, min);
-}
-
-static const node *find(agc_vm *vm, const node *t, agc_value key) {
-  while (t) {
-    int c = compare_keys(vm, key, t->e.key);
-    if (!c) return t;
-    t = c < 0 ? t->left : t->right;
-  }
-  return NULL;
 }
 
 static table *table_arg(agc_vm *vm, agc_value v, uint32_t span) {
@@ -157,91 +50,133 @@ static table *table_arg(agc_vm *vm, agc_value v, uint32_t span) {
   return t;
 }
 
-/* A key is an Int, a String or a Bytes (another tag is RUNTIME-INTERNAL); a String or Bytes key costs its bytes, as
-   in a Map lookup. */
-static agc_value key_arg(agc_vm *vm, agc_value key) {
-  if (agc_is(key, AGC_T_BYTES)) agc_charge(vm, agc_as_bytes(vm, key)->len / AGC_COST_BYTES);
-  else if (!agc_is(key, AGC_T_INT)) agc_charge(vm, agc_as_string(vm, key)->bytes / AGC_COST_BYTES);
-  return key;
-}
-
-static const state *load(table *t) { return atomic_load_explicit(&t->current, memory_order_acquire); }
-
-/* Installs next over seen; false when another call installed a state first, and the caller builds again from that
-   one. The release orders the nodes before the pointer that publishes them. The caller holds seen, so the collector
-   cannot free it and give its address to a newer state: a CAS that matches it saw no change (no ABA). */
-static bool install(table *t, const state *seen, const state *next) {
-  if (next == seen) return true;
-  return atomic_compare_exchange_strong_explicit(&t->current, &seen, next, memory_order_acq_rel,
-                                                 memory_order_acquire);
-}
-
-/* The state with key set to value: a new key gets the next insertion number, a present one keeps its own. */
-static const state *with_put(agc_vm *vm, const state *s, const node *found, agc_value key, agc_value value) {
-  state *next = agc_alloc(sizeof *next);
-  *next = *s;
-  entry e = {key, value, found ? found->e.seq : s->next_seq};
-  next->by_key = insert(vm, s->by_key, false, e);
-  next->by_seq = insert(vm, s->by_seq, true, e);
-  if (!found) {
-    next->size++;
-    next->next_seq++;
+/* Keys are Int, String or Bytes (agc_key_hash lets no other tag in). Typed code never mixes them in one table; forged
+   bytecode may, so keys of different tags are never equal. The tags are known here, so no accessor raises. */
+static bool same_key(agc_vm *vm, agc_value a, agc_value b) {
+  if (a.tag != b.tag) return false;
+  if (agc_is(a, AGC_T_INT)) return agc_as_int(vm, a) == agc_as_int(vm, b);
+  if (agc_is(a, AGC_T_STRING)) {
+    const agc_string *s = agc_as_string(vm, a), *t = agc_as_string(vm, b);
+    return s->bytes == t->bytes && (s->bytes == 0 || memcmp(s->data, t->data, s->bytes) == 0);
   }
-  return next;
+  const agc_bytes *x = agc_as_bytes(vm, a), *y = agc_as_bytes(vm, b);
+  return x->len == y->len && (x->len == 0 || memcmp(x->data, y->data, x->len) == 0);
 }
 
-/* The state without the entry found. */
-static const state *without(agc_vm *vm, const state *s, const node *found) {
-  state *next = agc_alloc(sizeof *next);
-  *next = *s;
-  next->by_key = erase(vm, s->by_key, false, found->e);
-  next->by_seq = erase(vm, s->by_seq, true, found->e);
-  next->size--;
-  return next;
+/* The slot of key's entry, or SIZE_MAX. */
+static size_t lookup(agc_vm *vm, const table *t, uint64_t hash, agc_value key) {
+  if (!t->slots) return SIZE_MAX;
+  size_t mask = t->slots - 1;
+  for (size_t at = (size_t)hash & mask;; at = (at + 1) & mask) {
+    uint32_t e = t->index[at];
+    if (e == EMPTY) return SIZE_MAX;
+    if (e != DEAD && t->entries[e].hash == hash && same_key(vm, t->entries[e].key, key)) return at;
+  }
+}
+
+/* Points the first EMPTY slot of hash's probe at entry number e. */
+static void point(table *t, uint64_t hash, uint32_t e) {
+  size_t mask = t->slots - 1, at = (size_t)hash & mask;
+  while (t->index[at] != EMPTY) at = (at + 1) & mask;
+  t->index[at] = e;
+}
+
+/* New arrays with the live entries in their order and room for as many again, so the rebuilds of a table cost O(1) a
+   write on average, whether it grows or only replaces deleted keys. Returns the entries moved, which the caller
+   charges once the lock is dropped. */
+static size_t rebuild(table *t) {
+  size_t live = (size_t)atomic_load_explicit(&t->size, memory_order_relaxed), slots = MIN_SLOTS;
+  while (slots / 3 * 2 < live * 2 + 1) {
+    if (slots == MAX_SLOTS) agc_out_of_memory();
+    slots *= 2;
+  }
+  size_t cap = slots / 3 * 2;
+  entry *entries = agc_alloc(agc_size_mul(cap, sizeof *entries));
+  uint32_t *index = agc_alloc_atomic(agc_size_mul(slots, sizeof *index));
+  memset(index, 0xff, slots * sizeof *index);
+  size_t n = 0;
+  for (size_t k = 0; k < t->used; k++)
+    if (!agc_is(t->entries[k].key, AGC_T_VOID)) entries[n++] = t->entries[k];
+  t->entries = entries;
+  t->index = index;
+  t->slots = slots;
+  t->cap = cap;
+  t->used = n;
+  for (size_t k = 0; k < n; k++) point(t, entries[k].hash, (uint32_t)k);
+  return n;
+}
+
+/* Adds an entry for a key the table does not hold. Returns the entries a rebuild moved. */
+static size_t append(table *t, uint64_t hash, agc_value key, agc_value value) {
+  size_t moved = t->used == t->cap ? rebuild(t) : 0;
+  t->entries[t->used] = (entry){key, value, hash};
+  point(t, hash, (uint32_t)t->used++);
+  atomic_store_explicit(&t->size, atomic_load_explicit(&t->size, memory_order_relaxed) + 1, memory_order_relaxed);
+  return moved;
+}
+
+/* Deletes the entry of slot `at`. A table left with an eighth of its entries gets smaller arrays. */
+static size_t remove_at(table *t, size_t at) {
+  entry *e = &t->entries[t->index[at]];
+  e->key = e->value = agc_void();
+  t->index[at] = DEAD;
+  int64_t size = atomic_load_explicit(&t->size, memory_order_relaxed) - 1;
+  atomic_store_explicit(&t->size, size, memory_order_relaxed);
+  return (size_t)size * 8 <= t->cap && t->slots > MIN_SLOTS ? rebuild(t) : 0;
 }
 
 static agc_value builtin_new(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)args;
   (void)span;
   table *t = agc_alloc(sizeof *t);
-  atomic_init(&t->current, &empty_state);
+  atomic_init(&t->size, 0);
   t->rt = vm->rt;
   return agc_ats_value(t);
 }
 
-/* The state after one change of key, or s itself when the change leaves the table as it is; *result gets the result
-   of the call. An add that overflows fails here, before anything is installed, so the table keeps its value. */
-static const state *changed(agc_vm *vm, const state *s, change c, agc_value key, agc_value value, uint32_t span,
-                            agc_value *result) {
-  const node *found = find(vm, s->by_key, key);
-  switch (c) {
-    case CHANGE_PUT: *result = agc_void(); return with_put(vm, s, found, key, value);
-    case CHANGE_PUT_NEW: *result = agc_bool(!found); return found ? s : with_put(vm, s, NULL, key, value);
-    case CHANGE_DELETE: *result = agc_void(); return found ? without(vm, s, found) : s;
-    case CHANGE_ADD: {
-      int64_t sum = 0;
-      if (__builtin_add_overflow(found ? agc_as_int(vm, found->e.value) : 0, agc_as_int(vm, value), &sum))
-        agc_fail(vm, "RUNTIME-INTEGER-OVERFLOW", "Int result is outside the 64-bit range", span);
-      *result = agc_int(sum);
-      return with_put(vm, s, found, key, *result);
-    }
-  }
-  return s;
-}
-
-/* One write: build the next state from the one loaded, and build again from the newer one when another call
-   installed it first. A lost race charges the levels it built for nothing, so retries under contention are turn cost,
-   not free work. */
+/* One write. Everything that can raise runs before the lock is taken or after it is dropped: the key's hash (a wrong
+   tag), the amount of an add, and an add that overflows or finds a value that is not an Int, which leave the table as
+   it was. */
 static agc_value update(agc_vm *vm, agc_value *args, uint32_t span, change c) {
   table *t = table_arg(vm, args[0], span);
-  agc_value key = key_arg(vm, args[1]);
-  agc_value value = c == CHANGE_DELETE ? agc_void() : args[2];
-  agc_value result = agc_void();
-  for (;;) {
-    const state *seen = load(t);
-    if (install(t, seen, changed(vm, seen, c, key, value, span, &result))) return result;
-    agc_charge(vm, (uint64_t)height(seen->by_key) + 1);
+  agc_value key = args[1], result = agc_void(), bad = agc_int(0);
+  uint64_t hash = agc_key_hash(vm, key);
+  int64_t by = c == CHANGE_ADD ? agc_as_int(vm, args[2]) : 0, sum = 0;
+  bool overflow = false;
+  size_t moved = 0;
+  agc_table_lock(vm->rt, t, true);
+  size_t at = lookup(vm, t, hash, key);
+  entry *found = at == SIZE_MAX ? NULL : &t->entries[t->index[at]];
+  switch (c) {
+    case CHANGE_PUT:
+      if (found) found->value = args[2];
+      else moved = append(t, hash, key, args[2]);
+      break;
+    case CHANGE_PUT_NEW:
+      result = agc_bool(!found);
+      if (!found) moved = append(t, hash, key, args[2]);
+      break;
+    case CHANGE_DELETE:
+      if (found) moved = remove_at(t, at);
+      break;
+    case CHANGE_ADD:
+      if (found && !agc_is(found->value, AGC_T_INT)) {
+        bad = found->value;
+        break;
+      }
+      overflow = __builtin_add_overflow(found ? agc_as_int(vm, found->value) : 0, by, &sum);
+      if (overflow) break;
+      result = agc_int(sum);
+      if (found) found->value = result;
+      else moved = append(t, hash, key, result);
+      break;
   }
+  agc_table_unlock(vm->rt, t, true);
+  agc_charge(vm, moved);
+  if (overflow) agc_fail(vm, "RUNTIME-INTEGER-OVERFLOW", "Int result is outside the 64-bit range", span);
+  /* Only forged bytecode puts another value in a table it adds to: the accessor raises its wrong tag. */
+  (void)agc_as_int(vm, bad);
+  return result;
 }
 
 static agc_value builtin_put(agc_vm *vm, agc_value *args, uint32_t span) { return update(vm, args, span, CHANGE_PUT); }
@@ -256,99 +191,106 @@ static agc_value builtin_delete(agc_vm *vm, agc_value *args, uint32_t span) {
 
 static agc_value builtin_add(agc_vm *vm, agc_value *args, uint32_t span) { return update(vm, args, span, CHANGE_ADD); }
 
-/* One store, whatever the size: the old state goes to the collector. A writer that built on it loses its CAS and
-   builds again on the empty state. */
+/* The arrays go to the collector whole, so the time does not grow with the table. */
 static agc_value builtin_clear(agc_vm *vm, agc_value *args, uint32_t span) {
-  atomic_store_explicit(&table_arg(vm, args[0], span)->current, &empty_state, memory_order_release);
+  table *t = table_arg(vm, args[0], span);
+  agc_table_lock(vm->rt, t, true);
+  t->entries = NULL;
+  t->index = NULL;
+  t->slots = t->cap = t->used = 0;
+  atomic_store_explicit(&t->size, 0, memory_order_relaxed);
+  agc_table_unlock(vm->rt, t, true);
   return agc_void();
 }
 
-static agc_value builtin_get(agc_vm *vm, agc_value *args, uint32_t span) {
+/* Whether the table holds key, and its value in *value. */
+static bool read_key(agc_vm *vm, agc_value *args, uint32_t span, agc_value *value) {
   table *t = table_arg(vm, args[0], span);
-  const node *found = find(vm, load(t)->by_key, key_arg(vm, args[1]));
-  if (found) return agc_result_value(true, found->e.value);
+  uint64_t hash = agc_key_hash(vm, args[1]);
+  agc_table_lock(vm->rt, t, false);
+  size_t at = lookup(vm, t, hash, args[1]);
+  if (at != SIZE_MAX) *value = t->entries[t->index[at]].value;
+  agc_table_unlock(vm->rt, t, false);
+  return at != SIZE_MAX;
+}
+
+static agc_value builtin_get(agc_vm *vm, agc_value *args, uint32_t span) {
+  agc_value value = agc_void();
+  if (read_key(vm, args, span, &value)) return agc_result_value(true, value);
   agc_string *message = agc_concat(agc_concat(ascii("key "), agc_debug(vm, args[1])), ascii(" is not in the table"));
   return agc_error_string(vm, AGC_KIND_ERROR, message);
 }
 
 static agc_value builtin_has_key(agc_vm *vm, agc_value *args, uint32_t span) {
-  table *t = table_arg(vm, args[0], span);
-  return agc_bool(find(vm, load(t)->by_key, key_arg(vm, args[1])) != NULL);
+  agc_value value = agc_void();
+  return agc_bool(read_key(vm, args, span, &value));
 }
 
 static agc_value builtin_size(agc_vm *vm, agc_value *args, uint32_t span) {
-  return agc_int(load(table_arg(vm, args[0], span))->size);
+  return agc_int(atomic_load_explicit(&table_arg(vm, args[0], span)->size, memory_order_relaxed));
 }
 
-/* Calls visit on each entry of the snapshot in insertion order: an in-order walk of by_seq with an explicit stack. */
-static void each_entry(const state *s, void (*visit)(agc_vm *vm, entry e, void *data), agc_vm *vm, void *data,
-                       uint32_t span) {
-  const node *stack[MAX_HEIGHT];
-  size_t depth = 0;
-  const node *at = s->by_seq;
-  while (at || depth) {
-    while (at) {
-      /* An AVL tree never gets this deep (MAX_HEIGHT); the check keeps a broken tree from writing past the stack. */
-      if (depth == MAX_HEIGHT) agc_fail(vm, "RUNTIME-INTERNAL", "an ATS tree is deeper than an AVL tree can be", span);
-      stack[depth++] = at;
-      at = at->left;
-    }
-    at = stack[--depth];
-    visit(vm, at->e, data);
-    at = at->right;
+/* A copy of the entries, the deleted ones among them, taken under the read lock; *n gets their count. The list or map
+   is built from the copy with the lock dropped, so a large table holds back a writer only for the copy. */
+static const entry *snapshot(agc_vm *vm, agc_value v, uint32_t span, size_t *n) {
+  table *t = table_arg(vm, v, span);
+  entry *copy = NULL;
+  agc_table_lock(vm->rt, t, false);
+  *n = t->used;
+  if (*n) {
+    copy = agc_alloc(agc_size_mul(*n, sizeof *copy));
+    memcpy(copy, t->entries, *n * sizeof *copy);
   }
+  agc_table_unlock(vm->rt, t, false);
+  agc_charge(vm, *n);
+  return copy;
 }
 
-static void add_key(agc_vm *vm, entry e, void *data) {
-  (void)vm;
-  agc_list_builder_more(data, e.key);
-}
-
-static void add_pair(agc_vm *vm, entry e, void *data) {
-  agc_map **map = data;
-  *map = agc_map_put(vm, *map, e.key, e.value);
-}
-
-/* The snapshot is the loaded pointer: building the list or map takes no lock and holds back no writer. */
 static agc_value builtin_keys(agc_vm *vm, agc_value *args, uint32_t span) {
-  const state *s = load(table_arg(vm, args[0], span));
-  agc_charge(vm, (uint64_t)s->size);
+  size_t n = 0;
+  const entry *entries = snapshot(vm, args[0], span, &n);
+  size_t live = 0;
+  for (size_t k = 0; k < n; k++) live += !agc_is(entries[k].key, AGC_T_VOID);
   agc_list_builder b;
-  agc_list_builder_sized(&b, (size_t)s->size);
-  each_entry(s, add_key, vm, &b, span);
+  agc_list_builder_sized(&b, live);
+  for (size_t k = 0; k < n; k++)
+    if (!agc_is(entries[k].key, AGC_T_VOID)) agc_list_builder_more(&b, entries[k].key);
   return agc_list_value(agc_list_builder_finish(&b));
 }
 
 static agc_value builtin_to_map(agc_vm *vm, agc_value *args, uint32_t span) {
-  const state *s = load(table_arg(vm, args[0], span));
-  agc_charge(vm, (uint64_t)s->size);
+  size_t n = 0;
+  const entry *entries = snapshot(vm, args[0], span, &n);
   agc_map *map = agc_new_map();
-  each_entry(s, add_pair, vm, &map, span);
+  for (size_t k = 0; k < n; k++)
+    if (!agc_is(entries[k].key, AGC_T_VOID))
+      map = agc_map_put_hash(vm, map, entries[k].hash, entries[k].key, entries[k].value);
   return agc_map_value(map);
 }
 
-/* The count of nodes of t when it is a valid AVL tree in the order of by_seq whose entries lie strictly between low and
-   high (NULL: no bound), else -1. */
-static int64_t valid_tree(agc_vm *vm, const node *t, bool by_seq, const entry *low, // NOLINT(misc-no-recursion)
-                          const entry *high) {
-  if (!t) return 0;
-  if ((low && order(vm, by_seq, *low, t) >= 0) || (high && order(vm, by_seq, *high, t) <= 0)) return -1;
-  uint32_t l = height(t->left), r = height(t->right);
-  if (t->height != (l > r ? l : r) + 1 || l > r + 1 || r > l + 1) return -1;
-  int64_t left = valid_tree(vm, t->left, by_seq, low, &t->e), right = valid_tree(vm, t->right, by_seq, &t->e, high);
-  return left < 0 || right < 0 ? -1 : left + right + 1;
-}
-
-/* For the C test (vm/tests/ats_test.c): both trees of the table are valid AVL trees in their order, and each holds
-   size nodes. */
+/* For the C test (vm/tests/ats_test.c), on a table no thread is writing: the counts agree, every live entry is found
+   through the index at its own number, and every entry, live or deleted, holds exactly one slot. */
 bool agc_ats_valid(agc_vm *vm, agc_value v) {
-  const state *s = load(agc_as_ats(vm, v));
-  return valid_tree(vm, s->by_key, false, NULL, NULL) == s->size &&
-         valid_tree(vm, s->by_seq, true, NULL, NULL) == s->size;
+  const table *t = agc_as_ats(vm, v);
+  size_t live = 0, taken = 0, dead = 0;
+  if (t->used > t->cap || t->cap != t->slots / 3 * 2 || (t->slots & (t->slots - 1))) return false;
+  for (size_t k = 0; k < t->used; k++) {
+    const entry *e = &t->entries[k];
+    if (agc_is(e->key, AGC_T_VOID)) continue;
+    size_t at = lookup(vm, t, e->hash, e->key);
+    if (at == SIZE_MAX || t->index[at] != k) return false;
+    live++;
+  }
+  for (size_t k = 0; k < t->slots; k++) {
+    taken += t->index[k] != EMPTY;
+    dead += t->index[k] == DEAD;
+  }
+  return (int64_t)live == atomic_load_explicit(&t->size, memory_order_relaxed) && taken == t->used &&
+         dead == t->used - live;
 }
 
-/* No row is shared or a leaf: a call takes no lock (the atomic pointer orders the writers), and a call charges for
-   String and Bytes keys and snapshots. */
+/* No row is shared or a leaf: a call takes the table's own lock, not rt->sync, and it charges for String and Bytes
+   keys, rebuilds and snapshots. */
 const agc_builtin agc_ats_builtins[] = {
   {"ATS.new", 0, builtin_new, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
   {"ATS.put", 3, builtin_put, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
