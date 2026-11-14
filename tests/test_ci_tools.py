@@ -37,7 +37,11 @@ def test_the_files_that_need_platforms_run_all_five(capsys):
                  ".github/workflows/release.yml", ".github/workflows/platforms.yml", ".github/actions/msys2/action.yml",
                  "tools/ci_systems.py", "tools/conformance.py", "tests/agentica_test.py", "tests/conftest.py",
                  "tests/windows_support.py", "tests/test_windows_process_cleanup.py", "tests/test_process_lifecycle.py",
-                 "tests/test_filesystem.py", "tests/test_bdd_posix.py"):
+                 "tests/test_filesystem.py", "tests/test_bdd_posix.py", "tests/vm_os_support.py",
+                 "tests/package_support.py", "tests/vm_diff_support.py", "tests/fixtures/bdd_logged_binary.c",
+                 "tests/fixtures/cache/compiler_probe.c", ".gitattributes", "tools/ci_changes.py",
+                 "compiler/io/native_build.agc", "compiler/packages/native_library.agc",
+                 "compiler/packages/native_build.agc", "pyproject.toml", "poetry.lock"):
         assert changes.classify(["compiler/app/cli.agc", path])["platforms"], path
     assert "platforms: all five (vm/interp.c)" in capsys.readouterr().err
     for files in (["compiler/app/cli.agc", "compiler/check/check_call.agc"], ["stdlib/cache.agc"], ["docs/x.md"],

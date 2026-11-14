@@ -47,7 +47,9 @@ PLATFORM_PATHS = re.compile(
     r"|bootstrap/stage0\.agcb$|VERSION$|tools/release\.py$|tools/release-check\.sh$|\.github/workflows/release\.yml$"
     r"|\.github/workflows/platforms\.yml$|\.github/actions/|tools/ci_systems\.py$|tools/conformance\.py$"
     r"|tests/(agentica_test|conftest)\.py$|tests/(test_)?windows_[^/]*\.py$|tests/test_process[^/]*\.py$"
-    r"|tests/test_filesystem\.py$|tests/[^/]*_posix\.py$"
+    r"|tests/test_filesystem\.py$|tests/[^/]*_posix\.py$|tests/[^/]*_support\.py$|tests/fixtures/.*\.c$"
+    r"|\.gitattributes$|tools/ci_changes\.py$|compiler/io/native_build\.agc$"
+    r"|compiler/packages/native_(library|build)\.agc$|pyproject\.toml$|poetry\.lock$"
 )
 TRACE_PATHS = re.compile(r"vm/trace\.|vm/tests/trace_test\.c$")
 # tests/std/ runs through tests/test_unit_test.py; the frozen manifests read their own copy of stdlib/.
