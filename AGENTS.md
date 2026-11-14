@@ -70,6 +70,35 @@ stay.
 - The steps of `ci.yml`, `sweep.yml` and the tests of `release.yml` are
   make targets; run them locally the same way.
 
+## Tests: what tests what
+
+`make test` runs each `tests/test_*.py` module in its own process (pytest).
+Every kind below starts from one of those modules or from a make target, so a
+broken VM or test runner cannot make its own tests pass.
+
+| What | Where | Run by |
+|---|---|---|
+| language rules, diagnostics | `tests/test_spec_<area>.py` (`--json check`, code and span) | `make test` |
+| front-end stages | `tests/test_frontend_*.py`, goldens in `tests/fixtures/frontend/` | `make test` |
+| VM behavior | `tests/fixtures/vm/*.agc` + `.expected`, Node/Python peers | `make test`, `make vm-golden-check` |
+| VM C code | `vm/tests/*_test.c` | `make vm-test`; shared state: `make vm-tsan`, `make test-shared` |
+| CLI | `tests/test_cli_*.py`, `tests/fixtures/cli/forms.json` | `make test-cli` |
+| `std/` modules | `tests/std/*_test.agc` (`agentica test`) | `tests/test_unit_test.py`, `tests/test_std_<module>.py` |
+| `agentica test`, `std/bdd` | `tests/test_unit_test.py`, `tests/test_bdd*.py`, `tests/bdd/specs` | `make test` |
+| slow tier, sanitizers, fuzz | `@slow` / `pytest.mark.slow` cases | `make test-slow`, CI only |
+
+- Tests written in Agentica are for the behavior of `std/` modules. The
+  language, the VM and the test runner are tested from outside: pytest through
+  the CLI, goldens, or an independent peer.
+- A pytest module that runs `.agc` tests asserts how many passed, so a run
+  that tests nothing fails.
+- An algorithm with a known model (a heap, a codec, a parser) also gets a
+  differential test against a Python or Node peer.
+- When: while working, the modules of the area you change
+  (`make test TESTS=...`) and the make target of the layer (`vm-test`,
+  `vm-tsan`, `test-cli`); `make goldens` after an output change, committed.
+  CI runs the rest on every PR.
+
 ## Where to read
 
 | Task | Read |

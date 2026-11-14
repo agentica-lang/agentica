@@ -261,6 +261,7 @@ def run(linked: Linker.Linked, checked: Checker.Checked) -> Result[Ir.Program]
       sources: kept_sources,
       structs: tables.structs,
       enums: tables.enums,
+      instances: tables.instances,
       written: std_aliases(linked),
       functions: pin_prelude_spans(built, kept_sources),
       entry: entry,

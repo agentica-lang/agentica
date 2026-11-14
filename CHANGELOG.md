@@ -10,17 +10,20 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `JSON.decode`, `JSON.schema` and `.codec` take generic struct instances, as the target (`Box[Int]`) or in a field (#748).
 - `Actor.inbox` gives the running actor its own inbox, so `init` can monitor tasks into it (#1525).
 - `List.count` takes a block and counts the elements it accepts, as Ruby's `xs.count { |x| ... }` does (#1590).
 - `List.tally`, `List.group_by` and `Range.group_by` take `Bytes` keys, as `List.uniq` does (#1596).
 - `--max-heap SIZE` ends a run whose memory would grow past `SIZE` (such as `256M`) with `RUNTIME-HEAP-LIMIT` and exit code 70 (#1113).
 - `ATS.clear(table)` removes every key of a shared table in one step, whatever its size (#1108).
 - `TCP.write` and `TCP.write_bytes` return without waiting for a slow peer: the bytes wait in the socket's write buffer (`TCP.write_buffer` sets its limit), and `TCP.flush` waits until they are out (#1188).
+- `ATS.push(table, key, value)` appends to the list of a key in one atomic step and gives the new length (#1442).
 
 ### Changed
 
 - Loops that call builtins such as `Map.get` or `String.slice` are up to 17% faster on Linux and macOS (#1599).
 - `std/cache`: dropping a generation and `Cache.clear` take the same short time whatever the size; a put that dropped 32,000 entries waited about 200 ms (#1108).
+- `ATS` tables are hash tables now: a single task writes about 5 times faster, tasks that write one table about 8 times faster, and `get` is O(1). `keys` and `to_map` copy the table, O(n), where they took a snapshot in O(1) (#1442).
 
 ### Fixed
 

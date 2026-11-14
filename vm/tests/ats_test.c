@@ -1,6 +1,7 @@
-/* ATS tables (vm/ats.c): order and snapshots with the AVL invariants of both trees, keys of mixed tags as forged
-   bytecode may pass them, an add that overflows and leaves the table unchanged, the run check, threads that update
-   one table at once with exact totals, and threads that write while one clears (both also under TSan). */
+/* ATS tables (vm/ats.c): order and snapshots with the invariants of the index and the entries, growth and shrinking,
+   keys of mixed tags as forged bytecode may pass them, an add that fails and leaves the table unchanged, the run
+   check, threads that update one table at once with exact totals, that write while one clears and that push to
+   one list (all also under TSan). */
 #include "../core.h"
 #include "../services.h"
 #include "io_harness.h"
@@ -70,7 +71,7 @@ static void test_order(void) {
   assert(agc_as_string(&vm, agc_list_get(list, 0))->data[0] == 'a');
   assert(agc_as_string(&vm, agc_list_get(list, 1))->data[0] == 'b');
   assert(get_int(t, agc_test_str("b")) == 4 && size_of(t) == 2);
-  /* Enough keys for every rotation of the trees, then every other one removed: the size and the order still hold. */
+  /* Enough keys for several rebuilds, then every other one removed: the size and the order still hold. */
   agc_value u = call("ATS.new", 0, NULL);
   for (int64_t k = 0; k < 1000; k++) put(u, agc_int((k * 7919) % 1000), k);
   assert(agc_ats_valid(&vm, u));
@@ -84,8 +85,8 @@ static void test_order(void) {
     assert(agc_as_int(&vm, agc_list_get(left, k)) == (int64_t)((2 * k + 1) * 7919 % 1000));
 }
 
-/* Seeded puts and deletes over few keys, so keys come back after a delete: the trees stay valid AVL trees with the size
-   of a shadow set. */
+/* Seeded puts and deletes over few keys, so keys come back after a delete: the table stays valid with the size of a
+   shadow set. */
 static void test_random_changes(void) {
   agc_value t = call("ATS.new", 0, NULL);
   bool present[200] = {false};
@@ -131,6 +132,36 @@ static void test_mixed_keys(void) {
   agc_value wrong[3] = {t, agc_bool(true), agc_int(0)};
   fails("ATS.put", 3, wrong, "RUNTIME-INTERNAL");
   assert(size_of(t) == 4);
+}
+
+/* A table that grew and lost nearly all its keys keeps the order of the rest; one key put and deleted many times
+   stays small (a rebuild drops the deleted entries); a value that is not an Int, which only forged bytecode can
+   put next to an add, fails and changes nothing. */
+static void test_growth(void) {
+  agc_value t = call("ATS.new", 0, NULL);
+  for (int64_t k = 0; k < 5000; k++) put(t, agc_int(k), k);
+  assert(size_of(t) == 5000 && agc_ats_valid(&vm, t));
+  for (int64_t k = 0; k < 5000; k++) {
+    agc_value args[2] = {t, agc_int(k)};
+    if (k % 1000 != 7) (void)call("ATS.delete", 2, args);
+  }
+  assert(size_of(t) == 5 && agc_ats_valid(&vm, t));
+  const agc_list *left = agc_as_list(&vm, call("ATS.keys", 1, &t));
+  assert(agc_list_len(left) == 5);
+  for (size_t k = 0; k < 5; k++) assert(agc_as_int(&vm, agc_list_get(left, k)) == (int64_t)(1000 * k + 7));
+  for (int64_t k = 0; k < 20000; k++) {
+    agc_value args[3] = {t, agc_test_str("again"), agc_int(k)};
+    (void)call("ATS.put", 3, args);
+    if (k % 2 == 0) (void)call("ATS.delete", 2, args);
+  }
+  assert(size_of(t) == 6 && agc_ats_valid(&vm, t) && get_int(t, agc_test_str("again")) == 19999);
+  const agc_list *keys = agc_as_list(&vm, call("ATS.keys", 1, &t));
+  assert(agc_as_string(&vm, agc_list_get(keys, 5))->data[0] == 'a');
+  agc_value text[3] = {t, agc_int(1), agc_test_str("text")};
+  (void)call("ATS.put", 3, text);
+  agc_value add[3] = {t, agc_int(1), agc_int(1)};
+  fails("ATS.add", 3, add, "RUNTIME-INTERNAL");
+  assert(size_of(t) == 7 && agc_ats_valid(&vm, t));
 }
 
 static void test_clear(void) {
@@ -204,6 +235,7 @@ static void worker(void *arg) {
 
 /* Runs first on thread 0 and rest on the others, over a new shared table, and waits for them. */
 static void race(uv_thread_cb first, uv_thread_cb rest) {
+  agc_share(&vm);
   shared_table = call("ATS.new", 0, NULL);
   for (int k = 0; k < THREADS; k++) {
     workers[k] = vm;
@@ -226,6 +258,45 @@ static void test_threads(void) {
       snprintf(name, sizeof name, "t%d-%d", k, j);
       assert(get_int(shared_table, agc_test_str(name)) == ROUNDS / OWN_KEYS);
     }
+}
+
+/* Every thread pushes to one shared key and to a key of its own: no item is lost, and each own list is in order. */
+static void pusher(void *arg) {
+  intptr_t k = (intptr_t)arg;
+  agc_vm *v = &workers[k];
+  assert(agc_gc_thread_enter());
+  uv_barrier_wait(&gate);
+  for (int r = 0; r < ROUNDS; r++) {
+    agc_value all[3] = {shared_table, agc_test_str("all"), agc_int(r)};
+    assert(agc_as_int(v, call_on(v, "ATS.push", 3, all)) >= r + 1);
+    agc_value own[3] = {shared_table, agc_int(k), agc_int(r)};
+    assert(agc_as_int(v, call_on(v, "ATS.push", 3, own)) == r + 1);
+  }
+  agc_gc_thread_leave();
+}
+
+static const agc_list *list_at(agc_value t, agc_value key) {
+  agc_value args[2] = {t, key};
+  const agc_result *r = agc_as_result(&vm, call("ATS.get", 2, args));
+  assert(r->ok);
+  return agc_as_list(&vm, r->value);
+}
+
+static void test_push(void) {
+  race(pusher, pusher);
+  assert(agc_ats_valid(&vm, shared_table) && size_of(shared_table) == THREADS + 1);
+  assert(agc_list_len(list_at(shared_table, agc_test_str("all"))) == (size_t)THREADS * ROUNDS);
+  for (int64_t k = 0; k < THREADS; k++) {
+    const agc_list *own = list_at(shared_table, agc_int(k));
+    assert(agc_list_len(own) == ROUNDS);
+    for (size_t r = 0; r < ROUNDS; r += 97) assert(agc_as_int(&vm, agc_list_get(own, r)) == (int64_t)r);
+  }
+  /* Forged bytecode can push to a key that holds no list: it fails and the value stays. */
+  agc_value t = call("ATS.new", 0, NULL);
+  put(t, agc_int(1), 5);
+  agc_value args[3] = {t, agc_int(1), agc_int(6)};
+  fails("ATS.push", 3, args, "RUNTIME-INTERNAL");
+  assert(get_int(t, agc_int(1)) == 5);
 }
 
 static atomic_bool clearing_done;
@@ -273,11 +344,13 @@ int main(void) {
   test_order();
   test_random_changes();
   test_mixed_keys();
+  test_growth();
   test_clear();
   test_overflow_keeps_the_value();
   test_other_run();
   test_threads();
   test_clear_races_writers();
+  test_push();
   puts("ats tests passed");
   return 0;
 }

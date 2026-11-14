@@ -1,10 +1,10 @@
 /*
  * The locks of the shared scheduler state (docs/vm/16-architecture.md §16.9, "One coarse lock"): `rt->sync`, the one lock
- * for the task tree, the waiter lists, the Task.map groups and the logger table, the lock of each output stream and the
- * locks of the channels. All are solo until agc_share: while one thread runs the VM they take nothing but a flag
- * test, which is what one scheduler costs. Core layer.
+ * for the task tree, the waiter lists, the Task.map groups and the logger table, the lock of each output stream, the
+ * locks of the channels and the read-write locks of the ATS tables. All are solo until agc_share: while one thread runs
+ * the VM they take nothing but a flag test, which is what one scheduler costs. Core layer.
  *
- * It includes <uv.h> only for `uv_mutex_t`, as runq.c does (docs/vm/15-layers.md §15.5, rule 5).
+ * It includes <uv.h> only for `uv_mutex_t` and `uv_rwlock_t`, as runq.c does (docs/vm/15-layers.md §15.5, rule 5).
  */
 #include "core.h"
 
@@ -47,6 +47,48 @@ static void share_channels(agc_runtime *rt) {
     agc_lock_share(locks[k]);
   }
   rt->channel_locks = locks;
+}
+
+_Static_assert(AGC_TABLE_LOCKS == 64, "table_lock keeps 6 bits");
+
+/* Each lock starts a cache line of its own block: readers of different tables then write to different lines. They
+   live as long as the runtime, like the channel locks. */
+static void share_tables(agc_runtime *rt) {
+  if (rt->table_locks) return;
+  uv_rwlock_t **locks = agc_alloc(AGC_TABLE_LOCKS * sizeof *locks);
+  for (size_t k = 0; k < AGC_TABLE_LOCKS; k++) {
+    char *block = agc_alloc(agc_size_add(sizeof(uv_rwlock_t), 2 * CACHE_LINE));
+    locks[k] = (uv_rwlock_t *)(void *)(block + CACHE_LINE);
+    if (uv_rwlock_init(locks[k]) != 0) agc_out_of_memory();
+  }
+  rt->table_locks = locks;
+}
+
+static uv_rwlock_t *table_lock(const agc_runtime *rt, const void *table) {
+  uv_rwlock_t **locks = rt->table_locks;
+  return locks[(((uint64_t)(uintptr_t)table >> 4) * UINT64_C(0x9E3779B97F4A7C15)) >> 58];
+}
+
+/* A table call holds the lock for less time than a sleep and a wake cost, so a thread that finds it taken spins for
+   it first, as agc_lock_take_shared does for rt->sync. */
+void agc_table_lock_shared(const agc_runtime *rt, const void *table, bool write) {
+  uv_rwlock_t *lock = table_lock(rt, table);
+  uint64_t spent = 0;
+  unsigned pauses = 1;
+  while ((write ? uv_rwlock_trywrlock(lock) : uv_rwlock_tryrdlock(lock)) != 0) {
+    if (spent >= rt->sync->spin) {
+      if (write) uv_rwlock_wrlock(lock);
+      else uv_rwlock_rdlock(lock);
+      return;
+    }
+    spent += pauses;
+    pauses = agc_spin_step(pauses);
+  }
+}
+
+void agc_table_unlock_shared(const agc_runtime *rt, const void *table, bool write) {
+  if (write) uv_rwlock_wrunlock(table_lock(rt, table));
+  else uv_rwlock_rdunlock(table_lock(rt, table));
 }
 
 /* From here on take and drop lock. Like agc_runq_share it runs before the second thread exists, so thread creation
@@ -164,6 +206,7 @@ void agc_share(agc_vm *vm) {
   agc_lock_share(rt->err.lock);
   agc_registry_share(vm);
   share_channels(rt);
+  share_tables(rt);
   agc_timers_share(vm);
   rt->shared = true;
 }

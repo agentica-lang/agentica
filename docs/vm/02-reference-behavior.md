@@ -246,6 +246,9 @@ The user-facing rules (which fields are required, the `JsonField` and
   `array`, and has `array of N items`. A payload error has the path
   `<object>.values[i]` and then its own path. A variant with no payload may
   leave `values` out, and it is then the shared value.
+- A struct instance (type kind 10, `Box[Int]`) decodes as a struct of its
+  generic struct, with the instance's field types; errors and the schema treat
+  it as a struct, and `$defs` names it with its arguments (`Box[Int]`).
 - Errors are values `"<path>: expected <what>"`. The path is `$`, `a.b` for
   fields, `a[3]` for list items and `a["k"]` for map keys. `<what>` is `object`,
   `array`, `required field`, `signed 64-bit Int` (a JSON float, or an integer
@@ -254,8 +257,9 @@ The user-facing rules (which fields are required, the `JsonField` and
   `Optional` applies.
 - `JSON.schema(T)` writes each struct and enum reached once in `$defs` under its
   linked name (`@2::Point` for an imported one), referenced by `{"$ref":
-  "#/$defs/<name>"}` with `~` written `~0` and `/` written `~1`. Int is
-  `{"type": "integer", "minimum": -2^63, "maximum": 2^63-1}`.
+  "#/$defs/<name>"}` with `~` written `~0` and `/` written `~1`, and every
+  other byte a URI fragment may not hold percent-encoded (`Box%5BInt%5D`). Int
+  is `{"type": "integer", "minimum": -2^63, "maximum": 2^63-1}`.
 - The VM walks the JSON tree and the type table with an explicit stack and
   builds the error path only on failure. Schema uses a queue. Neither recurses,
   so recursive structs and deep values are safe.

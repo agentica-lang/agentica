@@ -21,6 +21,8 @@ struct Section
   decodable_count: Int
   enums: Wire.Chunks
   enums_count: Int
+  instances: Wire.Chunks
+  instances_count: Int
 end
 
 ## Builds the sections for the structs and enums of the program. struct_index and enum_index map a name to its place in
@@ -65,6 +67,17 @@ def build(program: Ir.Program, struct_index: Map[String, Int], enum_index: Map[S
     index += 1
   end
 
+  instance_chunks = Wire.start()
+  for entry in program.instances
+    instance_chunks = Wire.add(instance_chunks, Wire.u32(struct_index[entry.struct_name]))
+    instance_chunks = Wire.add_text(instance_chunks, entry.name)
+    for type in entry.types
+      found = try type_id(program, struct_index, enum_index, pool, type)
+      pool = found.pool
+      instance_chunks = Wire.add(instance_chunks, Wire.u32(found.id))
+    end
+  end
+
   return error(Failure.limit(program, 0, "JSON field types", program.span)) if pool.count > MAX_U16
 
   decodable_types: List[Types.Type] = []
@@ -72,6 +85,10 @@ def build(program: Ir.Program, struct_index: Map[String, Int], enum_index: Map[S
     if entry.decodable
       decodable_types = decodable_types.concat(entry.types)
     end
+  end
+
+  for entry in program.instances
+    decodable_types = decodable_types.concat(entry.types)
   end
 
   for entry in program.enums
@@ -87,14 +104,25 @@ def build(program: Ir.Program, struct_index: Map[String, Int], enum_index: Map[S
     end
   end
 
-  ok(Section(types: pool, decodable: chunks, decodable_count: count, enums: enum_chunks, enums_count: enum_count))
+  ok(
+    Section(
+      types: pool,
+      decodable: chunks,
+      decodable_count: count,
+      enums: enum_chunks,
+      enums_count: enum_count,
+      instances: instance_chunks,
+      instances_count: program.instances.size,
+    ),
+  )
 end
 
 private
 
 # The entry of a type, added after the entries of the types it is made of. An entry is its tag (0 Int, 1 Float, 2 Bool,
-# 3 String, 4 List, 5 Map from String, 6 struct, 7 JSON.Field, 8 Optional, 9 enum) and, for the last six, the number of
-# the item type, the struct, the type inside the JSON.Field or the Optional, or the enum.
+# 3 String, 4 List, 5 Map from String, 6 struct, 7 JSON.Field, 8 Optional, 9 enum, 10 struct instance) and, for the
+# last seven, the number of the item type, the struct, the type inside the JSON.Field or the Optional, the enum, or the
+# instance.
 def type_id(
   program: Ir.Program,
   struct_index: Map[String, Int],
@@ -102,6 +130,8 @@ def type_id(
   pool: Pool.Pool,
   type: Types.Type,
 ) -> Result[Pool.Interned]
+  return instance_id(program, pool, type) if Types.is?(type, "Struct") and Types.args(type).size > 0
+
   case type
     Types.Type.Int -> ok(Pool.intern(pool, "0", [0]))
     Types.Type.Float -> ok(Pool.intern(pool, "1", [1]))
@@ -139,6 +169,19 @@ def type_id(
       ok(entry_of(pool, 6, struct_index[name]))
     _ -> error(unsupported(program, "a JSON field type of #{Types.tag(type)}"))
   end
+end
+
+# The entry of an instance of a generic struct: tag 10 and its place in program.instances, found by its type.
+def instance_id(program: Ir.Program, pool: Pool.Pool, type: Types.Type) -> Result[Pool.Interned]
+  name = Types.json_name(type)
+  at = 0
+  for entry in program.instances
+    return ok(entry_of(pool, 10, at)) if Types.json_name(entry.type) == name
+
+    at += 1
+  end
+
+  error(unsupported(program, "the struct instance #{Types.to_text(type)} in a JSON field type is not in the table"))
 end
 
 def entry_of(pool: Pool.Pool, tag: Int, number: Int) -> Pool.Interned

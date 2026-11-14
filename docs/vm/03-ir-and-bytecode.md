@@ -380,9 +380,10 @@ header and the entry.
 - **Section:** Types
   - **Entry:** `u32` type count. Each entry is a `u8` kind (0 Int, 1 Float, 2
     Bool, 3 String, 4 List, 5 Map with String keys, 6 Struct, 7 JSON.Field, 8
-    Optional, 9 Enum) and, for 4 to 9, a `u32` operand: the item, value,
-    `JSON.Field` or `Optional` payload type index (smaller than the entry's
-    own), the struct index or the enum index. A file with a kind 7 entry has
+    Optional, 9 Enum, 10 struct instance) and, for 4 to 10, a `u32` operand:
+    the item, value, `JSON.Field` or `Optional` payload type index (smaller
+    than the entry's own), the struct index, the enum index or the index of a
+    record of the Struct instances section. A file with a kind 7 entry has
     the `JSON.Field` enum (by that name; Absent, Null, Value, with arities 0, 0
     and 1) in its Enums section, at most once; an enum named `JsonField` is a
     plain enum; one with a kind 8 entry has the `Optional` enum
@@ -432,13 +433,26 @@ header and the entry.
     index (increasing), the `str` linked name and one `u32` type index for each
     payload item of its variants, in order (the variant arities in the Enums
     section give how many). A file with a type of kind 9 has the record of that
-    enum. Fewer than 4 bytes after the Entry are trailing bytes.
+    enum. Fewer than 4 bytes after the Entry are trailing bytes. The count is 0
+    only when the Struct instances section follows.
+
+- **Section:** Struct instances (optional, last)
+  - **Entry:** the instances of generic structs that `JSON.decode` can build
+    (`Box[Int]`), written only when there is one, after the Decodable enums
+    section (empty when no enum is decodable). It is a `u32` count (at least
+    1), then for each instance a `u32` struct index, the `str` linked name with
+    the type arguments (`@2::Box[Int]`), which no decodable struct or other
+    instance shares, and one `u32` type index for each field of the struct. A
+    file with a type of kind 10 has that record. `JSON.decode` builds a struct
+    of the struct index whose fields are read as the instance's types;
+    `JSON.schema` describes it under its linked name.
 
 - The Sources section embeds the full source texts, so the VM prints diagnostics
   without reading files. Each span's file keeps the name the front end gave it
   (`std/` modules by their `std/...` key).
-- Only struct and enum entries can make cycles in the Types section, and they
-  go through the decodable struct records and the Decodable enums section.
+- Only struct, enum and instance entries can make cycles in the Types section,
+  and they go through the decodable struct records, the Decodable enums section
+  and the Struct instances section.
   `compiler/bytecode/bytecode_types.agc` interns each distinct type once,
   children first. A program without a JSON type argument writes two zero
   counts.

@@ -104,6 +104,11 @@ def program_lines(program: Ir.Program) -> List[String]
     lines = lines.push(line)
   end
 
+  for entry in program.instances
+    types = Types.debug_list(entry.types)
+    lines = lines.push("instance #{Text.quote(entry.name)} of #{Text.quote(entry.struct_name)} types=[#{types}]")
+  end
+
   index = 0
   for function in program.functions
     lines = function_lines(lines, index, function, index == program.entry)

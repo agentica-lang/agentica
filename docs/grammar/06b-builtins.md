@@ -103,12 +103,15 @@ the checker enforces:
 
 - `JSON.decode(source, T)` and `JSON.schema(T)` take a named struct or enum
   type, not a value, and so does `T.codec`; bare type names are valid only for
-  these. `JSON.decode` also takes `List[T]` and `Map[String, T]` of such a type
-  (or of a field type below); `schema` and `codec` refuse them
-  (`CHECK-TYPE-MISMATCH`). Fields and payloads may be Int, Float, Bool, String,
-  lists, String-keyed maps, nested or recursive structs and enums, and
-  `Optional` of those (and `JSON.Field`, for a struct field); any other nested
-  type, a generic struct or enum instance included, is `CHECK-NOT-DECODABLE`.
+  these. A type name followed by `[` in an expression is always a type with
+  arguments (`Box[Int]`, `Lib.Box[Int]`), never an index. `JSON.decode` also
+  takes `List[T]` and `Map[String, T]` of such a type (or of a field type
+  below); `schema` and `codec` refuse them (`CHECK-TYPE-MISMATCH`). Fields and
+  payloads may be Int, Float, Bool, String, lists, String-keyed maps, nested or
+  recursive structs and enums, generic struct instances whose fields are such
+  types after substitution (semantics, generic structs), and `Optional` of those
+  (and `JSON.Field`, for a struct field); any other nested type, a generic enum
+  instance included, is `CHECK-NOT-DECODABLE`.
 - `JSON.encode` and `JSON.from` accept Int, Float, Bool, String, Nil (as
   `null`), JSON.Value, lists, String-keyed maps, `Optional`, structs and user
   enums of those, whose struct fields may also be `JSON.Field`. An instance of a
@@ -174,8 +177,8 @@ end
   argument counts after substitution: in `Box[JSON.Field[Int]]` (`struct Box[T]`
   with `value: T`) the field is a direct `JSON.Field` field, but `items:
   List[T]` or `f: JSON.Field[T]` with that argument is `CHECK-JSON-FIELD-PLACE`.
-  `JSON.decode` and `JSON.schema` still take no generic instance. This check
-  comes first, so `List[JSON.Field[Nil]]` is `CHECK-JSON-FIELD-PLACE`.
+  This check comes first, so `List[JSON.Field[Nil]]` is
+  `CHECK-JSON-FIELD-PLACE`.
   `JSON.Field[Nil]` as a field is `CHECK-NOT-DECODABLE` or
   `CHECK-NOT-ENCODABLE`, since `Value(nil)` would be written as `null`. A bare
   `JSON.Field` target is `CHECK-UNKNOWN-TYPE`.

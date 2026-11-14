@@ -168,14 +168,14 @@ end
 # holds a struct with private fields is CHECK-PRIVATE-FIELD outside that struct's module.
 def check_codec(cx: State.Cx, st: State.St, node: Ast.FieldAccess, type_name: Ast.TypeName) -> Result[State.Out]
   type = try Rules.check_codec_of(cx, st, type_name)
-  name = T.name(T.item(type))
-  fields = cx.structs.get(name)
+  target = T.item(type)
+  fields = cx.structs.get(T.name(target))
   members: List[Model.Named] = []
   if fields.some?
-    members = fields.unwrap!
+    members = CheckTypes.instance_fields(cx, target, fields.unwrap!)
   end
 
-  resolved = State.record_resolved(st, node.id, State.Resolved.Codec(name, members))
+  resolved = State.record_resolved(st, node.id, State.Resolved.Codec(T.json_name(target), members))
   ok(State.Out(st: resolved, type: type))
 end
 
