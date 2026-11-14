@@ -213,6 +213,7 @@ end
 def rule_name(rule: Model.Rule) -> String
   case rule
     Model.Rule.Plain -> "Plain"
+    Model.Rule.ActorInbox -> "ActorInbox"
     Model.Rule.AddressSend -> "AddressSend"
     Model.Rule.AtsCall -> "AtsCall"
     Model.Rule.AtsNew -> "AtsNew"

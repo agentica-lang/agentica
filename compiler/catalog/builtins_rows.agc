@@ -2,6 +2,7 @@
 ## Family.Member.fn, such as OpenSSL.Cipher.aes_256_gcm_encrypt.
 
 import Model from "builtin_model"
+import {ROWS as ACTORINBOX_ROWS} from "builtins_actorinbox"
 import {ROWS as ADDRESS_ROWS} from "builtins_address"
 import {ROWS as ATS_ROWS} from "builtins_ats"
 import {ROWS as BASE64_ROWS} from "builtins_base64"
@@ -45,7 +46,8 @@ import {ROWS as TLS_ROWS} from "builtins_tls"
 import {ROWS as ZLIB_ROWS} from "builtins_zlib"
 
 BUILTIN_ROWS: List[Model.Builtin] = (
-  ADDRESS_ROWS.concat(ATS_ROWS)
+  ACTORINBOX_ROWS.concat(ADDRESS_ROWS)
+    .concat(ATS_ROWS)
     .concat(BASE64_ROWS)
     .concat(BYTES_ROWS)
     .concat(CHANNEL_ROWS)

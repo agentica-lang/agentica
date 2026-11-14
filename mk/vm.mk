@@ -158,7 +158,7 @@ OSSL_CFLAGS := -g -fno-omit-frame-pointer
 DEBUG_MAP := $(DEBUG_MAPS)
 else ifeq ($(TSAN),1)
 VM_CC := clang
-VM_CFLAGS := $(VM_WARN) -O1 -g -fno-omit-frame-pointer -fsanitize=thread -fno-sanitize-recover=all -DAGC_NO_GC
+VM_CFLAGS := $(VM_WARN) -O1 -g -fno-omit-frame-pointer -fsanitize=thread -fno-sanitize-recover=all -DAGC_NO_GC -DAGC_TSAN
 VM_LDFLAGS := -fsanitize=thread $(VM_LIBS)
 GC_MODE := none
 VM_BUILD := build/vm/tsan
