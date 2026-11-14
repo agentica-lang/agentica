@@ -121,6 +121,17 @@ Invoke the `pr-reviewer` skill (via the Skill tool) and follow it to review GitH
   `build`, ...) are not names to require. Code PRs also need **Site
   examples** when the PR touches `site/content/`. Docs-only PRs
   skip `ci.yml` (an explicit docs-only exception) and do not wait for CI.
+- **Light path:** a PR that changes only portable `std/` modules (not
+  imported by `compiler/`, not the prelude, `std/test`, `std/bdd`,
+  `std/analysis`, `std/logger`, `std/actor` or `std/eag`), their
+  `tests/std/`, `tests/test_std_<name>.py` and `tests/fixtures/<name>/` files,
+  `tests/test_unit_test.py` and docs (`docs/`, `site/content/`, `.agents/`,
+  the root `*.md`), and no `stdlib/MODULES`, runs one fast shard: the test
+  modules and goldens that use the changed modules, the modules that check
+  every std module (`ALWAYS`) and `make dup-check` (`tools/ci_changes.py`; the
+  `changes` job prints the list or why the PR takes the full path). `test`
+  stays the required check. The reviewer runs those modules locally (`make
+  test TESTS="..."` with the `std_tests` line of the `changes` log).
 - **Platforms** (`platforms.yml`: Linux x86_64 and ARM64, Windows, macOS
   Intel and ARM) runs on a PR only with a label, and always on pushes to
   master. `platforms` runs all five systems: add it only when the PR changes

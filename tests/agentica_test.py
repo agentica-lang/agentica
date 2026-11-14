@@ -667,24 +667,66 @@ def check_lines(text, expected, message):
             assert line.startswith(want[1]), "%s: %r should start with %r" % (message, line, want[1])
 
 
-def _windows_process_alive(number):
+# Windows gives the id of an ended process to a new one within seconds, so a number read a moment ago may name a
+# process of another test module by now: a liveness check then answers for a stranger, and a kill ends it (#1098).
+# So each number is followed: _PINNED holds a handle to the process first seen under it (a held handle keeps the number
+# from being given out again), and _ENDED the time the number was first seen with no live process.
+_PINNED = {}
+_ENDED = {}
+_FOREIGN = object()
+
+
+def forget_processes():
+    """Forgets which process ids ended (conftest calls it before each test: a later process may get the number)."""
+    _ENDED.clear()
+
+
+def _windows_process(number, since):
+    """The pinned handle of process `number` while it lives and is the process the caller means, else None; _FOREIGN
+    for a process that cannot be opened (another user's). `since` is a time (seconds since the epoch, or a file whose
+    modification time counts) at which the caller knew the process existed: a process created later is another one,
+    and so is one created after the number was seen ended."""
     import ctypes
 
     kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
     kernel32.OpenProcess.restype = ctypes.c_void_p
     kernel32.OpenProcess.argtypes = [ctypes.c_uint32, ctypes.c_int, ctypes.c_uint32]
     kernel32.WaitForSingleObject.argtypes = [ctypes.c_void_p, ctypes.c_uint32]
+    kernel32.GetProcessTimes.argtypes = [ctypes.c_void_p] + [ctypes.POINTER(ctypes.c_uint64)] * 4
     kernel32.CloseHandle.argtypes = [ctypes.c_void_p]
-    # SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION. A process that ended but whose handle someone still holds can be
-    # opened, so the wait on its handle (signaled at the end), not the open, tells whether it is alive.
-    handle = kernel32.OpenProcess(0x00100000 | 0x1000, False, number)
+
+    def ended(handle):
+        # A process that ended but whose handle someone still holds can be opened, so the wait on its handle
+        # (signaled at the end), not the open, tells whether it is alive.
+        return kernel32.WaitForSingleObject(handle, 0) != 0x102  # WAIT_TIMEOUT
+
+    handle = _PINNED.get(number)
+    if handle and not ended(handle):
+        return handle
+    if handle:
+        kernel32.CloseHandle(_PINNED.pop(number))
+        _ENDED.setdefault(number, time.time())
+        return None
+    # PROCESS_TERMINATE | SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION
+    handle = kernel32.OpenProcess(0x0001 | 0x00100000 | 0x1000, False, number)
     if not handle:
-        # ERROR_ACCESS_DENIED (5): it exists and belongs to someone else, like the POSIX PermissionError branch.
-        return ctypes.get_last_error() == 5
-    try:
-        return kernel32.WaitForSingleObject(handle, 0) == 0x102  # WAIT_TIMEOUT
-    finally:
+        if ctypes.get_last_error() == 5:  # ERROR_ACCESS_DENIED
+            return _FOREIGN
+        _ENDED.setdefault(number, time.time())
+        return None
+    times = [ctypes.c_uint64() for _ in range(4)]
+    known = kernel32.GetProcessTimes(handle, *(ctypes.byref(part) for part in times))
+    # A FILETIME counts 100 ns from 1601; 11644473600 s later the epoch starts.
+    born = times[0].value / 1e7 - 11644473600
+    limits = [_ENDED[number]] if number in _ENDED else []
+    if since is not None:
+        limits.append(os.stat(since).st_mtime if isinstance(since, (str, os.PathLike)) else since)
+    if ended(handle) or not known or (limits and born > min(limits)):
         kernel32.CloseHandle(handle)
+        _ENDED.setdefault(number, time.time())
+        return None
+    _PINNED[number] = handle
+    return handle
 
 
 def _zombie(number):
@@ -750,14 +792,14 @@ def unreadable(path):
             msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, size)
 
 
-def process_alive(pid):
-    """True while the process exists and is not a zombie (Windows: until it ends)."""
+def process_alive(pid, since=None):
+    """True while the process exists and is not a zombie (Windows: until it ends; `since` as _windows_process says)."""
     try:
         number = int(pid)
     except ValueError:
         raise AssertionError("not a process id: %r" % (pid,)) from None
     if os.name == "nt":
-        return _windows_process_alive(number)
+        return bool(_windows_process(number, since))
     try:
         os.kill(number, 0)
     except ProcessLookupError:
@@ -777,12 +819,19 @@ def agc_literal(text):
     return '"' + "".join(escapes.get(c, c) for c in str(text)) + '"'
 
 
-def kill_process(pid):
-    """Last resort at the end of a test, so a failure leaves no process behind."""
-    if not process_alive(pid):
-        return
+def kill_process(pid, since=None):
+    """Last resort at the end of a test, so a failure leaves no process behind. On Windows the process is ended through
+    its pinned handle (exit code 1, as taskkill /F gives), never by its number."""
     if os.name == "nt":
-        subprocess.run(["taskkill", "/PID", str(pid), "/F"], capture_output=True, check=False)
+        import ctypes
+
+        handle = _windows_process(int(pid), since)
+        if handle and handle is not _FOREIGN:
+            kernel32 = ctypes.WinDLL("kernel32")
+            kernel32.TerminateProcess.argtypes = [ctypes.c_void_p, ctypes.c_uint32]
+            kernel32.TerminateProcess(handle, 1)
+        return
+    if not process_alive(pid):
         return
     try:
         os.kill(int(pid), signal.SIGKILL)
