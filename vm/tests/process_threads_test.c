@@ -343,6 +343,7 @@ static void test_the_loop_opens_the_stop_signals_again(void) {
   sigset_t all, saved, now;
   sigfillset(&all);
   pthread_sigmask(SIG_SETMASK, &all, &saved);
+  assert(!sigismember(&saved, SIGTERM) && !sigismember(&saved, SIGUSR1));
   (void)agc_io_poll(&vm, false);
   pthread_sigmask(SIG_SETMASK, &saved, &now);
   assert(!sigismember(&now, SIGTERM) && !sigismember(&now, SIGUSR1) && sigismember(&now, SIGCHLD));
