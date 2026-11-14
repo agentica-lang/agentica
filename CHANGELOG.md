@@ -21,6 +21,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Loops that call builtins such as `Map.get` or `String.slice` are up to 17% faster on Linux and macOS (#1599).
 - `std/cache`: dropping a generation and `Cache.clear` take the same short time whatever the size; a put that dropped 32,000 entries waited about 200 ms (#1108).
+- `ATS` tables are hash tables now: a single task writes about 5 times faster, tasks that write one table about 8 times faster, and `get` is O(1). `keys` and `to_map` copy the table, O(n), where they took a snapshot in O(1) (#1442).
 
 ### Fixed
 
