@@ -556,8 +556,53 @@ def check_all(session: Session, paths: List[String]) -> Int
     SymbolPaths.Expanded.Refused(problem) -> answered(session, Reply.Answer.Rejected(problem), "")
     SymbolPaths.Expanded.Files(roots) ->
       entries = roots.map do |root: SymbolPaths.Root| check_entry(session, root.typed) end
-      report(session, entries)
+      report(session, once_each(session, entries, roots))
   end
+end
+
+# A problem of an imported file comes back in the entry of every file that imports it. It is kept once: in the entry of
+# the file itself when that failed with it, else in the first importer; the other importers are skipped.
+def once_each(session: Session, entries: List[CliCheck.Entry], roots: List[SymbolPaths.Root]) -> List[CliCheck.Entry]
+  shown = Set.new(entries.map(&own_key))
+  kept: List[CliCheck.Entry] = []
+  for entry in entries
+    case entry
+      CliCheck.Entry.Failed(file, problem) if problem.file != file ->
+        imported = imported_name(session, problem, roots)
+        key = problem_key(imported, problem)
+        if shown.include?(key)
+          kept = kept.push(CliCheck.Entry.Skipped(file, imported))
+        else
+          shown = shown.add(key)
+          kept = kept.push(entry)
+        end
+
+      _ -> kept = kept.push(entry)
+    end
+  end
+
+  kept
+end
+
+# The key of the problem of an entry that failed in its own file, else "".
+def own_key(entry: CliCheck.Entry) -> String
+  case entry
+    CliCheck.Entry.Failed(file, problem) if problem.file == file -> problem_key(file, problem)
+    _ -> ""
+  end
+end
+
+def problem_key(file: String, problem: Problems.Problem) -> String
+  "#{file}:#{problem.key_path}:#{problem.code}:#{problem.span.start.offset}"
+end
+
+# The file of `problem` as typed when it is one of the roots, else as the problem names it.
+def imported_name(session: Session, problem: Problems.Problem, roots: List[SymbolPaths.Root]) -> String
+  for root in roots
+    return root.typed if Core.root?(problem.file, root.typed, session.settings)
+  end
+
+  problem.file
 end
 
 def check_entry(session: Session, file: String) -> CliCheck.Entry
@@ -590,6 +635,7 @@ end
 def show_entry(session: Session, entry: CliCheck.Entry) -> Void
   case entry
     CliCheck.Entry.Passed(_) -> return
+    CliCheck.Entry.Skipped(_, _) -> return
     CliCheck.Entry.Unreadable(file) -> IO.warn("agentica: cannot read #{file}")
     CliCheck.Entry.Failed(file, problem) ->
       text = render(session, problem, file)

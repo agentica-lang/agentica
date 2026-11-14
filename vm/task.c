@@ -547,11 +547,9 @@ static void resume(agc_vm *vm, agc_task *t) {
     agc_value result = agc_io_finish(vm, t);
     if (!t->retry) t->regs[t->park_reg] = result;
   } else if (t->timer.timed) {
-    /* Only a park that armed a timer pays for rt->sync here: the heap fields belong to the lock. A void call's
-       register is never read (CHECK-VOID-VALUE), so a sleep writes no result. */
-    agc_sync_take(vm);
+    /* Only a park that armed a timer pays for its heap's lock here. A void call's register is never read
+       (CHECK-VOID-VALUE), so a sleep writes no result. */
     agc_timers_disarm(vm, t);
-    agc_sync_drop(vm);
     t->timer.timed = false;
   }
   t->retry = false;
@@ -973,6 +971,7 @@ static agc_outcome run_threads(agc_vm *vm) {
   for (size_t k = 0; k < n; k++) {
     agc_vm *s = agc_alloc(sizeof(agc_vm));
     agc_vm_init_context(s, rt);
+    agc_timers_share(s);
     s->index = (uint32_t)k;
     s->runnext_on = true;
     agc_profile_start_cover(s);

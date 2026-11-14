@@ -1,7 +1,7 @@
 /*
  * The locks of the shared scheduler state (docs/vm/16-architecture.md §16.9, "One coarse lock"): `rt->sync`, the one lock
- * for the task tree, the waiter lists, the channels, the Task.map groups and the logger table, and the lock of each
- * output stream. All are solo until agc_share: while one thread runs the VM they take nothing but a flag
+ * for the task tree, the waiter lists, the Task.map groups and the logger table, the lock of each output stream and the
+ * locks of the channels. All are solo until agc_share: while one thread runs the VM they take nothing but a flag
  * test, which is what one scheduler costs. Core layer.
  *
  * It includes <uv.h> only for `uv_mutex_t`, as runq.c does (docs/vm/15-layers.md §15.5, rule 5).
@@ -19,14 +19,34 @@
 #include <sys/resource.h>
 #endif
 
-agc_lock *agc_lock_new(const char *name) {
-  agc_lock *l = agc_alloc(sizeof *l);
+static agc_lock *lock_init(agc_lock *l, uv_mutex_t *mutex, const char *name) {
   l->name = name;
-  uv_mutex_t *mutex = agc_alloc(sizeof *mutex);
   if (uv_mutex_init(mutex) != 0) agc_out_of_memory();
   l->mutex = mutex;
   l->solo = true;
   return l;
+}
+
+agc_lock *agc_lock_new(const char *name) { return lock_init(agc_alloc(sizeof(agc_lock)), agc_alloc(sizeof(uv_mutex_t)), name); }
+
+#define CACHE_LINE ((size_t)64)
+_Static_assert(sizeof(agc_lock) <= CACHE_LINE && sizeof(uv_mutex_t) <= CACHE_LINE, "a lock fits its cache lines");
+
+/* A lock that shares no cache line with another: every scheduler takes the channel locks, each on its own channels. */
+static agc_lock *lock_apart(const char *name) {
+  char *block = agc_alloc(4 * CACHE_LINE);
+  return lock_init((agc_lock *)(void *)(block + CACHE_LINE), (uv_mutex_t *)(void *)(block + 2 * CACHE_LINE), name);
+}
+
+static void share_channels(agc_runtime *rt) {
+  if (rt->channel_locks) return;
+  agc_lock **locks = agc_alloc(AGC_CHANNEL_LOCKS * sizeof *locks);
+  for (size_t k = 0; k < AGC_CHANNEL_LOCKS; k++) {
+    locks[k] = lock_apart("channel");
+    locks[k]->spin = rt->sync->spin;
+    agc_lock_share(locks[k]);
+  }
+  rt->channel_locks = locks;
 }
 
 /* From here on take and drop lock. Like agc_runq_share it runs before the second thread exists, so thread creation
@@ -143,6 +163,8 @@ void agc_share(agc_vm *vm) {
   agc_lock_share(rt->out.lock);
   agc_lock_share(rt->err.lock);
   agc_registry_share(vm);
+  share_channels(rt);
+  agc_timers_share(vm);
   rt->shared = true;
 }
 

@@ -1616,9 +1616,9 @@ static void ineligible(void) {
     assert(agc_jit_new(&f.program, AGC_JIT_ON, &quiet));
   }
   /* A builtin that may park (Channel.recv) counts AGC_JIT_PARK_WEIGHT trips out: a loop that calls it once stays out
-     below AGC_JIT_PARK_WEIGHT * AGC_JIT_SPACING instructions. A `shared` row that never parks (Channel.closed?)
+     below AGC_JIT_PARK_WEIGHT * AGC_JIT_SPACING instructions. A `shared` row that never parks (Channel.close)
      counts one, as any other call that leaves. */
-  const agc_builtin *shared_rows[2] = {table_row("Channel.recv"), table_row("Channel.closed?")};
+  const agc_builtin *shared_rows[2] = {table_row("Channel.recv"), table_row("Channel.close")};
   assert(shared_rows[0] && shared_rows[1] && shared_rows[1]->shared && !agc_jit_parks(shared_rows[1]));
   enum { PARKS = AGC_JIT_PARK_WEIGHT * AGC_JIT_SPACING };
   agc_instr parking[PARKS];

@@ -390,9 +390,10 @@ int agc_uv_clock_getres(clockid_t id, struct timespec *res);
 #endif
 
 /* Timers (vm/timers.c). A task that waits for a deadline marks itself PARKING (agc_task_parking), registers its other
- * waits, and calls agc_task_park_until; the deadline is an agc_clock_ms value. All of these run with rt->sync held,
- * except agc_timers_run and agc_timers_settle, which take it themselves, and agc_timers_next_due and
- * agc_timers_strong, which only read. */
+ * waits, and calls agc_task_park_until; the deadline is an agc_clock_ms value. Each takes the lock of the heap it
+ * changes; none needs rt->sync. */
+/* Makes the lock of this context's heap. Called once the VM is shared, before another thread uses the context. */
+void agc_timers_share(agc_vm *vm);
 void agc_task_park_until(agc_vm *vm, uint64_t deadline_ms, bool retry);
 /* The deadline of a wait of MS milliseconds that starts at NOW, an agc_clock_ms value. That clock is the time rounded
  * down to the millisecond, and a timer fires once the clock reaches its deadline, so NOW + MS could end the wait up to
