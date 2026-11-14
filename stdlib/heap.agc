@@ -39,7 +39,7 @@ end
 ## Takes the first value. Returns it with the rest of the heap, or an error when the heap is empty.
 def pop[T](heap: Heap[T]) -> Result[Popped[T]]
   case heap.root
-    Tree.Leaf -> error("heap is empty")
+    Tree.Leaf -> error("heap is empty", kind: "heap.empty")
     Tree.Node(top) ->
       rest = heap.with(root: merge(heap.before, top.left, top.right), size: heap.size - 1)
       ok(Popped(value: top.value, remaining: rest))
@@ -49,7 +49,7 @@ end
 ## Returns the first value without removing it, or an error when the heap is empty.
 def peek[T](heap: Heap[T]) -> Result[T]
   case heap.root
-    Tree.Leaf -> error("heap is empty")
+    Tree.Leaf -> error("heap is empty", kind: "heap.empty")
     Tree.Node(top) -> ok(top.value)
   end
 end

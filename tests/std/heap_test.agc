@@ -6,7 +6,7 @@ def main() -> Void
       h = Heap.new do |a: Int, b: Int| a < b end
       try Test.eq(Heap.size(h), 0)
       try Test.assert(Heap.empty?(h), "a new heap is empty")
-      try Test.eq(Heap.peek(h), error("heap is empty"))
+      try Test.eq(Heap.peek(h), error("heap is empty", kind: "heap.empty"))
       Test.error?(Heap.pop(h))
     end,
     Test.test("values leave in the order of before") do

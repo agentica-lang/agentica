@@ -104,6 +104,7 @@ The `std/` modules give these kinds. A `std/` function that passes on the error 
 | `std/regex` | `regex.syntax` (a pattern or a `replace` template), `argument` (`named` with no such group) |
 | `std/option_parser` | `option_parser.parse` (a mistake in the words), `option_parser.help` (`--help`), `argument` (a bad specification) |
 | `std/actor`, `std/supervisor` | `channel.timeout`, `channel.gone` (the actor has ended), `task.timeout` (`stop`) |
+| `std/heap` | `heap.empty` (`pop` and `peek` of an empty heap) |
 | `std/binary` | `binary.too_large` (a frame length over `max`), `number.range`, `argument` |
 | `std/uri`, `std/cookie` | `text.encoding`, `argument` |
 | `std/bdd` | `process.eof`, `process.timeout` (`read_line`), `process.failed`, `io.exists`, `json.decode`, `argument` |

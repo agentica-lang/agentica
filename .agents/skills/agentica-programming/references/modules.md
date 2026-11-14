@@ -185,9 +185,9 @@ cross-task operations, and the operations are O(n).
 
 ## Priority queue (`std/heap`)
 
-`Heap.new(before)` is an immutable heap of any `T`; `before: Fn[T, T, Bool]` is
-true when its first value comes out first (`a < b`: smallest first).
-`Heap.from(list, before)`, `push`, `pop`, `peek`, `size`, `empty?`, `to_a` (in
-pop order). `pop` gives `Popped(value, remaining)`; `pop` or `peek` on an empty
-heap is an error Result. `push` and `pop` are O(log n); equal values come out in
-no set order.
+`import Heap from "std/heap"`: `Heap.new(before)` is an immutable heap of any
+`T`; `before: Fn[T, T, Bool]` is true when its first value comes out first
+(`a < b`: smallest first). `Heap.from(list, before)`, `push`, `pop`, `peek`,
+`size`, `empty?`, `to_a` (in pop order). `pop` gives `Popped(value, remaining)`;
+`pop` or `peek` on an empty heap is an error of kind `heap.empty`. `push` and
+`pop` are O(log n); equal values come out in no set order.
