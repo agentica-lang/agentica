@@ -1262,8 +1262,8 @@ def test_every_system_builtin_with_no_effect_is_shared_state_or_reviewed():
     assert sorted(name for name in shared | set(PURE_SYSTEM_ROWS) if effects.get(name, "x") != "") == []
 
 
-# Builtins written in Agentica: one called twice, one under a `while` (an `other` node), one that takes a block, a Lazy
-# source and a Lazy terminal.
+# Builtins written in Agentica: one called twice, one under a `while`, one that takes a block, a Lazy source and a Lazy
+# terminal.
 PRELUDE_CALLS = """def total(xs: List[Int]) -> Int = xs.sum
 
 def pick(o: Optional[Int]) -> Int = o.unwrap_or(0)
@@ -1311,6 +1311,98 @@ def test_bodies_give_the_prelude_functions_their_calls_run(driver, project):
     assert functions["lines"]["impure"][0]["effect"] == "filesystem"
 
 
+# The nodes past the first subset: loops, collections, structs, variants, fields, function values, ranges, types,
+# constants and regexes.
+REST = """import Regex from "std/regex"
+
+LIMIT = 3
+
+struct Point
+  x: Int
+  y: Int
+end
+
+struct Handler
+  run: Fn[Int, Int]
+end
+
+enum Shape
+  Dot
+  Square(Int)
+end
+
+def loops(xs: List[Int]) -> Int
+  total = 0
+  for x in xs
+    next if x < 0
+    break if x > LIMIT
+    total += x
+  end
+  total
+end
+
+def values(p: Point, h: Handler) -> List[Int]
+  q = p.with(x: 1)
+  m = {"a": Point(x: q.x, y: 2).y}
+  f = &loops
+  g = ->(n: Int) { n + 1 }
+  _ = Shape.Square(2)
+  _ = 1..3
+  _ = /a+/i
+  [f.call([1]), g.call(m["a"]), h.run(3), Point.members.size, p.to_s.size, [1].map(&Int.abs)[0]]
+end
+"""
+
+
+def test_bodies_describe_the_rest_of_the_tree(driver, project):
+    write_files(project, {"rest.agc": REST})
+    answer, functions = bodies_of(driver, project, "rest.agc")
+    loop = functions["loops"]["body"][1]
+    assert (loop["kind"], loop["text"], type_text(loop["type"])) == ("for", "x", "Int")
+    assert [child["kind"] for child in loop["children"]] == ["local", "block"]
+    statements = loop["children"][1]["children"]
+    assert [branch["children"][1]["children"][0]["kind"] for branch in
+            (statements[0]["children"][0], statements[1]["children"][0])] == ["next", "break"]
+    assert statements[1]["children"][0]["children"][0]["children"][1]["kind"] == "constant"
+    body = functions["values"]["body"]
+    update, struct = body[0]["children"][0], body[1]["children"][0]["children"][0]["children"][1]["children"][0]
+    assert (update["kind"], [(n["kind"], n["text"]) for n in update["children"]]) == (
+        "with", [("local", "p"), ("named", "x")])
+    assert (struct["kind"], struct["target"], [n["text"] for n in struct["children"]]) == ("struct", "Point", ["x", "y"])
+    assert struct["children"][0]["children"][0]["kind"] == "field"
+    assert body[1]["children"][0]["kind"] == "map" and body[1]["children"][0]["children"][0]["kind"] == "entry"
+    assert (body[2]["children"][0]["kind"], body[2]["children"][0]["target"]) == ("function", "loops")
+    lam = body[3]["children"][0]
+    assert (lam["kind"], lam["text"], [(n["kind"], n["text"], type_text(n["type"])) for n in lam["children"][:1]]) == (
+        "lambda", "lambda", [("param", "n", "Int")])
+    variant, span, regex = (node["children"][0] for node in body[4:7])
+    assert (variant["kind"], variant["target"]) == ("variant", "Shape.Square")
+    assert (span["kind"], span["text"]) == ("range", "..")
+    assert (regex["kind"], regex["text"], regex["children"][0]["kind"]) == ("regex", "/a+/i", "call")
+    items = body[7]["children"][0]["children"]
+    assert [(n["kind"], n["text"]) for n in items[:3]] == [("invoke", "call"), ("invoke", "call"), ("invoke", "run")]
+    assert [(n["children"][0]["kind"], n["children"][0]["text"]) for n in items[3:5]] == [
+        ("method", "members"), ("method", "to_s")]
+    assert items[3]["children"][0]["children"][0]["kind"] == "type"
+    # A reference to a builtin runs a function of the prelude, which the answer lists.
+    reference = items[5]["children"][0]["children"][1]
+    assert (reference["kind"], reference["target"]) == ("function", "Int.abs")
+    assert reference["prelude"] in [function["linked"] for function in answer["prelude"]]
+
+
+def test_bodies_leave_no_node_undescribed(driver, project):
+    # Every function of std/http, which uses most of the language, and of the files above.
+    out, err = library(driver, project, "bodies", "std/http")
+    answer = json.loads(out)
+
+    def kinds(node):
+        return {node["kind"]} | {kind for child in node["children"] for kind in kinds(child)}
+
+    found = {kind for function in answer["functions"] + answer["prelude"] for node in function["body"]
+             for kind in kinds(node)}
+    assert err == "" and "other" not in found and {"while", "for", "lambda", "struct", "list", "field"} <= found
+
+
 def test_bodies_name_each_module_a_nested_import_reaches(driver, project):
     (project / "lib").mkdir()
     write_files(project, {
@@ -1325,7 +1417,7 @@ def test_bodies_name_each_module_a_nested_import_reaches(driver, project):
     assert files[target.split("::")[0] + "::"] == "lib/inner.agc"
 
 
-def test_bodies_resolve_calls_bindings_patterns_and_mark_what_they_do_not_cover(driver, project):
+def test_bodies_resolve_calls_bindings_and_patterns(driver, project):
     write_files(project, {"shapes.agc": BODIES})
     answer, functions = bodies_of(driver, project, "shapes.agc")
     assert [(function["name"], function["exported"]) for function in answer["functions"]] == [
@@ -1362,10 +1454,10 @@ def test_bodies_resolve_calls_bindings_patterns_and_mark_what_they_do_not_cover(
     optional = branches[2]["children"][0]["children"]
     assert [arm["children"][0]["target"] for arm in optional[1:]] == ["some", "none"]
     assert optional[0]["type"]["name"] == "Optional"
-    # A loop is past the first subset: it is `other`, with its place and no children.
+    # A loop: its condition, then its block.
     loop = functions["count"]["body"][0]
-    assert (loop["kind"], loop["text"], loop["children"], loop["range"]["start"]) == (
-        "other", "while", [], {"line": 40, "column": 3})
+    assert (loop["kind"], [child["kind"] for child in loop["children"]], loop["range"]["start"]) == (
+        "while", ["op", "block"], {"line": 40, "column": 3})
     # A guard is an `if` whose branch is [condition, block], as written out; the block is the statement before the
     # condition, so the two do not overlap.
     guard = functions["clamp"]["body"][0]
@@ -1373,9 +1465,9 @@ def test_bodies_resolve_calls_bindings_patterns_and_mark_what_they_do_not_cover(
     assert (guard["kind"], condition["kind"], block["kind"]) == ("if", "op", "block")
     assert (block["range"]["start"], block["range"]["end"], condition["range"]["start"]) == (
         {"line": 47, "column": 3}, {"line": 47, "column": 11}, {"line": 47, "column": 15})
-    # A lambda and a block are both `other`, told apart by their text.
-    others = [line.split()[2] for node in functions["bump"]["body"] for line in tree_text(node) if " other " in line]
-    assert others == ["text='lambda'", "text='block'"]
+    # A lambda and a block are both `lambda`, told apart by their text.
+    lambdas = [line.split()[2] for node in functions["bump"]["body"] for line in tree_text(node) if " lambda " in line]
+    assert lambdas == ["text='lambda'", "text='block'"]
 
 
 # The same def with its values given by `return` and as the last expressions (#1287).

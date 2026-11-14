@@ -156,12 +156,13 @@ def prelude_calls(checked: Checker.Checked, node: Ast.FunctionDecl) -> List[Stri
   names
 end
 
-# Whether `expr` is a node that the answer gives as a `call`, so that its `prelude` names what it runs.
+# Whether `expr` is a node that the answer gives as a `call` or a `function`, so that its `prelude` names what it runs.
 def call?(expr: Ast.Expr) -> Bool
   case expr
     Ast.Expr.Call(_) -> true
     Ast.Expr.MethodCall(_) -> true
     Ast.Expr.FieldAccess(_) -> true
+    Ast.Expr.FunctionRef(_) -> true
     _ -> false
   end
 end
@@ -393,7 +394,8 @@ def expression(checked: Checker.Checked, expr: Ast.Expr) -> Model.Node
       case checked.resolved.get(id)
         some(State.Resolved.Call(name, _)) ->
           call_leaf(checked, id, type, span, name).with(children: [expression(checked, node.target)])
-        _ -> leaf("field", type, span).with(text: node.name, children: [expression(checked, node.target)])
+        some(_) -> leaf("method", type, span).with(text: node.name, children: [expression(checked, node.target)])
+        none -> leaf("field", type, span).with(text: node.name, children: [expression(checked, node.target)])
       end
 
     Ast.Expr.Index(node) ->
@@ -445,7 +447,8 @@ def expression(checked: Checker.Checked, expr: Ast.Expr) -> Model.Node
         target: variant_target(node.enum_name, node.variant_name),
         children: arguments(checked, node.args).concat(named_nodes(checked, node.named)),
       )
-    Ast.Expr.FunctionRef(node) -> leaf("function", type, span).with(target: node.name)
+    Ast.Expr.FunctionRef(node) ->
+      leaf("function", type, span).with(target: node.name, prelude: prelude_of(checked, id))
     Ast.Expr.Invoke(node) ->
       leaf("invoke", type, span).with(text: "call", children: arguments(checked, [node.target].concat(node.args)))
     Ast.Expr.Construct(node) ->

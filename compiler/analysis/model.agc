@@ -325,9 +325,11 @@ end
 ##   the value its child). `with`: the struct, then its `named` nodes. `variant` (as a value): `target` as for a
 ##   pattern, then its arguments, and `named` nodes for named ones.
 ## - `field`: `text` the field, the child its struct. `method`: a method every type has that is not a builtin row
-##   (`to_s`, `inspect` of a struct), `text` its name, the receiver then the arguments.
-## - `function`: `&name`, `target` the function or builtin. `invoke`: a call of a function value (`f.call(x)`, `text`
-##   `call`) or of an Fn field (`h.run(x)`, `text` the field): the value, then the arguments.
+##   (`to_s`, `inspect` of a struct, `T.members`), `text` its name, the receiver then the arguments.
+## - `function`: `&name`, `target` the function or builtin; `prelude` as for a `call` (a builtin's reference is a
+##   prelude function that calls it). `invoke`: a call of a function value (`f.call(x)`, `text`
+##   `call`, the value then the arguments) or of an Fn field (`h.run(x)`, `text` the field, the struct then the
+##   arguments).
 ## - `lambda`: a block (`text` `block`) or a lambda (`text` `lambda`): one `param` node per parameter (`text` its
 ##   name, with its type), then a `block`.
 ## - `type`: a type as a value (`T.members`), `text` its name. `constant`: a read of a module constant, `text` its
