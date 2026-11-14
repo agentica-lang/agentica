@@ -8,6 +8,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- `r.error?` on a Result says that a Result has `ok?`, not to unwrap it (#1578).
+
 ## [0.32.0-alpha.1] - 2026-11-14
 
 ### Added

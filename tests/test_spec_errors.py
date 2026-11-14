@@ -3,7 +3,9 @@
 range covers, never the message. What the forms print is the VM golden tests/fixtures/vm/error-record.agc.
 """
 
-from tests.spec_support import Batch, assert_rule
+import pytest
+
+from tests.spec_support import Batch, assert_rule, check_diagnostic
 
 BATCH = Batch("main.agc")
 table = BATCH.table
@@ -139,3 +141,17 @@ REJECTED = [
 def test_an_error_payload_is_not_a_string(checked, body, code, text):
     program = HEAD % body
     assert_rule(checked(program), program, code, text)
+
+
+ERROR_PREDICATE = [
+    ("  r: Result[Void] = error(\"x\")\n  puts(r.error?)", "r.error?"),
+    ("  rs: List[Result[Void]] = []\n  puts(rs.select do |result| result.error? end)", "result.error?"),
+]
+
+
+@pytest.mark.parametrize("body, text", ERROR_PREDICATE)
+def test_error_predicate_help_is_about_a_result(body, text, tmp_path):
+    program = "def main() -> Void\n" + body + "\nend\n"
+    found = check_diagnostic(program, tmp_path)
+    assert_rule(found, program, "CHECK-UNKNOWN-METHOD", text)
+    assert "unwrap" not in found["help"]
