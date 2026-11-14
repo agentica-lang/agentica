@@ -426,13 +426,13 @@ one exit path are as in §16.1 to §16.6. What differs:
   never reads the clock. The scheduler fires its due timers at its turn boundary
   and when its run queue is empty (`agc_timers_run`), by waking the task like
   any waker. A deadline that the coarse clock shows ahead costs no clock read
-  (`clock_before`). Every change to a heap is made with `rt->sync` held, so any
-  scheduler can remove the entry at once: the task leaves the heap when it
-  resumes (`resume`) or is cancelled (`unlink_task`), under the lock the fire
-  takes, and a fire never wakes a task that has left the wait. When `rt->sync`
-  is split, a removal from a scheduler that is not the owner becomes lazy: the
-  CAS of an outcome decides, the owner drops the dead entry when it pops it, and
-  the heap is rebuilt when the dead entries are twice the live ones. A due timer
+  (`clock_before`), and a pending wait of a second or more starts at the coarse
+  clock plus its largest lag, so it reads none either and ends late by at most
+  that lag (two ticks and 2 ms). Every change to a heap is made with the heap's
+  own lock held (below, "Channel and timer locks"), so any scheduler can remove
+  the entry at once: the task leaves the heap when it resumes (`resume`) or is
+  cancelled (`unlink_task`), under the lock the fire takes, and a fire never
+  wakes a task that has left the wait. A due timer
   fires at the owner's next turn boundary or idle step, so it is late by at most
   the rest of the current turn and one poll of the loop. At N = 1 an idle
   scheduler runs the loop once, bounded by the nearest deadline
@@ -536,10 +536,11 @@ one exit path are as in §16.1 to §16.6. What differs:
   when it pops it. A PARKED task is claimed by a CAS from PARKED to READY
   (`agc_task_claim`), the same race as a waker's, and the winner ends it. The
   ending (`end_cancelled`) walks the task's lists with `rt->sync` held.
-- **One coarse lock, not per-channel locks.** `rt->sync` (`vm/sync.c`, an
-  `agc_lock`) covers the task tree (parent, children, waiters, awaiting), the
-  channels, the `Task.map` groups, the logger table, the stdin buffer, and the
-  FIFOs of the handles and of the jobs. Why one lock: the code that touches
+- **One coarse lock.** `rt->sync` (`vm/sync.c`, an `agc_lock`) covers the task
+  tree (parent, children, waiters, awaiting), the `Task.map` groups, the logger
+  table, the stdin buffer, and the FIFOs of the handles and of the jobs. The
+  channels and the timer heaps have their own locks ("Channel and timer
+  locks", below). Why one lock: the code that touches
   these structures calls into each other. A cancel ends a task, which wakes its
   awaiters, which ends a `Task.map` item, which cancels its siblings. Many small
   locks would need one fixed order across the whole task code and would still be
@@ -550,9 +551,7 @@ one exit path are as in §16.1 to §16.6. What differs:
   a close); at N > 1 those are requests to the I/O thread, and the lock is not
   held while the scheduler waits for one. A thread that finds it taken spins
   briefly (`SYNC_SPIN_NS`) before it sleeps on the mutex, since the sections are
-  short and many. It is cheap to split later, when a measurement shows the
-  contention (the `prints`, `ping-pong` and `files` benchmarks, with the locks
-  on). The pieces:
+  short and many. The pieces:
   - What takes the lock is marked per builtin: `agc_builtin.shared`, a flag in
     each row of the builtin tables, so a new row must say `true` or `false`.
     `call_builtin` (`vm/interp.c`) takes `rt->sync` around a row marked shared.
@@ -595,6 +594,30 @@ one exit path are as in §16.1 to §16.6. What differs:
     child needs no lock, since the I/O thread owns it (a direct send of a plain
     socket syncs with it by an atomic state of its own, §10.3.1). The owner of
     a stream's lock is the calling thread's context, not the stream's own `vm`.
+- **Channel and timer locks.** A message between two tasks took `rt->sync`
+  about ten times, and with 8 schedulers that was the ceiling (#1581), so the
+  two structures of that path have their own locks, also `agc_lock`s, solo
+  until `agc_share`:
+  - A channel's ring, counts, reservations, flags, waiter FIFOs and the
+    `channel` wait of each task queued on it change under the channel's lock:
+    one of 64 in the runtime, picked by the channel's address (`lock_of`,
+    `vm/channel.c`). A mutex per channel would need a finalizer, and a reply
+    channel is made per call. The rows `Channel.new`, `send`, `recv`,
+    `closed?`, `empty?` and `Address.send` are not `shared`. `Channel.close`,
+    `Channel.address` and `System.subscribe` are: the registry entry, the
+    address and the signal list stay under `rt->sync`.
+  - Each scheduler's timer heap and pending slot change under that heap's lock
+    (`vm/timers.c`). A fire holds it across the pop and the wake. A resume
+    takes the lock of the heap the task armed (`timer.home`), even when the
+    fire already took the entry out, so it never runs past a fire in progress.
+  - Order: `rt->sync`, then one channel lock or one heap lock, then the run
+    queue's. No path holds two channel locks, or a channel lock and a heap
+    lock. A waker holds the channel's lock across the wake, so the woken
+    task's retry comes after it. A waiter joins the FIFO under the lock, drops
+    it, and then parks on its timer; a wake in between finds it PARKING.
+  - Nothing raises under these locks (a wait refused inside a native callback
+    is raised after the drop), so `agc_sync_reset` has nothing to give back.
+    The mutators check the lock in a shared VM (`assert_locked`).
 - **GC threads.** Boehm's thread support, the helpers in `vm/value.c` and who
   registers are in §10.2.3, GC.
 - **The exit path runs on the I/O thread** (`agc_launch_end`, `vm/launch.c`).

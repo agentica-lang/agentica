@@ -71,6 +71,7 @@ typedef struct agc_test_run agc_test_run;
 typedef struct agc_registry agc_registry;
 typedef struct agc_runq agc_runq;
 typedef struct agc_lock agc_lock;
+#define AGC_CHANNEL_LOCKS 64
 typedef struct agc_loop agc_loop;
 typedef struct agc_io_job agc_io_job;
 typedef struct agc_cover agc_cover;
@@ -428,11 +429,13 @@ typedef struct {
   /* The cancel walks so far (cancel_tree), under rt->sync: the stamp of agc_task.held_walk. */
   uint64_t cancel_walks;
   _Atomic uint64_t tasks_done;
-  /* The one lock for the shared state of the tasks (agc_sync_take): the task tree, the waiter lists, the channels, the
-     Task.map groups and the logger table. `shared` is false until agc_share, and then the lock is real, and the
+  /* The one lock for the shared state of the tasks (agc_sync_take): the task tree, the waiter lists, the Task.map
+     groups and the logger table. `shared` is false until agc_share, and then the lock is real, and the
      interpreter takes it around each builtin whose row is marked `shared`. */
   agc_lock *sync;
   bool shared;
+  /* The locks of the channels, made by agc_share: a channel's is picked by its address (vm/channel.c). */
+  agc_lock **channel_locks;
   /* The scheduler threads (docs/vm/16-architecture.md §16.9, "Threads"): `schedulers` is N (1 runs the scheduler on the
      loop's thread, the default), `scheds` their contexts (GC memory, so the collector sees them) and `threads` their
      malloc'd ids, of which `started` are running. `over` is set by the first agc_run_over, or at one scheduler by
@@ -491,32 +494,34 @@ typedef enum { AGC_TURN_YIELD, AGC_TURN_PARKED, AGC_TURN_DONE } agc_turn_result;
 typedef enum { AGC_LOCK_TAKEN, AGC_LOCK_WAIT, AGC_LOCK_TIMEOUT } agc_lock_status;
 
 /* The timed wait of a task (docs/vm/16-architecture.md §16.9, "Timers"): the task is its own timer entry, so a deadline
-   needs no job, no registry slot and no libuv. `heap` is the heap that holds the entry (NULL when it is not armed),
-   `index` its place there, `seq` the order of arming that breaks a tie between equal deadlines. `timed` says that the
-   task's last park armed a timer; only the scheduler running the task touches it, so `resume` takes rt->sync to disarm
-   only when it is set (`heap` itself is read under the lock: the owner's fire clears it). `pending` says the entry is
-   the `pending` slot of `heap`, not in its heap: its clock has not started, and `deadline` holds the length of the wait
-   (agc_task_park_within). */
+   needs no job, no registry slot and no libuv. `home` is the heap of the task's last timed park, written only by the
+   thread that runs or ends the task: it names the lock of the other fields. Under that lock: `heap` is the heap that
+   holds the entry (NULL when it is not armed: a fire or a dropped pending wait clears it), `index` its place there,
+   `seq` the order of arming that breaks a tie between equal deadlines, and `pending` says the entry is the `pending`
+   slot of `heap`, not in its heap: its clock has not started, and `deadline` holds the length of the wait
+   (agc_task_park_within). `timed` says that the task's last park armed a timer; only the scheduler running the task
+   touches it, so `resume` disarms only when it is set. */
 typedef struct {
   uint64_t deadline, seq;
-  struct agc_timers *heap;
+  struct agc_timers *heap, *home;
   size_t index;
   bool timed, pending;
 } agc_timer;
 
 /* The armed timers of one scheduler: a binary min-heap of tasks ordered by (deadline, seq), in GC memory. Every change
-   to a heap is made with rt->sync held, by any scheduler (a cancel or a resume on another scheduler removes the entry
-   from the arming scheduler's heap); `next_due` is the earliest deadline (UINT64_MAX when empty), written under the
-   lock and read without it at the turn boundary of the owner. In a zeroed heap `next_due` is 0, a timer due at once:
-   every turn would then take rt->sync to find nothing, so every scheduler context is made by agc_vm_init, which sets
-   UINT64_MAX. `pending` is the one wait parked by agc_task_park_within whose clock has not started yet; it is changed
-   under the lock like the heap and read without it by the owner, at its turn boundary. */
+   to a heap is made with its `lock` held, by any scheduler (a cancel or a resume on another scheduler removes the
+   entry from the arming scheduler's heap); `next_due` is the earliest deadline (UINT64_MAX when empty), written under
+   the lock and read without it at the turn boundary of the owner. In a zeroed heap `next_due` is 0, a timer due at
+   once: every turn would then take the lock to find nothing, so every scheduler context is made by agc_vm_init, which
+   sets UINT64_MAX. `pending` is the one wait parked by agc_task_park_within whose clock has not started yet; it is
+   changed under the lock like the heap and read without it by the owner, at its turn boundary. */
 typedef struct agc_timers {
   struct agc_task **items;
   size_t count, cap;
   uint64_t seq;
   _Atomic uint64_t next_due;
   _Atomic(struct agc_task *) pending;
+  agc_lock *lock;
 } agc_timers;
 
 /* A Task.monitor registration on its task (`monitors`, changed under rt->sync). When the task settles, the runtime
@@ -780,7 +785,7 @@ static inline void agc_file_unlock(FILE *f) {
 }
 
 /* rt->sync, the one lock of the shared state of the tasks (docs/vm/16-architecture.md §16.9). It protects the task tree
-   (parent, children, waiters, awaiting), the waiter lists of channels, handles and stdin, the Task.map groups and the
+   (parent, children, waiters, awaiting), the waiter lists of handles and stdin, the Task.map groups and the
    logger table. The interpreter takes it around the builtins whose row is marked `shared` and the code that ends a task
    or hands a handle on takes it itself, so take it wherever such a list changes, and drop it before the builtin
    returns: never across a park or a turn. It is held across the libuv calls that those paths make inline at N = 1 (a job
