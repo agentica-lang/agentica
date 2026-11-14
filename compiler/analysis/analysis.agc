@@ -11,6 +11,7 @@ import Problems from "../diagnostics/problem"
 import Env from "../modules/link_env"
 import Linker from "../modules/linker"
 import TestFiles from "../modules/test_files"
+import Workspace from "../modules/workspace"
 import Outline from "../query/outline"
 import PartialAt from "../query/partial_at"
 import QueryFiles from "../query/query_files"
@@ -145,18 +146,29 @@ def native_modules(cache: Cache.Cache, settings: Env.Settings, path: String) -> 
   end
 end
 
-## The functions of the file at `path` (never a `std/` module) with their bodies as a typed tree, linked and checked
-## with what it imports and without requiring `main`: bodies.agc. Experimental. `cache` only saves work.
-def bodies(cache: Cache.Cache, settings: Env.Settings, path: String) -> Bodied
+## The functions of the file at `path` with their bodies as a typed tree, linked and checked with what it imports and
+## without requiring `main`: bodies.agc. A `std/` name that is not a buffer (`buffered`) is the module the provider of
+## the settings carries, checked as a std/ module. Experimental. `cache` only saves work.
+def bodies(cache: Cache.Cache, settings: Env.Settings, path: String, buffered: Bool) -> Bodied
   settings = for_query(settings, path)
-  case Front.read_root(settings.workspace, path)
+  root = path
+  if QueryFiles.embedded?(path, buffered)
+    root = QueryFiles.std_key(path)
+    settings = settings.with(workspace: std_root(settings, path, root))
+  end
+
+  case Front.read_root(settings.workspace, root)
     Front.Root.Unreadable(_) -> Bodied.Unreadable
     Front.Root.Invalid(problem) -> Bodied.Rejected(problem)
     Front.Root.Readable ->
-      case Front.query_cached(cache, path, settings)
+      case Front.query_cached(cache, root, settings)
         Front.Outcome.Rejected(problem) -> Bodied.Rejected(problem)
         Front.Outcome.Done(front) ->
-          name = QueryFiles.display(settings, path, true)
+          name = root
+          if root == path
+            name = QueryFiles.display(settings, path, true)
+          end
+
           modules = front.linked.modules.map do |module: Linker.LinkedModule|
             shown = name
             if module.file != front.linked.modules[0].file
@@ -391,6 +403,30 @@ def position_front(cache: Cache.Cache, settings: Env.Settings, asked: QueryPosit
         Front.Outcome.Done(front) -> Fronted.Done(front)
       end
   end
+end
+
+# The workspace of `settings` in which the std/ module `typed` is a root file whose key is `key` (`std/NAME.agc`): the
+# loader then reads it as it reads an import of it, and it may do what only std/ may. The folder `std` has no project.
+def std_root(settings: Env.Settings, typed: String, key: String) -> Workspace.Workspace
+  workspace = settings.workspace
+  workspace.with(
+    read_text: ->(path) { std_text(settings, typed, key, path) },
+    real_path: ->(path) { std_path(workspace.real_path, key, path) },
+    resolve_path: ->(path) { std_path(workspace.resolve_path, key, path) },
+    file_exists: ->(path) { !path.start_with?("std/") and workspace.file_exists.call(path) },
+  )
+end
+
+def std_text(settings: Env.Settings, typed: String, key: String, path: String) -> SourceFile.Read
+  return QueryFiles.read(settings, typed, false) if path == key
+
+  settings.workspace.read_text.call(path)
+end
+
+def std_path(resolve: Fn[String, Result[String]], key: String, path: String) -> Result[String]
+  return ok(key) if path == key
+
+  resolve.call(path)
 end
 
 def asked_front(cache: Cache.Cache, settings: Env.Settings, file: String, skipping: Bool) -> Front.Outcome

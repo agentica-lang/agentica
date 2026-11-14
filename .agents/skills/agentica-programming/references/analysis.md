@@ -79,7 +79,9 @@ Analysis.outline_json(found) -> JSON.Value     # also type_at_json, symbols_json
   loader compares with the module's tables. A block `range` covers its
   declarations only, and two blocks of one library are one.
 - `bodies` (experimental: the shape may change between releases with no
-  breaking mark) gives every function of a file with a body, private ones too:
+  breaking mark) gives every function of a file with a body, private ones too
+  (`std/binary` is that module as the binary carries it, named
+  `std/binary.agc`):
   `name`, `linked`, `generics`, typed `params` (with `default`, one node or
   none) and `result` (`TypeShape`: `kind`, `name`, `args`), and `body`, a list
   of `Node` (`kind`, `type`, `range`, `text`, `target`, `new`, `children`).
