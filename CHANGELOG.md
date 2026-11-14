@@ -8,10 +8,12 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.32.0-alpha.2] - 2026-11-14
+
 ### Changed
 
-- Channel messages between tasks scale with the schedulers: a send or a receive no longer takes the runtime's one lock (#1581).
-- A channel timeout of a second or more may end up to 10 ms late on Linux (22 ms on a 100 Hz kernel), since it reads no clock (#1581).
+- Channel messages between tasks scale with the schedulers: no more one runtime lock per send or receive (#1581).
+- A channel timeout of a second or more may end up to 10 ms late on Linux (#1581).
 
 ### Fixed
 
@@ -1579,7 +1581,8 @@ First release of Agentica, a statically typed language designed for AI agents.
 - `main` returns `Void`; maps preserve insertion order and support fallible
   lookups.
 
-[unreleased]: https://github.com/agentica-lang/agentica/compare/0.32.0-alpha.1...HEAD
+[unreleased]: https://github.com/agentica-lang/agentica/compare/0.32.0-alpha.2...HEAD
+[0.32.0-alpha.2]: https://github.com/agentica-lang/agentica/compare/0.32.0-alpha.1...0.32.0-alpha.2
 [0.32.0-alpha.1]: https://github.com/agentica-lang/agentica/compare/0.31.1...0.32.0-alpha.1
 [0.31.1]: https://github.com/agentica-lang/agentica/compare/0.31.0...0.31.1
 [0.31.0]: https://github.com/agentica-lang/agentica/compare/0.31.0-alpha.1...0.31.0
