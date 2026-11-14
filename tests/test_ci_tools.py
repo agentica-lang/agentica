@@ -98,17 +98,18 @@ def tree(tmp_path):
 
 def test_a_portable_std_module_with_its_tests_and_docs_takes_the_light_path(tree):
     out = changes.classify(["stdlib/port.agc", "tests/std/port_test.agc", "tests/fixtures/port/driver.agc",
-                            "CHANGELOG.md", "site/content/library/port.md", ""], tree)
+                            "CHANGELOG.md", "site/content/library/port.md", ".agents/skills/x/SKILL.md", ""], tree)
     assert out["std_only"] and not (out["c"] or out["cchecker"] or out["trace"])
-    assert out["std_tests"].split() == ["tests/test_frontend_modules.py", "tests/test_spec_user.py",
-                                        "tests/test_std_port.py", "tests/test_unit_test.py"]
-    assert out["std_fixtures"] == "uses-port"
+    tests = out["std_tests"].split()
+    assert set(tests) == set(changes.ALWAYS) | {"tests/test_spec_user.py", "tests/test_std_port.py"}
+    assert tests == sorted(tests) and out["std_fixtures"] == "uses-port"
 
 
 def test_the_front_end_std_modules_and_any_other_file_take_the_full_path(tree, capsys):
     for files in (["stdlib/dep.agc"], ["stdlib/front.agc"], ["stdlib/prelude/list.agc"], ["stdlib/MODULES"],
                   ["stdlib/port.agc", "compiler/app/main.agc"], ["stdlib/port.agc", "tests/test_vm_bits.py"],
-                  ["tests/std/front_test.agc"], ["docs/x.md"], ["stdlib/lone.agc"]):
+                  ["tests/std/front_test.agc"], ["docs/x.md"], ["stdlib/lone.agc"],
+                  ["stdlib/port.agc", "tests/README.md"], ["stdlib/port.agc", "site/layouts/page.html"]):
         out = changes.classify(files, tree)
         assert not out["std_only"] and out["std_tests"] == out["std_fixtures"] == "", files
     assert "tests/fixtures/orphan.agc uses std/lone" in capsys.readouterr().err
@@ -133,4 +134,5 @@ def test_the_std_modules_that_the_front_end_imports_are_not_portable():
     front = changes.front_end_std(changes.ROOT, modules)
     assert {"toml", "regex", "http", "uri", "binary", "archive", "bdd", "bdd/tags", "test/runner", "test/report",
             "analysis", "prelude/list"} <= front
-    assert {"cache", "cookie", "option_parser"}.isdisjoint(front)
+    assert {"logger", "utc", "actor", "eag", "html"} <= front
+    assert {"cache", "cookie", "option_parser", "supervisor"}.isdisjoint(front)

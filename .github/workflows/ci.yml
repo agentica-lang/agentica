@@ -165,7 +165,8 @@ jobs:
   # programs, put where the time is short. A VM runs on one scheduler per core unless the test pins a count, so on this
   # four-core runner `make test` runs the TCP, TLS, HTTP, process and BDD modules on four schedulers: the first step
   # fails if the runner gets fewer cores (then put `make test-multicore-modules` back here).
-  # On the light path (std_only) one shard runs the test modules and goldens of the changed std modules, fast and slow tier.
+  # On the light path (std_only) one shard runs the test modules and goldens of the changed std modules, fast and slow tier,
+  # and the copy-paste check of `checks`.
   tests-fast:
     name: fast tests (${{ matrix.shard }}/2)
     needs: [changes, build]
@@ -192,7 +193,7 @@ jobs:
       - name: make test
         if: needs.changes.outputs.std_only != 'true'
         run: make test JOBS=6 SHARD=${{ matrix.shard }}/2
-      - name: The test modules of the changed std modules, fast and slow tier, and the goldens that import them
+      - name: The test modules of the changed std modules, fast and slow tier, the goldens that import them, copy-paste
         if: needs.changes.outputs.std_only == 'true'
         env:
           STD_TESTS: ${{ needs.changes.outputs.std_tests }}
@@ -201,6 +202,7 @@ jobs:
           make test JOBS=6 TESTS="$STD_TESTS"
           make test-slow TESTS="$STD_TESTS"
           if [ -n "$STD_FIXTURES" ]; then make vm-golden-check FIXTURES="$STD_FIXTURES"; fi
+          make dup-check
       # The two static checks run even when a test failed, so one CI round reports both.
       - name: Every file of compiler/ checks, line width and style rules included (agentica check compiler)
         if: ${{ !cancelled() && matrix.shard == 2 }}

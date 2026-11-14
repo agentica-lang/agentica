@@ -23,8 +23,16 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 
-FRONT_END_STD = ("MODULES", "CORE", "agentica.toml", "prelude/", "test/", "bdd/", "bdd.agc", "analysis.agc")
-DOCS = ("docs/", "site/")
+# The VM, the front end or tools/release.py also know std/logger, std/actor and std/eag by name.
+FRONT_END_STD = ("MODULES", "CORE", "agentica.toml", "prelude/", "test/", "bdd/", "bdd.agc", "analysis.agc",
+                 "logger.agc", "actor.agc", "eag.agc")
+DOCS = ("docs/", "site/content/")
+# The modules that check every std module or its page; every light path runs them.
+ALWAYS = (
+    "tests/test_error_kinds.py", "tests/test_frontend_catalog.py", "tests/test_frontend_modules.py",
+    "tests/test_single_binary.py", "tests/test_site_examples.py", "tests/test_stdlib_docs.py",
+    "tests/test_stdlib_modules.py", "tests/test_style_line_width.py", "tests/test_unit_test.py",
+)
 C_PATHS = re.compile(
     r"vm/|tests/fixtures/native/|examples/ffi/[^/]*\.c$|Makefile$|mk/|\.gitmodules$|\.clang-tidy$"
     r"|\.github/workflows/ci\.yml$|\.github/actions/"
@@ -61,16 +69,17 @@ def tracked(root, *folders):
 
 def std_modules(root):
     """Every std module by name (`queue`, `bdd/tags`) and the std modules it imports."""
-    stdlib = root / "stdlib"
     return {
-        str(path.relative_to(stdlib).with_suffix("")): set(IMPORT.findall(read(path)))
-        for path in stdlib.rglob("*.agc")
+        str(rel.relative_to("stdlib").with_suffix("")): set(IMPORT.findall(read(root / rel)))
+        for rel in tracked(root, "stdlib")
+        if rel.suffix == ".agc"
     }
 
 
 def front_end_std(root, modules):
     """The std modules that the binary's front end carries compiled in."""
-    todo = [name for path in (root / "compiler").rglob("*.agc") for name in IMPORT.findall(read(path))]
+    sources = [root / rel for rel in tracked(root, "compiler") if rel.suffix == ".agc"]
+    todo = [name for path in sources for name in IMPORT.findall(read(path))]
     todo += [name for name in modules if (name + ".agc").startswith(FRONT_END_STD)]
     seen = set()
     while todo:
@@ -115,7 +124,7 @@ def users(name, root):
     uses = re.compile(r"std/" + re.escape(name) + r"(?![\w/])")
     py = sorted((root / "tests").glob("test_*.py"))
     tests, fixtures = set(), set()
-    for rel in tracked(root, "tests", "examples"):
+    for rel in tracked(root, "tests", "examples", "site/content"):
         path = root / rel
         if rel.parts[:2] in SELF_TESTED or rel.parts[:4] == FROZEN:
             continue
@@ -123,6 +132,8 @@ def users(name, root):
             continue
         if rel.parts[0] == "examples":
             tests.add("tests/test_examples.py")
+        elif rel.parts[0] == "site":
+            tests.add("tests/test_site_examples.py")
         elif len(rel.parts) == 2 and path.name.startswith("test_") and path.suffix == ".py":
             tests.add(str(rel))
         elif rel.parts[:3] == ("tests", "fixtures", "vm"):
@@ -145,13 +156,17 @@ def users(name, root):
     return tests, fixtures
 
 
+def is_docs(path):
+    return path.startswith(DOCS) or path.endswith(".md") and (path.startswith(".agents/") or "/" not in path)
+
+
 def light_path(files, root):
     """(std_tests, std_fixtures) when every file is a portable std module, its tests or docs; else FullPath."""
     modules = std_modules(root)
     portable = set(modules) - front_end_std(root, modules)
     changed = set()
     for path in files:
-        if path.startswith(DOCS) or path.endswith(".md") or path == "tests/test_unit_test.py":
+        if is_docs(path) or path == "tests/test_unit_test.py":
             continue
         name = module_of(path, portable)
         if name is None:
@@ -159,7 +174,7 @@ def light_path(files, root):
         changed.add(name)
     if not changed:
         raise FullPath("no portable std module changed")
-    tests, fixtures = {"tests/test_unit_test.py"}, set()
+    tests, fixtures = set(), set()
     for name in dependents(changed, modules):
         own = root / "tests" / f"test_std_{name}.py"
         if own.is_file():
@@ -167,9 +182,10 @@ def light_path(files, root):
         found = users(name, root)
         tests |= found[0]
         fixtures |= found[1]
+    tests -= set(ALWAYS)
     if len(tests) > MAX_TESTS:
         raise FullPath(f"{len(tests)} test modules use the changed std modules (more than {MAX_TESTS})")
-    return sorted(tests), sorted(fixtures)
+    return sorted(tests | set(ALWAYS)), sorted(fixtures)
 
 
 def classify(files, root=ROOT):
