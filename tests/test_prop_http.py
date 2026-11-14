@@ -255,7 +255,9 @@ def chunked(draw, body, extension=True):
 @st.composite
 def requests(draw):
     """A valid request with Connection: close, and the method, target, headers and body the app must see."""
-    method = draw(st.sampled_from(["GET", "POST", "PUT", "DELETE", "PATCH"]) | TOKENS.filter(lambda m: m != "CONNECT"))
+    # No HEAD: its answer has no body, so the echo would not show the request.
+    method = draw(st.sampled_from(["GET", "POST", "PUT", "DELETE", "PATCH"])
+                  | TOKENS.filter(lambda m: m not in ("CONNECT", "HEAD")))
     target = "/" + draw(st.text("abc/%?=&;:@!$'()*+,-._~", max_size=12))
     fields = draw(FIELDS)
     body = draw(st.binary(max_size=300))
@@ -353,10 +355,10 @@ def test_server_answers_a_damaged_request_with_responses_or_a_close(request_echo
     answer = send_pieces(request_echo, parts)
     replies = []
     while answer:
-        head, _, rest = answer.partition(b"\r\n\r\n")
-        assert head.startswith(b"HTTP/1.1 ") and rest is not None, (raw, answer[:200])
+        head, end, rest = answer.partition(b"\r\n\r\n")
+        assert head.startswith(b"HTTP/1.1 ") and end, (raw, answer[:200])
         length = re.search(rb"\r\nContent-Length: (\d+)\r", head + b"\r")
-        assert length, (raw, head)
+        assert length and len(rest) >= int(length[1]), (raw, answer[:200])
         replies.append((int(head[9:12]), head + b"\r\n", rest[:int(length[1])]))
         answer = rest[int(length[1]):]
     for status, head, _ in replies[:-1]:
