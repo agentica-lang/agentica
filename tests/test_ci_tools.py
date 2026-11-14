@@ -105,6 +105,12 @@ def test_a_portable_std_module_with_its_tests_and_docs_takes_the_light_path(tree
     assert tests == sorted(tests) and out["std_fixtures"] == "uses-port"
 
 
+def test_a_change_to_the_programming_skill_adds_the_skill_catalog(tree):
+    skill = ".agents/skills/agentica-programming/references/port.md"
+    assert "tests/test_skill_catalog.py" in changes.classify(["stdlib/port.agc", skill], tree)["std_tests"].split()
+    assert "tests/test_skill_catalog.py" not in changes.classify(["stdlib/port.agc"], tree)["std_tests"].split()
+
+
 def test_the_front_end_std_modules_and_any_other_file_take_the_full_path(tree, capsys):
     for files in (["stdlib/dep.agc"], ["stdlib/front.agc"], ["stdlib/prelude/list.agc"], ["stdlib/MODULES"],
                   ["stdlib/port.agc", "compiler/app/main.agc"], ["stdlib/port.agc", "tests/test_vm_bits.py"],

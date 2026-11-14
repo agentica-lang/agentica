@@ -28,6 +28,8 @@ FRONT_END_STD = ("MODULES", "CORE", "agentica.toml", "prelude/", "test/", "bdd/"
                  "logger.agc", "actor.agc", "eag.agc")
 DOCS = ("docs/", "site/content/")
 # The modules that check every std module or its page; every light path runs them.
+# tests/test_skill_catalog.py checks the builtin names this skill writes.
+PROGRAMMING_SKILL = ".agents/skills/agentica-programming/"
 ALWAYS = (
     "tests/test_error_kinds.py", "tests/test_frontend_catalog.py", "tests/test_frontend_modules.py",
     "tests/test_single_binary.py", "tests/test_site_examples.py", "tests/test_stdlib_docs.py",
@@ -185,6 +187,8 @@ def light_path(files, root):
     tests -= set(ALWAYS)
     if len(tests) > MAX_TESTS:
         raise FullPath(f"{len(tests)} test modules use the changed std modules (more than {MAX_TESTS})")
+    if any(path.startswith(PROGRAMMING_SKILL) for path in files):
+        tests.add("tests/test_skill_catalog.py")
     return sorted(tests | set(ALWAYS)), sorted(fixtures)
 
 
