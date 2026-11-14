@@ -94,10 +94,10 @@ end
 
 ## The inbox of the running actor, as Erlang's `self()`: `init`, a handler, `terminate` or a timeout can monitor a task
 ## into it (`Task.monitor`) or give out its `address`. Never receive from it. `M` comes from the expected type and is
-## not checked: it must be the actor's message type. Called outside an actor's task (also in a task the actor spawned),
-## it crashes the caller.
+## not checked: it must be the actor's message type, or a value sent through it crashes the actor's handler
+## (`RUNTIME-INTERNAL`). Called outside an actor's task (also in a task the actor spawned), it crashes the caller.
 def inbox[M]() -> Channel[M]
-  own: Optional[Channel[M]] = Task.inbox
+  own: Optional[Channel[M]] = ActorInbox.get
   own.to_result("actor: not in an actor").unwrap!
 end
 
@@ -144,7 +144,7 @@ end
 def run[S, M](setup: Setup[S, M]) -> Result[Void]
   behaviour = setup.behaviour
   inbox = setup.inbox
-  Task.set_inbox(inbox)
+  ActorInbox.set(inbox)
   state = behaviour.init.call()
   while true
     wait = waiting(behaviour.timeout, state)

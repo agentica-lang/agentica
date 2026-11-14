@@ -29,7 +29,7 @@ def check_collection_rule(cx: State.Cx, st: State.St, site: State.Site, rule: Mo
     Model.Rule.AtsNew -> check_ats_new(cx, st, site)
     Model.Rule.AtsCall -> check_ats_call(cx, st, site)
     Model.Rule.ChannelNew -> check_channel_new(cx, st, site)
-    Model.Rule.TaskInbox -> check_task_inbox(cx, st, site)
+    Model.Rule.ActorInbox -> check_actor_inbox(cx, st, site)
     Model.Rule.ChannelSend -> check_channel_send(cx, st, site, &Args.channel_argument)
     Model.Rule.AddressSend -> check_channel_send(cx, st, site, &Args.address_argument)
     Model.Rule.ChannelAddress -> check_channel_address(cx, st, site)
@@ -563,8 +563,8 @@ def check_channel_new(cx: State.Cx, st: State.St, site: State.Site) -> Result[St
   ok(State.Out(st: capacity.st, type: site.expected))
 end
 
-# Task.inbox: the expected Optional[Channel[T]], whose T the VM cannot check (std/actor keeps it right).
-def check_task_inbox(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
+# ActorInbox.get: the expected Optional[Channel[T]], whose T the VM cannot check (std/actor keeps it right).
+def check_actor_inbox(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
   expected = site.expected
   span = site.node.span
   if T.unknown?(expected)
@@ -573,9 +573,9 @@ def check_task_inbox(cx: State.Cx, st: State.St, site: State.Site) -> Result[Sta
         cx,
         st,
         "CHECK-EXPECTED-TYPE",
-        "Task.inbox needs an expected type",
+        "ActorInbox.get needs an expected type",
         span,
-        "annotate the variable, for example inbox: Optional[Channel[Msg]] = Task.inbox",
+        "annotate the variable, for example inbox: Optional[Channel[Msg]] = ActorInbox.get",
       ),
     )
   end

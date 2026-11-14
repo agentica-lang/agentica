@@ -606,7 +606,7 @@ struct agc_task {
   /* The Native.Mutex this task waits for (in its FIFO, or woken to take it), and the ones it holds, newest first
      (vm/mutex.c); under rt->sync. */
   struct agc_mutex *mutex_wait, *mutexes;
-  /* The inbox of the actor this task runs (Task.set_inbox, std/actor), a Channel; void in any other task. */
+  /* The inbox of the actor this task runs (ActorInbox.set, std/actor), a Channel; void in any other task. */
   agc_value inbox;
 };
 

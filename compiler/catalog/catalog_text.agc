@@ -213,6 +213,7 @@ end
 def rule_name(rule: Model.Rule) -> String
   case rule
     Model.Rule.Plain -> "Plain"
+    Model.Rule.ActorInbox -> "ActorInbox"
     Model.Rule.AddressSend -> "AddressSend"
     Model.Rule.AtsCall -> "AtsCall"
     Model.Rule.AtsNew -> "AtsNew"
@@ -288,7 +289,6 @@ def later_rule_name(rule: Model.Rule) -> String
     Model.Rule.Show -> "Show"
     Model.Rule.TaskAwait -> "TaskAwait"
     Model.Rule.TaskAwaitTimeout -> "TaskAwaitTimeout"
-    Model.Rule.TaskInbox -> "TaskInbox"
     Model.Rule.TaskMap -> "TaskMap"
     Model.Rule.TaskMonitor -> "TaskMonitor"
     Model.Rule.TaskSpawn -> "TaskSpawn"

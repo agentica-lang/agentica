@@ -9,6 +9,7 @@ analysis/partial.agc
 analysis/purity.agc
 analysis/session.agc
 catalog/builtin_model.agc
+catalog/builtins_actorinbox.agc
 catalog/builtins.agc
 catalog/builtins_address.agc
 catalog/builtins_ats.agc

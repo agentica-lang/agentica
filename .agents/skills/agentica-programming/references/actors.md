@@ -31,7 +31,7 @@ the `Ref`; there are no methods.
 - `inbox: Channel[Msg] = Actor.inbox` is the running actor's own inbox (as
   Erlang's `self()`), for `init` or a handler to `Task.monitor` into or to
   give out `inbox.address`. `M` is not checked: annotate the actor's message
-  type. Outside the actor's task (also in a task it spawned) it crashes
+  type (a wrong one crashes the handler with `RUNTIME-INTERNAL`). Outside the actor's task (also in a task it spawned) it crashes
   (`RUNTIME-UNWRAP-ERROR`).
 - `call` builds the message around a new reply channel and waits:
   `Actor.call(addr, 1000) do |reply| Msg.Get(reply) end`; the handler answers

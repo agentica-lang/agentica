@@ -8,6 +8,8 @@ ATS.put
 ATS.put_new
 ATS.size
 ATS.to_map
+ActorInbox.get
+ActorInbox.set
 Address.send
 Base64.decode64.bytes
 Base64.encode64.bytes
@@ -369,12 +371,10 @@ Task.await_result
 Task.cancel
 Task.current
 Task.id
-Task.inbox
 Task.map
 Task.monitor
 Task.monitor_ref
 Task.pending_count
-Task.set_inbox
 Task.sleep
 Task.spawn
 Task.spawn_owning

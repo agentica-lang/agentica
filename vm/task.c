@@ -404,6 +404,7 @@ static void finish_task(agc_vm *vm, agc_task *t) {
   t->frame_capacity = 0;
   t->nested = NULL;
   t->cursor = NULL;
+  t->inbox = agc_void();
   t->turn_cost = 0;
   /* A service task was counted as done when it was spawned (agc_task_spawn_in). */
   if (!t->group && !t->service) atomic_fetch_add_explicit(&vm->rt->tasks_done, 1, memory_order_relaxed);
@@ -1551,8 +1552,8 @@ const agc_builtin agc_task_builtins[] = {
   {"Task.current", 0, builtin_current, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"Task.id", 1, builtin_id, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"Task.monitor_ref", 3, builtin_monitor_ref, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
-  {"Task.set_inbox", 1, builtin_set_inbox, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
-  {"Task.inbox", 0, builtin_inbox, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"ActorInbox.set", 1, builtin_set_inbox, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"ActorInbox.get", 0, builtin_inbox, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
 };
 
 const size_t agc_task_builtin_count = sizeof agc_task_builtins / sizeof agc_task_builtins[0];
