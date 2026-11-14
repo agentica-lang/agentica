@@ -31,6 +31,7 @@ NAMES = [
     "maps",
     "ats",
     "ats-readers",
+    "ats-int-readers",
     "ats-writers",
     "sets",
     "calls",

@@ -254,20 +254,28 @@ static agc_value builtin_size(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_int(atomic_load_explicit(&table_arg(vm, args[0], span)->size, memory_order_relaxed));
 }
 
-/* A copy of the entries, the deleted ones among them, taken under the read lock; *n gets their count. The list or map
-   is built from the copy with the lock dropped, so a large table holds back a writer only for the copy. */
+/* A copy of the entries, the deleted ones among them, taken under the read lock; *n gets their count. The copy is
+   allocated with no lock held, since an allocation can start a collection and the lock also holds back the writers
+   of other tables: if the table grew past it meanwhile, a larger one is taken. The list or map is built from the copy
+   with the lock dropped, so a large table holds back a writer only for the copy. */
 static const entry *snapshot(agc_vm *vm, agc_value v, uint32_t span, size_t *n) {
   table *t = table_arg(vm, v, span);
   entry *copy = NULL;
-  agc_table_lock(vm->rt, t, false);
-  *n = t->used;
-  if (*n) {
-    copy = agc_alloc(agc_size_mul(*n, sizeof *copy));
-    memcpy(copy, t->entries, *n * sizeof *copy);
+  for (size_t room = 0;;) {
+    agc_table_lock(vm->rt, t, false);
+    size_t used = t->used;
+    if (used <= room) {
+      if (used) memcpy(copy, t->entries, used * sizeof *copy);
+      agc_table_unlock(vm->rt, t, false);
+      *n = used;
+      agc_charge(vm, used);
+      return copy;
+    }
+    agc_table_unlock(vm->rt, t, false);
+    room = used;
+    copy = agc_alloc(agc_size_mul(room, sizeof *copy));
+    agc_charge(vm, 1);
   }
-  agc_table_unlock(vm->rt, t, false);
-  agc_charge(vm, *n);
-  return copy;
 }
 
 static agc_value builtin_keys(agc_vm *vm, agc_value *args, uint32_t span) {

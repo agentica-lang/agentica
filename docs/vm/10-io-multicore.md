@@ -152,7 +152,11 @@ The multicore model (threads, queues and ownership) is in §16
   built so: a table is a hash table under a read-write lock, one of 64 picked
   by the table's address, so readers run together and a write is alone
   (`vm/ats.c`, `vm/sync.c`). A table call holds the lock for its own length,
-  raises nothing under it and does not yield.
+  raises nothing under it and does not yield. Two costs are known: writes to
+  one table do not run in parallel, and a read lock writes the lock's cache
+  line, so readers of one table with cheap keys do not scale (8 tasks, Int
+  keys, 8 schedulers: 2.1 s against 0.9 s for the lock-free trees this
+  replaced, and 2.4 s against 3.5 s on one scheduler; `benchmarks/programs/ats-int-readers.agc`).
 - **The Globals table** (module constants, the grammar's `Module constants`
   section) is the one place a loaded program is written (`agc_program.globals`).
   The loader lets only the entry function write it, in code with no backward
