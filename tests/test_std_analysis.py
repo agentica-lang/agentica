@@ -1239,7 +1239,7 @@ PURE_SYSTEM_ROWS = {
     "System.Profile.measure": "runs its block, which is walked; the profile is a trace",
     "System.signal_number": "a constant of the OS",
     "Task.id": "a field of the task value",
-    **{f"__lazy_{step}": "a step or terminal of a Lazy, whose terminal is function-value" for step in (
+    **{f"__lazy_{step}": "a step of a Lazy (a terminal is function-value)" for step in (
         "chunk_while", "count", "each", "find", "flat_map", "group", "list", "map", "produce", "range", "reduce",
         "test", "to_a", "with_index", "zlib")},
 }
@@ -1262,8 +1262,8 @@ def test_every_system_builtin_with_no_effect_is_shared_state_or_reviewed():
     assert sorted(name for name in shared | set(PURE_SYSTEM_ROWS) if effects.get(name, "x") != "") == []
 
 
-# Builtins written in Agentica: one called twice, one under a `while` (an `other` node), one that takes a block and a
-# Lazy source.
+# Builtins written in Agentica: one called twice, one under a `while` (an `other` node), one that takes a block, a Lazy
+# source and a Lazy terminal.
 PRELUDE_CALLS = """def total(xs: List[Int]) -> Int = xs.sum
 
 def pick(o: Optional[Int]) -> Int = o.unwrap_or(0)
@@ -1279,6 +1279,8 @@ def looped(xs: List[Int], n: Int) -> Int
 end
 
 def lines(path: String) -> Lazy[String] = File.foreach(path)
+
+def listed(xs: List[Int]) -> Result[List[Int]] = xs.lazy.to_a
 """
 
 
@@ -1291,7 +1293,8 @@ def test_bodies_give_the_prelude_functions_their_calls_run(driver, project):
     prelude = {function["linked"]: function for function in answer["prelude"]}
     # Each once, in the order first called; a call under `while` counts.
     assert list(prelude) == ["@prelude::list::sum_int", "@prelude::optional::unwrap_or",
-                             "@prelude::list::find_index", "@prelude::list::tally", "@prelude::lazy::from_file"]
+                             "@prelude::list::find_index", "@prelude::list::tally", "@prelude::lazy::from_file",
+                             "@prelude::lazy::to_a", "@prelude::lazy::from_list"]
     tally = prelude["@prelude::list::tally"]
     assert (tally["name"], tally["span"]["file"], tally["exported"]) == ("tally", "<prelude>/list.agc", False)
     source = (ROOT / "stdlib" / "prelude" / "list.agc").read_text(encoding="utf-8").splitlines()
@@ -1300,7 +1303,10 @@ def test_bodies_give_the_prelude_functions_their_calls_run(driver, project):
     # The prelude bodies are pure or not as any function: from_file reads a file, find_index calls its block.
     assert [(name, function["pure"]) for name, function in prelude.items()] == [
         ("@prelude::list::sum_int", True), ("@prelude::optional::unwrap_or", True),
-        ("@prelude::list::find_index", False), ("@prelude::list::tally", True), ("@prelude::lazy::from_file", False)]
+        ("@prelude::list::find_index", False), ("@prelude::list::tally", True), ("@prelude::lazy::from_file", False),
+        ("@prelude::lazy::to_a", False), ("@prelude::lazy::from_list", True)]
+    # A terminal pulls from its source, which may read a file: it is never pure.
+    assert [reason["effect"] for reason in prelude["@prelude::lazy::to_a"]["impure"]] == ["function-value"]
     assert [reason["effect"] for reason in prelude["@prelude::lazy::from_file"]["impure"]] == ["filesystem"]
     assert functions["lines"]["impure"][0]["effect"] == "filesystem"
 
