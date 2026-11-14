@@ -33,6 +33,8 @@ def main():
             print("put_new %s %s" % (key, "true" if fresh else "false"))
         elif name == "delete":
             table.pop(key, None)
+        elif name == "clear":
+            table.clear()
         elif name == "add":
             table[key] = table.get(key, 0) + value
             print("add %s %d" % (key, table[key]))

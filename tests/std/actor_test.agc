@@ -263,6 +263,49 @@ def test_a_monitor_sends_its_notice_into_the_inbox() -> Result[Void]
   Test.eq(Actor.stop(actor, 5000), ok())
 end
 
+def test_init_monitors_tasks_into_its_own_inbox() -> Result[Void]
+  behaviour: Actor.Behaviour[Int, Msg] = Actor.Behaviour(
+    init: -> { watch_workers(3) },
+    handle: ->(count, msg) { handle(probe(), count, msg) },
+  )
+  actor = Actor.start(behaviour)
+  try Test.eq(count_at_least(actor.address, 3), ok(3))
+  Test.eq(Actor.stop(actor, 5000), ok())
+end
+
+def watch_workers(n: Int) -> Int
+  inbox: Channel[Msg] = Actor.inbox
+  for _ in 1..n
+    worker = Task.spawn do 1 end
+    Task.monitor(worker, inbox) do |down| Msg.Down(down) end
+  end
+
+  0
+end
+
+def test_a_task_that_the_actor_spawns_has_no_inbox() -> Result[Void]
+  seen: ATS[Int, String] = ATS.new()
+  behaviour: Actor.Behaviour[Int, Msg] = Actor.Behaviour(
+    init: -> { inbox_in_a_child(seen) },
+    handle: ->(count, msg) { handle(probe(), count, msg) },
+  )
+  actor = Actor.start(behaviour)
+  try Test.eq(get(actor.address, 5000), ok(0))
+  child = seen.get(0).unwrap_or("")
+  try Test.assert(child.include?("task crashed: RUNTIME-UNWRAP-ERROR"), child)
+  Test.eq(Actor.stop(actor, 5000), ok())
+end
+
+def inbox_in_a_child(seen: ATS[Int, String]) -> Int
+  child: Task[Result[Bool]] = Task.spawn do
+    inbox: Channel[Msg] = Actor.inbox
+    ok(inbox.closed?)
+  end
+
+  seen.put(0, Task.await(child).to_s)
+  0
+end
+
 def test_an_actor_that_calls_itself_times_out_and_keeps_running() -> Result[Void]
   actor = counter(probe(), Actor.Options())
   try Actor.cast(actor.address, Msg.Add(1))

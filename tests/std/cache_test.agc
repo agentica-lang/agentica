@@ -12,6 +12,13 @@ struct Job
   now: ATS[Int, Int]
 end
 
+struct Gate
+  holder: Channel[Cache.Store]
+  to_owner: Channel[Int]
+  to_writer: Channel[Int]
+  done: Channel[Bool]
+end
+
 def value_of(key: String) -> String
   return "value of #{key}"
 end
@@ -46,9 +53,7 @@ def table_get(table: ATS[String, String], key: String) -> Optional[String]
 end
 
 def table_clear(table: ATS[String, String]) -> Void
-  for key in table.keys
-    table.delete(key)
-  end
+  table.clear
 end
 
 # A cache of our own over one table, with no limit: it shows that the helpers need only the struct.
@@ -102,22 +107,45 @@ def churn(job: Job) -> Int
   return wrong
 end
 
-# The clock of the takeover test: key 0 of `now` is the time. Once key 1 is set, the second read moves the time past
-# the two-second lease of a rotation and has another task put the keys young1 to young5. It depends on the order in
-# which the cache reads its clock: the first read is the claim of a rotation and the second its beat after 1024
-# deletes, so the rotation is taken over in its middle: the new owner publishes, and the young keys go into the
-# generation it published while the old owner is still emptying.
-def takeover_clock(now: ATS[Int, Int], holder: Channel[Cache.Store]) -> Int
-  if now.get(1).unwrap_or(0) == 1 and now.add(3, 1) == 2
-    now.put(2, 1)
+# The clock of the takeover test: key 0 of `now` is the time. Once key 1 is set, the fourth read moves the time past
+# the two-second lease of a rotation, tells the test, and waits, so the test can cancel the task there. It depends on
+# the order in which the cache reads its clock in a put that rotates: the lookup, the age of the generation, the claim
+# of the rotation and then the owner's read after it checked that it owns the rotation and before it empties the slot.
+def takeover_clock(now: ATS[Int, Int], gate: Gate) -> Int
+  if now.get(1).unwrap_or(0) == 1 and now.add(3, 1) == 4
+    now.put(1, 0)
     tick(now, 3_000)
-    cache = holder.recv(0).unwrap!
-    _ = holder.send(cache, 0)
-    Task.await(Task.spawn do
-      for i in 1..5
-        _ = Cache.put_new(cache, "young#{i}", "v")
+    _ = gate.to_owner.send(1, 0)
+    _ = gate.to_writer.recv(60_000)
+  end
+
+  return now.get(0).unwrap!
+end
+
+# The clock of the late owner test: key 0 of `now` is the time. Once key 1 is set, it counts the reads (key 3) of a
+# put that rotates. Read 4 is the owner's, as in takeover_clock: the time moves past the lease, a writer task starts,
+# and the owner waits. The writer takes the rotation over and publishes, and its read 9 is between the two writes of
+# its entry (the id, then the entry): it lets the owner go on and waits. The owner empties the slot, which now holds
+# the young generation, and its read 10, in its own insert, lets the writer store its entry.
+def late_clock(now: ATS[Int, Int], gate: Gate) -> Int
+  if now.get(1).unwrap_or(0) == 1
+    read = now.add(3, 1)
+    if read == 4
+      tick(now, 3_000)
+      cache = gate.holder.recv(0).unwrap!
+      _ = gate.holder.send(cache, 0)
+      _ = Task.spawn do
+        _ = gate.done.send(Cache.put_new(cache, "victim", "v"), 0)
       end
-    end)
+
+      _ = gate.to_owner.recv(5_000)
+    elsif read == 9
+      _ = gate.to_owner.send(1, 0)
+      _ = gate.to_writer.recv(5_000)
+    elsif read == 10
+      now.put(1, 0)
+      _ = gate.to_writer.send(1, 0)
+    end
   end
 
   return now.get(0).unwrap!
@@ -356,27 +384,50 @@ def main() -> Void
       end
       Test.eq(Cache.bytes(cache), 0)
     end,
-    Test.test("a rotation taken over in the middle leaves the entries of the new generation counted and removable") do
+    Test.test("a rotation whose owner was cancelled in the middle is taken over, with exact bytes") do
       now = clock()
-      holder: Channel[Cache.Store] = Channel.new(1)
-      # 1030 entries a generation, so the rotation that drops the first one beats before it is done.
-      options = Cache.Options(max_entries: 2_060, clock: some(-> { takeover_clock(now, holder) }))
+      gate = Gate(holder: Channel.new(1), to_owner: Channel.new(1), to_writer: Channel.new(1), done: Channel.new(1))
+      options = Cache.Options(max_entries: 4, ttl_ms: 1_000_000_000, clock: some(-> { takeover_clock(now, gate) }))
       cache = Cache.memory(10_000_000, options)
-      _ = holder.send(cache, 0)
-      for n in 0...3_090
+      for n in 0...6
         _ = Cache.put_new(cache, "k#{n}", "v")
       end
       now.put(1, 1)
-      _ = Cache.put_new(cache, "last", "v")
-      try Test.eq(now.get(2), ok(1))
-      for key in ["last", "young1", "young2", "young3", "young4", "young5"]
+      owner = Task.spawn do
+        _ = Cache.put_new(cache, "last", "v")
+      end
+
+      try Test.eq(gate.to_owner.recv(5_000), ok(1))
+      Task.cancel(owner)
+      for key in ["young1", "young2"]
+        try Test.eq(Cache.put_new(cache, key, "v"), true)
         try Test.eq(Cache.get(cache, key), some("v"))
         Cache.delete(cache, key)
       end
-      for n in 0...3_090
+      try Test.eq(Cache.get(cache, "last"), none)
+      for n in 0...6
         Cache.delete(cache, "k#{n}")
       end
       Test.eq(Cache.bytes(cache), 0)
+    end,
+    Test.test("an entry stored while a late owner empties its slot is taken out") do
+      now = clock()
+      gate = Gate(holder: Channel.new(1), to_owner: Channel.new(1), to_writer: Channel.new(1), done: Channel.new(1))
+      options = Cache.Options(max_entries: 4, ttl_ms: 1_000_000_000, clock: some(-> { late_clock(now, gate) }))
+      cache = Cache.memory(10_000_000, options)
+      _ = gate.holder.send(cache, 0)
+      for n in 0...6
+        _ = Cache.put_new(cache, "k#{n}", "v")
+      end
+      now.put(1, 1)
+      try Test.eq(Cache.put_new(cache, "last", "v"), true)
+      try Test.eq(gate.done.recv(5_000), ok(false))
+      try Test.eq(now.get(1), ok(0))
+      try Test.eq(Cache.get(cache, "victim"), none)
+      try Test.eq(Cache.get(cache, "last"), some("v"))
+      Cache.put(cache, "victim", "new")
+      Cache.delete(cache, "victim")
+      Test.eq(Cache.get(cache, "victim"), none)
     end,
     Test.test("many tasks on a small budget get right values and hold the budget") do
       cache = Cache.memory(20_000)

@@ -1,4 +1,5 @@
 ATS.add
+ATS.clear
 ATS.delete
 ATS.get
 ATS.has_key?
@@ -8,6 +9,8 @@ ATS.put
 ATS.put_new
 ATS.size
 ATS.to_map
+ActorInbox.get
+ActorInbox.set
 Address.send
 Base64.decode64.bytes
 Base64.encode64.bytes

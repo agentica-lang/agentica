@@ -185,6 +185,7 @@ The ring, the reservations and the FIFOs of waiters are
   an immutable `state` (two persistent AVL trees over the same entries, by key
   and by insertion number, plus the size); a writer builds the next state and
   installs it with a strong CAS, building again if another writer won.
+  `ATS.clear` stores the empty state, with no CAS.
 - No row is `shared`: a call takes neither `rt->sync` nor a lock. A failure
   happens before the CAS, so the table keeps its state. `vm/tests/ats_test.c`
   races threads on one table (in `VM_TSAN_TESTS`).

@@ -704,29 +704,18 @@ def run_child(
 end
 
 def step_line(index: Int, found: Match.Resolved, patterns: List[Match.Pattern], step: Gherkin.Step) -> String
-  has_doc = false
-  doc = ""
-  has_table = false
-  table: List[List[String]] = []
-  case step.argument
-    Gherkin.Argument.DocString(text) ->
-      has_doc = true
-      doc = text
-    Gherkin.Argument.DataTable(rows) ->
-      has_table = true
-      table = rows
-    Gherkin.Argument.NoArgument -> has_doc = false
-  end
   fields: Map[String, JSON.Value] = {
     "index": JSON.from(index),
     "definition": JSON.from(found.index),
     "pattern": JSON.from(patterns[found.index].text),
     "captures": JSON.from(found.captures),
-    "has_doc": JSON.from(has_doc),
-    "doc": JSON.from(doc),
-    "has_table": JSON.from(has_table),
-    "table": JSON.from(table),
   }
+
+  case step.argument
+    Gherkin.Argument.DocString(text) -> fields = fields.put("doc", JSON.from(text))
+    Gherkin.Argument.DataTable(rows) -> fields = fields.put("table", JSON.from(rows))
+    Gherkin.Argument.NoArgument -> nil
+  end
 
   JSON.encode(JSON.object(fields))
 end

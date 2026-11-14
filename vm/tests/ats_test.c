@@ -1,6 +1,6 @@
 /* ATS tables (vm/ats.c): order and snapshots with the AVL invariants of both trees, keys of mixed tags as forged
-   bytecode may pass them, an add that overflows and leaves the table unchanged, the run check, and threads that
-   update one table at once with exact totals (also under TSan). */
+   bytecode may pass them, an add that overflows and leaves the table unchanged, the run check, threads that update
+   one table at once with exact totals, and threads that write while one clears (both also under TSan). */
 #include "../core.h"
 #include "../services.h"
 #include "io_harness.h"
@@ -133,6 +133,27 @@ static void test_mixed_keys(void) {
   assert(size_of(t) == 4);
 }
 
+static void test_clear(void) {
+  agc_value t = call("ATS.new", 0, NULL);
+  for (int64_t k = 0; k < 100; k++) put(t, agc_int(k), k);
+  const agc_list *before = agc_as_list(&vm, call("ATS.keys", 1, &t));
+  (void)call("ATS.clear", 1, &t);
+  agc_value probe[2] = {t, agc_int(7)};
+  assert(size_of(t) == 0 && agc_ats_valid(&vm, t) && !agc_as_bool(&vm, call("ATS.has_key?", 2, probe)));
+  assert(agc_list_len(before) == 100);
+  (void)call("ATS.clear", 1, &t);
+  put(t, agc_int(7), 70);
+  put(t, agc_int(3), 30);
+  const agc_list *after = agc_as_list(&vm, call("ATS.keys", 1, &t));
+  assert(agc_list_len(after) == 2 && agc_as_int(&vm, agc_list_get(after, 0)) == 7 && get_int(t, agc_int(7)) == 70);
+  agc_runtime *mine = vm.rt;
+  agc_runtime other = *mine;
+  vm.rt = &other;
+  fails("ATS.clear", 1, &t, "RUNTIME-ATS-CONTEXT");
+  vm.rt = mine;
+  assert(size_of(t) == 2);
+}
+
 static void test_overflow_keeps_the_value(void) {
   agc_value t = call("ATS.new", 0, NULL);
   put(t, agc_test_str("max"), INT64_MAX);
@@ -181,7 +202,8 @@ static void worker(void *arg) {
   agc_gc_thread_leave();
 }
 
-static void test_threads(void) {
+/* Runs first on thread 0 and rest on the others, over a new shared table, and waits for them. */
+static void race(uv_thread_cb first, uv_thread_cb rest) {
   shared_table = call("ATS.new", 0, NULL);
   for (int k = 0; k < THREADS; k++) {
     workers[k] = vm;
@@ -189,9 +211,13 @@ static void test_threads(void) {
   }
   assert(uv_barrier_init(&gate, THREADS) == 0);
   uv_thread_t threads[THREADS];
-  for (intptr_t k = 0; k < THREADS; k++) assert(uv_thread_create(&threads[k], worker, (void *)k) == 0);
+  for (intptr_t k = 0; k < THREADS; k++) assert(uv_thread_create(&threads[k], k ? rest : first, (void *)k) == 0);
   for (int k = 0; k < THREADS; k++) assert(uv_thread_join(&threads[k]) == 0);
   uv_barrier_destroy(&gate);
+}
+
+static void test_threads(void) {
+  race(worker, worker);
   assert(get_int(shared_table, agc_test_str("counter")) == (int64_t)THREADS * ROUNDS);
   assert(size_of(shared_table) == 1 + THREADS * OWN_KEYS && agc_ats_valid(&vm, shared_table));
   char name[32];
@@ -202,6 +228,43 @@ static void test_threads(void) {
     }
 }
 
+static atomic_bool clearing_done;
+
+/* Clears the table while the other threads add to it. */
+static void clearer(void *arg) {
+  agc_vm *v = &workers[(intptr_t)arg];
+  assert(agc_gc_thread_enter());
+  uv_barrier_wait(&gate);
+  for (int r = 0; r < ROUNDS; r++) (void)call_on(v, "ATS.clear", 1, &shared_table);
+  atomic_store(&clearing_done, true);
+  agc_gc_thread_leave();
+}
+
+/* Adds 1 to its own key until the clears are over, then ROUNDS times more. A clear takes the key away whole, so each
+   add gives 1 or the last result plus 1, and the adds after the last clear all count. */
+static void clear_writer(void *arg) {
+  intptr_t k = (intptr_t)arg;
+  agc_vm *v = &workers[k];
+  assert(agc_gc_thread_enter());
+  uv_barrier_wait(&gate);
+  int64_t last = 0, after = 0;
+  while (after < ROUNDS) {
+    bool done = atomic_load(&clearing_done);
+    int64_t now = add_on(v, shared_table, agc_int(k), 1);
+    assert(now == 1 || now == last + 1);
+    last = now;
+    if (done) after++;
+  }
+  agc_gc_thread_leave();
+}
+
+static void test_clear_races_writers(void) {
+  atomic_store(&clearing_done, false);
+  race(clearer, clear_writer);
+  assert(size_of(shared_table) == THREADS - 1 && agc_ats_valid(&vm, shared_table));
+  for (int64_t k = 1; k < THREADS; k++) assert(get_int(shared_table, agc_int(k)) >= ROUNDS);
+}
+
 int main(void) {
   agc_test_deadline(120);
   agc_test_io_vm(&vm);
@@ -210,9 +273,11 @@ int main(void) {
   test_order();
   test_random_changes();
   test_mixed_keys();
+  test_clear();
   test_overflow_keeps_the_value();
   test_other_run();
   test_threads();
+  test_clear_races_writers();
   puts("ats tests passed");
   return 0;
 }

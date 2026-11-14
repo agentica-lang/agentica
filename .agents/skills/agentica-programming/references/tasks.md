@@ -345,6 +345,7 @@ ATS.put_new(table: ATS[K, V], key: K, value: V) -> Bool  # false: key present, n
 ATS.get(table: ATS[K, V], key: K) -> Result[V]
 ATS.has_key?(table: ATS[K, V], key: K) -> Bool
 ATS.delete(table: ATS[K, V], key: K) -> Void             # absent key ignored
+ATS.clear(table: ATS[K, V]) -> Void                      # every key, in O(1)
 ATS.add(table: ATS[K, Int], key: K, by: Int) -> Int       # absent counts as 0
 ATS.size(table: ATS[K, V]) -> Int
 ATS.keys(table: ATS[K, V]) -> List[K]                    # first-insertion order

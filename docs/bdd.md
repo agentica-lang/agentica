@@ -410,7 +410,8 @@ agentica test [PATH...] [--steps FILE]
 - **Direction:** runner to child
   - **Record:** `{"index":2,"definition":14,...}`
   - **Meaning:** Run step 2 with definition 14; a pattern mismatch is
-    `RUNTIME-BDD-INFRA`
+    `RUNTIME-BDD-INFRA`. The record has `doc` or `table` only when the step
+    has a Doc String or a Data Table (`JSON.Field` fields of the step line)
 
 - **Direction:** runner to child
   - **Record:** end of the channel (`Process.channel_close`)
