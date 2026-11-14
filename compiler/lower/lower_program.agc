@@ -40,11 +40,33 @@ end
 def build(decls: List[Ast.Decl], used: Set[String], type_names: List[String], targets: List[Types.Type]) -> Tables
   struct_decls: List[Ast.StructDecl] = []
   enum_decls: List[Ast.EnumDecl] = []
+  aliases: Map[String, Ast.TypeAliasDecl] = {}
   for decl in decls
     case decl
       Ast.Decl.Struct(node) -> struct_decls = struct_decls.push(node)
       Ast.Decl.Enum(node) -> enum_decls = enum_decls.push(node)
+      Ast.Decl.TypeAlias(node) -> aliases = aliases.put(node.name, node)
       _ -> struct_decls = struct_decls
+    end
+  end
+
+  if aliases.size > 0
+    struct_decls = struct_decls.map do |node: Ast.StructDecl|
+      params = Set.new(node.type_parameters)
+      node.with(
+        fields: node.fields.map do |field: Ast.FieldDecl| field.with(type: expanded(field.type, aliases, params)) end,
+      )
+    end
+
+    enum_decls = enum_decls.map do |node: Ast.EnumDecl|
+      params = Set.new(node.type_parameters)
+      node.with(
+        variants: node.variants.map do |variant: Ast.EnumVariant|
+          variant.with(
+            payload_types: variant.payload_types.map do |ref: Ast.TypeRef| expanded(ref, aliases, params) end,
+          )
+        end,
+      )
     end
   end
 
@@ -144,6 +166,29 @@ UNDECODABLE = Set.new(["Enum", "Channel", "Bytes", "Opaque"])
 struct Found
   table: Map[String, List[Types.Type]]
   instances: Map[String, Types.Type]
+end
+
+# The type with each alias replaced by the type it names, its parameters by the arguments written. A type parameter
+# in params is never an alias, and the checker has refused a cycle.
+def expanded(ref: Ast.TypeRef, aliases: Map[String, Ast.TypeAliasDecl], params: Set[String]) -> Ast.TypeRef
+  args = ref.args.map do |arg: Ast.TypeRef| expanded(arg, aliases, params) end
+  return ref.with(args: args) if params.include?(ref.name) or !aliases.has_key?(ref.name)
+
+  alias = aliases[ref.name]
+  return ref.with(args: args) if alias.type_parameters.size != args.size
+
+  bound: Map[String, Ast.TypeRef] = {}
+  for at in 0...args.size
+    bound = bound.put(alias.type_parameters[at], args[at])
+  end
+
+  substituted(expanded(alias.target, aliases, Set.new(alias.type_parameters)), bound)
+end
+
+def substituted(ref: Ast.TypeRef, bound: Map[String, Ast.TypeRef]) -> Ast.TypeRef
+  return bound[ref.name] if ref.args.size == 0 and bound.has_key?(ref.name)
+
+  ref.with(args: ref.args.map do |arg: Ast.TypeRef| substituted(arg, bound) end)
 end
 
 # The lookups over the finished tables.
