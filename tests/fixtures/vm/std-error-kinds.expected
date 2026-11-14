@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 8890,
+  "steps": 8909,
   "stdout": [
     "regex syntax: regex.syntax code=none regex=true",
     "regex template: regex.syntax code=none regex=true",
