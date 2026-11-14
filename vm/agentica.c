@@ -24,8 +24,8 @@ static const char name[] = "agentica";
 static const char run_name[] = "agentica run";
 
 static const char usage[] =
-  "usage: agentica run [--version] [--max-steps N] [--max-heap SIZE] [--seed N] [--flush-timeout MS] [--schedulers N] [--jit MODE] "
-  "[--deny-run] "
+  "usage: agentica run [--version] [--max-steps N] [--max-heap SIZE] [--seed N] [--flush-timeout MS] "
+  "[--schedulers N] [--jit MODE] [--deny-run] "
   "[--deny-net] [--deny-fs] [--deny-env] [--deny-native] [--sandbox] [--ai|--json] [--source-root DIR] "
   "[--coverage FILE] -- <file.agcb> [args...]\n"
   "  --source-root DIR is put before each stored source name that is relative and does not start with std/, in diagnostics and reports\n"
@@ -130,10 +130,10 @@ static void run_front_end(agc_launch *launch, const char *self, const char *repl
 
 /* The second run: the program that the front end handed over, with the options it passed on. It returns only to
  * report a start that failed. The options are those of `agentica run` (--ai, --json, the --deny-* flags, --sandbox,
- * --max-steps, --max-heap, --seed, --flush-timeout, --schedulers, --jit, --source-root, --coverage), each once. The front end is
- * trusted with them, but --driver-pid is not one: it names the process that started this one, which only that process
- * can say, so the front end cannot. The counts are capped by the hand-off (AGC_FRONT_END_MAX_OPTIONS and _ARGUMENTS),
- * so they fit an int. */
+ * --max-steps, --max-heap, --seed, --flush-timeout, --schedulers, --jit, --source-root, --coverage), each once. The
+ * front end is trusted with them, but --driver-pid is not one: it names the process that started this one, which only
+ * that process can say, so the front end cannot. The counts are capped by the hand-off (AGC_FRONT_END_MAX_OPTIONS and
+ * _ARGUMENTS), so they fit an int. */
 static int run_program(agc_launch *launch, const agc_front_end *fe) {
   agc_launch_options options;
   int at = 0;

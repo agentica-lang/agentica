@@ -23,8 +23,7 @@ typedef struct {
 
 #ifndef AGC_NO_GC
 /* yyjson's memory is malloc'd, outside the collector's heap, so under --max-heap it is counted here: each block
-   keeps its size in front, and a block that does not fit under the limit ends the run as the heap's own growth
-   does. */
+   keeps its size in front, and bytes that do not fit under the limit end the run as the heap's own growth does. */
 typedef union {
   size_t size;
   max_align_t align;
@@ -32,11 +31,15 @@ typedef union {
 
 static atomic_size_t counted_bytes; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 
+static void counted_take(size_t more) {
+  size_t held = atomic_fetch_add(&counted_bytes, more);
+  if (held > SIZE_MAX - more || !agc_heap_room(held + more)) agc_heap_limit_reached();
+}
+
 static void *counted_malloc(void *ctx, size_t size) {
   (void)ctx;
   if (size > SIZE_MAX - sizeof(counted)) return NULL;
-  size_t held = atomic_fetch_add(&counted_bytes, size);
-  if (held > SIZE_MAX - size || !agc_heap_room(held + size)) agc_heap_limit_reached();
+  counted_take(size);
   counted *block = malloc(sizeof *block + size);
   if (!block) {
     atomic_fetch_sub(&counted_bytes, size);
@@ -53,12 +56,22 @@ static void counted_free(void *ctx, void *ptr) {
   free(block);
 }
 
+/* Only the bytes a block grows by are taken, so it never needs room for its old and new size at once. */
 static void *counted_realloc(void *ctx, void *ptr, size_t old_size, size_t size) {
-  void *grown = counted_malloc(ctx, size);
-  if (!grown) return NULL;
-  memcpy(grown, ptr, old_size < size ? old_size : size);
-  counted_free(ctx, ptr);
-  return grown;
+  (void)ctx;
+  (void)old_size;
+  counted *block = (counted *)ptr - 1;
+  size_t had = block->size;
+  if (size > SIZE_MAX - sizeof(counted)) return NULL;
+  if (size > had) counted_take(size - had);
+  counted *moved = realloc(block, sizeof *moved + size);
+  if (!moved) {
+    if (size > had) atomic_fetch_sub(&counted_bytes, size - had);
+    return NULL;
+  }
+  if (size < had) atomic_fetch_sub(&counted_bytes, had - size);
+  moved->size = size;
+  return moved + 1;
 }
 #endif
 

@@ -142,16 +142,30 @@ _Noreturn void agc_heap_limit_reached(void) {
 
 size_t agc_heap_limit(void) { return heap_limit; }
 
-/* The heap's free part counts as room: a heap that is already at its limit still has it. */
-bool agc_heap_room(size_t outside) {
-  if (!heap_limit) return true;
+/* The bytes in use: without the collector, those handed out; with it, the heap less its free blocks, which still
+   counts the garbage that no collection has freed yet. */
+static size_t heap_in_use(void) {
 #ifdef AGC_NO_GC
-  size_t used = atomic_load(&heap_used);
+  return atomic_load(&heap_used);
 #else
   size_t heap = GC_get_heap_size(), unused = GC_get_free_bytes();
-  size_t used = heap > unused ? heap - unused : 0;
+  return heap > unused ? heap - unused : 0;
 #endif
+}
+
+static bool fits(size_t outside) {
+  size_t used = heap_in_use();
   return used < heap_limit && outside <= heap_limit - used;
+}
+
+/* Bytes that do not fit get one collection, as the heap's own growth does, since most of what is in use may be
+   garbage. On a thread the collector knows, outside its lock. */
+bool agc_heap_room(size_t outside) {
+  if (!heap_limit || fits(outside)) return true;
+#ifndef AGC_NO_GC
+  GC_gcollect();
+#endif
+  return fits(outside);
 }
 
 /* A limit under the heap the process already has is that heap: it cannot shrink, only stop growing. */
@@ -172,9 +186,11 @@ void agc_heap_limit_set(size_t bytes, bool json) {
 
 #ifndef AGC_NO_GC
 static void *on_gc_oom(size_t size) {
-  size_t heap = GC_get_heap_size();
-  if (heap_limit && (heap >= heap_limit || size >= heap_limit - heap || heap_limit - heap - size <= HEAP_LIMIT_SLACK))
-    agc_heap_limit_reached();
+  if (heap_limit) {
+    size_t heap = GC_get_heap_size();
+    if (heap >= heap_limit || size >= heap_limit - heap || heap_limit - heap - size <= HEAP_LIMIT_SLACK)
+      agc_heap_limit_reached();
+  }
   agc_out_of_memory();
   return NULL;
 }

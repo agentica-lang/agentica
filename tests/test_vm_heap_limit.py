@@ -47,17 +47,37 @@ def main() -> Void
 end
 """
 
-# An array of four million numbers in 8 MB of text: the parser's own memory is malloc'd, outside the collector.
-PARSES = """\
+# 400 rounds of 20,000 garbage strings and the parse of a 262 KB array. A few MB are live, the heap is full
+# of garbage whenever the parser asks for memory, and the parser's memory is malloc'd, outside the collector: the run
+# ends early unless that memory gets a collection before it is refused.
+ROUNDS = """\
 def main() -> Void
-  ones = "1,"
+  numbers = "1"
   k = 0
-  while k < 22
-    ones = ones + ones
+  while k < 17
+    numbers = numbers + "," + numbers
     k += 1
   end
 
-  puts(JSON.parse("[" + ones + "1]").ok?)
+  text = "[" + numbers + "]"
+  round = 0
+  parsed = 0
+  while round < 400
+    n = 0
+    total = 0
+    while n < 20000
+      total += "garbage string number #{n}".length
+      n += 1
+    end
+
+    if JSON.parse(text).ok? and total > 0
+      parsed += 1
+    end
+
+    round += 1
+  end
+
+  puts(parsed)
 end
 """
 
@@ -87,19 +107,18 @@ def test_garbage_does_not_count(tmp_path):
     assert (result.code, result.stdout, result.stderr) == (0, "142888890\n", ""), result
 
 
-def test_the_memory_of_a_json_parse_counts(tmp_path):
-    bytecode = compile_text(PARSES, "parses", tmp_path)
-    result = run_vm(bytecode, "--max-heap", "100M", timeout=scaled(120))
-    assert (result.code, result.stdout) == (70, "") and CODE in result.stderr, result
-    result = run_vm(bytecode, "--max-heap", "2G", timeout=scaled(120))
-    assert (result.code, result.stdout, result.stderr) == (0, "true\n", ""), result
-
-
 def test_a_limit_under_the_starting_heap_only_stops_its_growth(tmp_path):
     source = tmp_path / "small.agc"
     source.write_text('def main() -> Void\n  puts(JSON.parse("[1, 2]").ok?)\nend\n', encoding="utf-8")
     result = run([*cli(), "--max-heap", "8M", source], timeout=scaled(60))
     assert (result.code, result.stdout, result.stderr) == (0, "true\n", ""), result
+
+
+@pytest.mark.skipif(OTHER_BUILD, reason="needs the collector of the default build")
+@pytest.mark.parametrize("size", ["8M", "32M"])
+def test_garbage_does_not_count_against_a_json_parse(tmp_path, size):
+    result = run_vm(compile_text(ROUNDS, "rounds", tmp_path), "--max-heap", size, timeout=scaled(120))
+    assert (result.code, result.stdout, result.stderr) == (0, "400\n", ""), result
 
 
 @pytest.mark.parametrize("size", ["0", "x", "64MB", "-1", "1025G", "1.5G", ""])

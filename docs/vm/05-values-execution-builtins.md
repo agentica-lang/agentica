@@ -267,8 +267,9 @@ allocate. Three things to know:
   when the run starts from a source file, so a smaller limit only stops the
   heap from growing.
 - yyjson's memory is malloc'd, outside that heap. Under a limit `JSON.parse`
-  gives it a counting allocator (`vm/json.c`), and a block that does not fit
-  ends the run the same way. Other malloc'd buffers (I/O, zlib, TLS) are not
+  gives it a counting allocator (`vm/json.c`). Bytes that do not fit get one
+  collection first, since the heap may be full of garbage, and then end the
+  run the same way. Other malloc'd buffers (I/O, zlib, TLS) are not
   counted; their builtins take their own `max_bytes`.
 - A build without the collector (`AGC_NO_GC`: the sanitizers) frees nothing,
   so it counts the bytes it hands out from the start of the program.

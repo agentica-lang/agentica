@@ -569,7 +569,7 @@ _Noreturn void agc_out_of_memory(void);
    RUNTIME-HEAP-LIMIT (a JSON object when JSON is set) and status 70, as out of memory does. */
 void agc_heap_limit_set(size_t bytes, bool json);
 size_t agc_heap_limit(void);
-/* Whether OUTSIDE more bytes, held outside the collector's heap, still fit under the limit. */
+/* Whether OUTSIDE bytes, held outside the collector's heap, fit under the limit; it may collect to find out. */
 bool agc_heap_room(size_t outside);
 _Noreturn void agc_heap_limit_reached(void);
 unsigned agc_gc_version(void);
