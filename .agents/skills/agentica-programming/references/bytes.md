@@ -59,6 +59,5 @@ string.encode(encoding) -> Result[Bytes]
 - The `OpenSSL` family, `Base64`, `Zlib`, the `*_bytes` calls of `IO`,
   `File`, `TCP` and `Process`, and `std/binary` take and return `Bytes`. The
   `Native` array builtins use `List[Int]` or `List[Float]`, not bytes.
-- `List.tally` and `group_by` take `Int` or `String` keys only: use a
-  `Map[Bytes, _]`. `List.uniq` takes `Bytes`. `==` compares a `List[Bytes]`
-  item by item.
+- `List.uniq`, `tally` and `group_by` take `Bytes` items or keys. `==`
+  compares a `List[Bytes]` item by item.

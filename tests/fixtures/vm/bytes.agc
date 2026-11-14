@@ -59,6 +59,10 @@ def main() -> Void
   puts(items.size)
   puts(items.include?("b".bytes))
   puts(["a".bytes, "b".bytes, "a".bytes].uniq.size)
+  keys = ["a".bytes, "b".bytes, "a".bytes]
+  puts(keys.tally.size)
+  puts(keys.group_by { |key| key }.size)
+  puts((1..3).group_by { |n| n.to_s.bytes }.size)
 
   nested = [made]
   puts(nested.inspect)

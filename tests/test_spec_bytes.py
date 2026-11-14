@@ -57,9 +57,12 @@ CLEAN = [
         None,
         None,
     ),
-    # List.uniq takes Bytes, as Set.new does.
+    # List.uniq, tally and group_by take Bytes, as Set.new and a Map key do.
     (
-        MAIN + '  keys: List[Bytes] = ["a".bytes, "a".bytes].uniq\n  puts(keys.size)\nend\n',
+        MAIN + '  keys: List[Bytes] = ["a".bytes, "a".bytes].uniq\n  puts(keys.size)\n'
+        '  counts: Map[Bytes, Int] = keys.tally\n'
+        '  groups: Map[Bytes, List[Bytes]] = keys.group_by do |key| key end\n'
+        '  puts(counts.size + groups.size)\nend\n',
         None,
         None,
     ),
