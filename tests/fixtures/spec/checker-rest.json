@@ -10909,7 +10909,7 @@
         1
       ],
       "covers": "struct Lazy\n  a: Int\nend\n",
-      "help": false
+      "help": true
     },
     {
       "program": [
