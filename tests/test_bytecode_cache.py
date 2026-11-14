@@ -415,6 +415,46 @@ def test_another_path_hits_unless_it_finds_another_c_compiler(src, tmp_path):
     assert stamp(entry) != kept
 
 
+def executable(path, text="#!/bin/sh\n"):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+    path.chmod(0o755)
+
+
+@host_only(WINDOWS, "the stand-in compilers are shell scripts")
+def test_a_wrapper_like_ccache_misses_when_the_compiler_after_it_changes(src, tmp_path):
+    """`cc` in a ccache-like folder is a link to the wrapper, which runs the next `cc` of PATH: the key holds that
+    one too, so a PATH that puts another compiler after the wrapper misses."""
+    executable(tmp_path / "ccache")
+    (tmp_path / "wrap").mkdir()
+    (tmp_path / "wrap" / "cc").symlink_to(tmp_path / "ccache")
+    executable(tmp_path / "first" / "cc")
+    executable(tmp_path / "second" / "cc")
+    agentica(src, "main.agc", CC=None, PATH=f"{tmp_path / 'wrap'}{os.pathsep}{tmp_path / 'first'}")
+    entry = only_entry(src / "_build" / "bytecode")
+    kept = stamp(entry)
+    hit = agentica(src, "main.agc", CC=None, PATH=f"{tmp_path / 'wrap'}{os.pathsep}{tmp_path / 'first'}")
+    assert (hit.code, stamp(entry)) == (0, kept), hit.stderr
+    miss = agentica(src, "main.agc", CC=None, PATH=f"{tmp_path / 'wrap'}{os.pathsep}{tmp_path / 'second'}")
+    assert (miss.code, miss.stdout) == (0, "one\n"), miss.stderr
+    assert stamp(entry) != kept
+
+
+@host_only(WINDOWS, "an empty PATH entry and the default search are those of POSIX")
+def test_an_unset_path_keys_the_default_search_and_an_empty_entry_the_package_folder(src):
+    """With PATH unset the build searches the libc default, so the key is that of PATH set to it; an empty entry is the
+    folder of the package, whose `cc` the key cannot see, so adding one misses."""
+    default = "/usr/bin:/bin:/usr/sbin:/sbin" if os.uname().sysname == "Darwin" else "/bin:/usr/bin"
+    agentica(src, "main.agc", CC=None, PATH=default)
+    entry = only_entry(src / "_build" / "bytecode")
+    kept = stamp(entry)
+    unset = agentica(src, "main.agc", CC=None, PATH=None)
+    assert (unset.code, stamp(entry)) == (0, kept), unset.stderr
+    empty = agentica(src, "main.agc", CC=None, PATH=":" + default)
+    assert (empty.code, empty.stdout) == (0, "one\n"), empty.stderr
+    assert stamp(entry) != kept
+
+
 def test_the_entries_of_a_project_go_to_its_root_and_a_manifest_that_appears_in_a_parent_folder_misses(src):
     inner = src / "inner"
     inner.mkdir()
