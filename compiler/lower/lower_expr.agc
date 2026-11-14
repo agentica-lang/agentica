@@ -9,6 +9,8 @@ import Model from "../catalog/builtin_model"
 import Builtins from "../catalog/builtins"
 import State from "../check/check_state"
 import Defaults from "../check/defaults"
+import Formats from "../check/check_format"
+import Spec from "../check/format_spec"
 import Ast from "../syntax/ast"
 import AstWalk from "../syntax/ast_walk"
 import Names from "../syntax/prelude_name"
@@ -123,6 +125,13 @@ def lower_call(
       if written.named.size > 0 and written.name != "error"
         return error(Lowering.internal(cx, "lower: a call with named arguments has no slots", written.span))
       end
+  end
+
+  if node.name == "format"
+    out = try lower_format(cx, fx, node, want)
+    return ok(out.with(fx: Lowering.emit_at(out.fx, "return", [out.slot], node.span))) if tail
+
+    return ok(out)
   end
 
   span = node.span
@@ -327,6 +336,108 @@ def lower_optional(
   return ok(out.with(fx: Lowering.emit_at(out.fx, "return", [out.slot], node.span))) if tail
 
   ok(out)
+end
+
+# format(...): its text parts and one conversion per argument, joined with `concat` as an interpolation is. A %s or
+# %d with no width and no flag is the text of the value; any other conversion is a call of a Format builtin.
+def lower_format(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Call, want: Int) -> Result[Lowering.Out]
+  span = node.span
+  fx = Lowering.step(fx, span)
+  saved = fx.next
+  made = Lowering.target(fx, want)
+  fx = made.fx
+  dst = made.slot
+  pieces = Formats.pieces_of(node)
+  arg = 1
+  index = 0
+  while index < pieces.size
+    slot = dst
+    if index > 0
+      fx = Lowering.alloc(fx)
+      slot = fx.next - 1
+    end
+
+    case pieces[index]
+      Spec.Piece.Text(text) -> fx = Lowering.emit_const(fx, slot, Ir.Imm.Text(text), span)
+      Spec.Piece.Convert(conversion) ->
+        fx = try lower_conversion(cx, fx, conversion, node.args[arg], slot)
+        arg += 1
+    end
+
+    if index > 0
+      fx = Lowering.emit_at(fx, "concat", [dst, dst, slot], span)
+      fx = fx.with(next: slot)
+    end
+
+    index += 1
+  end
+
+  ok(Lowering.Out(fx: Lowering.release(fx, saved, want, dst), slot: dst))
+end
+
+# One conversion of format into slot: the value of the argument in a new register, then its text, or the call of
+# Format.int, Format.float or Format.text with the numbers of the conversion after it (the precision of a %f, the
+# width, and the flags: 1 for `-`, 2 for `0`, 4 for hex).
+def lower_conversion(
+  cx: Lowering.Cx,
+  fx: Lowering.Fx,
+  conversion: Spec.Conversion,
+  arg: Ast.Expr,
+  slot: Int,
+) -> Result[Lowering.Fx]
+  span = Ast.expr_span(arg)
+  saved = fx.next
+  fx = Lowering.alloc(fx)
+  base = fx.next - 1
+  out = try lower_expression(cx, fx, arg, base, false, false)
+  fx = out.fx
+  kind = conversion.kind
+  if kind == "s" or Spec.bare?(conversion)
+    fx = try text_of(fx, Lowering.static_type(cx, arg), base, span)
+  end
+
+  if !Spec.bare?(conversion) and !(kind == "s" and conversion.width == 0)
+    flags = 0
+    if conversion.left
+      flags += 1
+    end
+
+    if conversion.zero
+      flags += 2
+    end
+
+    numbers = [conversion.width, flags]
+    key = "Format.text"
+    if kind == "f"
+      key = "Format.float"
+      precision = conversion.precision
+      if precision < 0
+        precision = 6
+      end
+
+      numbers = [precision, conversion.width, flags]
+    elsif kind == "d" or kind == "x"
+      key = "Format.int"
+      if kind == "x"
+        numbers = [conversion.width, flags + 4]
+      end
+    end
+
+    spans = [span, span]
+    for number in numbers
+      fx = Lowering.alloc(fx)
+      fx = Lowering.emit_const(fx, fx.next - 1, Ir.Imm.Int(number), span)
+      spans = spans.push(span)
+    end
+
+    fx = Lowering.emit_builtin(fx, base, key, numbers.size + 1, spans)
+  end
+
+  if base != slot
+    fx = Lowering.emit_at(fx, "move", [slot, base], span)
+  end
+
+  ok(fx.with(next: saved))
 end
 
 # The value of a lower_codec call, in a new register: a method of a codec, whose receiver is the first argument.

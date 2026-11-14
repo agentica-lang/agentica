@@ -153,8 +153,10 @@ in a PR that rewrites the goldens.
   1)`, not the linker's `@2::` identity, and a builtin type that a std module
   re-exports prints with its written name (`HTTP.Response(...)`, not
   `HttpWire.Response(...)`; `written_names` in `vm/text.c`). A record or enum
-  of a std module prints with the alias the program imports the module with
-  (`HTTP.Download(...)`; the bytecode writer stores that name). A field-less
+  of a std module prints with the first alias a file of the project imports
+  the module with: the root first, then the other files, each in written order;
+  the files of packages and of std do not count (`HTTP.Download(...)`; the
+  bytecode writer stores that name). A field-less
   struct prints `Name()`; a nullary variant prints `Enum.Variant`, even when
   written `Enum.Variant()`. The VM never looks a type up by its display name.
 - JSON text sorts object keys, uses short escapes (`\n`) and lowercase `\u007f`

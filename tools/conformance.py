@@ -84,7 +84,7 @@ _NEEDS_POSIX = frozenset({
     "tests/test_vm_os.py", "tests/test_vm_stdout.py", "tests/test_vm_stop.py", "tests/test_vm_lazy_io.py",
     "tests/test_vm_multicore.py", "tests/test_bytecode_cache.py", "tests/test_check_cache.py",
     "tests/test_cli_coverage.py", "tests/test_vm_native.py", "tests/test_vm_http_proxy.py", "tests/test_vm_crypto.py",
-    "tests/test_vm_dns.py", "tests/test_error_kinds.py", "tests/test_vm_signals.py",
+    "tests/test_vm_dns.py", "tests/test_error_kinds.py", "tests/test_vm_signals.py", "tests/test_examples.py",
 })
 _NEEDS_LINUX = frozenset({
     "tests/test_vm_diff_8.py", "tests/test_single_binary.py", "tests/test_vm_file_open_block.py", "tests/test_vm_native.py",
@@ -128,6 +128,7 @@ AREAS = {
             "tests/test_spec_private_fields.py",
             "tests/test_spec_regex_literal.py",
             "tests/test_spec_eag.py", "tests/test_spec_implicit_return.py", "tests/test_spec_lambdas.py",
+            "tests/test_spec_format.py",
             "tests/test_spec_block_inference.py", "tests/test_spec_block_chain.py", "tests/test_spec_pipe_methods.py",
             "tests/test_spec_package_add.py", "tests/test_spec_package_fetch.py",
             "tests/test_spec_package_native_artifact.py", "tests/test_spec_package_subdir.py",
@@ -139,7 +140,7 @@ AREAS = {
             "tests/test_spec_patterns.py", "tests/test_spec_extern.py", "tests/test_spec_generic_structs.py",
             "tests/test_spec_errors.py", "tests/test_spec_package_agentica.py",
             "tests/test_spec_generics.py", "tests/test_spec_bytes.py", "tests/test_spec_optional.py",
-            "tests/test_spec_json_enum.py", "tests/test_spec_json_lists.py",
+            "tests/test_spec_json_enum.py", "tests/test_spec_json_lists.py", "tests/test_spec_json_node.py",
             "tests/test_spec_equality.py", "tests/test_spec_string_repeat.py",
             "tests/test_spec_string_distance.py",
         ],

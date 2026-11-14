@@ -171,7 +171,7 @@ Float.ceil(float: Float) -> Int
 Float.round(float: Float) -> Int
 ```
 
-They give an `Int`, as Ruby's `Float#floor` gives an `Integer`. `floor` goes down, `ceil` goes up, and `round` goes to the nearest whole number, with halves away from zero: `2.5.round` is `3` and `(-2.5).round` is `-3`. Like `x.to_i!`, NaN or an infinity is `RUNTIME-INVALID-NUMBER` and a result outside `Int` is `RUNTIME-INTEGER-OVERFLOW`. `round` takes no number of digits; for two decimals write `(x * 100.0).round.to_f / 100.0`.
+They give an `Int`, as Ruby's `Float#floor` gives an `Integer`. `floor` goes down, `ceil` goes up, and `round` goes to the nearest whole number, with halves away from zero: `2.5.round` is `3` and `(-2.5).round` is `-3`. Like `x.to_i!`, NaN or an infinity is `RUNTIME-INVALID-NUMBER` and a result outside `Int` is `RUNTIME-INTEGER-OVERFLOW`. `round` takes no number of digits; [`format("%.2f", x)`](#format) writes a Float with two digits after the point.
 
 ```agentica
 def main() -> Void
@@ -191,6 +191,42 @@ end
 3
 -3
 3.14
+```
+
+## format
+
+```signature
+format(format: String, args...) -> String
+```
+
+The text of a format string with one argument for each conversion, as Ruby's `format`. A conversion is `%[flags][width][.precision]type`:
+
+- `d`: an `Int` in decimal.
+- `x`: an `Int` in lowercase hex; a negative number is `-` and the hex of its magnitude (`-ff`).
+- `f`: a `Float` in fixed point, with 6 digits after the point unless `.precision` (0 to 50) says otherwise. It rounds the exact binary value, as C and Ruby do: `format("%.2f", 2.675)` is `2.67`, since `2.675` is a little below it. NaN, `Inf` and `-Inf` are written as in Ruby.
+- `s`: any value with `to_s`, as `puts` writes it.
+- `%%` is a `%`.
+
+The flag `0` pads a number with zeros after its sign, and `-` pads on the right with spaces; without a flag the padding is spaces on the left. `width` is 1 to 1000 and counts characters, as `String.length` does. An `Int` for `%f` is not converted: write `n.to_f`.
+
+Two outputs differ from Ruby: `%x` of a negative number is `-ff` where Ruby writes `..f01`, and `%s` of `nil` is `nil` where Ruby writes an empty string. `%f` rounds an exact tie, such as `format("%.1f", -1.25)`, to even (`-1.2`), except on Windows 10 before version 2004, whose C library rounds it away from zero (`-1.3`).
+
+The format must be a `"..."` string literal on one line, which the checker reads: a conversion it does not know (`%X`, `%e`, the flags `+`, space and `#`, a precision on `d`, `x` or `s`) is `CHECK-FORMAT-SPEC` at that conversion, another first argument is `CHECK-FORMAT-LITERAL`, the wrong number of arguments is `CHECK-ARITY`, and an argument of the wrong type is `CHECK-TYPE-MISMATCH`. A format whose conversions are all a plain `%s` or `%d` is `CHECK-FORMAT-SPEC` too: write `"#{x}"`.
+
+```agentica
+def main() -> Void
+  puts(format("%-8s|%6.2f|%03d|%x", "apple", 2.5, 7, 255))
+  puts(format("%05d|%-5d|%x", -42, 3, -255))
+  puts(format("%.0f %.0f %.3f", 0.5, 1.5, 1.0 / 3.0))
+  puts(format("%5.1f%%", 99.95))
+end
+```
+
+```output
+apple   |  2.50|007|ff
+-0042|3    |-ff
+0 2 0.333
+100.0%
 ```
 
 ## Math.sqrt

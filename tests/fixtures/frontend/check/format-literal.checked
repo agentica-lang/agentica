@@ -1,0 +1,1 @@
+ERROR CHECK-FORMAT-LITERAL 45:3:15-46:3:16 "the format of format(...) must be a string literal" "write the format as a \"...\" string on one line; to choose a format at run time, choose between literals" signature="main() -> Void" file="format-literal.agc"

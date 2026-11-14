@@ -91,6 +91,7 @@ static fixture *build(void) {
   f->program.variant_count = 2;
   f->program.optional = 0;
   f->program.json_field = UINT32_MAX;
+  f->program.json_node = UINT32_MAX;
   f->program.spans = f->span_table;
   f->program.span_count = SPANS;
   f->program.sources = source;

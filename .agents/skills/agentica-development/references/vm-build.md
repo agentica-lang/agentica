@@ -111,7 +111,9 @@ make compile-commands                # compile_commands.json (gitignored) with t
   golden outcome, or exit 1 with `RUNTIME-STEP-LIMIT` and output that is a
   prefix of the golden's; once a limit finishes, larger ones must too
   (`check_sweep`). A run under `T + max(10, T / 10)` must finish
-  (`check_step_allowance`, which catches over-charging). With
+  (`check_step_allowance`, which catches over-charging). So a change that
+  adds a few steps passes CI with the old count, and a later `make goldens`
+  rewrites that count on an unrelated branch: keep it out of that PR. With
   `AGENTICA_SWEEP=sampled` (the `test` and ASan jobs and `make vm-gc-stress`)
   each fixture runs only some limits, drawn from `AGENTICA_SWEEP_SEED` (else
   `GITHUB_SHA`); a failed limit names the seed: rerun with it. Local `make

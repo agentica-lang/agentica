@@ -269,6 +269,7 @@ Time.monotonic_ns Plain
 Time.now_ms Plain
 __fail_arg Plain
 error Error
+format Format
 gets Plain
 gets! Plain
 none OptionalNone

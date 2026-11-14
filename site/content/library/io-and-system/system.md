@@ -164,6 +164,29 @@ end
 15
 ```
 
+## System.signal
+
+```signature
+System.signal(pid: Int, signal: System.Signal, comm: String) -> Result[Void]
+```
+
+Sends a signal to a process that is not your program's child, such as a program that a child started. `comm` is the process's name as Linux keeps it in `/proc/<pid>/comm`: the file name of the program, cut to 15 bytes (`Runner.Listener`). The signal goes only to the process that has that pid and that name when the call runs: the VM holds the process with a pidfd while it compares the name, and signals through it, so a process that took a reused pid is never reached. For your program's own children use `Process.signal`.
+
+- A pid of 0 or less, or your program's own, returns `error("signal: pid must be above 0 and not the program's own")`, and an empty `comm` or one over 15 bytes returns `error("signal: comm must be 1 to 15 bytes without NUL")`, both with kind `argument`.
+- Another name returns `error("signal: the process has another name")` with kind `system.signal`, and the process gets nothing. A process that has ended, or one of another user, returns an error that starts with `signal: cannot signal the process`, with kind `process.failed` and the system's error number as its code.
+- `--deny-run` turns it off: it returns `error("denied: --deny-run turns off signalling processes")`.
+- It needs Linux 5.3 or later. On an older kernel, under a seccomp filter that refuses pidfds, and on macOS and Windows it returns `error("signal: pidfd is unavailable")` with kind `system.signal`.
+
+```agentica {mode="check"}
+def main() -> Void
+  pid = System.args()[0].to_i!
+  case System.signal(pid, System.Signal.Term, "Runner.Listener")
+    ok(_) -> puts("sent")
+    error(e) -> puts(e.message)
+  end
+end
+```
+
 ## Std.source
 
 ```signature

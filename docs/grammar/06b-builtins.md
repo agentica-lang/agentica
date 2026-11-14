@@ -58,6 +58,15 @@ whose generic functions the checker treats specially: see
 [`Map`](../../site/content/library/data-structures/map.md) and
 [`Set`](../../site/content/library/data-structures/set.md).
 
+`format(fmt, args...)` is Ruby's `format`. Its first argument must be a
+one-line `"..."` string literal (`CHECK-FORMAT-LITERAL`), which the checker
+reads: a bad conversion is `CHECK-FORMAT-SPEC` at its characters, and the
+arguments are checked against the conversions (`CHECK-ARITY`,
+`CHECK-TYPE-MISMATCH`). The conversions are in
+[numbers](../../site/content/library/text-and-data/numbers.md#format). Only the
+function name is reserved: `def format` is `CHECK-REDEFINED-NAME`, and a
+variable, parameter or field may be named `format`.
+
 A builtin family groups builtins under one reserved name, as Ruby's
 `OpenSSL::Cipher` does: its members are written `Family.Member` and their
 functions `Family.Member.fn(args)`, two levels at most
@@ -86,11 +95,11 @@ the [`Lazy` page](../../site/content/library/data-structures/lazy.md).
 
 ### JSON
 
-`JSON` is reserved; `JSON.Value` and `JSON.Field` are members of its family. A
-`JSON.Value` has no constructor, equality, fields or indexing. The functions,
-their errors, the schema and the text they read and write are in the [`JSON`
-page](../../site/content/library/text-and-data/json.md). The rules that the
-checker enforces:
+`JSON` is reserved; `JSON.Value`, `JSON.Field` and `JSON.Node` are members of
+its family. A `JSON.Value` has no constructor, equality, fields or indexing. The
+functions, their errors, the schema and the text they read and write are in the
+[`JSON` page](../../site/content/library/text-and-data/json.md). The rules that
+the checker enforces:
 
 - `JSON.decode(source, T)` and `JSON.schema(T)` take a named struct or enum
   type, not a value, and so does `T.codec`; bare type names are valid only for

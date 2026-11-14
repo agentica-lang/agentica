@@ -812,7 +812,7 @@ def render(session: Session, problem: Problems.Problem, source: String) -> Strin
     return Plain.without_source(shown)
   end
 
-  Plain.format(shown, text)
+  Plain.text_of(shown, text)
 end
 
 # The text that the lines of a message come from. A std/ module is not a file of the working folder: it goes straight

@@ -27,6 +27,7 @@ import Rewrite from "rewrite"
 ## `declarations` come from the stub of the check cache (check_cache.agc), which blanks the value of a long constant.
 ## block is the name of the module block this module is, "" for a file: a block is a module of its own, with the
 ## `file` and `text` of the file that holds it, its own key (`home_key`) and `parsed` the block alone.
+## package is the local name of the package the file belongs to, "" for a file of the project.
 struct LinkedModule
   key: String
   file: String
@@ -46,6 +47,7 @@ struct LinkedModule
   max_line_width: Int
   stubbed: Bool
   block: String
+  package: String = ""
 end
 
 ## A linked program: the root file as parsed (its id, span and module doc), the folder of the root file, the files with
@@ -355,6 +357,7 @@ def rewrite_module(
       max_line_width: module.origin.max_line_width,
       stubbed: module.stubbed,
       block: module.block,
+      package: module.origin.package,
     ),
   )
 end

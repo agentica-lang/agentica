@@ -11,6 +11,7 @@ CodecEncode
 CodecMembers
 Error
 ErrorKind
+Format
 Identity
 JsonDecode
 JsonEncode

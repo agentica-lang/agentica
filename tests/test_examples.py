@@ -7,15 +7,18 @@ subprocess run once here. The algorithm examples (knight tour, traveling
 salesman, maze) read JSON from stdin and are checked by their properties, not
 by one fixed answer; the slow tier has the full list of malformed inputs.
 """
+import http.client
 import itertools
 import json
 import os
 import re
+import signal
+import socket
 import time
 
 import pytest
 
-from tests.agentica_test import ROOT, Child, cli, run, scaled, vm_environment, wait_readable
+from tests.agentica_test import ROOT, WINDOWS, Child, cli, host_only, run, scaled, vm_environment, wait_readable
 from tests.spec_support import check_diagnostic
 
 EXAMPLES = ROOT / "examples"
@@ -170,6 +173,26 @@ def test_file_task_process_and_http_examples_give_their_expected_output():
     tool = cli_run(example("process-tool.agc"))
     assert tool.code == 0, tool.stderr
     assert (tool.stdout, tool.stderr) == ("hello from sh\n", "")
+
+
+@host_only(WINDOWS, "POSIX signals: System.subscribe takes no signal on Windows")
+def test_http_server_example_stops_gracefully_on_sigterm(adopt):
+    """`http_server.agc serve` under SIGTERM: the request in flight gets its answer, a new connection is refused and
+    the program ends with 0."""
+    server = adopt(Child(cli() + [str(EXAMPLES / "http_server.agc"), "serve"], env=vm_environment(),
+                         capture_stderr=True))
+    port = int(server.next_line())
+    slow = http.client.HTTPConnection("127.0.0.1", port, timeout=scaled(10))
+    slow.request("GET", "/slow")
+    time.sleep(0.2)
+    server.process.send_signal(signal.SIGTERM)
+    response = slow.getresponse()
+    assert (response.status, response.read(), response.getheader("Connection")) == (200, b"done\n", "close")
+    slow.close()
+    assert server.wait() == 0
+    assert server.next_line() == "stopped"
+    with pytest.raises(ConnectionRefusedError):
+        socket.create_connection(("127.0.0.1", port), timeout=scaled(2)).close()
 
 
 def test_echo_agc_reads_and_echoes_standard_input(program):

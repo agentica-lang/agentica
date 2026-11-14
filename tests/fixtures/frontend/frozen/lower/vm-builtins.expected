@@ -66,6 +66,9 @@ Float.to_bits
 Float.to_bits32
 Float.to_int
 Float.to_int!
+Format.float
+Format.int
+Format.text
 FrontEnd.hand_off.bytes
 FrontEnd.std_source
 FrontEnd.stdin_bytes.bytes
@@ -92,6 +95,8 @@ HttpWire.read_response
 HttpWire.server
 HttpWire.service
 HttpWire.spawn
+HttpWire.stop
+HttpWire.stopping
 HttpWire.upgrade_context
 HttpWire.upgrade_tls
 HttpWire.wait
@@ -129,6 +134,7 @@ JSON.get
 JSON.int
 JSON.kind
 JSON.list
+JSON.node
 JSON.null
 JSON.null?
 JSON.object
@@ -267,9 +273,12 @@ Process.read_bytes.bytes
 Process.read_line
 Process.send
 Process.send_bytes.bytes
+Process.signal
+Process.signal_group
 Process.spawn.options
 Process.spawn_captured.options
 Process.spawn_channel.options
+Process.spawn_group
 Process.wait
 Profile.measure
 Profile.steps
@@ -334,6 +343,7 @@ System.env
 System.exit
 System.os
 System.pid
+System.signal
 System.signal_number
 System.subscribe
 TCP.accept

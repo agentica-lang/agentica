@@ -549,7 +549,7 @@ static buffer type_tables(int which) {
   } else {
     u32(&t, which == 8 ? 0x10000000 : 3);
     u8(&t, 0);
-    u8(&t, which == 1 ? 10 : which >= 19 && which != 26 ? 8 : which >= 13 ? 7 : 4);
+    u8(&t, which == 1 ? 10 : which >= 27 ? 4 : which >= 19 && which != 26 ? 8 : which >= 13 ? 7 : 4);
     u32(&t, which == 2 ? 1 : 0);
     u8(&t, 6);
     u32(&t, which == 3 ? 2 : 0);
@@ -577,9 +577,24 @@ static buffer type_tables(int which) {
      is a plain enum, not the builtin one. 19: an
      Optional type (kind 8) and no enum; 20: with the Optional enum; 21: an enum named Optional of another shape (Some
      without its payload), which is not the builtin one; 22: two Optional enums. 23: a List target name (a `[`) on Q,
-     which has two fields; 24: one on P, which has one; 25: one on a Q of no fields. */
+     which has two fields; 24: one on P, which has one; 25: one on a Q of no fields. 27: a JSON.Node enum; 28: one
+     with Bool before Null; 29: one with Int without its payload; 30: two of them; 31: one without Object. */
   if (which < 14 || which == 19) {
     u32(&t, 0);
+    return t;
+  }
+  if (which >= 27) {
+    static const char *const names[] = {"Null", "Bool", "Int", "BigInt", "Float", "String", "Array", "Object"};
+    u32(&t, which == 30 ? 2 : 1);
+    for (int copy = 0; copy < (which == 30 ? 2 : 1); copy++) {
+      str(&t, "JSON.Node");
+      int count = which == 31 ? 7 : 8;
+      u32(&t, (uint32_t)count);
+      for (int k = 0; k < count; k++) {
+        str(&t, which == 28 && k < 2 ? names[1 - k] : names[k]);
+        u32(&t, k == 0 || (which == 29 && k == 2) ? 0 : 1);
+      }
+    }
     return t;
   }
   if (which >= 20 && which != 26) {
@@ -2146,6 +2161,11 @@ int main(void) {
   assert(loads_types(24, NULL));
   assert(!loads_types(25, "a List or Map JSON target needs one field"));
   assert(!loads_types(26, "JSON.Field type without the JSON.Field enum"));
+  assert(loads_types(27, NULL));
+  assert(!loads_types(28, "bad JSON.Node enum"));
+  assert(!loads_types(29, "bad JSON.Node enum"));
+  assert(!loads_types(30, "duplicate JSON.Node enum"));
+  assert(!loads_types(31, "bad JSON.Node enum"));
   buffer typed = type_tables(0);
   s = base();
   s.tables = &typed;

@@ -413,6 +413,7 @@ HTTP.download(client: HTTP.Client, url: String, path: String, options: DownloadO
 ```
 
 - `DownloadOptions` has `timeout_ms`, for the whole call, and `max_total_bytes`, for the body, at most 256 MiB. `DownloadOptions()`, the default, gives 30 s and 256 MiB. `Download` has `status`, `headers` and `bytes_written`; the body itself is in the file, never in the record.
+- A printed `Download` takes the alias the program imports `std/http` with, while a builtin record keeps its fixed name: with `import H from "std/http"`, it prints as `H.Download(status: 200, headers: [HTTP.Header(...)], ...)`.
 - The download sends a `GET` and streams the body to `path`, so bodies may be arbitrary bytes. The file never grows past `max_total_bytes`.
 - The file must not exist: it is made private to the user, so an existing path fails untouched, while a failed download keeps the partial file. Status codes such as 404 are normal responses whose body is still written, so check `status` before using the file.
 - The connection is not pooled: it closes when the download ends. There is no redirect follow, and `https` keeps certificate verification on.
@@ -952,14 +953,16 @@ def main() -> Void
 end
 ```
 
-### HTTP.wait and HTTP.close_server
+### HTTP.wait, HTTP.close_server and HTTP.shutdown
 
 ```signature
 HTTP.wait(server: HTTP.Server) -> Result[Void]
 HTTP.close_server(server: HTTP.Server) -> Void
+HTTP.shutdown(server: HTTP.Server, timeout_ms: Int = 30000) -> Void
 ```
 
 - `close_server` stops accepting, closes every connection and cancels the running apps and their tasks. Calling it again does nothing.
+- `shutdown` is the graceful stop. It stops accepting at once, so a new connection is refused, and closes the connections that wait for a request. The requests in flight go on, and their answers say `Connection: close`. A WebSocket handshake gets a `503`. A stream or an upgraded connection that is already running goes on until the deadline, and so does the close after an answer while the client keeps its side open. When they have all ended, or after `timeout_ms` (30 s unless given), it closes what is left as `close_server` does, cancelling the apps still running, and returns. Calling it on a closed server does nothing; a call made while another drains waits for that one. Do not call it from an app: it would wait for that app's own request until the deadline. An app that must stop the server sends a value on a channel that the task that called `serve` receives, and that task calls `shutdown`. A server that must end cleanly on a container stop subscribes to `Term` and `Int` ([`System.subscribe`](/library/io-and-system/system/#systemsubscribe)) and calls it, as below.
 - `wait` returns `ok()` once the server is closed and its apps and their tasks have ended. A program that only serves waits on it. When `main` returns, the server stops.
 - A server belongs to the task that called `HTTP.serve` and closes (freeing its port) when that task ends, so call `serve` in the task that keeps it, such as `main`. Each connection belongs to the task that serves it.
 
@@ -976,5 +979,22 @@ def main() -> Void
   puts("listening on #{HTTP.local_port(server)}")
   IO.flush()
   HTTP.wait(server).unwrap!
+end
+```
+
+```agentica {mode="check"}
+import HTTP from "std/http"
+
+def handle(request: HTTP.Request) -> Result[HTTP.Response]
+  ok(HTTP.Response(status: 200, headers: [], body: "hello".bytes))
+end
+
+def main() -> Void
+  server = HTTP.serve("0.0.0.0", 8080, HTTP.app(&handle)).unwrap!
+  signals = System.subscribe([System.Signal.Term, System.Signal.Int]).unwrap!
+  while not Result.ok?(signals.recv(60000))
+  end
+
+  HTTP.shutdown(server, 10000)
 end
 ```

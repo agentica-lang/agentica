@@ -151,7 +151,7 @@ OPTIONS = [
   "  --version",
   "     print the version and exit",
   "  --deny-run",
-  "     make Process.spawn and the other Process starts return an error",
+  "     make the Process starts and System.signal return an error",
   "  --deny-net",
   "     make TCP, TLS and HTTP connections and listeners return an error",
   "  --deny-fs",

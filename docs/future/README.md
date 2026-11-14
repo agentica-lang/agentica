@@ -10,15 +10,12 @@ what was decided against. They hold no recipes and nothing that shipped. When a
 feature lands, move its rules to `docs/grammar/`, `docs/vm/` or the site and
 delete its section; section numbers are never renumbered, so gaps stay.
 
-- `15-adapters-and-json-inspection.md`: the enum form of `JSON.kind`
-  (`JsonValue`, #1115).
 - `16-cbor.md`: typed `Term.encode` and `Term.decode` (#994).
 - `19-simd.md`: SIMD in the VM (#996).
-- `25-ruby-typed-idioms.md`: `format` (#982), and what was decided against.
+- `25-ruby-typed-idioms.md`: what was decided against.
 - `27-iteration-and-concurrency.md`: what was decided against in tasks and
   streams, and `Process.poll_line` (#997).
 - `28-vm-metrics.md`: VM metrics in Prometheus text (#992).
 - `29-tls-context.md`: later TLS options (#993).
-- `46-signals.md`: signals (#991).
 - `48-regex.md`: Unicode classes for regex (#990), and the decisions that bound
   it.

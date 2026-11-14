@@ -487,6 +487,34 @@ end
 ["int", "float", "float", "string", "null", "object"]
 ```
 
+## JSON.node
+
+```signature
+JSON.node(value: JSON.Value) -> JSON.Node
+```
+
+Opens one level of a `JSON.Value` for a `case`, to walk JSON whose shape is not known in advance. It never fails. `JSON.Node` is a builtin enum with the variants `Null`, `Bool(Bool)`, `Int(Int)`, `BigInt(String)`, `Float(Float)`, `String(String)`, `Array(List[JSON.Value])` and `Object(Map[String, JSON.Value])`, written `JSON.Node.Int(n)` in a `case`. `Int` holds a number that `JSON.int` takes; `BigInt` holds any other integer as its exact decimal text; `Float` holds what `JSON.float` gives, so `1.0` and `1e2` are `Float`. The keys of `Object` are sorted by code point, as `JSON.decode` into a `Map` sorts them. A `JSON.Node` cannot be encoded or decoded (`CHECK-NOT-ENCODABLE`, `CHECK-NOT-DECODABLE`). Prefer `JSON.decode` into a struct when the shape is known.
+
+```agentica
+def count(value: JSON.Value) -> Int
+  case value.node
+    JSON.Node.Array(items) -> items.map { |item| count(item) }.sum
+    JSON.Node.Object(members) -> members.values.map { |item| count(item) }.sum
+    _ -> 1
+  end
+end
+
+def main() -> Void
+  puts(count(JSON.parse("{\"a\": [1, 2.5, null], \"b\": {\"c\": \"x\"}}").unwrap!))
+  puts(JSON.parse("[123456789012345678901]").unwrap!.at(0).unwrap!.node)
+end
+```
+
+```output
+4
+JSON.Node.BigInt("123456789012345678901")
+```
+
 ## JSON.null and JSON.null?
 
 ```signature

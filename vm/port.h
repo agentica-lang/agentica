@@ -937,6 +937,8 @@ agc_loop *agc_loop_of_uv(struct uv_loop_s *uv);
 /* True where a step posted now runs at once on the calling thread: always while one thread plays both roles
    (N = 1). A service keeps a fast path that reads its own I/O state under this test only. */
 bool agc_io_here(agc_vm *vm);
+/* The OS number of a System.Signal value (vm/channel.c), 0 where the system has none (Windows). Under rt->sync. */
+int agc_signal_number_of(agc_vm *vm, agc_value signal);
 #define AGC_JOB_FLUSH 1u
 #define AGC_JOB_QUIET 2u
 /* Internal to vm/loop.c: set by agc_io_compute, never passed to agc_io_detached. */
