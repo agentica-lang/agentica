@@ -561,16 +561,17 @@ def check_all(session: Session, paths: List[String]) -> Int
 end
 
 # A problem of an imported file comes back in the entry of every file that imports it. It is kept once: in the entry of
-# the file itself when that is one of the roots, else in the first importer; the other importers are skipped.
+# the file itself when that failed with it, else in the first importer; the other importers are skipped.
 def once_each(session: Session, entries: List[CliCheck.Entry], roots: List[SymbolPaths.Root]) -> List[CliCheck.Entry]
-  shown: Set[String] = Set.new([])
+  shown = Set.new(entries.map(&own_key))
   kept: List[CliCheck.Entry] = []
   for entry in entries
     case entry
       CliCheck.Entry.Failed(file, problem) if problem.file != file ->
-        key = "#{problem.file}:#{problem.key_path}:#{problem.code}:#{problem.span.start.offset}"
-        if root_named(session, problem, roots) != "" or shown.include?(key)
-          kept = kept.push(CliCheck.Entry.Skipped(file, problem.file))
+        imported = imported_name(session, problem, roots)
+        key = problem_key(imported, problem)
+        if shown.include?(key)
+          kept = kept.push(CliCheck.Entry.Skipped(file, imported))
         else
           shown = shown.add(key)
           kept = kept.push(entry)
@@ -583,13 +584,25 @@ def once_each(session: Session, entries: List[CliCheck.Entry], roots: List[Symbo
   kept
 end
 
-# The name as typed of the root that `problem` is in, or "".
-def root_named(session: Session, problem: Problems.Problem, roots: List[SymbolPaths.Root]) -> String
+# The key of the problem of an entry that failed in its own file, else "".
+def own_key(entry: CliCheck.Entry) -> String
+  case entry
+    CliCheck.Entry.Failed(file, problem) if problem.file == file -> problem_key(file, problem)
+    _ -> ""
+  end
+end
+
+def problem_key(file: String, problem: Problems.Problem) -> String
+  "#{file}:#{problem.key_path}:#{problem.code}:#{problem.span.start.offset}"
+end
+
+# The file of `problem` as typed when it is one of the roots, else as the problem names it.
+def imported_name(session: Session, problem: Problems.Problem, roots: List[SymbolPaths.Root]) -> String
   for root in roots
     return root.typed if Core.root?(problem.file, root.typed, session.settings)
   end
 
-  ""
+  problem.file
 end
 
 def check_entry(session: Session, file: String) -> CliCheck.Entry

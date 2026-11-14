@@ -149,3 +149,11 @@ def test_a_problem_of_an_imported_file_is_shown_once(tmp_path):
     apart = document(check_json("a.agc", "b.agc", cwd=tmp_path), 1)
     assert (apart["checked"], apart["failed"]) == (2, 1)
     assert verdicts(apart)["a.agc"] == "CHECK-TYPE-MISMATCH"
+
+
+def test_an_import_cycle_still_fails(tmp_path):
+    lay_out(tmp_path, {"a.agc": 'import {b} from "b"\n\ndef a() -> Int = b()\n',
+                       "b.agc": 'import {a} from "a"\n\ndef b() -> Int = a()\n'})
+    report = document(check_json(".", cwd=tmp_path), 1)
+    assert report["failed"] >= 1
+    assert "CHECK-IMPORT-CYCLE" in verdicts(report).values()
