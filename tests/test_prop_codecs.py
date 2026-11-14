@@ -257,9 +257,9 @@ def python_decode(data, name):
     if name in ("utf-16", "utf-32"):
         unit = 2 if name == "utf-16" else 4
         codec = name + "-be"
-        if data[:unit] == "﻿".encode(name + "-le"):
+        if data[:unit] == "\ufeff".encode(name + "-le"):
             codec = name + "-le"
-        if data[:unit] in ("﻿".encode(name + "-le"), "﻿".encode(name + "-be")):
+        if data[:unit] in ("\ufeff".encode(name + "-le"), "\ufeff".encode(name + "-be")):
             data = data[unit:]
     try:
         return data.decode(codec)
@@ -267,8 +267,15 @@ def python_decode(data, name):
         return None
 
 
+# The upper halves of the one-byte encodings (the euro sign, the Latin-9 letters, the Windows-1252 quotes), which a
+# plain st.text() seldom draws.
+HIGH_CHARS = sorted({bytes([b]).decode(codec, "ignore") for b in range(0x80, 0x100)
+                     for codec in ("latin-1", "iso8859-15", "cp1252")} - {""})
+ENCODE_TEXTS = st.text(st.sampled_from(HIGH_CHARS) | st.characters(exclude_categories=("Cs",)), max_size=12)
+
+
 @timeout(300)
-@given(st.sampled_from(sorted(ENCODINGS)), st.sampled_from(BOMS), st.binary(max_size=24), st.text(max_size=12))
+@given(st.sampled_from(sorted(ENCODINGS)), st.sampled_from(BOMS), st.binary(max_size=24), ENCODE_TEXTS)
 def test_text_codecs_agree_with_python(codec, name, bom, data, text):
     """Bytes#decode fails if and only if Python's codec does, else gives the same text; String#encode the same, and
     the Unicode encodings never fail. String.from_bytes is the utf-8 decode."""
@@ -283,7 +290,7 @@ def test_text_codecs_agree_with_python(codec, name, bom, data, text):
     try:
         want = text.encode(ENCODINGS[name] if name not in ("utf-16", "utf-32") else name + "-be")
         if name in ("utf-16", "utf-32"):
-            want = "﻿".encode(name + "-be") + want
+            want = "\ufeff".encode(name + "-be") + want
     except UnicodeEncodeError:
         want = None
     assert codec.ask("encode:" + name, text.encode("utf-8")) == want, (name, text)
