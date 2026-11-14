@@ -91,8 +91,9 @@ Analysis.outline_json(found) -> JSON.Value     # also type_at_json, symbols_json
   generic call (the function's type parameters in order; a builtin's type
   variables as they first appear in its signature) and may leave out
   defaulted arguments; `op` has the operator as written (`+`, `<=`); `let` has
-  `new`, `_ = x` is `discard`; a node past what it covers yet is `other`
-  (loops, lists, maps, structs, blocks). `pure` is false when a call, through
+  `new`, `_ = x` is `discard`; every node is described (`while`, `for`,
+  `list`, `map`, `struct`, `with`, `field`, `function`, `invoke`, `lambda`,
+  `range`, ...; no `other`). `pure` is false when a call, through
   every function called, has an effect or reads shared state (a builtin's
   `effects`, `concurrency` for an ATS or Channel read, `native` for an extern
   function, `function-value` for `f.call(x)`, `h.run(x)` on an Fn field,
