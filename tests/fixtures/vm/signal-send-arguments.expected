@@ -1,0 +1,13 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 28,
+  "stdout": [
+    "signal: pid must be above 0 and not the program's own",
+    "signal: pid must be above 0 and not the program's own",
+    "signal: comm must be 1 to 15 bytes without NUL",
+    "signal: comm must be 1 to 15 bytes without NUL",
+    ""
+  ],
+  "stderr": []
+}

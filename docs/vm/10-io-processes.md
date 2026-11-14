@@ -118,6 +118,18 @@ systems get none.
   above ends it first). On a break, `agentica` waits 2 seconds, sends
   `SIGTERM`, and kills the VM 2 seconds later
   (`docs/vm/08-loader-and-cli.md`).
+- **Sending signals.** `Process.signal` and `signal_group` (`kill(-pid)`) run
+  on the I/O thread (a request at several schedulers) and signal only an
+  unreaped child, so its pid and its group id cannot name another process.
+  `Process.spawn_group` is a `pgroup` child whose stdin, stdout and stderr are
+  the VM's descriptors 0 to 2 (no pump task: nothing can stall); its stream
+  calls are errors, and its close is a plain child's group `SIGKILL`.
+  `System.signal` opens a pidfd (`pidfd_open`, called through `syscall()`:
+  glibc 2.28 has no wrapper), checks `/proc/<pid>/comm`, and signals with
+  `pidfd_send_signal` on that pidfd, so it never reaches a process that took
+  the pid; not `kill()` after the name check. One probe (a pidfd of the VM
+  itself) per run turns ENOSYS and EPERM into `signal: pidfd is unavailable`.
+  `--deny-run` covers `spawn_group` and `System.signal`.
 - **Behavior notes.** libuv resets signals 1 to 31 to their default in the
   child, so a signal the VM inherited as ignored (`nohup`) is not ignored in its
   children; the VM does not patch libuv. `Process.spawn` checks its timeout but

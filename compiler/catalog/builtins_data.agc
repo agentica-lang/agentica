@@ -331,7 +331,7 @@ TYPE_DESCRIPTIONS: Map[String, String] = {
   "JSON.Node": "One level of a JSON.Value, from JSON.node, to match with case.",
   "JSON.Value": "A JSON document of any shape, from JSON.parse; the JSON functions read it.",
   "Native.Mutex": "The lock of a native library, from Native.mutex; synchronize runs a block holding it.",
-  "Process": "A program started by Process.spawn, Process.spawn_captured or Process.spawn_channel.",
+  "Process": "A program started by Process.spawn, spawn_captured, spawn_channel or spawn_group.",
   "Process.Options": "The options of Process.spawn, spawn_captured and spawn_channel; give only the fields you need.",
   "Process.Output": "What Process.output returns: the unread stdout, all stderr and whether output was dropped.",
   "StructMember": "A member of a struct as T.codec lists it: its name and its type as written.",
@@ -499,7 +499,7 @@ BUILTIN_GROUP_11 = ROWS_51.concat(ROWS_52.concat(ROWS_53.concat(ROWS_54.concat(R
 BUILTIN_GROUP_12 = ROWS_56.concat(ROWS_57.concat(ROWS_58.concat(ROWS_59.concat(ROWS_60))))
 BUILTIN_GROUP_13 = ROWS_61.concat(ROWS_62.concat(ROWS_63.concat(ROWS_64.concat(ROWS_65))))
 BUILTIN_GROUP_14 = ROWS_66.concat(ROWS_67.concat(ROWS_68.concat(ROWS_69.concat(ROWS_70))))
-BUILTIN_GROUP_15 = ROWS_71.concat(ROWS_72.concat(ROWS_73.concat(ROWS_74)))
+BUILTIN_GROUP_15 = ROWS_71.concat(ROWS_72.concat(ROWS_73.concat(ROWS_74.concat(ROWS_75))))
 BUILTIN_GROUPS_1 = BUILTIN_GROUP_1.concat(BUILTIN_GROUP_2.concat(BUILTIN_GROUP_3))
 BUILTIN_GROUPS_2 = BUILTIN_GROUP_4.concat(BUILTIN_GROUP_5.concat(BUILTIN_GROUP_6))
 BUILTIN_GROUPS_3 = BUILTIN_GROUP_7.concat(BUILTIN_GROUP_8.concat(BUILTIN_GROUP_9))
@@ -7249,6 +7249,75 @@ ROWS_74: List[Model.Builtin] = [
       "The text of a format string literal with one argument per conversion, as Ruby's format: " +
       "%[flags][width][.precision]type with the flags - and 0, the types d (Int), x (Int, hex), f (Float) and " +
       "s (any value with to_s), and %% for a %: format(\"%-8s|%6.2f|%03d\", name, price, n)."
+    ),
+    alternatives: [],
+  ),
+]
+
+## The rows that send signals (issue #1478); appended last so the positions of the existing rows never shift.
+ROWS_75: List[Model.Builtin] = [
+  Model.Builtin(
+    name: "Process.signal",
+    parameters: [
+      Model.Named(name: "process", type: Types.Type.Opaque("Process")),
+      Model.Named(name: "signal", type: Types.Type.Enum("System.Signal", [])),
+    ],
+    result: Types.Type.Result(Types.Type.Void),
+    rule: Model.Rule.Plain,
+    implementation: "Process.signal",
+    effects: ["subprocess"],
+    description: "Send a signal to the child; a closed or exited child is an error; POSIX, VM only.",
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "Process.spawn_group",
+    parameters: [
+      Model.Named(name: "command", type: Types.Type.String),
+      Model.Named(name: "args", type: Types.Type.List(Types.Type.String)),
+      Model.Named(name: "dir", type: Types.Type.String, default: Model.Default.Text(".")),
+      Model.Named(name: "timeout_ms", type: Types.Type.Int, default: Model.Default.Whole(30000)),
+    ],
+    result: Types.Type.Result(Types.Type.Opaque("Process")),
+    rule: Model.Rule.Plain,
+    implementation: "Process.spawn_group",
+    effects: ["subprocess"],
+    description: (
+      "Start an executable in a new session, so it leads its own process group, with the program's stdin, stdout " +
+      "and stderr; Process.close and the end of the run kill the whole group; --deny-run makes it an error; POSIX, " +
+      "VM only."
+    ),
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "Process.signal_group",
+    parameters: [
+      Model.Named(name: "process", type: Types.Type.Opaque("Process")),
+      Model.Named(name: "signal", type: Types.Type.Enum("System.Signal", [])),
+    ],
+    result: Types.Type.Result(Types.Type.Void),
+    rule: Model.Rule.Plain,
+    implementation: "Process.signal_group",
+    effects: ["subprocess"],
+    description: (
+      "Send a signal to the process group that the child leads (Process.spawn_group, or pgroup: true); an error " +
+      "once the child has exited; POSIX, VM only."
+    ),
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "System.signal",
+    parameters: [
+      Model.Named(name: "pid", type: Types.Type.Int),
+      Model.Named(name: "signal", type: Types.Type.Enum("System.Signal", [])),
+      Model.Named(name: "comm", type: Types.Type.String),
+    ],
+    result: Types.Type.Result(Types.Type.Void),
+    rule: Model.Rule.Plain,
+    implementation: "System.signal",
+    effects: ["process"],
+    description: (
+      "Send a signal to the process PID only while its name (/proc/PID/comm, at most 15 bytes) is comm, through a " +
+      "pidfd so it never reaches another process; --deny-run makes it an error; Linux 5.3 or later, VM only."
     ),
     alternatives: [],
   ),

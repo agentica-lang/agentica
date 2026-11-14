@@ -149,11 +149,51 @@ Process.close(process: Process) -> Void
 
 Stops the program if it still runs and frees it. Closing twice is fine. A running program is killed, the call waits for it to exit (other tasks run meanwhile) and closes the ports it owns; a timeout closes the program too, but does not wait for it. A failed explicit cleanup is `RUNTIME-PROCESS-CLOSE` at the call.
 
-Return from `main`, `System.exit`, a diagnostic, a task failure, step exhaustion and an external interruption clean up the programs started directly; their descendants are covered only with `pgroup`, while the program runs. On Windows a stop is always immediate (no `SIGTERM` grace). Where libuv can assign its job object, the direct children of the VM die when the VM ends, and a child that is itself an Agentica program stops its own children the same way.
+Return from `main`, `System.exit`, a diagnostic, a task failure, step exhaustion and an external interruption clean up the programs started directly; their descendants are covered only with `pgroup` or `Process.spawn_group`, while the program runs. On Windows a stop is always immediate (no `SIGTERM` grace). Where libuv can assign its job object, the direct children of the VM die when the VM ends, and a child that is itself an Agentica program stops its own children the same way.
 
 For a `Process.spawn` program, the closing task waits up to one second for it to end; other tasks keep running.
 
 Its standard error goes to yours, unless started with `Process.spawn_captured` or an `err` file. It goes through your program's stderr buffer: while nobody reads your stderr, the child and `Process.wait` on it wait, and other tasks keep running.
+
+## Process.signal and Process.signal_group
+
+```signature
+Process.signal(process: Process, signal: System.Signal) -> Result[Void]
+Process.signal_group(process: Process, signal: System.Signal) -> Result[Void]
+```
+
+`Process.signal` sends a signal (`System.Signal`, see [System.subscribe](../system/#systemsubscribe)) to the program; `signal_group` sends it to the process group the program leads, so the programs it started get it too. A signal the program does not handle ends it, and `Process.wait` then gives `128 +` the signal's number (143 for `Term`). Neither call waits for the program to end: follow it with `Process.wait` and a deadline, and `Process.close` when the program is late.
+
+- A closed program returns `error("process: process is closed")`. A program that has exited returns `error("process: the child has exited")` with kind `process.failed`: its pid may already belong to another process.
+- `signal_group` needs a program that leads its own group, started with `Process.spawn_group` or `pgroup: true`; any other returns `error("process: the child does not lead a process group")` with kind `process.failed`.
+- On Windows both return `error("signal: not supported on this system")` with kind `system.signal`.
+
+## Process.spawn_group
+
+```signature
+Process.spawn_group(command: String, args: List[String], dir: String = ".", timeout_ms: Int = 30000) -> Result[Process]
+```
+
+Starts a program in a new session, so it leads its own process group, as Python's `Popen(start_new_session=True)`. It shares your program's standard input, output and error: its output goes where yours goes (a terminal, a container's log), nothing can fill up, and `read_line`, `read_bytes`, `read_available`, `output`, `send`, `send_bytes` and `close_stdin` return `error("process: the child uses the program's stdin, stdout and stderr")` with kind `process.failed`. `dir` is where it starts; the command is found from your program's folder, so give an absolute path when `dir` is not `"."`. `--deny-run` turns it off, and on Windows it returns `error("process: process groups are not supported on this system")` with kind `system.signal`.
+
+`Process.close`, the end of the task that owns it and the end of the run send `SIGKILL` to the whole group while the program runs. This is the start of a container entrypoint: it stops the program with `signal_group`, waits with a deadline, and kills the group when it is late.
+
+```agentica {mode="check"}
+def main() -> Void
+  signals = System.subscribe([System.Signal.Term, System.Signal.Int]).unwrap!
+  child = Process.spawn_group("/usr/bin/runner", ["--once"]).unwrap!
+  case signals.recv(3600000)
+    ok(signal) ->
+      _ = Process.signal_group(child, signal)
+      if !Process.wait(child, 30000).ok?
+        Process.close(child)
+      end
+
+      System.exit(128 + System.signal_number(signal))
+    error(_) -> nil
+  end
+end
+```
 
 ## Process.spawn_captured
 
