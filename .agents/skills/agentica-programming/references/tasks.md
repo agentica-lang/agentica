@@ -126,11 +126,11 @@ of an enum (there is no `select`). `TaskDown` is a builtin record:
 `TaskExit.Crashed` or `TaskExit.Cancelled`), and for a crash its diagnostic: `code` (the stable
 `RUNTIME-` code, to match on), `message`, `file`, `line` and `column` (`""` and
 `0` otherwise). The send never waits or fails: a notice into a full channel
-goes in past its capacity, and only a closed channel drops it. A crash whose
-notice went in counts as observed, unless the monitor came through a `TaskRef`
-(only the `Task[R]` holder observes). The `message` block runs in a task of its
-own. Monitor a task after any setup step that can fail: a failed start leaves a
-stale notice in the inbox.
+goes in past its capacity, and only a closed or signal channel drops it. A
+crash whose notice went in counts as observed, unless the monitor came through
+a `TaskRef` (only the `Task[R]` holder observes). The `message` block runs in a
+task of its own. Monitor a task after any setup step that can fail: a failed
+start leaves a stale notice in the inbox.
 
 `Task.current` is the running task as a `TaskRef`: `Task.monitor`,
 `Task.cancel` and `.id` take it, but `Task.await` of it is
