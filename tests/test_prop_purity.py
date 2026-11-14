@@ -1,6 +1,7 @@
 """Property tests (Hypothesis) of `pure` in `Analysis.bodies` (#1159): a program of arithmetic, `if`, `case` and
 calls, recursion and cycles included, is pure; one call of a builtin with an effect makes every function that reaches
-it impure, with that effect and the chain of calls, and leaves the others pure.
+it impure, with that effect and the chain of calls, and leaves the others pure. The prelude of the answer has each
+function the calls run, once, in the order of the calls.
 
 The profiles and the seed of each tier are in tests/conftest.py.
 """
@@ -82,3 +83,26 @@ def test_one_effect_makes_impure_exactly_the_functions_that_reach_it(setup, prog
             _, kind, call = EFFECTS[effect[1]]
             reasons = [(reason["effect"], reason["call"], reason["through"]) for reason in function["impure"]]
             assert (function["pure"], reasons) == (False, [(kind, call, [f"f{step}" for step in path])])
+
+
+PRELUDE_SNIPPETS = ["xs.sum", "xs.tally.size", "xs.uniq.size", "o.unwrap_or(0)", "xs.find_index { |x| x > 1 }.unwrap_or(0)",
+                    "xs.group_by { |x| x % 2 }.size", "xs.max.unwrap_or(0)", "1"]
+
+
+@given(st.lists(st.sampled_from(PRELUDE_SNIPPETS), min_size=1, max_size=6))
+def test_the_prelude_has_each_function_the_calls_run_once_in_call_order(setup, snippets):
+    driver, work = setup
+    text = "".join(f"def g{at}(xs: List[Int], o: Optional[Int]) -> Int = {snippet}\n\n"
+                   for at, snippet in enumerate(snippets))
+    (work / "prelude_calls.agc").write_text(text, encoding="utf-8")
+    result = run_vm(driver, args=["bodies", "prelude_calls.agc"], cwd=work, env=vm_environment())
+    assert result.code == 0 and result.stderr == "", result.stderr
+    answer = json.loads(result.stdout)
+
+    def named(node):
+        found = [node["prelude"]] if node["prelude"] else []
+        return found + [name for child in node["children"] for name in named(child)]
+
+    called = [name for function in answer["functions"] for node in function["body"] for name in named(node)]
+    assert [function["linked"] for function in answer["prelude"]] == list(dict.fromkeys(called))
+    assert all(function["span"]["file"].startswith("<prelude>/") for function in answer["prelude"])

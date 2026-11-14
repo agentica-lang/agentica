@@ -98,7 +98,10 @@ Analysis.outline_json(found) -> JSON.Value     # also type_at_json, symbols_json
   function, `function-value` for `f.call(x)`, `h.run(x)` on an Fn field,
   `xs.map(f)` or a Lazy terminal, `unresolved`); `impure` lists each `Reason`
   (`effect`, `call`, `range`, `through`: the chain of linked names). `+`,
-  `b[i]` and `unwrap!` are pure. No command line form.
+  `b[i]` and `unwrap!` are pure. A `call` of a builtin written in Agentica
+  has in `prelude` the linked name of the function that runs it
+  (`@prelude::list::sum_int`), whose body is in the answer's `prelude` list
+  (file `<prelude>/list.agc`). No command line form.
 - `outline`, `type_at`, `type_at_partial`, `symbol`, `refs`, `refs_partial`,
   `native_modules` and `bodies` return an error whose message is one JSON
   diagnostic (the `--json` object); `Analysis.diagnostic(message)` reads it, so

@@ -1,8 +1,8 @@
-## The JSON form of `Analysis.bodies` (#1159, experimental): `{version, command, file, modules, functions}`. A module
-## is `{prefix, file}`. A function is `{name, linked, exported, span, name_span, generics, params, result, body, pure,
-## impure}`, with a span `{file, range}`, a parameter `{name, type, range, default}` and a reason of `impure` `{effect,
-## call, range, through}`. A node is `{kind, type, range, text, target, new, children, type_args}`, and a type
-## `{kind, name, args}`.
+## The JSON form of `Analysis.bodies` (#1159, experimental): `{version, command, file, modules, functions, prelude}`. A
+## module is `{prefix, file}`. A function is `{name, linked, exported, span, name_span, generics, params, result, body,
+## pure, impure}`, with a span `{file, range}`, a parameter `{name, type, range, default}` and a reason of `impure`
+## `{effect, call, range, through}`. A node is `{kind, type, range, text, target, new, children, type_args, prelude}`,
+## and a type `{kind, name, args}`.
 
 import Model from "../analysis/model"
 import DiagnosticJson from "../diagnostics/diagnostic_json"
@@ -10,7 +10,7 @@ import DocJson from "../docs/doc_json"
 
 ## The object of the answer.
 def json(found: Model.Bodies) -> JSON.Value
-  functions = found.functions.map do |function: Model.Body| function_json(found.file, function) end
+  functions = found.functions.map(&function_json)
   JSON.object({
     "version": JSON.from(found.version),
     "command": JSON.from("bodies"),
@@ -21,12 +21,13 @@ def json(found: Model.Bodies) -> JSON.Value
       end,
     ),
     "functions": JSON.array(functions),
+    "prelude": JSON.array(found.prelude.map(&function_json)),
   })
 end
 
 private
 
-def function_json(file: String, function: Model.Body) -> JSON.Value
+def function_json(function: Model.Body) -> JSON.Value
   params = function.params.map do |param: Model.BodyParam|
     JSON.object({
       "name": JSON.from(param.name),
@@ -40,8 +41,8 @@ def function_json(file: String, function: Model.Body) -> JSON.Value
     "name": JSON.from(function.name),
     "linked": JSON.from(function.linked),
     "exported": JSON.from(function.exported),
-    "span": DocJson.span_json(file, function.range),
-    "name_span": DocJson.span_json(file, function.name_range),
+    "span": DocJson.span_json(function.file, function.range),
+    "name_span": DocJson.span_json(function.file, function.name_range),
     "generics": JSON.array(function.generics.map do |name: String| JSON.from(name) end),
     "params": JSON.array(params),
     "result": type_json(function.result),
@@ -71,6 +72,7 @@ def node_json(node: Model.Node) -> JSON.Value
     "new": JSON.from(node.new),
     "children": JSON.array(node.children.map(&node_json)),
     "type_args": JSON.array(node.type_args.map(&type_json)),
+    "prelude": JSON.from(node.prelude),
   })
 end
 
