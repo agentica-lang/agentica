@@ -8,48 +8,36 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.32.0-alpha.1] - 2026-11-14
+
 ### Added
 
-- `Process.poll_line(p, timeout_ms)`: reads a line as `read_line` does, but a timeout keeps the program and its output (#997).
-- `System.subscribe([System.Signal.Term, System.Signal.Int])` gives a channel
-  that receives those signals instead of letting them stop the program, and
-  `System.signal_number` gives a signal's number (#1477).
-- `HTTP.shutdown(server, timeout_ms)` stops a server gracefully: it stops
-  accepting, lets the requests in flight finish up to the deadline (30 s by
-  default), then closes what is left (#1479).
-- `Process.signal` and `Process.signal_group` send a signal to a child or its
-  process group, `Process.spawn_group` starts a child in its own group with the
-  program's stdin, stdout and stderr, and `System.signal(pid, signal, comm)`
-  signals another process through a pidfd on Linux (#1478).
-- `agentica help File.Info` prints a builtin type with its fields or variants,
-  and `agentica help --json` lists the builtin types too, each with a `kind`
-  (#1532).
-- `JSON.node(value)` gives a `JSON.Node` enum to walk JSON of unknown shape
-  with `case` (#1115).
+- `Process.poll_line(p, timeout_ms)` reads a line, and a timeout keeps the program (#997).
+- `System.subscribe` gives a channel that receives the listed signals, and `System.signal_number` a signal's number (#1477).
+- `HTTP.shutdown(server, timeout_ms)` stops a server gracefully, letting requests in flight finish (#1479).
+- `Process.signal`, `Process.signal_group` and `Process.spawn_group` signal a child or its process group, and `System.signal` signals another process on Linux (#1478).
+- `agentica help File.Info` prints a builtin type, and `agentica help --json` lists them (#1532).
+- `JSON.node(value)` gives a `JSON.Node` enum to walk JSON of unknown shape with `case` (#1115).
 - `std/analysis`: `Analysis.bodies(session, "std/binary")` reads a `std/` module as the binary carries it (#1159).
 - `std/analysis`: each function of `Analysis.bodies` says whether it is `pure`, and why not in `impure`, through every call (#1159).
 - `std/actor`: `Actor.Timeout`, a receive timeout that wakes an actor when no message came in time (#1523).
 - `format("%-8s|%6.2f|%03d|%x", name, price, n, n)`, Ruby's `format`, with a format string literal that `check` reads (`CHECK-FORMAT-SPEC`, `CHECK-FORMAT-LITERAL`) (#982).
-- Test-only dependencies: `group = "test"` on a dependency of `agentica.toml` (`agentica add ... --group test`); only the tests import it, and projects that depend on the package do not fetch it (#1196).
+- Test-only dependencies: `group = "test"` in `agentica.toml` (#1196).
 
 ### Changed
 
 - **Breaking:** `format` is a builtin function, so a `def format` is `CHECK-REDEFINED-NAME` (#982).
-- **Breaking:** `SIGUSR1` and `SIGUSR2` stop the program the way `SIGTERM` does (children
-  stopped, files written) instead of ending it at once, and `SIGQUIT` does the
-  same and exits with 131 instead of dumping core (#1477).
-- **Breaking:** `std/actor`: a call that times out closes its reply channel, and `Actor.reply` gives whether the caller gets the value (a `Bool`) and closes the channel, so an answer to a call that gave up is never lost. Only `&Actor.reply` used as a `Fn[..., Void]` value no longer checks (#1523).
+- **Breaking:** `SIGUSR1`, `SIGUSR2` and `SIGQUIT` stop the program as `SIGTERM` does (`SIGQUIT` exits 131) (#1477).
+- **Breaking:** `std/actor`: `Actor.reply` gives a `Bool`, and a call that times out closes its reply channel (#1523).
 
 ### Fixed
 
-- A hand-made `.agcb` that interpolates an Error whose message is not a String fails with `RUNTIME-INTERNAL` under the JIT too, instead of crossing compiled code (#1561).
-- The bytecode cache finds the C compiler as the native build does (an unset `PATH` or an empty entry of it, Windows `.com`/`.exe`, a wrapper such as ccache), so a change of compiler always compiles the program again (#1476).
+- A hand-made `.agcb` that interpolates a bad Error fails with `RUNTIME-INTERNAL` under the JIT too (#1561).
+- The bytecode cache finds the C compiler as the native build does (#1476).
 - `format`: leading zeros of a precision no longer count as digits, so `%.000001f` is `%.1f` (#1557).
 - `System.subscribe`: a listed signal that was ignored when the program started stays ignored, and the call subscribes the others instead of failing (#1533).
 - On macOS, with more than one scheduler, a stop signal after a task crash stops the program again (#1529).
-- A printed record or enum of a std module takes the first alias the project
-  writes for its module, not the alphabetically first, and never an alias
-  written in a package (#1456).
+- A printed record or enum of a std module takes the first alias the project writes (#1456).
 
 ## [0.31.1] - 2026-11-13
 
@@ -1576,7 +1564,8 @@ First release of Agentica, a statically typed language designed for AI agents.
 - `main` returns `Void`; maps preserve insertion order and support fallible
   lookups.
 
-[unreleased]: https://github.com/agentica-lang/agentica/compare/0.31.1...HEAD
+[unreleased]: https://github.com/agentica-lang/agentica/compare/0.32.0-alpha.1...HEAD
+[0.32.0-alpha.1]: https://github.com/agentica-lang/agentica/compare/0.31.1...0.32.0-alpha.1
 [0.31.1]: https://github.com/agentica-lang/agentica/compare/0.31.0...0.31.1
 [0.31.0]: https://github.com/agentica-lang/agentica/compare/0.31.0-alpha.1...0.31.0
 [0.31.0-alpha.1]: https://github.com/agentica-lang/agentica/compare/0.30.1...0.31.0-alpha.1
