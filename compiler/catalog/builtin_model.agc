@@ -21,6 +21,7 @@ enum Rule
   CodecMembers
   Error
   ErrorKind
+  Format
   Identity
   JsonDecode
   JsonEncode

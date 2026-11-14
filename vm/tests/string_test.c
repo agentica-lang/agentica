@@ -4,6 +4,7 @@
  */
 #include "../core.h"
 #include "../services.h"
+#include "builtin_test.h"
 #include "test_support.h"
 
 #include <assert.h>
@@ -262,6 +263,49 @@ static void shared_strings(agc_vm *vm) {
 }
 
 /* The resumes of the last distance call that ran as a stepper: how many, and the most turn cost one charged. */
+/* format(...)'s conversions (Format.int, Format.float, Format.text): the padding and the numbers out of range that only
+   a hand-made bytecode file can pass. */
+static void format_is(agc_vm *vm, const char *name, uint32_t arity, agc_value *args, const char *expected) {
+  agc_string *got = STR(call(vm, name, arity, args));
+  if (got->bytes != strlen(expected) || memcmp(got->data, expected, got->bytes) != 0) {
+    fprintf(stderr, "%s: got \"%.*s\", want \"%s\"\n", name, (int)got->bytes, got->data, expected);
+    assert(0);
+  }
+}
+
+static void format_conversions(agc_vm *vm) {
+  agc_value i1[] = {agc_int(-42), agc_int(6), agc_int(2)};
+  format_is(vm, "Format.int", 3, i1, "-00042");
+  agc_value i2[] = {agc_int(INT64_MIN), agc_int(0), agc_int(4)};
+  format_is(vm, "Format.int", 3, i2, "-8000000000000000");
+  agc_value i3[] = {agc_int(255), agc_int(5), agc_int(1 | 4)};
+  format_is(vm, "Format.int", 3, i3, "ff   ");
+  agc_value f1[] = {agc_float(2.5), agc_int(0), agc_int(4), agc_int(0)};
+  format_is(vm, "Format.float", 4, f1, "   2");
+  agc_value f2[] = {agc_float(-INFINITY), agc_int(2), agc_int(6), agc_int(2)};
+  format_is(vm, "Format.float", 4, f2, "  -Inf");
+  agc_value f3[] = {agc_float(-1.7976931348623157e308), agc_int(50), agc_int(1000), agc_int(1)};
+  agc_string *widest = STR(call(vm, "Format.float", 4, f3));
+  assert(widest->bytes == 1000 && widest->chars == 1000 && widest->data[0] == '-' && widest->data[999] == ' ');
+  agc_value t1[] = {str("\xc3\xa9t\xc3\xa9"), agc_int(5), agc_int(1)};
+  format_is(vm, "Format.text", 3, t1, "\xc3\xa9t\xc3\xa9  ");
+  assert(STR(call(vm, "Format.text", 3, t1))->chars == 5);
+  agc_value t2[] = {str("long"), agc_int(2), agc_int(0)};
+  format_is(vm, "Format.text", 3, t2, "long");
+
+  agc_value bad[][3] = {
+      {agc_int(1), agc_int(1001), agc_int(0)},
+      {agc_int(1), agc_int(-1), agc_int(0)},
+      {agc_int(1), agc_int(0), agc_int(8)},
+  };
+  for (size_t k = 0; k < sizeof bad / sizeof bad[0]; k++)
+    assert(strcmp(agc_test_fail_code(vm, agc_find_builtin((const uint8_t *)"Format.int", 10, 3), bad[k]),
+                  "RUNTIME-INVALID-COUNT") == 0);
+  agc_value precision[] = {agc_float(1.0), agc_int(51), agc_int(0), agc_int(0)};
+  assert(strcmp(agc_test_fail_code(vm, agc_find_builtin((const uint8_t *)"Format.float", 12, 4), precision),
+                "RUNTIME-INVALID-COUNT") == 0);
+}
+
 static size_t last_resumes;
 static int64_t last_most_cost;
 
@@ -606,6 +650,7 @@ int main(void) {
   assert(agc_parse_float((const uint8_t *)"1.5\0", 4, &x) == AGC_NUMBER_INVALID);
 
   shared_strings(&vm);
+  format_conversions(&vm);
   distances(&vm);
 
   printf("string tests passed\n");

@@ -21,6 +21,7 @@ check/check_defaults.agc
 check/check_error.agc
 check/check_expr.agc
 check/check_flow.agc
+check/check_format.agc
 check/check_help.agc
 check/check_infer.agc
 check/check_list.agc
@@ -42,6 +43,7 @@ check/check_unused.agc
 check/check_variables.agc
 check/checker.agc
 check/defaults.agc
+check/format_spec.agc
 check/native_shape.agc
 check/prelude_files.agc
 check/ruby_form.agc

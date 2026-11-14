@@ -65,8 +65,15 @@ Math.sqrt(float: Float) -> Float                         # negative float: RUNTI
 ```
 
 `floor`, `ceil` and `round` halt like `to_i!` on NaN, infinity or a result
-outside Int; `round` takes no digits: `(x * 100.0).round.to_f / 100.0`.
-Bit operations: `binary.md`.
+outside Int; `round` takes no digits. Bit operations: `binary.md`.
+
+`format(fmt, args...) -> String` is Ruby's `format`, for a width, digits, a
+flag or hex: `format("%-8s|%6.2f|%03d|%x", name, price, n, n)`. Conversions
+`%d` and `%x` (Int), `%f` (Float, `.precision` 0 to 50, 6 by default), `%s`
+(any value with `to_s`) and `%%`; flags `-` and `0`; width 1 to 1000. `fmt` must
+be a one-line `"..."` literal (`CHECK-FORMAT-LITERAL`); `%e`, `%X`, `%+d` and
+a format of only plain `%s`/`%d` are `CHECK-FORMAT-SPEC` (use `"#{x}"`); an
+Int for `%f` is `CHECK-TYPE-MISMATCH` (`n.to_f`).
 
 ## String
 

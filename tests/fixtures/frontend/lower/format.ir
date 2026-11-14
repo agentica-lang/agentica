@@ -1,0 +1,74 @@
+program 0:1:1-6:1 entry=1 globals=0
+source 0 "format.agc" chars=175
+struct s0 "Error" ["kind","message","code","details","cause","location"] types=[String, String, Optional(Int), Map(String, String), Optional(Struct(Error)), String]
+enum "Optional" v0="None"/0 v1="Some"/1
+fn0 "label" params=3 captures=0 slots=9 @ 0:1:1-2:1
+    step @ 0:1:59-1:123
+    step @ 0:1:59-1:123
+    step @ 0:1:96-1:100
+    move r4 r0 @ 0:1:96-1:100
+    const r5 int:6 @ 0:1:96-1:100
+    const r6 int:1 @ 0:1:96-1:100
+    call-builtin r4 "Format.text" 3 @ 0:1:96-1:100 0:1:96-1:100 0:1:96-1:100 0:1:96-1:100
+    move r3 r4 @ 0:1:96-1:100
+    const r4 "|" @ 0:1:59-1:123
+    concat r3 r3 r4 @ 0:1:59-1:123
+    step @ 0:1:102-1:107
+    move r5 r1 @ 0:1:102-1:107
+    const r6 int:2 @ 0:1:102-1:107
+    const r7 int:6 @ 0:1:102-1:107
+    const r8 int:0 @ 0:1:102-1:107
+    call-builtin r5 "Format.float" 4 @ 0:1:102-1:107 0:1:102-1:107 0:1:102-1:107 0:1:102-1:107 0:1:102-1:107
+    move r4 r5 @ 0:1:102-1:107
+    concat r3 r3 r4 @ 0:1:59-1:123
+    const r4 "|" @ 0:1:59-1:123
+    concat r3 r3 r4 @ 0:1:59-1:123
+    step @ 0:1:109-1:110
+    move r5 r2 @ 0:1:109-1:110
+    const r6 int:3 @ 0:1:109-1:110
+    const r7 int:2 @ 0:1:109-1:110
+    call-builtin r5 "Format.int" 3 @ 0:1:109-1:110 0:1:109-1:110 0:1:109-1:110 0:1:109-1:110
+    move r4 r5 @ 0:1:109-1:110
+    concat r3 r3 r4 @ 0:1:59-1:123
+    const r4 "|" @ 0:1:59-1:123
+    concat r3 r3 r4 @ 0:1:59-1:123
+    step @ 0:1:112-1:113
+    move r5 r2 @ 0:1:112-1:113
+    const r6 int:0 @ 0:1:112-1:113
+    const r7 int:4 @ 0:1:112-1:113
+    call-builtin r5 "Format.int" 3 @ 0:1:112-1:113 0:1:112-1:113 0:1:112-1:113 0:1:112-1:113
+    move r4 r5 @ 0:1:112-1:113
+    concat r3 r3 r4 @ 0:1:59-1:123
+    const r4 "|" @ 0:1:59-1:123
+    concat r3 r3 r4 @ 0:1:59-1:123
+    step @ 0:1:115-1:119
+    move r5 r0 @ 0:1:115-1:119
+    move r4 r5 @ 0:1:115-1:119
+    concat r3 r3 r4 @ 0:1:59-1:123
+    const r4 " " @ 0:1:59-1:123
+    concat r3 r3 r4 @ 0:1:59-1:123
+    step @ 0:1:121-1:122
+    move r5 r2 @ 0:1:121-1:122
+    to-text r5 r5 @ 0:1:121-1:122
+    move r4 r5 @ 0:1:121-1:122
+    concat r3 r3 r4 @ 0:1:59-1:123
+    const r4 "%" @ 0:1:59-1:123
+    concat r3 r3 r4 @ 0:1:59-1:123
+    return r3 @ 0:1:59-1:123
+    const r3 void @ 0:1:1-2:1
+    return r3 @ 0:1:1-2:1
+fn1 "main" params=0 captures=0 slots=4 entry @ 0:3:1-6:1
+    step @ 0:4:3-5:1
+    step @ 0:4:3-4:28
+    step @ 0:4:8-4:27
+    step @ 0:4:14-4:18
+    const r1 "ab" @ 0:4:14-4:18
+    step @ 0:4:20-4:23
+    const r2 float:bits:4612811918334230528 @ 0:4:20-4:23
+    step @ 0:4:25-4:26
+    const r3 int:7 @ 0:4:25-4:26
+    call r1 fn0 @ 0:4:8-4:27
+    move r0 r1 @ 0:4:8-4:27
+    call-builtin r0 "puts" 1 @ 0:4:3-4:28 0:4:8-4:27
+    const r0 void @ 0:3:1-6:1
+    return r0 @ 0:3:1-6:1

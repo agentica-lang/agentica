@@ -102,6 +102,10 @@ lines show. A task's stack ends with `task spawned at file:line:column`.
   `CHECK-RESULT-TYPE`, `CHECK-OPTIONAL-TYPE`, `CHECK-EXPECTED-TYPE`: `[]`, `{}`,
   `Set.new([])`, `error(...)`, `none`, `Channel.new(n)` or `ATS.new()` with no
   expected type: annotate the variable.
+- `CHECK-FORMAT-LITERAL`, `CHECK-FORMAT-SPEC`: the format of `format(...)` is
+  not a one-line `"..."` literal; a conversion it does not take (`%e`, `%X`,
+  `%+d`, a precision on `%d`), or a format of only plain `%s`/`%d` (use
+  `"#{x}"`). `builtins.md` ("Int, Float") has the conversions.
 - `CHECK-TRY-CONTEXT`: `try` in a function or block not returning a Result (a
   `Lazy` method block accepts any `try`: its failure ends the pipeline).
 - `CHECK-MAIN`: no `main` (for a run or `compile`; `check` needs none), or a

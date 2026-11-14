@@ -1,0 +1,12 @@
+program #11 0:1:1-82:4:1
+  module "format.agc"
+    declaration: function-decl #9 0:1:1-82:4:1 name="main"
+      result: type-ref #0 14:1:15-18:1:19 name="Void"
+      body: expr-stmt #8 21:2:3-78:3:1
+        value: call #7 21:2:3-77:2:59 name="puts" piped=false type=Void
+          arg: call #6 26:2:8-76:2:58 name="format" piped=false type=String
+            arg: literal #1 33:2:15-56:2:38 value=string:"%-6s|%6.2f|%03d|%x|%%" type=String
+            arg: literal #2 58:2:40-62:2:44 value=string:"ab" type=String
+            arg: literal #3 64:2:46-67:2:49 value=float:bits:4612811918334230528 type=Float
+            arg: literal #4 69:2:51-70:2:52 value=int:7 type=Int
+            arg: literal #5 72:2:54-75:2:57 value=int:255 type=Int

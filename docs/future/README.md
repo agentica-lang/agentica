@@ -12,7 +12,7 @@ delete its section; section numbers are never renumbered, so gaps stay.
 
 - `16-cbor.md`: typed `Term.encode` and `Term.decode` (#994).
 - `19-simd.md`: SIMD in the VM (#996).
-- `25-ruby-typed-idioms.md`: `format` (#982), and what was decided against.
+- `25-ruby-typed-idioms.md`: what was decided against.
 - `27-iteration-and-concurrency.md`: what was decided against in tasks and
   streams, and `Process.poll_line` (#997).
 - `28-vm-metrics.md`: VM metrics in Prometheus text (#992).
