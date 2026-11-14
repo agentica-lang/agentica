@@ -1390,8 +1390,9 @@ def test_bodies_describe_the_rest_of_the_tree(driver, project):
     assert reference["prelude"] in [function["linked"] for function in answer["prelude"]]
 
 
-def test_bodies_leave_no_node_undescribed(driver, project):
-    # Every function of std/http, which uses most of the language, and of the files above.
+def test_bodies_walk_a_large_module(driver, project):
+    # The case over every Ast.Expr and Ast.Stmt in bodies.agc has no catch-all, so a new node fails to compile there;
+    # this walks std/http, which uses most of the language, to see the answer's kinds in one real module.
     out, err = library(driver, project, "bodies", "std/http")
     answer = json.loads(out)
 
@@ -1400,7 +1401,7 @@ def test_bodies_leave_no_node_undescribed(driver, project):
 
     found = {kind for function in answer["functions"] + answer["prelude"] for node in function["body"]
              for kind in kinds(node)}
-    assert err == "" and "other" not in found and {"while", "for", "lambda", "struct", "list", "field"} <= found
+    assert err == "" and {"while", "for", "lambda", "struct", "list", "field"} <= found
 
 
 def test_bodies_name_each_module_a_nested_import_reaches(driver, project):
