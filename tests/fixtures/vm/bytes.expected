@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 311,
+  "steps": 362,
   "stdout": [
     "6",
     "6",
@@ -37,6 +37,7 @@
     "false",
     "2",
     "true",
+    "2",
     "[<Bytes 4 007f80ff>]",
     ""
   ],
