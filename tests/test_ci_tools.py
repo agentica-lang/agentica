@@ -2,6 +2,7 @@
 values a probe accepts (probe.yml passes them straight from the dispatch inputs), and the `changes` job of ci.yml."""
 import importlib.util
 import json
+import subprocess
 
 import pytest
 
@@ -88,6 +89,10 @@ def tree(tmp_path):
     for name, text in TREE.items():
         (tmp_path / name).parent.mkdir(parents=True, exist_ok=True)
         (tmp_path / name).write_text(text, encoding="utf-8")
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    subprocess.run(["git", "-C", str(tmp_path), "add", "."], check=True)
+    (tmp_path / "tests" / "__pycache__").mkdir()
+    (tmp_path / "tests" / "__pycache__" / "test_x.pyc").write_text('"std/port"', encoding="utf-8")
     return tmp_path
 
 

@@ -17,6 +17,7 @@ A std module is portable when the front end does not compile it in: not the file
 `compiler/embedded/`) imports, transitively, and not FRONT_END_STD.
 """
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -50,6 +51,12 @@ def read(path):
         return path.read_text(encoding="utf-8", errors="replace")
     except OSError:
         return ""
+
+
+def tracked(root, *folders):
+    listed = subprocess.run(["git", "-C", str(root), "ls-files", "-z", "--", *folders],
+                            check=True, capture_output=True).stdout
+    return [Path(name) for name in listed.decode("utf-8").split("\0") if name]
 
 
 def std_modules(root):
@@ -104,38 +111,37 @@ def module_of(path, portable):
 
 
 def users(name, root):
-    """The test modules and VM goldens that cover the uses of std/<name>, or None when a use maps to none."""
+    """The test modules and VM goldens that cover the uses of std/<name>; FullPath when a use maps to none."""
     uses = re.compile(r"std/" + re.escape(name) + r"(?![\w/])")
     py = sorted((root / "tests").glob("test_*.py"))
     tests, fixtures = set(), set()
-    for folder in ("tests", "examples"):
-        for path in (root / folder).rglob("*"):
-            rel = path.relative_to(root)
-            if not path.is_file() or rel.parts[:2] in SELF_TESTED or rel.parts[:4] == FROZEN:
-                continue
-            if not uses.search(read(path)):
-                continue
-            if folder == "examples":
-                tests.add("tests/test_examples.py")
-            elif len(rel.parts) == 2 and path.name.startswith("test_") and path.suffix == ".py":
-                tests.add(str(rel))
-            elif rel.parts[:3] == ("tests", "fixtures", "vm"):
-                fixture = path.name.split(".")[0]
-                if len(rel.parts) != 4 or not (path.parent / f"{fixture}.agc").is_file():
-                    raise FullPath(f"{rel} uses std/{name} and is no VM golden")
-                fixtures.add(fixture)
-            elif rel.parts[:3] == ("tests", "fixtures", "frontend"):
-                owner = root / "tests" / f"test_frontend_{rel.parts[3]}.py"
-                if not owner.is_file():
-                    raise FullPath(f"{rel} uses std/{name} and has no test module")
-                tests.add(str(owner.relative_to(root)))
-            else:
-                key = Path(rel.parts[2] if rel.parts[1] == "fixtures" else rel.parts[1]).stem
-                named = re.compile(r"[\"'/]" + re.escape(key) + r"(\.\w+)?[\"'/]")
-                owners = [str(p.relative_to(root)) for p in py if p != path and named.search(read(p))]
-                if not owners:
-                    raise FullPath(f"{rel} uses std/{name} and no test module names {key}")
-                tests.update(owners)
+    for rel in tracked(root, "tests", "examples"):
+        path = root / rel
+        if rel.parts[:2] in SELF_TESTED or rel.parts[:4] == FROZEN:
+            continue
+        if not uses.search(read(path)):
+            continue
+        if rel.parts[0] == "examples":
+            tests.add("tests/test_examples.py")
+        elif len(rel.parts) == 2 and path.name.startswith("test_") and path.suffix == ".py":
+            tests.add(str(rel))
+        elif rel.parts[:3] == ("tests", "fixtures", "vm"):
+            fixture = path.name.split(".")[0]
+            if len(rel.parts) != 4 or not (path.parent / f"{fixture}.agc").is_file():
+                raise FullPath(f"{rel} uses std/{name} and is no VM golden")
+            fixtures.add(fixture)
+        elif rel.parts[:3] == ("tests", "fixtures", "frontend"):
+            owner = root / "tests" / f"test_frontend_{rel.parts[3]}.py"
+            if not owner.is_file():
+                raise FullPath(f"{rel} uses std/{name} and has no test module")
+            tests.add(str(owner.relative_to(root)))
+        else:
+            key = Path(rel.parts[2] if rel.parts[1] == "fixtures" else rel.parts[1]).stem
+            named = re.compile(r"[\"'/]" + re.escape(key) + r"(\.\w+)?[\"'/]")
+            owners = [str(p.relative_to(root)) for p in py if p != path and named.search(read(p))]
+            if not owners:
+                raise FullPath(f"{rel} uses std/{name} and no test module names {key}")
+            tests.update(owners)
     return tests, fixtures
 
 
