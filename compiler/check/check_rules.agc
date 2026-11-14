@@ -691,16 +691,15 @@ end
 # The type arguments of a call of a builtin whose row has type variables, read back from the types the rule gave the
 # call and its arguments (each rule solves them its own way). It adds no failure, and its cost is the size of the row.
 def with_type_args(out: State.Out, node: Ast.Call, form: Model.Builtin) -> State.Out
+  generic = (
+    CheckTypes.has_variables?(form.result) or
+    form.parameters.any? do |param: Model.Named| CheckTypes.has_variables?(param.type) end
+  )
+
+  return out if !generic
+
+  names = row_variables(form)
   templates = form.parameters.map do |param: Model.Named| param.type end
-  names: List[String] = []
-  for name in templates.flat_map(&CheckTypes.variable_names).concat(CheckTypes.variable_names(form.result))
-    if !names.include?(name)
-      names = names.push(name)
-    end
-  end
-
-  return out if names.size == 0
-
   shape = Defaults.builtin_shape(form)
   count = node.args.size
   found = read_back(form.result, out.type, {})
@@ -716,8 +715,22 @@ def with_type_args(out: State.Out, node: Ast.Call, form: Model.Builtin) -> State
   out.with(st: State.record_type_args(out.st, node.id, solved))
 end
 
-# The variables of the template bound to the parts of actual at their places, the first binding of each kept. It walks
-# the template only, so a deep actual type costs nothing more.
+# The type variables of a row, once each, as they first appear in its parameters, then its result.
+def row_variables(form: Model.Builtin) -> List[String]
+  templates = form.parameters.map do |param: Model.Named| param.type end
+  names: List[String] = []
+  for name in templates.flat_map(&CheckTypes.variable_names).concat(CheckTypes.variable_names(form.result))
+    if !names.include?(name)
+      names = names.push(name)
+    end
+  end
+
+  names
+end
+
+# The variables of the template bound to the parts of actual at their places. The first binding of each is kept, even
+# one with Unknown inside: the call's own type is read first and is the most complete. It walks the template only, so
+# a deep actual type costs nothing more.
 def read_back(template: T.Type, actual: T.Type, found: Map[String, T.Type]) -> Map[String, T.Type]
   return found if T.unknown?(actual)
 

@@ -3,15 +3,16 @@ and the command line runs the same code, so the answers are the same bytes. The 
 fixtures/analysis/driver.agc) that calls the library, and the CLI with `--json` on the same files, and compare both
 streams. The driver is compiled once for the module (it compiles the core of the front end with it); each case is a run
 of its bytecode. That cost bounds the breadth: a few questions of the spec tests of each command stand for them."""
+import itertools
 import json
 import re
 import shutil
 from pathlib import Path
 
 import pytest
-from hypothesis import HealthCheck, given, settings, strategies as st
+from hypothesis import given, settings, strategies as st
 
-from tests.agentica_test import ROOT, SLOW, cli, compile_agc, run, run_vm, vm_environment, write_files
+from tests.agentica_test import ROOT, SLOW, cli, compile_agc, run, run_vm, start_vm, vm_environment, write_files
 from tests.test_spec_partial import APP, BAD_DECLARATIONS, FIXED, MODELS as PARTIAL_MODELS
 from tests.test_spec_type_at import AGENTS, MODELS, ORDERS, where, write_agents
 
@@ -1306,18 +1307,49 @@ VALUES = st.recursive(
     lambda inner: st.one_of(
         inner.map(lambda value: (f"[{value[0]}]", f"List[{value[1]}]")),
         inner.map(lambda value: (f"some({value[0]})", f"Optional[{value[1]}]")),
+        inner.map(lambda value: (f'{{"k": {value[0]}}}', f"Map[String,{value[1]}]")),
+        inner.map(lambda value: (f"ok({value[0]})", f"Result[{value[1]}]")),
     ),
     max_leaves=4,
 )
 
+# The calls made with a value `v` of type `T`, and the type arguments each binds: a generic function, and builtins whose
+# rules solve their variables each their own way.
+GENERIC_CALLS = [
+    ("wrap({v})", lambda t: [t]),
+    ("[{v}].first", lambda t: [t]),
+    ("some({v}).unwrap_or({v})", lambda t: [t]),
+    ('{{"k": {v}}}.get("k")', lambda t: ["String", t]),
+]
 
-@settings(max_examples=200 if SLOW else 10, suppress_health_check=[HealthCheck.function_scoped_fixture])
+
+# A new file name for each example, so no answer comes from the cache of an earlier one.
+SERVED = itertools.count()
+
+
+@pytest.fixture(scope="module")
+def bodies_server(driver, tmp_path_factory):
+    """One driver VM that answers `bodies` for each path written to its stdin, in its own directory."""
+    work = tmp_path_factory.mktemp("agentica-bodies-")
+    vm = start_vm(driver, "serve", stdin=True, cwd=work)
+    yield vm, work
+    vm.close_stdin()
+    vm.wait()
+
+
+@settings(max_examples=200 if SLOW else 20)
 @given(values=st.lists(VALUES, min_size=1, max_size=4))
-def test_bodies_type_arguments_are_the_types_of_the_values_given(driver, project, values):
-    # The oracle is the generator: `wrap(value)` binds T to the type it built the value of.
-    lines = [f"  _ = wrap({value})" for value, _ in values]
+def test_bodies_type_arguments_are_the_types_of_the_values_given(bodies_server, values):
+    # The oracle is the generator: each call binds its variables to the type it built the value of.
+    vm, work = bodies_server
+    lines = [f"  _ = {call.format(v=value)}" for value, _ in values for call, _ in GENERIC_CALLS]
     source = GENERICS.split("def apply")[0] + "def use() -> Void\n" + "".join(line + "\n" for line in lines) + "end\n"
-    write_files(project, {"values.agc": source})
-    _answer, functions = bodies_of(driver, project, "values.agc")
-    found = [[type_text(arg) for arg in node["children"][0]["type_args"]] for node in functions["use"]["body"]]
-    assert found == [[type] for _, type in values], source
+    name = f"values_{next(SERVED)}.agc"
+    write_files(work, {name: source})
+    vm.process.stdin.write((name + "\n").encode())
+    vm.process.stdin.flush()
+    answer = vm.next_line()
+    assert not answer.startswith("error "), (source, answer)
+    use = [function for function in json.loads(answer)["functions"] if function["name"] == "use"][0]
+    found = [[type_text(arg) for arg in node["children"][0]["type_args"]] for node in use["body"]]
+    assert found == [types(type) for _, type in values for _, types in GENERIC_CALLS], source

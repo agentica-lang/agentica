@@ -28,6 +28,8 @@ import Analysis from "std/analysis"
 #   type-at-partial PATH LINE COL, refs-partial PATH LINE COL   the same, with the partial answers
 #   native-modules PATH    the JSON of Analysis.native_modules_json on stdout, or the diagnostic on stderr
 #   bodies PATH            the JSON of Analysis.bodies_json on stdout, or the diagnostic on stderr
+#   serve                  the last command: each line of stdin is a PATH, answered as `bodies` with one line on
+#                          stdout (the JSON, or `error ` and the message), so one VM serves many files
 #   symbol NAME PATH...    the last command (it takes every word left): the same
 # An error is printed after Analysis.diagnostic read it and Analysis.diagnostic_json wrote it back, so the output of a
 # failure also proves that the pair is the identity.
@@ -120,6 +122,9 @@ def main() -> Void
     elsif word == "bodies"
       show(bodied(session, words[at + 1]))
       at += 2
+    elsif word == "serve"
+      serve(session)
+      at = words.size
     elsif word == "type-at-partial"
       show(typed_partial(session, words[at + 1], words[at + 2].to_i!, words[at + 3].to_i!))
       at += 4
@@ -221,6 +226,19 @@ end
 def natives(session: Analysis.Session, path: String) -> Result[JSON.Value]
   found = try Analysis.native_modules(session, path)
   return ok(Analysis.native_modules_json(found))
+end
+
+def serve(session: Analysis.Session) -> Void
+  while true
+    line = IO.gets()
+    return if !line.ok?
+    answer = bodied(session, line.unwrap!.strip)
+    if answer.ok?
+      puts(JSON.encode(answer.unwrap!))
+    else
+      puts("error #{answer.message}")
+    end
+  end
 end
 
 def bodied(session: Analysis.Session, path: String) -> Result[JSON.Value]
