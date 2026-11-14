@@ -102,6 +102,11 @@ struct agc_loop {
   uv_timer_t parent_check;
   bool parent_check_init;
 #endif
+#if defined(AGC_TSAN)
+  uv_prepare_t reopen;
+  uv_timer_t reopen_tick;
+  bool reopen_init, reopen_tick_init;
+#endif
 #endif
   /* The Native.wait_* pollers that poll now, linked by `next_wait`, where a descriptor takes one wait at a time
      (agc_poll_one_wait). I/O role only. */
@@ -923,6 +928,9 @@ static agc_loop *new_loop(agc_vm *vm) {
 #if defined(__APPLE__)
   loop->parent_check_init = false;
 #endif
+#if defined(AGC_TSAN)
+  loop->reopen_init = loop->reopen_tick_init = false;
+#endif
 #endif
   if (uv_mutex_init(&loop->service_lock) != 0) {
     free(loop);
@@ -1332,6 +1340,59 @@ static void stop_parent_check(uv_timer_t *timer) {
 }
 #endif
 
+/* TSan before LLVM 21 keeps one saved signal mask per thread while it runs the handlers it held back. A second signal
+   that lands as that begins is run from inside the first handler (at the end of uv_async_send's write), which saves
+   "all blocked" over the saved mask, and the thread keeps every signal blocked from then on: the loop's thread takes
+   no stop signal any more. So a TSan build opens the stop signals that were open at the first watch, before each poll
+   and, for a mask lost between that and the poll, every REOPEN_MS while the loop sleeps. The first watch runs on the
+   loop's thread, before any signal is handled: its mask is the one to keep. */
+#if defined(AGC_TSAN)
+#define REOPEN_MS 100
+
+static sigset_t stop_open;
+static bool stop_open_known;
+
+static void reopen_stop(uv_prepare_t *prepare) {
+  (void)prepare;
+  pthread_sigmask(SIG_UNBLOCK, &stop_open, NULL);
+}
+
+static void reopen_tick(uv_timer_t *timer) {
+  (void)timer;
+  pthread_sigmask(SIG_UNBLOCK, &stop_open, NULL);
+}
+
+static void reopen_start(agc_loop *loop) {
+  if (!stop_open_known) {
+    sigset_t now;
+    pthread_sigmask(SIG_BLOCK, NULL, &now);
+    sigemptyset(&stop_open);
+    for (size_t k = 0; k < STOP_SIGNALS; k++)
+      if (!sigismember(&now, stop_signals[k])) sigaddset(&stop_open, stop_signals[k]);
+    stop_open_known = true;
+  }
+  if (!loop->reopen_init && uv_prepare_init(&loop->uv, &loop->reopen) == 0) {
+    loop->reopen_init = true;
+    uv_prepare_start(&loop->reopen, reopen_stop);
+    uv_unref((uv_handle_t *)&loop->reopen);
+  }
+  if (!loop->reopen_tick_init && uv_timer_init(&loop->uv, &loop->reopen_tick) == 0) {
+    loop->reopen_tick_init = true;
+    uv_timer_start(&loop->reopen_tick, reopen_tick, REOPEN_MS, REOPEN_MS);
+    uv_unref((uv_handle_t *)&loop->reopen_tick);
+  }
+}
+
+static void reopen_end(agc_loop *loop) {
+  if (loop->reopen_init) uv_close((uv_handle_t *)&loop->reopen, NULL);
+  if (loop->reopen_tick_init) uv_close((uv_handle_t *)&loop->reopen_tick, NULL);
+  loop->reopen_init = loop->reopen_tick_init = false;
+}
+#else
+static void reopen_start(agc_loop *loop) { (void)loop; }
+static void reopen_end(agc_loop *loop) { (void)loop; }
+#endif
+
 void agc_io_watch_stop(agc_vm *vm, int64_t driver) {
   agc_loop *loop = new_loop(vm);
   if (loop && uv_async_init(&loop->uv, &loop->wake, stop_woken) == 0) {
@@ -1339,6 +1400,7 @@ void agc_io_watch_stop(agc_vm *vm, int64_t driver) {
     loop->wake.data = loop;
     stop_status()->wake = &loop->wake;
   }
+  if (loop) reopen_start(loop);
   stop_status()->driver = (pid_t)driver;
   atomic_store(&stop_status()->held, true);
   if (loop && uv_timer_init(&loop->uv, &loop->stop_grace) == 0) {
@@ -2330,6 +2392,7 @@ static void unwatch_stop(agc_loop *loop) {
     loop->parent_check_init = false;
   }
 #endif
+  reopen_end(loop);
   if (stop_status()->wake != &loop->wake) return;
   sigset_t saved;
   agc_io_block_stop(&saved);
