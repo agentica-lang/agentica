@@ -1114,10 +1114,111 @@ def test_bodies_read_a_std_module_as_the_binary_carries_it(driver, project):
     functions = {function["name"]: function for function in answer["functions"]}
     golden = ROOT / "tests" / "fixtures" / "analysis" / "binary_readers.tree"
     assert readers_tree(functions) == golden.read_text()
+    assert all(function["pure"] for function in answer["functions"])
     # A module of std/internal/ is private to std/, and a missing one cannot be read.
     for path in ("std/internal/compiler/analysis/bodies", "std/absent"):
         out, err = library(driver, project, "bodies", path)
         assert (out, json.loads(err)["code"]) == ("", "QUERY-USAGE")
+    # A relative import of a std/ module is the binary's too, not a file of the folder std/ of the disk.
+    (project / "std" / "internal").mkdir()
+    (project / "std" / "internal" / "websocket.agc").write_text('def broken() -> Int = "no"\n')
+    out, err = library(driver, project, "bodies", "std/http")
+    assert err == "" and "std/internal/websocket.agc" in [module["file"] for module in json.loads(out)["modules"]]
+    # A buffer with a std/ name is a file like any other.
+    (project / "one.agc").write_text("def one() -> Int = 1\n")
+    out, err = library(driver, project, "buffer", "std/binary.agc", "one.agc", "bodies", "std/binary.agc")
+    assert (err, [function["name"] for function in json.loads(out)["functions"]]) == ("", ["one"])
+
+
+# Purity through calls into another file, a cycle, function values (a parameter, a field, one given to a builtin, a
+# Lazy terminal), a reference `&name`, a loop, an extern function, file and channel sources and an ATS read.
+PURITY = """import Util from "util_log"
+
+struct Handler
+  run: Fn[Int, Int]
+end
+
+extern module "other"
+  def twice(n: Int) -> Int
+end
+
+def add(a: Int, b: Int) -> Int = a + b
+
+def outer(n: Int) -> Int = middle(n)
+
+def middle(n: Int) -> Int = Util.log("#{n}")
+
+def ping(n: Int) -> Int
+  return 0 if n == 0
+  pong(n - 1)
+end
+
+def pong(n: Int) -> Int = ping(n)
+
+def apply(f: Fn[Int, Int]) -> Int = f.call(1)
+
+def refs(xs: List[Int]) -> List[Int] = xs.map(&touch)
+
+def touch(x: Int) -> Int
+  return x if File.read_text("x").ok?
+  0
+end
+
+def loop(n: Int) -> Int
+  total = 0
+  while total < n
+    total += Util.log("a")
+  end
+  total
+end
+
+def native(n: Int) -> Int = twice(n)
+
+def field(h: Handler) -> Int = h.run(1)
+
+def lines(path: String) -> Lazy[String] = File.foreach(path)
+
+def drain(ch: Channel[Int]) -> Lazy[Int] = ch.lazy(100)
+
+def peek(t: ATS[String, Int]) -> Bool = t.has_key?("a")
+
+def map_with(xs: List[Int], f: Fn[Int, Int]) -> List[Int] = xs.map(f)
+
+def head(source: Lazy[String]) -> Result[List[String]] = source.first(1)
+
+def steps() -> Result[List[Int]] = [1, 2].lazy.map { |x| x + 1 }.to_a
+"""
+
+
+def test_bodies_say_why_a_function_is_not_pure(driver, project):
+    write_files(project, {"util_log.agc": "def log(text: String) -> Int\n  puts(text)\n  return 1\nend\n",
+                          "purity.agc": PURITY})
+    answer, functions = bodies_of(driver, project, "purity.agc")
+    prefix = next(module["prefix"] for module in answer["modules"] if module["file"] == "util_log.agc")
+    reasons = {name: (function["pure"], [(reason["effect"], reason["call"], reason["range"]["start"]["line"],
+                                          reason["through"]) for reason in function["impure"]])
+               for name, function in functions.items()}
+    puts = ("stdout", "puts", 2)
+    read = ("filesystem", "File.read_text", 29)
+    assert reasons == {
+        "add": (True, []),
+        "outer": (False, [(*puts, ["middle", f"{prefix}log"])]),
+        "middle": (False, [(*puts, [f"{prefix}log"])]),
+        "ping": (True, []),
+        "pong": (True, []),
+        "apply": (False, [("function-value", "call", 24, [])]),
+        "refs": (False, [(*read, ["touch"])]),
+        "touch": (False, [(*read, [])]),
+        "loop": (False, [(*puts, [f"{prefix}log"])]),
+        "native": (False, [("native", "twice", 41, [])]),
+        "field": (False, [("function-value", "call", 43, [])]),
+        "lines": (False, [("filesystem", "File.foreach", 45, [])]),
+        "drain": (False, [("concurrency", "Channel.lazy", 47, [])]),
+        "peek": (False, [("concurrency", "ATS.has_key?", 49, [])]),
+        "map_with": (False, [("function-value", "List.map", 51, [])]),
+        "head": (False, [("function-value", "Lazy.first", 53, [])]),
+        "steps": (False, [("function-value", "Lazy.to_a", 55, [])]),
+    }
 
 
 def test_bodies_name_each_module_a_nested_import_reaches(driver, project):

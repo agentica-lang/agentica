@@ -28,6 +28,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   with `case` (#1115).
 - `std/analysis`: `Analysis.bodies(session, "std/binary")` reads a `std/` module as the binary carries it (#1159).
 - `std/analysis`: a `call` node of `Analysis.bodies` has the `type_args` of a generic function or builtin (#1159).
+- `std/analysis`: each function of `Analysis.bodies` says whether it is `pure`, and why not in `impure`, through every call (#1159).
 - `std/actor`: `Actor.Timeout`, a receive timeout that wakes an actor when no message came in time (#1523).
 - `format("%-8s|%6.2f|%03d|%x", name, price, n, n)`, Ruby's `format`, with a format string literal that `check` reads (`CHECK-FORMAT-SPEC`, `CHECK-FORMAT-LITERAL`) (#982).
 - Test-only dependencies: `group = "test"` on a dependency of `agentica.toml` (`agentica add ... --group test`); only the tests import it, and projects that depend on the package do not fetch it (#1196).
@@ -42,6 +43,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- A hand-made `.agcb` that interpolates an Error whose message is not a String fails with `RUNTIME-INTERNAL` under the JIT too, instead of crossing compiled code (#1561).
 - The bytecode cache finds the C compiler as the native build does (an unset `PATH` or an empty entry of it, Windows `.com`/`.exe`, a wrapper such as ccache), so a change of compiler always compiles the program again (#1476).
 - `format`: leading zeros of a precision no longer count as digits, so `%.000001f` is `%.1f` (#1557).
 - `System.subscribe`: a listed signal that was ignored when the program started stays ignored, and the call subscribes the others instead of failing (#1533).

@@ -1107,8 +1107,9 @@ OP_HELPER agc_status agc_op_concat(agc_vm *vm, agc_value *dst, const agc_value *
 
 /* TO_TEXT prints any value through the checked text form, which charges a compound, String or Json form itself;
    the caller applies the cost. A Void at the top level or inside a list, map value, set, struct, enum or Result is
-   hand-made bytecode (the checker rejects a Void value with CHECK-VOID-VALUE): the checked form reports it instead
-   of failing, so the helper answers WRONG_TAG with dst left alone. Structs and enums come from loader-checked
+   hand-made bytecode (the checker rejects a Void value with CHECK-VOID-VALUE), and so is an Error whose message is
+   not a String (a STRUCT of the Error type with any registers): the checked form reports both instead of failing,
+   so the helper answers WRONG_TAG with dst left alone. Structs and enums come from loader-checked
    instructions, and a Json never holds a non-finite Float (JSON.parse and JSON.from refuse those), so on a loaded
    program the checked form fails for nothing else here. Unlike EQ, which answers shallow pairs without walking them
    (equal_values returns -1 past Ints, Floats, Nils, Strings, Ranges and Bools), TO_TEXT walks and formats

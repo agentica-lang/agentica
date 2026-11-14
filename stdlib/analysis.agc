@@ -156,6 +156,9 @@ type BodyParam = Model.BodyParam
 ## A module of the linked program of `bodies`: the prefix of its linked names and its file.
 type BodyModule = Model.BodyModule
 
+## Why a function of `bodies` is not pure.
+type Reason = Model.Reason
+
 ## One function of `bodies`.
 type Body = Model.Body
 

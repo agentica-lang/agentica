@@ -17,6 +17,7 @@ import Ast from "../syntax/ast"
 import Source from "../syntax/source"
 import Types from "../syntax/types"
 import Model from "model"
+import Purity from "purity"
 
 ## The functions of the root file of `linked` (checked as `checked`) that have a body, in source order. `file` is the
 ## name the answer gives the file, and `modules` the prefix and the file of each linked module.
@@ -44,11 +45,16 @@ def of_program(
     end
   end
 
+  program = Purity.program(linked, checked)
+  known = Purity.unknown()
   functions: List[Model.Body] = []
   for decl in root.declarations
     case decl
       Ast.Decl.Function(node) if node.native.none? ->
-        functions = functions.push(body_of(checked, node, written.get(node.id, node.name), exported.include?(node.id)))
+        reasoned = Purity.reasons(program, known, node.name)
+        known = reasoned.known
+        made = body_of(checked, node, written.get(node.id, node.name), exported.include?(node.id))
+        functions = functions.push(made.with(pure: reasoned.reasons.size == 0, impure: reasoned.reasons))
       _ -> next
     end
   end
@@ -88,6 +94,8 @@ def body_of(checked: Checker.Checked, node: Ast.FunctionDecl, name: String, expo
     params: params,
     result: bound(checked, node.result.id, 0),
     body: statements(checked, node.body),
+    pure: true,
+    impure: [],
   )
 end
 
