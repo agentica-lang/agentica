@@ -541,8 +541,9 @@ static agc_string *debug_text(agc_vm *vm, agc_value v, bool json, bool *is_void)
 
 agc_string *agc_debug(agc_vm *vm, agc_value v) { return debug_text(vm, v, false, NULL); }
 
-/* Like agc_text, but a Void at the top level or inside a list, map value, set, struct, enum or Result reports
-   through the result instead of failing: every other invalid value still fails as agc_text does. */
+/* Like agc_text, but a Void at the top level or inside a list, map value, set, struct, enum or Result, or a top-level
+   Error whose message is not a String, reports through the result instead of failing: every other invalid value
+   still fails as agc_text does. */
 bool agc_text_checked(agc_vm *vm, agc_value v, agc_string **text) {
   if (agc_is(v, AGC_T_VOID)) return false;
   if (agc_is(v, AGC_T_STRING)) {
@@ -550,7 +551,9 @@ bool agc_text_checked(agc_vm *vm, agc_value v, agc_string **text) {
     return true;
   }
   if (agc_is_error(vm, v)) {
-    *text = agc_error_message(vm, v);
+    agc_value message = agc_as_struct(vm, v)->fields[AGC_ERROR_MESSAGE];
+    if (!agc_is(message, AGC_T_STRING)) return false;
+    *text = agc_as_string(vm, message);
     return true;
   }
   if (agc_is(v, AGC_T_JSON)) {
