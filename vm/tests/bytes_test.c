@@ -151,7 +151,7 @@ static void test_text(void) {
 
 /* JSON has no byte type: the checker refuses it, and the VM fails hand-made bytecode that gets one through. */
 static void json_refused(agc_value v, bool from) {
-  if (setjmp(vm.fail) == 0) {
+  if (AGC_CATCH(vm.fail) == 0) {
     if (from)
       (void)agc_json_from(&vm, v, 0);
     else
@@ -583,7 +583,7 @@ static void test_string_keys(void) {
 static void handed(agc_value program, agc_front_end *fe) {
   agc_value args[3] = {program, vm.rt->empty_list, vm.rt->empty_list};
   memset(fe, 0, sizeof *fe);
-  if (setjmp(vm.fail) == 0) {
+  if (AGC_CATCH(vm.fail) == 0) {
     (void)agc_test_row("FrontEnd.hand_off.bytes", 3)->fn(&vm, args, 0);
     assert(0);
   }
@@ -640,7 +640,7 @@ static void test_hand_off_survives_collection(void) {
   vm.rt->front_end = &fe;
   hand_off_large_fn(&fe);
   scrub_stack_fn();
-  /* The jmp_buf of the hand-off's setjmp lives in the static vm and may still hold the value in a saved register. */
+  /* The catch buffer of the hand-off lives in the static vm and may still hold the value in a saved register. */
   memset(&vm.fail, 0, sizeof vm.fail);
   for (int round = 0; round < 5; round++) {
     for (int k = 0; k < 200; k++) memset(agc_new_bytes((size_t)1 << 20)->data, 0xAA, (size_t)1 << 20);

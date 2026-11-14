@@ -425,7 +425,7 @@ static void long_names(void) {
  * frame of the prelude. code[1] of a function is the instruction its frame last ran (pc 2). */
 static void fail_at(agc_vm *vm, int64_t argument, uint32_t span) {
   agc_string *message = agc_make_string("boom", 4, 4);
-  if (setjmp(vm->turn) == 0) {
+  if (AGC_CATCH(vm->turn) == 0) {
     if (argument == -2)
       agc_fail(vm, "RUNTIME-TEST", "boom", span);
     else

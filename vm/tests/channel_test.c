@@ -592,7 +592,7 @@ static void send_from_other_run(agc_value address) {
   agc_runtime *mine = vm.rt;
   agc_runtime other = *mine;
   vm.rt = &other;
-  if (setjmp(vm.fail) == 0) {
+  if (AGC_CATCH(vm.fail) == 0) {
     (void)send_to(main_task, address, 1, 0);
     assert(!"the send did not fail");
   }
@@ -649,7 +649,7 @@ static void test_address_gone(void) {
     lost[k] = lost_address_fn();
     scrub_stack_fn();
   }
-  /* The jmp_buf of the last failure lives in the static vm and may still hold a pointer in a saved register. */
+  /* The catch buffer of the last failure lives in the static vm and may still hold a pointer in a saved register. */
   memset(&vm.fail, 0, sizeof vm.fail);
   for (int round = 0; round < 5; round++) agc_gc_collect();
   int gone = 0;

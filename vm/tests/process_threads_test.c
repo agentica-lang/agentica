@@ -274,9 +274,9 @@ static void test_the_channel_through_posted_steps(void) {
   settle();
 }
 
-/* The code of the failure of a call of B, or "nothing" when it returns. No local lives across the setjmp. */
+/* The code of the failure of a call of B, or "nothing" when it returns. No local lives across the catch. */
 static const char *fail_code(const agc_builtin *b, agc_value *args) {
-  if (setjmp(vm.fail) != 0) return vm.outcome->code;
+  if (AGC_CATCH(vm.fail) != 0) return vm.outcome->code;
   (void)b->fn(&vm, args, 0);
   return "nothing";
 }

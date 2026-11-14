@@ -711,7 +711,7 @@ static void test_upgrade_context_names_its_context_argument(void) {
   const char *name = "HttpWire.upgrade_context";
   const agc_builtin *b = agc_find_builtin((const uint8_t *)name, strlen(name), 4);
   assert(b);
-  if (setjmp(vm.fail) == 0) {
+  if (AGC_CATCH(vm.fail) == 0) {
     (void)b->fn(&vm, args, 100);
     assert(!"the call did not fail");
   }
@@ -724,7 +724,7 @@ static const char *context_fails(const char *name, agc_value options) {
   const agc_builtin *b = agc_find_builtin((const uint8_t *)name, strlen(name), 1);
   assert(b);
   agc_value args[1] = {options};
-  if (setjmp(vm.fail) != 0) return vm.outcome->code;
+  if (AGC_CATCH(vm.fail) != 0) return vm.outcome->code;
   (void)b->fn(&vm, args, 0);
   return "nothing";
 }

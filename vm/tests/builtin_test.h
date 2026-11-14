@@ -39,9 +39,9 @@ static inline agc_value agc_test_call(agc_vm *vm, agc_task *task, const agc_buil
 }
 
 /* The code of the failure (agc_fail) of a call of builtin, or "nothing" when it returns. No local lives across the
-   setjmp. */
+   catch. */
 static inline const char *agc_test_fail_code(agc_vm *vm, const agc_builtin *builtin, agc_value *args) {
-  if (setjmp(vm->fail) != 0) return vm->outcome->code;
+  if (AGC_CATCH(vm->fail) != 0) return vm->outcome->code;
   (void)builtin->fn(vm, args, 0);
   return "nothing";
 }

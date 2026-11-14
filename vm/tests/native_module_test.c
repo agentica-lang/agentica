@@ -77,7 +77,7 @@ static agc_value call(const char *signature, const agc_value *items, size_t n) {
 }
 
 static void fails(const char *signature, const agc_value *items, size_t n, const char *code) {
-  if (setjmp(vm.fail) == 0) {
+  if (AGC_CATCH(vm.fail) == 0) {
     (void)call(signature, items, n);
     assert(!"the call did not fail");
   }
@@ -215,7 +215,7 @@ static void test_binding(void) {
   fails(wide, two, 2, "RUNTIME-INTERNAL");
   agc_value nul_args[2] = {agc_string_value(agc_make_string("module (Int, Int) -> Int add de\0mo", 34, 34)),
                            agc_list_value(agc_list_from_array(two, 2))};
-  if (setjmp(vm.fail) == 0) {
+  if (AGC_CATCH(vm.fail) == 0) {
     (void)agc_ffi_builtins[0].fn(&vm, nul_args, 0);
     assert(!"a NUL library was opened");
   }
@@ -462,7 +462,7 @@ static void dirty_fails(const char *signature, const agc_value *items, size_t n,
   park(signature, items, n);
   agc_test_wait_woken(&vm, vm.task);
   /* In the task's turn a failure jumps to vm.turn. */
-  if (setjmp(vm.turn) == 0) {
+  if (AGC_CATCH(vm.turn) == 0) {
     (void)finish();
     assert(!"the dirty call did not fail");
   }
@@ -650,7 +650,7 @@ static void test_a_dirty_call_that_cannot_start(void) {
   park("compute module " COUNTER "(Counter) -> Int wait_gate demo", &c, 1);
   agc_test_wait_woken(&vm, vm.task);
   assert(setrlimit(RLIMIT_NPROC, &saved) == 0);
-  if (setjmp(vm.turn) == 0) {
+  if (AGC_CATCH(vm.turn) == 0) {
     (void)finish();
     assert(!"the call that could not start did not fail");
   }

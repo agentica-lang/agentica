@@ -884,7 +884,7 @@ static agc_task *task_after_raise;
 
 static void service_raising(void *arg) {
   agc_task *before = arg;
-  if (setjmp(vm.fail) == 0) {
+  if (AGC_CATCH(vm.fail) == 0) {
     (void)agc_io_service(&vm);
     assert(!"the raising done did not raise");
   }
@@ -1022,7 +1022,7 @@ static const agc_io_kind timer_only_io = {NULL, idle_done, idle_expired, NULL, f
 static void test_timer_only_kind_is_refused(void) {
   running();
   agc_task *task = vm.task;
-  if (setjmp(vm.fail) == 0) {
+  if (AGC_CATCH(vm.fail) == 0) {
     (void)agc_io_start(&vm, &timer_only_io, NULL, agc_void(), 5);
     assert(!"a timer-only kind was started");
   }
@@ -1039,7 +1039,7 @@ static void refused_start(const agc_io_kind *kind, int callbacks, const char *co
   task->callbacks = (uint32_t)callbacks;
   gate *g = new_gate();
   dropped = 0;
-  if (setjmp(vm.fail) == 0) {
+  if (AGC_CATCH(vm.fail) == 0) {
     (void)agc_io_start(&vm, kind, g, agc_void(), 5);
     assert(!"a refused job was started");
   }
