@@ -77,6 +77,7 @@ enum Rule
   Show
   TaskAwait
   TaskAwaitTimeout
+  TaskInbox
   TaskMap
   TaskMonitor
   TaskSpawn

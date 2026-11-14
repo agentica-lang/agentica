@@ -1522,6 +1522,19 @@ static agc_value builtin_id(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_int((int64_t)agc_as_task(vm, args[0])->id);
 }
 
+static agc_value builtin_set_inbox(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)agc_as_channel(vm, args[0]);
+  (void)span;
+  vm->task->inbox = args[0];
+  return agc_void();
+}
+
+static agc_value builtin_inbox(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)args;
+  agc_value inbox = vm->task->inbox;
+  return agc_optional_value(vm, inbox.tag == AGC_T_CHANNEL, inbox, span);
+}
+
 const agc_builtin agc_task_builtins[] = {
   {"Task.spawn", 2, builtin_spawn, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"Task.await", 1, builtin_await, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
@@ -1538,6 +1551,8 @@ const agc_builtin agc_task_builtins[] = {
   {"Task.current", 0, builtin_current, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"Task.id", 1, builtin_id, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"Task.monitor_ref", 3, builtin_monitor_ref, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"Task.set_inbox", 1, builtin_set_inbox, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"Task.inbox", 0, builtin_inbox, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
 };
 
 const size_t agc_task_builtin_count = sizeof agc_task_builtins / sizeof agc_task_builtins[0];

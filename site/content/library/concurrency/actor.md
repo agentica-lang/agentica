@@ -29,6 +29,14 @@ The actor's task is a child of the task that calls `start`: a crash or cancel of
 
 A `Ref` has three fields: `address`, `inbox` (the `Channel[M]`) and `task`. Send through `address`. The `inbox` is there only for `Task.monitor`: never receive from it, which would take a message from the actor.
 
+## Actor.inbox
+
+```signature
+Actor.inbox() -> Channel[M]
+```
+
+The inbox of the running actor, as Erlang's `self()`: `init`, a handler, `terminate` or a timeout can monitor a task into it, `Task.monitor(task, inbox) do |down| Msg.Down(down) end`, or give out `inbox.address`. Never receive from it. `M` comes from the expected type, `inbox: Channel[Msg] = Actor.inbox`, and is not checked: it must be the actor's message type. Called outside an actor's task, also in a task the actor spawned, it is `RUNTIME-UNWRAP-ERROR` (`actor: not in an actor`).
+
 ## Actor.cast and Actor.call
 
 ```signature

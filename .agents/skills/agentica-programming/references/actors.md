@@ -17,6 +17,7 @@ Actor.cast(address: Address[M], message: M, timeout_ms: Int = 5000) -> Result[Vo
 Actor.call(address: Address[M], timeout_ms: Int, make: Fn[Channel[R], M]) -> Result[R]
 Actor.reply(channel: Channel[R], value: R) -> Bool
 Actor.stop(actor: Actor.Ref[S, M], timeout_ms: Int) -> Result[Void]
+Actor.inbox() -> Channel[M]
 ```
 
 An actor is a task that owns its state `S` and handles the messages `M` (your
@@ -27,6 +28,11 @@ enum) of one inbox, one at a time. The handler ends with
 never `recv` from it) and `task`. `cast` and `call` take the address, `stop`
 the `Ref`; there are no methods.
 
+- `inbox: Channel[Msg] = Actor.inbox` is the running actor's own inbox (as
+  Erlang's `self()`), for `init` or a handler to `Task.monitor` into or to
+  give out `inbox.address`. `M` is not checked: annotate the actor's message
+  type. Outside the actor's task (also in a task it spawned) it crashes
+  (`RUNTIME-UNWRAP-ERROR`).
 - `call` builds the message around a new reply channel and waits:
   `Actor.call(addr, 1000) do |reply| Msg.Get(reply) end`; the handler answers
   with `Actor.reply(reply, value)`. The answer type comes from the expected

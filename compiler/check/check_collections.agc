@@ -29,6 +29,7 @@ def check_collection_rule(cx: State.Cx, st: State.St, site: State.Site, rule: Mo
     Model.Rule.AtsNew -> check_ats_new(cx, st, site)
     Model.Rule.AtsCall -> check_ats_call(cx, st, site)
     Model.Rule.ChannelNew -> check_channel_new(cx, st, site)
+    Model.Rule.TaskInbox -> check_task_inbox(cx, st, site)
     Model.Rule.ChannelSend -> check_channel_send(cx, st, site, &Args.channel_argument)
     Model.Rule.AddressSend -> check_channel_send(cx, st, site, &Args.address_argument)
     Model.Rule.ChannelAddress -> check_channel_address(cx, st, site)
@@ -560,6 +561,30 @@ def check_channel_new(cx: State.Cx, st: State.St, site: State.Site) -> Result[St
   end
 
   ok(State.Out(st: capacity.st, type: site.expected))
+end
+
+# Task.inbox: the expected Optional[Channel[T]], whose T the VM cannot check (std/actor keeps it right).
+def check_task_inbox(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
+  expected = site.expected
+  span = site.node.span
+  if T.unknown?(expected)
+    return error(
+      State.fail_help(
+        cx,
+        st,
+        "CHECK-EXPECTED-TYPE",
+        "Task.inbox needs an expected type",
+        span,
+        "annotate the variable, for example inbox: Optional[Channel[Msg]] = Task.inbox",
+      ),
+    )
+  end
+
+  if !T.is?(expected, "Optional") or !T.is?(T.item(expected), "Channel")
+    return error(State.mismatch(cx, st, expected, site.selected.result, span))
+  end
+
+  ok(State.Out(st: st, type: expected))
 end
 
 # Channel.send and Address.send: the target (a Channel[T] or an Address[T], checked by `argument`), a T and a timeout.

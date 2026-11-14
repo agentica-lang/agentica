@@ -606,6 +606,8 @@ struct agc_task {
   /* The Native.Mutex this task waits for (in its FIFO, or woken to take it), and the ones it holds, newest first
      (vm/mutex.c); under rt->sync. */
   struct agc_mutex *mutex_wait, *mutexes;
+  /* The inbox of the actor this task runs (Task.set_inbox, std/actor), a Channel; void in any other task. */
+  agc_value inbox;
 };
 
 /* Where agc_fail and agc_exit jump while compiled code calls a builtin (agc_jit_call_builtin, vm/jit/jit.c) in a run
