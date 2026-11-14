@@ -413,6 +413,7 @@ HTTP.download(client: HTTP.Client, url: String, path: String, options: DownloadO
 ```
 
 - `DownloadOptions` has `timeout_ms`, for the whole call, and `max_total_bytes`, for the body, at most 256 MiB. `DownloadOptions()`, the default, gives 30 s and 256 MiB. `Download` has `status`, `headers` and `bytes_written`; the body itself is in the file, never in the record.
+- A printed `Download` takes the alias the program imports `std/http` with, while a builtin record keeps its fixed name: with `import H from "std/http"`, it prints as `H.Download(status: 200, headers: [HTTP.Header(...)], ...)`.
 - The download sends a `GET` and streams the body to `path`, so bodies may be arbitrary bytes. The file never grows past `max_total_bytes`.
 - The file must not exist: it is made private to the user, so an existing path fails untouched, while a failed download keeps the partial file. Status codes such as 404 are normal responses whose body is still written, so check `status` before using the file.
 - The connection is not pooled: it closes when the download ends. There is no redirect follow, and `https` keeps certificate verification on.

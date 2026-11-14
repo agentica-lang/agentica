@@ -1,0 +1,13 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 23,
+  "stdout": [
+    "W.Download(status: 200, headers: [], bytes_written: 1)",
+    "Z.Value.Int(2)",
+    "Z.Value.Bool(true)",
+    "Z.Value.Int(3)",
+    ""
+  ],
+  "stderr": []
+}

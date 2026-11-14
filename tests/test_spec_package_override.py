@@ -131,6 +131,22 @@ def test_a_path_is_read_in_place_with_no_fetch_no_cache_and_no_hash(ws, remotes)
     assert_at_key(problem_of(ws, remotes), "PKG-MANIFEST-INVALID", manifest, "dependencies.bond.path")
 
 
+def test_a_std_alias_written_in_a_package_does_not_name_the_records_of_the_project(ws, remotes):
+    bond = ws.base / "bond"
+    bond.mkdir()
+    (bond / "agentica.toml").write_text('name = "bond"\n', encoding="utf-8")
+    (bond / "bond.agc").write_text(
+        'import W from "std/toml"\n\ndef number() -> W.Value = W.Value.Int(1)\n', encoding="utf-8")
+    (ws.project / "agentica.toml").write_text('name = "app"\n\n[dependencies]\nbond = { path = "../bond" }\n',
+                                              encoding="utf-8")
+    (ws.project / "main.agc").write_text(
+        'import Bond from "pkg/bond/bond"\n\ndef main() -> Void\n  puts(Bond.number())\nend\n', encoding="utf-8")
+    no_git = no_git_path(ws.base)
+    assert plain(ws, remotes, "update", PATH=no_git).code == 0
+    ran = plain(ws, remotes, str(ws.project / "main.agc"), PATH=no_git)
+    assert (ran.code, ran.stdout) == (0, "Value.Int(1)\n"), ran.stderr
+
+
 def test_a_workspace_member_is_a_package_and_cannot_name_a_path(ws, remotes):
     repo = ws.base / "repo"
     url = remotes.url("owner/packages")

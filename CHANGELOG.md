@@ -30,6 +30,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - `System.subscribe`: a listed signal that was ignored when the program started stays ignored, and the call subscribes the others instead of failing (#1533).
 - On macOS, with more than one scheduler, a stop signal after a task crash stops the program again (#1529).
+- A printed record or enum of a std module takes the first alias the project
+  writes for its module, not the alphabetically first, and never an alias
+  written in a package (#1456).
 
 ## [0.31.1] - 2026-11-13
 
