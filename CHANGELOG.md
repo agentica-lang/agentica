@@ -17,7 +17,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 ### Changed
 
 - On Linux hosts whose exact clock is a system call (`hpet`), a channel timeout of a second or more may end up to two ticks and 2 ms late (#1581).
-- On Linux hosts whose exact clock is a system call (an `hpet` clock source), a channel timeout of a second or more reads no clock: it may end up to two ticks and 2 ms late (10 ms at 250 Hz), and so after a shorter timer due that much later (#1581).
+- Channel messages between tasks scale with the schedulers: a send or a receive no longer takes the runtime's one lock (#1581).
 
 ### Fixed
 
