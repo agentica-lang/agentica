@@ -329,11 +329,13 @@ end
 
 ## Returns the functions of the file `path` that have a body, private ones too, each with the resolved types of its
 ## parameters and result and its body as a typed tree (`Node`), for a tool that translates them. The file is linked and
-## checked with what it imports and needs no `main`, as for `type_at`. Experimental: the shape may change between
-## releases without notice. An unreadable or wrong file is an error, as for `type_at`.
+## checked with what it imports and needs no `main`, as for `type_at`. A `std/` name without a buffer (`std/binary`)
+## is that module as this binary carries it. Experimental: the shape may change between releases without notice. An
+## unreadable or wrong file is an error, as for `type_at`.
 def bodies(session: Session, path: String) -> Result[Bodies]
   settings = Sessions.asking(session.internal)
-  case Core.bodies(session.internal.cache, settings, path)
+  buffered = Sessions.buffered?(session.internal, path)
+  case Core.bodies(session.internal.cache, settings, path, buffered)
     Core.Bodied.Done(found) -> ok(found)
     Core.Bodied.Unreadable -> error(failure(Core.unreadable(path)))
     Core.Bodied.Rejected(problem) -> error(failure(Core.named(settings, problem, path)))

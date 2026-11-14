@@ -78,11 +78,10 @@ def display(settings: Env.Settings, file: String, buffered: Bool) -> String
   real.unwrap!
 end
 
-private
-
+## Whether `file` names a std/ module: a std/ name that is not a buffer.
 def embedded?(file: String, buffered: Bool) -> Bool = !buffered and file.start_with?("std/")
 
-# The key of a module in the provider: the name with its extension.
+## The key of a std/ module in the provider: the name with its extension.
 def std_key(file: String) -> String
   return file if file.end_with?(".agc")
 

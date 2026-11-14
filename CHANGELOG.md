@@ -25,6 +25,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   (#1532).
 - `JSON.node(value)` gives a `JSON.Node` enum to walk JSON of unknown shape
   with `case` (#1115).
+- `std/analysis`: `Analysis.bodies(session, "std/binary")` reads a `std/` module as the binary carries it (#1159).
 - `std/actor`: `Actor.Timeout`, a receive timeout that wakes an actor when no message came in time (#1523).
 - `format("%-8s|%6.2f|%03d|%x", name, price, n, n)`, Ruby's `format`, with a format string literal that `check` reads (`CHECK-FORMAT-SPEC`, `CHECK-FORMAT-LITERAL`) (#982).
 - Test-only dependencies: `group = "test"` on a dependency of `agentica.toml` (`agentica add ... --group test`); only the tests import it, and projects that depend on the package do not fetch it (#1196).
