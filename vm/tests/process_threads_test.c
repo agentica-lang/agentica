@@ -333,6 +333,24 @@ static void test_the_channel_through_posted_steps(void) {
   settle();
 }
 
+/* A thread that TSan left with every signal blocked (reopen_stop, vm/loop.c): the loop opens the stop signals again
+   before it polls, and no other signal. */
+#if defined(AGC_TSAN)
+static void test_the_loop_opens_the_stop_signals_again(void) {
+  assert(agc_io_share(&vm, false));
+  agc_io_watch_stop(&vm, 0);
+  plain("exec sleep 60");
+  sigset_t all, saved, now;
+  sigfillset(&all);
+  pthread_sigmask(SIG_SETMASK, &all, &saved);
+  (void)agc_io_poll(&vm, false);
+  pthread_sigmask(SIG_SETMASK, &saved, &now);
+  assert(!sigismember(&now, SIGTERM) && !sigismember(&now, SIGUSR1) && sigismember(&now, SIGCHLD));
+  close_child();
+  settle();
+}
+#endif
+
 /* The code of the failure of a call of B, or "nothing" when it returns. No local lives across the catch. */
 static const char *fail_code(const agc_builtin *b, agc_value *args) {
   if (AGC_CATCH(vm.fail) != 0) return vm.outcome->code;
@@ -387,6 +405,9 @@ int main(void) {
   test_a_poll_cancelled_after_its_line_gives_the_line_back();
   test_the_channel_through_posted_steps();
   test_a_spawn_in_a_callback();
+#if defined(AGC_TSAN)
+  test_the_loop_opens_the_stop_signals_again();
+#endif
 #endif
   puts("process threads tests passed");
   return 0;
