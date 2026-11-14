@@ -176,19 +176,6 @@ ROWS: List[Model.Builtin] = [
     alternatives: [],
   ),
   Model.Builtin(
-    name: "TCP.write_buffer",
-    parameters: [
-      Model.Named(name: "socket", type: Types.Type.Opaque("TCP.Socket")),
-      Model.Named(name: "bytes", type: Types.Type.Int),
-    ],
-    result: Types.Type.Result(Types.Type.Void),
-    rule: Model.Rule.Plain,
-    implementation: "TCP.write_buffer",
-    effects: ["network"],
-    description: "Set the limit of the socket's write buffer, 1024 to 16777216 bytes (65536 at first).",
-    alternatives: [],
-  ),
-  Model.Builtin(
     name: "TCP.write_bytes",
     parameters: [
       Model.Named(name: "socket", type: Types.Type.Opaque("TCP.Socket")),
@@ -200,6 +187,19 @@ ROWS: List[Model.Builtin] = [
     implementation: "TCP.write_bytes.bytes",
     effects: ["network"],
     description: "Put bytes in the socket's write buffer, at most 1 MiB per call.",
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "TCP.write_limit",
+    parameters: [
+      Model.Named(name: "socket", type: Types.Type.Opaque("TCP.Socket")),
+      Model.Named(name: "bytes", type: Types.Type.Int),
+    ],
+    result: Types.Type.Result(Types.Type.Void),
+    rule: Model.Rule.Plain,
+    implementation: "TCP.write_limit",
+    effects: ["network"],
+    description: "Set the limit of the socket's write buffer, 1024 to 16777216 bytes (65536 at first).",
     alternatives: [],
   ),
 ]

@@ -50,7 +50,7 @@ enum { UPGRADE_CLOSED = 0, UPGRADE_UNREAD = 1, UPGRADE_ENDED = 2, UPGRADE_SENDIN
    and a direct send went out in part and its rest has not started on the I/O thread (begin_send clears it). */
 enum { W_DIRECT = 1u, W_SHUT = 2u, W_DEFERRED = 4u, W_PARTIAL = 8u };
 
-/* The limit of a socket's write buffer (TCP.write_buffer), over which a write waits. */
+/* The limit of a socket's write buffer (TCP.write_limit), over which a write waits. */
 #define OUT_LIMIT_DEFAULT ((size_t)65536)
 #define OUT_LIMIT_MIN 1024
 #define OUT_LIMIT_MAX 16777216
@@ -168,7 +168,7 @@ struct agc_conn {
      (out_step) is on its way, so the writes that come before it runs cost no step of their own. `out` holds what
      waits behind the write in flight and goes out as one write. `flushers` are the tasks that wait for `unsent` to
      fall to their limit (TCP.flush: 0; a write over the limit: half of it). `out_error` is the first failure of a
-     buffered write, which every later write and flush reports. `out_limit` (TCP.write_buffer, 0 for the default) is
+     buffered write, which every later write and flush reports. `out_limit` (TCP.write_limit, 0 for the default) is
      read and written by schedulers only. `half_wanted`: HttpWire.close_write came while bytes waited. The three
      atomics come first, on their own, since every send on a scheduler reads `unsent` and `out_error`. */
   _Atomic size_t unsent;
@@ -182,6 +182,13 @@ struct agc_conn {
   size_t out_len, out_cap, out_flight;
   request *flushers;
   bool half_wanted;
+  /* A close that found bytes in the write buffer waits for them (linger): `lingering` while it does, at most
+     `linger_ms` (the flush limit of the run) on `linger`, a timer made for it; `lingered` says it was tried, so the
+     close that ends it does not wait again. `linger_why` is the reason of the close that waits. */
+  bool lingering, lingered;
+  int64_t linger_ms;
+  uv_timer_t *linger;
+  const char *linger_why;
 };
 
 /* A posted close: release_step runs it on the I/O thread. */
@@ -514,8 +521,31 @@ static void out_drop(net *n) {
   n->out_len = n->out_cap = 0;
 }
 
+/* The sockets whose close waits for their write buffer, for the end of the run (agc_net_draining). */
+static _Atomic size_t draining; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+
+bool agc_net_draining(void) { return atomic_load_explicit(&draining, memory_order_acquire) > 0; }
+
+static void linger_closed(uv_handle_t *h) {
+  net *n = h->data;
+  free(h);
+  n->callbacks--;
+  settle(n);
+}
+
+/* The wait of a close for the write buffer is over: its timer goes, and the caller closes. I/O thread only. */
+static void linger_stop(net *n) {
+  if (!n->lingering) return;
+  n->lingering = false;
+  (void)atomic_fetch_sub_explicit(&draining, 1, memory_order_acq_rel);
+  uv_timer_stop(n->linger);
+  uv_close((uv_handle_t *)n->linger, linger_closed);
+  n->linger = NULL;
+}
+
 static void shut_one(net *n, const char *why) {
   if (n->closed) return;
+  linger_stop(n);
   goodbye(n);
   n->closed = true;
   AGC_TRACE(&n->trace, AGC_TRACE_IO, "tcp_close %s=%" PRIu64 " why=%s", kind_name(n), n->id, why);
@@ -555,13 +585,47 @@ static void shut(net *n, const char *why) {
    Windows resets a socket that still has a read pending when the process ends, and the peer got WSAECONNRESET
    instead of the end of input (#489). The registry keeps its count; its release finds the net closed and only gives
    the count back. */
-static void say_goodbye(void *native) { shut(native, "exit"); }
+/* The peer did not take the buffer within the limit: the bytes are dropped, and the run says so, since the writes
+   that put them there returned ok. */
+static void linger_expired(uv_timer_t *t) {
+  net *n = t->data;
+  fprintf(stderr, "agentica: warning: a closed socket dropped %zu unsent bytes: the peer did not read them in %" PRId64
+                  " ms\n", atomic_load_explicit(&n->unsent, memory_order_acquire), n->linger_ms);
+  fflush(stderr);
+  shut_one(n, n->linger_why);
+}
+
+/* Whether the close of N for WHY (TCP.close, the end of its owner or of the run) now waits for the bytes of the write
+   buffer, as the kernel's close does for its own: N stays open, the last byte out (out_sent) or the limit closes it.
+   Bytes on their way from a scheduler are in the buffer by now: their step was posted before the close's. */
+static bool lingers(net *n, const char *why) {
+  if (n->closed || n->lingered || !n->conn || !(n->out_flight || n->out_len) || n->linger_ms <= 0) return false;
+  if (strcmp(why, "close") != 0 && strcmp(why, "owner") != 0 && strcmp(why, "exit") != 0) return false;
+  uv_timer_t *timer = malloc(sizeof *timer);
+  if (!timer) agc_out_of_memory();
+  if (uv_timer_init(n->conn->tcp.loop, timer) != 0) {
+    free(timer);
+    return false;
+  }
+  timer->data = n;
+  (void)uv_timer_start(timer, linger_expired, (uint64_t)n->linger_ms, 0);
+  n->linger = timer;
+  n->linger_why = why;
+  n->lingering = n->lingered = true;
+  n->callbacks++;
+  (void)atomic_fetch_add_explicit(&draining, 1, memory_order_acq_rel);
+  return true;
+}
+
+static void say_goodbye(void *native) {
+  if (!lingers(native, "exit")) shut(native, "exit");
+}
 
 /* The resource gave its count back: the close and the count, on the I/O thread. */
 static void release_step(void *data) {
   release_call *call = data;
   net *n = call->n;
-  shut(n, call->why);
+  if (!lingers(n, call->why)) shut(n, call->why);
   free(call);
   n->users--;
   settle(n);
@@ -579,9 +643,11 @@ static void post_release(net *n, const char *why) {
    (on a scheduler), so it is a step. */
 static void release_net(void *native) { post_release(native, "exit"); }
 
-static net *make_net(const agc_trace *trace, agc_loop *io, CC_OWNS char *host, int64_t port, bool listener) {
+static net *make_net(const agc_trace *trace, agc_loop *io, CC_OWNS char *host, int64_t port, bool listener,
+                     int64_t linger_ms) {
   net *n = calloc(1, sizeof(net));
   if (!n || uv_mutex_init(&n->out_lock) != 0) agc_out_of_memory();
+  n->linger_ms = linger_ms;
   n->trace = *trace;
   n->io = io;
   n->host = host;
@@ -592,7 +658,7 @@ static net *make_net(const agc_trace *trace, agc_loop *io, CC_OWNS char *host, i
 
 /* IO is agc_io_loop(vm), which can raise: the caller makes it before it mallocs HOST (#1259). */
 static net *new_net(agc_vm *vm, agc_loop *io, CC_OWNS char *host, int64_t port, bool listener) {
-  return make_net(&vm->rt->trace, io, host, port, listener);
+  return make_net(&vm->rt->trace, io, host, port, listener, vm->rt->flush_timeout);
 }
 
 /* The resource lets its net go, and its count on it with it, to the caller; NULL when it was closed already. */
@@ -1002,7 +1068,7 @@ static void begin_tls(net *n, agc_tls *t) {
 
 static net *accept_link(net *l, tcp_link *k, int *rc) {
   k->backlog--;
-  net *c = make_net(&l->trace, l->io, NULL, 0, false);
+  net *c = make_net(&l->trace, l->io, NULL, 0, false, l->linger_ms);
   c->loop = l->loop;
   tcp_link *link = new_link(c);
   *rc = uv_accept((uv_stream_t *)&k->tcp, (uv_stream_t *)&link->tcp);
@@ -1620,7 +1686,7 @@ static net *live(const agc_socket *sk) {
    a handshake. A half-closed socket (HttpWire.close_write) has no write side left. I/O thread only. */
 static int upgrade_refusal(const net *old) {
   if (!old || old->closed || !old->conn || old->half_closed) return UPGRADE_CLOSED;
-  if (old->writer || old->write_data || old->out_len ||
+  if (old->writer || old->write_data || atomic_load_explicit(&old->unsent, memory_order_acquire) ||
       (atomic_load_explicit(&old->wstate, memory_order_acquire) & (W_DIRECT | W_PARTIAL)))
     return UPGRADE_SENDING;
   if (agc_inbuf_pending(&old->in)) return UPGRADE_UNREAD;
@@ -1975,6 +2041,7 @@ static void out_sent(net *n, size_t len, int status, uv_write_cb cb) {
     if (failed || left <= q->limit) finish(q);
   }
   if (n->half_wanted && !n->out_flight && !n->out_len) half_close_now(n);
+  if (n->lingering && !n->out_flight && !n->out_len) shut_one(n, n->linger_why);
 }
 
 static void out_start(net *n, const uint8_t *data, size_t len, uv_write_cb cb) {
@@ -2294,12 +2361,12 @@ static agc_value builtin_flush(agc_vm *vm, agc_value *args, uint32_t span) {
   return wait_unsent(vm, args, n, 0, 0, timeout);
 }
 
-/* TCP.write_buffer(socket, bytes): the limit of the write buffer, over which a write waits. */
-static agc_value builtin_write_buffer(agc_vm *vm, agc_value *args, uint32_t span) {
+/* TCP.write_limit(socket, bytes): the limit of the write buffer, over which a write waits. */
+static agc_value builtin_write_limit(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   int64_t bytes = agc_as_int(vm, args[1]);
   if (bytes < OUT_LIMIT_MIN || bytes > OUT_LIMIT_MAX)
-    return agc_error(vm, AGC_KIND_ARGUMENT, "network: write buffer must be 1024..16777216 bytes");
+    return agc_error(vm, AGC_KIND_ARGUMENT, "network: write limit must be 1024..16777216 bytes");
   net *n = live(agc_as_socket(vm, args[0]));
   if (!n) return agc_error(vm, AGC_KIND_NET_CLOSED, socket_closed);
   atomic_store_explicit(&n->out_limit, (size_t)bytes, memory_order_relaxed);
@@ -2384,7 +2451,7 @@ const agc_builtin agc_tcp_builtins[] = {
   {"TCP.write", 3, builtin_write, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
   {"TCP.write_bytes.bytes", 3, builtin_write_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
   {"TCP.flush", 2, builtin_flush, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
-  {"TCP.write_buffer", 2, builtin_write_buffer, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"TCP.write_limit", 2, builtin_write_limit, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"TCP.recv_bytes.bytes", 3, builtin_recv_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
   {"TCP.read_line", 2, builtin_read_line, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
   {"TLS.connect", 4, builtin_tls_connect, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
@@ -2409,4 +2476,6 @@ const size_t agc_tcp_builtin_count = sizeof agc_tcp_builtins / sizeof agc_tcp_bu
 const agc_builtin agc_tcp_builtins[] = {{"", 0, NULL, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false}};
 
 const size_t agc_tcp_builtin_count = 0;
+
+bool agc_net_draining(void) { return false; }
 #endif

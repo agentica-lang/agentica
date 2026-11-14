@@ -292,8 +292,8 @@ static void test_the_rest_of_a_direct_send_goes_to_the_io_thread(void) {
 /* A piece of the pattern: its length is a multiple of 23, so pieces written one after the other continue it. */
 #define PIECE ((size_t)23 * 4096)
 
-static void set_write_buffer(int64_t bytes) {
-  ok_of(step(call("TCP.write_buffer", 2, socket_v, agc_int(bytes), agc_void(), agc_void())));
+static void set_write_limit(int64_t bytes) {
+  ok_of(step(call("TCP.write_limit", 2, socket_v, agc_int(bytes), agc_void(), agc_void())));
 }
 
 /* Runs the loop while the peer FD reads, until the task wakes; then the result of C. */
@@ -311,7 +311,7 @@ static agc_value drained(calling *c, int fd, size_t *at) {
    to wait for. The peer reads every byte once and in order. */
 static void test_writes_wait_in_the_buffer_in_their_order(void) {
   int fd = open_pair();
-  set_write_buffer(16777216);
+  set_write_limit(16777216);
   size_t count = 100, at = 0;
   for (size_t k = 0; k < count; k++) {
     calling writing = call("TCP.write", 3, socket_v, pattern(PIECE), agc_int(5000), agc_void());
@@ -332,7 +332,7 @@ static void test_writes_wait_in_the_buffer_in_their_order(void) {
    flush waits for the rest. */
 static void test_a_write_over_the_limit_waits(void) {
   int fd = open_pair();
-  set_write_buffer(1024);
+  set_write_limit(1024);
   size_t len = (size_t)23 << 20, at = 0;
   calling writing = call("TCP.write", 3, socket_v, pattern(len), agc_int(60000), agc_void());
   assert(start(&writing));
@@ -348,7 +348,7 @@ static void test_a_write_over_the_limit_waits(void) {
 
 /* A connection with 100 pieces in its write buffer and a flush that waits for them. */
 static calling flush_of_waiting_writes(void) {
-  set_write_buffer(16777216);
+  set_write_limit(16777216);
   for (size_t k = 0; k < 100; k++)
     ok_of(step(call("TCP.write", 3, socket_v, pattern(PIECE), agc_int(5000), agc_void())));
   calling flushing = call("TCP.flush", 2, socket_v, agc_int(60000), agc_void(), agc_void());
@@ -376,17 +376,23 @@ static void test_a_failed_buffered_write_is_reported(void) {
   agc_test_settle_loop(&vm);
 }
 
-/* A close drops the bytes that wait, and ends a flush with the closed socket's error. */
-static void test_a_flush_ends_with_the_close_of_its_socket(void) {
+/* A close waits for the bytes of the write buffer: the socket is gone for the program at once, the peer still gets
+   every byte and then the end, and the flush that waited ends well. */
+static void test_a_close_sends_the_write_buffer_first(void) {
   int fd = open_pair();
   calling flushing = flush_of_waiting_writes();
   calling closing = call("TCP.close", 1, socket_v, agc_void(), agc_void(), agc_void());
   assert(!start(&closing));
-  wait_woken();
-  assert(error_is(take(&flushing), "network: socket is closed"));
+  assert(error_is(step(call("TCP.write", 3, socket_v, agc_test_str("late"), agc_int(5000), agc_void())),
+                  "network: socket is closed"));
+  size_t at = 0;
+  ok_of(drained(&flushing, fd, &at));
+  while (at < 100 * PIECE) peer_drains(fd, &at);
   step(call("TCP.close_listener", 1, listener, agc_void(), agc_void(), agc_void()));
-  close(fd);
   agc_test_pump_until_idle(&vm);
+  char end;
+  assert(read(fd, &end, 1) == 0);
+  close(fd);
   agc_test_settle_loop(&vm);
 }
 
@@ -909,7 +915,7 @@ int main(void) {
   AGC_TEST_RUN(test_writes_wait_in_the_buffer_in_their_order());
   AGC_TEST_RUN(test_a_write_over_the_limit_waits());
   AGC_TEST_RUN(test_a_failed_buffered_write_is_reported());
-  AGC_TEST_RUN(test_a_flush_ends_with_the_close_of_its_socket());
+  AGC_TEST_RUN(test_a_close_sends_the_write_buffer_first());
   AGC_TEST_RUN(test_upgrade_tls_on_a_dropped_client());
   AGC_TEST_RUN(test_upgrade_context_names_its_context_argument());
   AGC_TEST_RUN(test_context_with_a_path_that_is_not_a_string());

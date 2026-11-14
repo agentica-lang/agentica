@@ -364,8 +364,8 @@ TCP.remote_address
 TCP.send
 TCP.send_bytes.bytes
 TCP.write
-TCP.write_buffer
 TCP.write_bytes.bytes
+TCP.write_limit
 TLS.alpn
 TLS.client_context
 TLS.connect

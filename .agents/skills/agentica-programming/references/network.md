@@ -21,7 +21,7 @@ TCP.send_bytes(socket: TCP.Socket, bytes: Bytes, timeout_ms: Int) -> Result[Void
 TCP.write(socket: TCP.Socket, text: String, timeout_ms: Int) -> Result[Void]         # buffered
 TCP.write_bytes(socket: TCP.Socket, bytes: Bytes, timeout_ms: Int) -> Result[Void]   # buffered
 TCP.flush(socket: TCP.Socket, timeout_ms: Int) -> Result[Void]
-TCP.write_buffer(socket: TCP.Socket, bytes: Int) -> Result[Void]   # 1024..16777216, default 65536
+TCP.write_limit(socket: TCP.Socket, bytes: Int) -> Result[Void]   # 1024..16777216, default 65536
 TCP.recv_bytes(socket: TCP.Socket, max_bytes: Int, timeout_ms: Int) -> Result[Bytes]
 TCP.recv_bytes(socket: TCP.Socket, max_bytes: Int) -> Result[Bytes]   # no time limit
 TCP.read_line(socket: TCP.Socket, timeout_ms: Int) -> Result[String]
@@ -98,11 +98,12 @@ TLS.ServerOptions(cert_file: String, key_file: String, alpn: List[String] = [])
   timeout would close the socket); a cancel still ends the wait.
 - `TCP.write` and `write_bytes` return without waiting for the peer: what the
   system does not take waits in the socket's buffer and goes out in order. A
-  write waits only over the limit (`TCP.write_buffer`), until half of it is
+  write waits only over the limit (`TCP.write_limit`), until half of it is
   out. `TCP.flush` waits for the buffer to empty; a `send` after a write also
   does. A failed buffered write is the error of `flush` and of later writes.
-  `TCP.close` and the end of the run drop unsent bytes: flush first. On a TLS
-  socket `write` is `send`.
+  `TCP.close` and the end of the run send unsent bytes first, for at most
+  the flush limit (`--flush-timeout`), then drop them with a warning: call
+  `flush` to get the error. On a TLS socket `write` is `send`.
 - `read_line` handles fragmented UTF-8, strips LF or CRLF and accepts a final
   unterminated line at EOF. It errors on an empty EOF, on a read error (a reset
   mid-line is an error, not a line) and on a line over 1 MiB, which also closes

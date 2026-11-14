@@ -2260,7 +2260,7 @@ def main() -> Void
     accepted = accepted.push(socket)
     # Half of the sockets get a small write buffer, so their writes wait for room.
     if buffered and k % 2 == 0
-      TCP.write_buffer(socket, 4096).unwrap!
+      TCP.write_limit(socket, 4096).unwrap!
     end
 
     id = 0

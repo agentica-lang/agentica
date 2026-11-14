@@ -152,7 +152,7 @@ Without `timeout_ms`, `recv_bytes` waits with no limit, until bytes arrive, the 
 TCP.write(socket: TCP.Socket, text: String, timeout_ms: Int) -> Result[Void]
 TCP.write_bytes(socket: TCP.Socket, bytes: Bytes, timeout_ms: Int) -> Result[Void]
 TCP.flush(socket: TCP.Socket, timeout_ms: Int) -> Result[Void]
-TCP.write_buffer(socket: TCP.Socket, bytes: Int) -> Result[Void]
+TCP.write_limit(socket: TCP.Socket, bytes: Int) -> Result[Void]
 ```
 
 `write` takes the bytes and returns without waiting for the other side: what the system does not take at once waits in the socket's write buffer and goes out in the background, in the order of the writes. A task that sends to many sockets uses it so that one slow reader does not hold back the others. `write_bytes` is the same for `Bytes`, at most 1 MiB per call.
@@ -160,7 +160,8 @@ TCP.write_buffer(socket: TCP.Socket, bytes: Int) -> Result[Void]
 - A write waits only when it leaves more bytes in the buffer than the limit, and then until half of the limit has gone out. The limit is 65536 bytes; `write_buffer` sets it for one socket, from 1024 to 16777216.
 - `flush` waits until the buffer is empty. `send` after a write goes behind the waiting bytes and returns when they are all out, so `send` is a write and a flush.
 - When a buffered write fails, `flush` and every later write on the socket return the error of the failed write. A `timeout_ms` that ends closes the socket, as for `send`.
-- `TCP.close` and the end of the run drop the bytes that still wait: flush first.
+- `TCP.close`, the end of the task that owns the socket and the end of the run send the bytes that still wait before the connection closes. They wait for them at most the flush limit of the run (`--flush-timeout`, 30 seconds by default); after that the bytes are dropped and the run prints a warning on standard error. A program that must know whether the bytes went out calls `flush`, which returns the error.
+- The limit is not the most memory a socket's buffer can take: each task that writes to the socket can leave one call's bytes (up to 1 MiB for `write_bytes`) over it, and the bytes are copied once more while they go out.
 - On a TLS socket `write` is `send`, and `flush` returns at once.
 
 ```agentica
@@ -197,7 +198,7 @@ TCP.close(socket: TCP.Socket) -> Void
 TCP.close_listener(listener: TCP.Listener) -> Void
 ```
 
-Closing twice is fine. Close early only when it must not wait for the task to end.
+Closing twice is fine. Close early only when it must not wait for the task to end. `TCP.close` returns at once; bytes of the write buffer still go out ([TCP.write](#tcpwrite-and-tcpflush)).
 
 ## TLS
 

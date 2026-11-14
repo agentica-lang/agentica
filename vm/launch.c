@@ -287,9 +287,19 @@ static void coverage_notice(agc_vm *vm) {
 /* agc_io_goodbye runs requests left in the inbox, and one may fail (sweep's "a job was freed while held"). vm->fail
    still points at the run's setjmp, whose frame has returned, so goodbye gets its own target. A failure becomes the
    outcome of a run that did not fail, else it is printed beside the run's own. */
+static bool nets_drained(agc_vm *vm, void *arg) {
+  (void)vm;
+  (void)arg;
+  return !agc_net_draining();
+}
+
 static void say_goodbye(agc_vm *vm, agc_outcome *outcome) {
   if (AGC_CATCH(vm->fail) == 0) {
     agc_io_goodbye(vm);
+    /* A socket closed with bytes in its write buffer (TCP.write) sends them first, at most for the flush limit; its
+       own timer ends the wait and says what was dropped, so this wait is a little longer. */
+    if (vm->rt->loop && agc_net_draining())
+      (void)agc_io_wait_for(vm, nets_drained, NULL, agc_clock_ms() + (uint64_t)vm->rt->flush_timeout + 1000);
     return;
   }
   agc_sync_reset(vm);

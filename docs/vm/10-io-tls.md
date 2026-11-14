@@ -232,13 +232,18 @@ texts.
   step for all that gathers before it runs; the I/O thread moves them behind
   the write in flight and sends what waits as one write when that one ends. A
   write waits (a `REQ_FLUSH` request, which holds no lock) only when `unsent`
-  is over the limit (`TCP.write_buffer`, 65536 by default), until half of it
+  is over the limit (`TCP.write_limit`, 65536 by default), until half of it
   is out; `TCP.flush`, and a send that went into the buffer, wait for 0. A
   failed write of the buffer drops what waited and is kept in `out_error`,
-  the result of the waiting and of every later write and flush. A close drops
-  the buffer; `HttpWire.close_write` waits for its last byte, and `TLS.upgrade`
-  refuses as for a send in progress. A TLS socket has no write buffer: its
-  write is a send.
+  the result of the waiting and of every later write and flush. A close by
+  the program (`TCP.close`, the end of the owner or of the run) leaves the net
+  open until the buffer is out (`lingers` in `vm/tcp.c`), for at most the
+  flush limit of the run, after which it drops the bytes and warns on standard
+  error; the end of the run waits for these nets (`agc_net_draining`). A close
+  for any other reason (a timeout, an error) drops the buffer;
+  `HttpWire.close_write` waits for its last byte, and `TLS.upgrade` refuses as
+  for a send in progress. A TLS socket has no write buffer: its write is a
+  send.
 - **Timeouts and close** (the user rules are in the network page). A timed-out
   read or write closes the socket; waiting for the lock alone does not. A
   timed-out connect closes the half-open socket. `TCP.close` and
