@@ -282,7 +282,7 @@ agc_value agc_json_decode(agc_vm *vm, agc_value root, uint32_t root_kind, uint32
   agc_value item = root;
   uint32_t kind = root_kind, arg = type;
   for (;;) {
-    agc_value v;
+    agc_value v = agc_void();
     double x;
     agc_charge(vm, 1);
     const agc_json *j = kind == ABSENT_FIELD ? NULL : agc_as_json(vm, item);
@@ -340,7 +340,6 @@ agc_value agc_json_decode(agc_vm *vm, agc_value root, uint32_t root_kind, uint32
       v = frame_value(p, f);
     }
     for (;;) {
-      // cchecker: ignore CC-TIDY-CLANG-ANALYZER-CORE-CALLANDMESSAGE: *v is set unless tagged, which continues
       if (!depth) return agc_result_value(true, v);
       decode_frame *top = &stack[depth - 1];
       store_child(vm, top, v);
