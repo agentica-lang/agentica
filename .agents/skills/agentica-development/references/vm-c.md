@@ -252,5 +252,5 @@ part of `references/vm-core.md` if the opcode gets compiled code.
 - Shared state: `make vm-tsan` and `make test-shared`
   (`references/vm-tasks.md`). The turn loop of `vm/interp.c`: `make
   layout-check`.
-- The PR gets the `platforms` label (`references/ci.md`, "Conformance
-  matrix") and a `vm-c-critic` review (`agentica-dev-workflow`).
+- Platforms runs by itself on the PR (`references/ci.md`, "Conformance
+  matrix"); it gets a `vm-c-critic` review (`agentica-dev-workflow`).

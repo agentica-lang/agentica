@@ -59,9 +59,9 @@ Wrap every build in a memory cap (`agentica-dev-workflow` §1).
 - The commit message, the PR title and the tag message are all
   `release version <version>`. The PR body lists the version, the date and the
   stage0 refresh.
-- Label it `platforms` (Platforms runs on a PR only with that label), and
-  take it to merge with `.agents/skills/agentica-dev-workflow/`. CI and
-  Platforms must be green on its head.
+- Take it to merge with `.agents/skills/agentica-dev-workflow/`. CI and
+  Platforms (it runs by itself: the PR changes `VERSION` and stage0) must be
+  green on its head.
 
 ## 2. Tag and publish
 
