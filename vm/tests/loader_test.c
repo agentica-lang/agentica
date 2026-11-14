@@ -578,7 +578,7 @@ static buffer type_tables(int which) {
      Optional type (kind 8) and no enum; 20: with the Optional enum; 21: an enum named Optional of another shape (Some
      without its payload), which is not the builtin one; 22: two Optional enums. 23: a List target name (a `[`) on Q,
      which has two fields; 24: one on P, which has one; 25: one on a Q of no fields. 27: a JSON.Node enum; 28: one
-     with Bool before Null; 29: one with Int without its payload; 30: two of them. */
+     with Bool before Null; 29: one with Int without its payload; 30: two of them; 31: one without Object. */
   if (which < 14 || which == 19) {
     u32(&t, 0);
     return t;
@@ -588,8 +588,9 @@ static buffer type_tables(int which) {
     u32(&t, which == 30 ? 2 : 1);
     for (int copy = 0; copy < (which == 30 ? 2 : 1); copy++) {
       str(&t, "JSON.Node");
-      u32(&t, 8);
-      for (int k = 0; k < 8; k++) {
+      int count = which == 31 ? 7 : 8;
+      u32(&t, (uint32_t)count);
+      for (int k = 0; k < count; k++) {
         str(&t, which == 28 && k < 2 ? names[1 - k] : names[k]);
         u32(&t, k == 0 || (which == 29 && k == 2) ? 0 : 1);
       }
@@ -2164,6 +2165,7 @@ int main(void) {
   assert(!loads_types(28, "bad JSON.Node enum"));
   assert(!loads_types(29, "bad JSON.Node enum"));
   assert(!loads_types(30, "duplicate JSON.Node enum"));
+  assert(!loads_types(31, "bad JSON.Node enum"));
   buffer typed = type_tables(0);
   s = base();
   s.tables = &typed;

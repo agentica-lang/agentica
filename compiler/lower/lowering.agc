@@ -12,6 +12,7 @@ import {ENUMS} from "../catalog/builtins"
 import Checker from "../check/checker"
 import Defaults from "../check/defaults"
 import Failure from "../diagnostics/problem"
+import Declarations from "../modules/declarations"
 import Linker from "../modules/linker"
 import Ast from "../syntax/ast"
 import {PRELUDE_PREFIX} from "../syntax/prelude_name"
@@ -588,10 +589,10 @@ def reads_of(plan: Const.Plan) -> Map[String, Lowering.Read]
   reads
 end
 
-# The alias of each std/ module that a file of the program imports with one (`import HTTP from "std/http"`), by the
-# linker prefix of the module. The root file comes first, then the other files in link order, and the first alias wins;
-# the imports that std/ modules make of each other do not count, so a user type and a std/ type that the program only
-# imports by name (`import {Download}`) keep their bare name.
+# The alias of each std/ module that a file of the project imports with one (`import HTTP from "std/http"`), by the
+# linker prefix of the module. The root file comes first, then the other files in link order, each in written order,
+# and the first alias wins. The files of std/ and of packages do not count, so a std/ type that the project only
+# imports by name (`import {Download}`) keeps its bare name.
 def std_aliases(linked: Linker.Linked) -> Map[String, String]
   prefixes: Map[String, String] = {}
   for module in linked.modules
@@ -602,9 +603,10 @@ def std_aliases(linked: Linker.Linked) -> Map[String, String]
 
   written: Map[String, String] = {}
   for module in linked.modules
-    if !module.key.start_with?("std/")
-      for alias in module.aliases.keys.sort
-        prefix = prefixes.get(module.aliases[alias], "")
+    if !module.key.start_with?("std/") and module.package == ""
+      for decl in Declarations.imports_of(module.parsed.declarations)
+        alias = decl.alias.unwrap_or("")
+        prefix = prefixes.get(module.aliases.get(alias, ""), "")
         if prefix != "" and !written.has_key?(prefix)
           written = written.put(prefix, alias)
         end
