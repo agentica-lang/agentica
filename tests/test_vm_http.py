@@ -1972,6 +1972,12 @@ def test_shutdown_drains_the_requests_in_flight_and_closes_idle_connections_at_o
     connection and one that never sent a request close at once, and a new connection is refused; a second call made
     while the first drains returns when the server is closed."""
     vm, port = start_shutdown(tmp_path, adopt)
+    # The busy connections come first: the drain must not wait for them before it closes the idle ones.
+    slow = http.client.HTTPConnection("127.0.0.1", port, timeout=scaled(10))
+    slow.request("GET", "/slow")
+    stream = http.client.HTTPConnection("127.0.0.1", port, timeout=scaled(10))
+    stream.request("GET", "/stream")
+    time.sleep(0.1)
     idle = socket.create_connection(("127.0.0.1", port), timeout=scaled(10))
     idle.sendall(b"GET /fast HTTP/1.1\r\nHost: x\r\n\r\n")
     head, rest = raw_answer(idle, False)
@@ -1979,11 +1985,7 @@ def test_shutdown_drains_the_requests_in_flight_and_closes_idle_connections_at_o
         rest += idle.recv(65536)
     assert b"connection: close" not in head, head
     fresh = socket.create_connection(("127.0.0.1", port), timeout=scaled(10))
-    slow = http.client.HTTPConnection("127.0.0.1", port, timeout=scaled(10))
-    slow.request("GET", "/slow")
-    stream = http.client.HTTPConnection("127.0.0.1", port, timeout=scaled(10))
-    stream.request("GET", "/stream")
-    time.sleep(0.2)
+    time.sleep(0.1)
     stop_in(vm, 10000)
     started = time.monotonic()
     assert idle.recv(65536) == b"" and fresh.recv(65536) == b""

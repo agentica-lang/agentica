@@ -2094,6 +2094,12 @@ end
 # a request, so it is cancelled at once. `idle` closes when its connection ends in any way.
 def drain_server(server: HttpWire.Server, conns: List[Channel[TaskRef]], deadline: Int) -> Void
   for idle in conns
+    case idle.recv(0)
+      ok(task) -> Task.cancel(task)
+      error(_) -> nil
+    end
+  end
+  for idle in conns
     while true
       case idle.recv(larger(0, deadline - Time.monotonic_ms()))
         ok(task) -> Task.cancel(task)
@@ -2262,7 +2268,7 @@ end
 # Sends the answer of an app. `whole` says whether the request body was read whole, and `rest` holds the bytes read
 # past it (the start of the next request). An upgrade needs the whole body: before that, the connection is not free
 # to change protocols, so an `Accept` is refused with a 500 and a `Reply` closes after it. A server that is `stopping`
-# closes the connection after a whole or streamed answer, and answers an upgrade 503.
+# closes the connection after its answer and answers an accepted upgrade 503.
 def send_answer(
   socket: TCP.Socket,
   request: HttpWire.Request,
@@ -2283,7 +2289,14 @@ def send_answer(
         Answer.Stream(response) ->
           return answer_stream(socket, incoming, stream_closing_unless(response, whole and not stopping), options)
         Answer.Upgrade(upgrade) ->
-          return Sent(keep: reply_whole(socket, request, closing_answer(503), timeout), rest: NO_BYTES) if stopping
+          if stopping
+            refusal = closing_answer(503)
+            case upgrade
+              Upgrade.Reply(response) -> refusal = closing_unless(response, false)
+              Upgrade.Accept(_, _, _, _) -> nil
+            end
+            return Sent(keep: reply_whole(socket, request, refusal, timeout), rest: NO_BYTES)
+          end
           return answer_upgrade(socket, incoming, upgrade, options) if whole
           case upgrade
             Upgrade.Reply(response) -> reply_whole(socket, request, closing_unless(response, false), timeout)
