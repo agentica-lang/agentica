@@ -1077,6 +1077,13 @@ OP_HELPER agc_status agc_op_same(agc_vm *vm, agc_value *dst, const agc_value *a,
   return AGC_STATUS_OK;
 }
 
+#if AGC_JIT_HOST
+_Static_assert(offsetof(agc_list, len) == AGC_JIT_LIST_LEN && sizeof(((agc_list *)0)->len) == 8 &&
+                 offsetof(agc_list, kind) == AGC_JIT_LIST_KIND && sizeof(((agc_list *)0)->kind) == 4 &&
+                 offsetof(agc_list, tail) == AGC_JIT_LIST_TAIL && LIST_MASK == AGC_JIT_LIST_MASK,
+               "compiled LIST_LEN and LIST_GET read the list at these offsets");
+#endif
+
 OP_HELPER agc_status agc_op_list_len(agc_vm *vm, agc_value *dst, const agc_value *list) {
   if (!agc_is(*list, AGC_T_LIST)) return AGC_STATUS_WRONG_TAG;
   *dst = agc_int((int64_t)list_len(agc_as_list(vm, *list)));
