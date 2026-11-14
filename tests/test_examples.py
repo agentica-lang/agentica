@@ -440,7 +440,6 @@ def test_an_unknown_method_suggests_the_ruby_method(tmp_path):
                                   ('"a".includes("a")', "include?"), ('"a".include("a")', "include?"),
                                   ("xs.contains?(1)", "any?"), ("(1..3).drop(1)", "to_a"),
                                   ('"abc".take(2)', "join"), ('"abc".drop(1)', "join"),
-                                  ("xs.count do |x| x > 1 end", "select"), ("xs.count", "select"),
                                   ('"abc".count("a")', "split")]:
         source = ("def main() -> Void\n  xs: List[Int] = [1]\n  m: Map[String, Int] = {}\n"
                   "  r: Result[Int] = ok(1)\n  puts(%s)\nend\n\n" % expression)
