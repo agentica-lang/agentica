@@ -423,6 +423,8 @@ def zombie(pid):
             return stat.read().rsplit(")", 1)[1].split()[0] == "Z"
     except FileNotFoundError:
         return False
+    except ProcessLookupError:
+        return True
 
 
 def gone(pid):
