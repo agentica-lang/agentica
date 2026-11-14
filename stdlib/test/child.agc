@@ -108,7 +108,10 @@ end
 ## there, and a child with an unobserved task crash writes a summary, which becomes `RUNTIME-TASK-CRASHED`. Lines of
 ## task crashes are skipped. Returns an error when there is none.
 def stderr_diagnostic(stderr: String, span: Report.Span) -> Result[Report.Failure]
-  lines = stderr.split("\n").filter do |line| line != "" and not vm_shape?(line, true) end
+  lines = stderr.split("\n")
+    .map { |line| scenario_crash(line) }
+    .filter do |line| line != "" and not vm_shape?(line, true) end
+
   return error("no diagnostic") if lines.size == 0
   last = lines[lines.size - 1]
   if summary?(last)
@@ -124,6 +127,7 @@ end
 ## Returns the lines of `stderr` that are not diagnostics, cut to their last 65536 characters.
 def stderr_text(stderr: String) -> String
   kept = stderr.split("\n")
+    .map { |line| scenario_crash(line) }
     .filter do |line|
       line != "" and not vm_shape?(line, true) and not vm_shape?(line, false) and not summary?(line)
     end
@@ -157,6 +161,25 @@ def vm_shape?(line: String, task: Bool) -> Bool
     fields = fields.put("task", JSON.from(true))
   end
   JSON.encode(JSON.object(fields)) == JSON.encode(root)
+end
+
+# The crash of the task a worker runs a scenario in (spawned in std/bdd) is that scenario's crash, as a crash of main
+# is in a child of its own: the line without `task` and `spawned_at`. Any other line stays as it is.
+def scenario_crash(line: String) -> String
+  return line if not vm_shape?(line, true)
+
+  root = JSON.parse(line).unwrap!
+  spawned = JSON.get(root, "spawned_at").unwrap_or(JSON.null())
+  return line if text_of(spawned, "file") != "std/bdd.agc"
+
+  fields: Map[String, JSON.Value] = {}
+  for key in ["code", "file", "message", "range", "stack", "stack_omitted"]
+    found = JSON.get(root, key)
+    if found.ok?
+      fields = fields.put(key, found.unwrap!)
+    end
+  end
+  JSON.encode(JSON.object(fields))
 end
 
 def trace_kind?(key: String, value: JSON.Value) -> Bool

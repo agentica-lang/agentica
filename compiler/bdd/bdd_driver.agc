@@ -171,7 +171,7 @@ def prepare_and_run(
     try Dir.mkdir(parts, IO_TIMEOUT)
   end
 
-  lines = Runner.config_text(config, entries, options.tags, options.jobs, options.timing, parts)
+  lines = Runner.config_text(config, entries, options, parts)
   try write_text("#{directory}/config.jsonl", lines)
   ran = Runner.run(options, runner, "#{directory}/config.jsonl", config.report_path)
   case ran
