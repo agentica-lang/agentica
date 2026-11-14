@@ -930,13 +930,18 @@ end
 
 def modulo_type(cx: State.Cx, sides: Sides, node: Ast.Binary) -> Result[T.Type]
   if !T.is?(sides.left, "Int") or !T.is?(sides.right, "Int")
+    help = ""
+    if T.is?(sides.left, "String")
+      help = "a format string is the first argument of format: format(\"%05d\", n)"
+    end
+
     return error(
       type_error(
         cx,
         sides,
         node,
         "\"%\" expects two Ints, found #{T.to_text(sides.left)} and #{T.to_text(sides.right)}",
-        "",
+        help,
       ),
     )
   end

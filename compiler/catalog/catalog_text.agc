@@ -226,6 +226,7 @@ def rule_name(rule: Model.Rule) -> String
     Model.Rule.CodecMembers -> "CodecMembers"
     Model.Rule.Error -> "Error"
     Model.Rule.ErrorKind -> "ErrorKind"
+    Model.Rule.Format -> "Format"
     Model.Rule.Identity -> "Identity"
     Model.Rule.JsonDecode -> "JsonDecode"
     Model.Rule.JsonEncode -> "JsonEncode"

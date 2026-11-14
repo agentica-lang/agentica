@@ -499,7 +499,7 @@ BUILTIN_GROUP_11 = ROWS_51.concat(ROWS_52.concat(ROWS_53.concat(ROWS_54.concat(R
 BUILTIN_GROUP_12 = ROWS_56.concat(ROWS_57.concat(ROWS_58.concat(ROWS_59.concat(ROWS_60))))
 BUILTIN_GROUP_13 = ROWS_61.concat(ROWS_62.concat(ROWS_63.concat(ROWS_64.concat(ROWS_65))))
 BUILTIN_GROUP_14 = ROWS_66.concat(ROWS_67.concat(ROWS_68.concat(ROWS_69.concat(ROWS_70))))
-BUILTIN_GROUP_15 = ROWS_71.concat(ROWS_72.concat(ROWS_73))
+BUILTIN_GROUP_15 = ROWS_71.concat(ROWS_72.concat(ROWS_73.concat(ROWS_74)))
 BUILTIN_GROUPS_1 = BUILTIN_GROUP_1.concat(BUILTIN_GROUP_2.concat(BUILTIN_GROUP_3))
 BUILTIN_GROUPS_2 = BUILTIN_GROUP_4.concat(BUILTIN_GROUP_5.concat(BUILTIN_GROUP_6))
 BUILTIN_GROUPS_3 = BUILTIN_GROUP_7.concat(BUILTIN_GROUP_8.concat(BUILTIN_GROUP_9))
@@ -7232,6 +7232,24 @@ ROWS_73: List[Model.Builtin] = [
     implementation: "System.signal_number",
     effects: [],
     description: "The OS number of a signal (Term is 15), so 128 + it is the exit code a signal gives; VM only.",
+    alternatives: [],
+  ),
+]
+
+## format(...), which the checker reads (check/check_format.agc) and the lowering writes as text and conversions.
+ROWS_74: List[Model.Builtin] = [
+  Model.Builtin(
+    name: "format",
+    parameters: [Model.Named(name: "format", type: Types.Type.String)],
+    result: Types.Type.String,
+    rule: Model.Rule.Format,
+    implementation: "",
+    effects: [],
+    description: (
+      "The text of a format string literal with one argument per conversion, as Ruby's format: " +
+      "%[flags][width][.precision]type with the flags - and 0, the types d (Int), x (Int, hex), f (Float) and " +
+      "s (any value with to_s), and %% for a %: format(\"%-8s|%6.2f|%03d\", name, price, n)."
+    ),
     alternatives: [],
   ),
 ]

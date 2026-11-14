@@ -9,6 +9,7 @@ import Ast from "../syntax/ast"
 import Source from "../syntax/source"
 import T from "../syntax/types"
 import Args from "check_args"
+import Formats from "check_format"
 import ErrorArgs from "check_error"
 import {PROCESS_OPTIONS_HELP} from "check_help"
 import Collections from "check_collections"
@@ -29,6 +30,9 @@ def check_builtin_call(
   expected: T.Type,
   entry: Model.Builtin,
 ) -> Result[State.Out]
+  # format(...) takes one argument for each conversion of its format string (check_format.agc).
+  return Formats.check_format(cx, st, written) if entry.name == "format"
+
   # The named arguments of error(...) are the fields of the Error it builds (check_error.agc).
   named = written.named.size > 0 and written.name != "error"
   count = written.args.size
@@ -158,6 +162,10 @@ def old_form_help(name: String, node: Ast.Call) -> String
       "a TLS.Context holds the PEM files: build one with " +
       "TLS.server_context(TLS.ServerOptions(cert_file: c, key_file: k))"
     )
+  end
+
+  if node.name == "Float.round" and node.args.size == 2
+    return "round gives the nearest Int; format(\"%.2f\", x) writes a Float with 2 digits after the point"
   end
 
   # The callee lists the catalog forms, which have no named arguments.

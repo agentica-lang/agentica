@@ -22,10 +22,12 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `JSON.node(value)` gives a `JSON.Node` enum to walk JSON of unknown shape
   with `case` (#1115).
 - `std/actor`: `Actor.Timeout`, a receive timeout that wakes an actor when no message came in time (#1523).
+- `format("%-8s|%6.2f|%03d|%x", name, price, n, n)`, Ruby's `format`, with a format string literal that `check` reads (`CHECK-FORMAT-SPEC`, `CHECK-FORMAT-LITERAL`) (#982).
 - Test-only dependencies: `group = "test"` on a dependency of `agentica.toml` (`agentica add ... --group test`); only the tests import it, and projects that depend on the package do not fetch it (#1196).
 
 ### Changed
 
+- **Breaking:** `format` is a builtin function, so a `def format` is `CHECK-REDEFINED-NAME` (#982).
 - **Breaking:** `SIGUSR1` and `SIGUSR2` stop the program the way `SIGTERM` does (children
   stopped, files written) instead of ending it at once, and `SIGQUIT` does the
   same and exits with 131 instead of dumping core (#1477).
