@@ -341,7 +341,7 @@ end
 List.group_by(list: List[A], key: Fn[A, K]) -> Map[K, List[A]]
 ```
 
-Groups by the key (an `Int` or a `String`; another key type is `CHECK-TYPE-MISMATCH` at the block). Keys and groups keep their first-appearance order.
+Groups by the key (an `Int`, a `String` or a `Bytes`; another key type is `CHECK-TYPE-MISMATCH` at the block). Keys and groups keep their first-appearance order.
 
 ```agentica
 def main() -> Void
@@ -361,7 +361,7 @@ List.tally(list: List[K]) -> Map[K, Int]
 List.uniq(list: List[K]) -> List[K]
 ```
 
-`tally` counts equal items; `uniq` keeps the first of each. Items are `Int` or `String` (`uniq` also takes `Bytes`), in order of first appearance.
+`tally` counts equal items; `uniq` keeps the first of each. Items are `Int`, `String` or `Bytes`, in order of first appearance.
 
 ```agentica
 def main() -> Void

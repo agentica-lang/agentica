@@ -64,7 +64,9 @@ ROWS: List[Model.PreludeRow] = [
   Model.PreludeRow(
     name: "List.group_by",
     module: "list",
-    limits: [Model.Limit(variable: "K", allowed: [Types.Type.Int, Types.Type.String], what: "a key")],
+    limits: [
+      Model.Limit(variable: "K", allowed: [Types.Type.Int, Types.Type.String, Types.Type.Bytes], what: "a key"),
+    ],
     selector: "",
     bodies: {"": "group_by"},
   ),
@@ -132,7 +134,9 @@ ROWS: List[Model.PreludeRow] = [
   Model.PreludeRow(
     name: "List.tally",
     module: "list",
-    limits: [Model.Limit(variable: "K", allowed: [Types.Type.Int, Types.Type.String], what: "items")],
+    limits: [
+      Model.Limit(variable: "K", allowed: [Types.Type.Int, Types.Type.String, Types.Type.Bytes], what: "items"),
+    ],
     selector: "",
     bodies: {"": "tally"},
   ),
@@ -183,7 +187,9 @@ ROWS: List[Model.PreludeRow] = [
   Model.PreludeRow(
     name: "Range.group_by",
     module: "range",
-    limits: [Model.Limit(variable: "K", allowed: [Types.Type.Int, Types.Type.String], what: "a key")],
+    limits: [
+      Model.Limit(variable: "K", allowed: [Types.Type.Int, Types.Type.String, Types.Type.Bytes], what: "a key"),
+    ],
     selector: "",
     bodies: {"": "group_by"},
   ),

@@ -1,1 +1,1 @@
-ERROR CHECK-REDEFINED-NAME 0:1:1-29:4:1 "duplicate or reserved declaration" - file="root.agc"
+ERROR CHECK-REDEFINED-NAME 0:1:1-29:4:1 "duplicate or reserved declaration" "TaskDown is a reserved type name; rename this declaration" file="root.agc"

@@ -238,7 +238,7 @@ ROWS: List[Model.Builtin] = [
     implementation: "",
     effects: [],
     description: (
-      "Group elements by an Int or String key; keys in order of first appearance, elements in " +
+      "Group elements by an Int, String or Bytes key; keys in order of first appearance, elements in " +
       "order; O(n)."
     ),
     alternatives: [],
@@ -494,7 +494,7 @@ ROWS: List[Model.Builtin] = [
     rule: Model.Rule.Prelude,
     implementation: "",
     effects: [],
-    description: "Count equal Int or String elements; keys in order of first appearance; O(n).",
+    description: "Count equal Int, String or Bytes elements; keys in order of first appearance; O(n).",
     alternatives: [],
   ),
   Model.Builtin(

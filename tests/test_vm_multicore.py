@@ -510,8 +510,8 @@ end
 """
 
 
-# The steps of a terminal over a channel or a file park and touch channel and task lists, so they take rt->sync
-# (agc_stepper.unlocked is false for them): three ch.lazy consumers lose and repeat no value, and four File.foreach
+# The steps of a terminal over a file take rt->sync around the line reader, and over a channel the channel's lock
+# inside the receive: three ch.lazy consumers lose and repeat no value, and four File.foreach
 # readers each read the whole file, on four schedulers.
 @RACE
 def test_lazy_terminals_over_a_contended_channel_and_a_file_on_four_schedulers(tmp_path, repeats):

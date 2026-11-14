@@ -9,7 +9,7 @@ against a Python and a Node peer."""
 import pytest
 
 from tests.agentica_test import FIXTURES, PYTHON, cli, run, tool, vm_environment
-from tests.spec_support import Batch, covered
+from tests.spec_support import Batch, check_diagnostic, covered
 
 
 def program(body):
@@ -120,3 +120,13 @@ def test_the_fixture_prints_what_the_python_and_node_peers_print():
     node = run([tool("node"), str(FIXTURES / "format-peer.js")])
     assert (python.code, node.code) == (0, 0)
     assert result.stdout == python.stdout == node.stdout
+
+
+@pytest.mark.parametrize("source", [
+    "def format(x: Int) -> Int = x\n",
+    "def one() -> Int = 1\n\ndef one() -> Int = 2\n",
+    "struct Bytes\n  size: Int\nend\n",
+])
+def test_a_taken_declaration_name_has_a_help(source, tmp_path):
+    found = check_diagnostic(source + "\ndef main() -> Void\nend\n", tmp_path)
+    assert found["code"] == "CHECK-REDEFINED-NAME" and found["help"]

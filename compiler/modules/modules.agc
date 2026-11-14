@@ -1064,7 +1064,7 @@ def collect(file: String, declarations: List[Ast.Decl]) -> Result[Collected]
     name = Declarations.name_of(wrapped)
     family_enum = Declarations.enum?(kind) and Builtins.record_family?(name)
     if names.has_key?(name) or BARE_NAMES.include?(name) or RESERVED.include?(name) or family_enum
-      help = Diag.Help.NoHelp
+      help = taken_help(name, names.has_key?(name), BARE_NAMES.include?(name))
       if family_enum
         help = Failure.hint(
           "#{name} is a builtin family with records of its own, so an enum may not have the name: its variants " +
@@ -1089,6 +1089,15 @@ def collect(file: String, declarations: List[Ast.Decl]) -> Result[Collected]
   end
 
   ok(Collected(names: names, public: public))
+end
+
+# The help of a declaration whose name is taken: by an earlier declaration, a builtin function or a reserved type.
+def taken_help(name: String, declared: Bool, builtin: Bool) -> Diag.Help
+  return Failure.hint("#{name} is declared more than once in this file; rename or remove one") if declared
+
+  return Failure.hint("#{name} is a builtin function; rename this declaration") if builtin
+
+  Failure.hint("#{name} is a reserved type name; rename this declaration")
 end
 
 # The public module block of `file` that has `member` among its public names, or "".
