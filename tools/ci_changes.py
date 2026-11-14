@@ -28,9 +28,9 @@ ROOT = Path(__file__).resolve().parent.parent
 FRONT_END_STD = ("MODULES", "CORE", "agentica.toml", "prelude/", "test/", "bdd/", "bdd.agc", "analysis.agc",
                  "logger.agc", "actor.agc", "eag.agc")
 DOCS = ("docs/", "site/content/")
-# The modules that check every std module or its page; every light path runs them.
 # tests/test_skill_catalog.py checks the builtin names this skill writes.
 PROGRAMMING_SKILL = ".agents/skills/agentica-programming/"
+# The modules that check every std module or its page; every light path runs them.
 ALWAYS = (
     "tests/test_error_kinds.py", "tests/test_frontend_catalog.py", "tests/test_frontend_modules.py",
     "tests/test_single_binary.py", "tests/test_site_examples.py", "tests/test_stdlib_docs.py",
