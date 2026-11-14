@@ -344,8 +344,22 @@ struct BodyModule
   file: String
 end
 
+## Why a function of `bodies` is not pure: the `effect` of the call (a builtin's effect such as `filesystem`, `native`
+## for a function of an `extern module`, `function-value` for a call of a function value), what it calls (a builtin, a
+## linked function name, or `call`) and its `range`. `through` is the chain of linked function names from the first one
+## the function calls to the one that makes the call, which is in the file of its prefix; empty when the function
+## makes it itself.
+struct Reason
+  effect: String
+  call: String
+  range: Diagnostics.Region
+  through: List[String]
+end
+
 ## One function of `bodies`: `name` as written, `linked` the name a `call` node targets, `generics` its type
-## parameters, the resolved types of its parameters and result, and its body as a list of statement nodes.
+## parameters, the resolved types of its parameters and result, and its body as a list of statement nodes. It is `pure`
+## when no call it makes, through every function it calls, has an effect; `impure` gives each reason once, by the
+## shortest chain. A builtin that can halt (`+`, `b[i]`, `unwrap!`) is pure.
 struct Body
   name: String
   linked: String
@@ -356,6 +370,8 @@ struct Body
   params: List[BodyParam]
   result: TypeShape
   body: List[Node]
+  pure: Bool
+  impure: List[Reason]
 end
 
 ## The answer of `bodies` (experimental): every function of a file with a body, private ones too, in source order.

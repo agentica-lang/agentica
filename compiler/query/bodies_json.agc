@@ -1,6 +1,7 @@
 ## The JSON form of `Analysis.bodies` (#1159, experimental): `{version, command, file, modules, functions}`. A module
-## is `{prefix, file}`. A function is `{name, linked, exported, span, name_span, generics, params, result, body}`, with
-## a span `{file, range}`, and a parameter `{name, type, range, default}`. A node is `{kind, type, range, text, target,
+## is `{prefix, file}`. A function is `{name, linked, exported, span, name_span, generics, params, result, body, pure,
+## impure}`, with a span `{file, range}`, a parameter `{name, type, range, default}` and a reason of `impure` `{effect,
+## call, range, through}`. A node is `{kind, type, range, text, target,
 ## new, children}`, and a type `{kind, name, args}`.
 
 import Model from "../analysis/model"
@@ -45,6 +46,17 @@ def function_json(file: String, function: Model.Body) -> JSON.Value
     "params": JSON.array(params),
     "result": type_json(function.result),
     "body": JSON.array(function.body.map(&node_json)),
+    "pure": JSON.from(function.pure),
+    "impure": JSON.array(function.impure.map(&reason_json)),
+  })
+end
+
+def reason_json(reason: Model.Reason) -> JSON.Value
+  JSON.object({
+    "effect": JSON.from(reason.effect),
+    "call": JSON.from(reason.call),
+    "range": DiagnosticJson.range(reason.range),
+    "through": JSON.array(reason.through.map do |name: String| JSON.from(name) end),
   })
 end
 

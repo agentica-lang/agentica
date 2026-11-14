@@ -90,7 +90,11 @@ Analysis.outline_json(found) -> JSON.Value     # also type_at_json, symbols_json
   `Bytes.at` for `data[i]`, a linked function name) and may leave out
   defaulted arguments; `op` has the operator as written (`+`, `<=`); `let` has
   `new`, `_ = x` is `discard`; a node past what it covers yet is `other`
-  (loops, lists, maps, structs, blocks). No command line form.
+  (loops, lists, maps, structs, blocks). `pure` is false when a call, through
+  every function called, has an effect (a builtin's `effects`, `native` for an
+  extern function, `function-value` for `f.call(x)`); `impure` lists each
+  `Reason` (`effect`, `call`, `range`, `through`: the chain of linked names).
+  `+`, `b[i]` and `unwrap!` are pure. No command line form.
 - `outline`, `type_at`, `type_at_partial`, `symbol`, `refs`, `refs_partial`,
   `native_modules` and `bodies` return an error whose message is one JSON
   diagnostic (the `--json` object); `Analysis.diagnostic(message)` reads it, so
