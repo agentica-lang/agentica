@@ -164,7 +164,8 @@ vm-libfuzz-run: dist/agentica$(EXE)
 	exit $$status
 
 # The HTTP head and body parsers under libFuzzer (vm/fuzz_http.c): bytes on the wire, no program. The seeds are the
-# files of tests/fixtures/fuzz/http/; the run is bounded as vm-libfuzz-run's, with its own corpus and crashes.
+# files of tests/fixtures/fuzz/http/; the run is bounded as vm-libfuzz-run's, with its own corpus and crashes. Inputs go
+# up to LIBFUZZ_HTTP_MAX_LEN bytes, past the head limit (AGC_HTTP_MAX_HEAD), so the too-large paths are reached.
 $(VM_BUILD)/agentica-http-libfuzz$(EXE): $(OSSL_DEP) $(GC_DEP) $(VM_OBJS) $(VM_OBJ)/fuzz_http.o $(VM_LINK_LIBS) $(VM_STAMP)
 	$(VM_LINK) -fsanitize=fuzzer
 
@@ -172,13 +173,14 @@ vm-libfuzz-http:
 	$(MAKE) $(LIBFUZZ_DIR)/agentica-http-libfuzz LIBFUZZ=1
 
 LIBFUZZ_HTTP_DIR := $(LIBFUZZ_DIR)/http
+LIBFUZZ_HTTP_MAX_LEN ?= 70000
 vm-libfuzz-http-run: vm-libfuzz-http
 	@mkdir -p $(LIBFUZZ_HTTP_DIR)/corpus $(LIBFUZZ_HTTP_DIR)/crashes $(LIBFUZZ_HTTP_DIR)/tmp
 	touch $(LIBFUZZ_HTTP_DIR)/tmp/started; status=0; \
 	ASAN_OPTIONS=detect_leaks=1:allocator_may_return_null=1 TMPDIR=$(CURDIR)/$(LIBFUZZ_HTTP_DIR)/tmp \
 	  $(LIBFUZZ_DIR)/agentica-http-libfuzz -fork=$(LIBFUZZ_JOBS) -ignore_timeouts=0 \
 	  -ignore_ooms=0 -ignore_crashes=0 -max_total_time=$(LIBFUZZ_TIME) -rss_limit_mb=$(LIBFUZZ_RSS_MB) -timeout=$(LIBFUZZ_TIMEOUT) \
-	  -artifact_prefix=$(LIBFUZZ_HTTP_DIR)/crashes/ -print_final_stats=1 $(LIBFUZZ_FLAGS) \
+	  -max_len=$(LIBFUZZ_HTTP_MAX_LEN) -artifact_prefix=$(LIBFUZZ_HTTP_DIR)/crashes/ -print_final_stats=1 $(LIBFUZZ_FLAGS) \
 	  $(LIBFUZZ_HTTP_DIR)/corpus tests/fixtures/fuzz/http || status=$$?; \
 	new=$$(find $(LIBFUZZ_HTTP_DIR)/crashes -type f -newer $(LIBFUZZ_HTTP_DIR)/tmp/started \( -name 'crash-*' -o -name 'leak-*' \
 	  -o -name 'timeout-*' -o -name 'oom-*' \)); \

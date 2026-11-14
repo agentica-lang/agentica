@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       seconds:
-        description: Seconds of coverage-guided fuzzing (libFuzzer), at most 6000 (the job stops at 120 minutes)
+        description: Seconds of coverage-guided fuzzing (libFuzzer), at most 5400 (the job stops at 120 minutes, and the HTTP run takes a tenth more)
         type: number
         default: 3600
 
@@ -26,7 +26,7 @@ jobs:
       - run: |
           clang --version
           command -v pkg-config >/dev/null && pkg-config --atleast-version=3.0.0 openssl && pkg-config --atleast-version=8.2.0 bdw-gc && pkg-config --atleast-version=1.2.0 zlib || { sudo apt-get update && sudo apt-get install -y --no-install-recommends libssl-dev libgc-dev zlib1g-dev pkg-config; }
-      - run: test "$SECONDS_TO_FUZZ" -le 6000 || { echo "seconds must be at most 6000 (timeout-minutes is 120)" >&2; exit 1; }
+      - run: test "$SECONDS_TO_FUZZ" -ge 10 -a "$SECONDS_TO_FUZZ" -le 5400 || { echo "seconds must be from 10 to 5400 (timeout-minutes is 120)" >&2; exit 1; }
       - run: make -j"$(nproc)" vm-libfuzz-run LIBFUZZ_TIME="$SECONDS_TO_FUZZ" LIBFUZZ_JOBS="$(nproc)" LIBFUZZ_FLAGS="-seed=$LIBFUZZ_SEED"
       # The HTTP parsers get a tenth of the time: they are small and run far more inputs per second.
       - if: ${{ !cancelled() }}
