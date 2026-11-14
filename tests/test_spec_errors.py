@@ -130,6 +130,9 @@ REJECTED = [
     # error(...) takes a String or an Error.
     ("  bad: Result[Int] = error(42)\n  puts(bad)", "CHECK-TYPE-MISMATCH", "42"),
     ("  bad: Result[Int] = error(r)\n  puts(bad)", "CHECK-TYPE-MISMATCH", "r"),
+    # error? is no method of a Result, in a statement or in a block over a list of Results.
+    ("  puts(r.error?)", "CHECK-UNKNOWN-METHOD", "r.error?"),
+    ("  puts([r].select do |result| result.error? end)", "CHECK-UNKNOWN-METHOD", "result.error?"),
     # A Result stays out of JSON, though the Error it holds is encodable.
     ("  puts(JSON.encode(r))", "CHECK-NOT-ENCODABLE", "r"),
 ]
