@@ -8,9 +8,15 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- Channel messages between tasks scale with the schedulers: a send or a receive no longer takes the runtime's one lock (#1581).
+- A channel timeout of a second or more may end up to 10 ms late on Linux (22 ms on a 100 Hz kernel), since it reads no clock (#1581).
+
 ### Fixed
 
 - `PKG-LOCK-MISSING` says to run `agentica update` to write `agentica.lock` (#1567).
+- `std/analysis`: `Analysis.bodies` gives the arguments of a call in the order they run, each `name: value` as a `named` node, and no `default` placeholders (#1594).
 - `List.uniq` takes `Bytes` items, as `Set.new` does (#1577).
 - `r.error?` on a Result says that a Result has `ok?`, not to unwrap it (#1578).
 - `none` in a `map` block takes the Optional item of the expected list type (#1579).

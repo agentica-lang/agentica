@@ -460,6 +460,7 @@ static void test_a_send_waits_for_a_direct_send_of_another_task(void) {
   agc_resource *writer = agc_as_socket(&vm, socket_v)->writer;
   set_blocking(mine, true);
   agc_share(&vm);
+  agc_timers_share(&other);
   locked_call first = {&vm, vm.task, call("TCP.send", 3, socket_v, pattern(len), agc_int(60000), agc_void())};
   /* Every call is made before the sender starts: call() reads vm.task, which call_locked sets on the sender's
      thread. */

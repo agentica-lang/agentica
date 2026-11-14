@@ -391,6 +391,78 @@ def test_a_contended_channel_loses_and_repeats_no_value(tmp_path, repeats):
         assert (result.code, result.stdout, result.stderr) == (0, "%d\n" % (6 * 500 * 501 // 2), "")
 
 
+CALLS = """\
+struct Call
+  n: Int
+  reply: Channel[Int]
+end
+
+struct Job
+  id: Int
+  inboxes: List[Channel[Call]]
+end
+
+def server(inbox: Channel[Call]) -> Int
+  served = 0
+  while true
+    case inbox.recv(1)
+      ok(call) ->
+        call.reply.send(call.n * 2, 10000).unwrap!
+        served += 1
+      error(_) ->
+        break if inbox.closed? and inbox.empty?
+    end
+  end
+  served
+end
+
+def client(job: Job) -> Int
+  total = 0
+  for i in 1..300
+    reply: Channel[Int] = Channel.new(1)
+    job.inboxes[(job.id + i) % job.inboxes.size].send(Call(n: i, reply: reply), 10000).unwrap!
+    waiting = true
+    while waiting
+      case reply.recv(1)
+        ok(v) ->
+          total += v
+          waiting = false
+        error(_) -> nil
+      end
+    end
+  end
+  total
+end
+
+def inbox(_: Int) -> Channel[Call]
+  made: Channel[Call] = Channel.new(2)
+  made
+end
+
+def main() -> Void
+  inboxes = (1..4).to_a.map(&inbox)
+  servers = inboxes.map do |inbox| Task.spawn(&server, inbox) end
+  clients = (1..16).to_a.map do |id| Task.spawn(&client, Job(id: id, inboxes: inboxes)) end
+  total = clients.map { |c| Task.await(c) }.sum
+  for inbox in inboxes
+    inbox.close
+  end
+  served = servers.map { |s| Task.await(s) }.sum
+  puts("#{total} #{served}")
+end
+"""
+
+
+# Each call has its own reply channel, the inboxes are full most of the time, and every receive has a 1 ms timeout, so
+# sends, timer fires and retries race on the channel locks and the timer heaps (#1581): each reply still arrives once.
+@RACE
+def test_calls_with_reply_channels_and_short_timeouts_lose_no_reply(tmp_path, repeats):
+    bytecode = program(tmp_path, "calls", CALLS)
+    for _ in range(repeats):
+        result = vm(bytecode)
+        assert (result.code, result.stdout, result.stderr) == (0, "%d %d\n" % (16 * 300 * 301, 16 * 300), "")
+
+
 LAZY_IO = """\
 def producer(ch: Channel[Int]) -> Void
   for i in 1..500

@@ -1,7 +1,7 @@
 /*
  * The timers of a task (docs/vm/16-architecture.md §16.9, "Timers"): heap order, disarm from the middle, a fire wakes
  * exactly the due tasks once, a wait parked without a clock starts or drops at the right step, and a fire or a start
- * on one scheduler races a wake and resume on another under rt->sync with no wake or entry left after the resume.
+ * on one scheduler races a wake and resume on another under the heap's lock with no wake or entry left after the resume.
  */
 #include "../core.h"
 #include "test_support.h"
@@ -155,8 +155,16 @@ static void test_pending(void) {
   uint64_t before = agc_clock_ms();
   assert(!agc_timers_run(&vm));
   assert(!a->timer.pending && a->timer.heap == &vm.timers && !atomic_load(&vm.timers.pending));
-  assert(a->timer.deadline >= before + 60001 && a->timer.deadline <= agc_clock_ms() + 60001);
+  /* A wait of a second or more starts at the coarse clock plus its lag: never early, late by that lag at most. */
+  uint64_t coarse = 0, tick = 0;
+  uint64_t lag = agc_coarse_clock_ms(&coarse, &tick) ? 2 * tick + 2 : 0;
+  assert(a->timer.deadline >= before + 60001 && a->timer.deadline <= agc_clock_ms() + 60001 + lag);
   assert(vm.timers.count == 1 && agc_timers_next_due(&vm) == a->timer.deadline);
+  agc_task *brief = parked_within(&vm, 999);
+  before = agc_clock_ms();
+  agc_timers_settle(&vm);
+  assert(brief->timer.deadline >= before + 1000 && brief->timer.deadline <= agc_clock_ms() + 1000);
+  agc_timers_disarm(&vm, brief);
   agc_task *b = parked_within(&vm, 60000);
   agc_task *c = parked_within(&vm, 60000);
   assert(pending_slot(c) && !b->timer.pending && b->timer.heap == &vm.timers && vm.timers.count == 2);
@@ -182,24 +190,20 @@ static agc_task *racing;
 static _Atomic int go;
 static _Atomic int finished;
 
-/* Another scheduler: a waker (a channel send, a target's end) wakes the task under rt->sync, then the scheduler that
-   pops it resumes it, which marks it RUNNING and leaves the timer (`resume`), while the owner may still be firing. */
+/* Another scheduler: a waker (a channel send, a target's end) wakes the task, then the scheduler that pops it resumes
+   it, which marks it RUNNING and leaves the timer (`resume`), while the owner may still be firing. */
 static void wake_and_resume(void *arg) {
   agc_vm *self = arg;
   assert(agc_gc_thread_enter());
   for (int round = 1; round <= ROUNDS; round++) {
     while (atomic_load_explicit(&go, memory_order_acquire) < round) agc_test_yield();
     for (volatile int k = 0; k < (round * 7) % 31; k++) {}
-    agc_sync_take(self);
     agc_task_wake(self, racing, "test");
-    agc_sync_drop(self);
     agc_task *popped;
     while (!(popped = agc_runq_pop(self->rt->runq))) {}
     assert(popped == racing);
     atomic_store(&racing->state, AGC_TASK_RUNNING);
-    agc_sync_take(self);
     agc_timers_disarm(self, racing);
-    agc_sync_drop(self);
     atomic_fetch_add_explicit(&finished, 1, memory_order_release);
   }
   agc_gc_thread_leave();
@@ -208,7 +212,7 @@ static void wake_and_resume(void *arg) {
 /* The owner runs its turn boundary while another scheduler wakes the task and resumes it, with a due timer (PENDING
    false) or a wait whose clock has not started (PENDING true). A due timer: each round queues the task exactly once
    (one wake wins the state CAS, the other finds it READY or RUNNING), and a later fire finds nothing to wake; without
-   the rt->sync take in agc_timers_run the fire and the disarm change the heap at once, which make vm-tsan reports
+   the lock take in agc_timers_run the fire and the disarm change the heap at once, which make vm-tsan reports
    (checked by hand when this test was written). A pending wait: the owner finds the task parked (it starts the clock,
    and the resume takes the entry out of the heap), woken (it drops the entry), or gone from the slot. Every round ends
    with no entry, an empty slot and the armed count back. */
@@ -225,12 +229,10 @@ static void race_against_wake(bool pending) {
     vm.task = racing;
     atomic_store(&racing->state, AGC_TASK_RUNNING);
     agc_task_parking(&vm);
-    agc_sync_take(&vm);
     if (pending)
       agc_task_park_within(&vm, 60000);
     else
       agc_task_park_until(&vm, agc_clock_ms(), true);
-    agc_sync_drop(&vm);
     racing->parking = false;
     assert(agc_task_commit_park(racing));
     vm.task = vm.rt->main;
