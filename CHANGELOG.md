@@ -16,6 +16,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `agentica help File.Info` prints a builtin type with its fields or variants,
   and `agentica help --json` lists the builtin types too, each with a `kind`
   (#1532).
+- `JSON.node(value)` gives a `JSON.Node` enum to walk JSON of unknown shape
+  with `case` (#1115).
 - `std/actor`: `Actor.Timeout`, a receive timeout that wakes an actor when no message came in time (#1523).
 - Test-only dependencies: `group = "test"` on a dependency of `agentica.toml` (`agentica add ... --group test`); only the tests import it, and projects that depend on the package do not fetch it (#1196).
 

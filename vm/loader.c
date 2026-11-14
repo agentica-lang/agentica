@@ -494,6 +494,22 @@ static void load_types(reader *r, agc_program *p) {
    Value(T) in that order, at most once. A type of kind JSON.Field needs it, since typed JSON builds its variants. Only
    the dotted name counts: an enum named JsonField (a user's, or the builtin of a front end before 0.31) is a plain
    enum. */
+static void find_json_node(reader *r, agc_program *p) {
+  static const char *const names[] = {"Null", "Bool", "Int", "BigInt", "Float", "String", "Array", "Object"};
+  p->json_node = UINT32_MAX;
+  for (uint32_t i = 0; i < p->enum_count; i++) {
+    const agc_enum_def *d = &p->enums[i];
+    if (!same_text(d->name, "JSON.Node")) continue;
+    if (p->json_node != UINT32_MAX) reject(r, "duplicate JSON.Node enum");
+    if (d->count != AGC_JSON_NODE_COUNT) reject(r, "bad JSON.Node enum");
+    for (uint32_t k = 0; k < AGC_JSON_NODE_COUNT; k++) {
+      const agc_variant_def *v = &p->variants[d->first + k];
+      if (!same_text(v->name, names[k]) || v->arity != (k != AGC_JSON_NODE_NULL)) reject(r, "bad JSON.Node enum");
+    }
+    p->json_node = d->first;
+  }
+}
+
 static void find_json_field(reader *r, agc_program *p) {
   static const char *const names[] = {"Absent", "Null", "Value"};
   p->json_field = UINT32_MAX;
@@ -582,6 +598,7 @@ static void load_tables(reader *r, agc_program *p) {
   for (uint32_t i = 0; i < p->type_count; i++)
     if (p->types[i].kind == AGC_TYPE_ENUM && p->types[i].arg >= p->enum_count) reject(r, "enum index out of range");
   find_json_field(r, p);
+  find_json_node(r, p);
   find_optional(r, p);
 }
 

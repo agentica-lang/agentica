@@ -7,6 +7,7 @@ JSON.from(value: T) -> JSON.Value
 JSON.null() -> JSON.Value
 JSON.null?(value: JSON.Value) -> Bool
 JSON.kind(value: JSON.Value) -> String
+JSON.node(value: JSON.Value) -> JSON.Node
 JSON.schema(type: T) -> JSON.Value
 JSON.decode(text: String, type: T) -> Result[T]
 JSON.decode(json: JSON.Value, type: T) -> Result[T]
@@ -151,6 +152,11 @@ end
 - `JSON.kind` returns `"null"`, `"bool"`, `"int"`, `"float"`, `"string"`,
   `"array"` or `"object"` and never fails. `1` and `-0` are `"int"` (even beyond
   Int bounds, where `JSON.int` still errors); `1.0` and `1e2` are `"float"`.
+- `JSON.node` (or `json.node`) opens one level for a `case` over unknown JSON:
+  `JSON.Node.Null`, `Bool(Bool)`, `Int(Int)`, `BigInt(String)` (an integer
+  `JSON.int` refuses, as exact text), `Float(Float)`, `String(String)`,
+  `Array(List[JSON.Value])`, `Object(Map[String, JSON.Value])` (keys sorted).
+  It never fails and cannot be encoded or decoded.
 - `JSON.list` returns elements as `JSON.Value` values, mixed arrays included.
 
 ## Encoding

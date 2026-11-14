@@ -1,0 +1,30 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 494,
+  "stdout": [
+    "object ,a,b,z",
+    "  object ",
+    "  string x",
+    "  object Z,a,é",
+    "    bool false",
+    "    bool true",
+    "    null",
+    "  array 7",
+    "    int 0",
+    "    float 3.0",
+    "    float 100.0",
+    "    int -1",
+    "    int 9223372036854775806",
+    "    big 9223372036854775808",
+    "    big -123456789012345678901234567890",
+    "object x,y",
+    "  array 1",
+    "    int 1",
+    "  float 1.0",
+    "JSON.Node.Int(5)",
+    "JSON.Node.Null",
+    ""
+  ],
+  "stderr": []
+}
