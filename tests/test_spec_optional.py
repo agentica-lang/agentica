@@ -58,6 +58,32 @@ end
         None,
     ),
     (
+        "none in the block of Range.map, Lazy.map, flat_map and a nested map takes the expected Optional item",
+        """def main() -> Void
+  xss: List[List[Int]] = [[1]]
+  a: List[Optional[Int]] = (1..2).map do |_| none end
+  b: Lazy[Optional[Int]] = [1].lazy.map do |_| none end
+  c: List[Optional[Int]] = [1].flat_map do |_| [none] end
+  d: List[List[Optional[Int]]] = xss.map do |ys| ys.map do |_| none end end
+  puts("#{a} #{b.to_a} #{c} #{d}")
+end
+""",
+        None,
+        None,
+    ),
+    (
+        "a Range.map block of the item type where the list wants Optional items",
+        "def main() -> Void\n  ids: List[Optional[Int]] = (1..2).map do |i| i end\nend\n",
+        "CHECK-TYPE-MISMATCH",
+        "i",
+    ),
+    (
+        "a Lazy.map block of the item type where the Lazy wants Optional items",
+        "def main() -> Void\n  ids: Lazy[Optional[Int]] = [1].lazy.map do |i| i end\nend\n",
+        "CHECK-TYPE-MISMATCH",
+        "i",
+    ),
+    (
         "a map block of the item type where the list wants Optional items",
         "def main() -> Void\n  ids: List[Optional[Int]] = [1, 2].map do |i| i end\nend\n",
         "CHECK-TYPE-MISMATCH",

@@ -30,7 +30,7 @@ def check_prelude_call(cx: State.Cx, st: State.St, site: State.Site) -> Result[S
   while index < count
     param = Defaults.param_of(shape, site.node.slots, count, index)
     template = form.parameters[param].type
-    settled = block_result(form, template, site.expected)
+    settled = block_result(cx, bound.st, form, template, site)
     bound = try check_argument(cx, bound, site.args[index], template, settled, row.module == "lazy")
     index += 1
   end
@@ -121,15 +121,34 @@ end
 
 # The result a block gives when its Fn's result still has an open variable. A Result there is one the body decides,
 # Result[Unknown] (Slot.InferResult), unless it is also the call's result and the expected type of the call is a
-# Result that names its item. Anything else is Unknown: the body decides it all.
-def block_result(form: Model.Builtin, template: T.Type, expected: T.Type) -> T.Type
-  return T.Type.Unknown if !T.is?(template, "Fn") or !T.is?(T.result(template), "Result")
+# Result that names its item. Any other result is the one the expected type of the call asks for (the item type of the
+# list that xs.map must give), so a `none` in the block takes its type; else Unknown: the body decides it all.
+def block_result(cx: State.Cx, st: State.St, form: Model.Builtin, template: T.Type, site: State.Site) -> T.Type
+  return T.Type.Unknown if !T.is?(template, "Fn")
+
+  expected = site.expected
+  return expected_result(cx, st, form, template, site) if !T.is?(T.result(template), "Result")
 
   if T.same?(T.result(template), form.result) and T.is?(expected, "Result") and !T.unknown?(T.item(expected))
     return expected
   end
 
   T.Type.Result(T.Type.Unknown)
+end
+
+# What the block must give for the call to have the expected type: the form's result unified with the expected type
+# binds the variables of the block's result. Unknown when there is no expected type, it does not fit, or it leaves a
+# variable open.
+def expected_result(cx: State.Cx, st: State.St, form: Model.Builtin, template: T.Type, site: State.Site) -> T.Type
+  return T.Type.Unknown if T.unknown?(site.expected)
+
+  learned = CheckTypes.unify(cx, st, form.result, site.expected, {}, site.node.span)
+  return T.Type.Unknown if !learned.ok?
+
+  result = CheckTypes.substitute(T.result(template), learned.unwrap!)
+  return T.Type.Unknown if CheckTypes.open_variables?(T.result(template), learned.unwrap!) or T.unknown?(result)
+
+  result
 end
 
 # CHECK-TYPE-MISMATCH at the argument that bound a limited variable to a type the row does not allow.

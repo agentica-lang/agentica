@@ -255,10 +255,10 @@ def reduce_block(
 end
 
 # The result a block of the rule must give: Bool for filter, any? and all?, Void for each, none known for map, except
-# the Optional item of the expected list, which lets `none` in the block take its type.
+# the item of the expected list, which lets `none` in the block take its type.
 def block_result(rule: Model.Rule, expected: T.Type) -> T.Type
   case rule
-    Model.Rule.ListMap -> optional_item(expected)
+    Model.Rule.ListMap -> expected_item(expected)
     Model.Rule.ListFilter -> T.Type.Bool
     Model.Rule.ListAny -> T.Type.Bool
     Model.Rule.ListAll -> T.Type.Bool
@@ -267,8 +267,8 @@ def block_result(rule: Model.Rule, expected: T.Type) -> T.Type
   end
 end
 
-def optional_item(expected: T.Type) -> T.Type
-  return T.Type.Unknown if !T.is?(expected, "List") or !T.is?(T.item(expected), "Optional")
+def expected_item(expected: T.Type) -> T.Type
+  return T.Type.Unknown if !T.is?(expected, "List")
 
   T.item(expected)
 end
