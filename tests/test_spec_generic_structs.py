@@ -4,6 +4,9 @@ A rule case is `(program, code, covered text)`: the code of the diagnostic and t
 A program that must check clean has no code.
 """
 
+import json
+import urllib.parse
+
 import pytest
 
 from tests.agentica_test import cli, output_lines, run, vm_environment
@@ -255,3 +258,46 @@ def test_generic_structs_run_and_print(tmp_path):
         '{"first":1,"second":"x","tags":[]}',
         '[StructMember(name: "value", type: "T")]',
     ]
+
+
+BOX_A = "struct Box[T]\n  value: T\nend\n"
+BOX_C = "struct Box[T]\n  name: String\n  count: T\nend\n"
+BOX_D = "struct Box[T]\n  work: Channel[T]\nend\n"
+
+
+def test_two_modules_with_a_box_each_decode_their_own_struct(tmp_path):
+    program = (
+        'import LibA from "liba"\nimport LibC from "libc"\n\n'
+        "struct Both\n  a: LibA.Box[Int]\n  c: LibC.Box[Int]\nend\n\n"
+        + main(
+            'puts(JSON.decode("{\\"a\\":{\\"value\\":1},\\"c\\":{\\"value\\":2}}", Both).ok?)',
+            'both = JSON.decode("{\\"a\\":{\\"value\\":1},\\"c\\":{\\"name\\":\\"n\\",\\"count\\":2}}", Both).unwrap!',
+            "puts(both.c.name)",
+            "puts(both.c.count + both.a.value)",
+            "puts(JSON.schema(Both))",
+        )
+    )
+    for name, text in (("liba.agc", BOX_A), ("libc.agc", BOX_C), ("main.agc", program)):
+        (tmp_path / name).write_text(text, encoding="utf-8")
+    result = run(cli() + [str(tmp_path / "main.agc")], env=vm_environment())
+    assert result.code == 0, result.stderr
+    lines = output_lines(result.stdout)
+    assert lines[:3] == ["false", "n", "3"]
+    schema = json.loads(lines[3])
+    refs = [schema["properties"][field]["$ref"] for field in ("a", "c")]
+    assert len(set(refs)) == 2
+    for ref in refs:
+        assert ref.startswith("#/$defs/") and not set(ref) & set("[] ")
+        key = urllib.parse.unquote(ref[len("#/$defs/"):])
+        assert key in schema["$defs"]
+    assert sorted(schema["$defs"][urllib.parse.unquote(refs[1][8:])]["required"]) == ["count", "name"]
+
+
+def test_a_box_of_another_module_with_a_channel_is_not_decodable(agentica_check):
+    program = (
+        'import LibA from "liba"\nimport LibD from "libd"\n\n'
+        "struct Both\n  a: LibA.Box[Int]\n  d: LibD.Box[Int]\nend\n\n"
+        + main('puts(JSON.decode("{}", Both).ok?)')
+    )
+    found = agentica_check({"liba.agc": BOX_A, "libd.agc": BOX_D, "main.agc": program})
+    assert found["code"] == "CHECK-NOT-DECODABLE"

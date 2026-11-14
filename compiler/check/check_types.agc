@@ -1186,7 +1186,7 @@ end
 def instance_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool]) -> Walk
   return refused(seen) if type_depth(type) > MAX_INSTANCE_DEPTH
 
-  key = "Instance:#{Types.to_text(type)}"
+  key = "Instance:#{Types.json_name(type)}"
   return passed(seen) if seen.has_key?(key)
 
   name = Types.name(type)

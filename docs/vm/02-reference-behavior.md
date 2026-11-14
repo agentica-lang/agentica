@@ -257,8 +257,9 @@ The user-facing rules (which fields are required, the `JsonField` and
   `Optional` applies.
 - `JSON.schema(T)` writes each struct and enum reached once in `$defs` under its
   linked name (`@2::Point` for an imported one), referenced by `{"$ref":
-  "#/$defs/<name>"}` with `~` written `~0` and `/` written `~1`. Int is
-  `{"type": "integer", "minimum": -2^63, "maximum": 2^63-1}`.
+  "#/$defs/<name>"}` with `~` written `~0` and `/` written `~1`, and every
+  other byte a URI fragment may not hold percent-encoded (`Box%5BInt%5D`). Int
+  is `{"type": "integer", "minimum": -2^63, "maximum": 2^63-1}`.
 - The VM walks the JSON tree and the type table with an explicit stack and
   builds the error path only on failure. Schema uses a queue. Neither recurses,
   so recursive structs and deep values are safe.

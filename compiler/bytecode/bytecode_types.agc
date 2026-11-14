@@ -173,15 +173,15 @@ end
 
 # The entry of an instance of a generic struct: tag 10 and its place in program.instances, found by its type.
 def instance_id(program: Ir.Program, pool: Pool.Pool, type: Types.Type) -> Result[Pool.Interned]
-  text = Types.to_text(type)
+  name = Types.json_name(type)
   at = 0
   for entry in program.instances
-    return ok(entry_of(pool, 10, at)) if Types.to_text(entry.type) == text
+    return ok(entry_of(pool, 10, at)) if Types.json_name(entry.type) == name
 
     at += 1
   end
 
-  error(unsupported(program, "the struct instance #{text} in a JSON field type is not in the table"))
+  error(unsupported(program, "the struct instance #{Types.to_text(type)} in a JSON field type is not in the table"))
 end
 
 def entry_of(pool: Pool.Pool, tag: Int, number: Int) -> Pool.Interned

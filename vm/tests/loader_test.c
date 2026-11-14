@@ -1436,6 +1436,32 @@ static bool loads_instances(uint32_t kind, uint32_t instance_arg, const buffer *
   return ok;
 }
 
+/* An instance that shares its JSON name with a decodable enum E(A) is refused. */
+static void instance_named_as_enum(void) {
+  buffer t = instance_tables(AGC_TYPE_INSTANCE, 0);
+  t.len -= 4;
+  u32(&t, 1);
+  str(&t, "E");
+  u32(&t, 1);
+  str(&t, "A");
+  u32(&t, 0);
+  buffer tail = instance_tail(1, 0, (const char *const[]){"Box[Int]"}, 0);
+  tail.len = 0;
+  u32(&tail, 1);
+  u32(&tail, 0);
+  str(&tail, "Box[Int]");
+  u32(&tail, 1);
+  u32(&tail, 0);
+  str(&tail, "Box[Int]");
+  u32(&tail, 0);
+  spec s = base();
+  s.tables = &t;
+  s.tail = &tail;
+  assert(!loads(s, "duplicate JSON type name"));
+  free(t.data);
+  free(tail.data);
+}
+
 static void json_instance_tests(void) {
   static const char *const one[] = {"Box[Int]"};
   static const char *const twice[] = {"Box[Int]", "Box[Int]"};
@@ -1452,6 +1478,7 @@ static void json_instance_tests(void) {
   assert(!loads_instances(AGC_TYPE_INSTANCE, 0, &same, "duplicate JSON type name"));
   buffer empty = instance_tail(0, 0, one, 0);
   assert(!loads_instances(AGC_TYPE_INSTANCE, 0, &empty, "empty struct instances section"));
+  instance_named_as_enum();
   /* An empty enums section is allowed only before the instances. */
   buffer bare = instance_tail(0, 0, one, 0);
   bare.len = 4;

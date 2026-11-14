@@ -639,7 +639,7 @@ static void load_json_enums(reader *r, agc_program *p) {
 }
 
 /* The optional last section of the file (4.6): the instances of generic structs that JSON.decode may build, each with
-   its struct index, its linked name with the type arguments, which no decodable struct shares, and one type index for
+   its struct index, its linked name with the type arguments, which no decodable struct or enum shares, and one type index for
    each field of the struct. A file without it has no type of kind instance. */
 static void load_instances(reader *r, agc_program *p) {
   uint32_t count = read_count(r, 8, "struct instance");
@@ -649,10 +649,14 @@ static void load_instances(reader *r, agc_program *p) {
   uint32_t named = 0;
   for (uint32_t i = 0; i < p->struct_count; i++)
     if (p->structs[i].json_name) named++;
+  for (uint32_t i = 0; i < p->enum_count; i++)
+    if (p->enums[i].json_name) named++;
   agc_string **names = load_alloc(r, agc_size_mul(agc_size_add(named, count), sizeof(agc_string *)), false);
   named = 0;
   for (uint32_t i = 0; i < p->struct_count; i++)
     if (p->structs[i].json_name) names[named++] = p->structs[i].json_name;
+  for (uint32_t i = 0; i < p->enum_count; i++)
+    if (p->enums[i].json_name) names[named++] = p->enums[i].json_name;
   for (uint32_t i = 0; i < count; i++) {
     agc_instance_def *d = &p->instances[i];
     d->struct_index = read_u32(r);

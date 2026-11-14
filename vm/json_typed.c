@@ -372,20 +372,31 @@ static agc_value typed(const char *name) {
   return object_of(1, keys, values);
 }
 
+// A URI fragment (RFC 3986) holding a JSON pointer: `~` and `/` are escaped as the pointer asks, then every byte a
+// fragment may not hold is percent-encoded, so Box[Int] is #/$defs/Box%5BInt%5D.
+static bool fragment_byte(unsigned char c) {
+  if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')) return true;
+  return c != 0 && strchr("-._!$&'()*+,;=:@?", c) != NULL;
+}
+
 static agc_value reference(const agc_string *name) {
+  static const char hex[] = "0123456789ABCDEF";
   agc_json_buffer b;
-  b.cap = agc_size_add(name->bytes, 16);
+  b.cap = agc_size_add(agc_size_mul(name->bytes, 3), 16);
   b.len = 0;
   b.data = agc_alloc_atomic(b.cap);
   agc_json_put(&b, "#/$defs/", 8);
-  size_t start = 0;
   for (size_t i = 0; i < name->bytes; i++) {
-    if (name->data[i] != '~' && name->data[i] != '/') continue;
-    agc_json_put(&b, name->data + start, i - start);
-    agc_json_put(&b, name->data[i] == '~' ? "~0" : "~1", 2);
-    start = i + 1;
+    unsigned char c = (unsigned char)name->data[i];
+    if (c == '~' || c == '/') {
+      agc_json_put(&b, c == '~' ? "~0" : "~1", 2);
+    } else if (fragment_byte(c)) {
+      agc_json_put(&b, (const char *)&c, 1);
+    } else {
+      char escaped[3] = {'%', hex[c >> 4], hex[c & 15]};
+      agc_json_put(&b, escaped, 3);
+    }
   }
-  agc_json_put(&b, name->data + start, name->bytes - start);
   static const char *const keys[] = {"$ref"};
   agc_value values[] = {agc_json_leaf(AGC_JSON_STRING, agc_string_value(buffer_string(&b)))};
   return object_of(1, keys, values);

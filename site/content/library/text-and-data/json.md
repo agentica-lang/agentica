@@ -118,7 +118,7 @@ error("[\"a\"].y: expected required field", kind: "json.decode")
 JSON.schema(type: T) -> JSON.Value
 ```
 
-Describes a struct as a JSON Schema: an object schema with `properties` and `required`. An enum is described by a `oneOf` (see [enums](#enums)). `required` lists every field that is not a `JSON.Field` or an `Optional`, and is left out when no field is required (an empty struct too). `Int` bounds are signed 64-bit, lists use `items`, `String`-keyed maps use `additionalProperties`, and nested and recursive structs and enums use `$defs` and `$ref`; a generic struct instance has a `$defs` entry of its own, named with its arguments (`Box[Int]`). Extra keys stay allowed.
+Describes a struct as a JSON Schema: an object schema with `properties` and `required`. An enum is described by a `oneOf` (see [enums](#enums)). `required` lists every field that is not a `JSON.Field` or an `Optional`, and is left out when no field is required (an empty struct too). `Int` bounds are signed 64-bit, lists use `items`, `String`-keyed maps use `additionalProperties`, and nested and recursive structs and enums use `$defs` and `$ref`; a generic struct instance has a `$defs` entry of its own, named with its arguments (`Box[Int]`), which its `$ref` percent-encodes as a URI fragment (`#/$defs/Box%5BInt%5D`). Extra keys stay allowed.
 
 ```agentica
 struct Point
