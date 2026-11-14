@@ -609,9 +609,9 @@ struct agc_task {
 };
 
 /* Where agc_fail and agc_exit jump while compiled code calls a builtin (agc_jit_call_builtin, vm/jit/jit.c) in a run
-   without rt->jit_unwinds, so that no longjmp crosses compiled code, which has no unwind info for Windows x64. Only the fuzz build's hard allocation
-   limit (longjmp(*on_limit) in vm/value.c, Linux) may cross it, leaving jit_catch set, and agc_fuzz_one then discards
-   the vm. POSIX takes sigsetjmp without the signal mask, as macOS's setjmp saves the mask with a system call at each
+   without rt->jit_unwinds, so that no longjmp crosses compiled code, which has no unwind info for Windows x64. Only
+   the fuzz build's hard allocation limit (longjmp(*on_limit) in vm/value.c, Linux) may cross it, leaving jit_catch
+   set, and agc_fuzz_one then discards the vm. POSIX takes sigsetjmp without the signal mask, as macOS's setjmp saves the mask with a system call at each
    call and its longjmp restores it on every thread of the process (#1529); Windows has setjmp only. */
 #ifdef _WIN32
 typedef jmp_buf agc_catch_buf;
