@@ -136,3 +136,24 @@ def test_ai_names_each_failing_file_apart_from_the_last_line(tmp_path):
     lines = result.stderr.splitlines()
     assert lines.count("a.agc:") == 1 and lines.count("b.agc:") == 1
     assert [line for line in lines if line.startswith("check failed")] == ["check failed: 2 of 2 files"]
+
+
+def test_a_problem_of_an_imported_file_is_shown_once(tmp_path):
+    importer = 'import {bad} from "lib"\n\ndef %s() -> Int = bad()\n'
+    lay_out(tmp_path, {"lib.agc": 'def bad() -> Int = "x"\n', "a.agc": importer % "a", "b.agc": importer % "b"})
+    report = document(check_json(".", cwd=tmp_path), 1)
+    assert (report["checked"], report["failed"]) == (3, 1)
+    assert verdicts(report) == {"a.agc": "", "b.agc": "", "lib.agc": "CHECK-TYPE-MISMATCH"}
+    text = check(".", cwd=tmp_path)
+    assert text.stderr.count("CHECK-TYPE-MISMATCH") == 1 and text.stderr.rstrip().endswith("1 of 3 files")
+    apart = document(check_json("a.agc", "b.agc", cwd=tmp_path), 1)
+    assert (apart["checked"], apart["failed"]) == (2, 1)
+    assert verdicts(apart)["a.agc"] == "CHECK-TYPE-MISMATCH"
+
+
+def test_an_import_cycle_still_fails(tmp_path):
+    lay_out(tmp_path, {"a.agc": 'import {b} from "b"\n\ndef a() -> Int = b()\n',
+                       "b.agc": 'import {a} from "a"\n\ndef b() -> Int = a()\n'})
+    report = document(check_json(".", cwd=tmp_path), 1)
+    assert report["failed"] >= 1
+    assert "CHECK-IMPORT-CYCLE" in verdicts(report).values()
