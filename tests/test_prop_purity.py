@@ -1,4 +1,5 @@
-"""Property tests (Hypothesis) of `pure` in `Analysis.bodies` (#1159): a program of arithmetic, `if`, `case` and
+"""Property tests (Hypothesis) of `Analysis.bodies` (#1159): the arguments of a call come in the order written, which
+is the order they run (#1594); and for `pure`, a program of arithmetic, `if`, `case` and
 calls, recursion and cycles included, is pure; one call of a builtin with an effect makes every function that reaches
 it impure, with that effect and the chain of calls, and leaves the others pure. The prelude of the answer has each
 function the calls run, once, in the order of the calls.
@@ -106,3 +107,29 @@ def test_the_prelude_has_each_function_the_calls_run_once_in_call_order(setup, s
     called = [name for function in answer["functions"] for node in function["body"] for name in named(node)]
     assert [function["linked"] for function in answer["prelude"]] == list(dict.fromkeys(called))
     assert all(function["span"]["file"].startswith("<prelude>/") for function in answer["prelude"])
+
+
+@given(st.integers(1, 4).flatmap(lambda count: st.tuples(st.integers(0, count), st.permutations(range(count)))))
+def test_call_arguments_come_in_the_order_written(setup, shape):
+    """`f(x0, x1, pN: ..., pM: ...)`: the first `positional` written by place, the rest by name in any order."""
+    driver, work = setup
+    positional, order = shape
+    count = len(order)
+    params = ", ".join(f"p{at}: Int" for at in range(count))
+    named = [at for at in order if at >= positional]
+    written = [f"{at} + 1" for at in range(positional)] + [f"p{at}: {at} + 1" for at in named]
+    text = f"def f({params}) -> Int = 0\n\ndef g() -> Int = f({', '.join(written)})\n"
+    (work / "named.agc").write_text(text, encoding="utf-8")
+    result = run_vm(driver, args=["bodies", "named.agc"], cwd=work, env=vm_environment())
+    assert result.code == 0 and result.stderr == "", result.stderr
+    function = next(f for f in json.loads(result.stdout)["functions"] if f["name"] == "g")
+    children = function["body"][0]["children"][0]["children"]
+    expected = [("op", "+", at) for at in range(positional)] + [("named", f"p{at}", at) for at in named]
+
+    def value(child):
+        return child["children"][0] if child["kind"] == "named" else child
+
+    assert all(child["text"] != "" for child in children if child["kind"] == "named")
+    assert [(child["kind"], child["text"], int(value(child)["children"][0]["text"])) for child in children] == expected
+    starts = [(child["range"]["start"]["line"], child["range"]["start"]["column"]) for child in children]
+    assert starts == sorted(starts)

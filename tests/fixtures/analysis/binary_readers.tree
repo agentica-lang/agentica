@@ -51,6 +51,7 @@ window exported=False (data: Bytes, offset: Int, n: Int, type: String) -> Result
               string String text=' is outside bytes of length ' @225:18-225:87
               call Int target='Bytes.length' @225:76-225:85
                 local Bytes text='data' @225:76-225:80
-            string String text='argument' @225:95-225:105
+            named String text='kind' @225:89-225:105
+              string String text='argument' @225:95-225:105
   return Result[Void] @227:3-227:7
     call Result[Void] target='ok' @227:3-227:7
