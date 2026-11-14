@@ -398,8 +398,7 @@ static inline __attribute__((always_inline)) void profile_op(agc_profile *profil
 }
 
 /* The call of a builtin. Once the VM is shared (agc_share) a builtin whose row is marked `shared` runs with rt->sync
- * held, so the task tree, the waiter lists, the channels, the handles and the logger table are seen by one scheduler
- * at a time. The lock is not held when the builtin returns: a builtin that must wait registers the wait and returns,
+ * held, so the task tree, the waiter lists, the handles and the logger table are seen by one scheduler at a time. The lock is not held when the builtin returns: a builtin that must wait registers the wait and returns,
  * and the task parks outside the lock. A builtin that fails leaves the lock to agc_sync_reset. */
 static inline agc_value call_builtin(agc_vm *vm, const agc_builtin *b, agc_value *args, uint32_t span) {
   if (__builtin_expect(vm->rt->shared, 0) && b->shared) {

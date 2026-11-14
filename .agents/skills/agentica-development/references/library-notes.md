@@ -174,9 +174,9 @@ tasks, TCP, TLS and HTTP, files and paths, processes. VM internals are in
   `services.h`) or `agc_channel_receive` (`port.h`), parks on the file job or
   the channel (`WAIT_IO`, a retry park for the channel), and closes the file in
   `lazy_done` before every END (`WAIT_CLOSE`). The run is `unlocked`, and
-  takes `rt->sync` only around those two calls (`lazy_lines_next`,
-  `lazy_receive`); `resume_stepper` fails `RUNTIME-INTERNAL` if an unlocked step
-  returns holding it. `CHECK-LAZY-NO-STEP` (`compiler/check/check_method.agc`)
+  takes `rt->sync` only around the line reader (`lazy_lines_next`; a receive
+  takes the channel's lock itself); `resume_stepper` fails `RUNTIME-INTERNAL`
+  if an unlocked step returns holding it. `CHECK-LAZY-NO-STEP` (`compiler/check/check_method.agc`)
   rejects `File.foreach(...).each` written as one chain.
 - `lz.write_lines(path, ms)` is the terminal `LAZY_WRITE`, driving the line
   writer `agc_line_writer` of `vm/files.c` (`agc_writer_*` in `services.h`): it
