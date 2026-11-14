@@ -57,6 +57,12 @@ CLEAN = [
         None,
         None,
     ),
+    # List.uniq takes Bytes, as Set.new does.
+    (
+        MAIN + '  keys: List[Bytes] = ["a".bytes, "a".bytes].uniq\n  puts(keys.size)\nend\n',
+        None,
+        None,
+    ),
     # An ATS key takes Bytes as a Map key does, and to_map gives a Map[Bytes, V].
     (
         "struct Cache\n  table: ATS[Bytes, List[Bytes]]\nend\n\n"

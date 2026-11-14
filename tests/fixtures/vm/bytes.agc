@@ -58,6 +58,7 @@ def main() -> Void
   items = Set.new(["a".bytes, "a".bytes, "b".bytes])
   puts(items.size)
   puts(items.include?("b".bytes))
+  puts(["a".bytes, "b".bytes, "a".bytes].uniq.size)
 
   nested = [made]
   puts(nested.inspect)
