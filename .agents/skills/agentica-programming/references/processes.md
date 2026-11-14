@@ -200,6 +200,10 @@ System.pid() -> Int                              # the process id of this progra
 ```text
 System.subscribe(signals: List[System.Signal]) -> Result[Channel[System.Signal]]
 System.signal_number(signal: System.Signal) -> Int   # Term 15, Int 2, Hup 1, Quit 3, Kill 9
+Process.signal(process: Process, signal: System.Signal) -> Result[Void]
+Process.signal_group(process: Process, signal: System.Signal) -> Result[Void]
+Process.spawn_group(command: String, args: List[String], dir: String = ".", timeout_ms: Int = 30000) -> Result[Process]
+System.signal(pid: Int, signal: System.Signal, comm: String) -> Result[Void]
 ```
 
 - `System.Signal` is `Term`, `Int`, `Hup`, `Usr1`, `Usr2`, `Quit`, `Kill`. A
@@ -214,6 +218,17 @@ System.signal_number(signal: System.Signal) -> Int   # Term 15, Int 2, Hup 1, Qu
   ignored and the rest are subscribed, and a list of only such signals is a
   `system.signal` error; Windows returns a `system.signal` error. `send` on
   the channel is an `argument` error. No flag needed, also under `--sandbox`.
+- `Process.signal` signals a running child; `signal_group` its group (a
+  `spawn_group` or `pgroup: true` child). An exited or closed child is an
+  error; neither waits, so follow with `Process.wait` and a deadline. Windows
+  returns `system.signal` errors.
+- `spawn_group` starts the child in a new session with the program's stdin,
+  stdout and stderr: its stream calls are `process.failed` errors, and close
+  and the end of the run `SIGKILL` the whole group. `--deny-run` refuses it.
+- `System.signal` reaches a process that is not a child, only while
+  `/proc/<pid>/comm` (at most 15 bytes) equals `comm`, through a pidfd, so a
+  reused pid is never hit. Linux 5.3+; elsewhere `signal: pidfd is
+  unavailable`. `--deny-run` refuses it.
 
 ```agentica
 def main() -> Void

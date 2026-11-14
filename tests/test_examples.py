@@ -18,7 +18,7 @@ import time
 
 import pytest
 
-from tests.agentica_test import ROOT, Child, cli, run, scaled, vm_environment, wait_readable
+from tests.agentica_test import ROOT, WINDOWS, Child, cli, host_only, run, scaled, vm_environment, wait_readable
 from tests.spec_support import check_diagnostic
 
 EXAMPLES = ROOT / "examples"
@@ -175,7 +175,7 @@ def test_file_task_process_and_http_examples_give_their_expected_output():
     assert (tool.stdout, tool.stderr) == ("hello from sh\n", "")
 
 
-@pytest.mark.skipif(os.name == "nt", reason="System.subscribe takes no signal on Windows")
+@host_only(WINDOWS, "POSIX signals: System.subscribe takes no signal on Windows")
 def test_http_server_example_stops_gracefully_on_sigterm(adopt):
     """`http_server.agc serve` under SIGTERM: the request in flight gets its answer, a new connection is refused and
     the program ends with 0."""

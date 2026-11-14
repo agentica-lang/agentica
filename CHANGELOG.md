@@ -17,6 +17,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `HTTP.shutdown(server, timeout_ms)` stops a server gracefully: it stops
   accepting, lets the requests in flight finish up to the deadline (30 s by
   default), then closes what is left (#1479).
+- `Process.signal` and `Process.signal_group` send a signal to a child or its
+  process group, `Process.spawn_group` starts a child in its own group with the
+  program's stdin, stdout and stderr, and `System.signal(pid, signal, comm)`
+  signals another process through a pidfd on Linux (#1478).
 - `agentica help File.Info` prints a builtin type with its fields or variants,
   and `agentica help --json` lists the builtin types too, each with a `kind`
   (#1532).

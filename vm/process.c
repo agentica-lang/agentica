@@ -8,6 +8,10 @@
 #ifdef __APPLE__
 #define _DARWIN_C_SOURCE
 #endif
+/* glibc declares syscall, for the pidfd calls, only for _GNU_SOURCE. */
+#ifdef __linux__
+#define _GNU_SOURCE
+#endif
 #include "net_os.h"
 #include "services.h"
 #include "file_io.h"
@@ -18,13 +22,18 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <inttypes.h>
+#include <limits.h>
 #include <signal.h>
+#include <stdatomic.h>
 #include <stdlib.h>
 #include <string.h>
 #ifdef _WIN32
 #include <io.h>
 #else
 #include <unistd.h>
+#endif
+#ifdef __linux__
+#include <sys/syscall.h>
 #endif
 #include <uv.h>
 
@@ -42,7 +51,8 @@
 #define OWNER(ptr, field) ((proc *)(void *)((char *)(ptr) - offsetof(proc, field)))
 
 typedef enum {
-  REQ_LINE, REQ_BYTES, REQ_SEND, REQ_WAIT, REQ_OUTPUT, REQ_CLOSE, REQ_AVAILABLE, REQ_SPAWN, REQ_STDIN, REQ_POLL
+  REQ_LINE, REQ_BYTES, REQ_SEND, REQ_WAIT, REQ_OUTPUT, REQ_CLOSE, REQ_AVAILABLE, REQ_SPAWN, REQ_STDIN, REQ_SIGNAL,
+  REQ_POLL
 } req_kind;
 typedef enum { STOP_NONE, STOP_TERM, STOP_KILLED } stop_state;
 
@@ -70,7 +80,7 @@ struct launch {
   CC_OWNS char *cwd;
   size_t args;
   int files[2];
-  bool channel, group;
+  bool channel, group, inherit;
 };
 
 /* A request's slot and count on its child are taken by its START step (link_request), on the I/O thread. A request
@@ -87,6 +97,9 @@ struct request {
   /* CLOSE: the request holds the count of the resource that the builtin unregistered, until its START gives it back.
      DETACHED: the job lost its task (the cancel half ran), so the done half has no caller to fail. */
   bool holds_resource, detached;
+  /* SIGNAL: the OS number and whether it goes to the child's group. */
+  bool to_group;
+  int sig;
   int rc;
   int64_t status;
   uint32_t span;
@@ -133,6 +146,8 @@ struct proc {
      signal of a stop goes to the group. group_gone: the end-of-run wait found the group empty (ESRCH), so it is not
      probed or signalled again: its id may since name another group. */
   bool captured, out_cut, err_cut, stop_failed, group, group_gone;
+  /* inherit: Process.spawn_group, whose child has the VM's stdin, stdout and stderr, so its pipes are never used. */
+  bool inherit;
   stop_state stop;
   int write_status;
   int64_t status;
@@ -715,6 +730,38 @@ static agc_value spawned(agc_vm *vm, const request *q, agc_value context) {
   return agc_system_error(vm, AGC_FAMILY_PROCESS, "process: cannot run the executable", agc_net_errno(q->rc));
 }
 
+/* What send_signal found besides a libuv error (negative) or 0. */
+#define SIGNAL_CLOSED 1
+#define SIGNAL_EXITED 2
+#define SIGNAL_NO_GROUP 3
+
+/* Process.signal and signal_group, on the I/O thread. A child is signalled only while it is unreaped (running): its
+   pid, and so its group's id, cannot name another process before that. */
+static int send_signal(proc *p, int sig, bool to_group) {
+  if (p->closed) return SIGNAL_CLOSED;
+  if (to_group && !p->group) return SIGNAL_NO_GROUP;
+  if (!p->running) return SIGNAL_EXITED;
+  int rc = to_group ? uv_kill(-p->process.pid, sig) : uv_process_kill(&p->process, sig);
+  AGC_TRACE(&p->trace, AGC_TRACE_PROC, "signal pid=%d sig=%d group=%d rc=%d", (int)p->process.pid, sig,
+            to_group ? 1 : 0, rc);
+  return rc;
+}
+
+static agc_value signal_result(agc_vm *vm, int rc) {
+  switch (rc) {
+    case 0:
+      return ok_void();
+    case SIGNAL_CLOSED:
+      return agc_error(vm, AGC_KIND_PROCESS_CLOSED, closed_text);
+    case SIGNAL_EXITED:
+      return agc_error(vm, AGC_KIND_PROCESS_FAILED, "process: the child has exited");
+    case SIGNAL_NO_GROUP:
+      return agc_error(vm, AGC_KIND_PROCESS_FAILED, "process: the child does not lead a process group");
+    default:
+      return agc_system_error(vm, AGC_FAMILY_PROCESS, "process: cannot signal the child", agc_net_errno(rc));
+  }
+}
+
 /* The done half of a posted request: the result that `finish` (or the START step) put in it, in the order of the
    checks at N = 1. */
 static agc_value posted_result(agc_vm *vm, const request *q, agc_value context) {
@@ -755,6 +802,8 @@ static agc_value posted_result(agc_vm *vm, const request *q, agc_value context) 
     case REQ_OUTPUT:
       if (q->closed) return agc_error(vm, AGC_KIND_PROCESS_CLOSED, closed_text);
       return output_of(vm, q->data, q->len, q->err_data, q->err_len, q->over);
+    case REQ_SIGNAL:
+      return signal_result(vm, q->rc);
   }
   return agc_void();
 }
@@ -1288,6 +1337,7 @@ static int start_child(guard *g, proc *p, const launch *l) {
     for (size_t k = 0; k < 3; k++) {
       stdio[k].flags = UV_INHERIT_FD;
       stdio[k].data.fd = k > 0 && l->files[k - 1] >= 0 ? l->files[k - 1] : fds[2 * k + (k == 0 ? 0 : 1)];
+      if (l->inherit) stdio[k].data.fd = (int)k;
     }
     for (int k = 0; k < link.child_count; k++) {
       stdio[3 + k].flags = UV_INHERIT_FD;
@@ -1386,7 +1436,7 @@ static bool case_twins(const env_pair *pairs, size_t count) {
 static const char *env_problem(agc_vm *vm, const agc_map *env, const env_pair **pairs, size_t *count) {
   *pairs = NULL;
   *count = 0;
-  if (!env->size) return NULL;
+  if (!env || !env->size) return NULL;
   const agc_value *keys = agc_map_keys(vm, env, 0);
   env_pair *found = agc_alloc(agc_size_mul(env->size, sizeof *found));
   for (size_t k = 0; k < env->size; k++) {
@@ -1507,8 +1557,10 @@ static bool begin_spawn(void *data, agc_io_job *job) {
    refused for its other arguments touches no file. */
 static agc_value spawn_child(agc_vm *vm, const agc_value *args, const agc_string *dir, int64_t timeout, bool captured,
                              bool channel, const agc_map *env, const agc_string *out, const agc_string *err,
-                             bool group) {
+                             bool group, bool inherit) {
   if (vm->rt->deny_run) return agc_error(vm, AGC_KIND_DENIED_RUN, "denied: --deny-run turns off starting programs");
+  if (inherit && !agc_proc_groups())
+    return agc_error(vm, AGC_KIND_SYSTEM_SIGNAL, "process: process groups are not supported on this system");
   bool files = out->bytes || err->bytes;
   if (files && captured) return agc_error(vm, AGC_KIND_ARGUMENT, "process: out and err need Process.spawn");
   const agc_string *command = agc_as_string(vm, args[0]);
@@ -1579,6 +1631,7 @@ static agc_value spawn_child(agc_vm *vm, const agc_value *args, const agc_string
   l->args = count;
   l->channel = channel;
   l->group = group;
+  l->inherit = inherit;
   if (!l->env) {
     AGC_TRACE(&vm->rt->trace, AGC_TRACE_PROC, "spawn_failed path=%s rc=%d", l->argv[0], UV_ENOMEM);
     free_launch(l);
@@ -1601,6 +1654,7 @@ static agc_value spawn_child(agc_vm *vm, const agc_value *args, const agc_string
   p->forward_wait = (agc_forward_wait){NULL, p->io, resume_err, p};
   p->file_wait = (agc_forward_wait){NULL, p->io, write_turn, p};
   p->captured = captured;
+  p->inherit = inherit;
   if (!agc_io_here(vm)) {
     /* The resource comes first, so the owner's end closes the child whatever happens to the spawn. */
     request *q = new_request(vm, p, REQ_SPAWN);
@@ -1627,7 +1681,7 @@ static agc_value spawn_options(agc_vm *vm, const agc_value *args, bool captured,
   const agc_value *f = o->fields;
   return spawn_child(vm, args, agc_as_string(vm, f[OPTION_CHDIR]), agc_as_int(vm, f[OPTION_TIMEOUT_MS]), captured,
                      channel, agc_as_map(vm, f[OPTION_ENV]), agc_as_string(vm, f[OPTION_OUT]),
-                     agc_as_string(vm, f[OPTION_ERR]), agc_as_bool(vm, f[OPTION_PGROUP]));
+                     agc_as_string(vm, f[OPTION_ERR]), agc_as_bool(vm, f[OPTION_PGROUP]), false);
 }
 
 static agc_value builtin_spawn_options(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -1638,6 +1692,15 @@ static agc_value builtin_spawn_options(agc_vm *vm, agc_value *args, uint32_t spa
 static agc_value builtin_spawn_captured_options(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   return spawn_options(vm, args, true, false);
+}
+
+/* Process.spawn_group(command, args, dir, timeout_ms): a child in a new session, so its pid is its group's id, with
+   the VM's stdin, stdout and stderr (docs/vm/10-io-processes.md, "Sending signals"). */
+static agc_value builtin_spawn_group(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  const agc_string *none = agc_make_string("", 0, 0);
+  return spawn_child(vm, args, agc_as_string(vm, args[2]), agc_as_int(vm, args[3]), false, false, NULL, none, none,
+                     true, true);
 }
 
 static agc_value builtin_spawn_channel_options(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -1669,11 +1732,16 @@ static proc *take_lock(agc_vm *vm, agc_process *pr, agc_resource *lock, int64_t 
   return p;
 }
 
+static agc_value inherited(agc_vm *vm) {
+  return agc_error(vm, AGC_KIND_PROCESS_FAILED, "process: the child uses the program's stdin, stdout and stderr");
+}
+
 static agc_value read_op(agc_vm *vm, agc_value handle, req_kind kind, size_t count, int64_t timeout) {
   agc_process *pr = agc_as_process(vm, handle);
   agc_value result;
   proc *p = take_lock(vm, pr, pr->reader, &timeout, &result);
   if (!p) return result;
+  if (p->inherit) return inherited(vm);
   /* At N = 1 the buffer is this thread's: what is buffered is taken without a park. */
   if (agc_io_here(vm) && read_ready(p, kind, count)) return take(vm, p, kind, count);
   request *q = new_request(vm, p, kind);
@@ -1729,6 +1797,7 @@ static agc_value write_op(agc_vm *vm, const agc_value *args, const uint8_t *data
   agc_value result;
   proc *p = take_lock(vm, pr, pr->writer, &timeout, &result);
   if (!p) return result;
+  if (p->inherit) return inherited(vm);
   if (agc_io_here(vm)) {
     if (p->in_closed) return agc_error(vm, AGC_KIND_PROCESS_CLOSED, "process: stdin is closed");
     /* In a callback of native code, a write that does not end at once stays in flight with no writer when new_request
@@ -1781,6 +1850,7 @@ static agc_value builtin_close_stdin(agc_vm *vm, agc_value *args, uint32_t span)
   agc_process *pr = agc_as_process(vm, args[0]);
   agc_value result;
   proc *p = take_lock(vm, pr, pr->writer, &timeout, &result);
+  if (p && p->inherit) return inherited(vm);
   if (p && agc_io_here(vm)) {
     close_stdin_now(p);
     result = ok_void();
@@ -1894,6 +1964,133 @@ static agc_value builtin_channel_close(agc_vm *vm, agc_value *args, uint32_t spa
   return d ? agc_duplex_close_write(vm, d, pr->channel.writer, agc_as_int(vm, args[1])) : result;
 }
 
+static bool begin_signal(void *data, agc_io_job *job) {
+  request *q = data;
+  link_request(q, job);
+  q->rc = send_signal(q->p, q->sig, q->to_group);
+  (void)finish(q);
+  return true;
+}
+
+static agc_value signal_op(agc_vm *vm, const agc_value *args, bool to_group) {
+  agc_process *pr = agc_as_process(vm, args[0]);
+  int sig = agc_signal_number_of(vm, args[1]);
+  if (!sig) return agc_error(vm, AGC_KIND_SYSTEM_SIGNAL, "signal: not supported on this system");
+  proc *p = live(vm, pr);
+  if (!p) return agc_error(vm, AGC_KIND_PROCESS_CLOSED, closed_text);
+  if (agc_io_here(vm)) return signal_result(vm, send_signal(p, sig, to_group));
+  request *q = new_request(vm, p, REQ_SIGNAL);
+  q->sig = sig;
+  q->to_group = to_group;
+  start_request(vm, q, agc_void(), -1, begin_signal);
+  return agc_void();
+}
+
+static agc_value builtin_signal(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  return signal_op(vm, args, false);
+}
+
+static agc_value builtin_signal_group(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  return signal_op(vm, args, true);
+}
+
+/* What signal_pid found besides 0 or a negated errno. */
+#define PID_UNAVAILABLE 1
+#define PID_OTHER_NAME 2
+
+#ifdef __linux__
+/* glibc 2.28, the release baseline, has no wrappers; the numbers are the same on every architecture we build. */
+#ifndef SYS_pidfd_open
+#define SYS_pidfd_open 434
+#endif
+#ifndef SYS_pidfd_send_signal
+#define SYS_pidfd_send_signal 424
+#endif
+
+#define PIDFD_UNKNOWN 0
+#define PIDFD_READY 1
+#define PIDFD_MISSING 2
+
+static int pidfd_of(pid_t pid) { return (int)syscall(SYS_pidfd_open, pid, 0); }
+
+static int pidfd_signal(int fd, int sig) { return (int)syscall(SYS_pidfd_send_signal, fd, sig, NULL, 0); }
+
+/* ENOSYS: an older kernel; EPERM: a seccomp filter. */
+static bool pidfd_refused(int err) { return err == ENOSYS || err == EPERM; }
+
+/* Probed once, by opening a pidfd of the VM itself and sending it signal 0. */
+static bool pidfd_ready(void) {
+  static atomic_int pidfd_state;
+  int state = atomic_load(&pidfd_state);
+  if (state != PIDFD_UNKNOWN) return state == PIDFD_READY;
+  int fd = pidfd_of(getpid());
+  bool refused = fd < 0 ? pidfd_refused(errno) : pidfd_signal(fd, 0) != 0 && pidfd_refused(errno);
+  if (fd >= 0) close(fd);
+  atomic_store(&pidfd_state, refused ? PIDFD_MISSING : PIDFD_READY);
+  return !refused;
+}
+
+/* The name of /proc/PID/comm without its newline; its length, or -1 with errno. */
+static ssize_t read_comm(pid_t pid, char *name, size_t size) {
+  char path[32];
+  snprintf(path, sizeof path, "/proc/%d/comm", (int)pid);
+  int fd = open(path, O_RDONLY | O_CLOEXEC);
+  if (fd < 0) return -1;
+  ssize_t n = read(fd, name, size);
+  int err = errno;
+  close(fd);
+  errno = err;
+  if (n > 0 && name[n - 1] == '\n') n--;
+  return n;
+}
+
+/* The signal goes through the pidfd that the name was checked under, so it reaches that process or none (ESRCH once
+   it is reaped), never one that took its pid. */
+static int signal_pid(pid_t pid, int sig, const agc_string *comm) {
+  if (!pidfd_ready()) return PID_UNAVAILABLE;
+  int fd = pidfd_of(pid);
+  if (fd < 0) return -errno;
+  char name[64];
+  ssize_t n = read_comm(pid, name, sizeof name);
+  int rc = 0;
+  if (n < 0)
+    rc = errno == ENOENT ? -ESRCH : -errno;
+  else if ((size_t)n != comm->bytes || memcmp(name, comm->data, comm->bytes) != 0)
+    rc = PID_OTHER_NAME;
+  else if (pidfd_signal(fd, sig) != 0)
+    rc = -errno;
+  close(fd);
+  return rc;
+}
+#else
+static int signal_pid(int pid, int sig, const agc_string *comm) {
+  (void)pid;
+  (void)sig;
+  (void)comm;
+  return PID_UNAVAILABLE;
+}
+#endif
+
+/* System.signal(pid, signal, comm): a process that is not a child, named by its pid and its 15-byte kernel name. */
+static agc_value builtin_system_signal(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  if (vm->rt->deny_run) return agc_error(vm, AGC_KIND_DENIED_RUN, "denied: --deny-run turns off signalling processes");
+  int64_t pid = agc_as_int(vm, args[0]);
+  int sig = agc_signal_number_of(vm, args[1]);
+  const agc_string *comm = agc_as_string(vm, args[2]);
+  if (pid <= 0 || pid > INT_MAX || pid == (int64_t)uv_os_getpid())
+    return agc_error(vm, AGC_KIND_ARGUMENT, "signal: pid must be above 0 and not the program's own");
+  if (!comm->bytes || comm->bytes > 15 || !no_nul(comm))
+    return agc_error(vm, AGC_KIND_ARGUMENT, "signal: comm must be 1 to 15 bytes without NUL");
+  int rc = sig ? signal_pid((int)pid, sig, comm) : PID_UNAVAILABLE;
+  if (rc == PID_UNAVAILABLE) return agc_error(vm, AGC_KIND_SYSTEM_SIGNAL, "signal: pidfd is unavailable");
+  if (rc == PID_OTHER_NAME) return agc_error(vm, AGC_KIND_SYSTEM_SIGNAL, "signal: the process has another name");
+  if (rc) return agc_system_error(vm, AGC_FAMILY_PROCESS, "signal: cannot signal the process", -rc);
+  return ok_void();
+}
+
 /* Reads what the stdout pipe holds now, so Process.read_available sees output that the child wrote before the call
    even when the loop has not run since. Where libuv's own reads own the pipe nothing is drained (process_os.h). */
 static void drain_out(proc *p) {
@@ -1960,6 +2157,10 @@ const agc_builtin agc_process_builtins[] = {
   {"Process.channel_send", 3, builtin_channel_send, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
   {"Process.channel_close", 2, builtin_channel_close, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"Process.read_available", 2, builtin_read_available, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"Process.spawn_group", 4, builtin_spawn_group, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
+  {"Process.signal", 2, builtin_signal, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"Process.signal_group", 2, builtin_signal_group, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"System.signal", 3, builtin_system_signal, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"Process.poll_line", 2, builtin_poll_line, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
 };
 
