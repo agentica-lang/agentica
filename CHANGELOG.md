@@ -17,12 +17,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- A declaration named like a builtin function, a reserved type or an earlier declaration (`CHECK-REDEFINED-NAME`) has a help that says which (#1588).
 - `PKG-LOCK-MISSING` says to run `agentica update` to write `agentica.lock` (#1567).
 - `agentica check` over several files shows a problem of an imported file once, and counts it once (#1566).
 - `std/analysis`: `Analysis.bodies` gives the arguments of a call in the order they run, each `name: value` as a `named` node, and no `default` placeholders (#1594).
-- `List.uniq` takes `Bytes` items, as `Set.new` does (#1577).
-- `r.error?` on a Result says that a Result has `ok?`, not to unwrap it (#1578).
-- `none` in a `map` block takes the Optional item of the expected list type (#1579).
 
 ## [0.32.0-alpha.1] - 2026-11-14
 
@@ -57,6 +55,16 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `System.subscribe`: a listed signal that was ignored when the program started stays ignored, and the call subscribes the others instead of failing (#1533).
 - On macOS, with more than one scheduler, a stop signal after a task crash stops the program again (#1529).
 - A printed record or enum of a std module takes the first alias the project writes (#1456).
+
+## [0.31.2] - 2026-11-14
+
+### Fixed
+
+- A hand-made `.agcb` that interpolates a bad Error fails with `RUNTIME-INTERNAL` under the JIT too (#1561).
+- On macOS, with more than one scheduler, a stop signal after a task crash stops the program again (#1529).
+- `none` in a `map` block takes the Optional item of the expected list type (#1579).
+- `List.uniq` takes `Bytes` items, as `Set.new` does (#1577).
+- `r.error?` on a Result says that a Result has `ok?`, not to unwrap it (#1578).
 
 ## [0.31.1] - 2026-11-13
 
@@ -1586,6 +1594,7 @@ First release of Agentica, a statically typed language designed for AI agents.
 [unreleased]: https://github.com/agentica-lang/agentica/compare/0.32.0-alpha.2...HEAD
 [0.32.0-alpha.2]: https://github.com/agentica-lang/agentica/compare/0.32.0-alpha.1...0.32.0-alpha.2
 [0.32.0-alpha.1]: https://github.com/agentica-lang/agentica/compare/0.31.1...0.32.0-alpha.1
+[0.31.2]: https://github.com/agentica-lang/agentica/compare/0.31.1...0.31.2
 [0.31.1]: https://github.com/agentica-lang/agentica/compare/0.31.0...0.31.1
 [0.31.0]: https://github.com/agentica-lang/agentica/compare/0.31.0-alpha.1...0.31.0
 [0.31.0-alpha.1]: https://github.com/agentica-lang/agentica/compare/0.30.1...0.31.0-alpha.1
