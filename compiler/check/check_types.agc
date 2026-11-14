@@ -419,6 +419,27 @@ def unify(
   ok(substitutions)
 end
 
+## The types inside a type, in order: the item, the key and value, the parameters then the result, the type arguments.
+def parts(type: ResolvedType) -> List[ResolvedType]
+  case type
+    Types.Type.Result(item) -> [item]
+    Types.Type.Optional(item) -> [item]
+    Types.Type.Task(item) -> [item]
+    Types.Type.Channel(item) -> [item]
+    Types.Type.Address(item) -> [item]
+    Types.Type.Lazy(item) -> [item]
+    Types.Type.Codec(item) -> [item]
+    Types.Type.List(item) -> [item]
+    Types.Type.Set(item) -> [item]
+    Types.Type.Map(key, value) -> [key, value]
+    Types.Type.ATS(key, value) -> [key, value]
+    Types.Type.Fn(params, result) -> params.concat([result])
+    Types.Type.Struct(_, args) -> args
+    Types.Type.Enum(_, args) -> args
+    _ -> []
+  end
+end
+
 private
 
 type ResolvedType = Types.Type
@@ -1410,27 +1431,6 @@ def unify_inside(
   end
 
   ok(found)
-end
-
-# The types inside a type, in order: the item, the key and value, the parameters then the result, the type arguments.
-def parts(type: ResolvedType) -> List[ResolvedType]
-  case type
-    Types.Type.Result(item) -> [item]
-    Types.Type.Optional(item) -> [item]
-    Types.Type.Task(item) -> [item]
-    Types.Type.Channel(item) -> [item]
-    Types.Type.Address(item) -> [item]
-    Types.Type.Lazy(item) -> [item]
-    Types.Type.Codec(item) -> [item]
-    Types.Type.List(item) -> [item]
-    Types.Type.Set(item) -> [item]
-    Types.Type.Map(key, value) -> [key, value]
-    Types.Type.ATS(key, value) -> [key, value]
-    Types.Type.Fn(params, result) -> params.concat([result])
-    Types.Type.Struct(_, args) -> args
-    Types.Type.Enum(_, args) -> args
-    _ -> []
-  end
 end
 
 # The span of the first argument whose parameter type has a variable of the need, else span.

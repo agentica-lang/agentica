@@ -30,7 +30,9 @@ import Prelude from "prelude_files"
 ## the program. bodies is the prelude function each call of a prelude builtin runs, by id of the call. step_tries is
 ## the id of each `try` in the block of a Lazy method (State.St.step). bound is the types that each name binding
 ## introduced, by node id (State.record_bound), for `agentica type-at` and `Analysis.bodies`, and the result type of
-## each function at the id of its result annotation, for `Analysis.bodies`. constant_types is the type of each constant
+## each function at the id of its result annotation, for `Analysis.bodies`. type_args is the type arguments of each
+## call of a generic function or builtin, by id of the call (State.record_type_args), for `Analysis.bodies`.
+## constant_types is the type of each constant
 ## by linked name (a later check of the same program takes them with the entries of the modules it does not check
 ## again).
 struct Checked
@@ -43,6 +45,7 @@ struct Checked
   step_tries: Set[Int]
   bound: Map[Int, List[T.Type]]
   slots: Map[Int, List[Int]] = {}
+  type_args: Map[Int, List[T.Type]] = {}
 end
 
 ## What `check_recovering` learned: the types of the functions that passed, and the problems of those that did not with
@@ -343,6 +346,7 @@ def run(
     step_tries: attached.st.step_tries,
     bound: attached.st.bound,
     slots: attached.st.slots,
+    type_args: attached.st.type_args,
   )
 
   ok(Recovered(checked: checked, problems: problems, failed: failed))
@@ -443,6 +447,7 @@ def taking(linked: Linker.Linked, reusing: Optional[Reusing]) -> Reuse.Taken
         bodies: before.checked.bodies,
         step_tries: before.checked.step_tries,
         slots: before.checked.slots,
+        type_args: before.checked.type_args,
       )
 
       Reuse.take(linked, before.linked, old, before.checked.constant_types, found.clean)

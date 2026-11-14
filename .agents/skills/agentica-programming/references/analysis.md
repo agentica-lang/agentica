@@ -87,7 +87,9 @@ Analysis.outline_json(found) -> JSON.Value     # also type_at_json, symbols_json
   of `Node` (`kind`, `type`, `range`, `text`, `target`, `new`, `children`).
   `modules` maps each `@N::` prefix of a linked name to its file. A `call` has
   the resolved `target` (`Int.shift_left`, `Bytes.length` for `data.size`,
-  `Bytes.at` for `data[i]`, a linked function name) and may leave out
+  `Bytes.at` for `data[i]`, a linked function name), the `type_args` of a
+  generic call (the function's type parameters in order; a builtin's type
+  variables as they first appear in its signature) and may leave out
   defaulted arguments; `op` has the operator as written (`+`, `<=`); `let` has
   `new`, `_ = x` is `discard`; a node past what it covers yet is `other`
   (loops, lists, maps, structs, blocks). No command line form.
