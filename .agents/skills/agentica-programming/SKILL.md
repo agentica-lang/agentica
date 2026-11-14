@@ -67,7 +67,7 @@ Read only what the task needs.
 | `builtins.md` | IO, Int/Float, String, List, Map, Set, Range, Result, Optional, System, Time, Random, `to_s`; Ruby names |
 | `examples.md` | complete programs to start from |
 | `diagnostics.md` | meaning and fix of a diagnostic code, call stacks |
-| `modules.md` | several files, `module` blocks, private struct fields, `std/`, `pkg/` search |
+| `modules.md` | several files, `module` blocks, private struct fields, `std/`, `pkg/` search, `std/queue`, `std/heap` |
 | `packages.md` | `agentica.toml`, `agentica.lock`, `deps/`, `add`/`install`/`update`, native tables, `[style]` |
 | `json.md` | parse, encode, decode into structs |
 | `files.md` | File, Dir, Path, locks |
