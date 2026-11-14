@@ -133,7 +133,7 @@ static void test_arguments(void) {
     agc_task *t = agc_test_task();
     vm.task = t;
     agc_value args[4] = {string_of("never-opened"), agc_int(bad[k]), agc_int(100), agc_void()};
-    if (setjmp(vm.fail) == 0) {
+    if (AGC_CATCH(vm.fail) == 0) {
       each_line->fn(&vm, args, 40);
       assert(0);
     }

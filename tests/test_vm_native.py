@@ -1406,9 +1406,7 @@ end
     assert capture.has(free_stream, b"native-free\n")
 
 
-# One pool thread (one scheduler) runs the first call while the other 49 wait in its queue. Once their tasks are
-# cancelled (after the first nap has started, so that one runs), the waiting calls are never made: only the first nap
-# is counted, even after a second nap would have ended.
+# The holder keeps the one pool thread busy until the 49 queued naps are cancelled, so no nap can start first.
 @NATIVE_CALLS
 def test_a_cancel_skips_a_compute_call_that_has_not_started(tmp_path, peer):
     main = """def nap(ms: Int) -> Result[Int]
@@ -1416,32 +1414,24 @@ def test_a_cancel_skips_a_compute_call_that_has_not_started(tmp_path, peer):
 end
 
 def main() -> Void
+  holder = Task.spawn(&peer_wait_flag, 20_000)
   tasks: List[Task[Result[Int]]] = []
-  for _ in 1..50
+  for _ in 1..49
     tasks = tasks.push(Task.spawn(&nap, 100))
   end
-  n = 0
-  while peer_nap_starts() == 0 and n < 5000
-    Task.sleep(1)
-    n += 1
-  end
-  if peer_nap_starts() == 0
-    puts("never started")
-  end
+  wait_waiting(1)
   for task in tasks
     Task.cancel(task)
   end
-  n = 0
-  while peer_naps() == 0 and n < 2000
-    Task.sleep(1)
-    n += 1
-  end
+  peer_set_flag()
+  puts(Task.await(holder))
   Task.sleep(250)
-  puts(peer_naps())
+  puts(peer_nap_starts())
 end
 """
-    result = agentica("--schedulers", "1", program(tmp_path, COMPUTE_EXTERN.format(library=literal(peer)) + main))
-    assert (result.code, result.stdout, result.stderr) == (0, "1\n", "")
+    source = program(tmp_path, (COMPUTE_EXTERN + PEER_WAITING).format(library=literal(peer)) + main)
+    result = agentica("--schedulers", "1", source)
+    assert (result.code, result.stdout, result.stderr) == (0, "1\n0\n", "")
 
 
 RESOURCE_EXTERN = """extern "{library}"
@@ -2839,6 +2829,50 @@ def main() -> Void
         child.kill()
         child.wait()
     assert notes_of(notes) == ["a", ""]
+
+
+SIGNAL_IN_CALLBACK = """extern "%s"
+  callback Step(x: C.Int32) -> C.Int32
+  def peer_call_maybe(fn: Optional[Step], x: C.Int32) -> C.Int32
+end
+
+def poll(_x: Int) -> Int
+  signals = System.subscribe([System.Signal.Term]).unwrap!
+  puts("ready")
+  IO.flush()
+  began = Time.now_ms()
+  while Time.now_ms() - began < 20_000
+    case signals.recv(0)
+      ok(_) -> return 1
+      error(_) -> nil
+    end
+  end
+
+  return 0
+end
+
+def main() -> Void
+  puts(peer_call_maybe(some(Native.callback(Step, &poll)), 0))
+end
+"""
+
+
+# A subscribed signal reaches its channel while a callback of native code runs, not only once C returns: the callback
+# polls with recv(0) and its turns end at the nested boundary, which delivers the signal.
+@NATIVE_CALLS
+@host_only(WINDOWS, "Windows has no POSIX signals")
+def test_a_subscribed_signal_reaches_a_callback_that_polls(tmp_path, peer):
+    source = program(tmp_path, SIGNAL_IN_CALLBACK % literal(peer))
+    child = subprocess.Popen(cli() + ["--schedulers", "1", str(source)], stdout=subprocess.PIPE,
+                             env=vm_environment(), text=True)
+    try:
+        assert child.stdout.readline() == "ready\n"
+        child.send_signal(signal.SIGTERM)
+        assert child.stdout.readline() == "1\n"
+        assert child.wait(timeout=20) == 0
+    finally:
+        child.kill()
+        child.wait()
 
 
 OUT_EXTERN = """extern "{library}"

@@ -206,7 +206,8 @@ System.signal_number(signal: System.Signal) -> Int   # Term 15, Int 2, Hup 1, Qu
   `ch.close` ends the subscription, and the signal stops the program again.
 - `Quit` or `Kill` in the list is `RUNTIME-INVALID-SIGNAL`; `Quit` (`Ctrl-\`)
   stays the force stop (exit 131). An empty list is an `argument` error; a
-  signal ignored at start (`nohup`, `Int` in a background shell job) is a
+  signal ignored at start (`nohup`, `Int` in a background shell job) stays
+  ignored and the rest are subscribed, and a list of only such signals is a
   `system.signal` error; Windows returns a `system.signal` error. `send` on
   the channel is an `argument` error. No flag needed, also under `--sandbox`.
 

@@ -439,8 +439,9 @@ static agc_value builtin_subscribe(agc_vm *vm, agc_value *args, uint32_t span) {
   if (!mask) return agc_error(vm, AGC_KIND_ARGUMENT, "signal: no signals");
   if (!agc_io_signals_supported())
     return agc_error(vm, AGC_KIND_SYSTEM_SIGNAL, "signal: not supported on this system");
-  if (mask & agc_io_signals_ignored())
-    return agc_error(vm, AGC_KIND_SYSTEM_SIGNAL, "signal: ignored when the program started");
+  /* A signal ignored at start stays ignored; the call fails only when nothing is left to subscribe to (#1533). */
+  mask &= ~agc_io_signals_ignored();
+  if (!mask) return agc_error(vm, AGC_KIND_SYSTEM_SIGNAL, "signal: ignored when the program started");
   size_t capacity = 0;
   for (unsigned k = 0; k < AGC_SIGNAL_DELIVERED; k++) capacity += (mask >> k) & 1u;
   agc_channel *c = agc_alloc(sizeof(agc_channel));

@@ -55,7 +55,7 @@ static agc_value chunk(agc_value state, const char *data) {
 }
 
 static void refused(agc_value state) {
-  if (setjmp(vm.fail) == 0) {
+  if (AGC_CATCH(vm.fail) == 0) {
     (void)chunk(state, "1\r\na\r\n0\r\n\r\n");
     assert(!"a hand-made Chunk reached the decoder");
   }

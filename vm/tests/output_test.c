@@ -370,7 +370,7 @@ static void test_flush_fails_when_the_reader_left(void) {
   assert(write_as(a, 'a', 10, false));
   vm.task = a;
   a->state = AGC_TASK_RUNNING;
-  if (setjmp(vm.fail) == 0) {
+  if (AGC_CATCH(vm.fail) == 0) {
     for (int round = 0; round < 1000; round++) {
       drain_as(a);
       pump();

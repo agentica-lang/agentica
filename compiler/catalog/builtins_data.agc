@@ -6807,7 +6807,7 @@ ROWS_68: List[Model.Builtin] = [
     description: (
       "When the task (or TaskRef) ends (returns, crashes or is cancelled), send message(TaskDown) into the channel " +
       "once, without waiting; at once for a task that has ended; past the capacity of a full channel, dropped when " +
-      "it is closed; VM only."
+      "it is closed or a signal channel; a crash counts as observed only through a Task[R]; VM only."
     ),
     alternatives: [],
   ),

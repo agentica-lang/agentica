@@ -237,9 +237,9 @@ dispatch, is the limit.
   runs on a normal end, on `System.exit`, on a diagnostic, on the step limit and
   on a stop signal (`SIGINT`, `SIGTERM`, `SIGHUP`, `SIGUSR1`, `SIGUSR2`, or
   `SIGQUIT`, which exits with 131) that no `System.subscribe` takes. After a
-  stop signal the VM ends by that signal. A second stop signal ends it at once, but only after the children are
-  stopped. The out-of-memory and GC abort exits (6.3) and `SIGKILL` run no
-  cleanup.
+  stop signal the VM ends by that signal. A second stop signal ends it at once,
+  but only after the children are stopped. The out-of-memory and GC abort exits
+  (6.3) and `SIGKILL` run no cleanup.
 - On Windows, `SIGINT`, `SIGBREAK` and `SIGHUP` take the same path
   (`vm/loop.c`), and the kill-on-close job object of 10.4 ends the children of
   a VM that is killed.

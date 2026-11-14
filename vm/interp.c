@@ -2043,6 +2043,7 @@ static NESTED bool run_nested(agc_vm *vm, agc_task *t, nested_barrier *b, agc_va
     /* The barrier keeps the task from ending, and agc_task_parking from parking. */
     if (r != AGC_TURN_YIELD) agc_fail(vm, "RUNTIME-INTERNAL", "a callback of native code left its frames", span);
     t->steps += agc_turn_finish(vm);
+    if (agc_io_signals_pending()) (void)agc_signals_deliver(vm);
     int sig = agc_io_stop_signal();
     if (sig) agc_stop(vm, sig);
     agc_task_nested_boundary(vm);

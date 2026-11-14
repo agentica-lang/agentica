@@ -247,7 +247,7 @@ static bool ended(long pid) {
 /* Closes the process in args[0]. A failed close longjmps out of the builtin (the VM is in a turn), so the jump is
    caught here and turned into an assert, not left to jump through a dead frame. */
 static void close_must_not_fail(agc_value *args) {
-  if (setjmp(vm.turn) == 0)
+  if (AGC_CATCH(vm.turn) == 0)
     call("Process.close", args);
   else
     assert(!"Process.close failed");

@@ -241,7 +241,7 @@ static void test_mismarked_leaf_aborts(void) {
    gives back what a failed builtin held. */
 static void test_assert_and_reset(void) {
   assert(vm.rt->shared);
-  if (setjmp(vm.fail) == 0) {
+  if (AGC_CATCH(vm.fail) == 0) {
     agc_sync_assert(&vm);
     assert(!"agc_sync_assert let a call without the lock through");
   }
