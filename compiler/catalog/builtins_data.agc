@@ -470,6 +470,7 @@ ERROR_KINDS: List[String] = [
 ## The modules only std/ may call: each name with the std module that wraps it and the alias its help shows.
 STD_ONLY_IMPORTS: Map[String, List[String]] = {
   "ActorInbox": ["std/actor", "Actor"],
+  "BddRandom": ["std/bdd", "BDD"],
   "HttpWire": ["std/http", "HTTP"],
   "LogRegistry": ["std/logger", "Logger"],
   "RegexEngine": ["std/regex", "Regex"],
