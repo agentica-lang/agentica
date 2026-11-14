@@ -280,6 +280,7 @@ void agc_inbuf_cut_line(agc_inbuf *b, agc_inbuf_cut *cut) {
   cut->error = b->error;
   cut_copy(cut, data, cut->status == AGC_CUT_DATA ? len : 0);
   if (cut->status != AGC_CUT_DATA) return;
+  cut->taken = consume;
   b->start += consume;
   b->scanned = 0;
 }

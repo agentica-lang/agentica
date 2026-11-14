@@ -9,11 +9,18 @@ import json
 import os
 import re
 import shutil
+import tempfile
+from pathlib import Path
 
 import pytest
 
-from tests.agentica_test import (FIXTURES, PYTHON, TARGET_OS, agc_literal, cli, host_only, kill_process, process_alive,
-                                 run, tool, vm_environment, wait_until)
+from tests.agentica_test import (FIXTURES, PYTHON, SLOW, TARGET_OS, agc_literal, cli, compile_agc, host_only,
+                                 kill_process, process_alive, require, run, tool, vm_environment, wait_until)
+
+try:
+    from hypothesis import given, settings, strategies as st
+except ImportError:  # the property test skips locally without Hypothesis and fails in CI (require)
+    given = settings = st = None
 
 PEER = FIXTURES / "process-peer.js"
 PY_PEER = FIXTURES / "process-peer.py"
@@ -255,6 +262,166 @@ def test_wait_retries_preserve_children_active_stream_deadlines_abort_them(tmp_p
     assert output(tmp_path, program(
         node, "oversized", "  IO.inspect(Result.ok?(Process.read_line(p, 5000)))\n  IO.inspect(Result.ok?(Process.wait(p, 1000)))")) == \
         "false\nfalse\n"
+
+
+@pytest.mark.parametrize("schedulers", ("1", "4"))
+def test_poll_line_times_out_without_closing_the_child_or_losing_a_partial_line(tmp_path, schedulers):
+    node = tool("node")
+    body = ('  Result.unwrap!(Process.send(p, "par", 5000))\n'
+            "  IO.inspect(Process.poll_line(p, 50))\n"
+            '  Result.unwrap!(Process.send(p, "tial\\r\\nnext\\n", 5000))\n'
+            "  IO.inspect(Process.poll_line(p, 5000))\n"
+            "  IO.inspect(Process.read_bytes(p, 5, 5000))\n"
+            "  Result.unwrap!(Process.close_stdin(p, 5000))\n"
+            "  IO.inspect(Process.poll_line(p, 5000))\n"
+            "  IO.inspect(Process.wait(p, 5000))")
+    assert output(tmp_path, program(node, "echo", body), "peer stderr\n", env={"AGENTICA_SCHEDULERS": schedulers}) == (
+        'error("process: operation timed out", kind: "process.timeout")\n'
+        'ok("partial")\n'
+        "ok(<Bytes 5 6e6578740a>)\n"
+        'error("process: end of input", kind: "process.eof")\n'
+        "ok(0)\n")
+
+
+@pytest.mark.parametrize("schedulers", ("1", "4"))
+def test_a_cancelled_poll_line_leaves_the_next_line_to_the_next_read(tmp_path, schedulers):
+    node = tool("node")
+    prefix = "def poller(p: Process) -> Result[String]\n  Process.poll_line(p, 5000)\nend\n\n"
+    body = ("  t = Task.spawn(&poller, p)\n"
+            "  Task.sleep(50)\n"
+            "  Task.cancel(t)\n"
+            "  IO.inspect(Task.await(t))\n"
+            '  Result.unwrap!(Process.send(p, "first\\n", 5000))\n'
+            "  IO.inspect(Process.poll_line(p, 5000))\n"
+            "  Result.unwrap!(Process.close_stdin(p, 5000))\n"
+            "  IO.inspect(Process.wait(p, 5000))")
+    assert output(tmp_path, program(node, "echo", body, prefix), "peer stderr\n",
+                  env={"AGENTICA_SCHEDULERS": schedulers}) == (
+        'error("task: cancelled", kind: "task.cancelled")\n'
+        'ok("first")\n'
+        "ok(0)\n")
+
+
+POLL_DRIVER = """\
+def show(line: String) -> Void
+  puts(OpenSSL.Digest.hexencode(line.bytes))
+end
+
+def main() -> Void
+  args = System.args()
+  p = Process.spawn(args[0], [args[1], args[2]]).unwrap!
+  i = 3
+  while i < args.size
+    words = args[i].split(":")
+    if words[0] == "p"
+      case Process.poll_line(p, words[1].to_i!)
+        ok(line) -> show(line)
+        error(e) -> _ = e
+      end
+
+    else
+      timeout = words[1].to_i!
+      t = Task.spawn do
+        Process.poll_line(p, timeout)
+      end
+
+      Task.sleep(words[2].to_i!)
+      Task.cancel(t)
+      case Task.await(t)
+        ok(line) -> show(line)
+        error(e) -> _ = e
+      end
+
+    end
+
+    i += 1
+  end
+
+  while true
+    case Process.poll_line(p, 10000)
+      ok(line) -> show(line)
+      error(e) ->
+        puts("end #{e.kind}")
+        break
+    end
+
+  end
+
+end
+"""
+
+POLL_CHILD = """\
+import json, sys, time
+for data, delay in json.load(open(sys.argv[1])):
+    sys.stdout.buffer.write(bytes.fromhex(data))
+    sys.stdout.buffer.flush()
+    time.sleep(delay / 1000)
+"""
+
+
+def poll_stream():
+    text = st.text(st.characters(blacklist_categories=("Cs",), blacklist_characters="\r\n"), max_size=40)
+    long = st.integers(1000, 70000).map(lambda n: "\u00e9" * (n // 2))
+    lines = st.lists(st.tuples(st.one_of(text, long), st.sampled_from(["\n", "\r\n"])), max_size=12)
+    return st.tuples(lines, st.one_of(st.just(""), text))
+
+
+def poll_plan():
+    poll = st.tuples(st.just("p"), st.integers(1, 50))
+    cancelled = st.tuples(st.just("c"), st.integers(1, 5000), st.integers(0, 30))
+    return st.lists(st.one_of(poll, cancelled), max_size=8)
+
+
+def run_poll_plan(driver, schedulers, stream, cuts, delays, plan):
+    lines, last = stream
+    data = "".join(line + ending for line, ending in lines).encode() + last.encode()
+    points = sorted({min(cut, len(data)) for cut in cuts} | {0, len(data)})
+    chunks = [[data[a:b].hex(), delays[k % len(delays)]] for k, (a, b) in enumerate(zip(points, points[1:]))]
+    with tempfile.TemporaryDirectory() as folder:
+        child, spec = Path(folder) / "child.py", Path(folder) / "chunks.json"
+        child.write_text(POLL_CHILD, encoding="utf-8")
+        spec.write_text(json.dumps(chunks), encoding="utf-8")
+        steps = [":".join(str(word) for word in step) for step in plan]
+        result = run(cli() + ["run", "--", str(driver), PYTHON, str(child), str(spec)] + steps,
+                     env=vm_environment({"AGENTICA_SCHEDULERS": schedulers}))
+    assert result.code == 0, result.stderr
+    out = result.stdout.split("\n")
+    assert out[-2:] == ["end process.eof", ""], result.stdout
+    got = [bytes.fromhex(word).decode() for word in out[:-2]]
+    wanted = [line for line, _ in lines] + ([last] if last else [])
+    cancels = sum(1 for step in plan if step[0] == "c")
+    if schedulers == "1" or not cancels:
+        assert got == wanted
+        return
+    # With several schedulers a task can be cancelled in the turn that returns its line, which Task.await then
+    # reports as cancelled: that line is lost to the program, never reordered or read twice.
+    rest = iter(wanted)
+    assert all(line in rest for line in got), (got, wanted)
+    assert len(wanted) - len(got) <= cancels
+
+
+@pytest.fixture(scope="module")
+def poll_driver(tmp_path_factory):
+    require(given is not None, "hypothesis is required (poetry install --only test --no-root)")
+    source = tmp_path_factory.mktemp("poll") / "driver.agc"
+    source.write_text(POLL_DRIVER, encoding="utf-8")
+    return compile_agc(source, source.with_suffix(".agcb"))
+
+
+def poll_property(test):
+    if given is None:
+        return lambda poll_driver, schedulers: None
+    # A property runs in both tiers (tests/conftest.py): a few examples in the fast one, more in the slow one.
+    return settings(max_examples=500 if SLOW else 25)(given(
+        stream=poll_stream(), cuts=st.lists(st.integers(0, 200000), max_size=8),
+        delays=st.lists(st.integers(0, 15), min_size=1, max_size=4), plan=poll_plan())(test))
+
+
+@pytest.mark.parametrize("schedulers", ("1", "4"))
+@poll_property
+def test_poll_line_hands_every_line_once_and_in_order_through_timeouts_and_cancels(poll_driver, schedulers, stream,
+                                                                                    cuts, delays, plan):
+    run_poll_plan(poll_driver, schedulers, stream, cuts, delays, plan)
 
 
 @pytest.mark.parametrize("operation", (

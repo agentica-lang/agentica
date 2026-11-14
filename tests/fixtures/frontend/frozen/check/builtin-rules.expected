@@ -168,6 +168,7 @@ Process.close_stdin Plain
 Process.output Plain
 Process.parent_read_line Plain
 Process.parent_send Plain
+Process.poll_line Plain
 Process.read_available Plain
 Process.read_bytes Plain
 Process.read_line Plain

@@ -159,7 +159,7 @@ static bool finish(request *q) {
       q->overflow = d->overflow;
     } else {
       if (agc_inbuf_drop_unterminated(&d->in))
-        q->cut = (agc_inbuf_cut){AGC_CUT_PARTIAL, 0, NULL, 0};
+        q->cut = (agc_inbuf_cut){AGC_CUT_PARTIAL, 0, NULL, 0, 0};
       else
         agc_inbuf_cut_line(&d->in, &q->cut);
       over = q->cut.status == AGC_CUT_OVER;
@@ -336,7 +336,7 @@ static void keep_retry(agc_duplex *d, request *q) {
   if (q->busy && d->got_ready) return;
   agc_inbuf_cut_free(&d->got);
   d->got = q->cut;
-  q->cut = (agc_inbuf_cut){AGC_CUT_DATA, 0, NULL, 0};
+  q->cut = (agc_inbuf_cut){AGC_CUT_DATA, 0, NULL, 0, 0};
   d->got_ready = true;
   d->got_closed = q->closed;
   d->got_busy = q->busy;
@@ -626,7 +626,7 @@ static agc_input_status parent_line_posted(agc_vm *vm, agc_duplex *d, agc_string
   }
   d->got_ready = false;
   agc_inbuf_cut cut = d->got;
-  d->got = (agc_inbuf_cut){AGC_CUT_DATA, 0, NULL, 0};
+  d->got = (agc_inbuf_cut){AGC_CUT_DATA, 0, NULL, 0, 0};
   agc_input_status status = AGC_INPUT_FAILED;
   if (d->got_closed || (!d->got_busy && cut.status == AGC_CUT_OVER)) {
     d->gone = true;
