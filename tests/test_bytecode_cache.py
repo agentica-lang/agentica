@@ -440,25 +440,28 @@ def test_a_wrapper_like_ccache_misses_when_the_compiler_after_it_changes(src, tm
     assert stamp(entry) != kept
 
 
-@host_only(WINDOWS, "an empty PATH entry and the default search are those of POSIX")
-def test_an_unset_path_keys_the_default_search_and_an_empty_entry_the_package_folder(src):
-    """With PATH unset the build searches libuv's default (_PATH_DEFPATH), so the key is that of PATH set to it; an empty entry is the
-    folder of the package, whose `cc` the key cannot see, so adding one misses."""
+@host_only(WINDOWS, "the stand-in PATH is that of POSIX")
+def test_an_unset_path_finds_no_compiler_and_an_empty_entry_is_skipped(src):
+    """Process.spawn searches only the non-empty entries of PATH, and none when PATH is unset (resolve in
+    vm/process.c): empty entries keep the key, and an unset PATH keys as an empty one."""
     default = "/usr/bin:/bin"
     agentica(src, "main.agc", CC=None, PATH=default)
     entry = only_entry(src / "_build" / "bytecode")
     kept = stamp(entry)
+    empty = agentica(src, "main.agc", CC=None, PATH=":" + default + ":")
+    assert (empty.code, stamp(entry)) == (0, kept), empty.stderr
     unset = agentica(src, "main.agc", CC=None, PATH=None)
-    assert (unset.code, stamp(entry)) == (0, kept), unset.stderr
-    empty = agentica(src, "main.agc", CC=None, PATH=":" + default)
-    assert (empty.code, empty.stdout) == (0, "one\n"), empty.stderr
+    assert (unset.code, unset.stdout) == (0, "one\n"), unset.stderr
     assert stamp(entry) != kept
+    kept = stamp(entry)
+    blank = agentica(src, "main.agc", CC=None, PATH="")
+    assert (blank.code, stamp(entry)) == (0, kept), blank.stderr
 
 
-@host_only(not WINDOWS, "the .com and .exe search of libuv is that of Windows")
+@host_only(not WINDOWS, "the .exe and .com search of Process.spawn is that of Windows")
 def test_on_windows_a_gcc_com_before_the_gcc_exe_that_was_found_misses(src, tmp_path):
-    """libuv tries NAME.com before NAME.exe in each folder of PATH, so a gcc.com in an earlier folder is another
-    compiler."""
+    """Process.spawn tries NAME.exe, then NAME.com, in each folder of PATH in turn, so a gcc.com in an earlier folder
+    is the compiler that runs."""
     for folder in ("first", "second"):
         (tmp_path / folder).mkdir()
     (tmp_path / "second" / "gcc.exe").write_bytes(b"")

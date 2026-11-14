@@ -226,6 +226,23 @@ def compiler_words(system: String) -> List[String]
   ["cc"]
 end
 
+## The C compiler a native build would start, found as Process.spawn finds a command (`resolve` in vm/process.c): a
+## name with a folder is that file, a bare name the first file of that name in a non-empty PATH entry, and on Windows
+## only NAME.exe or NAME.com runs. The key holds every match of PATH as "CANDIDATE REAL", so a venv with no compiler
+## keeps the cache and a wrapper such as ccache misses when the next match changes.
+def compiler_path(system: String) -> String
+  name = compiler_words(system)[0]
+  windows = system == "windows"
+  return "" if windows and !windows_name?(name)
+  return runnable(name, windows) if has_folder?(name, windows)
+
+  path = System.env("PATH")
+  return "" if !path.ok?
+
+  found = path_entries(path.unwrap!, windows).map { |folder| runnable("#{folder}/#{name}", windows) }
+  found.select { |match| match != "" }.join(" ")
+end
+
 private
 
 # The folder of the project (or of the root file) that holds the build outputs, and the variable that names another
@@ -236,8 +253,7 @@ BUILD_VARIABLE = "AGENTICA_BUILD_DIR"
 # The variables that change what the build of a native module makes (io/native_build.agc).
 COMPILER_VARIABLES = ["CC", "CPATH", "C_INCLUDE_PATH", "CPLUS_INCLUDE_PATH", "LIBRARY_PATH"]
 
-# The execute bits of the owner, the group and others (0111).
-EXECUTE_BITS = 73
+LETTERS = "abcdefghijklmnopqrstuvwxyz"
 
 # The files that decide which package or library an import reads, next to the manifest.
 MANIFEST_FILE = "agentica.toml"
@@ -283,84 +299,33 @@ def inputs_digest(settings: Env.Settings, project: Project.Project) -> Result[St
   ok(digest(parts.join("\n").bytes))
 end
 
-# The C compiler a native build would start, found as libuv's spawn finds it. The key holds every match of PATH as
-# "CANDIDATE REAL", so a venv with no compiler keeps the cache and a wrapper such as ccache misses when the next match
-# changes; a relative candidate depends on the package root of each build, so only its text goes in.
-def compiler_path(system: String) -> String
-  name = compiler_words(system)[0]
-  windows = system == "windows"
-  names = executable_names(name, windows)
-  if has_folder?(name, windows)
-    return name if !Paths.absolute?(name, windows)
-
-    return executable(names, windows)
+# The entries of PATH that Process.spawn searches: the non-empty ones, and on Windows without the quotes around one.
+def path_entries(path: String, windows: Bool) -> List[String]
+  entries = path.split(":")
+  if windows
+    entries = path.split(";").map { |entry| unquote(entry) }
   end
 
-  matches(search_folders(system), names, windows).join(" ")
+  entries.select { |entry| entry != "" }
 end
 
-# The folders a bare name is looked up in, in order; "" is the working folder.
-def search_folders(system: String) -> List[String]
-  path = System.env("PATH")
-  if system == "windows"
-    return [""] if !path.ok?
+def unquote(entry: String) -> String
+  return entry if entry.length < 2 or !entry.start_with?("\"") or !entry.end_with?("\"")
 
-    folders = windows_entries(path.unwrap!).filter do |folder: String| folder != "" end
-    return [""].concat(folders.map do |folder: String| unquote(folder) end)
+  entry.slice(1, entry.length - 2)
+end
+
+# The file that a start of `path` runs, as "CANDIDATE REAL"; "" when there is none. Any file but a folder runs; on
+# Windows a path that does not end in .exe or .com is tried with each, .exe first.
+def runnable(path: String, windows: Bool) -> String
+  candidates = [path]
+  if windows and !runnable_suffix?(path)
+    candidates = ["#{path}.exe", "#{path}.com"]
   end
 
-  return path.unwrap!.split(":") if path.ok?
-
-  ["/usr/bin", "/bin"]
-end
-
-# libuv splits a Windows PATH at ";", except inside an entry that starts with a quote, up to its closing quote.
-def windows_entries(path: String) -> List[String]
-  entries: List[String] = []
-  entry = ""
-  inside = false
-  for piece in path.split(";")
-    if inside
-      entry = "#{entry};#{piece}"
-    else
-      entry = piece
-    end
-
-    quoted = entry.length > 0 and quote?(entry.at(0))
-    inside = quoted and !entry.slice(1, entry.length - 1).include?(entry.at(0))
-    if !inside
-      entries = entries.push(entry)
-    end
-  end
-
-  return entries.push(entry) if inside
-
-  entries
-end
-
-# Each executable file of `names` in `folders`, as "CANDIDATE REAL"; a relative folder adds its candidate alone.
-def matches(folders: List[String], names: List[String], windows: Bool) -> List[String]
-  found: List[String] = []
-  for folder in folders
-    if folder == "" or !Paths.absolute?(folder, windows)
-      found = found.push("relative #{folder} #{names[0]}")
-      next
-    end
-
-    match = executable(names.map do |file: String| Paths.join(folder, file) end, windows)
-    if match != ""
-      found = found.push(match)
-    end
-  end
-
-  found
-end
-
-# The first of `candidates` that is an executable file, as "CANDIDATE REAL"; "" when none is.
-def executable(candidates: List[String], windows: Bool) -> String
   for candidate in candidates
     info = File.stat(candidate, IO_TIMEOUT_MS)
-    if info.ok? and info.unwrap!.kind == "file" and (windows or info.unwrap!.mode.bit_and(EXECUTE_BITS) != 0)
+    if info.ok? and info.unwrap!.kind != "directory"
       real = Path.real(candidate)
       return "#{candidate} #{real.unwrap!}" if real.ok?
     end
@@ -369,44 +334,36 @@ def executable(candidates: List[String], windows: Bool) -> String
   ""
 end
 
+def runnable_suffix?(path: String) -> Bool
+  lower = path.downcase
+  lower.end_with?(".exe") or lower.end_with?(".com")
+end
+
 def has_folder?(name: String, windows: Bool) -> Bool
   return name.include?("/") or name.include?("\\") or name.include?(":") if windows
 
   name.include?("/")
 end
 
-# On Windows libuv tries NAME as given only when it has an extension, then NAME.com and NAME.exe.
-def executable_names(name: String, windows: Bool) -> List[String]
-  return [name] if !windows
+# A command Process.spawn starts on Windows: no \\?\ or \\.\ prefix, a ":" only in a drive letter, a file name
+# after the last separator, and no end in a dot, a space, .cmd or .bat.
+def windows_name?(name: String) -> Bool
+  size = name.length
+  leading = separator?(name.at(0)) and size >= 4 and separator?(name.at(1)) and separator?(name.at(3))
+  return false if leading and (name.at(2) == "?" or name.at(2) == ".")
 
-  base = name.split("/").last.split("\\").last
-  given = base.split(".").drop(1).join(".") != ""
-  stem = name
-  if !name.end_with?(".")
-    stem = "#{name}."
+  rest = name
+  if size > 2 and name.at(1) == ":" and separator?(name.at(2)) and LETTERS.include?(name.at(0).downcase)
+    rest = name.slice(2, size - 2)
   end
 
-  appended = ["#{stem}com", "#{stem}exe"]
-  return [name].concat(appended) if given
-
-  appended
+  last = name.at(size - 1)
+  lower = name.downcase
+  script = lower.end_with?(".cmd") or lower.end_with?(".bat")
+  !rest.include?(":") and !separator?(last) and ![".", " "].include?(last) and !script
 end
 
-# libuv drops one quote at each end of a PATH entry.
-def unquote(folder: String) -> String
-  text = folder
-  if text.length > 0 and quote?(text.at(0))
-    text = text.slice(1, text.length - 1)
-  end
-
-  if text.length > 0 and quote?(text.at(text.length - 1))
-    text = text.slice(0, text.length - 1)
-  end
-
-  text
-end
-
-def quote?(char: String) -> Bool = char == "\"" or char == "'"
+def separator?(char: String) -> Bool = char == "/" or char == "\\"
 
 # The workspace of the project (packages/members.agc): the manifest that holds the table, and the manifest of each
 # member the lock names, which decide the packages a build reads from the members' folders; the manifest of each `path`
