@@ -637,9 +637,26 @@ static AGC_JIT_CALLER void direct_calls(void) {
   /* agc_fail reads the program of the run for the span. */
   vm.rt->program = &fs[1].program;
   expect_exit(code[1](&vm, R, NULL, 0), AGC_JIT_EXIT_RAISE, 0);
-  vm.rt->program = NULL;
   assert(vm.outcome->kind == AGC_FAILED && strcmp(vm.outcome->code, "RUNTIME-TEST") == 0 && vm.outcome->span == 8);
   assert(same_bits(R[1], agc_int(2)) && frames[0].pc == 1 && !vm.jit_catch);
+  /* Where a longjmp may cross compiled code (rt->jit_unwinds), the same failure sets no catch and jumps from the
+     builtin to the turn's target. */
+  if (AGC_JIT_UNWINDS) {
+    *vm.outcome = outcome;
+    frames[0].pc = 0;
+    bool in_turn = vm.in_turn;
+    vm.rt->jit_unwinds = vm.in_turn = true;
+    volatile bool jumped = false;
+    if (AGC_CATCH(vm.turn) == 0)
+      (void)code[1](&vm, R, NULL, 0);
+    else
+      jumped = true;
+    vm.rt->jit_unwinds = false;
+    vm.in_turn = in_turn;
+    assert(jumped && vm.outcome->kind == AGC_FAILED && strcmp(vm.outcome->code, "RUNTIME-TEST") == 0);
+    assert(vm.outcome->span == 8 && same_bits(R[1], agc_int(2)) && frames[0].pc == 1 && !vm.jit_catch);
+  }
+  vm.rt->program = NULL;
   expect_exit(code[2](&vm, R, NULL, 0), AGC_JIT_EXIT_INTERPRET, 0);
   expect_exit(code[3](&vm, R, NULL, 0), AGC_JIT_EXIT_INTERPRET, 0);
   *vm.outcome = outcome;
