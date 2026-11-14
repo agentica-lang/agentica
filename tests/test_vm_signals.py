@@ -1,4 +1,4 @@
-"""System.subscribe: OS signals as values on a channel (issue #1477).
+"""System.subscribe: OS signals as values on a channel (issue #1477), and sending them (issue #1478).
 
 The peer is this test: it starts the VM, sends the signals with os.kill and reads what the program prints. Each case
 runs at one scheduler and at four, where the I/O thread takes the signal and a scheduler delivers it. Windows has no
@@ -6,11 +6,12 @@ subscription: System.subscribe returns a system.signal error there, which the la
 """
 import os
 import signal
+import subprocess
 import time
 
 import pytest
 
-from tests.agentica_test import FIXTURES, PYTHON, WINDOWS, Child, compile_agc, host_only, scaled, start_vm, vm_command
+from tests.agentica_test import FIXTURES, PYTHON, TARGET_OS, WINDOWS, Child, compile_agc, host_only, scaled, start_vm, vm_command
 
 WAIT_SECONDS = scaled(10)
 POSIX = "System.subscribe needs POSIX signals; on Windows it returns a system.signal error, which " \
@@ -386,4 +387,132 @@ def test_subscribe_answers_on_every_system(tmp_path, adopt):
     vm = start(adopt, tmp_path, IGNORED.replace("System.Signal.Int", "System.Signal.Term"))
     want = "system.signal: signal: not supported on this system" if WINDOWS else "subscribed"
     assert vm.next_line(WAIT_SECONDS) == want
+    assert vm.wait(WAIT_SECONDS) == 0
+
+
+# A Process.spawn_group child that starts a grandchild and prints its pid on the program's stdout, which it inherits.
+# After "go" on stdin the program signals the group (term), closes the child (close) or ends with the child running
+# (end).
+ENTRYPOINT = """\
+def main() -> Void
+  args = System.args()
+  child = Process.spawn_group(args[1], ["-c", args[2]]).unwrap!
+  gets().unwrap!
+  case args[0]
+    "term" ->
+      Process.signal_group(child, System.Signal.Term).unwrap!
+      puts("exit #{Process.wait(child, 10000).unwrap!}")
+      puts(Process.signal_group(child, System.Signal.Term).message)
+    "close" ->
+      Process.close(child)
+      puts("closed")
+    _ -> puts(Process.read_line(child, 1000).message)
+  end
+
+end
+"""
+
+GRANDCHILD = "import subprocess, sys, time; g = subprocess.Popen(['sleep', '60']); print(g.pid, flush=True); " \
+             "time.sleep(60)"
+
+
+def gone(pid):
+    """True once PID has exited (a zombie that its new parent has not reaped yet counts as exited)."""
+    deadline = time.monotonic() + WAIT_SECONDS
+    while time.monotonic() < deadline:
+        try:
+            with open("/proc/%d/stat" % pid, encoding="utf-8") as stat:
+                if stat.read().rsplit(")", 1)[1].split()[0] == "Z":
+                    return True
+        except FileNotFoundError:
+            return True
+        time.sleep(0.05)
+    return False
+
+
+@host_only(TARGET_OS != "linux", "the test reads /proc to see the grandchild end; spawn_group itself is POSIX")
+@SCHEDULERS
+@pytest.mark.parametrize("how", ["term", "close", "end"])
+def test_a_group_child_shares_stdout_and_its_whole_group_stops(tmp_path, adopt, schedulers, how):
+    vm = start(adopt, tmp_path, ENTRYPOINT, how, PYTHON, GRANDCHILD, schedulers=schedulers, stdin=True)
+    grandchild = int(vm.next_line(WAIT_SECONDS))
+    vm.process.stdin.write(b"go\n")
+    vm.process.stdin.flush()
+    if how == "term":
+        assert vm.next_line(WAIT_SECONDS) == "exit 143"
+        assert vm.next_line(WAIT_SECONDS) == "process: the child has exited"
+    elif how == "close":
+        assert vm.next_line(WAIT_SECONDS) == "closed"
+    else:
+        assert vm.next_line(WAIT_SECONDS) == "process: the child uses the program's stdin, stdout and stderr"
+    assert vm.wait(WAIT_SECONDS) == 0
+    assert gone(grandchild)
+
+
+# Process.signal on a plain child, the errors of a closed, exited or groupless child, and System.signal on a process
+# that is not a child (args: its pid). A wrong name leaves the process alone.
+SEND = """\
+def main() -> Void
+  child = Process.spawn("sleep", ["60"]).unwrap!
+  puts(Process.signal_group(child, System.Signal.Term).message)
+  Process.signal(child, System.Signal.Kill).unwrap!
+  puts("exit #{Process.wait(child, 10000).unwrap!}")
+  puts(Process.signal(child, System.Signal.Term).message)
+  Process.close(child)
+  puts(Process.signal(child, System.Signal.Term).message)
+  pid = System.args()[0].to_i!
+  puts(System.signal(pid, System.Signal.Term, "slee").message)
+  IO.flush()
+  gets().unwrap!
+  case System.signal(pid, System.Signal.Term, "sleep")
+    ok(_) -> puts("sent")
+    error(e) -> puts("#{e.kind}: #{e.message}")
+  end
+
+end
+"""
+
+
+@host_only(WINDOWS, "Process.signal and System.signal need POSIX signals; Windows returns system.signal errors")
+@SCHEDULERS
+def test_a_signal_reaches_a_child_or_a_named_process(tmp_path, adopt, schedulers):
+    other = subprocess.Popen(["sleep", "60"])
+    try:
+        vm = start(adopt, tmp_path, SEND, str(other.pid), schedulers=schedulers, stdin=True)
+        assert vm.next_line(WAIT_SECONDS) == "process: the child does not lead a process group"
+        assert vm.next_line(WAIT_SECONDS) == "exit 137"
+        assert vm.next_line(WAIT_SECONDS) == "process: the child has exited"
+        assert vm.next_line(WAIT_SECONDS) == "process: process is closed"
+        if TARGET_OS != "linux":
+            assert vm.next_line(WAIT_SECONDS) == "signal: pidfd is unavailable"
+            vm.process.stdin.write(b"go\n")
+            vm.process.stdin.flush()
+            assert vm.next_line(WAIT_SECONDS) == "system.signal: signal: pidfd is unavailable"
+            assert vm.wait(WAIT_SECONDS) == 0
+            return
+        assert vm.next_line(WAIT_SECONDS) == "signal: the process has another name"
+        time.sleep(0.2)
+        assert other.poll() is None
+        vm.process.stdin.write(b"go\n")
+        vm.process.stdin.flush()
+        assert vm.next_line(WAIT_SECONDS) == "sent"
+        assert vm.wait(WAIT_SECONDS) == 0
+        assert other.wait(WAIT_SECONDS) == -signal.SIGTERM
+    finally:
+        other.kill()
+        other.wait()
+
+
+DENIED = """\
+def main() -> Void
+  puts(Process.spawn_group("sleep", ["60"]).message)
+  puts(System.signal(1, System.Signal.Term, "init").message)
+end
+"""
+
+
+def test_deny_run_turns_off_spawn_group_and_system_signal(tmp_path, adopt):
+    vm = start(adopt, tmp_path, DENIED, flags=("--deny-run",))
+    assert vm.next_line(WAIT_SECONDS) == "denied: --deny-run turns off starting programs"
+    assert vm.next_line(WAIT_SECONDS) == "denied: --deny-run turns off signalling processes"
     assert vm.wait(WAIT_SECONDS) == 0

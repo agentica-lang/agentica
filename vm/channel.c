@@ -421,6 +421,8 @@ static unsigned signal_index(agc_vm *vm, agc_value v) {
   agc_fail(vm, "RUNTIME-INTERNAL", "invalid bytecode: not a System.Signal value", 0);
 }
 
+int agc_signal_number_of(agc_vm *vm, agc_value signal) { return agc_io_signal_number(signal_index(vm, signal)); }
+
 /* System.subscribe(signals): a new channel that receives each listed signal, owned by the calling task like a handle,
    so its end (any end) or Channel.close ends the subscription. Its capacity is the number of signals, one pending
    value each (agc_signals_deliver). Quit (the VM's force stop) and Kill cannot be caught. */
@@ -458,7 +460,7 @@ static agc_value builtin_subscribe(agc_vm *vm, agc_value *args, uint32_t span) {
 /* System.signal_number(signal): the OS number, so 128 + it is the exit code of a process that the signal ended. */
 static agc_value builtin_signal_number(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
-  return agc_int(agc_io_signal_number(signal_index(vm, args[0])));
+  return agc_int(agc_signal_number_of(vm, args[0]));
 }
 
 /* Whether a value of the signal VARIANT waits in the ring: a signal is queued only when it has no pending value, so a
