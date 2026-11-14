@@ -46,6 +46,7 @@ ROWS: List[Model.PreludeRow] = [
   Model.PreludeRow(name: "Lazy.with_index", module: "lazy", limits: [], selector: "", bodies: {"": "with_index"}),
   Model.PreludeRow(name: "Lazy.write_bytes", module: "lazy", limits: [], selector: "", bodies: {"": "write_bytes"}),
   Model.PreludeRow(name: "Lazy.write_lines", module: "lazy", limits: [], selector: "", bodies: {"": "write_lines"}),
+  Model.PreludeRow(name: "List.count", module: "list", limits: [], selector: "", bodies: {"": "count"}),
   Model.PreludeRow(name: "List.drop_while", module: "list", limits: [], selector: "", bodies: {"": "drop_while"}),
   Model.PreludeRow(name: "List.each_slice", module: "list", limits: [], selector: "", bodies: {"": "each_slice"}),
   Model.PreludeRow(

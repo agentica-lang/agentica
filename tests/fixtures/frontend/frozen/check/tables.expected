@@ -202,7 +202,6 @@ def foreign_kind_methods() -> Map[String, String]
     "List.concat": "join two lists with +: xs + ys is a new list, and both stay as they were",
     "List.contains": "a List has no membership method; use xs.any? do |x| x == value end, or a Set with include?",
     "List.contains?": "a List has no membership method; use xs.any? do |x| x == value end, or a Set with include?",
-    "List.count": "xs.size counts all elements; count those that pass a test with xs.select { |x| ... }.size",
     "List.include?": "a List has no membership method; use xs.any? do |x| x == value end, or a Set with include?",
     "List.includes": "a List has no membership method; use xs.any? do |x| x == value end, or a Set with include?",
     "List.includes?": "a List has no membership method; use xs.any? do |x| x == value end, or a Set with include?",

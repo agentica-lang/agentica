@@ -153,6 +153,7 @@ List.uniq(list: List[K]) -> List[K]                      # K is Int, String or B
 List.sum(list: List[N]) -> N                             # Int or Float; empty gives 0 or 0.0; Int overflow halts
 List.include?(list: List[T], value: T) -> Bool           # any T with ==; also member?; stops at the first match
 List.index(list: List[T], value: T) -> Optional[Int]     # first position of an item == value; none when absent
+List.count(list: List[A], block: Fn[A, Bool]) -> Int         # how many elements the block accepts (xs.size counts all)
 List.find_index(list: List[A], block: Fn[A, Bool]) -> Optional[Int]   # the block form of index (index takes no block)
 List.min(list: List[T]) -> Optional[T]                   # T Int, Float or String; none when empty; also max
 List.min_by(list: List[A], key: Fn[A, O]) -> Optional[A]   # key Int, Float or String; first wins ties; empty is none

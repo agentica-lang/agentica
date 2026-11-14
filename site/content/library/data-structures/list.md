@@ -211,6 +211,25 @@ ok(8)
 error("not found")
 ```
 
+## count
+
+```signature
+List.count(list: List[A], block: Fn[A, Bool]) -> Int
+```
+
+`count` gives the number of elements for which the block gives `true`, without building a list as `select(...).size` does. It calls the block once for each element, O(n). `size` counts all the elements.
+
+```agentica
+def main() -> Void
+  xs = [1, 2, 3, 4]
+  puts(xs.count do |x| x % 2 == 0 end)
+end
+```
+
+```output
+2
+```
+
 ## index and find_index
 
 ```signature
