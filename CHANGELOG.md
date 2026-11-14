@@ -8,6 +8,12 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- `none` in a `map` block takes the Optional item of the expected list type (#1579).
+
+## [0.32.0-alpha.1] - 2026-11-14
+
 ### Added
 
 - `Process.poll_line(p, timeout_ms)`: reads a line as `read_line` does, but a timeout keeps the program and its output (#997).
