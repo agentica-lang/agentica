@@ -686,6 +686,7 @@ def test_a_lock_that_is_missing_shows_the_file_and_no_place_in_the_plain_and_ai_
     at = [line for line in ai if line.startswith("  at: ")]
     assert len(at) == 1 and Path(at[0][len("  at: "):]) == Path(lock)
     assert not [line for line in ai if line.startswith(("  source:", "  key:"))]
+    assert any("agentica update" in line for line in ai)
 
 
 def test_a_manifest_or_lock_error_with_a_key_shows_the_key_in_the_plain_and_ai_forms(ws):
