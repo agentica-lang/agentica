@@ -1,9 +1,9 @@
 ## Purity for `bodies` (#1159): why a function of a linked program is not pure, through every function it calls. A
-## builtin is pure when its catalog row lists no `effects`, so one that can halt (`+`, `b[i]`, `unwrap!`) is pure. A
-## call of an `extern module` function is not, nor is anything that may run a function value: `f.call(x)`, a call of an
-## Fn field, a builtin given a function value, a Lazy terminal. A call the checker did not resolve is not pure either:
-## what is not known to be pure is not. A reference `&name` counts as a call of `name`. Each reason is found once, by
-## the shortest chain of calls, so recursion and cycles end.
+## builtin is pure when its catalog row lists no `effects` and it reads no shared state, so one that can halt (`+`,
+## `b[i]`, `unwrap!`) is pure. A call of an `extern module` function is not, nor is anything that may run a function
+## value: `f.call(x)`, a call of an Fn field, a builtin given a function value, a Lazy terminal. A call the checker did
+## not resolve is not pure either: what is not known to be pure is not. A reference `&name` counts as a call of `name`.
+## Each reason is found once, by the shortest chain of calls, so recursion and cycles end.
 
 import Builtins from "../catalog/builtins"
 import State from "../check/check_state"
@@ -91,6 +91,15 @@ NATIVE = "native"
 
 # The effect of a call whose target the checker did not record: it is not known to be pure.
 UNRESOLVED = "unresolved"
+
+# Builtins whose catalog row lists no effect, so `check` may call their value unused, but whose answer depends on what
+# another task or the system does: a read of shared state, or a source of a Lazy whose terminal does I/O.
+SHARED_STATE: Map[String, String] = {
+  "ATS.get": "concurrency", "ATS.has_key?": "concurrency", "ATS.keys": "concurrency", "ATS.size": "concurrency",
+  "ATS.to_map": "concurrency", "Channel.closed?": "concurrency", "Channel.empty?": "concurrency",
+  "Channel.lazy": "concurrency", "HttpWire.awaited?": "concurrency", "File.foreach": "filesystem",
+  "File.chunks": "filesystem", "System.Profile.steps": "clock",
+}
 
 # What one function does itself: its reasons (with no chain) and the functions of the program it calls, in order.
 struct Direct
@@ -185,6 +194,10 @@ def named(program: Program, direct: Direct, name: String, span: Source.Span, arg
       made = direct
       for effect in builtin.effects
         made = with_reason(made, effect, name, span)
+      end
+
+      if SHARED_STATE.has_key?(name)
+        made = with_reason(made, SHARED_STATE[name], name, span)
       end
 
       if args.any? do |arg: Ast.Expr| function_value?(program, arg) end
