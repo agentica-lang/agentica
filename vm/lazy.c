@@ -307,10 +307,10 @@ static agc_value lazy_finish(agc_vm *vm, lazy_run *run) {
   return lazy_error(vm, AGC_KIND_ERROR, "not found");
 }
 
-/* The calls of a run that touch shared state: the line reader and writer start file jobs and close the handle, a
-   receive changes the channel's lists and parks on them. The run is `unlocked` (agc_stepper), so each takes rt->sync
-   only for the call, and a park is registered inside it; the drop comes before the step returns WAIT. A failure
-   inside jumps out with the lock held, and agc_sync_reset gives it back. */
+/* The calls of a run that touch shared state: the line reader and writer start file jobs and close the handle. The
+   run is `unlocked` (agc_stepper), so each takes rt->sync only for the call, and a park is registered inside it; the
+   drop comes before the step returns WAIT. A failure inside jumps out with the lock held, and agc_sync_reset gives it
+   back. A receive takes the channel's lock itself. */
 static agc_lines_status lazy_lines_next(agc_vm *vm, lazy_run *run, agc_value last, agc_value *out) {
   agc_sync_take(vm);
   agc_lines_status status = agc_lines_next(vm, run->lines, last, out);
@@ -326,11 +326,7 @@ static agc_writer_status lazy_write(agc_vm *vm, lazy_run *run, agc_value last, a
 }
 
 static agc_recv_status lazy_receive(agc_vm *vm, const lazy_node *source, agc_value *out) {
-  agc_channel *channel = agc_as_channel(vm, source->value);
-  agc_sync_take(vm);
-  agc_recv_status status = agc_channel_receive(vm, channel, source->timeout, out);
-  agc_sync_drop(vm);
-  return status;
+  return agc_channel_receive(vm, agc_as_channel(vm, source->value), source->timeout, out);
 }
 
 /* Frees the streams of the zlib steps; a second call finds none. */
@@ -824,8 +820,8 @@ static agc_value lazy_start(agc_vm *vm, agc_value recipe, lazy_terminal terminal
     if (n->kind == LAZY_ZLIB) run->stages[i].zlib = agc_zstep_open(vm, n->count, n->level, n->cap);
   }
   /* A run reads immutable nodes and writes only this run, which belongs to the calling task. An I/O source also starts
-     file jobs, closes the file and parks on channel lists, and write_lines starts file jobs: they take rt->sync around
-     those calls only (lazy_lines_next, lazy_receive, lazy_write), so a long to_a or a chain of steps never holds it. */
+     file jobs and closes the file, and write_lines starts file jobs: they take rt->sync around those calls only
+     (lazy_lines_next, lazy_write), so a long to_a or a chain of steps never holds it. */
   run->stepper.unlocked = true;
   agc_task_stepper(vm, &run->stepper);
   return agc_void();
@@ -862,9 +858,9 @@ static agc_value builtin_write_bytes(agc_vm *vm, agc_value *args, uint32_t span)
 }
 
 /* No row touches state other tasks can reach: a recipe is immutable and a run belongs to the calling task, so no row
-   takes rt->sync. The steps of a terminal run unlocked (agc_stepper.unlocked); over a file or a channel, and in
-   write_lines and write_bytes, they take it around the reader, the receive and the writer only, and vm/zlib.c takes
-   it to register and free a zlib stream. Callbacks run as bytecode. */
+   takes rt->sync. The steps of a terminal run unlocked (agc_stepper.unlocked); over a file, and in write_lines and
+   write_bytes, they take it around the reader and the writer only, and vm/zlib.c takes it to register and free a
+   zlib stream. Callbacks run as bytecode. */
 const agc_builtin agc_lazy_builtins[] = {
   {"__lazy_list", 1, builtin_list, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
   {"__lazy_range", 1, builtin_range, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},

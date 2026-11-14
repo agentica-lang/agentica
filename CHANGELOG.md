@@ -8,10 +8,12 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.32.0-alpha.2] - 2026-11-14
+
 ### Changed
 
-- Channel messages between tasks scale with the schedulers: a send or a receive no longer takes the runtime's one lock (#1581).
-- A channel timeout of a second or more may end up to 10 ms late on Linux (22 ms on a 100 Hz kernel), since it reads no clock (#1581).
+- On Linux hosts whose exact clock is a system call (`hpet`), a channel timeout of a second or more may end up to two ticks and 2 ms late (#1581).
+- On Linux hosts whose exact clock is a system call (an `hpet` clock source), a channel timeout of a second or more reads no clock: it may end up to two ticks and 2 ms late (10 ms at 250 Hz), and so after a shorter timer due that much later (#1581).
 
 ### Fixed
 
@@ -20,6 +22,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `agentica check` over several files shows a problem of an imported file once, and counts it once (#1566).
 - `std/analysis`: `Analysis.bodies` gives the arguments of a call in the order they run, each `name: value` as a `named` node, and no `default` placeholders (#1594).
 - `none` in the block of `Range.map`, `Lazy.map`, `flat_map` and a nested `map` takes the expected Optional type (#1595).
+- `List.tally`, `List.group_by` and `Range.group_by` take `Bytes` keys, as `List.uniq` does (#1596).
 
 ## [0.32.0-alpha.1] - 2026-11-14
 
@@ -1590,7 +1593,8 @@ First release of Agentica, a statically typed language designed for AI agents.
 - `main` returns `Void`; maps preserve insertion order and support fallible
   lookups.
 
-[unreleased]: https://github.com/agentica-lang/agentica/compare/0.32.0-alpha.1...HEAD
+[unreleased]: https://github.com/agentica-lang/agentica/compare/0.32.0-alpha.2...HEAD
+[0.32.0-alpha.2]: https://github.com/agentica-lang/agentica/compare/0.32.0-alpha.1...0.32.0-alpha.2
 [0.32.0-alpha.1]: https://github.com/agentica-lang/agentica/compare/0.31.1...0.32.0-alpha.1
 [0.31.2]: https://github.com/agentica-lang/agentica/compare/0.31.1...0.31.2
 [0.31.1]: https://github.com/agentica-lang/agentica/compare/0.31.0...0.31.1

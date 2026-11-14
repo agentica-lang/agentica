@@ -191,7 +191,7 @@ ROWS: List[Model.Builtin] = [
     rule: Model.Rule.Prelude,
     implementation: "",
     effects: [],
-    description: "Group the values by an Int or String key; keys in order of first appearance; O(n).",
+    description: "Group the values by an Int, String or Bytes key; keys in order of first appearance; O(n).",
     alternatives: [],
   ),
   Model.Builtin(

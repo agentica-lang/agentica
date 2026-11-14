@@ -898,13 +898,13 @@
  "[[\"help\", \"List.group_by\", \"--json\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "{\"arity\":2,\"description\":\"Group elements by an Int or String key; keys in order of first appearance, elements in order; O(n).\",\"effects\":[],\"name\":\"List.group_by\",\"parameters\":[{\"name\":\"list\",\"type\":\"List[A]\"},{\"name\":\"key\",\"type\":\"Fn[A, K]\"}],\"result\":\"Map[K, List[A]]\",\"ruby\":\"list.group_by(key: Fn[A, K]) -> Map[K, List[A]]\",\"signature\":\"List.group_by(list: List[A], key: Fn[A, K]) -> Map[K, List[A]]\"}\n",
+  "stdout": "{\"arity\":2,\"description\":\"Group elements by an Int, String or Bytes key; keys in order of first appearance, elements in order; O(n).\",\"effects\":[],\"name\":\"List.group_by\",\"parameters\":[{\"name\":\"list\",\"type\":\"List[A]\"},{\"name\":\"key\",\"type\":\"Fn[A, K]\"}],\"result\":\"Map[K, List[A]]\",\"ruby\":\"list.group_by(key: Fn[A, K]) -> Map[K, List[A]]\",\"signature\":\"List.group_by(list: List[A], key: Fn[A, K]) -> Map[K, List[A]]\"}\n",
   "written": []
  },
  "[[\"help\", \"List.group_by\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "list.group_by(key: Fn[A, K]) -> Map[K, List[A]]\nGroup elements by an Int or String key; keys in order of first appearance, elements in order; O(n).\n",
+  "stdout": "list.group_by(key: Fn[A, K]) -> Map[K, List[A]]\nGroup elements by an Int, String or Bytes key; keys in order of first appearance, elements in order; O(n).\n",
   "written": []
  },
  "[[\"help\", \"List.map\", \"String.split\"], {}]": {

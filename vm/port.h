@@ -837,7 +837,7 @@ void agc_handle_let_go(agc_vm *vm, agc_resource *handle);
 bool agc_channel_abandoned(agc_vm *vm, const agc_channel *c);
 /* The failure text of a negative channel timeout (Channel.send, Channel.recv, ch.lazy). */
 #define AGC_CHANNEL_BAD_TIMEOUT "channel timeout must be nonnegative"
-/* One receive from c, as Channel.recv does, for a stepper that holds rt->sync (Lazy over a channel). VALUE puts the
+/* One receive from c, as Channel.recv does, for a stepper (Lazy over a channel). VALUE puts the
    value in *out; CLOSED means closed and drained; TIMED_OUT means the wait for this value passed timeout_ms; WAIT
    means the task parks (a retry park), and the stepper calls this again with the same c and timeout when it wakes. */
 typedef enum { AGC_RECV_VALUE, AGC_RECV_CLOSED, AGC_RECV_TIMED_OUT, AGC_RECV_WAIT } agc_recv_status;
