@@ -50,27 +50,15 @@ static table *table_arg(agc_vm *vm, agc_value v, uint32_t span) {
   return t;
 }
 
-/* Keys are Int, String or Bytes (agc_key_hash lets no other tag in). Typed code never mixes them in one table; forged
-   bytecode may, so keys of different tags are never equal. The tags are known here, so no accessor raises. */
-static bool same_key(agc_vm *vm, agc_value a, agc_value b) {
-  if (a.tag != b.tag) return false;
-  if (agc_is(a, AGC_T_INT)) return agc_as_int(vm, a) == agc_as_int(vm, b);
-  if (agc_is(a, AGC_T_STRING)) {
-    const agc_string *s = agc_as_string(vm, a), *t = agc_as_string(vm, b);
-    return s->bytes == t->bytes && (s->bytes == 0 || memcmp(s->data, t->data, s->bytes) == 0);
-  }
-  const agc_bytes *x = agc_as_bytes(vm, a), *y = agc_as_bytes(vm, b);
-  return x->len == y->len && (x->len == 0 || memcmp(x->data, y->data, x->len) == 0);
-}
-
-/* The slot of key's entry, or SIZE_MAX. */
-static size_t lookup(agc_vm *vm, const table *t, uint64_t hash, agc_value key) {
+/* The slot of key's entry, or SIZE_MAX. Keys are Int, String or Bytes (agc_key_hash lets no other tag in). Typed code
+   never mixes them in one table; forged bytecode may, and keys of different tags are never the same. */
+static size_t lookup(const table *t, uint64_t hash, agc_value key) {
   if (!t->slots) return SIZE_MAX;
   size_t mask = t->slots - 1;
   for (size_t at = (size_t)hash & mask;; at = (at + 1) & mask) {
     uint32_t e = t->index[at];
     if (e == EMPTY) return SIZE_MAX;
-    if (e != DEAD && t->entries[e].hash == hash && same_key(vm, t->entries[e].key, key)) return at;
+    if (e != DEAD && t->entries[e].hash == hash && agc_key_same(t->entries[e].key, key)) return at;
   }
 }
 
@@ -145,7 +133,7 @@ static agc_value update(agc_vm *vm, agc_value *args, uint32_t span, change c) {
   bool overflow = false;
   size_t moved = 0;
   agc_table_lock(vm->rt, t, true);
-  size_t at = lookup(vm, t, hash, key);
+  size_t at = lookup(t, hash, key);
   entry *found = at == SIZE_MAX ? NULL : &t->entries[t->index[at]];
   switch (c) {
     case CHANGE_PUT:
@@ -164,7 +152,7 @@ static agc_value update(agc_vm *vm, agc_value *args, uint32_t span, change c) {
         bad = found->value;
         break;
       }
-      overflow = __builtin_add_overflow(found ? agc_as_int(vm, found->value) : 0, by, &sum);
+      overflow = __builtin_add_overflow(found ? (int64_t)agc_value_word(found->value) : 0, by, &sum);
       if (overflow) break;
       result = agc_int(sum);
       if (found) found->value = result;
@@ -208,7 +196,7 @@ static bool read_key(agc_vm *vm, agc_value *args, uint32_t span, agc_value *valu
   table *t = table_arg(vm, args[0], span);
   uint64_t hash = agc_key_hash(vm, args[1]);
   agc_table_lock(vm->rt, t, false);
-  size_t at = lookup(vm, t, hash, args[1]);
+  size_t at = lookup(t, hash, args[1]);
   if (at != SIZE_MAX) *value = t->entries[t->index[at]].value;
   agc_table_unlock(vm->rt, t, false);
   return at != SIZE_MAX;
@@ -277,7 +265,7 @@ bool agc_ats_valid(agc_vm *vm, agc_value v) {
   for (size_t k = 0; k < t->used; k++) {
     const entry *e = &t->entries[k];
     if (agc_is(e->key, AGC_T_VOID)) continue;
-    size_t at = lookup(vm, t, e->hash, e->key);
+    size_t at = lookup(t, e->hash, e->key);
     if (at == SIZE_MAX || t->index[at] != k) return false;
     live++;
   }

@@ -181,14 +181,17 @@ The ring, the reservations and the FIFOs of waiters are
 ## ATS (`vm/ats.c`)
 
 - Tag `AGC_T_ATS`, service layer; the rules are in
-  `site/content/library/concurrency/ats.md`. A table is an `_Atomic` pointer to
-  an immutable `state` (two persistent AVL trees over the same entries, by key
-  and by insertion number, plus the size); a writer builds the next state and
-  installs it with a strong CAS, building again if another writer won.
-  `ATS.clear` stores the empty state, with no CAS.
-- No row is `shared`: a call takes neither `rt->sync` nor a lock. A failure
-  happens before the CAS, so the table keeps its state. `vm/tests/ats_test.c`
-  races threads on one table (in `VM_TSAN_TESTS`).
+  `site/content/library/concurrency/ats.md`. A table is a hash table that keeps
+  insertion order (an array of entries plus an index of slots, as CPython's
+  `dict`): a deleted entry stays as a hole until the next rebuild, which also
+  grows or shrinks the arrays.
+- No row is `shared`: a call takes no `rt->sync`, only the table's read-write
+  lock, one of 64 picked by the table's address (`agc_table_lock`,
+  `vm/sync.c`), and one flag test before `agc_share`. Nothing raises, charges
+  or calls user code under it: the key is hashed before, and an add that fails
+  raises after the unlock, so the table keeps its state. `ATS.size` reads an
+  atomic without the lock. `vm/tests/ats_test.c` races threads on one table
+  (in `VM_TSAN_TESTS`).
 
 ## Test builtins (`vm/testing.c`)
 

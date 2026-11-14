@@ -863,6 +863,9 @@ agc_enum *agc_new_enum(uint32_t variant, uint32_t n);
 agc_fn *agc_new_fn(uint32_t function, uint32_t n);
 
 uint64_t agc_key_hash(agc_vm *vm, agc_value key);
+/* Whether two keys that agc_key_hash took (Int, String or Bytes) are the same key. It charges nothing and never
+   raises, so a caller may hold a lock. */
+bool agc_key_same(agc_value a, agc_value b);
 agc_map *agc_new_map(void);
 agc_map *agc_map_put(agc_vm *vm, const agc_map *m, agc_value key, agc_value value);
 agc_map *agc_map_put_hash(agc_vm *vm, const agc_map *m, uint64_t hash, agc_value key, agc_value value);

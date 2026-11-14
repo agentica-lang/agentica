@@ -780,14 +780,14 @@ CC_RELEASES(l->mutex) static inline void agc_lock_drop(agc_lock *l) {
 /* The read-write lock of an ATS table (vm/ats.c): WRITE takes it alone, else with the other readers. Like agc_lock it
    costs one flag test until the VM is shared. Nothing raises while it is held, and no other lock is taken. */
 #define AGC_TABLE_LOCKS 64
-void agc_table_lock_shared(const agc_runtime *rt, const void *table, bool write);
-void agc_table_unlock_shared(const agc_runtime *rt, const void *table, bool write);
+CC_ACQUIRES(rt->table_locks) void agc_table_lock_shared(const agc_runtime *rt, const void *table, bool write);
+CC_RELEASES(rt->table_locks) void agc_table_unlock_shared(const agc_runtime *rt, const void *table, bool write);
 
-static inline void agc_table_lock(const agc_runtime *rt, const void *table, bool write) {
+CC_ACQUIRES(rt->table_locks) static inline void agc_table_lock(const agc_runtime *rt, const void *table, bool write) {
   if (__builtin_expect(rt->shared, 0)) agc_table_lock_shared(rt, table, write);
 }
 
-static inline void agc_table_unlock(const agc_runtime *rt, const void *table, bool write) {
+CC_RELEASES(rt->table_locks) static inline void agc_table_unlock(const agc_runtime *rt, const void *table, bool write) {
   if (__builtin_expect(rt->shared, 0)) agc_table_unlock_shared(rt, table, write);
 }
 

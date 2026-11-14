@@ -120,15 +120,19 @@ uint64_t agc_key_hash(agc_vm *vm, agc_value key) {
   return plain_hash(vm->rt->hash_key, key);
 }
 
-/* VM NULL compares with no charge (agc_map_find). */
-static inline bool key_equal(agc_vm *vm, agc_value a, agc_value b) {
+bool agc_key_same(agc_value a, agc_value b) {
   if (a.tag != b.tag) return false;
   if (agc_is(a, AGC_T_INT)) return a.as.i == b.as.i;
-  if (!vm) {
-    const uint8_t *x, *y;
-    size_t n = key_bytes(a, &x);
-    return n == key_bytes(b, &y) && (n == 0 || memcmp(x, y, n) == 0);
-  }
+  const uint8_t *x, *y;
+  size_t n = key_bytes(a, &x);
+  return n == key_bytes(b, &y) && (n == 0 || memcmp(x, y, n) == 0);
+}
+
+/* VM NULL compares with no charge (agc_map_find). */
+static inline bool key_equal(agc_vm *vm, agc_value a, agc_value b) {
+  if (!vm) return agc_key_same(a, b);
+  if (a.tag != b.tag) return false;
+  if (agc_is(a, AGC_T_INT)) return a.as.i == b.as.i;
   if (agc_is(a, AGC_T_STRING)) return agc_same_string(vm, agc_as_string(vm, a), agc_as_string(vm, b));
   return agc_same_bytes(vm, agc_as_bytes(vm, a), agc_as_bytes(vm, b));
 }

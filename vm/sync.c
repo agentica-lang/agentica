@@ -69,9 +69,21 @@ static uv_rwlock_t *table_lock(const agc_runtime *rt, const void *table) {
   return locks[(((uint64_t)(uintptr_t)table >> 4) * UINT64_C(0x9E3779B97F4A7C15)) >> 58];
 }
 
+/* A table call holds the lock for less time than a sleep and a wake cost, so a thread that finds it taken spins for
+   it first, as agc_lock_take_shared does for rt->sync. */
 void agc_table_lock_shared(const agc_runtime *rt, const void *table, bool write) {
-  if (write) uv_rwlock_wrlock(table_lock(rt, table));
-  else uv_rwlock_rdlock(table_lock(rt, table));
+  uv_rwlock_t *lock = table_lock(rt, table);
+  uint64_t spent = 0;
+  unsigned pauses = 1;
+  while ((write ? uv_rwlock_trywrlock(lock) : uv_rwlock_tryrdlock(lock)) != 0) {
+    if (spent >= rt->sync->spin) {
+      if (write) uv_rwlock_wrlock(lock);
+      else uv_rwlock_rdlock(lock);
+      return;
+    }
+    spent += pauses;
+    pauses = agc_spin_step(pauses);
+  }
 }
 
 void agc_table_unlock_shared(const agc_runtime *rt, const void *table, bool write) {
