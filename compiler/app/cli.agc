@@ -781,6 +781,10 @@ def vm_flags(options: Options.Options, source: String) -> List[String]
     flags = flags.concat(["--max-steps", options.max_steps])
   end
 
+  if options.max_heap != ""
+    flags = flags.concat(["--max-heap", options.max_heap])
+  end
+
   if options.seed != ""
     flags = flags.concat(["--seed", options.seed])
   end

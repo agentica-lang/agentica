@@ -564,6 +564,14 @@ CC_GC_ALLOC void *agc_alloc_atomic(size_t size);
 size_t agc_size_add(size_t a, size_t b);
 size_t agc_size_mul(size_t a, size_t b);
 _Noreturn void agc_out_of_memory(void);
+/* --max-heap: the collector's heap may not grow past BYTES (0 is no limit), and memory counted with agc_heap_room
+   counts too. Set once, before the program's threads start. Reaching it ends the process with one line that carries
+   RUNTIME-HEAP-LIMIT (a JSON object when JSON is set) and status 70, as out of memory does. */
+void agc_heap_limit_set(size_t bytes, bool json);
+size_t agc_heap_limit(void);
+/* Whether OUTSIDE more bytes, held outside the collector's heap, still fit under the limit. */
+bool agc_heap_room(size_t outside);
+_Noreturn void agc_heap_limit_reached(void);
 unsigned agc_gc_version(void);
 void agc_gc_allow_threads(void);
 bool agc_gc_thread_enter(void);

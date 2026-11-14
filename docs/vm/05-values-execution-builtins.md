@@ -254,6 +254,25 @@ buffered stdout is lost. The handlers do not stop the children either: they
 see EOF or `EPIPE` and end by themselves (10.4). libgc warnings are
 ignored (`GC_set_warn_proc`), so they never reach the program's stderr.
 
+`--max-heap SIZE` (bytes, or with `K`, `M` or `G`, up to `1024G`) is a heap
+limit for the program's run: `GC_set_max_heap_size`, with two retries
+(`GC_set_max_retries`), so libgc collects before it gives up. The out-of-memory
+handler then writes `agentica: RUNTIME-HEAP-LIMIT: ...` instead (one JSON
+object with `code` and `message` under `--json`) and ends the same way, with
+`_Exit(70)`: the line has no span, because the handler has no task and cannot
+allocate. Three things to know:
+
+- The limit is on the collector's heap of the process. It starts at the heap
+  floor (32M, `AGENTICA_GC_HEAP`) and holds what compiling the program used
+  when the run starts from a source file, so a smaller limit only stops the
+  heap from growing.
+- yyjson's memory is malloc'd, outside that heap. Under a limit `JSON.parse`
+  gives it a counting allocator (`vm/json.c`), and a block that does not fit
+  ends the run the same way. Other malloc'd buffers (I/O, zlib, TLS) are not
+  counted; their builtins take their own `max_bytes`.
+- A build without the collector (`AGC_NO_GC`: the sanitizers) frees nothing,
+  so it counts the bytes it hands out from the start of the program.
+
 ### 6.4 JIT
 
 The JIT (`vm/jit/`) compiles hot functions of the user's program to x86-64 or
@@ -431,7 +450,7 @@ service and the server) build and run on Linux, macOS and Windows, so
   that parks only the reading task (10.2.2). A failed read is `RUNTIME-INTERNAL`
   for `gets`, `read` and `eof?`, and an error value for `read_bytes`. Reading
   charges no steps, so `--max-steps` does not bound a single read; only memory
-  does (13). `IO.flush` fails like a write. Output uses C stdio. On Windows the
+  does (6.3). `IO.flush` fails like a write. Output uses C stdio. On Windows the
   three streams are in binary mode.
 - A VM run without `vm/agentica.c` (the C tests and the fuzzer) has an empty
   stdin and no arguments.

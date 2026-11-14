@@ -20,6 +20,8 @@
  * them) and the rule that any of them turns on deny_native. */
 typedef struct {
   int64_t max_steps, flush_timeout, driver, schedulers;
+  /* The bytes of --max-heap (agc_heap_limit_set), 0 without it. */
+  size_t max_heap;
   uint32_t seed;
   /* The agc_jit_mode of --jit or AGENTICA_JIT (vm/jit/jit.h), on by default (a host without an emitter interprets). */
   int jit;

@@ -70,7 +70,8 @@ section says how the scheduler and the loop keep them.
     parks, or the scheduler goes idle. With N=1 the counts are exact. With N>1
     the run may stop up to (N-1) turn budgets early.
   - There are no per-task step quotas. Per-task memory quotas are out of scope,
-    since the Boehm heap is shared. Only a global heap limit is possible (13).
+    since the Boehm heap is shared. The heap limit is global: `--max-heap`
+    (6.3).
 - **Retry.** `Task.sleep(0)` yields; `Task.sleep(n)` is a timer of the task
   (§16.9). Under `no_files` (the fuzzer) every sleep yields, and a channel,
   `Task.await` or `Task.map` timeout lasts 0 ms (`agc_timeout_length`). Stdin

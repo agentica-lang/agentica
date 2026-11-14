@@ -21,6 +21,47 @@ typedef struct {
   agc_list_builder items;
 } parse_frame;
 
+#ifndef AGC_NO_GC
+/* yyjson's memory is malloc'd, outside the collector's heap, so under --max-heap it is counted here: each block
+   keeps its size in front, and a block that does not fit under the limit ends the run as the heap's own growth
+   does. */
+typedef union {
+  size_t size;
+  max_align_t align;
+} counted;
+
+static atomic_size_t counted_bytes; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+
+static void *counted_malloc(void *ctx, size_t size) {
+  (void)ctx;
+  if (size > SIZE_MAX - sizeof(counted)) return NULL;
+  size_t held = atomic_fetch_add(&counted_bytes, size);
+  if (held > SIZE_MAX - size || !agc_heap_room(held + size)) agc_heap_limit_reached();
+  counted *block = malloc(sizeof *block + size);
+  if (!block) {
+    atomic_fetch_sub(&counted_bytes, size);
+    return NULL;
+  }
+  block->size = size;
+  return block + 1;
+}
+
+static void counted_free(void *ctx, void *ptr) {
+  (void)ctx;
+  counted *block = (counted *)ptr - 1;
+  atomic_fetch_sub(&counted_bytes, block->size);
+  free(block);
+}
+
+static void *counted_realloc(void *ctx, void *ptr, size_t old_size, size_t size) {
+  void *grown = counted_malloc(ctx, size);
+  if (!grown) return NULL;
+  memcpy(grown, ptr, old_size < size ? old_size : size);
+  counted_free(ctx, ptr);
+  return grown;
+}
+#endif
+
 const char *agc_json_version(void) { return YYJSON_VERSION_STRING; }
 
 #ifdef AGC_NO_GC
@@ -225,7 +266,8 @@ agc_json_status agc_json_parse(agc_vm *vm, const uint8_t *s, size_t len, agc_val
   yyjson_alc alc = {yy_malloc, yy_realloc, yy_free, NULL};
   const yyjson_alc *use = &alc;
 #else
-  const yyjson_alc *use = NULL;
+  yyjson_alc alc = {counted_malloc, counted_realloc, counted_free, NULL};
+  const yyjson_alc *use = agc_heap_limit() ? &alc : NULL;
 #endif
   yyjson_doc *doc = yyjson_read_opts((char *)(s + i), len - i,
                                      YYJSON_READ_STOP_WHEN_DONE | YYJSON_READ_NUMBER_AS_RAW, use, &err);

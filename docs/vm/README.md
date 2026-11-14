@@ -67,7 +67,7 @@ double a string per instruction and reach the out-of-memory exit (70, 6.3) in a
 few dozen steps. Printing a list costs time and memory in proportion to its
 text, and lists can share items. Chained bindings can make that text exponential
 in the number of bindings, and printing such a list ends in the same
-out-of-memory exit. A heap cap is an open question (13).
+out-of-memory exit. `--max-heap SIZE` bounds that memory (6.3).
 
 ## Files
 

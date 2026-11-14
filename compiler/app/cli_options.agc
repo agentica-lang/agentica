@@ -13,6 +13,7 @@ import Texts from "cli_text"
 struct Options
   style: String
   max_steps: String
+  max_heap: String
   seed: String
   flush_timeout: String
   schedulers: String
@@ -38,6 +39,7 @@ def parse(arguments: List[String], version: String) -> Parsed
   options = Options(
     style: "plain",
     max_steps: "",
+    max_heap: "",
     seed: "",
     flush_timeout: "",
     schedulers: "",
@@ -98,11 +100,12 @@ private
 # The options that are given once at most, with the number of values each takes; --steps may repeat.
 ONCE = {
   "--version": 0, "--deny-run": 0, "--deny-net": 0, "--deny-fs": 0, "--deny-env": 0, "--deny-native": 0,
-  "--sandbox": 0, "--max-steps": 1, "--seed": 1, "--flush-timeout": 1, "--schedulers": 1, "--jit": 1, "--dump": 0,
-  "--dump-ir": 0, "--ai": 0, "--json": 0, "--no-cache": 0, "--coverage": 1,
+  "--sandbox": 0, "--max-steps": 1, "--max-heap": 1, "--seed": 1, "--flush-timeout": 1, "--schedulers": 1, "--jit": 1,
+  "--dump": 0, "--dump-ir": 0, "--ai": 0, "--json": 0, "--no-cache": 0, "--coverage": 1,
 }
 JIT_MODES: Set[String] = Set.new(["off", "on", "always"])
 DIGITS = "0123456789"
+HEAP_UNITS = "KMGkmg"
 
 # What applying one option gave: the options, or why it was refused (exit code 2).
 enum Applied
@@ -138,6 +141,7 @@ def apply(options: Options, word: String, value: String) -> Applied
     "--json" -> Applied.Changed(options.with(style: "json"))
     "--steps" -> Applied.Changed(options.with(steps: options.steps.push(value)))
     "--max-steps" -> max_steps(options, value)
+    "--max-heap" -> max_heap(options, value)
     "--seed" -> seed(options, value)
     "--schedulers" -> schedulers(options, value)
     "--jit" -> jit(options, value)
@@ -151,6 +155,20 @@ def max_steps(options: Options, value: String) -> Applied
   return Applied.Refused("--max-steps needs a positive integer") if !digits?(value) or digits == "0"
 
   Applied.Changed(options.with(max_steps: digits))
+end
+
+# The size goes to the VM as typed, which reads it (vm/launch.c): digits, then K, M or G at most.
+def max_heap(options: Options, value: String) -> Applied
+  digits = value
+  if value.length > 1 and HEAP_UNITS.include?(value.slice(value.length - 1, 1))
+    digits = value.slice(0, value.length - 1)
+  end
+
+  if !digits?(digits) or without_leading_zeros(digits) == "0"
+    return Applied.Refused("--max-heap needs a size in bytes, such as 268435456 or 256M (K, M or G), up to 1024G")
+  end
+
+  Applied.Changed(options.with(max_heap: value))
 end
 
 def seed(options: Options, value: String) -> Applied

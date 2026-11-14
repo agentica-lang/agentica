@@ -709,7 +709,7 @@ static agc_launch_status refuse(const char *name, const char *message) {
 
 agc_launch_status agc_launch_parse(const char *name, int argc, char **argv, int *at, agc_launch_options *options) {
   agc_launch_defaults(options);
-  bool seen_steps = false, seen_ai = false, seen_json = false, seen_root = false;
+  bool seen_steps = false, seen_heap = false, seen_ai = false, seen_json = false, seen_root = false;
   bool *deny = NULL;
   int i = *at;
   while (i < argc) {
@@ -735,6 +735,11 @@ agc_launch_status agc_launch_parse(const char *name, int argc, char **argv, int 
       if (!once(name, &seen_steps, arg)) return AGC_LAUNCH_BAD;
       if (!value || !parse_steps(value, &options->max_steps))
         return refuse(name, "--max-steps needs a positive integer");
+      i += 2;
+    } else if (strcmp(arg, "--max-heap") == 0) {
+      if (!once(name, &seen_heap, arg)) return AGC_LAUNCH_BAD;
+      if (!value || !agc_gc_heap_parse(value, &options->max_heap) || options->max_heap == 0)
+        return refuse(name, "--max-heap needs a size in bytes, such as 268435456 or 256M (K, M or G), up to 1024G");
       i += 2;
     } else if (strcmp(arg, "--seed") == 0) {
       if (!once(name, &options->seen_seed, arg)) return AGC_LAUNCH_BAD;
@@ -823,6 +828,7 @@ agc_vm *agc_launch_vm(agc_launch *launch, const agc_program *program, const agc_
   }
   agc_vm *vm = agc_alloc(sizeof(agc_vm));
   agc_vm_init(vm, program, stdout, stderr, options->max_steps);
+  if (options->max_heap) agc_heap_limit_set(options->max_heap, options->style == AGC_STYLE_JSON);
   agc_runtime *rt = vm->rt;
   rt->trace = launch->trace;
   rt->style = options->style;
