@@ -36,7 +36,31 @@ def check(line: String) -> Int
     puts("#{fields[0]} #{fields[1]}: JSON.float failed on float")
     return 1
   end
+  if node_kind(node) != got
+    puts("#{fields[0]} #{fields[1]}: JSON.node is #{node.node.inspect}, want #{got}")
+    return 1
+  end
   return 0
+end
+
+# The kind that JSON.node gives, as JSON.kind names it: an Int is one JSON.int takes, a BigInt one it refuses.
+def node_kind(node: JSON.Value) -> String
+  case node.node
+    JSON.Node.Null -> "null"
+    JSON.Node.Bool(_) -> "bool"
+    JSON.Node.Int(n) -> agreed(JSON.int(node) == ok(n), "int")
+    JSON.Node.BigInt(_) -> agreed(!JSON.int(node).ok?, "int")
+    JSON.Node.Float(x) -> agreed(JSON.float(node) == ok(x), "float")
+    JSON.Node.String(_) -> "string"
+    JSON.Node.Array(_) -> "array"
+    JSON.Node.Object(_) -> "object"
+  end
+end
+
+def agreed(same: Bool, kind: String) -> String
+  return kind if same
+
+  "not #{kind}"
 end
 
 def main() -> Void

@@ -386,12 +386,14 @@ header and the entry.
     the `JSON.Field` enum (by that name; Absent, Null, Value, with arities 0, 0
     and 1) in its Enums section, at most once; an enum named `JsonField` is a
     plain enum; one with a kind 8 entry has the `Optional` enum
-    (None, Some, with arities 0 and 1), at most once. Then a `u32` count of
-    decodable structs, each a `u32` struct index (increasing), the `str` linked
-    name and one `u32` type index per field. A linked name with a `[`
-    (`List[@2::Point]`) stands for a `List` or `Map` target of `JSON.decode`:
-    the struct has exactly one field, and the root is decoded as that field's
-    type.
+    (None, Some, with arities 0 and 1), at most once. An enum named
+    `JSON.Node`, which `JSON.node` builds, is Null, Bool, Int, BigInt, Float,
+    String, Array and Object (arities 0, then 1), at most once. Then a `u32`
+    count of decodable structs, each a `u32` struct index (increasing), the
+    `str` linked name and one `u32` type index per field. A linked name with a
+    `[` (`List[@2::Point]`) stands for a `List` or `Map` target of
+    `JSON.decode`: the struct has exactly one field, and the root is decoded as
+    that field's type.
 
 - **Section:** Enums
   - **Entry:** `str` display name, `u32` variant count, each `str` name and
