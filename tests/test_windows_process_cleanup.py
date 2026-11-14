@@ -11,11 +11,14 @@ tests/test_bdd.py). The cases here have no POSIX form, and the POSIX cases they 
 - A temporary folder cannot be written when its access list denies the user, where POSIX uses chmod 0500.
 """
 import os
+import subprocess
+import sys
+import time
 
 import pytest
 
-from tests.agentica_test import (FIXTURES, PYTHON, kill_process, run, run_vm, scaled, start_vm, vm_binary,
-                                 vm_command, vm_environment)
+from tests.agentica_test import (FIXTURES, PYTHON, kill_process, process_alive, run, run_vm, scaled, start_vm,
+                                 vm_binary, vm_command, vm_environment)
 from tests.test_bdd import assert_unwritable_temporary_is_an_infrastructure_error, bdd  # noqa: F401  (a fixture)
 from tests.test_process_lifecycle import bytecode, gone
 from tests.windows_support import (COPY_PROGRAM, access_denied, icacls,
@@ -195,3 +198,23 @@ def test_a_temporary_directory_that_cannot_be_written_is_an_infrastructure_error
             (temporary / "probe-file").write_text("x")
         # libuv maps ERROR_ACCESS_DENIED to EPERM, so the text is not "Permission denied" as it is for chmod.
         assert_unwritable_temporary_is_an_infrastructure_error(bdd, scratch, temporary, "Operation not permitted")
+
+
+# Windows gives the number of an ended process to a new one within seconds. A stale number once made kill_process end
+# a process of another test module, which then left with status 1 and no output (#1098).
+def test_a_process_younger_than_the_number_is_known_is_not_taken_for_it():
+    # The interpreter itself: a venv's python.exe is a launcher, and ending it would leave the interpreter asleep.
+    python = getattr(sys, "_base_executable", None) or PYTHON
+    child = subprocess.Popen([python, "-c", "import time; time.sleep(60)"])
+    try:
+        long_ago = time.time() - 3600
+        assert not process_alive(child.pid, long_ago)
+        kill_process(child.pid, long_ago)
+        assert child.poll() is None
+        assert process_alive(child.pid, time.time())
+        kill_process(child.pid)
+        assert child.wait(scaled(20)) == 1
+        assert not process_alive(child.pid)
+    finally:
+        child.kill()
+        child.wait()
