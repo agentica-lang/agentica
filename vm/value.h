@@ -446,10 +446,11 @@ typedef struct {
 /* A JSON field type. AGC_TYPE_JSON_FIELD is JSON.Field[T], an optional and nullable struct field (arg is T), and
    AGC_TYPE_OPTIONAL is Optional[T] (null or T, anywhere a type is); both point to an earlier type like List and Map.
    AGC_TYPE_ENUM is a user enum (arg is its index), like STRUCT a leaf of the table: its payload types are in the
-   variants (agc_enum_def.payload_types). */
+   variants (agc_enum_def.payload_types). AGC_TYPE_INSTANCE is an instance of a generic struct (arg is its index in
+   agc_program.instances), a leaf too: a struct of its struct index with the instance's field types. */
 typedef enum {
   AGC_TYPE_INT, AGC_TYPE_FLOAT, AGC_TYPE_BOOL, AGC_TYPE_STRING, AGC_TYPE_LIST, AGC_TYPE_MAP, AGC_TYPE_STRUCT,
-  AGC_TYPE_JSON_FIELD, AGC_TYPE_OPTIONAL, AGC_TYPE_ENUM
+  AGC_TYPE_JSON_FIELD, AGC_TYPE_OPTIONAL, AGC_TYPE_ENUM, AGC_TYPE_INSTANCE
 } agc_type_kind;
 
 /* The variants of the builtin JSON.Field enum, in table order from agc_program.json_field. */
@@ -501,6 +502,15 @@ typedef struct {
   agc_enum *shared;
 } agc_variant_def;
 
+/* An instance of a generic struct that JSON.decode may build (Box[Int]): the struct, its linked name with the type
+   arguments, and one type index for each field of the struct (the Instances section, docs/vm/03-ir-and-bytecode.md
+   4.6). */
+typedef struct {
+  uint32_t struct_index;
+  agc_string *json_name;
+  uint32_t *field_types;
+} agc_instance_def;
+
 typedef struct {
   uint32_t source_count, span_count, constant_count, builtin_count, function_count, entry;
   uint32_t struct_count, type_count, enum_count, variant_count, max_fields, max_arity, update_count, global_count;
@@ -540,6 +550,10 @@ typedef struct {
      scans it as it scans constants. A loaded program is run once; the slots
      keep their values after the run. */
   agc_value *globals;
+  /* The struct instances that JSON.decode may build: the Instances section, after the decodable enums; none when the
+     file has no such section. */
+  uint32_t instance_count;
+  agc_instance_def *instances;
 } agc_program;
 
 typedef struct {
@@ -564,6 +578,14 @@ CC_GC_ALLOC void *agc_alloc_atomic(size_t size);
 size_t agc_size_add(size_t a, size_t b);
 size_t agc_size_mul(size_t a, size_t b);
 _Noreturn void agc_out_of_memory(void);
+/* --max-heap: the collector's heap may not grow past BYTES (0 is no limit), and memory counted with agc_heap_room
+   counts too. Set once, before the program's threads start. Reaching it ends the process with one line that carries
+   RUNTIME-HEAP-LIMIT (a JSON object when JSON is set) and status 70, as out of memory does. */
+void agc_heap_limit_set(size_t bytes, bool json);
+size_t agc_heap_limit(void);
+/* Whether OUTSIDE bytes, held outside the collector's heap, fit under the limit; it may collect to find out. */
+bool agc_heap_room(size_t outside);
+_Noreturn void agc_heap_limit_reached(void);
 unsigned agc_gc_version(void);
 void agc_gc_allow_threads(void);
 bool agc_gc_thread_enter(void);
@@ -863,6 +885,9 @@ agc_enum *agc_new_enum(uint32_t variant, uint32_t n);
 agc_fn *agc_new_fn(uint32_t function, uint32_t n);
 
 uint64_t agc_key_hash(agc_vm *vm, agc_value key);
+/* Whether two keys that agc_key_hash took (Int, String or Bytes) are the same key. It charges nothing and never
+   raises, so a caller may hold a lock. */
+bool agc_key_same(agc_value a, agc_value b);
 agc_map *agc_new_map(void);
 agc_map *agc_map_put(agc_vm *vm, const agc_map *m, agc_value key, agc_value value);
 agc_map *agc_map_put_hash(agc_vm *vm, const agc_map *m, uint64_t hash, agc_value key, agc_value value);

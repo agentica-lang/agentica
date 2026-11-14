@@ -436,6 +436,8 @@ typedef struct {
   bool shared;
   /* The locks of the channels, made by agc_share: a channel's is picked by its address (vm/channel.c). */
   agc_lock **channel_locks;
+  /* The read-write locks of the ATS tables, made by agc_share: a table's is picked by its address (vm/sync.c). */
+  void *table_locks;
   /* The scheduler threads (docs/vm/16-architecture.md §16.9, "Threads"): `schedulers` is N (1 runs the scheduler on the
      loop's thread, the default), `scheds` their contexts (GC memory, so the collector sees them) and `threads` their
      malloc'd ids, of which `started` are running. `over` is set by the first agc_run_over, or at one scheduler by
@@ -773,6 +775,22 @@ CC_ACQUIRES(l->mutex) static inline void agc_lock_take(agc_lock *l) {
 
 CC_RELEASES(l->mutex) static inline void agc_lock_drop(agc_lock *l) {
   if (__builtin_expect(!l->solo, 0)) agc_lock_drop_shared(l);
+}
+
+/* The read-write lock of an ATS table (vm/ats.c): WRITE takes it alone, else with the other readers. Like agc_lock it
+   costs one flag test until the VM is shared. Nothing raises while it is held, and no other lock is taken. A table
+   shares its lock with one table in 64, and a call may hold it for the length of the table (a rebuild, the copy of a
+   snapshot). A read lock still writes the lock's cache line, so readers of one table on many schedulers contend. */
+#define AGC_TABLE_LOCKS 64
+CC_ACQUIRES(rt->table_locks) void agc_table_lock_shared(const agc_runtime *rt, const void *table, bool write);
+CC_RELEASES(rt->table_locks) void agc_table_unlock_shared(const agc_runtime *rt, const void *table, bool write);
+
+CC_ACQUIRES(rt->table_locks) static inline void agc_table_lock(const agc_runtime *rt, const void *table, bool write) {
+  if (__builtin_expect(rt->shared, 0)) agc_table_lock_shared(rt, table, write);
+}
+
+CC_RELEASES(rt->table_locks) static inline void agc_table_unlock(const agc_runtime *rt, const void *table, bool write) {
+  if (__builtin_expect(rt->shared, 0)) agc_table_unlock_shared(rt, table, write);
 }
 
 /* The lock of a stdio FILE across several calls (flockfile; _lock_file on Windows). */

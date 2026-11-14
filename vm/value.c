@@ -48,6 +48,13 @@ const char *__asan_default_options(void) { return "detect_leaks=0:allocator_may_
 #endif
 
 static const char oom_line[] = "agentica: out of memory\n";
+#define HEAP_LIMIT_TEXT "the program needs more memory than --max-heap allows"
+static const char limit_line[] = "agentica: RUNTIME-HEAP-LIMIT: " HEAP_LIMIT_TEXT "\n";
+static const char limit_json[] = "{\"code\":\"RUNTIME-HEAP-LIMIT\",\"message\":\"" HEAP_LIMIT_TEXT "\"}\n";
+/* libgc grows the heap by whole blocks, so a request this close to the limit is refused for the limit. */
+#define HEAP_LIMIT_SLACK ((size_t)1 << 20)
+static size_t heap_limit; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+static bool heap_limit_json; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 /* The text of each agc_error_kind (vm/error_kinds.h). */
 static const char *const kind_names[AGC_KIND_COUNT] = {
   [AGC_KIND_ERROR] = "error",
@@ -111,6 +118,8 @@ static void **owned; // NOLINT(cppcoreguidelines-avoid-non-const-global-variable
 static size_t owned_count, owned_cap, owned_bytes, limit_bytes; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 static jmp_buf *on_limit; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 static bool over_limit; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+/* Nothing is freed without the collector, so the bytes handed out since the limit was set are the heap. */
+static atomic_size_t heap_used; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 #endif
 
 _Noreturn void agc_out_of_memory(void) {
@@ -124,9 +133,64 @@ _Noreturn void agc_out_of_memory(void) {
 #endif
 }
 
+_Noreturn void agc_heap_limit_reached(void) {
+  ssize_t ignored = heap_limit_json ? write(2, limit_json, sizeof limit_json - 1)
+                                    : write(2, limit_line, sizeof limit_line - 1);
+  (void)ignored;
+  _Exit(70);
+}
+
+size_t agc_heap_limit(void) { return heap_limit; }
+
+/* The bytes in use: without the collector, those handed out; with it, the heap less its free blocks, which still
+   counts the garbage that no collection has freed yet. */
+static size_t heap_in_use(void) {
+#ifdef AGC_NO_GC
+  return atomic_load(&heap_used);
+#else
+  size_t heap = GC_get_heap_size(), unused = GC_get_free_bytes();
+  return heap > unused ? heap - unused : 0;
+#endif
+}
+
+static bool fits(size_t outside) {
+  size_t used = heap_in_use();
+  return used < heap_limit && outside <= heap_limit - used;
+}
+
+/* Bytes that do not fit get one collection, as the heap's own growth does, since most of what is in use may be
+   garbage. On a thread the collector knows, outside its lock. */
+bool agc_heap_room(size_t outside) {
+  if (!heap_limit || fits(outside)) return true;
+#ifndef AGC_NO_GC
+  GC_gcollect();
+#endif
+  return fits(outside);
+}
+
+/* A limit under the heap the process already has is that heap: it cannot shrink, only stop growing. */
+void agc_heap_limit_set(size_t bytes, bool json) {
+#ifndef AGC_NO_GC
+  size_t heap = GC_get_heap_size();
+  if (bytes && bytes < heap) bytes = heap;
+#endif
+  heap_limit = bytes;
+  heap_limit_json = json;
+#ifndef AGC_NO_GC
+  GC_set_max_heap_size(bytes);
+  /* libgc gives up at the first growth the limit refuses, even when most of the heap is garbage it has not
+     collected yet; with retries it collects first. */
+  GC_set_max_retries(bytes ? 2 : 0);
+#endif
+}
+
 #ifndef AGC_NO_GC
 static void *on_gc_oom(size_t size) {
-  (void)size;
+  if (heap_limit) {
+    size_t heap = GC_get_heap_size();
+    if (heap >= heap_limit || size >= heap_limit - heap || heap_limit - heap - size <= HEAP_LIMIT_SLACK)
+      agc_heap_limit_reached();
+  }
   agc_out_of_memory();
   return NULL;
 }
@@ -398,6 +462,8 @@ void *agc_weak_get(agc_weak *w) {
    leak. Past twice the limit the allocation jumps at once: a builtin that allocates without charging (AGC_OP_LIST,
    say) can still get there midway, a known hole. */
 static void *own(size_t size) {
+  if (heap_limit && (size > heap_limit || atomic_fetch_add(&heap_used, size) > heap_limit - size))
+    agc_heap_limit_reached();
   if (!on_limit) return calloc(1, size);
   size_t cost = size > SIZE_MAX - BLOCK_COST ? SIZE_MAX : size + BLOCK_COST;
   size_t hard = limit_bytes > SIZE_MAX / 2 ? SIZE_MAX : limit_bytes * 2;

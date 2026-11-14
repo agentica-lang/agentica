@@ -347,6 +347,7 @@ ATS.has_key?(table: ATS[K, V], key: K) -> Bool
 ATS.delete(table: ATS[K, V], key: K) -> Void             # absent key ignored
 ATS.clear(table: ATS[K, V]) -> Void                      # every key, in O(1)
 ATS.add(table: ATS[K, Int], key: K, by: Int) -> Int       # absent counts as 0
+ATS.push(table: ATS[K, List[E]], key: K, value: E) -> Int # atomic append, new length
 ATS.size(table: ATS[K, V]) -> Int
 ATS.keys(table: ATS[K, V]) -> List[K]                    # first-insertion order
 ATS.to_map(table: ATS[K, V]) -> Map[K, V]                # first-insertion order
@@ -368,9 +369,11 @@ anywhere else in a constant (`[ATS.new()]`, another constant's table) is
 `CHECK-CONSTANT-TYPE`.
 
 Each call is atomic on any scheduler; there are no multi-key transactions and no
-block-based update. `add` is the one atomic read-modify-write (`Int` values
-only, `CHECK-TYPE-MISMATCH` otherwise; overflow is `RUNTIME-INTEGER-OVERFLOW`
-and leaves the table unchanged), and `put_new` the one conditional insert: the
+block-based update. `add` is the atomic read-modify-write of an `Int` value
+(`CHECK-TYPE-MISMATCH` otherwise; overflow is `RUNTIME-INTEGER-OVERFLOW` and
+leaves the table unchanged), `push` the atomic append to a `List` value (a
+`get` then a `put` can lose an item), and `put_new` the one conditional insert:
+the
 cache pattern is `get`, compute on a miss, then `put_new`, which stores one
 value even when two tasks miss at once. `keys` and `to_map` are snapshots; a key
 deleted and put again goes to the end. Sort `keys` before printing when tasks

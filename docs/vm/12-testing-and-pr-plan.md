@@ -34,6 +34,4 @@
 
 ## 13. Open questions
 
-- **Heap cap** (#1113). `--max-steps` does not bound memory (§1); a hostile or
-  runaway file can reach the out-of-memory exit (§6.3). yyjson uses libc
-  `malloc` outside the GC heap, so a cap must also bound it.
+None. The heap cap is `--max-heap` (§6.3).

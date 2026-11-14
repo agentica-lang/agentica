@@ -445,6 +445,17 @@ static void reject_duplicate_names(reader *r, agc_string **names, uint32_t count
     if (compare_names(&names[i - 1], &names[i]) == 0) reject(r, "duplicate JSON type name");
 }
 
+/* One type index for each of the count fields of a struct, each in the type table. */
+static uint32_t *read_field_types(reader *r, const agc_program *p, uint32_t count) {
+  if ((uint64_t)count * 4 > left(r)) reject(r, "field type count exceeds the file");
+  uint32_t *types = load_alloc(r, agc_size_mul(count, sizeof(uint32_t)), true);
+  for (uint32_t k = 0; k < count; k++) {
+    types[k] = read_u32(r);
+    if (types[k] >= p->type_count) reject(r, "type index out of range");
+  }
+  return types;
+}
+
 static void load_types(reader *r, agc_program *p) {
   p->type_count = read_count(r, 1, "type");
   if (p->type_count > AGC_MAX_TYPES) reject(r, "too many types");
@@ -456,11 +467,12 @@ static void load_types(reader *r, agc_program *p) {
     agc_type *t = &p->types[i];
     t->kind = read_u8(r);
     t->arg = 0;
-    if (t->kind > AGC_TYPE_ENUM) reject(r, "unknown type kind %u", (unsigned)t->kind);
+    if (t->kind > AGC_TYPE_INSTANCE) reject(r, "unknown type kind %u", (unsigned)t->kind);
     if (t->kind < AGC_TYPE_LIST) continue;
     t->arg = read_u32(r);
     if (t->kind == AGC_TYPE_STRUCT && t->arg >= p->struct_count) reject(r, "struct index out of range");
-    if (t->kind == AGC_TYPE_STRUCT || t->kind == AGC_TYPE_ENUM) continue; /* the enum index is checked with the enums */
+    /* the enum and instance indexes are checked with their sections */
+    if (t->kind == AGC_TYPE_STRUCT || t->kind == AGC_TYPE_ENUM || t->kind == AGC_TYPE_INSTANCE) continue;
     if (t->arg >= i) reject(r, "element type is not an earlier type");
     if (depth[t->arg] >= AGC_MAX_TYPE_DEPTH) reject(r, "type nesting too deep");
     depth[i] = (uint16_t)(depth[t->arg] + 1);
@@ -477,12 +489,7 @@ static void load_types(reader *r, agc_program *p) {
     names[i] = d->json_name;
     d->json_root = memchr(d->json_name->data, '[', d->json_name->bytes) != NULL;
     if (d->json_root && d->count != 1) reject(r, "a List or Map JSON target needs one field");
-    if ((uint64_t)d->count * 4 > left(r)) reject(r, "field type count exceeds the file");
-    d->field_types = load_alloc(r, agc_size_mul(d->count, sizeof(uint32_t)), true);
-    for (uint32_t k = 0; k < d->count; k++) {
-      d->field_types[k] = read_u32(r);
-      if (d->field_types[k] >= p->type_count) reject(r, "type index out of range");
-    }
+    d->field_types = read_field_types(r, p, d->count);
   }
   reject_duplicate_names(r, names, count);
   for (uint32_t i = 0; i < p->type_count; i++)
@@ -603,12 +610,13 @@ static void load_tables(reader *r, agc_program *p) {
   find_optional(r, p);
 }
 
-/* The optional last section of the file (docs/vm/03-ir-and-bytecode.md 4.6): the enums that JSON.decode may build,
+/* The optional section after the entry (docs/vm/03-ir-and-bytecode.md 4.6): the enums that JSON.decode may build,
    each with its index (increasing), its linked name and one type index for each payload item of its variants, in
-   order. A file without it has no type of kind enum. */
+   order. A file without it has no type of kind enum. It is empty only when the Instances section follows. */
 static void load_json_enums(reader *r, agc_program *p) {
   uint32_t count = read_count(r, 8, "decodable enum");
-  if (count == 0) reject(r, "empty decodable enums section"); /* the writer leaves the section out instead */
+  /* the writer leaves the section out instead, unless the instances follow */
+  if (count == 0 && left(r) < 4) reject(r, "empty decodable enums section");
   agc_string **names = load_alloc(r, agc_size_mul(count, sizeof(agc_string *)), false);
   for (uint32_t i = 0, last = 0; i < count; i++) {
     uint32_t index = read_u32(r);
@@ -628,6 +636,36 @@ static void load_json_enums(reader *r, agc_program *p) {
     }
   }
   reject_duplicate_names(r, names, count);
+}
+
+/* The optional last section of the file (4.6): the instances of generic structs that JSON.decode may build, each with
+   its struct index, its linked name with the type arguments, which no decodable struct or enum shares, and one type index for
+   each field of the struct. A file without it has no type of kind instance. */
+static void load_instances(reader *r, agc_program *p) {
+  uint32_t count = read_count(r, 8, "struct instance");
+  if (count == 0) reject(r, "empty struct instances section");
+  p->instances = load_alloc(r, agc_size_mul(count, sizeof(agc_instance_def)), false);
+  p->instance_count = count;
+  uint32_t named = 0;
+  for (uint32_t i = 0; i < p->struct_count; i++)
+    if (p->structs[i].json_name) named++;
+  for (uint32_t i = 0; i < p->enum_count; i++)
+    if (p->enums[i].json_name) named++;
+  agc_string **names = load_alloc(r, agc_size_mul(agc_size_add(named, count), sizeof(agc_string *)), false);
+  named = 0;
+  for (uint32_t i = 0; i < p->struct_count; i++)
+    if (p->structs[i].json_name) names[named++] = p->structs[i].json_name;
+  for (uint32_t i = 0; i < p->enum_count; i++)
+    if (p->enums[i].json_name) names[named++] = p->enums[i].json_name;
+  for (uint32_t i = 0; i < count; i++) {
+    agc_instance_def *d = &p->instances[i];
+    d->struct_index = read_u32(r);
+    if (d->struct_index >= p->struct_count) reject(r, "struct index out of range");
+    d->json_name = read_string(r);
+    names[named++] = d->json_name;
+    d->field_types = read_field_types(r, p, p->structs[d->struct_index].count);
+  }
+  reject_duplicate_names(r, names, named);
 }
 
 static void load_updates(reader *r, agc_program *p) {
@@ -830,11 +868,17 @@ static void load(reader *r, agc_program *p) {
   if (p->functions[p->entry].params != 0) reject(r, "entry takes parameters");
   if (p->functions[p->entry].captures != 0) reject(r, "entry has captures");
   /* A count needs 4 bytes: fewer left are stray bytes, not a section. */
+  p->instance_count = 0;
+  p->instances = NULL;
   if (left(r) >= 4) load_json_enums(r, p);
+  if (left(r) >= 4) load_instances(r, p);
   if (left(r) != 0) reject(r, "trailing bytes");
-  for (uint32_t i = 0; i < p->type_count; i++)
+  for (uint32_t i = 0; i < p->type_count; i++) {
     if (p->types[i].kind == AGC_TYPE_ENUM && !p->enums[p->types[i].arg].json_name)
       reject(r, "type names an enum without payload types");
+    if (p->types[i].kind == AGC_TYPE_INSTANCE && p->types[i].arg >= p->instance_count)
+      reject(r, "instance index out of range");
+  }
 
   for (uint32_t i = 0; i < p->function_count; i++) check_function(r, p, &p->functions[i]);
   for (uint32_t i = 0; i < p->function_count; i++) {

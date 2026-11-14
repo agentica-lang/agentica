@@ -236,9 +236,10 @@ stages.
   hands over, can drop the user's `--deny-*` flags. That is why
   `--front-end FILE` is for the build and the tests only and has the same
   standing as the binary itself. The options it may pass are exactly `--ai`,
-  `--json`, the `--deny-*` flags, `--sandbox`, `--max-steps N`, `--seed N`,
-  `--flush-timeout MS`, `--schedulers N`, `--jit MODE`, `--source-root DIR` and
-  `--coverage FILE`, each once; no positional word, no `--version`.
+  `--json`, the `--deny-*` flags, `--sandbox`, `--max-steps N`,
+  `--max-heap SIZE`, `--seed N`, `--flush-timeout MS`, `--schedulers N`,
+  `--jit MODE`, `--source-root DIR` and `--coverage FILE`, each once; no
+  positional word, no `--version`.
   `--driver-pid` and `--embedded` are refused (exit 2): only the process that
   started this one can say so, and only `agentica run` starts an embedded
   program. The hand-off takes at most 64 option words and 1,048,576 argument

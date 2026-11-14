@@ -21,6 +21,60 @@ typedef struct {
   agc_list_builder items;
 } parse_frame;
 
+#ifndef AGC_NO_GC
+/* yyjson's memory is malloc'd, outside the collector's heap, so under --max-heap it is counted here: each block
+   keeps its size in front, and bytes that do not fit under the limit end the run as the heap's own growth does. */
+typedef union {
+  size_t size;
+  max_align_t align;
+} counted;
+
+static atomic_size_t counted_bytes; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+
+static void counted_take(size_t more) {
+  size_t held = atomic_fetch_add(&counted_bytes, more);
+  if (held > SIZE_MAX - more || !agc_heap_room(held + more)) agc_heap_limit_reached();
+}
+
+static void *counted_malloc(void *ctx, size_t size) {
+  (void)ctx;
+  if (size > SIZE_MAX - sizeof(counted)) return NULL;
+  counted_take(size);
+  counted *block = malloc(sizeof *block + size);
+  if (!block) {
+    atomic_fetch_sub(&counted_bytes, size);
+    return NULL;
+  }
+  block->size = size;
+  return block + 1;
+}
+
+static void counted_free(void *ctx, void *ptr) {
+  (void)ctx;
+  counted *block = (counted *)ptr - 1;
+  atomic_fetch_sub(&counted_bytes, block->size);
+  free(block);
+}
+
+/* Only the bytes a block grows by are taken, so it never needs room for its old and new size at once. */
+static void *counted_realloc(void *ctx, void *ptr, size_t old_size, size_t size) {
+  (void)ctx;
+  (void)old_size;
+  counted *block = (counted *)ptr - 1;
+  size_t had = block->size;
+  if (size > SIZE_MAX - sizeof(counted)) return NULL;
+  if (size > had) counted_take(size - had);
+  counted *moved = realloc(block, sizeof *moved + size);
+  if (!moved) {
+    if (size > had) atomic_fetch_sub(&counted_bytes, size - had);
+    return NULL;
+  }
+  if (size < had) atomic_fetch_sub(&counted_bytes, had - size);
+  moved->size = size;
+  return moved + 1;
+}
+#endif
+
 const char *agc_json_version(void) { return YYJSON_VERSION_STRING; }
 
 #ifdef AGC_NO_GC
@@ -225,7 +279,8 @@ agc_json_status agc_json_parse(agc_vm *vm, const uint8_t *s, size_t len, agc_val
   yyjson_alc alc = {yy_malloc, yy_realloc, yy_free, NULL};
   const yyjson_alc *use = &alc;
 #else
-  const yyjson_alc *use = NULL;
+  yyjson_alc alc = {counted_malloc, counted_realloc, counted_free, NULL};
+  const yyjson_alc *use = agc_heap_limit() ? &alc : NULL;
 #endif
   yyjson_doc *doc = yyjson_read_opts((char *)(s + i), len - i,
                                      YYJSON_READ_STOP_WHEN_DONE | YYJSON_READ_NUMBER_AS_RAW, use, &err);
@@ -266,7 +321,8 @@ static agc_value builtin_parse(agc_vm *vm, agc_value *args, uint32_t span) {
   return status == AGC_JSON_PARSED ? ok(out) : failure(vm, AGC_KIND_JSON_PARSE, agc_json_status_message(status));
 }
 
-/* The struct or enum that JSON.decode and JSON.schema name by its linked name: structs first, then enums. */
+/* The struct, enum or struct instance that JSON.decode and JSON.schema name by its linked name: structs first, then
+   enums, then instances. */
 static uint32_t decodable_type(agc_vm *vm, agc_value name, uint32_t span, uint32_t *kind) {
   const agc_string *text = agc_as_string(vm, name);
   const agc_program *p = vm->rt->program;
@@ -281,6 +337,11 @@ static uint32_t decodable_type(agc_vm *vm, agc_value name, uint32_t span, uint32
     const agc_string *json_name = p->enums[i].json_name;
     if (json_name && json_name->bytes == text->bytes && memcmp(json_name->data, text->data, text->bytes) == 0)
       return i;
+  }
+  *kind = AGC_TYPE_INSTANCE;
+  for (uint32_t i = 0; i < p->instance_count; i++) {
+    const agc_string *json_name = p->instances[i].json_name;
+    if (json_name->bytes == text->bytes && memcmp(json_name->data, text->data, text->bytes) == 0) return i;
   }
   agc_fail(vm, "RUNTIME-INTERNAL", "unknown JSON type", span);
 }

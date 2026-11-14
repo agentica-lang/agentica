@@ -162,6 +162,7 @@ The first line is the declaration. Each other line is a use, with its kind (`cal
 | Option | Does |
 |---|---|
 | `--max-steps N` | stops after `N` steps (`RUNTIME-STEP-LIMIT`). Each scheduler takes steps in batches, so the limit can trip a little late; `--schedulers 1` keeps the exact count |
+| `--max-heap SIZE` | ends the run when the program's memory would grow past `SIZE`: bytes, or a number with `K`, `M` or `G` (`256M`), up to `1024G`. The run ends with one line that carries `RUNTIME-HEAP-LIMIT` (a JSON object with `code` and `message` under `--json`) and exit code 70; output still in a buffer is lost, as when memory runs out. The limit is on the collected heap of the whole process, which starts at 32M and holds what compiling the program used, so a smaller size only stops it from growing. The memory of `JSON.parse` counts; other buffers outside the heap (files, sockets, zlib) do not |
 | `--seed N` | makes `Random` repeat the same numbers |
 | `--flush-timeout MS` | waits at most `MS` ms for file data, output and native frees at the end, then warns. Default 30000, most 86400000. Env `AGENTICA_FLUSH_TIMEOUT_MS` |
 | `--schedulers N` | scheduler threads, 1 to 1024; default one per logical core. Env `AGENTICA_SCHEDULERS` (empty counts as unset). `--schedulers 1` runs one task at a time, in a fixed order. A bad value exits with code 2; `agentica test` takes only the env |

@@ -70,6 +70,15 @@ struct EnumDef
   types: List[Types.Type]
 end
 
+## An instance of a generic struct that JSON.decode may build (Box[Int]): its name with the type arguments
+## (Program.json_list_name), the generic struct, the type, and its field types in field order.
+struct InstanceDef
+  name: String
+  struct_name: String
+  type: Types.Type
+  types: List[Types.Type]
+end
+
 ## A source file of the program, in the order the spans refer to it: the canonical path (std/NAME.agc for a standard
 ## module), the name the bytecode stores it under (the path from the folder of the root file, or `key@version/path` for
 ## a file of a package) and the text.
@@ -87,6 +96,7 @@ struct Program
   sources: List[SourceFile]
   structs: List[StructDef]
   enums: List[EnumDef]
+  instances: List[InstanceDef] = []
   written: Map[String, String] = {}
   functions: List[Function]
   entry: Int

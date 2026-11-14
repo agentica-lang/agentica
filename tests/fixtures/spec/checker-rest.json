@@ -12912,6 +12912,28 @@
         ""
       ],
       "code": null
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  t: ATS[String, Int] = ATS.new()",
+        "  _ = t.push(\"a\", 1)",
+        "end",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [3, 7]
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  t: ATS[String, List[Int]] = ATS.new()",
+        "  _ = t.push(\"a\", \"x\")",
+        "end",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [3, 19]
     }
   ],
   "Type.members lists the fields of a struct type as StructMember values": [

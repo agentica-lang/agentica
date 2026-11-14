@@ -20,10 +20,11 @@ OPTIONAL = Ir.EnumDef(
 
 ## The tables, and what the lowering looks up in them. user_types maps each name in the tables to "Struct" or "Enum",
 ## structs gives the index and the fields of a struct by name, enum_index the index of an enum by name, variants the id
-## of "Enum.Variant", and json_types the structs and enums JSON.decode may build.
+## of "Enum.Variant", and json_types the structs, enums and struct instances JSON.decode may build.
 struct Tables
   structs: List[Ir.StructDef]
   enums: List[Ir.EnumDef]
+  instances: List[Ir.InstanceDef]
   user_types: Map[String, String]
   infos: Map[String, State.StructInfo]
   enum_index: Map[String, Int]
@@ -53,7 +54,8 @@ def build(decls: List[Ast.Decl], used: Set[String], type_names: List[String], ta
     names = names.concat(struct_names_in(target))
   end
 
-  decodable = user_decodable(struct_decls, enum_decls, builtin_types, names)
+  found = user_decodable(struct_decls, enum_decls, builtin_types, names, targets)
+  decodable = found.table
   wanted = used
   if decodable.values.any? do |types: List[Types.Type]| types.any? do |type: Types.Type| json_field?(type) end end
     # JSON.decode builds JSON.Field values, so the enum is in the table even when no expression names it.
@@ -107,31 +109,45 @@ def build(decls: List[Ast.Decl], used: Set[String], type_names: List[String], ta
     end
   end
 
-  index(structs, enums)
+  instances: List[Ir.InstanceDef] = []
+  for key in found.instances.keys.sort
+    if decodable.has_key?(key)
+      type = found.instances[key]
+      instances = instances.push(
+        Ir.InstanceDef(name: key, struct_name: Types.name(type), type: type, types: decodable[key]),
+      )
+    end
+  end
+
+  index(structs, enums, instances)
 end
 
-## The name of the struct that stands for a List[T] or Map[String, T] used as a JSON.decode target: the type with its
-## linked names, such as List[app.Person]. A `[` keeps it apart from every struct a program declares, and the VM
-## decodes such a struct's one field in its place (docs/vm/03-ir-and-bytecode.md).
-def json_list_name(type: Types.Type) -> String
-  case type
-    Types.Type.List(item) -> "List[#{json_list_name(item)}]"
-    Types.Type.Map(key, value) -> "Map[#{json_list_name(key)}, #{json_list_name(value)}]"
-    Types.Type.Optional(item) -> "Optional[#{json_list_name(item)}]"
-    Types.Type.Struct(name, _) -> name
-    Types.Type.Enum(name, _) -> name
-    _ -> Types.tag(type)
-  end
-end
+## The name of the struct that stands for a List[T] or Map[String, T] used as a JSON.decode target, and of a generic
+## struct instance: the type with its linked names, such as List[app.Person] or app.Box[Int] (Types.json_name). A `[`
+## keeps it apart from every struct a program declares, and the VM decodes such a List or Map struct's one field in
+## its place (docs/vm/03-ir-and-bytecode.md).
+def json_list_name(type: Types.Type) -> String = Types.json_name(type)
 
 private
+
+# How deep the type arguments of a decodable generic struct instance may nest (Box[List[Int]] is 2); a deeper one, as a
+# struct whose field passes itself a bigger argument makes, is not decodable. The checker has the same limit
+# (check_types.agc).
+MAX_INSTANCE_DEPTH = 32
 
 # The field types that keep a builtin record from JSON.decode: an enum, a channel, and Bytes (JSON has no bytes:
 # HttpWire.Request.body).
 UNDECODABLE = Set.new(["Enum", "Channel", "Bytes", "Opaque"])
 
+# What user_decodable finds: the field or payload types of the structs, enums and struct instances JSON.decode can
+# build, by name (an instance by its json_list_name), and the type of each instance that was looked at.
+struct Found
+  table: Map[String, List[Types.Type]]
+  instances: Map[String, Types.Type]
+end
+
 # The lookups over the finished tables.
-def index(structs: List[Ir.StructDef], enums: List[Ir.EnumDef]) -> Tables
+def index(structs: List[Ir.StructDef], enums: List[Ir.EnumDef], instances: List[Ir.InstanceDef]) -> Tables
   user_types: Map[String, String] = {}
   infos: Map[String, State.StructInfo] = {}
   json_types: Set[String] = Set.new([])
@@ -169,9 +185,14 @@ def index(structs: List[Ir.StructDef], enums: List[Ir.EnumDef]) -> Tables
     end
   end
 
+  for instance in instances
+    json_types = json_types.add(instance.name)
+  end
+
   Tables(
     structs: structs,
     enums: enums,
+    instances: instances,
     user_types: user_types,
     infos: infos,
     enum_index: enum_index,
@@ -253,14 +274,17 @@ end
 # type name as a value. A generic enum is left out: JSON.decode takes a bare name, and the checker refuses an instance.
 # Every struct that can be built is kept, but an enum only when it is one of type_names or a struct or another
 # kept enum
-# has it in a field or payload, since the type table of such a struct names it.
+# has it in a field or payload, since the type table of such a struct names it. An instance of a generic struct
+# (Box[Int]) is an entry of its own, by its json_list_name, with the field types of the struct for its arguments: the
+# instances looked at are those of type_targets and those the fields of the entries name.
 def user_decodable(
   structs: List[Ast.StructDecl],
   enums: List[Ast.EnumDecl],
   builtin: Map[String, List[Types.Type]],
   type_names: List[String],
-) -> Map[String, List[Types.Type]]
-  return {} if type_names.size == 0
+  type_targets: List[Types.Type],
+) -> Found
+  return Found(table: {}, instances: {}) if type_names.size == 0
 
   kinds: Map[String, String] = {}
   for name in BUILTIN_STRUCTS
@@ -278,19 +302,15 @@ def user_decodable(
   end
 
   table = builtin
+  generic: Map[String, Ast.StructDecl] = {}
   for decl in structs
-    types: List[Types.Type] = []
-    complete = true
-    for field in decl.fields
-      found = field_type(field.type, kinds)
-      case found
-        some(type) -> types = types.push(type)
-        none -> complete = false
+    if decl.type_parameters.size > 0
+      generic = generic.put(decl.name, decl)
+    else
+      fields = struct_fields(decl, kinds, {})
+      if fields.some?
+        table = table.put(decl.name, fields.unwrap!)
       end
-    end
-
-    if complete
-      table = table.put(decl.name, types)
     end
   end
 
@@ -299,7 +319,7 @@ def user_decodable(
     complete = decl.type_parameters.size == 0
     for variant in decl.variants
       for payload in variant.payload_types
-        found = json_field_inner(payload, kinds)
+        found = json_field_inner(payload, kinds, {})
         case found
           some(type) -> types = types.push(type)
           none -> complete = false
@@ -309,6 +329,38 @@ def user_decodable(
 
     if complete
       table = table.put(decl.name, types)
+    end
+  end
+
+  pending: List[Types.Type] = type_targets.flat_map(&instances_in)
+  for types in table.values
+    pending = pending.concat(types.flat_map(&instances_in))
+  end
+
+  instances: Map[String, Types.Type] = {}
+  at = 0
+  while at < pending.size
+    type = pending[at]
+    at += 1
+    key = json_list_name(type)
+    next if instances.has_key?(key)
+
+    instances = instances.put(key, type)
+    decl = generic.get(Types.name(type))
+    next if decl.none? or depth(type) > MAX_INSTANCE_DEPTH
+
+    parameters = decl.unwrap!.type_parameters
+    next if parameters.size != Types.args(type).size
+
+    substitutions: Map[String, Types.Type] = {}
+    for index in 0...parameters.size
+      substitutions = substitutions.put(parameters[index], Types.args(type)[index])
+    end
+
+    fields = struct_fields(decl.unwrap!, kinds, substitutions)
+    if fields.some?
+      table = table.put(key, fields.unwrap!)
+      pending = pending.concat(fields.unwrap!.flat_map(&instances_in))
     end
   end
 
@@ -325,8 +377,60 @@ def user_decodable(
     table = kept
   end
 
-  with_reachable_enums(table, kinds, type_names)
+  Found(table: with_reachable_enums(table, kinds, type_names), instances: instances)
 end
+
+# The field types of a struct as JSON.decode builds them, with substitutions for the parameters of a generic one, or
+# none when a field cannot be built.
+def struct_fields(
+  decl: Ast.StructDecl,
+  kinds: Map[String, String],
+  substitutions: Map[String, Types.Type],
+) -> Optional[List[Types.Type]]
+  types: List[Types.Type] = []
+  for field in decl.fields
+    found = field_type(field.type, kinds, substitutions)
+    return none if found.none?
+
+    types = types.push(found.unwrap!)
+  end
+
+  some(types)
+end
+
+# The instances of generic structs in a field type, under any List, Map, Optional or JSON.Field around it: their own
+# arguments count only through their fields.
+def instances_in(type: Types.Type) -> List[Types.Type]
+  case type
+    Types.Type.Struct(_, args) ->
+      return [] if args.size == 0
+
+      [type]
+    Types.Type.List(item) -> instances_in(item)
+    Types.Type.Optional(item) -> instances_in(item)
+    Types.Type.Map(_, value) -> instances_in(value)
+    Types.Type.Enum(name, args) ->
+      return instances_in(args[0]) if name == "JSON.Field"
+
+      []
+    _ -> []
+  end
+end
+
+# The levels of a type: 0 for one without arguments or items, 1 more for each List, Map, Optional and argument list
+# around it (Box[List[Int]] is 2), as check_types.agc type_depth counts.
+def depth(type: Types.Type) -> Int
+  case type
+    Types.Type.Struct(_, args) -> deepest(args)
+    Types.Type.Enum(_, args) -> deepest(args)
+    Types.Type.List(item) -> depth(item) + 1
+    Types.Type.Optional(item) -> depth(item) + 1
+    Types.Type.Map(_, value) -> depth(value) + 1
+    _ -> 0
+  end
+end
+
+def deepest(types: List[Types.Type]) -> Int = types.map(&depth).max.map(->(found) { found + 1 }).unwrap_or(0)
 
 # The table with the structs and the enums that a struct or a name of type_names reaches: an enum nothing JSON
 # can build
@@ -382,7 +486,10 @@ end
 # The struct or enum a field type is made of, under any List, Map, Optional or JSON.Field around it.
 def struct_names_in(type: Types.Type) -> List[String]
   case type
-    Types.Type.Struct(name, _) -> [name]
+    Types.Type.Struct(_, args) ->
+      return [json_list_name(type)] if args.size > 0
+
+      [Types.name(type)]
     Types.Type.List(item) -> struct_names_in(item)
     Types.Type.Optional(item) -> struct_names_in(item)
     Types.Type.Map(_, value) -> struct_names_in(value)
@@ -410,14 +517,19 @@ end
 
 # The type of a struct field as JSON.decode builds it, or `none` when it cannot: a JSON.Field of a JSON type other than
 # an Optional, or a JSON type. JSON.Field is only allowed here, as the direct type of the field.
-def field_type(ref: Ast.TypeRef, kinds: Map[String, String]) -> Optional[Types.Type]
+# substitutions gives the type of each parameter of a generic struct.
+def field_type(
+  ref: Ast.TypeRef,
+  kinds: Map[String, String],
+  substitutions: Map[String, Types.Type],
+) -> Optional[Types.Type]
   if ref.name != "JSON.Field" or ref.args.size != 1
-    return json_field_inner(ref, kinds)
+    return json_field_inner(ref, kinds, substitutions)
   elsif ref.args[0].name == "Optional"
     return none
   end
 
-  value = json_field_inner(ref.args[0], kinds)
+  value = json_field_inner(ref.args[0], kinds, substitutions)
   case value
     some(type) -> some(Types.Type.Enum("JSON.Field", [type]))
     none -> none
@@ -426,9 +538,15 @@ end
 
 # The type of a JSON value as JSON.decode builds it inside a field (the whole field type, or T of a JSON.Field[T]) or a
 # payload, or `none` when it cannot. kinds maps the names of the structs and enums to "Struct" or "Enum".
-def json_field_inner(ref: Ast.TypeRef, kinds: Map[String, String]) -> Optional[Types.Type]
+def json_field_inner(
+  ref: Ast.TypeRef,
+  kinds: Map[String, String],
+  substitutions: Map[String, Types.Type],
+) -> Optional[Types.Type]
   args = ref.args
-  if args.size == 0 and ref.name == "Int"
+  if args.size == 0 and substitutions.has_key?(ref.name)
+    return some(substitutions[ref.name])
+  elsif args.size == 0 and ref.name == "Int"
     return some(Types.Type.Int)
   elsif args.size == 0 and ref.name == "Float"
     return some(Types.Type.Float)
@@ -437,25 +555,35 @@ def json_field_inner(ref: Ast.TypeRef, kinds: Map[String, String]) -> Optional[T
   elsif args.size == 0 and ref.name == "String"
     return some(Types.Type.String)
   elsif ref.name == "List" and args.size == 1
-    item = json_field_inner(args[0], kinds)
+    item = json_field_inner(args[0], kinds, substitutions)
     case item
       some(type) -> return some(Types.Type.List(type))
       none -> return none
     end
   elsif ref.name == "Optional" and args.size == 1
-    item = json_field_inner(args[0], kinds)
+    item = json_field_inner(args[0], kinds, substitutions)
     case item
       some(type) -> return some(Types.Type.Optional(type))
       none -> return none
     end
   elsif ref.name == "Map" and args.size == 2 and args[0].name == "String" and args[0].args.size == 0
-    value = json_field_inner(args[1], kinds)
+    value = json_field_inner(args[1], kinds, substitutions)
     case value
       some(type) -> return some(Types.Type.Map(Types.Type.String, type))
       none -> return none
     end
   elsif args.size == 0 and kinds.get(ref.name, "") == "Struct"
     return some(Types.Type.Struct(ref.name, []))
+  elsif kinds.get(ref.name, "") == "Struct"
+    found: List[Types.Type] = []
+    for arg in args
+      converted = field_type(arg, kinds, substitutions)
+      return none if converted.none?
+
+      found = found.push(converted.unwrap!)
+    end
+
+    return some(Types.Type.Struct(ref.name, found))
   elsif args.size == 0 and kinds.get(ref.name, "") == "Enum"
     return some(Types.Type.Enum(ref.name, []))
   end
