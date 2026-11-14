@@ -44,6 +44,9 @@ REJECTED = {
     "zero_on_s": (program('puts(format("%05s", "a"))'), "CHECK-FORMAT-SPEC", "%05s"),
     "width_too_big": (program('puts(format("%1001d", 1))'), "CHECK-FORMAT-SPEC", "%1001"),
     "precision_too_big": (program('puts(format("%.51f", 1.0))'), "CHECK-FORMAT-SPEC", "%.51"),
+    "precision_zeros": (program('puts(format("%.000051f", 1.0))'), "CHECK-FORMAT-SPEC", "%.000051"),
+    "percent_width": (program('puts(format("%5%", 1))'), "CHECK-FORMAT-SPEC", "%5%"),
+    "piped": (program('x = 1.5\nputs(x |> format("%.2f"))'), "CHECK-FORMAT-LITERAL", "x"),
     "after_escapes": (program('puts(format("a\\"\\t%5d %y", 1))'), "CHECK-FORMAT-SPEC", "%y"),
     "only_bare": (program('puts(format("%s and %d", "a", 1))'), "CHECK-FORMAT-SPEC", '"%s and %d"'),
     "no_conversion": (program('puts(format("abc %%"))'), "CHECK-FORMAT-SPEC", '"abc %%"'),
@@ -66,7 +69,16 @@ REJECTED = {
     "round_digits": (program("puts(2.5.round(2))"), "CHECK-ARITY", "2.5.round(2)"),
 }
 
-HELPED = {"sprintf", "string_format", "string_modulo", "to_fixed", "round_digits", "only_bare", "no_conversion"}
+HELPED = {
+    "sprintf",
+    "string_format",
+    "string_modulo",
+    "to_fixed",
+    "round_digits",
+    "only_bare",
+    "no_conversion",
+    "piped",
+}
 
 
 BATCH = Batch("program.agc")
@@ -91,6 +103,13 @@ def test_a_bad_format_is_reported_where_it_is(checked, name):
 
 
 checked = BATCH.fixture()
+
+
+def test_leading_zeros_of_the_precision_do_not_count(tmp_path):
+    path = tmp_path / "zeros.agc"
+    path.write_text(program('puts(format("[%.000001f]", 1.5))'))
+    result = run(cli() + [str(path)], env=vm_environment())
+    assert (result.code, result.stdout) == (0, "[1.5]\n"), result.stderr
 
 
 def test_the_fixture_prints_what_the_python_and_node_peers_print():
