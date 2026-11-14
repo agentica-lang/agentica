@@ -214,7 +214,7 @@ registration first (`check_register.agc`), then bodies.
   call's id and span, which starts after the receiver
   (`Calls.piped_method?`).
 - Builtin module calls keep their dotted name. Arity, signature and fixed types
-  come from the catalog (`builtins_data.agc`); generic rules are explicit
+  come from the catalog (`builtins_<module>.agc`); generic rules are explicit
   functions (`check_rules.agc`, `check_list.agc`, `check_collections.agc`,
   `check_args.agc`). Lowering reads the same entry's implementation key and
   trusts checked arity.
@@ -261,8 +261,8 @@ and an empty implementation key. `prelude_data.agc` says which file and function
 run it: `plain`, `limited` (for a variable only some types may take) or `chosen`
 (one function per type of the variable). The body is a `def` in
 `stdlib/prelude/<file>.agc` that names its type variables (`A`, `B`, `K`, `V`)
-in annotations. Adding one takes the row (sorted by name in
-`builtins_data.agc`), the `prelude_data.agc` entry, the body, and the tests
+in annotations. Adding one takes the row (in the `builtins_<module>.agc` of its
+module), the `prelude_data.agc` entry, the body, and the tests
 (`docs/vm/03-ir-and-bytecode.md` §4.7): a spec case per rule, a VM golden, and
 a step count in `tests/fixtures/vm/prelude-cost.agc`.
 
@@ -333,7 +333,8 @@ is `docs/vm/03-ir-and-bytecode.md` 4.6; the C loader is its only reader.
 
 ## Builtin catalog implementation
 
-One hand-edited catalog (`builtins_data.agc`; lookups in `builtins.agc`). It
+One hand-edited catalog (`builtins_<module>.agc` rows, `builtins_data.agc`
+records and enums; lookups in `builtins.agc`). It
 serves the checker, lowering and help; the shared type printer and
 `did_you_mean` (`suggest.agc`) keep them consistent. Effects are informational,
 except that a builtin with no effects whose result is unused is

@@ -151,7 +151,7 @@ def test_default_rules_hold_for_rows_no_real_builtin_has_yet(tmp_path):
 
 def test_the_lowering_fills_a_default_of_every_kind(tmp_path):
     shutil.copytree(ROOT / "compiler", tmp_path / "compiler")
-    data = tmp_path / "compiler" / "catalog" / "builtins_data.agc"
+    data = tmp_path / "compiler" / "catalog" / "builtins_zlib.agc"
     text = data.read_bytes().decode("utf-8")
     assert text.endswith("  ),\n]\n")
     data.write_bytes((text[:-len("]\n")] + PROBE_ROW + "]\n").encode("utf-8"))

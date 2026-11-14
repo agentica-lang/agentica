@@ -7,11 +7,11 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 ## Add a C builtin
 
 0. Name it. A builtin of a family (`FAMILIES` in
-   `compiler/catalog/builtins_data.agc`) is a row named `Family.Member.fn`
-   (`OpenSSL.Cipher.aes_256_gcm_encrypt`), and its implementation key is that
-   name (plus `.bytes` for a byte row). A new member is only its rows, or a
-   type named `Family.Member` in `RECORDS`, `ENUMS` or `OPAQUE_TYPES`;
-   `FAMILY_MEMBERS` (`builtins.agc`) derives the members. The linker turns
+   `compiler/catalog/builtins_data.agc`) is a row (in `builtins_<module>.agc`)
+   named `Family.Member.fn` (`OpenSSL.Cipher.aes_256_gcm_encrypt`), and its
+   implementation key is that name (plus `.bytes` for a byte row). A new member
+   is only its rows, or a type named `Family.Member` in `RECORDS`, `ENUMS` or
+   `OPAQUE_TYPES`; `FAMILY_MEMBERS` (`builtins.agc`) derives the members. The linker turns
    `Family.Member.fn(...)` into a call of that row (`modules/resolve.agc`,
    `rewrite.agc`). A new builtin never adds a name to `RESERVED_TYPE_NAMES`:
    put it in a family or an existing namespace. A new family (one name in
@@ -102,7 +102,7 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 
 Rules for the C code:
 
-- The catalog (`compiler/catalog/builtins_data.agc`) stays the source of keys
+- The catalog (`compiler/catalog/builtins_<module>.agc`) stays the source of keys
   and arity; the loader resolves each `(key, arity)` against the C table.
 - Check argument tags generically from the table; check list and map
   elements when you touch them.

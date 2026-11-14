@@ -1,11 +1,10 @@
 ## The builtin functions and tables the linker, checker, and lowering read. The tables are module constants derived
-## from builtins_data.agc and prelude_data.agc.
+## from builtins_data.agc, the builtins_<module>.agc rows and prelude_data.agc.
 
 import Text from "../syntax/text"
 import Types from "../syntax/types"
 import Model from "builtin_model"
 import {
-  BUILTIN_ROWS,
   ENUMS as DATA_ENUMS,
   ERROR_KINDS as DATA_ERROR_KINDS,
   FAMILIES as DATA_FAMILIES,
@@ -16,6 +15,7 @@ import {
   STD_ONLY_IMPORTS,
   TYPE_DESCRIPTIONS as DATA_TYPE_DESCRIPTIONS,
 } from "builtins_data"
+import {BUILTIN_ROWS} from "builtins_rows"
 import {PRELUDE_ONLY as DATA_PRELUDE_ONLY, ROWS as PRELUDE_ROWS} from "prelude_data"
 
 ENTRIES: Map[String, Model.Builtin] = BUILTIN_ROWS.reduce(EMPTY_BUILTINS) do |found, row| found.put(row.name, row) end
@@ -63,8 +63,8 @@ PUBLIC_NAMES = ENTRIES.keys.filter do |name|
   !STD_ONLY.has_key?(name.split(".")[0]) and !PRELUDE_ONLY.include?(name) and !OPERATOR_ONLY.include?(name)
 end
 
-## The builtin families (builtins_data.agc), each with its members: Family.Member is a group of functions, the rows
-## named Family.Member.fn, or a builtin type of that name. Members are sorted by name.
+## The builtin families (builtins_data.agc, builtins_<module>.agc), each with its members: Family.Member is a group of
+## functions, the rows named Family.Member.fn, or a builtin type of that name. Members are sorted by name.
 FAMILY_MEMBERS: Map[String, List[String]] = DATA_FAMILIES.reduce(EMPTY_FAMILIES) do |found, family|
   functions = ENTRIES.keys.filter do |name: String| name.start_with?("#{family}.") and name.split(".").size == 3 end
   types = FAMILY_TYPE_NAMES.filter do |name: String| name.start_with?("#{family}.") end
