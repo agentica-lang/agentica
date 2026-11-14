@@ -519,9 +519,19 @@ end
 # An ATS builtin other than ATS.new: argument 0 is an ATS[K, V], the K and V of the row become the table's key and
 # value types, the other arguments are checked against the row's parameters, and the call has the row's result. A row
 # whose table parameter fixes V (ATS.add takes ATS[K, Int]) refuses a table of another value type.
+# The type variables of a call on a table: E, of ATS.push, is the item type of a table of lists. On another table E
+# stays free, so the table type of the row does not match.
+def ats_vars(table: T.Type) -> Map[String, T.Type]
+  found: Map[String, T.Type] = {"K": T.key(table), "V": T.value(table)}
+  case T.value(table)
+    T.Type.List(inner) -> found.put("E", inner)
+    _ -> found
+  end
+end
+
 def check_ats_call(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
   target = try Args.ats_argument(cx, st, site)
-  found: Map[String, T.Type] = {"K": T.key(target.type), "V": T.value(target.type)}
+  found = ats_vars(target.type)
   parameters = site.selected.parameters
   table = CheckTypes.substitute(parameters[0].type, found)
   if !T.same?(table, target.type)

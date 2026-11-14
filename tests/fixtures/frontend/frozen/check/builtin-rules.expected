@@ -5,6 +5,7 @@ ATS.get AtsCall
 ATS.has_key? AtsCall
 ATS.keys AtsCall
 ATS.new AtsNew
+ATS.push AtsCall
 ATS.put AtsCall
 ATS.put_new AtsCall
 ATS.size AtsCall

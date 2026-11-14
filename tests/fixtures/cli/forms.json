@@ -164,7 +164,7 @@
  "[[\"--ai\", \"help\", \"push\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "list.push(value: T) -> List[T]\nReturn a new list with the value pushed on the end; near constant time.\n\nSet.push: sets are immutable; use s.add(x) and assign the result: s = s.add(x)\n",
+  "stdout": "table.push(key: K, value: E) -> Int\nAppend value to the list of key (absent counts as an empty list) and return the new length, atomically; VM only.\n\nlist.push(value: T) -> List[T]\nReturn a new list with the value pushed on the end; near constant time.\n\nSet.push: sets are immutable; use s.add(x) and assign the result: s = s.add(x)\n",
   "written": []
  },
  "[[\"--ai\", \"help\", \"strip\"], {}]": {
@@ -1306,13 +1306,13 @@
  "[[\"help\", \"push\", \"--json\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "{\"alias\":\"push\",\"builtins\":[{\"arity\":2,\"description\":\"Return a new list with the value pushed on the end; near constant time.\",\"effects\":[],\"name\":\"List.append\",\"parameters\":[{\"name\":\"list\",\"type\":\"List[T]\"},{\"name\":\"value\",\"type\":\"T\"}],\"result\":\"List[T]\",\"ruby\":\"list.push(value: T) -> List[T]\",\"signature\":\"List.append(list: List[T], value: T) -> List[T]\"}],\"hints\":{\"Set.push\":\"sets are immutable; use s.add(x) and assign the result: s = s.add(x)\"}}\n",
+  "stdout": "{\"alias\":\"push\",\"builtins\":[{\"arity\":3,\"description\":\"Append value to the list of key (absent counts as an empty list) and return the new length, atomically; VM only.\",\"effects\":[\"concurrency\"],\"name\":\"ATS.push\",\"parameters\":[{\"name\":\"table\",\"type\":\"ATS[K, List[E]]\"},{\"name\":\"key\",\"type\":\"K\"},{\"name\":\"value\",\"type\":\"E\"}],\"result\":\"Int\",\"ruby\":\"table.push(key: K, value: E) -> Int\",\"signature\":\"ATS.push(table: ATS[K, List[E]], key: K, value: E) -> Int\"},{\"arity\":2,\"description\":\"Return a new list with the value pushed on the end; near constant time.\",\"effects\":[],\"name\":\"List.append\",\"parameters\":[{\"name\":\"list\",\"type\":\"List[T]\"},{\"name\":\"value\",\"type\":\"T\"}],\"result\":\"List[T]\",\"ruby\":\"list.push(value: T) -> List[T]\",\"signature\":\"List.append(list: List[T], value: T) -> List[T]\"}],\"hints\":{\"Set.push\":\"sets are immutable; use s.add(x) and assign the result: s = s.add(x)\"}}\n",
   "written": []
  },
  "[[\"help\", \"push\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "list.push(value: T) -> List[T]\nReturn a new list with the value pushed on the end; near constant time.\n\nSet.push: sets are immutable; use s.add(x) and assign the result: s = s.add(x)\n",
+  "stdout": "table.push(key: K, value: E) -> Int\nAppend value to the list of key (absent counts as an empty list) and return the new length, atomically; VM only.\n\nlist.push(value: T) -> List[T]\nReturn a new list with the value pushed on the end; near constant time.\n\nSet.push: sets are immutable; use s.add(x) and assign the result: s = s.add(x)\n",
   "written": []
  },
  "[[\"help\", \"puts\", \"--json\"], {}]": {

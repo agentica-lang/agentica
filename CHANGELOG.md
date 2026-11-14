@@ -14,6 +14,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `List.count` takes a block and counts the elements it accepts, as Ruby's `xs.count { |x| ... }` does (#1590).
 - `List.tally`, `List.group_by` and `Range.group_by` take `Bytes` keys, as `List.uniq` does (#1596).
 - `ATS.clear(table)` removes every key of a shared table in one step, whatever its size (#1108).
+- `ATS.push(table, key, value)` appends to the list of a key in one atomic step and gives the new length (#1442).
 
 ### Changed
 
