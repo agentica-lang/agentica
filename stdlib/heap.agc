@@ -5,11 +5,10 @@
 
 ## A heap. Build one with `new`.
 struct Heap[T]
-  ## True when the first value comes out before the second.
+  private
+
   before: Fn[T, T, Bool]
-  ## The values.
   root: Tree[T]
-  ## How many values the heap holds.
   size: Int
 end
 
@@ -22,7 +21,7 @@ struct Popped[T]
 end
 
 ## Returns an empty heap. `before` is true when its first value comes out before its second: `a < b` gives the
-## smallest first.
+## smallest first. Give a strict order (`<`, not `<=`); values that tie come out in no set order.
 def new[T](before: Fn[T, T, Bool]) -> Heap[T] = Heap(before: before, root: Tree.Leaf, size: 0)
 
 ## Returns a heap with every value of `values` pushed, in O(n log n).
@@ -98,7 +97,7 @@ def merge[T](before: Fn[T, T, Bool], a: Tree[T], b: Tree[T]) -> Tree[T]
       case b
         Tree.Leaf -> a
         Tree.Node(y) ->
-          return merge(before, b, a) if before.call(y.value, x.value)
+          return join(y.value, y.left, merge(before, y.right, a)) if before.call(y.value, x.value)
 
           join(x.value, x.left, merge(before, x.right, b))
       end

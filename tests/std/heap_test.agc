@@ -24,6 +24,18 @@ def main() -> Void
       try Test.eq(Heap.size(h), 2000)
       Test.eq(Heap.to_a(h), values.sort)
     end,
+    Test.test("a non-strict order with repeated values ends") do
+      h = Heap.from([2, 2, 1, 2, 1]) do |a: Int, b: Int| a <= b end
+      Test.eq(Heap.to_a(h), [1, 1, 2, 2, 2])
+    end,
+    Test.test("values that tie all come out") do
+      jobs = [["b", "1"], ["a", "2"], ["c", "1"], ["d", "2"]]
+      h = Heap.from(jobs) do |a: List[String], b: List[String]| a[1].compare(b[1]) < 0 end
+      out = Heap.to_a(h)
+      try Test.eq(out.map do |job| job[1] end, ["1", "1", "2", "2"])
+      names = out.map do |job| job[0] end
+      Test.eq(names.sort, ["a", "b", "c", "d"])
+    end,
     Test.test("push and pop leave the old heap unchanged") do
       h = Heap.push(Heap.new(->(a: Int, b: Int) { a < b }), 2)
       smaller = Heap.push(h, 1)
@@ -31,6 +43,6 @@ def main() -> Void
       try Test.eq(Heap.to_a(h), [2])
       try Test.eq(Heap.to_a(smaller), [1, 2])
       Test.eq(Heap.to_a(popped.remaining), [2])
-    end
+    end,
   ])
 end
