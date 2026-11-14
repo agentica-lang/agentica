@@ -299,6 +299,8 @@ end
 ##   `Bytes.length` for `data.size`, `Bytes.at` for `data[i]`, `ok`, `some`); the children are the arguments, the
 ##   receiver of a method first. A call with named arguments (`f(1, size: 2)`) has them in parameter order, and a
 ##   parameter it leaves out before the last one it gives is a `default` node, which takes the parameter's default.
+##   A builtin written in Agentica (`List.map`) has in `prelude` the linked name of the function of the compiler
+##   prelude that runs it for these types, found in `Bodies.prelude`; "" for any other call.
 ## - `index`: `target[index]` on a List or Map; the children are the target and the index.
 ## - `op`: a binary operator, `text` as written (`+`, `-`, `<=`, `==`, `!=`, ...); the two children carry their own
 ##   types. `and`, `or`, `not` (`text` `!`) and `neg` (`text` `-`) are their own kinds. A minus before a number literal
@@ -325,6 +327,7 @@ struct Node
   target: String
   new: Bool
   children: List[Node]
+  prelude: String = ""
 end
 
 ## One parameter of a function of `bodies`, with its resolved type and its default value (one node, or none). The
@@ -356,13 +359,14 @@ struct Reason
   through: List[String]
 end
 
-## One function of `bodies`: `name` as written, `linked` the name a `call` node targets, `generics` its type
-## parameters, the resolved types of its parameters and result, and its body as a list of statement nodes. It is `pure`
-## when no call it makes, through every function it calls, has an effect; `impure` gives each reason once, by the
-## shortest chain. A builtin that can halt (`+`, `b[i]`, `unwrap!`) is pure.
+## One function of `bodies`: `name` as written, `linked` the name a `call` node targets, `file` the file it is in,
+## `generics` its type parameters, the resolved types of its parameters and result, and its body as a list of statement
+## nodes. It is `pure` when no call it makes, through every function it calls, has an effect; `impure` gives each
+## reason once, by the shortest chain. A builtin that can halt (`+`, `b[i]`, `unwrap!`) is pure.
 struct Body
   name: String
   linked: String
+  file: String
   exported: Bool
   range: Diagnostics.Region
   name_range: Diagnostics.Region
@@ -374,10 +378,12 @@ struct Body
   impure: List[Reason]
 end
 
-## The answer of `bodies` (experimental): every function of a file with a body, private ones too, in source order.
+## The answer of `bodies` (experimental): every function of a file with a body, private ones too, in source order, and
+## the functions of the compiler prelude that their calls run (`prelude` of a `call` node), each once.
 struct Bodies
   version: Int
   file: String
   modules: List[BodyModule]
   functions: List[Body]
+  prelude: List[Body]
 end

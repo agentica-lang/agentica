@@ -16,7 +16,7 @@ import Source from "../syntax/source"
 import Types from "../syntax/types"
 import Model from "model"
 
-## The functions of every module of `linked`, by linked name.
+## The functions of every module of `linked` and of the prelude files it calls, by linked name.
 struct Program
   functions: Map[String, Ast.FunctionDecl]
   checked: Checker.Checked
@@ -36,7 +36,7 @@ end
 ## The functions of `linked` (checked as `checked`), and nothing known yet.
 def program(linked: Linker.Linked, checked: Checker.Checked) -> Program
   functions: Map[String, Ast.FunctionDecl] = {}
-  for module in linked.modules
+  for module in linked.modules.concat(checked.prelude)
     for decl in module.declarations
       case decl
         Ast.Decl.Function(node) -> functions = functions.put(node.name, node)
@@ -98,7 +98,8 @@ SHARED_STATE: Map[String, String] = {
   "ATS.get": "concurrency", "ATS.has_key?": "concurrency", "ATS.keys": "concurrency", "ATS.size": "concurrency",
   "ATS.to_map": "concurrency", "Channel.closed?": "concurrency", "Channel.empty?": "concurrency",
   "Channel.lazy": "concurrency", "HttpWire.awaited?": "concurrency", "File.foreach": "filesystem",
-  "File.chunks": "filesystem", "System.Profile.steps": "clock",
+  "File.chunks": "filesystem", "System.Profile.steps": "clock", "__lazy_file": "filesystem",
+  "__lazy_chunks": "filesystem", "__lazy_channel": "concurrency",
 }
 
 # What one function does itself: its reasons (with no chain) and the functions of the program it calls, in order.

@@ -13,6 +13,8 @@ import Defaults from "../check/defaults"
 import DiagnosticModel from "../diagnostics/diagnostic_model"
 import Linker from "../modules/linker"
 import Ast from "../syntax/ast"
+import AstWalk from "../syntax/ast_walk"
+import Names from "../syntax/prelude_name"
 import Source from "../syntax/source"
 import Types from "../syntax/types"
 import Model from "model"
@@ -47,18 +49,26 @@ def of_program(
   program = Purity.program(linked, checked)
   known = Purity.unknown()
   functions: List[Model.Body] = []
+  roots: List[Ast.FunctionDecl] = []
   for decl in root.declarations
     case decl
       Ast.Decl.Function(node) if node.native.none? ->
+        roots = roots.push(node)
         reasoned = Purity.reasons(program, known, node.name)
         known = reasoned.known
         made = body_of(checked, node, written.get(node.id, node.name), exported.include?(node.id))
-        functions = functions.push(made.with(pure: reasoned.reasons.size == 0, impure: reasoned.reasons))
+        functions = functions.push(made.with(file: file, pure: reasoned.reasons.size == 0, impure: reasoned.reasons))
       _ -> next
     end
   end
 
-  Model.Bodies(version: BODIES_VERSION, file: file, modules: modules, functions: functions)
+  Model.Bodies(
+    version: BODIES_VERSION,
+    file: file,
+    modules: modules,
+    functions: functions,
+    prelude: prelude_bodies(checked, program, known, roots),
+  )
 end
 
 private
@@ -71,6 +81,92 @@ OPERATOR_TEXT: Map[String, String] = {
   "plus": "+", "minus": "-", "multiply": "*", "divide": "/", "modulo": "%", "less": "<", "less-equal": "<=",
   "greater": ">", "greater-equal": ">=", "equal": "==", "not-equal": "!=", "and": "and", "or": "or",
 }
+
+# The prelude functions that the calls of the root functions `roots` run, and those that their calls run in turn, each
+# once, in the order they are first called. The trees are walked, not the nodes, so a call under an `other` counts.
+def prelude_bodies(
+  checked: Checker.Checked,
+  program: Purity.Program,
+  known: Purity.Known,
+  roots: List[Ast.FunctionDecl],
+) -> List[Model.Body]
+  decls: Map[String, Ast.FunctionDecl] = {}
+  files: Map[String, String] = {}
+  for module in checked.prelude
+    for decl in module.declarations
+      case decl
+        Ast.Decl.Function(node) ->
+          decls = decls.put(node.name, node)
+          files = files.put(node.name, module.file)
+        _ -> next
+      end
+    end
+  end
+
+  found: List[Model.Body] = []
+  seen: Set[String] = Set.new([])
+  queue = roots
+  at = 0
+  while at < queue.size
+    for name in prelude_calls(checked, queue[at])
+      if !seen.include?(name) and decls.has_key?(name)
+        seen = seen.add(name)
+        decl = decls[name]
+        reasoned = Purity.reasons(program, known, name)
+        known = reasoned.known
+        made = body_of(checked, decl, written_name(name), false)
+        found = found.push(made.with(file: files[name], pure: reasoned.reasons.size == 0, impure: reasoned.reasons))
+        queue = queue.push(decl)
+      end
+    end
+
+    at += 1
+  end
+
+  found
+end
+
+# The linked names of the prelude functions that the calls in `node` run, in source order.
+def prelude_calls(checked: Checker.Checked, node: Ast.FunctionDecl) -> List[String]
+  names: List[String] = []
+  work = node.body.map do |stmt: Ast.Stmt| AstWalk.Node.Stmt(stmt) end
+  for param in node.params
+    case param.default
+      some(value) -> work = work.push(AstWalk.Node.Expr(value))
+      none -> next
+    end
+  end
+
+  work = work.reverse
+  while work.size > 0
+    item = work.last
+    work = work.take(work.size - 1).concat(AstWalk.children(item).reverse)
+    case item
+      AstWalk.Node.Expr(expr) ->
+        name = prelude_of(checked, Ast.expr_id(expr))
+        if name != "" and call?(expr)
+          names = names.push(name)
+        end
+
+      AstWalk.Node.Stmt(_) -> next
+    end
+  end
+
+  names
+end
+
+# Whether `expr` is a node that the answer gives as a `call`, so that its `prelude` names what it runs.
+def call?(expr: Ast.Expr) -> Bool
+  case expr
+    Ast.Expr.Call(_) -> true
+    Ast.Expr.MethodCall(_) -> true
+    Ast.Expr.FieldAccess(_) -> true
+    _ -> false
+  end
+end
+
+# The name of a prelude function as its file writes it: the part after the last "::".
+def written_name(linked: String) -> String = linked.split("::").last
 
 def body_of(checked: Checker.Checked, node: Ast.FunctionDecl, name: String, exported: Bool) -> Model.Body
   params = node.params.map do |param: Ast.Param|
@@ -86,6 +182,7 @@ def body_of(checked: Checker.Checked, node: Ast.FunctionDecl, name: String, expo
   Model.Body(
     name: name,
     linked: node.name,
+    file: "",
     exported: exported,
     range: DiagnosticModel.range_of(node.span),
     name_range: DiagnosticModel.range_of(node.name_span),
@@ -264,19 +361,31 @@ def expression(checked: Checker.Checked, expr: Ast.Expr) -> Model.Node
     Ast.Expr.Call(node) ->
       # The values of the named arguments of error(...) follow the positional ones.
       given = Defaults.arguments(node.args, node.named)
-      leaf("call", type, span).with(target: node.name, children: bound_arguments(checked, id, given, span))
+      leaf("call", type, span).with(
+        target: node.name,
+        children: bound_arguments(checked, id, given, span),
+        prelude: prelude_of(checked, id),
+      )
     Ast.Expr.MethodCall(node) ->
       case checked.resolved.get(id)
         some(State.Resolved.Call(name, _)) ->
           given = [node.target].concat(Defaults.arguments(node.args, node.named))
-          leaf("call", type, span).with(target: name, children: bound_arguments(checked, id, given, span))
+          leaf("call", type, span).with(
+            target: name,
+            children: bound_arguments(checked, id, given, span),
+            prelude: prelude_of(checked, id),
+          )
         _ -> other("method", span)
       end
 
     Ast.Expr.FieldAccess(node) ->
       case checked.resolved.get(id)
         some(State.Resolved.Call(name, _)) ->
-          leaf("call", type, span).with(target: name, children: [expression(checked, node.target)])
+          leaf("call", type, span).with(
+            target: name,
+            children: [expression(checked, node.target)],
+            prelude: prelude_of(checked, id),
+          )
         _ -> other("field", span)
       end
 
@@ -327,6 +436,14 @@ def expression(checked: Checker.Checked, expr: Ast.Expr) -> Model.Node
     Ast.Expr.ConstRef(_) -> other("constant", span)
     Ast.Expr.RegexLit(_) -> other("regex", span)
     Ast.Expr.EagLit(_) -> other("template", span)
+  end
+end
+
+# The linked name of the prelude function that the call `id` runs, or "".
+def prelude_of(checked: Checker.Checked, id: Int) -> String
+  case checked.bodies.get(id)
+    some(key) -> Names.prelude_name(key)
+    none -> ""
   end
 end
 

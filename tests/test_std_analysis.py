@@ -1219,6 +1219,90 @@ def test_bodies_say_why_a_function_is_not_pure(driver, project):
     }
 
 
+# The builtins of the families that touch the machine or other tasks whose catalog row lists no effect, and why each
+# is pure. Any other such row must be a key of SHARED_STATE in compiler/analysis/purity.agc: a new row fails here until
+# someone decides.
+PURE_SYSTEM_ROWS = {
+    "Channel.address": "a send-only reference, data",
+    "Channel.new": "a new channel, read only through effects",
+    "ATS.new": "a new table, read only through SHARED_STATE or effects",
+    "HttpWire.chunk": "decodes bytes it is given",
+    "HttpWire.chunk_read": "the next state from a struct; std made the read",
+    "HttpWire.chunked": "a new state",
+    "HttpWire.encode_request": "text from its arguments",
+    "HttpWire.encode_response": "text from its arguments",
+    "HttpWire.error_answer": "a value from its arguments",
+    "HttpWire.jobs": "a field the client was made with",
+    "HttpWire.options": "a field the client was made with",
+    "System.Profile.measure": "runs its block, which is walked; the profile is a trace",
+    "System.signal_number": "a constant of the OS",
+    "Task.id": "a field of the task value",
+    **{f"__lazy_{step}": "a step or terminal of a Lazy, whose terminal is function-value" for step in (
+        "chunk_while", "count", "each", "find", "flat_map", "group", "list", "map", "produce", "range", "reduce",
+        "test", "to_a", "with_index", "zlib")},
+}
+SYSTEM_FAMILIES = ("File", "Dir", "Path", "System", "Process", "Channel", "ATS", "Task", "HttpWire", "TCP", "TLS",
+                   "Time", "Random")
+
+
+def test_every_system_builtin_with_no_effect_is_shared_state_or_reviewed():
+    # The catalog as compiler/catalog/catalog.agc prints it (test_frontend_catalog.py keeps the golden equal to it).
+    catalog = (ROOT / "tests" / "fixtures" / "frontend" / "catalog" / "catalog.text").read_text(encoding="utf-8")
+    effects = {}
+    for name, listed in re.findall(r"^  (\S+?)\(.* effects=\[(.*?)\] desc=", catalog, re.M):
+        effects[name] = effects.get(name, "") + listed
+    purity = (ROOT / "compiler" / "analysis" / "purity.agc").read_text(encoding="utf-8")
+    table = purity[purity.index("SHARED_STATE"):]
+    shared = set(re.findall(r'"([^"]+)": "[a-z]+"', table[:table.index("}")]))
+    silent = {name for name, listed in effects.items()
+              if listed == "" and (name.split(".")[0] in SYSTEM_FAMILIES or name.startswith("__lazy_"))}
+    assert sorted(silent - shared - set(PURE_SYSTEM_ROWS)) == []
+    assert sorted(name for name in shared | set(PURE_SYSTEM_ROWS) if effects.get(name, "x") != "") == []
+
+
+# Builtins written in Agentica: one called twice, one under a `while` (an `other` node), one that takes a block and a
+# Lazy source.
+PRELUDE_CALLS = """def total(xs: List[Int]) -> Int = xs.sum
+
+def pick(o: Optional[Int]) -> Int = o.unwrap_or(0)
+
+def where(xs: List[Int]) -> Optional[Int] = xs.find_index { |x| x > 1 }
+
+def looped(xs: List[Int], n: Int) -> Int
+  count = 0
+  while count < n
+    count += xs.sum + xs.tally.size
+  end
+  count
+end
+
+def lines(path: String) -> Lazy[String] = File.foreach(path)
+"""
+
+
+def test_bodies_give_the_prelude_functions_their_calls_run(driver, project):
+    write_files(project, {"prelude_calls.agc": PRELUDE_CALLS})
+    answer, functions = bodies_of(driver, project, "prelude_calls.agc")
+    total = functions["total"]["body"][0]["children"][0]
+    assert (total["target"], total["prelude"]) == ("List.sum", "@prelude::list::sum_int")
+    assert functions["total"]["span"]["file"] == "prelude_calls.agc"
+    prelude = {function["linked"]: function for function in answer["prelude"]}
+    # Each once, in the order first called; a call under `while` counts.
+    assert list(prelude) == ["@prelude::list::sum_int", "@prelude::optional::unwrap_or",
+                             "@prelude::list::find_index", "@prelude::list::tally", "@prelude::lazy::from_file"]
+    tally = prelude["@prelude::list::tally"]
+    assert (tally["name"], tally["span"]["file"], tally["exported"]) == ("tally", "<prelude>/list.agc", False)
+    source = (ROOT / "stdlib" / "prelude" / "list.agc").read_text(encoding="utf-8").splitlines()
+    assert source[tally["name_span"]["range"]["start"]["line"] - 1].startswith("def tally")
+    assert type_text(tally["params"][0]["type"]) == "List[K]"
+    # The prelude bodies are pure or not as any function: from_file reads a file, find_index calls its block.
+    assert [(name, function["pure"]) for name, function in prelude.items()] == [
+        ("@prelude::list::sum_int", True), ("@prelude::optional::unwrap_or", True),
+        ("@prelude::list::find_index", False), ("@prelude::list::tally", True), ("@prelude::lazy::from_file", False)]
+    assert [reason["effect"] for reason in prelude["@prelude::lazy::from_file"]["impure"]] == ["filesystem"]
+    assert functions["lines"]["impure"][0]["effect"] == "filesystem"
+
+
 def test_bodies_name_each_module_a_nested_import_reaches(driver, project):
     (project / "lib").mkdir()
     write_files(project, {
