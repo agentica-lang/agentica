@@ -937,6 +937,85 @@ static agc_value builtin_jaro_winkler(agc_vm *vm, agc_value *args, uint32_t span
   return agc_void();
 }
 
+/* The conversions of format(...) (compiler/check/format_spec.agc): the lowering calls them with the numbers of a
+   conversion that the checker already read, but the bytecode may come from anywhere, so they check them again. */
+#define FORMAT_MAX_WIDTH 1000
+#define FORMAT_MAX_PRECISION 50
+#define FORMAT_LEFT 1
+#define FORMAT_ZERO 2
+#define FORMAT_HEX 4
+#define FORMAT_FLAGS 7
+
+static int64_t format_number(agc_vm *vm, agc_value v, int64_t max, uint32_t span) {
+  int64_t n = agc_as_int(vm, v);
+  if (n < 0 || n > max)
+    agc_fail(vm, "RUNTIME-INVALID-COUNT", "a format width, precision or flag is out of range", span);
+  return n;
+}
+
+/* The text padded to width characters: spaces on the right with FORMAT_LEFT, zeros after the sign (its first `sign`
+   bytes) with FORMAT_ZERO, else spaces on the left. */
+static agc_value format_padded(const char *text, size_t bytes, size_t chars, int64_t width, int64_t flags,
+                               size_t sign) {
+  size_t pad = (uint64_t)width > chars ? (size_t)width - chars : 0;
+  if (pad == 0) return agc_string_value(agc_make_string(text, bytes, chars));
+  agc_string *out = agc_new_string(bytes + pad, chars + pad);
+  char *d = out->data;
+  if (flags & FORMAT_LEFT) {
+    memcpy(d, text, bytes);
+    memset(d + bytes, ' ', pad);
+  } else if (flags & FORMAT_ZERO) {
+    memcpy(d, text, sign);
+    memset(d + sign, '0', pad);
+    memcpy(d + sign + pad, text + sign, bytes - sign);
+  } else {
+    memset(d, ' ', pad);
+    memcpy(d + pad, text, bytes);
+  }
+  return agc_string_value(out);
+}
+
+/* %d and %x: a negative number is `-` and the digits of its magnitude, in hex too (-ff). */
+static agc_value builtin_format_int(agc_vm *vm, agc_value *args, uint32_t span) {
+  int64_t n = agc_as_int(vm, args[0]);
+  int64_t width = format_number(vm, args[1], FORMAT_MAX_WIDTH, span + 2);
+  int64_t flags = format_number(vm, args[2], FORMAT_FLAGS, span + 3);
+  uint64_t magnitude = n < 0 ? (uint64_t)0 - (uint64_t)n : (uint64_t)n;
+  char text[32];
+  int len = (flags & FORMAT_HEX) ? snprintf(text, sizeof text, "%s%" PRIx64, n < 0 ? "-" : "", magnitude)
+                                 : snprintf(text, sizeof text, "%s%" PRIu64, n < 0 ? "-" : "", magnitude);
+  return format_padded(text, (size_t)len, (size_t)len, width, flags, n < 0 ? 1 : 0);
+}
+
+/* %f: fixed point with `precision` digits after the point, rounded from the exact binary value as C's %.*f does (and
+   Ruby's format); NaN, Inf and -Inf as in Ruby, padded with spaces only. */
+static agc_value builtin_format_float(agc_vm *vm, agc_value *args, uint32_t span) {
+  double x = agc_as_float(vm, args[0]);
+  int64_t precision = format_number(vm, args[1], FORMAT_MAX_PRECISION, span + 2);
+  int64_t width = format_number(vm, args[2], FORMAT_MAX_WIDTH, span + 3);
+  int64_t flags = format_number(vm, args[3], FORMAT_FLAGS, span + 4);
+  /* The longest text: a sign, 309 digits of DBL_MAX, the point and 50 digits. */
+  char text[400];
+  int len;
+  if (isnan(x) || isinf(x)) {
+    len = snprintf(text, sizeof text, "%s", isnan(x) ? "NaN" : x > 0 ? "Inf" : "-Inf");
+    flags &= ~FORMAT_ZERO;
+  } else {
+    len = snprintf(text, sizeof text, "%.*f", (int)precision, x);
+  }
+  if (len < 0 || (size_t)len >= sizeof text) agc_fail(vm, "RUNTIME-INTERNAL", "a format of a Float failed", span);
+  return format_padded(text, (size_t)len, (size_t)len, width, flags, text[0] == '-' ? 1 : 0);
+}
+
+/* %s with a width: the text padded with spaces; the width counts characters, as String.length does. */
+static agc_value builtin_format_text(agc_vm *vm, agc_value *args, uint32_t span) {
+  const agc_string *s = agc_as_string(vm, args[0]);
+  int64_t width = format_number(vm, args[1], FORMAT_MAX_WIDTH, span + 2);
+  int64_t flags = format_number(vm, args[2], FORMAT_FLAGS, span + 3);
+  if ((uint64_t)width <= s->chars) return args[0];
+  return format_padded(s->data, s->bytes, s->chars, width, flags & FORMAT_LEFT, 0);
+}
+
 const agc_builtin agc_string_builtins[] = {
   {"String.length", 1, builtin_length, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false},
   {"String.bytesize", 1, builtin_bytesize, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false},
@@ -967,6 +1046,9 @@ const agc_builtin agc_string_builtins[] = {
   {"String.edit_distance", 2, builtin_edit_distance, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
   {"String.edit_distance", 3, builtin_edit_distance_max, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
   {"String.jaro_winkler", 2, builtin_jaro_winkler, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
+  {"Format.int", 3, builtin_format_int, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, true},
+  {"Format.float", 4, builtin_format_float, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, true},
+  {"Format.text", 3, builtin_format_text, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true},
 };
 
 const size_t agc_string_builtin_count = sizeof agc_string_builtins / sizeof agc_string_builtins[0];

@@ -148,10 +148,12 @@ def foreign_names() -> Map[String, String]
     "next": "next is a statement on its own line inside while or for",
     "nil?": "compare with nil: x == nil",
     "null": "use nil",
+    "printf": "use puts(format(\"%5.2f\", x)); format is Ruby's format",
     "println": "use puts(x)",
     "range": "write a range: a..b includes b, a...b excludes it, as in for i in 0...n",
     "read_line": "use gets, which returns Result[String]; gets! halts at the end of input",
     "readline": "use gets, which returns Result[String]; gets! halts at the end of input",
+    "sprintf": "use format(\"%5.2f\", x), Ruby's format",
     "str": "use x.to_s, or interpolation: \"\#{x}\"",
   }
 end
@@ -187,6 +189,7 @@ def foreign_kind_methods() -> Map[String, String]
     "Error.is?": "use e.is_a?(\"db\"), true for the kind db and every db.* kind",
     "Float.max": "use [a, b].max.unwrap!, or x.clamp(min, max) to keep x in a range",
     "Float.min": "use [a, b].min.unwrap!, or x.clamp(min, max) to keep x in a range",
+    "Float.to_fixed": "use format(\"%.2f\", x) for a fixed number of digits after the point",
     "Float.to_int": "use x.to_i, which gives a Result",
     "Float.to_int!": "use x.to_i!",
     "Int.ceil": "an Int is already whole; ceil, floor and round are Float methods (x.ceil)",
@@ -235,6 +238,7 @@ def foreign_kind_methods() -> Map[String, String]
     "String.each_char": "s.split(\"\") gives the characters as a List[String]; s.at(i) reads one character",
     "String.ends_with?": "use s.end_with?(suffix)",
     "String.error?": "error? is not a String method; only a Result has ok? and message (!r.ok? tests for an error)",
+    "String.format": "use format(\"%5.2f\", x): the format string is the first argument of the function format",
     "String.gsub": "use s.replace(old, new)",
     "String.index": "use s.index_of(part), which gives an Optional[Int]",
     "String.is_numeric": (

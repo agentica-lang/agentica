@@ -66,6 +66,9 @@ Float.to_bits
 Float.to_bits32
 Float.to_int
 Float.to_int!
+Format.float
+Format.int
+Format.text
 FrontEnd.hand_off.bytes
 FrontEnd.std_source
 FrontEnd.stdin_bytes.bytes

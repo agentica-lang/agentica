@@ -12,7 +12,7 @@ import Problems from "problem"
 ## The text of the problem. `text` is the text of the file that the problem names. A problem at a key of a manifest or
 ## a lock has no source lines: the key path takes their place, and a problem about the whole file shows the file name
 ## alone.
-def format(problem: Problems.Problem, text: String) -> String
+def text_of(problem: Problems.Problem, text: String) -> String
   return without_source(problem) if !Problems.at_source?(problem)
 
   lines = text.split("\n")

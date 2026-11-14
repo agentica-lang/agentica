@@ -1,74 +1,10 @@
 ## 25. Ruby typed idioms
 
 Decisions behind the Ruby forms of the language. Built forms live in the
-grammar and the programming skill; planned ones live in their issue, with the
-spec below: `format` (§25.11, #982).
+grammar and the programming skill; planned ones live in their issue.
 
 The principles (Ruby with types, one way, no warnings, the method test) are in
 `docs/grammar/01-overview.md` §2.
-
-### 25.11 `format`
-
-```agentica
-puts(format("%-8s|%6.2f|%03d|%x", "apple", 2.5, 7, 255))   # apple   |  2.50|007|ff
-```
-
-`format(fmt, args...)` returns a `String`, like Ruby's `Kernel#format`. A
-conversion is `%[flags][width][.precision]type`:
-
-- `d`: an `Int`, in decimal.
-- `x`: an `Int`, in lowercase hex; a negative number is `-` and the hex of its
-  magnitude (`-ff`, as in Python; Ruby writes `..f01`).
-- `f`: a `Float`, fixed point with 6 digits after the point unless `.precision`
-  says otherwise; `NaN`, `Inf` and `-Inf` as in Ruby.
-- `s`: any value with `to_s`, as `puts` writes it.
-- `%%`: a `%`.
-
-Flags: `0` pads numbers with zeros after the sign (`%05d` of `-42` is `-0042`);
-`-` pads on the right with spaces. With both (`%-05d`), `0` is ignored, as in C
-and Ruby. Other flags (`+`, space, `#`) are `CHECK-FORMAT-SPEC`. `width` is 1 to
-1000 and counts characters as `String.length` does. `precision` is 0 to 50 and
-only for `f`. An `Int` for `%f` is not converted (`n.to_f`, as everywhere).
-
-**One way:** `format` is only for width, precision, flags or hex, and `"#{x}"`
-interpolation stays the way to put values in text. A format string whose
-conversions are all bare `%s` or `%d`, or that has no conversion at all, is
-`CHECK-FORMAT-SPEC` with a help that shows the interpolated string.
-`format("%.2f", x)` is the one public way to write a fixed number of digits;
-`x.to_fixed(2)` and `x.round(2).to_s` get `CHECK-UNKNOWN-METHOD` with a help
-that shows it.
-
-**The format string must be a literal, checked at compile time.** The
-alternative was a run-time format string returning `Result[String]`. The checker
-then knows the arguments and their types, so a mistake is a compile error with a
-span inside the string, the result is a plain `String`, and nearly all real
-format strings are literals. A program that needs a format chosen at run time
-picks between literals.
-
-**Checker rules:**
-
-- `format` is checker-handled and variadic: a catalog entry covers the name
-  reservation and `agentica help format`. Only the function name is reserved: a
-  user `def format` is `CHECK-REDEFINED-NAME` (breaking); variables, parameters
-  and fields named `format` stay valid.
-- The first argument must be a plain one-line string literal, without `#{...}`
-  and not a heredoc: `CHECK-FORMAT-LITERAL`.
-- A bad conversion (unknown type or flag, a trailing `%`, `precision` on `d`,
-  `x` or `s`, `0` on `s`, a width or precision out of range) is
-  `CHECK-FORMAT-SPEC` at the conversion's span inside the literal.
-- A wrong number of arguments is `CHECK-ARITY`; an argument of the wrong type (a
-  `%s` argument without `to_s` included) is `CHECK-TYPE-MISMATCH` at the
-  argument, with a secondary span at its conversion.
-- `sprintf(...)`, `"%d" % x` and `String.format(...)` get a help that shows
-  `format(...)`.
-
-**Format strings are not parsed at run time.** Padding, decimal and hex text
-are Agentica code in the compiler prelude, and each call becomes a
-concatenation of the literal parts and one prelude call per conversion. One
-part is a builtin, prelude-only (`CHECK-UNKNOWN-NAME` elsewhere): fixed-point
-text of a `Float` (digits 0 to 50, otherwise `RUNTIME-INVALID-COUNT`), because
-correct decimal rounding of a binary `Float` needs exact arithmetic (the VM
-calls `snprintf` with `%.*f`).
 
 ### 25.13 Decided against (Part C)
 
