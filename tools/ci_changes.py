@@ -9,6 +9,7 @@ It prints the lines a step appends to $GITHUB_OUTPUT:
     c             the C half (sanitizers, TSan, lint, layers, JIT on arm64)
     trace         make vm-trace-off
     cchecker      the cchecker job
+    platforms     platforms.yml: all five systems
     std_only      the light path: only portable std/ modules, their tests and docs changed
     std_tests     on the light path, the test modules of the changed std modules
     std_fixtures  on the light path, the VM goldens that import them
@@ -40,6 +41,13 @@ C_PATHS = re.compile(
 CCHECKER_PATHS = re.compile(
     r"vm/|Makefile$|mk/|\.gitmodules$|\.clang-tidy$|cchecker\.toml$|cchecker-baseline\.json$"
     r"|\.github/workflows/ci\.yml$|\.github/actions/"
+)
+PLATFORM_PATHS = re.compile(
+    r"vm/|tests/fixtures/native/|examples/ffi/|examples/native_module/|Makefile$|mk/|\.gitmodules$"
+    r"|bootstrap/stage0\.agcb$|VERSION$|tools/release\.py$|tools/release-check\.sh$|\.github/workflows/release\.yml$"
+    r"|\.github/workflows/platforms\.yml$|\.github/actions/|tools/ci_systems\.py$|tools/conformance\.py$"
+    r"|tests/(agentica_test|conftest)\.py$|tests/(test_)?windows_[^/]*\.py$|tests/test_process[^/]*\.py$"
+    r"|tests/test_filesystem\.py$|tests/[^/]*_posix\.py$"
 )
 TRACE_PATHS = re.compile(r"vm/trace\.|vm/tests/trace_test\.c$")
 # tests/std/ runs through tests/test_unit_test.py; the frozen manifests read their own copy of stdlib/.
@@ -195,10 +203,13 @@ def classify(files, root=ROOT):
     except FullPath as reason:
         print(f"full path: {reason}", file=sys.stderr)
         light = None
+    platform = next((f for f in files if PLATFORM_PATHS.match(f)), None)
+    print(f"platforms: all five ({platform})" if platform else "platforms: none (no file needs them)", file=sys.stderr)
     return {
         "c": any(C_PATHS.match(f) for f in files),
         "trace": any(TRACE_PATHS.match(f) for f in files),
         "cchecker": any(CCHECKER_PATHS.match(f) for f in files),
+        "platforms": platform is not None,
         "std_only": light is not None,
         "std_tests": " ".join(light[0]) if light else "",
         "std_fixtures": " ".join(light[1]) if light else "",
@@ -206,7 +217,8 @@ def classify(files, root=ROOT):
 
 
 def everything():
-    return {"c": True, "trace": True, "cchecker": True, "std_only": False, "std_tests": "", "std_fixtures": ""}
+    return {"c": True, "trace": True, "cchecker": True, "platforms": True, "std_only": False, "std_tests": "",
+            "std_fixtures": ""}
 
 
 def main(argv):

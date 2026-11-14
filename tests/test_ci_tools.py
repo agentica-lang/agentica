@@ -25,11 +25,25 @@ def names(picked):
     return [s["platform"] for s in picked]
 
 
-def test_platforms_runs_all_five_or_the_labelled_systems():
-    assert names(systems.platforms(True, [])) == systems.NAMES
-    labels = ["platform:macos-arm64", "platform:linux-x86_64", "bug", "platform:windows-x86_64"]
-    assert names(systems.platforms(False, labels)) == ["windows-x86_64", "macos-arm64"]
-    assert systems.platforms(False, []) == []
+def test_platforms_runs_all_five_or_none():
+    assert names(systems.platforms(True)) == systems.NAMES
+    assert systems.platforms(False) == []
+
+
+def test_the_files_that_need_platforms_run_all_five(capsys):
+    for path in ("vm/interp.c", "vm/jit/emit_a64.c", "vm/third_party/libuv", "tests/fixtures/native/peer.c",
+                 "examples/ffi/main.agc", "examples/native_module/agentica.toml", "Makefile", "mk/release.mk",
+                 ".gitmodules", "bootstrap/stage0.agcb", "VERSION", "tools/release.py", "tools/release-check.sh",
+                 ".github/workflows/release.yml", ".github/workflows/platforms.yml", ".github/actions/msys2/action.yml",
+                 "tools/ci_systems.py", "tools/conformance.py", "tests/agentica_test.py", "tests/conftest.py",
+                 "tests/windows_support.py", "tests/test_windows_process_cleanup.py", "tests/test_process_lifecycle.py",
+                 "tests/test_filesystem.py", "tests/test_bdd_posix.py"):
+        assert changes.classify(["compiler/app/cli.agc", path])["platforms"], path
+    assert "platforms: all five (vm/interp.c)" in capsys.readouterr().err
+    for files in (["compiler/app/cli.agc", "compiler/check/check_call.agc"], ["stdlib/cache.agc"], ["docs/x.md"],
+                  ["tests/test_vm_bits.py", "tests/fixtures/vm/hello.agc"], [".github/workflows/ci.yml"]):
+        assert not changes.classify(files)["platforms"], files
+    assert "platforms: none (no file needs them)" in capsys.readouterr().err
 
 
 def test_a_probe_names_systems_and_shorthands_and_refuses_an_unknown_one():
@@ -125,8 +139,8 @@ def test_the_c_trace_and_cchecker_outputs_and_a_run_of_everything(capsys):
     assert picked(["cchecker-baseline.json"]) == ["cchecker"]
     assert picked(["compiler/app/cli.agc", "examples/ffi/main.agc"]) == []
     changes.main(["ci_changes.py", "--all"])
-    assert capsys.readouterr().out.splitlines() == ["c=true", "trace=true", "cchecker=true", "std_only=false",
-                                                    "std_tests=", "std_fixtures="]
+    assert capsys.readouterr().out.splitlines() == ["c=true", "trace=true", "cchecker=true", "platforms=true",
+                                                    "std_only=false", "std_tests=", "std_fixtures="]
 
 
 def test_the_std_modules_that_the_front_end_imports_are_not_portable():
