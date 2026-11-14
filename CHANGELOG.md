@@ -22,6 +22,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `std/analysis`: a `call` node of `Analysis.bodies` has the `type_args` of a generic function or builtin (#1159).
 - `std/analysis`: each function of `Analysis.bodies` says whether it is `pure`, and why not in `impure`, through every call (#1159).
 - `std/analysis`: `Analysis.bodies` gives the bodies of the prelude functions that the calls of builtins written in Agentica run (`List.sum`, `File.foreach`), named in each `call` node's `prelude` (#1159).
+- `std/analysis`: `Analysis.bodies` describes every node: loops, collections, structs, variants, fields, function values, lambdas, ranges and constants have their own kinds, and none is `other` (#1159).
 - `std/actor`: `Actor.Timeout`, a receive timeout that wakes an actor when no message came in time (#1523).
 - `format("%-8s|%6.2f|%03d|%x", name, price, n, n)`, Ruby's `format`, with a format string literal that `check` reads (`CHECK-FORMAT-SPEC`, `CHECK-FORMAT-LITERAL`) (#982).
 - Test-only dependencies: `group = "test"` in `agentica.toml` (#1196).
