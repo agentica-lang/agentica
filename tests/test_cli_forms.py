@@ -84,6 +84,8 @@ OPTIONS = [
     ["--max-steps"], ["--max-steps", "x", "ok.agc"], ["--max-steps", "0", "ok.agc"], ["--max-steps", "007", "ok.agc"],
     ["--max-steps", "-1", "ok.agc"], ["--max-steps", "1.5", "ok.agc"], ["--max-steps", "#e3", "ok.agc"],
     ["--max-steps", "1", "check", "loop.agc"],
+    ["--max-heap"], ["--max-heap", "0", "ok.agc"], ["--max-heap", "64MB", "ok.agc"], ["--max-heap", "256M", "ok.agc"],
+    ["--max-heap", "1G", "--max-heap", "1G", "ok.agc"],
     ["--max-steps=5", "ok.agc"], ["--seed", "2147483648", "ok.agc"], ["--seed", "007", "ok.agc"],
     ["--seed", "--json", "ok.agc"], ["--seed", "1", "--seed"], ["--seed", "5", "--seed", "6", "ok.agc"],
     ["--ai", "--ai", "check", "ok.agc"], ["--deny-run", "--deny-run", "ok.agc"], ["--allow-run", "ok.agc"],

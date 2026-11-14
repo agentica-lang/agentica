@@ -32,13 +32,16 @@ the list of commands and flags.
   `--sandbox` or add `--deny-run`.
 - `--max-steps N` bounds expression and statement entries across all tasks
   (`RUNTIME-STEP-LIMIT`); it is not an I/O timeout.
+- `--max-heap SIZE` (`256M`; bytes, or `K`, `M`, `G`) ends a run whose memory
+  would grow past it: one stderr line with `RUNTIME-HEAP-LIMIT`, exit code 70.
+  The heap starts at 32M, so a smaller size only stops it from growing.
 - `--coverage FILE` writes the line coverage of the run as LCOV (the program's
   files, not `std/` or fetched packages), a failed run too; the JIT is off for
   that run. `agentica test --coverage` (no file) writes the coverage of the
   sources a test run ran to `coverage/lcov.info` (`bdd.md`).
 - `agentica compile FILE.agc -o OUT.agcb` writes bytecode; `agentica run
   [FLAGS] -- OUT.agcb [ARGS...]` runs it, on the same Agentica version only.
-  Flags go before `--` (`--max-steps`, `--seed`, `--schedulers N`, `--jit MODE`,
+  Flags go before `--` (`--max-steps`, `--max-heap`, `--seed`, `--schedulers N`, `--jit MODE`,
   `--deny-*`, `--sandbox`, `--source-root DIR`, `--coverage FILE`, `--ai`,
   `--json`).
 - `agentica F.agc`, `agentica compile` and `agentica test` keep the compiled

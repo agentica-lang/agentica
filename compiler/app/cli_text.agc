@@ -32,9 +32,9 @@ private
 # What a command line that names no source file gets on stderr (exit code 2), one line each.
 USAGE = [
   [
-    "usage: agentica [--version] [--dump] [--dump-ir] [--ai|--json] [--max-steps N] [--seed N] [--flush-timeout MS] ",
-    "[--schedulers N] [--jit MODE] [--deny-run] [--deny-net] [--deny-fs] [--deny-env] [--deny-native] [--sandbox] ",
-    "[--no-cache] [--coverage FILE] <source-file> [args...]",
+    "usage: agentica [--version] [--dump] [--dump-ir] [--ai|--json] [--max-steps N] [--max-heap SIZE] [--seed N] ",
+    "[--flush-timeout MS] [--schedulers N] [--jit MODE] [--deny-run] [--deny-net] [--deny-fs] [--deny-env] ",
+    "[--deny-native] [--sandbox] [--no-cache] [--coverage FILE] <source-file> [args...]",
   ].join(""),
   "       agentica [--ai|--json] check [PATH...]",
   "       agentica [--ai|--json] check --stdin <source-file>",
@@ -109,9 +109,9 @@ SUMMARY = [
   "                                          locked do not move",
   "  agentica compile FILE.agc -o OUT.agcb   write bytecode",
   "  agentica run [OPTIONS] -- FILE.agcb [ARGS...]",
-  "                                          run a compiled program; OPTIONS: --max-steps N, --seed N,",
-  "                                          --flush-timeout MS, --schedulers N, --jit MODE, the --deny-* flags,",
-  "                                          --sandbox, --source-root DIR, --coverage FILE, --ai, --json",
+  "                                          run a compiled program; OPTIONS: --max-steps N, --max-heap SIZE,",
+  "                                          --seed N, --flush-timeout MS, --schedulers N, --jit MODE, the --deny-*",
+  "                                          flags, --sandbox, --source-root DIR, --coverage FILE, --ai, --json",
   "  agentica doc PATH [--json]              exported API of a file or a std/ module, with its ## docs",
   "  agentica outline FILE [--json]          declarations of a file or a std/ module, private ones too, with docs",
   "                                          and spans; --stdin FILE reads the file from standard input",
@@ -167,6 +167,11 @@ OPTIONS = [
   "     all the --deny-* flags, for code you do not trust",
   "  --max-steps <count>",
   "     limit execution to N expression/statement entries",
+  "  --max-heap <size>",
+  [
+    "     end the run (RUNTIME-HEAP-LIMIT, exit code 70) when the program's memory would grow past SIZE: bytes, or ",
+    "with K, M or G, such as 256M",
+  ].join(""),
   "  --seed <n>",
   "     seed Random with N (0..2147483647) for repeatable runs",
   "  --flush-timeout <ms>",
