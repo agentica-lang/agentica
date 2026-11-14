@@ -1,1 +1,1 @@
-ERROR CHECK-REDEFINED-NAME 22:4:1-43:6:1 "duplicate or reserved declaration" - file="lib.agc"
+ERROR CHECK-REDEFINED-NAME 22:4:1-43:6:1 "duplicate or reserved declaration" "go is declared more than once in this file; rename or remove one" file="lib.agc"
