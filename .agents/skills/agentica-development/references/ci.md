@@ -177,7 +177,10 @@ proof). These are the rules they do not show.
   re-run the job.
 - The C half runs only when the merge commit changes `vm/`, the Makefile,
   `mk/*.mk`, `.gitmodules`, `.clang-tidy`, `ci.yml` or `.github/actions/` (the
-  `changes` job); keep that list in step with new C folders.
+  `changes` job: `tools/ci_changes.py`, tested in `tests/test_ci_tools.py`);
+  keep that list in step with new C folders. A new std module that `compiler/`
+  imports leaves the light path by itself (the script reads the imports); the
+  light path: `agentica-dev-workflow` §4.
 - Every job that runs tests sets `AGENTICA_SWEEP=sampled` (seed from
   `GITHUB_SHA`; a failure prints `AGENTICA_SWEEP_SEED`). `RUNTIME-TEST-TIMEOUT`
   has coverage only in the slow tier.
