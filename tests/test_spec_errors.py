@@ -3,9 +3,7 @@
 range covers, never the message. What the forms print is the VM golden tests/fixtures/vm/error-record.agc.
 """
 
-import pytest
-
-from tests.spec_support import Batch, assert_rule, check_diagnostic
+from tests.spec_support import Batch, assert_rule
 
 BATCH = Batch("main.agc")
 table = BATCH.table
@@ -132,6 +130,9 @@ REJECTED = [
     # error(...) takes a String or an Error.
     ("  bad: Result[Int] = error(42)\n  puts(bad)", "CHECK-TYPE-MISMATCH", "42"),
     ("  bad: Result[Int] = error(r)\n  puts(bad)", "CHECK-TYPE-MISMATCH", "r"),
+    # error? is no method of a Result, in a statement or in a block over a list of Results.
+    ("  puts(r.error?)", "CHECK-UNKNOWN-METHOD", "r.error?"),
+    ("  puts([r].select do |result| result.error? end)", "CHECK-UNKNOWN-METHOD", "result.error?"),
     # A Result stays out of JSON, though the Error it holds is encodable.
     ("  puts(JSON.encode(r))", "CHECK-NOT-ENCODABLE", "r"),
 ]
@@ -141,17 +142,3 @@ REJECTED = [
 def test_an_error_payload_is_not_a_string(checked, body, code, text):
     program = HEAD % body
     assert_rule(checked(program), program, code, text)
-
-
-ERROR_PREDICATE = [
-    ("  r: Result[Void] = error(\"x\")\n  puts(r.error?)", "r.error?"),
-    ("  rs: List[Result[Void]] = []\n  puts(rs.select do |result| result.error? end)", "result.error?"),
-]
-
-
-@pytest.mark.parametrize("body, text", ERROR_PREDICATE)
-def test_error_predicate_help_is_about_a_result(body, text, tmp_path):
-    program = "def main() -> Void\n" + body + "\nend\n"
-    found = check_diagnostic(program, tmp_path)
-    assert_rule(found, program, "CHECK-UNKNOWN-METHOD", text)
-    assert "unwrap" not in found["help"]
