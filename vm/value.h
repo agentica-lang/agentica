@@ -303,6 +303,8 @@ typedef struct {
   agc_resource *state;
   agc_value listener;
   agc_task *group;
+  /* The deadline of a graceful stop (HttpWire.stop), -1 while the server accepts. Read and written under rt->sync. */
+  int64_t stop_at;
 } agc_http_server;
 
 /* A TLS.Context (vm/tls_context.c): an atomic GC block (no GC pointer in it) with one count on the native TLS config
