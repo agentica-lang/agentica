@@ -336,6 +336,7 @@ Stops a task you no longer need, and every task it started. It does not wait: th
 
 - A task is cancelled by `Task.cancel`, by a crash of one of its ancestors, by the timeout of its `Task.map` item and by `HTTP.close_server` (the handler tasks). It also takes the `TaskRef` of [Task.current](#taskcurrent). `main` cannot be cancelled: a cancel of its `Task.current` does nothing. A wrong argument type is `CHECK-TYPE-MISMATCH` at the argument.
 - A sleep, a channel wait, an await or an I/O wait ends at once; a task busy in a loop on another scheduler stops at the end of its current turn, so it may end as cancelled even though it reached its return.
+- A cancel that lands during the turn wins even when the turn returned, so an item a consuming call (`Channel`, `TCP` or `Process` reads) already took is lost. To stop a reader without losing an item, give the read a timeout (`Process.poll_line`, a receive with a timeout) and let the task end on its own.
 - Its handles close as when any task ends, so a channel it owns (from `Task.spawn_owning`) is closed and its receivers get `error("channel: closed")`.
 - Awaiting it gives `error("task: cancelled")` for a `Result` task, and otherwise stops the program with `RUNTIME-TASK-CANCELLED`.
 - Cancelling a task that already ended, or twice, does nothing. Any task that holds the handle may cancel it. A task that cancels itself, or one that started it, stops right after the call.
