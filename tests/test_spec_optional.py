@@ -72,6 +72,18 @@ end
         None,
     ),
     (
+        "a Range.map block of the item type where the list wants Optional items",
+        "def main() -> Void\n  ids: List[Optional[Int]] = (1..2).map do |i| i end\nend\n",
+        "CHECK-TYPE-MISMATCH",
+        "i",
+    ),
+    (
+        "a Lazy.map block of the item type where the Lazy wants Optional items",
+        "def main() -> Void\n  ids: Lazy[Optional[Int]] = [1].lazy.map do |i| i end\nend\n",
+        "CHECK-TYPE-MISMATCH",
+        "i",
+    ),
+    (
         "a map block of the item type where the list wants Optional items",
         "def main() -> Void\n  ids: List[Optional[Int]] = [1, 2].map do |i| i end\nend\n",
         "CHECK-TYPE-MISMATCH",
