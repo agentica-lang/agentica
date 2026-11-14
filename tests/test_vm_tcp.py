@@ -531,14 +531,14 @@ def test_a_close_and_the_end_of_the_run_send_the_written_bytes_to_a_late_reader(
 
 def test_a_close_gives_up_at_the_flush_limit_and_the_run_says_what_it_dropped(tmp_path, adopt):
     """The peer never reads, so the bytes of the write buffer cannot go out: with a flush limit of 300 ms the run
-    still ends, and a warning on standard error says that bytes were dropped."""
+    still ends, and a warning on standard error at its end says that bytes were dropped."""
     vm = adopt(start_vm(compile_text(WRITE_CLOSE_PROGRAM, "write_drop", tmp_path), "close",
                         env={"AGENTICA_SCHEDULERS": "4", "AGENTICA_FLUSH_TIMEOUT_MS": "300"}))
     port = int(vm.next_line())
     with socket.create_connection(("127.0.0.1", port), timeout=scaled(30)):
         assert vm.next_line() == "written"
         assert vm.wait() == 0, vm.stderr_text()
-    assert "warning: a closed socket dropped" in vm.stderr_text()
+    assert "warning: closed sockets dropped" in vm.stderr_text()
 
 
 WRITE_TIMEOUT_PROGRAM = """\

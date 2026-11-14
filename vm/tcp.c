@@ -523,8 +523,12 @@ static void out_drop(net *n) {
 
 /* The sockets whose close waits for their write buffer, for the end of the run (agc_net_draining). */
 static _Atomic size_t draining; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+/* The bytes that such waits gave up at their limit (agc_net_dropped). */
+static _Atomic uint64_t dropped; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 
 bool agc_net_draining(void) { return atomic_load_explicit(&draining, memory_order_acquire) > 0; }
+
+uint64_t agc_net_dropped(void) { return atomic_load_explicit(&dropped, memory_order_acquire); }
 
 static void linger_closed(uv_handle_t *h) {
   net *n = h->data;
@@ -585,13 +589,13 @@ static void shut(net *n, const char *why) {
    Windows resets a socket that still has a read pending when the process ends, and the peer got WSAECONNRESET
    instead of the end of input (#489). The registry keeps its count; its release finds the net closed and only gives
    the count back. */
-/* The peer did not take the buffer within the limit: the bytes are dropped, and the run says so, since the writes
-   that put them there returned ok. */
+/* The peer did not take the buffer within the limit: the bytes are dropped and counted, and the end of the run says
+   so (vm/launch.c), since the writes that put them there returned ok. */
 static void linger_expired(uv_timer_t *t) {
   net *n = t->data;
-  fprintf(stderr, "agentica: warning: a closed socket dropped %zu unsent bytes: the peer did not read them in %" PRId64
-                  " ms\n", atomic_load_explicit(&n->unsent, memory_order_acquire), n->linger_ms);
-  fflush(stderr);
+  size_t lost = atomic_load_explicit(&n->unsent, memory_order_acquire);
+  (void)atomic_fetch_add_explicit(&dropped, lost, memory_order_acq_rel);
+  AGC_TRACE(&n->trace, AGC_TRACE_IO, "tcp_drop %s=%" PRIu64 " unsent=%zu", kind_name(n), n->id, lost);
   shut_one(n, n->linger_why);
 }
 
@@ -2478,4 +2482,6 @@ const agc_builtin agc_tcp_builtins[] = {{"", 0, NULL, AGC_NATIVE_NONE, AGC_COST_
 const size_t agc_tcp_builtin_count = 0;
 
 bool agc_net_draining(void) { return false; }
+
+uint64_t agc_net_dropped(void) { return 0; }
 #endif

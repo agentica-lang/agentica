@@ -297,9 +297,17 @@ static void say_goodbye(agc_vm *vm, agc_outcome *outcome) {
   if (AGC_CATCH(vm->fail) == 0) {
     agc_io_goodbye(vm);
     /* A socket closed with bytes in its write buffer (TCP.write) sends them first, at most for the flush limit; its
-       own timer ends the wait and says what was dropped, so this wait is a little longer. */
+       own timer ends the wait and counts what it dropped, so this wait is a little longer. */
     if (vm->rt->loop && agc_net_draining())
       (void)agc_io_wait_for(vm, nets_drained, NULL, agc_clock_ms() + (uint64_t)vm->rt->flush_timeout + 1000);
+    if (agc_net_dropped()) {
+      agc_notice notice;
+      fprintf(agc_notice_begin(&vm->rt->err, &notice),
+              "agentica: warning: closed sockets dropped %" PRIu64 " unsent bytes: the peer did not read them in %" PRId64
+              " ms\n",
+              agc_net_dropped(), vm->rt->flush_timeout);
+      agc_notice_end(vm, &notice, AGC_NOTICE_KEPT);
+    }
     return;
   }
   agc_sync_reset(vm);

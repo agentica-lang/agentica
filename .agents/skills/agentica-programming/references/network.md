@@ -102,7 +102,7 @@ TLS.ServerOptions(cert_file: String, key_file: String, alpn: List[String] = [])
   out. `TCP.flush` waits for the buffer to empty; a `send` after a write also
   does. A failed buffered write is the error of `flush` and of later writes.
   `TCP.close` and the end of the run send unsent bytes first, for at most
-  the flush limit (`--flush-timeout`), then drop them with a warning: call
+  the flush limit (`--flush-timeout`), then drop them (a warning at the end of the run): call
   `flush` to get the error. On a TLS socket `write` is `send`.
 - `read_line` handles fragmented UTF-8, strips LF or CRLF and accepts a final
   unterminated line at EOF. It errors on an empty EOF, on a read error (a reset
