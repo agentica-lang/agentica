@@ -214,7 +214,7 @@ static void test_printing(void) {
      JIT code. */
   agc_as_struct(&vm, odd)->fields[AGC_ERROR_MESSAGE] = agc_int(5);
   assert(!agc_text_checked(&vm, odd, &interpolated));
-  agc_value mark = agc_nil(), dst = mark;
+  agc_value dst = agc_nil();
   assert(agc_op_to_text(&vm, &dst, &odd) == AGC_STATUS_WRONG_TAG);
   assert(agc_is(dst, AGC_T_NIL));
 }
