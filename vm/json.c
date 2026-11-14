@@ -321,7 +321,8 @@ static agc_value builtin_parse(agc_vm *vm, agc_value *args, uint32_t span) {
   return status == AGC_JSON_PARSED ? ok(out) : failure(vm, AGC_KIND_JSON_PARSE, agc_json_status_message(status));
 }
 
-/* The struct or enum that JSON.decode and JSON.schema name by its linked name: structs first, then enums. */
+/* The struct, enum or struct instance that JSON.decode and JSON.schema name by its linked name: structs first, then
+   enums, then instances. */
 static uint32_t decodable_type(agc_vm *vm, agc_value name, uint32_t span, uint32_t *kind) {
   const agc_string *text = agc_as_string(vm, name);
   const agc_program *p = vm->rt->program;
@@ -336,6 +337,11 @@ static uint32_t decodable_type(agc_vm *vm, agc_value name, uint32_t span, uint32
     const agc_string *json_name = p->enums[i].json_name;
     if (json_name && json_name->bytes == text->bytes && memcmp(json_name->data, text->data, text->bytes) == 0)
       return i;
+  }
+  *kind = AGC_TYPE_INSTANCE;
+  for (uint32_t i = 0; i < p->instance_count; i++) {
+    const agc_string *json_name = p->instances[i].json_name;
+    if (json_name->bytes == text->bytes && memcmp(json_name->data, text->data, text->bytes) == 0) return i;
   }
   agc_fail(vm, "RUNTIME-INTERNAL", "unknown JSON type", span);
 }

@@ -4,6 +4,9 @@ A rule case is `(program, code, covered text)`: the code of the diagnostic and t
 A program that must check clean has no code.
 """
 
+import json
+import urllib.parse
+
 import pytest
 
 from tests.agentica_test import cli, output_lines, run, vm_environment
@@ -143,19 +146,32 @@ RULES = {
         "CHECK-JSON-FIELD-PLACE", "b"),
     "a JSON.Field argument is no whole JSON.from argument": (
         declared("puts(JSON.from(JSON.Field.Value(1)).inspect)"), "CHECK-JSON-FIELD-PLACE", "JSON.Field.Value(1)"),
-    "a generic instance with a JSON.Field argument is not decodable": (
-        declared('r = JSON.decode("{}", Wrapper)',
+    "a generic instance with a JSON.Field argument is decodable": (
+        declared('r = JSON.decode("{}", Wrapper)', "puts(r.ok?)",
                  header=BOX + "struct Wrapper\n  b: Box[JSON.Field[Int]]\nend\n\n"),
-        "CHECK-NOT-DECODABLE", "Wrapper"),
+        None, None),
+    "a generic instance is a JSON.decode target": (
+        declared('r: Result[Box[Int]] = JSON.decode("{}", Box[Int])', "puts(r.ok?)"), None, None),
+    "a generic instance whose JSON.Field argument becomes a list item": (
+        declared('puts(JSON.decode("{}", Both[JSON.Field[Int]]).ok?)', header=BOTH), "CHECK-JSON-FIELD-PLACE",
+        "Both[JSON.Field[Int]]"),
+    "a generic instance that would need instances without end": (
+        declared('puts(JSON.decode("{}", Grow[Int]).ok?)',
+                 header="struct Grow[T]\n  next: Optional[Grow[List[T]]]\nend\n\n"),
+        "CHECK-NOT-DECODABLE", "Grow[Int]"),
+    "a generic enum in a generic instance is not decodable": (
+        declared('puts(JSON.decode("{}", Box[Maybe[Int]]).ok?)',
+                 header=BOX + "enum Maybe[T]\n  Just(T)\n  Nothing\nend\n\n"),
+        "CHECK-NOT-DECODABLE", "Box[Maybe[Int]]"),
     "JSON.decode rejects a bare generic struct": (
         declared('r = JSON.decode("{}", Box)'), "CHECK-UNKNOWN-TYPE", "Box"),
     "JSON.schema rejects a bare generic struct": (declared("r = JSON.schema(Box)"), "CHECK-UNKNOWN-TYPE", "Box"),
-    "JSON.decode rejects a generic instance in the target": (
-        declared('r = JSON.decode("{}", Wrapper)', header=BOX + "struct Wrapper\n  b: Box[Int]\nend\n\n"),
-        "CHECK-NOT-DECODABLE", "Wrapper"),
-    "JSON.schema rejects an alias of a generic instance": (
-        declared("r = JSON.schema(IntBox)", header=BOX + "type IntBox = Box[Int]\n\n"), "CHECK-NOT-DECODABLE",
-        "IntBox"),
+    "JSON.decode takes a generic instance in a field of the target": (
+        declared('r = JSON.decode("{}", Wrapper)', "puts(r.ok?)",
+                 header=BOX + "struct Wrapper\n  b: Box[Int]\nend\n\n"),
+        None, None),
+    "JSON.schema takes an alias of a generic instance": (
+        declared("puts(JSON.schema(IntBox))", header=BOX + "type IntBox = Box[Int]\n\n"), None, None),
     "a generic struct has members": (declared("puts(Box.members)"), None, None),
     "a C struct takes no type parameters": (
         'extern "c"\n  struct Point[T]\n    x: C.Int32\n  end\nend\n\n' + main("puts(1)"), "PARSE-UNEXPECTED-TOKEN", "["),
@@ -179,6 +195,11 @@ MODULE_RULES = {
     "an imported bare generic struct": (
         'import M from "m"\n\ndef f(b: M.Box) -> Void\n  puts(1)\nend\n\n' + main("puts(1)"), "CHECK-UNKNOWN-TYPE",
         "M.Box"),
+    "an imported generic instance as a JSON.decode target": (
+        'import M from "m"\n\n' + main('puts(JSON.decode("{}", M.Box[Int]).ok?)'), None, None),
+    "an imported generic instance whose JSON.Field argument becomes a list item": (
+        'import M from "m"\n\n' + main('puts(JSON.decode("{}", M.Box[JSON.Field[Int]]).ok?)'),
+        "CHECK-JSON-FIELD-PLACE", "M.Box[JSON.Field[Int]]"),
     "an imported generic instance of the wrong type": (
         'import M from "m"\n\n' + main("b: M.Box[String] = M.make(1)"), "CHECK-TYPE-MISMATCH", "M.make(1)"),
 }
@@ -237,3 +258,46 @@ def test_generic_structs_run_and_print(tmp_path):
         '{"first":1,"second":"x","tags":[]}',
         '[StructMember(name: "value", type: "T")]',
     ]
+
+
+BOX_A = "struct Box[T]\n  value: T\nend\n"
+BOX_C = "struct Box[T]\n  name: String\n  count: T\nend\n"
+BOX_D = "struct Box[T]\n  work: Channel[T]\nend\n"
+
+
+def test_two_modules_with_a_box_each_decode_their_own_struct(tmp_path):
+    program = (
+        'import LibA from "liba"\nimport LibC from "libc"\n\n'
+        "struct Both\n  a: LibA.Box[Int]\n  c: LibC.Box[Int]\nend\n\n"
+        + main(
+            'puts(JSON.decode("{\\"a\\":{\\"value\\":1},\\"c\\":{\\"value\\":2}}", Both).ok?)',
+            'both = JSON.decode("{\\"a\\":{\\"value\\":1},\\"c\\":{\\"name\\":\\"n\\",\\"count\\":2}}", Both).unwrap!',
+            "puts(both.c.name)",
+            "puts(both.c.count + both.a.value)",
+            "puts(JSON.schema(Both))",
+        )
+    )
+    for name, text in (("liba.agc", BOX_A), ("libc.agc", BOX_C), ("main.agc", program)):
+        (tmp_path / name).write_text(text, encoding="utf-8")
+    result = run(cli() + [str(tmp_path / "main.agc")], env=vm_environment())
+    assert result.code == 0, result.stderr
+    lines = output_lines(result.stdout)
+    assert lines[:3] == ["false", "n", "3"]
+    schema = json.loads(lines[3])
+    refs = [schema["properties"][field]["$ref"] for field in ("a", "c")]
+    assert len(set(refs)) == 2
+    for ref in refs:
+        assert ref.startswith("#/$defs/") and not set(ref) & set("[] ")
+        key = urllib.parse.unquote(ref[len("#/$defs/"):])
+        assert key in schema["$defs"]
+    assert sorted(schema["$defs"][urllib.parse.unquote(refs[1][8:])]["required"]) == ["count", "name"]
+
+
+def test_a_box_of_another_module_with_a_channel_is_not_decodable(agentica_check):
+    program = (
+        'import LibA from "liba"\nimport LibD from "libd"\n\n'
+        "struct Both\n  a: LibA.Box[Int]\n  d: LibD.Box[Int]\nend\n\n"
+        + main('puts(JSON.decode("{}", Both).ok?)')
+    )
+    found = agentica_check({"liba.agc": BOX_A, "libd.agc": BOX_D, "main.agc": program})
+    assert found["code"] == "CHECK-NOT-DECODABLE"

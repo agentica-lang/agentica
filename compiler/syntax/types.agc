@@ -388,6 +388,18 @@ def list_text(types: List[Type]) -> String = types.map(&to_text).join(", ")
 ## The types joined by ", ", as debug_text writes each.
 def debug_list(types: List[Type]) -> String = types.map(&debug_text).join(", ")
 
+## The type with its linked names and type arguments, as the VM names a JSON type: List[app.Person], app.Box[Int].
+def json_name(type: Type) -> String
+  case type
+    Type.List(item) -> "List[#{json_name(item)}]"
+    Type.Map(key, value) -> "Map[#{json_name(key)}, #{json_name(value)}]"
+    Type.Optional(item) -> "Optional[#{json_name(item)}]"
+    Type.Struct(name, list) -> with_arguments(name, list)
+    Type.Enum(name, list) -> with_arguments(name, list)
+    _ -> tag(type)
+  end
+end
+
 private
 
 # A `written` map whose key "" (no linked name or prefix is empty) asks to_text_as for the builtin names.
@@ -395,6 +407,12 @@ KEEP_BUILTIN: Map[String, String] = {"": ""}
 
 # The characters that may continue a name: a type name next to one of them is part of a longer name.
 NAME_CHARACTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_?!"
+
+def with_arguments(name: String, list: List[Type]) -> String
+  return name if list.size == 0
+
+  "#{name}[#{list.map(&json_name).join(", ")}]"
+end
 
 # A struct with no type arguments prints as Struct(Name), a generic one as Struct(Name, [Int]).
 def struct_debug(name: String, args: List[Type]) -> String

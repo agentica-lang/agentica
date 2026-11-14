@@ -639,11 +639,14 @@ writes the field types as declared, so `value: T` gives `T`.
 
 `JSON.encode` and `JSON.from` accept a generic instance whose fields are
 encodable after substitution (`Box[List[Int]]`), and give `CHECK-NOT-ENCODABLE`
-when one is not (`Box[Fn[Int, Int]]`). `JSON.decode` and `JSON.schema` reject a
-generic instance anywhere in the target (a field `b: Box[Int]`, or an alias of
-one) with `CHECK-NOT-DECODABLE`, because the schema is keyed by the bare struct
-name and `Box[Int]` and `Box[String]` would share it; a bare generic struct as
-the target is `CHECK-UNKNOWN-TYPE`. A type argument counts after substitution
+when one is not (`Box[Fn[Int, Int]]`). `JSON.decode`, `JSON.schema` and
+`.codec` take a generic struct instance whose fields are decodable after
+substitution, as the target (`Box[Int]`, `Lib.Box[Int]` or an alias) or in a
+field; the schema describes each instance under its name with the arguments
+(`Box[Int]`). An instance whose arguments nest more than 32 levels (a struct
+whose field passes itself a bigger argument, `next: Optional[W[List[T]]]`) and
+a generic enum instance are `CHECK-NOT-DECODABLE`; a bare generic struct as the
+target is `CHECK-UNKNOWN-TYPE`. A type argument counts after substitution
 for `JSON.Field` too (rules in `06b-builtins.md`, "Optional and nullable
 fields"). A C struct of an `extern` block takes no type parameters
 (`PARSE-UNEXPECTED-TOKEN` at the `[`).

@@ -44,10 +44,11 @@ JSON.list(json: JSON.Value) -> Result[List[JSON.Value]]
 - `JSON.decode` takes JSON text or a `JSON.Value` value (`JSON.decode(item,
   User)` for an item of a parsed document; no `JSON.encode` first).
 - Decoded fields may be Int, Float, Bool, String, lists, String-keyed maps,
-  nested or recursive structs and enums, and `Optional` and `JSON.Field` of
-  those; other types, an instance of a generic struct or enum included, are
-  `CHECK-NOT-DECODABLE`. `JSON.decode(text, Shape)`, `schema` and `Shape.codec`
-  take an enum name too.
+  nested or recursive structs and enums, generic struct instances of those
+  (`Box[Int]`), and `Optional` and `JSON.Field` of those; other types, a
+  generic enum instance included, are `CHECK-NOT-DECODABLE`. `JSON.decode(text,
+  Shape)`, `schema` and `Shape.codec` take an enum name too, and a generic
+  struct instance (`JSON.decode(text, Box[Int])`, `Box[Int].codec`).
 - An enum is a tagged object, `{"tag":"Rect","values":[1.0,2.0]}`: the variant
   name and its payloads in order. Encode writes both keys (a variant with no
   payload writes `"values":[]`); decode accepts a missing `values` for such a

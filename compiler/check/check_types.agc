@@ -204,10 +204,10 @@ def add_need(found: List[ResolvedType], need: ResolvedType) -> List[ResolvedType
   found.push(need)
 end
 
-## True when JSON.decode can read a value of the type: Int, Float, Bool, String, lists, maps with String keys, plain
-## structs of those, and JSON.Field and Optional of a decodable type (Nil is not one; nor is an Optional, for a
-## JSON.Field). A generic struct is not decodable: the schema of the structs is keyed by their bare names, which
-## Box[Int] and Box[String] would share.
+## True when JSON.decode can read a value of the type: Int, Float, Bool, String, lists, maps with String keys, structs
+## of those, and JSON.Field and Optional of a decodable type (Nil is not one; nor is an Optional, for a JSON.Field). An
+## instance of a generic struct (Box[Int]) is decodable when its fields are for its arguments, up to MAX_INSTANCE_DEPTH
+## levels of types in its arguments; a generic enum is not.
 def decodable?(cx: State.Cx, type: ResolvedType) -> Bool = decode_walk(cx, type, {}).passes
 
 ## True when the type may be the value of an ATS: a data type (data?, a deep walk that rejects Fn, Task, Channel, every
@@ -440,7 +440,25 @@ def parts(type: ResolvedType) -> List[ResolvedType]
   end
 end
 
+## The fields of a struct type, with the type arguments of a generic one in place of its parameters.
+def instance_fields(cx: State.Cx, type: Types.Type, fields: List[Model.Named]) -> List[Model.Named]
+  parameters = cx.struct_params.get(Types.name(type), [])
+  return fields if parameters.size == 0 or parameters.size != Types.args(type).size
+
+  substitutions: Map[String, Types.Type] = {}
+  for index in 0...parameters.size
+    substitutions = substitutions.put(parameters[index], Types.args(type)[index])
+  end
+
+  fields.map do |field: Model.Named| field.with(type: substitute(field.type, substitutions)) end
+end
+
 private
+
+# How deep the type arguments of a decodable generic struct instance may nest (Box[List[Int]] is 2): a struct whose
+# field passes itself a bigger argument (W[T] with a field W[List[T]]) would need instances without end. The lowering
+# has the same limit (lower_program.agc).
+MAX_INSTANCE_DEPTH = 32
 
 type ResolvedType = Types.Type
 
@@ -1151,7 +1169,7 @@ def decode_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool]) -> Wa
 
     return decode_walk(cx, Types.value(type), seen)
   elsif Types.is?(type, "Struct")
-    return refused(seen) if Types.args(type).size != 0
+    return instance_walk(cx, type, seen) if Types.args(type).size != 0
 
     return struct_walk(cx, type, seen, 1)
   elsif Types.is?(type, "Enum")
@@ -1161,6 +1179,45 @@ def decode_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool]) -> Wa
   end
 
   refused(seen)
+end
+
+# decode_walk of an instance of a generic struct: its fields with the arguments in place of the parameters, once for
+# each instance (the key is the whole type), so a recursive Tree[Int] ends.
+def instance_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool]) -> Walk
+  return refused(seen) if type_depth(type) > MAX_INSTANCE_DEPTH
+
+  key = "Instance:#{Types.json_name(type)}"
+  return passed(seen) if seen.has_key?(key)
+
+  name = Types.name(type)
+  return refused(seen) if cx.struct_params.get(name, []).size != Types.args(type).size
+
+  seen = seen.put(key, true)
+  for field in instance_fields(cx, type, cx.structs[name])
+    found = decode_walk(cx, field.type, seen)
+    return found if !found.passes
+
+    seen = found.seen
+  end
+
+  passed(seen)
+end
+
+# The levels of a type: 0 for one without arguments or items, 1 more for each List, Map, Optional and argument list
+# around it (Box[List[Int]] is 2). lower_program.agc depth counts the same.
+def type_depth(type: ResolvedType) -> Int
+  inner = 0
+  for argument in Types.args(type)
+    inner = [inner, type_depth(argument) + 1].max.unwrap!
+  end
+
+  if Types.is?(type, "List") or Types.is?(type, "Optional")
+    inner = type_depth(Types.item(type)) + 1
+  elsif Types.is?(type, "Map")
+    inner = type_depth(Types.value(type)) + 1
+  end
+
+  inner
 end
 
 # The walk of a user enum type for the test (0 encodable, 1 decodable), as struct_walk walks a struct: the type
