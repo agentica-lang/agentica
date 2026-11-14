@@ -442,9 +442,9 @@ def test_a_wrapper_like_ccache_misses_when_the_compiler_after_it_changes(src, tm
 
 @host_only(WINDOWS, "an empty PATH entry and the default search are those of POSIX")
 def test_an_unset_path_keys_the_default_search_and_an_empty_entry_the_package_folder(src):
-    """With PATH unset the build searches the libc default, so the key is that of PATH set to it; an empty entry is the
+    """With PATH unset the build searches libuv's default (_PATH_DEFPATH), so the key is that of PATH set to it; an empty entry is the
     folder of the package, whose `cc` the key cannot see, so adding one misses."""
-    default = "/usr/bin:/bin:/usr/sbin:/sbin" if os.uname().sysname == "Darwin" else "/bin:/usr/bin"
+    default = "/usr/bin:/bin"
     agentica(src, "main.agc", CC=None, PATH=default)
     entry = only_entry(src / "_build" / "bytecode")
     kept = stamp(entry)
@@ -452,6 +452,25 @@ def test_an_unset_path_keys_the_default_search_and_an_empty_entry_the_package_fo
     assert (unset.code, stamp(entry)) == (0, kept), unset.stderr
     empty = agentica(src, "main.agc", CC=None, PATH=":" + default)
     assert (empty.code, empty.stdout) == (0, "one\n"), empty.stderr
+    assert stamp(entry) != kept
+
+
+@host_only(not WINDOWS, "the .com and .exe search of libuv is that of Windows")
+def test_on_windows_a_gcc_com_before_the_gcc_exe_that_was_found_misses(src, tmp_path):
+    """libuv tries NAME.com before NAME.exe in each folder of PATH, so a gcc.com in an earlier folder is another
+    compiler."""
+    for folder in ("first", "second"):
+        (tmp_path / folder).mkdir()
+    (tmp_path / "second" / "gcc.exe").write_bytes(b"")
+    path = os.pathsep.join([str(tmp_path / "first"), str(tmp_path / "second"), os.environ["PATH"]])
+    agentica(src, "main.agc", CC=None, PATH=path)
+    entry = only_entry(src / "_build" / "bytecode")
+    kept = stamp(entry)
+    hit = agentica(src, "main.agc", CC=None, PATH=path)
+    assert (hit.code, stamp(entry)) == (0, kept), hit.stderr
+    (tmp_path / "first" / "gcc.com").write_bytes(b"")
+    miss = agentica(src, "main.agc", CC=None, PATH=path)
+    assert (miss.code, miss.stdout) == (0, "one\n"), miss.stderr
     assert stamp(entry) != kept
 
 

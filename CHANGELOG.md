@@ -28,7 +28,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
-- The bytecode cache finds the C compiler as the native build does (an unset or empty `PATH` entry, Windows `.com`/`.exe`, a wrapper such as ccache), so a change of compiler always compiles the program again (#1476).
+- The bytecode cache finds the C compiler as the native build does (an unset `PATH` or an empty entry of it, Windows `.com`/`.exe`, a wrapper such as ccache), so a change of compiler always compiles the program again (#1476).
 - `System.subscribe`: a listed signal that was ignored when the program started stays ignored, and the call subscribes the others instead of failing (#1533).
 - On macOS, with more than one scheduler, a stop signal after a task crash stops the program again (#1529).
 

@@ -283,12 +283,9 @@ def inputs_digest(settings: Env.Settings, project: Project.Project) -> Result[St
   ok(digest(parts.join("\n").bytes))
 end
 
-# The C compiler a native build would start, found as libuv's spawn finds it: a name with a folder is that file, else
-# each folder of PATH in turn (glibc's or macOS's default when PATH is unset; on Windows the working folder first, and
-# NAME.com then NAME.exe). The key holds every match, each as the candidate and its real path, not PATH, so another
-# PATH (a venv) keeps the cache unless it finds another compiler; a wrapper such as ccache, which runs the next match,
-# changes the key when that match changes. A relative candidate is resolved from the package root of each native
-# build, which the key cannot know, so it adds only its text.
+# The C compiler a native build would start, found as libuv's spawn finds it. The key holds every match of PATH as
+# "CANDIDATE REAL", so a venv with no compiler keeps the cache and a wrapper such as ccache misses when the next match
+# changes; a relative candidate depends on the package root of each build, so only its text goes in.
 def compiler_path(system: String) -> String
   name = compiler_words(system)[0]
   windows = system == "windows"
@@ -308,15 +305,37 @@ def search_folders(system: String) -> List[String]
   if system == "windows"
     return [""] if !path.ok?
 
-    folders = path.unwrap!.split(";").filter do |folder: String| folder != "" end
+    folders = windows_entries(path.unwrap!).filter do |folder: String| folder != "" end
     return [""].concat(folders.map do |folder: String| unquote(folder) end)
   end
 
   return path.unwrap!.split(":") if path.ok?
 
-  return ["/usr/bin", "/bin", "/usr/sbin", "/sbin"] if system == "macos"
+  ["/usr/bin", "/bin"]
+end
 
-  ["/bin", "/usr/bin"]
+# libuv splits a Windows PATH at ";", except inside an entry that starts with a quote, up to its closing quote.
+def windows_entries(path: String) -> List[String]
+  entries: List[String] = []
+  entry = ""
+  inside = false
+  for piece in path.split(";")
+    if inside
+      entry = "#{entry};#{piece}"
+    else
+      entry = piece
+    end
+
+    quoted = entry.length > 0 and quote?(entry.at(0))
+    inside = quoted and !entry.slice(1, entry.length - 1).include?(entry.at(0))
+    if !inside
+      entries = entries.push(entry)
+    end
+  end
+
+  return entries.push(entry) if inside
+
+  entries
 end
 
 # Each executable file of `names` in `folders`, as "CANDIDATE REAL"; a relative folder adds its candidate alone.
@@ -362,7 +381,12 @@ def executable_names(name: String, windows: Bool) -> List[String]
 
   base = name.split("/").last.split("\\").last
   given = base.split(".").drop(1).join(".") != ""
-  appended = ["#{name}.com", "#{name}.exe"]
+  stem = name
+  if !name.end_with?(".")
+    stem = "#{name}."
+  end
+
+  appended = ["#{stem}com", "#{stem}exe"]
   return [name].concat(appended) if given
 
   appended
