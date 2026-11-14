@@ -297,8 +297,10 @@ end
 ##   `_ = child`.
 ## - `call`: `target` is the function or builtin the checker resolved (`window`, `@2::helper`, `Int.shift_left`,
 ##   `Bytes.length` for `data.size`, `Bytes.at` for `data[i]`, `ok`, `some`); the children are the arguments, the
-##   receiver of a method first. A call with named arguments (`f(1, size: 2)`) has them in parameter order, and a
-##   parameter it leaves out before the last one it gives is a `default` node, which takes the parameter's default.
+##   receiver of a method first, in the order they run, which is the order written: the positional ones fill the
+##   parameters from the left, each `name: value` is a `named` node (`text` the parameter, the value its child), and in
+##   a call with named arguments a trailing block is a `named` node too. A parameter that no argument fills takes its
+##   default.
 ##   `type_args` are the types a call of a generic function or builtin binds: for a function, one per type parameter in
 ##   order (its `generics`); for a builtin, one per type variable of its row, in the order they first appear in its
 ##   parameters, then its result (`List.map` is `[A, B]`). A type the call leaves open has the kind `none`. On any
@@ -350,9 +352,8 @@ struct Node
   type_args: List[TypeShape] = []
 end
 
-## One parameter of a function of `bodies`, with its resolved type and its default value (one node, or none). The
-## arguments of a call are in parameter order: a call may have fewer arguments than parameters, and the ones it leaves
-## out take their defaults, in order; a trailing block (`do ... end`) always fills the last parameter.
+## One parameter of a function of `bodies`, with its resolved type and its default value (one node, or none), which a
+## call that fills no argument for it takes.
 struct BodyParam
   name: String
   type: TypeShape

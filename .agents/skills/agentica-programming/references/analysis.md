@@ -89,8 +89,9 @@ Analysis.outline_json(found) -> JSON.Value     # also type_at_json, symbols_json
   the resolved `target` (`Int.shift_left`, `Bytes.length` for `data.size`,
   `Bytes.at` for `data[i]`, a linked function name), the `type_args` of a
   generic call (the function's type parameters in order; a builtin's type
-  variables as they first appear in its signature) and may leave out
-  defaulted arguments; `op` has the operator as written (`+`, `<=`); `let` has
+  variables as they first appear in its signature) and its arguments in the
+  order they run (as written; `name: value` is a `named` node, `text` the
+  parameter); a parameter with no argument takes its default; `op` has the operator as written (`+`, `<=`); `let` has
   `new`, `_ = x` is `discard`; every node is described (`while`, `for`,
   `list`, `map`, `struct`, `with`, `field`, `function`, `invoke`, `lambda`,
   `range`, ...; no `other`). `pure` is false when a call, through
