@@ -1,6 +1,6 @@
 /*
  * The HttpWire.Server task group builtins, called only by
- * stdlib/http.agc: server, accept, spawn, close_server, wait and local_port.
+ * stdlib/http.agc: server, accept, spawn, stop, stopping, close_server, wait and local_port.
  * std/http reads the requests and writes the responses itself. Service layer.
  * Design: docs/vm/10-io-http.md §10.7.2.
  */
@@ -267,6 +267,7 @@ static agc_value builtin_server(agc_vm *vm, agc_value *args, uint32_t span) {
   agc_http_server *hs = agc_alloc(sizeof(agc_http_server));
   hs->listener = args[0];
   hs->group = agc_task_group(vm);
+  hs->stop_at = -1;
   hs->state = agc_register(vm, s, release_server);
   hs->state->context = agc_http_server_value(hs);
   agc_own(vm, hs->state, close_owned);
@@ -283,7 +284,7 @@ static agc_value builtin_accept(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   agc_http_server *hs = agc_as_http_server(vm, args[0]);
   server *s = open_server(hs);
-  if (!s) return agc_error(vm, AGC_KIND_HTTP_CLOSED, server_closed);
+  if (!s || hs->stop_at >= 0) return agc_error(vm, AGC_KIND_HTTP_CLOSED, server_closed);
   if (agc_io_here(vm)) {
     agc_conn *c = take(s);
     if (c) return agc_result_value(true, agc_conn_socket(vm, c));
@@ -336,6 +337,24 @@ static agc_value builtin_close_server(agc_vm *vm, agc_value *args, uint32_t span
   return agc_void();
 }
 
+/* HttpWire.stop(server, deadline): the start of a graceful stop. The listener closes, which ends the accepts, and the
+   group goes on: std/http drains the connections and closes the server by the deadline. A second call, or one on a
+   closed server, does nothing. */
+static agc_value builtin_stop(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  agc_http_server *hs = agc_as_http_server(vm, args[0]);
+  int64_t at = agc_as_int(vm, args[1]);
+  if (hs->stop_at >= 0 || !open_server(hs)) return agc_void();
+  hs->stop_at = at < 0 ? 0 : at;
+  agc_net_close(vm, agc_as_listener(vm, hs->listener)->state, "stop");
+  return agc_void();
+}
+
+static agc_value builtin_stopping(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  return agc_int(agc_as_http_server(vm, args[0])->stop_at);
+}
+
 /* Waits for the close, then for every task of the group to end. The close cancels the group, but a task of it that
    is in a turn on another scheduler ends only after that turn (N > 1), moved up to the server's owner; without the
    join, the owner could see it still running after HTTP.wait, and Test.test report it as a leftover. The wait for
@@ -363,6 +382,8 @@ const agc_builtin agc_http_server_builtins[] = {
   {"HttpWire.server", 3, builtin_server, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"HttpWire.accept", 1, builtin_accept, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"HttpWire.spawn", 3, builtin_spawn, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"HttpWire.stop", 2, builtin_stop, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"HttpWire.stopping", 1, builtin_stopping, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"HttpWire.close_server", 1, builtin_close_server, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"HttpWire.wait", 1, builtin_wait, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"HttpWire.local_port", 1, builtin_local_port, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
