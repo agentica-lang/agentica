@@ -1,4 +1,4 @@
-## A cache that tasks on any scheduler share, as a small contract plus one implementation built on `ATS`.
+## A cache that tasks on any scheduler share: a small contract plus one implementation built on `ATS`.
 ##
 ## A `Store` is a struct of function values, the contract every cache implements: Agentica has no traits, so an
 ## implementation (here `memory`, elsewhere a package with another eviction strategy) builds a `Store` and the helpers
