@@ -41,6 +41,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- A hand-made `.agcb` that interpolates an Error whose message is not a String fails with `RUNTIME-INTERNAL` under the JIT too, instead of crossing compiled code (#1561).
 - The bytecode cache finds the C compiler as the native build does (an unset `PATH` or an empty entry of it, Windows `.com`/`.exe`, a wrapper such as ccache), so a change of compiler always compiles the program again (#1476).
 - `format`: leading zeros of a precision no longer count as digits, so `%.000001f` is `%.1f` (#1557).
 - `System.subscribe`: a listed signal that was ignored when the program started stays ignored, and the call subscribes the others instead of failing (#1533).
