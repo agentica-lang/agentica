@@ -373,21 +373,22 @@ def expression(checked: Checker.Checked, expr: Ast.Expr) -> Model.Node
       given = Defaults.arguments(node.args, node.named)
       call_leaf(checked, id, type, span, node.name).with(children: bound_arguments(checked, id, given, span))
     Ast.Expr.MethodCall(node) ->
+      given = [node.target].concat(Defaults.arguments(node.args, node.named))
       case checked.resolved.get(id)
-        some(State.Resolved.Call(name, _)) ->
-          given = [node.target].concat(Defaults.arguments(node.args, node.named))
-          call_leaf(checked, id, type, span, name).with(children: bound_arguments(checked, id, given, span))
-        _ ->
-          # A call of a function held in a field (`h.run(x)`), or a method every type has (`to_s`, `inspect`).
-          kind = "method"
-          if checked.resolved.get(id) == some(State.Resolved.FieldCall)
-            kind = "invoke"
+        some(found) ->
+          case found
+            State.Resolved.Call(name, _) ->
+              call_leaf(checked, id, type, span, name).with(children: bound_arguments(checked, id, given, span))
+            State.Resolved.FieldCall ->
+              leaf("invoke", type, span).with(text: node.name, children: arguments(checked, given))
+            State.Resolved.Self(_) -> method_node(checked, node.name, type, span, given)
+            State.Resolved.Text(_) -> method_node(checked, node.name, type, span, given)
+            State.Resolved.Inspect(_) -> method_node(checked, node.name, type, span, given)
+            State.Resolved.Members(_) -> method_node(checked, node.name, type, span, given)
+            State.Resolved.Codec(_, _) -> method_node(checked, node.name, type, span, given)
           end
 
-          leaf(kind, type, span).with(
-            text: node.name,
-            children: arguments(checked, [node.target].concat(Defaults.arguments(node.args, node.named))),
-          )
+        none -> method_node(checked, node.name, type, span, given)
       end
 
     Ast.Expr.FieldAccess(node) ->
@@ -486,6 +487,18 @@ end
 def call_leaf(checked: Checker.Checked, id: Int, type: Types.Type, span: Source.Span, target: String) -> Model.Node
   type_args = checked.type_args.get(id).unwrap_or([]).map(&shape)
   leaf("call", type, span).with(target: target, type_args: type_args, prelude: prelude_of(checked, id))
+end
+
+# A method that every type has and that is not a builtin row (`to_s`, `inspect`, `T.members`): the receiver, then the
+# arguments.
+def method_node(
+  checked: Checker.Checked,
+  name: String,
+  type: Types.Type,
+  span: Source.Span,
+  given: List[Ast.Expr],
+) -> Model.Node
+  leaf("method", type, span).with(text: name, children: arguments(checked, given))
 end
 
 # The `name: value` arguments of a struct, a `with` or a variant, in the order written: `text` is the name.
