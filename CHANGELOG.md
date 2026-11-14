@@ -19,6 +19,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `PKG-LOCK-MISSING` says to run `agentica update` to write `agentica.lock` (#1567).
 - `agentica check` over several files shows a problem of an imported file once, and counts it once (#1566).
 - `std/analysis`: `Analysis.bodies` gives the arguments of a call in the order they run, each `name: value` as a `named` node, and no `default` placeholders (#1594).
+- `none` in the block of `Range.map`, `Lazy.map`, `flat_map` and a nested `map` takes the expected Optional type (#1595).
 
 ## [0.32.0-alpha.1] - 2026-11-14
 
