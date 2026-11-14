@@ -1502,6 +1502,29 @@ ROWS_11: List[Model.Builtin] = [
     description: "Internal to std/http: run a connection task in the server's group.",
     alternatives: [],
   ),
+  Model.Builtin(
+    name: "HttpWire.stop",
+    parameters: [
+      Model.Named(name: "server", type: Types.Type.Opaque("HttpWire.Server")),
+      Model.Named(name: "deadline", type: Types.Type.Int),
+    ],
+    result: Types.Type.Void,
+    rule: Model.Rule.Plain,
+    implementation: "HttpWire.stop",
+    effects: ["network"],
+    description: "Internal to std/http: close the listener and keep the server's tasks, to drain them by deadline.",
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "HttpWire.stopping",
+    parameters: [Model.Named(name: "server", type: Types.Type.Opaque("HttpWire.Server"))],
+    result: Types.Type.Int,
+    rule: Model.Rule.Plain,
+    implementation: "HttpWire.stopping",
+    effects: ["network"],
+    description: "Internal to std/http: the deadline of a graceful stop, -1 while the server accepts.",
+    alternatives: [],
+  ),
 ]
 
 ROWS_12: List[Model.Builtin] = [

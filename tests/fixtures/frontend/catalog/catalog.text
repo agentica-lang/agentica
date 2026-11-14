@@ -139,6 +139,10 @@ builtin HttpWire.service forms=1
   HttpWire.service(jobs: Channel[HttpWire.Job], options: HTTP.ClientOptions, block: Fn[HTTP.Client, Void]) -> HTTP.Client shape=(Channel(Struct(HttpWire.Job)), Struct(HttpWire.ClientOptions), Fn([Opaque(HttpWire.Client)], Void)) -> Opaque(HttpWire.Client) rule=Plain impl="HttpWire.service" effects=["concurrency"] desc="Internal to std/http: run block(client), a client's owner task, outside every caller's task tree, as the owner of jobs; the client keeps jobs and options."
 builtin HttpWire.spawn forms=1
   HttpWire.spawn(server: HTTP.Server, socket: TCP.Socket, block: Fn[TCP.Socket, Void]) -> Void shape=(Opaque(HttpWire.Server), Opaque(TCP.Socket), Fn([Opaque(TCP.Socket)], Void)) -> Void rule=Plain impl="HttpWire.spawn" effects=["network"] desc="Internal to std/http: run a connection task in the server's group."
+builtin HttpWire.stop forms=1
+  HttpWire.stop(server: HTTP.Server, deadline: Int) -> Void shape=(Opaque(HttpWire.Server), Int) -> Void rule=Plain impl="HttpWire.stop" effects=["network"] desc="Internal to std/http: close the listener and keep the server's tasks, to drain them by deadline."
+builtin HttpWire.stopping forms=1
+  HttpWire.stopping(server: HTTP.Server) -> Int shape=(Opaque(HttpWire.Server)) -> Int rule=Plain impl="HttpWire.stopping" effects=["network"] desc="Internal to std/http: the deadline of a graceful stop, -1 while the server accepts."
 builtin HttpWire.wait forms=1
   HttpWire.wait(server: HTTP.Server) -> Result[Void] shape=(Opaque(HttpWire.Server)) -> Result(Void) rule=Plain impl="HttpWire.wait" effects=["network"] desc="Internal to std/http: wait until the server is closed."
 builtin IO.eof? forms=1
