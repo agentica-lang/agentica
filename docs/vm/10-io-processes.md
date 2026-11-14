@@ -123,7 +123,11 @@ systems get none.
   unreaped child, so its pid and its group id cannot name another process.
   `Process.spawn_group` is a `pgroup` child whose stdin, stdout and stderr are
   the VM's descriptors 0 to 2 (no pump task: nothing can stall); its stream
-  calls are errors, and its close is a plain child's group `SIGKILL`.
+  calls are errors, and its close is a plain child's group `SIGKILL`. The new
+  session (`setsid`) leaves it no controlling terminal (`/dev/tty` gives
+  `ENXIO`; no terminal job control; `Ctrl-C` reaches it only through the stop
+  path). It shares stdin with the VM (a pending `IO.gets` splits the input) and
+  the VM's buffered stdout may come after the child's output.
   `System.signal` opens a pidfd (`pidfd_open`, called through `syscall()`:
   glibc 2.28 has no wrapper), checks `/proc/<pid>/comm`, and signals with
   `pidfd_send_signal` on that pidfd, so it never reaches a process that took

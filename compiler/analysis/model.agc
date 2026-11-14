@@ -303,6 +303,8 @@ end
 ##   order (its `generics`); for a builtin, one per type variable of its row, in the order they first appear in its
 ##   parameters, then its result (`List.map` is `[A, B]`). A type the call leaves open has the kind `none`. On any
 ##   other node `type_args` is an empty list.
+##   A builtin written in Agentica (`List.map`) has in `prelude` the linked name of the function of the compiler
+##   prelude that runs it for these types, found in `Bodies.prelude`; "" for any other call.
 ## - `index`: `target[index]` on a List or Map; the children are the target and the index.
 ## - `op`: a binary operator, `text` as written (`+`, `-`, `<=`, `==`, `!=`, ...); the two children carry their own
 ##   types. `and`, `or`, `not` (`text` `!`) and `neg` (`text` `-`) are their own kinds. A minus before a number literal
@@ -316,8 +318,23 @@ end
 ##   enum name), `ok`, `error`, `some` or `none`, and whose children are its slots: `bind` (`text` the name), `skip`
 ##   (`_`) or a nested pattern. A pattern's type is the type it matches.
 ## - `block`: the statements of a body.
-## - `other`: a node that this version does not describe yet; `text` is its syntax (`while`, `list`, ...), and it has
-##   no children.
+## - `while`: the condition, then a `block`. `for`: `text` the variable, its type the variable's, then the iterable and
+##   a `block`. `next` and `break` have no children.
+## - `list`: the elements. `map`: one `entry` each, its key then its value. `range`: `text` `..` or `...`, its ends.
+## - `struct`: `target` the linked struct name, then one `named` node per `name: value` as written (`text` the name,
+##   the value its child). `with`: the struct, then its `named` nodes. `variant` (as a value): `target` as for a
+##   pattern, then its arguments, and `named` nodes for named ones.
+## - `field`: `text` the field, the child its struct. `method`: a method every type has that is not a builtin row
+##   (`to_s`, `inspect` of a struct, `T.members`), `text` its name, the receiver then the arguments.
+## - `function`: `&name`, `target` the function or builtin; `prelude` as for a `call` (a builtin's reference is a
+##   prelude function that calls it). `invoke`: a call of a function value (`f.call(x)`, `text`
+##   `call`, the value then the arguments) or of an Fn field (`h.run(x)`, `text` the field, the struct then the
+##   arguments).
+## - `lambda`: a block (`text` `block`) or a lambda (`text` `lambda`): one `param` node per parameter (`text` its
+##   name, with its type), then a `block`.
+## - `type`: a type as a value (`T.members`), `text` its name. `constant`: a read of a module constant, `text` its
+##   linked name. `regex`: `text` `/body/flags`, its child the call that builds it. `template`: its child the call that
+##   builds its text.
 ## `range` is the place of the node. Some are coarse: a `string` part of an interpolation has the range of the
 ## interpolation, a `skip` slot that of its variant, and an `if` or `case` statement runs to the start of the next
 ## line. A `block` runs from its first statement to its last (an empty one is empty, at the start of its owner).
@@ -329,6 +346,7 @@ struct Node
   target: String
   new: Bool
   children: List[Node]
+  prelude: String = ""
   type_args: List[TypeShape] = []
 end
 
@@ -361,13 +379,14 @@ struct Reason
   through: List[String]
 end
 
-## One function of `bodies`: `name` as written, `linked` the name a `call` node targets, `generics` its type
-## parameters, the resolved types of its parameters and result, and its body as a list of statement nodes. It is `pure`
-## when no call it makes, through every function it calls, has an effect; `impure` gives each reason once, by the
-## shortest chain. A builtin that can halt (`+`, `b[i]`, `unwrap!`) is pure.
+## One function of `bodies`: `name` as written, `linked` the name a `call` node targets, `file` the file it is in,
+## `generics` its type parameters, the resolved types of its parameters and result, and its body as a list of statement
+## nodes. It is `pure` when no call it makes, through every function it calls, has an effect; `impure` gives each
+## reason once, by the shortest chain. A builtin that can halt (`+`, `b[i]`, `unwrap!`) is pure.
 struct Body
   name: String
   linked: String
+  file: String
   exported: Bool
   range: Diagnostics.Region
   name_range: Diagnostics.Region
@@ -379,10 +398,12 @@ struct Body
   impure: List[Reason]
 end
 
-## The answer of `bodies` (experimental): every function of a file with a body, private ones too, in source order.
+## The answer of `bodies` (experimental): every function of a file with a body, private ones too, in source order, and
+## the functions of the compiler prelude that their calls run (`prelude` of a `call` node), each once.
 struct Bodies
   version: Int
   file: String
   modules: List[BodyModule]
   functions: List[Body]
+  prelude: List[Body]
 end

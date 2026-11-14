@@ -1221,6 +1221,188 @@ def test_bodies_say_why_a_function_is_not_pure(driver, project):
     }
 
 
+# The builtins of the families that touch the machine or other tasks whose catalog row lists no effect, and why each
+# is pure. Any other such row must be a key of SHARED_STATE in compiler/analysis/purity.agc: a new row fails here until
+# someone decides.
+PURE_SYSTEM_ROWS = {
+    "Channel.address": "a send-only reference, data",
+    "Channel.new": "a new channel, read only through effects",
+    "ATS.new": "a new table, read only through SHARED_STATE or effects",
+    "HttpWire.chunk": "decodes bytes it is given",
+    "HttpWire.chunk_read": "the next state from a struct; std made the read",
+    "HttpWire.chunked": "a new state",
+    "HttpWire.encode_request": "text from its arguments",
+    "HttpWire.encode_response": "text from its arguments",
+    "HttpWire.error_answer": "a value from its arguments",
+    "HttpWire.jobs": "a field the client was made with",
+    "HttpWire.options": "a field the client was made with",
+    "System.Profile.measure": "runs its block, which is walked; the profile is a trace",
+    "System.signal_number": "a constant of the OS",
+    "Task.id": "a field of the task value",
+    **{f"__lazy_{step}": "a step of a Lazy (a terminal is function-value)" for step in (
+        "chunk_while", "count", "each", "find", "flat_map", "group", "list", "map", "produce", "range", "reduce",
+        "test", "to_a", "with_index", "zlib")},
+}
+SYSTEM_FAMILIES = ("File", "Dir", "Path", "System", "Process", "Channel", "ATS", "Task", "HttpWire", "TCP", "TLS",
+                   "Time", "Random")
+
+
+def test_every_system_builtin_with_no_effect_is_shared_state_or_reviewed():
+    # The catalog as compiler/catalog/catalog.agc prints it (test_frontend_catalog.py keeps the golden equal to it).
+    catalog = (ROOT / "tests" / "fixtures" / "frontend" / "catalog" / "catalog.text").read_text(encoding="utf-8")
+    effects = {}
+    for name, listed in re.findall(r"^  (\S+?)\(.* effects=\[(.*?)\] desc=", catalog, re.M):
+        effects[name] = effects.get(name, "") + listed
+    purity = (ROOT / "compiler" / "analysis" / "purity.agc").read_text(encoding="utf-8")
+    table = purity[purity.index("SHARED_STATE"):]
+    shared = set(re.findall(r'"([^"]+)": "[a-z]+"', table[:table.index("}")]))
+    silent = {name for name, listed in effects.items()
+              if listed == "" and (name.split(".")[0] in SYSTEM_FAMILIES or name.startswith("__lazy_"))}
+    assert sorted(silent - shared - set(PURE_SYSTEM_ROWS)) == []
+    assert sorted(name for name in shared | set(PURE_SYSTEM_ROWS) if effects.get(name, "x") != "") == []
+
+
+# Builtins written in Agentica: one called twice, one under a `while`, one that takes a block, a Lazy source and a Lazy
+# terminal.
+PRELUDE_CALLS = """def total(xs: List[Int]) -> Int = xs.sum
+
+def pick(o: Optional[Int]) -> Int = o.unwrap_or(0)
+
+def where(xs: List[Int]) -> Optional[Int] = xs.find_index { |x| x > 1 }
+
+def looped(xs: List[Int], n: Int) -> Int
+  count = 0
+  while count < n
+    count += xs.sum + xs.tally.size
+  end
+  count
+end
+
+def lines(path: String) -> Lazy[String] = File.foreach(path)
+
+def listed(xs: List[Int]) -> Result[List[Int]] = xs.lazy.to_a
+"""
+
+
+def test_bodies_give_the_prelude_functions_their_calls_run(driver, project):
+    write_files(project, {"prelude_calls.agc": PRELUDE_CALLS})
+    answer, functions = bodies_of(driver, project, "prelude_calls.agc")
+    total = functions["total"]["body"][0]["children"][0]
+    assert (total["target"], total["prelude"]) == ("List.sum", "@prelude::list::sum_int")
+    assert functions["total"]["span"]["file"] == "prelude_calls.agc"
+    prelude = {function["linked"]: function for function in answer["prelude"]}
+    # Each once, in the order first called; a call under `while` counts.
+    assert list(prelude) == ["@prelude::list::sum_int", "@prelude::optional::unwrap_or",
+                             "@prelude::list::find_index", "@prelude::list::tally", "@prelude::lazy::from_file",
+                             "@prelude::lazy::to_a", "@prelude::lazy::from_list"]
+    tally = prelude["@prelude::list::tally"]
+    assert (tally["name"], tally["span"]["file"], tally["exported"]) == ("tally", "<prelude>/list.agc", False)
+    source = (ROOT / "stdlib" / "prelude" / "list.agc").read_text(encoding="utf-8").splitlines()
+    assert source[tally["name_span"]["range"]["start"]["line"] - 1].startswith("def tally")
+    assert type_text(tally["params"][0]["type"]) == "List[K]"
+    # The prelude bodies are pure or not as any function: from_file reads a file, find_index calls its block.
+    assert [(name, function["pure"]) for name, function in prelude.items()] == [
+        ("@prelude::list::sum_int", True), ("@prelude::optional::unwrap_or", True),
+        ("@prelude::list::find_index", False), ("@prelude::list::tally", True), ("@prelude::lazy::from_file", False),
+        ("@prelude::lazy::to_a", False), ("@prelude::lazy::from_list", True)]
+    # A terminal pulls from its source, which may read a file: it is never pure.
+    assert [reason["effect"] for reason in prelude["@prelude::lazy::to_a"]["impure"]] == ["function-value"]
+    assert [reason["effect"] for reason in prelude["@prelude::lazy::from_file"]["impure"]] == ["filesystem"]
+    assert functions["lines"]["impure"][0]["effect"] == "filesystem"
+
+
+# The nodes past the first subset: loops, collections, structs, variants, fields, function values, ranges, types,
+# constants and regexes.
+REST = """import Regex from "std/regex"
+
+LIMIT = 3
+
+struct Point
+  x: Int
+  y: Int
+end
+
+struct Handler
+  run: Fn[Int, Int]
+end
+
+enum Shape
+  Dot
+  Square(Int)
+end
+
+def loops(xs: List[Int]) -> Int
+  total = 0
+  for x in xs
+    next if x < 0
+    break if x > LIMIT
+    total += x
+  end
+  total
+end
+
+def values(p: Point, h: Handler) -> List[Int]
+  q = p.with(x: 1)
+  m = {"a": Point(x: q.x, y: 2).y}
+  f = &loops
+  g = ->(n: Int) { n + 1 }
+  _ = Shape.Square(2)
+  _ = 1..3
+  _ = /a+/i
+  [f.call([1]), g.call(m["a"]), h.run(3), Point.members.size, p.to_s.size, [1].map(&Int.abs)[0]]
+end
+"""
+
+
+def test_bodies_describe_the_rest_of_the_tree(driver, project):
+    write_files(project, {"rest.agc": REST})
+    answer, functions = bodies_of(driver, project, "rest.agc")
+    loop = functions["loops"]["body"][1]
+    assert (loop["kind"], loop["text"], type_text(loop["type"])) == ("for", "x", "Int")
+    assert [child["kind"] for child in loop["children"]] == ["local", "block"]
+    statements = loop["children"][1]["children"]
+    assert [branch["children"][1]["children"][0]["kind"] for branch in
+            (statements[0]["children"][0], statements[1]["children"][0])] == ["next", "break"]
+    assert statements[1]["children"][0]["children"][0]["children"][1]["kind"] == "constant"
+    body = functions["values"]["body"]
+    update, struct = body[0]["children"][0], body[1]["children"][0]["children"][0]["children"][1]["children"][0]
+    assert (update["kind"], [(n["kind"], n["text"]) for n in update["children"]]) == (
+        "with", [("local", "p"), ("named", "x")])
+    assert (struct["kind"], struct["target"], [n["text"] for n in struct["children"]]) == ("struct", "Point", ["x", "y"])
+    assert struct["children"][0]["children"][0]["kind"] == "field"
+    assert body[1]["children"][0]["kind"] == "map" and body[1]["children"][0]["children"][0]["kind"] == "entry"
+    assert (body[2]["children"][0]["kind"], body[2]["children"][0]["target"]) == ("function", "loops")
+    lam = body[3]["children"][0]
+    assert (lam["kind"], lam["text"], [(n["kind"], n["text"], type_text(n["type"])) for n in lam["children"][:1]]) == (
+        "lambda", "lambda", [("param", "n", "Int")])
+    variant, span, regex = (node["children"][0] for node in body[4:7])
+    assert (variant["kind"], variant["target"]) == ("variant", "Shape.Square")
+    assert (span["kind"], span["text"]) == ("range", "..")
+    assert (regex["kind"], regex["text"], regex["children"][0]["kind"]) == ("regex", "/a+/i", "call")
+    items = body[7]["children"][0]["children"]
+    assert [(n["kind"], n["text"]) for n in items[:3]] == [("invoke", "call"), ("invoke", "call"), ("invoke", "run")]
+    assert [(n["children"][0]["kind"], n["children"][0]["text"]) for n in items[3:5]] == [
+        ("method", "members"), ("method", "to_s")]
+    assert items[3]["children"][0]["children"][0]["kind"] == "type"
+    # A reference to a builtin runs a function of the prelude, which the answer lists.
+    reference = items[5]["children"][0]["children"][1]
+    assert (reference["kind"], reference["target"]) == ("function", "Int.abs")
+    assert reference["prelude"] in [function["linked"] for function in answer["prelude"]]
+
+
+def test_bodies_leave_no_node_undescribed(driver, project):
+    # Every function of std/http, which uses most of the language, and of the files above.
+    out, err = library(driver, project, "bodies", "std/http")
+    answer = json.loads(out)
+
+    def kinds(node):
+        return {node["kind"]} | {kind for child in node["children"] for kind in kinds(child)}
+
+    found = {kind for function in answer["functions"] + answer["prelude"] for node in function["body"]
+             for kind in kinds(node)}
+    assert err == "" and "other" not in found and {"while", "for", "lambda", "struct", "list", "field"} <= found
+
+
 def test_bodies_name_each_module_a_nested_import_reaches(driver, project):
     (project / "lib").mkdir()
     write_files(project, {
@@ -1235,7 +1417,7 @@ def test_bodies_name_each_module_a_nested_import_reaches(driver, project):
     assert files[target.split("::")[0] + "::"] == "lib/inner.agc"
 
 
-def test_bodies_resolve_calls_bindings_patterns_and_mark_what_they_do_not_cover(driver, project):
+def test_bodies_resolve_calls_bindings_and_patterns(driver, project):
     write_files(project, {"shapes.agc": BODIES})
     answer, functions = bodies_of(driver, project, "shapes.agc")
     assert [(function["name"], function["exported"]) for function in answer["functions"]] == [
@@ -1272,10 +1454,10 @@ def test_bodies_resolve_calls_bindings_patterns_and_mark_what_they_do_not_cover(
     optional = branches[2]["children"][0]["children"]
     assert [arm["children"][0]["target"] for arm in optional[1:]] == ["some", "none"]
     assert optional[0]["type"]["name"] == "Optional"
-    # A loop is past the first subset: it is `other`, with its place and no children.
+    # A loop: its condition, then its block.
     loop = functions["count"]["body"][0]
-    assert (loop["kind"], loop["text"], loop["children"], loop["range"]["start"]) == (
-        "other", "while", [], {"line": 40, "column": 3})
+    assert (loop["kind"], [child["kind"] for child in loop["children"]], loop["range"]["start"]) == (
+        "while", ["op", "block"], {"line": 40, "column": 3})
     # A guard is an `if` whose branch is [condition, block], as written out; the block is the statement before the
     # condition, so the two do not overlap.
     guard = functions["clamp"]["body"][0]
@@ -1283,9 +1465,9 @@ def test_bodies_resolve_calls_bindings_patterns_and_mark_what_they_do_not_cover(
     assert (guard["kind"], condition["kind"], block["kind"]) == ("if", "op", "block")
     assert (block["range"]["start"], block["range"]["end"], condition["range"]["start"]) == (
         {"line": 47, "column": 3}, {"line": 47, "column": 11}, {"line": 47, "column": 15})
-    # A lambda and a block are both `other`, told apart by their text.
-    others = [line.split()[2] for node in functions["bump"]["body"] for line in tree_text(node) if " other " in line]
-    assert others == ["text='lambda'", "text='block'"]
+    # A lambda and a block are both `lambda`, told apart by their text.
+    lambdas = [line.split()[2] for node in functions["bump"]["body"] for line in tree_text(node) if " lambda " in line]
+    assert lambdas == ["text='lambda'", "text='block'"]
 
 
 # The same def with its values given by `return` and as the last expressions (#1287).

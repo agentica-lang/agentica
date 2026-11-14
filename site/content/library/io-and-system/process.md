@@ -201,6 +201,8 @@ Process.spawn_group(command: String, args: List[String], dir: String = ".", time
 
 Starts a program in a new session, so it leads its own process group, as Python's `Popen(start_new_session=True)`. It shares your program's standard input, output and error: its output goes where yours goes (a terminal, a container's log), nothing can fill up, and `read_line`, `read_bytes`, `read_available`, `output`, `send`, `send_bytes` and `close_stdin` return `error("process: the child uses the program's stdin, stdout and stderr")` with kind `process.failed`. `dir` is where it starts; the command is found from your program's folder, so give an absolute path when `dir` is not `"."`. `--deny-run` turns it off, and on Windows it returns `error("process: process groups are not supported on this system")` with kind `system.signal`.
 
+The new session leaves the child without a controlling terminal: it has descriptors 0 to 2, but opening `/dev/tty` fails (`ENXIO`), so a program that needs one (an `ssh` password prompt, `less`, `sudo`, an editor) cannot use it, and there is no terminal job control. `Ctrl-C` reaches it only through the VM's stop path, which sends `SIGKILL` to the group. The child reads the same standard input as your program, so a pending `IO.gets` splits the input with it, and your buffered output may appear after the child's: flush before spawning.
+
 `Process.close`, the end of the task that owns it and the end of the run send `SIGKILL` to the whole group while the program runs. This is the start of a container entrypoint: it stops the program with `signal_group`, waits with a deadline, and kills the group when it is late.
 
 ```agentica {mode="check"}

@@ -14,6 +14,8 @@ import Defaults from "../check/defaults"
 import DiagnosticModel from "../diagnostics/diagnostic_model"
 import Linker from "../modules/linker"
 import Ast from "../syntax/ast"
+import AstWalk from "../syntax/ast_walk"
+import Names from "../syntax/prelude_name"
 import Source from "../syntax/source"
 import Types from "../syntax/types"
 import Model from "model"
@@ -48,18 +50,26 @@ def of_program(
   program = Purity.program(linked, checked)
   known = Purity.unknown()
   functions: List[Model.Body] = []
+  roots: List[Ast.FunctionDecl] = []
   for decl in root.declarations
     case decl
       Ast.Decl.Function(node) if node.native.none? ->
+        roots = roots.push(node)
         reasoned = Purity.reasons(program, known, node.name)
         known = reasoned.known
         made = body_of(checked, node, written.get(node.id, node.name), exported.include?(node.id))
-        functions = functions.push(made.with(pure: reasoned.reasons.size == 0, impure: reasoned.reasons))
+        functions = functions.push(made.with(file: file, pure: reasoned.reasons.size == 0, impure: reasoned.reasons))
       _ -> next
     end
   end
 
-  Model.Bodies(version: BODIES_VERSION, file: file, modules: modules, functions: functions)
+  Model.Bodies(
+    version: BODIES_VERSION,
+    file: file,
+    modules: modules,
+    functions: functions,
+    prelude: prelude_bodies(checked, program, known, roots),
+  )
 end
 
 private
@@ -72,6 +82,93 @@ OPERATOR_TEXT: Map[String, String] = {
   "plus": "+", "minus": "-", "multiply": "*", "divide": "/", "modulo": "%", "less": "<", "less-equal": "<=",
   "greater": ">", "greater-equal": ">=", "equal": "==", "not-equal": "!=", "and": "and", "or": "or",
 }
+
+# The prelude functions that the calls of the root functions `roots` run, and those that their calls run in turn, each
+# once, in the order they are first called.
+def prelude_bodies(
+  checked: Checker.Checked,
+  program: Purity.Program,
+  known: Purity.Known,
+  roots: List[Ast.FunctionDecl],
+) -> List[Model.Body]
+  decls: Map[String, Ast.FunctionDecl] = {}
+  files: Map[String, String] = {}
+  for module in checked.prelude
+    for decl in module.declarations
+      case decl
+        Ast.Decl.Function(node) ->
+          decls = decls.put(node.name, node)
+          files = files.put(node.name, module.file)
+        _ -> next
+      end
+    end
+  end
+
+  found: List[Model.Body] = []
+  seen: Set[String] = Set.new([])
+  queue = roots
+  at = 0
+  while at < queue.size
+    for name in prelude_calls(checked, queue[at])
+      if !seen.include?(name) and decls.has_key?(name)
+        seen = seen.add(name)
+        decl = decls[name]
+        reasoned = Purity.reasons(program, known, name)
+        known = reasoned.known
+        made = body_of(checked, decl, written_name(name), false)
+        found = found.push(made.with(file: files[name], pure: reasoned.reasons.size == 0, impure: reasoned.reasons))
+        queue = queue.push(decl)
+      end
+    end
+
+    at += 1
+  end
+
+  found
+end
+
+# The linked names of the prelude functions that the calls in `node` run, in source order.
+def prelude_calls(checked: Checker.Checked, node: Ast.FunctionDecl) -> List[String]
+  names: List[String] = []
+  work = node.body.map do |stmt: Ast.Stmt| AstWalk.Node.Stmt(stmt) end
+  for param in node.params
+    case param.default
+      some(value) -> work = work.push(AstWalk.Node.Expr(value))
+      none -> next
+    end
+  end
+
+  work = work.reverse
+  while work.size > 0
+    item = work.last
+    work = work.take(work.size - 1).concat(AstWalk.children(item).reverse)
+    case item
+      AstWalk.Node.Expr(expr) ->
+        name = prelude_of(checked, Ast.expr_id(expr))
+        if name != "" and call?(expr)
+          names = names.push(name)
+        end
+
+      AstWalk.Node.Stmt(_) -> next
+    end
+  end
+
+  names
+end
+
+# Whether `expr` is a node that the answer gives as a `call` or a `function`, so that its `prelude` names what it runs.
+def call?(expr: Ast.Expr) -> Bool
+  case expr
+    Ast.Expr.Call(_) -> true
+    Ast.Expr.MethodCall(_) -> true
+    Ast.Expr.FieldAccess(_) -> true
+    Ast.Expr.FunctionRef(_) -> true
+    _ -> false
+  end
+end
+
+# The name of a prelude function as its file writes it: the part after the last "::".
+def written_name(linked: String) -> String = linked.split("::").last
 
 def body_of(checked: Checker.Checked, node: Ast.FunctionDecl, name: String, exported: Bool) -> Model.Body
   params = node.params.map do |param: Ast.Param|
@@ -87,6 +184,7 @@ def body_of(checked: Checker.Checked, node: Ast.FunctionDecl, name: String, expo
   Model.Body(
     name: name,
     linked: node.name,
+    file: "",
     exported: exported,
     range: DiagnosticModel.range_of(node.span),
     name_range: DiagnosticModel.range_of(node.name_span),
@@ -154,9 +252,17 @@ def statement(checked: Checker.Checked, stmt: Ast.Stmt) -> Model.Node
     Ast.Stmt.Expression(node) -> expression(checked, node.value)
     Ast.Stmt.If(node) -> if_node(checked, node)
     Ast.Stmt.Case(node) -> case_node(checked, node)
-    Ast.Stmt.While(node) -> other("while", node.span)
-    Ast.Stmt.For(node) -> other("for", node.span)
-    Ast.Stmt.Control(node) -> other(node.kind, node.span)
+    Ast.Stmt.While(node) ->
+      condition = expression(checked, node.condition)
+      leaf("while", Types.Type.Unknown, node.span).with(children: [condition, block(checked, node.body, node.span)])
+    Ast.Stmt.For(node) ->
+      iterable = expression(checked, node.iterable)
+      leaf("for", Types.Type.Unknown, node.span).with(
+        type: bound(checked, node.id, 0),
+        text: node.variable,
+        children: [iterable, block(checked, node.body, node.span)],
+      )
+    Ast.Stmt.Control(node) -> leaf(node.kind, Types.Type.Unknown, node.span)
   end
 end
 
@@ -271,14 +377,25 @@ def expression(checked: Checker.Checked, expr: Ast.Expr) -> Model.Node
         some(State.Resolved.Call(name, _)) ->
           given = [node.target].concat(Defaults.arguments(node.args, node.named))
           call_leaf(checked, id, type, span, name).with(children: bound_arguments(checked, id, given, span))
-        _ -> other("method", span)
+        _ ->
+          # A call of a function held in a field (`h.run(x)`), or a method every type has (`to_s`, `inspect`).
+          kind = "method"
+          if checked.resolved.get(id) == some(State.Resolved.FieldCall)
+            kind = "invoke"
+          end
+
+          leaf(kind, type, span).with(
+            text: node.name,
+            children: arguments(checked, [node.target].concat(Defaults.arguments(node.args, node.named))),
+          )
       end
 
     Ast.Expr.FieldAccess(node) ->
       case checked.resolved.get(id)
         some(State.Resolved.Call(name, _)) ->
           call_leaf(checked, id, type, span, name).with(children: [expression(checked, node.target)])
-        _ -> other("field", span)
+        some(_) -> leaf("method", type, span).with(text: node.name, children: [expression(checked, node.target)])
+        none -> leaf("field", type, span).with(text: node.name, children: [expression(checked, node.target)])
       end
 
     Ast.Expr.Index(node) ->
@@ -298,7 +415,17 @@ def expression(checked: Checker.Checked, expr: Ast.Expr) -> Model.Node
 
       leaf("neg", type, span).with(text: "-", children: [operand])
     Ast.Expr.Binary(node) ->
-      return other("range", span) if node.op == "dot-dot" or node.op == "dot-dot-dot"
+      if node.op == "dot-dot" or node.op == "dot-dot-dot"
+        text = ".."
+        if node.op == "dot-dot-dot"
+          text = "..."
+        end
+
+        return leaf("range", type, span).with(
+          text: text,
+          children: [expression(checked, node.left), expression(checked, node.right)],
+        )
+      end
 
       kind = "op"
       if node.op == "and" or node.op == "or"
@@ -315,26 +442,73 @@ def expression(checked: Checker.Checked, expr: Ast.Expr) -> Model.Node
       leaf("interpolation", type, span).with(children: parts)
     Ast.Expr.Typed(node) -> expression(checked, node.target)
     Ast.Expr.Case(node) -> case_node(checked, node)
-    Ast.Expr.EnumConstructor(_) -> other("variant", span)
-    Ast.Expr.FunctionRef(_) -> other("function", span)
-    Ast.Expr.Invoke(_) -> other("invoke", span)
-    Ast.Expr.Construct(_) -> other("struct", span)
-    Ast.Expr.Update(_) -> other("with", span)
-    Ast.Expr.ListLit(_) -> other("list", span)
-    Ast.Expr.MapLit(_) -> other("map", span)
-    Ast.Expr.BlockLit(node) if node.lambda -> other("lambda", span)
-    Ast.Expr.BlockLit(_) -> other("block", span)
-    Ast.Expr.TypeName(_) -> other("type", span)
-    Ast.Expr.ConstRef(_) -> other("constant", span)
-    Ast.Expr.RegexLit(_) -> other("regex", span)
-    Ast.Expr.EagLit(_) -> other("template", span)
+    Ast.Expr.EnumConstructor(node) ->
+      leaf("variant", type, span).with(
+        target: variant_target(node.enum_name, node.variant_name),
+        children: arguments(checked, node.args).concat(named_nodes(checked, node.named)),
+      )
+    Ast.Expr.FunctionRef(node) ->
+      leaf("function", type, span).with(target: node.name, prelude: prelude_of(checked, id))
+    Ast.Expr.Invoke(node) ->
+      leaf("invoke", type, span).with(text: "call", children: arguments(checked, [node.target].concat(node.args)))
+    Ast.Expr.Construct(node) ->
+      leaf("struct", type, span).with(target: node.type_name, children: named_nodes(checked, node.args))
+    Ast.Expr.Update(node) ->
+      children = [expression(checked, node.target)].concat(named_nodes(checked, node.args))
+      leaf("with", type, span).with(children: children)
+    Ast.Expr.ListLit(node) -> leaf("list", type, span).with(children: arguments(checked, node.elements))
+    Ast.Expr.MapLit(node) ->
+      entries = node.entries.map do |entry: Ast.MapEntry|
+        leaf("entry", Types.Type.Unknown, entry.span).with(
+          children: [expression(checked, entry.key), expression(checked, entry.value)],
+        )
+      end
+
+      leaf("map", type, span).with(children: entries)
+    Ast.Expr.BlockLit(node) -> block_literal(checked, node, type)
+    Ast.Expr.TypeName(node) -> leaf("type", type, span).with(text: node.name)
+    Ast.Expr.ConstRef(node) -> leaf("constant", type, span).with(text: node.name)
+    Ast.Expr.RegexLit(node) ->
+      leaf("regex", type, span).with(text: "/#{node.body}/#{node.flags}", children: [expression(checked, node.call)])
+    Ast.Expr.EagLit(node) -> leaf("template", type, span).with(children: [expression(checked, node.call)])
   end
 end
 
-# A call of `target` with the type arguments the checker recorded for it.
+# The linked name of the prelude function that the call `id` runs, or "".
+def prelude_of(checked: Checker.Checked, id: Int) -> String
+  case checked.bodies.get(id)
+    some(key) -> Names.prelude_name(key)
+    none -> ""
+  end
+end
+
+# A call of `target` with the type arguments the checker recorded for it and the prelude function it runs.
 def call_leaf(checked: Checker.Checked, id: Int, type: Types.Type, span: Source.Span, target: String) -> Model.Node
   type_args = checked.type_args.get(id).unwrap_or([]).map(&shape)
-  leaf("call", type, span).with(target: target, type_args: type_args)
+  leaf("call", type, span).with(target: target, type_args: type_args, prelude: prelude_of(checked, id))
+end
+
+# The `name: value` arguments of a struct, a `with` or a variant, in the order written: `text` is the name.
+def named_nodes(checked: Checker.Checked, args: List[Ast.NamedArg]) -> List[Model.Node]
+  args.map do |arg: Ast.NamedArg|
+    value = expression(checked, arg.value)
+    leaf("named", Types.Type.Unknown, arg.span).with(type: value.type, text: arg.name, children: [value])
+  end
+end
+
+# A block or a lambda, `text` saying which was written: one `param` node per parameter, with the type the checker gave
+# it, then its body.
+def block_literal(checked: Checker.Checked, node: Ast.BlockLit, type: Types.Type) -> Model.Node
+  written = "block"
+  if node.lambda
+    written = "lambda"
+  end
+
+  params = node.params.map do |param: Ast.BlockParam|
+    leaf("param", Types.Type.Unknown, param.span).with(type: bound(checked, param.id, 0), text: param.name)
+  end
+
+  leaf("lambda", type, node.span).with(text: written, children: params.push(block(checked, node.body, node.span)))
 end
 
 # A text part has no place of its own, so it takes the place of the interpolation.
@@ -426,8 +600,6 @@ end
 def through(span: Source.Span, value: Model.Node) -> DiagnosticModel.Region
   DiagnosticModel.Region(start: DiagnosticModel.range_of(span).start, stop: value.range.stop)
 end
-
-def other(syntax: String, span: Source.Span) -> Model.Node = leaf("other", Types.Type.Unknown, span).with(text: syntax)
 
 # The type the checker recorded for the node `id`, Unknown when it has none.
 def types_at(checked: Checker.Checked, id: Int) -> Types.Type
