@@ -322,7 +322,7 @@ static void test_zstep_lifetime(void) {
   assert(owned[0]->native == NULL && owned[1]->native == NULL);
   agc_zstep_close(&vm, owned[0]);
   vm.in_turn = false;
-  if (setjmp(vm.fail) == 0) {
+  if (AGC_CATCH(vm.fail) == 0) {
     size_t used;
     agc_value out;
     (void)agc_zstep_next(&vm, owned[1], abc_bytes, 1, &used, false, &out);

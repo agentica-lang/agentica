@@ -64,7 +64,7 @@ static agc_value native_call(const char *signature, const agc_value *items, size
 }
 
 static void fails(const char *signature, const agc_value *items, size_t n, const char *code) {
-  if (setjmp(vm.fail) == 0) {
+  if (AGC_CATCH(vm.fail) == 0) {
     (void)native_call(signature, items, n);
     assert(!"the call did not fail");
   }
@@ -311,7 +311,7 @@ static agc_builtin_fn row(const char *name, uint32_t arity) {
 }
 
 static void read_fails(const char *name, uint32_t arity, agc_value *args, const char *code) {
-  if (setjmp(vm.fail) == 0) {
+  if (AGC_CATCH(vm.fail) == 0) {
     (void)row(name, arity)(&vm, args, 0);
     assert(!"the read did not fail");
   }
@@ -655,7 +655,7 @@ static agc_value function_value(uint32_t function, uint32_t n) {
 
 static void callback_fails(agc_value fn, const char *code) {
   agc_value args[2] = {agc_test_str("ii step"), fn};
-  if (setjmp(vm.fail) == 0) {
+  if (AGC_CATCH(vm.fail) == 0) {
     (void)row("Native.callback", 2)(&vm, args, 0);
     assert(!"the callback was made");
   }

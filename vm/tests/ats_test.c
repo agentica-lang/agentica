@@ -49,7 +49,7 @@ static int64_t get_int(agc_value t, agc_value key) {
 static int64_t size_of(agc_value t) { return agc_as_int(&vm, call("ATS.size", 1, &t)); }
 
 static void fails(const char *name, uint32_t arity, agc_value *args, const char *code) {
-  if (setjmp(vm.fail) == 0) {
+  if (AGC_CATCH(vm.fail) == 0) {
     (void)call(name, arity, args);
     assert(!"the call did not fail");
   }
