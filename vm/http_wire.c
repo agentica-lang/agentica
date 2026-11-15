@@ -157,12 +157,10 @@ agc_value agc_http_head_parsed(agc_vm *vm, const agc_http_parsed *p, size_t len,
                                bool *websocket) {
   *websocket = false;
   const agc_http_head *head = &p->head;
-  size_t used = p->used;
-  agc_http_error error = p->error;
-  agc_http_status status = p->status;
-  if (status == AGC_HTTP_INCOMPLETE)
+  if (p->status == AGC_HTTP_INCOMPLETE)
     return agc_error(vm, AGC_KIND_HTTP_CLOSED, "http: connection closed before the request was complete");
-  if (status == AGC_HTTP_ERROR) return refused_head(vm, agc_http_error_code(error), agc_http_error_text(error));
+  if (p->status == AGC_HTTP_ERROR)
+    return refused_head(vm, agc_http_error_code(p->error), agc_http_error_text(p->error));
   agc_http_slice value = {NULL, 0};
   size_t upgrades = count_named(head, "upgrade", &value);
   if (upgrades && !websocket_upgrade(head, upgrades, value))
@@ -184,7 +182,7 @@ agc_value agc_http_head_parsed(agc_vm *vm, const agc_http_parsed *p, size_t len,
   h->fields[4] = agc_int(chunked ? 0 : (int64_t)head->length);
   h->fields[5] = agc_bool(chunked);
   h->fields[6] = agc_bool(expects == 1);
-  h->fields[7] = agc_int((int64_t)(len - used + buffered));
+  h->fields[7] = agc_int((int64_t)(len - p->used + buffered));
   h->fields[8] = agc_int(0);
   h->fields[9] = ascii((const uint8_t *)"", 0);
   *websocket = upgrades != 0;
@@ -210,18 +208,16 @@ agc_value agc_http_response_value(agc_vm *vm, const uint8_t *buf, size_t len, bo
 agc_value agc_http_response_parsed(agc_vm *vm, agc_http_parsed *p, size_t len, bool head_only, uint64_t limit,
                                    int read_error, size_t buffered, bool ended) {
   agc_http_head *head = &p->head;
-  size_t used = p->used;
-  agc_http_error error = p->error;
-  agc_http_status status = p->status;
-  if (status == AGC_HTTP_INCOMPLETE && read_error) /* std/http: READ_FAILED */
+  if (p->status == AGC_HTTP_INCOMPLETE && read_error) /* std/http: READ_FAILED */
     return agc_system_error(vm, AGC_FAMILY_NET, "could not read from the stream", read_error);
-  if (status == AGC_HTTP_INCOMPLETE)
+  if (p->status == AGC_HTTP_INCOMPLETE)
     return agc_error(vm, AGC_KIND_HTTP_CLOSED, "http: connection closed before the response was complete");
-  if (status == AGC_HTTP_ERROR)
-    return agc_http_error_result(vm, agc_http_error_code(error), "http: ", agc_http_error_text(error));
+  if (p->status == AGC_HTTP_ERROR)
+    return agc_http_error_result(vm, agc_http_error_code(p->error), "http: ", agc_http_error_text(p->error));
   bool closes = agc_http_closes(head);
   if (head->status >= 200 && (head_only || head->status == 204 || head->status == 304)) {
-    bool announced = head->frame == AGC_HTTP_FRAME_CHUNKED || (head->frame == AGC_HTTP_FRAME_LENGTH && head->length > 0);
+    bool announced =
+        head->frame == AGC_HTTP_FRAME_CHUNKED || (head->frame == AGC_HTTP_FRAME_LENGTH && head->length > 0);
     if (announced && !head_only) closes = true;
     head->frame = AGC_HTTP_FRAME_LENGTH;
     head->length = 0;
@@ -237,7 +233,7 @@ agc_value agc_http_response_parsed(agc_vm *vm, agc_http_parsed *p, size_t len, b
   r->fields[3] = agc_bool(head->frame == AGC_HTTP_FRAME_CHUNKED);
   r->fields[4] = agc_bool(head->frame == AGC_HTTP_FRAME_CLOSE);
   r->fields[5] = agc_bool(closes);
-  r->fields[6] = agc_int((int64_t)(len - used + buffered));
+  r->fields[6] = agc_int((int64_t)(len - p->used + buffered));
   r->fields[7] = agc_bool(ended);
   return agc_result_value(true, agc_struct_value(r));
 }

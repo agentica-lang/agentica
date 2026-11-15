@@ -368,9 +368,10 @@ static agc_value idle_value(const request *q) {
   return agc_result_value(true, agc_bool(q->buffered == 0 && !q->ended));
 }
 
-/* The value of the head of LEN bytes that P holds parsed (none when LEN is 0: the input ended or failed first), built on
-   a scheduler from the request and the socket's net (q->n is not set by a read that did not park). std/http matches on "could not read from the stream" (a prefix) and "network: end of input" (READ_FAILED
-   and END_OF_INPUT in stdlib/http.agc). */
+/* The value of the head of LEN bytes that P holds parsed (none when LEN is 0: the input ended or failed first), built
+   on a scheduler from the request and the socket's net (q->n is not set by a read that did not park). std/http matches
+   on "could not read from the stream" (a prefix) and "network: end of input" (READ_FAILED and END_OF_INPUT in
+   stdlib/http.agc). */
 static agc_value head_result(agc_vm *vm, net *n, const request *q, agc_http_parsed *p, size_t len, int error,
                              size_t buffered, bool ended) {
   if (len && q->kind == REQ_RESPONSE)
