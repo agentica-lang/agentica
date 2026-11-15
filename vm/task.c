@@ -1544,11 +1544,11 @@ static agc_value builtin_uncount(agc_vm *vm, agc_value *args, uint32_t span) {
 }
 
 /* BddScenario.budget (std/bdd only): a worker gives each scenario the step budget that a child of its own would start
-   with. */
+   with. A run with --max-steps keeps its limit: there the call does nothing, so bytecode cannot lift it. */
 static agc_value builtin_budget(agc_vm *vm, agc_value *args, uint32_t span) {
   int64_t steps = agc_as_int(vm, args[0]);
   if (steps < 0) agc_fail(vm, "RUNTIME-INVALID-RANGE", "a step budget cannot be negative", span);
-  agc_steps_reset(vm, steps);
+  if (vm->rt->budget_settable) agc_steps_reset(vm, steps);
   return agc_void();
 }
 

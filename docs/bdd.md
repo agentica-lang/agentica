@@ -411,18 +411,21 @@ agentica test [PATH...] [--steps FILE]
 ```
 
 - **The runner is a fixed program.** User code never runs in the process that
-  writes the report. A user's `main` runs only in children, always under a step
-  limit, a deadline and captured output.
+  writes the report. A user's `main` runs only in children, always under a
+  deadline and captured output, and each scenario under its step budget.
 - **One step program, three modes.** The list child, the worker and the
   scenario child are the same `.agcb`, chosen by `System.args`, so step numbers
   match.
 - **Scenario child and worker.** Started with `--json` (so a crash leaves its
-  diagnostic as the last stderr line) and `--max-steps` of 1,000,000 times the
-  number of steps plus one (a worker: see Limits). A worker's scenario task
-  that crashes prints a task diagnostic spawned in `std/bdd.agc`; the runner
-  reads it as the scenario's crash (`scenario_crash` in `stdlib/test/child.agc`)
-  and the worker exits 1. The list child is the same with `list` and a
-  30-second limit.
+  diagnostic as the last stderr line) and no `--max-steps`: each scenario sets
+  its own budget (see Limits), which `BddScenario.budget` can do only in a run
+  without `--max-steps` (under it the call does nothing, so bytecode cannot lift
+  the limit). Until the first scenario, the 30-second deadline bounds the
+  child. A worker's scenario task that crashes prints a task diagnostic
+  spawned in `std/bdd.agc`; the runner reads it as the scenario's crash
+  (`scenario_crash` in `stdlib/test/child.agc`) and the worker exits 1. The
+  list child runs with `list`, a 30-second limit and `--max-steps` of
+  1,000,000.
 - **Protocol.** One JSON record per line, on the child channel: a pipe per
   direction of its own, opened by `Process.spawn_channel` and found by the
   child on descriptors 3 and 4 (`docs/vm/10-io-processes.md` §10.4). A record

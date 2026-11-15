@@ -721,7 +721,7 @@ def run_child(
   cover: String,
 ) -> Run
   count = item.steps.size
-  spawned = Process.spawn_channel(config.vm, vm_args(config, 1000000 * (count + 1), "scenario", cover))
+  spawned = Process.spawn_channel(config.vm, vm_args(config, 0, "scenario", cover))
   if not spawned.ok?
     return Run(failed_at: 0, verdict: failure("RUNTIME-BDD-INFRA", spawned.message, item.steps[0].span))
   end
@@ -740,8 +740,8 @@ end
 
 # The scenario on the lane's worker, or on a new one when the lane has none. The same lines as for a child, then `end`,
 # answered by `done`. The settings line gives the scenario the step budget of a child of its own (`steps`), which the
-# worker sets when the scenario starts; the worker's own budget covers its start. Only a scenario that passes and whose
-# `done` allows it leaves the worker for the next; any other end closes it.
+# worker sets when the scenario starts. Only a scenario that passes and whose `done` allows it leaves the worker for
+# the next; any other end closes it.
 def run_worker(
   config: Config,
   base: String,
@@ -755,7 +755,7 @@ def run_worker(
   deadline = started + 30000
   worker = slot.worker
   if worker.none?
-    spawned = Process.spawn_channel(config.vm, vm_args(config, 1000000, "worker", ""))
+    spawned = Process.spawn_channel(config.vm, vm_args(config, 0, "worker", ""))
     if not spawned.ok?
       run = Run(failed_at: 0, verdict: failure("RUNTIME-BDD-INFRA", spawned.message, item.steps[0].span))
       return Turn(run: run, slot: Slot(worker: none))
@@ -1070,17 +1070,18 @@ def unresolved(patterns: List[Match.Pattern], step: Gherkin.Step) -> Report.Fail
 end
 
 # `cover` is the LCOV part of the child (`--coverage`), or "" for none.
+# `steps` 0 starts the child without --max-steps: std/bdd then gives each scenario its budget (BddScenario.budget,
+# which a run with --max-steps ignores).
 def vm_args(config: Config, steps: Int, mode: String, cover: String) -> List[String]
-  options = [
-    "run",
-    "--json",
-    "--max-steps",
-    steps.to_s,
-    "--seed",
-    config.seed.to_s,
-    "--source-root",
-    config.steps_root,
-  ].concat(deny(config))
+  limit: List[String] = []
+  if steps > 0
+    limit = ["--max-steps", steps.to_s]
+  end
+  options = (
+    ["run", "--json", "--seed", config.seed.to_s, "--source-root", config.steps_root]
+      .concat(limit)
+      .concat(deny(config))
+  )
 
   if cover != ""
     options = options.concat(["--coverage", cover])
