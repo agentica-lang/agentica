@@ -195,6 +195,21 @@ def test_a_failing_run_still_writes_its_coverage(tmp_path):
     assert lines[2] == 1 and lines[4] == 0 and lines[5] == 0
 
 
+def test_a_run_stopped_by_the_step_limit_covers_only_the_steps_it_charged(tmp_path):
+    # Lines 3 to 6 are one gathered STEP: the limit stops in its first step.
+    (tmp_path / "limit.agc").write_text('def main() -> Void\n  puts("a")\n  x = 1\n  y = 2\n  z = 3\n  w = 4\n'
+                                        '  puts("#{x}#{y}#{z}#{w}")\nend\n')
+    reports = []
+    for jit in ("off", "always"):
+        result = agentica(tmp_path, "--json", "--jit", jit, "--max-steps", "3", "--coverage", "out.info", "limit.agc")
+        assert result.code == 1
+        assert '"RUNTIME-STEP-LIMIT"' in result.stderr
+        reports.append((tmp_path / "out.info").read_text())
+    assert reports[0] == reports[1]
+    lines = records(reports[0])["limit.agc"]["lines"]
+    assert lines[2] == 1 and [lines[line] for line in (4, 5, 6, 7)] == [0, 0, 0, 0]
+
+
 def test_a_file_that_cannot_be_written_fails_the_run_or_adds_a_notice_to_its_failure(tmp_path):
     cwd = program(tmp_path)
     result = agentica(cwd, "--json", "--coverage", "missing/out.info", "main.agc")

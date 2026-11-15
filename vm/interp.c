@@ -363,22 +363,22 @@ static void profile_sample(agc_vm *vm, uint64_t weight) {
   agc_profile_add_stack(vm->profile, codes, kept, weight);
 }
 
-/* The steps of a STEP, or of one pass of a native loop, go to the function that runs them. With folded output, every
+/* The first RAN steps of a STEP of N, or of one pass of a native loop, go to the function that runs them. With folded output, every
    `every` steps of the run take a sample, weighted by the steps it stands for. */
-static PROFILE_HOOK void profile_steps(agc_vm *vm, int64_t n) {
+static PROFILE_HOOK void profile_steps(agc_vm *vm, int64_t n, int64_t ran) {
   const agc_task *t = vm->task;
   if (t->frame_count == 0) return;
   agc_profile *profile = vm->profile;
   const agc_frame *frame = &t->frames[t->frame_count - 1];
-  profile->steps[frame->native ? profile->functions : frame->function] += (uint64_t)n;
+  profile->steps[frame->native ? profile->functions : frame->function] += (uint64_t)ran;
   if (profile->cover && !frame->native)
-    agc_cover_step(profile->cover, &vm->rt->program->functions[frame->function], frame->pc, n);
+    agc_cover_step(profile->cover, &vm->rt->program->functions[frame->function], frame->pc, n, ran);
   if (!profile->every) return;
-  if ((uint64_t)n < profile->left) {
-    profile->left -= (uint64_t)n;
+  if ((uint64_t)ran < profile->left) {
+    profile->left -= (uint64_t)ran;
     return;
   }
-  uint64_t over = (uint64_t)n - profile->left;
+  uint64_t over = (uint64_t)ran - profile->left;
   profile->left = profile->every - over % profile->every;
   profile_sample(vm, (1 + over / profile->every) * profile->every);
 }
@@ -463,11 +463,14 @@ static void step_slow(agc_vm *vm, int64_t n, uint32_t span) {
 #ifdef AGC_NO_GC
   agc_alloc_limit_check();
 #endif
-  if (AGC_PROFILE_ON(vm)) profile_steps(vm, n);
   sync_budget(vm);
   if (vm->batch < n) take_steps(vm, n - vm->batch + AGC_TURN_STEPS);
-  if (vm->batch < n)
+  if (vm->batch < n) {
+    /* The steps up to and including the one the budget stops at ran; the rest of the STEP did not. */
+    if (AGC_PROFILE_ON(vm)) profile_steps(vm, n, vm->batch + 1);
     agc_fail(vm, "RUNTIME-STEP-LIMIT", "execution step budget exhausted", span + (uint32_t)vm->batch);
+  }
+  if (AGC_PROFILE_ON(vm)) profile_steps(vm, n, n);
   vm->batch -= n;
   vm->turn_left -= n;
   if (vm->turn_left <= 0) {
