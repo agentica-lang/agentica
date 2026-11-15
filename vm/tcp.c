@@ -313,7 +313,7 @@ static bool head_ready(const agc_inbuf *in, request *q) {
   return lf && head_status(in, have, q->kind, &used) != AGC_HTTP_INCOMPLETE;
 }
 
-/* I/O thread only (or the N = 1 scheduler, which is that thread). */
+/* The input's owner only: the I/O thread, or a reader on its scheduler (take). */
 static bool read_ready(net *n, request *q) {
   if (n->closed) return true;
   if (heads(q->kind)) return head_ready(&n->in, q);
@@ -322,11 +322,11 @@ static bool read_ready(net *n, request *q) {
 }
 
 /* Whether the end of input or a read error has come (TLS: the TCP FIN, even before close_notify is decided). std/http
-   does not keep such a connection. I/O thread only. */
+   does not keep such a connection. The input's owner only. */
 static bool input_ended(const net *n) { return n->in.eof || n->in.error || n->raw_eof; }
 
 /* The cut of HttpWire.idle?: no bytes are taken (the request's cut stays empty), only the count left in the input and
-   whether it has ended. I/O thread only. */
+   whether it has ended. The input's owner only. */
 static void cut_idle(net *n, request *q) {
   q->buffered = agc_inbuf_pending(&n->in);
   q->ended = input_ended(n);
@@ -334,7 +334,7 @@ static void cut_idle(net *n, request *q) {
 
 /* The cut of HttpWire.read_head and read_response: the head's bytes when it is whole, else what
    is there up to one byte past the largest head (a parse error, a head too
-   large, or a head the end of input cut short). I/O thread only. */
+   large, or a head the end of input cut short). The input's owner only. */
 static void cut_head(net *n, request *q) {
   size_t have = agc_inbuf_pending(&n->in), used = 0;
   size_t window = have < AGC_HTTP_MAX_HEAD + 1 ? have : AGC_HTTP_MAX_HEAD + 1;
@@ -396,7 +396,7 @@ static void unlink_request(request *q) {
 }
 
 /* The request is over: its result goes into it (what the done half reads on a scheduler), it leaves its slot, and
-   its job is readied. A read takes its line or bytes out of the input here, so the input buffer stays the I/O
+   its job is readied. A parked read takes its line or bytes out of the input here, while the input is the I/O
    thread's. I/O thread only; once finished the request is the job's. */
 static void finish(request *q) {
   if (!q || q->finished) return;
@@ -1403,7 +1403,8 @@ static int shared_open(net *n) {
   return 0;
 }
 
-/* A read at N = 1 whose input is ready: the cut and the value in one step. */
+/* A read whose input is ready, on the input's owner (N = 1, or a scheduler that takes_here allows): the cut and the
+   value in one step. */
 static agc_value take(agc_vm *vm, net *n, request *q) {
   if (n->closed) return agc_error(vm, AGC_KIND_NET_CLOSED, socket_closed);
   if (q->kind == REQ_IDLE || heads(q->kind)) {
@@ -1894,9 +1895,9 @@ static bool begin_read(void *data, agc_io_job *job) {
 }
 
 /* A read as read_op takes it: the kind, the count and the body limit of HttpWire.read_head, whose rest goes back in
-   front of the input on the I/O thread (here at N = 1, else in begin_read). UNLIMITED (a call with no timeout
-   argument) waits with no limit: the read has no timer, so nothing closes the socket while it waits, and a wait for
-   the read lock takes the longest deadline, INT64_MAX ms, which agc_handle_wait keeps whole. */
+   front of the input by the input's owner (here at N = 1 and for takes_here, else in begin_read). UNLIMITED (a call
+   with no timeout argument) waits with no limit: the read has no timer, so nothing closes the socket while it waits,
+   and a wait for the read lock takes the longest deadline, INT64_MAX ms, which agc_handle_wait keeps whole. */
 static agc_value read_op(agc_vm *vm, const agc_value *args, request *want, bool unlimited, uint32_t span) {
   req_kind kind = want->kind;
   if (kind == REQ_BYTES) {
@@ -1929,11 +1930,7 @@ static agc_value read_op(agc_vm *vm, const agc_value *args, request *want, bool 
   if (here || takes_here(n)) {
     if (!agc_inbuf_unread(&n->in, rest, rest_len)) agc_out_of_memory();
     rest_len = 0;
-    if (read_ready(n, want) && (here || !over_limit(n, kind))) {
-      agc_value result = take(vm, n, want);
-      if (!here) agc_charge(vm, agc_value_units(result));
-      return result;
-    }
+    if (read_ready(n, want) && (here || !over_limit(n, kind))) return take(vm, n, want);
   }
   request *q = new_request(vm, n, kind);
   q->count = want->count;
