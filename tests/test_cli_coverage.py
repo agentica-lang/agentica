@@ -186,12 +186,13 @@ def test_an_old_report_is_removed_when_the_run_starts(tmp_path):
 
 
 def test_a_failing_run_still_writes_its_coverage(tmp_path):
-    (tmp_path / "fail.agc").write_text('def main() -> Void\n  puts("a")\n  x = [1][3]\n  puts(x)\nend\n')
+    # The steps of line 4 are not moved up past the failing list-get of line 3.
+    (tmp_path / "fail.agc").write_text('def main() -> Void\n  puts("a")\n  x = [1][3]\n  y = x\n  puts(y)\nend\n')
     result = agentica(tmp_path, "--json", "--coverage", "out.info", "fail.agc")
     assert result.code == 1
     assert '"RUNTIME-' in result.stderr
     lines = records((tmp_path / "out.info").read_text())["fail.agc"]["lines"]
-    assert lines[2] == 1 and lines[4] == 0
+    assert lines[2] == 1 and lines[4] == 0 and lines[5] == 0
 
 
 def test_a_file_that_cannot_be_written_fails_the_run_or_adds_a_notice_to_its_failure(tmp_path):

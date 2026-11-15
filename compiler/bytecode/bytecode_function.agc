@@ -1,6 +1,6 @@
 ## Encodes one function of the program: the instructions as four u16 words, a
-## label as the number of the instruction after it, runs of `step` merged, and the constants, struct updates, builtins
-## and spans the instructions name interned in the tables.
+## label as the number of the instruction after it, runs of `step` gathered and merged, and the constants, struct
+## updates, builtins and spans the instructions name interned in the tables.
 ##
 ## A function body is flat, so this is a loop over the instructions and uses no recursion.
 
@@ -9,7 +9,7 @@ import Wire from "bytecode_bytes"
 import Failure from "bytecode_failure"
 import Pool from "bytecode_pool"
 import Spans from "bytecode_spans"
-import {MAX_U16, NEEDS, OPCODES, PAIR_OPS, SINGLE_OPS, WIDE_OPS} from "bytecode_tables"
+import {MAX_U16, NEEDS, OPCODES, PAIR_OPS, SINGLE_OPS, STEP_PASSES, WIDE_OPS} from "bytecode_tables"
 
 ## What the writer has interned so far: the entries of the constant, struct update, builtin and span sections.
 struct Tables
@@ -33,7 +33,7 @@ def encode(program: Ir.Program, tables: Tables, function: Ir.Function) -> Result
     return error(Failure.limit(program, function.file, "registers in one function", function.span))
   end
 
-  body = function.body
+  body = gather_steps(function.body)
   labels = label_pcs(body)
   # The constant, update and builtin pools travel in state. The span pool is a local of its own: operands never read
   # state.spans, so it is stored back once, after the loop.
@@ -242,6 +242,28 @@ def instr_words(program: Ir.Program, instr: Ir.Instr, found: Operands) -> Result
   end
 
   ok([OPCODES[op], 0, a % 256, a / 256, b % 256, b / 256, c % 256, c / 256])
+end
+
+# The body with each `step` of a straight-line run moved up to the step before it, past the instructions of
+# STEP_PASSES, so the run is written as one `STEP n`.
+def gather_steps(body: List[Ir.Instr]) -> List[Ir.Instr]
+  out: List[Ir.Instr] = []
+  held: List[Ir.Instr] = []
+  gathering = false
+  for instr in body
+    if instr.op == "step"
+      out = out.push(instr)
+      gathering = true
+    elsif gathering and STEP_PASSES.include?(instr.op)
+      held = held.push(instr)
+    else
+      out = out.concat(held).push(instr)
+      held = []
+      gathering = false
+    end
+  end
+
+  out.concat(held)
 end
 
 # The place after the run of `step` instructions that starts at `at`. A run is cut at 65,535, the most one instruction
