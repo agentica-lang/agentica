@@ -11,6 +11,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 ### Changed
 
 - A project's `agentica.toml` is parsed once per start, not twice, so a program below a manifest starts a little faster (#1471).
+- `agentica FILE.agc` no longer looks for the C compiler in `PATH` at each start of a cached program with no native module, and a change of `CC` or `PATH` keeps its cache entry (#1551).
 
 ## [0.32.0] - 2026-11-15
 

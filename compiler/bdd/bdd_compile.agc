@@ -16,7 +16,7 @@ def file(path: String, settings: Env.Settings, unreadable: String, cached: Bool)
   plan = BytecodeCache.plan(settings, path, cached)
   case BytecodeCache.lookup(plan, settings)
     BytecodeCache.Lookup.Hit(bytes) -> Pipeline.Compiled.Bytes(bytes)
-    BytecodeCache.Lookup.Miss -> missed(path, settings, unreadable, plan)
+    BytecodeCache.Lookup.Miss(read) -> missed(path, settings, unreadable, read)
   end
 end
 
