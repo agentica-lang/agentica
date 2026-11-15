@@ -93,12 +93,15 @@ agc_task *agc_runq_wait_until(agc_runq *q, uint64_t due_ms);
 /* The spin of an idle scheduler before agc_runq_wait (docs/vm/16-architecture.md §16.9, "Wakes between schedulers"):
  * agc_runq_spin_setup allows MAX spinners at once for BUDGET_NS each (none until it is called); agc_runq_spin busy-waits
  * for a task without the lock and returns it, or NULL when none came (then the caller waits). A push skips the condvar
- * signal while a scheduler spins. agc_runq_stats is for the tests (agc_runq_counts). */
+ * signal while a scheduler spins. *LEVEL is the caller's own count (agc_vm.spin_level), 0 at first: a spin that starts
+ * while no other scheduler spins lasts BUDGET_NS times two to that level, and raises the level when it took a task and
+ * lowers it when it took none, from 0 to AGC_SPIN_LEVEL_MAX. agc_runq_stats is for the tests (agc_runq_counts). */
+#define AGC_SPIN_LEVEL_MAX 4u
 void agc_runq_spin_setup(agc_runq *q, uint32_t max, uint64_t budget_ns);
 /* How many AGC_CPU_PAUSE take about NS nanoseconds on this machine: the spins count pauses and read no clock, which
  * can cost a system call (a machine whose clock source is not the TSC). Timed once, at the first call. */
 uint64_t agc_pauses_for(uint64_t ns);
-agc_task *agc_runq_spin(agc_runq *q);
+agc_task *agc_runq_spin(agc_runq *q, uint32_t *level);
 agc_runq_counts agc_runq_stats(agc_runq *q);
 /* A nudge is work for a scheduler that is not a task: agc_runq_nudge ends one wait with NULL, agc_runq_nudged is the
  * test of a busy scheduler at its turn boundary, and agc_runq_take_nudge clears it for the one that runs the work. */

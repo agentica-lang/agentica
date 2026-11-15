@@ -506,7 +506,14 @@ one exit path are as in §16.1 to §16.6. What differs:
   - An idle scheduler spins before it waits on the condvar (`agc_runq_spin`). It
     polls the queue's atomic `work` flag, not the lock, for `SPIN_BUDGET_US`. It
     counts pauses and reads no clock, and never sleeps. At most half the
-    schedulers (at least one) spin at once, and none spin at N = 1. A push or a
+    schedulers (at least one) spin at once, and none spin at N = 1. A scheduler
+    that starts to spin while no other does spins for that budget times two to
+    its own level (`agc_vm.spin_level`, 0 to `AGC_SPIN_LEVEL_MAX`): a spin that
+    took a task raises the level by one and one that took none lowers it by
+    one. Tasks that keep coming within the longest budget (the clients of one
+    busy task) hold the level at its top, and a spinner takes them with no
+    futex wake per task; while none comes within the least budget, the level
+    falls to 0 and stays there. A push or a
     nudge reads the count of spinners under the queue's lock and skips the
     condvar signal while one spins. No wake is lost: a spinner leaves the count
     before it takes the lock for its wait, so it either sees `work`, finds the

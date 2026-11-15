@@ -1,13 +1,13 @@
 ---
 title: Actor (std)
 weight: 5
-description: The std/actor module, a task that owns its state and handles the messages of one inbox, with cast, call, stop and a receive timeout.
+description: The std/actor module, a task that owns its state and handles the messages of one inbox, with cast, call, send and await, stop and a receive timeout.
 ---
 
 `std/actor` is written in Agentica, on top of [Task](/library/concurrency/task/) and [Channel](/library/concurrency/channel/): `import Actor from "std/actor"`. An actor is a task that owns its state and handles the messages of one inbox, one at a time, so its state needs no lock and no `ATS` table.
 
 - An `Actor.Behaviour[S, M]` is a struct of functions, the contract of an actor, since Agentica has no traits: `init` makes the first state and `handle` takes the state and a message and gives the next step. `S` is the state and `M` the message type, an enum of your own.
-- `Actor.start` runs it in a task of its own and gives an `Actor.Ref[S, M]`. Its `address` is the `Address[M]` of the inbox: data that a table, a message or a struct can hold. `cast` and `call` take that address; `stop` takes the `Ref`.
+- `Actor.start` runs it in a task of its own and gives an `Actor.Ref[S, M]`. Its `address` is the `Address[M]` of the inbox: data that a table, a message or a struct can hold. `cast`, `call` and `send` take that address; `stop` takes the `Ref`.
 - A module usually hides the message enum behind its own functions (`Counter.add`, `Counter.get`), and keeps the addresses of its actors by name in a constant table, one per message type. There is no registry inside the library.
 - There are no methods: call `Actor.cast(address, message)`.
 
@@ -90,13 +90,60 @@ ok()
 error("address: gone", kind: "channel.gone")
 ```
 
+## Actor.send and Actor.await
+
+```signature
+Actor.send(address: Address[M], make: Fn[Channel[R], M], timeout_ms: Int = 5000) -> Result[Actor.Request[R]]
+Actor.await(request: Actor.Request[R], timeout_ms: Int) -> Result[R]
+```
+
+The two halves of `call`, for requests to several actors at once: `send` each request first, then `await` the answers in order, so the waits overlap. `send` makes a reply channel, builds the message around it with the block, waits at most `timeout_ms` for room in the inbox and gives an `Actor.Request[R]`; its errors are those of `cast`. `await` waits at most `timeout_ms` for the answer and keeps the guarantees of `call`: an await that gives up closes the reply channel, so a later `reply` gives `false`, and an answer that came just before is returned. A request has one answer: a second `await` gives `actor: timeout` at once. `call(address, timeout_ms) do ... end` is a `send` and an `await` within one `timeout_ms`. `send` takes `make` before `timeout_ms`, so with the block form pass the timeout by name: `Actor.send(address, timeout_ms: 100) do |reply| Msg.Get(reply) end`.
+
+```agentica
+import Actor from "std/actor"
+
+enum Msg
+  Work(Int, Channel[Int])
+end
+
+def handle(state: Int, msg: Msg) -> Actor.Step[Int]
+  case msg
+    Msg.Work(n, reply) ->
+      Task.sleep(300)
+      Actor.reply(reply, n * 10)
+      Actor.continue(state)
+  end
+end
+
+def main() -> Void
+  behaviour: Actor.Behaviour[Int, Msg] = Actor.Behaviour(init: -> { 0 }, handle: &handle)
+  shards = [Actor.start(behaviour), Actor.start(behaviour)]
+  started = Time.monotonic_ms
+  first = Actor.send(shards[0].address) do |reply| Msg.Work(1, reply) end
+  second = Actor.send(shards[1].address) do |reply| Msg.Work(2, reply) end
+  puts(Actor.await(first.unwrap!, 1000))
+  puts(Actor.await(second.unwrap!, 1000))
+  # Two calls one by one take at least 600 ms.
+  puts(Time.monotonic_ms - started < 600)
+  for shard in shards
+    _ = Actor.stop(shard, 1000)
+  end
+end
+```
+
+```output
+ok(10)
+ok(20)
+true
+```
+
 ## Actor.stop
 
 ```signature
 Actor.stop(actor: Actor.Ref[S, M], timeout_ms: Int) -> Result[Void]
 ```
 
-Closes the inbox and waits at most `timeout_ms` for the actor to end: it handles the messages already in its inbox (so a call that is waiting there gets its answer), runs `terminate` and ends. A `cast` or `call` after the close gives `error("address: gone")`. An actor still running after `timeout_ms` is cancelled and `stop` gives `actor: timeout` (kind `task.timeout`). An actor that crashed gives its `task crashed: ...` error, and stopping it observes the crash. Stopping an actor that has ended gives how it ended. `timeout_ms` must be above 0, else `RUNTIME-INVALID-DURATION`.
+Closes the inbox and waits at most `timeout_ms` for the actor to end: it handles the messages already in its inbox (so a call that is waiting there gets its answer), runs `terminate` and ends. A `cast`, `call` or `send` after the close gives `error("address: gone")`. An actor still running after `timeout_ms` is cancelled and `stop` gives `actor: timeout` (kind `task.timeout`). An actor that crashed gives its `task crashed: ...` error, and stopping it observes the crash. Stopping an actor that has ended gives how it ended. `timeout_ms` must be above 0, else `RUNTIME-INVALID-DURATION`.
 
 Only the holder of the `Ref` can stop the actor. To stop it through an address, give the message enum a `Stop` variant whose handler gives `Actor.done(state)`.
 

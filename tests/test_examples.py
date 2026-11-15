@@ -40,6 +40,7 @@ VALID_EXAMPLES = [
     ("constants.agc", "8 | 32\n5\nfruit | drink\n3\n"),
     ("module-blocks.agc", "apples: 0 items\npears: 3 items\n"),
     ("actor.agc", "counter: visits is taken\nok(110)\nok()\nerror(\"key \\\"visits\\\" is not in the table\")\nok()\n"),
+    ("actor_send.agc", "ok([10, 20])\nunder two waits: true\n"),
     ("defaults.agc", "Level.Info start 0\nLevel.Warn slow 1\na, b, c\na-b-c\none\ntwo\n- one\n- two\n"
                      "- three\n"),
     ("enumerable.agc", "big order: eve\n"
