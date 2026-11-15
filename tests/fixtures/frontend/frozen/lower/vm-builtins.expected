@@ -357,6 +357,7 @@ TCP.accept
 TCP.close
 TCP.close_listener
 TCP.connect
+TCP.flush
 TCP.listen
 TCP.local_port
 TCP.read_line
@@ -364,6 +365,9 @@ TCP.recv_bytes.bytes
 TCP.remote_address
 TCP.send
 TCP.send_bytes.bytes
+TCP.write
+TCP.write_bytes.bytes
+TCP.write_limit
 TLS.alpn
 TLS.client_context
 TLS.connect

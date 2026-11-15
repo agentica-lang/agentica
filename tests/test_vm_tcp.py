@@ -445,6 +445,144 @@ def test_a_direct_send_to_a_peer_that_reset_fails_with_a_write_error_and_the_pro
     assert vm.wait() == 0, vm.stderr_text()
 
 
+WRITE_PROGRAM = """\
+def main() -> Void
+  listener = TCP.listen("127.0.0.1", 0).unwrap!
+  puts(TCP.local_port(listener))
+  IO.flush()
+  socket = TCP.accept(listener, 5000).unwrap!
+  puts(TCP.write_limit(socket, 1023).ok?)
+  TCP.write_limit(socket, 16777216).unwrap!
+  pad = "x" * 4088
+  i = 0
+  while i < 3000
+    TCP.write(socket, "#{1000000 + i}#{pad}\\n", 5000).unwrap!
+    i += 1
+  end
+
+  puts("written")
+  IO.flush()
+  TCP.flush(socket, 30000).unwrap!
+  puts("flushed")
+  TCP.close(socket)
+  puts(TCP.write(socket, "late", 5000).ok?)
+  TCP.close_listener(listener)
+end
+"""
+
+
+@pytest.mark.parametrize("schedulers", ["1", "4"])
+def test_writes_return_while_the_peer_does_not_read_and_a_flush_waits_for_every_byte(tmp_path, adopt, schedulers):
+    """3000 writes of 4 KiB (12 MiB, under the 16 MiB limit set with TCP.write_limit) all return while the Python peer
+    reads nothing, where a send would wait for the peer. The peer then reads: the flush ends, and every line arrived
+    once and in order. A limit out of range and a write after the close are errors."""
+    vm = adopt(start_vm(compile_text(WRITE_PROGRAM, "write", tmp_path), env={"AGENTICA_SCHEDULERS": schedulers}))
+    port = int(vm.next_line())
+    with socket.create_connection(("127.0.0.1", port), timeout=scaled(30)) as peer:
+        assert vm.next_line() == "false"
+        assert vm.next_line() == "written"
+        lines = peer.makefile("rb").read().split(b"\n")
+    assert lines.pop() == b""
+    assert [line[:7] for line in lines] == [b"%d" % (1000000 + i) for i in range(3000)]
+    assert all(line[7:] == b"x" * 4088 for line in lines)
+    assert [vm.next_line(), vm.next_line()] == ["flushed", "false"]
+    assert vm.wait() == 0, vm.stderr_text()
+
+
+WRITE_CLOSE_PROGRAM = """\
+def main() -> Void
+  listener = TCP.listen("127.0.0.1", 0).unwrap!
+  puts(TCP.local_port(listener))
+  IO.flush()
+  socket = TCP.accept(listener, 5000).unwrap!
+  TCP.write_limit(socket, 16777216).unwrap!
+  chunk = "x" * 65536
+  i = 0
+  while i < 200
+    TCP.write(socket, chunk, 5000).unwrap!
+    i += 1
+  end
+
+  if System.args()[0] == "close"
+    TCP.close(socket)
+  end
+
+  puts("written")
+end
+"""
+
+
+@pytest.mark.parametrize("ending", ["close", "end"])
+@pytest.mark.parametrize("schedulers", ["1", "4"])
+def test_a_close_and_the_end_of_the_run_send_the_written_bytes_to_a_late_reader(tmp_path, adopt, schedulers, ending):
+    """200 writes of 64 KiB all return, then the program closes the socket, or just ends, without a flush. The Python
+    peer starts to read half a second later and still gets every byte before the end of the stream."""
+    vm = adopt(start_vm(compile_text(WRITE_CLOSE_PROGRAM, "write_close", tmp_path), ending,
+                        env={"AGENTICA_SCHEDULERS": schedulers}))
+    port = int(vm.next_line())
+    with socket.create_connection(("127.0.0.1", port), timeout=scaled(30)) as peer:
+        assert vm.next_line() == "written"
+        time.sleep(0.5)
+        got = peer.makefile("rb").read()
+    assert (len(got), got.count(b"x")) == (200 * 65536, 200 * 65536)
+    assert vm.wait() == 0, vm.stderr_text()
+    assert vm.stderr_text() == ""
+
+
+def test_a_close_gives_up_at_the_flush_limit_and_the_run_says_what_it_dropped(tmp_path, adopt):
+    """The peer never reads, so the bytes of the write buffer cannot go out: with a flush limit of 300 ms the run
+    still ends, and a warning on standard error at its end says that bytes were dropped."""
+    vm = adopt(start_vm(compile_text(WRITE_CLOSE_PROGRAM, "write_drop", tmp_path), "close",
+                        env={"AGENTICA_SCHEDULERS": "4", "AGENTICA_FLUSH_TIMEOUT_MS": "300"}))
+    port = int(vm.next_line())
+    with socket.create_connection(("127.0.0.1", port), timeout=scaled(30)):
+        assert vm.next_line() == "written"
+        assert vm.wait() == 0, vm.stderr_text()
+    assert "warning: closed sockets dropped" in vm.stderr_text()
+
+
+
+WRITE_TIMEOUT_PROGRAM = """\
+def hold(listener: TCP.Listener) -> Result[Void]
+  peer = try TCP.accept(listener, 5000)
+  _ = IO.gets()
+  TCP.close(peer)
+  ok()
+end
+
+def main() -> Void
+  listener = TCP.listen("127.0.0.1", 0).unwrap!
+  holder = Task.spawn(&hold, listener)
+  socket = TCP.connect("127.0.0.1", TCP.local_port(listener), 5000).unwrap!
+  big = "x" * 1048576
+  written = TCP.write(socket, big, 300)
+  count = 1
+  while written.ok? && count < 64
+    written = TCP.write(socket, big, 300)
+    count += 1
+  end
+
+  IO.inspect(written)
+  IO.inspect(TCP.flush(socket, 300))
+  IO.flush()
+  _ = Task.await(holder)
+  TCP.close_listener(listener)
+end
+"""
+
+
+@pytest.mark.parametrize("schedulers", ["1", "4"])
+def test_a_write_over_the_limit_times_out_when_the_peer_reads_nothing_and_closes_the_socket(tmp_path, adopt, schedulers):
+    """The peer task reads nothing, so megabyte writes fill the kernel's buffers and then the 64 KiB write buffer: the
+    write that leaves it over the limit waits and times out, which closes the socket as a send's timeout does."""
+    vm = adopt(start_vm(compile_text(WRITE_TIMEOUT_PROGRAM, "write_timeout", tmp_path), stdin=True,
+                        env={"AGENTICA_SCHEDULERS": schedulers}))
+    assert 'kind: "net.timeout"' in vm.next_line()
+    assert 'kind: "net.closed"' in vm.next_line()
+    go(vm)
+    assert vm.wait() == 0, vm.stderr_text()
+
+
 def test_main_returns_while_tasks_wait_on_sockets_and_the_peer_sees_every_socket_close(tmp_path, adopt, node):
     peer, ports = start_peer(adopt, node)
     trace, env = trace_env(tmp_path)

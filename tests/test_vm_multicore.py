@@ -2206,15 +2206,27 @@ NET_ORDER = r"""struct Job
   socket: TCP.Socket
   id: Int
   count: Int
+  buffered: Bool
 end
 
-# Sends `count` numbered lines; the padding varies so some sends fill the peer's small buffer and park.
+# Sends `count` numbered lines; the padding varies so some sends fill the peer's small buffer and park. A buffered
+# job writes four lines of five into the socket's write buffer, sends the fifth, and flushes at the end.
 def writer(job: Job) -> Result[Int]
   i = 0
   while i < job.count
     pad = "x" * ((i * 7919 + job.id * 104729) % 9000)
-    try TCP.send(job.socket, "#{job.id} #{i} #{pad}\n", 60000)
+    line = "#{job.id} #{i} #{pad}\n"
+    if job.buffered and i % 5 != 4
+      try TCP.write(job.socket, line, 60000)
+    else
+      try TCP.send(job.socket, line, 60000)
+    end
+
     i = i + 1
+  end
+
+  if job.buffered
+    try TCP.flush(job.socket, 60000)
   end
 
   return ok(job.count)
@@ -2236,6 +2248,7 @@ def main() -> Void
   sockets = args[0].to_i.unwrap!
   tasks = args[1].to_i.unwrap!
   count = args[2].to_i.unwrap!
+  buffered = args[3] == "write"
   listener = TCP.listen("127.0.0.1", 0).unwrap!
   puts(TCP.local_port(listener))
   IO.flush()
@@ -2245,9 +2258,14 @@ def main() -> Void
   while k < sockets
     socket = TCP.accept(listener, 60000).unwrap!
     accepted = accepted.push(socket)
+    # Half of the sockets get a small write buffer, so their writes wait for room.
+    if buffered and k % 2 == 0
+      TCP.write_limit(socket, 4096).unwrap!
+    end
+
     id = 0
     while id < tasks
-      jobs = jobs.push(Task.spawn(&writer, Job(socket: socket, id: id, count: count)))
+      jobs = jobs.push(Task.spawn(&writer, Job(socket: socket, id: id, count: count, buffered: buffered)))
       id = id + 1
     end
 
@@ -2312,17 +2330,19 @@ def read_lines_in_order(port, tasks, count, problems):
 
 
 @RACE
-def test_sends_of_many_tasks_on_many_sockets_keep_their_order_beside_a_slow_reader(tmp_path, repeats):
+@pytest.mark.parametrize("mode", ["send", "write"])
+def test_sends_of_many_tasks_on_many_sockets_keep_their_order_beside_a_slow_reader(tmp_path, repeats, mode):
     # 16 sockets, 4 tasks on each sending 60 numbered lines of up to 9000 bytes, on four schedulers. Most sends go out
     # from the scheduler (the direct send, #1188); a peer with a 4 KiB receive window that pauses between reads makes
     # some of them fill the kernel's buffer and hand the rest to the I/O thread. Each peer reads every line of each
     # task once, whole and in order. A smoke test: it rarely hits the window where a second send could overtake the
     # rest of a first (it passes without the writer lock's hold); the proof of that order is
-    # test_a_send_waits_for_a_direct_send_of_another_task in vm/tests/net_test.c.
+    # test_a_send_waits_for_a_direct_send_of_another_task in vm/tests/net_test.c. In the `write` mode the tasks use the
+    # write buffer (TCP.write, a send every fifth line, a flush at the end), half of the sockets with a 4 KiB limit.
     bytecode = program(tmp_path, "net_order", NET_ORDER)
     sockets, tasks, count = 16, 4, 60
     for _ in range(repeats):
-        process = subprocess.Popen([*vm_command(), *FLAGS, "--", bytecode, str(sockets), str(tasks), str(count)],
+        process = subprocess.Popen([*vm_command(), *FLAGS, "--", bytecode, str(sockets), str(tasks), str(count), mode],
                                    stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                    env=vm_environment(), text=True)
         try:
