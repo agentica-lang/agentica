@@ -46,6 +46,9 @@ struct agc_native {
   agc_list_builder out;
   agc_value *kept;
   agc_stepper *stepper;
+  /* Made by start_native or start_stepper, which nothing but its frame reaches, so finish_native frees it. The barrier
+     of a callback of native code is part of its level's stack and is not. */
+  bool owned;
 };
 
 /* The native frame under a callback's frame (agc_task_run_nested). The callback returns into it, and its step keeps
@@ -571,10 +574,17 @@ void agc_task_enter(agc_vm *vm, agc_task *t, uint32_t function) {
 static void finish_native(agc_vm *vm, agc_value result) {
   agc_task *t = vm->task;
   agc_frame *frame = &t->frames[t->frame_count - 1];
+  agc_native *st = frame->native;
   uint32_t base = frame->base;
   frame->native = NULL;
   t->frame_count--;
   t->regs[base] = result;
+  /* RESULT is built: a filter's list copied its kept items, and the callers of finish_native return without reading
+     the state again. */
+  if (st->owned) {
+    if (st->kind == AGC_NATIVE_FILTER) agc_free(st->kept);
+    agc_free(st);
+  }
   if (t->turn_cost) apply_cost(vm);
 }
 
@@ -798,6 +808,7 @@ static void push_native(agc_vm *vm, agc_native *st, uint32_t base) {
 static void start_native(agc_vm *vm, agc_native_kind kind, uint32_t base, uint32_t span) {
   agc_native *st = agc_alloc(sizeof(agc_native));
   const agc_value *args = vm->task->regs + base;
+  st->owned = true;
   st->kind = kind;
   st->span = span;
   if (counting(kind)) {
@@ -854,6 +865,7 @@ static void start_stepper(agc_vm *vm, const agc_builtin *b, uint32_t base, uint3
     return;
   }
   agc_native *st = agc_alloc(sizeof(agc_native));
+  st->owned = true;
   st->kind = AGC_NATIVE_STEPPER;
   st->span = span;
   st->stepper = t->stepper;

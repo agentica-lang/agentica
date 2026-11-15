@@ -135,9 +135,12 @@ The multicore model (threads, queues and ownership) is in §16
   (lock-free atomics and the wake handle, since a signal handler gets no
   context, 10.2.2 Stop signals), the system trust store of `vm/tls_trust.c` (a
   `CRYPTO_ONCE` and a list filled once and read-only after, shared by every
-  runtime), and `current_site` of `vm/ffi.c` (a `_Thread_local` pointer to a
+  runtime), `current_site` of `vm/ffi.c` (a `_Thread_local` pointer to a
   record on the C stack of a native call, since a callback gets no context but
-  its own data).
+  its own data), and two of `vm/value.c` for the `gc` trace: the record of the
+  collector's event callback (the pauses and the heap in use, written with the
+  collector's lock held, since the callback gets no context), and the
+  `_Thread_local` allocation counts of each thread (integers only).
 
   `setenv("UV_USE_IO_URING", "0", 0)` runs once at start-up (`agc_io_init`,
   before any loop exists), since `setenv` is not thread-safe. `agc_io_init`

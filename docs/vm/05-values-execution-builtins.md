@@ -102,6 +102,13 @@ does not make obvious:
   allocations: it runs at the start of a scheduler's next task. It is
   registered with `GC_REGISTER_FINALIZER_NO_ORDER`, the macro that matches
   `GC_MALLOC_ATOMIC` in the GC-debug build.
+- `agc_free` gives an object back before a collection. It is only for an
+  object the VM made with `agc_alloc` and reaches through one owner: the state
+  of a block call (`map`, `filter`, `each` and the others, and a stepper) and
+  a filter's kept items, freed when the call ends (`finish_native` in
+  `vm/interp.c`); the barrier of a callback of native code is part of its
+  level's stack and is not freed. The fuzz build keeps the block, since
+  `agc_release_all` frees it.
 - `agc_weak` (`vm/value.c`) is the one weak reference (an `Address`'s
   channel). It is registered with `GC_GENERAL_REGISTER_DISAPPEARING_LINK`: the
   plain `GC_general_register_disappearing_link` clears a live object's link in

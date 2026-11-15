@@ -12,6 +12,10 @@
 #include <string.h>
 #include <unistd.h>
 
+/* Pauses under 16 us have a bucket each; above, each power of two has four (pause_bucket). */
+#define PAUSE_EXACT 16
+#define PAUSE_BUCKETS (PAUSE_EXACT + 4 * 60)
+
 #ifndef AGC_NO_GC
 /* A call of agc_gc_blocking, for the function that GC_do_blocking runs. */
 typedef struct {
@@ -26,6 +30,17 @@ typedef struct {
 struct agc_weak {
   uintptr_t hidden;
 };
+
+#ifndef AGC_NO_GC
+/* The record of agc_gc_record_start. The collector writes it from its event callback, with its lock held, and
+   agc_gc_record reads it under that lock. `start_ns` and `start_cpu_us` are the clocks at agc_gc_record_start;
+   `stop_ns` is when the current stop of the world began, 0 outside one; `buckets` counts the pauses by their length
+   (pause_bucket). */
+typedef struct {
+  uint64_t start_ns, start_cpu_us, stop_ns, pauses, max_ns, total_ns, used_last, used_max;
+  uint64_t buckets[PAUSE_BUCKETS];
+} pause_record;
+#endif
 
 #ifdef AGC_NO_GC
 const char *__asan_default_options(void); // NOLINT(readability-identifier-naming,misc-use-internal-linkage)
@@ -55,6 +70,14 @@ static const char limit_json[] = "{\"code\":\"RUNTIME-HEAP-LIMIT\",\"message\":\
 #define HEAP_LIMIT_SLACK ((size_t)1 << 20)
 static size_t heap_limit; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 static bool heap_limit_json; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+#ifndef AGC_NO_GC
+/* The collector's event callback gets no context, so its record is process state (docs/vm/10-io-multicore.md
+   §10.2.3). */
+static pause_record pause_log; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+#endif
+/* The counts of the calling thread while it counts (agc_alloc_count_start): plain integers, never a GC pointer. */
+static _Thread_local bool counting; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+static _Thread_local agc_alloc_counts counts; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 /* The text of each agc_error_kind (vm/error_kinds.h). */
 static const char *const kind_names[AGC_KIND_COUNT] = {
   [AGC_KIND_ERROR] = "error",
@@ -424,6 +447,106 @@ void agc_gc_collect(void) {
 #endif
 }
 
+void agc_free(void *object) {
+#ifdef AGC_NO_GC
+  if (!on_limit) free(object);
+#else
+  if (__builtin_expect(counting, 0)) {
+    counts.freed_objects++;
+    counts.freed_bytes += GC_size(object);
+  }
+  GC_FREE(object);
+#endif
+}
+
+#ifndef AGC_NO_GC
+static size_t pause_bucket(uint64_t us) {
+  if (us < PAUSE_EXACT) return (size_t)us;
+  unsigned top = 63u - (unsigned)__builtin_clzll(us);
+  return PAUSE_EXACT + (size_t)(top - 4) * 4 + (size_t)((us >> (top - 2)) & 3);
+}
+
+static uint64_t pause_bucket_end(size_t bucket) {
+  if (bucket < PAUSE_EXACT) return bucket;
+  unsigned top = (unsigned)((bucket - PAUSE_EXACT) / 4) + 4;
+  uint64_t quarter = (bucket - PAUSE_EXACT) % 4;
+  return ((5 + quarter) << (top - 2)) - 1;
+}
+
+/* Runs in the collecting thread with the collector's lock held, the world stopped or not: it reads a clock and the
+   collector's counters (the _unsafe getter, as the lock is held) and allocates nothing. */
+static void GC_CALLBACK on_gc_event(GC_EventType event) {
+  pause_record *r = &pause_log;
+  if (event == GC_EVENT_PRE_STOP_WORLD) {
+    r->stop_ns = agc_trace_now();
+  } else if (event == GC_EVENT_POST_START_WORLD && r->stop_ns) {
+    uint64_t ns = agc_trace_now() - r->stop_ns;
+    r->stop_ns = 0;
+    r->pauses++;
+    r->total_ns += ns;
+    if (ns > r->max_ns) r->max_ns = ns;
+    r->buckets[pause_bucket(ns / 1000)]++;
+  } else if (event == GC_EVENT_RECLAIM_END) {
+    struct GC_prof_stats_s stats;
+    (void)GC_get_prof_stats_unsafe(&stats, sizeof stats);
+    r->used_last = stats.heapsize_full > stats.free_bytes_full ? stats.heapsize_full - stats.free_bytes_full : 0;
+    if (r->used_last > r->used_max) r->used_max = r->used_last;
+  }
+}
+
+static void *clear_record(void *unused) {
+  (void)unused;
+  memset(&pause_log, 0, sizeof pause_log);
+  pause_log.start_ns = agc_trace_now();
+  pause_log.start_cpu_us = agc_trace_cpu_us();
+  return NULL;
+}
+
+static void *copy_record(void *out) {
+  memcpy(out, &pause_log, sizeof pause_log);
+  return NULL;
+}
+
+static uint64_t pause_rank(const pause_record *r, uint64_t rank) {
+  uint64_t seen = 0;
+  for (size_t b = 0; b < PAUSE_BUCKETS; b++) {
+    seen += r->buckets[b];
+    if (seen >= rank) return pause_bucket_end(b);
+  }
+  return r->max_ns / 1000;
+}
+#endif
+
+void agc_gc_record_start(void) {
+#ifndef AGC_NO_GC
+  (void)GC_call_with_alloc_lock(clear_record, NULL);
+  GC_set_on_collection_event(on_gc_event);
+#endif
+}
+
+bool agc_gc_record(agc_gc_pauses *out) {
+#ifdef AGC_NO_GC
+  (void)out;
+  return false;
+#else
+  pause_record r;
+  (void)GC_call_with_alloc_lock(copy_record, &r);
+  uint64_t max_us = r.max_ns / 1000;
+  uint64_t p50 = pause_rank(&r, (r.pauses + 1) / 2), p99 = pause_rank(&r, r.pauses - r.pauses / 100);
+  uint64_t cpu_us = agc_trace_cpu_us();
+  *out = (agc_gc_pauses){r.total_ns / 1000,
+                         (agc_trace_now() - r.start_ns) / 1000,
+                         cpu_us > r.start_cpu_us ? cpu_us - r.start_cpu_us : 0,
+                         r.pauses,
+                         p50 < max_us ? p50 : max_us,
+                         p99 < max_us ? p99 : max_us,
+                         max_us,
+                         r.used_last,
+                         r.used_max};
+  return true;
+#endif
+}
+
 #ifndef AGC_NO_GC
 /* Reads the link under the collector's lock (GC_call_with_alloc_lock): the collector clears links after it has marked,
    with that lock held and the other threads running, so a read without it could see the pointer of an object the
@@ -521,8 +644,33 @@ static void stress(void) {
 static void stress(void) {}
 #endif
 
+static __attribute__((noinline, cold)) void count_alloc(size_t size, bool atomic) {
+  if (atomic) {
+    counts.atomic_objects++;
+    counts.atomic_bytes += size;
+  } else {
+    counts.scanned_objects++;
+    counts.scanned_bytes += size;
+  }
+  if (size >= AGC_LARGE_OBJECT) {
+    counts.large_objects++;
+    counts.large_bytes += size;
+  }
+}
+
+void agc_alloc_count_start(void) {
+  memset(&counts, 0, sizeof counts);
+  counting = true;
+}
+
+agc_alloc_counts agc_alloc_count_end(void) {
+  counting = false;
+  return counts;
+}
+
 void *agc_alloc(size_t size) {
   stress();
+  if (__builtin_expect(counting, 0)) count_alloc(size, false);
 #ifdef AGC_NO_GC
   void *p = own(size ? size : 1);
 #else
@@ -534,6 +682,7 @@ void *agc_alloc(size_t size) {
 
 void *agc_alloc_atomic(size_t size) {
   stress();
+  if (__builtin_expect(counting, 0)) count_alloc(size, true);
 #ifdef AGC_NO_GC
   void *p = own(size ? size : 1);
 #else
