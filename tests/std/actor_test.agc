@@ -360,6 +360,60 @@ def test_a_second_reply_after_the_first_was_taken_gives_false() -> Result[Void]
   Test.eq(Actor.stop(actor, 5000), ok())
 end
 
+def test_requests_sent_to_two_actors_first_are_answered_in_about_one_wait() -> Result[Void]
+  actors = [counter(probe(), Actor.Options()), counter(probe(), Actor.Options())]
+  started = Time.monotonic_ms
+  requests: List[Actor.Request[Int]] = []
+  for actor in actors
+    request = try Actor.send(actor.address) do |reply| Msg.Nap(300, reply) end
+    requests = requests.push(request)
+  end
+
+  for request in requests
+    try Test.eq(Actor.await(request, 5000), ok(300))
+  end
+
+  # Two calls one by one take at least 600 ms.
+  took = Time.monotonic_ms - started
+  try Test.assert(took < 600, "took #{took} ms")
+  for actor in actors
+    try Actor.stop(actor, 5000)
+  end
+
+  ok()
+end
+
+def test_an_await_past_its_deadline_closes_the_channel_and_the_reply_gives_false() -> Result[Void]
+  p = probe()
+  actor = counter(p, Actor.Options())
+  request = try Actor.send(actor.address) do |reply| Msg.Offer(100, reply) end
+  try Test.eq(Actor.await(request, 20), error("actor: timeout", kind: "channel.timeout"))
+  try get(actor.address, 5000)
+  try Test.eq(p.seen.to_map, {3: 1})
+  Test.eq(Actor.stop(actor, 5000), ok())
+end
+
+def test_a_second_await_of_one_request_gives_a_timeout_at_once() -> Result[Void]
+  actor = counter(probe(), Actor.Options())
+  try Actor.cast(actor.address, Msg.Add(4))
+  request = try Actor.send(actor.address) do |reply| Msg.Get(reply) end
+  try Test.eq(Actor.await(request, 5000), ok(4))
+  started = Time.monotonic_ms
+  try Test.eq(Actor.await(request, 5000), error("actor: timeout", kind: "channel.timeout"))
+  try Test.assert(Time.monotonic_ms - started < 1000, "the second await waited")
+  Test.eq(Actor.stop(actor, 5000), ok())
+end
+
+def test_a_send_to_a_stopped_actor_gives_gone() -> Result[Void]
+  actor = counter(probe(), Actor.Options())
+  try Actor.stop(actor, 5000)
+  request: Result[Actor.Request[Int]] = Actor.send(actor.address) do |reply| Msg.Get(reply) end
+  case request
+    ok(_) -> Test.assert(false, "sent to a stopped actor")
+    error(e) -> Test.eq(e.kind, "channel.gone")
+  end
+end
+
 def test_the_timeout_runs_again_and_again_while_no_message_comes() -> Result[Void]
   actor = timed(some(10))
   state = try ticked(actor.address, 2)

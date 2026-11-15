@@ -4,7 +4,8 @@
 ## first state, `handle` takes the state and a message and gives the next step. `start` runs it in a task of its own
 ## and gives a `Ref`; its `address` is the `Address[M]` of the inbox, which is data, so a table of names can hold it.
 ## `cast` sends a message, `call` sends one that carries a reply channel and waits for the answer, and `stop` ends the
-## actor after the messages already in its inbox. A `Timeout` wakes the actor when no message came in time.
+## actor after the messages already in its inbox. `send` and `await` are the two halves of `call`, so a caller can send
+## to several actors first and then wait for each answer. A `Timeout` wakes the actor when no message came in time.
 
 ## The contract of an actor with state `S` and messages `M`.
 struct Behaviour[S, M]
@@ -44,6 +45,13 @@ struct Ref[S, M]
   task: Task[Result[Void]]
 end
 
+## A request that `send` made: `await` gives its answer.
+struct Request[R]
+  private
+
+  answer: Channel[R]
+end
+
 ## Starts the actor in a task of its own, which owns the inbox: the inbox closes when the actor ends in any way.
 def start[S, M](behaviour: Behaviour[S, M], options: Options = Options()) -> Ref[S, M]
   inbox: Channel[M] = Channel.new(options.capacity)
@@ -76,19 +84,31 @@ def cast[M](address: Address[M], message: M, timeout_ms: Int = 5000) -> Result[V
   end
 end
 
-## Sends the message that `make` builds around a new reply channel and returns the answer, all within `timeout_ms`.
-## Errors as `cast`; a call whose actor ends or crashes before it answers ends with `actor: timeout`. A call that gives
-## up closes its reply channel, so a later `reply` gives false; an answer that came just before is returned.
+## Sends the message that `make` builds around a new reply channel and returns the answer, all within `timeout_ms`:
+## `await(send(...))`. Errors as `send` and `await`.
 def call[M, R](address: Address[M], timeout_ms: Int, make: Fn[Channel[R], M]) -> Result[R]
-  answer: Channel[R] = Channel.new(1)
   started = Time.monotonic_ms
-  try cast(address, make.call(answer), timeout_ms)
-  left = timeout_ms - (Time.monotonic_ms - started)
-  return given_up(answer) if left <= 0
+  request = try send(address, make, timeout_ms)
+  await(request, timeout_ms - (Time.monotonic_ms - started))
+end
 
-  case answer.recv(left)
+## Sends the message that `make` builds around a new reply channel, waiting at most `timeout_ms` for room in the inbox,
+## and gives the request whose answer `await` takes. Errors as `cast`.
+def send[M, R](address: Address[M], make: Fn[Channel[R], M], timeout_ms: Int = 5000) -> Result[Request[R]]
+  answer: Channel[R] = Channel.new(1)
+  try cast(address, make.call(answer), timeout_ms)
+  ok(Request(answer: answer))
+end
+
+## Waits at most `timeout_ms` for the answer of a request. A request whose actor ends or crashes before it answers
+## ends with `actor: timeout`. An await that gives up closes the reply channel, so a later `reply` gives false; an
+## answer that came just before is returned. A request has one answer: a second await gives `actor: timeout` at once.
+def await[R](request: Request[R], timeout_ms: Int) -> Result[R]
+  return given_up(request.answer) if timeout_ms <= 0
+
+  case request.answer.recv(timeout_ms)
     ok(value) -> ok(value)
-    error(_) -> given_up(answer)
+    error(_) -> given_up(request.answer)
   end
 end
 

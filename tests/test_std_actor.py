@@ -18,7 +18,7 @@ import pytest
 from tests.agentica_test import TESTS, cli, run, vm_environment
 
 # A test file and how many tests it has.
-FILES = [("actor_test.agc", 21), ("supervisor_test.agc", 12)]
+FILES = [("actor_test.agc", 25), ("supervisor_test.agc", 12)]
 
 
 @pytest.mark.parametrize("schedulers", [1, 4])

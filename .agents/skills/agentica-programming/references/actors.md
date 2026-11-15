@@ -15,6 +15,9 @@ Actor.continue(state: S) -> Actor.Step[S]
 Actor.done(state: S) -> Actor.Step[S]
 Actor.cast(address: Address[M], message: M, timeout_ms: Int = 5000) -> Result[Void]
 Actor.call(address: Address[M], timeout_ms: Int, make: Fn[Channel[R], M]) -> Result[R]
+Actor.send(address: Address[M], make: Fn[Channel[R], M], timeout_ms: Int = 5000)
+  -> Result[Actor.Request[R]]
+Actor.await(request: Actor.Request[R], timeout_ms: Int) -> Result[R]
 Actor.reply(channel: Channel[R], value: R) -> Bool
 Actor.stop(actor: Actor.Ref[S, M], timeout_ms: Int) -> Result[Void]
 Actor.inbox() -> Channel[M]
@@ -39,6 +42,12 @@ the `Ref`; there are no methods.
   with `Actor.reply(reply, value)`. The answer type comes from the expected
   type (the function's `Result[Int]`), or else from the variant the block
   builds (`Msg.Get(Channel[Int])`), so the call works in `puts` too.
+- `send` and `await` are the two halves of `call`, for requests to several
+  actors at once: `send` to each first
+  (`try Actor.send(addr) do |reply| Msg.Get(reply) end`), then `await` each
+  answer in order, so the waits overlap. `await` keeps the guarantees of
+  `call` (on give-up it closes the channel); a second `await` of one request
+  gives `actor: timeout` at once.
 - `reply` gives whether the caller gets the value and closes the channel
   (one answer per call; a second gives `false`). A call that gave up closed
   its channel, so `reply` gives `false` and the value stays with the actor
