@@ -250,18 +250,17 @@ fn5 "check_void" params=1 captures=0 slots=3 @ 0:59:1-65:1
   L0:
     const r1 void @ 0:59:1-65:1
     return r1 @ 0:59:1-65:1
-fn6 "main" params=0 captures=0 slots=5 entry @ 0:66:1-72:1
+fn6 "main" params=0 captures=0 slots=4 entry @ 0:66:1-72:1
     step @ 0:67:3-68:1
     step @ 0:67:3-67:35
     step @ 0:67:8-67:34
     step @ 0:67:13-67:33
     step @ 0:67:24-67:27
-    const r2 float:bits:4607182418800017408 @ 0:67:24-67:27
+    const r1 float:bits:4607182418800017408 @ 0:67:24-67:27
     step @ 0:67:29-67:32
-    const r3 float:bits:4611686018427387904 @ 0:67:29-67:32
-    enum r1 r2 v2 @ 0:67:13-67:33
-    call r1 fn0 @ 0:67:8-67:34
-    move r0 r1 @ 0:67:8-67:34
+    const r2 float:bits:4611686018427387904 @ 0:67:29-67:32
+    enum r0 r1 v2 @ 0:67:13-67:33
+    call r0 fn0 @ 0:67:8-67:34
     call-builtin r0 "puts" 1 @ 0:67:3-67:35 0:67:8-67:34
     step @ 0:68:3-69:1
     step @ 0:68:3-68:52
@@ -274,17 +273,15 @@ fn6 "main" params=0 captures=0 slots=5 entry @ 0:66:1-72:1
     step @ 0:68:22-68:36
     step @ 0:68:22-68:31
     step @ 0:68:27-68:30
-    const r4 "b" @ 0:68:27-68:30
-    call r4 fn2 @ 0:68:22-68:31
-    move r3 r4 @ 0:68:22-68:31
+    const r3 "b" @ 0:68:27-68:30
+    call r3 fn2 @ 0:68:22-68:31
     call-builtin r3 "String.from_int" 1 @ 0:68:22-68:36 0:68:22-68:31
     concat r1 r2 r3 @ 0:68:20-68:21
     step @ 0:68:39-68:51
     step @ 0:68:45-68:50
     step @ 0:68:48-68:49
-    const r3 int:1 @ 0:68:48-68:49
-    call-builtin r3 "ok" 1 @ 0:68:45-68:50 0:68:48-68:49
-    move r2 r3 @ 0:68:45-68:50
+    const r2 int:1 @ 0:68:48-68:49
+    call-builtin r2 "ok" 1 @ 0:68:45-68:50 0:68:48-68:49
     call r2 fn4 @ 0:68:39-68:51
     concat r0 r1 r2 @ 0:68:37-68:38
     call-builtin r0 "puts" 1 @ 0:68:3-68:52 0:68:8-68:51
@@ -300,8 +297,7 @@ fn6 "main" params=0 captures=0 slots=5 entry @ 0:66:1-72:1
     step @ 0:70:3-71:1
     step @ 0:70:3-70:19
     step @ 0:70:14-70:18
-    call-builtin r1 "ok" 0 @ 0:70:14-70:18
-    move r0 r1 @ 0:70:14-70:18
+    call-builtin r0 "ok" 0 @ 0:70:14-70:18
     call r0 fn5 @ 0:70:3-70:19
     const r0 void @ 0:66:1-72:1
     return r0 @ 0:66:1-72:1

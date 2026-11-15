@@ -12,6 +12,13 @@ import Source from "../syntax/source"
 import Types from "../syntax/types"
 import Ir from "ir"
 
+## The ops that write only R[a], after reading every operand, so R[a] may be an operand.
+DESTINATION_OPS = Set.new([
+  "move", "const", "global", "add-i", "sub-i", "mul-i", "div-i", "mod-i", "neg-i", "not", "lt-i", "le-i", "eq", "ne",
+  "add-f", "sub-f", "mul-f", "div-f", "neg-f", "lt-f", "le-f", "concat", "to-text", "list", "list-len", "list-get",
+  "struct", "field", "enum", "is-variant", "payload", "same", "map", "map-get", "struct-with",
+])
+
 ## A struct of the program as the lowering reads it: its index in the struct table, its fields in order, and the
 ## position of each field.
 struct StructInfo
@@ -145,6 +152,22 @@ def emit_at(fx: Fx, op: String, args: List[Int], span: Source.Span) -> Fx
   fx.with(code: fx.code.push(Ir.instr(op, args, fx.file, [span])))
 end
 
+## The state with the value of register from also in register to. When from is a temporary (temporary) that the last
+## instruction wrote, that instruction writes to instead: no label follows it, so every path to here ran it.
+def move_value(fx: Fx, to: Int, from: Int, temporary: Bool, span: Source.Span) -> Fx
+  code = fx.code
+  last = code.size - 1
+  if temporary and last >= 0
+    instr = code[last]
+    if DESTINATION_OPS.include?(instr.op) and instr.args[0] == from
+      args = instr.args.set(0, to)
+      return fx.with(code: code.set(last, instr.with(args: args)))
+    end
+  end
+
+  emit_at(fx, "move", [to, from], span)
+end
+
 ## The state with a `step` for a node.
 def step(fx: Fx, span: Source.Span) -> Fx = fx.with(code: fx.code.push(Ir.instr("step", [], fx.file, [span])))
 
@@ -176,6 +199,15 @@ def alloc(fx: Fx) -> Fx
   end
 
   fx.with(next: next, high: high)
+end
+
+## The first register of a call's window, whose result is wanted in want: want itself when it is the last register
+## taken, since the registers above it are free and the value it holds is never read again, else a new register.
+def window(fx: Fx, want: Int) -> Out
+  return Out(fx: fx, slot: want) if want >= 0 and want == fx.next - 1
+
+  taken = alloc(fx)
+  Out(fx: taken, slot: taken.next - 1)
 end
 
 ## The register to compute into: want when there is one (a register of 0 or more), else a new one.

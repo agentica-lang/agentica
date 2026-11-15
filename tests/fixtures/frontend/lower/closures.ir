@@ -34,7 +34,7 @@ fn2 "run" params=2 captures=0 slots=4 @ 0:9:1-12:1
     return r2 @ 0:10:3-11:1
     const r2 void @ 0:9:1-12:1
     return r2 @ 0:9:1-12:1
-fn3 "main" params=0 captures=0 slots=10 entry @ 0:13:1-31:1
+fn3 "main" params=0 captures=0 slots=9 entry @ 0:13:1-31:1
     step @ 0:14:3-15:1
     step @ 0:14:12-14:14
     const r0 int:10 @ 0:14:12-14:14
@@ -54,78 +54,71 @@ fn3 "main" params=0 captures=0 slots=10 entry @ 0:13:1-31:1
     step @ 0:17:3-17:37
     step @ 0:17:8-17:36
     step @ 0:17:8-17:10
-    move r4 r2 @ 0:17:8-17:10
+    move r3 r2 @ 0:17:8-17:10
     step @ 0:17:15-17:36
-    move r5 r0 @ 0:17:15-17:36
-    closure r5 fn4 @ 0:17:15-17:36
-    call-builtin r4 "List.map" 2 @ 0:17:8-17:36 0:17:8-17:10 0:17:15-17:36
-    move r3 r4 @ 0:17:8-17:36
+    move r4 r0 @ 0:17:15-17:36
+    closure r4 fn4 @ 0:17:15-17:36
+    call-builtin r3 "List.map" 2 @ 0:17:8-17:36 0:17:8-17:10 0:17:15-17:36
     call-builtin r3 "puts" 1 @ 0:17:3-17:37 0:17:8-17:36
     step @ 0:18:3-19:1
     step @ 0:18:3-18:55
     step @ 0:18:8-18:54
     step @ 0:18:8-18:10
-    move r4 r2 @ 0:18:8-18:10
+    move r3 r2 @ 0:18:8-18:10
     step @ 0:18:15-18:54
-    move r6 r1 @ 0:18:15-18:54
-    move r7 r0 @ 0:18:15-18:54
-    closure r6 fn5 @ 0:18:15-18:54
-    move r5 r6 @ 0:18:15-18:54
-    call-builtin r4 "List.map" 2 @ 0:18:8-18:54 0:18:8-18:10 0:18:15-18:54
-    move r3 r4 @ 0:18:8-18:54
+    move r5 r1 @ 0:18:15-18:54
+    move r6 r0 @ 0:18:15-18:54
+    closure r5 fn5 @ 0:18:15-18:54
+    move r4 r5 @ 0:18:15-18:54
+    call-builtin r3 "List.map" 2 @ 0:18:8-18:54 0:18:8-18:10 0:18:15-18:54
     call-builtin r3 "puts" 1 @ 0:18:3-18:55 0:18:8-18:54
     step @ 0:19:3-20:1
     step @ 0:19:3-19:59
     step @ 0:19:8-19:58
     step @ 0:19:8-19:10
-    move r4 r2 @ 0:19:8-19:10
+    move r3 r2 @ 0:19:8-19:10
     step @ 0:19:15-19:58
-    move r6 r2 @ 0:19:15-19:58
-    move r7 r0 @ 0:19:15-19:58
-    closure r6 fn6 @ 0:19:15-19:58
-    move r5 r6 @ 0:19:15-19:58
-    call-builtin r4 "List.map" 2 @ 0:19:8-19:58 0:19:8-19:10 0:19:15-19:58
-    move r3 r4 @ 0:19:8-19:58
+    move r5 r2 @ 0:19:15-19:58
+    move r6 r0 @ 0:19:15-19:58
+    closure r5 fn6 @ 0:19:15-19:58
+    move r4 r5 @ 0:19:15-19:58
+    call-builtin r3 "List.map" 2 @ 0:19:8-19:58 0:19:8-19:10 0:19:15-19:58
     call-builtin r3 "puts" 1 @ 0:19:3-19:59 0:19:8-19:58
     step @ 0:20:3-21:1
     step @ 0:20:3-20:26
     step @ 0:20:8-20:25
     step @ 0:20:14-20:21
-    closure r4 fn1 @ 0:20:14-20:21
+    closure r3 fn1 @ 0:20:14-20:21
     step @ 0:20:23-20:24
-    const r5 int:4 @ 0:20:23-20:24
-    call r4 fn0 @ 0:20:8-20:25
-    move r3 r4 @ 0:20:8-20:25
+    const r4 int:4 @ 0:20:23-20:24
+    call r3 fn0 @ 0:20:8-20:25
     call-builtin r3 "puts" 1 @ 0:20:3-20:26 0:20:8-20:25
     step @ 0:21:3-22:1
     step @ 0:21:3-21:37
     step @ 0:21:8-21:36
     step @ 0:21:12-21:13
-    const r4 int:3 @ 0:21:12-21:13
+    const r3 int:3 @ 0:21:12-21:13
     step @ 0:21:15-21:36
-    move r5 r0 @ 0:21:15-21:36
-    closure r5 fn8 @ 0:21:15-21:36
-    call r4 fn2 @ 0:21:8-21:36
-    move r3 r4 @ 0:21:8-21:36
+    move r4 r0 @ 0:21:15-21:36
+    closure r4 fn8 @ 0:21:15-21:36
+    call r3 fn2 @ 0:21:8-21:36
     call-builtin r3 "puts" 1 @ 0:21:3-21:37 0:21:8-21:36
     step @ 0:22:3-23:1
     step @ 0:22:11-22:42
     step @ 0:22:11-22:13
-    move r4 r2 @ 0:22:11-22:13
+    move r3 r2 @ 0:22:11-22:13
     step @ 0:22:21-22:42
-    closure r5 fn9 @ 0:22:21-22:42
-    call-builtin r4 "List.filter" 2 @ 0:22:11-22:42 0:22:11-22:13 0:22:21-22:42
-    move r3 r4 @ 0:22:11-22:42
+    closure r4 fn9 @ 0:22:21-22:42
+    call-builtin r3 "List.filter" 2 @ 0:22:11-22:42 0:22:11-22:13 0:22:21-22:42
     step @ 0:23:3-24:1
     step @ 0:23:11-23:47
     step @ 0:23:11-23:13
-    move r5 r2 @ 0:23:11-23:13
+    move r4 r2 @ 0:23:11-23:13
     step @ 0:23:21-23:22
-    const r6 int:0 @ 0:23:21-23:22
+    const r5 int:0 @ 0:23:21-23:22
     step @ 0:23:24-23:47
-    closure r7 fn10 @ 0:23:24-23:47
-    call-builtin r5 "List.reduce" 3 @ 0:23:11-23:47 0:23:11-23:13 0:23:21-23:22 0:23:24-23:47
-    move r4 r5 @ 0:23:11-23:47
+    closure r6 fn10 @ 0:23:24-23:47
+    call-builtin r4 "List.reduce" 3 @ 0:23:11-23:47 0:23:11-23:13 0:23:21-23:22 0:23:24-23:47
     step @ 0:24:3-25:1
     step @ 0:24:3-24:28
     step @ 0:24:8-24:27
@@ -149,14 +142,13 @@ fn3 "main" params=0 captures=0 slots=10 entry @ 0:13:1-31:1
     step @ 0:28:3-29:1
     step @ 0:28:11-28:74
     step @ 0:28:11-28:13
-    move r6 r2 @ 0:28:11-28:13
+    move r5 r2 @ 0:28:11-28:13
     step @ 0:28:18-28:74
-    move r8 r2 @ 0:28:18-28:74
-    move r9 r0 @ 0:28:18-28:74
-    closure r8 fn12 @ 0:28:18-28:74
-    move r7 r8 @ 0:28:18-28:74
-    call-builtin r6 "List.map" 2 @ 0:28:11-28:74 0:28:11-28:13 0:28:18-28:74
-    move r5 r6 @ 0:28:11-28:74
+    move r7 r2 @ 0:28:18-28:74
+    move r8 r0 @ 0:28:18-28:74
+    closure r7 fn12 @ 0:28:18-28:74
+    move r6 r7 @ 0:28:18-28:74
+    call-builtin r5 "List.map" 2 @ 0:28:11-28:74 0:28:11-28:13 0:28:18-28:74
     step @ 0:29:3-30:1
     step @ 0:29:3-29:14
     step @ 0:29:8-29:13
