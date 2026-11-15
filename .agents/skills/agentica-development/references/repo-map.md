@@ -34,7 +34,7 @@ compiler/         # the front end: one folder per context (placement and imports
 vm/               # the C11 VM; layers and the "Read next" table in references/vm.md
   value.c         # values and memory; the only file that includes gc.h or calls GC_*
   *_os.h          # a system difference sits behind an `_os.h` header, one file per system
-  agentica.c      # main: `run`, else the front end in a first runtime, retired at the hand-off, then the program in a second
+  agentica.c      # main: `run`, else the launcher (a bytecode cache hit) or the front end in a first runtime, retired at the hand-off, then the program in a second
   tests/          # C tests (references/vm-tests.md)
 tests/            # pytest modules test_<area>.py
   test_spec_<area>.py   # language rules through the CLI; helpers in spec_support.py

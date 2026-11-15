@@ -8,6 +8,28 @@ import Env from "../modules/link_env"
 import Launch from "cli_launch"
 import Options from "cli_options"
 
+## The first words that are commands. Any other first word is the source file of a run (cli.agc, dispatch).
+COMMANDS = [
+  "test",
+  "help",
+  "doc",
+  "fmt",
+  "lint",
+  "install",
+  "add",
+  "update",
+  "outline",
+  "type-at",
+  "symbol",
+  "refs",
+  "run",
+  "check",
+  "compile",
+]
+
+## Whether the words after the options are a run of a source file: a first word that is no command.
+def file_run?(words: List[String]) -> Bool = words.size > 0 and !COMMANDS.include?(words[0])
+
 ## The settings of a run or a `compile` with the flags `deny`: under any --deny-* flag or --sandbox no native module
 ## is built, and the bytecode cache keeps such programs apart (Settings.native_denied).
 def settings(settings: Env.Settings, deny: List[String]) -> Env.Settings

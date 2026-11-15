@@ -14,9 +14,9 @@ import Env from "../modules/link_env"
 import Cli from "cli"
 import Launch from "cli_launch"
 
-## Runs the command line.
-def run(settings: Env.Settings, words: List[String]) -> Void
-  System.exit(Cli.run(settings, words, &hand_off))
+## Runs the command line. `cache_missed` says that the launcher found no usable cache entry for this run.
+def run(settings: Env.Settings, words: List[String], cache_missed: Bool) -> Void
+  System.exit(Cli.run(settings, words, cache_missed, &hand_off))
 end
 
 private

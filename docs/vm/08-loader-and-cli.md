@@ -231,6 +231,24 @@ stages.
   with status 1 and `agentica: internal error: the front end left an operation
   running`, because the program must not share a process with anything of the
   compiler.
+- **The launcher.** Before the front end, `agentica WORDS...` runs a small
+  program that the binary carries, the launcher
+  (`compiler/embedded/launcher.agc`, `compiler/app/cli_hit.agc`), in a runtime
+  of its own with the front end's arguments. It serves one case: a run of a
+  source file whose compiled program is in the bytecode cache. It reads the
+  options, plans and reads the cache entry with the code the front end uses
+  (`cli_options.agc`, `cli_run.agc`, `io/bytecode_cache.agc`) and calls
+  `FrontEnd.hand_off`, so such a start does not load the front end. In every
+  other case it declines: it prints nothing and ends, and C runs the front end,
+  which does the whole work. A launcher that ends with status 3 has looked for
+  the entry and found none it could use; C then adds `--cache-missed` to the
+  front end's arguments, and the front end compiles without looking again. C
+  does not start the launcher with `--front-end FILE`, in a binary that carries
+  none (the first binary of the bootstrap), or when the first word that is no
+  option is a command (`may_run_a_file` in `vm/agentica.c`: a hint that saves
+  the start, the launcher decides). The launcher has the trust and the guarded
+  builtins of the front end. A stop signal during its run ends the process, as
+  in the front end; a launcher that fails is a decline.
 - **What a front end may hand over, and trust.** The front end that C loads is
   fully trusted: it runs with the user's rights and, through the options it
   hands over, can drop the user's `--deny-*` flags. That is why
@@ -271,16 +289,18 @@ stages.
 - **The loader.** `agc_load_front_end` is `agc_load_traced` without the check of
   the Agentica version in the header. Only `vm/agentica.c` calls it; the program
   that the front end hands over goes through `agc_load_traced`.
-- **The embedded data.** `agc_embedded_data` holds the front end, the BDD runner
-  and the default step program of `agentica test`, then each `std/` source's
-  NUL-terminated path and text (layout in `vm/embedded.h`). It is `.rodata`
-  built from `.incbin` and label differences, so there are no relocations. The
-  runner and the step program (`compiler/embedded/runner.agc`, `steps.agc`) are
-  compiled by the first binary with `stage2` as its front end, against the
-  `std/` sources of the same build; `make fixed-point` checks that
-  `dist/agentica` compiles the same bytes. The first binary of the bootstrap is
-  linked without them, because it has no `stage2` yet; its front end is stage0,
-  whose driver compiles them from the `std/` sources on every `agentica test`.
+- **The embedded data.** `agc_embedded_data` holds the front end, the BDD
+  runner, the default step program of `agentica test` and the launcher, then
+  each `std/` source's NUL-terminated path and text (layout in `vm/embedded.h`).
+  It is `.rodata` built from `.incbin` and label differences, so there are no
+  relocations. The runner, the step program and the launcher
+  (`compiler/embedded/runner.agc`, `steps.agc`, `launcher.agc`) are compiled by
+  the first binary with `stage2` as its front end, against the `std/` sources of
+  the same build; `make fixed-point` checks that `dist/agentica` compiles the
+  same bytes. The first binary of the bootstrap is linked without them, because
+  it has no `stage2` yet; its front end is stage0, whose driver compiles the two
+  test programs from the `std/` sources on every `agentica test`, and every
+  start loads the front end.
 
 **VM tracing.**
 
