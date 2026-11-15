@@ -1,5 +1,6 @@
-# A value assigned to an existing local, or a call result placed in the last register taken, is written straight into
-# its register: each case reads that register before it is written.
+# Values written straight into their register: an assignment to an existing local whose last instruction reads that
+# local as an operand (`aliases` runs it in a hot loop, so the JIT compiles the same instructions), and call results
+# placed in the last register taken, including nested calls and calls whose arguments read the local being assigned.
 enum Shape
   Dot
   Box(Int, Int)
@@ -19,6 +20,39 @@ def area(shape: Shape) -> Int
     Shape.Dot -> 0
     Shape.Box(w, h) -> w * h
   end
+end
+
+def aliases(rounds: Int) -> String
+  idx = [1, 2, 0]
+  names = [2, 0, 1]
+  i = 0
+  k = 0
+  n = 0
+  f = 1.5
+  b = false
+  s = ""
+  x = true
+  y = true
+  round = 0
+  while round < rounds
+    i = idx[i]
+    k = names[k]
+    x = (y and x) == x
+    n = n + round + 3
+    n = n / 7
+    n = n % 5
+    n = -n
+    b = n <= n
+    f = f * f
+    f = f / f + f
+    if f > 1000.0
+      f = 1.5
+    end
+    s = "a"
+    s = s + s
+    round += 1
+  end
+  "#{i} #{k} #{x} #{n} #{f} #{b} #{s}"
 end
 
 def main() -> Void
@@ -73,4 +107,6 @@ def main() -> Void
   puts(total)
   last = twice(add(twice(1), total))
   puts(last)
+  puts(aliases(3))
+  puts(aliases(20_000))
 end

@@ -75,9 +75,14 @@ code does not show:
   (`@2::User` when imported); the builtin finds the struct by that name in the
   Types section. The checker rejects a target that is not decodable
   (`CHECK-NOT-DECODABLE`).
-- Assignment to an existing local goes through a temporary, then `move`:
-  lowering straight into the local would let `x = y and x` read the new `x`. A
-  new local is lowered straight into its slot.
+- Assignment to an existing local is lowered into a temporary. When the last
+  instruction wrote that temporary, is one of `DESTINATION_OPS`
+  (`lower_state.agc`: it reads every operand before it writes R[a]) and no
+  label follows it, that instruction writes the local instead. Otherwise a
+  `move` follows: lowering straight into the local would let `x = y and x` read
+  the new `x`, and there a label comes last. A new local is lowered straight
+  into its slot. A call whose result goes into the last register taken (a new
+  local, an argument) starts its window at that register.
 - `RUNTIME-INDEX-OUT-OF-RANGE` and `RUNTIME-KEY-NOT-FOUND` point at the index
   expression's span.
 
