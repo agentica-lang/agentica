@@ -61,6 +61,12 @@ end
   write to GC memory, no API calls. The argument data lasts until the call
   returns: copy what a library keeps across calls (a `_start` that a later
   `_cont` finishes) into the resource state or other `malloc` memory.
+- `an_error_kind(env, kind, message, len, keys, values, n)` (API 1.4) makes
+  `error(message, kind: kind, details: {...})` from NUL-terminated C
+  strings; a kind that is not a dotted name fails the call.
+  `an_get_error(env, result, &kind, &message, &details)` reads an error
+  Result (outputs may be `NULL`); `an_get_result` still gives an error's
+  message as a String.
 - `[native.NAME] build = { sources = ["native/stats.c"], defines = [...],
   libs = ["m"] }` in `agentica.toml` builds the module with the system C
   compiler (`CC`, else `cc`; `gcc` on Windows) on a run, `compile`, `test` or

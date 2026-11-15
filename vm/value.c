@@ -821,12 +821,13 @@ agc_string **agc_error_kinds(void) {
 
 /* The empty map, none and the kinds are the run's shared values (agc_vm_init and the loader made them before any
    thread), so an error built on any scheduler allocates only its struct, its location and a code that it has. */
-static agc_value error_of(agc_vm *vm, agc_error_kind kind, agc_string *message, bool coded, int64_t code) {
+static agc_value error_of(agc_vm *vm, agc_error_kind kind, agc_string *named, agc_string *message, bool coded,
+                          int64_t code) {
   const agc_runtime *rt = vm->rt;
   if (rt->error_struct == UINT32_MAX) return agc_result_value(false, agc_string_value(message));
   agc_value none = agc_optional_make(rt->program, false, agc_void());
   agc_struct *e = agc_new_struct(rt->error_struct, AGC_ERROR_FIELDS);
-  e->fields[AGC_ERROR_KIND] = agc_string_value(rt->kinds[kind]);
+  e->fields[AGC_ERROR_KIND] = agc_string_value(named ? named : rt->kinds[kind]);
   e->fields[AGC_ERROR_MESSAGE] = agc_string_value(message);
   e->fields[AGC_ERROR_CODE] = coded ? agc_optional_make(rt->program, true, agc_int(code)) : none;
   e->fields[AGC_ERROR_DETAILS] = rt->empty_map;
@@ -836,11 +837,15 @@ static agc_value error_of(agc_vm *vm, agc_error_kind kind, agc_string *message, 
 }
 
 agc_value agc_error_string(agc_vm *vm, agc_error_kind kind, agc_string *message) {
-  return error_of(vm, kind, message, false, 0);
+  return error_of(vm, kind, NULL, message, false, 0);
+}
+
+agc_value agc_error_named(agc_vm *vm, agc_string *kind, agc_string *message) {
+  return error_of(vm, AGC_KIND_ERROR, kind, message, false, 0);
 }
 
 agc_value agc_error_code(agc_vm *vm, agc_error_kind kind, agc_string *message, int64_t code) {
-  return error_of(vm, kind, message, true, code);
+  return error_of(vm, kind, NULL, message, true, code);
 }
 
 agc_value agc_error(agc_vm *vm, agc_error_kind kind, const char *message) {
