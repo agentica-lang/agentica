@@ -25,6 +25,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - **Breaking:** `agentica test` runs the scenarios of each `--jobs` slot in one worker process while they pass, so a suite of small scenarios runs about 5 times faster; state that the step program makes in `main` before `BDD.run` (an `ATS` table, a `Channel`) and process state that a step sets (`Logger.set_level`) are now shared by the scenarios one worker runs, and `--isolate` gives each scenario its own process as before (#1465).
 - Loops that call builtins such as `Map.get` or `String.slice` are up to 17% faster on Linux and macOS (#1599).
 - Loops that read lists by index (`xs[i]`, `xs.size`) are up to 11% faster (#1123).
+- Loops of Int arithmetic and compares are up to 15% faster on x86-64: compiled code checks a value's type once per block and keeps the last result in a machine register (#1123).
 - `std/cache`: dropping a generation and `Cache.clear` take the same short time whatever the size; a put that dropped 32,000 entries waited about 200 ms (#1108).
 - `ATS` tables are hash tables now: a single task writes about 5 times faster, tasks that write one table about 8 times faster, and `get` is O(1). `keys` and `to_map` copy the table, O(n), where they took a snapshot in O(1) (#1442).
 

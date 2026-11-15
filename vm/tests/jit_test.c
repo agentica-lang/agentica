@@ -185,19 +185,19 @@ static void bytes(void) {
   size_t start = e.len;
   agc_emit_move(&e, 1, 2);
   static const uint8_t move[] = {
-    0x49, 0x8b, 0x84, 0x24, 0x20, 0, 0, 0, /* mov rax, [r12 + 32] */
-    0x49, 0x8b, 0x94, 0x24, 0x28, 0, 0, 0, /* mov rdx, [r12 + 40] */
-    0x49, 0x89, 0x84, 0x24, 0x10, 0, 0, 0, /* mov [r12 + 16], rax */
-    0x49, 0x89, 0x94, 0x24, 0x18, 0, 0, 0, /* mov [r12 + 24], rdx */
+    0x49, 0x8b, 0x94, 0x24, 0x20, 0, 0, 0, /* mov rdx, [r12 + 32] */
+    0x49, 0x89, 0x94, 0x24, 0x10, 0, 0, 0, /* mov [r12 + 16], rdx */
+    0x49, 0x8b, 0x84, 0x24, 0x28, 0, 0, 0, /* mov rax, [r12 + 40] */
+    0x49, 0x89, 0x84, 0x24, 0x18, 0, 0, 0, /* mov [r12 + 24], rax */
   };
   assert(e.len - start == sizeof move && memcmp(e.code + start, move, sizeof move) == 0);
   start = e.len;
   agc_emit_const(&e, 3, 1);
   static const uint8_t constant[] = {
-    0x49, 0x8b, 0x85, 0x10, 0, 0, 0,       /* mov rax, [r13 + 16] */
-    0x49, 0x8b, 0x95, 0x18, 0, 0, 0,       /* mov rdx, [r13 + 24] */
-    0x49, 0x89, 0x84, 0x24, 0x30, 0, 0, 0, /* mov [r12 + 48], rax */
-    0x49, 0x89, 0x94, 0x24, 0x38, 0, 0, 0, /* mov [r12 + 56], rdx */
+    0x49, 0x8b, 0x95, 0x10, 0, 0, 0,       /* mov rdx, [r13 + 16] */
+    0x49, 0x8b, 0x85, 0x18, 0, 0, 0,       /* mov rax, [r13 + 24] */
+    0x49, 0x89, 0x94, 0x24, 0x30, 0, 0, 0, /* mov [r12 + 48], rdx */
+    0x49, 0x89, 0x84, 0x24, 0x38, 0, 0, 0, /* mov [r12 + 56], rax */
   };
   assert(e.len - start == sizeof constant && memcmp(e.code + start, constant, sizeof constant) == 0);
   start = e.len;
@@ -214,21 +214,34 @@ static void bytes(void) {
   /* A constant whose offset does not fit 32 bits keeps the function interpreted. */
   agc_emit_const(&e, 0, UINT32_MAX);
   assert(agc_emit_end(&e) == 0);
-}
-
-/* total = 0 + 1 + ... + (n - 1) for n in R0, with the STEP of the loop at pc 2. */
-static void sum_loop(one_function *f) {
-  memset(f, 0, sizeof *f);
-  emit(f, AGC_OP_CONST, 1, 0, 0);
-  emit(f, AGC_OP_CONST, 2, 0, 0);
-  emit(f, AGC_OP_STEP, 1, 0, 0);
-  emit(f, AGC_OP_LT_I, 3, 1, 0);
-  emit(f, AGC_OP_JUMP_IF_FALSE, 3, 9, 0);
-  emit(f, AGC_OP_ADD_I, 2, 2, 1);
-  emit(f, AGC_FUSED_CONST_ARITH_I, 4, 1, 0);
-  emit(f, AGC_OP_ADD_I, 1, 1, 4);
-  emit(f, AGC_OP_JUMP, 0, 2, 0);
-  emit(f, AGC_OP_RETURN, 2, 0, 0);
+  /* R4 = R3 + R1 right after R3 = R1 + R2, with R1 and R3 known Ints: no tag check, and R3 comes from rax. An entry
+     at that instruction goes through a stub that loads R3 first. */
+  uint8_t tags[8];
+  memset(tags, AGC_JIT_TAG_UNKNOWN, sizeof tags);
+  agc_emit_begin(&e, 2);
+  e.tags = tags;
+  e.tag_count = 8;
+  agc_emit_label(&e, 0);
+  agc_emit_int(&e, AGC_OP_ADD_I, (agc_instr){AGC_OP_ADD_I, 3, 1, 2}, 0);
+  tags[1] = tags[3] = AGC_T_INT;
+  agc_emit_label(&e, 1);
+  start = e.len;
+  agc_emit_int(&e, AGC_OP_ADD_I, (agc_instr){AGC_OP_ADD_I, 4, 3, 1}, 1);
+  static const uint8_t add[] = {
+    0x49, 0x03, 0x84, 0x24, 0x18, 0, 0, 0,             /* add rax, [r12 + 24] */
+    0x0f, 0x80, 0, 0, 0, 0,                            /* jo exit */
+    0x49, 0xc7, 0x84, 0x24, 0x40, 0, 0, 0, 3, 0, 0, 0, /* mov qword [r12 + 64], 3 */
+    0x49, 0x89, 0x84, 0x24, 0x48, 0, 0, 0,             /* mov [r12 + 72], rax */
+  };
+  _Static_assert(AGC_T_INT == 3, "the tag in the bytes above");
+  assert(e.len - start == sizeof add && memcmp(e.code + start, add, sizeof add) == 0);
+  size_t direct = start, size = agc_emit_end(&e);
+  static const uint8_t reload[] = {0x49, 0x8b, 0x84, 0x24, 0x38, 0, 0, 0, 0xe9}; /* mov rax, [r12 + 56]; jmp */
+  size_t stub = e.labels[1];
+  assert(size && stub > direct && memcmp(e.code + stub, reload, sizeof reload) == 0);
+  int32_t rel;
+  memcpy(&rel, e.code + stub + sizeof reload, sizeof rel);
+  assert(stub + sizeof reload + 4 + (size_t)(int64_t)rel == direct);
 }
 
 /* A CALL that cannot be native and a RETURN not called natively take their exits, and a TAIL_CALL of a function past
@@ -255,6 +268,118 @@ static void run_on(agc_task *t, agc_frame *frames, agc_value *regs) {
   t->frame_count = t->depth = 1;
   t->regs = regs;
   t->reg_capacity = 8;
+}
+
+static agc_value truth(agc_vm *v, agc_value *args, uint32_t span) {
+  (void)v;
+  (void)args;
+  (void)span;
+  return agc_bool(true);
+}
+
+/* A tag that an instruction checked is not checked again in its block, and is checked again after anything that may
+   have changed the register: a jump target, an opcode helper, a builtin and a call. Each function checks R1 as an Int
+   at instruction 0 and reads it as an Int again at instruction 2, where it holds a Bool by then. */
+static AGC_JIT_CALLER void known_tags(void) {
+  static const agc_builtin row = {"Test.truth", 0, truth, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, true};
+  const agc_builtin *rows[1] = {&row};
+  agc_task *t = vm.task, saved = *vm.task;
+  agc_frame frames[2] = {{.function = 0}};
+  agc_value R[8];
+  run_on(t, frames, R);
+  vm.turn_left = vm.batch = vm.next_stop = vm.stop_set = 1000;
+  static const agc_instr between[3] = {
+    {AGC_OP_TO_TEXT, 1, 1, 0}, {AGC_OP_CALL_BUILTIN, 1, 0, 0}, {AGC_OP_CALL, 1, 9, 0}};
+  for (int k = 0; k < 3; k++) {
+    one_function f;
+    memset(&f, 0, sizeof f);
+    emit(&f, AGC_OP_ADD_I, 3, 1, 1);
+    emit(&f, between[k].op, between[k].a, between[k].b, between[k].c);
+    emit(&f, AGC_OP_ADD_I, 3, 1, 1);
+    emit(&f, AGC_OP_RETURN, 3, 0, 0);
+    f.program.builtins = rows;
+    f.program.builtin_count = 1;
+    agc_jit_code code = compile(&f);
+    assert(code);
+    memset(R, 0, sizeof R);
+    R[1] = agc_int(4);
+    frames[0].pc = 0;
+    t->turn_cost = 0;
+    agc_jit_exit out = code(&vm, R, f.constants, 0);
+    if (between[k].op == AGC_OP_CALL) {
+      /* The call leaves (function 9 is past the table); its callee's result lands in R1. */
+      expect_exit(out, AGC_JIT_EXIT_CALL, 1);
+      R[1] = agc_bool(true);
+      out = code(&vm, R, f.constants, 2);
+    }
+    expect_exit(out, AGC_STATUS_WRONG_TAG, 2);
+    assert(same_bits(R[3], agc_int(8)) && !agc_is(R[1], AGC_T_INT));
+  }
+  /* The loop's second pass reads R1 at its jump target, after the MOVE made it a Bool. */
+  one_function f;
+  memset(&f, 0, sizeof f);
+  emit(&f, AGC_OP_ADD_I, 3, 1, 1);
+  emit(&f, AGC_OP_STEP, 1, 0, 0);
+  emit(&f, AGC_OP_ADD_I, 3, 1, 1);
+  emit(&f, AGC_OP_MOVE, 1, 2, 0);
+  emit(&f, AGC_OP_JUMP, 0, 1, 0);
+  agc_jit_code code = compile(&f);
+  assert(code);
+  R[1] = agc_int(4);
+  R[2] = agc_bool(true);
+  expect_exit(code(&vm, R, f.constants, 0), AGC_STATUS_WRONG_TAG, 2);
+  *t = saved;
+  vm.next_stop = 1000;
+}
+
+/* A payload that the instruction before left in a machine register is read from the frame's register when the code
+   is entered at the instruction that uses it, as after an exit: nothing but the frame's registers carries over. */
+static AGC_JIT_CALLER void entries_inside_a_block(void) {
+  one_function f;
+  memset(&f, 0, sizeof f);
+  emit(&f, AGC_OP_ADD_I, 3, 1, 2);
+  emit(&f, AGC_OP_ADD_I, 4, 3, 1);
+  emit(&f, AGC_OP_LT_I, 5, 4, 1);
+  emit(&f, AGC_OP_JUMP_IF_FALSE, 5, 6, 0);
+  emit(&f, AGC_OP_MOVE, 6, 1, 0);
+  emit(&f, AGC_OP_ADD_I, 4, 6, 6);
+  emit(&f, AGC_OP_RETURN, 4, 0, 0);
+  agc_jit_code code = compile(&f);
+  assert(code);
+  agc_value R[8] = {agc_nil(), agc_int(5), agc_int(7)};
+  expect_exit(code(&vm, R, f.constants, 0), AGC_JIT_EXIT_RETURN, 6);
+  assert(same_bits(R[3], agc_int(12)) && same_bits(R[4], agc_int(17)) && same_bits(R[5], agc_bool(false)));
+  R[3] = agc_int(100);
+  expect_exit(code(&vm, R, f.constants, 1), AGC_JIT_EXIT_RETURN, 6);
+  assert(same_bits(R[4], agc_int(105)));
+  R[4] = agc_int(1);
+  expect_exit(code(&vm, R, f.constants, 2), AGC_JIT_EXIT_RETURN, 6);
+  assert(same_bits(R[5], agc_bool(true)) && same_bits(R[4], agc_int(10)));
+  R[4] = agc_int(1);
+  R[5] = agc_bool(false);
+  expect_exit(code(&vm, R, f.constants, 3), AGC_JIT_EXIT_RETURN, 6);
+  assert(same_bits(R[4], agc_int(1)));
+  R[5] = agc_bool(true);
+  expect_exit(code(&vm, R, f.constants, 3), AGC_JIT_EXIT_RETURN, 6);
+  assert(same_bits(R[4], agc_int(10)));
+  R[6] = agc_int(21);
+  expect_exit(code(&vm, R, f.constants, 5), AGC_JIT_EXIT_RETURN, 6);
+  assert(same_bits(R[4], agc_int(42)));
+}
+
+/* total = 0 + 1 + ... + (n - 1) for n in R0, with the STEP of the loop at pc 2. */
+static void sum_loop(one_function *f) {
+  memset(f, 0, sizeof *f);
+  emit(f, AGC_OP_CONST, 1, 0, 0);
+  emit(f, AGC_OP_CONST, 2, 0, 0);
+  emit(f, AGC_OP_STEP, 1, 0, 0);
+  emit(f, AGC_OP_LT_I, 3, 1, 0);
+  emit(f, AGC_OP_JUMP_IF_FALSE, 3, 9, 0);
+  emit(f, AGC_OP_ADD_I, 2, 2, 1);
+  emit(f, AGC_FUSED_CONST_ARITH_I, 4, 1, 0);
+  emit(f, AGC_OP_ADD_I, 1, 1, 4);
+  emit(f, AGC_OP_JUMP, 0, 2, 0);
+  emit(f, AGC_OP_RETURN, 2, 0, 0);
 }
 
 /* The code of function 0 of PROGRAM, compiled with `always` once function 1 has code; *JIT is the run's JIT. */
@@ -2017,6 +2142,8 @@ int main(void) {
   call_values();
   direct_calls();
   loops_and_steps();
+  known_tags();
+  entries_inside_a_block();
   int_rules();
   helpers();
   reads();

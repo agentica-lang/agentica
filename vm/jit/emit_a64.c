@@ -225,20 +225,24 @@ static void compare_tag(agc_emitter *e, uint32_t r, agc_tag tag) {
 
 /* The tag of register R must be TAG, else the instruction at PC fails with a wrong tag, as agc_as_int does. */
 static void need_tag(agc_emitter *e, uint32_t r, agc_tag tag, uint32_t pc) {
+  if (agc_emit_known(e, r, tag)) return;
   compare_tag(e, r, tag);
   exit_if(e, CC_NE, AGC_STATUS_WRONG_TAG, pc);
 }
 
 /* The tag of register R must be TAG, else the interpreter runs the instruction at PC, and fails as it does. */
 static void tag_or_interpret(agc_emitter *e, uint32_t r, agc_tag tag, uint32_t pc) {
+  if (agc_emit_known(e, r, tag)) return;
   compare_tag(e, r, tag);
   exit_if(e, CC_NE, AGC_JIT_EXIT_INTERPRET, pc);
 }
 
 /* R[a] = VALUE with TAG: the full tag word, then the payload. */
 static void store_value(agc_emitter *e, uint32_t a, agc_tag tag, int value) {
-  move_imm32(e, TAGS, (uint32_t)tag);
-  store(e, REGS, TAG(a), TAGS);
+  if (!agc_emit_known(e, a, tag)) {
+    move_imm32(e, TAGS, (uint32_t)tag);
+    store(e, REGS, TAG(a), TAGS);
+  }
   store(e, REGS, WORD(a), value);
 }
 
@@ -428,23 +432,28 @@ static void cost_exit(agc_emitter *e, uint32_t pc) {
 
 /* EQ and NE: two Ints inline; any other pair through agc_op_eq or agc_op_ne. */
 void A64(equal)(agc_emitter *e, agc_opcode op, agc_instr in, uint32_t pc) {
-  bool eq = op == AGC_OP_EQ;
-  /* Both tags Int, in one test: ccmp compares R[c]'s tag only when R[b]'s is Int, else sets Z clear (nzcv 0). */
-  load32(e, T0, REGS, TAG(in.b));
-  load32(e, T1, REGS, TAG(in.c));
-  compare_imm(e, false, T0, AGC_T_INT);
-  /* ccmp w10, #INT, #0, eq */
-  put32(e, 0x7A400800u | (uint32_t)AGC_T_INT << 16 | (uint32_t)CC_EQ << 12 | (uint32_t)T1 << 5);
-  size_t slow = skip_if(e, CC_NE);
+  bool eq = op == AGC_OP_EQ, ints = agc_emit_known(e, in.b, AGC_T_INT) && agc_emit_known(e, in.c, AGC_T_INT);
+  size_t slow = 0;
+  if (!ints) {
+    /* Both tags Int, in one test: ccmp compares R[c]'s tag only when R[b]'s is Int, else sets Z clear (nzcv 0). */
+    load32(e, T0, REGS, TAG(in.b));
+    load32(e, T1, REGS, TAG(in.c));
+    compare_imm(e, false, T0, AGC_T_INT);
+    /* ccmp w10, #INT, #0, eq */
+    put32(e, 0x7A400800u | (uint32_t)AGC_T_INT << 16 | (uint32_t)CC_EQ << 12 | (uint32_t)T1 << 5);
+    slow = skip_if(e, CC_NE);
+  }
   load(e, T0, REGS, WORD(in.b));
   load(e, T1, REGS, WORD(in.c));
   compare(e, T0, T1);
   set_bool(e, T0, eq ? CC_EQ : CC_NE);
   store_value(e, in.a, AGC_T_BOOL, T0);
-  size_t done = skip(e);
-  land(e, slow);
-  call_helper(e, (uint64_t)(uintptr_t)(eq ? agc_op_eq : agc_op_ne), in, true, pc);
-  land(e, done);
+  if (!ints) {
+    size_t done = skip(e);
+    land(e, slow);
+    call_helper(e, (uint64_t)(uintptr_t)(eq ? agc_op_eq : agc_op_ne), in, true, pc);
+    land(e, done);
+  }
   cost_exit(e, pc);
 }
 
@@ -566,8 +575,10 @@ void A64(read)(agc_emitter *e, agc_opcode op, agc_instr in, uint32_t pc) {
 }
 
 void A64(list_len)(agc_emitter *e, uint32_t a, uint32_t b, uint32_t status, uint32_t pc) {
-  compare_tag(e, b, AGC_T_LIST);
-  exit_if(e, CC_NE, status, pc);
+  if (!agc_emit_known(e, b, AGC_T_LIST)) {
+    compare_tag(e, b, AGC_T_LIST);
+    exit_if(e, CC_NE, status, pc);
+  }
   load(e, T2, REGS, WORD(b));
   load(e, T0, T2, AGC_JIT_LIST_LEN);
   store_value(e, a, AGC_T_INT, T0);
@@ -575,12 +586,19 @@ void A64(list_len)(agc_emitter *e, uint32_t a, uint32_t b, uint32_t status, uint
 
 _Static_assert(AGC_JIT_LIST_MASK == 31, "the and below clears the low 5 bits");
 
+/* A branch to the slow path, added to SLOW, when the tag of register R is not TAG; nothing when it is known to be. */
+static size_t other_tag(agc_emitter *e, uint32_t r, agc_tag tag, size_t *slow, size_t slows) {
+  if (agc_emit_known(e, r, tag)) return slows;
+  compare_tag(e, r, tag);
+  slow[slows] = skip_if(e, CC_NE);
+  return slows + 1;
+}
+
 /* x11 = the list, x9 = the index, then x9 = the index in the tail, as on x86-64. */
 void A64(list_get)(agc_emitter *e, agc_instr in, uint32_t pc) {
-  compare_tag(e, in.b, AGC_T_LIST);
-  size_t not_list = skip_if(e, CC_NE);
-  compare_tag(e, in.c, AGC_T_INT);
-  size_t not_int = skip_if(e, CC_NE);
+  size_t slow[2], slows = 0;
+  slows = other_tag(e, in.b, AGC_T_LIST, slow, slows);
+  slows = other_tag(e, in.c, AGC_T_INT, slow, slows);
   load(e, T2, REGS, WORD(in.b));
   load(e, T0, REGS, WORD(in.c));
   load(e, T1, T2, AGC_JIT_LIST_LEN);
@@ -603,8 +621,7 @@ void A64(list_get)(agc_emitter *e, agc_instr in, uint32_t pc) {
   store(e, REGS, TAG(in.a), T1);
   store(e, REGS, WORD(in.a), T0);
   size_t done = skip(e);
-  land(e, not_list);
-  land(e, not_int);
+  while (slows) land(e, slow[--slows]);
   land(e, outside);
   land(e, in_trie);
   call_helper(e, (uint64_t)(uintptr_t)agc_op_list_get, in, true, pc);

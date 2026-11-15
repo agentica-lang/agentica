@@ -430,7 +430,16 @@ typedef struct {
    that the entry table's address goes to. `failed` is set when an operand does not fit the encoding or the code
    passes AGC_JIT_CODE_CAP; from then on nothing is written, and the function stays interpreted. `call_isb` (true
    unless the JIT's seals synchronize every core, agc_jit_use_sync) makes the arm64 emitter put isb before the branch
-   of a native call. The buffers are GC memory without pointers. */
+   of a native call. `tags[r]` is the tag that register r is known to hold where the code being written runs, or
+   AGC_JIT_TAG_UNKNOWN: the walk (emit_function) sets it after each instruction and the emitter only reads it
+   (agc_emit_known), to leave out a tag check that an earlier instruction of the same block already made. NULL in the
+   C tests that call an emitter directly. `held` is the register whose payload the code of the instruction before
+   left in the emitter's scratch register (rax on x86-64; the arm64 emitter holds none), or AGC_JIT_NO_REGISTER: the
+   value is always in the frame's register too, so an exit needs nothing. agc_emit_label takes it from `next_held`,
+   which the code of an instruction sets when every path through it ends with the payload there, and the walk clears
+   at a jump target and with the tags. `held_at[pc]` is `held` at instruction pc: the entry table has every pc, and an
+   entry there runs a stub that loads the register first (agc_emit_end); a jump to such an instruction keeps the
+   function interpreted (agc_emit_patches). The buffers are GC memory without pointers. */
 typedef struct {
   uint8_t *code;
   size_t len, cap;
@@ -438,7 +447,16 @@ typedef struct {
   agc_jit_patch *patches;
   size_t patch_count, patch_cap;
   bool failed, call_isb;
+  uint8_t *tags;
+  uint32_t tag_count;
+  uint32_t held, next_held, *held_at;
 } agc_emitter;
+
+#define AGC_JIT_TAG_UNKNOWN 0xFF
+#define AGC_JIT_NO_REGISTER UINT32_MAX
+static inline bool agc_emit_known(const agc_emitter *e, uint32_t r, agc_tag tag) {
+  return r < e->tag_count && e->tags[r] == tag;
+}
 
 /* The byte of the host's code that fills a gap no code runs (before the entry table, between two functions sealed
    together): int3 on x86-64; on arm64 four of them make udf #0, which is always undefined. */

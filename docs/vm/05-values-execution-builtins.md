@@ -340,9 +340,17 @@ returns.
   cost up to 17% of a loop of direct builtins (#1599). The builtin's registers
   stay in the frame's register file during the call, so the collector sees
   them.
-- **Code.** Each instruction has fixed code, emitted in one pass over the
+- **Code.** Each instruction has its code, emitted in one pass over the
   bytecode; the register conventions are in the headers of `vm/jit/emit_x64.c`
-  and `vm/jit/emit_a64.c`. On arm64 the thread that runs compiled code first
+  and `vm/jit/emit_a64.c`. Inside a block (the instructions between two jump
+  targets) the pass keeps the tag each register is known to hold, so a tag an
+  earlier instruction checked or wrote is not checked or written again; it
+  forgets them at a jump target and at every call, builtin, helper and trip to
+  the interpreter (`track_tags` in `vm/jit/jit.c`). On x86-64 the code of an
+  Int instruction, a `MOVE` or a `CONST` also leaves its result in `rax` for
+  the next instruction. The frame's register always holds the value too: the
+  entry table has every pc, and an entry at an instruction that reads `rax`
+  goes through a stub that loads it first. On arm64 the thread that runs compiled code first
   runs `isb` (`agc_jit_sync`), as the code may come from another thread. On
   Linux each seal runs membarrier's `SYNC_CORE`, registered by the launch before
   any other thread starts, so a native call branches without `isb`; where that

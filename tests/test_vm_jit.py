@@ -392,6 +392,48 @@ def main() -> Void
 end
 """
 
+# mix keeps Ints in the same registers through each block of its loop, where compiled code checks a tag once and
+# reads a result from the machine register it is in; between them a String takes a register that held an Int, and a
+# call, a builtin and a branch end what the code knows.
+KNOWN_TAGS = """def half(n: Int) -> Int
+  return n / 2
+end
+
+def mix(items: List[Int], rounds: Int) -> Int
+  total = 0
+  round = 0
+  while round < rounds
+    i = 0
+    while i < items.size
+      x = items[i]
+      y = x * 3 + i
+      y = y + y - x
+      label = "#{y}"
+      if label.size > 2 and y % 2 == 0
+        total = total + y - label.size
+      else
+        total = total + half(y) + 1
+      end
+      if total == y or -total > y
+        total = total + 1
+      end
+      i = i + 1
+    end
+    round = round + 1
+  end
+  return total
+end
+
+def main() -> Void
+  items: List[Int] = []
+  for n in 1..40
+    items = items.append(n * n - 20)
+  end
+  puts(mix(items, 60))
+  puts("steps #{System.Profile.steps()}")
+end
+"""
+
 # label's loop builds Strings in compiled code (TO_TEXT and CONCAT have code of their own), so `on` compiles it;
 # `always` compiles it too.
 DENSE = """def label(n: Int) -> Int
@@ -1699,6 +1741,14 @@ def test_list_reads_of_every_layout_and_length_run_in_compiled_code(tmp_path):
     code, stdout, stderr = assert_same(bytecode)
     assert code == 0 and stdout.startswith("19125.0\n18675.0\n543000.0\n"), (stdout, stderr)
     assert_max_steps_sweep(bytecode, int(stdout.split("steps ")[1]))
+
+
+def test_blocks_that_keep_tags_and_results_match_the_interpreter_at_every_stop(tmp_path):
+    bytecode = compile_text(KNOWN_TAGS, "known_tags", tmp_path)
+    assert compiled(bytecode, tmp_path, "on") == (["half", "mix"] if jit_host() else [])
+    code, stdout, stderr = assert_same(bytecode)
+    assert code == 0 and stdout.startswith("4927686\n"), (stdout, stderr)
+    assert_step_limits_stop_alike(bytecode, int(stdout.split("steps ")[1]))
 
 
 def test_globals_structs_enums_and_try_run_in_compiled_code(tmp_path):
