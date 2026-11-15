@@ -530,7 +530,7 @@ def test_deny_run_turns_off_spawn_group_and_system_signal(tmp_path, adopt):
     assert vm.wait(WAIT_SECONDS) == 0
 
 
-# Closes a socket with megabytes in its write buffer (TCP.write), then sleeps.
+# Closes a socket with megabytes in its write buffer (TCP.write), then sleeps or, with "end", ends.
 WRITE_CLOSE_SLEEP = """\
 def main() -> Void
   listener = TCP.listen("127.0.0.1", 0).unwrap!
@@ -548,19 +548,27 @@ def main() -> Void
   TCP.close(socket)
   puts("written")
   IO.flush()
-  Task.sleep(60000)
+  if System.args()[0] == "sleep"
+    Task.sleep(60000)
+  end
 end
 """
 
 
 @host_only(WINDOWS, "Windows has no POSIX signals")
-def test_a_stop_signal_does_not_wait_for_the_peer_of_a_closed_socket(tmp_path, adopt):
+@SCHEDULERS
+@pytest.mark.parametrize("mode", ["sleep", "end"])
+def test_a_stop_signal_does_not_wait_for_the_peer_of_a_closed_socket(tmp_path, adopt, schedulers, mode):
     """The socket is closed with megabytes in its write buffer, and the peer never reads. A SIGTERM then ends the run
-    without the 30 seconds of the flush limit, and the warning says that bytes were dropped."""
-    vm = adopt(start_vm(compile_text(WRITE_CLOSE_SLEEP, "write_stop", tmp_path), env={"AGENTICA_SCHEDULERS": "4"}))
+    without the 30 seconds of the flush limit, and the warning says that bytes were dropped: while the program still
+    runs (`sleep`), and when main has ended and the run already waits for the socket (`end`, #1652)."""
+    vm = adopt(start_vm(compile_text(WRITE_CLOSE_SLEEP, "write_stop", tmp_path), mode,
+                        env={"AGENTICA_SCHEDULERS": str(schedulers)}))
     port = int(vm.next_line())
     with socket.create_connection(("127.0.0.1", port), timeout=scaled(30)):
         assert vm.next_line() == "written"
+        if mode == "end":
+            time.sleep(0.5)
         started = time.monotonic()
         os.kill(vm.process.pid, signal.SIGTERM)
         vm.wait()

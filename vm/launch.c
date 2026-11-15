@@ -290,20 +290,19 @@ static void coverage_notice(agc_vm *vm) {
 static bool nets_drained(agc_vm *vm, void *arg) {
   (void)vm;
   (void)arg;
-  return !agc_net_draining();
+  return !agc_net_draining() || agc_io_stop_signal();
 }
 
 static void say_goodbye(agc_vm *vm, agc_outcome *outcome) {
   if (AGC_CATCH(vm->fail) == 0) {
     agc_io_goodbye(vm);
     /* A socket closed with bytes in its write buffer (TCP.write) sends them first, at most for the flush limit; its
-       own timer ends the wait and counts what it dropped, so this wait is a little longer. After a stop signal the
-       exit does not wait for a peer: the bytes are dropped at once. */
+       own timer ends the wait and counts what it dropped, so this wait is a little longer. After a stop signal, also
+       one that comes during the wait, the exit does not wait for a peer: the bytes are dropped at once. */
     if (vm->rt->loop && agc_net_draining()) {
-      if (agc_io_stop_signal())
-        agc_net_give_up(vm);
-      else
+      if (!agc_io_stop_signal())
         (void)agc_io_wait_for(vm, nets_drained, NULL, agc_clock_ms() + (uint64_t)vm->rt->flush_timeout + 1000);
+      if (agc_io_stop_signal()) agc_net_give_up(vm);
     }
     if (agc_net_dropped()) {
       agc_notice notice;
