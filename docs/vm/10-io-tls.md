@@ -192,7 +192,13 @@ texts.
 - **Reads.** `recv_bytes` checks 1..1048576 first, then the timeout, the reader
   lock and the open state. The socket is read only while a reader waits, 4 KiB
   at a time (more when the request asks for more), so the VM reads at most about
-  4 KiB past what the program asked. `recv_bytes` returns what is buffered, as
+  4 KiB past what the program asked. With more than one scheduler a read of a
+  plain socket that the buffered input answers takes it on its scheduler with
+  no park (#1197): the I/O thread writes the input only while a read waits,
+  stops reading when it is answered or cancelled, and a close leaves the buffer
+  to the net's last count, which the socket's resource holds under `rt->sync`.
+  A read that needs more bytes, and every read of a TLS socket, waits on the I/O
+  thread as before. `recv_bytes` returns what is buffered, as
   soon as there is one byte, and empty `Bytes` at EOF. `recv_bytes` without a
   timeout (the catalog form of two arguments) starts its job with no timer and
   waits for the reader lock with the longest deadline (`INT64_MAX` ms), so
@@ -250,7 +256,7 @@ texts.
   read or write closes the socket; waiting for the lock alone does not. A
   timed-out connect closes the half-open socket. `TCP.close` and
   `TCP.close_listener` are idempotent: they close the link (a pending write
-  ends with `ECANCELED`), free the input buffer, and wake every waiting request
+  ends with `ECANCELED`), and wake every waiting request
   with the closed error. Data the program never read makes the kernel answer
   with RST instead of FIN.
 - **End of run.** Sockets and listeners are not closed one by one. The exit path

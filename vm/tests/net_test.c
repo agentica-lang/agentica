@@ -218,7 +218,7 @@ static void peer_reads(int fd, const char *data, size_t n) {
 }
 
 /* TCP.send_bytes and TCP.recv_bytes on Bytes, on the posted path (the I/O thread cuts the read, the done half builds
-   its value), and HttpWire.idle?, which takes no byte. A send of more than 1 MiB is refused. */
+   its value), and HttpWire.idle?, which takes no byte and so never parks. A send of more than 1 MiB is refused. */
 static void test_byte_keys(void) {
   int fd = open_pair();
   static const char sent[] = "\x00\xff" "a\n";
@@ -736,6 +736,37 @@ static void test_cancelled_read_leaves_the_reader_slot(void) {
   close_pair(fd);
 }
 
+static void line_is(agc_value v, const char *text) {
+  const agc_string *s = agc_as_string(&vm, ok_of(v));
+  assert(s->bytes == strlen(text) && memcmp(s->data, text, s->bytes) == 0);
+}
+
+/* At N > 1 a read of a plain socket that the buffered input answers takes it on the scheduler (#1197): the first read
+   parks and the I/O thread reads both lines, the second returns without a park while the loop does not run. A read
+   then waits again on the I/O thread, and a cancelled one stops the reading, so bytes that come after it stay in the
+   kernel for the next read and the I/O thread never writes the input beside a take. */
+static void test_a_read_takes_buffered_input_on_the_scheduler(void) {
+  int fd = open_pair();
+  agc_runq_share(vm.rt->runq);
+  assert(send(fd, "one\ntwo\n", 8, 0) == 8);
+  line_is(step(call("TCP.read_line", 2, socket_v, agc_int(5000), agc_void(), agc_void())), "one");
+  calling second = call("TCP.read_line", 2, socket_v, agc_int(5000), agc_void(), agc_void());
+  assert(!start(&second));
+  line_is(second.result, "two");
+  calling cancelled = call("TCP.read_line", 2, socket_v, agc_int(60000), agc_void(), agc_void());
+  assert(start(&cancelled));
+  (void)agc_io_poll(&vm, false);
+  on_thread(detach_task, NULL);
+  end_detached_job();
+  assert(send(fd, "three\n", 6, 0) == 6);
+  for (int k = 0; k < 10; k++) (void)agc_io_poll(&vm, false);
+  calling third = call("TCP.read_line", 2, socket_v, agc_int(5000), agc_void(), agc_void());
+  assert(start(&third));
+  wait_woken();
+  line_is(take(&third), "three");
+  close_pair(fd);
+}
+
 static void close_owned(void *arg) {
   (void)arg;
   agc_close_owned(&vm, vm.task);
@@ -906,6 +937,7 @@ int main(void) {
   AGC_TEST_RUN(test_cancelled_accept_leaves_the_queue());
   AGC_TEST_RUN(test_served_accept_of_a_cancelled_task());
   AGC_TEST_RUN(test_cancelled_read_leaves_the_reader_slot());
+  AGC_TEST_RUN(test_a_read_takes_buffered_input_on_the_scheduler());
   AGC_TEST_RUN(test_cancelled_tls_connect_past_its_deadline(false));
   AGC_TEST_RUN(test_cancelled_tls_connect_past_its_deadline(true));
   AGC_TEST_RUN(test_byte_keys());

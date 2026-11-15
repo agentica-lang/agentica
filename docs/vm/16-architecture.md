@@ -76,7 +76,8 @@ in this model; §16.6 maps each to the component that enforces it.
   runs only the `work` half of a job, on `malloc`'d memory (§10.2.2).
 - **The I/O thread moves bytes and builds no GC values.** It reads into and
   writes from `malloc`'d buffers: a job's, and a socket's input buffer
-  (`agc_conn.in`), which it owns (§16.11). Stdin is read into a job's buffer (on
+  (`agc_conn.in`), which it owns (§16.11) while a read waits; a plain socket's
+  scheduler takes buffered input itself (§10.3.1, #1197). Stdin is read into a job's buffer (on
   Windows, the reader thread's own buffer) and appended to the shared input by
   the `done` half, on a scheduler. The `done` half of a job, which builds GC
   values from those bytes, runs on the scheduler that resumes the task. TLS

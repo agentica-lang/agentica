@@ -2342,24 +2342,148 @@ def test_sends_of_many_tasks_on_many_sockets_keep_their_order_beside_a_slow_read
     bytecode = program(tmp_path, "net_order", NET_ORDER)
     sockets, tasks, count = 16, 4, 60
     for _ in range(repeats):
-        process = subprocess.Popen([*vm_command(), *FLAGS, "--", bytecode, str(sockets), str(tasks), str(count), mode],
-                                   stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                   env=vm_environment(), text=True)
-        try:
-            port = int(process.stdout.readline())
-            problems = []
-            peers = [threading.Thread(target=read_ordered_lines, args=(port, tasks, count, problems))
-                     for _ in range(sockets)]
-            for peer in peers:
-                peer.start()
-            for peer in peers:
-                peer.join()
-            out, err = process.communicate(timeout=60)
-            assert (problems, process.returncode, out) == ([], 0, "sent %d\n" % (sockets * tasks * count)), err
-        finally:
-            if process.poll() is None:
-                process.kill()
-                process.wait()
+        problems, code, out, err = run_with_peers([bytecode, str(sockets), str(tasks), str(count), mode], sockets,
+                                                  lambda port, seen: read_ordered_lines(port, tasks, count, seen))
+        assert (problems, code, out) == ([], 0, "sent %d\n" % (sockets * tasks * count)), err
+
+
+def run_with_peers(args, sockets, peer):
+    """Runs the program, which prints its port first, beside one thread per socket that runs peer(port, problems)."""
+    process = subprocess.Popen([*vm_command(), *FLAGS, "--", *args], stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                               stderr=subprocess.PIPE, env=vm_environment(), text=True)
+    try:
+        port = int(process.stdout.readline())
+        problems = []
+        peers = [threading.Thread(target=peer, args=(port, problems)) for _ in range(sockets)]
+        for thread in peers:
+            thread.start()
+        for thread in peers:
+            thread.join()
+        out, err = process.communicate(timeout=60)
+        return problems, process.returncode, out, err
+    finally:
+        if process.poll() is None:
+            process.kill()
+            process.wait()
+
+
+NET_TAKE = r"""struct Reader
+  socket: TCP.Socket
+  id: Int
+end
+
+# Reads numbered lines until the input ends or the socket is closed; the numbers one reader gets must rise.
+def reader(r: Reader) -> Result[Int]
+  count = 0
+  last = -1
+  line = TCP.read_line(r.socket, 60000)
+  while Result.ok?(line)
+    seq = line.unwrap!.to_i.unwrap!
+    if seq <= last
+      return error("reader #{r.id}: #{seq} after #{last}")
+    end
+
+    last = seq
+    count = count + 1
+    line = TCP.read_line(r.socket, 60000)
+  end
+
+  return ok(count)
+end
+
+def closer(socket: TCP.Socket) -> Result[Int]
+  Task.sleep(5)
+  TCP.close(socket)
+  return ok(0)
+end
+
+def main() -> Void
+  args = System.args()
+  sockets = args[0].to_i.unwrap!
+  readers = args[1].to_i.unwrap!
+  listener = TCP.listen("127.0.0.1", 0).unwrap!
+  puts(TCP.local_port(listener))
+  IO.flush()
+  jobs: List[Task[Result[Int]]] = []
+  cut: List[Task[Result[Int]]] = []
+  k = 0
+  while k < sockets
+    socket = TCP.accept(listener, 60000).unwrap!
+    # A read that waits and is cancelled before any byte comes leaves the input to the readers below.
+    _ = Task.map([socket], 1, 5) do |s| TCP.read_line(s, 60000) end
+    TCP.send(socket, "go\n", 60000).unwrap!
+    id = 0
+    while id < readers
+      task = Task.spawn(&reader, Reader(socket: socket, id: id))
+      if k == 0
+        cut = cut.push(task)
+      else
+        jobs = jobs.push(task)
+      end
+
+      id = id + 1
+    end
+
+    if k == 0
+      cut = cut.push(Task.spawn(&closer, socket))
+    end
+
+    k = k + 1
+  end
+
+  got = 0
+  for job in jobs
+    got = got + Task.await(job).unwrap!
+  end
+
+  for job in cut
+    _ = Task.await(job).unwrap!
+  end
+
+  puts("read #{got}")
+end
+"""
+
+
+def send_numbered_lines(port, count, problems):
+    """Waits for "go", then sends `count` numbered lines in bursts of 1 to 2000 lines, now and then after a pause, so
+    reads find whole lines, cut lines and nothing buffered."""
+    try:
+        with socket.socket() as peer:
+            peer.settimeout(60)
+            peer.connect(("127.0.0.1", port))
+            if peer.recv(3) != b"go\n":
+                problems.append("no go")
+                return
+            seq, burst = 0, 1
+            while seq < count:
+                n = min(burst, count - seq)
+                peer.sendall(b"".join(b"%d\n" % k for k in range(seq, seq + n)))
+                seq += n
+                burst = burst * 7 % 2003
+                if burst % 3 == 0:
+                    time.sleep(0.001)
+            peer.shutdown(socket.SHUT_WR)
+            while peer.recv(65536):
+                pass
+    except OSError:
+        pass  # the socket that the program closes
+    except Exception as failure:
+        problems.append(repr(failure))
+
+
+@RACE
+def test_reads_of_many_tasks_take_every_line_once_from_buffered_input(tmp_path, repeats):
+    # 8 sockets, 4 reader tasks on each, on four schedulers. A read that the buffered input answers takes it on its
+    # scheduler, and one that finds too little waits on the I/O thread (#1197); a cancelled read leaves the input
+    # first. Every line reaches one reader once, and each reader's lines rise. The program closes the first socket
+    # while its readers take from it, which the readers end on (its lines are not counted).
+    bytecode = program(tmp_path, "net_take", NET_TAKE)
+    sockets, readers, count = 8, 4, 20000
+    for _ in range(repeats):
+        problems, code, out, err = run_with_peers([bytecode, str(sockets), str(readers)], sockets,
+                                                  lambda port, seen: send_numbered_lines(port, count, seen))
+        assert (problems, code, out) == ([], 0, "read %d\n" % ((sockets - 1) * count)), err
 
 
 OWNER_CRASH = r"""def crash() -> Result[Int]

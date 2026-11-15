@@ -40,6 +40,9 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   Of the write buffer (`TCP.write`, §10.3.1) a scheduler touches only the
   atomics `unsent`, `out_limit` and `out_error`, and `pend` under `out_lock`;
   the rest (`out`, `out_flight`, `flushers`) is the I/O thread's.
+  A read of a plain socket at N > 1 takes buffered input on its scheduler
+  (`takes_here`): the I/O thread writes `in` only while a read waits, and
+  `request_cancel` stops reading; `shut_one` leaves `in` to `settle`.
   `finish` copies what the `done` half needs into the request, and
   `request_done` reads only that and posts `drop_request`. `users` changes only
   on the I/O thread (the first count, `own`, excepted). The `net` fields `id`
