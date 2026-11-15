@@ -23,6 +23,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `agentica FILE.agc` no longer looks for the C compiler in `PATH` at each start of a cached program with no native module, and a change of `CC` or `PATH` keeps its cache entry (#1551).
 - A `compute def` call or a dirty native module call made right after another costs about 3 µs in place of 15 to 25 µs: the compute pool thread spins briefly for the next call before it sleeps (#1120).
 - Programs run 4 to 6% faster when the interpreter runs them (`--jit off`, or code the JIT has not compiled): a call or an operator writes its result straight into the variable it is assigned to (#1001).
+- `include?`, `index_of`, `replace`, `split` and regex literal prefixes find a pattern of two bytes or more with the C library's `memmem` on Linux and macOS: up to 24% faster on search-heavy text work; `gets` finds the line end with `memchr` (#996).
 
 ## [0.32.0] - 2026-11-15
 

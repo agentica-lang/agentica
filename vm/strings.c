@@ -1,10 +1,19 @@
 /*
  * The String builtins (one of the tables that agc_find_builtin searches), with
- * UTF-8 encoding, offsets through a per-task cursor, KMP search, case mapping,
+ * UTF-8 encoding, offsets through a per-task cursor, text search, case mapping,
  * the Int and Float parsers, and the edit distance and Jaro-Winkler similarity
  * of two Strings. Service layer. Design:
  * docs/vm/02-reference-behavior.md §2.3.
  */
+/* glibc and macOS declare memmem only with these; Windows has none, so its search keeps memchr and KMP. */
+#if defined(__linux__)
+#define _GNU_SOURCE
+#define AGC_MEMMEM 1
+#elif defined(__APPLE__)
+#define _DARWIN_C_SOURCE
+#define AGC_MEMMEM 1
+#endif
+
 #include "services.h"
 
 #include <inttypes.h>
@@ -142,14 +151,17 @@ size_t agc_utf8_offset(agc_vm *vm, const agc_string *s, size_t index) {
 
 agc_finder agc_finder_new(const uint8_t *p, size_t m) {
   agc_finder f = {p, m, NULL};
-  if (f.m <= 8) return f;
-  f.fail = agc_alloc_atomic(agc_size_mul(f.m, sizeof(size_t)));
-  f.fail[0] = 0;
-  for (size_t i = 1, k = 0; i < f.m; i++) {
-    while (k > 0 && f.p[i] != f.p[k]) k = f.fail[k - 1];
-    if (f.p[i] == f.p[k]) k++;
-    f.fail[i] = k;
+#ifndef AGC_MEMMEM
+  if (f.m > 8) {
+    f.fail = agc_alloc_atomic(agc_size_mul(f.m, sizeof(size_t)));
+    f.fail[0] = 0;
+    for (size_t i = 1, k = 0; i < f.m; i++) {
+      while (k > 0 && f.p[i] != f.p[k]) k = f.fail[k - 1];
+      if (f.p[i] == f.p[k]) k++;
+      f.fail[i] = k;
+    }
   }
+#endif
   return f;
 }
 
@@ -159,6 +171,12 @@ size_t agc_finder_find(const agc_finder *f, const uint8_t *t, size_t n, size_t f
   size_t m = f->m;
   if (from > n || m > n - from) return AGC_NOT_FOUND;
   if (m == 0) return from;
+#ifdef AGC_MEMMEM
+  if (m > 1) {
+    const uint8_t *hit = memmem(t + from, n - from, f->p, m);
+    return hit ? (size_t)(hit - t) : AGC_NOT_FOUND;
+  }
+#endif
   if (!f->fail) {
     const uint8_t *last = t + n - m;
     for (const uint8_t *at = t + from; at <= last; at++) {

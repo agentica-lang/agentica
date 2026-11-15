@@ -375,19 +375,21 @@ agc_input_status agc_input_peek(agc_vm *vm, int *byte) {
 agc_input_status agc_input_line(agc_vm *vm, agc_string **line) {
   agc_input *in = &vm->rt->in;
   for (;;) {
-    bool rescan = false;
-    for (size_t k = in->start + in->scanned; k < in->end; k++) {
+    size_t from = in->start + in->scanned, k = in->end;
+    if (from < in->end) {
+      const uint8_t *lf = memchr(in->buf + from, '\n', in->end - from);
+      size_t before = lf ? (size_t)(lf - in->buf) : in->end;
+      const uint8_t *cr = memchr(in->buf + from, '\r', before - from);
+      k = cr ? (size_t)(cr - in->buf) : before;
+    }
+    if (k < in->end) {
       uint8_t c = in->buf[k];
-      if (c != '\n' && c != '\r') continue;
       if (c == '\r' && k + 1 == in->end) {
         in->scanned = k - in->start;
         int r = fill(vm);
         if (r == FILL_WAIT) return AGC_INPUT_WAIT;
         if (r < 0) read_failed(vm);
-        if (r > 0) {
-          rescan = true;
-          break;
-        }
+        if (r > 0) continue;
         in->pending_eof = true;
       }
       *line = decode(vm, in->buf + in->start, k - in->start);
@@ -396,7 +398,6 @@ agc_input_status agc_input_line(agc_vm *vm, agc_string **line) {
       consume(in, next);
       return AGC_INPUT_OK;
     }
-    if (rescan) continue;
     in->scanned = in->end - in->start;
     int r = fill(vm);
     if (r == FILL_WAIT) return AGC_INPUT_WAIT;
