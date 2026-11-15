@@ -992,7 +992,7 @@ uint32_t agc_utf8_next(const uint8_t *s, size_t len, size_t *at) {
   return cp;
 }
 
-size_t agc_utf8_valid(const uint8_t *s, size_t len) {
+static inline size_t valid_char(const uint8_t *s, size_t len) {
   if (len == 0) return 0;
   uint8_t c = s[0];
   size_t n;
@@ -1022,10 +1022,12 @@ size_t agc_utf8_valid(const uint8_t *s, size_t len) {
   return n + 1;
 }
 
+size_t agc_utf8_valid(const uint8_t *s, size_t len) { return valid_char(s, len); }
+
 /* The offset (from 0) of the first byte that does not start a valid character, or len when all of it is valid. */
 size_t agc_utf8_bad_at(const uint8_t *s, size_t len) {
   size_t at = 0;
-  for (size_t n; at < len && (n = agc_utf8_valid(s + at, len - at)) != 0;) at += n;
+  for (size_t n; at < len && (n = valid_char(s + at, len - at)) != 0;) at += n;
   return at;
 }
 
@@ -1062,7 +1064,7 @@ bool agc_utf8_chars(const uint8_t *s, size_t len, size_t *chars) {
       count += sizeof word;
     }
     if (i == len) break;
-    size_t n = agc_utf8_valid(s + i, len - i);
+    size_t n = valid_char(s + i, len - i);
     if (n == 0) return false;
     i += n;
     count++;
@@ -1082,7 +1084,7 @@ static bool incomplete_tail(const uint8_t *s, size_t len) {
 }
 
 static size_t utf8_step(const uint8_t *s, size_t len, bool tail, size_t *valid) {
-  size_t n = agc_utf8_valid(s, len);
+  size_t n = valid_char(s, len);
   *valid = n;
   if (n) return n;
   return tail && incomplete_tail(s, len) ? len : 1;

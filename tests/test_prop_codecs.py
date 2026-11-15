@@ -37,6 +37,13 @@ def text_reply(result: Result[String]) -> String
   end
 end
 
+def length_reply(result: Result[String]) -> String
+  case result
+    ok(s) -> "ok #{hex(s.length.to_s.bytes)}"
+    error(e) -> "error #{hex(e.message.bytes)}"
+  end
+end
+
 def value_reply(result: Result[JSON.Value]) -> String
   case result
     ok(j) -> "ok #{hex(JSON.encode(j).bytes)}"
@@ -64,6 +71,7 @@ def run(op: String, data: Bytes) -> String
     "ints" -> ints_reply(JSON.decode(text(data), List[Int]))
     "floats" -> floats_reply(JSON.decode(text(data), List[Float]))
     "utf8" -> text_reply(String.from_bytes(data))
+    "utf8length" -> length_reply(String.from_bytes(data))
     "b64" -> "ok #{hex(Base64.strict_encode64(data).bytes)}"
     "b64lines" -> "ok #{hex(Base64.encode64(data).bytes)}"
     "b64url" -> "ok #{hex(Base64.urlsafe_encode64(data).bytes)}"
@@ -294,6 +302,45 @@ def test_text_codecs_agree_with_python(codec, name, bom, data, text):
     except UnicodeEncodeError:
         want = None
     assert codec.ask("encode:" + name, text.encode("utf-8")) == want, (name, text)
+
+
+VALID_UTF8 = [b"a" * n for n in (1, 7, 8, 9, 16)] + [
+    c.encode() for c in ("é", "日", "😀", "\u07ff", "\u0800", "\uffff", "\U00010000", "\U0010ffff")]
+INVALID_UTF8 = [b"\x80", b"\xbf", b"\xc0\x80", b"\xc1\xbf", b"\xe0\x80\x80", b"\xe0\x9f\xbf", b"\xed\xa0\x80",
+                b"\xed\xbf\xbf", b"\xf0\x8f\xbf\xbf", b"\xf4\x90\x80\x80", b"\xf5\x80\x80\x80", b"\xff",
+                b"\xe6\x97", b"\xf0\x9f\x98"]
+
+
+@st.composite
+def utf8_inputs(draw):
+    """Valid characters and ASCII runs around a word of 8 bytes, sometimes with one invalid sequence put in."""
+    chunks = draw(st.lists(st.sampled_from(VALID_UTF8), max_size=12))
+    if draw(st.booleans()):
+        chunks.insert(draw(st.integers(0, len(chunks))), draw(st.sampled_from(INVALID_UTF8)))
+    return b"".join(chunks)
+
+
+@timeout(300)
+@given(utf8_inputs())
+@example(b"")
+@example(b"abcdefgh\xc3\xa9abcdefgh")
+@example(b"abcdefg\xed\xa0\x80")
+@example(b"\xf4\x90\x80\x80")
+@example(b"\xe0\x9f\xbf")
+@example(b"\xc0\x80")
+@example(b"abcdefg\xe6\x97")
+def test_from_bytes_agrees_with_python(codec, data):
+    """String.from_bytes accepts exactly the bytes Python's strict UTF-8 decoder accepts (no overlong form, surrogate
+    or code point past U+10FFFF, no cut character), after ASCII runs of every length around a word of 8, and the text
+    has Python's length in code points."""
+    try:
+        want = data.decode("utf-8")
+    except UnicodeDecodeError:
+        want = None
+    got = codec.ask("utf8", data)
+    assert got == (None if want is None else data), data
+    length = codec.ask("utf8length", data)
+    assert length == (None if want is None else str(len(want)).encode()), data
 
 
 BASE64_TEXTS = st.one_of(
