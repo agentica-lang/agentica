@@ -29,9 +29,9 @@ try:
 except ImportError:
     fcntl = None
 
-from tests.agentica_test import (FIFO_FILE_REASON, FIXTURES, PYTHON, TARGET_OS, UNDER_WINE, WINDOWS, cli, compile_agc,
-                                 compile_text, host_only, kill_process, process_alive, require, run, scaled, tool,
-                                 vm_binary, vm_command, vm_environment, wait_readable, wait_until)
+from tests.agentica_test import (FIFO_FILE_REASON, FIXTURES, PYTHON, TARGET_OS, UNDER_WINE, WINDOWS, Pid, cli,
+                                 compile_agc, compile_text, host_only, kill_process, process_alive, require, run,
+                                 scaled, tool, vm_binary, vm_command, vm_environment, wait_readable, wait_until)
 from tests import vm_diff_support as diff
 
 SCHEDULERS = os.environ.get("AGENTICA_VM_TEST_SCHEDULER_COUNT", "4")
@@ -1422,7 +1422,7 @@ def test_a_stop_signal_or_an_exit_kills_the_children_of_a_run_on_several_schedul
                                text=True, **NEW_GROUP)
     pids = []
     try:
-        pids = process.stdout.readline().split()
+        pids = [Pid(word) for word in process.stdout.readline().split()]
         assert len(pids) == 2
         if mode == "signal":
             process.send_signal(STOP_SIGNAL)
@@ -1653,7 +1653,7 @@ def recorded_running(folders):
     before = counts()
     time.sleep(0.5)
     after = counts()
-    return [pid for pid, count in after.items() if before.get(pid) != count]
+    return [Pid(pid) for pid, count in after.items() if before.get(pid) != count]
 
 
 @HEAVY_RACE
