@@ -186,8 +186,10 @@ def arg_text(instr: Ir.Instr, at: Int) -> String
     return "fn#{value}"
   elsif (op == "global" or op == "global-set") and at == 1
     return "g#{value}"
-  elsif (op == "enum" or op == "is-variant") and at == 2
+  elsif ((op == "enum" or op == "is-variant") and at == 2) or (op == "jump-variant" and at == 1)
     return "v#{value}"
+  elsif op == "jump-variant" and at == 2
+    return value.to_s
   elsif (op == "struct" or op == "struct-with") and at == 2
     return "s#{value}"
   elsif op == "struct-with" and at == 3

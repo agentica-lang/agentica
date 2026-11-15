@@ -139,6 +139,26 @@ def test_check_and_dump_neither_read_nor_write_the_entry_and_compile_reads_and_w
     assert only_entry(other / "_build" / "bytecode").is_file()
 
 
+def test_a_program_of_several_write_pieces_round_trips_through_the_entry_and_compile(tmp_path):
+    """One File.write_bytes takes 1 MiB, so the entry and the compiled file of a program of a few MiB are written in
+    pieces; a miss and a hit write the same bytes, and both run."""
+    (tmp_path / "big.agc").write_text(
+        'BIG = "%s"\n\ndef main() -> Void\n  puts(BIG.length)\nend\n' % ("abcdefg" * 360_000), encoding="utf-8"
+    )
+    assert agentica(tmp_path, "compile", "big.agc", "-o", "miss.agcb").code == 0
+    entry = only_entry(tmp_path / "_build" / "bytecode")
+    missed = (tmp_path / "miss.agcb").read_bytes()
+    assert len(missed) > 2 * 1_048_576 and len(missed) % 1_048_576 != 0
+    assert split(entry)[1] == missed
+    kept = stamp(entry)
+    assert agentica(tmp_path, "compile", "big.agc", "-o", "hit.agcb").code == 0
+    assert stamp(entry) == kept
+    assert (tmp_path / "hit.agcb").read_bytes() == missed
+    for words in (("big.agc",), ("run", "--", "hit.agcb")):
+        done = agentica(tmp_path, *words)
+        assert (done.code, done.stdout) == (0, "2520000\n"), done.stderr
+
+
 def test_a_damaged_entry_is_built_again(src):
     agentica(src, "main.agc")
     entry = only_entry(src / "_build" / "bytecode")

@@ -630,6 +630,25 @@ void A64(list_get)(agc_emitter *e, agc_instr in, uint32_t pc) {
 
 void A64(jump)(agc_emitter *e, uint32_t target) { branch_to(e, AGC_JIT_PATCH_LABEL, target); }
 
+/* w9 = the variant less in.b, then one unsigned compare for each run of table entries with the same target, in
+   order, and past the table the instruction after it (pc + 1 + in.c), as on x86-64. */
+void A64(jump_variant)(agc_emitter *e, agc_instr in, const uint32_t *targets, uint32_t pc) {
+  object(e, in.a, AGC_T_ENUM, pc);
+  load32(e, T0, T2, offsetof(agc_enum, variant));
+  if (in.b) {
+    move_imm32(e, T1, in.b);
+    put32(e, 0x4B000000u | (uint32_t)T1 << 16 | (uint32_t)T0 << 5 | (uint32_t)T0); /* sub w9, w9, w10 */
+  }
+  for (uint32_t k = 0; k < in.c; k++) {
+    if (k + 1 < in.c && targets[k + 1] == targets[k]) continue;
+    compare_imm(e, false, T0, k);
+    size_t past = skip_if(e, CC_HI);
+    branch_to(e, AGC_JIT_PATCH_LABEL, targets[k]);
+    land(e, past);
+  }
+  A64(jump)(e, pc + 1 + (uint32_t)in.c);
+}
+
 /* JUMP_IF_TRUE (WHEN) or JUMP_IF_FALSE: R[a] must be a Bool, whose payload is 0 or 1. */
 void A64(branch)(agc_emitter *e, uint32_t a, bool when, uint32_t target, uint32_t pc) {
   need_tag(e, a, AGC_T_BOOL, pc);

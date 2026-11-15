@@ -1,0 +1,27 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 15880779,
+  "stdout": [
+    "push 7: 7 other push",
+    "pop: 4 pop pop",
+    "add: 1 add math",
+    "sub: 1 other math",
+    "mul: 2 other math",
+    "neg: 4 other stack",
+    "dup: 4 dup stack",
+    "swap: 4 other stack",
+    "jump 3: 3 other jump",
+    "jump 30: 300 other jump",
+    "halt: 4 other halt",
+    "push 0: 100 other push",
+    "push -4: 200 other push",
+    "push 1: 1 one push",
+    "4 15 1 0 2 11 2 12 7 0",
+    "one, big 500, some 7, none",
+    "1 5 15 -1",
+    "checksum 856912",
+    ""
+  ],
+  "stderr": []
+}

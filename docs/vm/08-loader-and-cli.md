@@ -51,7 +51,9 @@ branch.
   `CALL_VALUE`, `CALL_BUILTIN`, `CLOSURE`, `RANGE`, `RANGE_BOUNDS`). Constant,
   function, builtin, type, struct, field, variant and span indexes are in range,
   including the extra spans of `STEP` and `CALL_BUILTIN`. Jump targets are
-  inside the function, and a `STEP` count is at least 1.
+  inside the function, and a `STEP` count is at least 1. A `JUMP_VARIANT` has
+  `c >= 1`, `b + c` at most the variant count, `c` `JUMP`s after it and one
+  more instruction after them.
 - **Termination**: every backward jump targets a `STEP`. Every function starts
   with a `STEP`, unless it has at most 2 instructions and no call (an empty
   body). The lowering (3.3) always meets these rules. Together they mean every

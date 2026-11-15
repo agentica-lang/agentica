@@ -152,6 +152,28 @@ static void words(void) {
     0xF9000E89u,                        /* str x9, [x20, #24] */
   };
   expect_words(&e, start, list_get, sizeof list_get / sizeof list_get[0], "LIST_GET");
+  /* JUMP_VARIANT on R1 from variant 1 with targets 5, 5 and 6: one compare for each run of the same target. */
+  start = e.len;
+  static const uint32_t targets[] = {5, 5, 6};
+  agc_a64_emit_jump_variant(&e, (agc_instr){AGC_OP_JUMP_VARIANT, 1, 1, 3}, targets, 0);
+  static const uint32_t jump_variant[] = {
+    0xB9401289u,                    /* ldr w9, [x20, #16] */
+    0x7100013Fu | AGC_T_ENUM << 10, /* cmp w9, #ENUM */
+    0x54000040u,                    /* b.eq over the exit */
+    0x14000000u,                    /* b to the INTERPRET exit */
+    0xF9400E8Bu,                    /* ldr x11, [x20, #24] */
+    0xB9400169u,                    /* ldr w9, [x11] */
+    0xD280002Au,                    /* movz x10, #1 */
+    0x4B0A0129u,                    /* sub w9, w9, w10 */
+    0x7100053Fu,                    /* cmp w9, #1 */
+    0x54000048u,                    /* b.hi over the b */
+    0x14000000u,                    /* b to instruction 5 */
+    0x7100093Fu,                    /* cmp w9, #2 */
+    0x54000048u,                    /* b.hi over the b */
+    0x14000000u,                    /* b to instruction 6 */
+    0x14000000u,                    /* b to instruction 4, past the table */
+  };
+  expect_words(&e, start, jump_variant, sizeof jump_variant / sizeof jump_variant[0], "JUMP_VARIANT");
   /* A register past the scaled 12-bit offsets takes its address in x13 first. */
   start = e.len;
   agc_a64_emit_move(&e, 0, 5000);

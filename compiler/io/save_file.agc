@@ -4,18 +4,28 @@
 ## `timeout_ms`.
 def bytes(path: String, data: Bytes, timeout_ms: Int) -> Result[Void]
   out = try File.open(path, "write", timeout_ms)
-  rest = data
-  while rest.size > 0
-    written = File.write_bytes(out, rest.take(PIECE), timeout_ms)
-    if !written.ok?
-      _ = File.close(out, timeout_ms)
-      return written
+  written = write_all(out, data, timeout_ms)
+  closed = File.close(out, timeout_ms)
+  return written if !written.ok?
+
+  closed
+end
+
+## Writes all of `data` to the open handle, in pieces of 1 MiB cut at an offset (a drop of the rest would copy it
+## again for every piece).
+def write_all(out: File.Handle, data: Bytes, timeout_ms: Int) -> Result[Void]
+  at = 0
+  while at < data.size
+    size = PIECE
+    if at + size > data.size
+      size = data.size - at
     end
 
-    rest = rest.drop(PIECE)
+    try File.write_bytes(out, data.slice(at, size), timeout_ms)
+    at += size
   end
 
-  File.close(out, timeout_ms)
+  ok()
 end
 
 ## Puts `data` in the file at `path` so that no reader sees a half-written file there. An old file (`replacing`) is
