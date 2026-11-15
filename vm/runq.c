@@ -40,6 +40,8 @@ struct agc_runq {
      most `spin_max` schedulers spin at once, each for `spin_pauses` CPU pauses, the count that lasts the budget on this
      machine (agc_pauses_for times it once): the spin reads no clock, since a clock read can cost a system call (a
      machine whose clock source is not the TSC), which would make each look slower than the pauses it waits for.
+     The scheduler that starts to spin while no other does spins longer: `spin_pauses` times two to its own level
+     (agc_runq_spin), which follows how often its spins find a task.
      spin_max is 0 (no spin) until agc_runq_spin_setup.
      `spinning` counts them, and `work` says whether the shared queue holds a task: the spinners poll it, not the lock.
      A push reads `spinning` under the lock (sequentially consistent, like the spinner's increment and decrement) and
@@ -256,9 +258,9 @@ uint64_t agc_pauses_for(uint64_t ns) {
   return ns > UINT64_MAX / PAUSE_CALIBRATION ? ns / took * PAUSE_CALIBRATION : ns * PAUSE_CALIBRATION / took;
 }
 
-/* Sets the spin of idle schedulers: at most MAX of them spin at once, each for about BUDGET_NS, as a count of pauses
-   (at least one round of each step). Called before the scheduler threads start; a queue that is never set up never
-   spins (one scheduler, the C tests). */
+/* Sets the spin of idle schedulers: at most MAX of them spin at once, each for about BUDGET_NS at level 0, as a count
+   of pauses (at least one round of each step). Called before the scheduler threads start; a queue that is never set
+   up never spins (one scheduler, the C tests). */
 void agc_runq_spin_setup(agc_runq *q, uint32_t max, uint64_t budget_ns) {
   q->spin_max = max;
   uint64_t pauses = agc_pauses_for(budget_ns);
@@ -266,13 +268,14 @@ void agc_runq_spin_setup(agc_runq *q, uint32_t max, uint64_t budget_ns) {
   q->spin_pauses = pauses < least ? least : pauses;
 }
 
-/* Joins the spinners if fewer than spin_max spin. */
-static bool join_spinners(agc_runq *q) {
+/* Joins the spinners if fewer than spin_max spin. *ALONE says whether no other scheduler spun then. */
+static bool join_spinners(agc_runq *q, bool *alone) {
   uint32_t n = atomic_load_explicit(&q->spinning, memory_order_relaxed);
   do {
     if (n >= q->spin_max) return false;
   } while (!atomic_compare_exchange_weak_explicit(&q->spinning, &n, n + 1, memory_order_seq_cst,
                                                   memory_order_relaxed));
+  *alone = n == 0;
   return true;
 }
 
@@ -283,28 +286,50 @@ static bool spin_found(agc_runq *q) {
          atomic_load_explicit(&q->ended, memory_order_relaxed);
 }
 
+static uint64_t spin_budget(const agc_runq *q, uint32_t level) {
+  return q->spin_pauses > UINT64_MAX >> level ? UINT64_MAX : q->spin_pauses << level;
+}
+
+/* A spin that took a task doubles the scheduler's next budget, up to AGC_SPIN_LEVEL_MAX doublings, and one that took
+   none halves it. So the budget settles near the gap between two pushes: tasks that come every few tens of
+   microseconds (the clients of one busy task, #1362) are taken by a spinner, with no futex wake per task and no sleep
+   between two of them, while a scheduler that its timers wake, or a push now and then, spins the least budget. Only
+   a scheduler that spins alone has the longer budget and changes its level, so at most one core spins for long. */
+static void adapt(uint32_t *level, bool took) {
+  if (took)
+    *level += *level < AGC_SPIN_LEVEL_MAX;
+  else
+    *level -= *level > 0;
+}
+
 /* The busy wait of an idle scheduler before it waits on the condvar: it polls `work` with growing runs of CPU pauses
-   (1, 2, 4, ... AGC_SPIN_PAUSES_MAX between two looks), never a system sleep, until a task shows up or spin_pauses have
-   passed.
+   (1, 2, 4, ... AGC_SPIN_PAUSES_MAX between two looks), never a system sleep, until a task shows up or its budget has
+   passed: spin_budget of *LEVEL (the caller's own count, 0 at first) when no other scheduler spins, else spin_pauses.
    It leaves the spinners before it takes the lock, so a push from then on signals or is found by its wait. Its take
    starts the chained wake of take_waited: the pushes it absorbed sent no signal. NULL when it found no task (the
    caller waits, and that wait returns at once on a nudge or the end); also NULL at once when spinning is off or
    spin_max spin. */
-agc_task *agc_runq_spin(agc_runq *q) {
-  if (q->solo || !join_spinners(q)) return NULL;
+agc_task *agc_runq_spin(agc_runq *q, uint32_t *level) {
+  bool alone;
+  if (q->solo || !join_spinners(q, &alone)) return NULL;
+  uint64_t budget = alone ? spin_budget(q, *level) : q->spin_pauses;
   uint64_t spent = 0;
   unsigned pauses = 1;
   bool found;
-  while (!(found = spin_found(q)) && spent < q->spin_pauses) {
+  while (!(found = spin_found(q)) && spent < budget) {
     spent += pauses;
     pauses = agc_spin_step(pauses);
   }
   atomic_fetch_sub_explicit(&q->spinning, 1, memory_order_seq_cst);
-  if (!found) return NULL;
-  uv_mutex_lock(&q->lock);
-  bool chain;
-  agc_task *t = take_waited(q, &chain);
-  return leave_with(q, t, chain);
+  agc_task *t = NULL;
+  if (found) {
+    bool chain;
+    uv_mutex_lock(&q->lock);
+    t = take_waited(q, &chain);
+    (void)leave_with(q, t, chain);
+  }
+  if (alone) adapt(level, t != NULL);
+  return t;
 }
 
 agc_runq_counts agc_runq_stats(agc_runq *q) {

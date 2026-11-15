@@ -12,7 +12,8 @@
 
 /* Wakes between schedulers (docs/vm/16-architecture.md §16.9): a scheduler runs the task in its runnext slot at most
    RUNNEXT_LIMIT times in a row before it looks at the global queue, and an idle scheduler spins for SPIN_BUDGET_US
-   before it waits on the queue's condvar. */
+   before it waits on the queue's condvar; the one that spins alone, up to 2^AGC_SPIN_LEVEL_MAX times that while its
+   spins find tasks. */
 #define RUNNEXT_LIMIT 3u
 #define SPIN_BUDGET_US 10u
 /* What else a run that cannot start a scheduler thread can do (agc_thread_start_failed). */
@@ -912,7 +913,7 @@ static void sched_turns(agc_vm *vm, void (*thread)(void *arg)) {
       if (check_stop(vm) || agc_timers_run(vm)) continue;
       /* The slot is empty here (agc_task_next takes it whenever the queue is empty), so the spin and the wait never
          leave a task of this scheduler behind. */
-      t = agc_runq_spin(q);
+      t = agc_runq_spin(q, &vm->spin_level);
       if (!t) {
         /* After the spin, which often finds the peer that ends a pending channel wait; before the wait it bounds. */
         agc_timers_settle(vm);

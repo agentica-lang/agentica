@@ -204,7 +204,8 @@ static agc_task *_Atomic spun_waited;
 static void spin_then_wait(void *arg) {
   (void)arg;
   assert(agc_gc_thread_enter());
-  agc_task *t = agc_runq_spin(spun.rt->runq);
+  uint32_t level = 0;
+  agc_task *t = agc_runq_spin(spun.rt->runq, &level);
   if (!t) t = agc_runq_wait(spun.rt->runq);
   atomic_store(&spun_task, t);
   agc_gc_thread_leave();
@@ -236,7 +237,8 @@ static void test_spin(void) {
   agc_vm_init(&spun, NULL, stdout, stderr, INT64_MAX);
   agc_runq *q = spun.rt->runq;
   agc_runq_share(q);
-  assert(agc_runq_spin(q) == NULL);
+  uint32_t level = 0;
+  assert(agc_runq_spin(q, &level) == NULL);
   agc_runq_add_scheduler(q);
   agc_runq_add_scheduler(q);
   agc_runq_spin_setup(q, 1, SPIN_FOREVER_NS);
@@ -246,7 +248,7 @@ static void test_spin(void) {
   atomic_store(&spun_task, NULL);
   assert(uv_thread_create(&spinner, spin_then_wait, NULL) == 0);
   await_counts(q, 1, 0);
-  assert(agc_runq_spin(q) == NULL);
+  assert(agc_runq_spin(q, &level) == NULL && level == 0);
   uint64_t signals = agc_runq_stats(q).signals;
   agc_runq_push(q, a);
   assert(uv_thread_join(&spinner) == 0);
@@ -317,6 +319,34 @@ static void test_push_own(void) {
   assert(agc_runq_pop(q) == a);
 }
 
+/* The spin budget follows the spins (#1362): a spin that takes a task raises the scheduler's level, up to
+   AGC_SPIN_LEVEL_MAX, and one that runs out of budget or finds only a nudge lowers it, down to 0. The queue has one
+   thread here, so each spin finds its task at the first look or spends the least budget. */
+static void test_spin_level(void) {
+  agc_vm vm;
+  agc_vm_init(&vm, NULL, stdout, stderr, INT64_MAX);
+  agc_runq *q = vm.rt->runq;
+  agc_runq_share(q);
+  agc_runq_add_scheduler(q);
+  agc_runq_spin_setup(q, 1, 1000);
+  uint32_t level = 0;
+  for (uint32_t k = 1; k <= AGC_SPIN_LEVEL_MAX + 2; k++) {
+    agc_task *t = agc_new_task(&vm);
+    agc_runq_push(q, t);
+    assert(agc_runq_spin(q, &level) == t);
+    assert(level == (k < AGC_SPIN_LEVEL_MAX ? k : AGC_SPIN_LEVEL_MAX));
+  }
+  agc_runq_nudge(q);
+  assert(agc_runq_spin(q, &level) == NULL && level == AGC_SPIN_LEVEL_MAX - 1);
+  assert(agc_runq_take_nudge(q));
+  for (uint32_t k = AGC_SPIN_LEVEL_MAX - 1; k > 0; k--) {
+    assert(agc_runq_spin(q, &level) == NULL);
+    assert(level == k - 1);
+  }
+  assert(agc_runq_spin(q, &level) == NULL && level == 0);
+  agc_runq_end(q);
+}
+
 static agc_vm burst;
 static _Atomic int burst_taken;
 
@@ -324,7 +354,8 @@ static _Atomic int burst_taken;
 static void burst_one(void *arg) {
   assert(agc_gc_thread_enter());
   agc_runq *q = burst.rt->runq;
-  agc_task *t = arg ? agc_runq_spin(q) : NULL;
+  uint32_t level = 0;
+  agc_task *t = arg ? agc_runq_spin(q, &level) : NULL;
   if (!t) t = agc_runq_wait(q);
   if (t) atomic_fetch_add(&burst_taken, 1);
   agc_gc_thread_leave();
@@ -425,6 +456,7 @@ int main(void) {
   test_wait_until();
   test_end_wakes_everyone();
   test_spin();
+  test_spin_level();
   test_push_own();
   test_burst_wakes_every_waiter(2, 300);
   test_burst_wakes_every_waiter(3, 300);
