@@ -7,12 +7,14 @@
 ## the bytes of the program, the same ones `agentica compile` writes. The text has one line for each part of the key
 ## (the format, the version, build and path of the binary, the real path of the root, and a digest of the project
 ## inputs), then `program SHA256`, then one `source SHA256 PATH` line for every file of the user that the front end
-## read, then the probes of the resolver: `absent PATH` for a place an import looked at and found nothing, and
-## `present PATH<TAB>REAL` for a place that held a file, with the real path it led to. A lookup compares the key,
-## hashes the files again, checks the probes (`file_exists` and `real_path`, a few `stat`s) and hashes the program, and
-## any difference is a miss, so the entry is rebuilt. The probes cover a file that appears in an earlier folder of the
-## `pkg/` search and a link that is retargeted (the files of a package in `deps/` are sources, so an edit there is a
-## miss); a program with no `pkg/` import records one probe for each relative import.
+## read, then `compiler SHA256` (the C compiler and its search variables) when the program has a native module, so
+## only such a program looks for the compiler at a start, then the probes of the resolver: `absent PATH` for a place
+## an import looked at and found nothing, and `present PATH<TAB>REAL` for a place that held a file, with the real
+## path it led to. A lookup compares the key, hashes the files again, checks the probes (`file_exists` and
+## `real_path`, a few `stat`s) and hashes the program, and any difference is a miss, so the entry is rebuilt. The
+## probes cover a file that appears in an earlier folder of the `pkg/` search and a link that is retargeted (the files
+## of a package in `deps/` are sources, so an edit there is a miss); a program with no `pkg/` import records one probe
+## for each relative import.
 ##
 ## The program digest only guards against damage. The loader treats the bytes as untrusted, but anything that can
 ## write the entry can make the user run the bytecode it holds, so the folder and the entry are used only when they
@@ -55,6 +57,7 @@ import RandomName from "random_name"
 ## Where the entry of one root file is and what it must match. `build` is the `_build/` folder and `folder` the
 ## `bytecode/` folder in it. `beside` is true for `_build/` of the project, false for the folder of AGENTICA_BUILD_DIR.
 ## `libs_dir` is the folder whose agc_libs/ the build reads first (the probes of the `pkg/` imports start there).
+## `compiler` is the compiler line (CacheFiles.compiler_line) as a miss read it, before the compile; "" until then.
 struct Entry
   build: String
   folder: String
@@ -62,6 +65,7 @@ struct Entry
   key: String
   beside: Bool
   libs_dir: String
+  compiler: String
 end
 
 ## The cache for one root file: off (asked off, no place for it, or a run that is not of the binary), or on with its
@@ -71,10 +75,12 @@ enum Plan
   On(Entry)
 end
 
-## What a lookup found: the bytes of the program, or nothing usable.
+## What a lookup found: the bytes of the program, or nothing usable, with the plan to store the compiled program
+## with. That plan holds the compiler line, read now, so a compiler that changes while the front end works makes the
+## next lookup miss.
 enum Lookup
   Hit(Bytes)
-  Miss
+  Miss(Plan)
 end
 
 ## The plan for the root file `root` (as typed). `wanted` is false for `--no-cache`. The cache is off for a front end
@@ -96,12 +102,12 @@ end
 ## The program kept for the plan, if the sources are the ones it was made from and the entry is the program's own.
 def lookup(plan: Plan, settings: Env.Settings) -> Lookup
   case plan
-    Plan.Off -> Lookup.Miss
+    Plan.Off -> Lookup.Miss(plan)
     Plan.On(entry) ->
       found = read_entry(entry, settings)
       return Lookup.Hit(found.unwrap!) if found.ok?
 
-      Lookup.Miss
+      Lookup.Miss(Plan.On(entry.with(compiler: CacheFiles.compiler_line(settings.env.os))))
   end
 end
 
@@ -117,10 +123,15 @@ def store(plan: Plan, settings: Env.Settings, modules: List[Linker.LinkedModule]
       return false if !probes.ok?
 
       lines = sources.map do |module: Linker.LinkedModule| source_line(module) end
-      libraries = library_lines(settings.workspace, sources, built_libraries(settings, sources))
+      built = built_libraries(settings, sources)
+      libraries = library_lines(settings.workspace, sources, built)
       return false if !libraries.ok?
 
       lines = lines.concat(libraries.unwrap!)
+      if built.size > 0
+        lines = lines.push(compiler_of(entry, settings))
+      end
+
       text = [entry.key, "program #{CacheFiles.digest(program)}"].concat(lines).concat(probes.unwrap!).join("\n")
       publish(entry, text, program)
   end
@@ -132,7 +143,7 @@ private
 BYTECODE_FOLDER = "bytecode"
 
 # The first line of the key; change it when the layout of an entry changes.
-FORMAT = "agentica-cache-3"
+FORMAT = "agentica-cache-4"
 
 # The head of an entry: this word, a space, the length of the text in eight digits, a line feed.
 HEAD_WORD = "AGCCACHE "
@@ -148,6 +159,7 @@ MAX_PROGRAM_BYTES = 268_435_456
 # The words that start the lines after the program line, and the digest length in hex.
 SOURCE_WORD = "source "
 TREE_WORD = "tree "
+COMPILER_WORD = "compiler "
 ABSENT_WORD = "absent "
 PRESENT_WORD = "present "
 DIGEST_CHARS = 64
@@ -225,6 +237,14 @@ def built_libraries(settings: Env.Settings, modules: List[Linker.LinkedModule]) 
   found
 end
 
+# The compiler line of a program that names a built library. No other program needs it: a module that was not built
+# stores no entry (NativeBuild.unbuilt_path), and without a build cache the key changes when one appears.
+def compiler_of(entry: Entry, settings: Env.Settings) -> String
+  return entry.compiler if entry.compiler != ""
+
+  CacheFiles.compiler_line(settings.env.os)
+end
+
 # The digest of the names of the native/ files of a package folder: those the package hash covers, and those the walk
 # of a build reads (hidden ones too; a refused walk is its failure), so a new file of either kind is a miss.
 def names_digest(workspace: Workspace.Workspace, root: String) -> String
@@ -278,6 +298,7 @@ def entry_for(settings: Env.Settings, root: String) -> Result[Entry]
       key: key,
       beside: site.beside,
       libs_dir: site.libs_dir,
+      compiler: "",
     ),
   )
 end
@@ -350,7 +371,7 @@ def read_whole(handle: File.Handle, entry: Entry, settings: Env.Settings) -> Res
 
   # The key has no line feed inside a line, so its lines are the first ones of the text, then the program line.
   lines = text.split("\n").drop(entry.key.split("\n").size)
-  try check_lines(settings.workspace, lines.drop(1))
+  try check_lines(settings, lines.drop(1))
   program = try read_rest(handle)
   if lines[0] != "program #{CacheFiles.digest(program)}" or !made_by?(program, settings.version)
     return error("the program of the entry is damaged")
@@ -374,9 +395,12 @@ def text_size(head: Bytes) -> Result[Int]
 end
 
 # Every source file must still have the digest the entry holds, and every probe must still answer as it did.
-def check_lines(workspace: Workspace.Workspace, lines: List[String]) -> Result[Void]
+def check_lines(settings: Env.Settings, lines: List[String]) -> Result[Void]
+  workspace = settings.workspace
   for line in lines
-    if line.start_with?(SOURCE_WORD)
+    if line.start_with?(COMPILER_WORD)
+      return error("the C compiler changed") if line != CacheFiles.compiler_line(settings.env.os)
+    elsif line.start_with?(SOURCE_WORD)
       try check_source(workspace, line)
     elsif line.start_with?(TREE_WORD)
       try check_tree(workspace, line)
