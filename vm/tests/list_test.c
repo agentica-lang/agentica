@@ -367,7 +367,7 @@ static void expect_interior_pointers(void) {
   if (!agc_gc_stats(&info)) return;
   const size_t n = 20000;
   agc_list *kept = replaced_first(n);
-  const size_t from = 40 * LIST_WIDTH;
+  const size_t from = (size_t)40 * LIST_WIDTH;
   agc_list *dropped = agc_list_slice(built(n), from, n - from);
   uint64_t stop = info.collections + 3;
   for (size_t round = 0; round < ROUNDS && info.collections < stop; round++) {
@@ -388,14 +388,17 @@ static void expect_small_node(const void *node, size_t bytes, size_t slack) {
   assert(base && GC_size(base) <= bytes + slack);
 }
 
-static void expect_small_nodes(const void *node, uint32_t shift) {
-  if (!shift) {
-    expect_small_node(node, 65536, 4096);
-    return;
+static void expect_small_nodes(const agc_list *l) {
+  size_t leaves = list_tail_off(l->len) >> LIST_BITS;
+  for (size_t k = 0; k < leaves; k++) {
+    const list_branch *node = l->root;
+    for (uint32_t s = l->shift; s > LIST_BITS; s -= LIST_BITS) {
+      expect_small_node(node, sizeof(list_branch), 256);
+      node = node->child[((k << LIST_BITS) >> s) & LIST_MASK];
+    }
+    expect_small_node(node, sizeof(list_branch), 256);
+    expect_small_node(node->child[k & LIST_MASK], 65536, 4096);
   }
-  const list_branch *b = node;
-  expect_small_node(b, sizeof(list_branch), 256);
-  for (size_t c = 0; c < LIST_WIDTH && b->child[c]; c++) expect_small_nodes(b->child[c], shift - LIST_BITS);
 }
 #endif
 
@@ -404,9 +407,9 @@ static void expect_bounded_nodes(void) {
 #ifndef AGC_NO_GC
   const size_t n = 100000 < MAX_LENGTH ? 100000 : MAX_LENGTH;
   agc_list *l = built(n);
-  expect_small_nodes(l->root, l->shift);
-  agc_list *shared = agc_list_slice(l, 7 * LIST_WIDTH, n - 7 * LIST_WIDTH);
-  expect_small_nodes(shared->root, shared->shift);
+  expect_small_nodes(l);
+  agc_list *shared = agc_list_slice(l, (size_t)7 * LIST_WIDTH, n - (size_t)7 * LIST_WIDTH);
+  expect_small_nodes(shared);
 #endif
 }
 

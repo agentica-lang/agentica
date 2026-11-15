@@ -19,13 +19,6 @@ typedef struct {
   uint32_t shift;
 } list_trie;
 
-typedef struct {
-  const agc_list *src;
-  size_t first, shared, leaves, next;
-  uint32_t kind;
-  char *slab;
-} trie_fill;
-
 static size_t trie_items(size_t n) { return n ? list_tail_off(n) : 0; }
 
 static uint32_t shift_for(size_t trie_len) {
@@ -118,34 +111,41 @@ static char *leaf_of(const agc_list *l, size_t k) {
   return node->child[k & LIST_MASK];
 }
 
-/* Leaves past `shared` are slices of slabs of at most SLAB_BYTES, and every branch is its own object: under
-   conservative marking, a false pointer into one keeps at most one slab of garbage alive, not a whole build. */
-static void *fill_node(trie_fill *f, uint32_t shift) {
-  if (!shift) {
-    size_t k = f->next++;
-    if (k < f->shared) return leaf_of(f->src, f->first + k);
-    size_t leaf_bytes = LIST_WIDTH * stride_of(f->kind);
-    size_t per = slab_leaves(f->kind);
-    size_t at = (k - f->shared) % per;
-    if (!at) {
-      size_t count = f->leaves - k < per ? f->leaves - k : per;
-      f->slab = items_alloc(f->kind, count * leaf_bytes);
-    }
-    return f->slab + at * leaf_bytes;
-  }
-  list_branch *b = agc_alloc(sizeof(list_branch));
-  for (size_t c = 0; c < LIST_WIDTH && f->next < f->leaves; c++) b->child[c] = fill_node(f, shift - LIST_BITS);
-  return b;
-}
-
-/* The first `shared` leaves are leaves first, first + 1, ... of src, which has the same kind. */
+/* The first `shared` leaves are leaves first, first + 1, ... of src, which has the same kind. The others are slices of
+   slabs of at most SLAB_BYTES, and every branch is its own object: under conservative marking, a false pointer into
+   one keeps at most one slab of garbage alive, not a whole build. path[d] is the current branch of level d (0 holds
+   leaves). */
 static void trie_make(agc_list *l, size_t items, uint32_t kind, const agc_list *src, size_t first, size_t shared) {
   /* the bound of 16-byte items for every kind, checked before shift_for: a len above SIZE_MAX / 16 ends in the out-of-memory exit here (17.7) */
   (void)agc_size_mul(items, sizeof(agc_value));
-  trie_fill f = {.src = src, .first = first, .shared = shared, .leaves = items >> LIST_BITS, .kind = kind};
+  if (shared && !src) abort();
+  size_t leaves = items >> LIST_BITS;
+  size_t leaf_bytes = LIST_WIDTH * stride_of(kind);
+  size_t per = slab_leaves(kind);
   uint32_t shift = shift_for(items);
-  l->root = fill_node(&f, shift);
+  size_t depth = shift / LIST_BITS;
+  list_branch *path[MAX_LEVELS];
+  path[depth - 1] = agc_alloc(sizeof(list_branch));
+  l->root = path[depth - 1];
   l->shift = shift;
+  char *slab = NULL;
+  for (size_t k = 0; k < leaves; k++) {
+    for (size_t d = depth - 1; d-- > 0;) {
+      size_t bits = LIST_BITS * (d + 1);
+      if (k & (((size_t)1 << bits) - 1)) continue;
+      path[d] = agc_alloc(sizeof(list_branch));
+      path[d + 1]->child[(k >> bits) & LIST_MASK] = path[d];
+    }
+    char *leaf;
+    if (src && k < shared) {
+      leaf = leaf_of(src, first + k);
+    } else {
+      size_t at = (k - shared) % per;
+      if (!at) slab = items_alloc(kind, (leaves - k < per ? leaves - k : per) * leaf_bytes);
+      leaf = slab + at * leaf_bytes;
+    }
+    path[0]->child[k & LIST_MASK] = leaf;
+  }
 }
 
 static const char *list_chunk(const agc_list *l, size_t i, size_t *start, size_t *end) {
