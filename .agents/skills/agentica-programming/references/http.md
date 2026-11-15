@@ -71,7 +71,8 @@ HTTP.ClientOptions(timeout_ms: Int = 30000, idle_timeout_ms: Int = 30000, max_co
   cut one (a timeout, a body over 256 MiB). Close `body` to stop early while
   data flows; on a quiet stream use `Task.cancel(stream.done)`.
   `HTTP.upload(method, url, body_channel, length)` sends the pieces another task
-  puts in the channel, as chunks until it closes (`length` -1, the default) or
+  puts in the channel, as chunks until it closes (`length` -1, the default;
+  pieces that wait in the channel together share a chunk) or
   with an exact `length`, which ends the body at that many bytes, and returns
   the whole response; `POST`, `PUT` or `PATCH` only. A producer that can fail
   should set `length`, since a closed channel is a clean end.
