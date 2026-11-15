@@ -41,6 +41,8 @@ Run an example with `dist/agentica examples/<name>.agc`. The
 - [`actor.agc`](actor.agc): a counter actor from `std/actor`, reached by name
   through a constant table of addresses, with `cast`, `call` and a `Stop`
   message.
+- [`actor_send.agc`](actor_send.agc): requests to two actors at once with
+  `Actor.send`, then `Actor.await` the answers in order.
 - [`process-tool.agc`](process-tool.agc): run another program.
 - [`tcp_echo.agc`](tcp_echo.agc): a TCP echo: read a line from a socket and send
   it back.

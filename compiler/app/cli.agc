@@ -26,7 +26,6 @@ import Front from "../analysis/front"
 import Driver from "../bdd/bdd_driver"
 import Opts from "../bdd/bdd_options"
 import Report from "../bdd/bdd_report"
-import SourceRoot from "../bdd/bdd_source_root"
 import CheckText from "../check/check_text"
 import Ai from "../diagnostics/diagnostic_ai"
 import Diag from "../diagnostics/diagnostic"
@@ -63,6 +62,7 @@ import Launch from "cli_launch"
 import Options from "cli_options"
 import CliQuery from "cli_query"
 import Reply from "cli_reply"
+import CliRun from "cli_run"
 import Texts from "cli_text"
 import Pipeline from "pipeline"
 
@@ -177,7 +177,7 @@ def builder_settings(settings: Env.Settings, deny: List[String], style: String, 
     return settings.with(workspace: settings.workspace.with(native_build: builder))
   end
 
-  denied = settings.with(native_denied: true)
+  denied = CliRun.settings(settings, deny)
   if verb == "compile"
     refusing: Fn[Workspace.BuildRequest, Workspace.Built] = NativeBuild.refusing(deny[0])
     return denied.with(workspace: settings.workspace.with(native_build: refusing))
@@ -682,7 +682,7 @@ def program(session: Session, verb: String, rest: List[String]) -> Int
     return verdict(session, source, Core.check(Cache.empty(), check_settings(session, source), source))
   end
 
-  plan = cache_plan(session, verb, source)
+  plan = CliRun.cache_plan(session.options, session.settings, verb, source)
   case BytecodeCache.lookup(plan, session.settings)
     BytecodeCache.Lookup.Hit(bytes) ->
       return save(rest[2], bytes) if verb == "compile"
@@ -696,17 +696,6 @@ end
 # (analysis/analysis.agc, modules/test_files.agc).
 def check_settings(session: Session, file: String) -> Env.Settings
   CheckCache.attach(session.settings, file, !session.options.no_cache)
-end
-
-# The bytecode cache (io/bytecode_cache.agc) serves a run and `compile` (whose bytes are the ones a fresh compile
-# writes): not a listing of the tree or the IR, and not `--no-cache`. `check` never gets here. A `compile` under a
-# --deny-* flag does not use it: it refuses a native module that needs a build (`builder_settings`), where a run's
-# entry names the library by its bare name.
-def cache_plan(session: Session, verb: String, source: String) -> BytecodeCache.Plan
-  options = session.options
-  denied_compile = verb == "compile" and options.deny.size > 0
-  wanted = !options.no_cache and !options.dump and !options.dump_ir and !denied_compile
-  BytecodeCache.plan(session.settings, source, wanted)
 end
 
 def read(session: Session, verb: String, rest: List[String], plan: BytecodeCache.Plan) -> Int
@@ -757,10 +746,9 @@ def checked(session: Session, verb: String, rest: List[String], front: Front.Che
   end
 end
 
-# Runs the program `bytes`: the VM gets the options in a fixed order, and the program its arguments.
+# Runs the program `bytes`.
 def start(session: Session, rest: List[String], bytes: Bytes) -> Int
-  launch = Launch.Launch(bytes: bytes, flags: vm_flags(session.options, rest[0]), arguments: rest.drop(1))
-  session.hand_off.call(launch)
+  session.hand_off.call(CliRun.launch(session.options, rest, bytes))
 end
 
 # `--dump-ir`: the lowered program in the text form of lower_text.agc. It is not the `format-ir` of the former front
@@ -772,52 +760,6 @@ def dump_ir(session: Session, source: String, front: Front.Checked) -> Int
       text = LowerText.program_text(program)
       emit(Reply.printed("#{text}\n"))
   end
-end
-
-# The options the VM gets, in a fixed order.
-def vm_flags(options: Options.Options, source: String) -> List[String]
-  flags: List[String] = []
-  if options.max_steps != ""
-    flags = flags.concat(["--max-steps", options.max_steps])
-  end
-
-  if options.max_heap != ""
-    flags = flags.concat(["--max-heap", options.max_heap])
-  end
-
-  if options.seed != ""
-    flags = flags.concat(["--seed", options.seed])
-  end
-
-  if options.flush_timeout != ""
-    flags = flags.concat(["--flush-timeout", options.flush_timeout])
-  end
-
-  if options.schedulers != ""
-    flags = flags.concat(["--schedulers", options.schedulers])
-  end
-
-  if options.jit != ""
-    flags = flags.concat(["--jit", options.jit])
-  end
-
-  if options.coverage != ""
-    flags = flags.concat(["--coverage", options.coverage])
-  end
-
-  flags = flags.concat(options.deny)
-  root = SourceRoot.option(source)
-  if root != ""
-    flags = flags.concat(["--source-root", root])
-  end
-
-  if options.style == "ai"
-    flags = flags.push("--ai")
-  elsif options.style == "json"
-    flags = flags.push("--json")
-  end
-
-  flags
 end
 
 # `compile`: the bytes to the file, which is created or emptied first.

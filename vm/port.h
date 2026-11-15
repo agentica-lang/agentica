@@ -696,6 +696,8 @@ struct agc_vm {
      use the queue. */
   agc_task *runnext;
   uint32_t runnext_runs;
+  /* How long this scheduler spins when it is the only idle one that does (agc_runq_spin). */
+  uint32_t spin_level;
   bool runnext_on;
   /* Set when this scheduler's last turn pushed its task with agc_runq_push_own, which wakes nobody; the next pick
      reads and clears it, and if it takes the slot instead of that task it wakes another scheduler for it. */
