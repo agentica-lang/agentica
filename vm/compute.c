@@ -113,7 +113,8 @@ static void serve(void *arg) {
       pool->idle--;
     }
     if (missed) adapt(w, pool->first && uv_hrtime() - slept < SPIN_NS << AGC_SPIN_LEVEL_MAX);
-    if (pool->closed) break;
+    /* `closed` is atomic, so this is a new read of it: the queue is tested too. */
+    if (pool->closed || !pool->first) break;
     agc_request *item = pool->first;
     pool->first = item->next;
     if (!pool->first) pool->last = NULL;
