@@ -263,8 +263,9 @@ A step program is a normal program: its `main` builds the list of steps with
   service")`. `Context` is not generic, so the step program's own type cannot
   travel through it; the closure carries the value. Services start empty in each
   scenario. Keeping a name again replaces the service; the old handle is not
-  closed and lives until the scenario's child VM ends, or until a `BDD.after`
-  hook closes it. A step still cannot leave a task running.
+  closed and lives until the scenario ends (its task, or its child VM under
+  `--isolate`), or until a `BDD.after` hook closes it. A step still cannot
+  leave a task running.
 - `BDD.after(ctx, hook)` keeps a `Fn[Context, Result[Void]]` in the context. The
   child runs the hooks, the last registered first, each in its own task
   (`run_after` in `stdlib/bdd.agc`), when the runner closes the channel (a
@@ -322,27 +323,49 @@ A step program is a normal program: its `main` builds the list of steps with
 
 `agentica test` compiles the step program and the runner to bytecode in a
 private temporary directory, and runs the runner on the VM. The runner lists the
-steps in one child VM, then runs **each scenario in its own child VM**, which
-runs the step program in scenario mode. A step that crashes, calls `System.exit`
-(even with 0), exceeds its step limit or loops forever fails only its scenario
-(`RUNTIME-BDD-PREMATURE-EXIT` for an exit). Its remaining steps are
-`not_executed`, and the next scenario runs. A step program that does not
-compile, does not list its steps, or has a bad pattern is one file error, and
-then no scenario runs.
+steps in one child VM, then runs the scenarios in `--jobs` lanes. Each lane
+keeps a **worker**: a child VM that runs the step program in worker mode, one
+scenario after another, **each scenario in a task of its own**, while they
+pass. A step that crashes, calls `System.exit` (even with 0), exceeds its step
+limit or loops forever fails only its scenario (`RUNTIME-BDD-PREMATURE-EXIT`
+for an exit). Its remaining steps are `not_executed`, the worker is closed, and
+the next scenario starts a new one. A step program that does not compile, does
+not list its steps, or has a bad pattern is one file error, and then no scenario
+runs.
+
+- **What a scenario keeps to itself.** Its context (`BDD.set`, `BDD.keep`), its
+  program under test and every handle its task opened (closed when the task
+  ends), its tasks (none may be left), its random numbers (it starts from the
+  run's seed, `BddScenario.srand`, whatever `main` drew before `BDD.run`), its
+  step budget (`BddScenario.budget`, below) and `Task.pending_count` (its task
+  is not counted, `BddScenario.uncount`). A worker takes the next scenario only
+  after one that passed and left no task running and no unobserved crash; any
+  other end closes it.
+- **What the scenarios of a worker share.** What the step program made in
+  `main` before `BDD.run` and the steps capture (an `ATS` table, a `Channel`),
+  module-level tables, process state that a step sets (`Logger.set_level`,
+  `LogRegistry` handlers), the state of native libraries, the process (its
+  working folder, environment, memory) and stderr. `--isolate` runs each
+  scenario in a child VM of its own (scenario mode, `main` again), as
+  `--coverage` does, which writes one LCOV part per child.
 
 - **Host access.** BDD gives no isolation from the host: programs run with the
   user's permissions and environment. Programs under test start with the same
   `agentica` command and no step limit, as `agentica FILE.agc` does.
-- **Limits.** A scenario has a 30-second deadline from the start of its child;
-  it is the only bound on the CPU and memory of a program under test.
+- **Limits.** A scenario has a 30-second deadline from its start (a new
+  worker's start included); it is the only bound on the CPU and memory of a
+  program under test.
   Program-driving calls without a timeout get 5 seconds, and starting a program
-  gets 30. The scenario child has 1,000,000 steps per step plus 1,000,000, and
-  that budget also pays for `std/bdd`'s own work; builtins cost steps per call,
-  not per byte. Unread stdout and stderr are each kept up to 1 MiB, checked
-  after every step. Handler output is limited to 1 MiB per step.
-- **Cleanup.** When a scenario ends, its child is closed and stops the program
-  under test; the runner closes each child with `Process.close`, which sends
-  `SIGTERM`, then `SIGKILL` after one second. An interrupted run (Ctrl-C,
+  gets 30. A scenario has 1,000,000 steps per step plus 1,000,000 (`steps` of
+  the settings line), set when it starts, in a worker as in a child, so its
+  verdict does not depend on the scenarios before it; that budget also pays for
+  `std/bdd`'s own work. Builtins cost steps per call, not per byte. Unread
+  stdout and stderr are each kept up to 1 MiB, checked after every step.
+  Handler output is limited to 1 MiB per step.
+- **Cleanup.** When a scenario ends, its task ends and the worker stops the
+  program under test (a child ends and stops it). The runner closes a child or
+  worker it is done with by `Process.close`, which sends `SIGTERM`, then
+  `SIGKILL` after one second. An interrupted run (Ctrl-C,
   `SIGTERM`) stops its children, but its temporary directory may stay until the
   next `agentica test` removes it, because the VM does not unwind (until
   signals, issue #991). On Linux the
@@ -364,8 +387,8 @@ then no scenario runs.
   default per-user `%TEMP%`). A shared multi-user temporary folder is out of
   scope, because another user who can delete entries of that folder could swap
   the run directory before its `lock` pins it.
-- **Shared resources.** Test files and scenarios run one at a time, each in its
-  own child VM, next to other programs. A fixed temporary file name or port can
+- **Shared resources.** Test files and scenarios run `--jobs` at a time, next
+  to other programs. A fixed temporary file name or port can
   collide with another run; use port 0 and a fresh temporary directory.
 
 ## How a run works
@@ -378,20 +401,31 @@ agentica test [PATH...] [--steps FILE]
   `agentica run` of the same binary:
     1. list child:    steps.agcb --agentica-bdd list   -> the patterns, in order (channel)
     2. per .feature:  parse, expand, match
-    3. per scenario:  steps.agcb --agentica-bdd scenario (own child VM)
-                      <- one init line, then one line per step (channel)
-                      -> assert, end, fail records (channel)
+    3. per lane:      steps.agcb --agentica-bdd worker (child VM, kept while
+                      scenarios pass; `scenario`, one child each, under
+                      --isolate or --coverage)
+                      per scenario: <- one init line, then one line per step,
+                      then `end` (worker) (channel)
+                      -> assert, end, fail, done (worker) records (channel)
     4. the report: plain, --ai or --json on stdout; exit 0, 1 or 2
 ```
 
 - **The runner is a fixed program.** User code never runs in the process that
-  writes the report. A user's `main` runs only in children, always under a step
-  limit, a deadline and captured output.
-- **One step program, two modes.** The list child and the scenario child are the
-  same `.agcb`, chosen by `System.args`, so step numbers match.
-- **Scenario child.** Started with `--json` (so a crash leaves its diagnostic as
-  the last stderr line) and `--max-steps` of 1,000,000 times the number of
-  steps plus one. The list child is the same with `list` and a 30-second limit.
+  writes the report. A user's `main` runs only in children, always under a
+  deadline and captured output, and each scenario under its step budget.
+- **One step program, three modes.** The list child, the worker and the
+  scenario child are the same `.agcb`, chosen by `System.args`, so step numbers
+  match.
+- **Scenario child and worker.** Started with `--json` (so a crash leaves its
+  diagnostic as the last stderr line) and no `--max-steps`: each scenario sets
+  its own budget (see Limits), which `BddScenario.budget` can do only in a run
+  without `--max-steps` (under it the call does nothing, so bytecode cannot lift
+  the limit). Until the first scenario, the 30-second deadline bounds the
+  child. A worker's scenario task that crashes prints a task diagnostic
+  spawned in `std/bdd.agc`; the runner reads it as the scenario's crash
+  (`scenario_crash` in `stdlib/test/child.agc`) and the worker exits 1. The
+  list child runs with `list`, a 30-second limit and `--max-steps` of
+  1,000,000.
 - **Protocol.** One JSON record per line, on the child channel: a pipe per
   direction of its own, opened by `Process.spawn_channel` and found by the
   child on descriptors 3 and 4 (`docs/vm/10-io-processes.md` §10.4). A record
@@ -402,7 +436,7 @@ agentica test [PATH...] [--steps FILE]
 
 - **Direction:** runner to child
   - **Record:** settings, once (`base`, `agentica`, `seeded`, `seed`,
-    `programs`)
+    `programs`, `steps`)
   - **Meaning:** Where programs resolve and run, how to start `agentica`,
     what to pass on, and the run folder where `BDD.given_program` compiles
     each program once per run (`""` for none)
@@ -415,7 +449,20 @@ agentica test [PATH...] [--steps FILE]
 
 - **Direction:** runner to child
   - **Record:** end of the channel (`Process.channel_close`)
-  - **Meaning:** `BDD.run` ends the child with `System.exit(0)`
+  - **Meaning:** `BDD.run` runs the after hooks and ends the child with
+    `System.exit(0)`
+
+- **Direction:** runner to worker
+  - **Record:** the line `end` (not JSON)
+  - **Meaning:** The scenario passed its steps: run the after hooks, then send
+    `done`; the next settings line starts the next scenario
+
+- **Direction:** worker to runner
+  - **Record:** `done` (with `reuse`)
+  - **Meaning:** The scenario's task ended and closed its handles; `reuse` is
+    false when a task of it still runs or crashed unobserved, and the worker
+    then exits 0. A worker that exits 0 before `done` (`System.exit` in a hook)
+    passes the scenario, as a child does
 
 - **Direction:** child to runner
   - **Record:** `assert`, `end` (with `index`), `fail` (with `code`, `message`,

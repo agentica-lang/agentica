@@ -167,3 +167,42 @@ def test_uncount_takes_a_task_out_of_the_pending_count_once_however_it_ends(tmp_
     result = run([*vm_command(), "--schedulers", "4", "--", compiled], env=vm_environment())
     assert result.code == 0, result
     assert result.stdout.splitlines() == ["0 1"] * 7, result
+
+
+BUDGET_PROBE = """\
+def spend(budget: Int, size: Int) -> Int
+  BddScenario.budget(budget)
+  (1..size).reduce(0) do |sum, n| sum + n end
+end
+"""
+
+
+def test_budget_gives_a_run_without_a_step_limit_that_many_steps_from_here(tmp_path):
+    """Each call starts a fresh budget: two sums (about 1.2 million steps each) end within budgets of 2 million, and one
+    sum over its own budget ends the run with RUNTIME-STEP-LIMIT."""
+    compiled = compiled_with_probe(
+        tmp_path, BUDGET_PROBE,
+        "def main() -> Void\n"
+        "  size = System.args()[0].to_i!\n"
+        '  puts("#{Probe.spend(2000000, size) > 0} #{Probe.spend(2000000, size) > 0}")\n'
+        "end\n")
+    fits = run([*vm_command(), "--", compiled, "100000"], env=vm_environment())
+    assert (fits.code, fits.stdout) == (0, "true true\n"), fits
+    over = run([*vm_command(), "--json", "--", compiled, "1000000"], env=vm_environment())
+    assert over.code == 1, over
+    assert json.loads(over.stderr.strip().splitlines()[-1])["code"] == "RUNTIME-STEP-LIMIT"
+
+
+def test_budget_does_not_lift_the_step_limit_of_the_run(tmp_path):
+    """Under --max-steps the limit holds for the whole run: a budget call there does nothing, so the two sums fit in 4
+    million steps and not in 2 million (a hand-made .agcb cannot lift the limit)."""
+    compiled = compiled_with_probe(
+        tmp_path, BUDGET_PROBE,
+        "def main() -> Void\n"
+        '  puts("#{Probe.spend(1000000000, 100000) > 0} #{Probe.spend(1000000000, 100000) > 0}")\n'
+        "end\n")
+    alone = run([*vm_command(), "--max-steps", "4000000", "--", compiled], env=vm_environment())
+    assert (alone.code, alone.stdout) == (0, "true true\n"), alone
+    capped = run([*vm_command(), "--json", "--max-steps", "2000000", "--", compiled], env=vm_environment())
+    assert capped.code == 1, capped
+    assert json.loads(capped.stderr.strip().splitlines()[-1])["code"] == "RUNTIME-STEP-LIMIT"

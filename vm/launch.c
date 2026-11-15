@@ -852,6 +852,7 @@ agc_vm *agc_launch_vm(agc_launch *launch, const agc_program *program, const agc_
   agc_vm_init(vm, program, stdout, stderr, options->max_steps);
   if (options->max_heap) agc_heap_limit_set(options->max_heap, options->style == AGC_STYLE_JSON);
   agc_runtime *rt = vm->rt;
+  rt->budget_settable = options->max_steps == INT64_MAX;
   rt->trace = launch->trace;
   rt->style = options->style;
   rt->flush_timeout = options->flush_timeout;

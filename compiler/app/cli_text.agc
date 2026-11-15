@@ -58,7 +58,7 @@ USAGE = [
   "       agentica [--ai|--json] update [NAME]",
   [
     "       agentica [--ai|--json] [--seed N] [--no-cache] test [PATH...] [--steps FILE] [--only TEXT] [--tags EXPR] ",
-    "[--jobs N] [--timing] [--coverage]",
+    "[--jobs N] [--timing] [--coverage] [--isolate]",
   ].join(""),
   "       agentica run [OPTIONS] -- <file.agcb> [args...]",
 ]
@@ -84,7 +84,7 @@ SUMMARY = [
   "                                          the current folder); suggestions exit 0, --strict exits 1 for any;",
   "                                          --json prints one document",
   "  agentica test [PATH...] [--steps FILE] [--only TEXT] [--tags EXPR]",
-  "                                          [--jobs N] [--timing] [--coverage]",
+  "                                          [--jobs N] [--timing] [--coverage] [--isolate]",
   "                                          run *_test.agc and .feature files (default PATH: test/ and specs/);",
   "                                          --steps FILE is the step program of the .feature files (default:",
   "                                          the nearest steps.agc in or above the folder of each PATH, up to",
@@ -95,7 +95,9 @@ SUMMARY = [
   "                                          default 1);",
   "                                          --timing adds the time of the run, of each file and of the 5",
   "                                          slowest scenarios;",
-  "                                          --coverage writes the line coverage to coverage/lcov.info (LCOV)",
+  "                                          --coverage writes the line coverage to coverage/lcov.info (LCOV);",
+  "                                          --isolate runs each scenario in a child of its own (default: each",
+  "                                          job slot reuses one child while its scenarios pass)",
   "  agentica install                        fetch the packages of agentica.lock with git (a package already in",
   "                                          the package cache is not fetched) and write them to deps/NAME/;",
   "                                          the lock is never changed",

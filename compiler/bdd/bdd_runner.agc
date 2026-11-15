@@ -48,33 +48,32 @@ end
 
 ## The text of the configuration file: the settings, one line for each entry, then the `--tags` expression as a JSON
 ## string when there is one, then `--jobs` as a JSON integer when it is more than 1, then `--timing` as a JSON boolean
-## when it is given, then the folder of the coverage parts (`--coverage`) as a JSON string when there is one. Those
-## last lines are not fields of `Config` because the runner decodes `Config` with no optional fields, and a driver that
-## does not write them (stage0) must keep working with the runner. Each line follows the one before it, so a run with
+## when it is given, then the folder of the coverage parts (`--coverage`) as a JSON string when there is one, then
+## `--isolate` as a JSON boolean when it is given. Those last lines are not fields of `Config` because the runner
+## decodes `Config` with no optional fields, and a driver that does not write them (stage0) must keep working with the
+## runner. Each line follows the one before it, so a run with
 ## jobs and no tags writes an empty tags string, which is no filter, and a run with timing alone writes both before it.
-def config_text(
-  config: Config,
-  entries: List[Discover.Entry],
-  tags: String,
-  jobs: Int,
-  timing: Bool,
-  parts: String,
-) -> String
+def config_text(config: Config, entries: List[Discover.Entry], options: Opts.Options, parts: String) -> String
   lines = [JSON.encode(config)].concat(entries.map do |entry: Discover.Entry| JSON.encode(entry) end)
-  if tags != "" or jobs > 1 or timing or parts != ""
-    lines = lines.push(JSON.encode(tags))
+  isolate = options.isolate
+  if options.tags != "" or options.jobs > 1 or options.timing or parts != "" or isolate
+    lines = lines.push(JSON.encode(options.tags))
   end
 
-  if jobs > 1 or timing or parts != ""
-    lines = lines.push(JSON.encode(jobs))
+  if options.jobs > 1 or options.timing or parts != "" or isolate
+    lines = lines.push(JSON.encode(options.jobs))
   end
 
-  if timing or parts != ""
-    lines = lines.push(JSON.encode(timing))
+  if options.timing or parts != "" or isolate
+    lines = lines.push(JSON.encode(options.timing))
   end
 
-  if parts != ""
+  if parts != "" or isolate
     lines = lines.push(JSON.encode(parts))
+  end
+
+  if isolate
+    lines = lines.push(JSON.encode(true))
   end
 
   "#{lines.join("\n")}\n"

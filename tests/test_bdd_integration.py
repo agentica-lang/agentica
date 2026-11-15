@@ -310,15 +310,194 @@ end
               BDD.run([BDD.step("stdout repeats the seeded draw") do |ctx, _| BDD.then_stdout(ctx, {draw} + "\\n") end])
             end
             """),
-        "seed.feature": ('Feature: Seeds\nScenario: seeded\nGiven the Agentica program "draw.agc"\n'
-                         "Then the program exits with code 0 within " + ms(5000) + " milliseconds\n"
-                         "And stdout repeats the seeded draw\n")})
+        "seed.feature": "Feature: Seeds\n" + "".join(
+            f'Scenario: {name}\nGiven the Agentica program "draw.agc"\n'
+            "Then the program exits with code 0 within " + ms(5000) + " milliseconds\n"
+            "And stdout repeats the seeded draw\n" for name in ("seeded", "again in its worker"))})
     arguments = [directory / "seed.feature", "--steps", directory / "steps.agc"]
     assert json_test(*arguments, before=["--seed", "9"])["ok"] is True
     drawn = json_test(*arguments)
     assert drawn["ok"] is True
     assert isinstance(drawn["seed"], int)
     assert drawn["seed"] >= 0
+
+
+def test_passing_scenarios_share_a_worker_that_closes_their_handles_and_a_failure_ends_it(tmp_path):
+    directory = suite(tmp_path, {})
+    pids = directory / "pids.txt"
+    ports = directory / "ports.txt"
+    write_files(directory, {
+        "steps.agc": dedent(f"""\
+            import BDD from "std/bdd"
+
+            def note(ctx: BDD.Context, _args: List[String]) -> BDD.Context
+              noted = File.append_text({agc_literal(pids)}, "#{{System.pid()}}\\n", 5000)
+              BDD.assert(ctx, noted.ok?, "cannot write the pid")
+            end
+
+            def listen(ctx: BDD.Context, _args: List[String]) -> BDD.Context
+              listener = TCP.listen("127.0.0.1", 0).unwrap!
+              noted = File.append_text({agc_literal(ports)}, TCP.local_port(listener).to_s, 5000)
+              BDD.assert(ctx, noted.ok?, "cannot write the port")
+            end
+
+            def closed(ctx: BDD.Context, _args: List[String]) -> BDD.Context
+              port = File.read_text({agc_literal(ports)}, 5000).unwrap!.to_i!
+              BDD.assert(ctx, not TCP.connect("127.0.0.1", port, 5000).ok?, "the listener is still open")
+            end
+
+            def main() -> Void
+              BDD.run([
+                BDD.step("I note my pid", &note),
+                BDD.step("I listen", &listen),
+                BDD.step("the last listener is closed", &closed),
+                BDD.step("it fails") do |ctx, _| BDD.assert(ctx, false, "failed") end,
+              ])
+            end
+            """),
+        "worker.feature": ("Feature: Worker\nScenario: first\nThen I note my pid\nAnd I listen\n"
+                           "Scenario: second\nThen I note my pid\nAnd the last listener is closed\n"
+                           "Scenario: broken\nThen I note my pid\nAnd it fails\n"
+                           "Scenario: after\nThen I note my pid\n")})
+    report = json_test(directory / "worker.feature", "--steps", directory / "steps.agc", "--jobs", "1")
+    assert [item["status"] for item in report_cases(report)] == ["passed", "passed", "failed", "passed"]
+    first, second, broken, after = pids.read_text(encoding="utf-8").split()
+    assert first == second == broken != after
+
+
+WORKER_STEPS = """\
+import BDD from "std/bdd"
+
+def sleep_long() -> Int
+  Task.sleep(60000)
+  0
+end
+
+def note(ctx: BDD.Context, _args: List[String]) -> BDD.Context
+  noted = File.append_text(PIDS, "#{System.pid()}\\n", 5000)
+  BDD.assert(ctx, noted.ok?, "cannot write the pid")
+end
+
+def leave_a_task(ctx: BDD.Context, _args: List[String]) -> BDD.Context
+  hooked = BDD.after(ctx) do |_|
+    _task = Task.spawn(&sleep_long)
+    ok()
+  end
+  BDD.assert(hooked, true, "hooked")
+end
+
+def main() -> Void
+  BDD.run([
+    BDD.step("I note my pid", &note),
+    BDD.step("an after hook leaves a task running", &leave_a_task),
+    BDD.step("the step hangs") do |ctx, _| BDD.set(ctx, "slept", JSON.from(sleep_long())) end,
+  ])
+end
+"""
+
+
+def worker_pids(tmp_path, feature):
+    """The verdicts of `feature` run on WORKER_STEPS with --jobs 1, and the pid each `I note my pid` step saw."""
+    directory = suite(tmp_path, {})
+    pids = directory / "pids.txt"
+    write_files(directory, {"steps.agc": WORKER_STEPS.replace("PIDS", agc_literal(pids)), "w.feature": feature})
+    report = json_test(directory / "w.feature", "--steps", directory / "steps.agc", "--jobs", "1")
+    return [item["status"] for item in report_cases(report)], pids.read_text(encoding="utf-8").split()
+
+
+def test_a_scenario_that_leaves_a_task_to_its_after_hooks_ends_its_worker(tmp_path):
+    statuses, pids = worker_pids(tmp_path, "Feature: W\nScenario: a\nThen I note my pid\n"
+                                           "And an after hook leaves a task running\n"
+                                           "Scenario: b\nThen I note my pid\nScenario: c\nThen I note my pid\n")
+    assert statuses == ["passed", "passed", "passed"]
+    assert pids[0] != pids[1] == pids[2]
+
+
+@pytest.mark.slow
+def test_a_scenario_that_hangs_fails_at_its_deadline_and_the_next_gets_a_new_worker(tmp_path):
+    statuses, pids = worker_pids(tmp_path, "Feature: W\nScenario: a\nThen I note my pid\nScenario: hangs\n"
+                                           "Then I note my pid\nAnd the step hangs\n"
+                                           "Scenario: after\nThen I note my pid\n")
+    assert statuses == ["passed", "failed", "passed"]
+    assert pids[0] == pids[1] != pids[2]
+
+
+def test_a_step_draws_the_same_numbers_in_a_worker_and_alone_whatever_main_drew_first(tmp_path):
+    directory = suite(tmp_path, {})
+    draws = directory / "draws.txt"
+    write_files(directory, {
+        "steps.agc": dedent(f"""\
+            import BDD from "std/bdd"
+
+            def main() -> Void
+              _early = Random.int(1, 1000000)
+              _done = Task.await(Task.spawn do 1 end)
+              BDD.run([
+                BDD.step("I draw") do |ctx, _|
+                  noted = File.append_text({agc_literal(draws)}, "#{{Random.int(1, 1000000)}}\\n", 5000)
+                  BDD.assert(ctx, noted.ok?, "cannot write the draw")
+                end,
+              ])
+            end
+            """),
+        "draw.feature": "Feature: Draw\nScenario: a\nThen I draw\nScenario: b\nThen I draw\n"})
+    arguments = [directory / "draw.feature", "--steps", directory / "steps.agc", "--jobs", "1"]
+    assert json_test(*arguments, before=["--seed", "5"])["ok"] is True
+    assert json_test(*arguments, "--isolate", before=["--seed", "5"])["ok"] is True
+    first, second, alone, alone_again = draws.read_text(encoding="utf-8").split()
+    assert first == second == alone == alone_again
+
+
+def test_a_table_made_in_main_is_shared_by_the_scenarios_of_a_worker_and_fresh_under_isolate(tmp_path):
+    directory = suite(tmp_path, {
+        "steps.agc": dedent("""\
+            import BDD from "std/bdd"
+
+            def main() -> Void
+              table: ATS[String, Int] = ATS.new()
+              BDD.run([
+                BDD.step("the table counts {int}") do |ctx, args|
+                  BDD.assert(ctx, table.add("n", 1) == args[0].to_i!, "another count")
+                end,
+              ])
+            end
+            """),
+        "table.feature": ("Feature: Table\nScenario: first\nThen the table counts 1\n"
+                          "Scenario: second\nThen the table counts 2\n")})
+    arguments = [directory / "table.feature", "--steps", directory / "steps.agc", "--jobs", "1"]
+    shared = json_test(*arguments)
+    assert [item["status"] for item in report_cases(shared)] == ["passed", "passed"]
+    isolated = json_test(*arguments, "--isolate")
+    assert [item["status"] for item in report_cases(isolated)] == ["passed", "failed"]
+    assert report_cases(isolated)[1]["error"]["code"] == "RUNTIME-BDD-ASSERTION"
+
+
+def test_a_scenario_in_a_worker_has_the_step_budget_it_has_alone(tmp_path):
+    """Each scenario gets the steps of a child of its own, whatever the scenarios before it in the worker spent: a sum
+    over its budget fails, and the light scenarios around it pass, in a worker as under --isolate."""
+    directory = suite(tmp_path, {
+        "steps.agc": dedent("""\
+            import BDD from "std/bdd"
+
+            def main() -> Void
+              BDD.run([
+                BDD.step("a sum up to {int} is positive") do |ctx, args|
+                  total = (1..args[0].to_i!).reduce(0) do |sum, n| sum + n end
+                  BDD.assert(ctx, total > 0, "no sum")
+                end,
+              ])
+            end
+            """),
+        "budget.feature": "Feature: Budget\n" + "".join(
+            f"Scenario: s{at}\nThen a sum up to {size} is positive\n"
+            for at, size in enumerate([100000, 100000, 100000, 400000, 100000, 100000]))})
+    arguments = [directory / "budget.feature", "--steps", directory / "steps.agc", "--jobs", "1"]
+    verdicts = []
+    for extra in ([], ["--isolate"]):
+        report = json_test(*arguments, *extra)
+        verdicts.append([(item["status"], (item.get("error") or {}).get("code")) for item in report_cases(report)])
+    light = ("passed", None)
+    assert verdicts[0] == verdicts[1] == [light] * 3 + [("failed", "RUNTIME-STEP-LIMIT")] + [light] * 2
 
 
 def test_a_scenario_gives_its_program_environment_variables_and_arguments_that_reach_no_other_scenario(tmp_path):

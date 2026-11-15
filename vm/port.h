@@ -470,6 +470,9 @@ typedef struct {
   uint32_t signal_variants[AGC_SIGNAL_COUNT];
   bool signal_found;
   _Atomic int64_t steps_left;
+  /* A run started without --max-steps: only there may BddScenario.budget set steps_left, so --max-steps stays a hard
+     limit for the whole run. Set once at launch. */
+  bool budget_settable;
   _Atomic uint64_t next_task_id;
   agc_log_registry log;
   agc_trace trace;

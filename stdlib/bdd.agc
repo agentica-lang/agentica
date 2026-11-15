@@ -43,7 +43,10 @@ def run(steps: List[Step]) -> Void
     System.exit(0)
   elsif mode == "scenario"
     check_start()
-    serve(all)
+    single(all)
+  elsif mode == "worker"
+    check_start()
+    work(all)
   end
   IO.warn("run this step program with agentica test --steps FILE")
   System.exit(2)
@@ -290,6 +293,8 @@ struct Settings
   # The folder of the run where the programs under test are compiled once for every scenario (`compiled`), or "" for
   # none: each start then goes through the front end.
   programs: String
+  # The step budget of the scenario.
+  steps: Int
 end
 
 struct StepLine
@@ -349,17 +354,57 @@ def predefined() -> List[Step]
   ]
 end
 
-# One step per channel line until the runner closes the channel; a failure has already ended the run with a fail
-# record. The after hooks run when the channel closes, so a hook that fails turns a passing scenario into a failed one.
-def serve(all: List[Step]) -> Void
+# One scenario, then the child exits.
+def single(all: List[Step]) -> Void
   init = Process.parent_read_line(idle_ms())
   if not init.ok?
     System.exit(0)
   end
-  settings = JSON.decode(init.unwrap!, Settings)
+  serve(all, init.unwrap!)
+  System.exit(0)
+end
+
+# Scenarios one after another, each in a task of its own: its end closes the handles it opened, the program under test
+# among them. As in a child of its own, the task is not in Task.pending_count.
+# `done` tells the runner whether the next scenario may run here: not when a task of this one is still running or
+# crashed unobserved. Any other end of a scenario (a failure, a skip, a crash) ends the worker, as it ends a child.
+def work(all: List[Step]) -> Void
+  init = Process.parent_read_line(idle_ms())
+  while init.ok?
+    text = init.unwrap!
+    played: Task[Result[Void]] = Task.spawn do
+      BddScenario.uncount()
+      serve(all, text)
+      ok()
+    end
+
+    if not Task.await(played).ok?
+      System.exit(1)
+    end
+    # The scenario's budget may be spent: what is left of this one is the worker's own.
+    BddScenario.budget(1000000)
+    reuse = Task.pending_count() == 0 and not Task.unobserved_crash().ok?
+    fields: Map[String, JSON.Value] = {"event": JSON.from("done"), "reuse": JSON.from(reuse)}
+    deliver(record_text(fields))
+    if not reuse
+      System.exit(0)
+    end
+    init = Process.parent_read_line(idle_ms())
+  end
+  System.exit(0)
+end
+
+# One step per channel line until the runner closes the channel or sends `end`; a failure has already ended the run
+# with a fail record. The after hooks run at the end, so a hook that fails turns a passing scenario into a failed one.
+# Whether it runs in a child or a worker, and whatever `main` did before `BDD.run`, a scenario starts with the random
+# numbers of the run's seed and its own step budget.
+def serve(all: List[Step], init: String) -> Void
+  settings = JSON.decode(init, Settings)
   if not settings.ok?
     abort("RUNTIME-BDD-INFRA", "invalid scenario settings: #{settings.message}")
   end
+  BddScenario.srand(Random.seed())
+  BddScenario.budget(settings.unwrap!.steps)
   blank = StepLine(
     index: 0,
     definition: 0,
@@ -386,7 +431,7 @@ def serve(all: List[Step]) -> Void
   )
 
   line = Process.parent_read_line(idle_ms())
-  while line.ok?
+  while line.ok? and line.unwrap! != "end"
     found = JSON.decode(line.unwrap!, StepLine)
     if not found.ok?
       halt(ctx, "RUNTIME-BDD-INFRA", "invalid step line: #{found.message}")
@@ -410,7 +455,6 @@ def serve(all: List[Step]) -> Void
     deliver(after_record(problems))
     System.exit(1)
   end
-  System.exit(0)
 end
 
 # Runs the after hooks, the last registered first, each in its own task so that a crash or a failed `BDD` check in one

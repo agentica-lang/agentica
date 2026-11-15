@@ -44,6 +44,8 @@ builtin BddScenario.srand forms=1
   BddScenario.srand(seed: Int) -> Void shape=(Int) -> Void rule=Plain impl="BddScenario.srand" effects=["random"] desc="Internal to std/bdd: start the running task's random numbers again from seed, as main's start under --seed."
 builtin BddScenario.uncount forms=1
   BddScenario.uncount() -> Void shape=() -> Void rule=Plain impl="BddScenario.uncount" effects=["concurrency"] desc="Internal to std/bdd: the running task leaves Task.pending_count, as main is out of it."
+builtin BddScenario.budget forms=1
+  BddScenario.budget(steps: Int) -> Void shape=(Int) -> Void rule=Plain impl="BddScenario.budget" effects=["concurrency"] desc="Internal to std/bdd: the run has steps left from here, as a run started with --max-steps steps."
 builtin Bytes.at forms=1
   Bytes.at(bytes: Bytes, index: Int) -> Int shape=(Bytes, Int) -> Int rule=Plain impl="Bytes.at" effects=[] desc="Read the byte at a zero-based index as an Int (0..255); an index outside the bytes halts."
 builtin Bytes.concat forms=1

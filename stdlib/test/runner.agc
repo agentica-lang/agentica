@@ -41,6 +41,7 @@ def main() -> Void
   jobs = read_jobs(handle)
   timing = read_timing(handle)
   parts = read_coverage(handle)
+  isolate = read_isolate(handle)
   _ = File.close(handle, 5000)
   if read.any? do |entry| not entry.ok? end
     IO.warn("invalid BDD runner configuration: a feature entry does not decode")
@@ -52,7 +53,7 @@ def main() -> Void
   end
   started = Time.monotonic_ms()
   entries = read.map do |entry| entry.unwrap! end
-  files = selected(seeded(config, seed), tags, jobs, parts, entries)
+  files = selected(seeded(config, seed), tags, Lanes(jobs: jobs, parts: parts, isolate: isolate), entries)
   # Wall time, not the sum of the file times: with `--jobs` the files and their scenarios overlap.
   wall_ms = Time.monotonic_ms() - started
   text = Report.text(files, config.style == "ai", seed)
@@ -166,6 +167,45 @@ enum Ran
   Scenario(Report.ScenarioResult)
 end
 
+# How the jobs run: how many at once (`--jobs`), the folder of the LCOV parts (`--coverage`, or ""), and whether each
+# scenario gets a child of its own (`--isolate`).
+struct Lanes
+  jobs: Int
+  parts: String
+  isolate: Bool
+end
+
+# A job's result, sent by the lane that ran it.
+struct Done
+  at: Int
+  ran: Ran
+end
+
+# The worker of a lane, if it has one.
+struct Slot
+  worker: Optional[Process]
+end
+
+struct Played
+  result: Report.ScenarioResult
+  slot: Slot
+end
+
+struct Driven
+  run: Run
+  asserts: Int
+end
+
+struct Ending
+  verdict: Report.Verdict
+  reuse: Bool
+end
+
+struct Turn
+  run: Run
+  slot: Slot
+end
+
 # A file gets at most 1 MiB in one write, and a character takes up to 4 bytes.
 def save_report(path: String, text: String) -> Result[Void]
   out = try File.open(path, "create_private", 5000)
@@ -222,6 +262,14 @@ def read_coverage(handle: File.Handle) -> String
   JSON.string(JSON.parse(line.unwrap!).unwrap_or(JSON.null())).unwrap_or("")
 end
 
+# The `--isolate` line, after the coverage line: a JSON boolean. A missing or unusable line is the workers.
+def read_isolate(handle: File.Handle) -> Bool
+  line = File.read_line(handle, 5000)
+  return false if !line.ok?
+
+  JSON.bool(JSON.parse(line.unwrap!).unwrap_or(JSON.null())).unwrap_or(false)
+end
+
 # The coverage of the run (Coverage.collect), without the test files and the step program: they always run.
 def covered_run(config: Config, parts: String, entries: List[Entry]) -> Coverage.Run
   return Coverage.Run(path: "", files: [], broken: [], problem: "") if parts == ""
@@ -241,13 +289,7 @@ end
 
 # The report of the run. A `--tags` expression that cannot be read or is bad is a usage error and nothing runs (the
 # driver has checked the expression already, so this is a mismatch of driver and runner).
-def selected(
-  config: Config,
-  tags: Result[String],
-  jobs: Int,
-  parts: String,
-  entries: List[Entry],
-) -> List[Report.FileResult]
+def selected(config: Config, tags: Result[String], lanes: Lanes, entries: List[Entry]) -> List[Report.FileResult]
   compiled = Tags.compile(tags.unwrap_or(""))
   message = ""
   if !tags.ok?
@@ -261,10 +303,10 @@ def selected(
     return [Report.file_error("<arguments>", "", Report.error_at("RUNTIME-BDD-USAGE", message, where))]
   end
 
-  matched(config, tags.unwrap!, compiled.unwrap!, run_all(config, compiled.unwrap!, jobs, parts, entries))
+  matched(config, tags.unwrap!, compiled.unwrap!, run_all(config, compiled.unwrap!, lanes, entries))
 end
 
-def run_all(config: Config, tags: Tags.Expr, jobs: Int, parts: String, found: List[Entry]) -> List[Report.FileResult]
+def run_all(config: Config, tags: Tags.Expr, lanes: Lanes, found: List[Entry]) -> List[Report.FileResult]
   if found.size == 0
     problem = Child.located("CHECK-BDD-EMPTY", config.empty_message, config.empty_path)
     return [Report.file_error(config.empty_path, "", problem)]
@@ -283,43 +325,92 @@ def run_all(config: Config, tags: Tags.Expr, jobs: Int, parts: String, found: Li
   end
   case listing
     Listing.Broken(problem) ->
-      tests = run_entries(config, tags, [], jobs, parts, entries.filter do |entry| entry.kind == "tests" end)
+      tests = run_entries(config, tags, [], lanes, entries.filter do |entry| entry.kind == "tests" end)
       [Report.file_error(config.steps_source, "steps", problem)].concat(tests)
-    Listing.Ready(patterns) -> run_entries(config, tags, patterns, jobs, parts, entries)
+    Listing.Ready(patterns) -> run_entries(config, tags, patterns, lanes, entries)
   end
 end
 
 # Runs the entries and gives their results in the order of `entries`, each file's scenarios in file order, so the
-# report does not depend on which job ends first. One job (the default) runs them one after another without tasks.
-# With more, the jobs are the scenarios of the feature files and the whole test files, `jobs` at a time from one
-# queue in entry order, so one long feature file no longer runs alone at the end. Each scenario and test file already
-# runs in its own child VM, so a task only waits for its children. The task deadline starts when the job's task starts,
-# after it has a slot. The job has a limit of its own (each scenario and test has one), so the deadline is a day.
+# report does not depend on which job ends first. The jobs are the scenarios of the feature files and the whole test
+# files, taken in entry order from one queue by `jobs` lanes, so one long feature file does not run alone at the end.
+# Each lane keeps a worker child VM that runs its scenarios one after another (`--agentica-bdd worker`) while they
+# pass (`--isolate`: a child of its own for each); each test file runs in a child of its own.
 def run_entries(
   config: Config,
   tags: Tags.Expr,
   patterns: List[Match.Pattern],
-  jobs: Int,
-  parts: String,
+  lanes: Lanes,
   entries: List[Entry],
 ) -> List[Report.FileResult]
   # The LCOV part of each child is named after its file's place in `entries` (and its scenario's in the file), so
   # children that run at once never share one.
-  indices = (0...entries.size).to_a
-  return indices.map do |at| run_entry(config, tags, patterns, part_of(parts, at), entries[at]) end if jobs <= 1
+  plans = (0...entries.size).to_a.map do |at| plan_entry(config, tags, entries[at]) end
+  work = jobs_of(plans, lanes.parts)
+  return gathered(entries, plans, work, []) if work.size == 0
 
-  plans = indices.map do |at| plan_entry(config, tags, entries[at]) end
-  work = jobs_of(plans, parts)
-  ended = Task.map(work, jobs, 86_400_000) do |job|
-    if job.scenario < 0
-      at = job.entry
-      return ok(Ran.File(run_entry(config, tags, patterns, part_of(parts, at), entries[at])))
-    end
-
-    ok(Ran.Scenario(run_scenario(config, patterns, job.base, job.item.unwrap!, job.cover)))
+  queue: Channel[Int] = Channel.new(work.size)
+  (0...work.size).to_a.each do |at| _ = queue.send(at, 0) end
+  queue.close
+  results: Channel[Done] = Channel.new(work.size)
+  count = min_of(lanes.jobs, work.size)
+  running = (0...count).to_a.map do |_|
+    lane: Task[Result[Void]] = Task.spawn do run_lane(config, patterns, lanes, entries, work, queue, results) end
+    lane
   end
 
+  awaited = running.map { |lane| Task.await(lane) }
+  crashes = awaited.filter { |ended| not ended.ok? }.map { |ended| ended.message }
+
+  results.close
+  ran: Map[Int, Ran] = {}
+  got = results.recv(0)
+  while got.ok?
+    ran = ran.put(got.unwrap!.at, got.unwrap!.ran)
+    got = results.recv(0)
+  end
+  lost = "the job did not end"
+  if crashes.size > 0
+    lost = "#{lost}: #{crashes[0]}"
+  end
+  ended = (0...work.size).to_a.map do |at| job_result(ran.get(at), lost) end
+
   gathered(entries, plans, work, ended)
+end
+
+def job_result(found: Optional[Ran], lost: String) -> Result[Ran]
+  return ok(found.unwrap!) if found.some?
+
+  error(lost)
+end
+
+# Takes jobs from the queue until it is empty. A job's deadline is its own (each scenario and test has one).
+def run_lane(
+  config: Config,
+  patterns: List[Match.Pattern],
+  lanes: Lanes,
+  entries: List[Entry],
+  work: List[Job],
+  queue: Channel[Int],
+  results: Channel[Done],
+) -> Result[Void]
+  slot = Slot(worker: none)
+  next = queue.recv(0)
+  while next.ok?
+    at = next.unwrap!
+    job = work[at]
+    ran = Ran.File(Report.file_error("", "", Child.located("RUNTIME-BDD-INFRA", "nothing to run", "")))
+    if job.scenario < 0
+      ran = Ran.File(run_entry(config, part_of(lanes.parts, job.entry), entries[job.entry]))
+    else
+      played = run_scenario(config, patterns, job.base, job.item.unwrap!, job.cover, lanes.isolate, slot)
+      slot = played.slot
+      ran = Ran.Scenario(played.result)
+    end
+    try results.send(Done(at: at, ran: ran), 0)
+    next = queue.recv(0)
+  end
+  ok()
 end
 
 # The jobs of the plans, in entry order and each file's scenarios in file order.
@@ -433,13 +524,7 @@ def part_of(parts: String, at: Int) -> String
   "#{parts}/#{at}"
 end
 
-def run_entry(
-  config: Config,
-  tags: Tags.Expr,
-  patterns: List[Match.Pattern],
-  part: String,
-  entry: Entry,
-) -> Report.FileResult
+def run_entry(config: Config, part: String, entry: Entry) -> Report.FileResult
   if entry.problem != ""
     return Report.file_error(entry.path, entry.kind, Child.located("RUNTIME-BDD-INFRA", entry.problem, entry.path))
   end
@@ -456,7 +541,8 @@ def run_entry(
 
     return Units.run(settings, entry.path, entry.bytecode, entry.front_end)
   end
-  run_file(config, tags, patterns, part, entry.path)
+  # A feature file without a problem runs scenario by scenario (`plan_entry`), never whole.
+  Report.file_error(entry.path, entry.kind, Child.located("RUNTIME-BDD-INFRA", "nothing to run", entry.path))
 end
 
 # How an entry runs under `--jobs`: a feature file without a problem is read and filtered here, the rest run whole.
@@ -526,27 +612,6 @@ def list_steps(config: Config, where: Report.Span) -> Listing
   end
 end
 
-def run_file(
-  config: Config,
-  tags: Tags.Expr,
-  patterns: List[Match.Pattern],
-  part: String,
-  path: String,
-) -> Report.FileResult
-  case plan_file(config, tags, path)
-    Plan.Scenarios(planned) ->
-      chosen = planned.chosen
-      scenarios = (0...chosen.size).to_a.map do |at|
-        run_scenario(config, patterns, planned.base, chosen[at], cover_of(part, at))
-      end
-
-      planned.shell.with(scenarios: scenarios)
-    Plan.Known(result) -> result
-    # `plan_file` never returns `Whole` (only `plan_entry` does); the case needs the arm.
-    Plan.Whole -> Report.file_error(path, "feature", Child.located("RUNTIME-BDD-INFRA", "nothing to run", path))
-  end
-end
-
 # Reads and parses a feature file and keeps the scenarios that --only and --tags select; a file that cannot be read or
 # parsed is its error.
 def plan_file(config: Config, tags: Tags.Expr, path: String) -> Plan
@@ -587,23 +652,33 @@ def cover_of(part: String, at: Int) -> String
 end
 
 # Every step is resolved before the child starts; the first unresolved one fails and the others are not executed.
+# Under `--isolate` or `--coverage` (each child writes its own LCOV part) each scenario runs in a child of its
+# own; else
+# in the lane's worker.
 def run_scenario(
   config: Config,
   patterns: List[Match.Pattern],
   base: String,
   item: Gherkin.Scenario,
   cover: String,
-) -> Report.ScenarioResult
+  isolate: Bool,
+  slot: Slot,
+) -> Played
   started = Time.monotonic_ms()
   found = item.steps.map do |step| resolved_of(Match.resolve(patterns, step)) end
   failing = (0...found.size).to_a.filter do |i| found[i].index < 0 end
   ran = failing.size == 0
   run = Run(failed_at: item.steps.size, verdict: Report.Verdict.Pass)
-  if ran
-    run = run_child(config, base, item, found, patterns, started, cover)
-  else
+  kept = slot
+  if not ran
     at = failing[0]
     run = Run(failed_at: at, verdict: Report.Verdict.Fail(unresolved(patterns, item.steps[at])))
+  elsif cover != "" or isolate
+    run = run_child(config, base, item, found, patterns, started, cover)
+  else
+    turn = run_worker(config, base, item, found, patterns, started, slot)
+    run = turn.run
+    kept = turn.slot
   end
   steps = (0...item.steps.size).to_a.map do |i|
     status = Report.StepStatus.NotExecuted
@@ -620,7 +695,7 @@ def run_scenario(
     Report.StepResult(text: item.steps[i].text, location: item.steps[i].span, status: status)
   end
 
-  Report.ScenarioResult(
+  result = Report.ScenarioResult(
     name: item.name,
     tags: item.tags,
     location: item.span,
@@ -630,10 +705,12 @@ def run_scenario(
     verdict: run.verdict,
     output: "",
   )
+
+  Played(result: result, slot: kept)
 end
 
-# One child VM per scenario: the settings line, then one line per step on the child's channel, each answered by records
-# on it.
+# One child VM for the scenario: the settings line, then one line per step on the child's channel, each answered by
+# records on it; then the runner closes the channel and the child exits.
 def run_child(
   config: Config,
   base: String,
@@ -644,19 +721,88 @@ def run_child(
   cover: String,
 ) -> Run
   count = item.steps.size
-  spawned = Process.spawn_channel(config.vm, vm_args(config, 1000000 * (count + 1), "scenario", cover))
+  spawned = Process.spawn_channel(config.vm, vm_args(config, 0, "scenario", cover))
   if not spawned.ok?
     return Run(failed_at: 0, verdict: failure("RUNTIME-BDD-INFRA", spawned.message, item.steps[0].span))
   end
   p = spawned.unwrap!
   _ = Process.close_stdin(p, 5000)
   deadline = started + 30000
+  driven = drive(p, config, base, item, found, patterns, deadline)
+  run = driven.run
+  if run.failed_at == count
+    _ = Process.channel_close(p, Child.left(deadline))
+    run = closed(count, await_exit(p, deadline, item.span), driven.asserts, item.span)
+  end
+  Process.close(p)
+  run
+end
+
+# The scenario on the lane's worker, or on a new one when the lane has none. The same lines as for a child, then `end`,
+# answered by `done`. The settings line gives the scenario the step budget of a child of its own (`steps`), which the
+# worker sets when the scenario starts. Only a scenario that passes and whose `done` allows it leaves the worker for
+# the next; any other end closes it.
+def run_worker(
+  config: Config,
+  base: String,
+  item: Gherkin.Scenario,
+  found: List[Match.Resolved],
+  patterns: List[Match.Pattern],
+  started: Int,
+  slot: Slot,
+) -> Turn
+  count = item.steps.size
+  deadline = started + 30000
+  worker = slot.worker
+  if worker.none?
+    spawned = Process.spawn_channel(config.vm, vm_args(config, 0, "worker", ""))
+    if not spawned.ok?
+      run = Run(failed_at: 0, verdict: failure("RUNTIME-BDD-INFRA", spawned.message, item.steps[0].span))
+      return Turn(run: run, slot: Slot(worker: none))
+    end
+    _ = Process.close_stdin(spawned.unwrap!, 5000)
+    worker = some(spawned.unwrap!)
+  end
+  p = worker.unwrap!
+  driven = drive(p, config, base, item, found, patterns, deadline)
+  run = driven.run
+  reuse = false
+  if run.failed_at == count
+    sent = Process.channel_send(p, "end\n", Child.left(deadline))
+    ending = Ending(verdict: Report.Verdict.Pass, reuse: false)
+    if sent.ok?
+      ending = await_done(p, deadline, item.span)
+    else
+      ending = Ending(verdict: Report.Verdict.Fail(send_failure(p, sent.message, deadline, item.span)), reuse: false)
+    end
+    run = closed(count, ending.verdict, driven.asserts, item.span)
+    reuse = ending.reuse and passed?(run.verdict)
+  end
+  if not reuse
+    Process.close(p)
+    return Turn(run: run, slot: Slot(worker: none))
+  end
+  Turn(run: run, slot: Slot(worker: some(p)))
+end
+
+# Sends the settings line and the steps until one does not pass.
+def drive(
+  p: Process,
+  config: Config,
+  base: String,
+  item: Gherkin.Scenario,
+  found: List[Match.Resolved],
+  patterns: List[Match.Pattern],
+  deadline: Int,
+) -> Driven
+  count = item.steps.size
   fields: Map[String, JSON.Value] = {
     "base": JSON.from(base),
     "agentica": JSON.from(config.agentica),
     "seeded": JSON.from(config.seeded),
     "seed": JSON.from(config.seed),
     "programs": JSON.from(run_folder(config)),
+    "steps": JSON.from(1000000 * (count + 1)),
   }
 
   run = Run(failed_at: count, verdict: Report.Verdict.Pass)
@@ -683,24 +829,33 @@ def run_child(
       Report.Verdict.NotExecuted -> i += 1
     end
   end
-  if run.failed_at == count
-    _ = Process.channel_close(p, Child.left(deadline))
-    ending = await_exit(p, deadline, item.span)
-    case ending
-      Report.Verdict.Fail(_) -> run = Run(failed_at: count, verdict: ending)
-      Report.Verdict.Skipped(_) -> run = Run(failed_at: count, verdict: ending)
-      Report.Verdict.Pass ->
-        if total == 0
-          run = Run(
-            failed_at: count,
-            verdict: failure("RUNTIME-BDD-NO-ASSERTION", "scenario performed no BDD assertions", item.span),
-          )
-        end
-      Report.Verdict.NotExecuted -> run = Run(failed_at: count, verdict: ending)
-    end
+  Driven(run: run, asserts: total)
+end
+
+# The run of a scenario whose steps all passed, from how it ended: a scenario without any BDD assertion fails.
+def closed(count: Int, ending: Report.Verdict, asserts: Int, span: Report.Span) -> Run
+  case ending
+    Report.Verdict.Pass ->
+      if asserts == 0
+        return Run(
+          failed_at: count,
+          verdict: failure("RUNTIME-BDD-NO-ASSERTION", "scenario performed no BDD assertions", span),
+        )
+      end
+      Run(failed_at: count, verdict: ending)
+    Report.Verdict.Fail(_) -> Run(failed_at: count, verdict: ending)
+    Report.Verdict.Skipped(_) -> Run(failed_at: count, verdict: ending)
+    Report.Verdict.NotExecuted -> Run(failed_at: count, verdict: ending)
   end
-  Process.close(p)
-  run
+end
+
+def passed?(verdict: Report.Verdict) -> Bool
+  case verdict
+    Report.Verdict.Pass -> true
+    Report.Verdict.Fail(_) -> false
+    Report.Verdict.Skipped(_) -> false
+    Report.Verdict.NotExecuted -> false
+  end
 end
 
 def step_line(index: Int, found: Match.Resolved, patterns: List[Match.Pattern], step: Gherkin.Step) -> String
@@ -829,6 +984,35 @@ def await_exit(p: Process, deadline: Int, span: Report.Span) -> Report.Verdict
   Report.Verdict.Fail(read_failure(p, line.message, deadline, span))
 end
 
+# After `end` the worker runs the scenario's after hooks and sends `done` with whether it can take the next scenario. A
+# worker that exits 0 instead (`System.exit` in a hook) passes the scenario, as a child that exits 0 does.
+def await_done(p: Process, deadline: Int, span: Report.Span) -> Ending
+  hooks = false
+  line = Process.channel_read_line(p, Child.left(deadline))
+  while line.ok?
+    record = Child.record_of(line.unwrap!)
+    event = Child.event_of(record)
+    if event == "after"
+      hooks = true
+    elsif event == "fail"
+      return Ending(verdict: Report.Verdict.Fail(record_error(record, span)), reuse: false)
+    elsif event == "done"
+      printed = Process.read_available(p, Child.left(deadline))
+      if not printed.ok?
+        return Ending(verdict: Report.Verdict.Fail(read_failure(p, printed.message, deadline, span)), reuse: false)
+      end
+      reuse = JSON.bool(JSON.get(record, "reuse").unwrap_or(JSON.null())).unwrap_or(false)
+      return Ending(verdict: Report.Verdict.Pass, reuse: reuse)
+    end
+    line = Process.channel_read_line(p, Child.left(deadline))
+  end
+  return Ending(verdict: await_exit(p, deadline, span), reuse: false) if line.message == "process: end of input"
+  if line.message == "process: operation timed out"
+    return Ending(verdict: failure("RUNTIME-BDD-TIMEOUT", late_text(hooks), span), reuse: false)
+  end
+  Ending(verdict: Report.Verdict.Fail(read_failure(p, line.message, deadline, span)), reuse: false)
+end
+
 # Why a child that has sent its last record is still running at the deadline: its after hooks when it said they run
 # (the `after` record), else only its own end.
 def late_text(hooks: Bool) -> String
@@ -886,17 +1070,18 @@ def unresolved(patterns: List[Match.Pattern], step: Gherkin.Step) -> Report.Fail
 end
 
 # `cover` is the LCOV part of the child (`--coverage`), or "" for none.
+# `steps` 0 starts the child without --max-steps: std/bdd then gives each scenario its budget (BddScenario.budget,
+# which a run with --max-steps ignores).
 def vm_args(config: Config, steps: Int, mode: String, cover: String) -> List[String]
-  options = [
-    "run",
-    "--json",
-    "--max-steps",
-    steps.to_s,
-    "--seed",
-    config.seed.to_s,
-    "--source-root",
-    config.steps_root,
-  ].concat(deny(config))
+  limit: List[String] = []
+  if steps > 0
+    limit = ["--max-steps", steps.to_s]
+  end
+  options = (
+    ["run", "--json", "--seed", config.seed.to_s, "--source-root", config.steps_root]
+      .concat(limit)
+      .concat(deny(config))
+  )
 
   if cover != ""
     options = options.concat(["--coverage", cover])

@@ -216,6 +216,7 @@ void agc_count_step(agc_vm *vm, uint32_t span);
 void agc_task_remove(agc_task **head, agc_task **tail, const agc_task *t);
 void agc_turn_begin(agc_vm *vm);
 uint64_t agc_turn_finish(agc_vm *vm);
+void agc_steps_reset(agc_vm *vm, int64_t steps);
 uint64_t agc_task_steps(const agc_vm *vm);
 bool agc_frame_runs(const agc_task *t, uint32_t at, const agc_stepper *stepper);
 agc_turn_result agc_run_turn(agc_vm *vm);
