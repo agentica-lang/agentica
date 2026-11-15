@@ -59,10 +59,13 @@ static void float_invalid(const char *s) {
 /* Float#to_s text reads back to the same bits: special values, the edges of each range and xorshift patterns. */
 static void float_text_round_trips(void) {
   uint64_t fixed[] = {0, 0x8000000000000000ull, 1, 0x000FFFFFFFFFFFFFull, 0x0010000000000000ull, 0x7FEFFFFFFFFFFFFFull,
-                      0xFFEFFFFFFFFFFFFFull, 0x7FF0000000000000ull, 0xFFF0000000000000ull, 0x4415AF1D78B58C40ull};
+                      0xFFEFFFFFFFFFFFFFull, 0x7FF0000000000000ull, 0xFFF0000000000000ull, 0x4415AF1D78B58C40ull,
+                      0x0E6FFFFFFFFFFFFFull};
+  size_t count = sizeof fixed / sizeof fixed[0], edges = (size_t)0x7FF * 4;
   uint64_t state = 0x9E3779B97F4A7C15ull;
-  for (size_t k = 0; k < 20000; k++) {
-    uint64_t bits = k < sizeof fixed / sizeof fixed[0] ? fixed[k] : state;
+  for (size_t k = 0; k < count + edges + 20000; k++) {
+    uint64_t edge = k - count, mantissa = edge % 4 < 2 ? edge % 4 : (UINT64_C(1) << 52) - 1 - edge % 2;
+    uint64_t bits = k < count ? fixed[k] : k < count + edges ? (edge / 4) << 52 | mantissa : state;
     state ^= state << 13, state ^= state >> 7, state ^= state << 17;
     double x, back;
     memcpy(&x, &bits, sizeof x);

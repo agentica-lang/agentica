@@ -307,8 +307,8 @@ static size_t digit_run(const uint8_t *s, size_t len, size_t i) {
 }
 
 /* Reads [+-]digits[.digits][(e|E)[+-]digits], or exactly a form agc_float_text writes for infinity and NaN, so
-   every Float#to_s reads back. strtod rounds correctly and the VM never leaves the C locale; a huge exponent gives an
-   infinity or zero. Integer text keeps its old rule: "-0" is 0.0. */
+   every Float#to_s reads back. agc_read_double rounds correctly on every system; a huge exponent gives an infinity or
+   zero. Integer text keeps its old rule: "-0" is 0.0. */
 agc_number_status agc_parse_float(const uint8_t *s, size_t len, double *value) {
   static const char *const special[] = {"+inf.0", "-inf.0", "+nan.0"};
   for (size_t k = 0; k < 3; k++)
@@ -333,10 +333,7 @@ agc_number_status agc_parse_float(const uint8_t *s, size_t len, double *value) {
     integer = false;
   }
   if (i != len) return AGC_NUMBER_INVALID;
-  char *text = agc_alloc_atomic(agc_size_add(len, 1));
-  memcpy(text, s, len);
-  text[len] = '\0';
-  double x = strtod(text, NULL);
+  double x = agc_read_double((const char *)s, len);
   *value = integer && x == 0 ? 0.0 : x;
   return AGC_NUMBER_OK;
 }

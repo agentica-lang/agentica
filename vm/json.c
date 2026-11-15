@@ -6,6 +6,7 @@
 #include "services.h"
 
 #include <math.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -100,12 +101,44 @@ static bool digit(uint8_t c) { return c >= '0' && c <= '9'; }
 
 static bool json_space(uint8_t c) { return c == ' ' || c == '\t' || c == '\n' || c == '\r'; }
 
-static double decimal(const char *s, size_t len) {
+/* yyjson's reader rounds correctly on every system, unlike some C libraries' strtod (mingw-w64's reads
+   3.839223843572815e-239 one ulp high). It gets the significant digits without trailing zeros, because past 768 digits
+   it takes the digits it drops as nonzero, and an exponent, kept exact up to 10^17 so that a long mantissa can cancel
+   it. Text yyjson refuses is past the largest Float. */
+double agc_read_double(const char *s, size_t len) {
+  size_t i = len > 0 && (s[0] == '+' || s[0] == '-') ? 1 : 0;
+  bool negative = i == 1 && s[0] == '-', point = false;
   char small[64];
-  char *text = len < sizeof small ? small : agc_alloc_atomic(agc_size_add(len, 1));
-  memcpy(text, s, len);
-  text[len] = '\0';
-  return strtod(text, NULL);
+  char *text = len < sizeof small - 24 ? small : agc_alloc_atomic(agc_size_add(len, 24));
+  size_t count = 0, kept = 0;
+  int64_t e10 = 0;
+  for (; i < len && s[i] != 'e' && s[i] != 'E'; i++) {
+    if (s[i] == '.') {
+      point = true;
+    } else if (count > 0 || s[i] != '0') {
+      text[count++] = s[i];
+      if (s[i] != '0') kept = count;
+    }
+    e10 -= point && s[i] != '.';
+  }
+  e10 += (int64_t)(count - kept);
+  if (i < len) {
+    bool down = s[++i] == '-';
+    i += s[i] == '+' || s[i] == '-';
+    int64_t e = 0;
+    for (; i < len; i++) e = e < INT64_C(100000000000000000) ? e * 10 + (s[i] - '0') : e;
+    e10 += down ? -e : e;
+  }
+  double x = 0.0;
+  int64_t lead = e10 + (int64_t)kept - 1;
+  if (kept > 0 && lead > 310) {
+    x = INFINITY;
+  } else if (kept > 0 && lead >= -330) {
+    snprintf(text + kept, 24, "e%lld", (long long)e10);
+    yyjson_val v;
+    x = yyjson_read_number(text, &v, 0, NULL, NULL) ? yyjson_get_real(&v) : INFINITY;
+  }
+  return negative ? -x : x;
 }
 
 static bool number_value(const uint8_t *s, size_t len, agc_value *out) {
@@ -132,7 +165,7 @@ static bool number_value(const uint8_t *s, size_t len, agc_value *out) {
     if (s[i] >= '1' && s[i] <= '9') zero = false;
   double x = 0.0;
   if (!zero) {
-    x = decimal((const char *)s, len);
+    x = agc_read_double((const char *)s, len);
     if (isinf(x)) return false;
   }
   *out = agc_json_leaf(AGC_JSON_FLOAT, agc_float(x));
@@ -450,7 +483,7 @@ bool agc_json_to_float(agc_vm *vm, const agc_json *j, double *out) {
   }
   if (j->kind != AGC_JSON_BIG) return false;
   const agc_string *s = agc_as_string(vm, j->scalar);
-  *out = decimal(s->data, s->bytes);
+  *out = agc_read_double(s->data, s->bytes);
   return isfinite(*out);
 }
 
