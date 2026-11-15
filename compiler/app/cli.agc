@@ -688,7 +688,7 @@ def program(session: Session, verb: String, rest: List[String]) -> Int
       return save(rest[2], bytes) if verb == "compile"
 
       start(session, rest, bytes)
-    BytecodeCache.Lookup.Miss -> read(session, verb, rest, plan)
+    BytecodeCache.Lookup.Miss(seen) -> read(session, verb, rest, seen)
   end
 end
 

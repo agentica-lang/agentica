@@ -207,18 +207,27 @@ def test_a_folder_that_cannot_be_written_still_runs(src):
     assert ROOT_USER or not (src / "_build").exists()
 
 
-def test_a_change_of_the_lock_misses(tmp_path):
+GREETER = "https://github.com/owner/greeter.git"
+GREET = {"greet.agc": 'def hello() -> String\n  return "hi"\nend\n'}
+
+
+def greeter_project(tmp_path):
+    """A project whose main.agc prints "hi" from the locked package greeter, and the variables that keep its runs to
+    its own folders."""
     ws = Workspace(tmp_path)
-    git = "https://github.com/owner/greeter.git"
-    ws.add_package("greeter", git, {"greet.agc": 'def hello() -> String\n  return "hi"\nend\n'}, tag="v1.0.0")
-    other = ws.add_package("greeter", git, {"greet.agc": 'def hello() -> String\n  return "hi"\nend\n'},
-                           tag="v1.0.0", commit="b" * 40)
-    ws.locked.remove(other)
-    ws.write_manifest({"greeter": dependency(git, tag="v1.0.0")})
+    ws.add_package("greeter", GREETER, GREET, tag="v1.0.0")
+    ws.write_manifest({"greeter": dependency(GREETER, tag="v1.0.0")})
     ws.write_lock()
     (ws.project / "main.agc").write_text(
         'import Greet from "pkg/greeter/greet"\n\ndef main() -> Void\n  puts(Greet.hello())\nend\n', encoding="utf-8")
-    hermetic = {"AGENTICA_PATH": "", **ws.cache_variables}
+    return ws, {"AGENTICA_PATH": "", **ws.cache_variables}
+
+
+def test_a_change_of_the_lock_misses(tmp_path):
+    ws, hermetic = greeter_project(tmp_path)
+    other = ws.add_package("greeter", GREETER, GREET, tag="v1.0.0", commit="b" * 40)
+    ws.locked.remove(other)
+    ws.write_lock()
     first = agentica(ws.project, "main.agc", **hermetic)
     assert (first.code, first.stdout) == (0, "hi\n"), first.stderr
     entry = only_entry(ws.project / "_build" / "bytecode")
@@ -397,18 +406,27 @@ def test_a_change_of_the_library_path_misses(tmp_path):
     assert stamp(entry) != kept
 
 
-def test_a_program_with_no_native_module_keeps_its_entry_when_the_c_compiler_changes(src, tmp_path):
-    """Only a native module is built with the C compiler, so the entry of any other program does not hold it, and a
-    start does not look for it (#1551)."""
-    agentica(src, "main.agc", CC=None)
-    entry = only_entry(src / "_build" / "bytecode")
+def keeps_its_entry(folder, output, tmp_path, **hermetic):
+    """The first run of main.agc in `folder` writes an entry with no compiler line, and runs with another `cc` in PATH,
+    another CC and another CPATH read it."""
+    first = agentica(folder, "main.agc", CC=None, **hermetic)
+    assert (first.code, first.stdout) == (0, output), first.stderr
+    entry = only_entry(folder / "_build" / "bytecode")
     kept = stamp(entry)
     assert "\ncompiler " not in split(entry)[0]
     executable(tmp_path / "other" / ("gcc.exe" if WINDOWS else "cc"))
     path = f"{tmp_path / 'other'}{os.pathsep}{os.environ['PATH']}"
     for extra in ({"CC": None, "PATH": path}, {"CC": "another-compiler"}, {"CC": None, "CPATH": str(tmp_path)}):
-        hit = agentica(src, "main.agc", **extra)
-        assert (hit.code, hit.stdout, stamp(entry)) == (0, "one\n", kept), hit.stderr
+        hit = agentica(folder, "main.agc", **hermetic, **extra)
+        assert (hit.code, hit.stdout, stamp(entry)) == (0, output, kept), hit.stderr
+
+
+def test_a_program_with_no_native_module_keeps_its_entry_when_the_c_compiler_changes(src, tmp_path):
+    """Only a native module is built with the C compiler, so the entry of any other program does not hold it, and a
+    start does not look for it (#1551). A package with no native files changes nothing."""
+    keeps_its_entry(src, "one\n", tmp_path)
+    ws, hermetic = greeter_project(tmp_path / "packaged")
+    keeps_its_entry(ws.project, "hi\n", tmp_path, **hermetic)
 
 
 def executable(path, text="#!/bin/sh\n"):
@@ -426,8 +444,8 @@ class Native:
         self.folder = shutil.copytree(EXAMPLE, tmp_path / "native", ignore=shutil.ignore_patterns("_build"))
         self.cache = {"LOCALAPPDATA": tmp_path / "cache"} if WINDOWS else {"XDG_CACHE_HOME": tmp_path / "cache"}
 
-    def run(self, path):
-        result = agentica(self.folder, "stats.agc", CC=None, PATH=path, **self.cache)
+    def run(self, path, **extra):
+        result = agentica(self.folder, "stats.agc", **{"CC": None, "PATH": path, **self.cache, **extra})
         return result, stamp(only_entry(self.folder / "_build" / "bytecode"))
 
     def first(self, path):
@@ -445,6 +463,18 @@ class Native:
 @pytest.fixture
 def native(tmp_path):
     return Native(tmp_path)
+
+
+@NATIVE_CALLS
+def test_with_a_native_module_a_change_of_cc_or_of_a_search_variable_misses(native, tmp_path):
+    path = os.environ["PATH"]
+    kept = native.first(path)
+    for extra in ({"CC": "gcc" if WINDOWS else "cc"}, {"CPATH": tmp_path}):
+        miss, after = native.run(path, **extra)
+        assert (miss.code, miss.stdout) == (0, EXAMPLE_OUTPUT), miss.stderr
+        assert after != kept
+        hit, kept = native.run(path, **extra)
+        assert (hit.code, kept) == (0, after), hit.stderr
 
 
 @NATIVE_CALLS
