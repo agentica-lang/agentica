@@ -1,7 +1,7 @@
 """Bytes against Python's bytes, on generated inputs.
 
 tests/fixtures/bytes-peer.agc answers one case a line: from_list, to_a, at, slice, take, drop, +, Bytes.concat, `==` and
-`!=`, and how many keys a Set and a Map keep (the hash and the key equality). The expected answers come from Python's
+`!=`, how many keys a Set and a Map keep (the hash and the key equality), and `.bytes` on an interpolated string. The expected answers come from Python's
 bytes and set. The inputs cover the empty value, one byte, every byte value, equal values that are separate objects, and
 values that differ in one byte, in the length or in the last byte only.
 """
@@ -96,4 +96,20 @@ def test_from_list_accepts_only_bytes(peer):
             mixed[rng.randrange(size)] = bad
             lines.append("from_list," + ",".join(map(str, mixed)))
             expected.append("error")
+    assert answers(peer, lines) == expected
+
+
+def test_interpolated_bytes_match_python(peer):
+    rng = random.Random(SEED + 3)
+    edges = [0, 1, -1, 9, 10, -10, 99, 100, 2**63 - 1, -(2**63), 10**18, -(10**18)]
+    numbers = edges + [rng.randint(-(2**63), 2**63 - 1) >> rng.randrange(64) for _ in range(200)]
+    texts = ["", "x", "ñandú €", "a\r\nb", "😀" * 40]
+    lines = []
+    expected = []
+    for first in numbers:
+        second = rng.choice(numbers)
+        text = rng.choice(texts)
+        lines.append(f"text,{first},{second},{text.encode().hex()}")
+        whole = f"${first}\r\n{second}:{text}".encode()
+        expected.append(f"{whole.hex()} {str(first).encode().hex()}")
     assert answers(peer, lines) == expected

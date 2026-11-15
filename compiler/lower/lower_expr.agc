@@ -22,8 +22,8 @@ import Program from "lower_program"
 import Scans from "lower_scan"
 import Lowering from "lower_state"
 import {
-  CODEC_BUILTINS, CODEC_MEMBERS, CODEC_NAME, FLOAT_OPS, INT_MIN, INT_MIN_DIGITS, INT_OPS, NATIVE_LAYOUTS, STRING_OPS,
-  VM_BUILTINS,
+  CODEC_BUILTINS, CODEC_MEMBERS, CODEC_NAME, FLOAT_OPS, INTERPOLATED_PARTS, INT_MIN, INT_MIN_DIGITS, INT_OPS,
+  NATIVE_LAYOUTS, STRING_OPS, VM_BUILTINS,
 } from "lower_tables"
 
 ## Lowers an expression into the register want (-1: any). void allows a Void value (a statement, a completion); known
@@ -1166,6 +1166,17 @@ def lower_resolved(
         return lower_literal_bytes(fx, span, literal.unwrap!, want)
       end
 
+      if name == "String.bytes" and args.empty?
+        case receiver
+          Ast.Expr.Interpolation(node) ->
+            if node.parts.size > 0 and node.parts.size <= INTERPOLATED_PARTS
+              return lower_interpolated_bytes(cx, fx, span, node, want)
+            end
+
+          _ -> nil
+        end
+      end
+
       target = Ast.TypedTarget(id: Ast.expr_id(receiver), target: receiver, type: type, span: Ast.expr_span(receiver))
       call = Ast.Call(
         id: id,
@@ -1206,6 +1217,42 @@ def lower_literal_bytes(fx: Lowering.Fx, span: Source.Span, literal: Ast.Literal
   fx = Lowering.step(Lowering.step(fx, span), literal.span)
   made = Lowering.target(fx, want)
   ok(Lowering.Out(fx: Lowering.emit_const(made.fx, made.slot, Ir.Imm.Bytes(text), span), slot: made.slot))
+end
+
+# `"a#{b}c".bytes` with at most INTERPOLATED_PARTS parts: the parts go to a window of registers as they are, and one
+# builtin writes their text into the Bytes, so no String is made for a part or for the whole. The call and the
+# interpolation keep their steps.
+def lower_interpolated_bytes(
+  cx: Lowering.Cx,
+  fx: Lowering.Fx,
+  span: Source.Span,
+  node: Ast.Interpolation,
+  want: Int,
+) -> Result[Lowering.Out]
+  fx = Lowering.step(Lowering.step(fx, span), node.span)
+  saved = fx.next
+  base = fx.next
+  spans = [span]
+  for part in node.parts
+    fx = Lowering.alloc(fx)
+    slot = fx.next - 1
+    case part
+      Ast.Part.Text(text) -> fx = Lowering.emit_const(fx, slot, Ir.Imm.Text(text), node.span)
+      Ast.Part.Code(code) ->
+        out = try lower_expression(cx, fx, code, slot, false, false)
+        fx = out.fx
+    end
+
+    spans = spans.push(node.span)
+  end
+
+  fx = Lowering.emit_builtin(fx, base, "String.interpolated.bytes", node.parts.size, spans)
+  if want >= 0
+    fx = Lowering.emit_at(fx, "move", [want, base], span)
+    return ok(Lowering.Out(fx: fx.with(next: saved), slot: want))
+  end
+
+  ok(Lowering.Out(fx: fx.with(next: base + 1), slot: base))
 end
 
 # to_s on a value: the interpolation of one part.

@@ -12,6 +12,7 @@
 #   items,A,B,C,D      how many distinct values the Set of the four and the Map of the four keys hold
 #   from_list,N,N,...  Bytes.from_list of the Ints: the hex, or "error"
 #   to_a,A             the bytes as Ints
+#   text,N,M,A         "$#{N}\r\n#{M}:#{text}".bytes and "#{N}".bytes, with text the UTF-8 String of A
 def bytes_of(hex: String) -> Bytes
   return OpenSSL.Digest.hexdecode(hex).unwrap!
 end
@@ -48,6 +49,11 @@ def answer(fields: List[String]) -> String
     end
 
     return "#{Set.new(keys).size} #{table.size}"
+  elsif op == "text"
+    first = fields[1].to_i!
+    second = fields[2].to_i!
+    text = String.from_bytes(bytes_of(fields[3])).unwrap!
+    return "#{hex_of("$#{first}\r\n#{second}:#{text}".bytes)} #{hex_of("#{first}".bytes)}"
   elsif op == "from_list"
     numbers = fields.drop(1).map do |text: String| text.to_i! end
     made = Bytes.from_list(numbers)

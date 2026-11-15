@@ -1,8 +1,9 @@
 /*
  * The Bytes builtins (one of the tables that agc_find_builtin searches):
  * Bytes.from_list, to_a, length, at, slice, take, drop, equal (`==`), plus
- * (`+`) and concat, and String.bytes. A Bytes is an immutable byte string
- * (agc_bytes in value.h); every result is a new copy or the empty constant.
+ * (`+`) and concat, String.bytes and the `.bytes` of an interpolation. A
+ * Bytes is an immutable byte string (agc_bytes in value.h); every result is
+ * a new copy or the empty constant.
  * Service layer.
  * Design: docs/vm/05-values-execution-builtins.md §5.1.
  */
@@ -148,6 +149,52 @@ static agc_value builtin_string_bytes(agc_vm *vm, agc_value *args, uint32_t span
   return agc_bytes_value(agc_make_bytes((const uint8_t *)s->data, s->bytes));
 }
 
+/* "a#{b}c".bytes: the text of every part written into one Bytes, with no String for a part or for the whole. A part
+   is a String as it is, or any other value in the text TO_TEXT gives it; an Int, Float, Bool or nil is printed on the
+   stack. The lowering sends 1 to INTERPOLATED_PARTS parts; a longer interpolation is joined as a String first. */
+#define INTERPOLATED_PARTS 8
+
+static agc_value interpolated(agc_vm *vm, agc_value *args, uint32_t count, uint32_t span) {
+  char printed[INTERPOLATED_PARTS][AGC_SCALAR_TEXT];
+  const agc_string *kept[INTERPOLATED_PARTS];
+  const char *data[INTERPOLATED_PARTS];
+  size_t len[INTERPOLATED_PARTS], total = 0;
+  for (uint32_t k = 0; k < count; k++) {
+    agc_value v = args[k];
+    kept[k] = NULL;
+    if (agc_is(v, AGC_T_INT) || agc_is(v, AGC_T_FLOAT) || agc_is(v, AGC_T_BOOL) || agc_is(v, AGC_T_NIL)) {
+      data[k] = printed[k];
+      len[k] = agc_scalar_text(vm, v, printed[k]);
+    } else {
+      agc_string *text;
+      if (!agc_text_checked(vm, v, &text))
+        agc_fail(vm, "RUNTIME-INTERNAL", "invalid bytecode: a part of an interpolation has no text", span);
+      kept[k] = text;
+      data[k] = text->data;
+      len[k] = text->bytes;
+    }
+    total = agc_size_add(total, len[k]);
+  }
+  if (total == 0) return agc_bytes_value(agc_empty_bytes());
+  agc_bytes *joined = agc_new_bytes(total);
+  size_t at = 0;
+  for (uint32_t k = 0; k < count; k++) {
+    if (len[k]) memcpy(joined->data + at, data[k], len[k]);
+    at += len[k];
+  }
+  (void)kept;
+  return agc_bytes_value(joined);
+}
+
+#define INTERPOLATED(n)                                                                  \
+  static agc_value builtin_interpolated##n(agc_vm *vm, agc_value *args, uint32_t span) { \
+    return interpolated(vm, args, n, span);                                              \
+  }
+INTERPOLATED(1) INTERPOLATED(2) INTERPOLATED(3) INTERPOLATED(4)
+INTERPOLATED(5) INTERPOLATED(6) INTERPOLATED(7) INTERPOLATED(8)
+#define INTERPOLATED_ROW(n) \
+  {"String.interpolated.bytes", n, builtin_interpolated##n, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true}
+
 const agc_builtin agc_bytes_builtins[] = {
   {"Bytes.from_list", 1, builtin_from_list, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true},
   {"Bytes.to_a", 1, builtin_to_a, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true},
@@ -160,6 +207,8 @@ const agc_builtin agc_bytes_builtins[] = {
   {"Bytes.plus", 2, builtin_plus, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true},
   {"Bytes.concat", 1, builtin_concat, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true},
   {"String.bytes", 1, builtin_string_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true},
+  INTERPOLATED_ROW(1), INTERPOLATED_ROW(2), INTERPOLATED_ROW(3), INTERPOLATED_ROW(4),
+  INTERPOLATED_ROW(5), INTERPOLATED_ROW(6), INTERPOLATED_ROW(7), INTERPOLATED_ROW(8),
 };
 
 const size_t agc_bytes_builtin_count = sizeof agc_bytes_builtins / sizeof agc_bytes_builtins[0];
