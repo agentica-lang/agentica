@@ -1,7 +1,8 @@
 /*
  * TCP and TLS builtins called on a scheduler thread while the test's thread is the I/O thread (§16.9), against a POSIX
  * peer: a close behind a read's START, deadlines before and after the bytes, cancelled accepts and reads, a cancelled
- * TLS connect, HttpWire.connect_tls on bad options, and the direct send (a close beside it included). Under TSan too.
+ * TLS connect, HttpWire.connect_tls on bad options, and the direct send and receive (a close beside each included).
+ * Under TSan too.
  */
 #include "../core.h"
 #include "../tls.h"
@@ -526,6 +527,34 @@ static void park_locked(void *arg) {
   assert(agc_task_commit_park(l->task));
 }
 
+/* close_pair with every lock on: the closes run with rt->sync, as a scheduler runs them. */
+static void close_pair_locked(int fd) {
+  locked_call closing = {&vm, vm.task, call("TCP.close", 1, socket_v, agc_void(), agc_void(), agc_void())};
+  on_thread(call_locked, &closing);
+  closing.c = call("TCP.close_listener", 1, listener, agc_void(), agc_void(), agc_void());
+  on_thread(call_locked, &closing);
+  close(fd);
+  agc_test_pump_until_idle(&vm);
+  agc_test_settle_loop(&vm);
+}
+
+static void take_locked(void *arg) {
+  agc_test_call *c = arg;
+  agc_sync_take(c->vm);
+  agc_test_take_on_thread(c);
+  agc_sync_drop(c->vm);
+}
+
+/* A whole locked call of TASK on CTX: started, then, when it parked, taken once the task wakes. */
+static agc_value locked_step(agc_vm *ctx, agc_task *task, agc_test_call c) {
+  locked_call l = {ctx, task, c};
+  on_thread(park_locked, &l);
+  if (!task->parked) return l.c.result;
+  agc_test_wait_woken(&vm, task);
+  on_thread(take_locked, &l.c);
+  return l.c.result;
+}
+
 static void send_first(void *arg) {
   assert(agc_gc_thread_enter());
   call_locked(arg);
@@ -640,26 +669,18 @@ static void test_a_send_waits_for_a_direct_send_of_another_task(void) {
   /* A task of its own: the harness resumes a woken task without its scheduler, which would take a timer of its last
      park. */
   agc_task *upgraded = agc_new_task(&vm);
-  locked_call queued = {&vm, upgraded,
-                        agc_test_call_of(&vm, upgraded, "HttpWire.read_head.bytes", 4, socket_v, rest, agc_int(1024),
-                                         agc_int(60000))};
-  on_thread(park_locked, &queued);
-  agc_test_wait_woken(&vm, upgraded);
-  ok_of(take(&queued.c));
-  queued.c =
-      agc_test_call_of(&vm, upgraded, "TCP.send", 3, socket_v, agc_test_str("queued\n"), agc_int(60000), agc_void());
+  ok_of(locked_step(&vm, upgraded,
+                    agc_test_call_of(&vm, upgraded, "HttpWire.read_head.bytes", 4, socket_v, rest, agc_int(1024),
+                                     agc_int(60000))));
+  locked_call queued = {
+      &vm, upgraded,
+      agc_test_call_of(&vm, upgraded, "TCP.send", 3, socket_v, agc_test_str("queued\n"), agc_int(60000), agc_void())};
   on_thread(park_locked, &queued);
   assert(upgraded->parked != NULL);
   agc_test_wait_woken(&vm, upgraded);
   ok_of(take(&queued.c));
   peer_reads(fd, "queued\n", 7);
-  locked_call closing = {&vm, vm.task, call("TCP.close", 1, socket_v, agc_void(), agc_void(), agc_void())};
-  on_thread(call_locked, &closing);
-  closing.c = call("TCP.close_listener", 1, listener, agc_void(), agc_void(), agc_void());
-  on_thread(call_locked, &closing);
-  close(fd);
-  agc_test_pump_until_idle(&vm);
-  agc_test_settle_loop(&vm);
+  close_pair_locked(fd);
 }
 
 static const agc_struct *head_of(agc_value v) { return agc_as_struct(&vm, ok_of(v)); }
@@ -966,6 +987,132 @@ static void test_upgrade_tls_builds_the_shared_context_then_handshakes(void) {
   agc_test_pump_until_idle(&vm);
   agc_test_settle_loop(&vm);
 }
+
+static agc_vm aside;
+
+/* open_pair with every lock on, and a second context (aside) for the calls of other tasks. */
+static int open_pair_locked(void) {
+  static bool made;
+  assert(agc_io_share(&vm, false));
+  if (!made) {
+    agc_vm_init_context(&aside, vm.rt);
+    agc_timers_share(&aside);
+    made = true;
+  }
+  listener = ok_of(
+      locked_step(&vm, vm.task, call("TCP.listen", 2, agc_test_str("127.0.0.1"), agc_int(0), agc_void(), agc_void())));
+  int fd = raw_connect(agc_as_listener(&vm, listener)->port);
+  socket_v = ok_of(locked_step(&vm, vm.task, call("TCP.accept", 2, listener, agc_int(5000), agc_void(), agc_void())));
+  return fd;
+}
+
+/* Waits until a read of another thread holds the reader lock with no job: it is inside recv_here, rt->sync dropped. */
+static void wait_for_receive(agc_resource *reader) {
+  for (bool held = false; !held;) {
+    agc_sync_take(&aside);
+    held = reader->holder == reader;
+    agc_sync_drop(&aside);
+  }
+}
+
+static void read_beside(void *arg) {
+  assert(agc_gc_thread_enter());
+  call_locked(arg);
+  agc_gc_thread_leave();
+}
+
+static agc_test_call read_line_of(agc_vm *ctx, agc_task *task) {
+  return agc_test_call_of(ctx, task, "TCP.read_line", 2, socket_v, agc_int(60000), agc_void(), agc_void());
+}
+
+/* At N > 1 a read that the input does not answer first receives on its scheduler, with rt->sync dropped (recv_here,
+   #1197). A line already in the kernel is read with no park while the loop does not run. A read that finds nothing
+   parks, and the next one parks with no receive even though its line is in the kernel (the rule's back-off). Then
+   the VM's socket is made blocking, so a read waits inside recv() holding the reader lock and the claim: another
+   task's read waits for that lock, a TLS upgrade is refused, and a close from another task shuts the socket on the
+   I/O thread but leaves the descriptor open. The receive takes the peer's next line, the read reports the socket
+   closed, and the end of the receive closes the descriptor. It runs after the shared case: every lock is on. */
+static void test_a_read_receives_on_the_scheduler(void) {
+  int fd = open_pair_locked();
+  int mine = vm_side(fd);
+  struct pollfd in_kernel = {mine, POLLIN, 0};
+
+  assert(send(fd, "one\n", 4, 0) == 4);
+  assert(poll(&in_kernel, 1, 5000) == 1);
+  locked_call reading = {&vm, vm.task, read_line_of(&vm, vm.task)};
+  on_thread(park_locked, &reading);
+  assert(vm.task->parked == NULL);
+  line_is(reading.c.result, "one");
+
+  on_thread(park_locked, &reading);
+  assert(vm.task->parked != NULL);
+  assert(send(fd, "two\n", 4, 0) == 4);
+  agc_test_wait_woken(&vm, vm.task);
+  on_thread(take_locked, &reading.c);
+  line_is(reading.c.result, "two");
+  assert(send(fd, "three\n", 6, 0) == 6);
+  assert(poll(&in_kernel, 1, 5000) == 1);
+  on_thread(park_locked, &reading);
+  assert(vm.task->parked != NULL);
+  agc_test_wait_woken(&vm, vm.task);
+  on_thread(take_locked, &reading.c);
+  line_is(reading.c.result, "three");
+
+  agc_resource *reader = agc_as_socket(&vm, socket_v)->reader;
+  set_blocking(mine, true);
+  uv_thread_t receiver;
+  assert(uv_thread_create(&receiver, read_beside, &reading) == 0);
+  wait_for_receive(reader);
+  agc_task *second = agc_new_task(&vm), *third = agc_new_task(&vm);
+  locked_call waiting = {&aside, second, read_line_of(&aside, second)};
+  on_thread(call_locked, &waiting);
+  assert(second->lock_wait == reader && second->parked == NULL);
+  locked_call upgrading = {&aside, third,
+                           agc_test_call_of(&aside, third, "HttpWire.upgrade_tls", 4, new_client(false), socket_v,
+                                            agc_test_str("localhost"), agc_int(1000))};
+  on_thread(call_locked, &upgrading);
+  assert(error_is(upgrading.c.result, "network: a read on the socket is in progress"));
+  locked_call closing = {&aside, third,
+                         agc_test_call_of(&aside, third, "TCP.close", 1, socket_v, agc_void(), agc_void(), agc_void())};
+  on_thread(call_locked, &closing);
+  for (int k = 0; k < 10; k++) (void)agc_io_poll(&vm, false);
+  assert(fcntl(mine, F_GETFL) >= 0);
+  assert(send(fd, "four\n", 5, 0) == 5);
+  assert(uv_thread_join(&receiver) == 0);
+  assert(vm.task->parked == NULL);
+  assert(error_is(reading.c.result, "network: socket is closed"));
+  wait_eof(fd);
+  assert(fcntl(mine, F_GETFL) < 0);
+  while (agc_runq_pop(vm.rt->runq)) {}
+  on_thread(call_locked, &waiting);
+  assert(error_is(waiting.c.result, "network: socket is closed"));
+  close_pair_locked(fd);
+}
+
+/* A close from another task while a read's recv() finds nothing (the VM's socket is blocking with a receive timeout,
+   so the call waits, then fails with EAGAIN): the read ends with the closed error and parks no request on a net that
+   is gone, and the end of the receive closes the descriptor. */
+static void test_a_close_during_an_empty_receive(void) {
+  int fd = open_pair_locked();
+  int mine = vm_side(fd);
+  set_blocking(mine, true);
+  struct timeval wait = {0, 300000};
+  assert(setsockopt(mine, SOL_SOCKET, SO_RCVTIMEO, &wait, sizeof wait) == 0);
+  locked_call reading = {&vm, vm.task, read_line_of(&vm, vm.task)};
+  uv_thread_t receiver;
+  assert(uv_thread_create(&receiver, read_beside, &reading) == 0);
+  wait_for_receive(agc_as_socket(&vm, socket_v)->reader);
+  agc_task *other = agc_new_task(&vm);
+  locked_call closing = {&aside, other,
+                         agc_test_call_of(&aside, other, "TCP.close", 1, socket_v, agc_void(), agc_void(), agc_void())};
+  on_thread(call_locked, &closing);
+  assert(uv_thread_join(&receiver) == 0);
+  assert(vm.task->parked == NULL);
+  assert(error_is(reading.c.result, "network: socket is closed"));
+  (void)agc_io_poll(&vm, false);
+  wait_eof(fd);
+  close_pair_locked(fd);
+}
 #endif
 
 int main(void) {
@@ -995,6 +1142,8 @@ int main(void) {
   AGC_TEST_RUN(test_context_with_a_path_that_is_not_a_string());
   AGC_TEST_RUN(test_upgrade_tls_builds_the_shared_context_then_handshakes());
   AGC_TEST_RUN(test_a_send_waits_for_a_direct_send_of_another_task());
+  AGC_TEST_RUN(test_a_read_receives_on_the_scheduler());
+  AGC_TEST_RUN(test_a_close_during_an_empty_receive());
 #endif
   puts("net tests passed");
   return 0;

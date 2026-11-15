@@ -1,7 +1,7 @@
 /*
  * Socket and pipe error numbers on POSIX systems: libuv's codes are the
  * negated errno values, so the number is the code negated; and the direct
- * send with send(2). Adapter for net_os.h.
+ * send and receive with send(2) and recv(2). Adapter for net_os.h.
  */
 #include "net_os.h"
 
@@ -38,5 +38,14 @@ int64_t agc_net_send(uintptr_t sock, const uint8_t *data, size_t len) {
     return errno == EWOULDBLOCK ? -EAGAIN : -errno;
   }
   return (int64_t)sent;
+}
+
+int64_t agc_net_recv(uintptr_t sock, uint8_t *data, size_t len) {
+  for (;;) {
+    ssize_t n = recv((int)sock, data, len, 0);
+    if (n >= 0) return (int64_t)n;
+    if (errno == EINTR) continue;
+    return errno == EWOULDBLOCK ? -EAGAIN : -errno;
+  }
 }
 #endif

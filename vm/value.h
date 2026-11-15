@@ -81,7 +81,7 @@ typedef struct agc_list agc_list;
 typedef struct {
   agc_list *out;
   char *next, *stop, *after;
-  size_t n;
+  size_t n, leaf;
   uint32_t kind;
 } agc_list_builder;
 
