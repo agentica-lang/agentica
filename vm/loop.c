@@ -2177,6 +2177,17 @@ uint64_t agc_trace_now(void) {
   return now;
 }
 
+uint64_t agc_trace_cpu_us(void) {
+  int saved = errno;
+  uv_rusage_t usage;
+  uint64_t us = 0;
+  if (uv_getrusage(&usage) == 0)
+    us = (uint64_t)usage.ru_utime.tv_sec * 1000000u + (uint64_t)usage.ru_utime.tv_usec +
+         (uint64_t)usage.ru_stime.tv_sec * 1000000u + (uint64_t)usage.ru_stime.tv_usec;
+  errno = saved;
+  return us;
+}
+
 /* The clock of the schedulers: milliseconds of libuv's monotonic clock. It does not read the loop (uv_now is the
    loop's own cached time, and the loop belongs to the I/O thread), so any thread may call it. Each read raises the
    floor of the coarse clock (agc_clock_coarse_ms), so a Time.monotonic_ms after it, a timer's wake included, is never

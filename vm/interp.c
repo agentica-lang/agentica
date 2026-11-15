@@ -567,35 +567,6 @@ void agc_task_call(agc_vm *vm, agc_task *t, agc_value fn, uint32_t window, const
   call_value(vm, t, fn, window, args, argc, ret, span);
 }
 
-/* Zeroes the registers of T above its frames, which every frame writes before it reads, so the values that returned
-   calls left there no longer keep objects alive. A frame uses [base, base + registers) and a native frame lies inside
-   its caller's; bases fall from the top frame down, so the walk stops once no lower frame can end higher. An array
-   whose dead part passes CLEAR_MAX registers is first cut to the smallest power of two that holds the live part, so a
-   park after a deep call clears a bounded tail; it moves as growing does, and no pointer into it outlives a turn. A
-   callback of native code is left alone: the outer turn keeps its arrays. */
-void agc_task_clear_dead(const agc_vm *vm, agc_task *t) {
-  if (t->callbacks || !t->regs) return;
-  const agc_program *p = vm->rt->program;
-  size_t top = 0, most = p->max_registers ? p->max_registers : SIZE_MAX / 2;
-  for (uint32_t k = t->frame_count; k-- > 0;) {
-    const agc_frame *f = &t->frames[k];
-    if ((size_t)f->base + most <= top) break;
-    if (f->native || f->function >= p->function_count) continue;
-    size_t end = (size_t)f->base + p->functions[f->function].registers;
-    if (end > top) top = end;
-  }
-  size_t capacity = 256;
-  while (capacity < top) capacity *= 2;
-  if (t->reg_capacity - top > CLEAR_MAX && capacity < t->reg_capacity) {
-    agc_value *regs = agc_alloc(capacity * sizeof(agc_value));
-    memcpy(regs, t->regs, top * sizeof(agc_value));
-    t->regs = regs;
-    t->reg_capacity = capacity;
-    return;
-  }
-  memset(t->regs + top, 0, (t->reg_capacity - top) * sizeof(agc_value));
-}
-
 void agc_task_enter(agc_vm *vm, agc_task *t, uint32_t function) {
   /* Like call_value: a profile test that a normal build still pays, once per task start. */
   if (AGC_PROFILE_ON(vm)) profile_call(vm, function);
@@ -2291,4 +2262,33 @@ NESTED _Noreturn void agc_raise(agc_vm *vm, const agc_outcome *failed) {
 void agc_steps_reset(agc_vm *vm, int64_t steps) {
   sync_budget(vm);
   atomic_store(&vm->rt->steps_left, steps > vm->batch ? steps - vm->batch : 0);
+}
+
+/* Zeroes the registers of T above its frames, which every frame writes before it reads, so the values that returned
+   calls left there no longer keep objects alive. A frame uses [base, base + registers) and a native frame lies inside
+   its caller's; bases fall from the top frame down, so the walk stops once no lower frame can end higher. An array
+   whose dead part passes CLEAR_MAX registers is first cut to the smallest power of two that holds the live part, so a
+   park after a deep call clears a bounded tail; it moves as growing does, and no pointer into it outlives a turn. A
+   callback of native code is left alone: the outer turn keeps its arrays. */
+void agc_task_clear_dead(const agc_vm *vm, agc_task *t) {
+  if (t->callbacks || !t->regs) return;
+  const agc_program *p = vm->rt->program;
+  size_t top = 0, most = p->max_registers ? p->max_registers : SIZE_MAX / 2;
+  for (uint32_t k = t->frame_count; k-- > 0;) {
+    const agc_frame *f = &t->frames[k];
+    if ((size_t)f->base + most <= top) break;
+    if (f->native || f->function >= p->function_count) continue;
+    size_t end = (size_t)f->base + p->functions[f->function].registers;
+    if (end > top) top = end;
+  }
+  size_t capacity = 256;
+  while (capacity < top) capacity *= 2;
+  if (t->reg_capacity - top > CLEAR_MAX && capacity < t->reg_capacity) {
+    agc_value *regs = agc_alloc(capacity * sizeof(agc_value));
+    memcpy(regs, t->regs, top * sizeof(agc_value));
+    t->regs = regs;
+    t->reg_capacity = capacity;
+    return;
+  }
+  memset(t->regs + top, 0, (t->reg_capacity - top) * sizeof(agc_value));
 }

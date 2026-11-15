@@ -614,10 +614,15 @@ static void trace_pauses(const agc_vm *vm) {
   const agc_trace *tr = &vm->rt->trace;
   agc_gc_pauses g;
   if (!AGC_TRACE_ON(tr, AGC_TRACE_GC) || !agc_gc_record(&g)) return;
+  /* The share of the wall and CPU time spent with the world stopped, in thousandths. */
+  uint64_t wall_permille = g.wall_us ? g.total_us * 1000 / g.wall_us : 0;
+  uint64_t cpu_permille = g.cpu_us ? g.total_us * 1000 / g.cpu_us : 0;
   AGC_TRACE(tr, AGC_TRACE_GC,
-            "pauses count=%" PRIu64 " p50_us=%" PRIu64 " p99_us=%" PRIu64 " max_us=%" PRIu64 " total_us=%" PRIu64
+            "pauses total_us=%" PRIu64 " wall_us=%" PRIu64 " cpu_us=%" PRIu64 " wall_permille=%" PRIu64
+            " cpu_permille=%" PRIu64 " count=%" PRIu64 " p50_us=%" PRIu64 " p99_us=%" PRIu64 " max_us=%" PRIu64
             " used_last=%" PRIu64 " used_max=%" PRIu64,
-            g.pauses, g.p50_us, g.p99_us, g.max_us, g.total_us, g.used_last, g.used_max);
+            g.total_us, g.wall_us, g.cpu_us, wall_permille, cpu_permille, g.pauses, g.p50_us, g.p99_us, g.max_us,
+            g.used_last, g.used_max);
 }
 
 static void trace_end(agc_vm *vm) {

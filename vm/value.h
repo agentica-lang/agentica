@@ -617,11 +617,12 @@ void agc_alloc_count_start(void);
 agc_alloc_counts agc_alloc_count_end(void);
 
 /* The stops of the world and the heap in use after each collection, recorded from agc_gc_record_start on (the gc
-   trace). A pause runs from the stop of the world to its restart, in microseconds; p50 and p99 are the upper bounds of
-   their buckets (a quarter wide at most), max and total are exact. `used` is the heap in blocks that still hold a live
-   object after a collection. */
+   trace). A pause runs from the stop of the world to its restart, in microseconds: `total_us` is their sum, beside
+   the wall time and the process's CPU time since the start; p50 and p99 are the upper bounds of their buckets (a
+   quarter wide at most), max is exact. `used` is the heap in blocks that still hold a live object after a
+   collection. */
 typedef struct {
-  uint64_t pauses, p50_us, p99_us, max_us, total_us, used_last, used_max;
+  uint64_t total_us, wall_us, cpu_us, pauses, p50_us, p99_us, max_us, used_last, used_max;
 } agc_gc_pauses;
 void agc_gc_record_start(void);
 bool agc_gc_record(agc_gc_pauses *out);

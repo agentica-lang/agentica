@@ -35,7 +35,8 @@ GC_LINE = re.compile(
     rb" pause_max_us=[0-9]+"
     rb"|alloc sched=([0-9]+|io) scanned_objects=[0-9]+ scanned_bytes=[0-9]+ atomic_objects=[0-9]+ atomic_bytes=[0-9]+"
     rb" large_objects=[0-9]+ large_bytes=[0-9]+ freed_objects=[0-9]+ freed_bytes=[0-9]+"
-    rb"|pauses count=[0-9]+ p50_us=[0-9]+ p99_us=[0-9]+ max_us=[0-9]+ total_us=[0-9]+ used_last=[0-9]+ used_max=[0-9]+"
+    rb"|pauses total_us=[0-9]+ wall_us=[0-9]+ cpu_us=[0-9]+ wall_permille=[0-9]+ cpu_permille=[0-9]+ count=[0-9]+"
+    rb" p50_us=[0-9]+ p99_us=[0-9]+ max_us=[0-9]+ used_last=[0-9]+ used_max=[0-9]+"
     rb")$")
 GC_FIELDS = re.compile(rb" gc (alloc sched=(\S+)|pauses) (.*)$")
 CATEGORY = re.compile(rb"^agc-trace \S+ (\S+)")
@@ -276,7 +277,8 @@ def test_an_allocation_heavy_run_writes_gc_lines(tmp_path, traced_vm, schedulers
     assert sum(a["scanned_objects"] for a in allocs.values()) > 0
     collected = max(int(line.split(b" count=")[1].split()[0]) for line in lines if b" collect " in line)
     assert pauses and 0 < pauses["count"] <= collected
-    assert pauses["p50_us"] <= pauses["p99_us"] <= pauses["max_us"] <= pauses["total_us"]
+    assert pauses["p50_us"] <= pauses["p99_us"] <= pauses["max_us"] <= pauses["total_us"] <= pauses["wall_us"]
+    assert pauses["wall_permille"] == pauses["total_us"] * 1000 // pauses["wall_us"]
     assert 0 < pauses["used_last"] <= pauses["used_max"]
 
 

@@ -33,10 +33,11 @@ struct agc_weak {
 
 #ifndef AGC_NO_GC
 /* The record of agc_gc_record_start. The collector writes it from its event callback, with its lock held, and
-   agc_gc_record reads it under that lock. `stop_ns` is when the current stop of the world began, 0 outside one;
-   `buckets` counts the pauses by their length (pause_bucket). */
+   agc_gc_record reads it under that lock. `start_ns` and `start_cpu_us` are the clocks at agc_gc_record_start;
+   `stop_ns` is when the current stop of the world began, 0 outside one; `buckets` counts the pauses by their length
+   (pause_bucket). */
 typedef struct {
-  uint64_t stop_ns, pauses, max_ns, total_ns, used_last, used_max;
+  uint64_t start_ns, start_cpu_us, stop_ns, pauses, max_ns, total_ns, used_last, used_max;
   uint64_t buckets[PAUSE_BUCKETS];
 } pause_record;
 #endif
@@ -496,6 +497,8 @@ static void GC_CALLBACK on_gc_event(GC_EventType event) {
 static void *clear_record(void *unused) {
   (void)unused;
   memset(&pause_log, 0, sizeof pause_log);
+  pause_log.start_ns = agc_trace_now();
+  pause_log.start_cpu_us = agc_trace_cpu_us();
   return NULL;
 }
 
@@ -530,8 +533,16 @@ bool agc_gc_record(agc_gc_pauses *out) {
   (void)GC_call_with_alloc_lock(copy_record, &r);
   uint64_t max_us = r.max_ns / 1000;
   uint64_t p50 = pause_rank(&r, (r.pauses + 1) / 2), p99 = pause_rank(&r, r.pauses - r.pauses / 100);
-  *out = (agc_gc_pauses){r.pauses, p50 < max_us ? p50 : max_us, p99 < max_us ? p99 : max_us, max_us,
-                         r.total_ns / 1000, r.used_last, r.used_max};
+  uint64_t cpu_us = agc_trace_cpu_us();
+  *out = (agc_gc_pauses){r.total_ns / 1000,
+                         (agc_trace_now() - r.start_ns) / 1000,
+                         cpu_us > r.start_cpu_us ? cpu_us - r.start_cpu_us : 0,
+                         r.pauses,
+                         p50 < max_us ? p50 : max_us,
+                         p99 < max_us ? p99 : max_us,
+                         max_us,
+                         r.used_last,
+                         r.used_max};
   return true;
 #endif
 }
