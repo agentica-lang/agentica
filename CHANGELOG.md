@@ -23,7 +23,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `agentica FILE.agc` no longer looks for the C compiler in `PATH` at each start of a cached program with no native module, and a change of `CC` or `PATH` keeps its cache entry (#1551).
 - A `compute def` call or a dirty native module call made right after another costs about 3 µs in place of 15 to 25 µs: the compute pool thread spins briefly for the next call before it sleeps (#1120).
 - Programs run 4 to 6% faster when the interpreter runs them (`--jit off`, or code the JIT has not compiled): a call or an operator writes its result straight into the variable it is assigned to (#1001).
-- Checking that bytes are UTF-8 (`String.from_bytes`, text reads from files, sockets and processes) is 12 to 25% faster on non-ASCII text (#996).
+- Checking that bytes are UTF-8 (`String.from_bytes`, text reads from files, sockets and processes) is 12 to 30% faster on non-ASCII text (#996).
+- `String.split` searches the text once instead of twice and skips counting the characters of each piece when the text is ASCII: about 10% faster on log-style line and word splitting (#996).
 
 ## [0.32.0] - 2026-11-15
 

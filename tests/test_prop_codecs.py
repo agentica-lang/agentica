@@ -65,6 +65,13 @@ def floats_reply(result: Result[List[Float]]) -> String
   end
 end
 
+def split_reply(data: Bytes, separator: Bytes) -> String
+  pieces = text(data).split(text(separator))
+  lengths = pieces.map do |piece: String| piece.length end
+  listing = "#{JSON.encode(pieces)} #{JSON.encode(lengths)}"
+  "ok #{hex(listing.bytes)}"
+end
+
 def run(op: String, data: Bytes) -> String
   case op
     "json" -> value_reply(JSON.parse(text(data)))
@@ -85,6 +92,9 @@ def run(op: String, data: Bytes) -> String
       parts = op.split(":")
       if parts[0] == "decode"
         return text_reply(data.decode(parts[1]))
+      end
+      if parts[0] == "split"
+        return split_reply(data, payload(parts[1]))
       end
 
       bytes_reply(text(data).encode(parts[1]))
@@ -341,6 +351,40 @@ def test_from_bytes_agrees_with_python(codec, data):
     assert got == (None if want is None else data), data
     length = codec.ask("utf8length", data)
     assert length == (None if want is None else str(len(want)).encode()), data
+
+
+SEPARATORS = ["", ",", " ", "aa", "é", "日本", "😀", ",é,", "abcabcabcab"]
+SPLIT_CHUNKS = ["a", "b", "c", ",", " ", "é", "日", "本", "😀"]
+
+
+@st.composite
+def split_cases(draw):
+    """A separator and a text made of chunks and copies of the separator: ASCII only or mixed, the separator at either
+    end, repeated or overlapping itself."""
+    separator = draw(st.sampled_from(SEPARATORS))
+    chunks = SPLIT_CHUNKS[:5] if draw(st.booleans()) else SPLIT_CHUNKS
+    text = "".join(draw(st.lists(st.sampled_from(chunks + [separator] * 3), max_size=40)))
+    return text, separator
+
+
+@timeout(300)
+@given(split_cases())
+@example(("", ","))
+@example((",", ","))
+@example((",a,,b,", ","))
+@example(("aaaaa", "aa"))
+@example(("abcabcabcabcabcab", "abcabcabcab"))
+@example(("日本日本x日本", "日本"))
+def test_split_agrees_with_python(codec, case):
+    """String#split gives Python's str.split (the characters for an empty separator), and each piece has Python's
+    length in code points, for ASCII and multibyte text."""
+    text, separator = case
+    got = codec.ask("split:" + (separator.encode("utf-8").hex() or "-"), text.encode("utf-8"))
+    assert got is not None, case
+    pieces, lengths = got.decode("utf-8").rsplit(" ", 1)
+    want = text.split(separator) if separator else list(text)
+    assert json.loads(pieces) == want, case
+    assert json.loads(lengths) == [len(piece) for piece in want], case
 
 
 BASE64_TEXTS = st.one_of(
