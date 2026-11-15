@@ -5,6 +5,10 @@
 ## JSON.decode, JSON.encode and JSON.from with other arguments than theirs, or read a field of the codec record.
 CODEC_BUILTINS = Set.new(["Codec.decode", "Codec.encode", "Codec.from", "Codec.members"])
 
+## The fewest arms that test a variant for a case to jump through a table on the variant (`jump-variant`) instead of
+## trying the arms in order.
+TABLE_ARMS = 3
+
 ## The fields of the Codec.Info record that T.codec builds (builtins_data.agc), by position.
 CODEC_NAME = 0
 CODEC_MEMBERS = 1

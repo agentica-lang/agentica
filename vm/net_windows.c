@@ -3,8 +3,9 @@
  * errors to its own codes (UV__E* in uv/errno.h), which no CRT function
  * names, so each code src/win/error.c can return maps to the errno of the
  * UCRT when it has one (POSIX supplement values such as ECONNREFUSED 107),
- * whose strerror has a text for it; and the direct send with send() on the
- * SOCKET, whose WSA error libuv translates. Adapter for net_os.h.
+ * whose strerror has a text for it; and the direct send and receive with
+ * send() and recv() on the SOCKET, whose WSA error libuv translates. Adapter
+ * for net_os.h.
  */
 #include "net_os.h"
 
@@ -86,5 +87,17 @@ int64_t agc_net_send(uintptr_t sock, const uint8_t *data, size_t len) {
     return uv_translate_sys_error(err);
   }
   return (int64_t)sent;
+}
+
+/* A receive is safe beside libuv's reads: vm/tcp.c calls it only while the handle does not read, and libuv's zero-byte
+   read that may still be pending then takes no byte. WSAECONNABORTED is a reset, as libuv's own read reports it. */
+int64_t agc_net_recv(uintptr_t sock, uint8_t *data, size_t len) {
+  for (;;) {
+    int n = recv((SOCKET)sock, (char *)data, len < SEND_CHUNK ? (int)len : INT_MAX, 0);
+    if (n >= 0) return n;
+    int err = WSAGetLastError();
+    if (err == WSAEINTR) continue;
+    return uv_translate_sys_error(err == WSAECONNABORTED ? WSAECONNRESET : err);
+  }
 }
 #endif

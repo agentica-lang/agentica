@@ -141,6 +141,7 @@ static bool has_code(uint32_t op) {
     case AGC_OP_NOT:
     case AGC_OP_FIELD:
     case AGC_OP_IS_VARIANT:
+    case AGC_OP_JUMP_VARIANT:
     case AGC_OP_PAYLOAD:
     case AGC_OP_IS_OK:
     case AGC_OP_RESULT_VALUE:
@@ -517,6 +518,7 @@ static void track_tags(agc_emitter *e, const agc_program *p, agc_opcode op, agc_
       know(e, in.b, AGC_T_ENUM);
       know(e, in.a, AGC_T_BOOL);
       break;
+    case AGC_OP_JUMP_VARIANT: know(e, in.a, AGC_T_ENUM); break;
     case AGC_OP_IS_OK:
       know(e, in.b, AGC_T_RESULT);
       know(e, in.a, AGC_T_BOOL);
@@ -549,6 +551,7 @@ static size_t emit_function(agc_emitter *e, const agc_jit *jit, const agc_functi
     uint32_t bx = (uint32_t)in.b | ((uint32_t)in.c << 16);
     if ((in.op == AGC_OP_JUMP || in.op == AGC_OP_JUMP_IF_FALSE || in.op == AGC_OP_JUMP_IF_TRUE) && bx < f->count)
       target[bx] = true;
+    if (in.op == AGC_OP_JUMP_VARIANT && (uint64_t)pc + 1 + in.c < f->count) target[pc + 1 + in.c] = true;
   }
   for (uint32_t pc = 0; pc < f->count && !e->failed; pc++) {
     agc_instr in = f->code[pc];
@@ -631,6 +634,21 @@ static size_t emit_function(agc_emitter *e, const agc_jit *jit, const agc_functi
       case AGC_OP_RESULT_VALUE:
       case AGC_OP_TRY:
       case AGC_OP_TRY_STEP: agc_emit_read(e, op, in, pc); break;
+      case AGC_OP_JUMP_VARIANT: {
+        /* The loader checks the table; the C tests' hand-made code may not. */
+        bool table = in.c > 0 && (uint64_t)pc + 1 + in.c < f->count;
+        uint32_t *targets = table ? agc_alloc_atomic(in.c * sizeof(uint32_t)) : NULL;
+        for (uint32_t k = 0; table && k < in.c; k++) {
+          agc_instr jump = f->code[pc + 1 + k];
+          targets[k] = (uint32_t)jump.b | ((uint32_t)jump.c << 16);
+          table = jump.op == AGC_OP_JUMP && targets[k] < f->count;
+        }
+        if (table)
+          agc_emit_jump_variant(e, in, targets, pc);
+        else
+          agc_emit_exit(e, AGC_JIT_EXIT_INTERPRET, pc);
+        break;
+      }
       case AGC_OP_JUMP: agc_emit_jump(e, bx); break;
       case AGC_OP_JUMP_IF_FALSE:
       case AGC_OP_JUMP_IF_TRUE: agc_emit_branch(e, in.a, op == AGC_OP_JUMP_IF_TRUE, bx, pc); break;

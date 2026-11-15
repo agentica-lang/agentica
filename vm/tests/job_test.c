@@ -270,6 +270,44 @@ static void test_compute_job_wakes_its_task(void) {
   finished_calls = 0;
 }
 
+static void wait_ended(void) {
+  while (!agc_io_compute_ended(&vm)) agc_test_yield();
+}
+
+/* The level of the one scheduler's spin for its compute calls (agc_io_compute_spin): an end the spin catches raises
+   it, a miss after a miss lowers it, and an end caught after a miss counts once, even when it comes after the longest
+   spin. Each spin starts after the end is posted, or with the work held at its gate, so no clock decides. The spin is
+   off on one CPU. */
+static void test_compute_spin_level(void) {
+  if (uv_available_parallelism() <= 1) return;
+  vm.spin_level = 0;
+  for (uint32_t k = 1; k <= 2; k++) {
+    gate *g = new_gate();
+    uv_sem_post(&g->go);
+    agc_task *task = park_compute(g);
+    wait_ended();
+    assert(agc_io_compute_spin(&vm) && vm.spin_level == k);
+    assert(task->state != AGC_TASK_PARKED);
+    while (agc_runq_pop(vm.rt->runq)) {}
+    assert(take(task) == 7);
+  }
+  gate *g = new_gate();
+  agc_task *task = park_compute(g);
+  uv_sem_wait(&g->entered);
+  assert(!agc_io_compute_spin(&vm) && vm.spin_level == 2);
+  assert(!agc_io_compute_spin(&vm) && vm.spin_level == 1);
+  uv_sleep(2);
+  uv_sem_post(&g->go);
+  wait_ended();
+  assert(agc_io_compute_spin(&vm) && vm.spin_level == 2);
+  while (agc_runq_pop(vm.rt->runq)) {}
+  assert(take(task) == 7 && vm.spin_level == 2);
+  settle_loop();
+  assert(dropped == 0 && finished_calls == 3);
+  finished_calls = 0;
+  vm.spin_level = 0;
+}
+
 /* A cancel detaches a compute job while its work runs: the work goes on, and its result is dropped once it ends. */
 static void test_cancel_during_compute(void) {
   gate *g = new_gate();
@@ -1117,6 +1155,7 @@ int main(void) {
   test_completion_before_timer();
   test_cancel_before_completion();
   test_compute_job_wakes_its_task();
+  test_compute_spin_level();
   test_cancel_during_compute();
   test_compute_queued_after_the_run_is_over();
   test_request_from_another_thread();

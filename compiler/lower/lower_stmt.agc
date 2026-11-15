@@ -9,7 +9,7 @@ import Types from "../syntax/types"
 import Ir from "ir"
 import Expr from "lower_expr"
 import Lowering from "lower_state"
-import {INT_MIN, INT_MIN_DIGITS} from "lower_tables"
+import {INT_MIN, INT_MIN_DIGITS, TABLE_ARMS} from "lower_tables"
 
 ## A lowered function, and the state after it: the block functions made inside it and the next function index, for the
 ## program to collect.
@@ -473,6 +473,10 @@ end
 # registers are not released: the caller sets `next`.
 def lower_arms(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.CaseStmt, target: Int) -> Result[Lowering.Fx]
   scrutinee = try Expr.lower_expression(cx, fx, node.value, -1, false, false)
+  sets = node.arms.map do |arm: Ast.CaseArm| arm_variants(cx, arm.pattern) end
+  tested = sets.count do |ids: List[Int]| ids.size > 0 end
+  return lower_table_arms(cx, scrutinee, node, target, sets) if tested >= TABLE_ARMS
+
   fx = Lowering.new_label(scrutinee.fx)
   end_label = fx.labels - 1
   value = scrutinee.slot
@@ -497,6 +501,132 @@ def lower_arms(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.CaseStmt, target: Int
   end
 
   ok(Lowering.place(fx, end_label))
+end
+
+# A case with TABLE_ARMS or more variant arms: `jump-variant` goes by the scrutinee's variant straight to the first arm
+# that can match it, past that arm's tag test, and other variants go to the first arm that can match any value. An arm
+# past its tag test knows the variant, so a failed nested pattern or guard goes straight to the next arm that can match
+# it. An arm that is not a single variant pattern (`_`, a literal, a Result pattern, any or-pattern, even of plain
+# variants) fails to the next arm in order, so every variant arm after it keeps its tag test, which goes to the next
+# arm when it fails. Arm k starts at label first + k, its code after the tag test at first + count + k, and the end of
+# the case is first + 2 * count.
+def lower_table_arms(
+  cx: Lowering.Cx,
+  scrutinee: Lowering.Out,
+  node: Ast.CaseStmt,
+  target: Int,
+  sets: List[List[Int]],
+) -> Result[Lowering.Fx]
+  value = scrutinee.slot
+  count = node.arms.size
+  first = scrutinee.fx.labels
+  end_label = first + 2 * count
+  fx = scrutinee.fx.with(labels: end_label + 1)
+  ids = sets.flat_map do |found: List[Int]| found end
+  low = ids.min.unwrap!
+  high = ids.max.unwrap!
+  span = Ast.expr_span(node.value)
+  fx = Lowering.emit_at(fx, "jump-variant", [value, low, high - low + 1], span)
+  for id in low..high
+    fx = Lowering.emit_at(fx, "jump", [arm_label(node, sets, first, 0, id)], span)
+  end
+
+  other = arm_label(node, sets, first, 0, -1)
+  if other != first
+    fx = Lowering.emit_at(fx, "jump", [other], span)
+  end
+
+  index = 0
+  chained = false
+  for arm in node.arms
+    fx = Lowering.place(fx, first + index)
+    next_arm = end_label
+    if index + 1 < count
+      next_arm = first + index + 1
+    end
+
+    test_slot = fx.next
+    skip = next_arm
+    case arm.pattern
+      Ast.Pattern.Variant(pattern) if direct?(arm.pattern) ->
+        id = sets[index][0]
+        if chained
+          fx = tag_test(fx, id, value, next_arm, Ast.pattern_span(arm.pattern))
+        end
+
+        fx = Lowering.place(fx, first + count + index)
+        skip = arm_label(node, sets, first, index + 1, id)
+        fx = try test_nested(cx, fx, pattern, value, skip)
+      _ ->
+        fx = try lower_test(cx, fx, arm.pattern, value, skip)
+        chained = true
+    end
+
+    fx = fx.with(next: test_slot)
+    before = fx
+    fx = try bind_payload(cx, fx, arm.pattern, value)
+    fx = try lower_guard(cx, fx, arm.guard, skip)
+    fx = try lower_arm_body(cx, fx, arm.body, target)
+    fx = leave(fx, before)
+    if index + 1 < count
+      fx = Lowering.emit_at(fx, "jump", [end_label], node.span)
+    end
+
+    index += 1
+  end
+
+  ok(Lowering.place(fx, end_label))
+end
+
+# The variant ids the top of a pattern can match, or [] when it may match any value: a wildcard, a literal, a Result
+# pattern, or an or-pattern with such a part.
+def arm_variants(cx: Lowering.Cx, pattern: Ast.Pattern) -> List[Int]
+  case pattern
+    Ast.Pattern.Variant(node) ->
+      return [] if node.enum_name == "Result"
+
+      [cx.variants["#{node.enum_name}.#{node.variant_name}"]]
+    Ast.Pattern.Or(node) ->
+      ids: List[Int] = []
+      for part in node.patterns
+        found = arm_variants(cx, part)
+        return [] if found.size == 0
+
+        ids = ids.concat(found)
+      end
+
+      ids
+    _ -> []
+  end
+end
+
+# A variant pattern of an enum, whose tag test a table can jump past.
+def direct?(pattern: Ast.Pattern) -> Bool
+  case pattern
+    Ast.Pattern.Variant(node) -> node.enum_name != "Result"
+    _ -> false
+  end
+end
+
+# The label of the first arm from `from` on that can match variant `id` (-1: a variant no arm names): past the tag
+# test of a variant pattern of that id, else the start of the arm; the end of the case when no arm can.
+def arm_label(node: Ast.CaseStmt, sets: List[List[Int]], first: Int, from: Int, id: Int) -> Int
+  count = sets.size
+  at = from
+  while at < count
+    ids = sets[at]
+    return first + at if ids.size == 0
+
+    if ids.include?(id)
+      return first + count + at if direct?(node.arms[at].pattern)
+
+      return first + at
+    end
+
+    at += 1
+  end
+
+  first + 2 * count
 end
 
 # The body of an arm. In a case that gives a value (target is a register) the last statement is an expression, which
@@ -527,9 +657,9 @@ def lower_test(cx: Lowering.Cx, fx: Lowering.Fx, pattern: Ast.Pattern, value: In
     Ast.Pattern.Literal(node) -> lower_literal_test(cx, fx, node, value, skip)
     Ast.Pattern.Or(node) -> lower_or_test(cx, fx, node, value, skip)
     Ast.Pattern.Variant(node) ->
-      fx = Lowering.alloc(fx)
-      slot = fx.next - 1
       if node.enum_name == "Result"
+        fx = Lowering.alloc(fx)
+        slot = fx.next - 1
         fx = Lowering.emit_at(fx, "is-ok", [slot, value], span)
         jump = "jump-if-true"
         if node.variant_name == "Ok"
@@ -537,14 +667,20 @@ def lower_test(cx: Lowering.Cx, fx: Lowering.Fx, pattern: Ast.Pattern, value: In
         end
 
         fx = Lowering.emit_at(fx, jump, [slot, skip], span)
-      else
-        id = cx.variants["#{node.enum_name}.#{node.variant_name}"]
-        fx = Lowering.emit_at(fx, "is-variant", [slot, value, id], span)
-        fx = Lowering.emit_at(fx, "jump-if-false", [slot, skip], span)
+        return test_nested(cx, fx, node, value, skip)
       end
 
+      fx = tag_test(fx, cx.variants["#{node.enum_name}.#{node.variant_name}"], value, skip, span)
       test_nested(cx, fx, node, value, skip)
   end
+end
+
+# The test of the variant of the value in a register: a jump to skip when it is not variant id.
+def tag_test(fx: Lowering.Fx, id: Int, value: Int, skip: Int, span: Source.Span) -> Lowering.Fx
+  fx = Lowering.alloc(fx)
+  slot = fx.next - 1
+  fx = Lowering.emit_at(fx, "is-variant", [slot, value, id], span)
+  Lowering.emit_at(fx, "jump-if-false", [slot, skip], span)
 end
 
 # An or-pattern tries its patterns in order: a pattern that fails jumps to the next one, the last to skip, and one that

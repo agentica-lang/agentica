@@ -315,15 +315,16 @@ are no GC finalizers.
 A plain TCP socket at N > 1 has a second send path: the scheduler calls `send()`
 itself, with `rt->sync` dropped and the writer lock held without a job
 (`agc_handle_hold`), and only the rest goes to the I/O thread as a job that
-takes the hold over. A close during that call does not close the descriptor:
-the scheduler's claim (`wstate` in `vm/tcp.c`) defers it, and the scheduler
-posts the close (`direct_over`) when the call returns. The reason is speed,
-for which §14.6 lets the core change: +55% requests per second on HTTP
-keep-alive at 64 connections (#1188), where every response crossed a saturated
-I/O thread. It adds no second way to wait, time out or be cancelled: a send
-that does not go out at once parks as a job on the I/O thread with its timer,
-and a task that waits for the writer lock waits in the same FIFO and is woken
-by the same hand-on (`agc_handle_let_go`).
+takes the hold over. A read that needs bytes calls `recv()` the same way, with
+the reader lock held (#1197). A close during either call does not close the
+descriptor: the scheduler's claim (`wstate` in `vm/tcp.c`) defers it, and the
+last call to end posts the close (`direct_over`). The reason is speed, for
+which §14.6 lets the core change: +55% requests per second on HTTP keep-alive
+at 64 connections (#1188), where every response crossed a saturated I/O
+thread. It adds no second way to wait, time out or be cancelled: a send that
+does not go out at once, or a read that the kernel cannot answer, parks as a
+job on the I/O thread with its timer, and a task that waits for the lock waits
+in the same FIFO and is woken by the same hand-on (`agc_handle_let_go`).
 
 A channel is the one handle made unowned. `Channel.new` makes no registry entry.
 The first `Task.spawn_owning` of it (any task may do it) registers an entry with

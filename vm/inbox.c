@@ -14,6 +14,8 @@ struct agc_inbox {
   uv_mutex_t lock;
   uv_async_t wake;
   agc_request *first, *last;
+  /* Whether `first` is set: changed under the lock, read without it by agc_inbox_full. */
+  _Atomic bool full;
   agc_inbox_fn handle;
   void *owner;
 };
@@ -26,6 +28,7 @@ bool agc_inbox_run(agc_inbox *in) {
   uv_mutex_lock(&in->lock);
   agc_request *list = in->first;
   in->first = in->last = NULL;
+  atomic_store_explicit(&in->full, false, memory_order_relaxed);
   uv_mutex_unlock(&in->lock);
   if (!list) return false;
   in->handle(in->owner, list);
@@ -84,9 +87,13 @@ void agc_inbox_post(agc_inbox *in, agc_request *entry) {
   else
     in->first = entry;
   in->last = entry;
+  atomic_store_explicit(&in->full, true, memory_order_release);
   uv_mutex_unlock(&in->lock);
   uv_async_send(&in->wake);
 }
+
+/* Any thread: whether an entry waits, for a consumer that spins before it waits for the wake. */
+bool agc_inbox_full(agc_inbox *in) { return atomic_load_explicit(&in->full, memory_order_acquire); }
 
 /* The loop's thread, once no thread posts any more and none is still inside agc_inbox_post: libuv allows no
    uv_async_send on a handle that is closing, and a poster may still be in it after its request was handled. The

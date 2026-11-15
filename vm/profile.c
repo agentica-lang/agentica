@@ -94,6 +94,7 @@ static const char *const opcode_names[] = {
   "neg-f", "lt-f", "le-f", "concat", "to-text", "inspect", "list", "list-len", "list-get", "struct", "field", "enum",
   "is-variant", "payload", "same", "tail-call", "try", "is-ok", "result-value", "map", "map-get", "call-value",
   "closure", "range", "range-bounds", "struct-with", "global", "global-set", "try-step",
+  "jump-variant",
 };
 _Static_assert(sizeof opcode_names / sizeof opcode_names[0] == AGC_OP_COUNT, "one name for each opcode");
 /* report_loop ranks the pairs in the AGC_OP_COUNT slots it ranks the opcodes in. */

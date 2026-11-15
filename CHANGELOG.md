@@ -19,12 +19,19 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `"$#{n}\r\n".bytes` on an interpolated string writes the parts into one `Bytes`, with no `String` in between; an `Int` in any interpolation prints faster (#1361).
 - A program whose tasks all wait for one busy task (a store task that serves 50 clients over channels) no longer runs slower with more scheduler threads: up to about 2 times faster at 2 to 8 schedulers, depending on the work per request (#1362).
 - A project's `agentica.toml` is parsed once per start, not twice, so a program below a manifest starts a little faster (#1471).
-- With several schedulers, a TCP read that bytes already received can answer returns at once instead of waiting on the I/O thread: up to 5 times more lines per second on a busy stream, about 10% more requests per second for an HTTP client and 6 to 28% for an HTTP server (#1197).
+- With several schedulers, a TCP read that bytes already received, or bytes waiting in the kernel, can answer returns at once instead of waiting on the I/O thread: up to 6 times more lines per second on a busy stream, about 10% more requests per second for an HTTP client and 6 to 28% for an HTTP server (#1197).
 - `agentica FILE.agc` no longer looks for the C compiler in `PATH` at each start of a cached program with no native module, and a change of `CC` or `PATH` keeps its cache entry (#1551).
 - A `compute def` call or a dirty native module call made right after another costs about 3 µs in place of 15 to 25 µs: the compute pool thread spins briefly for the next call before it sleeps (#1120).
+- With one scheduler (`--schedulers 1`), a run of `compute def` calls that take tens of microseconds each (an SQLite step, an agentica-db write) runs 2 to 3 times faster (a one-row SQLite query about 2.8 times, an agentica-db insert about 2 times): the scheduler spins briefly for the call's end before it sleeps (#1120).
 - Programs run 4 to 6% faster when the interpreter runs them (`--jit off`, or code the JIT has not compiled): a call or an operator writes its result straight into the variable it is assigned to (#1001).
 - Checking that bytes are UTF-8 (`String.from_bytes`, text reads from files, sockets and processes) is 12 to 30% faster on non-ASCII text (#996).
+- A `case` with 3 or more enum variant arms jumps straight to the arm that matches instead of testing the arms in order: `agentica check` and `compile` of a large program are about 5 to 7% faster (#1001).
 - `String.split` searches the text once instead of twice and skips counting the characters of each piece when the text is ASCII: about 10% faster on log-style line and word splitting (#996).
+- `agentica compile` of a large program whose bytecode is in the cache is about 15% faster: the output and the cache entry are written without copying the rest of the program for every 1 MiB piece (#1683).
+
+### Fixed
+
+- A loop that parses a large JSON array or builds large lists is much less likely to keep an old list alive through a stray pointer, which made it hit `--max-heap` on macOS arm64 and sometimes on Windows: a stray pointer into a list's items now keeps less than 64 KiB of them, not the whole list (#1681).
 
 ## [0.32.0] - 2026-11-15
 

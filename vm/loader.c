@@ -236,6 +236,16 @@ static void check_function(reader *r, const agc_program *p, const agc_function *
         check_register(r, in.b, f);
         if (in.c >= p->variant_count) reject(r, "variant index out of range");
         break;
+      case AGC_OP_JUMP_VARIANT:
+        /* The table is the c JUMPs after it, which the loop checks as JUMPs; the default path follows them. Tables
+           hold only JUMPs, so they never overlap and the scan stays linear in the function. */
+        check_register(r, in.a, f);
+        if (in.c == 0) reject(r, "variant jump table is empty");
+        if ((uint32_t)in.b + in.c > p->variant_count) reject(r, "variant jump table out of range");
+        if ((uint64_t)pc + 1 + in.c >= f->count) reject(r, "variant jump table runs past the function");
+        for (uint32_t k = 1; k <= in.c; k++)
+          if (f->code[pc + k].op != AGC_OP_JUMP) reject(r, "variant jump table entry is not a JUMP");
+        break;
       case AGC_OP_STRUCT:
         check_register(r, in.a, f);
         if (in.c >= p->struct_count) reject(r, "struct index out of range");
@@ -486,6 +496,7 @@ static void load_types(reader *r, agc_program *p) {
     last = index;
     agc_struct_def *d = &p->structs[index];
     d->json_name = read_string(r);
+    // cchecker: ignore CC-GCC-ANALYZER-NULL-DEREFERENCE: names is NULL only for a count of 0, which runs no pass
     names[i] = d->json_name;
     d->json_root = memchr(d->json_name->data, '[', d->json_name->bytes) != NULL;
     if (d->json_root && d->count != 1) reject(r, "a List or Map JSON target needs one field");

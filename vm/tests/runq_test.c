@@ -1,7 +1,8 @@
 /*
  * The global run queue (docs/vm/16-architecture.md §16.3): FIFO order and removal, solo and shared; the blocking pop
  * (a push before or after the wait, the end wakes every waiter); the spin (a push a spinner takes sends no signal, none
- * is lost when it stops); the push of a task whose turn ended; and the on-idle wake, sent without the queue's lock.
+ * is lost when it stops); the push of a task whose turn ended; the on-idle wake, sent without the queue's lock; and the
+ * spin of a solo queue for an inbox entry that another thread posts.
  */
 #include "../core.h"
 #include "test_support.h"
@@ -9,6 +10,7 @@
 #include <assert.h>
 #include <stdatomic.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <uv.h>
 
 #define PUSHERS 3
@@ -470,6 +472,52 @@ static void test_idle_wake_without_lock(bool timed) {
   assert(agc_runq_stats(q).idle == 0 && !agc_runq_quiet(q, &epoch) && agc_runq_pop(q) == NULL);
 }
 
+static int delivered;
+
+static void take_posted(void *owner, agc_request *list) {
+  (void)owner;
+  for (agc_request *next; list; list = next) {
+    next = list->next;
+    free(list);
+    delivered++;
+  }
+}
+
+static bool inbox_full(void *in) { return agc_inbox_full(in); }
+
+static void post_one(void *arg) {
+  uv_sleep(20);
+  agc_request *req = malloc(sizeof *req);
+  assert(req);
+  *req = (agc_request){NULL, 0, NULL, 0, NULL};
+  agc_inbox_post(arg, req);
+}
+
+/* The spin of the one scheduler for the end of a compute call (agc_io_compute_spin): none before the setup; it sees an
+   entry that another thread posts while it spins, which the inbox then delivers; and with nothing posted it gives up
+   after its budget. */
+static void test_solo_spin_until(void) {
+  agc_vm solo;
+  agc_vm_init(&solo, NULL, stdout, stderr, INT64_MAX);
+  agc_runq *q = solo.rt->runq;
+  uv_loop_t loop;
+  assert(uv_loop_init(&loop) == 0);
+  agc_inbox *in = agc_inbox_open(&loop, take_posted, NULL);
+  assert(in);
+  assert(!agc_runq_spin_until(q, 0, inbox_full, in));
+  agc_runq_spin_setup(q, 1, SPIN_FOREVER_NS);
+  uv_thread_t poster;
+  assert(uv_thread_create(&poster, post_one, in) == 0);
+  assert(agc_runq_spin_until(q, 0, inbox_full, in));
+  assert(agc_inbox_run(in) && delivered == 1 && !agc_inbox_full(in));
+  assert(uv_thread_join(&poster) == 0);
+  agc_runq_spin_setup(q, 1, 1000);
+  assert(!agc_runq_spin_until(q, AGC_SPIN_LEVEL_MAX, inbox_full, in));
+  agc_inbox_close(in);
+  assert(uv_run(&loop, UV_RUN_DEFAULT) == 0);
+  assert(uv_loop_close(&loop) == 0);
+}
+
 int main(void) {
   agc_test_deadline(300);
   agc_init();
@@ -490,6 +538,7 @@ int main(void) {
   test_burst_wakes_every_waiter(3, 300);
   test_idle_wake_without_lock(false);
   test_idle_wake_without_lock(true);
+  test_solo_spin_until();
   puts("run queue tests passed");
   return 0;
 }

@@ -77,9 +77,10 @@ in this model; §16.6 maps each to the component that enforces it.
 - **The I/O thread moves bytes and builds no GC values.** It reads into and
   writes from `malloc`'d buffers: a job's, and a socket's input buffer
   (`agc_conn.in`), which it owns (§16.11) while a read waits; a plain socket's
-  scheduler takes buffered input itself (§10.3.1, #1197). Stdin is read into a job's buffer (on
-  Windows, the reader thread's own buffer) and appended to the shared input by
-  the `done` half, on a scheduler. The `done` half of a job, which builds GC
+  scheduler takes buffered input, and receives into it, itself (§10.3.1,
+  #1197). Stdin is read into a job's buffer (on Windows, the reader thread's
+  own buffer) and appended to the shared input by the `done` half, on a
+  scheduler. The `done` half of a job, which builds GC
   values from those bytes, runs on the scheduler that resumes the task. TLS
   crypto runs on the I/O thread beside the socket state it reads and writes
   (`vm/tcp.c`), so a slow handshake delays the loop (§16.10).
@@ -510,9 +511,12 @@ one exit path are as in §16.1 to §16.6. What differs:
     it idle. A cancel by the owner takes it out of the slot and ends it; a
     cancel from another thread leaves it to the owner's `agc_task_next`.
   - An idle scheduler spins before it waits on the condvar (`agc_runq_spin`). It
-    polls the queue's atomic `work` flag, not the lock, for `SPIN_BUDGET_US`. It
-    counts pauses and reads no clock, and never sleeps. At most half the
-    schedulers (at least one) spin at once, and none spin at N = 1. A scheduler
+    polls the queue's atomic `work` flag, not the lock, for
+    `AGC_SPIN_BUDGET_NS`. It counts pauses and reads no clock, and never sleeps.
+    At most half the schedulers (at least one) spin at once. At N = 1 the one
+    scheduler spins only while compute calls that it gave run, for the end of
+    one (`agc_io_compute_spin`), with the same budget and level; a missed end
+    that comes within the longest spin raises the level. A scheduler
     that starts to spin while no other does spins for that budget times two to
     its own level (`agc_vm.spin_level`, 0 to `AGC_SPIN_LEVEL_MAX`): a spin that
     took a task raises the level by one and one that took none lowers it by
@@ -604,9 +608,10 @@ one exit path are as in §16.1 to §16.6. What differs:
     exercised: `agc_lock_drop` aborts when the caller is not the owner, and
     `agc_sync_assert` fails the run with `RUNTIME-INTERNAL` when a mutator of a
     shared list runs without the lock (`rg agc_sync_assert vm/`). A socket or a
-    child needs no lock, since the I/O thread owns it (a direct send of a plain
-    socket syncs with it by an atomic state of its own, §10.3.1). The owner of
-    a stream's lock is the calling thread's context, not the stream's own `vm`.
+    child needs no lock, since the I/O thread owns it (a direct send or receive
+    of a plain socket syncs with it by an atomic state of its own, §10.3.1).
+    The owner of a stream's lock is the calling thread's context, not the
+    stream's own `vm`.
 - **Channel and timer locks.** A message between two tasks took `rt->sync`
   about ten times, and with 8 schedulers that was the ceiling (#1581), so the
   two structures of that path have their own locks, also `agc_lock`s, solo

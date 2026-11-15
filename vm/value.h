@@ -81,7 +81,7 @@ typedef struct agc_list agc_list;
 typedef struct {
   agc_list *out;
   char *next, *stop, *after;
-  size_t n;
+  size_t n, leaf;
   uint32_t kind;
 } agc_list_builder;
 
@@ -205,6 +205,7 @@ typedef enum {
   AGC_OP_STRUCT_WITH,
   AGC_OP_GLOBAL, AGC_OP_GLOBAL_SET,
   AGC_OP_TRY_STEP,
+  AGC_OP_JUMP_VARIANT,
   AGC_OP_COUNT
 } agc_opcode;
 

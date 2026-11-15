@@ -192,7 +192,7 @@ void agc_sync_reset(agc_vm *vm) {
 }
 
 /* How long a thread spins for rt->sync before it sleeps (agc_lock_take_shared): about a scheduler's idle spin
-   (SPIN_BUDGET_US in vm/task.c). On a Campfire room page at 4 schedulers 2 µs gave most of the gain, and
+   (AGC_SPIN_BUDGET_NS in vm/core.h). On a Campfire room page at 4 schedulers 2 µs gave most of the gain, and
    5 to 50 µs the same within noise. */
 #define SYNC_SPIN_NS UINT64_C(10000)
 

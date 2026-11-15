@@ -197,8 +197,18 @@ texts.
   no park (#1197): the I/O thread writes the input only while a read waits,
   stops reading when it is answered or cancelled, and a close leaves the buffer
   to the net's last count, which the socket's resource holds under `rt->sync`.
-  A read that needs more bytes, and every read of a TLS socket, waits on the I/O
-  thread as before. `recv_bytes` returns what is buffered, as
+  A read that needs more bytes first calls `recv()` on its scheduler, 4 KiB at
+  most as above, with `rt->sync` dropped and the reader lock held without a
+  job, under a claim that keeps the descriptor open as the direct send's does,
+  and waits on the I/O thread only when the kernel has nothing. A `recv()`
+  that finds nothing makes the socket's next 1, 2, 4 ... up to 64 such reads
+  wait without one, and one that finds bytes ends that: on request/response
+  traffic the next request is rarely in the kernel yet, so a call per read
+  would cost more than the waits it saves. `TLS.upgrade` during that call
+  returns `network: a read on the socket is in progress` and leaves the socket
+  open; during another task's parked read it goes on. Which one an upgrade
+  beside a read meets depends on timing. Every read of a TLS
+  socket waits on the I/O thread. `recv_bytes` returns what is buffered, as
   soon as there is one byte, and empty `Bytes` at EOF. `recv_bytes` without a
   timeout (the catalog form of two arguments) starts its job with no timer and
   waits for the reader lock with the longest deadline (`INT64_MAX` ms), so
