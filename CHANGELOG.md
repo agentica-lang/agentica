@@ -8,17 +8,19 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.32.0] - 2026-11-15
+
 ### Added
 
-- `JSON.decode`, `JSON.schema` and `.codec` take generic struct instances, as the target (`Box[Int]`) or in a field (#748).
-- `Actor.inbox` gives the running actor its own inbox, so `init` can monitor tasks into it (#1525).
-- `List.count` takes a block and counts the elements it accepts, as Ruby's `xs.count { |x| ... }` does (#1590).
-- `List.tally`, `List.group_by` and `Range.group_by` take `Bytes` keys, as `List.uniq` does (#1596).
-- `--max-heap SIZE` ends a run whose memory would grow past `SIZE` (such as `256M`) with `RUNTIME-HEAP-LIMIT` and exit code 70 (#1113).
-- `ATS.clear(table)` removes every key of a shared table in one step, whatever its size (#1108).
-- `TCP.write` and `TCP.write_bytes` return without waiting for a slow peer: the bytes wait in the socket's write buffer (`TCP.write_limit` sets its limit), and `TCP.flush` waits until they are out (#1188).
-- `std/heap`: an immutable priority queue of any type, in the order a `before` function gives (#989).
-- `ATS.push(table, key, value)` appends to the list of a key in one atomic step and gives the new length (#1442).
+- `JSON.decode`, `JSON.schema` and `.codec` take generic struct instances (`Box[Int]`) (#748).
+- `Actor.inbox` gives the running actor its own inbox (#1525).
+- `List.count` takes a block, as Ruby's `xs.count { |x| ... }` does (#1590).
+- `List.tally`, `List.group_by` and `Range.group_by` take `Bytes` keys (#1596).
+- `--max-heap SIZE` ends a run whose memory would grow past `SIZE` with `RUNTIME-HEAP-LIMIT`, exit code 70 (#1113).
+- `ATS.clear(table)` removes every key of a shared table in one step (#1108).
+- `TCP.write` no longer waits for a slow peer; `TCP.write_limit` and `TCP.flush` control the write buffer (#1188).
+- `std/heap`: an immutable priority queue of any type (#989).
+- `ATS.push(table, key, value)` appends to the list of a key in one atomic step (#1442).
 
 ### Changed
 
@@ -31,13 +33,20 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `std/cache`: dropping a generation and `Cache.clear` take the same short time whatever the size; a put that dropped 32,000 entries waited about 200 ms (#1108).
 - `ATS` tables are hash tables now: a single task writes about 5 times faster, tasks that write one table about 8 times faster, and `get` is O(1). `keys` and `to_map` copy the table, O(n), where they took a snapshot in O(1) (#1442).
 - A program whose tasks all wait for one busy task (a store task that serves 50 clients over channels) no longer runs slower with more scheduler threads: about 2 times faster at 2 to 8 schedulers (#1362).
+- **Breaking:** `agentica test` runs the scenarios of each `--jobs` slot in one worker process, about 5 times faster; state made before `BDD.run` or set by a step is now shared by the scenarios of a worker, and `--isolate` gives each scenario its own process (#1465).
+- `std/http`: a chunked stream and a chunked `HTTP.upload` send the pieces that wait together as one chunk, several times faster.
+- Loops that call builtins such as `Map.get` are up to 17% faster on Linux and macOS (#1599).
+- Loops that read lists by index are up to 11% faster (#1123).
+- Loops of Int arithmetic and compares are up to 15% faster on x86-64 (#1123).
+- `std/cache`: dropping a generation and `Cache.clear` take a short time whatever the size (#1108).
+- `ATS` tables are hash tables: writes are 5 to 8 times faster and `get` is O(1); `keys` and `to_map` now copy the table, O(n) (#1442).
 
 ### Fixed
 
-- `HTTP.open` no longer ends the program with `RUNTIME-HANDLE-NOT-OWNED` when the response has no body and the server closes the connection: it returns a stream that is already at its end (#1654).
-- `std/http` no longer sends a head that its own parser refuses: the 65536 bytes of a header block and the 100 headers now count the lines the client and the server add and the empty line. A handler can send 98 headers (99 with its own `Date`, one less with `Connection: close`) and a client 99 (98 with a body); one more is an error at the sender, where the receiver refused it before (#1646).
-- `std/cache`: a task cancelled while it took over a stalled drop no longer stops the cache from dropping entries for good; another task takes over within four seconds (#1616).
-- `JSON.decode`, `JSON.schema` and `.codec` take a struct or enum whose field or payload type is a type alias, which stopped with `LOWER-UNSUPPORTED` (#1623).
+- `HTTP.open` returns an ended stream, not `RUNTIME-HANDLE-NOT-OWNED`, when the response has no body and the server closes (#1654).
+- `std/http` no longer sends a head that its own parser refuses: the header limits count the lines the client and the server add (#1646).
+- `std/cache`: a task cancelled while it took over a stalled drop no longer stops the cache from dropping entries (#1616).
+- `JSON.decode`, `JSON.schema` and `.codec` take a struct or enum field of an aliased type (#1623).
 - `none` in the block of `Range.map`, `Lazy.map`, `flat_map` and a nested `map` takes the expected Optional type (#1595).
 
 ## [0.32.0-alpha.2] - 2026-11-14
@@ -1623,7 +1632,8 @@ First release of Agentica, a statically typed language designed for AI agents.
 - `main` returns `Void`; maps preserve insertion order and support fallible
   lookups.
 
-[unreleased]: https://github.com/agentica-lang/agentica/compare/0.32.0-alpha.2...HEAD
+[unreleased]: https://github.com/agentica-lang/agentica/compare/0.32.0...HEAD
+[0.32.0]: https://github.com/agentica-lang/agentica/compare/0.32.0-alpha.2...0.32.0
 [0.32.0-alpha.2]: https://github.com/agentica-lang/agentica/compare/0.32.0-alpha.1...0.32.0-alpha.2
 [0.32.0-alpha.1]: https://github.com/agentica-lang/agentica/compare/0.31.1...0.32.0-alpha.1
 [0.31.2]: https://github.com/agentica-lang/agentica/compare/0.31.1...0.31.2
