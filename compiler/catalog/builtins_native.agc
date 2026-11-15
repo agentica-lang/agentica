@@ -16,6 +16,19 @@ ROWS: List[Model.Builtin] = [
     alternatives: [],
   ),
   Model.Builtin(
+    name: "Native.arena",
+    parameters: [Model.Named(name: "block", type: Types.Type.Fn([], Types.Type.Var("T")))],
+    result: Types.Type.Var("T"),
+    rule: Model.Rule.NativeArena,
+    implementation: "Native.arena",
+    effects: ["native"],
+    description: (
+      "Run the block and return its value; when it ends, close every resource and owned buffer this task opened " +
+      "in it, newest first, except those its value holds, which go to the enclosing arena."
+    ),
+    alternatives: [],
+  ),
+  Model.Builtin(
     name: "Native.callback",
     parameters: [
       Model.Named(name: "type", type: Types.Type.Var("T")),

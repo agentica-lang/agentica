@@ -1,7 +1,7 @@
 ---
 title: Types and resources
 weight: 1
-description: The C types of an extern block, variadic functions, reading memory that C returns, owned buffers and typed memory, resources that own a C pointer, out parameters, calls through C function pointers, callbacks that C calls, and C structs passed by value or through a pointer.
+description: The C types of an extern block, variadic functions, reading memory that C returns, owned buffers and typed memory, resources that own a C pointer and arenas that close them, out parameters, calls through C function pointers, callbacks that C calls, and C structs passed by value or through a pointer.
 ---
 
 ## Types
@@ -216,13 +216,42 @@ end
 - `Native.closed?(stream)` never stops the task, so a wrapper can return an `error` instead. It is `true` after `Native.close` (in any task), after the end of the task that owned the resource (also a task that returned it), and for a NULL out resource. It is `false` for a live one, also while a `compute def` call holds it; closed during that call, it is `true` at once. `true` is final; `false` can be out of date at once if another task may close the resource.
 - A resource the task did not close is freed when the task ends (return, crash or cancel), like a file. `Task.spawn_owning(&work, stream)` hands it to the new task.
 - A running native call, `def` or `compute def`, keeps its resource arguments until it returns: if the resource is closed meanwhile, or the task of a `compute def` is cancelled, the free runs when the call ends. It also keeps what each of them comes from, one level up and no further: the resources and buffers that the call which made it took, less one that another of them comes from. So `mysql_stmt_execute(stmt)` keeps the `Handle` that `mysql_stmt_init(handle)` took, a row made by `next(ctx, x)` keeps only `x`, since `x` comes from `ctx`, and a `Native.close(handle)` from another task during that call frees the handle when the call returns. A resource closed during the call keeps what it comes from in turn until its own free. An open one does not: with `env`, then `conn` from it, then `stmt` from `conn`, a `Native.close(env)` while `conn` is open frees `env` at once, so close children before their parents: `conn` first, and `x` before `ctx`.
-- Any task may pass a resource or an owned buffer to C, for instance one it got through a closure or a channel: nothing checks who owns it. Only the owner's end frees it, and `Native.close` or `Native.free` by any task closes it for all. Two tasks inside C on the same object at once race, as in C; `sqlite3_interrupt` or `duckdb_interrupt` from another task is the intended use.
+- Any task may pass a resource or an owned buffer to C, for instance one it got through a closure or a channel: nothing checks who owns it. Only the owner's end or its [arena](#arenas) frees it, and `Native.close` or `Native.free` by any task closes it for all. Two tasks inside C on the same object at once race, as in C; `sqlite3_interrupt` or `duckdb_interrupt` from another task is the intended use.
 - A free function that blocks (`mysql_close`, a `duckdb_close` that checkpoints) runs on the scheduler at `Native.close` or at the owner's end, like a `def` call, and stalls the other tasks.
 - Each owner frees its resources newest first. A parent handed to another task with `Task.spawn_owning` may be freed before its children: close the children first, or keep a parent and its children in one task.
 - When the run ends (`main` returns, `System.exit`, a crash of `main`, the step limit, or the first [stop signal](/library/io-and-system/files/)), a compute call that has not started is never made, child programs stop, files are written, and the run waits for the running `compute def` calls that hold a resource. Then every resource and buffer still open is freed, newest first (the reverse of opening), whatever task owns it. The frees stop at the first resource that a running call still holds and never skip past it, so that one and all older ones stay unfreed. So `stream` above keeps what `fputs` wrote even without `Native.close`. A resource that such a call returns at that point is never freed.
 - After a signal the run does not wait for those calls, and what they hold is not freed. The wait and the frees share the file flush limit (30 seconds, `--flush-timeout MS`): a call or a free function that takes longer is left behind, the exit code stays, and stderr gets one line saying native resources may not be freed. With `--flush-timeout 0` nothing is freed. A second signal ends the run at once.
 - Every resource result is a new pointer that your program owns. A function that returns a pointer its library keeps (a borrowed one) must be declared `-> C.Pointer`, or the pointer is freed twice. The free function cannot also be declared with `def` in its block (`PARSE-EXTERN-FREE`); the check is per block, so do not declare it in another block either.
 - A resource is a type: it is importable like the block, and its lines come before the functions that use it. Resources and `C.Pointer` do not convert into each other. `IO.inspect` prints `<Stream>`; a resource has no `to_s` and no JSON.
+
+### Arenas
+
+`Native.arena do ... end` runs the block and returns its value. When the block ends, it closes every resource and owned buffer (callbacks and resources of native modules included) that the task opened while the block ran, except the ones its value holds. A loop that makes many intermediate resources, such as the tensors of a training step, then frees them at a known point without a `Native.close` for each.
+
+```agentica {mode="check"}
+extern "libc.so.6"
+  resource Stream, free: fclose
+  def fopen(path: C.String, mode: C.String) -> Stream
+  def fputs(text: C.String, stream: Stream) -> C.Int32
+end
+
+def main() -> Void
+  kept = Native.arena do
+    log = fopen("/tmp/agentica-log.txt", "w").unwrap!
+    fputs("step\n", log)
+    fopen("/tmp/agentica-out.txt", "w").unwrap!
+  end # log is closed here
+
+  fputs("result\n", kept)
+  Native.close(kept)
+end
+```
+
+- What leaves the block is what its value holds, in its struct fields, enum payloads, `Result`, `List` items and `Map` values (the walk of `Task.spawn_owning`). A kept resource also keeps the resources it comes from, all the way up (a statement keeps its database), and a kept view keeps its buffer. A resource that only a returned function or lambda captures is closed.
+- The rest closes newest first, the reverse of opening, through `Native.close`: a running native call that holds one keeps it until the call returns, and using one later fails with `RUNTIME-NATIVE-CLOSED`.
+- An arena inside another gives what it keeps to the outer one, which closes it at its own end unless its value holds it too.
+- A `try` that fails in the block returns its error from the block, and the arena closes everything the error does not hold. A runtime error or a cancel ends the task, and the end of the task closes what it owns, newest first.
+- The arena closes only what the task still owns: a resource given away with `Task.spawn_owning` belongs to the new task. A resource that another task got through a channel or a closure is closed for all of them at the end of the block, and their later calls with it fail with `RUNTIME-NATIVE-CLOSED`.
 
 ## Out parameters
 

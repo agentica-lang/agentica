@@ -403,6 +403,7 @@ static void finish_task(agc_vm *vm, agc_task *t) {
   t->frames = NULL;
   t->frame_capacity = 0;
   t->nested = NULL;
+  t->arena = NULL;
   t->cursor = NULL;
   t->inbox = agc_void();
   t->turn_cost = 0;
@@ -1269,6 +1270,12 @@ static value_stack find_handles(agc_vm *vm, agc_value arg) {
     }
   }
   return handles;
+}
+
+agc_value *agc_handles_in(agc_vm *vm, agc_value v, size_t *count) {
+  value_stack found = find_handles(vm, v);
+  *count = found.count;
+  return found.items;
 }
 
 /* Task.spawn_owning(&f, value): the new task gets VALUE as its argument and owns every handle in it, all or none. The

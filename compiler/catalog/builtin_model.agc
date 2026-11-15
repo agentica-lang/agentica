@@ -52,6 +52,7 @@ enum Rule
   MapPut
   MapSize
   MapValues
+  NativeArena
   NativeCallback
   NativeClose
   NativeClosed

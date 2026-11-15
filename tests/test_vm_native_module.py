@@ -316,6 +316,26 @@ def test_a_resource_held_by_a_dirty_call_is_freed_once_after_it(tmp_path, demo):
     assert result.stderr == "freed 9\nfreed 7\nfreed 3\nfreed 2\nfreed 1\n"
 
 
+# Native.arena closes the counters made in its block, a compute call's list of them included, newest first, and keeps
+# the one its value holds.
+@NATIVE_CALLS
+def test_an_arena_closes_the_resources_of_a_module(tmp_path, demo):
+    body = """  trace_frees()
+  kept = Native.arena do
+    _a = counter(10)
+    _pair = counters(2)
+    _b = counter(20)
+    counter(30)
+  end
+  puts("freed #{freed()}")
+  puts(bump(kept))
+  Native.close(kept)
+"""
+    result = run_main(tmp_path, demo, body, TYPES, DIRTY)
+    assert (result.code, result.stdout) == (0, "freed 4\n1\n")
+    assert result.stderr == "freed 20\nfreed 2\nfreed 1\nfreed 10\nfreed 30\n"
+
+
 # The profile (AGENTICA_VM_TRACE=profile) has a line per function of a module that ran: its calls, the time in C and
 # the mode.
 @NATIVE_CALLS
