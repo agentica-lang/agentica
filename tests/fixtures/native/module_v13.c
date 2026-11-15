@@ -1,6 +1,7 @@
-/* A native module built for API 1.3 (tests/test_vm_native_module.py): the VM of a later minor version still loads it,
-   its an_error is an Error of kind "error" and an_get_result gives the message of any error as a String. */
-#include "../../../vm/agentica_native.h"
+/* A native module built for API 1.3 against a frozen copy of that header (tests/test_vm_native_module.py): the VM of
+   a later minor version still loads it, its an_error is an Error of kind "error" and an_get_result gives the message
+   of any error as a String. */
+#include "agentica_native_1_3.h"
 
 static an_term fail(an_env *env, int argc, const an_term *argv) {
   (void)argc;
@@ -23,7 +24,8 @@ static const an_function functions[] = {
 
 AN_EXPORT const an_module *agentica_native_init(const an_api *api);
 AN_EXPORT const an_module *agentica_native_init(const an_api *api) {
-  static const an_module module = {1, 3, sizeof(an_module), "module_v13", NULL, functions, AN_COUNT(functions)};
+  static const an_module module = {AN_API_MAJOR, AN_API_MINOR, sizeof(an_module), "module_v13",
+                                   NULL,         functions,    AN_COUNT(functions)};
   (void)api;
   return &module;
 }
