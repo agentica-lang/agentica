@@ -644,7 +644,7 @@ static void write_last(agc_vm *vm, agc_output *s) {
 
 /* True while a stream still has data to send. The normal end of the run kicks every stream and the caller waits, up to
    the flush limit, until none is busy. After a stop signal each stream gets one last write and the caller does not
-   wait. */
+   wait; a pool write of a file that is in flight (a notice queued in say_goodbye) first gets the moment of settle. */
 bool agc_output_busy(agc_vm *vm) {
   bool stopping = agc_io_stop_signal() != 0;
   bool busy = false;
@@ -656,29 +656,13 @@ bool agc_output_busy(agc_vm *vm) {
       pump(s, true);
       kick(vm, s);
       busy = true;
-    } else if (!(direct(s) && held(s))) {
-      pump(s, true);
-      write_last(vm, s);
-    }
-  }
-  return busy;
-}
-
-/* A notice queued after the last wait of the run (say_goodbye) is written before the exit: a pool job or a request
-   that carries it gets the shared moment of settle, and a descriptor the loop may write takes the rest at once. */
-void agc_output_settle(agc_vm *vm) {
-  agc_output *streams[2] = {&vm->rt->out, &vm->rt->err};
-  for (size_t k = 0; k < 2; k++) {
-    agc_output *s = streams[k];
-    if (s->base != s) continue;
-    stream_take(vm, s->lock);
-    if (!s->failed && (s->len || queued(s))) {
+    } else {
       pump(s, true);
       if (held(s)) settle(vm, s);
       write_last(vm, s);
     }
-    stream_drop(vm, s->lock);
   }
+  return busy;
 }
 
 /* A write still in flight (a reader stuck past the flush limit, a stop signal) keeps its stream as it is: on Windows a
@@ -854,8 +838,6 @@ bool agc_output_busy(agc_vm *vm) {
   (void)vm;
   return false;
 }
-
-void agc_output_settle(agc_vm *vm) { (void)vm; }
 
 void agc_output_open(agc_vm *vm, agc_output *out, int fd) {
   (void)vm;

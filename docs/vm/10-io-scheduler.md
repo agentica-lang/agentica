@@ -493,9 +493,8 @@ section says how the scheduler and the loop keep them.
     writing. So the wait ends when the data is written, not at the limit. With a
     stop signal set, `agc_output_busy` makes one non-blocking write per stream
     (on Windows, within the shared 200 ms) and then stops waiting for them
-    (§14.4). A notice queued after that wait (the dropped-bytes warning of
-    `say_goodbye`) is written by `agc_output_settle` before the exit: a pool
-    write of a file gets the same shared 200 ms, and a pipe one write.
+    (§14.4). A pool write of a file that is still in flight then (a notice
+    queued in `say_goodbye`) gets the same shared 200 ms first.
   - **A child's stderr.** `vm/process.c` hands each chunk of a plain child's
     stderr to `agc_output_forward` on the I/O thread. The bytes join the notice
     queue, so they never enter a print that holds the stream, and keep their

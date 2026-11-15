@@ -311,7 +311,6 @@ static void say_goodbye(agc_vm *vm, agc_outcome *outcome) {
               agc_net_dropped());
       agc_notice_end(vm, &notice, AGC_NOTICE_KEPT);
     }
-    agc_output_settle(vm);
     return;
   }
   agc_sync_reset(vm);
