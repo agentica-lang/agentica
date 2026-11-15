@@ -12,6 +12,10 @@ enum Msg
   Offer(Int, Channel[Int])
   # Answers 1, then 2 after 30 ms, and counts each as Offer does.
   Twice(Channel[Int])
+  # Answers 9 with a plain send, which leaves the channel open.
+  Plain(Channel[Int])
+  # Counts in the probe (key 4) that it started, waits until `go` closes, then answers 1.
+  Hold(Channel[Bool], Channel[Int])
   # For the actors with a receive timeout: the wait from now on, and the ticks and messages seen.
   Wait(Optional[Int])
   Ticks(Channel[Timed])
@@ -79,6 +83,14 @@ def handle(p: Probe, count: Int, msg: Msg) -> Actor.Step[Int]
       count_reply(p, Actor.reply(reply, 1))
       Task.sleep(30)
       count_reply(p, Actor.reply(reply, 2))
+      Actor.continue(count)
+    Msg.Plain(reply) ->
+      _ = reply.send(9, 0)
+      Actor.continue(count)
+    Msg.Hold(go, reply) ->
+      p.seen.add(4, 1)
+      _ = go.recv(5000)
+      Actor.reply(reply, 1)
       Actor.continue(count)
     _ -> Actor.continue(count)
   end
@@ -358,6 +370,77 @@ def test_a_second_reply_after_the_first_was_taken_gives_false() -> Result[Void]
   try get(actor.address, 5000)
   try Test.eq(p.seen.to_map, {2: 1, 3: 1})
   Test.eq(Actor.stop(actor, 5000), ok())
+end
+
+def test_requests_sent_to_two_actors_first_are_handled_at_the_same_time() -> Result[Void]
+  p = probe()
+  actors = [counter(p, Actor.Options()), counter(p, Actor.Options())]
+  go: Channel[Bool] = Channel.new(1)
+  requests: List[Actor.Request[Int]] = []
+  for actor in actors
+    request = try Actor.send(actor.address) do |reply| Msg.Hold(go, reply) end
+    requests = requests.push(request)
+  end
+
+  # Both handlers run before either answers: calls one by one would wait for an answer that needs `go` first.
+  try Test.assert(both_started(p), "the handlers did not both start")
+  go.close
+  for request in requests
+    try Test.eq(Actor.await(request, 5000), ok(1))
+  end
+
+  for actor in actors
+    try Actor.stop(actor, 5000)
+  end
+
+  ok()
+end
+
+def both_started(p: Probe) -> Bool
+  for _ in 1..500
+    return true if p.seen.get(4).unwrap_or(0) == 2
+
+    Task.sleep(10)
+  end
+
+  false
+end
+
+def test_an_await_past_its_deadline_closes_the_channel_and_the_reply_gives_false() -> Result[Void]
+  p = probe()
+  actor = counter(p, Actor.Options())
+  request = try Actor.send(actor.address) do |reply| Msg.Offer(300, reply) end
+  try Test.eq(Actor.await(request, 50), error("actor: timeout", kind: "channel.timeout"))
+  try get(actor.address, 5000)
+  try Test.eq(p.seen.to_map, {3: 1})
+  Test.eq(Actor.stop(actor, 5000), ok())
+end
+
+def test_a_second_await_of_one_request_gives_a_timeout_at_once() -> Result[Void]
+  actor = counter(probe(), Actor.Options())
+  try Actor.cast(actor.address, Msg.Add(4))
+  replied = try Actor.send(actor.address) do |reply| Msg.Get(reply) end
+  plain = try Actor.send(actor.address) do |reply| Msg.Plain(reply) end
+  try await_twice(replied, 4)
+  try await_twice(plain, 9)
+  Test.eq(Actor.stop(actor, 5000), ok())
+end
+
+def await_twice(request: Actor.Request[Int], answer: Int) -> Result[Void]
+  try Test.eq(Actor.await(request, 5000), ok(answer))
+  started = Time.monotonic_ms
+  try Test.eq(Actor.await(request, 5000), error("actor: timeout", kind: "channel.timeout"))
+  Test.assert(Time.monotonic_ms - started < 1000, "the second await waited")
+end
+
+def test_a_send_to_a_stopped_actor_gives_gone() -> Result[Void]
+  actor = counter(probe(), Actor.Options())
+  try Actor.stop(actor, 5000)
+  request: Result[Actor.Request[Int]] = Actor.send(actor.address) do |reply| Msg.Get(reply) end
+  case request
+    ok(_) -> Test.assert(false, "sent to a stopped actor")
+    error(e) -> Test.eq(e.kind, "channel.gone")
+  end
 end
 
 def test_the_timeout_runs_again_and_again_while_no_message_comes() -> Result[Void]
