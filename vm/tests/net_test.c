@@ -22,6 +22,7 @@
 #include <arpa/inet.h>
 #include <fcntl.h>
 #include <netinet/in.h>
+#include <openssl/err.h>
 #include <openssl/ssl.h>
 #include <poll.h>
 #include <sys/socket.h>
@@ -1200,6 +1201,19 @@ static bool peer_gets_bytes(int fd) {
   return true;
 }
 
+/* A TLS pair whose first record, from the VM's side, the peer has read. */
+static void open_tls_pair_greeted(tls_peer *p) {
+  open_tls_pair_locked(p);
+  send_locked("hello\n");
+  peer_reads_tls(p, "hello\n");
+}
+
+/* The peer sends TEXT and it reaches the VM's side of the socket. */
+static void peer_sends_to_kernel(const tls_peer *p, struct pollfd *in_kernel, const char *text) {
+  peer_send(p, text);
+  assert(poll(in_kernel, 1, 5000) == 1);
+}
+
 /* recv_here on a TLS socket (#1197): a read that the input does not answer receives the ciphertext on its scheduler
    and decrypts it there, so a line in the kernel is read with no park, while a read that finds nothing parks and the
    I/O thread ends it, and the next one parks with no receive (the rule's back-off). A key update that the scheduler
@@ -1208,28 +1222,23 @@ static bool peer_gets_bytes(int fd) {
    descriptor. */
 static void test_a_tls_read_receives_on_the_scheduler(void) {
   tls_peer p = {0};
-  open_tls_pair_locked(&p);
+  open_tls_pair_greeted(&p);
   int mine = vm_side(p.fd);
   struct pollfd in_kernel = {mine, POLLIN, 0};
   locked_call reading = {&vm, vm.task, read_line_of(&vm, vm.task)};
-  send_locked("hello\n");
-  peer_reads_tls(&p, "hello\n");
 
-  peer_send(&p, "one\n");
-  assert(poll(&in_kernel, 1, 5000) == 1);
+  peer_sends_to_kernel(&p, &in_kernel, "one\n");
   read_now(&reading, "one");
 
   read_parks(&reading);
   peer_send(&p, "two\n");
   read_wakes(&reading, "two");
-  peer_send(&p, "three\n");
-  assert(poll(&in_kernel, 1, 5000) == 1);
+  peer_sends_to_kernel(&p, &in_kernel, "three\n");
   read_parks(&reading);
   read_wakes(&reading, "three");
 
   assert(SSL_key_update(p.ssl, SSL_KEY_UPDATE_REQUESTED) == 1);
-  peer_send(&p, "four\n");
-  assert(poll(&in_kernel, 1, 5000) == 1);
+  peer_sends_to_kernel(&p, &in_kernel, "four\n");
   read_now(&reading, "four");
   send_locked("five\n");
   peer_reads_tls(&p, "five\n");
@@ -1243,13 +1252,34 @@ static void test_a_tls_read_receives_on_the_scheduler(void) {
   close_pair_locked(p.fd);
 }
 
+/* An error that other OpenSSL code (a native module) leaves in the scheduler thread's queue does not fail the next
+   read of a healthy TLS socket. */
+static void park_after_a_stale_error(void *arg) {
+  assert(SSL_CTX_new(NULL) == NULL && ERR_peek_error() != 0);
+  park_locked(arg);
+}
+
+static void test_a_stale_openssl_error_does_not_fail_a_tls_read(void) {
+  tls_peer p = {0};
+  open_tls_pair_greeted(&p);
+  struct pollfd in_kernel = {vm_side(p.fd), POLLIN, 0};
+  locked_call reading = {&vm, vm.task, read_line_of(&vm, vm.task)};
+  peer_sends_to_kernel(&p, &in_kernel, "one\n");
+  on_thread(park_after_a_stale_error, &reading);
+  assert(vm.task->parked == NULL);
+  line_is(reading.c.result, "one");
+  read_parks(&reading);
+  peer_send(&p, "two\n");
+  read_wakes(&reading, "two");
+  SSL_free(p.ssl);
+  close_pair_locked(p.fd);
+}
+
 /* A record that does not decrypt, read on the scheduler: the read fails, and the alert that the session leaves goes
    out from the I/O thread with no send of the program. */
 static void test_a_bad_record_on_the_scheduler_sends_its_alert(void) {
   tls_peer p = {0};
-  open_tls_pair_locked(&p);
-  send_locked("hello\n");
-  peer_reads_tls(&p, "hello\n");
+  open_tls_pair_greeted(&p);
   unsigned char junk[37] = {0x17, 0x03, 0x03, 0x00, 0x20};
   for (size_t k = 5; k < sizeof junk; k++) junk[k] = (unsigned char)k;
   assert(send(p.fd, junk, sizeof junk, 0) == (ssize_t)sizeof junk);
@@ -1298,6 +1328,7 @@ int main(void) {
   AGC_TEST_RUN(test_a_read_receives_on_the_scheduler());
   AGC_TEST_RUN(test_a_close_during_an_empty_receive());
   AGC_TEST_RUN(test_a_tls_read_receives_on_the_scheduler());
+  AGC_TEST_RUN(test_a_stale_openssl_error_does_not_fail_a_tls_read());
   AGC_TEST_RUN(test_a_bad_record_on_the_scheduler_sends_its_alert());
 #endif
   puts("net tests passed");
