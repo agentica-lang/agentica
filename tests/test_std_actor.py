@@ -4,7 +4,8 @@ suite, here on one and on four schedulers.
 actor_test covers cast, call, a timed-out call, stop, a handler that ends the actor, a crash, a stop that times out, a
 monitor notice, an init that monitors into its own inbox (Actor.inbox), a task the actor spawns that has no inbox, an
 actor that calls itself, answers that race the timeout of their call (taken or refused, never lost), a second reply,
-and the receive timeout (repeated, next to messages, changed per message, 0 or less, a passed deadline, stop and crash
+send and await (two actors in about one wait, an await past its deadline, a second await, a stopped actor) and the
+receive timeout (repeated, next to messages, changed per message, 0 or less, a passed deadline, stop and crash
 with a wait pending, 1,000 actors with no extra task). supervisor_test covers a restart that registers the new address,
 a child that ends without a crash, a restart that starts the receive timeout again, the stop order, the restart limit
 (the supervisor crashes), failed starts (in the register block, in init, many next to another child's crash, many in a
