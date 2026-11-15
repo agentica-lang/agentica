@@ -741,8 +741,7 @@ end
 # The scenario on the lane's worker, or on a new one when the lane has none. The same lines as for a child, then `end`,
 # answered by `done`. The settings line gives the scenario the step budget of a child of its own (`steps`), which the
 # worker sets when the scenario starts; the worker's own budget covers its start. Only a scenario that passes and whose
-# `done` allows it
-# leaves the worker for the next; any other end closes it.
+# `done` allows it leaves the worker for the next; any other end closes it.
 def run_worker(
   config: Config,
   base: String,
