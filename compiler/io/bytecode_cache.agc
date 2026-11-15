@@ -40,19 +40,22 @@
 ## Nothing here fails a run: a folder that cannot be written, an entry that cannot be read or a file that is gone is a
 ## miss, and the program is compiled as without the cache. This is front-end I/O, so the --deny-* flags (which are for
 ## the program) do not reach it.
+##
+## This file plans and reads an entry; io/bytecode_store.agc makes and writes one.
 
-import Declarations from "../modules/declarations"
 import Paths from "../modules/import_path"
 import Env from "../modules/link_env"
-import Linker from "../modules/linker"
-import Resolve from "../modules/resolve_import"
 import Workspace from "../modules/workspace"
 import NativeBuild from "../packages/native_build"
-import PackageCache from "../packages/package_cache"
 import PackageHash from "../packages/package_hash"
-import Ast from "../syntax/ast"
 import CacheFiles from "cache_files"
-import RandomName from "random_name"
+
+## The words that start the lines after the program line.
+SOURCE_WORD = "source "
+TREE_WORD = "tree "
+COMPILER_WORD = "compiler "
+ABSENT_WORD = "absent "
+PRESENT_WORD = "present "
 
 ## Where the entry of one root file is and what it must match. `build` is the `_build/` folder and `folder` the
 ## `bytecode/` folder in it. `beside` is true for `_build/` of the project, false for the folder of AGENTICA_BUILD_DIR.
@@ -111,30 +114,27 @@ def lookup(plan: Plan, settings: Env.Settings) -> Lookup
   end
 end
 
-## Keeps `program`, which was compiled from `modules`, as the entry of the plan. It gives false when it could not (a
-## folder that is not safe or not writable); the run goes on either way. The probes are taken here, after the compile,
-## so a file that appears between the two is the one gap: it is seen as present, not as absent.
-def store(plan: Plan, settings: Env.Settings, modules: List[Linker.LinkedModule], program: Bytes) -> Bool
-  case plan
-    Plan.Off -> false
-    Plan.On(entry) ->
-      sources = modules.filter do |module: Linker.LinkedModule| !Resolve.embedded?(module.key) end
-      probes = probe_lines(settings, entry.libs_dir, sources)
-      return false if !probes.ok?
-
-      lines = sources.map do |module: Linker.LinkedModule| source_line(module) end
-      built = built_libraries(settings, sources)
-      libraries = library_lines(settings.workspace, sources, built)
-      return false if !libraries.ok?
-
-      lines = lines.concat(libraries.unwrap!)
-      if built.size > 0
-        lines = lines.push(compiler_of(entry, settings))
-      end
-
-      text = [entry.key, "program #{CacheFiles.digest(program)}"].concat(lines).concat(probes.unwrap!).join("\n")
-      publish(entry, text, program)
+## The digest of the names of the native/ files of a package folder: those the package hash covers, and those the walk
+## of a build reads (hidden ones too; a refused walk is its failure), so a new file of either kind is a miss.
+def names_digest(workspace: Workspace.Workspace, root: String) -> String
+  hashed = PackageHash.native_files(workspace, root).join("\n")
+  walked = ""
+  case NativeBuild.native_files(workspace, root, "", "")
+    ok(paths) -> walked = paths.join("\n")
+    error(packed) -> walked = "refused #{packed}"
   end
+
+  CacheFiles.digest("#{hashed}\n\n#{walked}".bytes)
+end
+
+## The head of an entry whose text has `size` bytes.
+def head(size: Int) -> String
+  digits = size.to_s
+  while digits.length < HEAD_DIGITS
+    digits = "0#{digits}"
+  end
+
+  "#{HEAD_WORD}#{digits}\n"
 end
 
 private
@@ -156,107 +156,13 @@ MAX_TEXT_BYTES = 16_777_216
 # The program is at most as large as the VM takes (AGC_MAX_FILE_BYTES).
 MAX_PROGRAM_BYTES = 268_435_456
 
-# The words that start the lines after the program line, and the digest length in hex.
-SOURCE_WORD = "source "
-TREE_WORD = "tree "
-COMPILER_WORD = "compiler "
-ABSENT_WORD = "absent "
-PRESENT_WORD = "present "
+# The digest length in hex.
 DIGEST_CHARS = 64
 
 # The first bytes of a program: the magic, then the format version (4 bytes), then the length of the Agentica version
 # (4 bytes, little endian) and the version.
 MAGIC = "AGCB"
 VERSION_AT = 12
-
-def source_line(module: Linker.LinkedModule) -> String
-  "#{SOURCE_WORD}#{CacheFiles.digest(module.text.bytes)} #{module.key}"
-end
-
-# One `source` line for each file that a native library of the program may come from or load (the manifest that names
-# it and every file of native/), and one `tree` line for each package folder, with a digest of the names of its native/
-# files, so a change or an added file makes the entry miss and the build (which hashes the package against the lock)
-# runs again. A path that a `system` list of candidates chose by (module.probed) is not read: it gets the line of an
-# import place, so the entry misses when the library appears, goes away or leads elsewhere, and the pick is made again.
-def library_lines(
-  workspace: Workspace.Workspace,
-  modules: List[Linker.LinkedModule],
-  built: List[String],
-) -> Result[List[String]]
-  paths = built
-  probed: List[String] = []
-  for module in modules
-    paths = paths.concat(module.watched)
-    probed = probed.concat(module.probed)
-  end
-
-  lines: List[String] = []
-  for path in probed.uniq
-    lines = lines.push(try probe(workspace, path))
-  end
-
-  for path in paths.uniq
-    return error("the path has a line feed, a tab or a NUL") if !plain?(path)
-
-    if workspace.directory_exists.call(path)
-      lines = lines.push("#{TREE_WORD}#{names_digest(workspace, path)} #{path}")
-    else
-      read = try workspace.read_bytes.call(path)
-      lines = lines.push("#{SOURCE_WORD}#{CacheFiles.digest(read)} #{path}")
-    end
-  end
-
-  ok(lines)
-end
-
-# The libraries of the build cache (io/native_build.agc) that the extern functions of the program name: a removed or
-# changed build makes the entry miss, so the module is built again.
-def built_libraries(settings: Env.Settings, modules: List[Linker.LinkedModule]) -> List[String]
-  base = Paths.join(PackageCache.root(settings.env), "native-build/")
-  found: List[String] = []
-  return found if base == "native-build/"
-
-  for module in modules
-    for decl in module.declarations
-      case decl
-        Ast.Decl.Function(node) ->
-          case node.native
-            some(native) ->
-              if native.library.start_with?(base)
-                found = found.push(native.library)
-              end
-
-            none -> next
-          end
-
-        _ -> next
-      end
-    end
-  end
-
-  found
-end
-
-# The compiler line of a program that names a built library. No other program needs it: a module that was not built
-# stores no entry (NativeBuild.unbuilt_path), and without a build cache the key changes when one appears.
-def compiler_of(entry: Entry, settings: Env.Settings) -> String
-  return entry.compiler if entry.compiler != ""
-
-  CacheFiles.compiler_line(settings.env.os)
-end
-
-# The digest of the names of the native/ files of a package folder: those the package hash covers, and those the walk
-# of a build reads (hidden ones too; a refused walk is its failure), so a new file of either kind is a miss.
-def names_digest(workspace: Workspace.Workspace, root: String) -> String
-  hashed = PackageHash.native_files(workspace, root).join("\n")
-  walked = ""
-  case NativeBuild.native_files(workspace, root, "", "")
-    ok(paths) -> walked = paths.join("\n")
-    error(packed) -> walked = "refused #{packed}"
-  end
-
-  CacheFiles.digest("#{hashed}\n\n#{walked}".bytes)
-end
 
 # The place of the entry and the key it must match. The inputs are read now, before the compile, so a file that changes
 # while the front end works makes the next lookup miss instead of keeping the old program under the new key.
@@ -301,54 +207,6 @@ def entry_for(settings: Env.Settings, root: String) -> Result[Entry]
       compiler: "",
     ),
   )
-end
-
-# What the resolver looked at for the imports of `modules`, as lines of the entry: for a `pkg/` import, every place of
-# the search (a place that holds a file is `present`, with its real path); for any other import, the path written
-# beside the importing file and the real path it leads to (a link may be retargeted). std/ imports are in the binary.
-# More places than the resolver took are listed (it stops at the first), which can only cost a miss.
-def probe_lines(settings: Env.Settings, libs_dir: String, modules: List[Linker.LinkedModule]) -> Result[List[String]]
-  workspace = settings.workspace
-  roots: List[String] = []
-  searched = false
-  lines: List[String] = []
-  for module in modules
-    for decl in Declarations.imports_of(module.parsed.declarations)
-      file = "#{decl.path}.agc"
-      if file.start_with?("std/")
-        next
-      elsif file.start_with?("pkg/")
-        if !searched
-          roots = try Resolve.search_roots(settings, libs_dir)
-          searched = true
-        end
-
-        for root in roots
-          lines = lines.push(try probe(workspace, Paths.join(root, file.slice(4, file.length - 4))))
-        end
-      else
-        lines = lines.push(try probe(workspace, Paths.join(Paths.directory_of(module.key), file)))
-      end
-    end
-  end
-
-  ok(lines.uniq)
-end
-
-# The line for one place. A path with a line feed or a tab would break the lines; it keeps the entry from being made.
-def probe(workspace: Workspace.Workspace, path: String) -> Result[String]
-  return error("the path has a line feed, a tab or a NUL") if !plain?(path)
-
-  return ok("#{ABSENT_WORD}#{path}") if !workspace.file_exists.call(path)
-
-  real = try workspace.real_path.call(path)
-  return error("the path has a line feed, a tab or a NUL") if !plain?(real)
-
-  ok("#{PRESENT_WORD}#{path}\t#{real}")
-end
-
-def plain?(path: String) -> Bool
-  !path.include?("\n") and !path.include?("\t") and !path.include?(String.from_code(0))
 end
 
 def read_entry(entry: Entry, settings: Env.Settings) -> Result[Bytes]
@@ -506,44 +364,4 @@ def read_rest(handle: File.Handle) -> Result[Bytes]
   end
 
   ok(Bytes.concat(pieces))
-end
-
-# Writes the entry to a new private file beside its place under a name nobody can guess, and renames it there. A
-# rename never replaces (Path.rename), so the old entry is removed first: a reader that comes in between finds none,
-# which is a miss, and a run that dies in between leaves no entry. A file system that cannot rename without replacing
-# (the rename then fails) never gets an entry; the run is not affected. A `_build/` made by the cache gets a
-# .gitignore of its own, so the bytecode is not committed by mistake.
-def publish(entry: Entry, text: String, program: Bytes) -> Bool
-  return false if !prepare_folder(entry).ok?
-
-  CacheFiles.sweep(entry.folder)
-  suffix = RandomName.hex()
-  return false if !suffix.ok?
-
-  body = text.bytes
-  data = Bytes.concat([head(body.size).bytes, body, program])
-  temporary = Paths.join(entry.folder, "#{Paths.last_part(entry.file)}.tmp-#{suffix.unwrap!}")
-  CacheFiles.install(temporary, data, entry.file)
-end
-
-# Both folders must be ones this program may trust (private_kind), or be made now. The .gitignore goes in `_build/`
-# when the cache makes it there.
-def prepare_folder(entry: Entry) -> Result[Void]
-  user = try CacheFiles.own_user()
-  made = try CacheFiles.private_folder(entry.build, user)
-  if made and entry.beside
-    _ = CacheFiles.write_private(Paths.join(entry.build, ".gitignore"), "*\n".bytes)
-  end
-
-  try CacheFiles.private_folder(entry.folder, user)
-  ok()
-end
-
-def head(size: Int) -> String
-  digits = size.to_s
-  while digits.length < HEAD_DIGITS
-    digits = "0#{digits}"
-  end
-
-  "#{HEAD_WORD}#{digits}\n"
 end

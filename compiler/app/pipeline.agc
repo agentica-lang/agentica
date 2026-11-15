@@ -4,6 +4,7 @@
 
 import Front from "../analysis/front"
 import BytecodeCache from "../io/bytecode_cache"
+import BytecodeStore from "../io/bytecode_store"
 import Writer from "../bytecode/bytecode_writer"
 import Problems from "../diagnostics/problem"
 import Lowering from "../lower/lowering"
@@ -30,7 +31,7 @@ def build_cached(front: Front.Checked, settings: Env.Settings, plan: BytecodeCac
   case built
     Compiled.Rejected(_) -> built
     Compiled.Bytes(bytes) ->
-      BytecodeCache.store(plan, settings, front.linked.modules, bytes)
+      BytecodeStore.store(plan, settings, front.linked.modules, bytes)
       built
   end
 end
