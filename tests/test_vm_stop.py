@@ -325,7 +325,7 @@ def ctrl_c_through_the_cli(request, adopt, source, path):
     # Whatever fails, the child (it sleeps 60 s) must not outlive the test; run_on_console ends the CLI itself. Once
     # the test has seen the child gone, its pid may belong to another process, so it is not killed then.
     seen_gone = []
-    request.addfinalizer(lambda: child_pid() and not seen_gone and kill_process(child_pid()))
+    request.addfinalizer(lambda: child_pid() and not seen_gone and kill_process(child_pid(), pid_file))
 
     def press_ctrl_c(type_text):
         assert wait_until(lambda: child_pid() is not None, 6 * WAIT_SECONDS, 0.1), "the child wrote its pid"
