@@ -515,9 +515,6 @@ typedef struct {
 typedef struct {
   uint32_t source_count, span_count, constant_count, builtin_count, function_count, entry;
   uint32_t struct_count, type_count, enum_count, variant_count, max_fields, max_arity, update_count, global_count;
-  /* The most registers of any function, which the loader sets; 0 in a program built by hand, where
-     agc_task_clear_dead then reads every frame. */
-  uint32_t max_registers;
   agc_source *sources;
   agc_span *spans;
   agc_value *constants;

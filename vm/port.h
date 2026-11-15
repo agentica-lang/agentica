@@ -614,9 +614,6 @@ struct agc_task {
   struct agc_mutex *mutex_wait, *mutexes;
   /* The inbox of the actor this task runs (ActorInbox.set, std/actor), a Channel; void in any other task. */
   agc_value inbox;
-  /* The turns of this task that ended in a yield: agc_task_end_turn clears the dead registers at every
-     CLEAR_YIELDS-th one, and at every park. */
-  uint32_t yields;
 };
 
 /* Where agc_fail and agc_exit jump while compiled code calls a builtin (agc_jit_call_builtin, vm/jit/jit.c) in a run

@@ -282,6 +282,28 @@ def test_an_allocation_heavy_run_writes_gc_lines(tmp_path, traced_vm, schedulers
     assert 0 < pauses["used_last"] <= pauses["used_max"]
 
 
+def test_the_gc_trace_counts_large_objects_and_the_freed_state_of_block_calls(tmp_path, traced_vm):
+    vm, version = traced_vm
+    if b"sanitizer build" in version:
+        pytest.skip("gc trace test: sanitizer build, no libgc")
+    source = tmp_path / "blocks.agc"
+    source.write_text("def main() -> Void\n  items = (0...20000).to_a\n  total = 0\n  for k in 0...50\n"
+                      "    total += items.filter { |n| n % 50 == k }.map { |n| n * 2 }.size\n  end\n  puts(total)\nend\n")
+    bytecode = compile_fixture(source, tmp_path)
+    path = tmp_path / "blocks.trace"
+    settings = {"AGENTICA_SCHEDULERS": "1"}
+    plain = run_vm(vm, bytecode, settings)
+    traced = run_vm(vm, bytecode, {**settings, "AGENTICA_VM_TRACE": "gc", "AGENTICA_VM_TRACE_FILE": path})
+    assert traced == plain
+    allocs, _ = gc_summary(trace_lines(path))
+    counts = allocs["0"]
+    assert counts["large_objects"] >= 1
+    assert counts["large_bytes"] >= 64 * 1024 * counts["large_objects"]
+    # Each filter and map frees its state, and each filter its kept items: 3 objects per round.
+    assert counts["freed_objects"] >= 150
+    assert counts["freed_bytes"] > 0
+
+
 def test_the_profile_counts_calls_and_steps_of_each_function_and_the_time_of_each_builtin(tmp_path, traced_vm):
     vm = traced_vm[0]
     source = tmp_path / "profile.agc"

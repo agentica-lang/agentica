@@ -17,8 +17,6 @@
 #define RUNNEXT_LIMIT 3u
 /* What else a run that cannot start a scheduler thread can do (agc_thread_start_failed). */
 #define SCHEDULERS_FIX "set AGENTICA_SCHEDULERS=1"
-/* How often a task that yields has its dead registers cleared (agc_task_end_turn). */
-#define CLEAR_YIELDS 16u
 /* The fields of a gc trace `alloc` line (trace_alloc). */
 #define ALLOC_FIELDS                                                                                             \
   " scanned_objects=%" PRIu64 " scanned_bytes=%" PRIu64 " atomic_objects=%" PRIu64 " atomic_bytes=%" PRIu64 \
@@ -819,10 +817,6 @@ agc_task *agc_task_next(agc_vm *vm) {
 bool agc_task_end_turn(agc_vm *vm, agc_task *t, agc_turn_result r, bool ran) {
   trace_turn(vm, t, r, ran);
   trace_gc(vm, "turn");
-  /* A parked task may wait long with what its registers hold; one that yields runs on and overwrites most of them, so
-     only every CLEAR_YIELDS-th yield pays for the clear. */
-  if (ran && (r == AGC_TURN_PARKED || (r == AGC_TURN_YIELD && ++t->yields % CLEAR_YIELDS == 0)))
-    agc_task_clear_dead(vm, t);
   bool main_done = false;
   if (!ran) {
     if (fatal(vm, t)) AGC_THROW(vm->fail);

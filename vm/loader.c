@@ -857,7 +857,6 @@ static void load(reader *r, agc_program *p) {
     }
     if (f->registers == 0 || f->registers > 65535 || (uint64_t)f->params + f->captures > f->registers)
       reject(r, "bad register count");
-    if (f->registers > p->max_registers) p->max_registers = f->registers;
     if (f->span >= p->span_count) reject(r, "span index out of range");
     f->count = read_count(r, 12, "instruction");
     if (f->count == 0) reject(r, "empty function");

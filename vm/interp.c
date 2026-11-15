@@ -21,8 +21,6 @@
    must stay included before the definitions. clang's -Wstatic-in-inline (under -Wpedantic) is a false positive here,
    as the definition is not an inline definition. */
 #define OP_HELPER inline __attribute__((always_inline))
-/* The most dead registers agc_task_clear_dead zeroes in place (1 MiB); past it the array is cut first. */
-#define CLEAR_MAX ((size_t)65536)
 
 typedef enum { SORT_INT, SORT_FLOAT, SORT_TEXT } sort_kind;
 
@@ -2262,33 +2260,4 @@ NESTED _Noreturn void agc_raise(agc_vm *vm, const agc_outcome *failed) {
 void agc_steps_reset(agc_vm *vm, int64_t steps) {
   sync_budget(vm);
   atomic_store(&vm->rt->steps_left, steps > vm->batch ? steps - vm->batch : 0);
-}
-
-/* Zeroes the registers of T above its frames, which every frame writes before it reads, so the values that returned
-   calls left there no longer keep objects alive. A frame uses [base, base + registers) and a native frame lies inside
-   its caller's; bases fall from the top frame down, so the walk stops once no lower frame can end higher. An array
-   whose dead part passes CLEAR_MAX registers is first cut to the smallest power of two that holds the live part, so a
-   park after a deep call clears a bounded tail; it moves as growing does, and no pointer into it outlives a turn. A
-   callback of native code is left alone: the outer turn keeps its arrays. */
-void agc_task_clear_dead(const agc_vm *vm, agc_task *t) {
-  if (t->callbacks || !t->regs) return;
-  const agc_program *p = vm->rt->program;
-  size_t top = 0, most = p->max_registers ? p->max_registers : SIZE_MAX / 2;
-  for (uint32_t k = t->frame_count; k-- > 0;) {
-    const agc_frame *f = &t->frames[k];
-    if ((size_t)f->base + most <= top) break;
-    if (f->native || f->function >= p->function_count) continue;
-    size_t end = (size_t)f->base + p->functions[f->function].registers;
-    if (end > top) top = end;
-  }
-  size_t capacity = 256;
-  while (capacity < top) capacity *= 2;
-  if (t->reg_capacity - top > CLEAR_MAX && capacity < t->reg_capacity) {
-    agc_value *regs = agc_alloc(capacity * sizeof(agc_value));
-    memcpy(regs, t->regs, top * sizeof(agc_value));
-    t->regs = regs;
-    t->reg_capacity = capacity;
-    return;
-  }
-  memset(t->regs + top, 0, (t->reg_capacity - top) * sizeof(agc_value));
 }
