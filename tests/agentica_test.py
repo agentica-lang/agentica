@@ -676,6 +676,21 @@ _ENDED = {}
 _FOREIGN = object()
 
 
+# time.time() before Python 3.13 reads the coarse Windows clock (GetSystemTimeAsFileTime), which can lag a process's
+# creation time (a precise one) by one tick: a process born in the same tick as a `since` is not younger than it.
+_CLOCK_TICK = 0.02
+
+
+class Pid(int):
+    """A process id read from a child (a pipe, a file), with the time it was read: process_alive and kill_process take
+    that time as `since` when they get none, so a process that took the number after the read is not taken for it."""
+
+    def __new__(cls, value):
+        pid = super().__new__(cls, int(value))
+        pid.seen = time.time()
+        return pid
+
+
 def forget_processes():
     """Forgets which process ids ended (conftest calls it before each test: a later process may get the number)."""
     _ENDED.clear()
@@ -721,9 +736,14 @@ def _windows_process(number, since):
     limits = [_ENDED[number]] if number in _ENDED else []
     if since is not None:
         limits.append(os.stat(since).st_mtime if isinstance(since, (str, os.PathLike)) else since)
-    if ended(handle) or not known or (limits and born > min(limits)):
+    if ended(handle) or not known:
         kernel32.CloseHandle(handle)
         _ENDED.setdefault(number, time.time())
+        return None
+    # Younger than the caller's process: another one, but alive, so the number is not marked ended. A later look with
+    # a later `since` (or none) may still take it.
+    if limits and born > min(limits) + _CLOCK_TICK:
+        kernel32.CloseHandle(handle)
         return None
     _PINNED[number] = handle
     return handle
@@ -799,7 +819,7 @@ def process_alive(pid, since=None):
     except ValueError:
         raise AssertionError("not a process id: %r" % (pid,)) from None
     if os.name == "nt":
-        return bool(_windows_process(number, since))
+        return bool(_windows_process(number, since if since is not None else getattr(pid, "seen", None)))
     try:
         os.kill(number, 0)
     except ProcessLookupError:
@@ -825,7 +845,7 @@ def kill_process(pid, since=None):
     if os.name == "nt":
         import ctypes
 
-        handle = _windows_process(int(pid), since)
+        handle = _windows_process(int(pid), since if since is not None else getattr(pid, "seen", None))
         if handle and handle is not _FOREIGN:
             kernel32 = ctypes.WinDLL("kernel32")
             kernel32.TerminateProcess.argtypes = [ctypes.c_void_p, ctypes.c_uint32]

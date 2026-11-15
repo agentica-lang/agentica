@@ -13,7 +13,7 @@ import time
 
 import pytest
 
-from tests.agentica_test import (FIFO_FILE_REASON, FIXTURES, PYTHON, UNDER_WINE, WINDOWS, Child, cli, compile_agc,
+from tests.agentica_test import (FIFO_FILE_REASON, FIXTURES, PYTHON, UNDER_WINE, WINDOWS, Child, Pid, cli, compile_agc,
                                  host_only, kill_process, process_alive, run_vm, scaled, start_vm,
                                  stop_a_vm_that_fills_its_stdout, vm_command, vm_environment, wait_until)
 from tests.windows_console_support import CHILD as WINDOWS_CHILD, run_on_console
@@ -153,7 +153,7 @@ def check_a_driven_vm_with_stuck_standard_output(tmp_path, adopt):
                          read_stdout=False))
     # The pid of the driver as the driver reports it: the process of a venv's python.exe may be a launcher with the real
     # interpreter as its child, and the VM must lose its driver, not a job that holds a launcher.
-    driver_pid, pid = (int(word) for word in driver.next_stderr_line(WAIT_SECONDS).split())
+    driver_pid, pid = (Pid(word) for word in driver.next_stderr_line(WAIT_SECONDS).split())
     ready = driver.next_stderr_line(WAIT_SECONDS)
     assert ready == "ready", ready
     time.sleep(0.3)
@@ -183,7 +183,7 @@ def test_a_stop_signal_takes_the_exit_path_children_die_buffered_file_data_is_wr
         path = tmp_path / ("out-%s-%d.txt" % (mode, number))
         vm = launch(adopt, "default", "--", bytecode(child_program(), tmp_path, "program-%s" % mode),
                     path, mode, capture_stderr=True)
-        pid = int(vm.next_line(WAIT_SECONDS))
+        pid = Pid(vm.next_line(WAIT_SECONDS))
         os.kill(vm.process.pid, number)
         assert vm.wait(WAIT_SECONDS) == -number
         check_stopped(pid, path, "%s %s" % (mode, number))
@@ -195,7 +195,7 @@ def test_quit_takes_the_exit_path_and_exits_with_131_also_when_it_comes_twice(tm
         path = tmp_path / ("out-%d.txt" % count)
         vm = launch(adopt, "default", "--", bytecode(child_program(), tmp_path, "program-%d" % count), path, "sleep",
                     capture_stderr=True)
-        pid = int(vm.next_line(WAIT_SECONDS))
+        pid = Pid(vm.next_line(WAIT_SECONDS))
         for _ in range(count):
             os.kill(vm.process.pid, signal.SIGQUIT)
         assert vm.wait(WAIT_SECONDS) == 128 + signal.SIGQUIT
@@ -248,7 +248,7 @@ def test_a_second_stop_signal_before_the_children_are_stopped_waits_for_them(tmp
     path = tmp_path / "out.txt"
     code = bytecode(child_program("trap '' TERM; "), tmp_path)
     vm = adopt(start_vm(code, path, "sleep"))
-    pid = int(vm.next_line(WAIT_SECONDS))
+    pid = Pid(vm.next_line(WAIT_SECONDS))
     os.kill(vm.process.pid, signal.SIGTERM)
     time.sleep(0.1)
     os.kill(vm.process.pid, signal.SIGTERM)
@@ -276,7 +276,7 @@ def test_a_driven_vm_whose_driver_died_does_not_wait_for_its_flush(tmp_path, ado
         return check_a_driven_vm_with_stuck_standard_output(tmp_path, adopt)
     fifo = full_fifo(adopt, tmp_path)
     driver = adopt(Child([PYTHON, PEER, "drive", *vm_command(), "--", bytecode(STUCK_FLUSH, tmp_path), fifo]))
-    pid = int(driver.next_line(WAIT_SECONDS))
+    pid = Pid(driver.next_line(WAIT_SECONDS))
     driver.wait(WAIT_SECONDS)
     assert gone_soon(pid), "the VM ends after its driver"
 
@@ -312,7 +312,7 @@ def ctrl_c_through_the_cli(request, adopt, source, path):
     if os.name != "nt":
         cli_child = adopt(Child(cli() + [source, path, "sleep"],
                                 env=vm_environment(), capture_stderr=True))
-        pid = int(cli_child.next_line(6 * WAIT_SECONDS))
+        pid = Pid(cli_child.next_line(6 * WAIT_SECONDS))
         os.killpg(cli_child.process.pid, signal.SIGINT)
         cli_child.wait(WAIT_SECONDS)
         return pid
@@ -320,7 +320,7 @@ def ctrl_c_through_the_cli(request, adopt, source, path):
 
     def child_pid():
         text = pid_file.read_text() if pid_file.exists() else ""
-        return int(text) if text.isdigit() else None
+        return Pid(text) if text.isdigit() else None
 
     # Whatever fails, the child (it sleeps 60 s) must not outlive the test; run_on_console ends the CLI itself. Once
     # the test has seen the child gone, its pid may belong to another process, so it is not killed then.

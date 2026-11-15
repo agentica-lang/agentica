@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.agentica_test import (FIXTURES, PYTHON, SLOW, TARGET_OS, agc_literal, cli, compile_agc, host_only,
+from tests.agentica_test import (FIXTURES, PYTHON, SLOW, TARGET_OS, Pid, agc_literal, cli, compile_agc, host_only,
                                  kill_process, process_alive, require, run, tool, vm_environment, wait_until)
 
 try:
@@ -636,7 +636,7 @@ def test_closing_a_child_started_with_pgroup_stops_its_own_children(tmp_path, st
     def grandchild(group):
         text = ('def main() -> Void\n  p = Result.unwrap!(%s)\n  puts(Result.unwrap!(Process.read_line(p, 5000)))\n'
                 '  Process.close(p)\nend\n\n' % (start % (agc_literal(PYTHON), agc_literal(PY_PEER), group)))
-        return output(tmp_path, text).strip()
+        return Pid(output(tmp_path, text).strip())
 
     left = grandchild("false")
     try:
@@ -658,7 +658,7 @@ def stopped_family(tmp_path, ending, *mode):
     text = ('def main() -> Void\n  p = Result.unwrap!(Process.spawn_captured(%s, [%s, %s], Process.Options(timeout_ms: 5000, pgroup: true)))\n'
             '  puts(Result.unwrap!(Process.read_line(p, 5000)))\n%send\n\n' % (agc_literal(PYTHON), agc_literal(PY_PEER),
                                                                                words, stop))
-    return output(tmp_path, text).strip()
+    return Pid(output(tmp_path, text).strip())
 
 
 @host_only(TARGET_OS == "windows", "Windows has no process groups that a stop signals; pgroup stops the child alone")
