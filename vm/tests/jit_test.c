@@ -365,6 +365,38 @@ static AGC_JIT_CALLER void entries_inside_a_block(void) {
   R[6] = agc_int(21);
   expect_exit(code(&vm, R, f.constants, 5), AGC_JIT_EXIT_RETURN, 6);
   assert(same_bits(R[4], agc_int(42)));
+  /* Each instruction that reads rax, after R3 = R1 + R2 left R3 there: run whole (R3 is 12), then entered at the
+     instruction with ENTRY in R3. R5 is a list of 0, 10, ..., 150. */
+  static const struct {
+    agc_instr in;
+    int64_t whole, entry, entered;
+    bool truth;
+  } reads[] = {
+    {{AGC_OP_DIV_I, 4, 3, 1}, 1, 100, 14, false},   {{AGC_OP_MOD_I, 4, 3, 1}, 5, 100, 2, false},
+    {{AGC_OP_EQ, 4, 3, 1}, 0, 7, 1, true},          {{AGC_OP_NE, 4, 3, 1}, 1, 7, 0, true},
+    {{AGC_OP_ADD_I, 4, 1, 3}, 19, 100, 107, false}, {{AGC_OP_MUL_I, 4, 1, 3}, 84, 100, 700, false},
+    {{AGC_OP_MOVE, 4, 3, 0}, 12, 100, 100, false},  {{AGC_OP_LIST_GET, 4, 5, 3}, 120, 2, 20, false},
+  };
+  agc_value tens[16];
+  for (int64_t k = 0; k < 16; k++) tens[k] = agc_int(10 * k);
+  vm.task->turn_cost = 0;
+  for (size_t k = 0; k < sizeof reads / sizeof reads[0]; k++) {
+    memset(&f, 0, sizeof f);
+    emit(&f, AGC_OP_ADD_I, 3, 1, 2);
+    emit(&f, reads[k].in.op, reads[k].in.a, reads[k].in.b, reads[k].in.c);
+    emit(&f, AGC_OP_RETURN, 4, 0, 0);
+    code = compile(&f);
+    assert(code);
+    memset(R, 0, sizeof R);
+    R[1] = agc_int(7);
+    R[2] = agc_int(5);
+    R[5] = agc_list_value(agc_list_from_array(tens, 16));
+    expect_exit(code(&vm, R, f.constants, 0), AGC_JIT_EXIT_RETURN, 2);
+    assert(same_bits(R[4], reads[k].truth ? agc_bool(reads[k].whole) : agc_int(reads[k].whole)));
+    R[3] = agc_int(reads[k].entry);
+    expect_exit(code(&vm, R, f.constants, 1), AGC_JIT_EXIT_RETURN, 2);
+    assert(same_bits(R[4], reads[k].truth ? agc_bool(reads[k].entered) : agc_int(reads[k].entered)));
+  }
 }
 
 /* total = 0 + 1 + ... + (n - 1) for n in R0, with the STEP of the loop at pc 2. */

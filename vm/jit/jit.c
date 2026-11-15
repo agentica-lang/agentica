@@ -393,6 +393,7 @@ bool agc_emit_patches(agc_emitter *e, size_t epilogue, agc_emit_stub stub, agc_e
     agc_jit_patch p = e->patches[k];
     size_t to;
     if (p.kind == AGC_JIT_PATCH_LABEL) {
+      /* A guard that the walk never reaches: it clears the hold at every jump target, and instruction 0 has none. */
       if (p.value >= e->count || e->held_at[p.value] != AGC_JIT_NO_REGISTER) return false;
       to = e->labels[p.value];
     } else if (p.kind == AGC_JIT_PATCH_EPILOGUE) {
@@ -445,14 +446,17 @@ static void forget(agc_emitter *e) {
 /* The known tags (agc_emitter.tags) after instruction IN, whose code was just written with the tags before it: what
    that code checked or wrote inline, which the interpreter checks and writes the same way when it runs the
    instruction after an exit. A tag holds from the instruction that made it to the end of its block: emit_function
-   forgets every tag at a jump target, and every tag goes here at an instruction that calls a builtin or a function,
-   calls a helper, or leaves for the interpreter, since any of them may write registers; LIST_GET and a slow EQ or NE
-   keep only what the instruction itself checked or wrote. The operands come before R[a], which may be one of them.
+   forgets every tag at a jump target, and every tag goes here at an instruction without a case below (a call, a
+   CALL_BUILTIN other than the inline List.size, an instruction that is one helper call, one without code), since
+   any of them may write registers; LIST_GET and a slow EQ or NE keep only what the instruction itself checked or
+   wrote. The tags stay across a STEP, its slow exit included, and across an inline instruction whose failed check
+   leaves for the interpreter to run that one instruction: neither writes a register the code does not. The operands
+   come before R[a], which may be one of them.
    forget also drops the payload the emitter holds in a machine register (agc_emitter.next_held). */
 static void track_tags(agc_emitter *e, const agc_program *p, agc_opcode op, agc_instr in, bool list_size) {
   uint32_t bx = (uint32_t)in.b | ((uint32_t)in.c << 16);
   uint8_t moved = in.b < e->tag_count ? e->tags[in.b] : AGC_JIT_TAG_UNKNOWN;
-  bool ints = agc_emit_known(e, in.b, AGC_T_INT) && agc_emit_known(e, in.c, AGC_T_INT);
+  bool ints = agc_emit_ints(e, in);
   if (list_size) {
     know(e, in.a, AGC_T_INT);
     return;

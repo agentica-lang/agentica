@@ -420,8 +420,10 @@ static uint64_t binary(binary_helper helper) { return (uint64_t)(uintptr_t)helpe
 /* EQ and NE: two Ints inline; any other pair through agc_op_eq or agc_op_ne. */
 void agc_emit_equal(agc_emitter *e, agc_opcode op, agc_instr in, uint32_t pc) {
   size_t slow[2], slows = 0;
-  slows = other_tag(e, in.b, AGC_T_INT, slow, slows);
-  slows = other_tag(e, in.c, AGC_T_INT, slow, slows);
+  if (!agc_emit_ints(e, in)) {
+    slows = other_tag(e, in.b, AGC_T_INT, slow, slows);
+    slows = other_tag(e, in.c, AGC_T_INT, slow, slows);
+  }
   load_word(e, in.b);
   op_mem(e, true, 0x3B, RAX, REGS, WORD(in.c)); /* cmp rax, [c] */
   set_bool(e, op == AGC_OP_EQ ? CC_E : CC_NE);

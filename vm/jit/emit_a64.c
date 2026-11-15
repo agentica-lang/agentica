@@ -432,7 +432,7 @@ static void cost_exit(agc_emitter *e, uint32_t pc) {
 
 /* EQ and NE: two Ints inline; any other pair through agc_op_eq or agc_op_ne. */
 void A64(equal)(agc_emitter *e, agc_opcode op, agc_instr in, uint32_t pc) {
-  bool eq = op == AGC_OP_EQ, ints = agc_emit_known(e, in.b, AGC_T_INT) && agc_emit_known(e, in.c, AGC_T_INT);
+  bool eq = op == AGC_OP_EQ, ints = agc_emit_ints(e, in);
   size_t slow = 0;
   if (!ints) {
     /* Both tags Int, in one test: ccmp compares R[c]'s tag only when R[b]'s is Int, else sets Z clear (nzcv 0). */

@@ -457,6 +457,11 @@ typedef struct {
 static inline bool agc_emit_known(const agc_emitter *e, uint32_t r, agc_tag tag) {
   return r < e->tag_count && e->tags[r] == tag;
 }
+/* True when both operands of IN are known Ints: the code of EQ and NE then has no slow path, and the walk keeps the
+   tags after it. */
+static inline bool agc_emit_ints(const agc_emitter *e, agc_instr in) {
+  return agc_emit_known(e, in.b, AGC_T_INT) && agc_emit_known(e, in.c, AGC_T_INT);
+}
 
 /* The byte of the host's code that fills a gap no code runs (before the entry table, between two functions sealed
    together): int3 on x86-64; on arm64 four of them make udf #0, which is always undefined. */

@@ -344,9 +344,12 @@ returns.
   bytecode; the register conventions are in the headers of `vm/jit/emit_x64.c`
   and `vm/jit/emit_a64.c`. Inside a block (the instructions between two jump
   targets) the pass keeps the tag each register is known to hold, so a tag an
-  earlier instruction checked or wrote is not checked or written again; it
-  forgets them at a jump target and at every call, builtin, helper and trip to
-  the interpreter (`track_tags` in `vm/jit/jit.c`). On x86-64 the code of an
+  earlier instruction checked or wrote is not checked or written again. It
+  forgets them at a jump target and after every instruction without a case in
+  `track_tags` (`vm/jit/jit.c`): a call, a builtin call, an instruction that
+  is one helper call and one without code. The inline `List.size`, a `STEP`
+  (its slow exit included) and an inline instruction whose failed check sends
+  that one instruction to the interpreter keep them. On x86-64 the code of an
   Int instruction, a `MOVE` or a `CONST` also leaves its result in `rax` for
   the next instruction. The frame's register always holds the value too: the
   entry table has every pc, and an entry at an instruction that reads `rax`
