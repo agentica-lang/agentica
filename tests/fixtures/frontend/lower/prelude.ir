@@ -3,7 +3,7 @@ source 0 "prelude.agc" chars=200
 source 1 "<prelude>/list.agc" chars=0
 struct s0 "Error" ["kind","message","code","details","cause","location"] types=[String, String, Optional(Int), Map(String, String), Optional(Struct(Error)), String]
 enum "Optional" v0="None"/0 v1="Some"/1
-fn0 "main" params=0 captures=0 slots=5 entry @ 0:1:1-9:1
+fn0 "main" params=0 captures=0 slots=4 entry @ 0:1:1-9:1
     step @ 0:2:3-3:1
     step @ 0:2:13-2:22
     step @ 0:2:14-2:15
@@ -17,51 +17,46 @@ fn0 "main" params=0 captures=0 slots=5 entry @ 0:1:1-9:1
     step @ 0:3:3-3:38
     step @ 0:3:8-3:37
     step @ 0:3:8-3:15
-    move r2 r0 @ 0:3:8-3:15
+    move r1 r0 @ 0:3:8-3:15
     step @ 0:3:21-3:37
-    closure r3 fn6 @ 0:3:21-3:37
-    call r2 fn1 @ 0:3:8-3:37 0:3:8-3:15 0:3:21-3:37
-    move r1 r2 @ 0:3:8-3:37
+    closure r2 fn6 @ 0:3:21-3:37
+    call r1 fn1 @ 0:3:8-3:37 0:3:8-3:15 0:3:21-3:37
     call-builtin r1 "puts" 1 @ 0:3:3-3:38 0:3:8-3:37
     step @ 0:4:3-5:1
     step @ 0:4:3-4:30
     step @ 0:4:8-4:29
     step @ 0:4:8-4:15
-    move r2 r0 @ 0:4:8-4:15
+    move r1 r0 @ 0:4:8-4:15
     step @ 0:4:27-4:28
-    const r3 int:2 @ 0:4:27-4:28
-    call r2 fn2 @ 0:4:8-4:29 0:4:8-4:15 0:4:27-4:28
-    move r1 r2 @ 0:4:8-4:29
+    const r2 int:2 @ 0:4:27-4:28
+    call r1 fn2 @ 0:4:8-4:29 0:4:8-4:15 0:4:27-4:28
     call-builtin r1 "puts" 1 @ 0:4:3-4:30 0:4:8-4:29
     step @ 0:5:3-6:1
     step @ 0:5:3-5:20
     step @ 0:5:8-5:19
     step @ 0:5:8-5:15
-    move r2 r0 @ 0:5:8-5:15
-    call r2 fn4 @ 0:5:8-5:19 0:5:8-5:15
-    move r1 r2 @ 0:5:8-5:19
+    move r1 r0 @ 0:5:8-5:15
+    call r1 fn4 @ 0:5:8-5:19 0:5:8-5:15
     call-builtin r1 "puts" 1 @ 0:5:3-5:20 0:5:8-5:19
     step @ 0:6:3-7:1
     step @ 0:6:3-6:45
     step @ 0:6:8-6:44
     step @ 0:6:8-6:18
     step @ 0:6:9-6:12
-    const r3 "b" @ 0:6:9-6:12
+    const r2 "b" @ 0:6:9-6:12
     step @ 0:6:14-6:17
-    const r4 "a" @ 0:6:14-6:17
-    list r2 r3 2 @ 0:6:8-6:18
+    const r3 "a" @ 0:6:14-6:17
+    list r1 r2 2 @ 0:6:8-6:18
     step @ 0:6:26-6:44
-    closure r3 fn7 @ 0:6:26-6:44
-    call r2 fn5 @ 0:6:8-6:44 0:6:8-6:18 0:6:26-6:44
-    move r1 r2 @ 0:6:8-6:44
+    closure r2 fn7 @ 0:6:26-6:44
+    call r1 fn5 @ 0:6:8-6:44 0:6:8-6:18 0:6:26-6:44
     call-builtin r1 "puts" 1 @ 0:6:3-6:45 0:6:8-6:44
     step @ 0:7:3-8:1
     step @ 0:7:3-7:22
     step @ 0:7:8-7:21
     step @ 0:7:8-7:15
-    move r2 r0 @ 0:7:8-7:15
-    call r2 fn3 @ 0:7:8-7:21 0:7:8-7:15
-    move r1 r2 @ 0:7:8-7:21
+    move r1 r0 @ 0:7:8-7:15
+    call r1 fn3 @ 0:7:8-7:21 0:7:8-7:15
     call-builtin r1 "puts" 1 @ 0:7:3-7:22 0:7:8-7:21
     const r1 void @ 0:1:1-9:1
     return r1 @ 0:1:1-9:1
@@ -170,8 +165,7 @@ fn2 "@prelude::list::each_slice" params=2 captures=0 slots=12 @ 1:1:1-1:1
     move r2 r10 @ 1:1:1-1:1
     step @ 1:1:1-1:1
     step @ 1:1:1-1:1
-    list r10 r10 0 @ 1:1:1-1:1
-    move r3 r10 @ 1:1:1-1:1
+    list r3 r10 0 @ 1:1:1-1:1
   L7:
   L6:
   L3:
@@ -266,8 +260,7 @@ fn4 "@prelude::list::sum_int" params=1 captures=0 slots=9 @ 1:1:1-1:1
     step @ 1:1:1-1:1
     step @ 1:1:1-1:1
     step @ 1:1:1-1:1
-    add-i r8 r1 r7 @ 1:1:1-1:1
-    move r1 r8 @ 1:1:1-1:1
+    add-i r1 r1 r7 @ 1:1:1-1:1
   L1:
     add-i r3 r3 r6 @ 1:1:1-1:1
   L2:
@@ -305,11 +298,10 @@ fn5 "@prelude::list::min_by_string" params=2 captures=0 slots=10 @ 1:1:1-1:1
     step @ 1:1:1-1:1
     step @ 1:1:1-1:1
     step @ 1:1:1-1:1
-    move r4 r1 @ 1:1:1-1:1
+    move r3 r1 @ 1:1:1-1:1
     step @ 1:1:1-1:1
-    move r5 r2 @ 1:1:1-1:1
-    call-value r4 1 @ 1:1:1-1:1
-    move r3 r4 @ 1:1:1-1:1
+    move r4 r2 @ 1:1:1-1:1
+    call-value r3 1 @ 1:1:1-1:1
     step @ 1:1:1-1:1
     step @ 1:1:1-1:1
     const r4 int:1 @ 1:1:1-1:1
@@ -331,11 +323,10 @@ fn5 "@prelude::list::min_by_string" params=2 captures=0 slots=10 @ 1:1:1-1:1
     step @ 1:1:1-1:1
     step @ 1:1:1-1:1
     step @ 1:1:1-1:1
-    move r7 r1 @ 1:1:1-1:1
+    move r6 r1 @ 1:1:1-1:1
     step @ 1:1:1-1:1
-    move r8 r5 @ 1:1:1-1:1
-    call-value r7 1 @ 1:1:1-1:1
-    move r6 r7 @ 1:1:1-1:1
+    move r7 r5 @ 1:1:1-1:1
+    call-value r6 1 @ 1:1:1-1:1
     step @ 1:1:1-1:1
     step @ 1:1:1-1:1
     step @ 1:1:1-1:1
@@ -361,8 +352,7 @@ fn5 "@prelude::list::min_by_string" params=2 captures=0 slots=10 @ 1:1:1-1:1
     step @ 1:1:1-1:1
     step @ 1:1:1-1:1
     const r8 int:1 @ 1:1:1-1:1
-    add-i r7 r4 r8 @ 1:1:1-1:1
-    move r4 r7 @ 1:1:1-1:1
+    add-i r4 r4 r8 @ 1:1:1-1:1
     jump L2 @ 1:1:1-1:1
   L3:
     step @ 1:1:1-1:1

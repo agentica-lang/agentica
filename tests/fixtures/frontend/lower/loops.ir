@@ -19,8 +19,7 @@ fn0 "main" params=0 captures=0 slots=16 entry @ 0:1:1-47:1
     step @ 0:4:5-4:6
     step @ 0:4:10-4:11
     const r2 int:1 @ 0:4:10-4:11
-    add-i r1 r0 r2 @ 0:4:7-4:9
-    move r0 r1 @ 0:4:5-5:1
+    add-i r0 r0 r2 @ 0:4:7-4:9
     step @ 0:5:5-8:1
     step @ 0:5:8-5:14
     step @ 0:5:8-5:9
@@ -75,8 +74,7 @@ fn0 "main" params=0 captures=0 slots=16 entry @ 0:1:1-47:1
     step @ 0:16:5-17:1
     step @ 0:16:5-16:10
     step @ 0:16:14-16:15
-    add-i r9 r2 r8 @ 0:16:11-16:13
-    move r2 r9 @ 0:16:5-17:1
+    add-i r2 r2 r8 @ 0:16:11-16:13
     step @ 0:17:5-23:1
     step @ 0:17:14-17:16
     move r9 r1 @ 0:17:14-17:16
@@ -100,8 +98,7 @@ fn0 "main" params=0 captures=0 slots=16 entry @ 0:1:1-47:1
     step @ 0:21:7-22:1
     step @ 0:21:7-21:12
     step @ 0:21:16-21:17
-    add-i r15 r2 r14 @ 0:21:13-21:15
-    move r2 r15 @ 0:21:7-22:1
+    add-i r2 r2 r14 @ 0:21:13-21:15
   L11:
     add-i r10 r10 r13 @ 0:17:5-23:1
   L12:
@@ -121,12 +118,11 @@ fn0 "main" params=0 captures=0 slots=16 entry @ 0:1:1-47:1
     step @ 0:26:11-26:30
     step @ 0:26:19-26:29
     step @ 0:26:20-26:23
-    const r5 "b" @ 0:26:20-26:23
+    const r4 "b" @ 0:26:20-26:23
     step @ 0:26:25-26:28
-    const r6 "a" @ 0:26:25-26:28
-    list r4 r5 2 @ 0:26:19-26:29
-    call-builtin r4 "Set.new" 1 @ 0:26:11-26:30 0:26:19-26:29
-    move r3 r4 @ 0:26:11-26:30
+    const r5 "a" @ 0:26:25-26:28
+    list r3 r4 2 @ 0:26:19-26:29
+    call-builtin r3 "Set.new" 1 @ 0:26:11-26:30 0:26:19-26:29
     step @ 0:27:3-30:1
     step @ 0:27:15-27:20
     move r4 r3 @ 0:27:15-27:20
@@ -163,8 +159,7 @@ fn0 "main" params=0 captures=0 slots=16 entry @ 0:1:1-47:1
     step @ 0:31:5-32:1
     step @ 0:31:5-31:10
     step @ 0:31:14-31:15
-    add-i r9 r2 r4 @ 0:31:11-31:13
-    move r2 r9 @ 0:31:5-32:1
+    add-i r2 r2 r4 @ 0:31:11-31:13
   L22:
     eq r8 r4 r5 @ 0:30:3-33:1
     jump-if-true r8 L20 @ 0:30:3-33:1
@@ -198,8 +193,7 @@ fn0 "main" params=0 captures=0 slots=16 entry @ 0:1:1-47:1
     step @ 0:37:5-38:1
     step @ 0:37:5-37:10
     step @ 0:37:14-37:15
-    add-i r9 r2 r4 @ 0:37:11-37:13
-    move r2 r9 @ 0:37:5-38:1
+    add-i r2 r2 r4 @ 0:37:11-37:13
   L25:
     eq r8 r4 r5 @ 0:33:3-39:1
     jump-if-true r8 L23 @ 0:33:3-39:1
@@ -224,8 +218,7 @@ fn0 "main" params=0 captures=0 slots=16 entry @ 0:1:1-47:1
     step @ 0:41:5-42:1
     step @ 0:41:5-41:10
     step @ 0:41:14-41:15
-    add-i r10 r2 r5 @ 0:41:11-41:13
-    move r2 r10 @ 0:41:5-42:1
+    add-i r2 r2 r5 @ 0:41:11-41:13
   L30:
     eq r9 r5 r6 @ 0:40:3-43:1
     jump-if-true r9 L28 @ 0:40:3-43:1

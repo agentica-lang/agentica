@@ -150,12 +150,11 @@ fn17 "main" params=0 captures=0 slots=13 entry @ 0:39:1-68:1
     step @ 0:41:12-41:35
     step @ 0:41:24-41:26
     step @ 0:41:25-41:26
-    const r2 int:1 @ 0:41:25-41:26
-    neg-i r1 r2 @ 0:41:24-41:25
+    const r1 int:1 @ 0:41:25-41:26
+    neg-i r0 r1 @ 0:41:24-41:25
     step @ 0:41:28-41:34
-    const r2 int:65535 @ 0:41:28-41:34
-    call r1 fn4 @ 0:41:12-41:35
-    move r0 r1 @ 0:41:12-41:35
+    const r1 int:65535 @ 0:41:28-41:34
+    call r0 fn4 @ 0:41:12-41:35
     step @ 0:42:3-43:1
     step @ 0:42:3-42:33
     step @ 0:42:8-42:32
@@ -171,52 +170,46 @@ fn17 "main" params=0 captures=0 slots=13 entry @ 0:39:1-68:1
     step @ 0:43:3-43:37
     step @ 0:43:8-43:36
     step @ 0:43:13-43:14
-    const r2 int:1 @ 0:43:13-43:14
+    const r1 int:1 @ 0:43:13-43:14
     step @ 0:43:16-43:30
     step @ 0:43:16-43:24
     step @ 0:43:20-43:23
-    const r4 float:bits:0 @ 0:43:20-43:23
-    call r4 fn16 @ 0:43:16-43:24
+    const r3 float:bits:0 @ 0:43:20-43:23
+    call r3 fn16 @ 0:43:16-43:24
     step @ 0:43:27-43:30
-    const r5 float:bits:4602678819172646912 @ 0:43:27-43:30
-    lt-f r3 r5 r4 @ 0:43:25-43:26
+    const r4 float:bits:4602678819172646912 @ 0:43:27-43:30
+    lt-f r2 r4 r3 @ 0:43:25-43:26
     step @ 0:43:32-43:35
-    const r4 "x" @ 0:43:32-43:35
-    call r2 fn1 @ 0:43:8-43:36
-    move r1 r2 @ 0:43:8-43:36
+    const r3 "x" @ 0:43:32-43:35
+    call r1 fn1 @ 0:43:8-43:36
     call-builtin r1 "puts" 1 @ 0:43:3-43:37 0:43:8-43:36
     step @ 0:44:3-45:1
     step @ 0:44:3-44:18
     step @ 0:44:8-44:17
     step @ 0:44:15-44:16
-    const r2 int:2 @ 0:44:15-44:16
-    call r2 fn5 @ 0:44:8-44:17
-    move r1 r2 @ 0:44:8-44:17
+    const r1 int:2 @ 0:44:15-44:16
+    call r1 fn5 @ 0:44:8-44:17
     call-builtin r1 "puts" 1 @ 0:44:3-44:18 0:44:8-44:17
     step @ 0:45:3-46:1
     step @ 0:45:10-45:32
     step @ 0:45:10-45:24
     step @ 0:45:20-45:23
-    const r3 "p" @ 0:45:20-45:23
-    call r3 fn0 @ 0:45:10-45:24
-    move r2 r3 @ 0:45:10-45:24
-    call-builtin r2 "Result.unwrap!" 1 @ 0:45:10-45:32 0:45:10-45:24
-    move r1 r2 @ 0:45:10-45:32
+    const r1 "p" @ 0:45:20-45:23
+    call r1 fn0 @ 0:45:10-45:24
+    call-builtin r1 "Result.unwrap!" 1 @ 0:45:10-45:32 0:45:10-45:24
     step @ 0:46:3-47:1
     step @ 0:46:3-46:48
     step @ 0:46:8-46:47
     step @ 0:46:21-46:46
     step @ 0:46:26-46:30
-    move r4 r1 @ 0:46:26-46:30
+    move r2 r1 @ 0:46:26-46:30
     step @ 0:46:32-46:42
     step @ 0:46:32-46:36
-    const r5 bytes:"ab" @ 0:46:32-46:42
+    const r3 bytes:"ab" @ 0:46:32-46:42
     step @ 0:46:44-46:45
-    const r6 int:2 @ 0:46:44-46:45
-    call r4 fn2 @ 0:46:21-46:46
-    move r3 r4 @ 0:46:21-46:46
-    call-builtin r3 "Native.null?" 1 @ 0:46:8-46:47 0:46:21-46:46
-    move r2 r3 @ 0:46:8-46:47
+    const r4 int:2 @ 0:46:44-46:45
+    call r2 fn2 @ 0:46:21-46:46
+    call-builtin r2 "Native.null?" 1 @ 0:46:8-46:47 0:46:21-46:46
     call-builtin r2 "puts" 1 @ 0:46:3-46:48 0:46:8-46:47
     step @ 0:47:3-48:1
     step @ 0:47:3-47:21
@@ -226,9 +219,8 @@ fn17 "main" params=0 captures=0 slots=13 entry @ 0:39:1-68:1
     step @ 0:48:3-49:1
     step @ 0:48:14-48:29
     step @ 0:48:26-48:28
-    const r3 int:80 @ 0:48:26-48:28
-    call r3 fn6 @ 0:48:14-48:29
-    move r2 r3 @ 0:48:14-48:29
+    const r2 int:80 @ 0:48:26-48:28
+    call r2 fn6 @ 0:48:14-48:29
     step @ 0:49:3-50:1
     step @ 0:49:3-49:41
     step @ 0:49:8-49:40
@@ -258,9 +250,8 @@ fn17 "main" params=0 captures=0 slots=13 entry @ 0:39:1-68:1
     step @ 0:52:3-53:1
     step @ 0:52:10-52:25
     step @ 0:52:20-52:24
-    move r4 r1 @ 0:52:20-52:24
-    call r4 fn8 @ 0:52:10-52:25
-    move r3 r4 @ 0:52:10-52:25
+    move r3 r1 @ 0:52:20-52:24
+    call r3 fn8 @ 0:52:10-52:25
     step @ 0:53:3-54:1
     step @ 0:53:3-53:27
     step @ 0:53:16-53:26
@@ -272,60 +263,51 @@ fn17 "main" params=0 captures=0 slots=13 entry @ 0:39:1-68:1
     step @ 0:54:16-54:35
     step @ 0:54:16-54:27
     step @ 0:54:16-54:20
-    field r5 r3 0 @ 0:54:16-54:27
-    call-builtin r5 "Result.unwrap!" 1 @ 0:54:16-54:35 0:54:16-54:27
-    move r4 r5 @ 0:54:16-54:35
+    field r4 r3 0 @ 0:54:16-54:27
+    call-builtin r4 "Result.unwrap!" 1 @ 0:54:16-54:35 0:54:16-54:27
     call-builtin r4 "Native.close" 1 @ 0:54:3-54:36 0:54:16-54:35
     step @ 0:55:3-56:1
     step @ 0:55:3-55:35
     step @ 0:55:16-55:34
     step @ 0:55:16-55:26
-    call r6 fn9 @ 0:55:16-55:26
-    move r5 r6 @ 0:55:16-55:26
-    call-builtin r5 "Result.unwrap!" 1 @ 0:55:16-55:34 0:55:16-55:26
-    move r4 r5 @ 0:55:16-55:34
+    call r4 fn9 @ 0:55:16-55:26
+    call-builtin r4 "Result.unwrap!" 1 @ 0:55:16-55:34 0:55:16-55:26
     call-builtin r4 "Native.close" 1 @ 0:55:3-55:35 0:55:16-55:34
     step @ 0:56:3-57:1
     step @ 0:56:11-56:36
     step @ 0:56:33-56:35
-    const r5 int:16 @ 0:56:33-56:35
-    call-builtin r5 "Native.memory_pointer" 1 @ 0:56:11-56:36 0:56:33-56:35
-    move r4 r5 @ 0:56:11-56:36
+    const r4 int:16 @ 0:56:33-56:35
+    call-builtin r4 "Native.memory_pointer" 1 @ 0:56:11-56:36 0:56:33-56:35
     step @ 0:57:3-58:1
     step @ 0:57:3-57:49
     step @ 0:57:8-57:48
     step @ 0:57:16-57:44
     step @ 0:57:35-57:40
-    move r7 r4 @ 0:57:35-57:40
+    move r5 r4 @ 0:57:35-57:40
     step @ 0:57:42-57:43
-    const r8 int:0 @ 0:57:42-57:43
-    call-builtin r7 "Native.get_pointer" 2 @ 0:57:16-57:44 0:57:35-57:40 0:57:42-57:43
-    move r6 r7 @ 0:57:16-57:44
+    const r6 int:0 @ 0:57:42-57:43
+    call-builtin r5 "Native.get_pointer" 2 @ 0:57:16-57:44 0:57:35-57:40 0:57:42-57:43
     step @ 0:57:46-57:47
-    const r7 int:1 @ 0:57:46-57:47
-    call r6 fn10 @ 0:57:8-57:48
-    move r5 r6 @ 0:57:8-57:48
+    const r6 int:1 @ 0:57:46-57:47
+    call r5 fn10 @ 0:57:8-57:48
     call-builtin r5 "puts" 1 @ 0:57:3-57:49 0:57:8-57:48
     step @ 0:58:3-59:1
     step @ 0:58:12-58:89
     step @ 0:58:25-58:53
     step @ 0:58:44-58:49
-    move r7 r4 @ 0:58:44-58:49
+    move r5 r4 @ 0:58:44-58:49
     step @ 0:58:51-58:52
-    const r8 int:8 @ 0:58:51-58:52
-    call-builtin r7 "Native.get_pointer" 2 @ 0:58:25-58:53 0:58:44-58:49 0:58:51-58:52
-    move r6 r7 @ 0:58:25-58:53
+    const r6 int:8 @ 0:58:51-58:52
+    call-builtin r5 "Native.get_pointer" 2 @ 0:58:25-58:53 0:58:44-58:49 0:58:51-58:52
     step @ 0:58:55-58:58
-    const r7 "s" @ 0:58:55-58:58
+    const r6 "s" @ 0:58:55-58:58
     step @ 0:58:60-58:88
     step @ 0:58:79-58:84
-    move r9 r4 @ 0:58:79-58:84
+    move r7 r4 @ 0:58:79-58:84
     step @ 0:58:86-58:87
-    const r10 int:0 @ 0:58:86-58:87
-    call-builtin r9 "Native.get_pointer" 2 @ 0:58:60-58:88 0:58:79-58:84 0:58:86-58:87
-    move r8 r9 @ 0:58:60-58:88
-    call r6 fn11 @ 0:58:12-58:89
-    move r5 r6 @ 0:58:12-58:89
+    const r8 int:0 @ 0:58:86-58:87
+    call-builtin r7 "Native.get_pointer" 2 @ 0:58:60-58:88 0:58:79-58:84 0:58:86-58:87
+    call r5 fn11 @ 0:58:12-58:89
     step @ 0:59:3-60:1
     step @ 0:59:3-59:25
     step @ 0:59:16-59:24
@@ -337,48 +319,42 @@ fn17 "main" params=0 captures=0 slots=13 entry @ 0:39:1-68:1
     step @ 0:60:16-60:72
     step @ 0:60:16-60:64
     step @ 0:60:30-60:33
-    const r8 "t" @ 0:60:30-60:33
+    const r6 "t" @ 0:60:30-60:33
     step @ 0:60:35-60:63
     step @ 0:60:54-60:59
-    move r10 r4 @ 0:60:54-60:59
+    move r7 r4 @ 0:60:54-60:59
     step @ 0:60:61-60:62
-    const r11 int:0 @ 0:60:61-60:62
-    call-builtin r10 "Native.get_pointer" 2 @ 0:60:35-60:63 0:60:54-60:59 0:60:61-60:62
-    move r9 r10 @ 0:60:35-60:63
-    call r8 fn12 @ 0:60:16-60:64
-    move r7 r8 @ 0:60:16-60:64
-    call-builtin r7 "Result.unwrap!" 1 @ 0:60:16-60:72 0:60:16-60:64
-    move r6 r7 @ 0:60:16-60:72
+    const r8 int:0 @ 0:60:61-60:62
+    call-builtin r7 "Native.get_pointer" 2 @ 0:60:35-60:63 0:60:54-60:59 0:60:61-60:62
+    call r6 fn12 @ 0:60:16-60:64
+    call-builtin r6 "Result.unwrap!" 1 @ 0:60:16-60:72 0:60:16-60:64
     call-builtin r6 "Native.close" 1 @ 0:60:3-60:73 0:60:16-60:72
     step @ 0:61:3-62:1
     step @ 0:61:9-61:20
     step @ 0:61:18-61:19
-    const r7 int:3 @ 0:61:18-61:19
-    call r7 fn13 @ 0:61:9-61:20
-    move r6 r7 @ 0:61:9-61:20
+    const r6 int:3 @ 0:61:18-61:19
+    call r6 fn13 @ 0:61:9-61:20
     step @ 0:62:3-63:1
     step @ 0:62:11-62:81
     step @ 0:62:20-62:48
     step @ 0:62:39-62:44
-    move r9 r4 @ 0:62:39-62:44
+    move r7 r4 @ 0:62:39-62:44
     step @ 0:62:46-62:47
-    const r10 int:0 @ 0:62:46-62:47
-    call-builtin r9 "Native.get_pointer" 2 @ 0:62:20-62:48 0:62:39-62:44 0:62:46-62:47
-    move r8 r9 @ 0:62:20-62:48
+    const r8 int:0 @ 0:62:46-62:47
+    call-builtin r7 "Native.get_pointer" 2 @ 0:62:20-62:48 0:62:39-62:44 0:62:46-62:47
     step @ 0:62:50-62:68
     step @ 0:62:50-62:53
-    move r10 r6 @ 0:62:50-62:53
+    move r9 r6 @ 0:62:50-62:53
     step @ 0:62:63-62:67
-    const r11 true @ 0:62:63-62:67
-    struct-with r9 r10 s6 [2] @ 0:62:50-62:68
+    const r10 true @ 0:62:63-62:67
+    struct-with r8 r9 s6 [2] @ 0:62:50-62:68
     step @ 0:62:70-62:80
     step @ 0:62:78-62:79
-    const r11 int:1 @ 0:62:78-62:79
+    const r10 int:1 @ 0:62:78-62:79
     step @ 0:20:18-20:19
-    const r12 int:0 @ 0:20:18-20:19
-    struct r10 r11 s5 @ 0:62:70-62:80
-    call r8 fn14 @ 0:62:11-62:81
-    move r7 r8 @ 0:62:11-62:81
+    const r11 int:0 @ 0:20:18-20:19
+    struct r9 r10 s5 @ 0:62:70-62:80
+    call r7 fn14 @ 0:62:11-62:81
     step @ 0:63:3-64:1
     step @ 0:63:3-63:44
     step @ 0:63:8-63:43
@@ -398,20 +374,18 @@ fn17 "main" params=0 captures=0 slots=13 entry @ 0:39:1-68:1
     call-builtin r8 "puts" 1 @ 0:63:3-63:44 0:63:8-63:43
     step @ 0:64:3-65:1
     step @ 0:64:11-64:45
-    const r9 "dpis Visit" @ 0:64:27-64:32
+    const r8 "dpis Visit" @ 0:64:27-64:32
     step @ 0:64:34-64:44
-    closure r10 fn18 @ 0:64:34-64:44
-    call-builtin r9 "Native.callback" 2 @ 0:64:11-64:45 0:64:27-64:32 0:64:34-64:44
-    move r8 r9 @ 0:64:11-64:45
+    closure r9 fn18 @ 0:64:34-64:44
+    call-builtin r8 "Native.callback" 2 @ 0:64:11-64:45 0:64:27-64:32 0:64:34-64:44
     step @ 0:65:3-66:1
     step @ 0:65:3-65:32
     step @ 0:65:8-65:31
     step @ 0:65:18-65:23
-    move r10 r8 @ 0:65:18-65:23
+    move r9 r8 @ 0:65:18-65:23
     step @ 0:65:25-65:30
-    move r11 r4 @ 0:65:25-65:30
-    call r10 fn15 @ 0:65:8-65:31
-    move r9 r10 @ 0:65:8-65:31
+    move r10 r4 @ 0:65:25-65:30
+    call r9 fn15 @ 0:65:8-65:31
     call-builtin r9 "puts" 1 @ 0:65:3-65:32 0:65:8-65:31
     step @ 0:66:3-67:1
     step @ 0:66:3-66:22

@@ -19,7 +19,7 @@ fn0 "parse" params=1 captures=0 slots=3 @ 0:2:1-6:1
     return r2 @ 0:4:3-5:1
     const r2 void @ 0:2:1-6:1
     return r2 @ 0:2:1-6:1
-fn1 "main" params=0 captures=0 slots=5 entry @ 0:7:1-11:1
+fn1 "main" params=0 captures=0 slots=3 entry @ 0:7:1-11:1
     step @ 0:8:3-9:1
     step @ 0:8:11-8:21
     step @ 0:8:12-8:15
@@ -33,15 +33,12 @@ fn1 "main" params=0 captures=0 slots=5 entry @ 0:7:1-11:1
     step @ 0:9:8-9:49
     step @ 0:9:8-9:18
     step @ 0:9:8-9:13
-    move r4 r0 @ 0:9:8-9:13
-    call r4 fn2 @ 0:9:8-9:18 0:9:8-9:13
-    move r3 r4 @ 0:9:8-9:18
+    move r1 r0 @ 0:9:8-9:13
+    call r1 fn2 @ 0:9:8-9:18 0:9:8-9:13
     step @ 0:9:23-9:49
-    closure r4 fn5 @ 0:9:23-9:49
-    call r3 fn3 @ 0:9:8-9:49 0:9:8-9:18 0:9:23-9:49
-    move r2 r3 @ 0:9:8-9:49
-    call r2 fn4 @ 0:9:8-9:54 0:9:8-9:49
-    move r1 r2 @ 0:9:8-9:54
+    closure r2 fn5 @ 0:9:23-9:49
+    call r1 fn3 @ 0:9:8-9:49 0:9:8-9:18 0:9:23-9:49
+    call r1 fn4 @ 0:9:8-9:54 0:9:8-9:49
     call-builtin r1 "puts" 1 @ 0:9:3-9:55 0:9:8-9:54
     const r1 void @ 0:7:1-11:1
     return r1 @ 0:7:1-11:1
