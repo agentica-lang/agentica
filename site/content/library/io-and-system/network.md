@@ -260,7 +260,7 @@ end
 
 - With a client context it is the client side and checks `host` as `TLS.connect` does. With a server context it is the server side and `host` must be `""`; another host stops the program with `RUNTIME-TLS-CONTEXT-ROLE`.
 - Once its arguments pass their checks, the plain socket is closed for the program, whether the handshake works or not: a later call on it returns `network: socket is closed`.
-- Bytes that arrived and were not read yet fail the upgrade (`network: data came before the TLS handshake`): STARTTLS forbids them. A send still in progress on the socket fails it too.
+- Bytes that arrived and were not read yet fail the upgrade (`network: data came before the TLS handshake`): STARTTLS forbids them. A send still in progress on the socket fails it too. With several schedulers, an upgrade while another task reads the socket may fail with `network: a read on the socket is in progress`, and the plain socket then stays open: it depends on timing (that read is inside its receive from the kernel). Upgrade in the task that reads the socket.
 - The handshake runs within `timeout_ms`; a timeout closes the connection. A TLS socket cannot be upgraded again.
 
 An SMTP client reads each reply to its last line, so no byte is left before the handshake:

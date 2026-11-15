@@ -1,6 +1,6 @@
 /*
  * The error number a socket, pipe or spawn failure shows, and the direct
- * send of a scheduler. libuv reports one code set on every system;
+ * send and receive of a scheduler. libuv reports one code set on every system;
  * agc_system_error prints a C errno and its strerror text. POSIX: libuv's code
  * is the negated errno. Windows: libuv's codes are its own, so each is mapped
  * to the CRT's errno, whose strerror names it. Port interface: plain ints and
@@ -21,5 +21,10 @@ int agc_net_errno(int uv_error);
    Windows it only maps the error with uv_translate_sys_error, a pure function), so any thread may call it (vm/tcp.c,
    direct_send). */
 int64_t agc_net_send(uintptr_t sock, const uint8_t *data, size_t len);
+
+/* One receive of at most LEN bytes into DATA from the non-blocking socket SOCK: the count, 0 at the end of input, or a
+   negative libuv error code (UV_EAGAIN: nothing yet). Like agc_net_send, any thread may call it (vm/tcp.c,
+   recv_here). */
+int64_t agc_net_recv(uintptr_t sock, uint8_t *data, size_t len);
 
 #endif
