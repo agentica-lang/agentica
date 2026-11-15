@@ -20,6 +20,7 @@ make SANITIZE=1 && make vm-test SANITIZE=1   # clang ASan+UBSan, no GC (calloc, 
 AGENTICA_VM_TRACE=all AGENTICA_VM_TRACE_FILE=./t.trace dist/agentica run -- prog.agcb   # sched,io,proc,tls,loader,gc
 AGENTICA_VM_TRACE=profile dist/agentica check compiler/front_end.agc   # step profile at the end; folded stacks and System.Profile.measure: agentica-programming, references/performance.md
 make vm-libfuzz-run LIBFUZZ_TIME=300 LIBFUZZ_JOBS=2   # coverage-guided run; failures in build/vm/libfuzz/crashes/ (docs/vm/11-build-ci-supply-chain.md, Fuzzing)
+make vm-libfuzz-http-run LIBFUZZ_TIME=300   # the HTTP head and body parsers (vm/fuzz_http.c); failures in build/vm/libfuzz/http/crashes/
 make vm-gc-stress                    # GC_STRESS=1 (collect every 64 allocations), vm-test and the goldens
 make coverage [COVERAGE_CC=clang]    # COVERAGE=1 build, vm-test and the goldens (COVERAGE_TESTS): build/coverage/lcov.info and html/ (genhtml), vm/ without third_party and tests
                                      # only a normal end of the VM writes its counters: a signal exit, abort() or _Exit loses that run's

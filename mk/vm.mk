@@ -389,7 +389,7 @@ $(VM_OBJ)/agentica-res.o: vm/agentica.rc vm/agentica.manifest $(VM_OBJ_STAMP)
 # the C tests included, for clangd, clang-tidy and analyzers. The generated headers and the system library checks come
 # first, as for an object.
 COMPILE_COMMANDS ?= compile_commands.json
-CC_DB_SRC := $(VM_SRC) vm/agentica.c vm/launch.c vm/fuzz.c $(wildcard vm/tests/*.c)
+CC_DB_SRC := $(VM_SRC) vm/agentica.c vm/launch.c vm/fuzz.c vm/fuzz_http.c $(wildcard vm/tests/*.c)
 CC_DB_DEPS := $(FFI_HEADERS)
 CC_DB_ORDER := $(OSSL_DEP) $(GC_DEP) $(ZLIB_DEP) $(YY_DIR)/src/yyjson.c $(PICO_DIR)/picohttpparser.c $(UV_DIR)/src/uv-common.c
 compile-commands: $(CC_DB_DEPS) | $(CC_DB_ORDER)

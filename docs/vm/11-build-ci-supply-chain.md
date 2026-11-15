@@ -80,6 +80,11 @@ behind them.
   not repeatable from its seed: the saved file reproduces a failure, with
   `ASAN_OPTIONS=detect_leaks=1 build/vm/libfuzz/agentica-vm-libfuzz <file>`.
   `.github/workflows/fuzz.yml` runs it by hand.
+- `vm/fuzz_http.c` (`make vm-libfuzz-http-run`, 20 s in the same job) feeds
+  bytes to the HTTP head parsers and the body decoder. It aborts when a prefix
+  parses to more than the whole input, when a parsed head written back with
+  `agc_http_put_headers` does not parse to the same fields and framing, or when
+  a body cut in two decodes otherwise.
 
 ### Supply chain
 
