@@ -344,7 +344,12 @@ one exit path are as in §16.1 to §16.6. What differs:
   into values by the `done` half, outside `rt->sync`, or dropped, with the
   states of the resources it made freed, when no task takes it. An item that
   ends goes back to the loop's thread through the pool's own inbox, which
-  exists at N = 1 too and keeps the loop alive only while items run. So a
+  exists at N = 1 too and keeps the loop alive only while items run. A thread
+  that ran an item spins for the next one before it waits on the condvar, as an
+  idle scheduler does: 10 µs, up to 160 µs while its next items come soon after,
+  at most half the pool's threads (at least one) at once, none on a machine with
+  one core. A run of short calls then hands over in a few microseconds, not the
+  tens a condvar wake costs (#1120). So a
   compute job is a pool job: no deadline, no cancel half, and a cancel detaches
   it. A detached item still in the queue skips its `work`; a running one drops
   the result once the call returns. What the end of the run waits for is in

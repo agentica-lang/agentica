@@ -1,8 +1,8 @@
 /*
- * The compute pool (vm/compute.c): items run in order on one thread, the pool grows to its size and no further, also in
- * a burst, every end comes back on the loop's thread, an idle pool lets the loop end, and a close drops what no thread
- * took and leaves a running item to its thread. Direct items, submitted from other threads, end on the pool thread and
- * keep the loop out of it.
+ * The compute pool (vm/compute.c): items run in order on one thread, the pool grows to its size, also in a burst, ends
+ * come back on the loop's thread, an idle pool lets the loop end, and a close drops what no thread took and leaves a
+ * running item to its thread. Direct items end on the pool thread and keep the loop out of it. Items run across the
+ * spin of an idle thread, and a close joins a spinning thread.
  */
 #include "../core.h"
 #include "test_support.h"
@@ -178,6 +178,30 @@ static void test_direct_items_end_on_the_pool(void) {
   atomic_store(&ran, 0);
 }
 
+#define SPACED 300
+
+/* One item at a time, each after a pause from 0 to 300 µs since the last end: across the spin of 10 to 160 µs, so
+   items come while the thread spins, as it gives up and once it waits. Every one runs and ends. A close right after the
+   last end, while the thread spins, joins it. */
+static void test_items_across_the_spin(void) {
+  uv_loop_t loop;
+  assert(uv_loop_init(&loop) == 0);
+  agc_compute *pool = agc_compute_open(&loop, 1, count_finished, NULL);
+  assert(pool);
+  for (int k = 0; k < SPACED; k++) {
+    assert(agc_compute_submit(pool, direct_work, NULL));
+    assert(uv_run(&loop, UV_RUN_DEFAULT) == 0);
+    assert(finished == k + 1);
+    uint64_t until = uv_hrtime() + (uint64_t)(k * 7919 % 301) * 1000;
+    while (uv_hrtime() < until) {
+    }
+  }
+  close_pool(&loop, pool);
+  assert(atomic_load(&ran) == SPACED);
+  finished = 0;
+  atomic_store(&ran, 0);
+}
+
 int main(void) {
   agc_test_deadline(60);
   loop_thread = uv_thread_self();
@@ -186,6 +210,7 @@ int main(void) {
   test_a_burst_starts_threads();
   test_close_leaves_a_running_item();
   test_direct_items_end_on_the_pool();
+  test_items_across_the_spin();
   printf("compute: ok\n");
   return 0;
 }

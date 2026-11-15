@@ -20,6 +20,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - A program whose tasks all wait for one busy task (a store task that serves 50 clients over channels) no longer runs slower with more scheduler threads: up to about 2 times faster at 2 to 8 schedulers, depending on the work per request (#1362).
 - A project's `agentica.toml` is parsed once per start, not twice, so a program below a manifest starts a little faster (#1471).
 - `agentica FILE.agc` no longer looks for the C compiler in `PATH` at each start of a cached program with no native module, and a change of `CC` or `PATH` keeps its cache entry (#1551).
+- A `compute def` call or a dirty native module call made right after another costs about 3 µs in place of 15 to 25 µs: the compute pool thread spins briefly for the next call before it sleeps (#1120).
 
 ## [0.32.0] - 2026-11-15
 
