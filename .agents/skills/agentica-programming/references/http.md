@@ -263,8 +263,9 @@ def handle(request: HTTP.Request, body: HTTP.RequestBody) -> Result[HTTP.Answer]
 end
 ```
 
-- The head goes out at once, then each piece as one flushed chunk, and the
-  channel closing ends the body. The server sets the framing: an app that
+- The head goes out at once, then each piece as one flushed chunk (pieces
+  that wait in the channel together share a chunk), and the channel closing
+  ends the body. The server sets the framing: an app that
   sets `Content-Length` or `Transfer-Encoding` gets the 500. Pieces
   are `Bytes` sent as they are; empty ones are skipped.
 - `length: some(n)` is for a body of known size (a big file in pieces): the head

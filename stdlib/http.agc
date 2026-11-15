@@ -851,6 +851,8 @@ STREAM_EARLY = 2
 # The most bytes of a piece in one chunk, and of one TCP.send_bytes (1 MiB at most, with the chunk framing around it).
 CHUNK_BYTES = 524288
 SEND_BYTES = 1048576
+# The most bytes of the pieces of a chunked stream that go out as one chunk when they wait together.
+STREAM_JOIN_BYTES = 65536
 BAD_PROXY = "http: the proxy must be http://host:8080 or http://user:pass@host:8080, with no path or query"
 # Said without the user info: an error never repeats the credentials.
 BAD_LOGIN = "http: the proxy user info must be user:password in percent-encoding, and the user cannot hold a colon"
@@ -3383,7 +3385,7 @@ def pump(
 ) -> Int
   count = 0
   early = STREAM_DONE
-  for piece in first
+  for piece in packed(first, length)
     if length != UNSIZED and count + piece.size == length
       # Closed before the watcher is read and before the last byte goes out: a request that the watcher reads after
       # the close is the next request, not a dropped pipelined one (it tells them apart by `body.closed?`), and one
@@ -3417,7 +3419,7 @@ def pump(
           early = watched(left, sent)
           return STREAM_CUT if early == STREAM_CUT
         end
-        case emit(socket, piece, timeout, length, count)
+        case emit(socket, with_queued(body, piece, length), timeout, length, count)
           ok(total) -> count = total
           error(_) ->
             body.close
@@ -3432,6 +3434,46 @@ def pump(
     return STREAM_CUT if early == STREAM_CUT or not Result.ok?(TCP.send(socket, "0\r\n\r\n", timeout))
   end
   early
+end
+
+# A piece of a chunked stream with the pieces that already wait behind it in `body`: one chunk, one send. It never
+# waits. A body with a length is not joined: its pieces are counted one by one against the length.
+def with_queued(body: Channel[Bytes], piece: Bytes, length: Int) -> Bytes
+  return piece if length != UNSIZED
+
+  pieces = [piece]
+  size = piece.size
+  while size < STREAM_JOIN_BYTES
+    case body.recv(0)
+      ok(next) ->
+        pieces = List.append(pieces, next)
+        size = size + next.size
+      error(_) -> break
+    end
+  end
+  return piece if pieces.size == 1
+
+  Bytes.concat(pieces)
+end
+
+def packed(pieces: List[Bytes], length: Int) -> List[Bytes]
+  return pieces if length != UNSIZED or pieces.size < 2
+
+  groups: List[Bytes] = []
+  group: List[Bytes] = []
+  size = 0
+  for piece in pieces
+    group = List.append(group, piece)
+    size = size + piece.size
+    if size >= STREAM_JOIN_BYTES
+      groups = List.append(groups, Bytes.concat(group))
+      group = []
+      size = 0
+    end
+  end
+  return groups if group.empty?
+
+  List.append(groups, Bytes.concat(group))
 end
 
 # Sends one piece and gives the bytes sent so far: as chunks, or with a `length`, as they are and only while they fit

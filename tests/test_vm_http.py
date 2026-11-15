@@ -1230,6 +1230,102 @@ def test_streamed_response_sends_latin1_header_values_as_single_bytes(tmp_path, 
     assert vm.wait() == 0, "the VM server finishes"
 
 
+STREAM_JOIN_PAUSE_MS = scaled(500)
+STREAM_JOIN_PROGRAM = """\
+import HTTP from "std/http"
+
+def burst(body: Channel[Bytes]) -> Void
+  for n in 0...3000
+    _ = body.send("line #{n}\\n".bytes, 5000)
+  end
+  _ = body.send(("x" * 70000).bytes, 5000)
+  _ = body.send("".bytes, 5000)
+  _ = body.send("end\\n".bytes, 5000)
+  body.close
+end
+
+def lone(body: Channel[Bytes]) -> Void
+  _ = body.send("one".bytes, 5000)
+  Task.sleep(@pause_ms)
+  _ = body.send("two".bytes, 5000)
+  body.close
+end
+
+def handle(request: HTTP.Request, _body: HTTP.RequestBody) -> Result[HTTP.Answer]
+  body: Channel[Bytes] = Channel.new(64)
+  if request.path == "/lone"
+    Task.spawn(&lone, body)
+  else
+    if request.path == "/queued"
+      for n in 0...50
+        _ = body.send("early #{n}\\n".bytes, 5000)
+      end
+    end
+    Task.spawn(&burst, body)
+  end
+  return ok(HTTP.Answer.Stream(HTTP.StreamResponse(status: 200, headers: [], body: body)))
+end
+
+def main() -> Void
+  server = HTTP.serve("127.0.0.1", 0, &handle).unwrap!
+  puts(HTTP.local_port(server))
+  IO.flush()
+  IO.read()
+  HTTP.close_server(server)
+end
+"""
+
+
+def read_chunks(conn):
+    """The chunks of a chunked answer on a raw socket, each with the time its last byte was read; the last chunk
+    (of size 0) ends it and is left out."""
+    got = b""
+    while b"\r\n\r\n" not in got:
+        got += conn.recv(65536)
+    rest = got.partition(b"\r\n\r\n")[2]
+    chunks = []
+    while True:
+        while b"\r\n" not in rest:
+            rest += conn.recv(65536)
+        size, _, rest = rest.partition(b"\r\n")
+        size = int(size, 16)
+        while len(rest) < size + 2:
+            more = conn.recv(65536)
+            assert more, "the stream ended inside a chunk"
+            rest += more
+        assert rest[size:size + 2] == b"\r\n"
+        if size == 0:
+            return chunks
+        chunks.append((rest[:size], time.monotonic()))
+        rest = rest[size + 2:]
+
+
+def test_a_chunked_stream_joins_the_pieces_that_wait_together_and_sends_a_lone_piece_at_once(tmp_path, adopt):
+    """Pieces that a producer queues faster than the socket takes them go out joined, as fewer chunks of at most
+    64 KiB plus one piece, whole and in order, also the ones queued before the handler returned; a piece with nothing
+    behind it is not held back for the next one."""
+    program = STREAM_JOIN_PROGRAM.replace("@pause_ms", str(STREAM_JOIN_PAUSE_MS))
+    vm = adopt(start_vm(compile_text(program, "stream-join", tmp_path), stdin=True))
+    port = int(vm.next_line())
+    lines = b"".join(b"line %d\n" % n for n in range(3000)) + b"x" * 70000 + b"end\n"
+    early = b"".join(b"early %d\n" % n for n in range(50))
+    for path, body in [(b"/burst", lines), (b"/queued", early + lines)]:
+        with socket.create_connection(("127.0.0.1", port), timeout=scaled(20)) as conn:
+            conn.sendall(b"GET %s HTTP/1.1\r\nHost: x\r\n\r\n" % path)
+            chunks = [data for data, _ in read_chunks(conn)]
+        assert b"".join(chunks) == body
+        assert len(chunks) < 1500, "the pieces were joined"
+        assert max(len(data) for data in chunks) < 65536 + 70000
+    with socket.create_connection(("127.0.0.1", port), timeout=scaled(20)) as conn:
+        conn.sendall(b"GET /lone HTTP/1.1\r\nHost: x\r\n\r\n")
+        (one, first), (two, second) = read_chunks(conn)
+    assert (one, two) == (b"one", b"two")
+    assert second - first > STREAM_JOIN_PAUSE_MS / 1000 * 0.6, "the first piece did not wait for the second"
+    vm.close_stdin()
+    assert vm.wait() == 0
+    assert vm.stderr_text() == ""
+
+
 def start_server(tmp_path, adopt):
     """Starts SERVER_PROGRAM; returns the VM child and its plain port."""
     source = tmp_path / "server.agc"
