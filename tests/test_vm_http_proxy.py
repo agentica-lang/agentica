@@ -5,12 +5,24 @@ It prints a line for each request it sees, so the tests assert the request line 
 them, and the connection they came on.
 """
 import base64
+import contextlib
 import socket
 
 from tests.agentica_test import (FIXTURES, PYTHON, WINDOWS, Child, compile_agc, host_only, output_lines, run_vm, scaled,
                                  vm_environment)
 
 PEER = FIXTURES / "http-proxy-peer.py"
+
+
+@contextlib.contextmanager
+def dead_port():
+    """A port that refuses connections: bound, never listening, and held so no other process can take it."""
+    with socket.socket() as spare:
+        if hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
+            spare.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        spare.bind(("127.0.0.1", 0))
+        yield str(spare.getsockname()[1])
+
 
 PROGRAM = """\
 import HTTP from "std/http"
@@ -125,14 +137,11 @@ def test_requests_go_to_the_proxy_in_absolute_form_on_one_pooled_connection(tmp_
     no proxy does not touch it. A bad proxy is an error."""
     peer = adopt(Child([PYTHON, PEER], stdin=True))
     proxy, first, second, proxy_two = peer.next_line().split()[:4]
-    # A port that nothing listens on: bound and released.
-    with socket.socket() as spare:
-        spare.bind(("127.0.0.1", 0))
-        down = str(spare.getsockname()[1])
     source = tmp_path / "proxy.agc"
     source.write_text(PROGRAM, encoding="utf-8")
     bytecode = compile_agc(source, tmp_path / "proxy.agcb")
-    result = run_vm(bytecode, env=vm_environment(), args=[proxy, first, second, str(tmp_path), proxy_two, down], timeout=scaled(120))
+    with dead_port() as down:
+        result = run_vm(bytecode, env=vm_environment(), args=[proxy, first, second, str(tmp_path), proxy_two, down], timeout=scaled(120))
     assert result.code == 0, result.stderr
     assert output_lines(result.stdout) == [
         '200 hello from A /hello via=["1.1 proxy-peer"]',
@@ -283,15 +292,13 @@ def test_the_user_info_of_the_proxy_is_its_basic_login_and_a_407_names_the_proxy
     holds the password."""
     peer = adopt(Child([PYTHON, PEER], stdin=True))
     _proxy, first, _second, _proxy_two, locked = peer.next_line().split()[:5]
-    with socket.socket() as spare:
-        spare.bind(("127.0.0.1", 0))
-        down = str(spare.getsockname()[1])
     source = tmp_path / "auth.agc"
     source.write_text(AUTH_PROGRAM, encoding="utf-8")
     bytecode = compile_agc(source, tmp_path / "auth.agcb")
     trace = tmp_path / "trace.log"
     env = vm_environment({"AGENTICA_VM_TRACE": "io,tls,sched", "AGENTICA_VM_TRACE_FILE": str(trace)})
-    result = run_vm(bytecode, env=env, args=[locked, first, str(tmp_path), LOGIN, down], timeout=scaled(120))
+    with dead_port() as down:
+        result = run_vm(bytecode, env=env, args=[locked, first, str(tmp_path), LOGIN, down], timeout=scaled(120))
     assert result.code == 0, result.stderr
     name = "127.0.0.1:" + locked
     denied = [
@@ -652,15 +659,13 @@ def test_https_goes_through_a_proxy_in_a_connect_tunnel(tmp_path, adopt):
     a 407 of the target itself is its response."""
     peer = adopt(Child([PYTHON, PEER], stdin=True))
     proxy, _first, _second, _proxy_two, locked, tls_c, tls_d = peer.next_line().split()
-    with socket.socket() as spare:
-        spare.bind(("127.0.0.1", 0))
-        down = str(spare.getsockname()[1])
     source = tmp_path / "tunnel.agc"
     source.write_text(TUNNEL_PROGRAM, encoding="utf-8")
     bytecode = compile_agc(source, tmp_path / "tunnel.agcb")
     ca = str(FIXTURES / "tls" / "ca.pem")
     env = vm_environment({"SSL_CERT_FILE": ca})
-    result = run_vm(bytecode, env=env, args=[proxy, locked, tls_c, tls_d, str(tmp_path), ca, down, str(FIXTURES / "tls" / "self-signed.pem")], timeout=scaled(120))
+    with dead_port() as down:
+        result = run_vm(bytecode, env=env, args=[proxy, locked, tls_c, tls_d, str(tmp_path), ca, down, str(FIXTURES / "tls" / "self-signed.pem")], timeout=scaled(120))
     assert result.code == 0, result.stderr
 
     def served(tag):
