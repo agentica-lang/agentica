@@ -22,6 +22,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - With several schedulers, a TCP read that bytes already received can answer returns at once instead of waiting on the I/O thread: up to 5 times more lines per second on a busy stream, about 10% more requests per second for an HTTP client (#1197).
 - `agentica FILE.agc` no longer looks for the C compiler in `PATH` at each start of a cached program with no native module, and a change of `CC` or `PATH` keeps its cache entry (#1551).
 - Programs run 4 to 6% faster when the interpreter runs them (`--jit off`, or code the JIT has not compiled): a call or an operator writes its result straight into the variable it is assigned to (#1001).
+- A `case` with 3 or more enum variant arms jumps straight to the arm that matches instead of testing the arms in order: `agentica check` and `compile` of a large program are about 5 to 7% faster (#1001).
 
 ## [0.32.0] - 2026-11-15
 

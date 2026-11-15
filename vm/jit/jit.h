@@ -513,6 +513,9 @@ void agc_emit_struct_with(agc_emitter *e, agc_instr in, uint32_t pc, uint64_t up
 /* MAP of c pairs at R[b]: a call of agc_jit_map, which may leave. */
 void agc_emit_map(agc_emitter *e, agc_instr in, uint32_t pc);
 void agc_emit_jump(agc_emitter *e, uint32_t target);
+/* JUMP_VARIANT: to TARGETS[variant - IN.b] for the enum in R[a], or to the instruction after its IN.c table entries
+   (pc + 1 + IN.c) for any other variant; a wrong tag leaves for the interpreter. */
+void agc_emit_jump_variant(agc_emitter *e, agc_instr in, const uint32_t *targets, uint32_t pc);
 void agc_emit_branch(agc_emitter *e, uint32_t a, bool when, uint32_t target, uint32_t pc);
 void agc_emit_exit(agc_emitter *e, uint32_t status, uint32_t pc);
 /* CALL_BUILTIN of the direct row at BUILTIN, whose span is SPAN: a call of agc_jit_call_builtin, or of

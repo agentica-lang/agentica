@@ -110,7 +110,12 @@ functions up by name.
   file order; struct ids and field indexes follow declaration order. Generic
   enums need nothing special: type arguments exist only in the checker.
 - `case` reads a local scrutinee in place (no copy) because every test and
-  payload read comes before any arm body runs. Arm bodies go through
+  payload read comes before any arm body runs.
+- `jump-variant` (`lower_table_arms` in `lower_stmt.agc`) is followed by its
+  table, one `jump` per variant, with nothing between: a change that drops,
+  merges or moves a `jump` there makes a file the loader refuses. The JIT
+  compiles the table to compares, not an indirect jump, which the predictor of
+  some x86-64 cores misses on short repeating patterns. Arm bodies go through
   `lower_block`, so the `for` element read still lands after the first
   statement's `step` when a `case` starts a loop body.
 - The checker accepts Int literal patterns outside 64 bits

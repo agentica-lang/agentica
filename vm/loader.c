@@ -236,6 +236,16 @@ static void check_function(reader *r, const agc_program *p, const agc_function *
         check_register(r, in.b, f);
         if (in.c >= p->variant_count) reject(r, "variant index out of range");
         break;
+      case AGC_OP_JUMP_VARIANT:
+        /* The table is the c JUMPs after it, which the loop checks as JUMPs; the default path follows them. Tables
+           hold only JUMPs, so they never overlap and the scan stays linear in the function. */
+        check_register(r, in.a, f);
+        if (in.c == 0) reject(r, "variant jump table is empty");
+        if ((uint32_t)in.b + in.c > p->variant_count) reject(r, "variant jump table out of range");
+        if ((uint64_t)pc + 1 + in.c >= f->count) reject(r, "variant jump table runs past the function");
+        for (uint32_t k = 1; k <= in.c; k++)
+          if (f->code[pc + k].op != AGC_OP_JUMP) reject(r, "variant jump table entry is not a JUMP");
+        break;
       case AGC_OP_STRUCT:
         check_register(r, in.a, f);
         if (in.c >= p->struct_count) reject(r, "struct index out of range");

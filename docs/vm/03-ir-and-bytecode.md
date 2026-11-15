@@ -61,6 +61,14 @@ code does not show:
   the payload (`_` skipped). An Int literal outside 64 bits can never match, so
   its test is a plain `jump`. A Result binding reads `result-value` (the value
   or the message).
+- A `case` with 3 or more variant arms (`TABLE_ARMS`, not Result) starts with
+  `jump-variant`: one `jump` per variant from the lowest to the highest one the
+  arms name, each to the first arm that can match it, past that arm's tag
+  test, and a variant outside them goes to the first arm that can match any
+  value. Past its tag test an arm knows the variant, so a failed nested
+  pattern or guard jumps to the next arm that can match it. Only the variant
+  arms after an arm that can match any value (`_`, a literal, an or-pattern)
+  keep their tag test, since only they are reached in order.
 - `try` is `try dst src`: on an error, return that Result from the function (the
   block, inside a block). A `try` that the checker found in the block of a
   `Lazy` method (`Checked.step_tries`) is `try-step dst src`.
@@ -179,8 +187,12 @@ behavior.
     Bool, Nil and Range; `SAME` is the `case` literal test (`eqv?` for Float).
 
 - **Group:** Jump
-  - **Opcodes:** `JUMP bx`, `JUMP_IF_FALSE a bx`, `JUMP_IF_TRUE a bx`
-  - **Meaning:** Go to `bx`; test Bool `R[a]`.
+  - **Opcodes:** `JUMP bx`, `JUMP_IF_FALSE a bx`, `JUMP_IF_TRUE a bx`,
+    `JUMP_VARIANT a b c`
+  - **Meaning:** Go to `bx`; test Bool `R[a]`. `JUMP_VARIANT` (opcode 53) is
+    followed by `c` `JUMP`s, its table: for the enum in `R[a]` with variant
+    `v`, it goes where entry `v - b` goes when `b <= v < b + c`, else to the
+    instruction after the table.
 
 - **Group:** Call
   - **Opcodes:** `CALL a bx`, `CALL_VALUE a b`, `CALL_BUILTIN a bx`, `TAIL_CALL
@@ -221,7 +233,7 @@ behavior.
     never
     set is `RUNTIME-INTERNAL`.
 
-There are 53 opcodes. Everything else, including `ok`, `error`, `puts` and every
+There are 54 opcodes. Everything else, including `ok`, `error`, `puts` and every
 module function, is a builtin. Opcode numbers are positions in one list shared
 by `OPCODES` in `compiler/bytecode/bytecode_tables.agc` and `agc_opcode` in
 `vm/value.h`. New opcodes are appended at the end; that does not bump the
