@@ -290,11 +290,11 @@ static uint64_t spin_budget(const agc_runq *q, uint32_t level) {
   return q->spin_pauses > UINT64_MAX >> level ? UINT64_MAX : q->spin_pauses << level;
 }
 
-/* A spin that took a task doubles the scheduler's next budget, up to AGC_SPIN_LEVEL_MAX doublings, and one that took
-   none halves it. So the budget settles near the gap between two pushes: tasks that come every few tens of
-   microseconds (the clients of one busy task, #1362) are taken by a spinner, with no futex wake per task and no sleep
-   between two of them, while a scheduler that its timers wake, or a push now and then, spins the least budget. Only
-   a scheduler that spins alone has the longer budget and changes its level, so at most one core spins for long. */
+/* An up/down count: a spin that took a task doubles the scheduler's next budget, up to AGC_SPIN_LEVEL_MAX doublings,
+   and one that took none halves it. Pushes that keep coming within the longest budget (the clients of one busy task,
+   #1362) hold the level at its top, so a spinner takes them with no futex wake per task; while none comes within the
+   least budget, the level falls to 0 and stays there. Only a scheduler that spins alone has the longer budget and
+   changes its level, so at most one core spins for long. */
 static void adapt(uint32_t *level, bool took) {
   if (took)
     *level += *level < AGC_SPIN_LEVEL_MAX;
