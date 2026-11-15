@@ -514,18 +514,31 @@ static void drop_links(net *n) {
   n->conn = NULL;
 }
 
+/* What the session has to send, moved out of it into a malloc'd copy (NULL for nothing), under tls_lock, which a
+   reader on a scheduler takes for its decrypt (tls_got): the write to the socket comes after the unlock. */
+static uint8_t *take_out(net *n, size_t *len) {
+  const uint8_t *data;
+  *len = agc_tls_out_peek(n->tls, &data);
+  if (!*len) return NULL;
+  uint8_t *copy = malloc(*len);
+  if (!copy) agc_out_of_memory();
+  memcpy(copy, data, *len);
+  agc_tls_out_consume(n->tls, *len);
+  return copy;
+}
+
 static void goodbye(net *n) {
   if (!n->tls || !n->handshaken || n->tls_failed || !n->connected || !n->conn || n->write_status < 0) return;
   uv_mutex_lock(&n->tls_lock);
   agc_tls_close(n->tls);
-  const uint8_t *data;
-  size_t len = agc_tls_out_peek(n->tls, &data);
-  if (len && len <= CIPHER_SIZE && !n->flushing) {
+  size_t len;
+  uint8_t *data = take_out(n, &len);
+  uv_mutex_unlock(&n->tls_lock);
+  if (data && len <= CIPHER_SIZE && !n->flushing) {
     uv_buf_t b = uv_buf_init((char *)data, (unsigned)len);
     (void)uv_try_write((uv_stream_t *)&n->conn->tcp, &b, 1);
   }
-  agc_tls_out_consume(n->tls, len);
-  uv_mutex_unlock(&n->tls_lock);
+  free(data);
 }
 
 /* A net that waits for its client's context leaves the list at its close, so the build that others may still wait
@@ -995,18 +1008,11 @@ static void handshake_failed(net *n, agc_tls_status status) {
   notify(n, n->opener);
 }
 
-static void flush(net *n, uv_write_cb wrote) {
-  while (!n->flushing && !n->closed && n->write_status >= 0) {
-    const uint8_t *data;
-    size_t len = agc_tls_out_peek(n->tls, &data);
-    if (len) {
-      int rc = agc_stream_write((uv_stream_t *)&n->conn->tcp, &n->write_req, &n->write_data, data, len, wrote);
-      agc_tls_out_consume(n->tls, len);
-      if (rc < 0) n->write_status = rc;
-      if (rc == 1) n->flushing = true;
-      continue;
-    }
-    if (n->plain_at >= n->plain_len || !n->handshaken) break;
+/* The next bytes to send: what the session holds, or else the next chunk of `plain`, encrypted (take_out). */
+static uint8_t *next_out(net *n, size_t *len) {
+  uv_mutex_lock(&n->tls_lock);
+  uint8_t *data = take_out(n, len);
+  while (!data && n->plain_at < n->plain_len && n->handshaken) {
     size_t left = n->plain_len - n->plain_at;
     size_t step = left < TLS_CHUNK ? left : TLS_CHUNK;
     if (agc_tls_write(n->tls, n->plain + n->plain_at, step, &n->failure) != AGC_TLS_OK) {
@@ -1014,6 +1020,21 @@ static void flush(net *n, uv_write_cb wrote) {
       break;
     }
     n->plain_at += step;
+    data = take_out(n, len);
+  }
+  uv_mutex_unlock(&n->tls_lock);
+  return data;
+}
+
+static void flush(net *n, uv_write_cb wrote) {
+  while (!n->flushing && !n->closed && n->write_status >= 0) {
+    size_t len;
+    uint8_t *data = next_out(n, &len);
+    if (!data) break;
+    int rc = agc_stream_write((uv_stream_t *)&n->conn->tcp, &n->write_req, &n->write_data, data, len, wrote);
+    free(data);
+    if (rc < 0) n->write_status = rc;
+    if (rc == 1) n->flushing = true;
   }
   if (n->plain && (n->write_status < 0 || n->plain_at >= n->plain_len)) {
     free(n->plain);
@@ -1021,13 +1042,6 @@ static void flush(net *n, uv_write_cb wrote) {
     n->plain_at = n->plain_len = 0;
   }
   if (n->write_status < 0 || (!n->flushing && !n->plain)) notify(n, n->writer);
-}
-
-/* A flush beside a reader that may use the session on its scheduler (tls_here). */
-static void locked_flush(net *n, uv_write_cb wrote) {
-  uv_mutex_lock(&n->tls_lock);
-  flush(n, wrote);
-  uv_mutex_unlock(&n->tls_lock);
 }
 
 static void tls_wrote(uv_write_t *w, int status) {
@@ -1041,12 +1055,12 @@ static void tls_wrote(uv_write_t *w, int status) {
     handshake_failed(n, AGC_TLS_WANT_WRITE);
     return;
   }
-  locked_flush(n, tls_wrote);
+  flush(n, tls_wrote);
 }
 
 static void flush_step(void *data) {
   net *n = data;
-  if (!n->closed) locked_flush(n, tls_wrote);
+  if (!n->closed) flush(n, tls_wrote);
 }
 
 static void decrypt(net *n) {
@@ -2330,7 +2344,7 @@ static void tls_queue(net *n, const uint8_t *data, size_t len) {
   }
   n->plain_at = 0;
   n->plain_len = len;
-  locked_flush(n, tls_wrote);
+  flush(n, tls_wrote);
 }
 
 /* Starts a send on the I/O thread's side of the socket: 0 when it is out, 1 when it waits for libuv (the writer is

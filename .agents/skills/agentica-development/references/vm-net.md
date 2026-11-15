@@ -48,8 +48,8 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   per-socket back-off after a receive that finds nothing. A TLS socket joins
   once `stop_reading` saw its handshake over (`tls_here`); `tls_got` feeds and
   decrypts under `tls_lock`, which the I/O thread's sends and `goodbye` also
-  hold (`locked_flush`), and an alert left in the session goes out by
-  `flush_step`.
+  hold (`next_out`, `take_out`: a short lock, the socket write comes after
+  it), and an alert left in the session goes out by `flush_step`.
   `finish` copies what the `done` half needs into the request, and
   `request_done` reads only that and posts `drop_request`. `users` changes only
   on the I/O thread (the first count, `own`, excepted). The `net` fields `id`
