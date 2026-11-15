@@ -22,6 +22,7 @@
 #include <arpa/inet.h>
 #include <fcntl.h>
 #include <netinet/in.h>
+#include <openssl/ssl.h>
 #include <poll.h>
 #include <sys/socket.h>
 #include <sys/time.h>
@@ -51,6 +52,13 @@ typedef struct {
   agc_task *task;
   calling c;
 } locked_call;
+
+/* The peer of a TLS pair: an OpenSSL client on a blocking descriptor. */
+typedef struct {
+  int64_t port;
+  int fd;
+  SSL *ssl;
+} tls_peer;
 
 static calling call(const char *name, uint32_t arity, agc_value a, agc_value b, agc_value c, agc_value d) {
   return agc_test_call_of(&vm, vm.task, name, arity, a, b, c, d);
@@ -990,8 +998,8 @@ static void test_upgrade_tls_builds_the_shared_context_then_handshakes(void) {
 
 static agc_vm aside;
 
-/* open_pair with every lock on, and a second context (aside) for the calls of other tasks. */
-static int open_pair_locked(void) {
+/* Every lock on, and a second context (aside) for the calls of other tasks. */
+static void share_locked(void) {
   static bool made;
   assert(agc_io_share(&vm, false));
   if (!made) {
@@ -999,6 +1007,11 @@ static int open_pair_locked(void) {
     agc_timers_share(&aside);
     made = true;
   }
+}
+
+/* open_pair with every lock on. */
+static int open_pair_locked(void) {
+  share_locked();
   listener = ok_of(
       locked_step(&vm, vm.task, call("TCP.listen", 2, agc_test_str("127.0.0.1"), agc_int(0), agc_void(), agc_void())));
   int fd = raw_connect(agc_as_listener(&vm, listener)->port);
@@ -1025,6 +1038,44 @@ static agc_test_call read_line_of(agc_vm *ctx, agc_task *task) {
   return agc_test_call_of(ctx, task, "TCP.read_line", 2, socket_v, agc_int(60000), agc_void(), agc_void());
 }
 
+/* A read that the input or the kernel answers on its scheduler, with no park. */
+static void read_now(locked_call *reading, const char *text) {
+  on_thread(park_locked, reading);
+  assert(vm.task->parked == NULL);
+  line_is(reading->c.result, text);
+}
+
+static void read_parks(locked_call *reading) {
+  on_thread(park_locked, reading);
+  assert(vm.task->parked != NULL);
+}
+
+static void read_wakes(locked_call *reading, const char *text) {
+  agc_test_wait_woken(&vm, vm.task);
+  on_thread(take_locked, &reading->c);
+  line_is(reading->c.result, text);
+}
+
+/* A close from another task while READING waits in recv() on the VM's socket MINE, made blocking with a receive
+   timeout so the call ends with EAGAIN if nothing comes: the loop shuts the socket beside the receive, and the read
+   reports it closed. */
+static void close_during_receive(int mine, locked_call *reading) {
+  set_blocking(mine, true);
+  struct timeval wait = {0, 300000};
+  assert(setsockopt(mine, SOL_SOCKET, SO_RCVTIMEO, &wait, sizeof wait) == 0);
+  uv_thread_t receiver;
+  assert(uv_thread_create(&receiver, read_beside, reading) == 0);
+  wait_for_receive(agc_as_socket(&vm, socket_v)->reader);
+  agc_task *other = agc_new_task(&vm);
+  locked_call closing = {&aside, other,
+                         agc_test_call_of(&aside, other, "TCP.close", 1, socket_v, agc_void(), agc_void(), agc_void())};
+  on_thread(call_locked, &closing);
+  for (int k = 0; k < 10; k++) (void)agc_io_poll(&vm, false);
+  assert(uv_thread_join(&receiver) == 0);
+  assert(vm.task->parked == NULL);
+  assert(error_is(reading->c.result, "network: socket is closed"));
+}
+
 /* At N > 1 a read that the input does not answer first receives on its scheduler, with rt->sync dropped (recv_here,
    #1197). A line already in the kernel is read with no park while the loop does not run. A read that finds nothing
    parks, and the next one parks with no receive even though its line is in the kernel (the rule's back-off). Then
@@ -1040,23 +1091,15 @@ static void test_a_read_receives_on_the_scheduler(void) {
   assert(send(fd, "one\n", 4, 0) == 4);
   assert(poll(&in_kernel, 1, 5000) == 1);
   locked_call reading = {&vm, vm.task, read_line_of(&vm, vm.task)};
-  on_thread(park_locked, &reading);
-  assert(vm.task->parked == NULL);
-  line_is(reading.c.result, "one");
+  read_now(&reading, "one");
 
-  on_thread(park_locked, &reading);
-  assert(vm.task->parked != NULL);
+  read_parks(&reading);
   assert(send(fd, "two\n", 4, 0) == 4);
-  agc_test_wait_woken(&vm, vm.task);
-  on_thread(take_locked, &reading.c);
-  line_is(reading.c.result, "two");
+  read_wakes(&reading, "two");
   assert(send(fd, "three\n", 6, 0) == 6);
   assert(poll(&in_kernel, 1, 5000) == 1);
-  on_thread(park_locked, &reading);
-  assert(vm.task->parked != NULL);
-  agc_test_wait_woken(&vm, vm.task);
-  on_thread(take_locked, &reading.c);
-  line_is(reading.c.result, "three");
+  read_parks(&reading);
+  read_wakes(&reading, "three");
 
   agc_resource *reader = agc_as_socket(&vm, socket_v)->reader;
   set_blocking(mine, true);
@@ -1094,24 +1137,134 @@ static void test_a_read_receives_on_the_scheduler(void) {
    is gone, and the end of the receive closes the descriptor. */
 static void test_a_close_during_an_empty_receive(void) {
   int fd = open_pair_locked();
-  int mine = vm_side(fd);
-  set_blocking(mine, true);
-  struct timeval wait = {0, 300000};
-  assert(setsockopt(mine, SOL_SOCKET, SO_RCVTIMEO, &wait, sizeof wait) == 0);
   locked_call reading = {&vm, vm.task, read_line_of(&vm, vm.task)};
-  uv_thread_t receiver;
-  assert(uv_thread_create(&receiver, read_beside, &reading) == 0);
-  wait_for_receive(agc_as_socket(&vm, socket_v)->reader);
-  agc_task *other = agc_new_task(&vm);
-  locked_call closing = {&aside, other,
-                         agc_test_call_of(&aside, other, "TCP.close", 1, socket_v, agc_void(), agc_void(), agc_void())};
-  on_thread(call_locked, &closing);
-  assert(uv_thread_join(&receiver) == 0);
-  assert(vm.task->parked == NULL);
-  assert(error_is(reading.c.result, "network: socket is closed"));
+  close_during_receive(vm_side(fd), &reading);
   (void)agc_io_poll(&vm, false);
   wait_eof(fd);
   close_pair_locked(fd);
+}
+
+static void peer_handshake(void *arg) {
+  tls_peer *p = arg;
+  p->fd = raw_connect(p->port);
+  SSL_CTX *ctx = SSL_CTX_new(TLS_client_method());
+  assert(ctx);
+  p->ssl = SSL_new(ctx);
+  SSL_CTX_free(ctx);
+  assert(p->ssl && SSL_set_fd(p->ssl, p->fd) == 1 && SSL_connect(p->ssl) == 1);
+}
+
+static void peer_send(const tls_peer *p, const char *text) {
+  assert(SSL_write(p->ssl, text, (int)strlen(text)) == (int)strlen(text));
+}
+
+static void peer_reads_tls(const tls_peer *p, const char *text) {
+  char got[64];
+  size_t want = strlen(text), have = 0;
+  while (have < want) {
+    int n = SSL_read(p->ssl, got + have, (int)(want - have));
+    assert(n > 0);
+    have += (size_t)n;
+  }
+  assert(memcmp(got, text, want) == 0);
+}
+
+/* A TLS listener with every lock on and one accepted socket (socket_v), whose peer handshakes on its own thread. */
+static void open_tls_pair_locked(tls_peer *p) {
+  share_locked();
+  agc_tls_failure f;
+  agc_tls_config *config = agc_tls_server_config(CERTS "server.pem", CERTS "server-key.pem", &f);
+  assert(config);
+  agc_value tls = agc_tls_context_value(config, release_config, true);
+  calling listen = call("TLS.listen", 3, agc_test_str("127.0.0.1"), agc_int(0), tls, agc_void());
+  listener = ok_of(locked_step(&vm, vm.task, listen));
+  p->port = agc_as_listener(&vm, listener)->port;
+  uv_thread_t peer;
+  assert(uv_thread_create(&peer, peer_handshake, p) == 0);
+  socket_v = ok_of(locked_step(&vm, vm.task, call("TCP.accept", 2, listener, agc_int(5000), agc_void(), agc_void())));
+  assert(uv_thread_join(&peer) == 0);
+}
+
+static void send_locked(const char *text) {
+  ok_of(locked_step(&vm, vm.task, call("TCP.send", 3, socket_v, agc_test_str(text), agc_int(5000), agc_void())));
+}
+
+/* The peer's descriptor has bytes within five seconds while the loop runs. */
+static bool peer_gets_bytes(int fd) {
+  uint64_t due = agc_clock_ms() + 5000;
+  struct pollfd in = {fd, POLLIN, 0};
+  while (poll(&in, 1, 0) <= 0) {
+    if (agc_clock_ms() > due) return false;
+    (void)agc_io_poll(&vm, false);
+  }
+  return true;
+}
+
+/* recv_here on a TLS socket (#1197): a read that the input does not answer receives the ciphertext on its scheduler
+   and decrypts it there, so a line in the kernel is read with no park, while a read that finds nothing parks and the
+   I/O thread ends it, and the next one parks with no receive (the rule's back-off). A key update that the scheduler
+   reads is answered with the next send, from the I/O thread. A close from another task while the receive
+   waits sends close_notify beside it; the read reports the socket closed and the end of the receive closes the
+   descriptor. */
+static void test_a_tls_read_receives_on_the_scheduler(void) {
+  tls_peer p = {0};
+  open_tls_pair_locked(&p);
+  int mine = vm_side(p.fd);
+  struct pollfd in_kernel = {mine, POLLIN, 0};
+  locked_call reading = {&vm, vm.task, read_line_of(&vm, vm.task)};
+  send_locked("hello\n");
+  peer_reads_tls(&p, "hello\n");
+
+  peer_send(&p, "one\n");
+  assert(poll(&in_kernel, 1, 5000) == 1);
+  read_now(&reading, "one");
+
+  read_parks(&reading);
+  peer_send(&p, "two\n");
+  read_wakes(&reading, "two");
+  peer_send(&p, "three\n");
+  assert(poll(&in_kernel, 1, 5000) == 1);
+  read_parks(&reading);
+  read_wakes(&reading, "three");
+
+  assert(SSL_key_update(p.ssl, SSL_KEY_UPDATE_REQUESTED) == 1);
+  peer_send(&p, "four\n");
+  assert(poll(&in_kernel, 1, 5000) == 1);
+  read_now(&reading, "four");
+  send_locked("five\n");
+  peer_reads_tls(&p, "five\n");
+
+  close_during_receive(mine, &reading);
+  char end[8];
+  assert(SSL_read(p.ssl, end, sizeof end) == 0 && SSL_get_error(p.ssl, 0) == SSL_ERROR_ZERO_RETURN);
+  (void)agc_io_poll(&vm, false);
+  wait_eof(p.fd);
+  SSL_free(p.ssl);
+  close_pair_locked(p.fd);
+}
+
+/* A record that does not decrypt, read on the scheduler: the read fails, and the alert that the session leaves goes
+   out from the I/O thread with no send of the program. */
+static void test_a_bad_record_on_the_scheduler_sends_its_alert(void) {
+  tls_peer p = {0};
+  open_tls_pair_locked(&p);
+  send_locked("hello\n");
+  peer_reads_tls(&p, "hello\n");
+  unsigned char junk[37] = {0x17, 0x03, 0x03, 0x00, 0x20};
+  for (size_t k = 5; k < sizeof junk; k++) junk[k] = (unsigned char)k;
+  assert(send(p.fd, junk, sizeof junk, 0) == (ssize_t)sizeof junk);
+  struct pollfd in_kernel = {vm_side(p.fd), POLLIN, 0};
+  assert(poll(&in_kernel, 1, 5000) == 1);
+  locked_call reading = {&vm, vm.task, read_line_of(&vm, vm.task)};
+  on_thread(park_locked, &reading);
+  assert(vm.task->parked == NULL);
+  assert(!agc_as_result(&vm, reading.c.result)->ok);
+  assert(peer_gets_bytes(p.fd));
+  char alert[8];
+  int got = SSL_read(p.ssl, alert, sizeof alert);
+  assert(got <= 0 && SSL_get_error(p.ssl, got) == SSL_ERROR_SSL);
+  SSL_free(p.ssl);
+  close_pair_locked(p.fd);
 }
 #endif
 
@@ -1144,6 +1297,8 @@ int main(void) {
   AGC_TEST_RUN(test_a_send_waits_for_a_direct_send_of_another_task());
   AGC_TEST_RUN(test_a_read_receives_on_the_scheduler());
   AGC_TEST_RUN(test_a_close_during_an_empty_receive());
+  AGC_TEST_RUN(test_a_tls_read_receives_on_the_scheduler());
+  AGC_TEST_RUN(test_a_bad_record_on_the_scheduler_sends_its_alert());
 #endif
   puts("net tests passed");
   return 0;

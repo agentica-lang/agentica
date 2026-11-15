@@ -3,9 +3,9 @@
  * over libuv, with the TLS handshake and close_notify through tls.h and the
  * host's error numbers through net_os.h. Every `net` belongs to the I/O
  * thread; a builtin reaches it through a step posted there, and a done half
- * reads only what that thread copied into the request, except the direct send
- * of a plain socket from a scheduler (direct_send) and the take of its input by
- * a read (takes_here, recv_here). Service layer.
+ * reads only what that thread copied into the request, except a plain socket's
+ * direct send from a scheduler (direct_send) and a read's take, receive and
+ * decrypt of a socket's input there (takes_here, recv_here). Service layer.
  * Design: docs/vm/10-io-tls.md §10.3 and §10.3.1, docs/vm/16-architecture.md §16.9.
  */
 #include "http_fields.h"
@@ -109,9 +109,9 @@ typedef struct tls_shared tls_shared;
 /* A socket or a listener. Every field belongs to the I/O thread (the builtins post steps to it), with two exceptions:
    `closed` is atomic, so a builtin can refuse a closed socket at once (a stale false only means its step finds it
    closed), and `id` is atomic, since the scheduler that adopts an accepted socket names it while the I/O thread may
-   be tracing it. A plain socket's input `in` is also the reader's on a scheduler while no read of it waits
-   (takes_here). The error fields (`error`, `resolved`, `failure`, `tls_failed`) are not written after the failure
-   that a finished request reported, so its done half may read them. */
+   be tracing it. A socket's input `in` is also the reader's on a scheduler while no read of it waits (takes_here).
+   The error fields (`error`, `resolved`, `failure`, `tls_failed`) are not written after the failure that a finished
+   request reported, so its done half may read them. */
 struct agc_conn {
   agc_trace trace;
   agc_loop *io;
@@ -200,6 +200,11 @@ struct agc_conn {
   int64_t linger_ms;
   uv_timer_t *linger;
   const char *linger_why;
+  /* A TLS socket's session and input are the reader's on a scheduler (takes_here) while `tls_here` is set: its
+     handshake is over and the I/O thread does not read it. That thread still sends and says goodbye on the session,
+     so each use of the session by either side holds `tls_lock`. */
+  _Atomic bool tls_here;
+  uv_mutex_t tls_lock;
 };
 
 /* A posted close: release_step runs it on the I/O thread. */
@@ -254,6 +259,7 @@ static void settle(net *n) {
   free(n->out);
   free(n->pend);
   uv_mutex_destroy(&n->out_lock);
+  uv_mutex_destroy(&n->tls_lock);
   free(n->host);
   free(n);
 }
@@ -510,6 +516,7 @@ static void drop_links(net *n) {
 
 static void goodbye(net *n) {
   if (!n->tls || !n->handshaken || n->tls_failed || !n->connected || !n->conn || n->write_status < 0) return;
+  uv_mutex_lock(&n->tls_lock);
   agc_tls_close(n->tls);
   const uint8_t *data;
   size_t len = agc_tls_out_peek(n->tls, &data);
@@ -518,6 +525,7 @@ static void goodbye(net *n) {
     (void)uv_try_write((uv_stream_t *)&n->conn->tcp, &b, 1);
   }
   agc_tls_out_consume(n->tls, len);
+  uv_mutex_unlock(&n->tls_lock);
 }
 
 /* A net that waits for its client's context leaves the list at its close, so the build that others may still wait
@@ -543,6 +551,7 @@ static void stop_reading(net *n) {
   if (!n->reading) return;
   uv_read_stop((uv_stream_t *)&n->conn->tcp);
   n->reading = false;
+  if (n->tls) atomic_store_explicit(&n->tls_here, n->handshaken && !n->tls_failed, memory_order_release);
 }
 
 /* Marks the socket shut, so no direct send or receive starts after it; true when one is under way, whose end then
@@ -740,7 +749,7 @@ static void release_net(void *native) { post_release(native, "exit"); }
 static net *make_net(const agc_trace *trace, agc_loop *io, CC_OWNS char *host, int64_t port, bool listener,
                      int64_t linger_ms) {
   net *n = calloc(1, sizeof(net));
-  if (!n || uv_mutex_init(&n->out_lock) != 0) agc_out_of_memory();
+  if (!n || uv_mutex_init(&n->out_lock) != 0 || uv_mutex_init(&n->tls_lock) != 0) agc_out_of_memory();
   n->linger_ms = linger_ms;
   n->trace = *trace;
   n->io = io;
@@ -1014,6 +1023,13 @@ static void flush(net *n, uv_write_cb wrote) {
   if (n->write_status < 0 || (!n->flushing && !n->plain)) notify(n, n->writer);
 }
 
+/* A flush beside a reader that may use the session on its scheduler (tls_here). */
+static void locked_flush(net *n, uv_write_cb wrote) {
+  uv_mutex_lock(&n->tls_lock);
+  flush(n, wrote);
+  uv_mutex_unlock(&n->tls_lock);
+}
+
 static void tls_wrote(uv_write_t *w, int status) {
   net *n = NET(w, write_req);
   free(n->write_data);
@@ -1025,7 +1041,12 @@ static void tls_wrote(uv_write_t *w, int status) {
     handshake_failed(n, AGC_TLS_WANT_WRITE);
     return;
   }
-  flush(n, tls_wrote);
+  locked_flush(n, tls_wrote);
+}
+
+static void flush_step(void *data) {
+  net *n = data;
+  if (!n->closed) locked_flush(n, tls_wrote);
 }
 
 static void decrypt(net *n) {
@@ -1148,6 +1169,7 @@ static void read_in(uv_stream_t *s, ssize_t got, const uv_buf_t *buf) {
 
 static void start_reading(net *n) {
   if (n->reading || n->in.eof || n->in.error || n->raw_eof) return;
+  if (n->tls) atomic_store_explicit(&n->tls_here, false, memory_order_release);
   int rc = uv_read_start((uv_stream_t *)&n->conn->tcp, alloc_in, read_in);
   if (rc)
     n->in.error = agc_net_errno(rc);
@@ -1613,7 +1635,7 @@ static bool request_cancel(agc_vm *vm, void *data, agc_value context, bool deadl
   unlink_request(q);
   if (q->kind == REQ_CONNECT) shut(q->n, "cancel");
   /* The next reader may take the input on its scheduler (takes_here), so no read callback writes it from now on. */
-  if (reads(q->kind) && !q->n->secure) stop_reading(q->n);
+  if (reads(q->kind) && (!q->n->secure || q->n->handshaken)) stop_reading(q->n);
   return true;
 }
 
@@ -1954,20 +1976,44 @@ static agc_value builtin_close(agc_vm *vm, agc_value *args, uint32_t span) {
    (read_in), or at a cancel (request_cancel). The caller holds the reader lock, so no read of its socket waits, and the
    end of the last one (its `done` half, then the lock's hand-on) comes after that write. A timeout or a close of
    another task shuts the net beside the take, which leaves the buffer to `settle`, and that waits for the resource's
-   count, held here under rt->sync. A TLS socket reads for its handshake with no read waiting (a send starts it), and
-   the session decrypts into the input then, so its input stays the I/O thread's. */
-static bool takes_here(const net *n) { return !n->secure; }
+   count, held here under rt->sync. A TLS socket may read for its handshake with no read waiting (a send starts it),
+   and decrypts into the input then, so its input is the reader's only once stop_reading has seen the handshake over
+   (tls_here); after that only a waiting read starts reading again. */
+static bool takes_here(const net *n) {
+  return !n->secure || atomic_load_explicit(&n->tls_here, memory_order_acquire);
+}
+
+/* GOT bytes of ciphertext that a scheduler received (0 for the end), or its error, go into the session, and what it
+   can decrypt into the input: true when the session has bytes to send (an alert), which the I/O thread sends. Under
+   the claim W_RECV, with tls_here set. */
+static bool tls_got(net *n, int64_t got) {
+  uv_mutex_lock(&n->tls_lock);
+  if (got > 0 && !agc_tls_feed_in(n->tls, n->cipher, (size_t)got)) n->in.error = ENOMEM;
+  if (got == 0) {
+    n->raw_eof = true;
+    agc_tls_feed_eof(n->tls);
+  } else if (got < 0) {
+    n->in.error = agc_net_errno((int)got);
+  }
+  if (got <= 0)
+    AGC_TRACE(&n->trace, AGC_TRACE_IO, "tcp_eof socket=%" PRIu64 " error=%d", n->id, got ? agc_net_errno((int)got) : 0);
+  decrypt(n);
+  const uint8_t *data;
+  bool out = agc_tls_out_peek(n->tls, &data) > 0;
+  uv_mutex_unlock(&n->tls_lock);
+  return out;
+}
 
 /* A line that the limit cuts closes the socket (take), which is the I/O thread's to do: such a read parks. */
 static bool over_limit(const net *n, req_kind kind) { return kind == REQ_LINE && agc_inbuf_pending(&n->in) > LIMIT; }
 
-/* One receive on the scheduler into the input of a plain socket that the reader may take (takes_here), before the read
-   would park (#1197): true when it found bytes, the end of input or an error, which the read then looks at, or when the
-   socket was closed meanwhile (*NP, looked up again, is then NULL). rt->sync is dropped across the system call, as
-   direct_send drops it, under the claim W_RECV, which keeps the net and its descriptor: the net is not touched after
-   the claim ends. The reader lock is held without a job from the first receive on (*HOLDING), so no other read takes
-   the input meanwhile; the caller lets it go, or its park's job takes it over. The I/O thread does not read the
-   socket, since no read of it waits. RECV_SKIP_MAX says when a receive is tried. */
+/* One receive on the scheduler into the input of a socket that the reader may take (takes_here), through its session
+   for TLS, before the read would park (#1197): true when it found bytes, the end of input or an error, which the read
+   then looks at, or when the socket was closed meanwhile (*NP, looked up again, is then NULL). rt->sync is dropped
+   across the system call, as direct_send drops it, under the claim W_RECV, which keeps the net and its descriptor: the
+   net is not touched after the claim ends. The reader lock is held without a job from the first receive on (*HOLDING),
+   so no other read takes the input meanwhile; the caller lets it go, or its park's job takes it over. The I/O thread
+   does not read the socket, since no read of it waits. RECV_SKIP_MAX says when a receive is tried. */
 static bool recv_here(agc_vm *vm, agc_socket *sk, net **np, const request *want, bool *holding) {
   net *n = *np;
   if (!n->has_sock || vm->sync_depth > 1 || vm->task->callbacks || input_ended(n)) return false;
@@ -1976,8 +2022,8 @@ static bool recv_here(agc_vm *vm, agc_socket *sk, net **np, const request *want,
     return false;
   }
   bool counted = want->kind == REQ_BYTES;
-  size_t size = agc_inbuf_want(&n->in, !counted, counted ? want->count : 0);
-  uint8_t *room = agc_inbuf_room(&n->in, size);
+  size_t size = n->tls ? CIPHER_SIZE : agc_inbuf_want(&n->in, !counted, counted ? want->count : 0);
+  uint8_t *room = n->tls ? n->cipher : agc_inbuf_room(&n->in, size);
   if (!room) agc_out_of_memory();
   if (!claim_begin(n, W_RECV)) return false;
   if (!*holding) agc_handle_hold(vm, sk->reader);
@@ -1986,9 +2032,12 @@ static bool recv_here(agc_vm *vm, agc_socket *sk, net **np, const request *want,
   bool held = vm->sync_depth == 1;
   if (held) agc_sync_drop(vm);
   int64_t got = agc_net_recv(n->sock, room, size);
-  bool found = got != UV_EAGAIN;
+  bool found = got != UV_EAGAIN, out = false;
   if (found) {
-    plain_got(n, got ? got : UV_EOF);
+    if (n->tls)
+      out = tls_got(n, got);
+    else
+      plain_got(n, got ? got : UV_EOF);
     n->recv_backoff = 0;
   } else {
     n->recv_backoff = n->recv_backoff ? (n->recv_backoff < RECV_SKIP_MAX ? n->recv_backoff * 2 : RECV_SKIP_MAX) : 1;
@@ -1997,6 +2046,7 @@ static bool recv_here(agc_vm *vm, agc_socket *sk, net **np, const request *want,
   claim_end(n, W_RECV, false);
   if (held) agc_sync_take(vm);
   *np = live(sk);
+  if (out && *np) agc_loop_call(n->io, flush_step, n);
   return found || !*np;
 }
 
@@ -2280,7 +2330,7 @@ static void tls_queue(net *n, const uint8_t *data, size_t len) {
   }
   n->plain_at = 0;
   n->plain_len = len;
-  flush(n, tls_wrote);
+  locked_flush(n, tls_wrote);
 }
 
 /* Starts a send on the I/O thread's side of the socket: 0 when it is out, 1 when it waits for libuv (the writer is
@@ -2319,8 +2369,8 @@ static bool begin_send(void *data, agc_io_job *job) {
    kernel takes at once neither wakes the I/O thread nor arms a timer. The caller holds the socket's writer lock, so no
    other send of the socket is under way and the bytes keep their order; what the kernel does not take goes to the I/O
    thread as before. rt->sync is dropped across the system call (a profile of a busy server lost half its throughput
-   holding it there); the claim, taken while rt->sync and the resource hold the net, keeps the descriptor open. TLS
-   stays on the I/O thread, which owns the session that its reads and handshake also use.
+   holding it there); the claim, taken while rt->sync and the resource hold the net, keeps the descriptor open. A TLS
+   send stays on the I/O thread.
    The writer lock is free for others while no job holds it, so a send that claimed the socket holds it
    (agc_handle_hold, *HOLDING set) until the caller lets it go or parks the rest, whose job takes the hold over: a send
    of another task waits for it rather than overtake the rest of this one, also when the kernel took nothing.
