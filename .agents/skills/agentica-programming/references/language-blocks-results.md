@@ -96,7 +96,8 @@ Signatures: `builtins.md`.
   (`e.is_a?("denied")` matches all). A find with no match keeps `"error"`. An
   OS error has its errno as `code` (the number differs between systems; the
   kind does not), a refused HTTP head its status. The error of a call on a
-  path (refused or failed) has `details["path"]`, the path as given; one of a
+  path (refused or failed) has `details["path"]`, the path as given
+  (`Path.rename` also `details["to"]`); one of a
   call on a host (connect, listen, DNS, TLS, refused or failed) has
   `details["host"]`. Calls on an open handle have no details.
 - `std/` kinds: `http.*` and `net.timeout` (std/http), `archive.format`,

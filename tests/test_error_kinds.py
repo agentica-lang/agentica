@@ -293,6 +293,7 @@ def main() -> Void
     "fs" ->
       show("read", File.read_text("a.txt", 5000))
       show("write", File.write_text("b.txt", "x", 5000))
+      show("rename", Path.rename("a.txt", "b.txt", 5000))
       show("lines", File.each_line("c.txt") do |_| ok() end)
       show("tls", TLS.client_context(TLS.ClientOptions(ca_file: "ca.pem")))
       show("spawn", Process.spawn("true", [], Process.Options(timeout_ms: 5000, err: "err.txt")))
@@ -301,6 +302,10 @@ def main() -> Void
       show("listen", TCP.listen("localhost", 0))
       show("dns", DNS.lookup("example.test", 5000))
       show("http", HTTP.get_response("http://127.0.0.1:1/"))
+    "rename" ->
+      _ = File.write_text("c.txt", "c", 5000)
+      _ = File.write_text("d.txt", "d", 5000)
+      show("rename", Path.rename("c.txt", "d.txt", 5000))
     "refused" ->
       listener = Result.unwrap!(TCP.listen("127.0.0.1", 0))
       port = TCP.local_port(listener)
@@ -316,6 +321,7 @@ def test_a_refused_file_call_names_its_path(tmp_path, work):
     assert run_program(tmp_path, work, DETAILS_PROGRAM, "details_fs", "fs", flags=["--deny-fs"]) == [
         'read: denied.fs {"path": "a.txt"}',
         'write: denied.fs {"path": "b.txt"}',
+        'rename: denied.fs {"path": "a.txt", "to": "b.txt"}',
         'lines: denied.fs {"path": "c.txt"}',
         'tls: denied.fs {"path": "ca.pem"}',
         'spawn: denied.fs {"path": "err.txt"}',
@@ -334,3 +340,8 @@ def test_a_refused_network_call_names_its_host(tmp_path, work):
 def test_a_failed_connect_names_its_host(tmp_path, work):
     assert run_program(tmp_path, work, DETAILS_PROGRAM, "details_refused", "refused") == [
         'connect: net.refused {"host": "127.0.0.1"}']
+
+
+def test_a_failed_rename_names_both_paths(tmp_path, work):
+    assert run_program(tmp_path, work, DETAILS_PROGRAM, "details_rename", "rename") == [
+        'rename: io.exists {"path": "c.txt", "to": "d.txt"}']

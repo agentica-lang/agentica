@@ -1613,9 +1613,15 @@ static void close_file(agc_vm *vm, agc_resource *r, agc_task *ender) {
   }
 }
 
-/* The error of a job on a path names the path that the call was given, its context. */
+/* The error of a job on a path names the path that the call was given, its context: a String, or the List
+   [from, to] of a rename. */
 static agc_value named(agc_vm *vm, agc_value error, agc_value context) {
-  return agc_is(context, AGC_T_STRING) ? with_path(vm, error, agc_as_string(vm, context)) : error;
+  if (agc_is(context, AGC_T_STRING)) return with_path(vm, error, agc_as_string(vm, context));
+  if (!agc_is(context, AGC_T_LIST)) return error;
+  const agc_list *paths = agc_as_list(vm, context);
+  const agc_string *to = agc_as_string(vm, agc_list_get(paths, 1));
+  error = with_path(vm, error, agc_as_string(vm, agc_list_get(paths, 0)));
+  return agc_error_detail(vm, error, "to", to->data, to->bytes);
 }
 
 static agc_value done(agc_vm *vm, void *data, agc_value context) {
@@ -1796,17 +1802,21 @@ static agc_value builtin_remove(agc_vm *vm, agc_value *args, uint32_t span) {
 }
 
 static agc_value builtin_rename(agc_vm *vm, agc_value *args, uint32_t span) {
-  if (fs_denied(vm, span)) return fs_refused(vm, args[0]);
+  if (fs_denied(vm, span)) {
+    const agc_string *target = agc_as_string(vm, args[1]);
+    return agc_error_detail(vm, fs_refused(vm, args[0]), "to", target->data, target->bytes);
+  }
   const agc_string *from = agc_as_string(vm, args[0]);
   const agc_string *to = agc_as_string(vm, args[1]);
   int64_t timeout = agc_as_int(vm, args[2]);
   if (timeout <= 0) return error_of(vm, AGC_KIND_ARGUMENT, bad_timeout);
   if (!path_string(from)) return bad_path(vm, from);
   if (!path_string(to)) return bad_path(vm, to);
+  agc_value paths = agc_list_value(agc_list_from_array(args, 2));
   op *o = call_op(vm, OP_RENAME, NULL);
   o->path = agc_host_path(vm, from);
   o->to = agc_host_path(vm, to);
-  return start(vm, o, args[0], timeout);
+  return start(vm, o, paths, timeout);
 }
 
 /* File.replace(path, data, timeout_ms): see work_replace. */
