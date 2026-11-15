@@ -12,6 +12,7 @@ import GitSource from "git_source"
 import Lock from "lock"
 import Manifest from "manifest"
 import Members from "members"
+import Reader from "toml_read"
 
 ## The names of the two files, beside each other in the folder of the project.
 MANIFEST_FILE = "agentica.toml"
@@ -44,13 +45,10 @@ def find(workspace: Workspace.Workspace, root_dir: String, running: String) -> R
   dir = nearest_manifest(workspace, root_dir)
   return ok(Project.Bare) if dir == ""
 
-  manifest = try Manifest.read_checked(workspace, Paths.join(dir, MANIFEST_FILE), "", running)
-  try check_paths(workspace, dir, manifest)
-  members = try Members.find(workspace, dir, running)
-  empty = Lock.Lock(file: Paths.join(dir, LOCK_FILE), packages: [], artifacts: [])
-  if manifest.dependencies.size == 0 and !Manifest.has_downloaded(manifest)
-    return ok(Project.Declared(Found(dir: dir, manifest: manifest, lock: empty, members: members)))
-  end
+  found = try unlocked(workspace, dir, running)
+  manifest = found.manifest
+  empty = found.lock
+  return ok(Project.Declared(found)) if manifest.dependencies.size == 0 and !Manifest.has_downloaded(manifest)
 
   if !workspace.file_exists.call(empty.file)
     if manifest.dependencies.size == 0
@@ -75,8 +73,8 @@ def find(workspace: Workspace.Workspace, root_dir: String, running: String) -> R
   end
 
   lock = try Lock.read(workspace, empty.file)
-  try check_dependencies(lock, manifest, members, false)
-  ok(Project.Declared(Found(dir: dir, manifest: manifest, lock: lock, members: members)))
+  try check_dependencies(lock, manifest, found.members, false)
+  ok(Project.Declared(found.with(lock: lock)))
 end
 
 ## Finds the project of the commands that write the lock (`add`, `update`). The manifest is read as `find` reads it,
@@ -86,15 +84,11 @@ def find_to_write(workspace: Workspace.Workspace, root_dir: String, running: Str
   dir = nearest_manifest(workspace, root_dir)
   return ok(Project.Bare) if dir == ""
 
-  manifest = try Manifest.read_checked(workspace, Paths.join(dir, MANIFEST_FILE), "", running)
-  try check_paths(workspace, dir, manifest)
-  members = try Members.find(workspace, dir, running)
-  lock = Lock.Lock(file: Paths.join(dir, LOCK_FILE), packages: [], artifacts: [])
-  if workspace.file_exists.call(lock.file)
-    lock = try Lock.read(workspace, lock.file)
-  end
+  found = try unlocked(workspace, dir, running)
+  return ok(Project.Declared(found)) if !workspace.file_exists.call(found.lock.file)
 
-  ok(Project.Declared(Found(dir: dir, manifest: manifest, lock: lock, members: members)))
+  lock = try Lock.read(workspace, found.lock.file)
+  ok(Project.Declared(found.with(lock: lock)))
 end
 
 ## The local names of the dependencies of the root project that a program that is not a test may import, in the order
@@ -136,6 +130,19 @@ def path_folder(dir: String, path: String) -> String
   return path if Paths.rooted?(path)
 
   Paths.join(dir, path)
+end
+
+# The project in `dir` with an empty lock: its manifest, parsed once for the manifest and for the workspace search.
+def unlocked(workspace: Workspace.Workspace, dir: String, running: String) -> Result[Found]
+  file = Paths.join(dir, MANIFEST_FILE)
+  reading = Reader.Reading(file: file, code: "PKG-MANIFEST-INVALID")
+  text = try Reader.read_text(workspace, reading)
+  root = try Reader.parse(reading, text)
+  manifest = try Manifest.from_table(file, root, "", running)
+  try check_paths(workspace, dir, manifest)
+  members = try Members.find(workspace, dir, root, running)
+  lock = Lock.Lock(file: Paths.join(dir, LOCK_FILE), packages: [], artifacts: [])
+  ok(Found(dir: dir, manifest: manifest, lock: lock, members: members))
 end
 
 ## Checks that each `path` dependency of the root manifest names a folder with an agentica.toml, as a workspace member
