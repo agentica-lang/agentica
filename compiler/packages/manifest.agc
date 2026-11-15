@@ -84,6 +84,30 @@ end
 ## Reads the manifest text, which is said to come from file. The writer checks the text it is about to save with this.
 def parse(file: String, text: String) -> Result[Manifest] = parse_checked(file, text, "", "")
 
+## The manifest of the parsed document `root` of file, checked as `read_checked` checks it. The project reads its
+## manifest with this, so the workspace search uses the same parse (project.agc).
+def from_table(file: String, root: Map[String, Toml.Value], package: String, running: String) -> Result[Manifest]
+  reading = Reader.Reading(file: file, code: "PKG-MANIFEST-INVALID")
+  agentica = try checked_agentica(file, root, AgenticaVersion.owner_of(package), running)
+  try Reader.known_keys(reading, root, TOP_KEYS, "")
+  name = try optional_name(reading, root)
+  dependencies = try dependencies_of(reading, root)
+  natives = try natives_of(reading, root)
+  style = try style_of(reading, root)
+  try tool_of(reading, root)
+  ok(
+    Manifest(
+      file: file,
+      name: name,
+      agentica: agentica,
+      dependencies: dependencies,
+      natives: natives,
+      max_line_width: style.max_line_width,
+      blank_line_after_end: style.blank_line_after_end,
+    ),
+  )
+end
+
 ## Refuses what only the root project's manifest may say, in the manifest of a package (fetched, or a workspace member
 ## read in place): a `path` dependency, which cannot be published, and `override = true`, which the packages of a tree
 ## cannot impose on each other. A failure is PKG-ROOT-ONLY at `dependencies.<name>.path` or `.override`.
@@ -185,30 +209,13 @@ struct Style
   blank_line_after_end: Bool
 end
 
-# The `agentica` key comes first, right after the TOML parse: a manifest made for a newer Agentica may hold keys and
-# values that this one does not know, and the version it needs is then the failure to report. That order is a
-# contract: every later Agentica keeps it.
+# The `agentica` key comes first (from_table), right after the TOML parse: a manifest made for a newer Agentica may
+# hold keys and values that this one does not know, and the version it needs is then the failure to report. That
+# order is a contract: every later Agentica keeps it.
 def parse_checked(file: String, text: String, package: String, running: String) -> Result[Manifest]
   reading = Reader.Reading(file: file, code: "PKG-MANIFEST-INVALID")
   root = try Reader.parse(reading, text)
-  agentica = try checked_agentica(file, root, AgenticaVersion.owner_of(package), running)
-  try Reader.known_keys(reading, root, TOP_KEYS, "")
-  name = try optional_name(reading, root)
-  dependencies = try dependencies_of(reading, root)
-  natives = try natives_of(reading, root)
-  style = try style_of(reading, root)
-  try tool_of(reading, root)
-  ok(
-    Manifest(
-      file: file,
-      name: name,
-      agentica: agentica,
-      dependencies: dependencies,
-      natives: natives,
-      max_line_width: style.max_line_width,
-      blank_line_after_end: style.blank_line_after_end,
-    ),
-  )
+  from_table(file, root, package, running)
 end
 
 # The project's own name, a package name too. "" when the file has none.
