@@ -18,8 +18,8 @@ import time
 
 import pytest
 
-from tests.agentica_test import (FIXTURES, TARGET_OS, TEST_SCHEDULERS, WAIT_SECONDS, Child, compile_text,
-                                 run, run_vm, scaled, start_vm, vm_environment)
+from tests.agentica_test import (FIXTURES, TARGET_OS, TEST_SCHEDULERS, WAIT_SECONDS, WINDOWS, Child, compile_text,
+                                 host_only, run, run_vm, scaled, start_vm, vm_environment)
 
 PEER = FIXTURES / "tcp-peer.js"
 
@@ -546,7 +546,7 @@ def test_a_close_gives_up_at_the_flush_limit_and_the_run_says_what_it_dropped(tm
     assert "warning: closed sockets dropped" in vm.stderr_text()
 
 
-@pytest.mark.skipif(TARGET_OS == "windows", reason="a SIGTERM ends a Windows process at once")
+@host_only(WINDOWS, "Windows has no POSIX signals")
 def test_a_stop_signal_does_not_wait_for_the_peer_of_a_closed_socket(tmp_path, adopt):
     """The socket is closed with megabytes in its write buffer, and the peer never reads. A SIGTERM then ends the run
     without the 30 seconds of the flush limit, and the warning says that bytes were dropped."""
