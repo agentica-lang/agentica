@@ -12,6 +12,10 @@
 #include <stdio.h>
 #include <string.h>
 
+#ifndef AGC_NO_GC
+#include <gc.h>
+#endif
+
 #define LARGE ((size_t)33000)
 #define EXTEND_MAX ((size_t)1100)
 #define EXTENSION 70
@@ -363,6 +367,8 @@ static void expect_interior_pointers(void) {
   if (!agc_gc_stats(&info)) return;
   const size_t n = 20000;
   agc_list *kept = replaced_first(n);
+  const size_t from = 40 * LIST_WIDTH;
+  agc_list *dropped = agc_list_slice(built(n), from, n - from);
   uint64_t stop = info.collections + 3;
   for (size_t round = 0; round < ROUNDS && info.collections < stop; round++) {
     memset(agc_alloc(JUNK), 0xAB, JUNK);
@@ -372,6 +378,36 @@ static void expect_interior_pointers(void) {
   for (size_t round = 0; round < AFTER; round++) memset(agc_alloc(JUNK), 0xAB, JUNK);
   assert(is_other(agc_list_get(kept, 0), 0));
   for (size_t k = 1; k < n; k++) assert(is_item(agc_list_get(kept, k), k));
+  for (size_t k = 0; k < n - from; k++) assert(is_item(agc_list_get(dropped, k), from + k));
+}
+
+#ifndef AGC_NO_GC
+/* slack: the debug header of the GC-stress build and the rounding of a large object to whole heap blocks */
+static void expect_small_node(const void *node, size_t bytes, size_t slack) {
+  void *base = GC_base((void *)node);
+  assert(base && GC_size(base) <= bytes + slack);
+}
+
+static void expect_small_nodes(const void *node, uint32_t shift) {
+  if (!shift) {
+    expect_small_node(node, 65536, 4096);
+    return;
+  }
+  const list_branch *b = node;
+  expect_small_node(b, sizeof(list_branch), 256);
+  for (size_t c = 0; c < LIST_WIDTH && b->child[c]; c++) expect_small_nodes(b->child[c], shift - LIST_BITS);
+}
+#endif
+
+/* A false pointer into a built list keeps at most one slab of 64 KiB alive: no node of the trie is larger. */
+static void expect_bounded_nodes(void) {
+#ifndef AGC_NO_GC
+  const size_t n = 100000 < MAX_LENGTH ? 100000 : MAX_LENGTH;
+  agc_list *l = built(n);
+  expect_small_nodes(l->root, l->shift);
+  agc_list *shared = agc_list_slice(l, 7 * LIST_WIDTH, n - 7 * LIST_WIDTH);
+  expect_small_nodes(shared->root, shared->shift);
+#endif
 }
 
 static void expect_versions(void) {
@@ -418,6 +454,7 @@ static void run_lengths(void) {
   expect_sharing();
   expect_shared_leaves();
   expect_interior_pointers();
+  expect_bounded_nodes();
   const size_t chains[] = {33, 65, 1057, 1100};
   for (size_t s = 0; s < sizeof chains / sizeof chains[0]; s++)
     if (chains[s] <= MAX_LENGTH) expect_set_chain(chains[s]);

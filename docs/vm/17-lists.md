@@ -267,7 +267,7 @@ masks.
 
 **Memory and the GC.**
 
-- Numeric leaf blocks (a build's block, a copied leaf, the leaf of `repeat`)
+- Numeric leaf blocks (a build's slabs, a copied leaf, the leaf of `repeat`)
   come from `agc_alloc_atomic`: the collector does not scan them, and under
   Boehm they are not zeroed. Every word is written before the list is returned:
   `finish` aborts unless the builder is full, and a leaf copy always gets 32
@@ -276,9 +276,16 @@ masks.
   A numeric tail (at most 256 bytes) is scanned, so an Int that looks like a
   pointer can keep garbage alive for as long as its list lives. Boehm already
   accepts that for the stack and the registers.
-- A leaf is a slice of a block, and the branches hold interior pointers into it.
-  `GC_set_all_interior_pointers(1)` keeps the block alive. `list_test.c` forces
-  collections while only such pointers refer to an atomic block, for each kind.
+- A build (the sized builder, `slice`, `concat`, `reverse`) puts its new
+  leaves in slabs of at most 64 KiB, and the branches hold interior pointers
+  into them. `GC_set_all_interior_pointers(1)` keeps a slab alive.
+  `list_test.c` forces collections while only such pointers refer to a slab,
+  for each kind.
+- No node is larger than a slab: each branch is its own object. Marking is
+  conservative, so a stale or false pointer can point into a dead list; it then
+  keeps at most one slab and what its items refer to alive, not the whole list.
+  One block per build kept a whole parsed JSON array alive this way on macOS
+  arm64 (#1681).
 - The size bound of §17.7 still applies to 16-byte items, for every kind.
 
 **Mixing kinds.** The checker does not allow it, but a `.agcb` can ask for it:

@@ -26,6 +26,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - Programs run 4 to 6% faster when the interpreter runs them (`--jit off`, or code the JIT has not compiled): a call or an operator writes its result straight into the variable it is assigned to (#1001).
 - `String.split` searches the text once instead of twice and skips counting the characters of each piece when the text is ASCII: about 10% faster on log-style line and word splitting (#996).
 
+### Fixed
+
+- A loop that parses a large JSON array or builds large lists no longer keeps old lists alive through a stray pointer, which made it hit `--max-heap` on macOS arm64: such a pointer now keeps at most 64 KiB of a list (#1681).
+
 ## [0.32.0] - 2026-11-15
 
 ### Added
