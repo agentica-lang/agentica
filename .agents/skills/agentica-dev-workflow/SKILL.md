@@ -121,27 +121,32 @@ Invoke the `pr-reviewer` skill (via the Skill tool) and follow it to review GitH
   `build`, ...) are not names to require. Code PRs also need **Site
   examples** when the PR touches `site/content/`. Docs-only PRs
   skip `ci.yml` (an explicit docs-only exception) and do not wait for CI.
+- **Light path:** a PR that changes only portable `std/` modules (not
+  imported by `compiler/`, not the prelude, `std/test`, `std/bdd`,
+  `std/analysis`, `std/logger`, `std/actor` or `std/eag`), their
+  `tests/std/`, `tests/test_std_<name>.py` and `tests/fixtures/<name>/` files,
+  `tests/test_unit_test.py` and docs (`docs/`, `site/content/`, `.agents/`,
+  the root `*.md`), and no `stdlib/MODULES`, runs one fast shard: the test
+  modules and goldens that use the changed modules, the modules that check
+  every std module (`ALWAYS`) and `make dup-check` (`tools/ci_changes.py`; the
+  `changes` job prints the list or why the PR takes the full path). `test`
+  stays the required check. The reviewer runs those modules locally (`make
+  test TESTS="..."` with the `std_tests` line of the `changes` log).
 - **Platforms** (`platforms.yml`: Linux x86_64 and ARM64, Windows, macOS
-  Intel and ARM) runs on a PR only with a label, and always on pushes to
-  master. `platforms` runs all five systems: add it only when the PR changes
-  C code (`vm/`, the VM build in the Makefile) or is a release bump
-  (`agentica-release`), and wait for all five. A `platform:windows-x86_64`,
-  `platform:macos-x86_64` or `platform:macos-arm64` label runs that system
-  alone, for a PR that fixes or checks one system (a test fix for a
-  macOS-only flake); `conformance all-systems` then does not run. Add a label
-  a few seconds after opening the PR (a label at creation starts two runs).
-  A master run that fails after a merge without the label is fixed in a new
-  PR at once.
-- **Agentica code** (`compiler/`, `stdlib/`, their Python tests and goldens,
-  docs, the site) never gets `platforms`, also when its tests touch
-  processes, files or paths: do not wait for the macOS and Windows jobs.
-  Merge when `test` is green (plus `build` and Site examples when they run);
-  master's Platforms run catches the rare gap.
+  Intel and ARM) runs all five systems on a PR whose files need them (the
+  VM, the build, stage0, the release tooling, the workflow and the test code
+  that differs by system: `PLATFORM_PATHS` of `tools/ci_changes.py`; its
+  `systems` job prints why), and on every push to master. Other PRs
+  (`compiler/`, `stdlib/`, their tests and goldens, docs, the site) run none:
+  merge when `test` is green (plus `build` and Site examples when they run);
+  master's Platforms run catches the rare gap and is fixed in a new PR at
+  once. `gh workflow run platforms.yml --ref BRANCH` forces a run; the
+  Probe (below) runs one system.
 - Wait with one background call of the `watch-ci` skill when it is
-  installed (`--sha <head>`; with the label also `--require 'conformance
-  (macos|windows)'`, so the Platforms jobs must appear, and the green
-  verdict covers every check; `--merge` only when the owner asked for the
-  merge). Without
+  installed (`--sha <head>`; when Platforms runs also `--require
+  'conformance (macos|windows)'`, so the Platforms jobs must appear, and the
+  green verdict covers every check; `--merge` only when the owner asked for
+  the merge). Without
   it: one background loop on `gh run list --branch <b>` filtered by the head
   SHA, started from the main checkout (run the query once in the foreground
   first).

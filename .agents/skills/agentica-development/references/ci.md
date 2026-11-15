@@ -177,7 +177,10 @@ proof). These are the rules they do not show.
   re-run the job.
 - The C half runs only when the merge commit changes `vm/`, the Makefile,
   `mk/*.mk`, `.gitmodules`, `.clang-tidy`, `ci.yml` or `.github/actions/` (the
-  `changes` job); keep that list in step with new C folders.
+  `changes` job: `tools/ci_changes.py`, tested in `tests/test_ci_tools.py`);
+  keep that list in step with new C folders. A new std module that `compiler/`
+  imports leaves the light path by itself (the script reads the imports); the
+  light path: `agentica-dev-workflow` §4.
 - Every job that runs tests sets `AGENTICA_SWEEP=sampled` (seed from
   `GITHUB_SHA`; a failure prints `AGENTICA_SWEEP_SEED`). `RUNTIME-TEST-TIMEOUT`
   has coverage only in the slow tier.
@@ -257,7 +260,7 @@ in that clone (`docs/settings.md`, `docs/suppressions.md`).
 
 ## Conformance matrix (`platforms.yml`)
 
-The header of `platforms.yml` says what it runs; which label a PR takes:
+The header of `platforms.yml` says what it runs; which PRs run it:
 `agentica-dev-workflow` §4. No step checks or
 regenerates the frozen `vm/unicode_data.c`. Not in the matrix: the Docker
 and Wine groups, the slow tier, sanitizers, fuzz and gc-stress (`ci.yml`,
@@ -289,9 +292,8 @@ The Windows jobs set up MSYS2 with `.github/actions/msys2`, not
 60 s and 180 s) because the MSYS2 servers answer 504 now and then, and each
 attempt uses its own `location`, since the action refuses a folder that exists.
 
-A flaky test on one system: probe it there first (`repeat`, below); else open
-a do-not-merge experiment PR with that
-system's `platform:<system>` label that loops the suspect command alone, then
+A flaky test on one system: probe it there first (`repeat`, below); else loop
+the suspect command alone with the Probe's `target` or `program`, then
 under load (several loops beside other test loops); causes often show only
 under load. If it cannot be reproduced, make the failure message carry what the
 next case needs (exit code, folder contents).
@@ -349,7 +351,9 @@ do not say:
   the interpreter, then on Linux x86-64 with the JIT, and compares the outputs.
   The link wraps `agc_jit_mem_reserve` so each input's code memory is unmapped
   (`vm/fuzz_libfuzzer.c`). Seeds: `tests/fixtures/vm/` and
-  `tests/fixtures/fuzz/`.
+  `tests/fixtures/fuzz/`. Then `vm-libfuzz-http-run` fuzzes the HTTP parsers
+  for a tenth of the time (`vm/fuzz_http.c`, seeds in
+  `tests/fixtures/fuzz/http/`).
 - `sweep.yml` (weekly, and by hand) runs `make sweep-full` and
   `vm-jit-self-compile` (the front end compiles itself under `--jit on` and
   `always`, through the test-only `AGENTICA_VM_TEST_FRONT_END_JIT`), and its

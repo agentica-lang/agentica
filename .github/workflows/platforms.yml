@@ -6,13 +6,11 @@ name: Platforms
 # summary that fails when an area has no passed case, a module did not finish, or a case was skipped for a reason that is
 # not on the reviewed list (host-only: pairs in HOST_ONLY_ALLOWED; known-issue: numbers in KNOWN_ISSUES). A last job,
 # `conformance all-systems`, puts the five summaries side by side and fails when a case ran on no system.
-# Pushes to master and manual runs always run all five. A pull request runs all five with the `platforms` label, or only
-# the systems of its `platform:windows-x86_64`, `platform:macos-x86_64` and `platform:macos-arm64` labels (Linux has
-# no label of its own: ci.yml tests it); with none of these labels it runs nothing. Adding one of these labels starts a
-# run; another label never starts or cancels one.
+# Pushes to master and manual runs (`gh workflow run platforms.yml --ref BRANCH`) always run all five. A pull request
+# runs all five when tools/ci_changes.py says its files need them (the VM, the build, stage0, the release tooling, this
+# workflow, the test code that differs by system), and none otherwise; the `systems` job prints why.
 on:
   pull_request:
-    types: [opened, synchronize, reopened, labeled]
   push:
     branches: [master]
   workflow_dispatch:
@@ -26,11 +24,9 @@ on:
 permissions:
   contents: read
 
-# An unrelated label gets its own group, so it never cancels a real run;
-# master runs are never cancelled, so every merge is tested. The label list is
-# the same as in the `if` of the `systems` job.
+# Master runs are never cancelled, so every merge is tested.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event.action == 'labeled' && !contains(fromJSON('["platforms", "platform:windows-x86_64", "platform:macos-x86_64", "platform:macos-arm64"]'), github.event.label.name) && github.run_id || 'main' }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # The runners can be slow: every deadline of the tests is multiplied by this, as in ci.yml (references/ci.md). Linux
@@ -40,10 +36,9 @@ env:
   AGENTICA_TEST_TIMEOUT_SCALE: '4'
 
 jobs:
-  # Picks the systems from the event and the labels; `conformance` runs this matrix. The job runs only when the event
-  # may select a system: the `"platform` prefilter also matches `platforms`, and the step does the exact match.
+  # Picks the systems from the event and, on a pull request, from the changed files; `conformance` runs this matrix.
+  # HEAD is the merge commit on pull_request, so HEAD^1 is the base tip: this diffs the whole PR.
   systems:
-    if: github.event_name != 'pull_request' || contains(toJSON(github.event.pull_request.labels.*.name), '"platform') && (github.event.action != 'labeled' || contains(fromJSON('["platforms", "platform:windows-x86_64", "platform:macos-x86_64", "platform:macos-arm64"]'), github.event.label.name))
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -51,15 +46,22 @@ jobs:
       count: ${{ steps.pick.outputs.count }}
       all: ${{ steps.pick.outputs.all }}
     steps:
-      # The table of the five systems is tools/ci_systems.py, which probe.yml picks from too; only that file is checked out.
+      # The table of the five systems is tools/ci_systems.py, which probe.yml picks from too.
       - uses: actions/checkout@v7
         with:
-          sparse-checkout: tools/ci_systems.py
-          sparse-checkout-cone-mode: false
+          fetch-depth: 2
+      - id: changes
+        if: github.event_name == 'pull_request'
+        run: |
+          set -o pipefail
+          if files=$(git -c core.quotePath=false diff --name-only --no-renames HEAD^1 HEAD); then
+            printf '%s\n' "$files" | python3 tools/ci_changes.py | tee -a "$GITHUB_OUTPUT"
+          else
+            python3 tools/ci_changes.py --all | tee -a "$GITHUB_OUTPUT"
+          fi
       - id: pick
         env:
-          ALL: ${{ github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'platforms') }}
-          LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+          ALL: ${{ github.event_name != 'pull_request' || steps.changes.outputs.platforms == 'true' }}
         run: python3 tools/ci_systems.py platforms >> "$GITHUB_OUTPUT"
 
   conformance:
@@ -236,8 +238,7 @@ jobs:
           key: ccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Makefile', 'mk/*.mk', 'vm/**/*.c', 'vm/**/*.h') }}
 
   # The five summaries side by side: a case that no system ran (host-only or open gap on all of them) proves nothing,
-  # and one job cannot see that. It runs only when all five systems were picked: on a subset (`platform:<system>`
-  # labels) a case the other systems cover would look unrun, so the check would fail for no reason.
+  # and one job cannot see that. It runs only when all five systems were picked (always, when any is).
   summary:
     name: conformance all-systems
     needs: [systems, conformance]
