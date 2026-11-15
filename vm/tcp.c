@@ -4,7 +4,8 @@
  * host's error numbers through net_os.h. Every `net` belongs to the I/O
  * thread; a builtin reaches it through a step posted there, and a done half
  * reads only what that thread copied into the request, except the direct send
- * of a plain socket from a scheduler (direct_send). Service layer.
+ * of a plain socket from a scheduler (direct_send) and the take of its
+ * buffered input by a read (takes_here). Service layer.
  * Design: docs/vm/10-io-tls.md §10.3 and §10.3.1, docs/vm/16-architecture.md §16.9.
  */
 #include "http_fields.h"
@@ -102,7 +103,8 @@ typedef struct tls_shared tls_shared;
 /* A socket or a listener. Every field belongs to the I/O thread (the builtins post steps to it), with two exceptions:
    `closed` is atomic, so a builtin can refuse a closed socket at once (a stale false only means its step finds it
    closed), and `id` is atomic, since the scheduler that adopts an accepted socket names it while the I/O thread may
-   be tracing it. The error fields (`error`, `resolved`, `failure`, `tls_failed`) are not written after the failure
+   be tracing it. A plain socket's input `in` is also the reader's on a scheduler while no read of it waits
+   (takes_here). The error fields (`error`, `resolved`, `failure`, `tls_failed`) are not written after the failure
    that a finished request reported, so its done half may read them. */
 struct agc_conn {
   agc_trace trace;
@@ -566,7 +568,7 @@ static void shut_one(net *n, const char *why) {
     drop_links(n);
   }
   n->reading = false;
-  agc_inbuf_free(&n->in);
+  /* The input stays until `settle`: a read on a scheduler may be taking from it now (takes_here). */
   notify(n, n->opener);
   notify(n, n->reader);
   notify(n, n->writer);
@@ -1529,6 +1531,8 @@ static bool request_cancel(agc_vm *vm, void *data, agc_value context, bool deadl
   if (!deadline && (q->finished || (q->kind != REQ_ACCEPT && q->kind != REQ_FLUSH && !reads(q->kind)))) return false;
   unlink_request(q);
   if (q->kind == REQ_CONNECT) shut(q->n, "cancel");
+  /* The next reader may take the input on its scheduler (takes_here), so no read callback writes it from now on. */
+  if (reads(q->kind) && !q->n->secure) stop_reading(q->n);
   return true;
 }
 
@@ -1859,6 +1863,18 @@ static agc_value builtin_close(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_void();
 }
 
+/* Whether a read at N > 1 may take the buffered input of N on its scheduler (#1197). The I/O thread writes a plain
+   socket's input only while a read of it waits, from begin_read until `finish` takes its cut, and reading stops then
+   (read_in), or at a cancel (request_cancel). The caller holds the reader lock, so no read of its socket waits, and the
+   end of the last one (its `done` half, then the lock's hand-on) comes after that write. A timeout or a close of
+   another task shuts the net beside the take, which leaves the buffer to `settle`, and that waits for the resource's
+   count, held here under rt->sync. A TLS socket reads for its handshake with no read waiting (a send starts it), and
+   the session decrypts into the input then, so its input stays the I/O thread's. */
+static bool takes_here(const net *n) { return !n->secure; }
+
+/* A line that the limit cuts closes the socket (take), which is the I/O thread's to do: such a read parks. */
+static bool over_limit(const net *n, req_kind kind) { return kind == REQ_LINE && agc_inbuf_pending(&n->in) > LIMIT; }
+
 static bool begin_read(void *data, agc_io_job *job) {
   request *q = data;
   net *n = q->n;
@@ -1907,11 +1923,17 @@ static agc_value read_op(agc_vm *vm, const agc_value *args, request *want, bool 
   if (!agc_stream_lock(vm, sk->reader, AGC_STREAM_NETWORK, &timeout, &result)) return result;
   net *n = live(sk);
   if (!n) return agc_error(vm, AGC_KIND_NET_CLOSED, socket_closed);
-  /* At N = 1 the input is this thread's: what is buffered is taken without a park. */
-  if (agc_io_here(vm)) {
+  /* What is buffered is taken without a park: at N = 1 the input is this thread's, and at N > 1 a plain socket's is the
+     reader's while no read of it waits (takes_here). */
+  bool here = agc_io_here(vm);
+  if (here || takes_here(n)) {
     if (!agc_inbuf_unread(&n->in, rest, rest_len)) agc_out_of_memory();
     rest_len = 0;
-    if (read_ready(n, want)) return take(vm, n, want);
+    if (read_ready(n, want) && (here || !over_limit(n, kind))) {
+      agc_value result = take(vm, n, want);
+      if (!here) agc_charge(vm, agc_value_units(result));
+      return result;
+    }
   }
   request *q = new_request(vm, n, kind);
   q->count = want->count;
