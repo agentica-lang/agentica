@@ -185,13 +185,20 @@ The ring, the reservations and the FIFOs of waiters are
   insertion order (an array of entries plus an index of slots, as CPython's
   `dict`): a deleted entry stays as a hole until the next rebuild, which also
   grows or shrinks the arrays.
-- No row is `shared`: a call takes no `rt->sync`, only the table's read-write
-  lock, one of 64 picked by the table's address (`agc_table_lock`,
-  `vm/sync.c`), and one flag test before `agc_share`. Nothing raises, charges
-  or calls user code under it: the key is hashed before, and an add that fails
-  raises after the unlock, so the table keeps its state. `ATS.size` reads an
-  atomic without the lock. `vm/tests/ats_test.c` races threads on one table
-  (in `VM_TSAN_TESTS`).
+- No row is `shared`: a call takes no `rt->sync`. A write takes the table's
+  read-write lock, one of 64 picked by the table's address (`agc_table_lock`,
+  `vm/sync.c`; one flag test before `agc_share`). Nothing raises, charges or
+  calls user code under it: the key is hashed before, and an add that fails
+  raises after the unlock, so the table keeps its state.
+- A read (`get`, `has_key?`, the first look of `push`) takes no lock: a
+  seqlock (`read_at`). A write makes `seq` odd, then even; a read that saw it
+  odd or changed throws away what it loaded, and after `READ_TRIES` takes the
+  read lock. Every word a read loads without the lock is an atomic (a value is
+  two, which may come from two writes), a rebuild or a clear publishes a new
+  `block` and never changes the old one, and a delete leaves the key's
+  payload. `ATS.size` reads an atomic. `vm/tests/ats_test.c` races threads on
+  one table, readers against writes, rebuilds and clears among them (in
+  `VM_TSAN_TESTS`).
 
 ## Test builtins (`vm/testing.c`)
 

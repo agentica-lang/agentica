@@ -1,7 +1,7 @@
 /* ATS tables (vm/ats.c): order and snapshots with the invariants of the index and the entries, growth and shrinking,
-   keys of mixed tags as forged bytecode may pass them, an add that fails and leaves the table unchanged, the run
-   check, threads that update one table at once with exact totals, that write while one clears and that push to
-   one list (all also under TSan). */
+   mixed key tags, a failed add that changes nothing, the run check, and threads on one table (also under TSan): exact
+   totals of racing adds, writes against clears, pushes to one list, and readers without the lock against writes,
+   rebuilds and clears that never see a torn value. */
 #include "../core.h"
 #include "../services.h"
 #include "io_harness.h"
@@ -340,6 +340,79 @@ static void test_clear_races_writers(void) {
   for (int64_t k = 1; k < THREADS; k++) assert(get_int(shared_table, agc_int(k)) >= ROUNDS);
 }
 
+#define READ_KEYS 4
+#define READ_ROUNDS 40000
+#define FILLER 600
+
+static agc_value read_texts[READ_KEYS];
+static atomic_bool writing_done;
+static atomic_int_fast64_t reads_seen;
+
+static void put_on(agc_vm *v, agc_value t, agc_value key, agc_value value) {
+  agc_value args[3] = {t, key, value};
+  (void)call_on(v, "ATS.put", 3, args);
+}
+
+/* Key k holds the Int k or the String "s<k>", and the two swap all the time, so a value torn between them has the tag
+   of one and the payload of the other. Fillers make the table grow and shrink, and a clear now and then empties it. */
+static void read_writer(void *arg) {
+  agc_vm *v = &workers[(intptr_t)arg];
+  assert(agc_gc_thread_enter());
+  uv_barrier_wait(&gate);
+  for (int r = 0; r < READ_ROUNDS; r++) {
+    for (int64_t k = 0; k < READ_KEYS; k++) put_on(v, shared_table, agc_int(k), r % 2 ? agc_int(k) : read_texts[k]);
+    if (r % 512 == 3) {
+      for (int64_t k = 0; k < FILLER; k++) put_on(v, shared_table, agc_int(1000 + k), agc_int(k));
+      for (int64_t k = 0; k < FILLER; k++) {
+        agc_value args[2] = {shared_table, agc_int(1000 + k)};
+        (void)call_on(v, "ATS.delete", 2, args);
+      }
+    }
+    if (r % 1024 == 5) (void)call_on(v, "ATS.clear", 1, &shared_table);
+  }
+  atomic_store(&writing_done, true);
+  agc_gc_thread_leave();
+}
+
+/* Reads with no lock while read_writer runs: a key is missing or holds one of its two values, whole. */
+static void reader(void *arg) {
+  intptr_t id = (intptr_t)arg;
+  agc_vm *v = &workers[id];
+  assert(agc_gc_thread_enter());
+  uv_barrier_wait(&gate);
+  uint64_t seed = (uint64_t)id;
+  int64_t reads = 0;
+  while (!atomic_load(&writing_done)) {
+    seed = seed * 6364136223846793005u + 1442695040888963407u;
+    int64_t k = (int64_t)((seed >> 33) % READ_KEYS);
+    agc_value args[2] = {shared_table, agc_int(k)};
+    const agc_result *r = agc_as_result(v, call_on(v, "ATS.get", 2, args));
+    reads++;
+    if (!r->ok) continue;
+    if (agc_is(r->value, AGC_T_INT)) {
+      assert(agc_as_int(v, r->value) == k);
+      continue;
+    }
+    const agc_string *text = agc_as_string(v, r->value), *want = agc_as_string(v, read_texts[k]);
+    assert(text == want && memcmp(text->data, want->data, want->bytes) == 0);
+    (void)agc_as_bool(v, call_on(v, "ATS.has_key?", 2, args));
+  }
+  atomic_fetch_add(&reads_seen, reads);
+  agc_gc_thread_leave();
+}
+
+static void test_readers_race_writes(void) {
+  char name[16];
+  for (int k = 0; k < READ_KEYS; k++) {
+    snprintf(name, sizeof name, "s%d", k);
+    read_texts[k] = agc_test_str(name);
+  }
+  atomic_store(&writing_done, false);
+  atomic_store(&reads_seen, 0);
+  race(read_writer, reader);
+  assert(atomic_load(&reads_seen) >= THREADS - 1 && agc_ats_valid(&vm, shared_table));
+}
+
 int main(void) {
   agc_test_deadline(120);
   agc_test_io_vm(&vm);
@@ -355,6 +428,7 @@ int main(void) {
   test_threads();
   test_clear_races_writers();
   test_push();
+  test_readers_race_writes();
   puts("ats tests passed");
   return 0;
 }

@@ -149,14 +149,21 @@ The multicore model (threads, queues and ownership) is in §16
   in place when a value is known to be unique, the faster lists of §17)
   must be proven unshared or made atomic. Future mutable structures must use
   locks and atomics. The `ATS` tables (the grammar's "Shared tables") are
-  built so: a table is a hash table under a read-write lock, one of 64 picked
-  by the table's address, so readers run together and a write is alone
-  (`vm/ats.c`, `vm/sync.c`). A table call holds the lock for its own length,
-  raises nothing under it and does not yield. Two costs are known: writes to
-  one table do not run in parallel, and a read lock writes the lock's cache
-  line, so readers of one table with cheap keys do not scale (8 tasks, Int
-  keys, 8 schedulers: 2.1 s against 0.9 s for the lock-free trees this
-  replaced, and 2.4 s against 3.5 s on one scheduler; `benchmarks/programs/ats-int-readers.agc`).
+  built so: a table is a hash table whose writes take a read-write lock, one
+  of 64 picked by the table's address, so a write is alone (`vm/ats.c`,
+  `vm/sync.c`). A write holds the lock for its own length, raises nothing
+  under it and does not yield. A read takes no lock and writes no shared
+  memory (a seqlock): a write makes the table's sequence number odd, then
+  even, and a read that saw it odd or changed throws away what it loaded and
+  tries again, then takes the read lock after 8 tries. Every word a read
+  loads without the lock is an atomic: a value is two words, which a read may
+  load from two writes, and such a torn value is never used. A rebuild or a
+  clear publishes a new block of arrays and leaves the old one as it was for
+  the readers still in it, which keep it alive for the collector. Readers of
+  one table scale with the schedulers (8 tasks, Int keys, 8 schedulers: 0.73
+  s, against 2.2 s with a read lock and 0.92 s for the lock-free trees before
+  it; `benchmarks/programs/ats-int-readers.agc`). Writes to one table do not
+  run in parallel.
 - **The Globals table** (module constants, the grammar's `Module constants`
   section) is the one place a loaded program is written (`agc_program.globals`).
   The loader lets only the entry function write it, in code with no backward

@@ -786,7 +786,7 @@ CC_RELEASES(l->mutex) static inline void agc_lock_drop(agc_lock *l) {
 /* The read-write lock of an ATS table (vm/ats.c): WRITE takes it alone, else with the other readers. Like agc_lock it
    costs one flag test until the VM is shared. Nothing raises while it is held, and no other lock is taken. A table
    shares its lock with one table in 64, and a call may hold it for the length of the table (a rebuild, the copy of a
-   snapshot). A read lock still writes the lock's cache line, so readers of one table on many schedulers contend. */
+   snapshot). A get takes it only when its tries without a lock keep meeting writes (read_at, vm/ats.c). */
 #define AGC_TABLE_LOCKS 64
 CC_ACQUIRES(rt->table_locks) void agc_table_lock_shared(const agc_runtime *rt, const void *table, bool write);
 CC_RELEASES(rt->table_locks) void agc_table_unlock_shared(const agc_runtime *rt, const void *table, bool write);
