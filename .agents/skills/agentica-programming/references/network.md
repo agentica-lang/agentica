@@ -52,7 +52,9 @@ TLS.ServerOptions(cert_file: String, key_file: String, alpn: List[String] = [])
   TLS socket: a client context checks `host`, a server context takes `""`
   (another host is `RUNTIME-TLS-CONTEXT-ROLE`). The plain socket is
   closed whatever the handshake does. Unread bytes in it or a send in
-  progress fail the upgrade; a timeout closes the connection.
+  progress fail the upgrade; a timeout closes the connection. A read of
+  another task inside its `recv()` (several schedulers) fails it and leaves the
+  socket open.
 - Port 0 on listen picks an assigned port. Listen binds every address the host
   resolves to, on one port (`localhost` takes `127.0.0.1` and `::1`); addresses
   the system cannot use are skipped.

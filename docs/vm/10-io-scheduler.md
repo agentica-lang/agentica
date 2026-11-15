@@ -305,11 +305,12 @@ section says how the scheduler and the loop keep them.
   bytes). The end of the run drops every subscription first, so a signal
   during the exit path is a stop signal. Windows has no subscription.
 - **Per-handle lock.** A `FileHandle` has a `holder` (the job in flight, or a
-  socket's direct send, §10.3.1), a `next_owner` task, and a FIFO of waiting
-  tasks, all in GC memory. Every handle builtin checks its arguments and timeout
-  first, then takes the lock, and only then checks that the handle is open and
-  has the right mode. A task that cannot take the lock parks with retry on a
-  timer at its deadline, which covers both the lock wait and the operation.
+  socket's direct send or receive, §10.3.1), a `next_owner` task, and a FIFO of
+  waiting tasks, all in GC memory. Every handle builtin checks its arguments and
+  timeout first, then takes the lock, and only then checks that the handle is
+  open and has the right mode. A task that cannot take the lock parks with
+  retry on a timer at its deadline, which covers both the lock wait and the
+  operation.
   Release is a FIFO hand-off: the head waiter becomes `next_owner` and is the
   only one woken, so the releasing task cannot take the handle back in the same
   turn, and a cancelled `next_owner` passes ownership on. So `close` waits for

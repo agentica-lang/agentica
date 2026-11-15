@@ -4,8 +4,8 @@
  * host's error numbers through net_os.h. Every `net` belongs to the I/O
  * thread; a builtin reaches it through a step posted there, and a done half
  * reads only what that thread copied into the request, except the direct send
- * of a plain socket from a scheduler (direct_send) and the take of its
- * buffered input by a read (takes_here). Service layer.
+ * of a plain socket from a scheduler (direct_send) and the take of its input by
+ * a read (takes_here, recv_here). Service layer.
  * Design: docs/vm/10-io-tls.md §10.3 and §10.3.1, docs/vm/16-architecture.md §16.9.
  */
 #include "http_fields.h"
@@ -47,9 +47,15 @@ typedef enum {
 /* Why TLS.upgrade did not start, in its TLS net's `error` (libuv errors are negative). */
 enum { UPGRADE_CLOSED = 0, UPGRADE_UNREAD = 1, UPGRADE_ENDED = 2, UPGRADE_SENDING = 3 };
 
-/* The bits of a net's `wstate` (direct_send): a scheduler sends on it now, it is shut, its close waits for that send,
-   and a direct send went out in part and its rest has not started on the I/O thread (begin_send clears it). */
-enum { W_DIRECT = 1u, W_SHUT = 2u, W_DEFERRED = 4u, W_PARTIAL = 8u };
+/* The bits of a net's `wstate` (direct_send, recv_here): a scheduler sends on it now, it is shut, its close waits for
+   the send or receive under way, a direct send went out in part and its rest has not started on the I/O thread
+   (begin_send clears it), and a scheduler receives on it now. */
+enum { W_DIRECT = 1u, W_SHUT = 2u, W_DEFERRED = 4u, W_PARTIAL = 8u, W_RECV = 16u };
+
+/* recv_here's rule: a receive that finds nothing skips the next 1, 2, 4 ... RECV_SKIP_MAX tries, and one that finds
+   bytes tries every time again, so a request/response socket, whose next request is rarely in the kernel yet, seldom
+   pays for a receive, and a stream rarely parks. */
+#define RECV_SKIP_MAX 64u
 
 /* The limit of a socket's write buffer (TCP.write_limit), over which a write waits. */
 #define OUT_LIMIT_DEFAULT ((size_t)65536)
@@ -154,12 +160,15 @@ struct agc_conn {
      clears `direct`, for a WebSocket, and only direct_send reads it, both on a scheduler: under rt->sync in a shared
      VM (agc_share runs before the I/O thread starts), and at sync_depth 0 on the one thread of a VM that is not
      shared. `wstate` (W_*) is the one field both threads change, by atomic operations only. A scheduler sets W_DIRECT
-     for the time of its send, from 0 only, while it holds rt->sync and the socket's resource holds the net; shut_one
-     sets W_SHUT, and W_DEFERRED when it found W_DIRECT, and then leaves the close of the links to the scheduler's end
-     of the send (direct_over). So the descriptor is never closed, or reused, under a send. */
+     for the time of its send, from 0 or W_RECV only, while it holds rt->sync and the socket's resource holds the net,
+     and W_RECV the same way for a receive (recv_here); shut_one sets W_SHUT, and W_DEFERRED when it found either, and
+     then leaves the close of the links to the end of the last of them (direct_over). So the descriptor is never
+     closed, or reused, under a send or a receive. `has_sock` says `sock` is set; `recv_skip` and `recv_backoff` are
+     recv_here's rule, the reader's alone (takes_here). */
   uintptr_t sock;
-  bool direct;
+  bool direct, has_sock;
   _Atomic unsigned wstate;
+  unsigned recv_skip, recv_backoff;
   agc_conn_watch watch;
   void *watcher;
   /* The write buffer of a plain socket (TCP.write, #1188). `unsent` counts the bytes a write took that the kernel has
@@ -536,24 +545,46 @@ static void stop_reading(net *n) {
   n->reading = false;
 }
 
-/* Marks the write side shut, so no direct send starts after it; true when one is under way, whose end then closes the
-   links (W_DEFERRED). I/O thread only. */
+/* Marks the socket shut, so no direct send or receive starts after it; true when one is under way, whose end then
+   closes the links (W_DEFERRED). I/O thread only. */
 static bool shut_writes(net *n) {
   unsigned s = atomic_load_explicit(&n->wstate, memory_order_acquire);
   for (;;) {
-    unsigned next = s | W_SHUT | ((s & W_DIRECT) ? W_DEFERRED : 0u);
+    bool busy = (s & (W_DIRECT | W_RECV)) != 0;
+    unsigned next = s | W_SHUT | (busy ? W_DEFERRED : 0u);
     if (atomic_compare_exchange_weak_explicit(&n->wstate, &s, next, memory_order_acq_rel, memory_order_acquire))
-      return (s & W_DIRECT) != 0;
+      return busy;
   }
 }
 
-/* A direct send that a close found under way has ended (posted by direct_end): the close of the links that shut_one
-   left, and the count it took so the net outlived the send. */
+/* A direct send or receive that a close found under way has ended (posted by claim_end): the close of the links that
+   shut_one left, and the count it took so the net outlived the call. */
 static void direct_over(void *data) {
   net *n = data;
   drop_links(n);
   n->callbacks--;
   settle(n);
+}
+
+/* A scheduler's claim of the descriptor for a send (W_DIRECT) or a receive (W_RECV): not on a shut socket, and a send
+   not beside another send nor before the rest of a partial one; a send and a receive may go together. */
+static bool claim_begin(net *n, unsigned bit) {
+  unsigned s = atomic_load_explicit(&n->wstate, memory_order_relaxed);
+  unsigned refused = bit == W_DIRECT ? ~(unsigned)W_RECV : (unsigned)(W_SHUT | W_RECV);
+  do {
+    if (s & refused) return false;
+  } while (!atomic_compare_exchange_weak_explicit(&n->wstate, &s, s | bit, memory_order_acq_rel, memory_order_relaxed));
+  return true;
+}
+
+/* The end of a claim, its last access to the net: a send that went out in part says so (W_PARTIAL), and the last
+   claim to end after a close gets the links closed. */
+static void claim_end(net *n, unsigned bit, bool partial) {
+  unsigned s = atomic_load_explicit(&n->wstate, memory_order_relaxed), next;
+  do {
+    next = (s & ~bit) | (partial ? (unsigned)W_PARTIAL : 0u);
+  } while (!atomic_compare_exchange_weak_explicit(&n->wstate, &s, next, memory_order_acq_rel, memory_order_relaxed));
+  if ((s & W_DEFERRED) && !(next & (W_DIRECT | W_RECV))) agc_loop_call(n->io, direct_over, n);
 }
 
 /* The bytes that wait behind the write in flight are given up (a close, a failed write). I/O thread only. */
@@ -602,7 +633,7 @@ static void shut_one(net *n, const char *why) {
   if (n->resolving) uv_cancel((uv_req_t *)&n->dns);
   if (n->setting_up) shared_leave(n);
   if (shut_writes(n)) {
-    /* A scheduler sends on the descriptor now: it stays open, without reads, until direct_over. */
+    /* A scheduler sends or receives on the descriptor now: it stays open, without reads, until direct_over. */
     stop_reading(n);
     n->callbacks++;
   } else {
@@ -934,7 +965,7 @@ static void keep_sock(net *n, tcp_link *k) {
   uv_os_fd_t fd;
   if (uv_fileno((const uv_handle_t *)&k->tcp, &fd) != 0) return;
   n->sock = (uintptr_t)fd;
-  n->direct = true;
+  n->direct = n->has_sock = true;
 }
 
 static void handshake_failed(net *n, agc_tls_status status) {
@@ -1092,6 +1123,13 @@ static void tls_read_in(net *n, ssize_t got) {
   if (n->watch) n->watch(n->watcher);
 }
 
+/* GOT bytes of a plain socket's read are in the input, or its end or error (a libuv code). The input's owner only. */
+static void plain_got(net *n, int64_t got) {
+  agc_inbuf_got(&n->in, got, got == UV_EOF);
+  if (got < 0)
+    AGC_TRACE(&n->trace, AGC_TRACE_IO, "tcp_eof socket=%" PRIu64 " error=%d", n->id, got == UV_EOF ? 0 : agc_net_errno((int)got));
+}
+
 static void read_in(uv_stream_t *s, ssize_t got, const uv_buf_t *buf) {
   (void)buf;
   net *n = TCP_LINK(s, tcp)->owner;
@@ -1099,9 +1137,7 @@ static void read_in(uv_stream_t *s, ssize_t got, const uv_buf_t *buf) {
     tls_read_in(n, got);
     return;
   }
-  agc_inbuf_got(&n->in, got, got == UV_EOF);
-  if (got < 0)
-    AGC_TRACE(&n->trace, AGC_TRACE_IO, "tcp_eof socket=%" PRIu64 " error=%d", n->id, got == UV_EOF ? 0 : agc_net_errno((int)got));
+  plain_got(n, got);
   request *q = n->reader;
   bool done = q && read_ready(n, q);
   if (got < 0 || (!q && !n->watch) || done) stop_reading(n);
@@ -1816,6 +1852,10 @@ static agc_value upgrade_socket(agc_vm *vm, agc_socket *sk, agc_tls_context *con
   const net *plain = live(sk);
   if (!plain) return agc_error(vm, AGC_KIND_NET_CLOSED, socket_closed);
   if (plain->secure) return agc_error(vm, AGC_KIND_NET_TLS, "network: the socket is TLS already");
+  /* A read of another task receives on the descriptor with rt->sync dropped (recv_here); once the resource is gone
+     (let_go, under rt->sync) none starts, so the plain net's input is the I/O thread's in begin_upgrade. */
+  if (atomic_load_explicit(&plain->wstate, memory_order_acquire) & W_RECV)
+    return agc_error(vm, AGC_KIND_NET_FAILED, "network: a read on the socket is in progress");
   if (timeout <= 0) return agc_stream_bad_timeout(vm, AGC_STREAM_NETWORK);
   if (!server && !host->bytes) return agc_error(vm, AGC_KIND_ARGUMENT, "network: host cannot be empty");
   agc_loop *io = agc_io_loop(vm);
@@ -1920,6 +1960,45 @@ static bool takes_here(const net *n) { return !n->secure; }
 /* A line that the limit cuts closes the socket (take), which is the I/O thread's to do: such a read parks. */
 static bool over_limit(const net *n, req_kind kind) { return kind == REQ_LINE && agc_inbuf_pending(&n->in) > LIMIT; }
 
+/* One receive on the scheduler into the input of a plain socket that the reader may take (takes_here), before the read
+   would park (#1197): true when it found bytes, the end of input or an error, which the read then looks at, with *NP
+   looked up again (NULL when the socket was closed meanwhile). rt->sync is dropped across the system call, as
+   direct_send drops it, under the claim W_RECV, which keeps the net and its descriptor: the net is not touched after
+   the claim ends. The reader lock is held without a job from the first receive on (*HOLDING), so no other read takes
+   the input meanwhile; the caller lets it go, or its park's job takes it over. The I/O thread does not read the
+   socket, since no read of it waits. RECV_SKIP_MAX says when a receive is tried. */
+static bool recv_here(agc_vm *vm, agc_socket *sk, net **np, const request *want, bool *holding) {
+  net *n = *np;
+  if (!n->has_sock || vm->sync_depth > 1 || vm->task->callbacks || input_ended(n)) return false;
+  if (n->recv_skip) {
+    n->recv_skip--;
+    return false;
+  }
+  bool counted = want->kind == REQ_BYTES;
+  size_t size = agc_inbuf_want(&n->in, !counted, counted ? want->count : 0);
+  uint8_t *room = agc_inbuf_room(&n->in, size);
+  if (!room) agc_out_of_memory();
+  if (!claim_begin(n, W_RECV)) return false;
+  if (!*holding) agc_handle_hold(vm, sk->reader);
+  *holding = true;
+  /* 1 in a shared VM (the reads are locked builtins); 0 in one that is not, which has no rt->sync to drop. */
+  bool held = vm->sync_depth == 1;
+  if (held) agc_sync_drop(vm);
+  int64_t got = agc_net_recv(n->sock, room, size);
+  bool found = got != UV_EAGAIN;
+  if (found) {
+    plain_got(n, got ? got : UV_EOF);
+    n->recv_backoff = 0;
+  } else {
+    n->recv_backoff = n->recv_backoff ? (n->recv_backoff < RECV_SKIP_MAX ? n->recv_backoff * 2 : RECV_SKIP_MAX) : 1;
+    n->recv_skip = n->recv_backoff;
+  }
+  claim_end(n, W_RECV, false);
+  if (held) agc_sync_take(vm);
+  *np = live(sk);
+  return found;
+}
+
 static bool begin_read(void *data, agc_io_job *job) {
   request *q = data;
   net *n = q->n;
@@ -1969,17 +2048,30 @@ static agc_value read_op(agc_vm *vm, const agc_value *args, request *want, bool 
   net *n = live(sk);
   if (!n) return agc_error(vm, AGC_KIND_NET_CLOSED, socket_closed);
   /* What is buffered is taken without a park: at N = 1 the input is this thread's, and at N > 1 a plain socket's is the
-     reader's while no read of it waits (takes_here). */
-  bool here = agc_io_here(vm);
+     reader's while no read of it waits (takes_here), which may first receive more into it (recv_here). */
+  bool here = agc_io_here(vm), holding = false;
   if (here || takes_here(n)) {
     if (!agc_inbuf_unread(&n->in, rest, rest_len)) agc_out_of_memory();
     rest_len = 0;
-    agc_value result;
-    if (heads(kind)) {
-      if (n->closed) return agc_error(vm, AGC_KIND_NET_CLOSED, socket_closed);
-      if (take_head(vm, n, want, &result)) return result;
-    } else if (read_ready(n, want) && (here || !over_limit(n, kind))) {
-      return take(vm, n, want);
+    for (;;) {
+      bool done = true;
+      if (heads(kind) && n->closed) {
+        result = agc_error(vm, AGC_KIND_NET_CLOSED, socket_closed);
+      } else if (heads(kind)) {
+        done = take_head(vm, n, want, &result);
+      } else if (read_ready(n, want)) {
+        if (!here && over_limit(n, kind)) break;
+        result = take(vm, n, want);
+      } else {
+        done = false;
+      }
+      if (!done) {
+        if (here || !recv_here(vm, sk, &n, want, &holding)) break;
+        if (n) continue;
+        result = agc_error(vm, AGC_KIND_NET_CLOSED, socket_closed);
+      }
+      if (holding) agc_handle_let_go(vm, sk->reader);
+      return result;
     }
   }
   request *q = new_request(vm, n, kind);
@@ -2222,23 +2314,6 @@ static bool begin_send(void *data, agc_io_job *job) {
   return true;
 }
 
-/* A direct send's claim: from 0 only, so not on a shut socket nor beside another send. */
-static bool direct_begin(net *n) {
-  unsigned idle = 0;
-  return atomic_compare_exchange_strong_explicit(&n->wstate, &idle, W_DIRECT, memory_order_acq_rel,
-                                                 memory_order_relaxed);
-}
-
-/* The end of a direct send, its last access to the net: a send that went out in part says so (W_PARTIAL), and a close
-   that came meanwhile gets its links closed. */
-static void direct_end(net *n, bool partial) {
-  unsigned s = atomic_load_explicit(&n->wstate, memory_order_relaxed), next;
-  do {
-    next = (s & ~(unsigned)W_DIRECT) | (partial ? (unsigned)W_PARTIAL : 0u);
-  } while (!atomic_compare_exchange_weak_explicit(&n->wstate, &s, next, memory_order_acq_rel, memory_order_relaxed));
-  if (s & W_DEFERRED) agc_loop_call(n->io, direct_over, n);
-}
-
 /* The direct send (#1188): at N > 1 a send on a plain socket starts on the calling scheduler, so a send that the
    kernel takes at once neither wakes the I/O thread nor arms a timer. The caller holds the socket's writer lock, so no
    other send of the socket is under way and the bytes keep their order; what the kernel does not take goes to the I/O
@@ -2254,14 +2329,15 @@ static int64_t direct_send(agc_vm *vm, agc_socket *sk, net **np, const uint8_t *
   net *n = *np;
   *holding = false;
   /* A native callback may not park (agc_task_check_wait), and the rest of a send would park holding the lock. */
-  if (!n->direct || n->secure || !len || vm->sync_depth > 1 || vm->task->callbacks || !direct_begin(n)) return 0;
+  if (!n->direct || n->secure || !len || vm->sync_depth > 1 || vm->task->callbacks || !claim_begin(n, W_DIRECT))
+    return 0;
   agc_handle_hold(vm, sk->writer);
   *holding = true;
   /* 1 in a shared VM (TCP.send is a locked builtin); 0 in one that is not, which has no rt->sync to drop. */
   bool held = vm->sync_depth == 1;
   if (held) agc_sync_drop(vm);
   int64_t sent = agc_net_send(n->sock, data, len);
-  direct_end(n, sent > 0 && (size_t)sent < len);
+  claim_end(n, W_DIRECT, sent > 0 && (size_t)sent < len);
   if (held) agc_sync_take(vm);
   *np = live(sk);
   return sent == UV_EAGAIN ? 0 : sent;
