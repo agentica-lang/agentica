@@ -510,9 +510,12 @@ one exit path are as in §16.1 to §16.6. What differs:
     it idle. A cancel by the owner takes it out of the slot and ends it; a
     cancel from another thread leaves it to the owner's `agc_task_next`.
   - An idle scheduler spins before it waits on the condvar (`agc_runq_spin`). It
-    polls the queue's atomic `work` flag, not the lock, for `SPIN_BUDGET_US`. It
-    counts pauses and reads no clock, and never sleeps. At most half the
-    schedulers (at least one) spin at once, and none spin at N = 1. A scheduler
+    polls the queue's atomic `work` flag, not the lock, for
+    `AGC_SPIN_BUDGET_NS`. It counts pauses and reads no clock, and never sleeps.
+    At most half the schedulers (at least one) spin at once. At N = 1 the one
+    scheduler spins only while compute calls that it gave run, for the end of
+    one (`agc_io_compute_spin`), with the same budget and level; a missed end
+    that comes within the longest spin raises the level. A scheduler
     that starts to spin while no other does spins for that budget times two to
     its own level (`agc_vm.spin_level`, 0 to `AGC_SPIN_LEVEL_MAX`): a spin that
     took a task raises the level by one and one that took none lowers it by

@@ -295,7 +295,7 @@ static uint64_t spin_budget(const agc_runq *q, uint32_t level) {
    #1362) hold the level at its top, so a spinner takes them with no futex wake per task; while none comes within the
    least budget, the level falls to 0 and stays there. Only a scheduler that spins alone has the longer budget and
    changes its level, so at most one core spins for long. */
-static void adapt(uint32_t *level, bool took) {
+void agc_runq_adapt(uint32_t *level, bool took) {
   if (took)
     *level += *level < AGC_SPIN_LEVEL_MAX;
   else
@@ -328,8 +328,22 @@ agc_task *agc_runq_spin(agc_runq *q, uint32_t *level) {
     t = take_waited(q, &chain);
     (void)leave_with(q, t, chain);
   }
-  if (alone) adapt(level, t != NULL);
+  if (alone) agc_runq_adapt(level, t != NULL);
   return t;
+}
+
+/* False at once when spinning is off (agc_runq_spin_setup was not called). */
+bool agc_runq_spin_until(const agc_runq *q, uint32_t level, bool (*found)(void *arg), void *arg) {
+  if (!q->spin_pauses) return false;
+  uint64_t budget = spin_budget(q, level);
+  uint64_t spent = 0;
+  unsigned pauses = 1;
+  bool seen;
+  while (!(seen = found(arg)) && spent < budget) {
+    spent += pauses;
+    pauses = agc_spin_step(pauses);
+  }
+  return seen;
 }
 
 agc_runq_counts agc_runq_stats(agc_runq *q) {

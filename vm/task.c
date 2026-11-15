@@ -11,11 +11,10 @@
 #include <string.h>
 
 /* Wakes between schedulers (docs/vm/16-architecture.md §16.9): a scheduler runs the task in its runnext slot at most
-   RUNNEXT_LIMIT times in a row before it looks at the global queue, and an idle scheduler spins for SPIN_BUDGET_US
+   RUNNEXT_LIMIT times in a row before it looks at the global queue, and an idle scheduler spins for AGC_SPIN_BUDGET_NS
    before it waits on the queue's condvar; the one that spins alone, up to 2^AGC_SPIN_LEVEL_MAX times that while its
    spins find tasks. */
 #define RUNNEXT_LIMIT 3u
-#define SPIN_BUDGET_US 10u
 /* What else a run that cannot start a scheduler thread can do (agc_thread_start_failed). */
 #define SCHEDULERS_FIX "set AGENTICA_SCHEDULERS=1"
 
@@ -984,7 +983,7 @@ static agc_outcome run_threads(agc_vm *vm) {
   agc_runq_on_idle(rt->runq, agc_io_wake_idle, vm);
   /* At most half the schedulers spin, so a burst of wakes still finds some parked to wake and the spin never takes
      every core. */
-  agc_runq_spin_setup(rt->runq, n / 2 ? (uint32_t)(n / 2) : 1, (uint64_t)SPIN_BUDGET_US * 1000);
+  agc_runq_spin_setup(rt->runq, n / 2 ? (uint32_t)(n / 2) : 1, AGC_SPIN_BUDGET_NS);
   /* The I/O thread's own failures (agc_io_serve) go to its own record too while the schedulers run. */
   vm->outcome = &vm->own;
   agc_task_enter(vm, rt->main, rt->program->entry);
@@ -1031,7 +1030,7 @@ agc_outcome agc_vm_run(agc_vm *vm) {
     for (;;) {
       agc_task *t = agc_task_next(vm);
       if (!t) {
-        if (check_stop(vm) || agc_timers_run(vm)) continue;
+        if (check_stop(vm) || agc_timers_run(vm) || agc_io_compute_spin(vm)) continue;
         if (!idle_wait(vm)) {
           if (check_stop(vm)) continue;
           AGC_TRACE(&vm->rt->trace, AGC_TRACE_SCHED, "stall pending=%" PRIu64, pending_tasks(vm) + 1);

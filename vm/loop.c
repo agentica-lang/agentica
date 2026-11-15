@@ -144,6 +144,10 @@ struct agc_loop {
      before the schedulers start and cleared only after they have ended, so they read it to submit directly. */
   agc_compute *_Atomic compute;
   agc_compute *direct;
+  /* agc_io_compute_spin at N = 1: `spin_set` once it has set up the queue's spin (none on one CPU: `spin_off`), and
+     `spin_missed`, the uv_hrtime of a spin that found no end, which the next end compares with the longest spin. */
+  bool spin_set, spin_off;
+  uint64_t spin_missed;
 };
 
 /* A job is malloc memory with up to three libuv pieces (pool work or a wait on the loop, the one timer) and its
@@ -586,7 +590,18 @@ static void run_compute(void *item) {
     j->kind->work(j->data);
 }
 
-static void compute_finished(void *item) { work_finished(&((job *)item)->work, 0); }
+/* At N = 1 an end that comes within the longest spin after a spin that missed it raises the scheduler's level, as one
+   that the spin caught does (agc_io_compute_spin); a later one lowers it. */
+static void compute_finished(void *item) {
+  job *j = item;
+  agc_loop *loop = j->loop;
+  if (loop->spin_missed) {
+    agc_runq_adapt(&loop->vm->spin_level,
+                   uv_hrtime() - loop->spin_missed < AGC_SPIN_BUDGET_NS << AGC_SPIN_LEVEL_MAX);
+    loop->spin_missed = 0;
+  }
+  work_finished(&j->work, 0);
+}
 
 /* The end of a direct compute job's work, on the pool thread under the pool's lock: the wait ends there (what end_wait
    does, without the ready list, which is the I/O thread's), and the job goes on loop->finished with the wait piece's
@@ -2066,6 +2081,30 @@ void agc_io_pause(agc_vm *vm, uint64_t ms) {
   vm->service_saved = NULL;
 }
 
+static bool call_ended(void *pool) { return agc_compute_ended(pool); }
+
+/* The pool's end still wakes the loop (uv_async_send); the uv_run that follows finds the inbox empty. The queue's spin
+   is set up at the first such spin, so a run with no compute call pays nothing for it. */
+bool agc_io_compute_spin(agc_vm *vm) {
+  agc_loop *loop = vm->rt->loop;
+  agc_compute *pool = loop ? atomic_load_explicit(&loop->compute, memory_order_relaxed) : NULL;
+  if (!pool || loop->inbox || !agc_compute_running(pool)) return false;
+  if (!loop->spin_set) {
+    loop->spin_set = true;
+    loop->spin_off = uv_available_parallelism() <= 1;
+    if (!loop->spin_off) agc_runq_spin_setup(vm->rt->runq, 1, AGC_SPIN_BUDGET_NS);
+  }
+  if (loop->spin_off) return false;
+  if (!agc_runq_spin_until(vm->rt->runq, vm->spin_level, call_ended, pool)) {
+    loop->spin_missed = uv_hrtime();
+    return false;
+  }
+  agc_runq_adapt(&vm->spin_level, true);
+  (void)agc_compute_deliver(pool);
+  drain(vm);
+  return true;
+}
+
 /* The stall check of the I/O thread (docs/vm/16-architecture.md §16.9, "Stall"). Every scheduler waits in an empty
    queue (agc_runq_quiet), so none can make work; then the only producer left is this thread, and the run has stalled
    when this thread has nothing either: no request in the inbox, no ready job, no armed task timer, and nothing alive on
@@ -2537,6 +2576,11 @@ agc_io_job *agc_io_compute(agc_vm *vm, const agc_io_kind *kind, void *data, agc_
 }
 
 void agc_io_submit_direct(agc_vm *vm) { (void)vm; }
+
+bool agc_io_compute_spin(agc_vm *vm) {
+  (void)vm;
+  return false;
+}
 
 bool agc_io_poll(agc_vm *vm, bool wait) {
   (void)vm;

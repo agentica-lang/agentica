@@ -97,11 +97,17 @@ agc_task *agc_runq_wait_until(agc_runq *q, uint64_t due_ms);
  * while no other scheduler spins lasts BUDGET_NS times two to that level, and raises the level when it took a task and
  * lowers it when it took none, from 0 to AGC_SPIN_LEVEL_MAX. agc_runq_stats is for the tests (agc_runq_counts). */
 #define AGC_SPIN_LEVEL_MAX 4u
+/* The spin of an idle scheduler and of an idle compute pool thread at level 0. */
+#define AGC_SPIN_BUDGET_NS UINT64_C(10000)
 void agc_runq_spin_setup(agc_runq *q, uint32_t max, uint64_t budget_ns);
 /* How many AGC_CPU_PAUSE take about NS nanoseconds on this machine: the spins count pauses and read no clock, which
  * can cost a system call (a machine whose clock source is not the TSC). Timed once, at the first call. */
 uint64_t agc_pauses_for(uint64_t ns);
 agc_task *agc_runq_spin(agc_runq *q, uint32_t *level);
+/* The same spin for the one scheduler of a solo queue, for something other than a task: polls FOUND(ARG) for the
+ * budget of LEVEL and says whether it came (agc_io_compute_spin). agc_runq_adapt moves a level up or down. */
+bool agc_runq_spin_until(const agc_runq *q, uint32_t level, bool (*found)(void *arg), void *arg);
+void agc_runq_adapt(uint32_t *level, bool up);
 agc_runq_counts agc_runq_stats(agc_runq *q);
 /* A nudge is work for a scheduler that is not a task: agc_runq_nudge ends one wait with NULL, agc_runq_nudged is the
  * test of a busy scheduler at its turn boundary, and agc_runq_take_nudge clears it for the one that runs the work. */
@@ -163,6 +169,7 @@ bool agc_inbox_run(agc_inbox *in);
 void agc_inbox_post(agc_inbox *in, agc_request *entry);
 void agc_inbox_close(agc_inbox *in);
 void agc_inbox_wake(agc_inbox *in);
+bool agc_inbox_full(agc_inbox *in);
 
 /* The compute pool (vm/compute.c, docs/vm/16-architecture.md §16.9, "Compute pool"): the work of the jobs that
  * agc_io_compute starts, on at most SIZE threads of its own, in the order it came. open, submit and close run on LOOP's
@@ -181,6 +188,11 @@ bool agc_compute_submit(agc_compute *pool, void (*work)(void *item), void *item)
 bool agc_compute_submit_direct(agc_compute *pool, void (*work)(void *item), void *item);
 void agc_compute_end_direct(agc_compute *pool);
 bool agc_compute_direct_busy(agc_compute *pool);
+/* For the loop's thread that spins while its calls run (agc_io_compute_spin): whether items it gave still run, whether
+ * one has ended (any thread may ask), and the delivery of those that have, as the inbox's wake would. */
+bool agc_compute_running(const agc_compute *pool);
+bool agc_compute_ended(agc_compute *pool);
+bool agc_compute_deliver(agc_compute *pool);
 void agc_compute_close(agc_compute *pool);
 
 /* The outcome of a job and its reference count (docs/vm/16-architecture.md §16.5, rules 2 to 4). The outcome starts as
@@ -299,6 +311,10 @@ void agc_profile_add_stack(agc_profile *profile, const uint64_t *codes, uint32_t
 const char *agc_uv_version(void);
 bool agc_io_init(void);
 bool agc_io_poll(agc_vm *vm, bool wait);
+/* One scheduler (N = 1), with no task to run while compute calls it gave run: spins for the end of one, and when it
+ * comes delivers it and wakes its task (true). False with no call running, at once when the process may run on one
+ * CPU only, or when no call ended within the spin: the caller then waits as usual. */
+bool agc_io_compute_spin(agc_vm *vm);
 /* The work that the I/O role leaves for a scheduler once a second thread runs the schedulers: the end of each detached
  * job (its `done` half). A scheduler calls it when agc_runq_nudged says so, with no task current. Returns whether it ran
  * anything. At N = 1 the drain runs the job itself and the list is always empty. When a `done` half raises (agc_fail),
