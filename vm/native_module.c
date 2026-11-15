@@ -64,7 +64,16 @@ typedef enum {
 } type_kind;
 
 /* What a node of a dirty call's arena stages (staged.kind). */
-enum { N_STRING, N_BYTES, N_LIST, N_MAP, N_PUT, N_SOME, N_OK, N_ERROR, N_STRUCT, N_ENUM, N_RESOURCE };
+enum { N_STRING, N_BYTES, N_LIST, N_MAP, N_PUT, N_SOME, N_OK, N_ERROR, N_ERROR_KIND, N_STRUCT, N_ENUM, N_RESOURCE };
+
+/* The parts of an an_error_kind, checked: KIND and the N keys and values NUL terminated, MESSAGE LEN bytes. */
+typedef struct {
+  const char *kind;
+  const char *message;
+  size_t len;
+  const char *const *keys;
+  const char *const *values;
+} error_parts;
 
 typedef enum { B_STRUCT, B_ENUM, B_RESOURCE } block_kind;
 
@@ -1164,11 +1173,30 @@ static agc_value resolved(const agc_native_dirty *d, const agc_value *built, agc
   return staged_at(d, v, &at) ? built[at] : v;
 }
 
-static agc_value text_of(agc_vm *vm, const staged *s) {
+static agc_string *text_string(agc_vm *vm, const char *data, size_t len) {
   size_t chars = 0;
-  (void)agc_utf8_chars(s->data, s->n, &chars);
-  return agc_string_value(agc_small_string(vm, s->data, s->n, chars));
+  (void)agc_utf8_chars((const uint8_t *)data, len, &chars);
+  return agc_small_string(vm, data, len, chars);
 }
+
+/* The failed Result of P with its N details; the details stay out of a program without the Error struct. */
+static agc_value error_value(agc_vm *vm, const error_parts *p, size_t n) {
+  agc_string *kind = text_string(vm, p->kind, strlen(p->kind));
+  agc_value result = agc_error_named(vm, kind, text_string(vm, p->message, p->len));
+  const agc_result *r = agc_as_result(vm, result);
+  if (!n || !agc_is_error(vm, r->value)) return result;
+  agc_struct *e = agc_as_struct(vm, r->value);
+  agc_value details = e->fields[AGC_ERROR_DETAILS];
+  for (size_t k = 0; k < n; k++) {
+    agc_value key = agc_string_value(text_string(vm, p->keys[k], strlen(p->keys[k])));
+    agc_value value = agc_string_value(text_string(vm, p->values[k], strlen(p->values[k])));
+    details = agc_map_value(agc_map_put(vm, agc_as_map(vm, details), key, value));
+  }
+  e->fields[AGC_ERROR_DETAILS] = details;
+  return result;
+}
+
+static agc_value text_of(agc_vm *vm, const staged *s) { return agc_string_value(text_string(vm, s->data, s->n)); }
 
 /* The value of node S of D, the nodes below it BUILT. A resource gets its value and leaves the node. */
 static agc_value build_node(agc_vm *vm, agc_native_dirty *d, staged *s, const agc_value *built) {
@@ -1195,6 +1223,7 @@ static agc_value build_node(agc_vm *vm, agc_native_dirty *d, staged *s, const ag
   case N_SOME: return agc_optional_make(vm->rt->program, true, resolved(d, built, items[0]));
   case N_OK: return agc_result_value(true, resolved(d, built, items[0]));
   case N_ERROR: return agc_error_string(vm, AGC_KIND_ERROR, agc_as_string(vm, text_of(vm, s)));
+  case N_ERROR_KIND: return error_value(vm, s->data, s->n);
   case N_STRUCT: {
     agc_struct *st = agc_new_struct(s->id, (uint32_t)s->n);
     for (size_t k = 0; k < s->n; k++) st->fields[k] = resolved(d, built, items[k]);
@@ -1706,6 +1735,80 @@ static an_term api_error(an_env *env, const char *message, size_t len) {
   return text_term(env, N_ERROR, message, len, "an_error got a message that is not UTF-8");
 }
 
+static bool utf8(const char *data, size_t len) {
+  size_t chars;
+  return agc_utf8_chars((const uint8_t *)data, len, &chars);
+}
+
+/* Whether KIND is a dotted name: segments of a-z, 0-9 and _, each starting with a letter, joined by single dots. */
+static bool dotted_name(const char *kind) {
+  bool start = true;
+  for (const char *c = kind; *c; c++) {
+    if (*c == '.') {
+      if (start) return false;
+      start = true;
+      continue;
+    }
+    bool letter = *c >= 'a' && *c <= 'z';
+    if (!letter && (start || !((*c >= '0' && *c <= '9') || *c == '_'))) return false;
+    start = false;
+  }
+  return !start;
+}
+
+/* A NUL terminated copy of TEXT in D's arena. */
+static const char *stage_text(agc_native_dirty *d, const char *text) { return stage_bytes(d, text, strlen(text) + 1); }
+
+static an_term api_error_kind(an_env *env, const char *kind, const char *message, size_t len, const char *const *keys,
+                              const char *const *values, size_t details) {
+  if (!kind || !dotted_name(kind)) return env_refuse(env, "an_error_kind got a kind that is not a dotted name");
+  if (!message && len) return env_refuse(env, "an_error_kind got no message");
+  if (!utf8(message, len)) return env_refuse(env, "an_error_kind got a message that is not UTF-8");
+  if (details && (!keys || !values)) return env_refuse(env, "an_error_kind got no details");
+  size_t bytes = agc_size_add(len, strlen(kind));
+  for (size_t k = 0; k < details; k++) {
+    if (!keys[k] || !values[k] || !utf8(keys[k], strlen(keys[k])) || !utf8(values[k], strlen(values[k])))
+      return env_refuse(env, "an_error_kind got a detail that is NULL or not UTF-8");
+    bytes = agc_size_add(bytes, agc_size_add(agc_size_add(strlen(keys[k]), strlen(values[k])), MAP_ENTRY_BYTES));
+  }
+  agc_native_dirty *d = env->dirty;
+  if (!d) {
+    agc_charge_bytes(env->vm, bytes);
+    error_parts parts = {kind, message ? message : "", len, keys, values};
+    return term_of(error_value(env->vm, &parts, details));
+  }
+  d->bytes += bytes;
+  const char **texts = arena_take(d, agc_size_mul(details, 2 * sizeof *texts));
+  for (size_t k = 0; k < details; k++) {
+    texts[k] = stage_text(d, keys[k]);
+    texts[details + k] = stage_text(d, values[k]);
+  }
+  error_parts *copy = arena_take(d, sizeof *copy);
+  *copy = (error_parts){stage_text(d, kind), stage_bytes(d, message ? message : "", len), len, texts, texts + details};
+  return stage(d, N_ERROR_KIND, 0, details, copy);
+}
+
+/* The parts of an error Result: an Error's fields as they are (hostile bytecode may put any value there, which the
+   module's getters refuse), or for a String payload that String with kind "error" and no details. */
+static bool api_get_error(an_env *env, an_term t, an_term *kind, an_term *message, an_term *details) {
+  agc_value v = value_of(t);
+  if (!agc_is(v, AGC_T_RESULT)) return false;
+  const agc_result *r = agc_as_result(env->vm, v);
+  if (r->ok) return false;
+  const agc_runtime *rt = env->vm->rt;
+  agc_value parts[3] = {agc_string_value(rt->kinds[AGC_KIND_ERROR]), r->value, rt->empty_map};
+  if (agc_is_error(env->vm, r->value)) {
+    const agc_struct *e = agc_as_struct(env->vm, r->value);
+    parts[0] = e->fields[AGC_ERROR_KIND];
+    parts[1] = e->fields[AGC_ERROR_MESSAGE];
+    parts[2] = e->fields[AGC_ERROR_DETAILS];
+  }
+  if (kind) *kind = term_of(parts[0]);
+  if (message) *message = term_of(parts[1]);
+  if (details) *details = term_of(parts[2]);
+  return true;
+}
+
 static bool api_get_result(an_env *env, an_term t, bool *ok, an_term *value) {
   agc_value v = value_of(t);
   if (!agc_is(v, AGC_T_RESULT)) return false;
@@ -1864,4 +1967,5 @@ static const an_api API = {
   api_map_cursor,     api_map_next,     api_none,         api_some,         api_get_optional, api_ok,
   api_error,          api_get_result,   api_raise,        api_badarg,       api_struct,       api_get_field,
   api_enum,           api_get_variant,  api_get_payload,  api_resource_new, api_get_resource, api_blocking,
+  api_error_kind,     api_get_error,
 };

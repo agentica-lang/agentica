@@ -1,10 +1,10 @@
 /*
  * The C API of native modules (#1149): a shared library that exports agentica_native_init and calls the VM only
  * through the table of function pointers (an_api) that every call's env carries, so it links nothing from the
- * agentica binary. Values are opaque terms, read through checked getters. Version 1.3: short and dirty calls of
+ * agentica binary. Values are opaque terms, read through checked getters. Version 1.4: short and dirty calls of
  * scalars, String, Bytes, List, Map, Optional, Result, the program's structs and enums (1.1), the module's resources
- * (1.2) and an_blocking, for C libraries that switch stacks (1.3). The VM half is vm/native_module.c; this header is
- * the contract, and it includes nothing of the VM.
+ * (1.2), an_blocking, for C libraries that switch stacks (1.3), and errors with a kind and details (1.4). The VM half
+ * is vm/native_module.c; this header is the contract, and it includes nothing of the VM.
  */
 #ifndef AGENTICA_NATIVE_H
 #define AGENTICA_NATIVE_H
@@ -20,7 +20,7 @@ extern "C" {
 /* The API this header describes. The VM loads a module of the same major version and a minor version up to its own:
    an_api and an_module only grow at their end, which is a minor bump. */
 #define AN_API_MAJOR 1
-#define AN_API_MINOR 3
+#define AN_API_MINOR 4
 
 #if defined(_WIN32)
 #define AN_EXPORT __declspec(dllexport)
@@ -167,6 +167,9 @@ typedef struct an_api {
   void *(*resource_new)(an_env *env, uint32_t type, an_term *out);
   bool (*get_resource)(an_env *env, an_term t, uint32_t type, void **state);
   void (*blocking)(an_env *env, void (*fn)(void *arg), void *arg);
+  an_term (*make_error_kind)(an_env *env, const char *kind, const char *message, size_t len, const char *const *keys,
+                             const char *const *values, size_t details);
+  bool (*get_error)(an_env *env, an_term t, an_term *kind, an_term *message, an_term *details);
 } an_api;
 
 /* The one export of a module: the VM calls it once per run (a process runs one program), at the first call, with the
@@ -261,7 +264,8 @@ static inline bool an_map_next(an_env *env, an_map_cursor *c, an_term *key, an_t
   return an_api_of(env)->map_next(env, c, key, value);
 }
 
-/* Optional and Result. The error of a Result carries a String message, as in the language. */
+/* Optional and Result. an_error makes an Error of kind "error" with MESSAGE; an_get_result gives the message of an
+   error as a String, so a module of API 1.3 or before reads errors as it always did. */
 static inline an_term an_none(an_env *env) { return an_api_of(env)->make_none(env); }
 static inline an_term an_some(an_env *env, an_term value) { return an_api_of(env)->make_some(env, value); }
 static inline bool an_get_optional(an_env *env, an_term t, bool *some, an_term *value) {
@@ -273,6 +277,21 @@ static inline an_term an_error(an_env *env, const char *message, size_t len) {
 }
 static inline bool an_get_result(an_env *env, an_term t, bool *ok, an_term *value) {
   return an_api_of(env)->get_result(env, t, ok, value);
+}
+
+/* Errors with a kind (API 1.4). an_error_kind makes error(MESSAGE, kind: KIND, details: {KEYS[k]: VALUES[k]}) with
+   DETAILS pairs (KEYS and VALUES may be NULL when DETAILS is 0); a later key replaces an earlier one. KIND is a dotted
+   name: segments of a-z, 0-9 and _, each starting with a letter, joined by single dots ("db", "db.constraint").
+   KIND, every key and value are NUL terminated; MESSAGE is LEN bytes. A KIND that is not a dotted name, a NULL that
+   is not allowed, or text that is not UTF-8 fails the call. an_get_error gives the kind, message (Strings) and
+   details (a Map[String, String]) of a Result that is an error, each output may be NULL; false for another term,
+   ok(...) included. It allocates nothing. */
+static inline an_term an_error_kind(an_env *env, const char *kind, const char *message, size_t len,
+                                    const char *const *keys, const char *const *values, size_t details) {
+  return an_api_of(env)->make_error_kind(env, kind, message, len, keys, values, details);
+}
+static inline bool an_get_error(an_env *env, an_term t, an_term *kind, an_term *message, an_term *details) {
+  return an_api_of(env)->get_error(env, t, kind, message, details);
 }
 
 /* Structs and enums of the module's type table (an_type). an_struct takes one term per field, in declared order;

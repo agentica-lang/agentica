@@ -872,6 +872,8 @@ agc_string **agc_error_kinds(void);
    struct; else a String payload with MESSAGE alone. */
 agc_value agc_error(agc_vm *vm, agc_error_kind kind, const char *message);
 agc_value agc_error_string(agc_vm *vm, agc_error_kind kind, agc_string *message);
+/* agc_error_string with KIND as a String, a dotted name that the caller checked (a native module's kind). */
+agc_value agc_error_named(agc_vm *vm, agc_string *kind, agc_string *message);
 /* agc_error_string with some(CODE) as the code: an errno, an HTTP status. */
 agc_value agc_error_code(agc_vm *vm, agc_error_kind kind, agc_string *message, int64_t code);
 /* RESULT, a failed Result that agc_error* just built and no program has seen, with DATA (LEN bytes, decoded as

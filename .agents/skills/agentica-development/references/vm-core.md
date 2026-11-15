@@ -134,7 +134,10 @@ The design (trie, unboxed Int and Float leaves, builders, costs) is
   `agc_c_resource` with `row` set, freed through `agc_native_free_state`.
   `an_blocking` (API 1.3) runs C under `GC_do_blocking` (`agc_gc_blocking`)
   on a thread libgc knows, and as is on one it does not (the compute pool),
-  for C libraries that switch stacks.
+  for C libraries that switch stacks. `an_error_kind` (API 1.4) checks the
+  kind is a dotted name and stages a dirty call's error as `N_ERROR_KIND`
+  (`error_parts` in the arena); `an_get_error` reads an Error's fields as
+  they are, or kind `error` and no details for a String payload.
   `make bench-native` times it.
 - Resources that extern functions return are `agc_c_resource` (`vm/value.h`): a
   registry entry owned like a handle, freed by `Native.close` or the owner's
