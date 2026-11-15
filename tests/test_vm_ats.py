@@ -1,7 +1,8 @@
 """ATS shared tables on the VM: the semantics of one table against an independent Python model
 (tests/fixtures/ats-peer.py) with String and with Bytes keys, many tasks on four schedulers updating one table with
-exact results, a table that one task clears while others read and write it, tasks that push to one list, a table that BDD steps capture from main and that starts fresh in each scenario, and, in the slow tier,
-tables made and dropped in a loop whose heap stays bounded.
+exact results, a table that one task clears while others read and write it, tasks that push to one list, a table that
+BDD steps capture from main and that starts fresh in each scenario under `--isolate`, and, in the slow tier, tables
+made and dropped in a loop whose heap stays bounded.
 """
 import json
 import random
@@ -295,10 +296,12 @@ def test_tasks_that_push_to_one_list_lose_no_item(tmp_path, schedulers):
     assert vm.stdout.splitlines() == ["own 8000", "all 8000 %d" % (16 * sum(range(500))), "ordered true"]
 
 
-def test_a_table_captured_by_bdd_steps_starts_fresh_in_each_scenario(tmp_path):
+def test_a_table_captured_by_bdd_steps_starts_fresh_in_each_scenario_under_isolate(tmp_path):
+    """Without --isolate the scenarios of one worker share it (tests/test_bdd_integration.py)."""
     (tmp_path / "steps.agc").write_text(STEPS, encoding="utf-8")
     (tmp_path / "visits.feature").write_text(FEATURE, encoding="utf-8")
-    result = run(cli() + ["test", "visits.feature", "--steps", "steps.agc"], cwd=tmp_path, env=vm_environment())
+    result = run(cli() + ["test", "visits.feature", "--steps", "steps.agc", "--isolate"], cwd=tmp_path,
+                 env=vm_environment())
     assert result.code == 0, result.stdout + result.stderr
     assert "2 passed, 0 failed" in result.stdout
 
