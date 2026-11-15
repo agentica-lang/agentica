@@ -69,11 +69,12 @@ def until_closed(feed: Feed) -> Void
   say_stopped(feed)
 end
 
-# Pieces that are not UTF-8, and one that is text.
+# A piece that is not UTF-8, and one that is text. It waits for main to read the first before it sends the second:
+# pieces that wait in the channel together go out as one chunk.
 def binary(feed: Feed) -> Void
   Task.sleep(20)
   _ = feed.body.send(Bytes.from_list([255, 0, 128]).unwrap!, 5000)
-  _ = feed.body.send("".bytes, 5000)
+  _ = feed.hub.gate.recv(5000)
   _ = feed.body.send("ok".bytes, 5000)
   finish(feed)
 end
@@ -109,6 +110,14 @@ def stream_with(hub: Hub, job: Fn[Feed, Void], status: Int, headers: List[HTTP.H
   return ok(HTTP.StreamResponse(status: status, headers: headers, body: body))
 end
 
+# An empty piece is in the channel when the handler returns: it sends nothing.
+def binary_stream(hub: Hub) -> Result[HTTP.StreamResponse]
+  body: Channel[Bytes] = Channel.new(2)
+  _ = body.send("".bytes, 5000)
+  Task.spawn(&binary, Feed(hub: hub, body: body))
+  return ok(HTTP.StreamResponse(status: 200, headers: [HTTP.Header(name: TYPE, value: "text/plain")], body: body))
+end
+
 def stream(hub: Hub, job: Fn[Feed, Void], status: Int) -> Result[HTTP.StreamResponse]
   return stream_with(hub, job, status, [HTTP.Header(name: TYPE, value: "text/plain")])
 end
@@ -141,7 +150,7 @@ def routes(hub: Hub) -> Fn[HTTP.Request, Result[HTTP.StreamResponse]]
       "/short" -> return stream(hub, &short, 200)
       "/leave" -> return stream(hub, &until_closed, 200)
       "/head" -> return stream(hub, &head_only, 200)
-      "/binary" -> return stream(hub, &binary, 200)
+      "/binary" -> return binary_stream(hub)
       "/binary-whole" -> return ok(HTTP.StreamResponse(status: 200, headers: [], body: HTTP.whole(Bytes.from_list([255, 0, 128]).unwrap!)))
       "/large" -> return stream(hub, &large, 200)
       "/length" -> return stream_with(hub, &head_only, 200, [HTTP.Header(name: "Content-Length", value: "3")])
@@ -238,6 +247,7 @@ def main() -> Void
   ask(socket, "GET", "/binary", "")
   puts(head_of(socket))
   puts(binary_chunk_of(socket))
+  _ = hub.gate.send(true, 5000)
   puts(chunk_of(socket))
   puts(chunk_of(socket))
   ask(socket, "GET", "/binary-whole", "")
