@@ -12,6 +12,7 @@
 #include <string.h>
 
 #define MAX_LEVELS 12
+#define SLAB_BYTES 65536
 
 typedef struct {
   list_branch *root;
@@ -32,6 +33,9 @@ static size_t stride_of(uint32_t kind) { return kind ? sizeof(uint64_t) : sizeof
 static uint32_t kind_of(agc_value v) { return v.tag == AGC_T_INT || v.tag == AGC_T_FLOAT ? v.tag : 0; }
 
 static void *items_alloc(uint32_t kind, size_t bytes) { return kind ? agc_alloc_atomic(bytes) : agc_alloc(bytes); }
+
+/* Boehm adds a byte to each object for interior pointers: SLAB_BYTES - 1 keeps a slab in 16 heap blocks, not 17. */
+static size_t slab_leaves(uint32_t kind) { return (SLAB_BYTES - 1) / (LIST_WIDTH * stride_of(kind)); }
 
 static void item_put(uint32_t kind, char *dst, agc_value v) {
   if (kind) {
@@ -108,35 +112,43 @@ static char *leaf_of(const agc_list *l, size_t k) {
   return node->child[k & LIST_MASK];
 }
 
-/* The first `shared` leaves are leaves first, first + 1, ... of src, which has the same kind; the rest are slices of one new block of items. */
-static char *trie_make(agc_list *l, size_t items, uint32_t kind, const agc_list *src, size_t first, size_t shared) {
+/* The first `shared` leaves are leaves first, first + 1, ... of src, which has the same kind. The others are slices of
+   slabs of less than SLAB_BYTES, and every branch is its own object: under conservative marking, a false pointer into
+   a leaf keeps one slab of garbage alive, not a whole build. path[d] is the current branch of level d (0 holds
+   leaves). */
+static void trie_make(agc_list *l, size_t items, uint32_t kind, const agc_list *src, size_t first, size_t shared) {
   /* the bound of 16-byte items for every kind, checked before shift_for: a len above SIZE_MAX / 16 ends in the out-of-memory exit here (17.7) */
   (void)agc_size_mul(items, sizeof(agc_value));
-  size_t leaf_bytes = LIST_WIDTH * stride_of(kind);
-  size_t bytes = agc_size_mul((items >> LIST_BITS) - shared, leaf_bytes);
-  list_branch *levels[MAX_LEVELS];
+  if (shared && !src) abort();
   size_t leaves = items >> LIST_BITS;
+  size_t leaf_bytes = LIST_WIDTH * stride_of(kind);
+  size_t per = slab_leaves(kind);
   uint32_t shift = shift_for(items);
-  size_t depth = 0;
-  size_t count = leaves;
-  for (uint32_t s = LIST_BITS; s <= shift; s += LIST_BITS) {
-    count = (count + LIST_MASK) >> LIST_BITS;
-    levels[depth++] = agc_alloc(agc_size_mul(count, sizeof(list_branch)));
-  }
-  char *block = bytes ? items_alloc(kind, bytes) : NULL;
-  for (size_t k = 0; k < leaves; k++)
-    // cchecker: ignore CC-TIDY-CLANG-ANALYZER-CORE-NULLDEREFERENCE: items > 0 here, so depth >= 1
-    levels[0][k >> LIST_BITS].child[k & LIST_MASK] =
-        k < shared ? (void *)leaf_of(src, first + k) : block + (k - shared) * leaf_bytes;
-  count = leaves;
-  for (size_t d = 1; d < depth; d++) {
-    count = (count + LIST_MASK) >> LIST_BITS;
-    for (size_t k = 0; k < count; k++) levels[d][k >> LIST_BITS].child[k & LIST_MASK] = levels[d - 1] + k;
-  }
-  // cchecker: ignore CC-TIDY-CLANG-ANALYZER-CORE-UNINITIALIZED-ASSIGN: items > 0 here, so depth >= 1
-  l->root = levels[depth - 1];
+  size_t depth = shift / LIST_BITS;
+  list_branch *path[MAX_LEVELS];
+  path[depth - 1] = agc_alloc(sizeof(list_branch));
+  l->root = path[depth - 1];
   l->shift = shift;
-  return block;
+  char *next = NULL, *end = NULL;
+  for (size_t k = 0; k < leaves; k++) {
+    for (size_t d = depth - 1; d-- > 0 && !(k & LIST_MASK);) {
+      size_t bits = LIST_BITS * (d + 1);
+      if (k & (((size_t)1 << bits) - 1)) continue;
+      path[d] = agc_alloc(sizeof(list_branch));
+      path[d + 1]->child[(k >> bits) & LIST_MASK] = path[d];
+    }
+    if (src && k < shared) {
+      path[0]->child[k & LIST_MASK] = leaf_of(src, first + k);
+      continue;
+    }
+    if (next == end) {
+      size_t count = leaves - k < per ? leaves - k : per;
+      next = items_alloc(kind, count * leaf_bytes);
+      end = next + count * leaf_bytes;
+    }
+    path[0]->child[k & LIST_MASK] = next;
+    next += leaf_bytes;
+  }
 }
 
 static const char *list_chunk(const agc_list *l, size_t i, size_t *start, size_t *end) {
@@ -153,25 +165,31 @@ static const char *list_chunk(const agc_list *l, size_t i, size_t *start, size_t
   return node->child[(i >> LIST_BITS) & LIST_MASK];
 }
 
+/* Points next and stop at the next slab of the trie, then at the tail. */
+static void builder_advance(agc_list_builder *b) {
+  size_t leaves = trie_items(b->n) >> LIST_BITS;
+  size_t stride = stride_of(b->kind);
+  if (b->leaf < leaves) {
+    size_t per = slab_leaves(b->kind);
+    size_t count = leaves - b->leaf < per ? leaves - b->leaf : per;
+    b->next = leaf_of(b->out, b->leaf);
+    b->stop = b->next + count * LIST_WIDTH * stride;
+    b->leaf += count;
+    return;
+  }
+  if (!b->after) abort();
+  b->next = b->after;
+  b->stop = b->after + (b->n - trie_items(b->n)) * stride;
+  b->after = NULL;
+}
+
 static void builder_begin(agc_list_builder *b, size_t n, uint32_t kind, const agc_list *src, size_t first,
                           size_t shared) {
   size_t items = trie_items(n);
-  size_t stride = stride_of(kind);
   agc_list *l = list_alloc(n, n - items, kind);
-  char *block = items ? trie_make(l, items, kind, src, first, shared) : NULL;
-  b->out = l;
-  b->n = n;
-  b->kind = kind;
-  b->next = block ? block : (char *)l->tail;
-  b->stop = block ? block + (items - shared * LIST_WIDTH) * stride : (char *)l->tail + (n - items) * stride;
-  b->after = block ? (char *)l->tail : NULL;
-}
-
-static void builder_advance(agc_list_builder *b) {
-  if (!b->after) abort();
-  b->next = b->after;
-  b->stop = b->after + (b->n - list_tail_off(b->n)) * stride_of(b->kind);
-  b->after = NULL;
+  if (items) trie_make(l, items, kind, src, first, shared);
+  *b = (agc_list_builder){.out = l, .after = (char *)l->tail, .n = n, .kind = kind, .leaf = shared};
+  builder_advance(b);
 }
 
 /* v has the builder's kind, or the builder is of agc_values */
@@ -211,10 +229,12 @@ static void builder_replay(agc_list_builder *wide, const agc_list *src, size_t c
   for (size_t k = 0; k < count && agc_list_cursor_next(&cursor, &v); k++) builder_push(wide, v);
 }
 
-/* The items written so far are the first `done` of the half-built list: the block, then the tail. */
+/* The items written so far are the first `done` of the half-built list: the slabs, then the tail. A numeric builder
+   shares no leaves, so its slab starts at a multiple of 32 leaves. */
 static void builder_demote(agc_list_builder *b) {
   const agc_list *half = b->out;
-  size_t done = b->after ? (size_t)(b->next - leaf_of(half, 0)) / sizeof(uint64_t)
+  size_t slab = (b->leaf - 1) / slab_leaves(b->kind) * slab_leaves(b->kind);
+  size_t done = b->after ? slab * LIST_WIDTH + (size_t)(b->next - leaf_of(half, slab)) / sizeof(uint64_t)
                          : trie_items(b->n) + (size_t)(b->next - (char *)half->tail) / sizeof(uint64_t);
   agc_list_builder wide;
   builder_begin(&wide, b->n, 0, NULL, 0, 0);

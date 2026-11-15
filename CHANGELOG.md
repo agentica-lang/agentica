@@ -13,6 +13,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `Actor.send` and `Actor.await` split `Actor.call` in two, so a caller can send requests to several actors first and then await each answer (#1571).
 - The errors of file and network builtins carry `details`: `"path"`, the path the call was given (and `"to"` for `Path.rename`), for a failed or `--deny-fs` refused file call, and `"host"` for a failed or `--deny-net` refused connect, listen, DNS lookup or TLS handshake (#1510).
 - `Native.arena do ... end` closes, when its block ends, every native resource and owned buffer the task opened in it, newest first, except those the block's value holds (#1091).
+- Native API 1.4: `an_error_kind` makes an error with a kind and details, and `an_get_error` reads the kind, message and details of an error a module gets; modules built for 1.3 still load (#1510).
 
 ### Changed
 
@@ -28,6 +29,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - A `case` with 3 or more enum variant arms jumps straight to the arm that matches instead of testing the arms in order: `agentica check` and `compile` of a large program are about 5 to 7% faster (#1001).
 - `String.split` searches the text once instead of twice and skips counting the characters of each piece when the text is ASCII: about 10% faster on log-style line and word splitting (#996).
 - `agentica compile` of a large program whose bytecode is in the cache is about 15% faster: the output and the cache entry are written without copying the rest of the program for every 1 MiB piece (#1683).
+
+### Fixed
+
+- A loop that parses a large JSON array or builds large lists is much less likely to keep an old list alive through a stray pointer, which made it hit `--max-heap` on macOS arm64 and sometimes on Windows: a stray pointer into a list's items now keeps less than 64 KiB of them, not the whole list (#1681).
 
 ## [0.32.0] - 2026-11-15
 

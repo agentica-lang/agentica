@@ -162,6 +162,94 @@ static an_term unwrap(an_env *env, int argc, const an_term *argv) {
   return an_raise(env, message);
 }
 
+/* The String T copied into OUT (CAP bytes) with a NUL at its end; false for another term or a longer text. */
+static bool c_text(an_env *env, an_term t, char *out, size_t cap) {
+  const char *data;
+  size_t len;
+  if (!an_get_string(env, t, &data, &len) || len >= cap) return false;
+  memcpy(out, data, len);
+  out[len] = '\0';
+  return true;
+}
+
+#define ERROR_PAIRS 4
+#define ERROR_TEXT 64
+
+/* error(MESSAGE, kind: KIND, details: DETAILS) through an_error_kind (API 1.4), with at most ERROR_PAIRS details. */
+static an_term error_with(an_env *env, an_term kind_term, an_term message_term, an_term details_term) {
+  char kind[ERROR_TEXT], message[ERROR_TEXT], texts[2 * ERROR_PAIRS][ERROR_TEXT];
+  const char *keys[ERROR_PAIRS], *values[ERROR_PAIRS];
+  an_map_cursor c;
+  an_term key, value;
+  size_t n = 0;
+  if (!c_text(env, kind_term, kind, sizeof kind)) return an_badarg(env, 0);
+  if (!c_text(env, message_term, message, sizeof message)) return an_badarg(env, 1);
+  if (!an_map_cursor_begin(env, details_term, &c, NULL)) return an_badarg(env, 2);
+  while (an_map_next(env, &c, &key, &value)) {
+    if (n == ERROR_PAIRS || !c_text(env, key, texts[2 * n], ERROR_TEXT) ||
+        !c_text(env, value, texts[2 * n + 1], ERROR_TEXT))
+      return an_badarg(env, 2);
+    keys[n] = texts[2 * n];
+    values[n] = texts[2 * n + 1];
+    n++;
+  }
+  return an_error_kind(env, kind, message, strlen(message), keys, values, n);
+}
+
+static an_term fail_kind(an_env *env, int argc, const an_term *argv) {
+  (void)argc;
+  return error_with(env, argv[0], argv[1], argv[2]);
+}
+
+/* "KIND: MESSAGE {k=v, ...}" of an error through an_get_error, or "ok" for ok(...). */
+static an_term describe(an_env *env, int argc, const an_term *argv) {
+  an_term kind, message, details, key, value;
+  char text[512], part[2][ERROR_TEXT];
+  an_map_cursor c;
+  (void)argc;
+  if (!an_get_error(env, argv[0], &kind, &message, &details)) return an_string(env, "ok", 2);
+  if (!c_text(env, kind, part[0], ERROR_TEXT) || !c_text(env, message, part[1], ERROR_TEXT))
+    return an_badarg(env, 0);
+  int at = snprintf(text, sizeof text, "%s: %s {", part[0], part[1]);
+  if (!an_map_cursor_begin(env, details, &c, NULL)) return an_badarg(env, 0);
+  for (int k = 0; an_map_next(env, &c, &key, &value); k++) {
+    if (!c_text(env, key, part[0], ERROR_TEXT) || !c_text(env, value, part[1], ERROR_TEXT) || at > 384)
+      return an_badarg(env, 0);
+    at += snprintf(text + at, sizeof text - (size_t)at, "%s%s=%s", k ? ", " : "", part[0], part[1]);
+  }
+  at += snprintf(text + at, sizeof text - (size_t)at, "}");
+  return an_string(env, text, (size_t)at);
+}
+
+/* The error read with an_get_error and made again with an_error_kind; ok(...) as it is. */
+static an_term rethrow(an_env *env, int argc, const an_term *argv) {
+  an_term kind, message, details;
+  (void)argc;
+  if (!an_get_error(env, argv[0], &kind, &message, &details)) return argv[0];
+  return error_with(env, kind, message, details);
+}
+
+/* Bad arguments of the API 1.4 calls, each of which fails the call (WHICH 0 to 5); 6 reads an Int as an error and 7
+   an error with no outputs, which give "false" and "true". */
+static an_term bad_error(an_env *env, int argc, const an_term *argv) {
+  int64_t which;
+  const char *key = "k", *bad = "\xff", *none = NULL;
+  bool read;
+  (void)argc;
+  if (!an_get_int(env, argv[0], &which)) return an_badarg(env, 0);
+  switch (which) {
+  case 0: return an_error_kind(env, NULL, "m", 1, NULL, NULL, 0);
+  case 1: return an_error_kind(env, "db", NULL, 4, NULL, NULL, 0);
+  case 2: return an_error_kind(env, "db", "m", 1, NULL, NULL, 1);
+  case 3: return an_error_kind(env, "db", "m", 1, &key, &none, 1);
+  case 4: return an_error_kind(env, "db", bad, 1, NULL, NULL, 0);
+  case 5: return an_error_kind(env, "db", "m", 1, &bad, &key, 1);
+  case 6: read = an_get_error(env, argv[0], NULL, NULL, NULL); break;
+  default: read = an_get_error(env, an_error_kind(env, "db", "m", 1, NULL, NULL, 0), NULL, NULL, NULL); break;
+  }
+  return read ? an_string(env, "true", 4) : an_string(env, "false", 5);
+}
+
 static an_term truthy(an_env *env, int argc, const an_term *argv) {
   bool b;
   double x;
@@ -538,6 +626,10 @@ static const an_function functions[] = {
   {"parse", "(String) -> Result[Int]", parse, AN_SHORT},
   {"unwrap", "(Result[Int]) -> Int", unwrap, AN_SHORT},
   {"truthy?", "(Bool, Float) -> Float", truthy, AN_SHORT},
+  {"fail_kind", "(String, String, Map[String, String]) -> Result[Int]", fail_kind, AN_SHORT},
+  {"describe", "(Result[Int]) -> String", describe, AN_SHORT},
+  {"rethrow", "(Result[Int]) -> Result[Int]", rethrow, AN_SHORT},
+  {"bad_error", "(Int) -> String", bad_error, AN_SHORT},
   {"head", "(List[Int]) -> List[Int]", head, AN_SHORT},
   {"copy", "(Bytes) -> Bytes", copy, AN_SHORT},
   {"empty", "() -> Bytes", empty, AN_SHORT},
@@ -563,6 +655,10 @@ static const an_function functions[] = {
   {"dirty_lookup", "(Map[String, Int], String) -> Optional[Int]", lookup, AN_DIRTY},
   {"dirty_parse", "(String) -> Result[Int]", parse, AN_DIRTY},
   {"dirty_unwrap", "(Result[Int]) -> Int", unwrap, AN_DIRTY},
+  {"dirty_fail_kind", "(String, String, Map[String, String]) -> Result[Int]", fail_kind, AN_DIRTY},
+  {"dirty_describe", "(Result[Int]) -> String", describe, AN_DIRTY},
+  {"dirty_rethrow", "(Result[Int]) -> Result[Int]", rethrow, AN_DIRTY},
+  {"dirty_bad_error", "(Int) -> String", bad_error, AN_DIRTY},
   {"dirty_grow", "(Shape, Int) -> Shape", grow, AN_DIRTY},
   {"dirty_points", "(Int) -> List[Point]", points, AN_DIRTY},
   {"dirty_bad_text", "() -> String", bad_text, AN_DIRTY},

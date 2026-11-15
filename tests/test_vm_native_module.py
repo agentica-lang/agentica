@@ -331,3 +331,80 @@ def test_the_profile_counts_the_calls_of_each_module_function(tmp_path, demo):
     lines = [line for line in trace.read_text().splitlines() if "native calls=" in line]
     found = sorted(re.sub(r".*native calls=(\d+) us=\d+ (mode=\w+ name=\S+).*", r"\1 \2", line) for line in lines)
     assert found == ["1 mode=short name=bump", "1 mode=short name=counter", "2 mode=dirty name=crunch"]
+
+
+ERRORS = """extern module "LIBRARY"
+  def fail_kind(kind: String, message: String, details: Map[String, String]) -> Result[Int]
+  def describe(result: Result[Int]) -> String
+  def rethrow(result: Result[Int]) -> Result[Int]
+  def bad_error(which: Int) -> String
+  compute def dirty_fail_kind(kind: String, message: String, details: Map[String, String]) -> Result[Int]
+  compute def dirty_describe(result: Result[Int]) -> String
+  compute def dirty_rethrow(result: Result[Int]) -> Result[Int]
+  compute def dirty_bad_error(which: Int) -> String
+end
+
+"""
+
+
+# API 1.4: an_error_kind makes an Error with a kind and details, an_get_error reads them back, in short and compute
+# defs alike; what one reads, the other makes again, equal to the first.
+@NATIVE_CALLS
+def test_a_module_makes_and_reads_errors_with_a_kind_and_details(tmp_path, demo):
+    body = """  made = fail_kind("db.constraint", "unique failed", {"table": "users", "café": "é"})
+  case made
+    ok(n) -> puts(n)
+    error(e) -> puts("#{e.kind} #{e.message} #{e.details} #{e.is_a?("db")}")
+  end
+  dirty = dirty_fail_kind("net.timeout", "slow", {})
+  puts(dirty)
+  given: Result[Int] = error("no route", kind: "net.refused", details: {"host": "db"})
+  puts(describe(given))
+  puts(dirty_describe(given))
+  puts(describe(error("plain")))
+  puts(describe(ok(1)))
+  puts(rethrow(given) == given)
+  puts(dirty_rethrow(made) == made)
+  puts(bad_error(6))
+  puts(bad_error(7))
+  puts(dirty_bad_error(7))
+"""
+    result = run_main(tmp_path, demo, body, "", ERRORS)
+    assert (result.code, result.stderr) == (0, "")
+    assert result.stdout == "\n".join([
+        'db.constraint unique failed {"table": "users", "café": "é"} true',
+        'error("slow", kind: "net.timeout")',
+        "net.refused: no route {host=db}", "net.refused: no route {host=db}", "error: plain {}", "ok",
+        "true", "true", "false", "true", "false", ""])
+
+
+# A kind that is not a dotted name, a NULL where text is needed, or text that is not UTF-8 fails the call.
+@NATIVE_CALLS
+@pytest.mark.parametrize("call", [
+    'fail_kind("Db", "m", {})', 'fail_kind("db..x", "m", {})', 'fail_kind("db.", "m", {})', 'fail_kind("", "m", {})',
+    'fail_kind("1db", "m", {})', 'dirty_fail_kind("db._x", "m", {})',
+    "bad_error(0)", "bad_error(1)", "bad_error(2)", "bad_error(3)", "bad_error(4)", "bad_error(5)",
+    "dirty_bad_error(0)", "dirty_bad_error(3)", "dirty_bad_error(5)",
+])
+def test_bad_arguments_of_an_error_kind_fail_the_call(tmp_path, demo, call):
+    result = run_main(tmp_path, demo, "  puts(%s)\n" % call, "", ERRORS)
+    name = call.split("(")[0] + "("
+    assert diagnostic(result, 1) == ("RUNTIME-NATIVE-ERROR", (line_of(ERRORS, " def " + name), 3))
+    assert result.stdout == ""
+
+
+# A module built for API 1.3 still loads: its an_error makes kind "error", and an_get_result reads the message of an
+# Error with a kind as a String.
+@NATIVE_CALLS
+def test_a_module_of_api_1_3_still_loads_and_reads_errors(tmp_path_factory, tmp_path):
+    old = shared_library(tmp_path_factory, "module_v13", *(["-Wl,-z,defs"] if TARGET_OS == "linux" else []))
+    module = ('extern module "LIBRARY"\n  def fail() -> Result[Int]\n  def message(result: Result[Int]) -> String\n'
+              'end\n\n')
+    body = """  case fail()
+    ok(n) -> puts(n)
+    error(e) -> puts("#{e.kind} #{e.message}")
+  end
+  puts(message(error("boom", kind: "db.constraint")))
+"""
+    result = run_main(tmp_path, old, body, "", module)
+    assert (result.code, result.stdout, result.stderr) == (0, "error old\nboom\n", "")

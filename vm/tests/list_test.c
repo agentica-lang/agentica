@@ -12,6 +12,10 @@
 #include <stdio.h>
 #include <string.h>
 
+#ifndef AGC_NO_GC
+#include <gc.h>
+#endif
+
 #define LARGE ((size_t)33000)
 #define EXTEND_MAX ((size_t)1100)
 #define EXTENSION 70
@@ -363,6 +367,8 @@ static void expect_interior_pointers(void) {
   if (!agc_gc_stats(&info)) return;
   const size_t n = 20000;
   agc_list *kept = replaced_first(n);
+  const size_t from = (size_t)40 * LIST_WIDTH;
+  agc_list *dropped = agc_list_slice(built(n), from, n - from);
   uint64_t stop = info.collections + 3;
   for (size_t round = 0; round < ROUNDS && info.collections < stop; round++) {
     memset(agc_alloc(JUNK), 0xAB, JUNK);
@@ -372,6 +378,39 @@ static void expect_interior_pointers(void) {
   for (size_t round = 0; round < AFTER; round++) memset(agc_alloc(JUNK), 0xAB, JUNK);
   assert(is_other(agc_list_get(kept, 0), 0));
   for (size_t k = 1; k < n; k++) assert(is_item(agc_list_get(kept, k), k));
+  for (size_t k = 0; k < n - from; k++) assert(is_item(agc_list_get(dropped, k), from + k));
+}
+
+#ifndef AGC_NO_GC
+/* slack: the debug header of the GC-stress build and the rounding of a large object to whole heap blocks */
+static void expect_small_node(const void *node, size_t bytes, size_t slack) {
+  void *base = GC_base((void *)node);
+  assert(base && GC_size(base) <= bytes + slack);
+}
+
+static void expect_small_nodes(const agc_list *l) {
+  size_t leaves = list_tail_off(l->len) >> LIST_BITS;
+  for (size_t k = 0; k < leaves; k++) {
+    const list_branch *node = l->root;
+    for (uint32_t s = l->shift; s > LIST_BITS; s -= LIST_BITS) {
+      expect_small_node(node, sizeof(list_branch), 256);
+      node = node->child[((k << LIST_BITS) >> s) & LIST_MASK];
+    }
+    expect_small_node(node, sizeof(list_branch), 256);
+    expect_small_node(node->child[k & LIST_MASK], 65536, 4096);
+  }
+}
+#endif
+
+/* A false pointer into a built list keeps at most one slab of 64 KiB alive: no node of the trie is larger. */
+static void expect_bounded_nodes(void) {
+#ifndef AGC_NO_GC
+  const size_t n = 100000 < MAX_LENGTH ? 100000 : MAX_LENGTH;
+  agc_list *l = built(n);
+  expect_small_nodes(l);
+  agc_list *shared = agc_list_slice(l, (size_t)7 * LIST_WIDTH, n - (size_t)7 * LIST_WIDTH);
+  expect_small_nodes(shared);
+#endif
 }
 
 static void expect_versions(void) {
@@ -418,6 +457,7 @@ static void run_lengths(void) {
   expect_sharing();
   expect_shared_leaves();
   expect_interior_pointers();
+  expect_bounded_nodes();
   const size_t chains[] = {33, 65, 1057, 1100};
   for (size_t s = 0; s < sizeof chains / sizeof chains[0]; s++)
     if (chains[s] <= MAX_LENGTH) expect_set_chain(chains[s]);
@@ -455,12 +495,14 @@ static void expect_mixed(const agc_list *l, flavor_t base, flavor_t odd, size_t 
 }
 
 static void expect_builder_mixing(flavor_t base, flavor_t odd) {
-  const size_t sizes[] = {1, 2, 3, 31, 32, 33, 34, 64, 65, 66, 1056, 1057, 1058, 2113};
+  /* 8225 and 16449 fill one and two slabs of numeric leaves (255 leaves, 8160 items) and more */
+  const size_t sizes[] = {1, 2, 3, 31, 32, 33, 34, 64, 65, 66, 1056, 1057, 1058, 2113, 8225, 16449};
   for (size_t s = 0; s < sizeof sizes / sizeof sizes[0]; s++) {
     size_t n = sizes[s];
     if (n < 2) continue;
     size_t trie = list_tail_off(n);
-    size_t spots[] = {0, 1, 31, 32, 33, trie ? trie - 1 : 0, trie, trie + 1, n / 2, n - 1};
+    size_t spots[] = {0,    1,    31,   32,   33,    trie ? trie - 1 : 0, trie,  trie + 1, n / 2,
+                      8159, 8160, 8161, 8191, 8192, 8193,  16319,               16320, 16321,    n - 1};
     for (size_t t = 0; t < sizeof spots / sizeof spots[0]; t++) {
       size_t at = spots[t];
       if (at >= n) continue;

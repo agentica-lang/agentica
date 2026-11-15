@@ -5,7 +5,8 @@
     "**/third_party/**",
     "**/unicode_data.c",
     "vm/tools/**",
-    "**/eval/tasks/**"
+    "**/eval/tasks/**",
+    "tests/fixtures/native/agentica_native_1_3.h"
   ],
   "ignorePattern": ["\"\"\"[\\s\\S]*?\"\"\""],
   "minTokens": 50,
