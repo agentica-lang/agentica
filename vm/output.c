@@ -664,6 +664,23 @@ bool agc_output_busy(agc_vm *vm) {
   return busy;
 }
 
+/* A notice queued after the last wait of the run (say_goodbye) is written before the exit: a pool job or a request
+   that carries it gets the shared moment of settle, and a descriptor the loop may write takes the rest at once. */
+void agc_output_settle(agc_vm *vm) {
+  agc_output *streams[2] = {&vm->rt->out, &vm->rt->err};
+  for (size_t k = 0; k < 2; k++) {
+    agc_output *s = streams[k];
+    if (s->base != s) continue;
+    stream_take(vm, s->lock);
+    if (!s->failed && (s->len || queued(s))) {
+      pump(s, true);
+      if (held(s)) settle(vm, s);
+      write_last(vm, s);
+    }
+    stream_drop(vm, s->lock);
+  }
+}
+
 /* A write still in flight (a reader stuck past the flush limit, a stop signal) keeps its stream as it is: on Windows a
    call on that handle would wait for the write, and the exit must not wait for a reader. held is also true for a pool
    write that has ended but whose done half has not run yet; that stream is left as it is too, which only costs the
@@ -837,6 +854,8 @@ bool agc_output_busy(agc_vm *vm) {
   (void)vm;
   return false;
 }
+
+void agc_output_settle(agc_vm *vm) { (void)vm; }
 
 void agc_output_open(agc_vm *vm, agc_output *out, int fd) {
   (void)vm;

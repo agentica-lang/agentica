@@ -430,6 +430,7 @@ agc_input_status agc_input_bytes(agc_vm *vm, size_t count, const agc_bytes **out
 void agc_output_open(agc_vm *vm, agc_output *out, int fd);
 void agc_output_leave(agc_vm *vm, agc_task *t);
 bool agc_output_busy(agc_vm *vm);
+void agc_output_settle(agc_vm *vm);
 /* The last call before the process exits: each stream with no write in flight ends its target (agc_stdio_end). */
 void agc_output_end(agc_vm *vm);
 void agc_output_close(agc_vm *vm);
