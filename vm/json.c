@@ -103,12 +103,13 @@ static bool json_space(uint8_t c) { return c == ' ' || c == '\t' || c == '\n' ||
 
 /* yyjson's reader rounds correctly on every system, unlike some C libraries' strtod (mingw-w64's reads
    3.839223843572815e-239 one ulp high). It gets the significant digits without trailing zeros, because past 768 digits
-   it takes the digits it drops as nonzero, and an exponent; text it refuses is past the largest Float. */
+   it takes the digits it drops as nonzero, and an exponent, kept exact up to 10^17 so that a long mantissa can cancel
+   it. Text yyjson refuses is past the largest Float. */
 double agc_read_double(const char *s, size_t len) {
   size_t i = len > 0 && (s[0] == '+' || s[0] == '-') ? 1 : 0;
   bool negative = i == 1 && s[0] == '-', point = false;
   char small[64];
-  char *text = len < sizeof small - 16 ? small : agc_alloc_atomic(agc_size_add(len, 16));
+  char *text = len < sizeof small - 24 ? small : agc_alloc_atomic(agc_size_add(len, 24));
   size_t count = 0, kept = 0;
   int64_t e10 = 0;
   for (; i < len && s[i] != 'e' && s[i] != 'E'; i++) {
@@ -125,7 +126,7 @@ double agc_read_double(const char *s, size_t len) {
     bool down = s[++i] == '-';
     i += s[i] == '+' || s[i] == '-';
     int64_t e = 0;
-    for (; i < len; i++) e = e < 100000 ? e * 10 + (s[i] - '0') : e;
+    for (; i < len; i++) e = e < INT64_C(100000000000000000) ? e * 10 + (s[i] - '0') : e;
     e10 += down ? -e : e;
   }
   double x = 0.0;
@@ -133,7 +134,7 @@ double agc_read_double(const char *s, size_t len) {
   if (kept > 0 && lead > 310) {
     x = INFINITY;
   } else if (kept > 0 && lead >= -330) {
-    snprintf(text + kept, 16, "e%d", (int)e10);
+    snprintf(text + kept, 24, "e%lld", (long long)e10);
     yyjson_val v;
     x = yyjson_read_number(text, &v, 0, NULL, NULL) ? yyjson_get_real(&v) : INFINITY;
   }

@@ -89,6 +89,7 @@ def run(op: String, data: Bytes) -> String
     "hex" -> "ok #{hex(hex(data).bytes)}"
     "float" -> "ok #{hex(Float.from_bits(text(data).to_i!).to_s.bytes)}"
     "float_back" -> float_back(Float.from_bits(text(data).to_i!))
+    "to_f" -> "ok #{hex(text(data).to_f!.to_bits.to_s.bytes)}"
     "unhex" -> bytes_reply(OpenSSL.Digest.hexdecode(text(data)))
     _ ->
       parts = op.split(":")
@@ -466,3 +467,10 @@ def test_float_text_reads_back(codec):
             json = 0 if b in (0, 1 << 63) else signed
             got = codec.ask("float_back", str(signed).encode("ascii"))
             assert got == b"%d %d" % (signed, json), (hex(b), got)
+
+
+def test_a_long_mantissa_cancels_its_exponent(codec):
+    """to_f and JSON.decode read the exponent exactly, so a million digits that the exponent cancels give 1.0."""
+    for text in ("1" + "0" * 1000000 + "e-1000000", "0." + "0" * 1000000 + "1e1000001"):
+        assert codec.ask("to_f", text.encode("ascii")) == str(float_bits(1.0)).encode("ascii"), text[:20]
+        assert codec.ask("floats", ("[" + text + "]").encode("ascii")) == b"[1.0]", text[:20]
