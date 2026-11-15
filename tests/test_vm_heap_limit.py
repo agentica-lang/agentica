@@ -47,14 +47,16 @@ def main() -> Void
 end
 """
 
-# 400 rounds of 20,000 garbage strings and the parse of a 262 KB array. A few MB are live, the heap is full
-# of garbage whenever the parser asks for memory, and the parser's memory is malloc'd, outside the collector: the run
-# ends early unless that memory gets a collection before it is refused.
+# 400 rounds of 20,000 garbage strings and 32 parses of an 8 KB array. A few MB are live, the heap is full of garbage
+# whenever the parser asks for memory, and the parser's memory is malloc'd, outside the collector: the run ends early
+# unless that memory gets a collection before it is refused. Many small parses rather than one large one: marking is
+# conservative, and a stray pointer into a dead list keeps the whole list alive, so each list must be small next to
+# the limit (#1681).
 ROUNDS = """\
 def main() -> Void
   numbers = "1"
   k = 0
-  while k < 17
+  while k < 12
     numbers = numbers + "," + numbers
     k += 1
   end
@@ -70,8 +72,13 @@ def main() -> Void
       n += 1
     end
 
-    if JSON.parse(text).ok? and total > 0
-      parsed += 1
+    piece = 0
+    while piece < 32
+      if JSON.parse(text).ok? and total > 0
+        parsed += 1
+      end
+
+      piece += 1
     end
 
     round += 1
@@ -118,7 +125,7 @@ def test_a_limit_under_the_starting_heap_only_stops_its_growth(tmp_path):
 @pytest.mark.parametrize("size", ["8M", "32M"])
 def test_garbage_does_not_count_against_a_json_parse(tmp_path, size):
     result = run_vm(compile_text(ROUNDS, "rounds", tmp_path), "--max-heap", size, timeout=scaled(120))
-    assert (result.code, result.stdout, result.stderr) == (0, "400\n", ""), result
+    assert (result.code, result.stdout, result.stderr) == (0, "12800\n", ""), result
 
 
 @pytest.mark.parametrize("size", ["0", "x", "64MB", "-1", "1025G", "1.5G", ""])
