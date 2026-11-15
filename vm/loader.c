@@ -496,6 +496,7 @@ static void load_types(reader *r, agc_program *p) {
     last = index;
     agc_struct_def *d = &p->structs[index];
     d->json_name = read_string(r);
+    // cchecker: ignore CC-GCC-ANALYZER-NULL-DEREFERENCE: names is NULL only for a count of 0, which runs no pass
     names[i] = d->json_name;
     d->json_root = memchr(d->json_name->data, '[', d->json_name->bytes) != NULL;
     if (d->json_root && d->count != 1) reject(r, "a List or Map JSON target needs one field");
