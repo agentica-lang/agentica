@@ -375,12 +375,17 @@ agc_input_status agc_input_peek(agc_vm *vm, int *byte) {
 agc_input_status agc_input_line(agc_vm *vm, agc_string **line) {
   agc_input *in = &vm->rt->in;
   for (;;) {
+    /* A window that doubles keeps the work linear in the line: a \r can end the line long before the next \n. */
     size_t from = in->start + in->scanned, k = in->end;
-    if (from < in->end) {
-      const uint8_t *lf = memchr(in->buf + from, '\n', in->end - from);
-      size_t before = lf ? (size_t)(lf - in->buf) : in->end;
+    for (size_t window = 256; from < in->end; from += window, window *= 2) {
+      if (window > in->end - from) window = in->end - from;
+      const uint8_t *lf = memchr(in->buf + from, '\n', window);
+      size_t before = lf ? (size_t)(lf - in->buf) : from + window;
       const uint8_t *cr = memchr(in->buf + from, '\r', before - from);
-      k = cr ? (size_t)(cr - in->buf) : before;
+      if (cr || lf) {
+        k = cr ? (size_t)(cr - in->buf) : before;
+        break;
+      }
     }
     if (k < in->end) {
       uint8_t c = in->buf[k];
