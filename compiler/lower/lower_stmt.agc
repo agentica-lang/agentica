@@ -506,9 +506,10 @@ end
 # A case with TABLE_ARMS or more variant arms: `jump-variant` goes by the scrutinee's variant straight to the first arm
 # that can match it, past that arm's tag test, and other variants go to the first arm that can match any value. An arm
 # past its tag test knows the variant, so a failed nested pattern or guard goes straight to the next arm that can match
-# it. Only an arm after one that may match any value is also reached in order, so only such an arm keeps its tag test,
-# which goes to the next arm when it fails. Arm k starts at label first + k, its code after the tag test at
-# first + count + k, and the end of the case is first + 2 * count.
+# it. An arm that is not a single variant pattern (`_`, a literal, a Result pattern, any or-pattern, even of plain
+# variants) fails to the next arm in order, so every variant arm after it keeps its tag test, which goes to the next
+# arm when it fails. Arm k starts at label first + k, its code after the tag test at first + count + k, and the end of
+# the case is first + 2 * count.
 def lower_table_arms(
   cx: Lowering.Cx,
   scrutinee: Lowering.Out,

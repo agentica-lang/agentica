@@ -66,9 +66,10 @@ code does not show:
   arms name, each to the first arm that can match it, past that arm's tag
   test, and a variant outside them goes to the first arm that can match any
   value. Past its tag test an arm knows the variant, so a failed nested
-  pattern or guard jumps to the next arm that can match it. Only the variant
-  arms after an arm that can match any value (`_`, a literal, an or-pattern)
-  keep their tag test, since only they are reached in order.
+  pattern or guard jumps to the next arm that can match it. An arm that is
+  not a single variant pattern (`_`, a literal, a Result pattern, any
+  or-pattern, even of plain variants) fails to the next arm in order, so every
+  variant arm after it keeps its tag test.
 - `try` is `try dst src`: on an error, return that Result from the function (the
   block, inside a block). A `try` that the checker found in the block of a
   `Lazy` method (`Checked.step_tries`) is `try-step dst src`.
