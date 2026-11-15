@@ -644,6 +644,7 @@ static void shut_one(net *n, const char *why) {
   notify(n, n->opener);
   notify(n, n->reader);
   notify(n, n->writer);
+  // cchecker: ignore CC-GCC-ANALYZER-INFINITE-LOOP: a linked accept is not finished yet, and finish unlinks it
   while (n->accepts) finish(n->accepts);
   out_drop(n);
   while (n->flushers) finish(n->flushers);
