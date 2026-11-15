@@ -272,6 +272,39 @@ static void native_calls(void) {
   assert(find_word(&e, ret, 0xF9401A81u) != SIZE_MAX && find_word(&e, ret, 0xF9401E82u) != SIZE_MAX);
 }
 
+/* The instructions that check a tag, with every operand's tag unknown (KNOWN false) or known: the count of the words
+   that load a register's tag (ldr w9, [x20, #off]). */
+static size_t tag_loads(bool known) {
+  agc_emitter e;
+  uint8_t tags[4] = {AGC_T_BOOL, AGC_T_INT, AGC_T_INT, AGC_T_LIST};
+  agc_jit_plain plain = {{AGC_T_LIST, AGC_T_VOID}, false, false};
+  agc_a64_emit_begin(&e, 1);
+  if (known) {
+    e.tags = tags;
+    e.tag_count = 4;
+  }
+  agc_a64_emit_label(&e, 0);
+  size_t start = e.len, loads = 0;
+  agc_a64_emit_int(&e, AGC_OP_ADD_I, (agc_instr){0, 1, 1, 2}, 0);
+  agc_a64_emit_int(&e, AGC_OP_LT_I, (agc_instr){0, 0, 1, 2}, 0);
+  agc_a64_emit_equal(&e, AGC_OP_EQ, (agc_instr){0, 0, 1, 2}, 0);
+  agc_a64_emit_read(&e, AGC_OP_NOT, (agc_instr){0, 0, 0, 0}, 0);
+  agc_a64_emit_list_len(&e, 1, 3, AGC_STATUS_WRONG_TAG, 0);
+  agc_a64_emit_list_get(&e, (agc_instr){0, 2, 3, 1}, 0);
+  agc_a64_emit_plain_leaf(&e, (agc_instr){0, 3, 0, 0}, 0, 0x5000, 7, &plain);
+  agc_a64_emit_branch(&e, 0, true, 0, 0);
+  size_t end = e.len;
+  assert(agc_a64_emit_end(&e) > 0);
+  for (size_t k = start; k < end; k += 4) loads += (at(&e, k) & 0xFFC003FFu) == 0xB9400289u;
+  return loads;
+}
+
+/* A tag the walk knows (agc_emitter.tags) is not loaded or compared again. */
+static void known_tags(void) {
+  assert(tag_loads(false) == 11);
+  assert(tag_loads(true) == 0);
+}
+
 /* When every seal synchronizes the cores (call_isb false, agc_jit_use_sync), a native CALL and a TAIL_CALL branch
    right after the add of the entry, with no isb anywhere. */
 static void calls_without_isb(void) {
@@ -328,6 +361,7 @@ int main(void) {
   every_kind();
   native_calls();
   calls_without_isb();
+  known_tags();
   block_calls();
   cap();
   return 0;

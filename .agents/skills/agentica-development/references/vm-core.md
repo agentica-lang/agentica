@@ -221,7 +221,12 @@ Core layer; the design (modes, native calls, exits, helper contract) is
   spent=work` or `spent=bytes` once.
 - A new instruction with code needs: a case in `has_code` and in the walk, its
   `agc_emit_*` in both emitters (`emit_x64.c`, `emit_a64.c`), a case in
-  `jit_test.c`, `jit_a64_test.c` and `tests/test_vm_jit.py`. Compiled code
+  `jit_test.c`, `jit_a64_test.c` and `tests/test_vm_jit.py`. `track_tags`
+  (`jit.c`) forgets every known tag after it unless it has a case there: add
+  one only for code that calls nothing, with the tags that code checked or
+  wrote. On x86-64, code that ends with a register's payload in `rax` on every
+  path sets `next_held`; code after an entry may rely only on the frame's
+  registers. Compiled code
   never fails, allocates or parks, and pushes or pops a frame only in room the
   task already has; any slow path leaves for the interpreter. It calls a
   builtin only when the row is marked `direct` (`agc_builtin.direct`, checked

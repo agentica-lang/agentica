@@ -368,6 +368,9 @@ void agc_emit_start(agc_emitter *e, uint32_t count) {
   e->count = count;
   e->call_isb = true;
   e->labels = agc_alloc_atomic(agc_size_mul(count ? count : 1, sizeof *e->labels));
+  e->held_at = agc_alloc_atomic(agc_size_mul(count ? count : 1, sizeof *e->held_at));
+  for (uint32_t pc = 0; pc < count; pc++) e->held_at[pc] = AGC_JIT_NO_REGISTER;
+  e->held = e->next_held = AGC_JIT_NO_REGISTER;
 }
 
 void agc_emit_patch(agc_emitter *e, size_t at, agc_jit_patch_kind kind, uint64_t value) {
@@ -390,7 +393,8 @@ bool agc_emit_patches(agc_emitter *e, size_t epilogue, agc_emit_stub stub, agc_e
     agc_jit_patch p = e->patches[k];
     size_t to;
     if (p.kind == AGC_JIT_PATCH_LABEL) {
-      if (p.value >= e->count) return false;
+      /* A guard that the walk never reaches: it clears the hold at every jump target, and instruction 0 has none. */
+      if (p.value >= e->count || e->held_at[p.value] != AGC_JIT_NO_REGISTER) return false;
       to = e->labels[p.value];
     } else if (p.kind == AGC_JIT_PATCH_EPILOGUE) {
       to = epilogue;
@@ -430,6 +434,103 @@ static uint64_t opcode_helper(agc_opcode op, bool *two_operands, bool *charged) 
   return one ? (uint64_t)(uintptr_t)one : (uint64_t)(uintptr_t)two;
 }
 
+static void know(agc_emitter *e, uint32_t r, uint8_t tag) {
+  if (r < e->tag_count) e->tags[r] = tag;
+}
+
+static void forget(agc_emitter *e) {
+  e->next_held = AGC_JIT_NO_REGISTER;
+  if (e->tag_count) memset(e->tags, AGC_JIT_TAG_UNKNOWN, e->tag_count);
+}
+
+/* The known tags (agc_emitter.tags) after instruction IN, whose code was just written with the tags before it: what
+   that code checked or wrote inline, which the interpreter checks and writes the same way when it runs the
+   instruction after an exit. A tag holds from the instruction that made it to the end of its block: emit_function
+   forgets every tag at a jump target, and every tag goes here at an instruction without a case below (a call, a
+   CALL_BUILTIN other than the inline List.size, an instruction that is one helper call, one without code), since
+   any of them may write registers; LIST_GET and a slow EQ or NE keep only what the instruction itself checked or
+   wrote. The tags stay across a STEP, its slow exit included, and across an inline instruction whose failed check
+   leaves for the interpreter to run that one instruction: neither writes a register the code does not. The operands
+   come before R[a], which may be one of them.
+   forget also drops the payload the emitter holds in a machine register (agc_emitter.next_held). */
+static void track_tags(agc_emitter *e, const agc_program *p, agc_opcode op, agc_instr in, bool list_size) {
+  uint32_t bx = (uint32_t)in.b | ((uint32_t)in.c << 16);
+  uint8_t moved = in.b < e->tag_count ? e->tags[in.b] : AGC_JIT_TAG_UNKNOWN;
+  bool ints = agc_emit_ints(e, in);
+  if (list_size) {
+    know(e, in.a, AGC_T_INT);
+    return;
+  }
+  switch (op) {
+    case AGC_OP_STEP:
+    case AGC_OP_JUMP: break;
+    case AGC_OP_MOVE: know(e, in.a, moved); break;
+    case AGC_OP_CONST:
+      know(e, in.a, bx < p->constant_count ? (uint8_t)p->constants[bx].tag : AGC_JIT_TAG_UNKNOWN);
+      break;
+    case AGC_OP_GLOBAL: know(e, in.a, AGC_JIT_TAG_UNKNOWN); break;
+    case AGC_OP_NEG_I:
+      know(e, in.b, AGC_T_INT);
+      know(e, in.a, AGC_T_INT);
+      break;
+    case AGC_OP_ADD_I:
+    case AGC_OP_SUB_I:
+    case AGC_OP_MUL_I:
+    case AGC_OP_DIV_I:
+    case AGC_OP_MOD_I:
+    case AGC_OP_LT_I:
+    case AGC_OP_LE_I:
+      know(e, in.b, AGC_T_INT);
+      know(e, in.c, AGC_T_INT);
+      know(e, in.a, op == AGC_OP_LT_I || op == AGC_OP_LE_I ? AGC_T_BOOL : AGC_T_INT);
+      break;
+    case AGC_OP_EQ:
+    case AGC_OP_NE:
+      if (!ints) forget(e);
+      know(e, in.a, AGC_T_BOOL);
+      break;
+    case AGC_OP_NOT:
+      know(e, in.b, AGC_T_BOOL);
+      know(e, in.a, AGC_T_BOOL);
+      break;
+    case AGC_OP_JUMP_IF_FALSE:
+    case AGC_OP_JUMP_IF_TRUE: know(e, in.a, AGC_T_BOOL); break;
+    case AGC_OP_LIST_LEN:
+      know(e, in.b, AGC_T_LIST);
+      know(e, in.a, AGC_T_INT);
+      break;
+    case AGC_OP_LIST_GET:
+      forget(e);
+      know(e, in.b, AGC_T_LIST);
+      know(e, in.c, AGC_T_INT);
+      know(e, in.a, AGC_JIT_TAG_UNKNOWN);
+      break;
+    case AGC_OP_FIELD:
+      know(e, in.b, AGC_T_STRUCT);
+      know(e, in.a, AGC_JIT_TAG_UNKNOWN);
+      break;
+    case AGC_OP_PAYLOAD:
+      know(e, in.b, AGC_T_ENUM);
+      know(e, in.a, AGC_JIT_TAG_UNKNOWN);
+      break;
+    case AGC_OP_IS_VARIANT:
+      know(e, in.b, AGC_T_ENUM);
+      know(e, in.a, AGC_T_BOOL);
+      break;
+    case AGC_OP_IS_OK:
+      know(e, in.b, AGC_T_RESULT);
+      know(e, in.a, AGC_T_BOOL);
+      break;
+    case AGC_OP_RESULT_VALUE:
+    case AGC_OP_TRY:
+    case AGC_OP_TRY_STEP:
+      know(e, in.b, AGC_T_RESULT);
+      know(e, in.a, AGC_JIT_TAG_UNKNOWN);
+      break;
+    default: forget(e); break;
+  }
+}
+
 /* The size of F's code, or 0 when an operand or the code did not fit. Its cases are the set of has_code, CALL,
    CALL_VALUE and RETURN; other instructions leave for the interpreter. */
 static size_t emit_function(agc_emitter *e, const agc_jit *jit, const agc_function *f) {
@@ -438,10 +539,23 @@ static size_t emit_function(agc_emitter *e, const agc_jit *jit, const agc_functi
   uint64_t counter = AGC_TRACE_ON(jit->trace, AGC_TRACE_JIT) ? (uint64_t)(uintptr_t)jit : 0;
   agc_emit_begin(e, f->count);
   e->call_isb = !jit->sync_cores;
+  e->tag_count = f->registers;
+  e->tags = agc_alloc_atomic(f->registers ? f->registers : 1);
+  forget(e);
+  bool *target = agc_alloc_atomic(f->count ? f->count : 1);
+  memset(target, 0, f->count);
+  for (uint32_t pc = 0; pc < f->count; pc++) {
+    agc_instr in = f->code[pc];
+    uint32_t bx = (uint32_t)in.b | ((uint32_t)in.c << 16);
+    if ((in.op == AGC_OP_JUMP || in.op == AGC_OP_JUMP_IF_FALSE || in.op == AGC_OP_JUMP_IF_TRUE) && bx < f->count)
+      target[bx] = true;
+  }
   for (uint32_t pc = 0; pc < f->count && !e->failed; pc++) {
     agc_instr in = f->code[pc];
     agc_opcode op = (agc_opcode)plain_op(in.op);
     uint32_t bx = (uint32_t)in.b | ((uint32_t)in.c << 16);
+    bool list_size = false;
+    if (target[pc]) forget(e);
     agc_emit_label(e, pc);
     switch (op) {
       case AGC_OP_MOVE: agc_emit_move(e, in.a, in.b); break;
@@ -541,7 +655,8 @@ static size_t emit_function(agc_emitter *e, const agc_jit *jit, const agc_functi
         /* As for CALL, the C tests' hand-made code may have no builtin table. */
         const agc_builtin *b = bx < p->builtin_count ? p->builtins[bx] : NULL;
         const agc_jit_plain *plain = b ? agc_jit_plain_of(b) : NULL;
-        if (plain && plain->list_len)
+        list_size = plain && plain->list_len;
+        if (list_size)
           agc_emit_list_len(e, in.a, in.a, AGC_JIT_EXIT_INTERPRET, pc);
         else if (plain)
           agc_emit_plain_leaf(e, in, pc, (uint64_t)(uintptr_t)b, f->spans[pc], plain);
@@ -555,6 +670,7 @@ static size_t emit_function(agc_emitter *e, const agc_jit *jit, const agc_functi
       }
       default: agc_emit_exit(e, AGC_JIT_EXIT_INTERPRET, pc); break;
     }
+    track_tags(e, p, op, in, list_size);
   }
   return agc_emit_end(e);
 }

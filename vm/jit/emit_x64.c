@@ -187,14 +187,21 @@ static void exit_if(agc_emitter *e, int cc, uint32_t status, uint32_t pc) {
 
 /* The tag of register R must be TAG, else the instruction at PC fails with a wrong tag, as agc_as_int does. */
 static void need_tag(agc_emitter *e, uint32_t r, agc_tag tag, uint32_t pc) {
+  if (agc_emit_known(e, r, tag)) return;
   compare_imm8(e, false, REGS, TAG(r), (int8_t)tag);
   exit_if(e, CC_NE, AGC_STATUS_WRONG_TAG, pc);
 }
 
 /* R[a] = RAX with TAG: the full tag word, then the payload. */
 static void store_value(agc_emitter *e, uint32_t a, agc_tag tag) {
-  store_imm(e, REGS, TAG(a), (int32_t)tag);
+  if (!agc_emit_known(e, a, tag)) store_imm(e, REGS, TAG(a), (int32_t)tag);
   store(e, REGS, WORD(a), RAX);
+  e->next_held = a;
+}
+
+/* rax = the payload of R[r], which it already is when the instruction before left it there. */
+static void load_word(agc_emitter *e, uint32_t r) {
+  if (e->held != r) load(e, RAX, REGS, WORD(r));
 }
 
 /* setcc al; movzx eax, al: RAX is 0 or 1, the payload of agc_bool. */
@@ -245,21 +252,40 @@ void agc_emit_begin(agc_emitter *e, uint32_t count) {
 }
 
 void agc_emit_label(agc_emitter *e, uint32_t pc) {
-  if (pc < e->count) e->labels[pc] = (uint32_t)e->len;
+  e->held = e->next_held;
+  e->next_held = AGC_JIT_NO_REGISTER;
+  if (pc >= e->count) return;
+  e->labels[pc] = (uint32_t)e->len;
+  e->held_at[pc] = e->held;
 }
 
-void agc_emit_move(agc_emitter *e, uint32_t a, uint32_t b) {
+/* R[a] = R[b], both words, whatever is known. */
+static void copy(agc_emitter *e, uint32_t a, uint32_t b) {
   load(e, RAX, REGS, TAG(b));
   load(e, RDX, REGS, WORD(b));
   store(e, REGS, TAG(a), RAX);
   store(e, REGS, WORD(a), RDX);
 }
 
+void agc_emit_move(agc_emitter *e, uint32_t a, uint32_t b) {
+  uint8_t tag = b < e->tag_count ? e->tags[b] : AGC_JIT_TAG_UNKNOWN;
+  if (tag == AGC_JIT_TAG_UNKNOWN) {
+    load(e, RDX, REGS, TAG(b));
+    store(e, REGS, TAG(a), RDX);
+  } else if (!agc_emit_known(e, a, (agc_tag)tag)) {
+    store_imm(e, REGS, TAG(a), tag);
+  }
+  load_word(e, b);
+  store(e, REGS, WORD(a), RAX);
+  e->next_held = a;
+}
+
 void agc_emit_const(agc_emitter *e, uint32_t a, uint32_t k) {
-  load(e, RAX, CONSTS, TAG(k));
-  load(e, RDX, CONSTS, WORD(k));
-  store(e, REGS, TAG(a), RAX);
-  store(e, REGS, WORD(a), RDX);
+  load(e, RDX, CONSTS, TAG(k));
+  load(e, RAX, CONSTS, WORD(k));
+  store(e, REGS, TAG(a), RDX);
+  store(e, REGS, WORD(a), RAX);
+  e->next_held = a;
 }
 
 /* GLOBAL: the value in the slot, a program table that is never written after the entry function, so no lock; a slot
@@ -292,7 +318,7 @@ static void divide(agc_emitter *e, bool mod, agc_instr in, uint32_t pc) {
   load(e, RCX, REGS, WORD(in.c));
   BYTES(e, 0x48, 0x85, 0xC9); /* test rcx, rcx */
   exit_if(e, CC_E, AGC_STATUS_DIVISION_BY_ZERO, pc);
-  load(e, RAX, REGS, WORD(in.b));
+  load_word(e, in.b);
   BYTES(e, 0x48, 0x83, 0xF9, 0xFF); /* cmp rcx, -1 */
   size_t not_minus_one = jump_to_patch(e, CC_NE);
   if (mod) {
@@ -314,7 +340,7 @@ static void divide(agc_emitter *e, bool mod, agc_instr in, uint32_t pc) {
 void agc_emit_int(agc_emitter *e, agc_opcode op, agc_instr in, uint32_t pc) {
   need_tag(e, in.b, AGC_T_INT, pc);
   if (op == AGC_OP_NEG_I) {
-    load(e, RAX, REGS, WORD(in.b));
+    load_word(e, in.b);
     BYTES(e, 0x48, 0xF7, 0xD8); /* neg rax */
     exit_if(e, CC_O, AGC_STATUS_OVERFLOW, pc);
     store_value(e, in.a, AGC_T_INT);
@@ -326,17 +352,20 @@ void agc_emit_int(agc_emitter *e, agc_opcode op, agc_instr in, uint32_t pc) {
     case AGC_OP_MOD_I: divide(e, op == AGC_OP_MOD_I, in, pc); break;
     case AGC_OP_LT_I:
     case AGC_OP_LE_I:
-      load(e, RAX, REGS, WORD(in.b));
+      load_word(e, in.b);
       op_mem(e, true, 0x3B, RAX, REGS, WORD(in.c)); /* cmp rax, [c] */
       set_bool(e, op == AGC_OP_LT_I ? CC_L : CC_LE);
       store_value(e, in.a, AGC_T_BOOL);
       return;
-    default:
-      load(e, RAX, REGS, WORD(in.b));
-      /* add, sub or imul rax, [c] */
-      op_mem(e, true, op == AGC_OP_ADD_I ? 0x03 : op == AGC_OP_SUB_I ? 0x2B : 0x0FAF, RAX, REGS, WORD(in.c));
+    default: {
+      /* add, sub or imul rax, [c]; or with [b] when rax already holds R[c] and the order does not matter */
+      bool swap = op != AGC_OP_SUB_I && e->held == in.c;
+      load_word(e, swap ? in.c : in.b);
+      op_mem(e, true, op == AGC_OP_ADD_I ? 0x03 : op == AGC_OP_SUB_I ? 0x2B : 0x0FAF, RAX, REGS,
+             WORD(swap ? in.b : in.c));
       exit_if(e, CC_O, AGC_STATUS_OVERFLOW, pc);
       break;
+    }
   }
   store_value(e, in.a, AGC_T_INT);
 }
@@ -373,28 +402,39 @@ static void call_helper(agc_emitter *e, uint64_t helper, agc_instr in, bool c, u
    its bytes, CONCAT its joined bytes, TO_TEXT a compound, String or Json form) leaves
    for the interpreter to apply. */
 static void cost_exit(agc_emitter *e, uint32_t pc) {
-  load(e, RAX, VM, (int64_t)offsetof(agc_vm, task));
-  compare_imm8(e, true, RAX, (int64_t)offsetof(agc_task, turn_cost), 0);
+  load(e, RCX, VM, (int64_t)offsetof(agc_vm, task));
+  compare_imm8(e, true, RCX, (int64_t)offsetof(agc_task, turn_cost), 0);
   exit_if(e, CC_NE, AGC_JIT_EXIT_COST, pc);
+}
+
+/* A jump to the slow path, added to SLOW, when the tag of register R is not TAG; nothing when it is known to be. */
+static size_t other_tag(agc_emitter *e, uint32_t r, agc_tag tag, size_t *slow, size_t slows) {
+  if (agc_emit_known(e, r, tag)) return slows;
+  compare_imm8(e, false, REGS, TAG(r), (int8_t)tag);
+  slow[slows] = jump_to_patch(e, CC_NE);
+  return slows + 1;
 }
 
 static uint64_t binary(binary_helper helper) { return (uint64_t)(uintptr_t)helper; }
 
 /* EQ and NE: two Ints inline; any other pair through agc_op_eq or agc_op_ne. */
 void agc_emit_equal(agc_emitter *e, agc_opcode op, agc_instr in, uint32_t pc) {
-  compare_imm8(e, false, REGS, TAG(in.b), AGC_T_INT);
-  size_t slow_b = jump_to_patch(e, CC_NE);
-  compare_imm8(e, false, REGS, TAG(in.c), AGC_T_INT);
-  size_t slow_c = jump_to_patch(e, CC_NE);
-  load(e, RAX, REGS, WORD(in.b));
+  size_t slow[2], slows = 0;
+  if (!agc_emit_ints(e, in)) {
+    slows = other_tag(e, in.b, AGC_T_INT, slow, slows);
+    slows = other_tag(e, in.c, AGC_T_INT, slow, slows);
+  }
+  load_word(e, in.b);
   op_mem(e, true, 0x3B, RAX, REGS, WORD(in.c)); /* cmp rax, [c] */
   set_bool(e, op == AGC_OP_EQ ? CC_E : CC_NE);
   store_value(e, in.a, AGC_T_BOOL);
-  size_t done = jump_to_patch(e, -1);
-  land(e, slow_b);
-  land(e, slow_c);
-  call_helper(e, binary(op == AGC_OP_EQ ? agc_op_eq : agc_op_ne), in, true, pc);
-  land(e, done);
+  if (slows) {
+    e->next_held = AGC_JIT_NO_REGISTER;
+    size_t done = jump_to_patch(e, -1);
+    while (slows) land(e, slow[--slows]);
+    call_helper(e, binary(op == AGC_OP_EQ ? agc_op_eq : agc_op_ne), in, true, pc);
+    land(e, done);
+  }
   cost_exit(e, pc);
 }
 
@@ -458,6 +498,7 @@ void agc_emit_helper(agc_emitter *e, uint64_t helper, bool two, bool charged, ag
 
 /* The tag of register R must be TAG, else the interpreter runs the instruction at PC, and fails as it does. */
 static void tag_or_interpret(agc_emitter *e, uint32_t r, agc_tag tag, uint32_t pc) {
+  if (agc_emit_known(e, r, tag)) return;
   compare_imm8(e, false, REGS, TAG(r), (int8_t)tag);
   exit_if(e, CC_NE, AGC_JIT_EXIT_INTERPRET, pc);
 }
@@ -529,25 +570,27 @@ void agc_emit_read(agc_emitter *e, agc_opcode op, agc_instr in, uint32_t pc) {
 }
 
 void agc_emit_list_len(agc_emitter *e, uint32_t a, uint32_t b, uint32_t status, uint32_t pc) {
-  compare_imm8(e, false, REGS, TAG(b), AGC_T_LIST);
-  exit_if(e, CC_NE, status, pc);
+  if (!agc_emit_known(e, b, AGC_T_LIST)) {
+    compare_imm8(e, false, REGS, TAG(b), AGC_T_LIST);
+    exit_if(e, CC_NE, status, pc);
+  }
   load(e, RCX, REGS, WORD(b));
   load(e, RAX, RCX, AGC_JIT_LIST_LEN);
   store_value(e, a, AGC_T_INT);
 }
 
 _Static_assert(AGC_JIT_LIST_TAIL + 8 < 128, "the tail reads below use an 8-bit displacement");
+_Static_assert(AGC_JIT_LIST_MASK == 31, "the tail index below is masked with an 8-bit ~31");
 
 /* rcx = the list, rax = the index, then rax = the index in the tail: an index outside the list (a negative one is
    above every length as unsigned) or below the tail takes the helper. An item of kind 0 is an agc_value; else the
    kind is the tag and the item the payload (17.12). */
 void agc_emit_list_get(agc_emitter *e, agc_instr in, uint32_t pc) {
-  compare_imm8(e, false, REGS, TAG(in.b), AGC_T_LIST);
-  size_t not_list = jump_to_patch(e, CC_NE);
-  compare_imm8(e, false, REGS, TAG(in.c), AGC_T_INT);
-  size_t not_int = jump_to_patch(e, CC_NE);
+  size_t slow[2], slows = 0;
+  slows = other_tag(e, in.b, AGC_T_LIST, slow, slows);
+  slows = other_tag(e, in.c, AGC_T_INT, slow, slows);
   load(e, RCX, REGS, WORD(in.b));
-  load(e, RAX, REGS, WORD(in.c));
+  load_word(e, in.c);
   load(e, RDX, RCX, AGC_JIT_LIST_LEN);
   BYTES(e, 0x48, 0x39, 0xD0); /* cmp rax, rdx */
   size_t outside = jump_to_patch(e, CC_AE);
@@ -568,8 +611,7 @@ void agc_emit_list_get(agc_emitter *e, agc_instr in, uint32_t pc) {
   store(e, REGS, TAG(in.a), RAX);
   store(e, REGS, WORD(in.a), RDX);
   size_t done = jump_to_patch(e, -1);
-  land(e, not_list);
-  land(e, not_int);
+  while (slows) land(e, slow[--slows]);
   land(e, outside);
   land(e, in_trie);
   call_helper(e, binary(agc_op_list_get), in, true, pc);
@@ -583,7 +625,11 @@ void agc_emit_jump(agc_emitter *e, uint32_t target) {
 /* JUMP_IF_TRUE (WHEN) or JUMP_IF_FALSE: R[a] must be a Bool, whose payload is 0 or 1. */
 void agc_emit_branch(agc_emitter *e, uint32_t a, bool when, uint32_t target, uint32_t pc) {
   need_tag(e, a, AGC_T_BOOL, pc);
-  compare_imm8(e, true, REGS, WORD(a), 0);
+  if (e->held == a)
+    BYTES(e, 0x48, 0x85, 0xC0); /* test rax, rax */
+  else
+    compare_imm8(e, true, REGS, WORD(a), 0);
+  e->next_held = e->held;
   agc_emit_patch(e, jump_to_patch(e, when ? CC_NE : CC_E), AGC_JIT_PATCH_LABEL, target);
 }
 
@@ -616,10 +662,7 @@ void agc_emit_builtin(agc_emitter *e, agc_instr in, uint32_t pc, uint64_t builti
 void agc_emit_plain_leaf(agc_emitter *e, agc_instr in, uint32_t pc, uint64_t builtin, uint32_t span,
                          const agc_jit_plain *plain) {
   for (uint32_t k = 0; k < 2; k++)
-    if (plain->tags[k] != AGC_T_VOID) {
-      compare_imm8(e, false, REGS, TAG((uint32_t)in.a + k), (int8_t)plain->tags[k]);
-      exit_if(e, CC_NE, AGC_JIT_EXIT_INTERPRET, pc);
-    }
+    if (plain->tags[k] != AGC_T_VOID) tag_or_interpret(e, (uint32_t)in.a + k, (agc_tag)plain->tags[k], pc);
   if (plain->one_char) {
     load(e, RCX, REGS, WORD(in.a));
     compare_imm8(e, true, RCX, (int64_t)offsetof(agc_string, chars), 1); /* cmp qword [rcx + chars], 1 */
@@ -744,7 +787,7 @@ void agc_emit_tail_call(agc_emitter *e, agc_instr in, uint32_t pc, bool self, ui
     BYTES(e, 0x49, 0x39, 0xD2); /* cmp r10, rdx */
     tail_exit(e, CC_A, pc, counter, slot);
   }
-  for (uint32_t k = 0; in.a && k < params; k++) agc_emit_move(e, k, (uint32_t)in.a + k);
+  for (uint32_t k = 0; in.a && k < params; k++) copy(e, k, (uint32_t)in.a + k);
   /* rax = &frames[frame_count]: the top frame is the one before it. */
   op_mem(e, false, 0x8B, RAX, RCX, TASK_FIELD(frame_count)); /* mov eax, [rcx + frame_count] */
   BYTES(e, 0x48, 0xC1, 0xE0, 0x05);                          /* shl rax, 5 */
@@ -883,6 +926,14 @@ size_t agc_emit_end(agc_emitter *e) {
   pop(e, VM);
   byte(e, 0xC3); /* ret */
   if (!agc_emit_patches(e, epilogue, exit_stub, link_rel32)) return 0;
+  /* An entry at an instruction whose code expects a register's payload in rax loads it first. */
+  for (uint32_t pc = 0; pc < e->count; pc++) {
+    if (e->held_at[pc] == AGC_JIT_NO_REGISTER) continue;
+    size_t stub = e->len;
+    load(e, RAX, REGS, WORD(e->held_at[pc]));
+    link_rel32(e, jump_to_patch(e, -1), e->labels[pc]);
+    e->labels[pc] = (uint32_t)stub;
+  }
   while (!e->failed && e->len % 4) byte(e, AGC_EMIT_PAD);
   size_t table = e->len;
   for (uint32_t pc = 0; pc < e->count; pc++) word32(e, (uint32_t)(int32_t)(e->labels[pc] - table));
