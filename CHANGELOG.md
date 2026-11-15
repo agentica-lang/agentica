@@ -20,6 +20,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - The `gc` trace (`AGENTICA_VM_TRACE=gc`) reports what each scheduler allocated and, at the end of a run, the total time the world was stopped for collections, its share of wall and CPU time, and the pause count, p50, p99 and max (#1698).
 - `agentica FILE.agc` starts a program whose bytecode is in the cache without loading the compiler: about 16 ms in place of 48 ms for a small program on Linux (#1471).
 - `"$#{n}\r\n".bytes` on an interpolated string writes the parts into one `Bytes`, with no `String` in between; an `Int` in any interpolation prints faster (#1361).
+- `Bytes.concat([a, b, c])` with a list literal and `a + b + c` on `Bytes` (up to 8 parts) copy once and make no list or partial `Bytes` (#1361).
 - A program whose tasks all wait for one busy task (a store task that serves 50 clients over channels) no longer runs slower with more scheduler threads: up to about 2 times faster at 2 to 8 schedulers, depending on the work per request (#1362).
 - A project's `agentica.toml` is parsed once per start, not twice, so a program below a manifest starts a little faster (#1471).
 - `ATS.get`, `has_key?` and the read of `push` take no lock, so tasks that read one table scale with the schedulers: 8 tasks reading `Int` keys take 0.73 s in place of 2.2 s on 8 schedulers (#1625).

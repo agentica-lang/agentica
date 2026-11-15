@@ -1,9 +1,10 @@
 """Bytes against Python's bytes, on generated inputs.
 
 tests/fixtures/bytes-peer.agc answers one case a line: from_list, to_a, at, slice, take, drop, +, Bytes.concat, `==` and
-`!=`, how many keys a Set and a Map keep (the hash and the key equality), and `.bytes` on an interpolated string. The
-expected answers come from Python's bytes and set. The inputs cover the empty value, one byte, every byte value, equal
-values that are separate objects, and values that differ in one byte, in the length or in the last byte only.
+`!=`, how many keys a Set and a Map keep (the hash and the key equality), `.bytes` on an interpolated string, and
+Bytes.concat of a list literal and a chain of `+`. The expected answers come from Python's bytes and set. The inputs
+cover the empty value, one byte, every byte value, equal values that are separate objects, and values that differ in
+one byte, in the length or in the last byte only.
 """
 import random
 
@@ -96,6 +97,21 @@ def test_from_list_accepts_only_bytes(peer):
             mixed[rng.randrange(size)] = bad
             lines.append("from_list," + ",".join(map(str, mixed)))
             expected.append("error")
+    assert answers(peer, lines) == expected
+
+
+def test_concat_of_a_literal_and_a_plus_chain_match_python(peer):
+    """Up to 8 parts are joined from registers; 9 take the List and Bytes.plus paths. Empty parts are common, so one
+    part that has bytes and none that has bytes are both covered."""
+    rng = random.Random(SEED + 4)
+    data = values(rng) + [b""] * 8
+    lines = []
+    expected = []
+    for _ in range(300):
+        p = [rng.choice(data) for _ in range(9)]
+        lines.append("parts," + ",".join(part.hex() for part in p))
+        made = [p[0], p[0] + p[1], b"".join(p[:8]), b"".join(p), p[0] + p[1] + p[2], b"".join(p), b"".join(p)]
+        expected.append(" ".join(item.hex() for item in made))
     assert answers(peer, lines) == expected
 
 

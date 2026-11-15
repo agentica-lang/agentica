@@ -469,10 +469,12 @@ static void out_name(out_buffer *out, const char *s, size_t n) {
 /* The name that the report shows for builtin key KEY, its catalog name, and its length in *LEN. A byte row that moved
    to Bytes (#805) kept its catalog name under the key "<name>.bytes" (OpenSSL.Digest.sha256.bytes, __lazy_zlib.bytes),
    so the suffix is dropped when the rest is a qualified name or a prelude key; String.bytes (s.bytes) is a name of its
-   own, and "a#{b}".bytes runs under String.interpolated.bytes. */
+   own, and "a#{b}".bytes runs under String.interpolated.bytes; Bytes.concat([a, b]) and a + b + c run under
+   Bytes.concat.parts. */
 static const char *shown_name(const char *key, size_t *len) {
   static const char suffix[] = ".bytes";
   if (strcmp(key, "String.interpolated.bytes") == 0) key = "String.bytes";
+  if (strcmp(key, "Bytes.concat.parts") == 0) key = "Bytes.concat";
   size_t n = strlen(key), cut = sizeof suffix - 1;
   *len = n;
   if (n <= cut || memcmp(key + n - cut, suffix, cut) != 0) return key;

@@ -22,8 +22,8 @@ import Program from "lower_program"
 import Scans from "lower_scan"
 import Lowering from "lower_state"
 import {
-  CODEC_BUILTINS, CODEC_MEMBERS, CODEC_NAME, FLOAT_OPS, INTERPOLATED_PARTS, INT_MIN, INT_MIN_DIGITS, INT_OPS,
-  NATIVE_LAYOUTS, STRING_OPS, VM_BUILTINS,
+  CODEC_BUILTINS, CODEC_MEMBERS, CODEC_NAME, CONCAT_PARTS, FLOAT_OPS, INTERPOLATED_PARTS, INT_MIN, INT_MIN_DIGITS,
+  INT_OPS, NATIVE_LAYOUTS, STRING_OPS, VM_BUILTINS,
 } from "lower_tables"
 
 ## Lowers an expression into the register want (-1: any). void allows a Void value (a statement, a completion); known
@@ -169,6 +169,17 @@ def lower_call(
   if !checked
     expr = Ast.Expr.Call(node)
     try Lowering.require_type(cx, expr, void, Lowering.type_of(cx, expr))
+  end
+
+  listed = concat_literal(key, node)
+  if listed.some?
+    list = listed.unwrap!
+    try typed(cx, node.args[0], false)
+    spans = [span].concat(list.elements.map do |part: Ast.Expr| Ast.expr_span(part) end)
+    out = try lower_bytes_parts(cx, fx, [span, list.span], list.elements, spans, want)
+    return ok(out.with(fx: Lowering.emit_at(out.fx, "return", [out.slot], span))) if tail
+
+    return ok(out)
   end
 
   fx = Lowering.step(fx, span)
@@ -828,6 +839,16 @@ end
 # is outside equal_values, which the interpreter keeps small). `+` is Bytes.plus, `==` Bytes.equal and `!=` its
 # negation. The operands go to two new registers, where the call reads them and leaves its result in the first.
 def lower_bytes_operator(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Binary, dst: Int) -> Result[Lowering.Fx]
+  chain = plus_chain(cx, node)
+  if chain.size > 1
+    # a + b + c: the inner `+` nodes keep their steps, and one Bytes.concat.parts joins the operands.
+    parts = [chain.last.left].concat(chain.reverse.map do |plus: Ast.Binary| plus.right end)
+    spans = [node.op_span].concat(parts.map do |part: Ast.Expr| Ast.expr_span(part) end)
+    steps = chain.drop(1).map do |plus: Ast.Binary| plus.span end
+    out = try lower_bytes_parts(cx, fx, steps, parts, spans, -1)
+    return ok(Lowering.emit_at(out.fx, "move", [dst, out.slot], node.op_span))
+  end
+
   key = "Bytes.plus"
   if node.op == "equal" or node.op == "not-equal"
     key = "Bytes.equal"
@@ -837,6 +858,25 @@ def lower_bytes_operator(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Binary, dst
   return ok(Lowering.emit_at(window.fx, "not", [dst, window.slot], node.op_span)) if node.op == "not-equal"
 
   ok(Lowering.emit_at(window.fx, "move", [dst, window.slot], node.op_span))
+end
+
+# The `+` nodes of a left-nested a + b + c on Bytes, outermost first, at most CONCAT_PARTS - 1 of them; a longer chain
+# leaves the rest as the left operand of the last node.
+def plus_chain(cx: Lowering.Cx, node: Ast.Binary) -> List[Ast.Binary]
+  return [] if node.op != "plus"
+
+  chain = [node]
+  while chain.size < CONCAT_PARTS - 1
+    case chain.last.left
+      Ast.Expr.Binary(inner) ->
+        return chain if inner.op != "plus" or !Types.is?(Lowering.type_of(cx, inner.left), "Bytes")
+
+        chain = chain.push(inner)
+      _ -> return chain
+    end
+  end
+
+  chain
 end
 
 # True for a type whose == is the deep equality of the VM: anything but a primitive or a Range, which `eq` compares
@@ -1260,6 +1300,52 @@ def lower_interpolated_bytes(
   fx = Lowering.emit_builtin(fx, base, "String.interpolated.bytes", node.parts.size, spans)
   if want >= 0
     fx = Lowering.emit_at(fx, "move", [want, base], span)
+    return ok(Lowering.Out(fx: fx.with(next: saved), slot: want))
+  end
+
+  ok(Lowering.Out(fx: fx.with(next: base + 1), slot: base))
+end
+
+# The list literal of `Bytes.concat([a, b])` when it has 1 to CONCAT_PARTS items.
+def concat_literal(key: String, node: Ast.Call) -> Optional[Ast.ListLit]
+  return none if key != "Bytes.concat" or node.args.size != 1
+
+  case node.args[0]
+    Ast.Expr.ListLit(list) -> return some(list) if list.elements.size > 0 and list.elements.size <= CONCAT_PARTS
+    _ -> nil
+  end
+
+  none
+end
+
+# Bytes joined from a few parts by one Bytes.concat.parts, which reads them from a window of registers: no List of the
+# parts and no Bytes in between. steps are the steps of the nodes that the call stands for; spans is the span of the
+# call and then each part's.
+def lower_bytes_parts(
+  cx: Lowering.Cx,
+  fx: Lowering.Fx,
+  steps: List[Source.Span],
+  parts: List[Ast.Expr],
+  spans: List[Source.Span],
+  want: Int,
+) -> Result[Lowering.Out]
+  for at in steps
+    fx = Lowering.step(fx, at)
+  end
+
+  saved = fx.next
+  base = fx.next
+  index = 0
+  for part in parts
+    fx = Lowering.alloc(fx.with(next: base + index))
+    out = try lower_expression(cx, fx, part, fx.next - 1, false, false)
+    fx = out.fx
+    index += 1
+  end
+
+  fx = Lowering.emit_builtin(fx, base, "Bytes.concat.parts", parts.size, spans)
+  if want >= 0
+    fx = Lowering.emit_at(fx, "move", [want, base], spans[0])
     return ok(Lowering.Out(fx: fx.with(next: saved), slot: want))
   end
 

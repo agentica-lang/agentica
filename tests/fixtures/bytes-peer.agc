@@ -13,6 +13,8 @@
 #   from_list,N,N,...  Bytes.from_list of the Ints: the hex, or "error"
 #   to_a,A             the bytes as Ints
 #   text,N,M,A         "$#{N}\r\n#{M}:#{text}".bytes and "#{N}".bytes, with text the UTF-8 String of A
+#   parts,A,...,I      Bytes.concat of a literal of [A], [A, B], [A..H] and [A..I], A + B + C, A + ... + I, and
+#                      Bytes.concat of a List that is not a literal, space-separated
 def bytes_of(hex: String) -> Bytes
   return OpenSSL.Digest.hexdecode(hex).unwrap!
 end
@@ -54,6 +56,18 @@ def answer(fields: List[String]) -> String
     second = fields[2].to_i!
     text = String.from_bytes(bytes_of(fields[3])).unwrap!
     return "#{hex_of("$#{first}\r\n#{second}:#{text}".bytes)} #{hex_of("#{first}".bytes)}"
+  elsif op == "parts"
+    p = fields.drop(1).map do |field: String| bytes_of(field) end
+    made = [
+      Bytes.concat([p[0]]),
+      Bytes.concat([p[0], p[1]]),
+      Bytes.concat([p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7]]),
+      Bytes.concat([p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7], p[8]]),
+      p[0] + p[1] + p[2],
+      p[0] + p[1] + p[2] + p[3] + p[4] + p[5] + p[6] + p[7] + p[8],
+      Bytes.concat(p),
+    ]
+    return made.map { |data: Bytes| hex_of(data) }.join(" ")
   elsif op == "from_list"
     numbers = fields.drop(1).map do |text: String| text.to_i! end
     made = Bytes.from_list(numbers)

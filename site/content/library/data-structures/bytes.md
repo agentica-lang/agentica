@@ -182,7 +182,7 @@ a + b
 Bytes.concat(list: List[Bytes]) -> Bytes
 ```
 
-`+` joins two values. Repeated `+` copies everything each time, so a loop that joins many parts takes quadratic time; join the parts with `Bytes.concat`, which copies once.
+`+` joins two values. Repeated `+` copies everything each time, so a loop that joins many parts takes quadratic time; join the parts with `Bytes.concat`, which copies once. A chain such as `a + b + c` in one expression, and `Bytes.concat` of a list literal of up to 8 items, also copy once and make no list.
 
 ```agentica
 def main() -> Void
