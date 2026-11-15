@@ -2,7 +2,7 @@
 ## where the std/ sources are, and the path of the binary.
 ##
 ## The front end is run as
-## `PROGRAM --version V [--stdlib DIR] [--self PATH] [--embedded-bdd] -- ARGUMENTS...`.
+## `PROGRAM --version V [--stdlib DIR] [--self PATH] [--embedded-bdd] [--cache-missed] -- ARGUMENTS...`.
 ## The binary starts it as `--version V --self PATH [--embedded-bdd] -- ARGUMENTS...`;
 ## C passes its version, path and whether it carries compiled BDD programs, and
 ## grants the std/ sources that it carries. An ordinary VM run, as `make` does
@@ -10,8 +10,8 @@
 ## that folder (docs/vm/08-loader-and-cli.md §9).
 
 import Host from "../io/host"
-import NativeWorkspace from "../io/native_workspace"
 import Env from "../modules/link_env"
+import Workspace from "../modules/workspace"
 
 ## What the arguments of the front end are: the settings and the words of the user, or the mistake of whoever started
 ## it (a bug of the caller, not a usage error of the user).
@@ -20,8 +20,21 @@ enum Read
   Broken(String)
 end
 
-## Reads the arguments of the front end.
-def read(arguments: List[String]) -> Read
+## Whether C says that the launcher looked for the cache entry of this run and found none it could use
+## (`--cache-missed`, app/cli_hit.agc): the front end then compiles without looking again.
+def cache_missed?(arguments: List[String]) -> Bool
+  for word in arguments
+    return false if word == "--"
+    return true if word == MISSED
+  end
+
+  false
+end
+
+## Reads the arguments of the front end. `workspace` is the machine as the program sees it: the front end gives the
+## one that verifies native artifacts (io/native_workspace.agc), the launcher the plain one (io/host.agc), which is
+## all a cache lookup reads.
+def read(arguments: List[String], workspace: Workspace.Workspace) -> Read
   version = ""
   stdlib = ""
   self_path = ""
@@ -32,6 +45,8 @@ def read(arguments: List[String]) -> Read
     step = 2
     if word == "--embedded-bdd"
       embedded_bdd = true
+      step = 1
+    elsif word == MISSED
       step = 1
     elsif at + 1 >= arguments.size or arguments[at + 1] == "--"
       return Read.Broken("#{word} needs a value")
@@ -55,7 +70,6 @@ def read(arguments: List[String]) -> Read
   end
 
   env = Host.process_env()
-  workspace = NativeWorkspace.workspace_with(&std_source)
   words = arguments.drop(at + 1)
   if stdlib == ""
     return Read.Ready(Env.embedded_settings(workspace, env, version, embedded_bdd).with(self_path: self_path), words)
@@ -66,4 +80,4 @@ end
 
 private
 
-def std_source(name: String) -> Result[String] = FrontEnd.std_source(name)
+MISSED = "--cache-missed"

@@ -20,6 +20,13 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* How the launcher ended (run_launcher). */
+typedef enum { LAUNCHER_DECLINED, LAUNCHER_MISSED, LAUNCHER_HANDED } launcher_end;
+
+/* The exit status of a launcher that looked for the cache entry of the run and found none it could use
+ * (MISSED_STATUS in compiler/app/cli_hit.agc): the front end is told, and does not look again. */
+#define AGC_LAUNCHER_MISSED 3
+
 static const char name[] = "agentica";
 static const char run_name[] = "agentica run";
 
@@ -39,10 +46,10 @@ static const char usage[] =
 /* The std/ sources of the binary, from the index that make wrote. The rows point only into agc_embedded_data, which
  * is static, so the array holds no GC pointer and is atomic. */
 static agc_std_source *std_sources(size_t *count) {
-  size_t n = (size_t)agc_embedded_index[6];
+  size_t n = (size_t)agc_embedded_index[8];
   agc_std_source *sources = agc_alloc_atomic(agc_size_mul(n ? n : 1, sizeof *sources));
   for (size_t k = 0; k < n; k++) {
-    const uint64_t *row = agc_embedded_index + 7 + 3 * k;
+    const uint64_t *row = agc_embedded_index + 9 + 3 * k;
     const char *path = (const char *)agc_embedded_data + row[0];
     sources[k] = (agc_std_source){path, agc_embedded_data + row[1], (size_t)row[2]};
   }
@@ -65,18 +72,106 @@ static const uint8_t *embedded_program(const char *which, size_t *len) {
   return agc_embedded_data + agc_embedded_index[slot];
 }
 
-/* The first run. It leaves this function only when the front end handed a program over and its run ended cleanly;
- * every other end (a usage error, a problem in the user's file, a crash of the front end, a stop signal) is the
- * end of the process. The status is the one the front end gave, except for a crash: a runtime error in the front end
- * is a bug of the compiler or of `agentica test`'s driver, not a problem in the user's program (status 1), and a
- * driver that crashed must not look like a test run that failed, so it is status 2, like a front end started wrongly.
- * What it allocated is garbage once it returns.
+/* One run of a program that may hand a program over: the front end, or the launcher before it. It returns only in two
+ * cases. The first: the program handed a program over and its run ended cleanly. The second: it is the launcher and it
+ * declined, by ending without a hand-off (its status and its way of ending do not matter: the front end runs next and
+ * does the whole work). A launcher that crashed declines too, and its diagnostic is not printed: the front end looks
+ * the entry up again and reports what is wrong, once and in the style of the run. Every other end of the front end (a
+ * usage error, a problem in the user's file, a crash, a stop signal) is the end of the process. The status is the one
+ * the front end gave, except for a crash: a runtime error in the front end is a bug of the compiler or of `agentica
+ * test`'s driver, not a problem in the user's program (status 1), and a driver that crashed must not look like a test
+ * run that failed, so it is status 2, like a front end started wrongly. What the run allocated is garbage once it
+ * returns.
  *
  * The front end may start processes whatever the user's --deny-* flags: `agentica test` starts the runner and the
  * programs under test from here. That is no loophole for the user's program, which never runs in this runtime: the
  * front end only compiles it. */
-static void run_front_end(agc_launch *launch, const char *self, const char *replacement, int count, char **words,
-                          agc_front_end *fe) {
+static int run_stage(agc_launch *launch, agc_program *program, bool launcher, const char *self, bool replacement,
+                     bool missed, int count, char **words, agc_front_end *fe) {
+  /* The inputs of the front end (compiler/app/front_end_inputs.agc), then the words of the user. A front end of
+   * --front-end gets no --self, and a front end with no --self uses no cache (#1489): the key of a cache entry names
+   * the binary, not the front end, so it would get a program that another front end compiled. Without --self it
+   * cannot run `agentica test`, which starts the binary again, and the bootstrap does not need that. */
+  char version_flag[] = "--version", self_flag[] = "--self", bdd_flag[] = "--embedded-bdd",
+       missed_flag[] = "--cache-missed", separator[] = "--", version[] = AGC_VERSION;
+  bool embedded_bdd = !replacement && agc_embedded_index[3] != 0 && agc_embedded_index[5] != 0;
+  int input_count = 3 + (replacement ? 0 : 2) + (embedded_bdd ? 1 : 0) + (missed ? 1 : 0);
+  char **arguments = agc_alloc(agc_size_mul((size_t)count + (size_t)input_count, sizeof *arguments));
+  arguments[0] = version_flag;
+  arguments[1] = version;
+  int separator_at = 2;
+  if (!replacement) {
+    arguments[separator_at++] = self_flag;
+    arguments[separator_at++] = (char *)self;
+  }
+  if (embedded_bdd) arguments[separator_at++] = bdd_flag;
+  if (missed) arguments[separator_at++] = missed_flag;
+  arguments[separator_at++] = separator;
+  for (int k = 0; k < count; k++) arguments[separator_at + k] = words[k];
+  agc_launch_options options;
+  agc_launch_defaults(&options);
+  agc_vm *vm = agc_launch_vm(launch, program, &options, agc_launch_args(count + input_count, arguments, 0), fe);
+  agc_outcome outcome = agc_vm_run(vm);
+  bool crashed = outcome.kind == AGC_FAILED;
+  if (crashed && launcher) outcome = (agc_outcome){.kind = AGC_DONE};
+  int status = agc_launch_settle(vm, &outcome);
+  if (crashed) status = 2;
+  bool stopped = agc_io_stop_signal();
+  bool handed = fe->handed && outcome.kind == AGC_EXITED && status == 0;
+  if (stopped || (!handed && !launcher)) {
+    agc_output_end(vm);
+    agc_launch_exit(status);
+  }
+  /* A job that is still running would keep this run's loop alive next to the next one's: the program must not share
+   * a process with anything of the compiler, so this is the end of the run. */
+  if (!agc_io_close(vm)) {
+    fprintf(stderr, "%s: internal error: the %s left an operation running\n", name,
+            launcher ? "launcher" : "front end");
+    fflush(stderr);
+    agc_launch_exit(1);
+  }
+  if (!handed) fe->handed = false;
+  return crashed || outcome.kind != AGC_EXITED ? 0 : status;
+}
+
+/* False when the words cannot be a run that the cache serves, the one case of the launcher: there is no word, the
+ * first word that is no option is a command, or an option before it turns the cache off (--no-cache, --dump,
+ * --dump-ir). This is a hint that saves the launcher's start, not a rule: the launcher reads the words as the front
+ * end does and declines what is not its case, so a command missing here only costs time. The list is
+ * CliRun.COMMANDS (compiler/app/cli_run.agc; tests/test_bytecode_cache.py compares the two). */
+static bool may_run_a_file(int count, char **words) {
+  static const char *const commands[] = {"test",    "help",    "doc",    "fmt",  "lint", "install", "add",    "update",
+                                         "outline", "type-at", "symbol", "refs", "run",  "check",   "compile"};
+  for (int k = 0; k < count; k++) {
+    const char *word = words[k];
+    if (strcmp(word, "--no-cache") == 0 || strcmp(word, "--dump") == 0 || strcmp(word, "--dump-ir") == 0)
+      return false;
+    if ((word[0] == '-' || word[0] == '+') && word[1] != '\0') continue;
+    for (size_t c = 0; c < sizeof commands / sizeof commands[0]; c++)
+      if (strcmp(word, commands[c]) == 0) return false;
+    return true;
+  }
+  return false;
+}
+
+/* The launcher (compiler/embedded/launcher.agc): a small program that starts a run whose bytecode is in the cache, so
+ * such a start does not load the front end. It runs first when this binary carries one and no --front-end was given.
+ * A launcher that does not load is skipped: the front end says what is wrong with the binary, if anything is. */
+static launcher_end run_launcher(agc_launch *launch, const char *self, int count, char **words, agc_front_end *fe) {
+  size_t len = (size_t)agc_embedded_index[7];
+  if (len == 0 || !may_run_a_file(count, words)) return LAUNCHER_DECLINED;
+  agc_program *program = NULL;
+  char error[160];
+  if (!agc_load_front_end(agc_embedded_data + agc_embedded_index[6], len, &program, error, sizeof error, &launch->trace))
+    return LAUNCHER_DECLINED;
+  int status = run_stage(launch, program, true, self, false, false, count, words, fe);
+  if (fe->handed) return LAUNCHER_HANDED;
+  return status == AGC_LAUNCHER_MISSED ? LAUNCHER_MISSED : LAUNCHER_DECLINED;
+}
+
+/* The front end: the carried one, or the file of --front-end. */
+static void run_front_end(agc_launch *launch, const char *self, const char *replacement, bool missed, int count,
+                          char **words, agc_front_end *fe) {
   size_t len = (size_t)agc_embedded_index[1];
   const uint8_t *bytes = agc_embedded_data + agc_embedded_index[0];
   if (replacement && !(bytes = agc_launch_file(replacement, false, &len))) {
@@ -89,43 +184,7 @@ static void run_front_end(agc_launch *launch, const char *self, const char *repl
     fprintf(stderr, "%s: invalid front end: %s\n", name, error);
     exit(2);
   }
-  /* The inputs of the front end (compiler/app/front_end_inputs.agc), then the words of the user. A front end of
-   * --front-end gets no --self, and a front end with no --self uses no cache (#1489): the key of a cache entry names
-   * the binary, not the front end, so it would get a program that another front end compiled. Without --self it
-   * cannot run `agentica test`, which starts the binary again, and the bootstrap does not need that. */
-  char version_flag[] = "--version", self_flag[] = "--self", bdd_flag[] = "--embedded-bdd", separator[] = "--",
-       version[] = AGC_VERSION;
-  bool embedded_bdd = !replacement && agc_embedded_index[3] != 0 && agc_embedded_index[5] != 0;
-  int input_count = 3 + (replacement ? 0 : 2) + (embedded_bdd ? 1 : 0);
-  char **arguments = agc_alloc(agc_size_mul((size_t)count + (size_t)input_count, sizeof *arguments));
-  arguments[0] = version_flag;
-  arguments[1] = version;
-  int separator_at = 2;
-  if (!replacement) {
-    arguments[separator_at++] = self_flag;
-    arguments[separator_at++] = (char *)self;
-  }
-  if (embedded_bdd) arguments[separator_at++] = bdd_flag;
-  arguments[separator_at++] = separator;
-  for (int k = 0; k < count; k++) arguments[separator_at + k] = words[k];
-  agc_launch_options options;
-  agc_launch_defaults(&options);
-  agc_vm *vm = agc_launch_vm(launch, program, &options, agc_launch_args(count + input_count, arguments, 0), fe);
-  agc_outcome outcome = agc_vm_run(vm);
-  bool crashed = outcome.kind == AGC_FAILED;
-  int status = agc_launch_settle(vm, &outcome);
-  if (crashed) status = 2;
-  if (!fe->handed || outcome.kind != AGC_EXITED || status != 0 || agc_io_stop_signal()) {
-    agc_output_end(vm);
-    agc_launch_exit(status);
-  }
-  /* A job that is still running would keep the front end's loop alive next to the program's: the program must not share
-   * a process with anything of the compiler, so this is the end of the run. */
-  if (!agc_io_close(vm)) {
-    fprintf(stderr, "%s: internal error: the front end left an operation running\n", name);
-    fflush(stderr);
-    agc_launch_exit(1);
-  }
+  run_stage(launch, program, false, self, replacement != NULL, missed, count, words, fe);
 }
 
 /* The second run: the program that the front end handed over, with the options it passed on. It returns only to
@@ -278,6 +337,9 @@ int main(int argc, char **argv) {
   memset(&fe, 0, sizeof fe);
   char self[32768];
   const char *self_name = agc_launch_self_path(argc, argv, argc > 0 ? argv[0] : "", self, sizeof self);
-  run_front_end(&launch, self_name, replacement, argc - first, argv + first, &fe);
+  launcher_end launched = LAUNCHER_DECLINED;
+  if (!replacement) launched = run_launcher(&launch, self_name, argc - first, argv + first, &fe);
+  if (launched != LAUNCHER_HANDED)
+    run_front_end(&launch, self_name, replacement, launched == LAUNCHER_MISSED, argc - first, argv + first, &fe);
   return run_program(&launch, &fe);
 }

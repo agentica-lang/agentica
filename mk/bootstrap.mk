@@ -33,7 +33,7 @@ STAGE_INPUTS := $(sort $(shell find compiler -name '*.agc' -not -path 'compiler/
 # end of this build and carried by the binary, so `agentica test` does not compile them on every run. The first binary has
 # none (stage2 does not exist yet): its front end is stage0, whose driver compiles them from the std/ sources on every
 # `agentica test`, as it always did, and its `run --embedded` exits 2 (tests/test_bdd.py).
-EMBEDDED_PROGRAMS := $(STAGE_DIR)/runner.agcb $(STAGE_DIR)/steps.agcb
+EMBEDDED_PROGRAMS := $(STAGE_DIR)/runner.agcb $(STAGE_DIR)/steps.agcb $(STAGE_DIR)/launcher.agcb
 STAGE0 := bootstrap/stage0.agcb
 BOOT := $(VM_BUILD)/bootstrap/agentica$(EXE)
 # The compiler that makes stage1: the first binary. make stage0 STAGE1_COMPILER=... names another one when stage0 cannot
@@ -131,7 +131,7 @@ fixed-point: $(STAGE_DIR)/stage3.agcb dist/agentica$(EXE)
 	rm -f $(STAGE_DIR)/stage4.agcb
 	$(RUN_PROGRAM) dist/agentica$(EXE) compile $(FRONT_END_SRC) -o $(STAGE_DIR)/stage4.agcb
 	cmp $(STAGE_DIR)/stage2.agcb $(STAGE_DIR)/stage4.agcb || { echo "fixed point: dist/agentica compiles another front end" >&2; exit 1; }
-	for name in runner steps; do \
+	for name in runner steps launcher; do \
 	  rm -f $(STAGE_DIR)/$$name-check.agcb; \
 	  $(RUN_PROGRAM) dist/agentica$(EXE) compile compiler/embedded/$$name.agc -o $(STAGE_DIR)/$$name-check.agcb; \
 	  cmp $(STAGE_DIR)/$$name.agcb $(STAGE_DIR)/$$name-check.agcb || { echo "fixed point: dist/agentica compiles another $$name" >&2; exit 1; }; \

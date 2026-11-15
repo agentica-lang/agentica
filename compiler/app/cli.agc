@@ -67,12 +67,22 @@ import Texts from "cli_text"
 import Pipeline from "pipeline"
 
 ## Runs the command line `args` (the words after the program name) and gives the exit status. Everything it writes goes
-## to the standard streams of this process.
-def run(settings: Env.Settings, args: List[String], hand_off: Fn[Launch.Launch, Int]) -> Int
+## to the standard streams of this process. `cache_missed` says that the launcher (cli_hit.agc) looked for the cache
+## entry of this run and found none it could use, so a run of a source file does not look again.
+def run(settings: Env.Settings, args: List[String], cache_missed: Bool, hand_off: Fn[Launch.Launch, Int]) -> Int
   case Options.parse(args, settings.version)
     Options.Parsed.Answer(reply) -> emit(reply)
     Options.Parsed.Ready(options) ->
-      dispatch(Session(options: options, settings: settings, hand_off: hand_off, buffer_file: "", buffer_shown: ""))
+      dispatch(
+        Session(
+          options: options,
+          settings: settings,
+          hand_off: hand_off,
+          buffer_file: "",
+          buffer_shown: "",
+          cache_missed: cache_missed,
+        ),
+      )
   end
 end
 
@@ -92,6 +102,7 @@ struct Session
   hand_off: Fn[Launch.Launch, Int]
   buffer_file: String
   buffer_shown: String
+  cache_missed: Bool
 end
 
 # The first word picks the command; a word that is not a command is the source file of a run.
@@ -101,6 +112,8 @@ def dispatch(session: Session) -> Int
   if words.size > 0
     first = words[0]
   end
+
+  return program(building(session, first), first, words) if CliRun.file_run?(words)
 
   if first == "test"
     return test(session, words.drop(1))
@@ -670,6 +683,7 @@ def with_buffer(session: Session, file: String, then: Fn[Session, Int]) -> Int
           hand_off: session.hand_off,
           buffer_file: file,
           buffer_shown: buffer.shown,
+          cache_missed: session.cache_missed,
         ),
       )
   end
@@ -683,6 +697,10 @@ def program(session: Session, verb: String, rest: List[String]) -> Int
   end
 
   plan = CliRun.cache_plan(session.options, session.settings, verb, source)
+  if session.cache_missed and verb != "compile"
+    return read(session, verb, rest, BytecodeCache.missed(plan, session.settings))
+  end
+
   case BytecodeCache.lookup(plan, session.settings)
     BytecodeCache.Lookup.Hit(bytes) ->
       return save(rest[2], bytes) if verb == "compile"

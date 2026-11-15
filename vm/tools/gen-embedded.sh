@@ -1,10 +1,11 @@
 #!/bin/sh
-# Writes the assembly file that puts the front end, the std/ sources and two programs of `agentica test` into the single
-# binary (docs/vm/08-loader-and-cli.md).
-# usage: gen-embedded.sh FRONT_END.agcb STDLIB_DIR MODULES_FILE [RUNNER.agcb STEPS.agcb [CORE_FILE COMPILER_DIR
-#        [NATIVE_HEADER]]] > embedded.s
-# The runner and the default step program are optional: without them (the first binary of the bootstrap, which cannot
-# compile them yet) their length is 0 and `agentica test` compiles them as it did before.
+# Writes the assembly file that puts the front end, the std/ sources, two programs of `agentica test` and the launcher
+# into the single binary (docs/vm/08-loader-and-cli.md).
+# usage: gen-embedded.sh FRONT_END.agcb STDLIB_DIR MODULES_FILE [RUNNER.agcb STEPS.agcb LAUNCHER.agcb [CORE_FILE
+#        COMPILER_DIR [NATIVE_HEADER]]] > embedded.s
+# The runner, the default step program and the launcher are optional: without them (the first binary of the bootstrap,
+# which cannot compile them yet) their length is 0, `agentica test` compiles the two as it did before, and every start
+# loads the front end.
 # The core file lists files of COMPILER_DIR (the pure core of the front end, which std/analysis compiles into the user's
 # program): each one is carried as the std/ source internal/compiler/<name>, so a program reads it with Std.source.
 # The native header (vm/agentica_native.h) is carried as the std/ source internal/native/agentica_native.h, which the
@@ -22,10 +23,11 @@ stdlib="${2:?}"
 modules="${3:?}"
 runner="${4:-}"
 steps="${5:-}"
-core="${6:-}"
-compiler="${7:-}"
-header="${8:-}"
-for f in "$front_end" "$stdlib" "$modules" "$runner" "$steps" "$core" "$compiler" "$header"; do
+launcher="${6:-}"
+core="${7:-}"
+compiler="${8:-}"
+header="${9:-}"
+for f in "$front_end" "$stdlib" "$modules" "$runner" "$steps" "$launcher" "$core" "$compiler" "$header"; do
   case "$f" in
     *[!A-Za-z0-9_./-]*) echo "gen-embedded: $f is not a plain path" >&2; exit 1 ;;
   esac
@@ -85,6 +87,7 @@ embed() {
 }
 embed runner "$runner"
 embed steps "$steps"
+embed launcher "$launcher"
 k=0
 for name in $names; do
   printf '.Lpath%d:\n\t.asciz "%s"\n' "$k" "$name"
@@ -111,6 +114,7 @@ printf '%sagc_embedded_index:\n' "$prefix"
 printf '\t.quad .Lfront_end - %sagc_embedded_data\n\t.quad .Lfront_end_end - .Lfront_end\n' "$prefix"
 printf '\t.quad .Lrunner - %sagc_embedded_data\n\t.quad .Lrunner_end - .Lrunner\n' "$prefix"
 printf '\t.quad .Lsteps - %sagc_embedded_data\n\t.quad .Lsteps_end - .Lsteps\n' "$prefix"
+printf '\t.quad .Llauncher - %sagc_embedded_data\n\t.quad .Llauncher_end - .Llauncher\n' "$prefix"
 printf '\t.quad %d\n' "$count"
 k=0
 for name in $names $core_names ${header:+header}; do

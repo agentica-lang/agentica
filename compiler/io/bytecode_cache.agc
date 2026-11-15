@@ -104,13 +104,30 @@ end
 
 ## The program kept for the plan, if the sources are the ones it was made from and the entry is the program's own.
 def lookup(plan: Plan, settings: Env.Settings) -> Lookup
+  case kept(plan, settings)
+    some(bytes) -> Lookup.Hit(bytes)
+    none -> Lookup.Miss(missed(plan, settings))
+  end
+end
+
+## The plan to store with after a miss: it holds the compiler line, read now, before the compile.
+def missed(plan: Plan, settings: Env.Settings) -> Plan
   case plan
-    Plan.Off -> Lookup.Miss(plan)
+    Plan.Off -> plan
+    Plan.On(entry) -> Plan.On(entry.with(compiler: CacheFiles.compiler_line(settings.env.os)))
+  end
+end
+
+## The program of a hit, as `lookup` finds it, and nothing more: a miss here reads no compiler line, so the launcher
+## (app/cli_hit.agc) can leave the miss to the front end.
+def kept(plan: Plan, settings: Env.Settings) -> Optional[Bytes]
+  case plan
+    Plan.Off -> none
     Plan.On(entry) ->
       found = read_entry(entry, settings)
-      return Lookup.Hit(found.unwrap!) if found.ok?
+      return some(found.unwrap!) if found.ok?
 
-      Lookup.Miss(Plan.On(entry.with(compiler: CacheFiles.compiler_line(settings.env.os))))
+      none
   end
 end
 
