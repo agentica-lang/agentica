@@ -8,6 +8,8 @@ import json
 import math
 import re
 import struct
+from decimal import Decimal
+from fractions import Fraction
 from importlib.util import find_spec
 
 import pytest
@@ -79,6 +81,7 @@ def run(op: String, data: Bytes) -> String
     "unb64url" -> bytes_reply(Base64.urlsafe_decode64(text(data)))
     "unb64" -> "ok #{hex(Base64.decode64(text(data)))}"
     "hex" -> "ok #{hex(hex(data).bytes)}"
+    "float" -> "ok #{hex(Float.from_bits(text(data).to_i!).to_s.bytes)}"
     "unhex" -> bytes_reply(OpenSSL.Digest.hexdecode(text(data)))
     _ ->
       parts = op.split(":")
@@ -376,3 +379,68 @@ def test_base64_and_hex_agree_with_python(codec, data, encoded):
     want = bytes.fromhex(digits.decode()) if all(chr(c) in "0123456789abcdefABCDEF" for c in digits) \
         and len(digits) % 2 == 0 else None
     assert codec.ask("unhex", digits) == want, digits
+
+
+def float_text(x):
+    """Float#to_s as docs/vm/02-reference-behavior.md §2.2 states it, from Python's repr digits (the shortest that read
+    back, the nearest of those). repr breaks an exact tie to even; Agentica rounds it up."""
+    if math.isnan(x):
+        return "+nan.0"
+    if math.isinf(x):
+        return "+inf.0" if x > 0 else "-inf.0"
+    sign = "-" if math.copysign(1.0, x) < 0 else ""
+    x = abs(x)
+    if x == 0:
+        return sign + "0.0"
+    shortest = Decimal(repr(x)).normalize()
+    unit = Decimal((0, (1,), shortest.as_tuple().exponent))
+    if Fraction(x) - Fraction(shortest) == Fraction(unit) / 2 and float(shortest + unit) == x:
+        shortest = (shortest + unit).normalize()
+    _, digit_tuple, exponent = shortest.as_tuple()
+    digits = "".join(map(str, digit_tuple))
+    n = len(digits)
+    e = n - 1 + exponent
+    positional = n + 1 if n > e + 1 else e + 3
+    scientific = n + (n > 1) + 2 + len(str(abs(e)))
+    if e < -4 or (e >= 0 and positional > 16 and positional > scientific):
+        return f"{sign}{digits[0]}{'.' + digits[1:] if n > 1 else ''}e{'-' if e < 0 else '+'}{abs(e)}"
+    if e < 0:
+        return f"{sign}0.{'0' * (-e - 1)}{digits}"
+    if n > e + 1:
+        return f"{sign}{digits[:e + 1]}.{digits[e + 1:]}"
+    return f"{sign}{digits}{'0' * (e + 1 - n)}.0"
+
+
+def float_bits(x):
+    return struct.unpack("<Q", struct.pack("<d", x))[0]
+
+
+FLOAT_EDGES = [
+    0.0, -0.0, math.inf, -math.inf, math.nan, 5e-324, -5e-324, 1e-323, 2.2250738585072014e-308,
+    2.225073858507201e-308, 1.7976931348623157e308, -1.7976931348623157e308, 0.1, 0.30000000000000004, 1.0, -1.5,
+    100.0, 0.0001, 1e-5, 4.35e-5, 9007199254740992.0, 9007199254740993.0, 999999999999999.9, 1e15, 9999999999999998.0,
+    1e16, 12345678901234568.0, 1e17, 123456789012345680.0, 1e20, 1e21, 1e22, 1e23, 1e100, 1.5e300,
+    2208413816571858.25, -86798997958156.625, 1234567890123456.75, 11789751951819.5625,
+] + [10.0 ** k for k in range(-323, 309, 7)]
+
+
+def check_float_text(codec, bits):
+    x = struct.unpack("<d", struct.pack("<Q", bits))[0]
+    signed = struct.unpack("<q", struct.pack("<Q", bits))[0]
+    got = codec.ask("float", str(signed).encode("ascii"))
+    assert got == float_text(x).encode("ascii"), (hex(bits), repr(x), got)
+
+
+@given(st.one_of(st.integers(0, 2 ** 64 - 1), st.floats().map(float_bits)))
+@example(0x7FF8000000000001)
+@example(0xFFFFFFFFFFFFFFFF)
+@example(0x000FFFFFFFFFFFFF)
+def test_float_text_agrees_with_python_repr(codec, bits):
+    """Float#to_s of any bit pattern has the digits of Python's repr, ties up, in Agentica's layout."""
+    check_float_text(codec, bits)
+
+
+def test_float_text_edges_agree_with_python_repr(codec):
+    """Subnormals, ±0, ±inf, NaN, powers of ten, the switch to exponent form and exact ties."""
+    for x in FLOAT_EDGES:
+        check_float_text(codec, float_bits(x))

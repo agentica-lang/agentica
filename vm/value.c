@@ -1115,15 +1115,196 @@ static size_t put(char *out, size_t at, const char *text, size_t len) {
   return at + len;
 }
 
-static int decimal_digits(double x, int precision, char *all) {
-  char text[800];
-  int written = snprintf(text, sizeof text, "%.*e", precision, x);
-  char *mark = written > 0 && (size_t)written < sizeof text ? strchr(text, 'e') : NULL;
-  int total = 0;
-  for (const char *c = text; mark && c < mark; c++)
-    if (*c >= '0' && *c <= '9' && total <= precision) all[total++] = *c;
-  if (!mark || total != precision + 1) abort();
-  return atoi(mark + 1);
+/* Shortest round-trip digits: Ryu with its small tables (Ulf Adams, "Ryu: fast float-to-string conversion", PLDI 2018;
+   github.com/ulfjack/ryu, Apache-2.0), except that an exact tie rounds up. pow5_split[k] is the top 125 bits of 5^(26k)
+   and pow5_inv_split[k] is 2^(124 + bits(5^(26k))) / 5^(26k) + 1; the 2-bit offsets correct the powers in between to
+   the values of Ryu's full tables. */
+static const uint64_t pow5_small[26] = {
+    1u, 5u, 25u, 125u, 625u, 3125u, 15625u, 78125u, 390625u, 1953125u, 9765625u, 48828125u, 244140625u,
+    1220703125u, 6103515625u, 30517578125u, 152587890625u, 762939453125u, 3814697265625u, 19073486328125u,
+    95367431640625u, 476837158203125u, 2384185791015625u, 11920928955078125u, 59604644775390625u,
+    298023223876953125u,
+};
+static const uint64_t pow5_split[13][2] = {
+    {0x0000000000000000u, 0x1000000000000000u},
+    {0x0000000000000000u, 0x14adf4b7320334b9u},
+    {0x0e549208b31adb10u, 0x1aba4714957d300du},
+    {0x6dc6ad264d8f0866u, 0x1145b7e285bf98f5u},
+    {0xeb1dbd923d8596cau, 0x1652efdc6018a1fcu},
+    {0xb4c1b80b22ae923cu, 0x1cda62055b2d9d83u},
+    {0x5bb28b4e8f7e4c30u, 0x12a5568b9f52f416u},
+    {0xf08aed437682d4fbu, 0x1819651531f9e78fu},
+    {0xb4ee134ad99bf150u, 0x1f25c186a6f04c28u},
+    {0x16499ecb70c25f03u, 0x1420eb449c8842e6u},
+    {0x85a56ead360865b0u, 0x1a03fde214caf085u},
+    {0x093db1d57999890bu, 0x10cfeb353a97dad8u},
+    {0xcf38bb735e3f36acu, 0x15baaf44fa52673eu},
+};
+static const uint32_t pow5_offsets[21] = {
+    0x00000000u, 0x00000000u, 0x00000000u, 0x00000000u,
+    0x40000000u, 0x59695995u, 0x55545555u, 0x56555515u,
+    0x41150504u, 0x40555410u, 0x44555145u, 0x44504540u,
+    0x45555550u, 0x40004000u, 0x96440440u, 0x55565565u,
+    0x54454045u, 0x40154151u, 0x55559155u, 0x51405555u,
+    0x00000105u,
+};
+static const uint64_t pow5_inv_split[13][2] = {
+    {0x0000000000000001u, 0x2000000000000000u},
+    {0x52a6c95fc0655034u, 0x18c240c4aecb13bbu},
+    {0x7ca8d50071dfc806u, 0x1327fc58da0f6ff5u},
+    {0x6520247d3556476eu, 0x1da48ce468e7c702u},
+    {0x6139cdd76802e6e9u, 0x16ef5b40c2fc7779u},
+    {0xf951a7ff43de8c79u, 0x11bebdf578b2f391u},
+    {0x7be8bee8d6e957e8u, 0x1b758d848fac54b0u},
+    {0x8bd3f9e999a423eau, 0x153eda614071a3b7u},
+    {0x0848f973cb3ee3ceu, 0x10701bd527b4978cu},
+    {0x153285ebb9efbfa2u, 0x196fbb9bb44db44du},
+    {0xadeee7f86c07b696u, 0x13ae3591f5b4d936u},
+    {0x4d686a4eaf182222u, 0x1e74404f3daada91u},
+    {0x98c0a106e09ebd9fu, 0x17900ea4fda7c257u},
+};
+static const uint32_t pow5_inv_offsets[19] = {
+    0x54544554u, 0x04055545u, 0x10041000u, 0x00400414u,
+    0x40010000u, 0x41155555u, 0x00000454u, 0x00010044u,
+    0x40000000u, 0x44000041u, 0x50454450u, 0x55550054u,
+    0x51655554u, 0x40004000u, 0x01000001u, 0x00010500u,
+    0x51515411u, 0x05555554u, 0x00000000u,
+};
+
+static uint64_t umul128(uint64_t a, uint64_t b, uint64_t *high) {
+#ifdef __SIZEOF_INT128__
+  unsigned __int128 p = (unsigned __int128)a * b;
+  *high = (uint64_t)(p >> 64);
+  return (uint64_t)p;
+#else
+  uint64_t a0 = (uint32_t)a, a1 = a >> 32, b0 = (uint32_t)b, b1 = b >> 32;
+  uint64_t p00 = a0 * b0, p01 = a0 * b1, p10 = a1 * b0, p11 = a1 * b1;
+  uint64_t mid = p10 + (p00 >> 32) + (uint32_t)p01;
+  *high = p11 + (mid >> 32) + (p01 >> 32);
+  return (mid << 32) | (uint32_t)p00;
+#endif
+}
+
+static uint64_t shift128(uint64_t low, uint64_t high, int dist) { return (high << (64 - dist)) | (low >> dist); }
+
+static int pow5bits(int e) { return (int)(((uint32_t)e * 1217359) >> 19) + 1; }
+
+/* m * (mul[1]:mul[0]) as high:mid:low; returns mid and sets high. */
+static uint64_t mul_192(uint64_t m, const uint64_t mul[2], uint64_t *low, uint64_t *high) {
+  uint64_t high0;
+  uint64_t low1 = umul128(m, mul[1], high);
+  *low = umul128(m, mul[0], &high0);
+  uint64_t mid = high0 + low1;
+  *high += mid < high0;
+  return mid;
+}
+
+static void pow5_at(int i, uint64_t out[2]) {
+  int base = i / 26 * 26;
+  const uint64_t *mul = pow5_split[i / 26];
+  if (base == i) {
+    out[0] = mul[0];
+    out[1] = mul[1];
+    return;
+  }
+  uint64_t low, high, mid = mul_192(pow5_small[i - base], mul, &low, &high);
+  int delta = pow5bits(i) - pow5bits(base);
+  out[0] = shift128(low, mid, delta) + ((pow5_offsets[i / 16] >> (i % 16 * 2)) & 3);
+  out[1] = shift128(mid, high, delta);
+}
+
+static void pow5_inv_at(int i, uint64_t out[2]) {
+  int base = (i + 25) / 26 * 26;
+  const uint64_t *mul = pow5_inv_split[(i + 25) / 26];
+  if (base == i) {
+    out[0] = mul[0];
+    out[1] = mul[1];
+    return;
+  }
+  uint64_t low, high, mid = mul_192(pow5_small[base - i], (const uint64_t[2]){mul[0] - 1, mul[1]}, &low, &high);
+  int delta = pow5bits(base) - pow5bits(i);
+  out[0] = shift128(low, mid, delta) + 1 + ((pow5_inv_offsets[i / 16] >> (i % 16 * 2)) & 3);
+  out[1] = shift128(mid, high, delta);
+}
+
+static uint64_t mul_shift(uint64_t m, const uint64_t mul[2], int j) {
+  uint64_t low, high, mid = mul_192(m, mul, &low, &high);
+  return shift128(mid, high, j - 64);
+}
+
+static unsigned pow5_factor(uint64_t value) {
+  unsigned count = 0;
+  for (; (value *= 14757395258967641293u) <= 3689348814741910323u; count++) {}
+  return count;
+}
+
+/* The digits of x > 0 (finite) as mantissa * 10^*exponent, with the fewest digits that read back as x and, among
+   those, the nearest to x. */
+static uint64_t shortest_decimal(double x, int *exponent) {
+  uint64_t bits;
+  memcpy(&bits, &x, sizeof bits);
+  uint64_t fraction = bits & ((UINT64_C(1) << 52) - 1);
+  int biased = (int)(bits >> 52) & 0x7FF;
+  uint64_t m2 = biased ? fraction | UINT64_C(1) << 52 : fraction;
+  int e2 = (biased ? biased : 1) - 1023 - 52 - 2;
+  if (biased && e2 + 2 <= 0 && e2 + 2 >= -52 && (m2 & ((UINT64_C(1) << -(e2 + 2)) - 1)) == 0) {
+    *exponent = 0;
+    return m2 >> -(e2 + 2);
+  }
+  bool accept_bounds = (m2 & 1) == 0;
+  uint64_t mv = 4 * m2;
+  uint64_t mm_shift = fraction != 0 || biased <= 1;
+  uint64_t mul[2], vr, vp, vm;
+  int e10;
+  bool vm_zeros = false;
+  if (e2 >= 0) {
+    int q = (int)(((uint32_t)e2 * 78913) >> 18) - (e2 > 3);
+    e10 = q;
+    pow5_inv_at(q, mul);
+    int j = -e2 + q + 124 + pow5bits(q);
+    vr = mul_shift(mv, mul, j);
+    vp = mul_shift(mv + 2, mul, j);
+    vm = mul_shift(mv - 1 - mm_shift, mul, j);
+    if (q <= 21 && mv % 5 != 0) {
+      if (accept_bounds)
+        vm_zeros = pow5_factor(mv - 1 - mm_shift) >= (unsigned)q;
+      else
+        vp -= pow5_factor(mv + 2) >= (unsigned)q;
+    }
+  } else {
+    int q = (int)(((uint32_t)-e2 * 732923) >> 20) - (-e2 > 1);
+    e10 = q + e2;
+    int i = -e2 - q;
+    pow5_at(i, mul);
+    int j = q - (pow5bits(i) - 125);
+    vr = mul_shift(mv, mul, j);
+    vp = mul_shift(mv + 2, mul, j);
+    vm = mul_shift(mv - 1 - mm_shift, mul, j);
+    if (q <= 1) {
+      if (accept_bounds)
+        vm_zeros = mm_shift == 1;
+      else
+        vp--;
+    }
+  }
+  int removed = 0;
+  unsigned last = 0;
+  for (; vp / 10 > vm / 10; removed++) {
+    vm_zeros &= vm % 10 == 0;
+    last = (unsigned)(vr % 10);
+    vr /= 10;
+    vp /= 10;
+    vm /= 10;
+  }
+  if (vm_zeros)
+    for (; vm % 10 == 0; removed++) {
+      last = (unsigned)(vr % 10);
+      vr /= 10;
+      vp /= 10;
+      vm /= 10;
+    }
+  *exponent = e10 + removed;
+  return vr + ((vr == vm && (!accept_bounds || !vm_zeros)) || last >= 5);
 }
 
 size_t agc_float_text(double x, char out[AGC_SCALAR_TEXT]) {
@@ -1135,41 +1316,16 @@ size_t agc_float_text(double x, char out[AGC_SCALAR_TEXT]) {
     x = -x;
   }
   if (x == 0) return put(out, at, "0.0", 3);
-  char all[768];
-  int e = decimal_digits(x, 40, all);
-  double scaled = ldexp(x, 34);
-  bool carried = !(x < 1e40 && scaled == floor(scaled));
-  for (int k = 18; k <= 40 && carried; k++)
-    if (all[k] != '0') carried = false;
-  if (carried) e = decimal_digits(x, 767, all);
+  int e;
+  uint64_t mantissa = shortest_decimal(x, &e);
+  for (; mantissa % 10 == 0; e++) mantissa /= 10;
   char digits[20];
   size_t n = 0;
-  int digits_e = e;
-  bool found = false;
-  for (size_t precision = isnormal(x) ? 15 : 1; precision <= 17 && !found; precision++) {
-    bool nearest_up = all[precision] >= '5';
-    for (int attempt = 0; attempt < 2 && !found; attempt++) {
-      memcpy(digits, all, precision);
-      n = precision;
-      digits_e = e;
-      if (nearest_up != (attempt == 1)) {
-        size_t k = n;
-        while (k > 0 && digits[k - 1] == '9') digits[--k] = '0';
-        if (k == 0) {
-          digits[0] = '1';
-          digits_e++;
-        } else {
-          digits[k - 1]++;
-        }
-      }
-      char text[AGC_SCALAR_TEXT];
-      snprintf(text, sizeof text, "%c.%.*se%d", digits[0], (int)n - 1, digits + 1, digits_e);
-      found = strtod(text, NULL) == x;
-    }
-  }
-  while (n > 1 && digits[n - 1] == '0') n--;
-  e = digits_e;
-  int exponent_digits = snprintf(NULL, 0, "%d", e < 0 ? -e : e);
+  for (uint64_t m = mantissa; m; m /= 10) n++;
+  for (size_t k = n; k > 0; mantissa /= 10) digits[--k] = (char)('0' + mantissa % 10);
+  e += (int)n - 1;
+  int magnitude = e < 0 ? -e : e;
+  int exponent_digits = magnitude >= 100 ? 3 : magnitude >= 10 ? 2 : 1;
   int positional = (int)n > e + 1 ? (int)n + 1 : e + 3;
   int scientific = (int)n + (n > 1) + 2 + exponent_digits;
   if (e < -4 || (e >= 0 && positional > 16 && positional > scientific)) {
@@ -1178,7 +1334,10 @@ size_t agc_float_text(double x, char out[AGC_SCALAR_TEXT]) {
       out[at++] = '.';
       at = put(out, at, digits + 1, n - 1);
     }
-    return at + (size_t)snprintf(out + at, AGC_SCALAR_TEXT - at, "e%c%d", e < 0 ? '-' : '+', e < 0 ? -e : e);
+    out[at++] = 'e';
+    out[at++] = e < 0 ? '-' : '+';
+    for (int k = exponent_digits; k-- > 0; magnitude /= 10) out[at + (size_t)k] = (char)('0' + magnitude % 10);
+    return at + (size_t)exponent_digits;
   }
   if (e < 0) {
     at = put(out, at, "0.", 2);
