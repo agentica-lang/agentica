@@ -22,6 +22,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- A project's `agentica.toml` is parsed once per start, not twice, so a program below a manifest starts a little faster (#1471).
 - `std/http`: a chunked stream sends the pieces that wait in its channel together as one chunk, in one write; a fast producer streams several times faster.
 - `HTTP.upload` with a chunked body does the same: an upload of many small pieces is several times faster.
 - **Breaking:** `agentica test` runs the scenarios of each `--jobs` slot in one worker process while they pass, so a suite of small scenarios runs about 5 times faster; state that the step program makes in `main` before `BDD.run` (an `ATS` table, a `Channel`) and process state that a step sets (`Logger.set_level`) are now shared by the scenarios one worker runs, and `--isolate` gives each scenario its own process as before (#1465).

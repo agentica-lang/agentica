@@ -32,10 +32,21 @@ def empty() -> Members = Members(root: "", repository: "", folders: [])
 ## project folder is the root itself, which reports the table. A bad table is PKG-MANIFEST-INVALID. For a member, the
 ## root's own `agentica` key is checked against the running version `running` before the table, as the member's
 ## manifest is (PKG-AGENTICA-TOO-OLD at the root's key): the member is built as a part of the root's repository.
-def find(workspace: Workspace.Workspace, project_dir: String, running: String) -> Result[Members]
+## `manifest` is the parsed manifest of the project, which the caller read, so it is not parsed again here.
+def find(
+  workspace: Workspace.Workspace,
+  project_dir: String,
+  manifest: Map[String, Toml.Value],
+  running: String,
+) -> Result[Members]
   return ok(empty()) if Paths.last_part(Paths.directory_of(project_dir)) == DEPS_FOLDER
 
-  here = project_dir
+  file = Paths.join(project_dir, MANIFEST_FILE)
+  return belongs(workspace, project_dir, file, manifest, project_dir, running) if manifest.has_key?("workspace")
+
+  here = Paths.directory_of(project_dir)
+  return ok(empty()) if here == project_dir
+
   while here != ""
     file = Paths.join(here, MANIFEST_FILE)
     if workspace.file_exists.call(file)
