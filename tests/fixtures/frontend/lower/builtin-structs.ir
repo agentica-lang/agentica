@@ -8,11 +8,10 @@ fn0 "main" params=0 captures=0 slots=5 entry @ 0:1:1-10:1
     step @ 0:2:3-3:1
     step @ 0:2:10-2:33
     step @ 0:2:20-2:26
-    const r1 "/tmp" @ 0:2:20-2:26
+    const r0 "/tmp" @ 0:2:20-2:26
     step @ 0:2:28-2:32
-    const r2 int:1000 @ 0:2:28-2:32
-    call-builtin r1 "File.stat" 2 @ 0:2:10-2:33 0:2:20-2:26 0:2:28-2:32
-    move r0 r1 @ 0:2:10-2:33
+    const r1 int:1000 @ 0:2:28-2:32
+    call-builtin r0 "File.stat" 2 @ 0:2:10-2:33 0:2:20-2:26 0:2:28-2:32
     step @ 0:3:3-7:1
     step @ 0:3:8-3:12
     is-ok r1 r0 @ 0:4:5-4:10

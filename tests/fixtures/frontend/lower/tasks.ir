@@ -61,63 +61,55 @@ fn2 "show" params=1 captures=0 slots=3 @ 0:12:1-18:1
   L0:
     const r1 void @ 0:12:1-18:1
     return r1 @ 0:12:1-18:1
-fn3 "main" params=0 captures=0 slots=7 entry @ 0:19:1-31:1
+fn3 "main" params=0 captures=0 slots=6 entry @ 0:19:1-31:1
     step @ 0:20:3-21:1
     step @ 0:20:7-20:27
     step @ 0:20:18-20:23
-    closure r1 fn0 @ 0:20:18-20:23
+    closure r0 fn0 @ 0:20:18-20:23
     step @ 0:20:25-20:26
-    const r2 int:1 @ 0:20:25-20:26
-    call-builtin r1 "Task.spawn" 2 @ 0:20:7-20:27 0:20:18-20:23 0:20:25-20:26
-    move r0 r1 @ 0:20:7-20:27
+    const r1 int:1 @ 0:20:25-20:26
+    call-builtin r0 "Task.spawn" 2 @ 0:20:7-20:27 0:20:18-20:23 0:20:25-20:26
     step @ 0:21:3-22:1
     step @ 0:21:3-21:22
     step @ 0:21:8-21:21
     step @ 0:21:19-21:20
-    move r2 r0 @ 0:21:19-21:20
-    call-builtin r2 "Task.await" 1 @ 0:21:8-21:21 0:21:19-21:20
-    move r1 r2 @ 0:21:8-21:21
+    move r1 r0 @ 0:21:19-21:20
+    call-builtin r1 "Task.await" 1 @ 0:21:8-21:21 0:21:19-21:20
     call-builtin r1 "puts" 1 @ 0:21:3-21:22 0:21:8-21:21
     step @ 0:22:3-23:1
     step @ 0:22:3-22:47
     step @ 0:22:8-22:46
     step @ 0:22:19-22:39
     step @ 0:22:30-22:35
-    closure r3 fn0 @ 0:22:30-22:35
+    closure r1 fn0 @ 0:22:30-22:35
     step @ 0:22:37-22:38
-    const r4 int:2 @ 0:22:37-22:38
-    call-builtin r3 "Task.spawn" 2 @ 0:22:19-22:39 0:22:30-22:35 0:22:37-22:38
-    move r2 r3 @ 0:22:19-22:39
+    const r2 int:2 @ 0:22:37-22:38
+    call-builtin r1 "Task.spawn" 2 @ 0:22:19-22:39 0:22:30-22:35 0:22:37-22:38
     step @ 0:22:41-22:45
-    const r3 int:1000 @ 0:22:41-22:45
-    call-builtin r2 "Task.await" 2 @ 0:22:8-22:46 0:22:19-22:39 0:22:41-22:45
-    move r1 r2 @ 0:22:8-22:46
+    const r2 int:1000 @ 0:22:41-22:45
+    call-builtin r1 "Task.await" 2 @ 0:22:8-22:46 0:22:19-22:39 0:22:41-22:45
     call r1 fn2 @ 0:22:3-22:47
     step @ 0:23:3-24:1
     step @ 0:23:7-23:28
     step @ 0:23:18-23:24
-    closure r2 fn1 @ 0:23:18-23:24
+    closure r1 fn1 @ 0:23:18-23:24
     step @ 0:23:26-23:27
-    const r3 int:0 @ 0:23:26-23:27
-    call-builtin r2 "Task.spawn" 2 @ 0:23:7-23:28 0:23:18-23:24 0:23:26-23:27
-    move r1 r2 @ 0:23:7-23:28
+    const r2 int:0 @ 0:23:26-23:27
+    call-builtin r1 "Task.spawn" 2 @ 0:23:7-23:28 0:23:18-23:24 0:23:26-23:27
     step @ 0:24:3-25:1
     step @ 0:24:3-24:26
     step @ 0:24:8-24:25
     step @ 0:24:8-24:21
     step @ 0:24:19-24:20
-    move r4 r1 @ 0:24:19-24:20
-    call-builtin r4 "Task.await_result" 1 @ 0:24:8-24:21 0:24:19-24:20
-    move r3 r4 @ 0:24:8-24:21
-    call-builtin r3 "Result.ok?" 1 @ 0:24:8-24:25 0:24:8-24:21
-    move r2 r3 @ 0:24:8-24:25
+    move r2 r1 @ 0:24:19-24:20
+    call-builtin r2 "Task.await_result" 1 @ 0:24:8-24:21 0:24:19-24:20
+    call-builtin r2 "Result.ok?" 1 @ 0:24:8-24:25 0:24:8-24:21
     call-builtin r2 "puts" 1 @ 0:24:3-24:26 0:24:8-24:25
     step @ 0:25:3-26:1
     step @ 0:25:22-25:36
     step @ 0:25:34-25:35
-    const r3 int:2 @ 0:25:34-25:35
-    call-builtin r3 "Channel.new" 1 @ 0:25:22-25:36 0:25:34-25:35
-    move r2 r3 @ 0:25:22-25:36
+    const r2 int:2 @ 0:25:34-25:35
+    call-builtin r2 "Channel.new" 1 @ 0:25:22-25:36 0:25:34-25:35
     step @ 0:26:3-27:1
     step @ 0:26:7-26:22
     step @ 0:26:7-26:9
@@ -132,13 +124,11 @@ fn3 "main" params=0 captures=0 slots=7 entry @ 0:19:1-31:1
     step @ 0:27:8-27:28
     step @ 0:27:8-27:20
     step @ 0:27:8-27:10
-    move r5 r2 @ 0:27:8-27:10
+    move r3 r2 @ 0:27:8-27:10
     step @ 0:27:16-27:19
-    const r6 int:100 @ 0:27:16-27:19
-    call-builtin r5 "Channel.recv" 2 @ 0:27:8-27:20 0:27:8-27:10 0:27:16-27:19
-    move r4 r5 @ 0:27:8-27:20
-    call-builtin r4 "Result.unwrap!" 1 @ 0:27:8-27:28 0:27:8-27:20
-    move r3 r4 @ 0:27:8-27:28
+    const r4 int:100 @ 0:27:16-27:19
+    call-builtin r3 "Channel.recv" 2 @ 0:27:8-27:20 0:27:8-27:10 0:27:16-27:19
+    call-builtin r3 "Result.unwrap!" 1 @ 0:27:8-27:28 0:27:8-27:20
     call-builtin r3 "puts" 1 @ 0:27:3-27:29 0:27:8-27:28
     step @ 0:28:3-29:1
     step @ 0:28:3-28:16
@@ -148,8 +138,7 @@ fn3 "main" params=0 captures=0 slots=7 entry @ 0:19:1-31:1
     step @ 0:29:3-30:1
     step @ 0:29:3-29:29
     step @ 0:29:8-29:28
-    call-builtin r4 "Task.pending_count" 0 @ 0:29:8-29:28
-    move r3 r4 @ 0:29:8-29:28
+    call-builtin r3 "Task.pending_count" 0 @ 0:29:8-29:28
     call-builtin r3 "puts" 1 @ 0:29:3-29:29 0:29:8-29:28
     const r3 void @ 0:19:1-31:1
     return r3 @ 0:19:1-31:1

@@ -1056,9 +1056,8 @@ fn0 "main" params=0 captures=0 slots=512 entry @ 0:1:1-9:1
     step @ 0:3:3-3:15
     step @ 0:3:8-3:14
     step @ 0:3:8-3:9
-    move r2 r0 @ 0:3:8-3:9
-    call-builtin r2 "Map.size" 1 @ 0:3:8-3:14 0:3:8-3:9
-    move r1 r2 @ 0:3:8-3:14
+    move r1 r0 @ 0:3:8-3:9
+    call-builtin r1 "Map.size" 1 @ 0:3:8-3:14 0:3:8-3:9
     call-builtin r1 "puts" 1 @ 0:3:3-3:15 0:3:8-3:14
     step @ 0:4:3-5:1
     step @ 0:4:7-4:2337
@@ -2098,9 +2097,8 @@ fn0 "main" params=0 captures=0 slots=512 entry @ 0:1:1-9:1
     step @ 0:7:3-7:19
     step @ 0:7:8-7:18
     step @ 0:7:8-7:13
-    move r4 r2 @ 0:7:8-7:13
-    call-builtin r4 "Map.size" 1 @ 0:7:8-7:18 0:7:8-7:13
-    move r3 r4 @ 0:7:8-7:18
+    move r3 r2 @ 0:7:8-7:13
+    call-builtin r3 "Map.size" 1 @ 0:7:8-7:18 0:7:8-7:13
     call-builtin r3 "puts" 1 @ 0:7:3-7:19 0:7:8-7:18
     const r3 void @ 0:1:1-9:1
     return r3 @ 0:1:1-9:1

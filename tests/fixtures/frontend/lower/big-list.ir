@@ -1055,9 +1055,8 @@ fn0 "main" params=0 captures=0 slots=257 entry @ 0:1:1-7:1
     step @ 0:3:3-3:16
     step @ 0:3:8-3:15
     step @ 0:3:8-3:10
-    move r2 r0 @ 0:3:8-3:10
-    call-builtin r2 "List.size" 1 @ 0:3:8-3:15 0:3:8-3:10
-    move r1 r2 @ 0:3:8-3:15
+    move r1 r0 @ 0:3:8-3:10
+    call-builtin r1 "List.size" 1 @ 0:3:8-3:15 0:3:8-3:10
     call-builtin r1 "puts" 1 @ 0:3:3-3:16 0:3:8-3:15
     step @ 0:4:3-5:1
     step @ 0:4:8-4:1173

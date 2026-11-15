@@ -8,7 +8,7 @@ struct s2 "@3::Popped" ["value","remaining"]
 struct s3 "Error" ["kind","message","code","details","cause","location"] types=[String, String, Optional(Int), Map(String, String), Optional(Struct(Error)), String]
 enum "@2::Status" v0="Active"/0 v1="Gone"/0
 enum "Optional" v2="None"/0 v3="Some"/1
-fn0 "main" params=0 captures=0 slots=7 entry @ 0:4:1-13:1
+fn0 "main" params=0 captures=0 slots=5 entry @ 0:4:1-13:1
     step @ 0:5:3-6:1
     step @ 0:5:10-5:42
     step @ 0:5:28-5:33
@@ -27,9 +27,8 @@ fn0 "main" params=0 captures=0 slots=7 entry @ 0:4:1-13:1
     step @ 0:7:3-7:31
     step @ 0:7:8-7:30
     step @ 0:7:24-7:29
-    move r3 r1 @ 0:7:24-7:29
-    call r3 fn1 @ 0:7:8-7:30
-    move r2 r3 @ 0:7:8-7:30
+    move r2 r1 @ 0:7:24-7:29
+    call r2 fn1 @ 0:7:8-7:30
     call-builtin r2 "puts" 1 @ 0:7:3-7:31 0:7:8-7:30
     step @ 0:8:3-9:1
     step @ 0:8:3-8:38
@@ -37,19 +36,16 @@ fn0 "main" params=0 captures=0 slots=7 entry @ 0:4:1-13:1
     step @ 0:8:8-8:32
     step @ 0:8:21-8:31
     step @ 0:8:22-8:25
-    const r5 "x" @ 0:8:22-8:25
+    const r3 "x" @ 0:8:22-8:25
     step @ 0:8:27-8:30
-    const r6 "y" @ 0:8:27-8:30
-    list r4 r5 2 @ 0:8:21-8:31
-    call r4 fn2 @ 0:8:8-8:32
-    move r3 r4 @ 0:8:8-8:32
-    call-builtin r3 "List.size" 1 @ 0:8:8-8:37 0:8:8-8:32
-    move r2 r3 @ 0:8:8-8:37
+    const r4 "y" @ 0:8:27-8:30
+    list r2 r3 2 @ 0:8:21-8:31
+    call r2 fn2 @ 0:8:8-8:32
+    call-builtin r2 "List.size" 1 @ 0:8:8-8:37 0:8:8-8:32
     call-builtin r2 "puts" 1 @ 0:8:3-8:38 0:8:8-8:37
     step @ 0:9:3-10:1
     step @ 0:9:7-9:18
-    call r3 fn3 @ 0:9:7-9:18
-    move r2 r3 @ 0:9:7-9:18
+    call r2 fn3 @ 0:9:7-9:18
     step @ 0:10:3-11:1
     step @ 0:10:3-10:10
     step @ 0:10:8-10:9
@@ -101,22 +97,21 @@ fn3 "@3::new" params=0 captures=0 slots=2 @ 2:21:1-22:1
     return r0 @ 2:21:27-21:48
     const r0 void @ 2:21:1-22:1
     return r0 @ 2:21:1-22:1
-fn4 "@3::push" params=2 captures=0 slots=6 @ 2:24:1-25:1
+fn4 "@3::push" params=2 captures=0 slots=5 @ 2:24:1-25:1
     step @ 2:24:60-24:110
     step @ 2:24:60-24:110
     step @ 2:24:78-24:109
     step @ 2:24:90-24:101
     step @ 2:24:90-24:95
-    field r4 r0 0 @ 2:24:90-24:101
+    field r3 r0 0 @ 2:24:90-24:101
     step @ 2:24:103-24:108
-    move r5 r1 @ 2:24:103-24:108
-    call-builtin r4 "List.append" 2 @ 2:24:78-24:109 2:24:90-24:101 2:24:103-24:108
-    move r3 r4 @ 2:24:78-24:109
+    move r4 r1 @ 2:24:103-24:108
+    call-builtin r3 "List.append" 2 @ 2:24:78-24:109 2:24:90-24:101 2:24:103-24:108
     struct r2 r3 s1 @ 2:24:60-24:110
     return r2 @ 2:24:60-24:110
     const r2 void @ 2:24:1-25:1
     return r2 @ 2:24:1-25:1
-fn5 "@3::pop" params=1 captures=0 slots=7 @ 2:27:1-31:1
+fn5 "@3::pop" params=1 captures=0 slots=6 @ 2:27:1-31:1
     step @ 2:28:3-29:1
     step @ 2:28:37-28:50
     step @ 2:28:44-28:49
@@ -145,11 +140,10 @@ fn5 "@3::pop" params=1 captures=0 slots=7 @ 2:27:1-31:1
     step @ 2:29:65-29:90
     step @ 2:29:75-29:86
     step @ 2:29:75-29:80
-    field r5 r0 0 @ 2:29:75-29:86
+    field r4 r0 0 @ 2:29:75-29:86
     step @ 2:29:88-29:89
-    const r6 int:1 @ 2:29:88-29:89
-    call-builtin r5 "List.drop" 2 @ 2:29:65-29:90 2:29:75-29:86 2:29:88-29:89
-    move r4 r5 @ 2:29:65-29:90
+    const r5 int:1 @ 2:29:88-29:89
+    call-builtin r4 "List.drop" 2 @ 2:29:65-29:90 2:29:75-29:86 2:29:88-29:89
     struct r3 r4 s1 @ 2:29:47-29:91
     struct r1 r2 s2 @ 2:29:6-29:92
     call-builtin r1 "ok" 1 @ 2:29:3-29:93 2:29:6-29:92
