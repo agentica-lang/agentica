@@ -75,7 +75,8 @@ static const uint8_t *embedded_program(const char *which, size_t *len) {
 /* One run of a program that may hand a program over: the front end, or the launcher before it. It returns only in two
  * cases. The first: the program handed a program over and its run ended cleanly. The second: it is the launcher and it
  * declined, by ending without a hand-off (its status and its way of ending do not matter: the front end runs next and
- * does the whole work, so a launcher that failed costs time and nothing else). Every other end of the front end (a
+ * does the whole work). A launcher that crashed declines too, and its diagnostic is not printed: the front end looks
+ * the entry up again and reports what is wrong, once and in the style of the run. Every other end of the front end (a
  * usage error, a problem in the user's file, a crash, a stop signal) is the end of the process. The status is the one
  * the front end gave, except for a crash: a runtime error in the front end is a bug of the compiler or of `agentica
  * test`'s driver, not a problem in the user's program (status 1), and a driver that crashed must not look like a test
@@ -112,6 +113,7 @@ static int run_stage(agc_launch *launch, agc_program *program, bool launcher, co
   agc_vm *vm = agc_launch_vm(launch, program, &options, agc_launch_args(count + input_count, arguments, 0), fe);
   agc_outcome outcome = agc_vm_run(vm);
   bool crashed = outcome.kind == AGC_FAILED;
+  if (crashed && launcher) outcome = (agc_outcome){.kind = AGC_DONE};
   int status = agc_launch_settle(vm, &outcome);
   if (crashed) status = 2;
   bool stopped = agc_io_stop_signal();
@@ -123,7 +125,8 @@ static int run_stage(agc_launch *launch, agc_program *program, bool launcher, co
   /* A job that is still running would keep this run's loop alive next to the next one's: the program must not share
    * a process with anything of the compiler, so this is the end of the run. */
   if (!agc_io_close(vm)) {
-    fprintf(stderr, "%s: internal error: the front end left an operation running\n", name);
+    fprintf(stderr, "%s: internal error: the %s left an operation running\n", name,
+            launcher ? "launcher" : "front end");
     fflush(stderr);
     agc_launch_exit(1);
   }
@@ -131,15 +134,18 @@ static int run_stage(agc_launch *launch, agc_program *program, bool launcher, co
   return crashed || outcome.kind != AGC_EXITED ? 0 : status;
 }
 
-/* False when the words cannot be a run of a source file, the one case the launcher serves: there is no word, or the
- * first word that is no option is a command. This is a hint that saves the launcher's start, not a rule: the launcher
- * reads the words as the front end does and declines what is not its case, so a command missing here only costs time.
- * The list is CliRun.COMMANDS (compiler/app/cli_run.agc; tests/test_cli_launcher.py compares the two). */
+/* False when the words cannot be a run that the cache serves, the one case of the launcher: there is no word, the
+ * first word that is no option is a command, or an option before it turns the cache off (--no-cache, --dump,
+ * --dump-ir). This is a hint that saves the launcher's start, not a rule: the launcher reads the words as the front
+ * end does and declines what is not its case, so a command missing here only costs time. The list is
+ * CliRun.COMMANDS (compiler/app/cli_run.agc; tests/test_bytecode_cache.py compares the two). */
 static bool may_run_a_file(int count, char **words) {
   static const char *const commands[] = {"test",    "help",    "doc",    "fmt",  "lint", "install", "add",    "update",
                                          "outline", "type-at", "symbol", "refs", "run",  "check",   "compile"};
   for (int k = 0; k < count; k++) {
     const char *word = words[k];
+    if (strcmp(word, "--no-cache") == 0 || strcmp(word, "--dump") == 0 || strcmp(word, "--dump-ir") == 0)
+      return false;
     if ((word[0] == '-' || word[0] == '+') && word[1] != '\0') continue;
     for (size_t c = 0; c < sizeof commands / sizeof commands[0]; c++)
       if (strcmp(word, commands[c]) == 0) return false;

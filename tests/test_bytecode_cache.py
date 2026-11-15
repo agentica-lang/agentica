@@ -607,30 +607,31 @@ def test_a_folder_at_the_name_of_the_entry_is_not_removed(src):
     assert (entry / "inside").is_file()
 
 # The launcher (compiler/app/cli_hit.agc) serves a hit without the front end; the front end serves everything else. A
-# case is the files of a folder, the words after `agentica` and the standard input.
+# case is the files of a folder, the words after `agentica` and whether the program compiles (a hit follows). The exit
+# status of EXITS is the one a launcher that missed ends with (MISSED_STATUS).
 ARGS = 'def main() -> Void\n  puts(System.args())\nend\n'
-EXITS = 'def main() -> Void\n  puts("before")\n  System.exit(7)\nend\n'
+EXITS = 'def main() -> Void\n  puts("before")\n  System.exit(3)\nend\n'
 FAILS = 'def main() -> Void\n  xs: List[Int] = [1]\n  puts(xs[System.args().size + 3])\nend\n'
 REJECTED = 'def main() -> Void\n  puts(nope)\nend\n'
 LOOPS = 'def main() -> Void\n  n = 0\n  while n >= 0\n    n += 1\n  end\nend\n'
 READS = 'def main() -> Void\n  puts(File.read_text("main.agc", 1000).ok?)\nend\n'
 LAUNCHES = [
-    ("arguments", {"main.agc": ARGS}, ["main.agc", "a", "--json", "b c"]),
-    ("options end", {"main.agc": ARGS}, ["--", "main.agc", "-x"]),
-    ("modules", {"main.agc": MAIN, "util.agc": UTIL % "one"}, ["main.agc"]),
-    ("exit status", {"main.agc": EXITS}, ["main.agc"]),
-    ("runtime error", {"main.agc": FAILS}, ["main.agc"]),
-    ("runtime error json", {"main.agc": FAILS}, ["--json", "main.agc"]),
-    ("runtime error ai", {"main.agc": FAILS}, ["--ai", "main.agc"]),
-    ("check error", {"main.agc": REJECTED}, ["main.agc"]),
-    ("check error json", {"main.agc": REJECTED}, ["--json", "main.agc"]),
-    ("missing file", {}, ["main.agc"]),
-    ("step limit", {"main.agc": LOOPS}, ["--max-steps", "500", "main.agc"]),
-    ("step limit json", {"main.agc": LOOPS}, ["--json", "--max-steps", "500", "main.agc"]),
-    ("denied", {"main.agc": READS}, ["--deny-fs", "main.agc"]),
-    ("allowed", {"main.agc": READS}, ["main.agc"]),
-    ("unknown option", {"main.agc": ARGS}, ["--nope", "main.agc"]),
-    ("option after the file", {"main.agc": ARGS}, ["main.agc", "--max-steps"]),
+    ("arguments", {"main.agc": ARGS}, ["main.agc", "a", "--json", "b c"], True),
+    ("options end", {"main.agc": ARGS}, ["--", "main.agc", "-x"], True),
+    ("modules", {"main.agc": MAIN, "util.agc": UTIL % "one"}, ["main.agc"], True),
+    ("exit status", {"main.agc": EXITS}, ["main.agc"], True),
+    ("runtime error", {"main.agc": FAILS}, ["main.agc"], True),
+    ("runtime error json", {"main.agc": FAILS}, ["--json", "main.agc"], True),
+    ("runtime error ai", {"main.agc": FAILS}, ["--ai", "main.agc"], True),
+    ("check error", {"main.agc": REJECTED}, ["main.agc"], False),
+    ("check error json", {"main.agc": REJECTED}, ["--json", "main.agc"], False),
+    ("missing file", {}, ["main.agc"], False),
+    ("step limit", {"main.agc": LOOPS}, ["--max-steps", "500", "main.agc"], True),
+    ("step limit json", {"main.agc": LOOPS}, ["--json", "--max-steps", "500", "main.agc"], True),
+    ("denied", {"main.agc": READS}, ["--deny-fs", "main.agc"], True),
+    ("allowed", {"main.agc": READS}, ["main.agc"], True),
+    ("unknown option", {"main.agc": ARGS}, ["--nope", "main.agc"], False),
+    ("option after the file", {"main.agc": ARGS}, ["main.agc", "--max-steps"], False),
 ]
 
 
@@ -644,23 +645,28 @@ def untraced(result):
         line for line in result.stderr.splitlines(keepends=True) if not line.startswith("agc-trace "))
 
 
-@pytest.mark.parametrize("name, files, words", LAUNCHES, ids=[case[0] for case in LAUNCHES])
-def test_without_the_cache_on_a_miss_and_on_a_hit_a_run_prints_and_ends_alike(tmp_path, name, files, words):
+def traced_build():
+    return b"trace off" not in subprocess.run(cli() + ["run", "--version"], capture_output=True).stdout
+
+
+@pytest.mark.parametrize("name, files, words, compiles", LAUNCHES, ids=[case[0] for case in LAUNCHES])
+def test_without_the_cache_on_a_miss_and_on_a_hit_a_run_prints_and_ends_alike(tmp_path, name, files, words, compiles):
     """`--no-cache` is the front end alone. The first run with the cache is a miss, which the launcher leaves to the
     front end, and the second a hit, which the launcher serves (when the program compiled): the three print the same
     and end with the same status."""
     for file, text in files.items():
         (tmp_path / file).write_text(text, encoding="utf-8")
     plain = agentica(tmp_path, "--no-cache", *words)
-    miss = agentica(tmp_path, *words)
-    hit = agentica(tmp_path, *words)
-    assert (miss.code, miss.stdout, miss.stderr) == (plain.code, plain.stdout, plain.stderr)
-    assert (hit.code, hit.stdout, hit.stderr) == (plain.code, plain.stdout, plain.stderr)
+    miss = agentica(tmp_path, *words, AGENTICA_VM_TRACE="loader")
+    hit = agentica(tmp_path, *words, AGENTICA_VM_TRACE="loader")
+    assert untraced(miss) == untraced(hit) == (plain.code, plain.stdout, plain.stderr)
+    if compiles and traced_build():
+        # A miss: the launcher, the front end, the program. A hit: the launcher and the program.
+        assert (loads(miss), loads(hit)) == (3, 2), miss.stderr + hit.stderr
 
 
 def test_a_hit_loads_the_launcher_and_the_program_and_no_front_end(src):
-    require(b"trace off" not in subprocess.run(cli() + ["run", "--version"], capture_output=True).stdout,
-            "a binary with the trace built in")
+    require(traced_build(), "a binary with the trace built in")
     traced = {"AGENTICA_VM_TRACE": "loader"}
     plain = agentica(src, "--no-cache", "main.agc")
     miss = agentica(src, "main.agc", **traced)
@@ -668,9 +674,9 @@ def test_a_hit_loads_the_launcher_and_the_program_and_no_front_end(src):
     assert untraced(miss) == untraced(hit) == (0, "one\n", "") == (plain.code, plain.stdout, plain.stderr)
     # A miss: the launcher, the front end, the program. A hit: the launcher and the program.
     assert (loads(miss), loads(hit)) == (3, 2), miss.stderr + hit.stderr
-    # A command is the front end's alone, and so is a run that turns the cache off.
+    # A command is the front end's alone, and a run that turns the cache off starts no launcher.
     assert loads(agentica(src, "check", "main.agc", **traced)) == 1
-    assert loads(agentica(src, "--no-cache", "main.agc", **traced)) == 3
+    assert loads(agentica(src, "--no-cache", "main.agc", **traced)) == 2
 
 
 def test_the_commands_that_skip_the_launcher_in_c_are_those_of_the_command_line():

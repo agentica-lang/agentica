@@ -229,7 +229,7 @@ stages.
   for the second runtime (`unwatch_stop` in `vm/loop.c`). If the event loop of
   the front end cannot be closed (an operation is still running), the run ends
   with status 1 and `agentica: internal error: the front end left an operation
-  running`, because the program must not share a process with anything of the
+  running` (`the launcher` for the launcher), because the program must not share a process with anything of the
   compiler.
 - **The launcher.** Before the front end, `agentica WORDS...` runs a small
   program that the binary carries, the launcher
@@ -244,11 +244,14 @@ stages.
   the entry and found none it could use; C then adds `--cache-missed` to the
   front end's arguments, and the front end compiles without looking again. C
   does not start the launcher with `--front-end FILE`, in a binary that carries
-  none (the first binary of the bootstrap), or when the first word that is no
-  option is a command (`may_run_a_file` in `vm/agentica.c`: a hint that saves
-  the start, the launcher decides). The launcher has the trust and the guarded
-  builtins of the front end. A stop signal during its run ends the process, as
-  in the front end; a launcher that fails is a decline.
+  none (the first binary of the bootstrap), when the first word that is no
+  option is a command, or when `--no-cache`, `--dump` or `--dump-ir` comes
+  before it (`may_run_a_file` in `vm/agentica.c`: a hint that saves the start,
+  the launcher decides). The launcher has the trust and the guarded builtins of
+  the front end. A stop signal during its run ends the process, as in the front
+  end. A launcher that crashes is a decline too, and its diagnostic is not
+  printed: the front end looks the entry up again and reports what is wrong,
+  once and in the style of the run.
 - **What a front end may hand over, and trust.** The front end that C loads is
   fully trusted: it runs with the user's rights and, through the options it
   hands over, can drop the user's `--deny-*` flags. That is why
