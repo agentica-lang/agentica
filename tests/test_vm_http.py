@@ -1571,6 +1571,59 @@ def test_a_head_at_a_limit_is_read_back_and_one_past_it_is_refused_by_its_writer
     ]
 
 
+# A response with no body from a server that closes: the client has closed its socket by the time HTTP.open makes the
+# stream (#1654).
+OPEN_CLOSED_PROGRAM = """\
+import HTTP from "std/http"
+
+def handle(request: HTTP.Request) -> Result[HTTP.Response]
+  status = 200
+  if request.path == "/empty"
+    status = 204
+  end
+
+  return ok(HTTP.Response(status: status, headers: [HTTP.Header(name: "Connection", value: "close")], body: ("x" * (request.path.length - 6)).bytes))
+end
+
+def main() -> Void
+  server = HTTP.serve("127.0.0.1", 0, HTTP.app(&handle)).unwrap!
+  for path in ["/close-body", "/close", "/empty"]
+    case HTTP.open("GET", "http://127.0.0.1:#{HTTP.local_port(server)}#{path}", "".bytes)
+      ok(stream) ->
+        body = ""
+        while true
+          case stream.body.recv(5000)
+            ok(piece) -> body = body + String.from_bytes(piece).unwrap!
+            error(e) ->
+              body = body + " then #{e.message}"
+              break
+          end
+        end
+
+        puts("#{path} #{stream.status} #{body}")
+        IO.inspect(Task.await(stream.done, 5000))
+      error(e) -> puts("#{path} #{e.message}")
+    end
+  end
+
+  HTTP.close_server(server)
+end
+"""
+
+
+def test_open_gives_an_ended_stream_for_a_response_with_no_body_from_a_server_that_closes(tmp_path):
+    result = run_vm(compile_text(OPEN_CLOSED_PROGRAM, "open-closed", tmp_path), env=vm_environment())
+    assert result.code == 0, result.stderr
+    assert output_lines(result.stdout) == [
+        "/close-body 200 xxxxx then channel: closed",
+        "Await.Done(ok())",
+        "/close 200  then channel: closed",
+        "Await.Done(ok())",
+        "/empty 204  then channel: closed",
+        "Await.Done(ok())",
+    ]
+
+
 def test_upload_server_hands_the_body_to_the_handler_piece_by_piece_and_keeps_the_connection(tmp_path, adopt):
     """serve: a body of either framing arrives on a channel (3 MiB through a handler that waits before it reads,
     so the socket backs up), the connection stays for the next request, also when it arrived in the same write as the
