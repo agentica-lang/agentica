@@ -22,7 +22,8 @@ import time
 
 import pytest
 
-from tests.agentica_test import FIXTURES, TARGET_OS, WINDOWS, cli, host_only, require, run, scaled, tool, vm_environment
+from tests.agentica_test import (FIXTURES, TARGET_OS, WINDOWS, cli, host_only, require, run, scaled, tool, vm_binary,
+                                 vm_environment)
 
 MACOS = TARGET_OS == "darwin"
 # The systems whose build has libffi; the others refuse native code at load, and the call cases skip there.
@@ -2886,6 +2887,64 @@ end
     result, notes = run_notes(tmp_path, peer, main, "--schedulers", schedulers)
     assert (result.code, result.stdout, result.stderr) == (0, "300\n0\n", "")
     assert notes == ["returned", "shared", "closed", "returned", "handed", "late", ""]
+
+
+# A callback made in an arena is closed at its end, so C that kept it gets 0 from it; one the block returns stays live.
+@NATIVE_CALLS
+def test_an_arena_closes_its_callbacks(tmp_path, peer):
+    main = """def main() -> Void
+  inside = Native.arena do
+    peer_set_handler(some(Native.callback(Step, &step)))
+    peer_fire(0)
+  end
+  puts([inside, peer_fire(0)])
+  kept = Native.arena do
+    handler = Native.callback(Step, &step)
+    peer_set_handler(some(handler))
+    handler
+  end
+  puts("#{peer_fire(0)} #{Native.closed?(kept)}")
+  Native.close(kept)
+  puts(peer_fire(0))
+end
+"""
+    text = HANDLER_EXTERN.split("def fire()")[0].replace("LIBRARY", literal(peer)) + main
+    result = agentica(program(tmp_path, text), timeout=20)
+    assert (result.code, result.stdout, result.stderr) == (0, "[70, 0]\n70 false\n0\n", "")
+
+
+# A task that a cancel ends inside an arena lets its arena go with its frames: a thousand of them, each with a thousand
+# closed buffers and kept as a Task value, stay far below the heap limit. A build without the collector counts every
+# byte it hands out, so the case needs one.
+@NATIVE_CALLS
+@pytest.mark.skipif(bool(os.environ.get("AGENTICA_VM_BINARY") or os.environ.get("AGENTICA_TEST_EXECUTABLE")) or any(
+    mark in vm_binary().read_bytes() for mark in (b"__asan_init", b"__tsan_init")), reason="needs the collector")
+def test_an_ended_task_keeps_no_arena(tmp_path):
+    main = """def work(ready: Channel[Int]) -> Int
+  Native.arena do
+    for _ in 1..1000
+      Native.memory_pointer(8)
+    end
+    ready.send(1, 10_000).unwrap!
+    Task.sleep(60_000)
+    1
+  end
+end
+
+def main() -> Void
+  ready: Channel[Int] = Channel.new(1)
+  ended: List[Task[Int]] = []
+  for _ in 1..1000
+    task = Task.spawn do work(ready) end
+    ready.recv(10_000).unwrap!
+    Task.cancel(task)
+    ended = ended.push(task)
+  end
+  puts(ended.size)
+end
+"""
+    result = agentica("--max-heap", "160M", program(tmp_path, main), timeout=60)
+    assert (result.code, result.stdout, result.stderr) == (0, "1000\n", "")
 
 
 # What a kept resource comes from is kept with it (a statement keeps its database), and a kept view keeps its buffer.

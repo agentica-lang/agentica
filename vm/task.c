@@ -403,6 +403,7 @@ static void finish_task(agc_vm *vm, agc_task *t) {
   t->frames = NULL;
   t->frame_capacity = 0;
   t->nested = NULL;
+  t->arena = NULL;
   t->cursor = NULL;
   t->inbox = agc_void();
   t->turn_cost = 0;
