@@ -22,6 +22,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- `agentica FILE.agc` no longer looks for the C compiler in `PATH` at each start of a cached program with no native module, and a change of `CC` or `PATH` keeps its cache entry (#1551).
 - `std/http`: a chunked stream sends the pieces that wait in its channel together as one chunk, in one write; a fast producer streams several times faster.
 - **Breaking:** `agentica test` runs the scenarios of each `--jobs` slot in one worker process while they pass, so a suite of small scenarios runs about 5 times faster; state that the step program makes in `main` before `BDD.run` (an `ATS` table, a `Channel`) and process state that a step sets (`Logger.set_level`) are now shared by the scenarios one worker runs, and `--isolate` gives each scenario its own process as before (#1465).
 - Loops that call builtins such as `Map.get` or `String.slice` are up to 17% faster on Linux and macOS (#1599).

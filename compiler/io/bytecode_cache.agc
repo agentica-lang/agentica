@@ -7,7 +7,9 @@
 ## the bytes of the program, the same ones `agentica compile` writes. The text has one line for each part of the key
 ## (the format, the version, build and path of the binary, the real path of the root, and a digest of the project
 ## inputs), then `program SHA256`, then one `source SHA256 PATH` line for every file of the user that the front end
-## read, then the probes of the resolver: `absent PATH` for a place an import looked at and found nothing, and
+## read, then `compiler SHA256` (the C compiler and its search variables) when the program has a native module, so
+## only such a program looks for the compiler at a start, then the probes of the resolver: `absent PATH` for a place
+## an import looked at and found nothing, and
 ## `present PATH<TAB>REAL` for a place that held a file, with the real path it led to. A lookup compares the key,
 ## hashes the files again, checks the probes (`file_exists` and `real_path`, a few `stat`s) and hashes the program, and
 ## any difference is a miss, so the entry is rebuilt. The probes cover a file that appears in an earlier folder of the
@@ -117,10 +119,15 @@ def store(plan: Plan, settings: Env.Settings, modules: List[Linker.LinkedModule]
       return false if !probes.ok?
 
       lines = sources.map do |module: Linker.LinkedModule| source_line(module) end
-      libraries = library_lines(settings.workspace, sources, built_libraries(settings, sources))
+      built = built_libraries(settings, sources)
+      libraries = library_lines(settings.workspace, sources, built)
       return false if !libraries.ok?
 
       lines = lines.concat(libraries.unwrap!)
+      if native?(sources, built)
+        lines = lines.push(CacheFiles.compiler_line(settings.env.os))
+      end
+
       text = [entry.key, "program #{CacheFiles.digest(program)}"].concat(lines).concat(probes.unwrap!).join("\n")
       publish(entry, text, program)
   end
@@ -132,7 +139,7 @@ private
 BYTECODE_FOLDER = "bytecode"
 
 # The first line of the key; change it when the layout of an entry changes.
-FORMAT = "agentica-cache-3"
+FORMAT = "agentica-cache-4"
 
 # The head of an entry: this word, a space, the length of the text in eight digits, a line feed.
 HEAD_WORD = "AGCCACHE "
@@ -148,6 +155,7 @@ MAX_PROGRAM_BYTES = 268_435_456
 # The words that start the lines after the program line, and the digest length in hex.
 SOURCE_WORD = "source "
 TREE_WORD = "tree "
+COMPILER_WORD = "compiler "
 ABSENT_WORD = "absent "
 PRESENT_WORD = "present "
 DIGEST_CHARS = 64
@@ -223,6 +231,12 @@ def built_libraries(settings: Env.Settings, modules: List[Linker.LinkedModule]) 
   end
 
   found
+end
+
+# Whether a native build is part of what the program is: it names a built library, or reads a package that has native
+# files (which covers an optional module that was not built).
+def native?(modules: List[Linker.LinkedModule], built: List[String]) -> Bool
+  built.size > 0 or modules.any? { |module| module.watched.size > 0 }
 end
 
 # The digest of the names of the native/ files of a package folder: those the package hash covers, and those the walk
@@ -350,7 +364,7 @@ def read_whole(handle: File.Handle, entry: Entry, settings: Env.Settings) -> Res
 
   # The key has no line feed inside a line, so its lines are the first ones of the text, then the program line.
   lines = text.split("\n").drop(entry.key.split("\n").size)
-  try check_lines(settings.workspace, lines.drop(1))
+  try check_lines(settings, lines.drop(1))
   program = try read_rest(handle)
   if lines[0] != "program #{CacheFiles.digest(program)}" or !made_by?(program, settings.version)
     return error("the program of the entry is damaged")
@@ -374,9 +388,12 @@ def text_size(head: Bytes) -> Result[Int]
 end
 
 # Every source file must still have the digest the entry holds, and every probe must still answer as it did.
-def check_lines(workspace: Workspace.Workspace, lines: List[String]) -> Result[Void]
+def check_lines(settings: Env.Settings, lines: List[String]) -> Result[Void]
+  workspace = settings.workspace
   for line in lines
-    if line.start_with?(SOURCE_WORD)
+    if line.start_with?(COMPILER_WORD)
+      return error("the C compiler changed") if line != CacheFiles.compiler_line(settings.env.os)
+    elsif line.start_with?(SOURCE_WORD)
       try check_source(workspace, line)
     elsif line.start_with?(TREE_WORD)
       try check_tree(workspace, line)
