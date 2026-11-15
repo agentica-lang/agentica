@@ -1962,8 +1962,8 @@ static bool takes_here(const net *n) { return !n->secure; }
 static bool over_limit(const net *n, req_kind kind) { return kind == REQ_LINE && agc_inbuf_pending(&n->in) > LIMIT; }
 
 /* One receive on the scheduler into the input of a plain socket that the reader may take (takes_here), before the read
-   would park (#1197): true when it found bytes, the end of input or an error, which the read then looks at, with *NP
-   looked up again (NULL when the socket was closed meanwhile). rt->sync is dropped across the system call, as
+   would park (#1197): true when it found bytes, the end of input or an error, which the read then looks at, or when the
+   socket was closed meanwhile (*NP, looked up again, is then NULL). rt->sync is dropped across the system call, as
    direct_send drops it, under the claim W_RECV, which keeps the net and its descriptor: the net is not touched after
    the claim ends. The reader lock is held without a job from the first receive on (*HOLDING), so no other read takes
    the input meanwhile; the caller lets it go, or its park's job takes it over. The I/O thread does not read the
@@ -1997,7 +1997,7 @@ static bool recv_here(agc_vm *vm, agc_socket *sk, net **np, const request *want,
   claim_end(n, W_RECV, false);
   if (held) agc_sync_take(vm);
   *np = live(sk);
-  return found;
+  return found || !*np;
 }
 
 static bool begin_read(void *data, agc_io_job *job) {

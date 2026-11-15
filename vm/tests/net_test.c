@@ -988,6 +988,33 @@ static void test_upgrade_tls_builds_the_shared_context_then_handshakes(void) {
   agc_test_settle_loop(&vm);
 }
 
+static agc_vm aside;
+
+/* open_pair with every lock on, and a second context (aside) for the calls of other tasks. */
+static int open_pair_locked(void) {
+  static bool made;
+  assert(agc_io_share(&vm, false));
+  if (!made) {
+    agc_vm_init_context(&aside, vm.rt);
+    agc_timers_share(&aside);
+    made = true;
+  }
+  listener = ok_of(
+      locked_step(&vm, vm.task, call("TCP.listen", 2, agc_test_str("127.0.0.1"), agc_int(0), agc_void(), agc_void())));
+  int fd = raw_connect(agc_as_listener(&vm, listener)->port);
+  socket_v = ok_of(locked_step(&vm, vm.task, call("TCP.accept", 2, listener, agc_int(5000), agc_void(), agc_void())));
+  return fd;
+}
+
+/* Waits until a read of another thread holds the reader lock with no job: it is inside recv_here, rt->sync dropped. */
+static void wait_for_receive(agc_resource *reader) {
+  for (bool held = false; !held;) {
+    agc_sync_take(&aside);
+    held = reader->holder == reader;
+    agc_sync_drop(&aside);
+  }
+}
+
 static void read_beside(void *arg) {
   assert(agc_gc_thread_enter());
   call_locked(arg);
@@ -1006,14 +1033,7 @@ static agc_test_call read_line_of(agc_vm *ctx, agc_task *task) {
    I/O thread but leaves the descriptor open. The receive takes the peer's next line, the read reports the socket
    closed, and the end of the receive closes the descriptor. It runs after the shared case: every lock is on. */
 static void test_a_read_receives_on_the_scheduler(void) {
-  assert(agc_io_share(&vm, false));
-  static agc_vm aside;
-  agc_vm_init_context(&aside, vm.rt);
-  agc_timers_share(&aside);
-  listener = ok_of(
-      locked_step(&vm, vm.task, call("TCP.listen", 2, agc_test_str("127.0.0.1"), agc_int(0), agc_void(), agc_void())));
-  int fd = raw_connect(agc_as_listener(&vm, listener)->port);
-  socket_v = ok_of(locked_step(&vm, vm.task, call("TCP.accept", 2, listener, agc_int(5000), agc_void(), agc_void())));
+  int fd = open_pair_locked();
   int mine = vm_side(fd);
   struct pollfd in_kernel = {mine, POLLIN, 0};
 
@@ -1042,11 +1062,7 @@ static void test_a_read_receives_on_the_scheduler(void) {
   set_blocking(mine, true);
   uv_thread_t receiver;
   assert(uv_thread_create(&receiver, read_beside, &reading) == 0);
-  for (bool held = false; !held;) {
-    agc_sync_take(&aside);
-    held = reader->holder == reader;
-    agc_sync_drop(&aside);
-  }
+  wait_for_receive(reader);
   agc_task *second = agc_new_task(&vm), *third = agc_new_task(&vm);
   locked_call waiting = {&aside, second, read_line_of(&aside, second)};
   on_thread(call_locked, &waiting);
@@ -1070,6 +1086,31 @@ static void test_a_read_receives_on_the_scheduler(void) {
   while (agc_runq_pop(vm.rt->runq)) {}
   on_thread(call_locked, &waiting);
   assert(error_is(waiting.c.result, "network: socket is closed"));
+  close_pair_locked(fd);
+}
+
+/* A close from another task while a read's recv() finds nothing (the VM's socket is blocking with a receive timeout,
+   so the call waits, then fails with EAGAIN): the read ends with the closed error and parks no request on a net that
+   is gone, and the end of the receive closes the descriptor. */
+static void test_a_close_during_an_empty_receive(void) {
+  int fd = open_pair_locked();
+  int mine = vm_side(fd);
+  set_blocking(mine, true);
+  struct timeval wait = {0, 300000};
+  assert(setsockopt(mine, SOL_SOCKET, SO_RCVTIMEO, &wait, sizeof wait) == 0);
+  locked_call reading = {&vm, vm.task, read_line_of(&vm, vm.task)};
+  uv_thread_t receiver;
+  assert(uv_thread_create(&receiver, read_beside, &reading) == 0);
+  wait_for_receive(agc_as_socket(&vm, socket_v)->reader);
+  agc_task *other = agc_new_task(&vm);
+  locked_call closing = {&aside, other,
+                         agc_test_call_of(&aside, other, "TCP.close", 1, socket_v, agc_void(), agc_void(), agc_void())};
+  on_thread(call_locked, &closing);
+  assert(uv_thread_join(&receiver) == 0);
+  assert(vm.task->parked == NULL);
+  assert(error_is(reading.c.result, "network: socket is closed"));
+  (void)agc_io_poll(&vm, false);
+  wait_eof(fd);
   close_pair_locked(fd);
 }
 #endif
@@ -1102,6 +1143,7 @@ int main(void) {
   AGC_TEST_RUN(test_upgrade_tls_builds_the_shared_context_then_handshakes());
   AGC_TEST_RUN(test_a_send_waits_for_a_direct_send_of_another_task());
   AGC_TEST_RUN(test_a_read_receives_on_the_scheduler());
+  AGC_TEST_RUN(test_a_close_during_an_empty_receive());
 #endif
   puts("net tests passed");
   return 0;

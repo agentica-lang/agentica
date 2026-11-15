@@ -205,7 +205,9 @@ texts.
   wait without one, and one that finds bytes ends that: on request/response
   traffic the next request is rarely in the kernel yet, so a call per read
   would cost more than the waits it saves. `TLS.upgrade` during that call
-  returns `network: a read on the socket is in progress`. Every read of a TLS
+  returns `network: a read on the socket is in progress` and leaves the socket
+  open; during another task's parked read it goes on. Which one an upgrade
+  beside a read meets depends on timing. Every read of a TLS
   socket waits on the I/O thread. `recv_bytes` returns what is buffered, as
   soon as there is one byte, and empty `Bytes` at EOF. `recv_bytes` without a
   timeout (the catalog form of two arguments) starts its job with no timer and
