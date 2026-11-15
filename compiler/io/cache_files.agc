@@ -10,6 +10,7 @@ import Workspace from "../modules/workspace"
 import Lock from "../packages/lock"
 import Project from "../packages/project"
 import RandomName from "random_name"
+import SaveFile from "save_file"
 
 # The deadline of each system call, in milliseconds, and the most one File.read_bytes gives.
 IO_TIMEOUT_MS = 10_000
@@ -131,18 +132,11 @@ end
 # A new file that only this user can use. `create_private` fails on a name that exists and never follows a link.
 def write_private(path: String, data: Bytes) -> Result[Void]
   out = try File.open(path, "create_private", IO_TIMEOUT_MS)
-  rest = data
-  while rest.size > 0
-    written = File.write_bytes(out, rest.take(PIECE), IO_TIMEOUT_MS)
-    if !written.ok?
-      _ = File.close(out, IO_TIMEOUT_MS)
-      return written
-    end
+  written = SaveFile.write_all(out, data, IO_TIMEOUT_MS)
+  closed = File.close(out, IO_TIMEOUT_MS)
+  return written if !written.ok?
 
-    rest = rest.drop(PIECE)
-  end
-
-  File.close(out, IO_TIMEOUT_MS)
+  closed
 end
 
 # Puts `data` at `target` through the new private file `temporary` (beside the target, named with TEMP_MARK). A rename

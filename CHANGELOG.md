@@ -26,6 +26,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - Programs run 4 to 6% faster when the interpreter runs them (`--jit off`, or code the JIT has not compiled): a call or an operator writes its result straight into the variable it is assigned to (#1001).
 - A `case` with 3 or more enum variant arms jumps straight to the arm that matches instead of testing the arms in order: `agentica check` and `compile` of a large program are about 5 to 7% faster (#1001).
 - `String.split` searches the text once instead of twice and skips counting the characters of each piece when the text is ASCII: about 10% faster on log-style line and word splitting (#996).
+- `agentica compile` of a large program whose bytecode is in the cache is about 15% faster: the output and the cache entry are written without copying the rest of the program for every 1 MiB piece (#1683).
 
 ## [0.32.0] - 2026-11-15
 

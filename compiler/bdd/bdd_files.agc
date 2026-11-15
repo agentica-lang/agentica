@@ -1,24 +1,19 @@
 ## The files of a BDD run: new files that only the owner can read, written in pieces because one write takes at
 ## most 1 MiB.
 
+import SaveFile from "../io/save_file"
+
 ## The deadline, in milliseconds, of each file system call of the driver.
 IO_TIMEOUT = 10_000
 
 ## Writes bytes to a new file with mode 0600. It fails when the path exists (a link in the way included).
 def write_bytes(path: String, bytes: Bytes) -> Result[Void]
   out = try File.open(path, "create_private", IO_TIMEOUT)
-  rest = bytes
-  while rest.size > 0
-    written = File.write_bytes(out, rest.take(PIECE_BYTES), IO_TIMEOUT)
-    if !written.ok?
-      _ = File.close(out, IO_TIMEOUT)
-      return written
-    end
+  written = SaveFile.write_all(out, bytes, IO_TIMEOUT)
+  closed = File.close(out, IO_TIMEOUT)
+  return written if !written.ok?
 
-    rest = rest.drop(PIECE_BYTES)
-  end
-
-  File.close(out, IO_TIMEOUT)
+  closed
 end
 
 ## Writes text to a new file with mode 0600, as write_bytes does.
@@ -46,5 +41,4 @@ end
 private
 
 # At most 1 MiB goes in one call. A character takes up to 4 bytes, so a piece of 250,000 characters always fits.
-PIECE_BYTES = 1_048_576
 PIECE_CHARACTERS = 250_000
