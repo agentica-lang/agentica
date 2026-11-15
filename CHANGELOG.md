@@ -12,6 +12,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - `Actor.send` and `Actor.await` split `Actor.call` in two, so a caller can send requests to several actors first and then await each answer (#1571).
 - The errors of file and network builtins carry `details`: `"path"`, the path the call was given (and `"to"` for `Path.rename`), for a failed or `--deny-fs` refused file call, and `"host"` for a failed or `--deny-net` refused connect, listen, DNS lookup or TLS handshake (#1510).
+- `Native.arena do ... end` closes, when its block ends, every native resource and owned buffer the task opened in it, newest first, except those the block's value holds (#1091).
 
 ### Changed
 

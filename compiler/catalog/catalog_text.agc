@@ -268,6 +268,7 @@ def later_rule_name(rule: Model.Rule) -> String
     Model.Rule.MapPut -> "MapPut"
     Model.Rule.MapSize -> "MapSize"
     Model.Rule.MapValues -> "MapValues"
+    Model.Rule.NativeArena -> "NativeArena"
     Model.Rule.NativeCallback -> "NativeCallback"
     Model.Rule.NativeClose -> "NativeClose"
     Model.Rule.NativeClosed -> "NativeClosed"

@@ -303,6 +303,21 @@ typedef struct {
   bool called;
 } buffer_block;
 
+/* A Native.arena block (agc_task.arena): the enclosing one of the same task, and the resources and owned buffers that
+   the task registered while the block ran, in that order, in GC memory. Closed ones are dropped when the list grows
+   (arena_add), so a block that opens and closes in a loop keeps a short list. */
+typedef struct agc_arena {
+  struct agc_arena *outer;
+  agc_c_resource **items;
+  size_t count, cap;
+} agc_arena;
+
+typedef struct {
+  agc_stepper stepper;
+  agc_arena arena;
+  bool running;
+} arena_block;
+
 /* The prepared calls of the run, by signature string, and the struct layouts of Native.size_of, get_struct and
    put_struct, by layout code, in malloc memory (no GC pointers): open addressing over a
    power-of-two table, kept at most half full. find_entry runs with rt->sync held (call_entry takes it on a miss of
@@ -1182,6 +1197,31 @@ static void release_resource(void *native) {
   if (!res->freed && !res->jobs) call_free(res);
 }
 
+static void arena_add(agc_arena *a, agc_c_resource *res) {
+  if (a->count == a->cap) {
+    size_t open = 0;
+    for (size_t k = 0; k < a->count; k++)
+      if (!a->items[k]->closed) a->items[open++] = a->items[k];
+    for (size_t k = open; k < a->count; k++) a->items[k] = NULL;
+    a->count = open;
+    if (!a->cap || a->count * 2 > a->cap) {
+      size_t cap = a->cap ? agc_size_mul(a->cap, 2) : 16;
+      agc_c_resource **items = agc_alloc(agc_size_mul(cap, sizeof *items));
+      if (a->count) memcpy(items, a->items, a->count * sizeof *items);
+      a->items = items;
+      a->cap = cap;
+    }
+  }
+  a->items[a->count++] = res;
+}
+
+/* Registers RES (open) and gives it to the running task, and to its innermost Native.arena. */
+static void own_resource(agc_vm *vm, agc_c_resource *res) {
+  res->state = agc_register(vm, res, release_resource);
+  agc_own(vm, res->state, close_owned);
+  if (vm->in_turn && vm->task->arena) arena_add(vm->task->arena, res);
+}
+
 static void make_end_frees(void *data) {
   end_frees *batch = data;
   for (size_t k = 0; k < batch->count; k++) {
@@ -1412,10 +1452,7 @@ static agc_c_resource *new_resource(agc_vm *vm, agc_ffi_call *free_call, void *f
   res->closed = res->freed = pointer == NULL;
   res->buffer = false;
   res->state = NULL;
-  if (pointer) {
-    res->state = agc_register(vm, res, release_resource);
-    agc_own(vm, res->state, close_owned);
-  }
+  if (pointer) own_resource(vm, res);
   return res;
 }
 
@@ -2371,8 +2408,7 @@ static agc_value new_buffer(agc_vm *vm, int64_t size, uint32_t size_span) {
   res->jobs = 0;
   res->closed = res->freed = false;
   res->buffer = true;
-  res->state = agc_register(vm, res, release_resource);
-  agc_own(vm, res->state, close_owned);
+  own_resource(vm, res);
   return agc_c_resource_value(res);
 }
 
@@ -2428,6 +2464,86 @@ static agc_value builtin_memory_pointer_block(agc_vm *vm, agc_value *args, uint3
 /* Native.from_string(text) do |buf| ... end: the buffer of Native.from_string for the block, as above. */
 static agc_value builtin_from_string_block(agc_vm *vm, agc_value *args, uint32_t span) {
   return buffer_for_block(vm, builtin_from_string(vm, args, span));
+}
+
+/* Marks with WALK each resource that a value of FOUND (N handle values) is or shows (a view shows its buffer), and
+   what each one comes from, all the way up: a kept statement keeps its database. No recursion: TODO holds the ones
+   still to mark. Under rt->sync, which the links and `seen` need. */
+static void mark_kept(agc_vm *vm, const agc_value *found, size_t n, uint64_t walk) {
+  res_list todo;
+  list_init(&todo);
+  for (size_t k = 0; k < n; k++)
+    if (agc_is(found[k], AGC_T_C_RESOURCE)) list_push(&todo, root_of(agc_as_c_resource(vm, found[k])));
+  while (todo.count) {
+    agc_c_resource *res = todo.items[--todo.count];
+    if (res->seen == walk || res->freed) continue;
+    res->seen = walk;
+    settle_links(res);
+    for (size_t j = 0, m = up_count(res); j < m; j++) {
+      agc_c_resource *p = up_at(res, j);
+      if (p && !p->freed) list_push(&todo, p);
+    }
+  }
+  list_free(&todo);
+}
+
+static bool arena_holds(const agc_task *t, const agc_c_resource *res) {
+  return !res->closed && res->state->owner == t;
+}
+
+/* The end of a Native.arena block whose value is VALUE: each resource of A that is open and still this task's (one
+   that Task.spawn_owning handed over belongs to its new owner) closes, newest first, as Native.close closes it, unless
+   VALUE holds it (mark_kept); a kept one goes to the enclosing arena, in its order. The walk over VALUE runs without
+   rt->sync, as Task.spawn_owning's does, and only when a resource may still be open; the rest runs under it, since
+   another task may close a resource it shares or mark `seen` in its own call meanwhile. */
+static void arena_end(agc_vm *vm, agc_arena *a, agc_value value) {
+  bool any = false;
+  for (size_t k = 0; k < a->count && !any; k++) any = !a->items[k]->closed;
+  if (!any) return;
+  agc_task *t = vm->task;
+  size_t n = 0;
+  agc_value *found = agc_handles_in(vm, value, &n);
+  agc_charge(vm, a->count);
+  agc_sync_take(vm);
+  uint64_t walk = next_walk(vm);
+  mark_kept(vm, found, n, walk);
+  for (size_t k = a->count; k-- > 0;) {
+    agc_c_resource *res = a->items[k];
+    if (res->seen != walk && arena_holds(t, res)) close_resource(vm, res);
+  }
+  if (a->outer)
+    for (size_t k = 0; k < a->count; k++)
+      if (a->items[k]->seen == walk && arena_holds(t, a->items[k])) arena_add(a->outer, a->items[k]);
+  agc_sync_drop(vm);
+}
+
+/* The first step makes the arena the task's innermost and calls the block; the second ends it (arena_end) and ends
+   the call with what the block returned, an error Result from a `try` included. A runtime failure or a cancel in the
+   block never comes back here: it ends the task, whose end closes every resource it owns, newest first. The step
+   touches only the task's own state, and arena_end locks rt->sync itself. */
+static agc_step arena_step(agc_vm *vm, agc_stepper *self, agc_value last) {
+  arena_block *b = (arena_block *)self;
+  agc_task *t = vm->task;
+  if (!b->running) {
+    b->running = true;
+    b->arena.outer = t->arena;
+    t->arena = &b->arena;
+    return (agc_step){.kind = AGC_STEP_CALL0};
+  }
+  t->arena = b->arena.outer;
+  arena_end(vm, &b->arena, last);
+  return (agc_step){.kind = AGC_STEP_END, .value = last};
+}
+
+/* Native.arena do ... end: runs the block (the last argument) and closes what it opened and does not return. */
+static agc_value builtin_native_arena(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)args;
+  (void)span;
+  arena_block *b = agc_alloc(sizeof *b);
+  b->stepper.step = arena_step;
+  b->stepper.unlocked = true;
+  agc_task_stepper(vm, &b->stepper);
+  return agc_void();
 }
 
 /* Native.free(pointer): frees an owned buffer once, as Native.close frees a resource; a C.Pointer that C gave is not
@@ -3132,8 +3248,7 @@ static agc_value builtin_native_callback(agc_vm *vm, agc_value *args, uint32_t s
   res->pointer = cb->code;
   res->callback = cb;
   res->name = name;
-  res->state = agc_register(vm, res, release_resource);
-  agc_own(vm, res->state, close_owned);
+  own_resource(vm, res);
   agc_charge(vm, FFI_CALL_COST);
   return agc_c_resource_value(res);
 }
@@ -3206,6 +3321,7 @@ const agc_builtin agc_ffi_builtins[] = {
   {"Native.load", 1, builtin_native_load, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
   {"Native.function?", 2, builtin_native_function, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
   {"Native.callback", 2, builtin_native_callback, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"Native.arena", 1, builtin_native_arena, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
 };
 
 const size_t agc_ffi_builtin_count = sizeof agc_ffi_builtins / sizeof agc_ffi_builtins[0];

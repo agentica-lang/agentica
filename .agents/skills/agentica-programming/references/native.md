@@ -124,7 +124,7 @@ end
   (any task's), newest first, after waiting for running calls that hold one; the
   wait and the frees share the `--flush-timeout` limit (0 frees nothing), and
   what is slower is left with one stderr warning. Any task may pass a resource
-  or buffer to C (no owner check); only the owner's end frees it, and
+  or buffer to C (no owner check); only the owner's end (or arena) frees it, and
   `Native.close`/`free` by any task closes it for all. Two tasks inside C on one
   object race, as in C. A free that blocks (`mysql_close`) runs on the scheduler
   and stalls other tasks. A parent handed to another task may be freed before
@@ -138,6 +138,22 @@ end
     resource Stream, free: fclose
     def fopen(path: C.String, mode: C.String) -> Stream
     def fputs(text: C.String, stream: Stream) -> C.Int32
+  end
+  ~~~
+- `Native.arena do ... end` runs the block and gives its value; at its end it
+  closes, newest first, every resource and owned buffer the task opened in it,
+  except what the value holds (struct fields, enum payloads, `Result`, `List`
+  and `Map` items, not lambda captures), with what those come from (a kept
+  statement keeps its database). An inner arena gives what it keeps to the
+  outer one. A failed `try` in the block ends it as usual; a crash or cancel
+  ends the task, which closes what it owns. What `Task.spawn_owning` handed
+  over is the new task's; another task that got one by a channel or closure
+  gets `RUNTIME-NATIVE-CLOSED` after the arena ends.
+  ~~~ruby
+  kept = Native.arena do
+    log = fopen("/tmp/log", "w").unwrap!   # closed when the block ends
+    fputs("step\n", log)
+    fopen("/tmp/out", "w").unwrap!          # kept: the block's value
   end
   ~~~
 - `Native.closed?(x) -> Bool` asks before a call would stop the task with

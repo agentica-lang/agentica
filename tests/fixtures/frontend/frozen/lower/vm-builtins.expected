@@ -186,6 +186,7 @@ Map.values
 Math.sqrt
 Native.Mutex.synchronize
 Native.address
+Native.arena
 Native.callback
 Native.close
 Native.closed?

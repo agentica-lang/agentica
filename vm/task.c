@@ -1271,6 +1271,12 @@ static value_stack find_handles(agc_vm *vm, agc_value arg) {
   return handles;
 }
 
+agc_value *agc_handles_in(agc_vm *vm, agc_value v, size_t *count) {
+  value_stack found = find_handles(vm, v);
+  *count = found.count;
+  return found.items;
+}
+
 /* Task.spawn_owning(&f, value): the new task gets VALUE as its argument and owns every handle in it, all or none. The
    row is not shared: the walk over VALUE runs without rt->sync, which is taken only to claim the handles it found
    (claim changes no owner, so a handle the caller does not own fails here before any of them moves), hand them over

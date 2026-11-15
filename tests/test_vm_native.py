@@ -2772,6 +2772,154 @@ end
     assert notes_of(notes) == ["freed", ""]
 
 
+def run_notes(tmp_path, peer, main, *flags):
+    """Runs note_program(MAIN) with FLAGS; gives the result and the lines of the notes file."""
+    source, notes = note_program(tmp_path, peer, main)
+    return agentica(*flags, source, timeout=20), notes_of(notes)
+
+
+# Native.arena closes, when its block ends, what the task opened in it, newest first, except what the block's value
+# holds; an inner arena gives what it keeps to the outer one. A note that only a returned lambda holds is closed (the
+# walk does not enter functions), and a call with it is RUNTIME-NATIVE-CLOSED.
+@NATIVE_CALLS
+@pytest.mark.parametrize("schedulers", ["1", "4"])
+def test_an_arena_closes_what_its_block_opened_newest_first(tmp_path, peer, schedulers):
+    main = """struct Kept
+  note: Note
+  peek: Fn[Note]
+end
+
+def main() -> Void
+  before = peer_note_open("NOTES", "before").unwrap!
+  kept: Kept = Native.arena do
+    _a = peer_note_open("NOTES", "a").unwrap!
+    inner = Native.arena do
+      _b = peer_note_open("NOTES", "b").unwrap!
+      note = peer_note_open("NOTES", "kept").unwrap!
+      _c = peer_note_open("NOTES", "c").unwrap!
+      [note]
+    end
+    puts("inner ended")
+    hidden = peer_note_open("NOTES", "hidden").unwrap!
+    _d = peer_note_open("NOTES", "d").unwrap!
+    Kept(note: inner[0], peek: -> { hidden })
+  end
+  puts([Native.closed?(before), Native.closed?(kept.note), Native.closed?(kept.peek.call())])
+  Native.close(kept.note)
+  Native.close(before)
+  peer_note_hold(kept.peek.call(), 0)
+end
+"""
+    result, notes = run_notes(tmp_path, peer, main, "--json", "--schedulers", schedulers)
+    assert diagnostic(result, 1) == ("RUNTIME-NATIVE-CLOSED", (6, 3))
+    assert result.stdout == "inner ended\n[false, false, true]\n"
+    assert notes == ["c", "b", "d", "hidden", "a", "kept", "before", ""]
+
+
+# A `try` failure returns from the block, so the arena ends as usual; a runtime failure or a cancel ends the task,
+# whose end closes what it owns, newest first. Either way the notes of the block are freed before the await returns.
+@NATIVE_CALLS
+@pytest.mark.parametrize("schedulers", ["1", "4"])
+@pytest.mark.parametrize("ending, stop", [
+    ('n = try "x".to_i\n    ok(n)', ""),
+    ('ok("x".to_i.unwrap!)', ""),
+    ("Task.sleep(60_000)\n    ok(1)", "Task.cancel(task)"),
+])
+def test_an_arena_closes_on_a_try_failure_a_crash_and_a_cancel(tmp_path, peer, schedulers, ending, stop):
+    main = """def body(ready: Channel[Int]) -> Result[Int]
+  Native.arena do
+    _a = peer_note_open("NOTES", "a").unwrap!
+    _b = peer_note_open("NOTES", "b").unwrap!
+    ready.send(1, 10_000).unwrap!
+    %s
+  end
+end
+
+def main() -> Void
+  ready: Channel[Int] = Channel.new(1)
+  task = Task.spawn do body(ready) end
+  ready.recv(10_000).unwrap!
+  %s
+  puts(Task.await(task).ok?)
+  _late = peer_note_open("NOTES", "late").unwrap!
+end
+""" % (ending, stop)
+    result, notes = run_notes(tmp_path, peer, main, "--schedulers", schedulers)
+    assert (result.code, result.stdout) == (0, "false\n"), result.stderr
+    assert notes == ["b", "a", "late", ""]
+
+
+# A note that another task holds in a compute call is closed by the arena at once, and freed when the call returns, as
+# Native.close does; a note given away with Task.spawn_owning belongs to the new task, whose end frees it.
+@NATIVE_CALLS
+@pytest.mark.parametrize("schedulers", ["1", "4"])
+def test_an_arena_waits_for_a_compute_call_and_leaves_a_handed_note(tmp_path, peer, schedulers):
+    main = """def wait(note: Note, go: Channel[Int]) -> Int
+  go.recv(10_000).unwrap!
+  return peer_note_hold(note, 0)
+end
+
+# Starts a compute call on NOTE in another task and returns that task once the call runs.
+def held(note: Note) -> Task[Int]
+  task = Task.spawn do peer_note_hold(note, 300) end
+  for _ in 1..2000
+    break if peer_note_holding() > 0
+    Task.sleep(1)
+  end
+  task
+end
+
+def main() -> Void
+  holder = Native.arena do held(peer_note_open("NOTES", "shared").unwrap!) end
+  puts(Task.await(holder))
+  go: Channel[Int] = Channel.new(1)
+  child = Native.arena do
+    _closed = peer_note_open("NOTES", "closed").unwrap!
+    handed = peer_note_open("NOTES", "handed").unwrap!
+    Task.spawn_owning(->(note: Note) { wait(note, go) }, handed)
+  end
+  go.send(1, 10_000).unwrap!
+  puts(Task.await(child))
+  _late = peer_note_open("NOTES", "late").unwrap!
+end
+"""
+    result, notes = run_notes(tmp_path, peer, main, "--schedulers", schedulers)
+    assert (result.code, result.stdout, result.stderr) == (0, "300\n0\n", "")
+    assert notes == ["returned", "shared", "closed", "returned", "handed", "late", ""]
+
+
+# What a kept resource comes from is kept with it (a statement keeps its database), and a kept view keeps its buffer.
+# A block that opens and closes many resources keeps a short list, and what it left open, a compute call's result
+# included, still closes at the end.
+@NATIVE_CALLS
+def test_an_arena_keeps_what_a_kept_resource_comes_from(tmp_path, peer):
+    main = """def main() -> Void
+  child = Native.arena do
+    res = peer_res_open(7).unwrap!
+    _other = peer_res_open(8).unwrap!
+    peer_child_open(res).unwrap!
+  end
+  puts([peer_res_frees(), peer_child_frees(), peer_child_value(child)])
+  view = Native.arena do
+    buf = Native.memory_pointer(8)
+    Native.offset(buf, 4)
+  end
+  puts(Native.closed?(view))
+  frees = Native.arena do
+    _open = peer_res_open(1).unwrap!
+    _pooled = child_open_pool(peer_res_open(0).unwrap!).unwrap!
+    for n in 1..100
+      Native.close(peer_child_open(peer_res_open(n).unwrap!).unwrap!)
+    end
+    peer_child_frees()
+  end
+  puts([frees, peer_res_frees(), peer_child_frees()])
+end
+"""
+    result = agentica(program(tmp_path, CHILD_EXTERN.format(library=literal(peer)) + main), timeout=20)
+    assert (result.code, result.stdout, result.stderr) == (0, "[1, 0, 7]\nfalse\n[100, 103, 101]\n", "")
+
+
 # A free that hangs holds the exit no longer than the flush limit: the run ends with its own code and one warning line,
 # and the frees made before it (newest first) have run.
 @NATIVE_CALLS

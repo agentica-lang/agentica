@@ -614,6 +614,8 @@ struct agc_task {
   struct agc_mutex *mutex_wait, *mutexes;
   /* The inbox of the actor this task runs (ActorInbox.set, std/actor), a Channel; void in any other task. */
   agc_value inbox;
+  /* The innermost Native.arena block that this task runs, or NULL (vm/ffi.c); only the task's own turns touch it. */
+  struct agc_arena *arena;
 };
 
 /* Where agc_fail and agc_exit jump while compiled code calls a builtin (agc_jit_call_builtin, vm/jit/jit.c) in a run
@@ -946,6 +948,9 @@ agc_task *agc_task_spawn_seeded(agc_vm *vm, agc_task *parent, agc_value fn, cons
                                 uint32_t span);
 agc_task *agc_task_spawn_owning(agc_vm *vm, agc_task *parent, agc_value fn, agc_value handle, uint32_t span);
 bool agc_task_owns(agc_vm *vm, agc_value handle);
+/* The handle values inside V (*COUNT of them, each once), walked as Task.spawn_owning walks its argument; NULL when
+   there is none. */
+agc_value *agc_handles_in(agc_vm *vm, agc_value v, size_t *count);
 void agc_task_close_done(agc_vm *vm, agc_task *t);
 agc_task *agc_task_group(agc_vm *vm);
 agc_task *agc_task_service(agc_vm *vm, agc_value fn, agc_value handle, agc_value arg, uint32_t span);

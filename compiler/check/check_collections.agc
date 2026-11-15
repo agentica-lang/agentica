@@ -41,6 +41,7 @@ def check_collection_rule(cx: State.Cx, st: State.St, site: State.Site, rule: Mo
       check_block_value(cx, st, site, first, [T.Type.Opaque("C.Pointer")])
     Model.Rule.NativeStruct -> check_native_struct(cx, st, site)
     Model.Rule.NativeSynchronize -> check_block_value(cx, st, site, T.Type.Opaque("Native.Mutex"), [])
+    Model.Rule.NativeArena -> check_block(cx, st, site, site.args[0], [])
     Model.Rule.NativeCallback -> check_native_callback(cx, st, site)
     _ -> check_map_rule(cx, st, site, rule)
   end
@@ -645,15 +646,26 @@ def check_block_value(
   params: List[T.Type],
 ) -> Result[State.Out]
   leading = try State.expr(cx, st, site.args[0], first)
+  check_block(cx, leading.st, site, site.args[1], params)
+end
+
+# The block (or function) CALLBACK of a builtin whose value is the block's: Native.arena alone, or after a leading
+# argument (check_block_value).
+def check_block(
+  cx: State.Cx,
+  st: State.St,
+  site: State.Site,
+  callback: Ast.Expr,
+  params: List[T.Type],
+) -> Result[State.Out]
   wanted = site.expected
-  callback = site.args[1]
   case callback
     Ast.Expr.BlockLit(block) ->
       known = some(params)
-      checked = try Stmt.check_block_body(cx, leading.st, block, known, wanted, none)
+      checked = try Stmt.check_block_body(cx, st, block, known, wanted, none)
       ok(State.Out(st: checked.st, type: T.result(checked.type)))
     _ ->
-      checked = try State.expr(cx, leading.st, callback, T.Type.Unknown)
+      checked = try State.expr(cx, st, callback, T.Type.Unknown)
       if !T.is?(checked.type, "Fn") or !T.same_all?(T.params(checked.type), params)
         return error(
           State.fail(

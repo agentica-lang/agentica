@@ -194,7 +194,7 @@ end
 # typed reads and writes take any C.Pointer with an Int offset, giving Int, Float, C.Pointer or a list of Int or Float.
 # The block form yields a C.Pointer and has the type of the block's value (a Result from a `try` in it included); the
 # block or function must take one C.Pointer. Native.from_string takes a String in place of the size, and
-# text.bytesize is an Int.
+# text.bytesize is an Int. Native.arena has the type of its block's value, and its block or function takes nothing.
 @table("body, code, start, stop", [
     ("  buf = Native.memory_pointer(16)\n  fill(buf, 4)\n  xs: List[Float] = Native.get_array_of_float32(buf, 0, 4)\n"
      "  n: Int = Native.get_uint8(buf, 0) + Native.get_int64(buf, 8)\n  p: C.Pointer = Native.get_pointer(buf, 8)\n"
@@ -220,6 +220,13 @@ end
     ("  n = Native.from_string(3) do |buf| 1 end", "CHECK-TYPE-MISMATCH", (10, 26), (10, 27)),
     ('  n = Native.memory_pointer("x") do |buf| 1 end', "CHECK-TYPE-MISMATCH", (10, 29), (10, 32)),
     ('  s: String = "ab".bytesize', "CHECK-TYPE-MISMATCH", (10, 15), (10, 28)),
+    ('  total: Float = Native.arena do\n    buf = Native.memory_pointer(4)\n    fill(buf, 1)\n    1.5\n  end\n'
+     '  r: Result[Int] = Native.arena do\n    n = try "3".to_i\n    ok(n)\n  end\n  Native.arena(&main)\n'
+     '  puts(total)\n  puts(r.ok?)', None, None, None),
+    ("  s: String = Native.arena do 1 end", "CHECK-TYPE-MISMATCH", (10, 31), (10, 32)),
+    ("  n = Native.arena do |buf: Int| buf end", "CHECK-ARITY", (10, 20), (10, 41)),
+    ("  Native.arena(&fill_two)", "CHECK-TYPE-MISMATCH", (10, 16), (10, 25)),
+    ("  Native.arena(1)", "CHECK-TYPE-MISMATCH", (10, 16), (10, 17)),
 ], MEMORY)
 def test_owned_buffers_and_typed_memory_check_as_c_pointers(checked, body, code, start, stop):
     assert_checks(checked(MEMORY % body), code, start, stop)
