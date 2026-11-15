@@ -8,6 +8,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- A project's `agentica.toml` is parsed once per start, not twice, so a program below a manifest starts a little faster (#1471).
+
 ## [0.32.0] - 2026-11-15
 
 ### Added
@@ -24,15 +28,6 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
-- A project's `agentica.toml` is parsed once per start, not twice, so a program below a manifest starts a little faster (#1471).
-- `std/http`: a chunked stream sends the pieces that wait in its channel together as one chunk, in one write; a fast producer streams several times faster.
-- `HTTP.upload` with a chunked body does the same: an upload of many small pieces is several times faster.
-- **Breaking:** `agentica test` runs the scenarios of each `--jobs` slot in one worker process while they pass, so a suite of small scenarios runs about 5 times faster; state that the step program makes in `main` before `BDD.run` (an `ATS` table, a `Channel`) and process state that a step sets (`Logger.set_level`) are now shared by the scenarios one worker runs, and `--isolate` gives each scenario its own process as before (#1465).
-- Loops that call builtins such as `Map.get` or `String.slice` are up to 17% faster on Linux and macOS (#1599).
-- Loops that read lists by index (`xs[i]`, `xs.size`) are up to 11% faster (#1123).
-- Loops of Int arithmetic and compares are up to 15% faster on x86-64: compiled code checks a value's type once per block and keeps the last result in a machine register (#1123).
-- `std/cache`: dropping a generation and `Cache.clear` take the same short time whatever the size; a put that dropped 32,000 entries waited about 200 ms (#1108).
-- `ATS` tables are hash tables now: a single task writes about 5 times faster, tasks that write one table about 8 times faster, and `get` is O(1). `keys` and `to_map` copy the table, O(n), where they took a snapshot in O(1) (#1442).
 - **Breaking:** `agentica test` runs the scenarios of each `--jobs` slot in one worker process, about 5 times faster; state made before `BDD.run` or set by a step is now shared by the scenarios of a worker, and `--isolate` gives each scenario its own process (#1465).
 - `std/http`: a chunked stream and a chunked `HTTP.upload` send the pieces that wait together as one chunk, several times faster.
 - Loops that call builtins such as `Map.get` are up to 17% faster on Linux and macOS (#1599).
