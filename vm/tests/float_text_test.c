@@ -69,8 +69,10 @@ static const char min_subnormal[] =
     "627381672509558373897335989936648099411642057026370902792427675445652290"
     "8753868250641971826553344726562500000000000000000e-324";
 
+#ifndef _WIN32
 /* The formatter before Ryu: the exact digits from "%.767e", then the first length from 1 to 17 whose nearest candidate
-   (ties up) or other neighbour reads back as x. */
+   (ties up) or other neighbour reads back as x. Not on Windows, whose strtod misreads some candidates
+   (3.839223843572815e-239), so that the old formatter printed 17 digits there. */
 static size_t reference_text(double x, char *out) {
   if (isnan(x)) return (size_t)sprintf(out, "+nan.0");
   if (isinf(x)) return (size_t)sprintf(out, x > 0 ? "+inf.0" : "-inf.0");
@@ -146,6 +148,20 @@ static void check_reference(uint64_t bits) {
   assert(strcmp(got, want) == 0);
 }
 
+static void compare_with_reference(void) {
+  for (size_t i = 0; i < sizeof cases / sizeof cases[0]; i++) check_reference(cases[i].bits);
+  uint64_t mantissa = (UINT64_C(1) << 52) - 1;
+  for (uint64_t e = 0; e < 0x7FF; e++)
+    for (uint64_t m = 0; m < 4; m++) {
+      check_reference(e << 52 | m);
+      check_reference(e << 52 | (mantissa - m));
+      check_reference(e << 52 | (random_bits() & mantissa));
+      check_reference(e << 52 | (random_bits() & mantissa & ~((UINT64_C(1) << (random_bits() % 53)) - 1)));
+    }
+  for (int i = 0; i < 20000; i++) check_reference(random_bits());
+}
+#endif
+
 int main(void) {
   double tiny;
   uint64_t tiny_bits = 1;
@@ -162,16 +178,9 @@ int main(void) {
     if (strcmp(text, cases[i].text) != 0) fprintf(stderr, "%s: got %s\n", cases[i].text, text);
     assert(strcmp(text, cases[i].text) == 0);
   }
-  for (size_t i = 0; i < sizeof cases / sizeof cases[0]; i++) check_reference(cases[i].bits);
-  uint64_t mantissa = (UINT64_C(1) << 52) - 1;
-  for (uint64_t e = 0; e < 0x7FF; e++)
-    for (uint64_t m = 0; m < 4; m++) {
-      check_reference(e << 52 | m);
-      check_reference(e << 52 | (mantissa - m));
-      check_reference(e << 52 | (random_bits() & mantissa));
-      check_reference(e << 52 | (random_bits() & mantissa & ~((UINT64_C(1) << (random_bits() % 53)) - 1)));
-    }
-  for (int i = 0; i < 20000; i++) check_reference(random_bits());
+#ifndef _WIN32
+  compare_with_reference();
+#endif
   puts("float text tests passed");
   return 0;
 }
