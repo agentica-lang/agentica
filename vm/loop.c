@@ -931,6 +931,8 @@ static agc_loop *new_loop(agc_vm *vm) {
   loop->shared = false;
   loop->hand_off = false;
   loop->compute = loop->direct = NULL;
+  loop->spin_set = loop->spin_off = false;
+  loop->spin_missed = 0;
   loop->waits = NULL;
   atomic_init(&loop->closed, false);
   loop->owner = uv_thread_self();
