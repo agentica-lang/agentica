@@ -28,6 +28,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- `std/cache`: a task cancelled while it took over a stalled drop no longer stops the cache from dropping entries for good; another task takes over within four seconds (#1616).
 - `JSON.decode`, `JSON.schema` and `.codec` take a struct or enum whose field or payload type is a type alias, which stopped with `LOWER-UNSUPPORTED` (#1623).
 - `none` in the block of `Range.map`, `Lazy.map`, `flat_map` and a nested `map` takes the expected Optional type (#1595).
 
