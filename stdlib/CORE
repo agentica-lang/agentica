@@ -96,6 +96,7 @@ diagnostics/diagnostic.agc
 diagnostics/diagnostic_json.agc
 diagnostics/diagnostic_model.agc
 diagnostics/diagnostic_read.agc
+diagnostics/packed.agc
 diagnostics/problem.agc
 docs/doc.agc
 docs/doc_json.agc
@@ -106,6 +107,7 @@ io/host.agc
 io/source_reader.agc
 modules/check_cache.agc
 modules/declarations.agc
+modules/import_file.agc
 modules/import_help.agc
 modules/import_path.agc
 modules/import_use.agc

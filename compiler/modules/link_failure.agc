@@ -3,7 +3,7 @@
 ## diagnostic.
 
 import Diag from "../diagnostics/diagnostic"
-import Base from "../syntax/parse_base"
+import Packed from "../diagnostics/packed"
 import Source from "../syntax/source"
 
 ## Where a failure points: the file (a canonical path, or std/... for a standard module) and a span in it.
@@ -22,14 +22,14 @@ end
 
 ## The failure for a place in a file.
 def fail_at(site: Site, code: String, message: String, help: Diag.Help) -> String
-  in_file(site.file, Base.bail_span(code, message, site.span, help))
+  in_file(site.file, Packed.pack(code, message, site.span, help))
 end
 
 ## The failure for the key at key_path in file (agentica.toml or agentica.lock). The span is the start of the file, so
 ## a consumer that reads one still gets a place; key_path is the real one.
 def fail_key(file: String, key_path: String, code: String, message: String, help: Diag.Help) -> String
   start = Source.Position(offset: 0, line: 1, column: 1)
-  packed = Base.bail_span(code, message, Source.Span(start: start, stop: start), help)
+  packed = Packed.pack(code, message, Source.Span(start: start, stop: start), help)
   "#{file.length}\n#{file}#{key_path.length}\n#{key_path}#{packed}"
 end
 
@@ -38,12 +38,12 @@ end
 ## so they print the file name and no position.
 def fail_file(file: String, code: String, message: String, help: Diag.Help) -> String
   origin = Source.Position(offset: 0, line: 0, column: 0)
-  in_file(file, Base.bail_span(code, message, Source.Span(start: origin, stop: origin), help))
+  in_file(file, Packed.pack(code, message, Source.Span(start: origin, stop: origin), help))
 end
 
 ## The failure for a diagnostic of the lexer or the parser, which have no file.
 def from_stage(file: String, problem: Diag.Diagnostic) -> String
-  in_file(file, Base.bail_span(problem.code, problem.message, problem.span, problem.help))
+  in_file(file, Packed.pack(problem.code, problem.message, problem.span, problem.help))
 end
 
 ## A help text.
@@ -60,7 +60,7 @@ def add_help(text: String, more: String) -> String
     Diag.Help.NoHelp -> line = more
   end
 
-  packed = Base.bail_span(shown.code, shown.message, shown.span, hint(line))
+  packed = Packed.pack(shown.code, shown.message, shown.span, hint(line))
   "#{failure.file.length}\n#{failure.file}#{failure.key_path.length}\n#{failure.key_path}#{packed}"
 end
 
@@ -69,7 +69,7 @@ def unpack_failure(text: String) -> Failure
   file = take_field(text, 0)
   key_path = take_field(text, file.next)
   rest = text.slice(key_path.next, text.length - key_path.next)
-  Failure(file: file.value, key_path: key_path.value, diagnostic: Base.unpack(rest))
+  Failure(file: file.value, key_path: key_path.value, diagnostic: Packed.unpack(rest))
 end
 
 private

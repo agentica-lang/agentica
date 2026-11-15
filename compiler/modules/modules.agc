@@ -25,6 +25,7 @@ import SourceFile from "../syntax/source_file"
 import T from "../syntax/types"
 import CheckCache from "check_cache"
 import Declarations from "declarations"
+import ImportFile from "import_file"
 import ImportHelp from "import_help"
 import Paths from "import_path"
 import Env from "link_env"
@@ -776,7 +777,7 @@ def read_import(settings: Env.Settings, walk: Walk, frame: Frame, decl: Ast.Impo
     return error(Failure.fail_at(site, "CHECK-REDEFINED-NAME", "duplicate or reserved import alias", help))
   end
 
-  file = try Paths.module_file(decl, site)
+  file = try ImportFile.module_file(decl, site)
   importer = Resolve.Importer(key: module.key, origin: module.origin)
   found = try Resolve.resolve_import(settings, walk.build, importer, file, site)
   target = found.key
