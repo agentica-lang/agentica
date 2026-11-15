@@ -1395,6 +1395,106 @@ def test_client_writes_and_reads_latin1_header_values_as_single_bytes(tmp_path):
     assert b"\r\nX-Name: caf\xe9\r\n" in seen[0], seen
 
 
+# A VM client and a VM server at the head limits, which the writer and the parser count the same way: a header block is
+# every header line with its CRLF and the empty line, at most 65536 bytes (AGC_HTTP_MAX_BLOCK), and holds at most 100
+# headers. The lines each side adds itself count: Host for the client; Date (37 bytes) and Content-Length: 0 (19) for
+# the server.
+HEAD_LIMITS_PROGRAM = """\
+import HTTP from "std/http"
+
+def filled(bytes: Int) -> List[HTTP.Header]
+  headers: List[HTTP.Header] = []
+  rest = bytes
+  while rest > 0
+    line = rest
+    if rest > 8203
+      line = 8194
+    elsif rest > 8194
+      line = rest - 9
+    end
+
+    headers = headers.push(HTTP.Header(name: "X-F#{headers.length}", value: "v" * (line - 8)))
+    rest = rest - line
+  end
+
+  return headers
+end
+
+def counted(count: Int) -> List[HTTP.Header]
+  return (0...count).map do |k| HTTP.Header(name: "X-#{k}", value: "v") end
+end
+
+def block(headers: List[HTTP.Header]) -> Int
+  return headers.reduce(2) do |sum, h| sum + h.name.length + h.value.length + 4 end
+end
+
+def handle(request: HTTP.Request) -> Result[HTTP.Response]
+  words = request.path.split("/")
+  wanted = words[2].to_i!
+  headers = [HTTP.Header(name: "X-Seen", value: "#{block(request.headers)}")]
+  if words[1] == "number"
+    headers = [HTTP.Header(name: "X-Seen", value: "#{request.headers.length}")]
+  elsif words[1] == "block"
+    headers = filled(wanted - 58)
+  elsif words[1] == "count"
+    headers = counted(wanted - 2)
+  end
+
+  return ok(HTTP.Response(status: 200, headers: headers, body: "".bytes))
+end
+
+def show(name: String, reply: Result[HTTP.Response]) -> Void
+  case reply
+    ok(r) ->
+      seen = r.headers.detect do |h| h.name == "x-seen" end
+      if seen.ok?
+        puts("#{name} #{r.status} sent #{seen.unwrap!.value}")
+      else
+        puts("#{name} #{r.status} got #{block(r.headers)} #{r.headers.length}")
+      end
+    error(e) -> puts("#{name} #{e.kind} #{e.code}")
+  end
+end
+
+def main() -> Void
+  options = HTTP.ServerOptions(request_timeout_ms: 10000, idle_timeout_ms: 10000, max_connections: 2, max_body_bytes: 1024)
+  server = HTTP.serve("127.0.0.1", 0, HTTP.app(&handle), options).unwrap!
+  base = "http://127.0.0.1:#{HTTP.local_port(server)}"
+  client = HTTP.client(HTTP.ClientOptions(timeout_ms: 10000, idle_timeout_ms: 10000, max_connections: 1, max_body_bytes: 1024, tls: none)).unwrap!
+  host = "Host: 127.0.0.1:#{HTTP.local_port(server)}".length + 2
+  for size in [65536, 65537]
+    show("request block #{size}", HTTP.request(client, "GET", base + "/sent/0", "".bytes, headers: filled(size - host - 2)))
+    show("response block #{size}", HTTP.get(client, base + "/block/#{size}"))
+  end
+
+  for count in [100, 101]
+    show("request count #{count}", HTTP.request(client, "GET", base + "/number/0", "".bytes, headers: counted(count - 1)))
+    show("response count #{count}", HTTP.get(client, base + "/count/#{count}"))
+  end
+
+  HTTP.close_server(server)
+  IO.inspect(HTTP.wait(server))
+end
+"""
+
+
+def test_a_head_at_a_limit_is_read_back_and_one_past_it_is_refused_by_its_writer(tmp_path):
+    result = run_vm(compile_text(HEAD_LIMITS_PROGRAM, "head-limits", tmp_path), env=vm_environment())
+    assert result.code == 0, result.stderr
+    # A response the server cannot write is its 500, with Date, Content-Length and Connection: close (77 bytes).
+    assert output_lines(result.stdout) == [
+        "request block 65536 200 sent 65536",
+        "response block 65536 200 got 65536 10",
+        "request block 65537 http.too_large some(431)",
+        "response block 65537 500 got 77 3",
+        "request count 100 200 sent 100",
+        "response count 100 200 got 930 100",
+        "request count 101 http.too_large some(431)",
+        "response count 101 500 got 77 3",
+        "ok()",
+    ]
+
+
 def test_upload_server_hands_the_body_to_the_handler_piece_by_piece_and_keeps_the_connection(tmp_path, adopt):
     """serve: a body of either framing arrives on a channel (3 MiB through a handler that waits before it reads,
     so the socket backs up), the connection stays for the next request, also when it arrived in the same write as the

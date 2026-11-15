@@ -14,6 +14,13 @@ typedef struct {
   size_t len, cap;
 } agc_http_bytes;
 
+/* The header block being written: where it starts in the buffer, the bytes the buffer holds beyond the wire, the
+   header lines so far, and whether a refusal was one of the head limits. */
+typedef struct {
+  size_t start, extra, count;
+  bool too_large;
+} agc_http_block;
+
 typedef struct {
   size_t count;
   size_t *sizes;
@@ -23,8 +30,9 @@ typedef struct {
 void agc_http_put(agc_http_bytes *b, const void *data, size_t n);
 void agc_http_put_text(agc_http_bytes *b, const char *text);
 const char *agc_http_put_headers(agc_vm *vm, agc_http_bytes *b, const agc_list *headers, const char *const *managed,
-                                 size_t managed_count, const char *managed_reason, const char *skip, size_t *count,
-                                 bool *too_large);
+                                 size_t managed_count, const char *managed_reason, const char *skip,
+                                 agc_http_block *block);
+const char *agc_http_put_head_end(agc_http_bytes *b, agc_http_block *block);
 void agc_http_fields_keep(agc_http_fields *f, const agc_http_head *head);
 void agc_http_fields_free(agc_http_fields *f);
 size_t agc_http_fields_bytes(const agc_http_fields *f);

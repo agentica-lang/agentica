@@ -173,7 +173,7 @@ vm-libfuzz-http:
 	$(MAKE) $(LIBFUZZ_DIR)/agentica-http-libfuzz LIBFUZZ=1
 
 LIBFUZZ_HTTP_DIR := $(LIBFUZZ_DIR)/http
-LIBFUZZ_HTTP_MAX_LEN ?= 70000
+LIBFUZZ_HTTP_MAX_LEN ?= 80000
 vm-libfuzz-http-run: vm-libfuzz-http
 	@mkdir -p $(LIBFUZZ_HTTP_DIR)/corpus $(LIBFUZZ_HTTP_DIR)/crashes $(LIBFUZZ_HTTP_DIR)/tmp
 	touch $(LIBFUZZ_HTTP_DIR)/tmp/started; status=0; \
