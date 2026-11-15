@@ -253,27 +253,69 @@ static bool cased_after(const uint8_t *s, size_t len, size_t at) {
   return false;
 }
 
+/* The end of the run of ASCII bytes that starts at AT. The inner loops of this file that have a fixed count (32) are
+   there so the compiler vectorizes them at -O2: GCC's cheap cost model skips a loop whose count it does not know. */
+static size_t ascii_end(const uint8_t *s, size_t at, size_t len) {
+  for (; len - at >= 32; at += 32) {
+    uint8_t any = 0;
+    for (size_t k = 0; k < 32; k++) any |= s[at + k];
+    if (any & 0x80) break;
+  }
+  while (at < len && s[at] < 0x80) at++;
+  return at;
+}
+
+static uint8_t ascii_case(uint8_t c, uint8_t first) { return c ^ (uint8_t)(((uint8_t)(c - first) < 26) << 5); }
+
+static void ascii_change_case(const uint8_t *restrict in, uint8_t *restrict out, size_t n, bool up) {
+  uint8_t first = up ? 'a' : 'A';
+  size_t i = 0;
+  for (; n - i >= 32; i += 32)
+    for (size_t k = 0; k < 32; k++) out[i + k] = ascii_case(in[i + k], first);
+  for (; i < n; i++) out[i] = ascii_case(in[i], first);
+}
+
+/* ASCII maps to one ASCII byte, so a run of it keeps its size and is mapped in bulk; only the other characters are
+   decoded. A final sigma depends on the characters around it, so a downcase with a capital sigma decodes them all. */
 agc_string *agc_change_case(const agc_string *s, bool up) {
   const uint8_t *data = (const uint8_t *)s->data;
-  size_t bytes = 0, chars = 0;
+  if (s->bytes == s->chars) {
+    agc_string *result = agc_new_string(s->bytes, s->chars);
+    ascii_change_case(data, (uint8_t *)result->data, s->bytes, up);
+    return result;
+  }
+  size_t bytes = s->bytes, chars = s->chars;
   bool sigma = false;
   uint32_t out[3];
   char buf[4];
   for (size_t at = 0; at < s->bytes;) {
+    if (data[at] < 0x80) {
+      at = ascii_end(data, at, s->bytes);
+      continue;
+    }
+    size_t start = at;
     uint32_t cp = agc_utf8_next(data, s->bytes, &at);
     sigma = sigma || cp == SIGMA;
     size_t n = mapped(up, cp, out);
-    chars = agc_size_add(chars, n);
+    chars = agc_size_add(chars - 1, n);
+    bytes -= at - start;
     for (size_t k = 0; k < n; k++) bytes = agc_size_add(bytes, agc_utf8_encode(out[k], buf));
   }
   agc_string *result = agc_new_string(bytes, chars);
-  bool before = false;
+  bool final_sigma = !up && sigma, before = false;
   size_t w = 0;
   for (size_t at = 0; at < s->bytes;) {
+    if (!final_sigma && data[at] < 0x80) {
+      size_t end = ascii_end(data, at, s->bytes);
+      ascii_change_case(data + at, (uint8_t *)result->data + w, end - at, up);
+      w += end - at;
+      at = end;
+      continue;
+    }
     uint32_t cp = agc_utf8_next(data, s->bytes, &at);
     size_t n = mapped(up, cp, out);
-    if (!up && cp == SIGMA && before && !cased_after(data, s->bytes, at)) out[0] = FINAL_SIGMA;
-    if (!up && sigma) before = cased(cp) || (before && case_ignorable(cp));
+    if (final_sigma && cp == SIGMA && before && !cased_after(data, s->bytes, at)) out[0] = FINAL_SIGMA;
+    if (final_sigma) before = cased(cp) || (before && case_ignorable(cp));
     for (size_t k = 0; k < n; k++) {
       size_t len = agc_utf8_encode(out[k], buf);
       memcpy(result->data + w, buf, len);
@@ -578,14 +620,37 @@ static agc_value builtin_at(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_string_value(agc_small_string(vm, s->data + from, at - from, 1));
 }
 
+static uint64_t swap_bytes(uint64_t x) {
+  x = ((x & UINT64_C(0x00FF00FF00FF00FF)) << 8) | ((x >> 8) & UINT64_C(0x00FF00FF00FF00FF));
+  x = ((x & UINT64_C(0x0000FFFF0000FFFF)) << 16) | ((x >> 16) & UINT64_C(0x0000FFFF0000FFFF));
+  return (x << 32) | (x >> 32);
+}
+
+static void reverse_bytes(const uint8_t *restrict in, uint8_t *restrict out, size_t n) {
+  size_t i = 0;
+  for (; n - i >= sizeof(uint64_t); i += sizeof(uint64_t)) {
+    uint64_t word;
+    memcpy(&word, in + i, sizeof word);
+    word = swap_bytes(word);
+    memcpy(out + n - i - sizeof word, &word, sizeof word);
+  }
+  for (; i < n; i++) out[n - 1 - i] = in[i];
+}
+
 static agc_value builtin_reverse(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   const agc_string *s = agc_as_string(vm, args[0]);
   if (s->chars <= 1) return args[0];
   agc_string *result = agc_new_string(s->bytes, s->chars);
+  const uint8_t *data = (const uint8_t *)s->data;
   for (size_t at = 0; at < s->bytes;) {
     size_t start = at;
-    agc_utf8_next((const uint8_t *)s->data, s->bytes, &at);
+    if (data[at] < 0x80) {
+      at = ascii_end(data, at, s->bytes);
+      reverse_bytes(data + start, (uint8_t *)result->data + (s->bytes - at), at - start);
+      continue;
+    }
+    agc_utf8_next(data, s->bytes, &at);
     memcpy(result->data + (s->bytes - at), s->data + start, at - start);
   }
   return agc_string_value(result);

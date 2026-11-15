@@ -8,6 +8,7 @@ import json
 import math
 import random
 import re
+import string
 import struct
 from decimal import Decimal
 from fractions import Fraction
@@ -80,6 +81,8 @@ def split_reply(data: Bytes, separator: Bytes) -> String
   "ok #{hex(listing.bytes)}"
 end
 
+def text_reply_with_length(s: String) -> String = "ok #{hex("#{s} #{s.length}".bytes)}"
+
 def run(op: String, data: Bytes) -> String
   case op
     "json" -> value_reply(JSON.parse(text(data)))
@@ -99,6 +102,9 @@ def run(op: String, data: Bytes) -> String
     "float_back" -> float_back(Float.from_bits(text(data).to_i!))
     "to_f" -> "ok #{hex(text(data).to_f!.to_bits.to_s.bytes)}"
     "unhex" -> bytes_reply(OpenSSL.Digest.hexdecode(text(data)))
+    "upcase" -> text_reply_with_length(text(data).upcase)
+    "downcase" -> text_reply_with_length(text(data).downcase)
+    "reverse" -> text_reply_with_length(text(data).reverse)
     _ ->
       parts = op.split(":")
       if parts[0] == "decode"
@@ -106,6 +112,9 @@ def run(op: String, data: Bytes) -> String
       end
       if parts[0] == "split"
         return split_reply(data, payload(parts[1]))
+      end
+      if parts[0] == "index"
+        return "ok #{hex(text(data).index_of(text(payload(parts[1]))).unwrap_or(-1).to_s.bytes)}"
       end
 
       bytes_reply(text(data).encode(parts[1]))
@@ -396,6 +405,41 @@ def test_split_agrees_with_python(codec, case):
     want = text.split(separator) if separator else list(text)
     assert json.loads(pieces) == want, case
     assert json.loads(lengths) == [len(piece) for piece in want], case
+
+
+ASCII_RUN_LENGTHS = [0, 1, 7, 8, 9, 15, 16, 17, 31, 32, 33, 63, 64, 65]
+ASCII_CHARS = string.ascii_letters + string.digits + " .:'^`_-@[{\t\n"
+# Two sets of characters, because of issue #1704: the VM does not count ß, ﬁ or ŉ as cased letters, so a capital
+# sigma next to them downcases unlike Python. The first set has characters that change length (ß to SS, İ to i̇), the
+# second a capital sigma.
+NON_ASCII = (["é", "É", "ß", "ﬁ", "ŉ", "İ", "ǅ", "Ω", "σ", "ς", "日", "😀"], ["é", "É", "Σ", "σ", "ς", "İ", "Ω", "日", "😀"])
+
+
+@st.composite
+def scan_texts(draw):
+    """ASCII runs of lengths around 8, 16 and 32 bytes between characters of two to four bytes, some with special
+    casing (one character to several, a final sigma, title case)."""
+    runs = st.sampled_from(ASCII_RUN_LENGTHS).flatmap(
+        lambda n: st.text(st.sampled_from(ASCII_CHARS), min_size=n, max_size=n))
+    others = st.sampled_from(NON_ASCII[draw(st.integers(0, 1))])
+    return "".join(draw(st.lists(runs | others, max_size=10)))
+
+
+@timeout(300)
+@given(scan_texts(), st.sampled_from(["a", " ", "é", "Σ", "日本", "😀", "a:"]))
+@example("", "a")
+@example("a", "a")
+@example("x" * 32 + "é" + "Y" * 40, "Y")
+@example("ΟΔΥΣΣΕΥΣ " + "Ab" * 20 + "Σ.", "Σ")
+@example("İ" + "I" * 33, "I")
+def test_case_reverse_and_index_agree_with_python(codec, text, part):
+    """String#upcase, #downcase and #reverse give Python's str.upper, str.lower and reversed text with Python's length,
+    and String#index_of gives str.find (-1 for none) in code points."""
+    for op, want in (("upcase", text.upper()), ("downcase", text.lower()), ("reverse", text[::-1])):
+        got = codec.ask(op, text.encode("utf-8"))
+        assert got == ("%s %d" % (want, len(want))).encode("utf-8"), (op, text, got)
+    got = codec.ask("index:" + part.encode("utf-8").hex(), text.encode("utf-8"))
+    assert got == str(text.find(part)).encode(), (text, part, got)
 
 
 BASE64_TEXTS = st.one_of(

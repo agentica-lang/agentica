@@ -1185,23 +1185,21 @@ size_t agc_utf8_bad_at(const uint8_t *s, size_t len) {
   return at;
 }
 
-/* The characters of valid UTF-8: every byte but the continuation bytes (10xxxxxx). A word of eight ASCII bytes is
- * eight characters. */
+/* The characters of valid UTF-8: every byte but the continuation bytes (10xxxxxx). The inner loops have a fixed count,
+ * so the compiler vectorizes them at -O2 (GCC's cheap cost model skips a loop whose count it does not know). */
 size_t agc_utf8_count(const uint8_t *s, size_t len) {
   size_t count = 0, i = 0;
-  while (i < len) {
-    uint64_t word;
-    if (len - i >= sizeof word) {
-      memcpy(&word, s + i, sizeof word);
-      if (!(word & UINT64_C(0x8080808080808080))) {
-        i += sizeof word;
-        count += sizeof word;
-        continue;
-      }
-    }
-    count += (s[i] & 0xC0) != 0x80;
-    i++;
+  for (; len - i >= 32; i += 32) {
+    uint8_t block = 0;
+    for (size_t k = 0; k < 32; k++) block += (s[i + k] & 0xC0) != 0x80;
+    count += block;
   }
+  for (; len - i >= 8; i += 8) {
+    uint8_t block = 0;
+    for (size_t k = 0; k < 8; k++) block += (s[i + k] & 0xC0) != 0x80;
+    count += block;
+  }
+  for (; i < len; i++) count += (s[i] & 0xC0) != 0x80;
   return count;
 }
 

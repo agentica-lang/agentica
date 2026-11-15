@@ -275,10 +275,10 @@ static bool only_space(const uint8_t *s, size_t len, size_t i) {
   return true;
 }
 
-agc_json_status agc_json_parse(agc_vm *vm, const uint8_t *s, size_t len, agc_value *out) {
+static bool control_in_string(const uint8_t *s, size_t len) {
   bool quoted = false, escaped = false;
   for (size_t i = 0; i < len; i++) {
-    if (quoted && s[i] < 0x20) return AGC_JSON_CONTROL;
+    if (quoted && s[i] < 0x20) return true;
     if (escaped)
       escaped = false;
     else if (quoted && s[i] == '\\')
@@ -286,6 +286,10 @@ agc_json_status agc_json_parse(agc_vm *vm, const uint8_t *s, size_t len, agc_val
     else if (s[i] == '"')
       quoted = !quoted;
   }
+  return false;
+}
+
+static agc_json_status parse_value(agc_vm *vm, const uint8_t *s, size_t len, agc_value *out) {
   size_t i = 0;
   while (i < len && json_space(s[i])) i++;
   if (i == len) return AGC_JSON_EMPTY;
@@ -328,6 +332,12 @@ agc_json_status agc_json_parse(agc_vm *vm, const uint8_t *s, size_t len, agc_val
   bool finite = convert(vm, yyjson_doc_get_root(doc), out);
   yyjson_doc_free(doc);
   return finite ? AGC_JSON_PARSED : AGC_JSON_NOT_FINITE;
+}
+
+/* yyjson rejects a control character in a string, so the scan that names that error runs only when the parse fails. */
+agc_json_status agc_json_parse(agc_vm *vm, const uint8_t *s, size_t len, agc_value *out) {
+  agc_json_status status = parse_value(vm, s, len, out);
+  return status != AGC_JSON_PARSED && control_in_string(s, len) ? AGC_JSON_CONTROL : status;
 }
 
 static agc_value ok(agc_value v) { return agc_result_value(true, v); }
