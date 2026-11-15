@@ -24,6 +24,7 @@ BddScenario.srand
 BddScenario.uncount
 Bytes.at
 Bytes.concat
+Bytes.concat.parts
 Bytes.decode
 Bytes.drop
 Bytes.equal

@@ -28,4 +28,7 @@ def main() -> Void
   "ab".bytes.each do |byte| puts(byte) end
   name = "c"
   puts("#{name}d".bytes.length)
+  a = "a".bytes
+  puts(Bytes.concat([a, "b".bytes]).length)
+  puts((a + a + a).length)
 end

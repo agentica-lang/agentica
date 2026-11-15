@@ -191,6 +191,41 @@ INTERPOLATED(5) INTERPOLATED(6) INTERPOLATED(7) INTERPOLATED(8)
 #define INTERPOLATED_ROW(n) \
   {"String.interpolated.bytes", n, builtin_interpolated##n, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true}
 
+/* Bytes.concat([a, b]) with a list literal of 1 to CONCAT_PARTS items, and a + b + c: the lowering sends the parts in
+   registers, so no List is made for them and no Bytes for a partial sum. */
+#define CONCAT_PARTS 8
+
+static agc_value concat_parts(agc_vm *vm, agc_value *args, uint32_t count) {
+  const agc_bytes *part[CONCAT_PARTS];
+  size_t total = 0;
+  uint32_t filled = 0, last = 0;
+  for (uint32_t k = 0; k < count; k++) {
+    part[k] = agc_as_bytes(vm, args[k]);
+    if (part[k]->len) {
+      total = agc_size_add(total, part[k]->len);
+      filled++;
+      last = k;
+    }
+  }
+  if (filled == 0) return agc_bytes_value(agc_empty_bytes());
+  if (filled == 1) return args[last];
+  agc_bytes *joined = agc_new_bytes(total);
+  size_t at = 0;
+  for (uint32_t k = 0; k < count; k++) {
+    if (part[k]->len) memcpy(joined->data + at, part[k]->data, part[k]->len);
+    at += part[k]->len;
+  }
+  return agc_bytes_value(joined);
+}
+
+#define CONCAT(n)                                                                  \
+  static agc_value builtin_concat##n(agc_vm *vm, agc_value *args, uint32_t span) { \
+    (void)span;                                                                    \
+    return concat_parts(vm, args, n);                                              \
+  }
+CONCAT(1) CONCAT(2) CONCAT(3) CONCAT(4) CONCAT(5) CONCAT(6) CONCAT(7) CONCAT(8)
+#define CONCAT_ROW(n) {"Bytes.concat.parts", n, builtin_concat##n, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true}
+
 const agc_builtin agc_bytes_builtins[] = {
   {"Bytes.from_list", 1, builtin_from_list, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true},
   {"Bytes.to_a", 1, builtin_to_a, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true},
@@ -205,6 +240,8 @@ const agc_builtin agc_bytes_builtins[] = {
   {"String.bytes", 1, builtin_string_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true},
   INTERPOLATED_ROW(1), INTERPOLATED_ROW(2), INTERPOLATED_ROW(3), INTERPOLATED_ROW(4),
   INTERPOLATED_ROW(5), INTERPOLATED_ROW(6), INTERPOLATED_ROW(7), INTERPOLATED_ROW(8),
+  CONCAT_ROW(1), CONCAT_ROW(2), CONCAT_ROW(3), CONCAT_ROW(4),
+  CONCAT_ROW(5), CONCAT_ROW(6), CONCAT_ROW(7), CONCAT_ROW(8),
 };
 
 const size_t agc_bytes_builtin_count = sizeof agc_bytes_builtins / sizeof agc_bytes_builtins[0];

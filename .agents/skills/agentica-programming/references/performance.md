@@ -126,8 +126,9 @@ writes `/tmp/perf-PID.map`, so `perf report` names the compiled functions
   built.
 - Do not build many small Bytes pieces in a hot loop. Precompute the fixed
   pieces (a table of headers built once as a module constant) and join them
-  with one `Bytes.concat` at the end. `"...#{n}".bytes` builds a String, then
-  copies it.
+  with one `Bytes.concat` at the end. `"...#{n}".bytes`, `a + b + c` and
+  `Bytes.concat([a, b, c])` with a list literal (up to 8 parts each) make one
+  Bytes and nothing in between.
 - An immutable `Map#put` copies the nodes on the path, and an `ATS` operation
   costs more than a `Map` one: use `ATS` only for state that tasks really
   share.
