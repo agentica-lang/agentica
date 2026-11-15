@@ -102,7 +102,12 @@ end
 def name_lines() -> List[String]
   std_only: List[String] = []
   for name in STD_ONLY.keys.sort
-    std_only = std_only.push("#{name}=#{STD_ONLY[name][0]} as #{STD_ONLY[name][1]}")
+    shown = "#{name}=#{STD_ONLY[name][0]}"
+    if STD_ONLY[name][1] != ""
+      shown = "#{shown} as #{STD_ONLY[name][1]}"
+    end
+
+    std_only = std_only.push(shown)
   end
 
   rows: List[String] = []

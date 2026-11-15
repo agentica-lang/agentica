@@ -406,8 +406,8 @@ static void finish_task(agc_vm *vm, agc_task *t) {
   t->cursor = NULL;
   t->inbox = agc_void();
   t->turn_cost = 0;
-  /* A service task was counted as done when it was spawned (agc_task_spawn_in). */
-  if (!t->group && !t->service) atomic_fetch_add_explicit(&vm->rt->tasks_done, 1, memory_order_relaxed);
+  /* A service task was counted as done when it was spawned (agc_task_spawn_in), an uncounted one when it left. */
+  if (!t->group && !t->service && !t->uncounted) atomic_fetch_add_explicit(&vm->rt->tasks_done, 1, memory_order_relaxed);
   while (t->children) {
     agc_task *child = t->children;
     leave_parent(child);
@@ -1530,6 +1530,19 @@ static agc_value builtin_set_inbox(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_void();
 }
 
+/* BddScenario.uncount (std/bdd only): the running task leaves Task.pending_count, as main is out of it, so a scenario
+   that a worker runs in a task counts the same tasks as in a child of its own. Counted as done now, once; main and
+   service tasks are out already. */
+static agc_value builtin_uncount(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)args;
+  (void)span;
+  agc_task *t = vm->task;
+  if (t == vm->rt->main || t->service || t->uncounted) return agc_void();
+  t->uncounted = true;
+  atomic_fetch_add_explicit(&vm->rt->tasks_done, 1, memory_order_relaxed);
+  return agc_void();
+}
+
 static agc_value builtin_inbox(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)args;
   agc_value inbox = vm->task->inbox;
@@ -1554,6 +1567,7 @@ const agc_builtin agc_task_builtins[] = {
   {"Task.monitor_ref", 3, builtin_monitor_ref, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"ActorInbox.set", 1, builtin_set_inbox, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"ActorInbox.get", 0, builtin_inbox, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"BddScenario.uncount", 0, builtin_uncount, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
 };
 
 const size_t agc_task_builtin_count = sizeof agc_task_builtins / sizeof agc_task_builtins[0];

@@ -171,6 +171,8 @@ end
 ## The help for a std-only family (STD_ONLY) named outside std/: the std module to import in its place.
 def std_only_help(family: String) -> String
   wrapper = STD_ONLY[family]
+  return "#{family} is internal to #{wrapper[0]} and has no public form" if wrapper[1] == ""
+
   "#{family} is internal to #{wrapper[0]}; use import #{wrapper[1]} from \"#{wrapper[0]}\""
 end
 
