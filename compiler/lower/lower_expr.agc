@@ -173,8 +173,9 @@ def lower_call(
 
   fx = Lowering.step(fx, span)
   saved = fx.next
-  fx = Lowering.alloc(fx)
-  base = fx.next - 1
+  made = Lowering.window(fx, want)
+  fx = made.fx
+  base = made.slot
   fill = cx.fills.get(node.name)
   shape = Defaults.Shape(required: count, total: count, fn_last: false)
   # A builtin or prelude form with defaults; `builtin` and `prelude` are true only when the form exists.
@@ -253,7 +254,10 @@ def lower_call(
   end
 
   if want >= 0
-    fx = Lowering.emit_at(fx, "move", [want, base], span)
+    if base != want
+      fx = Lowering.emit_at(fx, "move", [want, base], span)
+    end
+
     return ok(Lowering.Out(fx: fx.with(next: saved), slot: want))
   end
 
@@ -1006,8 +1010,9 @@ end
 def lower_invoke(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Invoke, want: Int) -> Result[Lowering.Out]
   fx = Lowering.step(fx, node.span)
   saved = fx.next
-  fx = Lowering.alloc(fx)
-  base = fx.next - 1
+  made = Lowering.window(fx, want)
+  fx = made.fx
+  base = made.slot
   target = try lower_expression(cx, fx, node.target, base, false, false)
   finish_invoke(cx, target.fx, node.args, node.span, saved, base, want)
 end
@@ -1016,8 +1021,9 @@ end
 def lower_field_call(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.MethodCall, want: Int) -> Result[Lowering.Out]
   fx = Lowering.step(fx, node.span)
   saved = fx.next
-  fx = Lowering.alloc(fx)
-  base = fx.next - 1
+  made = Lowering.window(fx, want)
+  fx = made.fx
+  base = made.slot
   source = try lower_expression(cx, fx, node.target, -1, false, false)
   info = cx.structs[Types.name(Lowering.static_type(cx, node.target))]
   fx = Lowering.emit_at(source.fx, "field", [base, source.slot, info.positions[node.name]], node.name_span)
@@ -1052,7 +1058,10 @@ def finish_invoke(
 
   fx = Lowering.emit_at(fx, "call-value", [base, args.size], span)
   if want >= 0
-    fx = Lowering.emit_at(fx, "move", [want, base], span)
+    if base != want
+      fx = Lowering.emit_at(fx, "move", [want, base], span)
+    end
+
     return ok(Lowering.Out(fx: fx.with(next: saved), slot: want))
   end
 

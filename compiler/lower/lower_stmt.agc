@@ -166,7 +166,7 @@ def lower_binding(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Binding, saved: In
     out = try Expr.lower_expression(cx, fx, node.value, -1, false, false)
     fx = out.fx
     if out.slot != existing
-      fx = Lowering.emit_at(fx, "move", [existing, out.slot], node.span)
+      fx = Lowering.move_value(fx, existing, out.slot, out.slot >= saved, node.span)
     end
 
     return ok(fx.with(next: saved))
