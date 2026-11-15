@@ -42,10 +42,23 @@ agc_http_slice agc_http_text(agc_vm *vm, agc_value v);
 bool agc_http_list_closes(agc_vm *vm, const agc_list *headers);
 agc_error_kind agc_http_status_kind(int status);
 agc_value agc_http_error_result(agc_vm *vm, int status, const char *prefix, const char *reason);
+/* A request or response head parsed once (agc_http_parse_request_head or _response_head) from the LEN bytes its
+   value is built of, which must still be in place: the slices of `head` point into them. */
+typedef struct {
+  agc_http_status status;
+  agc_http_head head;
+  size_t used;
+  agc_http_error error;
+} agc_http_parsed;
+
 agc_value agc_http_head_value(agc_vm *vm, const uint8_t *buf, size_t len, uint64_t limit, size_t buffered,
                               bool *websocket);
+agc_value agc_http_head_parsed(agc_vm *vm, const agc_http_parsed *p, size_t len, uint64_t limit, size_t buffered,
+                               bool *websocket);
 agc_value agc_http_response_value(agc_vm *vm, const uint8_t *buf, size_t len, bool head_only, uint64_t limit,
                                   int read_error, size_t buffered, bool ended);
+agc_value agc_http_response_parsed(agc_vm *vm, agc_http_parsed *p, size_t len, bool head_only, uint64_t limit,
+                                   int read_error, size_t buffered, bool ended);
 int64_t agc_http_max_body(agc_vm *vm, agc_value v, uint32_t span);
 
 #endif
