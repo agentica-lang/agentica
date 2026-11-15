@@ -148,36 +148,41 @@ static bool websocket_upgrade(const agc_http_head *head, size_t upgrades, agc_ht
    WebSocket upgrade. */
 agc_value agc_http_head_value(agc_vm *vm, const uint8_t *buf, size_t len, uint64_t limit, size_t buffered,
                               bool *websocket) {
+  agc_http_parsed p;
+  p.status = agc_http_parse_request_head(buf, len, &p.head, &p.used, &p.error);
+  return agc_http_head_parsed(vm, &p, len, limit, buffered, websocket);
+}
+
+agc_value agc_http_head_parsed(agc_vm *vm, const agc_http_parsed *p, size_t len, uint64_t limit, size_t buffered,
+                               bool *websocket) {
   *websocket = false;
-  agc_http_head head;
-  size_t used;
-  agc_http_error error;
-  agc_http_status status = agc_http_parse_request_head(buf, len, &head, &used, &error);
-  if (status == AGC_HTTP_INCOMPLETE)
+  const agc_http_head *head = &p->head;
+  if (p->status == AGC_HTTP_INCOMPLETE)
     return agc_error(vm, AGC_KIND_HTTP_CLOSED, "http: connection closed before the request was complete");
-  if (status == AGC_HTTP_ERROR) return refused_head(vm, agc_http_error_code(error), agc_http_error_text(error));
+  if (p->status == AGC_HTTP_ERROR)
+    return refused_head(vm, agc_http_error_code(p->error), agc_http_error_text(p->error));
   agc_http_slice value = {NULL, 0};
-  size_t upgrades = count_named(&head, "upgrade", &value);
-  if (upgrades && !websocket_upgrade(&head, upgrades, value))
+  size_t upgrades = count_named(head, "upgrade", &value);
+  if (upgrades && !websocket_upgrade(head, upgrades, value))
     return refused_head(vm, 501, "protocol upgrades are unsupported");
-  size_t expects = count_named(&head, "expect", &value);
+  size_t expects = count_named(head, "expect", &value);
   if (expects > 1 || (expects == 1 && !agc_http_named(value, "100-continue")))
     return refused_head(vm, 417, "unsupported expectation");
-  bool chunked = head.frame == AGC_HTTP_FRAME_CHUNKED;
-  if (!chunked && head.length > limit)
+  bool chunked = head->frame == AGC_HTTP_FRAME_CHUNKED;
+  if (!chunked && head->length > limit)
     return refused_head(vm, agc_http_error_code(AGC_HTTP_ERR_TOO_LARGE), agc_http_error_text(AGC_HTTP_ERR_TOO_LARGE));
-  agc_value headers = header_values(vm, &head);
-  const uint8_t *query = memchr(head.target.data, '?', head.target.len);
-  size_t path_len = query ? (size_t)(query - head.target.data) : head.target.len;
+  agc_value headers = header_values(vm, head);
+  const uint8_t *query = memchr(head->target.data, '?', head->target.len);
+  size_t path_len = query ? (size_t)(query - head->target.data) : head->target.len;
   agc_struct *h = head_record(vm);
-  h->fields[0] = ascii(head.method.data, head.method.len);
-  h->fields[1] = ascii(head.target.data, head.target.len);
-  h->fields[2] = ascii(head.target.data, path_len);
+  h->fields[0] = ascii(head->method.data, head->method.len);
+  h->fields[1] = ascii(head->target.data, head->target.len);
+  h->fields[2] = ascii(head->target.data, path_len);
   h->fields[3] = headers;
-  h->fields[4] = agc_int(chunked ? 0 : (int64_t)head.length);
+  h->fields[4] = agc_int(chunked ? 0 : (int64_t)head->length);
   h->fields[5] = agc_bool(chunked);
   h->fields[6] = agc_bool(expects == 1);
-  h->fields[7] = agc_int((int64_t)(len - used + buffered));
+  h->fields[7] = agc_int((int64_t)(len - p->used + buffered));
   h->fields[8] = agc_int(0);
   h->fields[9] = ascii((const uint8_t *)"", 0);
   *websocket = upgrades != 0;
@@ -195,35 +200,40 @@ agc_value agc_http_head_value(agc_vm *vm, const uint8_t *buf, size_t len, uint64
    keeps a connection whose response has no body only when both are clear. */
 agc_value agc_http_response_value(agc_vm *vm, const uint8_t *buf, size_t len, bool head_only, uint64_t limit,
                                   int read_error, size_t buffered, bool ended) {
-  agc_http_head head;
-  size_t used;
-  agc_http_error error;
-  agc_http_status status = agc_http_parse_response_head(buf, len, &head, &used, &error);
-  if (status == AGC_HTTP_INCOMPLETE && read_error) /* std/http: READ_FAILED */
+  agc_http_parsed p;
+  p.status = agc_http_parse_response_head(buf, len, &p.head, &p.used, &p.error);
+  return agc_http_response_parsed(vm, &p, len, head_only, limit, read_error, buffered, ended);
+}
+
+agc_value agc_http_response_parsed(agc_vm *vm, agc_http_parsed *p, size_t len, bool head_only, uint64_t limit,
+                                   int read_error, size_t buffered, bool ended) {
+  agc_http_head *head = &p->head;
+  if (p->status == AGC_HTTP_INCOMPLETE && read_error) /* std/http: READ_FAILED */
     return agc_system_error(vm, AGC_FAMILY_NET, "could not read from the stream", read_error);
-  if (status == AGC_HTTP_INCOMPLETE)
+  if (p->status == AGC_HTTP_INCOMPLETE)
     return agc_error(vm, AGC_KIND_HTTP_CLOSED, "http: connection closed before the response was complete");
-  if (status == AGC_HTTP_ERROR)
-    return agc_http_error_result(vm, agc_http_error_code(error), "http: ", agc_http_error_text(error));
-  bool closes = agc_http_closes(&head);
-  if (head.status >= 200 && (head_only || head.status == 204 || head.status == 304)) {
-    bool announced = head.frame == AGC_HTTP_FRAME_CHUNKED || (head.frame == AGC_HTTP_FRAME_LENGTH && head.length > 0);
+  if (p->status == AGC_HTTP_ERROR)
+    return agc_http_error_result(vm, agc_http_error_code(p->error), "http: ", agc_http_error_text(p->error));
+  bool closes = agc_http_closes(head);
+  if (head->status >= 200 && (head_only || head->status == 204 || head->status == 304)) {
+    bool announced =
+        head->frame == AGC_HTTP_FRAME_CHUNKED || (head->frame == AGC_HTTP_FRAME_LENGTH && head->length > 0);
     if (announced && !head_only) closes = true;
-    head.frame = AGC_HTTP_FRAME_LENGTH;
-    head.length = 0;
+    head->frame = AGC_HTTP_FRAME_LENGTH;
+    head->length = 0;
   }
-  if (head.frame == AGC_HTTP_FRAME_CLOSE) closes = true;
-  if (head.frame == AGC_HTTP_FRAME_LENGTH && head.length > limit)
+  if (head->frame == AGC_HTTP_FRAME_CLOSE) closes = true;
+  if (head->frame == AGC_HTTP_FRAME_LENGTH && head->length > limit)
     return agc_http_error_result(vm, agc_http_error_code(AGC_HTTP_ERR_TOO_LARGE), "http: ",
                                  agc_http_error_text(AGC_HTTP_ERR_TOO_LARGE));
   agc_struct *r = agc_new_struct(agc_builtin_struct(vm, "HttpWire.ResponseHead", response_fields, 8), 8);
-  r->fields[0] = agc_int(head.status);
-  r->fields[1] = header_values(vm, &head);
-  r->fields[2] = agc_int(head.frame == AGC_HTTP_FRAME_LENGTH ? (int64_t)head.length : 0);
-  r->fields[3] = agc_bool(head.frame == AGC_HTTP_FRAME_CHUNKED);
-  r->fields[4] = agc_bool(head.frame == AGC_HTTP_FRAME_CLOSE);
+  r->fields[0] = agc_int(head->status);
+  r->fields[1] = header_values(vm, head);
+  r->fields[2] = agc_int(head->frame == AGC_HTTP_FRAME_LENGTH ? (int64_t)head->length : 0);
+  r->fields[3] = agc_bool(head->frame == AGC_HTTP_FRAME_CHUNKED);
+  r->fields[4] = agc_bool(head->frame == AGC_HTTP_FRAME_CLOSE);
   r->fields[5] = agc_bool(closes);
-  r->fields[6] = agc_int((int64_t)(len - used + buffered));
+  r->fields[6] = agc_int((int64_t)(len - p->used + buffered));
   r->fields[7] = agc_bool(ended);
   return agc_result_value(true, agc_struct_value(r));
 }

@@ -349,7 +349,12 @@ one exit path are as in §16.1 to §16.6. What differs:
   compute job is a pool job: no deadline, no cancel half, and a cancel detaches
   it. A detached item still in the queue skips its `work`; a running one drops
   the result once the call returns. What the end of the run waits for is in
-  §14.4 (steps 0 and 3).
+  §14.4 (steps 0 and 3). A thread that ran an item spins for the next one
+  before it waits on the condvar, as an idle scheduler does: 10 µs, up to
+  160 µs while its next items come soon after, at most half the pool's threads
+  (at least one) at once, and none when the process may run on one CPU only.
+  A run of short calls then hands over in a few microseconds, not the tens a
+  condvar wake costs (#1120).
   - At N > 1 a compute job skips the I/O thread. The builtin runs with
     `rt->sync` held, so its job waits in `vm->direct`, and `run_task` gives it
     to the pool once the turn is over (`agc_io_submit_direct`, no START). On the

@@ -289,28 +289,41 @@ static bool reads(req_kind kind) {
 
 static bool heads(req_kind kind) { return kind == REQ_HEAD || kind == REQ_RESPONSE; }
 
+/* Parses the request head (or response head) of the LEN bytes at DATA into P. */
+static void parse_head(const uint8_t *data, size_t len, req_kind kind, agc_http_parsed *p) {
+  p->status = kind == REQ_RESPONSE ? agc_http_parse_response_head(data, len, &p->head, &p->used, &p->error)
+                                   : agc_http_parse_request_head(data, len, &p->head, &p->used, &p->error);
+}
+
 /* The status of the request head (or response head) at the start of the
    input; *used is its length when it is whole. */
 static agc_http_status head_status(const agc_inbuf *in, size_t len, req_kind kind, size_t *used) {
-  agc_http_head head;
-  agc_http_error error;
-  const uint8_t *data = in->data + in->start;
-  return kind == REQ_RESPONSE ? agc_http_parse_response_head(data, len, &head, used, &error)
-                              : agc_http_parse_request_head(data, len, &head, used, &error);
+  agc_http_parsed p;
+  parse_head(in->data + in->start, len, kind, &p);
+  *used = p.used;
+  return p.status;
 }
 
-/* HttpWire.read_head and read_response wait for a whole head or a parse error, more bytes than
-   a head may hold, or the end of input. The head is parsed only when an LF
-   came in past q->scanned, so a head that arrives a byte at a time is parsed
-   once per line, and it stays in the input until it is whole. */
-static bool head_ready(const agc_inbuf *in, request *q) {
-  if (in->eof || in->error) return true;
-  size_t have = agc_inbuf_pending(in), used;
-  if (have > AGC_HTTP_MAX_HEAD) return true;
+/* Whether the input may hold a whole head or its end: an LF came in past q->scanned, more bytes than a head may hold,
+   or the end of input. Moves q->scanned, so a head that arrives a byte at a time is parsed once per line. SETTLED: the
+   head is ready even when a parse finds it incomplete. */
+static bool head_news(const agc_inbuf *in, request *q, bool *settled) {
+  size_t have = agc_inbuf_pending(in);
+  *settled = in->eof || in->error || have > AGC_HTTP_MAX_HEAD;
+  if (*settled) return true;
   if (q->scanned >= have) return false;
   bool lf = memchr(in->data + in->start + q->scanned, '\n', have - q->scanned) != NULL;
   q->scanned = have;
-  return lf && head_status(in, have, q->kind, &used) != AGC_HTTP_INCOMPLETE;
+  return lf;
+}
+
+/* HttpWire.read_head and read_response wait for a whole head or a parse error, more bytes than
+   a head may hold, or the end of input. The head stays in the input until it is whole. */
+static bool head_ready(const agc_inbuf *in, request *q) {
+  bool settled;
+  if (!head_news(in, q, &settled)) return false;
+  size_t used;
+  return settled || head_status(in, agc_inbuf_pending(in), q->kind, &used) != AGC_HTTP_INCOMPLETE;
 }
 
 /* The input's owner only: the I/O thread, or a reader on its scheduler (take). */
@@ -355,23 +368,51 @@ static agc_value idle_value(const request *q) {
   return agc_result_value(true, agc_bool(q->buffered == 0 && !q->ended));
 }
 
-/* The value of the head cut, built on a scheduler from the request and the socket's net (q->n is not set by the read
-   at N = 1). std/http matches on "could not read from the stream" (a prefix) and "network: end of input" (READ_FAILED
-   and END_OF_INPUT in stdlib/http.agc). */
-static agc_value head_value(agc_vm *vm, net *n, const request *q) {
-  if (q->cut.len && q->kind == REQ_RESPONSE)
-    return agc_http_response_value(vm, q->cut.data, q->cut.len, q->head_only, q->limit, q->cut.error, q->buffered, q->ended);
-  if (q->cut.len) {
+/* The value of the head of LEN bytes that P holds parsed (none when LEN is 0: the input ended or failed first), built
+   on a scheduler from the request and the socket's net (q->n is not set by a read that did not park). std/http matches
+   on "could not read from the stream" (a prefix) and "network: end of input" (READ_FAILED and END_OF_INPUT in
+   stdlib/http.agc). */
+static agc_value head_result(agc_vm *vm, net *n, const request *q, agc_http_parsed *p, size_t len, int error,
+                             size_t buffered, bool ended) {
+  if (len && q->kind == REQ_RESPONSE)
+    return agc_http_response_parsed(vm, p, len, q->head_only, q->limit, error, buffered, ended);
+  if (len) {
     bool websocket;
-    agc_value head = agc_http_head_value(vm, q->cut.data, q->cut.len, q->limit, q->buffered, &websocket);
+    agc_value head = agc_http_head_parsed(vm, p, len, q->limit, buffered, &websocket);
     /* A WebSocket of std/http sends through the I/O thread for good: its writer joins the frames that queue while a
        send waits there (#1191), and sent at once each frame would cost a wake and a system call of its own. At N > 1
-       this is a locked kind's done half, so rt->sync orders it with direct_send; at N = 1 nothing sends directly. */
+       this runs in a locked builtin or its done half, so rt->sync orders it with direct_send; at N = 1 nothing sends
+       directly. */
     if (websocket) n->direct = false;
     return head;
   }
-  if (q->cut.error) return agc_system_error(vm, AGC_FAMILY_NET, "could not read from the stream", q->cut.error);
+  if (error) return agc_system_error(vm, AGC_FAMILY_NET, "could not read from the stream", error);
   return agc_error(vm, AGC_KIND_NET_EOF, "network: end of input");
+}
+
+/* The value of a parked read's head cut, in its done half. */
+static agc_value head_value(agc_vm *vm, net *n, const request *q) {
+  agc_http_parsed p;
+  if (q->cut.len) parse_head(q->cut.data, q->cut.len, q->kind, &p);
+  return head_result(vm, n, q, &p, q->cut.len, q->cut.error, q->buffered, q->ended);
+}
+
+/* HttpWire.read_head or read_response on the input's owner (N = 1, or a scheduler that takes_here allows), when the
+   input answers it: the head is parsed once where it lies, its value is built from the input, and then its bytes are
+   taken, as cut_head would cut them. False when the head is not whole yet; the read then parks. */
+static bool take_head(agc_vm *vm, net *n, request *q, agc_value *result) {
+  bool settled;
+  if (!head_news(&n->in, q, &settled)) return false;
+  size_t have = agc_inbuf_pending(&n->in);
+  size_t window = have < AGC_HTTP_MAX_HEAD + 1 ? have : AGC_HTTP_MAX_HEAD + 1;
+  agc_http_parsed p;
+  p.status = AGC_HTTP_INCOMPLETE;
+  if (window) parse_head(n->in.data + n->in.start, window, q->kind, &p);
+  if (!settled && p.status == AGC_HTTP_INCOMPLETE) return false;
+  size_t len = p.status == AGC_HTTP_OK ? p.used : window;
+  *result = head_result(vm, n, q, &p, len, n->in.error, have - len, input_ended(n));
+  agc_inbuf_take(&n->in, len);
+  return true;
 }
 
 /* HttpWire.read_head's rest goes back in front of the input before the head
@@ -1412,12 +1453,9 @@ static int shared_open(net *n) {
    value in one step. */
 static agc_value take(agc_vm *vm, net *n, request *q) {
   if (n->closed) return agc_error(vm, AGC_KIND_NET_CLOSED, socket_closed);
-  if (q->kind == REQ_IDLE || heads(q->kind)) {
-    if (q->kind == REQ_IDLE) cut_idle(n, q);
-    else cut_head(n, q);
-    agc_value result = q->kind == REQ_IDLE ? idle_value(q) : head_value(vm, n, q);
-    agc_inbuf_cut_free(&q->cut);
-    return result;
+  if (q->kind == REQ_IDLE) {
+    cut_idle(n, q);
+    return idle_value(q);
   }
   if (q->kind == REQ_BYTES) return agc_inbuf_bytes(vm, AGC_STREAM_NETWORK, &n->in, q->count);
   bool over;
@@ -1936,7 +1974,13 @@ static agc_value read_op(agc_vm *vm, const agc_value *args, request *want, bool 
   if (here || takes_here(n)) {
     if (!agc_inbuf_unread(&n->in, rest, rest_len)) agc_out_of_memory();
     rest_len = 0;
-    if (read_ready(n, want) && (here || !over_limit(n, kind))) return take(vm, n, want);
+    agc_value result;
+    if (heads(kind)) {
+      if (n->closed) return agc_error(vm, AGC_KIND_NET_CLOSED, socket_closed);
+      if (take_head(vm, n, want, &result)) return result;
+    } else if (read_ready(n, want) && (here || !over_limit(n, kind))) {
+      return take(vm, n, want);
+    }
   }
   request *q = new_request(vm, n, kind);
   q->count = want->count;

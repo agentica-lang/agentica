@@ -19,10 +19,12 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `"$#{n}\r\n".bytes` on an interpolated string writes the parts into one `Bytes`, with no `String` in between; an `Int` in any interpolation prints faster (#1361).
 - A program whose tasks all wait for one busy task (a store task that serves 50 clients over channels) no longer runs slower with more scheduler threads: up to about 2 times faster at 2 to 8 schedulers, depending on the work per request (#1362).
 - A project's `agentica.toml` is parsed once per start, not twice, so a program below a manifest starts a little faster (#1471).
-- With several schedulers, a TCP read that bytes already received can answer returns at once instead of waiting on the I/O thread: up to 5 times more lines per second on a busy stream, about 10% more requests per second for an HTTP client (#1197).
+- With several schedulers, a TCP read that bytes already received can answer returns at once instead of waiting on the I/O thread: up to 5 times more lines per second on a busy stream, about 10% more requests per second for an HTTP client and 6 to 28% for an HTTP server (#1197).
 - `agentica FILE.agc` no longer looks for the C compiler in `PATH` at each start of a cached program with no native module, and a change of `CC` or `PATH` keeps its cache entry (#1551).
+- A `compute def` call or a dirty native module call made right after another costs about 3 µs in place of 15 to 25 µs: the compute pool thread spins briefly for the next call before it sleeps (#1120).
 - Programs run 4 to 6% faster when the interpreter runs them (`--jit off`, or code the JIT has not compiled): a call or an operator writes its result straight into the variable it is assigned to (#1001).
 - A `case` with 3 or more enum variant arms jumps straight to the arm that matches instead of testing the arms in order: `agentica check` and `compile` of a large program are about 5 to 7% faster (#1001).
+- `String.split` searches the text once instead of twice and skips counting the characters of each piece when the text is ASCII: about 10% faster on log-style line and word splitting (#996).
 
 ## [0.32.0] - 2026-11-15
 
