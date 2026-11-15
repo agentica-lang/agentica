@@ -1595,7 +1595,10 @@ static agc_value spawn_child(agc_vm *vm, const agc_value *args, const agc_string
   size_t pair_count;
   const char *env_text = env_problem(vm, env, &pairs, &pair_count);
   if (env_text) return agc_error(vm, AGC_KIND_ARGUMENT, env_text);
-  if (files && vm->rt->deny_fs) return agc_error(vm, AGC_KIND_DENIED_FS, AGC_DENIED_FS);
+  if (files && vm->rt->deny_fs) {
+    const agc_string *path = out->bytes ? out : err;
+    return agc_error_detail(vm, agc_error(vm, AGC_KIND_DENIED_FS, AGC_DENIED_FS), "path", path->data, path->bytes);
+  }
   if (files && (!no_nul(out) || !no_nul(err)))
     return agc_error(vm, AGC_KIND_ARGUMENT, "process: out and err cannot contain NUL");
   agc_process *pr = agc_alloc(sizeof(agc_process));

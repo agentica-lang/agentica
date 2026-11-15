@@ -184,6 +184,15 @@ static agc_value error_of(agc_vm *vm, agc_error_kind kind, const char *message) 
   return error_text(vm, kind, &t, 0);
 }
 
+static agc_value with_path(agc_vm *vm, agc_value error, const agc_string *path) {
+  return agc_error_detail(vm, error, "path", path->data, path->bytes);
+}
+
+/* --deny-fs's error, with the path the call was given. */
+static agc_value fs_refused(agc_vm *vm, agc_value path) {
+  return with_path(vm, error_of(vm, AGC_KIND_DENIED_FS, AGC_DENIED_FS), agc_as_string(vm, path));
+}
+
 /* The error of MESSAGE with the kind and code of ERR, or of FALLBACK when no errno is known (ERR 0). */
 static agc_value errno_of(agc_vm *vm, agc_error_kind fallback, const char *message, int err) {
   text t = {0};
@@ -1604,8 +1613,12 @@ static void close_file(agc_vm *vm, agc_resource *r, agc_task *ender) {
   }
 }
 
+/* The error of a job on a path names the path that the call was given, its context. */
+static agc_value named(agc_vm *vm, agc_value error, agc_value context) {
+  return agc_is(context, AGC_T_STRING) ? with_path(vm, error, agc_as_string(vm, context)) : error;
+}
+
 static agc_value done(agc_vm *vm, void *data, agc_value context) {
-  (void)context;
   op *o = data;
   if ((o->kind == OP_STAT || o->kind == OP_LSTAT) && o->status == FS_OK) {
     op info = *o;
@@ -1614,7 +1627,7 @@ static agc_value done(agc_vm *vm, void *data, agc_value context) {
   }
   agc_value result;
   if (o->status != FS_OK) {
-    result = common_error(vm, o);
+    result = o->status == FS_REFUSED ? common_error(vm, o) : named(vm, common_error(vm, o), context);
   } else {
     switch (o->kind) {
       case OP_READ_TEXT:
@@ -1663,7 +1676,7 @@ static agc_value expired(agc_vm *vm, void *data, agc_value context) {
     r->native = NULL;
     forget_file(vm, r);
   }
-  return error_of(vm, AGC_KIND_IO_TIMEOUT, timed_out);
+  return named(vm, error_of(vm, AGC_KIND_IO_TIMEOUT, timed_out), context);
 }
 
 static const agc_io_kind file_io = {work, done, expired, drop, false, "file", stop, false, pause_wait};
@@ -1701,22 +1714,23 @@ static agc_value start(agc_vm *vm, op *o, agc_value context, int64_t timeout) {
   return agc_void();
 }
 
-/* A job on the file at path. */
-static agc_value path_op(agc_vm *vm, op_kind kind, const agc_string *path, int64_t timeout) {
+/* A job on the file at GIVEN, a String: the job's context, so that its error names it (done). */
+static agc_value path_op(agc_vm *vm, op_kind kind, agc_value given, int64_t timeout) {
+  const agc_string *path = agc_as_string(vm, given);
   if (timeout <= 0) return error_of(vm, AGC_KIND_ARGUMENT, bad_timeout);
   if (!path_string(path)) return bad_path(vm, path);
   op *o = call_op(vm, kind, NULL);
   o->path = agc_host_path(vm, path);
-  return start(vm, o, agc_void(), timeout);
+  return start(vm, o, given, timeout);
 }
 
 static agc_value builtin_read_text(agc_vm *vm, agc_value *args, uint32_t span) {
-  if (fs_denied(vm, span)) return error_of(vm, AGC_KIND_DENIED_FS, AGC_DENIED_FS);
-  return path_op(vm, OP_READ_TEXT, agc_as_string(vm, args[0]), agc_as_int(vm, args[1]));
+  if (fs_denied(vm, span)) return fs_refused(vm, args[0]);
+  return path_op(vm, OP_READ_TEXT, args[0], agc_as_int(vm, args[1]));
 }
 
 static agc_value write_text(agc_vm *vm, agc_value *args, uint32_t span, op_kind kind) {
-  if (fs_denied(vm, span)) return error_of(vm, AGC_KIND_DENIED_FS, AGC_DENIED_FS);
+  if (fs_denied(vm, span)) return fs_refused(vm, args[0]);
   const agc_string *path = agc_as_string(vm, args[0]);
   const agc_string *content = agc_as_string(vm, args[1]);
   int64_t timeout = agc_as_int(vm, args[2]);
@@ -1729,7 +1743,7 @@ static agc_value write_text(agc_vm *vm, agc_value *args, uint32_t span, op_kind 
   if (content->bytes) memcpy(o->in, content->data, content->bytes);
   o->in_len = content->bytes;
   o->path = agc_host_path(vm, path);
-  return start(vm, o, agc_void(), timeout);
+  return start(vm, o, args[0], timeout);
 }
 
 static agc_value builtin_write_text(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -1741,48 +1755,48 @@ static agc_value builtin_append_text(agc_vm *vm, agc_value *args, uint32_t span)
 }
 
 static agc_value builtin_stat(agc_vm *vm, agc_value *args, uint32_t span) {
-  if (fs_denied(vm, span)) return error_of(vm, AGC_KIND_DENIED_FS, AGC_DENIED_FS);
-  return path_op(vm, OP_STAT, agc_as_string(vm, args[0]), agc_as_int(vm, args[1]));
+  if (fs_denied(vm, span)) return fs_refused(vm, args[0]);
+  return path_op(vm, OP_STAT, args[0], agc_as_int(vm, args[1]));
 }
 
 /* File.sha256: the SHA-256 of the file's bytes, as a Bytes. */
 static agc_value builtin_sha256(agc_vm *vm, agc_value *args, uint32_t span) {
-  if (fs_denied(vm, span)) return error_of(vm, AGC_KIND_DENIED_FS, AGC_DENIED_FS);
-  return path_op(vm, OP_SHA256, agc_as_string(vm, args[0]), agc_as_int(vm, args[1]));
+  if (fs_denied(vm, span)) return fs_refused(vm, args[0]);
+  return path_op(vm, OP_SHA256, args[0], agc_as_int(vm, args[1]));
 }
 
 static agc_value builtin_lstat(agc_vm *vm, agc_value *args, uint32_t span) {
-  if (fs_denied(vm, span)) return error_of(vm, AGC_KIND_DENIED_FS, AGC_DENIED_FS);
-  return path_op(vm, OP_LSTAT, agc_as_string(vm, args[0]), agc_as_int(vm, args[1]));
+  if (fs_denied(vm, span)) return fs_refused(vm, args[0]);
+  return path_op(vm, OP_LSTAT, args[0], agc_as_int(vm, args[1]));
 }
 
 static agc_value builtin_dir_list(agc_vm *vm, agc_value *args, uint32_t span) {
-  if (fs_denied(vm, span)) return error_of(vm, AGC_KIND_DENIED_FS, AGC_DENIED_FS);
-  return path_op(vm, OP_LIST, agc_as_string(vm, args[0]), agc_as_int(vm, args[1]));
+  if (fs_denied(vm, span)) return fs_refused(vm, args[0]);
+  return path_op(vm, OP_LIST, args[0], agc_as_int(vm, args[1]));
 }
 
 static agc_value builtin_dir_mkdir(agc_vm *vm, agc_value *args, uint32_t span) {
-  if (fs_denied(vm, span)) return error_of(vm, AGC_KIND_DENIED_FS, AGC_DENIED_FS);
-  return path_op(vm, OP_MKDIR, agc_as_string(vm, args[0]), agc_as_int(vm, args[1]));
+  if (fs_denied(vm, span)) return fs_refused(vm, args[0]);
+  return path_op(vm, OP_MKDIR, args[0], agc_as_int(vm, args[1]));
 }
 
 static agc_value builtin_dir_mkdir_private(agc_vm *vm, agc_value *args, uint32_t span) {
-  if (fs_denied(vm, span)) return error_of(vm, AGC_KIND_DENIED_FS, AGC_DENIED_FS);
-  return path_op(vm, OP_MKDIR_PRIVATE, agc_as_string(vm, args[0]), agc_as_int(vm, args[1]));
+  if (fs_denied(vm, span)) return fs_refused(vm, args[0]);
+  return path_op(vm, OP_MKDIR_PRIVATE, args[0], agc_as_int(vm, args[1]));
 }
 
 static agc_value builtin_remove(agc_vm *vm, agc_value *args, uint32_t span) {
-  if (fs_denied(vm, span)) return error_of(vm, AGC_KIND_DENIED_FS, AGC_DENIED_FS);
-  const agc_string *path = agc_as_string(vm, args[0]);
+  if (fs_denied(vm, span)) return fs_refused(vm, args[0]);
 #ifdef _WIN32
+  const agc_string *path = agc_as_string(vm, args[0]);
   if (path_string(path) && !windows_remove_input_valid(path))
     return error_of(vm, AGC_KIND_ARGUMENT, refused_windows_path);
 #endif
-  return path_op(vm, OP_REMOVE, path, agc_as_int(vm, args[1]));
+  return path_op(vm, OP_REMOVE, args[0], agc_as_int(vm, args[1]));
 }
 
 static agc_value builtin_rename(agc_vm *vm, agc_value *args, uint32_t span) {
-  if (fs_denied(vm, span)) return error_of(vm, AGC_KIND_DENIED_FS, AGC_DENIED_FS);
+  if (fs_denied(vm, span)) return fs_refused(vm, args[0]);
   const agc_string *from = agc_as_string(vm, args[0]);
   const agc_string *to = agc_as_string(vm, args[1]);
   int64_t timeout = agc_as_int(vm, args[2]);
@@ -1792,12 +1806,12 @@ static agc_value builtin_rename(agc_vm *vm, agc_value *args, uint32_t span) {
   op *o = call_op(vm, OP_RENAME, NULL);
   o->path = agc_host_path(vm, from);
   o->to = agc_host_path(vm, to);
-  return start(vm, o, agc_void(), timeout);
+  return start(vm, o, args[0], timeout);
 }
 
 /* File.replace(path, data, timeout_ms): see work_replace. */
 static agc_value builtin_replace(agc_vm *vm, agc_value *args, uint32_t span) {
-  if (fs_denied(vm, span)) return error_of(vm, AGC_KIND_DENIED_FS, AGC_DENIED_FS);
+  if (fs_denied(vm, span)) return fs_refused(vm, args[0]);
   const agc_string *path = agc_as_string(vm, args[0]);
   size_t len = 0;
   const uint8_t *data = agc_bytes_data(vm, args[1], &len);
@@ -1811,7 +1825,7 @@ static agc_value builtin_replace(agc_vm *vm, agc_value *args, uint32_t span) {
   if (len) memcpy(o->in, data, len);
   o->in_len = len;
   o->path = agc_host_path(vm, path);
-  return start(vm, o, agc_void(), timeout);
+  return start(vm, o, args[0], timeout);
 }
 
 static op *open_op(agc_vm *vm, op_kind kind, const agc_string *path) {
@@ -1831,7 +1845,7 @@ static agc_value close_handle(agc_vm *vm, agc_resource *r, agc_value handle, int
 }
 
 static agc_value builtin_open(agc_vm *vm, agc_value *args, uint32_t span) {
-  if (fs_denied(vm, span)) return error_of(vm, AGC_KIND_DENIED_FS, AGC_DENIED_FS);
+  if (fs_denied(vm, span)) return fs_refused(vm, args[0]);
   const agc_string *path = agc_as_string(vm, args[0]);
   const agc_string *mode = agc_as_string(vm, args[1]);
   int64_t timeout = agc_as_int(vm, args[2]);
@@ -1849,7 +1863,7 @@ static agc_value builtin_open(agc_vm *vm, agc_value *args, uint32_t span) {
     return error_of(vm, AGC_KIND_ARGUMENT, "filesystem: mode must be read, write, append, or create_private");
   }
   if (!path_string(path)) return bad_path(vm, path);
-  return start(vm, open_op(vm, kind, path), agc_void(), timeout);
+  return start(vm, open_op(vm, kind, path), args[0], timeout);
 }
 
 static bool blocked(agc_vm *vm, agc_value handle, int64_t *timeout, agc_value *result) {
@@ -2055,7 +2069,7 @@ static bool lines_take(agc_vm *vm, agc_line_reader *r, file_state *st, size_t le
 
 /* The errors a reader gives before it opens anything, or Void. */
 static agc_value lines_refused(agc_vm *vm, const agc_string *path, int64_t timeout) {
-  if (vm->rt->deny_fs) return error_of(vm, AGC_KIND_DENIED_FS, AGC_DENIED_FS);
+  if (vm->rt->deny_fs) return with_path(vm, error_of(vm, AGC_KIND_DENIED_FS, AGC_DENIED_FS), path);
   if (timeout <= 0) return error_of(vm, AGC_KIND_ARGUMENT, bad_timeout);
   if (!path_string(path)) return bad_path(vm, path);
   return agc_void();
@@ -2127,7 +2141,7 @@ agc_lines_status agc_lines_next(agc_vm *vm, agc_line_reader *r, agc_value last, 
         r->phase = LINES_OPENED;
         op *o = open_op(vm, OP_OPEN_READ, path);
         o->regular = r->chunks;
-        last = start(vm, o, agc_void(), r->timeout);
+        last = start(vm, o, r->path, r->timeout);
         if (vm->task->parking) return AGC_LINES_WAIT;
         break;
       }
@@ -2213,7 +2227,7 @@ static agc_step lines_step(agc_vm *vm, agc_stepper *self, agc_value last) {
 }
 
 static agc_value builtin_each_line(agc_vm *vm, agc_value *args, uint32_t span) {
-  if (fs_denied(vm, span)) return error_of(vm, AGC_KIND_DENIED_FS, AGC_DENIED_FS);
+  if (fs_denied(vm, span)) return fs_refused(vm, args[0]);
   const agc_string *path = agc_as_string(vm, args[0]);
   int64_t limit = agc_as_int(vm, args[1]);
   int64_t timeout = agc_as_int(vm, args[2]);
@@ -2285,7 +2299,7 @@ agc_writer_status agc_writer_next(agc_vm *vm, agc_line_writer *w, agc_value last
           break;
         }
         w->phase = WRITER_OPENED;
-        last = start(vm, open_op(vm, OP_OPEN_WRITE, path), agc_void(), w->timeout);
+        last = start(vm, open_op(vm, OP_OPEN_WRITE, path), w->path, w->timeout);
         if (vm->task->parking) return AGC_WRITER_WAIT;
         break;
       }
@@ -2351,12 +2365,12 @@ void agc_writer_stop(agc_line_writer *w, agc_value outcome) {
 }
 
 static agc_value builtin_real(agc_vm *vm, agc_value *args, uint32_t span) {
-  if (fs_denied(vm, span)) return error_of(vm, AGC_KIND_DENIED_FS, AGC_DENIED_FS);
+  if (fs_denied(vm, span)) return fs_refused(vm, args[0]);
   const agc_string *path = agc_as_string(vm, args[0]);
   if (!path_string(path)) return bad_path(vm, path);
   op *o = call_op(vm, OP_REAL, NULL);
   o->path = agc_host_path(vm, path);
-  return start(vm, o, agc_void(), NO_DEADLINE);
+  return start(vm, o, args[0], NO_DEADLINE);
 }
 
 /* Whether the stored working folder (always ending in '/') is a root: "/"; on Windows also a drive root "X:/"
@@ -2442,7 +2456,7 @@ static agc_value builtin_join(agc_vm *vm, agc_value *args, uint32_t span) {
 }
 
 static agc_value builtin_resolve(agc_vm *vm, agc_value *args, uint32_t span) {
-  if (fs_denied(vm, span)) return error_of(vm, AGC_KIND_DENIED_FS, AGC_DENIED_FS);
+  if (fs_denied(vm, span)) return fs_refused(vm, args[0]);
   const agc_string *path = agc_as_string(vm, args[0]);
   if (!path_string(path)) return bad_path(vm, path);
 #ifdef _WIN32

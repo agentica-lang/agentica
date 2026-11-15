@@ -23,6 +23,7 @@ one-shot stream. The one-shot encoders write Python's own bytes for "abc".
 """
 import gzip
 import hashlib
+import json
 import os
 import struct
 import sys
@@ -509,6 +510,11 @@ def test_lazy_bad_arguments(tmp_path):
     assert "RUNTIME-INVALID-COUNT" in result.stderr, result.stderr
 
 
+def path_detail(path):
+    """The details that an error of a file call shows: the path as the call was given it."""
+    return ', details: {"path": %s}' % json.dumps(str(path))
+
+
 def test_file_chunks_reads_a_file_and_refuses_what_is_not_regular(tmp_path):
     body = (
         "def main() -> Void\n"
@@ -527,8 +533,10 @@ def test_file_chunks_reads_a_file_and_refuses_what_is_not_regular(tmp_path):
     assert result.stdout.splitlines() == [
         "ok([[0, 255], [97, 98], [128]])",
         "ok([])",
-        'error("filesystem: path does not refer to a regular file", kind: "io.not_found", code: 2)',
-        'error("filesystem: path does not refer to a regular file", kind: "io.is_directory", code: 21)',
+        'error("filesystem: path does not refer to a regular file", kind: "io.not_found", code: 2%s)'
+        % path_detail(tmp_path / "missing.bin"),
+        'error("filesystem: path does not refer to a regular file", kind: "io.is_directory", code: 21%s)'
+        % path_detail(tmp_path),
     ], result.stdout
 
 
@@ -539,7 +547,8 @@ def test_file_chunks_refuses_a_fifo_without_waiting(tmp_path):
     body = "def main() -> Void\n  puts(File.chunks(System.args()[0]).to_a)\nend\n"
     result = run_source(tmp_path, "fifo.agc", body, [fifo])
     assert result.code == 0, result.stderr
-    assert result.stdout == 'error("filesystem: path does not refer to a regular file", kind: "io.failed")\n', result.stdout
+    assert result.stdout == ('error("filesystem: path does not refer to a regular file", kind: "io.failed"%s)\n'
+                             % path_detail(fifo)), result.stdout
 
 
 def test_write_bytes_errors(tmp_path):
@@ -582,8 +591,9 @@ def test_deny_fs_refuses_file_chunks_and_write_bytes_but_not_the_steps(tmp_path)
     dst = tmp_path / "dst.bin"
     result = run(cli() + ["--deny-fs", str(source), str(src), str(dst)], env=vm_environment())
     assert result.code == 0, result.stderr
-    denied = 'error("denied: --deny-fs turns off file access", kind: "denied.fs")'
-    assert result.stdout.splitlines() == [denied, denied, "ok([[104, 105]])"], result.stdout
+    denied = 'error("denied: --deny-fs turns off file access", kind: "denied.fs"%s)'
+    assert result.stdout.splitlines() == [denied % path_detail(src), denied % path_detail(dst),
+                                          "ok([[104, 105]])"], result.stdout
     assert not dst.exists()
 
 

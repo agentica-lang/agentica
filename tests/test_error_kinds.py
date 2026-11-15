@@ -274,3 +274,63 @@ def test_a_call_that_two_flags_refuse_has_the_kind_of_the_first_it_checks(flag, 
 def test_a_flag_refuses_only_its_own_calls(tmp_path, work):
     lines = run_program(tmp_path, work, DENIED_PROGRAM, "denied_other", tmp_path, "fs", flags=["--deny-net"])
     assert lines == ["read: io.not_found false false", "write: ok", "stat: ok", "list: ok", "open: ok"]
+
+
+# The details of a C error (#1510): the path that a refused or failed file call was given, the host of a refused or
+# failed network call. The paths of real file failures are in the goldens of tests/fixtures/vm/files-*.agc.
+DETAILS_PROGRAM = """\
+import HTTP from "std/http"
+
+def show[T](label: String, result: Result[T]) -> Void
+  case result
+    ok(_) -> puts("#{label}: ok")
+    error(e) -> puts("#{label}: #{e.kind} #{e.details}")
+  end
+end
+
+def main() -> Void
+  case System.args()[0]
+    "fs" ->
+      show("read", File.read_text("a.txt", 5000))
+      show("write", File.write_text("b.txt", "x", 5000))
+      show("lines", File.each_line("c.txt") do |_| ok() end)
+      show("tls", TLS.client_context(TLS.ClientOptions(ca_file: "ca.pem")))
+      show("spawn", Process.spawn("true", [], Process.Options(timeout_ms: 5000, err: "err.txt")))
+    "net" ->
+      show("connect", TCP.connect("127.0.0.1", 1, 5000))
+      show("listen", TCP.listen("localhost", 0))
+      show("dns", DNS.lookup("example.test", 5000))
+      show("http", HTTP.get_response("http://127.0.0.1:1/"))
+    "refused" ->
+      listener = Result.unwrap!(TCP.listen("127.0.0.1", 0))
+      port = TCP.local_port(listener)
+      TCP.close_listener(listener)
+      show("connect", TCP.connect("127.0.0.1", port, 5000))
+    _ -> puts("unknown group")
+  end
+end
+"""
+
+
+def test_a_refused_file_call_names_its_path(tmp_path, work):
+    assert run_program(tmp_path, work, DETAILS_PROGRAM, "details_fs", "fs", flags=["--deny-fs"]) == [
+        'read: denied.fs {"path": "a.txt"}',
+        'write: denied.fs {"path": "b.txt"}',
+        'lines: denied.fs {"path": "c.txt"}',
+        'tls: denied.fs {"path": "ca.pem"}',
+        'spawn: denied.fs {"path": "err.txt"}',
+    ]
+
+
+def test_a_refused_network_call_names_its_host(tmp_path, work):
+    assert run_program(tmp_path, work, DETAILS_PROGRAM, "details_net", "net", flags=["--deny-net"]) == [
+        'connect: denied.net {"host": "127.0.0.1"}',
+        'listen: denied.net {"host": "localhost"}',
+        'dns: denied.net {"host": "example.test"}',
+        'http: denied.net {"host": "127.0.0.1"}',
+    ]
+
+
+def test_a_failed_connect_names_its_host(tmp_path, work):
+    assert run_program(tmp_path, work, DETAILS_PROGRAM, "details_refused", "refused") == [
+        'connect: net.refused {"host": "127.0.0.1"}']

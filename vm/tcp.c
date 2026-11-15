@@ -780,7 +780,7 @@ static void drop_request(void *data) {
   settle(n);
 }
 
-agc_value agc_host_error(agc_vm *vm, const char *what, const char *host, int64_t port, int err) {
+static agc_value host_error(agc_vm *vm, const char *what, const char *host, int64_t port, int err) {
   size_t size = agc_size_add(strlen(host), strlen(what) + 64);
   char *head = agc_alloc_atomic(size);
   int len = port < 0 ? snprintf(head, size, "%s\n  host: %s", what, host)
@@ -796,6 +796,10 @@ agc_value agc_host_error(agc_vm *vm, const char *what, const char *host, int64_t
   int full = snprintf(text, total, "%s\n  system error: %s", head, reason);
   size_t n_text = full < 0 ? 0 : (size_t)full;
   return agc_error_string(vm, AGC_KIND_NET_HOST_NOT_FOUND, agc_utf8_decode((const uint8_t *)text, n_text, "?", true));
+}
+
+agc_value agc_host_error(agc_vm *vm, const char *what, const char *host, int64_t port, int err) {
+  return agc_error_detail(vm, host_error(vm, what, host, port, err), "host", host, strlen(host));
 }
 
 /* A system error of a TLS failure is of FAMILY: io when a file of the context failed to load, else net. */
@@ -816,7 +820,7 @@ agc_value agc_tls_load_error(agc_vm *vm, const char *what, const char *path, con
   size_t size = agc_size_add(strlen(what), agc_size_add(strlen(path), 32));
   char *head = agc_alloc_atomic(size);
   snprintf(head, size, "network: cannot load %s \"%s\"", what, path);
-  return tls_error(vm, AGC_FAMILY_IO, head, f);
+  return agc_error_detail(vm, tls_error(vm, AGC_FAMILY_IO, head, f), "path", path, strlen(path));
 }
 
 /* The files of a context are read when it is built (TLS.client_context), so only the lazy system-trust context of an
@@ -824,8 +828,9 @@ agc_value agc_tls_load_error(agc_vm *vm, const char *what, const char *path, con
 static agc_value secure_error(agc_vm *vm, const net *n) {
   const agc_tls_failure *f = &n->failure;
   if (n->parent) return agc_tls_failure_error(vm, "network: TLS accept failed", f);
-  if (n->setup_failed) return agc_tls_failure_error(vm, "network: TLS client setup failed", f);
-  return agc_tls_failure_error(vm, "network: TLS connect failed", f);
+  const char *what = n->setup_failed ? "network: TLS client setup failed" : "network: TLS connect failed";
+  const char *host = n->host ? n->host : "";
+  return agc_error_detail(vm, agc_tls_failure_error(vm, what, f), "host", host, strlen(host));
 }
 
 static agc_value open_failure(agc_vm *vm, const net *n, bool found, int err) {
@@ -1547,10 +1552,11 @@ static void no_network(agc_vm *vm, uint32_t span) {
 /* --deny-net, checked before anything is resolved, opened or allocated: the denied error, or Void. Every socket and
    listener starts here (a listener for HttpWire.server comes from TCP.listen or TLS.listen), so a denied run has none
    to accept on. A TLS.Context read its files when it was built (TLS.client_context, under --deny-fs). */
-static agc_value net_denied(agc_vm *vm, uint32_t span) {
+static agc_value net_denied(agc_vm *vm, agc_value host, uint32_t span) {
   no_network(vm, span);
-  if (vm->rt->deny_net) return agc_error(vm, AGC_KIND_DENIED_NET, AGC_DENIED_NET);
-  return agc_void();
+  if (!vm->rt->deny_net) return agc_void();
+  const agc_string *name = agc_as_string(vm, host);
+  return agc_error_detail(vm, agc_error(vm, AGC_KIND_DENIED_NET, AGC_DENIED_NET), "host", name->data, name->bytes);
 }
 
 static bool begin_open(void *data, agc_io_job *job) {
@@ -1612,7 +1618,7 @@ static const char server_role[] = "TLS.listen takes a server TLS.Context (TLS.se
    host's name. */
 static agc_value checked_connect(agc_vm *vm, const agc_value *where, int64_t timeout, uint32_t span, agc_value context,
                                  agc_http_client *client) {
-  agc_value denied = net_denied(vm, span);
+  agc_value denied = net_denied(vm, where[0], span);
   if (!agc_is(denied, AGC_T_VOID)) return denied;
   const agc_string *host = agc_as_string(vm, where[0]);
   int64_t port = agc_as_int(vm, where[1]);
@@ -1659,7 +1665,7 @@ static agc_value builtin_drop_tls(agc_vm *vm, agc_value *args, uint32_t span) {
 /* TCP.listen(host, port), or TLS.listen(host, port, context). */
 static agc_value open_listener(agc_vm *vm, const agc_value *args, uint32_t span, bool secure) {
   if (secure) agc_tls_context_check(vm, args[2], true, server_role, span + 3);
-  agc_value denied = net_denied(vm, span);
+  agc_value denied = net_denied(vm, args[0], span);
   if (!agc_is(denied, AGC_T_VOID)) return denied;
   const agc_string *host = agc_as_string(vm, args[0]);
   int64_t port = agc_as_int(vm, args[1]);

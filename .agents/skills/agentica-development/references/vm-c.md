@@ -48,6 +48,9 @@ Each rule names one place in the VM that follows it.
   output, a TLS file load) and compare kind and code. No bucket collapses
   errors into one kind with code 0; one family suffix everywhere
   (`*.too_large`, `*.timeout`).
+  The path of a file call and the host of a network call go in `details`
+  (`agc_error_detail`, keys `"path"` and `"host"`), refused or failed alike;
+  a path job keeps the given path as its context (`named`, `vm/files.c`).
 - **No C recursion whose depth a value decides.** Printing, comparing, hashing
   and JSON walk nested values with an explicit stack in `agc_alloc` memory
   (`compound_debug`, `vm/text.c`;

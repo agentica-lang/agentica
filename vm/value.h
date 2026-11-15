@@ -873,6 +873,10 @@ agc_value agc_error(agc_vm *vm, agc_error_kind kind, const char *message);
 agc_value agc_error_string(agc_vm *vm, agc_error_kind kind, agc_string *message);
 /* agc_error_string with some(CODE) as the code: an errno, an HTTP status. */
 agc_value agc_error_code(agc_vm *vm, agc_error_kind kind, agc_string *message, int64_t code);
+/* RESULT, a failed Result that agc_error* just built and no program has seen, with DATA (LEN bytes, decoded as
+   UTF-8 with U+FFFD for bad bytes) as details[KEY]. The String form of a program without the Error struct is left
+   as it is. */
+agc_value agc_error_detail(agc_vm *vm, agc_value result, const char *key, const char *data, size_t len);
 /* Whether V is an Error of the running program (a struct of rt->error_struct). */
 bool agc_is_error(const agc_vm *vm, agc_value v);
 /* The text of an error payload: a String as it is, the message of an Error. Any other value is a wrong tag. */

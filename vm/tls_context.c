@@ -169,14 +169,15 @@ static agc_value start_build(agc_vm *vm, agc_value options, bool server, uint32_
     refused = "network: a server context needs cert_file and key_file";
   else if (!b->cert != !b->key)
     refused = "network: cert_file and key_file go together";
-  agc_error_kind kind = AGC_KIND_ARGUMENT;
   if (!refused && vm->rt->deny_fs && (b->ca || b->cert)) {
-    refused = AGC_DENIED_FS;
-    kind = AGC_KIND_DENIED_FS;
+    free_build(b);
+    const agc_string *path = field[0];
+    for (size_t k = 1; k < paths && !path->bytes; k++) path = field[k];
+    return agc_error_detail(vm, agc_error(vm, AGC_KIND_DENIED_FS, AGC_DENIED_FS), "path", path->data, path->bytes);
   }
   if (refused) {
     free_build(b);
-    return agc_error(vm, kind, refused);
+    return agc_error(vm, AGC_KIND_ARGUMENT, refused);
   }
   agc_io_start(vm, &context_io, b, agc_void(), -1);
   return agc_void();

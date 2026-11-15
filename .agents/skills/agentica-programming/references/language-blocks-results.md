@@ -95,7 +95,10 @@ Signatures: `builtins.md`.
   `--deny-*` flags, `denied.env`, `denied.fs`, `denied.net` and `denied.run`
   (`e.is_a?("denied")` matches all). A find with no match keeps `"error"`. An
   OS error has its errno as `code` (the number differs between systems; the
-  kind does not), a refused HTTP head its status.
+  kind does not), a refused HTTP head its status. The error of a call on a
+  path (refused or failed) has `details["path"]`, the path as given; one of a
+  call on a host (connect, listen, DNS, TLS, refused or failed) has
+  `details["host"]`. Calls on an open handle have no details.
 - `std/` kinds: `http.*` and `net.timeout` (std/http), `archive.format`,
   `archive.unsafe`, `archive.too_large`, `archive.timeout`,
   `archive.not_found`, `toml.parse`, `toml.decode`, `regex.syntax`,
