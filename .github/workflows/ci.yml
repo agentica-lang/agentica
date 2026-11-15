@@ -107,8 +107,10 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
-  # What changed decides whether the C half runs. HEAD is the merge commit on pull_request, so HEAD^1 is the base tip: this
-  # diffs the whole PR, not just the tip commit.
+  # What changed decides which jobs run (tools/ci_changes.py says each output). HEAD is the merge commit on pull_request,
+  # so HEAD^1 is the base tip: this diffs the whole PR, not just the tip commit. std_only is the light path: a PR that
+  # changes only portable std/ modules, their tests and docs runs their test modules and goldens in one fast shard, and
+  # skips the other test jobs and `checks`.
   changes:
     if: github.event_name != 'push'
     runs-on: ubuntu-latest
@@ -117,6 +119,9 @@ jobs:
       c: ${{ steps.changes.outputs.c }}
       trace: ${{ steps.changes.outputs.trace }}
       cchecker: ${{ steps.changes.outputs.cchecker }}
+      std_only: ${{ steps.changes.outputs.std_only }}
+      std_tests: ${{ steps.changes.outputs.std_tests }}
+      std_fixtures: ${{ steps.changes.outputs.std_fixtures }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -125,39 +130,12 @@ jobs:
         env:
           EVENT: ${{ github.event_name }}
         run: |
-          c=false
-          trace=false
-          cchecker=false
-          if [ "$EVENT" != pull_request ]; then
-            c=true
-            trace=true
-            cchecker=true
-          elif ! files=$(git -c core.quotePath=false diff --name-only --no-renames HEAD^1 HEAD); then
-            c=true
-            trace=true
-            cchecker=true
+          if [ "$EVENT" = pull_request ] && files=$(git -c core.quotePath=false diff --name-only --no-renames HEAD^1 HEAD); then
+            printf '%s\n' "$files" | python3 tools/ci_changes.py > "$RUNNER_TEMP/changes"
           else
-            while IFS= read -r f; do
-              case "$f" in
-                vm/trace.*|vm/tests/trace_test.c)
-                  trace=true ;;
-              esac
-              case "$f" in
-                # tests/fixtures/native/ and examples/ffi/: the C peers, which vm-tsan-native runs under TSan.
-                vm/*|tests/fixtures/native/*|examples/ffi/*.c|Makefile|mk/*|.gitmodules|.clang-tidy|.github/workflows/ci.yml|.github/actions/*)
-                  c=true ;;
-              esac
-              # vm/ and the build files plus the settings and the baseline of cchecker, which do not need the sanitizer half.
-              case "$f" in
-                vm/*|Makefile|mk/*|.gitmodules|.clang-tidy|cchecker.toml|cchecker-baseline.json|.github/workflows/ci.yml|.github/actions/*)
-                  cchecker=true ;;
-              esac
-            done <<< "$files"
+            python3 tools/ci_changes.py --all > "$RUNNER_TEMP/changes"
           fi
-          echo "c=$c trace=$trace cchecker=$cchecker"
-          echo "c=$c" >> "$GITHUB_OUTPUT"
-          echo "trace=$trace" >> "$GITHUB_OUTPUT"
-          echo "cchecker=$cchecker" >> "$GITHUB_OUTPUT"
+          tee -a "$GITHUB_OUTPUT" < "$RUNNER_TEMP/changes"
 
   # The one build of the release mode: dist/agentica, the first binary of the bootstrap (tests/test_bdd_posix.py runs it) and
   # the C test programs, with the stage files and objects that make needs to see them as up to date.
@@ -187,15 +165,17 @@ jobs:
   # programs, put where the time is short. A VM runs on one scheduler per core unless the test pins a count, so on this
   # four-core runner `make test` runs the TCP, TLS, HTTP, process and BDD modules on four schedulers: the first step
   # fails if the runner gets fewer cores (then put `make test-multicore-modules` back here).
+  # On the light path (std_only) one shard runs the test modules and goldens of the changed std modules, fast and slow tier,
+  # and the copy-paste check of `checks`.
   tests-fast:
     name: fast tests (${{ matrix.shard }}/2)
-    needs: build
+    needs: [changes, build]
     runs-on: ubuntu-latest
     timeout-minutes: 150
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2]
+        shard: ${{ fromJSON(needs.changes.outputs.std_only == 'true' && '[1]' || '[1, 2]') }}
     env:
       AGENTICA_REQUIRE_VM: '1'
       AGENTICA_SWEEP: sampled
@@ -211,7 +191,18 @@ jobs:
       - name: The runner has four cores or more
         run: test "$(nproc)" -ge 4
       - name: make test
+        if: needs.changes.outputs.std_only != 'true'
         run: make test JOBS=6 SHARD=${{ matrix.shard }}/2
+      - name: The test modules of the changed std modules, fast and slow tier, the goldens that import them, copy-paste
+        if: needs.changes.outputs.std_only == 'true'
+        env:
+          STD_TESTS: ${{ needs.changes.outputs.std_tests }}
+          STD_FIXTURES: ${{ needs.changes.outputs.std_fixtures }}
+        run: |
+          make test JOBS=6 TESTS="$STD_TESTS"
+          make test-slow TESTS="$STD_TESTS"
+          if [ -n "$STD_FIXTURES" ]; then make vm-golden-check FIXTURES="$STD_FIXTURES"; fi
+          make dup-check
       # The two static checks run even when a test failed, so one CI round reports both.
       - name: Every file of compiler/ checks, line width and style rules included (agentica check compiler)
         if: ${{ !cancelled() && matrix.shard == 2 }}
@@ -221,7 +212,7 @@ jobs:
         run: make test-remove-actions
         env:
           AGENTICA_ACTIONS_RUNNER_ENVIRONMENT: ${{ runner.environment }}
-      - if: matrix.shard == 1
+      - if: matrix.shard == 1 && needs.changes.outputs.std_only != 'true'
         run: make vm-latency
       - name: The layout of compiler/ and stdlib/ (agentica fmt --check)
         if: ${{ !cancelled() && matrix.shard == 1 }}
@@ -232,7 +223,8 @@ jobs:
   # after the tests, not beside them).
   tests-slow:
     name: slow tests (${{ matrix.shard }}/2)
-    needs: build
+    needs: [changes, build]
+    if: needs.changes.outputs.std_only != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 150
     strategy:
@@ -258,7 +250,8 @@ jobs:
 
   tests-shared:
     name: shared-state locks
-    needs: build
+    needs: [changes, build]
+    if: needs.changes.outputs.std_only != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 150
     env:
@@ -280,7 +273,8 @@ jobs:
   # build/vm/release/obj with other flags, so nothing that builds may run after it (here: only dup-check, which builds nothing).
   checks:
     name: C tests, layout, fixed point, JIT goldens, stage0, vendored libraries, copy-paste
-    needs: build
+    needs: [changes, build]
+    if: needs.changes.outputs.std_only != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
@@ -439,22 +433,28 @@ jobs:
           retention-days: 7
 
   # The check that branch protection names: every job of the Linux tests passed. A job that failed, was cancelled or did not
-  # run fails it (none of them is skipped on a pull request or a manual run, but cchecker, which runs when vm/, the build or
-  # its settings changed).
+  # run fails it, but cchecker, which runs when vm/, the build or its settings changed, and on the light path (std_only)
+  # the slow tests, the shared-state locks and `checks`, which are skipped then.
   test:
     needs: [changes, build, tests-fast, tests-slow, tests-shared, checks, cchecker]
     if: ${{ always() && github.event_name != 'push' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Every job of the tests succeeded, cchecker unless it was skipped
+      - name: Every job of the tests succeeded, cchecker unless it was skipped, the skipped jobs of the light path
         env:
           NEEDS: ${{ toJSON(needs) }}
           CCHECKER: ${{ needs.changes.outputs.cchecker }}
+          STD_ONLY: ${{ needs.changes.outputs.std_only }}
         run: |
           printf '%s\n' "$NEEDS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
-          echo "cchecker=$CCHECKER"
-          printf '%s\n' "$NEEDS" | jq -e 'del(.cchecker) | all(.[]; .result == "success")' > /dev/null
+          echo "cchecker=$CCHECKER std_only=$STD_ONLY"
+          if [ "$STD_ONLY" = true ]; then
+            printf '%s\n' "$NEEDS" | jq -e '[."tests-slow", ."tests-shared", .checks] | all(.[]; .result == "skipped")' > /dev/null
+            printf '%s\n' "$NEEDS" | jq -e 'del(.cchecker, ."tests-slow", ."tests-shared", .checks) | all(.[]; .result == "success")' > /dev/null
+          else
+            printf '%s\n' "$NEEDS" | jq -e 'del(.cchecker) | all(.[]; .result == "success")' > /dev/null
+          fi
           if [ "$CCHECKER" = false ]; then
             printf '%s\n' "$NEEDS" | jq -e '.cchecker.result == "skipped"' > /dev/null
           else
