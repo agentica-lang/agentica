@@ -36,7 +36,7 @@ end
 
 def fetch(job: Job) -> Int
   ok_count = 0
-  for k in 0...job.count
+  for _ in 0...job.count
     if HTTP.get(job.pool, job.url).unwrap!.status == 200
       ok_count = ok_count + 1
     end
@@ -51,7 +51,7 @@ def main() -> Void
   options = HTTP.ClientOptions(timeout_ms: 30000, idle_timeout_ms: 30000, max_connections: connections, max_body_bytes: 1048576)
   pool = HTTP.client(options).unwrap!
   tasks: List[Task[Int]] = []
-  for k in 0...connections
+  for _ in 0...connections
     tasks = tasks.push(Task.spawn(&fetch, Job(pool: pool, url: args[0], count: each)))
   end
   total = 0
