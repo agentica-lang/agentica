@@ -11,6 +11,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 ### Changed
 
 - `"$#{n}\r\n".bytes` on an interpolated string writes the parts into one `Bytes`, with no `String` in between; an `Int` in any interpolation prints faster (#1361).
+- `agentica FILE.agc` no longer looks for the C compiler in `PATH` at each start of a cached program with no native module, and a change of `CC` or `PATH` keeps its cache entry (#1551).
 
 ## [0.32.0] - 2026-11-15
 
