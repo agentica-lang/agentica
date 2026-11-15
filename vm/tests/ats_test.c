@@ -344,7 +344,7 @@ static void test_clear_races_writers(void) {
 #define READ_ROUNDS 40000
 #define FILLER 600
 
-static agc_value read_texts[READ_KEYS];
+static agc_value read_keys[READ_KEYS], read_texts[READ_KEYS];
 static atomic_bool writing_done;
 static atomic_int_fast64_t reads_seen;
 
@@ -353,14 +353,25 @@ static void put_on(agc_vm *v, agc_value t, agc_value key, agc_value value) {
   (void)call_on(v, "ATS.put", 3, args);
 }
 
-/* Key k holds the Int k or the String "s<k>", and the two swap all the time, so a value torn between them has the tag
-   of one and the payload of the other. Fillers make the table grow and shrink, and a clear now and then empties it. */
+static agc_value text_of(const char *prefix, int k) {
+  char name[16];
+  snprintf(name, sizeof name, "%s%d", prefix, k);
+  return agc_test_str(name);
+}
+
+/* Key "k<k>" holds the Int k or the String "s<k>", and the two swap all the time, so a value torn between them has the
+   tag of one and the payload of the other. One key is deleted and put back each round, so probes pass deleted
+   entries whose key a reader may be comparing. Fillers make the table grow and shrink, and a clear now and then
+   empties it. */
 static void read_writer(void *arg) {
   agc_vm *v = &workers[(intptr_t)arg];
   assert(agc_gc_thread_enter());
   uv_barrier_wait(&gate);
   for (int r = 0; r < READ_ROUNDS; r++) {
-    for (int64_t k = 0; k < READ_KEYS; k++) put_on(v, shared_table, agc_int(k), r % 2 ? agc_int(k) : read_texts[k]);
+    for (int k = 0; k < READ_KEYS; k++) put_on(v, shared_table, read_keys[k], r % 2 ? agc_int(k) : read_texts[k]);
+    agc_value again[2] = {shared_table, read_keys[r % READ_KEYS]};
+    (void)call_on(v, "ATS.delete", 2, again);
+    put_on(v, shared_table, again[1], agc_int(r % READ_KEYS));
     if (r % 512 == 3) {
       for (int64_t k = 0; k < FILLER; k++) put_on(v, shared_table, agc_int(1000 + k), agc_int(k));
       for (int64_t k = 0; k < FILLER; k++) {
@@ -374,18 +385,21 @@ static void read_writer(void *arg) {
   agc_gc_thread_leave();
 }
 
-/* Reads with no lock while read_writer runs: a key is missing or holds one of its two values, whole. */
+/* Reads with no lock while read_writer runs, by keys of its own that equal the writer's: a key is missing or holds
+   one of its two values, whole. */
 static void reader(void *arg) {
   intptr_t id = (intptr_t)arg;
   agc_vm *v = &workers[id];
   assert(agc_gc_thread_enter());
+  agc_value keys[READ_KEYS];
+  for (int k = 0; k < READ_KEYS; k++) keys[k] = text_of("k", k);
   uv_barrier_wait(&gate);
   uint64_t seed = (uint64_t)id;
   int64_t reads = 0;
   while (!atomic_load(&writing_done)) {
     seed = seed * 6364136223846793005u + 1442695040888963407u;
-    int64_t k = (int64_t)((seed >> 33) % READ_KEYS);
-    agc_value args[2] = {shared_table, agc_int(k)};
+    int k = (int)((seed >> 33) % READ_KEYS);
+    agc_value args[2] = {shared_table, keys[k]};
     const agc_result *r = agc_as_result(v, call_on(v, "ATS.get", 2, args));
     reads++;
     if (!r->ok) continue;
@@ -402,10 +416,9 @@ static void reader(void *arg) {
 }
 
 static void test_readers_race_writes(void) {
-  char name[16];
   for (int k = 0; k < READ_KEYS; k++) {
-    snprintf(name, sizeof name, "s%d", k);
-    read_texts[k] = agc_test_str(name);
+    read_keys[k] = text_of("k", k);
+    read_texts[k] = text_of("s", k);
   }
   atomic_store(&writing_done, false);
   atomic_store(&reads_seen, 0);
