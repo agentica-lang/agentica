@@ -18,9 +18,9 @@ import time
 import pytest
 
 from tests import vm_diff_support
-from tests.agentica_test import (FIFO_FILE_REASON, RUN_TIMEOUT, TESTS, UNDER_WINE, WINDOWS, Child, cli, compile_agc,
-                                 host_only, kill_process, process_alive, scaled, vm_binary,
-                                 vm_command, vm_environment, wait_until)
+from tests.agentica_test import (FIFO_FILE_REASON, RUN_TIMEOUT, TESTS, UNDER_WINE, WINDOWS, Child, Pid, cli,
+                                 compile_agc, host_only, kill_process, process_alive, scaled, vm_binary, vm_command,
+                                 vm_environment, wait_until)
 from tests.vm_diff_support import (
     EXTRAS_SHARD, FIXTURE_DIR, HEAVY_FIXTURES, LIGHT_SHARD_ROTATION, SHARD_COUNT, Fixture, check_limited,
     check_runaway, check_step_allowance, check_sweep, check_text_format, decode, exit_status, execute, fixture_programs,
@@ -255,7 +255,7 @@ def test_closing_a_captured_vm_child_sends_sigterm_first_so_the_child_stops_its_
         request.addfinalizer(lambda found=pids: kill_alive(found))
         result = run_vm(PLAIN, outer, None, extra=[str(vm_binary()), str(inner), mode], cwd=tmp_path)
         lines = words(result[1])
-        pids.extend(word for word in (lines[0].split() if lines else []) if word.isdigit())
+        pids.extend(Pid(word) for word in (lines[0].split() if lines else []) if word.isdigit())
         assert result[0] == 0, mode
         assert lines[1:] == ([] if mode == "close" else ['error("process: operation timed out", kind: "process.timeout")']), mode
         assert len(pids) == 2, mode
@@ -284,7 +284,7 @@ def test_close_never_waits_for_a_captured_child_and_one_that_ignores_sigterm_get
         result = run_vm(PLAIN, bytecode, None, extra=[mode], cwd=tmp_path, env={"AGENTICA_VM_TRACE": "io"})
         lines = words(result[1])
         if lines and lines[0].isdigit():
-            pids.append(lines[0])
+            pids.append(Pid(lines[0]))
         assert result[0] == 0, mode
         assert len(pids) == 1, mode
         assert len(lines) >= 2 and int(lines[1]) < 500, "%s: %s" % (mode, lines)
@@ -334,6 +334,7 @@ def test_a_signal_caught_while_the_vm_is_blocked_is_not_lost_when_the_last_child
                         creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if windows else 0))
     pid = child.process.stdout.readline().decode().strip()
     assert pid.isdigit(), pid
+    pid = Pid(pid)
     request.addfinalizer(lambda: kill_alive([pid]))
     time.sleep(0.5)
     kill_process(pid)

@@ -30,7 +30,18 @@
 #define NET(ptr, field) ((net *)(void *)((char *)(ptr) - offsetof(net, field)))
 #define TCP_LINK(ptr, field) ((tcp_link *)(void *)((char *)(ptr) - offsetof(tcp_link, field)))
 
-typedef enum { REQ_CONNECT, REQ_LISTEN, REQ_ACCEPT, REQ_LINE, REQ_BYTES, REQ_IDLE, REQ_HEAD, REQ_RESPONSE, REQ_SEND } req_kind;
+typedef enum {
+  REQ_CONNECT,
+  REQ_LISTEN,
+  REQ_ACCEPT,
+  REQ_LINE,
+  REQ_BYTES,
+  REQ_IDLE,
+  REQ_HEAD,
+  REQ_RESPONSE,
+  REQ_SEND,
+  REQ_FLUSH
+} req_kind;
 
 /* Why TLS.upgrade did not start, in its TLS net's `error` (libuv errors are negative). */
 enum { UPGRADE_CLOSED = 0, UPGRADE_UNREAD = 1, UPGRADE_ENDED = 2, UPGRADE_SENDING = 3 };
@@ -38,6 +49,11 @@ enum { UPGRADE_CLOSED = 0, UPGRADE_UNREAD = 1, UPGRADE_ENDED = 2, UPGRADE_SENDIN
 /* The bits of a net's `wstate` (direct_send): a scheduler sends on it now, it is shut, its close waits for that send,
    and a direct send went out in part and its rest has not started on the I/O thread (begin_send clears it). */
 enum { W_DIRECT = 1u, W_SHUT = 2u, W_DEFERRED = 4u, W_PARTIAL = 8u };
+
+/* The limit of a socket's write buffer (TCP.write_limit), over which a write waits. */
+#define OUT_LIMIT_DEFAULT ((size_t)65536)
+#define OUT_LIMIT_MIN 1024
+#define OUT_LIMIT_MAX 16777216
 
 typedef agc_conn net;
 typedef struct tcp_link tcp_link;
@@ -104,7 +120,10 @@ struct agc_conn {
   size_t users, callbacks;
   bool listener, resolving, resolved, connected, reading;
   _Atomic bool closed;
-  int error, write_status;
+  int error;
+  /* The status of the last send. The I/O thread writes it, and so does a whole direct send, which clears an error
+     under the writer lock while agc_conn_half_close may read it on the I/O thread: atomic for that pair alone. */
+  _Atomic int write_status;
   uint8_t *write_data;
   agc_inbuf in;
   request *opener, *reader, *writer, *accepts, *accepts_tail, *handshakes;
@@ -141,6 +160,35 @@ struct agc_conn {
   _Atomic unsigned wstate;
   agc_conn_watch watch;
   void *watcher;
+  /* The write buffer of a plain socket (TCP.write, #1188). `unsent` counts the bytes a write took that the kernel has
+     not: those of `pend`, of `out` and of the write in flight (`out_flight`). A scheduler adds to it (out_put) with
+     rt->sync held and no direct send under way, and only when it is 0 does a write or a send go straight to the
+     kernel, so bytes keep their order; the I/O thread takes from it as bytes go out. `pend` is where a scheduler
+     leaves bytes for the I/O thread: both hold `out_lock` for it, and `pend_posted` says that the step that takes it
+     (out_step) is on its way, so the writes that come before it runs cost no step of their own. `out` holds what
+     waits behind the write in flight and goes out as one write. `flushers` are the tasks that wait for `unsent` to
+     fall to their limit (TCP.flush: 0; a write over the limit: half of it). `out_error` is the first failure of a
+     buffered write, which every later write and flush reports. `out_limit` (TCP.write_limit, 0 for the default) is
+     read and written by schedulers only. `half_wanted`: HttpWire.close_write came while bytes waited. The three
+     atomics come first, on their own, since every send on a scheduler reads `unsent` and `out_error`. */
+  _Atomic size_t unsent;
+  _Atomic size_t out_limit;
+  _Atomic int out_error;
+  uv_mutex_t out_lock;
+  uint8_t *pend;
+  size_t pend_len, pend_cap;
+  bool pend_posted;
+  uint8_t *out;
+  size_t out_len, out_cap, out_flight;
+  request *flushers;
+  bool half_wanted;
+  /* A close that found bytes in the write buffer waits for them (linger): `lingering` while it does, at most
+     `linger_ms` (the flush limit of the run) on `linger`, a timer made for it; `lingered` says it was tried, so the
+     close that ends it does not wait again. `linger_why` is the reason of the close that waits. */
+  bool lingering, lingered;
+  int64_t linger_ms;
+  uv_timer_t *linger;
+  const char *linger_why;
 };
 
 /* A posted close: release_step runs it on the I/O thread. */
@@ -192,6 +240,9 @@ static void settle(net *n) {
   free(n->cipher);
   free(n->plain);
   free(n->write_data);
+  free(n->out);
+  free(n->pend);
+  uv_mutex_destroy(&n->out_lock);
   free(n->host);
   free(n);
 }
@@ -337,6 +388,7 @@ static void unlink_request(request *q) {
   if (n->writer == q) n->writer = NULL;
   remove_request(&n->accepts, &n->accepts_tail, q);
   remove_request(&n->handshakes, NULL, q);
+  remove_request(&n->flushers, NULL, q);
   if (q->child && q->child->opener == q) q->child->opener = NULL;
   q->next = NULL;
 }
@@ -381,6 +433,9 @@ static void finish(request *q) {
       break;
     case REQ_SEND:
       q->write_status = n->write_status;
+      break;
+    case REQ_FLUSH:
+      q->write_status = atomic_load_explicit(&n->out_error, memory_order_relaxed);
       break;
   }
   agc_io_ready(q->job);
@@ -458,8 +513,45 @@ static void direct_over(void *data) {
   settle(n);
 }
 
+/* The bytes that wait behind the write in flight are given up (a close, a failed write). I/O thread only. */
+static void out_drop(net *n) {
+  (void)atomic_fetch_sub_explicit(&n->unsent, n->out_len, memory_order_acq_rel);
+  free(n->out);
+  n->out = NULL;
+  n->out_len = n->out_cap = 0;
+}
+
+/* The sockets whose close waits for their write buffer (agc_net_draining), and the bytes that such waits gave up
+   (agc_net_dropped). They are the process's and not a VM's: a net that waits has left its resource, so only its
+   loop knows it, and the exit asks about every one. Each wait ends, by its timer, by its last byte or by shut_one, so
+   the count goes back to 0. */
+static _Atomic size_t draining; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+static _Atomic uint64_t dropped; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+
+bool agc_net_draining(void) { return atomic_load_explicit(&draining, memory_order_acquire) > 0; }
+
+uint64_t agc_net_dropped(void) { return atomic_load_explicit(&dropped, memory_order_acquire); }
+
+static void linger_closed(uv_handle_t *h) {
+  net *n = h->data;
+  free(h);
+  n->callbacks--;
+  settle(n);
+}
+
+/* The wait of a close for the write buffer is over: its timer goes, and the caller closes. I/O thread only. */
+static void linger_stop(net *n) {
+  if (!n->lingering) return;
+  n->lingering = false;
+  (void)atomic_fetch_sub_explicit(&draining, 1, memory_order_acq_rel);
+  uv_timer_stop(n->linger);
+  uv_close((uv_handle_t *)n->linger, linger_closed);
+  n->linger = NULL;
+}
+
 static void shut_one(net *n, const char *why) {
   if (n->closed) return;
+  linger_stop(n);
   goodbye(n);
   n->closed = true;
   AGC_TRACE(&n->trace, AGC_TRACE_IO, "tcp_close %s=%" PRIu64 " why=%s", kind_name(n), n->id, why);
@@ -479,6 +571,8 @@ static void shut_one(net *n, const char *why) {
   notify(n, n->reader);
   notify(n, n->writer);
   while (n->accepts) finish(n->accepts);
+  out_drop(n);
+  while (n->flushers) finish(n->flushers);
 }
 
 /* A listener's close also closes the connections still in their handshake; closing one finishes its accept, and one
@@ -497,13 +591,60 @@ static void shut(net *n, const char *why) {
    Windows resets a socket that still has a read pending when the process ends, and the peer got WSAECONNRESET
    instead of the end of input (#489). The registry keeps its count; its release finds the net closed and only gives
    the count back. */
-static void say_goodbye(void *native) { shut(native, "exit"); }
+/* The bytes that a waiting close could not send are dropped and counted, and the end of the run says so
+   (vm/launch.c), since the writes that put them there returned ok. */
+static void linger_lost(net *n) {
+  size_t lost = atomic_load_explicit(&n->unsent, memory_order_acquire);
+  (void)atomic_fetch_add_explicit(&dropped, lost, memory_order_acq_rel);
+  AGC_TRACE(&n->trace, AGC_TRACE_IO, "tcp_drop %s=%" PRIu64 " unsent=%zu", kind_name(n), n->id, lost);
+}
+
+/* The peer did not take the buffer within the limit. */
+static void linger_expired(uv_timer_t *t) {
+  net *n = t->data;
+  linger_lost(n);
+  shut_one(n, n->linger_why);
+}
+
+static void give_up_one(uv_handle_t *h, void *arg) {
+  (void)arg;
+  if (h->type == UV_TIMER && ((uv_timer_t *)h)->timer_cb == linger_expired && !uv_is_closing(h))
+    linger_expired((uv_timer_t *)h);
+}
+
+void agc_net_give_up(agc_vm *vm) { uv_walk(agc_io_uv(vm), give_up_one, NULL); }
+
+/* Whether the close of N for WHY (TCP.close, the end of its owner or of the run) now waits for the bytes of the write
+   buffer, as the kernel's close does for its own: N stays open, the last byte out (out_sent) or the limit closes it.
+   Bytes on their way from a scheduler are in the buffer by now: their step was posted before the close's. */
+static bool lingers(net *n, const char *why) {
+  if (n->closed || n->lingered || !n->conn || !(n->out_flight || n->out_len) || n->linger_ms <= 0) return false;
+  if (strcmp(why, "close") != 0 && strcmp(why, "owner") != 0 && strcmp(why, "exit") != 0) return false;
+  uv_timer_t *timer = malloc(sizeof *timer);
+  if (!timer) agc_out_of_memory();
+  if (uv_timer_init(n->conn->tcp.loop, timer) != 0) {
+    free(timer);
+    return false;
+  }
+  timer->data = n;
+  (void)uv_timer_start(timer, linger_expired, (uint64_t)n->linger_ms, 0);
+  n->linger = timer;
+  n->linger_why = why;
+  n->lingering = n->lingered = true;
+  n->callbacks++;
+  (void)atomic_fetch_add_explicit(&draining, 1, memory_order_acq_rel);
+  return true;
+}
+
+static void say_goodbye(void *native) {
+  if (!lingers(native, "exit")) shut(native, "exit");
+}
 
 /* The resource gave its count back: the close and the count, on the I/O thread. */
 static void release_step(void *data) {
   release_call *call = data;
   net *n = call->n;
-  shut(n, call->why);
+  if (!lingers(n, call->why)) shut(n, call->why);
   free(call);
   n->users--;
   settle(n);
@@ -521,9 +662,11 @@ static void post_release(net *n, const char *why) {
    (on a scheduler), so it is a step. */
 static void release_net(void *native) { post_release(native, "exit"); }
 
-static net *make_net(const agc_trace *trace, agc_loop *io, CC_OWNS char *host, int64_t port, bool listener) {
+static net *make_net(const agc_trace *trace, agc_loop *io, CC_OWNS char *host, int64_t port, bool listener,
+                     int64_t linger_ms) {
   net *n = calloc(1, sizeof(net));
-  if (!n) agc_out_of_memory();
+  if (!n || uv_mutex_init(&n->out_lock) != 0) agc_out_of_memory();
+  n->linger_ms = linger_ms;
   n->trace = *trace;
   n->io = io;
   n->host = host;
@@ -534,7 +677,7 @@ static net *make_net(const agc_trace *trace, agc_loop *io, CC_OWNS char *host, i
 
 /* IO is agc_io_loop(vm), which can raise: the caller makes it before it mallocs HOST (#1259). */
 static net *new_net(agc_vm *vm, agc_loop *io, CC_OWNS char *host, int64_t port, bool listener) {
-  return make_net(&vm->rt->trace, io, host, port, listener);
+  return make_net(&vm->rt->trace, io, host, port, listener, vm->rt->flush_timeout);
 }
 
 /* The resource lets its net go, and its count on it with it, to the caller; NULL when it was closed already. */
@@ -589,6 +732,9 @@ static void link_request(request *q, agc_io_job *job) {
     n->reader = q;
   } else if (q->kind == REQ_SEND) {
     n->writer = q;
+  } else if (q->kind == REQ_FLUSH) {
+    q->next = n->flushers;
+    n->flushers = q;
   } else if (q->kind != REQ_ACCEPT) {
     n->opener = q;
   } else if (n->accepts_tail) {
@@ -941,7 +1087,7 @@ static void begin_tls(net *n, agc_tls *t) {
 
 static net *accept_link(net *l, tcp_link *k, int *rc) {
   k->backlog--;
-  net *c = make_net(&l->trace, l->io, NULL, 0, false);
+  net *c = make_net(&l->trace, l->io, NULL, 0, false, l->linger_ms);
   c->loop = l->loop;
   tcp_link *link = new_link(c);
   *rc = uv_accept((uv_stream_t *)&k->tcp, (uv_stream_t *)&link->tcp);
@@ -1320,7 +1466,7 @@ static agc_value opened(agc_vm *vm, const request *q, agc_value context) {
 static agc_value request_done(agc_vm *vm, void *data, agc_value context) {
   request *q = data;
   net *n = q->n;
-  if (q->kind == REQ_SEND) agc_charge(vm, q->count);
+  if (q->kind == REQ_SEND || q->kind == REQ_FLUSH) agc_charge(vm, q->count);
   agc_value result;
   if (q->kind == REQ_CONNECT || q->kind == REQ_LISTEN) {
     result = opened(vm, q, context);
@@ -1380,7 +1526,7 @@ static bool request_cancel(agc_vm *vm, void *data, agc_value context, bool deadl
   (void)context;
   request *q = data;
   if (q->kind == REQ_SEND || !q->counted) return false;
-  if (!deadline && (q->finished || (q->kind != REQ_ACCEPT && !reads(q->kind)))) return false;
+  if (!deadline && (q->finished || (q->kind != REQ_ACCEPT && q->kind != REQ_FLUSH && !reads(q->kind)))) return false;
   unlink_request(q);
   if (q->kind == REQ_CONNECT) shut(q->n, "cancel");
   return true;
@@ -1559,7 +1705,7 @@ static net *live(const agc_socket *sk) {
    a handshake. A half-closed socket (HttpWire.close_write) has no write side left. I/O thread only. */
 static int upgrade_refusal(const net *old) {
   if (!old || old->closed || !old->conn || old->half_closed) return UPGRADE_CLOSED;
-  if (old->writer || old->write_data ||
+  if (old->writer || old->write_data || atomic_load_explicit(&old->unsent, memory_order_acquire) ||
       (atomic_load_explicit(&old->wstate, memory_order_acquire) & (W_DIRECT | W_PARTIAL)))
     return UPGRADE_SENDING;
   if (agc_inbuf_pending(&old->in)) return UPGRADE_UNREAD;
@@ -1861,10 +2007,105 @@ static agc_value builtin_close_write(agc_vm *vm, agc_value *args, uint32_t span)
   return agc_void();
 }
 
+static void write_side_shut(uv_shutdown_t *req, int status) {
+  (void)status;
+  net *n = req->data;
+  n->callbacks--;
+  settle(n);
+}
+
+static void half_close_now(net *n) {
+  n->half_wanted = false;
+  if (n->closed || n->half_closed || !n->conn || n->write_status < 0 || n->out_error < 0) return;
+  n->half_closed = true;
+  goodbye(n);
+  n->shutdown.data = n;
+  if (uv_shutdown(&n->shutdown, (uv_stream_t *)&n->conn->tcp, write_side_shut) == 0) n->callbacks++;
+}
+
+/* Writes LEN bytes of the buffer, which `unsent` counts already, with no write in flight: true when the write stays
+   in flight, else *STATUS is 0 (all are out) or a libuv error. I/O thread only. CB, here and below, is `wrote`, which
+   calls out_sent and so comes after it. */
+static bool out_write(net *n, const uint8_t *data, size_t len, int *status, uv_write_cb cb) {
+  int rc = agc_stream_write((uv_stream_t *)&n->conn->tcp, &n->write_req, &n->write_data, data, len, cb);
+  if (rc == 1) n->out_flight = len;
+  *status = rc;
+  return rc == 1;
+}
+
+/* LEN bytes left the write buffer: they are out, or lost with STATUS, a libuv error, and then so is what waited
+   behind them. What waited goes out as one write; then the tasks whose limit is met are woken, and a half-close that
+   waited for the last byte is made. I/O thread only. */
+static void out_sent(net *n, size_t len, int status, uv_write_cb cb) {
+  for (bool flying = false; !flying;) {
+    if (status < 0 && n->lingering) linger_lost(n);
+    (void)atomic_fetch_sub_explicit(&n->unsent, len, memory_order_acq_rel);
+    if (status < 0) {
+      int none = 0;
+      (void)atomic_compare_exchange_strong_explicit(&n->out_error, &none, status, memory_order_acq_rel,
+                                                    memory_order_relaxed);
+      out_drop(n);
+    }
+    if (!n->out_len || n->closed) break;
+    uint8_t *data = n->out;
+    len = n->out_len;
+    n->out = NULL;
+    n->out_len = n->out_cap = 0;
+    flying = out_write(n, data, len, &status, cb);
+    free(data);
+  }
+  bool failed = atomic_load_explicit(&n->out_error, memory_order_relaxed) < 0;
+  size_t left = atomic_load_explicit(&n->unsent, memory_order_acquire);
+  for (request *q = n->flushers, *next; q; q = next) {
+    next = q->next;
+    if (failed || left <= q->limit) finish(q);
+  }
+  if (n->half_wanted && !n->out_flight && !n->out_len) half_close_now(n);
+  if (n->lingering && !n->out_flight && !n->out_len) shut_one(n, n->linger_why);
+}
+
+static void out_start(net *n, const uint8_t *data, size_t len, uv_write_cb cb) {
+  int status;
+  if (!out_write(n, data, len, &status, cb)) out_sent(n, len, status, cb);
+}
+
+static void out_append(uint8_t **buf, size_t *used, size_t *cap, const uint8_t *data, size_t len) {
+  if (len > *cap - *used) {
+    size_t want = agc_size_add(*used, len);
+    if (want < 2 * *cap) want = 2 * *cap;
+    uint8_t *grown = realloc(*buf, want);
+    if (!grown) agc_out_of_memory();
+    *buf = grown;
+    *cap = want;
+  }
+  memcpy(*buf + *used, data, len);
+  *used += len;
+}
+
+/* LEN bytes that a write took, counted in `unsent`: written now when nothing is ahead of them, else kept behind the
+   write in flight. A closed socket, or one whose buffered write failed, loses them. I/O thread only. */
+static void out_add(net *n, const uint8_t *data, size_t len, uv_write_cb cb) {
+  if (n->closed || !n->conn || atomic_load_explicit(&n->out_error, memory_order_relaxed) < 0) {
+    (void)atomic_fetch_sub_explicit(&n->unsent, len, memory_order_acq_rel);
+    return;
+  }
+  if (!n->out_flight && !n->out_len) {
+    out_start(n, data, len, cb);
+    return;
+  }
+  out_append(&n->out, &n->out_len, &n->out_cap, data, len);
+}
+
 static void wrote(uv_write_t *w, int status) {
   net *n = NET(w, write_req);
   free(n->write_data);
   n->write_data = NULL;
+  if (n->out_flight) {
+    size_t len = n->out_flight;
+    n->out_flight = 0;
+    out_sent(n, len, status, wrote);
+    return;
+  }
   n->write_status = status;
   notify(n, n->writer);
 }
@@ -1957,15 +2198,100 @@ static int64_t direct_send(agc_vm *vm, agc_socket *sk, net **np, const uint8_t *
   return sent == UV_EAGAIN ? 0 : sent;
 }
 
-/* A send of len bytes at data, which args[1] (the text or the bytes) keeps alive. */
-static agc_value write_op(agc_vm *vm, const agc_value *args, const uint8_t *data, size_t len) {
+/* Takes what the schedulers left in `pend` since the last step. The net outlives the step: the close of the socket
+   is a step posted after it. */
+static void out_step(void *data) {
+  net *n = data;
+  uv_mutex_lock(&n->out_lock);
+  uint8_t *bytes = n->pend;
+  size_t len = n->pend_len;
+  n->pend = NULL;
+  n->pend_len = n->pend_cap = 0;
+  n->pend_posted = false;
+  uv_mutex_unlock(&n->out_lock);
+  /* The rest of a direct write is with the I/O thread now, as a send's is in begin_send (upgrade_refusal). */
+  (void)atomic_fetch_and_explicit(&n->wstate, ~(unsigned)W_PARTIAL, memory_order_acq_rel);
+  out_add(n, bytes, len, wrote);
+  free(bytes);
+}
+
+/* LEN bytes go into the write buffer, behind what it holds. One scheduler at a time is here (rt->sync), and the
+   socket has no direct send under way, so the count and the bytes keep the order of the writes. */
+static void out_put(agc_vm *vm, net *n, const uint8_t *data, size_t len) {
+  if (!len) return;
+  (void)atomic_fetch_add_explicit(&n->unsent, len, memory_order_acq_rel);
+  if (agc_io_here(vm)) {
+    out_add(n, data, len, wrote);
+    return;
+  }
+  uv_mutex_lock(&n->out_lock);
+  out_append(&n->pend, &n->pend_len, &n->pend_cap, data, len);
+  bool post = !n->pend_posted;
+  n->pend_posted = true;
+  uv_mutex_unlock(&n->out_lock);
+  if (post) agc_loop_call(n->io, out_step, n);
+}
+
+/* The START step of a wait for the write buffer: over at once when the buffer is at its limit already. */
+static bool begin_flush(void *data, agc_io_job *job) {
+  request *q = data;
+  net *n = q->n;
+  link_request(q, job);
+  if (n->closed || atomic_load_explicit(&n->out_error, memory_order_relaxed) < 0 ||
+      atomic_load_explicit(&n->unsent, memory_order_acquire) <= q->limit)
+    finish(q);
+  return true;
+}
+
+/* Parks the task until at most LIMIT bytes of the write buffer are unsent. It holds no lock, so other tasks write
+   meanwhile. COUNT is charged at the end, as a send's. */
+static agc_value wait_unsent(agc_vm *vm, const agc_value *args, net *n, size_t limit, size_t count, int64_t timeout) {
+  request *q = new_request(vm, n, REQ_FLUSH);
+  q->limit = limit;
+  q->count = count;
+  park(vm, q, args[0], timeout, begin_flush);
+  return agc_void();
+}
+
+/* The end of a call whose bytes are in the write buffer: over at once unless more than LIMIT bytes are unsent, and
+   then it waits until half of LIMIT is, so a writer that the peer holds back wakes once per half buffer and not once
+   per write of the I/O thread. */
+static agc_value out_wait(agc_vm *vm, const agc_value *args, net *n, size_t limit, int64_t timeout) {
+  if (atomic_load_explicit(&n->unsent, memory_order_acquire) <= limit) return ok_value(agc_void());
+  return wait_unsent(vm, args, n, limit / 2, (size_t)agc_value_units(args[1]), timeout);
+}
+
+static size_t out_limit_of(const net *n) {
+  size_t limit = atomic_load_explicit(&n->out_limit, memory_order_relaxed);
+  return limit ? limit : OUT_LIMIT_DEFAULT;
+}
+
+static agc_value out_failed(agc_vm *vm, int status) {
+  return agc_system_error(vm, AGC_FAMILY_NET, write_failed, agc_net_errno(status));
+}
+
+/* A send of len bytes at data, which args[1] (the text or the bytes) keeps alive. With BUFFERED (TCP.write) the call
+   returns once the bytes are in the socket's write buffer and waits only while that is over its limit; a send
+   (TCP.send) on a socket whose buffer holds bytes goes behind them and waits for the last one. A TLS socket has no
+   write buffer: its write is a send. */
+static agc_value write_op(agc_vm *vm, const agc_value *args, const uint8_t *data, size_t len, bool buffered) {
   int64_t timeout = agc_as_int(vm, args[2]);
   agc_socket *sk = agc_as_socket(vm, args[0]);
   agc_value result;
   if (!agc_stream_lock(vm, sk->writer, AGC_STREAM_NETWORK, &timeout, &result)) return result;
   net *n = live(sk);
   if (!n) return agc_error(vm, AGC_KIND_NET_CLOSED, socket_closed);
+  if (n->secure) buffered = false;
   bool here = agc_io_here(vm);
+  if (!n->secure) {
+    int failed = atomic_load_explicit(&n->out_error, memory_order_relaxed);
+    if (failed < 0) return out_failed(vm, failed);
+    bool waiting = atomic_load_explicit(&n->unsent, memory_order_acquire) > 0;
+    if (waiting || (buffered && here)) {
+      out_put(vm, n, data, len);
+      return out_wait(vm, args, n, buffered ? out_limit_of(n) : 0, timeout);
+    }
+  }
   if (here) {
     /* At N = 1 the socket is this thread's: a send that goes out at once returns without a park. */
     int rc = send_now(n, data, len);
@@ -1985,11 +2311,17 @@ static agc_value write_op(agc_vm *vm, const agc_value *args, const uint8_t *data
     if (sent < 0 || whole || !n) {
       if (whole && n && n->write_status < 0) n->write_status = 0;
       if (holding) agc_handle_let_go(vm, sk->writer);
-      if (sent < 0) return agc_system_error(vm, AGC_FAMILY_NET, write_failed, agc_net_errno((int)sent));
+      if (sent < 0) return out_failed(vm, (int)sent);
       return whole ? ok_value(agc_void()) : agc_error(vm, AGC_KIND_NET_CLOSED, socket_closed);
     }
     data += sent;
     len -= (size_t)sent;
+    if (buffered) {
+      /* The rest goes into the buffer before the lock is let go, so no other write gets ahead of it. */
+      out_put(vm, n, data, len);
+      if (holding) agc_handle_let_go(vm, sk->writer);
+      return out_wait(vm, args, n, out_limit_of(n), timeout);
+    }
   }
   request *q = new_request(vm, n, REQ_SEND);
   q->count = (size_t)agc_value_units(args[1]);
@@ -2009,16 +2341,56 @@ static agc_value write_op(agc_vm *vm, const agc_value *args, const uint8_t *data
 static agc_value builtin_send(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   const agc_string *text = agc_as_string(vm, args[1]);
-  return write_op(vm, args, (const uint8_t *)text->data, text->bytes);
+  return write_op(vm, args, (const uint8_t *)text->data, text->bytes, false);
 }
 
-/* TCP.send_bytes: a Bytes, of which only the size is checked. */
-static agc_value builtin_send_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
-  (void)span;
+/* TCP.send_bytes and TCP.write_bytes: a Bytes, of which only the size is checked. */
+static agc_value bytes_op(agc_vm *vm, const agc_value *args, bool buffered) {
   size_t len = 0;
   const uint8_t *data = agc_stream_bytes(vm, args[1], LIMIT, &len);
   if (!data) return agc_error(vm, AGC_KIND_ARGUMENT, "network: bytes exceed 1048576 per call");
-  return write_op(vm, args, data, len);
+  return write_op(vm, args, data, len, buffered);
+}
+
+static agc_value builtin_send_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  return bytes_op(vm, args, false);
+}
+
+static agc_value builtin_write(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  const agc_string *text = agc_as_string(vm, args[1]);
+  return write_op(vm, args, (const uint8_t *)text->data, text->bytes, true);
+}
+
+static agc_value builtin_write_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  return bytes_op(vm, args, true);
+}
+
+/* TCP.flush(socket, timeout_ms): waits until the write buffer is empty, and fails as a send that fails. */
+static agc_value builtin_flush(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  int64_t timeout = agc_as_int(vm, args[1]);
+  if (timeout <= 0) return agc_stream_bad_timeout(vm, AGC_STREAM_NETWORK);
+  net *n = live(agc_as_socket(vm, args[0]));
+  if (!n) return agc_error(vm, AGC_KIND_NET_CLOSED, socket_closed);
+  int failed = atomic_load_explicit(&n->out_error, memory_order_relaxed);
+  if (failed < 0) return out_failed(vm, failed);
+  if (!atomic_load_explicit(&n->unsent, memory_order_acquire)) return ok_value(agc_void());
+  return wait_unsent(vm, args, n, 0, 0, timeout);
+}
+
+/* TCP.write_limit(socket, bytes): the limit of the write buffer, over which a write waits. */
+static agc_value builtin_write_limit(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  int64_t bytes = agc_as_int(vm, args[1]);
+  if (bytes < OUT_LIMIT_MIN || bytes > OUT_LIMIT_MAX)
+    return agc_error(vm, AGC_KIND_ARGUMENT, "network: write limit must be 1024..16777216 bytes");
+  net *n = live(agc_as_socket(vm, args[0]));
+  if (!n) return agc_error(vm, AGC_KIND_NET_CLOSED, socket_closed);
+  atomic_store_explicit(&n->out_limit, (size_t)bytes, memory_order_relaxed);
+  return ok_value(agc_void());
 }
 
 void agc_conn_observe(agc_conn *c, agc_conn_watch watch, void *watcher) {
@@ -2028,19 +2400,12 @@ void agc_conn_observe(agc_conn *c, agc_conn_watch watch, void *watcher) {
 
 bool agc_conn_clean_eof(const agc_conn *c) { return !c->secure || c->clean_eof; }
 
-static void write_side_shut(uv_shutdown_t *req, int status) {
-  (void)status;
-  net *n = req->data;
-  n->callbacks--;
-  settle(n);
-}
-
+/* Bytes of the write buffer go out first: the half-close waits for the last of them (out_sent). */
 void agc_conn_half_close(agc_conn *c) {
-  if (c->closed || c->half_closed || !c->conn || c->write_status < 0) return;
-  c->half_closed = true;
-  goodbye(c);
-  c->shutdown.data = c;
-  if (uv_shutdown(&c->shutdown, (uv_stream_t *)&c->conn->tcp, write_side_shut) == 0) c->callbacks++;
+  if (c->out_flight || c->out_len)
+    c->half_wanted = true;
+  else
+    half_close_now(c);
 }
 
 void agc_conn_release(agc_conn *c) {
@@ -2103,6 +2468,10 @@ const agc_builtin agc_tcp_builtins[] = {
   {"TCP.close", 1, builtin_close, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"TCP.send", 3, builtin_send, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
   {"TCP.send_bytes.bytes", 3, builtin_send_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
+  {"TCP.write", 3, builtin_write, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
+  {"TCP.write_bytes.bytes", 3, builtin_write_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
+  {"TCP.flush", 2, builtin_flush, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"TCP.write_limit", 2, builtin_write_limit, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"TCP.recv_bytes.bytes", 3, builtin_recv_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
   {"TCP.read_line", 2, builtin_read_line, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
   {"TLS.connect", 4, builtin_tls_connect, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
@@ -2127,4 +2496,10 @@ const size_t agc_tcp_builtin_count = sizeof agc_tcp_builtins / sizeof agc_tcp_bu
 const agc_builtin agc_tcp_builtins[] = {{"", 0, NULL, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false}};
 
 const size_t agc_tcp_builtin_count = 0;
+
+bool agc_net_draining(void) { return false; }
+
+uint64_t agc_net_dropped(void) { return 0; }
+
+void agc_net_give_up(agc_vm *vm) { (void)vm; }
 #endif

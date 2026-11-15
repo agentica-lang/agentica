@@ -16,6 +16,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `List.tally`, `List.group_by` and `Range.group_by` take `Bytes` keys, as `List.uniq` does (#1596).
 - `--max-heap SIZE` ends a run whose memory would grow past `SIZE` (such as `256M`) with `RUNTIME-HEAP-LIMIT` and exit code 70 (#1113).
 - `ATS.clear(table)` removes every key of a shared table in one step, whatever its size (#1108).
+- `TCP.write` and `TCP.write_bytes` return without waiting for a slow peer: the bytes wait in the socket's write buffer (`TCP.write_limit` sets its limit), and `TCP.flush` waits until they are out (#1188).
 - `std/heap`: an immutable priority queue of any type, in the order a `before` function gives (#989).
 - `ATS.push(table, key, value)` appends to the list of a key in one atomic step and gives the new length (#1442).
 
@@ -29,6 +30,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- `std/cache`: a task cancelled while it took over a stalled drop no longer stops the cache from dropping entries for good; another task takes over within four seconds (#1616).
 - `JSON.decode`, `JSON.schema` and `.codec` take a struct or enum whose field or payload type is a type alias, which stopped with `LOWER-UNSUPPORTED` (#1623).
 - `none` in the block of `Range.map`, `Lazy.map`, `flat_map` and a nested `map` takes the expected Optional type (#1595).
 

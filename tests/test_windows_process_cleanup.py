@@ -17,8 +17,8 @@ import time
 
 import pytest
 
-from tests.agentica_test import (FIXTURES, PYTHON, kill_process, process_alive, run, run_vm, scaled, start_vm,
-                                 vm_binary, vm_command, vm_environment)
+from tests.agentica_test import (_ENDED, FIXTURES, PYTHON, Pid, kill_process, process_alive, run, run_vm, scaled,
+                                 start_vm, vm_binary, vm_command, vm_environment)
 from tests.test_bdd import assert_unwritable_temporary_is_an_infrastructure_error, bdd  # noqa: F401  (a fixture)
 from tests.test_process_lifecycle import bytecode, gone
 from tests.windows_support import (COPY_PROGRAM, access_denied, icacls,
@@ -210,7 +210,13 @@ def test_a_process_younger_than_the_number_is_known_is_not_taken_for_it():
         long_ago = time.time() - 3600
         assert not process_alive(child.pid, long_ago)
         kill_process(child.pid, long_ago)
+        read_long_ago = Pid(child.pid)
+        read_long_ago.seen = long_ago
+        assert not process_alive(read_long_ago)
+        kill_process(read_long_ago)
         assert child.poll() is None
+        # A refusal for a `since` that came too early does not mark the number ended: a later `since` takes it.
+        assert child.pid not in _ENDED
         assert process_alive(child.pid, time.time())
         kill_process(child.pid)
         assert child.wait(scaled(20)) == 1

@@ -6,12 +6,13 @@ subscription: System.subscribe returns a system.signal error there, which the la
 """
 import os
 import signal
+import socket
 import subprocess
 import time
 
 import pytest
 
-from tests.agentica_test import FIXTURES, PYTHON, TARGET_OS, WINDOWS, Child, compile_agc, host_only, scaled, start_vm, vm_command
+from tests.agentica_test import FIXTURES, PYTHON, TARGET_OS, WINDOWS, Child, compile_agc, compile_text, host_only, scaled, start_vm, vm_command
 
 WAIT_SECONDS = scaled(10)
 POSIX = "System.subscribe needs POSIX signals; on Windows it returns a system.signal error, which " \
@@ -527,3 +528,41 @@ def test_deny_run_turns_off_spawn_group_and_system_signal(tmp_path, adopt):
     assert vm.next_line(WAIT_SECONDS) == "denied: --deny-run turns off starting programs"
     assert vm.next_line(WAIT_SECONDS) == "denied: --deny-run turns off signalling processes"
     assert vm.wait(WAIT_SECONDS) == 0
+
+
+# Closes a socket with megabytes in its write buffer (TCP.write), then sleeps.
+WRITE_CLOSE_SLEEP = """\
+def main() -> Void
+  listener = TCP.listen("127.0.0.1", 0).unwrap!
+  puts(TCP.local_port(listener))
+  IO.flush()
+  socket = TCP.accept(listener, 5000).unwrap!
+  TCP.write_limit(socket, 16777216).unwrap!
+  chunk = "x" * 65536
+  i = 0
+  while i < 200
+    TCP.write(socket, chunk, 5000).unwrap!
+    i += 1
+  end
+
+  TCP.close(socket)
+  puts("written")
+  IO.flush()
+  Task.sleep(60000)
+end
+"""
+
+
+@host_only(WINDOWS, "Windows has no POSIX signals")
+def test_a_stop_signal_does_not_wait_for_the_peer_of_a_closed_socket(tmp_path, adopt):
+    """The socket is closed with megabytes in its write buffer, and the peer never reads. A SIGTERM then ends the run
+    without the 30 seconds of the flush limit, and the warning says that bytes were dropped."""
+    vm = adopt(start_vm(compile_text(WRITE_CLOSE_SLEEP, "write_stop", tmp_path), env={"AGENTICA_SCHEDULERS": "4"}))
+    port = int(vm.next_line())
+    with socket.create_connection(("127.0.0.1", port), timeout=scaled(30)):
+        assert vm.next_line() == "written"
+        started = time.monotonic()
+        os.kill(vm.process.pid, signal.SIGTERM)
+        vm.wait()
+        assert time.monotonic() - started < scaled(10)
+    assert "warning: closed sockets dropped" in vm.stderr_text()

@@ -55,7 +55,7 @@ def memory(max_bytes: Int, options: Options = Options()) -> Store
   started: ATS[Int, Int] = ATS.new()
   rotations: ATS[Int, Int] = ATS.new()
   claimed: ATS[Int, Int] = ATS.new()
-  deaths: ATS[Int, Int] = ATS.new()
+  takeovers: ATS[String, Int] = ATS.new()
   stored: ATS[Int, Int] = ATS.new()
   counted: ATS[Int, Int] = ATS.new()
   ids: ATS[Int, Int] = ATS.new()
@@ -76,7 +76,7 @@ def memory(max_bytes: Int, options: Options = Options()) -> Store
     started: started,
     rotations: rotations,
     claimed: claimed,
-    deaths: deaths,
+    takeovers: takeovers,
     stored: stored,
     counted: counted,
     ids: ids,
@@ -166,7 +166,7 @@ struct Memory
   started: ATS[Int, Int]
   rotations: ATS[Int, Int]
   claimed: ATS[Int, Int]
-  deaths: ATS[Int, Int]
+  takeovers: ATS[String, Int]
   stored: ATS[Int, Int]
   counted: ATS[Int, Int]
   ids: ATS[Int, Int]
@@ -414,8 +414,13 @@ def rotate(state: Memory, g: Int) -> Bool
   # that nothing reads or counts until a later rotation empties it.
   if owner?(state, g, token)
     _ = state.generation.add(0, 1)
-    # A takeover is over once the generation moved: no one can claim this rotation again, so the arbiters can go.
-    state.deaths.clear
+    # A takeover is over once the generation moved: no one can claim this rotation again, so its arbiters can go.
+    # Only its own: a late owner gets here when the next generation may have arbiters already.
+    for key in state.takeovers.keys
+      if key.start_with?("#{g}:")
+        state.takeovers.delete(key)
+      end
+    end
     return true
   end
 
@@ -426,32 +431,39 @@ def owner?(state: Memory, g: Int, token: Int) -> Bool
   current(state) == g and state.rotations.get(g).unwrap_or(0) == token
 end
 
+# How many leases have ended since the rotation from generation g was first claimed: 0 while its first owner holds it.
+def lease_period(state: Memory, g: Int, at: Int) -> Int
+  max_of(at - state.claimed.get(g).unwrap_or(at) - 1, 0) / ROTATION_LEASE_MS
+end
+
+def takeover_key(g: Int, period: Int) -> String = "#{g}:#{period}"
+
 # The right to rotate from generation g, as a token, or 0. Only the rotation from the current generation can be
-# started. A rotation whose owner has held it for longer than the lease is taken over by the one task that wins
-# `deaths.add` on its token, so two tasks never take over the same dead owner.
+# started. A rotation whose owner has held it for longer than the lease is taken over, once in a lease period: by the
+# one task that wins `takeovers.add` on the period, and only if no task won the period before, whose lease still runs.
+# So a task that is cancelled anywhere in a takeover holds the rotation back for two periods at most.
 def claim(state: Memory, g: Int) -> Int
   return 0 if current(state) != g
 
   token = state.ids.add(0, 1)
   at = state.clock.call()
   if state.rotations.put_new(g, token)
-    state.claimed.put(g, at)
+    # Not `put`: an owner that stood still here must not move a lease that another task has started for it.
+    _ = state.claimed.put_new(g, at)
     return token
   end
 
-  owner = state.rotations.get(g).unwrap_or(0)
   # An owner that was cancelled before it wrote its time has none: the first task that sees it starts the lease.
   _ = state.claimed.put_new(g, at)
-  if owner > 0 and at - state.claimed.get(g).unwrap_or(at) > ROTATION_LEASE_MS and state.deaths.add(owner, 1) == 1
-    # The dead owner may have finished while this task decided; nothing has been taken from it yet, so just leave.
-    return 0 if current(state) != g
+  period = lease_period(state, g, at)
+  return 0 if period == 0 or state.takeovers.has_key?(takeover_key(g, period - 1))
+  return 0 if state.takeovers.add(takeover_key(g, period), 1) != 1
+  # The owner may have finished while this task decided, or this task stood still into a later period, which is
+  # another task's to win; nothing has been taken yet, so just leave.
+  return 0 if current(state) != g or lease_period(state, g, state.clock.call()) != period
 
-    state.claimed.put(g, at)
-    state.rotations.put(g, token)
-    return token
-  end
-
-  0
+  state.rotations.put(g, token)
+  token
 end
 
 def wipe(state: Memory) -> Void
