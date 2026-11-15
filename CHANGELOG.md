@@ -28,6 +28,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `String.split` searches the text once instead of twice and skips counting the characters of each piece when the text is ASCII: about 10% faster on log-style line and word splitting (#996).
 - `agentica compile` of a large program whose bytecode is in the cache is about 15% faster: the output and the cache entry are written without copying the rest of the program for every 1 MiB piece (#1683).
 
+### Fixed
+
+- A loop that parses a large JSON array or builds large lists is much less likely to keep an old list alive through a stray pointer, which made it hit `--max-heap` on macOS arm64 and sometimes on Windows: a stray pointer into a list's items now keeps less than 64 KiB of them, not the whole list (#1681).
+
 ## [0.32.0] - 2026-11-15
 
 ### Added
