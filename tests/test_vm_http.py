@@ -1239,7 +1239,9 @@ def burst(body: Channel[Bytes]) -> Void
     _ = body.send("line #{n}\\n".bytes, 5000)
   end
   _ = body.send(("x" * 70000).bytes, 5000)
-  _ = body.send("".bytes, 5000)
+  for _ in 0...200
+    _ = body.send("".bytes, 5000)
+  end
   _ = body.send("end\\n".bytes, 5000)
   body.close
 end

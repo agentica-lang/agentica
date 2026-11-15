@@ -3446,8 +3446,10 @@ def with_queued(body: Channel[Bytes], piece: Bytes, length: Int) -> Bytes
   while size < STREAM_JOIN_BYTES
     case body.recv(0)
       ok(next) ->
-        pieces = List.append(pieces, next)
-        size = size + next.size
+        if not next.empty?
+          pieces = List.append(pieces, next)
+          size = size + next.size
+        end
       error(_) -> break
     end
   end
