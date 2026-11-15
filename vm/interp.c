@@ -459,17 +459,19 @@ static PROFILE_HOOK agc_value profile_builtin(agc_vm *vm, const agc_builtin *b, 
   return result;
 }
 
+/* The budget stops inside a STEP of N: the steps up to and including the one it stops at ran, the rest did not. */
+static __attribute__((noinline, cold)) _Noreturn void step_limit(agc_vm *vm, int64_t n, uint32_t span) {
+  if (AGC_PROFILE_ON(vm)) profile_steps(vm, n, vm->batch + 1);
+  agc_fail(vm, "RUNTIME-STEP-LIMIT", "execution step budget exhausted", span + (uint32_t)vm->batch);
+}
+
 static void step_slow(agc_vm *vm, int64_t n, uint32_t span) {
 #ifdef AGC_NO_GC
   agc_alloc_limit_check();
 #endif
   sync_budget(vm);
   if (vm->batch < n) take_steps(vm, n - vm->batch + AGC_TURN_STEPS);
-  if (vm->batch < n) {
-    /* The steps up to and including the one the budget stops at ran; the rest of the STEP did not. */
-    if (AGC_PROFILE_ON(vm)) profile_steps(vm, n, vm->batch + 1);
-    agc_fail(vm, "RUNTIME-STEP-LIMIT", "execution step budget exhausted", span + (uint32_t)vm->batch);
-  }
+  if (vm->batch < n) step_limit(vm, n, span);
   if (AGC_PROFILE_ON(vm)) profile_steps(vm, n, n);
   vm->batch -= n;
   vm->turn_left -= n;
