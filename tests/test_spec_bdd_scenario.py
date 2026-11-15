@@ -54,8 +54,33 @@ def test_srand_in_a_task_draws_what_main_draws_first_under_the_same_seed(tmp_pat
         assert reseeded == first != second, result
 
 
+def test_srand_leaves_the_streams_of_the_other_tasks_as_they_were(tmp_path):
+    """The parent and a sibling draw the same numbers whether a task between them reseeds or not."""
+    compiled = compiled_with_probe(
+        tmp_path,
+        "def drawn(reseed: Bool) -> Int\n  if reseed\n    BddScenario.srand(1)\n  end\n  Random.int(0, 1000000000)\nend\n",
+        "def after_gate(gate: Channel[Int]) -> Result[Int]\n"
+        "  try gate.recv(5000)\n"
+        "  ok(Random.int(0, 1000000000))\n"
+        "end\n\n"
+        "def main() -> Void\n"
+        "  gate: Channel[Int] = Channel.new(1)\n"
+        "  sibling = Task.spawn do after_gate(gate) end\n"
+        "  reseed = System.args().size > 0\n"
+        "  middle = Task.await(Task.spawn do Probe.drawn(reseed) end)\n"
+        "  _ = gate.send(0, 1000)\n"
+        '  puts("#{Random.int(0, 1000000000)} #{Task.await(sibling).unwrap!} #{middle}")\n'
+        "end\n")
+    plain, reseeded = (run([*vm_command(), "--seed", "7", "--", compiled, *flag], env=vm_environment())
+                       for flag in ([], ["reseed"]))
+    assert plain.code == reseeded.code == 0, (plain, reseeded)
+    assert plain.stdout.split()[:2] == reseeded.stdout.split()[:2], (plain, reseeded)
+    assert plain.stdout.split()[2] != reseeded.stdout.split()[2], (plain, reseeded)
+
+
 # Each line: the count inside the uncounted task, then the count once it ended and one plain task waits. Twice in one
-# task, then in main (already out), then in a task that is cancelled while it sleeps, then in one that crashes.
+# task, then in main (already out), then in a task cancelled while it sleeps, one cancelled while it runs, one that
+# Task.map's deadline cancels, one that crashes, and in a Task.monitor message (a service task, out already).
 UNCOUNT_PROBE = """\
 def twice() -> Int
   BddScenario.uncount()
@@ -74,9 +99,24 @@ def parked(ready: Channel[Int]) -> Result[Int]
   ok(0)
 end
 
+def busy(ready: Channel[Int]) -> Result[Int]
+  BddScenario.uncount()
+  try ready.send(Task.pending_count(), 5000)
+  n = 0
+  while n >= 0
+    n += 1
+  end
+  ok(n)
+end
+
 def crashes(zero: Int) -> Result[Int]
   BddScenario.uncount()
   ok(1 / zero)
+end
+
+def noticed(_down: TaskDown) -> Int
+  BddScenario.uncount()
+  0
 end
 """
 
@@ -104,14 +144,26 @@ def main() -> Void
   Task.cancel(sleeper)
   _ = Task.await(sleeper)
   puts(with_one_waiting(inside))
+  spinner = Task.spawn do Probe.busy(ready) end
+  inside = ready.recv(5000).unwrap!
+  Task.cancel(spinner)
+  _ = Task.await(spinner)
+  puts(with_one_waiting(inside))
+  _ = Task.map([0], 1, 200) do |_| Probe.parked(ready) end
+  puts(with_one_waiting(ready.recv(5000).unwrap!))
   crashed = Task.await(Task.spawn do Probe.crashes(0) end)
   puts(with_one_waiting(crashed.unwrap_or(0)))
+  inbox: Channel[Int] = Channel.new(1)
+  target = Task.spawn do 1 end
+  Task.monitor(target, inbox) do |down| Probe.noticed(down) end
+  _ = Task.await(target)
+  puts(with_one_waiting(inbox.recv(5000).unwrap!))
 end
 """
 
 
 def test_uncount_takes_a_task_out_of_the_pending_count_once_however_it_ends(tmp_path):
     compiled = compiled_with_probe(tmp_path, UNCOUNT_PROBE, UNCOUNT_MAIN)
-    result = run([*vm_command(), "--", compiled], env=vm_environment())
+    result = run([*vm_command(), "--schedulers", "4", "--", compiled], env=vm_environment())
     assert result.code == 0, result
-    assert result.stdout.splitlines() == ["0 1", "0 1", "0 1", "0 1"], result
+    assert result.stdout.splitlines() == ["0 1"] * 7, result
