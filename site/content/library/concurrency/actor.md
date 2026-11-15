@@ -97,7 +97,7 @@ Actor.send(address: Address[M], make: Fn[Channel[R], M], timeout_ms: Int = 5000)
 Actor.await(request: Actor.Request[R], timeout_ms: Int) -> Result[R]
 ```
 
-The two halves of `call`, for requests to several actors at once: `send` each request first, then `await` the answers in order, so the waits overlap. `send` makes a reply channel, builds the message around it with the block, waits at most `timeout_ms` for room in the inbox and gives an `Actor.Request[R]`; its errors are those of `cast`. `await` waits at most `timeout_ms` for the answer and keeps the guarantees of `call`: an await that gives up closes the reply channel, so a later `reply` gives `false`, and an answer that came just before is returned. A request has one answer: a second `await` gives `actor: timeout` at once. `call(address, timeout_ms) do ... end` is a `send` and an `await` within one `timeout_ms`.
+The two halves of `call`, for requests to several actors at once: `send` each request first, then `await` the answers in order, so the waits overlap. `send` makes a reply channel, builds the message around it with the block, waits at most `timeout_ms` for room in the inbox and gives an `Actor.Request[R]`; its errors are those of `cast`. `await` waits at most `timeout_ms` for the answer and keeps the guarantees of `call`: an await that gives up closes the reply channel, so a later `reply` gives `false`, and an answer that came just before is returned. A request has one answer: a second `await` gives `actor: timeout` at once. `call(address, timeout_ms) do ... end` is a `send` and an `await` within one `timeout_ms`. `send` takes `make` before `timeout_ms`, so with the block form pass the timeout by name: `Actor.send(address, timeout_ms: 100) do |reply| Msg.Get(reply) end`.
 
 ```agentica
 import Actor from "std/actor"
@@ -109,7 +109,7 @@ end
 def handle(state: Int, msg: Msg) -> Actor.Step[Int]
   case msg
     Msg.Work(n, reply) ->
-      Task.sleep(100)
+      Task.sleep(300)
       Actor.reply(reply, n * 10)
       Actor.continue(state)
   end
@@ -123,7 +123,8 @@ def main() -> Void
   second = Actor.send(shards[1].address) do |reply| Msg.Work(2, reply) end
   puts(Actor.await(first.unwrap!, 1000))
   puts(Actor.await(second.unwrap!, 1000))
-  puts(Time.monotonic_ms - started < 200)
+  # Two calls one by one take at least 600 ms.
+  puts(Time.monotonic_ms - started < 600)
   for shard in shards
     _ = Actor.stop(shard, 1000)
   end

@@ -107,7 +107,10 @@ def await[R](request: Request[R], timeout_ms: Int) -> Result[R]
   return given_up(request.answer) if timeout_ms <= 0
 
   case request.answer.recv(timeout_ms)
-    ok(value) -> ok(value)
+    ok(value) ->
+      # Closed also when the handler sent without `reply`, so a second await gives up at once.
+      request.answer.close
+      ok(value)
     error(_) -> given_up(request.answer)
   end
 end
