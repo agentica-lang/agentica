@@ -1395,12 +1395,15 @@ def test_client_writes_and_reads_latin1_header_values_as_single_bytes(tmp_path):
     assert b"\r\nX-Name: caf\xe9\r\n" in seen[0], seen
 
 
-# A VM client and a VM server at the head limits, which the writer and the parser count the same way: a header block is
-# every header line with its CRLF and the empty line, at most 65536 bytes (AGC_HTTP_MAX_BLOCK), and holds at most 100
-# headers. The lines each side adds itself count: Host for the client; Date (37 bytes) and Content-Length: 0 (19) for
-# the server.
+# A VM client and a VM server at the head limits, which the writers count as the parser does: a header block is every
+# header line with its CRLF and the empty line, at most 65536 bytes (AGC_HTTP_MAX_BLOCK), and holds at most 100
+# headers. The caller's headers fill what the writer's own lines leave.
 HEAD_LIMITS_PROGRAM = """\
 import HTTP from "std/http"
+
+struct Late
+  into: Channel[Bytes]
+end
 
 def filled(bytes: Int) -> List[HTTP.Header]
   headers: List[HTTP.Header] = []
@@ -1428,19 +1431,36 @@ def block(headers: List[HTTP.Header]) -> Int
   return headers.reduce(2) do |sum, h| sum + h.name.length + h.value.length + 4 end
 end
 
-def handle(request: HTTP.Request) -> Result[HTTP.Response]
-  words = request.path.split("/")
-  wanted = words[2].to_i!
-  headers = [HTTP.Header(name: "X-Seen", value: "#{block(request.headers)}")]
-  if words[1] == "number"
-    headers = [HTTP.Header(name: "X-Seen", value: "#{request.headers.length}")]
-  elsif words[1] == "block"
-    headers = filled(wanted - 58)
-  elsif words[1] == "count"
-    headers = counted(wanted - 2)
-  end
+# Sends after the handler returned, so the server streams the body: one that is closed by then goes out whole.
+def produce(late: Late) -> Result[Void]
+  Task.sleep(300)
+  try late.into.send("hello world".bytes, 5000)
+  late.into.close
+  return ok()
+end
 
-  return ok(HTTP.Response(status: 200, headers: headers, body: "".bytes))
+def later() -> Channel[Bytes]
+  into: Channel[Bytes] = Channel.new(1)
+  Task.spawn(&produce, Late(into: into))
+  return into
+end
+
+# /KIND/OWN/SIZE answers with a block of SIZE bytes, of which the server writes OWN and the empty line.
+def handle(request: HTTP.Request, body: HTTP.RequestBody) -> Result[HTTP.Answer]
+  try HTTP.read_all(body, 1024)
+  words = request.path.split("/")
+  kind = words[1]
+  return ok(HTTP.Answer.Whole(HTTP.Response(status: 200, headers: [HTTP.Header(name: "X-Seen", value: "#{block(request.headers)}")], body: "".bytes))) if kind == "seen"
+  return ok(HTTP.Answer.Whole(HTTP.Response(status: 200, headers: [HTTP.Header(name: "X-Seen", value: "#{request.headers.length}")], body: "".bytes))) if kind == "number"
+  return ok(HTTP.Answer.Whole(HTTP.Response(status: 200, headers: counted(words[2].to_i! - 2), body: "".bytes))) if kind == "count"
+  headers = filled(words[3].to_i! - words[2].to_i! - 2)
+  return ok(HTTP.Answer.Stream(HTTP.StreamResponse(status: 200, headers: headers, body: later()))) if kind == "chunked"
+  return ok(HTTP.Answer.Stream(HTTP.StreamResponse(status: 200, headers: headers, body: later(), length: some(11)))) if kind == "sized"
+  return ok(HTTP.Answer.Stream(HTTP.StreamResponse(status: 200, headers: headers, body: HTTP.whole("hello world".bytes)))) if kind == "closed"
+  return ok(HTTP.Answer.Whole(HTTP.Response(status: 204, headers: headers, body: "".bytes))) if kind == "empty"
+  return ok(HTTP.Answer.Whole(HTTP.Response(status: 200, headers: headers.push(HTTP.Header(name: "Date", value: "x")), body: "".bytes))) if kind == "dated"
+  return ok(HTTP.Answer.Whole(HTTP.Response(status: 200, headers: headers.push(HTTP.Header(name: "Connection", value: "close")), body: "".bytes))) if kind == "close"
+  return ok(HTTP.Answer.Whole(HTTP.Response(status: 200, headers: headers, body: "hello world".bytes)))
 end
 
 def show(name: String, reply: Result[HTTP.Response]) -> Void
@@ -1452,45 +1472,75 @@ def show(name: String, reply: Result[HTTP.Response]) -> Void
       else
         puts("#{name} #{r.status} got #{block(r.headers)} #{r.headers.length}")
       end
+
     error(e) -> puts("#{name} #{e.kind} #{e.code}")
   end
 end
 
+def ready() -> Channel[Bytes]
+  into: Channel[Bytes] = Channel.new(2)
+  into.send("hello world".bytes, 5000).unwrap!
+  into.close
+  return into
+end
+
 def main() -> Void
   options = HTTP.ServerOptions(request_timeout_ms: 10000, idle_timeout_ms: 10000, max_connections: 2, max_body_bytes: 1024)
-  server = HTTP.serve("127.0.0.1", 0, HTTP.app(&handle), options).unwrap!
+  server = HTTP.serve("127.0.0.1", 0, &handle, options).unwrap!
   base = "http://127.0.0.1:#{HTTP.local_port(server)}"
-  client = HTTP.client(HTTP.ClientOptions(timeout_ms: 10000, idle_timeout_ms: 10000, max_connections: 1, max_body_bytes: 1024, tls: none)).unwrap!
+  limits = HTTP.ClientOptions(timeout_ms: 10000, idle_timeout_ms: 10000, max_connections: 1, max_body_bytes: 1024, tls: none)
+  client = HTTP.client(limits).unwrap!
   host = "Host: 127.0.0.1:#{HTTP.local_port(server)}".length + 2
   for size in [65536, 65537]
-    show("request block #{size}", HTTP.request(client, "GET", base + "/sent/0", "".bytes, headers: filled(size - host - 2)))
-    show("response block #{size}", HTTP.get(client, base + "/block/#{size}"))
+    room = size - host - 2
+    show("get #{size}", HTTP.request(client, "GET", base + "/seen", "".bytes, headers: filled(room)))
+    show("post #{size}", HTTP.request(client, "POST", base + "/seen", "hello world".bytes, headers: filled(room - 20)))
+    show("post-empty #{size}", HTTP.request(client, "POST", base + "/seen", "".bytes, headers: filled(room - 19)))
+    show("upload-chunked #{size}", HTTP.upload("PUT", base + "/seen", ready(), -1, filled(room - 28), limits))
+    show("upload-sized #{size}", HTTP.upload("PUT", base + "/seen", ready(), 11, filled(room - 20), limits))
+    for answer in System.args()
+      method = "GET"
+      if answer.start_with?("head/")
+        method = "HEAD"
+      end
+
+      show("#{answer} #{size}", HTTP.request(client, method, base + "/#{answer}/#{size}", "".bytes))
+    end
   end
 
   for count in [100, 101]
-    show("request count #{count}", HTTP.request(client, "GET", base + "/number/0", "".bytes, headers: counted(count - 1)))
-    show("response count #{count}", HTTP.get(client, base + "/count/#{count}"))
+    show("request-count #{count}", HTTP.request(client, "GET", base + "/number", "".bytes, headers: counted(count - 1)))
+    show("response-count #{count}", HTTP.get(client, base + "/count/#{count}"))
   end
 
   HTTP.close_server(server)
   IO.inspect(HTTP.wait(server))
 end
 """
+# Each kind of answer, with the bytes of the lines the server writes: Date (37) unless the handler set one (9), then
+# Content-Length: 0 (19), Content-Length: 11 (20) or Transfer-Encoding: chunked (28), and Connection: close (19). A
+# 204 has no length. The streams are the heads std/http changes after HttpWire.encode_response.
+HEAD_LIMITS_ANSWERS = ["whole/57", "head/57", "empty/37", "dated/28", "close/75", "chunked/65", "sized/57", "closed/57"]
+HEAD_LIMITS_REQUESTS = ["get", "post", "post-empty", "upload-chunked", "upload-sized"]
 
 
 def test_a_head_at_a_limit_is_read_back_and_one_past_it_is_refused_by_its_writer(tmp_path):
-    result = run_vm(compile_text(HEAD_LIMITS_PROGRAM, "head-limits", tmp_path), env=vm_environment())
+    result = run_vm(compile_text(HEAD_LIMITS_PROGRAM, "head-limits", tmp_path), env=vm_environment(),
+                    args=HEAD_LIMITS_ANSWERS)
     assert result.code == 0, result.stderr
+    statuses = {"empty/37": 204}
+    counts = {"empty/37": 9, "close/75": 11}
     # A response the server cannot write is its 500, with Date, Content-Length and Connection: close (77 bytes).
     assert output_lines(result.stdout) == [
-        "request block 65536 200 sent 65536",
-        "response block 65536 200 got 65536 10",
-        "request block 65537 http.too_large some(431)",
-        "response block 65537 500 got 77 3",
-        "request count 100 200 sent 100",
-        "response count 100 200 got 930 100",
-        "request count 101 http.too_large some(431)",
-        "response count 101 500 got 77 3",
+        *["%s 65536 200 sent 65536" % name for name in HEAD_LIMITS_REQUESTS],
+        *["%s 65536 %d got 65536 %d" % (name, statuses.get(name, 200), counts.get(name, 10))
+          for name in HEAD_LIMITS_ANSWERS],
+        *["%s 65537 http.too_large some(431)" % name for name in HEAD_LIMITS_REQUESTS],
+        *["%s 65537 500 got 77 3" % name for name in HEAD_LIMITS_ANSWERS],
+        "request-count 100 200 sent 100",
+        "response-count 100 200 got 930 100",
+        "request-count 101 http.too_large some(431)",
+        "response-count 101 500 got 77 3",
         "ok()",
     ]
 

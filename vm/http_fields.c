@@ -52,8 +52,8 @@ static const char *over_limit(agc_http_block *block, const char *reason) {
 }
 
 /* Writes the caller's headers after the ones in b. A refusal is its reason; block->too_large is set when the reason
-   is one of the head limits (a line, the count or the block), so the caller makes it http.too_large. block->count
-   starts at the lines the caller writes itself, before or after these. */
+   is one of the head limits (a line, the count or the block), so the caller makes it http.too_large. The caller adds
+   the lines it writes itself to block->count. */
 const char *agc_http_put_headers(agc_vm *vm, agc_http_bytes *b, const agc_list *headers, const char *const *managed,
                                  size_t managed_count, const char *managed_reason, const char *skip,
                                  agc_http_block *block) {
@@ -85,9 +85,10 @@ const char *agc_http_put_headers(agc_vm *vm, agc_http_bytes *b, const agc_list *
 }
 
 /* Ends the head with its empty line and measures the block as the parser does (scan_head): every line from
-   block->start with its CRLF, the empty line included. */
+   block->start with its CRLF, the empty line included, and every header, the caller's own too. */
 const char *agc_http_put_head_end(agc_http_bytes *b, agc_http_block *block) {
   agc_http_put_text(b, "\r\n");
+  if (block->count > AGC_HTTP_MAX_HEADERS) return over_limit(block, "too many headers");
   if (b->len - block->start - block->extra > AGC_HTTP_MAX_BLOCK) return over_limit(block, "headers are too large");
   return NULL;
 }
