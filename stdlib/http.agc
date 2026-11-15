@@ -517,6 +517,13 @@ def open(
   case send_request(conn, method, where.target, body, headers)
     ok(head) ->
       pieces: Channel[Bytes] = Channel.new(STREAM_PIECES)
+      # A response with no body left the socket closed already when the server closes (`finished_exchange`), and a
+      # closed socket cannot be handed to a task: the stream is then over at once.
+      if spent?(conn)
+        pieces.close
+        return ok(Stream(status: head.status, headers: head.headers, body: pieces, done: Task.spawn(&ended, pieces)))
+      end
+
       done = Task.spawn_owning(&feed_stream, Feed(conn: conn, pieces: pieces))
       ok(Stream(status: head.status, headers: head.headers, body: pieces, done: done))
     error(message) ->
@@ -1828,6 +1835,17 @@ def upload_whole(
   end_connection(conn)
   answer
 end
+
+def spent?(conn: Connection) -> Bool
+  case take_exchange(conn)
+    ok(exchange) ->
+      put_exchange(conn, exchange)
+      exchange.phase == SPENT or exchange.phase == OVER
+    error(_) -> false
+  end
+end
+
+def ended(_pieces: Channel[Bytes]) -> Result[Void] = ok()
 
 # The task of a Stream: it ends the channel and the connection on every path, so the reader's loop ends.
 def feed_stream(feed: Feed) -> Result[Void]
