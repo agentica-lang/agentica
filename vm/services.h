@@ -86,6 +86,8 @@ void agc_processes_stop(agc_vm *vm);
 bool agc_net_draining(void);
 /* The bytes that those waits gave up at the limit, since the process started. */
 uint64_t agc_net_dropped(void);
+/* Ends those waits now, on the thread that runs the loop: the unsent bytes are dropped and counted. */
+void agc_net_give_up(agc_vm *vm);
 void agc_files_init(agc_vm *vm);
 agc_file_ids agc_files_inherited(void);
 void agc_files_forget(agc_file_ids *ids, int fd);

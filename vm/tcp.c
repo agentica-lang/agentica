@@ -521,9 +521,11 @@ static void out_drop(net *n) {
   n->out_len = n->out_cap = 0;
 }
 
-/* The sockets whose close waits for their write buffer, for the end of the run (agc_net_draining). */
+/* The sockets whose close waits for their write buffer (agc_net_draining), and the bytes that such waits gave up
+   (agc_net_dropped). They are the process's and not a VM's: a net that waits has left its resource, so only its
+   loop knows it, and the exit asks about every one. Each wait ends, by its timer, by its last byte or by shut_one, so
+   the count goes back to 0. */
 static _Atomic size_t draining; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-/* The bytes that such waits gave up at their limit (agc_net_dropped). */
 static _Atomic uint64_t dropped; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 
 bool agc_net_draining(void) { return atomic_load_explicit(&draining, memory_order_acquire) > 0; }
@@ -589,15 +591,28 @@ static void shut(net *n, const char *why) {
    Windows resets a socket that still has a read pending when the process ends, and the peer got WSAECONNRESET
    instead of the end of input (#489). The registry keeps its count; its release finds the net closed and only gives
    the count back. */
-/* The peer did not take the buffer within the limit: the bytes are dropped and counted, and the end of the run says
-   so (vm/launch.c), since the writes that put them there returned ok. */
-static void linger_expired(uv_timer_t *t) {
-  net *n = t->data;
+/* The bytes that a waiting close could not send are dropped and counted, and the end of the run says so
+   (vm/launch.c), since the writes that put them there returned ok. */
+static void linger_lost(net *n) {
   size_t lost = atomic_load_explicit(&n->unsent, memory_order_acquire);
   (void)atomic_fetch_add_explicit(&dropped, lost, memory_order_acq_rel);
   AGC_TRACE(&n->trace, AGC_TRACE_IO, "tcp_drop %s=%" PRIu64 " unsent=%zu", kind_name(n), n->id, lost);
+}
+
+/* The peer did not take the buffer within the limit. */
+static void linger_expired(uv_timer_t *t) {
+  net *n = t->data;
+  linger_lost(n);
   shut_one(n, n->linger_why);
 }
+
+static void give_up_one(uv_handle_t *h, void *arg) {
+  (void)arg;
+  if (h->type == UV_TIMER && ((uv_timer_t *)h)->timer_cb == linger_expired && !uv_is_closing(h))
+    linger_expired((uv_timer_t *)h);
+}
+
+void agc_net_give_up(agc_vm *vm) { uv_walk(agc_io_uv(vm), give_up_one, NULL); }
 
 /* Whether the close of N for WHY (TCP.close, the end of its owner or of the run) now waits for the bytes of the write
    buffer, as the kernel's close does for its own: N stays open, the last byte out (out_sent) or the limit closes it.
@@ -2023,6 +2038,7 @@ static bool out_write(net *n, const uint8_t *data, size_t len, int *status, uv_w
    waited for the last byte is made. I/O thread only. */
 static void out_sent(net *n, size_t len, int status, uv_write_cb cb) {
   for (bool flying = false; !flying;) {
+    if (status < 0 && n->lingering) linger_lost(n);
     (void)atomic_fetch_sub_explicit(&n->unsent, len, memory_order_acq_rel);
     if (status < 0) {
       int none = 0;
@@ -2484,4 +2500,6 @@ const size_t agc_tcp_builtin_count = 0;
 bool agc_net_draining(void) { return false; }
 
 uint64_t agc_net_dropped(void) { return 0; }
+
+void agc_net_give_up(agc_vm *vm) { (void)vm; }
 #endif

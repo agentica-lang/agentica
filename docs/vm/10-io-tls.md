@@ -239,8 +239,10 @@ texts.
   the program (`TCP.close`, the end of the owner or of the run) leaves the net
   open until the buffer is out (`lingers` in `vm/tcp.c`), for at most the
   flush limit of the run, after which it drops and counts the bytes, and the
-  end of the run warns on standard error; the end of the run waits for these nets (`agc_net_draining`). A close
-  for any other reason (a timeout, an error) drops the buffer;
+  end of the run warns on standard error. The end of the run waits for these
+  nets (`agc_net_draining`), except after a stop signal, when it drops their
+  bytes at once (`agc_net_give_up`). A close for any other reason (a timeout,
+  an error) drops the buffer;
   `HttpWire.close_write` waits for its last byte, and `TLS.upgrade` refuses as
   for a send in progress. A TLS socket has no write buffer: its write is a
   send.

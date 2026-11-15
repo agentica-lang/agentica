@@ -9,6 +9,7 @@ import errno
 import json
 import os
 import re
+import signal
 import socket
 import struct
 import sys
@@ -503,11 +504,15 @@ def main() -> Void
     i += 1
   end
 
-  if System.args()[0] == "close"
+  if System.args()[0] != "end"
     TCP.close(socket)
   end
 
   puts("written")
+  IO.flush()
+  if System.args()[0] == "sleep"
+    Task.sleep(60000)
+  end
 end
 """
 
@@ -538,6 +543,22 @@ def test_a_close_gives_up_at_the_flush_limit_and_the_run_says_what_it_dropped(tm
     with socket.create_connection(("127.0.0.1", port), timeout=scaled(30)):
         assert vm.next_line() == "written"
         assert vm.wait() == 0, vm.stderr_text()
+    assert "warning: closed sockets dropped" in vm.stderr_text()
+
+
+@pytest.mark.skipif(TARGET_OS == "windows", reason="a SIGTERM ends a Windows process at once")
+def test_a_stop_signal_does_not_wait_for_the_peer_of_a_closed_socket(tmp_path, adopt):
+    """The socket is closed with megabytes in its write buffer, and the peer never reads. A SIGTERM then ends the run
+    without the 30 seconds of the flush limit, and the warning says that bytes were dropped."""
+    vm = adopt(start_vm(compile_text(WRITE_CLOSE_PROGRAM, "write_stop", tmp_path), "sleep",
+                        env={"AGENTICA_SCHEDULERS": "4"}))
+    port = int(vm.next_line())
+    with socket.create_connection(("127.0.0.1", port), timeout=scaled(30)):
+        assert vm.next_line() == "written"
+        started = time.monotonic()
+        os.kill(vm.process.pid, signal.SIGTERM)
+        vm.wait()
+        assert time.monotonic() - started < scaled(10)
     assert "warning: closed sockets dropped" in vm.stderr_text()
 
 
