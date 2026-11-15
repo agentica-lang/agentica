@@ -359,12 +359,14 @@ void agc_tls_free(agc_tls *t) {
 }
 
 agc_tls_status agc_tls_handshake(agc_tls *t, agc_tls_failure *failure) {
+  ERR_clear_error();
   int r = SSL_do_handshake(t->ssl);
   return r == 1 ? AGC_TLS_OK : status_of(t, r, failure, AGC_TLS_ERR_HANDSHAKE_FAILED);
 }
 
 bool agc_tls_feed_in(agc_tls *t, const uint8_t *data, size_t len) {
   size_t written = 0;
+  ERR_clear_error();
   if (len == 0 || (BIO_write_ex(t->in, data, len, &written) == 1 && written == len)) return true;
   ERR_clear_error();
   return false;
@@ -395,6 +397,7 @@ void agc_tls_out_consume(agc_tls *t, size_t len) {
 
 agc_tls_status agc_tls_read(agc_tls *t, uint8_t *buf, size_t cap, size_t *got, agc_tls_failure *failure) {
   *got = 0;
+  ERR_clear_error();
   int r = SSL_read_ex(t->ssl, buf, cap, got);
   return r == 1 ? AGC_TLS_OK : status_of(t, r, failure, AGC_TLS_ERR_PROTOCOL);
 }
@@ -402,6 +405,7 @@ agc_tls_status agc_tls_read(agc_tls *t, uint8_t *buf, size_t cap, size_t *got, a
 agc_tls_status agc_tls_write(agc_tls *t, const uint8_t *data, size_t len, agc_tls_failure *failure) {
   size_t written = 0;
   if (len == 0) return AGC_TLS_OK;
+  ERR_clear_error();
   int r = SSL_write_ex(t->ssl, data, len, &written);
   return r == 1 ? AGC_TLS_OK : status_of(t, r, failure, AGC_TLS_ERR_PROTOCOL);
 }

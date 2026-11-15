@@ -76,14 +76,14 @@ in this model; §16.6 maps each to the component that enforces it.
   runs only the `work` half of a job, on `malloc`'d memory (§10.2.2).
 - **The I/O thread moves bytes and builds no GC values.** It reads into and
   writes from `malloc`'d buffers: a job's, and a socket's input buffer
-  (`agc_conn.in`), which it owns (§16.11) while a read waits; a plain socket's
-  scheduler takes buffered input, and receives into it, itself (§10.3.1,
-  #1197). Stdin is read into a job's buffer (on Windows, the reader thread's
-  own buffer) and appended to the shared input by the `done` half, on a
+  (`agc_conn.in`), which it owns (§16.11) while a read waits; a socket's
+  scheduler takes buffered input, and receives (and decrypts) into it, itself
+  (§10.3.1, #1197). Stdin is read into a job's buffer (on Windows, the reader
+  thread's own buffer) and appended to the shared input by the `done` half, on a
   scheduler. The `done` half of a job, which builds GC
-  values from those bytes, runs on the scheduler that resumes the task. TLS
-  crypto runs on the I/O thread beside the socket state it reads and writes
-  (`vm/tcp.c`), so a slow handshake delays the loop (§16.10).
+  values from those bytes, runs on the scheduler that resumes the task. The
+  TLS handshake and sends run on the I/O thread beside the socket state they
+  read and write (`vm/tcp.c`), so a slow handshake delays the loop (§16.10).
 - **No dispatcher thread.** Schedulers pull work; nobody pushes a task at a
   chosen scheduler.
 
@@ -642,8 +642,10 @@ one exit path are as in §16.1 to §16.6. What differs:
 
 ### 16.10 Decided against
 
-K I/O threads, per-scheduler run queues with work stealing, and TLS crypto on
-the schedulers: not planned unless a measurement shows one is needed (#1114).
+K I/O threads, per-scheduler run queues with work stealing, and the rest of
+the TLS crypto on the schedulers: not planned unless a measurement shows one is
+needed (#1114). The decrypt of a read moved there when one did: the I/O thread
+was the limit of an HTTPS server (#1197).
 Wakes with the single global run queue use a runnext slot and a short spin
 (§16.9, "Wakes between schedulers").
 

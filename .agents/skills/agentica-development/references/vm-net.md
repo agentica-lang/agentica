@@ -40,12 +40,16 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   Of the write buffer (`TCP.write`, §10.3.1) a scheduler touches only the
   atomics `unsent`, `out_limit` and `out_error`, and `pend` under `out_lock`;
   the rest (`out`, `out_flight`, `flushers`) is the I/O thread's.
-  A read of a plain socket at N > 1 takes buffered input on its scheduler
-  (`takes_here`): the I/O thread writes `in` only while a read waits, and
-  `request_cancel` stops reading; `shut_one` leaves `in` to `settle`. When `in`
-  is short, `recv_here` calls `agc_net_recv` first, as `direct_send` sends:
-  claim `W_RECV`, reader lock held, nothing touched after the claim ends, and
-  a per-socket back-off after a receive that finds nothing.
+  A read at N > 1 takes buffered input on its scheduler (`takes_here`): the
+  I/O thread writes `in` only while a read waits, and `request_cancel` stops
+  reading; `shut_one` leaves `in` to `settle`. When `in` is short,
+  `recv_here` calls `agc_net_recv` first, as `direct_send` sends: claim
+  `W_RECV`, reader lock held, nothing touched after the claim ends, and a
+  per-socket back-off after a receive that finds nothing. A TLS socket joins
+  once `stop_reading` saw its handshake over (`tls_here`); `tls_got` feeds and
+  decrypts under `tls_lock`, which the I/O thread's sends and `goodbye` also
+  hold (`next_out`, `take_out`: a short lock, the socket write comes after
+  it), and an alert left in the session goes out by `flush_step`.
   `finish` copies what the `done` half needs into the request, and
   `request_done` reads only that and posts `drop_request`. `users` changes only
   on the I/O thread (the first count, `own`, excepted). The `net` fields `id`

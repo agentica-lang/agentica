@@ -46,8 +46,11 @@ short = ["agc_proc_read_now", "read_once", "agc_fd_reopen", "agc_stdio_try", "ca
 
 # The I/O inbox's lock is held to link one request; the poster wakes the loop after the unlock (vm/inbox.c). The run
 # queue's lock is held to link or unlink tasks: its waits give it back (uv_cond_wait), and a push signals after the
-# unlock (vm/runq.c), so the loop thread may wake a task (fail_stream under agc_output_forward).
-short_locks = ["agc_inbox.lock", "agc_runq.lock"]
+# unlock (vm/runq.c), so the loop thread may wake a task (fail_stream under agc_output_forward). A TLS socket's session
+# lock is held for the session's work in memory: one encrypt, or the decrypt of one receive of at most 16 KiB of
+# ciphertext, which may also grow or move the input buffer (up to about 1 MiB) and write trace output when tracing is
+# on. The socket's reads and writes come before or after it (vm/tcp.c tls_got, next_out).
+short_locks = ["agc_inbox.lock", "agc_runq.lock", "agc_conn.tls_lock"]
 
 # agc_request.call holds both the compute pool's work (it blocks, on a pool thread) and the loop's REQ_CALL steps.
 stop_fields = ["agc_request.call"]
