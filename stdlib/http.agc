@@ -849,6 +849,7 @@ BAD_PROXY = "http: the proxy must be http://host:8080 or http://user:pass@host:8
 BAD_LOGIN = "http: the proxy user info must be user:password in percent-encoding, and the user cannot hold a colon"
 NO_BODY = "a 204 or 304 response cannot have a body"
 WRONG_SIZE = "the body is not the length it was given"
+HEAD_TOO_LARGE = "headers are too large"
 CRLF = "\r\n".bytes
 # The widest body a download may write, in bytes, and the ceiling of a server's `max_body_bytes`. A client's bodies
 # stay capped at CLIENT_MAX_BODY by check_options; only a download streamed to a file may use up to this.
@@ -1867,10 +1868,11 @@ def uploaded(
     conn.options.max_body_bytes,
   )
 
+  framed = try stream_head(head, length)
   # A failure to write is not the end: a server that refused the upload (a 413) answers and closes, and its answer is
   # waiting in the input. It is returned when it can be read; else the failure is.
   written: Result[Void] = ok()
-  case TCP.send_bytes(conn.socket, head_bytes(stream_head(head, length)), timeout)
+  case TCP.send_bytes(conn.socket, head_bytes(framed), timeout)
     ok(_) -> written = try upload_pieces(conn.socket, body, length, timeout)
     error(e) -> written = write_failed(e)
   end
@@ -3129,15 +3131,21 @@ def answer_stream(
   request = incoming.request
   timeout = options.request_timeout_ms
   ready = take_ready(response.body)
-  head_only = HttpWire.Response(status: response.status, headers: response.headers, body: NO_BYTES)
   length = response.length.unwrap_or(UNSIZED)
-  case HttpWire.encode_response(request, head_only, Time.now_ms())
+  bodyless = response.status == 204 or response.status == 304
+  data = NO_BYTES
+  if ready.ended
+    data = Bytes.concat(ready.pieces)
+  end
+  # A closed body gives the head its Content-Length here; a 204 or 304 with one is refused below.
+  sized = data
+  if bodyless
+    sized = NO_BYTES
+  end
+
+  encoded = HttpWire.Response(status: response.status, headers: response.headers, body: sized)
+  case HttpWire.encode_response(request, encoded, Time.now_ms())
     ok(reply) ->
-      bodyless = response.status == 204 or response.status == 304
-      data = NO_BYTES
-      if ready.ended
-        data = Bytes.concat(ready.pieces)
-      end
       problem = length_problem(response, ready.ended, data.size, bodyless)
       return invalid_stream(socket, request, response.body, problem, timeout) if not problem.empty?
       if ready.ended
@@ -3154,7 +3162,12 @@ def answer_stream(
         end
         return send_whole(socket, incoming, reply, NO_BYTES, timeout)
       end
-      stream_out(socket, incoming, response.body, ready.pieces, reply, length, options)
+      case stream_head(reply.head, length)
+        ok(head) ->
+          framed = HttpWire.Reply(head: head, closes: reply.closes)
+          stream_out(socket, incoming, response.body, ready.pieces, framed, length, options)
+        error(_) -> invalid_stream(socket, request, response.body, HEAD_TOO_LARGE, timeout)
+      end
     error(reason) -> invalid_stream(socket, request, response.body, "#{reason}", timeout)
   end
 end
@@ -3172,11 +3185,11 @@ def length_problem(response: StreamResponse, ended: Bool, size: Int, bodyless: B
   end
 end
 
-# A body that was complete when the handler returned, with its Content-Length (the encoded head says 0, as its body
-# there is empty; a 204 or 304 head has no length and no body). A HEAD request gets the head alone.
+# A body that was complete when the handler returned, with its Content-Length in the encoded head (a 204 or 304 head
+# has no length and no body). A HEAD request gets the head alone.
 def send_whole(socket: TCP.Socket, incoming: Incoming, reply: HttpWire.Reply, data: Bytes, timeout: Int) -> Sent
   deadline = Time.monotonic_ms() + timeout
-  head = String.replace(reply.head, "\r\nContent-Length: 0\r\n", "\r\nContent-Length: #{data.size}\r\n")
+  head = reply.head
   sent = ok()
   if incoming.request.method == "HEAD" or data.empty?
     sent = TCP.send_bytes(socket, head_bytes(head), timeout)
@@ -3240,10 +3253,18 @@ end
 def head_bytes(head: String) -> Bytes = head.encode("latin-1").unwrap!
 
 # The encoded head says Content-Length: 0 (the body there is empty): a stream with no known length says chunked, and
-# one with a length says it.
-def stream_head(head: String, length: Int) -> String
-  return String.replace(head, "\r\nContent-Length: 0\r\n", "\r\nTransfer-Encoding: chunked\r\n") if length == UNSIZED
-  String.replace(head, "\r\nContent-Length: 0\r\n", "\r\nContent-Length: #{length}\r\n")
+# one with a length says it. The new line can be longer, so the block is measured again, by the rule of scan_head in
+# vm/http_pico.c: every byte after the start line, the empty line included, at most 65536 (AGC_HTTP_MAX_BLOCK).
+def stream_head(head: String, length: Int) -> Result[String]
+  framing = "Transfer-Encoding: chunked"
+  if length != UNSIZED
+    framing = "Content-Length: #{length}"
+  end
+
+  framed = String.replace(head, "\r\nContent-Length: 0\r\n", "\r\n#{framing}\r\n")
+  block = framed.length - framed.index_of("\r\n").unwrap_or(0) - 2
+  return error("http: #{HEAD_TOO_LARGE}", kind: "http.too_large", code: 431) if block > 65536
+  ok(framed)
 end
 
 # Sends the head and then the body, as chunks or (with a `length`) as it is. A HEAD request gets the head and the
@@ -3262,7 +3283,7 @@ def stream_out(
   options: HttpWire.ServerOptions,
 ) -> Sent
   timeout = options.request_timeout_ms
-  if not Result.ok?(TCP.send_bytes(socket, head_bytes(stream_head(reply.head, length)), timeout))
+  if not Result.ok?(TCP.send_bytes(socket, head_bytes(reply.head), timeout))
     body.close
     return Sent(keep: false, rest: NO_BYTES)
   end

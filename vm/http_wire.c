@@ -351,14 +351,16 @@ static bool has_named(agc_vm *vm, const agc_list *headers, const char *wanted) {
   return false;
 }
 
-static void put_date(agc_http_bytes *b, int64_t now_ms) {
+static bool put_date(agc_http_bytes *b, int64_t now_ms) {
   time_t now = (time_t)(now_ms / 1000);
   struct tm t;
-  if (!gmtime_r(&now, &t)) return;
+  if (!gmtime_r(&now, &t)) return false;
   char text[64];
   int len = snprintf(text, sizeof text, "Date: %s, %02d %s %04d %02d:%02d:%02d GMT\r\n", week_days[t.tm_wday % 7],
                      t.tm_mday, months[t.tm_mon % 12], t.tm_year + 1900, t.tm_hour, t.tm_min, t.tm_sec);
-  if (len > 0 && (size_t)len < sizeof text) agc_http_put(b, text, (size_t)len);
+  if (len <= 0 || (size_t)len >= sizeof text) return false;
+  agc_http_put(b, text, (size_t)len);
+  return true;
 }
 
 /* The head of the response to request: the body itself is std/http's to send,
@@ -378,19 +380,25 @@ static const char *response_head(agc_vm *vm, agc_http_bytes *b, const agc_struct
   char line[96];
   int len = snprintf(line, sizeof line, "HTTP/1.1 %" PRId64 " %s\r\n", status, reason_of(status));
   agc_http_put(b, line, (size_t)len);
-  size_t count = 0;
+  agc_http_block block = {.start = b->len};
   const char *bad = agc_http_put_headers(vm, b, headers, framing_headers, 2,
                                          "Content-Length and Transfer-Encoding are set by the server",
-                                         close ? "connection" : NULL, &count, too_large);
-  if (bad) return bad;
-  if (!has_named(vm, headers, "date")) put_date(b, now_ms);
-  if (!bodyless) {
-    len = snprintf(line, sizeof line, "Content-Length: %zu\r\n", body->len);
-    agc_http_put(b, line, (size_t)len);
+                                         close ? "connection" : NULL, &block);
+  if (!bad) {
+    if (!has_named(vm, headers, "date")) block.count += put_date(b, now_ms);
+    if (!bodyless) {
+      len = snprintf(line, sizeof line, "Content-Length: %zu\r\n", body->len);
+      agc_http_put(b, line, (size_t)len);
+      block.count++;
+    }
+    if (close) {
+      agc_http_put_text(b, "Connection: close\r\n");
+      block.count++;
+    }
+    bad = agc_http_put_head_end(b, &block);
   }
-  if (close) agc_http_put_text(b, "Connection: close\r\n");
-  agc_http_put_text(b, "\r\n");
-  return NULL;
+  *too_large = block.too_large;
+  return bad;
 }
 
 /* HttpWire.encode_response: the head as text, and whether the connection
@@ -453,7 +461,9 @@ static const char *request_head(agc_vm *vm, agc_http_bytes *b, const agc_value *
   agc_http_put(b, method->data, method->bytes);
   agc_http_put_text(b, " ");
   agc_http_put(b, target->data, target->bytes);
-  agc_http_put_text(b, " HTTP/1.1\r\nHost: ");
+  agc_http_put_text(b, " HTTP/1.1\r\n");
+  agc_http_block block = {.start = b->len, .count = 1};
+  agc_http_put_text(b, "Host: ");
   bool literal = memchr(host->data, ':', host->bytes) != NULL;
   if (literal) agc_http_put_text(b, "[");
   agc_http_put(b, host->data, host->bytes);
@@ -464,20 +474,19 @@ static const char *request_head(agc_vm *vm, agc_http_bytes *b, const agc_value *
     agc_http_put_text(b, number);
   }
   agc_http_put_text(b, "\r\n");
-  size_t count = 1;
   bool post = text_is(method, "POST") || text_is(method, "PUT") || text_is(method, "PATCH");
   if (body->len || post) {
     snprintf(number, sizeof number, "Content-Length: %zu\r\n", body->len);
     agc_http_put_text(b, number);
-    count++;
+    block.count++;
   }
   const char *bad = agc_http_put_headers(vm, b, agc_as_list(vm, args[5]), managed_headers,
                                          sizeof managed_headers / sizeof managed_headers[0],
                                          "Host, Content-Length, Transfer-Encoding and Connection are set by the client", NULL,
-                                         &count, too_large);
-  if (bad) return bad;
-  agc_http_put_text(b, "\r\n");
-  return NULL;
+                                         &block);
+  if (!bad) bad = agc_http_put_head_end(b, &block);
+  *too_large = block.too_large;
+  return bad;
 }
 
 /* HttpWire.encode_request(scheme, host, port, method, target, headers, body,

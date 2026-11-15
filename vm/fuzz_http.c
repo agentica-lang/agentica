@@ -108,26 +108,19 @@ static void round_trip(agc_vm *vm, bool request, const agc_http_head *head) {
     field->fields[1] = agc_string_value(latin1(head->fields[k].value));
     agc_list_builder_push(&fields, agc_struct_value(field));
   }
-  size_t count = 0;
-  bool too_large;
-  const char *bad = agc_http_put_headers(vm, &b, agc_list_builder_finish(&fields), NULL, 0, NULL, NULL, &count,
-                                         &too_large);
+  agc_http_block block = {.start = b.len};
+  const char *bad = agc_http_put_headers(vm, &b, agc_list_builder_finish(&fields), NULL, 0, NULL, NULL, &block);
+  if (!bad) bad = agc_http_put_head_end(&b, &block);
   if (bad) {
-    check(too_large, bad);
+    check(block.too_large, bad);
     free(b.data);
     return;
   }
-  agc_http_put_text(&b, "\r\n");
   b.len = wire(b.data, b.len);
   static agc_http_head again;
   size_t used;
   agc_http_error error;
   agc_http_status s = parse(request, b.data, b.len, &again, &used, &error);
-  // #1646: the writer does not count the final empty line in the block, so it can write a block the parser refuses.
-  if (s == AGC_HTTP_ERROR && error == AGC_HTTP_ERR_BLOCK_TOO_LARGE) {
-    free(b.data);
-    return;
-  }
   check(s == AGC_HTTP_OK && used == b.len, "a written head does not parse");
   check(again.count == head->count && again.frame == head->frame && again.length == head->length &&
             again.status == head->status && same_slice(again.method, head->method) &&

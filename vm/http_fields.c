@@ -46,18 +46,17 @@ static const char *put_value(agc_http_bytes *b, const agc_string *value, size_t 
   return NULL;
 }
 
-static const char *over_limit(bool *too_large, const char *reason) {
-  *too_large = true;
+static const char *over_limit(agc_http_block *block, const char *reason) {
+  block->too_large = true;
   return reason;
 }
 
-/* Writes the caller's headers after the ones in b. A refusal is its reason; *too_large is set when the reason is one
-   of the head limits (a line, the count or the block), so the caller makes it http.too_large. */
+/* Writes the caller's headers after the ones in b. A refusal is its reason; block->too_large is set when the reason
+   is one of the head limits (a line, the count or the block), so the caller makes it http.too_large. The caller adds
+   the lines it writes itself to block->count. */
 const char *agc_http_put_headers(agc_vm *vm, agc_http_bytes *b, const agc_list *headers, const char *const *managed,
-                                 size_t managed_count, const char *managed_reason, const char *skip, size_t *count,
-                                 bool *too_large) {
-  *too_large = false;
-  size_t block = b->len, block_extra = 0;
+                                 size_t managed_count, const char *managed_reason, const char *skip,
+                                 agc_http_block *block) {
   agc_list_cursor cursor;
   agc_value item;
   agc_list_cursor_begin(&cursor, headers, 0);
@@ -78,11 +77,19 @@ const char *agc_http_put_headers(agc_vm *vm, agc_http_bytes *b, const agc_list *
     const char *bad = put_value(b, value, &extra);
     if (bad) return bad;
     agc_http_put_text(b, "\r\n");
-    block_extra += extra;
-    if (b->len - start - extra > AGC_HTTP_MAX_LINE + 2) return over_limit(too_large, "a header line is too large");
-    if (++*count > AGC_HTTP_MAX_HEADERS) return over_limit(too_large, "too many headers");
+    block->extra += extra;
+    if (b->len - start - extra > AGC_HTTP_MAX_LINE + 2) return over_limit(block, "a header line is too large");
+    if (++block->count > AGC_HTTP_MAX_HEADERS) return over_limit(block, "too many headers");
   }
-  if (b->len - block - block_extra > AGC_HTTP_MAX_BLOCK) return over_limit(too_large, "headers are too large");
+  return NULL;
+}
+
+/* Ends the head with its empty line and measures the block as the parser does (scan_head): every line from
+   block->start with its CRLF, the empty line included, and every header, the caller's own too. */
+const char *agc_http_put_head_end(agc_http_bytes *b, agc_http_block *block) {
+  agc_http_put_text(b, "\r\n");
+  if (block->count > AGC_HTTP_MAX_HEADERS) return over_limit(block, "too many headers");
+  if (b->len - block->start - block->extra > AGC_HTTP_MAX_BLOCK) return over_limit(block, "headers are too large");
   return NULL;
 }
 
