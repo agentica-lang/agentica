@@ -465,15 +465,19 @@ static void out_name(out_buffer *out, const char *s, size_t n) {
   }
 }
 
-/* The length of the name that the report shows for builtin key KEY: its catalog name. A byte row that moved to Bytes
-   (#805) kept its catalog name under the key "<name>.bytes" (OpenSSL.Digest.sha256.bytes, __lazy_zlib.bytes), so the
-   suffix is dropped when the rest is a qualified name or a prelude key; String.bytes (s.bytes) is a name of its own. */
-static size_t shown_name_len(const char *key) {
+/* The name that the report shows for builtin key KEY, its catalog name, and its length in *LEN. A byte row that moved
+   to Bytes (#805) kept its catalog name under the key "<name>.bytes" (OpenSSL.Digest.sha256.bytes, __lazy_zlib.bytes),
+   so the suffix is dropped when the rest is a qualified name or a prelude key; String.bytes (s.bytes) is a name of its
+   own, and "a#{b}".bytes runs under String.interpolated.bytes. */
+static const char *shown_name(const char *key, size_t *len) {
   static const char suffix[] = ".bytes";
+  if (strcmp(key, "String.interpolated.bytes") == 0) key = "String.bytes";
   size_t n = strlen(key), cut = sizeof suffix - 1;
-  if (n <= cut || memcmp(key + n - cut, suffix, cut) != 0) return n;
+  *len = n;
+  if (n <= cut || memcmp(key + n - cut, suffix, cut) != 0) return key;
   bool prelude = n - cut >= 2 && key[0] == '_' && key[1] == '_';
-  return prelude || memchr(key, '.', n - cut) ? n - cut : n;
+  if (prelude || memchr(key, '.', n - cut)) *len = n - cut;
+  return key;
 }
 
 static void out_frame(out_buffer *out, const agc_program *p, const agc_profile *profile, uint64_t code) {
@@ -494,7 +498,9 @@ static void out_frame(out_buffer *out, const agc_program *p, const agc_profile *
     }
     case AGC_PROFILE_BUILTIN: {
       const char *name = id < profile->builtins && p->builtins[id] ? p->builtins[id]->name : "<native>";
-      out_name(out, name, shown_name_len(name));
+      size_t n;
+      name = shown_name(name, &n);
+      out_name(out, name, n);
       return;
     }
     case AGC_PROFILE_LABEL: {
@@ -598,9 +604,10 @@ void agc_profile_report(agc_vm *vm) {
   found = top_counts(profile->builtin_ns, NULL, builtins, top, PROFILE_TOP);
   for (size_t k = 0; k < found; k++) {
     uint32_t id = top[k];
-    const char *name = id < profile->builtins ? p->builtins[id]->name : "";
+    size_t n;
+    const char *name = shown_name(id < profile->builtins ? p->builtins[id]->name : "", &n);
     AGC_TRACE(tr, AGC_TRACE_PROFILE, "builtin calls=%" PRIu64 " us=%" PRIu64 " name=%.*s", profile->builtin_calls[id],
-              profile->builtin_ns[id] / 1000u, agc_trace_len(shown_name_len(name)), name);
+              profile->builtin_ns[id] / 1000u, agc_trace_len(n), name);
   }
   if (profile->report_native) profile->report_native(vm);
   report_sections(tr, profile->sections);
