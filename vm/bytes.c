@@ -156,12 +156,10 @@ static agc_value builtin_string_bytes(agc_vm *vm, agc_value *args, uint32_t span
 
 static agc_value interpolated(agc_vm *vm, agc_value *args, uint32_t count, uint32_t span) {
   char printed[INTERPOLATED_PARTS][AGC_SCALAR_TEXT];
-  const agc_string *kept[INTERPOLATED_PARTS];
   const char *data[INTERPOLATED_PARTS];
   size_t len[INTERPOLATED_PARTS], total = 0;
   for (uint32_t k = 0; k < count; k++) {
     agc_value v = args[k];
-    kept[k] = NULL;
     if (agc_is(v, AGC_T_INT) || agc_is(v, AGC_T_FLOAT) || agc_is(v, AGC_T_BOOL) || agc_is(v, AGC_T_NIL)) {
       data[k] = printed[k];
       len[k] = agc_scalar_text(vm, v, printed[k]);
@@ -169,7 +167,6 @@ static agc_value interpolated(agc_vm *vm, agc_value *args, uint32_t count, uint3
       agc_string *text;
       if (!agc_text_checked(vm, v, &text))
         agc_fail(vm, "RUNTIME-INTERNAL", "invalid bytecode: a part of an interpolation has no text", span);
-      kept[k] = text;
       data[k] = text->data;
       len[k] = text->bytes;
     }
@@ -182,7 +179,6 @@ static agc_value interpolated(agc_vm *vm, agc_value *args, uint32_t count, uint3
     if (len[k]) memcpy(joined->data + at, data[k], len[k]);
     at += len[k];
   }
-  (void)kept;
   return agc_bytes_value(joined);
 }
 

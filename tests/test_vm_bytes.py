@@ -1,9 +1,9 @@
 """Bytes against Python's bytes, on generated inputs.
 
 tests/fixtures/bytes-peer.agc answers one case a line: from_list, to_a, at, slice, take, drop, +, Bytes.concat, `==` and
-`!=`, how many keys a Set and a Map keep (the hash and the key equality), and `.bytes` on an interpolated string. The expected answers come from Python's
-bytes and set. The inputs cover the empty value, one byte, every byte value, equal values that are separate objects, and
-values that differ in one byte, in the length or in the last byte only.
+`!=`, how many keys a Set and a Map keep (the hash and the key equality), and `.bytes` on an interpolated string. The
+expected answers come from Python's bytes and set. The inputs cover the empty value, one byte, every byte value, equal
+values that are separate objects, and values that differ in one byte, in the length or in the last byte only.
 """
 import random
 

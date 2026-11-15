@@ -1233,8 +1233,9 @@ def lower_interpolated_bytes(
   saved = fx.next
   base = fx.next
   spans = [span]
+  index = 0
   for part in node.parts
-    fx = Lowering.alloc(fx)
+    fx = Lowering.alloc(fx.with(next: base + index))
     slot = fx.next - 1
     case part
       Ast.Part.Text(text) -> fx = Lowering.emit_const(fx, slot, Ir.Imm.Text(text), node.span)
@@ -1244,6 +1245,7 @@ def lower_interpolated_bytes(
     end
 
     spans = spans.push(node.span)
+    index += 1
   end
 
   fx = Lowering.emit_builtin(fx, base, "String.interpolated.bytes", node.parts.size, spans)
