@@ -331,6 +331,7 @@ String.from_code
 String.from_float
 String.from_int
 String.index_of.optional
+String.interpolated.bytes
 String.jaro_winkler
 String.join
 String.length

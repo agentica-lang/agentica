@@ -280,10 +280,12 @@ def test_the_profile_counts_calls_and_steps_of_each_function_and_the_time_of_eac
 
 def test_the_profile_names_a_byte_builtin_by_its_catalog_name(tmp_path, traced_vm):
     """OpenSSL.Digest.sha256 runs under the key OpenSSL.Digest.sha256.bytes; the report shows the catalog name. String.bytes is a
-    name of its own and keeps it (on a variable: on a literal, .bytes is a constant and calls nothing)."""
+    name of its own and keeps it (on a variable: on a literal, .bytes is a constant and calls nothing), and so does
+    .bytes on an interpolated string, which runs under String.interpolated.bytes."""
     vm = traced_vm[0]
     source = tmp_path / "digest.agc"
-    source.write_text('def main() -> Void\n  text = "abc"\n  puts(OpenSSL.Digest.sha256(text.bytes).length)\nend\n')
+    source.write_text('def main() -> Void\n  text = "abc"\n  puts(OpenSSL.Digest.sha256(text.bytes).length)\n'
+                      '  puts("a#{text}".bytes.length)\nend\n')
     bytecode = compile_fixture(source, tmp_path)
     path = tmp_path / "digest.trace"
     plain = run_vm(vm, bytecode)
@@ -292,6 +294,7 @@ def test_the_profile_names_a_byte_builtin_by_its_catalog_name(tmp_path, traced_v
             for line in trace_lines(path))
     names = {row.group(1) for row in rows if row}
     assert {b"OpenSSL.Digest.sha256", b"String.bytes"} <= names, names
+    assert b"String.interpolated" not in names, names
     assert not any(name.endswith(b".bytes") and name != b"String.bytes" for name in names), names
 
 

@@ -184,6 +184,20 @@ static size_t bytes_form(const agc_bytes *b, bytes_style style, char out[BYTES_F
   return n;
 }
 
+/* The decimal digits of an Int, without the cost of snprintf: an Int is the most common part of an interpolation. */
+static size_t int_text(int64_t n, char text[AGC_SCALAR_TEXT]) {
+  char digits[20];
+  uint64_t magnitude = n < 0 ? 0 - (uint64_t)n : (uint64_t)n;
+  size_t count = 0, at = 0;
+  do {
+    digits[count++] = (char)('0' + magnitude % 10);
+    magnitude /= 10;
+  } while (magnitude);
+  if (n < 0) text[at++] = '-';
+  while (count) text[at++] = digits[--count];
+  return at;
+}
+
 size_t agc_scalar_text(agc_vm *vm, agc_value v, char text[AGC_SCALAR_TEXT]) {
   if (agc_is(v, AGC_T_NIL)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "nil");
   if (agc_is(v, AGC_T_BOOL)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "%s", agc_as_bool(vm, v) ? "true" : "false");
@@ -214,7 +228,7 @@ size_t agc_scalar_text(agc_vm *vm, agc_value v, char text[AGC_SCALAR_TEXT]) {
     return (size_t)snprintf(text, AGC_SCALAR_TEXT, "%" PRId64 "%s%" PRId64, r->start, r->exclusive ? "..." : "..",
                             r->end);
   }
-  return (size_t)snprintf(text, AGC_SCALAR_TEXT, "%" PRId64, agc_as_int(vm, v));
+  return int_text(agc_as_int(vm, v), text);
 }
 
 static char *reserve(builder *b, size_t extra) {

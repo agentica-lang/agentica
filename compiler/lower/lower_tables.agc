@@ -86,7 +86,7 @@ VM_BUILTINS = Set.new([
   "System.signal_number", "Task.monitor_ref", "Format.int", "Format.float", "Format.text", "Process.signal",
   "Process.spawn_group", "Process.signal_group", "System.signal", "Process.poll_line", "ActorInbox.set",
   "ActorInbox.get", "BddScenario.srand", "BddScenario.uncount", "TCP.write", "TCP.write_bytes.bytes", "TCP.flush",
-  "TCP.write_limit", "BddScenario.budget",
+  "TCP.write_limit", "BddScenario.budget", "String.interpolated.bytes",
 ])
 
 ## The instruction of an operator on two Ints, by the token kind of the operator. `>` and `>=` use the instruction of
@@ -95,6 +95,9 @@ INT_OPS: Map[String, String] = {
   "plus": "add-i", "minus": "sub-i", "multiply": "mul-i", "divide": "div-i", "modulo": "mod-i", "less": "lt-i",
   "less-equal": "le-i", "greater": "lt-i", "greater-equal": "le-i",
 }
+
+## The most parts of an interpolation that `.bytes` writes with one builtin (INTERPOLATED_PARTS in vm/bytes.c).
+INTERPOLATED_PARTS = 8
 
 ## The operators on two Strings: only `+` (`String * Int` is the builtin String.multiply, lower_expr.agc).
 STRING_OPS: Map[String, String] = {"plus": "concat"}
