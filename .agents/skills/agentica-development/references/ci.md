@@ -351,7 +351,9 @@ do not say:
   the interpreter, then on Linux x86-64 with the JIT, and compares the outputs.
   The link wraps `agc_jit_mem_reserve` so each input's code memory is unmapped
   (`vm/fuzz_libfuzzer.c`). Seeds: `tests/fixtures/vm/` and
-  `tests/fixtures/fuzz/`.
+  `tests/fixtures/fuzz/`. Then `vm-libfuzz-http-run` fuzzes the HTTP parsers
+  for a tenth of the time (`vm/fuzz_http.c`, seeds in
+  `tests/fixtures/fuzz/http/`).
 - `sweep.yml` (weekly, and by hand) runs `make sweep-full` and
   `vm-jit-self-compile` (the front end compiles itself under `--jit on` and
   `always`, through the test-only `AGENTICA_VM_TEST_FRONT_END_JIT`), and its

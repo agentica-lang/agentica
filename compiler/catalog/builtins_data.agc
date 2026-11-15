@@ -467,9 +467,11 @@ ERROR_KINDS: List[String] = [
   "toml.parse",
 ]
 
-## The modules only std/ may call: each name with the std module that wraps it and the alias its help shows.
+## The modules only std/ may call: each name with the std module that wraps it and the alias its help shows ("" for a
+## family that has no public form there).
 STD_ONLY_IMPORTS: Map[String, List[String]] = {
   "ActorInbox": ["std/actor", "Actor"],
+  "BddScenario": ["std/bdd", ""],
   "HttpWire": ["std/http", "HTTP"],
   "LogRegistry": ["std/logger", "Logger"],
   "RegexEngine": ["std/regex", "Regex"],

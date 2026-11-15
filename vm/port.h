@@ -561,8 +561,9 @@ struct agc_task {
   /* Atomic: a canceller on another scheduler sets it while the task runs, and the scheduler reads it at the end of the
      turn, before it publishes PARKED (agc_vm_run). */
   _Atomic bool cancelled;
-  /* `service`: the task is under a service root (agc_task_service), and so are all its descendants. */
-  bool crashed, observed, left_children, group, hidden, spawned, service;
+  /* `service`: the task is under a service root (agc_task_service), and so are all its descendants. `uncounted`: the
+     task left Task.pending_count (BddScenario.uncount), so its end is not counted again; its descendants stay in. */
+  bool crashed, observed, left_children, group, hidden, spawned, service, uncounted;
   uint32_t spawn_span;
   agc_value result;
   agc_string *crash, *crash_message;
