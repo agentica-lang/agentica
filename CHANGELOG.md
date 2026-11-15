@@ -17,7 +17,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `"$#{n}\r\n".bytes` on an interpolated string writes the parts into one `Bytes`, with no `String` in between; an `Int` in any interpolation prints faster (#1361).
 - A program whose tasks all wait for one busy task (a store task that serves 50 clients over channels) no longer runs slower with more scheduler threads: up to about 2 times faster at 2 to 8 schedulers, depending on the work per request (#1362).
 - A project's `agentica.toml` is parsed once per start, not twice, so a program below a manifest starts a little faster (#1471).
-- With several schedulers, a read of a plain TCP socket that the received bytes already answer returns without a trip through the I/O thread: up to 5 times more lines per second on a busy stream, and about 10% more requests per second for an HTTP client (#1197).
+- With several schedulers, a TCP read that bytes already received can answer returns at once instead of waiting on the I/O thread: up to 5 times more lines per second on a busy stream, about 10% more requests per second for an HTTP client (#1197).
 - `agentica FILE.agc` no longer looks for the C compiler in `PATH` at each start of a cached program with no native module, and a change of `CC` or `PATH` keeps its cache entry (#1551).
 
 ## [0.32.0] - 2026-11-15
