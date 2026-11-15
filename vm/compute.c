@@ -13,27 +13,39 @@
 
 /* The `kind` of a queue entry that a scheduler submitted (agc_compute_submit_direct); 0 is a loop's item. */
 #define DIRECT 1
+/* How long a thread that ran an item spins for the next before it sleeps, at level 0. The longest spin is this times
+   2 to the AGC_SPIN_LEVEL_MAX (160 µs). */
+#define SPIN_NS UINT64_C(10000)
 
 typedef struct {
   agc_compute *pool;
   /* Under the pool's lock: the thread runs an item now. `join`: it was idle when the pool closed, so the close joins
-     it. */
+     it. `level`: the thread's own, for the length of its spin (spin_for). */
   bool busy, join;
+  uint32_t level;
 } worker;
 
 /* malloc memory, no GC pointer. `lock` guards the queue, the counts, the workers' flags and `closed`; `queued` is the
    length of the queue, `idle` the threads waiting for an item; `refs` counts the loop's hold and one per started
    thread, and the last one out frees the pool. `running` (items given and not yet
    finished) belongs to the loop's thread, which alone may ref or unref the inbox's handle. `direct` counts the direct
-   items given and not yet ended (any thread), which the loop's thread reads for its stall check instead. */
+   items given and not yet ended (any thread), which the loop's thread reads for its stall check instead.
+   A thread that ran an item spins for the next one before it waits (spin_for), as an idle scheduler does
+   (agc_runq_spin): a short call hands over in a few microseconds where a condvar wake costs tens. `spinning` (under
+   the lock) counts them, at most `spin_max`, and a submit signals only when the queue holds more items than threads
+   spin. They poll `queued` and `closed`, which change under the lock and are atomic for that read; a spinner takes
+   the lock again and tests the queue before it waits, so no item is left behind. `spin_pauses` is 0 when the process
+   may run on one CPU only, where a spin would only delay the thread that submits. */
 struct agc_compute {
   uv_mutex_t lock;
   uv_cond_t wake;
   agc_request *first, *last;
   void *threads;
   worker *workers;
-  uint32_t size, started, idle, queued, refs;
-  bool closed;
+  uint32_t size, started, idle, refs, spinning, spin_max;
+  _Atomic uint32_t queued;
+  _Atomic bool closed;
+  uint64_t spin_pauses;
   agc_inbox *done;
   void (*finished)(void *item);
   void (*ended)(void *item);
@@ -52,6 +64,39 @@ static void destroy(agc_compute *pool) {
 /* Drops a hold under the lock; the caller frees the pool, after the unlock, when this was the last one. */
 static bool let_go(agc_compute *pool) { return --pool->refs == 0; }
 
+/* A thread's level goes up when its spin found an item, or would have with a longer spin: the next one came within the
+   longest spin after this one ended. It goes down when the thread then slept for longer. */
+static void adapt(worker *w, bool up) {
+  if (up)
+    w->level += w->level < AGC_SPIN_LEVEL_MAX;
+  else
+    w->level -= w->level > 0;
+}
+
+/* Under the lock, with the queue empty: spins for an item outside the lock when fewer than spin_max threads spin, for
+   spin_pauses at level 0, longer at the thread's level when no other thread spins. Returns with the lock held; the
+   caller tests the queue again. True when the thread spun alone and found nothing: the caller then times its wait for
+   `adapt`. */
+static bool spin_for(agc_compute *pool, worker *w) {
+  if (!pool->spin_pauses || pool->spinning >= pool->spin_max) return false;
+  bool alone = pool->spinning++ == 0;
+  uint64_t budget = alone ? pool->spin_pauses << w->level : pool->spin_pauses;
+  uv_mutex_unlock(&pool->lock);
+  uint64_t spent = 0;
+  unsigned pauses = 1;
+  bool found;
+  while (!(found = atomic_load_explicit(&pool->queued, memory_order_relaxed) != 0 ||
+                   atomic_load_explicit(&pool->closed, memory_order_relaxed)) &&
+         spent < budget) {
+    spent += pauses;
+    pauses = agc_spin_step(pauses);
+  }
+  uv_mutex_lock(&pool->lock);
+  pool->spinning--;
+  if (alone && found) adapt(w, true);
+  return alone && !found;
+}
+
 /* A pool thread: the next item in order, its work outside the lock, then its end to the loop's thread. The end is
    posted under the lock, so a post never races agc_compute_close, which closes the inbox only after it set `closed`
    under the same lock. After the close an item that ends has nobody to take it, so its entry is freed here. */
@@ -60,13 +105,16 @@ static void serve(void *arg) {
   agc_compute *pool = w->pool;
   uv_mutex_lock(&pool->lock);
   for (;;) {
+    bool missed = !pool->first && !pool->closed && spin_for(pool, w);
+    uint64_t slept = missed ? uv_hrtime() : 0;
     while (!pool->first && !pool->closed) {
       pool->idle++;
       uv_cond_wait(&pool->wake, &pool->lock);
       pool->idle--;
     }
-    if (pool->closed) break;
+    if (missed) adapt(w, pool->first && uv_hrtime() - slept < SPIN_NS << AGC_SPIN_LEVEL_MAX);
     agc_request *item = pool->first;
+    if (pool->closed || !item) break;
     pool->first = item->next;
     if (!pool->first) pool->last = NULL;
     pool->queued--;
@@ -120,6 +168,12 @@ agc_compute *agc_compute_open(struct uv_loop_s *loop, uint32_t size, void (*fini
   pool->finished = finished;
   pool->ended = ended;
   pool->refs = 1;
+  pool->spin_max = pool->size / 2 ? pool->size / 2 : 1;
+  if (uv_available_parallelism() > 1) {
+    uint64_t pauses = agc_pauses_for(SPIN_NS);
+    uint64_t least = (uint64_t)2 * AGC_SPIN_PAUSES_MAX;
+    pool->spin_pauses = pauses < least ? least : pauses;
+  }
   if (uv_mutex_init(&pool->lock) != 0) {
     agc_threads_free(pool->threads);
     free(pool->workers);
@@ -154,7 +208,7 @@ static bool enqueue(agc_compute *pool, agc_request *entry) {
   pool->queued++;
   /* A new thread when the queue holds more items than threads wait for: a woken thread leaves `idle` only once it has
      the lock, so a burst of items still finds threads to start. The pool grows to its size under load and no further. */
-  if (pool->queued > pool->idle && pool->started < pool->size) {
+  if (pool->queued > pool->idle + pool->spinning && pool->started < pool->size) {
     uint32_t k = pool->started;
     pool->workers[k].pool = pool;
     pool->workers[k].busy = pool->workers[k].join = false;
@@ -171,8 +225,11 @@ static bool enqueue(agc_compute *pool, agc_request *entry) {
   return true;
 }
 
-/* After the unlock, so the thread it wakes does not wait for the lock at once. Only a thread that waits needs it: a
-   busy one takes the item when it comes back for the next. */
+/* Under the lock: whether an item needs a waiting thread woken. A busy thread takes it when it comes back for the next,
+   and a spinning one takes one item each. */
+static bool must_wake(const agc_compute *pool) { return pool->idle > 0 && pool->queued > pool->spinning; }
+
+/* After the unlock, so the thread it wakes does not wait for the lock at once. */
 static void wake_one(agc_compute *pool, bool waiting) {
   if (waiting) uv_cond_signal(&pool->wake);
 }
@@ -192,7 +249,7 @@ bool agc_compute_submit(agc_compute *pool, void (*work)(void *item), void *item)
     free(entry);
     return false;
   }
-  bool waiting = pool->idle > 0;
+  bool waiting = must_wake(pool);
   uv_mutex_unlock(&pool->lock);
   wake_one(pool, waiting);
   if (pool->running++ == 0) agc_inbox_keep(pool->done, true);
@@ -217,7 +274,7 @@ bool agc_compute_submit_direct(agc_compute *pool, void (*work)(void *item), void
     atomic_fetch_sub_explicit(&pool->direct, 1, memory_order_seq_cst);
     return false;
   }
-  bool waiting = pool->idle > 0;
+  bool waiting = must_wake(pool);
   uv_mutex_unlock(&pool->lock);
   wake_one(pool, waiting);
   return true;

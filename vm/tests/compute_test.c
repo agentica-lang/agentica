@@ -1,8 +1,8 @@
 /*
- * The compute pool (vm/compute.c): items run in order on one thread, the pool grows to its size and no further, also in
- * a burst, every end comes back on the loop's thread, an idle pool lets the loop end, and a close drops what no thread
- * took and leaves a running item to its thread. Direct items, submitted from other threads, end on the pool thread and
- * keep the loop out of it.
+ * The compute pool (vm/compute.c): items run in order on one thread, the pool grows to its size, also in a burst, ends
+ * come back on the loop's thread, an idle pool lets the loop end, and a close drops what no thread took and leaves a
+ * running item to its thread. Direct items end on the pool thread and keep the loop out of it. Items run across the
+ * spin of an idle thread, items beyond the spinners wake a waiting one, and a close joins a spinning thread.
  */
 #include "../core.h"
 #include "test_support.h"
@@ -178,6 +178,70 @@ static void test_direct_items_end_on_the_pool(void) {
   atomic_store(&ran, 0);
 }
 
+#define SPACED 300
+
+/* One item at a time, each after a pause from 0 to 300 µs since the last end: across the spin of 10 to 160 µs, so
+   items come while the thread spins, as it gives up and once it waits. Every one runs and ends. A close right after the
+   last end, while the thread spins, joins it. */
+static void test_items_across_the_spin(void) {
+  uv_loop_t loop;
+  assert(uv_loop_init(&loop) == 0);
+  agc_compute *pool = agc_compute_open(&loop, 1, count_finished, NULL);
+  assert(pool);
+  for (int k = 0; k < SPACED; k++) {
+    assert(agc_compute_submit(pool, direct_work, NULL));
+    assert(uv_run(&loop, UV_RUN_DEFAULT) == 0);
+    assert(finished == k + 1);
+    uint64_t until = uv_hrtime() + (uint64_t)(k * 7919 % 301) * 1000;
+    while (uv_hrtime() < until) {
+    }
+  }
+  close_pool(&loop, pool);
+  assert(atomic_load(&ran) == SPACED);
+  finished = 0;
+  atomic_store(&ran, 0);
+}
+
+/* Its own gate and count: test_close_leaves_a_running_item leaves `gate` and `inside` to a thread that never ends. */
+static uv_sem_t gate2;
+static _Atomic int inside2;
+
+static void held2(void *item) {
+  (void)item;
+  atomic_fetch_add(&inside2, 1);
+  uv_sem_wait(&gate2);
+  atomic_fetch_sub(&inside2, 1);
+}
+
+/* Two threads, one spinning (spin_max 1) and one asleep: two items that come during the spin run at once, so the
+   second submit wakes the sleeper instead of leaving it to the spinner. */
+static void test_items_beyond_the_spinners_wake_a_thread(void) {
+  uv_loop_t loop;
+  assert(uv_loop_init(&loop) == 0);
+  assert(uv_sem_init(&gate2, 0) == 0);
+  agc_compute *pool = agc_compute_open(&loop, 2, count_finished, NULL);
+  assert(pool);
+  for (int k = 0; k < 2; k++) assert(agc_compute_submit(pool, held2, NULL));
+  while (atomic_load(&inside2) < 2) agc_test_yield();
+  for (int k = 0; k < 2; k++) uv_sem_post(&gate2);
+  assert(uv_run(&loop, UV_RUN_DEFAULT) == 0);
+  for (int k = 0; k < 50; k++) {
+    assert(agc_compute_submit(pool, direct_work, NULL));
+    assert(uv_run(&loop, UV_RUN_DEFAULT) == 0);
+  }
+  for (int k = 0; k < 2; k++) assert(agc_compute_submit(pool, held2, NULL));
+  uint64_t until = uv_hrtime() + 1000000000u;
+  while (atomic_load(&inside2) < 2 && uv_hrtime() < until) agc_test_yield();
+  bool both = atomic_load(&inside2) == 2;
+  for (int k = 0; k < 2; k++) uv_sem_post(&gate2);
+  assert(uv_run(&loop, UV_RUN_DEFAULT) == 0);
+  assert(both);
+  close_pool(&loop, pool);
+  uv_sem_destroy(&gate2);
+  finished = 0;
+  atomic_store(&ran, 0);
+}
+
 int main(void) {
   agc_test_deadline(60);
   loop_thread = uv_thread_self();
@@ -186,6 +250,8 @@ int main(void) {
   test_a_burst_starts_threads();
   test_close_leaves_a_running_item();
   test_direct_items_end_on_the_pool();
+  test_items_across_the_spin();
+  test_items_beyond_the_spinners_wake_a_thread();
   printf("compute: ok\n");
   return 0;
 }
