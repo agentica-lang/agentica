@@ -4,6 +4,7 @@
  * over every exponent and random bit patterns.
  */
 #include "../core.h"
+#include "../services.h"
 
 #include <assert.h>
 #include <math.h>
@@ -69,10 +70,9 @@ static const char min_subnormal[] =
     "627381672509558373897335989936648099411642057026370902792427675445652290"
     "8753868250641971826553344726562500000000000000000e-324";
 
-#ifndef _WIN32
 /* The formatter before Ryu: the exact digits from "%.767e", then the first length from 1 to 17 whose nearest candidate
-   (ties up) or other neighbour reads back as x. Not on Windows, whose strtod misreads some candidates
-   (3.839223843572815e-239), so that the old formatter printed 17 digits there. */
+   (ties up) or other neighbour reads back as x. It read back with strtod, which misreads some candidates on Windows
+   (3.839223843572815e-239), so here it reads with agc_read_double. */
 static size_t reference_text(double x, char *out) {
   if (isnan(x)) return (size_t)sprintf(out, "+nan.0");
   if (isinf(x)) return (size_t)sprintf(out, x > 0 ? "+inf.0" : "-inf.0");
@@ -107,7 +107,7 @@ static size_t reference_text(double x, char *out) {
       }
       char text[40];
       snprintf(text, sizeof text, "%c.%.*se%d", digits[0], (int)n - 1, digits + 1, digits_e);
-      found = strtod(text, NULL) == x;
+      found = agc_read_double(text, strlen(text)) == x;
     }
   while (n > 1 && digits[n - 1] == '0') n--;
   e = digits_e;
@@ -160,7 +160,6 @@ static void compare_with_reference(void) {
     }
   for (int i = 0; i < 20000; i++) check_reference(random_bits());
 }
-#endif
 
 int main(void) {
   double tiny;
@@ -178,9 +177,7 @@ int main(void) {
     if (strcmp(text, cases[i].text) != 0) fprintf(stderr, "%s: got %s\n", cases[i].text, text);
     assert(strcmp(text, cases[i].text) == 0);
   }
-#ifndef _WIN32
   compare_with_reference();
-#endif
   puts("float text tests passed");
   return 0;
 }

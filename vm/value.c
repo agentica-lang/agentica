@@ -1115,10 +1115,11 @@ static size_t put(char *out, size_t at, const char *text, size_t len) {
   return at + len;
 }
 
-/* Shortest round-trip digits: Ryu with its small tables (Ulf Adams, "Ryu: fast float-to-string conversion", PLDI 2018;
-   github.com/ulfjack/ryu, Apache-2.0), except that an exact tie rounds up. pow5_split[k] is the top 125 bits of 5^(26k)
-   and pow5_inv_split[k] is 2^(124 + bits(5^(26k))) / 5^(26k) + 1; the 2-bit offsets correct the powers in between to
-   the values of Ryu's full tables. */
+/* Shortest round-trip digits, derived from Ryu (github.com/ulfjack/ryu; "Ryu: fast float-to-string conversion", PLDI
+   2018), Copyright 2018 Ulf Adams, used under Apache-2.0 (Ryu is dual-licensed). Changed from Ryu's d2s.c: an exact tie
+   rounds up, and the small tables were generated again from their definitions: pow5_split[k] is the top 125 bits of
+   5^(26k) and pow5_inv_split[k] is 2^(124 + bits(5^(26k))) / 5^(26k) + 1; the 2-bit offsets correct the powers in
+   between to the values of Ryu's full tables. */
 static const uint64_t pow5_small[26] = {
     1u, 5u, 25u, 125u, 625u, 3125u, 15625u, 78125u, 390625u, 1953125u, 9765625u, 48828125u, 244140625u,
     1220703125u, 6103515625u, 30517578125u, 152587890625u, 762939453125u, 3814697265625u, 19073486328125u,

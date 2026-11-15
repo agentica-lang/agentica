@@ -33,6 +33,9 @@ Agentica is licensed under the Apache License 2.0 with the LLVM exception (SPDX:
     native calls): MIT, with its license in `LICENSE`;
   - zlib (`vm/third_party/zlib`, v1.3.1, codec sources used by `Zlib`):
     zlib license, with its license in `LICENSE`;
+  - the shortest Float digits in `vm/value.c`, derived from Ryu (Copyright
+    2018 Ulf Adams, dual-licensed; changed: exact ties round up, tables
+    generated again): used under Apache-2.0, whose text is in `LICENSE`;
 
 Every release archive (Linux, macOS and Windows) ships these notices in
 `licenses/`: `bdwgc/NOTICE`, `libuv/LICENSE` and `LICENSE-extra`,
