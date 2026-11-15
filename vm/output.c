@@ -658,7 +658,7 @@ bool agc_output_busy(agc_vm *vm) {
       busy = true;
     } else {
       pump(s, true);
-      if (held(s)) settle(vm, s);
+      if (direct(s) && held(s)) settle(vm, s);
       write_last(vm, s);
     }
   }
