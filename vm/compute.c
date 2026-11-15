@@ -13,9 +13,6 @@
 
 /* The `kind` of a queue entry that a scheduler submitted (agc_compute_submit_direct); 0 is a loop's item. */
 #define DIRECT 1
-/* How long a thread that ran an item spins for the next before it sleeps, at level 0. The longest spin is this times
-   2 to the AGC_SPIN_LEVEL_MAX (160 µs). */
-#define SPIN_NS UINT64_C(10000)
 
 typedef struct {
   agc_compute *pool;
@@ -112,7 +109,7 @@ static void serve(void *arg) {
       uv_cond_wait(&pool->wake, &pool->lock);
       pool->idle--;
     }
-    if (missed) adapt(w, pool->first && uv_hrtime() - slept < SPIN_NS << AGC_SPIN_LEVEL_MAX);
+    if (missed) adapt(w, pool->first && uv_hrtime() - slept < AGC_SPIN_BUDGET_NS << AGC_SPIN_LEVEL_MAX);
     agc_request *item = pool->first;
     if (pool->closed || !item) break;
     pool->first = item->next;
@@ -170,7 +167,7 @@ agc_compute *agc_compute_open(struct uv_loop_s *loop, uint32_t size, void (*fini
   pool->refs = 1;
   pool->spin_max = pool->size / 2 ? pool->size / 2 : 1;
   if (uv_available_parallelism() > 1) {
-    uint64_t pauses = agc_pauses_for(SPIN_NS);
+    uint64_t pauses = agc_pauses_for(AGC_SPIN_BUDGET_NS);
     uint64_t least = (uint64_t)2 * AGC_SPIN_PAUSES_MAX;
     pool->spin_pauses = pauses < least ? least : pauses;
   }
@@ -291,6 +288,12 @@ void agc_compute_end_direct(agc_compute *pool) {
   if (left && pool->running == 0) agc_inbox_keep(pool->done, true);
   pool->running += left;
 }
+
+bool agc_compute_running(const agc_compute *pool) { return pool->running > 0; }
+
+bool agc_compute_ended(agc_compute *pool) { return agc_inbox_full(pool->done); }
+
+bool agc_compute_deliver(agc_compute *pool) { return agc_inbox_run(pool->done); }
 
 bool agc_compute_direct_busy(agc_compute *pool) {
   return atomic_load_explicit(&pool->direct, memory_order_seq_cst) != 0;
