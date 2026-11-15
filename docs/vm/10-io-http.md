@@ -375,9 +375,10 @@ Properties of the client that no test checks:
   checks and the C code are the same). The new line is longer, so `stream_head`
   measures the block again by the parser's rule, and a head over it is a 500
   (`HTTP.upload` does the same and returns the 431 error). The connection task
-  sends the pieces as it takes them from the channel. With `length: some(n)` the head carries
-  `Content-Length: n`, the pieces go out raw, and the pump cuts the connection
-  when the body ends short or a piece would pass `n`; it ends the body when it
+  sends the pieces as it takes them from the channel. With `length: some(n)`
+  the head carries `Content-Length: n`, the pieces go out raw, and the pump
+  cuts the connection when the body ends short or a piece would pass `n`; it
+  ends the body when it
   is full without waiting for the producer to close. A length of 0 never
   streams. A watcher task loops on `TCP.recv_bytes` for the whole stream: the
   end of the client's input (or a read error) sets a one-slot `left` channel

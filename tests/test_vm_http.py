@@ -1403,6 +1403,7 @@ import HTTP from "std/http"
 
 struct Late
   into: Channel[Bytes]
+  gate: Channel[Bool]
 end
 
 def filled(bytes: Int) -> List[HTTP.Header]
@@ -1431,22 +1432,23 @@ def block(headers: List[HTTP.Header]) -> Int
   return headers.reduce(2) do |sum, h| sum + h.name.length + h.value.length + 4 end
 end
 
-# Sends after the handler returned, so the server streams the body: one that is closed by then goes out whole.
+# Sends once main lets it, which is after the client has the head: the body is open when the handler returns, so the
+# server streams it. One that is closed by then goes out whole, with a Content-Length.
 def produce(late: Late) -> Result[Void]
-  Task.sleep(300)
+  try late.gate.recv(10000)
   try late.into.send("hello world".bytes, 5000)
   late.into.close
   return ok()
 end
 
-def later() -> Channel[Bytes]
+def later(gate: Channel[Bool]) -> Channel[Bytes]
   into: Channel[Bytes] = Channel.new(1)
-  Task.spawn(&produce, Late(into: into))
+  Task.spawn(&produce, Late(into: into, gate: gate))
   return into
 end
 
 # /KIND/OWN/SIZE answers with a block of SIZE bytes, of which the server writes OWN and the empty line.
-def handle(request: HTTP.Request, body: HTTP.RequestBody) -> Result[HTTP.Answer]
+def handle(gate: Channel[Bool], request: HTTP.Request, body: HTTP.RequestBody) -> Result[HTTP.Answer]
   try HTTP.read_all(body, 1024)
   words = request.path.split("/")
   kind = words[1]
@@ -1454,8 +1456,8 @@ def handle(request: HTTP.Request, body: HTTP.RequestBody) -> Result[HTTP.Answer]
   return ok(HTTP.Answer.Whole(HTTP.Response(status: 200, headers: [HTTP.Header(name: "X-Seen", value: "#{request.headers.length}")], body: "".bytes))) if kind == "number"
   return ok(HTTP.Answer.Whole(HTTP.Response(status: 200, headers: counted(words[2].to_i! - 2), body: "".bytes))) if kind == "count"
   headers = filled(words[3].to_i! - words[2].to_i! - 2)
-  return ok(HTTP.Answer.Stream(HTTP.StreamResponse(status: 200, headers: headers, body: later()))) if kind == "chunked"
-  return ok(HTTP.Answer.Stream(HTTP.StreamResponse(status: 200, headers: headers, body: later(), length: some(11)))) if kind == "sized"
+  return ok(HTTP.Answer.Stream(HTTP.StreamResponse(status: 200, headers: headers, body: later(gate)))) if kind == "chunked"
+  return ok(HTTP.Answer.Stream(HTTP.StreamResponse(status: 200, headers: headers, body: later(gate), length: some(11)))) if kind == "sized"
   return ok(HTTP.Answer.Stream(HTTP.StreamResponse(status: 200, headers: headers, body: HTTP.whole("hello world".bytes)))) if kind == "closed"
   return ok(HTTP.Answer.Whole(HTTP.Response(status: 204, headers: headers, body: "".bytes))) if kind == "empty"
   return ok(HTTP.Answer.Whole(HTTP.Response(status: 200, headers: headers.push(HTTP.Header(name: "Date", value: "x")), body: "".bytes))) if kind == "dated"
@@ -1477,6 +1479,19 @@ def show(name: String, reply: Result[HTTP.Response]) -> Void
   end
 end
 
+# The head of a stream, then the body: the producer starts only when the head is here.
+def show_stream(name: String, opened: Result[HTTP.Stream], gate: Channel[Bool]) -> Void
+  _ = gate.send(true, 5000)
+  case opened
+    ok(stream) ->
+      while stream.body.recv(5000).ok?
+      end
+
+      puts("#{name} #{stream.status} got #{block(stream.headers)} #{stream.headers.length}")
+    error(e) -> puts("#{name} #{e.kind} #{e.code}")
+  end
+end
+
 def ready() -> Channel[Bytes]
   into: Channel[Bytes] = Channel.new(2)
   into.send("hello world".bytes, 5000).unwrap!
@@ -1486,7 +1501,8 @@ end
 
 def main() -> Void
   options = HTTP.ServerOptions(request_timeout_ms: 10000, idle_timeout_ms: 10000, max_connections: 2, max_body_bytes: 1024)
-  server = HTTP.serve("127.0.0.1", 0, &handle, options).unwrap!
+  gate: Channel[Bool] = Channel.new(1)
+  server = HTTP.serve("127.0.0.1", 0, ->(request, body) { handle(gate, request, body) }, options).unwrap!
   base = "http://127.0.0.1:#{HTTP.local_port(server)}"
   limits = HTTP.ClientOptions(timeout_ms: 10000, idle_timeout_ms: 10000, max_connections: 1, max_body_bytes: 1024, tls: none)
   client = HTTP.client(limits).unwrap!
@@ -1504,7 +1520,17 @@ def main() -> Void
         method = "HEAD"
       end
 
-      show("#{answer} #{size}", HTTP.request(client, method, base + "/#{answer}/#{size}", "".bytes))
+      url = base + "/#{answer}/#{size}"
+      streamed = answer.start_with?("chunked/") or answer.start_with?("sized/")
+      if streamed and size == 65536
+        show_stream("#{answer} #{size}", HTTP.open("GET", url, "".bytes, [], limits), gate)
+      else
+        # A refused head is a whole 500, which comes while the producer of a stream still waits.
+        show("#{answer} #{size}", HTTP.request(client, method, url, "".bytes))
+        if streamed
+          _ = gate.send(true, 5000)
+        end
+      end
     end
   end
 
