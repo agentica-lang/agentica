@@ -28,7 +28,7 @@
     "  saw a",
     "invalid UTF-8 ends the call: error(\"invalid UTF-8 at byte 0\", kind: \"text.encoding\"), descriptors 0",
     "a line over the buffer ends the call: error(\"filesystem: line exceeds buffer_bytes\", kind: \"io.too_large\"), descriptors 0",
-    "a missing file: error(\"filesystem: path does not refer to a regular file\", kind: \"io.not_found\", code: 2), descriptors 0",
+    "a missing file: error(\"filesystem: path does not refer to a regular file\", kind: \"io.not_found\", code: 2, details: {\"path\": \"@tmp/missing.txt\"}), descriptors 0",
     "  saw 1",
     "  saw 2",
     "the same call in a task: error(\"stopped at 2\"), descriptors 0",

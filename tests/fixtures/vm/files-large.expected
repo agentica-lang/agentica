@@ -4,7 +4,7 @@
   "steps": 277,
   "stdout": [
     "[ok(), ok(), ok(), error(\"filesystem: text exceeds 1048576 bytes\", kind: \"argument\")]",
-    "error(\"filesystem: file exceeds 1048576 bytes\", kind: \"io.too_large\")",
+    "error(\"filesystem: file exceeds 1048576 bytes\", kind: \"io.too_large\", details: {\"path\": \"@tmp/big.txt\"})",
     "[1000000, 1000000, 97156, 0]",
     "error(\"filesystem: line exceeds 1048576 bytes\", kind: \"io.too_large\")",
     "1048575",
@@ -13,7 +13,7 @@
     "[error(\"filesystem: text exceeds 1048576 bytes\", kind: \"argument\"), ok()]",
     "1048576",
     "ok()",
-    "error(\"filesystem: file exceeds 1048576 bytes\", kind: \"io.too_large\")",
+    "error(\"filesystem: file exceeds 1048576 bytes\", kind: \"io.too_large\", details: {\"path\": \"@tmp/exact.txt\"})",
     "1048576",
     "error(\"filesystem: end of file\", kind: \"io.eof\")",
     ""

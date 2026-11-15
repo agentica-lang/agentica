@@ -403,7 +403,8 @@ def main() -> Void
 end
 """, fifo, out, one_pool_thread=True)
     assert (code, output) == (0, 'error("filesystem: operation timed out", kind: "io.timeout")\n'
-                                  'error("filesystem: operation timed out", kind: "io.timeout")\nmain done\n'), errors
+                                  'error("filesystem: operation timed out", kind: "io.timeout", details: {"path": %s})\n'
+                                  'main done\n' % json.dumps(str(fifo))), errors
     assert out.read_text() == "flushed"
 
 

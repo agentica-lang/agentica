@@ -283,10 +283,11 @@ def main() -> Void
   IO.inspect(Dir.mkdir_private(base + "/missing/x", 5000))
 end
 """
-    lines = run_program(root, work, text, "make-directory-error", root)
+    lines = run_program(root, work, text, "make-directory-error", root.as_posix())
     assert lines == [
         'error("filesystem: cannot make directory\\n  path: %s/missing/x\\n  system error: '
-        'No such file or directory; errno=2", kind: "io.not_found", code: 2)' % root.as_posix()]
+        'No such file or directory; errno=2", kind: "io.not_found", code: 2, details: {"path": "%s/missing/x"})'
+        % (root.as_posix(), root.as_posix())]
     assert not (root / "missing").exists()
 
 def test_children_never_get_the_metrics_variables_but_the_program_reads_them(root, work):

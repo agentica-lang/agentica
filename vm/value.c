@@ -848,6 +848,18 @@ agc_value agc_error(agc_vm *vm, agc_error_kind kind, const char *message) {
   return agc_error_string(vm, kind, agc_utf8_decode((const uint8_t *)message, n, "\xEF\xBF\xBD", false));
 }
 
+agc_value agc_error_detail(agc_vm *vm, agc_value result, const char *key, const char *data, size_t len) {
+  const agc_result *r = agc_as_result(vm, result);
+  if (r->ok || !agc_is_error(vm, r->value)) return result;
+  agc_struct *e = agc_as_struct(vm, r->value);
+  size_t n = strlen(key);
+  agc_value name = agc_string_value(agc_make_string(key, n, n));
+  agc_value text = agc_string_value(agc_utf8_decode((const uint8_t *)data, len, "\xEF\xBF\xBD", false));
+  const agc_map *details = agc_as_map(vm, e->fields[AGC_ERROR_DETAILS]);
+  e->fields[AGC_ERROR_DETAILS] = agc_map_value(agc_map_put(vm, details, name, text));
+  return result;
+}
+
 bool agc_is_error(const agc_vm *vm, agc_value v) {
   uint32_t type = vm->rt->error_struct;
   return type != UINT32_MAX && v.tag == AGC_T_STRUCT && ((const agc_struct *)v.as.p)->type == type &&
