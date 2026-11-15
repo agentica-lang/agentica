@@ -2,10 +2,7 @@
 ## check, and the path helpers.
 
 import Diag from "../diagnostics/diagnostic"
-import Ast from "../syntax/ast"
 import {PRELUDE_PREFIX} from "../syntax/prelude_name"
-import Unicode from "../syntax/unicode"
-import Declarations from "declarations"
 import Failure from "link_failure"
 import Workspace from "workspace"
 
@@ -97,55 +94,6 @@ def stored_file(workspace: Workspace.Workspace, root_dir: String, file: String) 
   stored_name(root_dir, file)
 end
 
-## The file an import names: "util" is "util.agc". A path that names a file with an extension, or no module at all, is
-## CHECK-IMPORT-PATH with a help that shows the fix, written as the import line of decl (the alias form or the name
-## list).
-def module_file(decl: Ast.ImportDecl, site: Failure.Site) -> Result[String]
-  path = decl.path
-  stem = ""
-  has_stem = path.end_with?(".agc")
-  if has_stem
-    stem = path.slice(0, path.length - 4)
-  end
-
-  guess = without_extension(path)
-  if module_name?(path)
-    return ok("#{path}.agc")
-  elsif has_stem and module_name?(stem)
-    return error(
-      refuse(
-        site,
-        "import paths name a module without the .agc extension",
-        "write #{Declarations.import_line(Unicode.written_text(stem), decl)}",
-      ),
-    )
-  elsif last_part(path) == "" or last_part(path) == "." or last_part(path) == ".."
-    return error(
-      refuse(
-        site,
-        "import paths name a module file",
-        "write #{Declarations.import_line("\"models\"", decl)} to load models.agc",
-      ),
-    )
-  elsif module_name?(guess)
-    return error(
-      refuse(
-        site,
-        "import paths name a module without an extension",
-        "write #{Declarations.import_line(Unicode.written_text(guess), decl)} to load #{guess}.agc",
-      ),
-    )
-  end
-
-  error(
-    refuse(
-      site,
-      "a module file name has no dot apart from .agc",
-      "rename the file so its name has no dot apart from .agc",
-    ),
-  )
-end
-
 ## CHECK-IMPORT-PATH unless a std/ or pkg/ path is made of plain parts: no backslash, no empty, "." or ".." part, and
 ## no ":" in a part.
 def validate_library_path(path: String, site: Failure.Site) -> Result[Void]
@@ -213,22 +161,4 @@ private
 
 def invalid_library_path(site: Failure.Site) -> String
   Failure.fail_at(site, "CHECK-IMPORT-PATH", "invalid library path", Diag.Help.NoHelp)
-end
-
-def refuse(site: Failure.Site, message: String, help: String) -> String
-  Failure.fail_at(site, "CHECK-IMPORT-PATH", message, Failure.hint(help))
-end
-
-# A name has text and no dot: "models" is a module name, "models.rb" is not.
-def module_name?(text: String) -> Bool
-  name = last_part(text)
-  name != "" and !name.include?(".")
-end
-
-# The path without a final ".ext".
-def without_extension(path: String) -> String
-  pieces = last_part(path).split(".")
-  return path if pieces.size == 1
-
-  path.slice(0, path.length - pieces[pieces.size - 1].length - 1)
 end

@@ -90,7 +90,7 @@ section for the area you are changing.
   identities while root names stay stable for CLI entrypoints. Preserve every
   original span when rewriting nodes; never restart evaluation for imported
   calls or tasks. Imports resolve relative to their source, not cwd. An import
-  path has no extension: `module_file` (`import_path.agc`) appends `.agc`, so
+  path has no extension: `module_file` (`import_file.agc`) appends `.agc`, so
   module keys, std/ registry keys and span source names stay real file names;
   `CHECK-IMPORT-PATH` covers a path ending in `.agc`, an empty path, a trailing
   `/` or a dot in the last part.
