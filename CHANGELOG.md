@@ -8,6 +8,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- A program whose tasks all wait for one busy task (a store task that serves 50 clients over channels) no longer runs slower with more scheduler threads: about 2 times faster at 2 to 8 schedulers (#1362).
+
 ## [0.32.0] - 2026-11-15
 
 ### Added
@@ -32,7 +36,6 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - Loops of Int arithmetic and compares are up to 15% faster on x86-64: compiled code checks a value's type once per block and keeps the last result in a machine register (#1123).
 - `std/cache`: dropping a generation and `Cache.clear` take the same short time whatever the size; a put that dropped 32,000 entries waited about 200 ms (#1108).
 - `ATS` tables are hash tables now: a single task writes about 5 times faster, tasks that write one table about 8 times faster, and `get` is O(1). `keys` and `to_map` copy the table, O(n), where they took a snapshot in O(1) (#1442).
-- A program whose tasks all wait for one busy task (a store task that serves 50 clients over channels) no longer runs slower with more scheduler threads: about 2 times faster at 2 to 8 schedulers (#1362).
 - **Breaking:** `agentica test` runs the scenarios of each `--jobs` slot in one worker process, about 5 times faster; state made before `BDD.run` or set by a step is now shared by the scenarios of a worker, and `--isolate` gives each scenario its own process (#1465).
 - `std/http`: a chunked stream and a chunked `HTTP.upload` send the pieces that wait together as one chunk, several times faster.
 - Loops that call builtins such as `Map.get` are up to 17% faster on Linux and macOS (#1599).
