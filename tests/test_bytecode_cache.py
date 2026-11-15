@@ -212,10 +212,10 @@ GREET = {"greet.agc": 'def hello() -> String\n  return "hi"\nend\n'}
 
 
 def greeter_project(tmp_path):
-    """A project whose main.agc prints "hi" from the locked package greeter, and the variables that keep its runs to
-    its own folders."""
+    """A project whose main.agc prints "hi" from the locked package greeter (which has a manifest and no native
+    files), and the variables that keep its runs to its own folders."""
     ws = Workspace(tmp_path)
-    ws.add_package("greeter", GREETER, GREET, tag="v1.0.0")
+    ws.add_package("greeter", GREETER, GREET, tag="v1.0.0", dependencies={})
     ws.write_manifest({"greeter": dependency(GREETER, tag="v1.0.0")})
     ws.write_lock()
     (ws.project / "main.agc").write_text(
@@ -225,7 +225,7 @@ def greeter_project(tmp_path):
 
 def test_a_change_of_the_lock_misses(tmp_path):
     ws, hermetic = greeter_project(tmp_path)
-    other = ws.add_package("greeter", GREETER, GREET, tag="v1.0.0", commit="b" * 40)
+    other = ws.add_package("greeter", GREETER, GREET, tag="v1.0.0", dependencies={}, commit="b" * 40)
     ws.locked.remove(other)
     ws.write_lock()
     first = agentica(ws.project, "main.agc", **hermetic)
