@@ -262,6 +262,13 @@ static void take_steps(agc_vm *vm, int64_t want) {
   vm->turn_taken += got;
 }
 
+/* BddScenario.budget: the run has `steps` left from here, the steps this turn holds included, as a run started with
+   --max-steps has. Other schedulers' turns may give back a few they held (at most a turn each). */
+void agc_steps_reset(agc_vm *vm, int64_t steps) {
+  sync_budget(vm);
+  atomic_store(&vm->rt->steps_left, steps > vm->batch ? steps - vm->batch : 0);
+}
+
 static void end_turn_now(agc_vm *vm) {
   vm->yield = true;
   vm->next_stop = vm->stop_set = 0;

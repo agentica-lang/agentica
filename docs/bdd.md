@@ -329,24 +329,25 @@ scenario after another, **each scenario in a task of its own**, while they
 pass. A step that crashes, calls `System.exit` (even with 0), exceeds its step
 limit or loops forever fails only its scenario (`RUNTIME-BDD-PREMATURE-EXIT`
 for an exit). Its remaining steps are `not_executed`, the worker is closed, and
-the next scenario starts a new one.
+the next scenario starts a new one. A step program that does not compile, does
+not list its steps, or has a bad pattern is one file error, and then no scenario
+runs.
 
 - **What a scenario keeps to itself.** Its context (`BDD.set`, `BDD.keep`), its
   program under test and every handle its task opened (closed when the task
-  ends), its tasks (none may be left), its random numbers (the task starts from
-  the run's seed, `BddScenario.srand`) and `Task.pending_count` (its task is
-  not counted, `BddScenario.uncount`). A worker takes the next scenario only
+  ends), its tasks (none may be left), its random numbers (it starts from the
+  run's seed, `BddScenario.srand`, whatever `main` drew before `BDD.run`), its
+  step budget (`BddScenario.budget`, below) and `Task.pending_count` (its task
+  is not counted, `BddScenario.uncount`). A worker takes the next scenario only
   after one that passed and left no task running and no unobserved crash; any
   other end closes it.
 - **What the scenarios of a worker share.** What the step program made in
   `main` before `BDD.run` and the steps capture (an `ATS` table, a `Channel`),
-  module-level tables, `LogRegistry` levels and handlers, the state of native
-  libraries, the process (its working folder, environment, memory), the step
-  budget and stderr. `--isolate` runs each scenario in a child VM of its own
-  (scenario mode, `main` again), as `--coverage` does, which writes one LCOV
-  part per child. A step program that does not
-compile, does not list its steps, or has a bad pattern is one file error, and
-then no scenario runs.
+  module-level tables, process state that a step sets (`Logger.set_level`,
+  `LogRegistry` handlers), the state of native libraries, the process (its
+  working folder, environment, memory) and stderr. `--isolate` runs each
+  scenario in a child VM of its own (scenario mode, `main` again), as
+  `--coverage` does, which writes one LCOV part per child.
 
 - **Host access.** BDD gives no isolation from the host: programs run with the
   user's permissions and environment. Programs under test start with the same
@@ -355,13 +356,12 @@ then no scenario runs.
   worker's start included); it is the only bound on the CPU and memory of a
   program under test.
   Program-driving calls without a timeout get 5 seconds, and starting a program
-  gets 30. A scenario has 1,000,000 steps per step plus 1,000,000, and that
-  budget also pays for `std/bdd`'s own work. A worker starts with 100 of those
-  millions (more when one scenario needs more) and is replaced when the next
-  scenario's share is more than it has left, so a scenario can use what the
-  ones before it in the worker left over; builtins cost steps per call,
-  not per byte. Unread stdout and stderr are each kept up to 1 MiB, checked
-  after every step. Handler output is limited to 1 MiB per step.
+  gets 30. A scenario has 1,000,000 steps per step plus 1,000,000 (`steps` of
+  the settings line), set when it starts, in a worker as in a child, so its
+  verdict does not depend on the scenarios before it; that budget also pays for
+  `std/bdd`'s own work. Builtins cost steps per call, not per byte. Unread
+  stdout and stderr are each kept up to 1 MiB, checked after every step.
+  Handler output is limited to 1 MiB per step.
 - **Cleanup.** When a scenario ends, its task ends and the worker stops the
   program under test (a child ends and stops it). The runner closes a child or
   worker it is done with by `Process.close`, which sends `SIGTERM`, then
@@ -433,7 +433,7 @@ agentica test [PATH...] [--steps FILE]
 
 - **Direction:** runner to child
   - **Record:** settings, once (`base`, `agentica`, `seeded`, `seed`,
-    `programs`)
+    `programs`, `steps`)
   - **Meaning:** Where programs resolve and run, how to start `agentica`,
     what to pass on, and the run folder where `BDD.given_program` compiles
     each program once per run (`""` for none)

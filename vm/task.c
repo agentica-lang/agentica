@@ -1543,6 +1543,15 @@ static agc_value builtin_uncount(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_void();
 }
 
+/* BddScenario.budget (std/bdd only): a worker gives each scenario the step budget that a child of its own would start
+   with. */
+static agc_value builtin_budget(agc_vm *vm, agc_value *args, uint32_t span) {
+  int64_t steps = agc_as_int(vm, args[0]);
+  if (steps < 0) agc_fail(vm, "RUNTIME-INVALID-RANGE", "a step budget cannot be negative", span);
+  agc_steps_reset(vm, steps);
+  return agc_void();
+}
+
 static agc_value builtin_inbox(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)args;
   agc_value inbox = vm->task->inbox;
@@ -1568,6 +1577,7 @@ const agc_builtin agc_task_builtins[] = {
   {"ActorInbox.set", 1, builtin_set_inbox, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"ActorInbox.get", 0, builtin_inbox, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"BddScenario.uncount", 0, builtin_uncount, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"BddScenario.budget", 1, builtin_budget, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
 };
 
 const size_t agc_task_builtin_count = sizeof agc_task_builtins / sizeof agc_task_builtins[0];

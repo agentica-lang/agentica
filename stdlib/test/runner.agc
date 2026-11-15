@@ -181,10 +181,9 @@ struct Done
   ran: Ran
 end
 
-# The worker of a lane, if it has one, and how many units of WORKER_STEPS it has left.
+# The worker of a lane, if it has one.
 struct Slot
   worker: Optional[Process]
-  left: Int
 end
 
 struct Played
@@ -221,15 +220,6 @@ end
 
 def min_of(a: Int, b: Int) -> Int
   return a if a < b
-  b
-end
-
-# A worker gets this many units of a million steps. A scenario takes as many units as a child of its own would get (one
-# per step and one more); one that needs more than the worker has left gets a new worker.
-def worker_units() -> Int = 100
-
-def max_of(a: Int, b: Int) -> Int
-  return a if a > b
   b
 end
 
@@ -404,7 +394,7 @@ def run_lane(
   queue: Channel[Int],
   results: Channel[Done],
 ) -> Result[Void]
-  slot = Slot(worker: none, left: 0)
+  slot = Slot(worker: none)
   next = queue.recv(0)
   while next.ok?
     at = next.unwrap!
@@ -748,8 +738,10 @@ def run_child(
   run
 end
 
-# The scenario on the lane's worker, or on a new one when the lane has none or its worker has too few steps left. The
-# same lines as for a child, then `end`, answered by `done`. Only a scenario that passes and whose `done` allows it
+# The scenario on the lane's worker, or on a new one when the lane has none. The same lines as for a child, then `end`,
+# answered by `done`. The settings line gives the scenario the step budget of a child of its own (`steps`), which the
+# worker sets when the scenario starts; the worker's own budget covers its start. Only a scenario that passes and whose
+# `done` allows it
 # leaves the worker for the next; any other end closes it.
 def run_worker(
   config: Config,
@@ -761,24 +753,16 @@ def run_worker(
   slot: Slot,
 ) -> Turn
   count = item.steps.size
-  need = count + 1
   deadline = started + 30000
   worker = slot.worker
-  left = slot.left
-  if worker.some? and left < need
-    Process.close(worker.unwrap!)
-    worker = none
-  end
   if worker.none?
-    units = max_of(worker_units(), need)
-    spawned = Process.spawn_channel(config.vm, vm_args(config, 1000000 * units, "worker", ""))
+    spawned = Process.spawn_channel(config.vm, vm_args(config, 1000000, "worker", ""))
     if not spawned.ok?
       run = Run(failed_at: 0, verdict: failure("RUNTIME-BDD-INFRA", spawned.message, item.steps[0].span))
-      return Turn(run: run, slot: Slot(worker: none, left: 0))
+      return Turn(run: run, slot: Slot(worker: none))
     end
     _ = Process.close_stdin(spawned.unwrap!, 5000)
     worker = some(spawned.unwrap!)
-    left = units
   end
   p = worker.unwrap!
   driven = drive(p, config, base, item, found, patterns, deadline)
@@ -797,9 +781,9 @@ def run_worker(
   end
   if not reuse
     Process.close(p)
-    return Turn(run: run, slot: Slot(worker: none, left: 0))
+    return Turn(run: run, slot: Slot(worker: none))
   end
-  Turn(run: run, slot: Slot(worker: some(p), left: left - need))
+  Turn(run: run, slot: Slot(worker: some(p)))
 end
 
 # Sends the settings line and the steps until one does not pass.
@@ -819,6 +803,7 @@ def drive(
     "seeded": JSON.from(config.seeded),
     "seed": JSON.from(config.seed),
     "programs": JSON.from(run_folder(config)),
+    "steps": JSON.from(1000000 * (count + 1)),
   }
 
   run = Run(failed_at: count, verdict: Report.Verdict.Pass)

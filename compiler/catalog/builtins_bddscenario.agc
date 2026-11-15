@@ -24,4 +24,14 @@ ROWS: List[Model.Builtin] = [
     description: "Internal to std/bdd: the running task leaves Task.pending_count, as main is out of it.",
     alternatives: [],
   ),
+  Model.Builtin(
+    name: "BddScenario.budget",
+    parameters: [Model.Named(name: "steps", type: Types.Type.Int)],
+    result: Types.Type.Void,
+    rule: Model.Rule.Plain,
+    implementation: "BddScenario.budget",
+    effects: ["concurrency"],
+    description: "Internal to std/bdd: the run has steps left from here, as a run started with --max-steps steps.",
+    alternatives: [],
+  ),
 ]
