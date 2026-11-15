@@ -6,16 +6,20 @@ enum "Optional" v3="None"/0 v4="Some"/1
 fn0 "area" params=1 captures=0 slots=5 @ 0:7:1-14:1
     step @ 0:8:3-13:1
     step @ 0:8:8-8:13
-    is-variant r1 r0 v0 @ 0:9:5-9:14
-    jump-if-false r1 L1 @ 0:9:5-9:14
+    jump-variant r0 v0 3 @ 0:8:8-8:13
+    jump L3 @ 0:8:8-8:13
+    jump L4 @ 0:8:8-8:13
+    jump L5 @ 0:8:8-8:13
+    jump L6 @ 0:8:8-8:13
+  L0:
+  L3:
     step @ 0:9:18-10:1
     step @ 0:9:25-9:28
     const r1 float:bits:0 @ 0:9:25-9:28
     return r1 @ 0:9:18-10:1
-    jump L0 @ 0:8:3-13:1
+    jump L6 @ 0:8:3-13:1
   L1:
-    is-variant r1 r0 v1 @ 0:10:5-10:20
-    jump-if-false r1 L2 @ 0:10:5-10:20
+  L4:
     payload r1 r0 0 @ 0:10:5-10:20
     step @ 0:10:24-11:1
     step @ 0:10:31-10:42
@@ -27,16 +31,14 @@ fn0 "area" params=1 captures=0 slots=5 @ 0:7:1-14:1
     const r4 float:bits:4613937818241073152 @ 0:10:39-10:42
     mul-f r2 r3 r4 @ 0:10:37-10:38
     return r2 @ 0:10:24-11:1
-    jump L0 @ 0:8:3-13:1
+    jump L6 @ 0:8:3-13:1
   L2:
-    is-variant r1 r0 v2 @ 0:11:5-11:21
-    jump-if-false r1 L3 @ 0:11:5-11:21
+  L5:
     payload r1 r0 0 @ 0:11:5-11:21
     step @ 0:11:25-12:1
     step @ 0:11:32-11:33
     return r1 @ 0:11:25-12:1
-  L3:
-  L0:
+  L6:
     const r1 void @ 0:7:1-14:1
     return r1 @ 0:7:1-14:1
 fn1 "describe" params=1 captures=0 slots=2 @ 0:15:1-24:1

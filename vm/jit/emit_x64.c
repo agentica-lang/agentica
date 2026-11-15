@@ -622,6 +622,25 @@ void agc_emit_jump(agc_emitter *e, uint32_t target) {
   agc_emit_patch(e, jump_to_patch(e, -1), AGC_JIT_PATCH_LABEL, target);
 }
 
+/* eax = the variant less in.b, then one unsigned compare for each run of table entries with the same target, in
+   order, and past the table the instruction after it (pc + 1 + in.c). Compares beat an indirect jump, which the
+   predictor of some cores misses on a short repeating pattern of variants. */
+void agc_emit_jump_variant(agc_emitter *e, agc_instr in, const uint32_t *targets, uint32_t pc) {
+  object(e, in.a, AGC_T_ENUM, pc);
+  op_mem(e, false, 0x8B, RAX, RCX, (int64_t)offsetof(agc_enum, variant)); /* mov eax, [rcx + variant] */
+  if (in.b) {
+    byte(e, 0x2D); /* sub eax, b */
+    word32(e, in.b);
+  }
+  for (uint32_t k = 0; k < in.c; k++) {
+    if (k + 1 < in.c && targets[k + 1] == targets[k]) continue;
+    byte(e, 0x3D); /* cmp eax, k */
+    word32(e, k);
+    agc_emit_patch(e, jump_to_patch(e, CC_BE), AGC_JIT_PATCH_LABEL, targets[k]);
+  }
+  agc_emit_jump(e, pc + 1 + (uint32_t)in.c);
+}
+
 /* JUMP_IF_TRUE (WHEN) or JUMP_IF_FALSE: R[a] must be a Bool, whose payload is 0 or 1. */
 void agc_emit_branch(agc_emitter *e, uint32_t a, bool when, uint32_t target, uint32_t pc) {
   need_tag(e, a, AGC_T_BOOL, pc);

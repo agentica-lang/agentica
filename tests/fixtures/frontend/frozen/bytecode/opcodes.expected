@@ -51,3 +51,4 @@ struct-with 49
 global 50
 global-set 51
 try-step 52
+jump-variant 53

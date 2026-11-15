@@ -4,53 +4,54 @@ struct s0 "Error" ["kind","message","code","details","cause","location"] types=[
 enum "Option" v0="Some"/1 v1="None"/0
 enum "Shape" v2="Circle"/1 v3="Pair"/2
 enum "Optional" v4="None"/0 v5="Some"/1
-fn0 "describe" params=2 captures=0 slots=7 @ 0:11:1-20:1
+fn0 "describe" params=2 captures=0 slots=6 @ 0:11:1-20:1
     step @ 0:12:3-19:1
     step @ 0:12:8-12:13
-    is-variant r2 r0 v2 @ 0:13:5-13:20
-    jump-if-false r2 L1 @ 0:13:5-13:20
-    payload r3 r0 0 @ 0:13:5-13:20
-    const r4 int:0 @ 0:13:18-13:19
-    same r4 r3 r4 @ 0:13:18-13:19
-    jump-if-false r4 L1 @ 0:13:18-13:19
+    jump-variant r0 v2 2 @ 0:12:8-12:13
+    jump L5 @ 0:12:8-12:13
+    jump L8 @ 0:12:8-12:13
+    jump L10 @ 0:12:8-12:13
+  L0:
+  L5:
+    payload r2 r0 0 @ 0:13:5-13:20
+    const r3 int:0 @ 0:13:18-13:19
+    same r3 r2 r3 @ 0:13:18-13:19
+    jump-if-false r3 L6 @ 0:13:18-13:19
     step @ 0:13:24-14:1
     step @ 0:13:31-13:38
     const r2 "empty" @ 0:13:31-13:38
     return r2 @ 0:13:24-14:1
-    jump L0 @ 0:12:3-19:1
+    jump L10 @ 0:12:3-19:1
   L1:
-    is-variant r2 r0 v2 @ 0:14:5-14:20
-    jump-if-false r2 L2 @ 0:14:5-14:20
+  L6:
     payload r2 r0 0 @ 0:14:5-14:20
     step @ 0:14:24-14:31
     step @ 0:14:24-14:25
     step @ 0:14:28-14:31
     const r4 int:100 @ 0:14:28-14:31
     lt-i r3 r4 r2 @ 0:14:26-14:27
-    jump-if-false r3 L2 @ 0:14:24-14:31
+    jump-if-false r3 L7 @ 0:14:24-14:31
     step @ 0:14:35-15:1
     step @ 0:14:42-14:47
     const r3 "big" @ 0:14:42-14:47
     return r3 @ 0:14:35-15:1
-    jump L0 @ 0:12:3-19:1
+    jump L10 @ 0:12:3-19:1
   L2:
-    is-variant r2 r0 v2 @ 0:15:5-15:20
-    jump-if-false r2 L3 @ 0:15:5-15:20
+  L7:
     step @ 0:15:24-16:1
     step @ 0:15:31-15:39
     const r2 "circle" @ 0:15:31-15:39
     return r2 @ 0:15:24-16:1
-    jump L0 @ 0:12:3-19:1
+    jump L10 @ 0:12:3-19:1
   L3:
-    is-variant r2 r0 v3 @ 0:16:5-16:34
-    jump-if-false r2 L4 @ 0:16:5-16:34
-    payload r3 r0 0 @ 0:16:5-16:34
-    const r4 int:1 @ 0:16:16-16:17
-    same r4 r3 r4 @ 0:16:16-16:17
-    jump-if-false r4 L4 @ 0:16:16-16:17
-    payload r5 r0 1 @ 0:16:5-16:34
-    is-variant r6 r5 v0 @ 0:16:19-16:33
-    jump-if-false r6 L4 @ 0:16:19-16:33
+  L8:
+    payload r2 r0 0 @ 0:16:5-16:34
+    const r3 int:1 @ 0:16:16-16:17
+    same r3 r2 r3 @ 0:16:16-16:17
+    jump-if-false r3 L9 @ 0:16:16-16:17
+    payload r4 r0 1 @ 0:16:5-16:34
+    is-variant r5 r4 v0 @ 0:16:19-16:33
+    jump-if-false r5 L9 @ 0:16:19-16:33
     payload r2 r0 1 @ 0:16:5-16:34
     payload r3 r2 0 @ 0:16:19-16:33
     step @ 0:16:38-16:43
@@ -58,7 +59,7 @@ fn0 "describe" params=2 captures=0 slots=7 @ 0:11:1-20:1
     step @ 0:16:42-16:43
     const r5 int:5 @ 0:16:42-16:43
     lt-i r4 r5 r3 @ 0:16:40-16:41
-    jump-if-false r4 L4 @ 0:16:38-16:43
+    jump-if-false r4 L9 @ 0:16:38-16:43
     step @ 0:16:47-17:1
     step @ 0:16:54-16:65
     const r4 "pair " @ 0:16:54-16:65
@@ -67,16 +68,14 @@ fn0 "describe" params=2 captures=0 slots=7 @ 0:11:1-20:1
     to-text r5 r5 @ 0:16:54-16:65
     concat r4 r4 r5 @ 0:16:54-16:65
     return r4 @ 0:16:47-17:1
-    jump L0 @ 0:12:3-19:1
+    jump L10 @ 0:12:3-19:1
   L4:
-    is-variant r2 r0 v3 @ 0:17:5-17:21
-    jump-if-false r2 L5 @ 0:17:5-17:21
+  L9:
     step @ 0:17:25-18:1
     step @ 0:17:32-17:38
     const r2 "pair" @ 0:17:32-17:38
     return r2 @ 0:17:25-18:1
-  L5:
-  L0:
+  L10:
     const r2 void @ 0:11:1-20:1
     return r2 @ 0:11:1-20:1
 fn1 "results" params=1 captures=0 slots=5 @ 0:21:1-30:1

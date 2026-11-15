@@ -1651,6 +1651,17 @@ reload:
       op_is_variant:
         R[in.a] = agc_bool(agc_as_enum(vm, R[in.b])->variant == in.c);
         break;
+      case AGC_OP_JUMP_VARIANT: {
+        /* The loader checked that the c instructions after this one are JUMPs, with the default path after them. */
+        uint32_t k = agc_as_enum(vm, R[in.a])->variant - in.b;
+        if (k < in.c) {
+          agc_instr jump = code[pc + k];
+          pc = (uint32_t)jump.b | ((uint32_t)jump.c << 16);
+        } else {
+          pc += in.c;
+        }
+        break;
+      }
       case AGC_OP_PAYLOAD: {
         const agc_enum *e = agc_as_enum(vm, R[in.b]);
         if (in.c >= e->n) agc_fail(vm, "RUNTIME-INTERNAL", "invalid bytecode: payload index out of range", 0);

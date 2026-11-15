@@ -20,7 +20,7 @@ OPCODES = {
   "le-f": 26, "concat": 27, "to-text": 28, "inspect": 29, "list": 30, "list-len": 31, "list-get": 32, "struct": 33,
   "field": 34, "enum": 35, "is-variant": 36, "payload": 37, "same": 38, "tail-call": 39, "try": 40, "is-ok": 41,
   "result-value": 42, "map": 43, "map-get": 44, "call-value": 45, "closure": 46, "range": 47, "range-bounds": 48,
-  "struct-with": 49, "global": 50, "global-set": 51, "try-step": 52,
+  "struct-with": 49, "global": 50, "global-set": 51, "try-step": 52, "jump-variant": 53,
 }
 
 ## The opcodes written as their first two operands and a zero.

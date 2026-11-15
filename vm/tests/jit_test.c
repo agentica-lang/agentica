@@ -399,6 +399,48 @@ static AGC_JIT_CALLER void entries_inside_a_block(void) {
   }
 }
 
+/* JUMP_VARIANT on R1 with first variant B and three entries (targets 5, 5 and 6): each variant returns at its
+   target, any other at the instruction after the table (pc 4), and a value that is not an enum leaves for the
+   interpreter at the instruction. A table that is not all JUMPs (hand-made code) leaves for the interpreter too. */
+static AGC_JIT_CALLER void variant_jumps(void) {
+  for (uint32_t b = 0; b < 2; b++) {
+    one_function f;
+    memset(&f, 0, sizeof f);
+    emit(&f, AGC_OP_JUMP_VARIANT, 1, b, 3);
+    emit(&f, AGC_OP_JUMP, 0, 5, 0);
+    emit(&f, AGC_OP_JUMP, 0, 5, 0);
+    emit(&f, AGC_OP_JUMP, 0, 6, 0);
+    emit(&f, AGC_OP_RETURN, 2, 0, 0);
+    emit(&f, AGC_OP_RETURN, 3, 0, 0);
+    emit(&f, AGC_OP_RETURN, 4, 0, 0);
+    agc_jit_code code = compile(&f);
+    assert(code);
+    static const uint32_t returns_at[] = {5, 5, 6, 4, 4};
+    for (uint32_t k = 0; k < 5; k++) {
+      agc_value R[8] = {0};
+      R[1] = agc_enum_value(agc_new_enum(b + k, 0));
+      expect_exit(code(&vm, R, f.constants, 0), AGC_JIT_EXIT_RETURN, returns_at[k]);
+    }
+    if (b) {
+      agc_value R[8] = {0};
+      R[1] = agc_enum_value(agc_new_enum(0, 0));
+      expect_exit(code(&vm, R, f.constants, 0), AGC_JIT_EXIT_RETURN, 4);
+    }
+    agc_value R[8] = {agc_nil(), agc_int(3)};
+    expect_exit(code(&vm, R, f.constants, 0), AGC_JIT_EXIT_INTERPRET, 0);
+  }
+  one_function f;
+  memset(&f, 0, sizeof f);
+  emit(&f, AGC_OP_JUMP_VARIANT, 1, 0, 2);
+  emit(&f, AGC_OP_JUMP, 0, 3, 0);
+  emit(&f, AGC_OP_MOVE, 2, 1, 0);
+  emit(&f, AGC_OP_RETURN, 2, 0, 0);
+  agc_jit_code code = compile(&f);
+  assert(code);
+  agc_value R[8] = {agc_nil(), agc_enum_value(agc_new_enum(0, 0))};
+  expect_exit(code(&vm, R, f.constants, 0), AGC_JIT_EXIT_INTERPRET, 0);
+}
+
 /* total = 0 + 1 + ... + (n - 1) for n in R0, with the STEP of the loop at pc 2. */
 static void sum_loop(one_function *f) {
   memset(f, 0, sizeof *f);
@@ -2179,6 +2221,7 @@ int main(void) {
   int_rules();
   helpers();
   reads();
+  variant_jumps();
   string_cost();
   string_build_cost();
   maps_and_lists();
