@@ -6,6 +6,7 @@ import {ROWS as ACTORINBOX_ROWS} from "builtins_actorinbox"
 import {ROWS as ADDRESS_ROWS} from "builtins_address"
 import {ROWS as ATS_ROWS} from "builtins_ats"
 import {ROWS as BASE64_ROWS} from "builtins_base64"
+import {ROWS as BDDSCENARIO_ROWS} from "builtins_bddscenario"
 import {ROWS as BYTES_ROWS} from "builtins_bytes"
 import {ROWS as CHANNEL_ROWS} from "builtins_channel"
 import {ROWS as CODEC_ROWS} from "builtins_codec"
@@ -49,6 +50,7 @@ BUILTIN_ROWS: List[Model.Builtin] = (
   ACTORINBOX_ROWS.concat(ADDRESS_ROWS)
     .concat(ATS_ROWS)
     .concat(BASE64_ROWS)
+    .concat(BDDSCENARIO_ROWS)
     .concat(BYTES_ROWS)
     .concat(CHANNEL_ROWS)
     .concat(CODEC_ROWS)

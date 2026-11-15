@@ -556,11 +556,16 @@ jobs:
       - name: vm-libfuzz-run, 60 s of libFuzzer (a crash, a JIT run that differs from the interpreter, a leak, RSS overrun or timeout fails it; the saved file reproduces it)
         if: ${{ !cancelled() }}
         run: make -j"$(nproc)" vm-libfuzz-run LIBFUZZ_TIME=60 LIBFUZZ_TIMEOUT=30 LIBFUZZ_JOBS="$(nproc)" LIBFUZZ_FLAGS=-seed=1
+      - name: vm-libfuzz-http-run, 20 s of libFuzzer on the HTTP head and body parsers
+        if: ${{ !cancelled() }}
+        run: make -j"$(nproc)" vm-libfuzz-http-run LIBFUZZ_TIME=20 LIBFUZZ_JOBS="$(nproc)" LIBFUZZ_FLAGS=-seed=1
       - if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
         with:
           name: libfuzz-crashes
-          path: build/vm/libfuzz/crashes/
+          path: |
+            build/vm/libfuzz/crashes/
+            build/vm/libfuzz/http/crashes/
           if-no-files-found: ignore
 
   # vm-sanitize-test, the modules split in two. The first shard also builds and runs the C tests and the fixed point of the
