@@ -437,6 +437,33 @@ def main() -> Void
       Cache.clear(cache)
       Test.eq(Cache.bytes(cache), 0)
     end,
+    Test.test("a task that stood still for a lease after it won a takeover leaves it to a later task") do
+      now = clock()
+      gate = Gate(holder: Channel.new(1), to_owner: Channel.new(1), to_writer: Channel.new(1), done: Channel.new(1))
+      options = Cache.Options(max_entries: 4, ttl_ms: 1_000_000_000, clock: some(-> { takeover_clock(now, gate) }))
+      cache = Cache.memory(10_000_000, options)
+      for n in 0...6
+        _ = Cache.put_new(cache, "k#{n}", "v")
+      end
+      now.put(1, 1)
+      owner = Task.spawn do
+        _ = Cache.put_new(cache, "owner", "v")
+      end
+
+      try Test.eq(gate.to_owner.recv(5_000), ok(1))
+      Task.cancel(owner)
+      now.put(1, 1)
+      _ = Task.spawn do
+        _ = gate.done.send(Cache.put_new(cache, "late", "v"), 0)
+      end
+
+      try Test.eq(gate.to_owner.recv(5_000), ok(1))
+      _ = gate.to_writer.send(1, 0)
+      try Test.eq(gate.done.recv(5_000), ok(false))
+      tick(now, 2_000)
+      try Test.eq(Cache.put_new(cache, "young", "v"), true)
+      Test.eq(Cache.get(cache, "young"), some("v"))
+    end,
     Test.test("an entry stored while a late owner empties its slot is taken out") do
       now = clock()
       gate = Gate(holder: Channel.new(1), to_owner: Channel.new(1), to_writer: Channel.new(1), done: Channel.new(1))

@@ -414,8 +414,13 @@ def rotate(state: Memory, g: Int) -> Bool
   # that nothing reads or counts until a later rotation empties it.
   if owner?(state, g, token)
     _ = state.generation.add(0, 1)
-    # A takeover is over once the generation moved: no one can claim this rotation again, so the arbiters can go.
-    state.takeovers.clear
+    # A takeover is over once the generation moved: no one can claim this rotation again, so its arbiters can go.
+    # Only its own: a late owner gets here when the next generation may have arbiters already.
+    for key in state.takeovers.keys
+      if key.start_with?("#{g}:")
+        state.takeovers.delete(key)
+      end
+    end
     return true
   end
 
@@ -443,7 +448,8 @@ def claim(state: Memory, g: Int) -> Int
   token = state.ids.add(0, 1)
   at = state.clock.call()
   if state.rotations.put_new(g, token)
-    state.claimed.put(g, at)
+    # Not `put`: an owner that stood still here must not move a lease that another task has started for it.
+    _ = state.claimed.put_new(g, at)
     return token
   end
 
