@@ -662,6 +662,47 @@ static void test_a_send_waits_for_a_direct_send_of_another_task(void) {
   agc_test_settle_loop(&vm);
 }
 
+static const agc_struct *head_of(agc_value v) { return agc_as_struct(&vm, ok_of(v)); }
+
+static agc_value read_head_call_result(calling *c) {
+  if (!start(c)) return c->result;
+  wait_woken();
+  return take(c);
+}
+
+static calling read_head_call(void) {
+  agc_value rest = agc_bytes_value(agc_make_bytes((const uint8_t *)"", 0));
+  return call("HttpWire.read_head.bytes", 4, socket_v, rest, agc_int(1024), agc_int(5000));
+}
+
+/* HttpWire.read_head at N > 1 on pipelined requests (#1197): the first read parks and the I/O thread reads both
+   heads and the start of a third; the second is parsed where it lies and taken without a park, and counts the bytes
+   after it. The third, cut short, parks and is read whole once the rest comes. */
+static void test_a_pipelined_head_is_taken_on_the_scheduler(void) {
+  int fd = open_pair();
+  agc_runq_share(vm.rt->runq);
+  declare_head_records();
+  const char *two = "GET /a HTTP/1.1\r\nHost: x\r\n\r\nGET /b?q HTTP/1.1\r\nHost: x\r\n\r\nGET /c HTTP/1.1\r\nHo";
+  assert(send(fd, two, strlen(two), 0) == (ssize_t)strlen(two));
+  calling first = read_head_call();
+  const agc_struct *a = head_of(read_head_call_result(&first));
+  assert(agc_as_string(&vm, a->fields[2])->bytes == 2 && agc_as_int(&vm, a->fields[7]) == 49);
+  calling second = read_head_call();
+  assert(!start(&second));
+  const agc_struct *b = head_of(second.result);
+  const agc_string *path = agc_as_string(&vm, b->fields[2]);
+  assert(path->bytes == 2 && memcmp(path->data, "/b", 2) == 0 && agc_as_int(&vm, b->fields[7]) == 19);
+  const char *end = "st: x\r\n\r\n";
+  calling third = read_head_call();
+  assert(start(&third));
+  for (int k = 0; k < 10; k++) (void)agc_io_poll(&vm, false);
+  assert(send(fd, end, strlen(end), 0) == (ssize_t)strlen(end));
+  wait_woken();
+  path = agc_as_string(&vm, head_of(take(&third))->fields[2]);
+  assert(path->bytes == 2 && memcmp(path->data, "/c", 2) == 0);
+  close_pair(fd);
+}
+
 static void detach_task(void *arg) {
   (void)arg;
   atomic_store(&vm.task->state, AGC_TASK_RUNNING);
@@ -938,6 +979,7 @@ int main(void) {
   AGC_TEST_RUN(test_served_accept_of_a_cancelled_task());
   AGC_TEST_RUN(test_cancelled_read_leaves_the_reader_slot());
   AGC_TEST_RUN(test_a_read_takes_buffered_input_on_the_scheduler());
+  AGC_TEST_RUN(test_a_pipelined_head_is_taken_on_the_scheduler());
   AGC_TEST_RUN(test_cancelled_tls_connect_past_its_deadline(false));
   AGC_TEST_RUN(test_cancelled_tls_connect_past_its_deadline(true));
   AGC_TEST_RUN(test_byte_keys());
