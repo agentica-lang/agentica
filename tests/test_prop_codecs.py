@@ -6,6 +6,7 @@ import base64
 import binascii
 import json
 import math
+import random
 import re
 import struct
 from decimal import Decimal
@@ -60,6 +61,11 @@ def floats_reply(result: Result[List[Float]]) -> String
   end
 end
 
+def float_back(x: Float) -> String
+  decoded = JSON.decode(JSON.encode([x]), List[Float]).unwrap!
+  "ok #{hex("#{x.to_s.to_f!.to_bits} #{decoded[0].to_bits}".bytes)}"
+end
+
 def split_reply(data: Bytes, separator: Bytes) -> String
   pieces = text(data).split(text(separator))
   lengths = pieces.map do |piece: String| piece.length end
@@ -82,6 +88,7 @@ def run(op: String, data: Bytes) -> String
     "unb64" -> "ok #{hex(Base64.decode64(text(data)))}"
     "hex" -> "ok #{hex(hex(data).bytes)}"
     "float" -> "ok #{hex(Float.from_bits(text(data).to_i!).to_s.bytes)}"
+    "float_back" -> float_back(Float.from_bits(text(data).to_i!))
     "unhex" -> bytes_reply(OpenSSL.Digest.hexdecode(text(data)))
     _ ->
       parts = op.split(":")
@@ -444,3 +451,18 @@ def test_float_text_edges_agree_with_python_repr(codec):
     """Subnormals, ±0, ±inf, NaN, powers of ten, the switch to exponent form and exact ties."""
     for x in FLOAT_EDGES:
         check_float_text(codec, float_bits(x))
+
+
+def test_float_text_reads_back(codec):
+    """to_s then to_f, and JSON.encode then JSON.decode, give back the same bits on every system (JSON reads -0.0 as
+    0.0): the value that Windows' UCRT strtod misread, every exponent with the mantissas next to a power of two, and
+    random patterns."""
+    rng = random.Random(1682)
+    patterns = [0x0E6FFFFFFFFFFFFF] + [e << 52 | m for e in range(0x7FF) for m in (0, 1, (1 << 52) - 2, (1 << 52) - 1)]
+    patterns += [rng.getrandbits(64) & ~(0x7FF << 52) | rng.randrange(0x7FF) << 52 for _ in range(3000)]
+    for bits in patterns:
+        for b in (bits, bits | 1 << 63):
+            signed = struct.unpack("<q", struct.pack("<Q", b))[0]
+            json = 0 if b in (0, 1 << 63) else signed
+            got = codec.ask("float_back", str(signed).encode("ascii"))
+            assert got == b"%d %d" % (signed, json), (hex(b), got)
