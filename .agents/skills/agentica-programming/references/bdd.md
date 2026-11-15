@@ -156,10 +156,16 @@ BDD.then_stdout_includes(ctx, expected) / then_stderr_includes(ctx, expected)
   it at once too: the scenario is `skipped` with the reason, its later steps are
   `not_executed`, and the exit code stays 0, even when every scenario is
   skipped (CI should check the `skipped` count).
-- Each scenario runs in its own child VM with empty state and no program,
-  running Background again. A crash, `System.exit` (even 0,
-  `RUNTIME-BDD-PREMATURE-EXIT`), step limit or loop fails only that scenario;
-  remaining steps are `not_executed`; other scenarios and files continue.
+- Each scenario starts with empty state and no program, running Background
+  again, in a task of its own in a worker process that runs the scenarios of
+  one `--jobs` slot while they pass. A crash, `System.exit` (even 0,
+  `RUNTIME-BDD-PREMATURE-EXIT`), step limit or loop fails only that scenario
+  (the next one gets a new worker); remaining steps are `not_executed`; other
+  scenarios and files continue.
+- A worker runs `main` once: state made in `main` before `BDD.run` and captured
+  by steps (an `ATS` table, a `Channel`) is shared by its scenarios. Make it in
+  a step, or run `agentica test --isolate` (a process per scenario, `main`
+  again each time).
 - Handlers may spawn tasks and pass `ctx` in a struct; tasks must end before the
   handler returns (`RUNTIME-BDD-PENDING-TASKS`; `std/bdd` checks
   `Task.pending_count()` after each handler). Assertions in tasks count. A

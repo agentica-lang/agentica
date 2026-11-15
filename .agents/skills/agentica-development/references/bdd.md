@@ -97,10 +97,14 @@ the programming skill or the site).
 
 ## Runner (`stdlib/test/runner.agc`)
 
-- The flow (list child, scenario children, the report and its exit code) is
-  `docs/bdd.md` ("How a run works"). Output over the cap while listing closes
-  the child: `RUNTIME-BDD-OUTPUT-LIMIT`. The files run in order, or `--jobs N`
-  at a time with `Task.map` in `run_entries`; the results are in file order.
+- The flow (list child, workers or scenario children, the report and its exit
+  code) is `docs/bdd.md` ("How a run works"). Output over the cap while listing
+  closes the child: `RUNTIME-BDD-OUTPUT-LIMIT`. `run_entries` puts the jobs (a
+  scenario or a whole test file) in one queue that `--jobs` lane tasks
+  (`run_lane`) take from; each sends its results on a channel, and they are put
+  back in file order. A lane keeps a worker (`Slot`, `run_worker`) while its
+  scenarios pass; `--isolate` and `--coverage` use `run_child`, one child per
+  scenario. The `--isolate` line is a JSON boolean after the coverage line.
 - The runner reads the child's records with `Process.channel_read_line` and
   sends the init and step lines with `Process.channel_send` (the records are in
   `docs/bdd.md`). After `end`
@@ -168,11 +172,14 @@ the programming skill or the site).
   unit tests show values the same way. In the child, `run` checks the step index
   and pattern, calls the handler, fails on pending tasks and an unobserved task
   crash, probes the output limit and sends `end`. Each record is one JSON line
-  sent with `Process.parent_send` after `IO.flush()`; scenario mode reads step
-  lines with `Process.parent_read_line` and a 24 h timeout (the runner holds the
-  deadline). Every failure sends one `fail` record and exits 1. A record over 1
-  MiB (`process: send exceeds`) becomes a small `RUNTIME-BDD-OUTPUT-LIMIT` fail
-  record.
+  sent with `Process.parent_send` after `IO.flush()`. Worker mode (`work`) runs
+  `serve` per scenario in a task that calls `BddScenario.srand` and
+  `BddScenario.uncount` (std-only, `vm/numbers.c`, `vm/task.c`), reads until the
+  `end` line and sends `done`; a failure, skip or crash still exits the
+  process. Both modes read step lines with `Process.parent_read_line` and a 24
+  h timeout (the runner holds the deadline). Every failure sends one `fail`
+  record and exits 1. A record over 1 MiB (`process: send exceeds`) becomes a
+  small `RUNTIME-BDD-OUTPUT-LIMIT` fail record.
 - Program launch and hooks: `given_env` and `given_argument` keep a `Map` and a
   list in `Scenario` until `start`, which passes them to
   `Process.spawn_captured` (`env`) and after the file. `after` keeps

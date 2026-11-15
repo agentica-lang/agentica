@@ -11,10 +11,6 @@ import Child from "child"
 import Coverage from "coverage"
 import Units from "units"
 
-# A worker gets this many units of a million steps. A scenario takes as many units as a child of its own would get (one
-# per step and one more); one that needs more than the worker has left gets a new worker.
-WORKER_UNITS = 100
-
 ## Reads the configuration file named by the one command-line argument, runs every feature and test file in it, and
 ## writes the report to the file the configuration names (`report_path`, a new file). The driver reads it from there:
 ## a child's stdout keeps only 1 MiB, and the report of a large run is bigger. Exits with a non-zero code when
@@ -227,6 +223,10 @@ def min_of(a: Int, b: Int) -> Int
   return a if a < b
   b
 end
+
+# A worker gets this many units of a million steps. A scenario takes as many units as a child of its own would get (one
+# per step and one more); one that needs more than the worker has left gets a new worker.
+def worker_units() -> Int = 100
 
 def max_of(a: Int, b: Int) -> Int
   return a if a > b
@@ -770,7 +770,7 @@ def run_worker(
     worker = none
   end
   if worker.none?
-    units = max_of(WORKER_UNITS, need)
+    units = max_of(worker_units(), need)
     spawned = Process.spawn_channel(config.vm, vm_args(config, 1000000 * units, "worker", ""))
     if not spawned.ok?
       run = Run(failed_at: 0, verdict: failure("RUNTIME-BDD-INFRA", spawned.message, item.steps[0].span))
