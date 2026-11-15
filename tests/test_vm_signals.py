@@ -12,7 +12,7 @@ import time
 
 import pytest
 
-from tests.agentica_test import FIXTURES, PYTHON, TARGET_OS, WINDOWS, Child, compile_agc, compile_text, host_only, scaled, start_vm, vm_command
+from tests.agentica_test import FIXTURES, PYTHON, TARGET_OS, WINDOWS, Child, compile_agc, compile_text, host_only, scaled, start_vm, vm_binary, vm_command, vm_environment
 
 WAIT_SECONDS = scaled(10)
 POSIX = "System.subscribe needs POSIX signals; on Windows it returns a system.signal error, which " \
@@ -574,3 +574,27 @@ def test_a_stop_signal_does_not_wait_for_the_peer_of_a_closed_socket(tmp_path, a
         vm.wait()
         assert time.monotonic() - started < scaled(10)
     assert "warning: closed sockets dropped" in vm.stderr_text()
+
+
+@host_only(WINDOWS, "Windows has no POSIX signals")
+@SCHEDULERS
+def test_the_warning_after_a_stop_signal_reaches_a_file_when_the_program_runs_from_source(tmp_path, adopt, schedulers):
+    """Standard error is a regular file, so a pool thread writes the warning, and the front end ran in this process
+    (`--no-cache`): the exit waits for that write (#1656). Without the wait the write loses the race in most runs
+    under the C locale and in none under C.UTF-8 (measured, not explained), so the locale is C and the round is
+    repeated."""
+    source = tmp_path / "write_stop.agc"
+    source.write_text(WRITE_CLOSE_SLEEP, encoding="utf-8")
+    for round_number in range(10):
+        errors = tmp_path / ("errors%d.txt" % round_number)
+        with open(errors, "wb") as stderr:
+            vm = adopt(Child([vm_binary(), "--no-cache", "--schedulers", str(schedulers), source, "sleep"],
+                             env=vm_environment({"LC_ALL": "C", "LANG": "C"}), stderr=stderr))
+            port = int(vm.next_line())
+            with socket.create_connection(("127.0.0.1", port), timeout=scaled(30)):
+                assert vm.next_line() == "written"
+                started = time.monotonic()
+                os.kill(vm.process.pid, signal.SIGTERM)
+                vm.wait()
+                assert time.monotonic() - started < scaled(10)
+        assert "warning: closed sockets dropped" in errors.read_text(encoding="utf-8"), round_number

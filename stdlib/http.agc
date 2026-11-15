@@ -851,7 +851,7 @@ STREAM_EARLY = 2
 # The most bytes of a piece in one chunk, and of one TCP.send_bytes (1 MiB at most, with the chunk framing around it).
 CHUNK_BYTES = 524288
 SEND_BYTES = 1048576
-# The most bytes of the pieces of a chunked stream that go out as one chunk when they wait together.
+# The most bytes of the pieces of a chunked body that go out as one chunk when they wait together.
 STREAM_JOIN_BYTES = 65536
 BAD_PROXY = "http: the proxy must be http://host:8080 or http://user:pass@host:8080, with no path or query"
 # Said without the user info: an error never repeats the credentials.
@@ -1932,7 +1932,7 @@ def upload_pieces(socket: TCP.Socket, body: Channel[Bytes], length: Int, timeout
           return error("http: the upload body is longer than its length", kind: "argument")
         end
         count = count + piece.size
-        case emit(socket, piece, timeout, length, 0)
+        case emit(socket, with_queued(body, piece, length), timeout, length, 0)
           ok(_) -> nil
           error(e) -> return ok(write_failed(e))
         end
@@ -3436,8 +3436,8 @@ def pump(
   early
 end
 
-# A piece of a chunked stream with the pieces that already wait behind it in `body`: one chunk, one send. It never
-# waits. A body with a length is not joined: its pieces are counted one by one against the length.
+# A piece of a chunked body (a stream or an upload) with the pieces that already wait behind it in `body`: one chunk,
+# one send. It never waits. A body with a length is not joined: its pieces are counted one by one against the length.
 def with_queued(body: Channel[Bytes], piece: Bytes, length: Int) -> Bytes
   return piece if length != UNSIZED
 

@@ -542,8 +542,10 @@ class Child:
     next_line() has a time limit and a child that exits is reported at once.
     """
 
-    def __init__(self, argv, env=None, cwd=None, stdin=False, capture_stderr=False, read_stdout=True, creationflags=0):
-        """stdin=True gives a pipe (close_stdin() ends it), else /dev/null; stderr is the test's own unless captured.
+    def __init__(self, argv, env=None, cwd=None, stdin=False, capture_stderr=False, read_stdout=True, creationflags=0,
+                 stderr=None):
+        """stdin=True gives a pipe (close_stdin() ends it), else /dev/null; stderr is the test's own unless captured,
+        or the open file `stderr`.
 
         read_stdout=False leaves the stdout pipe unread, for tests of a full pipe: the test reads process.stdout itself.
         creationflags are the Windows process creation flags (CREATE_NEW_PROCESS_GROUP, to send it Ctrl+Break).
@@ -551,7 +553,7 @@ class Child:
         self.argv = [str(part) for part in argv]
         self.process = subprocess.Popen(
             self.argv, stdin=subprocess.PIPE if stdin else subprocess.DEVNULL, stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE if capture_stderr else None, env=env, cwd=cwd, start_new_session=True,
+            stderr=subprocess.PIPE if capture_stderr else stderr, env=env, cwd=cwd, start_new_session=True,
             creationflags=creationflags)
         self._lines = queue.Queue()
         self._error_lines = queue.Queue()

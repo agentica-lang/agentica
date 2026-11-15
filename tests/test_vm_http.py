@@ -1063,8 +1063,12 @@ def test_open_streams_a_response_body_on_a_channel_with_backpressure_and_an_earl
 
 def test_upload_sends_a_body_from_a_channel_chunked_or_with_its_length(tmp_path, adopt):
     _, ports = start_peer(adopt)
-    check_lines(run_program(tmp_path, "stream-upload", STREAM_UPLOAD_PROGRAM, ports), [
-        "200 POST chunked 3 6 bef7c249",
+    out = run_program(tmp_path, "stream-upload", STREAM_UPLOAD_PROGRAM, ports)
+    # Three pieces with bytes: pieces that wait in the channel together share a chunk, so one to three chunks.
+    first = output_lines(out)[0].split(" ")
+    assert first[:3] + first[4:] == ["200", "POST", "chunked", "6", "bef7c249"] and first[3] in ("1", "2", "3"), first
+    check_lines(out, [
+        ("prefix", "200 POST chunked "),
         "200 POST length 6 6 bef7c249",
         "200 PUT chunked 0 0 e3b0c442",
         "200 PATCH length 0 0 e3b0c442",
@@ -1326,6 +1330,70 @@ def test_a_chunked_stream_joins_the_pieces_that_wait_together_and_sends_a_lone_p
     vm.close_stdin()
     assert vm.wait() == 0
     assert vm.stderr_text() == ""
+
+
+UPLOAD_JOIN_PROGRAM = """\
+import HTTP from "std/http"
+
+def burst(body: Channel[Bytes]) -> Void
+  for n in 0...3000
+    _ = body.send("line #{n}\\n".bytes, 5000)
+  end
+  _ = body.send(("x" * 70000).bytes, 5000)
+  for _ in 0...200
+    _ = body.send("".bytes, 5000)
+  end
+  _ = body.send("end\\n".bytes, 5000)
+  body.close
+end
+
+def lone(body: Channel[Bytes]) -> Void
+  _ = body.send("one".bytes, 5000)
+  Task.sleep(@pause_ms)
+  _ = body.send("two".bytes, 5000)
+  body.close
+end
+
+def main() -> Void
+  url = System.args()[0]
+  for job in [&burst, &lone]
+    body: Channel[Bytes] = Channel.new(64)
+    Task.spawn(job, body)
+    puts(HTTP.upload("POST", url, body).unwrap!.status)
+  end
+end
+"""
+
+
+def test_a_chunked_upload_joins_the_pieces_that_wait_together_and_sends_a_lone_piece_at_once(tmp_path):
+    """The client's upload joins as the server's stream does: a burst arrives whole and in order in fewer chunks of at
+    most 64 KiB plus one piece, and a piece with nothing behind it is not held back for the next one."""
+    program = UPLOAD_JOIN_PROGRAM.replace("@pause_ms", str(STREAM_JOIN_PAUSE_MS))
+    bytecode = compile_text(program, "upload-join", tmp_path)
+    uploads = []
+
+    def serve(listener):
+        for _ in range(2):
+            conn, _ = listener.accept()
+            with conn:
+                conn.settimeout(scaled(20))
+                uploads.append(read_chunks(conn))
+                conn.sendall(b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+
+    with socket.create_server(("127.0.0.1", 0)) as listener:
+        server = threading.Thread(target=serve, args=(listener,), daemon=True)
+        server.start()
+        result = run_vm(bytecode, args=["http://127.0.0.1:%d/" % listener.getsockname()[1]])
+        server.join(scaled(20))
+    assert (result.code, result.stdout, result.stderr) == (0, "200\n200\n", "")
+    burst, lone = uploads
+    chunks = [data for data, _ in burst]
+    assert b"".join(chunks) == b"".join(b"line %d\n" % n for n in range(3000)) + b"x" * 70000 + b"end\n"
+    assert len(chunks) < 1500, "the pieces were joined"
+    assert max(len(data) for data in chunks) < 65536 + 70000
+    (one, first), (two, second) = lone
+    assert (one, two) == (b"one", b"two")
+    assert second - first > STREAM_JOIN_PAUSE_MS / 1000 * 0.6, "the first piece did not wait for the second"
 
 
 def start_server(tmp_path, adopt):
