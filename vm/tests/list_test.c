@@ -495,12 +495,14 @@ static void expect_mixed(const agc_list *l, flavor_t base, flavor_t odd, size_t 
 }
 
 static void expect_builder_mixing(flavor_t base, flavor_t odd) {
-  const size_t sizes[] = {1, 2, 3, 31, 32, 33, 34, 64, 65, 66, 1056, 1057, 1058, 2113};
+  /* 8225 and 16449 fill one and two slabs of numeric leaves (255 leaves, 8160 items) and more */
+  const size_t sizes[] = {1, 2, 3, 31, 32, 33, 34, 64, 65, 66, 1056, 1057, 1058, 2113, 8225, 16449};
   for (size_t s = 0; s < sizeof sizes / sizeof sizes[0]; s++) {
     size_t n = sizes[s];
     if (n < 2) continue;
     size_t trie = list_tail_off(n);
-    size_t spots[] = {0, 1, 31, 32, 33, trie ? trie - 1 : 0, trie, trie + 1, n / 2, n - 1};
+    size_t spots[] = {0,    1,    31,   32,   33,    trie ? trie - 1 : 0, trie,  trie + 1, n / 2,
+                      8159, 8160, 8161, 8191, 8192, 8193,  16319,               16320, 16321,    n - 1};
     for (size_t t = 0; t < sizeof spots / sizeof spots[0]; t++) {
       size_t at = spots[t];
       if (at >= n) continue;

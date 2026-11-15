@@ -277,15 +277,18 @@ masks.
   pointer can keep garbage alive for as long as its list lives. Boehm already
   accepts that for the stack and the registers.
 - A build (the sized builder, `slice`, `concat`, `reverse`) puts its new
-  leaves in slabs of at most 64 KiB, and the branches hold interior pointers
+  leaves in slabs of less than 64 KiB (Boehm adds a byte to each object, so a
+  slab of `SLAB_BYTES - 1` fits in 16 heap blocks), and the branches hold interior pointers
   into them. `GC_set_all_interior_pointers(1)` keeps a slab alive.
   `list_test.c` forces collections while only such pointers refer to a slab,
   for each kind.
 - No node is larger than a slab: each branch is its own object. Marking is
-  conservative, so a stale or false pointer can point into a dead list; it then
-  keeps at most one slab and what its items refer to alive, not the whole list.
-  One block per build kept a whole parsed JSON array alive this way on macOS
-  arm64 (#1681).
+  conservative, so a stale or false pointer can point into a dead list. Into a
+  leaf, it keeps that leaf's slab and what its items refer to alive; into a
+  branch, every leaf under that branch; into the list object or the root, the
+  whole list. Leaves are most of a list's bytes, so most stray pointers land
+  in a slab. One block per build kept a whole parsed JSON array alive whenever
+  a stray pointer landed anywhere in it (#1681).
 - The size bound of §17.7 still applies to 16-byte items, for every kind.
 
 **Mixing kinds.** The checker does not allow it, but a `.agcb` can ask for it:

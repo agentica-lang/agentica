@@ -34,7 +34,8 @@ static uint32_t kind_of(agc_value v) { return v.tag == AGC_T_INT || v.tag == AGC
 
 static void *items_alloc(uint32_t kind, size_t bytes) { return kind ? agc_alloc_atomic(bytes) : agc_alloc(bytes); }
 
-static size_t slab_leaves(uint32_t kind) { return SLAB_BYTES / (LIST_WIDTH * stride_of(kind)); }
+/* Boehm adds a byte to each object for interior pointers: SLAB_BYTES - 1 keeps a slab in 16 heap blocks, not 17. */
+static size_t slab_leaves(uint32_t kind) { return (SLAB_BYTES - 1) / (LIST_WIDTH * stride_of(kind)); }
 
 static void item_put(uint32_t kind, char *dst, agc_value v) {
   if (kind) {
@@ -112,8 +113,8 @@ static char *leaf_of(const agc_list *l, size_t k) {
 }
 
 /* The first `shared` leaves are leaves first, first + 1, ... of src, which has the same kind. The others are slices of
-   slabs of at most SLAB_BYTES, and every branch is its own object: under conservative marking, a false pointer into
-   one keeps at most one slab of garbage alive, not a whole build. path[d] is the current branch of level d (0 holds
+   slabs of less than SLAB_BYTES, and every branch is its own object: under conservative marking, a false pointer into
+   a leaf keeps one slab of garbage alive, not a whole build. path[d] is the current branch of level d (0 holds
    leaves). */
 static void trie_make(agc_list *l, size_t items, uint32_t kind, const agc_list *src, size_t first, size_t shared) {
   /* the bound of 16-byte items for every kind, checked before shift_for: a len above SIZE_MAX / 16 ends in the out-of-memory exit here (17.7) */
@@ -128,23 +129,25 @@ static void trie_make(agc_list *l, size_t items, uint32_t kind, const agc_list *
   path[depth - 1] = agc_alloc(sizeof(list_branch));
   l->root = path[depth - 1];
   l->shift = shift;
-  char *slab = NULL;
+  char *next = NULL, *end = NULL;
   for (size_t k = 0; k < leaves; k++) {
-    for (size_t d = depth - 1; d-- > 0;) {
+    for (size_t d = depth - 1; d-- > 0 && !(k & LIST_MASK);) {
       size_t bits = LIST_BITS * (d + 1);
       if (k & (((size_t)1 << bits) - 1)) continue;
       path[d] = agc_alloc(sizeof(list_branch));
       path[d + 1]->child[(k >> bits) & LIST_MASK] = path[d];
     }
-    char *leaf;
     if (src && k < shared) {
-      leaf = leaf_of(src, first + k);
-    } else {
-      size_t at = (k - shared) % per;
-      if (!at) slab = items_alloc(kind, (leaves - k < per ? leaves - k : per) * leaf_bytes);
-      leaf = slab + at * leaf_bytes;
+      path[0]->child[k & LIST_MASK] = leaf_of(src, first + k);
+      continue;
     }
-    path[0]->child[k & LIST_MASK] = leaf;
+    if (next == end) {
+      size_t count = leaves - k < per ? leaves - k : per;
+      next = items_alloc(kind, count * leaf_bytes);
+      end = next + count * leaf_bytes;
+    }
+    path[0]->child[k & LIST_MASK] = next;
+    next += leaf_bytes;
   }
 }
 

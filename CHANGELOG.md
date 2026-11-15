@@ -30,7 +30,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
-- A loop that parses a large JSON array or builds large lists no longer keeps old lists alive through a stray pointer, which made it hit `--max-heap` on macOS arm64: such a pointer now keeps at most 64 KiB of a list (#1681).
+- A loop that parses a large JSON array or builds large lists is much less likely to keep an old list alive through a stray pointer, which made it hit `--max-heap` on macOS arm64 and sometimes on Windows: a stray pointer into a list's items now keeps less than 64 KiB of them, not the whole list (#1681).
 
 ## [0.32.0] - 2026-11-15
 
