@@ -21,6 +21,8 @@
    must stay included before the definitions. clang's -Wstatic-in-inline (under -Wpedantic) is a false positive here,
    as the definition is not an inline definition. */
 #define OP_HELPER inline __attribute__((always_inline))
+/* The most dead registers agc_task_clear_dead zeroes in place (1 MiB); past it the array is cut first. */
+#define CLEAR_MAX ((size_t)65536)
 
 typedef enum { SORT_INT, SORT_FLOAT, SORT_TEXT } sort_kind;
 
@@ -46,6 +48,9 @@ struct agc_native {
   agc_list_builder out;
   agc_value *kept;
   agc_stepper *stepper;
+  /* Made by start_native or start_stepper, which nothing but its frame reaches, so finish_native frees it. The barrier
+     of a callback of native code is part of its level's stack and is not. */
+  bool owned;
 };
 
 /* The native frame under a callback's frame (agc_task_run_nested). The callback returns into it, and its step keeps
@@ -562,6 +567,35 @@ void agc_task_call(agc_vm *vm, agc_task *t, agc_value fn, uint32_t window, const
   call_value(vm, t, fn, window, args, argc, ret, span);
 }
 
+/* Zeroes the registers of T above its frames, which every frame writes before it reads, so the values that returned
+   calls left there no longer keep objects alive. A frame uses [base, base + registers) and a native frame lies inside
+   its caller's; bases fall from the top frame down, so the walk stops once no lower frame can end higher. An array
+   whose dead part passes CLEAR_MAX registers is first cut to the smallest power of two that holds the live part, so a
+   park after a deep call clears a bounded tail; it moves as growing does, and no pointer into it outlives a turn. A
+   callback of native code is left alone: the outer turn keeps its arrays. */
+void agc_task_clear_dead(const agc_vm *vm, agc_task *t) {
+  if (t->callbacks || !t->regs) return;
+  const agc_program *p = vm->rt->program;
+  size_t top = 0, most = p->max_registers ? p->max_registers : SIZE_MAX / 2;
+  for (uint32_t k = t->frame_count; k-- > 0;) {
+    const agc_frame *f = &t->frames[k];
+    if ((size_t)f->base + most <= top) break;
+    if (f->native || f->function >= p->function_count) continue;
+    size_t end = (size_t)f->base + p->functions[f->function].registers;
+    if (end > top) top = end;
+  }
+  size_t capacity = 256;
+  while (capacity < top) capacity *= 2;
+  if (t->reg_capacity - top > CLEAR_MAX && capacity < t->reg_capacity) {
+    agc_value *regs = agc_alloc(capacity * sizeof(agc_value));
+    memcpy(regs, t->regs, top * sizeof(agc_value));
+    t->regs = regs;
+    t->reg_capacity = capacity;
+    return;
+  }
+  memset(t->regs + top, 0, (t->reg_capacity - top) * sizeof(agc_value));
+}
+
 void agc_task_enter(agc_vm *vm, agc_task *t, uint32_t function) {
   /* Like call_value: a profile test that a normal build still pays, once per task start. */
   if (AGC_PROFILE_ON(vm)) profile_call(vm, function);
@@ -571,10 +605,17 @@ void agc_task_enter(agc_vm *vm, agc_task *t, uint32_t function) {
 static void finish_native(agc_vm *vm, agc_value result) {
   agc_task *t = vm->task;
   agc_frame *frame = &t->frames[t->frame_count - 1];
+  agc_native *st = frame->native;
   uint32_t base = frame->base;
   frame->native = NULL;
   t->frame_count--;
   t->regs[base] = result;
+  /* RESULT is built: a filter's list copied its kept items, and the callers of finish_native return without reading
+     the state again. */
+  if (st->owned) {
+    if (st->kind == AGC_NATIVE_FILTER) agc_free(st->kept);
+    agc_free(st);
+  }
   if (t->turn_cost) apply_cost(vm);
 }
 
@@ -798,6 +839,7 @@ static void push_native(agc_vm *vm, agc_native *st, uint32_t base) {
 static void start_native(agc_vm *vm, agc_native_kind kind, uint32_t base, uint32_t span) {
   agc_native *st = agc_alloc(sizeof(agc_native));
   const agc_value *args = vm->task->regs + base;
+  st->owned = true;
   st->kind = kind;
   st->span = span;
   if (counting(kind)) {
@@ -854,6 +896,7 @@ static void start_stepper(agc_vm *vm, const agc_builtin *b, uint32_t base, uint3
     return;
   }
   agc_native *st = agc_alloc(sizeof(agc_native));
+  st->owned = true;
   st->kind = AGC_NATIVE_STEPPER;
   st->span = span;
   st->stepper = t->stepper;

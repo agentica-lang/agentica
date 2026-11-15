@@ -28,9 +28,16 @@ WAIT_SECONDS = scaled(60)
 # includes them.
 TRACE_LINE = re.compile(
     rb'^agc-trace \+[0-9]+\.[0-9]{6} (sched|io|proc|tls|loader|gc|jit) [a-z_]+'
-    rb'( [a-z_]+=([^ ="\\\x00-\x20\x7f]+|"([^"\\\x00-\x1f\x7f]|\\["\\bfnrt]|\\u[0-9a-f]{4})*"))*$')
+    rb'( [a-z][a-z0-9_]*=([^ ="\\\x00-\x20\x7f]+|"([^"\\\x00-\x1f\x7f]|\\["\\bfnrt]|\\u[0-9a-f]{4})*"))*$')
 GC_LINE = re.compile(
-    rb"^agc-trace \+[0-9]+\.[0-9]{6} gc collect at=(turn|end) count=[0-9]+ heap=[0-9]+ free=[0-9]+ since=[0-9]+$")
+    rb"^agc-trace \+[0-9]+\.[0-9]{6} gc ("
+    rb"collect at=(turn|end) count=[0-9]+ heap=[0-9]+ free=[0-9]+ since=[0-9]+ used=[0-9]+ pauses=[0-9]+"
+    rb" pause_max_us=[0-9]+"
+    rb"|alloc sched=([0-9]+|io) scanned_objects=[0-9]+ scanned_bytes=[0-9]+ atomic_objects=[0-9]+ atomic_bytes=[0-9]+"
+    rb" large_objects=[0-9]+ large_bytes=[0-9]+ freed_objects=[0-9]+ freed_bytes=[0-9]+"
+    rb"|pauses count=[0-9]+ p50_us=[0-9]+ p99_us=[0-9]+ max_us=[0-9]+ total_us=[0-9]+ used_last=[0-9]+ used_max=[0-9]+"
+    rb")$")
+GC_FIELDS = re.compile(rb" gc (alloc sched=(\S+)|pauses) (.*)$")
 CATEGORY = re.compile(rb"^agc-trace \S+ (\S+)")
 
 # (fixture, stdin sidecar, categories that must show up in the trace)
@@ -233,19 +240,44 @@ def test_agentica_test_with_a_pid_pattern_writes_a_trace_file_for_each_process_o
     assert len(list(traces.glob("run-*.log"))) >= 3
 
 
-def test_an_allocation_heavy_run_writes_gc_collect_lines(tmp_path, traced_vm):
+def gc_summary(lines):
+    """The fields of the `alloc` lines by scheduler, and of the `pauses` line, as ints."""
+    allocs, pauses = {}, None
+    for line in lines:
+        match = GC_FIELDS.search(line)
+        if match:
+            fields = {k.decode(): int(v) for k, v in (pair.split(b"=") for pair in match.group(3).split())}
+            if match.group(2):
+                allocs[match.group(2).decode()] = fields
+            else:
+                pauses = fields
+    return allocs, pauses
+
+
+@pytest.mark.parametrize("schedulers", ["1", "2"])
+def test_an_allocation_heavy_run_writes_gc_lines(tmp_path, traced_vm, schedulers):
     vm, version = traced_vm
     if b"sanitizer build" in version:
         pytest.skip("gc trace test: sanitizer build, no libgc")
     bytecode = compile_fixture(VM_FIXTURES / "map-large.agc", tmp_path)
     path = tmp_path / "map-large.trace"
-    plain = run_vm(vm, bytecode)
-    traced = run_vm(vm, bytecode, {"AGENTICA_VM_TRACE": "gc", "AGENTICA_VM_TRACE_FILE": path})
+    # Without the heap floor, the run collects.
+    settings = {"AGENTICA_SCHEDULERS": schedulers, "AGENTICA_GC_HEAP": "0"}
+    plain = run_vm(vm, bytecode, settings)
+    traced = run_vm(vm, bytecode, {**settings, "AGENTICA_VM_TRACE": "gc", "AGENTICA_VM_TRACE_FILE": path})
     lines = trace_lines(path)
     assert traced == plain
     assert lines
     for line in lines:
         assert GC_LINE.search(line), "gc line %r" % line
+    allocs, pauses = gc_summary(lines)
+    expected = {"0"} if schedulers == "1" else {"0", "1", "io"}
+    assert set(allocs) == expected
+    assert sum(a["scanned_objects"] for a in allocs.values()) > 0
+    collected = max(int(line.split(b" count=")[1].split()[0]) for line in lines if b" collect " in line)
+    assert pauses and 0 < pauses["count"] <= collected
+    assert pauses["p50_us"] <= pauses["p99_us"] <= pauses["max_us"] <= pauses["total_us"]
+    assert 0 < pauses["used_last"] <= pauses["used_max"]
 
 
 def test_the_profile_counts_calls_and_steps_of_each_function_and_the_time_of_each_builtin(tmp_path, traced_vm):

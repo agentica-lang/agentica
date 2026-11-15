@@ -17,6 +17,15 @@
 #define RUNNEXT_LIMIT 3u
 /* What else a run that cannot start a scheduler thread can do (agc_thread_start_failed). */
 #define SCHEDULERS_FIX "set AGENTICA_SCHEDULERS=1"
+/* How often a task that yields has its dead registers cleared (agc_task_end_turn). */
+#define CLEAR_YIELDS 16u
+/* The fields of a gc trace `alloc` line (trace_alloc). */
+#define ALLOC_FIELDS                                                                                             \
+  " scanned_objects=%" PRIu64 " scanned_bytes=%" PRIu64 " atomic_objects=%" PRIu64 " atomic_bytes=%" PRIu64 \
+  " large_objects=%" PRIu64 " large_bytes=%" PRIu64 " freed_objects=%" PRIu64 " freed_bytes=%" PRIu64
+#define ALLOC_VALUES(c)                                                                                              \
+  (c).scanned_objects, (c).scanned_bytes, (c).atomic_objects, (c).atomic_bytes, (c).large_objects, (c).large_bytes, \
+    (c).freed_objects, (c).freed_bytes
 
 /* A set of pointers (open addressing, a power-of-two capacity, at most half full): the containers a walk has seen
    and the resources it has found. Values are immutable and may share parts, so without it a value made of shared
@@ -571,11 +580,44 @@ static void trace_turn(const agc_vm *vm, const agc_task *t, agc_turn_result r, b
 static void trace_gc(agc_vm *vm, const char *when) {
   const agc_trace *tr = &vm->rt->trace;
   agc_gc_info info;
-  if (!AGC_TRACE_ON(tr, AGC_TRACE_GC) || !agc_gc_stats(&info) || info.collections == vm->gc_seen) return;
+  agc_gc_pauses pauses;
+  if (!AGC_TRACE_ON(tr, AGC_TRACE_GC) || !agc_gc_stats(&info) || info.collections == vm->gc_seen ||
+      !agc_gc_record(&pauses))
+    return;
   vm->gc_seen = info.collections;
   AGC_TRACE(tr, AGC_TRACE_GC,
-            "collect at=%s count=%" PRIu64 " heap=%" PRIu64 " free=%" PRIu64 " since=%" PRIu64, when,
-            info.collections, info.heap, info.free, info.since);
+            "collect at=%s count=%" PRIu64 " heap=%" PRIu64 " free=%" PRIu64 " since=%" PRIu64 " used=%" PRIu64
+            " pauses=%" PRIu64 " pause_max_us=%" PRIu64,
+            when, info.collections, info.heap, info.free, info.since, pauses.used_last, pauses.pauses, pauses.max_us);
+}
+
+/* Starts the gc trace's counts of a run: the stops of the world, and what the calling thread allocates. */
+static void trace_gc_start(const agc_vm *vm) {
+  if (!AGC_TRACE_ON(&vm->rt->trace, AGC_TRACE_GC)) return;
+  agc_gc_record_start();
+  agc_alloc_count_start();
+}
+
+/* What the calling thread allocated since trace_gc_start or the start of its scheduler: the scheduler's index, or
+   `io` for the I/O thread of a run with scheduler threads. */
+static void trace_alloc(const agc_vm *vm, bool io) {
+  const agc_trace *tr = &vm->rt->trace;
+  if (!AGC_TRACE_ON(tr, AGC_TRACE_GC)) return;
+  agc_alloc_counts c = agc_alloc_count_end();
+  if (io)
+    AGC_TRACE(tr, AGC_TRACE_GC, "alloc sched=io" ALLOC_FIELDS, ALLOC_VALUES(c));
+  else
+    AGC_TRACE(tr, AGC_TRACE_GC, "alloc sched=%" PRIu32 ALLOC_FIELDS, vm->index, ALLOC_VALUES(c));
+}
+
+static void trace_pauses(const agc_vm *vm) {
+  const agc_trace *tr = &vm->rt->trace;
+  agc_gc_pauses g;
+  if (!AGC_TRACE_ON(tr, AGC_TRACE_GC) || !agc_gc_record(&g)) return;
+  AGC_TRACE(tr, AGC_TRACE_GC,
+            "pauses count=%" PRIu64 " p50_us=%" PRIu64 " p99_us=%" PRIu64 " max_us=%" PRIu64 " total_us=%" PRIu64
+            " used_last=%" PRIu64 " used_max=%" PRIu64,
+            g.pauses, g.p50_us, g.p99_us, g.max_us, g.total_us, g.used_last, g.used_max);
 }
 
 static void trace_end(agc_vm *vm) {
@@ -587,6 +629,8 @@ static void trace_end(agc_vm *vm) {
   else if (o->kind == AGC_EXITED)
     AGC_TRACE(tr, AGC_TRACE_SCHED, "exit task=%" PRIu64 " code=%" PRId64, task, o->exit_code);
   trace_gc(vm, "end");
+  trace_alloc(vm, vm->rt->schedulers > 1);
+  trace_pauses(vm);
   if (vm->rt->jit && AGC_TRACE_ON(tr, AGC_TRACE_JIT)) agc_jit_report(vm->rt->jit);
   agc_profile_report(vm);
 }
@@ -770,6 +814,10 @@ agc_task *agc_task_next(agc_vm *vm) {
 bool agc_task_end_turn(agc_vm *vm, agc_task *t, agc_turn_result r, bool ran) {
   trace_turn(vm, t, r, ran);
   trace_gc(vm, "turn");
+  /* A parked task may wait long with what its registers hold; one that yields runs on and overwrites most of them, so
+     only every CLEAR_YIELDS-th yield pays for the clear. */
+  if (ran && (r == AGC_TURN_PARKED || (r == AGC_TURN_YIELD && ++t->yields % CLEAR_YIELDS == 0)))
+    agc_task_clear_dead(vm, t);
   bool main_done = false;
   if (!ran) {
     if (fatal(vm, t)) AGC_THROW(vm->fail);
@@ -944,6 +992,7 @@ static void sched_main(void *arg) {
   /* Registering reads the thread's stack bounds (pthread_getattr_np), which allocates: under a low ulimit -v it fails
      as the thread start itself can, and ends the same way. */
   if (!agc_gc_thread_enter()) agc_thread_start_failed("a scheduler thread", 0, SCHEDULERS_FIX);
+  if (AGC_TRACE_ON(&vm->rt->trace, AGC_TRACE_GC)) agc_alloc_count_start();
   if (AGC_CATCH(vm->fail) == 0) {
     sched_turns(vm, sched_main);
   } else {
@@ -951,6 +1000,7 @@ static void sched_main(void *arg) {
     agc_io_service_reset(vm);
     agc_run_over(vm);
   }
+  trace_alloc(vm, false);
   agc_gc_thread_leave();
 }
 
@@ -1021,6 +1071,7 @@ static agc_outcome run_threads(agc_vm *vm) {
 
 agc_outcome agc_vm_run(agc_vm *vm) {
   AGC_TRACE(&vm->rt->trace, AGC_TRACE_SCHED, "run schedulers=%" PRId64, vm->rt->schedulers);
+  trace_gc_start(vm);
   if (vm->rt->schedulers > 1) return run_threads(vm);
   if (AGC_CATCH(vm->fail) == 0) {
     agc_profile_start(vm);

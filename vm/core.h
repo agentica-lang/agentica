@@ -148,6 +148,8 @@ bool agc_task_commit_park(agc_task *t);
 bool agc_task_claim(agc_task *t);
 agc_task *agc_task_next(agc_vm *vm);
 bool agc_task_end_turn(agc_vm *vm, agc_task *t, agc_turn_result r, bool ran);
+/* Zeroes the registers of T above its frames (vm/interp.c), when its turn ends in a park or a yield. */
+void agc_task_clear_dead(const agc_vm *vm, agc_task *t);
 
 /* The inbox of the I/O thread (docs/vm/16-architecture.md §16.4): requests from any thread, handled on the loop's
  * thread. A request is malloc'd by the poster and freed by the handler; `subject` and `arg` mean what the handler says.

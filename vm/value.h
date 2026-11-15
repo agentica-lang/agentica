@@ -515,6 +515,9 @@ typedef struct {
 typedef struct {
   uint32_t source_count, span_count, constant_count, builtin_count, function_count, entry;
   uint32_t struct_count, type_count, enum_count, variant_count, max_fields, max_arity, update_count, global_count;
+  /* The most registers of any function, which the loader sets; 0 in a program built by hand, where
+     agc_task_clear_dead then reads every frame. */
+  uint32_t max_registers;
   agc_source *sources;
   agc_span *spans;
   agc_value *constants;
@@ -597,6 +600,31 @@ void agc_gc_resume(void);
 bool agc_gc_stats(agc_gc_info *info);
 void agc_gc_measure(void);
 void agc_gc_collect(void);
+/* Gives back an object that the caller made with agc_alloc and that nothing else reaches, so its memory is reused
+   before the next collection. A stale copy of the pointer on a stack is harmless while nothing reads through it. The
+   fuzz build keeps the block, since agc_release_all frees it. */
+void agc_free(void *object);
+
+/* What the calling thread allocated while it counted (the gc trace): objects and bytes with pointers (agc_alloc),
+   without (agc_alloc_atomic), those of AGC_LARGE_OBJECT bytes or more of either kind, and what it gave back with
+   agc_free (in the collector's block sizes; none counted without the collector). */
+#define AGC_LARGE_OBJECT ((size_t)64 * 1024)
+typedef struct {
+  uint64_t scanned_objects, scanned_bytes, atomic_objects, atomic_bytes, large_objects, large_bytes, freed_objects,
+    freed_bytes;
+} agc_alloc_counts;
+void agc_alloc_count_start(void);
+agc_alloc_counts agc_alloc_count_end(void);
+
+/* The stops of the world and the heap in use after each collection, recorded from agc_gc_record_start on (the gc
+   trace). A pause runs from the stop of the world to its restart, in microseconds; p50 and p99 are the upper bounds of
+   their buckets (a quarter wide at most), max and total are exact. `used` is the heap in blocks that still hold a live
+   object after a collection. */
+typedef struct {
+  uint64_t pauses, p50_us, p99_us, max_us, total_us, used_last, used_max;
+} agc_gc_pauses;
+void agc_gc_record_start(void);
+bool agc_gc_record(agc_gc_pauses *out);
 /* Runs the GC finalizers that are due (a TLS.Context no value reaches); a scheduler calls it between turns. */
 void agc_gc_finalize_pending(void);
 /* A weak reference to a GC object (an Address's channel): it does not keep the object alive, and the collector clears
