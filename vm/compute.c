@@ -34,8 +34,8 @@ typedef struct {
    (agc_runq_spin): a short call hands over in a few microseconds where a condvar wake costs tens. `spinning` (under
    the lock) counts them, at most `spin_max`, and a submit signals only when the queue holds more items than threads
    spin. They poll `queued` and `closed`, which change under the lock and are atomic for that read; a spinner takes
-   the lock again and tests the queue before it waits, so no item is left behind. `spin_pauses` is 0 on a machine with
-   one core, where a spin would only delay the thread that submits. */
+   the lock again and tests the queue before it waits, so no item is left behind. `spin_pauses` is 0 when the process
+   may run on one CPU only, where a spin would only delay the thread that submits. */
 struct agc_compute {
   uv_mutex_t lock;
   uv_cond_t wake;
@@ -113,9 +113,8 @@ static void serve(void *arg) {
       pool->idle--;
     }
     if (missed) adapt(w, pool->first && uv_hrtime() - slept < SPIN_NS << AGC_SPIN_LEVEL_MAX);
-    /* `closed` is atomic, so this is a new read of it: the queue is tested too. */
-    if (pool->closed || !pool->first) break;
     agc_request *item = pool->first;
+    if (pool->closed || !item) break;
     pool->first = item->next;
     if (!pool->first) pool->last = NULL;
     pool->queued--;
@@ -170,7 +169,11 @@ agc_compute *agc_compute_open(struct uv_loop_s *loop, uint32_t size, void (*fini
   pool->ended = ended;
   pool->refs = 1;
   pool->spin_max = pool->size / 2 ? pool->size / 2 : 1;
-  pool->spin_pauses = uv_available_parallelism() > 1 ? agc_pauses_for(SPIN_NS) : 0;
+  if (uv_available_parallelism() > 1) {
+    uint64_t pauses = agc_pauses_for(SPIN_NS);
+    uint64_t least = (uint64_t)2 * AGC_SPIN_PAUSES_MAX;
+    pool->spin_pauses = pauses < least ? least : pauses;
+  }
   if (uv_mutex_init(&pool->lock) != 0) {
     agc_threads_free(pool->threads);
     free(pool->workers);
