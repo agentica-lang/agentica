@@ -199,8 +199,8 @@ static agc_value piece(agc_vm *vm, const agc_string *s, size_t start, size_t end
   if (bytes == 1 && (uint8_t)s->data[start] < AGC_ASCII_CHARS)
     return agc_string_value(vm->rt->chars[(uint8_t)s->data[start]]);
   if (bytes == 0) return agc_string_value(vm->rt->empty_string);
-  return agc_string_value(
-      agc_make_string(s->data + start, bytes, agc_utf8_count((const uint8_t *)s->data + start, bytes)));
+  size_t chars = s->bytes == s->chars ? bytes : agc_utf8_count((const uint8_t *)s->data + start, bytes);
+  return agc_string_value(agc_make_string(s->data + start, bytes, chars));
 }
 
 static const uint32_t *case_row(const uint32_t (*map)[4], size_t count, uint32_t cp) {
@@ -435,11 +435,21 @@ static agc_value builtin_split(agc_vm *vm, agc_value *args, uint32_t span) {
     return agc_list_value(agc_list_builder_finish(&b));
   }
   finder f = make_finder(sep);
-  agc_list_builder_sized(&b, agc_size_add(count_matches(&f, s), 1));
+  size_t first[64], *ats = first, found = 0, room = sizeof first / sizeof first[0];
+  for (size_t at = find(&f, s, 0); at != AGC_NOT_FOUND; at = find(&f, s, at + sep->bytes)) {
+    if (found == room) {
+      room = agc_size_mul(room, 2);
+      size_t *more = agc_alloc_atomic(agc_size_mul(room, sizeof *ats));
+      memcpy(more, ats, found * sizeof *ats);
+      ats = more;
+    }
+    ats[found++] = at;
+  }
+  agc_list_builder_sized(&b, found + 1);
   size_t start = 0;
-  for (size_t at = find(&f, s, 0); at != AGC_NOT_FOUND; at = find(&f, s, start)) {
-    agc_list_builder_push(&b, piece(vm, s, start, at));
-    start = at + sep->bytes;
+  for (size_t k = 0; k < found; k++) {
+    agc_list_builder_push(&b, piece(vm, s, start, ats[k]));
+    start = ats[k] + sep->bytes;
   }
   agc_list_builder_push(&b, piece(vm, s, start, s->bytes));
   return agc_list_value(agc_list_builder_finish(&b));
