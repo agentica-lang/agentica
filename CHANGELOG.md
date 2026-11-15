@@ -28,6 +28,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - A `compute def` call or a dirty native module call made right after another costs about 3 µs in place of 15 to 25 µs: the compute pool thread spins briefly for the next call before it sleeps (#1120).
 - With one scheduler (`--schedulers 1`), a run of `compute def` calls that take tens of microseconds each (an SQLite step, an agentica-db write) runs 2 to 3 times faster (a one-row SQLite query about 2.8 times, an agentica-db insert about 2 times): the scheduler spins briefly for the call's end before it sleeps (#1120).
 - Programs run 4 to 6% faster when the interpreter runs them (`--jit off`, or code the JIT has not compiled): a call or an operator writes its result straight into the variable it is assigned to (#1001).
+- `check` and `compile` run about 1% faster and most programs 0.5 to 4% faster: the step counts of a straight-line run are charged by one instruction (#1001).
 - Checking that bytes are UTF-8 (`String.from_bytes`, text reads from files, sockets and processes) is 12 to 30% faster on non-ASCII text (#996).
 - A `case` with 3 or more enum variant arms jumps straight to the arm that matches instead of testing the arms in order: `agentica check` and `compile` of a large program are about 5 to 7% faster (#1001).
 - `String.split` searches the text once instead of twice and skips counting the characters of each piece when the text is ASCII: about 10% faster on log-style line and word splitting (#996).
