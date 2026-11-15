@@ -12,7 +12,7 @@ import os
 
 import pytest
 
-from tests.agentica_test import (FIXTURES, compile_agc, kill_process, process_alive, run, run_vm, scaled, start_vm,
+from tests.agentica_test import (FIXTURES, Pid, compile_agc, kill_process, process_alive, run, run_vm, scaled, start_vm,
                                  vm_binary, wait_until)
 
 PEER = FIXTURES / "child-channel-peer.js"
@@ -106,7 +106,7 @@ def test_a_child_ends_when_its_parent_is_killed(tmp_path, request, adopt, node):
     source.write_text(PARENT_PROGRAM, encoding="utf-8")
     mark = tmp_path / "mark.txt"
     vm = adopt(start_vm(compile_agc(source, tmp_path / "parent.agcb"), node, PEER, mark))
-    pid = vm.next_line(WAIT).strip()
+    pid = Pid(vm.next_line(WAIT))
     request.addfinalizer(lambda: kill_process(pid))
     assert process_alive(pid)
     vm.process.kill()

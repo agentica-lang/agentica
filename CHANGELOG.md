@@ -29,6 +29,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 ### Fixed
 
 - `std/http` no longer sends a head that its own parser refuses: the 65536 bytes of a header block and the 100 headers now count the lines the client and the server add and the empty line. A handler can send 98 headers (99 with its own `Date`, one less with `Connection: close`) and a client 99 (98 with a body); one more is an error at the sender, where the receiver refused it before (#1646).
+- `std/cache`: a task cancelled while it took over a stalled drop no longer stops the cache from dropping entries for good; another task takes over within four seconds (#1616).
 - `JSON.decode`, `JSON.schema` and `.codec` take a struct or enum whose field or payload type is a type alias, which stopped with `LOWER-UNSUPPORTED` (#1623).
 - `none` in the block of `Range.map`, `Lazy.map`, `flat_map` and a nested `map` takes the expected Optional type (#1595).
 

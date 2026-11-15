@@ -34,6 +34,7 @@ tests/test_platform_bootstrap.py 1 0 0 0
 tests/test_process.py 11 0 0 85
 tests/test_process_bdd.py 1 0 0 0
 tests/test_process_lifecycle.py 1 0 0 5
+tests/test_prop_codecs.py 1 9 0 0
 tests/test_prop_http.py 4 45 0 0
 tests/test_prop_purity.py 20 400 0 0
 tests/test_release_tools.py 2 0 0 0

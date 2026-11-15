@@ -171,7 +171,7 @@ The byte count stays exact when tasks race on the same entries: no size is count
 
 - A task cancelled in the middle of a write can leave one uncounted entry, readable until a later drop of its table.
 - A task cancelled between reserving the bytes of an entry and storing it leaves that reservation counted until its generation is dropped.
-- Only the current generation can be dropped. A drop whose task has held it for two seconds on the cache's clock, as when it was cancelled in the middle, is taken over by one other task. If the first task was only stopped and goes on later, the cache may skip a generation, whose table keeps its entries uncounted and unread until a later drop empties it, or lose the entries of the young generation, whose bytes stay counted until that generation is dropped.
+- Only the current generation can be dropped. A drop whose task has held it for two seconds on the cache's clock, as when it was cancelled in the middle, is taken over by one other task. A task that is cancelled while it takes a drop over is itself taken over, between two and four seconds later. If the first task was only stopped and goes on later, the cache may skip a generation, whose table keeps its entries uncounted and unread until a later drop empties it, or lose the entries of the young generation, whose bytes stay counted until that generation is dropped.
 
 ## Writing another cache
 
