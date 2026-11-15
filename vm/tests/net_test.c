@@ -987,7 +987,6 @@ static void test_upgrade_tls_builds_the_shared_context_then_handshakes(void) {
   agc_test_pump_until_idle(&vm);
   agc_test_settle_loop(&vm);
 }
-#endif
 
 static void read_beside(void *arg) {
   assert(agc_gc_thread_enter());
@@ -1073,6 +1072,7 @@ static void test_a_read_receives_on_the_scheduler(void) {
   assert(error_is(waiting.c.result, "network: socket is closed"));
   close_pair_locked(fd);
 }
+#endif
 
 int main(void) {
 #if defined(__linux__) || defined(__APPLE__)
