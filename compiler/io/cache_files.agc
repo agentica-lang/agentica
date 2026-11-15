@@ -226,6 +226,21 @@ def compiler_words(system: String) -> List[String]
   ["cc"]
 end
 
+## What a native build depends on besides its sources, as one line: a digest of the compiler's search variables (CC,
+## CPATH and the others of io/native_build.agc) and of the file the compiler is (`compiler_path`). Only the entry of a
+## program that has a native module holds it, so a start of any other program does not search PATH.
+def compiler_line(system: String) -> String
+  parts: List[String] = []
+  for name in COMPILER_VARIABLES
+    value = System.env(name)
+    if value.ok?
+      parts = parts.push("#{name} #{value.unwrap!}")
+    end
+  end
+
+  "compiler #{digest(parts.push(compiler_path(system)).join("\n").bytes)}"
+end
+
 ## The C compiler a native build would start, found as Process.spawn finds a command (`resolve` in vm/process.c): a
 ## name with a folder is that file, a bare name the first file of that name in a non-empty PATH entry, and on Windows
 ## only NAME.exe or NAME.com runs. The key holds every match of PATH as "CANDIDATE REAL", so a venv with no compiler
@@ -269,22 +284,12 @@ DISCARD_TRIES = 5
 DISCARD_PAUSE_MS = 30
 
 # What, besides the files an import reads, changes what a build makes of the root: the environment that places
-# libraries and packages, the C compiler a native module builds with (the file it is, `compiler_path`) and its
-# search variables (CC, CPATH and the others of io/native_build.agc), and the project (the manifest the build finds
-# and its lock).
+# libraries and packages, and the project (the manifest the build finds and its lock). The C compiler is not here: it
+# is a line of its own (`compiler_line`).
 def inputs_digest(settings: Env.Settings, project: Project.Project) -> Result[String]
   workspace = settings.workspace
   env = settings.env
   parts = ["env #{env.agentica_path}|#{env.xdg_data_home}|#{env.xdg_cache_home}|#{env.home}|#{env.local_app_data}"]
-  for name in COMPILER_VARIABLES
-    value = System.env(name)
-    if value.ok?
-      parts = parts.push("#{name} #{value.unwrap!}")
-    end
-  end
-
-  parts = parts.push("compiler #{compiler_path(env.os)}")
-
   case project
     Project.Project.Bare -> parts = parts.push("project -")
     Project.Project.Declared(manifest) ->

@@ -6,11 +6,11 @@
 ##
 ## There is one file for each source file of the programs checked (a path, or a `std/` name), named by a digest of its
 ## key, so the folder holds at most one entry for each file and an edit replaces the old entry. A file is a head with
-## the key of the run (the format, the version, the size, time and path of the binary, and the digest of the project
-## inputs, as the bytecode cache has them) and then the text of the entry. A read compares the head, so an entry made
-## by another build or for another project is a miss. The entry says which text it is for and the core compares that
-## with the text it read, so the cache is never asked which file changed: a changed file is read in full, and a file
-## that is the same is not parsed and checked again.
+## the key of the run (the format, the version, the size, time and path of the binary, the digest of the project
+## inputs, as the bytecode cache has them, and the line of the C compiler) and then the text of the entry. A read
+## compares the head, so an entry made by another build or for another project is a miss. The entry says which text
+## it is for and the core compares that with the text it read, so the cache is never asked which file changed: a
+## changed file is read in full, and a file that is the same is not parsed and checked again.
 ##
 ## An entry can make `check` skip the function bodies of a module, so the folder is used only when it is what this
 ## program made: a real folder (never a link) owned by the user of the process and writable by no one else, and the
@@ -80,7 +80,8 @@ def planned(settings: Env.Settings, root: String) -> Result[Plan]
   user = try CacheFiles.own_user()
   folder = Paths.join(site.build, CHECK_FOLDER)
   present = try folders_present(site.build, folder, user)
-  head = [FORMAT, "version #{settings.version}", site.binary, site.inputs].join("\n")
+  compiler = CacheFiles.compiler_line(settings.env.os)
+  head = [FORMAT, "version #{settings.version}", site.binary, site.inputs, compiler].join("\n")
   ok(
     Plan(
       build: site.build,

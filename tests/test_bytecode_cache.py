@@ -7,12 +7,15 @@ do. A miss is an entry that was written again. The layout of an entry is in comp
 import hashlib
 import json
 import os
+import shutil
 import stat
 
 import pytest
 
-from tests.agentica_test import POSIX_PYTHON, STAGE2, WINDOWS, cli, host_only, require, run, vm_environment
+from tests.agentica_test import POSIX_PYTHON, STAGE2, WINDOWS, cli, host_only, require, run, tool, vm_environment
 from tests.package_support import Workspace, dependency
+from tests.test_examples_native_module import EXAMPLE, OUTPUT as EXAMPLE_OUTPUT
+from tests.test_vm_native import NATIVE_CALLS
 
 HEAD_BYTES = 18
 
@@ -204,18 +207,27 @@ def test_a_folder_that_cannot_be_written_still_runs(src):
     assert ROOT_USER or not (src / "_build").exists()
 
 
-def test_a_change_of_the_lock_misses(tmp_path):
+GREETER = "https://github.com/owner/greeter.git"
+GREET = {"greet.agc": 'def hello() -> String\n  return "hi"\nend\n'}
+
+
+def greeter_project(tmp_path):
+    """A project whose main.agc prints "hi" from the locked package greeter (which has a manifest and no native
+    files), and the variables that keep its runs to its own folders."""
     ws = Workspace(tmp_path)
-    git = "https://github.com/owner/greeter.git"
-    ws.add_package("greeter", git, {"greet.agc": 'def hello() -> String\n  return "hi"\nend\n'}, tag="v1.0.0")
-    other = ws.add_package("greeter", git, {"greet.agc": 'def hello() -> String\n  return "hi"\nend\n'},
-                           tag="v1.0.0", commit="b" * 40)
-    ws.locked.remove(other)
-    ws.write_manifest({"greeter": dependency(git, tag="v1.0.0")})
+    ws.add_package("greeter", GREETER, GREET, tag="v1.0.0", dependencies={})
+    ws.write_manifest({"greeter": dependency(GREETER, tag="v1.0.0")})
     ws.write_lock()
     (ws.project / "main.agc").write_text(
         'import Greet from "pkg/greeter/greet"\n\ndef main() -> Void\n  puts(Greet.hello())\nend\n', encoding="utf-8")
-    hermetic = {"AGENTICA_PATH": "", **ws.cache_variables}
+    return ws, {"AGENTICA_PATH": "", **ws.cache_variables}
+
+
+def test_a_change_of_the_lock_misses(tmp_path):
+    ws, hermetic = greeter_project(tmp_path)
+    other = ws.add_package("greeter", GREETER, GREET, tag="v1.0.0", dependencies={}, commit="b" * 40)
+    ws.locked.remove(other)
+    ws.write_lock()
     first = agentica(ws.project, "main.agc", **hermetic)
     assert (first.code, first.stdout) == (0, "hi\n"), first.stderr
     entry = only_entry(ws.project / "_build" / "bytecode")
@@ -394,25 +406,27 @@ def test_a_change_of_the_library_path_misses(tmp_path):
     assert stamp(entry) != kept
 
 
-@host_only(WINDOWS, "the stand-in compiler is a shell script")
-def test_another_path_hits_unless_it_finds_another_c_compiler(src, tmp_path):
-    """The key holds the C compiler file a native build would run (`cc` found in PATH), not PATH: a venv-like folder
-    in front of PATH keeps the entry, and one whose `cc` shadows the system's misses."""
-    agentica(src, "main.agc", CC=None)
-    entry = only_entry(src / "_build" / "bytecode")
+def keeps_its_entry(folder, output, tmp_path, **hermetic):
+    """The first run of main.agc in `folder` writes an entry with no compiler line, and runs with another `cc` in PATH,
+    another CC and another CPATH read it."""
+    first = agentica(folder, "main.agc", CC=None, **hermetic)
+    assert (first.code, first.stdout) == (0, output), first.stderr
+    entry = only_entry(folder / "_build" / "bytecode")
     kept = stamp(entry)
-    venv = tmp_path / "venv"
-    venv.mkdir()
-    (venv / "python3").write_text("#!/bin/sh\n", encoding="utf-8")
-    (venv / "python3").chmod(0o755)
-    hit = agentica(src, "main.agc", CC=None, PATH=f"{venv}{os.pathsep}{os.environ['PATH']}")
-    assert (hit.code, hit.stdout) == (0, "one\n"), hit.stderr
-    assert stamp(entry) == kept
-    (venv / "cc").write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
-    (venv / "cc").chmod(0o755)
-    miss = agentica(src, "main.agc", CC=None, PATH=f"{venv}{os.pathsep}{os.environ['PATH']}")
-    assert (miss.code, miss.stdout) == (0, "one\n"), miss.stderr
-    assert stamp(entry) != kept
+    assert "\ncompiler " not in split(entry)[0]
+    executable(tmp_path / "other" / ("gcc.exe" if WINDOWS else "cc"))
+    path = f"{tmp_path / 'other'}{os.pathsep}{os.environ['PATH']}"
+    for extra in ({"CC": None, "PATH": path}, {"CC": "another-compiler"}, {"CC": None, "CPATH": str(tmp_path)}):
+        hit = agentica(folder, "main.agc", **hermetic, **extra)
+        assert (hit.code, hit.stdout, stamp(entry)) == (0, output, kept), hit.stderr
+
+
+def test_a_program_with_no_native_module_keeps_its_entry_when_the_c_compiler_changes(src, tmp_path):
+    """Only a native module is built with the C compiler, so the entry of any other program does not hold it, and a
+    start does not look for it (#1551). A package with no native files changes nothing."""
+    keeps_its_entry(src, "one\n", tmp_path)
+    ws, hermetic = greeter_project(tmp_path / "packaged")
+    keeps_its_entry(ws.project, "hi\n", tmp_path, **hermetic)
 
 
 def executable(path, text="#!/bin/sh\n"):
@@ -421,60 +435,110 @@ def executable(path, text="#!/bin/sh\n"):
     path.chmod(0o755)
 
 
+class Native:
+    """A copy of examples/native_module, whose run builds a module with the C compiler, with a package cache of its
+    own. `run` gives the result and the entry's stamp after it."""
+
+    def __init__(self, tmp_path):
+        self.compiler = tool("gcc" if WINDOWS else "cc")
+        self.folder = shutil.copytree(EXAMPLE, tmp_path / "native", ignore=shutil.ignore_patterns("_build"))
+        self.cache = {"LOCALAPPDATA": tmp_path / "cache"} if WINDOWS else {"XDG_CACHE_HOME": tmp_path / "cache"}
+
+    def run(self, path, **extra):
+        result = agentica(self.folder, "stats.agc", **{"CC": None, "PATH": path, **self.cache, **extra})
+        return result, stamp(only_entry(self.folder / "_build" / "bytecode"))
+
+    def first(self, path):
+        """The stamp of the entry that the first run makes."""
+        result, kept = self.run(path)
+        assert (result.code, result.stdout) == (0, EXAMPLE_OUTPUT), result.stderr
+        assert "\ncompiler " in split(only_entry(self.folder / "_build" / "bytecode"))[0]
+        return kept
+
+    def wrapper(self, path):
+        """A stand-in compiler at `path` that runs the real one."""
+        executable(path, f'#!/bin/sh\nexec "{self.compiler}" "$@"\n')
+
+
+@pytest.fixture
+def native(tmp_path):
+    return Native(tmp_path)
+
+
+@NATIVE_CALLS
+def test_with_a_native_module_a_change_of_cc_or_of_a_search_variable_misses(native, tmp_path):
+    path = os.environ["PATH"]
+    kept = native.first(path)
+    for extra in ({"CC": "gcc" if WINDOWS else "cc"}, {"CPATH": tmp_path}):
+        miss, after = native.run(path, **extra)
+        assert (miss.code, miss.stdout) == (0, EXAMPLE_OUTPUT), miss.stderr
+        assert after != kept
+        hit, kept = native.run(path, **extra)
+        assert (hit.code, kept) == (0, after), hit.stderr
+
+
+@NATIVE_CALLS
+@host_only(WINDOWS, "the stand-in compiler is a shell script")
+def test_with_a_native_module_another_path_hits_unless_it_finds_another_c_compiler(native, tmp_path):
+    """The entry of a program with a native module holds the C compiler file the build runs (`cc` found in PATH), not
+    PATH: a venv-like folder in front of PATH keeps the entry, and one whose `cc` shadows the system's misses."""
+    kept = native.first(os.environ["PATH"])
+    venv = tmp_path / "venv"
+    executable(venv / "python3")
+    hit, after = native.run(f"{venv}{os.pathsep}{os.environ['PATH']}")
+    assert (hit.code, hit.stdout, after) == (0, EXAMPLE_OUTPUT, kept), hit.stderr
+    native.wrapper(venv / "cc")
+    miss, after = native.run(f"{venv}{os.pathsep}{os.environ['PATH']}")
+    assert (miss.code, miss.stdout) == (0, EXAMPLE_OUTPUT), miss.stderr
+    assert after != kept
+
+
+@NATIVE_CALLS
 @host_only(WINDOWS, "the stand-in compilers are shell scripts")
-def test_a_wrapper_like_ccache_misses_when_the_compiler_after_it_changes(src, tmp_path):
-    """`cc` in a ccache-like folder is a link to the wrapper, which runs the next `cc` of PATH: the key holds that
+def test_a_wrapper_like_ccache_misses_when_the_compiler_after_it_changes(native, tmp_path):
+    """`cc` in a ccache-like folder is a link to the wrapper, which runs the next `cc` of PATH: the entry holds that
     one too, so a PATH that puts another compiler after the wrapper misses."""
-    executable(tmp_path / "ccache")
+    native.wrapper(tmp_path / "ccache")
     (tmp_path / "wrap").mkdir()
     (tmp_path / "wrap" / "cc").symlink_to(tmp_path / "ccache")
-    executable(tmp_path / "first" / "cc")
-    executable(tmp_path / "second" / "cc")
-    agentica(src, "main.agc", CC=None, PATH=f"{tmp_path / 'wrap'}{os.pathsep}{tmp_path / 'first'}")
-    entry = only_entry(src / "_build" / "bytecode")
-    kept = stamp(entry)
-    hit = agentica(src, "main.agc", CC=None, PATH=f"{tmp_path / 'wrap'}{os.pathsep}{tmp_path / 'first'}")
-    assert (hit.code, stamp(entry)) == (0, kept), hit.stderr
-    miss = agentica(src, "main.agc", CC=None, PATH=f"{tmp_path / 'wrap'}{os.pathsep}{tmp_path / 'second'}")
-    assert (miss.code, miss.stdout) == (0, "one\n"), miss.stderr
-    assert stamp(entry) != kept
+    native.wrapper(tmp_path / "first" / "cc")
+    native.wrapper(tmp_path / "second" / "cc")
+    with_first = os.pathsep.join([str(tmp_path / "wrap"), str(tmp_path / "first"), os.environ["PATH"]])
+    with_second = os.pathsep.join([str(tmp_path / "wrap"), str(tmp_path / "second"), os.environ["PATH"]])
+    kept = native.first(with_first)
+    hit, after = native.run(with_first)
+    assert (hit.code, after) == (0, kept), hit.stderr
+    miss, after = native.run(with_second)
+    assert (miss.code, miss.stdout) == (0, EXAMPLE_OUTPUT), miss.stderr
+    assert after != kept
 
 
+@NATIVE_CALLS
 @host_only(WINDOWS, "the stand-in PATH is that of POSIX")
-def test_an_unset_path_finds_no_compiler_and_an_empty_entry_is_skipped(src):
+def test_an_unset_path_finds_no_compiler_and_an_empty_entry_is_skipped(native):
     """Process.spawn searches only the non-empty entries of PATH, and none when PATH is unset (resolve in
-    vm/process.c): empty entries keep the key, and an unset PATH keys as an empty one."""
+    vm/process.c): empty entries keep the entry, and an unset PATH misses, so the build runs and finds no compiler."""
     default = "/usr/bin:/bin"
-    agentica(src, "main.agc", CC=None, PATH=default)
-    entry = only_entry(src / "_build" / "bytecode")
-    kept = stamp(entry)
-    empty = agentica(src, "main.agc", CC=None, PATH=":" + default + ":")
-    assert (empty.code, stamp(entry)) == (0, kept), empty.stderr
-    unset = agentica(src, "main.agc", CC=None, PATH=None)
-    assert (unset.code, unset.stdout) == (0, "one\n"), unset.stderr
-    assert stamp(entry) != kept
-    kept = stamp(entry)
-    blank = agentica(src, "main.agc", CC=None, PATH="")
-    assert (blank.code, stamp(entry)) == (0, kept), blank.stderr
+    kept = native.first(default)
+    empty, after = native.run(":" + default + ":")
+    assert (empty.code, after) == (0, kept), empty.stderr
+    unset, _ = native.run(None)
+    assert unset.code != 0 and "PKG-NATIVE-BUILD" in unset.stderr, unset.stderr
 
 
+@NATIVE_CALLS
 @host_only(not WINDOWS, "the .exe and .com search of Process.spawn is that of Windows")
-def test_on_windows_a_gcc_com_before_the_gcc_exe_that_was_found_misses(src, tmp_path):
+def test_on_windows_a_gcc_com_before_the_gcc_exe_that_was_found_misses(native, tmp_path):
     """Process.spawn tries NAME.exe, then NAME.com, in each folder of PATH in turn, so a gcc.com in an earlier folder
-    is the compiler that runs."""
-    for folder in ("first", "second"):
-        (tmp_path / folder).mkdir()
-    (tmp_path / "second" / "gcc.exe").write_bytes(b"")
-    path = os.pathsep.join([str(tmp_path / "first"), str(tmp_path / "second"), os.environ["PATH"]])
-    agentica(src, "main.agc", CC=None, PATH=path)
-    entry = only_entry(src / "_build" / "bytecode")
-    kept = stamp(entry)
-    hit = agentica(src, "main.agc", CC=None, PATH=path)
-    assert (hit.code, stamp(entry)) == (0, kept), hit.stderr
+    is the compiler that runs: the entry misses, and the build fails on the stand-in."""
+    (tmp_path / "first").mkdir()
+    path = os.pathsep.join([str(tmp_path / "first"), os.environ["PATH"]])
+    kept = native.first(path)
+    hit, after = native.run(path)
+    assert (hit.code, after) == (0, kept), hit.stderr
     (tmp_path / "first" / "gcc.com").write_bytes(b"")
-    miss = agentica(src, "main.agc", CC=None, PATH=path)
-    assert (miss.code, miss.stdout) == (0, "one\n"), miss.stderr
-    assert stamp(entry) != kept
+    miss, _ = native.run(path)
+    assert miss.code != 0 and "PKG-NATIVE-BUILD" in miss.stderr, miss.stderr
 
 
 def test_the_entries_of_a_project_go_to_its_root_and_a_manifest_that_appears_in_a_parent_folder_misses(src):
