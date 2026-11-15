@@ -22,7 +22,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - With several schedulers, a TCP read that bytes already received can answer returns at once instead of waiting on the I/O thread: up to 5 times more lines per second on a busy stream, about 10% more requests per second for an HTTP client and 6 to 28% for an HTTP server (#1197).
 - `agentica FILE.agc` no longer looks for the C compiler in `PATH` at each start of a cached program with no native module, and a change of `CC` or `PATH` keeps its cache entry (#1551).
 - A `compute def` call or a dirty native module call made right after another costs about 3 µs in place of 15 to 25 µs: the compute pool thread spins briefly for the next call before it sleeps (#1120).
-- With one scheduler (`--schedulers 1`), a run of `compute def` calls that take tens of microseconds each (an SQLite step, an agentica-db write) runs up to 2 times faster: the scheduler spins briefly for the call's end before it sleeps (#1120).
+- With one scheduler (`--schedulers 1`), a run of `compute def` calls that take tens of microseconds each (an SQLite step, an agentica-db write) runs 2 to 3 times faster (a one-row SQLite query about 2.8 times, an agentica-db insert about 2 times): the scheduler spins briefly for the call's end before it sleeps (#1120).
 - Programs run 4 to 6% faster when the interpreter runs them (`--jit off`, or code the JIT has not compiled): a call or an operator writes its result straight into the variable it is assigned to (#1001).
 
 ## [0.32.0] - 2026-11-15

@@ -315,6 +315,8 @@ bool agc_io_poll(agc_vm *vm, bool wait);
  * comes delivers it and wakes its task (true). False with no call running, at once when the process may run on one
  * CPU only, or when no call ended within the spin: the caller then waits as usual. */
 bool agc_io_compute_spin(agc_vm *vm);
+/* Whether a compute call that the loop gave has ended and waits to be delivered (the C tests). */
+bool agc_io_compute_ended(agc_vm *vm);
 /* The work that the I/O role leaves for a scheduler once a second thread runs the schedulers: the end of each detached
  * job (its `done` half). A scheduler calls it when agc_runq_nudged says so, with no task current. Returns whether it ran
  * anything. At N = 1 the drain runs the job itself and the list is always empty. When a `done` half raises (agc_fail),
