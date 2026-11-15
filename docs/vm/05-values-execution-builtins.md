@@ -102,6 +102,13 @@ does not make obvious:
   allocations: it runs at the start of a scheduler's next task. It is
   registered with `GC_REGISTER_FINALIZER_NO_ORDER`, the macro that matches
   `GC_MALLOC_ATOMIC` in the GC-debug build.
+- `agc_free` gives an object back before a collection. It is only for an
+  object the VM made with `agc_alloc` and reaches through one owner: the state
+  of a block call (`map`, `filter`, `each` and the others, and a stepper) and
+  a filter's kept items, freed when the call ends (`finish_native` in
+  `vm/interp.c`); the barrier of a callback of native code is part of its
+  level's stack and is not freed. The fuzz build keeps the block, since
+  `agc_release_all` frees it.
 - `agc_weak` (`vm/value.c`) is the one weak reference (an `Address`'s
   channel). It is registered with `GC_GENERAL_REGISTER_DISAPPEARING_LINK`: the
   plain `GC_general_register_disappearing_link` clears a live object's link in
@@ -182,6 +189,10 @@ dispatch, is the limit.
   doubling. A call grows the registers to the callee's declared count and new
   registers are zeroed. Frames hold base offsets, never raw pointers. A native
   frame (4.3) has a state pointer, so code that walks frames checks it first.
+  When a turn ends in a park, and at every 16th yield, the registers above the
+  frames are zeroed (`agc_task_clear_dead`), so values that returned calls left
+  there keep no objects alive; an array whose dead part passes 65536 registers
+  is cut first, as growing moves it.
 - The interpreter is one `switch` loop. Agentica calls push frames and never
   recurse on the C stack, so a task switch only changes the current task.
 - The loop keeps the top frame's code, span table, register window and next
