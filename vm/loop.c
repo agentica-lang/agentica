@@ -2092,11 +2092,11 @@ bool agc_io_compute_ended(agc_vm *vm) {
   return pool && agc_compute_ended(pool);
 }
 
-/* The pool's end still wakes the loop (uv_async_send); the uv_run that follows finds the inbox empty. The queue's spin
-   is set up at the first such spin, so a run with no compute call pays nothing for it. The level goes up for an end
-   the spin caught, down for a spin that missed after one that missed too (a long call in flight would otherwise keep
-   the longest spin at every idle wake), and compute_finished settles a single miss. A caught end clears the miss, so
-   it is counted once. */
+/* While the spin watches the pool, its end sends no wake (agc_compute_watch); one posted after the watch is off
+   wakes the loop, and the uv_run that follows finds the inbox empty. The queue's spin is set up at the first such
+   spin, so a run with no compute call pays nothing for it. The level goes up for an end the spin caught, down for a
+   spin that missed after one that missed too (a long call in flight would otherwise keep the longest spin at every
+   idle wake), and compute_finished settles a single miss. A caught end clears the miss, so it is counted once. */
 bool agc_io_compute_spin(agc_vm *vm) {
   agc_loop *loop = vm->rt->loop;
   agc_compute *pool = loop ? atomic_load_explicit(&loop->compute, memory_order_relaxed) : NULL;
