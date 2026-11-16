@@ -438,10 +438,10 @@ void agc_emit_equal(agc_emitter *e, agc_opcode op, agc_instr in, uint32_t pc) {
   cost_exit(e, pc);
 }
 
-/* MAP_GET: a call of agc_jit_map_get, which leaves for the interpreter on a missing key or a wrong tag; a String key's
+/* MAP_GET: a call of agc_op_map_get, which fails with its status on a missing key or a wrong tag; a String key's
    charge leaves to be applied, as the interpreter applies it after the instruction. */
 void agc_emit_map_get(agc_emitter *e, agc_instr in, uint32_t pc) {
-  call_helper(e, (uint64_t)(uintptr_t)agc_jit_map_get, in, true, pc);
+  call_helper(e, (uint64_t)(uintptr_t)agc_op_map_get, in, true, pc);
   cost_exit(e, pc);
 }
 

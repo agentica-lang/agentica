@@ -1283,9 +1283,8 @@ static AGC_JIT_CALLER void string_build_cost(void) {
   vm.task->turn_cost = 0;
 }
 
-/* MAP_GET reads a key in compiled code; a missing key or a wrong tag leaves for the interpreter at the instruction,
-   R3 and the turn cost untouched, so the interpreter fails as it does. A String key charges its bytes, and the code
-   leaves for the interpreter to apply them. LIST builds the window's values, or gives the run's empty List. */
+/* MAP_GET reads a key in compiled code; a missing key or a wrong tag leaves with its status at the instruction, R3
+   untouched. A String key charges its bytes, and the code leaves for the interpreter to apply them. LIST builds the window's values, or gives the run's empty List. */
 static AGC_JIT_CALLER void maps_and_lists(void) {
   char text[200];
   memset(text, 'k', sizeof text);
@@ -1296,20 +1295,21 @@ static AGC_JIT_CALLER void maps_and_lists(void) {
   agc_map *m = agc_map_put(&vm, agc_new_map(), one, ten);
   m = agc_map_put(&vm, m, key, agc_int(20));
   agc_value map = agc_map_value(m);
-  uint32_t out = AGC_JIT_EXIT_INTERPRET;
+  uint32_t missing = AGC_STATUS_KEY_NOT_FOUND, wrong = AGC_STATUS_WRONG_TAG;
   vm.task->turn_cost = 0;
   binary(AGC_OP_MAP_GET, map, one, AGC_STATUS_OK, ten);
-  binary(AGC_OP_MAP_GET, map, agc_int(2), out, any);
-  binary(AGC_OP_MAP_GET, agc_int(3), one, out, any);
-  binary(AGC_OP_MAP_GET, map, agc_float(1.0), out, any);
-  binary(AGC_OP_MAP_GET, agc_set_value(m), one, out, any);
+  binary(AGC_OP_MAP_GET, map, agc_int(2), missing, any);
+  binary(AGC_OP_MAP_GET, agc_int(3), one, wrong, any);
+  binary(AGC_OP_MAP_GET, map, agc_float(1.0), wrong, any);
+  binary(AGC_OP_MAP_GET, agc_set_value(m), one, wrong, any);
   assert(vm.task->turn_cost == 0);
   agc_value R[8];
   expect_exit(run_two(AGC_OP_MAP_GET, map, same_key, R), AGC_JIT_EXIT_COST, 0);
   assert(same_bits(R[3], agc_int(20)) && vm.task->turn_cost >= (int64_t)(sizeof text / AGC_COST_BYTES));
   vm.task->turn_cost = 0;
-  expect_exit(run_two(AGC_OP_MAP_GET, map, other_key, R), out, 0);
-  assert(same_bits(R[3], any) && vm.task->turn_cost == 0);
+  expect_exit(run_two(AGC_OP_MAP_GET, map, other_key, R), missing, 0);
+  assert(same_bits(R[3], any));
+  vm.task->turn_cost = 0;
   expect_exit(run_two(AGC_OP_LIST, one, ten, R), AGC_JIT_EXIT_RETURN, 1);
   const agc_list *l = agc_as_list(&vm, R[3]);
   assert(agc_list_len(l) == 2 && same_bits(agc_list_get(l, 0), one) && same_bits(agc_list_get(l, 1), ten));
