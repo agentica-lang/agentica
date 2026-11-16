@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 99,
+  "steps": 105,
   "stdout": [
     "\"new\"",
     "\"process: environment names must differ by more than case\"",

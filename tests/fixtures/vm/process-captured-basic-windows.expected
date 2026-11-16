@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 55,
+  "steps": 57,
   "stdout": [
     "error(\"process: executable is unavailable\", kind: \"process.not_found\")",
     "ok(0)",
