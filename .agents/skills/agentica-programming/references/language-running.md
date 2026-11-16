@@ -43,7 +43,9 @@ the list of commands and flags.
   [FLAGS] -- OUT.agcb [ARGS...]` runs it, on the same Agentica version only.
   Flags go before `--` (`--max-steps`, `--max-heap`, `--seed`, `--schedulers N`, `--jit MODE`,
   `--deny-*`, `--sandbox`, `--source-root DIR`, `--coverage FILE`, `--ai`,
-  `--json`).
+  `--json`). `agentica compile [FILE...]` (no `-o`) fills the bytecode cache
+  for the files, or for every `main.agc` under `.`, and prints `compiled F` or
+  `fresh F` for each.
 - `agentica F.agc`, `agentica compile` and `agentica test` keep the compiled
   program of each root file in `_build/bytecode/`, in the folder of the nearest
   `agentica.toml` (else beside F), and read it while F, its imports,

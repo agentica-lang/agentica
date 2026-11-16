@@ -71,9 +71,11 @@ A change that breaks a rule is a finding; older code is not.
   register or bytecode, at the edges of the structure (31/32/33 in a 32-wide
   node, a list at its cap); `memcpy`, loops and struct copies of `N` items
   whose source may hold fewer (release builds hide these; ASan finds them);
-  sizes, shifts, casts, unions; an `agc_string` passed to libc; `malloc`
-  memory on each way out of the function, `agc_fail` included, and libuv
-  requests without their `uv_*_req_cleanup`.
+  sizes, shifts, casts, unions; a signed value decoded from bytes (a long
+  varint) that is negative yet passes a `>= size` check; an `agc_string`
+  passed to libc; `malloc` memory on each way out of the function,
+  `agc_fail` included, and libuv requests without their
+  `uv_*_req_cleanup`.
 - **Hostile bytecode** (`vm.md`, "Trust model"; `vm-c.md`): each new section,
   field and operand has its loader check and stays inside the caps of
   `docs/vm/08-loader-and-cli.md`; each table index at a use comes from the
@@ -89,10 +91,11 @@ A change that breaks a rule is a finding; older code is not.
   Waiters are woken once and leave every list on cancel; the stall check still
   holds.
 - **Shared state** (`vm-tasks.md`): each new field more than one thread reads,
-  its lock or atomic, and the row's `shared` mark.
+  its lock or atomic, and the row's `shared` mark; a flag (`closed`, `done`)
+  read before the owner or lock check is a race.
 - **Costs** (`vm-builtins.md`): any path that does work growing with its input
   for a constant charge, or a CPU builtin that holds the scheduler well past a
-  turn.
+  turn; a size cap that skips some value kinds, or counts after encoding.
 - **Diagnostics** (`vm-core.md`, "Diagnostics"): one code with a span; a new
   JSON key or line still reads in `stdlib/test/child.agc` (`vm_shape?`),
   `compiler/bdd/bdd_runner.agc` and the tests that parse `--json`.

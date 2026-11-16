@@ -24,6 +24,10 @@ rules live in `AGENTS.md` and `agentica-development`.
   `origin/release-X.Y`: `agentica-release` §6). Never edit or switch
   branches in the main checkout or in other agents' worktrees; read-only
   `git` and `gh` commands are fine.
+- One open PR per author at a time: after the PR opens, the author watches
+  its CI and waits for the review, fixes the findings, and starts the next
+  change only after the merge. Stacks only when the coordinator or owner
+  asks for one.
 - A PR holds its own contracts (tests, docs, site page, skill, `CHANGELOG.md`
   entry; `AGENTS.md`); never defer them to a later PR in a stack. When a PR
   touches docs, authors and critics apply `documentation-writing`.
@@ -68,6 +72,8 @@ rules live in `AGENTS.md` and `agentica-development`.
 - Stop a hung process by its exact PID (from `$!` or the test's own output).
   Never `pgrep -f` or `pkill -f`, even in wait loops: they match the caller's
   shell, other agents' runs, and the self-hosted runners.
+- Before the PR, go through "Patterns that cost a Major before" in
+  `pr-reviewer` for what the change touches.
 - Commits: a summary line, then short bullets; no attribution lines. Never
   rebase or force-push; merge `origin/master` into the branch.
 - An agent's own plan or steps go in a local, untracked file, not in `docs/`.
@@ -102,13 +108,14 @@ Invoke the `pr-reviewer` skill (via the Skill tool) and follow it to review GitH
 
 ## 3. Fix and repeat
 
-- Do not ask which findings to fix: fix every critical and major plus the
-  worthwhile minors; list skipped minors and why in the PR body.
+- Do not ask which findings to fix: fix every critical and major in one
+  batch, plus small minors in the same batch; file the rest as an issue.
 - A fix for a critical or major reruns the change's whole generator or
   matrix before each push, not only the reported input: a spot fix can break
   a case next to it.
 - After a pass with a critical or major: push, wait for green CI, new review.
-  A pass with only minors: fix and merge without another review.
+  A pass with only minors ("ship with minors"): merge now and file the
+  minors as an issue (or a card). Minors never block a merge.
 - **Third-pass stop:** if the third review still has a critical or major,
   stop and evaluate the approach with the owner. Often the cause is scope, not
   the change.
@@ -161,11 +168,12 @@ Invoke the `pr-reviewer` skill (via the Skill tool) and follow it to review GitH
 
 ## 5. Merge and clean up
 
-- Merge when the last review had no critical or major, the fixes are pushed,
-  checks are green on the head, and the owner asked (or the condition holds):
-  `gh pr merge N --merge`.
+- Merge as soon as the last review had no critical or major, the fixes are
+  pushed, checks are green on the head, and the owner asked (or the
+  condition holds): `gh pr merge N --merge`. The author waits on it.
 - Then `gh pr list --state open --json number,mergeable,mergeStateStatus`:
-  tell the author of any PR that now conflicts to merge `origin/master`.
+  tell the author of any PR that now conflicts to merge `origin/master`
+  into it at once (a merge commit).
   After a `VERSION` change, every open PR that refreshes stage0 also merges
   master and refreshes it again (`references/ci.md` of agentica-development).
 - A `CHANGELOG.md` conflict on GitHub: merge `origin/master` locally; the

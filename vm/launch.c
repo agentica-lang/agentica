@@ -597,6 +597,8 @@ uint8_t *agc_launch_read(int fd, size_t size) {
   return done == size ? data : NULL;
 }
 
+bool agc_launch_stderr_tty(void) { return uv_guess_handle(2) == UV_TTY; }
+
 uint8_t *agc_launch_file(const char *path, bool driven, size_t *size) {
   int fd = agc_fs_bytecode_open(path, driven, AGC_MAX_FILE_BYTES, size);
   return fd < 0 ? NULL : agc_launch_read(fd, *size);
