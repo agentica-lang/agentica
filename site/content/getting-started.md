@@ -29,10 +29,10 @@ tar -xzf agentica-VERSION-linux-x86_64.tar.gz   # Windows: Expand-Archive
 
 ### Install it with your coding agent
 
-Paste this prompt into a coding agent (Claude Code, Codex, OpenCode, pi...) to install the latest release for your user, with no `sudo`.
+Paste this prompt into a coding agent (Claude Code, Codex, OpenCode, pi...) to install the latest release and its `agentica-programming` skill for your user, with no `sudo`.
 
 ```text
-Install the latest Agentica release for this machine at ~/.local/bin/agentica. From https://github.com/agentica-lang/agentica/releases/latest, download the archive for this OS and CPU and the SHA256SUMS file. Check the archive's SHA-256 against SHA256SUMS and stop if it does not match. Unpack it into ~/.local/share/agentica/ and link ~/.local/bin/agentica to the bin/agentica inside the unpacked folder. Do not use sudo. Run `agentica --version`, and tell me if ~/.local/bin is not on my PATH.
+Install the latest Agentica release for this machine at ~/.local/bin/agentica. From https://github.com/agentica-lang/agentica/releases/latest, download the archive for this OS and CPU and the SHA256SUMS file. Check the archive's SHA-256 against SHA256SUMS and stop if it does not match. Unpack it into ~/.local/share/agentica/ and link ~/.local/bin/agentica to the bin/agentica inside the unpacked folder. Do not use sudo. Run `agentica --version`, and tell me if ~/.local/bin is not on my PATH. Then install the `agentica-programming` skill of the same release: get the folder .agents/skills/agentica-programming/ (SKILL.md and references/) from the source archive https://github.com/agentica-lang/agentica/archive/refs/tags/TAG.tar.gz, with TAG the release tag (or from a sparse git clone at that tag), and copy the whole folder into your own skills folder (for example ~/.claude/skills/ for Claude Code), replacing any older copy.
 ```
 
 On Windows, tell the agent to use `%LOCALAPPDATA%\Programs\agentica` and to add its `bin` folder to the user `PATH`.
