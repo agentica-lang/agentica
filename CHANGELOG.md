@@ -8,11 +8,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-### Changed
-
-- The documentation moved to https://www.agentica-lang.com/agentica/; the old agentica-lang.github.io links redirect there.
-- The documentation has breadcrumbs, and search engines index only the latest release: the pages of older versions and of dev point to it.
-- Every version of the documentation has the current look and icon: the releases are built with the current docs theme.
+## [0.33.1] - 2026-11-17
 
 ### Fixed
 
@@ -1669,7 +1665,8 @@ First release of Agentica, a statically typed language designed for AI agents.
 - `main` returns `Void`; maps preserve insertion order and support fallible
   lookups.
 
-[unreleased]: https://github.com/agentica-lang/agentica/compare/0.33.0...HEAD
+[unreleased]: https://github.com/agentica-lang/agentica/compare/0.33.1...HEAD
+[0.33.1]: https://github.com/agentica-lang/agentica/compare/0.33.0...0.33.1
 [0.33.0]: https://github.com/agentica-lang/agentica/compare/0.32.0...0.33.0
 [0.32.0]: https://github.com/agentica-lang/agentica/compare/0.32.0-alpha.2...0.32.0
 [0.32.0-alpha.2]: https://github.com/agentica-lang/agentica/compare/0.32.0-alpha.1...0.32.0-alpha.2
