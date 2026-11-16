@@ -79,21 +79,21 @@ fn3 "sign" params=1 captures=0 slots=3 @ 0:13:1-24:1
     step @ 0:18:14-18:16
     const r2 int:10 @ 0:18:14-18:16
     le-i r1 r2 r0 @ 0:18:11-18:13
-    jump-if-false r1 L5 @ 0:18:17-18:20
+    jump-if-false r1 L5 @ 0:18:9-18:16
     step @ 0:18:21-18:28
     step @ 0:18:21-18:22
     step @ 0:18:26-18:28
     const r2 int:20 @ 0:18:26-18:28
     le-i r1 r0 r2 @ 0:18:23-18:25
+    jump-if-true r1 L4 @ 0:18:21-18:28
   L5:
-    jump-if-true r1 L4 @ 0:18:29-18:31
     step @ 0:18:32-18:39
     step @ 0:18:32-18:33
     step @ 0:18:37-18:39
     const r2 int:99 @ 0:18:37-18:39
     eq r1 r0 r2 @ 0:18:34-18:36
+    jump-if-false r1 L3 @ 0:18:32-18:39
   L4:
-    jump-if-false r1 L3 @ 0:18:9-18:39
     step @ 0:19:5-20:1
     step @ 0:19:12-19:17
     const r1 "mid" @ 0:19:12-19:17
@@ -163,7 +163,7 @@ fn4 "main" params=0 captures=0 slots=7 entry @ 0:25:1-37:1
     step @ 0:29:11-29:14
     const r4 float:bits:4607182418800017408 @ 0:29:11-29:14
     le-f r3 r2 r4 @ 0:29:8-29:10
-    jump-if-false r3 L3 @ 0:29:15-29:18
+    jump-if-false r3 L2 @ 0:29:6-29:14
     step @ 0:29:19-29:27
     step @ 0:29:19-29:20
     step @ 0:29:23-29:27
@@ -171,8 +171,7 @@ fn4 "main" params=0 captures=0 slots=7 entry @ 0:25:1-37:1
     const r5 float:bits:4607182418800017408 @ 0:29:24-29:27
     neg-f r4 r5 @ 0:29:23-29:24
     lt-f r3 r4 r2 @ 0:29:21-29:22
-  L3:
-    jump-if-false r3 L2 @ 0:29:6-29:27
+    jump-if-false r3 L2 @ 0:29:19-29:27
     step @ 0:30:5-31:1
     step @ 0:30:5-30:67
     step @ 0:30:10-30:66
