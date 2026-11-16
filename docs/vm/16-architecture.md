@@ -516,7 +516,11 @@ one exit path are as in §16.1 to §16.6. What differs:
     At most half the schedulers (at least one) spin at once. At N = 1 the one
     scheduler spins only while compute calls that it gave run, for the end of
     one (`agc_io_compute_spin`), with the same budget and level; a missed end
-    that comes within the longest spin raises the level. A scheduler
+    that comes within the longest spin raises the level. While it spins it
+    watches the pool's inbox (`agc_inbox_watch`), so an end sends no wake; after
+    the spin it looks at the inbox once more and takes an end that came
+    meanwhile itself. Its submits block the stop signals only while the pool
+    may still start a thread. A scheduler
     that starts to spin while no other does spins for that budget times two to
     its own level (`agc_vm.spin_level`, 0 to `AGC_SPIN_LEVEL_MAX`): a spin that
     took a task raises the level by one and one that took none lowers it by

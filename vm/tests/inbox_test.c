@@ -129,14 +129,24 @@ static void ping_all(void *arg) {
   }
 }
 
-static void test_wake_after_publish(void) {
+/* PING_ROUNDS pings from a producer thread, each answered before the next. WATCHING: the consumer of
+   agc_io_compute_spin, which watches and spins a varying while, ends the watch, takes a request that came meanwhile
+   itself, and else blocks in the loop; a post that skipped its wake and was then missed would leave it blocked forever
+   (the test's deadline). Else the loop alone takes them. */
+static void run_pings(bool watching) {
   ping p = {0};
   assert(uv_loop_init(&p.loop) == 0 && uv_sem_init(&p.answered, 0) == 0);
   p.inbox = agc_inbox_open(&p.loop, answer, &p);
   assert(p.inbox);
   uv_thread_t thread;
   assert(uv_thread_create(&thread, ping_all, &p) == 0);
-  assert(uv_run(&p.loop, UV_RUN_DEFAULT) == 0);
+  for (int64_t round = 0; watching && p.seen < PING_ROUNDS; round++) {
+    agc_inbox_watch(p.inbox, true);
+    for (int64_t spin = round % 4096; spin > 0 && !agc_inbox_full(p.inbox); spin--) AGC_CPU_PAUSE();
+    agc_inbox_watch(p.inbox, false);
+    if (!agc_inbox_run(p.inbox)) (void)uv_run(&p.loop, UV_RUN_ONCE);
+  }
+  if (!watching) assert(uv_run(&p.loop, UV_RUN_DEFAULT) == 0);
   assert(uv_thread_join(&thread) == 0);
   agc_inbox_close(p.inbox);
   assert(uv_run(&p.loop, UV_RUN_DEFAULT) == 0);
@@ -144,6 +154,10 @@ static void test_wake_after_publish(void) {
   uv_sem_destroy(&p.answered);
   assert(uv_loop_close(&p.loop) == 0);
 }
+
+static void test_wake_after_publish(void) { run_pings(false); }
+
+static void test_watch_never_loses_a_post(void) { run_pings(true); }
 
 /* The first handler call posts nothing itself: it holds the loop while a producer posts the second request. The list
    it was given was taken whole, so the second request is not in it, and the next wake delivers the second. */
@@ -239,11 +253,39 @@ static void test_unkept_inbox_does_not_hold_the_loop(void) {
   assert(uv_loop_close(&loop) == 0);
 }
 
+/* While the consumer watches the inbox, a post sets `full` and sends no wake: the loop's own run handles nothing,
+   and the consumer takes the request itself. Once the watch ends, a post wakes the loop again. */
+static void test_watched_post_skips_the_wake(void) {
+  uv_loop_t loop;
+  tally t = {0};
+  assert(uv_loop_init(&loop) == 0);
+  agc_inbox *inbox = agc_inbox_open(&loop, count_all, &t);
+  assert(inbox);
+  for (int pass = 0; pass < 2; pass++) {
+    bool watch = pass == 0;
+    agc_inbox_watch(inbox, watch);
+    agc_request *req = malloc(sizeof *req);
+    assert(req);
+    *req = (agc_request){NULL, 0, NULL, 0, NULL};
+    agc_inbox_post(inbox, req);
+    (void)uv_run(&loop, UV_RUN_NOWAIT);
+    assert(t.handled == (watch ? 0 : 2) && agc_inbox_full(inbox) == watch);
+    agc_inbox_watch(inbox, false);
+    if (watch) assert(agc_inbox_run(inbox) && t.handled == 1);
+  }
+  agc_inbox_keep(inbox, false);
+  agc_inbox_close(inbox);
+  assert(uv_run(&loop, UV_RUN_DEFAULT) == 0);
+  assert(uv_loop_close(&loop) == 0);
+}
+
 int main(void) {
   agc_test_deadline(120);
   test_unkept_inbox_does_not_hold_the_loop();
   test_close_handles_queued_requests();
   test_wake_after_publish();
+  test_watched_post_skips_the_wake();
+  test_watch_never_loses_a_post();
   test_post_during_handler();
   test_many_producers();
   puts("inbox tests passed");

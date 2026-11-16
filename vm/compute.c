@@ -41,7 +41,7 @@ struct agc_compute {
   worker *workers;
   uint32_t size, started, idle, refs, spinning, spin_max;
   _Atomic uint32_t queued;
-  _Atomic bool closed;
+  _Atomic bool closed, grown;
   uint64_t spin_pauses;
   agc_inbox *done;
   void (*finished)(void *item);
@@ -212,6 +212,7 @@ static bool enqueue(agc_compute *pool, agc_request *entry) {
     if (agc_thread_start(pool->threads, k, serve, &pool->workers[k]) == 0) {
       pool->started++;
       pool->refs++;
+      if (pool->started == pool->size) atomic_store_explicit(&pool->grown, true, memory_order_release);
     }
   }
   if (pool->started == 0) {
@@ -294,6 +295,10 @@ bool agc_compute_running(const agc_compute *pool) { return pool->running > 0; }
 bool agc_compute_ended(agc_compute *pool) { return agc_inbox_full(pool->done); }
 
 bool agc_compute_deliver(agc_compute *pool) { return agc_inbox_run(pool->done); }
+
+void agc_compute_watch(agc_compute *pool, bool watch) { agc_inbox_watch(pool->done, watch); }
+
+bool agc_compute_may_grow(const agc_compute *pool) { return !atomic_load_explicit(&pool->grown, memory_order_acquire); }
 
 bool agc_compute_direct_busy(agc_compute *pool) {
   return atomic_load_explicit(&pool->direct, memory_order_seq_cst) != 0;

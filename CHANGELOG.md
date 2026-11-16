@@ -17,6 +17,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- With one scheduler, a `compute def` call made right after another costs about 2 µs in place of 2.8 µs: its end no longer wakes the loop through a system call while the scheduler waits for it (#1120).
 - With the JIT, a loop that tests lines against literals (`strip`, `start_with?`, `end_with?`) runs faster: compiled code calls the prefix and suffix tests with no call overhead (#1223).
 - With the JIT, the block of a `Lazy` terminal (`File.foreach(path).reduce(state, &step)`) is compiled even when the code that calls the terminal is not, about 7% faster on a line scan (#1223).
 - The `gc` trace (`AGENTICA_VM_TRACE=gc`) reports what each scheduler allocated and, at the end of a run, the total time the world was stopped for collections, its share of wall and CPU time, and the pause count, p50, p99 and max (#1698).

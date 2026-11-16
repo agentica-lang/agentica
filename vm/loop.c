@@ -639,6 +639,7 @@ static bool open_compute(agc_loop *loop) {
    libuv pool's, so they keep the stop signals blocked. */
 static int submit_compute(agc_loop *loop, job *j) {
   if (!open_compute(loop)) return -1;
+  if (!agc_compute_may_grow(loop->compute)) return agc_compute_submit(loop->compute, run_compute, j) ? 0 : -1;
   pool_mask saved;
   pool_enter(&saved);
   bool queued = agc_compute_submit(loop->compute, run_compute, j);
@@ -2106,7 +2107,12 @@ bool agc_io_compute_spin(agc_vm *vm) {
     if (!loop->spin_off) agc_runq_spin_setup(vm->rt->runq, 1, AGC_SPIN_BUDGET_NS);
   }
   if (loop->spin_off) return false;
-  if (!agc_runq_spin_until(vm->rt->runq, vm->spin_level, call_ended, pool)) {
+  agc_compute_watch(pool, true);
+  bool caught = agc_runq_spin_until(vm->rt->runq, vm->spin_level, call_ended, pool);
+  agc_compute_watch(pool, false);
+  /* An end posted while the watch was on woke nobody: it is taken here, as a caught one. */
+  if (!caught && agc_compute_ended(pool)) caught = true;
+  if (!caught) {
     if (loop->spin_missed) agc_runq_adapt(&vm->spin_level, false);
     loop->spin_missed = uv_hrtime();
     return false;
