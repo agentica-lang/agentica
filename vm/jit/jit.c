@@ -52,10 +52,13 @@ struct agc_jit_batch {
   size_t count, slots;
 };
 
-/* The hottest leaf rows of the self-compile, which cannot fail once their checks pass: each argument has its tag here
-   (AGC_T_VOID: any tag) and, for String.code, its String has one character. Their only agc_fail is agc_as_*'s wrong
-   tag or String.code's other count, and running out of memory exits the process. Compiled code checks and calls them
-   with no catch (agc_jit_call_plain). vm/tests/jit_test.c checks that each one is a leaf row. */
+/* The hottest leaf rows of the self-compile, and the prefix and suffix tests of a line scan, which cannot fail once
+   their checks pass: each argument has its tag here (AGC_T_VOID: any tag) and, for String.code, its String has one
+   character. Their only agc_fail is agc_as_*'s wrong tag or String.code's other count, and running out of memory exits
+   the process. Compiled code checks and calls them with no catch (agc_jit_call_plain). String.starts_with? and
+   ends_with? are direct rows, not leaves (their compare grows with the prefix), but they charge nothing, never park
+   or yield, so agc_jit_call_builtin's tail has nothing to do for them. vm/tests/jit_test.c checks that each one is a
+   leaf row or a direct row that charges nothing. */
 typedef struct {
   const char *name;
   uint32_t arity;
@@ -69,6 +72,8 @@ static const plain_leaf plain_leaves[] = {
     {"Result.ok?", 1, {{AGC_T_RESULT, AGC_T_VOID}, false, false}},
     {"String.length", 1, {{AGC_T_STRING, AGC_T_VOID}, false, false}},
     {"String.code", 1, {{AGC_T_STRING, AGC_T_VOID}, true, false}},
+    {"String.starts_with?", 2, {{AGC_T_STRING, AGC_T_STRING}, false, false}},
+    {"String.ends_with?", 2, {{AGC_T_STRING, AGC_T_STRING}, false, false}},
 };
 
 /* The rows whose call may park: the turn ends while it waits, for a channel, a task, a timer or stdin (the woken task
@@ -357,7 +362,7 @@ bool agc_jit_parks(const agc_builtin *b) {
 }
 
 const agc_jit_plain *agc_jit_plain_of(const agc_builtin *b) {
-  if (!b->leaf) return NULL;
+  if (!b->leaf && !(b->direct && b->cost == AGC_COST_NONE)) return NULL;
   for (size_t k = 0; k < sizeof plain_leaves / sizeof plain_leaves[0]; k++)
     if (b->arity == plain_leaves[k].arity && strcmp(b->name, plain_leaves[k].name) == 0)
       return &plain_leaves[k].checks;
@@ -1209,27 +1214,30 @@ static inline bool called(agc_vm *vm, const agc_builtin *b, agc_value *args, uin
   return true;
 }
 
+static inline uint64_t units_of(agc_value v) {
+  return agc_is(v, AGC_T_STRING) ? ((const agc_string *)v.as.p)->bytes / AGC_COST_BYTES : agc_value_units(v);
+}
+
 uint32_t agc_jit_call_builtin(agc_vm *vm, agc_value *args, const agc_builtin *b, uint64_t where) {
   agc_task *t = vm->task;
   uint32_t span = (uint32_t)(where >> 32);
   t->frames[t->frame_count - 1].pc = (uint32_t)where;
   uint64_t units = 0;
   if (b->cost == AGC_COST_SIZE)
-    for (uint32_t k = 0; k < b->arity; k++) units += agc_value_units(args[k]);
+    for (uint32_t k = 0; k < b->arity; k++) units += units_of(args[k]);
 #if AGC_LEAF_CHECK
   uint32_t frames = t->frame_count, depth = vm->sync_depth;
   bool retry = t->retry;
 #endif
-  agc_value result;
-  if (!called(vm, b, args, span, &result, !vm->rt->jit_unwinds)) return AGC_JIT_EXIT_RAISE;
+  if (!called(vm, b, args, span, args, !vm->rt->jit_unwinds)) return AGC_JIT_EXIT_RAISE;
 #if AGC_LEAF_CHECK
   if (t->parking || t->retry != retry) direct_broken(b, "parked");
   if (t->stepper) direct_broken(b, "started a stepper");
   if (t->frame_count != frames) direct_broken(b, "moved the frames");
   if (vm->sync_depth != depth) direct_broken(b, "left rt->sync taken");
 #endif
-  args[0] = result;
-  if (b->cost == AGC_COST_SIZE) agc_charge(vm, units + agc_value_units(result));
+  if (b->cost == AGC_COST_SIZE) units += units_of(args[0]);
+  if (units) agc_charge(vm, units);
   if (t->turn_cost) agc_turn_charge(vm);
   return vm->yield ? AGC_JIT_EXIT_YIELD : AGC_STATUS_OK;
 }
@@ -1244,14 +1252,12 @@ static uint32_t call_leaf(agc_vm *vm, agc_value *args, const agc_builtin *b, uin
   uint32_t frames = t->frame_count, depth = vm->sync_depth;
   bool yielded = vm->yield, retry = t->retry;
 #endif
-  agc_value result;
-  if (!called(vm, b, args, (uint32_t)(where >> 32), &result, catch)) return AGC_JIT_EXIT_RAISE;
+  if (!called(vm, b, args, (uint32_t)(where >> 32), args, catch)) return AGC_JIT_EXIT_RAISE;
 #if AGC_LEAF_CHECK
   if (t->parking || t->retry != retry || t->stepper || t->frame_count != frames || vm->sync_depth != depth ||
       t->turn_cost != cost || vm->next_stop != stop || vm->turn_left != left || vm->yield != yielded)
     direct_broken(b, "broke the leaf rule");
 #endif
-  args[0] = result;
   return AGC_STATUS_OK;
 }
 
