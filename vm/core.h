@@ -250,6 +250,7 @@ typedef enum {
   AGC_STATUS_DIVISION_BY_ZERO,   /* RUNTIME-DIVISION-BY-ZERO at the instruction's span */
   AGC_STATUS_INDEX_OUT_OF_RANGE, /* RUNTIME-INDEX-OUT-OF-RANGE at the instruction's span */
   AGC_STATUS_WRONG_TAG,          /* RUNTIME-INTERNAL at span 0 (agc_wrong_tag): only hand-made bytecode */
+  AGC_STATUS_KEY_NOT_FOUND,      /* RUNTIME-KEY-NOT-FOUND at the instruction's span */
   AGC_STATUS_COUNT               /* not a status: the number of them, which stays last */
 } agc_status;
 
@@ -275,6 +276,8 @@ agc_status agc_op_list_len(agc_vm *vm, agc_value *dst, const agc_value *list);
 agc_status agc_op_list_get(agc_vm *vm, agc_value *dst, const agc_value *list, const agc_value *index);
 agc_status agc_op_concat(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b);
 agc_status agc_op_to_text(agc_vm *vm, agc_value *dst, const agc_value *v);
+/* MAP_GET: a String or Bytes key charges its bytes, which the caller applies. */
+agc_status agc_op_map_get(agc_vm *vm, agc_value *dst, const agc_value *map, const agc_value *key);
 /* The constructors LIST, CLOSURE (WINDOW[0] = the function value that holds the CAPTURES values at WINDOW), STRUCT and
  * ENUM (the shared value of V when it has no payload): they read the window the loader checked, allocate, charge
  * nothing and never fail, so they return no status. */
@@ -283,8 +286,8 @@ void agc_op_closure(agc_value *window, uint32_t function, uint32_t captures);
 void agc_op_struct(agc_value *dst, const agc_value *fields, uint32_t type, uint32_t count);
 void agc_op_enum(agc_value *dst, const agc_value *payload, const agc_variant_def *v, uint32_t variant);
 /* The failure of a helper's status, with agc_fail. `a` and `b` are the operands the helper was given:
- * AGC_STATUS_INDEX_OUT_OF_RANGE needs both (the list and the index, named in the message), the other statuses read
- * neither (NULL is fine). `span` is the span of the running instruction. It is called on the VM's C stack, never from
+ * AGC_STATUS_INDEX_OUT_OF_RANGE needs both (the list and the index, named in the message), AGC_STATUS_KEY_NOT_FOUND
+ * needs `b` (the key), the other statuses read neither (NULL is fine). `span` is the span of the running instruction. It is called on the VM's C stack, never from
  * compiled code. */
 _Noreturn void agc_op_fail(agc_vm *vm, agc_status status, const agc_value *a, const agc_value *b, uint32_t span);
 agc_outcome agc_vm_run(agc_vm *vm);

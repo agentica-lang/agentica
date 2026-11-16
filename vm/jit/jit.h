@@ -248,11 +248,6 @@ const agc_jit_plain *agc_jit_plain_of(const agc_builtin *b);
    catch, as nothing can fail. WHERE is as for agc_jit_call_builtin; only the checked builds read it, which call
    through agc_jit_call_leaf and abort if the row failed. */
 void agc_jit_call_plain(agc_vm *vm, agc_value *args, const agc_builtin *b, uint64_t where);
-/* MAP_GET in compiled code, as the interpreter's case runs it: *DST = the value of *KEY in *MAP, and AGC_STATUS_OK.
-   A missing key, or a wrong tag (hand-made bytecode), answers AGC_JIT_EXIT_INTERPRET with DST and the turn cost left
-   alone, so the interpreter runs the instruction and fails as it does. A String key charges its bytes to the task's
-   turn cost, which compiled code then leaves to apply, as after EQ. It never fails, allocates or parks. */
-uint32_t agc_jit_map_get(agc_vm *vm, agc_value *dst, const agc_value *map, const agc_value *key);
 /* STRUCT_WITH in compiled code, as the interpreter's case: *DST = a copy of the struct in WINDOW[0] with the fields
    of U set to WINDOW[1..] (the window the loader checked). The copy charges its size and applies the task's turn
    cost, as the interpreter does after it: AGC_STATUS_OK for the code to go on, or AGC_JIT_EXIT_YIELD when that ended

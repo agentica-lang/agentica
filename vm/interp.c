@@ -22,9 +22,10 @@
    as the definition is not an inline definition. */
 #define OP_HELPER inline __attribute__((always_inline))
 
-/* The constructor opcodes, written once for the turn loop and their agc_op_* functions, which a JIT calls. Macros over
-   R and the window's first register, not inline helpers: inlining a helper changed the register allocation of
-   plain_turn (make layout-check). */
+/* The lookup of MAP_GET and the constructor opcodes, written once for the turn loop and their agc_op_* functions, which
+   a JIT calls. Macros, not inline helpers: inlining a helper changed the register allocation of plain_turn (make
+   layout-check). */
+#define OP_MAP_GET(vm, map, key, found) agc_map_get((vm), agc_as_map((vm), (map)), (key), &(found))
 #define OP_LIST(vm, R, b, count) \
   ((count) ? agc_list_value(agc_list_from_array(&(R)[b], (count))) : (vm)->rt->empty_list)
 #define OP_STRUCT(dst, R, b, type, count)                                           \
@@ -34,16 +35,16 @@
     for (uint32_t k_ = 0; k_ < n_; k_++) st_->fields[k_] = (R)[(uint32_t)(b) + k_]; \
     (dst) = agc_struct_value(st_);                                                  \
   } while (0)
-#define OP_ENUM(dst, R, b, v, variant)                                                     \
-  do {                                                                                     \
-    const agc_variant_def *v_ = (v);                                                       \
-    if (v_->arity == 0) {                                                                  \
-      (dst) = agc_enum_value(v_->shared);                                                  \
-      break;                                                                               \
-    }                                                                                      \
-    agc_enum *e_ = agc_new_enum((variant), v_->arity);                                     \
-    for (uint32_t k_ = 0; k_ < v_->arity; k_++) e_->payload[k_] = (R)[(uint32_t)(b) + k_]; \
-    (dst) = agc_enum_value(e_);                                                            \
+#define OP_ENUM(dst, R, b, v, variant)                                                       \
+  do {                                                                                       \
+    const agc_variant_def *v_ = (v);                                                         \
+    if (v_->arity == 0) {                                                                    \
+      (dst) = agc_enum_value(v_->shared);                                                    \
+    } else {                                                                                 \
+      agc_enum *e_ = agc_new_enum((variant), v_->arity);                                     \
+      for (uint32_t k_ = 0; k_ < v_->arity; k_++) e_->payload[k_] = (R)[(uint32_t)(b) + k_]; \
+      (dst) = agc_enum_value(e_);                                                            \
+    }                                                                                        \
   } while (0)
 #define OP_CLOSURE(dst, R, a, function, captures)                                    \
   do {                                                                               \
@@ -1189,6 +1190,17 @@ static _Noreturn void index_out_of_range(agc_vm *vm, int64_t index, size_t len, 
   agc_fail(vm, "RUNTIME-INDEX-OUT-OF-RANGE", message, span);
 }
 
+static _Noreturn void key_not_found(agc_vm *vm, agc_value key, uint32_t span) {
+  static const char before[] = "key ", after[] = " is not in the map";
+  const agc_string *form = agc_debug(vm, key);
+  size_t len = agc_size_add(agc_size_add(sizeof before - 1, form->bytes), sizeof after);
+  char *message = agc_alloc_atomic(len);
+  memcpy(message, before, sizeof before - 1);
+  memcpy(message + sizeof before - 1, form->data, form->bytes);
+  memcpy(message + sizeof before - 1 + form->bytes, after, sizeof after);
+  agc_fail(vm, "RUNTIME-KEY-NOT-FOUND", message, span);
+}
+
 __attribute__((noinline, cold)) _Noreturn void agc_op_fail(agc_vm *vm, agc_status status, const agc_value *a,
                                                             const agc_value *b, uint32_t span) {
   switch (status) {
@@ -1199,6 +1211,9 @@ __attribute__((noinline, cold)) _Noreturn void agc_op_fail(agc_vm *vm, agc_statu
       assert(a && b);
       index_out_of_range(vm, agc_as_int(vm, *b), list_len(agc_as_list(vm, *a)), span);
     case AGC_STATUS_WRONG_TAG: agc_wrong_tag(vm);
+    case AGC_STATUS_KEY_NOT_FOUND:
+      assert(b);
+      key_not_found(vm, *b, span);
     case AGC_STATUS_OK:
     case AGC_STATUS_COUNT: break;
   }
@@ -1207,26 +1222,15 @@ __attribute__((noinline, cold)) _Noreturn void agc_op_fail(agc_vm *vm, agc_statu
 
 /* agc_op_fail for the running instruction of the interpreter, read back from the top frame (frame->pc is written
    before each instruction runs), so the hot loop passes only the status and keeps no operand live for the cold call.
-   Only LIST_GET's status needs the operands. */
+   Only the statuses of LIST_GET and MAP_GET need the operands. */
 static __attribute__((noinline, cold)) _Noreturn void op_failed(agc_vm *vm, agc_status status) {
   const agc_task *t = vm->task;
   const agc_frame *frame = &t->frames[t->frame_count - 1];
   const agc_function *f = &vm->rt->program->functions[frame->function];
   agc_instr in = f->code[frame->pc - 1];
   const agc_value *R = t->regs + frame->base;
-  bool operands = status == AGC_STATUS_INDEX_OUT_OF_RANGE;
+  bool operands = status == AGC_STATUS_INDEX_OUT_OF_RANGE || status == AGC_STATUS_KEY_NOT_FOUND;
   agc_op_fail(vm, status, operands ? &R[in.b] : NULL, operands ? &R[in.c] : NULL, f->spans[frame->pc - 1]);
-}
-
-static _Noreturn void key_not_found(agc_vm *vm, agc_value key, uint32_t span) {
-  static const char before[] = "key ", after[] = " is not in the map";
-  const agc_string *form = agc_debug(vm, key);
-  size_t len = agc_size_add(agc_size_add(sizeof before - 1, form->bytes), sizeof after);
-  char *message = agc_alloc_atomic(len);
-  memcpy(message, before, sizeof before - 1);
-  memcpy(message + sizeof before - 1, form->data, form->bytes);
-  memcpy(message + sizeof before - 1 + form->bytes, after, sizeof after);
-  agc_fail(vm, "RUNTIME-KEY-NOT-FOUND", message, span);
 }
 
 /* The turn ends in a wait (docs/vm/10-io-multicore.md §10.2.3). The state stays PARKING (or WOKEN): the scheduler
@@ -1643,7 +1647,7 @@ reload:
       }
       case AGC_OP_MAP_GET: {
         agc_value found;
-        if (!agc_map_get(vm, agc_as_map(vm, R[in.b]), R[in.c], &found)) key_not_found(vm, R[in.c], SPAN);
+        if (!OP_MAP_GET(vm, R[in.b], R[in.c], found)) key_not_found(vm, R[in.c], SPAN);
         R[in.a] = found;
         if (t->turn_cost && apply_cost(vm)) return AGC_TURN_YIELD;
         break;
@@ -1842,6 +1846,15 @@ agc_turn_result agc_run_turn(agc_vm *vm) {
   if (AGC_PROFILE_ON(vm)) return profile_turn(vm);
   if (vm->rt->jit && agc_jit_turn(vm->rt->jit, vm)) return jit_turn(vm);
   return plain_turn(vm);
+}
+
+agc_status agc_op_map_get(agc_vm *vm, agc_value *dst, const agc_value *map, const agc_value *key) {
+  if (!agc_is(*map, AGC_T_MAP) || !(agc_is(*key, AGC_T_INT) || agc_is(*key, AGC_T_STRING) || agc_is(*key, AGC_T_BYTES)))
+    return AGC_STATUS_WRONG_TAG;
+  agc_value found;
+  if (!OP_MAP_GET(vm, *map, *key, found)) return AGC_STATUS_KEY_NOT_FOUND;
+  *dst = found;
+  return AGC_STATUS_OK;
 }
 
 void agc_op_list(agc_vm *vm, agc_value *dst, const agc_value *items, uint32_t count) {

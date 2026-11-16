@@ -1269,25 +1269,6 @@ void agc_jit_call_plain(agc_vm *vm, agc_value *args, const agc_builtin *b, uint6
 #endif
 }
 
-uint32_t agc_jit_map_get(agc_vm *vm, agc_value *dst, const agc_value *map, const agc_value *key) {
-  /* agc_key_hash takes only an Int or a String and fails on any other tag, so those leave before the lookup. */
-  if (!agc_is(*map, AGC_T_MAP) || !(agc_is(*key, AGC_T_INT) || agc_is(*key, AGC_T_STRING)))
-    return AGC_JIT_EXIT_INTERPRET;
-  /* A String key charges its bytes. A miss gives the charge back, as the interpreter runs the instruction again and
-     charges them itself; restoring turn_cost undoes the whole lookup, since agc_charge is its only side effect. */
-  int64_t cost = vm->task->turn_cost;
-  agc_value found;
-  if (!agc_map_get(vm, agc_as_map(vm, *map), *key, &found)) {
-    vm->task->turn_cost = cost;
-    return AGC_JIT_EXIT_INTERPRET;
-  }
-  *dst = found;
-  return AGC_STATUS_OK;
-}
-
-
-
-
 uint32_t agc_jit_struct_with(agc_vm *vm, agc_value *dst, const agc_value *window, const agc_update_def *u) {
   const agc_program *p = vm->rt->program;
   if (!agc_is(window[0], AGC_T_STRUCT)) return AGC_JIT_EXIT_INTERPRET;
