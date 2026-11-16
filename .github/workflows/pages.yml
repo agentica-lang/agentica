@@ -43,7 +43,7 @@ jobs:
       DART_SASS_VERSION: 1.105.1
       DART_SASS_SHA256: 9046fdd4a31a524a0020298c55d9e155d4c22363ef268e8992574335a72c6a6f
     steps:
-      # Full history and tags: every release is built from its own tree (git archive).
+      # Full history and tags: every release is built from its own tree (a git worktree, whose history dates the pages).
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
