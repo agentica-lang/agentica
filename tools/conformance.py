@@ -67,11 +67,11 @@ WINDOWS_ONLY_MODULES = frozenset({
 # is not listed for its system, as host-only, fails the report. Windows lacks POSIX signals, FIFOs, /dev/stdin, modes,
 # descriptor flags, colon names and the pty of tests/test_cli_compile.py (and the descriptor flags, FIFOs and ptys of
 # the Native.wait_* cases in tests/test_vm_native.py, where Windows waits only on sockets, and the SIGTERM grace of a
-# child at the end of the run that tests/test_vm_crypto.py uses to hold the run open); macOS lacks non-UTF-8 names, a way to limit the CPUs of a
-# process, an RLIMIT_NPROC that limits threads (tests/test_vm_native.py) and a ulimit -v that limits the address space
-# (tests/test_vm_multicore.py); neither loads an LD_PRELOAD library in front of glibc's getaddrinfo
-# (tests/test_vm_dns.py); the other systems lack the Windows-only modules above and the search of NAME.com and NAME.exe
-# in PATH (tests/test_bytecode_cache.py).
+# child at the end of the run that tests/test_vm_crypto.py uses to hold the run open); macOS lacks non-UTF-8 names, a
+# way to limit the CPUs of a process, an RLIMIT_NPROC that limits threads (tests/test_vm_native.py) and a ulimit -v
+# that limits the address space (tests/test_vm_multicore.py); neither loads an LD_PRELOAD library in front of glibc's
+# getaddrinfo (tests/test_vm_dns.py); the other systems lack the Windows-only modules above and the search of NAME.com
+# and NAME.exe in PATH (tests/test_bytecode_cache.py).
 # Golden fixtures named -posix or -windows are allowed by name (host_only_fixture).
 _NEEDS_POSIX = frozenset({
     "tests/test_bdd_integration.py", "tests/test_bdd_posix.py", "tests/test_check_stdin.py", "tests/test_cli_fmt.py",
