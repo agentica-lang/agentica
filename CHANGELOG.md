@@ -17,6 +17,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 ### Fixed
 
 - `PKG-LOCK-MISSING` for a manifest with native downloads says to run `agentica update`, not `agentica install`, which never writes the lock (#1758).
+- `agentica fmt` is about three times faster on large files (#1751).
 
 ## [0.33.0] - 2026-11-16
 
