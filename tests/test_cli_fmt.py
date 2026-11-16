@@ -7,7 +7,9 @@ import os
 import re
 import stat
 
-from tests.agentica_test import WINDOWS, cli, host_only, run, vm_environment
+import pytest
+
+from tests.agentica_test import WINDOWS, cli, host_only, run, vm_command, vm_environment
 
 FORMATTED = 'def main() -> Void\n  puts("ok")\nend\n'
 UNFORMATTED = 'def main() -> Void\n    puts( "ok" )\nend\n'
@@ -162,6 +164,8 @@ def test_the_tree_has_no_node_ids_or_spans(tmp_path):
 
 def fmt_steps(tmp_path, units):
     """The bytes of a file of `units` copies of UNIT and the VM steps that `fmt -` takes on it."""
+    if "trace off" in run(vm_command() + ["--version"], env=vm_environment()).stdout:
+        pytest.skip("the VM was built with TRACE=0")
     text = "".join(UNIT.format(i=i) for i in range(units))
     env = vm_environment({"AGENTICA_VM_TRACE": "profile"})
     result = run(cli() + ["fmt", "-"], env=env, cwd=tmp_path, stdin=text)
@@ -172,10 +176,10 @@ def fmt_steps(tmp_path, units):
 
 def test_fmt_takes_steps_in_proportion_to_the_size_of_the_file(tmp_path):
     """The check of fmt's own output once scanned the tree text one character at a time, about 1500 VM steps per
-    byte of input; it now prints the tree without places, about 400 (#1751). Twice the file takes twice the steps."""
+    byte of input; it now prints the tree without places, about 375 (#1751). Twice the file takes twice the steps."""
     _, small = fmt_steps(tmp_path, 100)
     big_bytes, big = fmt_steps(tmp_path, 200)
-    assert big <= 600 * big_bytes, (big, big_bytes)
+    assert big <= 450 * big_bytes, (big, big_bytes)
     assert big <= 2.2 * small, (small, big)
 
 
