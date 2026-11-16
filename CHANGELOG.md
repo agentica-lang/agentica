@@ -8,38 +8,40 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.33.0] - 2026-11-16
+
 ### Added
 
-- `Process.spawn` with `pty: true` runs a program on a pseudo-terminal, so interactive programs (password prompts, REPLs, editors) work, and `Process.resize` sets its size; Linux and macOS (#1733).
-- A run that compiles its program says `Compiling FILE…` on a terminal's stderr, and `agentica compile` with no `-o` fills the bytecode cache ahead, by default for every `main.agc` under the working folder (#1735).
-- `Actor.send` and `Actor.await` split `Actor.call` in two, so a caller can send requests to several actors first and then await each answer (#1571).
-- The errors of file and network builtins carry `details`: `"path"` (and `"to"` for `Path.rename`) for a failed or refused file call, `"host"` for a failed or refused connect, listen, DNS lookup or TLS handshake (#1510).
-- `Native.arena do ... end` closes, when its block ends, every native resource and owned buffer the task opened in it, newest first, except those the block's value holds (#1091).
-- `Bytes.build do |out| ... end` builds one `Bytes` from many parts with `out.write(a, b, ...)` (a `Bytes`, a `String` or an `Int`), with no copy in between (#1361).
-- Native API 1.4: `an_error_kind` makes an error with a kind and details, and `an_get_error` reads the kind, message and details of an error a module gets; modules built for 1.3 still load (#1510).
+- `Process.spawn` with `pty: true` runs a program on a pseudo-terminal, and `Process.resize` sets its size; Linux and macOS (#1733).
+- A run that compiles its program says `Compiling FILE…` on a terminal, and `agentica compile` with no `-o` fills the bytecode cache ahead (#1735).
+- `Actor.send` and `Actor.await` split `Actor.call` in two, so a caller can ask several actors first and await each answer later (#1571).
+- The errors of file and network builtins carry `details`: `"path"` (and `"to"`) or `"host"` (#1510).
+- `Native.arena do ... end` closes the native resources and buffers its block opened when the block ends (#1091).
+- `Bytes.build do |out| ... end` builds one `Bytes` from many parts with no copy in between (#1361).
+- Native API 1.4: `an_error_kind` and `an_get_error` make and read errors with a kind and details; 1.3 modules still load (#1510).
 
 ### Changed
 
-- A `compute def` or dirty native module call made right after another costs about 3 µs in place of 15 to 25 µs (about 2 µs with `--schedulers 1`), and runs of calls that take tens of µs each (SQLite, agentica-db) run 2 to 3 times faster with `--schedulers 1` (#1120).
-- With the JIT, a loop that tests lines against literals (`strip`, `start_with?`, `end_with?`) runs faster, and the block of a `Lazy` terminal is compiled even when its caller is not (#1223).
-- The `gc` trace (`AGENTICA_VM_TRACE=gc`) reports what each scheduler allocated and, at the end of a run, the stop-the-world time, its share of wall and CPU time, and the pause count, p50, p99 and max (#1698).
-- `agentica FILE.agc` starts a program whose bytecode is in the cache without loading the compiler (about 16 ms in place of 48 ms for a small program on Linux), and parses `agentica.toml` once (#1471).
-- `"$#{n}\r\n".bytes` writes the parts into one `Bytes`, an `Int` in any interpolation prints faster, and `Bytes.concat([a, b, c])` and `a + b + c` on `Bytes` copy once (#1361).
-- A program whose tasks all wait for one busy task (a store task that serves 50 clients over channels) no longer runs slower with more scheduler threads: up to about 2 times faster at 2 to 8 schedulers (#1362).
-- `ATS.get`, `has_key?` and the read of `push` take no lock, so tasks that read one table scale with the schedulers: 8 tasks reading `Int` keys take 0.73 s in place of 2.2 s on 8 schedulers (#1625).
-- With several schedulers, TCP and TLS reads and sends run on the task's scheduler when they can: up to 6 times more lines per second on a stream, 6 to 50% more requests per second for HTTP and HTTPS servers (#1188, #1197).
-- `TCP.write` and `TCP.flush` buffer on TLS sockets too: a write returns once its records are in the socket's write buffer (#1713).
-- `agentica FILE.agc` no longer looks for the C compiler in `PATH` at each start of a cached program with no native module, and a change of `CC` or `PATH` keeps its cache entry (#1551).
-- The interpreter runs programs 4 to 6% faster, condition-heavy code up to 10% faster, and `check` and `compile` of a large program about 5 to 7% faster; `--max-steps`, profiles and `--coverage` count the same steps (#1001).
-- Text work is faster: UTF-8 checks 12 to 30%, `String.split` about 10%, `upcase`, `downcase` and `reverse` 3 to 50 times on ASCII, character counts up to 8 times on non-ASCII, `JSON.parse` 7 to 17% (#996).
-- A `Float` turns into text about 10 times faster, and `String.to_f` and `JSON.decode` read a number to the nearest `Float`; on Windows a few values that printed one digit too many print the shortest text and some texts were read one step off; other output is unchanged (#1682).
-- `agentica compile` of a large program whose bytecode is in the cache is about 15% faster (#1683).
+- A `compute def` or dirty native call right after another costs about 3 µs in place of 15 to 25 µs (#1120).
+- With the JIT, loops that test lines against literals run faster, and the block of a `Lazy` terminal is compiled (#1223).
+- The `gc` trace reports allocation per scheduler and the stop-the-world time and pauses (#1698).
+- `agentica FILE.agc` starts a cached program without loading the compiler, about 16 ms in place of 48 ms on Linux (#1471).
+- String interpolation into `Bytes`, `Int` printing and `Bytes` concatenation copy less (#1361).
+- Many tasks waiting on one busy task no longer run slower with more scheduler threads (#1362).
+- `ATS.get`, `has_key?` and the read of `push` take no lock, so readers scale with the schedulers (#1625).
+- With several schedulers, TCP and TLS reads and sends run on the task's scheduler: faster streams and HTTP(S) servers (#1188, #1197).
+- `TCP.write` and `TCP.flush` buffer on TLS sockets too (#1713).
+- `agentica FILE.agc` no longer searches `PATH` for the C compiler at each start of a cached program with no native module (#1551).
+- The interpreter runs programs 4 to 6% faster, and `check` and `compile` of a large program 5 to 7% faster (#1001).
+- Text work is faster: UTF-8 checks, `String.split`, case changes, character counts and `JSON.parse` (#996).
+- A `Float` turns into text about 10 times faster, and `String.to_f` and `JSON.decode` read numbers to the nearest `Float` (#1682).
+- `agentica compile` of a large cached program is about 15% faster (#1683).
 
 ### Fixed
 
-- `String#downcase` picks the final sigma as Python does: letters with no uppercase form (`ß`, `ŉ`, `ª`, `ﬁ`) count as cased, and modifier letters (`ʰ`, `ⁿ`) and U+0345 are skipped: `"ßΣ".downcase` is `"ßς"` (#1704).
-- A loop that parses a large JSON array or builds large lists is much less likely to hit `--max-heap` on macOS arm64 and Windows: a stray pointer into a list's items keeps less than 64 KiB of them, not the whole list (#1681).
-- `JSON.decode` and codecs give a field's default for a missing key (`wire: String = ""`) in place of `expected required field`, and `JSON.schema` leaves such a field out of `required`; `null` stays an error (#1739).
+- `String#downcase` picks the final sigma as Python does: `"ßΣ".downcase` is `"ßς"` (#1704).
+- Loops that parse large JSON arrays or build large lists are much less likely to hit `--max-heap` on macOS arm64 and Windows (#1681).
+- `JSON.decode` and codecs give a field's default for a missing key, and `JSON.schema` leaves such a field out of `required` (#1739).
 
 ## [0.32.0] - 2026-11-15
 
@@ -1656,7 +1658,8 @@ First release of Agentica, a statically typed language designed for AI agents.
 - `main` returns `Void`; maps preserve insertion order and support fallible
   lookups.
 
-[unreleased]: https://github.com/agentica-lang/agentica/compare/0.32.0...HEAD
+[unreleased]: https://github.com/agentica-lang/agentica/compare/0.33.0...HEAD
+[0.33.0]: https://github.com/agentica-lang/agentica/compare/0.32.0...0.33.0
 [0.32.0]: https://github.com/agentica-lang/agentica/compare/0.32.0-alpha.2...0.32.0
 [0.32.0-alpha.2]: https://github.com/agentica-lang/agentica/compare/0.32.0-alpha.1...0.32.0-alpha.2
 [0.32.0-alpha.1]: https://github.com/agentica-lang/agentica/compare/0.31.1...0.32.0-alpha.1
