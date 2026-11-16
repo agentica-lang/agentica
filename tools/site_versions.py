@@ -4,17 +4,20 @@
     site_versions.py build [--out DIR] [--cache DIR] [--base-url URL] [--tools DIR]
 
 The output is one site per final release (`X.Y.Z` tags, no pre-releases) under `VERSION/`, the development site under
-`dev/`, the latest release again at the root, `versions.json` and `_versions/selector.{js,css}` (site/versions/).
+`dev/`, the latest release again at the root, `versions.json` and `_versions/selector.{js,css}` (site/versions/). Only
+the root is for search engines: each page under `VERSION/` and `dev/` gets a canonical URL to the same page at the root
+when the root has it, else `noindex,follow`, and their sitemaps are removed.
 
-Each tag is built from its own tree with `make site` (plus the docs theme commit it pins, which `git archive` leaves
-out), using the Hugo and Dart Sass versions that tag pins in its `.github/workflows/pages.yml`. Only a tag whose tree
-has no site (no `site/hugo.toml`, no pins) and that is older than every built tag is left out. Any other failure (a
-download, `npm ci`, a timeout, a Hugo error, a no-site tag newer than a built one) is tried once more and then fails the
-run, so a release never drops silently from the deploy; so does a run in which no tag built. The output of a tag is
-cached by its commit sha (and the base URL, which Hugo bakes into every link), so a run builds only `dev` and the tags
-it has not seen; the cache folder is pruned to the current builds. With GITHUB_OUTPUT set, `fresh=true` tells the
-workflow that something new is worth saving. The selector is not part of a cached build: the assembly adds its `<link>`
-and `<script>` tags to every page, so a build from the cache loads the current selector.
+Each tag is built from its own tree, a detached git worktree (so Hugo's enableGitInfo dates its pages), with `make site`
+(plus the docs theme commit it pins, which a worktree leaves empty), using the Hugo and Dart Sass versions that tag pins
+in its `.github/workflows/pages.yml`. Only a tag whose tree has no site (no `site/hugo.toml`, no pins) and that is older
+than every built tag is left out. Any other failure (a download, `npm ci`, a timeout, a Hugo error, a no-site tag newer
+than a built one) is tried once more and then fails the run, so a release never drops silently from the deploy; so
+does a run in which no tag built. The output of a tag is cached by its commit sha (and the base URL, which Hugo bakes
+into every link), so a run builds only `dev` and the tags it has not seen; the cache folder is pruned to the current
+builds. With GITHUB_OUTPUT set, `fresh=true` tells the workflow that something new is worth saving. The selector and
+the search tags are not part of a cached build: the assembly adds the selector's `<link>` and `<script>` tags and the
+canonical or noindex tag to every page, so a build from the cache gets the current ones.
 
 Python's standard library only.
 """
@@ -111,6 +114,40 @@ def inject_selector(site: Path, root_path: str) -> int:
         page.write_text(text.replace("</head>", tag + "</head>", 1), encoding="utf-8")
         changed += 1
     return changed
+
+
+CANONICAL = re.compile(r'<link\s+rel="?canonical"?[^>]*>')
+ROBOTS = re.compile(r'<meta\s+name="?robots"?[^>]*>')
+
+
+def page_url(rel: Path) -> str:
+    """The URL path of a built file under its site root: `a/b/index.html` is `a/b/`, `index.html` is ``."""
+    path = rel.as_posix()
+    return path[: -len("index.html")] if path == "index.html" or path.endswith("/index.html") else path
+
+
+def point_copies_at_root(out: Path, root_url: str, folders: list[str]) -> tuple[int, int]:
+    """Make the root the only copy that search engines index: every page of each folder (a version, dev) gets, in place
+    of its own canonical and robots tags, a canonical URL to the same page at the root when the root has that file,
+    else `noindex,follow`; the folder's sitemap goes. Returns (pages with a canonical, pages with noindex)."""
+    pointed = hidden = 0
+    for folder in folders:
+        site = out / folder
+        (site / "sitemap.xml").unlink(missing_ok=True)
+        for page in site.rglob("*.html"):
+            text = page.read_text(encoding="utf-8")
+            if "</head>" not in text:
+                continue
+            rel = page.relative_to(site)
+            text = ROBOTS.sub("", CANONICAL.sub("", text))
+            if rel.as_posix() != "404.html" and (out / rel).is_file():
+                tag = '<link rel="canonical" href="%s%s">' % (root_url, page_url(rel))
+                pointed += 1
+            else:
+                tag = '<meta name="robots" content="noindex,follow">'
+                hidden += 1
+            page.write_text(text.replace("</head>", tag + "</head>", 1), encoding="utf-8")
+    return pointed, hidden
 
 
 def versions_json(built: list[str], dev: bool) -> list[dict]:
@@ -276,15 +313,15 @@ def build_ref(ref: str, base_url: str, cache: Path, tools: Path, logs: Path, lab
         return done, True
     with tempfile.TemporaryDirectory(prefix="agentica-site-") as scratch:
         tree = Path(scratch) / "tree"
-        tree.mkdir()
-        archive = subprocess.Popen(["git", "-C", str(ROOT), "archive", "--format=tar", sha], stdout=subprocess.PIPE)
-        with tarfile.open(fileobj=archive.stdout, mode="r|") as tar:
-            tar.extractall(tree, filter="data")
-        if archive.wait() != 0:
-            raise BuildError("git archive failed")
-        unpack_theme(sha, tree)
-        public = _build_tree(tree, base_url, tools, logs / (label + ".log"))
-        _store(public, cache, key)
+        if subprocess.run(["git", "-C", str(ROOT), "worktree", "add", "-q", "--detach", str(tree), sha],
+                          capture_output=True).returncode:
+            raise BuildError("git worktree add failed")
+        try:
+            unpack_theme(sha, tree)
+            public = _build_tree(tree, base_url, tools, logs / (label + ".log"))
+            _store(public, cache, key)
+        finally:
+            subprocess.run(["git", "-C", str(ROOT), "worktree", "remove", "--force", str(tree)], capture_output=True)
     return done, False
 
 
@@ -365,6 +402,7 @@ def build(args: argparse.Namespace) -> int:
     shutil.rmtree(out, ignore_errors=True)
     out.mkdir(parents=True)
 
+    run(["git", "-C", str(ROOT), "worktree", "prune"])  # the worktrees of a run that was killed
     built: dict[str, Path] = {}
     skipped: dict[str, str] = {}
     failed: dict[str, str] = {}
@@ -424,12 +462,14 @@ def build(args: argparse.Namespace) -> int:
     for name in SELECTOR_FILES:
         shutil.copy(ROOT / "site" / "versions" / name, selector / name)
     (out / "versions.json").write_text(json.dumps(versions_json(list(built), True), indent=2) + "\n")
+    pointed, hidden = point_copies_at_root(out, root_url, list(built) + ["dev"])
     pages = inject_selector(out, root_path)
 
     seconds = time.monotonic() - started
     print("\nversions: %s, dev" % ", ".join(built))
     print("left out: " + (", ".join("%s (%s)" % kv for kv in skipped.items()) or "none"))
     write_summary(built, skipped, failed)
+    print("version and dev pages: %d with a canonical URL at the root, %d noindex" % (pointed, hidden))
     print("pages with the selector tags: %d; from the cache: %d of %d tags" % (pages, len(built) - len([f for f in fresh if f != "root"]), len(built)))
     print("time: %.1f s; size: %.1f MB (%s)" % (seconds, folder_size(out) / 1e6, out))
     return 0
