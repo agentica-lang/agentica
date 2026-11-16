@@ -1010,14 +1010,27 @@ agc_jit *agc_jit_new(const agc_program *program, agc_jit_mode mode, const agc_tr
   bool *callable = agc_alloc_atomic(agc_size_mul(n ? n : 1, sizeof *callable));
   bool *looped = agc_alloc_atomic(agc_size_mul(n ? n : 1, sizeof *looped));
   bool *calling = agc_alloc_atomic(agc_size_mul(n ? n : 1, sizeof *calling));
-  if (mode == AGC_JIT_ON) agc_jit_settle(program, callable, looped, calling);
+  bool *valued = agc_alloc_atomic(agc_size_mul(n ? n : 1, sizeof *valued));
+  memset(valued, 0, (n ? n : 1) * sizeof *valued);
+  if (mode == AGC_JIT_ON) {
+    agc_jit_settle(program, callable, looped, calling);
+    for (uint32_t k = 0; k < n; k++)
+      for (uint32_t pc = 0; pc < program->functions[k].count; pc++) {
+        agc_instr in = program->functions[k].code[pc];
+        uint32_t bx = (uint32_t)in.b | ((uint32_t)in.c << 16);
+        if (plain_op(in.op) == AGC_OP_CLOSURE && bx < n && program->functions[bx].count >= AGC_JIT_BLOCK_SIZE)
+          valued[bx] = true;
+      }
+  }
   bool any = false;
   for (uint32_t k = 0; k < n; k++) {
     const agc_function *f = &program->functions[k];
     bool on = mode == AGC_JIT_ON;
     const char *why = !on || callable[k] ? NULL : looped[k] ? "exits" : "none";
-    /* With `on`, a function without a loop that may get code is entered only by native calls. */
-    bool native = !why && on && !looped[k], entered = !why && !native;
+    /* With `on`, a function without a loop that may get code is entered only by native calls, and, when it is made a
+       function value of AGC_JIT_BLOCK_SIZE instructions or more, at its first instruction as the block of a native
+       frame (run_compiled), such as a Lazy terminal's that the interpreter runs. */
+    bool native = !why && on && !looped[k], entered = !why && (!native || valued[k]);
     atomic_init(&skip[k], !entered);
     atomic_init(&native_only[k], native);
     if (entered)

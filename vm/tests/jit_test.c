@@ -1838,7 +1838,8 @@ static void sample_resets(void) {
    a leaf nor direct nor a block call) more than once in AGC_JIT_SPACING instructions, one that may park counting
    AGC_JIT_PARK_WEIGHT times; a leaf or direct builtin does not count, as compiled code calls it, nor a block call,
    which compiled code starts. A function without a loop that calls a leaf builtin or starts a block call may still get
-   code for native calls. A program where no function is compiled has no JIT at all. */
+   code for native calls, or as a function value of AGC_JIT_BLOCK_SIZE instructions or more. A program where no function
+   is compiled has no JIT at all. */
 static void ineligible(void) {
   static const agc_trace quiet = {0};
   one_function f;
@@ -1849,6 +1850,18 @@ static void ineligible(void) {
   assert(!agc_jit_new(&f.program, AGC_JIT_ON, &quiet));
   assert(agc_jit_new(&f.program, AGC_JIT_ALWAYS, &quiet));
   f.code[1] = (agc_instr){AGC_OP_JUMP, 0, 0, 0};
+  assert(agc_jit_new(&f.program, AGC_JIT_ON, &quiet));
+  /* A function value without a loop gets code for the native frames the interpreter runs from AGC_JIT_BLOCK_SIZE
+     instructions on. */
+  memset(&f, 0, sizeof f);
+  emit(&f, AGC_OP_CLOSURE, 0, 0, 0);
+  while (f.fn.count < AGC_JIT_BLOCK_SIZE - 2) emit(&f, AGC_OP_MOVE, 1, 2, 0);
+  emit(&f, AGC_OP_RETURN, 0, 0, 0);
+  program_of(&f);
+  assert(!agc_jit_new(&f.program, AGC_JIT_ON, &quiet));
+  f.code[f.fn.count - 1] = (agc_instr){AGC_OP_MOVE, 1, 2, 0};
+  emit(&f, AGC_OP_RETURN, 0, 0, 0);
+  program_of(&f);
   assert(agc_jit_new(&f.program, AGC_JIT_ON, &quiet));
   agc_builtin leaf = {.leaf = true}, other = {.leaf = false}, direct = {.direct = true};
   agc_builtin block = {.native = AGC_NATIVE_FILTER};

@@ -17,10 +17,15 @@
    or CALL_VALUE exit from compiled code when it calls a function (or a function value), else at its
    AGC_JIT_CALLEE_THRESHOLD-th: one without calls runs at most its own few instructions per call, and a compile costs
    about as much as interpreting thousands of them, so one called only a few times from compiled code stays
-   interpreted. */
+   interpreted. A function value of AGC_JIT_BLOCK_SIZE instructions or more is also compiled as the block of a
+   native frame that the interpreter runs, at its first instruction (agc_jit_code_of counts those entries). */
 typedef enum { AGC_JIT_OFF, AGC_JIT_ON, AGC_JIT_ALWAYS } agc_jit_mode;
 #define AGC_JIT_THRESHOLD 100
 #define AGC_JIT_PASSES 32
+/* The instructions from which `on` compiles a function value without a loop for the native frames that the
+   interpreter runs (a Lazy terminal's block): each call enters and leaves the code, so on a file's lines a block of 7
+   instructions ran 5% slower compiled and one of 28 ran 9% faster. */
+#define AGC_JIT_BLOCK_SIZE 12
 #define AGC_JIT_CALLEE_THRESHOLD 16
 #define AGC_JIT_SPACING 16
 /* The trips out that `on` counts for a builtin that may park (agc_jit_parking: channels, task waits, sleeps, stdin,
