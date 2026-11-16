@@ -23,6 +23,14 @@ OPCODES = {
   "struct-with": 49, "global": 50, "global-set": 51, "try-step": 52, "jump-variant": 53,
 }
 
+## The opcodes a `step` moves up across (bytecode_function.gather_steps): no jump, call or label, and no failure on a
+## checked program, so every step still runs before the next failure or branch.
+STEP_PASSES = Set.new([
+  "move", "const", "global", "not", "lt-i", "le-i", "eq", "ne", "add-f", "sub-f", "mul-f", "neg-f", "lt-f", "le-f",
+  "concat", "to-text", "inspect", "list", "list-len", "struct", "field", "enum", "is-variant", "same", "map",
+  "struct-with", "closure", "is-ok",
+])
+
 ## The opcodes written as their first two operands and a zero.
 PAIR_OPS = Set.new([
   "move", "neg-i", "neg-f", "not", "to-text", "inspect", "list-len", "try", "is-ok", "result-value", "range-bounds",

@@ -43,13 +43,13 @@ static bool is_step(uint16_t op) {
 
 /* step_slow calls profile_steps for a STEP of the turn loop, which leaves the frame's pc after it, and for the steps
    that builtins and native loops count, where the instruction before the pc is a call or the frame is native. So the
-   STEP before the pc, with N as its `a`, is the one that ran. */
-void agc_cover_step(agc_cover *cover, const agc_function *f, uint32_t pc, int64_t n) {
+   STEP before the pc, with N as its `a`, is the one that ran: its first RAN spans. */
+void agc_cover_step(agc_cover *cover, const agc_function *f, uint32_t pc, int64_t n, int64_t ran) {
   if (pc == 0 || pc > f->count) return;
   agc_instr in = f->code[pc - 1];
   if (!is_step(in.op) || in.a != n) return;
   uint32_t span = f->spans[pc - 1];
-  for (int64_t k = 0; k < n && (uint64_t)span + (uint64_t)k < cover->spans; k++)
+  for (int64_t k = 0; k < ran && (uint64_t)span + (uint64_t)k < cover->spans; k++)
     atomic_fetch_add_explicit(&cover->hits[span + (uint32_t)k], 1, memory_order_relaxed);
 }
 
