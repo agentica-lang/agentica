@@ -57,7 +57,7 @@ def find(workspace: Workspace.Workspace, root_dir: String, running: String) -> R
           empty.file,
           "PKG-LOCK-MISSING",
           "#{MANIFEST_FILE} declares native downloads but there is no #{LOCK_FILE}",
-          Failure.hint("run agentica install to lock the native artifacts the manifest declares"),
+          Failure.hint("run agentica update to write #{LOCK_FILE}"),
         ),
       )
     end
