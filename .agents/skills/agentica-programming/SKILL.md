@@ -92,4 +92,4 @@ Read only what the task needs.
 | `analysis.md` | compiler answers in a program (`std/analysis`) |
 
 Style: `agentica-code-guidelines`. Docs:
-`https://agentica-lang.github.io/agentica/llms.txt`.
+`https://www.agentica-lang.com/agentica/llms.txt`.

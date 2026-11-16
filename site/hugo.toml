@@ -1,7 +1,7 @@
 # The look, the layouts, the outputs and the highlighter come from the docs theme (themes/docs-theme). The deep
 # merge takes its [outputs], [markup] and [minify] defaults too; this file sets only what is the site's own.
 _merge = "deep"
-baseURL = "https://agentica-lang.github.io/agentica/"
+baseURL = "https://www.agentica-lang.com/agentica/"
 locale = "en"
 title = "Agentica"
 theme = "docs-theme"

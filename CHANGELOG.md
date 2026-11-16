@@ -8,6 +8,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- The documentation moved to https://www.agentica-lang.com/agentica/; the old agentica-lang.github.io links redirect there.
+
 ## [0.33.0] - 2026-11-16
 
 ### Added

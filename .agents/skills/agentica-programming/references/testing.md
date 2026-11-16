@@ -102,7 +102,7 @@ for a test function with parameters, type parameters or another result;
   smallest failure, with a seed to replay) come from the `prop` package:
   `agentica add prop https://github.com/agentica-lang/packages --tag
   prop-X.Y.Z --subdir prop --group test` (the newest `prop-*` tag; docs:
-  <https://agentica-lang.github.io/packages/prop/>). Use one for parsers of
+  <https://www.agentica-lang.com/packages/prop/>). Use one for parsers of
   untrusted bytes, round trips (encode and decode), and lengths or option
   values at their limits.
 - To fake a file, the clock or a call, pass a struct of `Fn` fields (an
