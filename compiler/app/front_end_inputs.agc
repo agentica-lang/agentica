@@ -2,7 +2,7 @@
 ## where the std/ sources are, and the path of the binary.
 ##
 ## The front end is run as
-## `PROGRAM --version V [--stdlib DIR] [--self PATH] [--embedded-bdd] [--cache-missed] -- ARGUMENTS...`.
+## `PROGRAM --version V [--stdlib DIR] [--self PATH] [--embedded-bdd] [--cache-missed] [--stderr-tty] -- ARGUMENTS...`.
 ## The binary starts it as `--version V --self PATH [--embedded-bdd] -- ARGUMENTS...`;
 ## C passes its version, path and whether it carries compiled BDD programs, and
 ## grants the std/ sources that it carries. An ordinary VM run, as `make` does
@@ -22,14 +22,10 @@ end
 
 ## Whether C says that the launcher looked for the cache entry of this run and found none it could use
 ## (`--cache-missed`, app/cli_hit.agc): the front end then compiles without looking again.
-def cache_missed?(arguments: List[String]) -> Bool
-  for word in arguments
-    return false if word == "--"
-    return true if word == MISSED
-  end
+def cache_missed?(arguments: List[String]) -> Bool = marked?(arguments, MISSED)
 
-  false
-end
+## Whether C says that stderr is a terminal (`--stderr-tty`): a run that compiles then says so there.
+def stderr_tty?(arguments: List[String]) -> Bool = marked?(arguments, TTY)
 
 ## Reads the arguments of the front end. `workspace` is the machine as the program sees it: the front end gives the
 ## one that verifies native artifacts (io/native_workspace.agc), the launcher the plain one (io/host.agc), which is
@@ -46,7 +42,7 @@ def read(arguments: List[String], workspace: Workspace.Workspace) -> Read
     if word == "--embedded-bdd"
       embedded_bdd = true
       step = 1
-    elsif word == MISSED
+    elsif word == MISSED or word == TTY
       step = 1
     elsif at + 1 >= arguments.size or arguments[at + 1] == "--"
       return Read.Broken("#{word} needs a value")
@@ -81,3 +77,13 @@ end
 private
 
 MISSED = "--cache-missed"
+TTY = "--stderr-tty"
+
+def marked?(arguments: List[String], mark: String) -> Bool
+  for word in arguments
+    return false if word == "--"
+    return true if word == mark
+  end
+
+  false
+end

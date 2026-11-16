@@ -97,7 +97,7 @@ OPTIONS = [
     ["--schedulers", "1", "--schedulers", "1", "ok.agc"],
     ["--jit"], ["--jit", "fast", "ok.agc"], ["--jit", "always", "ok.agc"], ["--jit", "on", "--jit", "off", "ok.agc"],
     ["--version", "--foo"], ["--foo", "--version"], ["--", "ok.agc"], ["ok.agc", "--version"],
-    ["check", "--json", "ok.agc"], ["compile", "ok.agc"], ["--dump", "compile", "ok.agc", "-o", "out.agcb"],
+    ["check", "--json", "ok.agc"], ["--no-cache", "compile", "ok.agc"], ["--dump", "compile", "ok.agc", "-o", "out.agcb"],
     ["--max-steps", "1", "check", "ok.agc"], ["--json", "check", "ok.agc"], ["--ai", "check", "ok.agc"],
     ["check", "nope.agc"], ["nope.agc"], ["check", "."], ["check", "ok.agc", "divide.agc"],
     ["--json", "check", "ok.agc", "tab.agc"], ["--ai", "check", "ok.agc", "tab.agc"], ["check", "ok.agc", "nope.agc"],

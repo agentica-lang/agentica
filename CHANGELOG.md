@@ -10,6 +10,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- A run that compiles its program says `Compiling FILE…` and the time on stderr when that is a terminal, and `agentica compile [FILE...]` (no `-o`) fills the bytecode cache ahead, by default for every `main.agc` under the working folder (#1735).
 - `Actor.send` and `Actor.await` split `Actor.call` in two, so a caller can send requests to several actors first and then await each answer (#1571).
 - The errors of file and network builtins carry `details`: `"path"`, the path the call was given (and `"to"` for `Path.rename`), for a failed or `--deny-fs` refused file call, and `"host"` for a failed or `--deny-net` refused connect, listen, DNS lookup or TLS handshake (#1510).
 - `Native.arena do ... end` closes, when its block ends, every native resource and owned buffer the task opened in it, newest first, except those the block's value holds (#1091).

@@ -244,7 +244,10 @@ stages.
   other case it declines: it prints nothing and ends, and C runs the front end,
   which does the whole work. A launcher that ends with status 3 has looked for
   the entry and found none it could use; C then adds `--cache-missed` to the
-  front end's arguments, and the front end compiles without looking again. C
+  front end's arguments, and the front end compiles without looking again.
+  When stderr is a terminal, C also adds `--stderr-tty`, so a run that
+  compiles says so there; only a front end of this build gets it (a binary
+  that carries the BDD programs, not `--front-end FILE`). C
   does not start the launcher with `--front-end FILE`, in a binary that carries
   none (the first binary of the bootstrap), when the first word that is no
   option is a command, or when `--no-cache`, `--dump` or `--dump-ir` comes

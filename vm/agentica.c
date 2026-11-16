@@ -93,9 +93,12 @@ static int run_stage(agc_launch *launch, agc_program *program, bool launcher, co
    * the binary, not the front end, so it would get a program that another front end compiled. Without --self it
    * cannot run `agentica test`, which starts the binary again, and the bootstrap does not need that. */
   char version_flag[] = "--version", self_flag[] = "--self", bdd_flag[] = "--embedded-bdd",
-       missed_flag[] = "--cache-missed", separator[] = "--", version[] = AGC_VERSION;
+       missed_flag[] = "--cache-missed", tty_flag[] = "--stderr-tty", separator[] = "--", version[] = AGC_VERSION;
   bool embedded_bdd = !replacement && agc_embedded_index[3] != 0 && agc_embedded_index[5] != 0;
-  int input_count = 3 + (replacement ? 0 : 2) + (embedded_bdd ? 1 : 0) + (missed ? 1 : 0);
+  /* Only a front end of this build knows --stderr-tty: the first binary of the bootstrap carries stage0, and carries
+   * no BDD programs either. */
+  bool tty = embedded_bdd && agc_launch_stderr_tty();
+  int input_count = 3 + (replacement ? 0 : 2) + (embedded_bdd ? 1 : 0) + (missed ? 1 : 0) + (tty ? 1 : 0);
   char **arguments = agc_alloc(agc_size_mul((size_t)count + (size_t)input_count, sizeof *arguments));
   arguments[0] = version_flag;
   arguments[1] = version;
@@ -106,6 +109,7 @@ static int run_stage(agc_launch *launch, agc_program *program, bool launcher, co
   }
   if (embedded_bdd) arguments[separator_at++] = bdd_flag;
   if (missed) arguments[separator_at++] = missed_flag;
+  if (tty) arguments[separator_at++] = tty_flag;
   arguments[separator_at++] = separator;
   for (int k = 0; k < count; k++) arguments[separator_at + k] = words[k];
   agc_launch_options options;

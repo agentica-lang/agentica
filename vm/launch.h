@@ -103,6 +103,9 @@ agc_value agc_launch_args(int argc, char **argv, int first);
 uint8_t *agc_launch_read(int fd, size_t size);
 uint8_t *agc_launch_file(const char *path, bool driven, size_t *size);
 
+/* Whether standard error is a terminal. */
+bool agc_launch_stderr_tty(void);
+
 /* A runtime for PROGRAM, ready to run: output on descriptors 1 and 2, the stop signals watched, the seed and the
  * options applied. A front end (FRONT_END not NULL, the compiler of the single binary) gets that structure in its
  * runtime and neither standard input nor the channel to a parent process; they stay with the user's program, which
