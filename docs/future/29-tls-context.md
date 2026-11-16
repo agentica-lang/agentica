@@ -1,6 +1,6 @@
 ## 29. TLS contexts
 
-`TlsContext`, `TLS.upgrade` and ALPN are built (the grammar's network section
+`TLS.Context`, `TLS.upgrade` and ALPN are built (the grammar's network section
 and the network library page). Issue #993 holds the options that are still
 planned.
 
@@ -11,10 +11,10 @@ argument), and each passes the one-way test because nothing else can express it:
 
 - `min_version` (`"1.2"` or `"1.3"`), on both records: today the floor is fixed
   at 1.2.
-- `client_ca_file` on `TlsServerOptions`, which makes the server require and
+- `client_ca_file` on `TLS.ServerOptions`, which makes the server require and
   verify a client certificate. (`cert_file` and `key_file` on
-  `TlsClientOptions`, ALPN and `TLS.alpn` are built.)
-- `ca_data` on `TlsClientOptions`: PEM text in memory, for a CA that ships
+  `TLS.ClientOptions`, ALPN and `TLS.alpn` are built.)
+- `ca_data` on `TLS.ClientOptions`: PEM text in memory, for a CA that ships
   inside the program. It passes only as the one way for in-memory PEM; it does
   not replace `ca_file` for files.
 - `TLS.peer_certificate(socket)`: subject, names, validity. A socket builtin,

@@ -1,6 +1,6 @@
 ## 15. VM layers
 
-It follows [§16](16-architecture.md); the rest of the layers is issue #998.
+It follows [§16](16-architecture.md).
 
 The C VM has three layers (core, services, adapters) with one-way dependencies,
 a driver that wires them, one port between the services and the core, one header

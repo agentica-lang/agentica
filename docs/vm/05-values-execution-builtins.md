@@ -57,11 +57,11 @@ does not make obvious:
   `Range.to_a` above 1048576 values fails with `RUNTIME-INVALID-COUNT`; `first`
   and `last` of an empty range are an error value.
 - **Function value.** `&name` has no captures.
-- **Json.** Big integers stay decimal text until extracted. Object members are
-  sorted by key bytes and the last of equal keys wins, so `JSON.get` is a binary
-  search.
-- **Handles.** One tag and GC record per kind: Task, Channel, Socket, Listener,
-  HTTP values, FileHandle and Process.
+- **JSON.Value.** Big integers stay decimal text until extracted. Object members
+  are sorted by key bytes and the last of equal keys wins, so `JSON.get` is a
+  binary search.
+- **Handles.** One tag and GC record per kind: Task, Channel, TCP.Socket,
+  TCP.Listener, HTTP values, File.Handle and Process.
 
 ### 5.2 Safety rules for values
 
@@ -97,7 +97,7 @@ does not make obvious:
   exception is `handle->data` and `SSL_set_app_data`, which may point to a GC
   object only while the resource registry also roots it (10.2).
 - No GC finalizers for OS resources. Closing is explicit (10.2). The one
-  finalizer is a `TlsContext`'s, which only gives back its count on a
+  finalizer is a `TLS.Context`'s, which only gives back its count on a
   `malloc`'d TLS config (10.3). `GC_set_finalize_on_demand(1)` keeps it out of
   allocations: it runs at the start of a scheduler's next task. It is
   registered with `GC_REGISTER_FINALIZER_NO_ORDER`, the macro that matches

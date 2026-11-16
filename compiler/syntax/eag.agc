@@ -1,16 +1,12 @@
 ## The expansion of an `<<~EAG` template (docs/grammar/04-lexical.md): the lines of its body, as the lexer kept them,
 ## in the tokens of an expression that builds its text, so that the parser and the checker see ordinary code.
 ##
-## The body is text with tags. `<%= code %>` inserts the value of `code`, as `"#{code}"` does, `<% code %>` is a
-## statement, `<%# note %>` is dropped, `<%%` is the text `<%`, and `-%>` removes the line break after the tag. A line
-## that holds only one `<% %>` or `<%# %>` tag, with spaces around it, is removed whole, so a loop leaves no blank
-## lines; `<%-` removes the spaces before the tag when only spaces come before it on its line. The text is raw: no
-## escape and no `#{}`. A tag ends on the line where it starts, at the first `%>`, as in Ruby's ERB.
+## The tags, the trimming rules and the `<%@ escape %>` directive are on the site's EAG page
+## (site/content/library/text-and-data/eag.md).
 ##
-## `<%== code %>` always inserts the value as it is. A directive `<%@ escape function %>` on the first line gives the
-## template an escaper, a `Fn[String, String]` that every `<%= %>` applies to its text: the block binds the function,
-## `eag#e: Fn[String, String] = function`, and the push is `eag#t.push(eag#e.call("#{code}"))`, so the checker sees
-## ordinary code and reports a function of another type at the directive.
+## With an escaper, the block binds the function, `eag#e: Fn[String, String] = function`, and the push is
+## `eag#t.push(eag#e.call("#{code}"))`, so the checker sees ordinary code and reports a function of another type at the
+## directive.
 ##
 ## The expansion is
 ##

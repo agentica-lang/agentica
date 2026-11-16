@@ -4,8 +4,7 @@ description: >-
   Review a PR or diff changing the Agentica C VM (vm/*.c, vm/*.h, vm/tests,
   the loader or interpreter) for memory safety, UB, hostile-bytecode safety,
   GC rules, scheduler semantics, hot-path efficiency, and a small layered
-  core. Investigates with gmem code tools, then shows each suspicion with a
-  small program. Use for critic, security or safety reviews of VM/C PRs. Not for
+  core. Use for critic, security or safety reviews of VM/C PRs. Not for
   writing code, front-end-only changes, programs, or docs-only PRs.
 compatibility: >-
   Agentica repository checkout or worktree with git, gh, rg, ast-grep and make;

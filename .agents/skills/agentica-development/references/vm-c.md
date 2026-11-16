@@ -88,29 +88,19 @@ Each rule names one place in the VM that follows it.
 C11. `make vm-lint` (clang-tidy, `.clang-tidy`) and
 `tests/test_vm_style.py` check the rules marked *checked*.
 
-- File order: includes, macros, every `struct`/`typedef`/`enum`/`union`
-  definition, static data, functions. No type definition between functions
-  (*checked*). Builtin tables that point to the file's functions come last.
-- Exported names start with `agc_` (*checked* for functions); macros in
-  the headers and enum constants start with `AGC_`; file-local macros are plain
-  upper case.
-- File-local helpers and data are `static` (*checked*).
-- No mutable global or file-scope `static` variable in `vm/*.c` and
-  `vm/*.h` (*checked* by
-  `cppcoreguidelines-avoid-non-const-global-variables`; function-local
+- *Checked:* file order (includes, macros, type definitions, static data,
+  functions; builtin tables last), `agc_` on exported functions, `static`
+  file-local helpers and data, no prototypes of `static` functions (only
+  unavoidable mutual recursion has one), and a header comment on every
+  `vm/*.c`, `vm/*.h` and `vm/tests/*.c` (3 to 8 lines on what the file is, its
+  layer and its `docs/vm/` home; 1 to 4 lines for a C test).
+- Macros in the headers and enum constants start with `AGC_`; file-local
+  macros are plain upper case.
+- No mutable global or file-scope `static` variable (*checked*; function-local
   `static` variables are not caught). State goes in `agc_vm`; constant data
   is `const`. The exceptions of `docs/vm/10-io-multicore.md` §10.2.3 take
   `// NOLINT(cppcoreguidelines-avoid-non-const-global-variables)`.
   `vm/tests/.clang-tidy` turns the check off for the C tests.
-- No prototypes of `static` functions: define each helper before its first use,
-  so files read bottom-up and the `agc_*` functions usually come last
-  (*checked*); only unavoidable mutual recursion may have one.
-- Every `vm/*.c`, `vm/*.h` and `vm/tests/*.c` file starts with a header comment,
-  except the generated `vm/unicode_data.c`. A source file's header is 3 to 8
-  lines of text: what the file is, its main functions or builtin family, its
-  layer, and where its design lives in `docs/vm/`, as `vm/agentica.c` does. A C
-  test's header is 1 to 4 lines on what it tests. A legal header may come before
-  it. *Checked* by `tests/test_vm_style.py`.
 - Comments say why where the C is not obvious: an invariant, an ownership or
   lifetime rule, GC reachability (why a pointer is still alive after an
   allocation), an order, a protocol or library quirk, the RFC section, or the

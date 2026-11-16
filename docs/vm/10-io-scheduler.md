@@ -195,7 +195,7 @@ section says how the scheduler and the loop keep them.
 
 - **Resource registry** (`vm/loop.c`). Every handle, request and job is a GC
   resource that owns its `malloc` memory and keeps its registry slot until it is
-  released. A `FileHandle` points to its resource. A job stays registered until
+  released. A `File.Handle` points to its resource. A job stays registered until
   its work has run, its timer is closed, and its result was taken. No GC pointer
   is stored in `malloc` memory. Callbacks find their job with `offsetof`, never
   through `handle->data`.
@@ -304,7 +304,7 @@ section says how the scheduler and the loop keep them.
   (glibc empties a `FILE` buffer on a failed write, so a retry would lose
   bytes). The end of the run drops every subscription first, so a signal
   during the exit path is a stop signal. Windows has no subscription.
-- **Per-handle lock.** A `FileHandle` has a `holder` (the job in flight, or a
+- **Per-handle lock.** A `File.Handle` has a `holder` (the job in flight, or a
   socket's direct send or receive, §10.3.1), a `next_owner` task, and a FIFO of
   waiting tasks, all in GC memory. Every handle builtin checks its arguments and
   timeout first, then takes the lock, and only then checks that the handle is

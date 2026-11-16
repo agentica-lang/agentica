@@ -327,13 +327,12 @@ one exit path are as in §16.1 to §16.6. What differs:
   it, as they call `agc_runq_share`. The run queue is solo in the same way: it
   takes no lock until `agc_runq_share` turns the lock on, which must run before
   a second thread touches the queue.
-- **The libuv steps of a job are requests** (`vm/loop.c`): START, CLOSE_TIMER,
-  RELEASE (a reference given back, so the count reaches zero on the loop's
-  thread), DETACH, EXPIRE_CANCEL (the cancel at a detached job's deadline),
-  WAIT_DONE and CALL (a libuv step with no job). `post` runs one at once on the
-  loop's thread, with no entry. libuv callbacks put the job on a ready list. The
-  scheduler drains it after `uv_run` and queues the tasks. That drain is the
-  push of §16.4, and it keeps a woken task behind the one whose turn just ended.
+- **The libuv steps of a job are requests** (`vm/loop.c`, `agc_request`); a
+  reference given back is one too, so the count reaches zero on the loop's
+  thread. `post` runs one at once on the loop's thread, with no entry. libuv
+  callbacks put the job on a ready list. The scheduler drains it after `uv_run`
+  and queues the tasks. That drain is the push of §16.4, and it keeps a woken
+  task behind the one whose turn just ended.
 - **Compute pool** (`vm/compute.c`). `agc_io_compute` starts a job whose `work`
   is a native call or a key derivation; its START gives the work to the compute
   pool instead of the libuv pool. The pool is made at the first such START with
@@ -350,23 +349,17 @@ one exit path are as in §16.1 to §16.6. What differs:
   compute job is a pool job: no deadline, no cancel half, and a cancel detaches
   it. A detached item still in the queue skips its `work`; a running one drops
   the result once the call returns. What the end of the run waits for is in
-  §14.4 (steps 0 and 3). A thread that ran an item spins for the next one
-  before it waits on the condvar, as an idle scheduler does: 10 µs, up to
-  160 µs while its next items come soon after, at most half the pool's threads
-  (at least one) at once, and none when the process may run on one CPU only.
-  A run of short calls then hands over in a few microseconds, not the tens a
-  condvar wake costs (#1120).
+  §14.4 (steps 0 and 3). A thread that ran an item spins briefly for the next
+  one before it waits on the condvar, as an idle scheduler does, so a run of
+  short calls hands over without a condvar wake (#1120).
   - At N > 1 a compute job skips the I/O thread. The builtin runs with
-    `rt->sync` held, so its job waits in `vm->direct`, and `run_task` gives it
-    to the pool once the turn is over (`agc_io_submit_direct`, no START). On the
-    pool thread `compute_ended` ends the wait, puts the job on `loop->finished`
-    and nudges a scheduler, which wakes the task into its runnext slot
-    (`end_finished` in `agc_io_service`) or posts READY for a detached job. Only
-    the last reference is posted (DEAD), so the I/O thread frees the job but is
-    woken once per call, not three times. The stall check also reads the pool's
+    `rt->sync` held, so its job waits until the turn is over and then goes to
+    the pool, with no START. The pool thread ends the wait and nudges a
+    scheduler, which wakes the task; only the last reference is posted, so the
+    I/O thread is woken once per call. The stall check also reads the pool's
     count of direct calls, since they keep no handle alive. Once the schedulers
-    have ended, `agc_io_hand_off(vm, false)` turns the calls still running into
-    the loop's own, so the end of the run waits for them on the loop.
+    have ended, the calls still running become the loop's own, so the end of
+    the run waits for them on the loop.
 - **Services.** Service code makes its handles through `agc_loop_uv` (§15.1).
   At N > 1 the steps of the standard streams and of polled files are requests
   (`agc_io_call`), and the stdin poller is opened before the schedulers start,
@@ -453,11 +446,8 @@ one exit path are as in §16.1 to §16.6. What differs:
 - **A post after the loop closed is loud.** After `agc_io_close`, a post from
   another thread aborts (`post_after_close`): it guards against a bug, not a
   program.
-- **TSan covers the shared code.** `make vm-tsan` builds the VM without libgc
-  (TSan and Boehm's stop-the-world do not mix) and runs the C tests that use
-  more than one thread, including whole runs on four schedulers
-  (`vm/tests/threads_test.c`). `make vm-tsan-run` runs
-  `tests/test_vm_multicore.py` on the same build.
+- **TSan covers the shared code** (`make vm-tsan`, without libgc: TSan and
+  Boehm's stop-the-world do not mix).
 - **The task is recorded before the job starts** (`start_job` sets `r->task`
   and `t->parked` before it posts START), so a completion that follows at once
   finds the task.
@@ -520,22 +510,17 @@ one exit path are as in §16.1 to §16.6. What differs:
     watches the pool's inbox (`agc_inbox_watch`), so an end sends no wake; after
     the spin it looks at the inbox once more and takes an end that came
     meanwhile itself. Its submits block the stop signals only while the pool
-    may still start a thread. A scheduler
-    that starts to spin while no other does spins for that budget times two to
-    its own level (`agc_vm.spin_level`, 0 to `AGC_SPIN_LEVEL_MAX`): a spin that
-    took a task raises the level by one and one that took none lowers it by
-    one. Tasks that keep coming within the longest budget (the clients of one
-    busy task) hold the level at its top, and a spinner takes them with no
-    futex wake per task; while none comes within the least budget, the level
-    falls to 0 and stays there. A push or a
-    nudge reads the count of spinners under the queue's lock and skips the
-    condvar signal while one spins. No wake is lost: a spinner leaves the count
-    before it takes the lock for its wait, so it either sees `work`, finds the
-    task in that wait, or left before the push read the count, which then
-    signals. A spinner may see several pushes that sent no signal, so the wake
-    is chained: a scheduler that leaves a spin or a wait with a task, while more
-    tasks are queued, signals one more waiter. Spinners do not count as idle for
-    the stall check; only the condvar wait does.
+    may still start a thread. The spin budget adapts per scheduler
+    (`agc_vm.spin_level`): it grows while spins find tasks and falls to its
+    least while they find none. A push or a nudge reads the count of spinners
+    under the queue's lock and skips the condvar signal while one spins. No wake
+    is lost: a spinner leaves the count before it takes the lock for its wait,
+    so it either sees `work`, finds the task in that wait, or left before the
+    push read the count, which then signals. A spinner may see several pushes
+    that sent no signal, so the wake is chained: a scheduler that leaves a spin
+    or a wait with a task, while more tasks are queued, signals one more waiter.
+    Spinners do not count as idle for the stall check; only the condvar wait
+    does.
   - A task whose turn ends ready (a yield, or a wake during its own turn) goes
     back to the queue with `agc_runq_push_own` when its scheduler's slot is
     empty, so that scheduler pops next. If the queue was empty, the push sends

@@ -1,9 +1,8 @@
 ---
 name: agentica-programming
 description: >-
-  Write, check, run and repair Agentica programs (`.agc` files), a Ruby-like
-  language with static types and immutable values: language rules,
-  builtins and `std/` modules (HTTP, JSON, tasks, regex, option_parser),
+  Write, check, run and repair Agentica programs (`.agc` files, a Ruby-like
+  language with static types): language rules, builtins, `std/` modules,
   `agentica.toml` packages, `agentica test` and BDD specs, and the `CHECK-`,
   `PARSE-`, `RUNTIME-` and `PKG-` diagnostics. Use whenever a task writes,
   edits, runs or debugs Agentica application code or fixes one of its
@@ -73,7 +72,6 @@ Read only what the task needs.
 | `files.md` | File, Dir, Path, locks |
 | `bytes.md` | `Bytes`: `s.bytes`, slicing, joining, `Bytes.build`, keys |
 | `compression.md` | Zlib bytes and Lazy byte streams (deflate, zlib, gzip) |
-| `archive.md` | `std/archive` (TAR/ZIP extraction by allowlist) |
 | `processes.md` | Process, `IO.read_bytes`, flush, `System.env/os/pid`, signals (`System.subscribe`, `Process.signal`, `System.signal`) |
 | `network.md` | TCP, TLS, DNS |
 | `http.md` | `std/http`: client, server, streaming, WebSocket |
@@ -85,16 +83,8 @@ Read only what the task needs.
 | `performance.md` | slow code, `System.Profile`, step costs |
 | `binary.md` | bit operations, `std/binary` (integers and floats in bytes, frames), `String.from_bytes` |
 | `crypto.md` | `OpenSSL` (`Digest`, `HMAC`, `Cipher`, `CMAC`, `KDF`, `RSA`, `Random`), `Base64`, hex |
-| `logger.md` | `std/logger` |
-| `toml.md` | `std/toml` |
-| `uri.md` | `std/uri` (percent-encoding, query strings) |
-| `html.md` | `std/html` |
-| `cookie.md` | `std/cookie` |
-| `option_parser.md` | `std/option_parser` (command-line options, help) |
-| `cache.md` | `std/cache` (bounded string cache that tasks share) |
-| `mime.md` | `std/mime` |
-| `utc.md` | `std/utc` (Unix ms to UTC date, RFC 3339) |
 | `regex.md` | `std/regex` and `/re/` literals |
+| `<name>.md` | `std/<name>`: `archive` (TAR/ZIP by allowlist), `cache` (string cache tasks share), `cookie`, `html`, `logger`, `mime`, `option_parser` (command-line options), `toml`, `uri` (percent-encoding, query strings), `utc` (Unix ms to UTC dates) |
 | `eag.md` | `<<~EAG` templates and `std/eag` |
 | `native.md` | C functions (`extern`, `compute def`, `C.Pointer`, memory reads, resources) |
 | `native-modules.md` | C code written for Agentica (`extern module`, the types that cross) |

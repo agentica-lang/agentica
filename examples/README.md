@@ -89,37 +89,8 @@ printf '%s\n' '{"distances":[[0,10,15,20],[10,0,35,25],[15,35,0,30],[20,25,30,0]
 printf '%s\n' '{"grid":[".#.","..."],"start":0,"goal":2}' | dist/agentica --max-steps 5000000 examples/maze-bfs.agc
 ```
 
-The JSON examples print compact JSON. Configs need a nonempty name and a port
-from 1 to 65535. Scores must be 0 to 100, and an active score of at least 60
-passes. A failed extraction gives an error object, and `json-lines` goes on to
-the next record.
-
-## Knight tour and traveling salesman
-
-Both read one JSON document and print one JSON document.
-
-- Knight tour: a square board of size 1 to 8, and a zero-based start square
-  (`row * size + column`). It prints `{"found":true,"path":[...]}`, or
-  `{"found":false,"path":[]}` after the search is exhausted. Tours are open:
-  they do not return to the start.
-- Traveling salesman: a complete directed square matrix of 1 to 8 cities, with a
-  zero diagonal and integer costs from 0 to 1,000,000,000. It prints the optimal
-  circuit as `{"cost":...,"route":[0,...,0]}`. One city gives `[0,0]` and cost
-  zero.
-- Both print `{"error":"invalid input"}` for an invalid document.
-
-Searches can be expensive. A step-limit diagnostic does not mean there is no
-solution; raise `--max-steps` and run it again.
-
-## Maze
-
-The grid is rectangular, with 1 to 32 rows and columns. `.` is open, `#` is
-blocked, and only horizontal and vertical steps are allowed. The start and goal
-use `row * width + column` and must be open cells. A start equal to the goal
-gives distance zero and a one-cell path. It prints
-`{"found":true,"distance":...,"path":[...]}`, or
-`{"found":false,"distance":-1,"path":[]}` when the goal cannot be reached.
-Invalid input gives `{"error":"invalid input"}`.
-
-The queue in `maze-bfs.agc` uses numeric keys and deletes consumed entries.
-`Map.delete` takes O(n) time, so the example shows the API, not a fast queue.
+Each prints one JSON document, and an invalid document gives an error object
+(`json-lines` goes on to the next record). The accepted ranges (board size,
+cities, grid size) are checked in each file. Knight tours are open:
+they do not return to the start. A step-limit diagnostic does not mean there is
+no solution; raise `--max-steps` and run it again.

@@ -21,7 +21,7 @@ rules live in `AGENTS.md` and `agentica-development`.
 - One branch and one PR per step, each in its own worktree:
   `git -C <repo> worktree add -b <branch> ../agentica-<topic> origin/master`,
   then `git submodule update --init` (a patch release starts from
-  `origin/release-X.Y`: `agentica-release` §6). Never edit or switch
+  `origin/release/X.Y.x`: `agentica-release` §6). Never edit or switch
   branches in the main checkout or in other agents' worktrees; read-only
   `git` and `gh` commands are fine.
 - One open PR per author at a time: after the PR opens, the author watches

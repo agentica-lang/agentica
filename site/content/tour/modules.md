@@ -303,7 +303,7 @@ See [Queue](/library/data-structures/queue/) for every function.
 
 ## Other libraries
 
-Paths that start with `pkg/` load installed libraries. `import Tools from "pkg/acme/tools"` looks for `acme/tools.agc` in `agc_libs/` next to the main program (next to `agentica.toml` when the project has one), then in each directory listed in `AGENTICA_PATH`, then in `~/.local/share/agentica/lib/`, `/usr/local/share/agentica/lib/` and `/usr/share/agentica/lib/`. On Windows, `AGENTICA_PATH` is separated by `;` (drive paths such as `C:\libs` are fine), the user directory is `%LOCALAPPDATA%\agentica\lib\`, and there are no system directories.
+Paths that start with `pkg/` load installed libraries: `import Tools from "pkg/acme/tools"` looks for `acme/tools.agc` in `agc_libs/` next to the main program, then in the folders of `AGENTICA_PATH` and the user and system library folders ([search order](/reference/modules/#standard-library-and-external-libraries)).
 
 ## Packages
 
@@ -342,6 +342,6 @@ A dependency that only the tests use, such as a property-testing package, takes 
 prop = { git = "https://github.com/owner/prop", tag = "v1.0.0", group = "test" }
 ```
 
-A manifest may say which Agentica it needs, as a minimum: `agentica = "0.31.0"` (one SemVer version; `0.31.0-alpha.1` is older than `0.31.0`). When the project, one of its packages or the root of its workspace needs a newer Agentica than the one running, `install`, `check`, `run` and `test` stop with `PKG-AGENTICA-TOO-OLD`.
+A manifest may name the oldest Agentica it needs, `agentica = "0.31.0"`; an older Agentica stops `install`, `check`, `run` and `test` with `PKG-AGENTICA-TOO-OLD`.
 
 Problems are reported with `PKG-` codes. Workspaces, `path` and `override` dependencies, native libraries and modules built from C, the `[style]` and `[tool.NAME]` tables, and every limit and code are in the [modules reference](/reference/modules/); native code is in [Native code](/library/io-and-system/native/).

@@ -184,16 +184,14 @@ proof). These are the rules they do not show.
 - Every job that runs tests sets `AGENTICA_SWEEP=sampled` (seed from
   `GITHUB_SHA`; a failure prints `AGENTICA_SWEEP_SEED`). `RUNTIME-TEST-TIMEOUT`
   has coverage only in the slow tier.
-- A new CI job counts against the 20 runners the organization shares with
-  `platforms.yml`: a run is 9 jobs, and 19 when C changed (the two aggregates
-  included), plus `cchecker` when `vm/`, the build files or its settings
-  changed. Merge small steps into an existing job before adding one.
+- A new CI job counts against the runners the organization shares with
+  `platforms.yml`: merge small steps into an existing job before adding one.
 - The artifacts live one day: after 24 hours, re-run all jobs of a run, not only
   the failed ones, since a shard could not download the build.
 - Peers: TCP needs Node; TLS needs Node and Python 3; the goldens need Python 3
   (`tests/fixtures/channel-run.py`; `channel-run.js` on Windows).
-- PR jobs use the system libgc (`GC_MIN` 8.2.0; older systems use
-  `AGENTICA_GC=vendored`), OpenSSL 3 and zlib 1.2.0; `warm-third-party`,
+- PR jobs use the system libgc, OpenSSL and zlib (minimums: `GC_MIN` and
+  `ZLIB_MIN` in `mk/vm.mk`); `warm-third-party`,
   `sweep.yml` and the release use the vendored ones. Both modes share
   `build/vm/release/obj`; a mode change forces a full rebuild.
 
@@ -208,8 +206,8 @@ settings and reports a stale ignore of the rules). It is an Agentica program:
 `make cchecker` clones the tag pinned in `mk/vm-test.mk` (`CCHECKER_VERSION`,
 checked against `CCHECKER_COMMIT`; the release has no binary) into
 `build/cchecker/`, and needs gcc 10+, clang and clang-tidy; `dist/agentica`
-runs it (`make` first). A run takes 3 to 5 minutes. Its docs are
-in that clone (`docs/settings.md`, `docs/suppressions.md`).
+runs it (`make` first). Its docs are in that clone (`docs/settings.md`,
+`docs/suppressions.md`).
 
 - `cchecker.toml` holds the settings (`[library]`, `[roots]`, `[assume]`);
   `cchecker-baseline.json` holds the accepted findings. It exits 1 on a
@@ -222,9 +220,9 @@ in that clone (`docs/settings.md`, `docs/suppressions.md`).
   failure shows there (a commit that is not the pinned one fails at once).
   The step fails when cchecker exits non-zero (the JSON says which: new
   findings, a stale ignore included, or a tool error), and the print step
-  fails on an empty or invalid JSON. It prints the new findings, the tool errors and the
-  files not checked, and uploads the JSON of `--json` as the artifact
-  `cchecker-findings`, also on a failure.
+  fails on an empty or invalid JSON. It prints the new findings, the tool
+  errors and the files not checked, and uploads the JSON of `--json` as the
+  artifact `cchecker-findings`, also on a failure.
 - The job pins gcc 14 and clang and clang-tidy 19, which are the reference:
   the baseline matches by message and the analyzers reword between versions,
   so a local run with other versions may differ by a finding or an unused
@@ -240,19 +238,9 @@ in that clone (`docs/settings.md`, `docs/suppressions.md`).
 - Marks: `vm/cchecker.h` is a copy of `include/cchecker.h` of the pinned
   release, and its header comment says what each macro means; they are empty in
   every build but cchecker's own AST dump (`CCHECKER_AST`). Settings first
-  (`cchecker.toml`); a mark is for what they cannot say. In this tree:
-  `CC_OWNS` on a function that returns malloc memory and on the fields and
-  parameters that own it, `CC_OWNS_OUT` on a `char **out` handing an owned
-  pointer to the caller (`agc_remove_tree`), `CC_FREES` on a parameter that is
-  freed, `CC_GC_ALLOC` on a collector allocator, `CC_ACQUIRES(lock)` and
-  `CC_RELEASES(lock)` on a function that takes or drops its caller's lock
-  (`agc_lock_take`, `leave_with`). `CC_JUMPS` goes on a raise that never
-  returns (`agc_wrong_tag`, `agc_fail` and its family): cchecker infers from it
-  which functions may jump out and checks what they hold there.
-  `CC_JUMP_RELEASES` goes on a lock helper whose lock the scheduler gives back
-  after a jump (`agc_sync_take`, `stream_take`). A function that takes or drops
-  a lock only on some paths (by a flag or a count) gets an ignore with the
-  reason.
+  (`cchecker.toml`); a mark is for what they cannot say. A function that takes
+  or drops a lock only on some paths (by a flag or a count) gets an ignore with
+  the reason.
 - To move to a new release, change `CCHECKER_VERSION` and `CCHECKER_COMMIT`
   (`git ls-remote https://github.com/agentica-lang/cchecker 'X^{}' X`), copy
   its `include/cchecker.h` over `vm/cchecker.h`, run

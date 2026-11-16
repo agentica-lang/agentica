@@ -4,7 +4,7 @@ weight: 1
 description: Build and read Result values.
 ---
 
-`Result[T]` is `ok(value)` or `error(...)`, which holds an [Error](/library/errors/error/). The tour page [Result and try](/tour/results-and-try/) explains how to use it.
+`Result[T]` is `ok(value)` or `error(...)`, which holds an [Error](/library/errors/error/).
 
 ## ok
 

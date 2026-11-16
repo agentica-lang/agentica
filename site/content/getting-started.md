@@ -60,10 +60,8 @@ Hello, world!
 
 ## Check
 
-`agentica check hello.agc` checks types without running and prints `check ok`. An error prints a stable code, such as `CHECK-TYPE-MISMATCH`, with its file, line and column, and exits with code 1. The [command line page](/cli/#check-and-errors) has the details.
+`agentica check hello.agc` checks types without running and prints `check ok`, or an error with a stable code such as `CHECK-TYPE-MISMATCH` ([Check and errors](/cli/#check-and-errors)).
 
 ## Next
 
-- Take the [language tour](/tour/) first, one idea at a time.
-- Then look up the builtins in the [library](/library/).
-- The [command line](/cli/) page lists every command, option and cache.
+Take the [language tour](/tour/), then look up the builtins in the [library](/library/).

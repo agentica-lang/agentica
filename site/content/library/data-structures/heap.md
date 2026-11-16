@@ -4,7 +4,7 @@ weight: 4
 description: The std/heap module, a priority queue of any type in the order you give.
 ---
 
-`std/heap` is part of the standard library. It is written in Agentica itself. Import it with an alias: `import Heap from "std/heap"`.
+`std/heap` is written in Agentica: `import Heap from "std/heap"`.
 
 A heap is an immutable `Heap.Heap[T]` value that holds values of any type. You give the order to `new` as a function `before`: it is true when its first value comes out before its second, so `a < b` gives the smallest first and `a > b` the largest first. Give a strict order (`<` or `>`, not `<=`); the heap still works with a non-strict one, but values that tie come out in no set order either way. Every function gives a new heap; assign it to keep it, or continue with `Popped.remaining`. `pop` and `peek` on an empty heap return an error Result of kind `heap.empty`.
 

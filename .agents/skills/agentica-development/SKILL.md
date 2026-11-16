@@ -2,15 +2,11 @@
 name: agentica-development
 description: >-
   Develops the Agentica interpreter: the front end written in Agentica
-  (compiler/: lexer, parser, linker, checker, lowering, bytecode writer) and
-  the C11 bytecode VM (vm/ with the Boehm GC, runtime libraries, loader
-  safety, golden tests). Covers where code goes, how to add tokens, AST nodes,
-  syntax, diagnostics, builtins, opcodes and tests, the gotchas of this repo,
-  and the VM build, CI, site, benchmarks and copy-paste check. Use
-  when working in the agentica repository on compiler/, vm/, tests/, site/,
-  the Makefile or CI. Don't use for writing Agentica programs
-  (agentica-programming), for the grammar documents alone, or for other C
-  projects.
+  (compiler/) and the C11 bytecode VM (vm/), with their tests, build, CI, site
+  and benchmarks. Use when working in the agentica repository on compiler/,
+  vm/, tests/, site/, the Makefile or CI. Don't use for writing Agentica
+  programs (agentica-programming), for the grammar documents alone, or for
+  other C projects.
 ---
 
 # Agentica development
@@ -18,7 +14,7 @@ description: >-
 This file says how to work and which reference to read; the tree is in
 `AGENTS.md`. Load only the references your change needs.
 
-- The rules of `AGENTS.md` apply. Read the GitHub issue of the work first
+- Read the GitHub issue of the work first
   (`gh issue view N -R agentica-lang/agentica`) and build only what it asks;
   `docs/future/` keeps the designs that issues point to.
 - One way per thing, and it is the Ruby form (name, method form, syntax). A
@@ -63,10 +59,8 @@ One pytest process runs per module, so keep xdist off.
 
 ## Stage contract
 
-The contract is in `AGENTS.md` ("Stages"); the entry points (`Lexer.lex` ...
-`Writer.write`) are in `references/stages.md`. `compiler/app/cli.agc` prints
-the diagnostic and exits 1. Thread spans through; an impossible state is a
-`*-INTERNAL` diagnostic.
+`AGENTS.md` ("Stages"); entry points in `references/stages.md`. Thread spans
+through; an impossible state is a `*-INTERNAL` diagnostic.
 
 ## Where new code goes
 

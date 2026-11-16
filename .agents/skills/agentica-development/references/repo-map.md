@@ -24,8 +24,6 @@ compiler/         # the front end: one folder per context (placement and imports
   catalog/        # the builtin catalog (imports only syntax/): builtins_data.agc (records, enums), builtins_<module>.agc (rows) and prelude_data.agc (by hand)
   lower/          # the IR and lowering; lower_tables.agc holds VM_BUILTINS
   bytecode/       # the writer; bytecode_tables.agc holds the format and OPCODES (same order as agc_opcode in vm/value.h)
-  docs/           # `agentica doc`
-  query/          # the printers of the query commands (frontend.md)
   diagnostics/    # the diagnostic model and its printers; problem.agc: how a stage packs a failure (`Problem`)
   format/         # `agentica fmt`; refreeze stages `format` (attach.agc) and `fmt` (fmt.agc); goldens in tests/fixtures/frontend/format/
   lint/           # `agentica lint`: rules.agc (the LINT- codes), rule_*.agc (one per kind of node); pure, parse only (reads the builtin catalog as data)

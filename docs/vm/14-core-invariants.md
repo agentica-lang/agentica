@@ -354,7 +354,6 @@ the caller. A channel never handed over is closed only by `Channel.close`.
 - Each new core concept replaces something, or justifies itself against §14.1 to
   §14.5: how it waits, times out, is cancelled, ends and owns its handles. If it
   needs a second way for any of them, it does not go in. A planned subsystem
-  (the rest of the VM layers, #998; VM metrics, #992) passes this rule before
-  it starts.
+  (VM metrics, #992) passes this rule before it starts.
 
 [task-rules]: ../../site/content/library/concurrency/task.md

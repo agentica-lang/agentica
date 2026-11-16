@@ -70,8 +70,6 @@ end
 
 A `Void` function gives no value: its last expression is a statement like any other.
 
-Code after a `return` can never run, so it is also an error (`CHECK-UNREACHABLE-CODE`): remove it or move it before the `return`.
-
 ## One-line functions
 
 A function whose body is one value can be written on one line, with `=` after the result type. It is the same as a `def` whose body is that value.

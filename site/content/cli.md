@@ -24,7 +24,7 @@ agentica greet.agc Ana Bob    # prints one greeting per name
 
 ## Check and errors
 
-`agentica check hello.agc` checks types without running and prints `check ok`. `agentica check src tests/util.agc` checks several files and folders at once (see [Options](#options)). Every run checks first, so a type error stops it before any output. `check` accepts a file without `main`; a run or `compile` needs `def main() -> Void`. The checker stops at the first error:
+`agentica check hello.agc` checks types without running and prints `check ok`. `agentica check src tests/util.agc` checks several files and folders at once (see below). Every run checks first, so a type error stops it before any output. `check` accepts a file without `main`; a run or `compile` needs `def main() -> Void`. The checker stops at the first error:
 
 ```agentica {expect="CHECK-TYPE-MISMATCH"}
 def main() -> Void
@@ -46,6 +46,9 @@ expected Int, found String
 - Exit code `1`: the program has an error. Exit code `2`: a bad command or an unreadable file.
 - Codes start with `LEX-`, `PARSE-`, `CHECK-`, `RUNTIME-` or `LINT-` (the suggestions of [`lint`](#suggest-style-changes)). A runtime error also prints the call stack. See [Diagnostics](/reference/diagnostics/).
 - `--ai` and `--json` print the same error for tools: `{"code":"CHECK-TYPE-MISMATCH","file":"bad.agc","range":{...},...}`. A warning, which is not an error (`PKG-NATIVE-UNBUILT`), is a JSON object with `"warning": true`, or an `--ai` block that starts with `warning`.
+- One file path prints `check ok`, or its first diagnostic; with `--json`, `{"ok":true}` or the diagnostic. A folder, no path or several paths end with a count (`check ok: 3 files`, or `check failed: 1 of 3 files` and exit 1), and each failing file prints its first diagnostic (with `--ai`, under the file name). With `--json` the output is one object on stdout, `{ok, checked, failed, files}`, with `{file, ok, diagnostic}` for each file.
+- A problem of an imported file is shown once, in the entry of that file when it is one of the paths, else in the first importer; the other importers are not counted as failed, and with `--json` their entry is `{file, ok: false, imports}`.
+- A folder skips hidden folders, `agc_libs/`, `_build/`, the `deps/` of a project and symbolic links to files, as `symbol` does; `build/` is not skipped. A path that does not exist, or a folder with no `.agc` file, is `QUERY-USAGE` and exit 2, and no file is checked. A file that cannot be read is `QUERY-USAGE` in its entry and makes the exit code 2; the other files are still checked.
 
 ## Suggest style changes
 
@@ -185,7 +188,7 @@ Three variables have no flag. `AGENTICA_GC_HEAP` (default `32M`: bytes, or a num
 
 | Command | Does |
 |---|---|
-| `check [PATH...]` | checks every `.agc` file of the files and folders named, or of the current folder with no PATH. One file path prints `check ok`, or its first diagnostic; with `--json`, `{"ok":true}` or the diagnostic. A folder, no path or several paths end with a count (`check ok: 3 files`, or `check failed: 1 of 3 files` and exit 1), and each failing file prints its first diagnostic (with `--ai`, under the file name). With `--json` the output is one object on stdout, `{ok, checked, failed, files}`, with `{file, ok, diagnostic}` for each file. A problem of an imported file is shown once, in the entry of that file when it is one of the paths, else in the first importer; the other importers are not counted as failed, and with `--json` their entry is `{file, ok: false, imports}`. A folder skips hidden folders, `agc_libs/`, `_build/`, the `deps/` of a project and symbolic links to files, as `symbol` does; `build/` is not skipped. A path that does not exist, or a folder with no `.agc` file, is `QUERY-USAGE` and exit 2, and no file is checked. A file that cannot be read is `QUERY-USAGE` in its entry and makes the exit code 2; the other files are still checked |
+| `check [PATH...]` | checks every `.agc` file of the files and folders named, or of the current folder with no PATH; see [Check and errors](#check-and-errors) |
 | `check --stdin FILE` | checks the text on standard input as if `FILE` held it, for an editor buffer that is not saved. `FILE` need not exist, but its folder is where imports, `agentica.toml` and `agc_libs/` are found; other files come from the disk. With `--json`, the diagnostic names `FILE` |
 | `lint [PATH...]` | suggests style changes; see [Suggest style changes](#suggest-style-changes) |
 | `fmt [PATH...]`, `fmt --check`, `fmt -`, `fmt --tree FILE` | formats files in place, lists the files it would change, formats standard input, or prints the parse tree; see [Format](#format) |

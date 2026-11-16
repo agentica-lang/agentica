@@ -60,7 +60,7 @@ libuv sockets (`vm/tcp.c`, `vm/net.h`) and has no platform code of its own.
 - **C (`HttpWire`)** is VM-only and std-only. It keeps the byte-level,
   security-critical and shared parts: the parser and decoder (10.6), the bytes
   of the error answers and of the response head, the client's
-  pool and its `SSL_CTX` (one per client, or the program's `TlsContext`), and
+  pool and its `SSL_CTX` (one per client, or the program's `TLS.Context`), and
   the server's slots, task group and
   `close_server`. The server's parsing functions hold no state: each takes the
   bytes read so far and returns a record.
@@ -129,7 +129,7 @@ libuv sockets (`vm/tcp.c`, `vm/net.h`) and has no platform code of its own.
   does not guard it: a crafted `.agcb` gets nothing `TCP` and `TLS` do not give
   (the trust model of §1). `HttpWire` is not a reserved name, but an
   `enum HttpWire` is `CHECK-REDEFINED-NAME`.
-- **TLS** takes a `TlsContext` (10.3): `HttpWire.ClientOptions.tls` a client
+- **TLS** takes a `TLS.Context` (10.3): `HttpWire.ClientOptions.tls` a client
   one (`none`: system trust), and `serve_tls` a server one.
 
 #### 10.7.1 The client
