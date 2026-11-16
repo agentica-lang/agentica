@@ -22,6 +22,37 @@
    as the definition is not an inline definition. */
 #define OP_HELPER inline __attribute__((always_inline))
 
+/* The constructor opcodes, written once for the turn loop and their agc_op_* functions, which a JIT calls. Macros over
+   R and the window's first register, not inline helpers: inlining a helper changed the register allocation of
+   plain_turn (make layout-check). */
+#define OP_LIST(vm, R, b, count) \
+  ((count) ? agc_list_value(agc_list_from_array(&(R)[b], (count))) : (vm)->rt->empty_list)
+#define OP_STRUCT(dst, R, b, type, count)                                           \
+  do {                                                                              \
+    uint32_t n_ = (count);                                                          \
+    agc_struct *st_ = agc_new_struct((type), n_);                                   \
+    for (uint32_t k_ = 0; k_ < n_; k_++) st_->fields[k_] = (R)[(uint32_t)(b) + k_]; \
+    (dst) = agc_struct_value(st_);                                                  \
+  } while (0)
+#define OP_ENUM(dst, R, b, v, variant)                                                     \
+  do {                                                                                     \
+    const agc_variant_def *v_ = (v);                                                       \
+    if (v_->arity == 0) {                                                                  \
+      (dst) = agc_enum_value(v_->shared);                                                  \
+      break;                                                                               \
+    }                                                                                      \
+    agc_enum *e_ = agc_new_enum((variant), v_->arity);                                     \
+    for (uint32_t k_ = 0; k_ < v_->arity; k_++) e_->payload[k_] = (R)[(uint32_t)(b) + k_]; \
+    (dst) = agc_enum_value(e_);                                                            \
+  } while (0)
+#define OP_CLOSURE(dst, R, a, function, captures)                                    \
+  do {                                                                               \
+    uint32_t n_ = (captures);                                                        \
+    agc_fn *f_ = agc_new_fn((function), n_);                                         \
+    for (uint32_t k_ = 0; k_ < n_; k_++) f_->captured[k_] = (R)[(uint32_t)(a) + k_]; \
+    (dst) = agc_fn_value(f_);                                                        \
+  } while (0)
+
 typedef enum { SORT_INT, SORT_FLOAT, SORT_TEXT } sort_kind;
 
 /* The result of one run_compiled call: no code ran, the turn yields or parks/done, an unsupported instruction is left
@@ -1595,7 +1626,7 @@ reload:
         if (t->turn_cost && apply_cost(vm)) return AGC_TURN_YIELD;
         break;
       case AGC_OP_LIST:
-        R[in.a] = in.c ? agc_list_value(agc_list_from_array(&R[in.b], in.c)) : vm->rt->empty_list;
+        R[in.a] = OP_LIST(vm, R, in.b, in.c);
         break;
       case AGC_OP_LIST_LEN: UNARY(agc_op_list_len); break;
       case AGC_OP_LIST_GET:
@@ -1617,13 +1648,7 @@ reload:
         if (t->turn_cost && apply_cost(vm)) return AGC_TURN_YIELD;
         break;
       }
-      case AGC_OP_STRUCT: {
-        uint32_t n = p->structs[in.c].count;
-        agc_struct *st = agc_new_struct(in.c, n);
-        for (uint32_t k = 0; k < n; k++) st->fields[k] = R[(uint32_t)in.b + k];
-        R[in.a] = agc_struct_value(st);
-        break;
-      }
+      case AGC_OP_STRUCT: OP_STRUCT(R[in.a], R, in.b, in.c, p->structs[in.c].count); break;
       case AGC_OP_STRUCT_WITH: {
         /* R[b] is the receiver and R[b+1..] the new values, in the order of
            the update's fields. The loader checked the field indexes against
@@ -1653,17 +1678,7 @@ reload:
         R[in.a] = st->fields[in.c];
         break;
       }
-      case AGC_OP_ENUM: {
-        const agc_variant_def *v = &p->variants[in.c];
-        if (v->arity == 0) {
-          R[in.a] = agc_enum_value(v->shared);
-          break;
-        }
-        agc_enum *e = agc_new_enum(in.c, v->arity);
-        for (uint32_t k = 0; k < v->arity; k++) e->payload[k] = R[(uint32_t)in.b + k];
-        R[in.a] = agc_enum_value(e);
-        break;
-      }
+      case AGC_OP_ENUM: OP_ENUM(R[in.a], R, in.b, &p->variants[in.c], in.c); break;
       case AGC_OP_IS_VARIANT:
       op_is_variant:
         R[in.a] = agc_bool(agc_as_enum(vm, R[in.b])->variant == in.c);
@@ -1723,13 +1738,7 @@ reload:
         call_value(vm, t, R[in.a], at + 1, NULL, in.b, at, SPAN);
         goto reload;
       }
-      case AGC_OP_CLOSURE: {
-        uint32_t n = p->functions[bx].captures;
-        agc_fn *f = agc_new_fn(bx, n);
-        for (uint32_t k = 0; k < n; k++) f->captured[k] = R[(uint32_t)in.a + k];
-        R[in.a] = agc_fn_value(f);
-        break;
-      }
+      case AGC_OP_CLOSURE: OP_CLOSURE(R[in.a], R, in.a, bx, p->functions[bx].captures); break;
       case AGC_OP_TAIL_CALL:
         if (profiling) profile_call(vm, bx);
         replace_frame(vm, bx, in.a, SPAN);
@@ -1833,6 +1842,22 @@ agc_turn_result agc_run_turn(agc_vm *vm) {
   if (AGC_PROFILE_ON(vm)) return profile_turn(vm);
   if (vm->rt->jit && agc_jit_turn(vm->rt->jit, vm)) return jit_turn(vm);
   return plain_turn(vm);
+}
+
+void agc_op_list(agc_vm *vm, agc_value *dst, const agc_value *items, uint32_t count) {
+  *dst = OP_LIST(vm, items, 0, count);
+}
+
+void agc_op_closure(agc_value *window, uint32_t function, uint32_t captures) {
+  OP_CLOSURE(window[0], window, 0, function, captures);
+}
+
+void agc_op_struct(agc_value *dst, const agc_value *fields, uint32_t type, uint32_t count) {
+  OP_STRUCT(*dst, fields, 0, type, count);
+}
+
+void agc_op_enum(agc_value *dst, const agc_value *payload, const agc_variant_def *v, uint32_t variant) {
+  OP_ENUM(*dst, payload, 0, v, variant);
 }
 
 /* True when the RETURN of RESULT by the block frame of FUNCTION into the native frame ST below it only makes ST call
