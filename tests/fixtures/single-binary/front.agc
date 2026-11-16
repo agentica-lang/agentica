@@ -7,6 +7,10 @@
 #                        again: the second call reads on from the end
 #   hand-off FILE.agcb [OPTIONS... -- ARGUMENTS...]
 #                        hands the program in FILE to the VM with the options and the arguments
+#   lines                prints each line of standard input, read with IO.gets, until its end
+#   session BINARY FILE.agcb json|plain LINES...
+#                        starts the session child of `agentica repl` with FILE as its first program, sends each line
+#                        on its channel and prints the answer, then closes the channel and prints the exit status
 #   crash                stops with a runtime error, as the driver of `agentica test` could
 #   bad-word             hands over a program with an argument that has a character 0
 #   too-many-options     hands over more options than the driver takes
@@ -27,6 +31,14 @@ def main() -> Void
     shown_stdin(FrontEnd.stdin_bytes())
   elsif words[0] == "hand-off"
     hand_off(words[1], words.drop(2))
+  elsif words[0] == "lines"
+    line = IO.gets()
+    while line.ok?
+      puts("line #{line.unwrap!}")
+      line = IO.gets()
+    end
+  elsif words[0] == "session"
+    session(words[1], words[2], words[3] == "json", words.drop(4))
   elsif words[0] == "crash"
     puts(1 / (words.size - 1))
   elsif words[0] == "bad-word"
@@ -58,6 +70,19 @@ def shown_void(result: Result[Void]) -> Void
   puts("error: #{result.message}")
 end
 
+def session(binary: String, file: String, json: Bool, lines: List[String]) -> Void
+  child = FrontEnd.spawn_session(binary, ["run", "--session", "-"], json).unwrap!
+  Process.send_bytes(child, program(file), 5000).unwrap!
+  Process.close_stdin(child, 5000).unwrap!
+  for line in lines
+    Process.channel_send(child, line + "\n", 5000).unwrap!
+    puts(Process.channel_read_line(child, 5000).unwrap!)
+    IO.flush()
+  end
+  Process.channel_close(child, 5000).unwrap!
+  puts("exit #{Process.wait(child, 5000).unwrap!}")
+end
+
 def hand_off(file: String, rest: List[String]) -> Void
   options: List[String] = []
   arguments: List[String] = []
@@ -83,5 +108,5 @@ def program(file: String) -> Bytes
     chunk = File.read_bytes(handle, 1048576, 5000).unwrap!
   end
   _ = File.close(handle, 5000)
-  return Bytes.concat(parts)
+  Bytes.concat(parts)
 end

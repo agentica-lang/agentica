@@ -679,9 +679,11 @@ static void crash(agc_vm *vm, agc_task *t) {
       vm->rt->crashes = t;
     vm->rt->crashes_tail = t;
   }
-  agc_notice notice;
-  agc_print_diagnostic(agc_notice_begin(&vm->rt->err, &notice), vm->rt->program, o, vm->rt->style, true);
-  agc_notice_end(vm, &notice, AGC_NOTICE_QUEUED);
+  if (!t->session) {
+    agc_notice notice;
+    agc_print_diagnostic(agc_notice_begin(&vm->rt->err, &notice), vm->rt->program, o, vm->rt->style, true);
+    agc_notice_end(vm, &notice, AGC_NOTICE_QUEUED);
+  }
   o->kind = AGC_DONE;
   unlink_task(vm, t);
   for (agc_task *child = t->children, *next; child; child = next) {

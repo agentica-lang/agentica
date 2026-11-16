@@ -339,6 +339,12 @@ agc_value agc_ffi_module_resource(agc_vm *vm, const void *row, const char *name,
 void agc_native_unbind(agc_native_fn *fn);
 void agc_native_register(agc_vm *vm, const char *library, agc_native_init init);
 void agc_native_forget(agc_runtime *rt);
+/* The session of `agentica run --session` (vm/session.c): made by the launch, served by FrontEnd.serve_session. */
+typedef struct agc_session agc_session;
+agc_session *agc_session_new(bool deny_native);
+agc_value agc_process_spawn_session(agc_vm *vm, const agc_value *args, bool json);
+agc_value agc_session_serve(agc_vm *vm, agc_value *args, uint32_t span);
+
 extern const agc_builtin agc_front_end_builtins[];
 extern const size_t agc_front_end_builtin_count;
 extern const agc_builtin agc_std_builtins[];

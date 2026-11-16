@@ -29,6 +29,10 @@ typedef struct {
   uint64_t start;
   char *error;
   size_t error_size;
+  /* A session load (agc_load_session): the program the file must extend, and for each of its functions whether it
+     writes a Globals slot (an init function of an earlier entry, which nothing may call again). NULL otherwise. */
+  const agc_program *base;
+  bool *base_inits;
   agc_catch_buf fail;
 } reader;
 
@@ -193,6 +197,8 @@ static bool calls_anything(const agc_function *f) {
    the entry is plain main, which a program may call. */
 static void check_not_entry(reader *r, const agc_program *p, uint32_t target) {
   if (p->global_count && target == p->entry) reject(r, "call or closure of the entry function of a file with globals");
+  if (r->base && target < r->base->function_count && r->base_inits[target])
+    reject(r, "call or closure of the init function of an earlier entry");
 }
 
 static void check_function(reader *r, const agc_program *p, const agc_function *f) {
@@ -824,6 +830,107 @@ static agc_string *stored_name(reader *r, agc_string *name) {
   return s;
 }
 
+static bool same_string(const agc_string *a, const agc_string *b) {
+  if (!a || !b) return a == b;
+  return a->bytes == b->bytes && (a->bytes == 0 || memcmp(a->data, b->data, a->bytes) == 0);
+}
+
+static bool same_u32s(const uint32_t *a, const uint32_t *b, uint32_t n) {
+  if (!a || !b) return a == b;
+  return n == 0 || memcmp(a, b, (size_t)n * sizeof(uint32_t)) == 0;
+}
+
+/* The tags were compared first, so the accessors cannot fail and need no vm. */
+static bool same_constant(agc_value a, agc_value b) {
+  if (a.tag != b.tag) return false;
+  if (agc_is(a, AGC_T_STRING)) return same_string(agc_as_string(NULL, a), agc_as_string(NULL, b));
+  if (agc_is(a, AGC_T_BYTES)) {
+    const agc_bytes *x = agc_as_bytes(NULL, a), *y = agc_as_bytes(NULL, b);
+    return x->len == y->len && (x->len == 0 || memcmp(x->data, y->data, x->len) == 0);
+  }
+  return agc_is(a, AGC_T_VOID) || agc_is(a, AGC_T_NIL) || agc_value_word(a) == agc_value_word(b);
+}
+
+static bool same_struct(const agc_struct_def *a, const agc_struct_def *b) {
+  if (!same_string(a->name, b->name) || a->count != b->count || a->json_root != b->json_root) return false;
+  for (uint32_t k = 0; k < a->count; k++)
+    if (!same_string(a->fields[k], b->fields[k])) return false;
+  return same_string(a->json_name, b->json_name) && same_u32s(a->field_types, b->field_types, a->field_types ? a->count : 0);
+}
+
+static uint32_t payload_count(const agc_program *p, const agc_enum_def *d) {
+  uint64_t items = 0;
+  for (uint32_t k = 0; k < d->count; k++) items += p->variants[d->first + k].arity;
+  return (uint32_t)items;
+}
+
+static bool same_function(const agc_function *a, const agc_function *b) {
+  return same_string(a->name, b->name) && a->params == b->params && a->captures == b->captures &&
+         a->registers == b->registers && a->span == b->span && a->count == b->count && a->prelude == b->prelude &&
+         memcmp(a->code, b->code, (size_t)a->count * sizeof(agc_instr)) == 0 &&
+         same_u32s(a->spans, b->spans, a->count);
+}
+
+static bool same_defaults(const agc_field_default *a, const agc_field_default *b, uint32_t n) {
+  if (!a || !b) return a == b;
+  return memcmp(a, b, (size_t)n * sizeof(agc_field_default)) == 0;
+}
+
+/* A session file (agc_load_session) holds the whole program of the session: every table starts with the base's
+   entries, unchanged, so each index that a live value, a frame or a running task holds (a struct, a variant, a
+   function, a constant, a slot) means in the new program what it meant in the base. Spans and sources are only
+   counted: the new tables are checked as usual and a stale position only misplaces a diagnostic. */
+static void extends_base(reader *r, const agc_program *p) {
+  const agc_program *b = r->base;
+  if (p->source_count < b->source_count || p->span_count < b->span_count || p->constant_count < b->constant_count ||
+      p->builtin_count < b->builtin_count || p->struct_count < b->struct_count || p->type_count < b->type_count ||
+      p->enum_count < b->enum_count || p->variant_count < b->variant_count || p->update_count < b->update_count ||
+      p->global_count < b->global_count || p->instance_count < b->instance_count)
+    reject(r, "a table is shorter than the session's");
+  for (uint32_t i = 0; i < b->constant_count; i++)
+    if (!same_constant(p->constants[i], b->constants[i])) reject(r, "constant %u differs from the session's", i);
+  for (uint32_t i = 0; i < b->builtin_count; i++)
+    if (p->builtins[i] != b->builtins[i]) reject(r, "builtin %u differs from the session's", i);
+  for (uint32_t i = 0; i < b->struct_count; i++) {
+    if (!same_struct(&p->structs[i], &b->structs[i])) reject(r, "struct %u differs from the session's", i);
+    const agc_field_default *pd = p->field_defaults ? p->field_defaults[i] : NULL;
+    const agc_field_default *bd = b->field_defaults ? b->field_defaults[i] : NULL;
+    if (!same_defaults(pd, bd, b->structs[i].count)) reject(r, "field defaults of struct %u differ", i);
+  }
+  for (uint32_t i = 0; i < b->type_count; i++)
+    if (p->types[i].kind != b->types[i].kind || p->types[i].arg != b->types[i].arg)
+      reject(r, "type %u differs from the session's", i);
+  for (uint32_t i = 0; i < b->variant_count; i++) {
+    const agc_variant_def *x = &p->variants[i], *y = &b->variants[i];
+    if (!same_string(x->name, y->name) || x->owner != y->owner || x->arity != y->arity)
+      reject(r, "variant %u differs from the session's", i);
+  }
+  for (uint32_t i = 0; i < b->enum_count; i++) {
+    const agc_enum_def *x = &p->enums[i], *y = &b->enums[i];
+    if (!same_string(x->name, y->name) || x->first != y->first || x->count != y->count ||
+        !same_string(x->json_name, y->json_name) ||
+        !same_u32s(x->payload_types, y->payload_types, payload_count(b, y)))
+      reject(r, "enum %u differs from the session's", i);
+  }
+  for (uint32_t i = 0; i < b->update_count; i++) {
+    const agc_update_def *x = &p->updates[i], *y = &b->updates[i];
+    if (x->type != y->type || x->count != y->count || !same_u32s(x->fields, y->fields, x->count))
+      reject(r, "struct update %u differs from the session's", i);
+  }
+  for (uint32_t i = 0; i < b->instance_count; i++) {
+    const agc_instance_def *x = &p->instances[i], *y = &b->instances[i];
+    if (x->struct_index != y->struct_index || !same_string(x->json_name, y->json_name) ||
+        !same_u32s(x->field_types, y->field_types, b->structs[y->struct_index].count))
+      reject(r, "struct instance %u differs from the session's", i);
+  }
+  if ((p->json_field != b->json_field && b->json_field != UINT32_MAX) ||
+      (p->json_node != b->json_node && b->json_node != UINT32_MAX) ||
+      (p->optional != b->optional && b->optional != UINT32_MAX))
+    reject(r, "a JSON or Optional type differs from the session's");
+  for (uint32_t i = 0; i < b->function_count; i++)
+    if (!same_function(&p->functions[i], &b->functions[i])) reject(r, "function %u differs from the session's", i);
+}
+
 static void load(reader *r, agc_program *p) {
   if (memcmp(take(r, 4), AGC_MAGIC, 4) != 0) reject(r, "bad magic");
   r->format = read_u32(r);
@@ -959,8 +1066,17 @@ static void load(reader *r, agc_program *p) {
       reject(r, "instance index out of range");
   }
 
-  for (uint32_t i = 0; i < p->function_count; i++) check_function(r, p, &p->functions[i]);
-  for (uint32_t i = 0; i < p->function_count; i++) {
+  /* A session file repeats the functions of its base, which the base's load checked and fused: they are fused here
+     and compared whole with the base's (extends_base), and only the new ones are checked. */
+  uint32_t first = r->base ? r->base->function_count : 0;
+  if (first > p->function_count) reject(r, "fewer functions than the session has");
+  for (uint32_t i = 0; i < first; i++) {
+    fuse_consts(&p->functions[i]);
+    fuse_steps(&p->functions[i]);
+  }
+  if (r->base) extends_base(r, p);
+  for (uint32_t i = first; i < p->function_count; i++) check_function(r, p, &p->functions[i]);
+  for (uint32_t i = first; i < p->function_count; i++) {
     fuse_consts(&p->functions[i]);
     fuse_steps(&p->functions[i]);
   }
@@ -983,7 +1099,7 @@ static bool load_guarded(reader *r, agc_program *p) {
 }
 
 static bool load_program(const uint8_t *data, size_t len, agc_program **program, char *error, size_t error_size,
-                         const agc_trace *trace, bool any_version) {
+                         const agc_trace *trace, bool any_version, const agc_program *base) {
   static const agc_trace off = {0, 2, 0, 0, 0};
   const agc_trace *tr = trace ? trace : &off;
   reader r;
@@ -997,6 +1113,17 @@ static bool load_program(const uint8_t *data, size_t len, agc_program **program,
   r.error = error;
   r.error_size = error_size;
   r.budget = (uint64_t)len * 4 + ((uint64_t)1 << 20);
+  r.base = base;
+  r.base_inits = NULL;
+  if (base) {
+    r.base_inits = agc_alloc_atomic(agc_size_mul(base->function_count ? base->function_count : 1, sizeof(bool)));
+    for (uint32_t i = 0; i < base->function_count; i++) {
+      const agc_function *f = &base->functions[i];
+      r.base_inits[i] = false;
+      for (uint32_t pc = 0; pc < f->count; pc++)
+        if (f->code[pc].op == AGC_OP_GLOBAL_SET) r.base_inits[i] = true;
+    }
+  }
   agc_program *p = agc_alloc(sizeof(agc_program));
   AGC_TRACE(tr, AGC_TRACE_LOADER, "file bytes=%zu", len);
   if (len > AGC_MAX_FILE_BYTES) {
@@ -1008,6 +1135,9 @@ static bool load_program(const uint8_t *data, size_t len, agc_program **program,
   bool loaded = load_guarded(&r, p);
   agc_gc_resume();
   if (!loaded) return false;
+  /* The slots of the base keep their values: the new init function sets only the ones it adds. */
+  if (base)
+    for (uint32_t i = 0; i < base->global_count; i++) p->globals[i] = base->globals[i];
   AGC_TRACE(tr, AGC_TRACE_LOADER, "format version=%" PRIu32, r.format);
   trace_tables(tr, p);
   AGC_TRACE(tr, AGC_TRACE_LOADER, "done us=%" PRIu64, elapsed_us(r.start));
@@ -1017,12 +1147,17 @@ static bool load_program(const uint8_t *data, size_t len, agc_program **program,
 
 bool agc_load_traced(const uint8_t *data, size_t len, agc_program **program, char *error, size_t error_size,
                      const agc_trace *trace) {
-  return load_program(data, len, program, error, error_size, trace, false);
+  return load_program(data, len, program, error, error_size, trace, false, NULL);
 }
 
 bool agc_load_front_end(const uint8_t *data, size_t len, agc_program **program, char *error, size_t error_size,
                         const agc_trace *trace) {
-  return load_program(data, len, program, error, error_size, trace, true);
+  return load_program(data, len, program, error, error_size, trace, true, NULL);
+}
+
+bool agc_load_session(const uint8_t *data, size_t len, const agc_program *base, agc_program **program, char *error,
+                      size_t error_size, const agc_trace *trace) {
+  return load_program(data, len, program, error, error_size, trace, false, base);
 }
 
 bool agc_load(const uint8_t *data, size_t len, agc_program **program, char *error, size_t error_size) {

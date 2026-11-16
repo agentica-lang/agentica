@@ -1,7 +1,8 @@
 /*
  * The FrontEnd builtins (agc_front_end_builtins), which only the front end of the binary may call: hand_off gives
  * the compiled program to the driver and ends the run; std_source reads a std/ source the binary carries; stdin_bytes
- * reads standard input. Any other runtime has no agc_front_end and fails with RUNTIME-FRONT-END-ONLY. Std.source
+ * reads standard input; spawn_session starts the child of `agentica repl`. Any other runtime has no agc_front_end and
+ * fails with RUNTIME-FRONT-END-ONLY; serve_session (vm/session.c) runs only in that child. Std.source
  * (agc_std_builtins) reads the same sources for every program. Service layer.
  * Design: docs/vm/08-loader-and-cli.md.
  */
@@ -114,10 +115,18 @@ static agc_value builtin_stdin_bytes(agc_vm *vm, agc_value *args, uint32_t span)
   return agc_result_value(true, agc_bytes_value(bytes));
 }
 
+/* The child of `agentica repl`: the binary in `run --session`, started by vm/process.c. */
+static agc_value builtin_spawn_session(agc_vm *vm, agc_value *args, uint32_t span) {
+  guarded(vm, span);
+  return agc_process_spawn_session(vm, args, agc_as_bool(vm, args[2]));
+}
+
 const agc_builtin agc_front_end_builtins[] = {
   {"FrontEnd.std_source", 1, builtin_std_source, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false, false},
   {"FrontEnd.hand_off.bytes", 3, builtin_hand_off, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false, false},
   {"FrontEnd.stdin_bytes.bytes", 0, builtin_stdin_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false, true},
+  {"FrontEnd.spawn_session", 3, builtin_spawn_session, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false, true},
+  {"FrontEnd.serve_session", 0, agc_session_serve, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false, true},
 };
 
 const size_t agc_front_end_builtin_count = sizeof agc_front_end_builtins / sizeof agc_front_end_builtins[0];

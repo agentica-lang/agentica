@@ -374,6 +374,9 @@ agc_input_status agc_input_peek(agc_vm *vm, int *byte) {
 
 agc_input_status agc_input_line(agc_vm *vm, agc_string **line) {
   agc_input *in = &vm->rt->in;
+  /* The front end starts with no input stream (FrontEnd.stdin_bytes); `agentica repl` reads its lines with IO.gets,
+     which opens it here, flushing the prompt on stdout before each read. */
+  if (in->fd < 0 && vm->rt->front_end) agc_input_open(vm, 0, true);
   for (;;) {
     bool rescan = false;
     for (size_t k = in->start + in->scanned; k < in->end; k++) {

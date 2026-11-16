@@ -349,6 +349,25 @@ static agc_value place_value(const agc_program *p, uint32_t index, const agc_str
   return agc_json_object(m, n);
 }
 
+static agc_value json_position(uint32_t line, uint32_t column) {
+  agc_json_member *m = agc_alloc(2 * sizeof(agc_json_member));
+  m[0] = agc_json_pair("column", agc_json_number(column));
+  m[1] = agc_json_pair("line", agc_json_number(line));
+  return agc_json_object(m, 2);
+}
+
+agc_string *agc_json_line(agc_vm *vm, agc_json_member *members, size_t n) {
+  agc_string *line = agc_json_encode(vm, agc_json_object(members, n), 0);
+  return agc_concat(line, agc_make_string("\n", 1, 1));
+}
+
+agc_value agc_span_range(const agc_span *span) {
+  agc_json_member *m = agc_alloc(2 * sizeof(agc_json_member));
+  m[0] = agc_json_pair("end", json_position(span->end_line, span->end_column));
+  m[1] = agc_json_pair("start", json_position(span->start_line, span->start_column));
+  return agc_json_object(m, 2);
+}
+
 size_t agc_stack_members(const agc_program *p, const agc_stack *stack, agc_json_member out[3]) {
   size_t n = 0;
   if (stack->spawned) out[n++] = agc_json_pair("spawned_at", place_value(p, stack->spawn_span, NULL, 0, false));

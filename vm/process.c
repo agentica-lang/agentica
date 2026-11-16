@@ -82,6 +82,9 @@ struct launch {
   CC_OWNS char *cwd;
   size_t args;
   int files[2];
+  /* A session child (FrontEnd.spawn_session): the descriptor of this process that becomes its stdout (1, or 2 so that
+     the front end's stdout keeps only its answers); its stderr is this process's. -1 for any other child. */
+  int session_out;
   bool channel, group, inherit, pty;
 };
 
@@ -1471,6 +1474,7 @@ static int start_child(guard *g, proc *p, const launch *l) {
       stdio[k].flags = UV_INHERIT_FD;
       stdio[k].data.fd = k > 0 && l->files[k - 1] >= 0 ? l->files[k - 1] : fds[2 * k + (k == 0 ? 0 : 1)];
       if (l->inherit) stdio[k].data.fd = (int)k;
+      if (l->session_out >= 0 && k > 0) stdio[k].data.fd = k == 1 ? l->session_out : 2;
     }
     for (int k = 0; k < link.child_count; k++) {
       stdio[3 + k].flags = UV_INHERIT_FD;
@@ -1699,7 +1703,7 @@ static bool begin_spawn(void *data, agc_io_job *job) {
    refused for its other arguments touches no file. */
 static agc_value spawn_child(agc_vm *vm, const agc_value *args, const agc_string *dir, int64_t timeout, bool captured,
                              bool channel, const agc_map *env, const agc_string *out, const agc_string *err,
-                             bool group, bool inherit, bool pty) {
+                             bool group, bool inherit, bool pty, int session_out) {
   if (vm->rt->deny_run) return agc_error(vm, AGC_KIND_DENIED_RUN, "denied: --deny-run turns off starting programs");
   if (inherit && !agc_proc_groups())
     return agc_error(vm, AGC_KIND_SYSTEM_SIGNAL, "process: process groups are not supported on this system");
@@ -1786,6 +1790,7 @@ static agc_value spawn_child(agc_vm *vm, const agc_value *args, const agc_string
   l->group = group;
   l->inherit = inherit;
   l->pty = pty;
+  l->session_out = session_out;
   if (!l->env) {
     AGC_TRACE(&vm->rt->trace, AGC_TRACE_PROC, "spawn_failed path=%s rc=%d", l->argv[0], UV_ENOMEM);
     free_launch(l);
@@ -1837,7 +1842,7 @@ static agc_value spawn_options(agc_vm *vm, const agc_value *args, bool captured,
   bool pty = o->n > OPTION_PTY && agc_as_bool(vm, f[OPTION_PTY]);
   return spawn_child(vm, args, agc_as_string(vm, f[OPTION_CHDIR]), agc_as_int(vm, f[OPTION_TIMEOUT_MS]), captured,
                      channel, agc_as_map(vm, f[OPTION_ENV]), agc_as_string(vm, f[OPTION_OUT]),
-                     agc_as_string(vm, f[OPTION_ERR]), agc_as_bool(vm, f[OPTION_PGROUP]), false, pty);
+                     agc_as_string(vm, f[OPTION_ERR]), agc_as_bool(vm, f[OPTION_PGROUP]), false, pty, -1);
 }
 
 static agc_value builtin_spawn_options(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -1856,7 +1861,19 @@ static agc_value builtin_spawn_group(agc_vm *vm, agc_value *args, uint32_t span)
   (void)span;
   const agc_string *none = agc_make_string("", 0, 0);
   return spawn_child(vm, args, agc_as_string(vm, args[2]), agc_as_int(vm, args[3]), false, false, NULL, none, none,
-                     true, true, false);
+                     true, true, false, -1);
+}
+
+/* FrontEnd.spawn_session(command, args, json): the child of `agentica repl` (vm/session.c). Its stdin is the pipe the
+   front end writes the first program to; its stdout is the front end's (its stderr under json, so the front end's
+   stdout keeps only the answers) and its stderr the front end's, so what an entry prints comes out in order before
+   its answer; the parent channel carries the entries and the answers. It leads its own process group where the
+   system has them, so a Ctrl-C of the terminal reaches only the front end. */
+agc_value agc_process_spawn_session(agc_vm *vm, const agc_value *args, bool json) {
+  const agc_string *none = agc_make_string("", 0, 0);
+  const agc_string *here = agc_make_string(".", 1, 1);
+  return spawn_child(vm, args, here, 30000, false, true, NULL, none, none, agc_proc_groups(), false, false,
+                     json ? 2 : 1);
 }
 
 static agc_value builtin_spawn_channel_options(agc_vm *vm, agc_value *args, uint32_t span) {

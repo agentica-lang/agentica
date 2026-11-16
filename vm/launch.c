@@ -806,6 +806,9 @@ agc_launch_status agc_launch_parse(const char *name, int argc, char **argv, int 
       if (!value || strcmp(value, "--") == 0) return refuse(name, "--embedded needs a program name");
       options->embedded = value;
       i += 2;
+    } else if (strcmp(arg, "--session") == 0) {
+      if (!once(name, &options->session, arg)) return AGC_LAUNCH_BAD;
+      i++;
     } else if (strcmp(arg, "--driver-pid") == 0) {
       if (!once(name, &options->seen_driver, arg)) return AGC_LAUNCH_BAD;
       if (!value || !parse_steps(value, &options->driver))
@@ -866,7 +869,10 @@ agc_vm *agc_launch_vm(agc_launch *launch, const agc_program *program, const agc_
   rt->front_end = front_end;
   rt->std = launch->std;
   rt->std_count = launch->std_count;
-  rt->schedulers = front_end ? 1 : options->schedulers;
+  rt->schedulers = front_end || options->session ? 1 : options->schedulers;
+  /* A session loads a longer program over the running one (agc_load_session) between its entries: the JIT, the
+     profile and the coverage size their tables by the first program's functions, and a session never has them. */
+  if (options->session) rt->session = agc_session_new(options->deny_native);
   /* The front end runs in the interpreter: --jit, `on` by default, is for the user's program. Under `on` the front end
      compiles a small program slower (on such a short run its own compiles cost more than they save), though it
      compiles itself faster. Test-only:
@@ -877,6 +883,7 @@ agc_vm *agc_launch_vm(agc_launch *launch, const agc_program *program, const agc_
     const char *test_mode = getenv("AGENTICA_VM_TEST_FRONT_END_JIT");
     if (!test_mode || !agc_jit_mode_parse(test_mode, &mode)) mode = AGC_JIT_OFF;
   }
+  if (options->session) mode = AGC_JIT_OFF;
   /* --coverage counts the interpreter's STEPs through the profile (agc_profile.cover), which compiled code does not
      run: the program runs in the interpreter. It is the user's program only, never the front end's run. A report of
      an earlier run is removed now, so a run that ends without writing one leaves none. */

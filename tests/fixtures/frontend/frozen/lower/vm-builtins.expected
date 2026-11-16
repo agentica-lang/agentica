@@ -80,6 +80,8 @@ Format.float
 Format.int
 Format.text
 FrontEnd.hand_off.bytes
+FrontEnd.serve_session
+FrontEnd.spawn_session
 FrontEnd.std_source
 FrontEnd.stdin_bytes.bytes
 HttpWire.accept

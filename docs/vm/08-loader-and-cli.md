@@ -78,6 +78,15 @@ branch.
   counts as a call for the termination rules.
 - **Run time**: parameter and capture counts of `CALL_VALUE` and callbacks, tags
   (5.2), list, map and string bounds, and the register cap (6.1).
+- **Session loads** (`agc_load_session`, for `run --session`): the file is the
+  whole program of the session, and every table starts with the entries of the
+  running program, unchanged (constants by value, records, types, variants,
+  updates, instances, field defaults, and each function's code and spans after
+  fusion), so the indexes that live values, frames and tasks hold keep their
+  meaning. Spans and sources are only counted. Only the new functions are
+  checked; none may call or close over an old function that holds a
+  `GLOBAL_SET` (an earlier init function). The new slots start with the old
+  values.
 
 `vm/tests/loader_test.c` checks each rule by its reason, and truncation at every
 byte of a file with a type table, an Updates section or Globals.
@@ -135,6 +144,20 @@ parser is `agc_launch_parse` (`vm/launch.c`).
   refuses `--schedulers` and `--jit` (exit 2), since the VMs it starts would not
   get them; they read the variables.
 - `--jit MODE` and `AGENTICA_JIT` (§6.4): a bad flag or variable exits 2.
+- `run --session -` is the child of `agentica repl`, started by
+  `FrontEnd.spawn_session`. It reads its first program from standard input,
+  always runs on one scheduler without the JIT, the profile or coverage (each
+  sizes its tables by the first program), and refuses `--embedded`,
+  `--coverage` and `--source-root`. Its `main` calls `FrontEnd.serve_session`
+  (`vm/session.c`), which reads lines on the parent channel: `chunk HEX` adds
+  bytes of the next program, and `entry FN READS WRITES` loads them (a session
+  load, §8), runs the new init function, if any, and then function `FN` as
+  tasks, with the session slots `READS` as arguments. FN returns a List: the
+  value to show (a String, Void for none, or any value, shown inspected) and
+  the values of the slots `WRITES`. Each entry gets one JSON line: `ok` with
+  `value`, `ok: false` with the `diagnostic` of a crash and its `text` in the
+  run's style, or `ok: false` with `refused`. A refused entry changes nothing.
+  Tasks that an entry starts live on. The end of the channel ends the child.
 - `agentica file.agc [args...]` runs in one process: the front end compiles in
   memory and hands the bytes to C with `FrontEnd.hand_off`, and C runs them in a
   new runtime ("The single binary"). No temporary file and no child.

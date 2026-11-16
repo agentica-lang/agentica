@@ -213,8 +213,9 @@ static int run_program(agc_launch *launch, const agc_front_end *fe) {
             name);
     return 2;
   }
-  if (options.embedded) {
-    fprintf(stderr, "%s: the front end passed --embedded, which only %s takes\n", name, run_name);
+  if (options.embedded || options.session) {
+    fprintf(stderr, "%s: the front end passed %s, which only %s takes\n", name,
+            options.embedded ? "--embedded" : "--session", run_name);
     return 2;
   }
   if (!agc_launch_env(name, &options) || !agc_launch_supported(name, &options)) return 2;
@@ -248,6 +249,28 @@ static void print_version(void) {
            uv ? ", libuv " : "", uv ? uv : "", ssl ? ", OpenSSL " : "", ssl ? ssl : "", trace);
 }
 
+/* The first program of `run --session`, which the front end writes to the child's standard input and closes: the
+ * entries read no input after it. NULL when it cannot be read or is larger than a file the loader takes. */
+static const uint8_t *session_program(size_t *len) {
+  size_t cap = 4096, n = 0;
+  uint8_t *data = agc_alloc_atomic(cap);
+  for (;;) {
+    if (n == cap) {
+      if (cap >= AGC_MAX_FILE_BYTES) return NULL;
+      uint8_t *grown = agc_alloc_atomic(agc_size_mul(cap, 2));
+      memcpy(grown, data, n);
+      data = grown;
+      cap *= 2;
+    }
+    size_t got = fread(data + n, 1, cap - n, stdin);
+    n += got;
+    if (got == 0) break;
+  }
+  if (ferror(stdin)) return NULL;
+  *len = n;
+  return data;
+}
+
 /* `agentica run`: argv[2] and on are the options, then `--` (or the first word that is not an option), the file and
  * the program's arguments. The steps and their order are those of a run of the front end's program, with the options
  * typed here instead of handed over: a start that fails is status 2. With `--embedded NAME` there is no file: the
@@ -275,7 +298,22 @@ static int run_command(agc_launch *launch, int argc, char **argv) {
   const uint8_t *data = NULL;
   /* The file is the first word; the arguments of an embedded program start where the file would have been. */
   int first = i + 1;
-  if (options.embedded) {
+  if (options.session) {
+    /* The child of `agentica repl` (vm/session.c): its first program comes on stdin ("-"), and a session never has
+       the JIT, the coverage or the profile, which size their tables by that program. */
+    if (options.embedded || options.coverage || options.source_root[0] || strcmp(argv[i], "-") != 0 ||
+        (launch->trace.mask & AGC_TRACE_PROFILE)) {
+      fprintf(stderr,
+              "%s: --session takes its program on stdin (-), without --embedded, --coverage, --source-root or the "
+              "profile\n",
+              run_name);
+      return 2;
+    }
+    if (!(data = session_program(&len))) {
+      fprintf(stderr, "%s: cannot read the session's program from stdin\n", run_name);
+      return 2;
+    }
+  } else if (options.embedded) {
     data = embedded_program(options.embedded, &len);
     first = i;
     if (!data || len == 0) {
