@@ -105,6 +105,13 @@ STDIN_NAME = "<stdin>"
 # The verb of `compile` with no -o, which fills the bytecode cache, and the file it looks for when no file is named.
 AHEAD = "compile ahead"
 MAIN_FILE = "main.agc"
+SKIPPED_FOLDERS = ["tests", "fixtures"]
+
+# The JSON line of one file of `compile` with no -o: `compiled` or `fresh`.
+struct Ahead
+  file: String
+  state: String
+end
 
 # What one run is given besides the words of the user: the options read in front of them, the settings and the
 # hand-off. `buffer_file` is the file whose text came from standard input ("" for none), and `buffer_shown` that text
@@ -712,7 +719,7 @@ def program(session: Session, verb: String, rest: List[String]) -> Int
 
   plan = CliRun.cache_plan(session.options, session.settings, verb, source)
   if session.cache_missed and verb != "compile"
-    return read(noticed(session, verb, source), verb, rest, BytecodeCache.missed(plan, session.settings))
+    return read(session, verb, rest, BytecodeCache.missed(plan, session.settings))
   end
 
   case BytecodeCache.lookup(plan, session.settings)
@@ -720,12 +727,13 @@ def program(session: Session, verb: String, rest: List[String]) -> Int
       return save(rest[2], bytes) if verb == "compile"
 
       start(session, rest, bytes)
-    BytecodeCache.Lookup.Miss(seen) -> read(noticed(session, verb, source), verb, rest, seen)
+    BytecodeCache.Lookup.Miss(seen) -> read(session, verb, rest, seen)
   end
 end
 
-# A run that compiles its program says so on stderr when that is a terminal: `Compiling FILE…` now, and the module
-# count and the time once it is built (`compiled`). `compile`, the listings and `--ai` or `--json` print nothing.
+# A run that compiles its program says so on stderr when that is a terminal: `Compiling FILE…` once the file is read,
+# and the module count and the time once it is built (`compiled`). `compile`, the listings and `--ai` or `--json` print
+# nothing.
 def noticed(session: Session, verb: String, source: String) -> Session
   options = session.options
   quiet = verb == "compile" or verb == AHEAD or options.dump or options.dump_ir or options.style != "plain"
@@ -748,8 +756,9 @@ def compiled(session: Session, source: String, modules: Int) -> Void
 end
 
 # `compile [FILE...]`: fills the bytecode cache for each file (with none, every main.agc under the working folder, as
-# `check` walks it) as a run with the same options would, and says of each whether it was compiled or fresh. It stops
-# at the first file that fails.
+# `check` walks it, outside tests/ and fixtures/ folders) as a run with the same options would, and says of each
+# whether it was compiled or fresh (a JSON line each with `--json`). A file that fails is reported and the others still
+# compile; the status is the worst one.
 def compile_ahead(session: Session, files: List[String]) -> Int
   options = session.options
   if options.no_cache or options.dump or options.dump_ir or files.any? do |file: String| file.start_with?("-") end
@@ -758,30 +767,49 @@ def compile_ahead(session: Session, files: List[String]) -> Int
 
   return ahead_each(session, files) if files.size > 0
 
-  case SymbolPaths.expand(session.settings.workspace, [], "", Texts.usage_text())
-    SymbolPaths.Expanded.Refused(problem) -> answered(session, Reply.Answer.Rejected(problem), "")
+  no_main = Reply.failed(2, "agentica: no #{MAIN_FILE} under this folder\n")
+  case SymbolPaths.expand(session.settings.workspace, [], "", "")
+    SymbolPaths.Expanded.Refused(problem) ->
+      return emit(no_main) if problem.message.start_with?("no ")
+
+      emit(Reply.failed(2, "agentica: #{problem.message}\n"))
     SymbolPaths.Expanded.Files(roots) ->
       files = roots.map do |root: SymbolPaths.Root| root.typed end
-      mains = files.select do |file: String| Paths.last_part(file) == MAIN_FILE end
-      return emit(Reply.failed(2, "agentica: no #{MAIN_FILE} under this folder\n")) if mains.size == 0
+      mains = files.select(&entry_point?)
+      return emit(no_main) if mains.size == 0
 
       ahead_each(session, mains)
   end
 end
 
+# A main.agc that is no test or fixture of the project.
+def entry_point?(file: String) -> Bool
+  parts = file.split("/")
+  Paths.last_part(file) == MAIN_FILE and !parts.any? do |part: String| SKIPPED_FOLDERS.include?(part) end
+end
+
 def ahead_each(session: Session, files: List[String]) -> Int
+  worst = 0
   for file in files
     status = ahead(building(session, file), file)
-    return status if status != 0
+    if status > worst
+      worst = status
+    end
   end
 
-  0
+  worst
+end
+
+def ahead_done(session: Session, file: String, state: String) -> Int
+  return emit(Reply.printed("#{JSON.encode(Ahead(file: file, state: state))}\n")) if session.options.style == "json"
+
+  emit(Reply.printed("#{state} #{file}\n"))
 end
 
 def ahead(session: Session, file: String) -> Int
   plan = CliRun.cache_plan(session.options, session.settings, file, file)
   case BytecodeCache.lookup(plan, session.settings)
-    BytecodeCache.Lookup.Hit(_) -> emit(Reply.printed("fresh #{file}\n"))
+    BytecodeCache.Lookup.Hit(_) -> ahead_done(session, file, "fresh")
     BytecodeCache.Lookup.Miss(seen) -> read(session, AHEAD, [file], seen)
   end
 end
@@ -797,7 +825,7 @@ def read(session: Session, verb: String, rest: List[String], plan: BytecodeCache
   case Front.read_root(session.settings.workspace, source)
     Front.Root.Unreadable(_) -> emit(Reply.failed(2, "agentica: cannot read #{source}\n"))
     Front.Root.Invalid(problem) -> reject(session, problem, source, 1)
-    Front.Root.Readable -> linked(session, verb, rest, plan)
+    Front.Root.Readable -> linked(noticed(session, verb, source), verb, rest, plan)
   end
 end
 
@@ -835,7 +863,7 @@ def checked(session: Session, verb: String, rest: List[String], front: Front.Che
     Pipeline.Compiled.Rejected(problem) -> reject(session, problem, source, 1)
     Pipeline.Compiled.Bytes(bytes) ->
       return save(rest[2], bytes) if verb == "compile"
-      return emit(Reply.printed("compiled #{source}\n")) if verb == AHEAD
+      return ahead_done(session, source, "compiled") if verb == AHEAD
 
       compiled(session, source, front.linked.modules.size)
       start(session, rest, bytes)

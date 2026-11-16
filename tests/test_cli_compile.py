@@ -1,6 +1,9 @@
 """`agentica compile [FILE...]`, which fills the bytecode cache ahead, and the notice of a run that compiles its program
 when stderr is a terminal (issue #1735), through the CLI."""
+import json
 import os
+
+import pytest
 
 from tests.agentica_test import WINDOWS, cli, host_only, run, vm_environment
 
@@ -27,7 +30,8 @@ def entries(folder):
 
 def test_compile_without_a_file_fills_the_cache_for_each_main_and_a_run_then_hits(tmp_path):
     write(tmp_path, {"agentica.toml": "", "app/main.agc": OK, "tool/main.agc": OK, "tool/helper.agc": OK,
-                     "deps/pkg/main.agc": OK, ".hidden/main.agc": OK})
+                     "deps/pkg/main.agc": OK, ".hidden/main.agc": OK, "tests/main.agc": BROKEN,
+                     "app/fixtures/bad/main.agc": BROKEN})
     first = agentica(tmp_path, "compile")
     assert (first.code, first.stdout, first.stderr) == (0, "compiled app/main.agc\ncompiled tool/main.agc\n", "")
     written = {entry: entry.stat().st_mtime_ns for entry in entries(tmp_path)}
@@ -40,14 +44,29 @@ def test_compile_without_a_file_fills_the_cache_for_each_main_and_a_run_then_hit
     assert {entry: entry.stat().st_mtime_ns for entry in entries(tmp_path) if entry in written} == written
 
 
-def test_compile_stops_at_a_program_that_does_not_compile_and_refuses_no_cache(tmp_path):
-    write(tmp_path, {"bad.agc": BROKEN, "ok.agc": OK})
-    failed = agentica(tmp_path, "--json", "compile", "bad.agc", "ok.agc")
-    assert (failed.code, failed.stdout, '"CHECK-TYPE-MISMATCH"' in failed.stderr) == (1, "", True)
-    assert entries(tmp_path) == []
-    assert agentica(tmp_path, "--no-cache", "compile", "ok.agc").code == 2
-    none = agentica(tmp_path, "compile")
-    assert (none.code, none.stdout) == (2, "")
+def test_compile_reports_a_program_that_does_not_compile_and_goes_on(tmp_path):
+    write(tmp_path, {"a/main.agc": BROKEN, "b/main.agc": OK})
+    failed = agentica(tmp_path, "--json", "compile")
+    assert (failed.code, '"CHECK-TYPE-MISMATCH"' in failed.stderr) == (1, True)
+    assert [json.loads(line) for line in failed.stdout.splitlines()] == [{"file": "b/main.agc", "state": "compiled"}]
+    assert len(list(tmp_path.glob("*/_build/bytecode/*.agcb"))) == 1
+    assert agentica(tmp_path, "--no-cache", "compile", "b/main.agc").code == 2
+
+
+@pytest.mark.parametrize("files", [{}, {"lib.agc": OK}])
+def test_a_folder_with_no_main_is_one_short_line(tmp_path, files):
+    write(tmp_path, files)
+    found = agentica(tmp_path, "compile")
+    assert (found.code, found.stdout, len(found.stderr.splitlines())) == (2, "", 1)
+
+
+def test_a_compile_under_a_deny_flag_fills_the_entry_that_a_run_under_it_reads(tmp_path):
+    write(tmp_path, {"ok.agc": OK})
+    assert agentica(tmp_path, "--deny-net", "compile", "ok.agc").stdout == "compiled ok.agc\n"
+    written = {entry: entry.stat().st_mtime_ns for entry in entries(tmp_path)}
+    ran = agentica(tmp_path, "--deny-net", "ok.agc")
+    assert (ran.code, ran.stdout) == (0, "ok\n")
+    assert {entry: entry.stat().st_mtime_ns for entry in entries(tmp_path)} == written
 
 
 def on_a_terminal(folder, *words):
@@ -83,5 +102,7 @@ def test_a_run_that_compiles_says_so_on_a_terminal_and_nowhere_else(tmp_path):
     assert on_a_terminal(tmp_path, "main.agc") == (0, "ok\n", "")
     assert on_a_terminal(tmp_path, "--no-cache", "--json", "main.agc") == (0, "ok\n", "")
     assert on_a_terminal(tmp_path, "--no-cache", "compile", "main.agc", "-o", "out.agcb") == (0, "", "")
+    missing = on_a_terminal(tmp_path, "nope.agc")
+    assert (missing[0], "Compiling" in missing[2]) == (2, False)
     piped = agentica(tmp_path, "--no-cache", "main.agc")
     assert (piped.code, piped.stdout, piped.stderr) == (0, "ok\n", "")
