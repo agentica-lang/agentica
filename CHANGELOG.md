@@ -13,10 +13,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 ### Added
 
 - `Process.spawn` with `pty: true` runs a program on a pseudo-terminal, and `Process.resize` sets its size; Linux and macOS (#1733).
-- A run that compiles its program says `Compiling FILE…` on a terminal, and `agentica compile` with no `-o` fills the bytecode cache ahead (#1735).
+- A run that compiles its program says `Compiling FILE…` on a terminal, and `agentica compile` with no `-o` fills the bytecode cache ahead for every `main.agc` under the working folder (#1735).
 - `Actor.send` and `Actor.await` split `Actor.call` in two, so a caller can ask several actors first and await each answer later (#1571).
-- The errors of file and network builtins carry `details`: `"path"` (and `"to"`) or `"host"` (#1510).
-- `Native.arena do ... end` closes the native resources and buffers its block opened when the block ends (#1091).
+- The errors of file and network builtins carry `details`: `"path"` for file calls (`"to"` for `Path.rename`), `"host"` for network calls (#1510).
+- `Native.arena do ... end` closes, when its block ends, the native resources and buffers the block opened, except those its value holds (#1091).
 - `Bytes.build do |out| ... end` builds one `Bytes` from many parts with no copy in between (#1361).
 - Native API 1.4: `an_error_kind` and `an_get_error` make and read errors with a kind and details; 1.3 modules still load (#1510).
 
@@ -26,7 +26,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - With the JIT, loops that test lines against literals run faster, and the block of a `Lazy` terminal is compiled (#1223).
 - The `gc` trace reports allocation per scheduler and the stop-the-world time and pauses (#1698).
 - `agentica FILE.agc` starts a cached program without loading the compiler, about 16 ms in place of 48 ms on Linux (#1471).
-- String interpolation into `Bytes`, `Int` printing and `Bytes` concatenation copy less (#1361).
+- An `Int` in an interpolation prints faster, and interpolation into `Bytes` and `Bytes` concatenation copy less (#1361).
 - Many tasks waiting on one busy task no longer run slower with more scheduler threads (#1362).
 - `ATS.get`, `has_key?` and the read of `push` take no lock, so readers scale with the schedulers (#1625).
 - With several schedulers, TCP and TLS reads and sends run on the task's scheduler: faster streams and HTTP(S) servers (#1188, #1197).
@@ -34,7 +34,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `agentica FILE.agc` no longer searches `PATH` for the C compiler at each start of a cached program with no native module (#1551).
 - The interpreter runs programs 4 to 6% faster, and `check` and `compile` of a large program 5 to 7% faster (#1001).
 - Text work is faster: UTF-8 checks, `String.split`, case changes, character counts and `JSON.parse` (#996).
-- A `Float` turns into text about 10 times faster, and `String.to_f` and `JSON.decode` read numbers to the nearest `Float` (#1682).
+- A `Float` turns into text about 10 times faster, and `String.to_f` and `JSON.decode` read numbers to the nearest `Float`; on Windows a few values print and read differently (#1682).
 - `agentica compile` of a large cached program is about 15% faster (#1683).
 
 ### Fixed
