@@ -112,7 +112,7 @@ SUMMARY = [
   "                                          locked do not move",
   "  agentica compile FILE.agc -o OUT.agcb   write bytecode",
   "  agentica compile [FILE...]              fill the bytecode cache, so the next runs start at once; no FILE:",
-  "                                          every main.agc under the working folder",
+  "                                          every main.agc under the working folder, outside tests/ and fixtures/",
   "  agentica run [OPTIONS] -- FILE.agcb [ARGS...]",
   "                                          run a compiled program; OPTIONS: --max-steps N, --max-heap SIZE,",
   "                                          --seed N, --flush-timeout MS, --schedulers N, --jit MODE, the --deny-*",

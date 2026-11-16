@@ -94,10 +94,11 @@ static int run_stage(agc_launch *launch, agc_program *program, bool launcher, co
    * cannot run `agentica test`, which starts the binary again, and the bootstrap does not need that. */
   char version_flag[] = "--version", self_flag[] = "--self", bdd_flag[] = "--embedded-bdd",
        missed_flag[] = "--cache-missed", tty_flag[] = "--stderr-tty", separator[] = "--", version[] = AGC_VERSION;
-  bool embedded_bdd = !replacement && agc_embedded_index[3] != 0 && agc_embedded_index[5] != 0;
-  /* Only a front end of this build knows --stderr-tty: the first binary of the bootstrap carries stage0, and carries
-   * no BDD programs either. */
-  bool tty = embedded_bdd && agc_launch_stderr_tty();
+  /* The front end comes from this build when the binary carries the BDD programs that it compiled: the first binary
+   * of the bootstrap carries stage0 and none of them. Only such a front end knows --embedded-bdd and --stderr-tty. */
+  bool this_build = !replacement && agc_embedded_index[3] != 0 && agc_embedded_index[5] != 0;
+  bool embedded_bdd = this_build;
+  bool tty = this_build && agc_launch_stderr_tty();
   int input_count = 3 + (replacement ? 0 : 2) + (embedded_bdd ? 1 : 0) + (missed ? 1 : 0) + (tty ? 1 : 0);
   char **arguments = agc_alloc(agc_size_mul((size_t)count + (size_t)input_count, sizeof *arguments));
   arguments[0] = version_flag;
