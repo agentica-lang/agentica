@@ -4,7 +4,6 @@ The child runs on a pseudo-terminal: its stdin, stdout and stderr and its contro
 the program sends and ends lines with CRLF, which read_line strips.
 """
 import json
-import resource
 
 import pytest
 
@@ -47,6 +46,7 @@ def test_a_pty_child_has_a_controlling_terminal_of_24_by_80_and_no_other_descrip
 @pytest.mark.parametrize("schedulers", ["1", "4"])
 def test_300_pty_children_that_exit_at_once_each_get_their_exit_code(tmp_path, schedulers):
     # Each child holds three descriptors while it runs: more than macOS's default limit of 256 all told.
+    import resource  # POSIX only
     soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
     want = 4096 if hard == resource.RLIM_INFINITY else min(hard, 4096)
     resource.setrlimit(resource.RLIMIT_NOFILE, (max(soft, want), hard))
