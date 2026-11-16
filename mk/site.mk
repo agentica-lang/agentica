@@ -23,6 +23,10 @@ $(THEME)/highlight/node_modules: $(THEME)/highlight/package.json $(THEME)/highli
 site: site-sass $(THEME)/highlight/node_modules
 	hugo --cleanDestinationDir --source site --panicOnWarning $(HUGO_FLAGS)
 	node $(THEME)/highlight/highlight.mjs --strict site/public
+	@# A relative link to no page becomes a link to its source on GitHub (repoPublic): to a content file or to a
+	@# folder. Only the footer's "Page source" may be one; link a page by its .md file.
+	@if grep -roE 'blob/[^/"]+/(site/content/[^ >"]*|([^ >"/]+/)*[^ >"/.]+/?)"?>[^<]*' site/public \
+		| grep -v '>Page source$$'; then echo "a link points at the source on GitHub, not the page" >&2; exit 1; fi
 
 site-serve: site-sass
 	hugo server --source site

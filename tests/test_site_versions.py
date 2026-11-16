@@ -166,9 +166,10 @@ def test_only_the_root_is_indexed_and_tags_build_in_a_git_checkout(repo, tmp_pat
     head, body = old.split("</head>")
     assert head.count(noindex) == 1 and "canonical" not in head.lower() and "content=all" not in head
     assert body == "<body><link rel=canonical href=body></body></html>"
-    # A page with an icon of its own (a tag from before the docs theme) gets the org icons instead.
+    # A page with an icon of its own (a tag from before the docs theme) gets the org icons instead, at the root too.
     assert head.count(tool.ORG_ICONS) == 1 and "data:x" not in head
-    assert "data:x" in (out / "only-0.11.0" / "index.html").read_text()
+    root = (out / "only-0.11.0" / "index.html").read_text()
+    assert root.count(tool.ORG_ICONS) == 1 and "data:x" not in root
     # dev is unreleased: every page is noindex, with no canonical, even where the root has the page.
     for page in ("library/index.html", "index.html", "only-0.12.0/index.html", "404.html"):
         text = (out / "dev" / page).read_text().split("</head>")[0]
@@ -223,6 +224,24 @@ def test_a_tag_with_the_theme_is_built_with_the_current_theme_and_pins(repo, tmp
     code, out, second = build(tmp_path, monkeypatch)
     assert code == 0 and second - first == 3  # 0.13.0 at its folder and at the root, and dev
     assert "theme three" in (out / "0.13.0" / "index.html").read_text()
+    # So does a change of the pins alone.
+    workflow.write_text(workflow.read_text().replace("HUGO_VERSION: 2.0.0", "HUGO_VERSION: 3.0.0"))
+    release(repo, "0.14.0-dev3")
+    code, out, third = build(tmp_path, monkeypatch)
+    assert code == 0 and third - second == 3 and used.count("3.0.0") == 3
+
+
+def test_org_icons_match_the_theme_and_a_page_with_them_is_left_alone(tmp_path):
+    partial = (ROOT / tool.THEME / "layouts" / "_partials" / "favicon.html").read_text()
+    links = "".join(line for line in partial.splitlines() if line.startswith("<link"))
+    assert links == tool.ORG_ICONS
+    themed = "<html><head>\n" + partial.split("-}}\n", 1)[1] + "</head><body>a</body></html>"
+    pages = {"themed.html": themed, "old.html": '<head><link rel="shortcut icon" href=x></head>', "part.html": "<p>"}
+    for name, text in pages.items():
+        (tmp_path / name).write_text(text)
+    assert tool.use_org_icons(tmp_path) == 1
+    assert (tmp_path / "themed.html").read_text() == themed and (tmp_path / "part.html").read_text() == "<p>"
+    assert (tmp_path / "old.html").read_text() == "<head>" + tool.ORG_ICONS + "</head>"
 
 
 def test_a_tag_that_fails_with_the_current_theme_fails_the_run(repo, tmp_path, monkeypatch, capsys):
