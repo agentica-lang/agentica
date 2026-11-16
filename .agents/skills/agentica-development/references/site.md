@@ -36,7 +36,9 @@ rule that a site page shows.
   `git add site/themes/docs-theme`, `make site`. `<commit>` is a commit on the
   theme's default branch (never one from a PR branch): a deleted or squashed
   branch breaks `git submodule update`. `tools/site_versions.py`
-  builds each tag with the theme commit that tag pins.
+  builds every tag that uses the theme with the theme commit of the current
+  checkout, so a theme bump restyles every version at the next deploy; a tag
+  that fails with it fails the deploy.
 
 ## Content
 
@@ -115,8 +117,10 @@ and the latest release again at the root. `tools/site_versions.py`
 (`make site-versions`; its docstring has the rules for tags, retries and the
 cache) builds them all. What it does not say:
 
-- Each tag is built with the Hugo and Dart Sass pinned in that tag's
-  `pages.yml`: keep the four `env` names of its `build` job.
+- A tag that uses the theme (0.28.0 on) is built with the Hugo and Dart Sass
+  of the current `pages.yml`; an older tag, with its own layouts, with those
+  of its own `pages.yml`, and the assembly swaps its icon for the org icons.
+  Keep the four `env` names of the `build` job.
 - The selector and the banner (`site/versions/selector.{js,css}`) are not part
   of a build: the assembly copies them to `/_versions/` and adds their tags to
   every HTML page, so a fix applies to every version at the next deploy. They

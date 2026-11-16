@@ -22,6 +22,7 @@ MAKEFILE = (
     ".PHONY: site\n"
     "site:\n"
     "\t@test ! -e FAIL\n"
+    "\t@test ! -e site/themes/docs-theme/FAIL\n"
     "\t@if [ -e FLAKY ] && [ ! -e $(ONCE) ]; then touch $(ONCE); exit 1; fi\n"
     "\t@echo run >> $(RUNS)\n"
     "\tmkdir -p site/public/library\n"
@@ -31,7 +32,7 @@ MAKEFILE = (
     "\tprintf 'see <head></head> /agentica/' > site/public/llms.txt\n"
     "\t@if [ -e site/themes/docs-theme/mark ]; then cat site/themes/docs-theme/mark >> site/public/index.html; fi\n"
     "\tmkdir -p site/public/only-$$(cat VERSION)\n"
-    "\tprintf '<html><head><link href=x REL=canonical><meta content=all name=robots></head>"
+    "\tprintf '<html><head><link href=x REL=canonical><meta content=all name=robots><link rel=icon href=data:x></head>"
     "<body><link rel=canonical href=body></body></html>' > site/public/only-$$(cat VERSION)/index.html\n"
     "\tprintf '<html><head></head><body>not found</body></html>' > site/public/404.html\n"
     "\tprintf '<urlset></urlset>' > site/public/sitemap.xml\n"
@@ -165,6 +166,9 @@ def test_only_the_root_is_indexed_and_tags_build_in_a_git_checkout(repo, tmp_pat
     head, body = old.split("</head>")
     assert head.count(noindex) == 1 and "canonical" not in head.lower() and "content=all" not in head
     assert body == "<body><link rel=canonical href=body></body></html>"
+    # A page with an icon of its own (a tag from before the docs theme) gets the org icons instead.
+    assert head.count(tool.ORG_ICONS) == 1 and "data:x" not in head
+    assert "data:x" in (out / "only-0.11.0" / "index.html").read_text()
     # dev is unreleased: every page is noindex, with no canonical, even where the root has the page.
     for page in ("library/index.html", "index.html", "only-0.12.0/index.html", "404.html"):
         text = (out / "dev" / page).read_text().split("</head>")[0]
@@ -178,7 +182,8 @@ def test_only_the_root_is_indexed_and_tags_build_in_a_git_checkout(repo, tmp_pat
     assert len(worktrees.splitlines()) == 1
 
 
-def test_a_tag_is_built_with_the_theme_commit_it_pins(repo, tmp_path, monkeypatch):
+def tag_with_theme(repo, tmp_path):
+    """Add the docs theme submodule (its `mark` is "theme one") and tag 0.13.0 with it; returns the theme repo."""
     theme = tmp_path / "theme"
     theme.mkdir()
     git(theme, "init", "-q")
@@ -187,15 +192,50 @@ def test_a_tag_is_built_with_the_theme_commit_it_pins(repo, tmp_path, monkeypatc
     git(theme, "commit", "-q", "-m", "one")
     git(repo, "-c", "protocol.file.allow=always", "submodule", "add", "-q", str(theme), tool.THEME)
     release(repo, "0.13.0", "0.13.0")
-    # The checkout moves on, uncommitted: git archive leaves the submodule empty, so the tag needs its own commit.
+    return theme
+
+
+def test_a_tag_with_the_theme_is_built_with_the_current_theme_and_pins(repo, tmp_path, monkeypatch):
+    theme = tag_with_theme(repo, tmp_path)
+    # The checkout then pins a newer theme and newer tools; the tag keeps its own pins.
     (theme / "mark").write_text("theme two")
     git(theme, "commit", "-q", "-am", "two")
     git(repo / tool.THEME, "pull", "-q")
-    code, out, _ = build(tmp_path, monkeypatch)
+    workflow = repo / ".github" / "workflows" / "pages.yml"
+    workflow.write_text(workflow.read_text().replace("HUGO_VERSION: 1.0.0", "HUGO_VERSION: 2.0.0"))
+    release(repo, "0.14.0-dev")
+    used = []
+    monkeypatch.setattr(tool, "tool_env", lambda text, tools: used.append(tool.pins(text)["HUGO_VERSION"]) or dict(os.environ))
+    code, out, first = build(tmp_path, monkeypatch)
     assert code == 0
-    assert "theme one" in (out / "0.13.0" / "index.html").read_text()
-    assert "theme one" in (out / "index.html").read_text()
+    # The tag's content, the look of the current theme: at its folder and at the root.
+    assert "theme two" in (out / "0.13.0" / "index.html").read_text()
+    assert "0.13.0" in (out / "0.13.0" / "library" / "index.html").read_text()
+    assert "theme two" in (out / "index.html").read_text()
     assert "theme two" in (out / "dev" / "index.html").read_text()
+    # A tag from before the theme keeps its own Hugo pins; one with the theme takes the current ones.
+    assert used.count("2.0.0") == 3 and used.count("1.0.0") == 3  # 0.13.0 twice and dev; 0.9.0, 0.10.0, 0.11.0
+    # A newer theme pin changes the cache key of the tags with the theme, so they build again; the others stay cached.
+    (theme / "mark").write_text("theme three")
+    git(theme, "commit", "-q", "-am", "three")
+    git(repo / tool.THEME, "pull", "-q")
+    release(repo, "0.14.0-dev2")
+    code, out, second = build(tmp_path, monkeypatch)
+    assert code == 0 and second - first == 3  # 0.13.0 at its folder and at the root, and dev
+    assert "theme three" in (out / "0.13.0" / "index.html").read_text()
+
+
+def test_a_tag_that_fails_with_the_current_theme_fails_the_run(repo, tmp_path, monkeypatch, capsys):
+    theme = tag_with_theme(repo, tmp_path)
+    # A theme that the tag's `make site` cannot build with (the fixture fails on a FAIL file in the tree).
+    (theme / "FAIL").write_text("")
+    git(theme, "add", "-A")
+    git(theme, "commit", "-q", "-m", "breaks old tags")
+    git(repo / tool.THEME, "pull", "-q")
+    release(repo, "0.14.0-dev")
+    code, _, _ = build(tmp_path, monkeypatch)
+    assert code == 1
+    assert "0.13.0" in capsys.readouterr().out
 
 
 def test_a_tag_that_fails_fails_the_run(repo, tmp_path, monkeypatch, capsys):
