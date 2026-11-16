@@ -51,22 +51,24 @@ def test_compile_stops_at_a_program_that_does_not_compile_and_refuses_no_cache(t
 
 
 def on_a_terminal(folder, *words):
-    """Runs with stderr on a pseudo-terminal: the exit code, stdout and what stderr showed."""
+    """Runs with stderr on a pseudo-terminal: the exit code, stdout and what stderr showed. The terminal side stays
+    open while the output is read: macOS drops what is unread once it closes."""
     import pty
+    import select
 
     main, side = pty.openpty()
-    with os.fdopen(side, "wb", buffering=0) as terminal:
+    try:
+        terminal = os.fdopen(side, "wb", buffering=0, closefd=False)
         result = agentica(folder, *words, stderr_to=terminal)
-    shown = b""
-    while True:
-        try:
+        shown = b""
+        while select.select([main], [], [], 0.5)[0]:
             chunk = os.read(main, 4096)
-        except OSError:
-            break
-        if not chunk:
-            break
-        shown += chunk
-    os.close(main)
+            if not chunk:
+                break
+            shown += chunk
+    finally:
+        os.close(side)
+        os.close(main)
     return result.code, result.stdout, shown.decode("utf-8").replace("\r\n", "\n")
 
 
