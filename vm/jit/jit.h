@@ -253,20 +253,6 @@ void agc_jit_call_plain(agc_vm *vm, agc_value *args, const agc_builtin *b, uint6
    alone, so the interpreter runs the instruction and fails as it does. A String key charges its bytes to the task's
    turn cost, which compiled code then leaves to apply, as after EQ. It never fails, allocates or parks. */
 uint32_t agc_jit_map_get(agc_vm *vm, agc_value *dst, const agc_value *map, const agc_value *key);
-/* LIST in compiled code, as the interpreter's case: *DST = a new List of the COUNT values at ITEMS (the window the
-   loader checked), or the run's empty List. It may allocate; it charges nothing and never fails or parks. */
-void agc_jit_list(agc_vm *vm, agc_value *dst, const agc_value *items, uint32_t count);
-/* CLOSURE in compiled code, as the interpreter's case: WINDOW[0] = a new function value of FUNCTION that holds the
-   CAPTURES values at WINDOW (the window the loader checked). It allocates; it charges nothing and never fails or
-   parks. */
-void agc_jit_closure(agc_value *window, uint32_t function, uint32_t captures);
-/* STRUCT in compiled code, as the interpreter's case: *DST = a new struct of TYPE that holds the COUNT values at FIELDS
-   (the window the loader checked). It allocates; it charges nothing and never fails or parks. */
-void agc_jit_struct(agc_value *dst, const agc_value *fields, uint32_t type, uint32_t count);
-/* ENUM in compiled code, as the interpreter's case: *DST = the shared value of V, the definition of VARIANT, when it
-   has no payload, else a new one that holds the V->arity values at PAYLOAD (the window the loader checked). It may
-   allocate; it charges nothing and never fails or parks. */
-void agc_jit_enum(agc_value *dst, const agc_value *payload, const agc_variant_def *v, uint32_t variant);
 /* STRUCT_WITH in compiled code, as the interpreter's case: *DST = a copy of the struct in WINDOW[0] with the fields
    of U set to WINDOW[1..] (the window the loader checked). The copy charges its size and applies the task's turn
    cost, as the interpreter does after it: AGC_STATUS_OK for the code to go on, or AGC_JIT_EXIT_YIELD when that ended
@@ -504,9 +490,9 @@ void agc_emit_list_len(agc_emitter *e, uint32_t a, uint32_t b, uint32_t status, 
 void agc_emit_list_get(agc_emitter *e, agc_instr in, uint32_t pc);
 void agc_emit_map_get(agc_emitter *e, agc_instr in, uint32_t pc);
 void agc_emit_list(agc_emitter *e, agc_instr in);
-/* CLOSURE of function bx, which holds CAPTURES values: a call of agc_jit_closure. */
+/* CLOSURE of function bx, which holds CAPTURES values: a call of agc_op_closure. */
 void agc_emit_closure(agc_emitter *e, agc_instr in, uint32_t captures);
-/* STRUCT or ENUM: a call of FN(&R[a], &R[b], X, Y) (agc_jit_struct, agc_jit_enum), which never fails. */
+/* STRUCT or ENUM: a call of FN(&R[a], &R[b], X, Y) (agc_op_struct, agc_op_enum), which never fails. */
 void agc_emit_new(agc_emitter *e, agc_instr in, uint64_t fn, uint64_t x, uint64_t y);
 /* STRUCT_WITH of the update definition at UPDATE: a call of agc_jit_struct_with, which may leave. */
 void agc_emit_struct_with(agc_emitter *e, agc_instr in, uint32_t pc, uint64_t update);

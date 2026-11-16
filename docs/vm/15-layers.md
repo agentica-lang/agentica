@@ -182,7 +182,8 @@ file, the unused `static inline` in `trace.h` fails under `-Werror` with clang).
   helpers (`agc_op_add_i` ... `agc_op_list_get`, defined in `interp.c`): they
   return an `agc_status` instead of failing, which `agc_op_fail` turns into the
   failure, and leave the step and turn-cost accounting to the caller, so the JIT
-  shares them (§6.4).
+  shares them (§6.4). The constructors (`agc_op_list`, `agc_op_closure`,
+  `agc_op_struct`, `agc_op_enum`) never fail and return nothing.
 - **`services.h`**: what the services share (the stream kit, the child channel,
   the exports of `files.c`, `tree.c` and `process.c` that others call).
 - **`list_impl.h`** (private to the core): `struct agc_list`, the trie node

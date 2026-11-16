@@ -236,7 +236,7 @@ uint64_t agc_task_steps(const agc_vm *vm);
 bool agc_frame_runs(const agc_task *t, uint32_t at, const agc_stepper *stepper);
 agc_turn_result agc_run_turn(agc_vm *vm);
 
-/* Opcode helpers: the arithmetic, comparison, equality, string and list opcodes, shared by the interpreter
+/* Opcode helpers: the arithmetic, comparison, equality, string, list and constructor opcodes, shared by the interpreter
  * (vm/interp.c inlines them) and the JIT (docs/vm/05-values-execution-builtins.md §6.4, "Helper contract"). Values go
  * by pointer: `dst` is the result register, written only on AGC_STATUS_OK, and it may be an operand. A helper never
  * fails itself (no agc_fail, no longjmp): it returns a status, and the caller turns a status other than OK into the
@@ -275,6 +275,13 @@ agc_status agc_op_list_len(agc_vm *vm, agc_value *dst, const agc_value *list);
 agc_status agc_op_list_get(agc_vm *vm, agc_value *dst, const agc_value *list, const agc_value *index);
 agc_status agc_op_concat(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b);
 agc_status agc_op_to_text(agc_vm *vm, agc_value *dst, const agc_value *v);
+/* The constructors LIST, CLOSURE (WINDOW[0] = the function value that holds the CAPTURES values at WINDOW), STRUCT and
+ * ENUM (the shared value of V when it has no payload): they read the window the loader checked, allocate, charge
+ * nothing and never fail, so they return no status. */
+void agc_op_list(agc_vm *vm, agc_value *dst, const agc_value *items, uint32_t count);
+void agc_op_closure(agc_value *window, uint32_t function, uint32_t captures);
+void agc_op_struct(agc_value *dst, const agc_value *fields, uint32_t type, uint32_t count);
+void agc_op_enum(agc_value *dst, const agc_value *payload, const agc_variant_def *v, uint32_t variant);
 /* The failure of a helper's status, with agc_fail. `a` and `b` are the operands the helper was given:
  * AGC_STATUS_INDEX_OUT_OF_RANGE needs both (the list and the index, named in the message), the other statuses read
  * neither (NULL is fine). `span` is the span of the running instruction. It is called on the VM's C stack, never from

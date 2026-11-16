@@ -445,19 +445,19 @@ void agc_emit_map_get(agc_emitter *e, agc_instr in, uint32_t pc) {
   cost_exit(e, pc);
 }
 
-/* LIST: agc_jit_list(vm, &R[a], &R[b], c), which never fails, so no status to test. */
+/* LIST: agc_op_list(vm, &R[a], &R[b], c), which never fails, so no status to test. */
 void agc_emit_list(agc_emitter *e, agc_instr in) {
   helper_args(e, in);
   move_imm64(e, ARG3, in.c);
-  call_fn(e, (uint64_t)(uintptr_t)agc_jit_list);
+  call_fn(e, (uint64_t)(uintptr_t)agc_op_list);
 }
 
-/* CLOSURE: agc_jit_closure(&R[a], bx, captures), which never fails, so no status to test. */
+/* CLOSURE: agc_op_closure(&R[a], bx, captures), which never fails, so no status to test. */
 void agc_emit_closure(agc_emitter *e, agc_instr in, uint32_t captures) {
   lea(e, ARG0, REGS, TAG(in.a));
   move_imm64(e, ARG1, (uint32_t)in.b | ((uint32_t)in.c << 16));
   move_imm64(e, ARG2, captures);
-  call_fn(e, (uint64_t)(uintptr_t)agc_jit_closure);
+  call_fn(e, (uint64_t)(uintptr_t)agc_op_closure);
 }
 
 /* STRUCT and ENUM: FN(&R[a], &R[b], x, y), which never fails, so no status to test. */

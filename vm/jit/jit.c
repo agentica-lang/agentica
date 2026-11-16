@@ -610,7 +610,7 @@ static size_t emit_function(agc_emitter *e, const agc_jit *jit, const agc_functi
       case AGC_OP_MAP: agc_emit_map(e, in, pc); break;
       case AGC_OP_STRUCT:
         if (in.c < p->struct_count)
-          agc_emit_new(e, in, (uint64_t)(uintptr_t)agc_jit_struct, in.c, p->structs[in.c].count);
+          agc_emit_new(e, in, (uint64_t)(uintptr_t)agc_op_struct, in.c, p->structs[in.c].count);
         else
           agc_emit_exit(e, AGC_JIT_EXIT_INTERPRET, pc);
         break;
@@ -622,7 +622,7 @@ static size_t emit_function(agc_emitter *e, const agc_jit *jit, const agc_functi
         break;
       case AGC_OP_ENUM:
         if (in.c < p->variant_count)
-          agc_emit_new(e, in, (uint64_t)(uintptr_t)agc_jit_enum, (uint64_t)(uintptr_t)&p->variants[in.c], in.c);
+          agc_emit_new(e, in, (uint64_t)(uintptr_t)agc_op_enum, (uint64_t)(uintptr_t)&p->variants[in.c], in.c);
         else
           agc_emit_exit(e, AGC_JIT_EXIT_INTERPRET, pc);
         break;
@@ -1285,21 +1285,8 @@ uint32_t agc_jit_map_get(agc_vm *vm, agc_value *dst, const agc_value *map, const
   return AGC_STATUS_OK;
 }
 
-void agc_jit_list(agc_vm *vm, agc_value *dst, const agc_value *items, uint32_t count) {
-  *dst = count ? agc_list_value(agc_list_from_array(items, count)) : vm->rt->empty_list;
-}
 
-void agc_jit_closure(agc_value *window, uint32_t function, uint32_t captures) {
-  agc_fn *f = agc_new_fn(function, captures);
-  for (uint32_t k = 0; k < captures; k++) f->captured[k] = window[k];
-  window[0] = agc_fn_value(f);
-}
 
-void agc_jit_struct(agc_value *dst, const agc_value *fields, uint32_t type, uint32_t count) {
-  agc_struct *st = agc_new_struct(type, count);
-  for (uint32_t k = 0; k < count; k++) st->fields[k] = fields[k];
-  *dst = agc_struct_value(st);
-}
 
 uint32_t agc_jit_struct_with(agc_vm *vm, agc_value *dst, const agc_value *window, const agc_update_def *u) {
   const agc_program *p = vm->rt->program;
@@ -1359,16 +1346,6 @@ agc_jit_code agc_jit_call_value(agc_vm *vm, agc_value *window, uint32_t argc, ui
   /* The loader keeps params + captures within the callee's registers, which fit the file (checked above). */
   if (fn->n) memcpy(window + 1 + argc, fn->captured, (size_t)fn->n * sizeof(agc_value));
   return code;
-}
-
-void agc_jit_enum(agc_value *dst, const agc_value *payload, const agc_variant_def *v, uint32_t variant) {
-  if (v->arity == 0) {
-    *dst = agc_enum_value(v->shared);
-    return;
-  }
-  agc_enum *e = agc_new_enum(variant, v->arity);
-  for (uint32_t k = 0; k < v->arity; k++) e->payload[k] = payload[k];
-  *dst = agc_enum_value(e);
 }
 
 bool agc_jit_mode_parse(const char *word, agc_jit_mode *mode) {
