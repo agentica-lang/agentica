@@ -2232,10 +2232,11 @@ def writer(job: Job) -> Result[Int]
   return ok(job.count)
 end
 
-# Waits for the peer's "bye" (it has read every line), then closes the socket.
-def finish(socket: TCP.Socket) -> Result[Void]
+# Waits for the peer's "bye" (it has read every line). It starts while the writers write, so on a TLS socket the
+# writes before its read go out from the schedulers and those after it through the I/O thread, which reads.
+def await_bye(socket: TCP.Socket) -> Result[Void]
+  Task.sleep(20)
   line = try TCP.read_line(socket, 60000)
-  TCP.close(socket)
   if line != "bye"
     return error("unexpected #{line}")
   end
@@ -2248,12 +2249,18 @@ def main() -> Void
   sockets = args[0].to_i.unwrap!
   tasks = args[1].to_i.unwrap!
   count = args[2].to_i.unwrap!
-  buffered = args[3] == "write"
+  buffered = args[3].end_with?("write")
   listener = TCP.listen("127.0.0.1", 0).unwrap!
+  if args[3].start_with?("tls")
+    context = TLS.server_context(TLS.ServerOptions(cert_file: "#{args[4]}/server.pem", key_file: "#{args[4]}/server-key.pem"))
+    listener = TLS.listen("127.0.0.1", 0, context.unwrap!).unwrap!
+  end
+
   puts(TCP.local_port(listener))
   IO.flush()
   accepted: List[TCP.Socket] = []
   jobs: List[Task[Result[Int]]] = []
+  byes: List[Task[Result[Void]]] = []
   k = 0
   while k < sockets
     socket = TCP.accept(listener, 60000).unwrap!
@@ -2269,6 +2276,7 @@ def main() -> Void
       id = id + 1
     end
 
+    byes = byes.push(Task.spawn(&await_bye, socket))
     k = k + 1
   end
 
@@ -2277,8 +2285,12 @@ def main() -> Void
     sent = sent + Task.await(job).unwrap!
   end
 
+  for bye in byes
+    Task.await(bye).unwrap!
+  end
+
   for socket in accepted
-    finish(socket).unwrap!
+    TCP.close(socket)
   end
 
   puts("sent #{sent}")
@@ -2290,20 +2302,23 @@ def padding(task, seq):
     return (seq * 7919 + task * 104729) % 9000
 
 
-def read_ordered_lines(port, tasks, count, problems):
+def read_ordered_lines(port, tasks, count, problems, secure=False):
     """A slow reader with a small receive window: it checks that each task's lines come whole, once and in order. A
     failure of the peer itself (a timeout) is a problem too, so the test names it."""
     try:
-        read_lines_in_order(port, tasks, count, problems)
+        read_lines_in_order(port, tasks, count, problems, secure)
     except Exception as failure:
         problems.append(repr(failure))
 
 
-def read_lines_in_order(port, tasks, count, problems):
-    with socket.socket() as peer:
-        peer.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 4096)
-        peer.settimeout(60)
-        peer.connect(("127.0.0.1", port))
+def read_lines_in_order(port, tasks, count, problems, secure):
+    with socket.socket() as raw:
+        raw.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 4096)
+        raw.settimeout(60)
+        raw.connect(("127.0.0.1", port))
+        peer = raw
+        if secure:
+            peer = ssl.create_default_context(cafile=TLS_DIR + "/ca.pem").wrap_socket(raw, server_hostname="localhost")
         expected, pending, lines, reads = [0] * tasks, b"", 0, 0
         while lines < tasks * count:
             chunk = peer.recv(2048)
@@ -2330,7 +2345,7 @@ def read_lines_in_order(port, tasks, count, problems):
 
 
 @RACE
-@pytest.mark.parametrize("mode", ["send", "write"])
+@pytest.mark.parametrize("mode", ["send", "write", "tls-send", "tls-write"])
 def test_sends_of_many_tasks_on_many_sockets_keep_their_order_beside_a_slow_reader(tmp_path, repeats, mode):
     # 16 sockets, 4 tasks on each sending 60 numbered lines of up to 9000 bytes, on four schedulers. Most sends go out
     # from the scheduler (the direct send, #1188); a peer with a 4 KiB receive window that pauses between reads makes
@@ -2338,12 +2353,15 @@ def test_sends_of_many_tasks_on_many_sockets_keep_their_order_beside_a_slow_read
     # task once, whole and in order. A smoke test: it rarely hits the window where a second send could overtake the
     # rest of a first (it passes without the writer lock's hold); the proof of that order is
     # test_a_send_waits_for_a_direct_send_of_another_task in vm/tests/net_test.c. In the `write` mode the tasks use the
-    # write buffer (TCP.write, a send every fifth line, a flush at the end), half of the sockets with a 4 KiB limit.
+    # write buffer (TCP.write, a send every fifth line, a flush at the end), half of the sockets with a 4 KiB limit. The
+    # tls modes do the same over TLS (#1713), where a read that starts meanwhile takes the session to the I/O thread.
     bytecode = program(tmp_path, "net_order", NET_ORDER)
     sockets, tasks, count = 16, 4, 60
+    secure = mode.startswith("tls")
     for _ in range(repeats):
-        problems, code, out, err = run_with_peers([bytecode, str(sockets), str(tasks), str(count), mode], sockets,
-                                                  lambda port, seen: read_ordered_lines(port, tasks, count, seen))
+        problems, code, out, err = run_with_peers([bytecode, str(sockets), str(tasks), str(count), mode, TLS_DIR],
+                                                  sockets,
+                                                  lambda port, seen: read_ordered_lines(port, tasks, count, seen, secure))
         assert (problems, code, out) == ([], 0, "sent %d\n" % (sockets * tasks * count)), err
 
 

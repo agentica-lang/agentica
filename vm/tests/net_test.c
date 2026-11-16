@@ -1366,8 +1366,8 @@ static void serve_junk_reader(junk_reader *r) {
   assert(uv_thread_join(&peer) == 0);
 }
 
-/* A TLS send that the kernel does not take: the scheduler encrypted it, so the I/O thread sends the rest as it is,
-   before anything else, and the task wakes when it is out. The next send goes out from the scheduler again. */
+/* A TLS send that the kernel does not take: the scheduler encrypted it, so the rest waits in the write buffer as it
+   is, before anything else, and the task wakes when it is out. The next send goes out from the scheduler again. */
 static void test_the_rest_of_a_tls_send_goes_to_the_io_thread(void) {
   tls_peer p = {0};
   size_t junk;
@@ -1387,6 +1387,50 @@ static void test_the_rest_of_a_tls_send_goes_to_the_io_thread(void) {
   assert(vm.task->parked == NULL);
   ok_of(sending.c.result);
   peer_reads_tls(&p, "next\n");
+  SSL_free(p.ssl);
+  close_pair_locked(p.fd);
+}
+
+/* The peer sends a record that does not decrypt to the VM's socket MINE, and a read on the scheduler fails on it with
+   no park, leaving an alert in the session; the loop then runs a few turns. */
+static void read_a_bad_record(const tls_peer *p, int mine) {
+  unsigned char bad[37] = {0x17, 0x03, 0x03, 0x00, 0x20};
+  for (size_t k = 5; k < sizeof bad; k++) bad[k] = (unsigned char)k;
+  assert(send(p->fd, bad, sizeof bad, 0) == (ssize_t)sizeof bad);
+  struct pollfd in_kernel = {mine, POLLIN, 0};
+  assert(poll(&in_kernel, 1, 5000) == 1);
+  locked_call reading = {&vm, vm.task, read_line_of(&vm, vm.task)};
+  on_thread(park_locked, &reading);
+  assert(vm.task->parked == NULL && !agc_as_result(&vm, reading.c.result)->ok);
+  for (int k = 0; k < 10; k++) (void)agc_io_poll(&vm, false);
+}
+
+static calling write_of(const char *text) {
+  return call("TCP.write", 3, socket_v, agc_test_str(text), agc_int(5000), agc_void());
+}
+
+/* TLS writes on a full socket return with their records in the write buffer (#1713). Then a read finds a bad record,
+   and the alert that the session has to send waits behind the buffer: the peer reads both lines whole, then the
+   alert. A flush then has nothing to wait for. */
+static void test_tls_writes_wait_in_the_buffer_and_an_alert_follows_them(void) {
+  tls_peer p = {0};
+  size_t junk;
+  int mine = open_tls_pair_full(&p, &junk);
+  locked_call writing = {&vm, vm.task, write_of("one\n")};
+  on_thread(park_locked, &writing);
+  assert(vm.task->parked == NULL);
+  ok_of(writing.c.result);
+  writing.c = write_of("two\n");
+  on_thread(park_locked, &writing);
+  assert(vm.task->parked == NULL);
+  ok_of(writing.c.result);
+  read_a_bad_record(&p, mine);
+  junk_reader r = {&p, junk, "one\ntwo\n", true, false};
+  serve_junk_reader(&r);
+  locked_call flushing = {&vm, vm.task, call("TCP.flush", 2, socket_v, agc_int(5000), agc_void(), agc_void())};
+  on_thread(park_locked, &flushing);
+  assert(vm.task->parked == NULL);
+  ok_of(flushing.c.result);
   SSL_free(p.ssl);
   close_pair_locked(p.fd);
 }
@@ -1415,15 +1459,7 @@ static void test_an_alert_waits_for_a_tls_send_under_way(void) {
     agc_sync_drop(&vm);
   }
   wait_ms(100);
-  unsigned char bad[37] = {0x17, 0x03, 0x03, 0x00, 0x20};
-  for (size_t k = 5; k < sizeof bad; k++) bad[k] = (unsigned char)k;
-  assert(send(p.fd, bad, sizeof bad, 0) == (ssize_t)sizeof bad);
-  struct pollfd in_kernel = {mine, POLLIN, 0};
-  assert(poll(&in_kernel, 1, 5000) == 1);
-  locked_call reading = {&vm, vm.task, read_line_of(&vm, vm.task)};
-  on_thread(park_locked, &reading);
-  assert(vm.task->parked == NULL && !agc_as_result(&vm, reading.c.result)->ok);
-  for (int k = 0; k < 10; k++) (void)agc_io_poll(&vm, false);
+  read_a_bad_record(&p, mine);
   junk_reader r = {&p, junk, "record\n", true, false};
   serve_junk_reader(&r);
   assert(uv_thread_join(&sender) == 0);
@@ -1470,6 +1506,7 @@ int main(void) {
 #ifdef __linux__
   AGC_TEST_RUN(test_the_rest_of_a_tls_send_goes_to_the_io_thread());
   AGC_TEST_RUN(test_an_alert_waits_for_a_tls_send_under_way());
+  AGC_TEST_RUN(test_tls_writes_wait_in_the_buffer_and_an_alert_follows_them());
 #endif
 #endif
   puts("net tests passed");

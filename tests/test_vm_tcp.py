@@ -10,6 +10,7 @@ import json
 import os
 import re
 import socket
+import ssl
 import struct
 import sys
 import threading
@@ -445,9 +446,24 @@ def test_a_direct_send_to_a_peer_that_reset_fails_with_a_write_error_and_the_pro
     assert vm.wait() == 0, vm.stderr_text()
 
 
-WRITE_PROGRAM = """\
+# The listener of the write programs: plain, or TLS when a directory of certificates is the last argument.
+WRITE_LISTEN = """\
+def open_listener() -> TCP.Listener
+  args = System.args()
+  if args.length < 2
+    return TCP.listen("127.0.0.1", 0).unwrap!
+  end
+
+  dir = args[1]
+  context = TLS.server_context(TLS.ServerOptions(cert_file: "#{dir}/server.pem", key_file: "#{dir}/server-key.pem"))
+  TLS.listen("127.0.0.1", 0, context.unwrap!).unwrap!
+end
+
+"""
+
+WRITE_PROGRAM = WRITE_LISTEN + """\
 def main() -> Void
-  listener = TCP.listen("127.0.0.1", 0).unwrap!
+  listener = open_listener()
   puts(TCP.local_port(listener))
   IO.flush()
   socket = TCP.accept(listener, 5000).unwrap!
@@ -471,14 +487,31 @@ end
 """
 
 
+def write_args(secure):
+    return ("x", str(FIXTURES / "tls")) if secure else ("x",)
+
+
+def write_peer(port, secure):
+    """A connection to the write program: plain, or TLS checked against the fixtures' CA."""
+    peer = socket.create_connection(("127.0.0.1", port), timeout=scaled(30))
+    if not secure:
+        return peer
+    context = ssl.create_default_context(cafile=str(FIXTURES / "tls" / "ca.pem"))
+    return context.wrap_socket(peer, server_hostname="localhost")
+
+
+@pytest.mark.parametrize("secure", [False, True], ids=["tcp", "tls"])
 @pytest.mark.parametrize("schedulers", ["1", "4"])
-def test_writes_return_while_the_peer_does_not_read_and_a_flush_waits_for_every_byte(tmp_path, adopt, schedulers):
+def test_writes_return_while_the_peer_does_not_read_and_a_flush_waits_for_every_byte(tmp_path, adopt, schedulers,
+                                                                                       secure):
     """3000 writes of 4 KiB (12 MiB, under the 16 MiB limit set with TCP.write_limit) all return while the Python peer
-    reads nothing, where a send would wait for the peer. The peer then reads: the flush ends, and every line arrived
-    once and in order. A limit out of range and a write after the close are errors."""
-    vm = adopt(start_vm(compile_text(WRITE_PROGRAM, "write", tmp_path), env={"AGENTICA_SCHEDULERS": schedulers}))
+    reads nothing, where a send would wait for the peer; on a TLS socket the buffer holds the records. The peer then
+    reads: the flush ends, and every line arrived once and in order. A limit out of range and a write after the close
+    are errors."""
+    vm = adopt(start_vm(compile_text(WRITE_PROGRAM, "write", tmp_path), *write_args(secure),
+                        env={"AGENTICA_SCHEDULERS": schedulers}))
     port = int(vm.next_line())
-    with socket.create_connection(("127.0.0.1", port), timeout=scaled(30)) as peer:
+    with write_peer(port, secure) as peer:
         assert vm.next_line() == "false"
         assert vm.next_line() == "written"
         lines = peer.makefile("rb").read().split(b"\n")
@@ -489,9 +522,9 @@ def test_writes_return_while_the_peer_does_not_read_and_a_flush_waits_for_every_
     assert vm.wait() == 0, vm.stderr_text()
 
 
-WRITE_CLOSE_PROGRAM = """\
+WRITE_CLOSE_PROGRAM = WRITE_LISTEN + """\
 def main() -> Void
-  listener = TCP.listen("127.0.0.1", 0).unwrap!
+  listener = open_listener()
   puts(TCP.local_port(listener))
   IO.flush()
   socket = TCP.accept(listener, 5000).unwrap!
@@ -512,15 +545,18 @@ end
 """
 
 
+@pytest.mark.parametrize("secure", [False, True], ids=["tcp", "tls"])
 @pytest.mark.parametrize("ending", ["close", "end"])
 @pytest.mark.parametrize("schedulers", ["1", "4"])
-def test_a_close_and_the_end_of_the_run_send_the_written_bytes_to_a_late_reader(tmp_path, adopt, schedulers, ending):
+def test_a_close_and_the_end_of_the_run_send_the_written_bytes_to_a_late_reader(tmp_path, adopt, schedulers, ending,
+                                                                                 secure):
     """200 writes of 64 KiB all return, then the program closes the socket, or just ends, without a flush. The Python
-    peer starts to read half a second later and still gets every byte before the end of the stream."""
+    peer starts to read half a second later and still gets every byte before the end of the stream, which on a TLS
+    socket is close_notify after the last record."""
     vm = adopt(start_vm(compile_text(WRITE_CLOSE_PROGRAM, "write_close", tmp_path), ending,
-                        env={"AGENTICA_SCHEDULERS": schedulers}))
+                        *write_args(secure)[1:], env={"AGENTICA_SCHEDULERS": schedulers}))
     port = int(vm.next_line())
-    with socket.create_connection(("127.0.0.1", port), timeout=scaled(30)) as peer:
+    with write_peer(port, secure) as peer:
         assert vm.next_line() == "written"
         time.sleep(0.5)
         got = peer.makefile("rb").read()
