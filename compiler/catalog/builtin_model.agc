@@ -12,6 +12,7 @@ enum Rule
   AddressSend
   AtsCall
   AtsNew
+  BytesWrite
   ChannelAddress
   ChannelNew
   ChannelRecv

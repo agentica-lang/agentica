@@ -2,6 +2,7 @@ ActorInbox
 AddressSend
 AtsCall
 AtsNew
+BytesWrite
 ChannelAddress
 ChannelNew
 ChannelRecv

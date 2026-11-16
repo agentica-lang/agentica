@@ -616,6 +616,9 @@ struct agc_task {
   agc_value inbox;
   /* The innermost Native.arena block that this task runs, or NULL (vm/ffi.c); only the task's own turns touch it. */
   struct agc_arena *arena;
+  /* The buffer of an ended Bytes.build of this task and its size, kept for its next one (vm/bytes.c), or NULL. */
+  agc_bytes *build_spare;
+  size_t build_spare_cap;
 };
 
 /* Where agc_fail and agc_exit jump while compiled code calls a builtin (agc_jit_call_builtin, vm/jit/jit.c) in a run

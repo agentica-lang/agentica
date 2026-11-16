@@ -1,8 +1,8 @@
 """Bytes against Python's bytes, on generated inputs.
 
 tests/fixtures/bytes-peer.agc answers one case a line: from_list, to_a, at, slice, take, drop, +, Bytes.concat, `==` and
-`!=`, how many keys a Set and a Map keep (the hash and the key equality), `.bytes` on an interpolated string, and
-Bytes.concat of a list literal and a chain of `+`. The expected answers come from Python's bytes and set. The inputs
+`!=`, how many keys a Set and a Map keep (the hash and the key equality), `.bytes` on an interpolated string,
+Bytes.concat of a list literal and a chain of `+`, and Bytes.build. The expected answers come from Python's bytes and set. The inputs
 cover the empty value, one byte, every byte value, equal values that are separate objects, and values that differ in
 one byte, in the length or in the last byte only.
 """
@@ -128,4 +128,25 @@ def test_interpolated_bytes_match_python(peer):
         lines.append(f"text,{first},{second},{text.encode().hex()}")
         whole = f"${first}\r\n{second}:{text}".encode()
         expected.append(f"{whole.hex()} {str(first).encode().hex()}")
+    assert answers(peer, lines) == expected
+
+
+def test_bytes_build_matches_python(peer):
+    """One RESP reply a line, so each build reuses the buffer the one before it left in the task; the sizes cross the
+    first buffer, a growth and the largest buffer the task keeps."""
+    rng = random.Random(SEED + 5)
+    data = values(rng) + [rng.randbytes(40000), rng.randbytes(70000)]
+    numbers = [0, -1, 2**63 - 1, -(2**63), 12345]
+    texts = ["", "x", "ñandú €"]
+    lines = []
+    expected = []
+    for _ in range(60):
+        items = [rng.choice(data) for _ in range(rng.randrange(6))]
+        number = rng.choice(numbers)
+        text = rng.choice(texts)
+        lines.append(",".join(["build", str(number), text.encode().hex()] + [item.hex() for item in items]))
+        whole = b"*%d\r\n" % len(items)
+        for item in items:
+            whole += b"$%d\r\n" % len(item) + item + f"\r\n{number} {text}\r\n".encode()
+        expected.append(whole.hex())
     assert answers(peer, lines) == expected

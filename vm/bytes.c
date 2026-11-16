@@ -1,9 +1,10 @@
 /*
  * The Bytes builtins (one of the tables that agc_find_builtin searches):
  * Bytes.from_list, to_a, length, at, slice, take, drop, equal (`==`), plus
- * (`+`) and concat, String.bytes and the `.bytes` of an interpolation. A
- * Bytes is an immutable byte string (agc_bytes in value.h); every result is
- * a new copy or the empty constant.
+ * (`+`) and concat, String.bytes, the `.bytes` of an interpolation, and
+ * Bytes.build with the write of its Bytes.Builder. A Bytes is an immutable
+ * byte string (agc_bytes in value.h); every result is a new copy, the empty
+ * constant, or the buffer of a Bytes.build that no write can reach again.
  * Service layer.
  * Design: docs/vm/05-values-execution-builtins.md §5.1.
  */
@@ -12,6 +13,24 @@
 #include <inttypes.h>
 #include <stdio.h>
 #include <string.h>
+
+#define BUILDER_FIRST 256
+#define BUILDER_SPARE_MAX ((size_t)64 * 1024)
+
+/* The state of a Bytes.build call, which its block sees as a Bytes.Builder (AGC_T_BUILDER). buf holds cap bytes, of
+   which len are written; the builder is the only reference to it. When the block returns the builder closes, and a
+   write after the close, or from another task than the one that called Bytes.build, is RUNTIME-BUILDER-CLOSED, so a
+   builder that escapes its block (through a channel, or into a block that another task runs) can reach no buffer: a
+   returned Bytes stays immutable and no two schedulers write one buffer. A buffer of up to BUILDER_SPARE_MAX bytes is
+   copied into the Bytes and kept in the task for its next build, so a build in a loop allocates only its result; a
+   larger one becomes the Bytes itself. */
+typedef struct {
+  agc_stepper stepper;
+  agc_bytes *buf;
+  size_t cap;
+  agc_task *owner;
+  bool called, closed;
+} builder;
 
 /* error on the first item outside 0..255, with its index: the type cannot say that an Int is a byte. */
 static agc_value builtin_from_list(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -154,22 +173,24 @@ static agc_value builtin_string_bytes(agc_vm *vm, agc_value *args, uint32_t span
    stack. The lowering sends 1 to INTERPOLATED_PARTS parts; a longer interpolation is joined as a String first. */
 #define INTERPOLATED_PARTS 8
 
+/* The text of V in *DATA and its length: printed into PRINTED for an Int, Float, Bool or nil. */
+static size_t part_text(agc_vm *vm, agc_value v, char printed[AGC_SCALAR_TEXT], const void **data, uint32_t span) {
+  if (agc_is(v, AGC_T_INT) || agc_is(v, AGC_T_FLOAT) || agc_is(v, AGC_T_BOOL) || agc_is(v, AGC_T_NIL)) {
+    *data = printed;
+    return agc_scalar_text(vm, v, printed);
+  }
+  agc_string *text;
+  if (!agc_text_checked(vm, v, &text)) agc_fail(vm, "RUNTIME-INTERNAL", "invalid bytecode: a value has no text", span);
+  *data = text->data;
+  return text->bytes;
+}
+
 static agc_value interpolated(agc_vm *vm, agc_value *args, uint32_t count, uint32_t span) {
   char printed[INTERPOLATED_PARTS][AGC_SCALAR_TEXT];
-  const char *data[INTERPOLATED_PARTS];
+  const void *data[INTERPOLATED_PARTS];
   size_t len[INTERPOLATED_PARTS], total = 0;
   for (uint32_t k = 0; k < count; k++) {
-    agc_value v = args[k];
-    if (agc_is(v, AGC_T_INT) || agc_is(v, AGC_T_FLOAT) || agc_is(v, AGC_T_BOOL) || agc_is(v, AGC_T_NIL)) {
-      data[k] = printed[k];
-      len[k] = agc_scalar_text(vm, v, printed[k]);
-    } else {
-      agc_string *text;
-      if (!agc_text_checked(vm, v, &text))
-        agc_fail(vm, "RUNTIME-INTERNAL", "invalid bytecode: a part of an interpolation has no text", span);
-      data[k] = text->data;
-      len[k] = text->bytes;
-    }
+    len[k] = part_text(vm, args[k], printed[k], &data[k], span);
     total = agc_size_add(total, len[k]);
   }
   if (total == 0) return agc_bytes_value(agc_empty_bytes());
@@ -226,6 +247,115 @@ static agc_value concat_parts(agc_vm *vm, agc_value *args, uint32_t count) {
 CONCAT(1) CONCAT(2) CONCAT(3) CONCAT(4) CONCAT(5) CONCAT(6) CONCAT(7) CONCAT(8)
 #define CONCAT_ROW(n) {"Bytes.concat.parts", n, builtin_concat##n, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true, false}
 
+static agc_value closed(builder *b) {
+  b->closed = true;
+  agc_bytes *buf = b->buf;
+  b->buf = NULL;
+  if (b->cap > BUILDER_SPARE_MAX) return agc_bytes_value(buf);
+  agc_value out = agc_bytes_value(agc_make_bytes(buf->data, buf->len));
+  if (b->cap >= b->owner->build_spare_cap) {
+    b->owner->build_spare = buf;
+    b->owner->build_spare_cap = b->cap;
+  }
+  return out;
+}
+
+static agc_step build_step(agc_vm *vm, agc_stepper *self, agc_value last) {
+  (void)vm;
+  (void)last;
+  builder *b = (builder *)self;
+  if (!b->called) {
+    b->called = true;
+    return (agc_step){.kind = AGC_STEP_CALL, .value = agc_builder_value(b)};
+  }
+  return (agc_step){.kind = AGC_STEP_END, .value = closed(b)};
+}
+
+/* Bytes.build(block): a stepper that calls the block once with the builder and ends with its buffer. The step touches
+   only the builder and its task, so it runs without rt->sync. */
+static agc_value builtin_build(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)args;
+  (void)span;
+  builder *b = agc_alloc(sizeof *b);
+  b->stepper.step = build_step;
+  b->stepper.unlocked = true;
+  b->owner = vm->task;
+  if (b->owner->build_spare) {
+    b->buf = b->owner->build_spare;
+    b->cap = b->owner->build_spare_cap;
+    b->owner->build_spare = NULL;
+    b->owner->build_spare_cap = 0;
+  } else {
+    b->buf = agc_alloc_atomic(sizeof(agc_bytes) + BUILDER_FIRST);
+    b->cap = BUILDER_FIRST;
+  }
+  b->buf->len = 0;
+  agc_task_stepper(vm, &b->stepper);
+  return agc_void();
+}
+
+/* Room for EXTRA more bytes after what was written; the buffer at least doubles when it grows. */
+static uint8_t *reserve(builder *b, size_t extra) {
+  size_t need = agc_size_add(b->buf->len, extra);
+  if (need > b->cap) {
+    size_t cap = b->cap;
+    while (cap < need) cap = agc_size_mul(cap, 2);
+    agc_bytes *grown = agc_alloc_atomic(agc_size_add(sizeof(agc_bytes), cap));
+    grown->len = b->buf->len;
+    memcpy(grown->data, b->buf->data, b->buf->len);
+    b->buf = grown;
+    b->cap = cap;
+  }
+  uint8_t *at = b->buf->data + b->buf->len;
+  b->buf->len = need;
+  return at;
+}
+
+/* out.write(a, b, ...): each value's bytes appended in order, a Bytes or a String as it is, an Int, Float, Bool or nil
+   printed on the stack, any other value in the text TO_TEXT gives it. The lowering sends out and 1 to
+   INTERPOLATED_PARTS values. */
+static agc_value write_values(agc_vm *vm, agc_value *args, uint32_t count, uint32_t span) {
+  builder *b = agc_as_builder(vm, args[0]);
+  if (b->closed) agc_fail(vm, "RUNTIME-BUILDER-CLOSED", "the Bytes.Builder is used after its Bytes.build ended", span + 1);
+  if (b->owner != vm->task)
+    agc_fail(vm, "RUNTIME-BUILDER-CLOSED", "the Bytes.Builder is used from another task than its Bytes.build", span + 1);
+  char printed[INTERPOLATED_PARTS][AGC_SCALAR_TEXT];
+  const void *data[INTERPOLATED_PARTS];
+  size_t len[INTERPOLATED_PARTS], total = 0;
+  for (uint32_t k = 0; k + 1 < count; k++) {
+    agc_value v = args[k + 1];
+    if (agc_is(v, AGC_T_BYTES)) {
+      const agc_bytes *part = agc_as_bytes(vm, v);
+      data[k] = part->data;
+      len[k] = part->len;
+    } else if (agc_is(v, AGC_T_STRING)) {
+      const agc_string *part = agc_as_string(vm, v);
+      data[k] = part->data;
+      len[k] = part->bytes;
+    } else {
+      len[k] = part_text(vm, v, printed[k], &data[k], span + 2 + k);
+    }
+    total = agc_size_add(total, len[k]);
+  }
+  uint8_t *at = reserve(b, total);
+  for (uint32_t k = 0; k + 1 < count; k++) {
+    const uint8_t *from = data[k];
+    if (len[k] <= 16)
+      for (size_t i = 0; i < len[k]; i++) at[i] = from[i];
+    else
+      memcpy(at, from, len[k]);
+    at += len[k];
+  }
+  return agc_void();
+}
+
+#define WRITE(n)                                                                  \
+  static agc_value builtin_write##n(agc_vm *vm, agc_value *args, uint32_t span) { \
+    return write_values(vm, args, n, span);                                       \
+  }
+WRITE(2) WRITE(3) WRITE(4) WRITE(5) WRITE(6) WRITE(7) WRITE(8) WRITE(9)
+#define WRITE_ROW(n) {"Bytes.Builder.write", n, builtin_write##n, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true, false}
+
 const agc_builtin agc_bytes_builtins[] = {
   {"Bytes.from_list", 1, builtin_from_list, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true, false},
   {"Bytes.to_a", 1, builtin_to_a, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true, false},
@@ -242,6 +372,9 @@ const agc_builtin agc_bytes_builtins[] = {
   INTERPOLATED_ROW(5), INTERPOLATED_ROW(6), INTERPOLATED_ROW(7), INTERPOLATED_ROW(8),
   CONCAT_ROW(1), CONCAT_ROW(2), CONCAT_ROW(3), CONCAT_ROW(4),
   CONCAT_ROW(5), CONCAT_ROW(6), CONCAT_ROW(7), CONCAT_ROW(8),
+  {"Bytes.build", 1, builtin_build, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false, false},
+  WRITE_ROW(2), WRITE_ROW(3), WRITE_ROW(4), WRITE_ROW(5),
+  WRITE_ROW(6), WRITE_ROW(7), WRITE_ROW(8), WRITE_ROW(9),
 };
 
 const size_t agc_bytes_builtin_count = sizeof agc_bytes_builtins / sizeof agc_bytes_builtins[0];

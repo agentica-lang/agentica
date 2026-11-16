@@ -850,6 +850,13 @@ agc_value agc_mutex_value(void *mutex) {
   return v;
 }
 
+agc_value agc_builder_value(void *builder) {
+  agc_value v;
+  v.tag = AGC_T_BUILDER;
+  v.as.p = builder;
+  return v;
+}
+
 agc_value agc_address_value(const void *address) {
   agc_value v;
   v.tag = AGC_T_ADDRESS;
@@ -1107,6 +1114,11 @@ void *agc_as_ats(agc_vm *vm, agc_value v) {
 
 void *agc_as_mutex(agc_vm *vm, agc_value v) {
   if (v.tag != AGC_T_MUTEX) agc_wrong_tag(vm);
+  return v.as.p;
+}
+
+void *agc_as_builder(agc_vm *vm, agc_value v) {
+  if (v.tag != AGC_T_BUILDER) agc_wrong_tag(vm);
   return v.as.p;
 }
 

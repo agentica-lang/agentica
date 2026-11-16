@@ -222,6 +222,7 @@ def rule_name(rule: Model.Rule) -> String
     Model.Rule.AddressSend -> "AddressSend"
     Model.Rule.AtsCall -> "AtsCall"
     Model.Rule.AtsNew -> "AtsNew"
+    Model.Rule.BytesWrite -> "BytesWrite"
     Model.Rule.ChannelAddress -> "ChannelAddress"
     Model.Rule.ChannelNew -> "ChannelNew"
     Model.Rule.ChannelRecv -> "ChannelRecv"

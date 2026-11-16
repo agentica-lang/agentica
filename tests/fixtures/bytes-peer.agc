@@ -15,6 +15,8 @@
 #   text,N,M,A         "$#{N}\r\n#{M}:#{text}".bytes and "#{N}".bytes, with text the UTF-8 String of A
 #   parts,A,...,I      Bytes.concat of a literal of [A], [A, B], [A..H] and [A..I], A + B + C, A + ... + I, and
 #                      Bytes.concat of a List that is not a literal, space-separated
+#   build,N,T,A,...    Bytes.build of the RESP array of the Bytes A..., each written with N (an Int) and T (a String)
+#                      before it: "*count\r\n", then "$size\r\n" A "\r\nN T\r\n" for each
 def bytes_of(hex: String) -> Bytes
   return OpenSSL.Digest.hexdecode(hex).unwrap!
 end
@@ -68,6 +70,18 @@ def answer(fields: List[String]) -> String
       Bytes.concat(p),
     ]
     return made.map { |data: Bytes| hex_of(data) }.join(" ")
+  elsif op == "build"
+    number = fields[1].to_i!
+    text = String.from_bytes(bytes_of(fields[2])).unwrap!
+    items = fields.drop(3).map do |field: String| bytes_of(field) end
+    made = Bytes.build do |out|
+      out.write("*", items.size, "\r\n")
+      for item in items
+        out.write("$", item.size, "\r\n", item, "\r\n")
+        out.write(number, " ", text, "\r\n")
+      end
+    end
+    return hex_of(made)
   elsif op == "from_list"
     numbers = fields.drop(1).map do |text: String| text.to_i! end
     made = Bytes.from_list(numbers)

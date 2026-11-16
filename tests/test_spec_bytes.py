@@ -82,6 +82,21 @@ CLEAN = [
         None,
         None,
     ),
+    # Bytes.build gives its block a Bytes.Builder, which a parameter or a channel may name; write takes 1 to 8 values
+    # that have a to_s.
+    (
+        "def head(out: Bytes.Builder, n: Int) -> Void\n  out.write(\"*\", n, \"\\r\\n\")\nend\n\n"
+        + MAIN
+        + "  c: Channel[Bytes.Builder] = Channel.new(1)\n"
+        "  b: Bytes = Bytes.build do |out|\n"
+        "    head(out, 2)\n"
+        '    out.write("a".bytes, 1.5, true, nil, [1], some(2), "b", 3)\n'
+        "    puts(c.closed?)\n"
+        "  end\n"
+        "  puts(b.length)\nend\n",
+        None,
+        None,
+    ),
 ]
 
 REFUSED = [
@@ -135,6 +150,19 @@ REFUSED = [
     # A codec may fail, so its result is a Result, and the encoding is a String.
     (MAIN + '  s: String = "a".bytes.decode("utf-8")\nend\n', "CHECK-TYPE-MISMATCH", '"a".bytes.decode("utf-8")'),
     (MAIN + '  b = "a".encode(8)\nend\n', "CHECK-TYPE-MISMATCH", "8"),
+    # write takes values that have a to_s, from 1 to 8 of them, on a Bytes.Builder only.
+    (
+        MAIN + "  c: Channel[Int] = Channel.new(1)\n  b = Bytes.build do |out|\n    out.write(c)\n  end\nend\n",
+        "CHECK-TYPE-MISMATCH",
+        "c",
+    ),
+    (
+        MAIN + "  b = Bytes.build do |out|\n    out.write(1, 2, 3, 4, 5, 6, 7, 8, 9)\n  end\nend\n",
+        "CHECK-ARITY",
+        "out.write(1, 2, 3, 4, 5, 6, 7, 8, 9)",
+    ),
+    (MAIN + '  b = Bytes.build("a")\nend\n', "CHECK-TYPE-MISMATCH", '"a"'),
+    (MAIN + '  "a".bytes.write("b")\nend\n', "CHECK-UNKNOWN-METHOD", '"a".bytes.write("b")'),
 ]
 
 

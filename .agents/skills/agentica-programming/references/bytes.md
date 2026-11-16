@@ -22,6 +22,7 @@ b.slice(start, length) -> Bytes           # halts outside the bounds
 b.take(n), b.drop(n) -> Bytes             # clamp to the length; n < 0 is RUNTIME-INVALID-COUNT
 a + b -> Bytes
 Bytes.concat(list: List[Bytes]) -> Bytes  # one copy
+Bytes.build do |out| ... end -> Bytes     # out.write(v, ...): 1 to 8 values
 b.each do |byte| ... end                  # Void
 for byte in b ... end
 b.decode(encoding) -> Result[String]      # text in an encoding; see below
@@ -53,9 +54,12 @@ string.encode(encoding) -> Result[Bytes]
 - A `Bytes` is a `Map` key, an `ATS` key or a `Set` item.
 - Not JSON: `JSON.encode(b)` is `CHECK-NOT-ENCODABLE`, and a `Bytes` field of a
   decode target is `CHECK-NOT-DECODABLE`. Write it as Base64 text first.
-- `slice`, `take` and `drop` copy. `+` in a loop is quadratic: collect the parts
-  in a list and call `Bytes.concat` once. To build bytes one at a time, build a
-  `List[Int]` and call `Bytes.from_list` once.
+- `slice`, `take` and `drop` copy. `+` in a loop is quadratic. For many small
+  parts (a wire reply) use `Bytes.build`: `out.write` appends a `Bytes` or
+  `String` as is and any other value as its `to_s`, with no `String` for an
+  `Int`. `out` works only inside the block, in its task; a write after the block
+  or from another task is `RUNTIME-BUILDER-CLOSED`. To build bytes one at a
+  time from `Int`s, build a `List[Int]` and call `Bytes.from_list` once.
 - The `OpenSSL` family, `Base64`, `Zlib`, the `*_bytes` calls of `IO`,
   `File`, `TCP` and `Process`, and `std/binary` take and return `Bytes`. The
   `Native` array builtins use `List[Int]` or `List[Float]`, not bytes.
