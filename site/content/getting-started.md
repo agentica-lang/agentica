@@ -27,6 +27,16 @@ tar -xzf agentica-VERSION-linux-x86_64.tar.gz   # Windows: Expand-Archive
 - macOS blocks a browser download: run `xattr -d com.apple.quarantine bin/agentica` (a `curl` download has no mark). Windows SmartScreen may warn once.
 - `TCP`, `TLS` and `std/http` run and are tested on Linux, macOS and Windows.
 
+### Install it with your coding agent
+
+Paste this prompt into a coding agent (Claude Code, Codex, OpenCode, pi...) to install the latest release for your user, with no `sudo`.
+
+```text
+Install the latest Agentica release for this machine at ~/.local/bin/agentica. From https://github.com/agentica-lang/agentica/releases/latest, download the archive for this OS and CPU and the SHA256SUMS file. Check the archive's SHA-256 against SHA256SUMS and stop if it does not match. Unpack it into ~/.local/share/agentica/ and link ~/.local/bin/agentica to the bin/agentica inside the unpacked folder. Do not use sudo. Run `agentica --version`, and tell me if ~/.local/bin is not on my PATH.
+```
+
+On Windows, tell the agent to use `%LOCALAPPDATA%\Programs\agentica` and to add its `bin` folder to the user `PATH`.
+
 ### Build from source
 
 Needs a C11 compiler and `make`; on Linux also `libssl-dev`, `libgc-dev`, `zlib1g-dev` and `pkg-config` (OpenSSL 3, libgc 8.2 or newer, zlib). The build starts from the checked-in `bootstrap/stage0.agcb` and needs no other tool. It also runs on macOS (Xcode command line tools) and Windows (MSYS2 UCRT64 with GCC).
