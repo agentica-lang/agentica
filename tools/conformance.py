@@ -116,6 +116,7 @@ AREAS = {
             "tests/test_bdd_integration.py", "tests/test_unit_test.py", "tests/test_vm_diff_8.py",
             "tests/test_single_binary.py", "tests/test_stdlib_distribution.py", "tests/test_bytecode_cache.py",
             "tests/test_prop_cache_compiler.py", "tests/test_check_cache.py", "tests/test_cli_coverage.py",
+            "tests/test_cli_compile.py",
         ],
     ),
     "spec": (
