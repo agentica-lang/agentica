@@ -95,6 +95,8 @@ copy).
 - Spans and positions: `references/stages.md` ("Conventions"). Node ids follow
   post-order; the writer and lowering rely on the order of the function table,
   registers and first-named sources. Keep them.
+- Key a per-type table by `Types.json_name`, never `Types.to_text` (it drops
+  the `@N::` module); test two modules that declare the same type name.
 - Parser tables are module constants (`NESTING_LIMIT`, `LEVELS`,
   `COMPOUND_OPERATORS`, `LITERAL_KINDS`, `GRAPHIC_RANGES`); do not rebuild them
   in zero-argument functions.
@@ -240,6 +242,9 @@ made only for the reported input kept missing the cases next to it.
   every corpus program with a binary built from `origin/master`; the main
   checkout's `dist/agentica` may be stale. Manifest sizes hide a negative
   program whose first diagnostic changed.
+- The design draft checks `std/` and the frozen corpus for name clashes, what
+  every loader path (old seeds, hand-written bytecode) does without a new
+  builtin, and that catalog alternatives are chosen by arity.
 
 ### Add a diagnostic code
 

@@ -105,8 +105,9 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   children.
 - `finish_task` is the one end of every task (return, crash or cancel). It first
   calls `agc_close_owned(vm, t)`, which closes the handles on the task's own
-  `owned` list, and nothing is given to the parent. A regular-file (pool) close
-  counts on the ending task in `closing`; a polled FIFO or pipe close does not.
+  `owned` list, and nothing is given to the parent. A new `agc_task` field is
+  cleared here. A regular-file (pool) close counts on the ending task in
+  `closing`; a polled FIFO or pipe close does not.
   `agc_task_join` keeps parking awaiters, new ones included, until
   `agc_task_close_done` has run for each counted job.
 - A cancelled task that has not settled (still on a turn on another scheduler,
