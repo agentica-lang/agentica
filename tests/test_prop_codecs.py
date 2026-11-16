@@ -409,7 +409,7 @@ def test_split_agrees_with_python(codec, case):
 
 ASCII_RUN_LENGTHS = [0, 1, 7, 8, 9, 15, 16, 17, 31, 32, 33, 63, 64, 65]
 ASCII_CHARS = string.ascii_letters + string.digits + " .:'^`_-@[{\t\n"
-NON_ASCII = ["é", "É", "ß", "ﬁ", "ŉ", "ª", "İ", "ǅ", "Σ", "Ω", "σ", "ς", "日", "😀"]
+NON_ASCII = ["é", "É", "ß", "ﬁ", "ŉ", "ª", "ʰ", "ⁿ", "İ", "ǅ", "Σ", "Ω", "σ", "ς", "日", "😀"]
 
 
 @st.composite
@@ -430,6 +430,7 @@ def scan_texts(draw):
 @example("ΟΔΥΣΣΕΥΣ " + "Ab" * 20 + "Σ.", "Σ")
 @example("İ" + "I" * 33, "I")
 @example("ßΣ éΣﬁ ŉΣ ΑΣº", "Σ")
+@example("ʰΣ ΑΣʰ ΑΣⁿ xᵃΣ \u0345Σ ΑΣ\u0345", "Σ")
 def test_case_reverse_and_index_agree_with_python(codec, text, part):
     """String#upcase, #downcase and #reverse give Python's str.upper, str.lower and reversed text with Python's length,
     and String#index_of gives str.find (-1 for none) in code points."""

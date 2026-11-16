@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 964,
+  "steps": 975,
   "stdout": [
     "25",
     "0",
@@ -118,9 +118,10 @@
     "sigma shy: \"α\\u00ADς\\u00AD\"",
     "sigma shy after: \"ασ\\u00ADβ\"",
     "sigma zwj: \"α‍ς \\u200Dσ\"",
-    "sigma ypo: \"ͅς 1ͅς ασͅ\"",
+    "sigma ypo: \"ͅσ 1ͅσ αςͅ\"",
     "sigma no upper: \"ßς ªς ŉς\"",
     "sigma before no upper: \"éσﬁ ασº\"",
+    "sigma modifier: \"ʰσ αςʰ αςⁿ xᵃς\"",
     "ypo up: \"ΑΙΙ\"",
     "2.5",
     ""

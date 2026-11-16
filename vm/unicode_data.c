@@ -10,8 +10,9 @@
  * A future generator over pinned Unicode Character Database files must reproduce this file byte for byte (or explain
  * each difference) before it replaces it. Until then edit it by hand only for a deliberate Unicode update.
  *
- * agc_cased_ranges is the Cased property of DerivedCoreProperties-17.0.0.txt (#1704): Racket's table left out the
- * lowercase letters with no uppercase mapping (ß, ŉ, ª, º, ﬁ), which the final-sigma rule counts as cased.
+ * agc_cased_ranges and agc_case_ignorable_ranges are the Cased and Case_Ignorable properties of
+ * DerivedCoreProperties-17.0.0.txt (#1704). Racket's tables left out the lowercase letters with no uppercase mapping
+ * (ß, ŉ, ª, º, ﬁ) from Cased, and U+0345 from Case_Ignorable.
  */
 #include "core.h"
 
@@ -4033,8 +4034,7 @@ const uint32_t agc_case_ignorable_ranges[][2] = {
   {0xAF, 0xAF},
   {0xB4, 0xB4},
   {0xB7, 0xB8},
-  {0x2B0, 0x344},
-  {0x346, 0x36F},
+  {0x2B0, 0x36F},
   {0x374, 0x375},
   {0x37A, 0x37A},
   {0x384, 0x385},

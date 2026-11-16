@@ -126,6 +126,7 @@ def main() -> Void
   show("sigma ypo", "#{ypo}Σ 1#{ypo}Σ ΑΣ#{ypo}".downcase)
   show("sigma no upper", "ßΣ ªΣ ŉΣ".downcase)
   show("sigma before no upper", "éΣﬁ ΑΣº".downcase)
+  show("sigma modifier", "ʰΣ ΑΣʰ ΑΣⁿ xᵃΣ".downcase)
   show("ypo up", "ᾳ#{ypo}".upcase)
   puts("2.5".to_f!)
 end
