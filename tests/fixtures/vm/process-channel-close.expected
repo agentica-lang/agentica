@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 120,
+  "steps": 122,
   "stdout": [
     "error(\"process: channel is closed\", kind: \"process.closed\")",
     "error(\"process: channel is closed\", kind: \"process.closed\")",

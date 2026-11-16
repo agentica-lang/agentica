@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 181,
+  "steps": 190,
   "stdout": [
     "ok(\"from the parent|old||\")",
     "ok(\"from the parent|new|a b|\")",

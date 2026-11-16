@@ -204,8 +204,9 @@ ROWS: List[Model.Builtin] = [
     effects: ["subprocess"],
     description: (
       "Start an executable with literal arguments and Process.Options: timeout_ms, chdir, extra env entries, out " +
-      "and err files that get its stdout and stderr when not empty, and pgroup to start it in its own process " +
-      "group, which a stop signals whole; --deny-run makes it an error."
+      "and err files that get its stdout and stderr when not empty, pgroup to start it in its own process " +
+      "group, which a stop signals whole, and pty to run it on a pseudo-terminal (Linux and macOS); --deny-run " +
+      "makes it an error."
     ),
     alternatives: [],
   ),
@@ -293,6 +294,20 @@ ROWS: List[Model.Builtin] = [
       "and stderr; Process.close and the end of the run kill the whole group; --deny-run makes it an error; POSIX, " +
       "VM only."
     ),
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "Process.resize",
+    parameters: [
+      Model.Named(name: "process", type: Types.Type.Opaque("Process")),
+      Model.Named(name: "rows", type: Types.Type.Int),
+      Model.Named(name: "cols", type: Types.Type.Int),
+    ],
+    result: Types.Type.Result(Types.Type.Void),
+    rule: Model.Rule.Plain,
+    implementation: "Process.resize",
+    effects: ["subprocess"],
+    description: "Set the size of a pty child's terminal (pty: true), which gets SIGWINCH; VM only.",
     alternatives: [],
   ),
   Model.Builtin(

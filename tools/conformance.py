@@ -65,17 +65,18 @@ WINDOWS_ONLY_MODULES = frozenset({
 
 # The modules that have some cases a system cannot run because it really lacks the capability. A case of a module that
 # is not listed for its system, as host-only, fails the report. Windows lacks POSIX signals, FIFOs, /dev/stdin, modes,
-# descriptor flags, colon names and the pty of tests/test_cli_compile.py (and the descriptor flags, FIFOs and ptys of
-# the Native.wait_* cases in tests/test_vm_native.py, where Windows waits only on sockets, and the SIGTERM grace of a
-# child at the end of the run that tests/test_vm_crypto.py uses to hold the run open); macOS lacks non-UTF-8 names, a
-# way to limit the CPUs of a process, an RLIMIT_NPROC that limits threads (tests/test_vm_native.py) and a ulimit -v
-# that limits the address space (tests/test_vm_multicore.py); neither loads an LD_PRELOAD library in front of glibc's
-# getaddrinfo (tests/test_vm_dns.py); the other systems lack the Windows-only modules above and the search of NAME.com
-# and NAME.exe in PATH (tests/test_bytecode_cache.py).
+# descriptor flags, colon names and ptys (tests/test_process_pty.py, tests/test_cli_compile.py; and the descriptor
+# flags, FIFOs and ptys of the Native.wait_* cases in tests/test_vm_native.py, where Windows waits only on sockets, and
+# the SIGTERM grace of a child at the end of the run that tests/test_vm_crypto.py uses to hold the run open); macOS
+# lacks non-UTF-8 names, a way to limit the CPUs of a process, an RLIMIT_NPROC that limits threads
+# (tests/test_vm_native.py) and a ulimit -v that limits the address space (tests/test_vm_multicore.py); neither loads
+# an LD_PRELOAD library in front of glibc's getaddrinfo (tests/test_vm_dns.py); the other systems lack the
+# Windows-only modules above and the search of NAME.com and NAME.exe in PATH (tests/test_bytecode_cache.py).
 # Golden fixtures named -posix or -windows are allowed by name (host_only_fixture).
 _NEEDS_POSIX = frozenset({
     "tests/test_bdd_integration.py", "tests/test_bdd_posix.py", "tests/test_check_stdin.py", "tests/test_cli_fmt.py",
-    "tests/test_filesystem.py", "tests/test_process.py", "tests/test_source_paths.py", "tests/test_spec_packages.py",
+    "tests/test_filesystem.py", "tests/test_process.py", "tests/test_process_pty.py", "tests/test_source_paths.py",
+    "tests/test_spec_packages.py",
     "tests/test_spec_package_native.py", "tests/test_spec_package_native_build.py",
     "tests/test_spec_package_native_download.py", "tests/test_spec_style.py",
     "tests/test_spec_type_at.py", "tests/test_vm_child_channel_posix.py", "tests/test_vm_diff_8.py",
@@ -189,7 +190,7 @@ AREAS = {
         "Process, the private channel between a parent and its child, stop signals and the bootstrap binary",
         [
             "tests/test_process.py", "tests/test_process_bdd.py", "tests/test_process_lifecycle.py",
-            "tests/test_process_windows.py", "tests/test_vm_child_channel.py",
+            "tests/test_process_pty.py", "tests/test_process_windows.py", "tests/test_vm_child_channel.py",
             "tests/test_vm_child_channel_posix.py", "tests/test_vm_stop.py", "tests/test_vm_test_protocol.py",
             "tests/test_platform_bootstrap.py", "tests/test_windows_console_stop.py", "tests/test_vm_signals.py",
             "tests/test_windows_process_cleanup.py",

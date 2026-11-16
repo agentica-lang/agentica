@@ -1,7 +1,7 @@
 {
   "exit": 1,
   "code": "RUNTIME-UNWRAP-ERROR",
-  "steps": 51,
+  "steps": 55,
   "stdout": [
     "error(\"denied: --deny-run turns off starting programs\", kind: \"denied.run\")",
     "error(\"denied: --deny-run turns off starting programs\", kind: \"denied.run\")",

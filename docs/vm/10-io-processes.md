@@ -134,6 +134,21 @@ systems get none.
   the pid; not `kill()` after the name check. One probe (a pidfd of the VM
   itself) per run turns ENOSYS and EPERM into `signal: pidfd is unavailable`.
   `--deny-run` covers `spawn_group` and `System.signal`.
+- **Pty children.** `pty: true` (Linux and macOS) is a captured `pgroup`
+  child whose stdin, stdout and stderr are the slave of a new pty (24x80),
+  also its controlling terminal. libuv's spawn cannot make the child call
+  `TIOCSCTTY`, so `agc_proc_pty_spawn` (`vm/process_posix.c`) forks on the I/O
+  thread: the child does only async-signal-safe calls (signals 1 to 31 to
+  their default and unblocked, `setsid`, `TIOCSCTTY`, the `dup2`s, `chdir`,
+  `execve`) and reports a failed exec through a close-on-exec pipe, as libuv
+  does. The master and a `dup` of it are opened close-on-exec and become the
+  `out` and `in` pipes; `err` is a pipe that ends at once. libuv does not know
+  the child: a `SIGCHLD` watcher, started before the fork, reaps it with
+  `waitpid(pid, WNOHANG)` (libuv reaps its own children by pid, so neither
+  takes the other's), and the stop path signals its pid as for any child. A
+  read of the master fails with `EIO` on Linux once the pty is closed in the
+  child: that is the end of output. `Process.resize` runs `TIOCSWINSZ` on the
+  master on the I/O thread; the kernel sends `SIGWINCH`.
 - **Behavior notes.** libuv resets signals 1 to 31 to their default in the
   child, so a signal the VM inherited as ignored (`nohup`) is not ignored in its
   children; the VM does not patch libuv. `Process.spawn` checks its timeout but
