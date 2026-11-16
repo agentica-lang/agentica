@@ -236,11 +236,13 @@ texts.
   (the direct send, `vm/tcp.c`): the send holds the writer lock across the call
   (`agc_handle_hold`), so sends keep their order, and a close that comes during
   the call waits for its end before the descriptor is closed. A TLS socket does
-  it once its session is the scheduler's, as for reads, and the I/O thread has
-  none of the session's bytes on their way: the scheduler encrypts the text
-  under the socket's TLS lock, sends the records after the unlock, and gives
-  the records that the kernel did not take to the I/O thread as they are. A
-  text over 64 KiB goes to the I/O thread, which encrypts 16 KiB at a time.
+  it once its handshake is over, also while a read of it waits on the I/O
+  thread (which then feeds and decrypts under the same lock), and when the I/O
+  thread has none of the session's bytes on their way: the scheduler encrypts
+  the text under the socket's TLS lock, sends the records after the unlock,
+  and gives the records that the kernel did not take to the I/O thread as they
+  are. A text over 64 KiB goes to the I/O thread, which encrypts 16 KiB at a
+  time.
   While such a send or its rest is under way, the I/O thread leaves what the
   session has to send (an alert after a decrypt) in it and sends it after the
   last record, and a close sends no close_notify. The sends of a socket whose
@@ -278,9 +280,8 @@ texts.
   raises `unsent` under that lock, and while `unsent` is not 0 the I/O thread
   leaves the session's own bytes (an alert) in the session and sends them when
   the buffer is out. The buffer's writes have their own libuv request, so they
-  queue behind a write of those bytes in the order of the two. Where the
-  session is the I/O thread's (a read of the socket waits there), a write is
-  a send and parks; at N = 1 the write buffers on the one thread.
+  queue behind a write of those bytes in the order of the two. At N = 1 the
+  write buffers on the one thread.
 - **Timeouts and close** (the user rules are in the network page). A timed-out
   read or write closes the socket; waiting for the lock alone does not. A
   timed-out connect closes the half-open socket. `TCP.close` and

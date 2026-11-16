@@ -1322,6 +1322,45 @@ static void test_a_tls_send_goes_out_from_the_scheduler(void) {
   close_pair_locked(p.fd);
 }
 
+#define BESIDE_SENDS 200
+
+static void sends_beside(void *arg) {
+  assert(agc_gc_thread_enter());
+  locked_call *l = arg;
+  for (int k = 0; k < BESIDE_SENDS; k++) {
+    char text[32];
+    snprintf(text, sizeof text, "beside %03d\n", k);
+    l->c = agc_test_call_of(l->ctx, l->task, "TCP.send", 3, socket_v, agc_test_str(text), agc_int(5000), agc_void());
+    call_locked(l);
+    assert(l->task->parked == NULL);
+    ok_of(l->c.result);
+  }
+  agc_gc_thread_leave();
+}
+
+/* A TLS send of another task while a read waits on the I/O thread is encrypted and sent on its scheduler too: the
+   sends never park while the I/O thread feeds and decrypts the peer's line on the same session (under tls_lock),
+   the peer reads every record in order, and the read gets its line. */
+static void test_a_tls_send_beside_a_waiting_read_goes_out_from_the_scheduler(void) {
+  tls_peer p = {0};
+  open_tls_pair_greeted(&p);
+  locked_call reading = {&vm, vm.task, read_line_of(&vm, vm.task)};
+  read_parks(&reading);
+  locked_call sending = {&aside, agc_new_task(&vm), {0}};
+  peer_send(&p, "two\n");
+  uv_thread_t sender;
+  assert(uv_thread_create(&sender, sends_beside, &sending) == 0);
+  read_wakes(&reading, "two");
+  assert(uv_thread_join(&sender) == 0);
+  for (int k = 0; k < BESIDE_SENDS; k++) {
+    char text[32];
+    snprintf(text, sizeof text, "beside %03d\n", k);
+    peer_reads_tls(&p, text);
+  }
+  SSL_free(p.ssl);
+  close_pair_locked(p.fd);
+}
+
 #ifdef __linux__
 /* A TLS pair whose VM side has a send buffer full of 'z' bytes (*JUNK of them) that the peer does not read, with
    small buffers on both ends, as test_a_send_waits_for_a_direct_send_of_another_task makes them: no byte of a send
@@ -1504,6 +1543,7 @@ int main(void) {
   AGC_TEST_RUN(test_a_stale_openssl_error_does_not_fail_a_tls_read());
   AGC_TEST_RUN(test_a_bad_record_on_the_scheduler_sends_its_alert());
   AGC_TEST_RUN(test_a_tls_send_goes_out_from_the_scheduler());
+  AGC_TEST_RUN(test_a_tls_send_beside_a_waiting_read_goes_out_from_the_scheduler());
 #ifdef __linux__
   AGC_TEST_RUN(test_the_rest_of_a_tls_send_goes_to_the_io_thread());
   AGC_TEST_RUN(test_an_alert_waits_for_a_tls_send_under_way());
