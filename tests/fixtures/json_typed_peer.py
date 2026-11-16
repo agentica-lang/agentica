@@ -148,16 +148,20 @@ def encode_common(value, kind, encode):
 
 
 def decode_struct(value, fields, path, decode):
-    """A struct from an object: fields are (name, kind) in declaration order; only an Optional field may be missing."""
+    """A struct from an object: fields are (name, kind) or (name, kind, default) in declaration order; only an
+    Optional field or one with a default may be missing, and a missing one with a default takes it."""
     if not isinstance(value, dict):
         fail(path, "object")
     record = {}
-    for name, kind in fields:
+    for name, kind, *default in fields:
         here = f"{path}.{name}" if path else name
         if name not in value:
-            if not is_optional(kind):
+            if default:
+                record[name] = default[0]
+            elif not is_optional(kind):
                 fail(here, "required field")
-            record[name] = NONE
+            else:
+                record[name] = NONE
         else:
             record[name] = decode(value[name], kind, here)
     return record
@@ -165,7 +169,7 @@ def decode_struct(value, fields, path, decode):
 
 def encode_struct(value, fields, encode):
     """The text of a struct: its keys in declaration order, no spaces."""
-    parts = [json.dumps(name) + ":" + encode(value[name], kind) for name, kind in fields]
+    parts = [json.dumps(field[0]) + ":" + encode(value[field[0]], field[1]) for field in fields]
     return "{" + ",".join(parts) + "}"
 
 

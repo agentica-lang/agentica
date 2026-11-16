@@ -259,7 +259,7 @@ def run(linked: Linker.Linked, checked: Checker.Checked) -> Result[Ir.Program]
   ok(
     Ir.Program(
       sources: kept_sources,
-      structs: tables.structs,
+      structs: with_defaults(cx, tables.structs, tables.instances),
       enums: tables.enums,
       instances: tables.instances,
       written: std_aliases(linked),
@@ -269,6 +269,72 @@ def run(linked: Linker.Linked, checked: Checker.Checked) -> Result[Ir.Program]
       span: linked.root.span,
     ),
   )
+end
+
+# The structs that JSON.decode may build, alone or as an instance, get the defaults of their fields.
+def with_defaults(cx: Lowering.Cx, structs: List[Ir.StructDef], instances: List[Ir.InstanceDef]) -> List[Ir.StructDef]
+  generic = Set.new(instances.map do |instance: Ir.InstanceDef| instance.struct_name end)
+  found: List[Ir.StructDef] = []
+  for entry in structs
+    fill = cx.field_fills.get(entry.name)
+    if fill.some? and (entry.decodable or generic.include?(entry.name))
+      values = fill.unwrap!.values
+      defaults: List[Ir.FieldDefault] = []
+      for field in entry.fields
+        value = values.get(field)
+        default = Ir.FieldDefault.Required
+        if value.some?
+          default = field_default(cx, value.unwrap!)
+        end
+
+        defaults = defaults.push(default)
+      end
+
+      found = found.push(entry.with(defaults: defaults))
+    else
+      found = found.push(entry)
+    end
+  end
+
+  found
+end
+
+# The default a missing key gives. A none or a JSON.Field variant is Required: a missing key already gives it.
+def field_default(cx: Lowering.Cx, value: Ast.Expr) -> Ir.FieldDefault
+  case value
+    Ast.Expr.Literal(node) -> literal_default(node.value, false)
+    Ast.Expr.Unary(node) ->
+      case node.operand
+        Ast.Expr.Literal(operand) -> literal_default(operand.value, true)
+        _ -> Ir.FieldDefault.Required
+      end
+
+    Ast.Expr.ListLit(_) -> Ir.FieldDefault.EmptyList
+    Ast.Expr.MapLit(_) -> Ir.FieldDefault.EmptyMap
+    Ast.Expr.EnumConstructor(node) ->
+      id = cx.variants.get("#{node.enum_name}.#{node.variant_name}")
+      return Ir.FieldDefault.Required if node.enum_name == "JSON.Field" or id.none?
+
+      Ir.FieldDefault.Variant(id.unwrap!)
+    _ -> Ir.FieldDefault.Required
+  end
+end
+
+def literal_default(value: Ast.LitValue, negative: Bool) -> Ir.FieldDefault
+  case value
+    Ast.LitValue.Whole(number) ->
+      return Ir.FieldDefault.Value(Ir.Imm.Int(-number)) if negative
+
+      Ir.FieldDefault.Value(Ir.Imm.Int(number))
+    Ast.LitValue.Huge(_) -> Ir.FieldDefault.Value(Ir.Imm.Int(-9_223_372_036_854_775_807 - 1))
+    Ast.LitValue.Real(number) ->
+      return Ir.FieldDefault.Value(Ir.Imm.Float(-number)) if negative
+
+      Ir.FieldDefault.Value(Ir.Imm.Float(number))
+    Ast.LitValue.Text(text) -> Ir.FieldDefault.Value(Ir.Imm.Text(text))
+    Ast.LitValue.Flag(flag) -> Ir.FieldDefault.Value(Ir.Imm.Bool(flag))
+    Ast.LitValue.Nothing -> Ir.FieldDefault.Required
+  end
 end
 
 # A file of the prelude is only a name in the program: no text, so no program can show its lines.

@@ -1505,6 +1505,51 @@ static void json_instance_tests(void) {
   free(big.data);
 }
 
+/* The instances tail of `instances` instances of Box[Int], then a Field defaults section of one record. */
+static buffer defaults_tail(uint32_t instances, uint32_t field, uint32_t kind, uint32_t number) {
+  static const char *const one[] = {"Box[Int]"};
+  buffer t = instance_tail(instances, 0, one, 0);
+  u32(&t, 1);
+  u32(&t, 0);
+  u32(&t, field);
+  u32(&t, kind);
+  u32(&t, number);
+  return t;
+}
+
+static bool loads_default(uint32_t instances, uint32_t field, uint32_t kind, uint32_t number, const char *reason) {
+  buffer tail = defaults_tail(instances, field, kind, number);
+  bool ok = loads_instances(AGC_TYPE_INSTANCE, 0, &tail, reason);
+  free(tail.data);
+  return ok;
+}
+
+/* The defaults JSON.decode gives a missing key: constant 0 is the Int 1 and constant 1 a Void. */
+static void field_default_tests(void) {
+  assert(loads_default(1, 0, AGC_DEFAULT_CONSTANT, 0, NULL));
+  assert(!loads_default(1, 0, AGC_DEFAULT_CONSTANT, 1, "field default does not fit its type"));
+  assert(!loads_default(1, 0, AGC_DEFAULT_CONSTANT, 9, "constant index out of range"));
+  assert(!loads_default(1, 0, AGC_DEFAULT_LIST, 0, "field default does not fit its type"));
+  assert(!loads_default(1, 0, AGC_DEFAULT_MAP, 1, "bad field default"));
+  assert(!loads_default(1, 0, AGC_DEFAULT_VARIANT, 0, "bad field default variant"));
+  assert(!loads_default(1, 0, 9, 0, "bad field default kind"));
+  assert(!loads_default(1, 1, AGC_DEFAULT_CONSTANT, 0, "field out of range"));
+  assert(!loads_default(0, 0, AGC_DEFAULT_CONSTANT, 0, "field default of a struct JSON.decode cannot build"));
+
+  buffer t = instance_tables(AGC_TYPE_INSTANCE, 0);
+  buffer tail = defaults_tail(1, 0, AGC_DEFAULT_CONSTANT, 0);
+  spec s = base();
+  s.tables = &t;
+  s.tail = &tail;
+  agc_program *p = loaded(s);
+  assert(p->field_defaults[0][0].kind == AGC_DEFAULT_CONSTANT && p->field_defaults[0][0].number == 0);
+  tail.len -= 16;
+  tail.data[tail.len - 4] = 0;
+  assert(!loads(s, "empty field defaults section"));
+  free(t.data);
+  free(tail.data);
+}
+
 /* The file of one row; t and u hold the tables and updates it may point to, and the caller frees them. */
 static spec case_spec(const code_case *c, buffer *t, buffer *u) {
   *t = make_tables(1);
@@ -2405,6 +2450,7 @@ int main(void) {
   table_count_tests();
   json_enum_tests();
   json_instance_tests();
+  field_default_tests();
   error_struct_tests();
   stored_name_tests();
   collector_tests();

@@ -76,6 +76,11 @@ def encode(program: Ir.Program, tables: Tables, function: Ir.Function) -> Result
   ok(Encoded(tables: state.with(spans: own.pool), parts: parts))
 end
 
+## The constant of the table for the value, added when it is new.
+def intern_constant(constants: Pool.Pool, imm: Ir.Imm) -> Pool.Interned
+  Pool.intern(constants, constant_key(imm), constant_bytes(imm))
+end
+
 private
 
 # The operands an instruction is written with, and the tables after naming what it needs. The instruction is written

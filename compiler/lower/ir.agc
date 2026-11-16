@@ -47,12 +47,23 @@ struct Function
 end
 
 ## A struct of the table. decodable says that JSON.decode may build it, and types then lists its field types in field
-## order.
+## order. defaults, when not empty, has the default of each field in field order, for a key JSON.decode misses.
 struct StructDef
   name: String
   fields: List[String]
   decodable: Bool
   types: List[Types.Type]
+  defaults: List[FieldDefault] = []
+end
+
+## The default of a field as JSON.decode gives it: a constant, an empty List or Map, a variant without a payload by its
+## id, or Required for a field without one (or with a default that a missing key already gives, as none).
+enum FieldDefault
+  Required
+  Value(Imm)
+  EmptyList
+  EmptyMap
+  Variant(Int)
 end
 
 ## One variant of an enum, with the number of its payload items.

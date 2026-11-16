@@ -463,7 +463,19 @@ header and the entry.
     instance shares, and one `u32` type index for each field of the struct. A
     file with a type of kind 10 has that record. `JSON.decode` builds a struct
     of the struct index whose fields are read as the instance's types;
-    `JSON.schema` describes it under its linked name.
+    `JSON.schema` describes it under its linked name. The count is 0 only when
+    the Field defaults section follows.
+
+- **Section:** Field defaults (optional, last)
+  - **Entry:** the defaults that `JSON.decode` gives a missing key, written only
+    when a struct it can build, alone or as an instance, has a field with a
+    default (none for an `Optional` or `JSON.Field` field, whose missing key
+    already has a value). It is a `u32` count (at least 1), then for each field
+    in increasing (struct, field) order a `u32` struct index, a `u32` field
+    index, a `u32` kind (1 the constant of the `u32` number, 2 an empty List, 3
+    an empty Map, 4 the variant of the number, which has no payload) and the
+    `u32` number (0 for 2 and 3). The loader checks that the default fits the
+    field type of the struct and of each of its instances.
 
 - The Sources section embeds the full source texts, so the VM prints diagnostics
   without reading files. Each span's file keeps the name the front end gave it
