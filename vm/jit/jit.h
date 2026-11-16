@@ -32,13 +32,13 @@ typedef enum { AGC_JIT_OFF, AGC_JIT_ON, AGC_JIT_ALWAYS } agc_jit_mode;
 #define AGC_JIT_PARK_WEIGHT 3
 
 /* Why compiled code stopped, besides a failure of agc_status (OVERFLOW, DIVISION_BY_ZERO, INDEX_OUT_OF_RANGE,
-   WRONG_TAG), which the interpreter raises at the instruction at `pc` with agc_op_fail. STEP: the STEP at `pc` is the
-   slow one; the interpreter runs it (a stop, a yield or a new batch of steps). COST: the instruction at `pc` charged
-   turn cost, which the interpreter applies. INTERPRET: the interpreter runs the instruction at `pc` (one without a
-   compiled boundary, or a slow path), then enters code again. CALL and RETURN: a call or return that compiled code
-   could not make natively (the callee has no code, an array would grow, the call would fail, or the function was not
-   called natively), whose shared frame handler run_compiled runs; TAIL_CALL: a tail call that compiled code could not
-   make natively (the callee has no code, more than AGC_JIT_TAIL_PARAMS arguments, or registers that would grow the
+   WRONG_TAG, KEY_NOT_FOUND), which the interpreter raises at the instruction at `pc` with agc_op_fail. STEP: the STEP
+   at `pc` is the slow one; the interpreter runs it (a stop, a yield or a new batch of steps). COST: the instruction at
+   `pc` charged turn cost, which the interpreter applies. INTERPRET: the interpreter runs the instruction at `pc` (one
+   without a compiled boundary, or a slow path), then enters code again. CALL and RETURN: a call or return that compiled
+   code could not make natively (the callee has no code, an array would grow, the call would fail, or the function was
+   not called natively), whose shared frame handler run_compiled runs; TAIL_CALL: a tail call that compiled code could
+   not make natively (the callee has no code, more than AGC_JIT_TAIL_PARAMS arguments, or registers that would grow the
    file), whose frame replacement (replace_frame) run_compiled runs, as the interpreter does; CALL_VALUE: a call of a
    function value that compiled code could not make natively (agc_jit_call_value said no), whose frame push run_compiled
    runs with the interpreter's call_value (agc_jit_call_value_exit), failures included. RETURNED never reaches
@@ -248,20 +248,12 @@ const agc_jit_plain *agc_jit_plain_of(const agc_builtin *b);
    catch, as nothing can fail. WHERE is as for agc_jit_call_builtin; only the checked builds read it, which call
    through agc_jit_call_leaf and abort if the row failed. */
 void agc_jit_call_plain(agc_vm *vm, agc_value *args, const agc_builtin *b, uint64_t where);
-/* STRUCT_WITH in compiled code, as the interpreter's case: *DST = a copy of the struct in WINDOW[0] with the fields
-   of U set to WINDOW[1..] (the window the loader checked). The copy charges its size and applies the task's turn
-   cost, as the interpreter does after it: AGC_STATUS_OK for the code to go on, or AGC_JIT_EXIT_YIELD when that ended
-   the turn (the result written), as agc_jit_call_builtin answers; a struct of 4 or more fields charges at each copy,
-   so a COST exit would leave the code at every update. A receiver that is not a struct of U's type with its declared
-   field count answers AGC_JIT_EXIT_INTERPRET with DST and the turn cost left alone, so the interpreter runs the
-   instruction and fails as it does. It allocates; it never fails or parks. */
+/* STRUCT_WITH and MAP in compiled code: agc_op_struct_with or agc_op_map, then the task's turn cost applied, as the
+   interpreter does after them: AGC_STATUS_OK for the code to go on, or AGC_JIT_EXIT_YIELD when that ended the turn
+   (the result written), as agc_jit_call_builtin answers; a struct of 4 or more fields charges at each copy, so a COST
+   exit would leave the code at every update. A WRONG_TAG of the helper is answered as is. They allocate; they never
+   fail or park. */
 uint32_t agc_jit_struct_with(agc_vm *vm, agc_value *dst, const agc_value *window, const agc_update_def *u);
-/* MAP in compiled code, as the interpreter's case: *DST = a new Map of the COUNT key and value pairs at PAIRS (the
-   window the loader checked), put in order into the run's empty Map. A String or Bytes key charges its bytes, and the
-   turn cost is applied after, as the interpreter does: AGC_STATUS_OK, or AGC_JIT_EXIT_YIELD when that ended the turn
-   (the result written). A key that is not an Int, a String or Bytes (hand-made bytecode) answers
-   AGC_JIT_EXIT_INTERPRET before anything is done, so the interpreter runs the instruction and fails as it does. It
-   allocates; it never fails or parks. */
 uint32_t agc_jit_map(agc_vm *vm, agc_value *dst, const agc_value *pairs, uint32_t count);
 /* CALL_VALUE in compiled code, the first half of a native call of a function value: when WINDOW[0] is a function
    value whose function has code and takes ARGC arguments and its captures (the checks of call_value), and the task

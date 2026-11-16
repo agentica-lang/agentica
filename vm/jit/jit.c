@@ -1276,30 +1276,14 @@ void agc_jit_call_plain(agc_vm *vm, agc_value *args, const agc_builtin *b, uint6
 }
 
 uint32_t agc_jit_struct_with(agc_vm *vm, agc_value *dst, const agc_value *window, const agc_update_def *u) {
-  const agc_program *p = vm->rt->program;
-  if (!agc_is(window[0], AGC_T_STRUCT)) return AGC_JIT_EXIT_INTERPRET;
-  const agc_struct *old = agc_as_struct(vm, window[0]);
-  if (old->type != u->type || old->n != p->structs[u->type].count) return AGC_JIT_EXIT_INTERPRET;
-  agc_struct *st = agc_new_struct(old->type, old->n);
-  memcpy(st->fields, old->fields, (size_t)old->n * sizeof(agc_value));
-  for (uint32_t k = 0; k < u->count; k++) st->fields[u->fields[k]] = window[1 + k];
-  /* The window is read in full before DST, which may be one of its registers, is written. */
-  *dst = agc_struct_value(st);
-  agc_charge_bytes(vm, (size_t)old->n * sizeof(agc_value));
+  agc_status status = agc_op_struct_with(vm, dst, window, u);
+  if (status != AGC_STATUS_OK) return status;
   return agc_turn_charge(vm) ? AGC_JIT_EXIT_YIELD : AGC_STATUS_OK;
 }
 
 uint32_t agc_jit_map(agc_vm *vm, agc_value *dst, const agc_value *pairs, uint32_t count) {
-  /* agc_key_hash fails on a key of another tag; the check comes first, so a leave has charged and allocated nothing. */
-  for (size_t k = 0; k < count; k++) {
-    agc_value key = pairs[2 * k];
-    if (!agc_is(key, AGC_T_INT) && !agc_is(key, AGC_T_STRING) && !agc_is(key, AGC_T_BYTES))
-      return AGC_JIT_EXIT_INTERPRET;
-  }
-  agc_map *m = agc_as_map(vm, vm->rt->empty_map);
-  for (size_t k = 0; k < count; k++) m = agc_map_put(vm, m, pairs[2 * k], pairs[2 * k + 1]);
-  /* The pairs are read in full before DST, which may be one of their registers, is written. */
-  *dst = agc_map_value(m);
+  agc_status status = agc_op_map(vm, dst, pairs, count);
+  if (status != AGC_STATUS_OK) return status;
   return agc_turn_charge(vm) ? AGC_JIT_EXIT_YIELD : AGC_STATUS_OK;
 }
 

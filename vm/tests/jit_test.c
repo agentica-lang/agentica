@@ -1284,7 +1284,8 @@ static AGC_JIT_CALLER void string_build_cost(void) {
 }
 
 /* MAP_GET reads a key in compiled code; a missing key or a wrong tag leaves with its status at the instruction, R3
-   untouched. A String key charges its bytes, and the code leaves for the interpreter to apply them. LIST builds the window's values, or gives the run's empty List. */
+   untouched. A String key charges its bytes, a missing one too, and the code leaves for the interpreter to apply them.
+   LIST builds the window's values, or gives the run's empty List. */
 static AGC_JIT_CALLER void maps_and_lists(void) {
   char text[200];
   memset(text, 'k', sizeof text);
@@ -1308,7 +1309,7 @@ static AGC_JIT_CALLER void maps_and_lists(void) {
   assert(same_bits(R[3], agc_int(20)) && vm.task->turn_cost >= (int64_t)(sizeof text / AGC_COST_BYTES));
   vm.task->turn_cost = 0;
   expect_exit(run_two(AGC_OP_MAP_GET, map, other_key, R), missing, 0);
-  assert(same_bits(R[3], any));
+  assert(same_bits(R[3], any) && vm.task->turn_cost >= (int64_t)((sizeof text - 1) / AGC_COST_BYTES));
   vm.task->turn_cost = 0;
   expect_exit(run_two(AGC_OP_LIST, one, ten, R), AGC_JIT_EXIT_RETURN, 1);
   const agc_list *l = agc_as_list(&vm, R[3]);
@@ -1330,7 +1331,7 @@ static AGC_JIT_CALLER void maps_and_lists(void) {
   pairs[0] = key;
   pairs[2] = agc_float(1.5);
   dst = any;
-  assert(agc_jit_map(&vm, &dst, pairs, 2) == AGC_JIT_EXIT_INTERPRET && same_bits(dst, any));
+  assert(agc_jit_map(&vm, &dst, pairs, 2) == AGC_STATUS_WRONG_TAG && same_bits(dst, any));
   assert(vm.task->turn_cost == 0);
 }
 
@@ -1414,8 +1415,8 @@ static AGC_JIT_CALLER void globals_structs_enums(void) {
 /* STRUCT_WITH copies the struct at R1 with the update's field set from R2 in compiled code. The copy charges its size
    and applies it, as the interpreter's case does: 4 fields (64 bytes) take one unit of the turn, and a turn that the
    charge ends leaves with YIELD after the result is written. A receiver that is not a struct of the update's type with
-   its declared field count, and an update past the program's table (hand-made code), leave for the interpreter, R3 and
-   the turn cost untouched. */
+   its declared field count leaves with WRONG_TAG, and an update past the program's table (hand-made code) leaves for
+   the interpreter, R3 and the turn cost untouched. */
 static AGC_JIT_CALLER void struct_updates(void) {
   agc_struct_def structs[2] = {{.count = 4}, {.count = 2}};
   uint32_t fields[1] = {2};
@@ -1450,7 +1451,7 @@ static AGC_JIT_CALLER void struct_updates(void) {
   agc_value wrong[3] = {agc_int(5), agc_struct_value(agc_new_struct(1, 2)), agc_struct_value(agc_new_struct(0, 2))};
   for (size_t k = 0; k < 3; k++) {
     R[1] = wrong[k];
-    expect_exit(code(&vm, R, f.constants, 0), AGC_JIT_EXIT_INTERPRET, 0);
+    expect_exit(code(&vm, R, f.constants, 0), AGC_STATUS_WRONG_TAG, 0);
     assert(same_bits(R[3], any) && vm.task->turn_cost == 0);
   }
   f.program.update_count = 0;

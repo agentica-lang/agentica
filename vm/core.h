@@ -278,6 +278,11 @@ agc_status agc_op_concat(agc_vm *vm, agc_value *dst, const agc_value *a, const a
 agc_status agc_op_to_text(agc_vm *vm, agc_value *dst, const agc_value *v);
 /* MAP_GET: a String or Bytes key charges its bytes, which the caller applies. */
 agc_status agc_op_map_get(agc_vm *vm, agc_value *dst, const agc_value *map, const agc_value *key);
+/* MAP and STRUCT_WITH read the window the loader checked and allocate. MAP's String or Bytes keys and STRUCT_WITH's
+ * copy charge their bytes, which the caller applies. A key that cannot be hashed, or a receiver that is not a struct of
+ * U's type with its declared field count, is WRONG_TAG, with nothing charged or written. */
+agc_status agc_op_map(agc_vm *vm, agc_value *dst, const agc_value *pairs, uint32_t count);
+agc_status agc_op_struct_with(agc_vm *vm, agc_value *dst, const agc_value *window, const agc_update_def *u);
 /* The constructors LIST, CLOSURE (WINDOW[0] = the function value that holds the CAPTURES values at WINDOW), STRUCT and
  * ENUM (the shared value of V when it has no payload): they read the window the loader checked, allocate, charge
  * nothing and never fail, so they return no status. */
@@ -287,8 +292,8 @@ void agc_op_struct(agc_value *dst, const agc_value *fields, uint32_t type, uint3
 void agc_op_enum(agc_value *dst, const agc_value *payload, const agc_variant_def *v, uint32_t variant);
 /* The failure of a helper's status, with agc_fail. `a` and `b` are the operands the helper was given:
  * AGC_STATUS_INDEX_OUT_OF_RANGE needs both (the list and the index, named in the message), AGC_STATUS_KEY_NOT_FOUND
- * needs `b` (the key), the other statuses read neither (NULL is fine). `span` is the span of the running instruction. It is called on the VM's C stack, never from
- * compiled code. */
+ * needs `b` (the key), the other statuses read neither (NULL is fine). `span` is the span of the running instruction.
+ * It is called on the VM's C stack, never from compiled code. */
 _Noreturn void agc_op_fail(agc_vm *vm, agc_status status, const agc_value *a, const agc_value *b, uint32_t span);
 agc_outcome agc_vm_run(agc_vm *vm);
 
