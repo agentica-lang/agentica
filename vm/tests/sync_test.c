@@ -163,8 +163,10 @@ static void test_builtin_classes(void) {
    marked; a map lookup is not, since hashing a String key charges turn cost, nor is a String op whose work grows with
    the text (slice), nor anything that writes output. A direct row is a call compiled code makes itself
    (agc_builtin.direct): not a leaf, never shared, no native frame. The String, List, Map and Set operations that only
-   return a value are marked; output, input, tasks and the block calls are not. */
-static void test_leaf_and_direct_rows(void) {
+   return a value are marked; output, input, tasks and the block calls are not. A parking row (agc_builtin.parks) is
+   neither: the channel, task, stdin, file and socket calls that wait are marked; output, Channel.close and the
+   steppers are not. */
+static void test_leaf_direct_and_parking_rows(void) {
   for (size_t t = 0; t < agc_builtin_table_count; t++) {
     for (size_t i = 0; i < *agc_builtin_tables[t].count; i++) {
       const agc_builtin *b = &agc_builtin_tables[t].entries[i];
@@ -172,28 +174,37 @@ static void test_leaf_and_direct_rows(void) {
         fprintf(stderr, "%s/%u: a leaf row must be a plain call\n", b->name, b->arity);
       if (b->direct && (b->leaf || b->shared || b->native != AGC_NATIVE_NONE || !b->fn))
         fprintf(stderr, "%s/%u: a direct row must be a plain call that is not a leaf\n", b->name, b->arity);
+      if (b->parks && (b->leaf || b->direct || b->native != AGC_NATIVE_NONE || !b->fn))
+        fprintf(stderr, "%s/%u: a parking row must be neither leaf, direct nor a block call\n", b->name, b->arity);
       assert(!b->leaf || (b->fn && !b->shared && b->native == AGC_NATIVE_NONE && b->cost == AGC_COST_NONE));
       assert(!b->direct || (b->fn && !b->leaf && !b->shared && b->native == AGC_NATIVE_NONE));
+      assert(!b->parks || (b->fn && !b->leaf && !b->direct && b->native == AGC_NATIVE_NONE));
     }
   }
   struct {
     const char *name;
     uint32_t arity;
-    bool leaf, direct;
+    bool leaf, direct, parks;
   } expected[] = {
-      {"List.size", 1, true, false},     {"List.at", 2, true, false},        {"String.length", 1, true, false},
-      {"Int.bit_and", 2, true, false},   {"Map.get.optional", 2, false, true}, {"Map.put", 3, false, true},
-      {"Map.has_key?", 2, false, true},  {"Set.include?", 2, false, true},   {"List.concat", 2, false, true},
-      {"String.slice", 3, false, true},  {"String.split", 2, false, true},   {"puts", 1, false, false},
-      {"List.map", 2, false, false},     {"IO.gets", 0, false, false},       {"Task.spawn", 1, false, false},
-      {"Native.closed?", 1, true, false}, {"LogRegistry.floor", 0, true, false},
-      {"LogRegistry.set_level", 1, false, false}, {"Value.equal", 2, false, true},
-      {"Optional.equal", 2, false, true},
+      {"List.size", 1, true, false, false},      {"List.at", 2, true, false, false},
+      {"String.length", 1, true, false, false},  {"Int.bit_and", 2, true, false, false},
+      {"Map.get.optional", 2, false, true, false}, {"Map.put", 3, false, true, false},
+      {"Map.has_key?", 2, false, true, false},   {"Set.include?", 2, false, true, false},
+      {"List.concat", 2, false, true, false},    {"String.slice", 3, false, true, false},
+      {"String.split", 2, false, true, false},   {"puts", 1, false, false, false},
+      {"List.map", 2, false, false, false},      {"IO.gets", 0, false, false, true},
+      {"Task.spawn", 1, false, false, false},    {"Native.closed?", 1, true, false, false},
+      {"LogRegistry.floor", 0, true, false, false}, {"LogRegistry.set_level", 1, false, false, false},
+      {"Value.equal", 2, false, true, false},    {"Optional.equal", 2, false, true, false},
+      {"Channel.recv", 2, false, false, true},   {"Channel.close", 1, false, false, false},
+      {"Task.await", 2, false, false, true},     {"TCP.send", 3, false, false, true},
+      {"TLS.connect", 4, false, false, true},    {"File.each_line", 4, false, false, false},
   };
   for (size_t k = 0; k < sizeof expected / sizeof expected[0]; k++) {
     const char *name = expected[k].name;
     const agc_builtin *b = agc_find_builtin((const uint8_t *)name, strlen(name), expected[k].arity);
-    assert(b && b->leaf == expected[k].leaf && b->direct == expected[k].direct);
+    if (!b) fprintf(stderr, "sync-test: no row %s/%u\n", name, expected[k].arity);
+    assert(b && b->leaf == expected[k].leaf && b->direct == expected[k].direct && b->parks == expected[k].parks);
   }
 }
 
@@ -206,7 +217,7 @@ static agc_value charges_cost(agc_vm *vm, agc_value *args, uint32_t span) {
 }
 
 static const agc_builtin mismarked = {
-  "Test.mismarked", 0, charges_cost, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false};
+  "Test.mismarked", 0, charges_cost, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false};
 
 /* A program whose entry calls the mismarked builtin and returns, with the profile on or off (the two copies of the
    turn loop). */
@@ -285,7 +296,7 @@ int main(void) {
   agc_gc_allow_threads();
   agc_vm_init(&vm, NULL, stdout, stderr, INT64_MAX);
   test_builtin_classes();
-  test_leaf_and_direct_rows();
+  test_leaf_direct_and_parking_rows();
   test_solo();
   test_exclusion_and_nesting();
   test_reset_frees_the_lock();

@@ -28,7 +28,7 @@ typedef enum { AGC_JIT_OFF, AGC_JIT_ON, AGC_JIT_ALWAYS } agc_jit_mode;
 #define AGC_JIT_BLOCK_SIZE 12
 #define AGC_JIT_CALLEE_THRESHOLD 16
 #define AGC_JIT_SPACING 16
-/* The trips out that `on` counts for a builtin that may park (agc_jit_parking: channels, task waits, sleeps, stdin,
+/* The trips out that `on` counts for a builtin that may park (a `parks` row: channels, task waits, sleeps, stdin,
    files, paths, processes, sockets), which ends the turn when it waits. A task woken from a channel, a task or a
    timer enters the code again only to leave it at the same call, which it retries. Measured with longer loop bodies
    of benchmarks/programs/channel-pingpong.agc, a loop with two such calls broke even at 64 to 96 instructions, where
@@ -548,10 +548,5 @@ bool agc_jit_mem_sync_cores(void);
    set when f has a loop and CALLING[f] when it calls a function of the program. Returns the work it did
    (instructions read and call sites counted), which the C test bounds by the program's size. */
 size_t agc_jit_settle(const agc_program *program, bool *callable, bool *looped, bool *calling);
-/* The names of the builtin rows whose call may park, sorted (jit.c), and whether B is one of them: `on` counts such a
-   call AGC_JIT_PARK_WEIGHT trips out. */
-extern const char *const agc_jit_parking[];
-extern const size_t agc_jit_parking_count;
-bool agc_jit_parks(const agc_builtin *b);
 
 #endif

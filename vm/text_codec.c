@@ -311,8 +311,8 @@ static agc_value builtin_encode(agc_vm *vm, agc_value *args, uint32_t span) {
 }
 
 const agc_builtin agc_text_codec_builtins[] = {
-  {"Bytes.decode", 2, builtin_decode, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true},
-  {"String.encode", 2, builtin_encode, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true},
+  {"Bytes.decode", 2, builtin_decode, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true, false},
+  {"String.encode", 2, builtin_encode, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true, false},
 };
 
 const size_t agc_text_codec_builtin_count = sizeof agc_text_codec_builtins / sizeof agc_text_codec_builtins[0];

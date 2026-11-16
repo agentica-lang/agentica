@@ -281,7 +281,7 @@ static agc_value truth(agc_vm *v, agc_value *args, uint32_t span) {
    have changed the register: a jump target, an opcode helper, a builtin and a call. Each function checks R1 as an Int
    at instruction 0 and reads it as an Int again at instruction 2, where it holds a Bool by then. */
 static AGC_JIT_CALLER void known_tags(void) {
-  static const agc_builtin row = {"Test.truth", 0, truth, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, true};
+  static const agc_builtin row = {"Test.truth", 0, truth, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, true, false};
   const agc_builtin *rows[1] = {&row};
   agc_task *t = vm.task, saved = *vm.task;
   agc_frame frames[2] = {{.function = 0}};
@@ -799,11 +799,11 @@ static agc_value subtracts(agc_vm *v, agc_value *args, uint32_t span) {
    alone. A row that is not direct takes the INTERPRET exit, and so does a leaf row at native depth 0
    (native_leaf_calls). */
 static AGC_JIT_CALLER void direct_calls(void) {
-  static const agc_builtin add_row = {"Test.adds", 2, adds, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, true};
-  static const agc_builtin fail_row = {"Test.refuses", 0, refuses, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, true};
-  static const agc_builtin tail_row = {"Test.adds", 2, adds, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false};
+  static const agc_builtin add_row = {"Test.adds", 2, adds, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, true, false};
+  static const agc_builtin fail_row = {"Test.refuses", 0, refuses, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, true, false};
+  static const agc_builtin tail_row = {"Test.adds", 2, adds, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false, false};
   static const agc_builtin leaf_row = {"Test.subtracts", 2, subtracts, AGC_NATIVE_NONE, AGC_COST_NONE,
-                                       false, true, false};
+                                       false, true, false, false};
   static one_function fs[4];
   const agc_builtin *rows[4] = {&add_row, &fail_row, &tail_row, &leaf_row};
   agc_task *t = vm.task, saved = *vm.task;
@@ -870,8 +870,8 @@ static AGC_JIT_CALLER void direct_calls(void) {
    RAISE, the callee's frame on top and the failure at the builtin's span. */
 static AGC_JIT_CALLER void native_leaf_calls(void) {
   static const agc_builtin rows[2] = {
-    {"Test.subtracts", 2, subtracts, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false},
-    {"Test.refuses", 0, refuses, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false}};
+    {"Test.subtracts", 2, subtracts, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+    {"Test.refuses", 0, refuses, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false}};
   agc_task *t = vm.task, saved = *vm.task;
   agc_outcome outcome = *vm.outcome;
   int64_t left = vm.turn_left;
@@ -960,8 +960,8 @@ static AGC_JIT_CALLER void plain_leaf_calls(void) {
       assert(!checks || !checks->one_char || checks->tags[0] == AGC_T_STRING);
     }
   assert(plain == 8);
-  static const agc_builtin row = {"String.length", 1, counts, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false};
-  static const agc_builtin not_leaf = {"String.length", 1, counts, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false};
+  static const agc_builtin row = {"String.length", 1, counts, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false};
+  static const agc_builtin not_leaf = {"String.length", 1, counts, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false, false};
   assert(agc_jit_plain_of(&row) && !agc_jit_plain_of(&not_leaf));
   agc_value got;
   expect_exit(plain_call(&row, agc_string_value(agc_make_string("abc", 3, 3)), &got), AGC_JIT_EXIT_RETURN, 1);
@@ -1527,7 +1527,7 @@ static agc_value record(agc_vm *v, agc_value *args, uint32_t span) {
 }
 
 static void block_program_of(block_program *b) {
-  static const agc_builtin record_row = {"Test.record", 1, record, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false};
+  static const agc_builtin record_row = {"Test.record", 1, record, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false};
   memset(b, 0, sizeof *b);
   b->builtins[0] = agc_find_builtin((const uint8_t *)"List.reduce", 11, 3);
   b->builtins[1] = agc_find_builtin((const uint8_t *)"List.map", 8, 2);
@@ -1696,7 +1696,7 @@ static AGC_JIT_CALLER void counting_steps_at_the_limit(void) {
 /* One run of the code_program of TEXT with no JIT or with `always` (its trace on, so it counts the leaves that
    run_compiled called in *LEAVES): the outcome. Test.record is no leaf here, so only String.code can be counted. */
 static agc_outcome run_code(code_program *c, const char *text, bool jit, uint64_t *leaves) {
-  static const agc_builtin record_row = {"Test.record", 1, record, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false};
+  static const agc_builtin record_row = {"Test.record", 1, record, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false, false};
   static FILE *quiet;
   if (!quiet) quiet = tmpfile(); /* not /dev/null: Windows has none */
   assert(quiet);
@@ -1798,17 +1798,6 @@ static const agc_builtin *table_row(const char *name) {
   return NULL;
 }
 
-/* The names of agc_jit_parking are sorted for bsearch, and each one is a row of the builtin tables, so a renamed row
-   fails here instead of dropping out of the list. */
-static void parking_rows(void) {
-  for (size_t k = 0; k < agc_jit_parking_count; k++) {
-    const agc_builtin *b = table_row(agc_jit_parking[k]);
-    if (!b) fprintf(stderr, "jit-test: agc_jit_parking names %s, which is no builtin row\n", agc_jit_parking[k]);
-    assert(b && agc_jit_parks(b));
-    assert(k == 0 || strcmp(agc_jit_parking[k - 1], agc_jit_parking[k]) < 0);
-  }
-}
-
 /* While no code is published, sampled turns that count no entry widen the sample to one turn in AGC_JIT_SAMPLE_MAX.
    An entry counted after that sets it back to one in AGC_JIT_SAMPLE at the next sampled turn, the function still
    compiles, and then every turn runs the jit copy. One scheduler's draws are the same in each run. */
@@ -1883,7 +1872,7 @@ static void ineligible(void) {
      below AGC_JIT_PARK_WEIGHT * AGC_JIT_SPACING instructions. A `shared` row that never parks (Channel.close)
      counts one, as any other call that leaves. */
   const agc_builtin *shared_rows[2] = {table_row("Channel.recv"), table_row("Channel.close")};
-  assert(shared_rows[0] && shared_rows[1] && shared_rows[1]->shared && !agc_jit_parks(shared_rows[1]));
+  assert(shared_rows[0] && shared_rows[1] && shared_rows[1]->shared && !shared_rows[1]->parks);
   enum { PARKS = AGC_JIT_PARK_WEIGHT * AGC_JIT_SPACING };
   agc_instr parking[PARKS];
   for (uint32_t which = 0; which < 2; which++) {
@@ -2242,7 +2231,6 @@ int main(void) {
   closures();
   globals_structs_enums();
   struct_updates();
-  parking_rows();
   ineligible();
   sample_resets();
   block_calls_in_place();

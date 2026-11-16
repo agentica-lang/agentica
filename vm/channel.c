@@ -594,16 +594,16 @@ void agc_channel_leave(agc_vm *vm, agc_task *t) {
 }
 
 const agc_builtin agc_channel_builtins[] = {
-  {"Channel.new", 1, builtin_new, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
-  {"Channel.send", 3, builtin_send, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
-  {"Channel.recv", 2, builtin_recv, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
-  {"Channel.close", 1, builtin_close, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
-  {"Channel.closed?", 1, builtin_closed, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
-  {"Channel.empty?", 1, builtin_empty, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
-  {"Channel.address", 1, builtin_address, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
-  {"Address.send", 3, builtin_address_send, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
-  {"System.subscribe", 1, builtin_subscribe, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
-  {"System.signal_number", 1, builtin_signal_number, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"Channel.new", 1, builtin_new, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false, false},
+  {"Channel.send", 3, builtin_send, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false, true},
+  {"Channel.recv", 2, builtin_recv, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false, true},
+  {"Channel.close", 1, builtin_close, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false, false},
+  {"Channel.closed?", 1, builtin_closed, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false, false},
+  {"Channel.empty?", 1, builtin_empty, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false, false},
+  {"Channel.address", 1, builtin_address, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false, false},
+  {"Address.send", 3, builtin_address_send, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false, true},
+  {"System.subscribe", 1, builtin_subscribe, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false, false},
+  {"System.signal_number", 1, builtin_signal_number, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false, false},
 };
 
 const size_t agc_channel_builtin_count = sizeof agc_channel_builtins / sizeof agc_channel_builtins[0];

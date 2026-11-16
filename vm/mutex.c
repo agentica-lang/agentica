@@ -166,8 +166,8 @@ void agc_mutex_release_held(agc_vm *vm, agc_task *t) {
 }
 
 const agc_builtin agc_mutex_builtins[] = {
-  {"Native.mutex", 0, builtin_mutex, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
-  {"Native.Mutex.synchronize", 2, builtin_synchronize, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
+  {"Native.mutex", 0, builtin_mutex, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false, false},
+  {"Native.Mutex.synchronize", 2, builtin_synchronize, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false, false},
 };
 
 const size_t agc_mutex_builtin_count = sizeof agc_mutex_builtins / sizeof agc_mutex_builtins[0];

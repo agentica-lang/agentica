@@ -189,7 +189,7 @@ static agc_value interpolated(agc_vm *vm, agc_value *args, uint32_t count, uint3
 INTERPOLATED(1) INTERPOLATED(2) INTERPOLATED(3) INTERPOLATED(4)
 INTERPOLATED(5) INTERPOLATED(6) INTERPOLATED(7) INTERPOLATED(8)
 #define INTERPOLATED_ROW(n) \
-  {"String.interpolated.bytes", n, builtin_interpolated##n, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true}
+  {"String.interpolated.bytes", n, builtin_interpolated##n, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true, false}
 
 /* Bytes.concat([a, b]) with a list literal of 1 to CONCAT_PARTS items, and a + b + c: the lowering sends the parts in
    registers, so no List is made for them and no Bytes for a partial sum. */
@@ -224,20 +224,20 @@ static agc_value concat_parts(agc_vm *vm, agc_value *args, uint32_t count) {
     return concat_parts(vm, args, n);                                              \
   }
 CONCAT(1) CONCAT(2) CONCAT(3) CONCAT(4) CONCAT(5) CONCAT(6) CONCAT(7) CONCAT(8)
-#define CONCAT_ROW(n) {"Bytes.concat.parts", n, builtin_concat##n, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true}
+#define CONCAT_ROW(n) {"Bytes.concat.parts", n, builtin_concat##n, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true, false}
 
 const agc_builtin agc_bytes_builtins[] = {
-  {"Bytes.from_list", 1, builtin_from_list, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true},
-  {"Bytes.to_a", 1, builtin_to_a, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true},
-  {"Bytes.length", 1, builtin_length, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false},
-  {"Bytes.at", 2, builtin_at, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false},
-  {"Bytes.slice", 3, builtin_slice, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, true},
-  {"Bytes.take", 2, builtin_take, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, true},
-  {"Bytes.drop", 2, builtin_drop, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, true},
-  {"Bytes.equal", 2, builtin_equal, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, true},
-  {"Bytes.plus", 2, builtin_plus, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true},
-  {"Bytes.concat", 1, builtin_concat, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true},
-  {"String.bytes", 1, builtin_string_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true},
+  {"Bytes.from_list", 1, builtin_from_list, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true, false},
+  {"Bytes.to_a", 1, builtin_to_a, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true, false},
+  {"Bytes.length", 1, builtin_length, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"Bytes.at", 2, builtin_at, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"Bytes.slice", 3, builtin_slice, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, true, false},
+  {"Bytes.take", 2, builtin_take, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, true, false},
+  {"Bytes.drop", 2, builtin_drop, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, true, false},
+  {"Bytes.equal", 2, builtin_equal, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, true, false},
+  {"Bytes.plus", 2, builtin_plus, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true, false},
+  {"Bytes.concat", 1, builtin_concat, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true, false},
+  {"String.bytes", 1, builtin_string_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true, false},
   INTERPOLATED_ROW(1), INTERPOLATED_ROW(2), INTERPOLATED_ROW(3), INTERPOLATED_ROW(4),
   INTERPOLATED_ROW(5), INTERPOLATED_ROW(6), INTERPOLATED_ROW(7), INTERPOLATED_ROW(8),
   CONCAT_ROW(1), CONCAT_ROW(2), CONCAT_ROW(3), CONCAT_ROW(4),

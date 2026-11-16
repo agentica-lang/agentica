@@ -444,18 +444,18 @@ bool agc_ats_valid(agc_vm *vm, agc_value v) {
 /* No row is shared or a leaf: a call takes no rt->sync, only the table's own lock or none (a read), and it charges for
    String and Bytes keys, rebuilds and snapshots. */
 const agc_builtin agc_ats_builtins[] = {
-  {"ATS.new", 0, builtin_new, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
-  {"ATS.put", 3, builtin_put, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
-  {"ATS.put_new", 3, builtin_put_new, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
-  {"ATS.get", 2, builtin_get, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
-  {"ATS.has_key?", 2, builtin_has_key, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
-  {"ATS.delete", 2, builtin_delete, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
-  {"ATS.clear", 1, builtin_clear, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
-  {"ATS.add", 3, builtin_add, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
-  {"ATS.size", 1, builtin_size, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
-  {"ATS.keys", 1, builtin_keys, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
-  {"ATS.to_map", 1, builtin_to_map, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
-  {"ATS.push", 3, builtin_push, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
+  {"ATS.new", 0, builtin_new, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false, false},
+  {"ATS.put", 3, builtin_put, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false, false},
+  {"ATS.put_new", 3, builtin_put_new, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false, false},
+  {"ATS.get", 2, builtin_get, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false, false},
+  {"ATS.has_key?", 2, builtin_has_key, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false, false},
+  {"ATS.delete", 2, builtin_delete, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false, false},
+  {"ATS.clear", 1, builtin_clear, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false, false},
+  {"ATS.add", 3, builtin_add, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false, false},
+  {"ATS.size", 1, builtin_size, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false, false},
+  {"ATS.keys", 1, builtin_keys, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false, false},
+  {"ATS.to_map", 1, builtin_to_map, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false, false},
+  {"ATS.push", 3, builtin_push, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false, false},
 };
 
 const size_t agc_ats_builtin_count = sizeof agc_ats_builtins / sizeof agc_ats_builtins[0];

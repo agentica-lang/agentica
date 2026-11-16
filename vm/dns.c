@@ -178,12 +178,12 @@ static agc_value builtin_lookup(agc_vm *vm, agc_value *args, uint32_t span) {
 }
 
 const agc_builtin agc_dns_builtins[] = {
-  {"DNS.lookup", 2, builtin_lookup, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
+  {"DNS.lookup", 2, builtin_lookup, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false, false},
 };
 
 const size_t agc_dns_builtin_count = sizeof agc_dns_builtins / sizeof agc_dns_builtins[0];
 #else
-const agc_builtin agc_dns_builtins[] = {{"", 0, NULL, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false}};
+const agc_builtin agc_dns_builtins[] = {{"", 0, NULL, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false, false}};
 
 const size_t agc_dns_builtin_count = 0;
 #endif

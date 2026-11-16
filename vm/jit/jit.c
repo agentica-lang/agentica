@@ -76,33 +76,6 @@ static const plain_leaf plain_leaves[] = {
     {"String.ends_with?", 2, {{AGC_T_STRING, AGC_T_STRING}, false, false}},
 };
 
-/* The rows whose call may park: the turn ends while it waits, for a channel, a task, a timer or stdin (the woken task
-   runs the call again) or for an I/O job on the loop or the thread pool (files, paths, processes, sockets, a native
-   call or wait). Sorted by strcmp for bsearch; a name stands for each of its arities. Not listed: the `shared` rows
-   that never park (Channel.close, Task.cancel, the logger, ...), the output rows (puts, IO.print, ...),
-   which park only while the output is backed up, and the steppers (File.each_line, Task.map, the Lazy terminals),
-   whose call leaves the code once, however often they wait inside it. vm/tests/jit_test.c checks that the list is
-   sorted and that each name is a row of the builtin tables. */
-const char *const agc_jit_parking[] = {
-    "Address.send", "Channel.recv", "Channel.send", "Dir.list", "Dir.mkdir", "Dir.mkdir_private", "File.append_text",
-    "File.close", "File.flush", "File.lstat", "File.open", "File.read_bytes.bytes", "File.read_line", "File.read_text",
-    "File.replace", "File.sha256.bytes", "File.stat", "File.try_lock", "File.write", "File.write_bytes.bytes",
-    "File.write_text", "FrontEnd.stdin_bytes.bytes", "HttpWire.accept", "HttpWire.connect_context", "HttpWire.connect_tls", "HttpWire.idle?",
-    "HttpWire.read_head.bytes", "HttpWire.read_response", "HttpWire.wait", "IO.eof?", "IO.gets", "IO.gets!", "IO.read",
-    "IO.read_bytes.bytes", "Native.call", "Native.wait_readable", "Native.wait_writable", "Path.real", "Path.remove",
-    "Path.rename", "Process.channel_close", "Process.channel_read_line", "Process.channel_send", "Process.close",
-    "Process.close_stdin", "Process.output", "Process.parent_read_line", "Process.parent_send",
-    "Process.read_available", "Process.read_bytes.bytes", "Process.read_line", "Process.send",
-    "Process.send_bytes.bytes", "Process.spawn.options", "Process.spawn_captured.options",
-    "Process.spawn_channel.options", "Process.wait",
-    "TCP.accept", "TCP.connect", "TCP.listen", "TCP.read_line", "TCP.recv_bytes.bytes", "TCP.send",
-    "TCP.send_bytes.bytes", "TLS.client_context", "TLS.connect", "TLS.listen", "TLS.server_context", "Task.await",
-    "Task.await_result", "Task.sleep", "Test.run",
-};
-const size_t agc_jit_parking_count = sizeof agc_jit_parking / sizeof agc_jit_parking[0];
-
-static int name_order(const void *key, const void *item) { return strcmp(key, *(const char *const *)item); }
-
 /* The opcode a fused one starts with (vm/value.h): its STEP or CONST, compiled alone like the instruction after it,
    which the loader left in place. */
 static uint32_t plain_op(uint32_t op) {
@@ -197,7 +170,7 @@ static bool backward(const agc_program *p, agc_instr in, uint32_t kind, uint32_t
 }
 
 /* The trips out of compiled code that the `on` heuristic counts for a CALL_BUILTIN of row BX of P: none, one, or
-   AGC_JIT_PARK_WEIGHT for a builtin that leaves and may park (agc_jit_parking). Compiled code calls a direct builtin
+   AGC_JIT_PARK_WEIGHT for a builtin that leaves and may park (`parks`). Compiled code calls a direct builtin
    itself, which leaves only when the call ends the turn or fails, and so is a leaf below a native call (at native depth
    0 it leaves, but unwinds nothing); it starts a block call (a row with a native kind, such as `filter`) itself too
    (agc_jit_block_start) and calls the block natively. ROWS[BX] keeps the answer of each row, which is the same at each
@@ -207,7 +180,7 @@ static uint32_t builtin_trips(const agc_program *p, uint8_t *rows, uint32_t bx) 
   if (!row) {
     const agc_builtin *b = p->builtins[bx];
     bool leaves = !(b->direct || b->leaf || b->native);
-    row = (uint8_t)(1u | (unsigned)leaves << 1 | (unsigned)(leaves && agc_jit_parks(b)) << 2);
+    row = (uint8_t)(1u | (unsigned)leaves << 1 | (unsigned)(leaves && b->parks) << 2);
     rows[bx] = row;
   }
   if (!(row & 2u)) return 0;
@@ -354,11 +327,6 @@ size_t agc_jit_settle(const agc_program *p, bool *callable, bool *looped, bool *
     work += first[g + 1] - first[g];
   }
   return work + site_count;
-}
-
-bool agc_jit_parks(const agc_builtin *b) {
-  return b->name &&
-         bsearch(b->name, agc_jit_parking, agc_jit_parking_count, sizeof agc_jit_parking[0], name_order) != NULL;
 }
 
 const agc_jit_plain *agc_jit_plain_of(const agc_builtin *b) {

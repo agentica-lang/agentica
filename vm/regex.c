@@ -695,7 +695,7 @@ static agc_value builtin_search(agc_vm *vm, agc_value *args, uint32_t span) {
 }
 
 const agc_builtin agc_regex_builtins[] = {
-  {"RegexEngine.search", 7, builtin_search, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
+  {"RegexEngine.search", 7, builtin_search, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false, false},
 };
 
 const size_t agc_regex_builtin_count = sizeof agc_regex_builtins / sizeof agc_regex_builtins[0];
