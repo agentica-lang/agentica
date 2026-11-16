@@ -460,6 +460,7 @@ static uint32_t *read_field_types(reader *r, const agc_program *p, uint32_t coun
   if ((uint64_t)count * 4 > left(r)) reject(r, "field type count exceeds the file");
   uint32_t *types = load_alloc(r, agc_size_mul(count, sizeof(uint32_t)), true);
   for (uint32_t k = 0; k < count; k++) {
+    // cchecker: ignore CC-GCC-ANALYZER-NULL-DEREFERENCE: a count of 0 gets NULL and no loop
     types[k] = read_u32(r);
     if (types[k] >= p->type_count) reject(r, "type index out of range");
   }
