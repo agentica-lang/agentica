@@ -65,8 +65,8 @@ WINDOWS_ONLY_MODULES = frozenset({
 
 # The modules that have some cases a system cannot run because it really lacks the capability. A case of a module that
 # is not listed for its system, as host-only, fails the report. Windows lacks POSIX signals, FIFOs, /dev/stdin, modes,
-# descriptor flags and colon names (and the descriptor flags, FIFOs and ptys of the Native.wait_* cases in
-# tests/test_vm_native.py, where Windows waits only on sockets, and the SIGTERM grace of a child at the end of the run
+# descriptor flags, colon names and the pty of tests/test_cli_compile.py (and the descriptor flags, FIFOs and ptys of
+# the Native.wait_* cases in tests/test_vm_native.py, where Windows waits only on sockets, and the SIGTERM grace of a child at the end of the run
 # that tests/test_vm_crypto.py uses to hold the run open); macOS lacks non-UTF-8 names, a way to limit the CPUs of a
 # process, an RLIMIT_NPROC that limits threads (tests/test_vm_native.py) and a ulimit -v that limits the address space
 # (tests/test_vm_multicore.py); neither loads an LD_PRELOAD library in front of glibc's getaddrinfo
@@ -85,6 +85,7 @@ _NEEDS_POSIX = frozenset({
     "tests/test_vm_multicore.py", "tests/test_bytecode_cache.py", "tests/test_check_cache.py",
     "tests/test_cli_coverage.py", "tests/test_vm_native.py", "tests/test_vm_http_proxy.py", "tests/test_vm_crypto.py",
     "tests/test_vm_dns.py", "tests/test_error_kinds.py", "tests/test_vm_signals.py", "tests/test_examples.py",
+    "tests/test_cli_compile.py",
 })
 _NEEDS_LINUX = frozenset({
     "tests/test_vm_diff_8.py", "tests/test_single_binary.py", "tests/test_vm_file_open_block.py", "tests/test_vm_native.py",
