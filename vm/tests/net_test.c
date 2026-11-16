@@ -25,6 +25,7 @@
 #include <openssl/err.h>
 #include <openssl/ssl.h>
 #include <poll.h>
+#include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <unistd.h>
@@ -1218,10 +1219,18 @@ static void open_tls_pair_greeted(tls_peer *p) {
   peer_reads_tls(p, "hello\n");
 }
 
-/* The peer sends TEXT and it reaches the VM's side of the socket. */
+/* The peer sends TEXT and every byte that SSL_write wrote for it reaches the VM's side of the socket, whose kernel
+   input was empty: after a key update the call writes two records, and a poll that sees the first alone (macOS
+   loopback) would let a read find half of them and park. */
 static void peer_sends_to_kernel(const tls_peer *p, struct pollfd *in_kernel, const char *text) {
+  uint64_t before = BIO_number_written(SSL_get_wbio(p->ssl));
   peer_send(p, text);
-  assert(poll(in_kernel, 1, 5000) == 1);
+  uint64_t sent = BIO_number_written(SSL_get_wbio(p->ssl)) - before;
+  uint64_t due = agc_clock_ms() + 5000;
+  for (int queued = 0; (uint64_t)queued < sent;) {
+    assert(agc_clock_ms() <= due && poll(in_kernel, 1, 10) >= 0);
+    assert(ioctl(in_kernel->fd, FIONREAD, &queued) == 0);
+  }
 }
 
 /* recv_here on a TLS socket (#1197): a read that the input does not answer receives the ciphertext on its scheduler
