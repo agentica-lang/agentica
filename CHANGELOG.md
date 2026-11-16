@@ -39,6 +39,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - `String#downcase` picks the final sigma as Python does: letters with no uppercase form (`ß`, `ŉ`, `ª`, `ﬁ`) count as cased, and modifier letters (`ʰ`, `ⁿ`) and U+0345 are skipped: `"ßΣ".downcase` is `"ßς"` (#1704).
 - A loop that parses a large JSON array or builds large lists is much less likely to hit `--max-heap` on macOS arm64 and Windows: a stray pointer into a list's items keeps less than 64 KiB of them, not the whole list (#1681).
+- `JSON.decode` and codecs give a field's default for a missing key (`wire: String = ""`) in place of `expected required field`, and `JSON.schema` leaves such a field out of `required`; `null` stays an error (#1739).
 
 ## [0.32.0] - 2026-11-15
 

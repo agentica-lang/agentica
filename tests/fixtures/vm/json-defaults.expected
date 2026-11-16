@@ -1,0 +1,19 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 73,
+  "stdout": [
+    "ok(Health(ok: true, wire: \"\", settings: Settings(mode: Mode.Slow, limit: 10, low: -9223372036854775808, ratio: -0.25, verbose: true, name: \"default\", tags: [], sizes: {})))",
+    "ok(Health(ok: true, wire: \"w\", settings: Settings(mode: Mode.Fast, limit: 2, low: -9223372036854775808, ratio: -0.25, verbose: true, name: \"default\", tags: [], sizes: {})))",
+    "error(\"wire: expected String\", kind: \"json.decode\")",
+    "error(\"ok: expected required field\", kind: \"json.decode\")",
+    "ok(Box(value: 3, label: \"box\"))",
+    "ok([Box(value: \"a\", label: \"box\"), Box(value: \"b\", label: \"c\")])",
+    "ok(Event.Changed(Settings(mode: Mode.Slow, limit: 10, low: -9223372036854775808, ratio: -0.25, verbose: false, name: \"default\", tags: [], sizes: {})))",
+    "ok(Settings(mode: Mode.Slow, limit: 10, low: -9223372036854775808, ratio: -0.25, verbose: true, name: \"x\", tags: [], sizes: {}))",
+    "true",
+    "{\"$defs\":{\"Mode\":{\"oneOf\":[{\"properties\":{\"tag\":{\"enum\":[\"Fast\"]},\"values\":{\"maxItems\":0,\"type\":\"array\"}},\"required\":[\"tag\"],\"type\":\"object\"},{\"properties\":{\"tag\":{\"enum\":[\"Slow\"]},\"values\":{\"maxItems\":0,\"type\":\"array\"}},\"required\":[\"tag\"],\"type\":\"object\"}]},\"Settings\":{\"properties\":{\"limit\":{\"maximum\":9223372036854775807,\"minimum\":-9223372036854775808,\"type\":\"integer\"},\"low\":{\"maximum\":9223372036854775807,\"minimum\":-9223372036854775808,\"type\":\"integer\"},\"mode\":{\"$ref\":\"#/$defs/Mode\"},\"name\":{\"type\":\"string\"},\"ratio\":{\"type\":\"number\"},\"sizes\":{\"additionalProperties\":{\"maximum\":9223372036854775807,\"minimum\":-9223372036854775808,\"type\":\"integer\"},\"type\":\"object\"},\"tags\":{\"items\":{\"type\":\"string\"},\"type\":\"array\"},\"verbose\":{\"type\":\"boolean\"}},\"type\":\"object\"}},\"properties\":{\"ok\":{\"type\":\"boolean\"},\"settings\":{\"$ref\":\"#/$defs/Settings\"},\"wire\":{\"type\":\"string\"}},\"required\":[\"ok\",\"settings\"],\"type\":\"object\"}",
+    ""
+  ],
+  "stderr": []
+}

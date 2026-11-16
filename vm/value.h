@@ -520,6 +520,15 @@ typedef struct {
   uint32_t *field_types;
 } agc_instance_def;
 
+/* A field default of the Field defaults section: kind 0 for a field without one, 1 the constant `number`, 2 an empty
+   List, 3 an empty Map, 4 the variant `number`, which has no payload. The loader checks that it fits the field type of
+   the struct and of each of its instances. */
+typedef struct {
+  uint32_t kind, number;
+} agc_field_default;
+
+enum { AGC_DEFAULT_NONE, AGC_DEFAULT_CONSTANT, AGC_DEFAULT_LIST, AGC_DEFAULT_MAP, AGC_DEFAULT_VARIANT };
+
 typedef struct {
   uint32_t source_count, span_count, constant_count, builtin_count, function_count, entry;
   uint32_t struct_count, type_count, enum_count, variant_count, max_fields, max_arity, update_count, global_count;
@@ -563,6 +572,9 @@ typedef struct {
      file has no such section. */
   uint32_t instance_count;
   agc_instance_def *instances;
+  /* The defaults that JSON.decode gives a missing key: for each struct, NULL, or one entry for each field (the Field
+     defaults section, last in the file). At the end, so the fields the interpreter reads keep their offsets. */
+  agc_field_default **field_defaults;
 } agc_program;
 
 typedef struct {

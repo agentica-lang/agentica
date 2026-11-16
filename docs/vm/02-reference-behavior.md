@@ -228,6 +228,10 @@ The user-facing rules (which fields are required, the `JSON.Field` and
 - `JSON.decode(s, T)` parses `s` like `JSON.parse`, then walks `T` in field
   order and stops at the first problem. A `JSON.Value` source skips the parse. A
   decoded map is built in sorted key order.
+- A missing key of a field with a default takes the default of the Field
+  defaults section (03 4.6): a constant, an empty List or Map, or a variant
+  without a payload. Only the missing key: `null` is decoded as the field type.
+  `JSON.schema` leaves such a field out of `required`.
 - A `JSON.Field[T]` field (type kind 7) is `Absent` when its key is missing and
   `Null` for JSON `null`; the encoders leave out the key of an `Absent` struct
   field, write `null` for `Null` and the payload for `Value`. They know the

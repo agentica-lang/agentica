@@ -59,6 +59,9 @@ JSON.list(json: JSON.Value) -> Result[List[JSON.Value]]
   (`shapes[0].values[1]`), for malformed JSON, missing fields, wrong types, Int
   overflow and non-finite Floats. Extra object keys are ignored. An integer may
   decode as Float; a decimal or exponent value never decodes as Int.
+- A missing key of a field with a default (`wire: String = ""`) gives the
+  default (codecs too); `null` stays an error unless the field is `Optional`.
+  `JSON.schema` leaves such a field out of `required`.
 
 ## Generic code: codecs
 

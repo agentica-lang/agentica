@@ -1,0 +1,17 @@
+# json-default-vectors.stdin: made by python3 tests/fixtures/json-default-vectors.py (Python json module); do not edit by hand
+{"id": 1, "main": {"sku": "m"}}	ok	{"id":1,"note":"","rush":false,"ratio":-2.5,"count":-7,"tags":[],"limits":{},"items":[],"main":{"sku":"m","qty":1,"price":0.5}}	changed
+{"id": 1, "note": "n", "rush": true, "ratio": 1.25, "count": 3, "tags": ["a"], "limits": {"a": 1}, "items": [{"sku": "x", "qty": 2, "price": 3.5}], "main": {"sku": "m", "qty": 9, "price": 1.5}}	ok	{"id":1,"note":"n","rush":true,"ratio":1.25,"count":3,"tags":["a"],"limits":{"a":1},"items":[{"sku":"x","qty":2,"price":3.5}],"main":{"sku":"m","qty":9,"price":1.5}}	same
+{"id": 2, "items": [{"sku": "x"}, {"sku": "y", "qty": 4}], "main": {"sku": "m"}}	ok	{"id":2,"note":"","rush":false,"ratio":-2.5,"count":-7,"tags":[],"limits":{},"items":[{"sku":"x","qty":1,"price":0.5},{"sku":"y","qty":4,"price":0.5}],"main":{"sku":"m","qty":1,"price":0.5}}	changed
+{"id": 3, "tags": [], "limits": {}, "main": {"sku": "m"}}	ok	{"id":3,"note":"","rush":false,"ratio":-2.5,"count":-7,"tags":[],"limits":{},"items":[],"main":{"sku":"m","qty":1,"price":0.5}}	changed
+{"id": 4, "extra": 1, "main": {"sku": "m"}}	ok	{"id":4,"note":"","rush":false,"ratio":-2.5,"count":-7,"tags":[],"limits":{},"items":[],"main":{"sku":"m","qty":1,"price":0.5}}	changed
+{"id": 5, "ratio": 2, "main": {"sku": "m"}}	ok	{"id":5,"note":"","rush":false,"ratio":2.0,"count":-7,"tags":[],"limits":{},"items":[],"main":{"sku":"m","qty":1,"price":0.5}}	changed
+{"note": "x", "main": {"sku": "m"}}	error	id: expected required field	-
+{"id": 1}	error	main: expected required field	-
+{"id": 1, "note": null, "main": {"sku": "m"}}	error	note: expected String	-
+{"id": 1, "rush": null, "main": {"sku": "m"}}	error	rush: expected Bool	-
+{"id": 1, "tags": null, "main": {"sku": "m"}}	error	tags: expected array	-
+{"id": 1, "count": "3", "main": {"sku": "m"}}	error	count: expected signed 64-bit Int	-
+{"id": 1, "items": [{"qty": 2}], "main": {"sku": "m"}}	error	items[0].sku: expected required field	-
+{"id": 1, "items": [{"sku": "x", "qty": null}], "main": {"sku": "m"}}	error	items[0].qty: expected signed 64-bit Int	-
+{"id": 1, "main": {"price": 1}}	error	main.sku: expected required field	-
+{"id": 1, "limits": {"a": "b"}, "main": {"sku": "m"}}	error	limits["a"]: expected signed 64-bit Int	-
