@@ -476,7 +476,7 @@ static void window_call(agc_emitter *e, agc_instr in, uint32_t pc, uint64_t fn, 
   call_status(e, fn, pc);
 }
 
-/* STRUCT_WITH: agc_jit_struct_with(vm, &R[a], &R[b], update), which fails with WRONG_TAG on a receiver of
+/* STRUCT_WITH: agc_jit_struct_with(vm, &R[a], &R[b], update), which fails with its status on a receiver of
    another struct, and applies the copy's charge itself, leaving with YIELD when that ends the turn. */
 void agc_emit_struct_with(agc_emitter *e, agc_instr in, uint32_t pc, uint64_t update) {
   window_call(e, in, pc, (uint64_t)(uintptr_t)agc_jit_struct_with, update);

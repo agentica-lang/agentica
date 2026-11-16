@@ -38,6 +38,7 @@
    a receiver of the declared type has that count; OP_UPDATE_FITS keeps the invariant at the write (as
    agc_struct_def_of does) so a field index can never leave the copy. The copy is linear in the field count (up to
    65535), unlike a STRUCT whose fields the program wrote one by one, so it is charged by size as CONCAT is. */
+#define FOREIGN_UPDATE "invalid bytecode: struct update of another struct"
 #define OP_UPDATE_FITS(old, u, structs) ((old)->type == (u)->type && (old)->n == (structs)[(u)->type].count)
 #define OP_STRUCT_WITH(dst, vm, R, b, old, u)                                                                \
   do {                                                                                                       \
@@ -467,28 +468,12 @@ static inline agc_value call_builtin(agc_vm *vm, const agc_builtin *b, agc_value
 }
 
 #if AGC_LEAF_CHECK
-/* Names the leaf builtin and what it did that a leaf must not (a row marked leaf by mistake). */
-static _Noreturn __attribute__((noinline, cold)) void leaf_broken(const agc_builtin *b, const char *what) {
-  char detail[160];
-  (void)snprintf(detail, sizeof detail, "builtin %s/%" PRIu32 " is marked leaf but %s", b->name, b->arity, what);
-  agc_internal_abort(detail);
-}
-
-/* The call of a leaf builtin (agc_builtin.leaf), checked: it parked (or asked to retry), started a stepper, charged
-   turn cost, counted a step, asked to yield or left rt->sync taken, any of which the generic tail of CALL_BUILTIN
-   would have handled, so the run stops. */
+/* The call of a leaf builtin (agc_builtin.leaf), checked: any work that the generic tail of CALL_BUILTIN would have
+   handled stops the run. */
 static inline agc_value call_leaf(agc_vm *vm, const agc_builtin *b, agc_value *args, uint32_t span) {
-  const agc_task *t = vm->task;
-  int64_t cost = t->turn_cost, stop = vm->next_stop, left = vm->turn_left;
-  uint32_t depth = vm->sync_depth;
-  bool yielded = vm->yield, retry = t->retry;
+  agc_call_rule rule = agc_call_rule_take(vm);
   agc_value result = b->fn(vm, args, span);
-  if (t->parking || t->retry != retry) leaf_broken(b, "parked");
-  if (t->stepper) leaf_broken(b, "started a stepper");
-  if (t->turn_cost != cost) leaf_broken(b, "charged turn cost");
-  if (vm->next_stop != stop || vm->turn_left != left || vm->yield != yielded)
-    leaf_broken(b, "counted a step or asked to yield");
-  if (vm->sync_depth != depth) leaf_broken(b, "left rt->sync taken");
+  agc_call_rule_check(vm, &rule, b, true);
   return result;
 }
 #else
@@ -607,6 +592,7 @@ static void call_value(agc_vm *vm, agc_task *t, agc_value value, uint32_t window
                        uint32_t ret, uint32_t span) {
   const agc_program *p = vm->rt->program;
   const agc_fn *fn = agc_as_fn(vm, value);
+  /* agc_fn_takes, written out: the call made gcc lay out this hot function another way. */
   if (fn->function >= p->function_count || p->functions[fn->function].params != argc ||
       p->functions[fn->function].captures != fn->n)
     agc_fail(vm, "RUNTIME-INTERNAL", "invalid bytecode: function value does not match its call", span);
@@ -1232,6 +1218,7 @@ __attribute__((noinline, cold)) _Noreturn void agc_op_fail(agc_vm *vm, agc_statu
       assert(a && b);
       index_out_of_range(vm, agc_as_int(vm, *b), list_len(agc_as_list(vm, *a)), span);
     case AGC_STATUS_WRONG_TAG: agc_wrong_tag(vm);
+    case AGC_STATUS_FOREIGN_UPDATE: agc_fail(vm, "RUNTIME-INTERNAL", FOREIGN_UPDATE, 0);
     case AGC_STATUS_KEY_NOT_FOUND:
       assert(b);
       key_not_found(vm, *b, span);
@@ -1674,7 +1661,7 @@ reload:
         const agc_update_def *u = &p->updates[in.c];
         const agc_struct *old = agc_as_struct(vm, R[in.b]);
         if (!OP_UPDATE_FITS(old, u, p->structs))
-          agc_fail(vm, "RUNTIME-INTERNAL", "invalid bytecode: struct update of another struct", 0);
+          agc_fail(vm, "RUNTIME-INTERNAL", FOREIGN_UPDATE, 0);
         OP_STRUCT_WITH(R[in.a], vm, R, in.b, old, u);
         if (t->turn_cost && apply_cost(vm)) return AGC_TURN_YIELD;
         break;
@@ -1864,9 +1851,42 @@ agc_status agc_op_map(agc_vm *vm, agc_value *dst, const agc_value *pairs, uint32
 agc_status agc_op_struct_with(agc_vm *vm, agc_value *dst, const agc_value *window, const agc_update_def *u) {
   if (!agc_is(window[0], AGC_T_STRUCT)) return AGC_STATUS_WRONG_TAG;
   const agc_struct *old = agc_as_struct(vm, window[0]);
-  if (!OP_UPDATE_FITS(old, u, vm->rt->program->structs)) return AGC_STATUS_WRONG_TAG;
+  if (!OP_UPDATE_FITS(old, u, vm->rt->program->structs)) return AGC_STATUS_FOREIGN_UPDATE;
   OP_STRUCT_WITH(*dst, vm, window, 0, old, u);
   return AGC_STATUS_OK;
+}
+
+agc_call_rule agc_call_rule_take(const agc_vm *vm) {
+  const agc_task *t = vm->task;
+  return (agc_call_rule){.cost = t->turn_cost,
+                         .stop = vm->next_stop,
+                         .left = vm->turn_left,
+                         .frames = t->frame_count,
+                         .depth = vm->sync_depth,
+                         .yielded = vm->yield,
+                         .retry = t->retry};
+}
+
+static const char *call_rule_broken(const agc_vm *vm, const agc_call_rule *was, bool leaf) {
+  const agc_task *t = vm->task;
+  if (t->parking || t->retry != was->retry) return "parked";
+  if (t->stepper) return "started a stepper";
+  if (t->frame_count != was->frames) return "moved the frames";
+  if (vm->sync_depth != was->depth) return "left rt->sync taken";
+  if (!leaf) return NULL;
+  if (t->turn_cost != was->cost) return "charged turn cost";
+  if (vm->next_stop != was->stop || vm->turn_left != was->left || vm->yield != was->yielded)
+    return "counted a step or asked to yield";
+  return NULL;
+}
+
+void agc_call_rule_check(const agc_vm *vm, const agc_call_rule *was, const agc_builtin *b, bool leaf) {
+  const char *what = call_rule_broken(vm, was, leaf);
+  if (!what) return;
+  char detail[160];
+  (void)snprintf(detail, sizeof detail, "builtin %s/%" PRIu32 " is marked %s but %s", b->name, b->arity,
+                 b->leaf ? "leaf" : "direct", what);
+  agc_internal_abort(detail);
 }
 
 agc_status agc_op_map_get(agc_vm *vm, agc_value *dst, const agc_value *map, const agc_value *key) {
@@ -2053,12 +2073,12 @@ uint64_t agc_jit_block_start(agc_vm *vm, agc_value *args, const agc_builtin *b, 
   }
   if (!agc_is(block, AGC_T_FN)) return AGC_JIT_EXIT_INTERPRET;
   const agc_fn *fn = agc_as_fn(vm, block);
-  if (fn->function >= p->function_count) return AGC_JIT_EXIT_INTERPRET;
+  if (!agc_fn_takes(p, fn, argc)) return AGC_JIT_EXIT_INTERPRET;
   const agc_function *callee = &p->functions[fn->function];
   /* ARGS is R + a of the frame on top, inside the register file: the native frame's base, the block's after it. */
   size_t base = (size_t)(args - t->regs);
-  if (callee->params != argc || callee->captures != fn->n || t->frame_capacity - t->frame_count < 2 ||
-      t->depth >= AGC_MAX_DEPTH || base + 1 + callee->registers > t->reg_capacity)
+  if (t->frame_capacity - t->frame_count < 2 || t->depth >= AGC_MAX_DEPTH ||
+      base + 1 + callee->registers > t->reg_capacity)
     return AGC_JIT_EXIT_INTERPRET;
   /* A counting call counts the step of its first call first: on the fast path only. */
   if (counting(kind) && vm->next_stop <= 1) return AGC_JIT_EXIT_INTERPRET;

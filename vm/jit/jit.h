@@ -37,19 +37,19 @@ typedef enum { AGC_JIT_OFF, AGC_JIT_ON, AGC_JIT_ALWAYS } agc_jit_mode;
 #define AGC_JIT_PARK_WEIGHT 3
 
 /* Why compiled code stopped, besides a failure of agc_status (OVERFLOW, DIVISION_BY_ZERO, INDEX_OUT_OF_RANGE,
-   WRONG_TAG, KEY_NOT_FOUND), which the interpreter raises at the instruction at `pc` with agc_op_fail. STEP: the STEP
-   at `pc` is the slow one; the interpreter runs it (a stop, a yield or a new batch of steps). COST: the instruction at
-   `pc` charged turn cost, which the interpreter applies. INTERPRET: the interpreter runs the instruction at `pc` (one
-   without a compiled boundary, or a slow path), then enters code again. CALL and RETURN: a call or return that compiled
-   code could not make natively (the callee has no code, an array would grow, the call would fail, or the function was
-   not called natively), whose shared frame handler run_compiled runs; TAIL_CALL: a tail call that compiled code could
-   not make natively (the callee has no code, more than AGC_JIT_TAIL_PARAMS arguments, or registers that would grow the
-   file), whose frame replacement (replace_frame) run_compiled runs, as the interpreter does; CALL_VALUE: a call of a
-   function value that compiled code could not make natively (agc_jit_call_value said no), whose frame push run_compiled
-   runs with the interpreter's call_value (agc_jit_call_value_exit), failures included. RETURNED never reaches
-   run_compiled: it is the answer of a natively called function's RETURN to its caller's code. YIELD and RAISE come from
-   a builtin that compiled code called (agc_jit_call_builtin): it returned and the turn ends, or it failed or exited,
-   and run_compiled jumps to the turn's target. RESUME comes from a block call that compiled code started
+   WRONG_TAG, KEY_NOT_FOUND, FOREIGN_UPDATE), which the interpreter raises at the instruction at `pc` with agc_op_fail.
+   STEP: the STEP at `pc` is the slow one; the interpreter runs it (a stop, a yield or a new batch of steps). COST: the
+   instruction at `pc` charged turn cost, which the interpreter applies. INTERPRET: the interpreter runs the instruction
+   at `pc` (one without a compiled boundary, or a slow path), then enters code again. CALL and RETURN: a call or return
+   that compiled code could not make natively (the callee has no code, an array would grow, the call would fail, or the
+   function was not called natively), whose shared frame handler run_compiled runs; TAIL_CALL: a tail call that compiled
+   code could not make natively (the callee has no code, more than AGC_JIT_TAIL_PARAMS arguments, or registers that
+   would grow the file), whose frame replacement (replace_frame) run_compiled runs, as the interpreter does; CALL_VALUE:
+   a call of a function value that compiled code could not make natively (agc_jit_call_value said no), whose frame push
+   run_compiled runs with the interpreter's call_value (agc_jit_call_value_exit), failures included. RETURNED never
+   reaches run_compiled: it is the answer of a natively called function's RETURN to its caller's code. YIELD and RAISE
+   come from a builtin that compiled code called (agc_jit_call_builtin): it returned and the turn ends, or it failed or
+   exited, and run_compiled jumps to the turn's target. RESUME comes from a block call that compiled code started
    (agc_jit_block_next): its native frame is on top, with the block's value in its register, and run_compiled resumes
    it. An exit from a natively called function goes up through its callers' code unchanged, so run_compiled finds that
    function's frame on top. */
@@ -256,7 +256,7 @@ void agc_jit_call_plain(agc_vm *vm, agc_value *args, const agc_builtin *b, uint6
 /* STRUCT_WITH and MAP in compiled code: agc_op_struct_with or agc_op_map, then the task's turn cost applied, as the
    interpreter does after them: AGC_STATUS_OK for the code to go on, or AGC_JIT_EXIT_YIELD when that ended the turn
    (the result written), as agc_jit_call_builtin answers; a struct of 4 or more fields charges at each copy, so a COST
-   exit would leave the code at every update. A WRONG_TAG of the helper is answered as is. They allocate; they never
+   exit would leave the code at every update. A failed status of the helper is answered as is. They allocate; they never
    fail or park. */
 uint32_t agc_jit_struct_with(agc_vm *vm, agc_value *dst, const agc_value *window, const agc_update_def *u);
 uint32_t agc_jit_map(agc_vm *vm, agc_value *dst, const agc_value *pairs, uint32_t count);

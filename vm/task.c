@@ -1542,8 +1542,7 @@ static agc_value monitor(agc_vm *vm, agc_value *args, uint32_t span, bool observ
   agc_channel *channel = agc_as_channel(vm, args[1]);
   const agc_fn *fn = agc_as_fn(vm, args[2]);
   const agc_program *p = vm->rt->program;
-  if (fn->function >= p->function_count || p->functions[fn->function].params != 1 ||
-      p->functions[fn->function].captures != fn->n)
+  if (!agc_fn_takes(p, fn, 1))
     agc_fail(vm, "RUNTIME-INTERNAL", "invalid bytecode: function value does not match its call", span + 3);
   down_types(vm);
   agc_monitor *m = agc_alloc(sizeof *m);

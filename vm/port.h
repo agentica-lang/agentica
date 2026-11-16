@@ -746,6 +746,12 @@ struct agc_vm {
 #define AGC_CPU_PAUSE() atomic_signal_fence(memory_order_seq_cst)
 #endif
 
+/* FN can be called with ARGC arguments: its function exists and takes ARGC parameters and FN's captures. */
+static inline bool agc_fn_takes(const agc_program *p, const agc_fn *fn, uint32_t argc) {
+  return fn->function < p->function_count && p->functions[fn->function].params == argc &&
+         p->functions[fn->function].captures == fn->n;
+}
+
 /* One step of a busy wait that backs off: PAUSES pauses, and the count for the next step, doubled up to 32 between two
    looks. A spinner starts at 1 and adds each step's count to what it spent (agc_runq_spin, agc_lock_take_shared). */
 #define AGC_SPIN_PAUSES_MAX 32u

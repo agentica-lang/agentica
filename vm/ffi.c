@@ -3232,8 +3232,7 @@ static agc_value builtin_native_callback(agc_vm *vm, agc_value *args, uint32_t s
     if (!c_type_of(codes[k + 1], false, &want.params[k], &out) || out || !callback_type(want.params[k], false))
       bad_signature(vm, span);
   const agc_program *p = vm->rt->program;
-  if (fn->function >= p->function_count || p->functions[fn->function].params != want.count ||
-      p->functions[fn->function].captures != fn->n || fn->n != 0)
+  if (!agc_fn_takes(p, fn, want.count) || fn->n != 0)
     agc_fail(vm, "RUNTIME-INTERNAL", "invalid bytecode: the function of a callback does not take its parameters", span);
   want.function = fn->function;
   want.fn = args[1];
