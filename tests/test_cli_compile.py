@@ -1,11 +1,8 @@
 """`agentica compile [FILE...]`, which fills the bytecode cache ahead, and the notice of a run that compiles its program
 when stderr is a terminal (issue #1735), through the CLI."""
 import os
-import sys
 
-import pytest
-
-from tests.agentica_test import cli, run, vm_environment
+from tests.agentica_test import WINDOWS, cli, host_only, run, vm_environment
 
 OK = 'def main() -> Void\n  puts("ok")\nend\n'
 BROKEN = 'def main() -> Void\n  x: Int = "a"\nend\n'
@@ -73,7 +70,7 @@ def on_a_terminal(folder, *words):
     return result.code, result.stdout, shown.decode("utf-8").replace("\r\n", "\n")
 
 
-@pytest.mark.skipif(sys.platform == "win32", reason="a pseudo-terminal is POSIX")
+@host_only(WINDOWS, "the notice is checked through a POSIX pseudo-terminal")
 def test_a_run_that_compiles_says_so_on_a_terminal_and_nowhere_else(tmp_path):
     write(tmp_path, {"main.agc": 'import Util from "util"\n\ndef main() -> Void\n  puts(Util.word())\nend\n',
                      "util.agc": 'def word() -> String = "ok"\n'})
