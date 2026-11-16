@@ -17,10 +17,10 @@ agentica --deny-run tool.agc
 ## Process.Options
 
 ```signature
-Process.Options(timeout_ms: Int = 30000, chdir: String = ".", env: Map[String, String] = {}, out: String = "", err: String = "", pgroup: Bool = false)
+Process.Options(timeout_ms: Int = 30000, chdir: String = ".", env: Map[String, String] = {}, out: String = "", err: String = "", pgroup: Bool = false, pty: Bool = false)
 ```
 
-The options of `Process.spawn`, `Process.spawn_captured` and `Process.spawn_channel`, their last argument, which defaults to `Process.Options()`. Give only the fields you need: `Process.Options(chdir: "build", err: "err.txt")`. The fields are Ruby's `spawn` options (`chdir:`, `out:`, `err:`, `pgroup:`), plus `timeout_ms` and `env` (Ruby passes the environment as the first argument). A timeout or a folder in the place of the options is `CHECK-TYPE-MISMATCH`.
+The options of `Process.spawn`, `Process.spawn_captured` and `Process.spawn_channel`, their last argument, which defaults to `Process.Options()`. Give only the fields you need: `Process.Options(chdir: "build", err: "err.txt")`. The fields are Ruby's `spawn` options (`chdir:`, `out:`, `err:`, `pgroup:`), plus `timeout_ms`, `env` (Ruby passes the environment as the first argument) and `pty`. A timeout or a folder in the place of the options is `CHECK-TYPE-MISMATCH`.
 
 ## Process.spawn
 
@@ -38,6 +38,7 @@ Starts a program with your program's environment, plus the variables of `env`.
 - An empty command, or a NUL byte in the command or an argument, gives `error("process: command must be nonempty and arguments cannot contain NUL")`.
 - `out` and `err`, when not empty, are files that get the program's standard output and error, with no shell and without the 1 MiB limit of a read or a captured stream (Ruby's `spawn(cmd, out: path)`). Each is created or truncated, on Unix with mode 0666 less where the umask clears bits, as `File.write_text` and a shell's `>` make it; a file that exists keeps its mode. A relative path starts at the current folder. `out` and `err` naming one file share it, as `> file 2>&1` does. A stream sent to a file is not readable: `read_line` gives the end of output at once, and nothing is forwarded to your standard error. A folder, the descriptor behind your standard output or error (`/proc/self/fd/5`), one of the program's own internal pipes, or on Windows a path starting `\\.\` or `\\?\` gives `error("process: out does not refer to a regular file")` (or `err`), as the `File` calls refuse them. A file that cannot be opened (a missing parent folder, no permission) gives an error that starts with `process: cannot open the out file` (or `err`) and names the system error. Either way no program starts. A NUL byte gives `error("process: out and err cannot contain NUL")`, and `--deny-fs` turns them off. The files are opened just before the start, so a start that then fails (a file that cannot run) may leave them created or truncated, as a shell's `>` does. Only `Process.spawn` takes them: `spawn_captured` and `spawn_channel` give `error("process: out and err need Process.spawn")`.
 - `pgroup: true` (also for `spawn_captured` and `spawn_channel`) starts the program in its own process group, as a new session on Linux and macOS. Unlike Ruby's `pgroup: true`, the new session leaves the program with no controlling terminal, so a prompt on `/dev/tty` fails. As for any group of its own, a Ctrl-C or hangup of the terminal reaches it only through your program's stop of its children, and a `SIGKILL` of your program leaves the group running. A stop of the program while it runs (`close`, a stream timeout, the end of the run, a signal to your program) signals the whole group, so the programs it started end with it: a compiler driver and its `cc1`, or `sh` and its `sleep`. After a `SIGTERM` the group gets `SIGKILL` when the grace ends, even if the program itself has already exited. A descendant left behind by a program that exited on its own, before any stop, is not stopped. A program started without `pgroup` is stopped alone, and its own children can outlive it. On Windows `pgroup` changes nothing: the program is stopped alone.
+- `pty: true` runs the program on a pseudo-terminal, as Ruby's `PTY.spawn` does, so interactive programs work: a password prompt (`ssh`, `sudo`), a REPL, an editor or a full-screen program. See [Process on a pty](#process-on-a-pty).
 - Windows: only `.exe` and `.com` run (`PATHEXT` is not read; a suffixless name tries `.exe` first; use `cmd.exe` by name for a shell). These fail: a name ending in a dot, a space, `.cmd` or `.bat`; one starting with `\\?\` or `\\.\`; a `:` that is not a drive.
 
 ```agentica {mode="check"}
@@ -179,6 +180,41 @@ Return from `main`, `System.exit`, a diagnostic, a task failure, step exhaustion
 For a `Process.spawn` program, the closing task waits up to one second for it to end; other tasks keep running.
 
 Its standard error goes to yours, unless started with `Process.spawn_captured` or an `err` file. It goes through your program's stderr buffer: while nobody reads your stderr, the child and `Process.wait` on it wait, and other tasks keep running.
+
+## Process on a pty
+
+With `pty: true` the program starts in a new session whose controlling terminal is a new pseudo-terminal of 24 rows and 80 columns, which is also its standard input, output and error, so standard error comes mixed into the output. `send` and `send_bytes` type into the terminal, and `read_line`, `read_bytes`, `poll_line` and `read_available` read what it shows. As for `spawn_captured`, the output is read all the time into a buffer of 1 MiB, so the program never blocks on a full terminal, `close` sends `SIGTERM` and then `SIGKILL`, and as with `pgroup: true` a stop signals the whole group. The output ends when the program and every program it started with the terminal have exited.
+
+- A terminal echoes what you send, unless the program turned echo off (a password prompt does), and ends lines with `\r\n`; `read_line` strips the `\r`. A prompt has no newline yet: read it with `read_bytes` or `read_available`. Ctrl-C is `"\x03"` and Ctrl-D (the end of input at the start of a line) is `"\x04"`; `close_stdin` does not end the program's input.
+- The program gets the variables of your environment, so give it `TERM` in `env` when it needs one.
+- `spawn_captured` and `spawn_channel` with `pty`, or `pty` with `out` or `err`, give `error("process: pty needs Process.spawn without out and err")`. There is no terminal mode API. Linux and macOS only: elsewhere `pty` gives `error("process: pty is not supported on this system")` with kind `process.failed`.
+
+```agentica {mode="check"}
+def main() -> Void
+  p = Process.spawn(
+    "sh",
+    ["-c", "stty -echo; printf 'name: '; read name; echo hi $name"],
+    Process.Options(pty: true),
+  ).unwrap!
+
+  puts(Process.read_bytes(p, 6, 1000).unwrap!.size)
+  Process.send(p, "Ada\n", 1000).unwrap!
+  puts(Process.read_line(p, 1000))
+end
+```
+
+```text
+6
+ok("hi Ada")
+```
+
+## Process.resize
+
+```signature
+Process.resize(process: Process, rows: Int, cols: Int) -> Result[Void]
+```
+
+Sets the size of a `pty: true` program's terminal, as a terminal window does when it is resized: the program gets `SIGWINCH`, and `stty size` shows the new size. Rows and columns are 1 to 65535, else `error("process: rows and cols must be 1..65535")`. A program without a pty gives `error("process: the child has no pty")` with kind `process.failed`, and a closed one `error("process: process is closed")`.
 
 ## Process.signal and Process.signal_group
 

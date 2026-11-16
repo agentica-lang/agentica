@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 72,
+  "steps": 74,
   "stdout": [
     "error(\"process: output exceeds 1048576 bytes\", kind: \"process.too_large\")",
     "error(\"process: output exceeds 1048576 bytes\", kind: \"process.too_large\")",

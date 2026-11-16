@@ -283,6 +283,7 @@ Process.poll_line
 Process.read_available
 Process.read_bytes.bytes
 Process.read_line
+Process.resize
 Process.send
 Process.send_bytes.bytes
 Process.signal

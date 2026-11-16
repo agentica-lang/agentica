@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 143,
+  "steps": 144,
   "stdout": [
     "a b;$x|--allow-run|ñ|",
     "ok()",

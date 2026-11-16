@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 166,
+  "steps": 171,
   "stdout": [
     "error(\"process: operation timed out\", kind: \"process.timeout\")",
     "error(\"process: process is closed\", kind: \"process.closed\")",

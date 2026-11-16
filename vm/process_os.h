@@ -48,6 +48,23 @@ bool agc_proc_drains(void);
    process groups that a signal reaches: there a child started with `pgroup` is stopped alone. */
 bool agc_proc_groups(void);
 
+/* True where a child can run on a pseudo-terminal (Linux and macOS). */
+bool agc_proc_ptys(void);
+
+/* Starts PATH with ARGV and ENV (never NULL), in CWD when not NULL, on a new pseudo-terminal of ROWS x COLS: a new
+   session whose controlling terminal is the pty, which is also its stdin, stdout and stderr. On success FDS holds two
+   descriptors of the master (close-on-exec, the caller's: one to read, one to write) and *PID the child. Returns 0 or
+   a negated system error number, also when the exec fails. */
+int agc_proc_pty_spawn(const char *path, char *const *argv, char *const *env, const char *cwd, int rows, int cols,
+                       int fds[2], int *pid);
+
+/* Reaps PID if it has exited, never waiting: true then, with *CODE its exit status or *SIGNAL the signal that ended
+   it (the other 0). This and agc_proc_pty_spawn exist only where agc_proc_ptys is true. */
+bool agc_proc_reap(int pid, int *code, int *signal);
+
+/* Sets the window size of the pty whose master is FD, which sends the child SIGWINCH: 0 or a negated error number. */
+int agc_proc_pty_resize(intptr_t fd, int rows, int cols);
+
 /* Returned by agc_proc_read_now when the pipe holds nothing now. */
 #define AGC_PROC_NOTHING INT64_MIN
 

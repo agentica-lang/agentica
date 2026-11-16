@@ -41,8 +41,10 @@ stop = ["agc_trace_emit"]
 # - release_state: the release flush of a handle not closed, one bounded write (docs/vm/14-core-invariants.md §14.1).
 # - agc_register, agc_unregister: reg->lock is held for a swap, a push or a copy; an agc_alloc there may collect, which
 #   stops the loop's thread anyway.
+# - agc_proc_pty_spawn: its fork waits on the report pipe only until the child's execve or its failure, as uv_spawn
+#   does for every other child.
 short = ["agc_proc_read_now", "read_once", "agc_fd_reopen", "agc_stdio_try", "call_on", "agc_compute_submit",
-         "agc_compute_submit_direct", "release_state", "agc_register", "agc_unregister"]
+         "agc_compute_submit_direct", "release_state", "agc_register", "agc_unregister", "agc_proc_pty_spawn"]
 
 # The I/O inbox's lock is held to link one request; the poster wakes the loop after the unlock (vm/inbox.c). The run
 # queue's lock is held to link or unlink tasks: its waits give it back (uv_cond_wait), and a push signals after the

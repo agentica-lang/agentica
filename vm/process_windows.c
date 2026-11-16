@@ -10,6 +10,7 @@
 #ifdef _WIN32
 #include "value.h"
 #include <ctype.h>
+#include <errno.h>
 #include <limits.h>
 #include <stdlib.h>
 #include <string.h>
@@ -111,6 +112,13 @@ bool agc_proc_env_case_blind(void) { return true; }
 bool agc_proc_drains(void) { return false; }
 
 bool agc_proc_groups(void) { return false; }
+
+bool agc_proc_ptys(void) { return false; }
+
+int agc_proc_pty_resize(intptr_t fd, int rows, int cols) {
+  (void)fd, (void)rows, (void)cols;
+  return -ENOSYS;
+}
 
 int64_t agc_proc_read_now(intptr_t fd, uint8_t *buf, size_t len) {
   (void)fd;

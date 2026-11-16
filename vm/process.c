@@ -48,11 +48,13 @@
 #define METRICS_FILE_ENV "AGENTICA_VM_METRICS_FILE="
 #define DRAIN_LIMIT ((size_t)2097152)
 #define STDIO_SLOTS 5
+#define PTY_ROWS 24
+#define PTY_COLS 80
 #define OWNER(ptr, field) ((proc *)(void *)((char *)(ptr) - offsetof(proc, field)))
 
 typedef enum {
   REQ_LINE, REQ_BYTES, REQ_SEND, REQ_WAIT, REQ_OUTPUT, REQ_CLOSE, REQ_AVAILABLE, REQ_SPAWN, REQ_STDIN, REQ_SIGNAL,
-  REQ_POLL
+  REQ_POLL, REQ_RESIZE
 } req_kind;
 typedef enum { STOP_NONE, STOP_TERM, STOP_KILLED } stop_state;
 
@@ -63,7 +65,7 @@ typedef struct launch launch;
 
 /* Process.Options as compiler/catalog/builtins_data.agc lays it out, read by position; tests/test_process.py
    (test_options_layout) fails when the two orders differ. */
-enum { OPTION_TIMEOUT_MS, OPTION_CHDIR, OPTION_ENV, OPTION_OUT, OPTION_ERR, OPTION_PGROUP, OPTION_FIELDS };
+enum { OPTION_TIMEOUT_MS, OPTION_CHDIR, OPTION_ENV, OPTION_OUT, OPTION_ERR, OPTION_PGROUP, OPTION_PTY, OPTION_FIELDS };
 
 /* One pair of the program's `env` map, taken out of the map by env_problem. Both strings are GC memory, and so is the
    array that holds the pairs, which keeps them alive. */
@@ -80,7 +82,7 @@ struct launch {
   CC_OWNS char *cwd;
   size_t args;
   int files[2];
-  bool channel, group, inherit;
+  bool channel, group, inherit, pty;
 };
 
 /* A request's slot and count on its child are taken by its START step (link_request), on the I/O thread. A request
@@ -97,9 +99,9 @@ struct request {
   /* CLOSE: the request holds the count of the resource that the builtin unregistered, until its START gives it back.
      DETACHED: the job lost its task (the cancel half ran), so the done half has no caller to fail. */
   bool holds_resource, detached;
-  /* SIGNAL: the OS number and whether it goes to the child's group. */
+  /* SIGNAL: the OS number and whether it goes to the child's group. RESIZE: the pty's new size. */
   bool to_group;
-  int sig;
+  int sig, rows, cols;
   int rc;
   int64_t status;
   uint32_t span;
@@ -148,6 +150,11 @@ struct proc {
   bool captured, out_cut, err_cut, stop_failed, group, group_gone;
   /* inherit: Process.spawn_group, whose child has the VM's stdin, stdout and stderr, so its pipes are never used. */
   bool inherit;
+  /* pty: the child runs on a pseudo-terminal (pty: true), always captured and a group. `in` and `out` hold the pty's
+     master (two descriptors of it), `err` a pipe that ends at once, and libuv does not know the child: `process`
+     holds only its pid, and `chld`, a SIGCHLD watcher, reaps it in place of libuv (reap_pty). */
+  bool pty;
+  uv_signal_t chld;
   stop_state stop;
   int write_status;
   int64_t status;
@@ -177,6 +184,8 @@ static void handle_gone(proc *p) {
 }
 
 static void closed_process(uv_handle_t *h) { handle_gone(OWNER(h, process)); }
+
+static void closed_chld(uv_handle_t *h) { handle_gone(OWNER(h, chld)); }
 
 static void closed_in(uv_handle_t *h) { handle_gone(OWNER(h, in)); }
 
@@ -408,7 +417,10 @@ static void retire(proc *p) {
   bool timed = group_in_grace(p) && (uv_is_active((uv_handle_t *)&p->grace) || p->grace_g);
   if (p->captured && ((!p->running && !timed) || p->stop == STOP_KILLED))
     close_handle((uv_handle_t *)&p->grace, closed_grace);
-  if (!p->running) close_handle((uv_handle_t *)&p->process, closed_process);
+  if (!p->running && p->pty)
+    close_handle((uv_handle_t *)&p->chld, closed_chld);
+  else if (!p->running)
+    close_handle((uv_handle_t *)&p->process, closed_process);
 }
 
 static void grace_over(uv_timer_t *t) {
@@ -734,6 +746,7 @@ static agc_value spawned(agc_vm *vm, const request *q, agc_value context) {
 #define SIGNAL_CLOSED 1
 #define SIGNAL_EXITED 2
 #define SIGNAL_NO_GROUP 3
+#define SIGNAL_NO_PTY 4
 
 /* Process.signal and signal_group, on the I/O thread. A child is signalled only while it is unreaped (running): its
    pid, and so its group's id, cannot name another process before that. */
@@ -760,6 +773,12 @@ static agc_value signal_result(agc_vm *vm, int rc) {
     default:
       return agc_system_error(vm, AGC_FAMILY_PROCESS, "process: cannot signal the child", agc_net_errno(rc));
   }
+}
+
+static agc_value resized(agc_vm *vm, int rc) {
+  if (rc == SIGNAL_NO_PTY) return agc_error(vm, AGC_KIND_PROCESS_FAILED, "process: the child has no pty");
+  if (rc < 0) return agc_system_error(vm, AGC_FAMILY_PROCESS, "process: cannot resize the pty", agc_net_errno(rc));
+  return signal_result(vm, rc);
 }
 
 /* The done half of a posted request: the result that `finish` (or the START step) put in it, in the order of the
@@ -804,6 +823,8 @@ static agc_value posted_result(agc_vm *vm, const request *q, agc_value context) 
       return output_of(vm, q->data, q->len, q->err_data, q->err_len, q->over);
     case REQ_SIGNAL:
       return signal_result(vm, q->rc);
+    case REQ_RESIZE:
+      return resized(vm, q->rc);
   }
   return agc_void();
 }
@@ -934,6 +955,42 @@ static void exited(uv_process_t *h, int64_t status, int signal) {
   finished(p, signal ? 128 + signal : status);
   retire(p);
   notify_waits(p);
+}
+
+#ifndef _WIN32
+/* Any SIGCHLD: the pty child is reaped once it has exited. libuv's own reaping waits for its children by pid, so
+   neither takes the other's. */
+static void reap_pty(uv_signal_t *h, int signum) {
+  (void)signum;
+  proc *p = OWNER(h, chld);
+  int code, sig;
+  if (!agc_proc_reap(p->process.pid, &code, &sig)) return;
+  uv_signal_stop(h);
+  exited(&p->process, code, sig);
+}
+#endif
+
+/* The pty child's start, in place of uv_spawn: the SIGCHLD watcher first, so no exit is missed. FDS[2] and FDS[1]
+   (the parent's ends of stdout and stdin) become the two descriptors of the master; the pipes are not used. */
+static int spawn_pty(uv_loop_t *loop, proc *p, const launch *l, int fds[6]) {
+  uv_signal_init(loop, &p->chld);
+  p->handles = 1;
+#ifdef _WIN32
+  /* Not reached: spawn_child refuses pty where agc_proc_ptys is false. */
+  (void)l, (void)fds;
+  return UV_ENOTSUP;
+#else
+  int rc = uv_signal_start(&p->chld, reap_pty, SIGCHLD);
+  if (rc) return rc;
+  int master[2] = {-1, -1}, pid = 0;
+  rc = agc_proc_pty_spawn(l->argv[0], l->argv, l->env, l->cwd, PTY_ROWS, PTY_COLS, master, &pid);
+  if (rc) return uv_translate_sys_error(-rc);
+  p->process.pid = pid;
+  for (int k = 0; k < 4; k++) close_fd(&fds[k]);
+  fds[2] = master[0];
+  fds[1] = master[1];
+  return 0;
+#endif
 }
 
 static void link_child(guard *g, proc *p) {
@@ -1165,6 +1222,8 @@ static void alloc_kept_err(uv_handle_t *h, size_t suggested, uv_buf_t *buf) {
 
 static void read_kept_out(uv_stream_t *s, ssize_t n, const uv_buf_t *buf) {
   proc *p = OWNER(s, out);
+  /* Linux fails a read of the master with EIO once no descriptor of the pty is open in the child: its end. */
+  if (p->pty && n == UV_EIO) n = UV_EOF;
   if (keep(p, &p->out_buf, &p->out_cut, n, buf, "stdout")) {
     uv_read_stop(s);
     notify_waits(p);
@@ -1366,11 +1425,20 @@ static int start_child(guard *g, proc *p, const launch *l) {
     p->group = l->group && agc_proc_groups();
     if (p->group) options.flags |= UV_PROCESS_DETACHED;
     link_child(g, p);
-    rc = uv_spawn(loop, &p->process, &options);
-    p->handles = 1;
-    p->running = !rc;
-    if (rc) {
-      uv_close((uv_handle_t *)&p->process, closed_process);
+    p->pty = l->pty;
+    if (p->pty) {
+      rc = spawn_pty(loop, p, l, fds);
+      p->running = p->process.pid > 0;
+    } else {
+      rc = uv_spawn(loop, &p->process, &options);
+      p->handles = 1;
+      p->running = !rc;
+    }
+    if (rc && !p->running) {
+      if (p->pty)
+        uv_close((uv_handle_t *)&p->chld, closed_chld);
+      else
+        uv_close((uv_handle_t *)&p->process, closed_process);
       unlink_child(p);
     }
   }
@@ -1566,12 +1634,20 @@ static bool begin_spawn(void *data, agc_io_job *job) {
    refused for its other arguments touches no file. */
 static agc_value spawn_child(agc_vm *vm, const agc_value *args, const agc_string *dir, int64_t timeout, bool captured,
                              bool channel, const agc_map *env, const agc_string *out, const agc_string *err,
-                             bool group, bool inherit) {
+                             bool group, bool inherit, bool pty) {
   if (vm->rt->deny_run) return agc_error(vm, AGC_KIND_DENIED_RUN, "denied: --deny-run turns off starting programs");
   if (inherit && !agc_proc_groups())
     return agc_error(vm, AGC_KIND_SYSTEM_SIGNAL, "process: process groups are not supported on this system");
   bool files = out->bytes || err->bytes;
   if (files && captured) return agc_error(vm, AGC_KIND_ARGUMENT, "process: out and err need Process.spawn");
+  if (pty && (captured || files))
+    return agc_error(vm, AGC_KIND_ARGUMENT, "process: pty needs Process.spawn without out and err");
+  if (pty && !agc_proc_ptys())
+    return agc_error(vm, AGC_KIND_PROCESS_FAILED, "process: pty is not supported on this system");
+  /* A pty child is kept as spawn_captured keeps its output (read_available works, and the child never blocks on a
+     full pty), and leads its session, so a stop signals its group. */
+  captured = captured || pty;
+  group = group || pty;
   const agc_string *command = agc_as_string(vm, args[0]);
   const agc_list *list = agc_as_list(vm, args[1]);
   /* Every argument is a String before the first malloc of the spawn (resolve): child_args copies these, so a wrong
@@ -1644,6 +1720,7 @@ static agc_value spawn_child(agc_vm *vm, const agc_value *args, const agc_string
   l->channel = channel;
   l->group = group;
   l->inherit = inherit;
+  l->pty = pty;
   if (!l->env) {
     AGC_TRACE(&vm->rt->trace, AGC_TRACE_PROC, "spawn_failed path=%s rc=%d", l->argv[0], UV_ENOMEM);
     free_launch(l);
@@ -1693,7 +1770,8 @@ static agc_value spawn_options(agc_vm *vm, const agc_value *args, bool captured,
   const agc_value *f = o->fields;
   return spawn_child(vm, args, agc_as_string(vm, f[OPTION_CHDIR]), agc_as_int(vm, f[OPTION_TIMEOUT_MS]), captured,
                      channel, agc_as_map(vm, f[OPTION_ENV]), agc_as_string(vm, f[OPTION_OUT]),
-                     agc_as_string(vm, f[OPTION_ERR]), agc_as_bool(vm, f[OPTION_PGROUP]), false);
+                     agc_as_string(vm, f[OPTION_ERR]), agc_as_bool(vm, f[OPTION_PGROUP]), false,
+                     agc_as_bool(vm, f[OPTION_PTY]));
 }
 
 static agc_value builtin_spawn_options(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -1712,7 +1790,7 @@ static agc_value builtin_spawn_group(agc_vm *vm, agc_value *args, uint32_t span)
   (void)span;
   const agc_string *none = agc_make_string("", 0, 0);
   return spawn_child(vm, args, agc_as_string(vm, args[2]), agc_as_int(vm, args[3]), false, false, NULL, none, none,
-                     true, true);
+                     true, true, false);
 }
 
 static agc_value builtin_spawn_channel_options(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -1998,6 +2076,43 @@ static agc_value signal_op(agc_vm *vm, const agc_value *args, bool to_group) {
   return agc_void();
 }
 
+/* Process.resize on the I/O thread, which owns the master: the kernel sends the child's foreground group SIGWINCH. */
+static int resize_pty(proc *p, int rows, int cols) {
+  if (p->closed) return SIGNAL_CLOSED;
+  if (!p->pty) return SIGNAL_NO_PTY;
+  uv_os_fd_t fd;
+  int rc = uv_fileno((uv_handle_t *)&p->out, &fd);
+  if (!rc) rc = agc_proc_pty_resize((intptr_t)fd, rows, cols);
+  if (rc) rc = uv_translate_sys_error(-rc);
+  AGC_TRACE(&p->trace, AGC_TRACE_PROC, "resize pid=%d rows=%d cols=%d rc=%d", (int)p->process.pid, rows, cols, rc);
+  return rc;
+}
+
+static bool begin_resize(void *data, agc_io_job *job) {
+  request *q = data;
+  link_request(q, job);
+  q->rc = resize_pty(q->p, q->rows, q->cols);
+  (void)finish(q);
+  return true;
+}
+
+/* Process.resize(process, rows, cols): the pty's new size, each 1..65535. */
+static agc_value builtin_resize(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  agc_process *pr = agc_as_process(vm, args[0]);
+  int64_t rows = agc_as_int(vm, args[1]), cols = agc_as_int(vm, args[2]);
+  if (rows < 1 || rows > 65535 || cols < 1 || cols > 65535)
+    return agc_error(vm, AGC_KIND_ARGUMENT, "process: rows and cols must be 1..65535");
+  proc *p = live(vm, pr);
+  if (!p) return agc_error(vm, AGC_KIND_PROCESS_CLOSED, closed_text);
+  if (agc_io_here(vm)) return resized(vm, resize_pty(p, (int)rows, (int)cols));
+  request *q = new_request(vm, p, REQ_RESIZE);
+  q->rows = (int)rows;
+  q->cols = (int)cols;
+  start_request(vm, q, agc_void(), -1, begin_resize);
+  return agc_void();
+}
+
 static agc_value builtin_signal(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   return signal_op(vm, args, false);
@@ -2174,6 +2289,7 @@ const agc_builtin agc_process_builtins[] = {
   {"Process.signal_group", 2, builtin_signal_group, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false, false},
   {"System.signal", 3, builtin_system_signal, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false, false},
   {"Process.poll_line", 2, builtin_poll_line, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false, false},
+  {"Process.resize", 3, builtin_resize, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false, false},
 };
 
 const size_t agc_process_builtin_count = sizeof agc_process_builtins / sizeof agc_process_builtins[0];

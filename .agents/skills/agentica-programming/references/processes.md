@@ -5,7 +5,7 @@ encoding.
 
 ```text
 Process.Options(timeout_ms: Int = 30000, chdir: String = ".", env: Map[String, String] = {},
-                out: String = "", err: String = "", pgroup: Bool = false)
+                out: String = "", err: String = "", pgroup: Bool = false, pty: Bool = false)
 Process.spawn(command: String, args: List[String],
               options: Process.Options = Process.Options()) -> Result[Process]
 Process.send(process: Process, text: String, timeout_ms: Int) -> Result[Void]
@@ -27,6 +27,7 @@ Process.channel_close(process: Process, timeout_ms: Int) -> Result[Void]
 Process.read_available(process: Process, timeout_ms: Int) -> Result[String]
 Process.parent_read_line(timeout_ms: Int) -> Result[String]
 Process.parent_send(text: String, timeout_ms: Int) -> Result[Void]
+Process.resize(process: Process, rows: Int, cols: Int) -> Result[Void]
 ```
 
 - The options of a start go in the builtin record `Process.Options`; give only
@@ -103,6 +104,14 @@ Process.parent_send(text: String, timeout_ms: Int) -> Result[Void]
   its own are not stopped. Windows ignores `pgroup`.
 - Operational failures return String error Results; explicit cleanup failures
   are `RUNTIME-PROCESS-CLOSE`, at the call span.
+- `pty: true` (`Process.spawn` only, without `out`/`err`; Linux and macOS)
+  runs the child on a pseudo-terminal, 24x80: its stdin, stdout, stderr
+  (merged) and controlling terminal, so password prompts, REPLs and TUIs work.
+  Output is kept as for `spawn_captured` (`read_available` works) and a stop
+  signals its group. The terminal echoes what you send (not with echo off) and
+  ends lines with CRLF (`read_line` strips it); read a prompt with `read_bytes`
+  or `read_available`. Ctrl-C is `"\x03"`, Ctrl-D `"\x04"`. Pass `TERM` in
+  `env` if needed. `Process.resize(p, rows, cols)` sends it `SIGWINCH`.
 
 ## Captured processes
 

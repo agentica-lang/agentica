@@ -184,6 +184,7 @@ RECORDS: List[Model.Record] = [
       Model.Named(name: "out", type: Types.Type.String, default: Model.Default.Text("")),
       Model.Named(name: "err", type: Types.Type.String, default: Model.Default.Text("")),
       Model.Named(name: "pgroup", type: Types.Type.Bool, default: Model.Default.Flag(false)),
+      Model.Named(name: "pty", type: Types.Type.Bool, default: Model.Default.Flag(false)),
     ],
   ),
   Model.Record(
