@@ -22,10 +22,31 @@
    as the definition is not an inline definition. */
 #define OP_HELPER inline __attribute__((always_inline))
 
-/* The lookup of MAP_GET and the constructor opcodes, written once for the turn loop and their agc_op_* functions, which
-   a JIT calls. Macros, not inline helpers: inlining a helper changed the register allocation of plain_turn (make
-   layout-check). */
+/* The lookup of MAP_GET and the constructor and update opcodes, written once for the turn loop and their agc_op_*
+   functions, which a JIT calls. Macros, not inline helpers: inlining a helper changed the register allocation of
+   plain_turn (make layout-check). */
 #define OP_MAP_GET(vm, map, key, found) agc_map_get((vm), agc_as_map((vm), (map)), (key), &(found))
+#define OP_MAP(dst, vm, R, b, count)                                                            \
+  do {                                                                                          \
+    agc_map *m_ = agc_as_map((vm), (vm)->rt->empty_map);                                        \
+    for (uint32_t k_ = 0; k_ < (count); k_++)                                                   \
+      m_ = agc_map_put((vm), m_, (R)[(uint32_t)(b) + 2 * k_], (R)[(uint32_t)(b) + 2 * k_ + 1]); \
+    (dst) = agc_map_value(m_);                                                                  \
+  } while (0)
+/* STRUCT_WITH: OLD is the receiver in R[b] and R[b+1..] the new values, in the order of U's fields. The loader checked
+   the field indexes against the struct's field count. Every C creator of a struct goes through agc_builtin_struct, so
+   a receiver of the declared type has that count; OP_UPDATE_FITS keeps the invariant at the write (as
+   agc_struct_def_of does) so a field index can never leave the copy. The copy is linear in the field count (up to
+   65535), unlike a STRUCT whose fields the program wrote one by one, so it is charged by size as CONCAT is. */
+#define OP_UPDATE_FITS(old, u, structs) ((old)->type == (u)->type && (old)->n == (structs)[(u)->type].count)
+#define OP_STRUCT_WITH(dst, vm, R, b, old, u)                                                                \
+  do {                                                                                                       \
+    agc_struct *st_ = agc_new_struct((old)->type, (old)->n);                                                 \
+    memcpy(st_->fields, (old)->fields, (size_t)(old)->n * sizeof(agc_value));                                \
+    for (uint32_t k_ = 0; k_ < (u)->count; k_++) st_->fields[(u)->fields[k_]] = (R)[(uint32_t)(b) + 1 + k_]; \
+    (dst) = agc_struct_value(st_);                                                                           \
+    agc_charge_bytes((vm), (size_t)(old)->n * sizeof(agc_value));                                            \
+  } while (0)
 #define OP_LIST(vm, R, b, count) \
   ((count) ? agc_list_value(agc_list_from_array(&(R)[b], (count))) : (vm)->rt->empty_list)
 #define OP_STRUCT(dst, R, b, type, count)                                           \
@@ -1637,14 +1658,10 @@ reload:
       op_list_get:
         BINARY(agc_op_list_get);
         break;
-      case AGC_OP_MAP: {
-        agc_map *m = agc_as_map(vm, vm->rt->empty_map);
-        for (uint32_t k = 0; k < in.c; k++)
-          m = agc_map_put(vm, m, R[(uint32_t)in.b + 2 * k], R[(uint32_t)in.b + 2 * k + 1]);
-        R[in.a] = agc_map_value(m);
+      case AGC_OP_MAP:
+        OP_MAP(R[in.a], vm, R, in.b, in.c);
         if (t->turn_cost && apply_cost(vm)) return AGC_TURN_YIELD;
         break;
-      }
       case AGC_OP_MAP_GET: {
         agc_value found;
         if (!OP_MAP_GET(vm, R[in.b], R[in.c], found)) key_not_found(vm, R[in.c], SPAN);
@@ -1654,24 +1671,11 @@ reload:
       }
       case AGC_OP_STRUCT: OP_STRUCT(R[in.a], R, in.b, in.c, p->structs[in.c].count); break;
       case AGC_OP_STRUCT_WITH: {
-        /* R[b] is the receiver and R[b+1..] the new values, in the order of
-           the update's fields. The loader checked the field indexes against
-           the struct's field count. Every C creator of a struct goes through
-           agc_builtin_struct, so a receiver of the declared type has that
-           count; the test below keeps the invariant at the write (as
-           agc_struct_def_of does) so a field index can never leave the copy. */
         const agc_update_def *u = &p->updates[in.c];
         const agc_struct *old = agc_as_struct(vm, R[in.b]);
-        if (old->type != u->type || old->n != p->structs[u->type].count)
+        if (!OP_UPDATE_FITS(old, u, p->structs))
           agc_fail(vm, "RUNTIME-INTERNAL", "invalid bytecode: struct update of another struct", 0);
-        agc_struct *st = agc_new_struct(old->type, old->n);
-        memcpy(st->fields, old->fields, (size_t)old->n * sizeof(agc_value));
-        for (uint32_t k = 0; k < u->count; k++) st->fields[u->fields[k]] = R[(uint32_t)in.b + 1 + k];
-        R[in.a] = agc_struct_value(st);
-        /* The copy is linear in the field count (up to 65535), unlike a
-           STRUCT whose fields the program wrote one by one, so it is charged
-           by size as CONCAT is. */
-        agc_charge_bytes(vm, (size_t)old->n * sizeof(agc_value));
+        OP_STRUCT_WITH(R[in.a], vm, R, in.b, old, u);
         if (t->turn_cost && apply_cost(vm)) return AGC_TURN_YIELD;
         break;
       }
@@ -1846,6 +1850,23 @@ agc_turn_result agc_run_turn(agc_vm *vm) {
   if (AGC_PROFILE_ON(vm)) return profile_turn(vm);
   if (vm->rt->jit && agc_jit_turn(vm->rt->jit, vm)) return jit_turn(vm);
   return plain_turn(vm);
+}
+
+agc_status agc_op_map(agc_vm *vm, agc_value *dst, const agc_value *pairs, uint32_t count) {
+  for (size_t k = 0; k < count; k++) {
+    agc_value key = pairs[2 * k];
+    if (!agc_is(key, AGC_T_INT) && !agc_is(key, AGC_T_STRING) && !agc_is(key, AGC_T_BYTES)) return AGC_STATUS_WRONG_TAG;
+  }
+  OP_MAP(*dst, vm, pairs, 0, count);
+  return AGC_STATUS_OK;
+}
+
+agc_status agc_op_struct_with(agc_vm *vm, agc_value *dst, const agc_value *window, const agc_update_def *u) {
+  if (!agc_is(window[0], AGC_T_STRUCT)) return AGC_STATUS_WRONG_TAG;
+  const agc_struct *old = agc_as_struct(vm, window[0]);
+  if (!OP_UPDATE_FITS(old, u, vm->rt->program->structs)) return AGC_STATUS_WRONG_TAG;
+  OP_STRUCT_WITH(*dst, vm, window, 0, old, u);
+  return AGC_STATUS_OK;
 }
 
 agc_status agc_op_map_get(agc_vm *vm, agc_value *dst, const agc_value *map, const agc_value *key) {
