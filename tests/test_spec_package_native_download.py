@@ -183,10 +183,16 @@ def test_root_native_only_install_update_and_offline_hit(server, tmp_path):
     sha = digest(archive)
     server.routes_ref["/t/lib.tar"] = archive
     write_root_manifest(ws, "demo", [download_row(HERE, server.url("/t/lib.tar"), sha)])
-    # No lock yet: check reports the missing lock without touching the network.
+    # No lock yet: check and install report the missing lock without touching the network, and the help names the
+    # command that writes it (install never does).
     mark = len(server.requests)
     result, problem = check_json(ws, ws.project / "main.agc")
     assert result.code == 1 and problem["code"] == "PKG-LOCK-MISSING"
+    result = run_cli(ws, "--json", "install")
+    problem = json.loads(result.stderr)
+    assert (result.code, problem["code"]) == (1, "PKG-LOCK-MISSING")
+    assert "agentica update" in problem["help"]
+    assert not (ws.project / "agentica.lock").exists()
     assert len(server.requests) == mark
     # Update pins all rows and fetches HOST; install from the lock fetches again from cache.
     result, problem = update(ws)
