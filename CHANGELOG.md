@@ -14,6 +14,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - The documentation has breadcrumbs, and search engines index only the latest release: the pages of older versions and of dev point to it.
 - Every version of the documentation has the current look and icon: the releases are built with the current docs theme.
 
+## [0.33.1] - 2026-11-17
+
 ### Fixed
 
 - `PKG-LOCK-MISSING` for a manifest with native downloads says to run `agentica update`, not `agentica install`, which never writes the lock (#1758).
@@ -1669,7 +1671,8 @@ First release of Agentica, a statically typed language designed for AI agents.
 - `main` returns `Void`; maps preserve insertion order and support fallible
   lookups.
 
-[unreleased]: https://github.com/agentica-lang/agentica/compare/0.33.0...HEAD
+[unreleased]: https://github.com/agentica-lang/agentica/compare/0.33.1...HEAD
+[0.33.1]: https://github.com/agentica-lang/agentica/compare/0.33.0...0.33.1
 [0.33.0]: https://github.com/agentica-lang/agentica/compare/0.32.0...0.33.0
 [0.32.0]: https://github.com/agentica-lang/agentica/compare/0.32.0-alpha.2...0.32.0
 [0.32.0-alpha.2]: https://github.com/agentica-lang/agentica/compare/0.32.0-alpha.1...0.32.0-alpha.2
