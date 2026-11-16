@@ -301,7 +301,9 @@ returns.
   entry once enough entries were passes, unless one of its innermost loops
   leaves compiled code too often (a builtin that may park counts as three
   exits); a function without a loop gets code only for native calls, when none
-  of its instructions leaves compiled code.
+  of its instructions leaves compiled code, and, as a function value of 12
+  instructions or more, for the blocks of native frames that the interpreter
+  runs (a Lazy terminal called from interpreted code).
 - **Native calls.** A `CALL`, or a `CALL_VALUE` (a block, a closure or `&name`),
   of a function that has code is a native call: compiled code pushes the frame
   and calls the callee's code, up to `AGC_JIT_NATIVE_DEPTH` (256) deep; the

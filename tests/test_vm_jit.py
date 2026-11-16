@@ -1691,6 +1691,47 @@ def test_a_line_scan_of_prefix_and_suffix_tests_matches_the_interpreter(tmp_path
     assert_max_steps_sweep(bytecode, int(stdout.split("steps ")[1]))
 
 
+# main has no loop, so `on` leaves it interpreted, and the interpreter runs the Lazy terminal's native frame, which
+# calls step for each item. step has no loop either: as a function value, `on` compiles it for those calls.
+LAZY_BLOCK = """struct Counter
+  calls: Int
+  depth: Int
+end
+
+def step(state: Counter, line: String) -> Counter
+  return state.with(depth: state.depth + 1) if line.end_with?("{")
+  return state.with(calls: state.calls + 100 / (line.length - 2)) if line.start_with?("k")
+  state
+end
+
+def line_of(i: Int) -> String
+  return LAST if i == 19999
+  ["{", "k12", "x", "kind", "{"][i % 5]
+end
+
+def main() -> Void
+  puts("before")
+  counted = (0...20000).to_a.map(&line_of).lazy.reduce(Counter(calls: 0, depth: 0), &step).unwrap!
+  puts("#{counted.calls} #{counted.depth}")
+  puts("steps #{System.Profile.steps()}")
+end
+"""
+
+
+def test_on_compiles_the_block_of_a_lazy_terminal_that_the_interpreter_runs(tmp_path):
+    bytecode = compile_text(LAZY_BLOCK.replace("LAST", '"x"'), "lazy_block", tmp_path)
+    code, stdout, _ = assert_same(bytecode)
+    assert code == 0 and stdout.startswith("before\n600000 7999\n"), stdout
+    assert compiled(bytecode, tmp_path, "on") == (["line_of", "step"] if jit_host() else [])
+    assert_max_steps_sweep(bytecode, int(stdout.split("steps ")[1]))
+
+
+def test_a_failure_in_the_compiled_block_of_a_lazy_terminal_matches_the_interpreter(tmp_path):
+    bytecode = compile_text(LAZY_BLOCK.replace("LAST", '"kk"'), "lazy_block_failure", tmp_path)
+    assert compiled(bytecode, tmp_path, "on") == (["line_of", "step"] if jit_host() else [])
+    assert_same_failure(bytecode, "RUNTIME-DIVISION-BY-ZERO", "step", "main")
+
+
 @pytest.mark.parametrize("word", ["", "ab"])
 @pytest.mark.parametrize("nested", [False, True])
 def test_a_failure_of_string_code_in_compiled_code_matches_the_interpreter(tmp_path, word, nested):
