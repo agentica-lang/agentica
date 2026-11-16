@@ -251,8 +251,7 @@ def lower_if(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.IfStmt, saved: Int) -> 
   for branch in node.branches
     fx = Lowering.new_label(fx)
     skip = fx.labels - 1
-    condition = try Expr.lower_expression(cx, fx, branch.condition, -1, false, false)
-    fx = Lowering.emit_at(condition.fx, "jump-if-false", [condition.slot, skip], Ast.expr_span(branch.condition))
+    fx = try Expr.lower_jump(cx, fx, branch.condition, skip, false)
     fx = fx.with(next: saved)
     fx = try scoped(cx, fx, branch.body)
     if has_else or index < node.branches.size
@@ -276,8 +275,7 @@ def lower_while(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.WhileStmt, saved: In
   head = fx.labels - 2
   exit = fx.labels - 1
   fx = Lowering.place(fx, head)
-  condition = try Expr.lower_expression(cx, fx, node.condition, -1, false, false)
-  fx = Lowering.emit_at(condition.fx, "jump-if-false", [condition.slot, exit], Ast.expr_span(node.condition))
+  fx = try Expr.lower_jump(cx, fx, node.condition, exit, false)
   fx = fx.with(next: saved)
   outer_next = fx.loop_next
   outer_exit = fx.loop_exit
@@ -800,11 +798,7 @@ end
 # the jump, but the names stay.
 def lower_guard(cx: Lowering.Cx, fx: Lowering.Fx, guard: Optional[Ast.Expr], skip: Int) -> Result[Lowering.Fx]
   case guard
-    some(condition) ->
-      kept = fx.next
-      lowered = try Expr.lower_expression(cx, fx, condition, -1, false, false)
-      fx = Lowering.emit_at(lowered.fx, "jump-if-false", [lowered.slot, skip], Ast.expr_span(condition))
-      ok(fx.with(next: kept))
+    some(condition) -> Expr.lower_jump(cx, fx, condition, skip, false)
     none -> ok(fx)
   end
 end
