@@ -4,9 +4,12 @@ files, the listed paths and diagnostic codes, never message text. The layout of 
 tests/fixtures/frontend/format (test_frontend_fmt.py)."""
 import json
 import os
+import re
 import stat
 
-from tests.agentica_test import WINDOWS, cli, host_only, run, vm_environment
+import pytest
+
+from tests.agentica_test import WINDOWS, cli, host_only, run, vm_command, vm_environment
 
 FORMATTED = 'def main() -> Void\n  puts("ok")\nend\n'
 UNFORMATTED = 'def main() -> Void\n    puts( "ok" )\nend\n'
@@ -24,6 +27,14 @@ ENDS_BLANK = ('def main() -> Void\n  xs = [1, 2, 3]\n  xs.each do |x|\n    puts(
 # tests/fixtures/frontend/format has the layout); here `check` takes the output.
 PIPES = ('def twice(n: Int) -> Int = n * 2\n\ndef main() -> Void\n  n = 3\n  total = n |> twice() |> twice()\n'
          '  one = n |> twice()\n  puts(total + one)\nend\n')
+
+# A function with a comment, a loop, a branch and an interpolated string, which fmt leaves as it is.
+UNIT = (
+    "# The total of item {i}, with a comment that the formatter keeps.\n"
+    "def total_{i}(items: List[Int], label: String) -> String\n  sum = 0\n  for item in items\n"
+    "    if item > {i} and item % 2 == 0\n      sum += item * 3\n    end\n  end\n\n"
+    '  "#{{label}}: #{{sum}} of #{{items.size}}"\nend\n\n'
+)
 
 
 def fmt(*words, cwd, json_style=False, stdin=None):
@@ -141,6 +152,35 @@ def test_tree_is_the_same_before_and_after_formatting(tmp_path):
     after = fmt("--tree", "good.agc", cwd=tmp_path)
     assert (before.code, before.stderr, after.code) == (0, "", 0)
     assert before.stdout == after.stdout
+
+
+def test_the_tree_has_no_node_ids_or_spans(tmp_path):
+    lay_out(tmp_path, {"good.agc": FORMATTED})
+    result = fmt("--tree", "good.agc", cwd=tmp_path)
+    assert (result.code, result.stderr) == (0, "")
+    assert result.stdout.startswith("program")
+    assert not re.search(r"#[0-9]|[0-9]+:[0-9]+:[0-9]+-", result.stdout), result.stdout
+
+
+def fmt_steps(tmp_path, units):
+    """The bytes of a file of `units` copies of UNIT and the VM steps that `fmt -` takes on it."""
+    if "trace off" in run(vm_command() + ["--version"], env=vm_environment()).stdout:
+        pytest.skip("the VM was built with TRACE=0")
+    text = "".join(UNIT.format(i=i) for i in range(units))
+    env = vm_environment({"AGENTICA_VM_TRACE": "profile"})
+    result = run(cli() + ["fmt", "-"], env=env, cwd=tmp_path, stdin=text)
+    assert (result.code, result.stdout) == (0, text[:-1]), result.stderr
+    total = re.search(r"profile total wall_ms=[0-9]+ steps=([0-9]+) ", result.stderr)
+    return len(text.encode("utf-8")), int(total.group(1))
+
+
+def test_fmt_takes_steps_in_proportion_to_the_size_of_the_file(tmp_path):
+    """The check of fmt's own output once scanned the tree text one character at a time, about 1500 VM steps per
+    byte of input; it now prints the tree without places, about 375 (#1751). Twice the file takes twice the steps."""
+    _, small = fmt_steps(tmp_path, 100)
+    big_bytes, big = fmt_steps(tmp_path, 200)
+    assert big <= 450 * big_bytes, (big, big_bytes)
+    assert big <= 2.2 * small, (small, big)
 
 
 def test_a_wrong_call_is_fmt_usage_with_status_2(tmp_path):

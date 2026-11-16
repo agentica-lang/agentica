@@ -8,6 +8,13 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.33.1] - 2026-11-17
+
+### Fixed
+
+- `PKG-LOCK-MISSING` for a manifest with native downloads says to run `agentica update`, not `agentica install`, which never writes the lock (#1758).
+- `agentica fmt` is about three times faster on large files (#1751).
+
 ## [0.33.0] - 2026-11-16
 
 ### Added
@@ -1658,7 +1665,8 @@ First release of Agentica, a statically typed language designed for AI agents.
 - `main` returns `Void`; maps preserve insertion order and support fallible
   lookups.
 
-[unreleased]: https://github.com/agentica-lang/agentica/compare/0.33.0...HEAD
+[unreleased]: https://github.com/agentica-lang/agentica/compare/0.33.1...HEAD
+[0.33.1]: https://github.com/agentica-lang/agentica/compare/0.33.0...0.33.1
 [0.33.0]: https://github.com/agentica-lang/agentica/compare/0.32.0...0.33.0
 [0.32.0]: https://github.com/agentica-lang/agentica/compare/0.32.0-alpha.2...0.32.0
 [0.32.0-alpha.2]: https://github.com/agentica-lang/agentica/compare/0.32.0-alpha.1...0.32.0-alpha.2
