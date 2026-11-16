@@ -1155,11 +1155,11 @@ static void advance(net *n) {
       return;
     }
     n->handshaken = true;
-    atomic_store_explicit(&n->tls_open, true, memory_order_release);
     const char *alpn = keep_alpn(n);
     AGC_TRACE(&n->trace, AGC_TRACE_TLS,
               "tls_handshake_done socket=%" PRIu64 " listener=%" PRIu64 " protocol=%s cipher=%s alpn=%s", n->id,
               n->parent, agc_tls_protocol(n->tls), agc_tls_cipher(n->tls), alpn);
+    atomic_store_explicit(&n->tls_open, true, memory_order_release);
     notify(n, n->opener);
   }
   uv_mutex_lock(&n->tls_lock);
