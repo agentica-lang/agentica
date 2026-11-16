@@ -592,7 +592,9 @@ static void call_value(agc_vm *vm, agc_task *t, agc_value value, uint32_t window
                        uint32_t ret, uint32_t span) {
   const agc_program *p = vm->rt->program;
   const agc_fn *fn = agc_as_fn(vm, value);
-  if (!agc_fn_takes(p, fn, argc))
+  /* agc_fn_takes, written out: the call made gcc lay out this hot function another way. */
+  if (fn->function >= p->function_count || p->functions[fn->function].params != argc ||
+      p->functions[fn->function].captures != fn->n)
     agc_fail(vm, "RUNTIME-INTERNAL", "invalid bytecode: function value does not match its call", span);
   /* The one profile test left in a normal build: these two entries are shared by both copies of the turn loop. */
   if (AGC_PROFILE_ON(vm)) profile_call(vm, fn->function);
