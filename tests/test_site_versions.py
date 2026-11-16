@@ -31,8 +31,9 @@ MAKEFILE = (
     "\tprintf 'see <head></head> /agentica/' > site/public/llms.txt\n"
     "\t@if [ -e site/themes/docs-theme/mark ]; then cat site/themes/docs-theme/mark >> site/public/index.html; fi\n"
     "\tmkdir -p site/public/only-$$(cat VERSION)\n"
-    "\tprintf '<html><head><link rel=canonical href=x><meta name=robots content=all></head></html>'"
-    " > site/public/only-$$(cat VERSION)/index.html\n"
+    "\tprintf '<html><head><link href=x REL=canonical><meta content=all name=robots></head>"
+    "<body><link rel=canonical href=body></body></html>' > site/public/only-$$(cat VERSION)/index.html\n"
+    "\tprintf '<html><head></head><body>not found</body></html>' > site/public/404.html\n"
     "\tprintf '<urlset></urlset>' > site/public/sitemap.xml\n"
     "\tgit rev-parse --is-inside-work-tree > site/public/git.txt\n"
 )
@@ -153,14 +154,21 @@ def test_only_the_root_is_indexed_and_tags_build_in_a_git_checkout(repo, tmp_pat
     assert code == 0
     canonical = '<link rel="canonical" href="https://example.org/docs/library/">'
     noindex = '<meta name="robots" content="noindex,follow">'
-    for folder in ("0.9.0", "0.10.0", "dev"):
+    for folder in ("0.9.0", "0.10.0"):
         page = (out / folder / "library" / "index.html").read_text()
         assert page.count(canonical) == 1 and noindex not in page
+        assert (out / folder / "404.html").read_text().count(noindex) == 1
+    for folder in ("0.9.0", "0.10.0", "dev"):
         assert not (out / folder / "sitemap.xml").exists()
-    # A page the root does not have: noindex, and its own canonical and robots tags are gone.
+    # A page the root does not have: noindex; its own head tags go (any case or order), and the body stays as it was.
     old = (out / "0.10.0" / "only-0.10.0" / "index.html").read_text()
-    assert old.count(noindex) == 1 and "canonical" not in old and "content=all" not in old
-    assert noindex in (out / "dev" / "only-0.12.0" / "index.html").read_text()
+    head, body = old.split("</head>")
+    assert head.count(noindex) == 1 and "canonical" not in head.lower() and "content=all" not in head
+    assert body == "<body><link rel=canonical href=body></body></html>"
+    # dev is unreleased: every page is noindex, with no canonical, even where the root has the page.
+    for page in ("library/index.html", "index.html", "only-0.12.0/index.html", "404.html"):
+        text = (out / "dev" / page).read_text().split("</head>")[0]
+        assert text.count(noindex) == 1 and "canonical" not in text.lower()
     # The root keeps its own tags and its sitemap.
     assert "content=all" in (out / "only-0.11.0" / "index.html").read_text()
     assert (out / "sitemap.xml").exists() and "noindex" not in (out / "library" / "index.html").read_text()

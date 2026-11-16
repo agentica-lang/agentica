@@ -5,8 +5,8 @@
 
 The output is one site per final release (`X.Y.Z` tags, no pre-releases) under `VERSION/`, the development site under
 `dev/`, the latest release again at the root, `versions.json` and `_versions/selector.{js,css}` (site/versions/). Only
-the root is for search engines: each page under `VERSION/` and `dev/` gets a canonical URL to the same page at the root
-when the root has it, else `noindex,follow`, and their sitemaps are removed.
+the root is for search engines: each page under `VERSION/` gets a canonical URL to the same page at the root when the
+root has it, else `noindex,follow`; each page under `dev/` gets `noindex,follow`; their sitemaps are removed.
 
 Each tag is built from its own tree, a detached git worktree (so Hugo's enableGitInfo dates its pages), with `make site`
 (plus the docs theme commit it pins, which a worktree leaves empty), using the Hugo and Dart Sass versions that tag pins
@@ -116,8 +116,9 @@ def inject_selector(site: Path, root_path: str) -> int:
     return changed
 
 
-CANONICAL = re.compile(r'<link\s+rel="?canonical"?[^>]*>')
-ROBOTS = re.compile(r'<meta\s+name="?robots"?[^>]*>')
+CANONICAL = re.compile(r'<link\b[^>]*\brel="?canonical\b[^>]*>', re.I)
+ROBOTS = re.compile(r'<meta\b[^>]*\bname="?robots\b[^>]*>', re.I)
+NOINDEX = '<meta name="robots" content="noindex,follow">'
 
 
 def page_url(rel: Path) -> str:
@@ -126,27 +127,29 @@ def page_url(rel: Path) -> str:
     return path[: -len("index.html")] if path == "index.html" or path.endswith("/index.html") else path
 
 
-def point_copies_at_root(out: Path, root_url: str, folders: list[str]) -> tuple[int, int]:
-    """Make the root the only copy that search engines index: every page of each folder (a version, dev) gets, in place
-    of its own canonical and robots tags, a canonical URL to the same page at the root when the root has that file,
-    else `noindex,follow`; the folder's sitemap goes. Returns (pages with a canonical, pages with noindex)."""
+def point_copies_at_root(out: Path, root_url: str, versions: list[str], dev: str = "dev") -> tuple[int, int]:
+    """Make the root the only copy that search engines index. In the `<head>` of every page of a version folder, its own
+    canonical and robots tags give way to a canonical URL to the same page at the root when the root has that file,
+    else `noindex,follow`; every page of dev (unreleased) is `noindex,follow`. The sitemaps of these folders go. The
+    body is never touched. Returns (pages with a canonical, pages with noindex)."""
     pointed = hidden = 0
-    for folder in folders:
+    for folder in [*versions, dev]:
         site = out / folder
         (site / "sitemap.xml").unlink(missing_ok=True)
         for page in site.rglob("*.html"):
             text = page.read_text(encoding="utf-8")
-            if "</head>" not in text:
+            head, end, body = text.partition("</head>")
+            if not end:
                 continue
             rel = page.relative_to(site)
-            text = ROBOTS.sub("", CANONICAL.sub("", text))
-            if rel.as_posix() != "404.html" and (out / rel).is_file():
+            head = ROBOTS.sub("", CANONICAL.sub("", head))
+            if folder != dev and rel.as_posix() != "404.html" and (out / rel).is_file():
                 tag = '<link rel="canonical" href="%s%s">' % (root_url, page_url(rel))
                 pointed += 1
             else:
-                tag = '<meta name="robots" content="noindex,follow">'
+                tag = NOINDEX
                 hidden += 1
-            page.write_text(text.replace("</head>", tag + "</head>", 1), encoding="utf-8")
+            page.write_text(head + tag + end + body, encoding="utf-8")
     return pointed, hidden
 
 
@@ -313,9 +316,10 @@ def build_ref(ref: str, base_url: str, cache: Path, tools: Path, logs: Path, lab
         return done, True
     with tempfile.TemporaryDirectory(prefix="agentica-site-") as scratch:
         tree = Path(scratch) / "tree"
-        if subprocess.run(["git", "-C", str(ROOT), "worktree", "add", "-q", "--detach", str(tree), sha],
-                          capture_output=True).returncode:
-            raise BuildError("git worktree add failed")
+        added = subprocess.run(["git", "-C", str(ROOT), "worktree", "add", "-q", "--detach", str(tree), sha],
+                               capture_output=True, text=True)
+        if added.returncode:
+            raise BuildError("git worktree add failed (%s)" % " | ".join(added.stderr.strip().splitlines()[-3:])[:400])
         try:
             unpack_theme(sha, tree)
             public = _build_tree(tree, base_url, tools, logs / (label + ".log"))
@@ -326,8 +330,8 @@ def build_ref(ref: str, base_url: str, cache: Path, tools: Path, logs: Path, lab
 
 
 def unpack_theme(sha: str, tree: Path) -> None:
-    """Unpack into tree the docs theme commit that sha pins (a submodule, empty in `git archive`); a tree from before
-    the theme has none. The commit comes from the theme checkout, fetched when it is not there yet."""
+    """Unpack into tree the docs theme commit that sha pins (a submodule, empty in the tag's worktree); a tree from
+    before the theme has none. The commit comes from the theme checkout, fetched when it is not there yet."""
     entry = run(["git", "-C", str(ROOT), "ls-tree", sha, THEME], capture_output=True).stdout.split()
     if not entry:
         return
@@ -462,7 +466,7 @@ def build(args: argparse.Namespace) -> int:
     for name in SELECTOR_FILES:
         shutil.copy(ROOT / "site" / "versions" / name, selector / name)
     (out / "versions.json").write_text(json.dumps(versions_json(list(built), True), indent=2) + "\n")
-    pointed, hidden = point_copies_at_root(out, root_url, list(built) + ["dev"])
+    pointed, hidden = point_copies_at_root(out, root_url, list(built))
     pages = inject_selector(out, root_path)
 
     seconds = time.monotonic() - started

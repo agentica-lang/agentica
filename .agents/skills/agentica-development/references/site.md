@@ -122,10 +122,10 @@ cache) builds them all. What it does not say:
   every HTML page, so a fix applies to every version at the next deploy. They
   use only the `.site-header`, its `.version` link and the color tokens
   (`_tokens.scss` of the docs theme); each old release carries its own copy.
-- Search engines see only the root. The assembly gives every page under
-  `/VERSION/` and `/dev/` a canonical URL to the same page at the root (or
-  `noindex,follow` when the root has no such page) and removes their
-  sitemaps. `site/hugo.toml` has `enableGitInfo`, so each tag builds in a
+- Search engines see only the root. In the `<head>` of every page under
+  `/VERSION/`, the assembly puts a canonical URL to the same page at the root
+  (or `noindex,follow` when the root has no such page); every page under
+  `/dev/` gets `noindex,follow`. It removes their sitemaps. `site/hugo.toml` has `enableGitInfo`, so each tag builds in a
   git worktree, not a `git archive` tree, and its sitemap has Git dates.
 - Serve a local build with
   `python3 -m http.server 8000 -d build/site-versions/public`.
