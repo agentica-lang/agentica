@@ -162,7 +162,7 @@ TCP.write_limit(socket: TCP.Socket, bytes: Int) -> Result[Void]
 - When a buffered write fails, `flush` and every later write on the socket return the error of the failed write. A `timeout_ms` that ends closes the socket, as for `send`.
 - `TCP.close`, the end of the task that owns the socket and the end of the run send the bytes that still wait before the connection closes. They wait for them at most the flush limit of the run (`--flush-timeout`, 30 seconds by default), and a closed socket whose peer does not read keeps its buffer and its descriptor for that long. Bytes that are still unsent at the limit are dropped, and so are the bytes of a connection that the peer resets and those that wait when a stop signal ends the run; the run prints a warning with their count on standard error when it ends. A program that must know whether the bytes went out calls `flush`, which returns the error.
 - The limit is not the most memory a socket's buffer can take: each task that writes to the socket can leave one call's bytes (up to 1 MiB for `write_bytes`) over it, and the bytes are copied once more while they go out.
-- On a TLS socket `write` is `send`, and `flush` returns at once.
+- A TLS socket buffers its records the same way. While a read of the same socket waits, a write on it waits as `send` does.
 
 ```agentica
 def read_two(listener: TCP.Listener) -> Result[String]

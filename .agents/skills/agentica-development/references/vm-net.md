@@ -50,12 +50,17 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   decrypts under `tls_lock`, which the I/O thread's sends and `goodbye` also
   hold (`next_out`, `take_out`: a short lock, the socket write comes after
   it), and an alert left in the session goes out by `flush_step`. A TLS send
-  is `tls_direct_send`: under `W_DIRECT` it encrypts in `tls_seal` (only with
-  `tls_here` set and `tls_busy` and `tls_shut` clear, read under `tls_lock`;
-  at most `TLS_DIRECT_MAX`, 64 KiB, so the lock stays short), sends
-  after the unlock, and parks the rest as ciphertext (`q->cipher`,
-  `send_rest`). While `W_DIRECT` or `W_PARTIAL` stands, `next_out` takes
-  nothing and sets `W_OWED`, and `goodbye` sends no close_notify;
+  or write is `tls_direct_write`: under `W_DIRECT` it encrypts in
+  `seal_locked` (only with `tls_here` set and `tls_shut` clear, read under
+  `tls_lock`; at most `TLS_DIRECT_MAX`, 64 KiB, per hold, so the lock stays
+  short). A piece goes to `send()` after the unlock when `unsent` is 0 and
+  `tls_busy` clear; otherwise, and for what the kernel left, the ciphertext
+  goes into the write buffer (`unsent` raised under `tls_lock`, `out_pend`
+  before the claim ends). At N = 1 it is `tls_buffer_here`. While `W_DIRECT`
+  stands or `unsent` is not 0, `next_out` takes nothing and sets `W_OWED`
+  (sent by `flush_step` or `out_settled`), and `goodbye` sends no
+  close_notify under `W_DIRECT`. The buffer writes use `out_req`/`out_data`,
+  so they queue in libuv beside the session's own write (`write_req`).
   `start_reading` clears `tls_here` under `tls_lock`.
   `finish` copies what the `done` half needs into the request, and
   `request_done` reads only that and posts `drop_request`. `users` changes only
