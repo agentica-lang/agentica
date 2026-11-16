@@ -316,9 +316,9 @@ static uint8_t *reserve(builder *b, size_t extra) {
    INTERPOLATED_PARTS values. */
 static agc_value write_values(agc_vm *vm, agc_value *args, uint32_t count, uint32_t span) {
   builder *b = agc_as_builder(vm, args[0]);
-  if (b->closed) agc_fail(vm, "RUNTIME-BUILDER-CLOSED", "the Bytes.Builder is used after its Bytes.build ended", span + 1);
   if (b->owner != vm->task)
     agc_fail(vm, "RUNTIME-BUILDER-CLOSED", "the Bytes.Builder is used from another task than its Bytes.build", span + 1);
+  if (b->closed) agc_fail(vm, "RUNTIME-BUILDER-CLOSED", "the Bytes.Builder is used after its Bytes.build ended", span + 1);
   char printed[INTERPOLATED_PARTS][AGC_SCALAR_TEXT];
   const void *data[INTERPOLATED_PARTS];
   size_t len[INTERPOLATED_PARTS], total = 0;

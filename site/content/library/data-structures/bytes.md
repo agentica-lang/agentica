@@ -203,7 +203,7 @@ Bytes.build(block: Fn[Bytes.Builder, Void]) -> Bytes
 out.write(value, ...) -> Void
 ```
 
-Builds one `Bytes` from many small parts, such as a reply of a wire protocol. `Bytes.build` calls the block with a `Bytes.Builder`, `out`, and returns what the block wrote. `out.write` takes 1 to 8 values and appends each one: a `Bytes` or a `String` as its bytes, an `Int`, a `Float`, a `Bool` or `nil` as the text that interpolation gives it (with no `String` made for it), and any other value as its `to_s`. The buffer grows as needed and is copied once into the result; a task keeps a buffer of up to 64 KiB for its next build, so a build in a loop allocates little more than its result.
+Builds one `Bytes` from many small parts, such as a reply of a wire protocol. `Bytes.build` calls the block with a `Bytes.Builder`, `out`, and returns what the block wrote. `out.write` takes 1 to 8 values and appends each one: a `Bytes` or a `String` as its bytes, an `Int`, a `Float`, a `Bool` or `nil` as the text that interpolation gives it (with no `String` made for it), and any other value as its `to_s`. The buffer grows as needed and is copied once into the result; a task keeps a buffer of up to 64 KiB for its next build, so a build in a loop allocates little more than its result. Each task keeps that reusable buffer until it ends.
 
 `out` works only inside its block and in the task that runs it. A write after the block returned (the builder was sent through a channel), or from another task, stops with `RUNTIME-BUILDER-CLOSED`, so a `Bytes` that `build` returned never changes.
 
