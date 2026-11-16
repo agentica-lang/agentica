@@ -38,9 +38,8 @@ def main():
     path, mode = sys.argv[1], sys.argv[2]
     os.mkfifo(path, 0o600)
     fd = os.open(path, os.O_RDWR)
-    # FIONREAD on the read-write descriptor answers 0 on macOS (it reports the FIFO's write side), so the queue is
-    # read on a read-only one: without it every piece, and the close, would go before the program read anything,
-    # and a close before the program opened the FIFO would drop the buffered pieces.
+    # FIONREAD on the read-write descriptor answers 0 on macOS, so the queue is read on a read-only one: else every
+    # piece, and the close, go out at once, and a close before the program opened the FIFO drops the pieces.
     queue = os.open(path, os.O_RDONLY | os.O_NONBLOCK)
     if mode in BEFORE:
         os.write(fd, BEFORE[mode])
