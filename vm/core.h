@@ -177,6 +177,7 @@ void agc_inbox_post(agc_inbox *in, agc_request *entry);
 void agc_inbox_close(agc_inbox *in);
 void agc_inbox_wake(agc_inbox *in);
 bool agc_inbox_full(agc_inbox *in);
+void agc_inbox_watch(agc_inbox *in, bool watch);
 
 /* The compute pool (vm/compute.c, docs/vm/16-architecture.md §16.9, "Compute pool"): the work of the jobs that
  * agc_io_compute starts, on at most SIZE threads of its own, in the order it came. open, submit and close run on LOOP's
@@ -200,6 +201,10 @@ bool agc_compute_direct_busy(agc_compute *pool);
 bool agc_compute_running(const agc_compute *pool);
 bool agc_compute_ended(agc_compute *pool);
 bool agc_compute_deliver(agc_compute *pool);
+/* The loop's thread, around such a spin: the ends of its items skip the inbox's wake meanwhile (agc_inbox_watch). */
+void agc_compute_watch(agc_compute *pool, bool watch);
+/* Any thread: false once every thread of the pool has started, so no submit starts one (or inherits a signal mask). */
+bool agc_compute_may_grow(const agc_compute *pool);
 void agc_compute_close(agc_compute *pool);
 
 /* The outcome of a job and its reference count (docs/vm/16-architecture.md §16.5, rules 2 to 4). The outcome starts as

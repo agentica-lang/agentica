@@ -14,8 +14,9 @@ struct agc_inbox {
   uv_mutex_t lock;
   uv_async_t wake;
   agc_request *first, *last;
-  /* Whether `first` is set: changed under the lock, read without it by agc_inbox_full. */
-  _Atomic bool full;
+  /* Whether `first` is set: changed under the lock, read without it by agc_inbox_full. `watched`: the consumer spins on
+     `full` (agc_inbox_watch), so a post needs no wake. */
+  _Atomic bool full, watched;
   agc_inbox_fn handle;
   void *owner;
 };
@@ -87,13 +88,18 @@ void agc_inbox_post(agc_inbox *in, agc_request *entry) {
   else
     in->first = entry;
   in->last = entry;
-  atomic_store_explicit(&in->full, true, memory_order_release);
+  atomic_store_explicit(&in->full, true, memory_order_seq_cst);
   uv_mutex_unlock(&in->lock);
-  uv_async_send(&in->wake);
+  if (!atomic_load_explicit(&in->watched, memory_order_seq_cst)) uv_async_send(&in->wake);
 }
 
+/* The consumer's thread, around a spin on agc_inbox_full: while WATCH is set, posts skip the wake. The store of `full`
+   and the load of `watched` in a post, and this store and the caller's next agc_inbox_full, are sequentially
+   consistent, so a post that skipped its wake is seen by that agc_inbox_full after the watch ends. */
+void agc_inbox_watch(agc_inbox *in, bool watch) { atomic_store_explicit(&in->watched, watch, memory_order_seq_cst); }
+
 /* Any thread: whether an entry waits, for a consumer that spins before it waits for the wake. */
-bool agc_inbox_full(agc_inbox *in) { return atomic_load_explicit(&in->full, memory_order_acquire); }
+bool agc_inbox_full(agc_inbox *in) { return atomic_load_explicit(&in->full, memory_order_seq_cst); }
 
 /* The loop's thread, once no thread posts any more and none is still inside agc_inbox_post: libuv allows no
    uv_async_send on a handle that is closing, and a poster may still be in it after its request was handled. The

@@ -639,6 +639,7 @@ static bool open_compute(agc_loop *loop) {
    libuv pool's, so they keep the stop signals blocked. */
 static int submit_compute(agc_loop *loop, job *j) {
   if (!open_compute(loop)) return -1;
+  if (!agc_compute_may_grow(loop->compute)) return agc_compute_submit(loop->compute, run_compute, j) ? 0 : -1;
   pool_mask saved;
   pool_enter(&saved);
   bool queued = agc_compute_submit(loop->compute, run_compute, j);
@@ -2091,11 +2092,11 @@ bool agc_io_compute_ended(agc_vm *vm) {
   return pool && agc_compute_ended(pool);
 }
 
-/* The pool's end still wakes the loop (uv_async_send); the uv_run that follows finds the inbox empty. The queue's spin
-   is set up at the first such spin, so a run with no compute call pays nothing for it. The level goes up for an end
-   the spin caught, down for a spin that missed after one that missed too (a long call in flight would otherwise keep
-   the longest spin at every idle wake), and compute_finished settles a single miss. A caught end clears the miss, so
-   it is counted once. */
+/* While the spin watches the pool, its end sends no wake (agc_compute_watch); one posted after the watch is off
+   wakes the loop, and the uv_run that follows finds the inbox empty. The queue's spin is set up at the first such
+   spin, so a run with no compute call pays nothing for it. The level goes up for an end the spin caught, down for a
+   spin that missed after one that missed too (a long call in flight would otherwise keep the longest spin at every
+   idle wake), and compute_finished settles a single miss. A caught end clears the miss, so it is counted once. */
 bool agc_io_compute_spin(agc_vm *vm) {
   agc_loop *loop = vm->rt->loop;
   agc_compute *pool = loop ? atomic_load_explicit(&loop->compute, memory_order_relaxed) : NULL;
@@ -2106,7 +2107,12 @@ bool agc_io_compute_spin(agc_vm *vm) {
     if (!loop->spin_off) agc_runq_spin_setup(vm->rt->runq, 1, AGC_SPIN_BUDGET_NS);
   }
   if (loop->spin_off) return false;
-  if (!agc_runq_spin_until(vm->rt->runq, vm->spin_level, call_ended, pool)) {
+  agc_compute_watch(pool, true);
+  bool caught = agc_runq_spin_until(vm->rt->runq, vm->spin_level, call_ended, pool);
+  agc_compute_watch(pool, false);
+  /* An end posted while the watch was on woke nobody: it is taken here, as a caught one. */
+  if (!caught && agc_compute_ended(pool)) caught = true;
+  if (!caught) {
     if (loop->spin_missed) agc_runq_adapt(&vm->spin_level, false);
     loop->spin_missed = uv_hrtime();
     return false;
