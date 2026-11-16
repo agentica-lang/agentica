@@ -4,6 +4,7 @@ The child runs on a pseudo-terminal: its stdin, stdout and stderr and its contro
 the program sends and ends lines with CRLF, which read_line strips.
 """
 import json
+import resource
 
 import pytest
 
@@ -38,8 +39,49 @@ def test_a_pty_child_has_a_controlling_terminal_of_24_by_80_and_no_other_descrip
                         '  IO.inspect(Process.read_line(p, 5000))\n'
                         '  IO.inspect(Process.wait(p, 5000))' % (agc_literal(PYTHON), agc_literal(PEER)),
                         "--schedulers", schedulers)
-    assert json.loads(lines[0]) == {"tty": [True, True, True], "size": [24, 80], "ctty": True, "fds": []}
+    assert json.loads(lines[0]) == {"tty": [True, True, True], "size": [24, 80], "ctty": True, "fds": [], "blocked": []}
     assert lines[1:] == ["[]", 'error("process: end of input", kind: "process.eof")', "ok(0)"]
+
+
+@host_only(NO_PTY, "a pty is Linux and macOS only")
+@pytest.mark.parametrize("schedulers", ["1", "4"])
+def test_300_pty_children_that_exit_at_once_each_get_their_exit_code(tmp_path, schedulers):
+    # Each child holds three descriptors while it runs: more than macOS's default limit of 256 all told.
+    soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+    want = 4096 if hard == resource.RLIM_INFINITY else min(hard, 4096)
+    resource.setrlimit(resource.RLIMIT_NOFILE, (max(soft, want), hard))
+    try:
+        path = tmp_path / "program.agc"
+        path.write_text('def child(_i: Int) -> Int\n'
+                        '  p = Process.spawn("/bin/sh", ["-c", "exit 7"], Process.Options(pty: true)).unwrap!\n'
+                        '  case Process.wait(p, 10000)\n'
+                        '  ok(code) -> code\n'
+                        '  error(_) -> -1\n'
+                        '  end\n'
+                        'end\n\n'
+                        'def main() -> Void\n'
+                        '  tasks = (1..300).to_a.map { |i| Task.spawn(&child, i) }\n'
+                        '  puts(tasks.map { |t| Task.await(t) }.count { |c| c == 7 })\n'
+                        'end\n', encoding="utf-8")
+        result = run(cli() + ["--schedulers", schedulers, str(path)], env=vm_environment(None))
+    finally:
+        resource.setrlimit(resource.RLIMIT_NOFILE, (soft, hard))
+    assert (result.code, result.stdout, result.stderr) == (0, "300\n", "")
+
+
+@host_only(NO_PTY, "a pty is Linux and macOS only")
+def test_a_pty_child_that_cannot_run_fails_the_spawn_and_one_that_runs_has_default_signal_handlers(tmp_path):
+    # The VM ignores SIGPIPE; the child does not, so the signal it sends itself ends it.
+    script = tmp_path / "script.sh"
+    script.write_text("echo hi\n", encoding="utf-8")
+    script.chmod(0o644)
+    lines = run_program(tmp_path, '  IO.inspect(Process.spawn(%s, [], Process.Options(pty: true)))\n'
+                                  '  p = Process.spawn("/bin/sh", ["-c", "kill -PIPE $$; echo ignored"], '
+                                  'Process.Options(pty: true)).unwrap!\n'
+                                  '  IO.inspect(Process.read_line(p, 5000))\n'
+                                  '  IO.inspect(Process.wait(p, 5000))' % agc_literal(str(script)))
+    assert lines[0].endswith('kind: "process.failed", code: 13)')
+    assert lines[1:] == ['error("process: end of input", kind: "process.eof")', "ok(141)"]
 
 
 @host_only(NO_PTY, "a pty is Linux and macOS only")

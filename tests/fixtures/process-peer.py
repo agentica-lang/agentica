@@ -4,12 +4,14 @@ Modes: args (argv as one JSON line), env (the AGENTICA_* and PROBE_* variables a
 hold (prints its pid and waits; tests/test_process_lifecycle.py uses it), streams N (N bytes "o" on stdout, then
 "err\n" on stderr, as bytes), family [stubborn | slow MARKER] (starts a Python child that sleeps, prints its pid and waits; see below).
 For a child on a pty (tests/test_process_pty.py): tty (whether fds 0-2 are terminals, the size, whether /dev/tty
-opens, and the open fds above 2, as JSON), fds (the open fds above 2), winch (prints "ready", waits for a line, then
-whether SIGWINCH came and runs `stty size`), password (getpass with echo off, then "got" and the password).
+opens, the open fds above 2 and the blocked signals, as JSON), fds (the open fds above 2), winch (prints "ready",
+waits for a line, then whether SIGWINCH came and runs `stty size`), password (getpass with echo off, then "got" and
+the password).
 """
 import getpass
 import json
 import os
+import signal
 import subprocess
 import sys
 import time
@@ -43,9 +45,9 @@ def on_pty(mode):
             ctty = False
         size = os.get_terminal_size(0)
         print(json.dumps({"tty": [os.isatty(fd) for fd in range(3)], "size": [size.lines, size.columns],
-                          "ctty": ctty, "fds": open_fds()}), flush=True)
+                          "ctty": ctty, "fds": open_fds(),
+                          "blocked": sorted(signal.pthread_sigmask(signal.SIG_BLOCK, []))}), flush=True)
     elif mode == "winch":
-        import signal
         came = []
         signal.signal(signal.SIGWINCH, lambda *_: came.append(1))
         print("ready", flush=True)

@@ -118,6 +118,9 @@ struct guard {
   agc_trace trace;
   agc_loop *io;
   proc *first, *graced;
+  /* chld: the one SIGCHLD watcher of the guard's pty children (reap_ptys), active while one runs; malloc'd, as its
+     close may end after the guard. */
+  uv_signal_t *chld;
   size_t running;
   bool released, reaping;
 };
@@ -152,9 +155,10 @@ struct proc {
   bool inherit;
   /* pty: the child runs on a pseudo-terminal (pty: true), always captured and a group. `in` and `out` hold the pty's
      master (two descriptors of it), `err` a pipe that ends at once, and libuv does not know the child: `process`
-     holds only its pid, and `chld`, a SIGCHLD watcher, reaps it in place of libuv (reap_pty). */
+     holds only its pid, the guard's SIGCHLD watcher reaps it (reap_ptys), and `held`, a handle never started, keeps
+     P alive until then, as `process` does for the others. */
   bool pty;
-  uv_signal_t chld;
+  uv_signal_t held;
   stop_state stop;
   int write_status;
   int64_t status;
@@ -185,7 +189,9 @@ static void handle_gone(proc *p) {
 
 static void closed_process(uv_handle_t *h) { handle_gone(OWNER(h, process)); }
 
-static void closed_chld(uv_handle_t *h) { handle_gone(OWNER(h, chld)); }
+static void closed_held(uv_handle_t *h) { handle_gone(OWNER(h, held)); }
+
+static void free_handle(uv_handle_t *h) { free(h); }
 
 static void closed_in(uv_handle_t *h) { handle_gone(OWNER(h, in)); }
 
@@ -198,7 +204,12 @@ static void close_handle(uv_handle_t *h, uv_close_cb done) {
 }
 
 static void guard_settle(guard *g) {
-  if (g->released && !g->running && !g->graced) free(g);
+  if (!g->released || g->running || g->graced) return;
+  if (g->chld) {
+    g->chld->data = NULL;
+    uv_close((uv_handle_t *)g->chld, free_handle);
+  }
+  free(g);
 }
 
 static void hold_grace(guard *g, proc *p) {
@@ -418,7 +429,7 @@ static void retire(proc *p) {
   if (p->captured && ((!p->running && !timed) || p->stop == STOP_KILLED))
     close_handle((uv_handle_t *)&p->grace, closed_grace);
   if (!p->running && p->pty)
-    close_handle((uv_handle_t *)&p->chld, closed_chld);
+    close_handle((uv_handle_t *)&p->held, closed_held);
   else if (!p->running)
     close_handle((uv_handle_t *)&p->process, closed_process);
 }
@@ -477,6 +488,44 @@ static void reader_ready(proc *p, request *q) {
   if (finish(q)) shut(p);
 }
 
+static void exited(uv_process_t *h, int64_t status, int signal) {
+  proc *p = OWNER(h, process);
+  AGC_TRACE(&p->trace, AGC_TRACE_PROC, "exit pid=%d status=%" PRId64 " signal=%d", (int)h->pid, status, signal);
+  finished(p, signal ? 128 + signal : status);
+  retire(p);
+  notify_waits(p);
+}
+
+#ifndef _WIN32
+/* Stops the SIGCHLD watcher once no pty child of G runs, so it holds the loop no longer than the children did. */
+static void watch_settle(guard *g) {
+  for (const proc *p = g->first; p; p = p->run_next)
+    if (p->pty && p->running) return;
+  if (g->chld) uv_signal_stop(g->chld);
+}
+
+/* Reaps every pty child of G that has exited. One watcher for all of them: libuv's signal pipe takes a message per
+   watcher for each SIGCHLD, so a watcher per child would fill it and lose exits. libuv reaps its own children by
+   pid, so neither takes the other's. The end-of-run waits call it too. */
+static void reap_ptys(guard *g) {
+  for (proc *p = g->first, *next = NULL; p; p = next) {
+    next = p->run_next;
+    int code, sig;
+    if (p->pty && p->running && agc_proc_reap(p->process.pid, &code, &sig)) exited(&p->process, code, sig);
+  }
+}
+
+static void chld_signal(uv_signal_t *h, int signum) {
+  (void)signum;
+  guard *g = h->data;
+  if (!g) return;
+  reap_ptys(g);
+  if (h->data) watch_settle(g);
+}
+#else
+static void reap_ptys(guard *g) { (void)g; }
+#endif
+
 static bool in_grace(const proc *p) { return p->captured && p->running && p->stop == STOP_TERM; }
 
 static bool to_await(const proc *p, bool grace) { return grace ? in_grace(p) : !p->stop_failed; }
@@ -502,7 +551,11 @@ static void await_exits(guard *g, bool grace) {
   uv_update_time(loop);
   uv_timer_init(loop, &bound);
   uv_timer_start(&bound, bound_over, REAP_MS, 0);
-  while (uv_is_active((uv_handle_t *)&bound) && exits_pending(g, grace)) uv_run(loop, UV_RUN_ONCE);
+  while (uv_is_active((uv_handle_t *)&bound)) {
+    reap_ptys(g);
+    if (!exits_pending(g, grace)) break;
+    uv_run(loop, UV_RUN_ONCE);
+  }
   if (!grace)
     for (const proc *p = g->first; p; p = p->run_next)
       if (to_await(p, grace)) trace_alive(p);
@@ -535,7 +588,11 @@ static void grace_wait(guard *g) {
   uv_timer_init(loop, &tick);
   uv_timer_start(&bound, bound_over, GRACE_MS, 0);
   uv_timer_start(&tick, bound_over, GROUP_POLL_MS, GROUP_POLL_MS);
-  while (uv_is_active((uv_handle_t *)&bound) && (exits_pending(g, true) || groups_alive(g))) uv_run(loop, UV_RUN_ONCE);
+  while (uv_is_active((uv_handle_t *)&bound)) {
+    reap_ptys(g);
+    if (!exits_pending(g, true) && !groups_alive(g)) break;
+    uv_run(loop, UV_RUN_ONCE);
+  }
   uv_close((uv_handle_t *)&bound, NULL);
   uv_close((uv_handle_t *)&tick, NULL);
   uv_run(loop, UV_RUN_NOWAIT);
@@ -949,42 +1006,50 @@ static void wrote(uv_write_t *w, int status) {
   if (p->writer) ready(p->writer);
 }
 
-static void exited(uv_process_t *h, int64_t status, int signal) {
-  proc *p = OWNER(h, process);
-  AGC_TRACE(&p->trace, AGC_TRACE_PROC, "exit pid=%d status=%" PRId64 " signal=%d", (int)h->pid, status, signal);
-  finished(p, signal ? 128 + signal : status);
-  retire(p);
-  notify_waits(p);
+#ifndef _WIN32
+static int watch_chld(uv_loop_t *loop, guard *g) {
+  if (!g->chld) {
+    uv_signal_t *h = malloc(sizeof *h);
+    if (!h) agc_out_of_memory();
+    int rc = uv_signal_init(loop, h);
+    if (rc) {
+      free(h);
+      return rc;
+    }
+    h->data = g;
+    g->chld = h;
+  }
+  return uv_signal_start(g->chld, chld_signal, SIGCHLD);
 }
 
-#ifndef _WIN32
-/* Any SIGCHLD: the pty child is reaped once it has exited. libuv's own reaping waits for its children by pid, so
-   neither takes the other's. */
-static void reap_pty(uv_signal_t *h, int signum) {
-  (void)signum;
-  proc *p = OWNER(h, chld);
-  int code, sig;
-  if (!agc_proc_reap(p->process.pid, &code, &sig)) return;
-  uv_signal_stop(h);
-  exited(&p->process, code, sig);
+/* The fork holds libuv's cloexec lock, as uv_spawn does, so no descriptor the thread pool opens leaks into the
+   child. */
+static int fork_pty(uv_loop_t *loop, const launch *l, int master[2], int *pid) {
+  uv_rwlock_wrlock(&loop->cloexec_lock);
+  int rc = agc_proc_pty_spawn(l->argv[0], l->argv, l->env, l->cwd, PTY_ROWS, PTY_COLS, master, pid);
+  uv_rwlock_wrunlock(&loop->cloexec_lock);
+  return rc;
 }
 #endif
 
 /* The pty child's start, in place of uv_spawn: the SIGCHLD watcher first, so no exit is missed. FDS[2] and FDS[1]
    (the parent's ends of stdout and stdin) become the two descriptors of the master; the pipes are not used. */
 static int spawn_pty(uv_loop_t *loop, proc *p, const launch *l, int fds[6]) {
-  uv_signal_init(loop, &p->chld);
+  uv_signal_init(loop, &p->held);
   p->handles = 1;
 #ifdef _WIN32
   /* Not reached: spawn_child refuses pty where agc_proc_ptys is false. */
   (void)l, (void)fds;
   return UV_ENOTSUP;
 #else
-  int rc = uv_signal_start(&p->chld, reap_pty, SIGCHLD);
+  int rc = watch_chld(loop, p->g);
   if (rc) return rc;
   int master[2] = {-1, -1}, pid = 0;
-  rc = agc_proc_pty_spawn(l->argv[0], l->argv, l->env, l->cwd, PTY_ROWS, PTY_COLS, master, &pid);
-  if (rc) return uv_translate_sys_error(-rc);
+  rc = fork_pty(loop, l, master, &pid);
+  if (rc) {
+    watch_settle(p->g);
+    return uv_translate_sys_error(-rc);
+  }
   p->process.pid = pid;
   for (int k = 0; k < 4; k++) close_fd(&fds[k]);
   fds[2] = master[0];
@@ -1436,7 +1501,7 @@ static int start_child(guard *g, proc *p, const launch *l) {
     }
     if (rc && !p->running) {
       if (p->pty)
-        uv_close((uv_handle_t *)&p->chld, closed_chld);
+        uv_close((uv_handle_t *)&p->held, closed_held);
       else
         uv_close((uv_handle_t *)&p->process, closed_process);
       unlink_child(p);

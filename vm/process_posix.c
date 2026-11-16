@@ -15,6 +15,7 @@
 #ifndef _WIN32
 #include <errno.h>
 #include <fcntl.h>
+#include <pthread.h>
 #include <signal.h>
 #include <stdlib.h>
 #include <string.h>
@@ -146,9 +147,16 @@ int agc_proc_pty_spawn(const char *path, char *const *argv, char *const *env, co
   if (rc) return rc;
   fds[1] = fcntl(fds[0], F_DUPFD_CLOEXEC, 0);
   if (fds[1] < 0 || make_pipe(report) || close_on_exec(report[0]) || close_on_exec(report[1])) rc = -errno;
+  /* Every signal blocked across the fork, as uv_spawn does, so no handler of the VM runs in the child before
+     pty_child resets them. */
+  sigset_t all, old;
+  sigfillset(&all);
+  if (!rc) rc = -pthread_sigmask(SIG_SETMASK, &all, &old);
+  bool masked = !rc;
   pid_t child = rc ? -1 : fork();
   if (child == 0) pty_child(slave, report[1], path, argv, env, cwd);
   if (!rc && child < 0) rc = -errno;
+  if (masked) (void)pthread_sigmask(SIG_SETMASK, &old, NULL);
   close(slave);
   if (report[1] >= 0) close(report[1]);
   int err;
