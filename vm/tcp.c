@@ -3,9 +3,9 @@
  * over libuv, with the TLS handshake and close_notify through tls.h and the
  * host's error numbers through net_os.h. Every `net` belongs to the I/O
  * thread; a builtin reaches it through a step posted there, and a done half
- * reads only what that thread copied into the request, except a plain socket's
- * direct send from a scheduler (direct_send) and a read's take, receive and
- * decrypt of a socket's input there (takes_here, recv_here). Service layer.
+ * reads only what that thread copied into the request, except a direct send
+ * (direct_send, tls_direct_send) and a read's take, receive and decrypt of a
+ * socket's input on a scheduler (takes_here, recv_here). Service layer.
  * Design: docs/vm/10-io-tls.md §10.3 and §10.3.1, docs/vm/16-architecture.md §16.9.
  */
 #include "http_fields.h"
@@ -49,8 +49,13 @@ enum { UPGRADE_CLOSED = 0, UPGRADE_UNREAD = 1, UPGRADE_ENDED = 2, UPGRADE_SENDIN
 
 /* The bits of a net's `wstate` (direct_send, recv_here): a scheduler sends on it now, it is shut, its close waits for
    the send or receive under way, a direct send went out in part and its rest has not started on the I/O thread
-   (begin_send clears it), and a scheduler receives on it now. */
-enum { W_DIRECT = 1u, W_SHUT = 2u, W_DEFERRED = 4u, W_PARTIAL = 8u, W_RECV = 16u };
+   (begin_send clears it), a scheduler receives on it now, and the I/O thread left the bytes of a TLS session in it
+   for the end of a direct send (next_out). */
+enum { W_DIRECT = 1u, W_SHUT = 2u, W_DEFERRED = 4u, W_PARTIAL = 8u, W_RECV = 16u, W_OWED = 32u };
+
+/* What tls_direct_send did with a send: all is out, nothing was encrypted (the I/O thread sends it), or the
+   ciphertext that the kernel did not take is left. */
+enum { TLS_SENT = 0, TLS_PASSED = 1, TLS_REST = 2 };
 
 /* recv_here's rule: a receive that finds nothing skips the next 1, 2, 4 ... RECV_SKIP_MAX tries, and one that finds
    bytes tries every time again, so a request/response socket, whose next request is rarely in the kernel yet, seldom
@@ -90,6 +95,8 @@ struct request {
   size_t len;
   int error, accept_rc;
   bool sends, counted, finished, stopped;
+  /* `data` is the ciphertext that a direct TLS send left (tls_direct_send), not plaintext. */
+  bool cipher;
   bool closed, opened, resolved, tls_failed;
   int64_t port;
   int write_status, open_error;
@@ -202,9 +209,12 @@ struct agc_conn {
   const char *linger_why;
   /* A TLS socket's session and input are the reader's on a scheduler (takes_here) while `tls_here` is set: its
      handshake is over and the I/O thread does not read it. That thread still sends and says goodbye on the session,
-     so each use of the session by either side holds `tls_lock`. */
+     so each use of the session by either side holds `tls_lock`. A scheduler also encrypts and sends on it then
+     (tls_direct_send). `tls_busy`, under `tls_lock`: the I/O thread took bytes of the session that are not in the
+     kernel yet. */
   _Atomic bool tls_here;
   uv_mutex_t tls_lock;
+  bool tls_busy;
 };
 
 /* A posted close: release_step runs it on the I/O thread. */
@@ -530,9 +540,13 @@ static uint8_t *take_out(net *n, size_t *len) {
 static void goodbye(net *n) {
   if (!n->tls || !n->handshaken || n->tls_failed || !n->connected || !n->conn || n->write_status < 0) return;
   uv_mutex_lock(&n->tls_lock);
-  agc_tls_close(n->tls);
-  size_t len;
-  uint8_t *data = take_out(n, &len);
+  size_t len = 0;
+  uint8_t *data = NULL;
+  /* A scheduler's ciphertext is on its way (tls_direct_send): close_notify could not follow it, so none goes. */
+  if (!(atomic_load_explicit(&n->wstate, memory_order_acquire) & (W_DIRECT | W_PARTIAL))) {
+    agc_tls_close(n->tls);
+    data = take_out(n, &len);
+  }
   uv_mutex_unlock(&n->tls_lock);
   if (data && len <= CIPHER_SIZE && !n->flushing) {
     uv_buf_t b = uv_buf_init((char *)data, (unsigned)len);
@@ -592,7 +606,7 @@ static void direct_over(void *data) {
    not beside another send nor before the rest of a partial one; a send and a receive may go together. */
 static bool claim_begin(net *n, unsigned bit) {
   unsigned s = atomic_load_explicit(&n->wstate, memory_order_relaxed);
-  unsigned refused = bit == W_DIRECT ? ~(unsigned)W_RECV : (unsigned)(W_SHUT | W_RECV);
+  unsigned refused = bit == W_DIRECT ? ~(unsigned)(W_RECV | W_OWED) : (unsigned)(W_SHUT | W_RECV);
   do {
     if (s & refused) return false;
   } while (!atomic_compare_exchange_weak_explicit(&n->wstate, &s, s | bit, memory_order_acq_rel, memory_order_relaxed));
@@ -600,13 +614,16 @@ static bool claim_begin(net *n, unsigned bit) {
 }
 
 /* The end of a claim, its last access to the net: a send that went out in part says so (W_PARTIAL), and the last
-   claim to end after a close gets the links closed. */
-static void claim_end(net *n, unsigned bit, bool partial) {
+   claim to end after a close gets the links closed. A send that went out whole takes W_OWED: true when the I/O thread
+   left bytes of the session for it to have sent, which the caller has flush_step send. */
+static bool claim_end(net *n, unsigned bit, bool partial) {
   unsigned s = atomic_load_explicit(&n->wstate, memory_order_relaxed), next;
+  unsigned owed = bit == W_DIRECT && !partial ? (unsigned)W_OWED : 0u;
   do {
-    next = (s & ~bit) | (partial ? (unsigned)W_PARTIAL : 0u);
+    next = (s & ~(bit | owed)) | (partial ? (unsigned)W_PARTIAL : 0u);
   } while (!atomic_compare_exchange_weak_explicit(&n->wstate, &s, next, memory_order_acq_rel, memory_order_relaxed));
   if ((s & W_DEFERRED) && !(next & (W_DIRECT | W_RECV))) agc_loop_call(n->io, direct_over, n);
+  return (s & owed) != 0;
 }
 
 /* The bytes that wait behind the write in flight are given up (a close, a failed write). I/O thread only. */
@@ -1008,9 +1025,21 @@ static void handshake_failed(net *n, agc_tls_status status) {
   notify(n, n->opener);
 }
 
-/* The next bytes to send: what the session holds, or else the next chunk of `plain`, encrypted (take_out). */
+/* The next bytes to send: what the session holds, or else the next chunk of `plain`, encrypted (take_out). None while
+   a scheduler's send is under way or its rest has not started here (W_DIRECT, W_PARTIAL): its ciphertext goes first,
+   and the end of the send, or begin_send, sends what was left (W_OWED). */
 static uint8_t *next_out(net *n, size_t *len) {
   uv_mutex_lock(&n->tls_lock);
+  unsigned s = atomic_load_explicit(&n->wstate, memory_order_acquire);
+  while (s & (W_DIRECT | W_PARTIAL)) {
+    if (atomic_compare_exchange_weak_explicit(&n->wstate, &s, s | W_OWED, memory_order_acq_rel,
+                                              memory_order_acquire)) {
+      uv_mutex_unlock(&n->tls_lock);
+      *len = 0;
+      return NULL;
+    }
+  }
+  if (s & W_OWED) (void)atomic_fetch_and_explicit(&n->wstate, ~(unsigned)W_OWED, memory_order_acq_rel);
   uint8_t *data = take_out(n, len);
   while (!data && n->plain_at < n->plain_len && n->handshaken) {
     size_t left = n->plain_len - n->plain_at;
@@ -1022,6 +1051,7 @@ static uint8_t *next_out(net *n, size_t *len) {
     n->plain_at += step;
     data = take_out(n, len);
   }
+  if (data) n->tls_busy = true;
   uv_mutex_unlock(&n->tls_lock);
   return data;
 }
@@ -1036,6 +1066,9 @@ static void flush(net *n, uv_write_cb wrote) {
     if (rc < 0) n->write_status = rc;
     if (rc == 1) n->flushing = true;
   }
+  uv_mutex_lock(&n->tls_lock);
+  n->tls_busy = n->flushing;
+  uv_mutex_unlock(&n->tls_lock);
   if (n->plain && (n->write_status < 0 || n->plain_at >= n->plain_len)) {
     free(n->plain);
     n->plain = NULL;
@@ -1183,7 +1216,12 @@ static void read_in(uv_stream_t *s, ssize_t got, const uv_buf_t *buf) {
 
 static void start_reading(net *n) {
   if (n->reading || n->in.eof || n->in.error || n->raw_eof) return;
-  if (n->tls) atomic_store_explicit(&n->tls_here, false, memory_order_release);
+  if (n->tls && atomic_load_explicit(&n->tls_here, memory_order_relaxed)) {
+    /* Under the lock, so a scheduler's encrypt (tls_seal) is over before this thread reads the session again. */
+    uv_mutex_lock(&n->tls_lock);
+    atomic_store_explicit(&n->tls_here, false, memory_order_release);
+    uv_mutex_unlock(&n->tls_lock);
+  }
   int rc = uv_read_start((uv_stream_t *)&n->conn->tcp, alloc_in, read_in);
   if (rc)
     n->in.error = agc_net_errno(rc);
@@ -2363,6 +2401,21 @@ static int send_now(net *n, const uint8_t *data, size_t len) {
   return rc;
 }
 
+/* The rest of a direct TLS send, in ciphertext, goes out before anything else of the session, which next_out kept back
+   while W_PARTIAL stood; what the session holds follows it. As send_now. */
+static int send_rest(net *n, const uint8_t *data, size_t len) {
+  if (n->write_status < 0) return n->write_status;
+  int rc = agc_stream_write((uv_stream_t *)&n->conn->tcp, &n->write_req, &n->write_data, data, len, tls_wrote);
+  if (rc < 0) {
+    n->write_status = rc;
+    return rc;
+  }
+  n->flushing = rc == 1;
+  flush(n, tls_wrote);
+  if (n->write_status < 0) return n->write_status;
+  return n->flushing ? 1 : 0;
+}
+
 /* A send at N > 1 carries a copy of its bytes and starts here; at N = 1 the builtin started it and the request only
    waits for its end. */
 static bool begin_send(void *data, agc_io_job *job) {
@@ -2371,7 +2424,7 @@ static bool begin_send(void *data, agc_io_job *job) {
   link_request(q, job);
   /* The rest of a direct send has its writer slot now (upgrade_refusal). */
   (void)atomic_fetch_and_explicit(&n->wstate, ~(unsigned)W_PARTIAL, memory_order_acq_rel);
-  bool out = !n->closed && q->sends && send_now(n, q->data, q->len) != 1;
+  bool out = !n->closed && q->sends && (q->cipher ? send_rest(n, q->data, q->len) : send_now(n, q->data, q->len)) != 1;
   /* send_now keeps its own copy of what it could not write (tls_queue, agc_stream_write). */
   free(q->data);
   q->data = NULL;
@@ -2384,7 +2437,7 @@ static bool begin_send(void *data, agc_io_job *job) {
    other send of the socket is under way and the bytes keep their order; what the kernel does not take goes to the I/O
    thread as before. rt->sync is dropped across the system call (a profile of a busy server lost half its throughput
    holding it there); the claim, taken while rt->sync and the resource hold the net, keeps the descriptor open. A TLS
-   send stays on the I/O thread.
+   socket's send is tls_direct_send.
    The writer lock is free for others while no job holds it, so a send that claimed the socket holds it
    (agc_handle_hold, *HOLDING set) until the caller lets it go or parks the rest, whose job takes the hold over: a send
    of another task waits for it rather than overtake the rest of this one, also when the kernel took nothing.
@@ -2406,6 +2459,72 @@ static int64_t direct_send(agc_vm *vm, agc_socket *sk, net **np, const uint8_t *
   if (held) agc_sync_take(vm);
   *np = live(sk);
   return sent == UV_EAGAIN ? 0 : sent;
+}
+
+/* LEN bytes encrypted for a direct send, behind what the session already had to send, as one malloc'd ciphertext
+   (*OUT_LEN bytes; NULL for none), under tls_lock. *STATUS is TLS_PASSED when the session is not this thread's to
+   use (the I/O thread reads it, or has bytes of it on their way), else 0, or UV_EPROTO when the session refused, which
+   the I/O thread's send would report too. */
+static uint8_t *tls_seal(net *n, const uint8_t *data, size_t len, size_t *out_len, int *status) {
+  *out_len = 0;
+  *status = TLS_PASSED;
+  uv_mutex_lock(&n->tls_lock);
+  if (!atomic_load_explicit(&n->tls_here, memory_order_acquire) || n->tls_busy) {
+    uv_mutex_unlock(&n->tls_lock);
+    return NULL;
+  }
+  agc_tls_failure failure;
+  *status = 0;
+  for (size_t at = 0; at < len && !*status; at += TLS_CHUNK) {
+    size_t step = len - at < TLS_CHUNK ? len - at : TLS_CHUNK;
+    if (agc_tls_write(n->tls, data + at, step, &failure) != AGC_TLS_OK) *status = UV_EPROTO;
+  }
+  uint8_t *cipher = take_out(n, out_len);
+  uv_mutex_unlock(&n->tls_lock);
+  return cipher;
+}
+
+/* The direct send of a TLS socket (#1188): as direct_send, and the scheduler also encrypts, once the session is the
+   reader's (tls_here) and the I/O thread has none of its bytes on their way (tls_busy). The claim W_DIRECT, then
+   W_PARTIAL until begin_send takes the rest, keeps the I/O thread from sending the session's bytes (next_out), so the
+   records keep their order; what it kept back (W_OWED) goes out by flush_step after the send. TLS_SENT: all is
+   out; TLS_PASSED: nothing was encrypted, and the I/O thread sends it all; TLS_REST: the kernel did not take all,
+   and *REST (malloc'd, *REST_LEN bytes) is the ciphertext left for the I/O thread; or a negative libuv error. *NP and
+   *HOLDING as direct_send. */
+static int tls_direct_send(agc_vm *vm, agc_socket *sk, net **np, const uint8_t *data, size_t len, bool *holding,
+                           uint8_t **rest, size_t *rest_len) {
+  net *n = *np;
+  *holding = false;
+  /* A longer text goes to the I/O thread, which encrypts it a chunk at a time, not all at once. */
+  if (!n->direct || !len || len > LIMIT || vm->sync_depth > 1 || vm->task->callbacks || n->write_status < 0 ||
+      !atomic_load_explicit(&n->tls_here, memory_order_acquire) || !claim_begin(n, W_DIRECT))
+    return TLS_PASSED;
+  agc_handle_hold(vm, sk->writer);
+  *holding = true;
+  bool held = vm->sync_depth == 1;
+  if (held) agc_sync_drop(vm);
+  size_t cipher_len;
+  int status;
+  uint8_t *cipher = tls_seal(n, data, len, &cipher_len, &status);
+  int64_t sent = cipher ? agc_net_send(n->sock, cipher, cipher_len) : 0;
+  size_t took = sent > 0 ? (size_t)sent : 0;
+  /* After a refusal of the session, or a failed send, the socket is lost: no rest goes on. */
+  bool partial = cipher && !status && (sent >= 0 || sent == UV_EAGAIN) && took < cipher_len;
+  bool owed = claim_end(n, W_DIRECT, partial);
+  if (held) agc_sync_take(vm);
+  *np = n = live(sk);
+  /* Posted under rt->sync while the resource holds the net, so before any release step. */
+  if (owed && n) agc_loop_call(n->io, flush_step, n);
+  if (partial) {
+    *rest_len = cipher_len - took;
+    *rest = malloc(*rest_len);
+    if (!*rest) agc_out_of_memory();
+    memcpy(*rest, cipher + took, *rest_len);
+  }
+  free(cipher);
+  if (sent < 0 && sent != UV_EAGAIN) return (int)sent;
+  if (status < 0) return status;
+  return partial ? TLS_REST : status;
 }
 
 /* Takes what the schedulers left in `pend` since the last step. The net outlives the step: the close of the socket
@@ -2502,11 +2621,26 @@ static agc_value write_op(agc_vm *vm, const agc_value *args, const uint8_t *data
       return out_wait(vm, args, n, buffered ? out_limit_of(n) : 0, timeout);
     }
   }
+  uint8_t *rest = NULL;
   if (here) {
     /* At N = 1 the socket is this thread's: a send that goes out at once returns without a park. */
     int rc = send_now(n, data, len);
     if (rc < 0) return agc_system_error(vm, AGC_FAMILY_NET, write_failed, agc_net_errno(rc));
     if (rc == 0) return ok_value(agc_void());
+  } else if (n->secure) {
+    bool holding;
+    size_t rest_len = 0;
+    int rc = tls_direct_send(vm, sk, &n, data, len, &holding, &rest, &rest_len);
+    if (rc < 0 || rc == TLS_SENT || !n) {
+      if (holding) agc_handle_let_go(vm, sk->writer);
+      free(rest);
+      if (rc < 0) return out_failed(vm, rc);
+      return rc == TLS_SENT ? ok_value(agc_void()) : agc_error(vm, AGC_KIND_NET_CLOSED, socket_closed);
+    }
+    if (rest) {
+      data = rest;
+      len = rest_len;
+    }
   } else {
     bool holding;
     int64_t sent = direct_send(vm, sk, &n, data, len, &holding);
@@ -2538,7 +2672,9 @@ static agc_value write_op(agc_vm *vm, const agc_value *args, const uint8_t *data
   if (!here) {
     q->sends = true;
     q->len = len;
-    if (len) {
+    q->cipher = rest != NULL;
+    q->data = rest;
+    if (len && !rest) {
       q->data = malloc(len);
       if (!q->data) agc_out_of_memory();
       memcpy(q->data, data, len);

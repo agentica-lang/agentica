@@ -210,11 +210,12 @@ texts.
   beside a read meets depends on timing. A TLS socket does the same once
   its handshake is over and the I/O thread has stopped reading it: the
   scheduler feeds what `recv()` returns to the session and decrypts it into
-  the input. Sends, close_notify and the handshake stay on the I/O thread, so
-  every use of the session after the handshake holds a lock of the socket, and
-  what the session has to send after a decrypt (an alert) goes to the I/O
-  thread as a step. `recv_bytes` returns what is buffered, as soon as there is
-  one byte, and empty `Bytes` at EOF. `recv_bytes` without a
+  the input. Close_notify and the handshake stay on the I/O thread, and sends
+  come from either side (below), so every use of the session after the
+  handshake holds a lock of the socket, and what the session has to send after
+  a decrypt (an alert) goes to the I/O thread as a step. `recv_bytes` returns
+  what is buffered, as soon as there is one byte, and empty `Bytes` at EOF.
+  `recv_bytes` without a
   timeout (the catalog form of two arguments) starts its job with no timer and
   waits for the reader lock with the longest deadline (`INT64_MAX` ms), so
   nothing but data, EOF, an error, a close or a cancel ends it. `read_line`
@@ -230,14 +231,21 @@ texts.
   `recv_bytes` and the HttpWire byte rows take and give `Bytes`, under the
   catalog key `<name>.bytes`. The bytes go out with `uv_try_write`, the rest
   with one `uv_write`, and the task parks until the callback. With more than one
-  scheduler a send on a plain (not TLS) socket first calls `send()` on the
-  scheduler itself, without `rt->sync`, and parks with the rest only when the
-  kernel does not take it all (the direct send, `vm/tcp.c`): the send holds the
-  writer lock across the call (`agc_handle_hold`), so sends keep their order,
-  and a close that comes during the call waits for its end before the descriptor
-  is closed. TLS sends stay on the I/O thread, which owns the session, and so do
-  the sends of a socket whose request head `HttpWire.read_head` let through as a
-  WebSocket upgrade: the `std/http` writer joins the frames that queue while a
+  scheduler a send first calls `send()` on the scheduler itself, without
+  `rt->sync`, and parks with the rest only when the kernel does not take it all
+  (the direct send, `vm/tcp.c`): the send holds the writer lock across the call
+  (`agc_handle_hold`), so sends keep their order, and a close that comes during
+  the call waits for its end before the descriptor is closed. A TLS socket does
+  it once its session is the scheduler's, as for reads, and the I/O thread has
+  none of the session's bytes on their way: the scheduler encrypts the text
+  under the socket's TLS lock, sends the records after the unlock, and gives
+  the records that the kernel did not take to the I/O thread as they are. A
+  text over 1 MiB goes to the I/O thread, which encrypts 16 KiB at a time.
+  While such a send or its rest is under way, the I/O thread leaves what the
+  session has to send (an alert after a decrypt) in it and sends it after the
+  last record, and a close sends no close_notify. The sends of a socket whose
+  request head `HttpWire.read_head` let through as a WebSocket upgrade stay on
+  the I/O thread: the `std/http` writer joins the frames that queue while a
   send waits. This follows the head, not the answer, so a kept connection whose
   route did not upgrade also sends through the I/O thread for the rest of its
   life, which costs speed only. `ok()` means every byte reached the kernel's

@@ -609,7 +609,8 @@ one exit path are as in §16.1 to §16.6. What differs:
     `agc_sync_assert` fails the run with `RUNTIME-INTERNAL` when a mutator of a
     shared list runs without the lock (`rg agc_sync_assert vm/`). A socket or a
     child needs no lock, since the I/O thread owns it (a direct send or receive
-    of a plain socket syncs with it by an atomic state of its own, §10.3.1).
+    of a socket syncs with it by an atomic state of its own, and a TLS
+    session's use by a short lock of the socket, §10.3.1).
     The owner of a stream's lock is the calling thread's context, not the
     stream's own `vm`.
 - **Channel and timer locks.** A message between two tasks took `rt->sync`
