@@ -46,6 +46,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- `String#downcase` picks the final sigma as Python does: letters with no uppercase form (`ß`, `ŉ`, `ª`, `ﬁ`) count as cased, and modifier letters (`ʰ`, `ⁿ`) and U+0345 are skipped: `"ßΣ".downcase` is `"ßς"` and `"ΑΣʰ".downcase` is `"αςʰ"` (#1704).
 - A loop that parses a large JSON array or builds large lists is much less likely to keep an old list alive through a stray pointer, which made it hit `--max-heap` on macOS arm64 and sometimes on Windows: a stray pointer into a list's items now keeps less than 64 KiB of them, not the whole list (#1681).
 
 ## [0.32.0] - 2026-11-15

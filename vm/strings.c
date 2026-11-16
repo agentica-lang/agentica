@@ -247,8 +247,7 @@ static bool case_ignorable(uint32_t cp) {
 static bool cased_after(const uint8_t *s, size_t len, size_t at) {
   while (at < len) {
     uint32_t cp = agc_utf8_next(s, len, &at);
-    if (cased(cp)) return true;
-    if (!case_ignorable(cp)) return false;
+    if (!case_ignorable(cp)) return cased(cp);
   }
   return false;
 }
@@ -315,7 +314,7 @@ agc_string *agc_change_case(const agc_string *s, bool up) {
     uint32_t cp = agc_utf8_next(data, s->bytes, &at);
     size_t n = mapped(up, cp, out);
     if (final_sigma && cp == SIGMA && before && !cased_after(data, s->bytes, at)) out[0] = FINAL_SIGMA;
-    if (final_sigma) before = cased(cp) || (before && case_ignorable(cp));
+    if (final_sigma && !case_ignorable(cp)) before = cased(cp);
     for (size_t k = 0; k < n; k++) {
       size_t len = agc_utf8_encode(out[k], buf);
       memcpy(result->data + w, buf, len);

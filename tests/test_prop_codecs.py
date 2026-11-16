@@ -409,10 +409,7 @@ def test_split_agrees_with_python(codec, case):
 
 ASCII_RUN_LENGTHS = [0, 1, 7, 8, 9, 15, 16, 17, 31, 32, 33, 63, 64, 65]
 ASCII_CHARS = string.ascii_letters + string.digits + " .:'^`_-@[{\t\n"
-# Two sets of characters, because of issue #1704: the VM does not count ß, ﬁ or ŉ as cased letters, so a capital
-# sigma next to them downcases unlike Python. The first set has characters that change length (ß to SS, İ to i̇), the
-# second a capital sigma.
-NON_ASCII = (["é", "É", "ß", "ﬁ", "ŉ", "İ", "ǅ", "Ω", "σ", "ς", "日", "😀"], ["é", "É", "Σ", "σ", "ς", "İ", "Ω", "日", "😀"])
+NON_ASCII = ["é", "É", "ß", "ﬁ", "ŉ", "ª", "ʰ", "ⁿ", "İ", "ǅ", "Σ", "Ω", "σ", "ς", "日", "😀"]
 
 
 @st.composite
@@ -421,7 +418,7 @@ def scan_texts(draw):
     casing (one character to several, a final sigma, title case)."""
     runs = st.sampled_from(ASCII_RUN_LENGTHS).flatmap(
         lambda n: st.text(st.sampled_from(ASCII_CHARS), min_size=n, max_size=n))
-    others = st.sampled_from(NON_ASCII[draw(st.integers(0, 1))])
+    others = st.sampled_from(NON_ASCII)
     return "".join(draw(st.lists(runs | others, max_size=10)))
 
 
@@ -432,6 +429,8 @@ def scan_texts(draw):
 @example("x" * 32 + "é" + "Y" * 40, "Y")
 @example("ΟΔΥΣΣΕΥΣ " + "Ab" * 20 + "Σ.", "Σ")
 @example("İ" + "I" * 33, "I")
+@example("ßΣ éΣﬁ ŉΣ ΑΣº", "Σ")
+@example("ʰΣ ΑΣʰ ΑΣⁿ xᵃΣ \u0345Σ ΑΣ\u0345", "Σ")
 def test_case_reverse_and_index_agree_with_python(codec, text, part):
     """String#upcase, #downcase and #reverse give Python's str.upper, str.lower and reversed text with Python's length,
     and String#index_of gives str.find (-1 for none) in code points."""
