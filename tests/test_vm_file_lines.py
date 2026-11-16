@@ -11,6 +11,7 @@ instead. The FIFO cases are host-only there: Windows has no FIFO file, and the V
 """
 import re
 import sys
+import time
 
 import pytest
 
@@ -365,6 +366,8 @@ def test_max_steps_ends_a_long_file_with_runtime_step_limit(tmp_path):
 @needs_fifo
 def test_a_fifo_fed_in_pieces_lines_and_a_crlf_split_across_reads_a_last_line_without_a_newline(tmp_path, request):
     peer, fifo = start_fifo_peer(tmp_path, "pieces", request)
+    # The program opens the FIFO late on purpose: the peer must wait for it to read each piece, never close first.
+    time.sleep(0.5)
     result = run_program(tmp_path, "fifo", FIFO_PROGRAM, fifo, "5000")
     assert result.code == 0, result.stderr
     assert result.stdout == '"alpha"\n"beta"\n"gamma"\n""\n"delta"\nok()\ntrue\n'
