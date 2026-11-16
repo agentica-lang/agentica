@@ -1,7 +1,7 @@
 ## 27. Iteration and concurrent collections
 
-What was decided against in tasks and streams, so it is not proposed again, and
-what is open. The principles are in `docs/grammar/01-overview.md` §2; values
+What was decided against in tasks and streams, so it is not proposed again.
+The principles are in `docs/grammar/01-overview.md` §2; values
 have no shared mutable state except the `std/logger` registry and the `ATS`
 tables. The concurrency primitives are a small set of C builtins (`Task.spawn`,
 `Task.await`, `Task.sleep`, `Channel`, `Task.map`); higher-level helpers are
@@ -46,16 +46,9 @@ Each of these is decided; its checker help names the Agentica form.
   - `Thread` is `Task`, and `SizedQueue` (a bounded, blocking queue) is
     `Channel`.
 - **Options on `Task.map`:** Elixir's `ordered: false`, `on_timeout:` and
-  `zip_input_on_exit:`. Each option is a second behavior of one call. `Task.map` has one: input order,
-  per-item timeout, cancel on timeout.
+  `zip_input_on_exit:`. Each option is a second behavior of one call.
+  `Task.map` has one: input order, per-item timeout, cancel on timeout.
 
 When the parts can simply be returned, returning them is the one form:
 `Task.map(words, 3, 1000) do |w| ok(w.length) end`, then `reduce` over the
 results.
-
-### 27.6 Open questions
-
-- **Resources over a channel.** Immutable values can be shared safely, but
-  ports, sockets and contextual services carry state. A handle sent over a
-  channel stays owned by the task that opened it; the ownership and
-  synchronization rules for the others are open.

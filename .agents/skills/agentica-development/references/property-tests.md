@@ -17,12 +17,6 @@ Add one where the bugs hide in the input space, not in one example:
   driver and its FFI twin, Agentica and a Node or Python peer, or a model and
   what it models (a cache key's PATH search and the real spawn).
 
-Two wins: issue #1568 (a property found that the bytecode cache's compiler key
-modelled libuv's PATH search, while `resolve()` in `vm/process.c` picks the
-file by other rules) and the `poll_line` property of `tests/test_process.py`
-(PR #1560: against the old code it shrinks to one cancelled poll that loses a
-line).
-
 ## How
 
 - The system under test is the real `dist/agentica`. One VM serves every

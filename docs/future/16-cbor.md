@@ -3,9 +3,7 @@
 Issue #994, on demand: it starts when a real program needs it (a disk cache, or
 messages between Agentica processes). The counterpart of Erlang's
 `term_to_binary` and `binary_to_term`: a typed binary form of Agentica values,
-in CBOR ([RFC 8949](https://www.rfc-editor.org/rfc/rfc8949)). Issue #748
-mentions `Term` only for `JsonField` (a `Term` writes `JsonField` as a plain
-generic enum).
+in CBOR ([RFC 8949](https://www.rfc-editor.org/rfc/rfc8949)).
 
 ### 16.1 Motivation
 
@@ -54,15 +52,14 @@ Term.decode(data: Bytes, type: T) -> Result[T]
 ### 16.3 What can be serialized
 
 The same data rule as printing: no `Fn`, `Task`, `Table` or resource handle
-(`FileHandle`, `Process`, `Socket` and the rest), at any depth. `Json`, `Result`
-and `Void` are rejected at any depth too (`Json` has its own text form;
-`Result` is for error flow, not stored data: use a user enum).
+(`File.Handle`, `Process`, `TCP.Socket` and the rest), at any depth.
+`JSON.Value`, `Result` and `Void` are rejected at any depth too (`JSON.Value`
+has its own text form; `Result` is for error flow, not stored data: use a user
+enum).
 
-- The type check is a new walk, not the JSON one: it substitutes the type
-  arguments of a generic instance into field and payload types, and cuts
-  recursion with a `seen` set keyed on the substituted type, so `Tree[Int]`
-  stops when it meets `Tree[Int]` again while `Box[Int]` and `Box[String]` are
-  checked apart.
+- The check runs on each generic instance with its type arguments: a recursive
+  type such as `Tree[Int]` is checked once, and `Box[Int]` and `Box[String]`
+  are checked apart.
 - A type that fails the rule is `CHECK-NOT-ENCODABLE` (`encode`) or
   `CHECK-NOT-DECODABLE` (`decode` target), with the span on the argument. The
   argument of `encode` has a concrete static type, as `JSON.encode` requires.

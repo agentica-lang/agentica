@@ -47,8 +47,7 @@ Exit code `0`: every scenario passes or is skipped (also when all are skipped, s
 
 - `--ai` and `--json` change the report format. `--only TEXT` keeps scenarios and tests whose name contains `TEXT`.
 - `--tags EXPR` keeps the scenarios whose tags match: `@a`, `not @a`, joined with `and` and `or` (`not` binds tighter than `and`, and `and` tighter than `or`; no parentheses), as in `--tags "@db and not @slow"`. A scenario has the tags of its Feature and itself, and a `Scenario Outline` row also those of its `Examples` block. Unit test files have no tags, so they are left out. A bad expression exits with `2`.
-- `--jobs N` runs up to `N` scenarios or test files at the same time ([Test](/cli/#test)).
-- `--isolate` runs each scenario in a process of its own (see below).
+- `--jobs N` and `--isolate` (each scenario in a process of its own, see below): [Test](/cli/#test).
 - A failed step is reported at its line and column in the feature file.
 - Each row of a `Scenario Outline` is named with the outline name and the row's values in the columns the name does not show, such as `Name (sqlite, 42)`, so `--only "(sqlite, 42)"` selects one row. Identical rows keep one name; `--json` has each row's line in `example`.
 - `--seed N` makes `Random` repeat in steps and programs. Without it, the runner draws one seed for every step program and program under test, and shows it when the run fails.

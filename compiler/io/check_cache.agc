@@ -1,8 +1,6 @@
 ## The check cache of `agentica check` and `agentica type-at` (issue #630) on disk: the entries of checked modules
-## (modules/check_cache.agc says what an entry holds and when the core may use it) kept in `_build/check/`, with
-## `_build/` in the folder of the project (the nearest agentica.toml) or, with none, beside the root file.
-## `AGENTICA_BUILD_DIR` names another folder in place of `_build/`, and `--no-cache` turns the cache off, as for the
-## bytecode cache (io/bytecode_cache.agc, whose rules this follows).
+## (modules/check_cache.agc says what an entry holds and when the core may use it) kept in `_build/check/`, with the
+## folder, `AGENTICA_BUILD_DIR` and `--no-cache` rules of the bytecode cache (io/bytecode_cache.agc).
 ##
 ## There is one file for each source file of the programs checked (a path, or a `std/` name), named by a digest of its
 ## key, so the folder holds at most one entry for each file and an edit replaces the old entry. A file is a head with
@@ -12,10 +10,8 @@
 ## it is for and the core compares that with the text it read, so the cache is never asked which file changed: a
 ## changed file is read in full, and a file that is the same is not parsed and checked again.
 ##
-## An entry can make `check` skip the function bodies of a module, so the folder is used only when it is what this
-## program made: a real folder (never a link) owned by the user of the process and writable by no one else, and the
-## same for every entry (the checks of io/cache_files.agc). The folders are made with `Dir.mkdir_private` and the
-## entries are written to a new private file under a random name and renamed into place. An entry is untrusted data:
+## An entry can make `check` skip the function bodies of a module, so the folder and every entry pass the private
+## checks of io/cache_files.agc, as for the bytecode cache. An entry is untrusted data:
 ## the core validates what it reads, and a corrupt one is a miss. Anything that fails turns the cache off for the run,
 ## or makes one entry a miss; nothing here fails a run.
 

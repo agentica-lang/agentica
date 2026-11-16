@@ -346,11 +346,11 @@ stages.
   are in that file. The step of each pass of a range `each`, `times`, `upto`,
   `downto` or `File.each_line` loop is `<native>`, while `List.map` and
   `List.each` add no step beyond their callbacks. A fused `STEP` or `CONST`
-  counts as itself and the instruction after it (§4.2). `Profile.measure`
-  sections are inclusive; with the profile off, `Profile.measure` only has its
-  block called in its place (one step, no native frame), and `Profile.steps` is
-  the task's steps either way. The profile runs on one scheduler, so its
-  counters need no lock.
+  counts as itself and the instruction after it (§4.2).
+  `System.Profile.measure` sections are inclusive; with the profile off,
+  `System.Profile.measure` only has its block called in its place (one step, no
+  native frame), and `System.Profile.steps` is the task's steps either way. The
+  profile runs on one scheduler, so its counters need no lock.
 - `AGENTICA_PROFILE_FORMAT=folded` (with `profile`) writes folded stacks to the
   trace output instead of the report: a line per distinct stack, frames
   outermost first joined by `;`, a space and the weight in steps. Each `STEP`

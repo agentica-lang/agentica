@@ -4,7 +4,7 @@ weight: 4
 description: The std/queue module, a first-in, first-out queue of strings.
 ---
 
-`std/queue` is part of the standard library. It is written in Agentica itself. Import it with an alias: `import Queue from "std/queue"`.
+`std/queue` is written in Agentica: `import Queue from "std/queue"`.
 
 A queue is an immutable `Queue.QueueState` value. Every function gives a new queue; assign it to keep it, or continue with `Popped.remaining`. Inputs are never changed, and empty strings and duplicates are valid. `push` adds at the back and `pop` removes the oldest value; `pop` and `peek` on an empty queue return an error Result.
 

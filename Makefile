@@ -34,7 +34,7 @@ all: $(PRODUCT)
 
 agentica: $(PRODUCT)
 
-# Targets that step 8d-2 removed. They fail on purpose: without a rule, `make vm` would find the vm/ folder and say nothing to do.
+# Removed targets. They fail on purpose: without a rule, `make vm` would find the vm/ folder and say nothing to do.
 .PHONY: vm exe cli bdd-driver
 vm exe cli bdd-driver:
 	@echo "make $@ is gone: the product is one binary, dist/agentica (the VM with the front end); run make" >&2; exit 1

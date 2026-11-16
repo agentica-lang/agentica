@@ -2,12 +2,11 @@
 name: api-simplification-audit
 description: >-
   Audit Agentica builtins and std/ modules for parameters that could take a
-  default (a required timeout_ms, max_bytes, an options struct), from a
-  signature scan to per-function proposals, reported as a GitHub tracking
-  issue split into small PRs. Use when asked to simplify builtin or std
-  signatures or to find required arguments that should be optional. Only the
-  audit: adding a default is agentica-development work; style is
-  agentica-code-guidelines.
+  default (a required timeout_ms, max_bytes, an options struct), reported as a
+  GitHub tracking issue split into small PRs. Use when asked to simplify
+  builtin or std signatures or to find required arguments that should be
+  optional. Only the audit: adding a default is agentica-development work;
+  style is agentica-code-guidelines.
 ---
 
 # API simplification audit

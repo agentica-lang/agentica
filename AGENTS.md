@@ -10,25 +10,23 @@ bytecode) and the `std/` sources inside. The build starts from the checked-in
 ```text
 VERSION             the version, one line (read by the Makefile)
 compiler/           the front end in Agentica, one folder per context
-                    (`ls compiler/`): app (CLI, pipeline), io (the only I/O of
-                    the stages), packages (manifest, lock, cache), catalog
-                    (builtins, prelude), analysis (queries shared by the CLI
-                    and std/analysis); front_end.agc is the program the binary
-                    carries
+                    (`ls compiler/`; map: references/repo-map.md of the
+                    development skill); front_end.agc is the program the
+                    binary carries
 Makefile, mk/       the build (`help` in the root); one mk/*.mk per area,
                     included in a fixed order
 bootstrap/          stage0.agcb: a checked-in front end that the build starts from
 vm/                 C11 VM: values, interpreter, loader, GC, tasks, I/O, HTTP, JSON;
                     agentica.c is the main of the binary (`run`, front end, hand-off)
-stdlib/             std/ modules written in Agentica (http, binary, queue, bdd, test runner,
-                    analysis); CORE lists the compiler/ files that std/analysis embeds
+stdlib/             std/ modules written in Agentica; CORE lists the compiler/
+                    files that std/analysis embeds
 tests/              pytest: test_<area>.py; test_spec_<area>.py are the language
                     rules through the CLI; fixtures/ (goldens, Node/Python peers)
 examples/           small programs per feature (README.md lists them)
 docs/               grammar/ (the language definition, index: docs/grammar.md),
                     vm/ (VM design), future/ (the design decisions of planned
-                    features and what was decided against; plans live in GitHub
-                    issues)
+                    features and what was decided against), bdd.md (the BDD
+                    contract), eval.md (agent evaluation), vm-benchmarks.md
 site/               Hugo documentation site: content/, versions/ and the
                     layouts/ overrides; the look and the layouts come from
                     themes/docs-theme (a submodule)
@@ -46,8 +44,7 @@ stay.
 - `make`: build `dist/agentica` (`git submodule update --init` first). Linux
   uses system libgc, OpenSSL and zlib (`pkg-config`);
   `make AGENTICA_GC=vendored AGENTICA_OPENSSL=vendored AGENTICA_ZLIB=vendored` links them
-  statically. The build bootstraps from `bootstrap/stage0.agcb`, compiling
-  the front end three times. `make fixed-point` checks it once more;
+  statically. `make fixed-point` checks the bootstrap once more;
   `make stage0` refreshes the seed (`references/ci.md` of the development
   skill).
 - `make test TESTS="tests/test_vm_bits.py tests/test_spec_checker.py"`: a
@@ -113,7 +110,7 @@ broken VM or test runner cannot make its own tests pass.
 | builtin functions and `std/` modules | `site/content/library/` |
 | writing `.agc` programs | `.agents/skills/agentica-programming/` |
 | writing or reviewing `.agc` style | `.agents/skills/agentica-code-guidelines/` (`site/content/style.md` is its page for people) |
-| what is planned or in progress | GitHub issues: `gh issue list -R agentica-lang/agentica -l area:std -m 0.23.0` (labels `area:*`, kind, platform; a milestone per release) |
+| what is planned or in progress | GitHub issues: `gh issue list -R agentica-lang/agentica -l area:std -m <version>` (labels `area:*`, kind, platform; a milestone per release) |
 | what shipped | `CHANGELOG.md` and the merged PR |
 
 ## Rules
@@ -155,15 +152,11 @@ broken VM or test runner cannot make its own tests pass.
 - New features are VM-only, tested with golden outputs and independent
   Node/Python peers.
 - Python tests use pytest, pytest-xdist and Hypothesis (test-only Poetry
-  dependencies) and live in `tests/test_<area>.py`; `make test` runs each
-  module in its own process.
-  `unittest.TestCase` modules (from `tests.agentica_test.TestCase`) are
-  collected too. Node and Python peers (curl included) use the standard
-  library only. Dependencies: the C submodules in `vm/third_party`, the
-  pinned jscpd in `tools/jscpd` and the docs theme (with the site
-  highlighter) in `site/themes/docs-theme`; nothing else.
-- A language rule is tested through the CLI, in `tests/test_spec_<area>.py`:
-  `--json check FILE`, asserting the code and the span, never the message.
+  dependencies); `unittest.TestCase` modules (from
+  `tests.agentica_test.TestCase`) are collected too. Node and Python peers
+  (curl included) use the standard library only. Dependencies: the C submodules
+  in `vm/third_party`, the pinned jscpd in `tools/jscpd` and the docs theme
+  (with the site highlighter) in `site/themes/docs-theme`; nothing else.
 - Network and process tests are hermetic: localhost, port 0, no external
   services, everything cleaned up. TCP/HTTP interop uses an independent
   protocol implementation as the peer. Fixtures go in `tests/fixtures/`.
@@ -191,8 +184,8 @@ broken VM or test runner cannot make its own tests pass.
   PR and docs); mark a breaking change `**Breaking:**`.
 - Do not create new files under `docs/` (outside Hugo's `site/content/`)
   unless the user asks for one or accepts your suggestion. Progress and
-  evidence go in the PR or the CHANGELOG. Change docs
-  only when strictly necessary (`.agents/skills/documentation-writing/`).
+  evidence go in the PR or the CHANGELOG. Change docs only when strictly
+  necessary (`.agents/skills/documentation-writing/`).
 - Prose wrapping: `site/content/` keeps one line per paragraph or list item.
   Markdown prose in `docs/` and `.agents/skills/` wraps at 80 characters;
   code blocks keep their line breaks.

@@ -31,21 +31,9 @@
 ## was.
 ##
 ## `Analysis.refresh` makes the questions about a file fast: it returns a session whose cache holds the linked and
-## checked program of the file, and the parsed modules it reads. A loop that keeps one session does `update`, then
-## `refresh`, then asks. A question reads the files again and uses the cache only where the modules and their texts are
-## the ones it was made from (a buffer, a closed buffer, a change on the disk, a new or a removed file all count), so
-## the answers are the same with or without `refresh`, whatever the cache holds. The cache keeps at most 16 checked
-## files, the least recently refreshed leaving first, and the parsed modules that these reach. It lives in the value:
-## there is no task or lock. The caller owns the loop: run `refresh` in a task, one at a time, and store the session it
-## returns; two refreshes of one session give two caches, and keeping one drops the work of the other (it costs time,
-## not correctness). To share the cache between tasks, `entry` takes from a refreshed session what it kept for a file,
-## as plain data that an `ATS` table can hold, and `adopt` puts such an entry in another session: tasks that refresh
-## different files lose nothing.
-##
-## A refresh does not check again a module whose text is the same as in the last program of the file that checked, when
-## every module it imports is the same too: it takes what that check left for the module, so an edit of the file costs
-## about the file itself, and an edit of an imported module checks that module and those that import it. The answers
-## are those of a check from the start.
+## checked program of the file. The answers are the same with or without `refresh`; a stale cache costs time, never a
+## wrong answer. `entry` and `adopt` share what a refresh kept between tasks, as plain data that an `ATS` table can
+## hold. The rules of the cache are on the "Code analysis (std)" page of the library reference.
 
 import BodiesJson from "std/internal/compiler/query/bodies_json"
 import Cache from "std/internal/compiler/analysis/cache"

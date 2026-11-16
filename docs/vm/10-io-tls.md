@@ -12,7 +12,7 @@ reads no `openssl.cnf`, so both builds behave the same.
   for a system error, and a short detail. The adapter drains OpenSSL's error
   queue, and OpenSSL never gets a GC pointer.
 - **Error codes** are `agc_tls_error` in `vm/tls.h`.
-- **Contexts.** A `TlsContext` (`AGC_T_TLS_CONTEXT`, `vm/tls_context.c`) holds
+- **Contexts.** A `TLS.Context` (`AGC_T_TLS_CONTEXT`, `vm/tls_context.c`) holds
   one `agc_tls_config` of one role, which counts its owners: the context and
   each socket and listener made from it. So a dropped context stays valid
   until its last socket closes. A GC finalizer gives the context's count back;
@@ -117,7 +117,7 @@ reads no `openssl.cnf`, so both builds behave the same.
 - **CONNECT tunnels (std-only).** std/http reaches an `https://` target through
   a proxy with a TCP socket that a CONNECT made a pipe, and starts TLS on it
   with `TLS.upgrade`'s machinery: `HttpWire.upgrade_context(socket, context,
-  host, timeout_ms)` for a client `TlsContext` (plus the ALPN check above), and
+  host, timeout_ms)` for a client `TLS.Context` (plus the ALPN check above), and
   `HttpWire.upgrade_tls(client, socket, host, timeout_ms)` for the client's
   shared system-trust context of `HttpWire.connect_tls` (the upgraded net takes
   a count on it, an error when the client gave it back).
@@ -159,11 +159,11 @@ other systems get none. `vm/stream.c` holds what they share with `vm/process.c`:
 the input buffer, the write path, the lock-or-timeout helper and the `network:`
 texts.
 
-- **Values.** A `Socket` is a GC value with a registered state and two lock
+- **Values.** A `TCP.Socket` is a GC value with a registered state and two lock
   records, `reader` and `writer`. `read_line` and `recv_bytes` take the reader
   lock, and `send` and `send_bytes` the writer lock, both through
   `agc_handle_wait`, so one deadline covers the lock wait and the operation. A
-  `Listener` keeps its bound port, so `TCP.local_port` still answers after
+  `TCP.Listener` keeps its bound port, so `TCP.local_port` still answers after
   `close_listener`.
 - **Ownership.** The native state is freed when its users (the resource and each
   request) and its callbacks (a DNS lookup, one close callback per link) are all

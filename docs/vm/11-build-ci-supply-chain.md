@@ -22,9 +22,8 @@ behind them.
   the build. The mode of libgc and zlib is not remembered: pass the variable to
   every make command. `make vm-gc-stress` always uses the vendored GC (it needs
   `GC_DEBUG`), and `SANITIZE=1` links no libgc.
-- The vendored libgc is built with `-DALL_INTERIOR_POINTERS
-  -DNO_EXECUTE_PERMISSION -DGC_THREADS -DGC_BUILTIN_ATOMIC -DPARALLEL_MARK
-  -DTHREAD_LOCAL_ALLOC`. `NO_EXECUTE_PERMISSION` keeps the heap without execute
+- The vendored libgc's defines are `GC_COMPILE` in `mk/vm.mk`.
+  `NO_EXECUTE_PERMISSION` keeps the heap without execute
   permission, since macOS on arm64 refuses writable and executable pages;
   `GC_BUILTIN_ATOMIC` avoids the `libatomic_ops` header.
 - Both libgc builds have thread support. `vm/value.c` is the only file that

@@ -34,8 +34,7 @@ upgraded only by a reviewed PR; `git submodule status` shows the pin.
   `$(VM_BUILD)/uv/` and linked statically.
 - **picohttpparser:** parses and validates request and response heads behind
   our adapter (10.6). `phr_decode_chunked` is not used, since it knows no
-  limits. It is built at the baseline, without `-msse4.2`; its SSE4.2 path is a
-  SIMD candidate (`docs/future/19-simd.md` §19).
+  limits. It is built at the baseline, without `-msse4.2`.
 - **libffi:** calls the C functions of `extern` blocks. The sources that
   libffi's `configure.host` lists for the target are compiled per mode into
   `$(VM_BUILD)/ffi/`, with the `ffi.h` and `fficonfig.h` that its configure

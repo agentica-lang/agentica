@@ -217,8 +217,8 @@ behavior.
     the terminal ends the pipeline with that error instead of taking it as the
     block's value. The frame below must be the native frame of a `Lazy`
     terminal (`agc_stepper.lazy`), else `RUNTIME-INTERNAL`: another stepper
-    (`File.each_line`, `Profile.measure`) or a native loop such as `List.map`
-    is refused.
+    (`File.each_line`, `System.Profile.measure`) or a native loop such as
+    `List.map` is refused.
 
 - **Group:** Range
   - **Opcodes:** `RANGE a b c`, `RANGE_BOUNDS a b`

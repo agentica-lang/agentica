@@ -1,39 +1,27 @@
-## Builds native modules from their C sources (docs/grammar/05b-modules.md), over the pure rules of
-## packages/native_build.agc: the Workspace builder of the commands that run or write a program (app/ turns it on).
+## Builds native modules from their C sources, over the pure rules of packages/native_build.agc: the Workspace
+## builder of the commands that run or write a program (app/ turns it on). The user-facing rules (the compiler, the
+## flags, the build key and the `native-build/<key>/` layout, PKG-NATIVE-BUILD and PKG-NATIVE-UNBUILT) are in
+## docs/grammar/05b-modules.md.
 ##
-## The compiler is the user's: the words of `CC` (split at spaces, no shell, no quoting), else `cc` (`gcc` on Windows,
-## the MSYS2 UCRT64 toolchain the VM is built with). The manifest names no compiler and no flag: its sources, defines
-## and libraries become the arguments of NativeBuild.arguments, passed as a list to Process.spawn_captured, which runs
-## no shell, with the package folder as the working folder. agentica_native.h comes from this binary (it carries the
-## header of its own VM), so a module always builds against the API that loads it. A fetched package (`pinned`) is
+## The arguments of NativeBuild.arguments go to Process.spawn_captured as a list, with no shell. agentica_native.h
+## comes from this binary, so a module always builds against the API that loads it. A fetched package (`pinned`) is
 ## compiled from a copy instead: the bytes the request carries (checked against its lock row by the core) are written
 ## to `package/` in the private folder of the build, which is the working folder and holds the sources, and the copy
 ## is removed before the entry is put in place.
 ##
-## The output is content-addressed in the package cache: `<cache>/native-build/<key>/libNAME.so` (`.dylib`,
-## `NAME.dll`), where the key is the SHA-256 of the files of native/, the table, the compiler words, the first lines of
-## `--version` and `-dumpmachine`, the header, and the variables that move the compiler's search (CPATH,
-## C_INCLUDE_PATH, CPLUS_INCLUDE_PATH, LIBRARY_PATH). System headers, installed libraries and the rest of the
-## environment are not in the key; neither is a file outside native/. The files of native/ are hashed again after the
-## compile, and a change during it stores nothing. Nothing is written into the package. An entry is made in a new
-## private folder beside the others, with the library, its `include/` and a receipt (the SHA-256 of the library), then
-## renamed into place in one no-replace step, so a reader never sees half an entry and two builds of one key keep the
-## first. A run that finds no entry takes the lock of the key (`<key>.lock` beside it, File.try_lock) and looks again,
-## so parallel first runs build once and the others use that entry. The library is code the run loads, so the
-## `native-build` folder and an entry are used only when they are this user's and writable by no one else
-## (cache_files.agc, private_kind; on Windows only their kind is checked), the library is a regular file in the entry,
-## and the receipt matches: anything else is PKG-NATIVE-BUILD, never a silent rebuild over it. Temporary folders that
-## a run left (it died during a build) are removed once an hour old.
+## An entry is made in a new private folder beside the others, then renamed into place in one no-replace step, so a
+## reader never sees half an entry and two builds of one key keep the first. A run that finds no entry takes the lock
+## of the key (`<key>.lock` beside it, File.try_lock) and looks again, so parallel first runs build once. The library
+## is code the run loads, so the `native-build` folder and an entry are used only when they are this user's and
+## writable by no one else (cache_files.agc, private_kind; on Windows only their kind is checked), the library is a
+## regular file in the entry, and the receipt matches: anything else is PKG-NATIVE-BUILD, never a silent rebuild over
+## it. Temporary folders that a run left (it died during a build) are removed once an hour old.
 ##
-## A compiler that cannot start, fails or leaves no library is PKG-NATIVE-BUILD at the manifest and
-## `native.NAME.build`; for an optional module (`optional = true`) any failure of the builder is instead the warning
-## PKG-NATIVE-UNBUILT at the same place, which the builder hands to `warned` (app/ prints it in the form the options
-## ask for), and Unbuilt, so the program runs without the module. The plain builder prints the
-## compiler's standard error as it is, and `built native NAME: PATH` after a build, on stderr; the quiet one (for
-## `--json` and `--ai`) prints nothing and puts the start of the compiler's standard error in the message instead. A
-## builder keeps what it built or failed for the rest of the run (an ATS table), so a module that many files use is
-## built, and reported, once. Under a --deny-* flag or --sandbox,
-## where the VM refuses native code, nothing is built: `compile` gets the `refusing` builder, the others none (app/).
+## For an optional module the builder hands the warning to `warned` (app/ prints it in the form the options ask for)
+## and returns Unbuilt. The quiet builder (for `--json` and `--ai`) prints nothing. A builder keeps what it built or
+## failed for the rest of the run (an ATS table), so a module that many files use is built, and reported, once. Under
+## a --deny-* flag or --sandbox, where the VM refuses native code, nothing is built: `compile` gets the `refusing`
+## builder, the others none (app/).
 
 import Diag from "../diagnostics/diagnostic"
 import Paths from "../modules/import_path"

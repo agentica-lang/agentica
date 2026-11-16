@@ -142,8 +142,8 @@ in a PR that rewrites the goldens.
 
 ### 2.4 Printing values
 
-- Text form: a String as is, a `Json` as its JSON text, anything else in debug
-  form. A list stays in debug form (`puts(["a"])` prints `["a"]`).
+- Text form: a String as is, a `JSON.Value` as its JSON text, anything else in
+  debug form. A list stays in debug form (`puts(["a"])` prints `["a"]`).
 - Debug form: `nil`, `true`, Int, Float (2.2), String (2.3), `[a, b]`, `{k: v}`
   in insertion order, `Name(f: v, ...)` in declaration order, `Enum.Variant` or
   `Enum.Variant(a, b)`, `ok(v)`, `ok()` for Void, `error("msg")`, and the handle
@@ -161,10 +161,11 @@ in a PR that rewrites the goldens.
   written `Enum.Variant()`. The VM never looks a type up by its display name.
 - JSON text sorts object keys, uses short escapes (`\n`) and lowercase `\u007f`
   for DEL, keeps non-ASCII raw, prints floats per 2.2 and big integers in
-  decimal. `JSON.encode` of a non-Json value keeps struct declaration order and
-  map insertion order; only a `Json` inside is sorted. `JSON.from`,
-  `JSON.object` and `JSON.array` build a `Json`, so their text is sorted. A
-  non-finite Float in either is `RUNTIME-JSON-ENCODE` at the call span.
+  decimal. `JSON.encode` of a value that is not a `JSON.Value` keeps struct
+  declaration order and map insertion order; only a `JSON.Value` inside is
+  sorted. `JSON.from`, `JSON.object` and `JSON.array` build a `JSON.Value`, so
+  their text is sorted. A non-finite Float in either is `RUNTIME-JSON-ENCODE` at
+  the call span.
 
 ### 2.5 Diagnostics, streams and exit codes
 
@@ -215,23 +216,23 @@ in a PR that rewrites the goldens.
   only zeros gives `0.0` (so `-0e5` is `0.0`); a non-zero negative value that
   rounds to zero is `-0.0`. `-0` is the integer 0.
 - A repeated key keeps the last value. Objects sort by key bytes, stably.
-- The VM reads the tree with the yyjson reader (10) and copies it into `Json`
-  nodes. Numbers reach the VM as text.
+- The VM reads the tree with the yyjson reader (10) and copies it into
+  `JSON.Value` nodes. Numbers reach the VM as text.
 
 ### 2.7 Typed JSON
 
-The user-facing rules (which fields are required, the `JsonField` and
+The user-facing rules (which fields are required, the `JSON.Field` and
 `Optional` forms, the enum object, the schema shape) are in
 `site/content/library/text-and-data/json.md`. The VM side:
 
 - `JSON.decode(s, T)` parses `s` like `JSON.parse`, then walks `T` in field
-  order and stops at the first problem. A `Json` source skips the parse. A
+  order and stops at the first problem. A `JSON.Value` source skips the parse. A
   decoded map is built in sorted key order.
 - A missing key of a field with a default takes the default of the Field
   defaults section (03 4.6): a constant, an empty List or Map, or a variant
   without a payload. Only the missing key: `null` is decoded as the field type.
   `JSON.schema` leaves such a field out of `required`.
-- A `JsonField[T]` field (type kind 7) is `Absent` when its key is missing and
+- A `JSON.Field[T]` field (type kind 7) is `Absent` when its key is missing and
   `Null` for JSON `null`; the encoders leave out the key of an `Absent` struct
   field, write `null` for `Null` and the payload for `Value`. They know the
   variants by the ids of the `JSON.Field` enum, which the loader finds by that
@@ -243,7 +244,7 @@ The user-facing rules (which fields are required, the `JsonField` and
   `Optional` of another shape, from an older file, is an ordinary enum.
 - An enum (type kind 9) is the object `{"tag": name, "values": [...]}`; the
   encoders write both keys, `tag` first, for any enum value that is not an
-  `Optional` or a `JsonField`. `JSON.decode` checks, in this order, each an
+  `Optional` or a `JSON.Field`. `JSON.decode` checks, in this order, each an
   error at the object's path: the value is an `object`; `tag` is there (`tag:
   expected required field`), a `String` and the name of a variant (`tag:
   expected one of A, B`); `values` is there for a variant with payloads, an
@@ -257,7 +258,7 @@ The user-facing rules (which fields are required, the `JsonField` and
   fields, `a[3]` for list items and `a["k"]` for map keys. `<what>` is `object`,
   `array`, `required field`, `signed 64-bit Int` (a JSON float, or an integer
   outside int64), `finite Float` (a big integer that rounds to infinity fails),
-  `Bool` or `String`, with ` or null` after it where a `JsonField` or
+  `Bool` or `String`, with ` or null` after it where a `JSON.Field` or
   `Optional` applies.
 - `JSON.schema(T)` writes each struct and enum reached once in `$defs` under its
   linked name (`@2::Point` for an imported one), referenced by `{"$ref":

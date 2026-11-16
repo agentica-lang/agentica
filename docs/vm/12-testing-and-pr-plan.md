@@ -1,4 +1,4 @@
-## 12. Testing and the PR plan
+## 12. Tests
 
 ### 12.1 Tests
 
@@ -31,7 +31,3 @@
 - VM goldens are timing-free: timeout behavior belongs in
   `tests/test_vm_http.py`. Filesystem fixtures get a fresh scratch directory per
   run. Network and process peers use standard libraries only (AGENTS.md).
-
-## 13. Open questions
-
-None. The heap cap is `--max-heap` (§6.3).

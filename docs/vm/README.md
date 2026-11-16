@@ -2,9 +2,9 @@
 
 The design of the C bytecode VM, which runs every program. The language does not
 change: `docs/grammar/` (index `docs/grammar.md`) stays the contract. The VM is
-the only backend. The VM's codename is Aurora, but only in these docs: the
-binary (`agentica`), the `AGENTICA_VM_*` variables, the `agc_` prefix, `.agcb`
-and `vm/` keep their names.
+the only backend. The VM's codename is Aurora, used only in these docs and on
+the site: the binary (`agentica`), the `AGENTICA_VM_*` variables, the
+`agc_` prefix, `.agcb` and `vm/` keep their names.
 
 The section numbers stay as they were, so a reference such as `§10.4` still
 finds its place. The table below gives the file for each number. Pending
@@ -13,19 +13,19 @@ work is in GitHub issues, and what shipped is in `CHANGELOG.md`.
 ## 1. Overview
 
 **Golden outputs, not parity.** Each fixture in `tests/fixtures/vm/` has a
-golden file, `<name>.expected`, with its exit code, stdout, program stderr and
-diagnostic code. The VM is the reference. When behavior changes on purpose,
-`make goldens` rewrites the files, and the PR shows their diff for review
-(12.1). A new fixture gets hand-checked expected output.
+golden file, `<name>.expected`, with its exit code, stdout, program stderr,
+diagnostic code and steps. The VM is the reference. When behavior changes on
+purpose, `make goldens` rewrites the files, and the PR shows their diff for
+review (12.1). A new fixture gets hand-checked expected output.
 
-**Black-box rule.** The goldens check the exit code, stdout, program stderr and
-diagnostic code, and nothing else. A runaway program must stop with
-`RUNTIME-STEP-LIMIT` under `--max-steps`. A run stopped by a smaller limit gives
-a prefix of the full stdout and program stderr (12.1). Diagnostic message text
-and span, the VM's own stderr wording, OS error text, exact step counts and
-step-limit spans may change in a PR that updates the goldens. An error string
-that a program prints is program data, so it is part of its golden. VM messages
-must be clear and useful for agents. The turn cost (10.2.1) stays, for fairness.
+**Black-box rule.** The goldens check the fields above and no VM internals. A
+runaway program must stop with `RUNTIME-STEP-LIMIT` under `--max-steps`. A run
+stopped by a smaller limit gives a prefix of the full stdout and program stderr
+(12.1). Diagnostic message text and span, the VM's own stderr wording, OS error
+text, exact step counts and step-limit spans may change in a PR that updates the
+goldens. An error string that a program prints is program data, so it is part of
+its golden. VM messages must be clear and useful for agents. The turn cost
+(10.2.1) stays, for fairness.
 
 The compiler may optimize freely as long as the goldens stay the same: inlining,
 constant folding, common subexpression elimination, loop-invariant code motion,
@@ -87,7 +87,7 @@ out-of-memory exit. `--max-heap SIZE` bounds that memory (6.3).
 - **§§10.4–10.5:** [Processes and runtime limits](10-io-processes.md).
 - **§§10.6–10.7:** [HTTP](10-io-http.md)—parser and VM implementation.
 - **§11:** [Build, CI and supply chain](11-build-ci-supply-chain.md).
-- **§§12–13:** [Tests and PR plan](12-testing-and-pr-plan.md); open questions.
+- **§12:** [Tests](12-testing-and-pr-plan.md).
 - **§14:** [Core invariants](14-core-invariants.md).
 - **§15:** [VM layers](15-layers.md).
 - **§16:** [VM architecture](16-architecture.md).

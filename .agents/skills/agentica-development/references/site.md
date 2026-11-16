@@ -66,14 +66,10 @@ rule that a site page shows.
 
 ## Markdown and llms.txt
 
-Every page is also published as Markdown (the theme's `layouts/all.markdown.md`;
-its `_partials/markdown-links.html` rewrites links to `.md` URLs, and
-`home.llms.txt` fails the build if that rewrite changes). It skips top-level ```
-fences, code spans and images, but not `~~~` or 4-backtick fences. Fence
-attributes become plain text: `{expect="CHECK-X"}` adds ``Does not compile:
-`error[CHECK-X]` `` after the block, `{file="a.agc"}` adds ``File `a.agc`:``
-before it. `/llms.txt` and `/llms-full.txt` come from the theme's
-`_partials/llms-groups.html`.
+Every page is also published as Markdown, and `/llms.txt` and
+`/llms-full.txt` are built from it (the theme's `layouts/all.markdown.md` and
+`_partials/llms-groups.html`). Its link rewrite skips top-level ```` ``` ````
+fences, code spans and images, but not `~~~` or 4-backtick fences.
 
 ## Examples are tests
 

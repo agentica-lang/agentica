@@ -29,10 +29,8 @@ git submodule update --init
 make
 ```
 
-This writes `dist/agentica`, the only program: the VM with the front end and the
-standard modules inside. The build starts from the compiled front end checked in
-as `bootstrap/stage0.agcb`, so it needs only a C toolchain. To run compiled
-bytecode, use `dist/agentica run -- FILE.agcb`.
+This writes `dist/agentica`. The build starts from the compiled front end
+checked in as `bootstrap/stage0.agcb`, so it needs only a C toolchain.
 
 ## Hello world
 

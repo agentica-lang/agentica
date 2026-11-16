@@ -11,48 +11,35 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 ### Added
 
 - `Process.spawn` with `pty: true` runs a program on a pseudo-terminal, so interactive programs (password prompts, REPLs, editors) work, and `Process.resize` sets its size; Linux and macOS (#1733).
-- A run that compiles its program says `Compiling FILE…` and the time on stderr when that is a terminal, and `agentica compile [FILE...]` (no `-o`) fills the bytecode cache ahead, by default for every `main.agc` under the working folder (#1735).
+- A run that compiles its program says `Compiling FILE…` on a terminal's stderr, and `agentica compile` with no `-o` fills the bytecode cache ahead, by default for every `main.agc` under the working folder (#1735).
 - `Actor.send` and `Actor.await` split `Actor.call` in two, so a caller can send requests to several actors first and then await each answer (#1571).
-- The errors of file and network builtins carry `details`: `"path"`, the path the call was given (and `"to"` for `Path.rename`), for a failed or `--deny-fs` refused file call, and `"host"` for a failed or `--deny-net` refused connect, listen, DNS lookup or TLS handshake (#1510).
+- The errors of file and network builtins carry `details`: `"path"` (and `"to"` for `Path.rename`) for a failed or refused file call, `"host"` for a failed or refused connect, listen, DNS lookup or TLS handshake (#1510).
 - `Native.arena do ... end` closes, when its block ends, every native resource and owned buffer the task opened in it, newest first, except those the block's value holds (#1091).
-- `Bytes.build do |out| ... end` builds one `Bytes` from many parts with `out.write(a, b, ...)`, which writes a `Bytes`, a `String` or an `Int` with no copy in between; a 100-item RESP reply builds about 4x faster than with `Bytes.concat` (#1361).
+- `Bytes.build do |out| ... end` builds one `Bytes` from many parts with `out.write(a, b, ...)` (a `Bytes`, a `String` or an `Int`), with no copy in between (#1361).
 - Native API 1.4: `an_error_kind` makes an error with a kind and details, and `an_get_error` reads the kind, message and details of an error a module gets; modules built for 1.3 still load (#1510).
 
 ### Changed
 
-- With one scheduler, a `compute def` call made right after another costs about 2 µs in place of 2.8 µs: its end no longer wakes the loop through a system call while the scheduler waits for it (#1120).
-- With the JIT, a loop that tests lines against literals (`strip`, `start_with?`, `end_with?`) runs faster: compiled code calls the prefix and suffix tests with no call overhead (#1223).
-- With the JIT, the block of a `Lazy` terminal (`File.foreach(path).reduce(state, &step)`) is compiled even when the code that calls the terminal is not, about 7% faster on a line scan (#1223).
-- The `gc` trace (`AGENTICA_VM_TRACE=gc`) reports what each scheduler allocated and, at the end of a run, the total time the world was stopped for collections, its share of wall and CPU time, and the pause count, p50, p99 and max (#1698).
-- `agentica FILE.agc` starts a program whose bytecode is in the cache without loading the compiler: about 16 ms in place of 48 ms for a small program on Linux (#1471).
-- `"$#{n}\r\n".bytes` on an interpolated string writes the parts into one `Bytes`, with no `String` in between; an `Int` in any interpolation prints faster (#1361).
-- `Bytes.concat([a, b, c])` with a list literal and `a + b + c` on `Bytes` (up to 8 parts) copy once and make no list or partial `Bytes` (#1361).
-- A program whose tasks all wait for one busy task (a store task that serves 50 clients over channels) no longer runs slower with more scheduler threads: up to about 2 times faster at 2 to 8 schedulers, depending on the work per request (#1362).
-- A project's `agentica.toml` is parsed once per start, not twice, so a program below a manifest starts a little faster (#1471).
+- A `compute def` or dirty native module call made right after another costs about 3 µs in place of 15 to 25 µs (about 2 µs with `--schedulers 1`), and runs of calls that take tens of µs each (SQLite, agentica-db) run 2 to 3 times faster with `--schedulers 1` (#1120).
+- With the JIT, a loop that tests lines against literals (`strip`, `start_with?`, `end_with?`) runs faster, and the block of a `Lazy` terminal is compiled even when its caller is not (#1223).
+- The `gc` trace (`AGENTICA_VM_TRACE=gc`) reports what each scheduler allocated and, at the end of a run, the stop-the-world time, its share of wall and CPU time, and the pause count, p50, p99 and max (#1698).
+- `agentica FILE.agc` starts a program whose bytecode is in the cache without loading the compiler (about 16 ms in place of 48 ms for a small program on Linux), and parses `agentica.toml` once (#1471).
+- `"$#{n}\r\n".bytes` writes the parts into one `Bytes`, an `Int` in any interpolation prints faster, and `Bytes.concat([a, b, c])` and `a + b + c` on `Bytes` copy once (#1361).
+- A program whose tasks all wait for one busy task (a store task that serves 50 clients over channels) no longer runs slower with more scheduler threads: up to about 2 times faster at 2 to 8 schedulers (#1362).
 - `ATS.get`, `has_key?` and the read of `push` take no lock, so tasks that read one table scale with the schedulers: 8 tasks reading `Int` keys take 0.73 s in place of 2.2 s on 8 schedulers (#1625).
-- With several schedulers, a TCP read that bytes already received, or bytes waiting in the kernel, can answer returns at once instead of waiting on the I/O thread: up to 6 times more lines per second on a busy stream, about 10% more requests per second for an HTTP client and 6 to 28% for an HTTP server (#1197).
-- With several schedulers, a TLS read also receives and decrypts on its scheduler: about 50% more requests per second for an HTTPS server and up to 6 times more lines per second on a TLS stream (#1197).
-- With several schedulers, a TLS send also encrypts and sends on its scheduler when no other send of the socket is under way, also while a read of it waits: about 4 times more lines per second for a server that streams lines over TLS, with or without a reader task on the socket (#1188, #1197).
+- With several schedulers, TCP and TLS reads and sends run on the task's scheduler when they can: up to 6 times more lines per second on a stream, 6 to 50% more requests per second for HTTP and HTTPS servers (#1188, #1197).
 - `TCP.write` and `TCP.flush` buffer on TLS sockets too: a write returns once its records are in the socket's write buffer (#1713).
 - `agentica FILE.agc` no longer looks for the C compiler in `PATH` at each start of a cached program with no native module, and a change of `CC` or `PATH` keeps its cache entry (#1551).
-- A `compute def` call or a dirty native module call made right after another costs about 3 µs in place of 15 to 25 µs: the compute pool thread spins briefly for the next call before it sleeps (#1120).
-- With one scheduler (`--schedulers 1`), a run of `compute def` calls that take tens of microseconds each (an SQLite step, an agentica-db write) runs 2 to 3 times faster (a one-row SQLite query about 2.8 times, an agentica-db insert about 2 times): the scheduler spins briefly for the call's end before it sleeps (#1120).
-- Programs run 4 to 6% faster when the interpreter runs them (`--jit off`, or code the JIT has not compiled): a call or an operator writes its result straight into the variable it is assigned to (#1001).
-- `check` and `compile` run about 1% faster and most programs 0.5 to 4% faster: a straight-line run of statements charges its steps with one instruction; `--max-steps`, profiles and `--coverage` count the same steps as before (#1001).
-- An `if`, `while` or `case` guard whose condition uses `and`, `or` or `not` jumps from each part instead of making the Bool first: up to 10% faster in the interpreter and 4 to 8% with the JIT on condition-heavy code (#1001).
-- Checking that bytes are UTF-8 (`String.from_bytes`, text reads from files, sockets and processes) is 12 to 30% faster on non-ASCII text (#996).
-- A `case` with 3 or more enum variant arms jumps straight to the arm that matches instead of testing the arms in order: `agentica check` and `compile` of a large program are about 5 to 7% faster (#1001).
-- `String.split` searches the text once instead of twice and skips counting the characters of each piece when the text is ASCII: about 10% faster on log-style line and word splitting (#996).
-- `String#upcase`, `#downcase` and `#reverse` handle runs of ASCII in bulk (3 to 50 times faster), counting characters (`index_of`, `split` pieces, JSON strings) is up to 8 times faster on non-ASCII text, and `JSON.parse` checks for control characters only when a parse fails (7 to 17% faster on a document of records) (#996).
-- A `Float` turns into text (`to_s`, interpolation, `JSON.encode`) about 10 times faster, with the same text as before: `JSON.encode` plus `JSON.decode` of records with float fields runs 40 to 65% faster. On Windows, a few values that printed one digit too many now print the shortest text, as on the other systems (#1682).
-- `String.to_f` and `JSON.decode` read a number to the nearest `Float` on every system (on Windows some texts, such as `3.839223843572815e-239`, were read one step off), and `to_f` is about 15% faster (#1682).
-- `agentica compile` of a large program whose bytecode is in the cache is about 15% faster: the output and the cache entry are written without copying the rest of the program for every 1 MiB piece (#1683).
+- The interpreter runs programs 4 to 6% faster, condition-heavy code up to 10% faster, and `check` and `compile` of a large program about 5 to 7% faster; `--max-steps`, profiles and `--coverage` count the same steps (#1001).
+- Text work is faster: UTF-8 checks 12 to 30%, `String.split` about 10%, `upcase`, `downcase` and `reverse` 3 to 50 times on ASCII, character counts up to 8 times on non-ASCII, `JSON.parse` 7 to 17% (#996).
+- A `Float` turns into text about 10 times faster, and `String.to_f` and `JSON.decode` read a number to the nearest `Float`; on Windows a few values that printed one digit too many print the shortest text and some texts were read one step off; other output is unchanged (#1682).
+- `agentica compile` of a large program whose bytecode is in the cache is about 15% faster (#1683).
 
 ### Fixed
 
+- `String#downcase` picks the final sigma as Python does: letters with no uppercase form (`ß`, `ŉ`, `ª`, `ﬁ`) count as cased, and modifier letters (`ʰ`, `ⁿ`) and U+0345 are skipped: `"ßΣ".downcase` is `"ßς"` (#1704).
+- A loop that parses a large JSON array or builds large lists is much less likely to hit `--max-heap` on macOS arm64 and Windows: a stray pointer into a list's items keeps less than 64 KiB of them, not the whole list (#1681).
 - `JSON.decode` and codecs give a field's default for a missing key (`wire: String = ""`) in place of `expected required field`, and `JSON.schema` leaves such a field out of `required`; `null` stays an error (#1739).
-- `String#downcase` picks the final sigma as Python does: letters with no uppercase form (`ß`, `ŉ`, `ª`, `ﬁ`) count as cased, and modifier letters (`ʰ`, `ⁿ`) and U+0345 are skipped: `"ßΣ".downcase` is `"ßς"` and `"ΑΣʰ".downcase` is `"αςʰ"` (#1704).
-- A loop that parses a large JSON array or builds large lists is much less likely to keep an old list alive through a stray pointer, which made it hit `--max-heap` on macOS arm64 and sometimes on Windows: a stray pointer into a list's items now keeps less than 64 KiB of them, not the whole list (#1681).
 
 ## [0.32.0] - 2026-11-15
 
