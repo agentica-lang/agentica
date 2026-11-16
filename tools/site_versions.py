@@ -287,9 +287,11 @@ def _download(url: str, sha256: str, folder: Path, strip: int) -> None:
         shutil.move(str(source), str(folder))
 
 
-def make_site(tree: Path, base_url: str, env: dict[str, str], log: Path) -> Path:
-    """Run the tree's own `make site` with the base URL; returns its site/public."""
-    command = ["make", "site", "HUGO_FLAGS=--baseURL " + with_slash(base_url)]
+def make_site(tree: Path, base_url: str, env: dict[str, str], log: Path, released: bool = False) -> Path:
+    """Run the tree's own `make site` with the base URL; returns its site/public. A released tag's content cannot
+    change, so a Hugo warning (such as a broken link that a newer theme reports) does not fail its build; dev's does."""
+    flags = "--baseURL " + with_slash(base_url) + (" --panicOnWarning=false" if released else "")
+    command = ["make", "site", "HUGO_FLAGS=" + flags]
     with log.open("w") as out:
         try:
             subprocess.run(command, cwd=tree, env=env, stdout=out, stderr=subprocess.STDOUT, timeout=BUILD_TIMEOUT_S,
@@ -369,7 +371,8 @@ def build_ref(ref: str, base_url: str, cache: Path, tools: Path, logs: Path, lab
             themed = uses_theme(sha)
             if themed:
                 unpack_theme(current_theme(), tree)
-            public = _build_tree(tree, base_url, tools, logs / (label + ".log"), current_workflow() if themed else None)
+            workflow = current_workflow() if themed else None
+            public = _build_tree(tree, base_url, tools, logs / (label + ".log"), workflow, released=True)
             _store(public, cache, key)
         finally:
             subprocess.run(["git", "-C", str(ROOT), "worktree", "remove", "--force", str(tree)], capture_output=True)
@@ -423,12 +426,13 @@ def write_summary(built: dict, skipped: dict, failed: dict) -> None:
             out.write("\n".join(lines))
 
 
-def _build_tree(tree: Path, base_url: str, tools: Path, log: Path, workflow: str | None = None) -> Path:
+def _build_tree(tree: Path, base_url: str, tools: Path, log: Path, workflow: str | None = None,
+                released: bool = False) -> Path:
     """`make site` of a tree, with the Hugo and Dart Sass of `workflow` (a pages.yml), else of the tree's own."""
     own = tree / ".github" / "workflows" / "pages.yml"
     if not (tree / "site" / "hugo.toml").exists() or not own.exists():
         raise NoSite("the tree has no site (site/hugo.toml, pages.yml)")
-    return make_site(tree, base_url, tool_env(workflow or own.read_text(), tools), log)
+    return make_site(tree, base_url, tool_env(workflow or own.read_text(), tools), log, released)
 
 
 def _store(public: Path, cache: Path, key: str) -> None:

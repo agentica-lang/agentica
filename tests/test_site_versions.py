@@ -125,9 +125,12 @@ def test_one_folder_per_release_with_the_latest_at_the_root(repo, tmp_path, monk
         {"version": "0.9.0", "path": "0.9.0/"},
     ]
     # Each build bakes in its own base URL; the root is the latest release under the root URL.
-    assert "--baseURL https://example.org/docs/0.9.0/ 0.9.0" in (out / "0.9.0" / "library" / "index.html").read_text()
-    assert "--baseURL https://example.org/docs/ 0.11.0" in (out / "library" / "index.html").read_text()
-    assert "--baseURL https://example.org/docs/dev/" in (out / "dev" / "index.html").read_text()
+    # A Hugo warning fails dev's build only: a released tag's content cannot change.
+    tag = "--baseURL https://example.org/docs/0.9.0/ --panicOnWarning=false 0.9.0"
+    assert tag in (out / "0.9.0" / "library" / "index.html").read_text()
+    root = "--baseURL https://example.org/docs/ --panicOnWarning=false 0.11.0"
+    assert root in (out / "library" / "index.html").read_text()
+    assert "--baseURL https://example.org/docs/dev/</body>" in (out / "dev" / "index.html").read_text()
     assert not (out / "0.1.0").exists() and not (out / "0.10.0-beta.1").exists()
     assert "`0.1.0`" in (tmp_path / "summary.md").read_text()
     assert (out / "_versions" / "selector.js").exists() and (out / "_versions" / "selector.css").exists()
