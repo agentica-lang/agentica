@@ -275,6 +275,45 @@ def lower_call(
   ok(Lowering.Out(fx: fx.with(next: base + 1), slot: base))
 end
 
+## The state with a jump to label when the Bool condition is `on`. An `and`, `or` or `not` jumps from each of
+## its operands instead of making its Bool first; it charges the same steps. The registers it takes are free after.
+def lower_jump(cx: Lowering.Cx, fx: Lowering.Fx, condition: Ast.Expr, label: Int, on: Bool) -> Result[Lowering.Fx]
+  case condition
+    Ast.Expr.Binary(node) ->
+      if node.op == "and" or node.op == "or"
+        try typed(cx, condition, false)
+        fx = Lowering.step(fx, node.span)
+        if (node.op == "and") == on
+          fx = Lowering.new_label(fx)
+          past = fx.labels - 1
+          fx = try lower_jump(cx, fx, node.left, past, !on)
+          fx = try lower_jump(cx, fx, node.right, label, on)
+          return ok(Lowering.place(fx, past))
+        end
+
+        fx = try lower_jump(cx, fx, node.left, label, on)
+        return lower_jump(cx, fx, node.right, label, on)
+      end
+
+    Ast.Expr.Unary(node) ->
+      if node.op == "not"
+        try typed(cx, condition, false)
+        return lower_jump(cx, Lowering.step(fx, node.span), node.operand, label, !on)
+      end
+
+    _ -> fx = fx
+  end
+
+  kept = fx.next
+  value = try lower_expression(cx, fx, condition, -1, false, false)
+  op = "jump-if-false"
+  if on
+    op = "jump-if-true"
+  end
+
+  ok(Lowering.emit_at(value.fx, op, [value.slot, label], Ast.expr_span(condition)).with(next: kept))
+end
+
 private
 
 # The methods of a codec. A codec is a Codec.Info record at run time (Type.codec, Data.lower_codec): its name is the
