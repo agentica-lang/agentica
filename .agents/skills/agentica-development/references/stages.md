@@ -355,6 +355,11 @@ one data type (the types with `to_s`, the types with value equality plus
 - A Plain or Prelude builtin may instead give its trailing parameters a default
   (`Model.Named.default`, `references/frontend.md`, "Builtin defaults");
   lowering fills the rest at the call site.
+- A row's `effects` cover any I/O, also lazy work run by a later builtin
+  (`File.foreach`, `Channel.lazy`), and reads of shared state (`ATS.get`):
+  purity analysis trusts them.
+- A builtin that only `std/` may call goes in a std-only family with a
+  `STD_ONLY_IMPORTS` entry, never in a public family.
 
 ## Command line (`compiler/app/cli.agc` and `cli_*.agc`)
 
