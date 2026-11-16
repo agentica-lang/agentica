@@ -1,7 +1,8 @@
 ## The bytecode writer: the .agcb bytes of a lowered program.
 ## The file is, in this order, the header, the sources, the spans, the constants, the structs, the JSON field types,
 ## the Decodable structs, the enums, the struct updates, the Globals count, the builtins, the functions, the entry and,
-## when some enum can be decoded, the Decodable enums (docs/vm/03-ir-and-bytecode.md 4.6).
+## when some enum can be decoded, the Decodable enums, the Struct instances and the Field defaults
+## (docs/vm/03-ir-and-bytecode.md 4.6).
 ## tests/test_frontend_bytecode.py compares them with frozen goldens.
 ##
 ## The functions are walked first, because they decide the entries of the constant, update, builtin and span tables,
@@ -39,6 +40,13 @@ end
 
 private
 
+# The Field defaults section and the constant table with its constants.
+struct Defaults
+  chunks: Wire.Chunks
+  count: Int
+  constants: Pool.Pool
+end
+
 def build(program: Ir.Program, version: String) -> Result[Bytes]
   try check_limits(program)
   struct_index: Map[String, Int] = {}
@@ -66,6 +74,8 @@ def build(program: Ir.Program, version: String) -> Result[Bytes]
     functions = Wire.add_all(functions, encoded.parts)
   end
 
+  found = field_defaults(program, tables.constants)
+  tables = tables.with(constants: found.constants)
   out = (
     header(version)
     |> sources(program)
@@ -82,7 +92,8 @@ def build(program: Ir.Program, version: String) -> Result[Bytes]
     |> Wire.add(Wire.u32(program.functions.size))
     |> Wire.add_all(functions)
     |> Wire.add(Wire.u32(program.entry))
-    |> decodable_enums(json)
+    |> decodable_enums(json, found.count > 0)
+    |> Wire.add_all(found.chunks)
   )
 
   joined = Wire.join(out)
@@ -92,15 +103,62 @@ def build(program: Ir.Program, version: String) -> Result[Bytes]
 end
 
 # The decodable enums, after the entry: a count and the records, then the struct instances the same way. Each is
-# written only when there is one to decode, so a program without one has the bytes it always had; the enums section
-# is empty (a count of 0) only before the instances.
-def decodable_enums(out: Wire.Chunks, json: JsonTypes.Section) -> Wire.Chunks
-  return out if json.enums_count == 0 and json.instances_count == 0
+# written only when there is one to decode or a later section follows, so a program without one has the bytes it
+# always had; a section is empty (a count of 0) only before the next one.
+def decodable_enums(out: Wire.Chunks, json: JsonTypes.Section, more: Bool) -> Wire.Chunks
+  return out if json.enums_count == 0 and json.instances_count == 0 and !more
 
   enums = Wire.add_all(Wire.add(out, Wire.u32(json.enums_count)), json.enums)
-  return enums if json.instances_count == 0
+  return enums if json.instances_count == 0 and !more
 
   Wire.add_all(Wire.add(enums, Wire.u32(json.instances_count)), json.instances)
+end
+
+# The Field defaults section, last in the file: a count, then for each field with a default, in struct and field
+# order, the struct, the field, a kind (1 constant, 2 empty List, 3 empty Map, 4 variant) and its number (the constant
+# or the variant; 0 otherwise). The constants join the table.
+def field_defaults(program: Ir.Program, constants: Pool.Pool) -> Defaults
+  entries = Wire.start()
+  count = 0
+  pool = constants
+  index = 0
+  for entry in program.structs
+    field = 0
+    for default in entry.defaults
+      kind = 0
+      number = 0
+      case default
+        Ir.FieldDefault.Required -> kind = 0
+        Ir.FieldDefault.Value(imm) ->
+          interned = Function.intern_constant(pool, imm)
+          pool = interned.pool
+          kind = 1
+          number = interned.id
+        Ir.FieldDefault.EmptyList -> kind = 2
+        Ir.FieldDefault.EmptyMap -> kind = 3
+        Ir.FieldDefault.Variant(id) ->
+          kind = 4
+          number = id
+      end
+
+      if kind > 0
+        record = Wire.u32(index).concat(Wire.u32(field)).concat(Wire.u32(kind)).concat(Wire.u32(number))
+        entries = Wire.add(entries, record)
+        count += 1
+      end
+
+      field += 1
+    end
+
+    index += 1
+  end
+
+  chunks = Wire.start()
+  if count > 0
+    chunks = Wire.add_all(Wire.add(chunks, Wire.u32(count)), entries)
+  end
+
+  Defaults(chunks: chunks, count: count, constants: pool)
 end
 
 # The first limits of the format, in this order. The limits of the types, the registers and the updates are met

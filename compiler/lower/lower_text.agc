@@ -127,7 +127,21 @@ def struct_line(index: Int, entry: Ir.StructDef) -> String
     line = "#{line} types=[#{types}]"
   end
 
+  if entry.defaults.size > 0
+    line = "#{line} defaults=[#{entry.defaults.map(&default_text).join(",")}]"
+  end
+
   line
+end
+
+def default_text(default: Ir.FieldDefault) -> String
+  case default
+    Ir.FieldDefault.Required -> "-"
+    Ir.FieldDefault.Value(imm) -> imm_text(imm)
+    Ir.FieldDefault.EmptyList -> "[]"
+    Ir.FieldDefault.EmptyMap -> "{}"
+    Ir.FieldDefault.Variant(id) -> "v#{id}"
+  end
 end
 
 def function_lines(out: List[String], index: Int, function: Ir.Function, entry: Bool) -> List[String]

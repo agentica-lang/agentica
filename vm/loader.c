@@ -460,6 +460,7 @@ static uint32_t *read_field_types(reader *r, const agc_program *p, uint32_t coun
   if ((uint64_t)count * 4 > left(r)) reject(r, "field type count exceeds the file");
   uint32_t *types = load_alloc(r, agc_size_mul(count, sizeof(uint32_t)), true);
   for (uint32_t k = 0; k < count; k++) {
+    // cchecker: ignore CC-GCC-ANALYZER-NULL-DEREFERENCE: a count of 0 gets NULL and no loop
     types[k] = read_u32(r);
     if (types[k] >= p->type_count) reject(r, "type index out of range");
   }
@@ -654,7 +655,8 @@ static void load_json_enums(reader *r, agc_program *p) {
    each field of the struct. A file without it has no type of kind instance. */
 static void load_instances(reader *r, agc_program *p) {
   uint32_t count = read_count(r, 8, "struct instance");
-  if (count == 0) reject(r, "empty struct instances section");
+  /* the writer leaves the section out instead, unless the field defaults follow */
+  if (count == 0 && left(r) < 4) reject(r, "empty struct instances section");
   p->instances = load_alloc(r, agc_size_mul(count, sizeof(agc_instance_def)), false);
   p->instance_count = count;
   uint32_t named = 0;
@@ -677,6 +679,70 @@ static void load_instances(reader *r, agc_program *p) {
     d->field_types = read_field_types(r, p, p->structs[d->struct_index].count);
   }
   reject_duplicate_names(r, names, named);
+}
+
+/* True when the default fits the field type at index t: a constant of its scalar kind, an empty List or Map, or a
+   variant without a payload of its enum. */
+static bool default_fits(const agc_program *p, uint32_t t, const agc_field_default *d) {
+  const agc_type *type = &p->types[t];
+  switch (d->kind) {
+    case AGC_DEFAULT_CONSTANT: {
+      agc_value c = p->constants[d->number];
+      return (type->kind == AGC_TYPE_INT && agc_is(c, AGC_T_INT)) ||
+             (type->kind == AGC_TYPE_FLOAT && agc_is(c, AGC_T_FLOAT)) ||
+             (type->kind == AGC_TYPE_BOOL && agc_is(c, AGC_T_BOOL)) ||
+             (type->kind == AGC_TYPE_STRING && agc_is(c, AGC_T_STRING));
+    }
+    case AGC_DEFAULT_LIST: return type->kind == AGC_TYPE_LIST;
+    case AGC_DEFAULT_MAP: return type->kind == AGC_TYPE_MAP;
+    default: return type->kind == AGC_TYPE_ENUM && p->variants[d->number].owner == type->arg;
+  }
+}
+
+/* The optional section after the instances (4.6): the defaults that JSON.decode gives a missing key. Each record is a
+   struct, a field, a kind and a number, in increasing (struct, field) order. A struct must be one that JSON.decode may
+   build, alone or as an instance, and the default must fit the field type in each of them. */
+static void load_field_defaults(reader *r, agc_program *p) {
+  uint32_t count = read_count(r, 16, "field default");
+  if (count == 0) reject(r, "empty field defaults section");
+  p->field_defaults = load_alloc(r, agc_size_mul(p->struct_count, sizeof(agc_field_default *)), false);
+  uint64_t last = 0;
+  for (uint32_t i = 0; i < count; i++) {
+    uint32_t s = read_u32(r), field = read_u32(r);
+    agc_field_default d;
+    d.kind = read_u32(r);
+    d.number = read_u32(r);
+    if (s >= p->struct_count) reject(r, "struct index out of range");
+    if (field >= p->structs[s].count) reject(r, "field out of range");
+    uint64_t at = ((uint64_t)s << 32) | field;
+    if (i && at <= last) reject(r, "field defaults out of order");
+    last = at;
+    if (d.kind == AGC_DEFAULT_CONSTANT && d.number >= p->constant_count) reject(r, "constant index out of range");
+    if (d.kind == AGC_DEFAULT_LIST || d.kind == AGC_DEFAULT_MAP) {
+      if (d.number != 0) reject(r, "bad field default");
+    } else if (d.kind == AGC_DEFAULT_VARIANT) {
+      if (d.number >= p->variant_count || p->variants[d.number].arity) reject(r, "bad field default variant");
+    } else if (d.kind != AGC_DEFAULT_CONSTANT) {
+      reject(r, "bad field default kind");
+    }
+    bool built = false;
+    if (p->structs[s].field_types) {
+      built = true;
+      if (!default_fits(p, p->structs[s].field_types[field], &d)) reject(r, "field default does not fit its type");
+    }
+    for (uint32_t k = 0; k < p->instance_count; k++) {
+      if (p->instances[k].struct_index != s) continue;
+      built = true;
+      if (!default_fits(p, p->instances[k].field_types[field], &d)) reject(r, "field default does not fit its type");
+    }
+    if (!built) reject(r, "field default of a struct JSON.decode cannot build");
+    if (!p->field_defaults[s]) {
+      size_t size = agc_size_mul(p->structs[s].count, sizeof(agc_field_default));
+      p->field_defaults[s] = load_alloc(r, size, true);
+      memset(p->field_defaults[s], 0, size);
+    }
+    p->field_defaults[s][field] = d;
+  }
 }
 
 static void load_updates(reader *r, agc_program *p) {
@@ -881,8 +947,10 @@ static void load(reader *r, agc_program *p) {
   /* A count needs 4 bytes: fewer left are stray bytes, not a section. */
   p->instance_count = 0;
   p->instances = NULL;
+  p->field_defaults = NULL;
   if (left(r) >= 4) load_json_enums(r, p);
   if (left(r) >= 4) load_instances(r, p);
+  if (left(r) >= 4) load_field_defaults(r, p);
   if (left(r) != 0) reject(r, "trailing bytes");
   for (uint32_t i = 0; i < p->type_count; i++) {
     if (p->types[i].kind == AGC_TYPE_ENUM && !p->enums[p->types[i].arg].json_name)
