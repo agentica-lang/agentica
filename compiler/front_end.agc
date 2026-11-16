@@ -8,7 +8,7 @@ private
 # compiles what the user asks for in memory and hands the program to C to run. docs/vm/08-loader-and-cli.md §9,
 # is the contract.
 #
-# Arguments: `--version V [--stdlib DIR] [--embedded-bdd] [--cache-missed] -- WORDS...`
+# Arguments: `--version V [--stdlib DIR] [--embedded-bdd] [--cache-missed] [--stderr-tty] -- WORDS...`
 # (front_end_inputs.agc). V is the Agentica version that every .agcb header
 # names; it is an input, never a constant of compiler/. Without --stdlib the
 # std/ sources come from the binary (FrontEnd.std_source); with it, from the
@@ -20,7 +20,8 @@ private
 # status of the program (FrontEnd.hand_off). A start with bad arguments is status 2 and a message that says so.
 def main() -> Void
   case Inputs.read(System.args(), NativeWorkspace.workspace_with(&std_source))
-    Inputs.Read.Ready(settings, words) -> Cli.run(settings, words, Inputs.cache_missed?(System.args()))
+    Inputs.Read.Ready(settings, words) ->
+      Cli.run(settings, words, Inputs.cache_missed?(System.args()), Inputs.stderr_tty?(System.args()))
     Inputs.Read.Broken(message) ->
       IO.warn("agentica: the front end was started wrongly: #{message}")
       System.exit(2)

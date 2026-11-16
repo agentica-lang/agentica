@@ -195,6 +195,7 @@ Three variables have no flag. `AGENTICA_GC_HEAP` (default `32M`: bytes, or a num
 | `type-at --partial`, `refs FILE:LINE:COL --partial` | answer although some functions do not check, from the ones that do and from the link: the JSON has `"partial": true` and `diagnostics`, and the exit code is 0. `refs` takes it for a position without PATH. `outline` takes the option and ignores it |
 | `install`, `add NAME URL --tag TAG` (or `--ref COMMIT`, `--subdir DIR`, `--group test`), `update [NAME]` | keep `deps/` and `agentica.lock`; see [Packages](/tour/modules/#packages) |
 | `compile FILE -o OUT` | writes VM bytecode |
+| `compile [FILE...]` | fills the [bytecode cache](#bytecode-cache) as a run with the same options would, so the next run starts at once, and prints `compiled FILE` or `fresh FILE` for each; with no FILE, every `main.agc` under the working folder, searched as `check` searches it. It stops at the first program that does not compile |
 | `run [OPTIONS] -- FILE.agcb [ARGS...]` | runs bytecode; `run` must be the first word. Options: the ones above except `--dump*`, plus `--source-root DIR`, `--ai`, `--json`. `run --version` lists the linked libraries |
 | `--version` | prints the version |
 
@@ -230,6 +231,7 @@ The `[style]` of the nearest `agentica.toml` above each file sets the width (`ma
 - The entry is bytecode that runs with your rights, so it is used only when `_build/`, `_build/bytecode/` and the file are real folders and files (no links) owned by you, with no write bit for the group or others. The cache makes the folder with mode 0700. A folder that fails the checks is skipped with no message, so `/tmp` is a poor place for it. A folder you make yourself must pass `chmod go-w DIR`. On Windows only the link and file-kind checks apply.
 - `AGENTICA_BUILD_DIR` names another folder in place of `_build/`. `--no-cache` neither reads nor writes the cache for one run. `--dump`, `--dump-ir`, `compile` with a `--deny-*` flag or `--sandbox`, and `run -- FILE.agcb` do not use it, and a program that does not compile is never cached. A run's front end uses the cache even under `--deny-*`.
 - If a run stops with `invalid bytecode` from a cached entry, remove `_build/bytecode/`.
+- When a run compiles its program and stderr is a terminal, it prints `Compiling FILE…` there first, and the module count and the time when it is built; not on a cache hit, not with `--ai` or `--json`, and not when stderr is a file or a pipe.
 
 ## Check cache
 

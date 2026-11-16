@@ -41,6 +41,7 @@ import SourceReader from "../io/source_reader"
 import StdinBuffer from "../io/stdin_buffer"
 import LowerText from "../lower/lower_text"
 import Lowering from "../lower/lowering"
+import Paths from "../modules/import_path"
 import Env from "../modules/link_env"
 import Failure from "../modules/link_failure"
 import Resolve from "../modules/resolve_import"
@@ -68,8 +69,15 @@ import Pipeline from "pipeline"
 
 ## Runs the command line `args` (the words after the program name) and gives the exit status. Everything it writes goes
 ## to the standard streams of this process. `cache_missed` says that the launcher (cli_hit.agc) looked for the cache
-## entry of this run and found none it could use, so a run of a source file does not look again.
-def run(settings: Env.Settings, args: List[String], cache_missed: Bool, hand_off: Fn[Launch.Launch, Int]) -> Int
+## entry of this run and found none it could use, so a run of a source file does not look again. `stderr_tty` says that
+## stderr is a terminal: a run that compiles its program says so there.
+def run(
+  settings: Env.Settings,
+  args: List[String],
+  cache_missed: Bool,
+  stderr_tty: Bool,
+  hand_off: Fn[Launch.Launch, Int],
+) -> Int
   case Options.parse(args, settings.version)
     Options.Parsed.Answer(reply) -> emit(reply)
     Options.Parsed.Ready(options) ->
@@ -81,6 +89,8 @@ def run(settings: Env.Settings, args: List[String], cache_missed: Bool, hand_off
           buffer_file: "",
           buffer_shown: "",
           cache_missed: cache_missed,
+          stderr_tty: stderr_tty,
+          compiling_since: -1,
         ),
       )
   end
@@ -92,10 +102,13 @@ private
 SAVE_TIMEOUT = 60_000
 # The name of the standard input in the diagnostics of `fmt -`.
 STDIN_NAME = "<stdin>"
+# The verb of `compile` with no -o, which fills the bytecode cache, and the file it looks for when no file is named.
+AHEAD = "compile ahead"
+MAIN_FILE = "main.agc"
 
 # What one run is given besides the words of the user: the options read in front of them, the settings and the
 # hand-off. `buffer_file` is the file whose text came from standard input ("" for none), and `buffer_shown` that text
-# for the lines of a message.
+# for the lines of a message. `compiling_since` is the monotonic time a run's notice started (-1 for none).
 struct Session
   options: Options.Options
   settings: Env.Settings
@@ -103,6 +116,8 @@ struct Session
   buffer_file: String
   buffer_shown: String
   cache_missed: Bool
+  stderr_tty: Bool
+  compiling_since: Int
 end
 
 # The first word picks the command; a word that is not a command is the source file of a run.
@@ -153,7 +168,9 @@ def dispatch(session: Session) -> Int
   end
 
   usable = rest.size >= 1
-  if first == "compile"
+  if first == "compile" and !rest.include?("-o")
+    return compile_ahead(session, rest)
+  elsif first == "compile"
     usable = rest.size == 3 and rest[1] == "-o" and !session.options.dump and !session.options.dump_ir
   end
 
@@ -677,13 +694,10 @@ def with_buffer(session: Session, file: String, then: Fn[Session, Int]) -> Int
     StdinBuffer.Taken.Got(buffer) ->
       workspace = StdinBuffer.over(session.settings.workspace, session.settings.env.windows, file, buffer)
       then.call(
-        Session(
-          options: session.options,
+        session.with(
           settings: session.settings.with(workspace: workspace),
-          hand_off: session.hand_off,
           buffer_file: file,
           buffer_shown: buffer.shown,
-          cache_missed: session.cache_missed,
         ),
       )
   end
@@ -698,7 +712,7 @@ def program(session: Session, verb: String, rest: List[String]) -> Int
 
   plan = CliRun.cache_plan(session.options, session.settings, verb, source)
   if session.cache_missed and verb != "compile"
-    return read(session, verb, rest, BytecodeCache.missed(plan, session.settings))
+    return read(noticed(session, verb, source), verb, rest, BytecodeCache.missed(plan, session.settings))
   end
 
   case BytecodeCache.lookup(plan, session.settings)
@@ -706,7 +720,69 @@ def program(session: Session, verb: String, rest: List[String]) -> Int
       return save(rest[2], bytes) if verb == "compile"
 
       start(session, rest, bytes)
-    BytecodeCache.Lookup.Miss(seen) -> read(session, verb, rest, seen)
+    BytecodeCache.Lookup.Miss(seen) -> read(noticed(session, verb, source), verb, rest, seen)
+  end
+end
+
+# A run that compiles its program says so on stderr when that is a terminal: `Compiling FILE…` now, and the module
+# count and the time once it is built (`compiled`). `compile`, the listings and `--ai` or `--json` print nothing.
+def noticed(session: Session, verb: String, source: String) -> Session
+  options = session.options
+  quiet = verb == "compile" or verb == AHEAD or options.dump or options.dump_ir or options.style != "plain"
+  return session if !session.stderr_tty or quiet
+
+  IO.warn("Compiling #{source}…")
+  session.with(compiling_since: Time.monotonic_ms)
+end
+
+def compiled(session: Session, source: String, modules: Int) -> Void
+  return if session.compiling_since < 0
+
+  took = Time.monotonic_ms - session.compiling_since
+  counted = "#{modules} modules"
+  if modules == 1
+    counted = "1 module"
+  end
+
+  IO.warn("Compiled #{source} (#{counted}) in #{took / 1000}.#{took % 1000 / 100}s")
+end
+
+# `compile [FILE...]`: fills the bytecode cache for each file (with none, every main.agc under the working folder, as
+# `check` walks it) as a run with the same options would, and says of each whether it was compiled or fresh. It stops
+# at the first file that fails.
+def compile_ahead(session: Session, files: List[String]) -> Int
+  options = session.options
+  if options.no_cache or options.dump or options.dump_ir or files.any? do |file: String| file.start_with?("-") end
+    return emit(Reply.failed(2, Texts.usage_text()))
+  end
+
+  return ahead_each(session, files) if files.size > 0
+
+  case SymbolPaths.expand(session.settings.workspace, [], "", Texts.usage_text())
+    SymbolPaths.Expanded.Refused(problem) -> answered(session, Reply.Answer.Rejected(problem), "")
+    SymbolPaths.Expanded.Files(roots) ->
+      files = roots.map do |root: SymbolPaths.Root| root.typed end
+      mains = files.select do |file: String| Paths.last_part(file) == MAIN_FILE end
+      return emit(Reply.failed(2, "agentica: no #{MAIN_FILE} under this folder\n")) if mains.size == 0
+
+      ahead_each(session, mains)
+  end
+end
+
+def ahead_each(session: Session, files: List[String]) -> Int
+  for file in files
+    status = ahead(building(session, file), file)
+    return status if status != 0
+  end
+
+  0
+end
+
+def ahead(session: Session, file: String) -> Int
+  plan = CliRun.cache_plan(session.options, session.settings, file, file)
+  case BytecodeCache.lookup(plan, session.settings)
+    BytecodeCache.Lookup.Hit(_) -> emit(Reply.printed("fresh #{file}\n"))
+    BytecodeCache.Lookup.Miss(seen) -> read(session, AHEAD, [file], seen)
   end
 end
 
@@ -759,7 +835,9 @@ def checked(session: Session, verb: String, rest: List[String], front: Front.Che
     Pipeline.Compiled.Rejected(problem) -> reject(session, problem, source, 1)
     Pipeline.Compiled.Bytes(bytes) ->
       return save(rest[2], bytes) if verb == "compile"
+      return emit(Reply.printed("compiled #{source}\n")) if verb == AHEAD
 
+      compiled(session, source, front.linked.modules.size)
       start(session, rest, bytes)
   end
 end
