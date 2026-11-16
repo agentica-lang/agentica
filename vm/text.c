@@ -199,6 +199,7 @@ static size_t int_text(int64_t n, char text[AGC_SCALAR_TEXT]) {
 }
 
 size_t agc_scalar_text(agc_vm *vm, agc_value v, char text[AGC_SCALAR_TEXT]) {
+  if (agc_is(v, AGC_T_INT)) return int_text(agc_as_int(vm, v), text);
   if (agc_is(v, AGC_T_NIL)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "nil");
   if (agc_is(v, AGC_T_BOOL)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "%s", agc_as_bool(vm, v) ? "true" : "false");
   if (agc_is(v, AGC_T_FLOAT)) return agc_float_text(agc_as_float(vm, v), text);
@@ -219,6 +220,7 @@ size_t agc_scalar_text(agc_vm *vm, agc_value v, char text[AGC_SCALAR_TEXT]) {
   if (agc_is(v, AGC_T_ADDRESS))
     return (size_t)snprintf(text, AGC_SCALAR_TEXT, "<Address %" PRIu64 ">", agc_address_id(vm, v));
   if (agc_is(v, AGC_T_MUTEX)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "<Native.Mutex>");
+  if (agc_is(v, AGC_T_BUILDER)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "<Bytes.Builder>");
   if (agc_is(v, AGC_T_C_POINTER)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "<C.Pointer>");
   /* A long resource name is cut to fit the scalar buffer. */
   if (agc_is(v, AGC_T_C_RESOURCE))
@@ -228,7 +230,7 @@ size_t agc_scalar_text(agc_vm *vm, agc_value v, char text[AGC_SCALAR_TEXT]) {
     return (size_t)snprintf(text, AGC_SCALAR_TEXT, "%" PRId64 "%s%" PRId64, r->start, r->exclusive ? "..." : "..",
                             r->end);
   }
-  return int_text(agc_as_int(vm, v), text);
+  agc_wrong_tag(vm);
 }
 
 static char *reserve(builder *b, size_t extra) {

@@ -91,6 +91,7 @@ VM_BUILTINS = Set.new([
   "Process.spawn_group", "Process.signal_group", "System.signal", "Process.poll_line", "ActorInbox.set",
   "ActorInbox.get", "BddScenario.srand", "BddScenario.uncount", "TCP.write", "TCP.write_bytes.bytes", "TCP.flush",
   "TCP.write_limit", "BddScenario.budget", "String.interpolated.bytes", "Native.arena", "Bytes.concat.parts",
+  "Bytes.build", "Bytes.Builder.write",
 ])
 
 ## The instruction of an operator on two Ints, by the token kind of the operator. `>` and `>=` use the instruction of

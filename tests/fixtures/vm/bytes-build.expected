@@ -1,0 +1,20 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 2316,
+  "stdout": [
+    "[42, 51, 13, 10, 36, 51, 13, 10, 71, 69, 84, 13, 10, 36, 48, 13, 10, 13, 10, 36, 50, 13, 10, 195, 177, 13, 10]",
+    "[42, 49, 13, 10, 36, 49, 13, 10, 120, 13, 10]",
+    "-42 1.5 true nil [1, 2] Point(x: 1, y: 2.0) some(3) ab",
+    "true",
+    "<inner>",
+    "300 [48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 48, 49]",
+    "task crashed: RUNTIME-BUILDER-CLOSED at @fixtures/vm/bytes-build.agc:49:7: the Bytes.Builder is used from another task than its Bytes.build",
+    "kept",
+    ""
+  ],
+  "stderr": [
+    "{\"code\":\"RUNTIME-BUILDER-CLOSED\",\"file\":\"@fixtures/vm/bytes-build.agc\",\"message\":\"the Bytes.Builder is used from another task than its Bytes.build\",\"range\":{\"end\":{\"column\":10,\"line\":49},\"start\":{\"column\":7,\"line\":49}},\"spawned_at\":{\"column\":12,\"file\":\"@fixtures/vm/bytes-build.agc\",\"line\":48},\"stack\":[{\"column\":7,\"file\":\"@fixtures/vm/bytes-build.agc\",\"function\":\"block\",\"line\":49}],\"task\":true}",
+    ""
+  ]
+}

@@ -22,7 +22,9 @@ Base64.urlsafe_encode64.bytes
 BddScenario.budget
 BddScenario.srand
 BddScenario.uncount
+Bytes.Builder.write
 Bytes.at
+Bytes.build
 Bytes.concat
 Bytes.concat.parts
 Bytes.decode

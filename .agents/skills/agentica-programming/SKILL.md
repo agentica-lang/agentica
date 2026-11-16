@@ -71,7 +71,7 @@ Read only what the task needs.
 | `packages.md` | `agentica.toml`, `agentica.lock`, `deps/`, `add`/`install`/`update`, native tables, `[style]` |
 | `json.md` | parse, encode, decode into structs |
 | `files.md` | File, Dir, Path, locks |
-| `bytes.md` | `Bytes`: `s.bytes`, slicing, joining, keys |
+| `bytes.md` | `Bytes`: `s.bytes`, slicing, joining, `Bytes.build`, keys |
 | `compression.md` | Zlib bytes and Lazy byte streams (deflate, zlib, gzip) |
 | `archive.md` | `std/archive` (TAR/ZIP extraction by allowlist) |
 | `processes.md` | Process, `IO.read_bytes`, flush, `System.env/os/pid`, signals (`System.subscribe`, `Process.signal`, `System.signal`) |

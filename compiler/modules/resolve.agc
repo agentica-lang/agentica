@@ -190,9 +190,9 @@ def identity(cx: Context, name: String) -> String = cx.me.prefix + name
 private
 
 # The builtin types with a module name that is no family, which any file may name: C.Pointer, the type of a C pointer
-# (the extern blocks of native code), Native.Mutex, the lock of a native library, and Process.Options, the options of
-# the spawns. The types of a family are family_member's.
-MODULE_TYPES = Set.new(["C.Pointer", "Native.Mutex", "Process.Options"])
+# (the extern blocks of native code), Native.Mutex, the lock of a native library, Process.Options, the options of the
+# spawns, and Bytes.Builder, the buffer of Bytes.build. The types of a family are family_member's.
+MODULE_TYPES = Set.new(["Bytes.Builder", "C.Pointer", "Native.Mutex", "Process.Options"])
 
 # A reserved type, a builtin enum (and Result and Optional), or a bare builtin function keeps its name.
 def builtin_name?(cx: Context, name: String, want: Want) -> Bool

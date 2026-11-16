@@ -7,6 +7,7 @@ def method_modules() -> Map[String, String]
   {
     "ATS": "ATS",
     "Address": "Address",
+    "Builder": "Bytes.Builder",
     "Bytes": "Bytes",
     "Channel": "Channel",
     "Codec": "Codec",

@@ -275,6 +275,7 @@ def check_rule(cx: State.Cx, st: State.St, site: State.Site, rule: Model.Rule) -
   case rule
     Model.Rule.Plain -> check_plain(cx, st, site)
     Model.Rule.Show -> check_show(cx, st, site)
+    Model.Rule.BytesWrite -> check_bytes_write(cx, st, site)
     Model.Rule.Identity -> check_identity(cx, st, site)
     Model.Rule.Ok -> check_ok(cx, st, site)
     Model.Rule.OkVoid -> ok(State.Out(st: st, type: T.Type.Result(T.Type.Void)))
@@ -324,6 +325,19 @@ def check_show(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out
   out = try State.expr(cx, st, site.args[0], T.Type.Unknown)
   try ensure_printable(cx, out.st, out.type, Ast.expr_span(site.args[0]))
   ok(State.Out(st: out.st, type: T.Type.Void))
+end
+
+# out.write(a, b, ...): out is the Bytes.Builder of a Bytes.build block, and each value is any value that has a to_s.
+def check_bytes_write(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
+  out = try State.expr(cx, st, site.args[0], T.Type.Opaque("Bytes.Builder"))
+  current = out.st
+  for arg in site.args.drop(1)
+    value = try State.expr(cx, current, arg, T.Type.Unknown)
+    try ensure_printable(cx, value.st, value.type, Ast.expr_span(arg))
+    current = value.st
+  end
+
+  ok(State.Out(st: current, type: T.Type.Void))
 end
 
 # IO.inspect: any value, except one whose type holds a Codec, which has no inspect (a codec is a record of the name

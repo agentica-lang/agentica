@@ -1,7 +1,7 @@
 ---
 title: Bytes
 weight: 7
-description: Bytes, a compact immutable byte string, and the methods that read, cut and join it.
+description: Bytes, a compact immutable byte string, and the methods that read, cut, join and build it.
 ---
 
 `Bytes` holds data that is not text: digests, file contents, wire formats. It stores one byte for each item, where a `List[Int]` of the same data takes eight. A byte is read as an `Int` from 0 to 255. `Bytes` is immutable, like every value: a method gives a new value. `Bytes` is a reserved name, so a struct, an enum or an import alias cannot be called `Bytes`.
@@ -194,6 +194,38 @@ end
 ```output
 [97, 98, 99, 100]
 [97, 98, 99]
+```
+
+## build
+
+```signature
+Bytes.build(block: Fn[Bytes.Builder, Void]) -> Bytes
+out.write(value, ...) -> Void
+```
+
+Builds one `Bytes` from many small parts, such as a reply of a wire protocol. `Bytes.build` calls the block with a `Bytes.Builder`, `out`, and returns what the block wrote. `out.write` takes 1 to 8 values and appends each one: a `Bytes` or a `String` as its bytes, an `Int`, a `Float`, a `Bool` or `nil` as the text that interpolation gives it (with no `String` made for it), and any other value as its `to_s`. The buffer grows as needed and is copied once into the result; a task keeps a buffer of up to 64 KiB for its next build, so a build in a loop allocates little more than its result. Each task keeps that reusable buffer until it ends.
+
+`out` works only inside its block and in the task that runs it. A write after the block returned (the builder was sent through a channel), or from another task, stops with `RUNTIME-BUILDER-CLOSED`, so a `Bytes` that `build` returned never changes.
+
+```agentica
+def reply(items: List[Bytes]) -> Bytes
+  Bytes.build do |out|
+    out.write("*", items.size, "\r\n")
+    for item in items
+      out.write("$", item.size, "\r\n", item, "\r\n")
+    end
+  end
+end
+
+def main() -> Void
+  puts(reply(["GET".bytes, "key".bytes]).to_a.size)
+  puts(String.from_bytes(reply(["ok".bytes])).unwrap!.inspect)
+end
+```
+
+```output
+22
+"*1\r\n$2\r\nok\r\n"
 ```
 
 ## each and for

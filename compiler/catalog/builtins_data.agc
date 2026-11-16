@@ -313,11 +313,12 @@ HANDLE_TYPES: List[String] = ["TCP.Socket", "TCP.Listener", "HttpWire.Server", "
 ## TaskRef (the running task, from Task.current) and Native.Mutex (the lock of a native library).
 OPAQUE_TYPES: List[String] = [
   "TCP.Socket", "TCP.Listener", "HttpWire.Client", "HttpWire.Server", "File.Handle", "Process", "Test.Case",
-  "TLS.Context", "C.Pointer", "TaskRef", "Native.Mutex",
+  "TLS.Context", "C.Pointer", "TaskRef", "Native.Mutex", "Bytes.Builder",
 ]
 
 TYPE_DESCRIPTIONS: Map[String, String] = {
   "Await": "What Task.await with a timeout returns: Done with the task's value, or TimedOut.",
+  "Bytes.Builder": "The buffer that Bytes.build gives its block; write appends to it, only inside that block.",
   "C.Pointer": "A C pointer of native code, from an extern call or Native.memory_pointer.",
   "Codec.Info": "What T.codec returns for a struct T: its name and its members, in declaration order.",
   "Error": "The payload of a failed Result: its kind, message, code, details, cause and the place it was made.",
