@@ -1766,12 +1766,13 @@ static agc_value spawn_child(agc_vm *vm, const agc_value *args, const agc_string
    lowers to. */
 static agc_value spawn_options(agc_vm *vm, const agc_value *args, bool captured, bool channel) {
   const agc_struct *o = agc_as_struct(vm, args[2]);
-  if (o->n != OPTION_FIELDS) agc_wrong_tag(vm);
+  /* Bytecode compiled before `pty` (stage0's front end, an older .agcb) passes the fields before it. */
+  if (o->n != OPTION_FIELDS && o->n != OPTION_PTY) agc_wrong_tag(vm);
   const agc_value *f = o->fields;
+  bool pty = o->n > OPTION_PTY && agc_as_bool(vm, f[OPTION_PTY]);
   return spawn_child(vm, args, agc_as_string(vm, f[OPTION_CHDIR]), agc_as_int(vm, f[OPTION_TIMEOUT_MS]), captured,
                      channel, agc_as_map(vm, f[OPTION_ENV]), agc_as_string(vm, f[OPTION_OUT]),
-                     agc_as_string(vm, f[OPTION_ERR]), agc_as_bool(vm, f[OPTION_PGROUP]), false,
-                     agc_as_bool(vm, f[OPTION_PTY]));
+                     agc_as_string(vm, f[OPTION_ERR]), agc_as_bool(vm, f[OPTION_PGROUP]), false, pty);
 }
 
 static agc_value builtin_spawn_options(agc_vm *vm, agc_value *args, uint32_t span) {
