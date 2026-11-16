@@ -473,7 +473,7 @@ static inline agc_value call_builtin(agc_vm *vm, const agc_builtin *b, agc_value
 static inline agc_value call_leaf(agc_vm *vm, const agc_builtin *b, agc_value *args, uint32_t span) {
   agc_call_rule rule = agc_call_rule_take(vm);
   agc_value result = b->fn(vm, args, span);
-  agc_call_rule_check(vm, &rule, b);
+  agc_call_rule_check(vm, &rule, b, true);
   return result;
 }
 #else
@@ -1880,8 +1880,8 @@ static const char *call_rule_broken(const agc_vm *vm, const agc_call_rule *was, 
   return NULL;
 }
 
-void agc_call_rule_check(const agc_vm *vm, const agc_call_rule *was, const agc_builtin *b) {
-  const char *what = call_rule_broken(vm, was, b->leaf);
+void agc_call_rule_check(const agc_vm *vm, const agc_call_rule *was, const agc_builtin *b, bool leaf) {
+  const char *what = call_rule_broken(vm, was, leaf);
   if (!what) return;
   char detail[160];
   (void)snprintf(detail, sizeof detail, "builtin %s/%" PRIu32 " is marked %s but %s", b->name, b->arity,

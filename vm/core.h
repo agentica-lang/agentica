@@ -306,10 +306,11 @@ void agc_op_enum(agc_value *dst, const agc_value *payload, const agc_variant_def
 _Noreturn void agc_op_fail(agc_vm *vm, agc_status status, const agc_value *a, const agc_value *b, uint32_t span);
 agc_outcome agc_vm_run(agc_vm *vm);
 /* The builds of AGC_LEAF_CHECK take the rule before a call of B, a leaf or direct row, and check it after: a call that
- * parked (or asked to retry), started a stepper, moved the frames or left rt->sync taken, or, for a leaf, charged turn
- * cost, counted a step or asked to yield, stops the run with a line that names B and what it did. */
+ * parked (or asked to retry), started a stepper, moved the frames or left rt->sync taken, or, with LEAF (a leaf row, or
+ * a plain row that compiled code calls as one), charged turn cost, counted a step or asked to yield, stops the run with
+ * a line that names B and what it did. */
 agc_call_rule agc_call_rule_take(const agc_vm *vm);
-void agc_call_rule_check(const agc_vm *vm, const agc_call_rule *was, const agc_builtin *b);
+void agc_call_rule_check(const agc_vm *vm, const agc_call_rule *was, const agc_builtin *b, bool leaf);
 
 void agc_profile_start(agc_vm *vm);
 void agc_profile_start_cover(agc_vm *vm);

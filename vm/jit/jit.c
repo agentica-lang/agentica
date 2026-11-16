@@ -1230,7 +1230,7 @@ uint32_t agc_jit_call_builtin(agc_vm *vm, agc_value *args, const agc_builtin *b,
 #endif
   if (!called(vm, b, args, span, args, !vm->rt->jit_unwinds)) return AGC_JIT_EXIT_RAISE;
 #if AGC_LEAF_CHECK
-  agc_call_rule_check(vm, &rule, b);
+  agc_call_rule_check(vm, &rule, b, b->leaf);
 #endif
   if (b->cost == AGC_COST_SIZE) units += units_of(args[0]);
   if (units) agc_charge(vm, units);
@@ -1247,7 +1247,7 @@ static uint32_t call_leaf(agc_vm *vm, agc_value *args, const agc_builtin *b, uin
 #endif
   if (!called(vm, b, args, (uint32_t)(where >> 32), args, catch)) return AGC_JIT_EXIT_RAISE;
 #if AGC_LEAF_CHECK
-  agc_call_rule_check(vm, &rule, b);
+  agc_call_rule_check(vm, &rule, b, true);
 #endif
   return AGC_STATUS_OK;
 }
