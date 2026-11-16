@@ -199,6 +199,7 @@ static void test_leaf_direct_and_parking_rows(void) {
       {"Channel.recv", 2, false, false, true},   {"Channel.close", 1, false, false, false},
       {"Task.await", 2, false, false, true},     {"TCP.send", 3, false, false, true},
       {"TLS.connect", 4, false, false, true},    {"File.each_line", 4, false, false, false},
+      {"DNS.lookup", 2, false, false, true},
   };
   for (size_t k = 0; k < sizeof expected / sizeof expected[0]; k++) {
     const char *name = expected[k].name;
