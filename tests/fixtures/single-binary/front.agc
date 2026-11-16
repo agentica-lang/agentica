@@ -9,8 +9,10 @@
 #                        hands the program in FILE to the VM with the options and the arguments
 #   lines                prints each line of standard input, read with IO.gets, until its end
 #   session BINARY FILE.agcb json|plain LINES...
-#                        starts the session child of `agentica repl` with FILE as its first program, sends each line
-#                        on its channel and prints the answer, then closes the channel and prints the exit status
+#                        starts the session child of `agentica repl` with FILE as its first program (json: in --json
+#                        style), sends each line on its channel and prints the answer, then closes the channel and
+#                        prints the exit status; a line "chunk ..." has no answer, and "@FILE.agcb" sends FILE as one
+#                        chunk
 #   crash                stops with a runtime error, as the driver of `agentica test` could
 #   bad-word             hands over a program with an argument that has a character 0
 #   too-many-options     hands over more options than the driver takes
@@ -71,13 +73,23 @@ def shown_void(result: Result[Void]) -> Void
 end
 
 def session(binary: String, file: String, json: Bool, lines: List[String]) -> Void
-  child = FrontEnd.spawn_session(binary, ["run", "--session", "-"], json).unwrap!
+  arguments = ["run", "--session", "-"]
+  if json
+    arguments = ["run", "--json", "--session", "-"]
+  end
+  child = FrontEnd.spawn_session(binary, arguments, json).unwrap!
   Process.send_bytes(child, program(file), 5000).unwrap!
   Process.close_stdin(child, 5000).unwrap!
   for line in lines
-    Process.channel_send(child, line + "\n", 5000).unwrap!
-    puts(Process.channel_read_line(child, 5000).unwrap!)
-    IO.flush()
+    sent = line
+    if line.start_with?("@")
+      sent = "chunk #{OpenSSL.Digest.hexencode(program(line.slice(1, line.length - 1)))}"
+    end
+    Process.channel_send(child, sent + "\n", 5000).unwrap!
+    if !sent.start_with?("chunk ")
+      puts(Process.channel_read_line(child, 5000).unwrap!)
+      IO.flush()
+    end
   end
   Process.channel_close(child, 5000).unwrap!
   puts("exit #{Process.wait(child, 5000).unwrap!}")
