@@ -14,6 +14,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - The documentation has breadcrumbs, and search engines index only the latest release: the pages of older versions and of dev point to it.
 - Every version of the documentation has the current look and icon: the releases are built with the current docs theme.
 
+### Fixed
+
+- `PKG-LOCK-MISSING` for a manifest with native downloads says to run `agentica update`, not `agentica install`, which never writes the lock (#1758).
+
 ## [0.33.0] - 2026-11-16
 
 ### Added

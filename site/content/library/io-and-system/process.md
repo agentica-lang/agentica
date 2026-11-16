@@ -223,7 +223,7 @@ Process.signal(process: Process, signal: System.Signal) -> Result[Void]
 Process.signal_group(process: Process, signal: System.Signal) -> Result[Void]
 ```
 
-`Process.signal` sends a signal (`System.Signal`, see [System.subscribe](../system/#systemsubscribe)) to the program; `signal_group` sends it to the process group the program leads, so the programs it started get it too. A signal the program does not handle ends it, and `Process.wait` then gives `128 +` the signal's number (143 for `Term`). Neither call waits for the program to end: follow it with `Process.wait` and a deadline, and `Process.close` when the program is late.
+`Process.signal` sends a signal (`System.Signal`, see [System.subscribe](system.md#systemsubscribe)) to the program; `signal_group` sends it to the process group the program leads, so the programs it started get it too. A signal the program does not handle ends it, and `Process.wait` then gives `128 +` the signal's number (143 for `Term`). Neither call waits for the program to end: follow it with `Process.wait` and a deadline, and `Process.close` when the program is late.
 
 - A closed program returns `error("process: process is closed")`. A program that has exited returns `error("process: the child has exited")` with kind `process.failed`: its pid may already belong to another process.
 - `signal_group` needs a program that leads its own group, started with `Process.spawn_group` or `pgroup: true`; any other returns `error("process: the child does not lead a process group")` with kind `process.failed`.

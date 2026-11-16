@@ -13,14 +13,14 @@ site`. A tag that uses the docs theme (it pins the submodule) is built with the 
 that the current checkout pins, not its own: the theme is only the look, so every version gets the current favicon,
 search tags and breadcrumbs, while the content stays the tag's; a tag that fails with them fails the run. An older tag,
 with its own layouts, keeps the Hugo and Dart Sass pinned in its `.github/workflows/pages.yml`, and the assembly gives
-its pages the org icons. Only a tag whose tree has no site (no `site/hugo.toml`, no pins) and that is older than every
-built tag is left out. Any other failure (a download, `npm ci`, a timeout, a Hugo error, a no-site tag newer than a
-built one) is tried once more and then fails the run, so a release never drops silently from the deploy; so does a run
-in which no tag built. The output of a tag is cached by its commit sha (and the base URL, which Hugo bakes into every
-link), so a run builds only `dev` and the tags it has not seen; the cache folder is pruned to the current builds. With
-GITHUB_OUTPUT set, `fresh=true` tells the workflow that something new is worth saving. The selector and the search tags
-are not part of a cached build: the assembly adds the selector's `<link>` and `<script>` tags and the canonical or
-noindex tag to every page, so a build from the cache gets the current ones.
+its pages, at its folder and at the root, the org icons. Only a tag whose tree has no site (no `site/hugo.toml`, no
+pins) and that is older than every built tag is left out. Any other failure (a download, `npm ci`, a timeout, a Hugo
+error, a no-site tag newer than a built one) is tried once more and then fails the run, so a release never drops
+silently from the deploy; so does a run in which no tag built. The output of a tag is cached by its commit sha (and the
+base URL, which Hugo bakes into every link), so a run builds only `dev` and the tags it has not seen; the cache folder
+is pruned to the current builds. With GITHUB_OUTPUT set, `fresh=true` tells the workflow that something new is worth
+saving. The selector and the search tags are not part of a cached build: the assembly adds the selector's `<link>` and
+`<script>` tags and the canonical or noindex tag to every page, so a build from the cache gets the current ones.
 
 Python's standard library only.
 """
@@ -120,11 +120,13 @@ def inject_selector(site: Path, root_path: str) -> int:
 
 
 ICON = re.compile(r'<link\b[^>]*\brel="?(?:shortcut )?(?:icon|apple-touch-icon)\b[^>]*>', re.I)
+# The links of the docs theme's _partials/favicon.html (a test keeps them equal); a page with the first has them all.
 ORG_ICONS = (
     '<link rel="icon" href="https://www.agentica-lang.com/favicon.ico" sizes="48x48">'
     '<link rel="icon" type="image/png" href="https://www.agentica-lang.com/favicon-32x32.png" sizes="32x32">'
     '<link rel="apple-touch-icon" href="https://www.agentica-lang.com/apple-touch-icon.png">'
 )
+ORG_FAVICON = re.search(r'href="([^"]+)"', ORG_ICONS).group(1)
 CANONICAL = re.compile(r'<link\b[^>]*\brel="?canonical\b[^>]*>', re.I)
 ROBOTS = re.compile(r'<meta\b[^>]*\bname="?robots\b[^>]*>', re.I)
 NOINDEX = '<meta name="robots" content="noindex,follow">'
@@ -139,8 +141,8 @@ def page_url(rel: Path) -> str:
 def point_copies_at_root(out: Path, root_url: str, versions: list[str], dev: str = "dev") -> tuple[int, int]:
     """Make the root the only copy that search engines index. In the `<head>` of every page of a version folder, its own
     canonical and robots tags give way to a canonical URL to the same page at the root when the root has that file, else
-    `noindex,follow`; every page of dev (unreleased) is `noindex,follow`. A page with an icon of its own (a tag from
-    before the docs theme) gets the org icons instead. The sitemaps of these folders go. The body is never touched.
+    `noindex,follow`; every page of dev (unreleased) is `noindex,follow`. The sitemaps of these folders go. The body is
+    never touched.
     Returns (pages with a canonical, pages with noindex)."""
     pointed = hidden = 0
     for folder in [*versions, dev]:
@@ -153,8 +155,6 @@ def point_copies_at_root(out: Path, root_url: str, versions: list[str], dev: str
                 continue
             rel = page.relative_to(site)
             head = ROBOTS.sub("", CANONICAL.sub("", head))
-            if "https://www.agentica-lang.com/favicon.ico" not in head:  # an old tag with its own layouts and icon
-                head = ICON.sub("", head) + ORG_ICONS
             if folder != dev and rel.as_posix() != "404.html" and (out / rel).is_file():
                 tag = '<link rel="canonical" href="%s%s">' % (root_url, page_url(rel))
                 pointed += 1
@@ -163,6 +163,20 @@ def point_copies_at_root(out: Path, root_url: str, versions: list[str], dev: str
                 hidden += 1
             page.write_text(head + tag + end + body, encoding="utf-8")
     return pointed, hidden
+
+
+def use_org_icons(out: Path) -> int:
+    """Give every page whose `<head>` lacks the org icons (a tag from before the docs theme, with its own layouts and
+    icon, at its folder or at the root) the org icons in place of its own. Returns the pages changed."""
+    changed = 0
+    for page in out.rglob("*.html"):
+        text = page.read_text(encoding="utf-8")
+        head, end, body = text.partition("</head>")
+        if not end or ORG_FAVICON in head:
+            continue
+        page.write_text(ICON.sub("", head) + ORG_ICONS + end + body, encoding="utf-8")
+        changed += 1
+    return changed
 
 
 def versions_json(built: list[str], dev: bool) -> list[dict]:
@@ -371,10 +385,17 @@ def unpack_theme(commit: str | None, tree: Path) -> None:
     if not (checkout / ".git").exists():
         raise BuildError("the docs theme is not checked out: git submodule update --init " + THEME)
     if subprocess.run(["git", "-C", str(checkout), "cat-file", "-e", commit + "^{commit}"], capture_output=True).returncode:
-        run(["git", "-C", str(checkout), "fetch", "-q", "origin", commit])
+        fetched = subprocess.run(["git", "-C", str(checkout), "fetch", "-q", "origin", commit],
+                                 capture_output=True, text=True)
+        if fetched.returncode:
+            raise BuildError("git fetch of theme %s failed (%s)" % (commit[:12], fetched.stderr.strip()[-300:]))
     archive = subprocess.Popen(["git", "-C", str(checkout), "archive", "--format=tar", commit], stdout=subprocess.PIPE)
-    with tarfile.open(fileobj=archive.stdout, mode="r|") as tar:
-        tar.extractall(tree / THEME, filter="data")
+    try:
+        with tarfile.open(fileobj=archive.stdout, mode="r|") as tar:
+            tar.extractall(tree / THEME, filter="data")
+    finally:
+        # Close the pipe before waiting, also when the extraction failed halfway: git then stops at once.
+        archive.stdout.close()
     if archive.wait() != 0:
         raise BuildError("git archive of the docs theme failed")
 
@@ -498,6 +519,7 @@ def build(args: argparse.Namespace) -> int:
         shutil.copy(ROOT / "site" / "versions" / name, selector / name)
     (out / "versions.json").write_text(json.dumps(versions_json(list(built), True), indent=2) + "\n")
     pointed, hidden = point_copies_at_root(out, root_url, list(built))
+    icons = use_org_icons(out)
     pages = inject_selector(out, root_path)
 
     seconds = time.monotonic() - started
@@ -505,6 +527,7 @@ def build(args: argparse.Namespace) -> int:
     print("left out: " + (", ".join("%s (%s)" % kv for kv in skipped.items()) or "none"))
     write_summary(built, skipped, failed)
     print("version and dev pages: %d with a canonical URL at the root, %d noindex" % (pointed, hidden))
+    print("pages given the org icons: %d" % icons)
     print("pages with the selector tags: %d; from the cache: %d of %d tags" % (pages, len(built) - len([f for f in fresh if f != "root"]), len(built)))
     print("time: %.1f s; size: %.1f MB (%s)" % (seconds, folder_size(out) / 1e6, out))
     return 0
