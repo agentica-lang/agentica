@@ -16,11 +16,12 @@ end
 ## Where a line is printed: its indent, the number subtracted from every node id, and the text added at the end of the
 ## line of a node, by the node's id (the checker's text form adds the type of each expression this way). A file of a
 ## linked program prints ids that start at 0 inside the file, so the text does not depend on which files came before
-## it.
+## it. Without `places`, the lines have no node ids and no spans.
 struct Margin
   indent: String
   base: Int
   notes: Map[Int, String]
+  places: Bool = true
 end
 
 ## Lexes and parses a file and returns the text form of the tree, or the ERROR line of the first diagnostic. One node
@@ -61,8 +62,13 @@ def head(at: Margin, role: String, kind: String, id: Int, span: Source.Span, att
     extra = note.unwrap!
   end
 
-  # "##{...}" writes a literal "#" and then the node number relative to the base, such as: Foo #3 1:1-1:4
-  "#{at.indent}#{label}#{kind} ##{id - at.base} #{Text.span_text(span)}#{attrs}#{extra}"
+  place = ""
+  if at.places
+    # "##{...}" writes a literal "#" and then the node number relative to the base, such as: Foo #3 1:1-1:4
+    place = " ##{id - at.base} #{Text.span_text(span)}"
+  end
+
+  "#{at.indent}#{label}#{kind}#{place}#{attrs}#{extra}"
 end
 
 ## The label followed by the quoted text of an optional string, or the empty string when it is absent.
@@ -75,10 +81,13 @@ end
 
 ## The text form of a parsed tree, one line per node: `role: kind #id span attributes`, children indented by two
 ## spaces.
-def print_program(program: Ast.Program) -> List[String]
+def print_program(program: Ast.Program) -> List[String] = print_program_with(program, true)
+
+## Like print_program; without `places`, the lines have no node ids and no spans.
+def print_program_with(program: Ast.Program, places: Bool) -> List[String]
   lines: List[String] = [
     head(
-      Margin(indent: "", base: 0, notes: {}),
+      Margin(indent: "", base: 0, notes: {}, places: places),
       "",
       "program",
       program.id,
@@ -88,7 +97,7 @@ def print_program(program: Ast.Program) -> List[String]
   ]
 
   for decl in program.declarations
-    lines = print_decl(lines, Margin(indent: "  ", base: 0, notes: {}), "declaration", decl)
+    lines = print_decl(lines, Margin(indent: "  ", base: 0, notes: {}, places: places), "declaration", decl)
   end
 
   lines
@@ -98,7 +107,7 @@ end
 def print_decl(out: List[String], at: Margin, role: String, decl: Ast.Decl) -> List[String]
   child = deeper(at)
   case decl
-    Ast.Decl.Import(node) -> out.push(head(at, role, "import-decl", node.id, node.span, import_attrs(node)))
+    Ast.Decl.Import(node) -> out.push(head(at, role, "import-decl", node.id, node.span, import_attrs(at, node)))
     Ast.Decl.Reexport(node) ->
       attrs = " alias=#{Text.quote(node.alias)} name=#{Text.quote(node.name)}"
       out.push(head(at, role, "reexport-decl", node.id, node.span, attrs))
@@ -362,7 +371,11 @@ def print_map_entry(out: List[String], at: Margin, entry: Ast.MapEntry) -> List[
   print_expr(lines, deeper(at), "value", entry.value)
 end
 
-def op_attrs(op: String, op_span: Source.Span) -> String = " op=#{op} op-span=#{Text.span_text(op_span)}"
+def op_attrs(at: Margin, op: String, op_span: Source.Span) -> String
+  return " op=#{op}" if !at.places
+
+  " op=#{op} op-span=#{Text.span_text(op_span)}"
+end
 
 def print_call_like(
   out: List[String],
@@ -478,10 +491,10 @@ def print_container_expr(out: List[String], at: Margin, role: String, expr: Ast.
       lines = out.push(head(at, role, "try-expr", node.id, node.span, ""))
       print_expr(lines, child, "operand", node.operand)
     Ast.Expr.Unary(node) ->
-      lines = out.push(head(at, role, "unary", node.id, node.span, op_attrs(node.op, node.op_span)))
+      lines = out.push(head(at, role, "unary", node.id, node.span, op_attrs(at, node.op, node.op_span)))
       print_expr(lines, child, "operand", node.operand)
     Ast.Expr.Binary(node) ->
-      lines = out.push(head(at, role, "binary", node.id, node.span, op_attrs(node.op, node.op_span)))
+      lines = out.push(head(at, role, "binary", node.id, node.span, op_attrs(at, node.op, node.op_span)))
       lines = print_expr(lines, child, "left", node.left)
       print_expr(lines, child, "right", node.right)
     Ast.Expr.RegexLit(node) ->
@@ -650,19 +663,26 @@ end
 
 # ` path="x" alias="Mod"`, or ` path="x" names=[...]` with each name and its span, and `as` with the local name for a
 # rename.
-def import_attrs(node: Ast.ImportDecl) -> String
+def import_attrs(at: Margin, node: Ast.ImportDecl) -> String
   case node.alias
     some(alias) -> " path=#{Text.quote(node.path)} alias=#{Text.quote(alias)}"
     none ->
-      texts = node.names.map do |entry| import_name_text(entry) end
+      texts = node.names.map do |entry| import_name_text(at, entry) end
       " path=#{Text.quote(node.path)} names=[#{texts.join(",")}]"
   end
 end
 
-def import_name_text(entry: Ast.ImportName) -> String
-  text = "#{Text.quote(entry.name)}@#{Text.span_text(entry.span)}"
+def import_name_text(at: Margin, entry: Ast.ImportName) -> String
+  text = Text.quote(entry.name)
+  if at.places
+    text += "@#{Text.span_text(entry.span)}"
+  end
+
   if entry.local != entry.name
-    text += " as #{Text.quote(entry.local)}@#{Text.span_text(entry.local_span)}"
+    text += " as #{Text.quote(entry.local)}"
+    if at.places
+      text += "@#{Text.span_text(entry.local_span)}"
+    end
   end
 
   text

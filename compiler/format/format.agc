@@ -18,6 +18,7 @@
 
 import Style from "../check/check_style"
 import Diag from "../diagnostics/diagnostic"
+import Ast from "../syntax/ast"
 import Lexer from "../syntax/lexer"
 import ParseText from "../syntax/parse_text"
 import Parser from "../syntax/parser"
@@ -43,9 +44,9 @@ def default_settings() -> Settings = Settings(width: WIDTH, blank_line_after_end
 ## FMT-INTERNAL when the output would not keep the tree and the comments. CRLF line ends become LF.
 def format_text(text: String, settings: Settings) -> Diag.Outcome[String]
   input = text.replace("\r\n", "\n")
-  case unchecked_text(input, settings)
+  case parsed(input)
     Diag.Outcome.Failed(problem) -> Diag.Outcome.Failed(problem)
-    Diag.Outcome.Done(output) -> checked(input, output)
+    Diag.Outcome.Done(source) -> checked(normal_form(source), laid_out(input, source, settings))
   end
 end
 
@@ -53,38 +54,53 @@ end
 ## become.
 def unchecked_text(text: String, settings: Settings) -> Diag.Outcome[String]
   input = text.replace("\r\n", "\n")
-  case Lexer.lex_with_comments(input)
+  case parsed(input)
     Diag.Outcome.Failed(problem) -> Diag.Outcome.Failed(problem)
-    Diag.Outcome.Done(scanned) ->
-      case Parser.parse(scanned.tokens, 0)
-        Diag.Outcome.Failed(problem) -> Diag.Outcome.Failed(problem)
-        Diag.Outcome.Done(program) ->
-          attachment = Comments.attach(program, scanned.tokens, scanned.comments)
-          context = Layout.context(input, scanned.tokens, attachment, settings.width)
-          output = Docs.render(Layout.program_doc(context, program), settings.width)
-          return Diag.Outcome.Done(with_blank_lines(output)) if settings.blank_line_after_end
-
-          Diag.Outcome.Done(output)
-      end
+    Diag.Outcome.Done(source) -> Diag.Outcome.Done(laid_out(input, source, settings))
   end
 end
 
 ## The normal form of `text`, one line per node and a last line with the words of its comments, or the diagnostic of
 ## a text that does not lex or parse.
 def tree_text(text: String) -> Diag.Outcome[String]
-  case Lexer.lex_with_comments(text.replace("\r\n", "\n"))
+  case parsed(text.replace("\r\n", "\n"))
     Diag.Outcome.Failed(problem) -> Diag.Outcome.Failed(problem)
-    Diag.Outcome.Done(scanned) ->
-      case Parser.parse(scanned.tokens, 0)
-        Diag.Outcome.Failed(problem) -> Diag.Outcome.Failed(problem)
-        Diag.Outcome.Done(program) ->
-          lines = ParseText.print_program(program).map do |line: String| without_marks(without_places(line)) end
-          Diag.Outcome.Done(lines.push(comment_words(scanned.comments)).join("\n"))
-      end
+    Diag.Outcome.Done(source) -> Diag.Outcome.Done(normal_form(source))
   end
 end
 
 private
+
+# A text lexed with its comments and parsed.
+struct Parsed
+  scanned: Lexer.Scanned
+  program: Ast.Program
+end
+
+def parsed(input: String) -> Diag.Outcome[Parsed]
+  case Lexer.lex_with_comments(input)
+    Diag.Outcome.Failed(problem) -> Diag.Outcome.Failed(problem)
+    Diag.Outcome.Done(scanned) ->
+      case Parser.parse(scanned.tokens, 0)
+        Diag.Outcome.Failed(problem) -> Diag.Outcome.Failed(problem)
+        Diag.Outcome.Done(program) -> Diag.Outcome.Done(Parsed(scanned: scanned, program: program))
+      end
+  end
+end
+
+def laid_out(input: String, source: Parsed, settings: Settings) -> String
+  attachment = Comments.attach(source.program, source.scanned.tokens, source.scanned.comments)
+  context = Layout.context(input, source.scanned.tokens, attachment, settings.width)
+  output = Docs.render(Layout.program_doc(context, source.program), settings.width)
+  return with_blank_lines(output) if settings.blank_line_after_end
+
+  output
+end
+
+def normal_form(source: Parsed) -> String
+  lines = ParseText.print_program_with(source.program, false).map do |line: String| without_marks(line) end
+  lines.push(comment_words(source.scanned.comments)).join("\n")
+end
 
 # `output` with an empty line after each bare `end` that the style rule asks one for. The output lexes, since the
 # layout keeps every token.
@@ -110,22 +126,18 @@ def with_blank_lines(output: String) -> String
   end
 end
 
-# The output, when its normal form is the input's; else FMT-INTERNAL at the first line where they differ.
-def checked(input: String, output: String) -> Diag.Outcome[String]
-  case tree_text(input)
-    Diag.Outcome.Failed(problem) -> Diag.Outcome.Failed(problem)
-    Diag.Outcome.Done(before) ->
-      case tree_text(output)
-        Diag.Outcome.Failed(problem) ->
-          at = problem.span.start
-          message = "the formatted text does not parse: #{problem.code} at #{at.line}:#{at.column}"
-          Diag.Outcome.Failed(internal(message))
-        Diag.Outcome.Done(after) ->
-          return Diag.Outcome.Done(output) if before == after
+# The output, when its normal form is `before`, the input's; else FMT-INTERNAL at the first line where they differ.
+def checked(before: String, output: String) -> Diag.Outcome[String]
+  case tree_text(output)
+    Diag.Outcome.Failed(problem) ->
+      at = problem.span.start
+      message = "the formatted text does not parse: #{problem.code} at #{at.line}:#{at.column}"
+      Diag.Outcome.Failed(internal(message))
+    Diag.Outcome.Done(after) ->
+      return Diag.Outcome.Done(output) if before == after
 
-          message = "the formatted text changes the tree at: #{first_change(before, after)}"
-          Diag.Outcome.Failed(internal(message))
-      end
+      message = "the formatted text changes the tree at: #{first_change(before, after)}"
+      Diag.Outcome.Failed(internal(message))
   end
 end
 
@@ -168,27 +180,6 @@ def comment_words(comments: List[Tokens.Comment]) -> String
   "comments: #{words.join(" ")}"
 end
 
-# A line of the parse text without its node id (` #12`) and its spans (`3:1:4-9:1:10`).
-def without_places(line: String) -> String
-  chars = line.split("")
-  kept: List[String] = []
-  at = 0
-  while at < chars.size
-    char = chars[at]
-    starts = at == 0 or not word_char?(chars[at - 1])
-    if char == "#" and at > 0 and chars[at - 1] == " " and digits_from(chars, at + 1) > at + 1
-      at = digits_from(chars, at + 1)
-    elsif starts and digit?(char) and span_end(chars, at) > at
-      at = span_end(chars, at)
-    else
-      kept = kept.push(char)
-      at += 1
-    end
-  end
-
-  kept.join("")
-end
-
 # The line without the mark of a form that the layout may turn into another: ` guard` on an `if-stmt` line,
 # ` expression` on a `function-decl` line and ` implicit` on a `return-stmt` line (parse_text.agc writes each last on
 # its line).
@@ -204,38 +195,4 @@ def without_marks(line: String) -> String
   end
 
   line
-end
-
-def digit?(char: String) -> Bool = char.length == 1 and "0123456789".include?(char)
-
-def word_char?(char: String) -> Bool
-  char.length == 1 and "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_".include?(char)
-end
-
-# The index after the digits that start at `at` (`at` itself when there are none).
-def digits_from(chars: List[String], at: Int) -> Int
-  stop = at
-  while stop < chars.size and digit?(chars[stop])
-    stop += 1
-  end
-
-  stop
-end
-
-# The index after a span `N:N:N-N:N:N` that starts at `at`, or -1.
-def span_end(chars: List[String], at: Int) -> Int
-  cursor = at
-  for separator in [":", ":", "-", ":", ":", ""]
-    stop = digits_from(chars, cursor)
-    return -1 if stop == cursor
-
-    cursor = stop
-    if separator != ""
-      return -1 if cursor >= chars.size or chars[cursor] != separator
-
-      cursor += 1
-    end
-  end
-
-  cursor
 end
