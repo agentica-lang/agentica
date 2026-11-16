@@ -1405,25 +1405,26 @@ static void read_a_bad_record(const tls_peer *p, int mine) {
   for (int k = 0; k < 10; k++) (void)agc_io_poll(&vm, false);
 }
 
-static calling write_of(const char *text) {
-  return call("TCP.write", 3, socket_v, agc_test_str(text), agc_int(5000), agc_void());
+/* A TLS write that returns with no park, its records in the write buffer; then the loop runs a few turns, which
+   hands them to libuv. */
+static void write_into_the_buffer(const char *text) {
+  locked_call writing = {&vm, vm.task, call("TCP.write", 3, socket_v, agc_test_str(text), agc_int(5000), agc_void())};
+  on_thread(park_locked, &writing);
+  assert(vm.task->parked == NULL);
+  ok_of(writing.c.result);
+  for (int k = 0; k < 10; k++) (void)agc_io_poll(&vm, false);
 }
 
 /* TLS writes on a full socket return with their records in the write buffer (#1713). Then a read finds a bad record,
    and the alert that the session has to send waits behind the buffer: the peer reads both lines whole, then the
-   alert. A flush then has nothing to wait for. */
+   alert. The loop runs after each write, so the records are in libuv's queue, not in `pend`, when the alert comes:
+   only next_out's hold-back keeps it behind them. A flush then has nothing to wait for. */
 static void test_tls_writes_wait_in_the_buffer_and_an_alert_follows_them(void) {
   tls_peer p = {0};
   size_t junk;
   int mine = open_tls_pair_full(&p, &junk);
-  locked_call writing = {&vm, vm.task, write_of("one\n")};
-  on_thread(park_locked, &writing);
-  assert(vm.task->parked == NULL);
-  ok_of(writing.c.result);
-  writing.c = write_of("two\n");
-  on_thread(park_locked, &writing);
-  assert(vm.task->parked == NULL);
-  ok_of(writing.c.result);
+  write_into_the_buffer("one\n");
+  write_into_the_buffer("two\n");
   read_a_bad_record(&p, mine);
   junk_reader r = {&p, junk, "one\ntwo\n", true, false};
   serve_junk_reader(&r);

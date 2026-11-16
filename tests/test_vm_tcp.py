@@ -565,6 +565,56 @@ def test_a_close_and_the_end_of_the_run_send_the_written_bytes_to_a_late_reader(
     assert vm.stderr_text() == ""
 
 
+TLS_MIXED_PROGRAM = WRITE_LISTEN + """\
+def main() -> Void
+  listener = open_listener()
+  puts(TCP.local_port(listener))
+  IO.flush()
+  socket = TCP.accept(listener, 5000).unwrap!
+  TCP.write_limit(socket, 16777216).unwrap!
+  a = "a" * 65535 + "\\n"
+  i = 0
+  while i < 40
+    TCP.write(socket, a, 30000).unwrap!
+    i += 1
+  end
+
+  TCP.send(socket, "b" * 99999 + "\\n", 30000).unwrap!
+  i = 0
+  while i < 10
+    TCP.write(socket, "c\\n", 30000).unwrap!
+    i += 1
+  end
+
+  TCP.flush(socket, 30000).unwrap!
+  TCP.close(socket)
+  puts("done")
+end
+"""
+
+
+def test_tls_writes_a_long_send_and_more_writes_reach_a_slow_peer_in_order(tmp_path, adopt):
+    """On a TLS socket at four schedulers, 40 buffered writes of 64 KiB, a send of 100 KB (over the 64 KiB that a
+    scheduler encrypts, so the I/O thread encrypts it behind the buffer) and 10 more writes reach a peer with a 4 KiB
+    receive window that starts to read a second late: 51 lines, whole and in order, then close_notify."""
+    vm = adopt(start_vm(compile_text(TLS_MIXED_PROGRAM, "tls_mixed", tmp_path), "x", str(FIXTURES / "tls"),
+                        env={"AGENTICA_SCHEDULERS": "4"}))
+    port = int(vm.next_line())
+    raw = socket.socket()
+    raw.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 4096)
+    raw.settimeout(scaled(30))
+    raw.connect(("127.0.0.1", port))
+    context = ssl.create_default_context(cafile=str(FIXTURES / "tls" / "ca.pem"))
+    with context.wrap_socket(raw, server_hostname="localhost") as peer:
+        time.sleep(1)
+        lines = peer.makefile("rb").read().split(b"\n")
+    assert lines.pop() == b""
+    assert [line[:1] for line in lines] == [b"a"] * 40 + [b"b"] + [b"c"] * 10
+    assert [len(line) for line in lines] == [65535] * 40 + [99999] + [1] * 10
+    assert vm.next_line() == "done"
+    assert vm.wait() == 0, vm.stderr_text()
+
+
 def test_a_close_gives_up_at_the_flush_limit_and_the_run_says_what_it_dropped(tmp_path, adopt):
     """The peer never reads, so the bytes of the write buffer cannot go out: with a flush limit of 300 ms the run
     still ends, and a warning on standard error at its end says that bytes were dropped."""

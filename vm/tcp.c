@@ -548,9 +548,11 @@ static void goodbye(net *n) {
   uv_mutex_lock(&n->tls_lock);
   size_t len = 0;
   uint8_t *data = NULL;
-  /* A scheduler's ciphertext is on its way (tls_direct_write): close_notify could not follow it, so none goes. */
-  if (!(atomic_load_explicit(&n->wstate, memory_order_acquire) & (W_DIRECT | W_PARTIAL))) {
-    n->tls_shut = true;
+  /* A scheduler's ciphertext is on its way (tls_direct_write), or records of the write buffer are dropped: close_notify
+     could not follow them, and the peer must not see a clean end, so none goes. */
+  n->tls_shut = true;
+  if (!(atomic_load_explicit(&n->wstate, memory_order_acquire) & (W_DIRECT | W_PARTIAL)) &&
+      !atomic_load_explicit(&n->unsent, memory_order_acquire)) {
     agc_tls_close(n->tls);
     data = take_out(n, &len);
   }
@@ -2543,7 +2545,8 @@ static int tls_direct_write(agc_vm *vm, agc_socket *sk, net **np, const uint8_t 
   while (*done < len && rc >= 0) {
     size_t step = len - *done < TLS_DIRECT_MAX ? len - *done : TLS_DIRECT_MAX;
     uv_mutex_lock(&n->tls_lock);
-    if (!atomic_load_explicit(&n->tls_here, memory_order_acquire) || n->tls_shut) {
+    if (!atomic_load_explicit(&n->tls_here, memory_order_acquire) || n->tls_shut ||
+        (atomic_load_explicit(&n->wstate, memory_order_acquire) & W_SHUT)) {
       uv_mutex_unlock(&n->tls_lock);
       break;
     }
