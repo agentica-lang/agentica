@@ -1909,6 +1909,88 @@ def test_echo_clients_on_several_schedulers_get_every_line_back(tmp_path, repeat
         assert (result.code, result.stdout, result.stderr) == (0, "%d\n%d\n" % (clients * lines, clients * lines), "")
 
 
+NET_DUPLEX = r"""struct Side
+  socket: TCP.Socket
+  lines: Int
+end
+
+struct Dial
+  port: Int
+  ca: String
+  lines: Int
+end
+
+def read_all(side: Side) -> Int
+  same = 0
+  i = 0
+  while i < side.lines
+    if TCP.read_line(side.socket, 10000).unwrap! == "line #{i} " + "x" * (i % 300)
+      same = same + 1
+    end
+    i = i + 1
+  end
+  return same
+end
+
+def duplex(side: Side) -> Int
+  reader = Task.spawn(&read_all, side)
+  i = 0
+  while i < side.lines
+    text = "line #{i} " + "x" * (i % 300) + "\n"
+    if i % 3 == 0
+      TCP.send(side.socket, text, 10000).unwrap!
+    else
+      TCP.write(side.socket, text, 10000).unwrap!
+    end
+    i = i + 1
+  end
+  TCP.flush(side.socket, 10000).unwrap!
+  same = Task.await(reader)
+  TCP.close(side.socket)
+  return same
+end
+
+def dial(d: Dial) -> Int
+  client = TLS.client_context(TLS.ClientOptions(ca_file: d.ca)).unwrap!
+  socket = TLS.connect("localhost", d.port, client, 10000).unwrap!
+  return duplex(Side(socket: socket, lines: d.lines))
+end
+
+def main() -> Void
+  args = System.args()
+  conns = args[0].to_i!
+  lines = args[1].to_i!
+  dir = args[2]
+  server = TLS.server_context(TLS.ServerOptions(cert_file: "#{dir}/server.pem", key_file: "#{dir}/server-key.pem")).unwrap!
+  listener = TLS.listen("127.0.0.1", 0, server).unwrap!
+  d = Dial(port: TCP.local_port(listener), ca: "#{dir}/ca.pem", lines: lines)
+  tasks: List[Task[Int]] = []
+  k = 0
+  while k < conns
+    tasks = tasks.push(Task.spawn(&dial, d))
+    tasks = tasks.push(Task.spawn(&duplex, Side(socket: TCP.accept(listener, 10000).unwrap!, lines: lines)))
+    k = k + 1
+  end
+  same = 0
+  for t in tasks
+    same = same + Task.await(t)
+  end
+  TCP.close_listener(listener)
+  puts(same)
+end
+"""
+
+
+@RACE
+def test_tls_writes_beside_reads_that_wait_keep_both_streams_whole(tmp_path, repeats):
+    # Each end of each connection writes its lines while a reader task of the same socket waits for the peer's:
+    # the sends and writes encrypt on a scheduler while the I/O thread decrypts on the same session.
+    bytecode = program(tmp_path, "duplex", NET_DUPLEX)
+    for _ in range(repeats):
+        result = vm(bytecode, args=("8", "2000", TLS_DIR))
+        assert (result.code, result.stdout, result.stderr) == (0, "%d\n" % (16 * 2000), "")
+
+
 NET_CANCEL = r"""struct Wait
   kind: String
   port: Int

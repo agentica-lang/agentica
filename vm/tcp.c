@@ -213,11 +213,13 @@ struct agc_conn {
   uv_timer_t *linger;
   const char *linger_why;
   /* A TLS socket's session and input are the reader's on a scheduler (takes_here) while `tls_here` is set: its
-     handshake is over and the I/O thread does not read it. That thread still sends and says goodbye on the session,
-     so each use of the session by either side holds `tls_lock`. A scheduler also encrypts and sends on it then
-     (tls_direct_write). Under `tls_lock`: `tls_busy`, the I/O thread took bytes of the session that are not in the
-     kernel yet, and `tls_shut`, goodbye shut the session. */
+     handshake is over and the I/O thread does not read it. `tls_open` says the handshake is over: from then on a
+     scheduler encrypts and sends on the session (tls_direct_write), also while a read waits on the I/O thread, which
+     feeds and decrypts then. So after the handshake each use of the session by either side holds `tls_lock`. Under
+     `tls_lock`: `tls_busy`, the I/O thread took bytes of the session that are not in the kernel yet, and `tls_shut`,
+     goodbye shut the session. */
   _Atomic bool tls_here;
+  _Atomic bool tls_open;
   uv_mutex_t tls_lock;
   bool tls_busy, tls_shut;
 };
@@ -1157,9 +1159,12 @@ static void advance(net *n) {
     AGC_TRACE(&n->trace, AGC_TRACE_TLS,
               "tls_handshake_done socket=%" PRIu64 " listener=%" PRIu64 " protocol=%s cipher=%s alpn=%s", n->id,
               n->parent, agc_tls_protocol(n->tls), agc_tls_cipher(n->tls), alpn);
+    atomic_store_explicit(&n->tls_open, true, memory_order_release);
     notify(n, n->opener);
   }
+  uv_mutex_lock(&n->tls_lock);
   decrypt(n);
+  uv_mutex_unlock(&n->tls_lock);
   flush(n, tls_wrote);
 }
 
@@ -1185,6 +1190,7 @@ static void finish_reader(net *n) {
 }
 
 static void tls_read_in(net *n, ssize_t got) {
+  uv_mutex_lock(&n->tls_lock);
   if (got > 0 && !agc_tls_feed_in(n->tls, n->cipher, (size_t)got)) n->in.error = ENOMEM;
   if (got == UV_EOF) {
     n->raw_eof = true;
@@ -1192,6 +1198,7 @@ static void tls_read_in(net *n, ssize_t got) {
   } else if (got < 0) {
     n->in.error = agc_net_errno((int)got);
   }
+  uv_mutex_unlock(&n->tls_lock);
   if (got < 0)
     AGC_TRACE(&n->trace, AGC_TRACE_IO, "tcp_eof socket=%" PRIu64 " error=%d", n->id, got == UV_EOF ? 0 : agc_net_errno((int)got));
   advance(n);
@@ -1226,12 +1233,7 @@ static void read_in(uv_stream_t *s, ssize_t got, const uv_buf_t *buf) {
 
 static void start_reading(net *n) {
   if (n->reading || n->in.eof || n->in.error || n->raw_eof) return;
-  if (n->tls && atomic_load_explicit(&n->tls_here, memory_order_relaxed)) {
-    /* Under the lock, so a scheduler's encrypt (seal_locked) is over before this thread reads the session again. */
-    uv_mutex_lock(&n->tls_lock);
-    atomic_store_explicit(&n->tls_here, false, memory_order_release);
-    uv_mutex_unlock(&n->tls_lock);
-  }
+  if (n->tls) atomic_store_explicit(&n->tls_here, false, memory_order_release);
   int rc = uv_read_start((uv_stream_t *)&n->conn->tcp, alloc_in, read_in);
   if (rc)
     n->in.error = agc_net_errno(rc);
@@ -2521,13 +2523,13 @@ static uint8_t *seal_locked(net *n, const uint8_t *data, size_t len, size_t *out
 }
 
 /* A send or a write of a TLS socket at N > 1 (#1188), as direct_send: the scheduler encrypts, at most TLS_DIRECT_MAX
-   bytes per hold of tls_lock, while the session is the reader's (tls_here) and goodbye has not shut it. A piece goes
+   bytes per hold of tls_lock, once the handshake is over (tls_open) and until goodbye shuts the session. A piece goes
    to the kernel at once when the write buffer is empty and the I/O thread has none of the session's bytes on their
    way (tls_busy); otherwise, and for what the kernel did not take, the ciphertext goes into the write buffer, counted
    in `unsent` before the claim ends. The claim W_DIRECT and `unsent` keep the I/O thread from sending the session's
    bytes meanwhile (next_out), so the records keep their order; what it kept back (W_OWED) goes out after. *DONE is
-   the count of bytes of DATA taken: when it is short of LEN, the session became the I/O thread's, which sends the
-   rest. A send over TLS_DIRECT_MAX goes to the I/O thread whole. Returns a TLS_* or a negative libuv error; *NP and
+   the count of bytes of DATA taken: when it is short of LEN, the socket was shut, and the I/O thread's send reports
+   it. A send over TLS_DIRECT_MAX goes to the I/O thread whole. Returns a TLS_* or a negative libuv error; *NP and
    *HOLDING as direct_send. */
 static int tls_direct_write(agc_vm *vm, agc_socket *sk, net **np, const uint8_t *data, size_t len, bool buffered,
                             size_t *done, bool *holding) {
@@ -2535,7 +2537,7 @@ static int tls_direct_write(agc_vm *vm, agc_socket *sk, net **np, const uint8_t 
   *holding = false;
   *done = 0;
   if (!n->direct || !len || (!buffered && len > TLS_DIRECT_MAX) || vm->sync_depth > 1 || vm->task->callbacks ||
-      n->write_status < 0 || !atomic_load_explicit(&n->tls_here, memory_order_acquire) || !claim_begin(n, W_DIRECT))
+      n->write_status < 0 || !atomic_load_explicit(&n->tls_open, memory_order_acquire) || !claim_begin(n, W_DIRECT))
     return TLS_PASSED;
   agc_handle_hold(vm, sk->writer);
   *holding = true;
@@ -2545,8 +2547,7 @@ static int tls_direct_write(agc_vm *vm, agc_socket *sk, net **np, const uint8_t 
   while (*done < len && rc >= 0) {
     size_t step = len - *done < TLS_DIRECT_MAX ? len - *done : TLS_DIRECT_MAX;
     uv_mutex_lock(&n->tls_lock);
-    if (!atomic_load_explicit(&n->tls_here, memory_order_acquire) || n->tls_shut ||
-        (atomic_load_explicit(&n->wstate, memory_order_acquire) & W_SHUT)) {
+    if (n->tls_shut || (atomic_load_explicit(&n->wstate, memory_order_acquire) & W_SHUT)) {
       uv_mutex_unlock(&n->tls_lock);
       break;
     }

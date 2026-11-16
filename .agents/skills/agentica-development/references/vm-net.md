@@ -47,13 +47,14 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   `W_RECV`, reader lock held, nothing touched after the claim ends, and a
   per-socket back-off after a receive that finds nothing. A TLS socket joins
   once `stop_reading` saw its handshake over (`tls_here`); `tls_got` feeds and
-  decrypts under `tls_lock`, which the I/O thread's sends and `goodbye` also
-  hold (`next_out`, `take_out`: a short lock, the socket write comes after
-  it), and an alert left in the session goes out by `flush_step`. A TLS send
-  or write is `tls_direct_write`: under `W_DIRECT` it encrypts in
-  `seal_locked` (only with `tls_here` set and `tls_shut` clear, read under
-  `tls_lock`; at most `TLS_DIRECT_MAX`, 64 KiB, per hold, so the lock stays
-  short). A piece goes to `send()` after the unlock when `unsent` is 0 and
+  decrypts under `tls_lock`, which the I/O thread's reads, sends and
+  `goodbye` also hold after the handshake (`tls_read_in`, `advance`,
+  `next_out`, `take_out`: a short lock, the socket write comes after it), and
+  an alert left in the session goes out by `flush_step`. A TLS send or write
+  is `tls_direct_write`: under `W_DIRECT` it encrypts in `seal_locked` (once
+  the handshake is over, `tls_open`, also while a read waits on the I/O
+  thread, and with `tls_shut` clear, read under `tls_lock`; at most
+  `TLS_DIRECT_MAX`, 64 KiB, per hold, so the lock stays short). A piece goes to `send()` after the unlock when `unsent` is 0 and
   `tls_busy` clear; otherwise, and for what the kernel left, the ciphertext
   goes into the write buffer (`unsent` raised under `tls_lock`, `out_pend`
   before the claim ends). At N = 1 it is `tls_buffer_here`. While `W_DIRECT`
@@ -61,7 +62,7 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   (sent by `flush_step` or `out_settled`), and `goodbye` sends no
   close_notify under `W_DIRECT`. The buffer writes use `out_req`/`out_data`,
   so they queue in libuv beside the session's own write (`write_req`).
-  `start_reading` clears `tls_here` under `tls_lock`.
+  `start_reading` clears `tls_here`.
   `finish` copies what the `done` half needs into the request, and
   `request_done` reads only that and posts `drop_request`. `users` changes only
   on the I/O thread (the first count, `own`, excepted). The `net` fields `id`
