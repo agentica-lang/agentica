@@ -432,6 +432,14 @@ typedef struct {
      abort when a direct call parks or starts a stepper. When unsure, leave a row unmarked: it then takes the
      INTERPRET exit. */
   bool direct;
+  /* The call may park: the turn ends while it waits, for a channel, a task, a timer or stdin (the woken task runs the
+     call again) or for an I/O job on the loop or the thread pool (files, paths, processes, sockets, a native call or
+     wait). Not marked: the `shared` rows that never park (Channel.close, Task.cancel, the logger, ...), the output rows
+     (puts, IO.print, ...), which park only while the output is backed up, and the steppers (File.each_line, Task.map,
+     the Lazy terminals), whose call leaves the code once, however often they wait inside it. The `on` heuristic of the
+     JIT weighs such a call (AGC_JIT_PARK_WEIGHT). A parking row is neither leaf nor direct and has AGC_NATIVE_NONE
+     (vm/tests/sync_test.c checks the tables). */
+  bool parks;
 } agc_builtin;
 
 /* prelude marks a function of the compiler prelude: its spans are not

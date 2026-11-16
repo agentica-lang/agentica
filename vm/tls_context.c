@@ -202,8 +202,8 @@ void agc_tls_http1_check(agc_vm *vm, const agc_tls_config *config, uint32_t at) 
 }
 
 const agc_builtin agc_tls_context_builtins[] = {
-  {"TLS.client_context", 1, builtin_client_context, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
-  {"TLS.server_context", 1, builtin_server_context, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
+  {"TLS.client_context", 1, builtin_client_context, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false, true},
+  {"TLS.server_context", 1, builtin_server_context, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false, true},
 };
 
 const size_t agc_tls_context_builtin_count = sizeof agc_tls_context_builtins / sizeof agc_tls_context_builtins[0];

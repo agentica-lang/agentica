@@ -2152,33 +2152,33 @@ static agc_value builtin_read_available(agc_vm *vm, agc_value *args, uint32_t sp
 }
 
 const agc_builtin agc_process_builtins[] = {
-  {"Process.spawn.options", 3, builtin_spawn_options, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
+  {"Process.spawn.options", 3, builtin_spawn_options, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false, true},
   {"Process.spawn_captured.options", 3, builtin_spawn_captured_options, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false,
-   false},
+   false, true},
   {"Process.spawn_channel.options", 3, builtin_spawn_channel_options, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false,
-   false},
-  {"Process.send", 3, builtin_send, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
-  {"Process.read_line", 2, builtin_read_line, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
-  {"Process.send_bytes.bytes", 3, builtin_send_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
-  {"Process.read_bytes.bytes", 3, builtin_read_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
-  {"Process.close_stdin", 2, builtin_close_stdin, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
-  {"Process.wait", 2, builtin_wait, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
-  {"Process.close", 1, builtin_close, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
-  {"Process.output", 2, builtin_output, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
-  {"Process.channel_read_line", 2, builtin_channel_read_line, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
-  {"Process.channel_send", 3, builtin_channel_send, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
-  {"Process.channel_close", 2, builtin_channel_close, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
-  {"Process.read_available", 2, builtin_read_available, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
-  {"Process.spawn_group", 4, builtin_spawn_group, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
-  {"Process.signal", 2, builtin_signal, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
-  {"Process.signal_group", 2, builtin_signal_group, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
-  {"System.signal", 3, builtin_system_signal, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
-  {"Process.poll_line", 2, builtin_poll_line, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
+   false, true},
+  {"Process.send", 3, builtin_send, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false, true},
+  {"Process.read_line", 2, builtin_read_line, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false, true},
+  {"Process.send_bytes.bytes", 3, builtin_send_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false, true},
+  {"Process.read_bytes.bytes", 3, builtin_read_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false, true},
+  {"Process.close_stdin", 2, builtin_close_stdin, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false, true},
+  {"Process.wait", 2, builtin_wait, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false, true},
+  {"Process.close", 1, builtin_close, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false, true},
+  {"Process.output", 2, builtin_output, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false, true},
+  {"Process.channel_read_line", 2, builtin_channel_read_line, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false, true},
+  {"Process.channel_send", 3, builtin_channel_send, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false, true},
+  {"Process.channel_close", 2, builtin_channel_close, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false, true},
+  {"Process.read_available", 2, builtin_read_available, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false, true},
+  {"Process.spawn_group", 4, builtin_spawn_group, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false, false},
+  {"Process.signal", 2, builtin_signal, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false, false},
+  {"Process.signal_group", 2, builtin_signal_group, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false, false},
+  {"System.signal", 3, builtin_system_signal, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false, false},
+  {"Process.poll_line", 2, builtin_poll_line, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false, false},
 };
 
 const size_t agc_process_builtin_count = sizeof agc_process_builtins / sizeof agc_process_builtins[0];
 #else
-const agc_builtin agc_process_builtins[] = {{"", 0, NULL, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false}};
+const agc_builtin agc_process_builtins[] = {{"", 0, NULL, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false, false}};
 
 const size_t agc_process_builtin_count = 0;
 
