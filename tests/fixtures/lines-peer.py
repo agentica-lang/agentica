@@ -38,6 +38,10 @@ def main():
     path, mode = sys.argv[1], sys.argv[2]
     os.mkfifo(path, 0o600)
     fd = os.open(path, os.O_RDWR)
+    # FIONREAD on the read-write descriptor answers 0 on macOS (it reports the FIFO's write side), so the queue is
+    # read on a read-only one: without it every piece, and the close, would go before the program read anything,
+    # and a close before the program opened the FIFO would drop the buffered pieces.
+    queue = os.open(path, os.O_RDONLY | os.O_NONBLOCK)
     if mode in BEFORE:
         os.write(fd, BEFORE[mode])
     print("ready", flush=True)
@@ -47,14 +51,15 @@ def main():
             # while the reader still has a read in flight, and the next piece would be lost with its descriptor.
             if not appeared(path + ".go", 20):
                 sys.exit(1)
-        elif not drained(fd, 20):
+        elif not drained(queue, 60):
             sys.exit(1)
         os.write(fd, piece)
         time.sleep(0.05)
     if mode == "pieces":
-        if not drained(fd, 20):
+        if not drained(queue, 60):
             sys.exit(1)
         os.close(fd)
+        os.close(queue)
         print("closed", flush=True)
         return
     print("holding", flush=True)
