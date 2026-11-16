@@ -30,6 +30,11 @@ MAKEFILE = (
     "\tprintf '<html><head></head><body>%s</body></html>' '$(HUGO_FLAGS)' > site/public/index.html\n"
     "\tprintf 'see <head></head> /agentica/' > site/public/llms.txt\n"
     "\t@if [ -e site/themes/docs-theme/mark ]; then cat site/themes/docs-theme/mark >> site/public/index.html; fi\n"
+    "\tmkdir -p site/public/only-$$(cat VERSION)\n"
+    "\tprintf '<html><head><link rel=canonical href=x><meta name=robots content=all></head></html>'"
+    " > site/public/only-$$(cat VERSION)/index.html\n"
+    "\tprintf '<urlset></urlset>' > site/public/sitemap.xml\n"
+    "\tgit rev-parse --is-inside-work-tree > site/public/git.txt\n"
 )
 
 
@@ -141,6 +146,28 @@ def test_every_html_page_loads_the_selector_once_and_the_cache_skips_builds(repo
     code, out, total = build(tmp_path, monkeypatch)
     assert code == 0 and total - first == 1  # only dev builds again: the working tree is never cached
     assert all(page.read_text().count(tags) == 1 for page in out.rglob("*.html"))
+
+
+def test_only_the_root_is_indexed_and_tags_build_in_a_git_checkout(repo, tmp_path, monkeypatch):
+    code, out, _ = build(tmp_path, monkeypatch)
+    assert code == 0
+    canonical = '<link rel="canonical" href="https://example.org/docs/library/">'
+    noindex = '<meta name="robots" content="noindex,follow">'
+    for folder in ("0.9.0", "0.10.0", "dev"):
+        page = (out / folder / "library" / "index.html").read_text()
+        assert page.count(canonical) == 1 and noindex not in page
+        assert not (out / folder / "sitemap.xml").exists()
+    # A page the root does not have: noindex, and its own canonical and robots tags are gone.
+    old = (out / "0.10.0" / "only-0.10.0" / "index.html").read_text()
+    assert old.count(noindex) == 1 and "canonical" not in old and "content=all" not in old
+    assert noindex in (out / "dev" / "only-0.12.0" / "index.html").read_text()
+    # The root keeps its own tags and its sitemap.
+    assert "content=all" in (out / "only-0.11.0" / "index.html").read_text()
+    assert (out / "sitemap.xml").exists() and "noindex" not in (out / "library" / "index.html").read_text()
+    # Each tag ran make in a git checkout (Hugo's enableGitInfo needs one), and no worktree is left behind.
+    assert (out / "0.10.0" / "git.txt").read_text().strip() == "true"
+    worktrees = subprocess.run(["git", "-C", str(repo), "worktree", "list"], capture_output=True, text=True).stdout
+    assert len(worktrees.splitlines()) == 1
 
 
 def test_a_tag_is_built_with_the_theme_commit_it_pins(repo, tmp_path, monkeypatch):

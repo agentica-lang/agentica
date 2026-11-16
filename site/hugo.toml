@@ -6,6 +6,8 @@ locale = "en"
 title = "Agentica"
 theme = "docs-theme"
 disableKinds = ["taxonomy", "term", "rss"]
+# The sitemap dates each page by its last commit (pages.yml checks out the whole history).
+enableGitInfo = true
 
 [params]
   description = "Agentica is Ruby with static types: Ruby-like syntax, checked before running, with immutable values."
