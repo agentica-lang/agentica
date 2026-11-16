@@ -17,6 +17,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- With the JIT, a loop that tests lines against literals (`strip`, `start_with?`, `end_with?`) runs about 19% faster: compiled code calls the prefix and suffix tests with no call overhead (#1223).
 - The `gc` trace (`AGENTICA_VM_TRACE=gc`) reports what each scheduler allocated and, at the end of a run, the total time the world was stopped for collections, its share of wall and CPU time, and the pause count, p50, p99 and max (#1698).
 - `agentica FILE.agc` starts a program whose bytecode is in the cache without loading the compiler: about 16 ms in place of 48 ms for a small program on Linux (#1471).
 - `"$#{n}\r\n".bytes` on an interpolated string writes the parts into one `Bytes`, with no `String` in between; an `Int` in any interpolation prints faster (#1361).

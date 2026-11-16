@@ -1654,6 +1654,43 @@ def test_string_code_runs_in_compiled_code_without_leaving(tmp_path):
     assert_max_steps_sweep(bytecode, int(stdout.split("steps ")[1]))
 
 
+# A line scan: String.starts_with? and ends_with? are plain calls in compiled code (no cost, no tail), strip a direct
+# call that charges by size; prefixes longer than the line, empty ones and lines of several bytes per character.
+SCAN = """def scan(lines: List[String], passes: Int) -> Int
+  n = 0
+  for _ in 0...passes
+    for line in lines
+      text = line.strip
+      if text.start_with?("\\"kind\\": \\"CallExpr\\"") or text == "}"
+        n += 1
+      end
+      if line.end_with?("{") or line.end_with?("é{")
+        n += 10
+      end
+      if text.start_with?("") and line.end_with?("")
+        n += 100
+      end
+    end
+  end
+  return n
+end
+
+def main() -> Void
+  lines = ["  \\"kind\\": \\"CallExpr\\",", "}", "{", "", "é{", "\\"kind\\"", "x" * 200 + "{", " } "]
+  puts(scan(lines, 2000))
+  puts("steps #{System.Profile.steps()}")
+end
+"""
+
+
+def test_a_line_scan_of_prefix_and_suffix_tests_matches_the_interpreter(tmp_path):
+    bytecode = compile_text(SCAN, "scan", tmp_path)
+    code, stdout, _ = assert_same(bytecode)
+    assert code == 0 and stdout.startswith("1666000\n"), stdout
+    assert compiled(bytecode, tmp_path, "on") == (["scan"] if jit_host() else [])
+    assert_max_steps_sweep(bytecode, int(stdout.split("steps ")[1]))
+
+
 @pytest.mark.parametrize("word", ["", "ab"])
 @pytest.mark.parametrize("nested", [False, True])
 def test_a_failure_of_string_code_in_compiled_code_matches_the_interpreter(tmp_path, word, nested):

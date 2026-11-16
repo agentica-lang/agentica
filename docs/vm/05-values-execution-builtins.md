@@ -321,10 +321,12 @@ returns.
   a direct builtin itself, and a leaf builtin when a native call is below it, so
   the native calls stay on the C stack; a leaf at native depth 0 takes the
   `INTERPRET` exit, which costs less than the catch of the call. A few hot
-  leaves that cannot fail once their arguments pass a check (`plain_leaves` in
-  `vm/jit/jit.c`) are called at any depth. The code reads a list's length
-  (`LIST_LEN`, `List.size`) and a `LIST_GET` of the tail itself, in both item
-  layouts (§17.12); an item of the trie goes through `agc_op_list_get`.
+  leaves, and direct rows that charge nothing (the prefix and suffix tests),
+  that cannot fail once their arguments pass a check (`plain_leaves` in
+  `vm/jit/jit.c`) are called at any depth with no catch and no tail. The code
+  reads a list's length (`LIST_LEN`, `List.size`) and a `LIST_GET` of the tail
+  itself, in both item layouts (§17.12); an item of the trie goes through
+  `agc_op_list_get`.
   Compiled code returns `{status, pc}` at its first exit, and `run_compiled` (`vm/interp.c`) handles it as the
   interpreter handles the instruction at `pc`; the exit kinds are the
   `AGC_JIT_EXIT_*` values of `vm/jit/jit.h`. A block's `RETURN` to a block call

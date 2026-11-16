@@ -945,8 +945,8 @@ static AGC_JIT_CALLER agc_jit_exit plain_call(const agc_builtin *row, agc_value 
   return got;
 }
 
-/* The rows of plain_leaves are leaf rows of the builtin tables, and only those get checks; a one-character check
-   follows a String tag check of the same argument. Such a row runs in compiled
+/* The rows of plain_leaves are leaf rows of the builtin tables or direct rows that charge nothing, and only those get
+   checks; a one-character check follows a String tag check of the same argument. Such a row runs in compiled
    code at native depth 0 too (agc_jit_call_plain): the result in the window and nothing charged, while an argument
    with another tag takes the INTERPRET exit at the call, its window left alone. */
 static AGC_JIT_CALLER void plain_leaf_calls(void) {
@@ -956,10 +956,10 @@ static AGC_JIT_CALLER void plain_leaf_calls(void) {
       const agc_builtin *b = &agc_builtin_tables[t].entries[i];
       const agc_jit_plain *checks = agc_jit_plain_of(b);
       if (checks) plain++;
-      assert(!checks || b->leaf);
+      assert(!checks || b->leaf || (b->direct && b->cost == AGC_COST_NONE));
       assert(!checks || !checks->one_char || checks->tags[0] == AGC_T_STRING);
     }
-  assert(plain == 6);
+  assert(plain == 8);
   static const agc_builtin row = {"String.length", 1, counts, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false};
   static const agc_builtin not_leaf = {"String.length", 1, counts, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false};
   assert(agc_jit_plain_of(&row) && !agc_jit_plain_of(&not_leaf));
