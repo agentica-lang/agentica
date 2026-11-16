@@ -51,7 +51,8 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   hold (`next_out`, `take_out`: a short lock, the socket write comes after
   it), and an alert left in the session goes out by `flush_step`. A TLS send
   is `tls_direct_send`: under `W_DIRECT` it encrypts in `tls_seal` (only with
-  `tls_here` set and `tls_busy` clear, both read under `tls_lock`), sends
+  `tls_here` set and `tls_busy` and `tls_shut` clear, read under `tls_lock`;
+  at most `TLS_DIRECT_MAX`, 64 KiB, so the lock stays short), sends
   after the unlock, and parks the rest as ciphertext (`q->cipher`,
   `send_rest`). While `W_DIRECT` or `W_PARTIAL` stands, `next_out` takes
   nothing and sets `W_OWED`, and `goodbye` sends no close_notify;

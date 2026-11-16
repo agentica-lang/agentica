@@ -28,6 +28,8 @@
 #define PEER_TEXT 64
 #define CIPHER_SIZE ((size_t)16384)
 #define TLS_CHUNK ((size_t)16384)
+/* The longest text that a TLS send encrypts on its scheduler (tls_direct_send), so tls_lock stays short. */
+#define TLS_DIRECT_MAX ((size_t)65536)
 #define NET(ptr, field) ((net *)(void *)((char *)(ptr) - offsetof(net, field)))
 #define TCP_LINK(ptr, field) ((tcp_link *)(void *)((char *)(ptr) - offsetof(tcp_link, field)))
 
@@ -162,16 +164,16 @@ struct agc_conn {
      socket connects or is accepted (read_peer), before the request that hands the socket to a program finishes, and
      never again, so a scheduler that holds the socket may read it. */
   char peer[PEER_TEXT];
-  /* The direct send (direct_send, #1188). `sock` is the OS socket of a connected link and `direct` says it is set:
-     both are written once on the I/O thread before a program holds the socket (keep_sock). After that only head_value
-     clears `direct`, for a WebSocket, and only direct_send reads it, both on a scheduler: under rt->sync in a shared
-     VM (agc_share runs before the I/O thread starts), and at sync_depth 0 on the one thread of a VM that is not
-     shared. `wstate` (W_*) is the one field both threads change, by atomic operations only. A scheduler sets W_DIRECT
-     for the time of its send, from 0 or W_RECV only, while it holds rt->sync and the socket's resource holds the net,
-     and W_RECV the same way for a receive (recv_here); shut_one sets W_SHUT, and W_DEFERRED when it found either, and
-     then leaves the close of the links to the end of the last of them (direct_over). So the descriptor is never
-     closed, or reused, under a send or a receive. `has_sock` says `sock` is set; `recv_skip` and `recv_backoff` are
-     recv_here's rule, the reader's alone (takes_here). */
+  /* The direct send (direct_send, #1188). `sock` is the OS socket of a connected link and `direct` says it is set: both
+     are written once on the I/O thread before a program holds the socket (keep_sock). After that only head_value clears
+     `direct`, for a WebSocket, and only direct_send and tls_direct_send read it, both on a scheduler: under rt->sync in
+     a shared VM (agc_share runs before the I/O thread starts), and at sync_depth 0 on the one thread of a VM that is
+     not shared. `wstate` (W_*) is the one field both threads change, by atomic operations only. A scheduler sets
+     W_DIRECT for the time of its send, from 0, W_RECV or W_OWED only, while it holds rt->sync and the socket's resource
+     holds the net, and W_RECV the same way for a receive (recv_here); shut_one sets W_SHUT, and W_DEFERRED when it
+     found either, and then leaves the close of the links to the end of the last of them (direct_over). So the
+     descriptor is never closed, or reused, under a send or a receive. `has_sock` says `sock` is set; `recv_skip` and
+     `recv_backoff` are recv_here's rule, the reader's alone (takes_here). */
   uintptr_t sock;
   bool direct, has_sock;
   _Atomic unsigned wstate;
@@ -210,11 +212,11 @@ struct agc_conn {
   /* A TLS socket's session and input are the reader's on a scheduler (takes_here) while `tls_here` is set: its
      handshake is over and the I/O thread does not read it. That thread still sends and says goodbye on the session,
      so each use of the session by either side holds `tls_lock`. A scheduler also encrypts and sends on it then
-     (tls_direct_send). `tls_busy`, under `tls_lock`: the I/O thread took bytes of the session that are not in the
-     kernel yet. */
+     (tls_direct_send). Under `tls_lock`: `tls_busy`, the I/O thread took bytes of the session that are not in the
+     kernel yet, and `tls_shut`, goodbye shut the session. */
   _Atomic bool tls_here;
   uv_mutex_t tls_lock;
-  bool tls_busy;
+  bool tls_busy, tls_shut;
 };
 
 /* A posted close: release_step runs it on the I/O thread. */
@@ -544,6 +546,7 @@ static void goodbye(net *n) {
   uint8_t *data = NULL;
   /* A scheduler's ciphertext is on its way (tls_direct_send): close_notify could not follow it, so none goes. */
   if (!(atomic_load_explicit(&n->wstate, memory_order_acquire) & (W_DIRECT | W_PARTIAL))) {
+    n->tls_shut = true;
     agc_tls_close(n->tls);
     data = take_out(n, &len);
   }
@@ -2463,13 +2466,14 @@ static int64_t direct_send(agc_vm *vm, agc_socket *sk, net **np, const uint8_t *
 
 /* LEN bytes encrypted for a direct send, behind what the session already had to send, as one malloc'd ciphertext
    (*OUT_LEN bytes; NULL for none), under tls_lock. *STATUS is TLS_PASSED when the session is not this thread's to
-   use (the I/O thread reads it, or has bytes of it on their way), else 0, or UV_EPROTO when the session refused, which
+   use (the I/O thread reads it, has bytes of it on their way, or shut it for a close, which the I/O thread then
+   reports), else 0, or UV_EPROTO when the session refused, which
    the I/O thread's send would report too. */
 static uint8_t *tls_seal(net *n, const uint8_t *data, size_t len, size_t *out_len, int *status) {
   *out_len = 0;
   *status = TLS_PASSED;
   uv_mutex_lock(&n->tls_lock);
-  if (!atomic_load_explicit(&n->tls_here, memory_order_acquire) || n->tls_busy) {
+  if (!atomic_load_explicit(&n->tls_here, memory_order_acquire) || n->tls_busy || n->tls_shut) {
     uv_mutex_unlock(&n->tls_lock);
     return NULL;
   }
@@ -2495,8 +2499,8 @@ static int tls_direct_send(agc_vm *vm, agc_socket *sk, net **np, const uint8_t *
                            uint8_t **rest, size_t *rest_len) {
   net *n = *np;
   *holding = false;
-  /* A longer text goes to the I/O thread, which encrypts it a chunk at a time, not all at once. */
-  if (!n->direct || !len || len > LIMIT || vm->sync_depth > 1 || vm->task->callbacks || n->write_status < 0 ||
+  /* A longer text goes to the I/O thread, which encrypts it a chunk at a time. */
+  if (!n->direct || !len || len > TLS_DIRECT_MAX || vm->sync_depth > 1 || vm->task->callbacks || n->write_status < 0 ||
       !atomic_load_explicit(&n->tls_here, memory_order_acquire) || !claim_begin(n, W_DIRECT))
     return TLS_PASSED;
   agc_handle_hold(vm, sk->writer);
@@ -2517,11 +2521,11 @@ static int tls_direct_send(agc_vm *vm, agc_socket *sk, net **np, const uint8_t *
   if (owed && n) agc_loop_call(n->io, flush_step, n);
   if (partial) {
     *rest_len = cipher_len - took;
-    *rest = malloc(*rest_len);
-    if (!*rest) agc_out_of_memory();
-    memcpy(*rest, cipher + took, *rest_len);
+    memmove(cipher, cipher + took, *rest_len);
+    *rest = cipher;
+  } else {
+    free(cipher);
   }
-  free(cipher);
   if (sent < 0 && sent != UV_EAGAIN) return (int)sent;
   if (status < 0) return status;
   return partial ? TLS_REST : status;

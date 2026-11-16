@@ -240,7 +240,7 @@ texts.
   none of the session's bytes on their way: the scheduler encrypts the text
   under the socket's TLS lock, sends the records after the unlock, and gives
   the records that the kernel did not take to the I/O thread as they are. A
-  text over 1 MiB goes to the I/O thread, which encrypts 16 KiB at a time.
+  text over 64 KiB goes to the I/O thread, which encrypts 16 KiB at a time.
   While such a send or its rest is under way, the I/O thread leaves what the
   session has to send (an alert after a decrypt) in it and sends it after the
   last record, and a close sends no close_notify. The sends of a socket whose
