@@ -16,6 +16,13 @@ typedef struct {
   const size_t *count;
 } agc_builtin_table;
 
+/* What a call of a leaf or direct builtin must not change (agc_builtin.leaf and .direct), taken before the call. */
+typedef struct {
+  int64_t cost, stop, left;
+  uint32_t frames, depth;
+  bool yielded, retry;
+} agc_call_rule;
+
 typedef struct {
   agc_output *out;
   FILE *file;
@@ -251,6 +258,7 @@ typedef enum {
   AGC_STATUS_INDEX_OUT_OF_RANGE, /* RUNTIME-INDEX-OUT-OF-RANGE at the instruction's span */
   AGC_STATUS_WRONG_TAG,          /* RUNTIME-INTERNAL at span 0 (agc_wrong_tag): only hand-made bytecode */
   AGC_STATUS_KEY_NOT_FOUND,      /* RUNTIME-KEY-NOT-FOUND at the instruction's span */
+  AGC_STATUS_FOREIGN_UPDATE,     /* RUNTIME-INTERNAL at span 0: a struct update of another struct (hand-made) */
   AGC_STATUS_COUNT               /* not a status: the number of them, which stays last */
 } agc_status;
 
@@ -279,8 +287,9 @@ agc_status agc_op_to_text(agc_vm *vm, agc_value *dst, const agc_value *v);
 /* MAP_GET: a String or Bytes key charges its bytes, which the caller applies. */
 agc_status agc_op_map_get(agc_vm *vm, agc_value *dst, const agc_value *map, const agc_value *key);
 /* MAP and STRUCT_WITH read the window the loader checked and allocate. MAP's String or Bytes keys and STRUCT_WITH's
- * copy charge their bytes, which the caller applies. A key that cannot be hashed, or a receiver that is not a struct of
- * U's type with its declared field count, is WRONG_TAG, with nothing charged or written. */
+ * copy charge their bytes, which the caller applies. A key that cannot be hashed or a receiver that is not a struct is
+ * WRONG_TAG, and a struct that is not of U's type with its declared field count is FOREIGN_UPDATE, with nothing charged
+ * or written. */
 agc_status agc_op_map(agc_vm *vm, agc_value *dst, const agc_value *pairs, uint32_t count);
 agc_status agc_op_struct_with(agc_vm *vm, agc_value *dst, const agc_value *window, const agc_update_def *u);
 /* The constructors LIST, CLOSURE (WINDOW[0] = the function value that holds the CAPTURES values at WINDOW), STRUCT and
@@ -296,6 +305,11 @@ void agc_op_enum(agc_value *dst, const agc_value *payload, const agc_variant_def
  * It is called on the VM's C stack, never from compiled code. */
 _Noreturn void agc_op_fail(agc_vm *vm, agc_status status, const agc_value *a, const agc_value *b, uint32_t span);
 agc_outcome agc_vm_run(agc_vm *vm);
+/* The builds of AGC_LEAF_CHECK take the rule before a call of B, a leaf or direct row, and check it after: a call that
+ * parked (or asked to retry), started a stepper, moved the frames or left rt->sync taken, or, for a leaf, charged turn
+ * cost, counted a step or asked to yield, stops the run with a line that names B and what it did. */
+agc_call_rule agc_call_rule_take(const agc_vm *vm);
+void agc_call_rule_check(const agc_vm *vm, const agc_call_rule *was, const agc_builtin *b);
 
 void agc_profile_start(agc_vm *vm);
 void agc_profile_start_cover(agc_vm *vm);

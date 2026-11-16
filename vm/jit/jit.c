@@ -1226,15 +1226,11 @@ uint32_t agc_jit_call_builtin(agc_vm *vm, agc_value *args, const agc_builtin *b,
   if (b->cost == AGC_COST_SIZE)
     for (uint32_t k = 0; k < b->arity; k++) units += units_of(args[k]);
 #if AGC_LEAF_CHECK
-  uint32_t frames = t->frame_count, depth = vm->sync_depth;
-  bool retry = t->retry;
+  agc_call_rule rule = agc_call_rule_take(vm);
 #endif
   if (!called(vm, b, args, span, args, !vm->rt->jit_unwinds)) return AGC_JIT_EXIT_RAISE;
 #if AGC_LEAF_CHECK
-  if (t->parking || t->retry != retry) direct_broken(b, "parked");
-  if (t->stepper) direct_broken(b, "started a stepper");
-  if (t->frame_count != frames) direct_broken(b, "moved the frames");
-  if (vm->sync_depth != depth) direct_broken(b, "left rt->sync taken");
+  agc_call_rule_check(vm, &rule, b);
 #endif
   if (b->cost == AGC_COST_SIZE) units += units_of(args[0]);
   if (units) agc_charge(vm, units);
@@ -1246,17 +1242,12 @@ static uint32_t call_leaf(agc_vm *vm, agc_value *args, const agc_builtin *b, uin
   agc_task *t = vm->task;
   t->frames[t->frame_count - 1].pc = (uint32_t)where;
 #if AGC_LEAF_CHECK
-  /* The interpreter's call_leaf checks the same rule; here a broken row would also have left a cost or a stop that
-     compiled code never applies. */
-  int64_t cost = t->turn_cost, stop = vm->next_stop, left = vm->turn_left;
-  uint32_t frames = t->frame_count, depth = vm->sync_depth;
-  bool yielded = vm->yield, retry = t->retry;
+  /* A broken row would also have left a cost or a stop that compiled code never applies. */
+  agc_call_rule rule = agc_call_rule_take(vm);
 #endif
   if (!called(vm, b, args, (uint32_t)(where >> 32), args, catch)) return AGC_JIT_EXIT_RAISE;
 #if AGC_LEAF_CHECK
-  if (t->parking || t->retry != retry || t->stepper || t->frame_count != frames || vm->sync_depth != depth ||
-      t->turn_cost != cost || vm->next_stop != stop || vm->turn_left != left || vm->yield != yielded)
-    direct_broken(b, "broke the leaf rule");
+  agc_call_rule_check(vm, &rule, b);
 #endif
   return AGC_STATUS_OK;
 }
@@ -1301,9 +1292,8 @@ agc_jit_code agc_jit_call_value(agc_vm *vm, agc_value *window, uint32_t argc, ui
   agc_task *t = vm->task;
   if (!agc_is(window[0], AGC_T_FN)) return NULL;
   const agc_fn *fn = agc_as_fn(vm, window[0]);
-  if (fn->function >= p->function_count) return NULL;
+  if (!agc_fn_takes(p, fn, argc)) return NULL;
   const agc_function *callee = &p->functions[fn->function];
-  if (callee->params != argc || callee->captures != fn->n) return NULL;
   agc_jit_code code = atomic_load_explicit(&vm->rt->jit->code[fn->function], memory_order_acquire);
   /* WINDOW is R + a of the frame on top, inside the register file. */
   size_t base = (size_t)(window - t->regs) + 1;

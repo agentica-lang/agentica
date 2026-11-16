@@ -1415,8 +1415,8 @@ static AGC_JIT_CALLER void globals_structs_enums(void) {
 /* STRUCT_WITH copies the struct at R1 with the update's field set from R2 in compiled code. The copy charges its size
    and applies it, as the interpreter's case does: 4 fields (64 bytes) take one unit of the turn, and a turn that the
    charge ends leaves with YIELD after the result is written. A receiver that is not a struct of the update's type with
-   its declared field count leaves with WRONG_TAG, and an update past the program's table (hand-made code) leaves for
-   the interpreter, R3 and the turn cost untouched. */
+   its declared field count leaves with WRONG_TAG or FOREIGN_UPDATE, and an update past the program's table (hand-made
+   code) leaves for the interpreter, R3 and the turn cost untouched. */
 static AGC_JIT_CALLER void struct_updates(void) {
   agc_struct_def structs[2] = {{.count = 4}, {.count = 2}};
   uint32_t fields[1] = {2};
@@ -1451,7 +1451,7 @@ static AGC_JIT_CALLER void struct_updates(void) {
   agc_value wrong[3] = {agc_int(5), agc_struct_value(agc_new_struct(1, 2)), agc_struct_value(agc_new_struct(0, 2))};
   for (size_t k = 0; k < 3; k++) {
     R[1] = wrong[k];
-    expect_exit(code(&vm, R, f.constants, 0), AGC_STATUS_WRONG_TAG, 0);
+    expect_exit(code(&vm, R, f.constants, 0), k ? AGC_STATUS_FOREIGN_UPDATE : AGC_STATUS_WRONG_TAG, 0);
     assert(same_bits(R[3], any) && vm.task->turn_cost == 0);
   }
   f.program.update_count = 0;
