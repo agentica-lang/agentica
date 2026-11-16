@@ -738,9 +738,6 @@ static void try_step_outside_lazy_tests(void) {
 #endif
 }
 
-/* The slot is the only reference to its String once the registers are cleared, so it must stay readable across
-   collections: junk of the String's size class (0xAB) takes its place if the collector frees it. Not run under
-   AGC_NO_GC, which never frees. */
 /* agc_load_session of the file EXTENSION over the program BASE: NULL when it is refused with a message that holds
    REASON (an unexpected answer fails the test). */
 static agc_program *session_load(const agc_program *base, spec extension, const char *reason) {
@@ -805,8 +802,22 @@ static void session_tests(void) {
   s.entry = 0;
   s.globals = 0;
   assert(!session_load(base_program, s, "fewer functions"));
+
+  /* The new init sets only new slots, and new slots need a new init. */
+  static const agc_instr set_old[] = {
+    {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_CONST, 0, 2, 0}, {AGC_OP_GLOBAL_SET, 0, 0, 0}, {AGC_OP_CONST, 0, 1, 0},
+    {AGC_OP_RETURN, 0, 0, 0}};
+  s = grown;
+  s.funcs[2].code = set_old;
+  assert(!session_load(base_program, s, "slot of an earlier entry"));
+  s = grown;
+  s.entry = 0;
+  assert(!session_load(base_program, s, "without a new init function"));
 }
 
+/* The slot is the only reference to its String once the registers are cleared, so it must stay readable across
+   collections: junk of the String's size class (0xAB) takes its place if the collector frees it. Not run under
+   AGC_NO_GC, which never frees. */
 static void expect_global_alive(agc_vm *vm, const agc_program *p) {
   agc_gc_info info;
   if (!agc_gc_stats(&info)) return;

@@ -115,7 +115,7 @@ static agc_value builtin_stdin_bytes(agc_vm *vm, agc_value *args, uint32_t span)
   return agc_result_value(true, agc_bytes_value(bytes));
 }
 
-/* The child of `agentica repl`: the binary in `run --session`, started by vm/process.c. */
+/* The child of `agentica repl`: `command run --driver-pid PID OPTIONS... --session -`, started by vm/process.c. */
 static agc_value builtin_spawn_session(agc_vm *vm, agc_value *args, uint32_t span) {
   guarded(vm, span);
   return agc_process_spawn_session(vm, args, agc_as_bool(vm, args[2]));

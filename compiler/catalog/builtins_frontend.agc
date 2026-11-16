@@ -39,7 +39,7 @@ ROWS: List[Model.Builtin] = [
     name: "FrontEnd.spawn_session",
     parameters: [
       Model.Named(name: "command", type: Types.Type.String),
-      Model.Named(name: "args", type: Types.Type.List(Types.Type.String)),
+      Model.Named(name: "options", type: Types.Type.List(Types.Type.String)),
       Model.Named(name: "json", type: Types.Type.Bool),
     ],
     result: Types.Type.Result(Types.Type.Opaque("Process")),
@@ -47,9 +47,10 @@ ROWS: List[Model.Builtin] = [
     implementation: "FrontEnd.spawn_session",
     effects: ["subprocess"],
     description: (
-      "Front end only: start the session child of `agentica repl` with the parent channel. Its stdin is a pipe, " +
-      "its stdout is the front end's (its stderr when json is true) and its stderr the front end's; it leads its " +
-      "own process group where the system has them. Any other program fails with RUNTIME-FRONT-END-ONLY."
+      "Front end only: start the session child of `agentica repl`, `command run --driver-pid PID options... " +
+      "--session -`, with the parent channel; it ends when the front end does. Its stdin is a pipe, its stdout is " +
+      "the front end's (its stderr when json is true) and its stderr the front end's; it leads its own process " +
+      "group where the system has them. Any other program fails with RUNTIME-FRONT-END-ONLY."
     ),
     alternatives: [],
   ),

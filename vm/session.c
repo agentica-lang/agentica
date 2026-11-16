@@ -24,6 +24,11 @@ struct agc_session {
   agc_string *record;
   agc_task *current;
   const char *problem;
+  /* The program this entry loaded, while its init function runs, and the first of the slots that init sets. */
+  agc_program *grown;
+  uint32_t first_new_slot;
+  /* The entry loaded a program, which stays loaded whatever its answer: the answer says "loaded". */
+  bool loaded;
   bool in_init, deny_native;
   uint32_t entry, read_count, write_count;
   uint32_t *reads, *writes;
@@ -43,6 +48,10 @@ static agc_string *lit(const char *text) {
 
 static agc_json_member *members(size_t n) { return agc_alloc(agc_size_mul(n, sizeof(agc_json_member))); }
 
+static agc_json_member yes(const char *key) {
+  return agc_json_pair(key, agc_json_leaf(AGC_JSON_BOOL, agc_bool(true)));
+}
+
 static agc_value json_text(agc_string *s) { return agc_json_leaf(AGC_JSON_STRING, agc_string_value(s)); }
 
 static agc_string *refused(agc_vm *vm, const char *message) {
@@ -53,8 +62,8 @@ static agc_string *refused(agc_vm *vm, const char *message) {
 }
 
 /* The failure as the front end shows it: the diagnostic's fields, as a --json run prints them, and its text in the
-   style of the run (plain, --ai or --json), which the front end prints as it is. */
-static agc_string *failure(agc_vm *vm, const agc_program *p, const agc_outcome *o) {
+   style of the run (plain, --ai or --json), which the front end prints as it is. LOADED: the entry's program stays. */
+static agc_string *failure(agc_vm *vm, const agc_program *p, const agc_outcome *o, bool loaded) {
   const agc_span *at = &p->spans[o->span < p->span_count ? o->span : 0];
   agc_json_member *d = members(7);
   size_t count = 0;
@@ -64,10 +73,11 @@ static agc_string *failure(agc_vm *vm, const agc_program *p, const agc_outcome *
   d[count++] = agc_json_pair("message", json_text(message));
   d[count++] = agc_json_pair("range", agc_span_range(at));
   if (o->stack.shown) count += agc_stack_members(p, &o->stack, d + count);
-  agc_json_member *m = members(3);
-  m[0] = agc_json_pair("diagnostic", agc_json_object(d, count));
-  m[1] = agc_json_pair("ok", agc_json_leaf(AGC_JSON_BOOL, agc_bool(false)));
-  size_t n = 2;
+  agc_json_member *m = members(4);
+  size_t n = 0;
+  m[n++] = agc_json_pair("diagnostic", agc_json_object(d, count));
+  if (loaded) m[n++] = yes("loaded");
+  m[n++] = agc_json_pair("ok", agc_json_leaf(AGC_JSON_BOOL, agc_bool(false)));
   agc_memstream *ms = NULL;
   FILE *file = agc_memstream_open(&ms);
   if (file) {
@@ -81,7 +91,7 @@ static agc_string *failure(agc_vm *vm, const agc_program *p, const agc_outcome *
   return agc_json_line(vm, m, n);
 }
 
-static agc_string *crashed(agc_vm *vm, agc_task *t) {
+static agc_string *crashed(agc_vm *vm, agc_session *s, agc_task *t) {
   agc_outcome o;
   memset(&o, 0, sizeof o);
   o.kind = AGC_FAILED;
@@ -91,7 +101,25 @@ static agc_string *crashed(agc_vm *vm, agc_task *t) {
   o.span = t->crash_span;
   if (t->crash_stack) o.stack = *t->crash_stack;
   agc_task_observe(vm, t);
-  return failure(vm, vm->rt->program, &o);
+  return failure(vm, vm->rt->program, &o, s->loaded);
+}
+
+/* An init function that crashed leaves its program loaded, as the front end keeps its declarations, and the slots it
+   did not set marked failed: a read of one fails that entry with RUNTIME-NO-VALUE (vm/interp.c). */
+static void mark_failed(agc_session *s) {
+  agc_program *p = s->grown;
+  for (uint32_t k = s->first_new_slot; k < p->global_count; k++)
+    if (p->globals[k].tag == AGC_T_VOID) p->globals[k].as.i = AGC_GLOBAL_FAILED;
+}
+
+/* An entry that ran but gave back what no entry gives: its effects stay, so it is not refused. */
+static agc_string *invalid(agc_vm *vm, agc_session *s, const char *message) {
+  agc_json_member *m = members(3);
+  size_t n = 0;
+  m[n++] = agc_json_pair("invalid", json_text(lit(message)));
+  if (s->loaded) m[n++] = yes("loaded");
+  m[n++] = agc_json_pair("ok", agc_json_leaf(AGC_JSON_BOOL, agc_bool(false)));
+  return agc_json_line(vm, m, n);
 }
 
 static void grow_slots(agc_session *s, uint32_t count) {
@@ -111,19 +139,20 @@ static void grow_slots(agc_session *s, uint32_t count) {
 /* The answer of an entry that returned: its result is a List of the shown value (a String, Void for none, or any
    value, shown with inspect) and the values of the written slots, in order. */
 static agc_string *returned(agc_vm *vm, agc_session *s, agc_value result) {
-  if (!agc_is(result, AGC_T_LIST)) return refused(vm, "the entry did not return a list");
+  if (!agc_is(result, AGC_T_LIST)) return invalid(vm, s, "the entry did not return a list");
   const agc_list *list = agc_as_list(vm, result);
   if (agc_list_len(list) != (size_t)s->write_count + 1)
-    return refused(vm, "the entry returned a list of another size");
+    return invalid(vm, s, "the entry returned a list of another size");
   uint32_t top = 0;
   for (uint32_t k = 0; k < s->write_count; k++)
     if (s->writes[k] + 1 > top) top = s->writes[k] + 1;
   grow_slots(s, top);
   for (uint32_t k = 0; k < s->write_count; k++) s->slots[s->writes[k]] = agc_list_get(list, k + 1);
   agc_value shown = agc_list_get(list, 0);
-  agc_json_member *m = members(2);
-  m[0] = agc_json_pair("ok", agc_json_leaf(AGC_JSON_BOOL, agc_bool(true)));
-  size_t n = 1;
+  agc_json_member *m = members(3);
+  size_t n = 0;
+  if (s->loaded) m[n++] = yes("loaded");
+  m[n++] = yes("ok");
   if (agc_is(shown, AGC_T_STRING))
     m[n++] = agc_json_pair("value", json_text(agc_as_string(vm, shown)));
   else if (!agc_is(shown, AGC_T_VOID))
@@ -241,10 +270,12 @@ static const char *take_entry(agc_vm *vm, agc_session *s, const char *at, const 
     o.code = agc_ffi_refusal(loaded, s->deny_native, &o.message, &o.span);
     if (o.code) {
       o.message_len = strlen(o.message);
-      s->record = failure(vm, loaded, &o);
+      s->record = failure(vm, loaded, &o, false);
       return NULL;
     }
     next = loaded;
+    s->grown = loaded;
+    s->first_new_slot = base->global_count;
   }
   const agc_function *f = s->entry < next->function_count ? &next->functions[s->entry] : NULL;
   if (!f || f->params != s->read_count || f->captures != 0) return "the entry function does not take the slots";
@@ -253,6 +284,8 @@ static const char *take_entry(agc_vm *vm, agc_session *s, const char *at, const 
   /* One scheduler runs (run --session), so no other turn holds the old program, and this task parks below before its
      own turn reads the table again (turn_loop reads it once per turn). */
   vm->rt->program = next;
+  s->loaded = next != base;
+  /* agc_load_session refused new slots without a new init function to set them. */
   if (next != base && next->entry >= base->function_count) {
     s->in_init = true;
     s->current = spawn(vm, next->entry, NULL, 0, span);
@@ -270,12 +303,14 @@ static void serve_line(agc_vm *vm, agc_session *s, const agc_string *line, uint3
     return;
   }
   const char *problem = "an unknown request";
+  s->loaded = false;
+  s->grown = NULL;
   if (line->bytes > 6 && memcmp(text, "entry ", 6) == 0) problem = take_entry(vm, s, text + 6, end, span);
   if (problem) s->record = refused(vm, problem);
 }
 
 /* A retry builtin of the main task, like Test.run (vm/testing.c): each wake comes back here and goes on from the
-   session's state. The end of the channel ends the run. */
+   session's state. The end of the channel ends the run with 0, a broken or missing channel with 1. */
 agc_value agc_session_serve(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)args;
   agc_session *s = vm->rt->session;
@@ -283,8 +318,7 @@ agc_value agc_session_serve(agc_vm *vm, agc_value *args, uint32_t span) {
     agc_fail(vm, "RUNTIME-FRONT-END-ONLY", "FrontEnd.serve_session is for the session child of agentica repl", span);
   if (vm->task != vm->rt->main)
     agc_fail(vm, "RUNTIME-FRONT-END-ONLY", "call FrontEnd.serve_session from main", span);
-  /* The end of the channel ends the session, as the front end has gone. */
-  if (!agc_parent_open(vm)) agc_exit(vm, 0);
+  if (!agc_parent_open(vm)) agc_exit(vm, 1);
   for (;;) {
     if (s->record) {
       if (!agc_drain(vm) || !agc_parent_send(vm, s->record)) return agc_void();
@@ -295,8 +329,9 @@ agc_value agc_session_serve(agc_vm *vm, agc_value *args, uint32_t span) {
       agc_task *t = s->current;
       s->current = NULL;
       if (t->crashed) {
+        if (s->in_init) mark_failed(s);
         s->in_init = false;
-        s->record = crashed(vm, t);
+        s->record = crashed(vm, s, t);
       } else if (s->in_init) {
         s->in_init = false;
         start_entry(vm, s, span);
@@ -308,7 +343,9 @@ agc_value agc_session_serve(agc_vm *vm, agc_value *args, uint32_t span) {
     agc_string *line = NULL;
     agc_input_status status = agc_parent_line(vm, &line);
     if (status == AGC_INPUT_WAIT) return agc_void();
-    if (status != AGC_INPUT_OK) agc_exit(vm, 0);
+    /* The end of the channel ends the session, as the front end has gone; a line the channel refused (over 1 MiB, or
+       cut off at the end) is a broken session. */
+    if (status != AGC_INPUT_OK) agc_exit(vm, status == AGC_INPUT_EOF ? 0 : 1);
     serve_line(vm, s, line, span);
   }
 }

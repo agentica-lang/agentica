@@ -1864,15 +1864,29 @@ static agc_value builtin_spawn_group(agc_vm *vm, agc_value *args, uint32_t span)
                      true, true, false, -1);
 }
 
-/* FrontEnd.spawn_session(command, args, json): the child of `agentica repl` (vm/session.c). Its stdin is the pipe the
-   front end writes the first program to; its stdout is the front end's (its stderr under json, so the front end's
-   stdout keeps only the answers) and its stderr the front end's, so what an entry prints comes out in order before
-   its answer; the parent channel carries the entries and the answers. It leads its own process group where the
-   system has them, so a Ctrl-C of the terminal reaches only the front end. */
+/* FrontEnd.spawn_session(command, options, json): the child of `agentica repl` (vm/session.c), `command run
+   --driver-pid PID OPTIONS... --session -` with this process as the driver, so the child ends when the front end does,
+   even killed (vm/launch.c). Its stdin is the pipe the front end writes the first program to; its stdout is the front
+   end's (its stderr under json, so the front end's stdout keeps only the answers) and its stderr the front end's, so
+   what an entry prints comes out in order before its answer; the parent channel carries the entries and the answers.
+   It leads its own process group where the system has them, so a Ctrl-C of the terminal reaches only the front end. */
 agc_value agc_process_spawn_session(agc_vm *vm, const agc_value *args, bool json) {
+  const agc_list *options = agc_as_list(vm, args[1]);
+  size_t n = agc_list_len(options);
+  agc_value *words = agc_alloc(agc_size_mul(agc_size_add(n, 5), sizeof(agc_value)));
+  char pid[24];
+  int pid_len = snprintf(pid, sizeof pid, "%lld", (long long)uv_os_getpid());
+  size_t k = 0;
+  words[k++] = agc_string_value(agc_make_string("run", 3, 3));
+  words[k++] = agc_string_value(agc_make_string("--driver-pid", 12, 12));
+  words[k++] = agc_string_value(agc_make_string(pid, (size_t)pid_len, (size_t)pid_len));
+  for (size_t i = 0; i < n; i++) words[k++] = agc_list_get(options, i);
+  words[k++] = agc_string_value(agc_make_string("--session", 9, 9));
+  words[k++] = agc_string_value(agc_make_string("-", 1, 1));
+  agc_value argv[2] = {args[0], agc_list_value(agc_list_from_array(words, k))};
   const agc_string *none = agc_make_string("", 0, 0);
   const agc_string *here = agc_make_string(".", 1, 1);
-  return spawn_child(vm, args, here, 30000, false, true, NULL, none, none, agc_proc_groups(), false, false,
+  return spawn_child(vm, argv, here, 30000, false, true, NULL, none, none, agc_proc_groups(), false, false,
                      json ? 2 : 1);
 }
 

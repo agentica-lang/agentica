@@ -73,11 +73,11 @@ def shown_void(result: Result[Void]) -> Void
 end
 
 def session(binary: String, file: String, json: Bool, lines: List[String]) -> Void
-  arguments = ["run", "--session", "-"]
+  options: List[String] = []
   if json
-    arguments = ["run", "--json", "--session", "-"]
+    options = ["--json"]
   end
-  child = FrontEnd.spawn_session(binary, arguments, json).unwrap!
+  child = FrontEnd.spawn_session(binary, options, json).unwrap!
   Process.send_bytes(child, program(file), 5000).unwrap!
   Process.close_stdin(child, 5000).unwrap!
   for line in lines

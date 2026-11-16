@@ -256,17 +256,18 @@ static const uint8_t *session_program(size_t *len) {
   uint8_t *data = agc_alloc_atomic(cap);
   for (;;) {
     if (n == cap) {
-      if (cap >= AGC_MAX_FILE_BYTES) return NULL;
-      uint8_t *grown = agc_alloc_atomic(agc_size_mul(cap, 2));
+      if (n > AGC_MAX_FILE_BYTES) return NULL;
+      size_t more = cap * 2 > AGC_MAX_FILE_BYTES ? AGC_MAX_FILE_BYTES + 1 : cap * 2;
+      uint8_t *grown = agc_alloc_atomic(more);
       memcpy(grown, data, n);
       data = grown;
-      cap *= 2;
+      cap = more;
     }
     size_t got = fread(data + n, 1, cap - n, stdin);
     n += got;
     if (got == 0) break;
   }
-  if (ferror(stdin)) return NULL;
+  if (ferror(stdin) || n > AGC_MAX_FILE_BYTES) return NULL;
   *len = n;
   return data;
 }

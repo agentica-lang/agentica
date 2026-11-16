@@ -277,6 +277,7 @@ static void check_function(reader *r, const agc_program *p, const agc_function *
         if (bx >= p->global_count) reject(r, "global index out of range");
         if (in.op == AGC_OP_GLOBAL_SET) {
           if (f != &p->functions[p->entry]) reject(r, "GLOBAL_SET outside the entry function");
+          if (r->base && bx < r->base->global_count) reject(r, "GLOBAL_SET of a slot of an earlier entry");
           sets_global = true;
         }
         break;
@@ -889,6 +890,9 @@ static void extends_base(reader *r, const agc_program *p) {
       p->enum_count < b->enum_count || p->variant_count < b->variant_count || p->update_count < b->update_count ||
       p->global_count < b->global_count || p->instance_count < b->instance_count)
     reject(r, "a table is shorter than the session's");
+  /* Only a new init function sets the new slots: one of the session's would run main again, or nothing would. */
+  if (p->global_count > b->global_count && p->entry < b->function_count)
+    reject(r, "new Globals slots without a new init function");
   for (uint32_t i = 0; i < b->constant_count; i++)
     if (!same_constant(p->constants[i], b->constants[i])) reject(r, "constant %u differs from the session's", i);
   for (uint32_t i = 0; i < b->builtin_count; i++)
