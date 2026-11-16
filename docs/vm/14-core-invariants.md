@@ -312,11 +312,12 @@ it; a dropped result frees what it made, and the end of the run frees what a
 finished call made for a task that never took it, before the registry. There
 are no GC finalizers.
 
-A plain TCP socket at N > 1 has a second send path: the scheduler calls `send()`
+A TCP socket at N > 1 has a second send path: the scheduler calls `send()`
 itself, with `rt->sync` dropped and the writer lock held without a job
 (`agc_handle_hold`), and only the rest goes to the I/O thread as a job that
-takes the hold over. A read that needs bytes calls `recv()` the same way, with
-the reader lock held, and a TLS socket decrypts there too (#1197). A close
+takes the hold over; a TLS socket encrypts there first (#1188). A read that
+needs bytes calls `recv()` the same way, with the reader lock held, and a TLS
+socket decrypts there too (#1197). A close
 during either call does not close the descriptor: the scheduler's claim
 (`wstate` in `vm/tcp.c`) defers it, and the last call to end posts the close
 (`direct_over`). The reason is speed, for which §14.6 lets the core change: +55%

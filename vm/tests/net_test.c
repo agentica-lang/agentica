@@ -61,6 +61,16 @@ typedef struct {
   SSL *ssl;
 } tls_peer;
 
+/* The peer of a TLS pair whose VM side filled its send buffer: it reads the junk, then TEXT through TLS, then, with
+   ALERT, the alert that ends it. */
+typedef struct {
+  tls_peer *p;
+  size_t junk;
+  const char *text;
+  bool alert;
+  atomic_bool over;
+} junk_reader;
+
 static calling call(const char *name, uint32_t arity, agc_value a, agc_value b, agc_value c, agc_value d) {
   return agc_test_call_of(&vm, vm.task, name, arity, a, b, c, d);
 }
@@ -1217,7 +1227,7 @@ static void peer_sends_to_kernel(const tls_peer *p, struct pollfd *in_kernel, co
 /* recv_here on a TLS socket (#1197): a read that the input does not answer receives the ciphertext on its scheduler
    and decrypts it there, so a line in the kernel is read with no park, while a read that finds nothing parks and the
    I/O thread ends it, and the next one parks with no receive (the rule's back-off). A key update that the scheduler
-   reads is answered with the next send, from the I/O thread. A close from another task while the receive
+   reads is answered with the next send. A close from another task while the receive
    waits sends close_notify beside it; the read reports the socket closed and the end of the receive closes the
    descriptor. */
 static void test_a_tls_read_receives_on_the_scheduler(void) {
@@ -1296,6 +1306,132 @@ static void test_a_bad_record_on_the_scheduler_sends_its_alert(void) {
   SSL_free(p.ssl);
   close_pair_locked(p.fd);
 }
+
+/* At N > 1 a TLS send that the kernel takes at once is encrypted and sent on its scheduler (#1188): the call returns
+   without a park and the peer reads the record while the loop does not run. */
+static void test_a_tls_send_goes_out_from_the_scheduler(void) {
+  tls_peer p = {0};
+  open_tls_pair_greeted(&p);
+  locked_call sending = {&vm, vm.task,
+                         call("TCP.send", 3, socket_v, agc_test_str("direct\n"), agc_int(5000), agc_void())};
+  on_thread(park_locked, &sending);
+  assert(vm.task->parked == NULL);
+  ok_of(sending.c.result);
+  peer_reads_tls(&p, "direct\n");
+  SSL_free(p.ssl);
+  close_pair_locked(p.fd);
+}
+
+#ifdef __linux__
+/* A TLS pair whose VM side has a send buffer full of 'z' bytes (*JUNK of them) that the peer does not read, with
+   small buffers on both ends, as test_a_send_waits_for_a_direct_send_of_another_task makes them: no byte of a send
+   leaves until the peer reads. */
+static int open_tls_pair_full(tls_peer *p, size_t *junk) {
+  open_tls_pair_greeted(p);
+  int mine = vm_side(p->fd);
+  int small = 4096;
+  assert(setsockopt(mine, SOL_SOCKET, SO_SNDBUF, &small, sizeof small) == 0);
+  assert(setsockopt(p->fd, SOL_SOCKET, SO_RCVBUF, &small, sizeof small) == 0);
+  *junk = 0;
+  for (size_t more = 1; more;) {
+    more = fill_send_buffer(mine);
+    *junk += more;
+    wait_ms(100);
+  }
+  return mine;
+}
+
+static void peer_reads_tls_after_junk(void *arg) {
+  junk_reader *r = arg;
+  char buf[4096];
+  for (size_t left = r->junk; left;) {
+    ssize_t got = recv(r->p->fd, buf, left < sizeof buf ? left : sizeof buf, 0);
+    assert(got > 0);
+    for (ssize_t k = 0; k < got; k++) assert(buf[k] == 'z');
+    left -= (size_t)got;
+  }
+  peer_reads_tls(r->p, r->text);
+  if (r->alert) {
+    int got = SSL_read(r->p->ssl, buf, sizeof buf);
+    assert(got <= 0 && SSL_get_error(r->p->ssl, got) == SSL_ERROR_SSL);
+  }
+  atomic_store(&r->over, true);
+}
+
+/* Runs the loop until the peer R has read all it waits for. */
+static void serve_junk_reader(junk_reader *r) {
+  uv_thread_t peer;
+  assert(uv_thread_create(&peer, peer_reads_tls_after_junk, r) == 0);
+  while (!atomic_load(&r->over)) (void)agc_io_poll(&vm, false);
+  assert(uv_thread_join(&peer) == 0);
+}
+
+/* A TLS send that the kernel does not take: the scheduler encrypted it, so the I/O thread sends the rest as it is,
+   before anything else, and the task wakes when it is out. The next send goes out from the scheduler again. */
+static void test_the_rest_of_a_tls_send_goes_to_the_io_thread(void) {
+  tls_peer p = {0};
+  size_t junk;
+  (void)open_tls_pair_full(&p, &junk);
+  locked_call sending = {&vm, vm.task,
+                         call("TCP.send", 3, socket_v, agc_test_str("rest\n"), agc_int(60000), agc_void())};
+  on_thread(park_locked, &sending);
+  assert(vm.task->parked != NULL);
+  junk_reader r = {&p, junk, "rest\n", false, false};
+  serve_junk_reader(&r);
+  wait_woken();
+  on_thread(take_locked, &sending.c);
+  ok_of(sending.c.result);
+  while (agc_runq_pop(vm.rt->runq)) {}
+  sending.c = call("TCP.send", 3, socket_v, agc_test_str("next\n"), agc_int(5000), agc_void());
+  on_thread(park_locked, &sending);
+  assert(vm.task->parked == NULL);
+  ok_of(sending.c.result);
+  peer_reads_tls(&p, "next\n");
+  SSL_free(p.ssl);
+  close_pair_locked(p.fd);
+}
+
+/* While a scheduler's TLS send waits in the kernel, a read on another scheduler finds a bad record, and the session
+   has an alert to send: the I/O thread keeps it back, and the end of the send sends it, after the record. The VM's
+   socket is blocking, so the send waits in send() until the peer reads; the peer reads the line whole, then the
+   alert. Without the hold-back the alert goes out beside the send and the line does not decrypt. */
+static void test_an_alert_waits_for_a_tls_send_under_way(void) {
+  tls_peer p = {0};
+  size_t junk;
+  int mine = open_tls_pair_full(&p, &junk);
+  set_blocking(mine, true);
+  struct timeval give_up = {10, 0};
+  assert(setsockopt(mine, SOL_SOCKET, SO_SNDTIMEO, &give_up, sizeof give_up) == 0);
+  agc_task *other = agc_new_task(&vm);
+  locked_call sending = {&aside, other,
+                         agc_test_call_of(&aside, other, "TCP.send", 3, socket_v, agc_test_str("record\n"),
+                                          agc_int(60000), agc_void())};
+  uv_thread_t sender;
+  assert(uv_thread_create(&sender, send_first, &sending) == 0);
+  agc_resource *writer = agc_as_socket(&vm, socket_v)->writer;
+  for (bool held = false; !held;) {
+    agc_sync_take(&vm);
+    held = writer->holder == writer;
+    agc_sync_drop(&vm);
+  }
+  wait_ms(100);
+  unsigned char bad[37] = {0x17, 0x03, 0x03, 0x00, 0x20};
+  for (size_t k = 5; k < sizeof bad; k++) bad[k] = (unsigned char)k;
+  assert(send(p.fd, bad, sizeof bad, 0) == (ssize_t)sizeof bad);
+  struct pollfd in_kernel = {mine, POLLIN, 0};
+  assert(poll(&in_kernel, 1, 5000) == 1);
+  locked_call reading = {&vm, vm.task, read_line_of(&vm, vm.task)};
+  on_thread(park_locked, &reading);
+  assert(vm.task->parked == NULL && !agc_as_result(&vm, reading.c.result)->ok);
+  for (int k = 0; k < 10; k++) (void)agc_io_poll(&vm, false);
+  junk_reader r = {&p, junk, "record\n", true, false};
+  serve_junk_reader(&r);
+  assert(uv_thread_join(&sender) == 0);
+  ok_of(sending.c.result);
+  SSL_free(p.ssl);
+  close_pair_locked(p.fd);
+}
+#endif
 #endif
 
 int main(void) {
@@ -1330,6 +1466,11 @@ int main(void) {
   AGC_TEST_RUN(test_a_tls_read_receives_on_the_scheduler());
   AGC_TEST_RUN(test_a_stale_openssl_error_does_not_fail_a_tls_read());
   AGC_TEST_RUN(test_a_bad_record_on_the_scheduler_sends_its_alert());
+  AGC_TEST_RUN(test_a_tls_send_goes_out_from_the_scheduler());
+#ifdef __linux__
+  AGC_TEST_RUN(test_the_rest_of_a_tls_send_goes_to_the_io_thread());
+  AGC_TEST_RUN(test_an_alert_waits_for_a_tls_send_under_way());
+#endif
 #endif
   puts("net tests passed");
   return 0;
