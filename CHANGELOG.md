@@ -20,7 +20,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
-- `compute def` and dirty native module calls made one right after another cost about 3 µs in place of 15 to 25 µs, and 2 to 3 times less with `--schedulers 1` (#1120).
+- A `compute def` or dirty native module call made right after another costs about 3 µs in place of 15 to 25 µs (about 2 µs with `--schedulers 1`), and runs of calls that take tens of µs each (SQLite, agentica-db) run 2 to 3 times faster with `--schedulers 1` (#1120).
 - With the JIT, a loop that tests lines against literals (`strip`, `start_with?`, `end_with?`) runs faster, and the block of a `Lazy` terminal is compiled even when its caller is not (#1223).
 - The `gc` trace (`AGENTICA_VM_TRACE=gc`) reports what each scheduler allocated and, at the end of a run, the stop-the-world time, its share of wall and CPU time, and the pause count, p50, p99 and max (#1698).
 - `agentica FILE.agc` starts a program whose bytecode is in the cache without loading the compiler (about 16 ms in place of 48 ms for a small program on Linux), and parses `agentica.toml` once (#1471).
@@ -32,7 +32,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `agentica FILE.agc` no longer looks for the C compiler in `PATH` at each start of a cached program with no native module, and a change of `CC` or `PATH` keeps its cache entry (#1551).
 - The interpreter runs programs 4 to 6% faster, condition-heavy code up to 10% faster, and `check` and `compile` of a large program about 5 to 7% faster; `--max-steps`, profiles and `--coverage` count the same steps (#1001).
 - Text work is faster: UTF-8 checks 12 to 30%, `String.split` about 10%, `upcase`, `downcase` and `reverse` 3 to 50 times on ASCII, character counts up to 8 times on non-ASCII, `JSON.parse` 7 to 17% (#996).
-- A `Float` turns into text about 10 times faster, and `String.to_f` and `JSON.decode` read a number to the nearest `Float`; on Windows a few values printed one digit too many and some texts were read one step off (#1682).
+- A `Float` turns into text about 10 times faster, and `String.to_f` and `JSON.decode` read a number to the nearest `Float`; on Windows a few values that printed one digit too many print the shortest text and some texts were read one step off; other output is unchanged (#1682).
 - `agentica compile` of a large program whose bytecode is in the cache is about 15% faster (#1683).
 
 ### Fixed

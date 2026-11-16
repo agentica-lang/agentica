@@ -184,7 +184,8 @@ broken VM or test runner cannot make its own tests pass.
   PR and docs); mark a breaking change `**Breaking:**`.
 - Do not create new files under `docs/` (outside Hugo's `site/content/`)
   unless the user asks for one or accepts your suggestion. Progress and
-  evidence go in the PR or the CHANGELOG.
+  evidence go in the PR or the CHANGELOG. Change docs only when strictly
+  necessary (`.agents/skills/documentation-writing/`).
 - Prose wrapping: `site/content/` keeps one line per paragraph or list item.
   Markdown prose in `docs/` and `.agents/skills/` wraps at 80 characters;
   code blocks keep their line breaks.

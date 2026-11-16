@@ -35,8 +35,8 @@ test is not patch material, since it does not change the binary.
   this branch: in SKILL.md §1 and in `agentica-dev-workflow`, read
   `origin/release/X.Y.x` wherever they say `origin/master`.
 - **The PR:** `release/X.Y.Z` is the version bump PR, with base `release/X.Y.x`.
-  SKILL.md §1 applies, with two changes. Rename `[Unreleased]` (which holds only
-  the fix lines) to the new version, and the compare link is
+  SKILL.md §1 applies, with two changes. Rename `[Unreleased]` (which holds
+  only the fix lines) to the new version, and the compare link is
   `X.Y.<Z-1>...X.Y.Z`. The stage0 refresh builds from the stage0 of the tag;
   check it with `make stage0-check BASE_STAGE0=<that stage0>`. CI and Platforms
   run on the PR as usual (their `pull_request` trigger has no branch filter).
@@ -61,6 +61,6 @@ test is not patch material, since it does not change the binary.
   patch of an older line, the Install section keeps the newest release; check
   only that the version selector lists `X.Y.Z` and that its release page has the
   archives.
-- After SKILL.md §5 passes, delete `release/X.Y.Z` and `release/X.Y.x` (the next
-  patch makes `release/X.Y.x` again from the last tag), and create the milestone
-  `X.Y.<Z+1>`.
+- After SKILL.md §5 passes, delete `release/X.Y.Z` and `release/X.Y.x` (the
+  next patch makes `release/X.Y.x` again from the last tag), and create the
+  milestone `X.Y.<Z+1>`.

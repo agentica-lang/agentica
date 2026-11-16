@@ -18,14 +18,14 @@ diagnostic code and steps. The VM is the reference. When behavior changes on
 purpose, `make goldens` rewrites the files, and the PR shows their diff for
 review (12.1). A new fixture gets hand-checked expected output.
 
-**Black-box rule.** The goldens check the exit code, stdout, program stderr and
-diagnostic code, and nothing else. A runaway program must stop with
-`RUNTIME-STEP-LIMIT` under `--max-steps`. A run stopped by a smaller limit gives
-a prefix of the full stdout and program stderr (12.1). Diagnostic message text
-and span, the VM's own stderr wording, OS error text, exact step counts and
-step-limit spans may change in a PR that updates the goldens. An error string
-that a program prints is program data, so it is part of its golden. VM messages
-must be clear and useful for agents. The turn cost (10.2.1) stays, for fairness.
+**Black-box rule.** The goldens check the fields above and no VM internals. A
+runaway program must stop with `RUNTIME-STEP-LIMIT` under `--max-steps`. A run
+stopped by a smaller limit gives a prefix of the full stdout and program stderr
+(12.1). Diagnostic message text and span, the VM's own stderr wording, OS error
+text, exact step counts and step-limit spans may change in a PR that updates the
+goldens. An error string that a program prints is program data, so it is part of
+its golden. VM messages must be clear and useful for agents. The turn cost
+(10.2.1) stays, for fairness.
 
 The compiler may optimize freely as long as the goldens stay the same: inlining,
 constant folding, common subexpression elimination, loop-invariant code motion,

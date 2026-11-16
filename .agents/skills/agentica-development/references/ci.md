@@ -190,8 +190,8 @@ proof). These are the rules they do not show.
   the failed ones, since a shard could not download the build.
 - Peers: TCP needs Node; TLS needs Node and Python 3; the goldens need Python 3
   (`tests/fixtures/channel-run.py`; `channel-run.js` on Windows).
-- PR jobs use the system libgc, OpenSSL and zlib (minimums: `GC_MIN` and
-  `ZLIB_MIN` in `mk/vm.mk`); `warm-third-party`,
+- PR jobs use the system libgc, OpenSSL and zlib (minimums: `GC_MIN`,
+  `OSSL_MIN` and `ZLIB_MIN` in `mk/vm.mk`); `warm-third-party`,
   `sweep.yml` and the release use the vendored ones. Both modes share
   `build/vm/release/obj`; a mode change forces a full rebuild.
 
