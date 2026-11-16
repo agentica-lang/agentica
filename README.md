@@ -6,7 +6,7 @@ several cores, and it comes with HTTP, TLS and WebSockets, packages and C native
 modules. A front end written in Agentica compiles each program to bytecode, and
 a C VM runs it. Both are one binary, `agentica`.
 
-**[Read the documentation →](https://agentica-lang.github.io/agentica/)**
+**[Read the documentation →](https://www.agentica-lang.com/agentica/)**
 
 Contributor resources: [language specification](docs/grammar.md) · [agent
 reference](.agents/skills/agentica-programming/SKILL.md) · [VM design](docs/vm/)
@@ -19,7 +19,7 @@ reference](.agents/skills/agentica-programming/SKILL.md) · [VM design](docs/vm/
 Each release has an archive per system (Linux and macOS on x86-64 and arm64,
 Windows on x86-64), with `bin/agentica` and the licenses. Unpack one and put
 its `bin` folder on your `PATH`. The [install
-guide](https://agentica-lang.github.io/agentica/getting-started/) lists the
+guide](https://www.agentica-lang.com/agentica/getting-started/) lists the
 archives, the minimum system versions and the requirements to build.
 
 ## Build
