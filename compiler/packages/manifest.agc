@@ -120,7 +120,7 @@ end
 ## is PKG-ROOT-ONLY at `dependencies.<name>.path`, `.override` or `native_policy`.
 def require_package(manifest: Manifest) -> Result[Void]
   reading = Reader.Reading(file: manifest.file, code: "PKG-ROOT-ONLY")
-  if NativePrebuilt.any?(manifest.policy)
+  if manifest.policy.written
     help = "write [native_policy] in the agentica.toml of the root project"
     message = "only the root project sets a native policy"
     return error(Reader.fail_help(reading, NativePrebuilt.POLICY_KEY, message, help))

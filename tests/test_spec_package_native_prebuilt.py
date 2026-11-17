@@ -67,17 +67,28 @@ BUILD = '[native.adder]\nbuild = { sources = ["native/adder.c"], defines = ["N=1
     (BUILD + "prebuilt = %s\n" % prebuilt(url="https://example.com/{version}/{target}"), "native.adder.prebuilt.url"),
     (BUILD + "prebuilt = %s\n" % prebuilt(url="https://example.com/{target"), "native.adder.prebuilt.url"),
     (BUILD + "prebuilt = %s\n" % prebuilt(url="https://example.com/target}/{target}"), "native.adder.prebuilt.url"),
+    (BUILD + "prebuilt = %s\n" % prebuilt(url="https://user@example.com/{target}"), "native.adder.prebuilt.url"),
+    (BUILD + "prebuilt = %s\n" % prebuilt(url="https://example.com/{}/{target}"), "native.adder.prebuilt.url"),
     (BUILD + "prebuilt = %s\n" % prebuilt(source="0123456789ABCDEF"), "native.adder.prebuilt.source"),
     (BUILD + "prebuilt = %s\n" % prebuilt(source="0123"), "native.adder.prebuilt.source"),
     (BUILD + "prebuilt = %s\n" % prebuilt(api="1"), "native.adder.prebuilt.api"),
     (BUILD + "prebuilt = %s\n" % prebuilt(api="1.x"), "native.adder.prebuilt.api"),
+    (BUILD + "prebuilt = %s\n" % prebuilt(api="01.4"), "native.adder.prebuilt.api"),
+    (BUILD + "prebuilt = %s\n" % prebuilt(api="1.04"), "native.adder.prebuilt.api"),
+    (BUILD + "prebuilt = %s\n" % prebuilt(api="1.2.3"), "native.adder.prebuilt.api"),
     (BUILD + "prebuilt = %s\n" % prebuilt(sha256="{}"), "native.adder.prebuilt.sha256"),
     (BUILD + "prebuilt = %s\n" % prebuilt(sha256='{ linux = "%s" }' % SHA), "native.adder.prebuilt.sha256.linux"),
+    (BUILD + "prebuilt = %s\n" % prebuilt(sha256='{ freebsd-x86_64 = "%s" }' % SHA),
+     "native.adder.prebuilt.sha256.freebsd-x86_64"),
     (BUILD + "prebuilt = %s\n" % prebuilt(sha256='{ macos-arm64 = "%s" }' % SHA.upper()),
      "native.adder.prebuilt.sha256.macos-arm64"),
+    (BUILD + "prebuilt = %s\n" % prebuilt(sha256='{ windows-x86_64 = "abc" }'),
+     "native.adder.prebuilt.sha256.windows-x86_64"),
 ], ids=["no build", "not a table", "no source", "an unknown key", "http", "no target in the url",
-        "an unknown placeholder", "an open brace", "a close brace", "an uppercase source", "a short source",
-        "an api with no minor", "an api that is no number", "no target", "a system for a target", "an uppercase sha"])
+        "an unknown placeholder", "an open brace", "a close brace", "user info", "an empty placeholder",
+        "an uppercase source", "a short source", "an api with no minor", "an api that is no number",
+        "a leading zero in the major", "a leading zero in the minor", "three numbers", "no target",
+        "a system for a target", "an unknown target", "an uppercase sha", "a short sha"])
 def test_a_prebuilt_table_is_checked_where_it_is_written(ws, table, key):
     project(ws, table)
     assert_at_key(check_problem(ws), "PKG-MANIFEST-INVALID", ws.project / "agentica.toml", key)
@@ -99,8 +110,9 @@ def test_a_prebuilt_table_beside_a_build_and_a_native_policy_check_clean(ws):
     ('build = ["adder", "x"]\nprebuilt_only = ["y", "x"]\n', "native_policy.prebuilt_only[1]"),
     ('build = "all"\nprebuilt_only = ["x"]\n', "native_policy.prebuilt_only"),
     ('build = ["x"]\nprebuilt_only = "all"\n', "native_policy.prebuilt_only"),
+    ('build = ["x", "x"]\nprebuilt_only = ["y", "y", "x"]\n', "native_policy.prebuilt_only[2]"),
 ], ids=["a word", "a number", "not a name", "an unknown key", "a module in both", "all and a name",
-        "a name and all"])
+        "a name and all", "a module in both after repeats"])
 def test_a_native_policy_names_modules_or_all_and_no_module_twice(ws, policy, key):
     project(ws, BUILD + "\n[native_policy]\n" + policy)
     assert_at_key(check_problem(ws), "PKG-MANIFEST-INVALID", ws.project / "agentica.toml", key)
@@ -169,6 +181,25 @@ def test_the_source_key_follows_the_code_but_not_the_prebuilt_table_or_files_the
     third = native_source(ws)["source"]
     assert third not in (first["source"], second)
     assert third == model_source_key(ws.project, "adder", ["native/adder.c"], ["N=2"], [])
+
+
+def test_a_crlf_checkout_of_native_keys_as_its_lf_copy(ws):
+    project(ws, BUILD)
+    (ws.project / "native" / "adder.h").write_bytes(b"#define A 1\n#define B 2\n")
+    lf = native_source(ws)["source"]
+    (ws.project / "native" / "adder.c").write_bytes(ADDER_C.replace("\n", "\r\n").encode("utf-8"))
+    (ws.project / "native" / "adder.h").write_bytes(b"#define A 1\r\n#define B 2\r\n")
+    assert native_source(ws)["source"] == lf
+    (ws.project / "native" / "adder.h").write_bytes(b"#define A 1\r\n#define B 3\r\n")
+    assert native_source(ws)["source"] != lf
+
+
+def test_a_native_file_over_the_limit_of_a_fetched_package_is_pkg_native_build(ws):
+    project(ws, BUILD)
+    (ws.project / "native" / "big.h").write_bytes(b"x" * (1_048_576 + 1))
+    result = agentica(ws, "--json", "native", "source", "adder")
+    assert result.code == 1, result.stderr
+    assert_at_key(json.loads(result.stderr), "PKG-NATIVE-BUILD", ws.project / "agentica.toml", "native.adder.build")
 
 
 def test_native_source_needs_a_module_that_builds_and_two_words(ws):

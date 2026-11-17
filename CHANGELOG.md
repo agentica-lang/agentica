@@ -11,7 +11,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 ### Added
 
 - A parameter or field default may be the bytes of a string literal, `body: Bytes = "".bytes`, directly or through a constant (#1777).
-- `[native.NAME]` takes `prebuilt = { url, source, api, sha256 }` beside `build`, and the project's manifest takes `[native_policy]`; both are checked, and `agentica native source NAME` prints the source key, the native API and the URL of each target (part of #1168).
+- `[native.NAME]` takes `prebuilt = { url, source, api, sha256 }` beside `build`, and the project's manifest takes `[native_policy]`; both are checked (not used yet), and `agentica native source NAME` prints the source key, the native API and the URL of each target (part of #1168).
 
 ### Changed
 

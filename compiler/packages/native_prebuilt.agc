@@ -5,13 +5,19 @@
 ## from. A failure is the reading's code at the key path (toml_read.agc).
 ##
 ## The source key is the first 16 hex digits of the SHA-256 of `source_text`: the library, its `build` table and the
-## files of native/ that the hash of the package covers, with the digest of each. The compiler, the header and the
-## system are left out, so one key names the code for every target, and a manifest that only changes its `prebuilt`
-## table keeps it.
+## files of native/ that the hash of the package covers, with the digest of each (a CRLF read as LF, so a checkout
+## that turns LF into CRLF keys alike). The compiler, the header and the system are left out, so one key names the code
+## for every target, and a manifest that only changes its `prebuilt` table keeps it. Every file of native/ is in the
+## key of every module, since a source may include any of them: a package that wants a module keyed alone keeps one
+## module per package.
 
+import Paths from "../modules/import_path"
+import Failure from "../modules/link_failure"
+import Workspace from "../modules/workspace"
 import NativeArtifact from "native_artifact"
 import NativeBuild from "native_build"
 import GitSource from "git_source"
+import PackageHash from "package_hash"
 import Toml from "std/toml"
 import Reader from "toml_read"
 
@@ -37,18 +43,17 @@ struct Choice
   names: List[String]
 end
 
-## `[native_policy]` of the project: the modules that always build from source, and those that never build.
+## `[native_policy]` of the project: the modules that always build from source, and those that never build (names
+## without repeats); `written` is whether the manifest has the table, even an empty one.
 struct Policy
   build: Choice
   prebuilt_only: Choice
+  written: Bool
 end
 
 ## The policy of a manifest without `[native_policy]`: nothing is forced.
-def no_policy() -> Policy = Policy(build: Choice(all: false, names: []), prebuilt_only: Choice(all: false, names: []))
-
-## Whether the manifest wrote a `[native_policy]` that asks anything.
-def any?(policy: Policy) -> Bool
-  policy.build.all or policy.build.names.size > 0 or policy.prebuilt_only.all or policy.prebuilt_only.names.size > 0
+def no_policy() -> Policy
+  Policy(build: Choice(all: false, names: []), prebuilt_only: Choice(all: false, names: []), written: false)
 end
 
 ## Reads `prebuilt = { url, source, api, sha256 = { TARGET = "..." } }` at `path` (`native.NAME.prebuilt`). Every key
@@ -77,7 +82,8 @@ def parse(reading: Reader.Reading, value: Toml.Value, path: String) -> Result[Pr
   api_path = Reader.child(path, "api")
   api = try Reader.text(reading, entries["api"], api_path)
   if !api_version?(api)
-    help = "write the native API the files were built with, MAJOR.MINOR, as agentica native source NAME prints it"
+    help = "write the native API the files were built with, MAJOR.MINOR with no leading zero, as"
+    help = "#{help} agentica native source NAME prints it"
     return error(Reader.fail_help(reading, api_path, "not a native API version", help))
   end
 
@@ -124,6 +130,42 @@ def header_api(header: String) -> String
   "#{major}.#{minor}"
 end
 
+## The source key of the library `name` with the `build` table, from the files of native/ in the package folder `root`
+## that the package hash covers, read within the limits of a fetched package. A failure is PKG-NATIVE-BUILD at
+## `native.NAME.build` of the manifest `file`.
+def source_of(
+  workspace: Workspace.Workspace,
+  root: String,
+  file: String,
+  name: String,
+  build: NativeBuild.Build,
+) -> Result[String]
+  key = Reader.child(Reader.child("native", name), "build")
+  paths: List[String] = []
+  case PackageHash.covered_files(workspace, root)
+    PackageHash.Listing.Files(found) -> paths = found.select do |path: String| PackageHash.native_path?(path) end
+    PackageHash.Listing.Stopped(reason) -> return error(refused(file, key, stopped(reason)))
+  end
+
+  digests: List[String] = []
+  total = 0
+  for path in paths
+    read = workspace.read_prefix.call(Paths.join(root, path), PackageHash.MAX_FILE_BYTES + 1)
+    return error(refused(file, key, "cannot read #{path}: #{read.message}")) if !read.ok?
+
+    total += read.unwrap!.size
+    if read.unwrap!.size > PackageHash.MAX_FILE_BYTES or total > PackageHash.MAX_TOTAL_BYTES
+      limits = "#{PackageHash.MAX_FILE_BYTES} bytes a file and #{PackageHash.MAX_TOTAL_BYTES} in all"
+      message = "the files of native/ are over the limits of a fetched package (#{limits}), at #{path}"
+      return error(refused(file, key, message))
+    end
+
+    digests = digests.push(OpenSSL.Digest.sha256_hexdigest(lf_only(read.unwrap!)))
+  end
+
+  ok(source_key(source_text(name, build, paths, digests)))
+end
+
 ## The source key of a source text.
 def source_key(text: String) -> String = OpenSSL.Digest.sha256_hexdigest(text.bytes).slice(0, SOURCE_LENGTH)
 
@@ -134,22 +176,15 @@ def policy_of(reading: Reader.Reading, root: Map[String, Toml.Value]) -> Result[
 
   entries = try Reader.table(reading, root[POLICY_KEY], POLICY_KEY)
   try Reader.known_keys(reading, entries, POLICY_KEYS, POLICY_KEY)
-  build = try choice_of(reading, entries, "build")
-  prebuilt_only = try choice_of(reading, entries, "prebuilt_only")
-  here = Reader.child(POLICY_KEY, "prebuilt_only")
-  help = "a module either always builds or never builds: name it in one of build and prebuilt_only"
+  build = try choice_of(reading, entries, "build", [])
+  prebuilt_only = try choice_of(reading, entries, "prebuilt_only", build.names)
   only_any = prebuilt_only.all or prebuilt_only.names.size > 0
   if (build.all and only_any) or (prebuilt_only.all and build.names.size > 0)
-    return error(Reader.fail_help(reading, here, "a module both builds and does not", help))
+    here = Reader.child(POLICY_KEY, "prebuilt_only")
+    return error(Reader.fail_help(reading, here, BOTH, BOTH_HELP))
   end
 
-  for index in 0...prebuilt_only.names.size
-    if build.names.include?(prebuilt_only.names[index])
-      return error(Reader.fail_help(reading, Reader.item(here, index), "a module both builds and does not", help))
-    end
-  end
-
-  ok(Policy(build: build, prebuilt_only: prebuilt_only))
+  ok(Policy(build: build, prebuilt_only: prebuilt_only, written: true))
 end
 
 private
@@ -162,6 +197,9 @@ SOURCE_FORMAT = "agentica native source 1"
 # The values a template is tried with: an https template stays one whatever the values are.
 SAMPLE_SOURCE = "0123456789abcdef"
 SAMPLE_API = "1.0"
+# The failure of a module named in both lists of the policy.
+BOTH = "a module both builds and does not"
+BOTH_HELP = "a module either always builds or never builds: name it in one of build and prebuilt_only"
 
 # Why the URL template is not usable, or "": an https URL (or http to 127.0.0.1 or [::1]) once expanded, with
 # `{target}` and only the known placeholders.
@@ -223,9 +261,31 @@ def api_version?(text: String) -> Bool
   parts.all? do |part: String| number?(part) end
 end
 
-# One to four digits.
+# One to four digits, with no leading zero.
 def number?(text: String) -> Bool
+  return false if text.length > 1 and text.start_with?("0")
+
   text.length > 0 and text.length <= 4 and text.split("").all? do |char: String| "0123456789".include?(char) end
+end
+
+# The bytes with each CRLF read as LF; bytes that are not UTF-8 text stay as they are.
+def lf_only(bytes: Bytes) -> Bytes
+  text = String.from_bytes(bytes)
+  return bytes if !text.ok? or !text.unwrap!.include?("\r\n")
+
+  text.unwrap!.replace("\r\n", "\n").bytes
+end
+
+def stopped(reason: PackageHash.Hashed) -> String
+  case reason
+    PackageHash.Hashed.Link(path) -> "#{path} in the package is a symbolic link"
+    PackageHash.Hashed.Unreadable(why) -> "cannot read the package: #{why}"
+    PackageHash.Hashed.Hash(_) -> "cannot read the package"
+  end
+end
+
+def refused(file: String, key: String, message: String) -> String
+  Failure.fail_key(file, key, "PKG-NATIVE-BUILD", message, Failure.hint("put the files of the module in native/"))
 end
 
 # `sha256 = { TARGET = "..." }`: at least one of TARGETS, each a SHA-256 in 64 lowercase hex digits.
@@ -253,22 +313,28 @@ def digests(reading: Reader.Reading, value: Toml.Value, path: String) -> Result[
   ok(found)
 end
 
-# One list of the policy: "all", or a list of module names.
-def choice_of(reading: Reader.Reading, entries: Map[String, Toml.Value], key: String) -> Result[Choice]
-  none_chosen = Choice(all: false, names: [])
-  return ok(none_chosen) if !entries.has_key?(key)
+# One list of the policy: "all", or a list of module names, none of them in `taken` (the names of the other list).
+def choice_of(
+  reading: Reader.Reading,
+  entries: Map[String, Toml.Value],
+  key: String,
+  taken: List[String],
+) -> Result[Choice]
+  return ok(Choice(all: false, names: [])) if !entries.has_key?(key)
 
   here = Reader.child(POLICY_KEY, key)
-  help = "write \"all\" or a list of module names, such as [\"db_sqlite\"]"
   case entries[key]
     Toml.Value.Str(text) ->
       return ok(Choice(all: true, names: [])) if text == "all"
 
-      return error(Reader.fail_help(reading, here, "not a list of modules", help))
-    _ -> none_chosen = none_chosen
+      help = "write \"all\" or a list of module names, such as [\"db_sqlite\"]"
+      error(Reader.fail_help(reading, here, "not a list of modules", help))
+    _ -> names_of(reading, entries[key], here, taken)
   end
+end
 
-  items = try Reader.array(reading, entries[key], here)
+def names_of(reading: Reader.Reading, value: Toml.Value, here: String, taken: List[String]) -> Result[Choice]
+  items = try Reader.array(reading, value, here)
   names: List[String] = []
   for index in 0...items.size
     at = Reader.item(here, index)
@@ -276,7 +342,11 @@ def choice_of(reading: Reader.Reading, entries: Map[String, Toml.Value], key: St
     problem = GitSource.name_problem(name)
     return error(Reader.fail_help(reading, at, "not a module name", problem)) if problem != ""
 
-    names = names.push(name)
+    return error(Reader.fail_help(reading, at, BOTH, BOTH_HELP)) if taken.include?(name)
+
+    if !names.include?(name)
+      names = names.push(name)
+    end
   end
 
   ok(Choice(all: false, names: names))

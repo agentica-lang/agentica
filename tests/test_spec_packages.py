@@ -382,8 +382,9 @@ def test_an_override_of_the_project_ends_the_conflict_and_a_package_cannot_overr
 
 def test_only_the_project_sets_a_native_policy(ws):
     manifest = ws.deps / "greeter" / "agentica.toml"
-    manifest.write_text('[native_policy]\nbuild = "all"\n', encoding="utf-8")
-    assert_at_key(check(ws), "PKG-ROOT-ONLY", manifest, "native_policy")
+    for table in ('[native_policy]\nbuild = "all"\n', "[native_policy]\n"):
+        manifest.write_text(table, encoding="utf-8")
+        assert_at_key(check(ws), "PKG-ROOT-ONLY", manifest, "native_policy")
 
 
 def test_the_project_and_a_package_may_declare_one_name_with_the_same_source(ws):
