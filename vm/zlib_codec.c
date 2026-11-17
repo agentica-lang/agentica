@@ -17,10 +17,10 @@
 struct agc_zcodec {
   z_stream stream;
   bool encoding, ready;
-  /* A gzip decoder: after each member it starts over for the next (members counts the ones that ended), and magic is
-     how many bytes of the next member's magic number it has checked. */
-  bool multi;
-  unsigned members, magic;
+  /* A gzip decoder: after each member it starts over for the next (after_member once one ended), and magic is how many
+     bytes of the next member's magic number it has checked. */
+  bool multi, after_member;
+  unsigned magic;
 };
 
 static const uint8_t gzip_magic[2] = {0x1f, 0x8b};
@@ -132,7 +132,7 @@ agc_zcodec_status agc_zcodec_decode(agc_zcodec *c, const uint8_t **inout, size_t
   if (out_cap == 0) return AGC_ZCODEC_MORE;
   /* After a member, bytes that are not the magic number of another are trailing bytes: refused before zlib sees them,
      so the error is not that of a corrupt second member. */
-  for (size_t at = 0; c->multi && c->members > 0 && c->magic < 2 && at < *in_left; at++, c->magic++)
+  for (size_t at = 0; c->multi && c->after_member && c->magic < 2 && at < *in_left; at++, c->magic++)
     if ((*inout)[at] != gzip_magic[c->magic]) return AGC_ZCODEC_TRAILING;
   unsigned in_count = 0, out_count = 0;
   take_input(&c->stream, inout, in_left, out, out_cap, &in_count, &out_count);
@@ -144,7 +144,7 @@ agc_zcodec_status agc_zcodec_decode(agc_zcodec *c, const uint8_t **inout, size_t
   switch (ret) {
     case Z_STREAM_END:
       if (c->multi) {
-        c->members++;
+        c->after_member = true;
         c->magic = 0;
         if (inflateReset(&c->stream) != Z_OK) return AGC_ZCODEC_FORMAT;
       }
@@ -157,8 +157,6 @@ agc_zcodec_status agc_zcodec_decode(agc_zcodec *c, const uint8_t **inout, size_t
     default: return AGC_ZCODEC_FORMAT;
   }
 }
-
-unsigned agc_zcodec_members(const agc_zcodec *c) { return c && c->multi ? c->members : 0; }
 
 void agc_zcodec_free(agc_zcodec *c) {
   if (!c) return;

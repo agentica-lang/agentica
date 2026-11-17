@@ -6,9 +6,11 @@ format (RFC 1952), and the Lazy steps add raw deflate (RFC 1951) through
 `deflate(level, true)` and `inflate(true, max_bytes)`. One-shot input is at
 most 1 MiB with max_bytes 1 to 1 MiB (default 1 MiB); a Lazy decoder's
 max_bytes is at least 1 (default 1 GiB) and holds while streaming. Decoders
-are strict: one stream or member, checksum verified, any trailing byte
-refused. Chunks of any size are taken, empty ones too, and an output chunk is
-at most 64 KiB. Only File.chunks and write_bytes touch the filesystem.
+are strict: checksum verified, and a byte after the end refused (inflate
+reads one stream; gunzip reads every member, and a byte that does not start
+another is refused). Chunks of any size are taken, empty ones too, and an
+output chunk is at most 64 KiB. Only File.chunks and write_bytes touch the
+filesystem.
 
 The peers are Python's stdlib zlib, gzip and hashlib only: both directions at
 levels 0, 6 and 9 over empty, NUL bytes, invalid UTF-8 and binary payloads,
@@ -526,6 +528,14 @@ def test_lazy_gunzip_reads_every_member_like_python_at_every_split(lazy_peer, tm
         for size in (1, 7, 65536):
             result, out = lazy_case(lazy_peer, tmp_path, "members-%d-%d" % (index, size), "gunzip", blob, size)
             assert (result.code, result.stdout, out) == (0, "ok(%d)\n" % len(want), want), (index, size, result.stderr)
+
+
+@pytest.mark.parametrize("mutate", ["crc", "isize"])
+def test_lazy_gunzip_checks_the_trailer_of_a_later_member(lazy_peer, tmp_path, mutate):
+    blob = members(b"first") + break_gzip_member(mutate) + members(b"last")
+    for size in (1, 7, 65536):
+        result, _ = lazy_case(lazy_peer, tmp_path, "later-%s-%d" % (mutate, size), "gunzip", blob, size)
+        assert (result.code, result.stdout) == (0, CHECKSUM), (size, result.stdout, result.stderr)
 
 
 def test_lazy_gunzip_keeps_the_cap_across_members(lazy_peer, tmp_path):

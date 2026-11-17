@@ -32,8 +32,9 @@ The rules of this section are fixed by the hostile-case tests (10.7.4).
     (400). The method is token characters only (400). `CONNECT` is 501.
   - Responses: `HTTP/1.1` and `HTTP/1.0` (any other version is 505), status
     100 to 599. An HTTP/1.0 response is framed by `Content-Length` or by the
-    close, never chunked (`Transfer-Encoding` there is 501), and its connection
-    closes unless it says `Connection: keep-alive`. 101 is rejected. At most 15
+    close, never chunked: `Transfer-Encoding` there is an error (501) when a
+    body follows, and closes the connection when none does (HEAD, 204, 304).
+    Its connection also closes unless it says `Connection: keep-alive`. 101 is rejected. At most 15
     interim responses are accepted, and the 16th fails. Responses fail as client
     error `Result`s. A head with status 100 to 199 is returned without framing,
     and the caller counts the interim responses.
