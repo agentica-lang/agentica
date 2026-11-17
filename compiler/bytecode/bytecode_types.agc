@@ -13,31 +13,31 @@ import Failure from "bytecode_failure"
 import Pool from "bytecode_pool"
 import {MAX_TYPE_DEPTH, MAX_U16} from "bytecode_tables"
 
-## The sections: the type table (entries in the order they were first needed), the bytes of the Decodable section
-## after its count, with the count, and the same for the decodable enums, which the writer puts last in the file.
+## The sections: the type table (entries in the order they were first needed), and the records of the Decodable
+## section, of the decodable enums, which the writer puts last in the file, and of the struct instances.
 struct Section
   types: Pool.Pool
-  decodable: Wire.Chunks
-  decodable_count: Int
-  enums: Wire.Chunks
-  enums_count: Int
-  instances: Wire.Chunks
-  instances_count: Int
+  decodable: Wire.Prefix
+  enums: Wire.Prefix
+  instances: Wire.Prefix
 end
 
 ## Builds the sections for the structs and enums of the program. struct_index and enum_index map a name to its place in
-## the table. The type table starts from `types`, the table of an earlier program that this one extends.
+## the table. The type table starts from `types`, the table of an earlier program that this one extends, and each
+## section from the records of that program (`held`), so only the entries after them are written.
 def build(
   program: Ir.Program,
   struct_index: Map[String, Int],
   enum_index: Map[String, Int],
   types: Pool.Pool,
+  held: Section,
 ) -> Result[Section]
   pool = types
-  chunks = Wire.start()
-  count = 0
-  index = 0
-  for entry in program.structs
+  chunks = held.decodable.chunks
+  count = held.decodable.records
+  index = held.decodable.count
+  fresh_types: List[Types.Type] = []
+  for entry in program.structs.drop(index)
     if entry.decodable
       chunks = Wire.add(chunks, Wire.u32(index))
       chunks = Wire.add_text(chunks, entry.name)
@@ -47,16 +47,17 @@ def build(
         chunks = Wire.add(chunks, Wire.u32(found.id))
       end
 
+      fresh_types = fresh_types.concat(entry.types)
       count += 1
     end
 
     index += 1
   end
 
-  enum_chunks = Wire.start()
-  enum_count = 0
-  index = 0
-  for entry in program.enums
+  enum_chunks = held.enums.chunks
+  enum_count = held.enums.records
+  index = held.enums.count
+  for entry in program.enums.drop(index)
     if entry.decodable
       enum_chunks = Wire.add(enum_chunks, Wire.u32(index))
       enum_chunks = Wire.add_text(enum_chunks, entry.name)
@@ -66,14 +67,15 @@ def build(
         enum_chunks = Wire.add(enum_chunks, Wire.u32(found.id))
       end
 
+      fresh_types = fresh_types.concat(entry.types)
       enum_count += 1
     end
 
     index += 1
   end
 
-  instance_chunks = Wire.start()
-  for entry in program.instances
+  instance_chunks = held.instances.chunks
+  for entry in program.instances.drop(held.instances.count)
     instance_chunks = Wire.add(instance_chunks, Wire.u32(struct_index[entry.struct_name]))
     instance_chunks = Wire.add_text(instance_chunks, entry.name)
     for type in entry.types
@@ -81,28 +83,13 @@ def build(
       pool = found.pool
       instance_chunks = Wire.add(instance_chunks, Wire.u32(found.id))
     end
+
+    fresh_types = fresh_types.concat(entry.types)
   end
 
   return error(Failure.limit(program, 0, "JSON field types", program.span)) if pool.count > MAX_U16
 
-  decodable_types: List[Types.Type] = []
-  for entry in program.structs
-    if entry.decodable
-      decodable_types = decodable_types.concat(entry.types)
-    end
-  end
-
-  for entry in program.instances
-    decodable_types = decodable_types.concat(entry.types)
-  end
-
-  for entry in program.enums
-    if entry.decodable
-      decodable_types = decodable_types.concat(entry.types)
-    end
-  end
-
-  for type in decodable_types
+  for type in fresh_types
     if nesting(type) > MAX_TYPE_DEPTH
       what = "nested List and Map levels in a JSON field type"
       return error(Failure.limit(program, 0, what, program.span))
@@ -112,12 +99,9 @@ def build(
   ok(
     Section(
       types: pool,
-      decodable: chunks,
-      decodable_count: count,
-      enums: enum_chunks,
-      enums_count: enum_count,
-      instances: instance_chunks,
-      instances_count: program.instances.size,
+      decodable: Wire.Prefix(count: program.structs.size, records: count, chunks: chunks),
+      enums: Wire.Prefix(count: program.enums.size, records: enum_count, chunks: enum_chunks),
+      instances: Wire.Prefix(count: program.instances.size, records: program.instances.size, chunks: instance_chunks),
     ),
   )
 end

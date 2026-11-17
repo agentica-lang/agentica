@@ -254,12 +254,54 @@ def test_zlib_gunzip_rejects_a_broken_member(bytes_peer, tmp_path, mutate, print
     assert result.stdout.startswith(printed), result.stdout
 
 
-def test_zlib_bytes_reject_a_second_member_and_trailing_bytes(bytes_peer, tmp_path):
-    first = gzip.compress(b"hi")
-    both = first + gzip.compress(b"yo")
-    for blob in (both, first + b"\x00", first + b"junk trailing"):
-        result, _ = bytes_case(bytes_peer, tmp_path, "trail", "gunzip", blob)
-        assert (result.code, result.stdout) == (0, TRAILING), result.stderr
+def members(*parts):
+    """A gzip file of one member per part (mtime 0, so a blob is the same on every run)."""
+    return b"".join(gzip.compress(part, mtime=0) for part in parts)
+
+
+# Member lists: several members, an empty one first, between and last, and a member that is larger than a chunk.
+MEMBER_CASES = [
+    (b"hi ", b"there"),
+    (b"", b"abc"),
+    (b"abc", b""),
+    (b"", b"", b""),
+    (b"a", b"", b"b", b"", b"c"),
+    (b"x" * 70000, b"y" * 3, bytes((k * 7) % 251 for k in range(100000))),
+]
+
+
+def test_zlib_bytes_gunzip_reads_every_member_like_python(bytes_peer, tmp_path):
+    for index, parts in enumerate(MEMBER_CASES):
+        blob = members(*parts)
+        assert gzip.decompress(blob) == b"".join(parts)
+        result, out = bytes_case(bytes_peer, tmp_path, "members-%d" % index, "gunzip", blob)
+        assert (result.code, result.stdout, out) == (0, "ok\n", b"".join(parts)), result.stderr
+
+
+def test_zlib_bytes_gunzip_keeps_the_cap_across_members_and_refuses_what_is_not_a_member(bytes_peer, tmp_path):
+    first = gzip.compress(b"hi", mtime=0)
+    two = members(b"abc", b"defg")
+    result, out = bytes_case(bytes_peer, tmp_path, "cap-exact", "gunzip", two, cap=7)
+    assert (result.stdout, out) == ("ok\n", b"abcdefg"), result.stderr
+    result, _ = bytes_case(bytes_peer, tmp_path, "cap-over", "gunzip", two, cap=6)
+    assert result.stdout == zlib_error("output exceeds max_bytes", "zlib.too_large"), result.stdout
+    for tag, blob, printed in [
+        ("zero", first + b"\x00", TRAILING),
+        ("zeros", first + b"\x00" * 16, TRAILING),
+        ("junk", first + b"junk trailing", TRAILING),
+        ("junk-after-two", two + b"junk", TRAILING),
+        ("magic-cut", first + b"\x1f", TRUNCATED),
+        ("magic-only", first + b"\x1f\x8b", TRUNCATED),
+        ("not-gzip", first + b"\x1f\x00", TRAILING),
+        ("bad-method", first + b"\x1f\x8b\x07" + bytes(20), INVALID),
+        ("cut-second", first + first[:-3], TRUNCATED),
+        ("crc-second", first + break_gzip_member("crc"), CHECKSUM),
+    ]:
+        result, _ = bytes_case(bytes_peer, tmp_path, tag, "gunzip", blob)
+        assert (result.code, result.stdout) == (0, printed), (tag, result.stdout, result.stderr)
+
+
+def test_zlib_bytes_reject_trailing_bytes_after_a_zlib_stream(bytes_peer, tmp_path):
     wrapped = zlib.compress(b"hi")
     for blob in (wrapped + wrapped, wrapped + b"\x00"):
         result, _ = bytes_case(bytes_peer, tmp_path, "trail-zz", "inflate", blob)
@@ -458,8 +500,9 @@ def test_lazy_steps_take_empty_items_and_match_python_bytes(tmp_path):
 
 # mtime=0: these blobs become test ids, so they must not change with the clock.
 @pytest.mark.parametrize("op, blob", [
-    ("gunzip", gzip.compress(b"hi", mtime=0) + gzip.compress(b"yo", mtime=0)),
     ("gunzip", gzip.compress(b"hi", mtime=0) + b"\x00"),
+    ("gunzip", gzip.compress(b"hi", mtime=0) + b"\x1f\x00"),
+    ("gunzip", gzip.compress(b"hi", mtime=0) + gzip.compress(b"yo", mtime=0)[:-3]),
     ("gunzip", gzip.compress(b"hi", mtime=0)[:-3]),
     ("gunzip", break_gzip_member("crc")),
     ("gunzip", zlib.compress(b"hi")),
@@ -473,6 +516,24 @@ def test_lazy_decoders_are_strict(lazy_peer, tmp_path, op, blob):
         result, _ = lazy_case(lazy_peer, tmp_path, "strict-%d" % size, op, blob, size)
         assert result.code == 0, result.stderr
         assert result.stdout.startswith('error("zlib: '), result.stdout
+
+
+def test_lazy_gunzip_reads_every_member_like_python_at_every_split(lazy_peer, tmp_path):
+    for index, parts in enumerate(MEMBER_CASES):
+        blob = members(*parts)
+        want = gzip.decompress(blob)
+        # One byte per piece cuts every header, trailer and member boundary; 7 and 65536 cut elsewhere.
+        for size in (1, 7, 65536):
+            result, out = lazy_case(lazy_peer, tmp_path, "members-%d-%d" % (index, size), "gunzip", blob, size)
+            assert (result.code, result.stdout, out) == (0, "ok(%d)\n" % len(want), want), (index, size, result.stderr)
+
+
+def test_lazy_gunzip_keeps_the_cap_across_members(lazy_peer, tmp_path):
+    two = members(b"abc", b"defg")
+    result, out = lazy_case(lazy_peer, tmp_path, "cap-exact", "gunzip", two, 1, 7)
+    assert (result.stdout, out) == ("ok(7)\n", b"abcdefg"), result.stderr
+    result, _ = lazy_case(lazy_peer, tmp_path, "cap-over", "gunzip", two, 1, 6)
+    assert result.stdout == zlib_error("output exceeds max_bytes", "zlib.too_large"), result.stdout
 
 
 def test_lazy_caps_hold_while_streaming(lazy_peer, tmp_path):

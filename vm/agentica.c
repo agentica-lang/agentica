@@ -145,8 +145,9 @@ static int run_stage(agc_launch *launch, agc_program *program, bool launcher, co
  * end does and declines what is not its case, so a command missing here only costs time. The list is
  * CliRun.COMMANDS (compiler/app/cli_run.agc; tests/test_bytecode_cache.py compares the two). */
 static bool may_run_a_file(int count, char **words) {
-  static const char *const commands[] = {"test",    "help",    "doc",    "fmt",  "lint", "install", "add",     "update",
-                                         "outline", "type-at", "symbol", "refs", "run",  "check",   "compile", "repl"};
+  static const char *const commands[] = {"test",   "help",    "doc",     "fmt",    "lint", "install", "add",
+                                         "update", "native",  "outline", "type-at", "symbol", "refs", "run",
+                                         "check",  "compile", "repl"};
   for (int k = 0; k < count; k++) {
     const char *word = words[k];
     if (strcmp(word, "--no-cache") == 0 || strcmp(word, "--dump") == 0 || strcmp(word, "--dump-ir") == 0)
@@ -341,7 +342,10 @@ static int run_command(agc_launch *launch, int argc, char **argv) {
   }
   if (!agc_launch_native(program, &options)) return 2;
   agc_vm *vm = agc_launch_vm(launch, program, &options, agc_launch_args(argc, argv, first), NULL);
-  agc_launch_end(vm, agc_vm_run(vm));
+  agc_outcome outcome = agc_vm_run(vm);
+  /* A failure that the front end of `agentica repl` shows is not shown again here; the run still ends with 1. */
+  if (agc_session_ended(vm, &outcome, agc_clock_ms() + 1000)) outcome = (agc_outcome){.kind = AGC_EXITED, .exit_code = 1};
+  agc_launch_end(vm, outcome);
 }
 
 int main(int argc, char **argv) {

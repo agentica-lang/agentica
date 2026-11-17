@@ -62,7 +62,7 @@ end
 struct Session
   file: String
   pieces: List[Piece]
-  bindings: List[Binding]
+  bindings: Map[String, Binding]
   text: String
   lines: Int
   entries: Int
@@ -132,7 +132,7 @@ def start(file: String, settings: Env.Settings) -> Started
             Writer.Written.Done(bytes) ->
               image = Image.first(program, over.tables)
               Started.Ready(
-                Session(file: file, pieces: [], bindings: [], text: "", lines: 0, entries: 0, slots: 0, image: image),
+                Session(file: file, pieces: [], bindings: {}, text: "", lines: 0, entries: 0, slots: 0, image: image),
                 bytes,
               )
           end
@@ -206,6 +206,7 @@ struct Plan
   pieces: List[Piece]
   statements: List[Piece]
   params: List[Binding]
+  held: Map[String, Binding]
   declared: List[String]
   dropped: List[String]
   shows: Bool
@@ -356,7 +357,10 @@ def stale_names(
 ) -> List[String]
   return [] if items.flat_map(&type_declared).size == 0
 
-  typed = session.bindings.filter { |binding: Binding| !dropped.include?(binding.name) and binding.entries.size > 0 }
+  typed = session.bindings.values.filter do |binding: Binding|
+    !dropped.include?(binding.name) and binding.entries.size > 0
+  end
+
   return [] if typed.size == 0
 
   declarations = items.filter { |item: Parser.EntryItem| item.declaration.some? }
@@ -404,8 +408,9 @@ def type_declared(item: Parser.EntryItem) -> List[String]
   end
 end
 
-# The plan of an entry. A name rebound with a type (`x: String = ...`) at the top level of the entry is no parameter:
-# the entry gives it its new type.
+# The plan of an entry. Its parameters are the names of the session that its text names, so its cost does not grow
+# with names it never uses; `held` has every name it keeps. A name rebound with a type (`x: String = ...`) at the top
+# level of the entry is no parameter: the entry gives it its new type.
 def planned(session: Session, text: String, items: List[Parser.EntryItem], dropped: List[String], number: Int) -> Plan
   first = session.lines
   lines = text.split("\n")
@@ -433,8 +438,15 @@ def planned(session: Session, text: String, items: List[Parser.EntryItem], dropp
   imports = Set.new(session.pieces.filter { |piece: Piece| piece.name == "" }.map { |piece: Piece| piece.key })
   kept = session.pieces.filter { |piece: Piece| !replaced.include?(piece.name) }
   fresh = added.filter { |piece: Piece| piece.name != "" or !imports.include?(piece.key) }
-  params = session.bindings.filter do |binding: Binding|
-    !annotated.include?(binding.name) and !dropped.include?(binding.name)
+  held = session.bindings
+  for name in annotated.to_a.concat(dropped)
+    held = held.delete(name)
+  end
+
+  named = words_of(text)
+  params = held.values
+  if named.size > 0
+    params = named.to_a.filter { |word: String| held.has_key?(word) }.map { |word: String| held[word] }
   end
 
   shows = false
@@ -457,10 +469,30 @@ def planned(session: Session, text: String, items: List[Parser.EntryItem], dropp
     pieces: kept.concat(fresh),
     statements: statements,
     params: params,
+    held: held,
     declared: declared,
     dropped: dropped,
     shows: shows,
   )
+end
+
+# The words of an entry's text, which hold every name of the session it reads or writes; none (all names) when it
+# has a template (`<<~EAG`), whose tags are one token.
+def words_of(text: String) -> Set[String]
+  case Lexer.lex(text)
+    Diag.Outcome.Failed(_) -> Set.new([])
+    Diag.Outcome.Done(tokens) ->
+      return Set.new([]) if (tokens.any? { |token: Tokens.Token| token.kind == "eag" })
+
+      Set.new(tokens.map { |token: Tokens.Token| bare_word(token.lexeme) })
+  end
+end
+
+# A label (`x:`) without its colon.
+def bare_word(lexeme: String) -> String
+  return lexeme.slice(0, lexeme.length - 1) if lexeme.length > 1 and lexeme.end_with?(":")
+
+  lexeme
 end
 
 # The lines of an item, which starts on line `span.start.line` of the entry, after `before` lines of the session. An
@@ -671,10 +703,10 @@ def found_in(session: Session, plan: Plan, front: Front.Checked, text: String) -
           end
 
           if !type.include?("Unknown") and !T.debug_text(value_type).include?("Unknown")
-            old = session.bindings.filter { |binding: Binding| binding.name == node.name }
+            old = session.bindings.get(node.name)
             number = slot
-            if old.size > 0
-              number = old[0].slot
+            if old.some?
+              number = old.unwrap!.slot
             else
               slot += 1
             end
@@ -827,7 +859,12 @@ def built(
         return Attempt.Refused(session_problem(session, "REPL-KIND-CHANGE", message))
       end
 
-      stale = plan.params.filter { |binding: Binding| !current?(binding, merged.ran) }
+      # The record of the entry before is no longer declared, and no name holds one.
+      stale: List[Binding] = []
+      if (merged.changed.any? { |name: String| !name.start_with?(RECORD) })
+        stale = plan.held.values.filter { |binding: Binding| !current?(binding, merged.ran) }
+      end
+
       return Attempt.Stale(stale.map { |binding: Binding| binding.name }) if stale.size > 0
 
       over = Writer.write_over(merged.program, settings.version, session.image.tables)
@@ -842,7 +879,6 @@ def built(
               .concat(found.bindings.drop(plan.params.size).map { |binding: Binding| with_entries(binding, ran) })
           )
 
-          names = Set.new(bindings.map { |binding: Binding| binding.name })
           top = session.slots
           for binding in bindings
             if binding.slot + 1 > top
@@ -850,9 +886,14 @@ def built(
             end
           end
 
-          kept = session.bindings.filter { |binding: Binding|
-            !names.include?(binding.name) and !plan.dropped.include?(binding.name)
-          }
+          kept = session.bindings
+          for name in plan.dropped
+            kept = kept.delete(name)
+          end
+
+          for binding in bindings
+            kept = kept.put(binding.name, binding)
+          end
 
           Attempt.Done(
             Compiled.Run(
@@ -866,13 +907,7 @@ def built(
                 declared: plan.declared,
                 dropped: plan.dropped,
                 skipped: found.skipped,
-                ran: after.with(
-                  pieces: plan.pieces,
-                  bindings: kept.concat(bindings),
-                  entries: plan.number,
-                  slots: top,
-                  image: ran,
-                ),
+                ran: after.with(pieces: plan.pieces, bindings: kept, entries: plan.number, slots: top, image: ran),
                 loaded: after.with(entries: plan.number, image: loaded),
               ),
             ),
@@ -887,6 +922,8 @@ end
 
 # Whether the types a name holds values of are still the current ones of their names.
 def current?(binding: Binding, image: Image.Image) -> Bool
+  return true if binding.entries.size == 0
+
   now = Image.entries(image, binding.entries.keys)
   return false if now.size != binding.entries.size
 

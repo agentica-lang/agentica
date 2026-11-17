@@ -305,6 +305,34 @@ static void test_zstep_strict(void) {
   free(s.data);
 }
 
+/* A gunzip step takes every member (RFC 1952 2.2), cut at any byte: abc, an empty member and abc again give "abcabc".
+   Bytes after the last member that do not start another are trailing bytes, and a member cut short is truncated. */
+static void test_zstep_members(void) {
+  sink s = {0};
+  agc_value error = agc_void();
+  uint8_t all[2 * sizeof zlib_vec_gzip_abc + sizeof zlib_vec_gzip_empty + 2];
+  size_t n = 0;
+  memcpy(all + n, zlib_vec_gzip_abc, sizeof zlib_vec_gzip_abc);
+  n += sizeof zlib_vec_gzip_abc;
+  memcpy(all + n, zlib_vec_gzip_empty, sizeof zlib_vec_gzip_empty);
+  n += sizeof zlib_vec_gzip_empty;
+  memcpy(all + n, zlib_vec_gzip_abc, sizeof zlib_vec_gzip_abc);
+  n += sizeof zlib_vec_gzip_abc;
+  for (size_t step = 1; step <= n; step += step < 4 ? 1 : 13) {
+    s.len = 0;
+    assert(run_step(5, 0, 6, all, n, step, &s, &error) == AGC_ZSTEP_END);
+    assert(s.len == 6 && memcmp(s.data, "abcabc", 6) == 0);
+  }
+  check_step_error(run_step(5, 0, 5, all, n, 1, &s, &error), error, "zlib: output exceeds max_bytes");
+  all[n] = 0x1f;
+  all[n + 1] = 0x00;
+  check_step_error(run_step(5, 0, 6, all, n + 2, 1, &s, &error), error, "zlib: trailing bytes after stream end");
+  check_step_error(run_step(5, 0, 6, all, n + 1, 3, &s, &error), error, "zlib: truncated stream");
+  all[n] = 0x00;
+  check_step_error(run_step(5, 0, 6, all, n + 1, 5, &s, &error), error, "zlib: trailing bytes after stream end");
+  free(s.data);
+}
+
 /* A stream is a registry entry its task owns: close is idempotent, the
    task's end frees what the run did not, and a pass over a freed stream is
    an internal error, never a use after free. */
@@ -406,6 +434,7 @@ int main(void) {
   test_zstep_round_trip();
   test_zstep_caps();
   test_zstep_strict();
+  test_zstep_members();
   test_zstep_lifetime();
   /* The shared phase: one lock for tasks and the registry, which agc_zstep_open
      and agc_zstep_close take like the unlocked Lazy terminal does. */
