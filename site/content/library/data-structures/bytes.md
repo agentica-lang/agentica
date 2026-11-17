@@ -57,7 +57,7 @@ true
 Bytes.decode(bytes: Bytes, encoding: String) -> Result[String]
 ```
 
-Reads the bytes as text in an encoding: `utf-8`, `utf-16`, `utf-16le`, `utf-16be`, `utf-32`, `utf-32le`, `utf-32be`, `ascii`, `latin-1` (ISO-8859-1), `iso-8859-15` (Latin-9, with the euro sign) or `windows-1252`. A name is matched without case, with `_` read as `-`, and these aliases work too: `utf8`, `utf16`, `utf32`, `utf-16-le`, `utf-16-be`, `utf-32-le`, `utf-32-be`, `us-ascii`, `latin1`, `iso-8859-1`, `iso8859-1`, `l1`, `cp819`, `iso8859-15`, `latin9`, `l9` and `cp1252`. An unknown name gives an error Result; the `agentica-lang/charset` package reads the other encodings. [`text.encode(encoding)`](/library/text-and-data/string/#encode) goes the other way. For UTF-8, use [`String.from_bytes`](/library/text-and-data/string/#from_bytes) and [`.bytes`](#bytes).
+Reads the bytes as text in an encoding: `utf-8`, `utf-16`, `utf-16le`, `utf-16be`, `utf-32`, `utf-32le`, `utf-32be`, `ascii`, `latin-1` (ISO-8859-1), `iso-8859-15` (Latin-9, with the euro sign) or `windows-1252`. A name is matched without case, with `_` read as `-`, and these aliases work too: `utf8`, `utf16`, `utf32`, `utf-16-le`, `utf-16-be`, `utf-32-le`, `utf-32-be`, `us-ascii`, `latin1`, `iso-8859-1`, `iso8859-1`, `l1`, `cp819`, `iso8859-15`, `latin9`, `l9` and `cp1252`. An unknown name gives an error Result; the `agentica-lang/charset` package reads the other encodings. [`text.encode(encoding)`](/library/text-and-data/string/#encode) goes the other way. For UTF-8, use [`String.from_bytes`](/library/text-and-data/string/#from_bytes) and [`.bytes`](#bytes), or [`scrub`](#scrub) to replace bad bytes.
 
 Plain `utf-16` and `utf-32` read a byte order mark and drop it, and read big-endian when there is none, as the Unicode standard says (Python reads the byte order of the machine). The `le` and `be` forms and `utf-8` keep a mark as the character U+FEFF. Decoding is strict: the first byte or sequence the encoding does not allow (invalid UTF-8, an unpaired surrogate, a cut code unit, a value above U+10FFFF, a byte above 127 in ASCII, one of the five bytes Windows-1252 leaves undefined: 0x81, 0x8D, 0x8F, 0x90 and 0x9D) gives an error Result whose text ends with its offset, `at byte N`, counted from 0. Latin-1 and ISO-8859-15 read every byte.
 
@@ -76,6 +76,29 @@ ok("hé")
 ok("hé")
 error("invalid UTF-16LE at byte 2", kind: "text.encoding")
 false
+```
+
+## scrub
+
+```signature
+Bytes.scrub(bytes: Bytes, replacement: String = "�") -> String
+```
+
+Reads the bytes as UTF-8 and never fails: each invalid or cut sequence becomes the replacement, U+FFFD unless given, and `""` drops it. It is for text that may hold bad bytes, such as a log or the output of a child process; [`String.from_bytes`](/library/text-and-data/string/#from_bytes) is the strict form. One replacement stands for the longest start of a valid sequence (Unicode's "maximal subpart"), as in Python's `decode("utf-8", "replace")` and a browser: a cut 3-byte character gives one, an overlong or a surrogate gives one per byte, and so does each byte above 0xF4. A log read line by line never cuts a character, since a line ends at byte 10, which no multi-byte sequence holds.
+
+```agentica
+def main() -> Void
+  data = Bytes.from_list([104, 226, 130, 105, 255]).unwrap!
+  puts(data.scrub)
+  puts(data.scrub("?"))
+  puts(data.scrub(""))
+end
+```
+
+```output
+h�i�
+h?i?
+hi
 ```
 
 ## from_list
