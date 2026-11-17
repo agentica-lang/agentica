@@ -138,10 +138,10 @@ def kind_of(r: Result[HTTP.Response]) -> String
   end
 end
 
-def drain(stream: HTTP.Stream) -> String
+def drain(stream: HTTP.Stream, wait: Int) -> String
   seen: List[String] = []
   while true
-    case stream.body.recv(5000)
+    case stream.body.recv(wait)
       ok(piece) -> seen = seen.push(String.from_bytes(piece).unwrap!)
       error(_) -> break
     end
@@ -176,15 +176,15 @@ def main() -> Void
 
   # A stream silent for longer than timeout_ms and shorter than read_timeout_ms stays open.
   quiet = HTTP.open("GET", base + "/quiet-stream", "".bytes, [], HTTP.ClientOptions(timeout_ms: limit, read_timeout_ms: pause * 4)).unwrap!
-  puts("quiet #{drain(quiet)}")
+  puts("quiet #{drain(quiet, pause * 4)}")
 
   # The same stream with a read_timeout_ms below the pause is cut.
   cut = HTTP.open("GET", base + "/quiet-stream", "".bytes, [], HTTP.ClientOptions(timeout_ms: limit, read_timeout_ms: limit)).unwrap!
-  puts("cut #{drain(cut)}")
+  puts("cut #{drain(cut, pause * 4)}")
 
   # read_timeout_ms 0 is no limit: the stream is still open after several times timeout_ms, and Task.cancel ends it.
   silent = HTTP.open("GET", base + "/silent", "".bytes, [], HTTP.ClientOptions(timeout_ms: limit, read_timeout_ms: 0)).unwrap!
-  puts("first #{String.from_bytes(silent.body.recv(5000).unwrap!).unwrap!}")
+  puts("first #{String.from_bytes(silent.body.recv(pause * 4).unwrap!).unwrap!}")
   case silent.body.recv(limit * 3)
     ok(_) -> puts("silent a piece")
     error(e) -> puts("silent waits #{e.message}")
