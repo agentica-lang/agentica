@@ -273,12 +273,18 @@ static const uint8_t *session_program(size_t *len) {
   return data;
 }
 
-/* The last answer of the session child (vm/session.c), sent within the flush limit, as the other writes at the end of
-   a run. A failure on the way is caught like theirs (vm/launch.c): the answer is then not sent and the run shows its
-   own end. */
-static bool session_ended(agc_vm *vm, const agc_outcome *outcome) {
-  if (AGC_CATCH(vm->fail) != 0) return false;
-  return agc_session_ended(vm, outcome, agc_clock_ms() + (uint64_t)vm->rt->flush_timeout);
+/* The last answer of the session child (vm/session.c), sent within the flush limit (at least a second), as the other
+   writes at the end of a run, and caught like theirs (vm/launch.c). */
+static bool session_ended(agc_vm *vm, agc_outcome *outcome) {
+  if (AGC_CATCH(vm->fail) == 0) {
+    uint64_t limit = vm->rt->flush_timeout > 1000 ? (uint64_t)vm->rt->flush_timeout : 1000;
+    return agc_session_ended(vm, outcome, agc_clock_ms() + limit, agc_io_stop_signal);
+  }
+  /* As in say_goodbye (vm/launch.c): a failure on the way is the run's outcome, shown once by agc_launch_settle,
+     unless the run had failed already, whose failure stays. */
+  agc_sync_reset(vm);
+  if (outcome->kind != AGC_FAILED) *outcome = *vm->outcome;
+  return false;
 }
 
 /* `agentica run`: argv[2] and on are the options, then `--` (or the first word that is not an option), the file and

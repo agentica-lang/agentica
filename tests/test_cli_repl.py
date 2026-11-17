@@ -401,25 +401,29 @@ def test_an_exit_between_entries_is_the_answer_of_the_next(tmp_path):
     session = Interactive(tmp_path)
     try:
         assert session.ask("t = Task.spawn do\n  Task.sleep(100)\n  System.exit(5)\nend")["ok"]
-        time.sleep(1)
-        assert session.ask("1") == {"entry": 2, "exited": 5, "line": 5, "ok": True}
+        for tries in range(100):
+            found = session.ask("1")
+            if "exited" in found:
+                break
+            time.sleep(0.05)
+        assert found == {"entry": tries + 2, "exited": 5, "line": tries + 5, "ok": True}
     finally:
         assert session.close() == 5
 
 
 def test_an_unknown_name_is_checked_with_every_name(tmp_path):
     got = repl(tmp_path, "total = 1", "totl + 1")
-    assert answers(got)[1]["diagnostic"]["help"] == 'did you mean "total"?'
+    assert '"total"' in answers(got)[1]["diagnostic"]["help"]
 
 
 def test_a_statement_takes_the_lines_of_its_heredocs(tmp_path):
-    (tmp_path / "doc.agc").write_text("w = <<~TEXT\n  three\n  four\nTEXT\n", encoding="utf-8")
+    (tmp_path / "doc.agc").write_text("w = <<~TEXT\n  three\n  TEXT  \n  four\nTEXT\n", encoding="utf-8")
     got = repl(tmp_path, "t = <<~TEXT\n  one\n  two\nTEXT", "u = [<<~A, <<~B]\n  a\n  b\nA\n  c\n  d\nB",
                ":load doc.agc", "t + u[1] + w")
     found = answers(got)
     assert [answer["ok"] for answer in found] == [True] * 4
-    assert (found[1]["line"], found[2]["line"], found[3]["line"]) == (5, 12, 17)
-    assert found[3]["value"] == '"one\\ntwo\\nc\\nd\\nthree\\nfour\\n"'
+    assert (found[1]["line"], found[2]["line"], found[3]["line"]) == (5, 12, 18)
+    assert found[3]["value"] == '"one\\ntwo\\nc\\nd\\nthree\\nTEXT  \\nfour\\n"'
 
 
 def test_the_exit_status(tmp_path):

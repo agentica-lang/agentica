@@ -60,6 +60,12 @@ struct agc_duplex {
   int sent_status;
 };
 
+/* The wait of agc_parent_send_last: the write is out, or a stop signal came. */
+typedef struct {
+  const agc_duplex *d;
+  int (*stop_signal)(void);
+} last_send;
+
 static const char closed_text[] = "process: channel is closed";
 static const char busy_text[] = "process: the channel is in use";
 static const char too_long[] = "process: line exceeds 1048576 bytes";
@@ -690,20 +696,23 @@ bool agc_parent_send(agc_vm *vm, const agc_string *text) {
 
 static bool sent_out(agc_vm *vm, void *arg) {
   (void)vm;
-  return !sending(arg);
+  const last_send *w = arg;
+  return !sending(w->d) || w->stop_signal();
 }
 
 /* The last line of a run, written after the run ended, on the one thread left and with no task to park. What the
-   pipe does not take at once (a Windows pipe takes no try-write) is queued, and the loop runs until it is out or BY
-   (agc_clock_ms). False when it is not sent, as when a write is still in flight or the channel is closed. */
-bool agc_parent_send_last(agc_vm *vm, const char *text, size_t len, uint64_t by) {
+   pipe does not take at once (a Windows pipe takes no try-write) is queued, and the loop runs until it is out, BY
+   (agc_clock_ms) or a stop signal (STOP_SIGNAL). False when it is not sent, as when a write is still in flight or the
+   channel is closed. */
+bool agc_parent_send_last(agc_vm *vm, const char *text, size_t len, uint64_t by, int (*stop_signal)(void)) {
   agc_duplex *d = vm->rt->parent ? vm->rt->parent->native : NULL;
   if (!d || !d->attached || d->closed || d->write_closed || !d->wr_live || sending(d)) return false;
   d->write_status = 0;
   int rc = agc_stream_write((uv_stream_t *)&d->wr_pipe, &d->write_req, &d->write_data, (const uint8_t *)text, len,
                             wrote);
   if (rc <= 0) return rc == 0;
-  (void)agc_io_wait_for(vm, sent_out, d, by);
+  last_send wait = {d, stop_signal};
+  (void)agc_io_wait_for(vm, sent_out, &wait, by);
   return !sending(d) && d->write_status >= 0;
 }
 
@@ -754,11 +763,12 @@ bool agc_parent_send(agc_vm *vm, const agc_string *text) {
   agc_fail(vm, "RUNTIME-INTERNAL", "cannot write to the parent channel", 0);
 }
 
-bool agc_parent_send_last(agc_vm *vm, const char *text, size_t len, uint64_t by) {
+bool agc_parent_send_last(agc_vm *vm, const char *text, size_t len, uint64_t by, int (*stop_signal)(void)) {
   (void)vm;
   (void)text;
   (void)len;
   (void)by;
+  (void)stop_signal;
   return false;
 }
 #endif
