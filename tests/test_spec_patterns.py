@@ -122,6 +122,30 @@ SINGLE_FILE = [
     ("a refutable arm does not cover its variant",
      case_of(["Shape.Circle(1) -> puts(1)", "Shape.Dot -> puts(0)", "Shape.Pair(_, _) -> puts(2)",
               "Shape.Boxed(_) -> puts(3)"]), "CHECK-NON-EXHAUSTIVE-CASE", Starts("case shape")),
+    ("nested Result patterns cover a Result of a Result",
+     main_with("  r: Result[Result[Int]] = ok(ok(1))\n  case r\n    ok(ok(n)) -> puts(n)\n"
+               "    ok(error(_)) -> puts(1)\n    error(_) -> puts(2)\n  end\n"), None, None),
+    ("nested patterns of an enum's payload cover the variant",
+     case_of(["Shape.Boxed(Option.Some(n)) -> puts(n)", "Shape.Boxed(Option.None) -> puts(1)", "Shape.Dot -> puts(0)",
+              "Shape.Circle(_) -> puts(2)", "Shape.Pair(_, _) -> puts(3)"]), None, None),
+    ("nested patterns over two payload slots cover every pair",
+     'enum Twin\n  Both(Option, Option)\nend\n\n'
+     + main_with("  t = Twin.Both(Option.None, Option.None)\n  case t\n"
+                 "    Twin.Both(Option.Some(_), _) -> puts(1)\n    Twin.Both(_, Option.Some(_)) -> puts(2)\n"
+                 "    Twin.Both(Option.None, Option.None) -> puts(3)\n  end\n", ENUMS), None, None),
+    ("nested patterns that miss a variant are not exhaustive",
+     main_with("  r: Result[Result[Int]] = ok(ok(1))\n  case r\n    ok(ok(n)) -> puts(n)\n"
+               "    error(_) -> puts(2)\n  end\n"), "CHECK-NON-EXHAUSTIVE-CASE", Starts("case r")),
+    ("nested patterns that miss a pair are not exhaustive",
+     'enum Twin\n  Both(Option, Option)\nend\n\n'
+     + main_with("  t = Twin.Both(Option.None, Option.None)\n  case t\n"
+                 "    Twin.Both(Option.Some(_), _) -> puts(1)\n"
+                 "    Twin.Both(Option.None, Option.None) -> puts(3)\n  end\n", ENUMS),
+     "CHECK-NON-EXHAUSTIVE-CASE", Starts("case t")),
+    ("a guarded nested arm covers nothing",
+     main_with("  r: Result[Result[Int]] = ok(ok(1))\n  case r\n    ok(ok(n)) if n > 0 -> puts(n)\n"
+               "    ok(error(_)) -> puts(1)\n    error(_) -> puts(2)\n  end\n"),
+     "CHECK-NON-EXHAUSTIVE-CASE", Starts("case r")),
     ("a refutable arm may be followed by the same variant",
      case_of(["Shape.Circle(1) -> puts(1)", "Shape.Circle(1) -> puts(8)", "Shape.Circle(n) -> puts(n)",
               "Shape.Dot -> puts(0)", "Shape.Pair(_, _) -> puts(2)", "Shape.Boxed(_) -> puts(3)"]), None, None),
