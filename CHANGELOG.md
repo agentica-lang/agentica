@@ -8,33 +8,29 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.34.0] - 2026-11-17
+
 ### Added
 
-- `HTTP.ClientOptions` has `connect_to`, an IP address that every connection goes to instead of resolving the URL host, which still gives `Host`, the TLS server name and the certificate check; it applies to every URL of those options or that client, so use one client per host (#1556).
-- `HTTP.ClientOptions` has `connect_timeout_ms` (10 s, the connect; a timeout of it has `details["phase"]` `"connect"`) and `read_timeout_ms` (300 s, 0 for no limit; each wait for body bytes, and each wait for a piece and each send of an `upload`) (#1710).
-- **Breaking:** `open`, `start` and `upload` no longer give each wait `timeout_ms`: a stream that relied on `timeout_ms` per read must set `read_timeout_ms`, and `timeout_ms: 5000` now allows 300 s per read.
-- **Breaking:** a connect ends after `connect_timeout_ms` (10 s), even when `timeout_ms` is longer.
-- `agentica repl` runs entries one at a time over a session in which names, declarations and tasks live on; `--json` gives one answer per entry for agents (#1463).
-- A parameter or field default may be the bytes of a string literal, `body: Bytes = "".bytes`, directly or through a constant (#1777).
-- `[native.NAME]` takes `prebuilt = { url, source, api, sha256 }` beside `build`, and the project's manifest takes `[native_policy]`, and `agentica native source NAME` prints the source key, the native API and the URL of each target (part of #1168).
-- `agentica install`, `add` and `update` download the prebuilt native module files of the host target into the package cache; a wrong file is an error, a failed download a warning, and `--deny-net` or `--sandbox` download none (part of #1168).
-- A native module uses its downloaded prebuilt file at first use, with no C compiler, and builds from source otherwise; `--native-build[=NAMES]`, `--native-prebuilt-only[=NAMES]` and `AGENTICA_NATIVE_BUILD`, `AGENTICA_NATIVE_PREBUILT_ONLY` go before `[native_policy]` (part of #1168).
-- `bytes.scrub(replacement = "�")` reads UTF-8 that may hold bad bytes, replacing each bad sequence, for logs and process output (#1762).
+- `agentica repl` runs entries one at a time over a session in which names, declarations and tasks live on; `--json` answers each entry for agents (#1463).
+- Prebuilt native modules: `[native.NAME] prebuilt` names the files a package author built, `install` downloads the host's file, and a run uses it with no C compiler; `[native_policy]`, `--native-build` and `--native-prebuilt-only` choose per module (#1168).
+- `HTTP.ClientOptions` has `connect_to`, an IP address every connection goes to instead of the URL host (#1556).
+- `HTTP.ClientOptions` has `connect_timeout_ms` (10 s) and `read_timeout_ms` (300 s per wait for body bytes) (#1710).
+- **Breaking:** a connect ends after `connect_timeout_ms`, and `timeout_ms` no longer bounds each read of `open`, `start` and `upload`: set `read_timeout_ms` (#1710).
+- A parameter or field default may be the bytes of a string literal, `body: Bytes = "".bytes` (#1777).
+- `bytes.scrub(replacement = "�")` reads UTF-8 that may hold bad bytes, for logs and process output (#1762).
 
 ### Changed
 
-- Every lossy UTF-8 decode (stdin, `System.args`, `System.env`, process output, paths and directory names, `C.String`, `Native.get_string`, `std/` sources, error texts) gives one replacement per invalid sequence, as `bytes.scrub` and Python do, instead of one per byte (#1762).
-- **Breaking:** `Zlib.gunzip` and `lazy.gunzip` decode every member of a gzip file (RFC 1952), as Python's `gzip.decompress` does; bytes after the last member, zero padding included, are still an error. `Archive.extract_tar` reads a `.tar.gz` of several members as one TAR stream (#1788).
-- The `std/http` client accepts HTTP/1.0 responses, which it refused with "http: HTTP version is unsupported"; the connection is not reused unless the response says `Connection: keep-alive`, and a proxy that answers `HTTP/1.0 200 Connection established` to CONNECT (classic Squid) now works (#1776).
-- The front page of the documentation has an example switcher (error handling, counting words, parallel tasks), and the README opens with the first one.
-- The documentation moved to https://www.agentica-lang.com/agentica/; the old agentica-lang.github.io links redirect there.
-- The documentation has breadcrumbs, and search engines index only the latest release: the pages of older versions and of dev point to it.
-- Every version of the documentation has the current look and icon: the releases are built with the current docs theme.
+- Every lossy UTF-8 decode gives one replacement per invalid sequence, as Python does, instead of one per byte (#1762).
+- **Breaking:** `Zlib.gunzip` and `lazy.gunzip` decode every member of a gzip file, and `Archive.extract_tar` reads a multi-member `.tar.gz` as one stream (#1788).
+- The `std/http` client accepts HTTP/1.0 responses, and HTTP/1.0 proxies for CONNECT (#1776).
+- The documentation moved to https://www.agentica-lang.com/agentica/ (the old links redirect), with breadcrumbs, an example switcher on the front page, and the current look for every version.
 
 ### Fixed
 
-- `agentica install` replaces a `deps/NAME` folder whose `agentica.toml` is not the locked one, even when its `.agc` files have the locked hash, so a lock bump that changed only a manifest no longer ends in `PKG-SOURCE-CONFLICT` (#1770).
-- `CHECK-UNUSED-VARIABLE` no longer fires on `count = try step(count)` or `count = step(count).unwrap!` in a loop: a name read inside a `try`, before `.unwrap!`, or in the arguments of a call of your own function or of an invoke is read; `total += price(v)` is still unused (#1793).
+- `agentica install` replaces a `deps/NAME` folder whose manifest is not the locked one, so a lock bump of only a manifest no longer ends in `PKG-SOURCE-CONFLICT` (#1770).
+- `CHECK-UNUSED-VARIABLE` no longer fires on `count = try step(count)` or `count = step(count).unwrap!` in a loop (#1793).
 
 ## [0.33.2] - 2026-11-17
 
@@ -1699,7 +1695,8 @@ First release of Agentica, a statically typed language designed for AI agents.
 - `main` returns `Void`; maps preserve insertion order and support fallible
   lookups.
 
-[unreleased]: https://github.com/agentica-lang/agentica/compare/0.33.2...HEAD
+[unreleased]: https://github.com/agentica-lang/agentica/compare/0.34.0...HEAD
+[0.34.0]: https://github.com/agentica-lang/agentica/compare/0.33.2...0.34.0
 [0.33.2]: https://github.com/agentica-lang/agentica/compare/0.33.1...0.33.2
 [0.33.1]: https://github.com/agentica-lang/agentica/compare/0.33.0...0.33.1
 [0.33.0]: https://github.com/agentica-lang/agentica/compare/0.32.0...0.33.0
