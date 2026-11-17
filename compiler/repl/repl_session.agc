@@ -212,6 +212,12 @@ struct Plan
   shows: Bool
 end
 
+# A heredoc opener `<<~NAME`: where it starts and its name.
+struct Opener
+  offset: Int
+  name: String
+end
+
 # What the first check found: the type of the shown value ("" for none or Void) and the names the entry binds.
 struct Found
   shown: String
@@ -267,9 +273,66 @@ def items_of(session: Session, text: String) -> Items
           return Items.Incomplete if found.span.start.offset >= end_at
 
           Items.Failed(entry_problem(session, found.code, found.message, found.span, found.help))
-        Diag.Outcome.Done(items) -> Items.Found(items)
+        Diag.Outcome.Done(items) ->
+          openers = openers_by_line(tokens, text)
+          lines = text.split("\n")
+          Items.Found(items.map { |item: Parser.EntryItem| with_bodies(item, openers, lines) })
       end
   end
+end
+
+# The heredoc openers of the text by line, each once (the string tokens of a heredoc all stand where its opener does).
+def openers_by_line(tokens: List[Tokens.Token], text: String) -> Map[Int, List[Opener]]
+  found: Map[Int, List[Opener]] = {}
+  last = -1
+  for token in tokens
+    at = token.span.start
+    if at.offset != last and at.offset + 3 <= text.length and text.slice(at.offset, 3) == "<<~"
+      opener = Opener(offset: at.offset, name: text.slice(at.offset + 3, token.span.stop.offset - at.offset - 3))
+      found = found.put(at.line, found.get(at.line, []).push(opener))
+      last = at.offset
+    end
+  end
+
+  found
+end
+
+# The item with the bodies of the heredocs opened on its last line, which its span leaves out: the tokens of a heredoc
+# stand where its opener stands, and its lines follow the line, each body after the one before (`lines` is the text
+# split into lines).
+def with_bodies(item: Parser.EntryItem, openers: Map[Int, List[Opener]], lines: List[String]) -> Parser.EntryItem
+  stop = item.span.stop
+  mine = openers.get(stop.line, [])
+    .filter do |opener: Opener| opener.offset >= item.span.start.offset and opener.offset < stop.offset end
+
+  return item if mine.size == 0
+
+  last = stop.line
+  for opener in mine
+    while last < lines.size and !end_line?(lines[last], opener.name)
+      last += 1
+    end
+
+    last += 1
+  end
+
+  ending = Source.Position(offset: stop.offset, line: last, column: 1)
+  item.with(span: item.span.with(stop: ending))
+end
+
+# Whether a line ends the heredoc `name`, as the lexer takes it: spaces, then the name, then the end of the line.
+def end_line?(line: String, name: String) -> Bool
+  bare = line
+  if bare.end_with?("\r")
+    bare = bare.slice(0, bare.length - 1)
+  end
+
+  at = 0
+  while at < bare.length and bare.slice(at, 1) == " "
+    at += 1
+  end
+
+  bare.length - at == name.length and bare.slice(at, name.length) == name
 end
 
 # The offset after the last character of `text` that is not blank.
@@ -345,6 +408,12 @@ def compile_items(session: Session, text: String, items: List[Parser.EntryItem],
   Compiled.Failed(session_problem(session, "REPL-INTERNAL", "an entry did not settle its names"))
 end
 
+# Whether two spans of the session stand at the same lines and columns (offsets count the code the session writes).
+def same_place?(a: Source.Span, b: Source.Span) -> Bool
+  starts = a.start.line == b.start.line and a.start.column == b.start.column
+  starts and a.stop.line == b.stop.line and a.stop.column == b.stop.column
+end
+
 # The names that hold a type the entry's declarations change: the declarations are compiled alone, without the names
 # whose types are structs or enums, and a name is stale when the entries of its types are not the current ones after
 # that. None when the entry declares no type or its declarations do not compile.
@@ -389,8 +458,25 @@ def attempt(
 ) -> Attempt
   plan = planned(session, text, items, dropped, session.entries + 1)
   case first_check(session, plan, settings)
-    Checks.Failed(problem) -> Attempt.Refused(problem)
+    Checks.Failed(problem) -> Attempt.Refused(suggested(session, plan, problem, settings))
     Checks.Done(found) -> second(session, text, plan, found, settings)
+  end
+end
+
+# An unknown name, checked again with every name of the session, so its help can name the one it is close to: the
+# entry takes only the names it names (`planned`). The problem of the second check is taken only when it is the same
+# problem at the same place.
+def suggested(session: Session, plan: Plan, problem: Problems.Problem, settings: Env.Settings) -> Problems.Problem
+  return problem if problem.code != "CHECK-UNKNOWN-NAME" or plan.params.size == plan.held.size
+
+  case first_check(session, plan.with(params: plan.held.values), settings)
+    Checks.Failed(again) ->
+      if again.code == problem.code and again.file == problem.file and same_place?(again.span, problem.span)
+        return again
+      end
+
+      problem
+    Checks.Done(_) -> problem
   end
 end
 

@@ -3,8 +3,10 @@ entries, redefinition, the problems that leave the session as it was, the comman
 read the `--json` answers (one object per entry or command) and assert values, types, codes and lines, never message
 text; one case reads the plain form."""
 import json
+import queue
 import statistics
 import subprocess
+import threading
 import time
 
 import pytest
@@ -31,6 +33,32 @@ end
 def repl(tmp_path, *lines, json_style=True):
     words = [*cli(), "repl", "--json"] if json_style else [*cli(), "repl"]
     return run(words, stdin="".join(line + "\n" for line in lines), cwd=tmp_path)
+
+
+class Interactive:
+    """`agentica repl --json` fed one entry at a time; each answer is read within a timeout."""
+
+    def __init__(self, tmp_path):
+        self.child = subprocess.Popen([*cli(), "repl", "--json"], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                      text=True, cwd=tmp_path)
+        self.lines = queue.Queue()
+        threading.Thread(target=self.read, daemon=True).start()
+
+    def read(self):
+        for line in self.child.stdout:
+            self.lines.put(line)
+
+    def ask(self, entry):
+        self.child.stdin.write(entry + "\n")
+        self.child.stdin.flush()
+        return json.loads(self.lines.get(timeout=30))
+
+    def close(self):
+        try:
+            self.child.stdin.close()
+        except OSError:
+            pass
+        return self.child.wait(timeout=60)
 
 
 def answers(got):
@@ -369,6 +397,35 @@ def test_a_session_gives_the_values_that_one_file_gives(tmp_path):
     assert len(shown) == 6
 
 
+def test_an_exit_between_entries_is_the_answer_of_the_next(tmp_path):
+    session = Interactive(tmp_path)
+    try:
+        assert session.ask("t = Task.spawn do\n  Task.sleep(100)\n  System.exit(5)\nend")["ok"]
+        for tries in range(100):
+            found = session.ask("1")
+            if "exited" in found:
+                break
+            time.sleep(0.05)
+        assert found == {"entry": tries + 2, "exited": 5, "line": tries + 5, "ok": True}
+    finally:
+        assert session.close() == 5
+
+
+def test_an_unknown_name_is_checked_with_every_name(tmp_path):
+    got = repl(tmp_path, "total = 1", "totl + 1")
+    assert '"total"' in answers(got)[1]["diagnostic"]["help"]
+
+
+def test_a_statement_takes_the_lines_of_its_heredocs(tmp_path):
+    (tmp_path / "doc.agc").write_text("w = <<~TEXT\n  three\n  TEXT  \n  four\nTEXT\n", encoding="utf-8")
+    got = repl(tmp_path, "t = <<~TEXT\n  one\n  two\nTEXT", "u = [<<~A, <<~B]\n  a\n  b\nA\n  c\n  d\nB",
+               ":load doc.agc", "t + u[1] + w")
+    found = answers(got)
+    assert [answer["ok"] for answer in found] == [True] * 4
+    assert (found[1]["line"], found[2]["line"], found[3]["line"]) == (5, 12, 18)
+    assert found[3]["value"] == '"one\\ntwo\\nc\\nd\\nthree\\nTEXT  \\nfour\\n"'
+
+
 def test_the_exit_status(tmp_path):
     got = repl(tmp_path, "x = 1", "System.exit(3)", "x")
     assert got.code == 3
@@ -389,17 +446,13 @@ def test_the_plain_form(tmp_path):
 def test_the_cost_of_an_entry_does_not_grow_with_the_session(tmp_path):
     # Each entry binds a name: the medians of the first and of the last 50 answers stay close, where an entry that
     # compiled and wrote the whole session again took 25 times longer at the end.
-    child = subprocess.Popen([*cli(), "repl", "--json"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True,
-                             cwd=tmp_path)
+    session = Interactive(tmp_path)
     times = []
     try:
         for k in range(400):
             begun = time.perf_counter()
-            child.stdin.write(f"x{k} = {k}\n")
-            child.stdin.flush()
-            assert json.loads(child.stdout.readline())["ok"]
+            assert session.ask(f"x{k} = {k}")["ok"]
             times.append(time.perf_counter() - begun)
     finally:
-        child.stdin.close()
-        child.wait(timeout=60)
+        session.close()
     assert statistics.median(times[-50:]) < 4 * statistics.median(times[:50])
