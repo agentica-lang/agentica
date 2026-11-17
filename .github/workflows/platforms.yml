@@ -24,9 +24,10 @@ on:
 permissions:
   contents: read
 
-# Master runs are never cancelled, so every merge is tested.
+# A new push to a pull request cancels its older run. A master push gets a group of its own, so it is never cancelled or
+# replaced while it waits: every merge is tested.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # The runners can be slow: every deadline of the tests is multiplied by this, as in ci.yml (references/ci.md). Linux
