@@ -129,7 +129,8 @@ broken VM or test runner cannot make its own tests pass.
 - Diagnostic codes are stable, prefixed by stage (`LEX-`, `PARSE-`, `CHECK-`,
   `RUNTIME-`, `LOWER-`, `BYTECODE-`) or by area (`PKG-`: the manifest, the lock
   and the package cache; `QUERY-`: the query commands, exit 2; `LINT-`: the
-  suggestions of `agentica lint`, which are not errors), and carry a
+  suggestions of `agentica lint`, which are not errors; `REPL-`: the commands
+  and entries of `agentica repl`), and carry a
   source span. A `PKG-` error about `agentica.toml` or `agentica.lock` carries
   the file and the key path instead (`key_path` in `--json`; a missing or
   unreadable file has the file alone). Tests assert the code (and the span, or

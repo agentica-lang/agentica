@@ -160,21 +160,27 @@ agc_value agc_http_header_list(agc_vm *vm, const agc_http_fields *f) {
   return agc_list_value(agc_list_builder_finish(&headers));
 }
 
-static bool value_closes(agc_http_slice v) {
+static bool value_has(agc_http_slice v, const char *token) {
   size_t start = 0;
   for (size_t at = 0; at <= v.len; at++) {
     if (at < v.len && v.data[at] != ',') continue;
-    if (agc_http_named(agc_http_trim((agc_http_slice){v.data + start, at - start}), "close")) return true;
+    if (agc_http_named(agc_http_trim((agc_http_slice){v.data + start, at - start}), token)) return true;
     start = at + 1;
   }
   return false;
 }
 
-bool agc_http_closes(const agc_http_head *head) {
+static bool value_closes(agc_http_slice v) { return value_has(v, "close"); }
+
+static bool connection_has(const agc_http_head *head, const char *token) {
   for (size_t k = 0; k < head->count; k++)
-    if (agc_http_named(head->fields[k].name, "connection") && value_closes(head->fields[k].value)) return true;
+    if (agc_http_named(head->fields[k].name, "connection") && value_has(head->fields[k].value, token)) return true;
   return false;
 }
+
+bool agc_http_closes(const agc_http_head *head) { return connection_has(head, "close"); }
+
+bool agc_http_keeps_alive(const agc_http_head *head) { return connection_has(head, "keep-alive"); }
 
 agc_http_slice agc_http_text(agc_vm *vm, agc_value v) {
   const agc_string *s = agc_as_string(vm, v);

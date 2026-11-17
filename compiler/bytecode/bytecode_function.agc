@@ -5,18 +5,20 @@
 ## A function body is flat, so this is a loop over the instructions and uses no recursion.
 
 import Ir from "../lower/ir"
+import Types from "../syntax/types"
 import Wire from "bytecode_bytes"
 import Failure from "bytecode_failure"
 import Pool from "bytecode_pool"
 import Spans from "bytecode_spans"
 import {MAX_U16, NEEDS, OPCODES, PAIR_OPS, SINGLE_OPS, STEP_PASSES, WIDE_OPS} from "bytecode_tables"
 
-## What the writer has interned so far: the entries of the constant, struct update, builtin and span sections.
+## What the writer has interned so far: the entries of the constant, struct update, builtin, span and type sections.
 struct Tables
   constants: Pool.Pool
   updates: Pool.Pool
   builtins: Pool.Pool
   spans: Pool.Pool
+  types: Pool.Pool
 end
 
 ## The bytes of a function in the file (its header, its code and the span of each instruction, as three chunks) and
@@ -79,6 +81,21 @@ end
 ## The constant of the table for the value, added when it is new.
 def intern_constant(constants: Pool.Pool, imm: Ir.Imm) -> Pool.Interned
   Pool.intern(constants, constant_key(imm), constant_bytes(imm))
+end
+
+## The text that stands for a constant in the table: two constants are one entry when this is the same. The tag keeps
+## an Int, a Float (by its bits, so 0.0 and -0.0 differ), a Bool, a String and a Bytes apart.
+def constant_key(imm: Ir.Imm) -> String
+  case imm
+    Ir.Imm.Void -> "v"
+    Ir.Imm.Nil -> "n"
+    Ir.Imm.Bool(flag) -> "b#{flag}"
+    Ir.Imm.Int(number) -> "i#{number}"
+    Ir.Imm.Float(number) -> "f#{Float.to_bits(number)}"
+    Ir.Imm.Text(text) -> "s#{text}"
+    Ir.Imm.Bytes(text) -> "y#{text}"
+    Ir.Imm.Type(type) -> "t#{Types.tag(type)}:#{Types.json_name(type)}"
+  end
 end
 
 private
@@ -305,20 +322,6 @@ def label_pcs(body: List[Ir.Instr]) -> Map[Int, Int]
   labels
 end
 
-# The text that stands for a constant in the table: two constants are one entry when this is the same. The tag keeps
-# an Int, a Float (by its bits, so 0.0 and -0.0 differ), a Bool, a String and a Bytes apart.
-def constant_key(imm: Ir.Imm) -> String
-  case imm
-    Ir.Imm.Void -> "v"
-    Ir.Imm.Nil -> "n"
-    Ir.Imm.Bool(flag) -> "b#{flag}"
-    Ir.Imm.Int(number) -> "i#{number}"
-    Ir.Imm.Float(number) -> "f#{Float.to_bits(number)}"
-    Ir.Imm.Text(text) -> "s#{text}"
-    Ir.Imm.Bytes(text) -> "y#{text}"
-  end
-end
-
 # A constant in the file: a tag (0 void, 1 nil, 2 false, 3 true, 4 Int, 5 Float, 6 String, 7 Bytes) and its value. A
 # Bytes is written as a String is, a length and the bytes; only the tag tells the VM not to check them as UTF-8.
 def constant_bytes(imm: Ir.Imm) -> List[Int]
@@ -330,6 +333,8 @@ def constant_bytes(imm: Ir.Imm) -> List[Int]
     Ir.Imm.Float(number) -> [5].concat(Wire.f64(number))
     Ir.Imm.Text(text) -> [6].concat(Wire.string(text))
     Ir.Imm.Bytes(text) -> [7].concat(Wire.string(text))
+    # The writer has turned it into an Int (bytecode_writer.agc, typed_constants); never written.
+    Ir.Imm.Type(_) -> [0]
   end
 end
 

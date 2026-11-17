@@ -83,6 +83,11 @@ release.
   needs the old VM to run the new compiler once by hand; the PR that changes the
   format writes the commands.
 
+Before you call a change (b), look for a form of the `compiler/` code that both
+the base stage0 and the new rules accept (check it with a binary built from
+master); then it is (a). A rewrite script keyed on an old marker skips the
+files without it, silently: count the files it changed.
+
 A row whose **type** changes (`List[Int]` to `Bytes`), not only its name, cannot
 keep the old name: no source compiles against both types. Keep the old C key for
 the base stage0, and add the new catalog rows with new C keys in the first
