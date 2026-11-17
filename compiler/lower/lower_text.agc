@@ -232,6 +232,7 @@ def imm_text(imm: Ir.Imm) -> String
     Ir.Imm.Float(number) -> "float:bits:#{Float.to_bits(number)}"
     Ir.Imm.Text(text) -> Text.quote(text)
     Ir.Imm.Bytes(text) -> "bytes:#{Text.quote(text)}"
+    Ir.Imm.Type(type) -> "type:#{Types.json_name(type)}"
   end
 end
 

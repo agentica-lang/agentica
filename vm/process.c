@@ -1877,11 +1877,13 @@ agc_value agc_process_spawn_session(agc_vm *vm, const agc_value *args, bool json
   char pid[24];
   int pid_len = snprintf(pid, sizeof pid, "%lld", (long long)uv_os_getpid());
   size_t k = 0;
+  /* --session comes first, so no option can make it a word of the program; an option that ends the options or takes
+     the "-" as its value leaves no "-" program, which run --session refuses. */
   words[k++] = agc_string_value(agc_make_string("run", 3, 3));
+  words[k++] = agc_string_value(agc_make_string("--session", 9, 9));
   words[k++] = agc_string_value(agc_make_string("--driver-pid", 12, 12));
   words[k++] = agc_string_value(agc_make_string(pid, (size_t)pid_len, (size_t)pid_len));
   for (size_t i = 0; i < n; i++) words[k++] = agc_list_get(options, i);
-  words[k++] = agc_string_value(agc_make_string("--session", 9, 9));
   words[k++] = agc_string_value(agc_make_string("-", 1, 1));
   agc_value argv[2] = {args[0], agc_list_value(agc_list_from_array(words, k))};
   const agc_string *none = agc_make_string("", 0, 0);

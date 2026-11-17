@@ -457,6 +457,27 @@ def executable(path, text="#!/bin/sh\n"):
     path.chmod(0o755)
 
 
+def test_a_module_block_of_an_imported_file_hits_and_an_edit_of_the_file_misses(tmp_path):
+    """A module block is linked as a module of its own (`shapes.agc#Square`), which is no file: the line of its file
+    covers it, so a second run reads the entry (#1784)."""
+    folder = tmp_path / "blocks"
+    folder.mkdir()
+    (folder / "main.agc").write_text(
+        'import Shapes from "shapes"\n\ndef main() -> Void\n  puts(Shapes.Square.area(3))\nend\n', encoding="utf-8")
+    block = "module Square\n  def area(side: Int) -> Int = side * %d\nend\n"
+    (folder / "shapes.agc").write_text(block % 3, encoding="utf-8")
+    first = agentica(folder, "main.agc")
+    assert (first.code, first.stdout) == (0, "9\n"), first.stderr
+    entry = only_entry(folder / "_build" / "bytecode")
+    kept = stamp(entry)
+    second = agentica(folder, "main.agc")
+    assert (second.code, second.stdout, stamp(entry)) == (0, "9\n", kept), second.stderr
+    (folder / "shapes.agc").write_text(block % 4, encoding="utf-8")
+    third = agentica(folder, "main.agc")
+    assert (third.code, third.stdout) == (0, "12\n"), third.stderr
+    assert stamp(entry) != kept
+
+
 class Native:
     """A copy of examples/native_module, whose run builds a module with the C compiler, with a package cache of its
     own. `run` gives the result and the entry's stamp after it."""

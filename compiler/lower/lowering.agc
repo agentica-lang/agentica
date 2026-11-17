@@ -35,11 +35,13 @@ enum Lowered
 end
 
 ## Lowers a linked program that the checker accepted.
-def lower(linked: Linker.Linked, checked: Checker.Checked) -> Lowered
-  result = run(linked, checked)
-  return Lowered.Done(result.unwrap!) if result.ok?
+def lower(linked: Linker.Linked, checked: Checker.Checked) -> Lowered = lowered(run(linked, checked, ["main"], false))
 
-  Lowered.Failed(Failure.unpack(result.message))
+## Lowers as `lower` does, with the constants that the functions `roots` reach built in place of those of `main`, which
+## the program need not have: an entry of `agentica repl` (compiler/repl/). Every struct and enum that JSON.decode can
+## build is in the Decodable table, used or not, so the table entry of a type is the same in every entry.
+def lower_from(linked: Linker.Linked, checked: Checker.Checked, roots: List[String]) -> Lowered
+  lowered(run(linked, checked, roots, true))
 end
 
 private
@@ -79,7 +81,7 @@ struct Scanned
   covered: Set[Int]
 end
 
-def run(linked: Linker.Linked, checked: Checker.Checked) -> Result[Ir.Program]
+def run(linked: Linker.Linked, checked: Checker.Checked, roots: List[String], every_type: Bool) -> Result[Ir.Program]
   functions: List[Located] = []
   constants: List[LocatedConst] = []
   structs: List[LocatedStruct] = []
@@ -129,8 +131,13 @@ def run(linked: Linker.Linked, checked: Checker.Checked) -> Result[Ir.Program]
     used = used.add("Optional")
   end
 
-  tables = Program.build(decls, used, scanned.type_names, json_targets(checked.types, scanned.type_ids))
-  plan = Const.plan(function_decls, scanned.function_scans, constant_decls, scanned.constant_scans, order)
+  type_names = scanned.type_names
+  if every_type
+    type_names = type_names.concat(decls.flat_map(&type_declared))
+  end
+
+  tables = Program.build(decls, used, type_names, json_targets(checked.types, scanned.type_ids))
+  plan = Const.plan(function_decls, scanned.function_scans, constant_decls, scanned.constant_scans, order, roots)
   start = plan.slots.size > 0
   files_of = constant_files(constants)
   files = source_order(linked, functions, plan.kept, files_of, structs)
@@ -146,7 +153,7 @@ def run(linked: Linker.Linked, checked: Checker.Checked) -> Result[Ir.Program]
     at += 1
   end
 
-  main_index = by_name["main"]
+  main_index = by_name.get("main", 0)
   struct_decls: Map[String, Ast.StructDecl] = {}
   for entry in structs
     struct_decls = struct_decls.put(entry.decl.name, entry.decl)
@@ -173,6 +180,7 @@ def run(linked: Linker.Linked, checked: Checker.Checked) -> Result[Ir.Program]
     enums: tables.enum_index,
     variants: tables.variants,
     json_types: tables.json_types,
+    typed_json: every_type,
     layouts: {},
     functions: by_name,
     bodies: checked.bodies,
@@ -266,9 +274,20 @@ def run(linked: Linker.Linked, checked: Checker.Checked) -> Result[Ir.Program]
       functions: pin_prelude_spans(built, kept_sources),
       entry: entry,
       globals: plan.slots.size,
+      global_names: slot_names(plan),
       span: linked.root.span,
     ),
   )
+end
+
+# The linked name of the constant of each slot, in slot order.
+def slot_names(plan: Const.Plan) -> List[String]
+  names = List.repeat("", plan.slots.size)
+  for name in plan.slots.keys
+    names = names.set(plan.slots[name], name)
+  end
+
+  names
 end
 
 # The structs that JSON.decode may build, alone or as an instance, get the defaults of their fields.
@@ -766,4 +785,19 @@ def start_function(
   body = body.push(Ir.Instr(op: "const", args: [0], imm: Ir.Imm.Void, name: "", file: 0, spans: [span]))
   body = body.push(Ir.instr("return", [0], 0, [span]))
   Ir.Function(name: "<start>", params: 0, captures: 0, slots: 1, body: body, file: 0, span: span)
+end
+
+def lowered(result: Result[Ir.Program]) -> Lowered
+  return Lowered.Done(result.unwrap!) if result.ok?
+
+  Lowered.Failed(Failure.unpack(result.message))
+end
+
+# The name of a struct or an enum that a declaration makes.
+def type_declared(decl: Ast.Decl) -> List[String]
+  case decl
+    Ast.Decl.Struct(node) -> [node.name]
+    Ast.Decl.Enum(node) -> [node.name]
+    _ -> []
+  end
 end

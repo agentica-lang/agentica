@@ -693,15 +693,26 @@ static void crash(agc_vm *vm, agc_task *t) {
   finish_task(vm, t);
 }
 
-/* In the session child of `agentica repl` (vm/session.c) a slot is unset only when the init function that sets it
-   crashed (agc_load_session refuses new slots without a new init), so the read of one (vm/interp.c, op_global) is the
-   error of that entry, not a broken file: it fails the task alone. */
-static void session_unset_read(agc_vm *vm) {
+/* In the session child of `agentica repl`, the read of a slot that a crashed init function did not set (marked
+   AGC_GLOBAL_FAILED by vm/session.c) is the error of that entry, not a broken file: it fails the task alone. The
+   interpreter (op_global) reports every unset slot as RUNTIME-INTERNAL and leaves frame->pc after the GLOBAL, which
+   names the slot; any other unset slot stays the fatal error. */
+static void session_unset_read(agc_vm *vm, const agc_task *t) {
   agc_outcome *o = vm->outcome;
   static const char unset[] = "invalid bytecode: global read before it was set";
   static const char failed[] = "this name has no value: its definition failed in an earlier entry";
   if (!vm->rt->session || o->kind != AGC_FAILED || strcmp(o->code, "RUNTIME-INTERNAL") != 0 ||
-      strcmp(o->message, unset) != 0)
+      o->message_len != sizeof unset - 1 || memcmp(o->message, unset, sizeof unset - 1) != 0)
+    return;
+  const agc_program *p = vm->rt->program;
+  if (!t->frames || t->frame_count == 0 || t->frame_count > t->frame_capacity) return;
+  const agc_frame *frame = &t->frames[t->frame_count - 1];
+  if (frame->native || frame->function >= p->function_count) return;
+  const agc_function *f = &p->functions[frame->function];
+  if (frame->pc == 0 || frame->pc > f->count || f->code[frame->pc - 1].op != AGC_OP_GLOBAL) return;
+  const agc_instr *in = &f->code[frame->pc - 1];
+  uint32_t slot = (uint32_t)in->b | ((uint32_t)in->c << 16);
+  if (slot >= p->global_count || p->globals[slot].tag != AGC_T_VOID || p->globals[slot].as.i != AGC_GLOBAL_FAILED)
     return;
   o->code = "RUNTIME-NO-VALUE";
   o->message = failed;
@@ -837,7 +848,7 @@ bool agc_task_end_turn(agc_vm *vm, agc_task *t, agc_turn_result r, bool ran) {
   trace_gc(vm, "turn");
   bool main_done = false;
   if (!ran) {
-    session_unset_read(vm);
+    session_unset_read(vm, t);
     if (fatal(vm, t)) AGC_THROW(vm->fail);
     agc_sync_take(vm);
     /* A task cancelled during its turn ends as cancelled even when the turn failed: the failure may come from the
