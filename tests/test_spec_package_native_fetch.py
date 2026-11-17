@@ -273,7 +273,7 @@ def test_a_cache_entry_that_changed_is_pkg_native_build(ws, remotes, peer):
     assert len(peer.requests) == 1
 
 
-@pytest.mark.skipif(WINDOWS, reason="Windows has no file modes")
+@pytest.mark.skipif(WINDOWS, reason="host-only: Windows has no file modes")
 def test_a_cache_entry_others_can_write_is_pkg_native_build(ws, remotes, peer):
     manifest = project(ws, remotes, peer, "ok")
     assert agentica(ws, remotes, "--json", "install").code == 0
