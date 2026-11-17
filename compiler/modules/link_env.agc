@@ -38,7 +38,10 @@ end
 ## test_build says that the root file is the step program of `agentica test` (or a `steps.agc` that `check` reads): it
 ## and a test file may import the test group of the project's manifest (`group = "test"`), which no other build may.
 ## native_denied says that a --deny-* flag is on, so the VM refuses native code: no module is built, and the bytecode
-## cache keeps the programs of such runs apart.
+## cache keeps the programs of such runs apart. native_policy is the native policy of the command line and of the
+## environment (`--native-build`, `--native-prebuilt-only` and their variables), in the text of
+## NativePrebuilt.layers_text ("" for none): the builder puts it before the manifest's, and the bytecode cache key
+## holds it.
 struct Settings
   std: StdProvider
   embedded_bdd: Bool
@@ -50,6 +53,7 @@ struct Settings
   test_file: Bool
   test_build: Bool
   native_denied: Bool
+  native_policy: String
 end
 
 ## Settings for a stdlib/ folder and an environment. The version is "": a program that writes .agcb files sets it
@@ -66,6 +70,7 @@ def settings(workspace: Workspace.Workspace, stdlib: String, env: Env) -> Settin
     test_file: false,
     test_build: false,
     native_denied: false,
+    native_policy: "",
   )
 end
 
@@ -83,5 +88,6 @@ def embedded_settings(workspace: Workspace.Workspace, env: Env, version: String,
     test_file: false,
     test_build: false,
     native_denied: false,
+    native_policy: "",
   )
 end

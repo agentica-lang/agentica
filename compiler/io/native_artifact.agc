@@ -100,8 +100,8 @@ end
 ## 301/302/303/307/308 with exactly one Location each, relative targets resolved against the current URL, to targets
 ## that `allowed` accepts besides the rules of every URL: no https downgrade, http only to a loopback literal, no loop.
 ## Only a final 200 is kept, and the bodies of all hops count against `limit` bytes; each hop writes a fresh private
-## file. Every failure is PKG-FETCH at the `url` key of `context` (a timeout at its key), with a message that never
-## echoes the URL.
+## file. Every failure, a timeout too, is PKG-FETCH at the `url` key of `context`, with a message that never echoes
+## the URL.
 def download(
   url: String,
   folder: String,
@@ -120,7 +120,7 @@ def download(
     left = deadline - Time.monotonic_ms()
     if left <= 0
       HTTP.close_client(pool)
-      return error(fail(context, "PKG-FETCH", "", "the operation timed out", ""))
+      return error(fail(context, "PKG-FETCH", "url", "the operation timed out", ""))
     end
 
     budgeted = NativeArtifact.hop_budget(consumed, limit)

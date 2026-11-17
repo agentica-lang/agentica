@@ -12,7 +12,7 @@ import NativePrebuilt from "../packages/native_prebuilt"
 import Project from "../packages/project"
 import Reader from "../packages/toml_read"
 import Front from "../analysis/front"
-import BuildMachine from "../io/native_build"
+import Prebuilt from "../io/native_prebuilt"
 import CliProject from "cli_project"
 import Reply from "cli_reply"
 
@@ -60,7 +60,7 @@ def source(settings: Env.Settings, dir: String, name: String) -> Result[Answer]
   library = try module_of(manifest, name)
   build = library.build.unwrap!
   key_hex = try NativePrebuilt.source_of(settings.workspace, found.unwrap!.dir, manifest.file, name, build)
-  api = BuildMachine.native_api()
+  api = Prebuilt.native_api()
   urls: Map[String, String] = {}
   if library.prebuilt.some?
     for target in NativePrebuilt.TARGETS

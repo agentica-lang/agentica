@@ -198,6 +198,8 @@ The first line is the declaration. Each other line is a use, with its kind (`cal
 | `--deny-env` | makes `System.env` return an error that begins with `denied: --deny-env`; the locale of error texts still follows `LANG` |
 | `--deny-native` | refuses a program that declares an `extern` block or calls a `Native.*` builtin before it runs (`RUNTIME-NATIVE-DENIED`, exit 2). Every `--deny-*` flag turns it on |
 | `--sandbox` | all the `--deny-*` flags: use it to run code you do not trust. A program that can start processes escapes a single flag; use `--sandbox`, or add `--deny-run`. `agentica test` gives them to the test files, the step programs and the programs under test, not to its runner |
+| `--native-build[=NAMES]` | builds the native modules `NAMES` (`a,b`; every module without `=`) from source and never uses their prebuilt files. Env `AGENTICA_NATIVE_BUILD` (`all` or `a,b`); both go before the manifest's `[native_policy]` (see [native modules](/library/io-and-system/native/modules/)) |
+| `--native-prebuilt-only[=NAMES]` | uses only the prebuilt files of the native modules `NAMES` and never builds them; one with no file in the cache is `PKG-NATIVE-BUILD`. Env `AGENTICA_NATIVE_PREBUILT_ONLY`. A module in both flags, or in both variables, is a usage error (exit 2) |
 | `--dump`, `--dump-ir` | print the checked tree or the lowered IR instead of running |
 | `--no-cache` | compiles the program again and does not keep its bytecode (see [Bytecode cache](#bytecode-cache)); `check` and `type-at` neither read nor write the check cache (see [Check cache](#check-cache)) |
 

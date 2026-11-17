@@ -176,7 +176,8 @@ def build_natives(settings: Env.Settings, found: Project.Found, scope: PackageIm
   workspace = settings.workspace
   cache = PackageCache.root(settings.env)
   os = settings.env.os
-  try NativeLibrary.build_all(workspace, found.manifest, found.dir, os, cache)
+  policy = found.manifest.policy
+  try NativeLibrary.build_all(workspace, found.manifest, found.dir, os, cache, policy)
   for locked in found.lock.packages
     next if !Lock.in_place?(locked)
 
@@ -186,7 +187,7 @@ def build_natives(settings: Env.Settings, found: Project.Found, scope: PackageIm
     file = Paths.join(real.unwrap!, Project.MANIFEST_FILE)
     if workspace.file_exists.call(file)
       manifest = try Manifest.read(workspace, file)
-      try NativeLibrary.build_all(workspace, manifest, real.unwrap!, os, cache)
+      try NativeLibrary.build_all(workspace, manifest, real.unwrap!, os, cache, policy)
     end
   end
 

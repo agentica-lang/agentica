@@ -17,6 +17,12 @@
 ## regular file in the entry, and the receipt matches: anything else is PKG-NATIVE-BUILD, never a silent rebuild over
 ## it. Temporary folders that a run left (it died during a build) are removed once an hour old.
 ##
+## Before a build, the builder looks for the module's prebuilt file in the cache (io/native_prebuilt.agc, lookup),
+## unless the policy builds the module: the command line, then the environment (Settings.native_policy), then the
+## project's `[native_policy]` (the request's mode). A verified prebuilt file is used as it is, and no compiler starts.
+## A prebuilt-only module without one is PKG-NATIVE-BUILD (Unbuilt when optional), with no compiler started either. A
+## build that fails when `install` would have downloaded a prebuilt file says so in its help.
+##
 ## For an optional module the builder hands the warning to `warned` (app/ prints it in the form the options ask for)
 ## and returns Unbuilt. The quiet builder (for `--json` and `--ai`) prints nothing. A builder keeps what it built or
 ## failed for the rest of the run (an ATS table), so a module that many files use is built, and reported, once. Under
@@ -30,28 +36,22 @@ import Workspace from "../modules/workspace"
 import NativeBuild from "../packages/native_build"
 import NativePrebuilt from "../packages/native_prebuilt"
 import CacheFiles from "cache_files"
+import Prebuilt from "native_prebuilt"
 
 ## A builder for one run: it builds a request, or finds it built, the first time it is asked, and gives the same
 ## answer for the same library afterwards. `noted` prints on stderr what the compiler says and the path of a new build;
 ## without it (`--json`, `--ai`) nothing is printed, so stderr holds the diagnostic alone. `warned` gets the packed
-## PKG-NATIVE-UNBUILT warning of an optional module that was not built, once a run.
-def builder(noted: Bool, warned: Fn[String, Void]) -> Fn[Workspace.BuildRequest, Workspace.Built]
+## PKG-NATIVE-UNBUILT warning of an optional module that was not built, once a run. `policy` is the native policy of
+## the command line and the environment (Settings.native_policy), which goes before the request's.
+def builder(noted: Bool, warned: Fn[String, Void], policy: String) -> Fn[Workspace.BuildRequest, Workspace.Built]
   memo: ATS[String, String] = ATS.new()
-  ->(request) { remembered(memo, request, noted, warned) }
+  layers = NativePrebuilt.layers_of(policy)
+  ->(request) { remembered(memo, with_mode(request, layers), noted, warned) }
 end
 
 ## The builder of `compile` under `flag` (a --deny-* flag or --sandbox), whose program may not open native code: it
 ## starts no compiler and fails at the build table, so nothing names a module that was not built.
 def refusing(flag: String) -> Fn[Workspace.BuildRequest, Workspace.Built] = ->(request) { refused(request, flag) }
-
-## The native API of the header this binary carries, MAJOR.MINOR ("" when it carries none): what a build compiles
-## against, and the newest a module may need.
-def native_api() -> String
-  case FrontEnd.std_source(HEADER)
-    ok(text) -> NativePrebuilt.header_api(text)
-    error(_) -> ""
-  end
-end
 
 private
 
@@ -60,7 +60,6 @@ BUILD_FOLDER = "native-build"
 INCLUDE_FOLDER = "include"
 # The folder of the private build folder that holds the copy of a fetched package.
 COPY_FOLDER = "package"
-RECEIPT = "receipt"
 # The std/ source name of the header the binary carries (vm/tools/gen-embedded.sh), and its file name.
 HEADER = "internal/native/agentica_native.h"
 HEADER_NAME = "agentica_native.h"
@@ -73,8 +72,6 @@ LOCK_PAUSE_MS = 50
 # How long a run waits for the lock of a key: a whole build, then a minute more for its file work.
 LOCK_WAIT_MS = BUILD_TIMEOUT_MS + 60_000
 TEMP_TRIES = 5
-TEMP_MARK = ".tmp-"
-STALE_TEMP_SECONDS = 3600
 # The most characters of the compiler's standard error that a quiet failure keeps (its start, where the first error
 # is).
 MAX_SHOWN = 8000
@@ -134,7 +131,43 @@ def answer(text: String) -> Workspace.Built
   Workspace.Built.Failed(rest)
 end
 
+# The request with the way the command line or the environment sends its module, when they name it.
+def with_mode(request: Workspace.BuildRequest, layers: List[NativePrebuilt.Policy]) -> Workspace.BuildRequest
+  mode = NativePrebuilt.mode_in(layers, request.library)
+  return request if mode == ""
+
+  request.with(mode: mode)
+end
+
+# The prebuilt library when there is one to use, else a build: never for a prebuilt-only module.
 def attempt(request: Workspace.BuildRequest, noted: Bool) -> Result[String]
+  downloadable = false
+  if request.mode != NativePrebuilt.MODE_BUILD
+    case Prebuilt.lookup(request)
+      Prebuilt.Lookup.Found(path) -> return ok(path)
+      Prebuilt.Lookup.Broken(packed) -> return error(packed)
+      Prebuilt.Lookup.Missing(reason, can) ->
+        if request.mode == NativePrebuilt.MODE_PREBUILT_ONLY
+          message = "#{request.library} is prebuilt-only and has no prebuilt file to use: #{reason}"
+          help = "take #{request.library} out of the prebuilt-only policy to build it from source"
+          if can
+            help = "run `agentica install` to download its prebuilt file, or #{help}"
+          end
+
+          return error(fail(request, message, help))
+        end
+
+        downloadable = can
+    end
+  end
+
+  built = build(request, noted)
+  return built if built.ok? or !downloadable
+
+  error(Failure.add_help(built.message, "or run `agentica install` to download its prebuilt file"))
+end
+
+def build(request: Workspace.BuildRequest, noted: Bool) -> Result[String]
   if request.cache_root == ""
     return error(fail(request, "there is no place for the build cache", "set HOME or XDG_CACHE_HOME"))
   end
@@ -156,7 +189,7 @@ def attempt(request: Workspace.BuildRequest, noted: Bool) -> Result[String]
 
   base = Paths.join(request.cache_root, BUILD_FOLDER)
   user = try private_base(request, base)
-  sweep(base)
+  CacheFiles.sweep_folders(base)
   entry = Paths.join(base, OpenSSL.Digest.sha256_hexdigest(key.bytes))
   name = NativeBuild.output_name(request.library, request.system)
   return verified(request, entry, name, user) if File.lstat(entry, FILE_TIMEOUT_MS).ok?
@@ -226,25 +259,6 @@ def search_lines() -> List[String]
   end
 
   lines
-end
-
-# Removes the temporary folders of builds that died, once they are an hour old. A build is bounded by
-# BUILD_TIMEOUT_MS (ten minutes), so only a run suspended (SIGSTOP, a sleeping laptop) for over an hour in the middle
-# of a build can lose its folder here; its rename then fails and the build is PKG-NATIVE-BUILD, never a half entry.
-def sweep(base: String) -> Void
-  names = Dir.list(base, FILE_TIMEOUT_MS)
-  return if !names.ok?
-
-  now = Time.now_ms() / 1000
-  for name in names.unwrap!
-    if name.start_with?(TEMP_MARK)
-      path = Paths.join(base, name)
-      info = File.lstat(path, FILE_TIMEOUT_MS)
-      if info.ok? and info.unwrap!.kind == "directory" and now - info.unwrap!.modified_seconds > STALE_TEMP_SECONDS
-        _ = Path.remove(path, FILE_TIMEOUT_MS)
-      end
-    end
-  end
 end
 
 # The first line the compiler prints for one question (`--version`, `-dumpmachine`), which names it in the key.
@@ -335,22 +349,16 @@ end
 def verified(request: Workspace.BuildRequest, entry: String, name: String, user: Int) -> Result[String]
   library = Paths.join(entry, name)
   help = "remove the folder #{entry} to build again"
-  if !CacheFiles.private_kind(entry, "directory", user).ok? or !regular?(library)
-    return error(fail(request, "the build cache entry is not private to this user", help))
-  end
-
-  receipt = File.read_text(Paths.join(entry, RECEIPT), FILE_TIMEOUT_MS)
-  digest = File.sha256(library, FILE_TIMEOUT_MS)
-  if !receipt.ok? or !digest.ok? or receipt.unwrap!.strip != OpenSSL.Digest.hexencode(digest.unwrap!)
-    return error(fail(request, "the build cache entry is not the one its receipt names", help))
-  end
+  problem = CacheFiles.entry_problem(entry, library, user, false)
+  return error(fail(request, "the build cache entry is #{problem_text(problem)}", help)) if problem != ""
 
   ok(library)
 end
 
-def regular?(path: String) -> Bool
-  info = File.lstat(path, FILE_TIMEOUT_MS)
-  info.ok? and info.unwrap!.kind == "file"
+def problem_text(problem: String) -> String
+  return "not private to this user" if problem == CacheFiles.ENTRY_NOT_PRIVATE
+
+  "not the one its receipt names"
 end
 
 # Builds in a new private folder and renames it into place. A concurrent build of the same key that renamed first is
@@ -433,7 +441,8 @@ def compile_in(
     return error(fail(request, "a file of native/ changed during the build", "run again to build the new files"))
   end
 
-  receipt = CacheFiles.write_private(Paths.join(folder, RECEIPT), OpenSSL.Digest.hexencode(digest.unwrap!).bytes)
+  written = OpenSSL.Digest.hexencode(digest.unwrap!).bytes
+  receipt = CacheFiles.write_private(Paths.join(folder, CacheFiles.RECEIPT), written)
   return error(fail(request, "cannot write the build cache", "")) if !receipt.ok?
 
   ok()

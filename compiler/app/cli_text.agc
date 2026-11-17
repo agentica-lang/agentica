@@ -34,7 +34,8 @@ USAGE = [
   [
     "usage: agentica [--version] [--dump] [--dump-ir] [--ai|--json] [--max-steps N] [--max-heap SIZE] [--seed N] ",
     "[--flush-timeout MS] [--schedulers N] [--jit MODE] [--deny-run] [--deny-net] [--deny-fs] [--deny-env] ",
-    "[--deny-native] [--sandbox] [--no-cache] [--coverage FILE] <source-file> [args...]",
+    "[--deny-native] [--sandbox] [--native-build[=NAMES]] [--native-prebuilt-only[=NAMES]] [--no-cache] ",
+    "[--coverage FILE] <source-file> [args...]",
   ].join(""),
   "       agentica [--ai|--json] check [PATH...]",
   "       agentica [--ai|--json] check --stdin <source-file>",
@@ -177,6 +178,16 @@ OPTIONS = [
   ].join(""),
   "  --sandbox",
   "     all the --deny-* flags, for code you do not trust",
+  "  --native-build[=NAMES]",
+  [
+    "     build the native modules NAMES (a,b; all without =) from source, never from their prebuilt files ",
+    "(AGENTICA_NATIVE_BUILD sets it too, the flag wins)",
+  ].join(""),
+  "  --native-prebuilt-only[=NAMES]",
+  [
+    "     use only the prebuilt files of the native modules NAMES (all without =), never a build ",
+    "(AGENTICA_NATIVE_PREBUILT_ONLY sets it too, the flag wins)",
+  ].join(""),
   "  --max-steps <count>",
   "     limit execution to N expression/statement entries",
   "  --max-heap <size>",
