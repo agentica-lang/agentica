@@ -3,9 +3,9 @@
 ## `sqlite = { git = "https://host/owner/repo", tag = "v1.2.0" }`, with exactly one of `tag` and `ref`, and an optional
 ## `subdir`: the folder of the repository that is the package. The root project's manifest may also write
 ## `name = { path = "../x" }` (a folder on this machine, read in place) and `override = true` (its source wins over any
-## other source of the name in the tree); `require_package` refuses both in the manifest of a package. Any dependency
-## may say `group = "test"` (Bundler's `group: :test`): only the tests of the project import it, and a project that
-## depends on the package neither fetches nor locks it (`needed`). A failure is
+## other source of the name in the tree); `require_package` refuses both, and `[native_policy]`, in the manifest of a
+## package. Any dependency may say `group = "test"` (Bundler's `group: :test`): only the tests of the project import
+## it, and a project that depends on the package neither fetches nor locks it (`needed`). A failure is
 ## PKG-MANIFEST-INVALID, with the file and the key path (toml_read.agc). The `[workspace]` table is known here but read
 ## by members.agc, and only for the project's manifest: the manifest of a package skips it. `[native]` is the other way
 ## round: only a package's is used. `[tool.NAME]` belongs to other tools: only its shape is checked. `agentica` is the
@@ -17,6 +17,7 @@ import AgenticaVersion from "agentica_version"
 import GitSource from "git_source"
 import NativeArtifact from "native_artifact"
 import NativeBuild from "native_build"
+import NativePrebuilt from "native_prebuilt"
 import PackageHash from "package_hash"
 import Toml from "std/toml"
 import Reader from "toml_read"
@@ -48,18 +49,20 @@ struct Place
 end
 
 ## A native library of a package: the name its `extern "name"` uses, where it is on each system it names, the
-## `build` table that compiles it from the package's C sources (native_build.agc), if any, and `optional`: when true, a
-## build that fails is a warning and the program runs without the library.
+## `build` table that compiles it from the package's C sources (native_build.agc), if any, `optional`: when true, a
+## build that fails is a warning and the program runs without the library, and the `prebuilt` files of that build for
+## each target (native_prebuilt.agc), if any.
 struct NativeLibrary
   name: String
   places: List[Place]
   build: Optional[NativeBuild.Build]
   optional: Bool
+  prebuilt: Optional[NativePrebuilt.Prebuilt]
 end
 
 ## A read manifest. name is "" when the file has none, and so is agentica, the oldest Agentica version the package
 ## works with; max_line_width is 0 when it sets no limit; blank_line_after_end is false unless `[style]` turns the rule
-## on.
+## on; policy is `[native_policy]` (NativePrebuilt.no_policy() when the file has none).
 struct Manifest
   file: String
   name: String
@@ -68,6 +71,7 @@ struct Manifest
   natives: List[NativeLibrary]
   max_line_width: Int
   blank_line_after_end: Bool
+  policy: NativePrebuilt.Policy
 end
 
 ## Reads the manifest at file, with no running version to check its `agentica` key against.
@@ -93,6 +97,7 @@ def from_table(file: String, root: Map[String, Toml.Value], package: String, run
   name = try optional_name(reading, root)
   dependencies = try dependencies_of(reading, root)
   natives = try natives_of(reading, root)
+  policy = try NativePrebuilt.policy_of(reading, root)
   style = try style_of(reading, root)
   try tool_of(reading, root)
   ok(
@@ -104,15 +109,23 @@ def from_table(file: String, root: Map[String, Toml.Value], package: String, run
       natives: natives,
       max_line_width: style.max_line_width,
       blank_line_after_end: style.blank_line_after_end,
+      policy: policy,
     ),
   )
 end
 
 ## Refuses what only the root project's manifest may say, in the manifest of a package (fetched, or a workspace member
-## read in place): a `path` dependency, which cannot be published, and `override = true`, which the packages of a tree
-## cannot impose on each other. A failure is PKG-ROOT-ONLY at `dependencies.<name>.path` or `.override`.
+## read in place): a `path` dependency, which cannot be published, `override = true`, which the packages of a tree
+## cannot impose on each other, and `[native_policy]`, which is the choice of the one who runs the program. A failure
+## is PKG-ROOT-ONLY at `dependencies.<name>.path`, `.override` or `native_policy`.
 def require_package(manifest: Manifest) -> Result[Void]
   reading = Reader.Reading(file: manifest.file, code: "PKG-ROOT-ONLY")
+  if NativePrebuilt.any?(manifest.policy)
+    help = "write [native_policy] in the agentica.toml of the root project"
+    message = "only the root project sets a native policy"
+    return error(Reader.fail_help(reading, NativePrebuilt.POLICY_KEY, message, help))
+  end
+
   for dependency in manifest.dependencies
     here = Reader.child("dependencies", dependency.name)
     if GitSource.local?(dependency.source)
@@ -185,7 +198,7 @@ end
 private
 
 # The keys the manifest knows, and those of [style] and of a dependency.
-TOP_KEYS = ["name", "agentica", "dependencies", "native", "style", "workspace", "tool"]
+TOP_KEYS = ["name", "agentica", "dependencies", "native", "native_policy", "style", "workspace", "tool"]
 STYLE_KEYS = ["max_line_width", "blank_line_after_end"]
 DEPENDENCY_KEYS = ["git", "tag", "ref", "subdir", "path", "override", "group"]
 GIT_KEYS = ["git", "tag", "ref", "subdir"]
@@ -194,10 +207,11 @@ PLACE_KEYS = ["file", "system", "url", "sha256", "member"]
 SYSTEMS = Set.new(["linux", "macos", "windows"])
 # The folder of a package that holds its native files (package_hash.agc hashes them with the .agc files).
 NATIVE_FOLDER = "native"
-# The keys of [native.NAME] that are not a system: the C sources of the library (native_build.agc), and whether the
-# package runs without it when it cannot be built.
+# The keys of [native.NAME] that are not a system: the C sources of the library (native_build.agc), whether the
+# package runs without it when it cannot be built, and the files built from them for each target (native_prebuilt.agc).
 BUILD_KEY = "build"
 OPTIONAL_KEY = "optional"
+PREBUILT_KEY = "prebuilt"
 MAX_SYSTEM_NAME = 128
 MAX_SYSTEM_PATH = 1024
 # The most candidates a `system` list holds: each one is looked up on disk when the library is used.
@@ -349,7 +363,7 @@ def git_source_of(reading: Reader.Reading, entries: Map[String, Toml.Value], pat
 end
 
 # [native.NAME]: for each library a table of systems, each with `file`, `system` or a download, an optional `build`,
-# and `optional`, which needs `build`.
+# and `optional` and `prebuilt`, which need `build`.
 def natives_of(reading: Reader.Reading, root: Map[String, Toml.Value]) -> Result[List[NativeLibrary]]
   found: List[NativeLibrary] = []
   return ok(found) if !root.has_key?("native")
@@ -364,6 +378,7 @@ def natives_of(reading: Reader.Reading, root: Map[String, Toml.Value]) -> Result
     places: List[Place] = []
     build: Optional[NativeBuild.Build] = none
     optional = false
+    prebuilt: Optional[NativePrebuilt.Prebuilt] = none
     for system in systems.keys
       here = Reader.child(path, system)
       if system == BUILD_KEY
@@ -376,8 +391,14 @@ def natives_of(reading: Reader.Reading, root: Map[String, Toml.Value]) -> Result
         next
       end
 
+      if system == PREBUILT_KEY
+        prebuilt = some(try NativePrebuilt.parse(reading, systems[system], here))
+        next
+      end
+
       if !SYSTEMS.include?(system)
-        return error(Reader.fail_help(reading, here, "not a system", "write linux, macos, windows, build or optional"))
+        help = "write linux, macos, windows, build, optional or prebuilt"
+        return error(Reader.fail_help(reading, here, "not a system", help))
       end
 
       places = places.push(try place_of(reading, system, systems[system], here))
@@ -393,7 +414,13 @@ def natives_of(reading: Reader.Reading, root: Map[String, Toml.Value]) -> Result
       return error(Reader.fail_help(reading, Reader.child(path, OPTIONAL_KEY), "optional without build", help))
     end
 
-    found = found.push(NativeLibrary(name: name, places: places, build: build, optional: optional))
+    if prebuilt.some? and build.none?
+      help = "add a build table: prebuilt files are the files of a build"
+      return error(Reader.fail_help(reading, Reader.child(path, PREBUILT_KEY), "prebuilt without build", help))
+    end
+
+    library = NativeLibrary(name: name, places: places, build: build, optional: optional, prebuilt: prebuilt)
+    found = found.push(library)
   end
 
   ok(found)

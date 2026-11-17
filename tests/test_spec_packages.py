@@ -380,6 +380,12 @@ def test_an_override_of_the_project_ends_the_conflict_and_a_package_cannot_overr
         assert_at_key(check(ws), "PKG-ROOT-ONLY", manifest, "dependencies.tools." + key)
 
 
+def test_only_the_project_sets_a_native_policy(ws):
+    manifest = ws.deps / "greeter" / "agentica.toml"
+    manifest.write_text('[native_policy]\nbuild = "all"\n', encoding="utf-8")
+    assert_at_key(check(ws), "PKG-ROOT-ONLY", manifest, "native_policy")
+
+
 def test_the_project_and_a_package_may_declare_one_name_with_the_same_source(ws):
     # The project asks for tools too, with the source the lock and greeter's manifest hold: not a conflict.
     ws.write_manifest({"greeter": GREETER, "tools": TOOLS})

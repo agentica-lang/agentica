@@ -28,6 +28,7 @@ import Paths from "../modules/import_path"
 import Failure from "../modules/link_failure"
 import Workspace from "../modules/workspace"
 import NativeBuild from "../packages/native_build"
+import NativePrebuilt from "../packages/native_prebuilt"
 import CacheFiles from "cache_files"
 
 ## A builder for one run: it builds a request, or finds it built, the first time it is asked, and gives the same
@@ -42,6 +43,15 @@ end
 ## The builder of `compile` under `flag` (a --deny-* flag or --sandbox), whose program may not open native code: it
 ## starts no compiler and fails at the build table, so nothing names a module that was not built.
 def refusing(flag: String) -> Fn[Workspace.BuildRequest, Workspace.Built] = ->(request) { refused(request, flag) }
+
+## The native API of the header this binary carries, MAJOR.MINOR ("" when it carries none): what a build compiles
+## against, and the newest a module may need.
+def native_api() -> String
+  case FrontEnd.std_source(HEADER)
+    ok(text) -> NativePrebuilt.header_api(text)
+    error(_) -> ""
+  end
+end
 
 private
 

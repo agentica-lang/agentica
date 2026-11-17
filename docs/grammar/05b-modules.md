@@ -816,8 +816,8 @@ import Sqlite from "pkg/sqlite/db"
     package author's tests run with the package as the project). The project's
     files are not hashed. A workspace member is read from its folder with no
     hash, as its `.agc` files are.
-  - `build` and `optional` are the keys of `[native.NAME]` that are not a
-    system. `build` gives the C sources of a native module (`extern module`),
+  - `build`, `optional` and `prebuilt` are the keys of `[native.NAME]` that
+    are not a system. `build` gives the C sources of a native module (`extern module`),
     which the project, a workspace member, a `path` dependency and a fetched
     package build instead of using their system entry. A fetched package is
     never compiled in
@@ -906,6 +906,37 @@ import Sqlite from "pkg/sqlite/db"
     a link in `native/`, a copy that differs from the lock and the `--deny-*`
     flags fail as for a required module. `optional` without `build`, or not
     a boolean, is `PKG-MANIFEST-INVALID` at `native.NAME.optional`.
+  - `prebuilt` beside `build` names the libraries that the package author
+    built from that `build` table, one file for each target:
+    ```toml
+    [native.stats]
+    build = { sources = ["native/stats.c"] }
+    prebuilt = { url = "https://github.com/owner/stats/releases/download/native-{source}/lib{name}-{api}-{target}{ext}", source = "63f121de1cebec83", api = "1.4", sha256 = { linux-x86_64 = "<64 hex digits>" } }
+    ```
+    All four keys are required. The URL is https (or http to `127.0.0.1` or
+    `[::1]`) and has `{target}`; its placeholders are `{name}` (the library),
+    `{api}`, `{target}` (`linux-x86_64`, `linux-arm64`, `macos-x86_64`,
+    `macos-arm64`, `windows-x86_64`), `{ext}` (`.so`, `.dylib`, `.dll`) and
+    `{source}`. `source` is the source key: the first 16 hex digits of the
+    SHA-256 of the library name, the `build` table and the SHA-256 and path of
+    each file of `native/` that the package hash covers (not the compiler, the
+    header or the system, so one key names the code for every target). `api`
+    is the native API the files were built with, `MAJOR.MINOR`. `sha256` names
+    at least one target, each with the SHA-256 of its file in 64 lowercase hex
+    digits; a target it leaves out builds from source. `agentica native
+    source NAME`, run in the folder of the package, prints the key, the native
+    API of the running binary and the URL of each target (with `--json` an
+    object with `source`, `api` and `urls`); a module that is not in the
+    manifest or has no `build` is `PKG-NATIVE-MISSING` at `native.NAME`. A bad
+    table is `PKG-MANIFEST-INVALID` at its key. This version checks the table
+    and still builds every module from source.
+- `[native_policy]`, in the root project's manifest only (`PKG-ROOT-ONLY` at
+  `native_policy` in the manifest of a package), says which native modules
+  always build from source and which never build: `build = "all"` or
+  `build = ["NAME", ...]`, and `prebuilt_only` the same. A module in both, or
+  `"all"` in one and anything in the other, is `PKG-MANIFEST-INVALID` at
+  `native_policy.prebuilt_only` (or its item). This version checks the table
+  and does not act on it yet.
 - The stored name of a package file in the `.agcb` file is
   `pkg/<name>@<tag>/path/in/package.agc`, such as `pkg/sqlite@v1.2.0/db.agc`
   (the path is from the package folder, without the `subdir`); for a package
