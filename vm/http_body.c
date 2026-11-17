@@ -123,8 +123,6 @@ agc_http_error agc_http_framing(agc_http_head *head, bool request) {
       chunked = agc_http_named(agc_http_trim(f->value), "chunked");
     }
   }
-  /* RFC 9112 6.1: Transfer-Encoding in an HTTP/1.0 response is faulty framing, whatever else the head says. */
-  if (!request && head->minor == 0 && transfers) return AGC_HTTP_ERR_TRANSFER;
   if (has_length && transfers) return AGC_HTTP_ERR_AMBIGUOUS;
   head->length = 0;
   if (transfers) {

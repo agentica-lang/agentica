@@ -2,9 +2,10 @@
 
 `Zlib` is reserved. `deflate`/`inflate` are the zlib wrapper (RFC 1950),
 `gzip`/`gunzip` are gzip (RFC 1952); the Lazy steps also speak raw DEFLATE
-(RFC 1951) with `raw = true`. Decoders take one stream or member with its
-checksum verified; trailing bytes (a second member included) are an error,
-unlike Python's `gzip.decompress`.
+(RFC 1951) with `raw = true`. `inflate` takes one stream and `gunzip`
+every member of a gzip file (empty ones too), each with its checksum verified;
+a byte after the end that does not start a member (zero padding included) is
+an error.
 
 ```text
 Zlib.deflate(data: Bytes, level: Int = 6, max_bytes: Int = 1048576) -> Result[Bytes]

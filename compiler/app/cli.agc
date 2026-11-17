@@ -56,6 +56,7 @@ import CliCheck from "cli_check"
 import CliDoc from "cli_doc"
 import CliFmt from "cli_fmt"
 import CliLint from "cli_lint"
+import CliNative from "cli_native"
 import Help from "cli_help"
 import HelpStd from "cli_help_std"
 import Install from "cli_install"
@@ -154,6 +155,8 @@ def dispatch(session: Session) -> Int
     return answered(session, Add.add(session.settings, session.options.style, words.drop(1)), "")
   elsif first == "update"
     return answered(session, Add.update(session.settings, session.options.style, words.drop(1)), "")
+  elsif first == "native"
+    return answered(session, CliNative.run(session.settings, session.options.style, words.drop(1)), "")
   elsif first == "outline" or first == "type-at"
     return query(session, first, words.drop(1))
   elsif first == "symbol"

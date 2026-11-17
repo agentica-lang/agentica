@@ -138,6 +138,7 @@ AREAS = {
             "tests/test_spec_package_native_artifact.py", "tests/test_spec_package_subdir.py",
             "tests/test_spec_package_deps.py", "tests/test_spec_package_native.py",
             "tests/test_spec_package_native_build.py", "tests/test_spec_package_native_download.py",
+            "tests/test_spec_package_native_prebuilt.py",
             "tests/test_spec_package_override.py", "tests/test_spec_package_workspace.py", "tests/test_spec_packages.py",
             "tests/test_spec_package_test_group.py",
             "tests/test_spec_parser.py", "tests/test_spec_style.py",

@@ -27,12 +27,13 @@ typedef enum { ZLIB_ENCODER, ZLIB_DECODER } zlib_kind;
    terminal. The codec holds no caller buffer on any return (the adapter
    clears its stream pointers). full is true when the last pass filled its
    output, so more output may wait in the codec with no new input; done once
-   the stream ended (a decoder verified its trailer); idle counts the passes
-   in a row that moved nothing. Only the task that owns the entry touches it. */
+   the stream ended (a decoder verified its trailer); between is a gunzip
+   step that finished a member and waits for the next or for the end of its
+   input; idle counts the passes in a row that moved nothing. Only the task that owns the entry touches it. */
 typedef struct {
   agc_zcodec *codec;
   uint8_t *buf; /* one quantum, the output of every pass */
-  bool encode, full, done;
+  bool encode, full, done, multi, between;
   int idle;
   uint64_t total_out, max_out;
 } zstep;
@@ -52,6 +53,7 @@ static const uint8_t zlib_empty[1] = {0};
 static const int step_bits[] = {15, -15, 31, 15, -15, 31};
 static const char encode_failed[] = "zlib: compression failed";
 static const char bad_data[] = "zlib: invalid compressed data";
+static const char trailing[] = "zlib: trailing bytes after stream end";
 
 static agc_value zlib_error(agc_vm *vm, agc_error_kind kind, const char *message) {
   size_t len = strlen(message);
@@ -89,10 +91,11 @@ static bool accum_push(out_accum *a, const uint8_t *chunk, size_t n, size_t max_
 
 /* One whole input through the codec in bounded quanta: NO_FLUSH while input
    remains, then FINISH drains for an encoder, while a decoder must end
-   exactly where the input ends. The output never grows past max_out, and a
+   exactly where the input ends (a gunzip decoder takes every member of the
+   input, so it ends there too). The output never grows past max_out, and a
    decoder refuses every trailing byte. */
 static agc_value oneshot_run(agc_vm *vm, zlib_kind kind, agc_zcodec *codec, const uint8_t *input, size_t n,
-                             size_t max_out) {
+                             size_t max_out, bool members) {
   uint8_t *chunk = malloc(ZLIB_QUANTUM);
   out_accum out = {malloc(ZLIB_QUANTUM), 0, ZLIB_QUANTUM};
   if (!chunk || !out.data) agc_out_of_memory();
@@ -119,13 +122,21 @@ static agc_value oneshot_run(agc_vm *vm, zlib_kind kind, agc_zcodec *codec, cons
       failed = zlib_error(vm, AGC_KIND_ZLIB_DATA, kind == ZLIB_ENCODER ? encode_failed : bad_data);
       break;
     }
+    if (fed == AGC_ZCODEC_TRAILING) {
+      failed = zlib_error(vm, AGC_KIND_ZLIB_DATA, trailing);
+      break;
+    }
     if (!accum_push(&out, chunk, produced, max_out)) {
       failed = zlib_error(vm, AGC_KIND_ZLIB_TOO_LARGE, "zlib: output exceeds max_bytes");
       break;
     }
-    if (fed == AGC_ZCODEC_DONE) {
+    if (fed == AGC_ZCODEC_DONE && !(members && left != 0)) {
       end = true;
       break;
+    }
+    if (fed == AGC_ZCODEC_DONE) {
+      idle = 0;
+      continue;
     }
     if (kind == ZLIB_DECODER && left == 0) {
       failed = zlib_error(vm, AGC_KIND_ZLIB_DATA, "zlib: truncated stream");
@@ -152,7 +163,7 @@ static agc_value oneshot_run(agc_vm *vm, zlib_kind kind, agc_zcodec *codec, cons
      end stay unconsumed, and are refused here rather than discarded. */
   if (kind == ZLIB_DECODER && left != 0) {
     free(out.data);
-    return zlib_error(vm, AGC_KIND_ZLIB_DATA, "zlib: trailing bytes after stream end");
+    return zlib_error(vm, AGC_KIND_ZLIB_DATA, trailing);
   }
   agc_charge_bytes(vm, n + out.len);
   agc_value result = agc_result_value(true, zlib_value(out.data, out.len));
@@ -164,14 +175,14 @@ static agc_value oneshot_compress(agc_vm *vm, const uint8_t *input, size_t n, in
                                   size_t max_out) {
   agc_zcodec *codec = agc_zcodec_encode_begin(window_bits, (int)level);
   if (!codec) agc_out_of_memory();
-  return oneshot_run(vm, ZLIB_ENCODER, codec, input, n, max_out);
+  return oneshot_run(vm, ZLIB_ENCODER, codec, input, n, max_out, false);
 }
 
 static agc_value oneshot_decode(agc_vm *vm, const uint8_t *input, size_t n, int window_bits, size_t max_out) {
   if (n == 0) return zlib_error(vm, AGC_KIND_ZLIB_DATA, "zlib: invalid compressed data");
   agc_zcodec *codec = agc_zcodec_decode_begin(window_bits);
   if (!codec) agc_out_of_memory();
-  return oneshot_run(vm, ZLIB_DECODER, codec, input, n, max_out);
+  return oneshot_run(vm, ZLIB_DECODER, codec, input, n, max_out, window_bits == 31);
 }
 
 /* One-shot calls are pure functions of their arguments: they hold no shared
@@ -292,6 +303,7 @@ agc_resource *agc_zstep_open(agc_vm *vm, int64_t kind, int64_t level, int64_t ma
   z->codec = codec;
   z->buf = buf;
   z->encode = encode;
+  z->multi = !encode && bits == 31;
   z->max_out = encode ? UINT64_MAX : (uint64_t)max_bytes;
   agc_sync_take(vm);
   agc_resource *r = agc_register(vm, z, release_zstep);
@@ -311,7 +323,9 @@ void agc_zstep_close(agc_vm *vm, agc_resource *r) {
    decoder's output buffer is one byte past what max_out still allows when that is less than a quantum, so a pass
    that fills it proves the overflow without ever keeping a byte past the cap; at an exactly full budget the pass can
    still read the trailer, which produces nothing. The decoder never finishes by itself: the end is its trailer, and
-   any byte after it is refused here (RFC 1950 §2.2, RFC 1952 §2.2: one stream, one member). */
+   any byte after it is refused here (RFC 1950 §2.2: one stream). A gunzip step takes members one after another
+   (RFC 1952 §2.2): after each it waits for the next or for the end of its input, and only bytes that do not start
+   a member are refused. */
 agc_zstep_status agc_zstep_next(agc_vm *vm, agc_resource *r, const uint8_t *in, size_t len, size_t *used, bool finish,
                                 agc_value *out) {
   *used = 0;
@@ -319,7 +333,9 @@ agc_zstep_status agc_zstep_next(agc_vm *vm, agc_resource *r, const uint8_t *in, 
   zstep *z = r->close == close_zstep ? r->native : NULL;
   if (!z) agc_fail(vm, "RUNTIME-INTERNAL", "a Lazy zlib step after its stream was freed", 0);
   if (z->done)
-    return len ? zstep_failed(vm, out, AGC_KIND_ZLIB_DATA, "zlib: trailing bytes after stream end") : AGC_ZSTEP_END;
+    return len ? zstep_failed(vm, out, AGC_KIND_ZLIB_DATA, trailing) : AGC_ZSTEP_END;
+  if (z->between && len == 0) return finish ? AGC_ZSTEP_END : AGC_ZSTEP_INPUT;
+  z->between = false;
   if (len == 0 && !finish && !z->full) return AGC_ZSTEP_INPUT;
   size_t cap = ZLIB_QUANTUM;
   if (z->max_out - z->total_out < (uint64_t)cap) cap = (size_t)(z->max_out - z->total_out) + 1;
@@ -337,12 +353,19 @@ agc_zstep_status agc_zstep_next(agc_vm *vm, agc_resource *r, const uint8_t *in, 
       return zstep_failed(vm, out, AGC_KIND_ZLIB_DATA, z->encode ? encode_failed : bad_data);
     return zstep_failed(vm, out, AGC_KIND_ZLIB_TOO_LARGE, "zlib: output exceeds max_bytes");
   }
+  if (fed == AGC_ZCODEC_TRAILING) return zstep_failed(vm, out, AGC_KIND_ZLIB_DATA, trailing);
   z->total_out += produced;
   agc_charge_bytes(vm, consumed + produced);
   if (produced) *out = zlib_value(buf, produced);
+  if (fed == AGC_ZCODEC_DONE && z->multi) {
+    z->between = left == 0;
+    z->full = false;
+    if (left) return AGC_ZSTEP_AGAIN;
+    return finish ? AGC_ZSTEP_END : AGC_ZSTEP_INPUT;
+  }
   if (fed == AGC_ZCODEC_DONE) {
     z->done = true;
-    return left ? zstep_failed(vm, out, AGC_KIND_ZLIB_DATA, "zlib: trailing bytes after stream end") : AGC_ZSTEP_END;
+    return left ? zstep_failed(vm, out, AGC_KIND_ZLIB_DATA, trailing) : AGC_ZSTEP_END;
   }
   /* Every pass consumes input, produces output, or ends: eight still passes bound a codec that stopped moving. */
   z->idle = consumed == 0 && produced == 0 ? z->idle + 1 : 0;

@@ -255,7 +255,8 @@ static void response_heads(void) {
 }
 
 /* An HTTP/1.0 response is read like an HTTP/1.1 one, with `minor` 0: a Content-Length frames the body and no length
-   runs it to the close, but Transfer-Encoding is faulty framing there (RFC 9112 6.1). The request side stays 1.1. */
+   runs it to the close. The parser lets Transfer-Encoding through: whether it is faulty framing (RFC 9112 6.1) depends
+   on the response having a body, which http_wire_test.c checks. The request side stays 1.1. */
 static void http10_responses(void) {
   assert(response("HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\n") == 200 && head.minor == 1);
   assert(response("HTTP/1.0 200 OK\r\nContent-Length: 3\r\n\r\n") == 200 && head.minor == 0);
@@ -263,9 +264,10 @@ static void http10_responses(void) {
   assert(response("HTTP/1.0 200 OK\r\n\r\n") == 200 && head.minor == 0 && head.frame == AGC_HTTP_FRAME_CLOSE);
   assert(response("HTTP/1.0 404 Not Found\r\nServer: x\r\n\r\n") == 200 && head.status == 404);
   assert(response("HTTP/1.0 100 Continue\r\n\r\n") == 200 && head.status == 100);
-  assert(response("HTTP/1.0 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n") == -AGC_HTTP_ERR_TRANSFER);
+  assert(response("HTTP/1.0 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n") == 200 &&
+         head.frame == AGC_HTTP_FRAME_CHUNKED && head.minor == 0);
   assert(response("HTTP/1.0 200 OK\r\nContent-Length: 2\r\nTransfer-Encoding: chunked\r\n\r\n") ==
-         -AGC_HTTP_ERR_TRANSFER);
+         -AGC_HTTP_ERR_AMBIGUOUS);
   assert(response("HTTP/1.0 200 OK\r\nTransfer-Encoding: identity\r\n\r\n") == -AGC_HTTP_ERR_TRANSFER);
   assert(response("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n") == 200 &&
          head.frame == AGC_HTTP_FRAME_CHUNKED);
