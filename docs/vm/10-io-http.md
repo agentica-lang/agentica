@@ -34,10 +34,10 @@ The rules of this section are fixed by the hostile-case tests (10.7.4).
     100 to 599. An HTTP/1.0 response is framed by `Content-Length` or by the
     close, never chunked: `Transfer-Encoding` there is an error (501) when a
     body follows, and closes the connection when none does (HEAD, 204, 304).
-    Its connection also closes unless it says `Connection: keep-alive`. 101 is rejected. At most 15
-    interim responses are accepted, and the 16th fails. Responses fail as client
-    error `Result`s. A head with status 100 to 199 is returned without framing,
-    and the caller counts the interim responses.
+    Its connection also closes unless it says `Connection: keep-alive`. 101 is
+    rejected. At most 15 interim responses are accepted, and the 16th fails.
+    Responses fail as client error `Result`s. A head with status 100 to 199 is
+    returned without framing, and the caller counts the interim responses.
 - The body decoder (`vm/http_body.c`) is our own incremental state machine, set
   up with the framing and `max_body_bytes`; a `Content-Length` body is reserved
   whole after the limit check. It gives 413 over the limit, 431 for
