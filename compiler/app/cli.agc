@@ -36,6 +36,7 @@ import Format from "../format/format"
 import BytecodeCache from "../io/bytecode_cache"
 import CheckCache from "../io/check_cache"
 import NativeBuild from "../io/native_build"
+import Prebuilt from "../io/native_prebuilt"
 import SaveFile from "../io/save_file"
 import SourceReader from "../io/source_reader"
 import StdinBuffer from "../io/stdin_buffer"
@@ -152,9 +153,10 @@ def dispatch(session: Session) -> Int
   elsif first == "install"
     return install(building(session, "install"), words.drop(1))
   elsif first == "add"
-    return answered(session, Add.add(session.settings, session.options.style, words.drop(1)), "")
+    return answered(session, Add.add(session.settings, session.options.style, fetching(session), words.drop(1)), "")
   elsif first == "update"
-    return answered(session, Add.update(session.settings, session.options.style, words.drop(1)), "")
+    answer = Add.update(session.settings, session.options.style, fetching(session), words.drop(1))
+    return answered(session, answer, "")
   elsif first == "native"
     return answered(session, CliNative.run(session.settings, session.options.style, words.drop(1)), "")
   elsif first == "outline" or first == "type-at"
@@ -209,14 +211,7 @@ end
 # each.
 def builder_settings(settings: Env.Settings, deny: List[String], style: String, verb: String) -> Env.Settings
   if deny.size == 0
-    warned: Fn[String, Void] = &warn_plain
-    if style == "json"
-      warned = &warn_json
-    elsif style == "ai"
-      warned = &warn_ai
-    end
-
-    builder: Fn[Workspace.BuildRequest, Workspace.Built] = NativeBuild.builder(style == "plain", warned)
+    builder: Fn[Workspace.BuildRequest, Workspace.Built] = NativeBuild.builder(style == "plain", warner(style))
     return settings.with(workspace: settings.workspace.with(native_build: builder))
   end
 
@@ -227,6 +222,23 @@ def builder_settings(settings: Env.Settings, deny: List[String], style: String, 
   end
 
   denied
+end
+
+# How `install`, `add` and `update` download prebuilt native modules: none under --deny-net or --sandbox, and the
+# warnings in the form of the options.
+def fetching(session: Session) -> Prebuilt.Fetching
+  deny = session.options.deny
+  denied = deny.include?("--deny-net") or deny.include?("--sandbox")
+  Prebuilt.Fetching(net_denied: denied, warned: warner(session.options.style))
+end
+
+# What prints a packed warning in the output style.
+def warner(style: String) -> Fn[String, Void]
+  return &warn_json if style == "json"
+
+  return &warn_ai if style == "ai"
+
+  &warn_plain
 end
 
 # The warning that a packed failure holds, on stderr: `warning: MESSAGE` in plain text, the JSON object of the problem
@@ -259,7 +271,7 @@ end
 def install(session: Session, words: List[String]) -> Int
   return emit(Reply.failed(2, Texts.usage_text())) if words.size != 0
 
-  answered(session, Install.run(session.settings, session.options.style), "")
+  answered(session, Install.run(session.settings, session.options.style, fetching(session)), "")
 end
 
 # What a command gave: print the answer, or reject the first problem of the program. A QUERY- problem is a mistake in
