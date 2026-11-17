@@ -70,7 +70,12 @@ libuv sockets (`vm/tcp.c`, `vm/net.h`) and has no platform code of its own.
   joined once, on both sides.
 - **Timeouts.** `get`, `post` and `request` block only the calling task. One
   `timeout_ms` covers the whole call: the wait for a pooled connection, DNS,
-  connect, the TLS handshake, the request and the response. 4xx and 5xx are
+  connect, the TLS handshake, the request and the response. Inside it,
+  `connect_timeout_ms` bounds the connect (DNS, TCP, TLS, a proxy `CONNECT`)
+  and `read_timeout_ms` each wait for body bytes (0: only the whole-call
+  deadline). For `open`, `start` and `upload` `timeout_ms` is the time to the
+  head, and `read_timeout_ms` the time of each later wait; with 0 a stream has
+  no limit but `Task.cancel`. 4xx and 5xx are
   normal responses. The server has two deadlines per request, each
   `request_timeout_ms`: reading one whole request from its first byte, and
   writing the response from the handler's return. The handler's own run is not
@@ -231,7 +236,8 @@ libuv sockets (`vm/tcp.c`, `vm/net.h`) and has no platform code of its own.
   OpenSSL cannot tell the two apart here, since `SSL_OP_IGNORE_UNEXPECTED_EOF`
   makes a bare FIN look like `close_notify`.
 - One deadline covers the call, from the wait for a connection to the last body
-  byte. On timeout the connection is closed and the call returns
+  byte, and `read_timeout_ms` caps each wait for body bytes inside it. On
+  timeout the connection is closed and the call returns
   `network: operation timed out`.
 
 Properties of the client that no test checks:

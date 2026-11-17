@@ -8,6 +8,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `HTTP.ClientOptions` has `connect_timeout_ms` (10 s: DNS, TCP, the TLS handshake and a proxy `CONNECT`) and `read_timeout_ms` (30 s: each wait for body bytes, and each piece of an `upload`; 0 is no limit). `timeout_ms` still covers the whole call of `get`, `post`, `request` and `download`, the head included, and is now the time to the head for `open`, `start` and `upload`, so a stream can have a short connect and head and a long or no read timeout (#1710). **Behavior change:** `open` and `start` no longer give the connect, the head and each body read a full `timeout_ms` each, a connect ends after 10 s, and a body of `get` or `download` silent for 30 s ends then even when `timeout_ms` is longer.
+
 ### Changed
 
 - The documentation moved to https://www.agentica-lang.com/agentica/; the old agentica-lang.github.io links redirect there.
