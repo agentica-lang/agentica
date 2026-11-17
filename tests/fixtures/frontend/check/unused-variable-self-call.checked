@@ -1,0 +1,1 @@
+ERROR CHECK-UNUSED-VARIABLE 119:7:3-129:8:1 "the variable \"total\" is never read" "it is only updated, never read; remove it, or name it _total if it is unused on purpose" signature="run() -> Result[Void]" file="unused-variable-self-call.agc"

@@ -28,6 +28,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - The documentation has breadcrumbs, and search engines index only the latest release: the pages of older versions and of dev point to it.
 - Every version of the documentation has the current look and icon: the releases are built with the current docs theme.
 
+### Fixed
+
+- `CHECK-UNUSED-VARIABLE` no longer fires on `count = try step(count)` or `count = step(count).unwrap!` in a loop: a name read inside a `try`, before `.unwrap!`, or in the arguments of a call of your own function or of an invoke is read; `total += price(v)` is still unused (#1793).
+
 ## [0.33.2] - 2026-11-17
 
 ### Fixed

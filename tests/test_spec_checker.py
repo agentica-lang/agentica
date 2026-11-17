@@ -6,7 +6,7 @@ limit. The other cases are in tests/test_spec_checker_rest.py.
 Each program is written to a file and checked with `--json check FILE`. A test asserts the diagnostic code and its
 range (the 1-based line and column of the start and of the end, which is exclusive). Message and help texts are not
 asserted (AGENTS.md). The programs are also in the frozen corpus (tests/fixtures/frontend/frozen/corpus/), which the
-Agentica checker is compared with, except the `_` discard programs at the end.
+Agentica checker is compared with, except the `_` discard programs and the CHECK-UNUSED-VARIABLE ones at the end.
 """
 from tests.agentica_test import cli, run
 from tests.spec_support import check_diagnostic as problem, covered
@@ -259,3 +259,57 @@ def test_type_members_of_a_struct_past_the_chunk_size_keeps_every_field_in_order
     path.write_text(text, encoding="utf-8")
     result = run(cli() + [str(path)])
     assert (result.code, result.stdout.splitlines()) == (0, ["256", "f0", "f255", "256"]), result.stderr
+
+
+UPDATE_HELPERS = ("def step(n: Int) -> Result[Int] = ok(n + 1)\n\n"
+                  "def double(n: Int) -> Int = n * 2\n\n"
+                  "def price(n: Int) -> Int = n * 2\n\n"
+                  "def wrap(n: Int) -> Int = n\n\n")
+
+
+def update_program(head, body, imports=""):
+    """`run` sets up a name with `head` and updates it in a loop with `body`; `main` calls it."""
+    each = "v" if "(v)" in body else "_"
+    return (imports + UPDATE_HELPERS + "def run() -> Result[Void]\n%s  for %s in [1, 2, 3]\n%s  end\n  ok()\nend\n\n"
+            % (head, each, body) + "def main() -> Void\n  puts(run().ok?)\nend\n\n")
+
+
+COUNT = "  count = 0\n"
+TOTAL = "  total = 0\n"
+PATH = '  path = "/etc/hostname"\n'
+LIST = "  xs: List[Int] = []\n"
+
+
+def test_a_name_that_flows_into_a_call_for_its_new_value_is_read(tmp_path):
+    # The value of the name goes into a call that can fail or has effects, so the call needs it (#1793): the operand
+    # of a try, the receiver of unwrap!, the arguments of a call of the program or of an invoke.
+    for head, body in [
+        (COUNT, "    count = try step(count)\n"),
+        (COUNT, "    count = step(count).unwrap!\n"),
+        (COUNT, "    count = double(count)\n"),
+        (COUNT, "    count = count |> try step()\n"),
+        (TOTAL, "    total = total + double(total)\n"),
+        (PATH, "    path = try File.read_text(path, 1000)\n"),
+        (PATH, "    path = File.read_text(path, 1000).unwrap!\n"),
+        (COUNT + "  f = &double\n", "    count = f.call(count)\n"),
+    ]:
+        assert_clean(update_program(head, body), tmp_path)
+
+
+def test_a_name_that_only_feeds_a_new_value_is_still_unused(tmp_path):
+    # A call beside the read of the name, a builtin by name, or a call of the standard library does not need it.
+    queue = 'import Queue from "std/queue"\n\n'
+    for head, body, imports in [
+        (TOTAL, "    total += price(v)\n", ""),
+        (TOTAL, "    total = total + price(v)\n", ""),
+        (LIST, "    xs = xs.push(wrap(v))\n", ""),
+        (TOTAL, "    total = total + try step(v)\n", ""),
+        (TOTAL, "    total = total + 1 + try step(2)\n", ""),
+        (TOTAL, "    total = total + 1\n", ""),
+        (PATH, '    path = String.replace(path, "a", "b")\n', ""),
+        ("  q = Queue.new()\n", '    q = Queue.push(q, "a")\n', queue),
+    ]:
+        text = update_program(head, body, imports)
+        found = assert_code(text, "CHECK-UNUSED-VARIABLE", tmp_path)
+        first = text.splitlines().index(head.splitlines()[-1]) + 1
+        assert position(found["range"]["start"]) == (first, 3), body
