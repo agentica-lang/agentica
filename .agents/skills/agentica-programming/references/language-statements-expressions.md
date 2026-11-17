@@ -16,7 +16,9 @@ Builtin methods and `to_s`: `builtins.md`.
   the name with `_` (`_count`) to keep it, or write `_` for a `for` variable
   (`for _ in 0...n`), a block parameter (`|_, i|`) or a pattern slot
   (`error(_)`). Updating is no read: `count += 1`, `x = x + 1` and
-  `xs = xs.push(v)` leave the name unused unless something else reads it.
+  `xs = xs.push(v)` leave the name unused unless something else reads it;
+  a value with a `try` or a call of your own function (`n = try step(n)`) reads
+  it.
 - `x += e` (also `-=`, `*=`, `/=`, `%=`) is `x = x op e`; `x` must exist.
 - A name created in a block is not visible after its `end`. A new variable
   cannot reuse a visible name (no shadowing: `CHECK-SHADOWED-NAME`).

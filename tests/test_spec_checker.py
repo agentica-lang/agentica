@@ -259,3 +259,28 @@ def test_type_members_of_a_struct_past_the_chunk_size_keeps_every_field_in_order
     path.write_text(text, encoding="utf-8")
     result = run(cli() + [str(path)])
     assert (result.code, result.stdout.splitlines()) == (0, ["256", "f0", "f255", "256"]), result.stderr
+
+
+UPDATE_HELPERS = ("def step(n: Int) -> Result[Int] = ok(n + 1)\n\n"
+                  "def double(n: Int) -> Int = n * 2\n\n")
+
+
+def test_a_name_fed_to_a_call_of_the_program_for_its_new_value_is_read(tmp_path):
+    # `x = try f(x)` needs the old x: the call can fail, so the name cannot be dropped (#1793).
+    loop = ("def run() -> Result[Void]\n  count = 0\n  i = 0\n  while i < 3\n    count = try step(count)\n"
+            "    i = i + 1\n  end\n\n  ok()\nend\n\n")
+    assert_clean(UPDATE_HELPERS + loop + "def main() -> Void\n  puts(run().ok?)\nend\n\n", tmp_path)
+    for body in ("  count = 1\n  count = step(count).unwrap!", "  count = 1\n  count = double(count)",
+                 "  count = 1\n  count = double(count) + 1"):
+        assert_clean(UPDATE_HELPERS + main_with(body), tmp_path)
+
+
+def test_a_name_that_only_feeds_a_builtin_or_nothing_for_its_new_value_is_still_unused(tmp_path):
+    for body, head in (("  x = 1\n  x = x + 1\n", "def run() -> Void"),
+                       ("  xs: List[Int] = []\n  xs = xs.push(1)\n", "def run() -> Void"),
+                       ("  x = 1\n  x += 2\n", "def run() -> Void"),
+                       ("  x = 1\n  x = try step(2)\n  ok()\n", "def run() -> Result[Void]")):
+        text = "%s%s\n%send\n\ndef main() -> Void\n  puts(1)\nend\n\n" % (UPDATE_HELPERS, head, body)
+        found = assert_code(text, "CHECK-UNUSED-VARIABLE", tmp_path)
+        first = text.splitlines().index(body.splitlines()[0]) + 1
+        assert position(found["range"]["start"]) == (first, 3), body

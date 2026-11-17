@@ -122,7 +122,10 @@ adapters depend on. A name is read when it is evaluated as an expression
 anywhere in its scope, in a nested block too. An assignment to the name itself
 is not a read of it: in `x += 1`, `x = x + 1` and `xs = xs.push(v)` the `x` on
 the right does not count, so a counter that is only incremented, or a list that
-is only appended to, is unused. The rule is per variable, not per assignment:
+is only appended to, is unused. The exception is a value that holds a `try` or
+calls a function of the program, as in `count = try step(count)`: the call needs
+the old value and can fail, so that `count` is a read. The rule is per variable,
+not per assignment:
 `x = 1`, `x = 2`, `puts(x)` is valid. The error is at the place where the name
 is introduced (the assignment statement, the `for` variable, the block
 parameter or the pattern name), the first in the source when several are unused,

@@ -396,7 +396,12 @@ def check_assignment(cx: State.Cx, st: State.St, node: Ast.Binding, existing: St
     )
   end
 
-  out = try State.expr(cx, State.assigning(st, existing), node.value, existing.type)
+  writing = State.assigning(st, existing)
+  if Variables.feeds_a_call?(cx, node.value)
+    writing = writing.with(assigning: st.assigning)
+  end
+
+  out = try State.expr(cx, writing, node.value, existing.type)
   ok(State.assigned(out.st, existing))
 end
 

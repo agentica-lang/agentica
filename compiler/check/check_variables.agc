@@ -35,6 +35,27 @@ def check(cx: State.Cx, st: State.St) -> Result[Bool]
   )
 end
 
+## True when a read of the name in the value assigned to it is a use of it: the value holds a `try` or calls a function
+## of the program (the call can fail or have effects, so it needs the old value, as in `count = try step(count)`). A
+## name that only feeds a pure builtin, as in `x = x + 1` or `xs = xs.push(v)`, is still never read. A block is not
+## entered, as in has_try?.
+def feeds_a_call?(cx: State.Cx, value: Ast.Expr) -> Bool
+  work: List[Walk.Node] = [Walk.Node.Expr(value)]
+  at = 0
+  while at < work.size
+    node = work[at]
+    at += 1
+    case node
+      Walk.Node.Expr(Ast.Expr.Try(_)) -> return true
+      Walk.Node.Expr(Ast.Expr.Call(call)) -> return true if cx.functions.key?(call.name)
+      Walk.Node.Expr(Ast.Expr.BlockLit(_)) -> work = work
+      _ -> work = work.concat(Walk.children(node))
+    end
+  end
+
+  false
+end
+
 private
 
 def label(origin: State.Origin) -> String
