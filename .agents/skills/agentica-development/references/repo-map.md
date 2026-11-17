@@ -30,6 +30,7 @@ compiler/         # the front end: one folder per context (placement and imports
   format/         # `agentica fmt`; refreeze stages `format` (attach.agc) and `fmt` (fmt.agc); goldens in tests/fixtures/frontend/format/
   lint/           # `agentica lint`: rules.agc (the LINT- codes), rule_*.agc (one per kind of node); pure, parse only (reads the builtin catalog as data)
   bdd/            # the `agentica test` driver (references/bdd.md)
+  repl/           # `agentica repl`: the session and the image of the child it loads each entry into (vm/session.c)
   embedded/       # runner.agc and steps.agc: not stage inputs; compiled with stage2 and embedded in the binary
 vm/               # the C11 VM; layers and the "Read next" table in references/vm.md
   value.c         # values and memory; the only file that includes gc.h or calls GC_*
