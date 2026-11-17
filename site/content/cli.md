@@ -34,12 +34,13 @@ agc> total(xs) * 10
 => 60 : Int
 ```
 
-- An entry is one line, or more while the lines so far leave it open (`def` without its `end`, an open bracket); an empty line drops a half entry. Lines count over the session, so a message says `(repl):12:5`.
-- A declaration made again replaces the old one: a function that called the old `f` calls the new one. A struct or enum declared again drops the names whose values have its old shape, and the answer lists them.
+- An entry is one line, or more while the lines so far leave it open (`def` without its `end`, an open bracket, a `##` doc comment); an empty line drops a half entry. Every line counts, commands too, so a message says `(repl):12:5`.
+- A declaration made again replaces the old one: a function that called the old `f` calls the new one. A struct or enum declared with another shape drops the names whose values have its old shape, or hold such a type (a struct with a field of it), and the answer lists them. An enum cannot take the name of a struct of the session (`REPL-KIND-CHANGE`; `:reset` first).
+- Names that start like the code the session writes around an entry (`repl_entry_`, `ReplEntry`, `repl_shown_`) are `REPL-RESERVED-NAME`. A name whose type is private to an imported file is not kept.
 - A name keeps its type: `x = "s"` after `x = 1` is `CHECK-TYPE-MISMATCH`. `x: String = "s"` gives it a new type.
 - A problem leaves the session as it was. A crash shows its diagnostic, and the tasks the entry started before it keep running. `System.exit(n)` ends the session with status `n`.
-- Commands, at the start of an entry: `:type EXPR` prints the type and runs nothing, `:load FILE` enters the text of a file, `:reset` starts a new session, `:quit` ends it (as the end of the input does), `:help` lists them. A bad one is `REPL-UNKNOWN-COMMAND` or `REPL-USAGE`.
-- `--json` prints one object per entry on stdout: `entry`, `line`, `ok`, `value` and `type` when it shows one, `bound` (the names it bound, with their types), `declared`, `dropped`, and `diagnostic` when it failed. What the entries print goes to stderr. `:type` answers `{"ok":true,"type":"..."}`.
+- Commands, at the start of an entry: `:type EXPR` prints the type and runs nothing, `:load FILE` enters the declarations of a file as one entry, `:reset` starts a new session, `:quit` ends it (as the end of the input does), `:help` lists them. A bad one is `REPL-UNKNOWN-COMMAND` or `REPL-USAGE`. A file that `:load` enters keeps its `private` part, its imports start from its folder, and a message points at its lines; one that cannot be read is `QUERY-USAGE`, as for `check`.
+- `--json` prints one object per entry and command on stdout, each with `entry` (its number in the session), `line` (its first line) and `ok`. An entry that ran adds `value` and `type` when it shows one, `bound` (the names it bound, with their types), `declared` and `dropped`, all empty when it failed; a problem adds `diagnostic`. `:type` adds `type`, `:help` `commands`, `:reset` `"reset":true`, and a half entry that an empty line drops `"discarded":true`. What the entries print goes to stderr.
 - The entries run in a child process, `agentica run --session -`, always on one scheduler and without the JIT, the profile or coverage; the run options (`--max-steps`, `--seed`, `--deny-*`) reach it. Exit status: 0 at the end of the input or after `:quit`, 1 when the input ends inside an entry (`REPL-INCOMPLETE`).
 
 ## Check and errors

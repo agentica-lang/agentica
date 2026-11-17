@@ -11,12 +11,13 @@ import Pool from "bytecode_pool"
 import Spans from "bytecode_spans"
 import {MAX_U16, NEEDS, OPCODES, PAIR_OPS, SINGLE_OPS, STEP_PASSES, WIDE_OPS} from "bytecode_tables"
 
-## What the writer has interned so far: the entries of the constant, struct update, builtin and span sections.
+## What the writer has interned so far: the entries of the constant, struct update, builtin, span and type sections.
 struct Tables
   constants: Pool.Pool
   updates: Pool.Pool
   builtins: Pool.Pool
   spans: Pool.Pool
+  types: Pool.Pool
 end
 
 ## The bytes of a function in the file (its header, its code and the span of each instruction, as three chunks) and

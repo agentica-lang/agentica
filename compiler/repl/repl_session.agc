@@ -14,7 +14,9 @@ import Diag from "../diagnostics/diagnostic"
 import Problems from "../diagnostics/problem"
 import Lowering from "../lower/lowering"
 import Declarations from "../modules/declarations"
+import Paths from "../modules/import_path"
 import Env from "../modules/link_env"
+import Linker from "../modules/linker"
 import Overlay from "../modules/overlay"
 import TypeAt from "../query/type_at"
 import Ast from "../syntax/ast"
@@ -22,14 +24,18 @@ import Lexer from "../syntax/lexer"
 import Parser from "../syntax/parser"
 import Source from "../syntax/source"
 import SourceFile from "../syntax/source_file"
+import Tokens from "../syntax/token"
 import T from "../syntax/types"
 import Image from "repl_image"
 
-## A name of the session: its type as the session's file writes it and the slot of the child that holds its value.
+## A name of the session: its type as the session's file writes it, the slot of the child that holds its value, the
+## structs and enums its type names, and their entries in the image when it was bound (Image.entries).
 struct Binding
   name: String
   type: String
   slot: Int
+  types: List[String] = []
+  entries: Map[String, Int] = {}
 end
 
 ## A declaration of the session: the name it declares ("" for an import), its text, its first line and its rank in a
@@ -41,8 +47,16 @@ struct Piece
   rank: Int = 3
 end
 
+## The lines of the session that `:load` entered from the file `file` (as typed), from line `first` on.
+struct Load
+  file: String
+  first: Int
+  count: Int
+end
+
 ## The session. `file` is the path of its virtual file, `text` every line typed so far, `lines` their number, `slots`
-## the number of slots of the child in use, and `image` what the child holds.
+## the number of slots of the child in use, `image` what the child holds, `loads` the lines that files entered, and
+## `folder` the folder that the relative imports of the entry being compiled resolve from ("" for the session's).
 struct Session
   file: String
   pieces: List[Piece]
@@ -52,6 +66,8 @@ struct Session
   entries: Int
   slots: Int
   image: Image.Image
+  loads: List[Load] = []
+  folder: String = ""
 end
 
 ## The first program of a session, which serves the entries, and the session that has only it.
@@ -122,7 +138,15 @@ end
 
 ## The session with the lines of an entry that did not run, so the lines of the next one count after them.
 def typed(session: Session, text: String) -> Session
-  session.with(text: session.text + text + "\n", lines: session.lines + text.split("\n").size)
+  session.with(text: session.text + text + "\n", lines: session.lines + text.split("\n").size, folder: "")
+end
+
+## Compiles the text of the file `file` as one entry: its `private` line is left out, its relative imports resolve
+## from `folder` (the file's folder, from the working folder), and a problem in its lines names the file.
+def load(session: Session, file: String, folder: String, text: String, settings: Env.Settings) -> Compiled
+  lines = text.split("\n").map { |line: String| public_line(line) }
+  load = Load(file: file, first: session.lines + 1, count: lines.size)
+  compile(session.with(loads: session.loads.push(load), folder: folder), lines.join("\n"), settings)
 end
 
 ## Compiles an entry, whose first line is the one after the session's.
@@ -151,27 +175,18 @@ def type_of(session: Session, text: String, settings: Env.Settings) -> Typed
   end
 end
 
-## The names of the session that a struct, an enum or a type alias of `names` appears in the type of.
-def mentioning(bindings: List[Binding], names: List[String]) -> List[String]
-  found: List[String] = []
-  for binding in bindings
-    words = Set.new(binding.type.replace("[", " ").replace("]", " ").replace(",", " ").replace(".", " ").split(" "))
-    if (names.any? { |name: String| words.include?(name) })
-      found = found.push(binding.name)
-    end
-  end
-
-  found
-end
-
 private
 
 # The base of every session: main serves the entries.
 SERVE = "def main() -> Void\n  FrontEnd.serve_session()\nend\n"
 # The problems of the lexer that the next lines may close: a delimiter or a heredoc still open at the end.
 OPEN_CODES = ["LEX-UNCLOSED-DELIMITER", "LEX-UNTERMINATED-HEREDOC"]
-# The field of the value the entry shows.
+# The field of the value the entry shows, and the start of the names of the function and the struct of an entry.
 SHOWN = "repl_shown_"
+ENTRY = "repl_entry_"
+RECORD = "ReplEntry"
+RESERVED = [SHOWN, ENTRY, RECORD]
+BLANKS = Set.new([" ", "\t", "\n", "\r"])
 
 # The items of an entry, or an entry that needs more lines.
 enum Items
@@ -203,6 +218,14 @@ enum Checks
   Failed(Problems.Problem)
 end
 
+# One compile of an entry: what it gives, the names of the session that hold values of a type declared again, or the
+# first problem.
+enum Attempt
+  Done(Compiled)
+  Stale(List[String])
+  Refused(Problems.Problem)
+end
+
 # The text of a file and the line of the session that each of its lines comes from.
 struct Gen
   lines: List[String]
@@ -214,49 +237,121 @@ def over(settings: Env.Settings, file: String, text: String) -> Env.Settings
   settings.with(workspace: Overlay.over(settings.workspace, [buffer]), unused: false)
 end
 
+# The items of an entry, or an entry that needs more lines: a problem past its last character that is not blank, a
+# delimiter or heredoc still open, or a doc comment with nothing after it.
 def items_of(session: Session, text: String) -> Items
-  first = session.lines
-  end_at = text.strip.length
+  end_at = content_end(text)
   case Lexer.lex(text)
     Diag.Outcome.Failed(found) ->
       return Items.Incomplete if found.span.start.offset >= end_at or OPEN_CODES.include?(found.code)
 
-      Items.Failed(
-        moved_problem(Problems.problem(session.file, "", found.code, found.message, found.span, found.help), first),
-      )
+      Items.Failed(entry_problem(session, found.code, found.message, found.span, found.help))
     Diag.Outcome.Done(tokens) ->
+      kinds = tokens.map { |token: Tokens.Token| token.kind }.filter { |kind: String| kind != "NL" and kind != "EOF" }
+      return Items.Incomplete if kinds.size > 0 and kinds[kinds.size - 1] == "DOC"
+
+      reserved = tokens.filter { |token: Tokens.Token| reserved?(token) }
+      if reserved.size > 0
+        message = "#{reserved[0].lexeme} is a name that the session keeps for itself"
+        return Items.Failed(entry_problem(session, "REPL-RESERVED-NAME", message, reserved[0].span, Diag.Help.NoHelp))
+      end
+
       case Parser.parse_entry(tokens, 0)
         Diag.Outcome.Failed(found) ->
           return Items.Incomplete if found.span.start.offset >= end_at
 
-          Items.Failed(
-            moved_problem(
-              Problems.problem(session.file, "", found.code, found.message, found.span, found.help),
-              first,
-            ),
-          )
+          Items.Failed(entry_problem(session, found.code, found.message, found.span, found.help))
         Diag.Outcome.Done(items) -> Items.Found(items)
       end
   end
 end
 
+# The offset after the last character of `text` that is not blank.
+def content_end(text: String) -> Int
+  at = text.length
+  while at > 0 and BLANKS.include?(text.slice(at - 1, 1))
+    at -= 1
+  end
+
+  at
+end
+
+# The names of the code that the session writes around an entry, which an entry cannot use.
+def reserved?(token: Tokens.Token) -> Bool
+  return false if token.kind != "name" and token.kind != "type-name"
+
+  RESERVED.any? { |prefix: String| token.lexeme.start_with?(prefix) }
+end
+
+def public_line(line: String) -> String
+  return "" if line.strip == "private"
+
+  line
+end
+
+# A problem of the entry's own text, whose lines start after the session's.
+def entry_problem(
+  session: Session,
+  code: String,
+  message: String,
+  span: Source.Span,
+  help: Diag.Help,
+) -> Problems.Problem
+  moved_problem(session, Problems.problem(session.file, "", code, message, span, help))
+end
+
+# An entry is compiled with every name of the session first. A name whose type was declared again holds values of the
+# old type: the image tells which (`Attempt.Stale`), and the entry is compiled again without them, as it is when it
+# does not check while a name's type is one the entry declares.
 def compile_items(session: Session, text: String, items: List[Parser.EntryItem], settings: Env.Settings) -> Compiled
-  number = session.entries + 1
-  lines = text.split("\n")
-  retyped: List[String] = []
-  for item in items
-    piece = piece_of(item, lines, session.lines)
-    changed = session.pieces.any? { |old: Piece| old.rank == 2 and old.name == piece.name and old.text != piece.text }
-    if item.declaration.some? and changed
-      retyped = retyped.push(piece.name)
+  dropped: List[String] = []
+  tries = 0
+  # Each try drops at least one more name.
+  while tries <= session.bindings.size
+    tries += 1
+    case attempt(session, text, items, dropped, settings)
+      Attempt.Done(compiled) -> return compiled
+      Attempt.Stale(names) -> dropped = dropped.concat(names)
+      Attempt.Refused(problem) ->
+        declared = items.flat_map(&type_declared)
+        risky = session.bindings.filter do |binding: Binding|
+          !dropped.include?(binding.name) and binding.types.any? { |name: String| declared.include?(name) }
+        end
+
+        return Compiled.Failed(problem) if risky.size == 0
+
+        dropped = dropped.concat(risky.map { |binding: Binding| binding.name })
     end
   end
 
-  dropped = mentioning(session.bindings, retyped)
-  plan = planned(session, text, items, dropped, number)
+  Compiled.Failed(session_problem(session, "REPL-INTERNAL", "an entry did not settle its names"))
+end
+
+def attempt(
+  session: Session,
+  text: String,
+  items: List[Parser.EntryItem],
+  dropped: List[String],
+  settings: Env.Settings,
+) -> Attempt
+  plan = planned(session, text, items, dropped, session.entries + 1)
   case first_check(session, plan, settings)
-    Checks.Failed(problem) -> Compiled.Failed(problem)
+    Checks.Failed(problem) -> Attempt.Refused(problem)
     Checks.Done(found) -> second(session, text, plan, found, settings)
+  end
+end
+
+# The struct or enum that an item declares, by the name it has in the session's file.
+def type_declared(item: Parser.EntryItem) -> List[String]
+  case item.declaration
+    some(decl) ->
+      case Declarations.unwrap(decl)
+        Ast.Decl.Struct(node) -> [node.name]
+        Ast.Decl.Enum(node) -> [node.name]
+        _ -> []
+      end
+
+    none -> []
   end
 end
 
@@ -269,7 +364,7 @@ def planned(session: Session, text: String, items: List[Parser.EntryItem], dropp
   statements: List[Piece] = []
   annotated: Set[String] = Set.new([])
   for item in items
-    piece = piece_of(item, lines, first)
+    piece = piece_of(item, lines, first, session.folder)
     case item.declaration
       some(_) -> added = added.push(piece)
       none ->
@@ -319,20 +414,34 @@ def planned(session: Session, text: String, items: List[Parser.EntryItem], dropp
   )
 end
 
-# The lines of an item, which starts on line `span.start.line` of the entry, after `before` lines of the session.
-def piece_of(item: Parser.EntryItem, lines: List[String], before: Int) -> Piece
+# The lines of an item, which starts on line `span.start.line` of the entry, after `before` lines of the session. An
+# import of a file from `folder` names it from the session's folder.
+def piece_of(item: Parser.EntryItem, lines: List[String], before: Int, folder: String) -> Piece
   span = item.span
   text = lines.drop(span.start.line - 1).take(span.stop.line - span.start.line + 1).join("\n")
   line = before + span.start.line
   case item.declaration
-    some(decl) -> Piece(name: Declarations.name_of(decl), text: text, line: line, rank: rank_of(decl))
+    some(decl) ->
+      Piece(name: Declarations.name_of(decl), text: imported_from(text, decl, folder), line: line, rank: rank_of(decl))
     none -> Piece(name: "", text: text, line: line)
   end
 end
 
-def entry_name(plan: Plan) -> String = "repl_entry_#{plan.number}"
+def imported_from(text: String, decl: Ast.Decl, folder: String) -> String
+  return text if folder == ""
 
-def record_name(plan: Plan) -> String = "ReplEntry#{plan.number}"
+  case Declarations.unwrap(decl)
+    Ast.Decl.Import(node) ->
+      return text if node.path.start_with?("std/") or node.path.start_with?("pkg/")
+
+      text.replace("\"#{node.path}\"", "\"#{Paths.join(folder, node.path)}\"")
+    _ -> text
+  end
+end
+
+def entry_name(plan: Plan) -> String = "#{ENTRY}#{plan.number}"
+
+def record_name(plan: Plan) -> String = "#{RECORD}#{plan.number}"
 
 def param_text(plan: Plan) -> String
   plan.params.map { |binding: Binding| "#{binding.name}: #{binding.type}" }.join(", ")
@@ -355,7 +464,7 @@ def declarations(gen: Gen, plan: Plan, ranks: List[Int]) -> Gen
     for piece in plan.pieces
       if piece.rank == rank
         out = add_text(out, piece.text, piece.line)
-        out = add_line(out, "", piece.line)
+        out = add_line(out, "", piece.line + piece.text.split("\n").size - 1)
       end
     end
   end
@@ -465,13 +574,19 @@ def found_in(session: Session, plan: Plan, front: Front.Checked, text: String) -
       Ast.Stmt.Binding(node) ->
         known = node.name == "_" or bindings.any? { |binding: Binding| binding.name == node.name }
         if !known
-          type = T.to_text_as(types[Ast.expr_id(node.value)], written)
+          value_type = types[Ast.expr_id(node.value)]
+          bound = front.checked.bound.get(node.id, [])
+          if bound.size > 0
+            value_type = bound[0]
+          end
+
+          type = T.to_text_as(value_type, written)
           if node.type.some?
             span = node.type.unwrap!.span
             type = text.slice(span.start.offset, span.stop.offset - span.start.offset)
           end
 
-          if !type.include?("Unknown")
+          if !type.include?("Unknown") and !T.debug_text(value_type).include?("Unknown")
             old = session.bindings.filter { |binding: Binding| binding.name == node.name }
             number = slot
             if old.size > 0
@@ -480,7 +595,7 @@ def found_in(session: Session, plan: Plan, front: Front.Checked, text: String) -
               slot += 1
             end
 
-            bindings = bindings.push(Binding(name: node.name, type: type, slot: number))
+            bindings = bindings.push(Binding(name: node.name, type: type, slot: number, types: names_in(value_type)))
           end
         end
 
@@ -516,20 +631,40 @@ def last_value(statement: Ast.Stmt) -> Optional[Ast.Expr]
 end
 
 # The second check, which builds what the child runs: the entry's function returns a struct of the value to show and
-# of every name.
-def second(session: Session, text: String, plan: Plan, found: Found, settings: Env.Settings) -> Compiled
+# of every name. A new name whose type the session's file cannot write (a type private to an imported file) is not
+# kept, and a value to show of such a type is shown by its text.
+def second(session: Session, text: String, plan: Plan, found: Found, settings: Env.Settings) -> Attempt
+  second_with(session, text, plan, found, settings, false)
+end
+
+def second_with(
+  session: Session,
+  text: String,
+  plan: Plan,
+  found: Found,
+  settings: Env.Settings,
+  inspected: Bool,
+) -> Attempt
   line = session.lines + 1
   record = record_name(plan)
   gen = declarations(empty_gen(), plan, [0, 1, 2])
   shown_type = found.shown
-  if shown_type == "" or shown_type == "String"
+  if shown_type == "" or shown_type == "String" or inspected
     shown_type = "String"
   end
 
   gen = add_line(gen, "struct #{record}", line)
   gen = add_line(gen, "  #{SHOWN}: #{shown_type}", line)
+  shown_line = gen.lines.size
+  fields: Map[Int, String] = {}
+  at = 0
   for binding in found.bindings
     gen = add_line(gen, "  #{binding.name}: #{binding.type}", line)
+    if at >= plan.params.size
+      fields = fields.put(gen.lines.size, binding.name)
+    end
+
+    at += 1
   end
 
   gen = add_line(gen, "end", line)
@@ -542,7 +677,7 @@ def second(session: Session, text: String, plan: Plan, found: Found, settings: E
     last = at == plan.statements.size - 1
     if last and found.shown != ""
       closing = ")"
-      if found.shown == "String"
+      if found.shown == "String" or inspected
         closing = ").inspect"
       end
 
@@ -555,11 +690,24 @@ def second(session: Session, text: String, plan: Plan, found: Found, settings: E
     at += 1
   end
 
-  fields = found.bindings.map { |binding: Binding| "#{binding.name}: #{binding.name}" }
-  gen = add_line(gen, "#{record}(#{[SHOWN + ": " + value].concat(fields).join(", ")})", line)
+  values = found.bindings.map { |binding: Binding| "#{binding.name}: #{binding.name}" }
+  gen = add_line(gen, "#{record}(#{[SHOWN + ": " + value].concat(values).join(", ")})", line)
   gen = add_line(gen, "end", line)
   case Front.query_file(session.file, over(settings, session.file, gen_text(gen)))
-    Front.Outcome.Rejected(problem) -> Compiled.Failed(mapped_problem(session, problem, gen))
+    Front.Outcome.Rejected(problem) ->
+      if session_file?(session, problem.file)
+        unwritten = fields.get(problem.span.start.line)
+        if unwritten.some?
+          kept = found.bindings.filter { |binding: Binding| binding.name != unwritten.unwrap! }
+          return second_with(session, text, plan, found.with(bindings: kept), settings, inspected)
+        end
+
+        if problem.span.start.line == shown_line and !inspected and found.shown != ""
+          return second_with(session, text, plan, found, settings, true)
+        end
+      end
+
+      Attempt.Refused(mapped_problem(session, problem, gen))
     Front.Outcome.Done(front) -> built(session, text, plan, found, front, gen, settings)
   end
 end
@@ -572,9 +720,9 @@ def built(
   front: Front.Checked,
   gen: Gen,
   settings: Env.Settings,
-) -> Compiled
+) -> Attempt
   case Lowering.lower_from(front.linked, front.checked, [entry_name(plan)])
-    Lowering.Lowered.Failed(problem) -> Compiled.Failed(mapped_problem(session, problem, gen))
+    Lowering.Lowered.Failed(problem) -> Attempt.Refused(mapped_problem(session, problem, gen))
     Lowering.Lowered.Done(program) ->
       after = typed(session, text)
       merged = Image.merge(
@@ -585,17 +733,33 @@ def built(
         after.text,
         origin_map(gen),
         session.lines + 1,
+        references(front.linked),
       )
+
+      if merged.clash != ""
+        name = T.display_name(merged.clash)
+        message = "#{name} was a struct in this session; :reset to declare an enum of that name"
+        return Attempt.Refused(session_problem(session, "REPL-KIND-CHANGE", message))
+      end
+
+      stale = plan.params.filter { |binding: Binding| !current?(binding, merged.ran) }
+      return Attempt.Stale(stale.map { |binding: Binding| binding.name }) if stale.size > 0
 
       over = Writer.write_over(merged.program, settings.version, session.image.tables)
       case over.written
-        Writer.Written.Failed(problem) -> Compiled.Failed(problem)
+        Writer.Written.Failed(problem) -> Attempt.Refused(problem)
         Writer.Written.Done(bytes) ->
           ran = Image.written(merged.ran, merged.program, over.tables)
           loaded = Image.written(merged.loaded, merged.program, over.tables)
-          names = Set.new(found.bindings.map { |binding: Binding| binding.name })
+          bindings = (
+            found.bindings
+              .take(plan.params.size)
+              .concat(found.bindings.drop(plan.params.size).map { |binding: Binding| with_entries(binding, ran) })
+          )
+
+          names = Set.new(bindings.map { |binding: Binding| binding.name })
           top = session.slots
-          for binding in found.bindings
+          for binding in bindings
             if binding.slot + 1 > top
               top = binding.slot + 1
             end
@@ -605,50 +769,163 @@ def built(
             !names.include?(binding.name) and !plan.dropped.include?(binding.name)
           }
 
-          Compiled.Run(
-            Request(
-              bytes: bytes,
-              entry: merged.entry,
-              reads: plan.params.map { |binding: Binding| binding.slot },
-              writes: found.bindings.map { |binding: Binding| binding.slot },
-              shown: found.shown,
-              bound: found.bindings.drop(plan.params.size),
-              declared: plan.declared,
-              dropped: plan.dropped,
-              ran: after.with(
-                pieces: plan.pieces,
-                bindings: kept.concat(found.bindings),
-                entries: plan.number,
-                slots: top,
-                image: ran,
+          Attempt.Done(
+            Compiled.Run(
+              Request(
+                bytes: bytes,
+                entry: merged.entry,
+                reads: plan.params.map { |binding: Binding| binding.slot },
+                writes: bindings.map { |binding: Binding| binding.slot },
+                shown: found.shown,
+                bound: bindings.drop(plan.params.size),
+                declared: plan.declared,
+                dropped: plan.dropped,
+                ran: after.with(
+                  pieces: plan.pieces,
+                  bindings: kept.concat(bindings),
+                  entries: plan.number,
+                  slots: top,
+                  image: ran,
+                ),
+                loaded: after.with(entries: plan.number, image: loaded),
               ),
-              loaded: after.with(entries: plan.number, image: loaded),
             ),
           )
       end
   end
 end
 
-# The problem of the file at the lines of the session; a problem of an imported file stays as it is.
+def with_entries(binding: Binding, image: Image.Image) -> Binding
+  binding.with(entries: Image.entries(image, binding.types))
+end
+
+# Whether the types a name holds values of are still the current ones of their names.
+def current?(binding: Binding, image: Image.Image) -> Bool
+  now = Image.entries(image, binding.entries.keys)
+  return false if now.size != binding.entries.size
+
+  binding.entries.keys.all? { |name: String| now[name] == binding.entries[name] }
+end
+
+# The structs and enums a type names.
+def names_in(type: T.Type) -> List[String]
+  inner = T.args(type).flat_map(&names_in)
+  case type
+    T.Type.Struct(name, _) -> inner.push(name)
+    T.Type.Enum(name, _) -> inner.push(name)
+    T.Type.Map(key, value) -> names_in(key).concat(names_in(value))
+    T.Type.ATS(key, value) -> names_in(key).concat(names_in(value))
+    T.Type.Fn(params, result) -> params.flat_map(&names_in).concat(names_in(result))
+    T.Type.Opaque(_) -> []
+    T.Type.Var(_) -> []
+    _ -> inner_names(type)
+  end
+end
+
+def inner_names(type: T.Type) -> List[String]
+  case type
+    T.Type.Result(item) -> names_in(item)
+    T.Type.Optional(item) -> names_in(item)
+    T.Type.Task(item) -> names_in(item)
+    T.Type.Channel(item) -> names_in(item)
+    T.Type.Address(item) -> names_in(item)
+    T.Type.Lazy(item) -> names_in(item)
+    T.Type.Codec(item) -> names_in(item)
+    T.Type.List(item) -> names_in(item)
+    T.Type.Set(item) -> names_in(item)
+    _ -> []
+  end
+end
+
+# For each struct and enum of the program's files, the types its fields or payloads name, through type aliases.
+def references(linked: Linker.Linked) -> Map[String, List[String]]
+  aliases: Map[String, Ast.TypeRef] = {}
+  for module in linked.modules
+    for decl in module.declarations
+      case Declarations.unwrap(decl)
+        Ast.Decl.TypeAlias(node) -> aliases = aliases.put(node.name, node.target)
+        _ -> next
+      end
+    end
+  end
+
+  refs: Map[String, List[String]] = {}
+  for module in linked.modules
+    for decl in module.declarations
+      case Declarations.unwrap(decl)
+        Ast.Decl.Struct(node) ->
+          refs = refs.put(node.name, node.fields.flat_map { |field: Ast.FieldDecl| ref_names(field.type, aliases, 0) })
+        Ast.Decl.Enum(node) ->
+          payloads = node.variants.flat_map { |variant: Ast.EnumVariant| variant.payload_types }
+          refs = refs.put(node.name, payloads.flat_map { |ref: Ast.TypeRef| ref_names(ref, aliases, 0) })
+        _ -> next
+      end
+    end
+  end
+
+  refs
+end
+
+# The names a written type names, each alias with the names of what it stands for (at most 64 aliases deep).
+def ref_names(ref: Ast.TypeRef, aliases: Map[String, Ast.TypeRef], depth: Int) -> List[String]
+  inner = ref.args.flat_map { |arg: Ast.TypeRef| ref_names(arg, aliases, depth) }.push(ref.name)
+  target = aliases.get(ref.name)
+  return inner if target.none? or depth >= 64
+
+  inner.concat(ref_names(target.unwrap!, aliases, depth + 1))
+end
+
+# The problem of the file at the lines of the session; a problem of an imported file stays as it is. The function
+# that the session writes around an entry is not named.
 def mapped_problem(session: Session, problem: Problems.Problem, gen: Gen) -> Problems.Problem
   return problem if !session_file?(session, problem.file)
 
   lines = origin_map(gen)
   fallback = session.lines + 1
   labels = problem.labels.map { |label: Problems.Label| label.with(span: mapped_span(label.span, lines, fallback)) }
-  problem.with(span: mapped_span(problem.span, lines, fallback), labels: labels)
+  placed(session, problem.with(span: mapped_span(problem.span, lines, fallback), labels: labels))
+end
+
+# A problem at lines of the session, in the file that `:load` entered them from when it did.
+def placed(session: Session, problem: Problems.Problem) -> Problems.Problem
+  out = problem
+  if out.signature.start_with?(ENTRY)
+    out = out.with(signature: "")
+  end
+
+  line = out.span.start.line
+  for load in session.loads
+    if line >= load.first and line < load.first + load.count
+      shift = load.first - 1
+      labels = out.labels.map { |label: Problems.Label| label.with(span: shifted(label.span, shift)) }
+      return out.with(file: load.file, span: shifted(out.span, shift), labels: labels)
+    end
+  end
+
+  out
+end
+
+def shifted(span: Source.Span, shift: Int) -> Source.Span
+  Source.Span(
+    start: span.start.with(line: span.start.line - shift),
+    stop: span.stop.with(line: span.stop.line - shift),
+  )
 end
 
 def mapped_span(span: Source.Span, lines: Map[Int, Int], fallback: Int) -> Source.Span
-  Source.Span(start: Image.moved(span.start, lines, fallback), stop: Image.moved(span.stop, lines, fallback))
+  Image.moved_span(span, lines, fallback)
 end
 
 # A problem of the entry's own text, whose lines start after the session's.
-def moved_problem(problem: Problems.Problem, before: Int) -> Problems.Problem
-  span = problem.span
-  start = span.start.with(line: span.start.line + before)
-  stop = span.stop.with(line: span.stop.line + before)
-  problem.with(span: Source.Span(start: start, stop: stop))
+def moved_problem(session: Session, problem: Problems.Problem) -> Problems.Problem
+  placed(session, problem.with(span: shifted(problem.span, -session.lines)))
+end
+
+# A problem of the session at the first line of the entry.
+def session_problem(session: Session, code: String, message: String) -> Problems.Problem
+  start = Source.Position(offset: 0, line: session.lines + 1, column: 1)
+  span = Source.Span(start: start, stop: start)
+  placed(session, Problems.problem(session.file, "", code, message, span, Diag.Help.NoHelp))
 end
 
 def not_expression(session: Session, text: String) -> Problems.Problem

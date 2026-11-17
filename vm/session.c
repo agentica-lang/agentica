@@ -104,6 +104,19 @@ static agc_string *crashed(agc_vm *vm, agc_session *s, agc_task *t) {
   return failure(vm, vm->rt->program, &o, s->loaded);
 }
 
+/* An entry or init that a task cancelled, at the entry function. */
+static agc_string *cancelled(agc_vm *vm, agc_session *s) {
+  const agc_program *p = vm->rt->program;
+  agc_outcome o;
+  memset(&o, 0, sizeof o);
+  o.kind = AGC_FAILED;
+  o.code = "RUNTIME-TASK-CANCELLED";
+  o.message = "the entry was cancelled";
+  o.message_len = strlen(o.message);
+  o.span = s->entry < p->function_count ? p->functions[s->entry].span : 0;
+  return failure(vm, p, &o, s->loaded);
+}
+
 /* An entry that ran but gave back what no entry gives: its effects stay, so it is not refused. */
 static agc_string *invalid(agc_vm *vm, agc_session *s, const char *message) {
   agc_json_member *m = members(3);
@@ -341,6 +354,11 @@ agc_value agc_session_serve(agc_vm *vm, agc_value *args, uint32_t span) {
         if (s->in_init) mark_failed(s);
         s->in_init = false;
         s->record = crashed(vm, s, t);
+      } else if (atomic_load_explicit(&t->cancelled, memory_order_seq_cst)) {
+        /* Cancelled, it never set what it was to set, as a crash. */
+        if (s->in_init) mark_failed(s);
+        s->in_init = false;
+        s->record = cancelled(vm, s);
       } else if (s->in_init) {
         s->in_init = false;
         start_entry(vm, s, span);

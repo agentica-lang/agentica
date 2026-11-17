@@ -16,22 +16,31 @@ import T from "../syntax/types"
 
 ## The tables the child holds and the writer's tables after them. functions and slots are the current function of
 ## each name and the slot of each constant (by linked name); set_by is the slot that each constant function set.
+## structs and enums are the current entry of each type name, the keys say what each entry of the tables is, and
+## declared has the structs and enums that the session declares.
 struct Image
   program: Ir.Program
   tables: Function.Tables
   functions: Map[String, Int]
   slots: Map[String, Int]
   set_by: Map[Int, Int]
+  structs: Map[String, Int]
+  enums: Map[String, Int]
+  struct_keys: List[String]
+  enum_keys: List[String]
+  declared: Set[String]
 end
 
 ## A fresh program over an image: the program to write (the image's tables and what is new after them), the number of
 ## the entry function, and the image when the child loaded it and the entry ran (`ran`) or did not (`loaded`, where
-## the declarations of the entry are not kept, so nothing but the tables grows).
+## the declarations of the entry are not kept, so nothing but the tables grows). `clash` is the name of a new enum
+## that JSON.decode could not find, as a struct of the session has its name ("" for none).
 struct Merged
   program: Ir.Program
   entry: Int
   ran: Image
   loaded: Image
+  clash: String
 end
 
 ## The image of the first program of a session, which the child runs from the start.
@@ -43,7 +52,31 @@ def first(program: Ir.Program, tables: Function.Tables) -> Image
     at += 1
   end
 
-  Image(program: program, tables: tables, functions: functions, slots: {}, set_by: {})
+  structs = places(program.structs.map { |entry: Ir.StructDef| entry.name })
+  enums = places(program.enums.map { |entry: Ir.EnumDef| entry.name })
+  variants: Map[Int, Int] = {}
+  count = 0
+  for entry in program.enums
+    for _ in entry.variants
+      variants = variants.put(count, count)
+      count += 1
+    end
+  end
+
+  naming = Naming(structs: structs, enums: enums, variants: variants)
+  normal = numbered_program(program, naming)
+  Image(
+    program: normal,
+    tables: tables,
+    functions: functions,
+    slots: {},
+    set_by: {},
+    structs: structs,
+    enums: enums,
+    struct_keys: normal.structs.map { |entry: Ir.StructDef| struct_key(entry, []) },
+    enum_keys: normal.enums.map { |entry: Ir.EnumDef| enum_key(entry, []) },
+    declared: Set.new([]),
+  )
 end
 
 ## The image with the tables that the writer gave after writing `program`.
@@ -51,18 +84,22 @@ def written(image: Image, program: Ir.Program, tables: Function.Tables) -> Image
   image.with(program: program, tables: tables)
 end
 
-## The place of `position` in the session: `lines` maps each line of the fresh file to the session's line, negative for
-## a line the session wrote, whose columns are not the user's: a place on it is the start of that line. A line it does
-## not map stands at `line`.
-def moved(position: Source.Position, lines: Map[Int, Int], line: Int) -> Source.Position
-  found = lines.get(position.line, -line)
-  return position.with(line: -found, column: 1) if found < 0
+## The place of `span` in the session: `lines` maps each line of the fresh file to the session's line, negative for a
+## line the session wrote, whose columns are not the user's: a place on it is the start of that line. A line it does
+## not map stands at `line`. A span that would end before it starts ends where it starts.
+def moved_span(span: Source.Span, lines: Map[Int, Int], line: Int) -> Source.Span
+  start = moved(span.start, lines, line)
+  stop = moved(span.stop, lines, line)
+  if stop.line < start.line or (stop.line == start.line and stop.column < start.column)
+    stop = start
+  end
 
-  position.with(line: found)
+  Source.Span(start: start, stop: stop)
 end
 
 ## The program `given` over the image. `entry` is the name of its entry function. The spans of the file `root` move to
-## the lines `lines` maps them to (a line it does not map goes to `line`), and its text becomes `text`.
+## the lines `lines` maps them to (a line it does not map goes to `line`), and its text becomes `text`. `refs` has, for
+## each struct and enum the session declares, the names of the types its fields or payloads name.
 def merge(
   image: Image,
   given: Ir.Program,
@@ -71,16 +108,15 @@ def merge(
   text: String,
   lines: Map[Int, Int],
   line: Int,
+  refs: Map[String, List[String]],
 ) -> Merged
   fresh = renamed_blocks(given, "@#{Paths.last_part(root)}:", lines)
   held = image.program
   files = file_numbers(held.sources, fresh.sources)
   sources = merged_sources(held.sources, fresh.sources, root, text)
-  structs = struct_numbers(held.structs, fresh.structs)
-  enums = enum_numbers(held.enums, fresh.enums)
-  variants = variant_numbers(held.enums, fresh.enums, enums.numbers)
+  types = type_numbers(image, fresh, refs)
   starts = start_pairs(fresh)
-  base = Numbers(functions: {}, files: files, structs: structs.numbers, variants: variants, slots: {})
+  base = Numbers(functions: {}, files: files, structs: types.structs, variants: types.variants, slots: {})
   matched = matching(image, fresh, base)
   slots = slot_numbers(image, fresh, matched, starts)
   functions = matched
@@ -112,16 +148,19 @@ def merge(
 
   program_entry = held.entry
   if slots.count > held.globals
-    init = init_function(starts, numbers, slots.added, repl, moved_span(fresh.span, moved))
+    init = init_function(starts, numbers, slots.added, repl, moved_in(fresh.span, moved))
     program_entry = table.size
     table = table.push(init)
   end
 
   program = held.with(
     sources: sources,
-    structs: held.structs.concat(structs.added),
-    enums: held.enums.concat(enums.added),
-    instances: merged_instances(held.instances, fresh.instances),
+    structs: held.structs.concat(types.added_structs),
+    enums: held.enums.concat(types.added_enums),
+    instances: merged_instances(
+      held.instances,
+      fresh.instances.map { |item: Ir.InstanceDef| numbered_instance(item, types.naming) },
+    ),
     written: merged_written(held.written, fresh.written),
     functions: table,
     entry: program_entry,
@@ -129,7 +168,12 @@ def merge(
     global_names: held.global_names.concat(slots.names),
   )
 
-  loaded = image.with(program: program)
+  loaded = image.with(
+    program: program,
+    struct_keys: image.struct_keys.concat(types.struct_keys),
+    enum_keys: image.enum_keys.concat(types.enum_keys),
+  )
+
   current = image.functions
   at = 0
   for function in fresh.functions
@@ -154,8 +198,59 @@ def merge(
     end
   end
 
-  ran = loaded.with(functions: current, slots: named, set_by: set_by)
-  Merged(program: program, entry: entry_number, ran: ran, loaded: loaded)
+  # A type the session no longer declares, or declares as the other kind, has no current entry of that kind.
+  declared = Set.new(refs.keys)
+  gone = image.declared.to_a.filter { |name: String| !declared.include?(name) }
+  structs = image.structs
+  for name in gone.concat(types.naming.enums.keys)
+    structs = structs.delete(name)
+  end
+
+  for name in types.naming.structs.keys
+    structs = structs.put(name, types.naming.structs[name])
+  end
+
+  enums = image.enums
+  for name in gone.concat(types.naming.structs.keys)
+    enums = enums.delete(name)
+  end
+
+  for name in types.naming.enums.keys
+    enums = enums.put(name, types.naming.enums[name])
+  end
+
+  ran = loaded.with(
+    functions: current,
+    slots: named,
+    set_by: set_by,
+    structs: structs,
+    enums: enums,
+    declared: declared,
+  )
+
+  Merged(
+    program: program,
+    entry: entry_number,
+    ran: ran,
+    loaded: loaded,
+    clash: clash(held.structs, types.added_enums),
+  )
+end
+
+## The entries of the types `names` in the image as a binding keeps them: a struct by its number and an enum by -1 less
+## its number. A name with no entry is left out. A binding whose entries are no longer those of their names holds
+## values of a type that was declared again.
+def entries(image: Image, names: List[String]) -> Map[String, Int]
+  found: Map[String, Int] = {}
+  for name in names
+    if image.structs.has_key?(name)
+      found = found.put(name, image.structs[name])
+    elsif image.enums.has_key?(name)
+      found = found.put(name, -1 - image.enums[name])
+    end
+  end
+
+  found
 end
 
 private
@@ -173,15 +268,25 @@ struct Numbers
   slots: Map[Int, Int]
 end
 
-# A fresh table's numbers in the image and the entries the image does not have, in fresh order.
-struct Structs
-  numbers: Map[Int, Int]
-  added: List[Ir.StructDef]
+# The number in the image of each type name and variant of a fresh program; -1 for one that has none yet. The tables
+# of the image name a type by its number (`#3`), since a name may stand for several entries of a session.
+struct Naming
+  structs: Map[String, Int]
+  enums: Map[String, Int]
+  variants: Map[Int, Int]
 end
 
-struct Enums
-  numbers: Map[Int, Int]
-  added: List[Ir.EnumDef]
+# The numbers of the fresh structs, enums and variants in the image, the names that go with them, and the entries the
+# image does not have, in fresh order, with their keys.
+struct TypeNumbers
+  structs: Map[Int, Int]
+  enums: Map[Int, Int]
+  variants: Map[Int, Int]
+  naming: Naming
+  added_structs: List[Ir.StructDef]
+  added_enums: List[Ir.EnumDef]
+  struct_keys: List[String]
+  enum_keys: List[String]
 end
 
 # The slots: the image's slot of each fresh slot, how many slots there are with the new ones, the fresh slots that
@@ -263,48 +368,9 @@ def with_text(source: Ir.SourceFile, root: String, text: String) -> Ir.SourceFil
   source
 end
 
-def struct_numbers(held: List[Ir.StructDef], fresh: List[Ir.StructDef]) -> Structs
-  keys = held.map { |item: Ir.StructDef| struct_key(item) }
-  numbers: Map[Int, Int] = {}
-  added: List[Ir.StructDef] = []
-  at = 0
-  for entry in fresh
-    found = latest(keys, struct_key(entry))
-    if found >= 0
-      numbers = numbers.put(at, found)
-    else
-      numbers = numbers.put(at, held.size + added.size)
-      added = added.push(entry)
-    end
-
-    at += 1
-  end
-
-  Structs(numbers: numbers, added: added)
-end
-
-def enum_numbers(held: List[Ir.EnumDef], fresh: List[Ir.EnumDef]) -> Enums
-  keys = held.map { |item: Ir.EnumDef| enum_key(item) }
-  numbers: Map[Int, Int] = {}
-  added: List[Ir.EnumDef] = []
-  at = 0
-  for entry in fresh
-    found = latest(keys, enum_key(entry))
-    if found >= 0
-      numbers = numbers.put(at, found)
-    else
-      numbers = numbers.put(at, held.size + added.size)
-      added = added.push(entry)
-    end
-
-    at += 1
-  end
-
-  Enums(numbers: numbers, added: added)
-end
-
 # The variants of all enums are numbered one after the other in table order (ir.agc, EnumDef): the image's number of
 # each fresh variant is the first variant of its enum in the image's table, with the new enums after it, and its place.
+# A fresh enum that `enums` does not map has no variant numbers yet (-1).
 def variant_numbers(held: List[Ir.EnumDef], fresh: List[Ir.EnumDef], enums: Map[Int, Int]) -> Map[Int, Int]
   firsts: List[Int] = []
   count = 0
@@ -316,7 +382,7 @@ def variant_numbers(held: List[Ir.EnumDef], fresh: List[Ir.EnumDef], enums: Map[
   added = 0
   at = 0
   for entry in fresh
-    if enums[at] >= held.size
+    if enums.get(at, -1) >= held.size
       firsts = firsts.push(count + added)
       added += entry.variants.size
     end
@@ -328,8 +394,14 @@ def variant_numbers(held: List[Ir.EnumDef], fresh: List[Ir.EnumDef], enums: Map[
   variant = 0
   at = 0
   for entry in fresh
+    number = enums.get(at, -1)
     for place in 0...entry.variants.size
-      numbers = numbers.put(variant, firsts[enums[at]] + place)
+      if number >= 0
+        numbers = numbers.put(variant, firsts[number] + place)
+      else
+        numbers = numbers.put(variant, -1)
+      end
+
       variant += 1
     end
 
@@ -355,22 +427,14 @@ def renamed(function: Ir.Function, marker: String, lines: Map[Int, Int]) -> Ir.F
   function.with(name: "#{parts[0]}#{marker}#{lines.get(place[0].to_i.unwrap!, 0)}:#{place[1]}")
 end
 
-# The last place of `name` in `names`, or -1.
-def latest(names: List[String], name: String) -> Int
-  at = names.size - 1
-  while at >= 0
-    return at if names[at] == name
-
-    at -= 1
-  end
-
-  -1
-end
-
-def struct_key(entry: Ir.StructDef) -> String
-  types = entry.types.map { |type: T.Type| T.to_text(type) }
+# What an entry of the tables is, with its types by number: a fresh entry keeps the number of the current entry of its
+# name when the keys agree, and the key holds the entries of the types that the fields or payloads name (`refs`), so a
+# struct that holds a type declared again is a new entry too.
+def struct_key(entry: Ir.StructDef, refs: List[String]) -> String
+  types = entry.types.map { |type: T.Type| T.json_name(type) }
   defaults = entry.defaults.map { |default: Ir.FieldDefault| default_key(default) }
-  "#{entry.name}|#{entry.fields.join(",")}|#{entry.decodable}|#{types.join(",")}|#{defaults.join(",")}"
+  fields = entry.fields.join(",")
+  [entry.name, fields, "#{entry.decodable}", types.join(","), defaults.join(","), refs.join(",")].join("|")
 end
 
 def default_key(default: Ir.FieldDefault) -> String
@@ -383,15 +447,221 @@ def default_key(default: Ir.FieldDefault) -> String
   end
 end
 
-def enum_key(entry: Ir.EnumDef) -> String
+def enum_key(entry: Ir.EnumDef, refs: List[String]) -> String
   variants = entry.variants.map { |variant: Ir.VariantDef| "#{variant.name}/#{variant.size}" }
-  types = entry.types.map { |type: T.Type| T.to_text(type) }
-  "#{entry.name}|#{variants.join(",")}|#{entry.decodable}|#{types.join(",")}"
+  types = entry.types.map { |type: T.Type| T.json_name(type) }
+  "#{entry.name}|#{variants.join(",")}|#{entry.decodable}|#{types.join(",")}|#{refs.join(",")}"
 end
 
+# A new enum that JSON.decode can build, with the name of a struct of the image that it can build: JSON.decode looks
+# for a struct first (vm/json.c).
+def clash(structs: List[Ir.StructDef], added: List[Ir.EnumDef]) -> String
+  names = Set.new(structs.filter { |entry: Ir.StructDef| entry.decodable }.map { |entry: Ir.StructDef| entry.name })
+  for entry in added
+    return entry.name if entry.decodable and names.include?(entry.name)
+  end
+
+  ""
+end
+
+# The entries of the types `names` that are in `naming`.
+def ref_entries(names: List[String], naming: Naming) -> List[String]
+  found: List[String] = []
+  for name in names
+    if naming.structs.has_key?(name)
+      found = found.push("s#{naming.structs[name]}")
+    elsif naming.enums.has_key?(name)
+      found = found.push("e#{naming.enums[name]}")
+    end
+  end
+
+  found
+end
+
+# The type with each struct and enum by its number in the image. JSON.Field keeps its name, which the writer looks for.
+def numbered(type: T.Type, naming: Naming) -> T.Type
+  case type
+    T.Type.List(item) -> T.Type.List(numbered(item, naming))
+    T.Type.Map(key, value) -> T.Type.Map(numbered(key, naming), numbered(value, naming))
+    T.Type.Optional(item) -> T.Type.Optional(numbered(item, naming))
+    T.Type.Struct(name, args) -> T.Type.Struct(number_name(naming.structs, name), numbered_all(args, naming))
+    T.Type.Enum(name, args) ->
+      return T.Type.Enum(name, numbered_all(args, naming)) if name == "JSON.Field"
+
+      T.Type.Enum(number_name(naming.enums, name), numbered_all(args, naming))
+    _ -> type
+  end
+end
+
+def numbered_all(types: List[T.Type], naming: Naming) -> List[T.Type]
+  types.map { |type: T.Type| numbered(type, naming) }
+end
+
+def number_name(numbers: Map[String, Int], name: String) -> String
+  return name if !numbers.has_key?(name)
+
+  "##{numbers[name]}"
+end
+
+def numbered_struct(entry: Ir.StructDef, naming: Naming) -> Ir.StructDef
+  entry.with(
+    types: numbered_all(entry.types, naming),
+    defaults: entry.defaults.map { |default: Ir.FieldDefault| numbered_default(default, naming) },
+  )
+end
+
+def numbered_default(default: Ir.FieldDefault, naming: Naming) -> Ir.FieldDefault
+  case default
+    Ir.FieldDefault.Variant(id) -> Ir.FieldDefault.Variant(naming.variants.get(id, -1))
+    _ -> default
+  end
+end
+
+def numbered_enum(entry: Ir.EnumDef, naming: Naming) -> Ir.EnumDef
+  entry.with(types: numbered_all(entry.types, naming))
+end
+
+def numbered_instance(entry: Ir.InstanceDef, naming: Naming) -> Ir.InstanceDef
+  entry.with(
+    struct_name: number_name(naming.structs, entry.struct_name),
+    type: numbered(entry.type, naming),
+    types: numbered_all(entry.types, naming),
+  )
+end
+
+def numbered_program(program: Ir.Program, naming: Naming) -> Ir.Program
+  program.with(
+    structs: program.structs.map { |entry: Ir.StructDef| numbered_struct(entry, naming) },
+    enums: program.enums.map { |entry: Ir.EnumDef| numbered_enum(entry, naming) },
+    instances: program.instances.map { |entry: Ir.InstanceDef| numbered_instance(entry, naming) },
+  )
+end
+
+# Each name at its place in the list; a later place wins.
+def places(names: List[String]) -> Map[String, Int]
+  found: Map[String, Int] = {}
+  at = 0
+  for name in names
+    found = found.put(name, at)
+    at += 1
+  end
+
+  found
+end
+
+# The fresh structs and enums in the image. Each starts as the current entry of its name, and one whose key differs
+# with the numbers so far is dropped, until nothing changes: a type declared again, and every type that names it, is
+# added at the end of its table.
+def type_numbers(image: Image, fresh: Ir.Program, refs: Map[String, List[String]]) -> TypeNumbers
+  held = image.program
+  structs: Map[Int, Int] = {}
+  at = 0
+  for entry in fresh.structs
+    if image.structs.has_key?(entry.name)
+      structs = structs.put(at, image.structs[entry.name])
+    end
+
+    at += 1
+  end
+
+  enums: Map[Int, Int] = {}
+  at = 0
+  for entry in fresh.enums
+    if image.enums.has_key?(entry.name)
+      enums = enums.put(at, image.enums[entry.name])
+    end
+
+    at += 1
+  end
+
+  changed = true
+  while changed
+    changed = false
+    naming = naming_of(fresh, structs, enums, held.enums)
+    kept_structs: Map[Int, Int] = {}
+    for index in structs.keys
+      entry = fresh.structs[index]
+      key = struct_key(numbered_struct(entry, naming), ref_entries(refs.get(entry.name, []), naming))
+      if key == image.struct_keys[structs[index]]
+        kept_structs = kept_structs.put(index, structs[index])
+      else
+        changed = true
+      end
+    end
+
+    kept_enums: Map[Int, Int] = {}
+    for index in enums.keys
+      entry = fresh.enums[index]
+      key = enum_key(numbered_enum(entry, naming), ref_entries(refs.get(entry.name, []), naming))
+      if key == image.enum_keys[enums[index]]
+        kept_enums = kept_enums.put(index, enums[index])
+      else
+        changed = true
+      end
+    end
+
+    structs = kept_structs
+    enums = kept_enums
+  end
+
+  added_structs: List[Ir.StructDef] = []
+  for index in 0...fresh.structs.size
+    if !structs.has_key?(index)
+      structs = structs.put(index, held.structs.size + added_structs.size)
+      added_structs = added_structs.push(fresh.structs[index])
+    end
+  end
+
+  added_enums: List[Ir.EnumDef] = []
+  for index in 0...fresh.enums.size
+    if !enums.has_key?(index)
+      enums = enums.put(index, held.enums.size + added_enums.size)
+      added_enums = added_enums.push(fresh.enums[index])
+    end
+  end
+
+  naming = naming_of(fresh, structs, enums, held.enums)
+  normal_structs = added_structs.map { |entry: Ir.StructDef| numbered_struct(entry, naming) }
+  normal_enums = added_enums.map { |entry: Ir.EnumDef| numbered_enum(entry, naming) }
+  TypeNumbers(
+    structs: structs,
+    enums: enums,
+    variants: naming.variants,
+    naming: naming,
+    added_structs: normal_structs,
+    added_enums: normal_enums,
+    struct_keys: normal_structs.map { |entry: Ir.StructDef|
+      struct_key(entry, ref_entries(refs.get(entry.name, []), naming))
+    },
+    enum_keys: normal_enums.map { |entry: Ir.EnumDef| enum_key(entry, ref_entries(refs.get(entry.name, []), naming)) },
+  )
+end
+
+# The naming of a fresh program whose structs and enums have the numbers `structs` and `enums` (a fresh place that is
+# not mapped has none yet). A new enum's variants are numbered after the image's, in fresh order.
+def naming_of(fresh: Ir.Program, structs: Map[Int, Int], enums: Map[Int, Int], held: List[Ir.EnumDef]) -> Naming
+  struct_names: Map[String, Int] = {}
+  at = 0
+  for entry in fresh.structs
+    struct_names = struct_names.put(entry.name, structs.get(at, -1))
+    at += 1
+  end
+
+  enum_names: Map[String, Int] = {}
+  at = 0
+  for entry in fresh.enums
+    enum_names = enum_names.put(entry.name, enums.get(at, -1))
+    at += 1
+  end
+
+  Naming(structs: struct_names, enums: enum_names, variants: variant_numbers(held, fresh.enums, enums))
+end
+
+# The instances of the image with the fresh ones it does not have after them: an instance is its generic struct by
+# number and its type arguments.
 def merged_instances(held: List[Ir.InstanceDef], fresh: List[Ir.InstanceDef]) -> List[Ir.InstanceDef]
-  known = Set.new(held.map { |instance: Ir.InstanceDef| instance.name })
-  held.concat(fresh.filter { |instance: Ir.InstanceDef| !known.include?(instance.name) })
+  known = Set.new(held.map { |instance: Ir.InstanceDef| T.json_name(instance.type) })
+  held.concat(fresh.filter { |instance: Ir.InstanceDef| !known.include?(T.json_name(instance.type)) })
 end
 
 def merged_written(held: Map[String, String], fresh: Map[String, String]) -> Map[String, String]
@@ -561,7 +831,7 @@ def renumber(function: Ir.Function, numbers: Numbers, moved: Moves) -> Ir.Functi
     at = numbers.files.get(instr.file, 0)
     spans = instr.spans
     if at == moved.file
-      spans = spans.map { |span: Source.Span| moved_span(span, moved) }
+      spans = spans.map { |span: Source.Span| moved_in(span, moved) }
     end
 
     instr.with(args: renumbered_args(instr, numbers), file: at, spans: spans)
@@ -569,18 +839,19 @@ def renumber(function: Ir.Function, numbers: Numbers, moved: Moves) -> Ir.Functi
 
   span = function.span
   if file == moved.file
-    span = moved_span(span, moved)
+    span = moved_in(span, moved)
   end
 
   function.with(file: file, body: body, span: span)
 end
 
-def moved_span(span: Source.Span, moved: Moves) -> Source.Span
-  Source.Span(start: moved_position(span.start, moved), stop: moved_position(span.stop, moved))
-end
+def moved_in(span: Source.Span, moved: Moves) -> Source.Span = moved_span(span, moved.lines, moved.line)
 
-def moved_position(position: Source.Position, moved: Moves) -> Source.Position
-  moved(position, moved.lines, moved.line)
+def moved(position: Source.Position, lines: Map[Int, Int], line: Int) -> Source.Position
+  found = lines.get(position.line, -line)
+  return position.with(line: -found, column: 1) if found < 0
+
+  position.with(line: found)
 end
 
 # The function that sets the new slots, the entry of the program: each new constant that `<start>` sets, in its order,

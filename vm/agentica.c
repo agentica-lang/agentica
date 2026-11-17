@@ -330,7 +330,7 @@ static int run_command(agc_launch *launch, int argc, char **argv) {
   if (!agc_load_traced(data, len, &program, error, sizeof error, &launch->trace)) {
     fprintf(stderr, "%s: invalid bytecode: %s\n", run_name, error);
     /* The usual mistake: a source file given to run. */
-    if (!options.embedded && (len < 4 || memcmp(data, AGC_MAGIC, 4) != 0))
+    if (!options.embedded && !options.session && (len < 4 || memcmp(data, AGC_MAGIC, 4) != 0))
       fprintf(stderr, "%s: %s is not compiled bytecode; to run a source file, use agentica %s\n", run_name, argv[i],
               argv[i]);
     return 2;

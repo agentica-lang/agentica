@@ -26,9 +26,14 @@ struct Section
 end
 
 ## Builds the sections for the structs and enums of the program. struct_index and enum_index map a name to its place in
-## the table.
-def build(program: Ir.Program, struct_index: Map[String, Int], enum_index: Map[String, Int]) -> Result[Section]
-  pool = Pool.empty()
+## the table. The type table starts from `types`, the table of an earlier program that this one extends.
+def build(
+  program: Ir.Program,
+  struct_index: Map[String, Int],
+  enum_index: Map[String, Int],
+  types: Pool.Pool,
+) -> Result[Section]
+  pool = types
   chunks = Wire.start()
   count = 0
   index = 0

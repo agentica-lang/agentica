@@ -364,28 +364,25 @@ static agc_value builtin_parse(agc_vm *vm, agc_value *args, uint32_t span) {
   return status == AGC_JSON_PARSED ? ok(out) : failure(vm, AGC_KIND_JSON_PARSE, agc_json_status_message(status));
 }
 
+static bool named(const agc_string *json_name, const agc_string *text) {
+  return json_name && json_name->bytes == text->bytes && memcmp(json_name->data, text->data, text->bytes) == 0;
+}
+
 /* The struct, enum or struct instance that JSON.decode and JSON.schema name by its linked name: structs first, then
-   enums, then instances. */
+   enums, then instances, each the last of its name (a session repeats a name when a type is declared again,
+   agc_load_session). */
 static uint32_t decodable_type(agc_vm *vm, agc_value name, uint32_t span, uint32_t *kind) {
   const agc_string *text = agc_as_string(vm, name);
   const agc_program *p = vm->rt->program;
   *kind = AGC_TYPE_STRUCT;
-  for (uint32_t i = 0; i < p->struct_count; i++) {
-    const agc_string *json_name = p->structs[i].json_name;
-    if (json_name && json_name->bytes == text->bytes && memcmp(json_name->data, text->data, text->bytes) == 0)
-      return i;
-  }
+  for (uint32_t i = p->struct_count; i-- > 0;)
+    if (named(p->structs[i].json_name, text)) return i;
   *kind = AGC_TYPE_ENUM;
-  for (uint32_t i = 0; i < p->enum_count; i++) {
-    const agc_string *json_name = p->enums[i].json_name;
-    if (json_name && json_name->bytes == text->bytes && memcmp(json_name->data, text->data, text->bytes) == 0)
-      return i;
-  }
+  for (uint32_t i = p->enum_count; i-- > 0;)
+    if (named(p->enums[i].json_name, text)) return i;
   *kind = AGC_TYPE_INSTANCE;
-  for (uint32_t i = 0; i < p->instance_count; i++) {
-    const agc_string *json_name = p->instances[i].json_name;
-    if (json_name->bytes == text->bytes && memcmp(json_name->data, text->data, text->bytes) == 0) return i;
-  }
+  for (uint32_t i = p->instance_count; i-- > 0;)
+    if (named(p->instances[i].json_name, text)) return i;
   agc_fail(vm, "RUNTIME-INTERNAL", "unknown JSON type", span);
 }
 

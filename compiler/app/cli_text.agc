@@ -43,6 +43,7 @@ USAGE = [
   "       agentica [--ai|--json] fmt [--check] [PATH...]",
   "       agentica [--ai|--json] fmt -",
   "       agentica [--ai|--json] lint [PATH...] [--strict]",
+  "       agentica repl [--json | --ai]",
   "       agentica help [NAME|std/MODULE[.NAME]] [--json]",
   "       agentica [--ai|--json] doc <path> [--json]",
   "       agentica [--ai|--json] outline <source-file> [--json] [--partial]",

@@ -8,12 +8,14 @@
 ## `--json`). Exit status: 0 at the end of the input or after `:quit`, 1 when the input ends inside an entry, the
 ## child's status when it ends (`System.exit(n)` in an entry), 2 for a session that cannot start.
 
+import Core from "../analysis/analysis"
 import Diag from "../diagnostics/diagnostic"
 import Ai from "../diagnostics/diagnostic_ai"
 import DiagnosticJson from "../diagnostics/diagnostic_json"
 import Plain from "../diagnostics/diagnostic_plain"
 import Problems from "../diagnostics/problem"
 import SourceReader from "../io/source_reader"
+import Paths from "../modules/import_path"
 import Env from "../modules/link_env"
 import Repl from "../repl/repl_session"
 import Source from "../syntax/source"
@@ -56,14 +58,15 @@ FILE = "(repl)"
 WAIT = 2_000_000_000
 # The hex of at most this many bytes of program goes in one `chunk` line, which the child reads up to 1 MiB.
 CHUNK = 262_144
-HELP = (
-  ":type EXPR   the type of an expression\n" +
-  ":load FILE   enter the text of a file\n" +
-  ":reset       start a new session\n" +
-  ":quit        end the session\n" +
-  ":help        this list\n"
-)
+COMMANDS = [
+  [":type EXPR", "the type of an expression"],
+  [":load FILE", "enter the text of a file"],
+  [":reset", "start a new session"],
+  [":quit", "end the session"],
+  [":help", "this list"],
+]
 
+# The loop of a session: `items` is the number of entries and commands answered so far.
 struct Loop
   session: Repl.Session
   child: Process
@@ -71,6 +74,7 @@ struct Loop
   flags: List[String]
   style: String
   prompts: Bool
+  items: Int = 0
 end
 
 enum Start
@@ -141,8 +145,10 @@ def serve(first: Loop) -> Int
     line = IO.gets()
     if !line.ok?
       if pending != ""
-        report(loop, repl_problem(loop, "REPL-INCOMPLETE", "the input ended inside an entry", pending), pending)
-        finish(loop)
+        counted = next_item(loop)
+        problem = repl_problem(counted, "REPL-INCOMPLETE", "the input ended inside an entry", pending)
+        report(counted, problem, pending, counted.session.lines + 1)
+        finish(counted)
         return 1
       end
 
@@ -176,9 +182,11 @@ def step(loop: Loop, pending: String, line: String) -> Step
   if pending == "" and line.strip == ""
     return Step.Next(loop, "")
   elsif pending != "" and line.strip == ""
-    return Step.Next(loop.with(session: Repl.typed(loop.session, pending)), "")
+    counted = next_item(loop)
+    answer(counted, counted.session.lines + 1, {"ok": JSON.from(true), "discarded": JSON.from(true)})
+    return Step.Next(counted.with(session: Repl.typed(loop.session, pending)), "")
   elsif pending == "" and line.start_with?(":")
-    return command(loop, line)
+    return command(next_item(loop), line)
   end
 
   text = line
@@ -189,35 +197,48 @@ def step(loop: Loop, pending: String, line: String) -> Step
   entry(loop, text)
 end
 
+def next_item(loop: Loop) -> Loop = loop.with(items: loop.items + 1)
+
+# A command, whose line counts as a line of the session.
 def command(loop: Loop, line: String) -> Step
   words = line.strip.split(" ")
   name = words[0]
   rest = line.strip.slice(name.length, line.strip.length - name.length).strip
+  at = loop.session.lines + 1
+  after = loop.with(session: Repl.typed(loop.session, line))
   if name == ":quit"
     return Step.Done(finish(loop))
   elsif name == ":help"
-    IO.print(HELP)
-    IO.flush()
-    return Step.Next(loop, "")
+    help(loop, at)
+    return Step.Next(after, "")
   elsif name == ":reset"
     finish(loop)
     case started(loop.settings, loop.flags, loop.style)
       Start.Failed(message) ->
         IO.warn("agentica: #{message}")
         return Step.Done(2)
-      Start.Running(fresh) -> return Step.Next(fresh.with(prompts: loop.prompts), "")
+      Start.Running(fresh) ->
+        answer(loop, at, {"ok": JSON.from(true), "reset": JSON.from(true)})
+        return Step.Next(fresh.with(prompts: loop.prompts), "")
     end
   elsif name == ":type" and rest != ""
-    return typed(loop, rest)
+    typed(loop, rest, at)
+    return Step.Next(after, "")
   elsif name == ":load" and rest != ""
-    return load(loop, rest)
+    return load(after, rest, at)
   elsif name == ":type" or name == ":load"
-    report(loop, repl_problem(loop, "REPL-USAGE", "#{name} takes #{usage_of(name)}", line), line)
-    return Step.Next(loop, "")
+    report(loop, repl_problem(loop, "REPL-USAGE", "#{name} takes #{usage_of(name)}", line), line, at)
+    return Step.Next(after, "")
   end
 
-  report(loop, repl_problem(loop, "REPL-UNKNOWN-COMMAND", "#{name} is not a command; :help lists them", line), line)
-  Step.Next(loop, "")
+  report(
+    loop,
+    repl_problem(loop, "REPL-UNKNOWN-COMMAND", "#{name} is not a command; :help lists them", line),
+    line,
+    at,
+  )
+
+  Step.Next(after, "")
 end
 
 def usage_of(name: String) -> String
@@ -226,25 +247,39 @@ def usage_of(name: String) -> String
   "a file"
 end
 
-def typed(loop: Loop, text: String) -> Step
+def help(loop: Loop, at: Int) -> Void
+  if loop.style == "json"
+    commands = COMMANDS.map do |pair: List[String]|
+      JSON.object({"command": JSON.from(pair[0]), "does": JSON.from(pair[1])})
+    end
+
+    answer(loop, at, {"ok": JSON.from(true), "commands": JSON.array(commands)})
+  else
+    lines = COMMANDS.map { |pair: List[String]| "#{padded(pair[0], 13)}#{pair[1]}\n" }
+    IO.print(lines.join(""))
+    IO.flush()
+  end
+end
+
+# `:type`: the type of `text`, which the command's line `at` holds.
+def typed(loop: Loop, text: String, at: Int) -> Void
   case Repl.type_of(loop.session, text, loop.settings)
     Repl.Typed.Type(type) ->
       if loop.style == "json"
-        puts(JSON.encode(JSON.object({"ok": JSON.from(true), "type": JSON.from(type)})))
+        answer(loop, at, {"ok": JSON.from(true), "type": JSON.from(type)})
       else
         puts(type)
+        IO.flush()
       end
 
-      IO.flush()
     Repl.Typed.Incomplete ->
-      report(loop, repl_problem(loop, "REPL-INCOMPLETE", "the expression is not complete", text), text)
-    Repl.Typed.Failed(problem) -> report(loop, problem, text)
+      report(loop, repl_problem(loop, "REPL-INCOMPLETE", "the expression is not complete", text), text, at)
+    Repl.Typed.Failed(problem) -> report(loop, problem, text, at)
   end
-
-  Step.Next(loop, "")
 end
 
-def load(loop: Loop, file: String) -> Step
+# `:load FILE`: the text of the file as one entry, after the command's line `at`.
+def load(loop: Loop, file: String, at: Int) -> Step
   case SourceReader.read_shown(file)
     SourceFile.Read.Text(text) ->
       body = text
@@ -252,32 +287,43 @@ def load(loop: Loop, file: String) -> Step
         body = body.slice(0, body.length - 1)
       end
 
-      case entry(loop, body)
-        Step.Next(after, rest) ->
-          return Step.Next(after, "") if rest == ""
-
-          report(after, repl_problem(after, "REPL-INCOMPLETE", "the file ends inside an entry", rest), rest)
-          Step.Next(after.with(session: Repl.typed(after.session, rest)), "")
-        Step.Done(status) -> Step.Done(status)
+      case Repl.load(loop.session, file, folder_of(file), body, loop.settings)
+        Repl.Compiled.Incomplete ->
+          report(loop, repl_problem(loop, "REPL-INCOMPLETE", "the file ends inside an entry", body), body, at)
+          Step.Next(loop.with(session: Repl.typed(loop.session, body)), "")
+        Repl.Compiled.Failed(problem) ->
+          report(loop, problem, body, at)
+          Step.Next(loop.with(session: Repl.typed(loop.session, body)), "")
+        Repl.Compiled.Run(request) -> ran(loop, body, request, at)
       end
 
     _ ->
-      report(loop, repl_problem(loop, "REPL-USAGE", "cannot read #{file}", ":load #{file}"), ":load #{file}")
+      report(loop, Core.unreadable(file), "", at)
       Step.Next(loop, "")
   end
+end
+
+# The folder of a file from the working folder, which the session's imports start from.
+def folder_of(file: String) -> String
+  folder = Paths.directory_of(file)
+  return folder if !Paths.rooted?(folder)
+
+  Paths.stored_name(Path.cwd().unwrap_or(""), folder)
 end
 
 def entry(loop: Loop, text: String) -> Step
   case Repl.compile(loop.session, text, loop.settings)
     Repl.Compiled.Incomplete -> Step.Next(loop, text)
     Repl.Compiled.Failed(problem) ->
-      report(loop, problem, text)
-      Step.Next(loop.with(session: Repl.typed(loop.session, text)), "")
-    Repl.Compiled.Run(request) -> ran(loop, text, request)
+      counted = next_item(loop)
+      report(counted, problem, text, loop.session.lines + 1)
+      Step.Next(counted.with(session: Repl.typed(loop.session, text)), "")
+    Repl.Compiled.Run(request) -> ran(next_item(loop), text, request, loop.session.lines + 1)
   end
 end
 
-def ran(loop: Loop, text: String, request: Repl.Request) -> Step
+# The answer of the child to an entry whose first line is `at`.
+def ran(loop: Loop, text: String, request: Repl.Request, at: Int) -> Step
   answer = asked(loop.child, request)
   if !answer.ok?
     finish_quiet(loop)
@@ -285,7 +331,11 @@ def ran(loop: Loop, text: String, request: Repl.Request) -> Step
   end
 
   parsed = JSON.parse(answer.unwrap!)
-  return Step.Done(2) if !parsed.ok?
+  if !parsed.ok?
+    IO.warn("agentica: the session's child gave an answer that is not JSON")
+    finish(loop)
+    return Step.Done(2)
+  end
 
   root = parsed.unwrap!
   passed = flag(root, "ok")
@@ -297,15 +347,16 @@ def ran(loop: Loop, text: String, request: Repl.Request) -> Step
   end
 
   after = loop.with(session: session)
-  line = loop.session.lines + 1
-  if loop.style == "json"
-    puts(JSON.encode(JSON.object(json_answer(root, request, line, passed))))
+  refused = refusal(root)
+  if refused != ""
+    problem = repl_problem(loop, "REPL-REFUSED", "the session refused the entry: #{refused}", text)
+    report(loop, problem, text, at)
+  elsif loop.style == "json"
+    answer(loop, at, json_answer(root, request, passed))
   elsif passed
     shown(root, request)
-  elsif refusal(root) != ""
-    IO.warn("agentica: the session refused the entry: #{refusal(root)}")
   else
-    IO.warn(text_of(root, "text"))
+    IO.warn(cleaned_text(text_of(root, "text")))
   end
 
   IO.flush()
@@ -365,41 +416,132 @@ def shown(root: JSON.Value, request: Repl.Request) -> Void
   end
 end
 
-def json_answer(root: JSON.Value, request: Repl.Request, line: Int, passed: Bool) -> Map[String, JSON.Value]
-  fields: Map[String, JSON.Value] = {
-    "entry": JSON.from(request.ran.entries),
-    "line": JSON.from(line),
-    "ok": JSON.from(passed),
-  }
-
+# The answer to an entry that ran. One that failed kept no name or declaration.
+def json_answer(root: JSON.Value, request: Repl.Request, passed: Bool) -> Map[String, JSON.Value]
+  fields: Map[String, JSON.Value] = {"ok": JSON.from(passed)}
   if passed and request.shown != ""
     fields = fields.put("value", JSON.from(text_of(root, "value"))).put("type", JSON.from(request.shown))
   end
 
   bound: Map[String, JSON.Value] = {}
-  for binding in request.bound
-    bound = bound.put(binding.name, JSON.from(binding.type))
+  declared: List[JSON.Value] = []
+  dropped: List[JSON.Value] = []
+  if passed
+    for binding in request.bound
+      bound = bound.put(binding.name, JSON.from(binding.type))
+    end
+
+    declared = request.declared.map { |name: String| JSON.from(name) }
+    dropped = request.dropped.map { |name: String| JSON.from(name) }
   end
 
-  fields = fields.put("bound", JSON.object(bound))
-  fields = fields.put("declared", JSON.array(request.declared.map { |name: String| JSON.from(name) }))
-  fields = fields.put("dropped", JSON.array(request.dropped.map { |name: String| JSON.from(name) }))
+  fields = fields.put("bound", JSON.object(bound)).put("declared", JSON.array(declared))
+  fields = fields.put("dropped", JSON.array(dropped))
   diagnostic = JSON.get(root, "diagnostic")
   if diagnostic.ok?
-    fields = fields.put("diagnostic", diagnostic.unwrap!)
-  end
-
-  refused = refusal(root)
-  if refused != ""
-    fields = fields.put("refused", JSON.from(refused))
+    fields = fields.put("diagnostic", cleaned_json(diagnostic.unwrap!))
   end
 
   fields
 end
 
-# A problem in the style of the session: plain text on stderr with the lines of the session and `typed`, the text
-# of the entry after them, or one JSON object on stdout.
-def report(loop: Loop, problem: Problems.Problem, typed: String) -> Void
+# One JSON answer on stdout, for the item `loop.items` whose first line in the session is `at`.
+def answer(loop: Loop, at: Int, fields: Map[String, JSON.Value]) -> Void
+  return if loop.style != "json"
+
+  puts(JSON.encode(JSON.object(fields.put("entry", JSON.from(loop.items)).put("line", JSON.from(at)))))
+  IO.flush()
+end
+
+# A diagnostic of the child without what the session wrote around the entry: the frame of the entry's function and
+# the task of the session that runs it.
+def cleaned_json(diagnostic: JSON.Value) -> JSON.Value
+  case JSON.node(diagnostic)
+    JSON.Node.Object(members) ->
+      out: Map[String, JSON.Value] = {}
+      for key in members.keys
+        value = members[key]
+        if key == "stack"
+          empty: List[JSON.Value] = []
+          frames = JSON.list(value)
+            .unwrap_or(empty)
+            .filter do |frame: JSON.Value| !entry_frame?(text_of(frame, "function")) end
+
+          if frames.size > 0
+            out = out.put(key, JSON.array(frames))
+          end
+        elsif key != "spawned_at" or !session_place?(text_of(value, "file"))
+          out = out.put(key, value)
+        end
+      end
+
+      JSON.object(out)
+    _ -> diagnostic
+  end
+end
+
+# The text of a diagnostic of the child with the same lines left out, and a stack heading with no frame left.
+def cleaned_text(text: String) -> String
+  kept: List[String] = []
+  for line in text.split("\n")
+    words = line.strip.split(" ")
+    entry = words.size > 1 and words[1] == "at" and entry_frame?(words[0])
+    spawned = line.strip.start_with?("task spawned at #{FILE} serve")
+    if !entry and !spawned
+      kept = kept.push(line)
+    end
+  end
+
+  out: List[String] = []
+  at = 0
+  for line in kept
+    heading = line.strip.start_with?("= stack") or line.strip == "stack:"
+    following = ""
+    if at + 1 < kept.size
+      following = kept[at + 1]
+    end
+
+    if !heading or indent(following) > indent(line)
+      out = out.push(line)
+    end
+
+    at += 1
+  end
+
+  while out.size > 0 and out[out.size - 1].strip == ""
+    out = out.take(out.size - 1)
+  end
+
+  out.join("\n")
+end
+
+def indent(line: String) -> Int
+  return 0 if line.strip == ""
+
+  at = 0
+  while line.slice(at, 1) == " "
+    at += 1
+  end
+
+  at
+end
+
+def padded(text: String, width: Int) -> String
+  out = text
+  while out.length < width
+    out = out + " "
+  end
+
+  out
+end
+
+def entry_frame?(name: String) -> Bool = name.start_with?("repl_entry_")
+
+def session_place?(file: String) -> Bool = file.start_with?(FILE)
+
+# A problem in the style of the session, the answer to the item whose first line is `at`: plain text on stderr with
+# the lines of the session and `typed`, the text of the entry after them, or one JSON object on stdout.
+def report(loop: Loop, problem: Problems.Problem, typed: String, at: Int) -> Void
   named = problem
   text = ""
   if Repl.session_file?(loop.session, problem.file)
@@ -413,7 +555,7 @@ def report(loop: Loop, problem: Problems.Problem, typed: String) -> Void
   end
 
   if loop.style == "json"
-    puts(JSON.encode(JSON.object({"ok": JSON.from(false), "diagnostic": DiagnosticJson.json(named)})))
+    answer(loop, at, {"ok": JSON.from(false), "diagnostic": DiagnosticJson.json(named)})
   elsif loop.style == "ai"
     IO.warn(Ai.ai(named, text))
   else

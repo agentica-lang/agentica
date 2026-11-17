@@ -87,7 +87,9 @@ branch.
   checked; none may call or close over an old function that holds a
   `GLOBAL_SET` (an earlier init function), and the new init sets only new
   slots. New slots need a new entry, the init function that sets them. The
-  slots of the running program keep their values.
+  slots of the running program keep their values. A type declared again is a
+  new entry with the old JSON name, so a session load may repeat a JSON name,
+  and `JSON.decode` takes the last struct, enum or instance of a name.
 
 `vm/tests/loader_test.c` checks each rule by its reason, and truncation at every
 byte of a file with a type table, an Updates section or Globals.
@@ -168,10 +170,10 @@ parser is `agc_launch_parse` (`vm/launch.c`).
     (its slots are not written), or `ok: false` with `refused`, which changed nothing.
   - `loaded: true` says the entry loaded its program, which stays loaded
     whatever the rest of the answer says: the front end keeps its declarations.
-    When the init function crashes, the entry does not run, and the new slots
-    it did not set are marked failed: a read of one fails that task with
-    `RUNTIME-NO-VALUE` (`vm/task.c`), and the child goes on. Any other unset
-    slot is the fatal `RUNTIME-INTERNAL` of a run.
+    When the init function crashes or is cancelled, the entry does not run,
+    and the new slots it did not set are marked failed: a read of one fails
+    that task with `RUNTIME-NO-VALUE` (`vm/task.c`), and the child goes on.
+    Any other unset slot is the fatal `RUNTIME-INTERNAL` of a run.
   - Tasks that an entry starts live on.
 - `agentica file.agc [args...]` runs in one process: the front end compiles in
   memory and hands the bytes to C with `FrontEnd.hand_off`, and C runs them in a

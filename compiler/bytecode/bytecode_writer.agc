@@ -39,12 +39,18 @@ def write(program: Ir.Program, version: String) -> Written = write_over(program,
 
 ## The tables of a program that has none yet.
 def no_tables() -> Function.Tables
-  Function.Tables(constants: Pool.empty(), updates: Pool.empty(), builtins: Pool.empty(), spans: Pool.empty())
+  Function.Tables(
+    constants: Pool.empty(),
+    updates: Pool.empty(),
+    builtins: Pool.empty(),
+    spans: Pool.empty(),
+    types: Pool.empty(),
+  )
 end
 
-## Writes the program as `write` does, with the constant, struct update, builtin and span tables starting from `seed`,
-## the tables of an earlier program whose functions this one starts with: each entry of those tables keeps its number,
-## as the session of `agentica repl` needs (compiler/repl/).
+## Writes the program as `write` does, with the constant, struct update, builtin, span and type tables starting from
+## `seed`, the tables of an earlier program whose functions and types this one starts with: each entry of those tables
+## keeps its number, as the session of `agentica repl` needs (compiler/repl/).
 def write_over(program: Ir.Program, version: String, seed: Function.Tables) -> Over
   if version == ""
     return Over(
@@ -74,25 +80,27 @@ struct Defaults
   constants: Pool.Pool
 end
 
+# A struct or an enum of a field type is found by its name, or by `#N` for the entry at N, which a session of
+# `agentica repl` writes where a name may stand for several entries (compiler/repl/repl_image.agc).
 def build(program: Ir.Program, version: String, seed: Function.Tables) -> Result[Built]
   try check_limits(program)
   struct_index: Map[String, Int] = {}
   at = 0
   for entry in program.structs
-    struct_index = struct_index.put(entry.name, at)
+    struct_index = struct_index.put(entry.name, at).put("##{at}", at)
     at += 1
   end
 
   enum_index: Map[String, Int] = {}
   at = 0
   for entry in program.enums
-    enum_index = enum_index.put(entry.name, at)
+    enum_index = enum_index.put(entry.name, at).put("##{at}", at)
     at += 1
   end
 
-  json = try JsonTypes.build(program, struct_index, enum_index)
+  json = try JsonTypes.build(program, struct_index, enum_index, seed.types)
   # The span of the program is the first run of the span table.
-  tables = seed.with(spans: Spans.intern_one(seed.spans, 0, program.span).pool)
+  tables = seed.with(spans: Spans.intern_one(seed.spans, 0, program.span).pool, types: json.types)
   functions = Wire.start()
   for function in program.functions
     encoded = try Function.encode(program, tables, function)

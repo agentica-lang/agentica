@@ -6,6 +6,22 @@ import json
 
 from tests.agentica_test import cli, run
 
+LIB = """\
+struct P
+  x: Int
+end
+
+def make() -> P = P(x: 1)
+
+def secret() -> Secret = Secret(v: 2)
+
+private
+
+struct Secret
+  v: Int
+end
+"""
+
 
 def repl(tmp_path, *lines, json_style=True):
     words = [*cli(), "repl", "--json"] if json_style else [*cli(), "repl"]
@@ -18,6 +34,15 @@ def answers(got):
 
 def code(answer):
     return answer["diagnostic"]["code"]
+
+
+def start(answer):
+    return answer["diagnostic"]["range"]["start"]
+
+
+def place(answer):
+    found = answer["diagnostic"]["range"]
+    return found["start"]["line"], found["start"]["column"], found["end"]["line"], found["end"]["column"]
 
 
 def test_a_name_keeps_its_value_and_type_across_entries(tmp_path):
@@ -87,22 +112,141 @@ def test_a_name_changes_type_only_with_a_type_written(tmp_path):
 
 
 def test_an_entry_goes_on_while_it_is_open_and_an_empty_line_drops_it(tmp_path):
-    got = repl(tmp_path, "def f(n: Int) -> Int", "  n * 2", "end", "f(", "", "f(4)")
+    got = repl(tmp_path, "def f(n: Int) -> Int", "  n * 2", "end", "f(", "", "f(4)", "## doc", "def g() -> Int = 1",
+               "g()", "  1 +* 2")
     found = answers(got)
     assert found[0]["declared"] == ["f"]
-    assert (found[1]["value"], found[1]["line"]) == ("8", 5)
+    assert found[1] == {"entry": 2, "line": 4, "ok": True, "discarded": True}
+    assert (found[2]["value"], found[2]["line"]) == ("8", 5)
+    assert (found[3]["declared"], found[3]["line"]) == (["g"], 6)
+    assert found[4]["value"] == "1"
+    assert (code(found[5]), start(found[5])) == ("PARSE-UNEXPECTED-TOKEN", {"line": 9, "column": 6})
 
 
 def test_the_commands(tmp_path):
     (tmp_path / "lib.agc").write_text("def helper(n: Int) -> Int = n + 100\n", encoding="utf-8")
-    got = repl(tmp_path, "x = 1", ":type [x]", ":load lib.agc", "helper(x)", ":type", ":nope", ":reset", "x",
+    got = repl(tmp_path, "x = 1", ":type [x]", ":load lib.agc", "helper(x)", ":type", ":nope", ":help", ":reset", "x",
                ":quit", "x")
     found = answers(got)
     assert got.code == 0
-    assert found[1] == {"ok": True, "type": "List[Int]"}
+    assert found[1] == {"entry": 2, "line": 2, "ok": True, "type": "List[Int]"}
     assert found[3]["value"] == "101"
-    assert [code(answer) for answer in found[4:7]] == ["REPL-USAGE", "REPL-UNKNOWN-COMMAND", "CHECK-UNKNOWN-NAME"]
-    assert len(found) == 7
+    assert [code(answer) for answer in found[4:6]] == ["REPL-USAGE", "REPL-UNKNOWN-COMMAND"]
+    assert [place(answer) for answer in found[4:6]] == [(6, 1, 6, 6), (7, 1, 7, 6)]
+    assert [item["command"] for item in found[6]["commands"]] == [":type EXPR", ":load FILE", ":reset", ":quit", ":help"]
+    assert found[7] == {"entry": 8, "line": 9, "ok": True, "reset": True}
+    assert (found[8]["entry"], found[8]["line"], code(found[8])) == (1, 1, "CHECK-UNKNOWN-NAME")
+    assert len(found) == 9
+
+
+def test_load_enters_a_file_with_its_private_part_and_its_imports(tmp_path):
+    (tmp_path / "sub").mkdir()
+    (tmp_path / "sub" / "lib.agc").write_text(LIB, encoding="utf-8")
+    (tmp_path / "sub" / "main.agc").write_text(
+        'import L from "lib"\n\ndef twice(n: Int) -> Int = helper(n) * 2\n\nprivate\n\n'
+        "def helper(n: Int) -> Int = n + L.make().x\n", encoding="utf-8")
+    (tmp_path / "sub" / "bad.agc").write_text('def one() -> Int = 1\n\ndef broken() -> Int = "s"\n', encoding="utf-8")
+    got = repl(tmp_path, ":load sub/main.agc", "twice(3)", ":load sub/bad.agc", ":load sub/nope.agc", "one()")
+    found = answers(got)
+    assert found[0]["declared"] == ["twice", "helper"]
+    assert found[1]["value"] == "8"
+    assert code(found[2]) == "CHECK-TYPE-MISMATCH"
+    assert (found[2]["diagnostic"]["file"], start(found[2])) == ("sub/bad.agc", {"line": 3, "column": 23})
+    assert code(found[3]) == "QUERY-USAGE"
+    assert code(found[4]) == "CHECK-UNKNOWN-NAME"
+
+
+def test_names_the_session_writes_are_refused(tmp_path):
+    got = repl(tmp_path, "repl_shown_ = 1", "[1,\n  ReplEntry3]", "def repl_entry_1() -> Int = 1")
+    found = answers(got)
+    assert [code(answer) for answer in found] == ["REPL-RESERVED-NAME"] * 3
+    assert [place(answer) for answer in found] == [(1, 1, 1, 12), (3, 3, 3, 13), (4, 5, 4, 17)]
+
+
+def test_every_answer_has_its_entry_and_line_and_hides_the_code_around_the_entry(tmp_path):
+    (tmp_path / "run.agc").write_text("z = 2\nxs[9]\n", encoding="utf-8")
+    got = repl(tmp_path, "xs = [1]", "xs[5]", ":load run.agc", "def f(n: Int) -> Int = n / 0", "f(1)",
+               "Task.cancel(Task.current)", "z")
+    found = answers(got)
+    assert [(answer["entry"], answer["line"]) for answer in found] == [(1, 1), (2, 2), (3, 3), (4, 6), (5, 7), (6, 8),
+                                                                       (7, 9)]
+    assert (found[2]["ok"], found[2]["bound"], code(found[2])) == (False, {}, "RUNTIME-INDEX-OUT-OF-RANGE")
+    assert [frame["function"] for frame in found[4]["diagnostic"]["stack"]] == ["f"]
+    assert (code(found[5]), code(found[6])) == ("RUNTIME-TASK-CANCELLED", "CHECK-UNKNOWN-NAME")
+    assert "repl_entry" not in got.stdout and "serve" not in got.stdout
+    plain = repl(tmp_path, "xs = [1]", "xs[5]", "def f(n: Int) -> Int = n / 0", "f(1)", "f(", json_style=False)
+    assert "repl_entry" not in plain.stderr and "serve" not in plain.stderr
+    assert "f at (repl):3:" in plain.stderr
+
+
+def test_a_type_declared_again_drops_every_name_that_holds_it(tmp_path):
+    got = repl(tmp_path, "struct P\n  x: Int\nend", "struct Q\n  p: P\nend", "enum E\n  A\nend",
+               "struct S\n  e: E\nend", "q = Q(p: P(x: 7))", "s = S(e: E.A)", "n = 1", "struct  P\n  x:   Int\nend",
+               "struct P\n  s: String\n  x: Int\nend", "enum E\n  A\n  B\nend", "q", 'Q(p: P(s: "a", x: n)).p.x',
+               "S(e: E.B)")
+    found = answers(got)
+    assert [answer["dropped"] for answer in found[7:10]] == [[], ["q"], ["s"]]
+    assert code(found[10]) == "CHECK-UNKNOWN-NAME"
+    assert (found[11]["value"], found[12]["value"]) == ("1", "S(e: E.B)")
+
+
+def test_a_type_of_an_imported_file_is_its_own(tmp_path):
+    (tmp_path / "lib.agc").write_text(LIB, encoding="utf-8")
+    got = repl(tmp_path, 'import M from "lib"', "a = M.make()", "struct P\n  y: String\nend", "a.x",
+               "b = M.secret()", "M.secret()", "b")
+    found = answers(got)
+    assert found[2]["dropped"] == []
+    assert found[3]["value"] == "1"
+    assert (found[4]["ok"], found[4]["bound"]) == (True, {})
+    assert found[5]["value"] == "Secret(v: 2)"
+    assert code(found[6]) == "CHECK-UNKNOWN-NAME"
+
+
+def test_json_decode_builds_the_current_type_of_a_name(tmp_path):
+    got = repl(tmp_path, "struct P\n  x: Int\nend", "p = P(x: 1)", 'p == JSON.decode("{\\"x\\": 1}", P).unwrap!',
+               "struct P\n  x: Int\n  y: Int = 3\nend", 'JSON.decode("{\\"x\\": 1}", P).unwrap!',
+               "struct Box[T]\n  v: T\nend", 'JSON.decode("{\\"v\\": {\\"x\\": 4}}", Box[P]).unwrap!',
+               "struct Box[T]\n  w: T\nend", 'JSON.decode("{\\"w\\": 2}", Box[Int]).unwrap!',
+               "enum P\n  A\nend")
+    found = answers(got)
+    assert [found[index]["value"] for index in (2, 4, 6, 8)] == ["true", "P(x: 1, y: 3)", "Box(v: P(x: 4, y: 3))",
+                                                                 "Box(w: 2)"]
+    assert found[3]["dropped"] == ["p"]
+    assert (code(found[9]), start(found[9])) == ("REPL-KIND-CHANGE", {"line": 19, "column": 1})
+
+
+# The same declarations and steps as a session and as one file: each value the session shows is the line the file
+# prints for it.
+DECLARATIONS = [
+    "struct Item\n  name: String\n  tags: List[String] = []\nend",
+    "enum Shape\n  Circle(Float)\n  Square(Float)\nend",
+    "def area(shape: Shape) -> Float\n  case shape\n    Shape.Circle(r) -> 3.0 * r * r\n"
+    "    Shape.Square(a) -> a * a\n  end\nend",
+]
+STEPS = [
+    ("items", '[Item(name: "a"), Item(name: "b", tags: ["x"])]'),
+    (None, "items.map { |item| item.name }"),
+    (None, "items[1]"),
+    ("total", "area(Shape.Square(2.0)) + area(Shape.Circle(1.0))"),
+    (None, "total * 2.0"),
+    (None, 'items[0] == JSON.decode("{\\"name\\": \\"a\\"}", Item).unwrap!'),
+    (None, '{"k": items.size}'),
+    (None, '"#{items[0].name}-#{total}"'),
+]
+
+
+def test_a_session_gives_the_values_that_one_file_gives(tmp_path):
+    lines = [f"{name} = {value}" if name else value for name, value in STEPS]
+    found = answers(repl(tmp_path, *DECLARATIONS, *lines))
+    shown = [answer["value"] for answer in found[len(DECLARATIONS):] if "value" in answer]
+    body = [f"  {name} = {value}" if name else f"  puts(({value}).inspect)" for name, value in STEPS]
+    source = tmp_path / "whole.agc"
+    source.write_text("\n\n".join(DECLARATIONS) + "\n\ndef main() -> Void\n" + "\n".join(body) + "\nend\n",
+                      encoding="utf-8")
+    whole = run([*cli(), str(source)], cwd=tmp_path)
+    assert whole.code == 0, whole.stderr
+    assert shown == whole.stdout.splitlines()
+    assert len(shown) == 6
 
 
 def test_the_exit_status(tmp_path):

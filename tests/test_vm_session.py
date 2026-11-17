@@ -256,3 +256,6 @@ def test_serve_session_runs_only_in_the_session_child_and_the_session_takes_stdi
     for flags in (["--session", "--", str(program)], ["--session", "--coverage", "c.info", "-"]):
         refused = run([str(vm_binary()), "run", *flags], env=vm_environment(), timeout=WAIT, stdin="")
         assert refused.code == 2 and "--session" in refused.stderr, flags
+    # A session's program is never a source file, so the run names no source file to run instead.
+    garbled = run([str(vm_binary()), "run", "--session", "-"], env=vm_environment(), timeout=WAIT, stdin="def main")
+    assert garbled.code == 2 and len(garbled.stderr.splitlines()) == 1, garbled.stderr

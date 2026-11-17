@@ -456,8 +456,10 @@ static int compare_names(const void *a, const void *b) {
   return x->bytes < y->bytes ? -1 : x->bytes > y->bytes;
 }
 
-/* No two decodable structs, or two decodable enums, may share a JSON name: JSON.decode finds a type by it. Sorts names. */
+/* No two decodable structs, or two decodable enums, may share a JSON name: JSON.decode finds a type by it. Sorts names.
+   A session load may repeat one: a type declared again keeps its old entry, and JSON.decode takes the last one. */
 static void reject_duplicate_names(reader *r, agc_string **names, uint32_t count) {
+  if (r->base) return;
   // cchecker: ignore CC-GCC-ANALYZER-NULL-ARGUMENT: names is NULL only for a count of 0, which sorts nothing
   if (count) qsort(names, count, sizeof(agc_string *), compare_names);
   for (uint32_t i = 1; i < count; i++)
