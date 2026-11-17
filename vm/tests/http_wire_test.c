@@ -151,6 +151,29 @@ static void test_upgrade(void) {
   assert(head_status("GET / HTTP/1.1\r\nHost: x\r\n\r\n") == 0 && !websocket);
 }
 
+/* The ResponseHead of a response head: `closes` (field 5) says whether the connection ends with the response. An
+   HTTP/1.1 response keeps it unless it says close; an HTTP/1.0 one closes it unless it says keep-alive (RFC 9112 9.3),
+   and a body that runs to the end of input closes it either way. */
+static bool closes(const char *head) {
+  agc_value found = agc_http_response_value(&vm, (const uint8_t *)head, strlen(head), false, 1024, 0, 0, false);
+  const agc_result *r = agc_as_result(&vm, found);
+  assert(r->ok);
+  return agc_as_bool(&vm, agc_as_struct(&vm, r->value)->fields[5]);
+}
+
+static void test_http10_closes(void) {
+  assert(!closes("HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\n"));
+  assert(closes("HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: 2\r\n\r\n"));
+  assert(closes("HTTP/1.0 200 OK\r\nContent-Length: 2\r\n\r\n"));
+  assert(closes("HTTP/1.0 200 OK\r\n\r\n"));
+  assert(!closes("HTTP/1.0 200 OK\r\nConnection: keep-alive\r\nContent-Length: 2\r\n\r\n"));
+  assert(!closes("HTTP/1.0 200 OK\r\nConnection: Foo, Keep-Alive\r\nContent-Length: 2\r\n\r\n"));
+  assert(closes("HTTP/1.0 200 OK\r\nConnection: keep-alive\r\n\r\n"));
+  assert(closes("HTTP/1.0 200 OK\r\nConnection: keep-alive, close\r\nContent-Length: 2\r\n\r\n"));
+  assert(closes("HTTP/1.0 204 No Content\r\n\r\n"));
+  assert(!closes("HTTP/1.0 204 No Content\r\nConnection: keep-alive\r\n\r\n"));
+}
+
 /* The structs the calls need, as a program that uses HttpWire.chunk lists them. */
 static const char *const chunk_fields[] = {"done",  "next",  "runs", "state",       "remaining", "size", "line",
                                            "block", "count", "name", "name_length", "total",     "limit"};
@@ -158,6 +181,8 @@ static const char *const chunk_fields[] = {"done",  "next",  "runs", "state",   
 static const char *const head_fields[] = {"method",          "target",   "path",   "headers", "length", "chunked",
                                           "expect_continue", "buffered", "status", "reason"};
 static const char *const header_fields[] = {"name", "value"};
+static const char *const response_fields[] = {"status", "headers",  "length", "chunked",
+                                              "until_close", "closes", "buffered", "ended"};
 
 int main(void) {
   agc_init();
@@ -165,10 +190,12 @@ int main(void) {
   agc_struct_def structs[] = {
       {agc_make_string("HttpWire.Chunk", 14, 14), 13, false, agc_test_field_names(chunk_fields, 13), NULL, NULL},
       {agc_make_string("HttpWire.Head", 13, 13), 10, false, agc_test_field_names(head_fields, 10), NULL, NULL},
-      {agc_make_string("HttpWire.Header", 15, 15), 2, false, agc_test_field_names(header_fields, 2), NULL, NULL}};
+      {agc_make_string("HttpWire.Header", 15, 15), 2, false, agc_test_field_names(header_fields, 2), NULL, NULL},
+      {agc_make_string("HttpWire.ResponseHead", 21, 21), 8, false, agc_test_field_names(response_fields, 8), NULL,
+       NULL}};
   agc_program program;
   memset(&program, 0, sizeof program);
-  program.struct_count = 3;
+  program.struct_count = 4;
   program.structs = structs;
   vm.rt->program = &program;
   const agc_result *r = agc_as_result(&vm, chunk(fresh(), "1\r\na\r\n0\r\n\r\n"));
@@ -181,6 +208,7 @@ int main(void) {
   test_unread();
   test_byte_keys();
   test_upgrade();
+  test_http10_closes();
   return 0;
 }
 #else

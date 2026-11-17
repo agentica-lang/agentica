@@ -38,6 +38,7 @@ void agc_http_fields_free(agc_http_fields *f);
 size_t agc_http_fields_bytes(const agc_http_fields *f);
 agc_value agc_http_header_list(agc_vm *vm, const agc_http_fields *f);
 bool agc_http_closes(const agc_http_head *head);
+bool agc_http_keeps_alive(const agc_http_head *head);
 agc_http_slice agc_http_text(agc_vm *vm, agc_value v);
 bool agc_http_list_closes(agc_vm *vm, const agc_list *headers);
 agc_error_kind agc_http_status_kind(int status);

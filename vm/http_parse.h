@@ -76,7 +76,7 @@ typedef struct {
 
 typedef struct {
   agc_http_slice method, target, reason;
-  int status;
+  int status, minor;
   agc_http_frame frame;
   uint64_t length;
   size_t count;

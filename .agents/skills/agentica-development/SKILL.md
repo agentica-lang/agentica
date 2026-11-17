@@ -85,6 +85,9 @@ Recipes: `references/frontend.md` ("Common tasks"). Homes:
 - Pipeline stage: `compiler/<context>/<stage>.agc`, wired in
   `compiler/app/pipeline.agc`, with `tests/test_spec_<area>.py` and
   `tests/test_frontend_<stage>.py`.
+- A new `compiler/` file that a file of `stdlib/CORE` imports: its line in
+  `stdlib/CORE`, else `std/analysis` fails; run `tests/test_stdlib_modules.py`
+  and `tests/test_std_analysis.py`.
 - Prelude method (List, Map, Lazy): a `Rule.Prelude` row in
   `builtins_<module>.agc`, an entry in `compiler/catalog/prelude_data.agc`, and a
   body in `stdlib/prelude/` (`references/stages.md`, "Compiler prelude").

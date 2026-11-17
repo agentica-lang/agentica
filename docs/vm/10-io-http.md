@@ -30,7 +30,10 @@ The rules of this section are fixed by the hostile-case tests (10.7.4).
     line fails at once, even where picohttpparser would wait for more.
   - The target is origin form, or `*` with `OPTIONS`, with bytes 33 to 126 only
     (400). The method is token characters only (400). `CONNECT` is 501.
-  - Responses: `HTTP/1.1` only, status 100 to 599. 101 is rejected. At most 15
+  - Responses: `HTTP/1.1` and `HTTP/1.0` (any other version is 505), status
+    100 to 599. An HTTP/1.0 response is framed by `Content-Length` or by the
+    close, never chunked (`Transfer-Encoding` there is 501), and its connection
+    closes unless it says `Connection: keep-alive`. 101 is rejected. At most 15
     interim responses are accepted, and the 16th fails. Responses fail as client
     error `Result`s. A head with status 100 to 199 is returned without framing,
     and the caller counts the interim responses.
@@ -394,8 +397,8 @@ Properties of the client that no test checks:
   socket read cannot be stopped without losing bytes), so the connection
   closes at the end of the stream, after `close_write` and a drain; when the
   stream ended with nothing read, the watcher's pending read is the wait for
-  the next request and its bytes go back as the start of it. HTTP/1.0 never
-  gets here: the parser answers 505.
+  the next request and its bytes go back as the start of it. An HTTP/1.0
+  request never gets here: the parser answers 505.
 - An `Upgrade` answer is a `Reply` (served as a whole answer, the connection
   kept) or an `Accept`. An `Accept` writes the 101 head by hand, then runs the
   session in the connection task with two tasks around it. The reader is the

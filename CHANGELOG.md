@@ -20,9 +20,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - **Breaking:** a connect ends after `connect_timeout_ms` (10 s), even when `timeout_ms` is longer.
 - `agentica repl` runs entries one at a time over a session in which names, declarations and tasks live on; `--json` gives one answer per entry for agents (#1463).
 - A parameter or field default may be the bytes of a string literal, `body: Bytes = "".bytes`, directly or through a constant (#1777).
+- `bytes.scrub(replacement = "�")` reads UTF-8 that may hold bad bytes, replacing each bad sequence, for logs and process output (#1762).
 
 ### Changed
 
+- The `std/http` client accepts HTTP/1.0 responses, which it refused with 505; the connection is not reused unless the response says `Connection: keep-alive` (#1776).
 - The documentation moved to https://www.agentica-lang.com/agentica/; the old agentica-lang.github.io links redirect there.
 - The documentation has breadcrumbs, and search engines index only the latest release: the pages of older versions and of dev point to it.
 - Every version of the documentation has the current look and icon: the releases are built with the current docs theme.

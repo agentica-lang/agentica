@@ -1,5 +1,6 @@
 # Reads a JSON Cases document on stdin and prints, as JSON, the answer of
-# Bytes.decode or String.encode for each case; tests/test_vm_text_codecs.py
+# Bytes.decode, Bytes.scrub or String.encode for each case (scrub replaces
+# with text, "default" for U+FFFD); tests/test_vm_text_codecs.py
 # compares them with Python's bytes.decode and str.encode. JSON has no byte
 # type, so the bytes come and go as lists of Ints.
 struct Case
@@ -21,6 +22,13 @@ struct Answer
 end
 
 def answer(c: Case) -> Answer
+  if c.op == "scrub"
+    data = Bytes.from_list(c.data).unwrap!
+    if c.text == "default"
+      return Answer(passed: true, data: [], text: data.scrub, message: "")
+    end
+    return Answer(passed: true, data: [], text: data.scrub(c.text), message: "")
+  end
   if c.op == "decode"
     case Bytes.from_list(c.data).unwrap!.decode(c.encoding)
       ok(text) -> return Answer(passed: true, data: [], text: text, message: "")
