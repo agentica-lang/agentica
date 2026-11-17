@@ -179,6 +179,11 @@ parser is `agc_launch_parse` (`vm/launch.c`).
     and the new slots it did not set are marked failed: a read of one fails
     that task with `RUNTIME-NO-VALUE` (`vm/task.c`), and the child goes on.
     Any other unset slot is the fatal `RUNTIME-INTERNAL` of a run.
+  - The end of the run is the last answer, which the front end reads as the
+    answer of the entry it waits for: `exited` with the status of
+    `System.exit`, or the fatal failure that ended the run with `lost: true`,
+    which the child then does not print (it still ends with 1). A child that
+    dies without either (a signal) answers nothing.
   - Tasks that an entry starts live on.
 - `agentica file.agc [args...]` runs in one process: the front end compiles in
   memory and hands the bytes to C with `FrontEnd.hand_off`, and C runs them in a

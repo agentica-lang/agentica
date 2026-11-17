@@ -85,6 +85,14 @@ end
   only (`install` does not build it): from a private copy of the `native/`
   files its locked hash covers (`PKG-HASH-MISMATCH` if `deps/` differs), so
   dotfiles are left out and a header outside `native/` is not found.
+- `prebuilt = { url, source, api, sha256 = { TARGET = "<64 hex>" } }` beside
+  `build` names the files built from it, one per target (`linux-x86_64`,
+  `linux-arm64`, `macos-x86_64`, `macos-arm64`, `windows-x86_64`). The URL is
+  https with `{target}`, and may use `{name}`, `{api}`, `{ext}`, `{source}`.
+  `agentica native source NAME` prints the `source` key, the `api` and each
+  URL. `[native_policy]` in the root manifest takes `build` and
+  `prebuilt_only` (`"all"` or a list of names). Both are checked
+  (`PKG-MANIFEST-INVALID` at the key); modules still build from source.
 - `optional = true` beside `build` (it needs `build`): a module that cannot
   be built (no compiler, a compile error) prints `warning: native module NAME
   not built: ...` once a run on stderr (`PKG-NATIVE-UNBUILT`, a JSON object

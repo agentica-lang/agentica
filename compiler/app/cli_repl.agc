@@ -331,13 +331,7 @@ end
 # The answer of the child to an entry whose first line is `at`.
 def ran(loop: Loop, text: String, request: Repl.Request, at: Int) -> Step
   answer = asked(loop.child, request)
-  if !answer.ok?
-    finish_quiet(loop)
-    status = ended(loop)
-    problem = repl_problem(loop, "REPL-SESSION-LOST", "the session ended with status #{status}", text)
-    report(loop, problem, text, at)
-    return Step.Done(status)
-  end
+  return lost(loop, text, at, JSON.null()) if !answer.ok?
 
   parsed = JSON.parse(answer.unwrap!)
   if !parsed.ok?
@@ -347,6 +341,20 @@ def ran(loop: Loop, text: String, request: Repl.Request, at: Int) -> Step
   end
 
   root = parsed.unwrap!
+  return lost(loop, text, at, root) if flag(root, "lost")
+
+  # System.exit ended the child, which says so: the session ends quietly with its status.
+  if JSON.get(root, "exited").ok?
+    finish_quiet(loop)
+    status = ended(loop)
+    if loop.style == "json"
+      answer(loop, at, {"ok": JSON.from(true), "exited": JSON.from(status)})
+    end
+
+    IO.flush()
+    return Step.Done(status)
+  end
+
   passed = flag(root, "ok")
   session = Repl.typed(loop.session, text)
   if passed
@@ -578,6 +586,31 @@ def report(loop: Loop, problem: Problems.Problem, typed: String, at: Int) -> Voi
   end
 
   IO.flush()
+end
+
+# The child ended during the entry: REPL-SESSION-LOST, after the failure that ended it when the child sent one
+# (`found`, JSON null otherwise), shown as the failure of an entry is. The session ends with the child's status.
+def lost(loop: Loop, text: String, at: Int, found: JSON.Value) -> Step
+  finish_quiet(loop)
+  status = ended(loop)
+  problem = repl_problem(loop, "REPL-SESSION-LOST", "the session ended with status #{status}", text)
+  diagnostic = JSON.get(found, "diagnostic")
+  if loop.style == "json"
+    fields = {"ok": JSON.from(false), "diagnostic": DiagnosticJson.json(problem.with(file: FILE))}
+    if diagnostic.ok?
+      fields = fields.put("cause", cleaned_json(diagnostic.unwrap!))
+    end
+
+    answer(loop, at, fields)
+  else
+    if diagnostic.ok?
+      IO.warn(cleaned_text(text_of(found, "text")))
+    end
+
+    report(loop, problem, text, at)
+  end
+
+  Step.Done(status)
 end
 
 # A problem of the session at the line after its last, whose text is `text`.

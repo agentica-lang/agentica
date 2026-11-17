@@ -11,8 +11,10 @@
 ## existing path is an error, a missing parent is an error), then streams the archive in 64 KiB chunks (`File.chunks`,
 ## through `gunzip` for a gzipped one) without ever holding the whole file, the whole decompressed stream or a skipped
 ## entry in memory. It scans the whole container through the two zero end blocks and the zeros-only padding after them,
-## so a duplicate, a missing member or a bad checksum after a selected file is still an error. A gzipped archive must
-## hold exactly one gzip member with its CRC and size verified and no trailing bytes. Only regular files are written,
+## so a duplicate, a missing member or a bad checksum after a selected file is still an error. A gzipped archive is
+## read through `gunzip`, which takes every gzip member with its CRC and size verified, so the TAR they carry must end
+## with the two zero blocks and zero padding: a second archive or any other byte after it is an error, and so are bytes
+## after the last gzip member. Only regular files are written,
 ## each with `create_private` and parents made under the new base; links, devices and sparse entries are refused when
 ## selected and skipped otherwise. Names keep their archive spelling after one optional leading `./`, so `./lib.so` and
 ## `lib.so` are the same member; the root header `.` or `./` of an archive of `.` is allowed but never extracted.
@@ -642,7 +644,7 @@ def append_out(out: String, piece: Bytes, deadline: Int) -> Result[Void]
   end
 end
 
-# Scans the whole TAR stream (the file, or its one gzip member) through the end blocks and the zero padding, writing
+# Scans the whole TAR stream (the file, or its gzip members) through the end blocks and the zero padding, writing
 # every selected file on the way, then names a member the archive never held.
 def scan_all(src: String, gzip: Bool, scan: Scan, members: List[String]) -> Result[List[Int]]
   deadline = scan.ctx.deadline

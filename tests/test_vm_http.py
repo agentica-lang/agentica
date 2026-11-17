@@ -248,9 +248,36 @@ def line(path: String, r: Result[HTTP.Response]) -> Void
   end
 end
 
+def streamed(opened: Result[HTTP.Stream]) -> String
+  case opened
+    ok(stream) ->
+      all: List[Bytes] = []
+      while true
+        case stream.body.recv(5000)
+          ok(piece) -> all = all.push(piece)
+          error(_) -> break
+        end
+      end
+      outcome = "done ok"
+      case Task.await(stream.done)
+        error(message) -> outcome = "done error: #{message}"
+        ok(_) -> outcome = "done ok"
+      end
+      return "#{stream.status} #{decoded(Bytes.concat(all))} #{outcome}"
+    error(e) -> return e.message
+  end
+end
+
 def main() -> Void
   raw = "http://127.0.0.1:#{System.args()[3]}"
   pool = Result.unwrap!(HTTP.client(options(5000, 1, 1000, "")))
+  line("/http10-big", HTTP.get(pool, raw + "/http10-big"))
+  line("/http10-204", HTTP.get(pool, raw + "/http10-204"))
+  line("/http10-304", HTTP.get(pool, raw + "/http10-304"))
+  line("/http10-head", HTTP.request(pool, "HEAD", raw + "/http10-head", "".bytes))
+  line("/http10-head-get", HTTP.get(pool, raw + "/http10-head"))
+  line("/http10 HEAD", HTTP.request(pool, "HEAD", raw + "/http10", "".bytes))
+  puts("open #{streamed(HTTP.open("GET", raw + "/http10-close", "".bytes, [], options(5000, 1, 1000, "")))}")
   for path in ["/http10", "/http10-open", "/http10-keep", "/http10-close", "/http10-keep-nolength", "/http10-chunked"]
     line(path, HTTP.get(pool, raw + path))
     line(path, HTTP.get(pool, raw + path))
@@ -1069,6 +1096,13 @@ def test_public_connection_against_hostile_raw_responses(tmp_path, adopt):
 def test_client_accepts_http10_responses_and_keeps_a_connection_only_with_keep_alive(tmp_path, adopt):
     _, ports = start_peer(adopt)
     check_lines(run_program(tmp_path, "http10", HTTP10_PROGRAM, ports), [
+        "/http10-big http: body exceeds max_body_bytes",
+        "/http10-204 204  0",
+        "/http10-304 304  0",
+        "/http10-head 200  0",
+        "/http10-head-get http: unsupported transfer encoding",
+        "/http10 HEAD 200  0",
+        "open 200 until the end done ok",
         "/http10 200 ok 2",
         "/http10 200 ok 2",
         "/http10-open 200 ok 2",
