@@ -2042,14 +2042,19 @@ def check_connect_to(options: HttpWire.ClientOptions) -> Result[Void]
   return ok() if address == ""
 
   if not ipv4_address?(address) and not ipv6_address?(address)
-    return error("http: connect_to must be an IP address (IPv4 a.b.c.d, or IPv6 without brackets)", kind: "argument")
+    return error(
+      "http: connect_to must be a destination IP address (IPv4 a.b.c.d or IPv6, not 0.0.0.0 or ::)",
+      kind: "argument",
+    )
   end
+
   return error("http: connect_to cannot be used with a proxy", kind: "argument") if options.proxy != ""
 
   ok()
 end
 
-# Four decimal numbers from 0 to 255 with no leading zero: the resolver reads `012` as octal and `010` as 8.
+# Four decimal numbers from 0 to 255 with no leading zero: the resolver reads `012` as octal and `010` as 8. `0.0.0.0`
+# is refused with the unspecified IPv6 address: it is no destination, and on Linux it reaches the local host.
 def ipv4_address?(text: String) -> Bool
   parts = String.split(text, ".")
   return false if List.size(parts) != 4
@@ -2059,22 +2064,38 @@ def ipv4_address?(text: String) -> Bool
     return false if part.start_with?("0") and String.length(part) > 1
     return false if part.to_i! > 255
   end
-  true
+  text != "0.0.0.0"
 end
 
-# At most 8 groups of 1 to 4 hex digits, one `::` at most, and no dotted tail. An IPv4-mapped
-# address (`::ffff:a.b.c.d`,
-# or its hex form) is refused: a caller passes the IPv4 address itself, so a check of it has one form to classify.
+# At most 8 groups of 1 to 4 hex digits, one `::` at most, and no dotted tail. The unspecified address (`::`) and an
+# IPv4-mapped one (`::ffff:a.b.c.d` or its hex form) are refused: a caller passes the IPv4 address itself, so a check
+# of it has one form to classify.
 def ipv6_address?(text: String) -> Bool
+  groups = ipv6_groups(text)
+  return false if groups == []
+  return false if ipv4_mapped?(groups)
+
+  for group in groups
+    return true if group != 0
+  end
+  false
+end
+
+# The 8 numbers of an IPv6 address with its `::` filled in, or `[]` when `text` is not one in the strict form.
+def ipv6_groups(text: String) -> List[Int]
+  invalid: List[Int] = []
   halves = String.split(text, "::")
-  return false if text == "" or List.size(halves) > 2
+  return invalid if text == "" or List.size(halves) > 2
 
   head = hex_groups(halves[0])
-  return false if head == [-1]
-  return List.size(head) == 8 and not ipv4_mapped?(head) if List.size(halves) == 1
+  return invalid if head == [-1]
+  if List.size(halves) == 1
+    return invalid if List.size(head) != 8
+    return head
+  end
 
   tail = hex_groups(halves[1])
-  return false if tail == [-1] or List.size(head) + List.size(tail) > 7
+  return invalid if tail == [-1] or List.size(head) + List.size(tail) > 7
 
   groups = head
   for _ in 0..(7 - List.size(head) - List.size(tail))
@@ -2083,7 +2104,7 @@ def ipv6_address?(text: String) -> Bool
   for group in tail
     groups = groups.push(group)
   end
-  not ipv4_mapped?(groups)
+  groups
 end
 
 def ipv4_mapped?(groups: List[Int]) -> Bool

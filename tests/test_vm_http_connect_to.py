@@ -152,11 +152,12 @@ def main() -> Void
 
   # Refused: a host name, a loose or ambiguous spelling of an address, and a proxy.
   for address in ["localhost", "127.0.0.010", "012.0.0.1", "127.0.0.1:80", "1.2.3", "256.0.0.1", "abc:def", ":", ":::",
-                  "1::2::3", "::ffff:127.0.0.1", "::ffff:7f00:1", "[::1]", "1:2:3:4:5:6:7:8:9", "::1%lo"]
+                  "1::2::3", "::ffff:127.0.0.1", "::ffff:7f00:1", "[::1]", "1:2:3:4:5:6:7:8:9", "::1%lo", "0.0.0.0",
+                  "::", "0:0:0:0:0:0:0:0", "0::0"]
     puts("refused #{address} #{HTTP.client(HTTP.ClientOptions(connect_to: address)).ok?}")
   end
   show("name call", HTTP.get_response("http://name.test:#{plain}/", HTTP.ClientOptions(connect_to: "localhost")))
-  for address in ["127.0.0.1", "::1", "::", "2001:db8::1", "1:2:3:4:5:6:7:8"]
+  for address in ["127.0.0.1", "::1", "2001:db8::1", "1:2:3:4:5:6:7:8"]
     puts("accepted #{address} #{HTTP.client(HTTP.ClientOptions(connect_to: address)).ok?}")
   end
   puts("proxy #{HTTP.client(HTTP.ClientOptions(connect_to: "127.0.0.1", proxy: "http://127.0.0.1:9")).ok?}")
@@ -165,7 +166,8 @@ end
 
 
 REFUSED = ["localhost", "127.0.0.010", "012.0.0.1", "127.0.0.1:80", "1.2.3", "256.0.0.1", "abc:def", ":", ":::",
-           "1::2::3", "::ffff:127.0.0.1", "::ffff:7f00:1", "[::1]", "1:2:3:4:5:6:7:8:9", "::1%lo"]
+           "1::2::3", "::ffff:127.0.0.1", "::ffff:7f00:1", "[::1]", "1:2:3:4:5:6:7:8:9", "::1%lo", "0.0.0.0",
+           "::", "0:0:0:0:0:0:0:0", "0::0"]
 
 
 def test_connect_to_reaches_the_address_with_the_host_and_name_of_the_url(tmp_path, peer):
@@ -197,7 +199,7 @@ def test_connect_to_reaches_the_address_with_the_host_and_name_of_the_url(tmp_pa
     assert lines[14:14 + len(REFUSED)] == ["refused %s false" % address for address in REFUSED]
     rest = lines[14 + len(REFUSED):]
     assert rest[0].startswith("name call argument "), rest[0]
-    assert rest[1:] == ["accepted %s true" % a for a in ["127.0.0.1", "::1", "::", "2001:db8::1", "1:2:3:4:5:6:7:8"]] \
+    assert rest[1:] == ["accepted %s true" % a for a in ["127.0.0.1", "::1", "2001:db8::1", "1:2:3:4:5:6:7:8"]] \
         + ["proxy false"]
 
 
@@ -215,9 +217,10 @@ end
 
 def test_connect_to_reaches_an_ipv6_address(tmp_path):
     try:
-        server = Peer(v6=True)
+        Peer.listen("::1").close()
     except OSError:
         pytest.skip("host-only: this system has no IPv6 loopback")
+    server = Peer(v6=True)
     try:
         port = server.plain.getsockname()[1]
         result = run_vm(compile_text(V6_PROGRAM, "connect-to-v6", tmp_path), env=vm_environment(), args=[str(port)])
