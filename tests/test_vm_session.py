@@ -89,8 +89,9 @@ def text(value):
     return u32(len(data)) + data
 
 
-def built(divisor=None):
-    """main and show; with DIVISOR, an init function that sets slot 0 to 42 / DIVISOR, and use, which shows it."""
+def built(divisor=None, sets=True):
+    """main and show; with DIVISOR, an init function that sets slot 0 to 42 / DIVISOR (unless not SETS), and use,
+    which shows it."""
     void, hello = b"\x00", b"\x06" + text("hello")
     constants = [hello, void]
     functions = [
@@ -101,7 +102,7 @@ def built(divisor=None):
         constants += [b"\x04" + struct.pack("<q", 42), b"\x04" + struct.pack("<q", divisor)]
         functions += [
             ("init", 2, [("STEP", 1, 0, 0), ("CONST", 0, 2, 0), ("CONST", 1, 3, 0), ("DIV_I", 0, 0, 1),
-                         ("GLOBAL_SET", 0, 0, 0), ("CONST", 0, 1, 0), ("RETURN", 0, 0, 0)]),
+                         ("GLOBAL_SET" if sets else "MOVE", 0, 0, 0), ("CONST", 0, 1, 0), ("RETURN", 0, 0, 0)]),
             ("use", 2, [("STEP", 1, 0, 0), ("GLOBAL", 0, 0, 0), ("LIST", 1, 0, 1), ("RETURN", 1, 0, 0)]),
         ]
     out = b"AGCB" + u32(FORMAT) + text(VERSION) + u32(1) + text("session.agc") + text("session\n")
@@ -214,6 +215,15 @@ def test_an_init_that_crashes_leaves_its_program_loaded_and_its_slot_failed(fron
     assert failed["diagnostic"]["code"] == "RUNTIME-NO-VALUE"
     assert answers[2:] == [{"ok": True, "value": "hello"}, "exit 0"]
     assert err == ""
+
+
+def test_a_slot_that_no_crash_left_unset_is_a_broken_program(front, tmp_path):
+    base, unset = tmp_path / "base.agcb", tmp_path / "unset.agcb"
+    base.write_bytes(built())
+    unset.write_bytes(built(divisor=1, sets=False))
+    got = front_end(front, "session", str(vm_binary()), str(base), "json", "@%s" % unset, entry(BUILT_USE))
+    assert got.code != 0
+    assert json.loads(got.stderr.splitlines()[0])["code"] == "RUNTIME-INTERNAL"
 
 
 def test_the_child_ends_when_the_front_end_is_killed(front, program):

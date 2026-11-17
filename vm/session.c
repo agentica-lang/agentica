@@ -26,6 +26,9 @@ struct agc_session {
   const char *problem;
   /* The entry loaded a program, which stays loaded whatever its answer: the answer says "loaded". */
   bool loaded;
+  /* The program this entry loaded and the first of the slots its init function sets. */
+  agc_program *grown;
+  uint32_t first_new_slot;
   bool in_init, deny_native;
   uint32_t entry, read_count, write_count;
   uint32_t *reads, *writes;
@@ -263,6 +266,8 @@ static const char *take_entry(agc_vm *vm, agc_session *s, const char *at, const 
       return NULL;
     }
     next = loaded;
+    s->grown = loaded;
+    s->first_new_slot = base->global_count;
   }
   const agc_function *f = s->entry < next->function_count ? &next->functions[s->entry] : NULL;
   if (!f || f->params != s->read_count || f->captures != 0) return "the entry function does not take the slots";
@@ -297,6 +302,12 @@ static void serve_line(agc_vm *vm, agc_session *s, const agc_string *line, uint3
 
 /* A retry builtin of the main task, like Test.run (vm/testing.c): each wake comes back here and goes on from the
    session's state. The end of the channel ends the run with 0, a broken or missing channel with 1. */
+static void mark_failed(agc_session *s) {
+  agc_program *p = s->grown;
+  for (uint32_t k = s->first_new_slot; k < p->global_count; k++)
+    if (p->globals[k].tag == AGC_T_VOID) p->globals[k].as.i = AGC_GLOBAL_FAILED;
+}
+
 agc_value agc_session_serve(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)args;
   agc_session *s = vm->rt->session;
@@ -317,6 +328,7 @@ agc_value agc_session_serve(agc_vm *vm, agc_value *args, uint32_t span) {
       if (t->crashed) {
         /* A crashed init leaves its program loaded, as the front end keeps its declarations; a later read of a slot it
            did not set fails that entry with RUNTIME-NO-VALUE (vm/task.c). */
+        if (s->in_init) mark_failed(s);
         s->in_init = false;
         s->record = crashed(vm, s, t);
       } else if (s->in_init) {

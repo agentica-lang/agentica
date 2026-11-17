@@ -197,7 +197,10 @@ The design (trie, unboxed Int and Float leaves, builders, costs) is
 - Globals: `GLOBAL_SET` runs at most once and before `main`, and only the entry
   runs it. So `agc_program.globals` is read-only afterwards, and a scheduler on
   another thread needs no lock (`docs/vm/10-io-multicore.md` §10.2.3). A zeroed
-  slot is `AGC_T_VOID` ("never set"); `GLOBAL` of one is `RUNTIME-INTERNAL`. A
+  slot is `AGC_T_VOID` ("never set"); `GLOBAL` of one is `RUNTIME-INTERNAL`,
+  except in the session child of `agentica repl`, where a slot that a crashed
+  init function did not set fails that task with `RUNTIME-NO-VALUE`
+  (`session_unset_read` in `vm/task.c`). A
   loaded program runs once; a test that reads an unset slot loads a fresh
   program. If a program ever runs twice for real, the table moves into
   `agc_runtime`.
