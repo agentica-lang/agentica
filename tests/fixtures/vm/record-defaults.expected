@@ -1,10 +1,11 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 97,
+  "steps": 114,
   "stdout": [
     "30000 30000 4 1048576 true",
     "10000 300000 0",
+    "true 127.0.0.1",
     "30000 2 true",
     "5 30000 128 1048576",
     "HTTP.ServerOptions(request_timeout_ms: 30000, idle_timeout_ms: 30000, max_connections: 128, max_body_bytes: 1048576)",
