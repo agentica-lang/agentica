@@ -336,17 +336,18 @@ static void serve_line(agc_vm *vm, agc_session *s, const agc_string *line, uint3
 /* The end of the run answers the entry the front end waits for: `exited` with the status of System.exit, or the
    failure that ended the run marked `lost`, which the front end shows without the names the session wrote around
    the entry. True when the failure went to the front end, which then shows it instead of the run. An end between
-   entries is read as the answer of the next one; a channel already closed takes nothing. */
-bool agc_session_ended(agc_vm *vm, const agc_outcome *outcome) {
+   entries is read as the answer of the next one; a channel already closed takes nothing. The line is out by BY
+   (agc_clock_ms) or not at all. */
+bool agc_session_ended(agc_vm *vm, const agc_outcome *outcome, uint64_t by) {
   if (!vm->rt->session) return false;
   if (outcome->kind == AGC_FAILED) {
     const agc_string *line = failure(vm, vm->rt->program, outcome, false, true);
-    return agc_parent_send_last(vm, line->data, line->bytes);
+    return agc_parent_send_last(vm, line->data, line->bytes, by);
   }
   if (outcome->kind != AGC_EXITED) return false;
   char line[48];
   int n = snprintf(line, sizeof line, "{\"exited\":%" PRId64 "}\n", outcome->exit_code);
-  if (n > 0 && (size_t)n < sizeof line) (void)agc_parent_send_last(vm, line, (size_t)n);
+  if (n > 0 && (size_t)n < sizeof line) (void)agc_parent_send_last(vm, line, (size_t)n, by);
   return false;
 }
 
