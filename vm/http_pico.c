@@ -76,7 +76,8 @@ static agc_http_error response_line(const uint8_t *s, size_t len) {
   size_t k = 0;
   while (k < len && s[k] != ' ') k++;
   agc_http_slice version = {s, k};
-  if (!same(version, "HTTP/1.1")) return version_shape(version) ? AGC_HTTP_ERR_VERSION : AGC_HTTP_ERR_HEAD;
+  if (!same(version, "HTTP/1.1") && !same(version, "HTTP/1.0"))
+    return version_shape(version) ? AGC_HTTP_ERR_VERSION : AGC_HTTP_ERR_HEAD;
   if (k == len) return AGC_HTTP_ERR_HEAD;
   while (k < len && s[k] == ' ') k++;
   if (len - k < 3) return AGC_HTTP_ERR_HEAD;
@@ -138,6 +139,11 @@ static agc_http_status framed(agc_http_head *out, bool request, size_t end, size
   return AGC_HTTP_OK;
 }
 
+static void start_head(agc_http_head *out, int minor) {
+  memset(out, 0, sizeof *out);
+  out->minor = minor;
+}
+
 agc_http_status agc_http_parse_request_head(const uint8_t *buf, size_t len, agc_http_head *out, size_t *used,
                                             agc_http_error *error) {
   *error = AGC_HTTP_ERR_NONE;
@@ -152,7 +158,7 @@ agc_http_status agc_http_parse_request_head(const uint8_t *buf, size_t len, agc_
   int r = phr_parse_request((const char *)buf, scan.end, &method, &method_len, &target, &target_len, &minor, fields,
                             &count, 0);
   if (r < 0 || (size_t)r != scan.end) return failed(error, AGC_HTTP_ERR_HEAD);
-  memset(out, 0, sizeof *out);
+  start_head(out, minor);
   out->method = (agc_http_slice){(const uint8_t *)method, method_len};
   out->target = (agc_http_slice){(const uint8_t *)target, target_len};
   status = copy_fields(out, fields, count, error);
@@ -181,7 +187,7 @@ agc_http_status agc_http_parse_response_head(const uint8_t *buf, size_t len, agc
   int minor, code;
   int r = phr_parse_response((const char *)buf, scan.end, &minor, &code, &reason, &reason_len, fields, &count, 0);
   if (r < 0 || (size_t)r != scan.end) return failed(error, AGC_HTTP_ERR_HEAD);
-  memset(out, 0, sizeof *out);
+  start_head(out, minor);
   out->status = code;
   out->reason = (agc_http_slice){(const uint8_t *)reason, reason_len};
   if (code < 100 || code > 599) return failed(error, AGC_HTTP_ERR_STATUS);
