@@ -169,8 +169,9 @@ parser is `agc_launch_parse` (`vm/launch.c`).
   - `loaded: true` says the entry loaded its program, which stays loaded
     whatever the rest of the answer says: the front end keeps its declarations.
     When the init function crashes, the entry does not run, and the new slots
-    it did not set are marked failed: a later read of one fails that entry's
-    task with `RUNTIME-NO-VALUE`, and the child goes on.
+    it did not set stay unset: in the session child a read of an unset slot
+    fails that task with `RUNTIME-NO-VALUE` (`vm/task.c`), not with the fatal
+    `RUNTIME-INTERNAL` of a run, and the child goes on.
   - Tasks that an entry starts live on.
 - `agentica file.agc [args...]` runs in one process: the front end compiles in
   memory and hands the bytes to C with `FrontEnd.hand_off`, and C runs them in a

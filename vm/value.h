@@ -705,10 +705,6 @@ agc_c_resource *agc_as_c_resource(agc_vm *vm, agc_value v);
    too. */
 CC_JUMPS _Noreturn void agc_wrong_tag(agc_vm *vm);
 
-/* The payload of a Void Globals slot whose init function crashed in a session (vm/session.c): a read of it fails
-   with RUNTIME-NO-VALUE, not with the internal error of a slot that was never set. */
-#define AGC_GLOBAL_FAILED 1
-
 static inline agc_value agc_void(void) {
   agc_value v;
   memset(&v, 0, sizeof v);

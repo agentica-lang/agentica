@@ -24,9 +24,6 @@ struct agc_session {
   agc_string *record;
   agc_task *current;
   const char *problem;
-  /* The program this entry loaded, while its init function runs, and the first of the slots that init sets. */
-  agc_program *grown;
-  uint32_t first_new_slot;
   /* The entry loaded a program, which stays loaded whatever its answer: the answer says "loaded". */
   bool loaded;
   bool in_init, deny_native;
@@ -102,14 +99,6 @@ static agc_string *crashed(agc_vm *vm, agc_session *s, agc_task *t) {
   if (t->crash_stack) o.stack = *t->crash_stack;
   agc_task_observe(vm, t);
   return failure(vm, vm->rt->program, &o, s->loaded);
-}
-
-/* An init function that crashed leaves its program loaded, as the front end keeps its declarations, and the slots it
-   did not set marked failed: a read of one fails that entry with RUNTIME-NO-VALUE (vm/interp.c). */
-static void mark_failed(agc_session *s) {
-  agc_program *p = s->grown;
-  for (uint32_t k = s->first_new_slot; k < p->global_count; k++)
-    if (p->globals[k].tag == AGC_T_VOID) p->globals[k].as.i = AGC_GLOBAL_FAILED;
 }
 
 /* An entry that ran but gave back what no entry gives: its effects stay, so it is not refused. */
@@ -274,8 +263,6 @@ static const char *take_entry(agc_vm *vm, agc_session *s, const char *at, const 
       return NULL;
     }
     next = loaded;
-    s->grown = loaded;
-    s->first_new_slot = base->global_count;
   }
   const agc_function *f = s->entry < next->function_count ? &next->functions[s->entry] : NULL;
   if (!f || f->params != s->read_count || f->captures != 0) return "the entry function does not take the slots";
@@ -304,7 +291,6 @@ static void serve_line(agc_vm *vm, agc_session *s, const agc_string *line, uint3
   }
   const char *problem = "an unknown request";
   s->loaded = false;
-  s->grown = NULL;
   if (line->bytes > 6 && memcmp(text, "entry ", 6) == 0) problem = take_entry(vm, s, text + 6, end, span);
   if (problem) s->record = refused(vm, problem);
 }
@@ -329,7 +315,8 @@ agc_value agc_session_serve(agc_vm *vm, agc_value *args, uint32_t span) {
       agc_task *t = s->current;
       s->current = NULL;
       if (t->crashed) {
-        if (s->in_init) mark_failed(s);
+        /* A crashed init leaves its program loaded, as the front end keeps its declarations; a later read of a slot it
+           did not set fails that entry with RUNTIME-NO-VALUE (vm/task.c). */
         s->in_init = false;
         s->record = crashed(vm, s, t);
       } else if (s->in_init) {

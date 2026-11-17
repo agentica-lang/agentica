@@ -1531,12 +1531,8 @@ reload:
            has type Void, so it means "never set": only a hand-made
            file reads one (or a slot it unset with GLOBAL_SET of a Void). */
         agc_value g = p->globals[bx];
-        if (g.tag == AGC_T_VOID) {
-          if (g.as.i == AGC_GLOBAL_FAILED)
-            agc_fail(vm, "RUNTIME-NO-VALUE", "this name has no value: its definition failed in an earlier entry",
-                     SPAN);
+        if (g.tag == AGC_T_VOID)
           agc_fail(vm, "RUNTIME-INTERNAL", "invalid bytecode: global read before it was set", SPAN);
-        }
         R[in.a] = g;
         break;
       }
