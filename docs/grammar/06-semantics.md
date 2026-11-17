@@ -457,13 +457,14 @@ a statement and the block gives no value; otherwise it gives the value. Arms of
 two different non-`Void` types are `CHECK-TYPE-MISMATCH`, even when another arm
 is `Void`.
 
-Exhaustiveness and reachability are conservative, and no deeper analysis is
-done. An arm covers its variant only when it has no guard and every slot is a
-name or `_`. An arm with a guard, a literal slot or a nested variant covers
-nothing: it is a test that may fail. So a guarded `_ if c ->` does not make a
-case exhaustive, and a case that matches only `Shape.Boxed(some(n))` (a variant
-with an `Optional` payload) needs a `Shape.Boxed(_)` arm (or `_`) after it, as
-`ok(Reading.Value(n))` needs `ok(_)` and `some(0)` needs `some(n)` or `_`. An
+Exhaustiveness and reachability are conservative. An arm covers its variant
+when it has no guard and every slot is a name or `_`. Nested variant patterns
+cover together what their variants cover: `ok(ok(n))`, `ok(error(_))` and
+`error(_)` cover a `Result[Result[Int]]`, and `Shape.Boxed(some(n))` with
+`Shape.Boxed(none)` cover `Shape.Boxed`, slot by slot. A guarded arm covers
+nothing, and a literal slot never covers its type: `some(0)` needs `some(n)` or
+`_`, and a guarded `_ if c ->` does not make a case exhaustive. An arm after
+a complete set of nested arms is not reported (for now). An
 arm is unreachable (`CHECK-UNREACHABLE-CASE-ARM`) only when an earlier arm
 without a guard already covers its variant with names and `_`, or follows an
 unguarded catch-all. The same pattern may come again after a guarded or
