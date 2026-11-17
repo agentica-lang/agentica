@@ -260,7 +260,7 @@ static an_term term_of(agc_value v) {
 }
 
 static agc_string *decoded(const char *text, size_t len) {
-  return agc_utf8_decode((const uint8_t *)text, len, REPLACEMENT, false);
+  return agc_utf8_decode((const uint8_t *)text, len, REPLACEMENT);
 }
 
 __attribute__((format(printf, 4, 5))) static _Noreturn void fail_with(agc_vm *vm, const char *code, uint32_t span,

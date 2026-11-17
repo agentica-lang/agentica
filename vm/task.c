@@ -659,7 +659,7 @@ static void crash(agc_vm *vm, agc_task *t) {
   AGC_TRACE(&vm->rt->trace, AGC_TRACE_SCHED, "crash task=%" PRIu64 " code=%s", t->id, o->code);
   t->crash = agc_crash_text(vm->rt->program, o);
   t->crash_code = o->code;
-  t->crash_message = agc_utf8_decode((const uint8_t *)o->message, o->message_len, "\xEF\xBF\xBD", false);
+  t->crash_message = agc_utf8_decode((const uint8_t *)o->message, o->message_len, "\xEF\xBF\xBD");
   t->crash_span = o->span;
   if (o->stack.shown) {
     t->crash_stack = agc_alloc_atomic(sizeof *t->crash_stack);

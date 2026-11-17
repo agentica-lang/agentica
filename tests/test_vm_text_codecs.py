@@ -14,12 +14,13 @@ The error texts and the fixed cases are the VM fixture text-codecs.
 """
 import codecs
 import json
+import os
 import random
 import re
 
 import pytest
 
-from tests.agentica_test import FIXTURES, compile_agc, run_vm
+from tests.agentica_test import FIXTURES, compile_agc, run_vm, vm_environment
 
 UNICODE = ["utf-8", "utf-16", "utf-16le", "utf-16be", "utf-32", "utf-32le", "utf-32be"]
 BYTE_CODECS = ["ascii", "latin-1", "iso-8859-15", "cp1252"]
@@ -43,7 +44,8 @@ NAMES = {
 MARKS = {"utf-16": (b"\xfe\xff", b"\xff\xfe"), "utf-32": (b"\x00\x00\xfe\xff", b"\xff\xfe\x00\x00")}
 # Bytes that make the decoders take every path: UTF-8 leads, continuations and bytes never allowed; and UTF-16 and
 # UTF-32 units with surrogates, a mark and values above U+10FFFF.
-UTF8_BYTES = [0x41, 0x7F, 0x80, 0xBF, 0xC0, 0xC2, 0xDF, 0xE0, 0xED, 0xA0, 0x9F, 0xEF, 0xF0, 0x90, 0xF4, 0x8F, 0xF5, 0xFF]
+UTF8_BYTES = [0x41, 0x7F, 0x80, 0xBF, 0xC0, 0xC1, 0xC2, 0xDF, 0xE0, 0xE1, 0xEC, 0xED, 0xEE, 0xA0, 0x9F, 0xEF, 0xF0, 0xF1,
+              0xF3, 0x90, 0xF4, 0x8F, 0xF5, 0xFF]
 UTF16_UNITS = [0x0041, 0x00E9, 0x20AC, 0xD800, 0xDBFF, 0xDC00, 0xDFFF, 0xFEFF, 0xFFFE]
 UTF32_UNITS = [0x41, 0xE9, 0xFEFF, 0xD800, 0xDFFF, 0x10FFFF, 0x110000, 0xFFFE0000]
 
@@ -209,7 +211,7 @@ codecs.register_error("agentica-scrub-test", lambda e: ("<?>", e.end))
 
 def test_scrub_matches_python_replace(peer):
     rng = random.Random(1762)
-    inputs = SCRUB_CASES + [bytes(rng.choice(UTF8_BYTES) for _ in range(rng.randrange(10))) for _ in range(400)]
+    inputs = SCRUB_CASES + [bytes(rng.choice(UTF8_BYTES) for _ in range(rng.randrange(40))) for _ in range(400)]
     pairs = [({"op": "scrub", "encoding": "utf-8", "data": data, "text": "default"}, data.decode("utf-8", "replace"))
              for data in inputs]
     pairs += [({"op": "scrub", "encoding": "utf-8", "data": data, "text": "<?>"},
@@ -217,3 +219,13 @@ def test_scrub_matches_python_replace(peer):
     for (case, expected), answer in zip(pairs, ask(peer, pairs)):
         assert answer["text"] == expected, case
     assert sum("\ufffd" in expected for _, expected in pairs) > 200
+
+
+@pytest.mark.skipif(os.name == "nt", reason="a POSIX environment holds bytes")
+def test_the_runtime_replaces_bad_bytes_as_scrub_does(tmp_path):
+    source = tmp_path / "env.agc"
+    source.write_text('def main() -> Void\n  puts(System.env("AGENTICA_SCRUB_TEST").unwrap!)\nend\n')
+    program = compile_agc(source, tmp_path / "env.agcb")
+    result = run_vm(program, env=vm_environment({"AGENTICA_SCRUB_TEST": os.fsdecode(b"\xe2\x82A")}))
+    assert result.code == 0, result.stderr
+    assert result.stdout == "\ufffdA\n"

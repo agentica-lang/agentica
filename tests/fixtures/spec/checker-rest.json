@@ -6390,6 +6390,19 @@
     {
       "program": [
         "def main() -> Void",
+        "  x = \"A\".scrub",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-METHOD",
+      "start": [2, 7],
+      "covers": "\"A\".scrub",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
         "  x: String = String.from_bytes(\"A\".bytes)",
         "end",
         "",

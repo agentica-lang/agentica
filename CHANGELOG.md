@@ -15,6 +15,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Every lossy UTF-8 decode (stdin, `System.args`, `System.env`, process output, `C.String`, error texts) gives one replacement per invalid sequence, as `bytes.scrub` and Python do, instead of one per byte (#1762).
 - The documentation moved to https://www.agentica-lang.com/agentica/; the old agentica-lang.github.io links redirect there.
 - The documentation has breadcrumbs, and search engines index only the latest release: the pages of older versions and of dev point to it.
 - Every version of the documentation has the current look and icon: the releases are built with the current docs theme.

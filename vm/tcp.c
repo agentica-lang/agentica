@@ -920,7 +920,7 @@ static agc_value host_error(agc_vm *vm, const char *what, const char *host, int6
   char *text = agc_alloc_atomic(total);
   int full = snprintf(text, total, "%s\n  system error: %s", head, reason);
   size_t n_text = full < 0 ? 0 : (size_t)full;
-  return agc_error_string(vm, AGC_KIND_NET_HOST_NOT_FOUND, agc_utf8_decode((const uint8_t *)text, n_text, "?", true));
+  return agc_error_string(vm, AGC_KIND_NET_HOST_NOT_FOUND, agc_utf8_decode((const uint8_t *)text, n_text, "?"));
 }
 
 agc_value agc_host_error(agc_vm *vm, const char *what, const char *host, int64_t port, int err) {
@@ -934,7 +934,7 @@ static agc_value tls_error(agc_vm *vm, agc_error_family family, const char *head
   char *text = agc_alloc_atomic(size);
   int len = snprintf(text, size, "%s (%s)", head, f->detail);
   size_t n_text = len < 0 ? 0 : (size_t)len;
-  return agc_error_string(vm, AGC_KIND_NET_TLS, agc_utf8_decode((const uint8_t *)text, n_text, "?", true));
+  return agc_error_string(vm, AGC_KIND_NET_TLS, agc_utf8_decode((const uint8_t *)text, n_text, "?"));
 }
 
 agc_value agc_tls_failure_error(agc_vm *vm, const char *head, const agc_tls_failure *f) {
@@ -2257,7 +2257,7 @@ static agc_value builtin_alpn(agc_vm *vm, agc_value *args, uint32_t span) {
   const net *n = live(agc_as_socket(vm, args[0]));
   const char *name = n ? atomic_load_explicit(&n->alpn, memory_order_acquire) : NULL;
   if (!name) return agc_string_value(vm->rt->empty_string);
-  return agc_string_value(agc_utf8_decode((const uint8_t *)name, strlen(name), "?", true));
+  return agc_string_value(agc_utf8_decode((const uint8_t *)name, strlen(name), "?"));
 }
 
 /* TCP.remote_address(socket): the peer's IP address, written when the socket connected or was accepted, or "" for a
@@ -2266,7 +2266,7 @@ static agc_value builtin_remote_address(agc_vm *vm, agc_value *args, uint32_t sp
   (void)span;
   const net *n = live(agc_as_socket(vm, args[0]));
   if (!n || !n->peer[0]) return agc_string_value(vm->rt->empty_string);
-  return agc_string_value(agc_utf8_decode((const uint8_t *)n->peer, strlen(n->peer), "?", true));
+  return agc_string_value(agc_utf8_decode((const uint8_t *)n->peer, strlen(n->peer), "?"));
 }
 
 static void half_close_step(void *data) { agc_conn_half_close(data); }

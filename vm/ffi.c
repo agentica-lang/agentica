@@ -536,7 +536,7 @@ static _Noreturn void bad_signature(agc_vm *vm, uint32_t span) {
 /* The String of a message of the system loader, whose bytes (a path, the OS text) may not be UTF-8: those become
    U+FFFD. */
 static agc_string *loader_text(const char *error) {
-  return agc_utf8_decode((const uint8_t *)error, strlen(error), "\xEF\xBF\xBD", false);
+  return agc_utf8_decode((const uint8_t *)error, strlen(error), "\xEF\xBF\xBD");
 }
 
 static _Noreturn void load_failed(agc_vm *vm, const char *error, uint32_t span) {
@@ -1831,7 +1831,7 @@ static void check_open(agc_vm *vm, const ffi_entry *e, const agc_list *values, u
 /* A String copy of the N bytes of C memory at P (NULL when N is 0). Bytes that are not UTF-8 become U+FFFD, as in
    every String the VM builds from outside text. */
 static agc_value text_value(const uint8_t *p, size_t n) {
-  return agc_string_value(agc_utf8_decode(n ? p : (const uint8_t *)"", n, "\xEF\xBF\xBD", false));
+  return agc_string_value(agc_utf8_decode(n ? p : (const uint8_t *)"", n, "\xEF\xBF\xBD"));
 }
 
 static agc_value result_value(agc_vm *vm, const ffi_entry *e, const agc_c_value *r, void *free_at,

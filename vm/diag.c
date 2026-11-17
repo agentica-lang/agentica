@@ -324,7 +324,7 @@ static agc_string *capped_string(const char *text, size_t len) {
   char *buffer = agc_alloc_atomic(total);
   memcpy(buffer, text, cut);
   if (cut < len) memcpy(buffer + cut, cut_mark, sizeof cut_mark - 1);
-  return agc_utf8_decode((const uint8_t *)buffer, total, "\xEF\xBF\xBD", false);
+  return agc_utf8_decode((const uint8_t *)buffer, total, "\xEF\xBF\xBD");
 }
 
 static agc_value json_text(const char *text, size_t len) {
@@ -519,7 +519,7 @@ agc_string *agc_crash_text(const agc_program *p, const agc_outcome *outcome) {
   memcpy(put, at, (size_t)n);
   put += n;
   put_line(put, outcome->message, outcome->message_len);
-  return agc_utf8_decode((const uint8_t *)text, len, "\xEF\xBF\xBD", false);
+  return agc_utf8_decode((const uint8_t *)text, len, "\xEF\xBF\xBD");
 }
 
 void agc_print_unobserved(FILE *err, uint64_t count, const agc_string *first, agc_style style) {

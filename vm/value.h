@@ -894,7 +894,11 @@ size_t agc_utf8_valid(const uint8_t *s, size_t len);
 size_t agc_utf8_bad_at(const uint8_t *s, size_t len);
 size_t agc_utf8_count(const uint8_t *s, size_t len);
 bool agc_utf8_chars(const uint8_t *data, size_t len, size_t *chars);
-agc_string *agc_utf8_decode(const uint8_t *data, size_t len, const char *replacement, bool tail);
+/* The bytes of the UTF-8 in data with the replacement for each bad sequence (one per maximal subpart), written to out
+   when it is not NULL; returns their count, with the characters in *chars. */
+size_t agc_utf8_scrub(const uint8_t *data, size_t len, const char *replacement, size_t rbytes, size_t rchars,
+                      char *out, size_t *chars);
+agc_string *agc_utf8_decode(const uint8_t *data, size_t len, const char *replacement);
 agc_string *agc_new_string(size_t bytes, size_t chars);
 agc_string *agc_make_string(const char *data, size_t bytes, size_t chars);
 /* The String of these bytes: the run's shared empty String for no bytes, its shared one-character String for one ASCII

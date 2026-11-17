@@ -4,7 +4,7 @@
   "steps": 25,
   "stdout": [
     "\"head\"",
-    "\"body ��\\nline\\r\\n😀 tail\\r\"",
+    "\"body �\\nline\\r\\n😀 tail\\r\"",
     "\"\"",
     "ok(<Bytes 0>)",
     "true",

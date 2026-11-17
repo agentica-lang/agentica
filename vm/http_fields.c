@@ -204,7 +204,7 @@ agc_value agc_http_error_result(agc_vm *vm, int status, const char *prefix, cons
   size_t size = agc_size_add(strlen(prefix), strlen(reason) + 1);
   char *text = agc_alloc_atomic(size);
   int n = snprintf(text, size, "%s%s", prefix, reason);
-  agc_string *message = agc_utf8_decode((const uint8_t *)text, n < 0 ? 0 : (size_t)n, "\xEF\xBF\xBD", false);
+  agc_string *message = agc_utf8_decode((const uint8_t *)text, n < 0 ? 0 : (size_t)n, "\xEF\xBF\xBD");
   agc_error_kind kind = agc_http_status_kind(status);
   if (kind == AGC_KIND_HTTP_PROTOCOL) return agc_error_string(vm, kind, message);
   return agc_error_code(vm, kind, message, status);
