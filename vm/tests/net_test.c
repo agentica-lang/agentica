@@ -978,20 +978,24 @@ static void test_context_with_a_path_that_is_not_a_string(void) {
   }
 }
 
-/* Hostile bytecode: HttpWire.service takes options of AGC_HTTP_OPTIONS_FIELDS fields, the timeouts at the end among
-   them as Ints: fewer fields, or a connect or read timeout that is not an Int, fail with RUNTIME-INTERNAL. */
+/* Hostile bytecode: HttpWire.service takes options of AGC_HTTP_OPTIONS_FIELDS fields: the timeouts are Ints and
+   connect_to at the end is a String. Fewer fields, or a field of another type, fail with RUNTIME-INTERNAL. */
 static void test_service_checks_the_shape_of_its_options(void) {
   const char *name = "HttpWire.service";
   const agc_builtin *b = agc_find_builtin((const uint8_t *)name, strlen(name), 3);
   assert(b);
-  for (uint32_t n = AGC_HTTP_OPTIONS_FIELDS - 2; n <= AGC_HTTP_OPTIONS_FIELDS; n++) {
+  for (uint32_t n = AGC_HTTP_OPTIONS_FIELDS - 3; n <= AGC_HTTP_OPTIONS_FIELDS; n++) {
     for (uint32_t bad = AGC_HTTP_OPTION_CONNECT; bad < AGC_HTTP_OPTIONS_FIELDS; bad++) {
       agc_struct *o = agc_new_struct(0, n);
       for (uint32_t k = 0; k < n; k++) o->fields[k] = agc_int(1);
       o->fields[AGC_HTTP_OPTION_PROXY] = agc_test_str("");
       o->fields[AGC_HTTP_OPTION_TLS] = agc_void();
-      if (n == AGC_HTTP_OPTIONS_FIELDS) o->fields[bad] = agc_test_str("1");
-      else if (bad != AGC_HTTP_OPTION_CONNECT) continue;
+      if (n == AGC_HTTP_OPTIONS_FIELDS) {
+        o->fields[AGC_HTTP_OPTION_CONNECT_TO] = agc_test_str("");
+        o->fields[bad] = bad == AGC_HTTP_OPTION_CONNECT_TO ? agc_int(1) : agc_test_str("1");
+      } else if (bad != AGC_HTTP_OPTION_CONNECT) {
+        continue;
+      }
       agc_value args[3] = {agc_void(), agc_struct_value(o), agc_void()};
       if (AGC_CATCH(vm.fail) == 0) {
         (void)b->fn(&vm, args, 0);
