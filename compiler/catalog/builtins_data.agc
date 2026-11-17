@@ -45,8 +45,9 @@ RECORDS: List[Model.Record] = [
     name: "HttpWire.Header",
     fields: [Model.Named(name: "name", type: Types.Type.String), Model.Named(name: "value", type: Types.Type.String)],
   ),
-  # vm/value.h names these field positions (AGC_HTTP_OPTIONS_FIELDS, AGC_HTTP_OPTION_PROXY and AGC_HTTP_OPTION_TLS):
-  # keep them in step.
+  # vm/value.h names these field positions (AGC_HTTP_OPTIONS_FIELDS, AGC_HTTP_OPTION_PROXY, AGC_HTTP_OPTION_TLS and
+  # AGC_HTTP_OPTION_CONNECT): keep them in step. The timeouts added later come last, so a positional caller keeps its
+  # meaning.
   Model.Record(
     name: "HttpWire.ClientOptions",
     fields: [
@@ -60,6 +61,8 @@ RECORDS: List[Model.Record] = [
         type: Types.Type.Optional(Types.Type.Opaque("TLS.Context")),
         default: Model.Default.None,
       ),
+      Model.Named(name: "connect_timeout_ms", type: Types.Type.Int, default: Model.Default.Whole(10000)),
+      Model.Named(name: "read_timeout_ms", type: Types.Type.Int, default: Model.Default.Whole(30000)),
     ],
   ),
   Model.Record(
