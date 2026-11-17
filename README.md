@@ -8,7 +8,7 @@ a C VM runs it. Both are one binary, `agentica`.
 
 ```agentica
 def main() -> Void
-  ["4", "8", "x"].each do |text|
+  for text in ["4", "8", "x"]
     case text.to_i
       ok(n) -> puts("#{text} doubled is #{n * 2}")
       error(_) -> puts("#{text} is not a number")

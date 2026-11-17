@@ -11,7 +11,7 @@ The project is hosted on [GitHub](https://github.com/agentica-lang/agentica).
 {{< example title="Handle errors" >}}
 ```agentica
 def main() -> Void
-  ["4", "8", "x"].each do |text|
+  for text in ["4", "8", "x"]
     case text.to_i
       ok(n) -> puts("#{text} doubled is #{n * 2}")
       error(_) -> puts("#{text} is not a number")
@@ -43,7 +43,7 @@ end
 def square(n: Int) -> Int = n * n
 
 def main() -> Void
-  tasks = (1..5).to_a.map { |n| Task.spawn(&square, n) }
+  tasks = (1..5).map { |n| Task.spawn(&square, n) }
   puts(tasks.map { |task| Task.await(task) })
 end
 ```

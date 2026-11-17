@@ -9,6 +9,7 @@
 .switcher-tabs label{padding:.4rem .9rem;cursor:pointer;color:var(--muted);border:1px solid transparent;border-bottom:0;border-radius:var(--radius) var(--radius) 0 0;margin-bottom:-1px}
 .switcher-tabs label:hover{color:var(--fg)}
 .switcher>section{display:none;padding-top:.5rem}
+@supports not selector(:has(*)){.switcher>section{display:block}.switcher>input{display:none}.switcher-tabs{display:none}}
 {{ range seq 6 }}
 .switcher:has(>input:nth-of-type({{ . }}):checked)>.switcher-tabs>label:nth-of-type({{ . }}){color:var(--fg);background:var(--bg);border-color:var(--border);font-weight:600}
 .switcher:has(>input:nth-of-type({{ . }}):checked)>section:nth-of-type({{ . }}){display:block}
@@ -16,9 +17,9 @@
 {{ end }}
 </style>
 {{ end -}}
-<div class="switcher">
+<div class="switcher" role="radiogroup" aria-label="Examples">
 {{- range $i, $tab := $tabs }}
-<input type="radio" name="{{ $id }}" id="{{ $id }}-{{ $i }}" aria-label="{{ $tab.title }}"{{ if eq $i 0 }} checked{{ end }}>
+<input type="radio" name="{{ $id }}" id="{{ $id }}-{{ $i }}"{{ if eq $i 0 }} checked{{ end }}>
 {{- end }}
 <div class="switcher-tabs">
 {{- range $i, $tab := $tabs }}
