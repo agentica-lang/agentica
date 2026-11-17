@@ -33,6 +33,7 @@ Bytes.equal
 Bytes.from_list
 Bytes.length
 Bytes.plus
+Bytes.scrub
 Bytes.slice
 Bytes.take
 Bytes.to_a

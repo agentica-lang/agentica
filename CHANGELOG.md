@@ -11,6 +11,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 ### Added
 
 - A parameter or field default may be the bytes of a string literal, `body: Bytes = "".bytes`, directly or through a constant (#1777).
+- `bytes.scrub(replacement = "�")` reads UTF-8 that may hold bad bytes, replacing each bad sequence, for logs and process output (#1762).
 
 ### Changed
 

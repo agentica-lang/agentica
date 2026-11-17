@@ -26,6 +26,7 @@ Bytes.build do |out| ... end -> Bytes     # out.write(v, ...): 1 to 8 values
 b.each do |byte| ... end                  # Void
 for byte in b ... end
 b.decode(encoding) -> Result[String]      # text in an encoding; see below
+b.scrub(replacement = "�") -> String      # UTF-8, each bad sequence replaced
 string.encode(encoding) -> Result[Bytes]
 ```
 
@@ -36,7 +37,9 @@ string.encode(encoding) -> Result[Bytes]
   byte order mark (big-endian without one) and write one; the other forms keep a
   mark as U+FEFF. Errors are strict and end with `at byte N` (decode) or `at
   index N` (encode); an unknown name is an error too. For UTF-8, use `s.bytes`
-  and `String.from_bytes`. `latin-1` maps each byte to one character and back:
+  and `String.from_bytes`, or `b.scrub` for logs and process output that may
+  hold bad bytes (one U+FFFD per bad sequence, as Python's `"replace"`).
+  `latin-1` maps each byte to one character and back:
   `b.decode("latin-1").unwrap!` and `s.encode("latin-1")` round-trip any bytes
   (for example inside an `error(...)` text).
 

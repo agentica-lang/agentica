@@ -66,4 +66,10 @@ def main() -> Void
   show_bytes("cp1252", "aŁ".encode("cp1252"))
   show_bytes("koi8-r", "a".encode("koi8-r"))
   show_text("utf-8-sig", bytes_of([97]).decode("utf-8-sig"))
+  # scrub: one replacement for each bad sequence, the default U+FFFD or a String of any size.
+  puts(bytes_of([104, 225, 128, 105, 255]).scrub.inspect)
+  puts(bytes_of([104, 225, 128, 105, 255]).scrub("<?>"))
+  puts(bytes_of([104, 225, 128, 105, 255]).scrub(""))
+  puts(bytes_of([226, 130, 172]).scrub("?"))
+  puts(bytes_of([]).scrub.inspect)
 end
