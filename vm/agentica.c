@@ -19,6 +19,9 @@
 #include <limits.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef __APPLE__
+#include <TargetConditionals.h>
+#endif
 
 /* How the launcher ended (run_launcher). */
 typedef enum { LAUNCHER_DECLINED, LAUNCHER_MISSED, LAUNCHER_HANDED } launcher_end;
@@ -45,13 +48,13 @@ static const char usage[] =
 
 /* The release target of this binary, which picks the prebuilt native modules it downloads; none on another system or
  * C library, which then builds them from source. */
-#if defined(__linux__) && defined(__GLIBC__) && defined(__x86_64__)
+#if defined(__linux__) && defined(__GLIBC__) && !defined(__UCLIBC__) && defined(__x86_64__) && !defined(__ILP32__)
 #define AGC_TARGET "linux-x86_64"
-#elif defined(__linux__) && defined(__GLIBC__) && defined(__aarch64__)
+#elif defined(__linux__) && defined(__GLIBC__) && !defined(__UCLIBC__) && defined(__aarch64__) && !defined(__ILP32__)
 #define AGC_TARGET "linux-arm64"
-#elif defined(__APPLE__) && defined(__x86_64__)
+#elif defined(__APPLE__) && TARGET_OS_OSX && defined(__x86_64__)
 #define AGC_TARGET "macos-x86_64"
-#elif defined(__APPLE__) && defined(__aarch64__)
+#elif defined(__APPLE__) && TARGET_OS_OSX && defined(__aarch64__)
 #define AGC_TARGET "macos-arm64"
 #elif defined(_WIN32) && (defined(__x86_64__) || defined(_M_X64))
 #define AGC_TARGET "windows-x86_64"

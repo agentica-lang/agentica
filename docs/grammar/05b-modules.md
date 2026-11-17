@@ -949,10 +949,10 @@ import Sqlite from "pkg/sqlite/db"
     and one deadline, and follows at most five redirects, never from https to
     http and only to the host of the URL, `objects.githubusercontent.com` or
     `release-assets.githubusercontent.com`.
-    The file goes to `<package cache>/native-prebuilt/<sha256>/libNAME.so`
-    (`.dylib`, `NAME.dll`) with a `receipt` holding its SHA-256, made in a
-    private folder and renamed into place, so a file that two packages name is
-    stored once and concurrent installs keep the first. A file that is not the
+    The file goes to `<package cache>/native-prebuilt/<sha256>/library.so`
+    (`.dylib`, `.dll`) with a `receipt` holding its SHA-256, made in a private
+    folder and renamed into place, so a file that two modules name is stored
+    once and concurrent installs keep the first. A file that is not the
     one its `sha256` names is `PKG-HASH-MISMATCH` at
     `native.NAME.prebuilt.sha256.TARGET`; any other failure of the download
     (a 404, a refused redirect, a file over the cap) is the warning
@@ -972,7 +972,10 @@ import Sqlite from "pkg/sqlite/db"
   download no file for a module that `build` names, and for a module that
   `prebuilt_only` names a failed download is an error (`PKG-FETCH`), and so
   is a file that `--deny-net` or `--sandbox` keeps from being downloaded
-  (`PKG-NATIVE-DENIED` at `native.NAME.prebuilt`).
+  (`PKG-NATIVE-DENIED` at `native.NAME.prebuilt`). Such a module that has no
+  file to download (no row for the target, a native API that is too new,
+  changed sources, a system that is no release target) gets one line in the
+  output that says its first use fails.
 - The stored name of a package file in the `.agcb` file is
   `pkg/<name>@<tag>/path/in/package.agc`, such as `pkg/sqlite@v1.2.0/db.agc`
   (the path is from the package folder, without the `subdir`); for a package

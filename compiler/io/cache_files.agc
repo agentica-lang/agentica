@@ -18,6 +18,8 @@ PIECE = 1_048_576
 
 # A file that a run could not finish is left with this in its name; the next one to write removes the old ones.
 TEMP_MARK = ".agcb.tmp-"
+# The start of the name of a temporary folder of a native build or a prebuilt download.
+FOLDER_MARK = ".tmp-"
 
 ## Where the caches of a root file are kept and what their entries must match. `build` is the `_build/` folder and
 ## `beside` is true for the `_build/` of the project, false for the folder of AGENTICA_BUILD_DIR. `libs_dir` is the
@@ -199,6 +201,26 @@ def sweep(folder: String) -> Void
       path = Paths.join(folder, name)
       info = File.lstat(path, IO_TIMEOUT_MS)
       if info.ok? and info.unwrap!.kind == "file" and now - info.unwrap!.modified_seconds > STALE_TEMP_SECONDS
+        _ = Path.remove(path, IO_TIMEOUT_MS)
+      end
+    end
+  end
+end
+
+# Removes the temporary folders (named `.tmp-...`) in `base` of builds or downloads that died, once they are an hour
+# old. A native build or a prebuilt download is bounded well below that (ten and five minutes), so only a run suspended
+# for over an hour in the middle of one (SIGSTOP, a sleeping laptop) can lose its folder here; its rename then fails
+# and the entry is PKG-NATIVE-BUILD, never half made.
+def sweep_folders(base: String) -> Void
+  names = Dir.list(base, IO_TIMEOUT_MS)
+  return if !names.ok?
+
+  now = Time.now_ms() / 1000
+  for name in names.unwrap!
+    if name.start_with?(FOLDER_MARK)
+      path = Paths.join(base, name)
+      info = File.lstat(path, IO_TIMEOUT_MS)
+      if info.ok? and info.unwrap!.kind == "directory" and now - info.unwrap!.modified_seconds > STALE_TEMP_SECONDS
         _ = Path.remove(path, IO_TIMEOUT_MS)
       end
     end

@@ -73,8 +73,6 @@ LOCK_PAUSE_MS = 50
 # How long a run waits for the lock of a key: a whole build, then a minute more for its file work.
 LOCK_WAIT_MS = BUILD_TIMEOUT_MS + 60_000
 TEMP_TRIES = 5
-TEMP_MARK = ".tmp-"
-STALE_TEMP_SECONDS = 3600
 # The most characters of the compiler's standard error that a quiet failure keeps (its start, where the first error
 # is).
 MAX_SHOWN = 8000
@@ -156,7 +154,7 @@ def attempt(request: Workspace.BuildRequest, noted: Bool) -> Result[String]
 
   base = Paths.join(request.cache_root, BUILD_FOLDER)
   user = try private_base(request, base)
-  sweep(base)
+  CacheFiles.sweep_folders(base)
   entry = Paths.join(base, OpenSSL.Digest.sha256_hexdigest(key.bytes))
   name = NativeBuild.output_name(request.library, request.system)
   return verified(request, entry, name, user) if File.lstat(entry, FILE_TIMEOUT_MS).ok?
@@ -226,25 +224,6 @@ def search_lines() -> List[String]
   end
 
   lines
-end
-
-# Removes the temporary folders of builds that died, once they are an hour old. A build is bounded by
-# BUILD_TIMEOUT_MS (ten minutes), so only a run suspended (SIGSTOP, a sleeping laptop) for over an hour in the middle
-# of a build can lose its folder here; its rename then fails and the build is PKG-NATIVE-BUILD, never a half entry.
-def sweep(base: String) -> Void
-  names = Dir.list(base, FILE_TIMEOUT_MS)
-  return if !names.ok?
-
-  now = Time.now_ms() / 1000
-  for name in names.unwrap!
-    if name.start_with?(TEMP_MARK)
-      path = Paths.join(base, name)
-      info = File.lstat(path, FILE_TIMEOUT_MS)
-      if info.ok? and info.unwrap!.kind == "directory" and now - info.unwrap!.modified_seconds > STALE_TEMP_SECONDS
-        _ = Path.remove(path, FILE_TIMEOUT_MS)
-      end
-    end
-  end
 end
 
 # The first line the compiler prints for one question (`--version`, `-dumpmachine`), which names it in the key.

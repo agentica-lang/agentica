@@ -175,7 +175,9 @@ lines show. A task's stack ends with `task spawned at file:line:column`.
   file for its `member`, or the download is not a TAR or a ZIP (key path in the
   report, `native.NAME.linux.file`).
 - `PKG-NATIVE-BUILD`: a native module's `build` failed (no C compiler, a
-  compile error), at `native.NAME.build`. `PKG-NATIVE-UNBUILT` is a warning,
+  compile error), at `native.NAME.build`; at `native.NAME.prebuilt`, an entry
+  of the prebuilt cache is not private to the user or is not the file its
+  receipt names (remove the folder the help names). `PKG-NATIVE-UNBUILT` is a warning,
   not an error: an `optional = true` module was not built and the program runs
   without it (`"warning": true` in `--json`). `PKG-NATIVE-DENIED`: a module
   of `native_policy.prebuilt_only` has no prebuilt file in the cache and

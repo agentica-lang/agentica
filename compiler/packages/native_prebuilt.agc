@@ -109,12 +109,9 @@ def redirect_allowed?(url: String, next: String) -> Bool
   host != "" and (host == NativeArtifact.host_of(url) or REDIRECT_HOSTS.include?(host))
 end
 
-## The file name of the library `name` on the system of `target`: lib<NAME>.so, lib<NAME>.dylib or <NAME>.dll.
-def file_name(name: String, target: String) -> String
-  return "#{name}.dll" if target.start_with?("windows-")
-
-  "lib#{name}#{extension(target)}"
-end
+## The file name of the library in a cache entry on the system of `target`: library.so, library.dylib or
+## library.dll. The entry is keyed by the SHA-256 alone, so two modules that name one file share it.
+def file_name(target: String) -> String = "library#{extension(target)}"
 
 ## The cache entry of the file with the SHA-256 `sha`: `<cache>/native-prebuilt/<sha>`, holding the library and its
 ## receipt.

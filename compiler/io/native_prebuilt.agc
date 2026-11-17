@@ -61,11 +61,15 @@ def fetch_all(
   packages: List[Lock.Locked],
   fetching: Fetching,
 ) -> Result[List[String]]
-  target = host_target()
-  return ok([]) if target == ""
-
   wanted = try modules_of(settings, manifest, members, packages)
   return ok([]) if wanted.size == 0
+
+  target = host_target()
+  if target == ""
+    reason = "this system is none of the release targets"
+    only = wanted.select do |module| NativePrebuilt.chosen?(manifest.policy.prebuilt_only, module.library.name) end
+    return ok(only.map do |module| unavailable(module.library.name, reason) end)
+  end
 
   cache = PackageCache.root(settings.env)
   if cache == ""
@@ -160,22 +164,25 @@ def fetch_one(pass: Pass, module: Module) -> Result[String]
   library = module.library
   name = library.name
   prebuilt = library.prebuilt.unwrap!
-  return ok("") if NativePrebuilt.chosen?(pass.policy.build, name) or !prebuilt.sha256.has_key?(pass.target)
+  return ok("") if NativePrebuilt.chosen?(pass.policy.build, name)
 
-  return ok("") if !NativePrebuilt.api_loads?(prebuilt.api, pass.api)
+  only = NativePrebuilt.chosen?(pass.policy.prebuilt_only, name)
+  skipped = skip_reason(pass, module)
+  if skipped != ""
+    return ok("") if !only
 
-  current = NativePrebuilt.source_of(pass.workspace, module.root, module.file, name, library.build.unwrap!)
-  return ok("") if !current.ok? or current.unwrap! != prebuilt.source
+    return ok(unavailable(name, skipped))
+  end
 
   key = Reader.child(Reader.child("native", name), "prebuilt")
   context = NativeArtifact.Context(file: module.file, key: key)
   sha = prebuilt.sha256[pass.target]
-  only = NativePrebuilt.chosen?(pass.policy.prebuilt_only, name)
   user = try own_user(context)
   base = Paths.join(pass.cache, NativePrebuilt.CACHE_FOLDER)
   try private_base(pass.cache, base, user, context)
+  CacheFiles.sweep_folders(base)
   entry = NativePrebuilt.entry_of(pass.cache, sha)
-  library_file = NativePrebuilt.file_name(name, pass.target)
+  library_file = NativePrebuilt.file_name(pass.target)
   if File.lstat(entry, FILE_TIMEOUT_MS).ok?
     try verified(entry, library_file, sha, user, context)
     return ok("prebuilt #{name} in the cache")
@@ -201,6 +208,30 @@ def fetch_one(pass: Pass, module: Module) -> Result[String]
       pass.fetching.warned.call(warning)
       ok("")
   end
+end
+
+# Why the module has no prebuilt file for this pass, or "": no file for the target, files for a native API this binary
+# cannot load, or sources that no longer give the source key (or cannot be read for it).
+def skip_reason(pass: Pass, module: Module) -> String
+  library = module.library
+  prebuilt = library.prebuilt.unwrap!
+  return "the table has no file for #{pass.target}" if !prebuilt.sha256.has_key?(pass.target)
+
+  if !NativePrebuilt.api_loads?(prebuilt.api, pass.api)
+    return "the files need native API #{prebuilt.api} and this Agentica has #{pass.api}"
+  end
+
+  current = NativePrebuilt.source_of(pass.workspace, module.root, module.file, library.name, library.build.unwrap!)
+  return "the sources of native/ cannot be keyed" if !current.ok?
+
+  return "the sources of native/ are not the ones the files were built from" if current.unwrap! != prebuilt.source
+
+  ""
+end
+
+# The line of a prebuilt-only module that has no file to download.
+def unavailable(name: String, reason: String) -> String
+  "prebuilt #{name} not available: #{reason}; it is prebuilt-only, so its first use fails"
 end
 
 # Downloads the file into a new private folder beside the entries, checks it and renames the folder into place. A
