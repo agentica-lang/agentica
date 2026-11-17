@@ -94,11 +94,11 @@ def literal_value(value: Ast.Expr) -> Optional[Ir.Imm]
 end
 
 ## A default that names a constant, as the lowering reads it: the value of the constant, written at the place of the
-## name. The checker accepted the name only for a value that a call can build with no code of its own (a literal, an
-## empty list or map, a variant without a payload, none or a struct built with no arguments), so the call site needs no
-## read of the constant, which a constant built after the call could not give. The spans become the one of the name,
-## because the instructions belong to the file of the default, and the node ids stay the ones of the value, which the
-## checker typed. Any other default is as written.
+## name. The checker accepted the name only for a value that a call can build with no code of its own (a literal, the
+## bytes of a string literal, an empty list or map, a variant without a payload, none or a struct built with no
+## arguments), so the call site needs no read of the constant, which a constant built after the call could not
+## give. The spans become the one of the name, because the instructions belong to the file of the default, and the
+## node ids stay the ones of the value, which the checker typed. Any other default is as written.
 def in_place(default: Ast.Expr, values: Map[String, Ast.Expr]) -> Ast.Expr
   case default
     Ast.Expr.ConstRef(node) ->
