@@ -10,6 +10,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `HTTP.ClientOptions` has `connect_to`, an IP address that every connection goes to instead of resolving the URL host, which still gives `Host`, the TLS server name and the certificate check; it applies to every URL of those options or that client, so use one client per host (#1556).
 - `HTTP.ClientOptions` has `connect_timeout_ms` (10 s, the connect; a timeout of it has `details["phase"]` `"connect"`) and `read_timeout_ms` (300 s, 0 for no limit; each wait for body bytes, and each wait for a piece and each send of an `upload`) (#1710).
 - **Breaking:** `open`, `start` and `upload` no longer give each wait `timeout_ms`: a stream that relied on `timeout_ms` per read must set `read_timeout_ms`, and `timeout_ms: 5000` now allows 300 s per read.
 - **Breaking:** a connect ends after `connect_timeout_ms` (10 s), even when `timeout_ms` is longer.
