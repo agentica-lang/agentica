@@ -53,8 +53,11 @@ HTTP.ClientOptions(timeout_ms: Int = 30000, idle_timeout_ms: Int = 30000, max_co
   client per host; after a redirect resolve and check again) and keeps each
   URL's host for `Host`, TLS and the certificate. An SSRF-safe
   call: `DNS.lookup(host)`, refuse private, loopback, link-local and reserved
-  addresses, then `connect_to:` a checked one (no second lookup to rebind). A
-  custom DNS or a fixed address works the same.
+  addresses, then `connect_to:` a checked one (no second lookup to rebind). The
+  filter must also classify the IPv4-compatible (`::a.b.c.d`), NAT64
+  (`64:ff9b::/96`) and other translated IPv6 forms; `connect_to` refuses
+  `0.0.0.0`, `::` and IPv4-mapped ones. A custom DNS or a fixed address works
+  the same.
   `proxy: "http://host:port"` sends `http://` requests through a forward proxy
   and opens a `CONNECT` tunnel for `https://`; user info in it is sent as
   `Proxy-Authorization: Basic` to the proxy only, and no error shows it. A
