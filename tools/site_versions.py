@@ -4,7 +4,7 @@
     site_versions.py build [--out DIR] [--cache DIR] [--base-url URL] [--tools DIR]
 
 The output is one site per final release (`X.Y.Z` tags, no pre-releases) under `VERSION/`, the development site under
-`dev/`, the latest release again at the root, `versions.json` and `_versions/selector.{js,css}` (site/versions/). Only
+`dev/`, the latest release again at the root, and `versions.json`, the list of the version selector. Only
 the root is for search engines: each page under `VERSION/` gets a canonical URL to the same page at the root when the
 root has it, else `noindex,follow`; each page under `dev/` gets `noindex,follow`; their sitemaps are removed.
 
@@ -19,8 +19,14 @@ error, a no-site tag newer than a built one) is tried once more and then fails t
 silently from the deploy; so does a run in which no tag built. The output of a tag is cached by its commit sha (and the
 base URL, which Hugo bakes into every link), so a run builds only `dev` and the tags it has not seen; the cache folder
 is pruned to the current builds. With GITHUB_OUTPUT set, `fresh=true` tells the workflow that something new is worth
-saving. The selector and the search tags are not part of a cached build: the assembly adds the selector's `<link>` and
-`<script>` tags and the canonical or noindex tag to every page, so a build from the cache gets the current ones.
+saving. The search tags are not part of a cached build: the assembly adds the canonical or noindex tag to every page,
+so a build from the cache gets the current ones.
+
+The version selector is the docs theme's (its README, Versions): every build with the theme gets it on through the
+environment (HUGO_PARAMS_VERSIONS_ENABLED and _ROOT, so a tag whose hugo.toml predates the param gets it too), and the
+root build publishes its two files at `_versions/`, which every page of every version loads (a root built without the
+theme gets those of the current theme checkout). A tag from before the theme cannot read the param: the assembly adds
+the same two tags to each page that does not load the selector yet.
 
 Python's standard library only.
 """
@@ -52,7 +58,7 @@ DOWNLOAD_BACKOFF = (10, 30, 60, 120)
 REQUEST_TIMEOUT = 30
 FINAL_TAG = re.compile(r"^\d+\.\d+\.\d+$")
 PIN = re.compile(r"^\s+(HUGO_VERSION|HUGO_SHA256|DART_SASS_VERSION|DART_SASS_SHA256):\s*(\S+)\s*$", re.MULTILINE)
-SELECTOR_FILES = ("selector.js", "selector.css")
+SELECTOR = re.compile(r"_versions/selector\.js")
 BUILD_TIMEOUT_S = 900
 HUGO_URL = "https://github.com/gohugoio/hugo/releases/download/v{v}/hugo_extended_{v}_linux-amd64.tar.gz"
 SASS_URL = "https://github.com/sass/dart-sass/releases/download/{v}/dart-sass-{v}-linux-x64.tar.gz"
@@ -106,13 +112,34 @@ def selector_tags(root_path: str) -> str:
     )
 
 
+def selector_env(root_path: str) -> dict[str, str]:
+    """The docs theme's version selector on, loaded from the root of all versions (the theme's README, Versions)."""
+    return {"HUGO_PARAMS_VERSIONS_ENABLED": "true", "HUGO_PARAMS_VERSIONS_ROOT": root_path}
+
+
+def selector_files(out: Path) -> None:
+    """The selector that every version loads from `_versions/`: the root build publishes it, with the theme; a root
+    built without it gets the files of the current theme checkout."""
+    folder = out / "_versions"
+    if (folder / "selector.js").is_file():
+        return
+    folder.mkdir(exist_ok=True)
+    for name in ("selector.js", "selector.css"):
+        source = ROOT / THEME / "assets" / "versions" / name
+        if not source.is_file():
+            raise BuildError("the docs theme has no %s: git submodule update --init %s" % (source, THEME))
+        shutil.copy(source, folder / name)
+
+
 def inject_selector(site: Path, root_path: str) -> int:
-    """Add the selector's tags before `</head>` of every HTML page that lacks exactly them; returns the pages changed."""
+    """Add the selector's tags before `</head>` of every HTML page whose head does not load the selector yet (a page
+    built without the docs theme; the theme's tags may be minified); returns the pages changed."""
     tag = selector_tags(root_path)
     changed = 0
     for page in site.rglob("*.html"):
         text = page.read_text(encoding="utf-8")
-        if tag in text or "</head>" not in text:
+        head, end, _ = text.partition("</head>")
+        if not end or SELECTOR.search(head):
             continue
         page.write_text(text.replace("</head>", tag + "</head>", 1), encoding="utf-8")
         changed += 1
@@ -354,8 +381,10 @@ def write_outputs(fresh: list[str]) -> None:
             out.write("fresh=%s\n" % ("true" if fresh else "false"))
 
 
-def build_ref(ref: str, base_url: str, cache: Path, tools: Path, logs: Path, label: str) -> tuple[Path, bool]:
-    """The built site of a commit, from the cache when its sha and base URL were built before; (folder, cached)."""
+def build_ref(ref: str, base_url: str, root_path: str, cache: Path, tools: Path, logs: Path,
+              label: str) -> tuple[Path, bool]:
+    """The built site of a commit, from the cache when its sha and base URL were built before; (folder, cached). The
+    root path of all versions, where the selector is, follows from the base URL, which the cache key has."""
     sha = sha_of(ref)
     key = cache_key(ref, base_url)
     done = cache / key
@@ -372,7 +401,8 @@ def build_ref(ref: str, base_url: str, cache: Path, tools: Path, logs: Path, lab
             if themed:
                 unpack_theme(current_theme(), tree)
             workflow = current_workflow() if themed else None
-            public = _build_tree(tree, base_url, tools, logs / (label + ".log"), workflow, released=True)
+            public = _build_tree(tree, base_url, tools, logs / (label + ".log"), workflow, released=True,
+                                 versions_root=root_path if themed else None)
             _store(public, cache, key)
         finally:
             subprocess.run(["git", "-C", str(ROOT), "worktree", "remove", "--force", str(tree)], capture_output=True)
@@ -403,16 +433,17 @@ def unpack_theme(commit: str | None, tree: Path) -> None:
         raise BuildError("git archive of the docs theme failed")
 
 
-def build_tag(tag: str, base_url: str, cache: Path, tools: Path, logs: Path, label: str = "") -> tuple[Path, bool]:
+def build_tag(tag: str, base_url: str, root_path: str, cache: Path, tools: Path, logs: Path,
+              label: str = "") -> tuple[Path, bool]:
     """build_ref of a tag, tried a second time after a failure that is not NoSite (a blip of the network)."""
     label = label or tag
     try:
-        return build_ref(tag, base_url, cache, tools, logs, label)
+        return build_ref(tag, base_url, root_path, cache, tools, logs, label)
     except NoSite:
         raise
     except (BuildError, OSError) as err:
         print("retry %-8s %s" % (label, err), flush=True)
-        return build_ref(tag, base_url, cache, tools, logs, label)
+        return build_ref(tag, base_url, root_path, cache, tools, logs, label)
 
 
 def write_summary(built: dict, skipped: dict, failed: dict) -> None:
@@ -427,12 +458,16 @@ def write_summary(built: dict, skipped: dict, failed: dict) -> None:
 
 
 def _build_tree(tree: Path, base_url: str, tools: Path, log: Path, workflow: str | None = None,
-                released: bool = False) -> Path:
-    """`make site` of a tree, with the Hugo and Dart Sass of `workflow` (a pages.yml), else of the tree's own."""
+                released: bool = False, versions_root: str | None = None) -> Path:
+    """`make site` of a tree, with the Hugo and Dart Sass of `workflow` (a pages.yml), else of the tree's own; with
+    `versions_root` (a tree with the docs theme), the theme's version selector on."""
     own = tree / ".github" / "workflows" / "pages.yml"
     if not (tree / "site" / "hugo.toml").exists() or not own.exists():
         raise NoSite("the tree has no site (site/hugo.toml, pages.yml)")
-    return make_site(tree, base_url, tool_env(workflow or own.read_text(), tools), log, released)
+    env = tool_env(workflow or own.read_text(), tools)
+    if versions_root:
+        env.update(selector_env(versions_root))
+    return make_site(tree, base_url, env, log, released)
 
 
 def _store(public: Path, cache: Path, key: str) -> None:
@@ -470,7 +505,7 @@ def build(args: argparse.Namespace) -> int:
     tags = final_tags()
     for tag in tags:
         try:
-            folder, hit = build_tag(tag, root_url + tag + "/", cache, tools, logs)
+            folder, hit = build_tag(tag, root_url + tag + "/", root_path, cache, tools, logs)
         except NoSite as err:
             skipped[tag] = str(err)
             print("skip %-8s %s" % (tag, err), flush=True)
@@ -504,11 +539,12 @@ def build(args: argparse.Namespace) -> int:
         raise BuildError("no version was built" if not built and not failed else "failed: " + ", ".join(failed))
 
     # dev is the working tree: master in pages.yml, which only runs from master (or a pull request).
-    dev_folder = _build_tree(ROOT, root_url + "dev/", tools, logs / "dev.log")
+    dev_folder = _build_tree(ROOT, root_url + "dev/", tools, logs / "dev.log",
+                             versions_root=root_path if current_theme() else None)
     print("built dev", flush=True)
 
     latest = next(iter(built))
-    root_folder, root_hit = build_tag(latest, root_url, cache, tools, logs, latest + "-root")
+    root_folder, root_hit = build_tag(latest, root_url, root_path, cache, tools, logs, latest + "-root")
     if not root_hit:
         fresh.append("root")
     write_outputs(fresh)
@@ -517,10 +553,7 @@ def build(args: argparse.Namespace) -> int:
         copy_site(folder, out / tag)
     copy_site(dev_folder, out / "dev")
 
-    selector = out / "_versions"
-    selector.mkdir()
-    for name in SELECTOR_FILES:
-        shutil.copy(ROOT / "site" / "versions" / name, selector / name)
+    selector_files(out)
     (out / "versions.json").write_text(json.dumps(versions_json(list(built), True), indent=2) + "\n")
     pointed, hidden = point_copies_at_root(out, root_url, list(built))
     icons = use_org_icons(out)
