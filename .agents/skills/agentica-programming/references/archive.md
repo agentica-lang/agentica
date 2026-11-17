@@ -22,7 +22,8 @@ Archive.extract_zip(src, members, dest_dir, options = Archive.Options()) -> Resu
 - Only regular files are written; a selected link, directory, device or sparse
   entry is an error. The whole container is scanned, so a duplicate, a missing
   member or a bad checksum after a selected file still fails. A gzipped
-  archive must hold exactly one member with no trailing bytes. The source must
+  archive is read through `gunzip` (every member): the TAR must still end at
+  its zero blocks, and no byte may follow the last member. The source must
   be a stable caller-owned regular file.
 - Fixed ceilings: 8192 entries, 1024 name bytes, a 256 MiB compressed source.
   USTAR with PAX `path`/`size` and GNU long names; other PAX records are

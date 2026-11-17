@@ -154,12 +154,17 @@ static void test_upgrade(void) {
 /* The ResponseHead of a response head: `closes` (field 5) says whether the connection ends with the response. An
    HTTP/1.1 response keeps it unless it says close; an HTTP/1.0 one closes it unless it says keep-alive (RFC 9112 9.3),
    and a body that runs to the end of input closes it either way. */
-static bool closes(const char *head) {
-  agc_value found = agc_http_response_value(&vm, (const uint8_t *)head, strlen(head), false, 1024, 0, 0, false);
-  const agc_result *r = agc_as_result(&vm, found);
+static const agc_result *answer(const char *head, bool head_only) {
+  agc_value found = agc_http_response_value(&vm, (const uint8_t *)head, strlen(head), head_only, 1024, 0, 0, false);
+  return agc_as_result(&vm, found);
+}
+
+static bool closes_of(const agc_result *r) {
   assert(r->ok);
   return agc_as_bool(&vm, agc_as_struct(&vm, r->value)->fields[5]);
 }
+
+static bool closes(const char *head) { return closes_of(answer(head, false)); }
 
 static void test_http10_closes(void) {
   assert(!closes("HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\n"));
@@ -172,6 +177,18 @@ static void test_http10_closes(void) {
   assert(closes("HTTP/1.0 200 OK\r\nConnection: keep-alive, close\r\nContent-Length: 2\r\n\r\n"));
   assert(closes("HTTP/1.0 204 No Content\r\n\r\n"));
   assert(!closes("HTTP/1.0 204 No Content\r\nConnection: keep-alive\r\n\r\n"));
+}
+
+/* Transfer-Encoding in an HTTP/1.0 response is faulty framing when a body follows; with no body (HEAD, 204, 304) it
+   only closes the connection (RFC 9112 6.1). */
+static void test_http10_transfer_encoding(void) {
+  const char *chunked = "HTTP/1.0 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n";
+  assert(!answer(chunked, false)->ok);
+  assert(closes_of(answer(chunked, true)));
+  assert(closes("HTTP/1.0 204 No Content\r\nTransfer-Encoding: chunked\r\n\r\n"));
+  assert(closes("HTTP/1.0 304 Not Modified\r\nTransfer-Encoding: chunked\r\nConnection: keep-alive\r\n\r\n"));
+  assert(!answer("HTTP/1.0 200 OK\r\nTransfer-Encoding: gzip\r\n\r\n", true)->ok);
+  assert(closes("HTTP/1.1 304 Not Modified\r\nTransfer-Encoding: chunked\r\n\r\n"));
 }
 
 /* The structs the calls need, as a program that uses HttpWire.chunk lists them. */
@@ -209,6 +226,7 @@ int main(void) {
   test_byte_keys();
   test_upgrade();
   test_http10_closes();
+  test_http10_transfer_encoding();
   return 0;
 }
 #else

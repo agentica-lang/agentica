@@ -658,7 +658,7 @@ def test_https_goes_through_a_proxy_in_a_connect_tunnel(tmp_path, adopt):
     login goes with the CONNECT only and never to the target, a non-2xx answer is an error that names the proxy, and
     a 407 of the target itself is its response."""
     peer = adopt(Child([PYTHON, PEER], stdin=True))
-    proxy, _first, _second, _proxy_two, locked, tls_c, tls_d = peer.next_line().split()
+    proxy, _first, _second, _proxy_two, locked, tls_c, tls_d = peer.next_line().split()[:7]
     source = tmp_path / "tunnel.agc"
     source.write_text(TUNNEL_PROGRAM, encoding="utf-8")
     bytecode = compile_agc(source, tmp_path / "tunnel.agcb")
@@ -726,3 +726,40 @@ def test_https_goes_through_a_proxy_in_a_connect_tunnel(tmp_path, adopt):
     everything = result.stdout + result.stderr
     for secret in ("hunter2", "p:ss", "p%3Ass", "ss/w", "us@er", "us%40er"):
         assert secret not in everything, secret
+
+
+OLD_PROXY_PROGRAM = """\
+import HTTP from "std/http"
+
+def show(r: Result[HTTP.Response]) -> Void
+  case r
+    ok(response) -> puts("#{response.status} #{Result.unwrap_or(String.from_bytes(response.body), "<not UTF-8>")}")
+    error(message) -> puts(message)
+  end
+end
+
+def main() -> Void
+  args = System.args()
+  context = TLS.client_context(TLS.ClientOptions(ca_file: args[2])).unwrap!
+  options = HTTP.ClientOptions(proxy: "http://127.0.0.1:#{args[0]}", tls: some(context))
+  pool = HTTP.client(options).unwrap!
+  show(HTTP.get(pool, "https://127.0.0.1:#{args[1]}/hello?old"))
+  show(HTTP.get(pool, "https://127.0.0.1:#{args[1]}/hello?old2"))
+end
+"""
+
+
+def test_https_goes_through_a_proxy_that_answers_the_connect_in_http10(tmp_path, adopt):
+    """A classic Squid answers `HTTP/1.0 200 Connection established`: the tunnel opens, and the pooled tunnel is reused."""
+    peer = adopt(Child([PYTHON, PEER], stdin=True))
+    ports = peer.next_line().split()
+    old, tls_c = ports[7], ports[5]
+    source = tmp_path / "old.agc"
+    source.write_text(OLD_PROXY_PROGRAM, encoding="utf-8")
+    bytecode = compile_agc(source, tmp_path / "old.agcb")
+    ca = str(FIXTURES / "tls" / "ca.pem")
+    result = run_vm(bytecode, env=vm_environment(), args=[old, tls_c, ca], timeout=scaled(60))
+    assert result.code == 0, result.stderr
+    assert output_lines(result.stdout) == ["200 hello from C /hello?old", "200 hello from C /hello?old2"], result.stdout
+    seen = [peer.next_line().split(" ", 2)[2] for _ in range(1)]
+    assert seen == ["CONNECT 127.0.0.1:%s HTTP/1.1 | 127.0.0.1:%s" % (tls_c, tls_c)], seen
