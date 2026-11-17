@@ -29,7 +29,9 @@ A key-to-value `if` chain is a `Map` constant read with `get`:
 ## Strings
 
 Build text with `push` and one `join`; `s = s + piece` in a loop copies the
-text each time (quadratic).
+text each time (quadratic). A `List` grown with `+` is the same. Code that reads
+untrusted input (a parser, a stream) gets a test with a large input and a time
+bound, which a quadratic copy fails.
 
 ```ruby
 # bad
