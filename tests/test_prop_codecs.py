@@ -7,7 +7,6 @@ import binascii
 import json
 import math
 import random
-import re
 import string
 import struct
 from decimal import Decimal
@@ -202,17 +201,13 @@ INVALID = object()
 
 
 def python_json(text):
-    """json.loads of `text`, or INVALID where JSON.parse must fail. A mantissa of only zeros is 0.0 whatever its sign
-    (docs/vm/02-reference-behavior.md); a negative number that rounds to zero is -0.0."""
+    """json.loads of `text`, or INVALID where JSON.parse must fail. A Float keeps its sign: `-0.0` and `-0e5` are -0.0,
+    as in Python (docs/vm/02-reference-behavior.md)."""
     def refuse(constant):
         raise ValueError(constant)
 
-    def number(digits):
-        mantissa = re.split("[eE]", digits)[0]
-        return 0.0 if mantissa.strip("-0.") == "" else float(digits)
-
     try:
-        value = json.loads(text, parse_constant=refuse, parse_float=number)
+        value = json.loads(text, parse_constant=refuse)
     except ValueError:
         return INVALID
     return value if representable(value) else INVALID
@@ -240,6 +235,7 @@ def json_texts(draw):
 @timeout(300)
 @given(json_texts())
 @example("-0.0")
+@example("[-0e5, -0.0e-3, -0E0, 0.0]")
 @example('{"a": 1, "a": 2}')
 @example("[" * 500 + "]" * 500)
 def test_json_parse_accepts_what_python_accepts_and_keeps_the_value(codec, text):
@@ -257,7 +253,7 @@ NUMBER_TEXTS = st.one_of(
     st.sampled_from([2**63 - 1, -2**63, 2**63, -2**63 - 1]).map(str),
     st.floats(allow_nan=False, allow_infinity=False).map(repr),
     st.builds("{}.{}e{}".format, st.integers(-99, 99), st.integers(0, 10**20), st.integers(-340, 320)),
-    st.sampled_from(["-0", "-0.0", "1E+2", "1e-400", "-1e-400", "1e400", "2.2250738585072014e-308",
+    st.sampled_from(["-0", "-0.0", "-0e5", "-0.000E-7", "1E+2", "1e-400", "-1e-400", "1e400", "2.2250738585072014e-308",
                      "4.9406564584124654e-324", "1.7976931348623159e308", "9007199254740993", "01", "1.", ".5", "+1"]),
 )
 
@@ -545,18 +541,17 @@ def test_float_text_edges_agree_with_python_repr(codec):
 
 
 def test_float_text_reads_back(codec):
-    """to_s then to_f, and JSON.encode then JSON.decode, give back the same bits on every system (JSON reads -0.0 as
-    0.0): the value that Windows' UCRT strtod misread, every exponent with the mantissas next to a power of two, and
-    random patterns."""
+    """to_s then to_f, and JSON.encode then JSON.decode, give back the same bits on every system, -0.0 included: the
+    value that Windows' UCRT strtod misread, every exponent with the mantissas next to a power of two, and random
+    patterns."""
     rng = random.Random(1682)
     patterns = [0x0E6FFFFFFFFFFFFF] + [e << 52 | m for e in range(0x7FF) for m in (0, 1, (1 << 52) - 2, (1 << 52) - 1)]
     patterns += [rng.getrandbits(64) & ~(0x7FF << 52) | rng.randrange(0x7FF) << 52 for _ in range(3000)]
     for bits in patterns:
         for b in (bits, bits | 1 << 63):
             signed = struct.unpack("<q", struct.pack("<Q", b))[0]
-            json = 0 if b in (0, 1 << 63) else signed
             got = codec.ask("float_back", str(signed).encode("ascii"))
-            assert got == b"%d %d" % (signed, json), (hex(b), got)
+            assert got == b"%d %d" % (signed, signed), (hex(b), got)
 
 
 def test_a_long_mantissa_cancels_its_exponent(codec):

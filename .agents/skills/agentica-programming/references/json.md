@@ -152,7 +152,8 @@ end
   values.
 - `JSON.string` and `JSON.bool` need that exact kind. `JSON.int` needs a signed
   64-bit integer (`1.0` and `1e0` are not Int). `JSON.float` accepts integers
-  and decimal or exponent numbers and rejects overflow.
+  and decimal or exponent numbers and rejects overflow. A Float keeps its sign
+  (`-0.0` reads as `-0.0`), so every finite Float round-trips.
 - `JSON.kind` returns `"null"`, `"bool"`, `"int"`, `"float"`, `"string"`,
   `"array"` or `"object"` and never fails. `1` and `-0` are `"int"` (even beyond
   Int bounds, where `JSON.int` still errors); `1.0` and `1e2` are `"float"`.
