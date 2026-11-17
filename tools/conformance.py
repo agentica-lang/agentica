@@ -192,6 +192,7 @@ AREAS = {
             "tests/test_process.py", "tests/test_process_bdd.py", "tests/test_process_lifecycle.py",
             "tests/test_process_pty.py", "tests/test_process_windows.py", "tests/test_vm_child_channel.py",
             "tests/test_vm_child_channel_posix.py", "tests/test_vm_stop.py", "tests/test_vm_test_protocol.py",
+            "tests/test_vm_session.py",
             "tests/test_platform_bootstrap.py", "tests/test_windows_console_stop.py", "tests/test_vm_signals.py",
             "tests/test_windows_process_cleanup.py",
         ],

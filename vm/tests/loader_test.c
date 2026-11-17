@@ -66,7 +66,7 @@ typedef struct {
   const char *second_source;
   const buffer *updates;
   uint32_t globals;
-  fn_spec funcs[2];
+  fn_spec funcs[3];
   uint32_t func_count;
   uint32_t main_prelude, helper_prelude;
   uint32_t more_spans;
@@ -736,6 +736,83 @@ static void try_step_outside_lazy_tests(void) {
   remove(path);
   assert(each.kind == AGC_FAILED && strcmp(each.code, "RUNTIME-INTERNAL") == 0);
 #endif
+}
+
+/* agc_load_session of the file EXTENSION over the program BASE: NULL when it is refused with a message that holds
+   REASON (an unexpected answer fails the test). */
+static agc_program *session_load(const agc_program *base, spec extension, const char *reason) {
+  buffer b = build(extension);
+  agc_program *p = NULL;
+  char error[160] = "";
+  bool ok = agc_load_session(b.data, b.len, base, &p, error, sizeof error, NULL);
+  assert_collector_on();
+  free(b.data);
+  if (ok == (reason != NULL) || (reason && !strstr(error, reason)))
+    fprintf(stderr, "session load: expected \"%s\", got \"%s\"\n", reason ? reason : "a load", error);
+  assert(ok == (reason == NULL));
+  assert(!reason || strstr(error, reason));
+  return ok ? p : NULL;
+}
+
+static void session_tests(void) {
+  /* The session starts with the init function (slot 0), main, and the String "ab". An entry adds a function that
+     writes slot 1 and is the new entry. */
+  static const agc_instr init_code[] = {
+    {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_CONST, 0, 0, 0}, {AGC_OP_GLOBAL_SET, 0, 0, 0}, {AGC_OP_TAIL_CALL, 0, 1, 0},
+    {AGC_OP_RETURN, 0, 0, 0}};
+  static const agc_instr main_code[] = {{AGC_OP_STEP, 1, 0, 0}, {AGC_OP_CONST, 0, 1, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  static const agc_instr add_code[] = {
+    {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_CONST, 0, 2, 0}, {AGC_OP_GLOBAL_SET, 0, 1, 0}, {AGC_OP_CONST, 0, 1, 0},
+    {AGC_OP_RETURN, 0, 0, 0}};
+  static const agc_instr call_main[] = {
+    {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_CALL, 0, 1, 0}, {AGC_OP_GLOBAL_SET, 0, 1, 0}, {AGC_OP_CONST, 0, 1, 0},
+    {AGC_OP_RETURN, 0, 0, 0}};
+  static const agc_instr call_init[] = {
+    {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_CALL, 0, 0, 0}, {AGC_OP_GLOBAL_SET, 0, 1, 0}, {AGC_OP_CONST, 0, 1, 0},
+    {AGC_OP_RETURN, 0, 0, 0}};
+  agc_program *base_program = loaded(pair_spec(init_code, 5, main_code, 3, 1, 0));
+  base_program->globals[0] = agc_int(7);
+
+  spec grown = pair_spec(init_code, 5, main_code, 3, 2, 2);
+  grown.func_count = 3;
+  grown.funcs[2] = (fn_spec){"add", 0, 4, add_code, zero_spans, 5, 0};
+  agc_program *p = session_load(base_program, grown, NULL);
+  assert(p->function_count == 3 && p->entry == 2 && p->global_count == 2);
+  assert(agc_value_word(p->globals[0]) == agc_value_word(agc_int(7)) && p->globals[1].tag == AGC_T_VOID);
+  assert(session_load(base_program, pair_spec(init_code, 5, main_code, 3, 1, 0), NULL));
+
+  spec s = grown;
+  s.funcs[2].code = call_main;
+  assert(session_load(base_program, s, NULL));
+  s.funcs[2].code = call_init;
+  assert(!session_load(base_program, s, "init function of an earlier entry"));
+  s = grown;
+  s.extra_string = "ac";
+  assert(!session_load(base_program, s, "constant 2 differs"));
+  s = grown;
+  s.funcs[1].registers = 5;
+  assert(!session_load(base_program, s, "function 1 differs"));
+  s = grown;
+  s.globals = 0;
+  s.entry = 1;
+  assert(!session_load(base_program, s, "shorter than the session"));
+  s = pair_spec(init_code, 5, main_code, 3, 1, 0);
+  s.func_count = 1;
+  s.funcs[0] = (fn_spec){"main", 0, 4, main_code, zero_spans, 3, 0};
+  s.entry = 0;
+  s.globals = 0;
+  assert(!session_load(base_program, s, "fewer functions"));
+
+  /* The new init sets only new slots, and new slots need a new init. */
+  static const agc_instr set_old[] = {
+    {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_CONST, 0, 2, 0}, {AGC_OP_GLOBAL_SET, 0, 0, 0}, {AGC_OP_CONST, 0, 1, 0},
+    {AGC_OP_RETURN, 0, 0, 0}};
+  s = grown;
+  s.funcs[2].code = set_old;
+  assert(!session_load(base_program, s, "slot of an earlier entry"));
+  s = grown;
+  s.entry = 0;
+  assert(!session_load(base_program, s, "without a new init function"));
 }
 
 /* The slot is the only reference to its String once the registers are cleared, so it must stay readable across
@@ -2444,6 +2521,7 @@ int main(void) {
   code_load_tests();
   internal_run_tests();
   globals_tests();
+  session_tests();
   prelude_tests();
   source_root_tests();
   line_index_tests();

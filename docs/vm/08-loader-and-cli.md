@@ -78,6 +78,16 @@ branch.
   counts as a call for the termination rules.
 - **Run time**: parameter and capture counts of `CALL_VALUE` and callbacks, tags
   (5.2), list, map and string bounds, and the register cap (6.1).
+- **Session loads** (`agc_load_session`, for `run --session`): the file is the
+  whole program of the session, and every table starts with the entries of the
+  running program, unchanged (constants by value, records, types, variants,
+  updates, instances, field defaults, and each function's code and spans after
+  fusion), so the indexes that live values, frames and tasks hold keep their
+  meaning. Spans and sources are only counted. Only the new functions are
+  checked; none may call or close over an old function that holds a
+  `GLOBAL_SET` (an earlier init function), and the new init sets only new
+  slots. New slots need a new entry, the init function that sets them. The
+  slots of the running program keep their values.
 
 `vm/tests/loader_test.c` checks each rule by its reason, and truncation at every
 byte of a file with a type table, an Updates section or Globals.
@@ -135,6 +145,34 @@ parser is `agc_launch_parse` (`vm/launch.c`).
   refuses `--schedulers` and `--jit` (exit 2), since the VMs it starts would not
   get them; they read the variables.
 - `--jit MODE` and `AGENTICA_JIT` (§6.4): a bad flag or variable exits 2.
+- `run --session -` is the child of `agentica repl`, started by
+  `FrontEnd.spawn_session` as `run --driver-pid PID OPTIONS... --session -`, so
+  it ends when the front end does (the driver handoff below). It reads its first
+  program from standard input, always runs on one scheduler without the JIT,
+  the profile or coverage (each sizes its tables by the first program), and
+  refuses `--embedded`, `--coverage` and `--source-root`. Its `main` calls
+  `FrontEnd.serve_session` (`vm/session.c`), which reads lines on the parent
+  channel:
+  - `chunk HEX` adds bytes of the next program, in lower-case hex. A line holds
+    at most 1 MiB, so a chunk carries at most 512 KiB; a longer line, or a last
+    line cut off, ends the child with status 1. The end of the channel ends it
+    with 0. A bad chunk is the answer of the next entry.
+  - `entry FN READS WRITES` loads the chunks (a session load, §8), runs the new
+    init function, if any, and then function `FN` as tasks, with the session
+    slots `READS` as arguments. FN returns a List: the value to show (a String,
+    Void for none, or any value, shown inspected) and the values of the slots
+    `WRITES`.
+  - Each entry gets one JSON line: `ok: true` with `value`, `ok: false` with the
+    `diagnostic` of a crash and its `text` in the run's style, `ok: false` with
+    `invalid` when FN ran but gave back no List of the right size (its slots are
+    not written), or `ok: false` with `refused`, which changed nothing.
+  - `loaded: true` says the entry loaded its program, which stays loaded
+    whatever the rest of the answer says: the front end keeps its declarations.
+    When the init function crashes, the entry does not run, and the new slots
+    it did not set stay unset: in the session child a read of an unset slot
+    fails that task with `RUNTIME-NO-VALUE` (`vm/task.c`), not with the fatal
+    `RUNTIME-INTERNAL` of a run, and the child goes on.
+  - Tasks that an entry starts live on.
 - `agentica file.agc [args...]` runs in one process: the front end compiles in
   memory and hands the bytes to C with `FrontEnd.hand_off`, and C runs them in a
   new runtime ("The single binary"). No temporary file and no child.

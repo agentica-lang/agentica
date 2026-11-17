@@ -520,8 +520,6 @@ void agc_stack_capture(const agc_vm *vm, agc_outcome *outcome);
    --source-root). The empty String when no frame of the program runs (a detached job's done half, whose value is
    dropped; a C test). */
 agc_string *agc_error_location(const agc_vm *vm);
-void agc_print_diagnostic(FILE *err, const agc_program *program, const agc_outcome *outcome, agc_style style,
-                          bool task);
 agc_string *agc_crash_text(const agc_program *program, const agc_outcome *outcome);
 void agc_print_unobserved(FILE *err, uint64_t count, const agc_string *first, agc_style style);
 void agc_print_flush_timeout(FILE *err, int64_t ms, bool files, bool natives, agc_style style);

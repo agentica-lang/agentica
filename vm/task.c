@@ -679,9 +679,11 @@ static void crash(agc_vm *vm, agc_task *t) {
       vm->rt->crashes = t;
     vm->rt->crashes_tail = t;
   }
-  agc_notice notice;
-  agc_print_diagnostic(agc_notice_begin(&vm->rt->err, &notice), vm->rt->program, o, vm->rt->style, true);
-  agc_notice_end(vm, &notice, AGC_NOTICE_QUEUED);
+  if (!t->session) {
+    agc_notice notice;
+    agc_print_diagnostic(agc_notice_begin(&vm->rt->err, &notice), vm->rt->program, o, vm->rt->style, true);
+    agc_notice_end(vm, &notice, AGC_NOTICE_QUEUED);
+  }
   o->kind = AGC_DONE;
   unlink_task(vm, t);
   for (agc_task *child = t->children, *next; child; child = next) {
@@ -689,6 +691,21 @@ static void crash(agc_vm *vm, agc_task *t) {
     cancel_tree(vm, child, NULL, t);
   }
   finish_task(vm, t);
+}
+
+/* In the session child of `agentica repl` (vm/session.c) a slot is unset only when the init function that sets it
+   crashed (agc_load_session refuses new slots without a new init), so the read of one (vm/interp.c, op_global) is the
+   error of that entry, not a broken file: it fails the task alone. */
+static void session_unset_read(agc_vm *vm) {
+  agc_outcome *o = vm->outcome;
+  static const char unset[] = "invalid bytecode: global read before it was set";
+  static const char failed[] = "this name has no value: its definition failed in an earlier entry";
+  if (!vm->rt->session || o->kind != AGC_FAILED || strcmp(o->code, "RUNTIME-INTERNAL") != 0 ||
+      strcmp(o->message, unset) != 0)
+    return;
+  o->code = "RUNTIME-NO-VALUE";
+  o->message = failed;
+  o->message_len = sizeof failed - 1;
 }
 
 static bool fatal(const agc_vm *vm, const agc_task *t) {
@@ -820,6 +837,7 @@ bool agc_task_end_turn(agc_vm *vm, agc_task *t, agc_turn_result r, bool ran) {
   trace_gc(vm, "turn");
   bool main_done = false;
   if (!ran) {
+    session_unset_read(vm);
     if (fatal(vm, t)) AGC_THROW(vm->fail);
     agc_sync_take(vm);
     /* A task cancelled during its turn ends as cancelled even when the turn failed: the failure may come from the

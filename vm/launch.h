@@ -33,6 +33,8 @@ typedef struct {
   size_t source_root_chars;
   bool seen_flush, seen_schedulers, chosen_schedulers, seen_seed, seen_driver, seen_jit, sandbox, deny_run,
       deny_net, deny_fs, deny_env, deny_native;
+  /* --session: the run is the child of `agentica repl` (vm/session.c), on one scheduler and without the JIT. */
+  bool session;
 } agc_launch_options;
 
 typedef enum { AGC_LAUNCH_OK, AGC_LAUNCH_VERSION, AGC_LAUNCH_BAD } agc_launch_status;

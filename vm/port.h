@@ -396,6 +396,9 @@ typedef struct {
      flush limit after the file flush starts (agc_io_flush_files sets it). */
   uint64_t flush_by;
   agc_front_end *front_end;
+  /* The state of `agentica run --session`, the child of `agentica repl` (vm/session.c); NULL in any other runtime, so
+     FrontEnd.serve_session is refused there. */
+  struct agc_session *session;
   /* The prepared native calls of the run (vm/ffi.c), made at the first call of each extern function; NULL before. */
   struct agc_ffi_cache *ffi;
   /* The native modules of the run (vm/native_module.c): those the binary carries, then each one loaded; malloc'd,
@@ -619,6 +622,9 @@ struct agc_task {
   /* The buffer of an ended Bytes.build of this task and its size, kept for its next one (vm/bytes.c), or NULL. */
   agc_bytes *build_spare;
   size_t build_spare_cap;
+  /* An init or entry task of a session (FrontEnd.serve_session, vm/session.c): its crash is the answer to the front
+     end, which shows it, so crash() prints nothing. */
+  bool session;
 };
 
 /* Where agc_fail and agc_exit jump while compiled code calls a builtin (agc_jit_call_builtin, vm/jit/jit.c) in a run
@@ -1108,6 +1114,19 @@ CC_JUMPS _Noreturn void agc_fail_argument(agc_vm *vm, const char *code, const ag
                                           int64_t argument, uint32_t span);
 CC_JUMPS _Noreturn void agc_exit(agc_vm *vm, int64_t code);
 size_t agc_stack_members(const agc_program *program, const agc_stack *stack, agc_json_member out[3]);
+/* The `range` of a --json diagnostic: {"end": {column, line}, "start": {column, line}} of SPAN (vm/diag.c). */
+agc_value agc_span_range(const agc_span *span);
+/* The JSON object of the N MEMBERS and a line feed: one record of a line protocol (vm/testing.c, vm/session.c). */
+agc_string *agc_json_line(agc_vm *vm, agc_json_member *members, size_t n);
+/* The diagnostic of OUTCOME in STYLE, as a run prints it (vm/diag.c); TASK adds that a task crashed. */
+void agc_print_diagnostic(FILE *err, const agc_program *program, const agc_outcome *outcome, agc_style style,
+                          bool task);
+/* Loads the next program of a session (vm/loader.c, for vm/session.c): the checks of agc_load_traced, and every table
+   must start with the entries of BASE, unchanged, so the values and frames of the session keep their meaning. The
+   functions of BASE are compared, not checked again, and no new one may call one that writes a Globals slot. The new
+   program's slots start with BASE's values. */
+bool agc_load_session(const uint8_t *data, size_t len, const agc_program *base, agc_program **program, char *error,
+                      size_t error_size, const agc_trace *trace);
 bool agc_write(agc_vm *vm, agc_output *out, const agc_string *text, bool newline);
 bool agc_output_waiting(const agc_vm *vm, const agc_output *out);
 bool agc_drain(agc_vm *vm);

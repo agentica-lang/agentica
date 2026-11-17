@@ -22,6 +22,39 @@ ROWS: List[Model.Builtin] = [
     alternatives: [],
   ),
   Model.Builtin(
+    name: "FrontEnd.serve_session",
+    parameters: [],
+    result: Types.Type.Void,
+    rule: Model.Rule.Plain,
+    implementation: "FrontEnd.serve_session",
+    effects: ["process"],
+    description: (
+      "Session child only: the main loop of `agentica run --session`, the child of `agentica repl`. It reads each " +
+      "entry on the parent channel, loads the session's program over the running one, runs the entry as a task and " +
+      "answers one JSON line, until the channel ends. Any other program fails with RUNTIME-FRONT-END-ONLY."
+    ),
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "FrontEnd.spawn_session",
+    parameters: [
+      Model.Named(name: "command", type: Types.Type.String),
+      Model.Named(name: "options", type: Types.Type.List(Types.Type.String)),
+      Model.Named(name: "json", type: Types.Type.Bool),
+    ],
+    result: Types.Type.Result(Types.Type.Opaque("Process")),
+    rule: Model.Rule.Plain,
+    implementation: "FrontEnd.spawn_session",
+    effects: ["subprocess"],
+    description: (
+      "Front end only: start the session child of `agentica repl`, `command run --driver-pid PID options... " +
+      "--session -`, with the parent channel; it ends when the front end does. Its stdin is a pipe, its stdout is " +
+      "the front end's (its stderr when json is true) and its stderr the front end's; it leads its own process " +
+      "group where the system has them. Any other program fails with RUNTIME-FRONT-END-ONLY."
+    ),
+    alternatives: [],
+  ),
+  Model.Builtin(
     name: "FrontEnd.std_source",
     parameters: [Model.Named(name: "path", type: Types.Type.String)],
     result: Types.Type.Result(Types.Type.String),
