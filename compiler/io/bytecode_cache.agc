@@ -55,8 +55,10 @@ TREE_WORD = "tree "
 COMPILER_WORD = "compiler "
 ABSENT_WORD = "absent "
 PRESENT_WORD = "present "
-## `library 0 PATH` (a build) or `library 1 PATH` (a prebuilt file): the native library must still be in a cache entry
-## that a run would trust (CacheFiles.entry_problem), checked again on every hit.
+## `library 0 DIGEST PATH` (a build) or `library 1 DIGEST PATH` (a prebuilt file): the native library must still be
+## in a cache entry that a run would trust (CacheFiles.entry_problem), checked again on every hit. DIGEST is the one of
+## its `source` line, which the hit checks the bytes against, so the receipt is compared with it and the library is
+## read once.
 LIBRARY_WORD = "library "
 
 ## Where the entry of one root file is and what it must match. `build` is the `_build/` folder and `folder` the
@@ -162,7 +164,7 @@ private
 BYTECODE_FOLDER = "bytecode"
 
 # The first line of the key; change it when the layout of an entry changes.
-FORMAT = "agentica-cache-4"
+FORMAT = "agentica-cache-5"
 
 # The head of an entry: this word, a space, the length of the text in eight digits, a line feed.
 HEAD_WORD = "AGCCACHE "
@@ -240,12 +242,12 @@ def read_entry(entry: Entry, settings: Env.Settings) -> Result[Bytes]
   try CacheFiles.private_kind(entry.folder, "directory", user)
   try CacheFiles.private_kind(entry.file, "file", user)
   handle = try File.open(entry.file, "read", CacheFiles.IO_TIMEOUT_MS)
-  read = read_whole(handle, entry, settings)
+  read = read_whole(handle, entry, settings, user)
   _ = File.close(handle, CacheFiles.IO_TIMEOUT_MS)
   read
 end
 
-def read_whole(handle: File.Handle, entry: Entry, settings: Env.Settings) -> Result[Bytes]
+def read_whole(handle: File.Handle, entry: Entry, settings: Env.Settings, user: Int) -> Result[Bytes]
   head = try read_exact(handle, HEAD_BYTES)
   size = try text_size(head)
   bytes = try read_exact(handle, size)
@@ -254,7 +256,7 @@ def read_whole(handle: File.Handle, entry: Entry, settings: Env.Settings) -> Res
 
   # The key has no line feed inside a line, so its lines are the first ones of the text, then the program line.
   lines = text.split("\n").drop(entry.key.split("\n").size)
-  try check_lines(settings, lines.drop(1))
+  try check_lines(settings, lines.drop(1), user)
   program = try read_rest(handle)
   if lines[0] != "program #{CacheFiles.digest(program)}" or !made_by?(program, settings.version)
     return error("the program of the entry is damaged")
@@ -277,17 +279,13 @@ def text_size(head: Bytes) -> Result[Int]
   ok(size)
 end
 
-# Every source file must still have the digest the entry holds, and every probe must still answer as it did.
-def check_lines(settings: Env.Settings, lines: List[String]) -> Result[Void]
+# Every source file must still have the digest the entry holds, and every probe must still answer as it did. `user` is
+# the user of this process (CacheFiles.own_user).
+def check_lines(settings: Env.Settings, lines: List[String], user: Int) -> Result[Void]
   workspace = settings.workspace
-  user: Optional[Int] = none
   for line in lines
     if line.start_with?(LIBRARY_WORD)
-      if !user.some?
-        user = some(try CacheFiles.own_user())
-      end
-
-      try check_library(line.slice(LIBRARY_WORD.length, line.length - LIBRARY_WORD.length), user.unwrap!)
+      try check_library(line.slice(LIBRARY_WORD.length, line.length - LIBRARY_WORD.length), user)
     elsif line.start_with?(COMPILER_WORD)
       return error("the C compiler changed") if line != CacheFiles.compiler_line(settings.env.os)
     elsif line.start_with?(SOURCE_WORD)
@@ -338,16 +336,18 @@ def check_tree(workspace: Workspace.Workspace, line: String) -> Result[Void]
   ok()
 end
 
-# `0 PATH` or `1 PATH`: the cache folder, the entry and the library are still private and match the receipt.
+# `0 DIGEST PATH` or `1 DIGEST PATH`: the cache folder, the entry and the library are still private, and the receipt
+# names DIGEST.
 def check_library(rest: String, user: Int) -> Result[Void]
-  if rest.length < 3 or !["0 ", "1 "].include?(rest.slice(0, 2)) or rest.include?(String.from_code(0))
+  start = 2 + DIGEST_CHARS + 1
+  if rest.length <= start or !["0 ", "1 "].include?(rest.slice(0, 2)) or rest.include?(String.from_code(0))
     return error("a line of the entry is wrong")
   end
 
-  library = rest.slice(2, rest.length - 2)
+  library = rest.slice(start, rest.length - start)
   entry = Paths.directory_of(library)
   try CacheFiles.private_kind(Paths.directory_of(entry), "directory", user)
-  if CacheFiles.entry_problem(entry, library, user, rest.start_with?("1")) != ""
+  if CacheFiles.entry_problem(entry, library, user, rest.start_with?("1"), rest.slice(2, DIGEST_CHARS)) != ""
     return error("the cache entry of #{library} is not trusted")
   end
 

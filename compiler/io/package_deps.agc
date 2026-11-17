@@ -4,7 +4,8 @@
 ## .agc files the hash covers and the manifest of the package (for a `subdir`, the cache folder holds that folder
 ## alone). They are built in a hidden folder of deps/, hashed against the lock, and swapped for the old `deps/<name>/`
 ## in two renames, so a build never sees a half-written copy and a failure leaves the old copy. A folder that is a real
-## folder with the locked hash is left as it is.
+## folder with the locked hash and the manifest of the cache is left as it is: the hash covers the .agc files only,
+## so a package whose new tag changed just its manifest has the same hash.
 ##
 ## The staging folder is a private (0700) parent, and the copy is a child of it made with the ordinary mode, because
 ## the folder that ends up as deps/<name>/ keeps its mode through the renames and other users must read it. A killed
@@ -71,8 +72,9 @@ def sync(
 end
 
 ## Writes the locked package from `source` (its cache folder) into `deps`, the deps/ folder of the project, unless its
-## folder there is a real folder that already has the locked hash (a rewrite would only change the times of the files
-## and make the bytecode cache miss). `place` names the lock entry, for the failures about the package itself.
+## folder there is a real folder that already has the locked hash and the manifest of `source` (a rewrite would only
+## change the times of the files and make the bytecode cache miss). `place` names the lock entry, for the failures
+## about the package itself.
 def put(
   workspace: Workspace.Workspace,
   deps: String,
@@ -80,7 +82,7 @@ def put(
   place: PackageFetch.Place,
   locked: Lock.Locked,
 ) -> Result[Void]
-  return ok() if up_to_date?(workspace, deps, locked)
+  return ok() if up_to_date?(workspace, deps, source, locked)
 
   files = try chosen(workspace, source, place, locked)
   try prepare(workspace, deps)
@@ -110,9 +112,10 @@ enum Kind
   Other
 end
 
-# Whether deps/<name> is a folder (never a link) whose .agc files hash to the lock. Anything else, a failed look
-# included, is a reason to write it again.
-def up_to_date?(workspace: Workspace.Workspace, deps: String, locked: Lock.Locked) -> Bool
+# Whether deps/<name> is a folder (never a link) whose .agc files hash to the lock and whose manifest is the one of
+# `source`, the cache folder (the hash does not cover it). Anything else, a failed look included, is a reason to write
+# it again.
+def up_to_date?(workspace: Workspace.Workspace, deps: String, source: String, locked: Lock.Locked) -> Bool
   here = kind_of(workspace, deps)
   return false if !here.ok? or !folder?(here.unwrap!)
 
@@ -121,9 +124,28 @@ def up_to_date?(workspace: Workspace.Workspace, deps: String, locked: Lock.Locke
   return false if !seen.ok? or !folder?(seen.unwrap!)
 
   case PackageHash.hash_folder(workspace, target)
-    PackageHash.Hashed.Hash(found) -> found == locked.hash
+    PackageHash.Hashed.Hash(found) -> found == locked.hash and same_manifest?(workspace, source, target)
     _ -> false
   end
+end
+
+# Whether the two folders have the same manifest, or neither has one (as `chosen` copies it: a regular file).
+def same_manifest?(workspace: Workspace.Workspace, source: String, target: String) -> Bool
+  wanted = manifest_of(workspace, source)
+  here = manifest_of(workspace, target)
+  wanted.ok? and here.ok? and wanted.unwrap! == here.unwrap!
+end
+
+# The bytes of the manifest in `folder`, `none` when it has no regular file of that name.
+def manifest_of(workspace: Workspace.Workspace, folder: String) -> Result[Optional[Bytes]]
+  entries = try workspace.list_folder.call(folder)
+  for entry in entries
+    if entry.name == MANIFEST_FILE and regular?(entry.kind)
+      return ok(some(try workspace.read_bytes.call(Paths.join(folder, MANIFEST_FILE))))
+    end
+  end
+
+  ok(none)
 end
 
 def folder?(kind: Kind) -> Bool

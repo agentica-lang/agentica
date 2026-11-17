@@ -380,7 +380,7 @@ def verified(
 ) -> Result[Void]
   library = Paths.join(entry, library_file)
   help = "remove the folder #{entry} to download it again"
-  problem = CacheFiles.entry_problem(entry, library, user, true)
+  problem = CacheFiles.entry_problem(entry, library, user, true, "")
   if problem == CacheFiles.ENTRY_NOT_PRIVATE
     return error(cache_failure(context, "the prebuilt cache entry is not private to this user", help))
   end

@@ -36,11 +36,11 @@ def store(plan: BytecodeCache.Plan, settings: Env.Settings, modules: List[Linker
       return false if !libraries.ok?
 
       for path in built.uniq
-        lines = lines.push("#{BytecodeCache.LIBRARY_WORD}0 #{path}")
+        lines = lines.push("#{BytecodeCache.LIBRARY_WORD}0 #{digest_of(libraries.unwrap!, path)} #{path}")
       end
 
       for path in fetched.uniq
-        lines = lines.push("#{BytecodeCache.LIBRARY_WORD}1 #{path}")
+        lines = lines.push("#{BytecodeCache.LIBRARY_WORD}1 #{digest_of(libraries.unwrap!, path)} #{path}")
       end
 
       lines = lines.concat(libraries.unwrap!)
@@ -96,6 +96,18 @@ def library_lines(
   end
 
   ok(lines)
+end
+
+# The digest of the `source` line of `path` among `lines` (library_lines writes one for each library).
+def digest_of(lines: List[String], path: String) -> String
+  for line in lines
+    if line.start_with?(BytecodeCache.SOURCE_WORD) and line.end_with?(" #{path}")
+      word = BytecodeCache.SOURCE_WORD.length
+      return line.slice(word, line.length - word - path.length - 1)
+    end
+  end
+
+  ""
 end
 
 # The libraries of a folder of the package cache that the extern functions of the program name: of the build cache
