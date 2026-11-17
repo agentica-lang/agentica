@@ -48,8 +48,10 @@ HTTP.ClientOptions(timeout_ms: Int = 30000, idle_timeout_ms: Int = 30000, max_co
   `connect_timeout_ms` bounds the connect inside it; `read_timeout_ms` is the
   longest wait for body bytes (a stream: `0` is no limit, stop it with
   `Task.cancel(stream.done)`).
-  `connect_to: "203.0.113.7"` (an IP, not a name, not with `proxy`) connects
-  there and keeps the URL's host for `Host`, TLS and the certificate. An SSRF-safe
+  `connect_to: "203.0.113.7"` (an IP in its strict form, not a name, not with
+  `proxy`) connects there for every URL that the options or client reach (one
+  client per host; after a redirect resolve and check again) and keeps each
+  URL's host for `Host`, TLS and the certificate. An SSRF-safe
   call: `DNS.lookup(host)`, refuse private, loopback, link-local and reserved
   addresses, then `connect_to:` a checked one (no second lookup to rebind). A
   custom DNS or a fixed address works the same.

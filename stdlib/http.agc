@@ -197,8 +197,10 @@ type App = Fn[HttpWire.Request, RequestBody, Result[Answer]]
 ## the system CA certificates and no proxy
 ## (set `tls: some(context)` to use a client context of `TLS.client_context` instead of the system certificates).
 ## `connect_to` is an IP address (empty by default) that every connection goes to instead of resolving the host of the
-## URL; `Host`, the TLS server name and the certificate check still use the host of the URL. It is an error for a host
-## name, and together with a proxy.
+## URL; `Host`, the TLS server name and the certificate check still use the host of the URL. It applies to every URL
+## that this client reaches, so use one client per host. It is an error for a host name or any spelling that is not
+## the strict form of an address (IPv4 `a.b.c.d` with no leading zero, IPv6 without brackets, not IPv4-mapped), and
+## together with a proxy.
 ## Every number in `options` must be positive, except `read_timeout_ms`, which is 0 (no limit) or positive;
 ## `max_connections` is at most 65536 and `max_body_bytes` at most 64 MiB, or the result is an error. `timeout_ms` is
 ## the whole call (the wait for a slot, the connect, the head and the body); `connect_timeout_ms` bounds the connect
@@ -405,7 +407,7 @@ def start(origin: String, options: HttpWire.ClientOptions = HttpWire.ClientOptio
   if where.target != "/"
     return error("http: start takes an origin such as http://host:8080, with no path or query", kind: "argument")
   end
-  connect_to(where, options)
+  open_connection(where, options)
 end
 
 ## Sends a request on the connection and returns when the head of the response has been read, as Ruby's
@@ -483,7 +485,7 @@ def open(
 
   where = try parse_url(url)
   head_by = after(options.timeout_ms)
-  conn = try connect_to(where, options)
+  conn = try open_connection(where, options)
   case sent_by(conn, method, where.target, body, headers, head_by)
     ok(head) ->
       pieces: Channel[Bytes] = Channel.new(STREAM_PIECES)
@@ -1435,7 +1437,7 @@ end
 
 # The connection to the host of `where`, idle and with no request yet. Its options keep the proxy without the user
 # info, which only the header of each request needs.
-def connect_to(where: Target, options: HttpWire.ClientOptions) -> Result[Connection]
+def open_connection(where: Target, options: HttpWire.ClientOptions) -> Result[Connection]
   via = try connect_target(where, options)
   socket = try at_connect(open_socket(via, options))
   login: Channel[String] = Channel.new(1)
@@ -1841,7 +1843,7 @@ def upload_whole(
   end
   return error("http: length must be -1 (chunked) or the number of bytes", kind: "argument") if length < UNSIZED
   where = try parse_url(url)
-  conn = try connect_to(where, options)
+  conn = try open_connection(where, options)
   answer = uploaded(conn, where.target, method, body, length, headers)
   end_connection(conn)
   answer
@@ -2033,17 +2035,89 @@ def check_client(options: HttpWire.ClientOptions) -> Result[Void]
   check_connect_to(options)
 end
 
-# `connect_to` is empty or an IP address (not a name, so nothing resolves again), and does not go with a proxy.
+# `connect_to` is empty or an IP address in the strict forms below (so the resolver reads it as the same address and
+# never as a name), and does not go with a proxy.
 def check_connect_to(options: HttpWire.ClientOptions) -> Result[Void]
   address = options.connect_to
   return ok() if address == ""
 
-  if ipv4_number(address) < 0 and not ipv6?(address)
-    return error("http: connect_to must be an IP address, not a host name", kind: "argument")
+  if not ipv4_address?(address) and not ipv6_address?(address)
+    return error("http: connect_to must be an IP address (IPv4 a.b.c.d, or IPv6 without brackets)", kind: "argument")
   end
   return error("http: connect_to cannot be used with a proxy", kind: "argument") if options.proxy != ""
 
   ok()
+end
+
+# Four decimal numbers from 0 to 255 with no leading zero: the resolver reads `012` as octal and `010` as 8.
+def ipv4_address?(text: String) -> Bool
+  parts = String.split(text, ".")
+  return false if List.size(parts) != 4
+
+  for part in parts
+    return false if part == "" or String.length(part) > 3 or not plain?(part, true)
+    return false if part.start_with?("0") and String.length(part) > 1
+    return false if part.to_i! > 255
+  end
+  true
+end
+
+# At most 8 groups of 1 to 4 hex digits, one `::` at most, and no dotted tail. An IPv4-mapped
+# address (`::ffff:a.b.c.d`,
+# or its hex form) is refused: a caller passes the IPv4 address itself, so a check of it has one form to classify.
+def ipv6_address?(text: String) -> Bool
+  halves = String.split(text, "::")
+  return false if text == "" or List.size(halves) > 2
+
+  head = hex_groups(halves[0])
+  return false if head == [-1]
+  return List.size(head) == 8 and not ipv4_mapped?(head) if List.size(halves) == 1
+
+  tail = hex_groups(halves[1])
+  return false if tail == [-1] or List.size(head) + List.size(tail) > 7
+
+  groups = head
+  for _ in 0..(7 - List.size(head) - List.size(tail))
+    groups = groups.push(0)
+  end
+  for group in tail
+    groups = groups.push(group)
+  end
+  not ipv4_mapped?(groups)
+end
+
+def ipv4_mapped?(groups: List[Int]) -> Bool
+  for k in 0..4
+    return false if groups[k] != 0
+  end
+  groups[5] == 65535
+end
+
+# The numbers of the groups of `text`, separated by `:`; `[-1]` when a group is empty, longer than 4 or not hex.
+def hex_groups(text: String) -> List[Int]
+  groups: List[Int] = []
+  return groups if text == ""
+
+  for part in String.split(text, ":")
+    return [-1] if part == "" or String.length(part) > 4
+
+    value = 0
+    for c in String.split(part, "")
+      digit = hex_digit(String.code(c))
+      return [-1] if digit < 0
+
+      value = value * 16 + digit
+    end
+    groups = groups.push(value)
+  end
+  groups
+end
+
+def hex_digit(code: Int) -> Int
+  return code - 48 if code >= 48 and code <= 57
+  return code - 55 if code >= 65 and code <= 70
+  return code - 87 if code >= 97 and code <= 102
+  -1
 end
 
 # The address of a connect: `connect_to` when the options set it, else the host of the URL, which the system resolver

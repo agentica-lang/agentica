@@ -73,7 +73,8 @@ WINDOWS_ONLY_MODULES = frozenset({
 # an LD_PRELOAD library in front of glibc's getaddrinfo (tests/test_vm_dns.py); the other systems lack the
 # Windows-only modules above and the search of NAME.com and NAME.exe in PATH (tests/test_bytecode_cache.py); Windows and
 # macOS do not drop the SYN of a connect to a full accept queue, so that one case of tests/test_vm_http_timeouts.py
-# skips there (its https case, a server that never speaks, runs everywhere).
+# skips there (its https case, a server that never speaks, runs everywhere); a system with no IPv6 loopback skips the
+# ::1 case of tests/test_vm_http_connect_to.py.
 # Golden fixtures named -posix or -windows are allowed by name (host_only_fixture).
 _NEEDS_POSIX = frozenset({
     "tests/test_bdd_integration.py", "tests/test_bdd_posix.py", "tests/test_check_stdin.py", "tests/test_cli_fmt.py",
@@ -95,12 +96,13 @@ _NEEDS_LINUX = frozenset({
     "tests/test_vm_multicore.py", "tests/test_vm_dns.py", "tests/test_vm_http_timeouts.py",
 })
 _NEEDS_WINDOWS = WINDOWS_ONLY_MODULES | {"tests/test_bytecode_cache.py"}
+_NEEDS_IPV6 = frozenset({"tests/test_vm_http_connect_to.py"})
 HOST_ONLY_ALLOWED = {
-    "linux-x86_64": _NEEDS_WINDOWS,
-    "linux-arm64": _NEEDS_WINDOWS,
-    "windows-x86_64": _NEEDS_POSIX,
-    "macos-x86_64": _NEEDS_WINDOWS | _NEEDS_LINUX,
-    "macos-arm64": _NEEDS_WINDOWS | _NEEDS_LINUX,
+    "linux-x86_64": _NEEDS_WINDOWS | _NEEDS_IPV6,
+    "linux-arm64": _NEEDS_WINDOWS | _NEEDS_IPV6,
+    "windows-x86_64": _NEEDS_POSIX | _NEEDS_IPV6,
+    "macos-x86_64": _NEEDS_WINDOWS | _NEEDS_LINUX | _NEEDS_IPV6,
+    "macos-arm64": _NEEDS_WINDOWS | _NEEDS_LINUX | _NEEDS_IPV6,
 }
 
 # The reason of a golden fixture that holds the answers of the other family of systems (tests/vm_diff_support.py).
