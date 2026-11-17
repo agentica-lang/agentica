@@ -29,10 +29,8 @@ typedef struct {
   uint64_t start;
   char *error;
   size_t error_size;
-  /* A session load (agc_load_session): the program the file must extend, and for each of its functions whether it
-     writes a Globals slot (an init function of an earlier entry, which nothing may call again). NULL otherwise. */
+  /* A session load (agc_load_session): the program the file adds to. NULL otherwise. */
   const agc_program *base;
-  bool *base_inits;
   agc_catch_buf fail;
 } reader;
 
@@ -79,6 +77,22 @@ static void *load_alloc(reader *r, size_t size, bool atomic) {
   return atomic ? agc_alloc_atomic(size) : agc_alloc(size);
 }
 
+/* A table of `count` entries of `size` bytes whose first `held` are the base's (a session load), copied. Only the new
+   entries count against the budget: the base's were counted when it loaded. */
+static void *grown(reader *r, const void *base, uint32_t held, uint32_t count, size_t size, bool atomic) {
+  size_t added = agc_size_mul(count - held, size);
+  if (added > r->budget) reject(r, "file needs too much memory");
+  r->budget -= added;
+  size_t total = agc_size_mul(count, size);
+  if (total == 0) return NULL;
+  void *table = atomic ? agc_alloc_atomic(total) : agc_alloc(total);
+  if (base && held) memcpy(table, base, (size_t)held * size);
+  return table;
+}
+
+/* The base's count of a table in a session load, whose entries come before the file's; 0 otherwise. */
+#define HELD(r, field) ((r)->base ? (r)->base->field : 0)
+
 static uint8_t read_u8(reader *r) { return *take(r, 1); }
 
 static inline uint32_t read_u32(reader *r) { return get_u32(take(r, 4)); }
@@ -93,6 +107,13 @@ static uint32_t read_count(reader *r, size_t min_entry, const char *what) {
   uint32_t count = read_u32(r);
   if ((uint64_t)count * min_entry > left(r)) reject(r, "%s count exceeds the file", what);
   return count;
+}
+
+/* The count of a table whose first `held` entries are the base's: the file has only the ones after them. */
+static uint32_t table_count(reader *r, uint32_t held, size_t min_entry, const char *what) {
+  uint32_t added = read_count(r, min_entry, what);
+  if (added > UINT32_MAX - held) reject(r, "too many entries of %s", what);
+  return held + added;
 }
 
 static agc_string *read_string(reader *r) {
@@ -183,6 +204,13 @@ static void check_spans(reader *r, const agc_program *p, uint32_t first, uint32_
   if ((uint64_t)first + count > p->span_count) reject(r, "span index out of range");
 }
 
+/* An init function of an earlier entry, which nothing may call again. */
+static bool sets_globals(const agc_function *f) {
+  for (uint32_t pc = 0; pc < f->count; pc++)
+    if (f->code[pc].op == AGC_OP_GLOBAL_SET) return true;
+  return false;
+}
+
 static bool calls_anything(const agc_function *f) {
   for (uint32_t pc = 0; pc < f->count; pc++)
     if (f->code[pc].op == AGC_OP_CALL || f->code[pc].op == AGC_OP_TAIL_CALL || f->code[pc].op == AGC_OP_CALL_BUILTIN ||
@@ -197,7 +225,7 @@ static bool calls_anything(const agc_function *f) {
    the entry is plain main, which a program may call. */
 static void check_not_entry(reader *r, const agc_program *p, uint32_t target) {
   if (p->global_count && target == p->entry) reject(r, "call or closure of the entry function of a file with globals");
-  if (r->base && target < r->base->function_count && r->base_inits[target])
+  if (target < HELD(r, function_count) && sets_globals(&r->base->functions[target]))
     reject(r, "call or closure of the init function of an earlier entry");
 }
 
@@ -481,13 +509,21 @@ static uint32_t *read_field_types(reader *r, const agc_program *p, uint32_t coun
   return types;
 }
 
+/* How deep the element types of type i nest, from those of the types before it. */
+static uint16_t type_depth(const agc_type *t, const uint16_t *depth) {
+  bool nests = t->kind >= AGC_TYPE_LIST && t->kind != AGC_TYPE_STRUCT && t->kind != AGC_TYPE_ENUM &&
+               t->kind != AGC_TYPE_INSTANCE;
+  return nests ? (uint16_t)(depth[t->arg] + 1) : 0;
+}
+
 static void load_types(reader *r, agc_program *p) {
-  p->type_count = read_count(r, 1, "type");
+  uint32_t held = HELD(r, type_count);
+  p->type_count = table_count(r, held, 1, "type");
   if (p->type_count > AGC_MAX_TYPES) reject(r, "too many types");
-  p->types = load_alloc(r, agc_size_mul(p->type_count, sizeof(agc_type)), true);
+  p->types = grown(r, held ? r->base->types : NULL, held, p->type_count, sizeof(agc_type), true);
   uint16_t *depth = load_alloc(r, agc_size_mul(p->type_count, sizeof(uint16_t)), true);
-  for (uint32_t i = 0; i < p->type_count; i++) {
-    // cchecker: ignore CC-GCC-ANALYZER-NULL-DEREFERENCE: a count of 0 gets NULL and no loop
+  for (uint32_t i = 0; i < held; i++) depth[i] = type_depth(&p->types[i], depth);
+  for (uint32_t i = held; i < p->type_count; i++) {
     depth[i] = 0;
     agc_type *t = &p->types[i];
     t->kind = read_u8(r);
@@ -507,6 +543,7 @@ static void load_types(reader *r, agc_program *p) {
   for (uint32_t i = 0, last = 0; i < count; i++) {
     uint32_t index = read_u32(r);
     if (index >= p->struct_count) reject(r, "struct index out of range");
+    if (index < HELD(r, struct_count)) reject(r, "a decodable record of a struct of the session");
     if (i && index <= last) reject(r, "decodable structs out of order");
     last = index;
     agc_struct_def *d = &p->structs[index];
@@ -518,7 +555,7 @@ static void load_types(reader *r, agc_program *p) {
     d->field_types = read_field_types(r, p, d->count);
   }
   reject_duplicate_names(r, p, names, count);
-  for (uint32_t i = 0; i < p->type_count; i++)
+  for (uint32_t i = held; i < p->type_count; i++)
     if (p->types[i].kind == AGC_TYPE_STRUCT && !p->structs[p->types[i].arg].json_name)
       reject(r, "type names a struct without field types");
 }
@@ -529,8 +566,8 @@ static void load_types(reader *r, agc_program *p) {
    enum. */
 static void find_json_field(reader *r, agc_program *p) {
   static const char *const names[] = {"Absent", "Null", "Value"};
-  p->json_field = UINT32_MAX;
-  for (uint32_t i = 0; i < p->enum_count; i++) {
+  p->json_field = r->base ? r->base->json_field : UINT32_MAX;
+  for (uint32_t i = HELD(r, enum_count); i < p->enum_count; i++) {
     const agc_enum_def *d = &p->enums[i];
     if (!same_text(d->name, "JSON.Field")) continue;
     if (p->json_field != UINT32_MAX) reject(r, "duplicate JSON.Field enum");
@@ -541,7 +578,7 @@ static void find_json_field(reader *r, agc_program *p) {
     }
     p->json_field = d->first;
   }
-  for (uint32_t i = 0; i < p->type_count; i++)
+  for (uint32_t i = HELD(r, type_count); i < p->type_count; i++)
     if (p->types[i].kind == AGC_TYPE_JSON_FIELD && p->json_field == UINT32_MAX)
       reject(r, "JSON.Field type without the JSON.Field enum");
 }
@@ -549,8 +586,8 @@ static void find_json_field(reader *r, agc_program *p) {
 /* The builtin JSON.Node enum that JSON.node builds: its eight variants in order, at most once. */
 static void find_json_node(reader *r, agc_program *p) {
   static const char *const names[] = {"Null", "Bool", "Int", "BigInt", "Float", "String", "Array", "Object"};
-  p->json_node = UINT32_MAX;
-  for (uint32_t i = 0; i < p->enum_count; i++) {
+  p->json_node = r->base ? r->base->json_node : UINT32_MAX;
+  for (uint32_t i = HELD(r, enum_count); i < p->enum_count; i++) {
     const agc_enum_def *d = &p->enums[i];
     if (!same_text(d->name, "JSON.Node")) continue;
     if (p->json_node != UINT32_MAX) reject(r, "duplicate JSON.Node enum");
@@ -568,8 +605,8 @@ static void find_json_node(reader *r, agc_program *p) {
    another shape is an ordinary enum, not an error. A type of kind Optional needs the enum, since typed JSON builds
    its variants. */
 static void find_optional(reader *r, agc_program *p) {
-  p->optional = UINT32_MAX;
-  for (uint32_t i = 0; i < p->enum_count; i++) {
+  p->optional = r->base ? r->base->optional : UINT32_MAX;
+  for (uint32_t i = HELD(r, enum_count); i < p->enum_count; i++) {
     const agc_enum_def *d = &p->enums[i];
     if (!same_text(d->name, "Optional") || d->count != 2) continue;
     const agc_variant_def *none = &p->variants[d->first];
@@ -579,17 +616,20 @@ static void find_optional(reader *r, agc_program *p) {
     if (p->optional != UINT32_MAX) reject(r, "duplicate Optional enum");
     p->optional = d->first;
   }
-  for (uint32_t i = 0; i < p->type_count; i++)
+  for (uint32_t i = HELD(r, type_count); i < p->type_count; i++)
     if (p->types[i].kind == AGC_TYPE_OPTIONAL && p->optional == UINT32_MAX)
       reject(r, "Optional type without the Optional enum");
 }
 
 static void load_tables(reader *r, agc_program *p) {
-  p->struct_count = read_count(r, 8, "struct");
-  p->structs = load_alloc(r, agc_size_mul(p->struct_count, sizeof(agc_struct_def)), false);
-  for (uint32_t i = 0; i < p->struct_count; i++) {
+  const agc_program *b = r->base;
+  uint32_t held = HELD(r, struct_count);
+  p->struct_count = table_count(r, held, 8, "struct");
+  p->structs = grown(r, b ? b->structs : NULL, held, p->struct_count, sizeof(agc_struct_def), false);
+  p->max_fields = HELD(r, max_fields);
+  p->max_arity = HELD(r, max_arity);
+  for (uint32_t i = held; i < p->struct_count; i++) {
     agc_struct_def *d = &p->structs[i];
-    // cchecker: ignore CC-GCC-ANALYZER-NULL-DEREFERENCE: a count of 0 gets NULL and no loop
     d->name = read_string(r);
     d->count = read_count(r, 4, "field");
     if (d->count > 65535) reject(r, "too many fields");
@@ -603,12 +643,14 @@ static void load_tables(reader *r, agc_program *p) {
 
   load_types(r, p);
 
-  p->enum_count = read_count(r, 8, "enum");
-  p->enums = load_alloc(r, agc_size_mul(p->enum_count, sizeof(agc_enum_def)), false);
-  uint64_t total = count_variants(r, p->enum_count);
+  uint32_t held_enums = HELD(r, enum_count), held_variants = HELD(r, variant_count);
+  p->enum_count = table_count(r, held_enums, 8, "enum");
+  p->enums = grown(r, b ? b->enums : NULL, held_enums, p->enum_count, sizeof(agc_enum_def), false);
+  uint64_t total = held_variants + count_variants(r, p->enum_count - held_enums);
+  if (total > UINT32_MAX) reject(r, "too many variants");
   p->variant_count = (uint32_t)total;
-  p->variants = load_alloc(r, agc_size_mul(p->variant_count, sizeof(agc_variant_def)), false);
-  for (uint32_t i = 0, next = 0; i < p->enum_count; i++) {
+  p->variants = grown(r, b ? b->variants : NULL, held_variants, p->variant_count, sizeof(agc_variant_def), false);
+  for (uint32_t i = held_enums, next = held_variants; i < p->enum_count; i++) {
     agc_enum_def *d = &p->enums[i];
     d->name = read_string(r);
     d->json_name = NULL;
@@ -629,7 +671,7 @@ static void load_tables(reader *r, agc_program *p) {
       }
     }
   }
-  for (uint32_t i = 0; i < p->type_count; i++)
+  for (uint32_t i = HELD(r, type_count); i < p->type_count; i++)
     if (p->types[i].kind == AGC_TYPE_ENUM && p->types[i].arg >= p->enum_count) reject(r, "enum index out of range");
   find_json_field(r, p);
   find_json_node(r, p);
@@ -647,6 +689,7 @@ static void load_json_enums(reader *r, agc_program *p) {
   for (uint32_t i = 0, last = 0; i < count; i++) {
     uint32_t index = read_u32(r);
     if (index >= p->enum_count) reject(r, "enum index out of range");
+    if (index < HELD(r, enum_count)) reject(r, "a decodable record of an enum of the session");
     if (i && index <= last) reject(r, "decodable enums out of order");
     last = index;
     agc_enum_def *d = &p->enums[index];
@@ -667,32 +710,39 @@ static void load_json_enums(reader *r, agc_program *p) {
 /* The optional last section of the file (4.6): the instances of generic structs that JSON.decode may build, each with
    its struct index, its linked name with the type arguments, which no decodable struct or enum shares, and one type index for
    each field of the struct. A file without it has no type of kind instance. */
-static void load_instances(reader *r, agc_program *p) {
-  uint32_t count = read_count(r, 8, "struct instance");
-  /* the writer leaves the section out instead, unless the field defaults follow */
-  if (count == 0 && left(r) < 4) reject(r, "empty struct instances section");
-  p->instances = load_alloc(r, agc_size_mul(count, sizeof(agc_instance_def)), false);
-  p->instance_count = count;
-  uint32_t named = 0;
+/* No two of the decodable structs, the decodable enums and the instances share a JSON name. */
+static void check_json_names(reader *r, agc_program *p) {
+  uint32_t named = p->instance_count;
   for (uint32_t i = 0; i < p->struct_count; i++)
     if (p->structs[i].json_name) named++;
   for (uint32_t i = 0; i < p->enum_count; i++)
     if (p->enums[i].json_name) named++;
-  agc_string **names = load_alloc(r, agc_size_mul(agc_size_add(named, count), sizeof(agc_string *)), false);
+  agc_string **names = load_alloc(r, agc_size_mul(named, sizeof(agc_string *)), false);
   named = 0;
   for (uint32_t i = 0; i < p->struct_count; i++)
     if (p->structs[i].json_name) names[named++] = p->structs[i].json_name;
   for (uint32_t i = 0; i < p->enum_count; i++)
     if (p->enums[i].json_name) names[named++] = p->enums[i].json_name;
-  for (uint32_t i = 0; i < count; i++) {
+  for (uint32_t i = 0; i < p->instance_count; i++) names[named++] = p->instances[i].json_name;
+  reject_duplicate_names(r, p, names, named);
+}
+
+static void load_instances(reader *r, agc_program *p) {
+  uint32_t held = HELD(r, instance_count);
+  uint32_t count = table_count(r, held, 8, "struct instance");
+  /* the writer leaves the section out instead, unless the field defaults follow */
+  if (count == held && left(r) < 4) reject(r, "empty struct instances section");
+  p->instances = grown(r, p->instances, held, count, sizeof(agc_instance_def), false);
+  p->instance_count = count;
+  for (uint32_t i = held; i < count; i++) {
     agc_instance_def *d = &p->instances[i];
     d->struct_index = read_u32(r);
     if (d->struct_index >= p->struct_count) reject(r, "struct index out of range");
     d->json_name = read_string(r);
-    names[named++] = d->json_name;
     d->field_types = read_field_types(r, p, p->structs[d->struct_index].count);
   }
-  reject_duplicate_names(r, p, names, named);
+  /* a session load looks for repeats once, at its end (note_repeated_names) */
+  if (!r->base) check_json_names(r, p);
 }
 
 /* True when the default fits the field type at index t: a constant of its scalar kind, an empty List or Map, or a
@@ -719,7 +769,8 @@ static bool default_fits(const agc_program *p, uint32_t t, const agc_field_defau
 static void load_field_defaults(reader *r, agc_program *p) {
   uint32_t count = read_count(r, 16, "field default");
   if (count == 0) reject(r, "empty field defaults section");
-  p->field_defaults = load_alloc(r, agc_size_mul(p->struct_count, sizeof(agc_field_default *)), false);
+  if (!p->field_defaults)
+    p->field_defaults = load_alloc(r, agc_size_mul(p->struct_count, sizeof(agc_field_default *)), false);
   uint64_t last = 0;
   for (uint32_t i = 0; i < count; i++) {
     uint32_t s = read_u32(r), field = read_u32(r);
@@ -727,6 +778,7 @@ static void load_field_defaults(reader *r, agc_program *p) {
     d.kind = read_u32(r);
     d.number = read_u32(r);
     if (s >= p->struct_count) reject(r, "struct index out of range");
+    if (s < HELD(r, struct_count)) reject(r, "a field default of a struct of the session");
     if (field >= p->structs[s].count) reject(r, "field out of range");
     uint64_t at = ((uint64_t)s << 32) | field;
     if (i && at <= last) reject(r, "field defaults out of order");
@@ -760,9 +812,10 @@ static void load_field_defaults(reader *r, agc_program *p) {
 }
 
 static void load_updates(reader *r, agc_program *p) {
-  p->update_count = read_count(r, 8, "struct update");
-  p->updates = load_alloc(r, agc_size_mul(p->update_count, sizeof(agc_update_def)), false);
-  for (uint32_t i = 0; i < p->update_count; i++) {
+  uint32_t held = HELD(r, update_count);
+  p->update_count = table_count(r, held, 8, "struct update");
+  p->updates = grown(r, held ? r->base->updates : NULL, held, p->update_count, sizeof(agc_update_def), false);
+  for (uint32_t i = held; i < p->update_count; i++) {
     agc_update_def *u = &p->updates[i];
     u->type = read_u32(r);
     if (u->type >= p->struct_count) reject(r, "struct index out of range");
@@ -785,12 +838,15 @@ static void load_updates(reader *r, agc_program *p) {
 static void load_globals(reader *r, agc_program *p) {
   p->global_count = read_u32(r);
   if (p->global_count > AGC_MAX_GLOBALS) reject(r, "too many globals");
+  if (p->global_count < HELD(r, global_count)) reject(r, "fewer Globals slots than the session has");
   p->globals = load_alloc(r, agc_size_mul(p->global_count, sizeof(agc_value)), false);
 }
 
-/* The first function that calls the native import: the span of a refusal at load (agc_ffi_refusal). */
-static void note_native_function(agc_program *p) {
-  for (uint32_t i = 0; i < p->function_count; i++) {
+/* The first function that calls the native import: the span of a refusal at load (agc_ffi_refusal). Only the
+   functions from `first` on are looked at: the base of a session load found its own. */
+static void note_native_function(agc_program *p, uint32_t first) {
+  if (p->native_function != UINT32_MAX) return;
+  for (uint32_t i = first; i < p->function_count; i++) {
     const agc_function *f = &p->functions[i];
     for (uint32_t pc = 0; pc < f->count; pc++) {
       agc_instr in = f->code[pc];
@@ -843,103 +899,36 @@ static bool same_string(const agc_string *a, const agc_string *b) {
   return a->bytes == b->bytes && (a->bytes == 0 || memcmp(a->data, b->data, a->bytes) == 0);
 }
 
-static bool same_u32s(const uint32_t *a, const uint32_t *b, uint32_t n) {
-  if (!a || !b) return a == b;
-  return n == 0 || memcmp(a, b, (size_t)n * sizeof(uint32_t)) == 0;
+/* How many of the decodable structs, the decodable enums and the instances have the JSON name `name`. */
+static uint32_t named_count(const agc_program *p, const agc_string *name) {
+  uint32_t n = 0;
+  for (uint32_t i = 0; i < p->struct_count; i++) n += same_string(p->structs[i].json_name, name);
+  for (uint32_t i = 0; i < p->enum_count; i++) n += same_string(p->enums[i].json_name, name);
+  for (uint32_t i = 0; i < p->instance_count; i++) n += same_string(p->instances[i].json_name, name);
+  return n;
 }
 
-/* The tags were compared first, so the accessors cannot fail and need no vm. */
-static bool same_constant(agc_value a, agc_value b) {
-  if (a.tag != b.tag) return false;
-  if (agc_is(a, AGC_T_STRING)) return same_string(agc_as_string(NULL, a), agc_as_string(NULL, b));
-  if (agc_is(a, AGC_T_BYTES)) {
-    const agc_bytes *x = agc_as_bytes(NULL, a), *y = agc_as_bytes(NULL, b);
-    return x->len == y->len && (x->len == 0 || memcmp(x->data, y->data, x->len) == 0);
-  }
-  return agc_is(a, AGC_T_VOID) || agc_is(a, AGC_T_NIL) || agc_value_word(a) == agc_value_word(b);
+/* A session load: whether a JSON name that the file adds repeats another (json_names_repeat). Each new name is looked
+   for among all of them, which costs less than sorting them all when an entry adds one or two. */
+static void note_repeated_names(const reader *r, agc_program *p) {
+  for (uint32_t i = HELD(r, struct_count); i < p->struct_count && !p->json_names_repeat; i++)
+    if (p->structs[i].json_name && named_count(p, p->structs[i].json_name) > 1) p->json_names_repeat = true;
+  for (uint32_t i = HELD(r, enum_count); i < p->enum_count && !p->json_names_repeat; i++)
+    if (p->enums[i].json_name && named_count(p, p->enums[i].json_name) > 1) p->json_names_repeat = true;
+  for (uint32_t i = HELD(r, instance_count); i < p->instance_count && !p->json_names_repeat; i++)
+    if (named_count(p, p->instances[i].json_name) > 1) p->json_names_repeat = true;
 }
 
-static bool same_struct(const agc_struct_def *a, const agc_struct_def *b) {
-  if (!same_string(a->name, b->name) || a->count != b->count || a->json_root != b->json_root) return false;
-  for (uint32_t k = 0; k < a->count; k++)
-    if (!same_string(a->fields[k], b->fields[k])) return false;
-  return same_string(a->json_name, b->json_name) && same_u32s(a->field_types, b->field_types, a->field_types ? a->count : 0);
-}
-
-static uint32_t payload_count(const agc_program *p, const agc_enum_def *d) {
-  uint64_t items = 0;
-  for (uint32_t k = 0; k < d->count; k++) items += p->variants[d->first + k].arity;
-  return (uint32_t)items;
-}
-
-static bool same_function(const agc_function *a, const agc_function *b) {
-  return same_string(a->name, b->name) && a->params == b->params && a->captures == b->captures &&
-         a->registers == b->registers && a->span == b->span && a->count == b->count && a->prelude == b->prelude &&
-         memcmp(a->code, b->code, (size_t)a->count * sizeof(agc_instr)) == 0 &&
-         same_u32s(a->spans, b->spans, a->count);
-}
-
-static bool same_defaults(const agc_field_default *a, const agc_field_default *b, uint32_t n) {
-  if (!a || !b) return a == b;
-  return memcmp(a, b, (size_t)n * sizeof(agc_field_default)) == 0;
-}
-
-/* A session file (agc_load_session) holds the whole program of the session: every table starts with the base's
-   entries, unchanged, so each index that a live value, a frame or a running task holds (a struct, a variant, a
-   function, a constant, a slot) means in the new program what it meant in the base. Spans and sources are only
-   counted: the new tables are checked as usual and a stale position only misplaces a diagnostic. */
-static void extends_base(reader *r, const agc_program *p) {
-  const agc_program *b = r->base;
-  if (p->source_count < b->source_count || p->span_count < b->span_count || p->constant_count < b->constant_count ||
-      p->builtin_count < b->builtin_count || p->struct_count < b->struct_count || p->type_count < b->type_count ||
-      p->enum_count < b->enum_count || p->variant_count < b->variant_count || p->update_count < b->update_count ||
-      p->global_count < b->global_count || p->instance_count < b->instance_count)
-    reject(r, "a table is shorter than the session's");
-  /* Only a new init function sets the new slots: one of the session's would run main again, or nothing would. */
-  if (p->global_count > b->global_count && p->entry < b->function_count)
-    reject(r, "new Globals slots without a new init function");
-  for (uint32_t i = 0; i < b->constant_count; i++)
-    if (!same_constant(p->constants[i], b->constants[i])) reject(r, "constant %u differs from the session's", i);
-  for (uint32_t i = 0; i < b->builtin_count; i++)
-    if (p->builtins[i] != b->builtins[i]) reject(r, "builtin %u differs from the session's", i);
-  for (uint32_t i = 0; i < b->struct_count; i++) {
-    if (!same_struct(&p->structs[i], &b->structs[i])) reject(r, "struct %u differs from the session's", i);
-    const agc_field_default *pd = p->field_defaults ? p->field_defaults[i] : NULL;
-    const agc_field_default *bd = b->field_defaults ? b->field_defaults[i] : NULL;
-    if (!same_defaults(pd, bd, b->structs[i].count)) reject(r, "field defaults of struct %u differ", i);
-  }
-  for (uint32_t i = 0; i < b->type_count; i++)
-    if (p->types[i].kind != b->types[i].kind || p->types[i].arg != b->types[i].arg)
-      reject(r, "type %u differs from the session's", i);
-  for (uint32_t i = 0; i < b->variant_count; i++) {
-    const agc_variant_def *x = &p->variants[i], *y = &b->variants[i];
-    if (!same_string(x->name, y->name) || x->owner != y->owner || x->arity != y->arity)
-      reject(r, "variant %u differs from the session's", i);
-  }
-  for (uint32_t i = 0; i < b->enum_count; i++) {
-    const agc_enum_def *x = &p->enums[i], *y = &b->enums[i];
-    if (!same_string(x->name, y->name) || x->first != y->first || x->count != y->count ||
-        !same_string(x->json_name, y->json_name) ||
-        !same_u32s(x->payload_types, y->payload_types, payload_count(b, y)))
-      reject(r, "enum %u differs from the session's", i);
-  }
-  for (uint32_t i = 0; i < b->update_count; i++) {
-    const agc_update_def *x = &p->updates[i], *y = &b->updates[i];
-    if (x->type != y->type || x->count != y->count || !same_u32s(x->fields, y->fields, x->count))
-      reject(r, "struct update %u differs from the session's", i);
-  }
-  for (uint32_t i = 0; i < b->instance_count; i++) {
-    const agc_instance_def *x = &p->instances[i], *y = &b->instances[i];
-    if (x->struct_index != y->struct_index || !same_string(x->json_name, y->json_name) ||
-        !same_u32s(x->field_types, y->field_types, b->structs[y->struct_index].count))
-      reject(r, "struct instance %u differs from the session's", i);
-  }
-  if ((p->json_field != b->json_field && b->json_field != UINT32_MAX) ||
-      (p->json_node != b->json_node && b->json_node != UINT32_MAX) ||
-      (p->optional != b->optional && b->optional != UINT32_MAX))
-    reject(r, "a JSON or Optional type differs from the session's");
-  for (uint32_t i = 0; i < b->function_count; i++)
-    if (!same_function(&p->functions[i], &b->functions[i])) reject(r, "function %u differs from the session's", i);
+/* A source text that grew: the base's, then the bytes added. Both are UTF-8, so the whole is. */
+static agc_string *joined(reader *r, const agc_string *base, const agc_string *added) {
+  size_t bytes = agc_size_add(base->bytes, added->bytes);
+  if (bytes > AGC_MAX_FILE_BYTES) reject(r, "a source of the session is larger than 256 MiB");
+  agc_string *s = load_alloc(r, agc_size_add(sizeof(agc_string), bytes), true);
+  s->bytes = bytes;
+  s->chars = base->chars + added->chars;
+  if (base->bytes) memcpy(s->data, base->data, base->bytes);
+  memcpy(s->data + base->bytes, added->data, added->bytes);
+  return s;
 }
 
 static void load(reader *r, agc_program *p) {
@@ -950,21 +939,36 @@ static void load(reader *r, agc_program *p) {
   /* The version is read in both cases, so the text is validated and the file is parsed the same way. */
   if (!same_text(read_string(r), AGC_VERSION) && !r->any_version) reject(r, "built for another Agentica version");
 
+  const agc_program *b = r->base;
+  /* A session file names every source, the base's first: the text of one of those is what the base's text grew by. */
+  uint32_t held = HELD(r, source_count);
   p->source_count = read_count(r, 8, "source");
-  p->sources = load_alloc(r, agc_size_mul(p->source_count, sizeof(agc_source)), false);
+  if (p->source_count < held) reject(r, "fewer sources than the session has");
+  p->sources = grown(r, b ? b->sources : NULL, held, p->source_count, sizeof(agc_source), false);
   for (uint32_t i = 0; i < p->source_count; i++) {
-    // cchecker: ignore CC-GCC-ANALYZER-NULL-DEREFERENCE: a count of 0 gets NULL and no loop
-    p->sources[i].name = read_string(r);
-    p->sources[i].stored = stored_name(r, p->sources[i].name);
-    p->sources[i].library = library_source(p->sources[i].name);
-    p->sources[i].text = read_string(r);
-    index_lines(r, &p->sources[i]);
+    agc_string *name = read_string(r);
+    agc_string *text = read_string(r);
+    agc_source *source = &p->sources[i];
+    if (i < held) {
+      if (!same_string(name, source->name)) reject(r, "source %u is not the session's", i);
+      if (text->bytes == 0) continue;
+      /* the base's text and its line index were counted when it loaded */
+      r->budget += source->text->bytes + (uint64_t)source->lines * 2 * sizeof(uint32_t);
+      source->text = joined(r, source->text, text);
+    } else {
+      source->name = name;
+      source->stored = stored_name(r, name);
+      source->library = library_source(name);
+      source->text = text;
+    }
+    index_lines(r, source);
   }
 
-  p->span_count = read_count(r, 20, "span");
+  held = HELD(r, span_count);
+  p->span_count = table_count(r, held, 20, "span");
   if (p->span_count == 0) reject(r, "missing program span");
-  p->spans = load_alloc(r, agc_size_mul(p->span_count, sizeof(agc_span)), true);
-  for (uint32_t i = 0; i < p->span_count; i++) {
+  p->spans = grown(r, b ? b->spans : NULL, held, p->span_count, sizeof(agc_span), true);
+  for (uint32_t i = held; i < p->span_count; i++) {
     const uint8_t *e = take(r, 20);
     agc_span s;
     s.source = get_u32(e);
@@ -978,13 +982,13 @@ static void load(reader *r, agc_program *p) {
     check_position(r, source, s.end_line, s.end_column);
     if (s.start_line > s.end_line || (s.start_line == s.end_line && s.start_column > s.end_column))
       reject(r, "span starts after it ends");
-    // cchecker: ignore CC-GCC-ANALYZER-NULL-DEREFERENCE: a count of 0 gets NULL and no loop
     p->spans[i] = s;
   }
 
-  p->constant_count = read_count(r, 1, "constant");
-  p->constants = load_alloc(r, agc_size_mul(p->constant_count, sizeof(agc_value)), false);
-  for (uint32_t i = 0; i < p->constant_count; i++) {
+  held = HELD(r, constant_count);
+  p->constant_count = table_count(r, held, 1, "constant");
+  p->constants = grown(r, b ? b->constants : NULL, held, p->constant_count, sizeof(agc_value), false);
+  for (uint32_t i = held; i < p->constant_count; i++) {
     uint8_t kind = read_u8(r);
     switch (kind) {
       case 0: p->constants[i] = agc_void(); break;
@@ -1009,11 +1013,12 @@ static void load(reader *r, agc_program *p) {
   load_updates(r, p);
   load_globals(r, p);
 
-  p->native_import = UINT32_MAX;
-  p->native_function = UINT32_MAX;
-  p->builtin_count = read_count(r, 8, "builtin");
-  p->builtins = load_alloc(r, agc_size_mul(p->builtin_count, sizeof(agc_builtin *)), false);
-  for (uint32_t i = 0; i < p->builtin_count; i++) {
+  p->native_import = b ? b->native_import : UINT32_MAX;
+  p->native_function = b ? b->native_function : UINT32_MAX;
+  held = HELD(r, builtin_count);
+  p->builtin_count = table_count(r, held, 8, "builtin");
+  p->builtins = grown(r, b ? b->builtins : NULL, held, p->builtin_count, sizeof(agc_builtin *), false);
+  for (uint32_t i = held; i < p->builtin_count; i++) {
     agc_string *name = read_string(r);
     uint32_t arity = read_u32(r);
     p->builtins[i] = agc_find_builtin((const uint8_t *)name->data, name->bytes, arity);
@@ -1022,10 +1027,12 @@ static void load(reader *r, agc_program *p) {
       p->native_import = i;
   }
 
-  p->function_count = read_count(r, 36, "function");
+  /* The functions of the base were checked and fused when it loaded: only the new ones are. */
+  uint32_t first = HELD(r, function_count);
+  p->function_count = table_count(r, first, 36, "function");
   if (p->function_count == 0) reject(r, "no functions");
-  p->functions = load_alloc(r, agc_size_mul(p->function_count, sizeof(agc_function)), false);
-  for (uint32_t i = 0; i < p->function_count; i++) {
+  p->functions = grown(r, b ? b->functions : NULL, first, p->function_count, sizeof(agc_function), false);
+  for (uint32_t i = first; i < p->function_count; i++) {
     agc_function *f = &p->functions[i];
     f->name = read_string(r);
     f->params = read_u32(r);
@@ -1063,35 +1070,33 @@ static void load(reader *r, agc_program *p) {
   if (p->functions[p->entry].params != 0) reject(r, "entry takes parameters");
   if (p->functions[p->entry].captures != 0) reject(r, "entry has captures");
   /* A count needs 4 bytes: fewer left are stray bytes, not a section. */
-  p->instance_count = 0;
-  p->instances = NULL;
-  p->field_defaults = NULL;
+  p->instance_count = HELD(r, instance_count);
+  p->instances = b ? b->instances : NULL;
+  p->field_defaults = b && b->field_defaults ? grown(r, b->field_defaults, b->struct_count, p->struct_count,
+                                                     sizeof(agc_field_default *), false)
+                                             : NULL;
+  p->json_names_repeat = b && b->json_names_repeat;
   if (left(r) >= 4) load_json_enums(r, p);
   if (left(r) >= 4) load_instances(r, p);
   if (left(r) >= 4) load_field_defaults(r, p);
   if (left(r) != 0) reject(r, "trailing bytes");
-  for (uint32_t i = 0; i < p->type_count; i++) {
+  if (b) note_repeated_names(r, p);
+  for (uint32_t i = HELD(r, type_count); i < p->type_count; i++) {
     if (p->types[i].kind == AGC_TYPE_ENUM && !p->enums[p->types[i].arg].json_name)
       reject(r, "type names an enum without payload types");
     if (p->types[i].kind == AGC_TYPE_INSTANCE && p->types[i].arg >= p->instance_count)
       reject(r, "instance index out of range");
   }
 
-  /* A session file repeats the functions of its base, which the base's load checked and fused: they are fused here
-     and compared whole with the base's (extends_base), and only the new ones are checked. */
-  uint32_t first = r->base ? r->base->function_count : 0;
-  if (first > p->function_count) reject(r, "fewer functions than the session has");
-  for (uint32_t i = 0; i < first; i++) {
-    fuse_consts(&p->functions[i]);
-    fuse_steps(&p->functions[i]);
-  }
-  if (r->base) extends_base(r, p);
+  /* Only a new init function sets the new slots: one of the session's would run main again, or nothing would. */
+  if (p->global_count > HELD(r, global_count) && p->entry < first)
+    reject(r, "new Globals slots without a new init function");
   for (uint32_t i = first; i < p->function_count; i++) check_function(r, p, &p->functions[i]);
   for (uint32_t i = first; i < p->function_count; i++) {
     fuse_consts(&p->functions[i]);
     fuse_steps(&p->functions[i]);
   }
-  if (p->native_import != UINT32_MAX) note_native_function(p);
+  if (p->native_import != UINT32_MAX) note_native_function(p, first);
 }
 
 static void trace_tables(const agc_trace *tr, const agc_program *p) {
@@ -1125,16 +1130,6 @@ static bool load_program(const uint8_t *data, size_t len, agc_program **program,
   r.error_size = error_size;
   r.budget = (uint64_t)len * 4 + ((uint64_t)1 << 20);
   r.base = base;
-  r.base_inits = NULL;
-  if (base) {
-    r.base_inits = agc_alloc_atomic(agc_size_mul(base->function_count ? base->function_count : 1, sizeof(bool)));
-    for (uint32_t i = 0; i < base->function_count; i++) {
-      const agc_function *f = &base->functions[i];
-      r.base_inits[i] = false;
-      for (uint32_t pc = 0; pc < f->count; pc++)
-        if (f->code[pc].op == AGC_OP_GLOBAL_SET) r.base_inits[i] = true;
-    }
-  }
   agc_program *p = agc_alloc(sizeof(agc_program));
   AGC_TRACE(tr, AGC_TRACE_LOADER, "file bytes=%zu", len);
   if (len > AGC_MAX_FILE_BYTES) {

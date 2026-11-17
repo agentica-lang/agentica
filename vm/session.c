@@ -1,9 +1,9 @@
 /*
  * FrontEnd.serve_session: the main loop of `agentica run --session`, the child of `agentica repl`. It reads each entry
- * from the parent channel (the session's whole program, then the entry function and its slots), loads the program
- * over the running one (agc_load_session), runs the program's new init function and then the entry as tasks, keeps
- * the values the entry gives back in the session slots, and answers one JSON line. Tasks that an entry starts live
- * on. Service layer. Design: docs/vm/08-loader-and-cli.md (§8, §9).
+ * from the parent channel (what the entry adds to the session's program, then the entry function and its slots),
+ * loads it over the running program (agc_load_session), runs the program's new init function and then the entry as
+ * tasks, keeps the values the entry gives back in the session slots, and answers one JSON line. Tasks that an entry
+ * starts live on. Service layer. Design: docs/vm/08-loader-and-cli.md (§8, §9).
  */
 #include "services.h"
 

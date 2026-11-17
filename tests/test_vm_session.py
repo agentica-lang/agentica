@@ -72,7 +72,7 @@ end
 """
 SHOW, KEEP, READ_BACK, CRASH, START, FINISH, LOUD, HANG, EXIT = range(9)
 
-# A function before the others moves every index, so the program does not extend PROGRAM.
+# Another whole program, which is not a session file over PROGRAM (one that has only what it adds).
 SHIFTED = "def first() -> List[String]\n  [\"first\"]\nend\n\n" + PROGRAM
 
 # Hand-built programs (the layout of vm/loader.c, as vm/tests/loader_test.c writes it): the compiler gives a slot only
@@ -95,31 +95,33 @@ def text(value):
 
 
 def built(divisor=None, sets=True):
-    """main and show; with DIVISOR, an init function that sets slot 0 to 42 / DIVISOR (unless not SETS), and use,
-    which shows it."""
+    """main and show; with DIVISOR, the session file over them, which has only what it adds (vm/loader.c): an init
+    function that sets slot 0 to 42 / DIVISOR (unless not SETS), and use, which shows it."""
     void, hello = b"\x00", b"\x06" + text("hello")
-    constants = [hello, void]
+    text_added, spans, constants = "session\n", [(0, 1, 1, 1, 8)], [hello, void]
+    globals, builtins, entry = 0, 1, BUILT_MAIN
     functions = [
         ("main", 1, [("STEP", 1, 0, 0), ("CALL_BUILTIN", 0, 0, 0), ("CONST", 0, 1, 0), ("RETURN", 0, 0, 0)]),
         ("show", 2, [("STEP", 1, 0, 0), ("CONST", 0, 0, 0), ("LIST", 1, 0, 1), ("RETURN", 1, 0, 0)]),
     ]
     if divisor is not None:
-        constants += [b"\x04" + struct.pack("<q", 42), b"\x04" + struct.pack("<q", divisor)]
-        functions += [
+        text_added, spans, globals, builtins, entry = "", [], 1, 0, BUILT_INIT
+        constants = [b"\x04" + struct.pack("<q", 42), b"\x04" + struct.pack("<q", divisor)]
+        functions = [
             ("init", 2, [("STEP", 1, 0, 0), ("CONST", 0, 2, 0), ("CONST", 1, 3, 0), ("DIV_I", 0, 0, 1),
                          ("GLOBAL_SET" if sets else "MOVE", 0, 0, 0), ("CONST", 0, 1, 0), ("RETURN", 0, 0, 0)]),
             ("use", 2, [("STEP", 1, 0, 0), ("GLOBAL", 0, 0, 0), ("LIST", 1, 0, 1), ("RETURN", 1, 0, 0)]),
         ]
-    out = b"AGCB" + u32(FORMAT) + text(VERSION) + u32(1) + text("session.agc") + text("session\n")
-    out += u32(1) + struct.pack("<5I", 0, 1, 1, 1, 8)
+    out = b"AGCB" + u32(FORMAT) + text(VERSION) + u32(1) + text("session.agc") + text(text_added)
+    out += u32(len(spans)) + b"".join(struct.pack("<5I", *span) for span in spans)
     out += u32(len(constants)) + b"".join(constants)
-    out += u32(0) * 5 + u32(0 if divisor is None else 1)
-    out += u32(1) + text("FrontEnd.serve_session") + u32(0)
+    out += u32(0) * 5 + u32(globals)
+    out += u32(builtins) + (text("FrontEnd.serve_session") + u32(0)) * builtins
     out += u32(len(functions))
     for name, registers, code in functions:
         out += text(name) + u32(0) + u32(0) + u32(registers) + u32(0) + u32(0) + u32(len(code))
         out += b"".join(struct.pack("<4H", OP[op], a, b, c) for op, a, b, c in code) + u32(0) * len(code)
-    return out + u32(BUILT_MAIN if divisor is None else BUILT_INIT)
+    return out + u32(entry)
 
 
 @pytest.fixture(scope="module")
@@ -190,18 +192,18 @@ def test_bad_requests_are_refused_and_the_session_goes_on(front, program):
     assert answers[10:] == [{"ok": True, "value": "hello"}, "exit 0"]
 
 
-def test_a_program_that_extends_the_session_loads_and_one_that_does_not_is_refused(front, program, tmp_path):
+def test_a_file_that_is_not_a_session_file_is_refused_and_the_session_goes_on(front, program, tmp_path):
     shifted = tmp_path / "shifted.agc"
     shifted.write_text(SHIFTED, encoding="utf-8")
     other = compile_agc(shifted, tmp_path / "shifted.agcb")
     junk = tmp_path / "junk.agcb"
     junk.write_bytes(b"AGCB not a program")
-    answers, _ = session(front, program, entry(KEEP, writes="0"), "@%s" % program, entry(READ_BACK, reads="0"),
-                         "@%s" % other, entry(SHOW), "@%s" % junk, entry(SHOW), entry(SHOW))
-    assert answers[:2] == [{"ok": True, "value": "kept it"}, {"loaded": True, "ok": True, "value": "kept!"}]
-    assert answers[2]["ok"] is False and "session" in answers[2]["refused"]
-    assert answers[3]["ok"] is False and "refused" in answers[3]
-    assert answers[4:] == [{"ok": True, "value": "hello"}, "exit 0"]
+    answers, _ = session(front, program, entry(KEEP, writes="0"), "@%s" % other, entry(SHOW), "@%s" % junk,
+                         entry(SHOW), entry(READ_BACK, reads="0"))
+    assert answers[0] == {"ok": True, "value": "kept it"}
+    assert answers[1]["ok"] is False and "session" in answers[1]["refused"]
+    assert answers[2]["ok"] is False and "refused" in answers[2]
+    assert answers[3:] == [{"ok": True, "value": "kept!"}, "exit 0"]
 
 
 def test_an_init_that_crashes_leaves_its_program_loaded_and_its_slot_failed(front, tmp_path):
