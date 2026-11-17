@@ -11,6 +11,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 ### Added
 
 - `agentica repl` runs entries one at a time over a session in which names, declarations and tasks live on; `--json` gives one answer per entry for agents (#1463).
+- A parameter or field default may be the bytes of a string literal, `body: Bytes = "".bytes`, directly or through a constant (#1777).
 
 ### Changed
 

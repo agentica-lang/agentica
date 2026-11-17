@@ -1,0 +1,39 @@
+program #39 0:1:1-264:14:1
+  module "default-bytes.agc"
+    declaration: const-decl #2 0:1:1-19:2:1 name="NO_BODY"
+      value: field-access #1 10:1:11-18:1:19 name="bytes" type=Bytes resolved=call("String.bytes", String)
+        target: literal #0 10:1:11-12:1:13 value=string:"" type=String
+    declaration: struct-decl #10 20:3:1-89:7:1 name="Frame"
+      field: field-decl #6 35:4:3-61:5:1 name="head"
+        type: type-ref #3 41:4:9-46:4:14 name="Bytes"
+        default: field-access #5 49:4:17-60:4:28 name="bytes" type=Bytes resolved=call("String.bytes", String)
+          target: literal #4 49:4:17-54:4:22 value=string:"GET" type=String
+      field: field-decl #9 63:5:3-85:6:1 name="tail"
+        type: type-ref #7 69:5:9-74:5:14 name="Bytes"
+        default: const-ref #8 77:5:17-84:5:24 name="NO_BODY" type=Bytes
+    declaration: function-decl #25 90:8:1-197:9:1 name="send" expression
+      param: param #13 99:8:10-120:8:31 name="body"
+        type: type-ref #11 105:8:16-110:8:21 name="Bytes"
+        default: const-ref #12 113:8:24-120:8:31 name="NO_BODY" type=Bytes
+      param: param #17 122:8:33-155:8:66 name="separator"
+        type: type-ref #14 133:8:44-138:8:49 name="Bytes"
+        default: method-call #16 141:8:52-155:8:66 name="bytes" type=Bytes resolved=call("String.bytes", String)
+          target: literal #15 141:8:52-147:8:58 value=string:"\r\n" type=String
+      result: type-ref #18 160:8:71-163:8:74 name="Int"
+      body: return-stmt #24 166:8:77-196:8:107 implicit
+        value: binary #23 166:8:77-196:8:107 op=plus op-span=178:8:89-179:8:90 type=Int
+          left: field-access #20 166:8:77-177:8:88 name="length" type=Int resolved=call("Bytes.length", Bytes)
+            target: name-ref #19 166:8:77-170:8:81 name="body" type=Bytes
+          right: field-access #22 180:8:91-196:8:107 name="length" type=Int resolved=call("Bytes.length", Bytes)
+            target: name-ref #21 180:8:91-189:8:100 name="separator" type=Bytes
+    declaration: function-decl #35 198:10:1-264:14:1 name="main"
+      result: type-ref #26 212:10:15-216:10:19 name="Void"
+      body: expr-stmt #29 219:11:3-232:12:1
+        value: call #28 219:11:3-231:11:15 name="puts" piped=false type=Void
+          arg: call #27 224:11:8-230:11:14 name="send" piped=false type=Int
+      body: expr-stmt #34 234:12:3-260:13:1
+        value: call #33 234:12:3-259:12:28 name="puts" piped=false type=Void
+          arg: field-access #32 239:12:8-258:12:27 name="length" type=Int resolved=call("Bytes.length", Bytes)
+            target: field-access #31 239:12:8-251:12:20 name="head" type=Bytes
+              target: construct #30 239:12:8-246:12:15 type="Frame" type=Struct(Frame)
+constant-order ["NO_BODY"]

@@ -84,6 +84,8 @@ private
 
 # The default that only a parameter takes (check_value).
 EMPTY_STRUCT = "a struct with no arguments"
+# The constant forms of every default, in the help of check_value.
+FORMS = "a literal, \"text\".bytes, true, false, nil, none, [], {}"
 
 def order_failure(cx: State.Cx, st: State.St, param: Ast.Param) -> String
   State.fail_help(
@@ -102,9 +104,9 @@ end
 def check_value(cx: State.Cx, st: State.St, value: Ast.Expr, param: Bool, remedy: String) -> Result[Bool]
   return ok(true) if acceptable?(value, param)
 
-  forms = "a literal, true, false, nil, none, [], {} or an enum variant without a payload"
+  forms = "#{FORMS} or an enum variant without a payload"
   if param
-    forms = "a literal, true, false, nil, none, [], {}, an enum variant without a payload or #{EMPTY_STRUCT}"
+    forms = "#{FORMS}, an enum variant without a payload or #{EMPTY_STRUCT}"
   end
 
   what = "write #{forms}"
@@ -149,8 +151,9 @@ def acceptable?(value: Ast.Expr, param: Bool) -> Bool = constant?(value) or (par
 
 # The forms accepted here and in empty_construct? must be the kinds that `respanned` handles in `Const.in_place`
 # (lower/lower_const.agc), and the reverse.
-# A literal (a minus sign allowed before a number), an empty list or map, a variant with no payload, or none (the
-# parser reads a bare none as a call with no arguments): a value that the call site can build with no code of its own.
+# A literal (a minus sign allowed before a number), the bytes of a string literal (`"text".bytes`, one constant the VM
+# makes at load), an empty list or map, a variant with no payload, or none (the parser reads a bare none as a call with
+# no arguments): a value that the call site can build with no code of its own.
 def constant?(value: Ast.Expr) -> Bool
   case value
     Ast.Expr.Literal(_) -> true
@@ -159,6 +162,23 @@ def constant?(value: Ast.Expr) -> Bool
     Ast.Expr.MapLit(node) -> node.entries.size == 0
     Ast.Expr.EnumConstructor(node) -> node.args.size == 0 and node.named.size == 0
     Ast.Expr.Call(node) -> node.name == "none" and !node.parenthesized and node.args.size == 0
+    Ast.Expr.FieldAccess(node) -> literal_bytes?(node.name, node.target)
+    Ast.Expr.MethodCall(node) -> node.args.empty? and node.named.empty? and literal_bytes?(node.name, node.target)
+    _ -> false
+  end
+end
+
+# `"text".bytes` (or `.bytes()`): the method bytes with no arguments on a string literal without interpolation.
+def literal_bytes?(name: String, target: Ast.Expr) -> Bool
+  return false if name != "bytes"
+
+  case target
+    Ast.Expr.Literal(literal) ->
+      case literal.value
+        Ast.LitValue.Text(_) -> true
+        _ -> false
+      end
+
     _ -> false
   end
 end
