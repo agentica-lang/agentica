@@ -35,7 +35,7 @@ HTTP.Header(name: String, value: String)
 HTTP.Response(status: Int, headers: List[HTTP.Header], body: Bytes)
 DownloadOptions(timeout_ms: Int = 30000, max_total_bytes: Int = 268435456)
 Download(status: Int, headers: List[HTTP.Header], bytes_written: Int)
-HTTP.ClientOptions(timeout_ms: Int = 30000, idle_timeout_ms: Int = 30000, max_connections: Int = 4, max_body_bytes: Int = 1048576, proxy: String = "", tls: Optional[TLS.Context] = none, connect_timeout_ms: Int = 10000, read_timeout_ms: Int = 30000)
+HTTP.ClientOptions(timeout_ms: Int = 30000, idle_timeout_ms: Int = 30000, max_connections: Int = 4, max_body_bytes: Int = 1048576, proxy: String = "", tls: Optional[TLS.Context] = none, connect_timeout_ms: Int = 10000, read_timeout_ms: Int = 300000)
 ```
 
 - Every call is whole: it returns after the full body is read, as `Bytes` of at

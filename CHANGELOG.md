@@ -10,14 +10,14 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- `HTTP.ClientOptions` has `connect_timeout_ms` (10 s) and `read_timeout_ms` (30 s, 0 for no limit) (#1710).
+- `HTTP.ClientOptions` has `connect_timeout_ms` (10 s) and `read_timeout_ms` (300 s, 0 for no limit) (#1710).
 - `connect_timeout_ms` bounds the connect: DNS, TCP, the TLS handshake and a proxy `CONNECT`. An error of the connect has `details["phase"]` `"connect"`.
 - `read_timeout_ms` bounds each wait for body bytes in `get`, `post`, `request`, `get_response`, `post_response`, `download`, `open` and `start`.
 - In `upload`, `read_timeout_ms` bounds each wait for a piece from the channel and each send.
 - `timeout_ms` is the whole call of `get`, `post`, `request`, `get_response`, `post_response` and `download`, the head included.
 - For `open`, `start` and `upload`, `timeout_ms` is the time to the head, so a stream can have a short connect and head and a long or no read timeout.
-- **Breaking:** `open`, `start` and `upload` no longer give each wait `timeout_ms`: a stream that relied on `timeout_ms` per read must set `read_timeout_ms`, and `timeout_ms: 5000` now allows 30 s per read.
-- **Breaking:** a connect ends after 10 s, and a body of `get` or `download` silent for 30 s ends then, even when `timeout_ms` is longer.
+- **Breaking:** `open`, `start` and `upload` no longer give each wait `timeout_ms`: a stream that relied on `timeout_ms` per read must set `read_timeout_ms`, and `timeout_ms: 5000` now allows 300 s per read.
+- **Breaking:** a connect ends after `connect_timeout_ms` (10 s), even when `timeout_ms` is longer.
 
 ### Changed
 

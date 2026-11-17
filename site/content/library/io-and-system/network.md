@@ -323,7 +323,7 @@ A client reuses open connections for the same scheme, host and port. Every field
 |---|---|---|
 | `timeout_ms` | 30 s, for each whole call | positive |
 | `connect_timeout_ms` | 10 s, for the connect | positive |
-| `read_timeout_ms` | 30 s, for each wait for body bytes | 0 (no limit) or positive |
+| `read_timeout_ms` | 300 s, for each wait for body bytes | 0 (no limit) or positive |
 | `idle_timeout_ms` | 30 s, for kept connections | positive |
 | `max_connections` | 4, per host | positive, at most 65536 |
 | `max_body_bytes` | 1 MiB | positive, at most 64 MiB |

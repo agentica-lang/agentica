@@ -223,7 +223,7 @@ def main() -> Void
   quiet = HTTP.open("GET", base + "/quiet-stream", "".bytes, [], HTTP.ClientOptions(timeout_ms: limit, read_timeout_ms: pause * 4)).unwrap!
   puts("quiet #{drain(quiet, pause * 4)}")
 
-  # The default read_timeout_ms (30 s) allows a pause that timeout_ms would have cut.
+  # The default read_timeout_ms (300 s) allows a pause that timeout_ms would have cut.
   fallback = HTTP.open("GET", base + "/quiet-stream", "".bytes, [], HTTP.ClientOptions(timeout_ms: limit)).unwrap!
   puts("default #{drain(fallback, pause * 4)}")
 
@@ -319,7 +319,7 @@ def main() -> Void
   refused = HTTP.upload("POST", base + "/stall", stalled, -1, [], HTTP.ClientOptions(timeout_ms: pause * 20, read_timeout_ms: limit))
   puts("stalled upload #{kind_of(refused)} #{within(since, limit - 100, pause * 10)}")
 
-  # The default read_timeout_ms (30 s) allows a producer that is silent for longer than timeout_ms.
+  # The default read_timeout_ms (300 s) allows a producer that is silent for longer than timeout_ms.
   delayed: Channel[Bytes] = Channel.new(1)
   Task.spawn(&producer, Feed(body: delayed, pause: pause, pieces: 1, size: 5))
   late = HTTP.upload("POST", base + "/upload-ok", delayed, -1, [], HTTP.ClientOptions(timeout_ms: limit))

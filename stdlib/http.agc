@@ -192,7 +192,7 @@ end
 type App = Fn[HttpWire.Request, RequestBody, Result[Answer]]
 
 ## Creates a client that keeps connections open and reuses them. `options` is optional and defaults to
-## `HTTP.ClientOptions()`: a 30 s `timeout_ms` for the whole call, a 10 s `connect_timeout_ms` and a 30 s
+## `HTTP.ClientOptions()`: a 30 s `timeout_ms` for the whole call, a 10 s `connect_timeout_ms` and a 300 s
 ## `read_timeout_ms` for each wait for body bytes (0 for none), a 30 s idle timeout, up to 4 connections, 1 MiB bodies,
 ## the system CA certificates and no proxy
 ## (set `tls: some(context)` to use a client context of `TLS.client_context` instead of the system certificates).
