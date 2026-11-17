@@ -27,18 +27,57 @@ enum Written
   Failed(Problems.Problem)
 end
 
+## What `write_over` gives: the bytes or the first problem, and the tables after the program (the seed when it failed).
+struct Over
+  written: Written
+  tables: Function.Tables
+end
+
 ## Writes the program. version is the Agentica version that the header names; the VM loads the file only when it is
 ## its own, so an empty one is BYTECODE-INTERNAL.
-def write(program: Ir.Program, version: String) -> Written
-  return Written.Failed(Problems.unpack(Failure.internal(program, "the Agentica version is empty"))) if version == ""
+def write(program: Ir.Program, version: String) -> Written = write_over(program, version, no_tables()).written
 
-  result = build(program, version)
-  return Written.Done(result.unwrap!) if result.ok?
+## The tables of a program that has none yet.
+def no_tables() -> Function.Tables
+  Function.Tables(
+    constants: Pool.empty(),
+    updates: Pool.empty(),
+    builtins: Pool.empty(),
+    spans: Pool.empty(),
+    types: Pool.empty(),
+  )
+end
 
-  Written.Failed(Problems.unpack(result.message))
+## Writes the program as `write` does, with the constant, struct update, builtin, span and type tables starting from
+## `seed`, the tables of an earlier program whose functions and types this one starts with: each entry of those tables
+## keeps its number, as the session of `agentica repl` needs (compiler/repl/).
+def write_over(program: Ir.Program, version: String, seed: Function.Tables) -> Over
+  if version == ""
+    return Over(
+      written: Written.Failed(Problems.unpack(Failure.internal(program, "the Agentica version is empty"))),
+      tables: seed,
+    )
+  end
+
+  result = build(program, version, seed)
+  return Over(written: Written.Done(result.unwrap!.bytes), tables: result.unwrap!.tables) if result.ok?
+
+  Over(written: Written.Failed(Problems.unpack(result.message)), tables: seed)
 end
 
 private
+
+# The bytes of a program and the tables after it.
+struct Built
+  bytes: Bytes
+  tables: Function.Tables
+end
+
+# A program whose Type constants are the Ints of their entries in the type table, and that table.
+struct Typed
+  program: Ir.Program
+  types: Pool.Pool
+end
 
 # The Field defaults section and the constant table with its constants.
 struct Defaults
@@ -47,28 +86,74 @@ struct Defaults
   constants: Pool.Pool
 end
 
-def build(program: Ir.Program, version: String) -> Result[Bytes]
+# A struct or an enum of a field type is found by its name, or by `#N` for the entry at N, which a session of
+# `agentica repl` writes where a name may stand for several entries (compiler/repl/repl_image.agc).
+# Each Type constant (Ir.Imm.Type) as the Int of the entry of its type in the type table.
+def typed_constants(
+  program: Ir.Program,
+  struct_index: Map[String, Int],
+  enum_index: Map[String, Int],
+  types: Pool.Pool,
+) -> Result[Typed]
+  return ok(Typed(program: program, types: types)) if !program.functions.any?(&typed?)
+
+  pool = types
+  functions: List[Ir.Function] = []
+  for function in program.functions
+    body: List[Ir.Instr] = []
+    for instr in function.body
+      out = instr
+      case instr.imm
+        Ir.Imm.Type(type) ->
+          found = try JsonTypes.target(program, struct_index, enum_index, pool, type)
+          pool = found.pool
+          out = instr.with(imm: Ir.Imm.Int(found.id))
+        _ -> out = instr
+      end
+
+      body = body.push(out)
+    end
+
+    functions = functions.push(function.with(body: body))
+  end
+
+  return error(Failure.limit(program, 0, "JSON field types", program.span)) if pool.count > MAX_U16
+
+  ok(Typed(program: program.with(functions: functions), types: pool))
+end
+
+def typed?(function: Ir.Function) -> Bool
+  function.body.any? do |instr: Ir.Instr|
+    case instr.imm
+      Ir.Imm.Type(_) -> true
+      _ -> false
+    end
+  end
+end
+
+def build(program: Ir.Program, version: String, seed: Function.Tables) -> Result[Built]
   try check_limits(program)
   struct_index: Map[String, Int] = {}
   at = 0
   for entry in program.structs
-    struct_index = struct_index.put(entry.name, at)
+    struct_index = struct_index.put(entry.name, at).put("##{at}", at)
     at += 1
   end
 
   enum_index: Map[String, Int] = {}
   at = 0
   for entry in program.enums
-    enum_index = enum_index.put(entry.name, at)
+    enum_index = enum_index.put(entry.name, at).put("##{at}", at)
     at += 1
   end
 
-  json = try JsonTypes.build(program, struct_index, enum_index)
+  built = try JsonTypes.build(program, struct_index, enum_index, seed.types)
+  typed = try typed_constants(program, struct_index, enum_index, built.types)
+  json = built.with(types: typed.types)
   # The span of the program is the first run of the span table.
-  spans = Spans.intern_one(Pool.empty(), 0, program.span).pool
-  tables = Function.Tables(constants: Pool.empty(), updates: Pool.empty(), builtins: Pool.empty(), spans: spans)
+  tables = seed.with(spans: Spans.intern_one(seed.spans, 0, program.span).pool, types: json.types)
   functions = Wire.start()
-  for function in program.functions
+  for function in typed.program.functions
     encoded = try Function.encode(program, tables, function)
     tables = encoded.tables
     functions = Wire.add_all(functions, encoded.parts)
@@ -99,7 +184,7 @@ def build(program: Ir.Program, version: String) -> Result[Bytes]
   joined = Wire.join(out)
   return error(Failure.internal(program, joined.message)) if !joined.ok?
 
-  joined
+  ok(Built(bytes: joined.unwrap!, tables: tables))
 end
 
 # The decodable enums, after the entry: a count and the records, then the struct instances the same way. Each is

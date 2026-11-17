@@ -18,17 +18,18 @@ struct Plan
   literals: Map[String, Ir.Imm]
 end
 
-## Decides which constants are built and which get a slot. The functions reachable from `main` (by calls, `&f` and the
-## blocks inside, to a fixed point) decide the kept constants, then the constants those read. A slot is given to every
-## non-literal constant that any emitted function reads, reachable or not, so the code of an unreachable function still
-## loads. functions and constants are the declarations in program order, with the scan of each body; order is the
-## initialization order of the constants (their linked names).
+## Decides which constants are built and which get a slot. The functions reachable from the `roots` (`main` for a
+## program; by calls, `&f` and the blocks inside, to a fixed point) decide the kept constants, then the constants those
+## read. A slot is given to every non-literal constant that any emitted function reads, reachable or not, so the code
+## of an unreachable function still loads. functions and constants are the declarations in program order, with the
+## scan of each body; order is the initialization order of the constants (their linked names).
 def plan(
   functions: List[Ast.FunctionDecl],
   function_scans: List[Scans.Scan],
   constants: List[Ast.ConstDecl],
   constant_scans: List[Scans.Scan],
   order: List[String],
+  roots: List[String],
 ) -> Plan
   by_name: Map[String, Int] = {}
   literals: Map[String, Ir.Imm] = {}
@@ -51,7 +52,7 @@ def plan(
     at += 1
   end
 
-  kept_set = kept_names(function_scans, by_function, constant_scans, by_name, literals)
+  kept_set = kept_names(function_scans, by_function, constant_scans, by_name, literals, roots)
   slot_set = kept_set
   for scan in function_scans
     for name in scan.consts
@@ -94,11 +95,11 @@ def literal_value(value: Ast.Expr) -> Optional[Ir.Imm]
 end
 
 ## A default that names a constant, as the lowering reads it: the value of the constant, written at the place of the
-## name. The checker accepted the name only for a value that a call can build with no code of its own (a literal, an
-## empty list or map, a variant without a payload, none or a struct built with no arguments), so the call site needs no
-## read of the constant, which a constant built after the call could not give. The spans become the one of the name,
-## because the instructions belong to the file of the default, and the node ids stay the ones of the value, which the
-## checker typed. Any other default is as written.
+## name. The checker accepted the name only for a value that a call can build with no code of its own (a literal, the
+## bytes of a string literal, an empty list or map, a variant without a payload, none or a struct built with no
+## arguments), so the call site needs no read of the constant, which a constant built after the call could not
+## give. The spans become the one of the name, because the instructions belong to the file of the default, and the
+## node ids stay the ones of the value, which the checker typed. Any other default is as written.
 def in_place(default: Ast.Expr, values: Map[String, Ast.Expr]) -> Ast.Expr
   case default
     Ast.Expr.ConstRef(node) ->
@@ -121,9 +122,10 @@ def kept_names(
   constant_scans: List[Scans.Scan],
   by_name: Map[String, Int],
   literals: Map[String, Ir.Imm],
+  roots: List[String],
 ) -> Set[String]
   reached: Set[String] = Set.new([])
-  pending: List[String] = ["main"]
+  pending = roots
   wanted: List[String] = []
   kept: Set[String] = Set.new([])
   at = 0

@@ -1539,6 +1539,25 @@ static void instance_named_as_enum(void) {
   free(tail.data);
 }
 
+/* A session may repeat a JSON name, which a type declared again keeps: the second Box[Int] loads over the first. */
+static void session_json_names(void) {
+  static const char *const one[] = {"Box[Int]"};
+  static const char *const twice[] = {"Box[Int]", "Box[Int]"};
+  buffer t = instance_tables(AGC_TYPE_INSTANCE, 0);
+  buffer first = instance_tail(1, 0, one, 0);
+  buffer second = instance_tail(2, 0, twice, 0);
+  spec s = base();
+  s.tables = &t;
+  s.tail = &first;
+  agc_program *held = loaded(s);
+  s.tail = &second;
+  agc_program *p = session_load(held, s, NULL);
+  assert(p && p->instance_count == 2);
+  free(t.data);
+  free(first.data);
+  free(second.data);
+}
+
 static void json_instance_tests(void) {
   static const char *const one[] = {"Box[Int]"};
   static const char *const twice[] = {"Box[Int]", "Box[Int]"};
@@ -1556,6 +1575,7 @@ static void json_instance_tests(void) {
   buffer empty = instance_tail(0, 0, one, 0);
   assert(!loads_instances(AGC_TYPE_INSTANCE, 0, &empty, "empty struct instances section"));
   instance_named_as_enum();
+  session_json_names();
   /* An empty enums section is allowed only before the instances. */
   buffer bare = instance_tail(0, 0, one, 0);
   bare.len = 4;

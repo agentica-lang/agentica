@@ -10,6 +10,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `agentica repl` runs entries one at a time over a session in which names, declarations and tasks live on; `--json` gives one answer per entry for agents (#1463).
 - A parameter or field default may be the bytes of a string literal, `body: Bytes = "".bytes`, directly or through a constant (#1777).
 
 ### Changed
@@ -18,6 +19,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - The documentation moved to https://www.agentica-lang.com/agentica/; the old agentica-lang.github.io links redirect there.
 - The documentation has breadcrumbs, and search engines index only the latest release: the pages of older versions and of dev point to it.
 - Every version of the documentation has the current look and icon: the releases are built with the current docs theme.
+
+### Fixed
+
+- The bytecode cache works for a program that imports a file with a module block (`module Name ... end`), such as agentica-tui: it compiled again on every run (#1784).
 
 ## [0.33.1] - 2026-11-17
 
