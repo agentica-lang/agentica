@@ -127,7 +127,8 @@ end
 ## type arguments for the JSON.encode and JSON.from calls of its body and of the generic functions it calls
 ## (checker.agc computes it before the bodies are checked): each is a type variable, or an Optional, JSON.Field or Map
 ## key of one, that must be encodable once the variables are bound. lenient is the files in which a name that nothing
-## reads is no error (CHECK-UNUSED-VARIABLE): the roots of a query, as for an unused import.
+## reads is no error (CHECK-UNUSED-VARIABLE): the roots of a query, as for an unused import. std is the prefixes of the
+## modules of the standard library.
 struct Cx
   help: Help.Tables
   structs: Map[String, List[Model.Named]]
@@ -152,6 +153,7 @@ struct Cx
   prelude: Bool
   json_needs: Map[String, List[Types.Type]]
   lenient: Set[String]
+  std: Set[String]
 end
 
 ## What the body of a generic function does with JSON that its callers must know: Need is a JSON.encode or JSON.from

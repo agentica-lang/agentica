@@ -397,7 +397,7 @@ def check_assignment(cx: State.Cx, st: State.St, node: Ast.Binding, existing: St
   end
 
   writing = State.assigning(st, existing)
-  if Variables.feeds_a_call?(cx, node.value)
+  if Variables.read_by_a_call?(cx, node.name, node.value)
     writing = writing.with(assigning: st.assigning)
   end
 

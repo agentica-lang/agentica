@@ -202,7 +202,21 @@ def start(linked: Linker.Linked) -> State.Cx
     prelude: false,
     json_needs: {},
     lenient: Set.new([]),
+    std: std_prefixes(linked.modules),
   )
+end
+
+# The prefixes of the modules of the standard library, which CHECK-UNUSED-VARIABLE does not count as the program's own
+# functions (State.Cx.std).
+def std_prefixes(modules: List[Linker.LinkedModule]) -> Set[String]
+  found: List[String] = []
+  for module in modules
+    if module.key.start_with?("std/")
+      found = found.push(module.prefix)
+    end
+  end
+
+  Set.new(found)
 end
 
 # The prefix of the file that holds each module block, by the prefix of the block (State.Cx.homes).
