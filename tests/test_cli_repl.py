@@ -189,6 +189,19 @@ def test_load_enters_a_file_with_its_private_part_and_its_imports(tmp_path):
     assert code(found[4]) == "CHECK-UNKNOWN-NAME"
 
 
+def test_an_imported_file_edited_on_disk_is_read_again(tmp_path):
+    (tmp_path / "m.agc").write_text("def g() -> Int = 1\n", encoding="utf-8")
+    session = Interactive(tmp_path)
+    try:
+        first = [session.ask('import M from "./m"'), session.ask("M.g()")]
+        (tmp_path / "m.agc").write_text("\n\n\n\ndef g() -> Int = 2\n\ndef h() -> Int = g() + 1\n", encoding="utf-8")
+        later = [session.ask("M.g()"), session.ask("M.h()"), session.ask("1 + 1")]
+    finally:
+        assert session.close() == 0
+    assert first[1]["value"] == "1", first
+    assert [answer.get("value") for answer in later] == ["2", "3", "2"], later
+
+
 def test_a_type_declared_again_the_same_drops_no_name(tmp_path):
     (tmp_path / "field.agc").write_text("struct P\n  x: Int\nend\n\nputs(p.nope)\n", encoding="utf-8")
     (tmp_path / "retype.agc").write_text("struct P\n  x: Int\nend\n\np = 5\n", encoding="utf-8")
