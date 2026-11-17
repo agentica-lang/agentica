@@ -908,15 +908,17 @@ def test_system_env_gives_what_pythons_os_environ_gives_decoding_bytes_that_are_
         "AGC_PEER_SET": b"plain", "AGC_PEER_EMPTY": b"", "AGC_PEER_EQ": b"x=y=", "AGC_PEER_SPACE": b"  padded  ",
         "AGC_PEER_UNI": "h\u00e9llo \u2713 \u65e5\u672c".encode("utf-8"),
         "AGC_PEER_BAD": b"a\xffb", "AGC_PEER_BAD2": b"\xc3(", "AGC_PEER_BAD3": b"x\xe2\x82",
-        "AGC_PEER_LONG": b"v" * 100000})
+        "AGC_PEER_BAD4": b"\xe2\x82A", "AGC_PEER_LONG": b"v" * 100000})
     items = ["AGC_PEER_SET", "AGC_PEER_EMPTY", "AGC_PEER_EQ", "AGC_PEER_SPACE", "AGC_PEER_UNI", "AGC_PEER_BAD",
-             "AGC_PEER_BAD2", "AGC_PEER_BAD3", "AGC_PEER_LONG", "AGC_PEER_UNSET", "agc_peer_set", "AGC_PEER",
-             "AGC_PEER_SET_", "", "=", "AGC_PEER_SET=plain"]
+             "AGC_PEER_BAD2", "AGC_PEER_BAD3", "AGC_PEER_BAD4", "AGC_PEER_LONG", "AGC_PEER_UNSET", "agc_peer_set",
+             "AGC_PEER", "AGC_PEER_SET_", "", "=", "AGC_PEER_SET=plain"]
     seen = os_lines("env", items, env=env)
     assert brief(seen) == brief(os_peer_lines("env", items, env=env))
     assert seen[:3] == ["ok:plain", "ok:", "ok:x=y="]
     assert seen[5] == "ok:a\ufffdb"
-    assert seen[9:] == ["error"] * 7
+    # One U+FFFD for the cut sequence E2 82, as bytes.scrub gives.
+    assert seen[8] == "ok:\ufffdA"
+    assert seen[10:] == ["error"] * 7
 
 
 def test_system_env_does_not_show_the_variables_the_vm_keeps_for_itself(os_lines):

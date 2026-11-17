@@ -14,13 +14,12 @@ The error texts and the fixed cases are the VM fixture text-codecs.
 """
 import codecs
 import json
-import os
 import random
 import re
 
 import pytest
 
-from tests.agentica_test import FIXTURES, WINDOWS, compile_agc, host_only, run_vm, vm_environment
+from tests.agentica_test import FIXTURES, compile_agc, run_vm
 
 UNICODE = ["utf-8", "utf-16", "utf-16le", "utf-16be", "utf-32", "utf-32le", "utf-32be"]
 BYTE_CODECS = ["ascii", "latin-1", "iso-8859-15", "cp1252"]
@@ -219,13 +218,3 @@ def test_scrub_matches_python_replace(peer):
     for (case, expected), answer in zip(pairs, ask(peer, pairs)):
         assert answer["text"] == expected, case
     assert sum("\ufffd" in expected for _, expected in pairs) > 200
-
-
-@host_only(WINDOWS, "the Windows environment is UTF-16, so it cannot hold bytes that are not UTF-8")
-def test_the_runtime_replaces_bad_bytes_as_scrub_does(tmp_path):
-    source = tmp_path / "env.agc"
-    source.write_text('def main() -> Void\n  puts(System.env("AGENTICA_SCRUB_TEST").unwrap!)\nend\n')
-    program = compile_agc(source, tmp_path / "env.agcb")
-    result = run_vm(program, env=vm_environment({"AGENTICA_SCRUB_TEST": os.fsdecode(b"\xe2\x82A")}))
-    assert result.code == 0, result.stderr
-    assert result.stdout == "\ufffdA\n"
