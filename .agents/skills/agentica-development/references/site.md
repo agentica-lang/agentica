@@ -36,9 +36,10 @@ rule that a site page shows.
   `git add site/themes/docs-theme`, `make site`. `<commit>` is a commit on the
   theme's default branch (never one from a PR branch): a deleted or squashed
   branch breaks `git submodule update`. `tools/site_versions.py`
-  builds every tag that uses the theme with the theme commit of the current
-  checkout, so a theme bump restyles every version at the next deploy; a tag
-  that fails with it fails the deploy.
+  builds every tag that uses the theme with the theme commit that HEAD pins,
+  not the one checked out in the working tree (dev uses the working tree), so
+  commit the bump before `make site-versions`. A theme bump restyles every
+  version at the next deploy; a tag that fails with it fails the deploy.
 
 ## Content
 
