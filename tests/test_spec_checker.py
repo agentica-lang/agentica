@@ -287,6 +287,8 @@ def test_a_name_that_flows_into_a_call_for_its_new_value_is_read(tmp_path):
         (COUNT, "    count = try step(count)\n"),
         (COUNT, "    count = step(count).unwrap!\n"),
         (COUNT, "    count = double(count)\n"),
+        (COUNT, "    count = double(count + 1)\n"),
+        (COUNT, "    count = double([1].map { |n| n + count }.size)\n"),
         (COUNT, "    count = count |> try step()\n"),
         (TOTAL, "    total = total + double(total)\n"),
         (PATH, "    path = try File.read_text(path, 1000)\n"),
