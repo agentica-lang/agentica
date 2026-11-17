@@ -5,6 +5,7 @@
 ## A function body is flat, so this is a loop over the instructions and uses no recursion.
 
 import Ir from "../lower/ir"
+import Types from "../syntax/types"
 import Wire from "bytecode_bytes"
 import Failure from "bytecode_failure"
 import Pool from "bytecode_pool"
@@ -93,6 +94,7 @@ def constant_key(imm: Ir.Imm) -> String
     Ir.Imm.Float(number) -> "f#{Float.to_bits(number)}"
     Ir.Imm.Text(text) -> "s#{text}"
     Ir.Imm.Bytes(text) -> "y#{text}"
+    Ir.Imm.Type(type) -> "t#{Types.tag(type)}:#{Types.json_name(type)}"
   end
 end
 
@@ -331,6 +333,8 @@ def constant_bytes(imm: Ir.Imm) -> List[Int]
     Ir.Imm.Float(number) -> [5].concat(Wire.f64(number))
     Ir.Imm.Text(text) -> [6].concat(Wire.string(text))
     Ir.Imm.Bytes(text) -> [7].concat(Wire.string(text))
+    # The writer has turned it into an Int (bytecode_writer.agc, typed_constants); never written.
+    Ir.Imm.Type(_) -> [0]
   end
 end
 

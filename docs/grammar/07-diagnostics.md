@@ -127,7 +127,8 @@ given. A suggestion has a source span and a help that names the form to write.
 `REPL-INCOMPLETE` an input or a loaded file that ends inside an entry,
 `REPL-RESERVED-NAME` a name that starts like the code the session writes around
 an entry (`repl_entry_`, `ReplEntry`, `repl_shown_`), `REPL-KIND-CHANGE` an enum
-declared where the session had a struct of that name, and `REPL-REFUSED` and
+declared where the session had a struct of that name, `REPL-SESSION-LOST` an
+entry during which the child of the session ended, and `REPL-REFUSED` and
 `REPL-INTERNAL` a fault of the session itself.
 
 Names and forms from other languages get a `help` that names the Agentica form

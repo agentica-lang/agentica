@@ -122,6 +122,21 @@ def build(
   )
 end
 
+## The entry of the JSON.decode or JSON.schema target `type` (Ir.Imm.Type), added to `pool` when it is new.
+def target(
+  program: Ir.Program,
+  struct_index: Map[String, Int],
+  enum_index: Map[String, Int],
+  pool: Pool.Pool,
+  type: Types.Type,
+) -> Result[Pool.Interned]
+  if !Types.is?(type, "Struct") and !Types.is?(type, "Enum")
+    return error(unsupported(program, "a JSON.decode target of #{Types.tag(type)}"))
+  end
+
+  type_id(program, struct_index, enum_index, pool, type)
+end
+
 private
 
 # The entry of a type, added after the entries of the types it is made of. An entry is its tag (0 Int, 1 Float, 2 Bool,

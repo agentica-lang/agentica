@@ -579,6 +579,9 @@ typedef struct {
   /* The defaults that JSON.decode gives a missing key: for each struct, NULL, or one entry for each field (the Field
      defaults section, last in the file). At the end, so the fields the interpreter reads keep their offsets. */
   agc_field_default **field_defaults;
+  /* A session load (agc_load_session) may repeat a JSON name: a type declared again keeps its old entry. JSON.decode
+     and JSON.schema then take their target only by its type index; a name is refused (vm/json.c). */
+  bool json_names_repeat;
 } agc_program;
 
 typedef struct {

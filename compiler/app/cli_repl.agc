@@ -8,7 +8,6 @@
 ## `--json`). Exit status: 0 at the end of the input or after `:quit`, 1 when the input ends inside an entry, the
 ## child's status when it ends (`System.exit(n)` in an entry), 2 for a session that cannot start.
 
-import Core from "../analysis/analysis"
 import Diag from "../diagnostics/diagnostic"
 import Ai from "../diagnostics/diagnostic_ai"
 import DiagnosticJson from "../diagnostics/diagnostic_json"
@@ -298,9 +297,16 @@ def load(loop: Loop, file: String, at: Int) -> Step
       end
 
     _ ->
-      report(loop, Core.unreadable(file), "", at)
+      report(loop, unreadable(file), "", at)
       Step.Next(loop, "")
   end
+end
+
+# A file that `:load` cannot read, as the query commands report one: at the file alone, with no line.
+def unreadable(file: String) -> Problems.Problem
+  start = Source.Position(offset: 0, line: 0, column: 0)
+  span = Source.Span(start: start, stop: start)
+  Problems.problem(file, "", "QUERY-USAGE", "cannot read #{file}", span, Diag.Help.NoHelp)
 end
 
 # The folder of a file from the working folder, which the session's imports start from.
@@ -327,7 +333,10 @@ def ran(loop: Loop, text: String, request: Repl.Request, at: Int) -> Step
   answer = asked(loop.child, request)
   if !answer.ok?
     finish_quiet(loop)
-    return Step.Done(ended(loop))
+    status = ended(loop)
+    problem = repl_problem(loop, "REPL-SESSION-LOST", "the session ended with status #{status}", text)
+    report(loop, problem, text, at)
+    return Step.Done(status)
   end
 
   parsed = JSON.parse(answer.unwrap!)
@@ -414,6 +423,10 @@ def shown(root: JSON.Value, request: Repl.Request) -> Void
   if request.dropped.size > 0
     puts("dropped #{request.dropped.join(", ")}: the type of each changed")
   end
+
+  if request.skipped.size > 0
+    puts("not kept #{request.skipped.join(", ")}: the type of each is private to its file")
+  end
 end
 
 # The answer to an entry that ran. One that failed kept no name or declaration.
@@ -426,6 +439,7 @@ def json_answer(root: JSON.Value, request: Repl.Request, passed: Bool) -> Map[St
   bound: Map[String, JSON.Value] = {}
   declared: List[JSON.Value] = []
   dropped: List[JSON.Value] = []
+  skipped: List[JSON.Value] = []
   if passed
     for binding in request.bound
       bound = bound.put(binding.name, JSON.from(binding.type))
@@ -433,10 +447,11 @@ def json_answer(root: JSON.Value, request: Repl.Request, passed: Bool) -> Map[St
 
     declared = request.declared.map { |name: String| JSON.from(name) }
     dropped = request.dropped.map { |name: String| JSON.from(name) }
+    skipped = request.skipped.map { |name: String| JSON.from(name) }
   end
 
   fields = fields.put("bound", JSON.object(bound)).put("declared", JSON.array(declared))
-  fields = fields.put("dropped", JSON.array(dropped))
+  fields = fields.put("dropped", JSON.array(dropped)).put("skipped", JSON.array(skipped))
   diagnostic = JSON.get(root, "diagnostic")
   if diagnostic.ok?
     fields = fields.put("diagnostic", cleaned_json(diagnostic.unwrap!))

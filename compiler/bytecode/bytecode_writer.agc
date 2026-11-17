@@ -73,6 +73,12 @@ struct Built
   tables: Function.Tables
 end
 
+# A program whose Type constants are the Ints of their entries in the type table, and that table.
+struct Typed
+  program: Ir.Program
+  types: Pool.Pool
+end
+
 # The Field defaults section and the constant table with its constants.
 struct Defaults
   chunks: Wire.Chunks
@@ -82,6 +88,49 @@ end
 
 # A struct or an enum of a field type is found by its name, or by `#N` for the entry at N, which a session of
 # `agentica repl` writes where a name may stand for several entries (compiler/repl/repl_image.agc).
+# Each Type constant (Ir.Imm.Type) as the Int of the entry of its type in the type table.
+def typed_constants(
+  program: Ir.Program,
+  struct_index: Map[String, Int],
+  enum_index: Map[String, Int],
+  types: Pool.Pool,
+) -> Result[Typed]
+  return ok(Typed(program: program, types: types)) if !program.functions.any?(&typed?)
+
+  pool = types
+  functions: List[Ir.Function] = []
+  for function in program.functions
+    body: List[Ir.Instr] = []
+    for instr in function.body
+      out = instr
+      case instr.imm
+        Ir.Imm.Type(type) ->
+          found = try JsonTypes.target(program, struct_index, enum_index, pool, type)
+          pool = found.pool
+          out = instr.with(imm: Ir.Imm.Int(found.id))
+        _ -> out = instr
+      end
+
+      body = body.push(out)
+    end
+
+    functions = functions.push(function.with(body: body))
+  end
+
+  return error(Failure.limit(program, 0, "JSON field types", program.span)) if pool.count > MAX_U16
+
+  ok(Typed(program: program.with(functions: functions), types: pool))
+end
+
+def typed?(function: Ir.Function) -> Bool
+  function.body.any? do |instr: Ir.Instr|
+    case instr.imm
+      Ir.Imm.Type(_) -> true
+      _ -> false
+    end
+  end
+end
+
 def build(program: Ir.Program, version: String, seed: Function.Tables) -> Result[Built]
   try check_limits(program)
   struct_index: Map[String, Int] = {}
@@ -98,11 +147,13 @@ def build(program: Ir.Program, version: String, seed: Function.Tables) -> Result
     at += 1
   end
 
-  json = try JsonTypes.build(program, struct_index, enum_index, seed.types)
+  built = try JsonTypes.build(program, struct_index, enum_index, seed.types)
+  typed = try typed_constants(program, struct_index, enum_index, built.types)
+  json = built.with(types: typed.types)
   # The span of the program is the first run of the span table.
   tables = seed.with(spans: Spans.intern_one(seed.spans, 0, program.span).pool, types: json.types)
   functions = Wire.start()
-  for function in program.functions
+  for function in typed.program.functions
     encoded = try Function.encode(program, tables, function)
     tables = encoded.tables
     functions = Wire.add_all(functions, encoded.parts)

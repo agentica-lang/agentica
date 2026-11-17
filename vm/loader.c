@@ -456,14 +456,17 @@ static int compare_names(const void *a, const void *b) {
   return x->bytes < y->bytes ? -1 : x->bytes > y->bytes;
 }
 
-/* No two decodable structs, or two decodable enums, may share a JSON name: JSON.decode finds a type by it. Sorts names.
-   A session load may repeat one: a type declared again keeps its old entry, and JSON.decode takes the last one. */
-static void reject_duplicate_names(reader *r, agc_string **names, uint32_t count) {
-  if (r->base) return;
+/* No two decodable structs, or two decodable enums, may share a JSON name: JSON.decode may find a type by it. Sorts
+   names. A session load may repeat one, as a type declared again keeps its old entry: the program then names its
+   targets by type index only (json_names_repeat). */
+static void reject_duplicate_names(reader *r, agc_program *p, agc_string **names, uint32_t count) {
   // cchecker: ignore CC-GCC-ANALYZER-NULL-ARGUMENT: names is NULL only for a count of 0, which sorts nothing
   if (count) qsort(names, count, sizeof(agc_string *), compare_names);
-  for (uint32_t i = 1; i < count; i++)
-    if (compare_names(&names[i - 1], &names[i]) == 0) reject(r, "duplicate JSON type name");
+  for (uint32_t i = 1; i < count; i++) {
+    if (compare_names(&names[i - 1], &names[i]) != 0) continue;
+    if (!r->base) reject(r, "duplicate JSON type name");
+    p->json_names_repeat = true;
+  }
 }
 
 /* One type index for each of the count fields of a struct, each in the type table. */
@@ -514,7 +517,7 @@ static void load_types(reader *r, agc_program *p) {
     if (d->json_root && d->count != 1) reject(r, "a List or Map JSON target needs one field");
     d->field_types = read_field_types(r, p, d->count);
   }
-  reject_duplicate_names(r, names, count);
+  reject_duplicate_names(r, p, names, count);
   for (uint32_t i = 0; i < p->type_count; i++)
     if (p->types[i].kind == AGC_TYPE_STRUCT && !p->structs[p->types[i].arg].json_name)
       reject(r, "type names a struct without field types");
@@ -658,7 +661,7 @@ static void load_json_enums(reader *r, agc_program *p) {
       if (d->payload_types[k] >= p->type_count) reject(r, "type index out of range");
     }
   }
-  reject_duplicate_names(r, names, count);
+  reject_duplicate_names(r, p, names, count);
 }
 
 /* The optional last section of the file (4.6): the instances of generic structs that JSON.decode may build, each with
@@ -689,7 +692,7 @@ static void load_instances(reader *r, agc_program *p) {
     names[named++] = d->json_name;
     d->field_types = read_field_types(r, p, p->structs[d->struct_index].count);
   }
-  reject_duplicate_names(r, names, named);
+  reject_duplicate_names(r, p, names, named);
 }
 
 /* True when the default fits the field type at index t: a constant of its scalar kind, an empty List or Map, or a

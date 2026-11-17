@@ -1516,7 +1516,7 @@
  "[[\"repl\", \"--json\"], {\"stdin\": \"xs = [1, 2]\\nxs.size\\n\"}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "{\"bound\":{\"xs\":\"List[Int]\"},\"declared\":[],\"dropped\":[],\"entry\":1,\"line\":1,\"ok\":true}\n{\"bound\":{},\"declared\":[],\"dropped\":[],\"entry\":2,\"line\":2,\"ok\":true,\"type\":\"Int\",\"value\":\"2\"}\n",
+  "stdout": "{\"bound\":{\"xs\":\"List[Int]\"},\"declared\":[],\"dropped\":[],\"entry\":1,\"line\":1,\"ok\":true,\"skipped\":[]}\n{\"bound\":{},\"declared\":[],\"dropped\":[],\"entry\":2,\"line\":2,\"ok\":true,\"skipped\":[],\"type\":\"Int\",\"value\":\"2\"}\n",
   "written": []
  },
  "[[\"repl\", \"--nope\"], {}]": {

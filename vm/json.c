@@ -368,20 +368,31 @@ static bool named(const agc_string *json_name, const agc_string *text) {
   return json_name && json_name->bytes == text->bytes && memcmp(json_name->data, text->data, text->bytes) == 0;
 }
 
-/* The struct, enum or struct instance that JSON.decode and JSON.schema name by its linked name: structs first, then
-   enums, then instances, each the last of its name (a session repeats a name when a type is declared again,
-   agc_load_session). */
-static uint32_t decodable_type(agc_vm *vm, agc_value name, uint32_t span, uint32_t *kind) {
-  const agc_string *text = agc_as_string(vm, name);
+/* The struct, enum or struct instance that JSON.decode and JSON.schema target: an Int is its entry in the type table
+   (a session of `agentica repl` names them so, Ir.Imm.Type), a String its linked name, looked for in the structs,
+   then the enums, then the instances. A name is refused where the program repeats one (json_names_repeat). */
+static uint32_t decodable_type(agc_vm *vm, agc_value target, uint32_t span, uint32_t *kind) {
   const agc_program *p = vm->rt->program;
+  if (agc_is(target, AGC_T_INT)) {
+    int64_t index = agc_as_int(vm, target);
+    if (index < 0 || index >= (int64_t)p->type_count) agc_fail(vm, "RUNTIME-INTERNAL", "JSON type out of range", span);
+    const agc_type *t = &p->types[index];
+    *kind = t->kind;
+    /* The loader checked each index and gave every struct of the table its field types. */
+    if (t->kind == AGC_TYPE_STRUCT || t->kind == AGC_TYPE_INSTANCE) return t->arg;
+    if (t->kind == AGC_TYPE_ENUM && p->enums[t->arg].json_name) return t->arg;
+    agc_fail(vm, "RUNTIME-INTERNAL", "not a JSON type", span);
+  }
+  const agc_string *text = agc_as_string(vm, target);
+  if (p->json_names_repeat) agc_fail(vm, "RUNTIME-INTERNAL", "a JSON type name that the program repeats", span);
   *kind = AGC_TYPE_STRUCT;
-  for (uint32_t i = p->struct_count; i-- > 0;)
+  for (uint32_t i = 0; i < p->struct_count; i++)
     if (named(p->structs[i].json_name, text)) return i;
   *kind = AGC_TYPE_ENUM;
-  for (uint32_t i = p->enum_count; i-- > 0;)
+  for (uint32_t i = 0; i < p->enum_count; i++)
     if (named(p->enums[i].json_name, text)) return i;
   *kind = AGC_TYPE_INSTANCE;
-  for (uint32_t i = p->instance_count; i-- > 0;)
+  for (uint32_t i = 0; i < p->instance_count; i++)
     if (named(p->instances[i].json_name, text)) return i;
   agc_fail(vm, "RUNTIME-INTERNAL", "unknown JSON type", span);
 }

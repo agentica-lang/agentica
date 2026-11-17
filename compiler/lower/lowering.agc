@@ -180,6 +180,7 @@ def run(linked: Linker.Linked, checked: Checker.Checked, roots: List[String], ev
     enums: tables.enum_index,
     variants: tables.variants,
     json_types: tables.json_types,
+    typed_json: every_type,
     layouts: {},
     functions: by_name,
     bodies: checked.bodies,

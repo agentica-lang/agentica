@@ -751,8 +751,20 @@ def lower_type_name(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.TypeName, want: 
 
   fx = Lowering.step(fx, node.span)
   made = Lowering.target(fx, want)
-  fx = Lowering.emit_const(made.fx, made.slot, Ir.Imm.Text(name), node.span)
+  value = Ir.Imm.Text(name)
+  if cx.typed_json
+    value = Ir.Imm.Type(json_target(type, name))
+  end
+
+  fx = Lowering.emit_const(made.fx, made.slot, value, node.span)
   ok(Lowering.Out(fx: fx, slot: made.slot))
+end
+
+# The type of a JSON.decode target as the type table names it: a List or Map target by the struct that stands for it.
+def json_target(type: Types.Type, name: String) -> Types.Type
+  return Types.Type.Struct(name, []) if Types.is?(type, "List") or Types.is?(type, "Map")
+
+  type
 end
 
 # -9223372036854775808 is the only negative literal whose positive part does not fit an Int, so it is one `const`.

@@ -12,7 +12,10 @@ import Source from "../syntax/source"
 import Types from "../syntax/types"
 
 ## The value of a `const` instruction. Void and Nil are the values of those types; Bytes is the UTF-8 bytes of its
-## text (`"text".bytes` on a literal), a Bytes constant that the VM makes once when it loads the program.
+## text (`"text".bytes` on a literal), a Bytes constant that the VM makes once when it loads the program. Type is the
+## target of JSON.decode or JSON.schema in a session of `agentica repl`, which the writer turns into the Int of its
+## entry in the type table (a struct, an enum, or an instance of a generic struct), so the call names one entry even
+## where a name stands for several.
 enum Imm
   Void
   Nil
@@ -21,6 +24,7 @@ enum Imm
   Float(Float)
   Text(String)
   Bytes(String)
+  Type(Types.Type)
 end
 
 ## One instruction, or a label. file is the index in Program.sources of the file the spans are in: a Span has no file

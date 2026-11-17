@@ -104,6 +104,14 @@ static agc_string *crashed(agc_vm *vm, agc_session *s, agc_task *t) {
   return failure(vm, vm->rt->program, &o, s->loaded);
 }
 
+/* Whether a cancel ended the task before it returned. The flag alone does not say so: a cancel sets it first and then
+   looks at the task, which may have returned already. A task that returned has popped its last frame; one that
+   end_cancelled ended keeps the count of the frames it was in (vm/task.c, finish_task drops the frames, not the
+   count). */
+static bool cut_short(const agc_task *t) {
+  return atomic_load_explicit(&t->cancelled, memory_order_seq_cst) && t->frame_count > 0;
+}
+
 /* An entry or init that a task cancelled, at the entry function. */
 static agc_string *cancelled(agc_vm *vm, agc_session *s) {
   const agc_program *p = vm->rt->program;
@@ -354,7 +362,7 @@ agc_value agc_session_serve(agc_vm *vm, agc_value *args, uint32_t span) {
         if (s->in_init) mark_failed(s);
         s->in_init = false;
         s->record = crashed(vm, s, t);
-      } else if (atomic_load_explicit(&t->cancelled, memory_order_seq_cst)) {
+      } else if (cut_short(t)) {
         /* Cancelled, it never set what it was to set, as a crash. */
         if (s->in_init) mark_failed(s);
         s->in_init = false;

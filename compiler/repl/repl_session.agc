@@ -39,12 +39,14 @@ struct Binding
 end
 
 ## A declaration of the session: the name it declares ("" for an import), its text, its first line and its rank in a
-## file: imports, constants, types, then functions.
+## file: imports, constants, types, then functions. key is what an import imports: the same file under the same names
+## is one import, however its path is written.
 struct Piece
   name: String
   text: String
   line: Int
   rank: Int = 3
+  key: String = ""
 end
 
 ## The lines of the session that `:load` entered from the file `file` (as typed), from line `first` on.
@@ -78,9 +80,10 @@ end
 
 ## What the child is sent for an entry: the program (empty when the child has it already), the number of the entry
 ## function, the slots it reads and writes, the type of the value it shows ("" for none), the names it binds anew or
-## with a new type, the names it declares, and the names whose struct or enum it declared again, which the session
-## drops. `ran` is the session after the entry, and `loaded` the one
-## after a failure of it, when the child has the program but not the declarations and names of the entry.
+## with a new type, the names it declares, the names whose struct or enum it declared again, which the session drops,
+## and the names it binds that the session cannot keep, as their type is private to an imported file. `ran` is the
+## session after the entry, and `loaded` the one after a failure of it, when the child has the program but not the
+## declarations and names of the entry.
 struct Request
   bytes: Bytes
   entry: Int
@@ -90,6 +93,7 @@ struct Request
   bound: List[Binding]
   declared: List[String]
   dropped: List[String]
+  skipped: List[String]
   ran: Session
   loaded: Session
 end
@@ -144,7 +148,7 @@ end
 ## Compiles the text of the file `file` as one entry: its `private` line is left out, its relative imports resolve
 ## from `folder` (the file's folder, from the working folder), and a problem in its lines names the file.
 def load(session: Session, file: String, folder: String, text: String, settings: Env.Settings) -> Compiled
-  lines = text.split("\n").map { |line: String| public_line(line) }
+  lines = public_text(text).split("\n")
   load = Load(file: file, first: session.lines + 1, count: lines.size)
   compile(session.with(loads: session.loads.push(load), folder: folder), lines.join("\n"), settings)
 end
@@ -211,6 +215,7 @@ end
 struct Found
   shown: String
   bindings: List[Binding]
+  skipped: List[String] = []
 end
 
 enum Checks
@@ -283,10 +288,25 @@ def reserved?(token: Tokens.Token) -> Bool
   RESERVED.any? { |prefix: String| token.lexeme.start_with?(prefix) }
 end
 
-def public_line(line: String) -> String
-  return "" if line.strip == "private"
+# The text with its `private` line blank: the line that holds the name `private` alone, as the parser takes it.
+def public_text(text: String) -> String
+  case Lexer.lex(text)
+    Diag.Outcome.Failed(_) -> text
+    Diag.Outcome.Done(tokens) ->
+      lines = text.split("\n")
+      at = 0
+      for token in tokens
+        before = at == 0 or tokens[at - 1].kind == "NL"
+        after = at + 1 >= tokens.size or tokens[at + 1].kind == "NL" or tokens[at + 1].kind == "EOF"
+        if token.kind == "name" and token.lexeme == "private" and before and after
+          lines = lines.set(token.span.start.line - 1, "")
+        end
 
-  line
+        at += 1
+      end
+
+      lines.join("\n")
+  end
 end
 
 # A problem of the entry's own text, whose lines start after the session's.
@@ -301,8 +321,9 @@ def entry_problem(
 end
 
 # An entry is compiled with every name of the session first. A name whose type was declared again holds values of the
-# old type: the image tells which (`Attempt.Stale`), and the entry is compiled again without them, as it is when it
-# does not check while a name's type is one the entry declares.
+# old type: the image tells which (`Attempt.Stale`), and the entry is compiled again without them. An entry that
+# declares a type and does not check may fail only for such a name (`p.y` of a P that gained y): its declarations
+# alone tell which names hold an old type (`stale_names`), and without any the first problem stands.
 def compile_items(session: Session, text: String, items: List[Parser.EntryItem], settings: Env.Settings) -> Compiled
   dropped: List[String] = []
   tries = 0
@@ -313,18 +334,46 @@ def compile_items(session: Session, text: String, items: List[Parser.EntryItem],
       Attempt.Done(compiled) -> return compiled
       Attempt.Stale(names) -> dropped = dropped.concat(names)
       Attempt.Refused(problem) ->
-        declared = items.flat_map(&type_declared)
-        risky = session.bindings.filter do |binding: Binding|
-          !dropped.include?(binding.name) and binding.types.any? { |name: String| declared.include?(name) }
-        end
+        stale = stale_names(session, text, items, dropped, settings)
+        return Compiled.Failed(problem) if stale.size == 0
 
-        return Compiled.Failed(problem) if risky.size == 0
-
-        dropped = dropped.concat(risky.map { |binding: Binding| binding.name })
+        dropped = dropped.concat(stale)
     end
   end
 
   Compiled.Failed(session_problem(session, "REPL-INTERNAL", "an entry did not settle its names"))
+end
+
+# The names that hold a type the entry's declarations change: the declarations are compiled alone, without the names
+# whose types are structs or enums, and a name is stale when the entries of its types are not the current ones after
+# that. None when the entry declares no type or its declarations do not compile.
+def stale_names(
+  session: Session,
+  text: String,
+  items: List[Parser.EntryItem],
+  dropped: List[String],
+  settings: Env.Settings,
+) -> List[String]
+  return [] if items.flat_map(&type_declared).size == 0
+
+  typed = session.bindings.filter { |binding: Binding| !dropped.include?(binding.name) and binding.entries.size > 0 }
+  return [] if typed.size == 0
+
+  declarations = items.filter { |item: Parser.EntryItem| item.declaration.some? }
+  aside = dropped.concat(typed.map { |binding: Binding| binding.name })
+  case attempt(session, text, declarations, aside, settings)
+    Attempt.Done(compiled) ->
+      case compiled
+        Compiled.Run(request) ->
+          typed.filter { |binding: Binding| !current?(binding, request.ran.image) }
+            .map do |binding: Binding| binding.name end
+
+        _ -> []
+      end
+
+    Attempt.Stale(names) -> names
+    Attempt.Refused(_) -> []
+  end
 end
 
 def attempt(
@@ -381,9 +430,9 @@ def planned(session: Session, text: String, items: List[Parser.EntryItem], dropp
   end
 
   replaced = Set.new(added.map { |piece: Piece| piece.name }.filter { |name: String| name != "" })
-  imports = Set.new(session.pieces.filter { |piece: Piece| piece.name == "" }.map { |piece: Piece| piece.text })
+  imports = Set.new(session.pieces.filter { |piece: Piece| piece.name == "" }.map { |piece: Piece| piece.key })
   kept = session.pieces.filter { |piece: Piece| !replaced.include?(piece.name) }
-  fresh = added.filter { |piece: Piece| piece.name != "" or !imports.include?(piece.text) }
+  fresh = added.filter { |piece: Piece| piece.name != "" or !imports.include?(piece.key) }
   params = session.bindings.filter do |binding: Binding|
     !annotated.include?(binding.name) and !dropped.include?(binding.name)
   end
@@ -422,9 +471,44 @@ def piece_of(item: Parser.EntryItem, lines: List[String], before: Int, folder: S
   line = before + span.start.line
   case item.declaration
     some(decl) ->
-      Piece(name: Declarations.name_of(decl), text: imported_from(text, decl, folder), line: line, rank: rank_of(decl))
+      Piece(
+        name: Declarations.name_of(decl),
+        text: imported_from(text, decl, folder),
+        line: line,
+        rank: rank_of(decl),
+        key: import_key(decl, folder, text),
+      )
     none -> Piece(name: "", text: text, line: line)
   end
+end
+
+# What an import imports: its path from the session's folder with the `.` and `..` parts folded, and its alias or
+# names. Any other declaration is its text.
+def import_key(decl: Ast.Decl, folder: String, text: String) -> String
+  case Declarations.unwrap(decl)
+    Ast.Decl.Import(node) ->
+      path = node.path
+      if folder != "" and !path.start_with?("std/") and !path.start_with?("pkg/")
+        path = Paths.join(folder, path)
+      end
+
+      names = node.names.map { |entry: Ast.ImportName| "#{entry.name} as #{entry.local}" }.join(",")
+      "#{normal_path(path)}|#{Declarations.alias_of(node)}|#{names}"
+    _ -> text
+  end
+end
+
+def normal_path(path: String) -> String
+  kept: List[String] = []
+  for part in path.split("/")
+    if part == ".." and kept.size > 0 and kept[kept.size - 1] != ".."
+      kept = kept.take(kept.size - 1)
+    elsif part != "." and part != ""
+      kept = kept.push(part)
+    end
+  end
+
+  kept.join("/")
 end
 
 def imported_from(text: String, decl: Ast.Decl, folder: String) -> String
@@ -699,7 +783,8 @@ def second_with(
         unwritten = fields.get(problem.span.start.line)
         if unwritten.some?
           kept = found.bindings.filter { |binding: Binding| binding.name != unwritten.unwrap! }
-          return second_with(session, text, plan, found.with(bindings: kept), settings, inspected)
+          skipped = found.skipped.push(unwritten.unwrap!)
+          return second_with(session, text, plan, found.with(bindings: kept, skipped: skipped), settings, inspected)
         end
 
         if problem.span.start.line == shown_line and !inspected and found.shown != ""
@@ -780,6 +865,7 @@ def built(
                 bound: bindings.drop(plan.params.size),
                 declared: plan.declared,
                 dropped: plan.dropped,
+                skipped: found.skipped,
                 ran: after.with(
                   pieces: plan.pieces,
                   bindings: kept.concat(bindings),

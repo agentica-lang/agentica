@@ -156,6 +156,44 @@ def test_load_enters_a_file_with_its_private_part_and_its_imports(tmp_path):
     assert code(found[4]) == "CHECK-UNKNOWN-NAME"
 
 
+def test_a_type_declared_again_the_same_drops_no_name(tmp_path):
+    (tmp_path / "field.agc").write_text("struct P\n  x: Int\nend\n\nputs(p.nope)\n", encoding="utf-8")
+    (tmp_path / "retype.agc").write_text("struct P\n  x: Int\nend\n\np = 5\n", encoding="utf-8")
+    (tmp_path / "generic.agc").write_text("struct P[T]\n  x: T\nend\n\nputs(p.x)\n", encoding="utf-8")
+    got = repl(tmp_path, "struct P\n  x: Int\nend", "p = P(x: 1)", "p = 5", ":load field.agc", ":load retype.agc",
+               "p.x", ":load generic.agc", "P(x: 2).x")
+    found = answers(got)
+    assert [code(answer) for answer in found[2:5]] == ["CHECK-TYPE-MISMATCH", "CHECK-UNKNOWN-FIELD",
+                                                       "CHECK-TYPE-MISMATCH"]
+    assert found[5]["value"] == "1"
+    assert code(found[6]) == "CHECK-UNKNOWN-NAME"
+    assert found[7]["value"] == "2"
+
+
+def test_load_takes_an_import_the_session_has_by_its_file(tmp_path):
+    (tmp_path / "lib").mkdir()
+    (tmp_path / "sub").mkdir()
+    (tmp_path / "lib" / "m.agc").write_text(LIB, encoding="utf-8")
+    (tmp_path / "sub" / "s.agc").write_text(
+        'import M from "../lib/m"\n\ndef twice() -> Int = M.make().x * 2\n\n'
+        "def words() -> String\n  <<~TEXT\n    private\n    two\n  TEXT\nend\n", encoding="utf-8")
+    got = repl(tmp_path, 'import M from "./lib/m"', ":load sub/s.agc", "twice() + M.make().x", "words()",
+               ":load sub/nope.agc")
+    found = answers(got)
+    assert found[1]["declared"] == ["twice", "words"]
+    assert (found[2]["value"], found[3]["value"]) == ("3", '"private\\ntwo\\n"')
+    plain = repl(tmp_path, ":load sub/nope.agc", json_style=False)
+    assert "error[QUERY-USAGE]" in plain.stderr and "|" not in plain.stderr and "help" not in plain.stderr
+
+
+def test_a_session_whose_child_ends_answers_the_entry(tmp_path):
+    got = run([*cli(), "--max-steps", "100000", "repl", "--json"], stdin="x = 1\nwhile true\nend\nx\n", cwd=tmp_path)
+    found = answers(got)
+    assert got.code == 1
+    assert (code(found[1]), found[1]["entry"], found[1]["line"]) == ("REPL-SESSION-LOST", 2, 2)
+    assert len(found) == 2
+
+
 def test_names_the_session_writes_are_refused(tmp_path):
     got = repl(tmp_path, "repl_shown_ = 1", "[1,\n  ReplEntry3]", "def repl_entry_1() -> Int = 1")
     found = answers(got)
@@ -197,7 +235,7 @@ def test_a_type_of_an_imported_file_is_its_own(tmp_path):
     found = answers(got)
     assert found[2]["dropped"] == []
     assert found[3]["value"] == "1"
-    assert (found[4]["ok"], found[4]["bound"]) == (True, {})
+    assert (found[4]["ok"], found[4]["bound"], found[4]["skipped"]) == (True, {}, ["b"])
     assert found[5]["value"] == "Secret(v: 2)"
     assert code(found[6]) == "CHECK-UNKNOWN-NAME"
 
@@ -213,6 +251,68 @@ def test_json_decode_builds_the_current_type_of_a_name(tmp_path):
                                                                  "Box(w: 2)"]
     assert found[3]["dropped"] == ["p"]
     assert (code(found[9]), start(found[9])) == ("REPL-KIND-CHANGE", {"line": 19, "column": 1})
+
+
+OLD_TYPES = """\
+struct P
+  x: Int
+end
+
+enum E
+  A
+  B
+end
+
+struct Box[T]
+  v: T
+end
+
+def p_of(s: String) -> String = JSON.decode(s, P).unwrap!.inspect
+
+def e_of(s: String) -> String = JSON.decode(s, E).unwrap!.inspect
+
+def box_of(s: String) -> String = JSON.decode(s, Box[Int]).unwrap!.inspect
+"""
+
+NEW_TYPES = """\
+struct P
+  x: Int
+  label: String = "new"
+end
+
+enum E
+  A
+  B
+  C
+end
+
+struct Box[T]
+  v: T
+  w: Int = 7
+end
+
+def p_of(s: String) -> String = JSON.decode(s, P).unwrap!.inspect
+
+def e_of(s: String) -> String = JSON.decode(s, E).unwrap!.inspect
+
+def box_of(s: String) -> String = JSON.decode(s, Box[Int]).unwrap!.inspect
+"""
+
+DECODES = 'p_of("{\\"x\\": 5}") + " " + e_of("{\\"tag\\": \\"B\\", \\"values\\": []}") + " " + box_of("{\\"v\\": 1}")'
+
+
+def test_code_of_a_type_declared_again_decodes_the_type_it_was_compiled_with(tmp_path):
+    (tmp_path / "old.agc").write_text(OLD_TYPES, encoding="utf-8")
+    (tmp_path / "new.agc").write_text(NEW_TYPES, encoding="utf-8")
+    got = repl(tmp_path, ":load old.agc", "ch: Channel[Int] = Channel.new(1)",
+               f"t = Task.spawn do\n  ch.recv(10000).unwrap!\n  {DECODES}\nend", ":load new.agc",
+               "ch.send(1, 10000).unwrap!", "Task.await(t)", DECODES, "JSON.schema(P).to_s.include?(\"label\")")
+    found = answers(got)
+    assert got.code == 0, got.stderr
+    assert [answer["ok"] for answer in found] == [True] * 8
+    assert found[5]["value"] == '"P(x: 5) E.B Box(v: 1)"'
+    assert found[6]["value"] == '"P(x: 5, label: \\"new\\") E.B Box(v: 1, w: 7)"'
+    assert found[7]["value"] == "true"
 
 
 # The same declarations and steps as a session and as one file: each value the session shows is the line the file

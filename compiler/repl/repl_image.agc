@@ -116,7 +116,15 @@ def merge(
   sources = merged_sources(held.sources, fresh.sources, root, text)
   types = type_numbers(image, fresh, refs)
   starts = start_pairs(fresh)
-  base = Numbers(functions: {}, files: files, structs: types.structs, variants: types.variants, slots: {})
+  base = Numbers(
+    functions: {},
+    files: files,
+    structs: types.structs,
+    variants: types.variants,
+    slots: {},
+    naming: types.naming,
+  )
+
   matched = matching(image, fresh, base)
   slots = slot_numbers(image, fresh, matched, starts)
   functions = matched
@@ -266,6 +274,7 @@ struct Numbers
   structs: Map[Int, Int]
   variants: Map[Int, Int]
   slots: Map[Int, Int]
+  naming: Naming
 end
 
 # The number in the image of each type name and variant of a fresh program; -1 for one that has none yet. The tables
@@ -490,6 +499,15 @@ def numbered(type: T.Type, naming: Naming) -> T.Type
 
       T.Type.Enum(number_name(naming.enums, name), numbered_all(args, naming))
     _ -> type
+  end
+end
+
+# The target of JSON.decode or JSON.schema by number, so a function names the entry of its type, not the last of a
+# name.
+def numbered_imm(imm: Ir.Imm, naming: Naming) -> Ir.Imm
+  case imm
+    Ir.Imm.Type(type) -> Ir.Imm.Type(numbered(type, naming))
+    _ -> imm
   end
 end
 
@@ -791,7 +809,7 @@ def same_instr?(fresh: Ir.Instr, held: Ir.Instr, numbers: Numbers) -> Bool
     fresh.op != held.op or
     fresh.name != held.name or
     fresh.args.size != held.args.size or
-    Function.constant_key(fresh.imm) != Function.constant_key(held.imm) or
+    Function.constant_key(numbered_imm(fresh.imm, numbers.naming)) != Function.constant_key(held.imm) or
     numbers.files.get(fresh.file, -1) != held.file
   )
     return false
@@ -834,7 +852,12 @@ def renumber(function: Ir.Function, numbers: Numbers, moved: Moves) -> Ir.Functi
       spans = spans.map { |span: Source.Span| moved_in(span, moved) }
     end
 
-    instr.with(args: renumbered_args(instr, numbers), file: at, spans: spans)
+    instr.with(
+      args: renumbered_args(instr, numbers),
+      imm: numbered_imm(instr.imm, numbers.naming),
+      file: at,
+      spans: spans,
+    )
   end
 
   span = function.span

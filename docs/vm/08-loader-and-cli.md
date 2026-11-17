@@ -88,8 +88,10 @@ branch.
   `GLOBAL_SET` (an earlier init function), and the new init sets only new
   slots. New slots need a new entry, the init function that sets them. The
   slots of the running program keep their values. A type declared again is a
-  new entry with the old JSON name, so a session load may repeat a JSON name,
-  and `JSON.decode` takes the last struct, enum or instance of a name.
+  new entry with the old JSON name, so a session load may repeat a JSON name.
+  `JSON.decode` and `JSON.schema` in a session take their target as an Int, the
+  type-table index of its struct, enum or instance, which the VM bounds-checks;
+  a name is refused in a program that repeats one (`json_names_repeat`).
 
 `vm/tests/loader_test.c` checks each rule by its reason, and truncation at every
 byte of a file with a type table, an Updates section or Globals.
@@ -167,9 +169,12 @@ parser is `agc_launch_parse` (`vm/launch.c`).
   - Each entry gets one JSON line: `ok: true` with `value`, `ok: false` with the
     `diagnostic` of a crash and its `text` in the run's style, `ok: false` with
     `invalid` when FN ran but gave back no List or struct of the right size
-    (its slots are not written), or `ok: false` with `refused`, which changed nothing.
+    (its slots are not written), or `ok: false` with `refused`, which changed
+    nothing. An entry or init that a cancel ended before it returned is
+    `RUNTIME-TASK-CANCELLED`.
   - `loaded: true` says the entry loaded its program, which stays loaded
-    whatever the rest of the answer says: the front end keeps its declarations.
+    whatever the rest of the answer says: the front end keeps the program, but
+    not the declarations and names of an entry that failed.
     When the init function crashes or is cancelled, the entry does not run,
     and the new slots it did not set are marked failed: a read of one fails
     that task with `RUNTIME-NO-VALUE` (`vm/task.c`), and the child goes on.
