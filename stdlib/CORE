@@ -131,6 +131,7 @@ packages/members.agc
 packages/native_artifact.agc
 packages/native_build.agc
 packages/native_library.agc
+packages/native_prebuilt.agc
 packages/package_cache.agc
 packages/package_hash.agc
 packages/package_import.agc

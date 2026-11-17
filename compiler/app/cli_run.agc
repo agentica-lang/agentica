@@ -18,6 +18,7 @@ COMMANDS = [
   "install",
   "add",
   "update",
+  "native",
   "outline",
   "type-at",
   "symbol",
