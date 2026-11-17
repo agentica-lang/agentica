@@ -85,8 +85,9 @@ end
 ## Why the native library `library` of the package cache entry `entry` (io/native_build.agc, io/native_prebuilt.agc)
 ## may not be loaded, or "": ENTRY_NOT_PRIVATE when the entry is not a folder private to `user` or the library is not
 ## a regular file (a link is refused; `private_library` also wants the file private), ENTRY_NOT_RECEIPT when the
-## `receipt` of the entry does not hold the SHA-256 of the library.
-def entry_problem(entry: String, library: String, user: Int, private_library: Bool) -> String
+## `receipt` of the entry does not hold the SHA-256 of the library: `digest` in hex when the caller has checked the
+## bytes against it already, else "" to read the library.
+def entry_problem(entry: String, library: String, user: Int, private_library: Bool, digest: String) -> String
   return ENTRY_NOT_PRIVATE if !private_kind(entry, "directory", user).ok?
 
   info = File.lstat(library, IO_TIMEOUT_MS)
@@ -94,11 +95,16 @@ def entry_problem(entry: String, library: String, user: Int, private_library: Bo
     return ENTRY_NOT_PRIVATE
   end
 
-  receipt = File.read_text(Paths.join(entry, RECEIPT), IO_TIMEOUT_MS)
-  digest = File.sha256(library, IO_TIMEOUT_MS)
-  if !receipt.ok? or !digest.ok? or receipt.unwrap!.strip != OpenSSL.Digest.hexencode(digest.unwrap!)
-    return ENTRY_NOT_RECEIPT
+  wanted = digest
+  if wanted == ""
+    read = File.sha256(library, IO_TIMEOUT_MS)
+    return ENTRY_NOT_RECEIPT if !read.ok?
+
+    wanted = OpenSSL.Digest.hexencode(read.unwrap!)
   end
+
+  receipt = File.read_text(Paths.join(entry, RECEIPT), IO_TIMEOUT_MS)
+  return ENTRY_NOT_RECEIPT if !receipt.ok? or receipt.unwrap!.strip != wanted
 
   ""
 end

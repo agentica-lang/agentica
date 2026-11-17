@@ -112,6 +112,10 @@ def remembered(
         text = "U#{reason}"
         message = "native module #{request.library} not built: #{reason}; the package runs without it"
         help = "install a C compiler or fix the module, then run again to build it"
+        if request.mode == NativePrebuilt.MODE_PREBUILT_ONLY
+          help = "run `agentica install` to download its prebuilt file, or take it out of the prebuilt-only policy"
+        end
+
         warned.call(Failure.fail_key(request.file, request.key, "PKG-NATIVE-UNBUILT", message, Failure.hint(help)))
       end
   end
@@ -349,7 +353,7 @@ end
 def verified(request: Workspace.BuildRequest, entry: String, name: String, user: Int) -> Result[String]
   library = Paths.join(entry, name)
   help = "remove the folder #{entry} to build again"
-  problem = CacheFiles.entry_problem(entry, library, user, false)
+  problem = CacheFiles.entry_problem(entry, library, user, false, "")
   return error(fail(request, "the build cache entry is #{problem_text(problem)}", help)) if problem != ""
 
   ok(library)
