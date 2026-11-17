@@ -153,6 +153,7 @@ def test_an_optional_prebuilt_only_module_with_nothing_fetched_is_a_warning(ws, 
     ran = agentica(ws, "--json", "--native-prebuilt-only", "main.agc", **counting_cc(ws))
     assert (ran.code, ran.stdout, starts(ws)) == (0, "without adder\n", 0), ran.stderr
     assert [item["code"] for item in warnings(ran)] == ["PKG-NATIVE-UNBUILT"]
+    assert "agentica install" in warnings(ran)[0]["help"]
 
 
 def test_the_flag_goes_before_the_variable_and_the_variable_before_the_manifest(ws, peer):
