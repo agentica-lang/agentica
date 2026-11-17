@@ -691,10 +691,12 @@ import Sqlite from "pkg/sqlite/db"
   the lock (`PKG-HASH-MISMATCH` at `package[n].hash`), and swap it for the old
   `deps/<name>/` in two renames, so the old folder stays if a step fails. The
   folder of a locked package is replaced when it is not a real folder (a link,
-  say) or its `.agc` files differ from the lock (an edited, added or missing
-  file), and running `install` again is how to restore it. A real folder whose
-  `.agc` files have the locked hash is left as it is, so its files keep their
-  times, and so do other files in it (a note, say). Hidden `.tmp-*` and `.old-*`
+  say), its `.agc` files differ from the lock (an edited, added or missing
+  file) or its `agentica.toml` differs from the cached one (the hash does not
+  cover it), and running `install` again is how to restore it. A real folder
+  whose `.agc` files have the locked hash and whose manifest is the cached one
+  is left as it is, so its files keep their times, and so do other files in it
+  (a note, say). Hidden `.tmp-*` and `.old-*`
   entries of `deps/` left by a killed command are removed first when they are
   older than ten minutes (a younger one may belong to a command that is still
   running), judged by their own time and never through a link. The new folder
