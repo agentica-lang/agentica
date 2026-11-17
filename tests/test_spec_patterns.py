@@ -4,6 +4,8 @@ Each case writes a program (one file, or several for the import-alias rules) and
 A rejected program is asserted by its diagnostic code and the source text its range covers; a good one checks clean or
 prints what the rule says. Message and help texts are not asserted (AGENTS.md).
 """
+import json
+import time
 from collections import namedtuple
 
 import pytest
@@ -396,3 +398,20 @@ def test_nesting_depth_is_bounded_like_expressions(agentica_check):
     assert agentica_check(deep(1001))["code"] == "PARSE-TOO-DEEP"
     later = "    " + "Deep.Node(" * 3000 + "Deep.Leaf" + ")" * 3000 + " -> puts(3)\n"
     assert agentica_check(deep(1, later))["code"] == "PARSE-TOO-DEEP"
+
+
+def test_nested_cover_is_not_exponential_in_the_payload_slots(tmp_path):
+    """Sixteen slots, each arm naming one variant in one slot: the checker answers at once, not in minutes."""
+    k = 16
+    arms = "".join('    Big.V(%s) -> puts("%d")\n' % (", ".join("S.A" if j == i else "_" for j in range(k)), i)
+                   for i in range(k))
+    program = ("enum S\n  A\n  B\n  C\nend\n\nenum Big\n  V(%s)\nend\n\n"
+               "def f(x: Big) -> Void\n  case x\n%s  end\nend\n\ndef main() -> Void\nend\n"
+               % (", ".join(["S"] * k), arms))
+    path = tmp_path / "big.agc"
+    path.write_text(program, encoding="utf-8")
+    started = time.monotonic()
+    result = run(cli() + ["--json", "check", str(path)])
+    took = time.monotonic() - started
+    assert json.loads(result.stderr)["code"] == "CHECK-NON-EXHAUSTIVE-CASE", result.stderr
+    assert took < 2, took

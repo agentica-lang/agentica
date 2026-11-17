@@ -1020,8 +1020,11 @@ def covers?(cx: State.Cx, rows: List[List[Ast.Slot]], types: List[T.Type]) -> Bo
   first = types[0]
   rest = types.drop(1)
   names = variant_names(cx, first)
-  heads = rows.any? do |row: List[Ast.Slot]| variant_of(row[0]).some? end
-  if !names.ok? or !heads
+  heads = rows.map { |row: List[Ast.Slot]| head_name(row[0]) }
+  # A column that does not name every variant of its type is covered only where the rows with any value there cover
+  # the rest (Maranget's default matrix), so one recursion decides it; splitting by every variant would be exponential
+  # in the columns.
+  if (!names.ok? or !names.unwrap!.all? { |name: String| heads.include?(name) })
     left = rows.select { |row: List[Ast.Slot]| any_value?(row[0]) }
     return covers?(cx, left.map { |row: List[Ast.Slot]| row.drop(1) }, rest)
   end
@@ -1051,6 +1054,14 @@ def split(rows: List[List[Ast.Slot]], name: String, size: Int) -> List[List[Ast.
   end
 
   found
+end
+
+# The variant a slot names, or "".
+def head_name(slot: Ast.Slot) -> String
+  case variant_of(slot)
+    some(pattern) -> pattern.variant_name
+    none -> ""
+  end
 end
 
 def variant_of(slot: Ast.Slot) -> Optional[Ast.VariantPattern]

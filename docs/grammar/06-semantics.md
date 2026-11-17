@@ -463,7 +463,8 @@ cover together what their variants cover: `ok(ok(n))`, `ok(error(_))` and
 `error(_)` cover a `Result[Result[Int]]`, and `Shape.Boxed(some(n))` with
 `Shape.Boxed(none)` cover `Shape.Boxed`, slot by slot. A guarded arm covers
 nothing, and a literal slot never covers its type: `some(0)` needs `some(n)` or
-`_`, and a guarded `_ if c ->` does not make a case exhaustive. An
+`_`, and a guarded `_ if c ->` does not make a case exhaustive. An arm after
+a complete set of nested arms is not reported (for now). An
 arm is unreachable (`CHECK-UNREACHABLE-CASE-ARM`) only when an earlier arm
 without a guard already covers its variant with names and `_`, or follows an
 unguarded catch-all. The same pattern may come again after a guarded or

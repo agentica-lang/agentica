@@ -340,7 +340,7 @@ none
 timed out
 ```
 
-An unguarded arm whose positions are only names or `_` covers its variant. Nested patterns cover together what their variants cover: `ok(ok(n))`, `ok(error(_))` and `error(_)` cover a `Result[Result[Int]]`. A guarded arm or a literal such as `some(0)` may fail, so end with `some(n)`, a variant with `_` positions, or `_`.
+An unguarded arm whose positions are only names or `_` covers its variant. Nested patterns cover together what their variants cover: `ok(ok(n))`, `ok(error(_))` and `error(_)` cover a `Result[Result[Int]]`; an arm after such a set is not reported as unreachable (for now). A guarded arm or a literal such as `some(0)` may fail, so end with `some(n)`, a variant with `_` positions, or `_`.
 
 The payload of your own variant can be an [Optional](/library/data-structures/optional/), and the same patterns apply:
 
