@@ -6,6 +6,7 @@ that a cancelled stream closed its connection. A blackhole (a listener whose acc
 never ends; where the kernel does not drop the SYN, that test is skipped.
 """
 import socket
+import sys
 import threading
 import time
 
@@ -104,6 +105,22 @@ class PeerServer:
                 client.sendall(b"def")
             elif path == "/upload":
                 self.wait_for_close(client, path)
+            elif path == "/stall":
+                # Takes the request head and never reads the body, so the client's writes back up.
+                self.stopped.wait(60)
+            elif path == "/flood":
+                client.sendall(chunked)
+                piece = b"10000\r\n" + b"x" * 65536 + b"\r\n"
+                for _ in range(200):
+                    client.sendall(piece)
+            elif path == "/upload-ok":
+                data = head.split(b"\r\n\r\n", 1)[1]
+                while not data.endswith(b"0\r\n\r\n"):
+                    more = client.recv(65536)
+                    if not more:
+                        return
+                    data += more
+                client.sendall(b"HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\ngot")
         except OSError:
             pass
         finally:
@@ -123,6 +140,13 @@ def peer():
 PRELUDE = """\
 import HTTP from "std/http"
 
+struct Feed
+  body: Channel[Bytes]
+  pause: Int
+  pieces: Int
+  size: Int
+end
+
 def elapsed(since: Int) -> Int = Time.monotonic_ms() - since
 
 # Whether `since` ago is between the two bounds, so a line does not print a time that changes from run to run.
@@ -136,6 +160,27 @@ def kind_of(r: Result[HTTP.Response]) -> String
     ok(response) -> return "#{response.status} #{String.from_bytes(response.body).unwrap!}"
     error(e) -> return e.kind
   end
+end
+
+def failed(r: Result[HTTP.Response]) -> String
+  case r
+    ok(_) -> return "answered"
+    error(e) -> return "#{e.kind} #{e.details.get("phase").unwrap_or("-")}"
+  end
+end
+
+def producer(feed: Feed) -> Void
+  Task.sleep(feed.pause)
+  piece = ("x" * feed.size).bytes
+  body = feed.body
+  for _ in 0..feed.pieces
+    case body.send(piece, 10000)
+      ok(_) -> nil
+      error(_) -> break
+    end
+  end
+
+  body.close
 end
 
 def drain(stream: HTTP.Stream, wait: Int) -> String
@@ -178,6 +223,10 @@ def main() -> Void
   quiet = HTTP.open("GET", base + "/quiet-stream", "".bytes, [], HTTP.ClientOptions(timeout_ms: limit, read_timeout_ms: pause * 4)).unwrap!
   puts("quiet #{drain(quiet, pause * 4)}")
 
+  # The default read_timeout_ms (30 s) allows a pause that timeout_ms would have cut.
+  fallback = HTTP.open("GET", base + "/quiet-stream", "".bytes, [], HTTP.ClientOptions(timeout_ms: limit)).unwrap!
+  puts("default #{drain(fallback, pause * 4)}")
+
   # The same stream with a read_timeout_ms below the pause is cut.
   cut = HTTP.open("GET", base + "/quiet-stream", "".bytes, [], HTTP.ClientOptions(timeout_ms: limit, read_timeout_ms: limit)).unwrap!
   puts("cut #{drain(cut, pause * 4)}")
@@ -187,7 +236,7 @@ def main() -> Void
   puts("first #{String.from_bytes(silent.body.recv(pause * 4).unwrap!).unwrap!}")
   case silent.body.recv(limit * 3)
     ok(_) -> puts("silent a piece")
-    error(e) -> puts("silent waits #{e.message}")
+    error(e) -> puts("silent waits #{e.kind}")
   end
 
   Task.cancel(silent.done)
@@ -198,6 +247,14 @@ def main() -> Void
 
   Task.sleep(300)
   puts("peer #{String.from_bytes(HTTP.get_response(base + "/seen/silent").unwrap!.body).unwrap!}")
+
+  # A reader that does not take the pieces for longer than read_timeout_ms ends the stream.
+  flood = HTTP.open("GET", base + "/flood", "".bytes, [], HTTP.ClientOptions(timeout_ms: limit * 5, read_timeout_ms: limit)).unwrap!
+  Task.sleep(limit * 3)
+  case Task.await(flood.done)
+    ok(_) -> puts("flood ok")
+    error(e) -> puts("flood #{e.kind}")
+  end
 end
 """
 )
@@ -255,6 +312,19 @@ def main() -> Void
   uploaded = HTTP.upload("POST", base + "/upload", body, -1, [], HTTP.ClientOptions(timeout_ms: pause * 5, read_timeout_ms: limit))
   puts("upload #{kind_of(uploaded)} #{within(since, limit - 100, pause)}")
 
+  # A server that never reads the upload: the write stops at read_timeout_ms.
+  since = Time.monotonic_ms()
+  stalled: Channel[Bytes] = Channel.new(1)
+  Task.spawn(&producer, Feed(body: stalled, pause: 0, pieces: 64, size: 1048576))
+  refused = HTTP.upload("POST", base + "/stall", stalled, -1, [], HTTP.ClientOptions(timeout_ms: pause * 20, read_timeout_ms: limit))
+  puts("stalled upload #{kind_of(refused)} #{within(since, limit - 100, pause * 10)}")
+
+  # The default read_timeout_ms (30 s) allows a producer that is silent for longer than timeout_ms.
+  delayed: Channel[Bytes] = Channel.new(1)
+  Task.spawn(&producer, Feed(body: delayed, pause: pause, pieces: 1, size: 5))
+  late = HTTP.upload("POST", base + "/upload-ok", delayed, -1, [], HTTP.ClientOptions(timeout_ms: limit))
+  puts("slow producer #{kind_of(late)}")
+
   # The options are checked: 0 is no limit for a read and not for the others.
   puts("read -1 #{HTTP.client(HTTP.ClientOptions(read_timeout_ms: -1)).ok?}")
   puts("read 0 #{HTTP.client(HTTP.ClientOptions(read_timeout_ms: 0)).ok?}")
@@ -267,22 +337,26 @@ CONNECT_PROGRAM = (
     PRELUDE
     + """\
 def main() -> Void
-  url = "http://127.0.0.1:#{System.args()[0]}"
+  url = System.args()[0]
   limit = System.args()[1].to_i!
   options = HTTP.ClientOptions(timeout_ms: limit * 20, connect_timeout_ms: limit)
 
   since = Time.monotonic_ms()
-  puts("get #{kind_of(HTTP.get_response(url + "/", options))} #{within(since, limit - 100, limit * 6)}")
+  puts("get_response #{failed(HTTP.get_response(url + "/", options))} #{within(since, limit - 100, limit * 6)}")
+  client = HTTP.client(options).unwrap!
+  since = Time.monotonic_ms()
+  puts("get #{failed(HTTP.get(client, url + "/"))} #{within(since, limit - 100, limit * 6)}")
+  HTTP.close_client(client)
   since = Time.monotonic_ms()
   case HTTP.open("GET", url + "/", "".bytes, [], options)
     ok(_) -> puts("open connected")
-    error(e) -> puts("open #{e.kind} #{within(since, limit - 100, limit * 6)}")
+    error(e) -> puts("open #{e.kind} #{e.details.get("phase").unwrap_or("-")} #{within(since, limit - 100, limit * 6)}")
   end
 
   since = Time.monotonic_ms()
   case HTTP.start(url, options)
     ok(_) -> puts("start connected")
-    error(e) -> puts("start #{e.kind} #{within(since, limit - 100, limit * 6)}")
+    error(e) -> puts("start #{e.kind} #{e.details.get("phase").unwrap_or("-")} #{within(since, limit - 100, limit * 6)}")
   end
 
   # timeout_ms of the whole call also bounds a connect that has a longer connect_timeout_ms.
@@ -305,11 +379,13 @@ def test_a_stream_has_a_short_head_timeout_and_a_long_or_no_read_timeout(tmp_pat
     assert lines == [
         "never net.timeout true",
         "quiet one,two ok",
+        "default one,two ok",
         "cut one net.timeout",
         "first one",
-        "silent waits channel: timed out",
+        "silent waits channel.timeout",
         "cancelled error",
         "peer closed",
+        "flood channel.timeout",
     ]
 
 
@@ -324,18 +400,35 @@ def test_whole_calls_cut_a_quiet_body_at_read_timeout_ms_and_wait_for_a_slow_hea
         "start 200 abc",
         "second net.timeout",
         "upload channel.timeout true",
+        "stalled upload net.timeout true",
+        "slow producer 200 got",
         "read -1 false",
         "read 0 true",
         "connect 0 false",
     ]
 
 
+CONNECT_LINES = [
+    "get_response net.timeout connect true",
+    "get net.timeout connect true",
+    "open net.timeout connect true",
+    "start net.timeout connect true",
+    "total net.timeout true",
+]
+
+
+def test_a_tls_handshake_that_is_not_answered_ends_at_connect_timeout_ms_in_each_call(tmp_path, peer):
+    """The peer takes the connection and never speaks, so an https:// connect stalls in the handshake on every system."""
+    lines = run_program(tmp_path, "tls-connect", CONNECT_PROGRAM, "https://127.0.0.1:%d" % peer.port, scaled(500))
+    assert lines == CONNECT_LINES
+
+
 @pytest.fixture
 def blackhole():
-    """A listener whose accept queue is full, so the next connect is not answered. Skipped where the kernel does not
-    drop the SYN (it then answers or refuses at once)."""
-    if WINDOWS:
-        pytest.skip("a full accept queue does not stall a connect here")
+    """A listener whose accept queue is full, so the next connect is not answered. Windows and macOS answer or refuse
+    instead of dropping the SYN; the portable case is the https one above."""
+    if WINDOWS or sys.platform == "darwin":
+        pytest.skip("host-only: a full accept queue does not stall a connect here, it is refused or answered")
     listener = socket.socket()
     listener.bind(("127.0.0.1", 0))
     listener.listen(0)
@@ -353,7 +446,7 @@ def blackhole():
                 stalled = True
                 break
         if not stalled:
-            pytest.skip("this kernel does not stall a connect to a full accept queue")
+            pytest.skip("host-only: this kernel does not stall a connect to a full accept queue")
         yield address[1]
     finally:
         for filler in fillers:
@@ -362,9 +455,5 @@ def blackhole():
 
 
 def test_a_connect_that_is_not_answered_ends_at_connect_timeout_ms_in_each_call(tmp_path, blackhole):
-    assert run_program(tmp_path, "connect", CONNECT_PROGRAM, blackhole, scaled(500)) == [
-        "get net.timeout true",
-        "open net.timeout true",
-        "start net.timeout true",
-        "total net.timeout true",
-    ]
+    assert run_program(tmp_path, "connect", CONNECT_PROGRAM, "http://127.0.0.1:%d" % blackhole, scaled(500)) == \
+        CONNECT_LINES

@@ -307,7 +307,7 @@ def request(
     options.max_body_bytes,
   )
 
-  deadline = Time.monotonic_ms() + options.timeout_ms
+  deadline = after(options.timeout_ms)
   reply: Channel[Result[HttpWire.Response]] = Channel.new(1)
   job = HttpWire.Job(
     origin: "#{via.scheme}://#{via.host}:#{via.port}",
@@ -368,7 +368,7 @@ def download(
     client_options.max_body_bytes,
   )
 
-  deadline = Time.monotonic_ms() + options.timeout_ms
+  deadline = after(options.timeout_ms)
   # What a 407 from the proxy is told as; empty when there is no proxy or the request is in a tunnel, whose 407 is the
   # server's own answer.
   denied = ""
@@ -420,7 +420,7 @@ def send_request(
   body: Bytes,
   headers: List[HttpWire.Header] = [],
 ) -> Result[ResponseHead]
-  sent_by(conn, method, target, body, headers, Time.monotonic_ms() + conn.options.timeout_ms)
+  sent_by(conn, method, target, body, headers, after(conn.options.timeout_ms))
 end
 
 ## Reads the next piece of the body of the last response, at most `max_bytes` (1 to 1 MiB, 64 KiB by default), as
@@ -479,7 +479,7 @@ def open(
   try check_client(options)
 
   where = try parse_url(url)
-  head_by = Time.monotonic_ms() + options.timeout_ms
+  head_by = after(options.timeout_ms)
   conn = try connect_to(where, options)
   case sent_by(conn, method, where.target, body, headers, head_by)
     ok(head) ->
@@ -1434,7 +1434,7 @@ end
 # info, which only the header of each request needs.
 def connect_to(where: Target, options: HttpWire.ClientOptions) -> Result[Connection]
   via = try connect_target(where, options)
-  socket = try open_socket(via, options)
+  socket = try at_connect(open_socket(via, options))
   login: Channel[String] = Channel.new(1)
   kept = options
   if options.proxy != ""
@@ -1911,7 +1911,7 @@ def uploaded(
     ok(_) -> written = try upload_pieces(conn.socket, body, length, timeout)
     error(e) -> written = write_failed(e)
   end
-  case read_head_of(conn.socket, false, DOWNLOAD_MAX_BYTES, Time.monotonic_ms() + conn.options.timeout_ms)
+  case read_head_of(conn.socket, false, DOWNLOAD_MAX_BYTES, after(conn.options.timeout_ms))
     ok(response) -> upload_answer(conn, response)
     error(message) ->
       case written
@@ -2007,7 +2007,18 @@ def connect_ms(options: HttpWire.ClientOptions, left: Int) -> Int = smaller(opti
 # read closes the socket and so no wait is without an end. A wait never passes the deadline of the call it is in.
 def read_ms(options: HttpWire.ClientOptions) -> Int
   return WATCH_MS if options.read_timeout_ms == 0
-  options.read_timeout_ms
+  smaller(options.read_timeout_ms, WATCH_MS)
+end
+
+# The time `ms` from now, at most a year: a huge timeout does not overflow the clock.
+def after(ms: Int) -> Int = Time.monotonic_ms() + smaller(ms, WATCH_MS)
+
+# An error of a connect says so in its details (`phase` is `connect`), so a caller tells it from the timeout of a read.
+def at_connect[T](answer: Result[T]) -> Result[T]
+  case answer
+    ok(value) -> ok(value)
+    error(e) -> error(e.with(details: e.details.put("phase", "connect")))
+  end
 end
 
 # `most_body` is the ceiling of `max_body_bytes`: CLIENT_MAX_BODY for a client, DOWNLOAD_MAX_BYTES for a server.
@@ -3909,9 +3920,9 @@ def connect(worker: Worker, job: HttpWire.Job) -> Result[TCP.Socket]
   left = job.deadline - Time.monotonic_ms()
   return error(TIMED_OUT, kind: "net.timeout") if left <= 0
   wait = connect_ms(worker.options, left)
-  return connect_https(worker.client, job.host, job.port, wait) if job.scheme == "https"
+  return at_connect(connect_https(worker.client, job.host, job.port, wait)) if job.scheme == "https"
   where = Target(scheme: job.scheme, host: job.host, port: job.port, target: "/")
-  reaching(TCP.connect(job.host, job.port, wait), HttpWire.options(worker.client), where)
+  at_connect(reaching(TCP.connect(job.host, job.port, wait), HttpWire.options(worker.client), where))
 end
 
 def idempotent?(method: String) -> Bool
@@ -4115,8 +4126,8 @@ def connect_download(pool: HttpWire.Client, where: Target, deadline: Int) -> Res
   return error(TIMED_OUT, kind: "net.timeout") if left <= 0
   options = HttpWire.options(pool)
   wait = connect_ms(options, left)
-  return connect_https(pool, where.host, where.port, wait) if where.scheme == "https"
-  reaching(TCP.connect(where.host, where.port, wait), options, where)
+  return at_connect(connect_https(pool, where.host, where.port, wait)) if where.scheme == "https"
+  at_connect(reaching(TCP.connect(where.host, where.port, wait), options, where))
 end
 
 # Opens the destination exclusively, then streams the response into it. Every error below closes both handles;
