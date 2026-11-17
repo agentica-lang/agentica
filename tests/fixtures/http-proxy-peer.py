@@ -1,6 +1,6 @@
 """An HTTP forward proxy and two origin servers, all on 127.0.0.1 with port 0, for the client's proxy tests.
 
-It prints one line, `proxy A B proxy2 locked C D`, the seven ports (two proxies that share nothing, a third that asks for
+It prints one line, `proxy A B proxy2 locked C D old`, the eight ports (two proxies that share nothing, a third that asks for
 credentials, and two origins that speak TLS, with the certificate of tests/fixtures/tls/server.pem), and serves until
 its stdin closes. The proxy refuses anything but the
 absolute-form request target (`GET http://host:port/path HTTP/1.1`, RFC 9112 3.2.2), forwards the request to the origin
@@ -100,6 +100,8 @@ class Proxy(http.server.BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
     tag = "?"
     locked = False
+    # An old proxy (Squid) answers the CONNECT in HTTP/1.0.
+    old = False
 
     def log_message(self, *args):
         pass
@@ -159,8 +161,12 @@ class Proxy(http.server.BaseHTTPRequestHandler):
             upstream = socket.create_connection((host.strip("[]"), int(port)), timeout=10)
         except (OSError, ValueError):
             return self.refuse("bad gateway", 502)
-        self.send_response(200, "Connection Established")
-        self.end_headers()
+        if self.old:
+            self.wfile.write(b"HTTP/1.0 200 Connection established\r\n\r\n")
+            self.wfile.flush()
+        else:
+            self.send_response(200, "Connection Established")
+            self.end_headers()
         self.close_connection = True
         relay(self.connection, upstream)
 
@@ -245,10 +251,11 @@ def main():
     second = type("B", (Origin,), {"name": "B"})
     proxies = [type("P%d" % n, (Proxy,), {"tag": str(n), "counter": [0], "lock": threading.Lock(), "locked": n == 3})
                for n in (1, 2, 3)]
+    old = type("P4", (Proxy,), {"tag": "4", "counter": [0], "lock": threading.Lock(), "old": True})
     third = type("C", (Origin,), {"name": "C"})
     fourth = type("D", (Origin,), {"name": "D"})
     servers = [serve(proxies[0]), serve(first), serve(second), serve(proxies[1]), serve(proxies[2]),
-               serve(third, tls=True), serve(fourth, tls=True)]
+               serve(third, tls=True), serve(fourth, tls=True), serve(old)]
     say(" ".join(str(server.server_address[1]) for server in servers))
     sys.stdin.read()
     for server in servers:
