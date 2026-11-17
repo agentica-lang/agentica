@@ -159,8 +159,8 @@ static agc_value oneshot_run(agc_vm *vm, zlib_kind kind, agc_zcodec *codec, cons
     free(out.data);
     return failed;
   }
-  /* A strict single stream: a second member, zeros or junk after the verified
-     end stay unconsumed, and are refused here rather than discarded. */
+  /* A strict single stream (inflate; a gunzip run continues over the next member instead): zeros or junk after the
+     verified end stay unconsumed, and are refused here rather than discarded. */
   if (kind == ZLIB_DECODER && left != 0) {
     free(out.data);
     return zlib_error(vm, AGC_KIND_ZLIB_DATA, trailing);

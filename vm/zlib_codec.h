@@ -42,8 +42,8 @@ uint32_t agc_zlib_crc32(uint32_t crc, const uint8_t *data, size_t len);
    last inputs (Z_FINISH) and NO_FLUSH before that; the decoder always takes
    NO_FLUSH and checks the trailer itself. DONE ends the stream with its
    checksum verified (a gzip decoder, window_bits 31, then starts over for the
-   next member, RFC 1952 §2.2: DONE ends each member, the input left is the
-   next one's, and agc_zcodec_decode_members counts the ones that ended);
+   next member, RFC 1952 §2.2: DONE ends each member and the input left is
+   the next one's);
    TRAILING is the bytes after the last member (a gzip decoder only): they do
    not start another member, and none of them is consumed; MORE needs another
    call (more input, or room in out);
@@ -55,9 +55,6 @@ agc_zcodec_status agc_zcodec_encode(agc_zcodec *c, const uint8_t **inout, size_t
                                     size_t out_cap, size_t *produced);
 agc_zcodec_status agc_zcodec_decode(agc_zcodec *c, const uint8_t **inout, size_t *in_left, uint8_t *out,
                                     size_t out_cap, size_t *produced);
-
-/* How many members a gzip decoder has finished; 0 for any other codec. */
-unsigned agc_zcodec_members(const agc_zcodec *c);
 
 /* Frees a codec started by agc_zcodec_encode_begin or agc_zcodec_decode_begin;
    NULL is free of charge. */

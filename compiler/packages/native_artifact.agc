@@ -129,6 +129,14 @@ def url_allowed?(url: String) -> Bool
   false
 end
 
+## The lowercased host of the URL, without brackets: "" when the URL does not parse.
+def host_of(url: String) -> String
+  case parse_url(url)
+    ok(parts) -> parts.host
+    error(_) -> ""
+  end
+end
+
 ## Whether following `next` from `current` drops from https to http. Both URLs passed `url_allowed?` first; an
 ## unparsable one never downgrades, it is refused elsewhere.
 def downgrade?(current: String, next: String) -> Bool

@@ -187,6 +187,7 @@ static void test_http10_transfer_encoding(void) {
   assert(closes_of(answer(chunked, true)));
   assert(closes("HTTP/1.0 204 No Content\r\nTransfer-Encoding: chunked\r\n\r\n"));
   assert(closes("HTTP/1.0 304 Not Modified\r\nTransfer-Encoding: chunked\r\nConnection: keep-alive\r\n\r\n"));
+  assert(closes_of(answer("HTTP/1.0 200 OK\r\nTransfer-Encoding: chunked\r\nConnection: keep-alive\r\n\r\n", true)));
   assert(!answer("HTTP/1.0 200 OK\r\nTransfer-Encoding: gzip\r\n\r\n", true)->ok);
   assert(closes("HTTP/1.1 304 Not Modified\r\nTransfer-Encoding: chunked\r\n\r\n"));
 }

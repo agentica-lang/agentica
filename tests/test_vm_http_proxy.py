@@ -761,5 +761,7 @@ def test_https_goes_through_a_proxy_that_answers_the_connect_in_http10(tmp_path,
     result = run_vm(bytecode, env=vm_environment(), args=[old, tls_c, ca], timeout=scaled(60))
     assert result.code == 0, result.stderr
     assert output_lines(result.stdout) == ["200 hello from C /hello?old", "200 hello from C /hello?old2"], result.stdout
-    seen = [peer.next_line().split(" ", 2)[2] for _ in range(1)]
+    peer.close_stdin()
+    peer.wait()
+    seen = [line.split(" ", 2)[2] for line in output_lines(peer.stdout_text())]
     assert seen == ["CONNECT 127.0.0.1:%s HTTP/1.1 | 127.0.0.1:%s" % (tls_c, tls_c)], seen

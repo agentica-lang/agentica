@@ -1,8 +1,9 @@
 ## Prebuilt native modules (docs/grammar/05b-modules.md): the `prebuilt` key of `[native.NAME]`, beside `build`, which
 ## names one library file per release target that the package author built from that `build`, and the project's
 ## `[native_policy]`, which says which modules always build from source and which never do. This holds the pure parts:
-## the checks of both tables, the URL of a target, and the source key that ties the files to the code they were built
-## from. A failure is the reading's code at the key path (toml_read.agc).
+## the checks of both tables, the URL of a target, the source key that ties the files to the code they were built
+## from, and the rules of the download (io/native_prebuilt.agc): the size cap, where a redirect may lead and the
+## cache entry. A failure is the reading's code at the key path (toml_read.agc).
 ##
 ## The source key is the first 16 hex digits of the SHA-256 of `source_text`: the library, its `build` table and the
 ## files of native/ that the hash of the package covers, with the digest of each (a CRLF read as LF, so a checkout
@@ -27,6 +28,12 @@ TARGETS = ["linux-x86_64", "linux-arm64", "macos-x86_64", "macos-arm64", "window
 SOURCE_LENGTH = 16
 ## The table name of the policy, which only the project's manifest may write.
 POLICY_KEY = "native_policy"
+## The most bytes of one prebuilt file, the bodies of its redirects included.
+FILE_MAX_BYTES = 67_108_864
+## The hosts other than the one of the URL that a redirect may lead to: where GitHub serves release assets.
+REDIRECT_HOSTS = ["objects.githubusercontent.com", "release-assets.githubusercontent.com"]
+## The folder of the package cache that holds the prebuilt files, one entry per SHA-256.
+CACHE_FOLDER = "native-prebuilt"
 
 ## The files of one library for each target: a URL template, the source key and the native API the files were built
 ## with, and the SHA-256 of each target's file (64 lowercase hex digits), by target in the order of the file.
@@ -95,6 +102,35 @@ end
 def url_for(prebuilt: Prebuilt, name: String, api: String, source: String, target: String) -> String
   expand(prebuilt.url, name, api, source, target)
 end
+
+## Whether a redirect of the download of `url` may lead to `next`: the same host, or one of REDIRECT_HOSTS.
+def redirect_allowed?(url: String, next: String) -> Bool
+  host = NativeArtifact.host_of(next)
+  host != "" and (host == NativeArtifact.host_of(url) or REDIRECT_HOSTS.include?(host))
+end
+
+## The file name of the library `name` on the system of `target`: lib<NAME>.so, lib<NAME>.dylib or <NAME>.dll.
+def file_name(name: String, target: String) -> String
+  return "#{name}.dll" if target.start_with?("windows-")
+
+  "lib#{name}#{extension(target)}"
+end
+
+## The cache entry of the file with the SHA-256 `sha`: `<cache>/native-prebuilt/<sha>`, holding the library and its
+## receipt.
+def entry_of(cache_root: String, sha: String) -> String = Paths.join(Paths.join(cache_root, CACHE_FOLDER), sha)
+
+## Whether a VM of the native API `vm_api` loads files built with `api`: the same major and a minor up to its own.
+def api_loads?(api: String, vm_api: String) -> Bool
+  return false if !api_version?(api) or !api_version?(vm_api)
+
+  files = api.split(".")
+  own = vm_api.split(".")
+  files[0] == own[0] and files[1].to_i! <= own[1].to_i!
+end
+
+## Whether `choice` names the module `name`.
+def chosen?(choice: Choice, name: String) -> Bool = choice.all or choice.names.include?(name)
 
 ## The text the source key covers: the format, the library, its `build` table as written and, for each file of
 ## native/ that the package hash covers (`files`, relative paths in bytewise order), its SHA-256 in hex (`digests`, at

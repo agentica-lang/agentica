@@ -43,16 +43,36 @@ static const char usage[] =
   "on by default, x86-64 and arm64\n"
   "  --coverage FILE writes the LCOV of the lines that ran to FILE at the end of the run (with the JIT off)\n";
 
-/* The std/ sources of the binary, from the index that make wrote. The rows point only into agc_embedded_data, which
- * is static, so the array holds no GC pointer and is atomic. */
+/* The release target of this binary, which picks the prebuilt native modules it downloads; none on another system or
+ * C library, which then builds them from source. */
+#if defined(__linux__) && defined(__GLIBC__) && defined(__x86_64__)
+#define AGC_TARGET "linux-x86_64"
+#elif defined(__linux__) && defined(__GLIBC__) && defined(__aarch64__)
+#define AGC_TARGET "linux-arm64"
+#elif defined(__APPLE__) && defined(__x86_64__)
+#define AGC_TARGET "macos-x86_64"
+#elif defined(__APPLE__) && defined(__aarch64__)
+#define AGC_TARGET "macos-arm64"
+#elif defined(_WIN32) && (defined(__x86_64__) || defined(_M_X64))
+#define AGC_TARGET "windows-x86_64"
+#endif
+
+/* The std/ sources of the binary, from the index that make wrote, and the release target as the source
+ * internal/native/target. The rows point only into static data, so the array holds no GC pointer and is atomic. */
 static agc_std_source *std_sources(size_t *count) {
   size_t n = (size_t)agc_embedded_index[8];
-  agc_std_source *sources = agc_alloc_atomic(agc_size_mul(n ? n : 1, sizeof *sources));
+  agc_std_source *sources = agc_alloc_atomic(agc_size_mul(n + 1, sizeof *sources));
   for (size_t k = 0; k < n; k++) {
     const uint64_t *row = agc_embedded_index + 9 + 3 * k;
     const char *path = (const char *)agc_embedded_data + row[0];
     sources[k] = (agc_std_source){path, agc_embedded_data + row[1], (size_t)row[2]};
   }
+#ifdef AGC_TARGET
+  if (n > 0) {
+    static const char target[] = AGC_TARGET;
+    sources[n++] = (agc_std_source){"internal/native/target", (const uint8_t *)target, sizeof target - 1};
+  }
+#endif
   *count = n;
   return sources;
 }
