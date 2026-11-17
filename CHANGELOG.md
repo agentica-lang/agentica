@@ -10,12 +10,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- `HTTP.ClientOptions` has `connect_timeout_ms` (10 s) and `read_timeout_ms` (300 s, 0 for no limit) (#1710).
-- `connect_timeout_ms` bounds the connect: DNS, TCP, the TLS handshake and a proxy `CONNECT`. A timeout of the connect has `details["phase"]` `"connect"`.
-- `read_timeout_ms` bounds each wait for body bytes in `get`, `post`, `request`, `get_response`, `post_response`, `download`, `open` and `start`.
-- In `upload`, `read_timeout_ms` bounds each wait for a piece from the channel and each send.
-- `timeout_ms` is the whole call of `get`, `post`, `request`, `get_response`, `post_response` and `download`, the head included.
-- For `open`, `start` and `upload`, `timeout_ms` is the time to the head, so a stream can have a short connect and head and a long or no read timeout.
+- `HTTP.ClientOptions` has `connect_timeout_ms` (10 s, the connect; a timeout of it has `details["phase"]` `"connect"`) and `read_timeout_ms` (300 s, 0 for no limit; each wait for body bytes, and each wait for a piece and each send of an `upload`) (#1710).
 - **Breaking:** `open`, `start` and `upload` no longer give each wait `timeout_ms`: a stream that relied on `timeout_ms` per read must set `read_timeout_ms`, and `timeout_ms: 5000` now allows 300 s per read.
 - **Breaking:** a connect ends after `connect_timeout_ms` (10 s), even when `timeout_ms` is longer.
 - `agentica repl` runs entries one at a time over a session in which names, declarations and tasks live on; `--json` gives one answer per entry for agents (#1463).
