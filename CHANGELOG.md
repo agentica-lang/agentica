@@ -8,6 +8,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- A parameter or field default may be the bytes of a string literal, `body: Bytes = "".bytes`, directly or through a constant (#1777).
+
 ### Changed
 
 - The documentation moved to https://www.agentica-lang.com/agentica/; the old agentica-lang.github.io links redirect there.
