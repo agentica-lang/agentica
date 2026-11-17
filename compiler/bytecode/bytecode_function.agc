@@ -81,6 +81,20 @@ def intern_constant(constants: Pool.Pool, imm: Ir.Imm) -> Pool.Interned
   Pool.intern(constants, constant_key(imm), constant_bytes(imm))
 end
 
+## The text that stands for a constant in the table: two constants are one entry when this is the same. The tag keeps
+## an Int, a Float (by its bits, so 0.0 and -0.0 differ), a Bool, a String and a Bytes apart.
+def constant_key(imm: Ir.Imm) -> String
+  case imm
+    Ir.Imm.Void -> "v"
+    Ir.Imm.Nil -> "n"
+    Ir.Imm.Bool(flag) -> "b#{flag}"
+    Ir.Imm.Int(number) -> "i#{number}"
+    Ir.Imm.Float(number) -> "f#{Float.to_bits(number)}"
+    Ir.Imm.Text(text) -> "s#{text}"
+    Ir.Imm.Bytes(text) -> "y#{text}"
+  end
+end
+
 private
 
 # The operands an instruction is written with, and the tables after naming what it needs. The instruction is written
@@ -303,20 +317,6 @@ def label_pcs(body: List[Ir.Instr]) -> Map[Int, Int]
   end
 
   labels
-end
-
-# The text that stands for a constant in the table: two constants are one entry when this is the same. The tag keeps
-# an Int, a Float (by its bits, so 0.0 and -0.0 differ), a Bool, a String and a Bytes apart.
-def constant_key(imm: Ir.Imm) -> String
-  case imm
-    Ir.Imm.Void -> "v"
-    Ir.Imm.Nil -> "n"
-    Ir.Imm.Bool(flag) -> "b#{flag}"
-    Ir.Imm.Int(number) -> "i#{number}"
-    Ir.Imm.Float(number) -> "f#{Float.to_bits(number)}"
-    Ir.Imm.Text(text) -> "s#{text}"
-    Ir.Imm.Bytes(text) -> "y#{text}"
-  end
 end
 
 # A constant in the file: a tag (0 void, 1 nil, 2 false, 3 true, 4 Int, 5 Float, 6 String, 7 Bytes) and its value. A

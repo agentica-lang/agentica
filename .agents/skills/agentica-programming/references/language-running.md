@@ -14,6 +14,12 @@ the list of commands and flags.
   once, not once per importer. A folder skips hidden folders,
   `agc_libs/`, `_build/`, the `deps/` of a project and symbolic links to files,
   as `symbol` does; `build/` is not skipped.
+- `agentica repl` runs each entry (a line, or more while one is open) over a
+  session: names, declarations and tasks live on, a redefined `def` is what
+  earlier callers call, and a name changes type only through `x: T = ...`.
+  `--json` prints one object per entry (`ok`, `value`, `type`, `bound`,
+  `declared`, `dropped`, `diagnostic`); `:type EXPR`, `:load FILE`, `:reset`,
+  `:quit`. Exit 1 when the input ends inside an entry (`REPL-INCOMPLETE`).
 - `agentica fmt` formats in place; a file that does not parse is left as it is
   (exit 1). `[style]` of the nearest `agentica.toml` sets the width (default
   119) and `blank_line_after_end`. `agentica lint` suggests style changes

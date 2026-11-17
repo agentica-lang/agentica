@@ -35,8 +35,12 @@ enum Lowered
 end
 
 ## Lowers a linked program that the checker accepted.
-def lower(linked: Linker.Linked, checked: Checker.Checked) -> Lowered
-  result = run(linked, checked)
+def lower(linked: Linker.Linked, checked: Checker.Checked) -> Lowered = lower_from(linked, checked, ["main"])
+
+## Lowers as `lower` does, with the constants that the functions `roots` reach built in place of those of `main`, which
+## the program need not have: an entry of `agentica repl` (compiler/repl/).
+def lower_from(linked: Linker.Linked, checked: Checker.Checked, roots: List[String]) -> Lowered
+  result = run(linked, checked, roots)
   return Lowered.Done(result.unwrap!) if result.ok?
 
   Lowered.Failed(Failure.unpack(result.message))
@@ -79,7 +83,7 @@ struct Scanned
   covered: Set[Int]
 end
 
-def run(linked: Linker.Linked, checked: Checker.Checked) -> Result[Ir.Program]
+def run(linked: Linker.Linked, checked: Checker.Checked, roots: List[String]) -> Result[Ir.Program]
   functions: List[Located] = []
   constants: List[LocatedConst] = []
   structs: List[LocatedStruct] = []
@@ -130,7 +134,7 @@ def run(linked: Linker.Linked, checked: Checker.Checked) -> Result[Ir.Program]
   end
 
   tables = Program.build(decls, used, scanned.type_names, json_targets(checked.types, scanned.type_ids))
-  plan = Const.plan(function_decls, scanned.function_scans, constant_decls, scanned.constant_scans, order)
+  plan = Const.plan(function_decls, scanned.function_scans, constant_decls, scanned.constant_scans, order, roots)
   start = plan.slots.size > 0
   files_of = constant_files(constants)
   files = source_order(linked, functions, plan.kept, files_of, structs)
@@ -146,7 +150,7 @@ def run(linked: Linker.Linked, checked: Checker.Checked) -> Result[Ir.Program]
     at += 1
   end
 
-  main_index = by_name["main"]
+  main_index = by_name.get("main", 0)
   struct_decls: Map[String, Ast.StructDecl] = {}
   for entry in structs
     struct_decls = struct_decls.put(entry.decl.name, entry.decl)
@@ -266,9 +270,20 @@ def run(linked: Linker.Linked, checked: Checker.Checked) -> Result[Ir.Program]
       functions: pin_prelude_spans(built, kept_sources),
       entry: entry,
       globals: plan.slots.size,
+      global_names: slot_names(plan),
       span: linked.root.span,
     ),
   )
+end
+
+# The linked name of the constant of each slot, in slot order.
+def slot_names(plan: Const.Plan) -> List[String]
+  names = List.repeat("", plan.slots.size)
+  for name in plan.slots.keys
+    names = names.set(plan.slots[name], name)
+  end
+
+  names
 end
 
 # The structs that JSON.decode may build, alone or as an instance, get the defaults of their fields.

@@ -128,19 +128,29 @@ static void grow_slots(agc_session *s, uint32_t count) {
   s->slot_count = count;
 }
 
-/* The answer of an entry that returned: its result is a List of the shown value (a String, Void for none, or any
-   value, shown with inspect) and the values of the written slots, in order. */
+/* Item k of what an entry returned: of a List, or the field k of a struct, whose fields may have any types. */
+static agc_value item(agc_vm *vm, agc_value result, uint32_t k) {
+  if (agc_is(result, AGC_T_LIST)) return agc_list_get(agc_as_list(vm, result), k);
+  return agc_as_struct(vm, result)->fields[k];
+}
+
+/* The answer of an entry that returned: its result is a List or a struct of the shown value (a String, Void for none,
+   or any value, shown with inspect) and the values of the written slots, in order. */
 static agc_string *returned(agc_vm *vm, agc_session *s, agc_value result) {
-  if (!agc_is(result, AGC_T_LIST)) return invalid(vm, s, "the entry did not return a list");
-  const agc_list *list = agc_as_list(vm, result);
-  if (agc_list_len(list) != (size_t)s->write_count + 1)
-    return invalid(vm, s, "the entry returned a list of another size");
+  size_t size;
+  if (agc_is(result, AGC_T_LIST))
+    size = agc_list_len(agc_as_list(vm, result));
+  else if (agc_is(result, AGC_T_STRUCT))
+    size = agc_as_struct(vm, result)->n;
+  else
+    return invalid(vm, s, "the entry did not return a list or a struct");
+  if (size != (size_t)s->write_count + 1) return invalid(vm, s, "the entry returned a value of another size");
   uint32_t top = 0;
   for (uint32_t k = 0; k < s->write_count; k++)
     if (s->writes[k] + 1 > top) top = s->writes[k] + 1;
   grow_slots(s, top);
-  for (uint32_t k = 0; k < s->write_count; k++) s->slots[s->writes[k]] = agc_list_get(list, k + 1);
-  agc_value shown = agc_list_get(list, 0);
+  for (uint32_t k = 0; k < s->write_count; k++) s->slots[s->writes[k]] = item(vm, result, k + 1);
+  agc_value shown = item(vm, result, 0);
   agc_json_member *m = members(3);
   size_t n = 0;
   if (s->loaded) m[n++] = yes("loaded");

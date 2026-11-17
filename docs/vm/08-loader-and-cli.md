@@ -159,13 +159,13 @@ parser is `agc_launch_parse` (`vm/launch.c`).
     with 0. A bad chunk is the answer of the next entry.
   - `entry FN READS WRITES` loads the chunks (a session load, §8), runs the new
     init function, if any, and then function `FN` as tasks, with the session
-    slots `READS` as arguments. FN returns a List: the value to show (a String,
-    Void for none, or any value, shown inspected) and the values of the slots
-    `WRITES`.
+    slots `READS` as arguments. FN returns a List or a struct (whose fields may
+    have any types): the value to show (a String, Void for none, or any value,
+    shown inspected) and the values of the slots `WRITES`.
   - Each entry gets one JSON line: `ok: true` with `value`, `ok: false` with the
     `diagnostic` of a crash and its `text` in the run's style, `ok: false` with
-    `invalid` when FN ran but gave back no List of the right size (its slots are
-    not written), or `ok: false` with `refused`, which changed nothing.
+    `invalid` when FN ran but gave back no List or struct of the right size
+    (its slots are not written), or `ok: false` with `refused`, which changed nothing.
   - `loaded: true` says the entry loaded its program, which stays loaded
     whatever the rest of the answer says: the front end keeps its declarations.
     When the init function crashes, the entry does not run, and the new slots

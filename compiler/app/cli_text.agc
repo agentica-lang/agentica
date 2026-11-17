@@ -76,6 +76,8 @@ SUMMARY = [
   "                                          is every .agc file under it (default PATH: the current folder, without",
   "                                          deps/ and hidden folders), and several files end with a count",
   "  agentica check --stdin FILE.agc         check the text on standard input as if FILE.agc held it",
+  "  agentica repl [--json | --ai]           run entries one at a time; their names, declarations and tasks live",
+  "                                          on; :type, :load, :reset, :quit, :help",
   "  agentica fmt [PATH...]                  format the .agc files in place (default PATH: the current folder);",
   "                                          --check lists the files it would change and exits 1 if any;",
   "                                          - formats standard input to standard output; [style] of agentica.toml",

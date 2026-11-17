@@ -22,6 +22,26 @@ end
 agentica greet.agc Ana Bob    # prints one greeting per name
 ```
 
+## REPL
+
+`agentica repl` reads entries from standard input and runs each one over a session: the names an entry binds, the functions, structs and constants it declares and the tasks it starts live on for the next entries. An entry that ends with an expression prints its value and type:
+
+```sh
+$ agentica repl
+agc> xs = [1, 2, 3]
+agc> def total(items: List[Int]) -> Int = items.sum()
+agc> total(xs) * 10
+=> 60 : Int
+```
+
+- An entry is one line, or more while the lines so far leave it open (`def` without its `end`, an open bracket); an empty line drops a half entry. Lines count over the session, so a message says `(repl):12:5`.
+- A declaration made again replaces the old one: a function that called the old `f` calls the new one. A struct or enum declared again drops the names whose values have its old shape, and the answer lists them.
+- A name keeps its type: `x = "s"` after `x = 1` is `CHECK-TYPE-MISMATCH`. `x: String = "s"` gives it a new type.
+- A problem leaves the session as it was. A crash shows its diagnostic, and the tasks the entry started before it keep running. `System.exit(n)` ends the session with status `n`.
+- Commands, at the start of an entry: `:type EXPR` prints the type and runs nothing, `:load FILE` enters the text of a file, `:reset` starts a new session, `:quit` ends it (as the end of the input does), `:help` lists them. A bad one is `REPL-UNKNOWN-COMMAND` or `REPL-USAGE`.
+- `--json` prints one object per entry on stdout: `entry`, `line`, `ok`, `value` and `type` when it shows one, `bound` (the names it bound, with their types), `declared`, `dropped`, and `diagnostic` when it failed. What the entries print goes to stderr. `:type` answers `{"ok":true,"type":"..."}`.
+- The entries run in a child process, `agentica run --session -`, always on one scheduler and without the JIT, the profile or coverage; the run options (`--max-steps`, `--seed`, `--deny-*`) reach it. Exit status: 0 at the end of the input or after `:quit`, 1 when the input ends inside an entry (`REPL-INCOMPLETE`).
+
 ## Check and errors
 
 `agentica check hello.agc` checks types without running and prints `check ok`. `agentica check src tests/util.agc` checks several files and folders at once (see below). Every run checks first, so a type error stops it before any output. `check` accepts a file without `main`; a run or `compile` needs `def main() -> Void`. The checker stops at the first error:
@@ -188,6 +208,7 @@ Three variables have no flag. `AGENTICA_GC_HEAP` (default `32M`: bytes, or a num
 
 | Command | Does |
 |---|---|
+| `repl` | runs entries one at a time over a session; see [REPL](#repl) |
 | `check [PATH...]` | checks every `.agc` file of the files and folders named, or of the current folder with no PATH; see [Check and errors](#check-and-errors) |
 | `check --stdin FILE` | checks the text on standard input as if `FILE` held it, for an editor buffer that is not saved. `FILE` need not exist, but its folder is where imports, `agentica.toml` and `agc_libs/` are found; other files come from the disk. With `--json`, the diagnostic names `FILE` |
 | `lint [PATH...]` | suggests style changes; see [Suggest style changes](#suggest-style-changes) |

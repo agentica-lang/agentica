@@ -99,7 +99,8 @@ struct SourceFile
   text: String
 end
 
-## The lowered program. globals is the number of slots of the module constants. entry is the index in functions of the
+## The lowered program. globals is the number of slots of the module constants, and global_names the linked name of
+## the constant of each slot. entry is the index in functions of the
 ## function the VM starts: `main`, or `<start>` when globals is above zero. The span is the root file's. written maps
 ## the linker prefix of a std/ module ("@3::") to the alias the program imports it with ("HTTP"), so the bytecode names
 ## its records and enums as written (HTTP.Download).
@@ -113,6 +114,7 @@ struct Program
   entry: Int
   globals: Int
   span: Source.Span
+  global_names: List[String] = []
 end
 
 ## True when the source file at index file is a file of the prelude: the functions lowered from it are the prelude
