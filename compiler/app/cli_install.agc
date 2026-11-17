@@ -7,14 +7,15 @@
 ## against the lock, as a build checks it, and only then are the files written to deps/ (io/package_deps.agc), so a
 ## cache or a manifest that fails those checks writes nothing there. A folder of deps/ that the lock does not name is
 ## left as it is. A package the lock marks as a member of the workspace of the project is neither fetched nor written
-## to deps/: the build reads it from the member's folder, and its manifest is checked there. Last, the native modules
-## of the project and of the packages it reads in place (members and `path` dependencies) are built from their C
-## sources (`[native.NAME] build`, io/native_build.agc), so the first run finds them built. A fetched package is only
-## fetched and checked: its module builds when a file first uses it, so a project that never uses it needs no C
-## compiler.
+## to deps/: the build reads it from the member's folder, and its manifest is checked there. Then the prebuilt native
+## modules of the host target are downloaded (io/native_prebuilt.agc). Last, the native modules of the project and of
+## the packages it reads in place (members and `path` dependencies) are built from their C sources (`[native.NAME]
+## build`, io/native_build.agc), so the first run finds them built. A fetched package is only fetched and checked: its
+## module builds when a file first uses it, so a project that never uses it needs no C compiler.
 
 import NativeArtifact from "../packages/native_artifact"
 import Engine from "../io/native_artifact"
+import Prebuilt from "../io/native_prebuilt"
 import PackageDeps from "../io/package_deps"
 import PackageFetch from "../io/package_fetch"
 import Paths from "../modules/import_path"
@@ -30,9 +31,9 @@ import CliProject from "cli_project"
 import Reply from "cli_reply"
 
 ## Runs `install` in the working folder. `style` is the output style of the options: with `json` a success prints
-## `{"ok":true}`, as `check` does.
-def run(settings: Env.Settings, style: String) -> Reply.Answer
-  CliProject.run(style, settings.workspace) do |dir: String| install(settings, dir) end
+## `{"ok":true}`, as `check` does. `fetching` says how the prebuilt native modules are downloaded.
+def run(settings: Env.Settings, style: String, fetching: Prebuilt.Fetching) -> Reply.Answer
+  CliProject.run(style, settings.workspace) do |dir: String| install(settings, dir, fetching) end
 end
 
 ## Fills the cache with every package of the lock, in the order of the file, then every downloaded native artifact
@@ -99,6 +100,15 @@ def overridden_lines(packages: List[Lock.Locked], asked: Map[String, List[String
   lines
 end
 
+## The answer with the lines of the prebuilt native modules after it, in place of `nothing to install`.
+def with_lines(answer: String, more: List[String]) -> String
+  return answer if more.size == 0
+
+  return "#{more.join("\n")}\n" if answer == "nothing to install\n"
+
+  "#{answer}#{more.join("\n")}\n"
+end
+
 private
 
 # The deadline of one downloaded artifact during install (the engine caps hops and bytes).
@@ -144,7 +154,7 @@ def artifact_key(lock: Lock.Lock, artifact: Lock.Artifact) -> String
 end
 
 # The lines of the answer, or a packed failure.
-def install(settings: Env.Settings, dir: String) -> Result[String]
+def install(settings: Env.Settings, dir: String, fetching: Prebuilt.Fetching) -> Result[String]
   workspace = settings.workspace
   project = try Project.find(workspace, dir, settings.version)
   case project
@@ -154,8 +164,9 @@ def install(settings: Env.Settings, dir: String) -> Result[String]
       scope = PackageImport.scope_of(project).with(agentica: settings.version)
       try check_cache(settings, found.lock, scope)
       try PackageDeps.sync(settings, found.lock.file, scope.deps, found.lock.packages, [])
+      prebuilt = try Prebuilt.fetch_all(settings, found.manifest, found.members, found.lock.packages, fetching)
       try build_natives(settings, found, scope)
-      ok(lines)
+      ok(with_lines(lines, prebuilt))
   end
 end
 
