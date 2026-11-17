@@ -284,9 +284,11 @@ block can still fill it. Any other parameter without a default after one with a
 default is `CHECK-DEFAULT-ORDER`, located at that parameter.
 
 A default is a constant: an `Int`, `Float` or `String` literal (a minus sign is
-allowed before a number, and a string has no `#{...}`), `true`, `false`, `nil`,
-`none`, `[]`, `{}`, or a nullary enum variant (`Level.Info`, `TaskExit.Ok` for
-a builtin enum, or `Models.Level.Info` through an import alias). A parameter
+allowed before a number, and a string has no `#{...}`), the bytes of such a
+string (`body: Bytes = "".bytes`, also written `.bytes()`), `true`, `false`,
+`nil`, `none`, `[]`, `{}`, or a nullary enum variant (`Level.Info`,
+`TaskExit.Ok` for a builtin enum, or `Models.Level.Info` through an import
+alias). A parameter
 may also default to a struct built with no arguments, `options: Options =
 Options()`: each field takes its own default, and a field without one is
 `CHECK-MISSING-FIELD` at the default. A default may also name a module

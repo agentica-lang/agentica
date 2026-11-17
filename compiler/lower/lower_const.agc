@@ -189,6 +189,10 @@ def respanned(value: Ast.Expr, span: Source.Span) -> Ast.Expr
     Ast.Expr.EnumConstructor(node) -> Ast.Expr.EnumConstructor(node.with(span: span))
     Ast.Expr.Call(node) -> Ast.Expr.Call(node.with(span: span))
     Ast.Expr.Construct(node) -> Ast.Expr.Construct(node.with(span: span))
+    Ast.Expr.FieldAccess(node) ->
+      Ast.Expr.FieldAccess(node.with(span: span, name_span: span, target: respanned(node.target, span)))
+    Ast.Expr.MethodCall(node) ->
+      Ast.Expr.MethodCall(node.with(span: span, name_span: span, target: respanned(node.target, span)))
     _ -> value
   end
 end
