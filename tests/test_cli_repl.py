@@ -3,6 +3,11 @@ entries, redefinition, the problems that leave the session as it was, the comman
 read the `--json` answers (one object per entry or command) and assert values, types, codes and lines, never message
 text; one case reads the plain form."""
 import json
+import statistics
+import subprocess
+import time
+
+import pytest
 
 from tests.agentica_test import cli, run
 
@@ -187,11 +192,26 @@ def test_load_takes_an_import_the_session_has_by_its_file(tmp_path):
 
 
 def test_a_session_whose_child_ends_answers_the_entry(tmp_path):
-    got = run([*cli(), "--max-steps", "100000", "repl", "--json"], stdin="x = 1\nwhile true\nend\nx\n", cwd=tmp_path)
+    entries = "x = 1\nwhile true\nend\nx\n"
+    got = run([*cli(), "--max-steps", "100000", "repl", "--json"], stdin=entries, cwd=tmp_path)
     found = answers(got)
     assert got.code == 1
     assert (code(found[1]), found[1]["entry"], found[1]["line"]) == ("REPL-SESSION-LOST", 2, 2)
+    assert (found[1]["cause"]["code"], found[1]["cause"]["range"]["start"]["line"]) == ("RUNTIME-STEP-LIMIT", 2)
     assert len(found) == 2
+    plain = run([*cli(), "--max-steps", "100000", "repl"], stdin=entries, cwd=tmp_path)
+    assert plain.code == 1
+    assert "error[RUNTIME-STEP-LIMIT]" in plain.stderr and "error[REPL-SESSION-LOST]" in plain.stderr
+    for text in (got.stdout + got.stderr, plain.stdout + plain.stderr):
+        assert "repl_entry" not in text and "serve" not in text
+
+
+def test_an_entry_takes_the_names_it_names(tmp_path):
+    got = repl(tmp_path, "n = 1", 's = "a"', "if true\n  n += 1\nend", '"#{s}-#{n}"', "f = ->(k: Int) { k + n }",
+               "[1].map(f).first", "def g() -> Int = 3", "n")
+    found = answers(got)
+    assert [answer["ok"] for answer in found] == [True] * 8
+    assert (found[3]["value"], found[5]["value"], found[7]["value"]) == ('"a-2"', "3", "2")
 
 
 def test_names_the_session_writes_are_refused(tmp_path):
@@ -350,7 +370,11 @@ def test_a_session_gives_the_values_that_one_file_gives(tmp_path):
 
 
 def test_the_exit_status(tmp_path):
-    assert repl(tmp_path, "System.exit(3)").code == 3
+    got = repl(tmp_path, "x = 1", "System.exit(3)", "x")
+    assert got.code == 3
+    assert answers(got)[1:] == [{"entry": 2, "exited": 3, "line": 2, "ok": True}]
+    quiet = repl(tmp_path, "System.exit(0)", "1", json_style=False)
+    assert (quiet.code, quiet.stdout, quiet.stderr) == (0, "", "")
     got = repl(tmp_path, "def f() -> Int")
     assert (got.code, code(answers(got)[0])) == (1, "REPL-INCOMPLETE")
 
@@ -359,3 +383,23 @@ def test_the_plain_form(tmp_path):
     got = repl(tmp_path, "x = 2", "x * 21", 'puts("hi")', "x.nope", json_style=False)
     assert got.stdout == "=> 42 : Int\nhi\n"
     assert "(repl):4:1 error[CHECK-UNKNOWN-METHOD]" in got.stderr
+
+
+@pytest.mark.slow
+def test_the_cost_of_an_entry_does_not_grow_with_the_session(tmp_path):
+    # Each entry binds a name: the medians of the first and of the last 50 answers stay close, where an entry that
+    # compiled and wrote the whole session again took 25 times longer at the end.
+    child = subprocess.Popen([*cli(), "repl", "--json"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True,
+                             cwd=tmp_path)
+    times = []
+    try:
+        for k in range(400):
+            begun = time.perf_counter()
+            child.stdin.write(f"x{k} = {k}\n")
+            child.stdin.flush()
+            assert json.loads(child.stdout.readline())["ok"]
+            times.append(time.perf_counter() - begun)
+    finally:
+        child.stdin.close()
+        child.wait(timeout=60)
+    assert statistics.median(times[-50:]) < 4 * statistics.median(times[:50])

@@ -688,6 +688,25 @@ bool agc_parent_send(agc_vm *vm, const agc_string *text) {
   agc_fail(vm, "RUNTIME-INTERNAL", "cannot write to the parent channel", 0);
 }
 
+static bool sent_out(agc_vm *vm, void *arg) {
+  (void)vm;
+  return !sending(arg);
+}
+
+/* The last line of a run, written after the run ended, on the one thread left and with no task to park. What the
+   pipe does not take at once (a Windows pipe takes no try-write) is queued, and the loop runs until it is out or BY
+   (agc_clock_ms). False when it is not sent, as when a write is still in flight or the channel is closed. */
+bool agc_parent_send_last(agc_vm *vm, const char *text, size_t len, uint64_t by) {
+  agc_duplex *d = vm->rt->parent ? vm->rt->parent->native : NULL;
+  if (!d || !d->attached || d->closed || d->write_closed || !d->wr_live || sending(d)) return false;
+  d->write_status = 0;
+  int rc = agc_stream_write((uv_stream_t *)&d->wr_pipe, &d->write_req, &d->write_data, (const uint8_t *)text, len,
+                            wrote);
+  if (rc <= 0) return rc == 0;
+  (void)agc_io_wait_for(vm, sent_out, d, by);
+  return !sending(d) && d->write_status >= 0;
+}
+
 static agc_value builtin_parent_read_line(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   int64_t timeout = agc_as_int(vm, args[0]);
@@ -733,5 +752,13 @@ agc_input_status agc_parent_line(agc_vm *vm, agc_string **line) {
 bool agc_parent_send(agc_vm *vm, const agc_string *text) {
   (void)text;
   agc_fail(vm, "RUNTIME-INTERNAL", "cannot write to the parent channel", 0);
+}
+
+bool agc_parent_send_last(agc_vm *vm, const char *text, size_t len, uint64_t by) {
+  (void)vm;
+  (void)text;
+  (void)len;
+  (void)by;
+  return false;
 }
 #endif

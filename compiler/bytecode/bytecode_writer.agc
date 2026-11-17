@@ -39,18 +39,31 @@ def write(program: Ir.Program, version: String) -> Written = write_over(program,
 
 ## The tables of a program that has none yet.
 def no_tables() -> Function.Tables
+  empty = Wire.no_prefix()
   Function.Tables(
     constants: Pool.empty(),
     updates: Pool.empty(),
     builtins: Pool.empty(),
     spans: Pool.empty(),
     types: Pool.empty(),
+    written: Function.Written(
+      functions: empty,
+      structs: empty,
+      enums: empty,
+      decodable: empty,
+      decodable_enums: empty,
+      instances: empty,
+      defaults: empty,
+      struct_index: {},
+      enum_index: {},
+    ),
   )
 end
 
 ## Writes the program as `write` does, with the constant, struct update, builtin, span and type tables starting from
 ## `seed`, the tables of an earlier program whose functions and types this one starts with: each entry of those tables
-## keeps its number, as the session of `agentica repl` needs (compiler/repl/).
+## keeps its number, as the session of `agentica repl` needs (compiler/repl/). The functions, structs, enums and
+## instances of that program keep the records they were written with, so only the new ones are written.
 def write_over(program: Ir.Program, version: String, seed: Function.Tables) -> Over
   if version == ""
     return Over(
@@ -73,33 +86,36 @@ struct Built
   tables: Function.Tables
 end
 
-# A program whose Type constants are the Ints of their entries in the type table, and that table.
+# The functions of a program after the first `from`, with their Type constants as the Ints of their entries in the
+# type table, and that table.
 struct Typed
-  program: Ir.Program
+  functions: List[Ir.Function]
   types: Pool.Pool
 end
 
-# The Field defaults section and the constant table with its constants.
+# The records of the Field defaults section and the constant table with their constants.
 struct Defaults
-  chunks: Wire.Chunks
-  count: Int
+  records: Wire.Prefix
   constants: Pool.Pool
 end
 
 # A struct or an enum of a field type is found by its name, or by `#N` for the entry at N, which a session of
 # `agentica repl` writes where a name may stand for several entries (compiler/repl/repl_image.agc).
-# Each Type constant (Ir.Imm.Type) as the Int of the entry of its type in the type table.
+# Each Type constant (Ir.Imm.Type) as the Int of the entry of its type in the type table, in the functions after the
+# first `from`.
 def typed_constants(
   program: Ir.Program,
   struct_index: Map[String, Int],
   enum_index: Map[String, Int],
   types: Pool.Pool,
+  from: Int,
 ) -> Result[Typed]
-  return ok(Typed(program: program, types: types)) if !program.functions.any?(&typed?)
+  fresh = program.functions.drop(from)
+  return ok(Typed(functions: fresh, types: types)) if !fresh.any?(&typed?)
 
   pool = types
   functions: List[Ir.Function] = []
-  for function in program.functions
+  for function in fresh
     body: List[Ir.Instr] = []
     for instr in function.body
       out = instr
@@ -119,7 +135,7 @@ def typed_constants(
 
   return error(Failure.limit(program, 0, "JSON field types", program.span)) if pool.count > MAX_U16
 
-  ok(Typed(program: program.with(functions: functions), types: pool))
+  ok(Typed(functions: functions, types: pool))
 end
 
 def typed?(function: Ir.Function) -> Bool
@@ -132,53 +148,71 @@ def typed?(function: Ir.Function) -> Bool
 end
 
 def build(program: Ir.Program, version: String, seed: Function.Tables) -> Result[Built]
-  try check_limits(program)
-  struct_index: Map[String, Int] = {}
-  at = 0
-  for entry in program.structs
+  held = seed.written
+  try check_limits(program, held.structs.count)
+  struct_index = held.struct_index
+  at = held.structs.count
+  for entry in program.structs.drop(at)
     struct_index = struct_index.put(entry.name, at).put("##{at}", at)
     at += 1
   end
 
-  enum_index: Map[String, Int] = {}
-  at = 0
-  for entry in program.enums
+  enum_index = held.enum_index
+  at = held.enums.count
+  for entry in program.enums.drop(at)
     enum_index = enum_index.put(entry.name, at).put("##{at}", at)
     at += 1
   end
 
-  built = try JsonTypes.build(program, struct_index, enum_index, seed.types)
-  typed = try typed_constants(program, struct_index, enum_index, built.types)
+  sections = JsonTypes.Section(
+    types: seed.types,
+    decodable: held.decodable,
+    enums: held.decodable_enums,
+    instances: held.instances,
+  )
+
+  built = try JsonTypes.build(program, struct_index, enum_index, seed.types, sections)
+  typed = try typed_constants(program, struct_index, enum_index, built.types, held.functions.count)
   json = built.with(types: typed.types)
   # The span of the program is the first run of the span table.
   tables = seed.with(spans: Spans.intern_one(seed.spans, 0, program.span).pool, types: json.types)
-  functions = Wire.start()
-  for function in typed.program.functions
+  functions = held.functions.chunks
+  for function in typed.functions
     encoded = try Function.encode(program, tables, function)
     tables = encoded.tables
     functions = Wire.add_all(functions, encoded.parts)
   end
 
-  found = field_defaults(program, tables.constants)
-  tables = tables.with(constants: found.constants)
+  found = field_defaults(program, tables.constants, held.defaults)
+  written = Function.Written(
+    functions: Wire.Prefix(count: program.functions.size, records: program.functions.size, chunks: functions),
+    structs: struct_records(program, held.structs),
+    enums: enum_records(program, held.enums),
+    decodable: json.decodable,
+    decodable_enums: json.enums,
+    instances: json.instances,
+    defaults: found.records,
+    struct_index: struct_index,
+    enum_index: enum_index,
+  )
+
+  tables = tables.with(constants: found.constants, written: written)
   out = (
     header(version)
     |> sources(program)
     |> pool_section(tables.spans)
     |> pool_section(tables.constants)
-    |> structs(program)
+    |> records(written.structs)
     |> pool_section(json.types)
-    |> Wire.add(Wire.u32(json.decodable_count))
-    |> Wire.add_all(json.decodable)
-    |> enums(program)
+    |> records(json.decodable)
+    |> records(written.enums)
     |> pool_section(tables.updates)
     |> Wire.add(Wire.u32(program.globals))
     |> pool_section(tables.builtins)
-    |> Wire.add(Wire.u32(program.functions.size))
-    |> Wire.add_all(functions)
+    |> records(written.functions)
     |> Wire.add(Wire.u32(program.entry))
-    |> decodable_enums(json, found.count > 0)
-    |> Wire.add_all(found.chunks)
+    |> decodable_enums(json, found.records.records > 0)
+    |> field_default_section(found.records)
   )
 
   joined = Wire.join(out)
@@ -191,23 +225,35 @@ end
 # written only when there is one to decode or a later section follows, so a program without one has the bytes it
 # always had; a section is empty (a count of 0) only before the next one.
 def decodable_enums(out: Wire.Chunks, json: JsonTypes.Section, more: Bool) -> Wire.Chunks
-  return out if json.enums_count == 0 and json.instances_count == 0 and !more
+  return out if json.enums.records == 0 and json.instances.records == 0 and !more
 
-  enums = Wire.add_all(Wire.add(out, Wire.u32(json.enums_count)), json.enums)
-  return enums if json.instances_count == 0 and !more
+  enums = records(out, json.enums)
+  return enums if json.instances.records == 0 and !more
 
-  Wire.add_all(Wire.add(enums, Wire.u32(json.instances_count)), json.instances)
+  records(enums, json.instances)
+end
+
+# A section of records: their count, then the records.
+def records(out: Wire.Chunks, prefix: Wire.Prefix) -> Wire.Chunks
+  Wire.add_all(Wire.add(out, Wire.u32(prefix.records)), prefix.chunks)
+end
+
+# The Field defaults section, written only when it has a record.
+def field_default_section(out: Wire.Chunks, prefix: Wire.Prefix) -> Wire.Chunks
+  return out if prefix.records == 0
+
+  records(out, prefix)
 end
 
 # The Field defaults section, last in the file: a count, then for each field with a default, in struct and field
 # order, the struct, the field, a kind (1 constant, 2 empty List, 3 empty Map, 4 variant) and its number (the constant
 # or the variant; 0 otherwise). The constants join the table.
-def field_defaults(program: Ir.Program, constants: Pool.Pool) -> Defaults
-  entries = Wire.start()
-  count = 0
+def field_defaults(program: Ir.Program, constants: Pool.Pool, held: Wire.Prefix) -> Defaults
+  entries = held.chunks
+  count = held.records
   pool = constants
-  index = 0
-  for entry in program.structs
+  index = held.count
+  for entry in program.structs.drop(held.count)
     field = 0
     for default in entry.defaults
       kind = 0
@@ -238,17 +284,12 @@ def field_defaults(program: Ir.Program, constants: Pool.Pool) -> Defaults
     index += 1
   end
 
-  chunks = Wire.start()
-  if count > 0
-    chunks = Wire.add_all(Wire.add(chunks, Wire.u32(count)), entries)
-  end
-
-  Defaults(chunks: chunks, count: count, constants: pool)
+  Defaults(records: Wire.Prefix(count: program.structs.size, records: count, chunks: entries), constants: pool)
 end
 
 # The first limits of the format, in this order. The limits of the types, the registers and the updates are met
-# while those are written.
-def check_limits(program: Ir.Program) -> Result[Void]
+# while those are written. The first `held` structs were checked when they were written.
+def check_limits(program: Ir.Program, held: Int) -> Result[Void]
   span = program.span
   return error(Failure.limit(program, 0, "structs", span)) if program.structs.size > MAX_U16
 
@@ -259,7 +300,7 @@ def check_limits(program: Ir.Program) -> Result[Void]
 
   return error(Failure.limit(program, 0, "enum variants", span)) if variants > MAX_U16
 
-  for entry in program.structs
+  for entry in program.structs.drop(held)
     return error(Failure.limit(program, 0, "fields in one struct", span)) if entry.fields.size > MAX_U16
   end
 
@@ -306,10 +347,10 @@ def written_name(program: Ir.Program, name: String) -> String
   "#{alias}.#{bare}"
 end
 
-# The structs: the name as the user wrote it, and the fields.
-def structs(out: Wire.Chunks, program: Ir.Program) -> Wire.Chunks
-  chunks = Wire.add(out, Wire.u32(program.structs.size))
-  for entry in program.structs
+# The records of the structs, after those of `held`: the name as the user wrote it, and the fields.
+def struct_records(program: Ir.Program, held: Wire.Prefix) -> Wire.Prefix
+  chunks = held.chunks
+  for entry in program.structs.drop(held.count)
     chunks = Wire.add_text(chunks, written_name(program, entry.name))
     chunks = Wire.add(chunks, Wire.u32(entry.fields.size))
     for field in entry.fields
@@ -317,13 +358,14 @@ def structs(out: Wire.Chunks, program: Ir.Program) -> Wire.Chunks
     end
   end
 
-  chunks
+  Wire.Prefix(count: program.structs.size, records: program.structs.size, chunks: chunks)
 end
 
-# The enums: the name as the user wrote it, and the variants with their payload sizes.
-def enums(out: Wire.Chunks, program: Ir.Program) -> Wire.Chunks
-  chunks = Wire.add(out, Wire.u32(program.enums.size))
-  for entry in program.enums
+# The records of the enums, after those of `held`: the name as the user wrote it, and the variants with their payload
+# sizes.
+def enum_records(program: Ir.Program, held: Wire.Prefix) -> Wire.Prefix
+  chunks = held.chunks
+  for entry in program.enums.drop(held.count)
     chunks = Wire.add_text(chunks, written_name(program, entry.name))
     chunks = Wire.add(chunks, Wire.u32(entry.variants.size))
     for variant in entry.variants
@@ -332,5 +374,5 @@ def enums(out: Wire.Chunks, program: Ir.Program) -> Wire.Chunks
     end
   end
 
-  chunks
+  Wire.Prefix(count: program.enums.size, records: program.enums.size, chunks: chunks)
 end
