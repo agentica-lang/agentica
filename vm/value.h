@@ -39,6 +39,10 @@ _Static_assert(AGC_SCALAR_TEXT >= 44, "range text needs 44 bytes");
 #define AGC_TURN_STEPS 2000
 #define AGC_COST_BYTES 64
 
+/* The payload of a Void Globals slot that a crashed init function of a session did not set (vm/session.c): a read of
+   it fails that task with RUNTIME-NO-VALUE (vm/task.c), not with the fatal RUNTIME-INTERNAL of a slot never set. */
+#define AGC_GLOBAL_FAILED 1
+
 typedef enum {
   AGC_T_VOID = 0, AGC_T_NIL, AGC_T_BOOL, AGC_T_INT, AGC_T_FLOAT, AGC_T_STRING, AGC_T_LIST, AGC_T_MAP, AGC_T_STRUCT, AGC_T_ENUM, AGC_T_RESULT, AGC_T_FN, AGC_T_RANGE, AGC_T_JSON, AGC_T_HANDLE, AGC_T_TASK, AGC_T_PROCESS, AGC_T_SOCKET, AGC_T_LISTENER, AGC_T_HTTP_CLIENT, AGC_T_TEST, AGC_T_HTTP_SERVER, AGC_T_CHANNEL, AGC_T_SET, AGC_T_LAZY, AGC_T_C_POINTER, AGC_T_C_RESOURCE, AGC_T_ATS, AGC_T_BYTES, AGC_T_TLS_CONTEXT, AGC_T_MUTEX, AGC_T_ADDRESS, AGC_T_BUILDER
 } agc_tag;
@@ -575,6 +579,9 @@ typedef struct {
   /* The defaults that JSON.decode gives a missing key: for each struct, NULL, or one entry for each field (the Field
      defaults section, last in the file). At the end, so the fields the interpreter reads keep their offsets. */
   agc_field_default **field_defaults;
+  /* A session load (agc_load_session) may repeat a JSON name: a type declared again keeps its old entry. JSON.decode
+     and JSON.schema then take their target only by its type index; a name is refused (vm/json.c). */
+  bool json_names_repeat;
 } agc_program;
 
 typedef struct {
