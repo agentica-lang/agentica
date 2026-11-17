@@ -215,6 +215,8 @@ agc_value agc_http_response_parsed(agc_vm *vm, agc_http_parsed *p, size_t len, b
   if (p->status == AGC_HTTP_ERROR)
     return agc_http_error_result(vm, agc_http_error_code(p->error), "http: ", agc_http_error_text(p->error));
   bool closes = agc_http_closes(head);
+  /* HTTP/1.0 connections are not persistent unless the response says Connection: keep-alive (RFC 9112 9.3). */
+  if (head->minor == 0 && !agc_http_keeps_alive(head)) closes = true;
   if (head->status >= 200 && (head_only || head->status == 204 || head->status == 304)) {
     bool announced =
         head->frame == AGC_HTTP_FRAME_CHUNKED || (head->frame == AGC_HTTP_FRAME_LENGTH && head->length > 0);
@@ -222,6 +224,11 @@ agc_value agc_http_response_parsed(agc_vm *vm, agc_http_parsed *p, size_t len, b
     head->frame = AGC_HTTP_FRAME_LENGTH;
     head->length = 0;
   }
+  /* RFC 9112 6.1: Transfer-Encoding in an HTTP/1.0 response is faulty framing. A response without a body (above) only
+     closes the connection. */
+  if (head->minor == 0 && head->frame == AGC_HTTP_FRAME_CHUNKED)
+    return agc_http_error_result(vm, agc_http_error_code(AGC_HTTP_ERR_TRANSFER), "http: ",
+                                 agc_http_error_text(AGC_HTTP_ERR_TRANSFER));
   if (head->frame == AGC_HTTP_FRAME_CLOSE) closes = true;
   if (head->frame == AGC_HTTP_FRAME_LENGTH && head->length > limit)
     return agc_http_error_result(vm, agc_http_error_code(AGC_HTTP_ERR_TOO_LARGE), "http: ",

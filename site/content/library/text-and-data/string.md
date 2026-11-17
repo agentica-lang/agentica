@@ -385,7 +385,7 @@ end
 String.from_bytes(data: Bytes) -> Result[String]
 ```
 
-Decodes UTF-8 bytes strictly: invalid, overlong, surrogate and incomplete sequences give an error Result, never replacement characters. It is the inverse of [`s.bytes`](#bytes). [`b.decode(encoding)`](/library/data-structures/bytes/#decode) reads the other encodings.
+Decodes UTF-8 bytes strictly: invalid, overlong, surrogate and incomplete sequences give an error Result, never replacement characters ([`b.scrub`](/library/data-structures/bytes/#scrub) replaces them). It is the inverse of [`s.bytes`](#bytes). [`b.decode(encoding)`](/library/data-structures/bytes/#decode) reads the other encodings.
 
 ```agentica
 def main() -> Void

@@ -240,6 +240,57 @@ def main() -> Void
 end
 """
 
+HTTP10_PROGRAM = """\
+def line(path: String, r: Result[HTTP.Response]) -> Void
+  case r
+    ok(response) -> puts("#{path} #{response.status} #{short(response.body)} #{String.length(decoded(response.body))}")
+    error(e) -> puts("#{path} #{e.message}")
+  end
+end
+
+def streamed(opened: Result[HTTP.Stream]) -> String
+  case opened
+    ok(stream) ->
+      all: List[Bytes] = []
+      while true
+        case stream.body.recv(5000)
+          ok(piece) -> all = all.push(piece)
+          error(_) -> break
+        end
+      end
+      outcome = "done ok"
+      case Task.await(stream.done)
+        error(message) -> outcome = "done error: #{message}"
+        ok(_) -> outcome = "done ok"
+      end
+      return "#{stream.status} #{decoded(Bytes.concat(all))} #{outcome}"
+    error(e) -> return e.message
+  end
+end
+
+def main() -> Void
+  raw = "http://127.0.0.1:#{System.args()[3]}"
+  pool = Result.unwrap!(HTTP.client(options(5000, 1, 1000, "")))
+  line("/http10-big", HTTP.get(pool, raw + "/http10-big"))
+  line("/http10-204", HTTP.get(pool, raw + "/http10-204"))
+  line("/http10-304", HTTP.get(pool, raw + "/http10-304"))
+  line("/http10-head", HTTP.request(pool, "HEAD", raw + "/http10-head", "".bytes))
+  line("/http10-head-get", HTTP.get(pool, raw + "/http10-head"))
+  line("/http10 HEAD", HTTP.request(pool, "HEAD", raw + "/http10", "".bytes))
+  puts("open #{streamed(HTTP.open("GET", raw + "/http10-close", "".bytes, [], options(5000, 1, 1000, "")))}")
+  for path in ["/http10", "/http10-open", "/http10-keep", "/http10-close", "/http10-keep-nolength", "/http10-chunked"]
+    line(path, HTTP.get(pool, raw + path))
+    line(path, HTTP.get(pool, raw + path))
+  end
+  conn = Result.unwrap!(HTTP.start(raw, options(5000, 1, 1000, "")))
+  case HTTP.send_request(conn, "GET", "/http10-keep", "".bytes)
+    ok(head) -> puts("start #{head.status} #{decoded(Result.unwrap!(HTTP.read_body(conn)))} #{HTTP.send_request(conn, "GET", "/http10-keep", "".bytes).ok?}")
+    error(e) -> puts("start #{e.message}")
+  end
+  HTTP.finish(conn)
+end
+"""
+
 CONNECTION_RAW_PROGRAM = """\
 def drain(conn: HTTP.Connection) -> String
   text = ""
@@ -1032,7 +1083,7 @@ def test_public_connection_against_hostile_raw_responses(tmp_path, adopt):
     check_lines(run_program(tmp_path, "connection-raw", CONNECTION_RAW_PROGRAM, ports), [
         "/truncated 200 error: http: truncated HTTP body after 3 false",
         "/badchunk 200 error: http: invalid chunk size after 0 false",
-        "/http10 error: http: HTTP version is unsupported",
+        "/http10 200 2 bytes false",
         "/atlimit 200 1000 bytes false",
         "/bigchunks 200 1024 bytes false",
         "/after 200 2 bytes false",
@@ -1040,6 +1091,31 @@ def test_public_connection_against_hostile_raw_responses(tmp_path, adopt):
         "/nocontent 204 0 bytes false",
         "/two 200 3 bytes false",
         "/tail 200 3 bytes false"], "connection-raw")
+
+
+def test_client_accepts_http10_responses_and_keeps_a_connection_only_with_keep_alive(tmp_path, adopt):
+    _, ports = start_peer(adopt)
+    check_lines(run_program(tmp_path, "http10", HTTP10_PROGRAM, ports), [
+        "/http10-big http: body exceeds max_body_bytes",
+        "/http10-204 204  0",
+        "/http10-304 304  0",
+        "/http10-head 200  0",
+        "/http10-head-get http: unsupported transfer encoding",
+        "/http10 HEAD 200  0",
+        "open 200 until the end done ok",
+        "/http10 200 ok 2",
+        "/http10 200 ok 2",
+        "/http10-open 200 ok 2",
+        "/http10-open 200 ok 2",
+        "/http10-keep 200 ok 2",
+        "/http10-keep 200 reused 6",
+        "/http10-close 200 until the end 13",
+        "/http10-close 200 until the end 13",
+        "/http10-keep-nolength 200 hello 5",
+        "/http10-keep-nolength 200 hello 5",
+        "/http10-chunked http: unsupported transfer encoding",
+        "/http10-chunked http: unsupported transfer encoding",
+        "start 200 ok true"], "http10")
 
 
 def test_open_streams_a_response_body_on_a_channel_with_backpressure_and_an_early_stop(tmp_path, adopt):
@@ -1128,7 +1204,7 @@ def check_raw_lines(text):
         "200 ok 2",
         "200  0",
         "200 reused 6",
-        "http: HTTP version is unsupported",
+        "200 ok 2",
         "http: invalid HTTP head",
         "http: invalid response status",
         "http: protocol upgrades are unsupported",

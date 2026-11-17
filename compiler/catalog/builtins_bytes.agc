@@ -275,4 +275,17 @@ ROWS: List[Model.Builtin] = [
     description: "Read the bytes as text in an encoding; invalid bytes or an unknown encoding give an error.",
     alternatives: [],
   ),
+  Model.Builtin(
+    name: "Bytes.scrub",
+    parameters: [
+      Model.Named(name: "bytes", type: Types.Type.Bytes),
+      Model.Named(name: "replacement", type: Types.Type.String, default: Model.Default.Text("�")),
+    ],
+    result: Types.Type.String,
+    rule: Model.Rule.Plain,
+    implementation: "Bytes.scrub",
+    effects: [],
+    description: "Read UTF-8, with the replacement for each invalid or cut sequence; never fails.",
+    alternatives: [],
+  ),
 ]

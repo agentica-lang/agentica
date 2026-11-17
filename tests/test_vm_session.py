@@ -61,11 +61,16 @@ def hang() -> List[String]
   ["never"]
 end
 
+def leave() -> List[String]
+  System.exit(4)
+  ["never"]
+end
+
 def main() -> Void
   FrontEnd.serve_session()
 end
 """
-SHOW, KEEP, READ_BACK, CRASH, START, FINISH, LOUD, HANG = range(8)
+SHOW, KEEP, READ_BACK, CRASH, START, FINISH, LOUD, HANG, EXIT = range(9)
 
 # A function before the others moves every index, so the program does not extend PROGRAM.
 SHIFTED = "def first() -> List[String]\n  [\"first\"]\nend\n\n" + PROGRAM
@@ -222,8 +227,15 @@ def test_a_slot_that_no_crash_left_unset_is_a_broken_program(front, tmp_path):
     base.write_bytes(built())
     unset.write_bytes(built(divisor=1, sets=False))
     got = front_end(front, "session", str(vm_binary()), str(base), "json", "@%s" % unset, entry(BUILT_USE))
-    assert got.code != 0
-    assert json.loads(got.stderr.splitlines()[0])["code"] == "RUNTIME-INTERNAL"
+    printed = got.stdout.splitlines()
+    lost = json.loads(printed[0])
+    assert (lost["lost"], lost["ok"], lost["diagnostic"]["code"]) == (True, False, "RUNTIME-INTERNAL")
+    assert (printed[1:], got.stderr) == (["exit 1"], "")
+
+
+def test_an_exit_answers_with_its_status(front, program):
+    answers, err = session(front, program, entry(EXIT))
+    assert (answers, err) == ([{"exited": 4}, "exit 4"], "")
 
 
 def test_the_child_ends_when_the_front_end_is_killed(front, program):

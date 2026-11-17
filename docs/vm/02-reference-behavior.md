@@ -300,8 +300,11 @@ Every failure is an error value. The checks run in this order:
   decoder's output buffer is one byte past what `max_bytes` still allows, so an
   overflow is found without handing on a byte past the cap. The errors are
   `zlib: invalid compressed data`, `zlib: truncated stream`, `zlib: trailing
-  bytes after stream end` (a second member or any trailing byte) and `zlib:
-  checksum mismatch`. The `Zlib` and `__lazy_*` builtins use `Bytes`.
+  bytes after stream end` (any byte after a zlib stream, or after the last gzip
+  member when it does not start another member) and `zlib: checksum mismatch`.
+  A gunzip step and `Zlib.gunzip` take every member of a gzip file (RFC 1952
+  section 2.2), the `max_bytes` cap counting all their output. The `Zlib` and
+  `__lazy_*` builtins use `Bytes`.
 - `File.stat` of a missing path is an error without a kind. A directory's size
   is 0. `modified_seconds` is the mtime; `mode` is `st_mode & 07777`.
 - `File.lstat` is `lstat`: a link has `kind` `"link"`, `size_bytes` as its text

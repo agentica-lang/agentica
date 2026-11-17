@@ -58,6 +58,7 @@ USAGE = [
   "       agentica [--ai|--json] install",
   "       agentica [--ai|--json] add NAME URL --tag TAG|--ref COMMIT [--subdir DIR] [--group test]",
   "       agentica [--ai|--json] update [NAME]",
+  "       agentica [--ai|--json] native source NAME",
   [
     "       agentica [--ai|--json] [--seed N] [--no-cache] test [PATH...] [--steps FILE] [--only TEXT] [--tags EXPR] ",
     "[--jobs N] [--timing] [--coverage] [--isolate]",
@@ -113,6 +114,9 @@ SUMMARY = [
   "  agentica update [NAME]                  fetch the tag pins again (all, or the dependency NAME), rewrite",
   "                                          agentica.lock and refresh deps/; a commit pin and a package already",
   "                                          locked do not move",
+  "  agentica native source NAME             the source key of the native module NAME (its build table and the",
+  "                                          files of native/), the native API of this agentica and the URL of",
+  "                                          each target of its prebuilt table, for the files a release uploads",
   "  agentica compile FILE.agc -o OUT.agcb   write bytecode",
   "  agentica compile [FILE...]              fill the bytecode cache, so the next runs start at once; no FILE:",
   "                                          every main.agc under the working folder, outside tests/ and fixtures/",
