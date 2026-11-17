@@ -93,6 +93,12 @@ class PeerServer:
                 client.sendall(chunked + b"3\r\none\r\n")
                 time.sleep(PAUSE_MS / 1000)
                 client.sendall(b"3\r\ntwo\r\n0\r\n\r\n")
+            elif path == "/trickle":
+                client.sendall(chunked)
+                for _ in range(9):
+                    time.sleep(LIMIT_MS / 3000)
+                    client.sendall(b"1\r\nx\r\n")
+                client.sendall(b"0\r\n\r\n")
             elif path == "/silent":
                 client.sendall(chunked + b"3\r\none\r\n")
                 self.wait_for_close(client, path)
@@ -333,6 +339,23 @@ end
 """
 )
 
+TRICKLE_PROGRAM = (
+    PRELUDE
+    + """\
+def main() -> Void
+  url = "http://127.0.0.1:#{System.args()[0]}/trickle"
+  limit = System.args()[1].to_i!
+  options = HTTP.ClientOptions(timeout_ms: limit * 20, read_timeout_ms: limit)
+
+  # A piece every third of read_timeout_ms for three times as long: each wait is short, the sum is not.
+  since = Time.monotonic_ms()
+  puts("get_response #{kind_of(HTTP.get_response(url, options))} #{within(since, limit * 2, limit * 8)}")
+  stream = HTTP.open("GET", url, "".bytes, [], options).unwrap!
+  puts("open #{drain(stream, limit * 2)}")
+end
+"""
+)
+
 CONNECT_PROGRAM = (
     PRELUDE
     + """\
@@ -406,6 +429,11 @@ def test_whole_calls_cut_a_quiet_body_at_read_timeout_ms_and_wait_for_a_slow_hea
         "read 0 true",
         "connect 0 false",
     ]
+
+
+def test_read_timeout_ms_is_the_wait_for_each_piece_and_not_a_total(tmp_path, peer):
+    lines = run_program(tmp_path, "trickle", TRICKLE_PROGRAM, peer.port, LIMIT_MS)
+    assert lines == ["get_response 200 xxxxxxxxx true", "open x,x,x,x,x,x,x,x,x ok"]
 
 
 CONNECT_LINES = [
