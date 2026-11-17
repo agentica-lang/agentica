@@ -8,9 +8,16 @@ name: Platforms
 # `conformance all-systems`, puts the five summaries side by side and fails when a case ran on no system.
 # Pushes to master and manual runs (`gh workflow run platforms.yml --ref BRANCH`) always run all five. A pull request
 # runs all five when tools/ci_changes.py says its files need them (the VM, the build, stage0, the release tooling, this
-# workflow, the test code that differs by system), and none otherwise; the `systems` job prints why.
+# workflow, the test code that differs by system), and none otherwise; the `systems` job prints why. A pull request that
+# changes only the docs, the site or Markdown files does not start this workflow, as in ci.yml.
 on:
   pull_request:
+    paths-ignore:
+      - 'docs/**'
+      - 'site/**'
+      - '**/*.md'
+      - '.github/workflows/pages.yml'
+      - '.github/workflows/site-examples.yml'
   push:
     branches: [master]
   workflow_dispatch:
