@@ -2013,11 +2013,13 @@ end
 # The time `ms` from now, at most a year: a huge timeout does not overflow the clock.
 def after(ms: Int) -> Int = Time.monotonic_ms() + smaller(ms, WATCH_MS)
 
-# An error of a connect says so in its details (`phase` is `connect`), so a caller tells it from the timeout of a read.
+# The timeout of a connect says so in its details (`phase` is `connect`), so a caller tells it from a read's timeout.
 def at_connect[T](answer: Result[T]) -> Result[T]
   case answer
     ok(value) -> ok(value)
-    error(e) -> error(e.with(details: e.details.put("phase", "connect")))
+    error(e) ->
+      return error(e) if e.kind != "net.timeout"
+      error(e.with(details: e.details.put("phase", "connect")))
   end
 end
 
