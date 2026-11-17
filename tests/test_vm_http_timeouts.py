@@ -189,6 +189,24 @@ def producer(feed: Feed) -> Void
   body.close
 end
 
+def joined(stream: HTTP.Stream, wait: Int) -> String
+  text = ""
+  while true
+    case stream.body.recv(wait)
+      ok(piece) -> text = text + String.from_bytes(piece).unwrap!
+      error(_) -> break
+    end
+  end
+
+  outcome = "ended"
+  case Task.await(stream.done)
+    ok(_) -> outcome = "ok"
+    error(e) -> outcome = e.kind
+  end
+
+  return "#{text} #{outcome}"
+end
+
 def drain(stream: HTTP.Stream, wait: Int) -> String
   seen: List[String] = []
   while true
@@ -351,7 +369,7 @@ def main() -> Void
   since = Time.monotonic_ms()
   puts("get_response #{kind_of(HTTP.get_response(url, options))} #{within(since, limit * 2, limit * 8)}")
   stream = HTTP.open("GET", url, "".bytes, [], options).unwrap!
-  puts("open #{drain(stream, limit * 2)}")
+  puts("open #{joined(stream, limit * 2)}")
 end
 """
 )
@@ -433,7 +451,7 @@ def test_whole_calls_cut_a_quiet_body_at_read_timeout_ms_and_wait_for_a_slow_hea
 
 def test_read_timeout_ms_is_the_wait_for_each_piece_and_not_a_total(tmp_path, peer):
     lines = run_program(tmp_path, "trickle", TRICKLE_PROGRAM, peer.port, LIMIT_MS)
-    assert lines == ["get_response 200 xxxxxxxxx true", "open x,x,x,x,x,x,x,x,x ok"]
+    assert lines == ["get_response 200 xxxxxxxxx true", "open xxxxxxxxx ok"]
 
 
 CONNECT_LINES = [
