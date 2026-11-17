@@ -96,10 +96,12 @@ end
 private
 
 # What the arms of a case have covered so far: the variants named, the literals seen, and whether a wildcard arm came.
+# `variants` has every unguarded variant pattern, nested ones too, for the exhaustiveness of nested patterns.
 # A case that gives a value (`valued`) also carries the type its arms must have, which is the expected type or else the
 # type of the first arm, and whether an arm may end with a Void expression (`completion`, the last line of a block).
 struct Arms
   covered: List[String]
+  variants: List[Ast.VariantPattern]
   literals: List[Ast.LitValue]
   wildcard: Bool
   valued: Bool
@@ -569,13 +571,22 @@ def in_loop(cx: State.Cx, st: State.St, body: List[Ast.Stmt]) -> Result[State.St
 end
 
 def check_case(cx: State.Cx, st: State.St, node: Ast.CaseStmt) -> Result[State.St]
-  start = Arms(covered: [], literals: [], wildcard: false, valued: false, completion: false, type: T.Type.Unknown)
+  start = Arms(
+    covered: [],
+    variants: [],
+    literals: [],
+    wildcard: false,
+    valued: false,
+    completion: false,
+    type: T.Type.Unknown,
+  )
+
   done = try case_arms(cx, st, node, start)
   ok(done.st)
 end
 
 def valued_arms(type: T.Type, completion: Bool) -> Arms
-  Arms(covered: [], literals: [], wildcard: false, valued: true, completion: completion, type: type)
+  Arms(covered: [], variants: [], literals: [], wildcard: false, valued: true, completion: completion, type: type)
 end
 
 def case_arms(cx: State.Cx, st: State.St, node: Ast.CaseStmt, start: Arms) -> Result[CaseDone]
@@ -712,10 +723,11 @@ def check_variant(
   end
 
   bound = try bind_pattern(cx, st, pattern, payload.unwrap!)
+  seen = arms.with(variants: arms.variants.push(pattern))
   # Only a pattern that cannot fail covers its variant: nothing but names and _ in the payload.
-  return ok(ArmDone(st: bound, arms: arms)) if !irrefutable?(pattern)
+  return ok(ArmDone(st: bound, arms: seen)) if !irrefutable?(pattern)
 
-  ok(ArmDone(st: bound, arms: arms.with(covered: arms.covered.push(pattern.variant_name))))
+  ok(ArmDone(st: bound, arms: seen.with(covered: arms.covered.push(pattern.variant_name))))
 end
 
 # CHECK-UNREACHABLE-CASE-ARM for a pattern that an earlier one already matches: "duplicate literal case arm" for an arm
@@ -862,14 +874,18 @@ end
 # enum the value has, with its type arguments filled in. An error when the pattern names another enum or no such
 # variant.
 def payload_types(cx: State.Cx, pattern: Ast.VariantPattern, value_type: T.Type) -> Result[List[T.Type]]
+  payload_named(cx, pattern.enum_name, pattern.variant_name, value_type)
+end
+
+def payload_named(cx: State.Cx, enum_name: String, variant: String, value_type: T.Type) -> Result[List[T.Type]]
   case value_type
-    T.Type.Result(item) if pattern.enum_name == "Result" and pattern.variant_name == "Ok" -> return ok([item])
-    T.Type.Result(_) if pattern.enum_name == "Result" and pattern.variant_name == "Err" -> return ok([T.error_type()])
-    T.Type.Optional(item) if pattern.enum_name == "Optional" and pattern.variant_name == "Some" -> return ok([item])
-    T.Type.Optional(_) if pattern.enum_name == "Optional" and pattern.variant_name == "None" -> return ok([])
-    T.Type.Enum(name, args) if pattern.enum_name == name ->
+    T.Type.Result(item) if enum_name == "Result" and variant == "Ok" -> return ok([item])
+    T.Type.Result(_) if enum_name == "Result" and variant == "Err" -> return ok([T.error_type()])
+    T.Type.Optional(item) if enum_name == "Optional" and variant == "Some" -> return ok([item])
+    T.Type.Optional(_) if enum_name == "Optional" and variant == "None" -> return ok([])
+    T.Type.Enum(name, args) if enum_name == name ->
       definition = cx.enums.get(name)
-      return variant_payload(definition.unwrap!, pattern.variant_name, args) if definition.some?
+      return variant_payload(definition.unwrap!, variant, args) if definition.some?
 
     _ -> return error("no such variant")
   end
@@ -979,7 +995,8 @@ def check_exhaustive(
     )
   end
 
-  if !all_covered?(names.unwrap!, arms.covered)
+  rows = arms.variants.map do |pattern: Ast.VariantPattern| [Ast.Slot.Nested(Ast.Pattern.Variant(pattern))] end
+  if !all_covered?(names.unwrap!, arms.covered) and !covers?(cx, rows, [value_type])
     return error(
       State.fail(
         cx,
@@ -992,6 +1009,88 @@ def check_exhaustive(
   end
 
   ok(true)
+end
+
+# Whether the rows of patterns match every tuple of values of `types` (one slot per type), as Maranget's usefulness
+# check does: a column of a type with variants is split by variant, each variant's payload becoming new columns; any
+# other column (a literal, a name, `_`) keeps only the rows that match anything there. A literal never covers its type.
+def covers?(cx: State.Cx, rows: List[List[Ast.Slot]], types: List[T.Type]) -> Bool
+  return rows.size > 0 if types.size == 0
+
+  first = types[0]
+  rest = types.drop(1)
+  names = variant_names(cx, first)
+  heads = rows.map { |row: List[Ast.Slot]| head_name(row[0]) }
+  # A column that does not name every variant of its type is covered only where the rows with any value there cover
+  # the rest (Maranget's default matrix), so one recursion decides it; splitting by every variant would be exponential
+  # in the columns.
+  if (!names.ok? or !names.unwrap!.all? { |name: String| heads.include?(name) })
+    left = rows.select { |row: List[Ast.Slot]| any_value?(row[0]) }
+    return covers?(cx, left.map { |row: List[Ast.Slot]| row.drop(1) }, rest)
+  end
+
+  names.unwrap!.all? do |name: String|
+    payload = payload_of(cx, first, name)
+    payload.ok? and covers?(cx, split(rows, name, payload.unwrap!.size), payload.unwrap!.concat(rest))
+  end
+end
+
+# The rows of `covers?` that match the variant `name`, with its payload's `size` slots in place of the first slot.
+def split(rows: List[List[Ast.Slot]], name: String, size: Int) -> List[List[Ast.Slot]]
+  found: List[List[Ast.Slot]] = []
+  for row in rows
+    case variant_of(row[0])
+      some(pattern) ->
+        if pattern.variant_name == name
+          found = found.push(pattern.slots.concat(row.drop(1)))
+        end
+
+      none ->
+        if any_value?(row[0])
+          skips: List[Ast.Slot] = (0...size).map { |_: Int| Ast.Slot.Skip }
+          found = found.push(skips.concat(row.drop(1)))
+        end
+    end
+  end
+
+  found
+end
+
+# The variant a slot names, or "".
+def head_name(slot: Ast.Slot) -> String
+  case variant_of(slot)
+    some(pattern) -> pattern.variant_name
+    none -> ""
+  end
+end
+
+def variant_of(slot: Ast.Slot) -> Optional[Ast.VariantPattern]
+  case slot
+    Ast.Slot.Nested(Ast.Pattern.Variant(pattern)) -> some(pattern)
+    _ -> none
+  end
+end
+
+# Whether a slot matches any value: a name, `_`, or a nested `_`.
+def any_value?(slot: Ast.Slot) -> Bool
+  case slot
+    Ast.Slot.Bind(_, _) -> true
+    Ast.Slot.Skip -> true
+    Ast.Slot.Nested(Ast.Pattern.Wildcard(_)) -> true
+    _ -> false
+  end
+end
+
+# The payload types of the variant `name` of `value_type` (a Result, an Optional or an enum).
+def payload_of(cx: State.Cx, value_type: T.Type, name: String) -> Result[List[T.Type]]
+  enum_name = T.name(value_type)
+  if T.is?(value_type, "Result")
+    enum_name = "Result"
+  elsif T.is?(value_type, "Optional")
+    enum_name = "Optional"
+  end
+
+  payload_named(cx, enum_name, name, value_type)
 end
 
 # The type of a literal.

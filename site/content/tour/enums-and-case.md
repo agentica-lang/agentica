@@ -340,7 +340,7 @@ none
 timed out
 ```
 
-An unguarded arm whose positions are only names or `_` covers its variant. Any other arm may fail, so end with `ok(_)`, a variant with `_` positions, or `_`.
+An unguarded arm whose positions are only names or `_` covers its variant. Nested patterns cover together what their variants cover: `ok(ok(n))`, `ok(error(_))` and `error(_)` cover a `Result[Result[Int]]`; an arm after such a set is not reported as unreachable (for now). A guarded arm or a literal such as `some(0)` may fail, so end with `some(n)`, a variant with `_` positions, or `_`.
 
 The payload of your own variant can be an [Optional](/library/data-structures/optional/), and the same patterns apply:
 
@@ -374,7 +374,7 @@ no value
 missing
 ```
 
-Here `some(n)` and `none` are both listed, but each arm has a variant inside, so neither covers `Reading.Value`. The case is not exhaustive until you add `Reading.Value(_)` or `_`, or use one arm with only a name, `Reading.Value(opt)`, and match `opt` inside it.
+Arms with `Reading.Value(some(n))` and `Reading.Value(none)` would cover `Reading.Value` together. A literal never covers its type, so with `some(0)` in place of `some(n)` the case is not exhaustive until you add `Reading.Value(_)` or `_`.
 
 ```agentica {expect="CHECK-NON-EXHAUSTIVE-CASE"}
 enum Reading
@@ -384,7 +384,7 @@ end
 
 def main() -> Void
   case Reading.Missing
-    Reading.Value(some(n)) -> puts("value #{n}")
+    Reading.Value(some(0)) -> puts("zero")
     Reading.Value(none) -> puts("no value")
     Reading.Missing -> puts("missing")
   end
