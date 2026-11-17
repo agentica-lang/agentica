@@ -287,7 +287,7 @@ typedef struct {
 
 /* HttpWire.ClientOptions as the record of compiler/catalog/builtins_data.agc lays it out: timeout_ms,
    idle_timeout_ms, max_connections, max_body_bytes, proxy, tls (Optional[TLS.Context]), connect_timeout_ms,
-   read_timeout_ms. HttpWire.service checks the shape, since the std-only rule lives in the front end and bytecode can
+   read_timeout_ms, connect_to (String). HttpWire.service checks the shape, since the std-only rule lives in the front end and bytecode can
    call the builtin with any struct. */
 #define AGC_HTTP_OPTIONS_FIELDS 9
 #define AGC_HTTP_OPTION_PROXY 4
