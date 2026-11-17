@@ -60,9 +60,10 @@ Builtin methods and `to_s`: `builtins.md`.
   not a catch-all.
 - Cover: an enum `case` lists every variant or ends with `_`; any other `case`
   (Int, Float, String, `Bool`, `Nil`) ends with a top-level `_`. An arm covers
-  its variant only when unguarded with names or `_` in every slot, so guarded,
-  literal and nested-variant arms need a closing `ok(_)`, `Shape.Pair(_, _)` or
-  `_`. Missing cover is `CHECK-NON-EXHAUSTIVE-CASE`; an arm after a covering arm
+  its variant when unguarded with names or `_` in every slot; nested variant
+  arms cover together (`ok(ok(n))`, `ok(error(_))`, `error(_)`), but guarded
+  and literal arms need a closing `some(n)`, `Shape.Pair(_, _)` or `_`. Missing
+  cover is `CHECK-NON-EXHAUSTIVE-CASE`; an arm after a covering arm
   or an unguarded `_` is `CHECK-UNREACHABLE-CASE-ARM`.
 - `if` and `while` conditions must be `Bool`; there is no truthiness.
 - `break` leaves the innermost `while` or `for`; `next` skips to its next

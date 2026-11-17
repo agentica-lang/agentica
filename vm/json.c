@@ -163,7 +163,8 @@ static bool number_value(const uint8_t *s, size_t len, agc_value *out) {
   bool zero = true;
   for (size_t i = 0; i < mantissa; i++)
     if (s[i] >= '1' && s[i] <= '9') zero = false;
-  double x = 0.0;
+  /* A mantissa of only zeros keeps its sign, as JSON.encode writes -0.0 and Python reads it. */
+  double x = s[0] == '-' ? -0.0 : 0.0;
   if (!zero) {
     x = agc_read_double((const char *)s, len);
     if (isinf(x)) return false;

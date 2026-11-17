@@ -45,7 +45,9 @@ int main(void) {
   agc_vm_init(&vm, NULL, stdout, stderr, INT64_MAX);
 
   agc_json *j = parse("-0.0", 4);
-  assert(j->kind == AGC_JSON_FLOAT && agc_as_float(&vm, j->scalar) == 0.0 && !signbit(agc_as_float(&vm, j->scalar)));
+  assert(j->kind == AGC_JSON_FLOAT && agc_as_float(&vm, j->scalar) == 0.0 && signbit(agc_as_float(&vm, j->scalar)));
+  j = parse("0.0", 3);
+  assert(j->kind == AGC_JSON_FLOAT && !signbit(agc_as_float(&vm, j->scalar)));
   j = parse("-1e-500", 7);
   assert(j->kind == AGC_JSON_FLOAT && signbit(agc_as_float(&vm, j->scalar)));
 

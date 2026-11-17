@@ -213,9 +213,9 @@ in a PR that rewrites the goldens.
   `[A-Za-z0-9_]` (`truex`) is invalid; `true-` is trailing content.
 - A number with a fraction or an exponent is a Float (`1e2` is `100.0`); others
   are integers of any size.
-- A Float is the exact decimal rounded to nearest, ties to even. A mantissa of
-  only zeros gives `0.0` (so `-0e5` is `0.0`); a non-zero negative value that
-  rounds to zero is `-0.0`. `-0` is the integer 0.
+- A Float is the exact decimal rounded to nearest, ties to even, and keeps its
+  sign: `-0.0`, `-0e5` and a negative value that rounds to zero are `-0.0`, so
+  the `-0.0` that `JSON.encode` writes reads back. `-0` is the integer 0.
 - A repeated key keeps the last value. Objects sort by key bytes, stably.
 - The VM reads the tree with the yyjson reader (10) and copies it into
   `JSON.Value` nodes. Numbers reach the VM as text.

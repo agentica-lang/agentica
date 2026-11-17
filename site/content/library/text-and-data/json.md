@@ -340,7 +340,7 @@ error("tag: expected one of Circle, Rect, Empty", kind: "json.decode")
 JSON.parse(text: String) -> Result[JSON.Value]
 ```
 
-Reads exactly one JSON value of any shape, with optional surrounding whitespace (space, tab, CR, LF). Bad JSON gives an error Result: empty input, trailing content, invalid escapes, raw control characters and non-finite numbers are all errors.
+Reads exactly one JSON value of any shape, with optional surrounding whitespace (space, tab, CR, LF). Bad JSON gives an error Result: empty input, trailing content, invalid escapes, raw control characters and non-finite numbers are all errors. A decimal or exponent number keeps its sign, so `-0.0` and `-0e5` read as `-0.0` and every finite `Float` that `JSON.encode` writes reads back with the same bits. `-0` is the integer 0, so it decodes into a `Float` as `0.0`, as in Python.
 
 ```agentica
 def main() -> Void

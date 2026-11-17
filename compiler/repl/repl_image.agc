@@ -114,8 +114,8 @@ def merge(
 ) -> Merged
   fresh = renamed_blocks(given, "@#{Paths.last_part(root)}:", lines)
   held = image.program
-  files = file_numbers(held.sources, fresh.sources)
-  sources = merged_sources(held.sources, fresh.sources, root, text)
+  files = file_numbers(held.sources, fresh.sources, root)
+  sources = merged_sources(held.sources, fresh.sources, files, root, text)
   types = type_numbers(image, fresh, refs)
   starts = start_pairs(fresh)
   base = Numbers(
@@ -353,12 +353,17 @@ def fresh_root(fresh: Ir.Program, root: String) -> Int
   0
 end
 
-def file_numbers(held: List[Ir.SourceFile], fresh: List[Ir.SourceFile]) -> Map[Int, Int]
+# The number in the image of each fresh source: the image's entry of its file when the text is the same (or the file
+# is the session's root, whose text the image replaces), else a new entry. An imported file edited on disk gets a new
+# entry, so the functions compiled from its old text keep the spans of that text.
+def file_numbers(held: List[Ir.SourceFile], fresh: List[Ir.SourceFile], root: String) -> Map[Int, Int]
   numbers: Map[Int, Int] = {}
   known: Map[String, Int] = {}
+  texts: Map[String, String] = {}
   at = 0
   for source in held
     known = known.put(source.file, at)
+    texts = texts.put(source.file, source.text)
     at += 1
   end
 
@@ -366,11 +371,12 @@ def file_numbers(held: List[Ir.SourceFile], fresh: List[Ir.SourceFile]) -> Map[I
   at = 0
   for source in fresh
     found = known.get(source.file)
-    if found.some?
+    if found.some? and (source.file == root or texts.get(source.file, "") == source.text)
       numbers = numbers.put(at, found.unwrap!)
     else
       numbers = numbers.put(at, count)
       known = known.put(source.file, count)
+      texts = texts.put(source.file, source.text)
       count += 1
     end
 
@@ -380,16 +386,25 @@ def file_numbers(held: List[Ir.SourceFile], fresh: List[Ir.SourceFile]) -> Map[I
   numbers
 end
 
-# The image's sources with the new files after them; the root file holds the session's text, which only a message
-# reads (the loader counts the sources and never compares them).
+# The image's sources with the new entries of file_numbers after them, in their order; the root file holds the
+# session's text, which only a message reads (the loader counts the sources and never compares them).
 def merged_sources(
   held: List[Ir.SourceFile],
   fresh: List[Ir.SourceFile],
+  files: Map[Int, Int],
   root: String,
   text: String,
 ) -> List[Ir.SourceFile]
-  known = Set.new(held.map { |source: Ir.SourceFile| source.file })
-  sources = held.concat(fresh.filter { |source: Ir.SourceFile| !known.include?(source.file) })
+  sources = held
+  at = 0
+  for source in fresh
+    if files.get(at, 0) >= held.size
+      sources = sources.push(source)
+    end
+
+    at += 1
+  end
+
   sources.map do |source: Ir.SourceFile| with_text(source, root, text) end
 end
 

@@ -8,6 +8,17 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.34.1] - 2026-11-17
+
+### Changed
+
+- `JSON.parse` and `JSON.decode` now read `-0.0` (and `-0e5`) as `-0.0`, no longer `0.0`, so every finite `Float` round-trips through JSON, as in Python; this changes the documented rule (#1639).
+
+### Fixed
+
+- A `case` whose nested patterns cover every value, such as `ok(ok(n))`, `ok(error(_))` and `error(_)` on a `Result[Result[Int]]`, is no longer `CHECK-NON-EXHAUSTIVE-CASE` (#1794).
+- `agentica repl` reads an imported file again after it changes on disk, instead of refusing every later entry with `REPL-REFUSED` (#1815).
+
 ## [0.34.0] - 2026-11-17
 
 ### Added
@@ -1695,7 +1706,8 @@ First release of Agentica, a statically typed language designed for AI agents.
 - `main` returns `Void`; maps preserve insertion order and support fallible
   lookups.
 
-[unreleased]: https://github.com/agentica-lang/agentica/compare/0.34.0...HEAD
+[unreleased]: https://github.com/agentica-lang/agentica/compare/0.34.1...HEAD
+[0.34.1]: https://github.com/agentica-lang/agentica/compare/0.34.0...0.34.1
 [0.34.0]: https://github.com/agentica-lang/agentica/compare/0.33.2...0.34.0
 [0.33.2]: https://github.com/agentica-lang/agentica/compare/0.33.1...0.33.2
 [0.33.1]: https://github.com/agentica-lang/agentica/compare/0.33.0...0.33.1
