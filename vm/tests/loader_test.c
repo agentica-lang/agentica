@@ -160,7 +160,8 @@ static spec base(void) {
 static buffer build(spec s) {
   buffer b;
   flags_written = s.version != AGC_FORMAT_PREVIOUS;
-  b.data = malloc(4096 + (size_t)s.extra_voids + (s.tables ? s.tables->len : 0) + (s.updates ? s.updates->len : 0));
+  b.data = malloc(4096 + (size_t)s.extra_voids + (s.tables ? s.tables->len : 0) + (s.updates ? s.updates->len : 0) +
+                  (s.second_source ? strlen(s.second_source) : 0));
   assert(b.data);
   b.len = 0;
   memcpy(b.data, s.magic, 4);
@@ -754,9 +755,22 @@ static agc_program *session_load(const agc_program *base, spec extension, const 
   return ok ? p : NULL;
 }
 
+/* A session file over the base of session_tests: what base() writes, which comes after the base's entries (its source
+   record adds its text to the base's), and the function CODE, numbered 2, which is the entry. */
+static spec added(const agc_instr *code, uint32_t globals) {
+  spec s = base();
+  s.extra_kind = 6;
+  s.extra_string = "ab";
+  s.globals = globals;
+  s.entry = 2;
+  s.func_count = 1;
+  s.funcs[0] = (fn_spec){"add", 0, 4, code, zero_spans, 5, 0};
+  return s;
+}
+
 static void session_tests(void) {
-  /* The session starts with the init function (slot 0), main, and the String "ab". An entry adds a function that
-     writes slot 1 and is the new entry. */
+  /* The session starts with the init function (slot 0), main, and the constants 1, void and "ab". An entry adds a
+     function that writes slot 1 and is the new entry. */
   static const agc_instr init_code[] = {
     {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_CONST, 0, 0, 0}, {AGC_OP_GLOBAL_SET, 0, 0, 0}, {AGC_OP_TAIL_CALL, 0, 1, 0},
     {AGC_OP_RETURN, 0, 0, 0}};
@@ -773,42 +787,47 @@ static void session_tests(void) {
   agc_program *base_program = loaded(pair_spec(init_code, 5, main_code, 3, 1, 0));
   base_program->globals[0] = agc_int(7);
 
-  spec grown = pair_spec(init_code, 5, main_code, 3, 2, 2);
-  grown.func_count = 3;
-  grown.funcs[2] = (fn_spec){"add", 0, 4, add_code, zero_spans, 5, 0};
+  spec grown = added(add_code, 2);
   agc_program *p = session_load(base_program, grown, NULL);
-  assert(p->function_count == 3 && p->entry == 2 && p->global_count == 2);
+  assert(p->function_count == 3 && p->entry == 2 && p->global_count == 2 && p->constant_count == 6);
+  assert(p->functions[1].code == base_program->functions[1].code && p->span_count == 6 && p->builtin_count == 2);
   assert(agc_value_word(p->globals[0]) == agc_value_word(agc_int(7)) && p->globals[1].tag == AGC_T_VOID);
-  assert(session_load(base_program, pair_spec(init_code, 5, main_code, 3, 1, 0), NULL));
+  const agc_source *held = &base_program->sources[0], *text = &p->sources[0];
+  assert(p->source_count == 1 && text->text->bytes == 2 * held->text->bytes && text->lines == 2 * held->lines - 1);
 
   spec s = grown;
-  s.funcs[2].code = call_main;
+  s.funcs[0].code = call_main;
   assert(session_load(base_program, s, NULL));
-  s.funcs[2].code = call_init;
+  s.funcs[0].code = call_init;
   assert(!session_load(base_program, s, "init function of an earlier entry"));
   s = grown;
-  s.extra_string = "ac";
-  assert(!session_load(base_program, s, "constant 2 differs"));
-  s = grown;
-  s.funcs[1].registers = 5;
-  assert(!session_load(base_program, s, "function 1 differs"));
+  s.name = "other.agc";
+  assert(!session_load(base_program, s, "source 0 is not the session's"));
   s = grown;
   s.globals = 0;
-  s.entry = 1;
-  assert(!session_load(base_program, s, "shorter than the session"));
+  assert(!session_load(base_program, s, "fewer Globals slots"));
   s = pair_spec(init_code, 5, main_code, 3, 1, 0);
-  s.func_count = 1;
-  s.funcs[0] = (fn_spec){"main", 0, 4, main_code, zero_spans, 3, 0};
-  s.entry = 0;
-  s.globals = 0;
-  assert(!session_load(base_program, s, "fewer functions"));
+  s.second_source = "x\n";
+  assert(!session_load(loaded(s), grown, "fewer sources"));
+  /* A text larger than the file's load budget grows by a small file: only what it adds counts. */
+  size_t size = (size_t)2 << 20;
+  char *large = malloc(size + 1);
+  assert(large);
+  memset(large, 'x', size);
+  large[size] = 0;
+  s.second_source = large;
+  agc_program *long_text = loaded(s);
+  spec more = grown;
+  more.second_source = "y";
+  p = session_load(long_text, more, NULL);
+  assert(p && p->sources[1].text->bytes == size + 1 && p->sources[1].text->data[size] == 'y');
+  free(large);
 
   /* The new init sets only new slots, and new slots need a new init. */
   static const agc_instr set_old[] = {
     {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_CONST, 0, 2, 0}, {AGC_OP_GLOBAL_SET, 0, 0, 0}, {AGC_OP_CONST, 0, 1, 0},
     {AGC_OP_RETURN, 0, 0, 0}};
-  s = grown;
-  s.funcs[2].code = set_old;
+  s = added(set_old, 2);
   assert(!session_load(base_program, s, "slot of an earlier entry"));
   s = grown;
   s.entry = 0;
@@ -1539,25 +1558,6 @@ static void instance_named_as_enum(void) {
   free(tail.data);
 }
 
-/* A session may repeat a JSON name, which a type declared again keeps: the second Box[Int] loads over the first. */
-static void session_json_names(void) {
-  static const char *const one[] = {"Box[Int]"};
-  static const char *const twice[] = {"Box[Int]", "Box[Int]"};
-  buffer t = instance_tables(AGC_TYPE_INSTANCE, 0);
-  buffer first = instance_tail(1, 0, one, 0);
-  buffer second = instance_tail(2, 0, twice, 0);
-  spec s = base();
-  s.tables = &t;
-  s.tail = &first;
-  agc_program *held = loaded(s);
-  s.tail = &second;
-  agc_program *p = session_load(held, s, NULL);
-  assert(p && p->instance_count == 2);
-  free(t.data);
-  free(first.data);
-  free(second.data);
-}
-
 static void json_instance_tests(void) {
   static const char *const one[] = {"Box[Int]"};
   static const char *const twice[] = {"Box[Int]", "Box[Int]"};
@@ -1575,7 +1575,6 @@ static void json_instance_tests(void) {
   buffer empty = instance_tail(0, 0, one, 0);
   assert(!loads_instances(AGC_TYPE_INSTANCE, 0, &empty, "empty struct instances section"));
   instance_named_as_enum();
-  session_json_names();
   /* An empty enums section is allowed only before the instances. */
   buffer bare = instance_tail(0, 0, one, 0);
   bare.len = 4;
@@ -1645,6 +1644,31 @@ static void field_default_tests(void) {
   assert(!loads(s, "empty field defaults section"));
   free(t.data);
   free(tail.data);
+}
+
+/* A session may repeat a JSON name, which a type declared again keeps: a second Box[Int] loads over the first. A field
+   default may be given only to a struct the file adds. */
+static void session_json_names(void) {
+  static const char *const one[] = {"Box[Int]"};
+  buffer t = instance_tables(AGC_TYPE_INSTANCE, 0);
+  buffer first = defaults_tail(1, 0, AGC_DEFAULT_CONSTANT, 0);
+  spec s = base();
+  s.tables = &t;
+  s.tail = &first;
+  agc_program *held = loaded(s);
+  assert(!held->json_names_repeat);
+  assert(!session_load(held, s, "a field default of a struct of the session"));
+  /* The file's struct is 1 and its Int type 2: the instance and the default are of that struct. */
+  buffer second = instance_tail(1, 1, one, 2);
+  static const uint32_t record[] = {1, 1, 0, AGC_DEFAULT_CONSTANT, 0};
+  for (size_t k = 0; k < sizeof record / sizeof record[0]; k++) u32(&second, record[k]);
+  s.tail = &second;
+  agc_program *p = session_load(held, s, NULL);
+  assert(p && p->instance_count == 2 && p->struct_count == 2 && p->json_names_repeat);
+  assert(p->field_defaults[0] == held->field_defaults[0] && p->field_defaults[1][0].kind == AGC_DEFAULT_CONSTANT);
+  free(t.data);
+  free(first.data);
+  free(second.data);
 }
 
 /* The file of one row; t and u hold the tables and updates it may point to, and the caller frees them. */
@@ -2549,6 +2573,7 @@ int main(void) {
   json_enum_tests();
   json_instance_tests();
   field_default_tests();
+  session_json_names();
   error_struct_tests();
   stored_name_tests();
   collector_tests();

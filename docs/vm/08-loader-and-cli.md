@@ -78,17 +78,19 @@ branch.
   counts as a call for the termination rules.
 - **Run time**: parameter and capture counts of `CALL_VALUE` and callbacks, tags
   (5.2), list, map and string bounds, and the register cap (6.1).
-- **Session loads** (`agc_load_session`, for `run --session`): the file is the
-  whole program of the session, and every table starts with the entries of the
-  running program, unchanged (constants by value, records, types, variants,
-  updates, instances, field defaults, and each function's code and spans after
-  fusion), so the indexes that live values, frames and tasks hold keep their
-  meaning. Spans and sources are only counted. Only the new functions are
-  checked; none may call or close over an old function that holds a
-  `GLOBAL_SET` (an earlier init function), and the new init sets only new
-  slots. New slots need a new entry, the init function that sets them. The
-  slots of the running program keep their values. A type declared again is a
-  new entry with the old JSON name, so a session load may repeat a JSON name.
+- **Session loads** (`agc_load_session`, for `run --session`): the file has
+  only what the session adds. Each table's count and records are the entries
+  after the running program's, which the new program keeps as they are, so the
+  indexes that live values, frames and tasks hold keep their meaning; an entry
+  of the file names the old entries by their numbers. The sources section names
+  every source, the running program's first: the text of one of those is what
+  its text grew by. Only the new entries are checked. No new function may call
+  or close over an old function that holds a `GLOBAL_SET` (an earlier init
+  function), and the new init sets only new slots. New slots need a new entry,
+  the init function that sets them. A decodable record or a field default is
+  only for a struct or enum the file adds. The slots of the running program keep
+  their values. A type declared again is a new entry with the old JSON name, so
+  a session load may repeat a JSON name.
   `JSON.decode` and `JSON.schema` in a session take their target as an Int, the
   type-table index of its struct, enum or instance, which the VM bounds-checks;
   a name is refused in a program that repeats one (`json_names_repeat`).

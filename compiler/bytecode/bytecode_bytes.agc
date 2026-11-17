@@ -13,9 +13,8 @@ struct Chunks
   failed: String
 end
 
-## The records that a table of the file has for its first `count` entries (functions, structs, enums, instances), as
-## the writer wrote them, and how many records they are: some tables have a record only for some entries. A program
-## that starts with those entries reuses them (Writer.write_over).
+## The records that a table of the file has for its first `count` entries (functions, structs, enums, instances), how
+## many they are (some tables have a record only for some entries), and the bytes of those the last write added.
 struct Prefix
   count: Int
   records: Int

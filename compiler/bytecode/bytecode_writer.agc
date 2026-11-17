@@ -56,14 +56,15 @@ def no_tables() -> Function.Tables
       defaults: empty,
       struct_index: {},
       enum_index: {},
+      texts: [],
     ),
   )
 end
 
-## Writes the program as `write` does, with the constant, struct update, builtin, span and type tables starting from
-## `seed`, the tables of an earlier program whose functions and types this one starts with: each entry of those tables
-## keeps its number, as the session of `agentica repl` needs (compiler/repl/). The functions, structs, enums and
-## instances of that program keep the records they were written with, so only the new ones are written.
+## Writes the program over `seed`, the tables of an earlier program whose functions and types this one starts with:
+## each entry of those tables keeps its number, as the session of `agentica repl` needs (compiler/repl/). The file
+## has only the entries after the seed's, and of each source of the seed only the text it gained since, which the
+## session's child loads over that program (vm/loader.c, a session load). Over no tables, it is the whole file.
 def write_over(program: Ir.Program, version: String, seed: Function.Tables) -> Over
   if version == ""
     return Over(
@@ -149,6 +150,7 @@ end
 
 def build(program: Ir.Program, version: String, seed: Function.Tables) -> Result[Built]
   held = seed.written
+  start = unwritten(seed)
   try check_limits(program, held.structs.count)
   struct_index = held.struct_index
   at = held.structs.count
@@ -165,54 +167,55 @@ def build(program: Ir.Program, version: String, seed: Function.Tables) -> Result
   end
 
   sections = JsonTypes.Section(
-    types: seed.types,
-    decodable: held.decodable,
-    enums: held.decodable_enums,
-    instances: held.instances,
+    types: start.types,
+    decodable: start.written.decodable,
+    enums: start.written.decodable_enums,
+    instances: start.written.instances,
   )
 
-  built = try JsonTypes.build(program, struct_index, enum_index, seed.types, sections)
+  built = try JsonTypes.build(program, struct_index, enum_index, start.types, sections)
   typed = try typed_constants(program, struct_index, enum_index, built.types, held.functions.count)
   json = built.with(types: typed.types)
   # The span of the program is the first run of the span table.
-  tables = seed.with(spans: Spans.intern_one(seed.spans, 0, program.span).pool, types: json.types)
-  functions = held.functions.chunks
+  tables = start.with(spans: Spans.intern_one(start.spans, 0, program.span).pool, types: json.types)
+  functions = Wire.start()
   for function in typed.functions
     encoded = try Function.encode(program, tables, function)
     tables = encoded.tables
     functions = Wire.add_all(functions, encoded.parts)
   end
 
-  found = field_defaults(program, tables.constants, held.defaults)
+  found = field_defaults(program, tables.constants, start.written.defaults)
   written = Function.Written(
     functions: Wire.Prefix(count: program.functions.size, records: program.functions.size, chunks: functions),
-    structs: struct_records(program, held.structs),
-    enums: enum_records(program, held.enums),
+    structs: struct_records(program, start.written.structs),
+    enums: enum_records(program, start.written.enums),
     decodable: json.decodable,
     decodable_enums: json.enums,
     instances: json.instances,
     defaults: found.records,
     struct_index: struct_index,
     enum_index: enum_index,
+    texts: program.sources.map { |source: Ir.SourceFile| source.text },
   )
 
   tables = tables.with(constants: found.constants, written: written)
+  head = try sources(header(version), program, held.texts)
   out = (
-    header(version)
-    |> sources(program)
-    |> pool_section(tables.spans)
-    |> pool_section(tables.constants)
-    |> records(written.structs)
-    |> pool_section(json.types)
-    |> records(json.decodable)
-    |> records(written.enums)
-    |> pool_section(tables.updates)
+    head
+    |> pool_section(tables.spans, seed.spans)
+    |> pool_section(tables.constants, seed.constants)
+    |> records(written.structs, held.structs)
+    |> pool_section(json.types, seed.types)
+    |> records(json.decodable, held.decodable)
+    |> records(written.enums, held.enums)
+    |> pool_section(tables.updates, seed.updates)
     |> Wire.add(Wire.u32(program.globals))
-    |> pool_section(tables.builtins)
-    |> records(written.functions)
+    |> pool_section(tables.builtins, seed.builtins)
+    |> records(written.functions, held.functions)
     |> Wire.add(Wire.u32(program.entry))
-    |> decodable_enums(json, found.records.records > 0)
-    |> field_default_section(found.records)
+    |> decodable_enums(json, held, found.records.records > held.defaults.records)
+    |> field_default_section(found.records, held.defaults)
   )
 
   joined = Wire.join(out)
@@ -221,28 +224,54 @@ def build(program: Ir.Program, version: String, seed: Function.Tables) -> Result
   ok(Built(bytes: joined.unwrap!, tables: tables))
 end
 
+# The seed with no bytes in its tables, which then hold only what is written after it.
+def unwritten(seed: Function.Tables) -> Function.Tables
+  held = seed.written
+  seed.with(
+    constants: blank(seed.constants),
+    updates: blank(seed.updates),
+    builtins: blank(seed.builtins),
+    spans: blank(seed.spans),
+    types: blank(seed.types),
+    written: held.with(
+      functions: blank_records(held.functions),
+      structs: blank_records(held.structs),
+      enums: blank_records(held.enums),
+      decodable: blank_records(held.decodable),
+      decodable_enums: blank_records(held.decodable_enums),
+      instances: blank_records(held.instances),
+      defaults: blank_records(held.defaults),
+    ),
+  )
+end
+
+def blank(pool: Pool.Pool) -> Pool.Pool = pool.with(chunks: Wire.start())
+
+def blank_records(prefix: Wire.Prefix) -> Wire.Prefix = prefix.with(chunks: Wire.start())
+
 # The decodable enums, after the entry: a count and the records, then the struct instances the same way. Each is
-# written only when there is one to decode or a later section follows, so a program without one has the bytes it
-# always had; a section is empty (a count of 0) only before the next one.
-def decodable_enums(out: Wire.Chunks, json: JsonTypes.Section, more: Bool) -> Wire.Chunks
-  return out if json.enums.records == 0 and json.instances.records == 0 and !more
+# written only when there is a new one or a later section follows, so a program without one has the bytes it always
+# had; a section is empty (a count of 0) only before the next one.
+def decodable_enums(out: Wire.Chunks, json: JsonTypes.Section, held: Function.Written, more: Bool) -> Wire.Chunks
+  instances = json.instances.records > held.instances.records or more
+  return out if json.enums.records == held.decodable_enums.records and !instances
 
-  enums = records(out, json.enums)
-  return enums if json.instances.records == 0 and !more
+  enums = records(out, json.enums, held.decodable_enums)
+  return enums if !instances
 
-  records(enums, json.instances)
+  records(enums, json.instances, held.instances)
 end
 
-# A section of records: their count, then the records.
-def records(out: Wire.Chunks, prefix: Wire.Prefix) -> Wire.Chunks
-  Wire.add_all(Wire.add(out, Wire.u32(prefix.records)), prefix.chunks)
+# A section of records: the number of those after `held`, then their bytes.
+def records(out: Wire.Chunks, prefix: Wire.Prefix, held: Wire.Prefix) -> Wire.Chunks
+  Wire.add_all(Wire.add(out, Wire.u32(prefix.records - held.records)), prefix.chunks)
 end
 
-# The Field defaults section, written only when it has a record.
-def field_default_section(out: Wire.Chunks, prefix: Wire.Prefix) -> Wire.Chunks
-  return out if prefix.records == 0
+# The Field defaults section, written only when it has a new record.
+def field_default_section(out: Wire.Chunks, prefix: Wire.Prefix, held: Wire.Prefix) -> Wire.Chunks
+  return out if prefix.records == held.records
 
-  records(out, prefix)
+  records(out, prefix, held)
 end
 
 # The Field defaults section, last in the file: a count, then for each field with a default, in struct and field
@@ -322,20 +351,32 @@ def header(version: String) -> Wire.Chunks
   Wire.add_text(out, version)
 end
 
-# The count of a table of entries, then its entries.
-def pool_section(out: Wire.Chunks, pool: Pool.Pool) -> Wire.Chunks
-  Wire.add_all(Wire.add(out, Wire.u32(pool.count)), pool.chunks)
+# A table of entries: the number of those after the seed's, then their bytes.
+def pool_section(out: Wire.Chunks, pool: Pool.Pool, seed: Pool.Pool) -> Wire.Chunks
+  Wire.add_all(Wire.add(out, Wire.u32(pool.count - seed.count)), pool.chunks)
 end
 
-# The sources: the stored name of each file and its text.
-def sources(out: Wire.Chunks, program: Ir.Program) -> Wire.Chunks
+# The sources: the stored name of each file and its text. A source of the seed, whose text as written then is in
+# `held`, has only the text it gained since: a session's text only grows.
+def sources(out: Wire.Chunks, program: Ir.Program, held: List[String]) -> Result[Wire.Chunks]
   chunks = Wire.add(out, Wire.u32(program.sources.size))
+  at = 0
   for source in program.sources
-    chunks = Wire.add_text(chunks, source.name)
-    chunks = Wire.add_text(chunks, source.text)
+    text = source.text
+    if at < held.size
+      before = held[at]
+      if !text.start_with?(before)
+        return error(Failure.internal(program, "the text of a source of the session changed"))
+      end
+
+      text = text.slice(before.length, text.length - before.length)
+    end
+
+    chunks = Wire.add_text(Wire.add_text(chunks, source.name), text)
+    at += 1
   end
 
-  chunks
+  ok(chunks)
 end
 
 # The name of a struct or an enum as the program writes it: display_name, with the import alias of its std/ module.
