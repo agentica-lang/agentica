@@ -63,6 +63,7 @@ RECORDS: List[Model.Record] = [
       ),
       Model.Named(name: "connect_timeout_ms", type: Types.Type.Int, default: Model.Default.Whole(10000)),
       Model.Named(name: "read_timeout_ms", type: Types.Type.Int, default: Model.Default.Whole(300000)),
+      Model.Named(name: "connect_to", type: Types.Type.String, default: Model.Default.Text("")),
     ],
   ),
   Model.Record(
