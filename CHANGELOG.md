@@ -10,6 +10,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- `JSON.parse` and `JSON.decode` read `-0.0` (and `-0e5`) as `-0.0`, no longer `0.0`, so every finite `Float` round-trips through JSON, as in Python; this changes the documented rule (#1639).
 - A `case` whose nested patterns cover every value, such as `ok(ok(n))`, `ok(error(_))` and `error(_)` on a `Result[Result[Int]]`, is no longer `CHECK-NON-EXHAUSTIVE-CASE` (#1794).
 - `agentica repl` reads an imported file again after it changes on disk, instead of refusing every later entry with `REPL-REFUSED` (#1815).
 
