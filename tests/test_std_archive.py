@@ -487,6 +487,38 @@ def test_gzip_trailer_and_a_second_archive_rejected(tmp_path, driver):
     assert (work / "o1" / "a.txt").read_bytes() == b"0123456789"
 
 
+def test_multi_member_gzip_is_one_tar_stream(tmp_path, driver):
+    work = tmp_path
+    body = bytes((k * 7) % 251 for k in range(3000))
+    buffer = io.BytesIO()
+    with tarfile.open(fileobj=buffer, mode="w", format=tarfile.USTAR_FORMAT) as tar:
+        for name, data in (("a.txt", b"0123456789"), ("b.bin", body)):
+            info = tarfile.TarInfo(name)
+            info.size = len(data)
+            tar.addfile(info, io.BytesIO(data))
+    raw = buffer.getvalue()
+    # Cut inside the data of b.bin (header at 1024) and inside its padding: three gzip members, no cut at an entry.
+    cuts = [1024 + 512 + 700, 1024 + 512 + 3000]
+    parts = [raw[: cuts[0]], raw[cuts[0] : cuts[1]], raw[cuts[1] :]]
+    assert b"".join(parts) == raw
+    split = b"".join(gzip.compress(part, mtime=0) for part in parts)
+    assert gzip.decompress(split) == raw
+    (work / "split.tar.gz").write_bytes(split)
+    (work / "padded.tar.gz").write_bytes(gzip.compress(raw, mtime=0) + gzip.compress(b"\x00" * 4096, mtime=0))
+    (work / "twice.tar.gz").write_bytes(gzip.compress(raw, mtime=0) + gzip.compress(raw, mtime=0))
+    calls = [
+        ("split", "split.tar.gz", ["a.txt", "b.bin"], "o1", None),
+        ("padded", "padded.tar.gz", ["a.txt"], "o2", None),
+        ("twice", "twice.tar.gz", ["a.txt"], "o3", None),
+    ]
+    lines = extract(driver, work, "tar", calls)
+    assert lines[0] == "split ok [10, 3000]"
+    assert lines[1] == "padded ok [10]"
+    assert lines[2] == "twice error archive: non-zero padding after the archive end"
+    assert (work / "o1" / "b.bin").read_bytes() == body
+    assert (work / "o2" / "a.txt").read_bytes() == b"0123456789"
+
+
 def test_entry_cap_trips_past_8192(tmp_path, driver):
     work = tmp_path
     tiny = []
