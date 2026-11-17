@@ -16,6 +16,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `agentica repl` runs entries one at a time over a session in which names, declarations and tasks live on; `--json` gives one answer per entry for agents (#1463).
 - A parameter or field default may be the bytes of a string literal, `body: Bytes = "".bytes`, directly or through a constant (#1777).
 - `[native.NAME]` takes `prebuilt = { url, source, api, sha256 }` beside `build`, and the project's manifest takes `[native_policy]`; both are checked (not used yet), and `agentica native source NAME` prints the source key, the native API and the URL of each target (part of #1168).
+- `agentica install`, `add` and `update` download the prebuilt native module files of the host target into the package cache; a wrong file is an error, a failed download a warning, and `--deny-net` or `--sandbox` download none (part of #1168).
 - `bytes.scrub(replacement = "�")` reads UTF-8 that may hold bad bytes, replacing each bad sequence, for logs and process output (#1762).
 
 ### Changed

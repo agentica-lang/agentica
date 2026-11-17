@@ -84,7 +84,8 @@ def module_of(manifest: Manifest.Manifest, name: String) -> Result[Manifest.Nati
   end
 
   message = "#{name} is not a native module of this project"
-  help = Failure.hint("write [native.#{name}] with a build table; for a module of a dependency, run this in deps/NAME")
+  text = "write [native.#{name}] with a build table; for a module of a dependency, run this in deps/<dependency>"
+  help = Failure.hint(text)
   error(Failure.fail_key(manifest.file, Reader.child("native", name), "PKG-NATIVE-MISSING", message, help))
 end
 
