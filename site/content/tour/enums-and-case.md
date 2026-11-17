@@ -374,7 +374,7 @@ no value
 missing
 ```
 
-Here `some(n)` and `none` are both listed, but each arm has a variant inside, so neither covers `Reading.Value`. The case is not exhaustive until you add `Reading.Value(_)` or `_`, or use one arm with only a name, `Reading.Value(opt)`, and match `opt` inside it.
+Arms with `Reading.Value(some(n))` and `Reading.Value(none)` would cover `Reading.Value` together. A literal never covers its type, so with `some(0)` in place of `some(n)` the case is not exhaustive until you add `Reading.Value(_)` or `_`.
 
 ```agentica {expect="CHECK-NON-EXHAUSTIVE-CASE"}
 enum Reading
@@ -384,7 +384,7 @@ end
 
 def main() -> Void
   case Reading.Missing
-    Reading.Value(some(n)) -> puts("value #{n}")
+    Reading.Value(some(0)) -> puts("zero")
     Reading.Value(none) -> puts("no value")
     Reading.Missing -> puts("missing")
   end
