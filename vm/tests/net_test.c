@@ -978,6 +978,30 @@ static void test_context_with_a_path_that_is_not_a_string(void) {
   }
 }
 
+/* Hostile bytecode: HttpWire.service takes options of AGC_HTTP_OPTIONS_FIELDS fields, the timeouts at the end among
+   them as Ints: fewer fields, or a connect or read timeout that is not an Int, fail with RUNTIME-INTERNAL. */
+static void test_service_checks_the_shape_of_its_options(void) {
+  const char *name = "HttpWire.service";
+  const agc_builtin *b = agc_find_builtin((const uint8_t *)name, strlen(name), 3);
+  assert(b);
+  for (uint32_t n = AGC_HTTP_OPTIONS_FIELDS - 2; n <= AGC_HTTP_OPTIONS_FIELDS; n++) {
+    for (uint32_t bad = AGC_HTTP_OPTION_CONNECT; bad < AGC_HTTP_OPTIONS_FIELDS; bad++) {
+      agc_struct *o = agc_new_struct(0, n);
+      for (uint32_t k = 0; k < n; k++) o->fields[k] = agc_int(1);
+      o->fields[AGC_HTTP_OPTION_PROXY] = agc_test_str("");
+      o->fields[AGC_HTTP_OPTION_TLS] = agc_void();
+      if (n == AGC_HTTP_OPTIONS_FIELDS) o->fields[bad] = agc_test_str("1");
+      else if (bad != AGC_HTTP_OPTION_CONNECT) continue;
+      agc_value args[3] = {agc_void(), agc_struct_value(o), agc_void()};
+      if (AGC_CATCH(vm.fail) == 0) {
+        (void)b->fn(&vm, args, 0);
+        assert(!"the call did not fail");
+      }
+      assert(strcmp(vm.outcome->code, "RUNTIME-INTERNAL") == 0);
+    }
+  }
+}
+
 /* The first HttpWire.upgrade_tls of a client builds its shared system-trust context (a pool job), waits for it, then
    starts the handshake on the socket it was given: the peer reads a TLS record (0x16, the ClientHello) and closes, the
    call fails, and the client keeps the context until HttpWire.drop_tls gives it back. The call's deadline covers the
@@ -1544,6 +1568,7 @@ int main(void) {
   AGC_TEST_RUN(test_upgrade_tls_on_a_dropped_client());
   AGC_TEST_RUN(test_upgrade_context_names_its_context_argument());
   AGC_TEST_RUN(test_context_with_a_path_that_is_not_a_string());
+  AGC_TEST_RUN(test_service_checks_the_shape_of_its_options());
   AGC_TEST_RUN(test_upgrade_tls_builds_the_shared_context_then_handshakes());
   AGC_TEST_RUN(test_a_send_waits_for_a_direct_send_of_another_task());
   AGC_TEST_RUN(test_a_read_receives_on_the_scheduler());
