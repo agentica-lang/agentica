@@ -27,6 +27,7 @@ static agc_value builtin_service(agc_vm *vm, agc_value *args, uint32_t span) {
   if (o->n != AGC_HTTP_OPTIONS_FIELDS) agc_wrong_tag(vm);
   for (uint32_t k = 0; k < AGC_HTTP_OPTION_PROXY; k++) (void)agc_as_int(vm, o->fields[k]);
   (void)agc_as_string(vm, o->fields[AGC_HTTP_OPTION_PROXY]);
+  for (uint32_t k = AGC_HTTP_OPTION_CONNECT; k < AGC_HTTP_OPTIONS_FIELDS; k++) (void)agc_as_int(vm, o->fields[k]);
   const agc_enum *tls = optional_of(vm, o->fields[AGC_HTTP_OPTION_TLS]);
   if (tls->n) {
     agc_tls_context_check(vm, tls->payload[0], false,

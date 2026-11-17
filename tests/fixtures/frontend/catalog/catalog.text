@@ -1056,7 +1056,7 @@ record Codec.Info name: String, members: List(Struct(StructMember))
 record Error kind: String = "error", message: String, code: Optional(Int) = none, details: Map(String, String) = {}, cause: Optional(Struct(Error)) = none, location: String = ""
 record File.Info kind: String, size_bytes: Int, modified_seconds: Int, mode: Int, user_id: Int, group_id: Int
 record HttpWire.Chunk done: Bool, next: Int, runs: List(Int), state: Int, remaining: Int, size: Int, line: Int, block: Int, count: Int, name: String, name_length: Int, total: Int, limit: Int
-record HttpWire.ClientOptions timeout_ms: Int = 30000, idle_timeout_ms: Int = 30000, max_connections: Int = 4, max_body_bytes: Int = 1048576, proxy: String = "", tls: Optional(Opaque(TLS.Context)) = none
+record HttpWire.ClientOptions timeout_ms: Int = 30000, idle_timeout_ms: Int = 30000, max_connections: Int = 4, max_body_bytes: Int = 1048576, proxy: String = "", tls: Optional(Opaque(TLS.Context)) = none, connect_timeout_ms: Int = 10000, read_timeout_ms: Int = 300000
 record HttpWire.Head method: String, target: String, path: String, headers: List(Struct(HttpWire.Header)), length: Int, chunked: Bool, expect_continue: Bool, buffered: Int, status: Int, reason: String
 record HttpWire.Header name: String, value: String
 record HttpWire.Job origin: String, scheme: String, host: String, port: Int, method: String, head: String, body: Bytes, deadline: Int, reply: Channel(Result(Struct(HttpWire.Response))), worker: Int, kept: Bool
