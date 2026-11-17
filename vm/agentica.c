@@ -273,6 +273,14 @@ static const uint8_t *session_program(size_t *len) {
   return data;
 }
 
+/* The last answer of the session child (vm/session.c), sent within the flush limit, as the other writes at the end of
+   a run. A failure on the way is caught like theirs (vm/launch.c): the answer is then not sent and the run shows its
+   own end. */
+static bool session_ended(agc_vm *vm, const agc_outcome *outcome) {
+  if (AGC_CATCH(vm->fail) != 0) return false;
+  return agc_session_ended(vm, outcome, agc_clock_ms() + (uint64_t)vm->rt->flush_timeout);
+}
+
 /* `agentica run`: argv[2] and on are the options, then `--` (or the first word that is not an option), the file and
  * the program's arguments. The steps and their order are those of a run of the front end's program, with the options
  * typed here instead of handed over: a start that fails is status 2. With `--embedded NAME` there is no file: the
@@ -344,7 +352,7 @@ static int run_command(agc_launch *launch, int argc, char **argv) {
   agc_vm *vm = agc_launch_vm(launch, program, &options, agc_launch_args(argc, argv, first), NULL);
   agc_outcome outcome = agc_vm_run(vm);
   /* A failure that the front end of `agentica repl` shows is not shown again here; the run still ends with 1. */
-  if (agc_session_ended(vm, &outcome, agc_clock_ms() + 1000)) outcome = (agc_outcome){.kind = AGC_EXITED, .exit_code = 1};
+  if (session_ended(vm, &outcome)) outcome = (agc_outcome){.kind = AGC_EXITED, .exit_code = 1};
   agc_launch_end(vm, outcome);
 }
 

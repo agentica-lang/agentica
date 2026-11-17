@@ -267,9 +267,41 @@ def items_of(session: Session, text: String) -> Items
           return Items.Incomplete if found.span.start.offset >= end_at
 
           Items.Failed(entry_problem(session, found.code, found.message, found.span, found.help))
-        Diag.Outcome.Done(items) -> Items.Found(items)
+        Diag.Outcome.Done(items) -> Items.Found(items.map { |item: Parser.EntryItem| with_bodies(item, tokens, text) })
       end
   end
+end
+
+# The item with the bodies of the heredocs opened on its last line, which its span leaves out: the tokens of a heredoc
+# stand where its opener `<<~NAME` stands, and its lines follow the line, each body after the one before.
+def with_bodies(item: Parser.EntryItem, tokens: List[Tokens.Token], text: String) -> Parser.EntryItem
+  stop = item.span.stop
+  openers: List[Int] = []
+  for token in tokens
+    at = token.span.start
+    if at.line == stop.line and at.offset >= item.span.start.offset and at.offset < stop.offset
+      if at.offset + 3 <= text.length and text.slice(at.offset, 3) == "<<~" and !openers.include?(at.offset)
+        openers = openers.push(at.offset)
+      end
+    end
+  end
+
+  return item if openers.size == 0
+
+  lines = text.split("\n")
+  last = stop.line
+  for opener in openers
+    found = tokens.filter { |token: Tokens.Token| token.span.start.offset == opener }[0].span
+    name = text.slice(opener + 3, found.stop.offset - opener - 3)
+    while last < lines.size and lines[last].strip != name
+      last += 1
+    end
+
+    last += 1
+  end
+
+  ending = Source.Position(offset: stop.offset, line: last, column: 1)
+  item.with(span: item.span.with(stop: ending))
 end
 
 # The offset after the last character of `text` that is not blank.
@@ -389,8 +421,19 @@ def attempt(
 ) -> Attempt
   plan = planned(session, text, items, dropped, session.entries + 1)
   case first_check(session, plan, settings)
-    Checks.Failed(problem) -> Attempt.Refused(problem)
+    Checks.Failed(problem) -> Attempt.Refused(suggested(session, plan, problem, settings))
     Checks.Done(found) -> second(session, text, plan, found, settings)
+  end
+end
+
+# An unknown name, checked again with every name of the session, so its help can name the one it is close to: the
+# entry takes only the names it names (`planned`).
+def suggested(session: Session, plan: Plan, problem: Problems.Problem, settings: Env.Settings) -> Problems.Problem
+  return problem if problem.code != "CHECK-UNKNOWN-NAME" or plan.params.size == plan.held.size
+
+  case first_check(session, plan.with(params: plan.held.values), settings)
+    Checks.Failed(again) -> again
+    Checks.Done(_) -> problem
   end
 end
 

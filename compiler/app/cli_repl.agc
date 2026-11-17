@@ -380,7 +380,14 @@ def ran(loop: Loop, text: String, request: Repl.Request, at: Int) -> Step
   Step.Next(after, "")
 end
 
+# The child's answer to the request. A child that ended before it took the request (System.exit in a task between
+# entries) may have answered already: its line is read even when the request could not be sent.
 def asked(child: Process, request: Repl.Request) -> Result[String]
+  _ = sent_request(child, request)
+  Process.channel_read_line(child, WAIT)
+end
+
+def sent_request(child: Process, request: Repl.Request) -> Result[Void]
   hex = OpenSSL.Digest.hexencode(request.bytes)
   at = 0
   while at < hex.length
@@ -395,8 +402,7 @@ def asked(child: Process, request: Repl.Request) -> Result[String]
 
   reads = numbers(request.reads)
   writes = numbers(request.writes)
-  try Process.channel_send(child, "entry #{request.entry} #{reads} #{writes}\n", WAIT)
-  Process.channel_read_line(child, WAIT)
+  Process.channel_send(child, "entry #{request.entry} #{reads} #{writes}\n", WAIT)
 end
 
 def numbers(slots: List[Int]) -> String
