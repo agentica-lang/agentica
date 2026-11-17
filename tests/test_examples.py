@@ -505,3 +505,4 @@ def test_algorithm_examples_reject_malformed_input_before_producing_a_solution(p
             out, code = run_text_io(program, text, stdin, max_steps=STEP_BUDGET)
             assert code is None, name + " " + stdin
             assert json.loads(out) == {"error": "invalid input"}, name + " " + stdin
+# proof
