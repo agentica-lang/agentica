@@ -17,6 +17,7 @@ import Lock from "lock"
 import Manifest from "manifest"
 import Members from "members"
 import NativeLibrary from "native_library"
+import NativePrebuilt from "native_prebuilt"
 import PackageHash from "package_hash"
 import Project from "project"
 
@@ -68,7 +69,8 @@ end
 ## no manifest), with the rules it asks for: `blank_line_after_end` and `max_line_width` (0 for no limit).
 ## `agentica` is the running Agentica version, which the `agentica` key of each package's manifest is checked against
 ## ("" checks nothing). `tests` are the names of the project's test group (`group = "test"`) that this build may not
-## import: all of them, until `with_tests` says the build is a test.
+## import: all of them, until `with_tests` says the build is a test. `policy` is the project's `[native_policy]`, which
+## the native modules of every package follow.
 struct Scope
   deps: String
   os: String
@@ -86,6 +88,7 @@ struct Scope
   blank_line_after_end: Bool
   max_line_width: Int
   agentica: String
+  policy: NativePrebuilt.Policy
 end
 
 ## How a `pkg/` import reads: a library of the pkg/ roots, or a package and the module inside it (a path with `.agc`).
@@ -123,6 +126,7 @@ def scope_of(project: Project.Project) -> Scope
         blank_line_after_end: false,
         max_line_width: 0,
         agentica: "",
+        policy: NativePrebuilt.no_policy(),
       )
     Project.Project.Declared(found) ->
       Scope(
@@ -142,6 +146,7 @@ def scope_of(project: Project.Project) -> Scope
         blank_line_after_end: found.manifest.blank_line_after_end,
         max_line_width: found.manifest.max_line_width,
         agentica: "",
+        policy: found.manifest.policy,
       )
   end
 end
@@ -168,6 +173,7 @@ def with_project_natives(workspace: Workspace.Workspace, scope: Scope, project: 
         "",
         scope.lock,
         scope.native_root,
+        scope.policy,
       )
 
       scope.with(natives: native.targets, watched: native.watched, probed: native.probed)
@@ -551,6 +557,7 @@ def natives_of(
         locked.name,
         scope.lock,
         scope.native_root,
+        scope.policy,
       )
 
       ok(found)

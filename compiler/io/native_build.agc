@@ -17,6 +17,12 @@
 ## regular file in the entry, and the receipt matches: anything else is PKG-NATIVE-BUILD, never a silent rebuild over
 ## it. Temporary folders that a run left (it died during a build) are removed once an hour old.
 ##
+## Before a build, the builder looks for the module's prebuilt file in the cache (io/native_prebuilt.agc, lookup),
+## unless the policy builds the module: the command line, then the environment (Settings.native_policy), then the
+## project's `[native_policy]` (the request's mode). A verified prebuilt file is used as it is, and no compiler starts.
+## A prebuilt-only module without one is PKG-NATIVE-BUILD (Unbuilt when optional), with no compiler started either. A
+## build that fails when `install` would have downloaded a prebuilt file says so in its help.
+##
 ## For an optional module the builder hands the warning to `warned` (app/ prints it in the form the options ask for)
 ## and returns Unbuilt. The quiet builder (for `--json` and `--ai`) prints nothing. A builder keeps what it built or
 ## failed for the rest of the run (an ATS table), so a module that many files use is built, and reported, once. Under
@@ -30,28 +36,22 @@ import Workspace from "../modules/workspace"
 import NativeBuild from "../packages/native_build"
 import NativePrebuilt from "../packages/native_prebuilt"
 import CacheFiles from "cache_files"
+import Prebuilt from "native_prebuilt"
 
 ## A builder for one run: it builds a request, or finds it built, the first time it is asked, and gives the same
 ## answer for the same library afterwards. `noted` prints on stderr what the compiler says and the path of a new build;
 ## without it (`--json`, `--ai`) nothing is printed, so stderr holds the diagnostic alone. `warned` gets the packed
-## PKG-NATIVE-UNBUILT warning of an optional module that was not built, once a run.
-def builder(noted: Bool, warned: Fn[String, Void]) -> Fn[Workspace.BuildRequest, Workspace.Built]
+## PKG-NATIVE-UNBUILT warning of an optional module that was not built, once a run. `policy` is the native policy of
+## the command line and the environment (Settings.native_policy), which goes before the request's.
+def builder(noted: Bool, warned: Fn[String, Void], policy: String) -> Fn[Workspace.BuildRequest, Workspace.Built]
   memo: ATS[String, String] = ATS.new()
-  ->(request) { remembered(memo, request, noted, warned) }
+  layers = NativePrebuilt.layers_of(policy)
+  ->(request) { remembered(memo, with_mode(request, layers), noted, warned) }
 end
 
 ## The builder of `compile` under `flag` (a --deny-* flag or --sandbox), whose program may not open native code: it
 ## starts no compiler and fails at the build table, so nothing names a module that was not built.
 def refusing(flag: String) -> Fn[Workspace.BuildRequest, Workspace.Built] = ->(request) { refused(request, flag) }
-
-## The native API of the header this binary carries, MAJOR.MINOR ("" when it carries none): what a build compiles
-## against, and the newest a module may need.
-def native_api() -> String
-  case FrontEnd.std_source(HEADER)
-    ok(text) -> NativePrebuilt.header_api(text)
-    error(_) -> ""
-  end
-end
 
 private
 
@@ -132,7 +132,43 @@ def answer(text: String) -> Workspace.Built
   Workspace.Built.Failed(rest)
 end
 
+# The request with the way the command line or the environment sends its module, when they name it.
+def with_mode(request: Workspace.BuildRequest, layers: List[NativePrebuilt.Policy]) -> Workspace.BuildRequest
+  mode = NativePrebuilt.mode_in(layers, request.library)
+  return request if mode == ""
+
+  request.with(mode: mode)
+end
+
+# The prebuilt library when there is one to use, else a build: never for a prebuilt-only module.
 def attempt(request: Workspace.BuildRequest, noted: Bool) -> Result[String]
+  downloadable = false
+  if request.mode != NativePrebuilt.MODE_BUILD
+    case Prebuilt.lookup(request)
+      Prebuilt.Lookup.Found(path) -> return ok(path)
+      Prebuilt.Lookup.Broken(packed) -> return error(packed)
+      Prebuilt.Lookup.Missing(reason, can) ->
+        if request.mode == NativePrebuilt.MODE_PREBUILT_ONLY
+          message = "#{request.library} is prebuilt-only and has no prebuilt file to use: #{reason}"
+          help = "take #{request.library} out of the prebuilt-only policy to build it from source"
+          if can
+            help = "run `agentica install` to download its prebuilt file, or #{help}"
+          end
+
+          return error(fail(request, message, help))
+        end
+
+        downloadable = can
+    end
+  end
+
+  built = build(request, noted)
+  return built if built.ok? or !downloadable
+
+  error(Failure.add_help(built.message, "or run `agentica install` to download its prebuilt file"))
+end
+
+def build(request: Workspace.BuildRequest, noted: Bool) -> Result[String]
   if request.cache_root == ""
     return error(fail(request, "there is no place for the build cache", "set HOME or XDG_CACHE_HOME"))
   end

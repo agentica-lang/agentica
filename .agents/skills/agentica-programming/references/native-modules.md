@@ -99,7 +99,13 @@ end
   warning; `--deny-net` and `--sandbox` download nothing. `[native_policy]`
   in the root manifest takes `build` (never downloaded) and `prebuilt_only`
   (a failed download is an error, `PKG-NATIVE-DENIED` under `--deny-net`),
-  each `"all"` or a list of names. Modules still build from source.
+  each `"all"` or a list of names. At first use a module uses its downloaded
+  file when its row, `api` and `source` still match (no compiler needed),
+  else it builds; a `prebuilt_only` module with no file is
+  `PKG-NATIVE-BUILD` (run `agentica install`). `--native-build[=a,b]`,
+  `--native-prebuilt-only[=a,b]` (no `=`: all) and `AGENTICA_NATIVE_BUILD`,
+  `AGENTICA_NATIVE_PREBUILT_ONLY` (`all` or `a,b`) override the manifest, the
+  flags first; `install` warns (`PKG-NATIVE-MISSING`) of an unknown name.
 - `optional = true` beside `build` (it needs `build`): a module that cannot
   be built (no compiler, a compile error) prints `warning: native module NAME
   not built: ...` once a run on stderr (`PKG-NATIVE-UNBUILT`, a JSON object

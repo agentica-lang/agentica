@@ -42,6 +42,7 @@ class Peer:
     def __init__(self):
         self.requests = []
         self.connections = 0
+        self.body = BODY
         peer = self
 
         class Handler(BaseHTTPRequestHandler):
@@ -77,7 +78,7 @@ class Peer:
                     except OSError:
                         pass
                 elif kind in ("ok", "wrong"):
-                    body = BODY if kind == "ok" else b"other bytes\n"
+                    body = peer.body if kind == "ok" else b"other bytes\n"
                     self.send_response(200)
                     self.send_header("Content-Length", str(len(body)))
                     self.end_headers()

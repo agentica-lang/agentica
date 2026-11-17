@@ -83,6 +83,11 @@ def request(
     libs: build.libs,
     files: [],
     contents: [],
+    mode: "",
+    prebuilt_sha256: {},
+    prebuilt_api: "",
+    prebuilt_source: "",
+    prebuilt_fresh: false,
   )
 end
 

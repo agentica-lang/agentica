@@ -8,6 +8,7 @@ import Env from "../modules/link_env"
 import Linker from "../modules/linker"
 import Resolve from "../modules/resolve_import"
 import Workspace from "../modules/workspace"
+import NativePrebuilt from "../packages/native_prebuilt"
 import PackageCache from "../packages/package_cache"
 import Ast from "../syntax/ast"
 import BytecodeCache from "bytecode_cache"
@@ -29,8 +30,9 @@ def store(plan: BytecodeCache.Plan, settings: Env.Settings, modules: List[Linker
       # line of its file covers it.
       files = sources.select do |module: Linker.LinkedModule| module.block == "" end
       lines = files.map do |module: Linker.LinkedModule| source_line(module) end
-      built = built_libraries(settings, sources)
-      libraries = library_lines(settings.workspace, sources, built)
+      built = built_libraries(settings, sources, BUILD_FOLDER)
+      fetched = built_libraries(settings, sources, NativePrebuilt.CACHE_FOLDER)
+      libraries = library_lines(settings.workspace, sources, built.concat(fetched))
       return false if !libraries.ok?
 
       lines = lines.concat(libraries.unwrap!)
@@ -44,6 +46,9 @@ def store(plan: BytecodeCache.Plan, settings: Env.Settings, modules: List[Linker
 end
 
 private
+
+# The folder of the package cache that holds the native builds (io/native_build.agc).
+BUILD_FOLDER = "native-build"
 
 def source_line(module: Linker.LinkedModule) -> String
   "#{BytecodeCache.SOURCE_WORD}#{CacheFiles.digest(module.text.bytes)} #{module.key}"
@@ -85,12 +90,13 @@ def library_lines(
   ok(lines)
 end
 
-# The libraries of the build cache (io/native_build.agc) that the extern functions of the program name: a removed or
-# changed build makes the entry miss, so the module is built again.
-def built_libraries(settings: Env.Settings, modules: List[Linker.LinkedModule]) -> List[String]
-  base = Paths.join(PackageCache.root(settings.env), "native-build/")
+# The libraries of a folder of the package cache that the extern functions of the program name: of the build cache
+# (io/native_build.agc) or of the prebuilt files (io/native_prebuilt.agc). A removed or changed library makes the entry
+# miss, so the module is built, or its prebuilt file checked, again.
+def built_libraries(settings: Env.Settings, modules: List[Linker.LinkedModule], folder: String) -> List[String]
+  base = Paths.join(PackageCache.root(settings.env), "#{folder}/")
   found: List[String] = []
-  return found if base == "native-build/"
+  return found if base == "#{folder}/"
 
   for module in modules
     for decl in module.declarations

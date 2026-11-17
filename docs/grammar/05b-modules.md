@@ -960,8 +960,21 @@ import Sqlite from "pkg/sqlite/db"
     source. An entry or `native-prebuilt` folder that is not private to the
     user, or a file that is not the one its receipt names, is
     `PKG-NATIVE-BUILD` at `native.NAME.prebuilt`. Under `--deny-net` or
-    `--sandbox` nothing is downloaded. This version downloads the files and
-    still builds every module from source.
+    `--sandbox` nothing is downloaded.
+  - At first use (a run, `compile`, `test`, `install`) a module that the
+    policy does not build uses its file in the cache when the target has a
+    row, the `api` loads and the package's files still give the `source` key
+    (a key that cannot be computed, such as a file of `native/` over the
+    limits of a fetched package, means a build); the receipt and the SHA-256
+    of the file are checked again once a run, and a bad entry is
+    `PKG-NATIVE-BUILD` at `native.NAME.prebuilt`. No compiler starts then.
+    Otherwise the module builds from source as above; when that fails and
+    `install` would download a file, the help says so. A `prebuilt_only`
+    module never builds: with no file in the cache it is `PKG-NATIVE-BUILD`
+    at `native.NAME.build` (the warning `PKG-NATIVE-UNBUILT` when optional),
+    and the help names `agentica install` and leaving `prebuilt_only`. The
+    bytecode cache watches the prebuilt files a program uses as it watches
+    the built libraries.
 - `[native_policy]`, in the root project's manifest only (`PKG-ROOT-ONLY` at
   `native_policy` in the manifest of a package, even an empty table), says
   which native modules always build from source and which never build:
@@ -975,7 +988,16 @@ import Sqlite from "pkg/sqlite/db"
   (`PKG-NATIVE-DENIED` at `native.NAME.prebuilt`). Such a module that has no
   file to download (no row for the target, a native API that is too new,
   changed sources, a system that is no release target) gets one line in the
-  output that says its first use fails.
+  output that says its first use fails. `--native-build[=NAMES]` and
+  `--native-prebuilt-only[=NAMES]` before the command, and the variables
+  `AGENTICA_NATIVE_BUILD` and `AGENTICA_NATIVE_PREBUILT_ONLY` (`all` or
+  `NAME,...`), say the same: for each module the flags win, then the
+  variables, then the manifest. A flag without `=` is every module; a bad
+  name, or a module in both of one layer, is a usage error (exit 2). The
+  bytecode cache keeps the programs of each flag and variable setting apart.
+  `install` warns (`PKG-NATIVE-MISSING`) of a name in any layer that is no
+  native module with `build` in the project or its packages, at
+  `native_policy.build` or `native_policy.prebuilt_only` for the manifest.
 - The stored name of a package file in the `.agcb` file is
   `pkg/<name>@<tag>/path/in/package.agc`, such as `pkg/sqlite@v1.2.0/db.agc`
   (the path is from the package folder, without the `subdir`); for a package

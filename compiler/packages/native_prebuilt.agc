@@ -34,6 +34,9 @@ FILE_MAX_BYTES = 67_108_864
 REDIRECT_HOSTS = ["objects.githubusercontent.com", "release-assets.githubusercontent.com"]
 ## The folder of the package cache that holds the prebuilt files, one entry per SHA-256.
 CACHE_FOLDER = "native-prebuilt"
+## The ways a policy can send a module: always build it from source, or never.
+MODE_BUILD = "build"
+MODE_PREBUILT_ONLY = "prebuilt_only"
 
 ## The files of one library for each target: a URL template, the source key and the native API the files were built
 ## with, and the SHA-256 of each target's file (64 lowercase hex digits), by target in the order of the file.
@@ -126,8 +129,92 @@ def api_loads?(api: String, vm_api: String) -> Bool
   files[0] == own[0] and files[1].to_i! <= own[1].to_i!
 end
 
+## Why a module has no prebuilt file to use on `target` with the native API `vm_api` of this binary, or "" when it
+## has: `sha256` and `api` are its table's ({} with no table), and `fresh` says that its sources still give the
+## table's source key. `target` is "" on a system that is none of TARGETS.
+def missing_reason(sha256: Map[String, String], api: String, fresh: Bool, target: String, vm_api: String) -> String
+  return "it has no prebuilt table" if sha256.size == 0
+
+  return "this system is none of the release targets" if target == ""
+
+  return "the table has no file for #{target}" if !sha256.has_key?(target)
+
+  return "the files need native API #{api} and this Agentica has #{vm_api}" if !api_loads?(api, vm_api)
+
+  return "the sources of native/ are not the ones the files were built from" if !fresh
+
+  ""
+end
+
 ## Whether `choice` names the module `name`.
 def chosen?(choice: Choice, name: String) -> Bool = choice.all or choice.names.include?(name)
+
+## The way of the module `name` under `policy`: MODE_BUILD, MODE_PREBUILT_ONLY, or "" when the policy does not name it.
+def mode_of(policy: Policy, name: String) -> String
+  return MODE_BUILD if chosen?(policy.build, name)
+
+  return MODE_PREBUILT_ONLY if chosen?(policy.prebuilt_only, name)
+
+  ""
+end
+
+## The way of the module `name` under the first of `layers` that names it ("" when none does): the command line, then
+## the environment, then the manifest.
+def mode_in(layers: List[Policy], name: String) -> String
+  for layer in layers
+    mode = mode_of(layer, name)
+    return mode if mode != ""
+  end
+
+  ""
+end
+
+## The policy of the command line or the environment: `build` and `prebuilt_only` are each "" (none), "all" or module
+## names joined by commas. A bad name, or a module in both, is the plain text of the error.
+def layer_of(build: String, prebuilt_only: String) -> Result[Policy]
+  built = try choice_text(build)
+  only = try choice_text(prebuilt_only)
+  return error(BOTH_HELP) if (built.all and (only.all or only.names.size > 0)) or (only.all and built.names.size > 0)
+
+  for name in only.names
+    return error("#{name}: #{BOTH_HELP}") if built.names.include?(name)
+  end
+
+  ok(Policy(build: built, prebuilt_only: only, written: build != "" or prebuilt_only != ""))
+end
+
+## The text of the layers that Settings.native_policy keeps for the bytecode cache key and the builder: one line each,
+## `build=X;prebuilt_only=Y`; "" when no layer names anything.
+def layers_text(layers: List[Policy]) -> String
+  return "" if !layers.any? do |layer: Policy| layer.written end
+
+  lines = layers.map do |layer: Policy|
+    "build=#{choice_line(layer.build)};prebuilt_only=#{choice_line(layer.prebuilt_only)}"
+  end
+
+  lines.join("\n")
+end
+
+## The layers that `layers_text` wrote (none for "", and a line that does not read is no layer).
+def layers_of(text: String) -> List[Policy]
+  return [] if text == ""
+
+  found: List[Policy] = []
+  for line in text.split("\n")
+    parts = line.split(";")
+    if parts.size == 2 and parts[0].start_with?("build=") and parts[1].start_with?("prebuilt_only=")
+      layer = layer_of(parts[0].slice(6, parts[0].length - 6), parts[1].slice(14, parts[1].length - 14))
+      if layer.ok?
+        found = found.push(layer.unwrap!)
+      end
+    end
+  end
+
+  found
+end
+
+## The module names that `policy` names, in its order, without `all`.
+def names_in(policy: Policy) -> List[String] = policy.build.names.concat(policy.prebuilt_only.names)
 
 ## The text the source key covers: the format, the library, its `build` table as written and, for each file of
 ## native/ that the package hash covers (`files`, relative paths in bytewise order), its SHA-256 in hex (`digests`, at
@@ -233,6 +320,31 @@ SAMPLE_API = "1.0"
 # The failure of a module named in both lists of the policy.
 BOTH = "a module both builds and does not"
 BOTH_HELP = "a module either always builds or never builds: name it in one of build and prebuilt_only"
+
+# A choice of the command line or the environment: "", "all" or names joined by commas.
+def choice_text(text: String) -> Result[Choice]
+  return ok(Choice(all: false, names: [])) if text == ""
+
+  return ok(Choice(all: true, names: [])) if text == "all"
+
+  names: List[String] = []
+  for name in text.split(",")
+    problem = GitSource.name_problem(name)
+    return error("#{name}: #{problem}") if problem != ""
+
+    if !names.include?(name)
+      names = names.push(name)
+    end
+  end
+
+  ok(Choice(all: false, names: names))
+end
+
+def choice_line(choice: Choice) -> String
+  return "all" if choice.all
+
+  choice.names.join(",")
+end
 
 # Why the URL template is not usable, or "": an https URL (or http to 127.0.0.1 or [::1]) once expanded, with
 # `{target}` and only the known placeholders.

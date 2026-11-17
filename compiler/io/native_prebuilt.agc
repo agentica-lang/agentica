@@ -31,13 +31,61 @@ import Project from "../packages/project"
 import Reader from "../packages/toml_read"
 import CacheFiles from "cache_files"
 import Engine from "native_artifact"
-import BuildMachine from "native_build"
 
 ## How a pass may download: `net_denied` under --deny-net or --sandbox, and `warned`, which gets each packed warning
 ## (app/ prints it in the form the options ask for).
 struct Fetching
   net_denied: Bool
   warned: Fn[String, Void]
+end
+
+## What the prebuilt cache holds for a module at its first use: the verified library, none (why, and whether `install`
+## would download one), or the packed PKG-NATIVE-BUILD of an entry that cannot be trusted.
+enum Lookup
+  Found(String)
+  Missing(String, Bool)
+  Broken(String)
+end
+
+## The native API of the header this binary carries, MAJOR.MINOR ("" when it carries none): what a build compiles
+## against, and the newest a module may need.
+def native_api() -> String
+  case FrontEnd.std_source(HEADER)
+    ok(text) -> NativePrebuilt.header_api(text)
+    error(_) -> ""
+  end
+end
+
+## The prebuilt library of the module of `request` for this target, from the cache alone: the receipt and the SHA-256
+## of the file are checked again, and an entry or folder that is not private to the user is Broken.
+def lookup(request: Workspace.BuildRequest) -> Lookup
+  target = host_target()
+  sha256 = request.prebuilt_sha256
+  reason = NativePrebuilt.missing_reason(sha256, request.prebuilt_api, request.prebuilt_fresh, target, native_api())
+  return Lookup.Missing(reason, false) if reason != ""
+
+  return Lookup.Missing("there is no package cache: HOME is not set", false) if request.cache_root == ""
+
+  sha = sha256[target]
+  entry = NativePrebuilt.entry_of(request.cache_root, sha)
+  return Lookup.Missing("its prebuilt file was not downloaded", true) if !File.lstat(entry, FILE_TIMEOUT_MS).ok?
+
+  key = Reader.child(Reader.child("native", request.library), "prebuilt")
+  context = NativeArtifact.Context(file: request.file, key: key)
+  user = own_user(context)
+  return Lookup.Broken(user.message) if !user.ok?
+
+  base = Paths.join(request.cache_root, NativePrebuilt.CACHE_FOLDER)
+  if !CacheFiles.private_kind(base, "directory", user.unwrap!).ok?
+    message = "the prebuilt cache is not private to this user"
+    return Lookup.Broken(cache_failure(context, message, "remove the folder #{base}"))
+  end
+
+  library_file = NativePrebuilt.file_name(target)
+  checked = verified(entry, library_file, sha, user.unwrap!, context)
+  return Lookup.Broken(checked.message) if !checked.ok?
+
+  Lookup.Found(Paths.join(entry, library_file))
 end
 
 ## The release target of this binary, one of NativePrebuilt.TARGETS, or "" on any other system.
@@ -61,13 +109,19 @@ def fetch_all(
   packages: List[Lock.Locked],
   fetching: Fetching,
 ) -> Result[List[String]]
-  wanted = try modules_of(settings, manifest, members, packages)
+  modules = try modules_of(settings, manifest, members, packages)
+  layers = NativePrebuilt.layers_of(settings.native_policy).push(manifest.policy)
+  warn_unknown(manifest.file, layers, modules, fetching)
+  wanted = modules.select do |module| module.library.prebuilt.some? end
   return ok([]) if wanted.size == 0
 
   target = host_target()
   if target == ""
     reason = "this system is none of the release targets"
-    only = wanted.select do |module| NativePrebuilt.chosen?(manifest.policy.prebuilt_only, module.library.name) end
+    only = wanted.select do |module|
+      NativePrebuilt.mode_in(layers, module.library.name) == NativePrebuilt.MODE_PREBUILT_ONLY
+    end
+
     return ok(only.map do |module| unavailable(module.library.name, reason) end)
   end
 
@@ -81,8 +135,8 @@ def fetch_all(
     workspace: settings.workspace,
     cache: cache,
     target: target,
-    api: BuildMachine.native_api(),
-    policy: manifest.policy,
+    api: native_api(),
+    layers: layers,
     fetching: fetching,
   )
 
@@ -99,8 +153,9 @@ end
 
 private
 
-# The std/ source that holds the release target of the binary (vm/agentica.c).
+# The std/ sources that hold the release target of the binary (vm/agentica.c) and its native header.
 TARGET_SOURCE = "internal/native/target"
+HEADER = "internal/native/agentica_native.h"
 RECEIPT = "receipt"
 DOWNLOAD_FOLDER = "download"
 # The deadline of one file, and of each step of the cache.
@@ -114,18 +169,18 @@ struct Pass
   cache: String
   target: String
   api: String
-  policy: NativePrebuilt.Policy
+  layers: List[NativePrebuilt.Policy]
   fetching: Fetching
 end
 
-# A module with a `prebuilt` table: the folder of its package, the manifest that declares it and the library.
+# A module that builds: the folder of its package, the manifest that declares it and the library.
 struct Module
   root: String
   file: String
   library: Manifest.NativeLibrary
 end
 
-# The modules with a prebuilt table, of the project first and then of each package in the order of `packages`. A
+# The modules with a `build` table, of the project first and then of each package in the order of `packages`. A
 # package whose manifest is not there has none.
 def modules_of(
   settings: Env.Settings,
@@ -134,7 +189,7 @@ def modules_of(
   packages: List[Lock.Locked],
 ) -> Result[List[Module]]
   dir = Paths.directory_of(manifest.file)
-  found = with_prebuilt(dir, manifest)
+  found = buildable(dir, manifest)
   for locked in packages
     folder = Project.folder_of(dir, members, locked)
     if !Lock.in_place?(locked)
@@ -147,16 +202,40 @@ def modules_of(
     file = Paths.join(folder, Project.MANIFEST_FILE)
     if settings.workspace.file_exists.call(file)
       declared = try Manifest.read(settings.workspace, file)
-      found = found.concat(with_prebuilt(folder, declared))
+      found = found.concat(buildable(folder, declared))
     end
   end
 
   ok(found)
 end
 
-def with_prebuilt(root: String, manifest: Manifest.Manifest) -> List[Module]
-  usable = manifest.natives.select do |library| library.build.some? and library.prebuilt.some? end
+def buildable(root: String, manifest: Manifest.Manifest) -> List[Module]
+  usable = manifest.natives.select do |library| library.build.some? end
   usable.map do |library| Module(root: root, file: manifest.file, library: library) end
+end
+
+# A warning for each module that a layer of the policy names and no package has, at the manifest's key for its own
+# policy and at the manifest file for the command line and the environment (the last layer is the manifest's).
+def warn_unknown(file: String, layers: List[NativePrebuilt.Policy], modules: List[Module], fetching: Fetching) -> Void
+  known = modules.map do |module| module.library.name end
+  for index in 0...layers.size
+    layer = layers[index]
+    unknown = NativePrebuilt.names_in(layer).select do |name: String| !known.include?(name) end
+    for name in unknown
+      message = "the native policy names #{name}, which is no native module of the project or its packages"
+      help = Failure.hint("check the name, or remove it from the policy")
+      if index == layers.size - 1
+        key = Reader.child(NativePrebuilt.POLICY_KEY, "build")
+        if !layer.build.names.include?(name)
+          key = Reader.child(NativePrebuilt.POLICY_KEY, "prebuilt_only")
+        end
+
+        fetching.warned.call(Failure.fail_key(file, key, "PKG-NATIVE-MISSING", message, help))
+      else
+        fetching.warned.call(Failure.fail_file(file, "PKG-NATIVE-MISSING", message, help))
+      end
+    end
+  end
 end
 
 # The line of one module ("" when it is skipped or only warned about), or the error that stops the pass.
@@ -164,9 +243,10 @@ def fetch_one(pass: Pass, module: Module) -> Result[String]
   library = module.library
   name = library.name
   prebuilt = library.prebuilt.unwrap!
-  return ok("") if NativePrebuilt.chosen?(pass.policy.build, name)
+  mode = NativePrebuilt.mode_in(pass.layers, name)
+  return ok("") if mode == NativePrebuilt.MODE_BUILD
 
-  only = NativePrebuilt.chosen?(pass.policy.prebuilt_only, name)
+  only = mode == NativePrebuilt.MODE_PREBUILT_ONLY
   skipped = skip_reason(pass, module)
   if skipped != ""
     return ok("") if !only
@@ -210,23 +290,13 @@ def fetch_one(pass: Pass, module: Module) -> Result[String]
   end
 end
 
-# Why the module has no prebuilt file for this pass, or "": no file for the target, files for a native API this binary
-# cannot load, or sources that no longer give the source key (or cannot be read for it).
+# Why the module has no prebuilt file for this pass, or "" (NativePrebuilt.missing_reason).
 def skip_reason(pass: Pass, module: Module) -> String
   library = module.library
   prebuilt = library.prebuilt.unwrap!
-  return "the table has no file for #{pass.target}" if !prebuilt.sha256.has_key?(pass.target)
-
-  if !NativePrebuilt.api_loads?(prebuilt.api, pass.api)
-    return "the files need native API #{prebuilt.api} and this Agentica has #{pass.api}"
-  end
-
   current = NativePrebuilt.source_of(pass.workspace, module.root, module.file, library.name, library.build.unwrap!)
-  return "the sources of native/ cannot be keyed" if !current.ok?
-
-  return "the sources of native/ are not the ones the files were built from" if current.unwrap! != prebuilt.source
-
-  ""
+  fresh = current.ok? and current.unwrap! == prebuilt.source
+  NativePrebuilt.missing_reason(prebuilt.sha256, prebuilt.api, fresh, pass.target, pass.api)
 end
 
 # The line of a prebuilt-only module that has no file to download.

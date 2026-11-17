@@ -209,7 +209,13 @@ def entry_for(settings: Env.Settings, root: String) -> Result[Entry]
     named = root
   end
 
-  key = [FORMAT, "version #{settings.version}", site.binary, root, site.inputs].join("\n")
+  parts = [FORMAT, "version #{settings.version}", site.binary, root, site.inputs]
+  # The native policy of the command line and the environment picks the library of a module, prebuilt or built.
+  if settings.native_policy != ""
+    parts = parts.push("native policy #{settings.native_policy.replace("\n", " ")}")
+  end
+
+  key = parts.join("\n")
   folder = Paths.join(site.build, BYTECODE_FOLDER)
   name = "#{Paths.last_part(real)}-#{CacheFiles.digest(named.bytes).slice(0, 16)}.agcb"
   ok(

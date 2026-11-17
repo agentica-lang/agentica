@@ -1,10 +1,11 @@
-## What a run of a program needs from the command line besides the compile: the settings a --deny-* flag changes, the
-## plan of the bytecode cache, and the hand-off of the bytes. The command line (cli.agc) uses them for a run and for
-## `compile`; they import no stage of the front end.
+## What a run of a program needs from the command line besides the compile: the settings a --deny-* flag and the native
+## policy change, the plan of the bytecode cache, and the hand-off of the bytes. The command line (cli.agc) uses them
+## for a run and for `compile`; they import no stage of the front end.
 
 import SourceRoot from "../bdd/bdd_source_root"
 import BytecodeCache from "../io/bytecode_cache"
 import Env from "../modules/link_env"
+import NativePrebuilt from "../packages/native_prebuilt"
 import Launch from "cli_launch"
 import Options from "cli_options"
 
@@ -40,6 +41,21 @@ def settings(settings: Env.Settings, deny: List[String]) -> Env.Settings
   settings.with(native_denied: true)
 end
 
+## The settings with the native policy of the command line (`--native-build`, `--native-prebuilt-only`) and of the
+## environment (AGENTICA_NATIVE_BUILD, AGENTICA_NATIVE_PREBUILT_ONLY: `all` or `NAME,...`), the flags first. A bad
+## name, or a module that one of them both builds and does not, is the text of the usage error.
+def native_settings(settings: Env.Settings, options: Options.Options) -> Result[Env.Settings]
+  flags = NativePrebuilt.layer_of(options.native_build, options.native_prebuilt_only)
+  return error("--native-build and --native-prebuilt-only: #{flags.message}") if !flags.ok?
+
+  built = System.env(BUILD_VARIABLE).unwrap_or("")
+  only = System.env(PREBUILT_ONLY_VARIABLE).unwrap_or("")
+  variables = NativePrebuilt.layer_of(built, only)
+  return error("#{BUILD_VARIABLE} and #{PREBUILT_ONLY_VARIABLE}: #{variables.message}") if !variables.ok?
+
+  ok(settings.with(native_policy: NativePrebuilt.layers_text([flags.unwrap!, variables.unwrap!])))
+end
+
 ## The bytecode cache (io/bytecode_cache.agc) serves a run and `compile` (whose bytes are the ones a fresh compile
 ## writes): not a listing of the tree or the IR, and not `--no-cache`. `check` never gets here. A `compile` under a
 ## --deny-* flag does not use it: it refuses a native module that needs a build (`builder_settings` in cli.agc), where
@@ -57,6 +73,10 @@ def launch(options: Options.Options, rest: List[String], bytes: Bytes) -> Launch
 end
 
 private
+
+# The environment variables of the native policy.
+BUILD_VARIABLE = "AGENTICA_NATIVE_BUILD"
+PREBUILT_ONLY_VARIABLE = "AGENTICA_NATIVE_PREBUILT_ONLY"
 
 # The options the VM gets, in a fixed order.
 def vm_flags(options: Options.Options, source: String) -> List[String]

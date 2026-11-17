@@ -18,6 +18,7 @@ import Lock from "lock"
 import Manifest from "manifest"
 import NativeArtifact from "native_artifact"
 import NativeBuild from "native_build"
+import NativePrebuilt from "native_prebuilt"
 import PackageHash from "package_hash"
 import Reader from "toml_read"
 
@@ -68,11 +69,17 @@ def resolve(
   package_name: String,
   lock: Lock.Lock,
   cache_root: String,
+  policy: NativePrebuilt.Policy,
 ) -> Found
   buildable = !package or member or pinned != ""
   targets: Map[String, Target] = {}
   for library in manifest.natives
     target = target_of(workspace, manifest, library, root, os, package_name, lock, cache_root, buildable, pinned)
+    case target
+      Target.Build(request) -> target = Target.Build(with_prebuilt(request, library, policy))
+      _ -> target = target
+    end
+
     targets = targets.put(library.name, target)
   end
 
@@ -110,7 +117,7 @@ def build_target(workspace: Workspace.Workspace, request: Workspace.BuildRequest
   listed = NativeBuild.listed(workspace, request)
   return Target.Unusable(listed.message) if !listed.ok?
 
-  case workspace.native_build.call(listed.unwrap!)
+  case workspace.native_build.call(fresh(workspace, listed.unwrap!))
     Workspace.Built.Library(path) -> Target.File(path)
     Workspace.Built.Skipped -> Target.System(name)
     Workspace.Built.Failed(packed) -> Target.Unusable(packed)
@@ -128,12 +135,13 @@ def build_all(
   root: String,
   os: String,
   cache_root: String,
+  policy: NativePrebuilt.Policy,
 ) -> Result[Void]
   for library in manifest.natives
     case library.build
       some(build) ->
         request = NativeBuild.request(library.name, build, root, os, manifest.file, cache_root, "", library.optional)
-        case build_target(workspace, request, library.name)
+        case build_target(workspace, with_prebuilt(request, library, policy), library.name)
           Target.Unusable(packed) -> return error(packed)
           _ -> next
         end
@@ -146,6 +154,36 @@ def build_all(
 end
 
 private
+
+# The request with the way `policy` (the root manifest's) sends the library and its prebuilt files, if any.
+def with_prebuilt(
+  request: Workspace.BuildRequest,
+  library: Manifest.NativeLibrary,
+  policy: NativePrebuilt.Policy,
+) -> Workspace.BuildRequest
+  mode = NativePrebuilt.mode_of(policy, library.name)
+  case library.prebuilt
+    some(prebuilt) ->
+      request.with(
+        mode: mode,
+        prebuilt_sha256: prebuilt.sha256,
+        prebuilt_api: prebuilt.api,
+        prebuilt_source: prebuilt.source,
+      )
+    none -> request.with(mode: mode)
+  end
+end
+
+# The request with `prebuilt_fresh`, which is true when the package's sources still give the source key of its
+# prebuilt table. A source key that cannot be computed (a file of native/ over the limits of a fetched package, say)
+# is no match: the module then builds from source.
+def fresh(workspace: Workspace.Workspace, request: Workspace.BuildRequest) -> Workspace.BuildRequest
+  return request if request.prebuilt_sha256.size == 0
+
+  build = NativeBuild.Build(sources: request.sources, defines: request.defines, libs: request.libs)
+  found = NativePrebuilt.source_of(workspace, request.root, request.file, request.library, build)
+  request.with(prebuilt_fresh: found.ok? and found.unwrap! == request.prebuilt_source)
+end
 
 # The absolute candidates of the `system` lists of this system. A list of one is not a choice, so it is not probed.
 def probes(manifest: Manifest.Manifest, os: String) -> List[String]
