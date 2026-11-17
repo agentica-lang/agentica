@@ -166,6 +166,9 @@ def groups(work):
         (["--json", "sub/boom.agc"], {}),
         (["main.agc"], {"cwd": "sub"}),
         ([str(work / "sub" / "boom.agc")], {"cwd": "/"}),
+        (["repl"], {"stdin": "xs = [1, 2]\nxs.size\nxs[5]\n:type xs\n:nope\n"}),
+        (["repl", "--json"], {"stdin": "xs = [1, 2]\nxs.size\n"}),
+        (["repl", "--nope"], {}),
     ]
     compiles = [
         (["compile", "args.agc", "-o", "out.agcb"], {"outputs": ["out.agcb"]}),

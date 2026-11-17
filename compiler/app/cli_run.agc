@@ -26,6 +26,7 @@ COMMANDS = [
   "run",
   "check",
   "compile",
+  "repl",
 ]
 
 ## Whether the words after the options are a run of a source file: a first word that is no command.

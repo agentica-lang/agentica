@@ -18,17 +18,18 @@ struct Plan
   literals: Map[String, Ir.Imm]
 end
 
-## Decides which constants are built and which get a slot. The functions reachable from `main` (by calls, `&f` and the
-## blocks inside, to a fixed point) decide the kept constants, then the constants those read. A slot is given to every
-## non-literal constant that any emitted function reads, reachable or not, so the code of an unreachable function still
-## loads. functions and constants are the declarations in program order, with the scan of each body; order is the
-## initialization order of the constants (their linked names).
+## Decides which constants are built and which get a slot. The functions reachable from the `roots` (`main` for a
+## program; by calls, `&f` and the blocks inside, to a fixed point) decide the kept constants, then the constants those
+## read. A slot is given to every non-literal constant that any emitted function reads, reachable or not, so the code
+## of an unreachable function still loads. functions and constants are the declarations in program order, with the
+## scan of each body; order is the initialization order of the constants (their linked names).
 def plan(
   functions: List[Ast.FunctionDecl],
   function_scans: List[Scans.Scan],
   constants: List[Ast.ConstDecl],
   constant_scans: List[Scans.Scan],
   order: List[String],
+  roots: List[String],
 ) -> Plan
   by_name: Map[String, Int] = {}
   literals: Map[String, Ir.Imm] = {}
@@ -51,7 +52,7 @@ def plan(
     at += 1
   end
 
-  kept_set = kept_names(function_scans, by_function, constant_scans, by_name, literals)
+  kept_set = kept_names(function_scans, by_function, constant_scans, by_name, literals, roots)
   slot_set = kept_set
   for scan in function_scans
     for name in scan.consts
@@ -121,9 +122,10 @@ def kept_names(
   constant_scans: List[Scans.Scan],
   by_name: Map[String, Int],
   literals: Map[String, Ir.Imm],
+  roots: List[String],
 ) -> Set[String]
   reached: Set[String] = Set.new([])
-  pending: List[String] = ["main"]
+  pending = roots
   wanted: List[String] = []
   kept: Set[String] = Set.new([])
   at = 0

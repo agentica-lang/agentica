@@ -63,6 +63,7 @@ import Install from "cli_install"
 import Launch from "cli_launch"
 import Options from "cli_options"
 import CliQuery from "cli_query"
+import Repl from "cli_repl"
 import Reply from "cli_reply"
 import CliRun from "cli_run"
 import Texts from "cli_text"
@@ -164,6 +165,8 @@ def dispatch(session: Session) -> Int
     return refs(session, words.drop(1))
   elsif first == "run"
     return emit(Reply.failed(2, Texts.run_first_text()))
+  elsif first == "repl"
+    return Repl.run(session.settings, session.options, words.drop(1), session.stderr_tty)
   end
 
   rest = words

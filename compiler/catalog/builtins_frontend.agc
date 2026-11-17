@@ -47,8 +47,8 @@ ROWS: List[Model.Builtin] = [
     implementation: "FrontEnd.spawn_session",
     effects: ["subprocess"],
     description: (
-      "Front end only: start the session child of `agentica repl`, `command run --driver-pid PID options... " +
-      "--session -`, with the parent channel; it ends when the front end does. Its stdin is a pipe, its stdout is " +
+      "Front end only: start the session child of `agentica repl`, `command run --session --driver-pid PID " +
+      "options... -`, with the parent channel; it ends when the front end does. Its stdin is a pipe, its stdout is " +
       "the front end's (its stderr when json is true) and its stderr the front end's; it leads its own process " +
       "group where the system has them. Any other program fails with RUNTIME-FRONT-END-ONLY."
     ),

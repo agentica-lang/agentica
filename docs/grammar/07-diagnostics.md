@@ -122,6 +122,15 @@ the style guide, or a likely typo (`LINT-ERROR-KIND`), not an error: the
 program is valid without it, and the command exits 0 unless `--strict` is
 given. A suggestion has a source span and a help that names the form to write.
 
+`REPL-` is the prefix of `agentica repl`, located at the line of the session
+(`(repl):LINE`): `REPL-USAGE` and `REPL-UNKNOWN-COMMAND` are a bad command,
+`REPL-INCOMPLETE` an input or a loaded file that ends inside an entry,
+`REPL-RESERVED-NAME` a name that starts like the code the session writes around
+an entry (`repl_entry_`, `ReplEntry`, `repl_shown_`), `REPL-KIND-CHANGE` an enum
+declared where the session had a struct of that name, `REPL-SESSION-LOST` an
+entry during which the child of the session ended, and `REPL-REFUSED` and
+`REPL-INTERNAL` a fault of the session itself.
+
 Names and forms from other languages get a `help` that names the Agentica form
 (`len(x)`, `elif`, `let x = 5`, `Mutex.new`, `Agent.start_link`, `Thread.new`, a
 Ruby String method Agentica lacks): those without a code of their own are in the
