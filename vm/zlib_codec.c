@@ -17,7 +17,13 @@
 struct agc_zcodec {
   z_stream stream;
   bool encoding, ready;
+  /* A gzip decoder: after each member it starts over for the next (members counts the ones that ended), and magic is
+     how many bytes of the next member's magic number it has checked. */
+  bool multi;
+  unsigned members, magic;
 };
+
+static const uint8_t gzip_magic[2] = {0x1f, 0x8b};
 
 /* The CRC32 chained after crc: empty input returns crc (never zlib, whose
    NULL call resets to zero), longer inputs run in uInt chunks so the cast
@@ -60,6 +66,7 @@ static agc_zcodec *codec_begin(bool encoding, int window_bits, int level) {
     return NULL;
   }
   c->encoding = encoding;
+  c->multi = !encoding && window_bits == 31;
   c->ready = true;
   return c;
 }
@@ -123,6 +130,10 @@ agc_zcodec_status agc_zcodec_decode(agc_zcodec *c, const uint8_t **inout, size_t
   *produced = 0;
   if (!c || !c->ready || c->encoding || !inout || !in_left) return AGC_ZCODEC_FORMAT;
   if (out_cap == 0) return AGC_ZCODEC_MORE;
+  /* After a member, bytes that are not the magic number of another are trailing bytes: refused before zlib sees them,
+     so the error is not that of a corrupt second member. */
+  for (size_t at = 0; c->multi && c->members > 0 && c->magic < 2 && at < *in_left; at++, c->magic++)
+    if ((*inout)[at] != gzip_magic[c->magic]) return AGC_ZCODEC_TRAILING;
   unsigned in_count = 0, out_count = 0;
   take_input(&c->stream, inout, in_left, out, out_cap, &in_count, &out_count);
   /* Z_NO_FLUSH only: the decoder never finishes a stream by itself, so the
@@ -131,7 +142,13 @@ agc_zcodec_status agc_zcodec_decode(agc_zcodec *c, const uint8_t **inout, size_t
   const char *message = c->stream.msg;
   give_back(&c->stream, inout, in_left, in_count, out_count, produced);
   switch (ret) {
-    case Z_STREAM_END: return AGC_ZCODEC_DONE;
+    case Z_STREAM_END:
+      if (c->multi) {
+        c->members++;
+        c->magic = 0;
+        if (inflateReset(&c->stream) != Z_OK) return AGC_ZCODEC_FORMAT;
+      }
+      return AGC_ZCODEC_DONE;
     case Z_OK:
     case Z_BUF_ERROR: return AGC_ZCODEC_MORE;
     case Z_MEM_ERROR: return AGC_ZCODEC_NOMEM;
@@ -140,6 +157,8 @@ agc_zcodec_status agc_zcodec_decode(agc_zcodec *c, const uint8_t **inout, size_t
     default: return AGC_ZCODEC_FORMAT;
   }
 }
+
+unsigned agc_zcodec_members(const agc_zcodec *c) { return c && c->multi ? c->members : 0; }
 
 void agc_zcodec_free(agc_zcodec *c) {
   if (!c) return;

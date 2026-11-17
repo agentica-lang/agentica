@@ -6,7 +6,7 @@ description: The Zlib builtins and the Lazy steps, which compress bytes, files a
 
 `Zlib` holds the compression builtins for bytes in the zlib wrapper (RFC 1950, the Ruby and Python default) and in gzip (RFC 1952). Files and streams go through [Lazy](/library/data-structures/lazy/#zlib-steps) steps, which also speak raw DEFLATE (RFC 1951). The VM computes them with zlib, the library it already links; nothing is written in Agentica.
 
-There is no auto-detect, no dictionary and no metadata option. Decoders are strict on purpose: one stream or member, with its checksum verified, and any trailing byte after it is an error. Unlike Python's `gzip.decompress`, concatenated members never decode: the second member is trailing bytes.
+There is no auto-detect, no dictionary and no metadata option. Decoders are strict on purpose: the checksum is verified, and a byte after the end is an error. `Zlib.inflate` and `lazy.inflate` read one stream, and any byte after it is an error. `Zlib.gunzip` and `lazy.gunzip` read every member of a gzip file (RFC 1952 section 2.2), like Python's `gzip.decompress`, and their output is the members' outputs one after another; a member may be empty. A byte after the last member that does not start another member is an error, zero padding included (Python skips it), and a member that is cut or has a bad checksum is an error.
 
 ## Bytes
 
@@ -18,7 +18,7 @@ Zlib.gunzip(data: Bytes, max_bytes: Int = 1048576) -> Result[Bytes]
 Zlib.crc32(data: Bytes, seed: Int = 0) -> Result[Int]
 ```
 
-`Zlib.deflate` compresses bytes to the zlib wrapper and `Zlib.gzip` to gzip, with `level` 0 to 9; empty input is valid and gives the empty stream or member. `Zlib.inflate` and `Zlib.gunzip` decompress one stream or member, checking the Adler checksum (zlib) or the CRC and size (gzip). Empty compressed input fails.
+`Zlib.deflate` compresses bytes to the zlib wrapper and `Zlib.gzip` to gzip, with `level` 0 to 9; empty input is valid and gives the empty stream or member. `Zlib.inflate` decompresses one stream, checking the Adler checksum, and `Zlib.gunzip` every member of a gzip file, checking the CRC and size of each. Empty compressed input fails.
 
 ```agentica {mode="check"}
 def main() -> Void

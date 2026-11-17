@@ -454,7 +454,7 @@ def test_limits_and_streaming_chunks(tmp_path, driver):
     assert (work / "o2" / "big.bin").read_bytes() == big
 
 
-def test_gzip_trailer_and_concat_rejected(tmp_path, driver):
+def test_gzip_trailer_and_a_second_archive_rejected(tmp_path, driver):
     work = tmp_path
     mini = finish([entry(b"a.txt", b"0123456789")])
     single = gzip.compress(mini)
@@ -478,7 +478,7 @@ def test_gzip_trailer_and_concat_rejected(tmp_path, driver):
     ]
     lines = extract(driver, work, "tar", calls)
     assert lines[0] == "one ok [10]"
-    assert lines[1] == "concat error archive: trailing bytes after the gzip member"
+    assert lines[1] == "concat error archive: non-zero padding after the archive end"
     assert lines[2] == "trailing error archive: trailing bytes after the gzip member"
     assert lines[3] == "zeros error archive: trailing bytes after the gzip member"
     assert lines[4] == "cut error archive: gzip stream is truncated"
