@@ -50,8 +50,9 @@ struct Connection
   scheme: String
   host: String
   port: Int
-  ## The options it was opened with: `timeout_ms` is the time of each call, and `max_body_bytes` the largest request
-  ## body. A `proxy` has no user info here, so printing a connection shows no password.
+  ## The options it was opened with: `timeout_ms` is the time of each `send_request` (the write and the head),
+  ## `read_timeout_ms` the time of each `read_body`, and `max_body_bytes` the largest request body. A `proxy` has no
+  ## user info here, so printing a connection shows no password.
   options: HttpWire.ClientOptions
   ## The `Proxy-Authorization` value of the proxy's user info ("" with none), alone in a channel that holds one value:
   ## a channel prints as `<Channel>`, where a field would print the login.
@@ -76,8 +77,8 @@ end
 ## awaits `done`: `ok` means the body ended cleanly, an `error` says why it did not (a cut body, a timeout, a body over
 ## 256 MiB). To stop early the reader closes the channel: the task's next `send` fails, it closes the connection and
 ## `done` is an `error`. That works only while data flows: on a quiet stream the task waits in its read until
-## `timeout_ms`, so the prompt stop is `Task.cancel(stream.done)`, which closes the connection at once. The connection
-## belongs to the task and is never reused.
+## `read_timeout_ms` (for ever when it is 0), so the prompt stop is `Task.cancel(stream.done)`, which closes the
+## connection at once. The connection belongs to the task and is never reused.
 struct Stream
   status: Int
   headers: List[HttpWire.Header]
@@ -191,10 +192,15 @@ end
 type App = Fn[HttpWire.Request, RequestBody, Result[Answer]]
 
 ## Creates a client that keeps connections open and reuses them. `options` is optional and defaults to
-## `HTTP.ClientOptions()`: 30 s timeouts, up to 4 connections, 1 MiB bodies, the system CA certificates and no proxy
+## `HTTP.ClientOptions()`: a 30 s `timeout_ms` for the whole call, a 10 s `connect_timeout_ms` and a 300 s
+## `read_timeout_ms` for each wait for body bytes (0 for none), a 30 s idle timeout, up to 4 connections, 1 MiB bodies,
+## the system CA certificates and no proxy
 ## (set `tls: some(context)` to use a client context of `TLS.client_context` instead of the system certificates).
-## Every number in `options` must be positive, `max_connections` at most 65536 and `max_body_bytes` at most 64 MiB, or
-## the result is an error. With a `proxy` (`http://host:port`, an origin with no path) every `http://` request goes
+## Every number in `options` must be positive, except `read_timeout_ms`, which is 0 (no limit) or positive;
+## `max_connections` is at most 65536 and `max_body_bytes` at most 64 MiB, or the result is an error. `timeout_ms` is
+## the whole call (the wait for a slot, the connect, the head and the body); `connect_timeout_ms` bounds the connect
+## (DNS, TCP, the TLS handshake and a proxy `CONNECT`) inside it, and `read_timeout_ms` each wait for body
+## bytes. With a `proxy` (`http://host:port`, an origin with no path) every `http://` request goes
 ## through that forward proxy in absolute form (`GET http://host/path HTTP/1.1`, `Host` still the target's), the
 ## connections are pooled by the proxy. An `https://` request opens a `CONNECT host:port` tunnel through the proxy,
 ## one per target, and speaks TLS inside it, verified against the target (a non-2xx answer to the `CONNECT` is an
@@ -202,13 +208,7 @@ type App = Fn[HttpWire.Request, RequestBody, Result[Answer]]
 ## `proxy` (`http://user:password@host:8080`, percent-decoded) is sent to the proxy as `Proxy-Authorization: Basic`,
 ## and a `407` from it is an error that names the proxy and not the credentials. Close the client with `close_client`.
 def client(options: HttpWire.ClientOptions = HttpWire.ClientOptions()) -> Result[HttpWire.Client]
-  try check_options(
-    options.timeout_ms,
-    options.idle_timeout_ms,
-    options.max_connections,
-    options.max_body_bytes,
-    CLIENT_MAX_BODY,
-  )
+  try check_client(options)
 
   try check_proxy(options)
   jobs: Channel[HttpWire.Job] = Channel.new(CLIENT_JOBS)
@@ -307,7 +307,7 @@ def request(
     options.max_body_bytes,
   )
 
-  deadline = Time.monotonic_ms() + options.timeout_ms
+  deadline = after(options.timeout_ms)
   reply: Channel[Result[HttpWire.Response]] = Channel.new(1)
   job = HttpWire.Job(
     origin: "#{via.scheme}://#{via.host}:#{via.port}",
@@ -332,7 +332,8 @@ def request(
 end
 
 ## Downloads the resource at `url` with a `GET` request and writes its body bytes to `path`. `options` is optional
-## and defaults to `DownloadOptions()`: a 30 s timeout and bodies up to 256 MiB.
+## and defaults to `DownloadOptions()`: a 30 s timeout and bodies up to 256 MiB. The connect takes at most the
+## client's `connect_timeout_ms` and each wait for body bytes its `read_timeout_ms`, inside the whole-call timeout.
 ##
 ## The transfer stays bounded: at most 1 MiB is held at once, the body stops at
 ## `options.max_total_bytes` with `http: body exceeds max_body_bytes`, and the file never grows past it. The file
@@ -367,7 +368,7 @@ def download(
     client_options.max_body_bytes,
   )
 
-  deadline = Time.monotonic_ms() + options.timeout_ms
+  deadline = after(options.timeout_ms)
   # What a 407 from the proxy is told as; empty when there is no proxy or the request is in a tunnel, whose 407 is the
   # server's own answer.
   denied = ""
@@ -377,7 +378,7 @@ def download(
 
   socket = try connect_download(pool, via, deadline)
   case TCP.send_bytes(socket, head_bytes(head), try time_left(socket, deadline))
-    ok(_) -> finish_download(socket, path, options, deadline, denied)
+    ok(_) -> finish_download(socket, path, options, deadline, denied, read_ms(client_options))
     error(message) ->
       TCP.close(socket)
       error(message)
@@ -385,8 +386,9 @@ def download(
 end
 
 ## Opens a connection to the `origin` (`http://host` or `https://host:8443`, with no path) and returns it, as
-## Ruby's `Net::HTTP.start` does. The connection is made now. Only `timeout_ms` (the time of each call: this one, each
-## `send_request` and each `read_body`), `max_body_bytes` (the largest request body), `tls` (over `https`, the
+## Ruby's `Net::HTTP.start` does. The connection is made now. Only `connect_timeout_ms` (the connect, at most
+## `timeout_ms`), `timeout_ms` (each `send_request`, which writes the request and reads the head), `read_timeout_ms`
+## (each `read_body`, 0 for none), `max_body_bytes` (the largest request body), `tls` (over `https`, the
 ## certificate is verified with that client context, the system trust by default, built again for each `start`) and
 ## `proxy` (an `http` origin is then reached through the proxy, which each `send_request` addresses in absolute form)
 ## of `options` apply: nothing is pooled. The connection is for one request at a time and stays open for the next one
@@ -394,13 +396,7 @@ end
 ## close it. A response body is at most 256 MiB, the limit of `download`: a longer one is an `error`. Close it with
 ## `finish`. For whole requests use `get_response` or the pooled client instead.
 def start(origin: String, options: HttpWire.ClientOptions = HttpWire.ClientOptions()) -> Result[Connection]
-  try check_options(
-    options.timeout_ms,
-    options.idle_timeout_ms,
-    options.max_connections,
-    options.max_body_bytes,
-    CLIENT_MAX_BODY,
-  )
+  try check_client(options)
 
   where = try parse_url(origin)
   if where.target != "/"
@@ -424,34 +420,7 @@ def send_request(
   body: Bytes,
   headers: List[HttpWire.Header] = [],
 ) -> Result[ResponseHead]
-  exchange = try take_exchange(conn)
-  if exchange.phase == READING
-    put_exchange(conn, exchange)
-    return error("http: the body of the last response is not read to its end", kind: "argument")
-  end
-  if exchange.phase == OVER or exchange.phase == SPENT
-    put_exchange(conn, exchange)
-    return error(CONNECTION_OVER, kind: "http.closed")
-  end
-  # A request that cannot be encoded (a bad method, header or target, a body over the limit) was never written, so
-  # the connection is as healthy as before. Only a failure after the first byte ends it.
-  encoded = HttpWire.encode_request(
-    conn.scheme,
-    conn.host,
-    conn.port,
-    method,
-    connection_target(conn, target),
-    connection_headers(conn, headers),
-    body,
-    conn.options.max_body_bytes,
-  )
-
-  case encoded
-    ok(request) -> send_encoded(conn, request, method == "HEAD", body)
-    error(message) ->
-      put_exchange(conn, exchange)
-      error(message)
-  end
+  sent_by(conn, method, target, body, headers, after(conn.options.timeout_ms))
 end
 
 ## Reads the next piece of the body of the last response, at most `max_bytes` (1 to 1 MiB, 64 KiB by default), as
@@ -473,7 +442,7 @@ def read_body(conn: Connection, max_bytes: Int = 65536) -> Result[Bytes]
     put_exchange(conn, exchange)
     return ok(NO_BYTES)
   end
-  deadline = Time.monotonic_ms() + conn.options.timeout_ms
+  deadline = Time.monotonic_ms() + read_ms(conn.options)
   case next_piece(conn.socket, exchange, max_bytes, deadline)
     ok(step) ->
       put_exchange(conn, finished_exchange(conn, step.exchange))
@@ -493,9 +462,12 @@ end
 ## Sends a request on a connection of its own and returns at the head of the response, whose body arrives on a channel
 ## (`Stream`), for a body that is too big to hold, that never ends (events, lines of a log) or that another task reads
 ## as it comes. `url` has a path and query; `method`, `body` (`Bytes`, at most `max_body_bytes`) and `headers` are as
-## for `request`. `options.timeout_ms` is the time of each wait: the connect, the head, each read of the body and each
-## `send` to the channel, so a reader that takes longer than that to ask for the next piece ends the stream. The body
-## is at most 256 MiB, whatever its framing. The connection is not pooled and ends with the body. For whole responses
+## for `request`. `options.timeout_ms` is the time until the head arrives, the connect included (the connect itself
+## takes at most `connect_timeout_ms`). After the head, `read_timeout_ms` is the time of each wait: each read of the
+## body and each `send` to the channel, so a reader that takes longer than that to ask for the next piece ends the
+## stream, and so does a server that is silent for that long. 0 is no limit, for a stream that may stay quiet: it ends
+## with the body, with `Task.cancel(stream.done)` or when the server closes it. The body is at most 256 MiB, whatever
+## its framing. The connection is not pooled and ends with the body. For whole responses
 ## use `get`.
 def open(
   method: String,
@@ -504,17 +476,12 @@ def open(
   headers: List[HttpWire.Header] = [],
   options: HttpWire.ClientOptions = HttpWire.ClientOptions(),
 ) -> Result[Stream]
-  try check_options(
-    options.timeout_ms,
-    options.idle_timeout_ms,
-    options.max_connections,
-    options.max_body_bytes,
-    CLIENT_MAX_BODY,
-  )
+  try check_client(options)
 
   where = try parse_url(url)
+  head_by = after(options.timeout_ms)
   conn = try connect_to(where, options)
-  case send_request(conn, method, where.target, body, headers)
+  case sent_by(conn, method, where.target, body, headers, head_by)
     ok(head) ->
       pieces: Channel[Bytes] = Channel.new(STREAM_PIECES)
       # A response with no body left the socket closed already when the server closes (`finished_exchange`), and a
@@ -537,9 +504,10 @@ end
 ## request then says as `Content-Length` and which ends the body as soon as that many bytes were sent (the producer
 ## need not close the channel), or -1 (the default) for a chunked body, which ends when the channel closes. `method` is
 ## `POST`, `PUT` or `PATCH`; `headers` and `options` are as for `request`, and `options.max_body_bytes` limits the
-## response body, not the upload. `options.timeout_ms` is the time of each wait: the connect, each piece from the
-## channel, each send and the head of the response. A body that is longer or shorter than `length`, or a channel that
-## stays silent for longer than the timeout, is an `error` and ends the connection. A channel that closes ends the
+## response body, not the upload. The connect takes at most `connect_timeout_ms`; `read_timeout_ms` is the time of each
+## wait for a piece from the channel and of each send (0 for none); `timeout_ms` is the time from the end of the upload
+## to the head of the response. A body that is longer or shorter than `length`, or a channel that stays silent for
+## longer than `read_timeout_ms`, is an `error` and ends the connection. A channel that closes ends the
 ## body, also when its producer died, so a producer that can fail should set `length`. A server that answers and closes
 ## before the upload ends (a 413) does not hide its answer: when a write fails, the head of the response that is
 ## waiting is read and returned, and the write failure is the `error` only when there is none. The connection is not
@@ -1045,6 +1013,8 @@ struct Pending
   socket: TCP.Socket
   job: HttpWire.Job
   max_body_bytes: Int
+  # The longest one read of the body waits.
+  read_ms: Int
 end
 
 # A response read, or why not; started is true once any byte of it came, which rules out a retry.
@@ -1464,7 +1434,7 @@ end
 # info, which only the header of each request needs.
 def connect_to(where: Target, options: HttpWire.ClientOptions) -> Result[Connection]
   via = try connect_target(where, options)
-  socket = try open_socket(via, options)
+  socket = try at_connect(open_socket(via, options))
   login: Channel[String] = Channel.new(1)
   kept = options
   if options.proxy != ""
@@ -1495,15 +1465,16 @@ end
 def open_socket(where: Target, options: HttpWire.ClientOptions) -> Result[TCP.Socket]
   return tunnel_context(where, options) if where.scheme == "https" and options.proxy != ""
 
+  wait = connect_ms(options, options.timeout_ms)
   if where.scheme == "https"
     case options.tls
-      some(context) -> return HttpWire.connect_context(where.host, where.port, context, options.timeout_ms)
+      some(context) -> return HttpWire.connect_context(where.host, where.port, context, wait)
       none ->
         context = try TLS.client_context(TLS.ClientOptions())
-        return HttpWire.connect_context(where.host, where.port, context, options.timeout_ms)
+        return HttpWire.connect_context(where.host, where.port, context, wait)
     end
   end
-  reaching(TCP.connect(where.host, where.port, options.timeout_ms), options, where)
+  reaching(TCP.connect(where.host, where.port, wait), options, where)
 end
 
 # The result of connecting to `where`, which is the proxy when the options have one: a failure names the proxy, so the
@@ -1560,7 +1531,7 @@ end
 def tunnel_context(where: Target, options: HttpWire.ClientOptions) -> Result[TCP.Socket]
   # The context is built first, so that its failure never leaves a tunnel socket behind.
   context = try tunnel_trust(options)
-  deadline = Time.monotonic_ms() + options.timeout_ms
+  deadline = Time.monotonic_ms() + connect_ms(options, options.timeout_ms)
   socket = try tunnel(options, where.host, where.port, deadline)
   left = try time_left(socket, deadline)
   upgraded = HttpWire.upgrade_context(socket, context, where.host, left)
@@ -1673,8 +1644,14 @@ def end_connection(conn: Connection) -> Void
 end
 
 # The request head and body written and the response head read: the connection is now in the response, or ended.
-def send_encoded(conn: Connection, request: String, head_only: Bool, body: Bytes) -> Result[ResponseHead]
-  case sent_request(conn, request, head_only, body)
+def send_encoded(
+  conn: Connection,
+  request: String,
+  head_only: Bool,
+  body: Bytes,
+  deadline: Int,
+) -> Result[ResponseHead]
+  case sent_request(conn, request, head_only, body, deadline)
     ok(head) ->
       if proxy_asked?(conn.options, conn.scheme, head.status)
         end_connection(conn)
@@ -1690,8 +1667,13 @@ def send_encoded(conn: Connection, request: String, head_only: Bool, body: Bytes
 end
 
 # The head sent, the body after it, and the response head read (a HEAD request has no body in its answer).
-def sent_request(conn: Connection, head: String, head_only: Bool, body: Bytes) -> Result[HttpWire.ResponseHead]
-  deadline = Time.monotonic_ms() + conn.options.timeout_ms
+def sent_request(
+  conn: Connection,
+  head: String,
+  head_only: Bool,
+  body: Bytes,
+  deadline: Int,
+) -> Result[HttpWire.ResponseHead]
   try TCP.send_bytes(conn.socket, head_bytes(head), try time_left(conn.socket, deadline))
   at = 0
   while at < body.size
@@ -1819,13 +1801,7 @@ def upload_whole(
   headers: List[HttpWire.Header],
   options: HttpWire.ClientOptions,
 ) -> Result[HttpWire.Response]
-  try check_options(
-    options.timeout_ms,
-    options.idle_timeout_ms,
-    options.max_connections,
-    options.max_body_bytes,
-    CLIENT_MAX_BODY,
-  )
+  try check_client(options)
 
   if method != "POST" and method != "PUT" and method != "PATCH"
     return error("http: upload takes POST, PUT or PATCH", kind: "argument")
@@ -1836,6 +1812,45 @@ def upload_whole(
   answer = uploaded(conn, where.target, method, body, length, headers)
   end_connection(conn)
   answer
+end
+
+# `send_request` with the time by which the head of the answer must have come.
+def sent_by(
+  conn: Connection,
+  method: String,
+  target: String,
+  body: Bytes,
+  headers: List[HttpWire.Header],
+  deadline: Int,
+) -> Result[ResponseHead]
+  exchange = try take_exchange(conn)
+  if exchange.phase == READING
+    put_exchange(conn, exchange)
+    return error("http: the body of the last response is not read to its end", kind: "argument")
+  end
+  if exchange.phase == OVER or exchange.phase == SPENT
+    put_exchange(conn, exchange)
+    return error(CONNECTION_OVER, kind: "http.closed")
+  end
+  # A request that cannot be encoded (a bad method, header or target, a body over the limit) was never written, so
+  # the connection is as healthy as before. Only a failure after the first byte ends it.
+  encoded = HttpWire.encode_request(
+    conn.scheme,
+    conn.host,
+    conn.port,
+    method,
+    connection_target(conn, target),
+    connection_headers(conn, headers),
+    body,
+    conn.options.max_body_bytes,
+  )
+
+  case encoded
+    ok(request) -> send_encoded(conn, request, method == "HEAD", body, deadline)
+    error(message) ->
+      put_exchange(conn, exchange)
+      error(message)
+  end
 end
 
 def spent?(conn: Connection) -> Bool
@@ -1861,7 +1876,7 @@ def feed_pieces(conn: Connection, pieces: Channel[Bytes]) -> Result[Void]
   while true
     piece = try read_body(conn, READ_BYTES)
     return ok() if piece.empty?
-    try pieces.send(piece, conn.options.timeout_ms)
+    try pieces.send(piece, read_ms(conn.options))
   end
   ok()
 end
@@ -1876,7 +1891,7 @@ def uploaded(
   length: Int,
   headers: List[HttpWire.Header],
 ) -> Result[HttpWire.Response]
-  timeout = conn.options.timeout_ms
+  timeout = read_ms(conn.options)
   head = try HttpWire.encode_request(
     conn.scheme,
     conn.host,
@@ -1896,7 +1911,7 @@ def uploaded(
     ok(_) -> written = try upload_pieces(conn.socket, body, length, timeout)
     error(e) -> written = write_failed(e)
   end
-  case read_head_of(conn.socket, false, DOWNLOAD_MAX_BYTES, Time.monotonic_ms() + timeout)
+  case read_head_of(conn.socket, false, DOWNLOAD_MAX_BYTES, after(conn.options.timeout_ms))
     ok(response) -> upload_answer(conn, response)
     error(message) ->
       case written
@@ -1966,6 +1981,46 @@ def read_whole(conn: Connection, most: Int) -> Result[Bytes]
     pieces = pieces.push(piece)
   end
   error(TRUNCATED, kind: "http.protocol")
+end
+
+# The options of a client: the numbers are positive, but `read_timeout_ms`, whose 0 is no limit.
+def check_client(options: HttpWire.ClientOptions) -> Result[Void]
+  try check_options(
+    options.timeout_ms,
+    options.idle_timeout_ms,
+    options.max_connections,
+    options.max_body_bytes,
+    CLIENT_MAX_BODY,
+  )
+
+  return error("http: every option must be positive", kind: "argument") if options.connect_timeout_ms <= 0
+  if options.read_timeout_ms < 0
+    return error("http: read_timeout_ms must be 0 (no limit) or positive", kind: "argument")
+  end
+  ok()
+end
+
+# The wait for a connect: `connect_timeout_ms`, and never more than `left` of the call.
+def connect_ms(options: HttpWire.ClientOptions, left: Int) -> Int = smaller(options.connect_timeout_ms, left)
+
+# The wait of one read of a body, or of one piece of an upload: `read_timeout_ms`, a year for 0, since a timeout of a
+# read closes the socket and so no wait is without an end. A wait never passes the deadline of the call it is in.
+def read_ms(options: HttpWire.ClientOptions) -> Int
+  return WATCH_MS if options.read_timeout_ms == 0
+  smaller(options.read_timeout_ms, WATCH_MS)
+end
+
+# The time `ms` from now, at most a year: a huge timeout does not overflow the clock.
+def after(ms: Int) -> Int = Time.monotonic_ms() + smaller(ms, WATCH_MS)
+
+# The timeout of a connect says so in its details (`phase` is `connect`), so a caller tells it from a read's timeout.
+def at_connect[T](answer: Result[T]) -> Result[T]
+  case answer
+    ok(value) -> ok(value)
+    error(e) ->
+      return error(e) if e.kind != "net.timeout"
+      error(e.with(details: e.details.put("phase", "connect")))
+  end
 end
 
 # `most_body` is the ceiling of `max_body_bytes`: CLIENT_MAX_BODY for a client, DOWNLOAD_MAX_BYTES for a server.
@@ -3840,7 +3895,11 @@ def run_job(worker: Worker, socket: Result[TCP.Socket], job: HttpWire.Job) -> Do
   end
   case socket
     ok(s) ->
-      attempt = exchange(Pending(socket: s, job: job, max_body_bytes: worker.options.max_body_bytes), reused)
+      attempt = exchange(
+        Pending(socket: s, job: job, max_body_bytes: worker.options.max_body_bytes, read_ms: read_ms(worker.options)),
+        reused,
+      )
+
       if not attempt.retry
         # A 407 ends the connection, as it does for `start`, `upload` and `download`.
         refused = ok_status?(attempt.answer, 407) and proxy_asked?(worker.options, job.scheme, 407)
@@ -3862,9 +3921,10 @@ end
 def connect(worker: Worker, job: HttpWire.Job) -> Result[TCP.Socket]
   left = job.deadline - Time.monotonic_ms()
   return error(TIMED_OUT, kind: "net.timeout") if left <= 0
-  return connect_https(worker.client, job.host, job.port, left) if job.scheme == "https"
+  wait = connect_ms(worker.options, left)
+  return at_connect(connect_https(worker.client, job.host, job.port, wait)) if job.scheme == "https"
   where = Target(scheme: job.scheme, host: job.host, port: job.port, target: "/")
-  reaching(TCP.connect(job.host, job.port, left), HttpWire.options(worker.client), where)
+  at_connect(reaching(TCP.connect(job.host, job.port, wait), HttpWire.options(worker.client), where))
 end
 
 def idempotent?(method: String) -> Bool
@@ -3992,7 +4052,7 @@ def read_length_body(answer: Pending, length: Int) -> Result[Whole]
   pieces: List[Bytes] = []
   left = length
   while left > 0
-    data = try recv_body(answer.socket, smaller(left, BODY_READ_BYTES), answer.job.deadline)
+    data = try recv_step(answer.socket, smaller(left, BODY_READ_BYTES), answer.job.deadline, answer.read_ms)
     return error(TRUNCATED, kind: "http.protocol") if data.empty?
     pieces = List.append(pieces, data)
     left = left - data.size
@@ -4009,12 +4069,12 @@ def read_chunked_body(answer: Pending) -> Result[Whole]
   pieces: List[Bytes] = []
   while not state.done
     if state.remaining > 0
-      data = try recv_body(answer.socket, smaller(state.remaining, BODY_READ_BYTES), deadline)
+      data = try recv_step(answer.socket, smaller(state.remaining, BODY_READ_BYTES), deadline, answer.read_ms)
       return error(TRUNCATED, kind: "http.protocol") if data.empty?
       pieces = List.append(pieces, data)
       state = HttpWire.chunk_read(state, data.size)
     else
-      framing = try recv_body(answer.socket, FRAME_BYTES, deadline)
+      framing = try recv_step(answer.socket, FRAME_BYTES, deadline, answer.read_ms)
       return error(TRUNCATED, kind: "http.protocol") if framing.empty?
       case HttpWire.chunk(state, framing, 0)
         ok(next) -> state = next
@@ -4049,7 +4109,7 @@ def read_until_close(answer: Pending) -> Result[Whole]
   pieces: List[Bytes] = []
   total = 0
   while true
-    data = try recv_body(answer.socket, BODY_READ_BYTES, answer.job.deadline)
+    data = try recv_step(answer.socket, BODY_READ_BYTES, answer.job.deadline, answer.read_ms)
     if data.empty?
       return error(TRUNCATED, kind: "http.protocol") if not HttpWire.clean_eof?(answer.socket)
       return ok(Whole(body: Bytes.concat(pieces), kept: false))
@@ -4066,8 +4126,10 @@ end
 def connect_download(pool: HttpWire.Client, where: Target, deadline: Int) -> Result[TCP.Socket]
   left = deadline - Time.monotonic_ms()
   return error(TIMED_OUT, kind: "net.timeout") if left <= 0
-  return connect_https(pool, where.host, where.port, left) if where.scheme == "https"
-  reaching(TCP.connect(where.host, where.port, left), HttpWire.options(pool), where)
+  options = HttpWire.options(pool)
+  wait = connect_ms(options, left)
+  return at_connect(connect_https(pool, where.host, where.port, wait)) if where.scheme == "https"
+  at_connect(reaching(TCP.connect(where.host, where.port, wait), options, where))
 end
 
 # Opens the destination exclusively, then streams the response into it. Every error below closes both handles;
@@ -4078,11 +4140,12 @@ def finish_download(
   options: DownloadOptions,
   deadline: Int,
   denied: String,
+  step: Int,
 ) -> Result[Download]
   case time_left(socket, deadline)
     ok(left) ->
       case File.open(path, "create_private", left)
-        ok(out) -> stream_download(socket, out, options, deadline, denied)
+        ok(out) -> stream_download(socket, out, options, deadline, denied, step)
         error(message) ->
           TCP.close(socket)
           error(message)
@@ -4100,12 +4163,13 @@ def stream_download(
   options: DownloadOptions,
   deadline: Int,
   denied: String,
+  step: Int,
 ) -> Result[Download]
   case download_head(socket, options.max_total_bytes, deadline)
     ok(head) ->
       return fail_download(socket, out, deadline, denied_error(denied)) if head.status == 407 and denied != ""
 
-      case save_body(socket, out, head, options.max_total_bytes, deadline)
+      case save_body(socket, out, head, options.max_total_bytes, deadline, step)
         ok(written) ->
           case File.close(out, larger(deadline - Time.monotonic_ms(), 1))
             ok(_) ->
@@ -4160,15 +4224,21 @@ def save_body(
   head: HttpWire.ResponseHead,
   budget: Int,
   deadline: Int,
+  step: Int,
 ) -> Result[Int]
-  return save_chunked(socket, out, budget, deadline) if head.chunked
-  return save_until_close(socket, out, budget, deadline) if head.until_close
-  save_length(socket, out, head.length, budget, deadline)
+  return save_chunked(socket, out, budget, deadline, step) if head.chunked
+  return save_until_close(socket, out, budget, deadline, step) if head.until_close
+  save_length(socket, out, head.length, budget, deadline, step)
 end
 
 # The next body bytes, at most most of them; no bytes means the peer closed the input.
 def recv_body(socket: TCP.Socket, most: Int, deadline: Int) -> Result[Bytes]
   TCP.recv_bytes(socket, most, try time_left(socket, deadline))
+end
+
+# The same, waiting at most `step` for the bytes (`read_timeout_ms`): a body that goes quiet ends the call early.
+def recv_step(socket: TCP.Socket, most: Int, deadline: Int, step: Int) -> Result[Bytes]
+  TCP.recv_bytes(socket, most, smaller(try time_left(socket, deadline), step))
 end
 
 # Appends data to the download within the whole-call deadline.
@@ -4192,11 +4262,18 @@ def write_bounded(out: File.Handle, data: Bytes, written: Int, budget: Int, dead
 end
 
 # A Content-Length body: the head already refused one over the budget, so the count only follows it.
-def save_length(socket: TCP.Socket, out: File.Handle, length: Int, budget: Int, deadline: Int) -> Result[Int]
+def save_length(
+  socket: TCP.Socket,
+  out: File.Handle,
+  length: Int,
+  budget: Int,
+  deadline: Int,
+  step: Int,
+) -> Result[Int]
   left = length
   written = 0
   while left > 0
-    data = try recv_body(socket, smaller(left, BODY_READ_BYTES), deadline)
+    data = try recv_step(socket, smaller(left, BODY_READ_BYTES), deadline, step)
     return error(TRUNCATED, kind: "http.protocol") if data.empty?
     written = try write_bounded(out, data, written, budget, deadline)
     left = left - data.size
@@ -4205,18 +4282,18 @@ def save_length(socket: TCP.Socket, out: File.Handle, length: Int, budget: Int, 
 end
 
 # A chunked body: framing goes through the decoder, whose runs say which bytes of each read are body.
-def save_chunked(socket: TCP.Socket, out: File.Handle, budget: Int, deadline: Int) -> Result[Int]
+def save_chunked(socket: TCP.Socket, out: File.Handle, budget: Int, deadline: Int, step: Int) -> Result[Int]
   data = NO_BYTES
   state = HttpWire.chunked(budget)
   written = 0
   while not state.done
     if state.remaining > 0
-      data = try recv_body(socket, smaller(state.remaining, BODY_READ_BYTES), deadline)
+      data = try recv_step(socket, smaller(state.remaining, BODY_READ_BYTES), deadline, step)
       return error(TRUNCATED, kind: "http.protocol") if data.empty?
       written = try write_bounded(out, data, written, budget, deadline)
       state = HttpWire.chunk_read(state, data.size)
     else
-      data = try recv_body(socket, FRAME_BYTES, deadline)
+      data = try recv_step(socket, FRAME_BYTES, deadline, step)
       return error(TRUNCATED, kind: "http.protocol") if data.empty?
       case HttpWire.chunk(state, data, 0)
         ok(next) -> state = next
@@ -4240,10 +4317,10 @@ def write_runs(out: File.Handle, data: Bytes, runs: List[Int], written: Int, bud
 end
 
 # A body that ends with the connection: over TLS the end must be the peer's close_notify.
-def save_until_close(socket: TCP.Socket, out: File.Handle, budget: Int, deadline: Int) -> Result[Int]
+def save_until_close(socket: TCP.Socket, out: File.Handle, budget: Int, deadline: Int, step: Int) -> Result[Int]
   written = 0
   while true
-    data = try recv_body(socket, BODY_READ_BYTES, deadline)
+    data = try recv_step(socket, BODY_READ_BYTES, deadline, step)
     if data.empty?
       return error(TRUNCATED, kind: "http.protocol") if not HttpWire.clean_eof?(socket)
       return ok(written)

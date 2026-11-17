@@ -35,15 +35,19 @@ HTTP.Header(name: String, value: String)
 HTTP.Response(status: Int, headers: List[HTTP.Header], body: Bytes)
 DownloadOptions(timeout_ms: Int = 30000, max_total_bytes: Int = 268435456)
 Download(status: Int, headers: List[HTTP.Header], bytes_written: Int)
-HTTP.ClientOptions(timeout_ms: Int = 30000, idle_timeout_ms: Int = 30000, max_connections: Int = 4, max_body_bytes: Int = 1048576, proxy: String = "", tls: Optional[TLS.Context] = none)
+HTTP.ClientOptions(timeout_ms: Int = 30000, idle_timeout_ms: Int = 30000, max_connections: Int = 4, max_body_bytes: Int = 1048576, proxy: String = "", tls: Optional[TLS.Context] = none, connect_timeout_ms: Int = 10000, read_timeout_ms: Int = 300000)
 ```
 
 - Every call is whole: it returns after the full body is read, as `Bytes` of at
   most `max_body_bytes`, with any content. `HTTP.ClientOptions()`, the default,
   gives a 30 s timeout, a 30 s idle timeout, 4 connections per origin, a 1 MiB
   body limit and system CA trust (`tls: some(context)` takes a client context
-  instead). Options must be positive (`max_body_bytes` at most 64 MiB). One
-  `timeout_ms` covers the whole call.
+  instead). Options must be positive (`max_body_bytes` at most 64 MiB;
+  `read_timeout_ms` may be 0). `timeout_ms` covers the whole call, the head
+  included (for `open`, `start` and `upload`, the time to the head);
+  `connect_timeout_ms` bounds the connect inside it; `read_timeout_ms` is the
+  longest wait for body bytes (a stream: `0` is no limit, stop it with
+  `Task.cancel(stream.done)`).
   `proxy: "http://host:port"` sends `http://` requests through a forward proxy
   and opens a `CONNECT` tunnel for `https://`; user info in it is sent as
   `Proxy-Authorization: Basic` to the proxy only, and no error shows it. A
