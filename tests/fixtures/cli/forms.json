@@ -1015,6 +1015,12 @@
   "stdout": "string.compare(other: String) -> Int\nCompare two Strings in the order of sort: -1, 0 or 1.\n",
   "written": []
  },
+ "[[\"help\", \"String.scrub\"], {}]": {
+  "code": 2,
+  "stderr": "agentica: unknown builtin String.scrub; a String is always valid UTF-8; to replace bad bytes, scrub the Bytes: b.scrub or s.bytes.scrub\n",
+  "stdout": "",
+  "written": []
+ },
  "[[\"help\", \"String.split\", \"--json\"], {}]": {
   "code": 0,
   "stderr": "",

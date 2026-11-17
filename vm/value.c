@@ -1257,6 +1257,8 @@ static size_t maximal_subpart(const uint8_t *s, size_t len) {
 size_t agc_utf8_scrub(const uint8_t *data, size_t len, const char *replacement, size_t rbytes, size_t rchars,
                       char *out, size_t *chars) {
   size_t bytes = 0, count = 0;
+  *chars = 0;
+  if (len == 0) return 0;
   for (size_t i = 0;;) {
     size_t run_chars, run = valid_run(data + i, len - i, &run_chars);
     if (out && run) memcpy(out + bytes, data + i, run);

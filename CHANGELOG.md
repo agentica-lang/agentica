@@ -17,8 +17,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
-- Every lossy UTF-8 decode (stdin, `System.args`, `System.env`, process output, `C.String`, error texts) gives one replacement per invalid sequence, as `bytes.scrub` and Python do, instead of one per byte (#1762).
-- The `std/http` client accepts HTTP/1.0 responses, which it refused with 505; the connection is not reused unless the response says `Connection: keep-alive` (#1776).
+- Every lossy UTF-8 decode (stdin, `System.args`, `System.env`, process output, paths and directory names, `C.String`, `Native.get_string`, `std/` sources, error texts) gives one replacement per invalid sequence, as `bytes.scrub` and Python do, instead of one per byte (#1762).
 - **Breaking:** `Zlib.gunzip` and `lazy.gunzip` decode every member of a gzip file (RFC 1952), as Python's `gzip.decompress` does; bytes after the last member, zero padding included, are still an error. `Archive.extract_tar` reads a `.tar.gz` of several members as one TAR stream (#1788).
 - The `std/http` client accepts HTTP/1.0 responses, which it refused with "http: HTTP version is unsupported"; the connection is not reused unless the response says `Connection: keep-alive`, and a proxy that answers `HTTP/1.0 200 Connection established` to CONNECT (classic Squid) now works (#1776).
 - The documentation moved to https://www.agentica-lang.com/agentica/; the old agentica-lang.github.io links redirect there.
