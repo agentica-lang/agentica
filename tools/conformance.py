@@ -210,7 +210,7 @@ AREAS = {
         "TCP, TLS and HTTP, client and server, against independent peers",
         ["tests/test_vm_tcp.py", "tests/test_vm_dns.py", "tests/test_vm_tls.py", "tests/test_vm_http.py",
          "tests/test_vm_http_download.py", "tests/test_vm_websocket.py", "tests/test_vm_http_proxy.py",
-         "tests/test_vm_http_timeouts.py", "tests/test_prop_http.py"],
+         "tests/test_vm_http_timeouts.py", "tests/test_vm_http_connect_to.py", "tests/test_prop_http.py"],
     ),
     "multicore": (
         "programs on four schedulers: the goldens, races between schedulers, the I/O thread",

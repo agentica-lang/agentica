@@ -196,6 +196,9 @@ type App = Fn[HttpWire.Request, RequestBody, Result[Answer]]
 ## `read_timeout_ms` for each wait for body bytes (0 for none), a 30 s idle timeout, up to 4 connections, 1 MiB bodies,
 ## the system CA certificates and no proxy
 ## (set `tls: some(context)` to use a client context of `TLS.client_context` instead of the system certificates).
+## `connect_to` is an IP address (empty by default) that every connection goes to instead of resolving the host of the
+## URL; `Host`, the TLS server name and the certificate check still use the host of the URL. It is an error for a host
+## name, and together with a proxy.
 ## Every number in `options` must be positive, except `read_timeout_ms`, which is 0 (no limit) or positive;
 ## `max_connections` is at most 65536 and `max_body_bytes` at most 64 MiB, or the result is an error. `timeout_ms` is
 ## the whole call (the wait for a slot, the connect, the head and the body); `connect_timeout_ms` bounds the connect
@@ -1466,6 +1469,8 @@ def open_socket(where: Target, options: HttpWire.ClientOptions) -> Result[TCP.So
   return tunnel_context(where, options) if where.scheme == "https" and options.proxy != ""
 
   wait = connect_ms(options, options.timeout_ms)
+  return pinned_context(where, options, wait) if where.scheme == "https" and options.connect_to != ""
+
   if where.scheme == "https"
     case options.tls
       some(context) -> return HttpWire.connect_context(where.host, where.port, context, wait)
@@ -1474,7 +1479,18 @@ def open_socket(where: Target, options: HttpWire.ClientOptions) -> Result[TCP.So
         return HttpWire.connect_context(where.host, where.port, context, wait)
     end
   end
-  reaching(TCP.connect(where.host, where.port, wait), options, where)
+  reaching(TCP.connect(address_of(options, where.host), where.port, wait), options, where)
+end
+
+# The `https` socket of `start`, `open` and `upload` with `connect_to`: TCP to that address, then TLS to the name of
+# the URL on the context of `options.tls` (or one with the system trust built for this connection).
+def pinned_context(where: Target, options: HttpWire.ClientOptions, wait: Int) -> Result[TCP.Socket]
+  context = try tunnel_trust(options)
+  deadline = Time.monotonic_ms() + wait
+  socket = try TCP.connect(options.connect_to, where.port, wait)
+  left = try time_left(socket, deadline)
+  upgraded = HttpWire.upgrade_context(socket, context, where.host, left)
+  closing_on_error(upgraded, socket, options, where.host, where.port)
 end
 
 # The result of connecting to `where`, which is the proxy when the options have one: a failure names the proxy, so the
@@ -1492,10 +1508,27 @@ end
 # A TLS connection of a client's pool: on the context of `options.tls`, or on the client's shared system-trust context
 # when it names none (HttpWire.connect_tls builds it once per client).
 def connect_tls(client: HttpWire.Client, host: String, port: Int, timeout_ms: Int) -> Result[TCP.Socket]
-  case HttpWire.options(client).tls
+  options = HttpWire.options(client)
+  return pinned_tls(client, options, host, port, timeout_ms) if options.connect_to != ""
+
+  case options.tls
     some(context) -> HttpWire.connect_context(host, port, context, timeout_ms)
     none -> HttpWire.connect_tls(client, host, port, timeout_ms)
   end
+end
+
+# A TLS connection with `connect_to`: TCP to that address, then TLS to `host` on the same context as without it.
+def pinned_tls(
+  client: HttpWire.Client,
+  options: HttpWire.ClientOptions,
+  host: String,
+  port: Int,
+  timeout_ms: Int,
+) -> Result[TCP.Socket]
+  deadline = Time.monotonic_ms() + timeout_ms
+  socket = try TCP.connect(options.connect_to, port, timeout_ms)
+  upgraded = upgrade_client(client, options, socket, host, deadline)
+  closing_on_error(upgraded, socket, options, host, port)
 end
 
 # An `https` connection of a client's pool or of a download: TLS to the host, or, with a proxy in the options, a
@@ -1997,7 +2030,27 @@ def check_client(options: HttpWire.ClientOptions) -> Result[Void]
   if options.read_timeout_ms < 0
     return error("http: read_timeout_ms must be 0 (no limit) or positive", kind: "argument")
   end
+  check_connect_to(options)
+end
+
+# `connect_to` is empty or an IP address (not a name, so nothing resolves again), and does not go with a proxy.
+def check_connect_to(options: HttpWire.ClientOptions) -> Result[Void]
+  address = options.connect_to
+  return ok() if address == ""
+
+  if ipv4_number(address) < 0 and not ipv6?(address)
+    return error("http: connect_to must be an IP address, not a host name", kind: "argument")
+  end
+  return error("http: connect_to cannot be used with a proxy", kind: "argument") if options.proxy != ""
+
   ok()
+end
+
+# The address of a connect: `connect_to` when the options set it, else the host of the URL, which the system resolver
+# then resolves. `Host`, the TLS server name and the certificate check always take the host of the URL.
+def address_of(options: HttpWire.ClientOptions, host: String) -> String
+  return host if options.connect_to == ""
+  options.connect_to
 end
 
 # The wait for a connect: `connect_timeout_ms`, and never more than `left` of the call.
@@ -3924,7 +3977,8 @@ def connect(worker: Worker, job: HttpWire.Job) -> Result[TCP.Socket]
   wait = connect_ms(worker.options, left)
   return at_connect(connect_https(worker.client, job.host, job.port, wait)) if job.scheme == "https"
   where = Target(scheme: job.scheme, host: job.host, port: job.port, target: "/")
-  at_connect(reaching(TCP.connect(job.host, job.port, wait), HttpWire.options(worker.client), where))
+  options = HttpWire.options(worker.client)
+  at_connect(reaching(TCP.connect(address_of(options, job.host), job.port, wait), options, where))
 end
 
 def idempotent?(method: String) -> Bool
@@ -4129,7 +4183,7 @@ def connect_download(pool: HttpWire.Client, where: Target, deadline: Int) -> Res
   options = HttpWire.options(pool)
   wait = connect_ms(options, left)
   return at_connect(connect_https(pool, where.host, where.port, wait)) if where.scheme == "https"
-  at_connect(reaching(TCP.connect(where.host, where.port, wait), options, where))
+  at_connect(reaching(TCP.connect(address_of(options, where.host), where.port, wait), options, where))
 end
 
 # Opens the destination exclusively, then streams the response into it. Every error below closes both handles;

@@ -35,7 +35,7 @@ HTTP.Header(name: String, value: String)
 HTTP.Response(status: Int, headers: List[HTTP.Header], body: Bytes)
 DownloadOptions(timeout_ms: Int = 30000, max_total_bytes: Int = 268435456)
 Download(status: Int, headers: List[HTTP.Header], bytes_written: Int)
-HTTP.ClientOptions(timeout_ms: Int = 30000, idle_timeout_ms: Int = 30000, max_connections: Int = 4, max_body_bytes: Int = 1048576, proxy: String = "", tls: Optional[TLS.Context] = none, connect_timeout_ms: Int = 10000, read_timeout_ms: Int = 300000)
+HTTP.ClientOptions(timeout_ms: Int = 30000, idle_timeout_ms: Int = 30000, max_connections: Int = 4, max_body_bytes: Int = 1048576, proxy: String = "", tls: Optional[TLS.Context] = none, connect_timeout_ms: Int = 10000, read_timeout_ms: Int = 300000, connect_to: String = "")
 ```
 
 - Every call is whole: it returns after the full body is read, as `Bytes` of at
@@ -48,6 +48,11 @@ HTTP.ClientOptions(timeout_ms: Int = 30000, idle_timeout_ms: Int = 30000, max_co
   `connect_timeout_ms` bounds the connect inside it; `read_timeout_ms` is the
   longest wait for body bytes (a stream: `0` is no limit, stop it with
   `Task.cancel(stream.done)`).
+  `connect_to: "203.0.113.7"` (an IP, not a name, not with `proxy`) connects
+  there and keeps the URL's host for `Host`, TLS and the certificate. An SSRF-safe
+  call: `DNS.lookup(host)`, refuse private, loopback, link-local and reserved
+  addresses, then `connect_to:` a checked one (no second lookup to rebind). A
+  custom DNS or a fixed address works the same.
   `proxy: "http://host:port"` sends `http://` requests through a forward proxy
   and opens a `CONNECT` tunnel for `https://`; user info in it is sent as
   `Proxy-Authorization: Basic` to the proxy only, and no error shows it. A
