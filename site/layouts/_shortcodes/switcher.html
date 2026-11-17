@@ -1,0 +1,31 @@
+{{- $id := printf "switcher-%d" .Ordinal -}}
+{{- $_ := .Inner -}}
+{{- $tabs := .Store.Get "tabs" | default slice -}}
+{{- if not (.Page.Store.Get "switcher-style") }}{{ .Page.Store.Set "switcher-style" true -}}
+<style>
+.switcher{margin:1.25rem 0}
+.switcher>input{position:absolute;opacity:0;pointer-events:none}
+.switcher-tabs{display:flex;flex-wrap:wrap;gap:.25rem;border-bottom:1px solid var(--border)}
+.switcher-tabs label{padding:.4rem .9rem;cursor:pointer;color:var(--muted);border:1px solid transparent;border-bottom:0;border-radius:var(--radius) var(--radius) 0 0;margin-bottom:-1px}
+.switcher-tabs label:hover{color:var(--fg)}
+.switcher>section{display:none;padding-top:.5rem}
+{{ range seq 6 }}
+.switcher:has(>input:nth-of-type({{ . }}):checked)>.switcher-tabs>label:nth-of-type({{ . }}){color:var(--fg);background:var(--bg);border-color:var(--border);font-weight:600}
+.switcher:has(>input:nth-of-type({{ . }}):checked)>section:nth-of-type({{ . }}){display:block}
+.switcher:has(>input:nth-of-type({{ . }}):focus-visible)>.switcher-tabs>label:nth-of-type({{ . }}){outline:var(--focus-ring)}
+{{ end }}
+</style>
+{{ end -}}
+<div class="switcher">
+{{- range $i, $tab := $tabs }}
+<input type="radio" name="{{ $id }}" id="{{ $id }}-{{ $i }}" aria-label="{{ $tab.title }}"{{ if eq $i 0 }} checked{{ end }}>
+{{- end }}
+<div class="switcher-tabs">
+{{- range $i, $tab := $tabs }}
+<label for="{{ $id }}-{{ $i }}">{{ $tab.title }}</label>
+{{- end }}
+</div>
+{{- range $tabs }}
+<section>{{ .body }}</section>
+{{- end }}
+</div>

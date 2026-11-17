@@ -6,6 +6,25 @@ several cores, and it comes with HTTP, TLS and WebSockets, packages and C native
 modules. A front end written in Agentica compiles each program to bytecode, and
 a C VM runs it. Both are one binary, `agentica`.
 
+```agentica
+def main() -> Void
+  ["4", "8", "x"].each do |text|
+    case text.to_i
+      ok(n) -> puts("#{text} doubled is #{n * 2}")
+      error(_) -> puts("#{text} is not a number")
+    end
+  end
+end
+```
+
+```text
+4 doubled is 8
+8 doubled is 16
+x is not a number
+```
+
+Save it as `hello.agc` and run it with `agentica hello.agc`.
+
 **[Read the documentation →](https://www.agentica-lang.com/agentica/)**
 
 Contributor resources: [language specification](docs/grammar.md) · [agent

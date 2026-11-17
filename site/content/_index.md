@@ -7,6 +7,55 @@ Agentica is Ruby with static types. It has Ruby-like syntax. Every program is ch
 
 The project is hosted on [GitHub](https://github.com/agentica-lang/agentica).
 
+{{< switcher >}}
+{{< example title="Handle errors" >}}
+```agentica
+def main() -> Void
+  ["4", "8", "x"].each do |text|
+    case text.to_i
+      ok(n) -> puts("#{text} doubled is #{n * 2}")
+      error(_) -> puts("#{text} is not a number")
+    end
+  end
+end
+```
+
+```output
+4 doubled is 8
+8 doubled is 16
+x is not a number
+```
+{{< /example >}}
+{{< example title="Count words" >}}
+```agentica
+def main() -> Void
+  words = "Fun to learn, delightful to ship".downcase.replace(",", "").split(" ")
+  puts(words.tally)
+end
+```
+
+```output
+{"fun": 1, "to": 2, "learn": 1, "delightful": 1, "ship": 1}
+```
+{{< /example >}}
+{{< example title="Run in parallel" >}}
+```agentica
+def square(n: Int) -> Int = n * n
+
+def main() -> Void
+  tasks = (1..5).to_a.map { |n| Task.spawn(&square, n) }
+  puts(tasks.map { |task| Task.await(task) })
+end
+```
+
+```output
+[1, 4, 9, 16, 25]
+```
+{{< /example >}}
+{{< /switcher >}}
+
+A longer program:
+
 ```agentica
 # Prices are in cents, so the math stays exact.
 TAX_PERCENT = 21

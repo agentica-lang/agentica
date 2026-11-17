@@ -1,0 +1,2 @@
+{{- $body := .Inner | .Page.RenderString (dict "display" "block") -}}
+{{- .Parent.Store.Add "tabs" (slice (dict "title" (.Get "title") "body" $body)) -}}
