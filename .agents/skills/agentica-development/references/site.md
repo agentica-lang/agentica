@@ -36,9 +36,10 @@ rule that a site page shows.
   `git add site/themes/docs-theme`, `make site`. `<commit>` is a commit on the
   theme's default branch (never one from a PR branch): a deleted or squashed
   branch breaks `git submodule update`. `tools/site_versions.py`
-  builds every tag that uses the theme with the theme commit of the current
-  checkout, so a theme bump restyles every version at the next deploy; a tag
-  that fails with it fails the deploy.
+  builds every tag that uses the theme with the theme commit that HEAD pins,
+  not the one checked out in the working tree (dev uses the working tree), so
+  commit the bump before `make site-versions`. A theme bump restyles every
+  version at the next deploy; a tag that fails with it fails the deploy.
 
 ## Content
 
@@ -121,11 +122,13 @@ cache) builds them all. What it does not say:
   of the current `pages.yml`; an older tag, with its own layouts, with those
   of its own `pages.yml`, and the assembly swaps its icon for the org icons.
   Keep the four `env` names of the `build` job.
-- The selector and the banner (`site/versions/selector.{js,css}`) are not part
-  of a build: the assembly copies them to `/_versions/` and adds their tags to
-  every HTML page, so a fix applies to every version at the next deploy. They
-  use only the `.site-header`, its `.version` link and the color tokens
-  (`_tokens.scss` of the docs theme); each old release carries its own copy.
+- The selector and the banner are the docs theme's (`params.versions`, on in
+  `site/hugo.toml`; the theme's README, Versions). The script turns them on in
+  every build with the theme (`HUGO_PARAMS_VERSIONS_*`), the root build
+  publishes them at `/_versions/`, and every page of every version loads that
+  copy, so a theme bump applies to every version at the next deploy. A tag
+  from before the theme (0.27.0 and older) gets the same two tags from the
+  assembly.
 - Search engines see only the root. In the `<head>` of every page under
   `/VERSION/`, the assembly puts a canonical URL to the same page at the root
   (or `noindex,follow` when the root has no such page); every page under

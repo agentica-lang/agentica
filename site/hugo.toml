@@ -16,6 +16,10 @@ enableGitInfo = true
   branch = "master"
   repoPublic = false
 
+  # The theme's version selector; tools/site_versions.py turns it on for every version and passes the root.
+  [params.versions]
+    enabled = true
+
 [module.hugoVersion]
   extended = true
   min = "0.167.0"

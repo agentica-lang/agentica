@@ -3,13 +3,13 @@
 The real Hugo build runs in `make site-versions` and pages.yml. This test runs the whole assembly on a small git
 repository whose `make site` writes two pages: the tags that become versions (and the ones that do not), the tag with
 no site left out, a tag that fails (or no tag built at all) failing the run, the latest release served at the root, the
-selector tags added to every page once and to nothing else, a second run that builds only what is not cached, and
-each tag built with the docs theme commit it pins.
+selector loaded once by every page (the docs theme's own tags, or the assembly's on a page built without the theme) and
+by nothing else, a second run that builds only what is not cached, and each tag built with the docs theme commit it
+pins.
 """
 import importlib.util
 import json
 import os
-import shutil
 import subprocess
 
 import pytest
@@ -17,8 +17,11 @@ import pytest
 from tests.agentica_test import ROOT
 
 # Each tag's `make site` records its own base URL and version in its pages (and the mark of its docs theme, when it has
-# one); a tree with a FAIL file fails.
+# one); a tree with a FAIL file fails. With the selector on (HUGO_PARAMS_VERSIONS_*), it does what the docs theme does:
+# the selector's two files under _versions/, and its two tags, minified, in the head of every page.
 MAKEFILE = (
+    "HEAD = $(if $(HUGO_PARAMS_VERSIONS_ENABLED),<link rel=stylesheet href=$(HUGO_PARAMS_VERSIONS_ROOT)_versions/"
+    "selector.css><script src=$(HUGO_PARAMS_VERSIONS_ROOT)_versions/selector.js defer></script>)\n"
     ".PHONY: site\n"
     "site:\n"
     "\t@test ! -e FAIL\n"
@@ -26,15 +29,17 @@ MAKEFILE = (
     "\t@if [ -e FLAKY ] && [ ! -e $(ONCE) ]; then touch $(ONCE); exit 1; fi\n"
     "\t@echo run >> $(RUNS)\n"
     "\tmkdir -p site/public/library\n"
-    "\tprintf '<html><head></head><body>%s %s</body></html>' '$(HUGO_FLAGS)' \"$$(cat VERSION)\""
+    "\tprintf '<html><head>$(HEAD)</head><body>%s %s</body></html>' '$(HUGO_FLAGS)' \"$$(cat VERSION)\""
     " > site/public/library/index.html\n"
-    "\tprintf '<html><head></head><body>%s</body></html>' '$(HUGO_FLAGS)' > site/public/index.html\n"
+    "\tprintf '<html><head>$(HEAD)</head><body>%s</body></html>' '$(HUGO_FLAGS)' > site/public/index.html\n"
     "\tprintf 'see <head></head> /agentica/' > site/public/llms.txt\n"
     "\t@if [ -e site/themes/docs-theme/mark ]; then cat site/themes/docs-theme/mark >> site/public/index.html; fi\n"
     "\tmkdir -p site/public/only-$$(cat VERSION)\n"
     "\tprintf '<html><head><link href=x REL=canonical><meta content=all name=robots><link rel=icon href=data:x></head>"
     "<body><link rel=canonical href=body></body></html>' > site/public/only-$$(cat VERSION)/index.html\n"
-    "\tprintf '<html><head></head><body>not found</body></html>' > site/public/404.html\n"
+    "\tprintf '<html><head>$(HEAD)</head><body>not found</body></html>' > site/public/404.html\n"
+    "\t@if [ -n '$(HUGO_PARAMS_VERSIONS_ENABLED)' ]; then mkdir -p site/public/_versions;"
+    " echo js > site/public/_versions/selector.js; echo css > site/public/_versions/selector.css; fi\n"
     "\tprintf '<urlset></urlset>' > site/public/sitemap.xml\n"
     "\tgit rev-parse --is-inside-work-tree > site/public/git.txt\n"
 )
@@ -72,20 +77,29 @@ def release(repo, version, tag=None, fail=False, flaky=False):
 
 @pytest.fixture
 def repo(tmp_path, monkeypatch):
+    """0.9.0 and 0.10.0 from before the docs theme, 0.11.0 with it (its `mark` is "theme one", in tmp_path/theme)."""
     repo = tmp_path / "repo"
-    (repo / "site" / "versions").mkdir(parents=True)
+    (repo / "site").mkdir(parents=True)
     (repo / ".github" / "workflows").mkdir(parents=True)
     (repo / "Makefile").write_text(MAKEFILE)
     git(repo, "init", "-q")
     release(repo, "0.1.0", "0.1.0")  # before the site existed: no site/hugo.toml, no pages.yml
     (repo / "site" / "hugo.toml").write_text("")
-    for name in tool.SELECTOR_FILES:
-        shutil.copy(ROOT / "site" / "versions" / name, repo / "site" / "versions" / name)
     pins = "HUGO_VERSION: 1.0.0\n  HUGO_SHA256: a\n  DART_SASS_VERSION: 1.0.0\n  DART_SASS_SHA256: b\n"
     (repo / ".github" / "workflows" / "pages.yml").write_text("env:\n  " + pins)
     release(repo, "0.9.0", "0.9.0")
     release(repo, "0.10.0-beta.1", "0.10.0-beta.1")
     release(repo, "0.10.0", "0.10.0")
+    theme = tmp_path / "theme"
+    theme.mkdir()
+    git(theme, "init", "-q")
+    (theme / "mark").write_text("theme one")
+    (theme / "assets" / "versions").mkdir(parents=True)
+    for name in ("selector.js", "selector.css"):
+        (theme / "assets" / "versions" / name).write_text("theme " + name)
+    git(theme, "add", "-A")
+    git(theme, "commit", "-q", "-m", "one")
+    git(repo, "-c", "protocol.file.allow=always", "submodule", "add", "-q", str(theme), tool.THEME)
     release(repo, "0.11.0", "0.11.0")
     release(repo, "0.12.0", "bootstrap-racket")
     monkeypatch.setattr(tool, "ROOT", repo)
@@ -133,6 +147,7 @@ def test_one_folder_per_release_with_the_latest_at_the_root(repo, tmp_path, monk
     assert "--baseURL https://example.org/docs/dev/</body>" in (out / "dev" / "index.html").read_text()
     assert not (out / "0.1.0").exists() and not (out / "0.10.0-beta.1").exists()
     assert "`0.1.0`" in (tmp_path / "summary.md").read_text()
+    # The root build, with the theme, publishes the selector that every version loads.
     assert (out / "_versions" / "selector.js").exists() and (out / "_versions" / "selector.css").exists()
 
 
@@ -143,14 +158,29 @@ def test_every_html_page_loads_the_selector_once_and_the_cache_skips_builds(repo
         '<script src="/docs/_versions/selector.js" defer></script>'
     )
     pages = list(out.rglob("*.html"))
-    assert pages and all(page.read_text().count(tags) == 1 for page in pages)
+    assert pages and all(page.read_text().count("_versions/selector.js") == 1 for page in pages)
+    # A build with the theme loads it with the theme's tags, from the root of all versions; one from before the theme
+    # gets the assembly's.
+    for page in ("0.11.0/library/index.html", "library/index.html", "dev/index.html", "0.11.0/404.html"):
+        text = (out / page).read_text()
+        assert "<script src=/docs/_versions/selector.js defer>" in text and tags not in text
+    for page in ("0.9.0/library/index.html", "0.10.0/only-0.10.0/index.html", "0.10.0/404.html"):
+        assert (out / page).read_text().count(tags) == 1
     # Other files are not touched, even when they look like a page.
     assert (out / "llms.txt").read_text() == "see <head></head> /agentica/"
     # 0.9.0, 0.10.0 and 0.11.0 (versioned and at the root) and dev; 0.1.0 has no site and never runs make.
     assert first == 5
     code, out, total = build(tmp_path, monkeypatch)
     assert code == 0 and total - first == 1  # only dev builds again: the working tree is never cached
-    assert all(page.read_text().count(tags) == 1 for page in out.rglob("*.html"))
+    assert all(page.read_text().count("_versions/selector.js") == 1 for page in out.rglob("*.html"))
+
+
+def test_a_root_built_without_the_theme_gets_the_selector_of_the_current_theme(repo, tmp_path, monkeypatch):
+    monkeypatch.setattr(tool, "final_tags", lambda: ["0.10.0", "0.9.0"])
+    code, out, _ = build(tmp_path, monkeypatch)
+    assert code == 0
+    assert (out / "_versions" / "selector.js").read_text() == "theme selector.js"
+    assert (out / "_versions" / "selector.css").read_text() == "theme selector.css"
 
 
 def test_only_the_root_is_indexed_and_tags_build_in_a_git_checkout(repo, tmp_path, monkeypatch):
@@ -187,16 +217,9 @@ def test_only_the_root_is_indexed_and_tags_build_in_a_git_checkout(repo, tmp_pat
 
 
 def tag_with_theme(repo, tmp_path):
-    """Add the docs theme submodule (its `mark` is "theme one") and tag 0.13.0 with it; returns the theme repo."""
-    theme = tmp_path / "theme"
-    theme.mkdir()
-    git(theme, "init", "-q")
-    (theme / "mark").write_text("theme one")
-    git(theme, "add", "-A")
-    git(theme, "commit", "-q", "-m", "one")
-    git(repo, "-c", "protocol.file.allow=always", "submodule", "add", "-q", str(theme), tool.THEME)
+    """Tag 0.13.0, with the docs theme of the fixture; returns the theme repo."""
     release(repo, "0.13.0", "0.13.0")
-    return theme
+    return tmp_path / "theme"
 
 
 def test_a_tag_with_the_theme_is_built_with_the_current_theme_and_pins(repo, tmp_path, monkeypatch):
@@ -218,20 +241,20 @@ def test_a_tag_with_the_theme_is_built_with_the_current_theme_and_pins(repo, tmp
     assert "theme two" in (out / "index.html").read_text()
     assert "theme two" in (out / "dev" / "index.html").read_text()
     # A tag from before the theme keeps its own Hugo pins; one with the theme takes the current ones.
-    assert used.count("2.0.0") == 3 and used.count("1.0.0") == 3  # 0.13.0 twice and dev; 0.9.0, 0.10.0, 0.11.0
+    assert used.count("2.0.0") == 4 and used.count("1.0.0") == 2  # 0.11.0, 0.13.0 twice and dev; 0.9.0, 0.10.0
     # A newer theme pin changes the cache key of the tags with the theme, so they build again; the others stay cached.
     (theme / "mark").write_text("theme three")
     git(theme, "commit", "-q", "-am", "three")
     git(repo / tool.THEME, "pull", "-q")
     release(repo, "0.14.0-dev2")
     code, out, second = build(tmp_path, monkeypatch)
-    assert code == 0 and second - first == 3  # 0.13.0 at its folder and at the root, and dev
+    assert code == 0 and second - first == 4  # 0.11.0, 0.13.0 at its folder and at the root, and dev
     assert "theme three" in (out / "0.13.0" / "index.html").read_text()
     # So does a change of the pins alone.
     workflow.write_text(workflow.read_text().replace("HUGO_VERSION: 2.0.0", "HUGO_VERSION: 3.0.0"))
     release(repo, "0.14.0-dev3")
     code, out, third = build(tmp_path, monkeypatch)
-    assert code == 0 and third - second == 3 and used.count("3.0.0") == 3
+    assert code == 0 and third - second == 4 and used.count("3.0.0") == 4
 
 
 def test_org_icons_match_the_theme_and_a_page_with_them_is_left_alone(tmp_path):
