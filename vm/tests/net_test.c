@@ -823,15 +823,31 @@ static void line_is(agc_value v, const char *text) {
   assert(s->bytes == strlen(text) && memcmp(s->data, text, s->bytes) == 0);
 }
 
-/* At N > 1 a read of a plain socket that the buffered input answers takes it on the scheduler (#1197): the first read
-   parks and the I/O thread reads both lines, the second returns without a park while the loop does not run. A read
-   then waits again on the I/O thread, and a cancelled one stops the reading, so bytes that come after it stay in the
-   kernel for the next read and the I/O thread never writes the input beside a take. */
+/* Waits until BYTES bytes are in the kernel input of the descriptor FD: a send on macOS loopback may reach it later. */
+static void wait_queued(int fd, int bytes) {
+  struct pollfd in_kernel = {fd, POLLIN, 0};
+  uint64_t due = agc_clock_ms() + 5000;
+  for (int queued = 0; queued < bytes;) {
+    assert(agc_clock_ms() <= due && poll(&in_kernel, 1, 10) >= 0);
+    assert(ioctl(fd, FIONREAD, &queued) == 0);
+  }
+}
+
+/* At N > 1 a read of a plain socket takes its input on the scheduler (#1197): with both lines in the kernel, the
+   first read receives them and the second takes the buffered one, both without a park while the loop does not run.
+   A read that finds nothing then parks, and a cancelled one stops the reading, so bytes that come after it stay in the
+   kernel and the I/O thread never writes the input beside a take. The next read skips its receive (recv_here's
+   back-off) and waits on the I/O thread. The lines are in the kernel before each read: a first read that found
+   nothing would park and spend the back-off, and the third would then receive its line without a park (#1812). */
 static void test_a_read_takes_buffered_input_on_the_scheduler(void) {
   int fd = open_pair();
+  int mine = vm_side(fd);
   agc_runq_share(vm.rt->runq);
   assert(send(fd, "one\ntwo\n", 8, 0) == 8);
-  line_is(step(call("TCP.read_line", 2, socket_v, agc_int(5000), agc_void(), agc_void())), "one");
+  wait_queued(mine, 8);
+  calling first = call("TCP.read_line", 2, socket_v, agc_int(5000), agc_void(), agc_void());
+  assert(!start(&first));
+  line_is(first.result, "one");
   calling second = call("TCP.read_line", 2, socket_v, agc_int(5000), agc_void(), agc_void());
   assert(!start(&second));
   line_is(second.result, "two");
@@ -841,7 +857,10 @@ static void test_a_read_takes_buffered_input_on_the_scheduler(void) {
   on_thread(detach_task, NULL);
   end_detached_job();
   assert(send(fd, "three\n", 6, 0) == 6);
+  wait_queued(mine, 6);
   for (int k = 0; k < 10; k++) (void)agc_io_poll(&vm, false);
+  int queued = 0;
+  assert(ioctl(mine, FIONREAD, &queued) == 0 && queued == 6);
   calling third = call("TCP.read_line", 2, socket_v, agc_int(5000), agc_void(), agc_void());
   assert(start(&third));
   wait_woken();
@@ -1253,12 +1272,7 @@ static void open_tls_pair_greeted(tls_peer *p) {
 static void peer_sends_to_kernel(const tls_peer *p, struct pollfd *in_kernel, const char *text) {
   uint64_t before = BIO_number_written(SSL_get_wbio(p->ssl));
   peer_send(p, text);
-  uint64_t sent = BIO_number_written(SSL_get_wbio(p->ssl)) - before;
-  uint64_t due = agc_clock_ms() + 5000;
-  for (int queued = 0; (uint64_t)queued < sent;) {
-    assert(agc_clock_ms() <= due && poll(in_kernel, 1, 10) >= 0);
-    assert(ioctl(in_kernel->fd, FIONREAD, &queued) == 0);
-  }
+  wait_queued(in_kernel->fd, (int)(BIO_number_written(SSL_get_wbio(p->ssl)) - before));
 }
 
 /* recv_here on a TLS socket (#1197): a read that the input does not answer receives the ciphertext on its scheduler
