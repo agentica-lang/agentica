@@ -167,6 +167,12 @@ SINGLE_FILE = [
     ("another method of a string literal is no default",
      'def f(a: String = "x".upcase) -> String\n  return a\nend\n\n' + main_with("  puts(f())\n"),
      "CHECK-DEFAULT-VALUE", '"x".upcase'),
+    ("bytes with an argument are no default",
+     'def send(body: Bytes = "x".bytes(1)) -> Int\n  return body.length\nend\n\n' + main_with("  puts(send())\n"),
+     "CHECK-DEFAULT-VALUE", '"x".bytes(1)'),
+    ("the bytes of an operation on strings are no default",
+     'def send(body: Bytes = ("x" + "y").bytes) -> Int\n  return body.length\nend\n\n' + main_with("  puts(send())\n"),
+     "CHECK-DEFAULT-VALUE", '("x" + "y").bytes'),
     ("a default may not name a constant whose value is the bytes of an interpolated string",
      'BODY = "a#{1}".bytes\n\ndef send(body: Bytes = BODY) -> Int\n  return body.length\nend\n\n'
      + main_with("  puts(send())\n"), "CHECK-DEFAULT-VALUE", "BODY"),
