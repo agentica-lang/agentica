@@ -638,3 +638,4 @@ end
 - `LINT-NEGATED-ELSE` and `LINT-BOOL-COMPARE`: [Naming](#naming) and [Functions](#functions).
 - `LINT-SINGLE-PIPE`, `LINT-NESTED-CALL` and `LINT-LAMBDA-CHAIN`: [Pipes](#pipes).
 - `LINT-TO-S-CONCAT` and `LINT-STRING-APPEND-IN-LOOP`: [Text and collections](#text-and-collections).
+
