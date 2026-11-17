@@ -46,7 +46,7 @@ struct Producer
 end
 
 def options(timeout: Int, connections: Int, body: Int, ca: String) -> HTTP.ClientOptions
-  return HTTP.ClientOptions(timeout_ms: timeout, idle_timeout_ms: 5000, max_connections: connections, max_body_bytes: body, tls: some(TLS.client_context(TLS.ClientOptions(ca_file: ca)).unwrap!))
+  return HTTP.ClientOptions(timeout_ms: timeout, read_timeout_ms: timeout, idle_timeout_ms: 5000, max_connections: connections, max_body_bytes: body, tls: some(TLS.client_context(TLS.ClientOptions(ca_file: ca)).unwrap!))
 end
 
 # A body as text; one that is not UTF-8 says so, since these shows print text.

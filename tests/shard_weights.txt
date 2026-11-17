@@ -122,6 +122,7 @@ tests/test_vm_file_sha256.py 1 0 0 0
 tests/test_vm_http.py 37 0 69 133
 tests/test_vm_http_download.py 5 0 0 0
 tests/test_vm_http_proxy.py 6 0 12 25
+tests/test_vm_http_timeouts.py 14 0 0 0
 tests/test_vm_jit.py 21 0 65 0
 tests/test_vm_lazy_io.py 2 0 0 0
 tests/test_vm_logger.py 1 0 0 0
