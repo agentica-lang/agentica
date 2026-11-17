@@ -87,7 +87,11 @@ branch.
   checked; none may call or close over an old function that holds a
   `GLOBAL_SET` (an earlier init function), and the new init sets only new
   slots. New slots need a new entry, the init function that sets them. The
-  slots of the running program keep their values.
+  slots of the running program keep their values. A type declared again is a
+  new entry with the old JSON name, so a session load may repeat a JSON name.
+  `JSON.decode` and `JSON.schema` in a session take their target as an Int, the
+  type-table index of its struct, enum or instance, which the VM bounds-checks;
+  a name is refused in a program that repeats one (`json_names_repeat`).
 
 `vm/tests/loader_test.c` checks each rule by its reason, and truncation at every
 byte of a file with a type table, an Updates section or Globals.
@@ -159,19 +163,22 @@ parser is `agc_launch_parse` (`vm/launch.c`).
     with 0. A bad chunk is the answer of the next entry.
   - `entry FN READS WRITES` loads the chunks (a session load, §8), runs the new
     init function, if any, and then function `FN` as tasks, with the session
-    slots `READS` as arguments. FN returns a List: the value to show (a String,
-    Void for none, or any value, shown inspected) and the values of the slots
-    `WRITES`.
+    slots `READS` as arguments. FN returns a List or a struct (whose fields may
+    have any types): the value to show (a String, Void for none, or any value,
+    shown inspected) and the values of the slots `WRITES`.
   - Each entry gets one JSON line: `ok: true` with `value`, `ok: false` with the
     `diagnostic` of a crash and its `text` in the run's style, `ok: false` with
-    `invalid` when FN ran but gave back no List of the right size (its slots are
-    not written), or `ok: false` with `refused`, which changed nothing.
+    `invalid` when FN ran but gave back no List or struct of the right size
+    (its slots are not written), or `ok: false` with `refused`, which changed
+    nothing. An entry or init that a cancel ended before it returned is
+    `RUNTIME-TASK-CANCELLED`.
   - `loaded: true` says the entry loaded its program, which stays loaded
-    whatever the rest of the answer says: the front end keeps its declarations.
-    When the init function crashes, the entry does not run, and the new slots
-    it did not set stay unset: in the session child a read of an unset slot
-    fails that task with `RUNTIME-NO-VALUE` (`vm/task.c`), not with the fatal
-    `RUNTIME-INTERNAL` of a run, and the child goes on.
+    whatever the rest of the answer says: the front end keeps the program, but
+    not the declarations and names of an entry that failed.
+    When the init function crashes or is cancelled, the entry does not run,
+    and the new slots it did not set are marked failed: a read of one fails
+    that task with `RUNTIME-NO-VALUE` (`vm/task.c`), and the child goes on.
+    Any other unset slot is the fatal `RUNTIME-INTERNAL` of a run.
   - Tasks that an entry starts live on.
 - `agentica file.agc [args...]` runs in one process: the front end compiles in
   memory and hands the bytes to C with `FrontEnd.hand_off`, and C runs them in a

@@ -26,6 +26,9 @@ struct agc_session {
   const char *problem;
   /* The entry loaded a program, which stays loaded whatever its answer: the answer says "loaded". */
   bool loaded;
+  /* The program this entry loaded and the first of the slots its init function sets. */
+  agc_program *grown;
+  uint32_t first_new_slot;
   bool in_init, deny_native;
   uint32_t entry, read_count, write_count;
   uint32_t *reads, *writes;
@@ -101,6 +104,27 @@ static agc_string *crashed(agc_vm *vm, agc_session *s, agc_task *t) {
   return failure(vm, vm->rt->program, &o, s->loaded);
 }
 
+/* Whether a cancel ended the task before it returned. The flag alone does not say so: a cancel sets it first and then
+   looks at the task, which may have returned already. A task that returned has popped its last frame; one that
+   end_cancelled ended keeps the count of the frames it was in (vm/task.c, finish_task drops the frames, not the
+   count). */
+static bool cut_short(const agc_task *t) {
+  return atomic_load_explicit(&t->cancelled, memory_order_seq_cst) && t->frame_count > 0;
+}
+
+/* An entry or init that a task cancelled, at the entry function. */
+static agc_string *cancelled(agc_vm *vm, agc_session *s) {
+  const agc_program *p = vm->rt->program;
+  agc_outcome o;
+  memset(&o, 0, sizeof o);
+  o.kind = AGC_FAILED;
+  o.code = "RUNTIME-TASK-CANCELLED";
+  o.message = "the entry was cancelled";
+  o.message_len = strlen(o.message);
+  o.span = s->entry < p->function_count ? p->functions[s->entry].span : 0;
+  return failure(vm, p, &o, s->loaded);
+}
+
 /* An entry that ran but gave back what no entry gives: its effects stay, so it is not refused. */
 static agc_string *invalid(agc_vm *vm, agc_session *s, const char *message) {
   agc_json_member *m = members(3);
@@ -125,19 +149,29 @@ static void grow_slots(agc_session *s, uint32_t count) {
   s->slot_count = count;
 }
 
-/* The answer of an entry that returned: its result is a List of the shown value (a String, Void for none, or any
-   value, shown with inspect) and the values of the written slots, in order. */
+/* Item k of what an entry returned: of a List, or the field k of a struct, whose fields may have any types. */
+static agc_value item(agc_vm *vm, agc_value result, uint32_t k) {
+  if (agc_is(result, AGC_T_LIST)) return agc_list_get(agc_as_list(vm, result), k);
+  return agc_as_struct(vm, result)->fields[k];
+}
+
+/* The answer of an entry that returned: its result is a List or a struct of the shown value (a String, Void for none,
+   or any value, shown with inspect) and the values of the written slots, in order. */
 static agc_string *returned(agc_vm *vm, agc_session *s, agc_value result) {
-  if (!agc_is(result, AGC_T_LIST)) return invalid(vm, s, "the entry did not return a list");
-  const agc_list *list = agc_as_list(vm, result);
-  if (agc_list_len(list) != (size_t)s->write_count + 1)
-    return invalid(vm, s, "the entry returned a list of another size");
+  size_t size;
+  if (agc_is(result, AGC_T_LIST))
+    size = agc_list_len(agc_as_list(vm, result));
+  else if (agc_is(result, AGC_T_STRUCT))
+    size = agc_as_struct(vm, result)->n;
+  else
+    return invalid(vm, s, "the entry did not return a list or a struct");
+  if (size != (size_t)s->write_count + 1) return invalid(vm, s, "the entry returned a value of another size");
   uint32_t top = 0;
   for (uint32_t k = 0; k < s->write_count; k++)
     if (s->writes[k] + 1 > top) top = s->writes[k] + 1;
   grow_slots(s, top);
-  for (uint32_t k = 0; k < s->write_count; k++) s->slots[s->writes[k]] = agc_list_get(list, k + 1);
-  agc_value shown = agc_list_get(list, 0);
+  for (uint32_t k = 0; k < s->write_count; k++) s->slots[s->writes[k]] = item(vm, result, k + 1);
+  agc_value shown = item(vm, result, 0);
   agc_json_member *m = members(3);
   size_t n = 0;
   if (s->loaded) m[n++] = yes("loaded");
@@ -263,6 +297,8 @@ static const char *take_entry(agc_vm *vm, agc_session *s, const char *at, const 
       return NULL;
     }
     next = loaded;
+    s->grown = loaded;
+    s->first_new_slot = base->global_count;
   }
   const agc_function *f = s->entry < next->function_count ? &next->functions[s->entry] : NULL;
   if (!f || f->params != s->read_count || f->captures != 0) return "the entry function does not take the slots";
@@ -297,6 +333,12 @@ static void serve_line(agc_vm *vm, agc_session *s, const agc_string *line, uint3
 
 /* A retry builtin of the main task, like Test.run (vm/testing.c): each wake comes back here and goes on from the
    session's state. The end of the channel ends the run with 0, a broken or missing channel with 1. */
+static void mark_failed(agc_session *s) {
+  agc_program *p = s->grown;
+  for (uint32_t k = s->first_new_slot; k < p->global_count; k++)
+    if (p->globals[k].tag == AGC_T_VOID) p->globals[k].as.i = AGC_GLOBAL_FAILED;
+}
+
 agc_value agc_session_serve(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)args;
   agc_session *s = vm->rt->session;
@@ -317,8 +359,14 @@ agc_value agc_session_serve(agc_vm *vm, agc_value *args, uint32_t span) {
       if (t->crashed) {
         /* A crashed init leaves its program loaded, as the front end keeps its declarations; a later read of a slot it
            did not set fails that entry with RUNTIME-NO-VALUE (vm/task.c). */
+        if (s->in_init) mark_failed(s);
         s->in_init = false;
         s->record = crashed(vm, s, t);
+      } else if (cut_short(t)) {
+        /* Cancelled, it never set what it was to set, as a crash. */
+        if (s->in_init) mark_failed(s);
+        s->in_init = false;
+        s->record = cancelled(vm, s);
       } else if (s->in_init) {
         s->in_init = false;
         start_entry(vm, s, span);

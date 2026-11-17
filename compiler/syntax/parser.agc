@@ -23,6 +23,14 @@ PIPE_TARGET_HINT = (
 ## The help of a library that is not a name or an absolute path, in an extern block and in Native.load.
 EXTERN_LIBRARY_HELP = "write a library name such as \"libm.so.6\" or an absolute path such as \"/usr/lib/libx.so\""
 
+## One top-level item of an entry of `agentica repl` (compiler/repl/): a declaration or an import, or else a statement.
+## The span covers its tokens.
+struct EntryItem
+  declaration: Optional[Ast.Decl]
+  statement: Optional[Ast.Stmt]
+  span: Source.Span
+end
+
 ## Parses the tokens of the lexer into a Program, or returns the first PARSE- diagnostic. It stops at the first error
 ## and never fails otherwise. The nodes are numbered in post-order from first_id (see ast.agc), so that the modules of
 ## one program can share one numbering: start the next file at Ast.next_free_id(program).
@@ -37,6 +45,15 @@ end
 ## path. A relative path would resolve against the working directory, while imports resolve against the source file:
 ## until a later phase decides, it is refused.
 def library_name?(name: String) -> Bool = name != "" and (!name.include?("/") or name.start_with?("/"))
+
+## Parses the tokens of an entry of `agentica repl` into its items in order, or gives the first PARSE- diagnostic. Its
+## top level holds what a file holds, without the blank line rule, and statements as a function body does.
+def parse_entry(tokens: List[Tokens.Token], first_id: Int) -> Diag.Outcome[List[EntryItem]]
+  case entry_items(Base.make_env(tokens), first_id)
+    ok(items) -> Diag.Outcome.Done(items)
+    error(text) -> Diag.Outcome.Failed(Base.unpack("#{text}"))
+  end
+end
 
 private
 
@@ -4925,3 +4942,44 @@ def one_line_def?(decl: Ast.Decl) -> Bool
 end
 
 def module_doc_absent?(doc: Optional[String]) -> Bool = doc.none?
+
+def entry_items(e: Base.Env, first_id: Int) -> Result[List[EntryItem]]
+  items: List[EntryItem] = []
+  cursor = Base.skip_newlines(e, 0)
+  next_id = first_id
+  while e.tokens[cursor].kind != "EOF"
+    start = cursor
+    declaration: Optional[Ast.Decl] = none
+    statement: Optional[Ast.Stmt] = none
+    if e.tokens[cursor].kind == "import"
+      parsed = try parse_import(e, cursor, next_id)
+      declaration = some(parsed.node)
+      cursor = parsed.pos
+      next_id = parsed.ids
+    elsif declaration_start?(e, cursor) or e.tokens[cursor].kind == "DOC"
+      taken = try documented(e, cursor, "declaration")
+      parsed = try parse_declaration(e, taken.pos, next_id, taken.doc)
+      declaration = some(parsed.node)
+      cursor = parsed.pos
+      next_id = parsed.ids
+    else
+      parsed = try parse_statement(Base.with_depth(e, 0), cursor, next_id)
+      statement = some(parsed.node)
+      cursor = parsed.pos
+      next_id = parsed.ids
+    end
+
+    last = cursor - 1
+    while last > start and e.tokens[last].kind == "NL"
+      last -= 1
+    end
+
+    items = items.push(
+      EntryItem(declaration: declaration, statement: statement, span: Base.span_from(e, start, last + 1)),
+    )
+
+    cursor = Base.skip_newlines(e, cursor)
+  end
+
+  ok(items)
+end

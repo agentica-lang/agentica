@@ -12,7 +12,10 @@ import Source from "../syntax/source"
 import Types from "../syntax/types"
 
 ## The value of a `const` instruction. Void and Nil are the values of those types; Bytes is the UTF-8 bytes of its
-## text (`"text".bytes` on a literal), a Bytes constant that the VM makes once when it loads the program.
+## text (`"text".bytes` on a literal), a Bytes constant that the VM makes once when it loads the program. Type is the
+## target of JSON.decode or JSON.schema in a session of `agentica repl`, which the writer turns into the Int of its
+## entry in the type table (a struct, an enum, or an instance of a generic struct), so the call names one entry even
+## where a name stands for several.
 enum Imm
   Void
   Nil
@@ -21,6 +24,7 @@ enum Imm
   Float(Float)
   Text(String)
   Bytes(String)
+  Type(Types.Type)
 end
 
 ## One instruction, or a label. file is the index in Program.sources of the file the spans are in: a Span has no file
@@ -99,7 +103,8 @@ struct SourceFile
   text: String
 end
 
-## The lowered program. globals is the number of slots of the module constants. entry is the index in functions of the
+## The lowered program. globals is the number of slots of the module constants, and global_names the linked name of
+## the constant of each slot. entry is the index in functions of the
 ## function the VM starts: `main`, or `<start>` when globals is above zero. The span is the root file's. written maps
 ## the linker prefix of a std/ module ("@3::") to the alias the program imports it with ("HTTP"), so the bytecode names
 ## its records and enums as written (HTTP.Download).
@@ -113,6 +118,7 @@ struct Program
   entry: Int
   globals: Int
   span: Source.Span
+  global_names: List[String] = []
 end
 
 ## True when the source file at index file is a file of the prelude: the functions lowered from it are the prelude
