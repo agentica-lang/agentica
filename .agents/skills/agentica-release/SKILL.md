@@ -51,6 +51,8 @@ checkout) on a branch such as `release/<version>`. Change only:
      ```
 
    - Read the entries once: they must say what users see.
+   - Leave each released section as its tag has it
+     (`git show <tag>:CHANGELOG.md`).
 3. `bootstrap/stage0.agcb`: refresh it before every release ("Refreshing
    stage0" (a) in `.agents/skills/agentica-development/references/ci.md`). CI
    rebuilds it from the base stage0 (`make stage0-check`) and must match.
@@ -62,7 +64,9 @@ Wrap every build in a memory cap (`agentica-dev-workflow` §1).
   stage0 refresh.
 - Take it to merge with `.agents/skills/agentica-dev-workflow/`. CI and
   Platforms (it runs by itself: the PR changes `VERSION` and stage0) must be
-  green on its head.
+  green on its head. Also run `gh workflow run release.yml --ref
+  release/<version>` on it and wait for green: only that run builds and smokes
+  the five archives before the tag.
 
 ## 2. Tag and publish
 

@@ -278,6 +278,12 @@ def main() -> Void
 end
 ```
 
+A producer whose stream can end in an error keeps room for that error:
+capacity N+1, and it sends an `ok` value only while fewer than N wait (count
+the sends since the channel was last `empty?`). Else, when a slow reader leaves
+the channel full, the error does not fit, the reader gets only the close, and a
+cut stream looks whole. Test it with a slow reader.
+
 The close rule: the producer closes the channel on every path; consumers never
 do. If nobody closes it, the loop polls forever. Put the sending in its own
 function and close after it, as `produce` does, so a `try` that returns early

@@ -95,6 +95,10 @@ copy).
 - Spans and positions: `references/stages.md` ("Conventions"). Node ids follow
   post-order; the writer and lowering rely on the order of the function table,
   registers and first-named sources. Keep them.
+- Code that changes at run time (`agentica repl`, `:load`): a lookup by name (a
+  type, a JSON name, a function) can find both the old and the new definition,
+  so key it by table index, and test a task started before the redefinition. A
+  module is its resolved path, not its spelling.
 - Key a per-type table by `Types.json_name`, never `Types.to_text` (it drops
   the `@N::` module); test two modules that declare the same type name.
 - Parser tables are module constants (`NESTING_LIMIT`, `LEVELS`,
@@ -374,7 +378,9 @@ block on each `def`, `struct` or `enum` you add or touch in `compiler/**/*.agc`.
 `Cli.run` (`references/stages.md`, "Command line") runs a command through
 `pipeline.agc`, which the BDD driver shares. A command never prints: it returns
 a `Reply` (code, stdout, stderr), and `cli.agc` writes it. `cli_text.agc` keeps
-the help texts as data.
+the help texts as data. `tools/release.py smoke` matches some `help`, `--help`
+and `--version` output, which no PR check runs: a change of that output
+searches `tools/release.py` for the old text (`rg`).
 
 To run a `compiler/` change without the build chain:
 `dist/agentica run -- build/stage/stage2.agcb --version V --stdlib stdlib --self PATH -- WORDS`
