@@ -8,6 +8,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- `agentica repl` reads an imported file again after it changes on disk, instead of refusing every later entry with `REPL-REFUSED` (#1815).
+
 ## [0.34.0] - 2026-11-17
 
 ### Added
