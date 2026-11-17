@@ -270,6 +270,7 @@ def foreign_kind_methods() -> Map[String, String]
       "there are no regular expressions; use s.include?(part), s.start_with?(part), s.end_with?(part) or " +
       "s.index_of(part)"
     ),
+    "String.scrub": "a String is always valid UTF-8; to replace bad bytes, scrub the Bytes: b.scrub or s.bytes.scrub",
     "String.starts_with?": "use s.start_with?(prefix)",
     "String.sub": "use s.replace(old, new)",
     "String.substr": "use s.slice(start, length) for a part of the text; length is end - start",

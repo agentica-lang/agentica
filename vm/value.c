@@ -1006,7 +1006,7 @@ agc_value agc_error_code(agc_vm *vm, agc_error_kind kind, agc_string *message, i
 
 agc_value agc_error(agc_vm *vm, agc_error_kind kind, const char *message) {
   size_t n = strlen(message);
-  return agc_error_string(vm, kind, agc_utf8_decode((const uint8_t *)message, n, "\xEF\xBF\xBD", false));
+  return agc_error_string(vm, kind, agc_utf8_decode((const uint8_t *)message, n, "\xEF\xBF\xBD"));
 }
 
 agc_value agc_error_detail(agc_vm *vm, agc_value result, const char *key, const char *data, size_t len) {
@@ -1015,7 +1015,7 @@ agc_value agc_error_detail(agc_vm *vm, agc_value result, const char *key, const 
   agc_struct *e = agc_as_struct(vm, r->value);
   size_t n = strlen(key);
   agc_value name = agc_string_value(agc_make_string(key, n, n));
-  agc_value text = agc_string_value(agc_utf8_decode((const uint8_t *)data, len, "\xEF\xBF\xBD", false));
+  agc_value text = agc_string_value(agc_utf8_decode((const uint8_t *)data, len, "\xEF\xBF\xBD"));
   const agc_map *details = agc_as_map(vm, e->fields[AGC_ERROR_DETAILS]);
   e->fields[AGC_ERROR_DETAILS] = agc_map_value(agc_map_put(vm, details, name, text));
   return result;
@@ -1215,9 +1215,10 @@ size_t agc_utf8_count(const uint8_t *s, size_t len) {
   return count;
 }
 
-/* Most text is ASCII, so a run of it is skipped eight bytes at a time (no byte with the high bit set) and the
- * characters are decoded one by one only where a word has a byte of 0x80 or more. */
-bool agc_utf8_chars(const uint8_t *s, size_t len, size_t *chars) {
+/* The length of the valid UTF-8 at the start of s, with its characters in *chars. Most text is ASCII, so a run of it
+ * is skipped eight bytes at a time (no byte with the high bit set) and the characters are decoded one by one only
+ * where a word has a byte of 0x80 or more. */
+static size_t valid_run(const uint8_t *s, size_t len, size_t *chars) {
   size_t count = 0, i = 0;
   while (i < len) {
     uint64_t word;
@@ -1229,50 +1230,56 @@ bool agc_utf8_chars(const uint8_t *s, size_t len, size_t *chars) {
     }
     if (i == len) break;
     size_t n = valid_char(s + i, len - i);
-    if (n == 0) return false;
+    if (n == 0) break;
     i += n;
     count++;
   }
   *chars = count;
-  return true;
+  return i;
 }
 
-static bool incomplete_tail(const uint8_t *s, size_t len) {
+bool agc_utf8_chars(const uint8_t *s, size_t len, size_t *chars) { return valid_run(s, len, chars) == len; }
+
+/* The length of the bad sequence at s, where no valid character starts: its longest start that a valid character
+   could have, at least the first byte. Each one gets one replacement (Unicode §3.9, "U+FFFD Substitution of Maximal
+   Subparts"), as in the WHATWG decoder and Python's decode("utf-8", "replace"); a cut character at the end is one. */
+static size_t maximal_subpart(const uint8_t *s, size_t len) {
   uint8_t c = s[0];
-  size_t width = c >= 0xC2 && c <= 0xDF ? 2 : c >= 0xE0 && c <= 0xEF ? 3 : c >= 0xF0 && c <= 0xF4 ? 4 : 0;
-  if (width == 0 || len >= width) return false;
-  for (size_t k = 1; k < len; k++)
-    if ((s[k] & 0xC0) != 0x80) return false;
-  if (len > 1 && ((c == 0xE0 && s[1] < 0xA0) || (c == 0xF0 && s[1] < 0x90))) return false;
-  return true;
-}
-
-static size_t utf8_step(const uint8_t *s, size_t len, bool tail, size_t *valid) {
-  size_t n = valid_char(s, len);
-  *valid = n;
-  if (n) return n;
-  return tail && incomplete_tail(s, len) ? len : 1;
-}
-
-agc_string *agc_utf8_decode(const uint8_t *data, size_t len, const char *replacement, bool tail) {
-  size_t rlen = strlen(replacement), bytes = 0, chars = 0, n;
-  for (size_t i = 0; i < len; chars++) {
-    i += utf8_step(data + i, len - i, tail, &n);
-    bytes = agc_size_add(bytes, n ? n : rlen);
+  size_t width = c >= 0xC2 && c <= 0xDF ? 2 : c >= 0xE0 && c <= 0xEF ? 3 : c >= 0xF0 && c <= 0xF4 ? 4 : 1;
+  uint8_t lo = c == 0xE0 ? 0xA0 : c == 0xF0 ? 0x90 : 0x80, hi = c == 0xED ? 0x9F : c == 0xF4 ? 0x8F : 0xBF;
+  size_t n = 1;
+  for (; n < width && n < len; n++) {
+    if (s[n] < (n == 1 ? lo : 0x80) || s[n] > (n == 1 ? hi : 0xBF)) break;
   }
+  return n;
+}
+
+size_t agc_utf8_scrub(const uint8_t *data, size_t len, const char *replacement, size_t rbytes, size_t rchars,
+                      char *out, size_t *chars) {
+  size_t bytes = 0, count = 0;
+  *chars = 0;
+  if (len == 0) return 0;
+  for (size_t i = 0;;) {
+    size_t run_chars, run = valid_run(data + i, len - i, &run_chars);
+    if (out && run) memcpy(out + bytes, data + i, run);
+    bytes = agc_size_add(bytes, run);
+    count += run_chars;
+    i += run;
+    if (i == len) break;
+    if (out && rbytes) memcpy(out + bytes, replacement, rbytes);
+    bytes = agc_size_add(bytes, rbytes);
+    count += rchars;
+    i += maximal_subpart(data + i, len - i);
+  }
+  *chars = count;
+  return bytes;
+}
+
+agc_string *agc_utf8_decode(const uint8_t *data, size_t len, const char *replacement) {
+  size_t rbytes = strlen(replacement), rchars = agc_utf8_count((const uint8_t *)replacement, rbytes), chars;
+  size_t bytes = agc_utf8_scrub(data, len, replacement, rbytes, rchars, NULL, &chars);
   agc_string *s = agc_new_string(bytes, chars);
-  size_t at = 0;
-  for (size_t i = 0; i < len;) {
-    size_t step = utf8_step(data + i, len - i, tail, &n);
-    if (n) {
-      memcpy(s->data + at, data + i, n);
-      at += n;
-    } else {
-      memcpy(s->data + at, replacement, rlen);
-      at += rlen;
-    }
-    i += step;
-  }
+  agc_utf8_scrub(data, len, replacement, rbytes, rchars, s->data, &chars);
   return s;
 }
 

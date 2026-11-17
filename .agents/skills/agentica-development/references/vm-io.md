@@ -169,9 +169,10 @@ Order and rules: `docs/vm/10-io-scheduler.md` §10.2.2, "End of run", and
   front end) and fills the args, so C tests and the fuzzer never block on stdin.
   The driver copies a non-file stdin into the VM with a thread it kills when the
   VM exits.
-- Stdin decodes each invalid byte to U+FFFD. Arguments decode each invalid byte
-  to `?`, and an incomplete sequence at the end to one `?` (`LC_ALL=C.UTF-8` in
-  the diff test).
+- Every lossy decode (stdin, arguments, `System.env`, process output,
+  `C.String`, error texts) is `agc_utf8_decode`: one replacement per maximal
+  invalid subsequence, as `bytes.scrub` and Python's `"replace"`. Stdin gets
+  U+FFFD, arguments `?`.
 
 ## Output (`vm/output.c`)
 

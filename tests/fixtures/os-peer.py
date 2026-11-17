@@ -1,8 +1,5 @@
-import codecs
 import os
 import sys
-
-codecs.register_error("per-byte", lambda error: ("\ufffd" * (error.end - error.start), error.end))
 
 
 def real(path):
@@ -17,7 +14,7 @@ def env(name):
         value = os.environb[os.fsencode(name)]
     except (KeyError, ValueError):
         return "error"
-    return "ok:" + value.decode("utf-8", "per-byte")
+    return "ok:" + value.decode("utf-8", "replace")
 
 
 def main():

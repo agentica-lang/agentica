@@ -239,49 +239,16 @@ static agc_value builtin_decode(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_result_value(true, agc_string_value(s));
 }
 
-/* The length of the bad sequence at s, where no valid character starts: its longest start that a valid character
-   could have, at least the first byte. Each one gets one replacement (Unicode §3.9, "U+FFFD Substitution of Maximal
-   Subparts"), as in the WHATWG decoder and Python's decode("utf-8", "replace"). */
-static size_t maximal_subpart(const uint8_t *s, size_t len) {
-  uint8_t c = s[0];
-  size_t width = c >= 0xC2 && c <= 0xDF ? 2 : c >= 0xE0 && c <= 0xEF ? 3 : c >= 0xF0 && c <= 0xF4 ? 4 : 1;
-  uint8_t lo = c == 0xE0 ? 0xA0 : c == 0xF0 ? 0x90 : 0x80, hi = c == 0xED ? 0x9F : c == 0xF4 ? 0x8F : 0xBF;
-  size_t n = 1;
-  for (; n < width && n < len; n++) {
-    if (s[n] < (n == 1 ? lo : 0x80) || s[n] > (n == 1 ? hi : 0xBF)) break;
-  }
-  return n;
-}
-
-/* Walks the bytes, copying valid characters and the replacement for each bad sequence to out when it is not NULL,
-   and returns the size of the result; chars gets its characters. */
-static size_t scrub_into(const uint8_t *data, size_t len, const agc_string *r, char *out, size_t *chars) {
-  size_t bytes = 0, count = 0;
-  for (size_t i = 0; i < len;) {
-    size_t n = agc_utf8_valid(data + i, len - i);
-    const char *from = n ? (const char *)data + i : r->data;
-    size_t size = n ? n : r->bytes;
-    if (out) memcpy(out + bytes, from, size);
-    bytes = agc_size_add(bytes, size);
-    count += n ? 1 : r->chars;
-    i += n ? n : maximal_subpart(data + i, len - i);
-  }
-  *chars = count;
-  return bytes;
-}
-
 /* bytes.scrub(replacement): the String of the UTF-8 bytes with each bad sequence replaced. */
 static agc_value builtin_scrub(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   size_t len, chars;
   const uint8_t *data = agc_bytes_data(vm, args[0], &len);
-  if (agc_utf8_chars(data, len, &chars))
-    return agc_string_value(agc_small_string(vm, (const char *)data, len, chars));
   const agc_string *r = agc_as_string(vm, args[1]);
-  size_t bytes = scrub_into(data, len, r, NULL, &chars);
+  size_t bytes = agc_utf8_scrub(data, len, r->data, r->bytes, r->chars, NULL, &chars);
   if (bytes == 0) return agc_string_value(vm->rt->empty_string);
   agc_string *s = agc_new_string(bytes, chars);
-  scrub_into(data, len, r, s->data, &chars);
+  agc_utf8_scrub(data, len, r->data, r->bytes, r->chars, s->data, &chars);
   return agc_string_value(s);
 }
 

@@ -79,7 +79,7 @@ static agc_value std_source(agc_vm *vm, agc_value path_value) {
   for (size_t k = 0; k < rt->std_count; k++) {
     const agc_std_source *source = &rt->std[k];
     if (strlen(source->path) != path->bytes || memcmp(source->path, path->data, path->bytes) != 0) continue;
-    return agc_result_value(true, agc_string_value(agc_utf8_decode(source->data, source->len, "\xEF\xBF\xBD", false)));
+    return agc_result_value(true, agc_string_value(agc_utf8_decode(source->data, source->len, "\xEF\xBF\xBD")));
   }
   return agc_error(vm, AGC_KIND_ERROR, "no such std source");
 }

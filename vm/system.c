@@ -51,7 +51,7 @@ static agc_value builtin_env(agc_vm *vm, agc_value *args, uint32_t span) {
   char *value = agc_system_env(key);
   free(key);
   if (!value) return agc_error(vm, AGC_KIND_SYSTEM_ENV, "system: environment variable is not set");
-  agc_string *text = agc_utf8_decode((const uint8_t *)value, strlen(value), "\xEF\xBF\xBD", false);
+  agc_string *text = agc_utf8_decode((const uint8_t *)value, strlen(value), "\xEF\xBF\xBD");
   free(value);
   return agc_result_value(true, agc_string_value(text));
 }

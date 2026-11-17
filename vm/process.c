@@ -766,8 +766,8 @@ static agc_value output_of(agc_vm *vm, const uint8_t *out, size_t out_len, const
                            bool truncated) {
   agc_charge_bytes(vm, agc_size_add(out_len, err_len));
   agc_struct *s = agc_new_struct(output_struct(vm), 3);
-  s->fields[0] = agc_string_value(agc_utf8_decode(out ? out : (const uint8_t *)"", out_len, "\xEF\xBF\xBD", false));
-  s->fields[1] = agc_string_value(agc_utf8_decode(err ? err : (const uint8_t *)"", err_len, "\xEF\xBF\xBD", false));
+  s->fields[0] = agc_string_value(agc_utf8_decode(out ? out : (const uint8_t *)"", out_len, "\xEF\xBF\xBD"));
+  s->fields[1] = agc_string_value(agc_utf8_decode(err ? err : (const uint8_t *)"", err_len, "\xEF\xBF\xBD"));
   s->fields[2] = agc_bool(truncated);
   return agc_result_value(true, agc_struct_value(s));
 }
@@ -783,7 +783,7 @@ static agc_value waited(agc_vm *vm, const proc *p, req_kind kind) {
 
 static agc_value available_text(agc_vm *vm, const uint8_t *data, size_t n) {
   agc_charge_bytes(vm, n);
-  agc_string *text = agc_utf8_decode(data ? data : (const uint8_t *)"", n, "\xEF\xBF\xBD", false);
+  agc_string *text = agc_utf8_decode(data ? data : (const uint8_t *)"", n, "\xEF\xBF\xBD");
   return agc_result_value(true, agc_string_value(text));
 }
 

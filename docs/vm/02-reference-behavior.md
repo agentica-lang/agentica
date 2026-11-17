@@ -83,16 +83,17 @@ in a PR that rewrites the goldens.
   other characters that are not printed raw become `\uXXXX` or `\UXXXXXXXX`
   (uppercase hex). A joiner (U+200C, U+200D, U+E0020 to U+E007F) prints raw only
   after a raw, non-blank character, so family emoji and flags print raw.
-- Stdin is decoded per byte: each byte that does not start a complete valid
-  UTF-8 sequence becomes one U+FFFD (`E2 82 63` gives two U+FFFD, then `c`).
+- Stdin is decoded as `bytes.scrub` does: each maximal invalid subsequence
+  becomes one U+FFFD (`E2 82 63` gives one U+FFFD, then `c`), as in Python's
+  `decode("utf-8", "replace")`.
   `IO.gets` ends lines at LF, CR or CRLF. A read decodes only the bytes it
   consumes.
-- `System.args` on Linux and macOS is UTF-8 with one `?` per invalid byte, as
-  glibc `iconv` gives. Other locales and Windows code pages are outside the
+- `System.args` on Linux and macOS is UTF-8 with one `?` per maximal invalid
+  subsequence. Other locales and Windows code pages are outside the
   contract.
 - `System.env(name)` is the value of the first `name=value` entry. An empty
   name, a name with `=` or NUL, and an unset name give an error Result; a set
-  empty value gives `ok("")`. Values decode per byte. The VM's own entries
+  empty value gives `ok("")`. Values decode as stdin does. The VM's own entries
   (`AGENTICA_CHANNEL`, and `UV_USE_IO_URING` when the VM set it) are hidden. No
   flag is needed.
 - `System.pid()` is the VM's `getpid()`, with no flag. `--driver-pid` checks its
@@ -362,8 +363,8 @@ Every failure is an error value. The checks run in this order:
   exist; a link loop, too many links or a non-directory in the middle fail
   (`filesystem: cannot resolve path`). An empty or NUL path gives
   `filesystem: invalid path`. A relative path starts at the working directory,
-  and the result decodes per byte. macOS and Windows fail long absolute forms
-  (1024 bytes, 260 characters unless `LongPathsEnabled`).
+  and the result decodes as stdin does. macOS and Windows fail long absolute
+  forms (1024 bytes, 260 characters unless `LongPathsEnabled`).
 - After a timeout on an active handle operation the handle is closed: later
   operations fail with "file handle is closed", and `File.close` gives `ok()`.
 - A timed-out read on a FIFO or device ends at the timeout (10.2.2);
