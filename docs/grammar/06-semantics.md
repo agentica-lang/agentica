@@ -284,23 +284,24 @@ block can still fill it. Any other parameter without a default after one with a
 default is `CHECK-DEFAULT-ORDER`, located at that parameter.
 
 A default is a constant: an `Int`, `Float` or `String` literal (a minus sign is
-allowed before a number, and a string has no `#{...}`), `true`, `false`, `nil`,
-`none`, `[]`, `{}`, or a nullary enum variant (`Level.Info`, `TaskExit.Ok` for
-a builtin enum, or `Models.Level.Info` through an import alias). A parameter
-may also default to a struct built with no arguments, `options: Options =
-Options()`: each field takes its own default, and a field without one is
-`CHECK-MISSING-FIELD` at the default. A default may also name a module
-constant (`limit: Int = LIMIT`): one of the same file, an imported one through
-its alias (`Limits.LIMIT`) or one imported by name, as long as the value of
-the constant is itself one of these forms (not a call, an operation, another
-constant, a non-empty list or map; a struct with no arguments only for a
-parameter). The name is the value written in its place, so the default is the
-same at every call and a caller in another module that leaves the argument out
-gets it without importing the constant. Anything else (a call such as
-`some(1)`, any other name, `&name`, a struct with arguments, a variant with a
-payload, a non-empty list or map, an interpolated string, an operation) is
-`CHECK-DEFAULT-VALUE`, located at the expression, with a help that says to make
-the parameter required. A default cannot read another parameter.
+allowed before a number, and a string has no `#{...}`), the bytes of such a
+string (`body: Bytes = "".bytes`), `true`, `false`, `nil`, `none`, `[]`, `{}`,
+or a nullary enum variant (`Level.Info`, `TaskExit.Ok` for a builtin enum, or
+`Models.Level.Info` through an import alias). A parameter may also default to a
+struct built with no arguments, `options: Options = Options()`: each field takes
+its own default, and a field without one is `CHECK-MISSING-FIELD` at the
+default. A default may also name a module constant (`limit: Int = LIMIT`): one
+of the same file, an imported one through its alias (`Limits.LIMIT`) or one
+imported by name, as long as the value of the constant is itself one of these
+forms (not a call, an operation, another constant, a non-empty list or map; a
+struct with no arguments only for a parameter). The name is the value written in
+its place, so the default is the same at every call and a caller in another
+module that leaves the argument out gets it without importing the constant.
+Anything else (a call such as `some(1)`, any other name, `&name`, a struct with
+arguments, a variant with a payload, a non-empty list or map, an interpolated
+string, an operation) is `CHECK-DEFAULT-VALUE`, located at the expression, with
+a help that says to make the parameter required. A default cannot read another
+parameter.
 
 The type of a default is checked against the type of its parameter like an
 initializer: `[]` and `{}` take the parameter type as their expected type, and a

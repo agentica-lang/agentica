@@ -196,7 +196,8 @@ end
 - A parameter may have a default: `def connect(host: String = "localhost", port:
   Int = 8080)`. A call omits trailing defaulted parameters (`connect("db")`).
   The default is a constant: an Int, Float or String literal (a minus before a
-  number is fine; `#{...}` is not), `true`, `false`, `nil`, `none`, `[]`, `{}`
+  number is fine; `#{...}` is not), the bytes of such a string
+  (`body: Bytes = "".bytes`), `true`, `false`, `nil`, `none`, `[]`, `{}`
   (built again at each call, typed by the parameter), a payload-less enum
   variant (`Level.Info`), or the name of a module constant whose value is one
   of those (`limit: Int = LIMIT`). A parameter, not a field, may also default to

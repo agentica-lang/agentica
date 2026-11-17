@@ -127,7 +127,8 @@ Invoke the `pr-reviewer` skill (via the Skill tool) and follow it to review GitH
   when C did not change); the shard jobs behind them (`fast tests (1/2)`,
   `build`, ...) are not names to require. Code PRs also need **Site
   examples** when the PR touches `site/content/`. Docs-only PRs
-  skip `ci.yml` (an explicit docs-only exception) and do not wait for CI.
+  skip `ci.yml` and `platforms.yml` (an explicit docs-only exception) and do
+  not wait for CI.
 - **Light path:** a PR that changes only portable `std/` modules (not
   imported by `compiler/`, not the prelude, `std/test`, `std/bdd`,
   `std/analysis`, `std/logger`, `std/actor` or `std/eag`), their
