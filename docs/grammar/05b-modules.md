@@ -974,7 +974,8 @@ import Sqlite from "pkg/sqlite/db"
     at `native.NAME.build` (the warning `PKG-NATIVE-UNBUILT` when optional),
     and the help names `agentica install` and leaving `prebuilt_only`. The
     bytecode cache watches the prebuilt files a program uses as it watches
-    the built libraries.
+    the built libraries, and a cached run checks the entry of each again
+    (private, no link, the receipt), so a bad entry misses and is reported.
 - `[native_policy]`, in the root project's manifest only (`PKG-ROOT-ONLY` at
   `native_policy` in the manifest of a package, even an empty table), says
   which native modules always build from source and which never build:

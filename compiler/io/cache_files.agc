@@ -21,6 +21,11 @@ TEMP_MARK = ".agcb.tmp-"
 # The start of the name of a temporary folder of a native build or a prebuilt download.
 FOLDER_MARK = ".tmp-"
 
+## The file of a native cache entry that holds the SHA-256 of its library, and the answers of entry_problem.
+RECEIPT = "receipt"
+ENTRY_NOT_PRIVATE = "not private"
+ENTRY_NOT_RECEIPT = "not its receipt"
+
 ## Where the caches of a root file are kept and what their entries must match. `build` is the `_build/` folder and
 ## `beside` is true for the `_build/` of the project, false for the folder of AGENTICA_BUILD_DIR. `libs_dir` is the
 ## folder whose agc_libs/ the build reads first. `binary` and `inputs` are lines of the key of an entry: the size, time
@@ -75,6 +80,27 @@ def private_kind(path: String, kind: String, user: Int) -> Result[Void]
   end
 
   ok()
+end
+
+## Why the native library `library` of the package cache entry `entry` (io/native_build.agc, io/native_prebuilt.agc)
+## may not be loaded, or "": ENTRY_NOT_PRIVATE when the entry is not a folder private to `user` or the library is not
+## a regular file (a link is refused; `private_library` also wants the file private), ENTRY_NOT_RECEIPT when the
+## `receipt` of the entry does not hold the SHA-256 of the library.
+def entry_problem(entry: String, library: String, user: Int, private_library: Bool) -> String
+  return ENTRY_NOT_PRIVATE if !private_kind(entry, "directory", user).ok?
+
+  info = File.lstat(library, IO_TIMEOUT_MS)
+  if !info.ok? or info.unwrap!.kind != "file" or (private_library and !private_kind(library, "file", user).ok?)
+    return ENTRY_NOT_PRIVATE
+  end
+
+  receipt = File.read_text(Paths.join(entry, RECEIPT), IO_TIMEOUT_MS)
+  digest = File.sha256(library, IO_TIMEOUT_MS)
+  if !receipt.ok? or !digest.ok? or receipt.unwrap!.strip != OpenSSL.Digest.hexencode(digest.unwrap!)
+    return ENTRY_NOT_RECEIPT
+  end
+
+  ""
 end
 
 # The user id of this process, which no builtin gives: the owner of a file made now with `create_private`, in the first

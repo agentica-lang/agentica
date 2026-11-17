@@ -60,7 +60,6 @@ BUILD_FOLDER = "native-build"
 INCLUDE_FOLDER = "include"
 # The folder of the private build folder that holds the copy of a fetched package.
 COPY_FOLDER = "package"
-RECEIPT = "receipt"
 # The std/ source name of the header the binary carries (vm/tools/gen-embedded.sh), and its file name.
 HEADER = "internal/native/agentica_native.h"
 HEADER_NAME = "agentica_native.h"
@@ -350,22 +349,16 @@ end
 def verified(request: Workspace.BuildRequest, entry: String, name: String, user: Int) -> Result[String]
   library = Paths.join(entry, name)
   help = "remove the folder #{entry} to build again"
-  if !CacheFiles.private_kind(entry, "directory", user).ok? or !regular?(library)
-    return error(fail(request, "the build cache entry is not private to this user", help))
-  end
-
-  receipt = File.read_text(Paths.join(entry, RECEIPT), FILE_TIMEOUT_MS)
-  digest = File.sha256(library, FILE_TIMEOUT_MS)
-  if !receipt.ok? or !digest.ok? or receipt.unwrap!.strip != OpenSSL.Digest.hexencode(digest.unwrap!)
-    return error(fail(request, "the build cache entry is not the one its receipt names", help))
-  end
+  problem = CacheFiles.entry_problem(entry, library, user, false)
+  return error(fail(request, "the build cache entry is #{problem_text(problem)}", help)) if problem != ""
 
   ok(library)
 end
 
-def regular?(path: String) -> Bool
-  info = File.lstat(path, FILE_TIMEOUT_MS)
-  info.ok? and info.unwrap!.kind == "file"
+def problem_text(problem: String) -> String
+  return "not private to this user" if problem == CacheFiles.ENTRY_NOT_PRIVATE
+
+  "not the one its receipt names"
 end
 
 # Builds in a new private folder and renames it into place. A concurrent build of the same key that renamed first is
@@ -448,7 +441,8 @@ def compile_in(
     return error(fail(request, "a file of native/ changed during the build", "run again to build the new files"))
   end
 
-  receipt = CacheFiles.write_private(Paths.join(folder, RECEIPT), OpenSSL.Digest.hexencode(digest.unwrap!).bytes)
+  written = OpenSSL.Digest.hexencode(digest.unwrap!).bytes
+  receipt = CacheFiles.write_private(Paths.join(folder, CacheFiles.RECEIPT), written)
   return error(fail(request, "cannot write the build cache", "")) if !receipt.ok?
 
   ok()

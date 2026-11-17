@@ -35,6 +35,14 @@ def store(plan: BytecodeCache.Plan, settings: Env.Settings, modules: List[Linker
       libraries = library_lines(settings.workspace, sources, built.concat(fetched))
       return false if !libraries.ok?
 
+      for path in built.uniq
+        lines = lines.push("#{BytecodeCache.LIBRARY_WORD}0 #{path}")
+      end
+
+      for path in fetched.uniq
+        lines = lines.push("#{BytecodeCache.LIBRARY_WORD}1 #{path}")
+      end
+
       lines = lines.concat(libraries.unwrap!)
       if built.size > 0
         lines = lines.push(compiler_of(entry, settings))

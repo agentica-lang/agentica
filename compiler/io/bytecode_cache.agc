@@ -55,6 +55,9 @@ TREE_WORD = "tree "
 COMPILER_WORD = "compiler "
 ABSENT_WORD = "absent "
 PRESENT_WORD = "present "
+## `library 0 PATH` (a build) or `library 1 PATH` (a prebuilt file): the native library must still be in a cache entry
+## that a run would trust (CacheFiles.entry_problem), checked again on every hit.
+LIBRARY_WORD = "library "
 
 ## Where the entry of one root file is and what it must match. `build` is the `_build/` folder and `folder` the
 ## `bytecode/` folder in it. `beside` is true for `_build/` of the project, false for the folder of AGENTICA_BUILD_DIR.
@@ -277,8 +280,15 @@ end
 # Every source file must still have the digest the entry holds, and every probe must still answer as it did.
 def check_lines(settings: Env.Settings, lines: List[String]) -> Result[Void]
   workspace = settings.workspace
+  user: Optional[Int] = none
   for line in lines
-    if line.start_with?(COMPILER_WORD)
+    if line.start_with?(LIBRARY_WORD)
+      if !user.some?
+        user = some(try CacheFiles.own_user())
+      end
+
+      try check_library(line.slice(LIBRARY_WORD.length, line.length - LIBRARY_WORD.length), user.unwrap!)
+    elsif line.start_with?(COMPILER_WORD)
       return error("the C compiler changed") if line != CacheFiles.compiler_line(settings.env.os)
     elsif line.start_with?(SOURCE_WORD)
       try check_source(workspace, line)
@@ -323,6 +333,22 @@ def check_tree(workspace: Workspace.Workspace, line: String) -> Result[Void]
 
   if names_digest(workspace, path) != line.slice(TREE_WORD.length, DIGEST_CHARS)
     return error("the native files of #{path} changed")
+  end
+
+  ok()
+end
+
+# `0 PATH` or `1 PATH`: the cache folder, the entry and the library are still private and match the receipt.
+def check_library(rest: String, user: Int) -> Result[Void]
+  if rest.length < 3 or !["0 ", "1 "].include?(rest.slice(0, 2)) or rest.include?(String.from_code(0))
+    return error("a line of the entry is wrong")
+  end
+
+  library = rest.slice(2, rest.length - 2)
+  entry = Paths.directory_of(library)
+  try CacheFiles.private_kind(Paths.directory_of(entry), "directory", user)
+  if CacheFiles.entry_problem(entry, library, user, rest.start_with?("1")) != ""
+    return error("the cache entry of #{library} is not trusted")
   end
 
   ok()

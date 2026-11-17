@@ -156,7 +156,6 @@ private
 # The std/ sources that hold the release target of the binary (vm/agentica.c) and its native header.
 TARGET_SOURCE = "internal/native/target"
 HEADER = "internal/native/agentica_native.h"
-RECEIPT = "receipt"
 DOWNLOAD_FOLDER = "download"
 # The deadline of one file, and of each step of the cache.
 FETCH_TIMEOUT_MS = 300_000
@@ -363,7 +362,7 @@ def fill(
     return error(cache_failure(context, "cannot write the prebuilt cache", ""))
   end
 
-  if !CacheFiles.write_private(Paths.join(folder, RECEIPT), sha.bytes).ok?
+  if !CacheFiles.write_private(Paths.join(folder, CacheFiles.RECEIPT), sha.bytes).ok?
     return error(cache_failure(context, "cannot write the prebuilt cache", ""))
   end
 
@@ -381,13 +380,13 @@ def verified(
 ) -> Result[Void]
   library = Paths.join(entry, library_file)
   help = "remove the folder #{entry} to download it again"
-  if !CacheFiles.private_kind(entry, "directory", user).ok? or !CacheFiles.private_kind(library, "file", user).ok?
+  problem = CacheFiles.entry_problem(entry, library, user, true)
+  if problem == CacheFiles.ENTRY_NOT_PRIVATE
     return error(cache_failure(context, "the prebuilt cache entry is not private to this user", help))
   end
 
-  receipt = File.read_text(Paths.join(entry, RECEIPT), FILE_TIMEOUT_MS)
-  digest = File.sha256(library, FILE_TIMEOUT_MS)
-  if !receipt.ok? or !digest.ok? or receipt.unwrap!.strip != sha or OpenSSL.Digest.hexencode(digest.unwrap!) != sha
+  receipt = File.read_text(Paths.join(entry, CacheFiles.RECEIPT), FILE_TIMEOUT_MS)
+  if problem != "" or !receipt.ok? or receipt.unwrap!.strip != sha
     return error(cache_failure(context, "the prebuilt cache entry is not the one its receipt names", help))
   end
 

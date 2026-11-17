@@ -217,3 +217,47 @@ def test_install_warns_of_a_policy_name_that_is_no_module(ws, peer):
     found = [(item["code"], item.get("key_path", "")) for item in warnings(installed)]
     assert sorted(found) == [("PKG-NATIVE-MISSING", ""), ("PKG-NATIVE-MISSING", "native_policy.build")]
     assert all(item["file"] == str(manifest) for item in warnings(installed))
+
+
+@pytest.mark.parametrize("first_run", [True, False], ids=["after a run", "first run"])
+def test_a_prebuilt_file_of_older_sources_is_not_used(ws, peer, first_run):
+    project(ws, peer)
+    assert agentica(ws, "--json", "install", **counting_cc(ws)).code == 0
+    if first_run:
+        ran = agentica(ws, "main.agc", **counting_cc(ws))
+        assert (ran.code, ran.stdout, starts(ws)) == (0, "42\n", 0), ran.stderr
+    (ws.project / "native" / "offset.h").write_text("#define OFFSET 1\n", encoding="utf-8")
+    ran = agentica(ws, "main.agc", **counting_cc(ws))
+    assert (ran.code, ran.stdout) == (0, "43\n"), ran.stderr
+    assert starts(ws) > 0
+
+
+def plant(entry, library, state):
+    if state == "linked entry":
+        entry.rename(entry.with_name(entry.name + "-real"))
+        entry.symlink_to(entry.with_name(entry.name + "-real"))
+    elif state == "linked library":
+        library.rename(entry / "real")
+        library.symlink_to(entry / "real")
+    elif state == "zeroed receipt":
+        (entry / "receipt").write_text("0" * 64, encoding="utf-8")
+    else:
+        entry.chmod(0o777)
+
+
+@pytest.mark.parametrize("state", ["linked entry", "linked library", "zeroed receipt", "open entry"])
+@pytest.mark.parametrize("folder, words, key", [
+    ("native-prebuilt", [], KEY + ".prebuilt"),
+    ("native-build", ["--native-build"], KEY + ".build"),
+], ids=["prebuilt", "build"])
+def test_a_cached_program_checks_its_library_entry_again(ws, peer, folder, words, key, state):
+    manifest = project(ws, peer)
+    assert agentica(ws, "--json", "install", **counting_cc(ws)).code == 0
+    for _ in range(2):
+        ran = agentica(ws, *words, "main.agc", **counting_cc(ws))
+        assert (ran.code, ran.stdout) == (0, "42\n"), ran.stderr
+    libraries = [path for path in (ws.pkg_root / folder).glob("*/*") if path.name not in ("receipt", "include")]
+    assert len(libraries) == 1, libraries
+    plant(libraries[0].parent, libraries[0], state)
+    found = problem(agentica(ws, "--json", *words, "main.agc", **counting_cc(ws)))
+    assert (found["code"], found["file"], found["key_path"]) == ("PKG-NATIVE-BUILD", str(manifest), key)

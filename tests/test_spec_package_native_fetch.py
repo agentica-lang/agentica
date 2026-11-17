@@ -2,8 +2,8 @@
 and `update`, through the CLI.
 
 Hermetic: the peer is a plain HTTP server of the standard library on 127.0.0.1, port 0 (the loopback http the URL rules
-allow), which serves the file, a wrong file, a 404, redirects to the same host and to another one, and bodies over the
-64 MiB cap, with a length and chunked; a package comes from a bare git repository behind a throwaway HOME (tests/package_support.py). The bytes
+allow), which serves the file, a wrong file, a 404, redirects and bodies over the 64 MiB cap; a package comes from a
+bare git repository behind a throwaway HOME (tests/package_support.py). The bytes
 of a prebuilt file are never loaded here, so any bytes do, and no C compiler runs: the module is optional and CC names
 no program, so the build that `install` tries for the project is a PKG-NATIVE-UNBUILT warning, left out of what the
 cases read. Cases assert codes and key paths, never message text.
