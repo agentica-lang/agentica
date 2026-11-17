@@ -8,6 +8,12 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.33.2] - 2026-11-17
+
+### Fixed
+
+- The bytecode cache works for a program that imports a file with a module block (`module Name ... end`), such as agentica-tui: it compiled again on every run (#1784).
+
 ## [0.33.1] - 2026-11-17
 
 ### Fixed
@@ -1665,7 +1671,8 @@ First release of Agentica, a statically typed language designed for AI agents.
 - `main` returns `Void`; maps preserve insertion order and support fallible
   lookups.
 
-[unreleased]: https://github.com/agentica-lang/agentica/compare/0.33.1...HEAD
+[unreleased]: https://github.com/agentica-lang/agentica/compare/0.33.2...HEAD
+[0.33.2]: https://github.com/agentica-lang/agentica/compare/0.33.1...0.33.2
 [0.33.1]: https://github.com/agentica-lang/agentica/compare/0.33.0...0.33.1
 [0.33.0]: https://github.com/agentica-lang/agentica/compare/0.32.0...0.33.0
 [0.32.0]: https://github.com/agentica-lang/agentica/compare/0.32.0-alpha.2...0.32.0
