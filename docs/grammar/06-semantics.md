@@ -122,16 +122,21 @@ adapters depend on. A name is read when it is evaluated as an expression
 anywhere in its scope, in a nested block too. An assignment to the name itself
 is not a read of it: in `x += 1`, `x = x + 1` and `xs = xs.push(v)` the `x` on
 the right does not count, so a counter that is only incremented, or a list that
-is only appended to, is unused. The rule is per variable, not per assignment:
-`x = 1`, `x = 2`, `puts(x)` is valid. The error is at the place where the name
-is introduced (the assignment statement, the `for` variable, the block
-parameter or the pattern name), the first in the source when several are unused,
-and it is found at the end of the function, after every other error of it. To
-drop a value, write `_ = f()`; to ignore a loop variable, a parameter or a
-payload, write `for _ in 0...n`, `|_, i|` or `error(_)`. The query commands
-(`type-at`, `refs`, `symbol`) do not report it in the file they are asked about,
-since an editor writes a name before its first use; the files that file imports
-keep the rule.
+is only appended to, is unused, and so are `total += price(v)` and
+`xs = xs.push(wrap(v))`, where a call only feeds the new value. The exception is
+a read where the old value flows into a call that can fail or have effects: in
+the operand of a `try`, as the receiver of `.unwrap!`, in the arguments of a
+call of a function of the program (not of `std/`) or of an invoke (`f.call(x)`),
+as in `count = try step(count)` or `x = File.read_text(x, n).unwrap!`. The rule
+is per variable, not per assignment: `x = 1`, `x = 2`, `puts(x)` is valid. The
+error is at the place where the name is introduced (the assignment statement,
+the `for` variable, the block parameter or the pattern name), the first in the
+source when several are unused, and it is found at the end of the function,
+after every other error of it. To drop a value, write `_ = f()`; to ignore a
+loop variable, a parameter or a payload, write `for _ in 0...n`, `|_, i|` or
+`error(_)`. The query commands (`type-at`, `refs`, `symbol`) do not report it in
+the file they are asked about, since an editor writes a name before its first
+use; the files that file imports keep the rule.
 
 ### Module constants
 
