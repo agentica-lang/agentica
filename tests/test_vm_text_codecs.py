@@ -20,7 +20,7 @@ import re
 
 import pytest
 
-from tests.agentica_test import FIXTURES, compile_agc, run_vm, vm_environment
+from tests.agentica_test import FIXTURES, WINDOWS, compile_agc, host_only, run_vm, vm_environment
 
 UNICODE = ["utf-8", "utf-16", "utf-16le", "utf-16be", "utf-32", "utf-32le", "utf-32be"]
 BYTE_CODECS = ["ascii", "latin-1", "iso-8859-15", "cp1252"]
@@ -221,7 +221,7 @@ def test_scrub_matches_python_replace(peer):
     assert sum("\ufffd" in expected for _, expected in pairs) > 200
 
 
-@pytest.mark.skipif(os.name == "nt", reason="a POSIX environment holds bytes")
+@host_only(WINDOWS, "the Windows environment is UTF-16, so it cannot hold bytes that are not UTF-8")
 def test_the_runtime_replaces_bad_bytes_as_scrub_does(tmp_path):
     source = tmp_path / "env.agc"
     source.write_text('def main() -> Void\n  puts(System.env("AGENTICA_SCRUB_TEST").unwrap!)\nend\n')
