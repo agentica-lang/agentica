@@ -34,13 +34,15 @@ end
 ## A fresh program over an image: the program to write (the image's tables and what is new after them), the number of
 ## the entry function, and the image when the child loaded it and the entry ran (`ran`) or did not (`loaded`, where
 ## the declarations of the entry are not kept, so nothing but the tables grows). `clash` is the name of a new enum
-## that JSON.decode could not find, as a struct of the session has its name ("" for none).
+## that JSON.decode could not find, as a struct of the session has its name ("" for none). `changed` has the
+## struct and enum names that have another current entry, or none, so a name may hold values of an old type.
 struct Merged
   program: Ir.Program
   entry: Int
   ran: Image
   loaded: Image
   clash: String
+  changed: List[String]
 end
 
 ## The image of the first program of a session, which the child runs from the start.
@@ -209,7 +211,20 @@ def merge(
   # A type the session no longer declares, or declares as the other kind, has no current entry of that kind.
   declared = Set.new(refs.keys)
   gone = image.declared.to_a.filter { |name: String| !declared.include?(name) }
+  changed = gone
   structs = image.structs
+  for name in types.naming.enums.keys
+    if structs.has_key?(name)
+      changed = changed.push(name)
+    end
+  end
+
+  for name in types.naming.structs.keys
+    if structs.get(name, types.naming.structs[name]) != types.naming.structs[name] or image.enums.has_key?(name)
+      changed = changed.push(name)
+    end
+  end
+
   for name in gone.concat(types.naming.enums.keys)
     structs = structs.delete(name)
   end
@@ -219,6 +234,12 @@ def merge(
   end
 
   enums = image.enums
+  for name in types.naming.enums.keys
+    if enums.get(name, types.naming.enums[name]) != types.naming.enums[name]
+      changed = changed.push(name)
+    end
+  end
+
   for name in gone.concat(types.naming.structs.keys)
     enums = enums.delete(name)
   end
@@ -242,6 +263,7 @@ def merge(
     ran: ran,
     loaded: loaded,
     clash: clash(held.structs, types.added_enums),
+    changed: changed,
   )
 end
 
@@ -465,6 +487,8 @@ end
 # A new enum that JSON.decode can build, with the name of a struct of the image that it can build: JSON.decode looks
 # for a struct first (vm/json.c).
 def clash(structs: List[Ir.StructDef], added: List[Ir.EnumDef]) -> String
+  return "" if (!added.any? { |entry: Ir.EnumDef| entry.decodable })
+
   names = Set.new(structs.filter { |entry: Ir.StructDef| entry.decodable }.map { |entry: Ir.StructDef| entry.name })
   for entry in added
     return entry.name if entry.decodable and names.include?(entry.name)

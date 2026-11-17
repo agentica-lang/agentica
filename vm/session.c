@@ -7,6 +7,7 @@
  */
 #include "services.h"
 
+#include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -63,7 +64,7 @@ static agc_string *refused(agc_vm *vm, const char *message) {
 
 /* The failure as the front end shows it: the diagnostic's fields, as a --json run prints them, and its text in the
    style of the run (plain, --ai or --json), which the front end prints as it is. LOADED: the entry's program stays. */
-static agc_string *failure(agc_vm *vm, const agc_program *p, const agc_outcome *o, bool loaded) {
+static agc_string *failure(agc_vm *vm, const agc_program *p, const agc_outcome *o, bool loaded, bool lost) {
   const agc_span *at = &p->spans[o->span < p->span_count ? o->span : 0];
   agc_json_member *d = members(7);
   size_t count = 0;
@@ -73,10 +74,11 @@ static agc_string *failure(agc_vm *vm, const agc_program *p, const agc_outcome *
   d[count++] = agc_json_pair("message", json_text(message));
   d[count++] = agc_json_pair("range", agc_span_range(at));
   if (o->stack.shown) count += agc_stack_members(p, &o->stack, d + count);
-  agc_json_member *m = members(4);
+  agc_json_member *m = members(5);
   size_t n = 0;
   m[n++] = agc_json_pair("diagnostic", agc_json_object(d, count));
   if (loaded) m[n++] = yes("loaded");
+  if (lost) m[n++] = yes("lost");
   m[n++] = agc_json_pair("ok", agc_json_leaf(AGC_JSON_BOOL, agc_bool(false)));
   agc_memstream *ms = NULL;
   FILE *file = agc_memstream_open(&ms);
@@ -101,7 +103,7 @@ static agc_string *crashed(agc_vm *vm, agc_session *s, agc_task *t) {
   o.span = t->crash_span;
   if (t->crash_stack) o.stack = *t->crash_stack;
   agc_task_observe(vm, t);
-  return failure(vm, vm->rt->program, &o, s->loaded);
+  return failure(vm, vm->rt->program, &o, s->loaded, false);
 }
 
 /* Whether a cancel ended the task before it returned. The flag alone does not say so: a cancel sets it first and then
@@ -122,7 +124,7 @@ static agc_string *cancelled(agc_vm *vm, agc_session *s) {
   o.message = "the entry was cancelled";
   o.message_len = strlen(o.message);
   o.span = s->entry < p->function_count ? p->functions[s->entry].span : 0;
-  return failure(vm, p, &o, s->loaded);
+  return failure(vm, p, &o, s->loaded, false);
 }
 
 /* An entry that ran but gave back what no entry gives: its effects stay, so it is not refused. */
@@ -293,7 +295,7 @@ static const char *take_entry(agc_vm *vm, agc_session *s, const char *at, const 
     o.code = agc_ffi_refusal(loaded, s->deny_native, &o.message, &o.span);
     if (o.code) {
       o.message_len = strlen(o.message);
-      s->record = failure(vm, loaded, &o, false);
+      s->record = failure(vm, loaded, &o, false, false);
       return NULL;
     }
     next = loaded;
@@ -329,6 +331,23 @@ static void serve_line(agc_vm *vm, agc_session *s, const agc_string *line, uint3
   s->loaded = false;
   if (line->bytes > 6 && memcmp(text, "entry ", 6) == 0) problem = take_entry(vm, s, text + 6, end, span);
   if (problem) s->record = refused(vm, problem);
+}
+
+/* The end of the run answers the entry the front end waits for: `exited` with the status of System.exit, or the
+   failure that ended the run marked `lost`, which the front end shows without the names the session wrote around
+   the entry. True when the failure went to the front end, which then shows it instead of the run. An end between
+   entries is read as the answer of the next one; a channel already closed takes nothing. */
+bool agc_session_ended(agc_vm *vm, const agc_outcome *outcome) {
+  if (!vm->rt->session) return false;
+  if (outcome->kind == AGC_FAILED) {
+    const agc_string *line = failure(vm, vm->rt->program, outcome, false, true);
+    return agc_parent_send_last(vm, line->data, line->bytes);
+  }
+  if (outcome->kind != AGC_EXITED) return false;
+  char line[48];
+  int n = snprintf(line, sizeof line, "{\"exited\":%" PRId64 "}\n", outcome->exit_code);
+  if (n > 0 && (size_t)n < sizeof line) (void)agc_parent_send_last(vm, line, (size_t)n);
+  return false;
 }
 
 /* A retry builtin of the main task, like Test.run (vm/testing.c): each wake comes back here and goes on from the

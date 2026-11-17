@@ -688,6 +688,26 @@ bool agc_parent_send(agc_vm *vm, const agc_string *text) {
   agc_fail(vm, "RUNTIME-INTERNAL", "cannot write to the parent channel", 0);
 }
 
+/* The last line of a run, written after the run ended, on the one thread left and with no task to park: a short line
+   that a free pipe takes at once, tried a few times while the pipe is full. False when it is not sent, as when a
+   write is still in flight or the channel is closed. */
+bool agc_parent_send_last(agc_vm *vm, const char *text, size_t len) {
+  agc_duplex *d = vm->rt->parent ? vm->rt->parent->native : NULL;
+  if (!d || !d->attached || d->closed || d->write_closed || !d->wr_live || sending(d)) return false;
+  size_t sent = 0;
+  for (int tries = 0; sent < len && tries < 100; tries++) {
+    uv_buf_t b = uv_buf_init((char *)text + sent, (unsigned)(len - sent));
+    int n = uv_try_write((uv_stream_t *)&d->wr_pipe, &b, 1);
+    if (n == UV_EAGAIN) {
+      uv_sleep(1);
+      continue;
+    }
+    if (n < 0) return false;
+    sent += (size_t)n;
+  }
+  return sent == len;
+}
+
 static agc_value builtin_parent_read_line(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   int64_t timeout = agc_as_int(vm, args[0]);
@@ -733,5 +753,12 @@ agc_input_status agc_parent_line(agc_vm *vm, agc_string **line) {
 bool agc_parent_send(agc_vm *vm, const agc_string *text) {
   (void)text;
   agc_fail(vm, "RUNTIME-INTERNAL", "cannot write to the parent channel", 0);
+}
+
+bool agc_parent_send_last(agc_vm *vm, const char *text, size_t len) {
+  (void)vm;
+  (void)text;
+  (void)len;
+  return false;
 }
 #endif

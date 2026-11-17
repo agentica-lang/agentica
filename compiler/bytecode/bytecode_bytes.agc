@@ -13,6 +13,18 @@ struct Chunks
   failed: String
 end
 
+## The records that a table of the file has for its first `count` entries (functions, structs, enums, instances), as
+## the writer wrote them, and how many records they are: some tables have a record only for some entries. A program
+## that starts with those entries reuses them (Writer.write_over).
+struct Prefix
+  count: Int
+  records: Int
+  chunks: Chunks
+end
+
+## The prefix of no entry.
+def no_prefix() -> Prefix = Prefix(count: 0, records: 0, chunks: start())
+
 ## The 2 bytes of a number in 0 .. 65535, low byte first.
 def u16(number: Int) -> List[Int] = [number % 256, number / 256]
 

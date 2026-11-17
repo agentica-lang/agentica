@@ -12,13 +12,30 @@ import Pool from "bytecode_pool"
 import Spans from "bytecode_spans"
 import {MAX_U16, NEEDS, OPCODES, PAIR_OPS, SINGLE_OPS, STEP_PASSES, WIDE_OPS} from "bytecode_tables"
 
-## What the writer has interned so far: the entries of the constant, struct update, builtin, span and type sections.
+## What the writer has interned so far: the entries of the constant, struct update, builtin, span and type sections,
+## and the records it wrote for the functions, structs, enums, decodable structs and enums, struct instances and field
+## defaults, which a program that starts with those entries reuses (Writer.write_over).
 struct Tables
   constants: Pool.Pool
   updates: Pool.Pool
   builtins: Pool.Pool
   spans: Pool.Pool
   types: Pool.Pool
+  written: Written
+end
+
+## The records the writer wrote for the entries of each table (Wire.Prefix), and the place of each struct and enum
+## of those tables by its name and by `#N`.
+struct Written
+  functions: Wire.Prefix
+  structs: Wire.Prefix
+  enums: Wire.Prefix
+  decodable: Wire.Prefix
+  decodable_enums: Wire.Prefix
+  instances: Wire.Prefix
+  defaults: Wire.Prefix
+  struct_index: Map[String, Int]
+  enum_index: Map[String, Int]
 end
 
 ## The bytes of a function in the file (its header, its code and the span of each instruction, as three chunks) and

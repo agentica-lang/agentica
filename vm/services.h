@@ -202,6 +202,7 @@ void agc_parent_take(agc_vm *vm);
 bool agc_parent_open(agc_vm *vm);
 agc_input_status agc_parent_line(agc_vm *vm, agc_string **line);
 bool agc_parent_send(agc_vm *vm, const agc_string *text);
+bool agc_parent_send_last(agc_vm *vm, const char *text, size_t len);
 
 extern const agc_builtin agc_string_builtins[];
 extern const size_t agc_string_builtin_count;
@@ -344,6 +345,7 @@ typedef struct agc_session agc_session;
 agc_session *agc_session_new(bool deny_native);
 agc_value agc_process_spawn_session(agc_vm *vm, const agc_value *args, bool json);
 agc_value agc_session_serve(agc_vm *vm, agc_value *args, uint32_t span);
+bool agc_session_ended(agc_vm *vm, const agc_outcome *outcome);
 
 extern const agc_builtin agc_front_end_builtins[];
 extern const size_t agc_front_end_builtin_count;
