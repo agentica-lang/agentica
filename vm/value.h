@@ -289,10 +289,11 @@ typedef struct {
    idle_timeout_ms, max_connections, max_body_bytes, proxy, tls (Optional[TLS.Context]), connect_timeout_ms,
    read_timeout_ms. HttpWire.service checks the shape, since the std-only rule lives in the front end and bytecode can
    call the builtin with any struct. */
-#define AGC_HTTP_OPTIONS_FIELDS 8
+#define AGC_HTTP_OPTIONS_FIELDS 9
 #define AGC_HTTP_OPTION_PROXY 4
 #define AGC_HTTP_OPTION_TLS 5
 #define AGC_HTTP_OPTION_CONNECT 6
+#define AGC_HTTP_OPTION_CONNECT_TO 8
 
 /* The builtin record Error (#671) as the catalog lays it out: kind, message, code (Optional[Int]), details
    (Map[String, String]), cause (Optional[Error]) and location ("path:line:col"). Equality compares the fields before
