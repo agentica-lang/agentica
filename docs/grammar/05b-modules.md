@@ -925,8 +925,9 @@ import Sqlite from "pkg/sqlite/db"
     (`.so`, `.dylib`, `.dll`) and `{source}`. `source` is the source key: the
     first 16 hex digits of the SHA-256 of the library name, the `build` table
     and the SHA-256 and path of each file of `native/` that the package hash
-    covers, with CRLF read as LF (not the compiler, the header or the system,
-    so one key names the code for every target). Any change in `native/`
+    covers, with CRLF read as LF in a file that decodes as UTF-8 (not the
+    compiler, the header or the system, so one key names the code for every
+    target). Any change in `native/`
     gives every module of the package a new key; a package that wants a module
     keyed alone keeps one module per package. `api` is the native API the
     files were built with, `MAJOR.MINOR` with no leading zero. `sha256` names
@@ -938,16 +939,40 @@ import Sqlite from "pkg/sqlite/db"
     manifest or has no `build` is `PKG-NATIVE-MISSING` at `native.NAME`, and a
     file of `native/` over the limits of a fetched package is
     `PKG-NATIVE-BUILD` at `native.NAME.build`. A bad table is
-    `PKG-MANIFEST-INVALID` at its key. This version checks the table and still
-    builds every module from source.
+    `PKG-MANIFEST-INVALID` at its key.
+  - `install`, `add` and `update` download the file of the host target (the
+    target of the running binary; none on another system) for the project and
+    every locked package, fetched ones too; a run never downloads. A module is
+    skipped when the policy builds it, `sha256` has no row for the target,
+    `api` has another major or a newer minor than the binary, or the package's
+    files no longer give the `source` key. The download takes at most 64 MiB
+    and one deadline, and follows at most five redirects, never from https to
+    http and only to the host of the URL, `objects.githubusercontent.com` or
+    `release-assets.githubusercontent.com`.
+    The file goes to `<package cache>/native-prebuilt/<sha256>/libNAME.so`
+    (`.dylib`, `NAME.dll`) with a `receipt` holding its SHA-256, made in a
+    private folder and renamed into place, so a file that two packages name is
+    stored once and concurrent installs keep the first. A file that is not the
+    one its `sha256` names is `PKG-HASH-MISMATCH` at
+    `native.NAME.prebuilt.sha256.TARGET`; any other failure of the download
+    (a 404, a refused redirect, a file over the cap) is the warning
+    `PKG-FETCH` at `native.NAME.prebuilt.url`, and the module builds from
+    source. An entry or `native-prebuilt` folder that is not private to the
+    user, or a file that is not the one its receipt names, is
+    `PKG-NATIVE-BUILD` at `native.NAME.prebuilt`. Under `--deny-net` or
+    `--sandbox` nothing is downloaded. This version downloads the files and
+    still builds every module from source.
 - `[native_policy]`, in the root project's manifest only (`PKG-ROOT-ONLY` at
   `native_policy` in the manifest of a package, even an empty table), says
   which native modules always build from source and which never build:
   `build = "all"` or `build = ["NAME", ...]`, and `prebuilt_only` the same; a
   name written twice counts once. A module in both, or `"all"` in one and
   anything in the other, is `PKG-MANIFEST-INVALID` at
-  `native_policy.prebuilt_only` (or its item). This version checks the table
-  and does not act on it yet.
+  `native_policy.prebuilt_only` (or its item). `install`, `add` and `update`
+  download no file for a module that `build` names, and for a module that
+  `prebuilt_only` names a failed download is an error (`PKG-FETCH`), and so
+  is a file that `--deny-net` or `--sandbox` keeps from being downloaded
+  (`PKG-NATIVE-DENIED` at `native.NAME.prebuilt`).
 - The stored name of a package file in the `.agcb` file is
   `pkg/<name>@<tag>/path/in/package.agc`, such as `pkg/sqlite@v1.2.0/db.agc`
   (the path is from the package folder, without the `subdir`); for a package

@@ -1,13 +1,14 @@
 ## `agentica add NAME URL --tag TAG` (or `--ref COMMIT`, `--subdir DIR` and `--group test`) and `agentica update`
 ## (docs/grammar/05b-modules.md). Both work on the project of the working folder, resolve its packages
-## (io/package_resolve.agc: git runs for the pins that are new or asked to move), fill the cache, write agentica.lock
-## and refresh deps/ (io/package_deps.agc: every package of the new lock is written, and a package the old lock had
-## and the new one lacks is removed). `add` also puts the dependency in agentica.toml, with one line added and nothing
-## else changed (packages/manifest_edit.agc). The lock is written first: a lock with more packages than the manifest
-## needs is still good, while a manifest that names a package the lock lacks is PKG-LOCK-STALE. deps/ is written last,
-## because `agentica install` can write it again from the lock. Nothing is written when anything before the lock
-## fails.
+## (io/package_resolve.agc: git runs for the pins that are new or asked to move), fill the cache (with the prebuilt
+## native modules of the host target, io/native_prebuilt.agc), write agentica.lock and refresh deps/
+## (io/package_deps.agc: every package of the new lock is written, and a package the old lock had and the new one lacks
+## is removed). `add` also puts the dependency in agentica.toml, with one line added and nothing else changed
+## (packages/manifest_edit.agc). The lock is written first: a lock with more packages than the manifest needs is still
+## good, while a manifest that names a package the lock lacks is PKG-LOCK-STALE. deps/ is written last, because
+## `agentica install` can write it again from the lock. Nothing is written when anything before the lock fails.
 
+import Prebuilt from "../io/native_prebuilt"
 import PackageDeps from "../io/package_deps"
 import PackageResolve from "../io/package_resolve"
 import SaveFile from "../io/save_file"
@@ -26,16 +27,16 @@ import Reply from "cli_reply"
 import Texts from "cli_text"
 
 ## Runs `add`. `words` are the ones after the command: NAME URL, `--tag TAG` or `--ref COMMIT`, `--subdir DIR` and
-## `--group test`.
-def add(settings: Env.Settings, style: String, words: List[String]) -> Reply.Answer
+## `--group test`. `fetching` says how the prebuilt native modules are downloaded.
+def add(settings: Env.Settings, style: String, fetching: Prebuilt.Fetching, words: List[String]) -> Reply.Answer
   asked = request_of(words)
   return Reply.Answer.Printed(Reply.failed(2, asked.message)) if !asked.ok?
 
-  CliProject.run(style, settings.workspace) do |dir: String| add_to(settings, dir, asked.unwrap!) end
+  CliProject.run(style, settings.workspace) do |dir: String| add_to(settings, dir, fetching, asked.unwrap!) end
 end
 
 ## Runs `update`. `words` are the ones after the command: none for every package, or the name of a dependency.
-def update(settings: Env.Settings, style: String, words: List[String]) -> Reply.Answer
+def update(settings: Env.Settings, style: String, fetching: Prebuilt.Fetching, words: List[String]) -> Reply.Answer
   # A word that starts with "-" is an option nobody knows, not a name.
   if words.size > 1 or (words.size == 1 and words[0].start_with?("-"))
     return Reply.Answer.Printed(Reply.failed(2, Texts.usage_text()))
@@ -46,7 +47,7 @@ def update(settings: Env.Settings, style: String, words: List[String]) -> Reply.
     name = words[0]
   end
 
-  CliProject.run(style, settings.workspace) do |dir: String| update_in(settings, dir, name) end
+  CliProject.run(style, settings.workspace) do |dir: String| update_in(settings, dir, fetching, name) end
 end
 
 private
@@ -125,15 +126,20 @@ def option_of(options: Map[String, String], flag: String) -> String
   ""
 end
 
-def add_to(settings: Env.Settings, dir: String, request: Request) -> Result[String]
+def add_to(settings: Env.Settings, dir: String, fetching: Prebuilt.Fetching, request: Request) -> Result[String]
   project = try Project.find_to_write(settings.workspace, dir, settings.version)
   case project
     Project.Project.Bare -> error(CliProject.missing_manifest(dir))
-    Project.Project.Declared(found) -> add_in(settings, found, request)
+    Project.Project.Declared(found) -> add_in(settings, found, fetching, request)
   end
 end
 
-def add_in(settings: Env.Settings, found: Project.Found, request: Request) -> Result[String]
+def add_in(
+  settings: Env.Settings,
+  found: Project.Found,
+  fetching: Prebuilt.Fetching,
+  request: Request,
+) -> Result[String]
   file = found.manifest.file
   if found.manifest.dependencies.any? do |dependency| dependency.name == request.name end
     message = "#{request.name} is already a dependency"
@@ -148,11 +154,12 @@ def add_in(settings: Env.Settings, found: Project.Found, request: Request) -> Re
   resolved = try PackageResolve.resolve(settings, manifest, found.members, found.lock, refresh)
   packages = resolved.packages
   artifacts = try PackageResolve.resolve_artifacts(settings, manifest, found.members, packages)
+  prebuilt = try Prebuilt.fetch_all(settings, manifest, found.members, packages, fetching)
   try unchanged(settings, file, text)
   try save(settings, found.lock.file, Lock.encode(packages, artifacts), "")
   try save(settings, file, edited, LOCK_WRITTEN)
   try refresh_deps(settings, found, packages)
-  ok(report(found.lock, resolved, request.name))
+  ok(CliInstall.with_lines(report(found.lock, resolved, request.name), prebuilt))
 end
 
 # The fetch takes a while, and the edit is of the text read before it: a manifest changed meanwhile is not overwritten.
@@ -183,15 +190,20 @@ def one_more?(old: Manifest.Manifest, manifest: Manifest.Manifest, request: Requ
   GitSource.same?(entry.unwrap!.source, request.source) and entry.unwrap!.test == request.test
 end
 
-def update_in(settings: Env.Settings, dir: String, name: String) -> Result[String]
+def update_in(settings: Env.Settings, dir: String, fetching: Prebuilt.Fetching, name: String) -> Result[String]
   project = try Project.find_to_write(settings.workspace, dir, settings.version)
   case project
     Project.Project.Bare -> error(CliProject.missing_manifest(dir))
-    Project.Project.Declared(found) -> update_found(settings, found, name)
+    Project.Project.Declared(found) -> update_found(settings, found, fetching, name)
   end
 end
 
-def update_found(settings: Env.Settings, found: Project.Found, name: String) -> Result[String]
+def update_found(
+  settings: Env.Settings,
+  found: Project.Found,
+  fetching: Prebuilt.Fetching,
+  name: String,
+) -> Result[String]
   manifest = found.manifest
   if name != "" and !Manifest.find(manifest, name).ok?
     message = "#{name} is not a dependency of #{manifest.file}"
@@ -203,13 +215,14 @@ def update_found(settings: Env.Settings, found: Project.Found, name: String) -> 
   resolved = try PackageResolve.resolve(settings, manifest, found.members, found.lock, refresh)
   packages = resolved.packages
   artifacts = try PackageResolve.resolve_artifacts(settings, manifest, found.members, packages)
+  prebuilt = try Prebuilt.fetch_all(settings, manifest, found.members, packages, fetching)
   # A project with no dependency, no download and no lock stays as it is: nothing asks for a lock.
   if packages.size > 0 or artifacts.size > 0 or settings.workspace.file_exists.call(found.lock.file)
     try save(settings, found.lock.file, Lock.encode(packages, artifacts), "")
   end
 
   try refresh_deps(settings, found, packages)
-  ok(report(found.lock, resolved, ""))
+  ok(CliInstall.with_lines(report(found.lock, resolved, ""), prebuilt))
 end
 
 # Writes the packages of the new lock to deps/ and removes those the old lock had and the new one lacks. Only a project

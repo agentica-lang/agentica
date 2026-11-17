@@ -90,9 +90,16 @@ end
   `linux-arm64`, `macos-x86_64`, `macos-arm64`, `windows-x86_64`). The URL is
   https with `{target}`, and may use `{name}`, `{api}`, `{ext}`, `{source}`.
   `agentica native source NAME` prints the `source` key, the `api` and each
-  URL. `[native_policy]` in the root manifest takes `build` and
-  `prebuilt_only` (`"all"` or a list of names). Both are checked
-  (`PKG-MANIFEST-INVALID` at the key); modules still build from source.
+  URL. The key covers `build` and every file of `native/` (CRLF read as LF in
+  a file that decodes as UTF-8), so any change there re-keys every module of
+  the package. `install`, `add` and `update` download the host target's file
+  into the package cache (64 MiB at most; redirects only to the URL's host or
+  GitHub's release asset hosts): a wrong file is `PKG-HASH-MISMATCH` at
+  `native.NAME.prebuilt.sha256.TARGET`, another failure a `PKG-FETCH`
+  warning; `--deny-net` and `--sandbox` download nothing. `[native_policy]`
+  in the root manifest takes `build` (never downloaded) and `prebuilt_only`
+  (a failed download is an error, `PKG-NATIVE-DENIED` under `--deny-net`),
+  each `"all"` or a list of names. Modules still build from source.
 - `optional = true` beside `build` (it needs `build`): a module that cannot
   be built (no compiler, a compile error) prints `warning: native module NAME
   not built: ...` once a run on stderr (`PKG-NATIVE-UNBUILT`, a JSON object

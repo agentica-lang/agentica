@@ -96,6 +96,79 @@ def cached(
   end
 end
 
+## Downloads `url` into a new file in `folder` and gives its path. It follows at most five redirects of
+## 301/302/303/307/308 with exactly one Location each, relative targets resolved against the current URL, to targets
+## that `allowed` accepts besides the rules of every URL: no https downgrade, http only to a loopback literal, no loop.
+## Only a final 200 is kept, and the bodies of all hops count against `limit` bytes; each hop writes a fresh private
+## file. Every failure is PKG-FETCH at the `url` key of `context` (a timeout at its key), with a message that never
+## echoes the URL.
+def download(
+  url: String,
+  folder: String,
+  limit: Int,
+  deadline: Int,
+  context: NativeArtifact.Context,
+  allowed: Fn[String, Bool],
+) -> Result[String]
+  pool = try open_pool(deadline, context)
+  current = url
+  consumed = 0
+  redirects = 0
+  seen: Map[String, Bool] = {}
+  seen = seen.put(url, true)
+  while true
+    left = deadline - Time.monotonic_ms()
+    if left <= 0
+      HTTP.close_client(pool)
+      return error(fail(context, "PKG-FETCH", "", "the operation timed out", ""))
+    end
+
+    budgeted = NativeArtifact.hop_budget(consumed, limit)
+    if !budgeted.ok?
+      HTTP.close_client(pool)
+      return error(fail(context, "PKG-FETCH", "url", "the download is larger than #{limit / 1_048_576} MiB", ""))
+    end
+
+    dest = Paths.join(folder, ".dl-#{System.pid()}-#{Random.int(0, 999999999)}-#{redirects}")
+    options = HTTP.DownloadOptions(timeout_ms: left, max_total_bytes: budgeted.unwrap!)
+    case HTTP.download(pool, current, dest, options)
+      error(e) ->
+        HTTP.close_client(pool)
+        if e.is_a?("http.too_large")
+          return error(fail(context, "PKG-FETCH", "url", "the download is larger than #{limit / 1_048_576} MiB", ""))
+        end
+
+        return error(fail(context, "PKG-FETCH", "url", "cannot download the file", ""))
+      ok(got) ->
+        consumed = consumed + got.bytes_written
+        if !NativeArtifact.redirect_status?(got.status)
+          HTTP.close_client(pool)
+          return ok(dest) if got.status == 200
+
+          return error(fail(context, "PKG-FETCH", "url", "the server answered with status #{got.status}", ""))
+        end
+
+        case follow_redirect(current, got.headers, seen, redirects, context)
+          ok(next_url) ->
+            if !allowed.call(next_url)
+              HTTP.close_client(pool)
+              return error(fail(context, "PKG-FETCH", "url", "the redirect target is not allowed", ""))
+            end
+
+            seen = seen.put(next_url, true)
+            current = next_url
+            redirects = redirects + 1
+          error(packed) ->
+            HTTP.close_client(pool)
+            return error(packed)
+        end
+    end
+  end
+
+  HTTP.close_client(pool)
+  error(fail(context, "PKG-FETCH", "url", "cannot download the file", ""))
+end
+
 private
 
 # Tries for a fresh private name, as in package_fetch.agc.
@@ -267,9 +340,8 @@ def open_pool(deadline: Int, context: NativeArtifact.Context) -> Result[HTTP.Cli
   end
 end
 
-# Downloads the archive at `url` with at most five redirect hops, hashes the final bytes and publishes them as the
-# archive of `sha`. Bodies of every hop count against 256 MiB; each hop writes a fresh private file that is kept on
-# failure. A concurrent winner is verified and kept, never replaced.
+# Downloads the archive at `url` (any redirect target that passes the rules of every URL), hashes the final bytes and
+# publishes them as the archive of `sha`. A concurrent winner is verified and kept, never replaced.
 def download_archive(
   root: String,
   sha: String,
@@ -277,75 +349,22 @@ def download_archive(
   deadline: Int,
   context: NativeArtifact.Context,
 ) -> Result[String]
-  pool = try open_pool(deadline, context)
   base = NativeArtifact.native_base(root)
   try make_parents(base, deadline, context)
-  current = url
-  consumed = 0
-  redirects = 0
-  seen: Map[String, Bool] = {}
-  seen = seen.put(url, true)
-  while true
-    left = deadline - Time.monotonic_ms()
-    if left <= 0
-      HTTP.close_client(pool)
-      return error(fail(context, "PKG-FETCH", "", "the operation timed out", ""))
-    end
+  dest = try download(url, base, TOTAL_BODY_BYTES, deadline, context, &any_target)
+  case File.sha256(dest, deadline - Time.monotonic_ms())
+    ok(found) ->
+      if OpenSSL.Digest.hexencode(found) != sha
+        message = "the file is not the one its sha256 names"
+        return error(fail(context, "PKG-HASH-MISMATCH", "sha256", message, ""))
+      end
 
-    budgeted = NativeArtifact.hop_budget(consumed, TOTAL_BODY_BYTES)
-    if !budgeted.ok?
-      HTTP.close_client(pool)
-      return error(fail(context, "PKG-FETCH", "url", "the download is larger than 256 MiB", ""))
-    end
-
-    remaining = budgeted.unwrap!
-    dest = Paths.join(base, ".dl-#{System.pid()}-#{Random.int(0, 999999999)}-#{redirects}")
-    options = HTTP.DownloadOptions(timeout_ms: left, max_total_bytes: remaining)
-    case HTTP.download(pool, current, dest, options)
-      error(_) ->
-        HTTP.close_client(pool)
-        return error(fail(context, "PKG-FETCH", "url", "cannot download the file", ""))
-      ok(got) ->
-        consumed = consumed + got.bytes_written
-        if NativeArtifact.redirect_status?(got.status)
-          case follow_redirect(current, got.headers, seen, redirects, context)
-            ok(next_url) ->
-              seen = seen.put(next_url, true)
-              current = next_url
-              redirects = redirects + 1
-            error(packed) ->
-              HTTP.close_client(pool)
-              return error(packed)
-          end
-        else
-          if got.status != 200
-            HTTP.close_client(pool)
-            message = "the server answered with status #{got.status}"
-            return error(fail(context, "PKG-FETCH", "url", message, ""))
-          end
-
-          case File.sha256(dest, deadline - Time.monotonic_ms())
-            ok(found) ->
-              if OpenSSL.Digest.hexencode(found) != sha
-                HTTP.close_client(pool)
-                message = "the file is not the one its sha256 names"
-                return error(fail(context, "PKG-HASH-MISMATCH", "sha256", message, ""))
-              end
-
-              placed = publish_file(dest, NativeArtifact.archive_path(root, sha), sha, deadline, context)
-              HTTP.close_client(pool)
-              return placed
-            error(_) ->
-              HTTP.close_client(pool)
-              return error(fail(context, "PKG-FETCH", "sha256", "cannot hash the download", ""))
-          end
-        end
-    end
+      publish_file(dest, NativeArtifact.archive_path(root, sha), sha, deadline, context)
+    error(_) -> error(fail(context, "PKG-FETCH", "sha256", "cannot hash the download", ""))
   end
-
-  HTTP.close_client(pool)
-  error(fail(context, "PKG-FETCH", "url", "cannot download the file", ""))
 end
+
+def any_target(url: String) -> Bool = true
 
 def follow_redirect(
   current: String,
