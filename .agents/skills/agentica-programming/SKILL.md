@@ -53,6 +53,13 @@ in one command, `for f in cases/*.txt; do agentica p.agc < "$f" || break; done`.
 - A method not in `references/` does not exist (`contains?` on a List, `value!`,
   `len`, `trim`, `to_int`): `CHECK-UNKNOWN-METHOD`.
 
+## Logs
+
+A server, a worker, a package or a long tool logs with `std/logger`: `err`
+for a failure it handles, `warning` for a recovered problem, `info` for a few
+lifecycle events, `debug` for detail. The message is fixed; ids and values go
+in `fields`; never secrets (`references/logger.md`).
+
 ## References
 
 Read only what the task needs.
