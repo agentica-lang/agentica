@@ -444,15 +444,16 @@ def test_the_plain_form(tmp_path):
 
 @pytest.mark.slow
 def test_the_cost_of_an_entry_does_not_grow_with_the_session(tmp_path):
-    # Each entry binds a name: the medians of the first and of the last 50 answers stay close, where an entry that
-    # compiled and wrote the whole session again took 25 times longer at the end.
+    # Each entry binds a name: the medians of the first and of the last 50 answers stay close. An entry that compiled
+    # and wrote the whole session again took 25 times longer at the end, and one whose child loaded the whole program
+    # again twice as long.
     session = Interactive(tmp_path)
     times = []
     try:
-        for k in range(400):
+        for k in range(800):
             begun = time.perf_counter()
             assert session.ask(f"x{k} = {k}")["ok"]
             times.append(time.perf_counter() - begun)
     finally:
         session.close()
-    assert statistics.median(times[-50:]) < 4 * statistics.median(times[:50])
+    assert statistics.median(times[-50:]) < 1.6 * statistics.median(times[:50])
