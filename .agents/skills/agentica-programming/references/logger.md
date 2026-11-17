@@ -57,3 +57,32 @@ Logger.time_text(time_ms: Int) -> String
   writer before `main` returns.
 - The handlers and the level belong to one run; a `Process.spawn` child has its
   own.
+
+## What to log, at which level
+
+A server, a worker, a package or a long tool logs with `std/logger`, not
+`puts` or `IO.warn`. A short script that prints its answer needs no logs.
+
+| Level | When | Example |
+|---|---|---|
+| `err` | a failure the program handles and cannot recover: a request ends with 500, a job is given up, a task crashed | `Logger.err("job dead", {"id": id, "attempts": n.to_s})` |
+| `warning` | a problem that was recovered: a retry, a fallback, a default for a missing setting, a dropped item | `Logger.warning("config missing, using defaults", {"path": path})` |
+| `info` | a few lifecycle events: started (with the main settings), listening, stopped, a connection or job done | `Logger.info("listening", {"port": port.to_s})` |
+| `debug` | detail to find a bug: inputs, branches taken, timings, each item of a loop | `Logger.debug("reading config", {"path": path})` |
+
+- The message is a fixed text; the values go in `fields` (`to_s` them), so
+  lines can be searched and grouped: `Logger.info("job done", {"id": id})`,
+  not `Logger.info("job #{id} done")`.
+- Log an error once, where it is handled (the `case` that turns it into a
+  response or a retry). A function that returns the `Result` does not log it
+  too.
+- Put ids in `fields` (request, job, session, user id), so one flow can be
+  followed across lines.
+- Never log secrets (tokens, passwords, keys, cookies) or whole bodies; cap
+  long values.
+- `info` stays quiet in a loop: one line per request or job, not per item.
+  Detail is `debug`, inside `Logger.enabled?` when the message is costly.
+- A package logs but never calls `set_level`, `attach` or `detach`: the
+  program that uses it chooses the level and the handlers.
+- Tests check behavior, not log lines. A test may attach a handler to check
+  that an important warning or error is logged.
