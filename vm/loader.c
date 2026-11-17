@@ -86,7 +86,7 @@ static void *grown(reader *r, const void *base, uint32_t held, uint32_t count, s
   size_t total = agc_size_mul(count, size);
   if (total == 0) return NULL;
   void *table = atomic ? agc_alloc_atomic(total) : agc_alloc(total);
-  if (held) memcpy(table, base, (size_t)held * size);
+  if (base && held) memcpy(table, base, (size_t)held * size);
   return table;
 }
 
@@ -524,7 +524,6 @@ static void load_types(reader *r, agc_program *p) {
   uint16_t *depth = load_alloc(r, agc_size_mul(p->type_count, sizeof(uint16_t)), true);
   for (uint32_t i = 0; i < held; i++) depth[i] = type_depth(&p->types[i], depth);
   for (uint32_t i = held; i < p->type_count; i++) {
-    // cchecker: ignore CC-GCC-ANALYZER-NULL-DEREFERENCE: a count of 0 gets NULL and no loop
     depth[i] = 0;
     agc_type *t = &p->types[i];
     t->kind = read_u8(r);
@@ -631,7 +630,6 @@ static void load_tables(reader *r, agc_program *p) {
   p->max_arity = HELD(r, max_arity);
   for (uint32_t i = held; i < p->struct_count; i++) {
     agc_struct_def *d = &p->structs[i];
-    // cchecker: ignore CC-GCC-ANALYZER-NULL-DEREFERENCE: a count of 0 gets NULL and no loop
     d->name = read_string(r);
     d->count = read_count(r, 4, "field");
     if (d->count > 65535) reject(r, "too many fields");
@@ -926,7 +924,6 @@ static agc_string *joined(reader *r, const agc_string *base, const agc_string *a
   size_t bytes = agc_size_add(base->bytes, added->bytes);
   if (bytes > AGC_MAX_FILE_BYTES) reject(r, "a source of the session is larger than 256 MiB");
   agc_string *s = load_alloc(r, agc_size_add(sizeof(agc_string), bytes), true);
-  // cchecker: ignore CC-GCC-ANALYZER-NULL-DEREFERENCE: the size is at least sizeof(agc_string), never 0
   s->bytes = bytes;
   s->chars = base->chars + added->chars;
   if (base->bytes) memcpy(s->data, base->data, base->bytes);
@@ -951,7 +948,6 @@ static void load(reader *r, agc_program *p) {
   for (uint32_t i = 0; i < p->source_count; i++) {
     agc_string *name = read_string(r);
     agc_string *text = read_string(r);
-    // cchecker: ignore CC-GCC-ANALYZER-NULL-DEREFERENCE: a count of 0 gets NULL and no loop
     agc_source *source = &p->sources[i];
     if (i < held) {
       if (!same_string(name, source->name)) reject(r, "source %u is not the session's", i);
@@ -986,7 +982,6 @@ static void load(reader *r, agc_program *p) {
     check_position(r, source, s.end_line, s.end_column);
     if (s.start_line > s.end_line || (s.start_line == s.end_line && s.start_column > s.end_column))
       reject(r, "span starts after it ends");
-    // cchecker: ignore CC-GCC-ANALYZER-NULL-DEREFERENCE: a count of 0 gets NULL and no loop
     p->spans[i] = s;
   }
 
