@@ -228,26 +228,8 @@ def untmp(directory, result):
 # Running the VM -------------------------------------------------------------------------------------------------------
 
 def decode(data):
-    """Bytes as text the way a port reads it: each byte that is not part of a valid sequence is one U+FFFD (Python
-    would turn a cut sequence into a single one)."""
-    try:
-        return data.decode("utf-8")
-    except UnicodeDecodeError:
-        pass
-    text = []
-    index = 0
-    while index < len(data):
-        for size in range(1, min(4, len(data) - index) + 1):
-            try:
-                text.append(data[index:index + size].decode("utf-8"))
-                index += size
-                break
-            except UnicodeDecodeError:
-                continue
-        else:
-            text.append("\ufffd")
-            index += 1
-    return "".join(text)
+    """Bytes as text the way a port reads it: one U+FFFD per maximal invalid subsequence, as the VM does."""
+    return data.decode("utf-8", "replace")
 
 
 def exit_status(code):

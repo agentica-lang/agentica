@@ -261,8 +261,8 @@ test-distribution: $(PRODUCT)
 # front-end goldens of tests/fixtures/frontend/ from the Agentica stages (tools/refreeze.py, fast tier only: run
 # `poetry run python tools/refreeze.py` with no flag to rewrite the frozen manifests of the slow tier too, slow).
 goldens: $(PRODUCT)
-	AGENTICA_FIXTURES="$(FIXTURES)" $(PYTHON) -m tests.vm_diff_support
-	AGENTICA_FIXTURES="$(FIXTURES)" $(PYTHON) -m tests.test_vm_stack
+	AGENTICA_FIXTURES="$(FIXTURES)" $(POETRY) run python -m tests.vm_diff_support
+	AGENTICA_FIXTURES="$(FIXTURES)" $(POETRY) run python -m tests.test_vm_stack
 	test -n "$(FIXTURES)" || $(POETRY) run python -m tests.test_cli_forms freeze
 	test -n "$(FIXTURES)" || $(POETRY) run python tools/refreeze.py --fast-only
 

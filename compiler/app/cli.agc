@@ -84,10 +84,13 @@ def run(
   case Options.parse(args, settings.version)
     Options.Parsed.Answer(reply) -> emit(reply)
     Options.Parsed.Ready(options) ->
+      native = CliRun.native_settings(settings, options)
+      return emit(Reply.failed(2, "agentica: #{native.message}\n")) if !native.ok?
+
       dispatch(
         Session(
           options: options,
-          settings: settings,
+          settings: native.unwrap!,
           hand_off: hand_off,
           buffer_file: "",
           buffer_shown: "",
@@ -211,7 +214,7 @@ end
 # each.
 def builder_settings(settings: Env.Settings, deny: List[String], style: String, verb: String) -> Env.Settings
   if deny.size == 0
-    builder: Fn[Workspace.BuildRequest, Workspace.Built] = NativeBuild.builder(style == "plain", warner(style))
+    builder = NativeBuild.builder(style == "plain", warner(style), settings.native_policy)
     return settings.with(workspace: settings.workspace.with(native_build: builder))
   end
 

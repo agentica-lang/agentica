@@ -578,7 +578,7 @@ agc_value agc_launch_args(int argc, char **argv, int first) {
   agc_list_builder_sized(&b, n);
   for (size_t k = 0; k < n; k++) {
     const char *arg = argv[(size_t)first + k];
-    agc_list_builder_push(&b, agc_string_value(agc_utf8_decode((const uint8_t *)arg, strlen(arg), "?", true)));
+    agc_list_builder_push(&b, agc_string_value(agc_utf8_decode((const uint8_t *)arg, strlen(arg), "?")));
   }
   return agc_list_value(agc_list_builder_finish(&b));
 }

@@ -169,7 +169,7 @@ static void put(text *t, const char *data, size_t len) {
 static void puts_text(text *t, const char *s) { put(t, s, strlen(s)); }
 
 static agc_string *lossy(const void *data, size_t len) {
-  return agc_utf8_decode((const uint8_t *)data, len, "\xEF\xBF\xBD", false);
+  return agc_utf8_decode((const uint8_t *)data, len, "\xEF\xBF\xBD");
 }
 
 /* The error of the text in t, of KIND, with ERR as its code unless it is 0 (no errno is 0). */

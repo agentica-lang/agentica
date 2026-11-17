@@ -53,7 +53,7 @@ Reads an environment variable of the program. With `--deny-env` (or `--sandbox`)
 
 - A variable that is not set is an error. A variable set to the empty string is `ok("")`.
 - A name that is empty, or has `=` or a NUL in it, is an error.
-- A value that is not valid UTF-8 is not an error. Each byte that is not part of a valid UTF-8 sequence becomes U+FFFD.
+- A value that is not valid UTF-8 is not an error. Each invalid sequence becomes one U+FFFD, as [`bytes.scrub`](/library/data-structures/bytes/#scrub) does.
 - The home directory is `System.env("HOME")`.
 
 ```agentica

@@ -70,7 +70,7 @@ static agc_string *failure(agc_vm *vm, const agc_program *p, const agc_outcome *
   size_t count = 0;
   d[count++] = agc_json_pair("code", json_text(lit(o->code)));
   d[count++] = agc_json_pair("file", json_text(p->sources[at->source].name));
-  agc_string *message = agc_utf8_decode((const uint8_t *)o->message, o->message_len, "\xEF\xBF\xBD", false);
+  agc_string *message = agc_utf8_decode((const uint8_t *)o->message, o->message_len, "\xEF\xBF\xBD");
   d[count++] = agc_json_pair("message", json_text(message));
   d[count++] = agc_json_pair("range", agc_span_range(at));
   if (o->stack.shown) count += agc_stack_members(p, &o->stack, d + count);
@@ -87,7 +87,7 @@ static agc_string *failure(agc_vm *vm, const agc_program *p, const agc_outcome *
     char *text = NULL;
     size_t len = 0;
     if (agc_memstream_take(file, ms, &text, &len) && text)
-      m[n++] = agc_json_pair("text", json_text(agc_utf8_decode((const uint8_t *)text, len, "\xEF\xBF\xBD", false)));
+      m[n++] = agc_json_pair("text", json_text(agc_utf8_decode((const uint8_t *)text, len, "\xEF\xBF\xBD")));
     free(text);
   }
   return agc_json_line(vm, m, n);

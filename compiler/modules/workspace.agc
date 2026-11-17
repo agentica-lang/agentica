@@ -48,7 +48,11 @@ end
 ## package `files` are only the files of native/ that the hash covers and `contents` holds their bytes, read once and
 ## checked against the pin (packages/native_build.agc, listed): the machine builds from a private copy of those bytes,
 ## never from the package folder. `contents` is empty for a package read in place. `optional` is true when the manifest
-## says `optional = true`: a build that fails is then Unbuilt, not Failed.
+## says `optional = true`: a build that fails is then Unbuilt, not Failed. `mode` is the way the root manifest's
+## `[native_policy]` sends the module ("", "build" or "prebuilt_only"; the machine puts the command line and the
+## environment first). `prebuilt_sha256` is the SHA-256 of the prebuilt file of each target ({} with no `prebuilt`
+## table), built with the native API `prebuilt_api` from the sources of the key `prebuilt_source`; `prebuilt_fresh`
+## says that the package's sources still give that key, so those files are for this code.
 struct BuildRequest
   cache_root: String
   library: String
@@ -63,6 +67,11 @@ struct BuildRequest
   libs: List[String]
   files: List[String]
   contents: List[Bytes]
+  mode: String
+  prebuilt_sha256: Map[String, String]
+  prebuilt_api: String
+  prebuilt_source: String
+  prebuilt_fresh: Bool
 end
 
 ## What the machine did with a BuildRequest: the absolute path of the built library, nothing (a command that never

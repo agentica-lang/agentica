@@ -68,7 +68,7 @@ static agc_value status_error(agc_vm *vm, int code, const char *reason) {
   size_t size = strlen(reason) + 8;
   char *text = agc_alloc_atomic(size);
   int n = snprintf(text, size, "%d %s", code, reason);
-  agc_string *message = agc_utf8_decode((const uint8_t *)text, n < 0 ? 0 : (size_t)n, "\xEF\xBF\xBD", false);
+  agc_string *message = agc_utf8_decode((const uint8_t *)text, n < 0 ? 0 : (size_t)n, "\xEF\xBF\xBD");
   return agc_error_code(vm, agc_http_status_kind(code), message, code);
 }
 

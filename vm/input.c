@@ -67,7 +67,7 @@ static _Noreturn void read_failed(agc_vm *vm) {
 
 static agc_string *decode(agc_vm *vm, const uint8_t *data, size_t len) {
   if (len <= 1 && (len == 0 || data[0] < AGC_ASCII_CHARS)) return agc_small_string(vm, (const char *)data, len, len);
-  return agc_utf8_decode(data, len, "\xEF\xBF\xBD", false);
+  return agc_utf8_decode(data, len, "\xEF\xBF\xBD");
 }
 
 static void consume(agc_input *in, size_t to) {

@@ -20,6 +20,8 @@ struct Options
   jit: String
   coverage: String
   deny: List[String]
+  native_build: String
+  native_prebuilt_only: String
   dump: Bool
   dump_ir: Bool
   no_cache: Bool
@@ -46,6 +48,8 @@ def parse(arguments: List[String], version: String) -> Parsed
     jit: "",
     coverage: "",
     deny: [],
+    native_build: "",
+    native_prebuilt_only: "",
     dump: false,
     dump_ir: false,
     no_cache: false,
@@ -67,6 +71,20 @@ def parse(arguments: List[String], version: String) -> Parsed
       return mistake("unknown switch: #{word.slice(0, 2)}")
     elsif word == "--version"
       return Parsed.Answer(Reply.printed("#{version}\n"))
+    end
+
+    if native_flag(word) != ""
+      flag = native_flag(word)
+      return mistake("the #{flag} option can only be specified once") if seen.include?(flag)
+
+      seen = seen.add(flag)
+      case native(options, flag, word)
+        Applied.Changed(changed) -> options = changed
+        Applied.Refused(message) -> return Parsed.Answer(Reply.failed(2, "agentica: #{message}\n"))
+      end
+
+      at += 1
+      next
     end
 
     taken = values(word)
@@ -106,11 +124,36 @@ ONCE = {
 JIT_MODES: Set[String] = Set.new(["off", "on", "always"])
 DIGITS = "0123456789"
 HEAP_UNITS = "KMGkmg"
+# The native policy flags, alone (every module) or with `=NAME,...`.
+NATIVE_FLAGS = ["--native-build", "--native-prebuilt-only"]
 
 # What applying one option gave: the options, or why it was refused (exit code 2).
 enum Applied
   Changed(Options)
   Refused(String)
+end
+
+# The native policy flag that `word` is, or "".
+def native_flag(word: String) -> String
+  for flag in NATIVE_FLAGS
+    return flag if word == flag or word.start_with?("#{flag}=")
+  end
+
+  ""
+end
+
+# `--native-build` is every module ("all"), `--native-build=a,b` the modules a and b; the names are checked with the
+# policy (cli_run.agc).
+def native(options: Options, flag: String, word: String) -> Applied
+  value = "all"
+  if word != flag
+    value = word.slice(flag.length + 1, word.length - flag.length - 1)
+    return Applied.Refused("#{flag}= needs module names, such as #{flag}=db_sqlite") if value == "" or value == "all"
+  end
+
+  return Applied.Changed(options.with(native_build: value)) if flag == "--native-build"
+
+  Applied.Changed(options.with(native_prebuilt_only: value))
 end
 
 def mistake(message: String) -> Parsed = Parsed.Answer(Reply.failed(1, "agentica: #{message}\n"))

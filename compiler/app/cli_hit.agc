@@ -22,7 +22,10 @@ def run(settings: Env.Settings, words: List[String]) -> Void
     Options.Parsed.Ready(options) ->
       return if !CliRun.file_run?(options.words)
 
-      denied = CliRun.settings(settings, options.deny)
+      native = CliRun.native_settings(settings, options)
+      return if !native.ok?
+
+      denied = CliRun.settings(native.unwrap!, options.deny)
       plan = CliRun.cache_plan(options, denied, options.words[0], options.words[0])
       case BytecodeCache.kept(plan, denied)
         none ->
