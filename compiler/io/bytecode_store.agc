@@ -25,7 +25,10 @@ def store(plan: BytecodeCache.Plan, settings: Env.Settings, modules: List[Linker
       probes = probe_lines(settings, entry.libs_dir, sources)
       return false if !probes.ok?
 
-      lines = sources.map do |module: Linker.LinkedModule| source_line(module) end
+      # A module block (`module Raw ... end`) is linked as a module of its own, keyed `FILE#Raw`, which is no file: the
+      # line of its file covers it.
+      files = sources.select do |module: Linker.LinkedModule| module.block == "" end
+      lines = files.map do |module: Linker.LinkedModule| source_line(module) end
       built = built_libraries(settings, sources)
       libraries = library_lines(settings.workspace, sources, built)
       return false if !libraries.ok?

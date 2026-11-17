@@ -8,6 +8,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- The bytecode cache works for a program that imports a file with a module block (`module Name ... end`), such as agentica-tui: it compiled again on every run (#1784).
+
 ## [0.33.1] - 2026-11-17
 
 ### Fixed
