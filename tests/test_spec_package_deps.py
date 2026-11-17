@@ -185,6 +185,30 @@ def test_install_again_puts_the_locked_files_back_replaces_a_link_and_leaves_oth
     assert build(ws, remotes).stdout == "hello!\n"
 
 
+def test_install_replaces_a_folder_whose_manifest_is_not_the_locked_one_though_its_agc_files_are(project, remotes):
+    ws = project
+    assert install(ws, remotes)[1] is None
+    manifest = ws.deps / "greeter" / "agentica.toml"
+    locked_manifest = manifest.read_text(encoding="utf-8")
+    greet = ws.deps / "greeter" / "greet.agc"
+    # The hash covers the .agc files only, so a package whose new tag changed just its manifest (a bumped dependency)
+    # has the same hash: install must still bring the manifest back, or the build reads the old one (issue 1770).
+    manifest.write_text('name = "greeter"\n\n[dependencies]\n', encoding="utf-8")
+    assert install(ws, remotes)[1] is None
+    assert manifest.read_text(encoding="utf-8") == locked_manifest
+    # A manifest that is gone, or one the locked copy does not have, is put back or removed the same way.
+    manifest.unlink()
+    assert install(ws, remotes)[1] is None
+    assert manifest.read_text(encoding="utf-8") == locked_manifest
+    (ws.deps / "tools" / "agentica.toml").write_text('name = "stale"\n', encoding="utf-8")
+    assert install(ws, remotes)[1] is None
+    assert not (ws.deps / "tools" / "agentica.toml").exists()
+    # Nothing differs now: the files are not written again.
+    before = greet.stat().st_mtime_ns
+    assert install(ws, remotes)[1] is None
+    assert greet.stat().st_mtime_ns == before
+
+
 def test_install_never_writes_through_a_link_that_deps_is(project, remotes, tmp_path):
     ws = project
     outside = tmp_path / "outside"
