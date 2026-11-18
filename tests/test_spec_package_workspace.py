@@ -209,6 +209,17 @@ def test_a_project_that_a_broken_table_does_not_list_builds_as_if_the_table_were
     assert (ran.code, ran.stdout) == (0, "app\n"), ran.stderr
 
 
+def test_add_with_a_tag_name_version_takes_the_member_folder_with_no_fetch(ws, remotes, tmp_path):
+    repo = tmp_path / "repo"
+    lay_out(repo, files_of(remotes))
+    # The remote holds nothing: only the member can say that the folder sqlite is the package.
+    result, problem = at(repo, ws, remotes, "--json", "add", "sqlite", remotes.url(REPOSITORY), "--tag", "sqlite-1.0.0",
+                         HOME=None, XDG_CACHE_HOME=None)
+    assert (result.code, problem) == (0, None), result.stderr
+    assert (repo / "agentica.toml").read_text(encoding="utf-8").endswith("sqlite = %s\n" % inline_table(
+        dependency(remotes.url(REPOSITORY), tag="sqlite-1.0.0", subdir="sqlite")))
+
+
 def test_a_lock_of_members_alone_needs_no_cache_folder(ws, remotes, tmp_path):
     repo = tmp_path / "repo"
     lay_out(repo, files_of(remotes))

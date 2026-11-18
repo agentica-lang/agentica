@@ -3,6 +3,8 @@
 ## build compares the two. The rules of the three parts are here, so that
 ## a rule changes in one place. Every check returns "" when the text is fine, else a reason for the diagnostic.
 
+import AgenticaVersion from "agentica_version"
+
 ## A source: a git URL as written, exactly one of tag and ref ("" for the other), and the folder of the repository
 ## that is the package ("" for the repository itself); or a local folder, `path` as written, with every other field "".
 struct Source
@@ -58,6 +60,31 @@ def git_problem(url: String) -> String
 
     if segment.end_with?(".") or WINDOWS_DEVICES.include?(segment.split(".")[0].downcase)
       return "the owner and the repository of a git URL do not end in . and are not a Windows device name such as con"
+    end
+  end
+
+  ""
+end
+
+## The git URL that `agentica add` reads from its source word: `OWNER/REPO` is the GitHub repository
+## `https://github.com/OWNER/REPO` when OWNER is a GitHub account name (letters, digits and -, not first, at most 39
+## characters) and REPO holds letters, digits, . _ and -; any other word is kept as written, for git_problem.
+def expand_git(word: String) -> String
+  parts = word.split("/")
+  return word if parts.size != 2 or !github_owner?(parts[0]) or parts[1] == ""
+  return word if !parts[1].split("").all? do |letter| SEGMENT_CHARACTERS.include?(letter) end
+
+  "#{GITHUB}#{word}"
+end
+
+## The package name of a tag `NAME-X.Y.Z` (a SemVer version, a pre-release such as `-alpha.1` too), or "" for any
+## other tag. A name holds no `.`, so only the first `-` that a version follows can end it.
+def tag_package(tag: String) -> String
+  for at in 0...tag.length
+    if tag.slice(at, 1) == "-"
+      name = tag.slice(0, at)
+      version = tag.slice(at + 1, tag.length - at - 1)
+      return name if name_problem(name) == "" and AgenticaVersion.problem(version) == ""
     end
   end
 
@@ -213,5 +240,14 @@ MAX_REF = 64
 MAX_SUBDIR = 128
 MAX_PATH = 1024
 HTTPS = "https://"
+GITHUB = "https://github.com/"
 # The first characters of a commit in the stored name of a file of a package that is pinned by a ref.
 SHORT_COMMIT = 12
+OWNER_CHARACTERS = Set.new("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-".split(""))
+MAX_OWNER = 39
+
+def github_owner?(owner: String) -> Bool
+  return false if owner == "" or owner.length > MAX_OWNER or owner.start_with?("-")
+
+  owner.split("").all? do |letter| OWNER_CHARACTERS.include?(letter) end
+end

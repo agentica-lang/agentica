@@ -9,6 +9,12 @@ writes every locked package into `deps/<name>/` beside `agentica.toml` (through
 a download cache). A build reads packages only from `deps/`; a declared package
 missing there is `CHECK-IMPORT-PACKAGE`.
 
+- `add` takes `OWNER/REPO` for `https://github.com/OWNER/REPO` (the files
+  store the full URL); a source that is neither is `PKG-SOURCE-INVALID`. A tag
+  `NAME-X.Y.Z` with no `--subdir` takes the folder NAME when the package is
+  there and not at the root:
+  `agentica add jobs agentica-lang/packages --tag jobs-0.1.0`.
+
 ```toml
 name = "notes"
 

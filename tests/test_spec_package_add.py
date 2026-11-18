@@ -121,15 +121,58 @@ def test_add_a_commit_pins_it_by_the_whole_id(ws, remotes):
 @pytest.mark.parametrize("words", [
     [], ["greeter"], ["greeter", "{url}"], ["greeter", "{url}", "--tag"], ["greeter", "{url}", "--branch", "main"],
     ["greeter", "{url}", "--tag", "v1.0.0", "extra"], ["Greeter", "{url}", "--tag", "v1.0.0"],
-    ["greeter", "http://example.test/owner/greeter", "--tag", "v1.0.0"], ["greeter", "{url}", "--tag", "a/b"],
-    ["greeter", "{url}", "--ref", "3f2a9c1"], ["greeter", "{url}", "--ref", "NOT-HEX-AT-ALL-HERE-NOPE"],
-], ids=["nothing", "a name", "no pin", "no tag", "a branch", "a fifth word", "a bad name", "http", "a bad tag",
+    ["greeter", "{url}", "--tag", "a/b"], ["greeter", "{url}", "--ref", "3f2a9c1"],
+    ["greeter", "{url}", "--ref", "NOT-HEX-AT-ALL-HERE-NOPE"],
+], ids=["nothing", "a name", "no pin", "no tag", "a branch", "a fifth word", "a bad name", "a bad tag",
         "an abbreviated commit", "not a commit"])
 def test_add_with_a_bad_command_line_is_a_usage_error_and_writes_nothing(ws, remotes, words):
     (ws.project / "agentica.toml").write_text('name = "app"\n', encoding="utf-8")
     result = plain(ws, remotes, "add", *[word.format(url=remotes.url(GREETER)) for word in words])
     assert (result.code, result.stdout) == (2, "")
     assert sorted(path.name for path in ws.project.iterdir()) == ["agentica.toml"]
+    assert read(ws, "agentica.toml") == 'name = "app"\n'
+
+
+def test_add_owner_repo_fetches_the_github_repository_and_writes_its_full_url(ws, remotes):
+    remotes.mirror("https://github.com/")
+    files = {"greet.agc": "# greet\n"}
+    commit = remotes.publish(GREETER, files, tag="v1.0.0")
+    (ws.project / "agentica.toml").write_text('name = "app"\n', encoding="utf-8")
+    result, problem = command(ws, remotes, "add", "greeter", GREETER, "--tag", "v1.0.0")
+    assert (result.code, problem) == (0, None), result.stderr
+    github = "https://github.com/" + GREETER
+    assert read(ws, "agentica.toml") == 'name = "app"\n\n[dependencies]\ngreeter = %s\n' % inline_table(
+        dependency(github, tag="v1.0.0"))
+    entry = lock_entry(ws, remotes, GREETER, files, commit, tag="v1.0.0")
+    entry["git"] = github
+    assert read(ws, "agentica.lock") == lock_of(ws, entry)
+    assert command(ws, remotes, "install")[0].code == 0
+
+
+@pytest.mark.parametrize("source", [
+    "http://example.test/owner/greeter", "example.test/owner/greeter", "greeter", "owner/", "owner/..",
+    "owner/gree ter", "https://Example.test/owner/greeter", "gitlab.com/foo", ".git/y", "-owner/greeter",
+    "o" * 40 + "/greeter",
+], ids=["http", "no scheme", "one segment", "an empty repository", "a dot-dot repository", "a space",
+        "an uppercase host", "a host and one segment", "a dot in the owner", "an owner that starts with -",
+        "an owner of 40 characters"])
+def test_add_with_a_source_that_is_no_url_and_no_owner_repo_is_pkg_source_invalid_and_writes_nothing(ws, remotes,
+                                                                                                       source):
+    (ws.project / "agentica.toml").write_text('name = "app"\n', encoding="utf-8")
+    result, problem = command(ws, remotes, "add", "greeter", source, "--tag", "v1.0.0")
+    assert_at_key(problem, "PKG-SOURCE-INVALID", ws.project / "agentica.toml", "dependencies.greeter.git")
+    assert sorted(path.name for path in ws.project.iterdir()) == ["agentica.toml"]
+    assert read(ws, "agentica.toml") == 'name = "app"\n'
+
+
+def test_add_owner_repo_that_is_a_folder_of_the_working_folder_is_pkg_source_invalid(ws, remotes):
+    remotes.mirror("https://github.com/")  # A fetch, if one ran, stays local.
+    (ws.project / "agentica.toml").write_text('name = "app"\n', encoding="utf-8")
+    (ws.project / "vendor" / "foo").mkdir(parents=True)
+    result, problem = command(ws, remotes, "add", "foo", "vendor/foo", "--tag", "v1.0.0")
+    assert_at_key(problem, "PKG-SOURCE-INVALID", ws.project / "agentica.toml", "dependencies.foo.git")
+    assert "path = " in problem["help"]
+    assert sorted(path.name for path in ws.project.iterdir()) == ["agentica.toml", "vendor"]
     assert read(ws, "agentica.toml") == 'name = "app"\n'
 
 

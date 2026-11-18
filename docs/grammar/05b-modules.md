@@ -649,12 +649,23 @@ import Sqlite from "pkg/sqlite/db"
   changed.
   - `add` takes the local name, the `https://` URL and `--tag` or `--ref`, in
     that order, then `--subdir DIR` if the package is a folder of the repository
-    and `--group test` for the test group. The commit of `--ref` is the whole id
+    and `--group test` for the test group. In place of the URL, `OWNER/REPO`
+    (a GitHub account name of letters, digits and `-`, not first, at most 39
+    characters, then a repository of letters, digits, `.`, `_` and `-`) is
+    `https://github.com/OWNER/REPO`; the manifest and the lock store the full
+    URL. A source that is neither, or an `OWNER/REPO` that is a folder of the
+    working folder (a local package is a `path` dependency), is
+    `PKG-SOURCE-INVALID` at `dependencies.<name>.git`. With a tag
+    `NAME-X.Y.Z` (a SemVer version, a pre-release too) and no `--subdir`, `add`
+    fetches the tag and takes the folder NAME of the tag when the commit has
+    the file `NAME/agentica.toml` and its root has no `agentica.toml` whose
+    `name` is NAME; else the repository itself. The commit of `--ref` is the
+    whole id
     (40 or, for SHA-256, 64 digits), since git fetches no abbreviation (a
     package whose manifest asks for a part of an id that the lock lacks is
     `PKG-FETCH` at `dependencies.<name>.ref` of that manifest). The tag of a
     SHA-1 repository is fetched; a SHA-256 repository takes `--ref`. A name,
-    URL, tag or commit that the manifest would refuse, or any other words, are a
+    tag or commit that the manifest would refuse, or any other words, are a
     usage error (exit code 2). A name that is a dependency already is
     `PKG-DEPENDENCY-EXISTS`. The manifest gets one new line, `NAME = { git =
     "URL", tag = "TAG" }` (with `subdir = "DIR"` and then `group = "test"` last
