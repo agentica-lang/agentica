@@ -506,9 +506,10 @@ def member_of(
     return error(Reader.fail(reading, Reader.child(path, "subdir"), "a workspace member is a folder: missing key"))
   end
 
-  for key in ["commit", "hash"]
+  for key in ["commit", "hash", "repository"]
     if entries.has_key?(key)
-      return error(Reader.fail(reading, Reader.child(path, key), "a workspace member has no commit and no hash"))
+      message = "a workspace member has no commit, no hash and no repository"
+      return error(Reader.fail(reading, Reader.child(path, key), message))
     end
   end
 

@@ -434,36 +434,36 @@ import Sqlite from "pkg/sqlite/db"
   the manifest of the root project: in the manifest of a package (fetched, or a
   workspace member) it is `PKG-ROOT-ONLY` at `dependencies.<name>.path`.
 - `workspace = true` makes the dependency the whole workspace of a repository,
-  under the one name of the key: `finn = { git = "https://github.com/owner/finn",
-  tag = "finn-1", workspace = true }`. A project reaches a member as
-  `pkg/<name>/<member>/<module>` (`import Core from "pkg/finn/core/core"`, the
-  member `core` of the workspace `finn`, its module `core`), so the names of the
-  members are not names of the project: a project that has a `protocol` of its
-  own can use the member `finn/protocol`. The key needs `git` and a pin like any
-  dependency, and excludes `subdir` and `path` (`PKG-MANIFEST-INVALID` at
-  `dependencies.<name>.workspace`, as a value that is not a boolean is;
-  `false` is the same as leaving it out). It may be written in any manifest, a
-  package's too, and `override` and `group` apply to it as to any dependency.
-  The repository must have, at the pin, a root `agentica.toml` with a
-  `[workspace]` table (the rules above), and every member a manifest of its
-  own; `add` and `update` read the table from the commit with the fetch that
-  gets the files, and a repository that has no table, a table that breaks its
-  rules, a member without a manifest or a member inside
-  another member (`deps/` keeps each one in its own folder) is `PKG-FETCH` at
-  `dependencies.<name>.workspace`. Every member is locked and installed, whether
-  or not an import reaches it. A dependency of a member (or of a package that a
-  member needs, through the usual rules) on the repository of the workspace with
-  a `subdir` that is a member is a sibling: it means the member of the same
-  workspace, at the pin of the workspace, and the `tag` or `ref` it writes is
-  ignored, so a member keeps the dependencies it writes for a user outside the
-  repository. A sibling is imported by its local name, as for any dependency
-  (`pkg/protocol/...` in a file of `finn/core` is `finn/protocol`), and the
-  members are not imported by the names of the package that is not in the
-  workspace. Any other dependency of a member is asked for as usual and stays
-  flat and shared, under the same `PKG-SOURCE-CONFLICT` and `override` rules.
-  The same repository may also be a dependency under another name, with or
-  without a `subdir`: they are packages of their own, as two names for one
-  repository are, and share the cache folder of a member.
+  under the one name of the key: `finn = { git =
+  "https://github.com/owner/finn", tag = "finn-1", workspace = true }`. A
+  project reaches a member as `pkg/<name>/<member>/<module>` (`import Core from
+  "pkg/finn/core/core"`, the member `core` of the workspace `finn`, its module
+  `core`), so the names of the members are not names of the project: a project
+  that has a `protocol` of its own can use the member `finn/protocol`. The key
+  needs `git` and a pin like any dependency, and excludes `subdir` and `path`
+  (`PKG-MANIFEST-INVALID` at `dependencies.<name>.workspace`, as a value that
+  is not a boolean is; `false` is the same as leaving it out). It may be
+  written in any manifest, a package's too, and `override` and `group` apply to
+  it as to any dependency. The repository must have, at the pin, a root
+  `agentica.toml` with a `[workspace]` table (the rules above), and every
+  member a manifest of its own; `add` and `update` read the table from the
+  commit with the fetch that gets the files, and a repository that has no
+  table, a table that breaks its rules, a member without a manifest or a member
+  inside another member (`deps/` keeps each one in its own folder) is
+  `PKG-FETCH` at `dependencies.<name>.workspace`. Every member is locked and
+  installed, whether or not an import reaches it. A dependency of a member on
+  the repository of the workspace with a `subdir` that is a member is a
+  sibling: it means the member of the same workspace, at the pin of the
+  workspace, and the `tag` or `ref` it writes is ignored, so a member keeps the
+  dependencies it writes for a user outside the repository. A sibling is
+  imported by its local name, as for any dependency (`pkg/protocol/...` in a
+  file of `finn/core` is `finn/protocol`); a package that is not a member does
+  not see the members by those names. Any other dependency of a member is
+  asked for as usual and stays flat and shared, under the same
+  `PKG-SOURCE-CONFLICT` and `override` rules. The same repository may also be a
+  dependency under another name, with or without a `subdir`: they are packages
+  of their own, as two names for one repository are, and share the cache
+  folder of a member.
 - `override = true` in a dependency of the root manifest makes its source win
   for that name everywhere in the tree, with any of the sources above (a `path`
   too, to try a local copy of a transitive dependency). A package that asks for
@@ -586,23 +586,22 @@ import Sqlite from "pkg/sqlite/db"
   `hash` or `subdir` on a workspace entry are `PKG-LOCK-INVALID` at
   `package[n].name` (or the key that is wrong); the `package` of a
   `[[native-artifact]]` follows the rule of a name or a namespaced name. Every
-  dependency of the manifest must be
-  in the lock with the same `git` (with or without a `.git` at the end), the
-  same `subdir` (or none) and the same `tag` or `ref`, or the same `path`, and
-  the same `override`, and `workspace` (a workspace dependency has the entry of
-  a workspace, and any other a package), or the lock is `PKG-LOCK-STALE`. The
-  same check runs
-  on the manifest of every locked package that is in `deps/`, where a sibling
-  is looked up under the namespace of the package and its pin is not compared:
-  a name the lock lacks is `PKG-LOCK-STALE`, and a name with another source than the lock is
+  dependency of the manifest must be in the lock with the same `git` (with or
+  without a `.git` at the end), the same `subdir` (or none) and the same `tag`
+  or `ref`, or the same `path`, and the same `override`, and `workspace` (a
+  workspace dependency has the entry of a workspace, and any other a package),
+  or the lock is `PKG-LOCK-STALE`. The same check runs on the manifest of every
+  locked package that is in `deps/`, where a sibling is looked up under the
+  namespace of the package and its pin is not compared: a name the lock lacks
+  is `PKG-LOCK-STALE`, and a name with another source than the lock is
   `PKG-SOURCE-CONFLICT`; both are reported at `dependencies.<name>` of that
-  manifest. One name with two different sources anywhere in the
-  tree (the project and a package, or two packages) is `PKG-SOURCE-CONFLICT`,
-  unless the project overrides the name (the item on `override`);
-  the source is the `git`, the `subdir` and the pin; there are no versions to
-  compare and no ranges to solve. Both checks run once for every command that
-  loads code, before any file is read, so a conflict is reported whether or not
-  an import reaches that package. A package that is not in `deps/`, one whose
+  manifest. One name with two different sources anywhere in the tree (the
+  project and a package, or two packages) is `PKG-SOURCE-CONFLICT`, unless the
+  project overrides the name (the item on `override`); the source is the `git`,
+  the `subdir` and the pin; there are no versions to compare and no ranges to
+  solve. Both checks run once for every command that loads code, before any
+  file is read, so a conflict is reported whether or not an import reaches that
+  package. A package that is not in `deps/`, one whose
   folder cannot be listed and one whose manifest is not a regular file are left
   for the import that loads them (so a conflict in them shows only then). A
   manifest that is a symbolic link, a folder or a pipe is `PKG-SYMLINK` and is

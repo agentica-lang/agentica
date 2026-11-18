@@ -34,21 +34,28 @@ import SaveFile from "save_file"
 ## folders of the `dropped` names that are not among them. `packages` are in the order of `lock_file`, whose entries
 ## the failures about a package name. Every package must be in the cache already (`install`, `add` and `update` fill
 ## it), except a workspace member or a `path` package, which has no folder in deps/: its entry is skipped, and a
-## folder of deps/ that the name has is removed like that of a dropped package.
+## folder of deps/ that the name has is removed like that of a dropped package. The folders of the `reset` names (a
+## package that became a workspace dependency, or the other way round) are removed before anything is written, so none
+## of their old files stays.
 def sync(
   settings: Env.Settings,
   lock_file: String,
   deps: String,
   packages: List[Lock.Locked],
   dropped: List[String],
+  reset: List[String],
 ) -> Result[Void]
   workspace = settings.workspace
   try sweep(workspace, deps)
+  for name in reset
+    try remove(workspace, deps, name)
+  end
+
   if packages.size > 0
     cache = try PackageFetch.cache_for(settings.env, lock_file, packages)
     for index in 0...packages.size
       locked = packages[index]
-      next if Lock.in_place?(locked)
+      next if Lock.in_place?(locked) or Lock.root?(locked)
 
       place = PackageFetch.Place(file: lock_file, entry: Reader.item("package", index))
       folder = PackageCache.folder(cache, locked.source, locked.commit)
@@ -59,6 +66,7 @@ def sync(
     end
   end
 
+  # The entry of a workspace dependency has no folder, but its name is the folder of its members: it is not removed.
   fetched = packages.filter do |locked| !Lock.in_place?(locked) end
   kept = Set.new(fetched.map do |locked| locked.name end)
   members = packages.filter do |locked| Lock.in_place?(locked) end
@@ -412,22 +420,6 @@ def remove(workspace: Workspace.Workspace, deps: String, name: String) -> Result
 
   # An old folder that cannot be removed is only a spare hidden folder.
   _ = Path.remove(backup, FS_TIMEOUT_MS)
-  if Lock.namespace(name) != ""
-    try drop_if_empty(workspace, Paths.join(deps, Lock.namespace(name)))
-  end
-
-  ok()
-end
-
-# Removes the folder of a namespace when no package is left in it. A link, a file and a folder with an entry stay.
-def drop_if_empty(workspace: Workspace.Workspace, folder: String) -> Result[Void]
-  seen = try kind_of(workspace, folder)
-  return ok() if !folder?(seen)
-
-  listed = workspace.list_folder.call(folder)
-  if listed.ok? and listed.unwrap!.size == 0
-    _ = Path.remove(folder, FS_TIMEOUT_MS)
-  end
 
   ok()
 end

@@ -275,10 +275,24 @@ def refresh_deps(settings: Env.Settings, found: Project.Found, packages: List[Lo
   deps = PackageImport.scope_of(Project.Project.Declared(found)).deps
   old = found.lock.packages.map do |locked| locked.name end
   ordered = packages.sort_by do |locked| locked.name end
-  done = PackageDeps.sync(settings, found.lock.file, deps, ordered, old)
+  done = PackageDeps.sync(settings, found.lock.file, deps, ordered, old, changed_kind(found.lock, packages))
   return error(Failure.add_help(done.message, DEPS_PENDING)) if !done.ok?
 
   ok()
+end
+
+# The names that the old lock has as a package and the new one as a workspace dependency, or the other way round.
+def changed_kind(old: Lock.Lock, packages: List[Lock.Locked]) -> List[String]
+  names: List[String] = []
+  for before in old.packages
+    for now in packages
+      if now.name == before.name and Lock.root?(now) != Lock.root?(before)
+        names = names.push(now.name)
+      end
+    end
+  end
+
+  names
 end
 
 # Replaces the file whole (SaveFile.replace leaves the old one as it was if a step fails). A file that cannot be

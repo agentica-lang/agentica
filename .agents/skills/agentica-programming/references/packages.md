@@ -127,12 +127,12 @@ import Sqlite from "pkg/sqlite/db"
   written when a step before the lock fails; if only the manifest write fails,
   run `agentica update`. Both then refresh `deps/`.
 - `deps/<name>/` holds the `.agc` files and the `agentica.toml` of each locked
-  package that is not a workspace member (`deps/<name>/<member>/` for a member of
-  a workspace dependency). `install` replaces a folder
-  whose `.agc` files differ from the lock and leaves every other entry of
-  `deps/` alone. The tool writes no `.gitignore` there: commit `deps/` or ignore
-  it. `test`, `check`, `fmt` and `symbol` walks skip the `deps/` of a project
-  and `_build/`; `agc_libs/` stays for local libraries.
+  package that is not a workspace member (`deps/<name>/<member>/` for a member
+  of a workspace dependency). `install` replaces a folder whose `.agc` files
+  differ from the lock and leaves every other entry of `deps/` alone. The tool
+  writes no `.gitignore` there: commit `deps/` or ignore it. `test`, `check`,
+  `fmt` and `symbol` walks skip the `deps/` of a project and `_build/`;
+  `agc_libs/` stays for local libraries.
 - The package hash leaves out hidden folders and `_build/` (any depth) and
   `agc_libs/` and `deps/` at its root; a package cannot import a file there.
 - A build hashes a package (its `deps/` folder) the first time an import loads

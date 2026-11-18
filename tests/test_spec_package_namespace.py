@@ -66,9 +66,9 @@ MAIN = ('import Core from "pkg/finn/core/core"\nimport Protocol from "pkg/protoc
         'def main() -> Void\n  puts(Core.describe())\n  puts(Protocol.name())\nend\n')
 
 
-def project(ws, remotes, workspace=True, extra=""):
-    """A project that depends on the workspace `finn` and on its own `protocol`."""
-    flag = ", workspace = true" if workspace else ""
+def project(ws, remotes, workspace=True, extra="", options=""):
+    """A project that depends on the workspace `finn` and on its own `protocol`; `options` follows `workspace`."""
+    flag = (", workspace = true" if workspace else "") + options
     text = 'name = "app"\n\n[dependencies]\nfinn = { git = "%s", tag = "%s"%s }\nprotocol = %s\n' % (
         url(remotes), TAG, flag, inline_table(dependency(remotes.url(MINE), tag="v1")))
     (ws.project / "agentica.toml").write_text(text + extra, encoding="utf-8")
@@ -93,7 +93,7 @@ def locked(ws, remotes, edit=None):
         edit(entries)
         text = "version = 1\n"
         for entry in entries:
-            text += "\n[[package]]\n" + "".join('%s = "%s"\n' % pair for pair in entry.items())
+            text += "\n[[package]]\n" + "".join("%s = %s\n" % (key, json.dumps(value)) for key, value in entry.items())
         (ws.project / "agentica.lock").write_text(text, encoding="utf-8")
 
 
@@ -188,6 +188,53 @@ def test_update_gives_back_the_lock_it_wrote_and_install_reads_it(ws, remotes):
     shutil.rmtree(ws.deps)
     assert run_json("install", ws, remotes)[1] is None
     assert sorted(os.listdir(ws.deps / "finn")) == ["core", "llm", "protocol"]
+
+
+def test_a_workspace_dependency_may_be_an_override_and_is_updated_installed_and_built_so(ws, remotes):
+    publish(remotes)
+    project(ws, remotes, options=", override = true")
+    assert update(ws, remotes).code == 0
+    packages = {entry["name"]: entry for entry in lock_of(ws)}
+    assert packages["finn"]["override"] is True
+    assert not any("override" in entry for name, entry in packages.items() if name != "finn")
+    shutil.rmtree(ws.deps)
+    assert run_json("install", ws, remotes)[1] is None
+    assert sorted(os.listdir(ws.deps / "finn")) == ["core", "llm", "protocol"]
+    ran = build(ws, remotes)
+    assert (ran.code, ran.stdout) == (0, "core finn-protocol llm+finn-protocol other\nmy protocol\n"), ran.stderr
+    assert problem_of(ws, remotes) is None
+
+
+def test_a_hash_that_the_files_of_a_member_do_not_match_is_refused_in_the_group_fetch_and_nothing_is_kept(ws, remotes):
+    locked(ws, remotes, edit=lambda entries: entries[2].update(hash="sha256:" + "0" * 64))
+    shutil.rmtree(ws.pkg_root)
+    shutil.rmtree(ws.deps)
+    _, problem = run_json("install", ws, remotes)
+    assert_at_key(problem, "PKG-HASH-MISMATCH", ws.project / "agentica.lock", "package[2].hash")
+    assert not ws.deps.exists() or "llm" not in os.listdir(ws.deps / "finn")
+
+
+def test_a_package_that_becomes_a_workspace_dependency_leaves_no_file_of_the_old_package_in_its_folder(ws, remotes):
+    publish(remotes, {**member_files(remotes), "note.agc": "# a root file, the old package\n"})
+    project(ws, remotes, workspace=False)
+    assert update(ws, remotes).code == 0
+    assert "note.agc" in os.listdir(ws.deps / "finn")
+    project(ws, remotes)
+    assert update(ws, remotes).code == 0
+    assert sorted(os.listdir(ws.deps / "finn")) == ["core", "llm", "protocol"]
+    assert run_json("install", ws, remotes)[1] is None
+    assert sorted(os.listdir(ws.deps / "finn")) == ["core", "llm", "protocol"]
+
+
+@pytest.mark.parametrize("edit, index", [
+    (lambda entries: entries.append({"name": "mem", "git": "https://example.test/owner/mem", "subdir": "mem",
+                                     "tag": "v1", "workspace": True, "repository": "https://example.test/owner/mem"}), 6),
+    (lambda entries: entries.append({"name": "local", "path": "local", "repository": "https://example.test/owner/x"}), 6),
+], ids=["workspace-member", "path"])
+def test_only_the_entry_of_a_workspace_dependency_has_a_repository(ws, remotes, edit, index):
+    locked(ws, remotes, edit=edit)
+    assert_at_key(problem_of(ws, remotes), "PKG-LOCK-INVALID", ws.project / "agentica.lock",
+                  "package[%d].repository" % index)
 
 
 def test_a_moved_tag_is_taken_by_update_for_the_workspace_and_every_member(ws, remotes):
