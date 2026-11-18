@@ -113,7 +113,7 @@ Logger.time_text(time_ms: Int) -> String
 - Text: `TIME LEVEL MESSAGE key=value ...`, with the time in UTC and the level in capitals.
 - A message, key or value is written as a JSON string when it is empty, or has `=`, a quote, a backslash or a control character. A key or value with a space is also written as a JSON string. So a line is always one line, and a value never looks like a field.
 - JSON: one object per line, with the keys `time`, `level` (`debug`, `info`, `warning` or `error`), `msg`, `fields` and `task`. The fields are nested, so a field named `level` never clashes with a fixed key.
-- `time_text` turns milliseconds since the Unix epoch into text such as `2026-10-12T10:15:02.345000Z`, the [`iso8601`](/library/io-and-system/time/#iso8601) of the `Time.DateTime` at offset 0, with six fraction digits. An instant outside the years 1 to 9999 halts; the time of an event comes from `Time.now_ms()`, which is in range.
+- `time_text` turns milliseconds since the Unix epoch into text such as `2026-10-12T10:15:02.345000Z`, the [`iso8601`](/library/io-and-system/time/#iso8601) of the `Time.DateTime` at offset 0, with six fraction digits. An instant outside the years 1 to 9999 halts with `RUNTIME-UNWRAP-ERROR` (`time_ms X is outside the years 1 to 9999`); the time of an event comes from `Time.now_ms()`, which is in range.
 
 ```agentica
 import Logger from "std/logger"

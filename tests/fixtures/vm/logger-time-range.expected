@@ -1,10 +1,19 @@
 {
-  "exit": 1,
-  "code": "RUNTIME-UNWRAP-ERROR",
-  "steps": 24,
+  "exit": 0,
+  "code": null,
+  "steps": 174,
   "stdout": [
     "0001-01-01T00:00:00.000000Z",
+    "9999-12-31T23:59:59.999000Z",
+    "task crashed: RUNTIME-UNWRAP-ERROR at std/logger.agc:145:3: time_ms -62135596800001 is outside the years 1 to 9999",
+    "task crashed: RUNTIME-UNWRAP-ERROR at std/logger.agc:145:3: time_ms 253402300800000 is outside the years 1 to 9999",
+    "task crashed: RUNTIME-UNWRAP-ERROR at std/logger.agc:145:3: time_ms 9223372036854775807 is outside the years 1 to 9999",
     ""
   ],
-  "stderr": []
+  "stderr": [
+    "{\"code\":\"RUNTIME-UNWRAP-ERROR\",\"file\":\"std/logger.agc\",\"message\":\"time_ms -62135596800001 is outside the years 1 to 9999\",\"range\":{\"end\":{\"column\":18,\"line\":145},\"start\":{\"column\":3,\"line\":145}},\"spawned_at\":{\"column\":10,\"file\":\"@fixtures/vm/logger-time-range.agc\",\"line\":5},\"stack\":[{\"column\":3,\"file\":\"std/logger.agc\",\"function\":\"time_text\",\"line\":145},{\"column\":29,\"file\":\"@fixtures/vm/logger-time-range.agc\",\"function\":\"lambda\",\"line\":5}],\"task\":true}",
+    "{\"code\":\"RUNTIME-UNWRAP-ERROR\",\"file\":\"std/logger.agc\",\"message\":\"time_ms 253402300800000 is outside the years 1 to 9999\",\"range\":{\"end\":{\"column\":18,\"line\":145},\"start\":{\"column\":3,\"line\":145}},\"spawned_at\":{\"column\":10,\"file\":\"@fixtures/vm/logger-time-range.agc\",\"line\":5},\"stack\":[{\"column\":3,\"file\":\"std/logger.agc\",\"function\":\"time_text\",\"line\":145},{\"column\":29,\"file\":\"@fixtures/vm/logger-time-range.agc\",\"function\":\"lambda\",\"line\":5}],\"task\":true}",
+    "{\"code\":\"RUNTIME-UNWRAP-ERROR\",\"file\":\"std/logger.agc\",\"message\":\"time_ms 9223372036854775807 is outside the years 1 to 9999\",\"range\":{\"end\":{\"column\":18,\"line\":145},\"start\":{\"column\":3,\"line\":145}},\"spawned_at\":{\"column\":10,\"file\":\"@fixtures/vm/logger-time-range.agc\",\"line\":5},\"stack\":[{\"column\":3,\"file\":\"std/logger.agc\",\"function\":\"time_text\",\"line\":145},{\"column\":29,\"file\":\"@fixtures/vm/logger-time-range.agc\",\"function\":\"lambda\",\"line\":5}],\"task\":true}",
+    ""
+  ]
 }
