@@ -97,7 +97,10 @@ VM_BUILTINS = Set.new([
   "Time.NaiveDateTime.assume_offset", "Time.DateTime.naive_of", "Time.DateTime.to_date", "Time.NaiveDateTime.to_date",
   "Time.Date.format_iso8601", "Time.TimeOfDay.format_iso8601", "Time.NaiveDateTime.format_iso8601",
   "Time.DateTime.format_iso8601", "Time.Date.iso8601", "Time.TimeOfDay.iso8601", "Time.NaiveDateTime.iso8601",
-  "Time.DateTime.iso8601",
+  "Time.DateTime.iso8601", "Time.Date.add_days", "Time.NaiveDateTime.add_days", "Time.DateTime.add_days",
+  "Time.NaiveDateTime.add_us", "Time.DateTime.add_us", "Time.Date.days_between", "Time.DateTime.us_between",
+  "Time.NaiveDateTime.us_between", "Time.compare", "Time.compare_naive", "Time.compare_date", "Time.compare_time",
+  "Time.Date.cwday", "Time.Date.yday",
 ])
 
 ## The instruction of an operator on two Ints, by the token kind of the operator. `>` and `>=` use the instruction of

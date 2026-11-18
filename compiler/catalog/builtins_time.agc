@@ -3,6 +3,42 @@ import Model from "builtin_model"
 
 ROWS: List[Model.Builtin] = [
   Model.Builtin(
+    name: "Time.Date.add_days",
+    parameters: [
+      Model.Named(name: "date", type: Types.Type.Struct("Time.Date", [])),
+      Model.Named(name: "days", type: Types.Type.Int),
+    ],
+    result: Types.Type.Result(Types.Type.Struct("Time.Date", [])),
+    rule: Model.Rule.Plain,
+    implementation: "Time.Date.add_days",
+    effects: [],
+    description: "Return the date days later, or earlier for a negative count; an error outside the years 1 to 9999.",
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "Time.Date.cwday",
+    parameters: [Model.Named(name: "date", type: Types.Type.Struct("Time.Date", []))],
+    result: Types.Type.Int,
+    rule: Model.Rule.Plain,
+    implementation: "Time.Date.cwday",
+    effects: [],
+    description: "Return the ISO day of the week, 1 for Monday to 7 for Sunday.",
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "Time.Date.days_between",
+    parameters: [
+      Model.Named(name: "from", type: Types.Type.Struct("Time.Date", [])),
+      Model.Named(name: "to", type: Types.Type.Struct("Time.Date", [])),
+    ],
+    result: Types.Type.Int,
+    rule: Model.Rule.Plain,
+    implementation: "Time.Date.days_between",
+    effects: [],
+    description: "Return the days from the date from to the date to, positive when to is later.",
+    alternatives: [],
+  ),
+  Model.Builtin(
     name: "Time.Date.days_in_month",
     parameters: [Model.Named(name: "year", type: Types.Type.Int), Model.Named(name: "month", type: Types.Type.Int)],
     result: Types.Type.Result(Types.Type.Int),
@@ -54,6 +90,45 @@ ROWS: List[Model.Builtin] = [
     implementation: "Time.Date.new",
     effects: [],
     description: "Build a date; an error when it is no real day of the years 1 to 9999.",
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "Time.Date.yday",
+    parameters: [Model.Named(name: "date", type: Types.Type.Struct("Time.Date", []))],
+    result: Types.Type.Int,
+    rule: Model.Rule.Plain,
+    implementation: "Time.Date.yday",
+    effects: [],
+    description: "Return the day of the year, 1 to 366.",
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "Time.DateTime.add_days",
+    parameters: [
+      Model.Named(name: "time", type: Types.Type.Struct("Time.DateTime", [])),
+      Model.Named(name: "days", type: Types.Type.Int),
+    ],
+    result: Types.Type.Result(Types.Type.Struct("Time.DateTime", [])),
+    rule: Model.Rule.Plain,
+    implementation: "Time.DateTime.add_days",
+    effects: [],
+    description: "Return the reading days later at the same offset; an error outside the years 1 to 9999.",
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "Time.DateTime.add_us",
+    parameters: [
+      Model.Named(name: "time", type: Types.Type.Struct("Time.DateTime", [])),
+      Model.Named(name: "us", type: Types.Type.Int),
+    ],
+    result: Types.Type.Result(Types.Type.Struct("Time.DateTime", [])),
+    rule: Model.Rule.Plain,
+    implementation: "Time.DateTime.add_us",
+    effects: [],
+    description: (
+      "Return the instant us microseconds later, or earlier, at the same offset; an error when the reading " +
+      "leaves the years 1 to 9999."
+    ),
     alternatives: [],
   ),
   Model.Builtin(
@@ -168,6 +243,48 @@ ROWS: List[Model.Builtin] = [
     alternatives: [],
   ),
   Model.Builtin(
+    name: "Time.DateTime.us_between",
+    parameters: [
+      Model.Named(name: "from", type: Types.Type.Struct("Time.DateTime", [])),
+      Model.Named(name: "to", type: Types.Type.Struct("Time.DateTime", [])),
+    ],
+    result: Types.Type.Int,
+    rule: Model.Rule.Plain,
+    implementation: "Time.DateTime.us_between",
+    effects: [],
+    description: "Return the microseconds from the instant from to the instant to, whatever their offsets.",
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "Time.NaiveDateTime.add_days",
+    parameters: [
+      Model.Named(name: "naive", type: Types.Type.Struct("Time.NaiveDateTime", [])),
+      Model.Named(name: "days", type: Types.Type.Int),
+    ],
+    result: Types.Type.Result(Types.Type.Struct("Time.NaiveDateTime", [])),
+    rule: Model.Rule.Plain,
+    implementation: "Time.NaiveDateTime.add_days",
+    effects: [],
+    description: (
+      "Return the reading days later, or earlier for a negative count; an error outside the years 1 to " +
+      "9999."
+    ),
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "Time.NaiveDateTime.add_us",
+    parameters: [
+      Model.Named(name: "naive", type: Types.Type.Struct("Time.NaiveDateTime", [])),
+      Model.Named(name: "us", type: Types.Type.Int),
+    ],
+    result: Types.Type.Result(Types.Type.Struct("Time.NaiveDateTime", [])),
+    rule: Model.Rule.Plain,
+    implementation: "Time.NaiveDateTime.add_us",
+    effects: [],
+    description: "Return the reading us microseconds later, or earlier; an error outside the years 1 to 9999.",
+    alternatives: [],
+  ),
+  Model.Builtin(
     name: "Time.NaiveDateTime.assume_offset",
     parameters: [
       Model.Named(name: "naive", type: Types.Type.Struct("Time.NaiveDateTime", [])),
@@ -229,6 +346,19 @@ ROWS: List[Model.Builtin] = [
     alternatives: [],
   ),
   Model.Builtin(
+    name: "Time.NaiveDateTime.us_between",
+    parameters: [
+      Model.Named(name: "from", type: Types.Type.Struct("Time.NaiveDateTime", [])),
+      Model.Named(name: "to", type: Types.Type.Struct("Time.NaiveDateTime", [])),
+    ],
+    result: Types.Type.Int,
+    rule: Model.Rule.Plain,
+    implementation: "Time.NaiveDateTime.us_between",
+    effects: [],
+    description: "Return the microseconds from the reading from to the reading to.",
+    alternatives: [],
+  ),
+  Model.Builtin(
     name: "Time.TimeOfDay.format_iso8601",
     parameters: [Model.Named(name: "time", type: Types.Type.Struct("Time.TimeOfDay", []))],
     result: Types.Type.String,
@@ -284,6 +414,58 @@ ROWS: List[Model.Builtin] = [
       "Return the instant us microseconds after the Unix epoch, in UTC; an error outside the years 1 to " +
       "9999."
     ),
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "Time.compare",
+    parameters: [
+      Model.Named(name: "a", type: Types.Type.Struct("Time.DateTime", [])),
+      Model.Named(name: "b", type: Types.Type.Struct("Time.DateTime", [])),
+    ],
+    result: Types.Type.Int,
+    rule: Model.Rule.Plain,
+    implementation: "Time.compare",
+    effects: [],
+    description: "Return -1, 0 or 1 as the instant a is before, the same as or after b; offsets do not count.",
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "Time.compare_date",
+    parameters: [
+      Model.Named(name: "a", type: Types.Type.Struct("Time.Date", [])),
+      Model.Named(name: "b", type: Types.Type.Struct("Time.Date", [])),
+    ],
+    result: Types.Type.Int,
+    rule: Model.Rule.Plain,
+    implementation: "Time.compare_date",
+    effects: [],
+    description: "Return -1, 0 or 1 as the day a is before, the same as or after b.",
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "Time.compare_naive",
+    parameters: [
+      Model.Named(name: "a", type: Types.Type.Struct("Time.NaiveDateTime", [])),
+      Model.Named(name: "b", type: Types.Type.Struct("Time.NaiveDateTime", [])),
+    ],
+    result: Types.Type.Int,
+    rule: Model.Rule.Plain,
+    implementation: "Time.compare_naive",
+    effects: [],
+    description: "Return -1, 0 or 1 as the reading a is before, the same as or after b.",
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "Time.compare_time",
+    parameters: [
+      Model.Named(name: "a", type: Types.Type.Struct("Time.TimeOfDay", [])),
+      Model.Named(name: "b", type: Types.Type.Struct("Time.TimeOfDay", [])),
+    ],
+    result: Types.Type.Int,
+    rule: Model.Rule.Plain,
+    implementation: "Time.compare_time",
+    effects: [],
+    description: "Return -1, 0 or 1 as the clock reading a is before, the same as or after b.",
     alternatives: [],
   ),
   Model.Builtin(

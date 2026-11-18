@@ -55,10 +55,39 @@ def aware_fields(t: Time.DateTime) -> List[Int] = [t.year, t.month, t.day, t.hou
 
 def naive_fields(t: Time.NaiveDateTime) -> List[Int] = [t.year, t.month, t.day, t.hour, t.min, t.sec, t.usec]
 
-def aware(a: List[Int]) -> Time.DateTime = Time.DateTime.new(a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7]).unwrap!
+def aware(a: List[Int]) -> Time.DateTime = aware_at(a, 0)
 
-def plain(a: List[Int]) -> Time.NaiveDateTime
-  Time.NaiveDateTime.new(a[0], a[1], a[2], a[3], a[4], a[5], a[6]).unwrap!
+def plain(a: List[Int]) -> Time.NaiveDateTime = plain_at(a, 0)
+
+def aware_at(a: List[Int], i: Int) -> Time.DateTime
+  Time.DateTime.new(a[i], a[i + 1], a[i + 2], a[i + 3], a[i + 4], a[i + 5], a[i + 6], a[i + 7]).unwrap!
+end
+
+def plain_at(a: List[Int], i: Int) -> Time.NaiveDateTime
+  Time.NaiveDateTime.new(a[i], a[i + 1], a[i + 2], a[i + 3], a[i + 4], a[i + 5], a[i + 6]).unwrap!
+end
+
+def day_at(a: List[Int], i: Int) -> Time.Date = Time.Date.new(a[i], a[i + 1], a[i + 2]).unwrap!
+
+def clock_at(a: List[Int], i: Int) -> Time.TimeOfDay = Time.TimeOfDay.new(a[i], a[i + 1], a[i + 2], a[i + 3]).unwrap!
+
+def arithmetic(op: String, a: List[Int]) -> Reply
+  case op
+    "date_add_days" -> date_reply(day_at(a, 0).add_days(a[3]))
+    "naive_add_days" -> naive_reply(plain(a).add_days(a[7]))
+    "aware_add_days" -> aware_reply(aware(a).add_days(a[8]))
+    "naive_add_us" -> naive_reply(plain(a).add_us(a[7]))
+    "aware_add_us" -> aware_reply(aware(a).add_us(a[8]))
+    "days_between" -> done([day_at(a, 0).days_between(day_at(a, 3))])
+    "us_between" -> done([aware(a).us_between(aware_at(a, 8))])
+    "naive_us_between" -> done([plain(a).us_between(plain_at(a, 7))])
+    "compare" -> done([Time.compare(aware(a), aware_at(a, 8))])
+    "compare_naive" -> done([Time.compare_naive(plain(a), plain_at(a, 7))])
+    "compare_date" -> done([Time.compare_date(day_at(a, 0), day_at(a, 3))])
+    "compare_time" -> done([Time.compare_time(clock_at(a, 0), clock_at(a, 4))])
+    "cwday" -> done([day_at(a, 0).cwday])
+    _ -> done([day_at(a, 0).yday])
+  end
 end
 
 def date_fields(d: Time.Date) -> List[Int] = [d.year, d.month, d.day]
@@ -141,7 +170,7 @@ def convert(op: String, a: List[Int], text: String) -> Reply
     "to_date" -> done(date_fields(aware(a).to_date))
     "naive_to_date" -> done(date_fields(plain(a).to_date))
     "now" -> now()
-    _ -> text_case(op, a, text)
+    _ -> more(op, a, text)
   end
 end
 
@@ -155,4 +184,10 @@ def main() -> Void
       error(err) -> puts("bad case: #{err.message}")
     end
   end
+end
+
+def more(op: String, a: List[Int], text: String) -> Reply
+  return text_case(op, a, text) if op.start_with?("format_") or op.start_with?("parse_")
+
+  arithmetic(op, a)
 end

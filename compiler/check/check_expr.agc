@@ -994,6 +994,10 @@ def equality_type(cx: State.Cx, sides: Sides, node: Ast.Binary) -> Result[T.Type
       "generic T have no equality"
     )
 
+    if gap.why == CheckTypes.INSTANT_WHY
+      help = "Time.compare(a, b) == 0 compares two Time.DateTime values by instant; Test.eq compares their fields"
+    end
+
     base = Failure.problem(
       cx.file,
       sides.st.signature,

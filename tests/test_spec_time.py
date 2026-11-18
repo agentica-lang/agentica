@@ -74,6 +74,19 @@ CLEAN = [
         None,
         None,
     ),
+    # Arithmetic gives a Result, a difference, comparison or query an Int; compare takes two of one type.
+    (
+        MAIN
+        + f"  d = {DATE}\n  a = {AWARE}\n  n = a.naive_of\n"
+        "  later: Result[Time.Date] = d.add_days(7)\n"
+        "  moved: Result[Time.DateTime] = a.add_us(-1).unwrap!.add_days(1)\n"
+        "  shifted: Result[Time.NaiveDateTime] = n.add_us(1).unwrap!.add_days(-1)\n"
+        "  sum: Int = d.days_between(d) + a.us_between(a) + n.us_between(n) + d.cwday + d.yday\n"
+        "  order: Int = Time.compare(a, a) + Time.compare_naive(n, n) + Time.compare_date(d, d)\n"
+        "  puts(\"#{later.ok?} #{moved.ok?} #{shifted.ok?} #{sum} #{order}\")\nend\n",
+        None,
+        None,
+    ),
     # A field of a program's struct keeps a lambda parameter that reads it, though a record has a method of the name.
     (
         "struct Job\n  to_date: Int\n  getutc: Int\nend\n\n"
@@ -132,6 +145,12 @@ REFUSED = [
     (MAIN + f"  a = {AWARE}\n  puts(a.hours)\nend\n", "CHECK-UNKNOWN-FIELD", "a.hours"),
     (MAIN + f"  a = {AWARE}\n  puts(Time.to_i(a))\nend\n", "CHECK-UNKNOWN-NAME", "Time.to_i(a)"),
     (MAIN + "  a: Time.DateTime = Time.at(0)\nend\n", "CHECK-TYPE-MISMATCH", "Time.at(0)"),
+    # A comparison takes two values of its one type, and arithmetic is not on a time of day.
+    (MAIN + f"  d = {DATE}\n  a = {AWARE}\n  puts(Time.compare(a, d))\nend\n", "CHECK-TYPE-MISMATCH", "d"),
+    (MAIN + f"  d = {DATE}\n  puts(Time.compare(d, d))\nend\n", "CHECK-TYPE-MISMATCH", "d"),
+    (MAIN + "  t = Time.TimeOfDay.new(1, 2, 3, 4).unwrap!\n  puts(t.add_us(1))\nend\n", "CHECK-UNKNOWN-METHOD",
+     "t.add_us(1)"),
+    (MAIN + f"  d = {DATE}\n  e: Time.Date = d.add_days(1)\nend\n", "CHECK-TYPE-MISMATCH", "d.add_days(1)"),
     # The parse takes text and gives a Result; the text of a value takes no argument.
     (MAIN + f"  d = {DATE}\n  puts(Time.Date.iso8601(d))\nend\n", "CHECK-TYPE-MISMATCH", "d"),
     (MAIN + '  d: Time.Date = Time.Date.iso8601("2026-10-14")\nend\n', "CHECK-TYPE-MISMATCH",
@@ -172,3 +191,9 @@ def test_a_value_given_to_its_parse_names_the_method_that_writes_it(agentica_che
     found = agentica_check(MAIN + f"  d = {DATE}\n  puts(Time.Date.iso8601(d))\nend\n")
     assert found["code"] == "CHECK-TYPE-MISMATCH"
     assert "d.iso8601" in found["help"] and "format_iso8601" not in found["help"], found["help"]
+
+
+def test_the_equality_of_a_datetime_points_to_time_compare(agentica_check):
+    found = agentica_check(MAIN + f"  a = {AWARE}\n  puts(a == a)\nend\n")
+    assert found["code"] == "CHECK-TYPE-MISMATCH"
+    assert "Time.compare(a, b)" in found["help"], found["help"]

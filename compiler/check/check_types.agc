@@ -10,6 +10,9 @@ import Types from "../syntax/types"
 import Help from "check_help"
 import State from "check_state"
 
+## The why of equality_gap for a type that has no equality only because a Time.DateTime is in it.
+INSTANT_WHY = "== would compare the readings of Time.DateTime values, not their instants"
+
 ## Why a type has no equality (equality_gap): why is the text ("" when nothing on the way explains it), and field the
 ## declaration of the struct field that blocks it, in file, when there is one.
 struct Gap
@@ -258,7 +261,7 @@ def equality_gap(cx: State.Cx, type: ResolvedType) -> Gap
   found = data_walk(cx, type, {}, true)
   if found.why == "" and inside?(cx, type) do |current: ResolvedType| instant?(current) end
     # Two readings of one instant at different offsets differ field by field.
-    return Gap(why: "== would compare the readings of Time.DateTime values, not their instants", file: "", field: none)
+    return Gap(why: INSTANT_WHY, file: "", field: none)
   end
 
   Gap(why: found.why, file: found.file, field: found.field)

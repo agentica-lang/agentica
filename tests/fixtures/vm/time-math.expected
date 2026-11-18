@@ -1,0 +1,29 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 309,
+  "stdout": [
+    "2024-02-29",
+    "2025-02-28",
+    "0001-01-01",
+    "argument: the date is outside the years 1 to 9999",
+    "argument: the date is outside the years 1 to 9999",
+    "argument: the date is outside the years 1 to 9999",
+    "9999-12-31T23:59:59.999998+01:00",
+    "argument: the reading is outside the years 1 to 9999",
+    "9999-12-30T23:59:59.999999+01:00",
+    "argument: the reading is outside the years 1 to 9999",
+    "the reading is outside the years 1 to 9999",
+    "9999-12-31T00:00:00.000000",
+    "9999-12-31T23:59:59.999999",
+    "0 -3600000000 308",
+    "[0, -1, 1]",
+    "[1, 0, 1]",
+    "[1, -1, 0]",
+    "2026-10-14 3 287",
+    "0001-01-01 1 1",
+    "2024-12-31 2 366",
+    ""
+  ],
+  "stderr": []
+}
