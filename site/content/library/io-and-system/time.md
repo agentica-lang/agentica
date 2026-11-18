@@ -1,7 +1,7 @@
 ---
 title: Dates and times
 weight: 9
-description: Calendar dates, times of day and date-times with a fixed UTC offset, as checked values of the Time family, with Unix time and the wall clock.
+description: Calendar dates, times of day and date-times with a fixed UTC offset, as checked values of the Time family, with Unix time, the wall clock and ISO 8601 text.
 ---
 
 The `Time` family has four record types. Their fields are `Int`s, named as in Ruby's `Time`:
@@ -268,4 +268,63 @@ end
 ```output
 Time.Date(year: 2026, month: 10, day: 14)
 Time.Date(year: 2026, month: 10, day: 15)
+```
+
+## iso8601
+
+```signature
+Time.Date.format_iso8601(date: Time.Date) -> String
+Time.TimeOfDay.format_iso8601(time: Time.TimeOfDay) -> String
+Time.NaiveDateTime.format_iso8601(naive: Time.NaiveDateTime) -> String
+Time.DateTime.format_iso8601(time: Time.DateTime) -> String
+```
+
+The ISO 8601 text of a value, written `value.iso8601`: `YYYY-MM-DD` for a date, `HH:MM:SS.ffffff` for a time of day, the two joined by `T` for a date and time, and for a `Time.DateTime` its offset, `Z` at offset 0 and `+HH:MM` or `-HH:MM` otherwise (RFC 3339). The fraction always has six digits, so texts of one offset sort as their instants do.
+
+```agentica
+def main() -> Void
+  t = Time.DateTime.new(2026, 10, 14, 21, 5, 42, 201337, 7200).unwrap!
+  puts(t.iso8601)
+  puts(t.getutc.unwrap!.iso8601)
+  puts(t.naive_of.iso8601)
+  puts(t.to_date.iso8601)
+end
+```
+
+```output
+2026-10-14T21:05:42.201337+02:00
+2026-10-14T19:05:42.201337Z
+2026-10-14T21:05:42.201337
+2026-10-14
+```
+
+## Time.Date.iso8601 and the other parses
+
+```signature
+Time.Date.iso8601(text: String) -> Result[Time.Date]
+Time.TimeOfDay.iso8601(text: String) -> Result[Time.TimeOfDay]
+Time.NaiveDateTime.iso8601(text: String) -> Result[Time.NaiveDateTime]
+Time.DateTime.iso8601(text: String) -> Result[Time.DateTime]
+```
+
+The value that the text spells in the form `iso8601` writes, with the checks of the type's `new`. The seconds may have no fraction or a `.` and any number of digits; the digits past the sixth are cut off, not rounded. `T` and `Z` may be lowercase, as RFC 3339 allows, and `-00:00` is offset 0.
+
+`Time.DateTime.iso8601` needs an offset and `Time.NaiveDateTime.iso8601` refuses one, so a text with no offset is never read as an instant by mistake. Any other text is an error of kind `argument` that says what was expected and at which character (counted from 1): a space for `T`, `+0200`, an offset hour above 23, `07:32` with no seconds, text after the value, or a second of 60.
+
+```agentica
+def main() -> Void
+  puts(Time.DateTime.iso8601("2026-10-14t19:05:42.123456789z").unwrap!.iso8601)
+  puts(Time.DateTime.iso8601("2026-10-14T19:05:42").message)
+  puts(Time.DateTime.iso8601("2026-10-14 19:05:42Z").message)
+  puts(Time.NaiveDateTime.iso8601("2026-10-14T19:05:42Z").message)
+  puts(Time.TimeOfDay.iso8601("07:32:00.5"))
+end
+```
+
+```output
+2026-10-14T19:05:42.123456Z
+missing offset; use Time.NaiveDateTime.iso8601 for text without one
+expected YYYY-MM-DDTHH:MM:SS at character 11
+offset "Z" is not allowed here; use Time.DateTime.iso8601
+ok(Time.TimeOfDay(hour: 7, min: 32, sec: 0, usec: 500000))
 ```

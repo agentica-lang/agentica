@@ -1,13 +1,14 @@
 /*
  * The dates and times of the Time family (agc_date_builtins): the constructors of Time.Date, Time.TimeOfDay,
  * Time.NaiveDateTime and Time.DateTime, which check every field, the calendar queries, Unix time, the wall clock and
- * fixed offsets. Service layer. The calendar is the proleptic Gregorian one, years 1 to 9999, with microseconds and no
- * leap seconds: every day has 86400 seconds, as in POSIX time.
+ * fixed offsets, and their ISO 8601 text (RFC 3339 for an aware value). Service layer. The calendar is the proleptic
+ * Gregorian one, years 1 to 9999, with microseconds and no leap seconds: every day has 86400 seconds, as in POSIX time.
  * Design: issue #985 (§41) and docs/vm/05-values-execution-builtins.md §7.
  */
 #include "services.h"
 
 #include <inttypes.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <time.h>
 
@@ -26,6 +27,16 @@
 typedef struct {
   int64_t year, month, day, hour, min, sec, usec, utc_offset;
 } fields;
+
+/* A strict reader of the text of one kind: every read checks AT against the length first, digits are ASCII only, and
+   nothing depends on the locale. A failure writes MESSAGE (MESSAGE_SIZE bytes) and returns false; positions in it
+   count characters from 1, and every character before a failure is ASCII, so they are byte positions too. */
+typedef struct {
+  const uint8_t *text;
+  size_t length, at;
+  const char *pattern;
+  char *message;
+} reader;
 
 /* agc_fail keeps the pointer to its message, so these are static. */
 static const char *const missing_struct[AGC_TIME_RECORDS] = {
@@ -322,6 +333,180 @@ static agc_value builtin_naive_to_date(agc_vm *vm, agc_value *args, uint32_t spa
   return record(vm, AGC_TIME_DATE, &f, span);
 }
 
+/* The ISO 8601 text of a value: YYYY-MM-DD, HH:MM:SS.ffffff (always six digits), the two joined by T, and for an
+   aware value Z at offset 0 or +HH:MM / -HH:MM. TEXT holds at least TEXT_SIZE bytes. */
+#define TEXT_SIZE 64
+
+static size_t write_text(uint32_t kind, const fields *f, char *text) {
+  int n = 0;
+  if (kind != AGC_TIME_OF_DAY)
+    n += snprintf(text + n, TEXT_SIZE - (size_t)n, "%04d-%02d-%02d", (int)f->year, (int)f->month, (int)f->day);
+  if (kind == AGC_TIME_DATE) return (size_t)n;
+  if (kind != AGC_TIME_OF_DAY) text[n++] = 'T';
+  n += snprintf(text + n, TEXT_SIZE - (size_t)n, "%02d:%02d:%02d.%06d", (int)f->hour, (int)f->min, (int)f->sec,
+                (int)f->usec);
+  if (kind != AGC_TIME_DATETIME) return (size_t)n;
+  if (f->utc_offset == 0) {
+    text[n++] = 'Z';
+    return (size_t)n;
+  }
+  int64_t minutes = f->utc_offset < 0 ? -f->utc_offset / 60 : f->utc_offset / 60;
+  n += snprintf(text + n, TEXT_SIZE - (size_t)n, "%c%02d:%02d", f->utc_offset < 0 ? '-' : '+', (int)(minutes / 60),
+                (int)(minutes % 60));
+  return (size_t)n;
+}
+
+static agc_value format_record(agc_vm *vm, agc_value value, uint32_t kind, uint32_t span) {
+  fields f = {0};
+  read_record(vm, value, kind, &f, span);
+  char text[TEXT_SIZE];
+  size_t n = write_text(kind, &f, text);
+  return agc_string_value(agc_make_string(text, n, n));
+}
+
+static agc_value builtin_format_date(agc_vm *vm, agc_value *args, uint32_t span) {
+  return format_record(vm, args[0], AGC_TIME_DATE, span);
+}
+
+static agc_value builtin_format_time_of_day(agc_vm *vm, agc_value *args, uint32_t span) {
+  return format_record(vm, args[0], AGC_TIME_OF_DAY, span);
+}
+
+static agc_value builtin_format_naive(agc_vm *vm, agc_value *args, uint32_t span) {
+  return format_record(vm, args[0], AGC_TIME_NAIVE, span);
+}
+
+static agc_value builtin_format_datetime(agc_vm *vm, agc_value *args, uint32_t span) {
+  return format_record(vm, args[0], AGC_TIME_DATETIME, span);
+}
+
+static bool expected(reader *r) {
+  snprintf(r->message, MESSAGE_SIZE, "expected %s at character %zu", r->pattern, r->at + 1);
+  return false;
+}
+
+static bool next_is(const reader *r, char c) { return r->at < r->length && r->text[r->at] == (uint8_t)c; }
+
+static bool next_digit(const reader *r) { return r->at < r->length && r->text[r->at] >= '0' && r->text[r->at] <= '9'; }
+
+/* A separator, matched without case for T and Z as RFC 3339 allows. */
+static bool separator(reader *r, char c) {
+  if (r->at >= r->length || (r->text[r->at] | 0x20) != (uint8_t)(c | 0x20)) return expected(r);
+  r->at++;
+  return true;
+}
+
+static bool number(reader *r, int count, int64_t *out) {
+  int64_t value = 0;
+  for (int k = 0; k < count; k++) {
+    if (!next_digit(r)) return expected(r);
+    value = value * 10 + (r->text[r->at++] - '0');
+  }
+  *out = value;
+  return true;
+}
+
+static bool read_date(reader *r, fields *f) {
+  return number(r, 4, &f->year) && separator(r, '-') && number(r, 2, &f->month) && separator(r, '-') &&
+         number(r, 2, &f->day);
+}
+
+/* HH:MM:SS, then a . and one or more digits, of which the first six are kept: the rest is cut off, as rounding could
+   carry into the next second. */
+static bool read_clock(reader *r, fields *f) {
+  if (!number(r, 2, &f->hour) || !separator(r, ':') || !number(r, 2, &f->min) || !separator(r, ':') ||
+      !number(r, 2, &f->sec))
+    return false;
+  f->usec = 0;
+  if (!next_is(r, '.')) return true;
+  r->at++;
+  if (!next_digit(r)) {
+    snprintf(r->message, MESSAGE_SIZE, "expected a digit after . at character %zu", r->at + 1);
+    return false;
+  }
+  int64_t scale = 100000;
+  for (; next_digit(r); r->at++, scale /= 10) f->usec += (r->text[r->at] - '0') * scale;
+  return true;
+}
+
+static bool offset_next(const reader *r) {
+  return r->at < r->length && (r->text[r->at] == '+' || r->text[r->at] == '-' || (r->text[r->at] | 0x20) == 'z');
+}
+
+/* Z, or +HH:MM / -HH:MM with HH to 23 and MM to 59; -00:00 is offset 0. */
+static bool read_offset(reader *r, fields *f) {
+  if ((r->text[r->at] | 0x20) == 'z') {
+    r->at++;
+    f->utc_offset = 0;
+    return true;
+  }
+  int64_t sign = r->text[r->at++] == '-' ? -1 : 1, hours, minutes;
+  r->pattern = "+HH:MM";
+  if (!number(r, 2, &hours) || !separator(r, ':') || !number(r, 2, &minutes)) return false;
+  if (!in_range("offset hour", hours, 0, 23, r->message) || !in_range("offset minute", minutes, 0, 59, r->message))
+    return false;
+  f->utc_offset = sign * (hours * 3600 + minutes * 60);
+  return true;
+}
+
+static bool read_end(reader *r) {
+  if (r->at == r->length) return true;
+  snprintf(r->message, MESSAGE_SIZE, "unexpected text at character %zu", r->at + 1);
+  return false;
+}
+
+static const char *const patterns[AGC_TIME_RECORDS] = {"YYYY-MM-DD", "HH:MM:SS", "YYYY-MM-DDTHH:MM:SS",
+                                                       "YYYY-MM-DDTHH:MM:SS"};
+
+/* The value of KIND that TEXT spells, with the checks of its constructor, or an argument error. */
+static agc_value parse_record(agc_vm *vm, agc_value text, uint32_t kind, uint32_t span) {
+  const agc_string *s = agc_as_string(vm, text);
+  char message[MESSAGE_SIZE];
+  reader r = {(const uint8_t *)s->data, s->bytes, 0, patterns[kind], message};
+  fields f = {0};
+  bool ok = true;
+  if (kind != AGC_TIME_OF_DAY) ok = read_date(&r, &f);
+  if (ok && kind != AGC_TIME_DATE && kind != AGC_TIME_OF_DAY) ok = separator(&r, 'T');
+  if (ok && kind != AGC_TIME_DATE) ok = read_clock(&r, &f);
+  if (ok && kind == AGC_TIME_DATETIME && r.at == r.length) {
+    snprintf(message, MESSAGE_SIZE, "missing offset; use Time.NaiveDateTime.iso8601 for text without one");
+    ok = false;
+  } else if (ok && kind == AGC_TIME_DATETIME) {
+    r.pattern = "Z or +HH:MM";
+    ok = offset_next(&r) ? read_offset(&r, &f) : expected(&r);
+  } else if (ok && offset_next(&r)) {
+    /* The offset as written, up to its six characters and only while they are printable ASCII. */
+    int shown = 0;
+    while (shown < 6 && r.at + (size_t)shown < r.length && r.text[r.at + (size_t)shown] >= 0x20 &&
+           r.text[r.at + (size_t)shown] < 0x7f && r.text[r.at + (size_t)shown] != '"')
+      shown++;
+    snprintf(message, MESSAGE_SIZE, "offset \"%.*s\" is not allowed here; use Time.DateTime.iso8601", shown,
+             (const char *)r.text + r.at);
+    ok = false;
+  }
+  ok = ok && read_end(&r);
+  if (ok && kind != AGC_TIME_OF_DAY) ok = check_date(&f, message);
+  if (ok && kind != AGC_TIME_DATE) ok = check_clock(&f, message);
+  if (!ok) return agc_error(vm, AGC_KIND_ARGUMENT, message);
+  return build(vm, kind, &f, span);
+}
+
+static agc_value builtin_parse_date(agc_vm *vm, agc_value *args, uint32_t span) {
+  return parse_record(vm, args[0], AGC_TIME_DATE, span);
+}
+
+static agc_value builtin_parse_time_of_day(agc_vm *vm, agc_value *args, uint32_t span) {
+  return parse_record(vm, args[0], AGC_TIME_OF_DAY, span);
+}
+
+static agc_value builtin_parse_naive(agc_vm *vm, agc_value *args, uint32_t span) {
+  return parse_record(vm, args[0], AGC_TIME_NAIVE, span);
+}
+
+static agc_value builtin_parse_datetime(agc_vm *vm, agc_value *args, uint32_t span) {
+  return parse_record(vm, args[0], AGC_TIME_DATETIME, span);
+}
+
 const agc_builtin agc_date_builtins[] = {
   {"Time.Date.new", 3, builtin_date_new, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
   {"Time.TimeOfDay.new", 4, builtin_time_of_day_new, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
@@ -341,6 +526,18 @@ const agc_builtin agc_date_builtins[] = {
   {"Time.DateTime.naive_of", 1, builtin_naive_of, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
   {"Time.DateTime.to_date", 1, builtin_to_date, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
   {"Time.NaiveDateTime.to_date", 1, builtin_naive_to_date, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  /* The text builtins allocate a String or read one of any length, so they are direct rows, not leaves. */
+  {"Time.Date.format_iso8601", 1, builtin_format_date, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, true, false},
+  {"Time.TimeOfDay.format_iso8601", 1, builtin_format_time_of_day, AGC_NATIVE_NONE, AGC_COST_NONE, false, false,
+   true, false},
+  {"Time.NaiveDateTime.format_iso8601", 1, builtin_format_naive, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, true,
+   false},
+  {"Time.DateTime.format_iso8601", 1, builtin_format_datetime, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, true,
+   false},
+  {"Time.Date.iso8601", 1, builtin_parse_date, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true, false},
+  {"Time.TimeOfDay.iso8601", 1, builtin_parse_time_of_day, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true, false},
+  {"Time.NaiveDateTime.iso8601", 1, builtin_parse_naive, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true, false},
+  {"Time.DateTime.iso8601", 1, builtin_parse_datetime, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true, false},
 };
 
 const size_t agc_date_builtin_count = sizeof agc_date_builtins / sizeof agc_date_builtins[0];

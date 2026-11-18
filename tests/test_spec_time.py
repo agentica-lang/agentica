@@ -60,6 +60,20 @@ CLEAN = [
         None,
         None,
     ),
+    # Each type writes its ISO 8601 text with iso8601 and reads it back with Type.iso8601(text), a Result.
+    (
+        MAIN
+        + f"  a = {AWARE}\n"
+        "  texts: List[String] = [a.iso8601, a.naive_of.iso8601(), a.to_date.iso8601, "
+        "Time.TimeOfDay.new(1, 2, 3, 4).unwrap!.iso8601]\n"
+        "  d: Result[Time.Date] = Time.Date.iso8601(texts[2])\n"
+        "  t: Result[Time.TimeOfDay] = Time.TimeOfDay.iso8601(texts[3])\n"
+        "  n: Result[Time.NaiveDateTime] = Time.NaiveDateTime.iso8601(texts[1])\n"
+        "  b: Result[Time.DateTime] = Time.DateTime.iso8601(texts[0])\n"
+        "  puts(\"#{d.ok?} #{t.ok?} #{n.ok?} #{b.ok?}\")\nend\n",
+        None,
+        None,
+    ),
     # A field of a program's struct keeps a lambda parameter that reads it, though a record has a method of the name.
     (
         "struct Job\n  to_date: Int\n  getutc: Int\nend\n\n"
@@ -118,6 +132,11 @@ REFUSED = [
     (MAIN + f"  a = {AWARE}\n  puts(a.hours)\nend\n", "CHECK-UNKNOWN-FIELD", "a.hours"),
     (MAIN + f"  a = {AWARE}\n  puts(Time.to_i(a))\nend\n", "CHECK-UNKNOWN-NAME", "Time.to_i(a)"),
     (MAIN + "  a: Time.DateTime = Time.at(0)\nend\n", "CHECK-TYPE-MISMATCH", "Time.at(0)"),
+    # The parse takes text and gives a Result; the text of a value takes no argument.
+    (MAIN + f"  d = {DATE}\n  puts(Time.Date.iso8601(d))\nend\n", "CHECK-TYPE-MISMATCH", "d"),
+    (MAIN + '  d: Time.Date = Time.Date.iso8601("2026-10-14")\nend\n', "CHECK-TYPE-MISMATCH",
+     'Time.Date.iso8601("2026-10-14")'),
+    (MAIN + f"  d = {DATE}\n  puts(d.iso8601(6))\nend\n", "CHECK-ARITY", "d.iso8601(6)"),
 ]
 
 
