@@ -160,6 +160,25 @@ def test_update_and_install_fetch_the_workspace_once_and_update_of_another_name_
     assert build(ws, remotes).code == 0
 
 
+def test_a_member_in_a_folder_below_the_root_is_installed_in_the_same_folders(ws, remotes):
+    files = member_files(remotes)
+    files["agentica.toml"] = files["agentica.toml"].replace('"llm"]', '"llm", "examples/extension"]')
+    files["examples/extension/agentica.toml"] = 'name = "extension"\n'
+    files["examples/extension/main.agc"] = 'def name() -> String\n  return "extension"\nend\n'
+    publish(remotes, files)
+    project(ws, remotes)
+    (ws.project / "main.agc").write_text(
+        'import Extension from "pkg/finn/examples/extension/main"\n\ndef main() -> Void\n  puts(Extension.name())\nend\n',
+        encoding="utf-8")
+    assert update(ws, remotes).code == 0
+    assert cached_files(ws.deps / "finn" / "examples" / "extension") == ["agentica.toml", "main.agc"]
+    assert "finn/examples/extension" in [entry["name"] for entry in lock_of(ws)]
+    shutil.rmtree(ws.deps)
+    assert run_json("install", ws, remotes)[1] is None
+    ran = build(ws, remotes)
+    assert (ran.code, ran.stdout) == (0, "extension\n"), ran.stderr
+
+
 def test_update_gives_back_the_lock_it_wrote_and_install_reads_it(ws, remotes):
     locked(ws, remotes)
     lock = (ws.project / "agentica.lock").read_text(encoding="utf-8")
