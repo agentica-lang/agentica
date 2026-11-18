@@ -507,9 +507,10 @@ import Sqlite from "pkg/sqlite/db"
   with no module is `CHECK-IMPORT-PATH`. A name that the manifest of the
   importing file declares is a package, and it comes first: it shadows a library
   of the same name in the `pkg/` roots, `agc_libs/` included. Its files come
-  only from `deps/<name>/` beside `agentica.toml`, one flat folder for each
+  only from `deps/<name>/` beside `agentica.toml`, one folder for each
   locked package, including the ones that packages import (the lock is one list,
-  so one folder for each name). A name that is not declared is the `pkg/`
+  so one folder for each name; `deps/<namespace>/<subdir>/` for a namespaced
+  name). A name that is not declared is the `pkg/`
   library search above, unchanged. Since the prefix is `pkg/`, a package import
   never clashes with a local file or folder.
 - Which manifest decides: the manifest of the project for the files of the
@@ -532,7 +533,14 @@ import Sqlite from "pkg/sqlite/db"
   (`sha256:` and 64 lowercase hex digits), `workspace = true` for a member
   of the workspace of the project, or `path` in place of the git source for a
   `path` dependency, then `override = true` for an overridden name. A bad lock
-  is `PKG-LOCK-INVALID`, a bad `subdir` too, at `package[n].subdir`. Every
+  is `PKG-LOCK-INVALID`, a bad `subdir` too, at `package[n].subdir`. A fetched
+  entry with a `subdir` may have a namespaced name, `namespace/subdir` (`finn/core`
+  for the folder `core`): the namespace follows the rule of a name, and the
+  rest is the `subdir` of the entry. Its files are in `deps/namespace/subdir/`.
+  Any other `/` in a name, a namespaced name on a `path` or workspace entry,
+  and a namespace that is also the `name` of an entry are `PKG-LOCK-INVALID` at
+  `package[n].name`; the `package` of a `[[native-artifact]]` follows the same
+  rule as a name. Every
   dependency of the manifest must be
   in the lock with the same `git` (with or without a `.git` at the end), the
   same `subdir` (or none) and the same `tag` or `ref`, or the same `path`, and
@@ -582,7 +590,9 @@ import Sqlite from "pkg/sqlite/db"
   package, in the order of the file: a folder of the commit that is in the cache
   and has the locked hash is left alone and git does not run; a folder with
   another hash is `PKG-HASH-MISMATCH` and is never overwritten; else the package
-  is fetched. The fetch runs the system `git` (its config, SSH keys and
+  is fetched. Packages with the same `git`, pin and commit (two folders of one
+  repository, say) are fetched together: one `git fetch` serves all of them.
+  The fetch runs the system `git` (its config, SSH keys and
   credential helpers apply; a `url.<base>.insteadOf` setting applies to the
   `git` value, which the lock keeps as written): a depth-1 fetch of the tag, or
   of the locked commit for a `ref`, into a temporary bare repository with no

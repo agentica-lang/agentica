@@ -9,7 +9,8 @@
 ## overwritten. A failure is a packed failure that names the lock and the key of the entry (link_failure.agc,
 ## fail_key).
 ##
-## `fill` fetches what the lock names. `resolve` (for `add` and `update`) fetches a pin that has no commit or hash yet,
+## `fill` fetches what the lock names; `fill_group` does it for several packages of one repository, pin and commit with
+## one fetch. `resolve` (for `add` and `update`) fetches a pin that has no commit or hash yet,
 ## learns both from what it fetched, and puts the files in the cache by the same steps.
 
 import Diag from "../diagnostics/diagnostic"
@@ -38,6 +39,12 @@ struct Place
   entry: String
 end
 
+## A package of the lock to put in the cache: the entry of the lock it is in, and the locked package.
+struct Entry
+  place: Place
+  locked: Lock.Locked
+end
+
 ## The folder of the package cache, or the failure for `file` (the lock, whose entries are about to be filled) when the
 ## environment leaves no place for it.
 def cache_root(env: Env.Env, file: String) -> Result[String]
@@ -60,12 +67,32 @@ end
 
 ## Puts the files of the locked package into the cache under `cache` (a folder; PackageCache.root).
 def fill(workspace: Workspace.Workspace, cache: String, place: Place, locked: Lock.Locked) -> Result[Filled]
-  target = PackageCache.folder(cache, locked.source, locked.commit)
-  seen = try inspect(workspace, place, target, locked)
-  case seen
-    Seen.Matches -> ok(Filled.Present)
-    Seen.Absent -> fetch(workspace, cache, place, target, locked)
+  filled = try fill_group(workspace, cache, [Entry(place: place, locked: locked)])
+  ok(filled[0])
+end
+
+## Puts the files of locked packages into the cache with one fetch: the packages are folders of one repository (or the
+## repository itself) at one pin and commit, so one temporary repository serves all of them, and git runs once for the
+## group whatever its size. The answers are in the order of `entries`, which are not empty. A package that is in the
+## cache with the locked hash is not fetched, and when every one is, git does not run. A failure of the fetch names the
+## first entry that needed it.
+def fill_group(workspace: Workspace.Workspace, cache: String, entries: List[Entry]) -> Result[List[Filled]]
+  absent: List[Entry] = []
+  for entry in entries
+    target = PackageCache.folder(cache, entry.locked.source, entry.locked.commit)
+    seen = try inspect(workspace, entry.place, target, entry.locked)
+    case seen
+      Seen.Matches -> next
+      Seen.Absent -> absent = absent.push(entry)
+    end
   end
+
+  fetched: Map[String, Filled] = {}
+  if absent.size > 0
+    fetched = try fetch_all(workspace, cache, absent)
+  end
+
+  ok(entries.map do |entry: Entry| fetched.get(entry.locked.name).unwrap_or(Filled.Present) end)
 end
 
 ## Fetches the pin of a package that is not locked yet, for `add` and `update`: the lock entry it gives has the commit
@@ -181,22 +208,19 @@ def inspect(workspace: Workspace.Workspace, place: Place, target: String, locked
   end
 end
 
-# Fetches into a temporary folder of the cache root, which is removed whatever happens.
-def fetch(
-  workspace: Workspace.Workspace,
-  cache: String,
-  place: Place,
-  target: String,
-  locked: Lock.Locked,
-) -> Result[Filled]
+# Fetches the pin once into a temporary folder of the cache root, which is removed whatever happens, and puts the
+# files of each entry (one folder of the repository, or all of it) into the cache folder of its commit. The entries are
+# not empty and share one repository, pin and commit. The answers are by lock name.
+def fetch_all(workspace: Workspace.Workspace, cache: String, entries: List[Entry]) -> Result[Map[String, Filled]]
   made = make_temp(cache)
   if !made.ok?
-    return error(fail(place, "PKG-FETCH", "", "cannot make a folder in the package cache #{cache}", made.message))
+    return error(
+      fail(entries[0].place, "PKG-FETCH", "", "cannot make a folder in the package cache #{cache}", made.message),
+    )
   end
 
   temp = made.unwrap!
-  scratch = Scratch(temp: temp, repo: Paths.join(temp, "repo.git"), files: Paths.join(temp, "files"))
-  filled = fetch_into(workspace, place, scratch, target, locked)
+  filled = fetch_into(workspace, cache, temp, entries)
   # A folder that cannot be removed stays hidden in the cache root, and the result of the install stands: the failure
   # to clean up is not worth failing a fetch that worked (or hiding the error of one that did not).
   remove_temp(temp)
@@ -238,17 +262,26 @@ end
 
 def fetch_into(
   workspace: Workspace.Workspace,
-  place: Place,
-  scratch: Scratch,
-  target: String,
-  locked: Lock.Locked,
-) -> Result[Filled]
-  try init_repository(place, scratch, locked)
-  try fetch_pin(place, scratch, locked)
-  try check_commit(place, scratch, locked)
-  try copy_tree(place, scratch, locked.commit, locked.source.subdir)
-  try check_hash(workspace, place, scratch.files, locked)
-  move_into_place(workspace, place, scratch.files, target, locked)
+  cache: String,
+  temp: String,
+  entries: List[Entry],
+) -> Result[Map[String, Filled]]
+  first = entries[0]
+  scratch = Scratch(temp: temp, repo: Paths.join(temp, "repo.git"), files: Paths.join(temp, "files"))
+  try init_repository(first.place, scratch, first.locked)
+  try fetch_pin(first.place, scratch, first.locked)
+  try check_commit(first.place, scratch, first.locked)
+  done: Map[String, Filled] = {}
+  for index in 0...entries.size
+    entry = entries[index]
+    here = scratch.with(files: Paths.join(temp, "files-#{index}"))
+    try copy_tree(entry.place, here, entry.locked.commit, entry.locked.source.subdir)
+    try check_hash(workspace, entry.place, here.files, entry.locked)
+    target = PackageCache.folder(cache, entry.locked.source, entry.locked.commit)
+    done = done.put(entry.locked.name, try move_into_place(workspace, entry.place, here.files, target, entry.locked))
+  end
+
+  ok(done)
 end
 
 # The files of the commit that the hash covers (and the manifest) go to scratch.files. For a package that is a folder

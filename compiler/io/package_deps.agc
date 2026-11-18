@@ -1,5 +1,6 @@
-## Writes the locked packages into `deps/<name>/` of the project (docs/grammar/05b-modules.md), one flat folder for
-## each package of the build, direct or not, and removes the ones the lock dropped. This is the only place a build
+## Writes the locked packages into `deps/<name>/` of the project (docs/grammar/05b-modules.md), one folder for each
+## package of the build, direct or not (`deps/<namespace>/<subdir>/` for a namespaced name such as `finn/core`), and
+## removes the ones the lock dropped. This is the only place a build
 ## reads a package from. The files come from the cache folder of the commit, which `install` filled and hashed: the
 ## .agc files the hash covers and the manifest of the package (for a `subdir`, the cache folder holds that folder
 ## alone). They are built in a hidden folder of deps/, hashed against the lock, and swapped for the old `deps/<name>/`
@@ -86,6 +87,10 @@ def put(
 
   files = try chosen(workspace, source, place, locked)
   try prepare(workspace, deps)
+  if Lock.namespace(locked.name) != ""
+    try prepare(workspace, Paths.join(deps, Lock.namespace(locked.name)))
+  end
+
   parent = try make_stage(deps)
   done = stage_and_swap(workspace, deps, parent, source, files, place, locked)
   # A staging folder that cannot be removed stays hidden in deps/ and does not change the answer. After a swap
@@ -241,7 +246,11 @@ def prepare(workspace: Workspace.Workspace, deps: String) -> Result[Void]
 end
 
 def kind_of(workspace: Workspace.Workspace, path: String) -> Result[Kind]
-  entries = workspace.list_folder.call(Paths.directory_of(path))
+  folder = Paths.directory_of(path)
+  entries = workspace.list_folder.call(folder)
+  # The folder of a namespaced package may not be made yet.
+  return ok(Kind.Absent) if !entries.ok? and !workspace.directory_exists.call(folder)
+
   return error(write_failure(path, "cannot read the folder of #{path}", entries.message)) if !entries.ok?
 
   name = Paths.last_part(path)
@@ -328,7 +337,7 @@ end
 # takes its place, and the old one is removed. A rename that fails puts the old one back.
 def swap(workspace: Workspace.Workspace, deps: String, stage: String, name: String) -> Result[Void]
   target = Paths.join(deps, name)
-  backup = Paths.join(deps, ".old-#{unique()}-#{name}")
+  backup = Paths.join(deps, ".old-#{unique()}-#{name.replace("/", "@")}")
   seen = try kind_of(workspace, target)
   replacing = !absent?(seen)
   if replacing
@@ -370,12 +379,29 @@ def remove(workspace: Workspace.Workspace, deps: String, name: String) -> Result
   seen = try kind_of(workspace, target)
   return ok() if absent?(seen)
 
-  backup = Paths.join(deps, ".old-#{unique()}-#{name}")
+  backup = Paths.join(deps, ".old-#{unique()}-#{name.replace("/", "@")}")
   moved = Path.rename(target, backup, FS_TIMEOUT_MS)
   return error(write_failure(target, "cannot remove #{target}", moved.message)) if !moved.ok?
 
   # An old folder that cannot be removed is only a spare hidden folder.
   _ = Path.remove(backup, FS_TIMEOUT_MS)
+  if Lock.namespace(name) != ""
+    try drop_if_empty(workspace, Paths.join(deps, Lock.namespace(name)))
+  end
+
+  ok()
+end
+
+# Removes the folder of a namespace when no package is left in it. A link, a file and a folder with an entry stay.
+def drop_if_empty(workspace: Workspace.Workspace, folder: String) -> Result[Void]
+  seen = try kind_of(workspace, folder)
+  return ok() if !folder?(seen)
+
+  listed = workspace.list_folder.call(folder)
+  if listed.ok? and listed.unwrap!.size == 0
+    _ = Path.remove(folder, FS_TIMEOUT_MS)
+  end
+
   ok()
 end
 

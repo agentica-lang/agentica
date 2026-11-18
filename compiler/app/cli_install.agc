@@ -20,6 +20,7 @@ import PackageDeps from "../io/package_deps"
 import PackageFetch from "../io/package_fetch"
 import Paths from "../modules/import_path"
 import Env from "../modules/link_env"
+import GitSource from "../packages/git_source"
 import Lock from "../packages/lock"
 import Manifest from "../packages/manifest"
 import NativeLibrary from "../packages/native_library"
@@ -46,8 +47,9 @@ def fill_all(settings: Env.Settings, lock: Lock.Lock) -> Result[String]
   lines: List[String] = []
   if lock.packages.size > 0
     cache = try PackageFetch.cache_for(settings.env, lock.file, lock.packages)
-    for index in 0...lock.packages.size
-      locked = lock.packages[index]
+    groups = fetch_groups(lock)
+    filled: Map[String, PackageFetch.Filled] = {}
+    for locked in lock.packages
       label = Lock.label(locked)
       if locked.member
         lines = lines.push("in the workspace #{label}")
@@ -59,9 +61,19 @@ def fill_all(settings: Env.Settings, lock: Lock.Lock) -> Result[String]
         next
       end
 
-      place = PackageFetch.Place(file: lock.file, entry: Reader.item("package", index))
-      filled = try PackageFetch.fill(settings.workspace, cache, place, locked)
-      case filled
+      if !filled.has_key?(locked.name)
+        entries = groups[fetch_key(locked)].map do |index: Int|
+          place = PackageFetch.Place(file: lock.file, entry: Reader.item("package", index))
+          PackageFetch.Entry(place: place, locked: lock.packages[index])
+        end
+
+        done = try PackageFetch.fill_group(settings.workspace, cache, entries)
+        for at in 0...entries.size
+          filled = filled.put(entries[at].locked.name, done[at])
+        end
+      end
+
+      case filled[locked.name]
         PackageFetch.Filled.Fetched -> lines = lines.push("fetched #{label}")
         PackageFetch.Filled.Present -> lines = lines.push("in the cache #{label}")
       end
@@ -151,6 +163,26 @@ def artifact_key(lock: Lock.Lock, artifact: Lock.Artifact) -> String
   end
 
   "native-artifact"
+end
+
+# The packages that one fetch serves, by `fetch_key`: the indexes in the lock of the fetched packages of one
+# repository, pin and commit (the folders of a repository, or two names for it), in the order of the file.
+def fetch_groups(lock: Lock.Lock) -> Map[String, List[Int]]
+  groups: Map[String, List[Int]] = {}
+  for index in 0...lock.packages.size
+    locked = lock.packages[index]
+    next if Lock.in_place?(locked)
+
+    key = fetch_key(locked)
+    groups = groups.put(key, groups.get(key).unwrap_or([]).push(index))
+  end
+
+  groups
+end
+
+def fetch_key(locked: Lock.Locked) -> String
+  sep = String.from_code(0)
+  "#{GitSource.identity(locked.source.git)}#{sep}#{GitSource.pin(locked.source)}#{sep}#{locked.commit}"
 end
 
 # The lines of the answer, or a packed failure.

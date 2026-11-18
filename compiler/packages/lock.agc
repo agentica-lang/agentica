@@ -4,9 +4,11 @@
 ## the project (members.agc) has `workspace = true` in place of the commit and the hash: it is read from its folder,
 ## so it has neither; so is a package that is a local `path` of the root project's manifest, which has the `path` in
 ## place of the git source. `override = true` marks a package whose source the root project imposes on the whole tree
-## (the packages that ask for another source of that name are not compared). A failure is PKG-LOCK-INVALID, with the
-## file and the key path (toml_read.agc). This reads one file; project.agc checks it against the manifest, and
-## package_import.agc against the manifest of each package it loads. `encode` is the writer
+## (the packages that ask for another source of that name are not compared). A fetched package that is a folder of its
+## repository may have a namespaced name, `namespace/subdir` (`finn/core` for the folder `core`): deps/ keeps it in
+## `deps/namespace/subdir/`, and the namespace is then the name of no package of its own. A failure is
+## PKG-LOCK-INVALID, with the file and the key path (toml_read.agc). This reads one file; project.agc checks it against
+## the manifest, and package_import.agc against the manifest of each package it loads. `encode` is the writer
 ## (docs/grammar/05b-modules.md): the file is the tool's own, so it is written whole.
 
 import Workspace from "../modules/workspace"
@@ -72,6 +74,8 @@ def read(workspace: Workspace.Workspace, file: String) -> Result[Lock]
       seen = seen.add(locked.name)
       packages = packages.push(locked)
     end
+
+    try namespaces_free(reading, packages)
   end
 
   artifacts: List[Artifact] = []
@@ -120,6 +124,14 @@ def encode(packages: List[Locked], artifacts: List[Artifact]) -> String
 
   # The keys are fixed and every value is a string or the version, so std/toml has no reason to refuse them.
   Toml.encode(root).unwrap!
+end
+
+## The part of a lock name before its first `/`, the namespace of `finn/core`; "" for a name with no `/`.
+def namespace(name: String) -> String
+  at = name.index_of("/")
+  return "" if at.none?
+
+  name.slice(0, at.unwrap!)
 end
 
 ## Whether the files of the package are read in place, with no fetch, no cache and no hash: a workspace member or a
@@ -201,6 +213,31 @@ def package_keys(locked: Locked) -> Map[String, Toml.Value]
   keys.put("commit", Toml.Value.Str(locked.commit)).put("hash", Toml.Value.Str(locked.hash))
 end
 
+# Why text is not a lock name, or "": a package name, or a package name and a subdir joined by `/`.
+def key_problem(name: String) -> String
+  space = namespace(name)
+  return GitSource.name_problem(name) if space == ""
+
+  problem = GitSource.name_problem(space)
+  return problem if problem != ""
+
+  GitSource.subdir_problem(name.slice(space.length + 1, name.length - space.length - 1))
+end
+
+# A namespace is the name of no package: deps/<namespace>/ holds only the folders of the namespaced packages, so a
+# package of that name would hash them as its own files.
+def namespaces_free(reading: Reader.Reading, packages: List[Locked]) -> Result[Void]
+  spaces = Set.new(packages.map do |locked| namespace(locked.name) end)
+  for index in 0...packages.size
+    if spaces.include?(packages[index].name)
+      message = "the name is the namespace of another package"
+      return error(Reader.fail(reading, Reader.child(Reader.item("package", index), "name"), message))
+    end
+  end
+
+  ok()
+end
+
 # The sort key of a native artifact row: one alias on one system of one package.
 def sort_key(artifact: Artifact) -> String
   sep = String.from_code(0)
@@ -233,7 +270,7 @@ def artifact_of(reading: Reader.Reading, value: Toml.Value, path: String) -> Res
 
   package = try text_of(reading, entries, path, "package")
   if package != ""
-    problem = GitSource.name_problem(package)
+    problem = key_problem(package)
     if problem != ""
       return error(Reader.fail_help(reading, Reader.child(path, "package"), "not a package name", problem))
     end
@@ -287,14 +324,25 @@ def package_of(reading: Reader.Reading, value: Toml.Value, path: String) -> Resu
   end
 
   name = try text_of(reading, entries, path, "name")
-  problem = GitSource.name_problem(name)
+  problem = key_problem(name)
   return error(Reader.fail_help(reading, Reader.child(path, "name"), "not a package name", problem)) if problem != ""
+
+  nested = namespace(name) != ""
+  if nested and (entries.has_key?("path") or entries.has_key?("workspace"))
+    message = "a namespaced name is a fetched folder of a repository"
+    return error(Reader.fail(reading, Reader.child(path, "name"), message))
+  end
 
   override = try override_of(reading, entries, path)
   return path_of(reading, entries, path, name, override) if entries.has_key?("path")
 
   source = try source_of(reading, entries, path)
   return member_of(reading, entries, path, name, source, override) if entries.has_key?("workspace")
+
+  if nested and name != "#{namespace(name)}/#{source.subdir}"
+    message = "a namespaced name is the namespace, a /, and the subdir of the entry"
+    return error(Reader.fail(reading, Reader.child(path, "name"), message))
+  end
 
   commit = try text_of(reading, entries, path, "commit")
   problem = GitSource.commit_problem(commit)
