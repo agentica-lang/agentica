@@ -59,6 +59,10 @@ def method_aliases() -> Map[String, String]
     "String.size": "String.length",
     "String.to_s": "self",
     "Task.id": "Task.id",
+    "Time.Date.iso8601": "Time.Date.format_iso8601",
+    "Time.DateTime.iso8601": "Time.DateTime.format_iso8601",
+    "Time.NaiveDateTime.iso8601": "Time.NaiveDateTime.format_iso8601",
+    "Time.TimeOfDay.iso8601": "Time.TimeOfDay.format_iso8601",
   }
 end
 

@@ -1,7 +1,7 @@
 /*
  * The readers of the Time records (vm/dates.c) against forged values: a .agcb can build a Time record by hand with any
  * struct type, field count or field values, and a program can lack the struct of a record. Each must fail with
- * RUNTIME-INTERNAL "invalid bytecode", never reach the calendar arithmetic. A real value still converts.
+ * RUNTIME-INTERNAL "invalid bytecode", never reach the calendar arithmetic or the text. A real value still converts.
  */
 #include "../core.h"
 #include "../services.h"
@@ -71,6 +71,10 @@ static void test_a_forged_naive_fails(void) {
   forged("Time.NaiveDateTime.assume_offset", 2, changed(AGC_TIME_NAIVE, 7, good, 2, 0));
   forged("Time.NaiveDateTime.to_date", 1, record(AGC_TIME_DATETIME, 7, good));
   forged("Time.NaiveDateTime.to_date", 1, record(AGC_TIME_NAIVE, 8, good));
+  forged("Time.NaiveDateTime.format_iso8601", 1, changed(AGC_TIME_NAIVE, 7, good, 0, 10000));
+  forged("Time.Date.format_iso8601", 1, record(AGC_TIME_NAIVE, 7, good));
+  static const int64_t noon[8] = {12, 0, 0, 0};
+  forged("Time.TimeOfDay.format_iso8601", 1, changed(AGC_TIME_OF_DAY, 4, noon, 0, 24));
 }
 
 static void test_a_program_without_the_struct_fails(void) {

@@ -11,7 +11,9 @@ parentheses, `receiver.name` on a non-struct value is a method without arguments
 no methods, except a record of a builtin family: a builtin
 `Family.Record.name` whose first parameter is that record is its method
 (`t.to_i` is `Time.DateTime.to_i(t)`), and `.name` on it is a field when the
-record has one and the method otherwise. The forms on a type name are
+record has one and the method otherwise. `iso8601` is the one name with both
+forms: the method writes the text (`d.iso8601`) and `Time.Date.iso8601(text)`
+reads it. The forms on a type name are
 `Type.members`, the list of the fields of a struct
 (`docs/grammar/06-semantics.md`, "Structs and lists"), and `Type.codec`, its
 codec (JSON, below).

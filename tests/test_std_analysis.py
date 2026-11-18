@@ -1244,6 +1244,8 @@ PURE_SYSTEM_ROWS = {
     **{f"Time.{name}": "a conversion of its arguments; no clock" for name in (
         "at", "at_us", "DateTime.getlocal", "DateTime.getutc", "DateTime.naive_of", "DateTime.to_date",
         "DateTime.to_i", "DateTime.to_us", "NaiveDateTime.assume_offset", "NaiveDateTime.to_date")},
+    **{f"Time.{kind}.{name}": "the text of a value, or the value of a text; no clock" for kind in (
+        "Date", "TimeOfDay", "NaiveDateTime", "DateTime") for name in ("format_iso8601", "iso8601")},
     **{f"__lazy_{step}": "a step of a Lazy (a terminal is function-value)" for step in (
         "chunk_while", "count", "each", "find", "flat_map", "group", "list", "map", "produce", "range", "reduce",
         "test", "to_a", "with_index", "zlib")},

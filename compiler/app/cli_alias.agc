@@ -64,14 +64,16 @@ def ending_with(hints: Map[String, String], name: String, found: Map[String, Str
   found
 end
 
-# The method aliases of the checker: `List.select` is `List.filter`. `self` (`String.to_s`) is no builtin.
+# The method aliases of the checker: `List.select` is `List.filter`, and the kind of a record has dots of its own
+# (`Time.Date.iso8601`). `self` (`String.to_s`) is no builtin.
 def from_aliases(method: String, kind: String) -> List[String]
   aliases = Tables.method_aliases()
   found: List[String] = []
   for key in aliases.keys.sort
     pieces = key.split(".")
+    owner = pieces.take(pieces.size - 1).join(".")
     target = aliases[key]
-    if pieces[1] == method and (kind == "" or pieces[0] == kind) and target != "self"
+    if pieces[pieces.size - 1] == method and (kind == "" or owner == kind) and target != "self"
       found = found.push(target)
     end
   end
