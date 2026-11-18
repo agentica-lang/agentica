@@ -448,7 +448,8 @@ import Sqlite from "pkg/sqlite/db"
   `[workspace]` table (the rules above), and every member a manifest of its
   own; `add` and `update` read the table from the commit with the fetch that
   gets the files, and a repository that has no table, a table that breaks its
-  rules or a member without a manifest is `PKG-FETCH` at
+  rules, a member without a manifest or a member inside
+  another member (`deps/` keeps each one in its own folder) is `PKG-FETCH` at
   `dependencies.<name>.workspace`. Every member is locked and installed, whether
   or not an import reaches it. A dependency of a member (or of a package that a
   member needs, through the usual rules) on the repository of the workspace with
