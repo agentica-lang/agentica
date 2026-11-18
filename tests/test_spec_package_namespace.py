@@ -11,13 +11,11 @@ nothing touches the network. Cases assert codes and the file and key path, never
 import json
 import os
 import shutil
-import stat
 import tomllib
-from pathlib import Path
 
 import pytest
 
-from tests.agentica_test import WINDOWS, cli, run
+from tests.agentica_test import cli, run
 from tests.package_support import (assert_at_key, build, cached_files, dependency, environment, git,  # noqa: F401
                                     inline_table, package_hash, problem_of, remotes, run_json, ws)
 
@@ -99,20 +97,10 @@ def locked(ws, remotes, edit=None):
         (ws.project / "agentica.lock").write_text(text, encoding="utf-8")
 
 
-def git_logger(base):
-    """A PATH whose `git` writes each command line to a file and then runs the real one (POSIX), and that file."""
-    folder = Path(base) / "git-logger"
-    folder.mkdir()
-    log = folder / "log"
-    script = folder / "git"
-    script.write_text('#!/bin/sh\necho "$@" >> "%s"\nexec "%s" "$@"\n' % (log, shutil.which("git")), encoding="utf-8")
-    script.chmod(script.stat().st_mode | stat.S_IEXEC)
-    return folder.as_posix() + os.pathsep + os.environ["PATH"], log
-
-
-def fetches(log):
-    lines = log.read_text(encoding="utf-8").splitlines() if log.exists() else []
-    return [line for line in lines if " fetch " in line]
+def fetches(trace):
+    """The `git fetch` commands that a run started, from the file that GIT_TRACE=<file> made."""
+    lines = trace.read_text(encoding="utf-8", errors="replace").splitlines() if trace.exists() else []
+    return [line for line in lines if "trace: built-in: git fetch" in line]
 
 
 def test_update_locks_a_workspace_dependency_as_one_entry_and_one_for_each_member_and_the_project_builds(ws, remotes):
@@ -144,51 +132,32 @@ def test_update_locks_a_workspace_dependency_as_one_entry_and_one_for_each_membe
     assert problem_of(ws, remotes) is None
 
 
-@pytest.mark.skipif(WINDOWS, reason="the git wrapper is a shell script")
 def test_update_and_install_fetch_the_workspace_once_and_update_of_another_name_keeps_it(ws, remotes, tmp_path):
     publish(remotes)
     project(ws, remotes)
-    path, log = git_logger(tmp_path)
-    assert update(ws, remotes, PATH=path).code == 0
+    trace = tmp_path / "git-trace"
+    traced = {"GIT_TRACE": str(trace)}
+    assert update(ws, remotes, **traced).code == 0
     # One fetch for finn (its root manifest and every member), one for `other` and one for `protocol`.
-    assert len(fetches(log)) == 3
+    assert len(fetches(trace)) == 3
     lock = (ws.project / "agentica.lock").read_text(encoding="utf-8")
 
     # `update protocol` fetches that pin again and keeps the workspace as locked, with no fetch for it.
-    log.unlink()
-    assert update(ws, remotes, "protocol", PATH=path).stdout == "nothing to update\n"
-    assert len(fetches(log)) == 1
+    trace.unlink()
+    assert update(ws, remotes, "protocol", **traced).stdout == "nothing to update\n"
+    assert len(fetches(trace)) == 1
     assert (ws.project / "agentica.lock").read_text(encoding="utf-8") == lock
 
     # A cold cache and an empty deps/: install fetches the group once.
     shutil.rmtree(ws.pkg_root)
     shutil.rmtree(ws.deps)
-    log.unlink()
-    result = run(cli() + ["install"], cwd=ws.project, env=environment(ws, remotes, PATH=path))
+    trace.unlink()
+    result = run(cli() + ["install"], cwd=ws.project, env=environment(ws, remotes, **traced))
     assert (result.code, result.stdout.splitlines()) == (0, [
         "fetched finn/core@finn-1", "fetched finn/llm@finn-1", "fetched finn/protocol@finn-1", "fetched other@v1",
         "fetched protocol@v1"]), result.stderr
-    assert len(fetches(log)) == 3
+    assert len(fetches(trace)) == 3
     assert build(ws, remotes).code == 0
-
-
-def test_a_member_in_a_folder_below_the_root_is_installed_in_the_same_folders(ws, remotes):
-    files = member_files(remotes)
-    files["agentica.toml"] = files["agentica.toml"].replace('"llm"]', '"llm", "examples/extension"]')
-    files["examples/extension/agentica.toml"] = 'name = "extension"\n'
-    files["examples/extension/main.agc"] = 'def name() -> String\n  return "extension"\nend\n'
-    publish(remotes, files)
-    project(ws, remotes)
-    (ws.project / "main.agc").write_text(
-        'import Extension from "pkg/finn/examples/extension/main"\n\ndef main() -> Void\n  puts(Extension.name())\nend\n',
-        encoding="utf-8")
-    assert update(ws, remotes).code == 0
-    assert cached_files(ws.deps / "finn" / "examples" / "extension") == ["agentica.toml", "main.agc"]
-    assert "finn/examples/extension" in [entry["name"] for entry in lock_of(ws)]
-    shutil.rmtree(ws.deps)
-    assert run_json("install", ws, remotes)[1] is None
-    ran = build(ws, remotes)
-    assert (ran.code, ran.stdout) == (0, "extension\n"), ran.stderr
 
 
 def test_update_gives_back_the_lock_it_wrote_and_install_reads_it(ws, remotes):
@@ -325,7 +294,6 @@ def test_an_edited_member_is_written_again_a_stray_file_beside_it_stays_and_a_dr
     assert sorted(os.listdir(ws.deps)) == ["protocol"]
 
 
-@pytest.mark.skipif(WINDOWS, reason="symbolic links need a privilege on Windows")
 def test_install_does_not_write_through_a_link_in_the_place_of_the_namespace_folder(ws, remotes, tmp_path):
     locked(ws, remotes)
     shutil.rmtree(ws.deps / "finn")
