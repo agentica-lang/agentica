@@ -534,13 +534,14 @@ import Sqlite from "pkg/sqlite/db"
   of the workspace of the project, or `path` in place of the git source for a
   `path` dependency, then `override = true` for an overridden name. A bad lock
   is `PKG-LOCK-INVALID`, a bad `subdir` too, at `package[n].subdir`. A fetched
-  entry with a `subdir` may have a namespaced name, `namespace/subdir` (`finn/core`
-  for the folder `core`): the namespace follows the rule of a name, and the
-  rest is the `subdir` of the entry. Its files are in `deps/namespace/subdir/`.
-  Any other `/` in a name, a namespaced name on a `path` or workspace entry,
-  and a namespace that is also the `name` of an entry are `PKG-LOCK-INVALID` at
-  `package[n].name`; the `package` of a `[[native-artifact]]` follows the same
-  rule as a name. Every
+  entry with a `subdir` may have a namespaced name, `namespace/subdir`
+  (`finn/core` for the folder `core`): the namespace follows the rule of a
+  name, and the rest is the `subdir` of the entry. Its files are in
+  `deps/namespace/subdir/`. Any other `/` in a name, a namespaced name on a
+  `path` or workspace entry, a namespace that is also the `name` of an entry
+  and a namespaced entry inside the folder of another (`finn/a`, `finn/a/b`)
+  are `PKG-LOCK-INVALID` at `package[n].name`; the `package` of a
+  `[[native-artifact]]` follows the same rule as a name. Every
   dependency of the manifest must be
   in the lock with the same `git` (with or without a `.git` at the end), the
   same `subdir` (or none) and the same `tag` or `ref`, or the same `path`, and

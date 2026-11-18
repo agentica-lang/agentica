@@ -8,7 +8,7 @@ import os
 
 import pytest
 
-from tests.agentica_test import cli, run
+from tests.agentica_test import FIXTURES, compile_agc, cli, run, run_vm, vm_environment
 from tests.package_support import (assert_at_key, build, cached_files, dependency, environment,  # noqa: F401
                                     git, lock_entry, package_hash, problem_of, remotes, run_json, ws)
 
@@ -112,6 +112,26 @@ def test_install_does_not_write_through_a_link_in_the_place_of_the_namespace_fol
     assert os.listdir(outside) == []
 
 
+def test_a_link_in_the_place_of_the_namespace_folder_is_refused_by_install_and_by_a_removal(ws, remotes, tmp_path):
+    project(ws, remotes)
+    assert run_json("install", ws, remotes)[1] is None
+    outside = tmp_path / "outside"
+    os.rename(ws.deps / "finn", outside)
+    os.symlink(outside, ws.deps / "finn")
+    _, problem = run_json("install", ws, remotes)
+    assert_at_key(problem, "PKG-SYMLINK", ws.deps / "finn", "")
+    _, problem = run_json("update", ws, remotes)
+    assert_at_key(problem, "PKG-SYMLINK", ws.deps / "finn", "")
+    assert cached_files(outside / "core") == ["core.agc"]
+    assert cached_files(outside / "llm") == ["llm.agc", "util/text.agc"]
+
+
+def test_a_namespaced_package_inside_the_folder_of_another_is_refused(ws, remotes):
+    project(ws, remotes)
+    ws.write_lock(lambda entries: entries.append(dict(entries[0], name="finn/core/inner", subdir="core/inner")))
+    assert_at_key(problem_of(ws, remotes), "PKG-LOCK-INVALID", ws.project / "agentica.lock", "package[3].name")
+
+
 @pytest.mark.parametrize("edit, key", [
     (lambda entry: entry.update(name="finn/llm"), "name"),
     (lambda entry: entry.update(name="Finn/core"), "name"),
@@ -132,6 +152,17 @@ def test_a_namespace_is_not_the_name_of_a_package(ws, remotes):
     ws.write_lock(lambda entries: entries.append(dict(entries[2], name="finn")))
     problem = problem_of(ws, remotes)
     assert_at_key(problem, "PKG-LOCK-INVALID", ws.project / "agentica.lock", "package[3].name")
+
+
+def test_a_lock_with_namespaced_entries_is_read_and_encoded_to_the_same_bytes(ws, remotes, tmp_path):
+    project(ws, remotes)
+    text = ws.lock_text() + (
+        '\n[[native-artifact]]\npackage = "finn/core"\nlibrary = "bash"\nsystem = "linux"\n'
+        'url = "https://example.test/bash.so"\nsha256 = "%s"\nmember = "bash.so"\n' % ("a" * 64))
+    (ws.project / "agentica.lock").write_text(text, encoding="utf-8")
+    bytecode = compile_agc(str(FIXTURES / "lock" / "roundtrip.agc"), str(tmp_path / "roundtrip.agcb"))
+    result = run_vm(bytecode, args=[str(ws.project / "agentica.lock")], env=vm_environment({}))
+    assert (result.code, result.stdout) == (0, text), result.stderr
 
 
 def test_a_native_artifact_may_belong_to_a_namespaced_package(ws, remotes):

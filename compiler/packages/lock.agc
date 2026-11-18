@@ -225,17 +225,34 @@ def key_problem(name: String) -> String
 end
 
 # A namespace is the name of no package: deps/<namespace>/ holds only the folders of the namespaced packages, so a
-# package of that name would hash them as its own files.
+# package of that name would hash them as its own files. The same holds for a namespaced package inside the folder of
+# another (`finn/a` and `finn/a/b`).
 def namespaces_free(reading: Reader.Reading, packages: List[Locked]) -> Result[Void]
+  names = Set.new(packages.map do |locked| locked.name end)
   spaces = Set.new(packages.map do |locked| namespace(locked.name) end)
   for index in 0...packages.size
-    if spaces.include?(packages[index].name)
+    name = packages[index].name
+    message = ""
+    if spaces.include?(name)
       message = "the name is the namespace of another package"
-      return error(Reader.fail(reading, Reader.child(Reader.item("package", index), "name"), message))
+    elsif inside_another?(names, name)
+      message = "the folder is inside the folder of another package"
     end
+
+    return error(Reader.fail(reading, Reader.child(Reader.item("package", index), "name"), message)) if message != ""
   end
 
   ok()
+end
+
+# Whether a folder above the folder of the namespaced `name` is the folder of a package in `names`.
+def inside_another?(names: Set[String], name: String) -> Bool
+  parts = name.split("/")
+  for count in 2...parts.size
+    return true if names.include?(parts.take(count).join("/"))
+  end
+
+  false
 end
 
 # The sort key of a native artifact row: one alias on one system of one package.
