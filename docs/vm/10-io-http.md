@@ -208,12 +208,14 @@ libuv sockets (`vm/tcp.c`, `vm/net.h`) and has no platform code of its own.
   on the channel left without a value (a cancel or a recv timeout; a caller
   that has not parked yet has not given up): the job is not sent, and the
   connection stays. While it is true, the worker is bound to the channel until
-  a value is sent to it: a cancel of the caller parked on it cancels the worker
-  (`agc_channel_leave`), whose end closes the connection at once, and the
-  supervisor tells the owner the worker is gone. The owner never asks
-  `awaited?`, which would bind the owner. A caller that gave up while the
-  answer was on its way (`awaited?` is false after the job) makes the worker
-  close the connection instead of keeping it.
+  the first value is sent to it: a cancel of the caller parked on it cancels
+  the worker (`agc_channel_leave`), whose end closes the connection at once,
+  and the supervisor tells the owner the worker is gone (a second notice of
+  the same worker is dropped). A recv timeout cancels nothing. The owner never
+  asks `awaited?`, which would bind the owner. After it answers, the worker
+  asks again, which then binds nothing: a caller that gave up before or as the
+  answer came (also a cancel that reached the worker while it ran on another
+  scheduler) makes it close the connection instead of keeping it.
 - `get_response` and `post_response` queue their one job on a new `jobs`
   channel before `HttpWire.service` starts the client, whose owner (`once`)
   closes `jobs` once no job is in flight: the client ends with its call, also

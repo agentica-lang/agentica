@@ -41,8 +41,8 @@ struct agc_channel {
   /* A receiver that had parked left without a value: its recv timed out or its task was cancelled. std/http reads
      it (HttpWire.awaited?) to tell a caller that gave up from one that has not parked yet. */
   bool closed, abandoned, read_only;
-  /* The task that HttpWire.awaited? bound to the channel (agc_channel_watch): a cancel of a parked receiver cancels it,
-     and the next value sent clears it. */
+  /* The task that HttpWire.awaited? bound to the channel before its first value (agc_channel_watch): a cancel of a
+     parked receiver cancels it, and the first value sent clears it. */
   agc_task *watcher;
   agc_resource *state;
   agc_task *receivers, *receivers_tail, *senders, *senders_tail;
@@ -469,11 +469,11 @@ bool agc_channel_abandoned(agc_vm *vm, const agc_channel *c) {
   return abandoned;
 }
 
-/* Makes t the watcher of c, or false when a receiver gave up already. */
+/* Makes t the watcher of c while no value has been sent to it, or false when a receiver gave up already. */
 bool agc_channel_watch(agc_vm *vm, agc_channel *c, agc_task *t) {
   lock(vm, c);
   bool open = !c->abandoned;
-  if (open) c->watcher = t;
+  if (open && c->sent == 0) c->watcher = t;
   unlock(vm, c);
   return open;
 }

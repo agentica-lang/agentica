@@ -54,10 +54,10 @@ static agc_value builtin_options(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_as_http_client(vm, args[0])->options;
 }
 
-/* HttpWire.awaited?(reply): false once the caller gave up on its reply. While it is true, the calling task (a worker
-   before it runs the job, and before it pools the connection) is bound to reply: a cancel of the caller while it waits
-   on reply cancels the worker, so the connection closes now and does not go back to the pool. The answer sent on reply
-   ends the bond (agc_channel_watch). */
+/* HttpWire.awaited?(reply): false once the caller gave up on its reply. Asked before the answer is sent (a worker
+   before it runs the job), it binds the calling task to reply: a cancel of the caller while it waits on reply cancels
+   the worker, so the connection closes now and does not go back to the pool. The answer sent on reply ends the bond,
+   and a later ask, before the worker pools the connection, binds nothing (agc_channel_watch). */
 static agc_value builtin_awaited(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   return agc_bool(agc_channel_watch(vm, agc_as_channel(vm, args[0]), vm->task));
