@@ -326,7 +326,7 @@ import Sqlite from "pkg/sqlite/db"
 A manifest that declares dependencies needs an `agentica.lock` beside it, with the exact commit and a hash of every package. A build never downloads anything: it reads each package from `deps/<name>/` and checks its hash. Three commands keep `deps/` and the lock, through the system `git`:
 
 - `agentica install` fetches what the lock names into `deps/`; it never changes the lock.
-- `agentica add NAME URL --tag TAG` (or `--ref COMMIT`, `--subdir DIR`) adds a dependency to `agentica.toml`, the lock and `deps/`. `OWNER/REPO` in place of the URL is `https://github.com/OWNER/REPO`, and the files store the full URL; another source is `PKG-SOURCE-INVALID`. A tag `NAME-X.Y.Z` with no `--subdir` takes the folder `NAME` of the repository when the package is there and not at its root.
+- `agentica add NAME URL --tag TAG` (or `--ref COMMIT`, `--subdir DIR`, `--workspace`) adds a dependency to `agentica.toml`, the lock and `deps/`. `OWNER/REPO` in place of the URL is `https://github.com/OWNER/REPO`, and the files store the full URL; another source is `PKG-SOURCE-INVALID`. A tag `NAME-X.Y.Z` with no `--subdir` takes the folder `NAME` of the repository when the package is there and not at its root.
 - `agentica update [NAME]` fetches the tag pins again and repairs a lock that is out of date.
 
 ```sh
@@ -336,7 +336,7 @@ agentica add jobs agentica-lang/packages --tag jobs-0.1.0
 agentica update sqlite
 ```
 
-A repository of packages that has a `[workspace]` table in its root `agentica.toml` can be one dependency, with `workspace = true`. The project locks and installs every member, and imports one as `pkg/NAME/MEMBER/MODULE`, so the names of the members never clash with the names the project uses (`agentica add` does not write this key yet):
+A repository of packages that has a `[workspace]` table in its root `agentica.toml` can be one dependency, with `workspace = true`. The project locks and installs every member, and imports one as `pkg/NAME/MEMBER/MODULE`, so the names of the members never clash with the names the project uses:
 
 ```toml
 [dependencies]

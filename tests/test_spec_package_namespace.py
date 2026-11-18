@@ -452,3 +452,64 @@ def test_a_native_artifact_may_belong_to_a_namespaced_package(ws, remotes):
     assert problem_of(ws, remotes) is None
     lock.write_text(text.replace('package = "finn/core"', 'package = "Finn/core"'), encoding="utf-8")
     assert_at_key(problem_of(ws, remotes), "PKG-LOCK-INVALID", lock, "native-artifact[0].package")
+
+
+def add(ws, remotes, *words):
+    return run(cli() + ["--json", "add", *words], cwd=ws.project, env=environment(ws, remotes))
+
+
+def test_add_with_workspace_writes_the_key_the_lock_and_the_members_and_changes_no_other_byte(ws, remotes):
+    commit = publish(remotes)
+    manifest = ws.project / "agentica.toml"
+    before = '# the app\nname = "app"\n\n[dependencies]\n# first\nother = %s\n\n[style]\nmax_line_width = 119\n' % (
+        inline_table(dependency(remotes.url(OTHER), tag="v1")))
+    manifest.write_text(before, encoding="utf-8")
+    result = add(ws, remotes, "finn", url(remotes), "--tag", TAG, "--workspace")
+    assert (result.code, result.stdout) == (0, '{"ok":true}\n'), result.stderr
+    line = 'finn = { git = "%s", tag = "%s", workspace = true }\n' % (url(remotes), TAG)
+    assert manifest.read_text(encoding="utf-8") == before.replace("\n\n[style]", "\n" + line + "\n[style]")
+    packages = {entry["name"]: entry for entry in lock_of(ws)}
+    assert sorted(packages) == ["finn", "finn/core", "finn/llm", "finn/protocol", "other"]
+    assert packages["finn"]["commit"] == commit and packages["finn"]["repository"] == url(remotes)
+    assert sorted(os.listdir(ws.deps / "finn")) == ["core", "llm", "protocol"]
+    (ws.project / "main.agc").write_text(
+        'import Core from "pkg/finn/core/core"\n\ndef main() -> Void\n  puts(Core.describe())\nend\n', encoding="utf-8")
+    ran = build(ws, remotes)
+    assert (ran.code, ran.stdout) == (0, "core finn-protocol llm+finn-protocol other\n"), ran.stderr
+
+
+def test_add_with_workspace_does_not_take_the_folder_of_a_name_x_y_z_tag_and_keeps_the_group_last(ws, remotes):
+    files = {"agentica.toml": 'name = "suite"\n\n[workspace]\nrepository = "%s"\nmembers = ["finn"]\n' % url(remotes),
+             "finn/agentica.toml": 'name = "finn"\n', "finn/finn.agc": "# finn\n"}
+    remotes.publish(REPOSITORY, files, tag="finn-1.0.0")
+    (ws.project / "agentica.toml").write_text('name = "app"\n', encoding="utf-8")
+    result = add(ws, remotes, "finn", url(remotes), "--group", "test", "--workspace", "--tag", "finn-1.0.0")
+    assert result.code == 0, result.stderr
+    text = (ws.project / "agentica.toml").read_text(encoding="utf-8")
+    assert 'finn = { git = "%s", tag = "finn-1.0.0", workspace = true, group = "test" }' % url(remotes) in text
+    assert [entry["name"] for entry in lock_of(ws)] == ["finn", "finn/finn"]
+
+
+@pytest.mark.parametrize("words", [
+    ["finn", "URL", "--tag", TAG, "--workspace", "--subdir", "core"],
+    ["finn", "URL", "--workspace", "--tag", TAG, "--workspace"],
+    ["finn", "URL", "--tag", TAG, "--workspace=true"],
+    ["finn", "URL", "--workspace", "--tag"],
+    ["finn", "URL", "--workspace"],
+], ids=["subdir", "twice", "with-a-value", "tag-without-a-value", "no-pin"])
+def test_add_with_workspace_refuses_what_it_cannot_write_before_it_reads_the_project(ws, remotes, words):
+    (ws.project / "agentica.toml").write_text('name = "app"\n', encoding="utf-8")
+    result = add(ws, remotes, *[word.replace("URL", url(remotes)) for word in words])
+    assert result.code == 2, result.stderr
+    assert (ws.project / "agentica.toml").read_text(encoding="utf-8") == 'name = "app"\n'
+    assert not (ws.project / "agentica.lock").exists()
+
+
+def test_add_with_workspace_of_a_repository_that_is_no_workspace_writes_nothing(ws, remotes):
+    remotes.publish(REPOSITORY, {"a.agc": "# a\n"}, tag=TAG)
+    (ws.project / "agentica.toml").write_text('name = "app"\n', encoding="utf-8")
+    result = add(ws, remotes, "finn", url(remotes), "--tag", TAG, "--workspace")
+    assert result.code == 1, result.stdout
+    assert_at_key(json.loads(result.stderr), "PKG-FETCH", ws.project / "agentica.toml", "dependencies.finn.workspace")
+    assert (ws.project / "agentica.toml").read_text(encoding="utf-8") == 'name = "app"\n'
+    assert not (ws.project / "agentica.lock").exists()
