@@ -267,17 +267,21 @@ def member_use(cx: State.Cx, structs: List[String], name: String) -> Allows
     end
   end
 
-  for kind in METHOD_RECORDS.to_a
-    if Names.resolve_method(cx, kind, name) != ""
-      out = out.push(T.Type.Struct(kind, []))
-    end
-  end
-
   for key in structs
     if cx.structs[key].any? do |field: Model.Named| field.name == name end
       return Allows.Any if generic_struct?(cx, key)
 
       out = out.push(T.Type.Struct(key, []))
+    end
+  end
+
+  # A method of a builtin record (`t.to_us`) counts only when nothing else has the name, so a struct of the program
+  # with a field of that name keeps it.
+  if out.size == 0
+    for kind in METHOD_RECORDS.to_a
+      if Names.resolve_method(cx, kind, name) != ""
+        out = out.push(T.Type.Struct(kind, []))
+      end
     end
   end
 

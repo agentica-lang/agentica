@@ -60,6 +60,14 @@ CLEAN = [
         None,
         None,
     ),
+    # A field of a program's struct keeps a lambda parameter that reads it, though a record has a method of the name.
+    (
+        "struct Job\n  to_date: Int\n  getutc: Int\nend\n\n"
+        + MAIN
+        + "  f = ->(j) { j.to_date + j.getutc }\n  puts(f.call(Job(to_date: 1, getutc: 2)))\nend\n",
+        None,
+        None,
+    ),
     # A user type of the same name is not the builtin one, and a variant may be named Date or DateTime.
     (
         "struct Date\n  day: Int\nend\n\nenum Value\n  Date(Int)\n  DateTime(String)\nend\n\n"
@@ -131,3 +139,11 @@ def test_a_misplaced_conversion_names_its_method_form(agentica_check):
     assert "a.to_i" not in found["help"] and "value.to_i" in found["help"], found["help"]
     unknown = agentica_check(MAIN + f"  a = {AWARE}\n  puts(a.foo())\nend\n")
     assert "to_i" in unknown["help"] and "getlocal" in unknown["help"], unknown["help"]
+
+
+def test_an_unknown_field_of_a_record_with_methods_lists_its_methods(agentica_check):
+    naive = agentica_check(MAIN + "  n = Time.NaiveDateTime.new(1, 1, 1, 0, 0, 0, 0).unwrap!\n  puts(n.getutc)\nend\n")
+    assert naive["code"] == "CHECK-UNKNOWN-FIELD"
+    assert "assume_offset" in naive["help"] and "to_date" in naive["help"], naive["help"]
+    typo = agentica_check(MAIN + f"  a = {AWARE}\n  puts(a.yeer)\nend\n")
+    assert "\"year\"" in typo["help"] and "getlocal" in typo["help"], typo["help"]

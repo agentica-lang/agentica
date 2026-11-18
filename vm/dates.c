@@ -266,7 +266,7 @@ static agc_value builtin_now(agc_vm *vm, agc_value *args, uint32_t span) {
 }
 
 static agc_value builtin_to_i(agc_vm *vm, agc_value *args, uint32_t span) {
-  fields f;
+  fields f = {0};
   read_record(vm, args[0], AGC_TIME_DATETIME, &f, span);
   /* Floor division, as Ruby's Time#to_i: the second that holds the instant, also before 1970. */
   int64_t us = instant_us(&f), seconds = us / SECOND_US;
@@ -274,13 +274,13 @@ static agc_value builtin_to_i(agc_vm *vm, agc_value *args, uint32_t span) {
 }
 
 static agc_value builtin_to_us(agc_vm *vm, agc_value *args, uint32_t span) {
-  fields f;
+  fields f = {0};
   read_record(vm, args[0], AGC_TIME_DATETIME, &f, span);
   return agc_int(instant_us(&f));
 }
 
 static agc_value builtin_getlocal(agc_vm *vm, agc_value *args, uint32_t span) {
-  fields f;
+  fields f = {0};
   read_record(vm, args[0], AGC_TIME_DATETIME, &f, span);
   int64_t offset = agc_as_int(vm, args[1]);
   char message[MESSAGE_SIZE];
@@ -289,14 +289,14 @@ static agc_value builtin_getlocal(agc_vm *vm, agc_value *args, uint32_t span) {
 }
 
 static agc_value builtin_getutc(agc_vm *vm, agc_value *args, uint32_t span) {
-  fields f;
+  fields f = {0};
   read_record(vm, args[0], AGC_TIME_DATETIME, &f, span);
   return at_offset(vm, instant_us(&f), 0, span);
 }
 
 /* The reading of a naive value at an offset: the fields stay, so only the offset is checked. */
 static agc_value builtin_assume_offset(agc_vm *vm, agc_value *args, uint32_t span) {
-  fields f;
+  fields f = {0};
   read_record(vm, args[0], AGC_TIME_NAIVE, &f, span);
   f.utc_offset = agc_as_int(vm, args[1]);
   char message[MESSAGE_SIZE];
@@ -305,19 +305,19 @@ static agc_value builtin_assume_offset(agc_vm *vm, agc_value *args, uint32_t spa
 }
 
 static agc_value builtin_naive_of(agc_vm *vm, agc_value *args, uint32_t span) {
-  fields f;
+  fields f = {0};
   read_record(vm, args[0], AGC_TIME_DATETIME, &f, span);
   return record(vm, AGC_TIME_NAIVE, &f, span);
 }
 
 static agc_value builtin_to_date(agc_vm *vm, agc_value *args, uint32_t span) {
-  fields f;
+  fields f = {0};
   read_record(vm, args[0], AGC_TIME_DATETIME, &f, span);
   return record(vm, AGC_TIME_DATE, &f, span);
 }
 
 static agc_value builtin_naive_to_date(agc_vm *vm, agc_value *args, uint32_t span) {
-  fields f;
+  fields f = {0};
   read_record(vm, args[0], AGC_TIME_NAIVE, &f, span);
   return record(vm, AGC_TIME_DATE, &f, span);
 }

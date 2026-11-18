@@ -204,6 +204,8 @@ def check_struct_field(cx: State.Cx, st: State.St, node: Ast.FieldAccess, target
     if T.error?(target) and Names.resolve_method(cx, "String", node.name) != ""
       # e.size or e.strip on the payload of error(e), which was a String before it was an Error.
       help = "an Error is not a String: call #{node.name} on its text, e.message.#{node.name}"
+    elsif RubyForm.method_record?(target)
+      help = "#{help}; methods: #{method_names(cx, target, T.name(target)).sort.join(", ")}"
     end
 
     return error(

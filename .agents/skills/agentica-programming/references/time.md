@@ -30,8 +30,8 @@ n.assume_offset(utc_offset: Int) -> Result[Time.DateTime]   # same reading
 t.to_date -> Time.Date       # also on a Time.NaiveDateTime
 ```
 
-- A builtin that takes the record first is its method (`t.to_i`, not
-  `Time.DateTime.to_i(t)`); a field name stays a field.
+- A builtin that takes the record first is its method: write `t.to_i` (the
+  method form). A field name stays a field.
 - `getutc`/`getlocal` keep the instant and fail when the new reading leaves the
   years 1 to 9999. Durations: `Time.monotonic_ms`, not `Time.now`.
 
