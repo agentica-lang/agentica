@@ -8,6 +8,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- A task cancelled while `HTTP.get_response`, `HTTP.post_response` or a call on an `HTTP.client` waits for the answer closes the connection at once, instead of when the server answers; a pooled connection does not go back to the pool (#1860).
+
 ## [0.34.1] - 2026-11-17
 
 ### Changed
