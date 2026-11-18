@@ -42,7 +42,6 @@ tests/            # pytest modules test_<area>.py
   test_frontend_<stage>.py  # Agentica stages against frozen outputs (references/frontend.md); frontend_support.py, frontend_cases.py
   test_vm_diff_{1..8}.py  # golden shards; 8 is the command line, process, signal and path cases; vm_diff_support.py (references/vm-build.md)
   test_conformance.py   # every module is in an area of tools/conformance.py (references/ci.md)
-  eval/           # agent evaluation, not part of make test (references/bench-eval.md)
 stdlib/           # std/ modules, embedded in the binary; MODULES is the registry; CORE lists the compiler/ files std/analysis embeds as std/internal/compiler/<path>
   prelude/        # bodies of List, Map, Lazy, String and Bytes methods; not importable (references/stages.md)
   bdd/ test/      # internal to agentica test (references/bdd.md)

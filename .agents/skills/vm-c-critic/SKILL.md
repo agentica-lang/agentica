@@ -45,7 +45,7 @@ casts: `ast-grep run --lang c -p 'memcpy($D, $S, $N)' vm/`.
    nothing known.
 2. **Load the rules.** Read `AGENTS.md`. In
    `.agents/skills/agentica-development/references/` (later `vm.md`, `vm-c.md`
-   and `bench-eval.md` mean files there), read `vm.md` ("Trust model") and all
+   and `bench.md` mean files there), read `vm.md` ("Trust model") and all
    of `vm-c.md`, plus the `vm-*.md` file the "Read next" table of `vm.md` names
    for the touched area. The rules live there only; this skill says where to
    look and how to prove a breach. Read the touched
@@ -103,7 +103,7 @@ A change that breaks a rule is a finding; older code is not.
   frame growth or allocation. Elsewhere: allocation per item where a bulk path
   exists, O(n) work where the design promises O(1) or O(log n). A speed claim
   is compared with `origin/<base>` built in a scratch worktree, interleaved,
-  medians (`bench-eval.md`); code layout alone moves a binary by 20–35 %. Peak
+  medians (`bench.md`); code layout alone moves a binary by 20–35 %. Peak
   RSS (`/usr/bin/time -v`) when memory is the claim.
 - **Size and layers** (`docs/vm/14-core-invariants.md` §14.6, `vm.md`, "Which
   layer"): a new subsystem without a program that needs it; `make vm-layers`;

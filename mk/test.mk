@@ -2,7 +2,7 @@
 # conformance, goldens, fmt-check, check-compiler, benchmarks, jscpd (dup-check) and the Ubuntu test container. The C tests are in mk/vm-test.mk.
 
 .PHONY: test test-slow test-py tests tests-host tests-files tests-docker tests-wine test-cli conformance conformance-report \
-  fmt-check check-compiler goldens bench bench-native eval-references vm-latency vm-task-map test-distribution vm-golden-check dup-check dup-baseline \
+  fmt-check check-compiler goldens bench bench-native vm-latency vm-task-map test-distribution vm-golden-check dup-check dup-baseline \
   docker-test-image windows-docker-remove-check windows-docker-remove-wine-check test-remove-actions test-jit-off probe
 
 # Tests live in tests/test_<area>.py and run through pytest; unittest.TestCase modules remain supported.
@@ -13,8 +13,8 @@
 # One shard of the modules:    make test SHARD=2/3   (also make test-slow; CI runs the shards on separate runners)
 TESTS ?= tests/
 TESTS_EXPLICIT = $(if $(filter file,$(origin TESTS)),,1)
-# TESTS without a leading ./ or a trailing /. A directory contributes its own test_*.py files, not those of subdirectories
-# (tests/eval/test_*.py are not part of this runner).
+# TESTS without a leading ./ or a trailing /. A directory contributes its own test_*.py files, not those of
+# subdirectories.
 TESTS_NORM = $(patsubst %/,%,$(patsubst ./%,%,$(TESTS)))
 PY_FILES = $(filter %.py,$(TESTS_NORM))
 # Modules that only run when named (make vm-latency, make vm-task-map): a directory in TESTS does not pick them up
@@ -178,9 +178,6 @@ bench: $(PRODUCT)
 # The cost of one native call, module, extern def and compute def (benchmarks/native/run.py): BENCH_ARGS="--runs 9"
 bench-native: $(PRODUCT)
 	python3 benchmarks/native/run.py $(BENCH_ARGS)
-
-eval-references:
-	python3 tests/eval/run.py --check-references --jobs 8
 
 # Task wake latency next to busy tasks (docs/vm/10-io-scheduler.md 10.2.1), alone so it has the CPU to itself
 vm-latency: $(PRODUCT)

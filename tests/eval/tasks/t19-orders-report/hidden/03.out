@@ -1,9 +1,0 @@
-rows: 0
-skipped: 0
---- files
-orders.csv
-report.json
---- report.json
-'{"customers":[],"skipped":0}\n'
-input unchanged: yes
---- exit 0

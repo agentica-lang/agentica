@@ -26,7 +26,8 @@ examples/           small programs per feature (README.md lists them)
 docs/               grammar/ (the language definition, index: docs/grammar.md),
                     vm/ (VM design), future/ (the design decisions of planned
                     features and what was decided against), bdd.md (the BDD
-                    contract), eval.md (agent evaluation), vm-benchmarks.md
+                    contract), vm-benchmarks.md; the agent evaluation lives
+                    in agentica-lang/evals
 site/               Hugo documentation site: content/, versions/ and the
                     layouts/ overrides; the look and the layouts come from
                     themes/docs-theme (a submodule)
