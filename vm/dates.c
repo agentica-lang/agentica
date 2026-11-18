@@ -71,10 +71,10 @@ static void read_fields(agc_vm *vm, const agc_value *args, uint32_t first, uint3
 }
 
 /* The ok Result of the Time record KIND (AGC_TIME_*) with COUNT of the fields from FIRST, in the order of `fields` (a
-   time of day starts at hour, 3). The struct was found once for the run (agc_time_structs); a program without it is
-   forged bytecode. */
+   time of day starts at hour, 3). The loader found the struct (agc_time_structs); a program without it is forged
+   bytecode. */
 static agc_value build(agc_vm *vm, uint32_t kind, uint32_t first, uint32_t count, const fields *f, uint32_t span) {
-  uint32_t type = vm->rt->time_structs[kind];
+  uint32_t type = vm->rt->program->time_structs[kind];
   if (type == UINT32_MAX) {
     char message[MESSAGE_SIZE];
     snprintf(message, sizeof message, "invalid bytecode: the %s struct is missing", record_names[kind]);

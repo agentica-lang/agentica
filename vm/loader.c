@@ -676,6 +676,7 @@ static void load_tables(reader *r, agc_program *p) {
   find_json_field(r, p);
   find_json_node(r, p);
   find_optional(r, p);
+  agc_time_structs(p, p->time_structs);
 }
 
 /* The optional section after the entry (docs/vm/03-ir-and-bytecode.md 4.6): the enums that JSON.decode may build,

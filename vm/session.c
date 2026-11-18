@@ -309,7 +309,6 @@ static const char *take_entry(agc_vm *vm, agc_session *s, const char *at, const 
   /* One scheduler runs (run --session), so no other turn holds the old program, and this task parks below before its
      own turn reads the table again (turn_loop reads it once per turn). */
   vm->rt->program = next;
-  agc_time_structs(next, vm->rt->time_structs);
   s->loaded = next != base;
   /* agc_load_session refused new slots without a new init function to set them. */
   if (next != base && next->entry >= base->function_count) {

@@ -593,6 +593,10 @@ typedef struct {
   /* A session load (agc_load_session) may repeat a JSON name: a type declared again keeps its old entry. JSON.decode
      and JSON.schema then take their target only by its type index; a name is refused (vm/json.c). */
   bool json_names_repeat;
+  /* The struct of each Time record (AGC_TIME_*), or UINT32_MAX for one the program lacks, which the constructors of
+     vm/dates.c report: found by the loader (agc_time_structs), since a constructor is a leaf and must not scan the
+     struct table. At the end, so the fields the interpreter reads keep their offsets. */
+  uint32_t time_structs[AGC_TIME_RECORDS];
 } agc_program;
 
 typedef struct {
