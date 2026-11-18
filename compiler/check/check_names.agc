@@ -42,6 +42,7 @@ def receiver_kind(type: T.Type) -> String
   return "Mutex" if RubyForm.parameter_kind(type) == "Mutex"
   return "Builder" if RubyForm.parameter_kind(type) == "Builder"
   return "Error" if RubyForm.parameter_kind(type) == "Error"
+  return T.name(type) if RubyForm.method_record?(type)
 
   # No tag is "Mutex" or "Builder", so only the words of the tags match here.
   return word if METHOD_KINDS.include?(word)
@@ -71,7 +72,7 @@ def method_names(cx: State.Cx, kind: String) -> List[String]
     end
   end
 
-  module = cx.help.modules.get(kind)
+  module = RubyForm.module_of(kind)
   if module.some?
     names = names.concat(module_methods(cx, kind, "#{module.unwrap!}."))
   end
@@ -131,7 +132,7 @@ end
 
 # The builtin of the kind's module with that name whose first parameter has the kind, or "".
 def catalog_method(cx: State.Cx, kind: String, name: String) -> String
-  module = cx.help.modules.get(kind)
+  module = RubyForm.module_of(kind)
   return "" if module.none?
 
   entry = ENTRIES.get("#{module.unwrap!}.#{name}")

@@ -307,8 +307,8 @@ typedef struct {
 #define AGC_ERROR_CAUSE 4
 #define AGC_ERROR_LOCATION 5
 
-/* The records of the Time family (#985) that vm/dates.c builds, as indexes of agc_runtime.time_structs, in the order of
-   agc_time_structs (vm/builtins.c). */
+/* The records of the Time family (#985) that vm/dates.c builds and reads, as indexes of agc_program.time_structs, in the
+   order of agc_time_structs (vm/builtins.c). */
 #define AGC_TIME_DATE 0
 #define AGC_TIME_OF_DAY 1
 #define AGC_TIME_NAIVE 2

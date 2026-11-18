@@ -7,7 +7,7 @@
 import Types from "../syntax/types"
 import Model from "../catalog/builtin_model"
 import Builtins from "../catalog/builtins"
-import {ENTRIES} from "../catalog/builtins"
+import {ENTRIES, METHOD_RECORDS} from "../catalog/builtins"
 import Tables from "check_tables"
 
 ## `Kind.method` of the Ruby method form of the builtin `name` (`List.select` for `List.filter`), or "" when it has
@@ -20,7 +20,7 @@ def method_key(name: String) -> String
   return "" if entry.none? or entry.unwrap!.parameters.size == 0
 
   kind = parameter_kind(entry.unwrap!.parameters[0].type)
-  module = Tables.method_modules().get(kind)
+  module = module_of(kind)
   return "" if module.none? or !name.start_with?("#{module.unwrap!}.")
 
   key = "#{kind}.#{name.slice(module.unwrap!.length + 1, name.length - module.unwrap!.length - 1)}"
@@ -31,14 +31,25 @@ def method_key(name: String) -> String
 end
 
 ## The receiver kind of a builtin whose first parameter has this type: its tag (`String`, `List`, ...), but Mutex for
-## Native.Mutex and Builder for Bytes.Builder, the opaque types with methods, and Error for the builtin record Error,
-## the one struct with methods.
+## Native.Mutex and Builder for Bytes.Builder, the opaque types with methods, Error for the builtin record Error, and
+## the name of a record of a family with methods (`Time.DateTime`, METHOD_RECORDS).
 def parameter_kind(type: Types.Type) -> String
   return "Mutex" if Types.is?(type, "Opaque") and Types.name(type) == "Native.Mutex"
   return "Builder" if Types.is?(type, "Opaque") and Types.name(type) == "Bytes.Builder"
   return "Error" if Types.error?(type)
+  return Types.name(type) if method_record?(type)
 
   Types.tag(type)
+end
+
+## True when the type is a record of a family with methods: a name it has no field of is a method (`t.to_i`).
+def method_record?(type: Types.Type) -> Bool = Types.is?(type, "Struct") and METHOD_RECORDS.include?(Types.name(type))
+
+## The builtin module that holds the methods of a receiver kind: the table of the checker, or the record itself.
+def module_of(kind: String) -> Optional[String]
+  return some(kind) if METHOD_RECORDS.include?(kind)
+
+  Tables.method_modules().get(kind)
 end
 
 ## The method name of the Ruby form of the builtin `name` (`select` for `List.filter`), or "".
@@ -46,7 +57,9 @@ def method_name(name: String) -> String
   key = method_key(name)
   return "" if key == ""
 
-  key.slice(key.index_of(".").unwrap! + 1, key.length - key.index_of(".").unwrap! - 1)
+  # The kind of a record has dots of its own (Time.DateTime.to_i); a method name has none.
+  parts = key.split(".")
+  parts[parts.size - 1]
 end
 
 ## True when `method` is a Ruby name of the builtin `name` on the receiver `kind`: its Ruby form, or a synonym of it

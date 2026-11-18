@@ -1241,6 +1241,9 @@ PURE_SYSTEM_ROWS = {
     "Task.id": "a field of the task value",
     **{f"Time.{name}": "a value or a calendar fact from its Int arguments; no clock" for name in (
         "Date.days_in_month", "Date.leap?", "Date.new", "DateTime.new", "NaiveDateTime.new", "TimeOfDay.new")},
+    **{f"Time.{name}": "a conversion of its arguments; no clock" for name in (
+        "at", "at_us", "DateTime.getlocal", "DateTime.getutc", "DateTime.naive_of", "DateTime.to_date",
+        "DateTime.to_i", "DateTime.to_us", "NaiveDateTime.assume_offset", "NaiveDateTime.to_date")},
     **{f"__lazy_{step}": "a step of a Lazy (a terminal is function-value)" for step in (
         "chunk_while", "count", "each", "find", "flat_map", "group", "list", "map", "produce", "range", "reduce",
         "test", "to_a", "with_index", "zlib")},

@@ -5,7 +5,7 @@
 ## one type. The scan reads the tree only; the body is then checked with that type as if it were annotated.
 
 import Model from "../catalog/builtin_model"
-import {ENTRIES} from "../catalog/builtins"
+import {ENTRIES, METHOD_RECORDS} from "../catalog/builtins"
 import Ast from "../syntax/ast"
 import Walk from "../syntax/ast_walk"
 import T from "../syntax/types"
@@ -272,6 +272,16 @@ def member_use(cx: State.Cx, structs: List[String], name: String) -> Allows
       return Allows.Any if generic_struct?(cx, key)
 
       out = out.push(T.Type.Struct(key, []))
+    end
+  end
+
+  # A method of a builtin record (`t.to_us`) counts only when nothing else has the name, so a struct of the program
+  # with a field of that name keeps it.
+  if out.size == 0
+    for kind in METHOD_RECORDS.to_a
+      if Names.resolve_method(cx, kind, name) != ""
+        out = out.push(T.Type.Struct(kind, []))
+      end
     end
   end
 

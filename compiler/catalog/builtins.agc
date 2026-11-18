@@ -76,20 +76,32 @@ FAMILY_MEMBERS: Map[String, List[String]] = DATA_FAMILIES.reduce(EMPTY_FAMILIES)
   found.put(family, members.uniq.sort)
 end
 
+## The rows that are methods of a record of a family: Family.Record.fn whose first parameter is that record
+## (Time.DateTime.to_i). A program writes them only on a value of the record, `t.to_i`.
+RECORD_METHODS = Set.new(
+  PUBLIC_NAMES.filter do |name|
+    parts = name.split(".")
+    parameters = ENTRIES[name].parameters
+    parts.size == 3 and parameters.size > 0 and parameters[0].type == Types.Type.Struct("#{parts[0]}.#{parts[1]}", [])
+  end,
+)
+
+## The records of a family that have methods: the receiver kinds of RECORD_METHODS, whose kind is the record's name and
+## whose methods are the rows under it.
+METHOD_RECORDS = Set.new(
+  RECORD_METHODS.to_a.map do |name|
+    parts = name.split(".")
+    "#{parts[0]}.#{parts[1]}"
+  end,
+)
+
 ## The public builtins a call can name, for the did-you-mean of an unknown name. Any other name with two dots
 ## (Native.Mutex.synchronize) is a method of a builtin type, written only on a value of it, so it is left out; a
-## function of a family member (OpenSSL.Digest.sha256) stays, and so does one of a family type that takes no value of
-## it first (Time.Date.new): a method of a record takes the record first.
+## function of a family member (OpenSSL.Digest.sha256) stays, and so does one of a family record that takes no value of
+## it first (Time.Date.new).
 CALLABLE_NAMES = PUBLIC_NAMES.filter do |name|
   parts = name.split(".")
-  method = false
-  if parts.size >= 3
-    type = "#{parts[0]}.#{parts[1]}"
-    parameters = ENTRIES[name].parameters
-    method = parameters.size > 0 and parameters[0].type == Types.Type.Struct(type, [])
-  end
-
-  parts.size < 3 or (FAMILY_MEMBERS.has_key?(parts[0]) and !method)
+  parts.size < 3 or (FAMILY_MEMBERS.has_key?(parts[0]) and !RECORD_METHODS.include?(name))
 end
 
 BARE_NAMES = Set.new(ENTRIES.keys.filter do |name| !name.include?(".") end)

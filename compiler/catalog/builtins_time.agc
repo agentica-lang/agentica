@@ -59,6 +59,85 @@ ROWS: List[Model.Builtin] = [
     alternatives: [],
   ),
   Model.Builtin(
+    name: "Time.DateTime.getlocal",
+    parameters: [
+      Model.Named(name: "time", type: Types.Type.Struct("Time.DateTime", [])),
+      Model.Named(name: "utc_offset", type: Types.Type.Int),
+    ],
+    result: Types.Type.Result(Types.Type.Struct("Time.DateTime", [])),
+    rule: Model.Rule.Plain,
+    implementation: "Time.DateTime.getlocal",
+    effects: [],
+    description: (
+      "Return the same instant at utc_offset seconds east of UTC; an error when the offset is invalid or the " +
+      "reading leaves the years 1 to 9999."
+    ),
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "Time.DateTime.getutc",
+    parameters: [Model.Named(name: "time", type: Types.Type.Struct("Time.DateTime", []))],
+    result: Types.Type.Result(Types.Type.Struct("Time.DateTime", [])),
+    rule: Model.Rule.Plain,
+    implementation: "Time.DateTime.getutc",
+    effects: [],
+    description: "Return the same instant in UTC, offset 0; an error when the reading leaves the years 1 to 9999.",
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "Time.DateTime.naive_of",
+    parameters: [Model.Named(name: "time", type: Types.Type.Struct("Time.DateTime", []))],
+    result: Types.Type.Struct("Time.NaiveDateTime", []),
+    rule: Model.Rule.Plain,
+    implementation: "Time.DateTime.naive_of",
+    effects: [],
+    description: "Drop the offset of the reading: the same fields, no longer an instant.",
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "Time.DateTime.to_date",
+    parameters: [Model.Named(name: "time", type: Types.Type.Struct("Time.DateTime", []))],
+    result: Types.Type.Struct("Time.Date", []),
+    rule: Model.Rule.Plain,
+    implementation: "Time.DateTime.to_date",
+    effects: [],
+    description: "Return the date of the reading, at its own offset.",
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "Time.DateTime.to_i",
+    parameters: [Model.Named(name: "time", type: Types.Type.Struct("Time.DateTime", []))],
+    result: Types.Type.Int,
+    rule: Model.Rule.Plain,
+    implementation: "Time.DateTime.to_i",
+    effects: [],
+    description: "Return the seconds since the Unix epoch, rounded toward minus infinity, as Ruby's Time#to_i.",
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "Time.DateTime.to_us",
+    parameters: [Model.Named(name: "time", type: Types.Type.Struct("Time.DateTime", []))],
+    result: Types.Type.Int,
+    rule: Model.Rule.Plain,
+    implementation: "Time.DateTime.to_us",
+    effects: [],
+    description: "Return the microseconds since the Unix epoch; never fails.",
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "Time.NaiveDateTime.assume_offset",
+    parameters: [
+      Model.Named(name: "naive", type: Types.Type.Struct("Time.NaiveDateTime", [])),
+      Model.Named(name: "utc_offset", type: Types.Type.Int),
+    ],
+    result: Types.Type.Result(Types.Type.Struct("Time.DateTime", [])),
+    rule: Model.Rule.Plain,
+    implementation: "Time.NaiveDateTime.assume_offset",
+    effects: [],
+    description: "Give the reading an offset of utc_offset seconds east of UTC; an error when the offset is invalid.",
+    alternatives: [],
+  ),
+  Model.Builtin(
     name: "Time.NaiveDateTime.new",
     parameters: [
       Model.Named(name: "year", type: Types.Type.Int),
@@ -77,6 +156,16 @@ ROWS: List[Model.Builtin] = [
     alternatives: [],
   ),
   Model.Builtin(
+    name: "Time.NaiveDateTime.to_date",
+    parameters: [Model.Named(name: "naive", type: Types.Type.Struct("Time.NaiveDateTime", []))],
+    result: Types.Type.Struct("Time.Date", []),
+    rule: Model.Rule.Plain,
+    implementation: "Time.NaiveDateTime.to_date",
+    effects: [],
+    description: "Return the date of the reading.",
+    alternatives: [],
+  ),
+  Model.Builtin(
     name: "Time.TimeOfDay.new",
     parameters: [
       Model.Named(name: "hour", type: Types.Type.Int),
@@ -89,6 +178,29 @@ ROWS: List[Model.Builtin] = [
     implementation: "Time.TimeOfDay.new",
     effects: [],
     description: "Build a time of day from hour, min, sec and usec; an error when a field is out of range.",
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "Time.at",
+    parameters: [Model.Named(name: "seconds", type: Types.Type.Int)],
+    result: Types.Type.Result(Types.Type.Struct("Time.DateTime", [])),
+    rule: Model.Rule.Plain,
+    implementation: "Time.at",
+    effects: [],
+    description: "Return the instant seconds after the Unix epoch, in UTC; an error outside the years 1 to 9999.",
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "Time.at_us",
+    parameters: [Model.Named(name: "us", type: Types.Type.Int)],
+    result: Types.Type.Result(Types.Type.Struct("Time.DateTime", [])),
+    rule: Model.Rule.Plain,
+    implementation: "Time.at_us",
+    effects: [],
+    description: (
+      "Return the instant us microseconds after the Unix epoch, in UTC; an error outside the years 1 to " +
+      "9999."
+    ),
     alternatives: [],
   ),
   Model.Builtin(
@@ -112,6 +224,16 @@ ROWS: List[Model.Builtin] = [
       "Read nanoseconds from the clock of Time.monotonic_ms; same origin, never goes backward; use for short " +
       "durations."
     ),
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "Time.now",
+    parameters: [],
+    result: Types.Type.Struct("Time.DateTime", []),
+    rule: Model.Rule.Plain,
+    implementation: "Time.now",
+    effects: ["clock"],
+    description: "Read the wall clock as a Time.DateTime in UTC, to the microsecond; may jump.",
     alternatives: [],
   ),
   Model.Builtin(

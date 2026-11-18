@@ -17,7 +17,23 @@ Time.NaiveDateTime.new(year, month, day, hour, min, sec, usec) -> Result[Time.Na
 Time.DateTime.new(year, month, day, hour, min, sec, usec, utc_offset) -> Result[Time.DateTime]
 Time.Date.leap?(year: Int) -> Bool               # any Int
 Time.Date.days_in_month(year: Int, month: Int) -> Result[Int]
+
+Time.at(seconds: Int) -> Result[Time.DateTime]   # UTC; years 1..9999 only
+Time.at_us(us: Int) -> Result[Time.DateTime]
+Time.now() -> Time.DateTime                      # wall clock, UTC, µs
+t.to_i -> Int                # seconds since the epoch, floor (at_us(-1).to_i == -1)
+t.to_us -> Int
+t.getutc -> Result[Time.DateTime]                # same instant, offset 0
+t.getlocal(utc_offset: Int) -> Result[Time.DateTime]
+t.naive_of -> Time.NaiveDateTime                 # same reading, no offset
+n.assume_offset(utc_offset: Int) -> Result[Time.DateTime]   # same reading
+t.to_date -> Time.Date       # also on a Time.NaiveDateTime
 ```
+
+- A builtin that takes the record first is its method: write `t.to_i` (the
+  method form). A field name stays a field.
+- `getutc`/`getlocal` keep the instant and fail when the new reading leaves the
+  years 1 to 9999. Durations: `Time.monotonic_ms`, not `Time.now`.
 
 - A field out of range is an error of kind `argument` (`month 13 is not in
   1..12`); `sec` 60 is an error. `utc_offset` is whole minutes within
