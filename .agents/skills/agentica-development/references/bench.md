@@ -1,7 +1,8 @@
-# Benchmarks and agent evaluation
+# Benchmarks
 
 Read before running or changing `benchmarks/`, `make bench`, the HTTP benchmark,
-`tests/eval/`, or before measuring a speed change.
+or before measuring a speed change. The agent evaluation lives in
+[agentica-lang/evals](https://github.com/agentica-lang/evals).
 
 ## Benchmarks
 
@@ -78,11 +79,3 @@ broadcast sent as `Text` and as `HTTP.prepare`.
 - A change that must keep the output: `make fixed-point`, `make goldens` (it
   must leave `git status` clean), and for a front-end stage the differential
   run against master in `references/frontend.md`.
-
-## Agent evaluation
-
-Not part of `make test`; the arms, the task layout and the sandboxes are in
-`docs/eval.md`. After any change to a task, `tests/eval/run.py`, the Dockerfile
-or the VM, run `make eval-references` (`run.py --check-references --jobs 8`: it
-grades every `reference.*` in the Docker sandbox without a model and exits 1 on
-a failure; not in CI).

@@ -48,7 +48,7 @@ rules live in `AGENTS.md` and `agentica-development`.
   order-dependent cases fail locally.
 - **Speed:** only the author measures, and only when the PR touches the
   interpreter or scheduler hot path: an interleaved A/B against master with
-  medians (`references/bench-eval.md` of agentica-development), numbers in
+  medians (`references/bench.md` of agentica-development), numbers in
   the PR body. Critics and reviewers do not time.
 - A local pre-commit hook (untracked) may run the style tests, `make
   dup-check` and `make fmt-check` on staged files; fix what it blocks (CI fails
