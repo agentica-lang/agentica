@@ -1,4 +1,5 @@
-## `agentica add NAME SOURCE --tag TAG` (or `--ref COMMIT`, `--subdir DIR` and `--group test`) and `agentica update`
+## `agentica add NAME SOURCE --tag TAG` (or `--ref COMMIT`, `--subdir DIR`, `--workspace` and `--group test`) and
+## `agentica update`
 ## (docs/grammar/05b-modules.md). Both work on the project of the working folder, resolve its packages
 ## (io/package_resolve.agc: git runs for the pins that are new or asked to move), fill the cache (with the prebuilt
 ## native modules of the host target, io/native_prebuilt.agc), write agentica.lock and refresh deps/
@@ -29,8 +30,8 @@ import CliProject from "cli_project"
 import Reply from "cli_reply"
 import Texts from "cli_text"
 
-## Runs `add`. `words` are the ones after the command: NAME SOURCE, `--tag TAG` or `--ref COMMIT`, `--subdir DIR` and
-## `--group test`. `fetching` says how the prebuilt native modules are downloaded.
+## Runs `add`. `words` are the ones after the command: NAME SOURCE, `--tag TAG` or `--ref COMMIT`, `--subdir DIR` or
+## `--workspace` and `--group test`. `fetching` says how the prebuilt native modules are downloaded.
 def add(settings: Env.Settings, style: String, fetching: Prebuilt.Fetching, words: List[String]) -> Reply.Answer
   asked = request_of(words)
   return Reply.Answer.Printed(Reply.failed(2, asked.message)) if !asked.ok?
@@ -61,6 +62,8 @@ WRITE_TIMEOUT_MS = 60_000
 GITHUB_FORM = "https://github.com/OWNER/REPO"
 # The options of `add`, each with a value.
 ADD_FLAGS = Set.new(["--tag", "--ref", "--subdir", "--group"])
+# The option of `add` that has no value: the dependency is the whole workspace of the repository.
+WORKSPACE_FLAG = "--workspace"
 
 # More help for a manifest that could not be written after the lock was.
 LOCK_WRITTEN = "; agentica.lock was written already, so run `agentica update` to make it match agentica.toml again"
@@ -69,31 +72,46 @@ LOCK_WRITTEN = "; agentica.lock was written already, so run `agentica update` to
 DEPS_PENDING = "agentica.lock was written already; run `agentica install` to write the locked packages into deps/"
 
 # What `add` was asked: the local name, the source word as typed, where the package comes from (the word as a git URL,
-# GitSource.expand_git) and whether only the tests import it.
+# GitSource.expand_git), whether only the tests import it and whether it is the whole workspace of the repository.
 struct Request
   name: String
   word: String
   source: GitSource.Source
   test: Bool
+  workspace: Bool
 end
 
 # NAME SOURCE, then --tag TAG or --ref COMMIT (one of them), --subdir DIR when the package is a folder of the
-# repository, and --group test for a dependency that only the tests import, in any order. A word that is not a good
+# repository or --workspace (a flag with no value) when it is the whole workspace of the repository, and --group test
+# for a dependency that only the tests import, in any order. A word that is not a good
 # name, tag, commit, subdir or group is refused here, before the project is read, with the reason of the rule that the
 # manifest applies; a source that is no git URL is PKG-SOURCE-INVALID once the manifest is found (add_in). The commit
 # is the whole id: git fetches no abbreviation.
 def request_of(words: List[String]) -> Result[Request]
-  return error(Texts.usage_text()) if words.size < 4 or words.size % 2 != 0
+  return error(Texts.usage_text()) if words.size < 4
 
   options: Map[String, String] = {}
-  for at in 1...(words.size / 2)
-    flag = words[at * 2]
-    return error(Texts.usage_text()) if !ADD_FLAGS.include?(flag) or options.has_key?(flag)
+  workspace = false
+  at = 2
+  while at < words.size
+    flag = words[at]
+    if flag == WORKSPACE_FLAG
+      return error(Texts.usage_text()) if workspace
 
-    options = options.put(flag, words[at * 2 + 1])
+      workspace = true
+      at += 1
+      next
+    end
+
+    return error(Texts.usage_text()) if !ADD_FLAGS.include?(flag) or options.has_key?(flag) or at + 1 >= words.size
+
+    options = options.put(flag, words[at + 1])
+    at += 2
   end
 
   return error(Texts.usage_text()) if options.has_key?("--tag") == options.has_key?("--ref")
+
+  return error(Texts.usage_text()) if workspace and options.has_key?("--subdir")
 
   tag = option_of(options, "--tag")
   ref = option_of(options, "--ref")
@@ -120,7 +138,7 @@ def request_of(words: List[String]) -> Result[Request]
   return error("agentica: #{problem}\n") if problem != ""
 
   source = GitSource.Source(git: GitSource.expand_git(words[1]), subdir: subdir, tag: tag, ref: ref, path: "")
-  ok(Request(name: words[0], word: words[1], source: source, test: group == Manifest.TEST_GROUP))
+  ok(Request(name: words[0], word: words[1], source: source, test: group == Manifest.TEST_GROUP, workspace: workspace))
 end
 
 # The value of an option, "" when it was not given.
@@ -156,7 +174,7 @@ def add_in(
   request = try with_tag_subdir(settings, found, asked)
 
   text = try Reader.read_text(settings.workspace, Reader.Reading(file: file, code: "PKG-MANIFEST-INVALID"))
-  edited = ManifestEdit.add_dependency(text, request.name, request.source, request.test)
+  edited = ManifestEdit.add_dependency(text, request.name, request.source, request.test, request.workspace)
   manifest = try added_manifest(found.manifest, edited, request)
   refresh = PackageResolve.Refresh(all: false, name: "")
   resolved = try PackageResolve.resolve(settings, manifest, found.members, found.lock, refresh)
@@ -194,7 +212,8 @@ end
 # with no check of the root manifest's name: the member list says the folder is a package.
 def with_tag_subdir(settings: Env.Settings, found: Project.Found, request: Request) -> Result[Request]
   package = GitSource.tag_package(request.source.tag)
-  return ok(request) if package == "" or request.source.subdir != "" or GitSource.subdir_problem(package) != ""
+  return ok(request) if request.workspace or package == "" or request.source.subdir != ""
+  return ok(request) if GitSource.subdir_problem(package) != ""
 
   folder = request.source.with(subdir: package)
   return ok(request.with(source: folder)) if Members.member?(found.members, folder)
@@ -231,7 +250,8 @@ def one_more?(old: Manifest.Manifest, manifest: Manifest.Manifest, request: Requ
   entry = Manifest.find(manifest, request.name)
   return false if manifest.dependencies.size != old.dependencies.size + 1 or !entry.ok?
 
-  GitSource.same?(entry.unwrap!.source, request.source) and entry.unwrap!.test == request.test
+  same = GitSource.same?(entry.unwrap!.source, request.source) and entry.unwrap!.test == request.test
+  same and entry.unwrap!.workspace == request.workspace
 end
 
 def update_in(settings: Env.Settings, dir: String, fetching: Prebuilt.Fetching, name: String) -> Result[String]
@@ -275,10 +295,24 @@ def refresh_deps(settings: Env.Settings, found: Project.Found, packages: List[Lo
   deps = PackageImport.scope_of(Project.Project.Declared(found)).deps
   old = found.lock.packages.map do |locked| locked.name end
   ordered = packages.sort_by do |locked| locked.name end
-  done = PackageDeps.sync(settings, found.lock.file, deps, ordered, old)
+  done = PackageDeps.sync(settings, found.lock.file, deps, ordered, old, changed_kind(found.lock, packages))
   return error(Failure.add_help(done.message, DEPS_PENDING)) if !done.ok?
 
   ok()
+end
+
+# The names that the old lock has as a package and the new one as a workspace dependency, or the other way round.
+def changed_kind(old: Lock.Lock, packages: List[Lock.Locked]) -> List[String]
+  names: List[String] = []
+  for before in old.packages
+    for now in packages
+      if now.name == before.name and Lock.root?(now) != Lock.root?(before)
+        names = names.push(now.name)
+      end
+    end
+  end
+
+  names
 end
 
 # Replaces the file whole (SaveFile.replace leaves the old one as it was if a step fails). A file that cannot be

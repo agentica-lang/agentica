@@ -73,7 +73,7 @@ def find(workspace: Workspace.Workspace, root_dir: String, running: String) -> R
   end
 
   lock = try Lock.read(workspace, empty.file)
-  try check_dependencies(lock, manifest, found.members, false)
+  try check_dependencies(lock, manifest, found.members, "")
   ok(Project.Declared(found.with(lock: lock)))
 end
 
@@ -165,19 +165,23 @@ end
 
 ## Checks the dependencies of a manifest against the lock: each must be in the lock, with the same source and pin. A
 ## missing one is PKG-LOCK-STALE. One with another source is PKG-LOCK-STALE for the manifest of the project (the lock
-## is out of date) and PKG-SOURCE-CONFLICT for the manifest of a package, `of_package` (one name cannot stand for two
-## sources in one build). A dependency that is a member of the workspace `members` must be locked as a member, and any
-## other as a fetched package: the same two codes. The root manifest and the lock must agree on `override`. A package
-## manifest is checked by `Manifest.require_package` first (PKG-ROOT-ONLY), and a name that the lock marks as
-## overridden keeps the source of the root, so the source a package asks for is not compared. The test group of a
-## package (`group = "test"`) is its own and is not in the lock of the project, so it is not checked. The failure names
-## the manifest and `dependencies.<name>`.
+## is out of date) and PKG-SOURCE-CONFLICT for the manifest of a package (one name cannot stand for two sources in one
+## build). A dependency that is a member of the workspace `members` must be locked as a member, and any other as a
+## fetched package: the same two codes; a dependency with `workspace = true` must be locked as a workspace entry and
+## any other not: the same two codes. The root manifest and the lock must agree on `override`. `owner` is the lock name
+## of the package whose manifest this is ("" for the project's). A package manifest is checked by
+## `Manifest.require_package` first (PKG-ROOT-ONLY), and a name that the lock marks as overridden keeps the source of
+## the root, so the source a package asks for is not compared. A package of a workspace dependency (`owner` has a
+## namespace) that asks for a sibling, a folder of its own workspace, finds it under the namespace and is not compared
+## either: its own pin is ignored. The test group of a package (`group = "test"`) is its own and is not in the lock of
+## the project, so it is not checked. The failure names the manifest and `dependencies.<name>`.
 def check_dependencies(
   lock: Lock.Lock,
   manifest: Manifest.Manifest,
   members: Members.Members,
-  of_package: Bool,
+  owner: String,
 ) -> Result[Void]
+  of_package = owner != ""
   dependencies = manifest.dependencies
   if of_package
     try Manifest.require_package(manifest)
@@ -186,11 +190,21 @@ def check_dependencies(
 
   for dependency in dependencies
     path = "dependencies.#{dependency.name}"
-    found = Lock.find(lock, dependency.name)
+    key = dependency.name
+    sibling = ""
+    if of_package
+      sibling = Lock.sibling(lock, owner, dependency.source)
+    end
+
+    if sibling != ""
+      key = sibling
+    end
+
+    found = Lock.find(lock, key)
     return error(stale(manifest.file, path, "#{dependency.name} is not in #{LOCK_FILE}")) if !found.ok?
 
     locked = found.unwrap!
-    next if of_package and locked.override
+    next if sibling != "" or (of_package and locked.override)
 
     if !of_package and dependency.override != locked.override
       message = "#{dependency.name} is overridden in #{MANIFEST_FILE}, but not in #{LOCK_FILE}"
@@ -204,6 +218,17 @@ def check_dependencies(
     if !GitSource.same?(dependency.source, locked.source)
       wanted = GitSource.describe(dependency.source)
       message = "#{dependency.name} is #{wanted}, but #{LOCK_FILE} has #{GitSource.describe(locked.source)}"
+      return error(conflict(manifest.file, path, message)) if of_package
+
+      return error(stale(manifest.file, path, message))
+    end
+
+    if dependency.workspace != Lock.root?(locked)
+      message = "#{dependency.name} is a workspace dependency, but #{LOCK_FILE} has it as one package"
+      if locked.repository != ""
+        message = "#{dependency.name} is not a workspace dependency, but #{LOCK_FILE} has it as one"
+      end
+
       return error(conflict(manifest.file, path, message)) if of_package
 
       return error(stale(manifest.file, path, message))

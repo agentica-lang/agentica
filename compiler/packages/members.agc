@@ -21,6 +21,12 @@ struct Members
   folders: List[String]
 end
 
+## The two values of a `[workspace]` table: the repository and the member folders as written.
+struct Table
+  repository: String
+  folders: List[String]
+end
+
 ## The workspace of a project that is in none.
 def empty() -> Members = Members(root: "", repository: "", folders: [])
 
@@ -73,6 +79,18 @@ def member?(members: Members, source: GitSource.Source) -> Bool
   members.folders.any? do |folder| folder == source.subdir end
 end
 
+## The `[workspace]` table `value` as its rules read it, with no look at the folders: `repository` and `members` only,
+## the repository a git URL and each member a subdir, once. A failure is PKG-MANIFEST-INVALID at `workspace`,
+## `workspace.repository`, `workspace.members` or `workspace.members[n]` of the file in `reading`. The table of a
+## workspace dependency, which is in a repository that is not on this machine, is read with this.
+def table_of(reading: Reader.Reading, value: Toml.Value) -> Result[Table]
+  table = try Reader.table(reading, value, "workspace")
+  try Reader.known_keys(reading, table, TABLE_KEYS, "workspace")
+  repository = try repository_of(reading, table)
+  folders = try folders_of(reading, table)
+  ok(Table(repository: repository, folders: folders))
+end
+
 ## The folder of the member that a source names (`member?` is true for it).
 def folder_of(members: Members, source: GitSource.Source) -> String = Paths.join(members.root, source.subdir)
 
@@ -116,11 +134,9 @@ def belongs(
   end
 
   reading = Reader.Reading(file: file, code: "PKG-MANIFEST-INVALID")
-  table = try Reader.table(reading, value, "workspace")
-  try Reader.known_keys(reading, table, TABLE_KEYS, "workspace")
-  repository = try repository_of(reading, table)
-  folders = try folders_of(workspace, reading, table, root_dir)
-  ok(Members(root: root_dir, repository: repository, folders: folders))
+  parsed = try table_of(reading, value)
+  try manifests_present(workspace, reading, parsed.folders, root_dir)
+  ok(Members(root: root_dir, repository: parsed.repository, folders: parsed.folders))
 end
 
 # The path of dir below root_dir, written with "/": "" when dir is not below it.
@@ -173,13 +189,8 @@ def repository_of(reading: Reader.Reading, table: Map[String, Toml.Value]) -> Re
   ok(repository)
 end
 
-# The members: subdirs of the repository (the same rules as `subdir`), each once, each a folder with its own manifest.
-def folders_of(
-  workspace: Workspace.Workspace,
-  reading: Reader.Reading,
-  table: Map[String, Toml.Value],
-  root_dir: String,
-) -> Result[List[String]]
+# The members: subdirs of the repository (the same rules as `subdir`), each once.
+def folders_of(reading: Reader.Reading, table: Map[String, Toml.Value]) -> Result[List[String]]
   path = Reader.child("workspace", "members")
   if !table.has_key?("members")
     return error(Reader.fail_help(reading, path, "missing key", "members = [\"sqlite\", \"postgres\"]"))
@@ -199,14 +210,27 @@ def folders_of(
 
     return error(Reader.fail(reading, here, "member listed twice")) if folders.any? do |seen| seen == folder end
 
-    manifest = Paths.join(Paths.join(root_dir, folder), MANIFEST_FILE)
-    if !workspace.file_exists.call(manifest)
-      help = "write #{folder}/#{MANIFEST_FILE}"
-      return error(Reader.fail_help(reading, here, "a member has an agentica.toml", help))
-    end
-
     folders = folders.push(folder)
   end
 
   ok(folders)
+end
+
+# Each member is a folder with its own manifest.
+def manifests_present(
+  workspace: Workspace.Workspace,
+  reading: Reader.Reading,
+  folders: List[String],
+  root_dir: String,
+) -> Result[Void]
+  for index in 0...folders.size
+    manifest = Paths.join(Paths.join(root_dir, folders[index]), MANIFEST_FILE)
+    if !workspace.file_exists.call(manifest)
+      here = Reader.item(Reader.child("workspace", "members"), index)
+      help = "write #{folders[index]}/#{MANIFEST_FILE}"
+      return error(Reader.fail_help(reading, here, "a member has an agentica.toml", help))
+    end
+  end
+
+  ok()
 end

@@ -190,6 +190,8 @@ def modules_of(
   dir = Paths.directory_of(manifest.file)
   found = buildable(dir, manifest)
   for locked in packages
+    next if Lock.root?(locked)
+
     folder = Project.folder_of(dir, members, locked)
     if !Lock.in_place?(locked)
       cache = PackageCache.root(settings.env)

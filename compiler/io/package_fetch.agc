@@ -8,8 +8,8 @@
 ## place in one step, so the cache never holds half a package. A folder that is already in place is hashed, never
 ## overwritten. A failure is a packed failure that names the lock and the key of the entry (link_failure.agc,
 ## fail_key).
-##
-## `fill` fetches what the lock names. `resolve` (for `add` and `update`) fetches a pin that has no commit or hash yet,
+## `fill` fetches what the lock names; `fill_group` does it for several packages of one repository, pin and commit with
+## one fetch. `resolve` (for `add` and `update`) fetches a pin that has no commit or hash yet,
 ## learns both from what it fetched, and puts the files in the cache by the same steps.
 
 import Diag from "../diagnostics/diagnostic"
@@ -19,6 +19,7 @@ import Failure from "../modules/link_failure"
 import Workspace from "../modules/workspace"
 import GitSource from "../packages/git_source"
 import Lock from "../packages/lock"
+import Members from "../packages/members"
 import PackageCache from "../packages/package_cache"
 import PackageHash from "../packages/package_hash"
 import Tree from "../packages/package_tree"
@@ -36,6 +37,12 @@ end
 struct Place
   file: String
   entry: String
+end
+
+## A package of the lock to put in the cache: the entry of the lock it is in, and the locked package.
+struct Entry
+  place: Place
+  locked: Lock.Locked
 end
 
 ## The folder of the package cache, or the failure for `file` (the lock, whose entries are about to be filled) when the
@@ -60,12 +67,32 @@ end
 
 ## Puts the files of the locked package into the cache under `cache` (a folder; PackageCache.root).
 def fill(workspace: Workspace.Workspace, cache: String, place: Place, locked: Lock.Locked) -> Result[Filled]
-  target = PackageCache.folder(cache, locked.source, locked.commit)
-  seen = try inspect(workspace, place, target, locked)
-  case seen
-    Seen.Matches -> ok(Filled.Present)
-    Seen.Absent -> fetch(workspace, cache, place, target, locked)
+  filled = try fill_group(workspace, cache, [Entry(place: place, locked: locked)])
+  ok(filled[0])
+end
+
+## Puts the files of locked packages into the cache with one fetch: the packages are folders of one repository (or the
+## repository itself) at one pin and commit, so one temporary repository serves all of them, and git runs once for the
+## group whatever its size. The answers are in the order of `entries`, which are not empty. A package that is in the
+## cache with the locked hash is not fetched, and when every one is, git does not run. A failure of the fetch names the
+## first entry that needed it.
+def fill_group(workspace: Workspace.Workspace, cache: String, entries: List[Entry]) -> Result[List[Filled]]
+  absent: List[Entry] = []
+  for entry in entries
+    target = PackageCache.folder(cache, entry.locked.source, entry.locked.commit)
+    seen = try inspect(workspace, entry.place, target, entry.locked)
+    case seen
+      Seen.Matches -> next
+      Seen.Absent -> absent = absent.push(entry)
+    end
   end
+
+  fetched: Map[String, Filled] = {}
+  if absent.size > 0
+    fetched = try fetch_all(workspace, cache, absent)
+  end
+
+  ok(entries.map do |entry: Entry| fetched.get(entry.locked.name).unwrap_or(Filled.Present) end)
 end
 
 ## Fetches the pin of a package that is not locked yet, for `add` and `update`: the lock entry it gives has the commit
@@ -85,7 +112,16 @@ def resolve(
   end
 
   # A ref is the commit already; a tag's commit is learnt from the fetch.
-  pin = Lock.Locked(name: name, source: source, commit: source.ref, hash: "", member: false, override: false)
+  pin = Lock.Locked(
+    name: name,
+    source: source,
+    commit: source.ref,
+    hash: "",
+    member: false,
+    override: false,
+    repository: "",
+  )
+
   made = make_temp(cache)
   if !made.ok?
     return error(fail(place, "PKG-FETCH", "", "cannot make a folder in the package cache #{cache}", made.message))
@@ -95,6 +131,46 @@ def resolve(
   scratch = Scratch(temp: temp, repo: Paths.join(temp, "repo.git"), files: Paths.join(temp, "files"))
   resolved = resolve_into(workspace, cache, place, scratch, pin)
   # As in fetch: a temporary folder that cannot be removed does not change the answer.
+  remove_temp(temp)
+  resolved
+end
+
+## Fetches the pin of a workspace dependency, for `add` and `update`: with one fetch it reads the `[workspace]` table
+## of the root `agentica.toml` at the commit and puts every member in the cache as `resolve` would put a package that
+## is a folder of the repository. It gives the entry of the workspace (`name`, the commit, the `repository` of the
+## table and no hash) followed by one entry for each member, named `name/folder` and pinned as the workspace is. A
+## repository with no `[workspace]` table, a table that its rules refuse and a member without a manifest are PKG-FETCH
+## at `workspace` of the dependency that `place` names, as is a root manifest that cannot be read.
+def resolve_workspace(
+  workspace: Workspace.Workspace,
+  cache: String,
+  place: Place,
+  name: String,
+  source: GitSource.Source,
+) -> Result[List[Lock.Locked]]
+  if source.ref != "" and source.ref.length != 40 and source.ref.length != 64
+    message = "git fetches a commit by its whole id, and #{source.ref} is only a part of it"
+    return error(fail(place, "PKG-FETCH", "ref", message, "write the 40 (or 64) digits of the commit"))
+  end
+
+  pin = Lock.Locked(
+    name: name,
+    source: source,
+    commit: source.ref,
+    hash: "",
+    member: false,
+    override: false,
+    repository: "",
+  )
+
+  made = make_temp(cache)
+  if !made.ok?
+    return error(fail(place, "PKG-FETCH", "", "cannot make a folder in the package cache #{cache}", made.message))
+  end
+
+  temp = made.unwrap!
+  scratch = Scratch(temp: temp, repo: Paths.join(temp, "repo.git"), files: Paths.join(temp, "files"))
+  resolved = workspace_into(workspace, cache, place, scratch, pin)
   remove_temp(temp)
   resolved
 end
@@ -117,7 +193,16 @@ def tag_subdir(
 
   temp = made.unwrap!
   scratch = Scratch(temp: temp, repo: Paths.join(temp, "repo.git"), files: Paths.join(temp, "files"))
-  pin = Lock.Locked(name: package, source: source, commit: "", hash: "", member: false, override: false)
+  pin = Lock.Locked(
+    name: package,
+    source: source,
+    commit: "",
+    hash: "",
+    member: false,
+    override: false,
+    repository: "",
+  )
+
   found = subdir_in(place, scratch, pin, package)
   remove_temp(temp)
   found
@@ -181,22 +266,19 @@ def inspect(workspace: Workspace.Workspace, place: Place, target: String, locked
   end
 end
 
-# Fetches into a temporary folder of the cache root, which is removed whatever happens.
-def fetch(
-  workspace: Workspace.Workspace,
-  cache: String,
-  place: Place,
-  target: String,
-  locked: Lock.Locked,
-) -> Result[Filled]
+# Fetches the pin once into a temporary folder of the cache root, which is removed whatever happens, and puts the
+# files of each entry (one folder of the repository, or all of it) into the cache folder of its commit. The entries are
+# not empty and share one repository, pin and commit. The answers are by lock name.
+def fetch_all(workspace: Workspace.Workspace, cache: String, entries: List[Entry]) -> Result[Map[String, Filled]]
   made = make_temp(cache)
   if !made.ok?
-    return error(fail(place, "PKG-FETCH", "", "cannot make a folder in the package cache #{cache}", made.message))
+    return error(
+      fail(entries[0].place, "PKG-FETCH", "", "cannot make a folder in the package cache #{cache}", made.message),
+    )
   end
 
   temp = made.unwrap!
-  scratch = Scratch(temp: temp, repo: Paths.join(temp, "repo.git"), files: Paths.join(temp, "files"))
-  filled = fetch_into(workspace, place, scratch, target, locked)
+  filled = fetch_into(workspace, cache, temp, entries)
   # A folder that cannot be removed stays hidden in the cache root, and the result of the install stands: the failure
   # to clean up is not worth failing a fetch that worked (or hiding the error of one that did not).
   remove_temp(temp)
@@ -238,17 +320,26 @@ end
 
 def fetch_into(
   workspace: Workspace.Workspace,
-  place: Place,
-  scratch: Scratch,
-  target: String,
-  locked: Lock.Locked,
-) -> Result[Filled]
-  try init_repository(place, scratch, locked)
-  try fetch_pin(place, scratch, locked)
-  try check_commit(place, scratch, locked)
-  try copy_tree(place, scratch, locked.commit, locked.source.subdir)
-  try check_hash(workspace, place, scratch.files, locked)
-  move_into_place(workspace, place, scratch.files, target, locked)
+  cache: String,
+  temp: String,
+  entries: List[Entry],
+) -> Result[Map[String, Filled]]
+  first = entries[0]
+  scratch = Scratch(temp: temp, repo: Paths.join(temp, "repo.git"), files: Paths.join(temp, "files"))
+  try init_repository(first.place, scratch, first.locked)
+  try fetch_pin(first.place, scratch, first.locked)
+  try check_commit(first.place, scratch, first.locked)
+  done: Map[String, Filled] = {}
+  for index in 0...entries.size
+    entry = entries[index]
+    here = scratch.with(files: Paths.join(temp, "files-#{index}"))
+    try copy_tree(entry.place, here, entry.locked.commit, entry.locked.source.subdir)
+    try check_hash(workspace, entry.place, here.files, entry.locked)
+    target = PackageCache.folder(cache, entry.locked.source, entry.locked.commit)
+    done = done.put(entry.locked.name, try move_into_place(workspace, entry.place, here.files, target, entry.locked))
+  end
+
+  ok(done)
 end
 
 # The files of the commit that the hash covers (and the manifest) go to scratch.files. For a package that is a folder
@@ -296,10 +387,143 @@ def resolve_into(
 
   try copy_tree(place, scratch, commit, pin.source.subdir)
   hash = try hash_of(workspace, place, pin, scratch.files)
-  locked = Lock.Locked(name: pin.name, source: pin.source, commit: commit, hash: hash, member: false, override: false)
+  locked = Lock.Locked(
+    name: pin.name,
+    source: pin.source,
+    commit: commit,
+    hash: hash,
+    member: false,
+    override: false,
+    repository: "",
+  )
+
   target = PackageCache.folder(cache, locked.source, commit)
   try move_into_place(workspace, place, scratch.files, target, locked)
   ok(locked)
+end
+
+def workspace_into(
+  workspace: Workspace.Workspace,
+  cache: String,
+  place: Place,
+  scratch: Scratch,
+  pin: Lock.Locked,
+) -> Result[List[Lock.Locked]]
+  try init_repository(place, scratch, pin)
+  try fetch_pin(place, scratch, pin)
+  commit = try peel(place, scratch)
+  if pin.source.ref != "" and commit != pin.source.ref
+    return error(fail(place, "PKG-FETCH", "ref", "git fetched #{commit}, not #{pin.source.ref}", ""))
+  end
+
+  table = try workspace_table(place, scratch, commit)
+  try members_apart(place, table.folders)
+  try members_present(place, scratch, commit, table.folders)
+  root = Lock.Locked(
+    name: pin.name,
+    source: pin.source,
+    commit: commit,
+    hash: "",
+    member: false,
+    override: false,
+    repository: table.repository,
+  )
+
+  found = [root]
+  for index in 0...table.folders.size
+    folder = table.folders[index]
+    source = GitSource.Source(git: pin.source.git, subdir: folder, tag: pin.source.tag, ref: pin.source.ref, path: "")
+
+    member = Lock.Locked(
+      name: "#{pin.name}/#{folder}",
+      source: source,
+      commit: commit,
+      hash: "",
+      member: false,
+      override: false,
+      repository: "",
+    )
+
+    here = scratch.with(files: Paths.join(scratch.temp, "files-#{index}"))
+    try copy_tree(place, here, commit, folder)
+    hash = try hash_of(workspace, place, member, here.files)
+    stored = member.with(hash: hash)
+    target = PackageCache.folder(cache, stored.source, commit)
+    try move_into_place(workspace, place, here.files, target, stored)
+    found = found.push(stored)
+  end
+
+  ok(found)
+end
+
+# The `[workspace]` table of the root agentica.toml of the commit: its repository and members. Anything that is not
+# a good table is PKG-FETCH at `workspace` of the dependency: the repository is not a workspace.
+def workspace_table(place: Place, scratch: Scratch, commit: String) -> Result[Members.Table]
+  listing = try git_text(place, scratch, inside(scratch, ["ls-tree", "-z", "-l", commit, "--", MANIFEST]))
+  blobs = manifest_blobs(listing)
+  if !blobs.has_key?(MANIFEST)
+    return error(fail(place, "PKG-FETCH", "workspace", "the repository has no #{MANIFEST} at its root", ""))
+  end
+
+  text = try git_text(place, scratch, inside(scratch, ["cat-file", "blob", blobs[MANIFEST]]))
+  parsed = Toml.parse(text)
+  if !parsed.ok?
+    message = "the #{MANIFEST} of the repository is not TOML: #{parsed.message}"
+    return error(fail(place, "PKG-FETCH", "workspace", message, ""))
+  end
+
+  case parsed.unwrap!
+    Toml.Value.Table(entries) ->
+      if !entries.has_key?("workspace")
+        message = "the #{MANIFEST} of the repository has no [workspace] table"
+        return error(
+          fail(place, "PKG-FETCH", "workspace", message, "a workspace dependency names a repository of packages"),
+        )
+      end
+
+      reading = Reader.Reading(file: MANIFEST, code: "PKG-FETCH")
+      case Members.table_of(reading, entries["workspace"])
+        ok(table) -> ok(table)
+        error(packed) ->
+          problem = Failure.unpack_failure(packed.message)
+          message = (
+            "the [workspace] table of the repository is not good: #{problem.key_path} #{problem.diagnostic.message}"
+          )
+
+          error(fail(place, "PKG-FETCH", "workspace", message, ""))
+      end
+
+    _ -> error(fail(place, "PKG-FETCH", "workspace", "the #{MANIFEST} of the repository is not a table", ""))
+  end
+end
+
+# No member is inside another: deps/ keeps a member in a folder of its namespace, and the files of one member inside
+# another would be hashed as the files of both.
+def members_apart(place: Place, folders: List[String]) -> Result[Void]
+  for folder in folders
+    inner = folders.select do |other: String| folder.start_with?("#{other}/") end
+    if inner.size > 0
+      message = "the workspace member #{folder} is inside the member #{inner[0]}"
+      return error(fail(place, "PKG-FETCH", "workspace", message, "a member is a folder of its own"))
+    end
+  end
+
+  ok()
+end
+
+# Every member of the table is a folder of the commit with its own manifest, which one `ls-tree` of those paths shows.
+def members_present(place: Place, scratch: Scratch, commit: String, folders: List[String]) -> Result[Void]
+  paths = folders.map do |folder: String| "#{folder}/#{MANIFEST}" end
+  listing = try git_text(place, scratch, inside(scratch, ["ls-tree", "-z", "-l", commit, "--"].concat(paths)))
+  blobs = manifest_blobs(listing)
+  for path in paths
+    if !blobs.has_key?(path)
+      message = "the workspace has a member whose #{path} is not a file of the commit"
+      return error(fail(place, "PKG-FETCH", "workspace", message, "each member is a folder with an #{MANIFEST}"))
+    end
+  end
+
+  ok()
 end
 
 def subdir_in(place: Place, scratch: Scratch, pin: Lock.Locked, package: String) -> Result[String]

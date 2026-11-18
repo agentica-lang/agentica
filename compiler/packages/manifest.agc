@@ -1,15 +1,17 @@
 ## The manifest agentica.toml (docs/grammar/05b-modules.md): the project's own name, its direct dependencies, the
 ## native libraries of a package ([native]) and the [style] rules. A dependency is a local name and a git source:
 ## `sqlite = { git = "https://host/owner/repo", tag = "v1.2.0" }`, with exactly one of `tag` and `ref`, and an optional
-## `subdir`: the folder of the repository that is the package. The root project's manifest may also write
-## `name = { path = "../x" }` (a folder on this machine, read in place) and `override = true` (its source wins over any
-## other source of the name in the tree); `require_package` refuses both, and `[native_policy]`, in the manifest of a
+## `subdir`: the folder of the repository that is the package. The root project's manifest may also write `name = {
+## path = "../x" }` (a folder on this machine, read in place) and `override = true` (its source wins over any other
+## source of the name in the tree); `require_package` refuses both, and `[native_policy]`, in the manifest of a
 ## package. Any dependency may say `group = "test"` (Bundler's `group: :test`): only the tests of the project import
-## it, and a project that depends on the package neither fetches nor locks it (`needed`). A failure is
-## PKG-MANIFEST-INVALID, with the file and the key path (toml_read.agc). The `[workspace]` table is known here but read
-## by members.agc, and only for the project's manifest: the manifest of a package skips it. `[native]` is the other way
-## round: only a package's is used. `[tool.NAME]` belongs to other tools: only its shape is checked. `agentica` is the
-## oldest Agentica the package works with (agentica_version.agc).
+## it, and a project that depends on the package neither fetches nor locks it (`needed`). `workspace = true` makes the
+## dependency the whole workspace of its repository (`finn = { git, tag, workspace = true }`), whose members are
+## imported as `pkg/finn/<member>/<module>`. A failure is PKG-MANIFEST-INVALID, with the file and the key path
+## (toml_read.agc). The `[workspace]` table is known here but read by members.agc, and only for the project's manifest:
+## the manifest of a package skips it. `[native]` is the other way round: only a package's is used. `[tool.NAME]`
+## belongs to other tools: only its shape is checked. `agentica` is the oldest Agentica the package works with
+## (agentica_version.agc).
 
 import Workspace from "../modules/workspace"
 import Paths from "../modules/import_path"
@@ -26,12 +28,15 @@ import Reader from "toml_read"
 TEST_GROUP = "test"
 
 ## A direct dependency: the local name (the segment after `pkg/` in an import) and where it comes from. override is
-## true when the manifest says `override = true`, and test when it says `group = "test"`.
+## true when the manifest says `override = true`, and test when it says `group = "test"`. workspace is true when it
+## says `workspace = true`: the dependency is the whole workspace of the repository (source has no subdir), whose
+## members are reached as `pkg/<name>/<member>/<module>`.
 struct Dependency
   name: String
   source: GitSource.Source
   override: Bool
   test: Bool
+  workspace: Bool
 end
 
 ## Where a native library is on one system: `file`, a path inside the package's native/ folder, `system`, one or more
@@ -200,7 +205,7 @@ private
 # The keys the manifest knows, and those of [style] and of a dependency.
 TOP_KEYS = ["name", "agentica", "dependencies", "native", "native_policy", "style", "workspace", "tool"]
 STYLE_KEYS = ["max_line_width", "blank_line_after_end"]
-DEPENDENCY_KEYS = ["git", "tag", "ref", "subdir", "path", "override", "group"]
+DEPENDENCY_KEYS = ["git", "tag", "ref", "subdir", "path", "override", "group", "workspace"]
 GIT_KEYS = ["git", "tag", "ref", "subdir"]
 PLACE_KEYS = ["file", "system", "url", "sha256", "member"]
 # The systems a native library can be named for. The key is the whole system: a macOS file is a universal binary.
@@ -283,13 +288,33 @@ def dependency_of(reading: Reader.Reading, name: String, value: Toml.Value, path
   end
 
   test = try test_group_of(reading, entries, path)
+  workspace = try workspace_of(reading, entries, path)
   if entries.has_key?("path")
     source = try path_source_of(reading, entries, path)
-    return ok(Dependency(name: name, source: source, override: override, test: test))
+    return ok(Dependency(name: name, source: source, override: override, test: test, workspace: workspace))
   end
 
   source = try git_source_of(reading, entries, path)
-  ok(Dependency(name: name, source: source, override: override, test: test))
+  ok(Dependency(name: name, source: source, override: override, test: test, workspace: workspace))
+end
+
+# `workspace = true`, or false when the key is left out or false. A workspace dependency is the repository itself, so
+# it has no `subdir` and no `path`.
+def workspace_of(reading: Reader.Reading, entries: Map[String, Toml.Value], path: String) -> Result[Bool]
+  return ok(false) if !entries.has_key?("workspace")
+
+  here = Reader.child(path, "workspace")
+  flag = try Reader.boolean(reading, entries["workspace"], here)
+  return ok(false) if !flag
+
+  for key in ["subdir", "path"]
+    if entries.has_key?(key)
+      help = "a workspace is the whole repository: leave #{key} out, or leave workspace out"
+      return error(Reader.fail_help(reading, here, "workspace has no #{key}", help))
+    end
+  end
+
+  ok(true)
 end
 
 # `group = "test"`, or false when the key is left out. `test` is the only group.

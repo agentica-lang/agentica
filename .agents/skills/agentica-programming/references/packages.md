@@ -3,7 +3,8 @@
 A project with an `agentica.toml` in the folder of the root file (or above it)
 can import the packages it declares. A build never downloads and never writes
 `agentica.lock`: `agentica add NAME URL --tag TAG` (or `--ref COMMIT`, the whole
-id; `--subdir DIR` for a folder of the repository) adds a dependency and writes
+id; `--subdir DIR` for a folder of the repository, `--workspace` for the whole
+workspace) adds a dependency and writes
 the lock, `agentica update [NAME]` moves tag pins, and `agentica install`
 writes every locked package into `deps/<name>/` beside `agentica.toml` (through
 a download cache). A build reads packages only from `deps/`; a declared package
@@ -53,6 +54,18 @@ import Sqlite from "pkg/sqlite/db"
   `agc_libs`, else `PKG-MANIFEST-INVALID`. The folder holds the package's
   `agentica.toml`; relative imports cannot leave it; the hash covers only that
   folder.
+- `workspace = true` (with `git` and a pin, no `subdir`, no `path`) makes the
+  dependency a whole workspace repository under its one name:
+  `finn = { git = "...", tag = "finn-1", workspace = true }`, imported as
+  `pkg/finn/<member>/<module>`. Every member is locked as `finn/<member>`
+  (and the workspace as `finn`, with `repository` and no hash), and installed to
+  `deps/finn/<member>/`. A dependency of a member on its own workspace (the
+  `repository` and a member as `subdir`) is that member at the pin of the
+  workspace, whatever pin it writes; any other dependency of a member stays flat
+  and shared. A repository with no good `[workspace]` table at the pin is
+  `PKG-FETCH` at `dependencies.NAME.workspace`; `workspace` with `subdir` or
+  `path` is `PKG-MANIFEST-INVALID`. `agentica add NAME URL --tag TAG
+  --workspace` writes it (not with `--subdir`).
 - A repository of packages can be a workspace: its root `agentica.toml` has
   `[workspace]` with `repository = "<git URL>"` and `members = ["sqlite",
   "postgres"]` (folders written like a `subdir`, each with its own
@@ -116,11 +129,12 @@ import Sqlite from "pkg/sqlite/db"
   written when a step before the lock fails; if only the manifest write fails,
   run `agentica update`. Both then refresh `deps/`.
 - `deps/<name>/` holds the `.agc` files and the `agentica.toml` of each locked
-  package that is not a workspace member, flat. `install` replaces a folder
-  whose `.agc` files differ from the lock and leaves every other entry of
-  `deps/` alone. The tool writes no `.gitignore` there: commit `deps/` or ignore
-  it. `test`, `check`, `fmt` and `symbol` walks skip the `deps/` of a project
-  and `_build/`; `agc_libs/` stays for local libraries.
+  package that is not a workspace member (`deps/<name>/<member>/` for a member
+  of a workspace dependency). `install` replaces a folder whose `.agc` files
+  differ from the lock and leaves every other entry of `deps/` alone. The tool
+  writes no `.gitignore` there: commit `deps/` or ignore it. `test`, `check`,
+  `fmt` and `symbol` walks skip the `deps/` of a project and `_build/`;
+  `agc_libs/` stays for local libraries.
 - The package hash leaves out hidden folders and `_build/` (any depth) and
   `agc_libs/` and `deps/` at its root; a package cannot import a file there.
 - A build hashes a package (its `deps/` folder) the first time an import loads

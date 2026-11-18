@@ -400,8 +400,9 @@ import Sqlite from "pkg/sqlite/db"
   `ref` (7 to 64 lowercase hex digits of a commit), and optionally `subdir`
   (next item), or a `path` instead of all of those (the item after the next).
   A branch, a version range or another key is `PKG-MANIFEST-INVALID`, at the
-  key path (`dependencies.sqlite.branch`). `override = true` and
-  `group = "test"` are the only other keys (their items below).
+  key path (`dependencies.sqlite.branch`). `override = true`,
+  `group = "test"` and `workspace = true` are the only other keys (their items
+  below).
 - `subdir` says that the package is a folder of the repository, not the
   repository itself, so one repository can hold many packages. It is a relative
   path of plain folder names joined by `/` (`"postgres"`, `"libs/sql"`). Each
@@ -432,6 +433,37 @@ import Sqlite from "pkg/sqlite/db"
   `add` and `update`. A package can be published, so a `path` is allowed only in
   the manifest of the root project: in the manifest of a package (fetched, or a
   workspace member) it is `PKG-ROOT-ONLY` at `dependencies.<name>.path`.
+- `workspace = true` makes the dependency the whole workspace of a repository,
+  under the one name of the key: `finn = { git =
+  "https://github.com/owner/finn", tag = "finn-1", workspace = true }`. A
+  project reaches a member as `pkg/<name>/<member>/<module>` (`import Core from
+  "pkg/finn/core/core"`, the member `core` of the workspace `finn`, its module
+  `core`), so the names of the members are not names of the project: a project
+  that has a `protocol` of its own can use the member `finn/protocol`. The key
+  needs `git` and a pin like any dependency, and excludes `subdir` and `path`
+  (`PKG-MANIFEST-INVALID` at `dependencies.<name>.workspace`, as a value that
+  is not a boolean is; `false` is the same as leaving it out). It may be
+  written in any manifest, a package's too, and `override` and `group` apply to
+  it as to any dependency. The repository must have, at the pin, a root
+  `agentica.toml` with a `[workspace]` table (the rules above), and every
+  member a manifest of its own; `add` and `update` read the table from the
+  commit with the fetch that gets the files, and a repository that has no
+  table, a table that breaks its rules, a member without a manifest or a member
+  inside another member (`deps/` keeps each one in its own folder) is
+  `PKG-FETCH` at `dependencies.<name>.workspace`. Every member is locked and
+  installed, whether or not an import reaches it. A dependency of a member on
+  the repository of the workspace with a `subdir` that is a member is a
+  sibling: it means the member of the same workspace, at the pin of the
+  workspace, and the `tag` or `ref` it writes is ignored, so a member keeps the
+  dependencies it writes for a user outside the repository. A sibling is
+  imported by its local name, as for any dependency (`pkg/protocol/...` in a
+  file of `finn/core` is `finn/protocol`); a package that is not a member does
+  not see the members by those names. Any other dependency of a member is
+  asked for as usual and stays flat and shared, under the same
+  `PKG-SOURCE-CONFLICT` and `override` rules. The same repository may also be a
+  dependency under another name, with or without a `subdir`: they are packages
+  of their own, as two names for one repository are, and share the cache
+  folder of a member.
 - `override = true` in a dependency of the root manifest makes its source win
   for that name everywhere in the tree, with any of the sources above (a `path`
   too, to try a local copy of a transitive dependency). A package that asks for
@@ -504,12 +536,18 @@ import Sqlite from "pkg/sqlite/db"
   dependency is fetched and locked with a commit and a hash.
 - The import is `pkg/<name>/<module path>`, with no extension:
   `"pkg/sqlite/util/json"` loads `util/json.agc` of the package. `pkg/sqlite`
-  with no module is `CHECK-IMPORT-PATH`. A name that the manifest of the
+  with no module is `CHECK-IMPORT-PATH`. For a workspace dependency the import
+  is `pkg/<name>/<member>/<module path>` (the longest member folder that the
+  path starts with is the member: `"pkg/finn/core/agent"` is the module `agent`
+  of the member `core`); a path that starts with no member is
+  `CHECK-IMPORT-PACKAGE`, and a member with no module `CHECK-IMPORT-PATH`. A
+  name that the manifest of the
   importing file declares is a package, and it comes first: it shadows a library
   of the same name in the `pkg/` roots, `agc_libs/` included. Its files come
-  only from `deps/<name>/` beside `agentica.toml`, one flat folder for each
+  only from `deps/<name>/` beside `agentica.toml`, one folder for each
   locked package, including the ones that packages import (the lock is one list,
-  so one folder for each name). A name that is not declared is the `pkg/`
+  so one folder for each name; `deps/<namespace>/<subdir>/` for a namespaced
+  name). A name that is not declared is the `pkg/`
   library search above, unchanged. Since the prefix is `pkg/`, a package import
   never clashes with a local file or folder.
 - Which manifest decides: the manifest of the project for the files of the
@@ -532,21 +570,38 @@ import Sqlite from "pkg/sqlite/db"
   (`sha256:` and 64 lowercase hex digits), `workspace = true` for a member
   of the workspace of the project, or `path` in place of the git source for a
   `path` dependency, then `override = true` for an overridden name. A bad lock
-  is `PKG-LOCK-INVALID`, a bad `subdir` too, at `package[n].subdir`. Every
-  dependency of the manifest must be
-  in the lock with the same `git` (with or without a `.git` at the end), the
-  same `subdir` (or none) and the same `tag` or `ref`, or the same `path`, and
-  the same `override`, or the lock is `PKG-LOCK-STALE`. The same check runs
-  on the manifest of every locked package that is in `deps/`: a name the lock
-  lacks is `PKG-LOCK-STALE`, and a name with another source than the lock is
+  is `PKG-LOCK-INVALID`, a bad `subdir` too, at `package[n].subdir`. A
+  workspace dependency (`workspace = true`) has one entry with its name, the
+  `git` and the pin, the `commit` and `repository`, the `[workspace]`
+  `repository` of that commit (a `git` URL), and no `hash` and no `subdir`,
+  and one entry for each member, a fetched entry with a `subdir` whose name is
+  `namespace/subdir` (`finn/core` for the folder `core`) and that has the `git`,
+  the pin and the `commit` of the workspace entry. The namespace is the name of
+  the workspace entry, and the rest is the `subdir` of the entry. A workspace
+  entry has no `/` in its name, and a `/` in the name of any other entry,
+  a namespaced name on a `path` or workspace member entry, a namespaced entry
+  without the workspace entry of its namespace at the same source and commit, a
+  namespace that is the name of an entry that is not a workspace entry, a
+  namespaced entry inside the folder of another (`finn/a`, `finn/a/b`), and a
+  `hash` or `subdir` on a workspace entry are `PKG-LOCK-INVALID` at
+  `package[n].name` (or the key that is wrong); the `package` of a
+  `[[native-artifact]]` follows the rule of a name or a namespaced name. Every
+  dependency of the manifest must be in the lock with the same `git` (with or
+  without a `.git` at the end), the same `subdir` (or none) and the same `tag`
+  or `ref`, or the same `path`, and the same `override`, and `workspace` (a
+  workspace dependency has the entry of a workspace, and any other a package),
+  or the lock is `PKG-LOCK-STALE`. The same check runs on the manifest of every
+  locked package that is in `deps/`, where a sibling is looked up under the
+  namespace of the package and its pin is not compared: a name the lock lacks
+  is `PKG-LOCK-STALE`, and a name with another source than the lock is
   `PKG-SOURCE-CONFLICT`; both are reported at `dependencies.<name>` of that
-  manifest. One name with two different sources anywhere in the
-  tree (the project and a package, or two packages) is `PKG-SOURCE-CONFLICT`,
-  unless the project overrides the name (the item on `override`);
-  the source is the `git`, the `subdir` and the pin; there are no versions to
-  compare and no ranges to solve. Both checks run once for every command that
-  loads code, before any file is read, so a conflict is reported whether or not
-  an import reaches that package. A package that is not in `deps/`, one whose
+  manifest. One name with two different sources anywhere in the tree (the
+  project and a package, or two packages) is `PKG-SOURCE-CONFLICT`, unless the
+  project overrides the name (the item on `override`); the source is the `git`,
+  the `subdir` and the pin; there are no versions to compare and no ranges to
+  solve. Both checks run once for every command that loads code, before any
+  file is read, so a conflict is reported whether or not an import reaches that
+  package. A package that is not in `deps/`, one whose
   folder cannot be listed and one whose manifest is not a regular file are left
   for the import that loads them (so a conflict in them shows only then). A
   manifest that is a symbolic link, a folder or a pipe is `PKG-SYMLINK` and is
@@ -582,7 +637,9 @@ import Sqlite from "pkg/sqlite/db"
   package, in the order of the file: a folder of the commit that is in the cache
   and has the locked hash is left alone and git does not run; a folder with
   another hash is `PKG-HASH-MISMATCH` and is never overwritten; else the package
-  is fetched. The fetch runs the system `git` (its config, SSH keys and
+  is fetched. Packages with the same `git`, pin and commit (two folders of one
+  repository, say) are fetched together: one `git fetch` serves all of them.
+  The fetch runs the system `git` (its config, SSH keys and
   credential helpers apply; a `url.<base>.insteadOf` setting applies to the
   `git` value, which the lock keeps as written): a depth-1 fetch of the tag, or
   of the locked commit for a `ref`, into a temporary bare repository with no
@@ -615,13 +672,15 @@ import Sqlite from "pkg/sqlite/db"
   `agentica install` finishes the rest. The
   answer is `fetched NAME@VERSION`, `in the cache NAME@VERSION`, for a
   workspace member `in the workspace NAME@workspace` or, for a `path`,
-  `in place NAME@path` for each package, then `overridden NAME@VERSION` for
+  `in place NAME@path` for each package (a workspace dependency has a line for
+  each member, `fetched finn/core@finn-1`, and none for its own entry), then
+  `overridden NAME@VERSION` for
   each overridden package; with no package but host artifacts ready,
   `1 native artifact ready` (or `N native artifacts ready`); else `nothing to
   install`. The command starts git even under `--deny-run`, which only limits
   programs.
-- `agentica add NAME URL --tag TAG` (or `--ref COMMIT`, `--subdir DIR` and
-  `--group test`) and
+- `agentica add NAME URL --tag TAG` (or `--ref COMMIT`, `--subdir DIR` or
+  `--workspace`, and `--group test`) and
   `agentica update [NAME]` write the lock; they are the only commands that do.
   Both work on the project of the working folder (no manifest is
   `PKG-MANIFEST-MISSING`), read the lock without checking it against the
@@ -649,7 +708,10 @@ import Sqlite from "pkg/sqlite/db"
   changed.
   - `add` takes the local name, the `https://` URL and `--tag` or `--ref`, in
     that order, then `--subdir DIR` if the package is a folder of the repository
-    and `--group test` for the test group. In place of the URL, `OWNER/REPO`
+    or `--workspace` (a flag with no value) if it is the whole workspace of the
+    repository, and `--group test` for the test group. `--workspace` with
+    `--subdir` is a usage error, and it turns off the folder that a tag
+    `NAME-X.Y.Z` would take. In place of the URL, `OWNER/REPO`
     (a GitHub account name of letters, digits and `-`, not first, at most 39
     characters, then a repository of letters, digits, `.`, `_` and `-`) is
     `https://github.com/OWNER/REPO`; the manifest and the lock store the full
@@ -668,10 +730,11 @@ import Sqlite from "pkg/sqlite/db"
     tag or commit that the manifest would refuse, or any other words, are a
     usage error (exit code 2). A name that is a dependency already is
     `PKG-DEPENDENCY-EXISTS`. The manifest gets one new line, `NAME = { git =
-    "URL", tag = "TAG" }` (with `subdir = "DIR"` and then `group = "test"` last
-    when asked), after the last entry of `[dependencies]` (or in a new
-    `[dependencies]` table at the end of the file); no other byte changes, so
-    comments, blank lines, the order of the keys and the line endings stay. The
+    "URL", tag = "TAG" }` (with `subdir = "DIR"` or `workspace = true`, and then
+    `group = "test"` last, when asked), after the last entry of
+    `[dependencies]` (or in a new `[dependencies]` table at the end of the
+    file); no other byte changes, so comments, blank lines, the order of the
+    keys and the line endings stay. The
     new text is read as a manifest before it is saved, and a layout the edit
     cannot handle (the table written as `dependencies = {}`, say) is
     `PKG-MANIFEST-EDIT`: write the line by hand.
@@ -689,12 +752,20 @@ import Sqlite from "pkg/sqlite/db"
     `deps/`.
   - A workspace member is locked with no fetch, whether or not its tag exists,
     and its manifest is read from its folder; its version is `workspace`.
+  - A workspace dependency is fetched once: the one fetch of the pin reads the
+    root manifest and every member, and a locked workspace at the same source
+    is kept, its members put in the cache with one fetch if they are missing.
+    `update` and `update NAME` fetch the pin again, as for any tag, and take
+    the new commit for the workspace entry and every member together. The
+    answer has a line for the workspace entry (`added finn@finn-1`) and one for
+    each member (`added finn/core@finn-1 (folder core)`).
   - The answer lists `added NAME@VERSION`, `updated NAME@VERSION` (another
     commit or pin) and `removed NAME`, one per line, or `nothing to update`;
     a package with a `subdir` adds ` (folder DIR)` after `NAME@VERSION`. With
     `--json` a success prints `{"ok":true}`.
 - `deps/` holds the files of each locked package that is not a workspace
-  member, direct or not, in
+  member (a workspace dependency has no folder of its own, only the folders of
+  its members), direct or not, in
   `deps/<name>/` beside `agentica.toml`, like `mix deps.get`: the files the hash
   covers and the `agentica.toml` of the package (for a `subdir`, of that folder
   only: the cache holds nothing else). `install`, `add` and `update` copy them
@@ -716,7 +787,10 @@ import Sqlite from "pkg/sqlite/db"
   that holds it; `install` writes the package again from the cache, and the next
   command removes that folder once it is older than ten minutes. A folder of a
   package that `update` or `add` dropped from the lock is moved aside and
-  removed without following links (a link is removed as a link). Nothing else in
+  removed without following links (a link is removed as a link); that of a
+  dropped workspace dependency is `deps/<name>/`, with all its members. The
+  folder of a workspace dependency is checked as `deps/` is: a link there is
+  `PKG-SYMLINK`. Nothing else in
   `deps/` is touched, and the tool writes no `.gitignore` there: a project may
   commit `deps/` or ignore it. `deps/` itself must be a real folder: a symbolic
   link is `PKG-SYMLINK`, and a file or a write that fails is `PKG-WRITE` (the

@@ -2,16 +2,17 @@
 ## beside agentica.toml (docs/grammar/05b-modules.md). The project is the one of the working folder, found as a build
 ## finds it (the nearest agentica.toml going up), and the lock is read as a build reads it, so a manifest that asks for
 ## more than the lock holds is PKG-LOCK-STALE. The lock is never written. A package that is in the cache with the
-## locked hash is left alone and git does not run for it; the others are fetched (io/package_fetch.agc), one after the
-## other, and the first failure stops the command. When all are in the cache, the manifest of each package is checked
-## against the lock, as a build checks it, and only then are the files written to deps/ (io/package_deps.agc), so a
-## cache or a manifest that fails those checks writes nothing there. A folder of deps/ that the lock does not name is
-## left as it is. A package the lock marks as a member of the workspace of the project is neither fetched nor written
-## to deps/: the build reads it from the member's folder, and its manifest is checked there. Then the prebuilt native
-## modules of the host target are downloaded (io/native_prebuilt.agc). Last, the native modules of the project and of
-## the packages it reads in place (members and `path` dependencies) are built from their C sources (`[native.NAME]
-## build`, io/native_build.agc), so the first run finds them built. A fetched package is only fetched and checked: its
-## module builds when a file first uses it, so a project that never uses it needs no C compiler.
+## locked hash is left alone and git does not run for it; the others are fetched (io/package_fetch.agc), those of one
+## repository, pin and commit together, and the first failure stops the command. When all are in the cache, the
+## manifest of each package is checked against the lock, as a build checks it, and only then are the files written to
+## deps/ (io/package_deps.agc), so a cache or a manifest that fails those checks writes nothing there. A folder of
+## deps/ that the lock does not name is left as it is. A package the lock marks as a member of the workspace of the
+## project is neither fetched nor written to deps/: the build reads it from the member's folder, and its manifest is
+## checked there. Then the prebuilt native modules of the host target are downloaded (io/native_prebuilt.agc). Last,
+## the native modules of the project and of the packages it reads in place (members and `path` dependencies) are built
+## from their C sources (`[native.NAME] build`, io/native_build.agc), so the first run finds them built. A fetched
+## package is only fetched and checked: its module builds when a file first uses it, so a project that never uses it
+## needs no C compiler.
 
 import NativeArtifact from "../packages/native_artifact"
 import Engine from "../io/native_artifact"
@@ -20,6 +21,7 @@ import PackageDeps from "../io/package_deps"
 import PackageFetch from "../io/package_fetch"
 import Paths from "../modules/import_path"
 import Env from "../modules/link_env"
+import GitSource from "../packages/git_source"
 import Lock from "../packages/lock"
 import Manifest from "../packages/manifest"
 import NativeLibrary from "../packages/native_library"
@@ -46,8 +48,9 @@ def fill_all(settings: Env.Settings, lock: Lock.Lock) -> Result[String]
   lines: List[String] = []
   if lock.packages.size > 0
     cache = try PackageFetch.cache_for(settings.env, lock.file, lock.packages)
-    for index in 0...lock.packages.size
-      locked = lock.packages[index]
+    groups = fetch_groups(lock)
+    filled: Map[String, PackageFetch.Filled] = {}
+    for locked in lock.packages
       label = Lock.label(locked)
       if locked.member
         lines = lines.push("in the workspace #{label}")
@@ -59,9 +62,22 @@ def fill_all(settings: Env.Settings, lock: Lock.Lock) -> Result[String]
         next
       end
 
-      place = PackageFetch.Place(file: lock.file, entry: Reader.item("package", index))
-      filled = try PackageFetch.fill(settings.workspace, cache, place, locked)
-      case filled
+      # The entry of a workspace dependency has no files: its members, which follow it, are the packages.
+      next if Lock.root?(locked)
+
+      if !filled.has_key?(locked.name)
+        entries = groups[fetch_key(locked)].map do |index: Int|
+          place = PackageFetch.Place(file: lock.file, entry: Reader.item("package", index))
+          PackageFetch.Entry(place: place, locked: lock.packages[index])
+        end
+
+        done = try PackageFetch.fill_group(settings.workspace, cache, entries)
+        for at in 0...entries.size
+          filled = filled.put(entries[at].locked.name, done[at])
+        end
+      end
+
+      case filled[locked.name]
         PackageFetch.Filled.Fetched -> lines = lines.push("fetched #{label}")
         PackageFetch.Filled.Present -> lines = lines.push("in the cache #{label}")
       end
@@ -153,6 +169,26 @@ def artifact_key(lock: Lock.Lock, artifact: Lock.Artifact) -> String
   "native-artifact"
 end
 
+# The packages that one fetch serves, by `fetch_key`: the indexes in the lock of the fetched packages of one
+# repository, pin and commit (the folders of a repository, or two names for it), in the order of the file.
+def fetch_groups(lock: Lock.Lock) -> Map[String, List[Int]]
+  groups: Map[String, List[Int]] = {}
+  for index in 0...lock.packages.size
+    locked = lock.packages[index]
+    next if Lock.in_place?(locked) or Lock.root?(locked)
+
+    key = fetch_key(locked)
+    groups = groups.put(key, groups.get(key).unwrap_or([]).push(index))
+  end
+
+  groups
+end
+
+def fetch_key(locked: Lock.Locked) -> String
+  sep = String.from_code(0)
+  "#{GitSource.identity(locked.source.git)}#{sep}#{GitSource.pin(locked.source)}#{sep}#{locked.commit}"
+end
+
 # The lines of the answer, or a packed failure.
 def install(settings: Env.Settings, dir: String, fetching: Prebuilt.Fetching) -> Result[String]
   workspace = settings.workspace
@@ -163,7 +199,7 @@ def install(settings: Env.Settings, dir: String, fetching: Prebuilt.Fetching) ->
       lines = try fill_all(settings, found.lock)
       scope = PackageImport.scope_of(project).with(agentica: settings.version)
       try check_cache(settings, found.lock, scope)
-      try PackageDeps.sync(settings, found.lock.file, scope.deps, found.lock.packages, [])
+      try PackageDeps.sync(settings, found.lock.file, scope.deps, found.lock.packages, [], [])
       prebuilt = try Prebuilt.fetch_all(settings, found.manifest, found.members, found.lock.packages, fetching)
       try build_natives(settings, found, scope)
       ok(with_lines(lines, prebuilt))
@@ -203,7 +239,7 @@ def check_cache(settings: Env.Settings, lock: Lock.Lock, scope: PackageImport.Sc
   for locked in lock.packages
     if Lock.in_place?(locked)
       folders = folders.put(locked.name, PackageImport.folder_of(scope, locked))
-    else
+    elsif !Lock.root?(locked)
       folders = folders.put(locked.name, PackageCache.folder(cache, locked.source, locked.commit))
     end
   end

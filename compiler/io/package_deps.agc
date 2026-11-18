@@ -1,5 +1,6 @@
-## Writes the locked packages into `deps/<name>/` of the project (docs/grammar/05b-modules.md), one flat folder for
-## each package of the build, direct or not, and removes the ones the lock dropped. This is the only place a build
+## Writes the locked packages into `deps/<name>/` of the project (docs/grammar/05b-modules.md), one folder for each
+## package of the build, direct or not (`deps/<namespace>/<subdir>/` for a namespaced name such as `finn/core`), and
+## removes the ones the lock dropped. This is the only place a build
 ## reads a package from. The files come from the cache folder of the commit, which `install` filled and hashed: the
 ## .agc files the hash covers and the manifest of the package (for a `subdir`, the cache folder holds that folder
 ## alone). They are built in a hidden folder of deps/, hashed against the lock, and swapped for the old `deps/<name>/`
@@ -33,21 +34,28 @@ import SaveFile from "save_file"
 ## folders of the `dropped` names that are not among them. `packages` are in the order of `lock_file`, whose entries
 ## the failures about a package name. Every package must be in the cache already (`install`, `add` and `update` fill
 ## it), except a workspace member or a `path` package, which has no folder in deps/: its entry is skipped, and a
-## folder of deps/ that the name has is removed like that of a dropped package.
+## folder of deps/ that the name has is removed like that of a dropped package. The folders of the `reset` names (a
+## package that became a workspace dependency, or the other way round) are removed before anything is written, so none
+## of their old files stays.
 def sync(
   settings: Env.Settings,
   lock_file: String,
   deps: String,
   packages: List[Lock.Locked],
   dropped: List[String],
+  reset: List[String],
 ) -> Result[Void]
   workspace = settings.workspace
   try sweep(workspace, deps)
+  for name in reset
+    try remove(workspace, deps, name)
+  end
+
   if packages.size > 0
     cache = try PackageFetch.cache_for(settings.env, lock_file, packages)
     for index in 0...packages.size
       locked = packages[index]
-      next if Lock.in_place?(locked)
+      next if Lock.in_place?(locked) or Lock.root?(locked)
 
       place = PackageFetch.Place(file: lock_file, entry: Reader.item("package", index))
       folder = PackageCache.folder(cache, locked.source, locked.commit)
@@ -58,6 +66,7 @@ def sync(
     end
   end
 
+  # The entry of a workspace dependency has no folder, but its name is the folder of its members: it is not removed.
   fetched = packages.filter do |locked| !Lock.in_place?(locked) end
   kept = Set.new(fetched.map do |locked| locked.name end)
   members = packages.filter do |locked| Lock.in_place?(locked) end
@@ -85,7 +94,7 @@ def put(
   return ok() if up_to_date?(workspace, deps, source, locked)
 
   files = try chosen(workspace, source, place, locked)
-  try prepare(workspace, deps)
+  try prepare_parents(workspace, deps, locked.name)
   parent = try make_stage(deps)
   done = stage_and_swap(workspace, deps, parent, source, files, place, locked)
   # A staging folder that cannot be removed stays hidden in deps/ and does not change the answer. After a swap
@@ -116,8 +125,8 @@ end
 # `source`, the cache folder (the hash does not cover it). Anything else, a failed look included, is a reason to write
 # it again.
 def up_to_date?(workspace: Workspace.Workspace, deps: String, source: String, locked: Lock.Locked) -> Bool
-  here = kind_of(workspace, deps)
-  return false if !here.ok? or !folder?(here.unwrap!)
+  parents = parents_present?(workspace, deps, locked.name)
+  return false if !parents.ok? or !parents.unwrap!
 
   target = Paths.join(deps, locked.name)
   seen = kind_of(workspace, target)
@@ -240,8 +249,43 @@ def prepare(workspace: Workspace.Workspace, deps: String) -> Result[Void]
   end
 end
 
+# deps/ and the folders above deps/<name> when the name has a namespace (`finn/examples/extension`: deps/finn and
+# deps/finn/examples), each made if it is not there and never a link.
+def prepare_parents(workspace: Workspace.Workspace, deps: String, name: String) -> Result[Void]
+  try prepare(workspace, deps)
+  parts = name.split("/")
+  for count in 1...parts.size
+    try prepare(workspace, Paths.join(deps, parts.take(count).join("/")))
+  end
+
+  ok()
+end
+
+# Whether deps/ and every folder above deps/<name> exist as real folders: false when one is not there, an error when
+# one is a link or not a folder, so that nothing is read or moved through it. Nothing is made.
+def parents_present?(workspace: Workspace.Workspace, deps: String, name: String) -> Result[Bool]
+  folders = [deps]
+  parts = name.split("/")
+  for count in 1...parts.size
+    folders = folders.push(Paths.join(deps, parts.take(count).join("/")))
+  end
+
+  for folder in folders
+    seen = try kind_of(workspace, folder)
+    return ok(false) if absent?(seen)
+
+    try prepare(workspace, folder)
+  end
+
+  ok(true)
+end
+
 def kind_of(workspace: Workspace.Workspace, path: String) -> Result[Kind]
-  entries = workspace.list_folder.call(Paths.directory_of(path))
+  folder = Paths.directory_of(path)
+  entries = workspace.list_folder.call(folder)
+  # The folder of a namespaced package may not be made yet.
+  return ok(Kind.Absent) if !entries.ok? and !workspace.directory_exists.call(folder)
+
   return error(write_failure(path, "cannot read the folder of #{path}", entries.message)) if !entries.ok?
 
   name = Paths.last_part(path)
@@ -328,7 +372,7 @@ end
 # takes its place, and the old one is removed. A rename that fails puts the old one back.
 def swap(workspace: Workspace.Workspace, deps: String, stage: String, name: String) -> Result[Void]
   target = Paths.join(deps, name)
-  backup = Paths.join(deps, ".old-#{unique()}-#{name}")
+  backup = Paths.join(deps, ".old-#{unique()}-#{name.replace("/", "@")}")
   seen = try kind_of(workspace, target)
   replacing = !absent?(seen)
   if replacing
@@ -360,22 +404,23 @@ end
 
 # Takes the folder (or link, or file) of a dropped package out of deps/ by a rename, then removes it. Path.remove does
 # not follow links, and the rename means a build that comes in between finds the package missing, never half removed.
-# A deps/ that does not exist has nothing to remove, and one that is a link is refused as `put` refuses it.
+# A deps/ or a namespace folder that does not exist has nothing to remove, and one that is a link is refused as `put`
+# refuses it, before anything is looked at through it.
 def remove(workspace: Workspace.Workspace, deps: String, name: String) -> Result[Void]
-  here = try kind_of(workspace, deps)
-  return ok() if absent?(here)
+  present = try parents_present?(workspace, deps, name)
+  return ok() if !present
 
-  try prepare(workspace, deps)
   target = Paths.join(deps, name)
   seen = try kind_of(workspace, target)
   return ok() if absent?(seen)
 
-  backup = Paths.join(deps, ".old-#{unique()}-#{name}")
+  backup = Paths.join(deps, ".old-#{unique()}-#{name.replace("/", "@")}")
   moved = Path.rename(target, backup, FS_TIMEOUT_MS)
   return error(write_failure(target, "cannot remove #{target}", moved.message)) if !moved.ok?
 
   # An old folder that cannot be removed is only a spare hidden folder.
   _ = Path.remove(backup, FS_TIMEOUT_MS)
+
   ok()
 end
 
