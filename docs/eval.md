@@ -298,6 +298,19 @@ Issue #1009 tracks it: the Agentica `skill` arm against the typed Python arm,
 with the same model and budget, and the measurement of `--ai` and labels
 against plain text on the `binary` arm.
 
+### The preflight
+
+Before the first task of a `--agent pi` round in Docker, the runner makes one
+tiny call in the agent image, with the round's model, mounts, auth and
+network: the prompt `Reply with the word pong.` It stops the round before any
+task when Pi does not answer, when the provider refuses the key or the model
+(Pi exits 0 then, and the error is in the assistant's `message_end`), when Pi
+does not know the model, when the answer has no tokens or does not parse, or
+when the run has no cost source ("no cost source for MODEL": Pi reports 0 and
+`PRICES` has no price). `run.json` records `preflight` (`ok`, `cost_source`,
+`tokens`, `turns`, `cost`), and its cost counts toward `--max-cost`.
+`--no-preflight` skips it; `--preflight-only` runs it alone.
+
 ### The budget cap
 
 The queue goes rep by rep: rep 1 of every task and arm (task by task, then arm

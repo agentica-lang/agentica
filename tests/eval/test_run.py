@@ -698,7 +698,14 @@ class ImageBuildTests(unittest.TestCase):
         self.assertIn("Docker daemon", str(raised.exception))
 
 
+PREFLIGHT = {"ok": True, "cost_source": "agent", "tokens": 120, "turns": 1, "cost": 0.0}
+
+
 class MainTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.preflights: list = []
+        self.preflight = PREFLIGHT
+
     def main(self, root: Path, argv: list[str], status: str,
              cost: float = 0.0) -> tuple[int, list[tuple[str, list[str], str]], list]:
         calls: list[tuple[str, list[str], str]] = []
@@ -723,8 +730,10 @@ class MainTests(unittest.TestCase):
         with (patch.object(run, "ROOT", root), patch.object(run, "EVAL", root / "eval"),
               patch.object(run, "build") as build, patch.object(run, "require_docker"),
               patch.object(run, "validate_docker", fake_validate), patch.object(run, "one_run", fake_one_run),
+              patch.object(run, "run_preflight") as preflight,
               patch.dict(os.environ, {"FOO": "bar"}), patch("sys.argv", ["run.py", *argv]),
               contextlib.redirect_stdout(io.StringIO())):
+            preflight.side_effect = lambda args: self.preflights.append(args.model) or self.preflight
             code = run.main()
         build.assert_called_once()
         return code, calls, validated
@@ -792,6 +801,23 @@ class MainTests(unittest.TestCase):
         self.assertEqual((code, json.loads(text)["pi_auth_file"]), (0, True))
         self.assertNotIn("sk-test", text)
         self.assertNotIn(str(auth), text)
+
+    def test_a_pi_round_runs_the_preflight_first_records_it_and_counts_its_cost(self) -> None:
+        self.preflight = dict(PREFLIGHT, cost=0.04)
+        with tempfile.TemporaryDirectory() as directory:
+            root = self.runtime_root(directory)
+            self.main(root, ["--model", "opencode-go/m", "--tasks", "t1", "--arms", "skill", "--max-cost", "1"],
+                      "pass", cost=0.5)
+            info = self.result_info(root)
+            shutil.rmtree(root / "eval")
+            self.main(root, ["--no-preflight", "--tasks", "t1", "--arms", "skill"], "pass")
+            skipped = self.result_info(root)
+            shutil.rmtree(root / "eval")
+            self.main(root, ["--check-references", "--tasks", "t1"], "pass")
+
+        self.assertEqual(self.preflights, ["opencode-go/m"])
+        self.assertEqual((info["preflight"], info["cost"]), (self.preflight, 0.54))
+        self.assertIsNone(skipped["preflight"])
 
     def test_an_arm_runs_only_on_its_task_subset(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -899,6 +925,53 @@ class MainTests(unittest.TestCase):
                 with contextlib.redirect_stdout(out):
                     run.budgeted_run(args, run.Budget(cap, 0.01), Path("r"), Path("s"), "t1", "skill", 1)
                 self.assertEqual("warning: t1-skill-1 reported no cost" in out.getvalue(), warns)
+
+
+def pi_reply(usage: dict | None = None, stop: str = "stop", error: str = "", text: str = "pong") -> str:
+    """A Pi stream in the shape Pi 1.3.0 prints for one answer (recorded from opencode-go, trimmed)."""
+    cost = {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0, "total": 0}
+    usage = usage or {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0, "totalTokens": 0, "cost": cost}
+    message = {"role": "assistant", "content": [{"type": "text", "text": text}] if text else [], "api": "openai-completions",
+               "provider": "opencode-go", "model": "deepseek-v4.1-flash", "usage": usage, "stopReason": stop}
+    if error:
+        message["errorMessage"] = error
+    events = [{"type": "message_end", "message": {"role": "user", "content": [{"type": "text", "text": "Reply"}]}},
+              {"type": "message_update", "assistantMessageEvent": {"type": "text_delta", "delta": text}},
+              {"type": "message_end", "message": message}, {"type": "agent_end", "messages": []}]
+    return "\n".join(json.dumps(event) for event in events) + "\n"
+
+
+class PreflightTests(unittest.TestCase):
+    MODEL = "opencode-go/deepseek-v4.1-flash"
+
+    def usage(self, total: float) -> dict:
+        cost = {"input": total * 0.8, "output": total * 0.2, "cacheRead": 0, "cacheWrite": 0, "total": total}
+        return {"input": 1500, "output": 3, "cacheRead": 0, "cacheWrite": 0, "totalTokens": 1503, "cost": cost}
+
+    def test_a_reported_cost_is_the_source(self) -> None:
+        result = run.preflight_result(pi_reply(self.usage(0.000227)), "", False, 0, self.MODEL)
+
+        self.assertEqual(result, {"ok": True, "cost_source": "agent", "tokens": 1503, "turns": 1, "cost": 0.000227})
+
+    def test_a_cost_of_0_falls_back_to_the_price_table_or_stops_the_round(self) -> None:
+        free = self.usage(0.0)
+        self.assertEqual(run.preflight_result(pi_reply(free), "", False, 0, self.MODEL)["cost_source"], "table")
+        with self.assertRaises(SystemExit) as raised:
+            run.preflight_result(pi_reply(free), "", False, 0, "opencode-go/unpriced")
+        self.assertIn("no cost source for opencode-go/unpriced", str(raised.exception))
+
+    def test_an_auth_error_an_unknown_model_or_no_answer_stops_the_round(self) -> None:
+        refused = pi_reply(stop="error", error='401: {"type":"error","error":{"message":"Invalid API key"}}', text="")
+        unknown = 'Warning: Model "no-such" not found for provider "opencode-go". Using custom model id.\n'
+        for out, err, timed_out, returncode, message in (
+                (refused, "", False, 0, "refused the call"),
+                (pi_reply(self.usage(0.1)), unknown, False, 0, "does not know the model"),
+                (pi_reply(self.usage(0.1)), "crash", False, 1, "exited 1"),
+                (pi_reply(self.usage(0.1), text=""), "", False, 0, "no answer"),
+                ("", "", True, None, "did not answer")):
+            with self.subTest(message=message), self.assertRaises(SystemExit) as raised:
+                run.preflight_result(out, err, timed_out, returncode, self.MODEL)
+            self.assertIn(message, str(raised.exception))
 
 
 class PiVersionTests(unittest.TestCase):
@@ -1024,7 +1097,7 @@ class DockerBoundaryTests(unittest.TestCase):
 
             with (patch.object(run, "agent_command", return_value=probe), patch.object(run, "AGENT_NETWORK", False),
                   patch.object(run.subprocess, "Popen", recording_popen)):
-                out, err, timed_out = run.run_agent("pi", work, root, "t1-stats", "skill", None, 60, "docker", [],
+                out, err, timed_out, _ = run.run_agent("pi", work, root, "t1-stats", "skill", None, 60, "docker", [],
                                                     run.DEFAULT_IMAGE, auth)
             unchanged = json.loads(auth.read_text())["opencode-go"]["key"] == key
             left = list(work.iterdir())

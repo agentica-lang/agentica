@@ -270,8 +270,9 @@ def prompt(work: Path, arm: str) -> str:
     return " ".join(lines)
 
 
-def agent_command(agent: str, work: Path, arm: str, model: str | None, *, in_chroot: bool) -> list[str]:
-    text = prompt(work, arm)
+def agent_command(agent: str, work: Path, arm: str, model: str | None, *, in_chroot: bool,
+                  text: str | None = None) -> list[str]:
+    text = text or prompt(work, arm)
     workspace = WORKSPACE if in_chroot else work
     if agent == "pi":
         cmd = ["pi", "-p", "--mode", "json", "--no-session", "--no-context-files", "--no-extensions"]
@@ -594,13 +595,15 @@ def run_agent(
     pass_env: list[str],
     image: str,
     pi_auth: Path | None = None,
-) -> tuple[str, str, bool]:
+    text: str | None = None,
+) -> tuple[str, str, bool, int | None]:
+    """The agent's redacted stdout and stderr, whether it timed out, and its exit status."""
     ext = ARMS[arm]
     if agent == "reference":
         shutil.copy(TASKS / task / f"reference.{ext}", work / f"solution.{ext}")
-        return "", "", False
+        return "", "", False, 0
     env = child_environment(pass_env, in_chroot=True, workspace=work)
-    command = agent_command(agent, work, arm, model, in_chroot=True)
+    command = agent_command(agent, work, arm, model, in_chroot=True, text=text)
     container = f"agentica-agent-{uuid.uuid4().hex}"
     secrets = auth_secrets(pi_auth)
     if sandbox == "docker":
@@ -615,11 +618,11 @@ def run_agent(
                             start_new_session=True)
     try:
         out, err = proc.communicate(timeout=timeout)
-        return agent_log(out, pass_env, secrets), redact_secrets(err, pass_env, secrets), False
+        return agent_log(out, pass_env, secrets), redact_secrets(err, pass_env, secrets), False, proc.returncode
     except subprocess.TimeoutExpired:
         os.killpg(proc.pid, signal.SIGKILL)
         out, err = proc.communicate()
-        return agent_log(out or "", pass_env, secrets), redact_secrets(err or "", pass_env, secrets), True
+        return agent_log(out or "", pass_env, secrets), redact_secrets(err or "", pass_env, secrets), True, None
     finally:
         if sandbox == "docker":
             remove_container(container)
@@ -966,7 +969,7 @@ def one_run(args: argparse.Namespace, results: Path, scratch: Path, task: str, a
     prepare(work, task, arm)
     (agent_root / "home" / "agent").mkdir(parents=True, exist_ok=True)
     began = time.time()
-    out, err, timed_out = run_agent(
+    out, err, timed_out, _ = run_agent(
         args.agent, work, agent_root, task, arm, args.model, args.timeout, args.sandbox, args.pass_env, args.image,
         args.pi_auth,
     )
@@ -994,6 +997,54 @@ def one_run(args: argparse.Namespace, results: Path, scratch: Path, task: str, a
     return row
 
 
+PREFLIGHT_PROMPT = "Reply with the word pong."
+PREFLIGHT_TIMEOUT = 120
+UNKNOWN_MODEL = re.compile(r'Model "[^"]*" not found for provider "[^"]*"')
+
+
+def preflight_result(out: str, err: str, timed_out: bool, returncode: int | None, model: str) -> dict:
+    """Check one tiny Pi call: it ended, the provider took the key and the model, the answer has tokens, the stream
+    parses, and the run has a cost source. Stops the round with a message otherwise. Pi exits 0 on a provider
+    error, so the error comes from the assistant's `message_end`."""
+    if timed_out:
+        raise SystemExit(f"preflight: Pi did not answer in {PREFLIGHT_TIMEOUT} s")
+    unknown = UNKNOWN_MODEL.search(err)
+    if unknown:
+        raise SystemExit(f"preflight: Pi does not know the model {model}: {unknown.group(0)}")
+    replies = [event["message"] for event in json_events(out) if event.get("type") == "message_end"
+               and isinstance(event.get("message"), dict) and event["message"].get("role") == "assistant"]
+    for reply in replies:
+        if reply.get("stopReason") == "error":
+            raise SystemExit(f"preflight: the provider refused the call (auth or model?): "
+                             f"{str(reply.get('errorMessage', ''))[:300]}")
+    if returncode != 0:
+        raise SystemExit(f"preflight: Pi exited {returncode}: {err.strip()[-300:]}")
+    row = {"model": model, **pi_metrics(out)}
+    tokens = row["tokens_in"] + row["tokens_out"] + row["tokens_cached"]
+    answered = any(part.get("type") == "text" and str(part.get("text", "")).strip()
+                   for reply in replies for part in reply.get("content", []) if isinstance(part, dict))
+    if row["turns"] < 1 or tokens <= 0 or not answered:
+        raise SystemExit(f"preflight: no answer with tokens from {model} (turns {row['turns']}, tokens {tokens})")
+    row.update(spend(row))
+    if row["cost_source"] == "none":
+        raise SystemExit(f"no cost source for {model}: Pi reported a cost of 0 and PRICES in run.py has no price for it")
+    return {"ok": True, "cost_source": row["cost_source"], "tokens": tokens, "turns": row["turns"],
+            "cost": round(row["cost"], 6)}
+
+
+def run_preflight(args: argparse.Namespace) -> dict:
+    """One tiny call in the agent image, with the round's model, mounts, auth and network."""
+    with tempfile.TemporaryDirectory(prefix="agentica-preflight-") as directory:
+        work = Path(directory) / "workspace"
+        work.mkdir()
+        out, err, timed_out, returncode = run_agent(
+            "pi", work, Path(directory), "preflight", "typed-python", args.model, PREFLIGHT_TIMEOUT, args.sandbox,
+            args.pass_env, args.image, args.pi_auth, text=PREFLIGHT_PROMPT)
+    result = preflight_result(out, err, timed_out, returncode, args.model or "default")
+    print(f"preflight: ok, {result['tokens']} tokens, ${result['cost']:.6f} ({result['cost_source']})", flush=True)
+    return result
+
+
 class Budget:
     """The `--max-cost` cap, a soft one. A run starts only when the cost so far, plus the estimate for this run and
     for every run in flight, stays under the cap; the first refusal is final, so the round stops starting runs and
@@ -1010,6 +1061,11 @@ class Budget:
         self.highest = 0.0
         self.stopped = False
         self.lock = threading.Lock()
+
+    def charge(self, cost: float) -> None:
+        """Add a cost outside the runs (the preflight)."""
+        with self.lock:
+            self.spent += cost
 
     def estimate(self) -> float:
         return max(self.floor, self.highest)
@@ -1206,6 +1262,10 @@ def main() -> int:
                         help="firejail runs the host-built agentica on the chroot's glibc")
     parser.add_argument("--image", default=DEFAULT_IMAGE, help="Docker image; the default is built when missing")
     parser.add_argument("--summarize", metavar="RESULTS_DIR")
+    parser.add_argument("--no-preflight", action="store_true",
+                        help="skip the preflight: one tiny Pi call with the round's model, auth and image that "
+                             "checks the auth, the model, the tokens and the cost source before any task runs")
+    parser.add_argument("--preflight-only", action="store_true", help="run the preflight alone and exit")
     parser.add_argument("--check-references", action="store_true",
                         help="grade every reference solution (no model, no credentials) and exit 1 if one fails; "
                              f"arms default to {' '.join(REFERENCE_ARMS)}")
@@ -1243,6 +1303,13 @@ def main() -> int:
             raise SystemExit("--sandbox firejail requires --chroot-root")
         args.chroot_root = args.chroot_root.resolve()
         validate_sandbox(args.chroot_root, args.agent, typed)
+    preflight = args.agent == "pi" and args.sandbox == "docker" and not args.no_preflight
+    if args.preflight_only:
+        if not preflight:
+            raise SystemExit("--preflight-only needs --agent pi in the Docker sandbox, without --no-preflight")
+        validate_docker(args.image, pi=True)
+        print(json.dumps(run_preflight(args)))
+        return 0
     if not args.no_build:
         build()
     if not (ROOT / "dist" / "runtime" / "bin" / "agentica").is_file():
@@ -1250,12 +1317,16 @@ def main() -> int:
     image_info: dict[str, str | None] = {"checker": None, "image_id": None, "pi": None}
     if args.sandbox == "docker":
         image_info = validate_docker(args.image, typed, agentica, args.agent == "pi")
+    checked = run_preflight(args) if preflight else None
     stamp = time.strftime("%Y%m%d-%H%M%S")
     results = EVAL / "results" / f"{stamp}-{args.agent}"
     results.mkdir(parents=True)
-    (results / "run.json").write_text(json.dumps(run_info(args, image_info), indent=2) + "\n", encoding="utf-8")
+    (results / "run.json").write_text(json.dumps({**run_info(args, image_info), "preflight": checked}, indent=2) + "\n",
+                                      encoding="utf-8")
     jobs = run_order(args.tasks, args.arms, args.arm_tasks, args.reps)
     budget = Budget(args.max_cost, args.run_cost_estimate)
+    if checked:
+        budget.charge(checked["cost"])
     with tempfile.TemporaryDirectory(prefix="agentica-eval-") as scratch_dir:
         scratch = Path(scratch_dir)
         with ThreadPoolExecutor(max_workers=args.jobs) as pool:
