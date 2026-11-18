@@ -21,15 +21,21 @@ ROOT = Path(__file__).resolve().parents[2]
 EVAL = ROOT / "tests" / "eval"
 TASKS = EVAL / "tasks"
 SKILL = ROOT / ".agents" / "skills" / "agentica-programming"
-ARMS = {"skill": "agc", "grammar": "agc", "binary": "agc", "python": "py", "typed-python": "py", "skill-nocli": "agc"}
+ARMS = {"skill": "agc", "grammar": "agc", "binary": "agc", "python": "py", "typed-python": "py", "skill-nocli": "agc",
+        "go": "go"}
 TYPED_ARMS = {"typed-python"}
 SKILL_ARMS = {"skill", "skill-nocli"}
 # Arms that run only when asked for with --arms: the default is the five arms of the early rounds.
-OPT_IN_ARMS = {"skill-nocli"}
+OPT_IN_ARMS = {"skill-nocli", "go"}
 NOCLI_NOTE = "agentica --help and agentica help still name the four query commands; the wrapper only refuses them"
-REFERENCE_ARMS = ["binary", "python", "typed-python"]
+REFERENCE_ARMS = ["binary", "python", "typed-python", "go"]
 CHECKER = ["mypy", "--strict", "--cache-dir=/dev/null"]
 CHECK_TIMEOUT = 90
+# The go arm checks with `go vet` and then `go build`, in file mode: start.go sits next to solution.go, and both are
+# package main.
+GO_VET = ["go", "vet", "solution.go"]
+GO_BUILD = ["go", "build", "-o", "solution", "solution.go"]
+GO_FILE_ERROR = re.compile(r"^(?:vet: )?\S+\.go:\d+(?::\d+)?: ", re.MULTILINE)
 NET_STRONG = re.compile(r"\bwget\b|\bgit\s+clone\b|github\.com|\bpip3?\s+install\b|\bnpm\b|\bapt(?:-get)?\b")
 NET_WEAK = re.compile(r"\bcurl\b|\burllib\b")
 LOOPBACK = re.compile(r"\blocalhost\b|127\.0\.0\.1")
@@ -50,7 +56,8 @@ RUN_COMMAND = re.compile(COMMAND_PREFIX + r"(?:\S*/)?(?:agentica(?:-real)?|pytho
 SHELL_SCRIPT = re.compile(COMMAND_PREFIX + r"(?:\S*/)?(?:ba)?sh\s+(?:-[a-z]+\s+)*?-[a-z]*c[a-z]*\s+"
                           r"(?:'([^']*)'|\"((?:[^\"\\]|\\.)*)\")")
 GO_COMMAND = re.compile(COMMAND_PREFIX + r"(?:\S*/)?go\s+(?:vet|build|run|test)\b")
-GO_ERROR = re.compile(r"^\s*\S+\.go:\d+(?::\d+)?: |^panic: |^\s*--- FAIL", re.MULTILINE)
+# `go vet` puts "vet: " before the first type error of a file it cannot load.
+GO_ERROR = re.compile(r"^\s*(?:vet: )?\S+\.go:\d+(?::\d+)?: |^panic: |^\s*--- FAIL", re.MULTILINE)
 # The common shell forms that write the solution: a redirection (a `cat` heredoc too), `tee`, `sed -i`, `cp` or `mv`
 # onto it, and `open('solution.py', 'w')` in a `python -c`. Other forms (a script, `dd`, `install`) are not seen.
 SOLUTION = r"['\"]?(?:\S*/)?solution\.(?:agc|py|go)(?![\w.])"
@@ -149,6 +156,14 @@ def clone_rootfs(template: Path, destination: Path) -> Path:
     return destination
 
 
+def go_mod() -> str:
+    """The go.mod of a workspace: module `solution`, at the Go version of the image's pin."""
+    found = re.search(r"^ARG GO_VERSION=(\d+\.\d+)", (EVAL / "Dockerfile").read_text(encoding="utf-8"), re.MULTILINE)
+    if not found:
+        raise SystemExit("tests/eval/Dockerfile has no ARG GO_VERSION")
+    return f"module solution\n\ngo {found.group(1)}\n"
+
+
 def start_file(task: str, arm: str) -> Path:
     ext = ARMS[arm]
     typed = TASKS / task / f"start.typed.{ext}"
@@ -166,6 +181,8 @@ def prepare(work: Path, task: str, arm: str) -> None:
         shutil.copy(start, work / f"start.{ext}")
     if ext == "agc":
         shutil.copytree(ROOT / "dist" / "runtime", work, dirs_exist_ok=True)
+    if ext == "go":
+        (work / "go.mod").write_text(go_mod(), encoding="utf-8")
     if arm in SKILL_ARMS:
         (work / "skills").mkdir()
         shutil.copytree(SKILL, work / "skills" / "agentica-programming")
@@ -273,6 +290,11 @@ def prompt(work: Path, arm: str) -> str:
         lines.append("Write a complete Python 3 program to solution.py, with type annotations on every function. "
                      "Run programs with `python3`. The type checker is `mypy --strict solution.py`, on your PATH: "
                      "the solution must pass it, so do not silence it with `# type: ignore` or by weakening its options.")
+    elif ext == "go":
+        lines.append("Write a complete Go program to solution.go, in package main, with the standard library only; "
+                     "go.mod is ready. Run programs with `go run solution.go`. The checkers are "
+                     "`go vet solution.go` and `go build solution.go`, on your PATH: the solution must pass both, "
+                     "so do not silence them.")
     else:
         lines.append("Write a complete Python 3 program to solution.py. Run programs with `python3`.")
     lines.append("Work only inside the current directory. Test your program before you finish, then reply with one sentence.")
@@ -320,16 +342,18 @@ def jail_prefix(rootfs: Path, *, network: bool) -> list[str]:
 
 
 def docker_prefix(work: Path, image: str, name: str, *, network: bool, pass_env: list[str],
-                  pi_auth: Path | None = None) -> list[str]:
+                  pi_auth: Path | None = None, writable: bool | None = None) -> list[str]:
+    """`writable` is whether the workspace mount is writable; it follows `network` unless given (the Go build of the
+    grader writes its binary there without a network)."""
     uid, gid = os.getuid(), os.getgid()
     command = [
         shutil.which("docker") or "docker", "run", "--rm", "--interactive",
         "--name", name, "--user", f"{uid}:{gid}",
         "--read-only", "--cap-drop=ALL", "--security-opt=no-new-privileges",
         "--pids-limit=256", "--memory=2g", "--cpus=2",
-        "--tmpfs", "/tmp:rw,nosuid,nodev,size=128m",
+        "--tmpfs", "/tmp:rw,nosuid,nodev,exec,size=256m",
         "--tmpfs", f"/home/agent:rw,nosuid,nodev,uid={uid},gid={gid},size=128m",
-        "--mount", f"type=bind,src={work},dst=/workspace" + ("" if network else ",readonly"),
+        "--mount", f"type=bind,src={work},dst=/workspace" + ("" if (network if writable is None else writable) else ",readonly"),
         "--workdir", "/workspace",
     ]
     if pi_auth is not None:
@@ -405,17 +429,32 @@ def runtime_probe(image: str) -> tuple[bool, str]:
     return code == 0 and out.strip() == "hello", err.strip() or out.strip()
 
 
-def ensure_checker(image: str) -> str:
-    code, out, err = checker_probe(image)
+def go_probe(image: str) -> tuple[int | None, str, str]:
+    with tempfile.TemporaryDirectory(prefix="agentica-go-probe-") as directory:
+        return probe(image, ["go", "version"], Path(directory), 60)
+
+
+def ensure_tool(image: str, run_probe: Callable[[str], tuple[int | None, str, str]], command: str, arm: str) -> str:
+    """The version line of a tool the arm needs. The default image is rebuilt once when the tool is missing (exit 126
+    or 127); any other failure, or a missing tool in an image given with --image, stops the run."""
+    code, out, err = run_probe(image)
     if code in MISSING_COMMAND and image == DEFAULT_IMAGE:
-        print(f"{CHECKER[0]} is missing from {image} (exit {code}): rebuilding the image from tests/eval/Dockerfile", flush=True)
+        print(f"{command.split()[0]} is missing from {image} (exit {code}): rebuilding the image from tests/eval/Dockerfile", flush=True)
         build_image(image)
-        code, out, err = checker_probe(image)
+        code, out, err = run_probe(image)
     if code != 0:
         reason = "it timed out" if code is None else f"it exited {code}: {err.strip()}"
         hint = " Rebuild the image from tests/eval/Dockerfile." if code in MISSING_COMMAND else ""
-        raise SystemExit(f"{CHECKER[0]} --version failed in the Docker image {image} ({reason}); the typed-python arm needs it.{hint}")
+        raise SystemExit(f"{command} failed in the Docker image {image} ({reason}); the {arm} arm needs it.{hint}")
     return out.strip()
+
+
+def ensure_checker(image: str) -> str:
+    return ensure_tool(image, lambda name: checker_probe(name), f"{CHECKER[0]} --version", "typed-python")
+
+
+def ensure_go(image: str) -> str:
+    return ensure_tool(image, lambda name: go_probe(name), "go version", "go")
 
 
 def ensure_runtime(image: str) -> None:
@@ -450,7 +489,7 @@ def ensure_pi(image: str) -> str | None:
 
 
 def validate_docker(image: str, typed: bool = False, agentica: bool = False,
-                    pi: bool = False) -> dict[str, str | None]:
+                    pi: bool = False, go: bool = False) -> dict[str, str | None]:
     require_docker()
     if not image_exists(image):
         if image != DEFAULT_IMAGE:
@@ -462,7 +501,8 @@ def validate_docker(image: str, typed: bool = False, agentica: bool = False,
     checker = ensure_checker(image) if typed else None
     if agentica:
         ensure_runtime(image)
-    return {"checker": checker, "image_id": image_id(image), "pi": ensure_pi(image) if pi else None}
+    return {"checker": checker, "go": ensure_go(image) if go else None, "image_id": image_id(image),
+            "pi": ensure_pi(image) if pi else None}
 
 
 def child_environment(pass_env: list[str], *, in_chroot: bool, workspace: Path) -> dict[str, str]:
@@ -873,6 +913,8 @@ def case_timeout(task: str) -> int:
 
 
 def case_invocation(ext: str, driver: str | None, case: str) -> tuple[list[str], str]:
+    if ext == "go":
+        return (["/workspace/solution"], case) if driver is None else (["python3", "-I", "-", case, "/workspace/solution"], driver)
     if ext == "agc":
         command = ["/workspace/bin/agentica", "solution.agc"]
     else:
@@ -883,10 +925,10 @@ def case_invocation(ext: str, driver: str | None, case: str) -> tuple[list[str],
 
 
 def contained_run(args: argparse.Namespace, grade_root: Path, work: Path, command: list[str],
-                  stdin: str, timeout: int) -> tuple[str | None, str, int | None]:
+                  stdin: str, timeout: int, writable: bool = False) -> tuple[str | None, str, int | None]:
     container = f"agentica-grade-{uuid.uuid4().hex}"
     try:
-        prefix = (docker_prefix(work, args.image, container, network=False, pass_env=[])
+        prefix = (docker_prefix(work, args.image, container, network=False, pass_env=[], writable=writable)
                   if args.sandbox == "docker" else jail_prefix(grade_root, network=False))
         done = subprocess.run(prefix + command, cwd=work, env=grader_environment(), input=stdin,
                               capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=timeout)
@@ -924,6 +966,22 @@ def type_check(contained: Contained, total: int) -> dict | None:
             "check_errors": len(re.findall(r": error: ", out))}
 
 
+def go_check(contained: Contained, built: Contained, total: int) -> dict | None:
+    """`go vet`, then `go build` into the workspace; None when both pass, else the failing row."""
+    for step, command, run_step in (("vet", GO_VET, contained), ("build", GO_BUILD, built)):
+        out, err, returncode = run_step(command, "", CHECK_TIMEOUT)
+        if returncode == 0:
+            continue
+        if out is None:
+            return {"status": "fail", "passed": 0, "total": total, "failure": "check-timeout", "code": step,
+                    "check_errors": 0}
+        text = out + err
+        kind, code = ("syntax", "syntax") if "syntax error" in text else ("check", step)
+        return {"status": "fail", "passed": 0, "total": total, "failure": kind, "code": code,
+                "check_errors": len(GO_FILE_ERROR.findall(text))}
+    return None
+
+
 def grade(solution: Path, task: str, arm: str, args: argparse.Namespace, scratch: Path, name: str) -> dict:
     ext = ARMS[arm]
     cases = sorted((TASKS / task / "hidden").glob("*.in"))
@@ -936,9 +994,14 @@ def grade(solution: Path, task: str, arm: str, args: argparse.Namespace, scratch
     shutil.copyfile(solution, work / solution.name)
     if ext == "agc":
         shutil.copytree(ROOT / "dist" / "runtime", work, dirs_exist_ok=True)
+    if ext == "go":
+        (work / "go.mod").write_text(go_mod(), encoding="utf-8")
 
     def contained(command: list[str], stdin: str, timeout: int) -> tuple[str | None, str, int | None]:
         return contained_run(args, grade_root, work, command, stdin, timeout)
+
+    def built(command: list[str], stdin: str, timeout: int) -> tuple[str | None, str, int | None]:
+        return contained_run(args, grade_root, work, command, stdin, timeout, writable=True)
 
     extra: dict[str, int] = {}
     if arm in TYPED_ARMS:
@@ -949,6 +1012,11 @@ def grade(solution: Path, task: str, arm: str, args: argparse.Namespace, scratch
         found = type_check(contained, len(cases))
         if found is not None:
             return {**found, **extra}
+        extra["check_errors"] = 0
+    if ext == "go":
+        found = go_check(contained, built, len(cases))
+        if found is not None:
+            return found
         extra["check_errors"] = 0
     driver = hidden_driver(task)
     timeout = case_timeout(task)
@@ -976,6 +1044,8 @@ def classify(err: str, ext: str) -> tuple[str, str | None]:
                 start = err.index(f"error[{stage}") + 6
                 return kind, err[start:err.index("]", start)]
         return "logic", None
+    if ext == "go":
+        return ("runtime", "panic") if "panic:" in err else ("logic", None)
     if "SyntaxError" in err:
         return "syntax", "SyntaxError"
     if "Traceback" in err:
@@ -1147,7 +1217,7 @@ def run_info(args: argparse.Namespace, image_info: dict[str, str | None]) -> dic
             "skill_commit": git_output("log", "-1", "--format=%H", "--", ".agents/skills/agentica-programming"),
             "agent": args.agent, "model": args.model or "default", "arms": args.arms, "tasks": args.tasks,
             "reps": args.reps, "timeout": args.timeout, "sandbox": args.sandbox, "image": args.image,
-            "image_id": image_info["image_id"], "checker": image_info["checker"],
+            "image_id": image_info["image_id"], "checker": image_info["checker"], "go": image_info.get("go"),
             "pi_version": image_info.get("pi"), "pass_env": args.pass_env,
             "agent_network": AGENT_NETWORK and args.agent != "reference", "arm_tasks": args.arm_tasks,
             "max_cost": args.max_cost, "started_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -1323,6 +1393,8 @@ def main() -> int:
     else:
         if args.chroot_root is None:
             raise SystemExit("--sandbox firejail requires --chroot-root")
+        if "go" in args.arms:
+            raise SystemExit("the go arm runs only in the Docker sandbox (its Go settings come from the image)")
         args.chroot_root = args.chroot_root.resolve()
         validate_sandbox(args.chroot_root, args.agent, typed)
     preflight = args.agent == "pi" and args.sandbox == "docker" and not args.no_preflight
@@ -1336,9 +1408,9 @@ def main() -> int:
         build()
     if not (ROOT / "dist" / "runtime" / "bin" / "agentica").is_file():
         raise SystemExit("dist/runtime is missing; rerun without --no-build")
-    image_info: dict[str, str | None] = {"checker": None, "image_id": None, "pi": None}
+    image_info: dict[str, str | None] = {"checker": None, "go": None, "image_id": None, "pi": None}
     if args.sandbox == "docker":
-        image_info = validate_docker(args.image, typed, agentica, args.agent == "pi")
+        image_info = validate_docker(args.image, typed, agentica, args.agent == "pi", "go" in args.arms)
     checked = run_preflight(args) if preflight else None
     stamp = time.strftime("%Y%m%d-%H%M%S")
     results = EVAL / "results" / f"{stamp}-{args.agent}"
