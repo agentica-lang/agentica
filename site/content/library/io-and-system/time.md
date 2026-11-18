@@ -336,15 +336,15 @@ time.strftime(format: String) -> String
 naive.strftime(format: String) -> String
 ```
 
-The format with each directive replaced by a part of the value, as Ruby's `strftime` writes it, with English names:
+The format of a value of any of the four types (`date` a `Time.Date`, `time` a `Time.TimeOfDay` or a `Time.DateTime`, `naive` a `Time.NaiveDateTime`) with each directive replaced by a part of the value. It takes a subset of Ruby's `strftime` directives, with English names:
 
-- `%Y` the year in four digits or more, `%m` and `%d` the month and the day in two, `%j` the day of the year in three;
+- `%Y` the year in four digits, `%m` and `%d` the month and the day in two, `%j` the day of the year in three;
 - `%u` the ISO day of the week (`1` Monday to `7` Sunday), `%w` the day of the week from `0` (Sunday) to `6`;
 - `%a` and `%A` the day's name, short (`Wed`) and full (`Wednesday`), `%b` and `%B` the month's name, short (`Oct`) and full (`October`);
 - `%H`, `%M` and `%S` the hour, minute and second in two digits, `%L` the milliseconds in three, `%N` the nanoseconds in nine;
 - `%z` the offset as `+HHMM` and `%:z` as `+HH:MM`, and `%%` a `%`.
 
-There are no flags or widths. A directive that is not in this list, or that names a part the value does not have (`%H` of a `Time.Date`, `%z` of a `Time.NaiveDateTime`), stays as it is written, as does a `%` at the end.
+There are no flags or widths. A directive that is not in this list, or that names a part the value does not have, stays as it is written, as does a `%` at the end: for example `%e`, `%y`, `%F`, `%T` and `%-d`, `%H` of a `Time.Date` and `%z` of a `Time.NaiveDateTime`.
 
 ```agentica
 def main() -> Void

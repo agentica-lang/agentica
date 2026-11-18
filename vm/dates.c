@@ -551,7 +551,9 @@ static size_t directive(uint32_t kind, const fields *f, const uint8_t *format, s
   else if (c == 'N' && clock) n = snprintf(out, DIRECTIVE_SIZE, "%06d000", (int)f->usec);
   else if (c == 'z' && zone) n = snprintf(out, DIRECTIVE_SIZE, "%c%02d%02d", sign, hours, mins);
   else if (colon && zone) n = snprintf(out, DIRECTIVE_SIZE, "%c%02d:%02d", sign, hours, mins);
-  return n > 0 ? (size_t)n : 0;
+  /* read_record keeps every field in range, so no directive passes 9 bytes; the guard keeps render's memcpy inside
+     its piece whatever the fields. */
+  return n > 0 && n < DIRECTIVE_SIZE ? (size_t)n : 0;
 }
 
 /* The text of FORMAT for the value: its byte length, and its characters in *chars. OUT is NULL to count only. */

@@ -103,8 +103,8 @@ ROWS: List[Model.Builtin] = [
     implementation: "Time.Date.strftime",
     effects: [],
     description: (
-      "Write the date in a strftime format: %Y %m %d %j %u %w %a %A %b %B and %%; any other " +
-      "directive is copied as written."
+      "Write the date in a strftime format, a subset of Ruby's directives: %Y %m %d %j %u %w %a " +
+      "%A %b %B and %%; any other (%e, %y, %F, %-d, %H) is copied as written."
     ),
     alternatives: [],
   ),
@@ -239,8 +239,8 @@ ROWS: List[Model.Builtin] = [
     implementation: "Time.DateTime.strftime",
     effects: [],
     description: (
-      "Write the reading in a strftime format: the directives of a date and a time of day, %z, " +
-      "%:z and %%; any other is copied."
+      "Write the reading in a strftime format, a subset of Ruby's directives: those of a date " +
+      "and a time of day, %z, %:z and %%; any other (%e, %y, %F, %T, %-d) is copied as written."
     ),
     alternatives: [],
   ),
@@ -378,8 +378,8 @@ ROWS: List[Model.Builtin] = [
     implementation: "Time.NaiveDateTime.strftime",
     effects: [],
     description: (
-      "Write the reading in a strftime format: the directives of a date and a time of day, and " +
-      "%%; any other is copied."
+      "Write the reading in a strftime format, a subset of Ruby's directives: those of a date " +
+      "and a time of day, and %%; any other (%e, %y, %F, %T, %-d, %z) is copied as written."
     ),
     alternatives: [],
   ),
@@ -452,8 +452,8 @@ ROWS: List[Model.Builtin] = [
     implementation: "Time.TimeOfDay.strftime",
     effects: [],
     description: (
-      "Write the clock reading in a strftime format: %H %M %S %L %N and %%; any other directive " +
-      "is copied as written."
+      "Write the clock reading in a strftime format, a subset of Ruby's directives: %H %M %S %L " +
+      "%N and %%; any other (%T, %-H, %Y) is copied as written."
     ),
     alternatives: [],
   ),
