@@ -307,6 +307,17 @@ def test_add_with_a_tag_name_version_takes_the_folder_name_when_the_package_is_t
     assert line == "work = %s\n" % inline_table(dependency(url(remotes), tag="jobs-1.0.0", subdir="jobs"))
 
 
+@pytest.mark.parametrize("root", ['name = "all"\n\n[workspace]\nrepository = "https://example.test/owner/all"\n'
+                                  'members = ["jobs"]\n', '[style]\nmax_line_width = 100\n'],
+                         ids=["a workspace root of another name", "a root manifest with no name"])
+def test_add_with_a_tag_name_version_takes_the_folder_when_the_root_manifest_is_not_named_so(ws, remotes, root):
+    remotes.publish(REPOSITORY, {"agentica.toml": root, **{"jobs/" + path: text for path, text in JOBS.items()}},
+                    tag="jobs-0.1.0")
+    answer, line = add_line(ws, remotes, "jobs", url(remotes), "--tag", "jobs-0.1.0")
+    assert answer == "added jobs@jobs-0.1.0 (folder jobs)\n"
+    assert line == "jobs = %s\n" % inline_table(dependency(url(remotes), tag="jobs-0.1.0", subdir="jobs"))
+
+
 def test_add_with_an_explicit_subdir_takes_it_over_the_folder_of_the_tag(ws, remotes):
     files = {**{"jobs/" + path: text for path, text in JOBS.items()}, **{"sqlite/" + p: t for p, t in SQLITE.items()}}
     remotes.publish(REPOSITORY, files, tag="jobs-0.1.0")
@@ -314,13 +325,14 @@ def test_add_with_an_explicit_subdir_takes_it_over_the_folder_of_the_tag(ws, rem
     assert line == "sqlite = %s\n" % inline_table(dependency(url(remotes), tag="jobs-0.1.0", subdir="sqlite"))
 
 
-@pytest.mark.parametrize("files", [
-    {"run.agc": "# root\n", "other/agentica.toml": 'name = "other"\n'},
-    {"agentica.toml": 'name = "jobs"\n', **{"jobs/" + path: text for path, text in JOBS.items()}},
-    {"run.agc": "# root\n", "jobs/run.agc": "# no manifest\n"},
-], ids=["no folder of the name", "the root is the package", "a folder with no manifest"])
-def test_add_with_a_tag_name_version_and_no_package_folder_takes_the_repository_itself(ws, remotes, files):
-    remotes.publish(REPOSITORY, files, tag="jobs-0.1.0")
+@pytest.mark.parametrize("files, links", [
+    ({"run.agc": "# root\n", "other/agentica.toml": 'name = "other"\n'}, None),
+    ({"agentica.toml": 'name = "jobs"\n', **{"jobs/" + path: text for path, text in JOBS.items()}}, None),
+    ({"run.agc": "# root\n", "jobs/run.agc": "# no manifest\n"}, None),
+    ({"run.agc": "# root\n", "jobs/run.agc": "# jobs\n"}, {"jobs/agentica.toml": "../README.md"}),
+], ids=["no folder of the name", "the root is the package", "a folder with no manifest", "a manifest that is a link"])
+def test_add_with_a_tag_name_version_and_no_package_folder_takes_the_repository_itself(ws, remotes, files, links):
+    remotes.publish(REPOSITORY, files, links=links, tag="jobs-0.1.0")
     answer, line = add_line(ws, remotes, "jobs", url(remotes), "--tag", "jobs-0.1.0")
     assert answer == "added jobs@jobs-0.1.0\n"
     assert line == "jobs = %s\n" % inline_table(dependency(url(remotes), tag="jobs-0.1.0"))

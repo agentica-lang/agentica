@@ -13,6 +13,7 @@ import PackageDeps from "../io/package_deps"
 import PackageFetch from "../io/package_fetch"
 import PackageResolve from "../io/package_resolve"
 import SaveFile from "../io/save_file"
+import Paths from "../modules/import_path"
 import Env from "../modules/link_env"
 import Failure from "../modules/link_failure"
 import GitSource from "../packages/git_source"
@@ -133,19 +134,19 @@ def add_to(settings: Env.Settings, dir: String, fetching: Prebuilt.Fetching, req
   project = try Project.find_to_write(settings.workspace, dir, settings.version)
   case project
     Project.Project.Bare -> error(CliProject.missing_manifest(dir))
-    Project.Project.Declared(found) -> add_in(settings, found, fetching, request)
+    Project.Project.Declared(found) -> add_in(settings, dir, found, fetching, request)
   end
 end
 
-def add_in(settings: Env.Settings, found: Project.Found, fetching: Prebuilt.Fetching, asked: Request) -> Result[String]
+def add_in(
+  settings: Env.Settings,
+  dir: String,
+  found: Project.Found,
+  fetching: Prebuilt.Fetching,
+  asked: Request,
+) -> Result[String]
   file = found.manifest.file
-  problem = GitSource.git_problem(asked.source.git)
-  if problem != ""
-    message = "#{asked.word} is not a git source: write https://host/owner/repo, or OWNER/REPO for #{GITHUB_FORM}"
-    key = "dependencies.#{asked.name}.git"
-    return error(Failure.fail_key(file, key, "PKG-SOURCE-INVALID", message, Failure.hint(problem)))
-  end
-
+  try check_source(settings, dir, file, asked)
   if found.manifest.dependencies.any? do |dependency| dependency.name == asked.name end
     message = "#{asked.name} is already a dependency"
     help = Failure.hint("change its tag or ref in #{file} and run `agentica update #{asked.name}`")
@@ -169,8 +170,28 @@ def add_in(settings: Env.Settings, found: Project.Found, fetching: Prebuilt.Fetc
   ok(CliInstall.with_lines(report(found.lock, resolved, request.name), prebuilt))
 end
 
+# A source that is no git URL is PKG-SOURCE-INVALID at the key that `add` would write. So is OWNER/REPO when the
+# working folder has a folder at that path: a local package is a `path` dependency, never a GitHub repository.
+def check_source(settings: Env.Settings, dir: String, file: String, request: Request) -> Result[Void]
+  key = "dependencies.#{request.name}.git"
+  problem = GitSource.git_problem(request.source.git)
+  if problem != ""
+    message = "#{request.word} is not a git source: write https://host/owner/repo, or OWNER/REPO for #{GITHUB_FORM}"
+    return error(Failure.fail_key(file, key, "PKG-SOURCE-INVALID", message, Failure.hint(problem)))
+  end
+
+  shorthand = request.word != request.source.git
+  return ok() if !shorthand or !settings.workspace.directory_exists.call(Paths.join(dir, request.word))
+
+  message = "#{request.word} is a folder here, and as OWNER/REPO it would be #{request.source.git}"
+  path = "#{request.name} = { path = \"#{request.word}\" }"
+  help = Failure.hint("a local package is a path dependency: write #{path} in [dependencies] of agentica.toml")
+  error(Failure.fail_key(file, key, "PKG-SOURCE-INVALID", message, help))
+end
+
 # A tag NAME-X.Y.Z with no --subdir names the folder NAME of the repository when the tagged commit has the package
-# there and not at its root (PackageFetch.tag_subdir). A member of the workspace is that folder with no fetch.
+# there and not at its root (PackageFetch.tag_subdir). A member of the workspace is that folder with no fetch, and
+# with no check of the root manifest's name: the member list says the folder is a package.
 def with_tag_subdir(settings: Env.Settings, found: Project.Found, request: Request) -> Result[Request]
   package = GitSource.tag_package(request.source.tag)
   return ok(request) if package == "" or request.source.subdir != "" or GitSource.subdir_problem(package) != ""

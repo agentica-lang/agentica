@@ -66,20 +66,15 @@ def git_problem(url: String) -> String
   ""
 end
 
-## The git URL that `agentica add` reads from its source word: `OWNER/REPO` (two segments of letters, digits, . _ and
-## -) is the GitHub repository `https://github.com/OWNER/REPO`; any other word is kept as written, for git_problem.
+## The git URL that `agentica add` reads from its source word: `OWNER/REPO` is the GitHub repository
+## `https://github.com/OWNER/REPO` when OWNER is a GitHub account name (letters, digits and -, not first, at most 39
+## characters) and REPO holds letters, digits, . _ and -; any other word is kept as written, for git_problem.
 def expand_git(word: String) -> String
   parts = word.split("/")
-  shorthand = (
-    parts.size == 2 and
-    parts.all? do |part: String|
-      part != "" and part.split("").all? do |letter| SEGMENT_CHARACTERS.include?(letter) end
-    end
-  )
+  return word if parts.size != 2 or !github_owner?(parts[0]) or parts[1] == ""
+  return word if !parts[1].split("").all? do |letter| SEGMENT_CHARACTERS.include?(letter) end
 
-  return "#{GITHUB}#{word}" if shorthand
-
-  word
+  "#{GITHUB}#{word}"
 end
 
 ## The package name of a tag `NAME-X.Y.Z` (a SemVer version, a pre-release such as `-alpha.1` too), or "" for any
@@ -248,3 +243,11 @@ HTTPS = "https://"
 GITHUB = "https://github.com/"
 # The first characters of a commit in the stored name of a file of a package that is pinned by a ref.
 SHORT_COMMIT = 12
+OWNER_CHARACTERS = Set.new("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-".split(""))
+MAX_OWNER = 39
+
+def github_owner?(owner: String) -> Bool
+  return false if owner == "" or owner.length > MAX_OWNER or owner.start_with?("-")
+
+  owner.split("").all? do |letter| OWNER_CHARACTERS.include?(letter) end
+end

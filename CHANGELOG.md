@@ -12,6 +12,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - `agentica add NAME OWNER/REPO` takes a GitHub repository as `OWNER/REPO` (stored as the full URL), and a tag `NAME-X.Y.Z` with no `--subdir` takes the folder `NAME` when the package is there (#1833).
 
+### Changed
+
+- A source of `agentica add` that is neither an `https://` URL nor `OWNER/REPO` is `PKG-SOURCE-INVALID` (exit 1), no longer a usage error (exit 2) (#1833).
+
 ## [0.34.1] - 2026-11-17
 
 ### Changed

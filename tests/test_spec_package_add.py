@@ -151,15 +151,28 @@ def test_add_owner_repo_fetches_the_github_repository_and_writes_its_full_url(ws
 
 @pytest.mark.parametrize("source", [
     "http://example.test/owner/greeter", "example.test/owner/greeter", "greeter", "owner/", "owner/..",
-    "owner/gree ter", "https://Example.test/owner/greeter",
+    "owner/gree ter", "https://Example.test/owner/greeter", "gitlab.com/foo", ".git/y", "-owner/greeter",
+    "o" * 40 + "/greeter",
 ], ids=["http", "no scheme", "one segment", "an empty repository", "a dot-dot repository", "a space",
-        "an uppercase host"])
+        "an uppercase host", "a host and one segment", "a dot in the owner", "an owner that starts with -",
+        "an owner of 40 characters"])
 def test_add_with_a_source_that_is_no_url_and_no_owner_repo_is_pkg_source_invalid_and_writes_nothing(ws, remotes,
                                                                                                        source):
     (ws.project / "agentica.toml").write_text('name = "app"\n', encoding="utf-8")
     result, problem = command(ws, remotes, "add", "greeter", source, "--tag", "v1.0.0")
     assert_at_key(problem, "PKG-SOURCE-INVALID", ws.project / "agentica.toml", "dependencies.greeter.git")
     assert sorted(path.name for path in ws.project.iterdir()) == ["agentica.toml"]
+    assert read(ws, "agentica.toml") == 'name = "app"\n'
+
+
+def test_add_owner_repo_that_is_a_folder_of_the_working_folder_is_pkg_source_invalid(ws, remotes):
+    remotes.mirror("https://github.com/")  # A fetch, if one ran, stays local.
+    (ws.project / "agentica.toml").write_text('name = "app"\n', encoding="utf-8")
+    (ws.project / "vendor" / "foo").mkdir(parents=True)
+    result, problem = command(ws, remotes, "add", "foo", "vendor/foo", "--tag", "v1.0.0")
+    assert_at_key(problem, "PKG-SOURCE-INVALID", ws.project / "agentica.toml", "dependencies.foo.git")
+    assert "path = " in problem["help"]
+    assert sorted(path.name for path in ws.project.iterdir()) == ["agentica.toml", "vendor"]
     assert read(ws, "agentica.toml") == 'name = "app"\n'
 
 
