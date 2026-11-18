@@ -679,8 +679,8 @@ import Sqlite from "pkg/sqlite/db"
   `1 native artifact ready` (or `N native artifacts ready`); else `nothing to
   install`. The command starts git even under `--deny-run`, which only limits
   programs.
-- `agentica add NAME URL --tag TAG` (or `--ref COMMIT`, `--subdir DIR` and
-  `--group test`) and
+- `agentica add NAME URL --tag TAG` (or `--ref COMMIT`, `--subdir DIR` or
+  `--workspace`, and `--group test`) and
   `agentica update [NAME]` write the lock; they are the only commands that do.
   Both work on the project of the working folder (no manifest is
   `PKG-MANIFEST-MISSING`), read the lock without checking it against the
@@ -708,7 +708,10 @@ import Sqlite from "pkg/sqlite/db"
   changed.
   - `add` takes the local name, the `https://` URL and `--tag` or `--ref`, in
     that order, then `--subdir DIR` if the package is a folder of the repository
-    and `--group test` for the test group. In place of the URL, `OWNER/REPO`
+    or `--workspace` (a flag with no value) if it is the whole workspace of the
+    repository, and `--group test` for the test group. `--workspace` with
+    `--subdir` is a usage error, and it turns off the folder that a tag
+    `NAME-X.Y.Z` would take. In place of the URL, `OWNER/REPO`
     (a GitHub account name of letters, digits and `-`, not first, at most 39
     characters, then a repository of letters, digits, `.`, `_` and `-`) is
     `https://github.com/OWNER/REPO`; the manifest and the lock store the full
@@ -727,8 +730,8 @@ import Sqlite from "pkg/sqlite/db"
     tag or commit that the manifest would refuse, or any other words, are a
     usage error (exit code 2). A name that is a dependency already is
     `PKG-DEPENDENCY-EXISTS`. The manifest gets one new line, `NAME = { git =
-    "URL", tag = "TAG" }` (with `subdir = "DIR"` and then `group = "test"` last
-    when asked), after the last entry of `[dependencies]` (or in a new
+    "URL", tag = "TAG" }` (with `subdir = "DIR"` or `workspace = true`, and then
+    `group = "test"` last, when asked), after the last entry of `[dependencies]` (or in a new
     `[dependencies]` table at the end of the file); no other byte changes, so
     comments, blank lines, the order of the keys and the line endings stay. The
     new text is read as a manifest before it is saved, and a layout the edit

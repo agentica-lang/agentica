@@ -3,7 +3,8 @@
 A project with an `agentica.toml` in the folder of the root file (or above it)
 can import the packages it declares. A build never downloads and never writes
 `agentica.lock`: `agentica add NAME URL --tag TAG` (or `--ref COMMIT`, the whole
-id; `--subdir DIR` for a folder of the repository) adds a dependency and writes
+id; `--subdir DIR` for a folder of the repository, `--workspace` for the whole
+workspace) adds a dependency and writes
 the lock, `agentica update [NAME]` moves tag pins, and `agentica install`
 writes every locked package into `deps/<name>/` beside `agentica.toml` (through
 a download cache). A build reads packages only from `deps/`; a declared package
@@ -63,7 +64,8 @@ import Sqlite from "pkg/sqlite/db"
   workspace, whatever pin it writes; any other dependency of a member stays flat
   and shared. A repository with no good `[workspace]` table at the pin is
   `PKG-FETCH` at `dependencies.NAME.workspace`; `workspace` with `subdir` or
-  `path` is `PKG-MANIFEST-INVALID`. `agentica add` does not write this key yet.
+  `path` is `PKG-MANIFEST-INVALID`. `agentica add NAME URL --tag TAG --workspace` writes it
+  (not with `--subdir`).
 - A repository of packages can be a workspace: its root `agentica.toml` has
   `[workspace]` with `repository = "<git URL>"` and `members = ["sqlite",
   "postgres"]` (folders written like a `subdir`, each with its own

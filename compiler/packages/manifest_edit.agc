@@ -6,15 +6,16 @@
 
 import GitSource from "git_source"
 
-## The text with `name = { git = "...", tag = "..." }` (or `ref`, and `group = "test"` last when `test`) added to the
-## [dependencies] table: after its last entry, or in a new table at the end of the file when there is none.
-def add_dependency(text: String, name: String, source: GitSource.Source, test: Bool) -> String
+## The text with `name = { git = "...", tag = "..." }` (or `ref`; `workspace = true` after the pin when `workspace`,
+## and `group = "test"` last when `test`) added to the [dependencies] table: after its last entry, or in a new table at
+## the end of the file when there is none.
+def add_dependency(text: String, name: String, source: GitSource.Source, test: Bool, workspace: Bool) -> String
   newline = "\n"
   if text.include?("\r\n")
     newline = "\r\n"
   end
 
-  entry = "#{name} = #{inline_table(source, test)}"
+  entry = "#{name} = #{inline_table(source, test, workspace)}"
   lines = text.split("\n")
   header = header_index(lines)
   return with_new_table(text, entry, newline) if header < 0
@@ -35,7 +36,7 @@ private
 HEADER = "[dependencies]"
 
 # The values were checked (GitSource), so they hold no quote or backslash and need no escape.
-def inline_table(source: GitSource.Source, test: Bool) -> String
+def inline_table(source: GitSource.Source, test: Bool, workspace: Bool) -> String
   keys = ["git = \"#{source.git}\""]
   if source.tag != ""
     keys = keys.push("tag = \"#{source.tag}\"")
@@ -45,6 +46,10 @@ def inline_table(source: GitSource.Source, test: Bool) -> String
 
   if source.subdir != ""
     keys = keys.push("subdir = \"#{source.subdir}\"")
+  end
+
+  if workspace
+    keys = keys.push("workspace = true")
   end
 
   if test
