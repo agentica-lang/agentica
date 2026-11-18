@@ -27,6 +27,83 @@ tar -xzf agentica-VERSION-linux-x86_64.tar.gz   # Windows: Expand-Archive
 - macOS blocks a browser download: run `xattr -d com.apple.quarantine bin/agentica` (a `curl` download has no mark). Windows SmartScreen may warn once.
 - `TCP`, `TLS` and `std/http` run and are tested on Linux, macOS and Windows.
 
+### Install with Nix
+
+Needs flakes enabled (`experimental-features = nix-command flakes` in `nix.conf`). Save this as `flake.nix` in your project:
+
+```nix
+{
+  description = "Agentica development environment using precompiled releases";
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
+  outputs = { self, nixpkgs }:
+    let
+      version = "0.34.1";
+      releases = {
+        x86_64-linux = {
+          platform = "linux-x86_64";
+          hash = "sha256-8cfKo5R6xZR6h1Zv67HEsG8FeTvU8DdSsh/UFrRLc9s=";
+        };
+        aarch64-linux = {
+          platform = "linux-arm64";
+          hash = "sha256-bsG5aS1Iit8jUdH+m1Bbqt7HYprBI2wxw/o6bDnDYnY=";
+        };
+        aarch64-darwin = {
+          platform = "macos-arm64";
+          hash = "sha256-17deh/+trZvflEkG1cvBa23gcpTFzQDgkcFNxbS+3Ig=";
+        };
+        x86_64-darwin = {
+          platform = "macos-x86_64";
+          hash = "sha256-IvadtmtbmaVe7XwyrdSm5lROlv4BTHUQxvMETSnSwEE=";
+        };
+      };
+      forAllSystems = nixpkgs.lib.genAttrs (builtins.attrNames releases);
+    in
+    {
+      packages = forAllSystems (system:
+        let
+          pkgs = nixpkgs.legacyPackages.${system};
+          release = releases.${system};
+        in
+        rec {
+          agentica = pkgs.stdenvNoCC.mkDerivation {
+            pname = "agentica";
+            inherit version;
+            src = pkgs.fetchurl {
+              url = "https://github.com/agentica-lang/agentica/releases/download/${version}/agentica-${version}-${release.platform}.tar.gz";
+              inherit (release) hash;
+            };
+            nativeBuildInputs = pkgs.lib.optionals pkgs.stdenv.hostPlatform.isLinux [ pkgs.autoPatchelfHook ];
+            dontConfigure = true;
+            dontBuild = true;
+            dontStrip = true;
+            installPhase = ''
+              runHook preInstall
+              mkdir -p "$out"
+              cp -r bin include LICENSE NOTICE licenses "$out/"
+              runHook postInstall
+            '';
+            meta = {
+              description = "Agentica programming language";
+              homepage = "https://www.agentica-lang.com/agentica/";
+              platforms = builtins.attrNames releases;
+              mainProgram = "agentica";
+            };
+          };
+          default = agentica;
+        });
+      devShells = forAllSystems (system: {
+        default = nixpkgs.legacyPackages.${system}.mkShellNoCC {
+          packages = [ self.packages.${system}.agentica ];
+        };
+      });
+    };
+}
+```
+
+`nix develop` opens a shell with `agentica` on the `PATH`, and `nix build` writes `./result/bin/agentica`. The flake covers Linux x86-64 and ARM64, and macOS Intel and Apple silicon; Windows is not covered.
+
+To move to a newer release, change `version` and each `hash`. `nix store prefetch-file --json <archive URL>` prints the `hash` in the form the flake needs (`nix-prefetch-url` prints a base32 hash instead).
+
 ### Install it with your coding agent
 
 Paste this prompt into a coding agent (Claude Code, Codex, OpenCode, pi...) to install the latest release and its `agentica-programming` skill for your user, with no `sudo`.
