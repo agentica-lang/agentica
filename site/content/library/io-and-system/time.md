@@ -385,13 +385,13 @@ end
 ## Time.compare
 
 ```signature
-Time.compare(a: Time.DateTime, b: Time.DateTime) -> Int
-Time.compare_naive(a: Time.NaiveDateTime, b: Time.NaiveDateTime) -> Int
-Time.compare_date(a: Time.Date, b: Time.Date) -> Int
-Time.compare_time(a: Time.TimeOfDay, b: Time.TimeOfDay) -> Int
+Time.compare(time: Time.DateTime, other: Time.DateTime) -> Int
+Time.compare_naive(naive: Time.NaiveDateTime, other: Time.NaiveDateTime) -> Int
+Time.compare_date(date: Time.Date, other: Time.Date) -> Int
+Time.compare_time(time: Time.TimeOfDay, other: Time.TimeOfDay) -> Int
 ```
 
-`-1`, `0` or `1` as `a` is before, the same as or after `b`, as Ruby's `<=>` gives. `Time.compare` compares instants, so one instant at two offsets is `0`; the others compare readings, days and clock readings.
+`-1`, `0` or `1` as the first value is before, the same as or after `other`, as Ruby's `<=>` gives. `Time.compare` compares instants, so one instant at two offsets is `0`; the others compare readings, days and clock readings.
 
 ```agentica
 def main() -> Void

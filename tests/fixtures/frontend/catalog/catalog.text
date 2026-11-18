@@ -1093,13 +1093,13 @@ builtin Time.at forms=1
 builtin Time.at_us forms=1
   Time.at_us(us: Int) -> Result[Time.DateTime] shape=(Int) -> Result(Struct(Time.DateTime)) rule=Plain impl="Time.at_us" effects=[] desc="Return the instant us microseconds after the Unix epoch, in UTC; an error outside the years 1 to 9999."
 builtin Time.compare forms=1
-  Time.compare(a: Time.DateTime, b: Time.DateTime) -> Int shape=(Struct(Time.DateTime), Struct(Time.DateTime)) -> Int rule=Plain impl="Time.compare" effects=[] desc="Return -1, 0 or 1 as the instant a is before, the same as or after b; offsets do not count."
+  Time.compare(time: Time.DateTime, other: Time.DateTime) -> Int shape=(Struct(Time.DateTime), Struct(Time.DateTime)) -> Int rule=Plain impl="Time.compare" effects=[] desc="Return -1, 0 or 1 as the instant is before, the same as or after the other; offsets do not count."
 builtin Time.compare_date forms=1
-  Time.compare_date(a: Time.Date, b: Time.Date) -> Int shape=(Struct(Time.Date), Struct(Time.Date)) -> Int rule=Plain impl="Time.compare_date" effects=[] desc="Return -1, 0 or 1 as the day a is before, the same as or after b."
+  Time.compare_date(date: Time.Date, other: Time.Date) -> Int shape=(Struct(Time.Date), Struct(Time.Date)) -> Int rule=Plain impl="Time.compare_date" effects=[] desc="Return -1, 0 or 1 as the day is before, the same as or after the other."
 builtin Time.compare_naive forms=1
-  Time.compare_naive(a: Time.NaiveDateTime, b: Time.NaiveDateTime) -> Int shape=(Struct(Time.NaiveDateTime), Struct(Time.NaiveDateTime)) -> Int rule=Plain impl="Time.compare_naive" effects=[] desc="Return -1, 0 or 1 as the reading a is before, the same as or after b."
+  Time.compare_naive(naive: Time.NaiveDateTime, other: Time.NaiveDateTime) -> Int shape=(Struct(Time.NaiveDateTime), Struct(Time.NaiveDateTime)) -> Int rule=Plain impl="Time.compare_naive" effects=[] desc="Return -1, 0 or 1 as the reading is before, the same as or after the other."
 builtin Time.compare_time forms=1
-  Time.compare_time(a: Time.TimeOfDay, b: Time.TimeOfDay) -> Int shape=(Struct(Time.TimeOfDay), Struct(Time.TimeOfDay)) -> Int rule=Plain impl="Time.compare_time" effects=[] desc="Return -1, 0 or 1 as the clock reading a is before, the same as or after b."
+  Time.compare_time(time: Time.TimeOfDay, other: Time.TimeOfDay) -> Int shape=(Struct(Time.TimeOfDay), Struct(Time.TimeOfDay)) -> Int rule=Plain impl="Time.compare_time" effects=[] desc="Return -1, 0 or 1 as the clock reading is before, the same as or after the other."
 builtin Time.monotonic_ms forms=1
   Time.monotonic_ms() -> Int shape=() -> Int rule=Plain impl="Time.monotonic_ms" effects=["clock"] desc="Read milliseconds from an arbitrary origin that never goes backward; use for durations."
 builtin Time.monotonic_ns forms=1
