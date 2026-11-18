@@ -99,10 +99,12 @@ HTTP.ClientOptions(timeout_ms: Int = 30000, idle_timeout_ms: Int = 30000, max_co
   responses. Errors are Results: protocol and limit errors start with `http: `,
   a timeout is `network: operation timed out`. `HTTP.get` has no
   streaming (see `HTTP.start`), redirect following or gzip decoding.
-- `download` streams a `GET` body to a new file next to `path` and renames it
-  over `path` (replacing a file there) only after a clean end; a failure
-  removes it and leaves `path` as it was. By default it has no time or size
-  limit (each wait still takes at most the client's `read_timeout_ms`);
+- `download` streams a `GET` body to a hidden file
+  `.<name>.<hex>.agc-part` beside `path` and `Path.replace`s it over `path`
+  (a file or link there is replaced, in one step) only after a clean end; a
+  failure removes it and leaves `path` as it was, but a cancelled or killed
+  download can leave the `.agc-part` file. By default it has no size limit and
+  a one-year time limit (each wait still takes at most `read_timeout_ms`);
   `some(...)` sets `timeout_ms` or `max_total_bytes`, and
   `sha256: some(hex)` checks the digest (`http.digest` when it differs).
   4xx and 5xx still return `ok` with their status and written body.

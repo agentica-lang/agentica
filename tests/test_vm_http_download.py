@@ -6,6 +6,8 @@ with port 0; bodies stream file-ward in pieces of at most 1 MiB and never become
 """
 import hashlib
 import json
+import re
+import urllib.parse
 
 import pytest
 
@@ -163,6 +165,43 @@ def main() -> Void
   HTTP.close_client(pool)
 end
 """.replace("SHOW", SHOW).replace("BIG", str(BIG)).replace("CHUNKED", str(BIG_CHUNKED))
+
+LATE_DIRECTORY_PROGRAM = """\
+import HTTP from "std/http"
+
+SHOW
+
+def main() -> Void
+  pool = Result.unwrap!(HTTP.client())
+  case HTTP.download(pool, System.args()[0], System.args()[1])
+    ok(saved) -> puts("200 #{saved.bytes_written}")
+    error(e) -> puts("#{e.kind} #{e.message.split("\\n")[0]}")
+  end
+  HTTP.close_client(pool)
+end
+""".replace("SHOW", SHOW)
+
+CANCEL_PROGRAM = """\
+import HTTP from "std/http"
+
+struct Job
+  pool: HTTP.Client
+  url: String
+  path: String
+end
+
+def fetch(job: Job) -> Result[HTTP.Download]
+  HTTP.download(job.pool, job.url, job.path)
+end
+
+def main() -> Void
+  job = Job(pool: Result.unwrap!(HTTP.client()), url: System.args()[0], path: System.args()[1])
+  task = Task.spawn(&fetch, job)
+  Task.sleep(1000)
+  Task.cancel(task)
+  puts("cancelled")
+end
+"""
 
 HUGE_PROGRAM = """\
 import HTTP from "std/http"
@@ -330,6 +369,30 @@ def test_big_bodies_stream_past_the_old_text_ceiling(tmp_path, ports):
         data = (directory / name).read_bytes()
         assert len(data) == count
         assert hashlib.sha256(data).hexdigest() == expected_digest(count)
+
+
+def test_a_directory_made_during_the_download_is_left_alone(tmp_path, ports):
+    directory = tmp_path / "late"
+    directory.mkdir()
+    target = directory / "saved.bin"
+    url = "http://127.0.0.1:%d/dir-at/1000?path=%s" % (ports["plain"], urllib.parse.quote(str(target)))
+    lines = output_lines(run_program(tmp_path, "late", LATE_DIRECTORY_PROGRAM, [url, str(target)]))
+    assert lines == ["io.is_directory filesystem: cannot rename path"], lines
+    assert [path.name for path in directory.iterdir()] == ["saved.bin"]
+    assert target.is_dir() and list(target.iterdir()) == []
+
+
+def test_a_cancelled_download_leaves_only_its_hidden_part_file(tmp_path, ports):
+    directory = tmp_path / "cancel"
+    directory.mkdir()
+    (directory / "kept.bin").write_bytes(b"keep")
+    url = "http://127.0.0.1:%d/stall/1000" % ports["plain"]
+    lines = output_lines(run_program(tmp_path, "cancel", CANCEL_PROGRAM, [url, str(directory / "kept.bin")]))
+    assert lines == ["cancelled"], lines
+    names = sorted(path.name for path in directory.iterdir())
+    assert len(names) == 2 and names[1] == "kept.bin", names
+    assert re.fullmatch(r"\.kept\.bin\.[0-9a-f]{8}\.agc-part", names[0]), names
+    assert (directory / "kept.bin").read_bytes() == b"keep"
 
 
 def test_bodies_past_256_mib_stream_whole_through_a_redirect(tmp_path, ports):

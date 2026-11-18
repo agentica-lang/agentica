@@ -314,13 +314,15 @@ def request(
 end
 
 ## Downloads the resource at `url` with a `GET` request and writes its body bytes to `path`. `options` is optional
-## and defaults to `DownloadOptions()`: no limit on the time or the size of the body. The connect takes at most the
-## client's `connect_timeout_ms` and each wait for the head or for body bytes its `read_timeout_ms`.
+## and defaults to `DownloadOptions()`: no limit on the size of the body, and none on the time but a year. The
+## connect takes at most the client's `connect_timeout_ms` and each wait for the head or for body bytes its
+## `read_timeout_ms`.
 ##
-## The body never sits in memory: at most 1 MiB is held at once. It goes to a new file next to `path` (`path` with a
-## random `.part` suffix), which is renamed to `path` only when the body ended cleanly, its size is within
-## `options.max_total_bytes` and its digest is `options.sha256` (else `http.digest`): an existing file or link at
-## `path` is then replaced, and a directory is an error. A failure removes the new file and leaves `path` as it was.
+## The body never sits in memory: at most 1 MiB is held at once. It goes to a new private file in the folder of
+## `path`, named `.<name>.<8 hex digits>.agc-part`, which `Path.replace` puts at `path` in one step only when the body
+## ended cleanly, its size is within `options.max_total_bytes` and its digest is `options.sha256` (else
+## `http.digest`): an existing file or link at `path` is then replaced, and a directory is an error. A failure removes
+## the new file and leaves `path` as it was; a cancelled task or a killed program can leave the new file behind.
 ## Status codes such as 404 or 500 are normal responses, as with `get`: the body is still written and the status
 ## returned, so check `status` before using the file. There is no redirect follow, and the connection is not pooled:
 ## it closes when the download ends. The pool gives the TLS context and its certificates for `https`, whose
@@ -813,6 +815,8 @@ NO_BODY_LIMIT = 9223372036854775807
 # The time a failed download takes to close and remove its new file, apart from the call's deadline.
 CLEANUP_MS = 30000
 DIGEST_MISMATCH = "http: the body does not match the sha256 digest"
+# The most characters of the file name that the hidden name of a growing download keeps.
+PART_NAME = 32
 CLIENT_MAX_BODY = 67108864
 # The error of an awaited task that was cancelled (Task.await), as the feeder of a closing server gives it.
 TASK_CANCELLED = "task: cancelled"
@@ -4356,7 +4360,7 @@ def finish_download(
   denied: String,
   step: Int,
 ) -> Result[Download]
-  temp = "#{path}.#{OpenSSL.Random.hex(8)}.part"
+  temp = part_path(path)
   case time_left(socket, deadline)
     ok(left) ->
       case File.open(temp, "create_private", left)
@@ -4412,16 +4416,32 @@ def fail_download(socket: TCP.Socket, saving: Saving, failed: Result[Download]) 
   failed
 end
 
-# Removes the new file of a failed download, with a time of its own: the call's deadline may be what failed.
+# Removes the new file of a failed download, with a time of its own: the call's deadline may be what failed. Only the
+# new file: a Path.replace that timed out may still finish in the pool, so `path` may already be the new file, and
+# then the new name is gone and its removal does nothing.
 def remove_part(temp: String) -> Void
   _ = Path.remove(temp, CLEANUP_MS)
 end
 
-# The finished file checked against the digest, then renamed over `path`.
+# The finished file checked against the digest, then renamed over `path` in one step, so `path` always names the old
+# file or the new one.
 def settle(saving: Saving, sha256: Optional[String], deadline: Int) -> Result[Void]
   try check_digest(saving.temp, sha256, deadline)
-  try clear_path(saving.path, deadline)
-  Path.rename(saving.temp, saving.path, try file_left(deadline))
+  Path.replace(saving.temp, saving.path, try file_left(deadline))
+end
+
+# The hidden name a download grows under, in the folder of `path`: `.<name>.<8 hex digits>.agc-part`, with at most
+# PART_NAME characters of the name, so it stays short whatever `path` is.
+def part_path(path: String) -> String
+  name = last_part(last_part(path, "/"), "\\")
+  folder = path.slice(0, path.length - name.length)
+  "#{folder}.#{name.slice(0, smaller(name.length, PART_NAME))}.#{OpenSSL.Random.hex(4)}.agc-part"
+end
+
+# What follows the last `separator` in `text`, or all of it when there is none.
+def last_part(text: String, separator: String) -> String
+  return "" if text.end_with?(separator)
+  text.split(separator).last
 end
 
 def check_digest(temp: String, sha256: Optional[String], deadline: Int) -> Result[Void]
@@ -4433,7 +4453,8 @@ def check_digest(temp: String, sha256: Optional[String], deadline: Int) -> Resul
   end
 end
 
-# Whether a download may end at `path`: nothing is there yet, or a file or a link that it replaces.
+# Whether a download may end at `path`: nothing is there yet, or a file or a link that it replaces. It is checked
+# before the connect, so a directory fails at once; Path.replace refuses one that appears later.
 def replaceable(path: String, deadline: Int) -> Result[Void]
   case File.lstat(path, try file_left(deadline))
     ok(info) ->
@@ -4441,13 +4462,6 @@ def replaceable(path: String, deadline: Int) -> Result[Void]
       error("http: the download path is a #{info.kind}, not a file", kind: "argument")
     error(_) -> ok()
   end
-end
-
-# Removes the file or link at `path` that the rename replaces (Path.rename never replaces a target).
-def clear_path(path: String, deadline: Int) -> Result[Void]
-  try replaceable(path, deadline)
-  return ok() if not File.lstat(path, try file_left(deadline)).ok?
-  Path.remove(path, try file_left(deadline))
 end
 
 def file_left(deadline: Int) -> Result[Int]
