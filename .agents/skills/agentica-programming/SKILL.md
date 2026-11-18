@@ -71,6 +71,7 @@ Read only what the task needs.
 | `language-statements-expressions.md` | `case`, loops, assignment, literals, heredocs, operators, pipes, foreign forms |
 | `language-blocks-results.md` | blocks and closures, `Fn` values, `Result`, `try`, `Optional`, design patterns |
 | `builtins.md` | IO, Int/Float, String, List, Map, Set, Range, Result, Optional, System, Time, Random, `to_s`; Ruby names |
+| `time.md` | dates and times: `Time.Date`, `Time.TimeOfDay`, `Time.NaiveDateTime`, `Time.DateTime` |
 | `examples.md` | complete programs to start from |
 | `diagnostics.md` | meaning and fix of a diagnostic code, call stacks |
 | `modules.md` | several files, `module` blocks, private struct fields, `std/`, `pkg/` search, `std/queue`, `std/heap` |

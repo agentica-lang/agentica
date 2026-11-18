@@ -74,8 +74,19 @@ functions `Family.Member.fn(args)`, two levels at most
 `OpenSSL.Random.uuid`, `data |> OpenSSL.Digest.sha256()`). A member is a group
 of functions or a builtin type. A member the family lacks is
 `CHECK-UNKNOWN-NAME`, with the members in the help; a group of functions where
-a type is wanted is `CHECK-UNKNOWN-TYPE`. The one family today is `OpenSSL`
-(`Digest`, `HMAC`, `Cipher`, `CMAC`, `KDF`, `RSA`, `Random`).
+a type is wanted is `CHECK-UNKNOWN-TYPE`. The families are `File`, `JSON`,
+`OpenSSL` (`Digest`, `HMAC`, `Cipher`, `CMAC`, `KDF`, `RSA`, `Random`),
+`Process`, `System`, `TCP`, `TLS`, `Test` and `Time` (`Date`, `TimeOfDay`,
+`NaiveDateTime`, `DateTime`).
+
+The members `Time.Date`, `Time.TimeOfDay`, `Time.NaiveDateTime` and
+`Time.DateTime` of the `Time` family are records that only their builtins build
+(`Time.Date.new`, ...), so every value is a valid date or time: a construction
+or a `.with` of one is `CHECK-NOT-CONSTRUCTIBLE`, `JSON` neither encodes nor
+decodes one, and a `Time.DateTime` has no `==` (`CHECK-TYPE-MISMATCH`), since
+two readings of one instant at different offsets differ field by field. The
+functions are in the
+[dates and times page](../../site/content/library/io-and-system/time.md).
 
 Callbacks (`List.map`, `select`, `reduce`, `each`, `any?`, `all?`, `sort_by`
 and the other methods that take a function) take a block, `&name` or a function

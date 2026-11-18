@@ -564,6 +564,10 @@ def json_refusal_help(cx: State.Cx, type: T.Type, verb: String) -> String
     )
   end
 
+  if CheckTypes.sealed_inside?(cx, type)
+    return "JSON has no form for the dates and times of Time yet; use a struct of their fields, as Ints"
+  end
+
   return "" if !CheckTypes.bytes_inside?(cx, type)
 
   return "JSON has no byte type; encode it first: Base64.strict_encode64(b)" if verb == "encode"

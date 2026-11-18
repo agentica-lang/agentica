@@ -1239,6 +1239,8 @@ PURE_SYSTEM_ROWS = {
     "System.Profile.measure": "runs its block, which is walked; the profile is a trace",
     "System.signal_number": "a constant of the OS",
     "Task.id": "a field of the task value",
+    **{f"Time.{name}": "a value or a calendar fact from its Int arguments; no clock" for name in (
+        "Date.days_in_month", "Date.leap?", "Date.new", "DateTime.new", "NaiveDateTime.new", "TimeOfDay.new")},
     **{f"__lazy_{step}": "a step of a Lazy (a terminal is function-value)" for step in (
         "chunk_while", "count", "each", "find", "flat_map", "group", "list", "map", "produce", "range", "reduce",
         "test", "to_a", "with_index", "zlib")},

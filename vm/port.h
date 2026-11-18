@@ -1156,6 +1156,9 @@ uint32_t agc_builtin_struct(agc_vm *vm, const char *name, const char *const *fie
    or UINT32_MAX:
    unlike agc_builtin_struct it never fails, because a program without one still runs with String errors. */
 uint32_t agc_error_struct(const agc_program *program);
+/* Fills OUT (AGC_TIME_RECORDS entries) with the struct of each Time record of PROGRAM, by name and exact field list, or
+   UINT32_MAX. */
+void agc_time_structs(const agc_program *program, uint32_t *out);
 uint32_t agc_builtin_variant(agc_vm *vm, const char *enum_name, const char *variant_name, uint32_t arity);
 
 #endif

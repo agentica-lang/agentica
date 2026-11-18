@@ -655,6 +655,18 @@ uint32_t agc_error_struct(const agc_program *program) {
   return found != UINT32_MAX && error_types(program, found) ? found : UINT32_MAX;
 }
 
+void agc_time_structs(const agc_program *program, uint32_t *out) {
+  static const char *const fields[] = {"year", "month", "day", "hour", "min", "sec", "usec", "utc_offset"};
+  /* A time of day has the four clock fields, from hour. */
+  static const struct {
+    const char *name;
+    uint32_t first, count;
+  } records[AGC_TIME_RECORDS] = {
+      {"Time.Date", 0, 3}, {"Time.TimeOfDay", 3, 4}, {"Time.NaiveDateTime", 0, 7}, {"Time.DateTime", 0, 8}};
+  for (uint32_t k = 0; k < AGC_TIME_RECORDS; k++)
+    out[k] = program ? find_struct(program, records[k].name, fields + records[k].first, records[k].count) : UINT32_MAX;
+}
+
 uint32_t agc_builtin_struct(agc_vm *vm, const char *name, const char *const *fields, uint32_t count) {
   uint32_t found = find_struct(vm->rt->program, name, fields, count);
   if (found != UINT32_MAX) return found;

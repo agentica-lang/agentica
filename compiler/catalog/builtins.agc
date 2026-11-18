@@ -12,6 +12,7 @@ import {
   OPAQUE_TYPES as DATA_OPAQUE_TYPES,
   RECORDS as DATA_RECORDS,
   RESERVED_TYPE_NAMES,
+  SEALED_RECORDS,
   STD_ONLY_IMPORTS,
   TYPE_DESCRIPTIONS as DATA_TYPE_DESCRIPTIONS,
 } from "builtins_data"
@@ -29,6 +30,9 @@ ENUMS: Map[String, Model.EnumDef] = DATA_ENUMS.reduce(EMPTY_ENUMS) do |found, de
 end
 
 OPAQUE_TYPES = Set.new(DATA_OPAQUE_TYPES)
+
+## The builtin records that only their builtins build (Time.Date): no construction, .with or JSON.
+SEALED = Set.new(SEALED_RECORDS)
 
 ## The builtin type of a family that is a type of its own in the checker, not a record, enum or opaque type: JSON.Value
 ## is Types.Type.Json.
@@ -74,10 +78,18 @@ end
 
 ## The public builtins a call can name, for the did-you-mean of an unknown name. Any other name with two dots
 ## (Native.Mutex.synchronize) is a method of a builtin type, written only on a value of it, so it is left out; a
-## function of a family member (OpenSSL.Digest.sha256) stays.
+## function of a family member (OpenSSL.Digest.sha256) stays, and so does one of a family type that takes no value of
+## it first (Time.Date.new): a method of a record takes the record first.
 CALLABLE_NAMES = PUBLIC_NAMES.filter do |name|
   parts = name.split(".")
-  parts.size < 3 or (FAMILY_MEMBERS.has_key?(parts[0]) and !FAMILY_TYPES.include?("#{parts[0]}.#{parts[1]}"))
+  method = false
+  if parts.size >= 3
+    type = "#{parts[0]}.#{parts[1]}"
+    parameters = ENTRIES[name].parameters
+    method = parameters.size > 0 and parameters[0].type == Types.Type.Struct(type, [])
+  end
+
+  parts.size < 3 or (FAMILY_MEMBERS.has_key?(parts[0]) and !method)
 end
 
 BARE_NAMES = Set.new(ENTRIES.keys.filter do |name| !name.include?(".") end)

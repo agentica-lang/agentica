@@ -29,10 +29,11 @@ VM_BUILTINS = Set.new([
   "String.code", "String.from_code", "String.from_bytes.bytes", "String.to_int", "String.to_int!", "String.to_float",
   "String.to_float!", "Float.from_int", "Float.to_int", "Float.to_int!", "Int.bit_and", "Int.bit_or", "Int.bit_xor",
   "Int.bit_not", "Int.shift_left", "Int.shift_right", "Int.shift_right_unsigned", "Float.to_bits", "Float.from_bits",
-  "Float.to_bits32", "Float.from_bits32", "Time.now_ms", "Time.monotonic_ms", "Time.monotonic_ns", "Random.int",
-  "Random.float", "JSON.parse", "JSON.encode", "JSON.from", "JSON.object", "JSON.array", "JSON.null", "JSON.null?",
-  "JSON.get", "JSON.at", "JSON.string", "JSON.int", "JSON.kind", "JSON.float", "JSON.bool", "JSON.list", "JSON.decode",
-  "JSON.schema", "JSON.node", "File.open", "File.read_bytes.bytes", "File.read_line", "File.write",
+  "Float.to_bits32", "Float.from_bits32", "Time.now_ms", "Time.monotonic_ms", "Time.monotonic_ns", "Time.Date.new",
+  "Time.TimeOfDay.new", "Time.NaiveDateTime.new", "Time.DateTime.new", "Time.Date.leap?", "Time.Date.days_in_month",
+  "Random.int", "Random.float", "JSON.parse", "JSON.encode", "JSON.from", "JSON.object", "JSON.array", "JSON.null",
+  "JSON.null?", "JSON.get", "JSON.at", "JSON.string", "JSON.int", "JSON.kind", "JSON.float", "JSON.bool", "JSON.list",
+  "JSON.decode", "JSON.schema", "JSON.node", "File.open", "File.read_bytes.bytes", "File.read_line", "File.write",
   "File.write_bytes.bytes", "File.flush", "File.close", "File.each_line", "File.read_text", "File.sha256.bytes",
   "File.replace", "File.write_text", "File.append_text", "File.stat", "File.lstat", "File.try_lock",
   "Zlib.deflate.bytes", "Zlib.inflate.bytes", "Zlib.gzip.bytes", "Zlib.gunzip.bytes", "Zlib.crc32.bytes", "Dir.list",
@@ -127,7 +128,7 @@ BUILTIN_STRUCTS = [
   "File.Info", "HttpWire.Header", "HttpWire.Request", "HttpWire.Response", "HttpWire.ClientOptions",
   "HttpWire.ServerOptions", "Process.Output", "LogRegistry.Event", "HttpWire.Head", "HttpWire.Chunk", "HttpWire.Reply",
   "HttpWire.Job", "HttpWire.ResponseHead", "StructMember", "Codec.Info", "TLS.ClientOptions", "TLS.ServerOptions",
-  "TaskDown", "Process.Options", "Error",
+  "TaskDown", "Process.Options", "Error", "Time.Date", "Time.TimeOfDay", "Time.NaiveDateTime", "Time.DateTime",
 ]
 
 ## The builtin structs that another one has a field of: using the key also puts these in the table.
