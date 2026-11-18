@@ -12,7 +12,7 @@
 #include <stdio.h>
 #include <string.h>
 
-enum { DATE, OF_DAY, NAIVE, DATETIME, OTHER };
+enum { OTHER = AGC_TIME_RECORDS };
 
 static agc_vm vm;
 static agc_program program;
@@ -39,7 +39,7 @@ static agc_value changed(uint32_t type, uint32_t n, const int64_t *good, uint32_
 
 static void test_a_real_value_converts(void) {
   static const int64_t epoch[8] = {1970, 1, 1, 0, 0, 1, 500000, 3600};
-  agc_value t = record(DATETIME, 8, epoch);
+  agc_value t = record(AGC_TIME_DATETIME, 8, epoch);
   assert(agc_as_int(&vm, agc_test_call_row(&vm, "Time.DateTime.to_us", 1, &t)) == INT64_C(-3598500000));
   assert(agc_as_int(&vm, agc_test_call_row(&vm, "Time.DateTime.to_i", 1, &t)) == -3599);
 }
@@ -52,36 +52,36 @@ static void test_a_forged_datetime_fails(void) {
   } bad[] = {{0, 0},  {0, 10000}, {1, 0},  {1, 13},      {2, 0},  {2, 30},    {3, 24},   {3, -1},
              {4, 60}, {5, 60},    {6, -1}, {6, 1000000}, {7, 30}, {7, 86400}, {7, INT64_MIN}};
   for (size_t k = 0; k < sizeof bad / sizeof bad[0]; k++) {
-    agc_value value = changed(DATETIME, 8, good, bad[k].at, bad[k].value);
+    agc_value value = changed(AGC_TIME_DATETIME, 8, good, bad[k].at, bad[k].value);
     forged("Time.DateTime.to_us", 1, value);
     forged("Time.DateTime.getlocal", 2, value);
   }
   forged("Time.DateTime.to_i", 1, record(OTHER, 8, good));
-  forged("Time.DateTime.to_i", 1, record(NAIVE, 7, good));
-  forged("Time.DateTime.to_i", 1, record(DATETIME, 7, good));
+  forged("Time.DateTime.to_i", 1, record(AGC_TIME_NAIVE, 7, good));
+  forged("Time.DateTime.to_i", 1, record(AGC_TIME_DATETIME, 7, good));
   forged("Time.DateTime.to_date", 1, agc_int(1));
-  agc_value text = record(DATETIME, 8, good);
+  agc_value text = record(AGC_TIME_DATETIME, 8, good);
   agc_as_struct(&vm, text)->fields[0] = agc_test_str("2024");
   forged("Time.DateTime.naive_of", 1, text);
 }
 
 static void test_a_forged_naive_fails(void) {
   static const int64_t good[8] = {1, 1, 1, 0, 0, 0, 0, 0};
-  forged("Time.NaiveDateTime.assume_offset", 2, changed(NAIVE, 7, good, 1, 13));
-  forged("Time.NaiveDateTime.assume_offset", 2, changed(NAIVE, 7, good, 2, 0));
-  forged("Time.NaiveDateTime.to_date", 1, record(DATETIME, 7, good));
-  forged("Time.NaiveDateTime.to_date", 1, record(NAIVE, 8, good));
+  forged("Time.NaiveDateTime.assume_offset", 2, changed(AGC_TIME_NAIVE, 7, good, 1, 13));
+  forged("Time.NaiveDateTime.assume_offset", 2, changed(AGC_TIME_NAIVE, 7, good, 2, 0));
+  forged("Time.NaiveDateTime.to_date", 1, record(AGC_TIME_DATETIME, 7, good));
+  forged("Time.NaiveDateTime.to_date", 1, record(AGC_TIME_NAIVE, 8, good));
 }
 
 static void test_a_program_without_the_struct_fails(void) {
   agc_value seconds = agc_int(0);
-  program.time_structs[DATETIME] = UINT32_MAX;
+  program.time_structs[AGC_TIME_DATETIME] = UINT32_MAX;
   forged("Time.at", 1, seconds);
-  program.time_structs[DATETIME] = DATETIME;
+  program.time_structs[AGC_TIME_DATETIME] = AGC_TIME_DATETIME;
   static const int64_t good[8] = {2000, 1, 1, 0, 0, 0, 0, 0};
-  program.time_structs[DATE] = UINT32_MAX;
-  forged("Time.DateTime.to_date", 1, record(DATETIME, 8, good));
-  program.time_structs[DATE] = DATE;
+  program.time_structs[AGC_TIME_DATE] = UINT32_MAX;
+  forged("Time.DateTime.to_date", 1, record(AGC_TIME_DATETIME, 8, good));
+  program.time_structs[AGC_TIME_DATE] = AGC_TIME_DATE;
 }
 
 int main(void) {
