@@ -1039,6 +1039,7 @@ def main() -> Void
   show(Path.replace(root + "/blocked.txt", root + "/folder"))
   show(Path.replace(root + "/folder", root + "/other.txt"))
   show(Path.replace(root + "/absent.txt", root + "/old.txt"))
+  show(Path.replace(root + "/from-link.txt", root + "/other.txt"))
 end
 """
 
@@ -1051,6 +1052,7 @@ def test_path_replace_swaps_a_file_or_link_in_one_step_and_refuses_a_directory(n
     (root / "folder").mkdir()
     (root / "folder" / "keep.txt").write_text("keep")
     os.symlink(root / "target.txt", root / "link.txt")
+    os.symlink(root / "blocked.txt", root / "from-link.txt")
     output = run_program(PATH_REPLACE_PROGRAM, [str(root)])
     assert output.splitlines() == [
         "ok",
@@ -1059,6 +1061,7 @@ def test_path_replace_swaps_a_file_or_link_in_one_step_and_refuses_a_directory(n
         "io.is_directory filesystem: cannot rename path",
         "io.is_directory filesystem: cannot rename path",
         "io.not_found filesystem: cannot rename path",
+        "io.failed filesystem: cannot rename path",
     ], output
     assert (root / "old.txt").read_text() == "new"
     assert (root / "missing.txt").read_text() == "fresh"
@@ -1068,4 +1071,4 @@ def test_path_replace_swaps_a_file_or_link_in_one_step_and_refuses_a_directory(n
     assert [path.name for path in (root / "folder").iterdir()] == ["keep.txt"]
     assert (root / "other.txt").read_text() == "other"
     assert sorted(path.name for path in root.iterdir()) == [
-        "blocked.txt", "folder", "link.txt", "missing.txt", "old.txt", "other.txt", "target.txt"]
+        "blocked.txt", "folder", "from-link.txt", "link.txt", "missing.txt", "old.txt", "other.txt", "target.txt"]
