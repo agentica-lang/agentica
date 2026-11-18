@@ -139,15 +139,33 @@ static ssize_t console_write(HANDLE console, const uint8_t *data, size_t n, agc_
   return failed ? -1 : (ssize_t)n;
 }
 
+/* The UCRT's _write and fflush map ERROR_NO_DATA (a pipe whose reader closed) to EINVAL, so a failure of one of them
+   whose system error is ERROR_NO_DATA or ERROR_BROKEN_PIPE gets EPIPE, on the thread of the call, which keeps
+   _doserrno. */
+static void pipe_errno(void) {
+  if (_doserrno == ERROR_NO_DATA || _doserrno == ERROR_BROKEN_PIPE) errno = EPIPE;
+}
+
+static ssize_t crt_write(int fd, const uint8_t *data, size_t n) {
+  int done = _write(fd, data, (unsigned)n);
+  if (done < 0) pipe_errno();
+  return done;
+}
+
 ssize_t agc_stdio_write(int fd, const uint8_t *data, size_t n, agc_utf8_cut *cut) {
   DWORD mode;
   HANDLE handle = (HANDLE)_get_osfhandle(fd);
   if (handle != INVALID_HANDLE_VALUE && GetConsoleMode(handle, &mode)) return console_write(handle, data, n, cut);
-  return _write(fd, data, (unsigned)n);
+  return crt_write(fd, data, n);
 }
 
-/* The CRT maps ERROR_BROKEN_PIPE and ERROR_NO_DATA to EPIPE, and libuv to UV_EPIPE. */
-bool agc_stdio_gone(int err) { return err == EPIPE || err == UV_EPIPE; }
+/* EPIPE from crt_write, pipe_errno or the flush thread; libuv's write completion maps ERROR_BROKEN_PIPE to UV_EOF and
+   ERROR_PIPE_NOT_CONNECTED to UV_EPIPE. A write is never told UV_EOF for any other reason. The FILE fallback of
+   vm/output.c (write_failed) reads errno on the thread of the failed fwrite or fflush, which still holds _doserrno. */
+bool agc_stdio_gone(int err) {
+  if (err == EINVAL && (_doserrno == ERROR_NO_DATA || _doserrno == ERROR_BROKEN_PIPE)) return true;
+  return err == EPIPE || err == UV_EPIPE || err == UV_EOF;
+}
 
 static void pipe_closed(uv_handle_t *handle) { free(handle->data); }
 
@@ -289,7 +307,7 @@ bool agc_stdio_try_first(const agc_output *s) {
   return false;
 }
 
-ssize_t agc_stdio_try(agc_output *s, const uint8_t *data, size_t n) { return _write(s->fd, data, (unsigned)n); }
+ssize_t agc_stdio_try(agc_output *s, const uint8_t *data, size_t n) { return crt_write(s->fd, data, n); }
 
 /* Writes the bytes of two ranges (a ring that wrapped) as one request. They must stay unchanged until done runs, with
    the status of libuv: 0 when all went out. done also runs at once when libuv refuses the request. */
@@ -573,6 +591,7 @@ static unsigned __stdcall flush_stream(void *arg) {
   while (fflush(f->stream) != 0) {
     if (errno != EINTR) {
       result = AGC_STDIO_FAILED;
+      pipe_errno();
       atomic_store(&f->err, errno);
       break;
     }

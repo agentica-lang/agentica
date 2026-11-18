@@ -71,8 +71,10 @@ code does not show:
   or-pattern, even of plain variants) fails to the next arm in order, so every
   variant arm after it keeps its tag test.
 - The checker makes every `case` exhaustive, but unless its last arm is `_`
-  with no guard, the code after the last arm is `no-match` on the scrutinee:
-  a checker bug fails there instead of going on with a stale register.
+  with no guard, a failed test of the last arm jumps to `no-match` on the
+  scrutinee, out of line after the function's code (with a `return` after
+  it): a checker bug fails there instead of going on with a stale register,
+  and the arms run no extra instruction.
 - `try` is `try dst src`: on an error, return that Result from the function (the
   block, inside a block). A `try` that the checker found in the block of a
   `Lazy` method (`Checked.step_tries`) is `try-step dst src`.

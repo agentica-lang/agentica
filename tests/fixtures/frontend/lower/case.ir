@@ -38,12 +38,12 @@ fn0 "area" params=1 captures=0 slots=5 @ 0:7:1-14:1
     step @ 0:11:25-12:1
     step @ 0:11:32-11:33
     return r1 @ 0:11:25-12:1
-    jump L7 @ 0:8:3-13:1
-  L6:
-    no-match r0 @ 0:8:3-13:1
   L7:
     const r1 void @ 0:7:1-14:1
     return r1 @ 0:7:1-14:1
+  L6:
+    no-match r0 @ 0:8:3-13:1
+    return r0 @ 0:8:3-13:1
 fn1 "describe" params=1 captures=0 slots=2 @ 0:15:1-24:1
     step @ 0:16:3-23:1
     step @ 0:16:8-16:9
@@ -227,12 +227,12 @@ fn4 "check" params=1 captures=0 slots=4 @ 0:52:1-58:1
     step @ 0:55:24-55:25
     field r2 r1 1 @ 0:55:24-55:33
     return r2 @ 0:55:17-56:1
-    jump L0 @ 0:53:3-57:1
-  L2:
-    no-match r0 @ 0:53:3-57:1
   L0:
     const r1 void @ 0:52:1-58:1
     return r1 @ 0:52:1-58:1
+  L2:
+    no-match r0 @ 0:53:3-57:1
+    return r0 @ 0:53:3-57:1
 fn5 "check_void" params=1 captures=0 slots=3 @ 0:59:1-65:1
     step @ 0:60:3-64:1
     step @ 0:60:8-60:9
@@ -253,12 +253,12 @@ fn5 "check_void" params=1 captures=0 slots=3 @ 0:59:1-65:1
     step @ 0:62:27-62:28
     move r2 r1 @ 0:62:27-62:28
     call-builtin r2 "puts" 1 @ 0:62:22-62:29 0:62:27-62:28
-    jump L0 @ 0:60:3-64:1
-  L2:
-    no-match r0 @ 0:60:3-64:1
   L0:
     const r1 void @ 0:59:1-65:1
     return r1 @ 0:59:1-65:1
+  L2:
+    no-match r0 @ 0:60:3-64:1
+    return r0 @ 0:60:3-64:1
 fn6 "main" params=0 captures=0 slots=4 entry @ 0:66:1-72:1
     step @ 0:67:3-68:1
     step @ 0:67:3-67:35

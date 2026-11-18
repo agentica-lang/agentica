@@ -73,7 +73,7 @@ def lower_function(
     params: count,
     captures: captures.size,
     slots: fx.high,
-    body: fx.code,
+    body: fx.code.concat(fx.traps),
     file: fx.file,
     span: span,
   )
@@ -491,16 +491,16 @@ def lower_arms(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.CaseStmt, target: Int
     fx = try lower_guard(cx, fx, arm.guard, skip)
     fx = try lower_arm_body(cx, fx, arm.body, target)
     fx = leave(fx, before)
-    if index < node.arms.size or trap
+    if index < node.arms.size
       fx = Lowering.emit_at(fx, "jump", [end_label], node.span)
+      fx = Lowering.place(fx, skip)
+    elsif trap
+      fx = Lowering.trap(fx, skip, value, node.span)
+    else
+      fx = Lowering.place(fx, skip)
     end
 
-    fx = Lowering.place(fx, skip)
     index += 1
-  end
-
-  if trap
-    fx = Lowering.emit_at(fx, "no-match", [value], node.span)
   end
 
   ok(Lowering.place(fx, end_label))
@@ -512,7 +512,7 @@ end
 # it. An arm that is not a single variant pattern (`_`, a literal, a Result pattern, any or-pattern, even of plain
 # variants) fails to the next arm in order, so every variant arm after it keeps its tag test, which goes to the next
 # arm when it fails. Arm k starts at label first + k, its code after the tag test at first + count + k, no arm matched
-# at first + 2 * count, and the case ends there or, after a `no-match`, at the label after it.
+# at first + 2 * count (the end, or an out-of-line `no-match`), and the case ends at the label after it.
 def lower_table_arms(
   cx: Lowering.Cx,
   scrutinee: Lowering.Out,
@@ -524,12 +524,7 @@ def lower_table_arms(
   count = node.arms.size
   first = scrutinee.fx.labels
   missed = first + 2 * count
-  trap = may_fall_through?(node)
-  end_label = missed
-  if trap
-    end_label = missed + 1
-  end
-
+  end_label = missed + 1
   fx = scrutinee.fx.with(labels: end_label + 1)
   ids = sets.flat_map do |found: List[Int]| found end
   low = ids.min.unwrap!
@@ -577,23 +572,25 @@ def lower_table_arms(
     fx = try lower_guard(cx, fx, arm.guard, skip)
     fx = try lower_arm_body(cx, fx, arm.body, target)
     fx = leave(fx, before)
-    if index + 1 < count or trap
+    if index + 1 < count
       fx = Lowering.emit_at(fx, "jump", [end_label], node.span)
     end
 
     index += 1
   end
 
-  if trap
+  if may_fall_through?(node)
+    fx = Lowering.trap(fx, missed, value, node.span)
+  else
     fx = Lowering.place(fx, missed)
-    fx = Lowering.emit_at(fx, "no-match", [value], node.span)
   end
 
   ok(Lowering.place(fx, end_label))
 end
 
-# Whether no arm may run: the checker made the case exhaustive, but unless the last arm is `_` with no guard the case
-# ends in `no-match`, so a checker bug fails with RUNTIME-CASE-NO-MATCH instead of going on with a wrong value.
+# Whether no arm may run: the checker made the case exhaustive, but unless the last arm is `_` with no guard, a failed
+# test of the last arm goes to an out-of-line `no-match` (Lowering.trap), so a checker bug fails with
+# RUNTIME-CASE-NO-MATCH instead of going on with a wrong value.
 def may_fall_through?(node: Ast.CaseStmt) -> Bool
   last = node.arms[node.arms.size - 1]
   case last.pattern

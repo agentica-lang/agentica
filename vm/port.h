@@ -298,7 +298,7 @@ struct agc_output {
   agc_stdio *io;
   agc_write_mode mode;
   agc_utf8_cut cut;
-  /* gone: the failure was EPIPE, the reader closed its end (agc_stdio_gone). */
+  /* gone: the reader closed its end (agc_stdio_gone of the failure). */
   bool writing, failed, gone;
   /* Positions in the bytes of the stream since it opened: `sent` bytes have been written, the ring holds the next
      `len` and the queue the ones after. `own_end` is the position just past the last byte of text of the program or
@@ -1072,9 +1072,6 @@ ssize_t agc_stdio_try(agc_output *out, const uint8_t *data, size_t n);
 void agc_stdio_start(agc_output *out, const uint8_t *first, size_t first_len, const uint8_t *second, size_t second_len,
                      void (*done)(void *data, int status), void *data);
 ssize_t agc_stdio_write(int fd, const uint8_t *data, size_t n, agc_utf8_cut *cut);
-/* True when ERR, an errno of a write or the status of a write or poller callback, says that the reader closed its end
-   (EPIPE). */
-bool agc_stdio_gone(int err);
 /* A FILE that keeps what is written to it in memory (open_memstream; Windows has none). NULL when none can be made.
    take closes it and gives the text (malloc'd) and its length; false when text was lost. */
 FILE *agc_memstream_open(agc_memstream **ms);
@@ -1088,6 +1085,9 @@ bool agc_memstream_take(FILE *file, agc_memstream *ms, char **text, size_t *len)
    Only native code writes to these buffers (the VM writes its own output through vm/output.c), so a busy stream
    loses at most what native code left in its buffer. FAILED when fflush fails. */
 typedef enum { AGC_STDIO_FLUSHED, AGC_STDIO_BUSY, AGC_STDIO_FAILED } agc_stdio_flush_result;
+/* True when ERR, the errno of a failed write or flush or the status of a write or poller callback, says that the
+   reader closed its end (EPIPE; vm/stdio_windows.c maps Windows' broken pipe to it). */
+bool agc_stdio_gone(int err);
 #define AGC_STDIO_FLUSH_WAIT_MS 100
 agc_stdio_flush_result agc_stdio_flush(FILE *stream);
 #ifdef _WIN32

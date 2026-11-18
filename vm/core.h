@@ -309,6 +309,9 @@ void agc_op_enum(agc_value *dst, const agc_value *payload, const agc_variant_def
  * needs `b` (the key), the other statuses read neither (NULL is fine). `span` is the span of the running instruction.
  * It is called on the VM's C stack, never from compiled code. */
 _Noreturn void agc_op_fail(agc_vm *vm, agc_status status, const agc_value *a, const agc_value *b, uint32_t span);
+/* NO_MATCH: RUNTIME-CASE-NO-MATCH at SPAN, with the debug form of VALUE. Defined after the turn loops of vm/interp.c,
+   so its cold code does not move them. */
+_Noreturn void agc_no_match(agc_vm *vm, agc_value value, uint32_t span);
 agc_outcome agc_vm_run(agc_vm *vm);
 /* The builds of AGC_LEAF_CHECK take the rule before a call of B, a leaf or direct row, and check it after: a call that
  * parked (or asked to retry), started a stepper, moved the frames or left rt->sync taken, or, with LEAF (a leaf row, or

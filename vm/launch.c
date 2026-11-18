@@ -336,7 +336,7 @@ int agc_launch_settle(agc_vm *vm, agc_outcome *outcome) {
   agc_io_children_stopped();
   say_goodbye(vm, outcome);
   bool stdout_ok = agc_stdio_flush(stdout) != AGC_STDIO_FAILED;
-  bool stdout_gone = !stdout_ok && errno == EPIPE;
+  bool stdout_gone = !stdout_ok && agc_stdio_gone(errno);
   agc_stdio_flush(stderr);
   if (outcome->kind == AGC_FAILED) announce_outcome(vm, outcome);
   flush_files(vm);
@@ -355,18 +355,19 @@ int agc_launch_settle(agc_vm *vm, agc_outcome *outcome) {
   if (outcome->kind != AGC_FAILED && !agc_io_stop_signal()) {
     if (stdout_ok && agc_stdio_flush(stdout) == AGC_STDIO_FAILED) {
       stdout_ok = false;
-      stdout_gone = errno == EPIPE;
+      stdout_gone = agc_stdio_gone(errno);
     }
-    if (stdout_gone) {
-      /* The reader of standard output left (`prog | head`): a quiet end, as fail_write in vm/output.c. */
+    bool stderr_ok = !agc_output_failed(&vm->rt->err), stderr_gone = agc_output_gone(&vm->rt->err);
+    if (!stdout_ok && !stdout_gone) {
+      write_error = "cannot write to standard output";
+    } else if (!stderr_ok && !stderr_gone) {
+      write_error = "cannot write to standard error";
+    } else if (stdout_gone || stderr_gone) {
+      /* The reader of standard output or error left (`prog | head`): a quiet end, as fail_write in vm/output.c. */
       if (outcome->kind != AGC_EXITED || outcome->exit_code == 0) {
         outcome->kind = AGC_EXITED;
         outcome->exit_code = AGC_EXIT_READER_GONE;
       }
-    } else if (!stdout_ok) {
-      write_error = "cannot write to standard output";
-    } else if (agc_output_failed(&vm->rt->err)) {
-      write_error = "cannot write to standard error";
     } else if (!covered) {
       write_error = "cannot write the coverage file";
     }

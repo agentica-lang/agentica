@@ -719,6 +719,18 @@ def test_a_reader_that_goes_away_after_the_last_print_still_ends_the_run_with_st
     assert err == ""
 
 
+def test_a_stderr_whose_reader_left_ends_the_run_quietly_with_status_141(tmp_path):
+    bytecode = compile_text(ERROR_ROWS_PROGRAM % 400, "err-gone", tmp_path)
+    reader, writer = os.pipe()
+    os.close(reader)
+    try:
+        process = subprocess.run([*vm_command(), "--", bytecode], stdout=subprocess.DEVNULL, stderr=writer,
+                                 env=vm_environment(), timeout=PEER_LIMIT)
+    finally:
+        os.close(writer)
+    assert process.returncode == 141
+
+
 @pytest.mark.skipif(not os.path.exists("/dev/full"), reason="host-only: /dev/full, which fails every write, is Linux")
 def test_a_standard_output_that_fails_otherwise_than_epipe_is_still_an_error(tmp_path):
     bytecode = compile_text(ROWS_PROGRAM % 10, "full", tmp_path)

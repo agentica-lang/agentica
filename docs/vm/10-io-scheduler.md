@@ -463,10 +463,10 @@ section says how the scheduler and the loop keep them.
     wake, and the print that notices it fails with `RUNTIME-INTERNAL` (`cannot
     write to standard output` or `standard error`). `end_run` folds a failed
     stream into exit code 1, even when no print saw the error. `EPIPE` on
-    standard output (or on standard error that shares its target) is the
-    reader leaving (`prog | head`): the run ends quietly with status 141, the
-    status of a Unix tool that SIGPIPE killed, both at the print and at the
-    end. The blocking
+    standard output or error is the reader leaving (`prog | head`; on Windows
+    a broken pipe, `ERROR_NO_DATA` or `ERROR_BROKEN_PIPE`): the run ends
+    quietly with status 141, the status of a Unix tool that SIGPIPE killed,
+    both at the print and at the end. The blocking
     `fwrite` of the `FILE` stays only for the fallbacks of §14.1. The records of
     `agentica test` do not use this module. They travel on the child channel
     (§10.4).

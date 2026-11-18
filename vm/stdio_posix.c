@@ -146,9 +146,6 @@ ssize_t agc_stdio_write(int fd, const uint8_t *data, size_t n, agc_utf8_cut *cut
   return write(fd, data, n);
 }
 
-/* libuv's statuses are negative errno values on Unix. */
-bool agc_stdio_gone(int err) { return err == EPIPE || err == -EPIPE; }
-
 static void watch_ready(void *data, int status) {
   agc_stdio *io = data;
   agc_poller_pause(io->poller);
@@ -203,6 +200,9 @@ bool agc_memstream_take(FILE *file, agc_memstream *m, char **text, size_t *len) 
 }
 
 #endif
+
+/* libuv's statuses are negative errno values on Unix. */
+bool agc_stdio_gone(int err) { return err == EPIPE || err == -EPIPE; }
 
 /* ftrylockfile is POSIX, so every system but Windows takes this flush, not only Linux and macOS. */
 agc_stdio_flush_result agc_stdio_flush(FILE *stream) {

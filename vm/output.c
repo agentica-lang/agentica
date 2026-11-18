@@ -37,10 +37,10 @@ typedef struct {
 } drain_request;
 #endif
 
-/* A write to standard output, or to standard error on the same target, whose reader closed its end ends the run quietly
-   with AGC_EXIT_READER_GONE, as a Unix tool killed by SIGPIPE: `prog | head` is not an error. */
+/* A write to standard output or error whose reader closed its end ends the run quietly with AGC_EXIT_READER_GONE, as
+   SIGPIPE ends a Unix tool: `prog | head` is not an error. */
 static _Noreturn void fail_write(agc_vm *vm, const agc_output *out) {
-  if (out->base && out->base->gone && out->base == vm->rt->out.base) agc_exit(vm, AGC_EXIT_READER_GONE);
+  if (out->base && out->base->gone) agc_exit(vm, AGC_EXIT_READER_GONE);
   agc_fail(vm, "RUNTIME-INTERNAL",
            out == &vm->rt->err ? "cannot write to standard error" : "cannot write to standard output", 0);
 }
@@ -51,7 +51,7 @@ static _Noreturn void write_failed(agc_vm *vm, agc_output *out) {
     clearerr(out->file);
     agc_stop(vm, sig);
   }
-  if (out == &vm->rt->out && errno == EPIPE) agc_exit(vm, AGC_EXIT_READER_GONE);
+  if (agc_stdio_gone(errno)) agc_exit(vm, AGC_EXIT_READER_GONE);
   fail_write(vm, out);
 }
 
