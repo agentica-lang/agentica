@@ -138,7 +138,7 @@ end
 ## Returns milliseconds since the Unix epoch as UTC text, `Time.DateTime#iso8601` of the instant, such as
 ## `2026-10-12T10:15:02.345000Z`. An instant outside the years 1 to 9999 halts with `RUNTIME-UNWRAP-ERROR`.
 def time_text(time_ms: Int) -> String
-  instant: Result[Time.DateTime] = error("time_ms #{time_ms} is outside the years 1 to 9999")
+  instant: Result[Time.DateTime] = error("time_ms #{time_ms} is outside the years 1 to 9999", kind: "argument")
   if time_ms >= -62135596800000 && time_ms <= 253402300799999
     instant = Time.at_us(time_ms * 1000)
   end
