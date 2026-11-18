@@ -62,6 +62,9 @@ def fill_all(settings: Env.Settings, lock: Lock.Lock) -> Result[String]
         next
       end
 
+      # The entry of a workspace dependency has no files: its members, which follow it, are the packages.
+      next if Lock.root?(locked)
+
       if !filled.has_key?(locked.name)
         entries = groups[fetch_key(locked)].map do |index: Int|
           place = PackageFetch.Place(file: lock.file, entry: Reader.item("package", index))
@@ -172,7 +175,7 @@ def fetch_groups(lock: Lock.Lock) -> Map[String, List[Int]]
   groups: Map[String, List[Int]] = {}
   for index in 0...lock.packages.size
     locked = lock.packages[index]
-    next if Lock.in_place?(locked)
+    next if Lock.in_place?(locked) or Lock.root?(locked)
 
     key = fetch_key(locked)
     groups = groups.put(key, groups.get(key).unwrap_or([]).push(index))
@@ -236,7 +239,7 @@ def check_cache(settings: Env.Settings, lock: Lock.Lock, scope: PackageImport.Sc
   for locked in lock.packages
     if Lock.in_place?(locked)
       folders = folders.put(locked.name, PackageImport.folder_of(scope, locked))
-    else
+    elsif !Lock.root?(locked)
       folders = folders.put(locked.name, PackageCache.folder(cache, locked.source, locked.commit))
     end
   end

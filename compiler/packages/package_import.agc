@@ -42,19 +42,22 @@ struct Origin
 end
 
 ## The names a manifest declares: those a program may import, and its test group (`group = "test"`), which only its
-## own tests import.
+## own tests import. siblings maps the local name of each dependency on a folder of the package's own workspace (a
+## package of a workspace dependency) to its lock name.
 struct Names
   program: List[String]
   tests: List[String]
+  siblings: Map[String, String]
 end
 
 ## A package that the build has loaded and hashed: the same fields as its Origin, the names its own manifest declares,
-## which its files may import, and its test group, which they may not.
+## which its files may import, and its test group, which they may not. siblings is the one of `Names`.
 struct Opened
   root: String
   label: String
   names: List[String]
   tests: List[String]
+  siblings: Map[String, String]
   natives: Map[String, NativeLibrary.Target]
   watched: List[String]
   probed: List[String]
@@ -227,7 +230,10 @@ def library_origin() -> Origin
 end
 
 ## Tells how the `pkg/` import path file (ending in .agc, a valid library path) reads. A declared name is a package,
-## and it shadows the library roots for that name. An undeclared name is a library for a file of the project, and
+## and it shadows the library roots for that name. The name a file of a workspace dependency (a package that has a
+## namespace) gives to a sibling is the sibling's lock name, and `pkg/finn/core/module` of a workspace dependency
+## `finn` is the member `finn/core` and its module (a member that is not there is CHECK-IMPORT-PACKAGE, and a member
+## with no module CHECK-IMPORT-PATH). An undeclared name is a library for a file of the project, and
 ## CHECK-IMPORT-PACKAGE for a file of a package, which reaches nothing its manifest does not declare. `pkg/name` alone,
 ## naming no module, is CHECK-IMPORT-PATH when `name` is declared. A name of the project's test group is
 ## CHECK-IMPORT-PACKAGE for a file of the project in a build that is not a test.
@@ -246,7 +252,7 @@ def match_import(scope: Scope, origin: Origin, file: String, site: Failure.Site)
       return error(refuse(site, "a package is imported by a module of it", "write pkg/#{stem}/ and a module name"))
     end
   elsif declared?(names, parts[1])
-    return ok(Match.Package(parts[1], parts.drop(2).join("/")))
+    return package_match(scope, origin, parts[1], parts.drop(2).join("/"), site)
   end
 
   if origin.package != "" and declared?(package_tests(scope, origin), parts[1])
@@ -321,7 +327,9 @@ end
 def check_manifests(workspace: Workspace.Workspace, scope: Scope) -> Result[Scope]
   folders: Map[String, String] = {}
   for locked in scope.lock.packages
-    folders = folders.put(locked.name, folder_of(scope, locked))
+    if !Lock.root?(locked)
+      folders = folders.put(locked.name, folder_of(scope, locked))
+    end
   end
 
   check_folders(workspace, scope, folders)
@@ -338,7 +346,7 @@ def check_folders(workspace: Workspace.Workspace, scope: Scope, folders: Map[Str
     real = workspace.real_path.call(folders[locked.name])
     if real.ok? and workspace.directory_exists.call(real.unwrap!)
       case shape_of(workspace, real.unwrap!)
-        Shape.Absent -> declared = declared.put(locked.name, Names(program: [], tests: []))
+        Shape.Absent -> declared = declared.put(locked.name, Names(program: [], tests: [], siblings: {}))
         Shape.Regular ->
           names = try read_names(workspace, scope, locked.name, real.unwrap!)
           declared = declared.put(locked.name, names)
@@ -443,6 +451,7 @@ def load(workspace: Workspace.Workspace, scope: Scope, locked: Lock.Locked, site
       label: Lock.label(locked),
       names: names.program,
       tests: names.tests,
+      siblings: names.siblings,
       natives: native.targets,
       watched: watched,
       probed: native.probed,
@@ -524,7 +533,7 @@ def declared_names(
   site: Failure.Site,
 ) -> Result[Names]
   case shape_of(workspace, root)
-    Shape.Absent -> ok(Names(program: [], tests: []))
+    Shape.Absent -> ok(Names(program: [], tests: [], siblings: {}))
     Shape.Regular -> read_names(workspace, scope, package, root)
     Shape.Unsafe(name) ->
       message = "#{name} in the package is not a regular file"
@@ -565,12 +574,61 @@ def natives_of(
   end
 end
 
+# The lock name of each dependency of the manifest that is a sibling of the package `name` (Lock.sibling), by
+# local name.
+def siblings_of(lock: Lock.Lock, name: String, manifest: Manifest.Manifest) -> Map[String, String]
+  found: Map[String, String] = {}
+  for dependency in Manifest.needed(manifest)
+    key = Lock.sibling(lock, name, dependency.source)
+    if key != ""
+      found = found.put(dependency.name, key)
+    end
+  end
+
+  found
+end
+
+# What `pkg/name/rest` means for a file of `origin`: the package of a sibling, a member of a workspace dependency
+# (the longest member folder that `rest` starts with) or the package `name` itself.
+def package_match(scope: Scope, origin: Origin, name: String, rest: String, site: Failure.Site) -> Result[Match]
+  if origin.package != "" and scope.opened.has_key?(origin.package)
+    siblings = scope.opened[origin.package].siblings
+    return ok(Match.Package(siblings[name], rest)) if siblings.has_key?(name)
+  end
+
+  found = Lock.find(scope.lock, name)
+  return ok(Match.Package(name, rest)) if !found.ok? or !Lock.root?(found.unwrap!)
+
+  folders = Lock.members_of(scope.lock, name)
+  inside = folders.select do |folder: String| rest.start_with?("#{folder}/") end
+  if inside.size == 0
+    named = folders.select do |folder: String| "#{folder}.agc" == rest end
+    if named.size > 0
+      help = "write pkg/#{name}/#{named[0]}/ and a module name"
+      return error(refuse(site, "a member is imported by a module of it", help))
+    end
+
+    message = "#{name} has no member for #{rest}"
+    return error(missing(site, message, "its members are #{folders.join(", ")}"))
+  end
+
+  longest = inside.sort_by do |folder: String| 0 - folder.length end
+  member = longest[0]
+  ok(Match.Package("#{name}/#{member}", rest.slice(member.length + 1, rest.length - member.length - 1)))
+end
+
 # The names the manifest of the package `name` declares, after its checks: the running Agentica version first
 # (PKG-AGENTICA-TOO-OLD), then the lock.
 def read_names(workspace: Workspace.Workspace, scope: Scope, name: String, root: String) -> Result[Names]
   manifest = try Manifest.read_checked(workspace, Paths.join(root, MANIFEST_FILE), name, scope.agentica)
-  try Project.check_dependencies(scope.lock, manifest, scope.members, true)
-  ok(Names(program: Manifest.program_names(manifest), tests: Manifest.test_names(manifest)))
+  try Project.check_dependencies(scope.lock, manifest, scope.members, name)
+  ok(
+    Names(
+      program: Manifest.program_names(manifest),
+      tests: Manifest.test_names(manifest),
+      siblings: siblings_of(scope.lock, name, manifest),
+    ),
+  )
 end
 
 def declared?(names: List[String], name: String) -> Bool = names.any? do |declared| declared == name end

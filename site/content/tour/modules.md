@@ -336,6 +336,19 @@ agentica add jobs agentica-lang/packages --tag jobs-0.1.0
 agentica update sqlite
 ```
 
+A repository of packages that has a `[workspace]` table in its root `agentica.toml` can be one dependency, with `workspace = true`. The project locks and installs every member, and imports one as `pkg/NAME/MEMBER/MODULE`, so the names of the members never clash with the names the project uses (`agentica add` does not write this key yet):
+
+```toml
+[dependencies]
+finn = { git = "https://github.com/owner/finn", tag = "finn-1", workspace = true }
+```
+
+```text
+import Core from "pkg/finn/core/agent"
+```
+
+Inside the workspace, a member that depends on another member of the same repository gets the one of the workspace, at the pin of the workspace, whatever pin it writes.
+
 A dependency that only the tests use, such as a property-testing package, takes `group = "test"` (`agentica add NAME URL --tag TAG --group test` writes it). The project locks and installs it, but only its `*_test.agc` files and its step program import it; any other program that imports it stops with `CHECK-IMPORT-PACKAGE`. A project that depends on your package never fetches it.
 
 ```toml

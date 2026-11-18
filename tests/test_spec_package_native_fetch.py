@@ -385,8 +385,9 @@ def test_a_cache_entry_others_can_write_is_pkg_native_build(ws, remotes, peer):
 ADDER = "owner/adder"
 
 
-def publish_adder(ws, remotes, peer, kind):
-    """The package adder with the module adder and its prebuilt table; returns its manifest text."""
+def publish_adder(ws, remotes, peer, kind, workspace=False):
+    """The package adder with the module adder and its prebuilt table, or, with `workspace`, a workspace repository
+    whose one member `adder` is that package."""
     scratch = ws.base / "author"
     (scratch / "native").mkdir(parents=True)
     (scratch / "native" / "adder.c").write_text(ADDER_C, encoding="utf-8")
@@ -394,6 +395,9 @@ def publish_adder(ws, remotes, peer, kind):
     source, api = native_source(scratch, ws, remotes)
     manifest = 'name = "adder"\n\n[native.adder]\n%s%s' % (BUILD, prebuilt(kind, peer, source, api))
     files = {"agentica.toml": manifest, "native/adder.c": ADDER_C, "adder.agc": "def one() -> Int = 1\n"}
+    if workspace:
+        table = '[workspace]\nrepository = "%s"\nmembers = ["adder"]\n' % remotes.url(ADDER)
+        files = {"agentica.toml": table, **{"adder/" + path: text for path, text in files.items()}}
     remotes.publish(ADDER, files, tag="v1")
 
 
@@ -411,6 +415,22 @@ def test_add_and_update_fetch_the_files_of_a_fetched_package(ws, remotes, peer):
     assert (result.code, problems(result)) == (0, []), result.stderr
     assert_fetched(ws, peer)
     assert len(peer.requests) == 2
+
+
+def test_a_prebuilt_module_of_a_workspace_member_is_fetched_through_the_workspace_dependency(ws, remotes, peer):
+    publish_adder(ws, remotes, peer, "ok", workspace=True)
+    (ws.project / "agentica.toml").write_text(
+        'name = "app"\n\n[dependencies]\nsuite = { git = "%s", tag = "v1", workspace = true }\n' % remotes.url(ADDER),
+        encoding="utf-8")
+    result = agentica(ws, remotes, "--json", "update")
+    assert (result.code, problems(result)) == (0, []), result.stderr
+    assert_fetched(ws, peer)
+    assert len(peer.requests) == 1
+    # The lock names the member `suite/adder`, and install finds the file in the prebuilt cache.
+    assert 'name = "suite/adder"' in (ws.project / "agentica.lock").read_text(encoding="utf-8")
+    result = agentica(ws, remotes, "--json", "install")
+    assert (result.code, problems(result)) == (0, []), result.stderr
+    assert len(peer.requests) == 1
 
 
 def test_a_wrong_file_of_a_package_writes_no_lock(ws, remotes, peer):
