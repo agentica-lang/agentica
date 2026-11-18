@@ -29,6 +29,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - `std/utc`: use the builtin `Time` dates and times; it is removed in 0.36.0 (#985).
 
+## [0.34.2] - 2026-11-18
+
 ### Fixed
 
 - A program whose standard output loses its reader (`prog | head`) ends quietly with status 141, as SIGPIPE ends a Unix tool, instead of a `RUNTIME-INTERNAL` error (#1455).
@@ -1733,7 +1735,8 @@ First release of Agentica, a statically typed language designed for AI agents.
 - `main` returns `Void`; maps preserve insertion order and support fallible
   lookups.
 
-[unreleased]: https://github.com/agentica-lang/agentica/compare/0.34.1...HEAD
+[unreleased]: https://github.com/agentica-lang/agentica/compare/0.34.2...HEAD
+[0.34.2]: https://github.com/agentica-lang/agentica/compare/0.34.1...0.34.2
 [0.34.1]: https://github.com/agentica-lang/agentica/compare/0.34.0...0.34.1
 [0.34.0]: https://github.com/agentica-lang/agentica/compare/0.33.2...0.34.0
 [0.33.2]: https://github.com/agentica-lang/agentica/compare/0.33.1...0.33.2
