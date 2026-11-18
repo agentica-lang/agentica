@@ -128,9 +128,13 @@ The Docker sandbox works like this:
   `tests/eval/.secrets/`, which git ignores; it is never in the image. The
   container gets it read-only at `/run/pi-auth.json` and copies it to
   `~/.pi/agent/auth.json` on its tmpfs, because Pi locks that file in its own
-  folder. The strings of the file are redacted from the logs, and `run.json`
-  records only `pi_auth_file: true`. Pi 1.3.0 of the image has the
-  `opencode-go` provider (`pi --list-models opencode-go`).
+  folder. Its strings of 8 characters or more are redacted from the agent log
+  (as written and JSON-escaped; Pi's delta events, which can split a key, are
+  dropped from it) and from the copied solution, and `run.json` records only
+  `pi_auth_file: true`. Pi 1.3.0 of the image has the `opencode-go` provider
+  (`pi --list-models opencode-go`). The agent runs as the same user and can
+  read the copy, so use a key made for the eval, with a spend cap, rotate it
+  after a round, and put one provider only in the file.
 - `TMPDIR` is `/tmp` in every container, because the root file system is
   read-only and the launcher writes its bytecode to the temporary directory. The
   image has `libgc1` and `libssl3t64`, which `dist/agentica` links (the
@@ -214,18 +218,20 @@ them per arm.
 
 - `cost` (the `spend $` column) is the cost Pi reports, `cost_source: agent`.
   When Pi reports 0 for a run that used tokens, the runner prices the tokens
-  with `PRICES` in `run.py` (`cost_source: table`): the list prices of the
-  OpenCode Go models on 2026-11-18, from
-  `https://opencode.ai/inference/go/v1/models`. A model outside the table
-  gets `cost_source: none` and a cost of 0. Either way it is the list price:
-  it does not count OpenCode Go's double price on weekday hours (01:00 to
-  04:00 and 06:00 to 10:00 UTC) or the allowance of the plan. `run.json` has
-  `started_utc` for that reason.
+  with `PRICES` in `run.py` (`cost_source: table`): the opencode-go prices of
+  Pi 1.3.0's catalog, the same as
+  `https://opencode.ai/inference/go/v1/models` on 2026-11-18. A model
+  outside the table gets `cost_source: none` and a cost of 0. Either way it is
+  the list price: it does not count OpenCode Go's double price on weekday
+  hours (01:00 to 04:00 and 06:00 to 10:00 UTC) or the allowance of the plan.
+  `run.json` has `started_utc` for that reason.
 - `fix_rounds` counts failed check or run calls (the calls of
   `interpreter_runs`) that an edit follows before the next check or run call:
-  Pi's `edit` or `write` tool, or a shell command that writes `solution.*`
-  (`>`, `tee`, `sed -i`, `cp` or `mv` onto it). A failure that another call
-  follows first, or that is never edited, is no round. `failing_runs` stays
+  Pi's `edit` or `write` tool on a `solution.*` file without an error, or a
+  shell command that writes `solution.*` in a common form (`>`, a `cat`
+  heredoc, `tee`, `sed -i`, `cp` or `mv` onto it, `open(..., 'w')` in a
+  `python -c`); a script that writes it is not seen. A failure that another
+  call follows first, or that is never edited, is no round. `failing_runs` stays
   the count of every failed call.
 
 `--agent claude` reports no calls, so its `fix rounds` read `-`.

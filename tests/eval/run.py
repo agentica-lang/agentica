@@ -38,12 +38,14 @@ CHECK_COMMAND = re.compile(COMMAND_PREFIX + r"(?:(?:python3?\s+-m\s+)?(?:\S*/)?m
                            r"|(?:\S*/)?go\s+(?:vet|build))\b")
 MYPY_COMMAND = re.compile(COMMAND_PREFIX + r"(?:python3?\s+-m\s+)?(?:\S*/)?mypy\b")
 GO_COMMAND = re.compile(COMMAND_PREFIX + r"(?:\S*/)?go\s+(?:vet|build|run|test)\b")
-GO_ERROR = re.compile(r"^\S+\.go:\d+(?::\d+)?: |^panic: |^# \S+$", re.MULTILINE)
-# A shell command that writes the solution: a redirection, `tee`, `sed -i`, or `cp`/`mv` onto it.
-SOLUTION = r"['\"]?(?:\S*/)?solution\.(?:agc|py|go)\b"
+GO_ERROR = re.compile(r"^\s*\S+\.go:\d+(?::\d+)?: |^panic: |^\s*--- FAIL", re.MULTILINE)
+# The common shell forms that write the solution: a redirection (a `cat` heredoc too), `tee`, `sed -i`, `cp` or `mv`
+# onto it, and `open('solution.py', 'w')` in a `python -c`. Other forms (a script, `dd`, `install`) are not seen.
+SOLUTION = r"['\"]?(?:\S*/)?solution\.(?:agc|py|go)(?![\w.])"
 SHELL_EDIT = re.compile(rf">>?\s*{SOLUTION}|\btee\s+(?:-a\s+)?{SOLUTION}|^\s*sed\s+-i.*\s{SOLUTION}"
-                        rf"|^\s*(?:cp|mv)\s.*\s{SOLUTION}['\"]?\s*$")
+                        rf"|^\s*(?:cp|mv)\s.*\s{SOLUTION}['\"]?\s*$|\bopen\(\s*{SOLUTION}['\"]?\s*,\s*['\"][wa]")
 EDIT_TOOLS = {"edit", "write"}
+DROPPED_EVENTS = {"message_update", "tool_execution_update"}
 # `agentica [--json|--ai|--partial] outline|type-at|symbol|refs ...`, also through a path (`dist/agentica`) or the
 # renamed binary of the skill-nocli arm (`agentica-real`).
 # Global options may come first: flags, `--` and the four that take a value.
@@ -93,17 +95,16 @@ PI_AUTH_MOUNT = "/run/pi-auth.json"
 PI_AUTH_COPY = (f'mkdir -p "$HOME/.pi/agent" && cp {PI_AUTH_MOUNT} "$HOME/.pi/agent/auth.json" '
                 '&& chmod 600 "$HOME/.pi/agent/auth.json" && exec "$@"')
 DEFAULT_ARMS = [arm for arm in ARMS if arm not in OPT_IN_ARMS]
-# List prices in USD per million tokens (input, cache read, cache write, output), from
-# https://opencode.ai/inference/go/v1/models on 2026-11-18; a model without a cache-write price pays the input price.
+# Prices in USD per million tokens (input, cache read, cache write, output): the opencode-go catalog of Pi 1.3.0
+# (pi-ai/dist/providers/data/opencode-go.json), which matches https://opencode.ai/inference/go/v1/models on 2026-11-18.
 # Used only when Pi reports no cost.
 PRICES = {
-    "opencode-go/deepseek-v4.1-flash": (0.15, 0.003, 0.15, 0.6),
-    "opencode-go/deepseek-v4-pro": (0.66, 0.022, 0.66, 1.98),
-    "opencode-go/glm-5.3-flash": (0.15, 0.03, 0.15, 0.5),
-    "opencode-go/glm-5.3": (1.4, 0.26, 1.4, 4.4),
+    "opencode-go/deepseek-v4.1-flash": (0.15, 0.003, 0.0, 0.6),
+    "opencode-go/deepseek-v4-pro": (0.66, 0.022, 0.0, 1.98),
+    "opencode-go/glm-5.3-flash": (0.15, 0.03, 0.0, 0.5),
+    "opencode-go/glm-5.3": (1.4, 0.26, 0.0, 4.4),
     "opencode-go/qwen3.8-flash": (0.15, 0.016, 0.2, 0.47),
-    "opencode-go/minimax-m3.1-flash": (0.15, 0.015, 0.15, 0.6),
-    "opencode-go/kimi-k2.7-code": (0.95, 0.19, 0.95, 4.0),
+    "opencode-go/kimi-k2.7-code": (0.95, 0.19, 0.0, 4.0),
 }
 
 
@@ -466,15 +467,45 @@ def child_environment(pass_env: list[str], *, in_chroot: bool, workspace: Path) 
     return env
 
 
+def secret_forms(pass_env: list[str], secrets: list[str] | None = None) -> list[str]:
+    """Each secret as it is and JSON-escaped, longest first."""
+    values = [*(os.environ[name] for name in pass_env), *(secrets or [])]
+    return sorted({form for value in values if value for form in (value, json.dumps(value)[1:-1])}, key=len, reverse=True)
+
+
 def redact_secrets(output: str, pass_env: list[str], secrets: list[str] | None = None) -> str:
-    for value in [*(os.environ[name] for name in pass_env), *(secrets or [])]:
-        if value:
-            output = output.replace(value, "[REDACTED]")
+    for form in secret_forms(pass_env, secrets):
+        output = output.replace(form, "[REDACTED]")
     return output
 
 
+def agent_log(output: str, pass_env: list[str], secrets: list[str]) -> str:
+    """The stream to keep, redacted. Pi's `message_update` and `tool_execution_update` events carry deltas, which can
+    split a secret over events where no replace finds it; they go, and `message_end` and `tool_execution_end` keep
+    the whole text."""
+    kept = []
+    for line in output.splitlines(keepends=True):
+        if line.startswith("{"):
+            try:
+                event = json.loads(line)
+            except json.JSONDecodeError:
+                event = None
+            if isinstance(event, dict) and event.get("type") in DROPPED_EVENTS:
+                continue
+        kept.append(line)
+    return redact_secrets("".join(kept), pass_env, secrets)
+
+
+def redact_file(path: Path, pass_env: list[str], secrets: list[str]) -> None:
+    data = path.read_bytes()
+    for form in secret_forms(pass_env, secrets):
+        data = data.replace(form.encode("utf-8"), b"[REDACTED]")
+    path.write_bytes(data)
+
+
 def auth_secrets(path: Path | None) -> list[str]:
-    """Every string of a Pi auth.json except the credential types, to redact; nothing of it is ever printed."""
+    """Every string of a Pi auth.json of 8 characters or more, except the credential types, to redact; nothing of it
+    is ever printed."""
     if path is None:
         return []
     found: list[str] = []
@@ -491,7 +522,7 @@ def auth_secrets(path: Path | None) -> list[str]:
 
     try:
         walk(json.loads(path.read_text(encoding="utf-8")))
-    except (OSError, json.JSONDecodeError) as exc:
+    except (OSError, ValueError) as exc:
         raise SystemExit(f"--pi-auth: cannot read {path} as JSON ({type(exc).__name__})") from None
     return found
 
@@ -581,11 +612,11 @@ def run_agent(
                             start_new_session=True)
     try:
         out, err = proc.communicate(timeout=timeout)
-        return redact_secrets(out, pass_env, secrets), redact_secrets(err, pass_env, secrets), False
+        return agent_log(out, pass_env, secrets), redact_secrets(err, pass_env, secrets), False
     except subprocess.TimeoutExpired:
         os.killpg(proc.pid, signal.SIGKILL)
         out, err = proc.communicate()
-        return redact_secrets(out or "", pass_env, secrets), redact_secrets(err or "", pass_env, secrets), True
+        return agent_log(out or "", pass_env, secrets), redact_secrets(err or "", pass_env, secrets), True
     finally:
         if sandbox == "docker":
             remove_container(container)
@@ -658,6 +689,11 @@ def runs_program(command: str) -> bool:
     return "agentica" in command or "python" in command or runs_mypy(command) or runs_go(command)
 
 
+def edits_solution(call: "Call") -> bool:
+    path = str(call.args.get("path") or call.args.get("file_path") or "")
+    return call.tool in EDIT_TOOLS and not call.failed and Path(path).name.startswith("solution.")
+
+
 def writes_solution(command: str) -> bool:
     return any(SHELL_EDIT.search(part) for part in command_parts(command))
 
@@ -677,6 +713,7 @@ class Call:
     tool: str
     args: dict
     output: str = ""
+    failed: bool = False
 
 
 def call_metrics(calls: list[Call]) -> dict[str, int]:
@@ -695,7 +732,7 @@ def call_metrics(calls: list[Call]) -> dict[str, int]:
         m["net_commands"] += is_net_command(command)
         if call.tool == "read":
             m["read_runs"] += 1
-        elif call.tool in EDIT_TOOLS or writes_solution(command):
+        elif edits_solution(call) or writes_solution(command):
             m["fix_rounds"] += awaiting_fix
             awaiting_fix = False
         if not command:
@@ -722,7 +759,9 @@ def pi_metrics(out: str) -> dict[str, int | float]:
     `cost_input`, `cost_cache` (reads and writes) and `cost_output`."""
     m: dict[str, int | float] = {"tokens_in": 0, "tokens_out": 0, "tokens_cached": 0, "tokens_cache_write": 0,
                                  "cost": 0.0, "cost_input": 0.0, "cost_cache": 0.0, "cost_output": 0.0, "turns": 0}
-    calls: dict[str, Call] = {}
+    calls: list[Call] = []
+    # Pi can repeat a call id or leave it empty, so an id maps to the calls still open under it, oldest first.
+    open_calls: dict[str, list[int]] = {}
     for event in json_events(out):
         kind = event.get("type")
         if kind == "message_end" and event.get("message", {}).get("role") == "assistant":
@@ -738,10 +777,13 @@ def pi_metrics(out: str) -> dict[str, int | float]:
             m["cost_cache"] += usage_cost.get("cacheRead", 0.0) + usage_cost.get("cacheWrite", 0.0)
             m["cost_output"] += usage_cost.get("output", 0.0)
         elif kind == "tool_execution_start":
-            calls[event.get("toolCallId", f"#{len(calls)}")] = Call(event.get("toolName", ""), event.get("args", {}))
-        elif kind == "tool_execution_end" and event.get("toolCallId") in calls:
-            calls[event["toolCallId"]].output = result_text(event.get("result", {}))
-    return {**m, **call_metrics(list(calls.values()))}
+            open_calls.setdefault(str(event.get("toolCallId", "")), []).append(len(calls))
+            calls.append(Call(event.get("toolName", ""), event.get("args", {})))
+        elif kind == "tool_execution_end" and open_calls.get(str(event.get("toolCallId", ""))):
+            call = calls[open_calls[str(event.get("toolCallId", ""))].pop(0)]
+            call.output = result_text(event.get("result", {}))
+            call.failed = bool(event.get("isError"))
+    return {**m, **call_metrics(calls)}
 
 
 def result_text(result: object) -> str:
@@ -940,7 +982,8 @@ def one_run(args: argparse.Namespace, results: Path, scratch: Path, task: str, a
     run_dir.mkdir(parents=True)
     (run_dir / "agent.jsonl").write_text(out, encoding="utf-8")
     (run_dir / "agent.stderr").write_text(err, encoding="utf-8")
-    copy_candidate(solution, run_dir / solution.name)
+    if copy_candidate(solution, run_dir / solution.name):
+        redact_file(run_dir / solution.name, args.pass_env, auth_secrets(args.pi_auth))
     with WRITE_LOCK:
         with (results / "results.jsonl").open("a") as handle:
             handle.write(json.dumps(row) + "\n")
@@ -1180,8 +1223,12 @@ def main() -> int:
         if args.agent != "pi" or args.sandbox != "docker":
             raise SystemExit("--pi-auth is for --agent pi in the Docker sandbox")
         args.pi_auth = args.pi_auth.resolve()
+        if "," in str(args.pi_auth):
+            raise SystemExit("--pi-auth: the path cannot hold a comma (Docker's --mount splits on it)")
         if not args.pi_auth.is_file():
             raise SystemExit(f"--pi-auth: no such file: {args.pi_auth}")
+        if args.pi_auth.stat().st_mode & 0o077:
+            print(f"warning: --pi-auth {args.pi_auth} can be read by other users; chmod 600 it", flush=True)
         auth_secrets(args.pi_auth)
     typed = any(arm in TYPED_ARMS for arm in args.arms)
     agentica = any(ARMS[arm] == "agc" for arm in args.arms)
