@@ -217,7 +217,7 @@ def client(options: HttpWire.ClientOptions = HttpWire.ClientOptions()) -> Result
 
   try check_proxy(options)
   jobs: Channel[HttpWire.Job] = Channel.new(CLIENT_JOBS)
-  ok(HttpWire.service(jobs, options) do |own| supervise_pool(own) end)
+  ok(HttpWire.service(jobs, options) do |own| supervise_pool(own, false) end)
 end
 
 ## The proxy that the environment names for `url`, to pass as `HTTP.ClientOptions(proxy: ...)`, or `""` when there is
@@ -297,39 +297,10 @@ def request(
   body: Bytes,
   headers: List[HttpWire.Header] = [],
 ) -> Result[HttpWire.Response]
-  where = try parse_url(url)
   options = HttpWire.options(pool)
-  # The pool connects to `via` (the proxy, or the target's host) and keys its connections by it.
-  via = try connect_target(where, options)
-  head = try HttpWire.encode_request(
-    where.scheme,
-    where.host,
-    where.port,
-    method,
-    request_target(options, where),
-    with_login(options, where.scheme, headers),
-    body,
-    options.max_body_bytes,
-  )
-
-  deadline = after(options.timeout_ms)
-  reply: Channel[Result[HttpWire.Response]] = Channel.new(1)
-  job = HttpWire.Job(
-    origin: "#{via.scheme}://#{via.host}:#{via.port}",
-    scheme: via.scheme,
-    host: via.host,
-    port: via.port,
-    method: method,
-    head: head,
-    body: body,
-    deadline: deadline,
-    reply: reply,
-    worker: 0,
-    kept: false,
-  )
-
-  case HttpWire.jobs(pool).send(job, options.timeout_ms)
-    ok(_) -> unless_denied(options, where.scheme, wait_reply(reply, deadline))
+  call = try call_of(options, method, url, body, headers)
+  case HttpWire.jobs(pool).send(call.job, options.timeout_ms)
+    ok(_) -> answer_of(options, call)
     error(message) ->
       return error(CLIENT_CLOSED, kind: "http.closed") if "#{message}" == CHANNEL_CLOSED
       error(TIMED_OUT, kind: "net.timeout")
@@ -982,6 +953,14 @@ struct Pool
   inboxes: Map[Int, Channel[HttpWire.Job]]
   busy: Map[Int, Channel[Result[HttpWire.Response]]]
   next_id: Int
+  # The client of one request (get_response, post_response): it closes once no job is in flight.
+  once: Bool
+end
+
+# A request's job and the target of its URL.
+struct Call
+  where: Target
+  job: HttpWire.Job
 end
 
 # A worker owns one connection. It gets its jobs one at a time on inbox, and tells the owner on jobs when it is free
@@ -1058,8 +1037,53 @@ struct Feed
   pieces: Channel[Bytes]
 end
 
-# One request on a client that lives for it alone. The client is closed after the reply, whatever it was, so no
-# connection or task of it outlives the call.
+# The job of a request, with its reply channel, and the target it was made for.
+def call_of(
+  options: HttpWire.ClientOptions,
+  method: String,
+  url: String,
+  body: Bytes,
+  headers: List[HttpWire.Header],
+) -> Result[Call]
+  where = try parse_url(url)
+  # The pool connects to `via` (the proxy, or the target's host) and keys its connections by it.
+  via = try connect_target(where, options)
+  head = try HttpWire.encode_request(
+    where.scheme,
+    where.host,
+    where.port,
+    method,
+    request_target(options, where),
+    with_login(options, where.scheme, headers),
+    body,
+    options.max_body_bytes,
+  )
+
+  deadline = after(options.timeout_ms)
+  reply: Channel[Result[HttpWire.Response]] = Channel.new(1)
+  job = HttpWire.Job(
+    origin: "#{via.scheme}://#{via.host}:#{via.port}",
+    scheme: via.scheme,
+    host: via.host,
+    port: via.port,
+    method: method,
+    head: head,
+    body: body,
+    deadline: deadline,
+    reply: reply,
+    worker: 0,
+    kept: false,
+  )
+
+  ok(Call(where: where, job: job))
+end
+
+def answer_of(options: HttpWire.ClientOptions, call: Call) -> Result[HttpWire.Response]
+  unless_denied(options, call.where.scheme, wait_reply(call.job.reply, call.job.deadline))
+end
+
+# One request on a client that lives for it alone. The job is queued before the client starts, and the client closes
+# once the job is answered, so no connection or task of it outlives the call, even when the caller is cancelled.
 def request_once(
   method: String,
   url: String,
@@ -1067,10 +1091,15 @@ def request_once(
   headers: List[HttpWire.Header],
   options: HttpWire.ClientOptions,
 ) -> Result[HttpWire.Response]
-  pool = try client(options)
-  response = request(pool, method, url, body, headers)
-  close_client(pool)
-  response
+  try check_client(options)
+
+  try check_proxy(options)
+  call = try call_of(options, method, url, body, headers)
+  jobs: Channel[HttpWire.Job] = Channel.new(1)
+  # A new channel with room for one: this send cannot fail.
+  _ = jobs.send(call.job, 0)
+  _ = HttpWire.service(jobs, options) do |own| supervise_pool(own, true) end
+  answer_of(options, call)
 end
 
 def settled(phase: Int, closes: Bool) -> Exchange
@@ -3804,10 +3833,10 @@ end
 # The client's service task (HttpWire.service runs it, and it owns jobs). It awaits the owner as a Result task, so a
 # crash of the owner is observed here, not reported as unobserved. After a crash the client is closed: later calls
 # get "http: client is closed", the workers are cancelled with the owner, and calls in flight time out.
-def supervise_pool(client: HttpWire.Client) -> Void
+def supervise_pool(client: HttpWire.Client, once: Bool) -> Void
   jobs = HttpWire.jobs(client)
   options = HttpWire.options(client)
-  pool = Pool(client: client, options: options, jobs: jobs, origins: {}, inboxes: {}, busy: {}, next_id: 1)
+  pool = Pool(client: client, options: options, jobs: jobs, origins: {}, inboxes: {}, busy: {}, next_id: 1, once: once)
   _ = Task.await(Task.spawn(&run_pool, pool))
   jobs.close
   # Connections still open or in their handshake keep the context until they end.
@@ -3827,6 +3856,9 @@ def run_pool(pool: Pool) -> Result[Void]
           pool = freed(pool, job)
         else
           pool = gone(pool, job)
+        end
+        if pool.once and Map.size(pool.busy) == 0
+          jobs.close
         end
       error(message) ->
         if "#{message}" == CHANNEL_CLOSED
@@ -3849,7 +3881,7 @@ def with_origin(pool: Pool, key: String, origin: Origin) -> Pool
 end
 
 def dispatch(pool: Pool, job: HttpWire.Job) -> Pool
-  return pool if Time.monotonic_ms() >= job.deadline or not HttpWire.awaited?(job.reply)
+  return pool if Time.monotonic_ms() >= job.deadline
   result = place(pool, job)
   return result.pool if result.placed
   origin = origin_of(result.pool, job.origin)
@@ -3903,6 +3935,8 @@ end
 # fails, or the caller has taken its answer and nobody reads the channel again.
 def gone(pool: Pool, message: HttpWire.Job) -> Pool
   id = message.worker
+  # A worker cancelled as it ended is reported twice, by itself and by its supervisor: the second notice is dropped.
+  return pool if not Map.has_key?(pool.inboxes, id)
   case Map.get(pool.busy, id)
     some(reply) -> _ = reply.send(error(FAILED, kind: "net.failed"), 0)
     none -> id = id
@@ -3915,14 +3949,14 @@ def gone(pool: Pool, message: HttpWire.Job) -> Pool
 end
 
 # The oldest waiting job that still has time goes out, if a worker or a slot takes it. The caller of a job past its
-# deadline has returned its timeout already, and a caller that gave up on its reply was cancelled, so such a job is
-# dropped, never sent. A caller that has not parked on its reply yet has not given up.
+# deadline has returned its timeout already, so such a job is dropped. A job whose caller gave up on its reply goes
+# out, and its worker drops it without sending it (work).
 def next_waiting(pool: Pool, key: String) -> Pool
   origin = origin_of(pool, key)
   while queued(origin) > 0
     job = List.at(origin.waiting, origin.front)
     rest = popped(origin)
-    if Time.monotonic_ms() < job.deadline and HttpWire.awaited?(job.reply)
+    if Time.monotonic_ms() < job.deadline
       result = place(with_origin(pool, key, rest), job)
       return result.pool if result.placed
       kept = origin_of(result.pool, key).with(waiting: origin.waiting, front: origin.front)
@@ -3986,14 +4020,23 @@ def work(worker: Worker) -> Result[Void]
       close_socket(socket)
       return ok()
     end
-    done = run_job(worker, socket, job)
-    # The caller gave up on the reply (cancelled, or its wait timed out): the connection is closed, not pooled, so a
-    # timed-out call leaves no connection behind (site/content/library/concurrency/task.md, Task.map).
-    awaited = HttpWire.awaited?(job.reply)
+    # Once awaited? is true, a cancel of the caller while it waits cancels this worker, and with it the connection
+    # (vm/http_service.c). A job whose caller gave up already is not run, and the connection, untouched, is kept.
+    served = HttpWire.awaited?(job.reply)
+    done = Done(socket: socket, answer: error(FAILED, kind: "net.failed"), kept: Result.ok?(socket))
+    if served
+      done = run_job(worker, socket, job)
+    end
     _ = job.reply.send(done.answer, 0)
+    # The caller gave up on the reply (its wait timed out, or it was cancelled before or as the answer came): the
+    # connection is closed, not pooled, so a timed-out call leaves no connection behind
+    # (site/content/library/concurrency/task.md, Task.map). Asked after the answer, so a worker that the
+    # caller's cancel
+    # reached on another scheduler, still running, sees it here and never goes back to the pool.
+    awaited = HttpWire.awaited?(job.reply)
     # The idle wait below keeps job only for its origin and reply.
     job = job.with(head: "", body: NO_BYTES)
-    if not done.kept or not awaited
+    if not done.kept or (served and not awaited)
       close_socket(done.socket)
       tell(worker, job, false)
       return ok()
