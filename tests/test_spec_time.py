@@ -197,3 +197,17 @@ def test_the_equality_of_a_datetime_points_to_time_compare(agentica_check):
     found = agentica_check(MAIN + f"  a = {AWARE}\n  puts(a == a)\nend\n")
     assert found["code"] == "CHECK-TYPE-MISMATCH"
     assert "Time.compare(a, b)" in found["help"], found["help"]
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        MAIN + f"  a = {AWARE}\n  puts([a] == [a])\nend\n",
+        f"struct Stamp\n  at: Time.DateTime\nend\n\n{MAIN}  s = Stamp(at: {AWARE})\n  puts(s == s)\nend\n",
+    ],
+    ids=["list", "struct-field"],
+)
+def test_the_equality_of_a_datetime_inside_points_to_time_compare(agentica_check, source):
+    found = agentica_check(source)
+    assert found["code"] == "CHECK-TYPE-MISMATCH"
+    assert found["help"].startswith("compare the Time.DateTime values inside"), found["help"]

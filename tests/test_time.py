@@ -534,10 +534,11 @@ def test_arithmetic_agrees_with_python(driver):
 
 def test_differences_comparisons_and_queries_agree_with_python(driver):
     answers = {}
+    verdicts = {}
 
     @given(st.lists(QUERIES, min_size=50, max_size=300))
     def run(cases):
-        check(driver, cases)
+        check(driver, cases, verdicts)
         for op, args in cases:
             if op.startswith("compare"):
                 key = (op, PEERS[op](*args)[0])
@@ -548,6 +549,11 @@ def test_differences_comparisons_and_queries_agree_with_python(driver):
     thin = {(op, r): answers.get((op, r), 0) for op in ("compare", "compare_naive", "compare_date", "compare_time")
             for r in (-1, 0, 1) if answers.get((op, r), 0) < 30}
     assert thin == {}, answers
+    # These never refuse a valid record, so each op reaches its check many times.
+    ops = ("days_between", "us_between", "naive_us_between", "cwday", "yday", "compare", "compare_naive",
+           "compare_date", "compare_time")
+    thin = {op: verdicts.get((op, True), 0) for op in ops if verdicts.get((op, True), 0) < 100}
+    assert thin == {}, verdicts
 
 
 def test_the_ends_of_the_range_and_the_largest_counts(driver):

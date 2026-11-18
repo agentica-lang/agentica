@@ -14,11 +14,13 @@ import State from "check_state"
 INSTANT_WHY = "== would compare the readings of Time.DateTime values, not their instants"
 
 ## Why a type has no equality (equality_gap): why is the text ("" when nothing on the way explains it), and field the
-## declaration of the struct field that blocks it, in file, when there is one.
+## declaration of the struct field that blocks it, in file, when there is one. instant says the type that blocks it is
+## a Time.DateTime.
 struct Gap
   why: String
   file: String
   field: Optional[Source.Span]
+  instant: Bool
 end
 
 ## The type a type written in the source stands for. completion says Void is allowed here (a result type, or the item
@@ -259,13 +261,16 @@ def equality?(cx: State.Cx, type: ResolvedType) -> Bool = data_walk(cx, type, {}
 ## (List[Fn[Int, Int]]). A struct field also gives its declaration.
 def equality_gap(cx: State.Cx, type: ResolvedType) -> Gap
   found = data_walk(cx, type, {}, true)
-  if found.why == "" and inside?(cx, type) do |current: ResolvedType| instant?(current) end
+  if found.why == "" and found.instant
     # Two readings of one instant at different offsets differ field by field.
-    return Gap(why: INSTANT_WHY, file: "", field: none)
+    return Gap(why: INSTANT_WHY, file: "", field: none, instant: true)
   end
 
-  Gap(why: found.why, file: found.file, field: found.field)
+  Gap(why: found.why, file: found.file, field: found.field, instant: found.instant)
 end
+
+## True for Time.DateTime, whose == would compare readings, not instants.
+def instant?(type: ResolvedType) -> Bool = Types.is?(type, "Struct") and Types.name(type) == "Time.DateTime"
 
 ## True when the type has a type variable inside.
 def has_variables?(type: ResolvedType) -> Bool
@@ -491,13 +496,14 @@ end
 
 # What a walk of a type found: whether the test passed, and the structs walked so far (see struct_walk). why is the
 # struct field or enum variant where the walk of equality stopped, or "" (see equality_gap). When it is a struct field,
-# file and field are where the field is declared.
+# file and field are where the field is declared. instant says the walk of equality stopped at a Time.DateTime.
 struct Walk
   passes: Bool
   seen: Map[String, Bool]
   why: String
   file: String
   field: Optional[Source.Span]
+  instant: Bool
 end
 
 def contains_alias?(cx: State.Cx, ref: TypeRef) -> Bool
@@ -1124,9 +1130,13 @@ def place_fields(cx: State.Cx, type: ResolvedType) -> List[Model.Named]
   cx.structs[name].map do |field: Model.Named| field.with(type: substitute(field.type, stand)) end
 end
 
-def passed(seen: Map[String, Bool]) -> Walk = Walk(passes: true, seen: seen, why: "", file: "", field: none)
+def passed(seen: Map[String, Bool]) -> Walk
+  Walk(passes: true, seen: seen, why: "", file: "", field: none, instant: false)
+end
 
-def refused(seen: Map[String, Bool]) -> Walk = Walk(passes: false, seen: seen, why: "", file: "", field: none)
+def refused(seen: Map[String, Bool]) -> Walk
+  Walk(passes: false, seen: seen, why: "", file: "", field: none, instant: false)
+end
 
 # The refused walk found, with why as its reason when no part deeper in it gave one.
 def refused_at(found: Walk, why: String) -> Walk
@@ -1293,14 +1303,14 @@ def data_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool], equal: 
   if primitive?(type) or Types.is?(type, "Range") or Types.is?(type, "Bytes") or Types.is?(type, "Address")
     return passed(seen)
   elsif Types.is?(type, "Json")
-    return Walk(passes: !equal, seen: seen, why: "", file: "", field: none)
+    return Walk(passes: !equal, seen: seen, why: "", file: "", field: none, instant: false)
   elsif Types.is?(type, "Var")
     why = ""
     if !cx.prelude
       why = "the type variable #{Types.name(type)} of a generic function could be a function"
     end
 
-    return Walk(passes: cx.prelude, seen: seen, why: why, file: "", field: none)
+    return Walk(passes: cx.prelude, seen: seen, why: why, file: "", field: none, instant: false)
   elsif Types.is?(type, "List")
     return data_walk(cx, Types.item(type), seen, equal)
   elsif Types.is?(type, "Map")
@@ -1319,16 +1329,13 @@ def data_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool], equal: 
   elsif equal and instant?(type)
     # No reason here, so that a struct field on the way names itself (refused_in_field); equality_gap gives the reason
     # of a Time.DateTime that no field holds.
-    return refused(seen)
+    return refused(seen).with(instant: true)
   elsif Types.is?(type, "Struct") or Types.is?(type, "Enum")
     return nominal_walk(cx, type, seen, equal)
   end
 
   refused(seen)
 end
-
-# True for Time.DateTime, whose == would compare readings, not instants.
-def instant?(type: ResolvedType) -> Bool = Types.is?(type, "Struct") and Types.name(type) == "Time.DateTime"
 
 # True for a builtin record that only its builtins build (SEALED).
 def sealed?(type: ResolvedType) -> Bool = Types.is?(type, "Struct") and SEALED.include?(Types.name(type))

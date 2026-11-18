@@ -119,13 +119,27 @@ static void test_a_count_past_the_range_is_an_argument_error(void) {
   static const uint32_t counts[] = {3, 7, 8, 7, 8};
   static const int64_t huge[] = {INT64_MIN, INT64_MIN + 1, -INT64_C(315537897600000001),
                                  INT64_C(315537897600000000), INT64_MAX};
+  /* An Error struct and the Optional enum its none fields need, so the kind of the error can be read. */
+  agc_variant_def variants[2] = {{NULL, 0, 0, agc_new_enum(0, 0)}, {NULL, 0, 1, NULL}};
+  program.variants = variants;
+  program.variant_count = 2;
+  program.optional = 0;
+  vm.rt->error_struct = AGC_TIME_RECORDS;
+  const char *want = agc_error_kind_name(AGC_KIND_ARGUMENT);
   for (size_t k = 0; k < sizeof adds / sizeof adds[0]; k++) {
     for (size_t h = 0; h < sizeof huge / sizeof huge[0]; h++) {
       agc_value args[2] = {record(kinds[k], counts[k], good), agc_int(huge[h])};
       agc_value result = agc_test_call_row(&vm, adds[k], 2, args);
-      assert(result.tag == AGC_T_RESULT && !((agc_result *)result.as.p)->ok);
+      const agc_result *r = agc_as_result(&vm, result);
+      assert(!r->ok);
+      const agc_string *kind = agc_as_string(&vm, agc_as_struct(&vm, r->value)->fields[AGC_ERROR_KIND]);
+      assert(kind->bytes == strlen(want) && memcmp(kind->data, want, kind->bytes) == 0);
     }
   }
+  vm.rt->error_struct = UINT32_MAX;
+  program.optional = UINT32_MAX;
+  program.variants = NULL;
+  program.variant_count = 0;
 }
 
 static void test_a_program_without_the_struct_fails(void) {
