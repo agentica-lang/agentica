@@ -39,10 +39,12 @@ its `LOWER-UNSUPPORTED` summary.
 
 **Method.** Keep the old binary built apart (from master) and run the two
 alternately (A B A B, several rounds), take the median of the round medians,
-and say when the load average was above 2 ("measured under load"). The table
-that `run.py` prints is one binary; run it once for each and compare. Step
-counts (`AGENTICA_VM_TRACE=profile`) are exact and do not depend on the load, so
-they are the main evidence and the wall time supports them.
+and say when the load average was above 2 ("measured under load"). One run of
+`run.py` prints the table of one binary: run it once for each (the old one with
+`AGENTICA_TEST_EXECUTABLE=path/to/old/agentica`, the new one with the default
+`dist/agentica`) and compare the two tables row by row. Step counts
+(`AGENTICA_VM_TRACE=profile`) are exact and do not depend on the load, so they
+are the main evidence and the wall time supports them.
 
 **The link layout hides small differences.** Padding the text of one binary by
 64 to 1,216 bytes moved an empty loop between 53 and 98 ms, and `arithmetic` by

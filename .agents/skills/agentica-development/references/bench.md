@@ -2,7 +2,8 @@
 
 Read before running or changing `benchmarks/`, `make bench`, or before
 measuring a speed change. Comparisons with other languages and the agent
-evaluation live in [agentica-lang/evals](https://github.com/agentica-lang/evals).
+evaluation live in
+[agentica-lang/evals](https://github.com/agentica-lang/evals).
 
 ## Benchmarks
 

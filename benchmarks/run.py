@@ -14,7 +14,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 PROGRAMS = ROOT / "benchmarks" / "programs"
-EXE = ROOT / "dist" / "agentica"
+# The binary under test: dist/agentica, or the one AGENTICA_TEST_EXECUTABLE names (as the pytest modules do).
+EXE = ROOT / (os.environ.get("AGENTICA_TEST_EXECUTABLE") or "dist/agentica")
 HELLO = ROOT / "examples" / "hello.agc"
 GHERKIN = ROOT / "stdlib" / "bdd" / "gherkin.agc"
 PARSER = ROOT / "compiler" / "syntax" / "parser.agc"
@@ -61,10 +62,14 @@ BUSY_LOAD = 2.0
 DIGEST_ABOVE = 64 * 1024
 
 
+class MissingGolden(Exception):
+    pass
+
+
 @dataclass
 class Sample:
     seconds: float
-    stdout: str
+    stdout: bytes
     stderr: str
     code: int
 
@@ -83,10 +88,10 @@ class Row:
 def run(command: list[str]) -> Sample:
     start = time.perf_counter()
     process = subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
-                               stderr=subprocess.PIPE, text=True)
+                               stderr=subprocess.PIPE)
     stdout, stderr = process.communicate()
     seconds = time.perf_counter() - start
-    return Sample(seconds, stdout, stderr, process.returncode)
+    return Sample(seconds, stdout, stderr.decode(errors="replace"), process.returncode)
 
 
 def peak_rss(command: list[str]) -> tuple[Sample, int | None]:
@@ -132,45 +137,51 @@ def runners(selected: list[str]) -> dict[str, list[str]]:
     return {name: available[name] for name in selected}
 
 
-def golden_text(output: str) -> str:
-    data = output.encode()
-    if len(data) <= DIGEST_ABOVE:
+def golden_bytes(output: bytes) -> bytes:
+    if len(output) <= DIGEST_ABOVE:
         return output
-    return f"sha256 {hashlib.sha256(data).hexdigest()} {len(data)}\n"
+    return f"sha256 {hashlib.sha256(output).hexdigest()} {len(output)}\n".encode()
 
 
 def golden_path(name: str) -> Path:
     return PROGRAMS / f"{name}.expected"
 
 
-def golden_matches(name: str, output: str) -> bool:
-    return golden_path(name).read_text() == golden_text(output)
+def golden_matches(name: str, output: bytes) -> bool:
+    path = golden_path(name)
+    if not path.exists():
+        raise MissingGolden(name)
+    return path.read_bytes() == golden_bytes(output)
 
 
 def update_goldens(names: list[str]) -> int:
     """Writes the .expected of each program from one run of `dist/agentica` at size 1."""
     if not EXE.exists():
-        raise SystemExit("dist/agentica is not built; run make first")
+        raise SystemExit(f"{EXE} is not built; run make first")
     for name in names:
         sample = run([str(EXE), str(PROGRAMS / f"{name}.agc")])
         if sample.code != 0:
             print(f"{name}: failed: {diagnostic(sample.stderr)}", file=sys.stderr)
             return 1
-        golden_path(name).write_text(golden_text(sample.stdout))
+        golden_path(name).write_bytes(golden_bytes(sample.stdout))
         print(f"{name}: written", file=sys.stderr, flush=True)
     return 0
 
 
-def measure(name: str, runner: str, command: list[str], runs: int, expected: str | None,
-            codes: tuple[int, ...] = (0,), golden: Callable[[str], bool] | None = None) -> tuple[Row, str]:
+def measure(name: str, runner: str, command: list[str], runs: int, expected: bytes | None,
+            codes: tuple[int, ...] = (0,), golden: Callable[[bytes], bool] | None = None) -> tuple[Row, bytes]:
     first, rss = peak_rss(command)
     times = []
     for sample in [first] + [run(command) for _ in range(runs)]:
         if sample.code not in codes:
-            return Row(name, runner, "failed", note=diagnostic(sample.stderr)), ""
-        if (expected is not None and sample.stdout != expected) or (golden and not golden(sample.stdout)):
-            last = sample.stdout.strip().splitlines()
-            return Row(name, runner, "mismatch", note=last[-1] if last else "no output"), ""
+            return Row(name, runner, "failed", note=diagnostic(sample.stderr)), b""
+        try:
+            wrong = (expected is not None and sample.stdout != expected) or (golden and not golden(sample.stdout))
+        except MissingGolden:
+            return Row(name, runner, "mismatch", note="no golden: run --update-goldens"), b""
+        if wrong:
+            last = sample.stdout.decode(errors="replace").strip().splitlines()
+            return Row(name, runner, "mismatch", note=last[-1] if last else "no output"), b""
         expected = sample.stdout
         if sample is not first:
             times.append(sample.seconds)
@@ -227,7 +238,7 @@ def startup(runs: int, commands: dict[str, list[str] | None], workdir: Path) -> 
             argv = command + [str(bytecode)]
         else:
             argv = command + [str(HELLO)]
-        rows.append(measure("hello", runner, argv, runs, "hello\n")[0])
+        rows.append(measure("hello", runner, argv, runs, b"hello\n")[0])
     return rows
 
 
@@ -317,7 +328,7 @@ def main() -> int:
         print(table(program_rows))
     finally:
         shutil.rmtree(workdir, ignore_errors=True)
-    return 1 if any(row.status in ("failed", "mismatch") for row in rows) else 0
+    return 1 if any(row.status in ("failed", "mismatch", "missing") for row in rows) else 0
 
 
 if __name__ == "__main__":

@@ -4,7 +4,7 @@ def scale() -> Int
   return 1
 end
 
-# 64 KiB of bytes from a linear congruential generator, so the data is the same on every run and in the Python twin.
+# 64 KiB of bytes from a linear congruential generator, so the data is the same on every run.
 def block() -> Bytes
   items: List[Int] = []
   x = 12345
