@@ -13,7 +13,7 @@ import sys
 from datetime import datetime, timedelta, timezone
 
 EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
-TIME = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$")
+TIME = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$")
 KEYS = ["time", "level", "msg", "fields", "task"]
 
 FIXED = [
@@ -37,8 +37,8 @@ FIXED = [
 
 def text(ms):
     moment = EPOCH + timedelta(milliseconds=ms)
-    return "%04d-%02d-%02dT%02d:%02d:%02d.%03dZ" % (
-        moment.year, moment.month, moment.day, moment.hour, moment.minute, moment.second, moment.microsecond // 1000)
+    return "%04d-%02d-%02dT%02d:%02d:%02d.%06dZ" % (
+        moment.year, moment.month, moment.day, moment.hour, moment.minute, moment.second, moment.microsecond)
 
 
 def vectors(directory):

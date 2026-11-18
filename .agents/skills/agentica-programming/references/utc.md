@@ -1,5 +1,8 @@
 # UTC (`std/utc`)
 
+Deprecated, removed in 0.36.0: use `Time` (`time.md`).
+`UTC.iso8601(ms, 3)` is `Time.at_us(ms * 1000).unwrap!.iso8601` (six digits).
+
 `import UTC from "std/utc"`. Unix milliseconds (`Time.now_ms()`) as a civil
 date and time in UTC. `Time` is the builtin's name, so the module is `UTC`.
 `iso8601` is Ruby's `Time#utc.iso8601(n)`. Nothing halts.

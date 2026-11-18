@@ -33,8 +33,8 @@ Logger.time_text(time_ms: Int) -> String
   `Logger.info("done", {"path": "/items"})`.
 - No setup is needed. The first call of any `Logger` function attaches a handler
   named `console` (`stderr_text`, level `info`), so `Logger.info("started")`
-  writes `2026-10-12T10:15:02.345Z INFO started` on stderr. Change the setup at
-  the start of `main`: `Logger.set_level(Logger.Level.Debug)`, `_ =
+  writes `2026-10-12T10:15:02.345000Z INFO started` on stderr. Change the
+  setup at the start of `main`: `Logger.set_level(Logger.Level.Debug)`, `_ =
   Logger.detach("console")`, `_ = Logger.attach("console", Logger.Level.Info,
   &Logger.stderr_json)`.
 - Two levels apply. A call below the global level (`info` by default) makes no
@@ -50,6 +50,8 @@ Logger.time_text(time_ms: Int) -> String
   handler that logs recurses until `RUNTIME-STACK-OVERFLOW`.
 - Text lines are `TIME LEVEL MESSAGE key=value ...`. JSON lines have the keys
   `time`, `level`, `msg`, `fields` (nested) and `task`.
+- `Logger.time_text(ms)` writes six fraction digits (`.345000Z`) and halts
+  with `RUNTIME-UNWRAP-ERROR` outside the years 1 to 9999.
 - There is no file handler. Write one: `_ = File.append_text(path,
   Logger.format_json(event) + "\n", 1000)` in a block. For a slow handler, send
   each event into a `Channel[Logger.Event]` read by a writer task started with
