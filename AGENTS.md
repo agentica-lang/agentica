@@ -31,7 +31,7 @@ docs/               grammar/ (the language definition, index: docs/grammar.md),
 site/               Hugo documentation site: content/, versions/ and the
                     layouts/ overrides; the look and the layouts come from
                     themes/docs-theme (a submodule)
-benchmarks/         make bench programs and Python twins
+benchmarks/         make bench: the VM programs, with their .expected goldens
 .agents/skills/     agent skills
 ```
 

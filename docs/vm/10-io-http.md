@@ -475,7 +475,6 @@ the call: `HTTP.text` refuses it. A connection that fails is never pooled.
   Node's `http`. Python and Node are required in CI.
 - **Guards**: a user file, a `pkg/` module and a relative import that call
   `HttpWire.service` each get `CHECK-UNKNOWN-NAME` with the `std/http` help.
-- **Performance** is not a CI gate (`benchmarks/http_bench.py`,
-  `docs/vm-benchmarks.md`).
+- **Performance** is not a CI gate (`docs/vm-benchmarks.md`).
 
 [task-rules]: ../../site/content/library/concurrency/task.md

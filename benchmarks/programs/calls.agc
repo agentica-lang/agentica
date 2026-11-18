@@ -1,5 +1,5 @@
 def scale() -> Int
-  1
+  return 1
 end
 
 def fib(n: Int) -> Int

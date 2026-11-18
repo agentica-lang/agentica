@@ -121,4 +121,4 @@ Recipes: `references/frontend.md` ("Common tasks"). Homes:
 | `ci.md` | `.github/workflows/`, Makefile and `mk/`, new VM files, peers, fixtures, jscpd, releases, stage0 |
 | `property-tests.md` | when to add a Hypothesis property test, and how |
 | `site.md` | `site/`, or a language rule or builtin shown on a site page |
-| `bench.md` | `benchmarks/`, `make bench`, measuring speed |
+| `bench.md` | `benchmarks/`, `make bench` (the old binary against the new), measuring speed |

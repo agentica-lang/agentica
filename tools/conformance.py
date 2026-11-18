@@ -238,6 +238,7 @@ EXCLUDED = {
     "tests/test_vm_os_remove.py": "destructive: make test-remove-actions runs it in the scratch of an Actions runner",
     "tests/test_windows_filesystem_safety.py":
         "destructive: make test-remove-actions runs it in the scratch of an Actions runner",
+    "tests/test_benchmarks.py": "benchmarks/run.py, a developer tool of the VM build, not the product",
     "tests/test_conformance.py": "checks this manifest itself, in make test on Linux",
     "tests/test_docker_tests.py": "the Docker launcher of the Linux developer container, not the product",
     "tests/test_release_tools.py": "tools/release.py packing; release.yml runs the packages on all four systems",
