@@ -15,7 +15,7 @@ import tomllib
 
 import pytest
 
-from tests.agentica_test import cli, run
+from tests.agentica_test import FIXTURES, cli, compile_agc, run, run_vm, vm_environment
 from tests.package_support import (assert_at_key, build, cached_files, dependency, environment, git,  # noqa: F401
                                     inline_table, package_hash, problem_of, remotes, run_json, ws)
 
@@ -341,6 +341,46 @@ def test_a_namespaced_name_must_be_the_namespace_and_the_subdir_of_an_entry_of_i
     locked(ws, remotes, edit=edit)
     assert_at_key(problem_of(ws, remotes), "PKG-LOCK-INVALID", ws.project / "agentica.lock",
                   "package[%d].name" % index)
+
+
+def test_a_link_in_the_place_of_the_workspace_folder_is_refused_and_nothing_outside_it_is_read_or_moved(
+        ws, remotes, tmp_path):
+    files = member_files(remotes)
+    files["agentica.toml"] = files["agentica.toml"].replace('"llm"]', '"llm", "extra"]')
+    files["extra/agentica.toml"] = 'name = "extra"\n'
+    files["extra/extra.agc"] = "# extra\n"
+    publish(remotes, files)
+    project(ws, remotes)
+    assert update(ws, remotes).code == 0
+    outside = tmp_path / "outside"
+    os.rename(ws.deps / "finn", outside)
+    os.symlink(outside, ws.deps / "finn")
+    # The link leads to the files that the lock names: still no package, and install writes nothing through it.
+    _, problem = run_json("install", ws, remotes)
+    assert_at_key(problem, "PKG-SYMLINK", ws.deps / "finn", "")
+    # The tag moves to a commit without `extra`: its removal must not follow the link either.
+    remotes.publish(REPOSITORY, member_files(remotes), tag=TAG)
+    _, problem = run_json("update", ws, remotes, "finn")
+    assert_at_key(problem, "PKG-SYMLINK", ws.deps / "finn", "")
+    assert sorted(os.listdir(outside)) == ["core", "extra", "llm", "protocol"]
+
+
+def test_a_namespaced_package_inside_the_folder_of_another_is_refused(ws, remotes):
+    locked(ws, remotes, edit=lambda entries: entries.append(dict(entries[1], name="finn/core/inner", subdir="core/inner")))
+    assert_at_key(problem_of(ws, remotes), "PKG-LOCK-INVALID", ws.project / "agentica.lock", "package[6].name")
+
+
+def test_a_lock_with_a_workspace_and_namespaced_entries_is_read_and_encoded_to_the_same_bytes(ws, remotes, tmp_path):
+    locked(ws, remotes)
+    lock = ws.project / "agentica.lock"
+    text = lock.read_text(encoding="utf-8") + (
+        '\n[[native-artifact]]\npackage = "finn/core"\nlibrary = "bash"\nsystem = "linux"\n'
+        'url = "https://example.test/bash.so"\nsha256 = "%s"\nmember = "bash.so"\n' % ("a" * 64))
+    lock.write_text(text, encoding="utf-8")
+    bytecode = compile_agc(str(FIXTURES / "lock" / "roundtrip.agc"), str(tmp_path / "roundtrip.agcb"))
+    result = run_vm(bytecode, args=[str(lock)], env=vm_environment({}))
+    assert (result.code, result.stdout) == (0, text), result.stderr
+
 
 
 @pytest.mark.parametrize("edit, key", [

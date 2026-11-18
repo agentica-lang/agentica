@@ -581,7 +581,8 @@ import Sqlite from "pkg/sqlite/db"
   entry has no `/` in its name, and a `/` in the name of any other entry,
   a namespaced name on a `path` or workspace member entry, a namespaced entry
   without the workspace entry of its namespace at the same source and commit, a
-  namespace that is the name of an entry that is not a workspace entry, and a
+  namespace that is the name of an entry that is not a workspace entry, a
+  namespaced entry inside the folder of another (`finn/a`, `finn/a/b`), and a
   `hash` or `subdir` on a workspace entry are `PKG-LOCK-INVALID` at
   `package[n].name` (or the key that is wrong); the `package` of a
   `[[native-artifact]]` follows the rule of a name or a namespaced name. Every

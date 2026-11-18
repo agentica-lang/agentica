@@ -48,7 +48,7 @@ def sync(
     cache = try PackageFetch.cache_for(settings.env, lock_file, packages)
     for index in 0...packages.size
       locked = packages[index]
-      next if Lock.in_place?(locked) or Lock.root?(locked)
+      next if Lock.in_place?(locked)
 
       place = PackageFetch.Place(file: lock_file, entry: Reader.item("package", index))
       folder = PackageCache.folder(cache, locked.source, locked.commit)
@@ -59,7 +59,6 @@ def sync(
     end
   end
 
-  # The entry of a workspace dependency has no folder, but its name is the folder of its members: it is not removed.
   fetched = packages.filter do |locked| !Lock.in_place?(locked) end
   kept = Set.new(fetched.map do |locked| locked.name end)
   members = packages.filter do |locked| Lock.in_place?(locked) end
@@ -87,9 +86,7 @@ def put(
   return ok() if up_to_date?(workspace, deps, source, locked)
 
   files = try chosen(workspace, source, place, locked)
-  try prepare(workspace, deps)
   try prepare_parents(workspace, deps, locked.name)
-
   parent = try make_stage(deps)
   done = stage_and_swap(workspace, deps, parent, source, files, place, locked)
   # A staging folder that cannot be removed stays hidden in deps/ and does not change the answer. After a swap
@@ -120,8 +117,8 @@ end
 # `source`, the cache folder (the hash does not cover it). Anything else, a failed look included, is a reason to write
 # it again.
 def up_to_date?(workspace: Workspace.Workspace, deps: String, source: String, locked: Lock.Locked) -> Bool
-  here = kind_of(workspace, deps)
-  return false if !here.ok? or !folder?(here.unwrap!)
+  parents = parents_present?(workspace, deps, locked.name)
+  return false if !parents.ok? or !parents.unwrap!
 
   target = Paths.join(deps, locked.name)
   seen = kind_of(workspace, target)
@@ -244,15 +241,35 @@ def prepare(workspace: Workspace.Workspace, deps: String) -> Result[Void]
   end
 end
 
-# The folders above deps/<name> when the name has a namespace (`finn/examples/extension`: deps/finn and
+# deps/ and the folders above deps/<name> when the name has a namespace (`finn/examples/extension`: deps/finn and
 # deps/finn/examples), each made if it is not there and never a link.
 def prepare_parents(workspace: Workspace.Workspace, deps: String, name: String) -> Result[Void]
+  try prepare(workspace, deps)
   parts = name.split("/")
   for count in 1...parts.size
     try prepare(workspace, Paths.join(deps, parts.take(count).join("/")))
   end
 
   ok()
+end
+
+# Whether deps/ and every folder above deps/<name> exist as real folders: false when one is not there, an error when
+# one is a link or not a folder, so that nothing is read or moved through it. Nothing is made.
+def parents_present?(workspace: Workspace.Workspace, deps: String, name: String) -> Result[Bool]
+  folders = [deps]
+  parts = name.split("/")
+  for count in 1...parts.size
+    folders = folders.push(Paths.join(deps, parts.take(count).join("/")))
+  end
+
+  for folder in folders
+    seen = try kind_of(workspace, folder)
+    return ok(false) if absent?(seen)
+
+    try prepare(workspace, folder)
+  end
+
+  ok(true)
 end
 
 def kind_of(workspace: Workspace.Workspace, path: String) -> Result[Kind]
@@ -379,12 +396,12 @@ end
 
 # Takes the folder (or link, or file) of a dropped package out of deps/ by a rename, then removes it. Path.remove does
 # not follow links, and the rename means a build that comes in between finds the package missing, never half removed.
-# A deps/ that does not exist has nothing to remove, and one that is a link is refused as `put` refuses it.
+# A deps/ or a namespace folder that does not exist has nothing to remove, and one that is a link is refused as `put`
+# refuses it, before anything is looked at through it.
 def remove(workspace: Workspace.Workspace, deps: String, name: String) -> Result[Void]
-  here = try kind_of(workspace, deps)
-  return ok() if absent?(here)
+  present = try parents_present?(workspace, deps, name)
+  return ok() if !present
 
-  try prepare(workspace, deps)
   target = Paths.join(deps, name)
   seen = try kind_of(workspace, target)
   return ok() if absent?(seen)
@@ -395,6 +412,22 @@ def remove(workspace: Workspace.Workspace, deps: String, name: String) -> Result
 
   # An old folder that cannot be removed is only a spare hidden folder.
   _ = Path.remove(backup, FS_TIMEOUT_MS)
+  if Lock.namespace(name) != ""
+    try drop_if_empty(workspace, Paths.join(deps, Lock.namespace(name)))
+  end
+
+  ok()
+end
+
+# Removes the folder of a namespace when no package is left in it. A link, a file and a folder with an entry stay.
+def drop_if_empty(workspace: Workspace.Workspace, folder: String) -> Result[Void]
+  seen = try kind_of(workspace, folder)
+  return ok() if !folder?(seen)
+
+  listed = workspace.list_folder.call(folder)
+  if listed.ok? and listed.unwrap!.size == 0
+    _ = Path.remove(folder, FS_TIMEOUT_MS)
+  end
 
   ok()
 end
