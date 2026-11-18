@@ -684,3 +684,36 @@ def test_a_pgroup_descendant_gets_the_whole_grace_after_its_leader_is_reaped(tmp
         assert marker.read_text() == "done"
     finally:
         kill_process(pid)
+
+
+PID_PROGRAM = """\
+def main() -> Void
+  p = Process.spawn_captured(%s, ["-c", "import os, sys; print(os.getpid(), flush=True); sys.stdin.readline()"],
+                             Process.Options(timeout_ms: 5000)).unwrap!
+  puts(Process.pid(p).unwrap!)
+  puts(Process.read_line(p, 5000).unwrap!)
+  Process.close_stdin(p, 5000).unwrap!
+  puts(Process.wait(p, 5000).unwrap!)
+  case Process.pid(p)
+    ok(pid) -> puts("still #{pid}")
+    error(e) -> puts("#{e.kind}: #{e.message}")
+  end
+
+  Process.close(p)
+  case Process.pid(p)
+    ok(pid) -> puts("still #{pid}")
+    error(e) -> puts(e.kind)
+  end
+end
+"""
+
+
+@pytest.mark.parametrize("schedulers", ["1", "4"])
+def test_process_pid_is_the_childs_own_pid_until_it_is_reaped(tmp_path, schedulers):
+    result = cli_run("--schedulers", schedulers, write(tmp_path, "pid.agc", PID_PROGRAM % agc_literal(PYTHON)))
+    assert result.code == 0, result.stderr
+    ours, theirs, status, exited, closed = result.stdout.splitlines()
+    assert int(ours) > 0 and ours == theirs
+    assert status == "0"
+    assert exited == "process.failed: process: the child has exited"
+    assert closed == "process.closed"

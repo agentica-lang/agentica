@@ -651,6 +651,7 @@ void agc_launch_defaults(agc_launch_options *options) {
   options->style = AGC_STYLE_PLAIN;
   options->jit = AGC_JIT_ON;
   options->source_root = "";
+  options->program_name = "";
 }
 
 bool agc_launch_env(const char *name, agc_launch_options *options) {
@@ -732,7 +733,7 @@ static agc_launch_status refuse(const char *name, const char *message) {
 
 agc_launch_status agc_launch_parse(const char *name, int argc, char **argv, int *at, agc_launch_options *options) {
   agc_launch_defaults(options);
-  bool seen_steps = false, seen_heap = false, seen_ai = false, seen_json = false, seen_root = false;
+  bool seen_steps = false, seen_heap = false, seen_ai = false, seen_json = false, seen_root = false, seen_name = false;
   bool *deny = NULL;
   int i = *at;
   while (i < argc) {
@@ -791,6 +792,11 @@ agc_launch_status agc_launch_parse(const char *name, int argc, char **argv, int 
           !agc_utf8_chars((const uint8_t *)value, strlen(value), &options->source_root_chars))
         return refuse(name, "--source-root needs a folder name in UTF-8");
       options->source_root = value;
+      i += 2;
+    } else if (strcmp(arg, "--program-name") == 0) {
+      if (!once(name, &seen_name, arg)) return AGC_LAUNCH_BAD;
+      if (!value) return refuse(name, "--program-name needs a path");
+      options->program_name = value;
       i += 2;
     } else if (strcmp(arg, "--coverage") == 0) {
       bool seen = options->coverage != NULL;
@@ -918,6 +924,9 @@ agc_vm *agc_launch_vm(agc_launch *launch, const agc_program *program, const agc_
   rt->seed = options->seen_seed ? options->seed : entropy_seed();
   agc_random_seed(&vm->rt->main->random, rt->seed);
   rt->args = args;
+  const char *program_name = options->program_name;
+  rt->program_name =
+      agc_string_value(agc_utf8_decode((const uint8_t *)program_name, strlen(program_name), "?"));
   if (!front_end) {
     agc_parent_take(vm);
     agc_input_open(vm, 0, isatty(1));

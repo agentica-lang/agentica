@@ -278,6 +278,16 @@ ROWS: List[Model.Builtin] = [
     alternatives: [],
   ),
   Model.Builtin(
+    name: "Process.pid",
+    parameters: [Model.Named(name: "process", type: Types.Type.Opaque("Process"))],
+    result: Types.Type.Result(Types.Type.Int),
+    rule: Model.Rule.Plain,
+    implementation: "Process.pid",
+    effects: ["subprocess"],
+    description: "The OS process id of the child; a closed child or one that has exited and was reaped is an error.",
+    alternatives: [],
+  ),
+  Model.Builtin(
     name: "Process.spawn_group",
     parameters: [
       Model.Named(name: "command", type: Types.Type.String),

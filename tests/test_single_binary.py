@@ -721,3 +721,18 @@ def test_a_problem_in_a_std_module_shows_that_module_not_a_file_of_the_working_f
     assert "std/queue.agc:" in got.stderr
     assert 'return "text"' in got.stderr
     assert "decoy" not in got.stderr
+
+
+def test_program_name_is_the_main_program_as_it_was_given(tmp_path):
+    folder = tmp_path / "app"
+    folder.mkdir()
+    source = folder / "name.agc"
+    source.write_text('def main() -> Void\n  puts(System.program_name())\n  IO.inspect(System.args())\nend\n',
+                      encoding="utf-8")
+    compiled = compile_agc(source, folder / "name.agcb")
+    relative_source, relative_compiled = os.path.join("app", "name.agc"), os.path.join("app", "name.agcb")
+    cases = [([relative_source], relative_source), ([str(source)], str(source)),
+             (["run", "--", relative_compiled], relative_compiled), (["run", "--", str(compiled)], str(compiled))]
+    for words, name in cases:
+        got = agentica(*words, "x", cwd=tmp_path)
+        assert (got.code, got.stdout) == (0, '%s\n["x"]\n' % name), (words, got.stderr)

@@ -186,6 +186,8 @@ IO.flush() -> Void                               # stdout only
 System.env(name: String) -> Result[String]       # error if unset or the name is empty, has = or NUL; ok("") if set empty
 System.os() -> String                            # "linux", "macos", "windows", else the lowercase uname name ("unknown" if none or not printable ASCII)
 System.pid() -> Int                              # the process id of this program (VM only)
+System.program_name() -> String                  # the main .agc or .agcb as given ($PROGRAM_NAME)
+Process.pid(process: Process) -> Result[Int]     # the child's OS pid; error once it exited (process.failed)
 ```
 
 - `IO.read_bytes` waits for `count` bytes or end of input. A short final read
@@ -203,6 +205,10 @@ System.pid() -> Int                              # the process id of this progra
   `System.env("HOME")`. No call lists the variables.
 - `System.pid` needs no flag. Pass it to a VM you start with `--driver-pid`:
   that VM checks that its parent is this process.
+- `System.program_name` is the path as typed (`app/tool.agc`, or the `.agcb`
+  of `agentica run --`), not in `System.args`; `Path.real` makes it full.
+- `Process.pid` of an exited (reaped) child is `process.failed`, of a closed
+  one `process.closed`: the number may belong to another process by then.
 
 ## Signals
 

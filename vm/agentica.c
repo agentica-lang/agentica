@@ -378,6 +378,7 @@ static int run_command(agc_launch *launch, int argc, char **argv) {
     return 2;
   }
   if (!agc_launch_native(program, &options)) return 2;
+  if (!options.program_name[0] && !options.embedded && !options.session) options.program_name = argv[i];
   agc_vm *vm = agc_launch_vm(launch, program, &options, agc_launch_args(argc, argv, first), NULL);
   agc_outcome outcome = agc_vm_run(vm);
   /* A failure that the front end of `agentica repl` shows is not shown again here; the run still ends with 1. */

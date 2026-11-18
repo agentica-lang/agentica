@@ -54,7 +54,7 @@
 
 typedef enum {
   REQ_LINE, REQ_BYTES, REQ_SEND, REQ_WAIT, REQ_OUTPUT, REQ_CLOSE, REQ_AVAILABLE, REQ_SPAWN, REQ_STDIN, REQ_SIGNAL,
-  REQ_POLL, REQ_RESIZE
+  REQ_POLL, REQ_RESIZE, REQ_PID
 } req_kind;
 typedef enum { STOP_NONE, STOP_TERM, STOP_KILLED } stop_state;
 
@@ -835,6 +835,19 @@ static agc_value signal_result(agc_vm *vm, int rc) {
   }
 }
 
+/* The pid of a child that runs; once it has exited it was reaped, and the number may already be another process's. On
+   Windows libuv's pid is the GetProcessId of the child. */
+static int pid_of(const proc *p, int64_t *pid) {
+  if (p->closed) return SIGNAL_CLOSED;
+  if (!p->running) return SIGNAL_EXITED;
+  *pid = (int64_t)p->process.pid;
+  return 0;
+}
+
+static agc_value pid_result(agc_vm *vm, int rc, int64_t pid) {
+  return rc ? signal_result(vm, rc) : agc_result_value(true, agc_int(pid));
+}
+
 static agc_value resized(agc_vm *vm, int rc) {
   if (rc == SIGNAL_NO_PTY) return agc_error(vm, AGC_KIND_PROCESS_FAILED, "process: the child has no pty");
   if (rc < 0) return agc_system_error(vm, AGC_FAMILY_PROCESS, "process: cannot resize the pty", agc_net_errno(rc));
@@ -885,6 +898,8 @@ static agc_value posted_result(agc_vm *vm, const request *q, agc_value context) 
       return signal_result(vm, q->rc);
     case REQ_RESIZE:
       return resized(vm, q->rc);
+    case REQ_PID:
+      return pid_result(vm, q->rc, q->status);
   }
   return agc_void();
 }
@@ -2175,6 +2190,28 @@ static agc_value signal_op(agc_vm *vm, const agc_value *args, bool to_group) {
   return agc_void();
 }
 
+static bool begin_pid(void *data, agc_io_job *job) {
+  request *q = data;
+  link_request(q, job);
+  q->rc = pid_of(q->p, &q->status);
+  (void)finish(q);
+  return true;
+}
+
+/* Process.pid(process): read on the I/O thread, which owns the child's state, as Process.signal does. */
+static agc_value builtin_pid(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  proc *p = live(vm, agc_as_process(vm, args[0]));
+  if (!p) return agc_error(vm, AGC_KIND_PROCESS_CLOSED, closed_text);
+  if (agc_io_here(vm)) {
+    int64_t pid = 0;
+    int rc = pid_of(p, &pid);
+    return pid_result(vm, rc, pid);
+  }
+  start_request(vm, new_request(vm, p, REQ_PID), agc_void(), -1, begin_pid);
+  return agc_void();
+}
+
 /* Process.resize on the I/O thread, which owns the master: the kernel sends the child's foreground group SIGWINCH. */
 static int resize_pty(proc *p, int rows, int cols) {
   if (p->closed) return SIGNAL_CLOSED;
@@ -2389,6 +2426,7 @@ const agc_builtin agc_process_builtins[] = {
   {"System.signal", 3, builtin_system_signal, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false, false},
   {"Process.poll_line", 2, builtin_poll_line, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false, false},
   {"Process.resize", 3, builtin_resize, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false, false},
+  {"Process.pid", 1, builtin_pid, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false, false},
 };
 
 const size_t agc_process_builtin_count = sizeof agc_process_builtins / sizeof agc_process_builtins[0];

@@ -371,7 +371,8 @@ typedef struct {
 typedef struct {
   const agc_program *program;
   agc_output out, err;
-  agc_value args;
+  /* args: System.args; program_name: System.program_name. */
+  agc_value args, program_name;
   /* The shared small values of the run (docs/vm/05-values-execution-builtins.md §5.4), made once by agc_vm_init and never
      written: the empty List, Map, Set and String, and the one-character ASCII Strings by code. A builtin that computes
      one of them returns the shared value instead of allocating. Values are immutable and compared by content, so
