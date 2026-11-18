@@ -1,14 +1,16 @@
-## Resolves the packages of a project (docs/grammar/05b-modules.md): the list of lock entries for `add` and
-## `update`. It starts from the dependencies of the manifest and follows the manifest of each package it settles, so
-## the result holds every package of the build, direct or not, and only those: a package that nothing asks for any more
-## is dropped. The test group of the project (`group = "test"`) is followed, and that of a package is not. A package is
+## Resolves the packages of a project (docs/grammar/05b-modules.md): the list of lock entries for `add` and `update`.
+## It starts from the dependencies of the manifest and follows the manifest of each package it settles, so the result
+## holds every package of the build, direct or not, and only those: a package that nothing asks for any more is
+## dropped. The test group of the project (`group = "test"`) is followed, and that of a package is not. A package is
 ## settled in one of two ways. A locked entry with the same source is kept (its files are put in the cache if they are
-## missing, with no git when they are there). Anything else is fetched afresh: a name the lock lacks, a new source,
-## and the tag pins that `update` was asked to move. The exception is a package that is a member
-## of the workspace of the project (packages/members.agc): it is locked as a member and never fetched, and its manifest
-## is read from the member's folder. The files of every other settled package are in the cache when this returns,
-## because the manifest of a package is read from there.
-##
+## missing, with no git when they are there). Anything else is fetched afresh: a name the lock lacks, a new source, and
+## the tag pins that `update` was asked to move. The exception is a package that is a member of the workspace of the
+## project (packages/members.agc): it is locked as a member and never fetched, and its manifest is read from the
+## member's folder. A workspace dependency (`workspace = true`) is settled as a group: the entry of the workspace and
+## one for each of its members, fetched together; a dependency of a member on a sibling (a folder of the same
+## workspace) is the sibling's entry, whatever pin it writes, and every other dependency of a member is asked for as
+## usual. The files of every other settled package are in the cache when this returns, because the manifest of a
+## package is read from there.
 ## A dependency of the project's own manifest may be a `path` (a folder read in place, as a member is: never fetched,
 ## so it needs no cache) and may say `override = true`: its source then wins for that name everywhere, so a package
 ## that asks for another source of the name is not a conflict. The ones that did are reported (`Resolved.asked`).
@@ -62,6 +64,7 @@ def resolve(
       asked_in: manifest.file,
       by: "",
       override: dependency.override,
+      workspace: dependency.workspace,
     )
   end
 
@@ -86,10 +89,18 @@ def resolve(
       cache = try PackageFetch.cache_root(settings.env, old.file)
     end
 
-    locked = try settle(settings, cache, members, old, refresh, wanted)
-    found = found.put(wanted.name, locked)
-    more = try asked_by(settings, cache, dir, members, locked)
-    queue = queue.concat(more)
+    settled = try settle(settings, cache, members, old, refresh, wanted)
+    for locked in settled
+      found = found.put(locked.name, locked)
+    end
+
+    # The siblings of a member are in `found` by now, so they are not asked for again.
+    here = Lock.Lock(file: old.file, packages: found.values, artifacts: [])
+    for locked in settled
+      next if Lock.root?(locked)
+
+      queue = queue.concat(try asked_by(settings, cache, dir, members, here, locked))
+    end
   end
 
   ok(Resolved(packages: found.values, asked: asked))
@@ -112,6 +123,8 @@ def resolve_artifacts(
 
   dir = Paths.directory_of(manifest.file)
   for locked in packages
+    next if Lock.root?(locked)
+
     folder = Project.folder_of(dir, members, locked)
     if !Lock.in_place?(locked)
       folder = PackageCache.folder(cache, locked.source, locked.commit)
@@ -157,13 +170,16 @@ MANIFEST_FILE = "agentica.toml"
 NATIVE_TIMEOUT_MS = 300_000
 
 # A package some manifest asks for, the file of that manifest (the project's, or the cached one of a package), the
-# package it belongs to ("" for the project's) and whether it says `override = true` (only the project's can).
+# package it belongs to ("" for the project's), whether it says `override = true` (only the project's can) and
+# whether it
+# is a workspace dependency.
 struct Wanted
   name: String
   source: GitSource.Source
   asked_in: String
   by: String
   override: Bool
+  workspace: Bool
 end
 
 # One downloaded row with where it was declared, for fetching HOST rows with a manifest file/key context.
@@ -223,9 +239,9 @@ def artifact_key(artifact: Lock.Artifact) -> String
   "#{artifact.package}#{sep}#{artifact.library}#{sep}#{artifact.system}"
 end
 
-# One name must stand for one source in a build, whoever asks for it.
+# One name must stand for one source in a build, whoever asks for it, and for a package or a workspace.
 def agree(locked: Lock.Locked, wanted: Wanted) -> Result[Void]
-  return ok() if GitSource.same?(locked.source, wanted.source)
+  return ok() if GitSource.same?(locked.source, wanted.source) and wanted.workspace == Lock.root?(locked)
 
   asked = GitSource.describe(wanted.source)
   message = "#{wanted.name} is #{asked}, but another package has it at #{GitSource.describe(locked.source)}"
@@ -236,7 +252,7 @@ end
 
 # A `path` and a member of the workspace are locked as such, with no fetch. Else keeps the locked entry when it is the
 # same source and nobody asked to move it (an entry locked as a member, but not a member any more, is fetched), else
-# fetches the pin.
+# fetches the pin. A workspace dependency gives its own entry and the entries of its members.
 def settle(
   settings: Env.Settings,
   cache: String,
@@ -244,9 +260,9 @@ def settle(
   old: Lock.Lock,
   refresh: Refresh,
   wanted: Wanted,
-) -> Result[Lock.Locked]
+) -> Result[List[Lock.Locked]]
   if GitSource.local?(wanted.source)
-    return ok(
+    return ok([
       Lock.Locked(
         name: wanted.name,
         source: wanted.source,
@@ -254,12 +270,13 @@ def settle(
         hash: "",
         member: false,
         override: wanted.override,
+        repository: "",
       ),
-    )
+    ])
   end
 
   if Members.member?(members, wanted.source)
-    return ok(
+    return ok([
       Lock.Locked(
         name: wanted.name,
         source: wanted.source,
@@ -267,23 +284,62 @@ def settle(
         hash: "",
         member: true,
         override: wanted.override,
+        repository: "",
       ),
-    )
+    ])
   end
+
+  return settle_workspace(settings, cache, old, refresh, wanted) if wanted.workspace
 
   for index in 0...old.packages.size
     locked = old.packages[index]
     same = locked.name == wanted.name and GitSource.same?(locked.source, wanted.source)
-    if same and !locked.member and !moves?(refresh, wanted)
+    if same and !locked.member and !Lock.root?(locked) and !moves?(refresh, wanted)
       place = PackageFetch.Place(file: old.file, entry: Reader.item("package", index))
       try PackageFetch.fill(settings.workspace, cache, place, locked)
-      return ok(locked.with(override: wanted.override))
+      return ok([locked.with(override: wanted.override)])
     end
   end
 
   place = PackageFetch.Place(file: wanted.asked_in, entry: Reader.child("dependencies", wanted.name))
   fetched = try PackageFetch.resolve(settings.workspace, cache, place, wanted.name, wanted.source)
-  ok(fetched.with(override: wanted.override))
+  ok([fetched.with(override: wanted.override)])
+end
+
+# A workspace dependency: the locked entry of the workspace and its members when the lock has them at this source and
+# nobody asked to move the pin (their files are put in the cache with one fetch if they are missing), else one fetch
+# of the pin that reads the workspace table.
+def settle_workspace(
+  settings: Env.Settings,
+  cache: String,
+  old: Lock.Lock,
+  refresh: Refresh,
+  wanted: Wanted,
+) -> Result[List[Lock.Locked]]
+  for locked in old.packages
+    same = locked.name == wanted.name and Lock.root?(locked) and GitSource.same?(locked.source, wanted.source)
+    if same and !moves?(refresh, wanted)
+      entries: List[PackageFetch.Entry] = []
+      for index in 0...old.packages.size
+        if Lock.namespace(old.packages[index].name) == wanted.name
+          place = PackageFetch.Place(file: old.file, entry: Reader.item("package", index))
+          entries = entries.push(PackageFetch.Entry(place: place, locked: old.packages[index]))
+        end
+      end
+
+      if entries.size > 0
+        try PackageFetch.fill_group(settings.workspace, cache, entries)
+      end
+
+      return ok(
+        [locked.with(override: wanted.override)].concat(entries.map do |entry: PackageFetch.Entry| entry.locked end),
+      )
+    end
+  end
+
+  place = PackageFetch.Place(file: wanted.asked_in, entry: Reader.child("dependencies", wanted.name))
+  fetched = try PackageFetch.resolve_workspace(settings.workspace, cache, place, wanted.name, wanted.source)
+  ok([fetched[0].with(override: wanted.override)].concat(fetched.drop(1)))
 end
 
 def moves?(refresh: Refresh, wanted: Wanted) -> Bool
@@ -297,6 +353,7 @@ def asked_by(
   cache: String,
   dir: String,
   members: Members.Members,
+  here: Lock.Lock,
   locked: Lock.Locked,
 ) -> Result[List[Wanted]]
   folder = Project.folder_of(dir, members, locked)
@@ -310,9 +367,21 @@ def asked_by(
   manifest = try Manifest.read_checked(settings.workspace, file, locked.name, settings.version)
   try Manifest.require_package(manifest)
   # The test group of a package is its own: a project that depends on it neither fetches nor locks it.
+  # A sibling of a member of a workspace dependency is that workspace's own entry, not another package to settle.
+  asked = Manifest.needed(manifest).select do |dependency: Manifest.Dependency|
+    Lock.sibling(here, locked.name, dependency.source) == ""
+  end
+
   ok(
-    Manifest.needed(manifest).map do |dependency|
-      Wanted(name: dependency.name, source: dependency.source, asked_in: file, by: locked.name, override: false)
+    asked.map do |dependency: Manifest.Dependency|
+      Wanted(
+        name: dependency.name,
+        source: dependency.source,
+        asked_in: file,
+        by: locked.name,
+        override: false,
+        workspace: dependency.workspace,
+      )
     end,
   )
 end

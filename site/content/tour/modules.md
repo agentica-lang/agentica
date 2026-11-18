@@ -326,7 +326,7 @@ import Sqlite from "pkg/sqlite/db"
 A manifest that declares dependencies needs an `agentica.lock` beside it, with the exact commit and a hash of every package. A build never downloads anything: it reads each package from `deps/<name>/` and checks its hash. Three commands keep `deps/` and the lock, through the system `git`:
 
 - `agentica install` fetches what the lock names into `deps/`; it never changes the lock.
-- `agentica add NAME URL --tag TAG` (or `--ref COMMIT`, `--subdir DIR`) adds a dependency to `agentica.toml`, the lock and `deps/`. `OWNER/REPO` in place of the URL is `https://github.com/OWNER/REPO`, and the files store the full URL; another source is `PKG-SOURCE-INVALID`. A tag `NAME-X.Y.Z` with no `--subdir` takes the folder `NAME` of the repository when the package is there and not at its root.
+- `agentica add NAME URL --tag TAG` (or `--ref COMMIT`, `--subdir DIR`, `--workspace`) adds a dependency to `agentica.toml`, the lock and `deps/`. `OWNER/REPO` in place of the URL is `https://github.com/OWNER/REPO`, and the files store the full URL; another source is `PKG-SOURCE-INVALID`. A tag `NAME-X.Y.Z` with no `--subdir` takes the folder `NAME` of the repository when the package is there and not at its root.
 - `agentica update [NAME]` fetches the tag pins again and repairs a lock that is out of date.
 
 ```sh
@@ -335,6 +335,19 @@ agentica add sqlite https://github.com/owner/sqlite-ac --tag v1.2.0
 agentica add jobs agentica-lang/packages --tag jobs-0.1.0
 agentica update sqlite
 ```
+
+A repository of packages that has a `[workspace]` table in its root `agentica.toml` can be one dependency, with `workspace = true`. The project locks and installs every member, and imports one as `pkg/NAME/MEMBER/MODULE`, so the names of the members never clash with the names the project uses:
+
+```toml
+[dependencies]
+finn = { git = "https://github.com/owner/finn", tag = "finn-1", workspace = true }
+```
+
+```text
+import Core from "pkg/finn/core/agent"
+```
+
+Inside the workspace, a member that depends on another member of the same repository gets the one of the workspace, at the pin of the workspace, whatever pin it writes.
 
 A dependency that only the tests use, such as a property-testing package, takes `group = "test"` (`agentica add NAME URL --tag TAG --group test` writes it). The project locks and installs it, but only its `*_test.agc` files and its step program import it; any other program that imports it stops with `CHECK-IMPORT-PACKAGE`. A project that depends on your package never fetches it.
 

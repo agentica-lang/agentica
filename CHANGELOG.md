@@ -16,7 +16,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - ISO 8601 text in the `Time` family: `x.iso8601` writes any of the four types (RFC 3339 for a `Time.DateTime`, six fraction digits), and `Time.Date.iso8601(text)` and the like read it back as a Result (#985).
 - Arithmetic and queries in the `Time` family: `add_days`, `add_us`, `days_between`, `us_between`, `cwday` and `yday`, and `Time.compare`, `Time.compare_naive`, `Time.compare_date` and `Time.compare_time` (-1, 0 or 1); the `==` error on a `Time.DateTime` names `Time.compare` (#985).
 - `x.strftime(format)` writes any of the four `Time` types with a subset of Ruby's directives (`%Y %m %d %H %M %S %L %N %z %:z %j %u %w %a %A %b %B %%`), English names and no flags or widths (#985).
-- `agentica.lock` may name a folder of a repository `namespace/subdir` (`finn/core`), kept in `deps/namespace/subdir/`, and `agentica install` fetches the packages of one repository, pin and commit with one `git fetch` (#1850).
+- A dependency can be a whole workspace repository under one name: `finn = { git, tag, workspace = true }` locks every member as `finn/MEMBER`, installs it to `deps/finn/MEMBER/` and is imported as `pkg/finn/MEMBER/MODULE`, so the names of the members stay free for the project; members that depend on each other by `subdir` get the members of the same workspace; `agentica add NAME URL --tag TAG --workspace` writes it (#1850).
+- `agentica install` fetches the packages of one repository, pin and commit with one `git fetch` (#1850).
 - Install with Nix: getting started has a flake that fetches the release archives.
 
 ### Changed

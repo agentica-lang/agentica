@@ -4,9 +4,11 @@
 ## the project (members.agc) has `workspace = true` in place of the commit and the hash: it is read from its folder,
 ## so it has neither; so is a package that is a local `path` of the root project's manifest, which has the `path` in
 ## place of the git source. `override = true` marks a package whose source the root project imposes on the whole tree
-## (the packages that ask for another source of that name are not compared). A fetched package that is a folder of its
-## repository may have a namespaced name, `namespace/subdir` (`finn/core` for the folder `core`): deps/ keeps it in
-## `deps/namespace/subdir/`, and the namespace is then the name of no package of its own. A failure is
+## (the packages that ask for another source of that name are not compared). A workspace dependency
+## (`finn = { git, tag, workspace = true }`) is locked as the entry `finn`, which has `repository` (the `[workspace]`
+## repository of the pin) and no hash and no files, and one entry `finn/subdir` for each member folder: a fetched
+## package that is a folder of the repository, whose name is `namespace/subdir` and which deps/ keeps in
+## `deps/namespace/subdir/`. A name with a namespace needs the workspace entry of that namespace. A failure is
 ## PKG-LOCK-INVALID, with the file and the key path (toml_read.agc). This reads one file; project.agc checks it against
 ## the manifest, and package_import.agc against the manifest of each package it loads. `encode` is the writer
 ## (docs/grammar/05b-modules.md): the file is the tool's own, so it is written whole.
@@ -19,7 +21,8 @@ import Reader from "toml_read"
 
 ## One locked package. commit is the full git commit; hash is `sha256:` and 64 hex digits. A workspace member (member
 ## is true) and a package of a `path` (source.path is not "") have "" for both: their files are the ones in the
-## folder. override is true when the root manifest overrides the name.
+## folder. override is true when the root manifest overrides the name. repository is "" except for the entry of a
+## workspace dependency, which has a commit and no hash and no files of its own: its members are its namespace.
 struct Locked
   name: String
   source: GitSource.Source
@@ -27,6 +30,7 @@ struct Locked
   hash: String
   member: Bool
   override: Bool
+  repository: String
 end
 
 ## One locked native artifact: the lock key of the package ("" for the project root), the library and the
@@ -75,7 +79,7 @@ def read(workspace: Workspace.Workspace, file: String) -> Result[Lock]
       packages = packages.push(locked)
     end
 
-    try namespaces_free(reading, packages)
+    try namespaces_agree(reading, packages)
   end
 
   artifacts: List[Artifact] = []
@@ -134,6 +138,39 @@ def namespace(name: String) -> String
   name.slice(0, at.unwrap!)
 end
 
+## Whether the entry is the one of a workspace dependency: it has no files, and its members are the entries named
+## `name/subdir`.
+def root?(locked: Locked) -> Bool = locked.repository != ""
+
+## The folders of the members of the workspace dependency `space`, in the order of the lock.
+def members_of(lock: Lock, space: String) -> List[String]
+  folders: List[String] = []
+  for locked in lock.packages
+    if namespace(locked.name) == space and !root?(locked)
+      folders = folders.push(locked.source.subdir)
+    end
+  end
+
+  folders
+end
+
+## The lock name of the sibling that a package of a workspace dependency means by a dependency on `source`, or "" when
+## it is not one. `owner` is the lock name of the package that asks. A sibling is a dependency on the repository of the
+## workspace and on a folder that is one of its members; its own pin plays no part, the pin of the workspace does.
+def sibling(lock: Lock, owner: String, source: GitSource.Source) -> String
+  space = namespace(owner)
+  return "" if space == "" or source.subdir == ""
+
+  found = find(lock, space)
+  return "" if !found.ok? or !root?(found.unwrap!)
+
+  return "" if GitSource.identity(found.unwrap!.repository) != GitSource.identity(source.git)
+
+  return "#{space}/#{source.subdir}" if members_of(lock, space).any? do |folder| folder == source.subdir end
+
+  ""
+end
+
 ## Whether the files of the package are read in place, with no fetch, no cache and no hash: a workspace member or a
 ## `path`.
 def in_place?(locked: Locked) -> Bool = locked.member or GitSource.local?(locked.source)
@@ -170,8 +207,8 @@ private
 
 # The keys of the lock, of a [[package]] table and of a [[native-artifact]] table.
 TOP_KEYS = ["version", "package", "native-artifact"]
-PACKAGE_KEYS = ["name", "git", "subdir", "tag", "ref", "commit", "hash", "workspace", "path", "override"]
-GIT_KEYS = ["git", "subdir", "tag", "ref", "commit", "hash", "workspace"]
+PACKAGE_KEYS = ["name", "git", "subdir", "tag", "ref", "commit", "hash", "workspace", "path", "override", "repository"]
+GIT_KEYS = ["git", "subdir", "tag", "ref", "commit", "hash", "workspace", "repository"]
 ARTIFACT_KEYS = ["package", "library", "system", "url", "sha256", "member"]
 
 LOCK_FORMAT = 1
@@ -210,6 +247,10 @@ def package_keys(locked: Locked) -> Map[String, Toml.Value]
   keys = keys.put(pin_key, pin)
   return keys.put("workspace", Toml.Value.Bool(true)) if locked.member
 
+  if root?(locked)
+    return keys.put("commit", Toml.Value.Str(locked.commit)).put("repository", Toml.Value.Str(locked.repository))
+  end
+
   keys.put("commit", Toml.Value.Str(locked.commit)).put("hash", Toml.Value.Str(locked.hash))
 end
 
@@ -224,22 +265,35 @@ def key_problem(name: String) -> String
   GitSource.subdir_problem(name.slice(space.length + 1, name.length - space.length - 1))
 end
 
-# A namespace is the name of no package: deps/<namespace>/ holds only the folders of the namespaced packages, so a
-# package of that name would hash them as its own files. The same holds for a namespaced package inside the folder of
-# another (`finn/a` and `finn/a/b`).
-def namespaces_free(reading: Reader.Reading, packages: List[Locked]) -> Result[Void]
+# A name with a namespace needs the entry of a workspace dependency of that name, at the same repository, pin and
+# commit, and the folder of such an entry holds only its members, so no other kind of entry has the name of
+# a namespace. A namespaced entry is not inside the folder of another (`finn/a` and `finn/a/b`).
+def namespaces_agree(reading: Reader.Reading, packages: List[Locked]) -> Result[Void]
   names = Set.new(packages.map do |locked| locked.name end)
+  roots: Map[String, Locked] = {}
+  for locked in packages
+    if root?(locked)
+      roots = roots.put(locked.name, locked)
+    end
+  end
+
   spaces = Set.new(packages.map do |locked| namespace(locked.name) end)
   for index in 0...packages.size
-    name = packages[index].name
-    message = ""
-    if spaces.include?(name)
-      message = "the name is the namespace of another package"
-    elsif inside_another?(names, name)
-      message = "the folder is inside the folder of another package"
+    locked = packages[index]
+    here = Reader.child(Reader.item("package", index), "name")
+    space = namespace(locked.name)
+    if space == "" and spaces.include?(locked.name) and !root?(locked)
+      return error(Reader.fail(reading, here, "the name is the namespace of another package"))
     end
 
-    return error(Reader.fail(reading, Reader.child(Reader.item("package", index), "name"), message)) if message != ""
+    if space != "" and !agrees?(roots.get(space), locked)
+      message = "a namespaced package needs the workspace entry #{space} at the same source and commit"
+      return error(Reader.fail(reading, here, message))
+    end
+
+    if inside_another?(names, locked.name)
+      return error(Reader.fail(reading, here, "the folder is inside the folder of another package"))
+    end
   end
 
   ok()
@@ -253,6 +307,14 @@ def inside_another?(names: Set[String], name: String) -> Bool
   end
 
   false
+end
+
+def agrees?(found: Optional[Locked], member: Locked) -> Bool
+  return false if found.none?
+
+  root = found.unwrap!
+  same = GitSource.identity(root.source.git) == GitSource.identity(member.source.git)
+  same and GitSource.pin(root.source) == GitSource.pin(member.source) and root.commit == member.commit
 end
 
 # The sort key of a native artifact row: one alias on one system of one package.
@@ -334,6 +396,8 @@ def package_of(reading: Reader.Reading, value: Toml.Value, path: String) -> Resu
     required = ["name", "git"]
   elsif entries.has_key?("path")
     required = ["name", "path"]
+  elsif entries.has_key?("repository")
+    required = ["name", "git", "commit", "repository"]
   end
 
   for key in required
@@ -355,6 +419,7 @@ def package_of(reading: Reader.Reading, value: Toml.Value, path: String) -> Resu
 
   source = try source_of(reading, entries, path)
   return member_of(reading, entries, path, name, source, override) if entries.has_key?("workspace")
+  return root_of(reading, entries, path, name, source, override) if entries.has_key?("repository")
 
   if nested and name != "#{namespace(name)}/#{source.subdir}"
     message = "a namespaced name is the namespace, a /, and the subdir of the entry"
@@ -374,7 +439,52 @@ def package_of(reading: Reader.Reading, value: Toml.Value, path: String) -> Resu
     return error(Reader.fail(reading, Reader.child(path, "hash"), "a hash is sha256: and 64 lowercase hex digits"))
   end
 
-  ok(Locked(name: name, source: source, commit: commit, hash: hash, member: false, override: override))
+  ok(Locked(name: name, source: source, commit: commit, hash: hash, member: false, override: override, repository: ""))
+end
+
+# The entry of a workspace dependency: a git source with no subdir, the commit and the `repository` of the workspace
+# table at that commit, and no hash, since its members hold the files.
+def root_of(
+  reading: Reader.Reading,
+  entries: Map[String, Toml.Value],
+  path: String,
+  name: String,
+  source: GitSource.Source,
+  override: Bool,
+) -> Result[Locked]
+  if namespace(name) != ""
+    return error(Reader.fail(reading, Reader.child(path, "name"), "a workspace entry has a name with no /"))
+  end
+
+  for key in ["subdir", "hash"]
+    if entries.has_key?(key)
+      return error(Reader.fail(reading, Reader.child(path, key), "a workspace entry has no subdir and no hash"))
+    end
+  end
+
+  commit = try text_of(reading, entries, path, "commit")
+  problem = GitSource.commit_problem(commit)
+  return error(Reader.fail_help(reading, Reader.child(path, "commit"), "not a commit", problem)) if problem != ""
+
+  if source.ref != "" and !commit.start_with?(source.ref)
+    return error(Reader.fail(reading, Reader.child(path, "commit"), "the commit does not start with the ref"))
+  end
+
+  repository = try text_of(reading, entries, path, "repository")
+  problem = GitSource.git_problem(repository)
+  return error(Reader.fail_help(reading, Reader.child(path, "repository"), "not a git URL", problem)) if problem != ""
+
+  ok(
+    Locked(
+      name: name,
+      source: source,
+      commit: commit,
+      hash: "",
+      member: false,
+      override: override,
+      repository: repository,
+    ),
+  )
 end
 
 # A workspace member: `workspace = true`, a subdir (the member's folder) and neither a commit nor a hash.
@@ -396,13 +506,14 @@ def member_of(
     return error(Reader.fail(reading, Reader.child(path, "subdir"), "a workspace member is a folder: missing key"))
   end
 
-  for key in ["commit", "hash"]
+  for key in ["commit", "hash", "repository"]
     if entries.has_key?(key)
-      return error(Reader.fail(reading, Reader.child(path, key), "a workspace member has no commit and no hash"))
+      message = "a workspace member has no commit, no hash and no repository"
+      return error(Reader.fail(reading, Reader.child(path, key), message))
     end
   end
 
-  ok(Locked(name: name, source: source, commit: "", hash: "", member: true, override: override))
+  ok(Locked(name: name, source: source, commit: "", hash: "", member: true, override: override, repository: ""))
 end
 
 # A package that is a local folder: `path` and neither a git source nor a commit and a hash.
@@ -425,7 +536,7 @@ def path_of(
   return error(Reader.fail_help(reading, Reader.child(path, "path"), "not a path", problem)) if problem != ""
 
   source = GitSource.Source(git: "", subdir: "", tag: "", ref: "", path: folder)
-  ok(Locked(name: name, source: source, commit: "", hash: "", member: false, override: override))
+  ok(Locked(name: name, source: source, commit: "", hash: "", member: false, override: override, repository: ""))
 end
 
 # `override = true`, or false when the key is left out.
