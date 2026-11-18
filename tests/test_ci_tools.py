@@ -158,5 +158,5 @@ def test_the_std_modules_that_the_front_end_imports_are_not_portable():
     front = changes.front_end_std(changes.ROOT, modules)
     assert {"toml", "regex", "http", "uri", "binary", "archive", "bdd", "bdd/tags", "test/runner", "test/report",
             "analysis", "prelude/list"} <= front
-    assert {"logger", "utc", "actor", "eag", "html"} <= front
-    assert {"cache", "cookie", "option_parser", "supervisor"}.isdisjoint(front)
+    assert {"logger", "actor", "eag", "html"} <= front
+    assert {"cache", "cookie", "option_parser", "supervisor", "utc"}.isdisjoint(front)
