@@ -884,7 +884,7 @@ agc_lock_status agc_handle_wait(agc_vm *vm, agc_resource *handle, int64_t *timeo
 void agc_handle_hold(agc_vm *vm, agc_resource *handle);
 void agc_handle_let_go(agc_vm *vm, agc_resource *handle);
 bool agc_channel_abandoned(agc_vm *vm, const agc_channel *c);
-/* HttpWire.awaited?: false when a receiver gave up on C already (agc_channel_abandoned). Else, while no value has been
+/* HttpWire.watch: false when a receiver gave up on C already (agc_channel_abandoned). Else, while no value has been
    sent to C, T becomes the watcher of C, cancelled when a receiver parked on C is cancelled before the first value is
    sent; that value ends the watch. A receiver whose wait times out cancels nothing. */
 bool agc_channel_watch(agc_vm *vm, agc_channel *c, agc_task *t);
