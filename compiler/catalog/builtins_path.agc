@@ -66,6 +66,24 @@ ROWS: List[Model.Builtin] = [
     alternatives: [],
   ),
   Model.Builtin(
+    name: "Path.replace",
+    parameters: [
+      Model.Named(name: "from", type: Types.Type.String),
+      Model.Named(name: "to", type: Types.Type.String),
+      Model.Named(name: "timeout_ms", type: Types.Type.Int, default: Model.Default.Whole(30000)),
+    ],
+    result: Types.Type.Result(Types.Type.Void),
+    rule: Model.Rule.Plain,
+    implementation: "Path.replace",
+    effects: ["filesystem"],
+    description: (
+      "Rename the regular file from to to in one step, replacing a file or a symbolic link (the link itself) at to, " +
+      "so to is the old file or the new one, never neither; from is synced first; a directory at to is an error; " +
+      "VM only."
+    ),
+    alternatives: [],
+  ),
+  Model.Builtin(
     name: "Path.resolve",
     parameters: [Model.Named(name: "path", type: Types.Type.String)],
     result: Types.Type.Result(Types.Type.String),
