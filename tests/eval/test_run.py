@@ -54,6 +54,21 @@ class ChildEnvironmentTests(unittest.TestCase):
 
         self.assertEqual(output, "logged [REDACTED]")
 
+    def test_the_pi_auth_file_is_mounted_read_only_and_its_keys_are_redacted(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            auth = Path(directory) / "pi-auth.json"
+            auth.write_text(json.dumps({"opencode-go": {"type": "api_key", "key": "sk-test-0123456789"}}))
+            secrets = run.auth_secrets(auth)
+            command = run.docker_prefix(Path(directory), "image", "name", network=True, pass_env=[], pi_auth=auth)
+            auth.write_text("{not json")
+            with self.assertRaises(SystemExit) as raised:
+                run.auth_secrets(auth)
+
+        self.assertEqual(secrets, ["sk-test-0123456789"])
+        self.assertIn(f"type=bind,src={auth},dst={run.PI_AUTH_MOUNT},readonly", command)
+        self.assertEqual(run.redact_secrets("key sk-test-0123456789", [], secrets), "key [REDACTED]")
+        self.assertNotIn("not json", str(raised.exception))
+
 
 class JailCommandTests(unittest.TestCase):
     def test_agent_has_chroot_and_network_access(self) -> None:
@@ -361,6 +376,54 @@ class MetricsTests(unittest.TestCase):
         self.assertEqual(metrics["read_runs"], 5)
         self.assertEqual(metrics["check_runs"], 2)
 
+    def test_a_fix_round_is_a_failed_call_then_an_edit_before_the_next_check(self) -> None:
+        error = "solution.py:3: error: Incompatible types  [assignment]"
+        events = (bash_events("1", "mypy --strict solution.py", error)
+                  + [json.dumps({"type": "tool_execution_start", "toolCallId": "e1", "toolName": "edit",
+                                 "args": {"path": "solution.py"}})]
+                  + bash_events("2", "mypy --strict solution.py", error)
+                  + bash_events("3", "mypy --strict solution.py", error)
+                  + bash_events("4", "cat > solution.py <<'EOF'\nx = 1\nEOF\nmypy --strict solution.py", "Success")
+                  + bash_events("5", "go build solution.go", "./solution.go:4:2: undefined: x")
+                  + [json.dumps({"type": "tool_execution_start", "toolCallId": "w1", "toolName": "write",
+                                 "args": {"path": "solution.go"}})]
+                  + bash_events("6", "python3 solution.py", "Traceback (most recent call last):"))
+
+        metrics = run.pi_metrics("\n".join(events))
+
+        # 1 then the edit: a round; 2 then 3 with no edit between: not one; 3 then the heredoc: a round;
+        # 5 then the write: a round; 6 is never edited: not one
+        self.assertEqual((metrics["failing_runs"], metrics["check_failures"], metrics["fix_rounds"]), (5, 4, 3))
+        for command in ("echo x > solution.agc", "tee -a solution.go < x", "sed -i 's/a/b/' solution.py",
+                        "cp /tmp/x.py solution.py", "cd w && cat >> ./solution.py"):
+            with self.subTest(command=command):
+                self.assertTrue(run.writes_solution(command))
+        for command in ("cat solution.py", "cp solution.py backup.py", "python3 solution.py > out.txt",
+                        "diff solution.py start.py"):
+            with self.subTest(command=command):
+                self.assertFalse(run.writes_solution(command))
+
+    def test_go_vet_and_go_build_are_checks_and_their_errors_failures(self) -> None:
+        for command in ("go vet ./...", "go build -o app solution.go", "cd w && go vet solution.go"):
+            with self.subTest(command=command):
+                self.assertTrue(run.is_check_command(command))
+        self.assertFalse(run.is_check_command("go run solution.go"))
+        self.assertTrue(run.command_failed("go build solution.go", "./solution.go:4:2: undefined: x"))
+        self.assertTrue(run.command_failed("go run solution.go", "panic: runtime error: index out of range"))
+        self.assertFalse(run.command_failed("go vet solution.go", ""))
+        self.assertFalse(run.command_failed("cat x.go", "./solution.go:4:2: undefined: x"))
+
+    def test_spend_is_pis_cost_or_the_list_price_of_the_tokens(self) -> None:
+        model = "opencode-go/deepseek-v4.1-flash"
+        tokens = {"tokens_in": 1_000_000, "tokens_cached": 2_000_000, "tokens_cache_write": 0, "tokens_out": 1_000_000}
+        self.assertEqual(run.spend({"model": model, "cost": 0.5, **tokens}), {"cost_source": "agent"})
+        table = run.spend({"model": model, "cost": 0.0, **tokens})
+        self.assertEqual(table["cost_source"], "table")
+        self.assertAlmostEqual(table["cost"], 0.15 + 2 * 0.003 + 0.6)
+        self.assertAlmostEqual(table["cost_input"] + table["cost_cache"] + table["cost_output"], table["cost"])
+        self.assertEqual(run.spend({"model": "other/m", "cost": 0.0, **tokens}), {"cost": 0.0, "cost_source": "none"})
+        self.assertEqual(run.spend({"model": model, "cost": 0.0})["cost_source"], "none")
+
 
 class CheckerGradingTests(unittest.TestCase):
     def test_classifies_mypy_output(self) -> None:
@@ -584,6 +647,24 @@ class MainTests(unittest.TestCase):
         (root / "dist" / "runtime" / "bin" / "agentica").write_text("binary")
         return root
 
+    def test_pi_auth_is_checked_first_and_run_json_records_only_that_one_was_used(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = self.runtime_root(directory)
+            auth = root / "pi-auth.json"
+            auth.write_text(json.dumps({"opencode-go": {"type": "api_key", "key": "sk-test-0123456789"}}))
+            for argv in (["--pi-auth", str(root / "missing.json")], ["--pi-auth", str(auth), "--agent", "claude"]):
+                with self.subTest(argv=argv), self.assertRaises(SystemExit) as raised:
+                    with patch("sys.argv", ["run.py", "--tasks", "t1", *argv]):
+                        run.main()
+                self.assertIn("--pi-auth", str(raised.exception))
+            code, _, _ = self.main(root, ["--pi-auth", str(auth), "--model", "opencode-go/deepseek-v4.1-flash",
+                                          "--tasks", "t1", "--arms", "skill"], "pass")
+            text = (next((root / "eval" / "results").iterdir()) / "run.json").read_text(encoding="utf-8")
+
+        self.assertEqual((code, json.loads(text)["pi_auth_file"]), (0, True))
+        self.assertNotIn("sk-test", text)
+        self.assertNotIn(str(auth), text)
+
     def test_an_arm_runs_only_on_its_task_subset(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = self.runtime_root(directory)
@@ -710,6 +791,15 @@ class PiVersionTests(unittest.TestCase):
         self.assertRegex(run.dockerfile_pi_version() or "", r"^\d+\.\d+\.\d+$")
 
 
+def summary_of(rows: list[dict]) -> str:
+    with tempfile.TemporaryDirectory() as directory:
+        results = Path(directory)
+        (results / "results.jsonl").write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+        with contextlib.redirect_stdout(io.StringIO()):
+            run.summarize(results)
+        return (results / "summary.md").read_text(encoding="utf-8")
+
+
 class SummaryTests(unittest.TestCase):
     def test_summary_has_a_check_runs_column(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -727,7 +817,7 @@ class SummaryTests(unittest.TestCase):
 
         self.assertIn("check runs | query runs | refused | read runs | type escapes", summary)
         # no token or cost fields in these rows: the context and the cost split are unknown, not 0
-        self.assertIn("| t1 | typed-python | 2 | 1/2 | 50% | 0 | - | - | - | - | 4.0 | 2.0 | 3.0 | 1.5 | 1.5 | 5.0 | 1.5 | check:arg-type |",
+        self.assertIn("| t1 | typed-python | 2 | 1/2 | 50% | 0 | - | - | - | - | - | 4.0 | 2.0 | - | 3.0 | 1.5 | 1.5 | 5.0 | 1.5 | check:arg-type |",
                       summary)
         self.assertIn("stopped_for_budget: false", summary)
 
@@ -738,16 +828,22 @@ class SummaryTests(unittest.TestCase):
                      cost_input=0.5, cost_cache=0.25, cost_output=1.0),
                 dict(row, tokens_in=300, tokens_out=30, tokens_cached=600, cost_input=1.5, cost_cache=0.75,
                      cost_output=2.0)]
-        with tempfile.TemporaryDirectory() as directory:
-            results = Path(directory)
-            (results / "results.jsonl").write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
-            with contextlib.redirect_stdout(io.StringIO()):
-                run.summarize(results)
-            summary = (results / "summary.md").read_text(encoding="utf-8")
+        summary = summary_of(rows)
 
-        self.assertIn("| tokens | context | cost in $ | cost cache $ | cost out $ |", summary)
+        self.assertIn("| tokens | context | spend $ | cost in $ | cost cache $ | cost out $ |", summary)
         # tokens: (110 + 330) / 2; context: (550 + 900) / 2, the cache write counted when present
-        self.assertIn("| t1 | skill | 2 | 2/2 | 100% | 220 | 725 | 1.0000 | 0.5000 | 1.5000 | 1.0 |", summary)
+        self.assertIn("| t1 | skill | 2 | 2/2 | 100% | 220 | 725 | - | 1.0000 | 0.5000 | 1.5000 | 1.0 |", summary)
+
+    def test_summary_shows_spend_and_fix_rounds_per_task_and_per_arm(self) -> None:
+        row = {"status": "pass", "passed": 1, "total": 1, "seconds": 1.0, "failure": None, "code": None}
+        rows = [dict(row, task="t1", arm="skill", cost=0.25, cost_source="agent", fix_rounds=1),
+                dict(row, task="t2", arm="skill", cost=0.75, cost_source="table", fix_rounds=2),
+                dict(row, task="t1", arm="typed-python", cost=0.5, cost_source="agent", fix_rounds=0, status="fail")]
+        summary = summary_of(rows)
+
+        self.assertIn("| t2 | skill | 1 | 1/1 | 100% | 0 | - | 0.7500 | - | - | - | 1.0 | 0.0 | 2.0 |", summary)
+        self.assertIn("| typed-python | 1 | 0/1 | 0.5000 | 0.5000 | 0.00 | agent 1 |", summary)
+        self.assertIn("| skill | 2 | 2/2 | 1.0000 | 0.5000 | 1.50 | agent 1, table 1 |", summary)
 
 
 class DockerBoundaryTests(unittest.TestCase):
@@ -779,6 +875,29 @@ class DockerBoundaryTests(unittest.TestCase):
                     run.remove_container(name)
             self.assertEqual(json.loads(result.stdout), [False, "test-token", None, os.getuid()])
             self.assertEqual((work / "probe.txt").read_text(), "ok")
+
+    def test_pi_reads_the_auth_file_copied_into_its_home_and_the_key_never_reaches_the_log(self) -> None:
+        key = "sk-test-0123456789"
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            work = root / "workspace"
+            work.mkdir()
+            auth = root / "pi-auth.json"
+            auth.write_text(json.dumps({"opencode-go": {"type": "api_key", "key": key}}))
+            auth.chmod(0o600)
+            probe = ["sh", "-c", "cat $HOME/.pi/agent/auth.json; pi --list-models opencode-go"]
+            with patch.object(run, "agent_command", return_value=probe), patch.object(run, "AGENT_NETWORK", False):
+                out, err, timed_out = run.run_agent("pi", work, root, "t1-stats", "skill", None, 60, "docker", [],
+                                                    run.DEFAULT_IMAGE, auth)
+            unchanged = json.loads(auth.read_text())["opencode-go"]["key"] == key
+            left = list(work.iterdir())
+
+        self.assertFalse(timed_out)
+        self.assertIn("deepseek-v4.1-flash", out, err)
+        self.assertIn("[REDACTED]", out)
+        self.assertNotIn(key, out + err)
+        self.assertTrue(unchanged)
+        self.assertEqual(left, [])
 
     def test_grader_has_no_secret_network_or_workspace_writes(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

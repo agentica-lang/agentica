@@ -11,8 +11,10 @@ import tempfile
 import threading
 import time
 import uuid
+from collections import Counter
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -32,8 +34,16 @@ NET_STRONG = re.compile(r"\bwget\b|\bgit\s+clone\b|github\.com|\bpip3?\s+install
 NET_WEAK = re.compile(r"\bcurl\b|\burllib\b")
 LOOPBACK = re.compile(r"\blocalhost\b|127\.0\.0\.1")
 COMMAND_PREFIX = r"^\s*(?:(?:env|time|timeout\s+(?:-\S+\s+)*\d\S*|\w+=\S*)\s+)*"
-CHECK_COMMAND = re.compile(COMMAND_PREFIX + r"(?:(?:python3?\s+-m\s+)?(?:\S*/)?mypy|(?:\S*/)?agentica\s+check)\b")
+CHECK_COMMAND = re.compile(COMMAND_PREFIX + r"(?:(?:python3?\s+-m\s+)?(?:\S*/)?mypy|(?:\S*/)?agentica\s+check"
+                           r"|(?:\S*/)?go\s+(?:vet|build))\b")
 MYPY_COMMAND = re.compile(COMMAND_PREFIX + r"(?:python3?\s+-m\s+)?(?:\S*/)?mypy\b")
+GO_COMMAND = re.compile(COMMAND_PREFIX + r"(?:\S*/)?go\s+(?:vet|build|run|test)\b")
+GO_ERROR = re.compile(r"^\S+\.go:\d+(?::\d+)?: |^panic: |^# \S+$", re.MULTILINE)
+# A shell command that writes the solution: a redirection, `tee`, `sed -i`, or `cp`/`mv` onto it.
+SOLUTION = r"['\"]?(?:\S*/)?solution\.(?:agc|py|go)\b"
+SHELL_EDIT = re.compile(rf">>?\s*{SOLUTION}|\btee\s+(?:-a\s+)?{SOLUTION}|^\s*sed\s+-i.*\s{SOLUTION}"
+                        rf"|^\s*(?:cp|mv)\s.*\s{SOLUTION}['\"]?\s*$")
+EDIT_TOOLS = {"edit", "write"}
 # `agentica [--json|--ai|--partial] outline|type-at|symbol|refs ...`, also through a path (`dist/agentica`) or the
 # renamed binary of the skill-nocli arm (`agentica-real`).
 # Global options may come first: flags, `--` and the four that take a value.
@@ -77,7 +87,24 @@ SYSTEM_PATH = "/usr/local/bin:/usr/bin:/bin"
 ROOTFS_PATH = f"/workspace/bin:{SYSTEM_PATH}"
 SAFE_ENV = {"LANG": "C.UTF-8", "LC_ALL": "C.UTF-8", "PYTHONUTF8": "1", "TMPDIR": "/tmp"}
 DEFAULT_IMAGE = "agentica-eval:local"
+# Pi locks auth.json in its own folder, so a read-only file there stops it: the container gets the file read-only at
+# PI_AUTH_MOUNT and copies it into its HOME (a tmpfs that goes with the container) before Pi starts.
+PI_AUTH_MOUNT = "/run/pi-auth.json"
+PI_AUTH_COPY = (f'mkdir -p "$HOME/.pi/agent" && cp {PI_AUTH_MOUNT} "$HOME/.pi/agent/auth.json" '
+                '&& chmod 600 "$HOME/.pi/agent/auth.json" && exec "$@"')
 DEFAULT_ARMS = [arm for arm in ARMS if arm not in OPT_IN_ARMS]
+# List prices in USD per million tokens (input, cache read, cache write, output), from
+# https://opencode.ai/inference/go/v1/models on 2026-11-18; a model without a cache-write price pays the input price.
+# Used only when Pi reports no cost.
+PRICES = {
+    "opencode-go/deepseek-v4.1-flash": (0.15, 0.003, 0.15, 0.6),
+    "opencode-go/deepseek-v4-pro": (0.66, 0.022, 0.66, 1.98),
+    "opencode-go/glm-5.3-flash": (0.15, 0.03, 0.15, 0.5),
+    "opencode-go/glm-5.3": (1.4, 0.26, 1.4, 4.4),
+    "opencode-go/qwen3.8-flash": (0.15, 0.016, 0.2, 0.47),
+    "opencode-go/minimax-m3.1-flash": (0.15, 0.015, 0.15, 0.6),
+    "opencode-go/kimi-k2.7-code": (0.95, 0.19, 0.95, 4.0),
+}
 
 
 def build() -> None:
@@ -278,7 +305,8 @@ def jail_prefix(rootfs: Path, *, network: bool) -> list[str]:
     return command
 
 
-def docker_prefix(work: Path, image: str, name: str, *, network: bool, pass_env: list[str]) -> list[str]:
+def docker_prefix(work: Path, image: str, name: str, *, network: bool, pass_env: list[str],
+                  pi_auth: Path | None = None) -> list[str]:
     uid, gid = os.getuid(), os.getgid()
     command = [
         shutil.which("docker") or "docker", "run", "--rm", "--interactive",
@@ -290,6 +318,8 @@ def docker_prefix(work: Path, image: str, name: str, *, network: bool, pass_env:
         "--mount", f"type=bind,src={work},dst=/workspace" + ("" if network else ",readonly"),
         "--workdir", "/workspace",
     ]
+    if pi_auth is not None:
+        command += ["--mount", f"type=bind,src={pi_auth},dst={PI_AUTH_MOUNT},readonly"]
     if not network:
         command.append("--network=none")
     for key in [*grader_environment(), *pass_env]:
@@ -436,12 +466,34 @@ def child_environment(pass_env: list[str], *, in_chroot: bool, workspace: Path) 
     return env
 
 
-def redact_secrets(output: str, pass_env: list[str]) -> str:
-    for name in pass_env:
-        value = os.environ[name]
+def redact_secrets(output: str, pass_env: list[str], secrets: list[str] | None = None) -> str:
+    for value in [*(os.environ[name] for name in pass_env), *(secrets or [])]:
         if value:
             output = output.replace(value, "[REDACTED]")
     return output
+
+
+def auth_secrets(path: Path | None) -> list[str]:
+    """Every string of a Pi auth.json except the credential types, to redact; nothing of it is ever printed."""
+    if path is None:
+        return []
+    found: list[str] = []
+
+    def walk(value: object, key: str = "") -> None:
+        if isinstance(value, dict):
+            for name, item in value.items():
+                walk(item, name)
+        elif isinstance(value, list):
+            for item in value:
+                walk(item, key)
+        elif isinstance(value, str) and key != "type" and len(value) >= 8:
+            found.append(value)
+
+    try:
+        walk(json.loads(path.read_text(encoding="utf-8")))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise SystemExit(f"--pi-auth: cannot read {path} as JSON ({type(exc).__name__})") from None
+    return found
 
 
 def grader_environment() -> dict[str, str]:
@@ -507,6 +559,7 @@ def run_agent(
     sandbox: str,
     pass_env: list[str],
     image: str,
+    pi_auth: Path | None = None,
 ) -> tuple[str, str, bool]:
     ext = ARMS[arm]
     if agent == "reference":
@@ -515,8 +568,12 @@ def run_agent(
     env = child_environment(pass_env, in_chroot=True, workspace=work)
     command = agent_command(agent, work, arm, model, in_chroot=True)
     container = f"agentica-agent-{uuid.uuid4().hex}"
+    secrets = auth_secrets(pi_auth)
     if sandbox == "docker":
-        command = docker_prefix(work, image, container, network=AGENT_NETWORK, pass_env=pass_env) + command
+        if pi_auth is not None:
+            command = ["sh", "-c", PI_AUTH_COPY, "sh", *command]
+        command = docker_prefix(work, image, container, network=AGENT_NETWORK, pass_env=pass_env,
+                                pi_auth=pi_auth) + command
     else:
         command = jail_prefix(rootfs, network=AGENT_NETWORK) + command
     proc = subprocess.Popen(command, cwd=work, env=env, text=True,
@@ -524,11 +581,11 @@ def run_agent(
                             start_new_session=True)
     try:
         out, err = proc.communicate(timeout=timeout)
-        return redact_secrets(out, pass_env), redact_secrets(err, pass_env), False
+        return redact_secrets(out, pass_env, secrets), redact_secrets(err, pass_env, secrets), False
     except subprocess.TimeoutExpired:
         os.killpg(proc.pid, signal.SIGKILL)
         out, err = proc.communicate()
-        return redact_secrets(out or "", pass_env), redact_secrets(err or "", pass_env), True
+        return redact_secrets(out or "", pass_env, secrets), redact_secrets(err or "", pass_env, secrets), True
     finally:
         if sandbox == "docker":
             remove_container(container)
@@ -592,30 +649,81 @@ def is_net_command(command: str) -> bool:
                for part in command_parts(command))
 
 
+def runs_go(command: str) -> bool:
+    return any(GO_COMMAND.match(part) for part in command_parts(command))
+
+
+def runs_program(command: str) -> bool:
+    """A check or run call: the interpreter, Python, a checker or the Go tool."""
+    return "agentica" in command or "python" in command or runs_mypy(command) or runs_go(command)
+
+
+def writes_solution(command: str) -> bool:
+    return any(SHELL_EDIT.search(part) for part in command_parts(command))
+
+
 def command_failed(command: str, text: str) -> bool:
     if "error[" in text or "Traceback" in text or "SyntaxError" in text:
+        return True
+    if runs_go(command) and GO_ERROR.search(text):
         return True
     return runs_mypy(command) and ": error:" in text
 
 
+@dataclass
+class Call:
+    """One tool call of the agent, with the text of its result."""
+
+    tool: str
+    args: dict
+    output: str = ""
+
+
+def call_metrics(calls: list[Call]) -> dict[str, int]:
+    """The counters of a run from its tool calls, in order.
+
+    A fix round is a failed check or run call followed by an edit (an edit tool, or a shell command that writes the
+    solution) before the next check or run call. Failures that are never edited, or that another check follows
+    first, are not rounds."""
+    m = {"interpreter_runs": 0, "failing_runs": 0, "check_runs": 0, "check_failures": 0, "fix_rounds": 0,
+         "outside_reads": 0, "net_commands": 0, "query_runs": 0, "read_runs": 0}
+    awaiting_fix = False
+    for call in calls:
+        if str(ROOT) in json.dumps(call.args):
+            m["outside_reads"] += 1
+        command = call.args.get("command", "") if call.tool == "bash" else ""
+        m["net_commands"] += is_net_command(command)
+        if call.tool == "read":
+            m["read_runs"] += 1
+        elif call.tool in EDIT_TOOLS or writes_solution(command):
+            m["fix_rounds"] += awaiting_fix
+            awaiting_fix = False
+        if not command:
+            continue
+        m["query_runs"] += is_query_command(command)
+        m["read_runs"] += is_read_command(command)
+        if runs_program(command):
+            check = is_check_command(command)
+            failed = command_failed(command, call.output)
+            m["interpreter_runs"] += 1
+            m["check_runs"] += check
+            m["failing_runs"] += failed
+            m["check_failures"] += failed and check
+            awaiting_fix = failed
+    return m
+
+
 def pi_metrics(out: str) -> dict[str, int | float]:
-    """Counters from the `message_end` events of the assistant in Pi's JSON stream.
+    """Counters from Pi's JSON stream: usage from the `message_end` events of the assistant, calls from the
+    `tool_execution_start` and `_end` events.
 
     `tokens_in` is the uncached input only, `tokens_cached` the cache reads: the context an agent read is
     `tokens_in + tokens_cached + tokens_cache_write`. The cost is split in the same way as the usage events do:
     `cost_input`, `cost_cache` (reads and writes) and `cost_output`."""
-    m = {"tokens_in": 0, "tokens_out": 0, "tokens_cached": 0, "tokens_cache_write": 0, "cost": 0.0,
-         "cost_input": 0.0, "cost_cache": 0.0, "cost_output": 0.0, "turns": 0,
-         "interpreter_runs": 0, "failing_runs": 0, "check_runs": 0, "check_failures": 0,
-         "outside_reads": 0, "net_commands": 0, "query_runs": 0, "read_runs": 0}
-    pending: dict[str, str] = {}
-    for line in out.splitlines():
-        if not line.startswith("{"):
-            continue
-        try:
-            event = json.loads(line)
-        except json.JSONDecodeError:
-            continue
+    m: dict[str, int | float] = {"tokens_in": 0, "tokens_out": 0, "tokens_cached": 0, "tokens_cache_write": 0,
+                                 "cost": 0.0, "cost_input": 0.0, "cost_cache": 0.0, "cost_output": 0.0, "turns": 0}
+    calls: dict[str, Call] = {}
+    for event in json_events(out):
         kind = event.get("type")
         if kind == "message_end" and event.get("message", {}).get("role") == "assistant":
             usage = event["message"].get("usage", {})
@@ -630,29 +738,45 @@ def pi_metrics(out: str) -> dict[str, int | float]:
             m["cost_cache"] += usage_cost.get("cacheRead", 0.0) + usage_cost.get("cacheWrite", 0.0)
             m["cost_output"] += usage_cost.get("output", 0.0)
         elif kind == "tool_execution_start":
-            args = json.dumps(event.get("args", {}))
-            if str(ROOT) in args:
-                m["outside_reads"] += 1
-            command = event.get("args", {}).get("command", "")
-            if is_net_command(command):
-                m["net_commands"] += 1
-            if event.get("toolName") == "bash":
-                m["query_runs"] += is_query_command(command)
-                m["read_runs"] += is_read_command(command)
-            elif event.get("toolName") == "read":
-                m["read_runs"] += 1
-            if event.get("toolName") == "bash" and ("agentica" in command or "python" in command or runs_mypy(command)):
-                m["interpreter_runs"] += 1
-                if is_check_command(command):
-                    m["check_runs"] += 1
-                pending[event["toolCallId"]] = command
-        elif kind == "tool_execution_end" and event.get("toolCallId") in pending:
-            command = pending.pop(event["toolCallId"])
-            if command_failed(command, json.dumps(event.get("result", {}))):
-                m["failing_runs"] += 1
-                if is_check_command(command):
-                    m["check_failures"] += 1
-    return m
+            calls[event.get("toolCallId", f"#{len(calls)}")] = Call(event.get("toolName", ""), event.get("args", {}))
+        elif kind == "tool_execution_end" and event.get("toolCallId") in calls:
+            calls[event["toolCallId"]].output = result_text(event.get("result", {}))
+    return {**m, **call_metrics(list(calls.values()))}
+
+
+def result_text(result: object) -> str:
+    """The text of a Pi tool result, so line-anchored patterns (Go's `file.go:N:M:`) can match."""
+    content = result.get("content") if isinstance(result, dict) else None
+    if isinstance(content, list):
+        return "\n".join(str(item.get("text", "")) for item in content if isinstance(item, dict))
+    return json.dumps(result)
+
+
+def json_events(out: str) -> list[dict]:
+    events = []
+    for line in out.splitlines():
+        if not line.startswith("{"):
+            continue
+        try:
+            events.append(json.loads(line))
+        except json.JSONDecodeError:
+            continue
+    return events
+
+
+def spend(row: dict) -> dict[str, float | str]:
+    """The cost of a run and where it comes from: the agent's figure when it reports one above 0, else the token
+    counts at the list prices of PRICES, else none (0)."""
+    if row.get("cost", 0) > 0:
+        return {"cost_source": "agent"}
+    prices = PRICES.get(row.get("model", ""))
+    if prices is None or not any(row.get(key) for key in ("tokens_in", "tokens_out", "tokens_cached")):
+        return {"cost": 0.0, "cost_source": "none"}
+    price_in, price_read, price_write, price_out = (price / 1_000_000 for price in prices)
+    split = {"cost_input": row.get("tokens_in", 0) * price_in,
+             "cost_cache": row.get("tokens_cached", 0) * price_read + row.get("tokens_cache_write", 0) * price_write,
+             "cost_output": row.get("tokens_out", 0) * price_out}
+    return {**split, "cost": sum(split.values()), "cost_source": "table"}
 
 
 def claude_metrics(out: str) -> dict[str, int | float]:
@@ -798,7 +922,8 @@ def one_run(args: argparse.Namespace, results: Path, scratch: Path, task: str, a
     (agent_root / "home" / "agent").mkdir(parents=True, exist_ok=True)
     began = time.time()
     out, err, timed_out = run_agent(
-        args.agent, work, agent_root, task, arm, args.model, args.timeout, args.sandbox, args.pass_env, args.image
+        args.agent, work, agent_root, task, arm, args.model, args.timeout, args.sandbox, args.pass_env, args.image,
+        args.pi_auth,
     )
     seconds = round(time.time() - began, 1)
     row = {"task": task, "arm": arm, "rep": rep, "agent": args.agent, "model": args.model or "default",
@@ -807,6 +932,7 @@ def one_run(args: argparse.Namespace, results: Path, scratch: Path, task: str, a
         row.update(pi_metrics(out))
     elif args.agent == "claude":
         row.update(claude_metrics(out))
+    row.update(spend(row))
     row["refused_queries"] = refused_queries(work)
     solution = work / f"solution.{ARMS[arm]}"
     row.update(grade(solution, task, arm, args, scratch, name))
@@ -897,9 +1023,11 @@ def run_info(args: argparse.Namespace, image_info: dict[str, str | None]) -> dic
             "skill_commit": git_output("log", "-1", "--format=%H", "--", ".agents/skills/agentica-programming"),
             "agent": args.agent, "model": args.model or "default", "arms": args.arms, "tasks": args.tasks,
             "reps": args.reps, "timeout": args.timeout, "sandbox": args.sandbox, "image": args.image,
-            "image_id": image_info["image_id"], "checker": image_info["checker"], "pi_version": image_info.get("pi"), "pass_env": args.pass_env,
+            "image_id": image_info["image_id"], "checker": image_info["checker"],
+            "pi_version": image_info.get("pi"), "pass_env": args.pass_env,
             "agent_network": AGENT_NETWORK and args.agent != "reference", "arm_tasks": args.arm_tasks,
-            "max_cost": args.max_cost,
+            "max_cost": args.max_cost, "started_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "pi_auth_file": args.pi_auth is not None,
             "arm_notes": {arm: NOCLI_NOTE for arm in args.arms if arm == "skill-nocli"}}
 
 
@@ -919,8 +1047,8 @@ def summarize(results: Path) -> None:
     groups = {}
     for row in rows:
         groups.setdefault((row["task"], row["arm"]), []).append(row)
-    out = ["| task | arm | runs | pass | cases | tokens | context | cost in $ | cost cache $ | cost out $ | seconds | failing runs | check runs | query runs | refused | read runs | type escapes | failures |",
-           "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
+    out = ["| task | arm | runs | pass | cases | tokens | context | spend $ | cost in $ | cost cache $ | cost out $ | seconds | failing runs | fix rounds | check runs | query runs | refused | read runs | type escapes | failures |",
+           "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for (task, arm), rs in sorted(groups.items()):
         n = len(rs)
         mean = lambda key: round(sum(r.get(key, 0) for r in rs) / n, 1)
@@ -932,7 +1060,8 @@ def summarize(results: Path) -> None:
         passes = sum(r["status"] == "pass" for r in rs)
         cases = round(sum(r["passed"] / r["total"] for r in rs) / n * 100)
         kinds = ", ".join(sorted({f"{r['failure']}:{r['code']}" if r["code"] else str(r["failure"]) for r in rs if r["failure"]})) or "-"
-        out.append(f"| {task} | {arm} | {n} | {passes}/{n} | {cases}% | {tokens} | {context} | {mean_known(rs, ('cost_input',), 4)} | {mean_known(rs, ('cost_cache',), 4)} | {mean_known(rs, ('cost_output',), 4)} | {mean('seconds')} | {mean('failing_runs')} | {mean('check_runs')} | {mean('query_runs')} | {mean('refused_queries')} | {mean('read_runs')} | {mean('type_escapes')} | {kinds} |")
+        out.append(f"| {task} | {arm} | {n} | {passes}/{n} | {cases}% | {tokens} | {context} | {mean_known(rs, ('cost',), 4)} | {mean_known(rs, ('cost_input',), 4)} | {mean_known(rs, ('cost_cache',), 4)} | {mean_known(rs, ('cost_output',), 4)} | {mean('seconds')} | {mean('failing_runs')} | {mean_known(rs, ('fix_rounds',), 1)} | {mean('check_runs')} | {mean('query_runs')} | {mean('refused_queries')} | {mean('read_runs')} | {mean('type_escapes')} | {kinds} |")
+    out += ["", *arm_totals(rows)]
     if info.get("cost") is not None:
         out += ["", f"cost: ${info['cost']:.4f}" + (f" (cap ${info['max_cost']:.2f})" if info.get("max_cost") is not None else "")]
     out += ["", f"stopped_for_budget: {str(bool(info.get('stopped_for_budget'))).lower()}"
@@ -942,6 +1071,23 @@ def summarize(results: Path) -> None:
     text = "\n".join(out) + "\n"
     (results / "summary.md").write_text(text, encoding="utf-8")
     print(text)
+
+
+def arm_totals(rows: list[dict]) -> list[str]:
+    """One line per arm over all its tasks: the spend in total and per run, and the fix rounds per run. A row
+    without the field (an older results file) makes that figure unknown (`-`)."""
+    arms: dict[str, list[dict]] = {}
+    for row in rows:
+        arms.setdefault(row["arm"], []).append(row)
+    out = ["| arm | runs | pass | spend $ | spend $ per run | fix rounds per run | spend from |",
+           "|---|---|---|---|---|---|---|"]
+    for arm, rs in sorted(arms.items()):
+        total = "-" if any("cost" not in r for r in rs) else f"{sum(r['cost'] for r in rs):.4f}"
+        sources = ", ".join(f"{source} {count}" for source, count in
+                            sorted(Counter(r.get("cost_source", "-") for r in rs).items()))
+        out.append(f"| {arm} | {len(rs)} | {sum(r['status'] == 'pass' for r in rs)}/{len(rs)} | {total} | "
+                   f"{mean_known(rs, ('cost',), 4)} | {mean_known(rs, ('fix_rounds',), 2)} | {sources} |")
+    return out
 
 
 def run_order(tasks: list[str], arms: list[str], arm_tasks: dict[str, list[str]], reps: int) -> list[tuple[str, str, int]]:
@@ -987,6 +1133,9 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--agent", choices=["pi", "claude", "reference"], default="pi")
     parser.add_argument("--model")
+    parser.add_argument("--pi-auth", type=Path, metavar="PATH",
+                        help="a Pi auth.json (such as tests/eval/.secrets/pi-auth.json), mounted read-only in the agent "
+                             "container and copied to its ~/.pi/agent/auth.json; its keys are redacted from the logs")
     parser.add_argument("--tasks", nargs="*", default=sorted(p.name for p in TASKS.iterdir() if p.is_dir()))
     parser.add_argument("--arms", nargs="*", help=f"default: {' '.join(DEFAULT_ARMS)}; opt-in: {' '.join(sorted(OPT_IN_ARMS))}")
     parser.add_argument("--arm-tasks", action="append", default=[], metavar="ARM=TASK,TASK",
@@ -1025,6 +1174,15 @@ def main() -> int:
     args.arm_tasks = parse_arm_tasks(args.arm_tasks, args.arms, args.tasks)
     if args.max_cost is not None and args.max_cost <= 0:
         raise SystemExit("--max-cost must be more than 0")
+    if args.check_references:
+        args.pi_auth = None
+    if args.pi_auth is not None:
+        if args.agent != "pi" or args.sandbox != "docker":
+            raise SystemExit("--pi-auth is for --agent pi in the Docker sandbox")
+        args.pi_auth = args.pi_auth.resolve()
+        if not args.pi_auth.is_file():
+            raise SystemExit(f"--pi-auth: no such file: {args.pi_auth}")
+        auth_secrets(args.pi_auth)
     typed = any(arm in TYPED_ARMS for arm in args.arms)
     agentica = any(ARMS[arm] == "agc" for arm in args.arms)
     child_environment(args.pass_env, in_chroot=True, workspace=WORKSPACE)

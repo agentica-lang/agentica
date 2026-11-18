@@ -81,6 +81,9 @@ python3 tests/eval/run.py --check-references
 # A model run: 3 reps per task and arm
 python3 tests/eval/run.py --agent pi --model fireworks/accounts/fireworks/models/deepseek-v4p1-flash --pass-env FIREWORKS_API_KEY --arms skill typed-python --reps 3 --jobs 4
 
+# The same through OpenCode Go, with the key in a Pi auth file
+python3 tests/eval/run.py --agent pi --model opencode-go/deepseek-v4.1-flash --pi-auth tests/eval/.secrets/pi-auth.json --arms skill typed-python --reps 3 --jobs 2 --max-cost 2
+
 # Summarize a finished run, and count the diagnostics the agents saw
 python3 tests/eval/run.py --summarize tests/eval/results/<run directory>
 python3 tests/eval/diagnostics.py
@@ -118,7 +121,16 @@ The Docker sandbox works like this:
   "Hidden cases").
 - Agent containers mount only the task workspace, and they can reach the
   provider. They run with `--read-only`, `--cap-drop=ALL` and
-  `no-new-privileges`. Credentials come only from `--pass-env`.
+  `no-new-privileges`. Credentials come only from `--pass-env` or
+  `--pi-auth`.
+- `--pi-auth PATH` gives Pi a key in its `auth.json` format, such as
+  `{"opencode-go": {"type": "api_key", "key": "..."}}`. The key file lives in
+  `tests/eval/.secrets/`, which git ignores; it is never in the image. The
+  container gets it read-only at `/run/pi-auth.json` and copies it to
+  `~/.pi/agent/auth.json` on its tmpfs, because Pi locks that file in its own
+  folder. The strings of the file are redacted from the logs, and `run.json`
+  records only `pi_auth_file: true`. Pi 1.3.0 of the image has the
+  `opencode-go` provider (`pi --list-models opencode-go`).
 - `TMPDIR` is `/tmp` in every container, because the root file system is
   read-only and the launcher writes its bytecode to the temporary directory. The
   image has `libgc1` and `libssl3t64`, which `dist/agentica` links (the
@@ -182,9 +194,11 @@ by weakening its options.
   `error[...]` diagnostic); `failing_runs` counts every failing call, checks
   included, so repairs are compared with the checker calls on both sides.
   Tokens, turns, cost and seconds are the same as in the Agentica arms.
-  `diagnostics.py` still counts Agentica diagnostics only. Only `--agent pi`
-  reports calls: `--agent claude` gives totals, so its interpreter, check and
-  failing runs read 0, which means not measured.
+  `diagnostics.py` still counts Agentica diagnostics only. `go vet` and
+  `go build` count as checks too, and a `file.go:N:M:` or `panic:` line as a
+  failure, ready for a Go arm. Only `--agent pi` reports calls:
+  `--agent claude` gives totals, so its interpreter, check and failing runs
+  read 0, which means not measured.
 - Starts: `start.py` of t9 to t19 is typed and passes `mypy --strict`. For t2,
   t3 and t5 (written for the untyped arm) `start.typed.py` is the same program
   with annotations, and the typed arm gets it as `start.py`; for t2 and t5 it
@@ -192,6 +206,29 @@ by weakening its options.
   `agentica check`.
 - The untyped `python` arm stays for comparison with the early rounds. It is not
   part of the typed-Python pilot. Its workspace has no Agentica binaries.
+
+### Spend and fix rounds
+
+Every row and `summary.md` have two more figures; `summary.md` also totals
+them per arm.
+
+- `cost` (the `spend $` column) is the cost Pi reports, `cost_source: agent`.
+  When Pi reports 0 for a run that used tokens, the runner prices the tokens
+  with `PRICES` in `run.py` (`cost_source: table`): the list prices of the
+  OpenCode Go models on 2026-11-18, from
+  `https://opencode.ai/inference/go/v1/models`. A model outside the table
+  gets `cost_source: none` and a cost of 0. Either way it is the list price:
+  it does not count OpenCode Go's double price on weekday hours (01:00 to
+  04:00 and 06:00 to 10:00 UTC) or the allowance of the plan. `run.json` has
+  `started_utc` for that reason.
+- `fix_rounds` counts failed check or run calls (the calls of
+  `interpreter_runs`) that an edit follows before the next check or run call:
+  Pi's `edit` or `write` tool, or a shell command that writes `solution.*`
+  (`>`, `tee`, `sed -i`, `cp` or `mv` onto it). A failure that another call
+  follows first, or that is never edited, is no round. `failing_runs` stays
+  the count of every failed call.
+
+`--agent claude` reports no calls, so its `fix rounds` read `-`.
 
 ### Query-command counts
 
@@ -273,9 +310,10 @@ The estimate is the highest cost seen so far (never below the mean), and never
 below `--run-cost-estimate` (default $0.01). A run that reports no cost (no
 usage at all, or `cost.total` of 0: a timeout, a 429, an auth error) is charged
 the estimate, stays out of that figure, and prints a `warning:` line. Cost is
-what Pi reports (`cost.total`), so the cap is as good as the price table of the
-model. The runner prints `cost so far: $X of the $Y cap` after every run, and
-`run.json` and `summary.md` end with the total. The cap is per command: for two
+what Pi reports (`cost.total`), or the fallback of "Spend and fix rounds", so
+the cap is as good as the price table of the model. The runner prints
+`cost so far: $X of the $Y cap` after every run, and `run.json` and
+`summary.md` end with the total. The cap is per command: for two
 models, give each its share of the total (one command each, as in the example
 above); a shared total across commands would need a way to read earlier run
 folders, which the runner does not have.
