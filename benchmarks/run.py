@@ -1,4 +1,5 @@
 import argparse
+import hashlib
 import os
 import re
 import shutil
@@ -7,13 +8,14 @@ import subprocess
 import sys
 import tempfile
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 PROGRAMS = ROOT / "benchmarks" / "programs"
-PYTHON = ROOT / "benchmarks" / "python"
-EXE = ROOT / "dist" / "agentica"
+# The binary under test: dist/agentica, or the one AGENTICA_TEST_EXECUTABLE names (as the pytest modules do).
+EXE = ROOT / (os.environ.get("AGENTICA_TEST_EXECUTABLE") or "dist/agentica")
 HELLO = ROOT / "examples" / "hello.agc"
 GHERKIN = ROOT / "stdlib" / "bdd" / "gherkin.agc"
 PARSER = ROOT / "compiler" / "syntax" / "parser.agc"
@@ -47,20 +49,27 @@ NAMES = [
     "read-lines",
     "line-scan",
     "store-clients",
+    "logger-disabled",
 ]
 SCALE_DEF = "def scale() -> Int\n  return 1\nend\n"
 # Programs for the front-end rows: a main that imports the largest module of the corpus, so that `check` goes through
 # every function body of it, and the smallest unit test.
-GHERKIN_MAIN = 'import Gherkin from "std/bdd/gherkin"\n\ndef main() -> Void\n  puts("ok")\nend\n'
+GHERKIN_MAIN = 'import Gherkin from "std/bdd/gherkin"\n\ndef main() -> Void\n  Gherkin.parse("a.feature", "")\nend\n'
 SMALL_TEST = 'def main() -> Void\n  Test.run([Test.test("adds") do\n    Test.eq(1 + 1, 2)\n  end])\nend\n'
 # A one-minute load average above this makes the numbers rough; the report says so.
 BUSY_LOAD = 2.0
+# An output longer than this is stored in its .expected as a digest line ("sha256 HEX BYTES"), not as text.
+DIGEST_ABOVE = 64 * 1024
+
+
+class MissingGolden(Exception):
+    pass
 
 
 @dataclass
 class Sample:
     seconds: float
-    stdout: str
+    stdout: bytes
     stderr: str
     code: int
 
@@ -79,10 +88,10 @@ class Row:
 def run(command: list[str]) -> Sample:
     start = time.perf_counter()
     process = subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
-                               stderr=subprocess.PIPE, text=True)
+                               stderr=subprocess.PIPE)
     stdout, stderr = process.communicate()
     seconds = time.perf_counter() - start
-    return Sample(seconds, stdout, stderr, process.returncode)
+    return Sample(seconds, stdout, stderr.decode(errors="replace"), process.returncode)
 
 
 def peak_rss(command: list[str]) -> tuple[Sample, int | None]:
@@ -121,7 +130,6 @@ def runners(selected: list[str]) -> dict[str, list[str]]:
     available = {
         "exe": [str(EXE)] if EXE.exists() else None,
         "vm": [str(EXE), "run", "--"] if EXE.exists() else None,
-        "python": [sys.executable],
     }
     for name in selected:
         if name not in available:
@@ -129,16 +137,51 @@ def runners(selected: list[str]) -> dict[str, list[str]]:
     return {name: available[name] for name in selected}
 
 
-def measure(name: str, runner: str, command: list[str], runs: int, expected: str | None,
-            codes: tuple[int, ...] = (0,)) -> tuple[Row, str]:
+def golden_bytes(output: bytes) -> bytes:
+    if len(output) <= DIGEST_ABOVE:
+        return output
+    return f"sha256 {hashlib.sha256(output).hexdigest()} {len(output)}\n".encode()
+
+
+def golden_path(name: str) -> Path:
+    return PROGRAMS / f"{name}.expected"
+
+
+def golden_matches(name: str, output: bytes) -> bool:
+    path = golden_path(name)
+    if not path.exists():
+        raise MissingGolden(name)
+    return path.read_bytes() == golden_bytes(output)
+
+
+def update_goldens(names: list[str]) -> int:
+    """Writes the .expected of each program from one run of `dist/agentica` at size 1."""
+    if not EXE.exists():
+        raise SystemExit(f"{EXE} is not built; run make first")
+    for name in names:
+        sample = run([str(EXE), str(PROGRAMS / f"{name}.agc")])
+        if sample.code != 0:
+            print(f"{name}: failed: {diagnostic(sample.stderr)}", file=sys.stderr)
+            return 1
+        golden_path(name).write_bytes(golden_bytes(sample.stdout))
+        print(f"{name}: written", file=sys.stderr, flush=True)
+    return 0
+
+
+def measure(name: str, runner: str, command: list[str], runs: int, expected: bytes | None,
+            codes: tuple[int, ...] = (0,), golden: Callable[[bytes], bool] | None = None) -> tuple[Row, bytes]:
     first, rss = peak_rss(command)
     times = []
     for sample in [first] + [run(command) for _ in range(runs)]:
         if sample.code not in codes:
-            return Row(name, runner, "failed", note=diagnostic(sample.stderr)), ""
-        if expected is not None and sample.stdout != expected:
-            last = sample.stdout.strip().splitlines()
-            return Row(name, runner, "mismatch", note=last[-1] if last else "no output"), ""
+            return Row(name, runner, "failed", note=diagnostic(sample.stderr)), b""
+        try:
+            wrong = (expected is not None and sample.stdout != expected) or (golden and not golden(sample.stdout))
+        except MissingGolden:
+            return Row(name, runner, "mismatch", note="no golden: run --update-goldens"), b""
+        if wrong:
+            last = sample.stdout.decode(errors="replace").strip().splitlines()
+            return Row(name, runner, "mismatch", note=last[-1] if last else "no output"), b""
         expected = sample.stdout
         if sample is not first:
             times.append(sample.seconds)
@@ -159,13 +202,12 @@ def benchmark(name: str, size: int, runs: int, commands: dict[str, list[str] | N
     source = scaled_source(name, size, workdir)
     rows = []
     expected = None
+    golden = (lambda output: golden_matches(name, output)) if size == 1 else None
     for runner, command in commands.items():
         if command is None:
             rows.append(Row(name, runner, "missing", note="not built"))
             continue
-        if runner == "python":
-            argv = command + [str(PYTHON / f"{name.replace('-', '_')}.py"), str(size)]
-        elif runner == "vm":
+        if runner == "vm":
             bytecode = workdir / f"{name}.agcb"
             failure = compile_vm(name, runner, source, bytecode)
             if failure:
@@ -174,7 +216,7 @@ def benchmark(name: str, size: int, runs: int, commands: dict[str, list[str] | N
             argv = command + [str(bytecode)]
         else:
             argv = command + [str(source)]
-        row, output = measure(name, runner, argv, runs, expected)
+        row, output = measure(name, runner, argv, runs, expected, golden=golden)
         if row.status == "ok" and expected is None:
             expected = output
         rows.append(row)
@@ -187,9 +229,7 @@ def startup(runs: int, commands: dict[str, list[str] | None], workdir: Path) -> 
         if command is None:
             rows.append(Row("hello", runner, "missing", note="not built"))
             continue
-        if runner == "python":
-            argv = command + ["-c", "print('hello')"]
-        elif runner == "vm":
+        if runner == "vm":
             bytecode = workdir / "hello.agcb"
             failure = compile_vm("hello", runner, HELLO, bytecode)
             if failure:
@@ -198,7 +238,7 @@ def startup(runs: int, commands: dict[str, list[str] | None], workdir: Path) -> 
             argv = command + [str(bytecode)]
         else:
             argv = command + [str(HELLO)]
-        rows.append(measure("hello", runner, argv, runs, "hello\n")[0])
+        rows.append(measure("hello", runner, argv, runs, b"hello\n")[0])
     return rows
 
 
@@ -230,30 +270,30 @@ def load_note() -> str:
 
 
 def table(rows: list[Row]) -> str:
-    baseline = {row.name: row.median for row in rows if row.runner == "python" and row.status == "ok"}
-    lines = ["| program | runner | median s | min s | max RSS MB | vs python | note |",
-             "|---|---|---:|---:|---:|---:|---|"]
+    lines = ["| program | runner | median s | min s | max RSS MB | note |",
+             "|---|---|---:|---:|---:|---|"]
     for row in rows:
         if row.status != "ok":
-            lines.append(f"| {row.name} | {row.runner} | {row.status} | | | | {row.note} |")
+            lines.append(f"| {row.name} | {row.runner} | {row.status} | | | {row.note} |")
             continue
-        ratio = ""
         rss = "n/a" if row.rss_kb is None else f"{row.rss_kb / 1024:.1f}"
-        if row.name in baseline and row.median > 0:
-            ratio = f"{baseline[row.name] / row.median:.1f}x"
-        lines.append(f"| {row.name} | {row.runner} | {row.median:.3f} | {row.best:.3f} | "
-                     f"{rss} | {ratio} | |")
+        lines.append(f"| {row.name} | {row.runner} | {row.median:.3f} | {row.best:.3f} | {rss} | |")
     return "\n".join(lines)
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Time Agentica benchmark programs on each runner.")
+    parser = argparse.ArgumentParser(
+        description="Time Agentica benchmark programs on each runner. Each output must equal "
+                    "benchmarks/programs/NAME.expected; that check runs at --size 1 only (at any other size the "
+                    "runners are compared with each other).")
     parser.add_argument("--runs", type=int, default=5, help="runs per program and runner (default 5)")
     parser.add_argument("--size", type=int, default=1, help="work multiplier for every program (default 1)")
-    parser.add_argument("--runners", default="exe,vm,python",
-                        help="comma-separated runners: exe (agentica FILE.agc), vm (agentica run FILE.agcb), python")
+    parser.add_argument("--runners", default="exe,vm",
+                        help="comma-separated runners: exe (agentica FILE.agc), vm (agentica run FILE.agcb)")
     parser.add_argument("--only", default="", help="comma-separated program names")
     parser.add_argument("--no-startup", action="store_true", help="skip the hello.agc start-up check")
+    parser.add_argument("--update-goldens", action="store_true",
+                        help="rewrite the .expected of the programs from dist/agentica at size 1, and stop")
     args = parser.parse_args()
     if args.runs < 1 or args.size < 1:
         parser.error("--runs and --size must be at least 1")
@@ -261,6 +301,8 @@ def main() -> int:
     for name in names:
         if name not in NAMES:
             parser.error(f"unknown program {name}; choose from {', '.join(NAMES)}")
+    if args.update_goldens:
+        return update_goldens(names)
     commands = runners([runner for runner in args.runners.split(",") if runner])
     workdir = Path(tempfile.mkdtemp(prefix="agentica-bench-"))
     rows = []
@@ -286,7 +328,7 @@ def main() -> int:
         print(table(program_rows))
     finally:
         shutil.rmtree(workdir, ignore_errors=True)
-    return 1 if any(row.status in ("failed", "mismatch") for row in rows) else 0
+    return 1 if any(row.status in ("failed", "mismatch", "missing") for row in rows) else 0
 
 
 if __name__ == "__main__":

@@ -3,7 +3,9 @@ struct Req
   reply: Channel[Int]
 end
 
-def scale() -> Int = 1
+def scale() -> Int
+  return 1
+end
 
 # One busy task that serves every client in turn (#1362): the clients wait for it, so an idle scheduler should take
 # the next request without a sleep or a futex wake.

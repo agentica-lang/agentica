@@ -5,6 +5,7 @@
 tests/test_bdd.py 19 0 0 231
 tests/test_bdd_integration.py 5 92 0 0
 tests/test_bdd_posix.py 2 0 0 0
+tests/test_benchmarks.py 18 0 0 0
 tests/test_bytecode_cache.py 9 0 0 0
 tests/test_check_cache.py 28 0 0 0
 tests/test_check_stdin.py 5 0 0 0

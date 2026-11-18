@@ -1,14 +1,16 @@
 # VM benchmarks
 
-How to measure the VM against CPython and the JIT against the interpreter, the
-HTTP sanity check, the front-end timings, and what was tried and dropped. The
-before and after numbers of a speed change go in its PR.
+How to check a VM change by running the old binary against the new one, the
+JIT against the interpreter, the front-end timings, and what was tried and
+dropped. The before and after numbers of a speed change go in its PR. For
+comparisons with other languages, see
+[agentica-lang/evals](https://github.com/agentica-lang/evals).
 
 ## How to run
 
 ```sh
 make bench                                                      # builds the VM, then runs every program
-python3 benchmarks/run.py --runs 5 --size 1 --only knight-tour,calls --runners vm,python
+python3 benchmarks/run.py --runs 5 --size 1 --only knight-tour,calls --runners vm
 ```
 
 `benchmarks/run.py` runs each program in `benchmarks/programs/` on these
@@ -18,24 +20,31 @@ runners:
   It runs only when `dist/agentica` exists, so run `make` first.
 - `vm`: `dist/agentica run` on bytecode that `agentica compile` wrote. Only the
   VM run is timed.
-- `python`: the CPython twin in `benchmarks/python/`.
 
 Options: `--runs N` (timed runs, default 5), `--size N` (scales the work of
-every program), `--only a,b`, `--runners exe,vm,python`, and `--no-startup` to
-skip the `hello.agc` start-up check and the front-end rows (see "Front end").
-`run.py` has no `--jit`; programs run with the default `--jit on`, and
+every program), `--only a,b`, `--runners exe,vm`, and `--no-startup` to skip the
+`hello.agc` start-up check and the front-end rows (see "Front end"). `run.py`
+has no `--jit`; programs run with the default `--jit on`, and
 `AGENTICA_JIT=off python3 benchmarks/run.py ...` sets the JIT mode of every
 program it runs (see "JIT").
 
-Every runner must print the same output, or the row is a mismatch and the script
-exits 1. A program the VM cannot compile yet shows as `unsupported`, with its
-`LOWER-UNSUPPORTED` summary. The Python twins are idiomatic, not step-by-step
-copies, so a ratio compares two idiomatic programs.
+Each program has a golden, `benchmarks/programs/NAME.expected`: its output at
+`--size 1`. A run that prints something else is a mismatch, and the script exits
+1; at any other size the output changes, so only the runners are compared with
+each other. An output over 64 KiB (`print-lines`) is stored as one digest line.
+A change that alters an output on purpose rewrites the goldens with
+`python3 benchmarks/run.py --update-goldens` (or `make goldens`), and the diff
+is the review. A program the VM cannot compile yet shows as `unsupported`, with
+its `LOWER-UNSUPPORTED` summary.
 
-**Method.** Run the two binaries alternately (A B A B, several rounds, the
-median of the round medians), keep the old binary built apart, and say when the
-load average was above 2 ("measured under load"). Step counts
-(`AGENTICA_VM_TRACE=profile`) do not depend on the load.
+**Method.** Keep the old binary built apart (from master) and run the two
+alternately (A B A B, several rounds), take the median of the round medians,
+and say when the load average was above 2 ("measured under load"). One run of
+`run.py` prints the table of one binary: run it once for each (the old one with
+`AGENTICA_TEST_EXECUTABLE=path/to/old/agentica`, the new one with the default
+`dist/agentica`) and compare the two tables row by row. Step counts
+(`AGENTICA_VM_TRACE=profile`) are exact and do not depend on the load, so they
+are the main evidence and the wall time supports them.
 
 **The link layout hides small differences.** Padding the text of one binary by
 64 to 1,216 bytes moved an empty loop between 53 and 98 ms, and `arithmetic` by
@@ -43,9 +52,6 @@ load average was above 2 ("measured under load"). Step counts
 start of `agc_run_turn`; most likely the indirect jump of the `switch` and the
 predictor. Read a pure-interpreter difference below 10% from one layout as
 noise, and build several layouts (padding) before blaming a change.
-
-Start-up on precompiled bytecode: the VM takes about 1 ms and 2 MB, CPython 19
-ms and 8 MB.
 
 ## Struct update
 
@@ -136,26 +142,6 @@ loops out: `docs/vm/05-values-execution-builtins.md` §6.4, "Why the policy".
   compiles in `list-bulk`, and its best of 5 follows its rare fast runs: 20
   runs per mode gave the same spread (218 to 318 ms `off`, 220 to 312 ms `on`,
   both with a median of about 254 ms). Neither ratio is a JIT result.
-
-## HTTP sanity check
-
-`benchmarks/http_bench.py` is not a CI gate. It needs Python 3.10 or newer,
-`taskset`, and Node for the load client and one server. It compares
-`examples/http_server.agc serve` on the VM with three single-process servers
-(Node `http`, a Python asyncio server, and Python's `ThreadingHTTPServer`).
-Every server gets the same keep-alive load from Node clients in 4 processes. The
-rounds run interleaved under `taskset`, and a round starts only when the machine
-is idle.
-
-```sh
-make
-python3 benchmarks/http_bench.py                                          # 40000 requests per run, 8 and 64 connections, 3 rounds
-python3 benchmarks/http_bench.py --requests 8000 --rounds 2 --retries 0   # a quick check of the script
-```
-
-The script marks any round that ran on a busy machine. The results include
-connection count, server, requests per second, min-to-max latency, p50 and p99
-latency, server CPU and maximum client CPU.
 
 ## Front end
 

@@ -1,17 +1,20 @@
 # Benchmarks
 
-Read before running or changing `benchmarks/`, `make bench`, the HTTP benchmark,
-or before measuring a speed change. The agent evaluation lives in
+Read before running or changing `benchmarks/`, `make bench`, or before
+measuring a speed change. Comparisons with other languages and the agent
+evaluation live in
 [agentica-lang/evals](https://github.com/agentica-lang/evals).
 
 ## Benchmarks
 
 `make bench` (options: `BENCH_ARGS="--runs 3 --size 2"`; `python3
 benchmarks/run.py --help` lists the rest) times `benchmarks/programs/*.agc` on
-each runner (`exe` is `agentica FILE.agc`, `vm` is `agentica run` on bytecode)
-against the CPython twins in `benchmarks/python/`, checks that every runner
-prints the same output, and times start-up and the front end of `dist/agentica`
-apart. It is outside `make test` and CI. `AGENTICA_JIT=off` in the environment
+each runner (`exe` is `agentica FILE.agc`, `vm` is `agentica run` on bytecode),
+checks that every output equals the program's `.expected` (at `--size 1`; a
+mismatch exits 1), and times start-up and the front end of `dist/agentica`
+apart. It is outside `make test` and CI; `tests/test_benchmarks.py` runs each
+program once for the goldens. The job is the A/B check of a VM change: build
+the old binary apart, run both, compare. `AGENTICA_JIT=off` in the environment
 sets the JIT mode of every run (`on` by default); new numbers go in the PR
 body. For where the time goes, `AGENTICA_VM_TRACE=profile`
 (`references/vm-build.md`).
@@ -37,12 +40,10 @@ ns per call with the loop included; it builds
 `tests/fixtures/native/module_demo.c` with the system compiler.
 
 A new program needs `def scale() -> Int` returning 1 (the script rewrites it for
-`--size`), a deterministic checksum line, and a Python twin that takes the size
-as `argv[1]`. The HTTP sanity check is apart:
-`python3 benchmarks/http_bench.py`; record numbers only from an idle machine
-(`docs/vm-benchmarks.md`, "HTTP sanity check").
-`python3 benchmarks/websocket_broadcast.py` compares the GC time of a WebSocket
-broadcast sent as `Text` and as `HTTP.prepare`.
+`--size`), a deterministic checksum line, an entry in `NAMES` of `run.py` and
+its `.expected` (`python3 benchmarks/run.py --update-goldens --only NAME`; `make
+goldens` rewrites them all). A change that alters an output on purpose rewrites
+the goldens, and their diff is the review.
 
 ## Speed work
 

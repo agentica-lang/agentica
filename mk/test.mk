@@ -254,13 +254,15 @@ test-distribution: $(PRODUCT)
 	AGENTICA_TEST_EXECUTABLE=$(CURDIR)/$(PRODUCT) $(MAKE) --no-print-directory test-py TESTS=tests/test_stdlib_distribution.py
 
 # make goldens FIXTURES="name ..." rewrites only those fixtures (names without .agc)
-# Without FIXTURES it also rewrites the CLI output golden tests/fixtures/cli/forms.json (tests/test_cli_forms.py) and the
+# Without FIXTURES it also rewrites the CLI output golden tests/fixtures/cli/forms.json (tests/test_cli_forms.py), the
+# benchmark goldens benchmarks/programs/*.expected (benchmarks/run.py --update-goldens) and the
 # front-end goldens of tests/fixtures/frontend/ from the Agentica stages (tools/refreeze.py, fast tier only: run
 # `poetry run python tools/refreeze.py` with no flag to rewrite the frozen manifests of the slow tier too, slow).
 goldens: $(PRODUCT)
 	AGENTICA_FIXTURES="$(FIXTURES)" $(POETRY) run python -m tests.vm_diff_support
 	AGENTICA_FIXTURES="$(FIXTURES)" $(POETRY) run python -m tests.test_vm_stack
 	test -n "$(FIXTURES)" || $(POETRY) run python -m tests.test_cli_forms freeze
+	test -n "$(FIXTURES)" || $(PYTHON) benchmarks/run.py --update-goldens
 	test -n "$(FIXTURES)" || $(POETRY) run python tools/refreeze.py --fast-only
 
 # make vm-golden-check FIXTURES="name ..." runs the golden check of CI on only those fixtures
