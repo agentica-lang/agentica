@@ -37,6 +37,9 @@ COMMAND_PREFIX = r"^\s*(?:(?:env|time|timeout\s+(?:-\S+\s+)*\d\S*|\w+=\S*)\s+)*"
 CHECK_COMMAND = re.compile(COMMAND_PREFIX + r"(?:(?:python3?\s+-m\s+)?(?:\S*/)?mypy|(?:\S*/)?agentica\s+check"
                            r"|(?:\S*/)?go\s+(?:vet|build))\b")
 MYPY_COMMAND = re.compile(COMMAND_PREFIX + r"(?:python3?\s+-m\s+)?(?:\S*/)?mypy\b")
+# A check or run call starts a shell segment with the program; a path that names it (`cat skills/agentica-programming/x`)
+# is no call.
+RUN_COMMAND = re.compile(COMMAND_PREFIX + r"(?:\S*/)?(?:agentica(?:-real)?|python3?(?:\.\d+)?|mypy|go)(?=\s|$)")
 GO_COMMAND = re.compile(COMMAND_PREFIX + r"(?:\S*/)?go\s+(?:vet|build|run|test)\b")
 GO_ERROR = re.compile(r"^\s*\S+\.go:\d+(?::\d+)?: |^panic: |^\s*--- FAIL", re.MULTILINE)
 # The common shell forms that write the solution: a redirection (a `cat` heredoc too), `tee`, `sed -i`, `cp` or `mv`
@@ -686,7 +689,7 @@ def runs_go(command: str) -> bool:
 
 def runs_program(command: str) -> bool:
     """A check or run call: the interpreter, Python, a checker or the Go tool."""
-    return "agentica" in command or "python" in command or runs_mypy(command) or runs_go(command)
+    return any(RUN_COMMAND.match(part) for part in command_parts(command))
 
 
 def edits_solution(call: "Call") -> bool:

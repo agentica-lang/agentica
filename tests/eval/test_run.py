@@ -476,6 +476,18 @@ class MetricsTests(unittest.TestCase):
 
         self.assertEqual(run.pi_metrics("\n".join(events))["fix_rounds"], 1)
 
+    def test_a_path_that_names_a_program_is_no_run(self) -> None:
+        diagnostics = "error[CHECK-UNKNOWN-NAME] in the examples"
+        for command in ("sed -n 1,80p skills/agentica-programming/references/diagnostics.md",
+                        "ls /workspace/skills/agentica-programming", "cat python_notes.txt", "rg mypy ."):
+            with self.subTest(command=command):
+                metrics = run.pi_metrics("\n".join(bash_events("1", command, diagnostics)))
+                self.assertEqual((metrics["interpreter_runs"], metrics["failing_runs"]), (0, 0))
+        for command in ("python3.13 solution.py", "./bin/agentica solution.agc", "go run solution.go",
+                        "cd w && env X=1 python solution.py"):
+            with self.subTest(command=command):
+                self.assertTrue(run.runs_program(command))
+
     def test_calls_that_share_an_id_or_have_none_keep_their_own_results(self) -> None:
         traceback = "Traceback (most recent call last):"
         events = (bash_events("", "python3 solution.py", traceback) + bash_events("", "python3 solution.py", "ok")
@@ -490,9 +502,11 @@ class MetricsTests(unittest.TestCase):
                           metrics["read_runs"]), (5, 1, 3, 1))
 
     def test_unique_ids_give_the_counts_of_the_runner_before_the_call_list(self) -> None:
+        # No command names a program outside the call position: the old runner counted any command that holds
+        # "agentica" or "python" (`cat skills/agentica-programming/SKILL.md`) as a run.
         commands = ["python3 solution.py", "mypy --strict solution.py", "agentica check s.agc", "agentica s.agc",
-                    "cat task.md", "curl https://x.y", "agentica outline s.agc", f"cat {run.ROOT}/README.md",
-                    "rg x . | head"]
+                    "cat task.md", "curl https://x.y", "agentica outline s.agc", "cat /etc/hosts", "rg x . | head",
+                    "cd /workspace && printf '1' | agentica s.agc", "timeout 5 python3 -m mypy s.py"]
         outputs = ["ok", "Traceback (most recent call last):\nValueError", "a.py:1: error: bad", "error[CHECK-X]",
                    "SyntaxError: x", "plain"]
         rng = random.Random(1843)

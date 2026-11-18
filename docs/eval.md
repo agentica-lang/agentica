@@ -190,10 +190,12 @@ by weakening its options.
   not fail a run, and the checker still runs, but check them before you compare
   the arms: `summary.md` shows their mean in the `type escapes` column.
 - Measures: `interpreter_runs` counts every bash call that runs `agentica`,
-  `python` or `mypy`; `check_runs` counts the calls to `mypy` and
-  `agentica check` (a lower bound: a command is recognised at the start of a
-  shell segment, after `env`, `time`, `timeout N` and `NAME=value` prefixes, so
-  a checker run through another wrapper or a script is not counted);
+  `python`, `mypy` or `go` (before 2026-11-18 it also counted a command that
+  only named one, such as a `sed` of the skill's files); `check_runs` counts
+  the calls to `mypy` and `agentica check` (both a lower bound: a command is
+  recognised at the start of a shell segment, after `env`, `time`,
+  `timeout N` and `NAME=value` prefixes, so a run through another wrapper or a
+  script is not counted);
   `check_failures` counts those that failed (a mypy `error:` line, an
   `error[...]` diagnostic); `failing_runs` counts every failing call, checks
   included, so repairs are compared with the checker calls on both sides.
