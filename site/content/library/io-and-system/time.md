@@ -1,7 +1,7 @@
 ---
 title: Dates and times
 weight: 9
-description: Calendar dates, times of day and date-times with a fixed UTC offset, as checked values of the Time family.
+description: Calendar dates, times of day and date-times with a fixed UTC offset, as checked values of the Time family, with Unix time and the wall clock.
 ---
 
 The `Time` family has four record types. Their fields are `Int`s, named as in Ruby's `Time`:
@@ -13,9 +13,11 @@ The `Time` family has four record types. Their fields are `Int`s, named as in Ru
 
 The calendar is the proleptic Gregorian one, with the years 1 to 9999. The precision is microseconds (`usec`, 0 to 999999). Unix time has no leap seconds, so a `sec` of 60 is an error. An offset is whole minutes, from `-86340` (`-23:59`) to `86340` (`+23:59`); there are no named time zones and no daylight saving time. The fields of a `Time.DateTime` are the reading at its offset.
 
-Every value is valid, because only the constructors below build one: writing `Time.Date(year: ..., ...)` or `d.with(...)` is `CHECK-NOT-CONSTRUCTIBLE`. `JSON.encode` and `JSON.decode` refuse these types, alone or inside a struct (`CHECK-NOT-ENCODABLE`, `CHECK-NOT-DECODABLE`). `==` compares a `Time.Date`, a `Time.TimeOfDay` or a `Time.NaiveDateTime` field by field. A `Time.DateTime` has no `==` (`CHECK-TYPE-MISMATCH`): two readings of one instant at different offsets differ in their fields. `Test.eq` still compares two of them field by field, so a test asserts the exact reading.
+Every value is valid, because only the builtins below build one: writing `Time.Date(year: ..., ...)` or `d.with(...)` is `CHECK-NOT-CONSTRUCTIBLE`. `JSON.encode` and `JSON.decode` refuse these types, alone or inside a struct (`CHECK-NOT-ENCODABLE`, `CHECK-NOT-DECODABLE`). `==` compares a `Time.Date`, a `Time.TimeOfDay` or a `Time.NaiveDateTime` field by field. A `Time.DateTime` has no `==` (`CHECK-TYPE-MISMATCH`): two readings of one instant at different offsets differ in their fields. `Test.eq` still compares two of them field by field, so a test asserts the exact reading.
 
-The clocks are on [System, Time and Random](/library/io-and-system/system/).
+A builtin that takes one of these values first is written as a method of it: `t.to_i`, `t.getlocal(3600)`. Without arguments the parentheses are optional, as for a field.
+
+`Time.now` reads the wall clock; the other clocks are on [System, Time and Random](/library/io-and-system/system/).
 
 ## Time.Date.new
 
@@ -134,4 +136,136 @@ end
 ```output
 ok(29)
 month 13 is not in 1..12
+```
+
+## Time.at and Time.at_us
+
+```signature
+Time.at(seconds: Int) -> Result[Time.DateTime]
+Time.at_us(us: Int) -> Result[Time.DateTime]
+```
+
+The instant `seconds` (or `us` microseconds) after the Unix epoch, 1970-01-01T00:00:00Z, in UTC (`utc_offset` 0). A negative count is before 1970. The range is `-62135596800` to `253402300799` seconds (`-62135596800000000` to `253402300799999999` microseconds), the first and the last instant of the years 1 to 9999; a count outside it is an error of kind `argument`.
+
+```agentica
+def main() -> Void
+  puts(Time.at(1_000_000_000).unwrap!)
+  puts(Time.at_us(-1).unwrap!)
+  puts(Time.at(253402300800).message)
+end
+```
+
+```output
+Time.DateTime(year: 2001, month: 9, day: 9, hour: 1, min: 46, sec: 40, usec: 0, utc_offset: 0)
+Time.DateTime(year: 1969, month: 12, day: 31, hour: 23, min: 59, sec: 59, usec: 999999, utc_offset: 0)
+seconds 253402300800 is not in -62135596800..253402300799
+```
+
+## Time.now
+
+```signature
+Time.now() -> Time.DateTime
+```
+
+The wall clock in UTC, to the microsecond. The wall clock can jump, so measure a duration with `Time.monotonic_ms` or `Time.monotonic_ns` instead.
+
+```agentica
+def main() -> Void
+  puts(Time.now().utc_offset)
+end
+```
+
+```output
+0
+```
+
+## to_i and to_us
+
+```signature
+Time.DateTime.to_i(time: Time.DateTime) -> Int
+Time.DateTime.to_us(time: Time.DateTime) -> Int
+```
+
+The instant as seconds (`to_i`) or microseconds (`to_us`) since the Unix epoch, whatever the offset. `to_i` rounds toward minus infinity, as Ruby's `Time#to_i` does: the microsecond before the epoch is in second `-1`. Neither fails; a reading in the year 1 or 9999 at an offset may give an instant just outside the range of `Time.at`.
+
+```agentica
+def main() -> Void
+  t = Time.DateTime.new(2001, 9, 9, 3, 46, 40, 500000, 7200).unwrap!
+  puts("#{t.to_i} #{t.to_us}")
+  puts(Time.at_us(-1).unwrap!.to_i)
+end
+```
+
+```output
+1000000000 1000000000500000
+-1
+```
+
+## getutc and getlocal
+
+```signature
+Time.DateTime.getutc(time: Time.DateTime) -> Result[Time.DateTime]
+Time.DateTime.getlocal(time: Time.DateTime, utc_offset: Int) -> Result[Time.DateTime]
+```
+
+The same instant read at offset 0 (`getutc`) or at `utc_offset` seconds east of UTC (`getlocal`). An error of kind `argument` when the offset is not one `Time.DateTime.new` takes, or when the new reading is outside the years 1 to 9999.
+
+```agentica
+def main() -> Void
+  t = Time.DateTime.new(2026, 10, 14, 21, 5, 42, 0, 7200).unwrap!
+  puts(t.getutc.unwrap!.hour)
+  puts(t.getlocal(-18000).unwrap!.hour)
+  puts(t.getlocal(30).message)
+end
+```
+
+```output
+19
+14
+utc_offset 30 is not a whole number of minutes
+```
+
+## naive_of and assume_offset
+
+```signature
+Time.DateTime.naive_of(time: Time.DateTime) -> Time.NaiveDateTime
+Time.NaiveDateTime.assume_offset(naive: Time.NaiveDateTime, utc_offset: Int) -> Result[Time.DateTime]
+```
+
+`naive_of` keeps the reading and drops the offset. `assume_offset` gives a naive reading an offset, which makes it an instant; it keeps the fields, so its only error (of kind `argument`) is an offset that `Time.DateTime.new` refuses.
+
+```agentica
+def main() -> Void
+  n = Time.NaiveDateTime.new(2026, 10, 14, 9, 0, 0, 0).unwrap!
+  t = n.assume_offset(-18000).unwrap!
+  puts(t.to_i)
+  puts(t.naive_of == n)
+end
+```
+
+```output
+1791986400
+true
+```
+
+## to_date
+
+```signature
+Time.DateTime.to_date(time: Time.DateTime) -> Time.Date
+Time.NaiveDateTime.to_date(naive: Time.NaiveDateTime) -> Time.Date
+```
+
+The date of the reading, at its own offset.
+
+```agentica
+def main() -> Void
+  t = Time.DateTime.new(2026, 10, 14, 23, 30, 0, 0, -3600).unwrap!
+  puts(t.to_date)
+  puts(t.getutc.unwrap!.to_date)
+end
+```
+
+```output
+Time.Date(year: 2026, month: 10, day: 14)
+Time.Date(year: 2026, month: 10, day: 15)
 ```

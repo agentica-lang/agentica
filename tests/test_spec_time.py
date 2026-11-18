@@ -1,5 +1,6 @@
-"""The dates and times of the Time family through the product CLI: the types in every position, the constructors, and
-the rules that keep every value valid (no construction, no .with, no JSON) and keep == off Time.DateTime. A case is
+"""The dates and times of the Time family through the product CLI: the types in every position, the constructors, the
+conversions written as methods, and the rules that keep every value valid (no construction, no .with, no JSON) and
+keep == off Time.DateTime. A case is
 `(program, code, covered text)`: the code of the diagnostic and the source text its range covers; a program that must
 check clean has no code.
 """
@@ -38,6 +39,24 @@ CLEAN = [
         "  n = Time.NaiveDateTime.new(2026, 10, 14, 1, 2, 3, 4).unwrap!\n"
         "  _ = Test.eq(n, n)\n"
         "  puts(d == d and t == t and n == n and [d].include?(d))\nend\n",
+        None,
+        None,
+    ),
+    # A conversion is a method of its record, with or without parentheses, and a field of the record stays a field. A
+    # lambda parameter with no type that calls one takes the record.
+    (
+        MAIN
+        + "  a: Result[Time.DateTime] = Time.at(-1)\n"
+        "  b: Result[Time.DateTime] = Time.at_us(-1)\n"
+        "  now: Time.DateTime = Time.now()\n"
+        "  utc: Result[Time.DateTime] = now.getutc\n"
+        "  local: Result[Time.DateTime] = now.getlocal(-18000)\n"
+        "  n: Time.NaiveDateTime = now.naive_of()\n"
+        "  back: Result[Time.DateTime] = n.assume_offset(3600)\n"
+        "  days: List[Time.Date] = [now.to_date, n.to_date()]\n"
+        "  stamp = ->(t) { t.getutc }\n"
+        "  sum: Int = now.to_i + now.to_us + now.year + stamp.call(now).unwrap!.hour\n"
+        "  puts(\"#{a.ok?} #{b.ok?} #{utc.ok?} #{local.ok?} #{back.ok?} #{days.size} #{sum}\")\nend\n",
         None,
         None,
     ),
@@ -81,6 +100,16 @@ REFUSED = [
     (MAIN + '  d = Time.Date.new(2026, "10", 14)\nend\n', "CHECK-TYPE-MISMATCH", '"10"'),
     (MAIN + "  d = Time.Date.nwe(2026, 10, 14)\nend\n", "CHECK-UNKNOWN-NAME", "Time.Date.nwe(2026, 10, 14)"),
     (MAIN + "  d = Time.Dat.new(2026, 10, 14)\nend\n", "CHECK-UNKNOWN-NAME", "Time.Dat"),
+    # A conversion is a method of one record only, takes its own arguments, and a name the record lacks is a field it
+    # lacks (without parentheses) or a method it lacks (with them).
+    (MAIN + f"  d = {DATE}\n  puts(d.to_i)\nend\n", "CHECK-UNKNOWN-FIELD", "d.to_i"),
+    (MAIN + "  n = Time.NaiveDateTime.new(1, 1, 1, 0, 0, 0, 0).unwrap!\n  puts(n.to_us())\nend\n",
+     "CHECK-UNKNOWN-METHOD", "n.to_us()"),
+    (MAIN + f"  a = {AWARE}\n  puts(a.to_i(3))\nend\n", "CHECK-ARITY", "a.to_i(3)"),
+    (MAIN + f"  a = {AWARE}\n  b = a.getlocal(\"+02:00\")\nend\n", "CHECK-TYPE-MISMATCH", '"+02:00"'),
+    (MAIN + f"  a = {AWARE}\n  puts(a.hours)\nend\n", "CHECK-UNKNOWN-FIELD", "a.hours"),
+    (MAIN + f"  a = {AWARE}\n  puts(Time.to_i(a))\nend\n", "CHECK-UNKNOWN-NAME", "Time.to_i(a)"),
+    (MAIN + "  a: Time.DateTime = Time.at(0)\nend\n", "CHECK-TYPE-MISMATCH", "Time.at(0)"),
 ]
 
 
@@ -94,3 +123,11 @@ def test_a_struct_field_that_holds_a_datetime_is_labeled_where_equality_is_refus
     found = agentica_check(program)
     assert_rule(found, program, "CHECK-TYPE-MISMATCH", "==")
     assert [covered(program, label["range"]) for label in found["labels"]] == ["at: Time.DateTime\n"]
+
+
+def test_a_misplaced_conversion_names_its_method_form(agentica_check):
+    found = agentica_check(MAIN + f"  a = {AWARE}\n  puts(Time.to_i(a))\nend\n")
+    assert found["code"] == "CHECK-UNKNOWN-NAME"
+    assert "a.to_i" not in found["help"] and "value.to_i" in found["help"], found["help"]
+    unknown = agentica_check(MAIN + f"  a = {AWARE}\n  puts(a.foo())\nend\n")
+    assert "to_i" in unknown["help"] and "getlocal" in unknown["help"], unknown["help"]

@@ -1456,13 +1456,13 @@
  "[[\"help\", \"to_i\", \"--json\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "{\"alias\":\"to_i\",\"builtins\":[{\"arity\":1,\"description\":\"Truncate toward zero; NaN, infinity or overflow return an error.\",\"effects\":[],\"name\":\"Float.to_i\",\"parameters\":[{\"name\":\"float\",\"type\":\"Float\"}],\"result\":\"Result[Int]\",\"ruby\":\"float.to_i() -> Result[Int]\",\"signature\":\"Float.to_i(float: Float) -> Result[Int]\"},{\"arity\":1,\"description\":\"Parse signed decimal Int as a Result.\",\"effects\":[],\"name\":\"String.to_i\",\"parameters\":[{\"name\":\"string\",\"type\":\"String\"}],\"result\":\"Result[Int]\",\"ruby\":\"string.to_i() -> Result[Int]\",\"signature\":\"String.to_i(string: String) -> Result[Int]\"}],\"hints\":{}}\n",
+  "stdout": "{\"alias\":\"to_i\",\"builtins\":[{\"arity\":1,\"description\":\"Truncate toward zero; NaN, infinity or overflow return an error.\",\"effects\":[],\"name\":\"Float.to_i\",\"parameters\":[{\"name\":\"float\",\"type\":\"Float\"}],\"result\":\"Result[Int]\",\"ruby\":\"float.to_i() -> Result[Int]\",\"signature\":\"Float.to_i(float: Float) -> Result[Int]\"},{\"arity\":1,\"description\":\"Parse signed decimal Int as a Result.\",\"effects\":[],\"name\":\"String.to_i\",\"parameters\":[{\"name\":\"string\",\"type\":\"String\"}],\"result\":\"Result[Int]\",\"ruby\":\"string.to_i() -> Result[Int]\",\"signature\":\"String.to_i(string: String) -> Result[Int]\"},{\"arity\":1,\"description\":\"Return the seconds since the Unix epoch, rounded toward minus infinity, as Ruby's Time#to_i.\",\"effects\":[],\"name\":\"Time.DateTime.to_i\",\"parameters\":[{\"name\":\"time\",\"type\":\"Time.DateTime\"}],\"result\":\"Int\",\"ruby\":\"time.to_i() -> Int\",\"signature\":\"Time.DateTime.to_i(time: Time.DateTime) -> Int\"}],\"hints\":{}}\n",
   "written": []
  },
  "[[\"help\", \"to_i\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "float.to_i() -> Result[Int]\nTruncate toward zero; NaN, infinity or overflow return an error.\n\nstring.to_i() -> Result[Int]\nParse signed decimal Int as a Result.\n",
+  "stdout": "float.to_i() -> Result[Int]\nTruncate toward zero; NaN, infinity or overflow return an error.\n\nstring.to_i() -> Result[Int]\nParse signed decimal Int as a Result.\n\ntime.to_i() -> Int\nReturn the seconds since the Unix epoch, rounded toward minus infinity, as Ruby's Time#to_i.\n",
   "written": []
  },
  "[[\"help\", \"to_int\", \"--json\"], {}]": {

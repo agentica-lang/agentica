@@ -6,7 +6,16 @@
 ## declares it.
 
 import Builtins from "../catalog/builtins"
-import {BARE_NAMES, ENUMS, ENTRIES, FAMILY_MEMBERS, RECORDS, RESERVED, STD_ONLY} from "../catalog/builtins"
+import {
+  BARE_NAMES,
+  ENUMS,
+  ENTRIES,
+  FAMILY_MEMBERS,
+  RECORD_METHODS,
+  RECORDS,
+  RESERVED,
+  STD_ONLY,
+} from "../catalog/builtins"
 import Diag from "../diagnostics/diagnostic"
 import Base from "../syntax/parse_base"
 import Source from "../syntax/source"
@@ -270,7 +279,9 @@ def unknown_member(cx: Context, family: String, member: String, span: Source.Spa
   members = FAMILY_MEMBERS[family]
   help = "the members of #{family} are #{members.join(", ")}"
   owners = member_owners(family, member)
-  if owners.size > 0
+  if owners.size > 0 and RECORD_METHODS.include?("#{family}.#{owners[0]}.#{member}")
+    help = "#{member} is a method of #{family}.#{owners[0]}: call it on a value, value.#{member}; #{help}"
+  elsif owners.size > 0
     help = "use #{family}.#{owners[0]}.#{member}; #{help}"
   else
     case Suggest.closest_among(member, [], members)

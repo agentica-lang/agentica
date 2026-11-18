@@ -11,6 +11,7 @@ import Help from "check_help"
 import Names from "check_names"
 import State from "check_state"
 import Rules from "check_rules"
+import RubyForm from "ruby_form"
 import CheckTypes from "check_types"
 
 ## Checks target.name(args).
@@ -179,11 +180,13 @@ def check_codec(cx: State.Cx, st: State.St, node: Ast.FieldAccess, type_name: As
   ok(State.Out(st: resolved, type: type))
 end
 
-# A struct is read by field unless the name is to_s or inspect and the struct has no such field.
+# A struct is read by field unless the name is to_s or inspect, or a method of a record with methods
+# (RubyForm.method_record?), and the struct has no such field.
 def field_target?(cx: State.Cx, target: T.Type, name: String) -> Bool
   return false if !T.is?(target, "Struct")
 
-  if name == "to_s" or name == "inspect"
+  method = RubyForm.method_record?(target) and Names.resolve_method(cx, T.name(target), name) != ""
+  if name == "to_s" or name == "inspect" or method
     # A private field named to_s or inspect is not seen outside its module, so the name is the method there.
     owner = T.name(target)
     return Calls.find_field(cx.structs[owner], name).ok? and !State.private_fields(cx, owner).include?(name)
@@ -374,7 +377,7 @@ def unknown_method_help(cx: State.Cx, st: State.St, id: Int, target: T.Type, kin
     return "an Error is not a String: call #{name} on its text, e.message.#{name}"
   elsif T.error?(target) and kind != ""
     return kind_help(cx, target, kind, name)
-  elsif T.is?(target, "Struct")
+  elsif T.is?(target, "Struct") and !RubyForm.method_record?(target)
     return struct_help(cx, target, name)
   elsif name == "with"
     return "with copies a struct with some fields changed; the value before .with must be a struct"
