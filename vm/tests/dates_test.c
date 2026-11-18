@@ -29,6 +29,13 @@ static void forged(const char *name, uint32_t arity, agc_value value) {
   assert(strncmp(vm.outcome->message, "invalid bytecode", 16) == 0);
 }
 
+/* A call of NAME with FIRST and SECOND that must fail as forged bytecode. */
+static void forged_pair(const char *name, agc_value first, agc_value second) {
+  agc_value args[2] = {first, second};
+  agc_test_fails_row(&vm, name, 2, args, "RUNTIME-INTERNAL");
+  assert(strncmp(vm.outcome->message, "invalid bytecode", 16) == 0);
+}
+
 /* A good value with field AT set to VALUE. */
 static agc_value changed(uint32_t type, uint32_t n, const int64_t *good, uint32_t at, int64_t value) {
   int64_t values[8];
@@ -77,6 +84,64 @@ static void test_a_forged_naive_fails(void) {
   forged("Time.TimeOfDay.format_iso8601", 1, changed(AGC_TIME_OF_DAY, 4, noon, 0, 24));
 }
 
+/* The arithmetic, comparison and query readers check every value they take, the second one too, also when the count
+   is refused anyway: a forged value never gets an argument error instead. */
+static void test_a_forged_value_fails_in_arithmetic_and_comparison(void) {
+  static const int64_t good[8] = {2024, 2, 29, 23, 59, 59, 999999, 0};
+  static const int64_t noon[8] = {12, 0, 0, 0};
+  agc_value date = record(AGC_TIME_DATE, 3, good), naive = record(AGC_TIME_NAIVE, 7, good);
+  agc_value aware = record(AGC_TIME_DATETIME, 8, good), clock = record(AGC_TIME_OF_DAY, 4, noon);
+  agc_value bad_date = changed(AGC_TIME_DATE, 3, good, 2, 30), bad_naive = changed(AGC_TIME_NAIVE, 7, good, 3, 24);
+  agc_value bad_aware = changed(AGC_TIME_DATETIME, 8, good, 7, 1), bad_clock = changed(AGC_TIME_OF_DAY, 4, noon, 3, -1);
+  agc_value huge = agc_int(INT64_MAX);
+  forged_pair("Time.Date.add_days", bad_date, agc_int(1));
+  forged_pair("Time.Date.add_days", bad_date, huge);
+  forged_pair("Time.NaiveDateTime.add_days", bad_naive, huge);
+  forged_pair("Time.DateTime.add_days", bad_aware, agc_int(INT64_MIN));
+  forged_pair("Time.NaiveDateTime.add_us", bad_naive, huge);
+  forged_pair("Time.DateTime.add_us", bad_aware, agc_int(0));
+  forged_pair("Time.Date.days_between", date, bad_date);
+  forged_pair("Time.DateTime.us_between", aware, bad_aware);
+  forged_pair("Time.NaiveDateTime.us_between", bad_naive, naive);
+  forged_pair("Time.compare", aware, naive);
+  forged_pair("Time.compare_naive", naive, bad_naive);
+  forged_pair("Time.compare_date", bad_date, date);
+  forged_pair("Time.compare_time", clock, bad_clock);
+  forged("Time.Date.cwday", 1, bad_date);
+  forged("Time.Date.yday", 1, aware);
+}
+
+static void test_a_count_past_the_range_is_an_argument_error(void) {
+  static const int64_t good[8] = {2024, 2, 29, 23, 59, 59, 999999, 3600};
+  static const char *const adds[] = {"Time.Date.add_days", "Time.NaiveDateTime.add_days", "Time.DateTime.add_days",
+                                     "Time.NaiveDateTime.add_us", "Time.DateTime.add_us"};
+  static const uint32_t kinds[] = {AGC_TIME_DATE, AGC_TIME_NAIVE, AGC_TIME_DATETIME, AGC_TIME_NAIVE, AGC_TIME_DATETIME};
+  static const uint32_t counts[] = {3, 7, 8, 7, 8};
+  static const int64_t huge[] = {INT64_MIN, INT64_MIN + 1, -INT64_C(315537897600000001),
+                                 INT64_C(315537897600000000), INT64_MAX};
+  /* An Error struct and the Optional enum its none fields need, so the kind of the error can be read. */
+  agc_variant_def variants[2] = {{NULL, 0, 0, agc_new_enum(0, 0)}, {NULL, 0, 1, NULL}};
+  program.variants = variants;
+  program.variant_count = 2;
+  program.optional = 0;
+  vm.rt->error_struct = AGC_TIME_RECORDS;
+  const char *want = agc_error_kind_name(AGC_KIND_ARGUMENT);
+  for (size_t k = 0; k < sizeof adds / sizeof adds[0]; k++) {
+    for (size_t h = 0; h < sizeof huge / sizeof huge[0]; h++) {
+      agc_value args[2] = {record(kinds[k], counts[k], good), agc_int(huge[h])};
+      agc_value result = agc_test_call_row(&vm, adds[k], 2, args);
+      const agc_result *r = agc_as_result(&vm, result);
+      assert(!r->ok);
+      const agc_string *kind = agc_as_string(&vm, agc_as_struct(&vm, r->value)->fields[AGC_ERROR_KIND]);
+      assert(kind->bytes == strlen(want) && memcmp(kind->data, want, kind->bytes) == 0);
+    }
+  }
+  vm.rt->error_struct = UINT32_MAX;
+  program.optional = UINT32_MAX;
+  program.variants = NULL;
+  program.variant_count = 0;
+}
+
 static void test_a_program_without_the_struct_fails(void) {
   agc_value seconds = agc_int(0);
   program.time_structs[AGC_TIME_DATETIME] = UINT32_MAX;
@@ -98,6 +163,8 @@ int main(void) {
   test_a_real_value_converts();
   test_a_forged_datetime_fails();
   test_a_forged_naive_fails();
+  test_a_forged_value_fails_in_arithmetic_and_comparison();
+  test_a_count_past_the_range_is_an_argument_error();
   test_a_program_without_the_struct_fails();
   puts("dates tests passed");
   return 0;

@@ -451,3 +451,124 @@ def test_forms_python_reads_and_control_characters_are_refused(driver):
     replies = run_json_cases(driver, [request(op, [text]) for op, text in cases])
     assert [(reply["ok"], reply["kind"]) for reply in replies] == [(False, "argument")] * len(cases)
     check(driver, [(op, (text,)) for op, text in cases])
+
+
+SPAN_DAYS = 3_652_058
+SPAN_US = LAST_US - FIRST_US
+# Hypothesis favors small Ints, so the counts past the range get their own branches, as do counts that fit any value.
+DAY_COUNTS = (near(-SPAN_DAYS, SPAN_DAYS, 0) | st.integers(-1000, 1000) | st.integers(-SPAN_DAYS, SPAN_DAYS)
+              | st.integers(INT_MIN, -SPAN_DAYS) | st.integers(SPAN_DAYS, INT_MAX))
+US_COUNTS = (near(-SPAN_US, SPAN_US, 0) | st.integers(-10 ** 12, 10 ** 12) | st.integers(-SPAN_US, SPAN_US)
+             | st.integers(INT_MIN, -SPAN_US) | st.integers(SPAN_US, INT_MAX))
+EDGE_DATES = EDGE_NAIVE.map(lambda t: t[:3])
+
+
+def shifted(value, fields, **delta):
+    moved = peer(lambda: value + timedelta(**delta))
+    return moved and fields(moved)
+
+
+def sign(a, b):
+    return (a > b) - (a < b)
+
+
+@st.composite
+def aware_pair(draw):
+    """Two aware values: one time in three the same instant at another offset, which compares equal."""
+    first = draw(VALID_AWARE)
+    if draw(st.integers(0, 2)) == 0:
+        off = draw(VALID_OFFSETS)
+        same = peer(lambda: aware(*first).astimezone(timezone(timedelta(seconds=off))))
+        if same is not None:
+            return (*first, *aware_fields(same))
+    return (*first, *draw(VALID_AWARE))
+
+
+def maybe_same(values):
+    """Pairs of values, one time in three the same value twice."""
+    return st.tuples(values, values, st.integers(0, 2)).map(lambda p: (*p[0], *(p[0] if p[2] == 0 else p[1])))
+
+
+PEERS |= {
+    "date_add_days": lambda y, mo, d, n: shifted(date(y, mo, d), lambda v: [v.year, v.month, v.day], days=n),
+    "naive_add_days": lambda *a: shifted(datetime(*a[:7]), lambda v: list(naive_tuple(v)), days=a[7]),
+    "aware_add_days": lambda *a: shifted(aware(*a[:8]), aware_fields, days=a[8]),
+    "naive_add_us": lambda *a: shifted(datetime(*a[:7]), lambda v: list(naive_tuple(v)), microseconds=a[7]),
+    "aware_add_us": lambda *a: shifted(aware(*a[:8]), aware_fields, microseconds=a[8]),
+    "days_between": lambda *a: [(date(*a[3:]) - date(*a[:3])).days],
+    "us_between": lambda *a: [(aware(*a[8:]) - aware(*a[:8])) // MICROSECOND],
+    "naive_us_between": lambda *a: [(datetime(*a[7:]) - datetime(*a[:7])) // MICROSECOND],
+    "compare": lambda *a: [sign(aware(*a[:8]), aware(*a[8:]))],
+    "compare_naive": lambda *a: [sign(datetime(*a[:7]), datetime(*a[7:]))],
+    "compare_date": lambda *a: [sign(date(*a[:3]), date(*a[3:]))],
+    "compare_time": lambda *a: [sign(time(*a[:4]), time(*a[4:]))],
+    "cwday": lambda *a: [date(*a).isoweekday()],
+    "yday": lambda *a: [date(*a).timetuple().tm_yday],
+}
+
+
+def counted(values, counts):
+    return st.tuples(values, counts).map(lambda p: (*p[0], p[1]))
+
+
+ARITHMETIC = (
+    st.tuples(st.just("date_add_days"), counted(VALID_DATES | EDGE_DATES, DAY_COUNTS))
+    | st.tuples(st.just("naive_add_days"), counted(VALID_NAIVE | EDGE_NAIVE, DAY_COUNTS))
+    | st.tuples(st.just("aware_add_days"), counted(VALID_AWARE | EDGE_AWARE, DAY_COUNTS))
+    | st.tuples(st.just("naive_add_us"), counted(VALID_NAIVE | EDGE_NAIVE, US_COUNTS))
+    | st.tuples(st.just("aware_add_us"), counted(VALID_AWARE | EDGE_AWARE, US_COUNTS))
+)
+QUERIES = (
+    st.tuples(st.sampled_from(["days_between", "compare_date"]), maybe_same(VALID_DATES | EDGE_DATES))
+    | st.tuples(st.sampled_from(["us_between", "compare"]), aware_pair())
+    | st.tuples(st.sampled_from(["naive_us_between", "compare_naive"]), maybe_same(VALID_NAIVE | EDGE_NAIVE))
+    | st.tuples(st.just("compare_time"), maybe_same(st.times().map(clock)))
+    | st.tuples(st.sampled_from(["cwday", "yday"]), VALID_DATES | EDGE_DATES)
+)
+ARITHMETIC_VERDICTS = ("date_add_days", "naive_add_days", "aware_add_days", "naive_add_us", "aware_add_us")
+
+
+def test_arithmetic_agrees_with_python(driver):
+    agree(driver, ARITHMETIC, ARITHMETIC_VERDICTS)
+
+
+def test_differences_comparisons_and_queries_agree_with_python(driver):
+    answers = {}
+    verdicts = {}
+
+    @given(st.lists(QUERIES, min_size=50, max_size=300))
+    def run(cases):
+        check(driver, cases, verdicts)
+        for op, args in cases:
+            if op.startswith("compare"):
+                key = (op, PEERS[op](*args)[0])
+                answers[key] = answers.get(key, 0) + 1
+
+    run()
+    # Every comparison gives each of -1, 0 and 1 many times; 0 across offsets for compare.
+    thin = {(op, r): answers.get((op, r), 0) for op in ("compare", "compare_naive", "compare_date", "compare_time")
+            for r in (-1, 0, 1) if answers.get((op, r), 0) < 30}
+    assert thin == {}, answers
+    # These never refuse a valid record, so each op reaches its check many times.
+    ops = ("days_between", "us_between", "naive_us_between", "cwday", "yday", "compare", "compare_naive",
+           "compare_date", "compare_time")
+    thin = {op: verdicts.get((op, True), 0) for op in ops if verdicts.get((op, True), 0) < 100}
+    assert thin == {}, verdicts
+
+
+def test_the_ends_of_the_range_and_the_largest_counts(driver):
+    first, last = (1, 1, 1), (9999, 12, 31)
+    first_naive, last_naive = (*first, 0, 0, 0, 0), (*last, 23, 59, 59, 999_999)
+    counts = (INT_MIN, INT_MIN + 1, -SPAN_US - 1, -SPAN_US, -SPAN_DAYS - 1, -SPAN_DAYS, -1, 0, 1, SPAN_DAYS,
+              SPAN_DAYS + 1, SPAN_US, SPAN_US + 1, INT_MAX)
+    cases = [("date_add_days", (*d, n)) for d in (first, last) for n in counts]
+    cases += [(op, (*t, n)) for op in ("naive_add_days", "naive_add_us") for t in (first_naive, last_naive)
+              for n in counts]
+    cases += [(op, (*t, off, n)) for op in ("aware_add_days", "aware_add_us") for t in (first_naive, last_naive)
+              for off in (-OFFSET_MAX, 0, OFFSET_MAX) for n in counts]
+    cases += [("us_between", (*first_naive, OFFSET_MAX, *last_naive, -OFFSET_MAX)),
+              ("days_between", (*last, *first)), ("cwday", (2026, 10, 14)), ("yday", (2026, 10, 14)),
+              ("yday", (2024, 12, 31)), ("cwday", first)]
+    check(driver, cases)
+    replies = run_json_cases(driver, [request(op, args) for op, args in cases[-4:]])
+    assert [r["fields"][0] for r in replies] == [3, 287, 366, 1]

@@ -1,8 +1,9 @@
 /*
  * The dates and times of the Time family (agc_date_builtins): the constructors of Time.Date, Time.TimeOfDay,
  * Time.NaiveDateTime and Time.DateTime, which check every field, the calendar queries, Unix time, the wall clock and
- * fixed offsets, and their ISO 8601 text (RFC 3339 for an aware value). Service layer. The calendar is the proleptic
- * Gregorian one, years 1 to 9999, with microseconds and no leap seconds: every day has 86400 seconds, as in POSIX time.
+ * fixed offsets, arithmetic and comparison, and their ISO 8601 text (RFC 3339 for an aware value). Service layer. The
+ * calendar is the proleptic Gregorian one, years 1 to 9999, with microseconds and no leap seconds: every day has 86400
+ * seconds, as in POSIX time.
  * Design: issue #985 (§41) and docs/vm/05-values-execution-builtins.md §7.
  */
 #include "services.h"
@@ -333,6 +334,132 @@ static agc_value builtin_naive_to_date(agc_vm *vm, agc_value *args, uint32_t spa
   return record(vm, AGC_TIME_DATE, &f, span);
 }
 
+/* Arithmetic and comparison. The span of the range bounds every count before it is added: SPAN_DAYS days from the first
+   to the last date, SPAN_US microseconds from the first to the last reading. A larger count leaves the range from any
+   value, so it is refused before the sum can overflow. */
+#define SPAN_DAYS INT64_C(3652058)
+#define SPAN_US (LAST_US - FIRST_US)
+
+static int64_t date_days(const fields *f) { return days_from_civil(f->year, f->month, f->day); }
+
+static int64_t clock_us(const fields *f) { return ((f->hour * 60 + f->min) * 60 + f->sec) * SECOND_US + f->usec; }
+
+static int compare_ints(int64_t a, int64_t b) { return (a > b) - (a < b); }
+
+static agc_value out_of_range(agc_vm *vm, const char *what) {
+  char message[MESSAGE_SIZE];
+  snprintf(message, sizeof message, "the %s is outside the years 1 to 9999", what);
+  return agc_error(vm, AGC_KIND_ARGUMENT, message);
+}
+
+static agc_value builtin_date_add_days(agc_vm *vm, agc_value *args, uint32_t span) {
+  fields f = {0};
+  read_record(vm, args[0], AGC_TIME_DATE, &f, span);
+  int64_t days = agc_as_int(vm, args[1]);
+  if (days < -SPAN_DAYS || days > SPAN_DAYS) return out_of_range(vm, "date");
+  int64_t moved = date_days(&f) + days;
+  if (moved < FIRST_US / DAY_US || moved > LAST_US / DAY_US) return out_of_range(vm, "date");
+  civil_from_days(moved, &f);
+  return build(vm, AGC_TIME_DATE, &f, span);
+}
+
+/* The value of KIND (naive or aware) whose reading is US microseconds later; an aware value keeps its offset, so its
+   instant moves as much as its reading. */
+static agc_value add_reading_us(agc_vm *vm, uint32_t kind, int64_t us, uint32_t span, agc_value value) {
+  fields f = {0};
+  read_record(vm, value, kind, &f, span);
+  if (us < -SPAN_US || us > SPAN_US) return out_of_range(vm, "reading");
+  int64_t moved = reading_us(&f) + us;
+  if (moved < FIRST_US || moved > LAST_US) return out_of_range(vm, "reading");
+  set_reading(moved, &f);
+  return build(vm, kind, &f, span);
+}
+
+/* Days as microseconds; a count past the span stays past it, refused before the multiplication can overflow. */
+static agc_value add_days_to_reading(agc_vm *vm, uint32_t kind, agc_value *args, uint32_t span) {
+  int64_t days = agc_as_int(vm, args[1]);
+  int64_t us = days < -SPAN_DAYS - 1 ? -SPAN_US - 1 : days > SPAN_DAYS + 1 ? SPAN_US + 1 : days * DAY_US;
+  return add_reading_us(vm, kind, us, span, args[0]);
+}
+
+static agc_value builtin_naive_add_days(agc_vm *vm, agc_value *args, uint32_t span) {
+  return add_days_to_reading(vm, AGC_TIME_NAIVE, args, span);
+}
+
+static agc_value builtin_datetime_add_days(agc_vm *vm, agc_value *args, uint32_t span) {
+  return add_days_to_reading(vm, AGC_TIME_DATETIME, args, span);
+}
+
+static agc_value builtin_naive_add_us(agc_vm *vm, agc_value *args, uint32_t span) {
+  return add_reading_us(vm, AGC_TIME_NAIVE, agc_as_int(vm, args[1]), span, args[0]);
+}
+
+static agc_value builtin_datetime_add_us(agc_vm *vm, agc_value *args, uint32_t span) {
+  return add_reading_us(vm, AGC_TIME_DATETIME, agc_as_int(vm, args[1]), span, args[0]);
+}
+
+/* The two values of KIND that a builtin takes, each read and checked. */
+static void read_pair(agc_vm *vm, agc_value *args, uint32_t kind, fields *a, fields *b, uint32_t span) {
+  read_record(vm, args[0], kind, a, span);
+  read_record(vm, args[1], kind, b, span);
+}
+
+static agc_value builtin_days_between(agc_vm *vm, agc_value *args, uint32_t span) {
+  fields from = {0}, to = {0};
+  read_pair(vm, args, AGC_TIME_DATE, &from, &to, span);
+  return agc_int(date_days(&to) - date_days(&from));
+}
+
+static agc_value builtin_us_between(agc_vm *vm, agc_value *args, uint32_t span) {
+  fields from = {0}, to = {0};
+  read_pair(vm, args, AGC_TIME_DATETIME, &from, &to, span);
+  return agc_int(instant_us(&to) - instant_us(&from));
+}
+
+static agc_value builtin_naive_us_between(agc_vm *vm, agc_value *args, uint32_t span) {
+  fields from = {0}, to = {0};
+  read_pair(vm, args, AGC_TIME_NAIVE, &from, &to, span);
+  return agc_int(reading_us(&to) - reading_us(&from));
+}
+
+static agc_value builtin_compare(agc_vm *vm, agc_value *args, uint32_t span) {
+  fields a = {0}, b = {0};
+  read_pair(vm, args, AGC_TIME_DATETIME, &a, &b, span);
+  return agc_int(compare_ints(instant_us(&a), instant_us(&b)));
+}
+
+static agc_value builtin_compare_naive(agc_vm *vm, agc_value *args, uint32_t span) {
+  fields a = {0}, b = {0};
+  read_pair(vm, args, AGC_TIME_NAIVE, &a, &b, span);
+  return agc_int(compare_ints(reading_us(&a), reading_us(&b)));
+}
+
+static agc_value builtin_compare_date(agc_vm *vm, agc_value *args, uint32_t span) {
+  fields a = {0}, b = {0};
+  read_pair(vm, args, AGC_TIME_DATE, &a, &b, span);
+  return agc_int(compare_ints(date_days(&a), date_days(&b)));
+}
+
+static agc_value builtin_compare_time(agc_vm *vm, agc_value *args, uint32_t span) {
+  fields a = {0}, b = {0};
+  read_pair(vm, args, AGC_TIME_OF_DAY, &a, &b, span);
+  return agc_int(compare_ints(clock_us(&a), clock_us(&b)));
+}
+
+/* ISO weekday, 1 for Monday to 7 for Sunday: 1970-01-01, day 0, was a Thursday. */
+static agc_value builtin_cwday(agc_vm *vm, agc_value *args, uint32_t span) {
+  fields f = {0};
+  read_record(vm, args[0], AGC_TIME_DATE, &f, span);
+  int64_t days = date_days(&f);
+  return agc_int(((days % 7 + 7) % 7 + 3) % 7 + 1);
+}
+
+static agc_value builtin_yday(agc_vm *vm, agc_value *args, uint32_t span) {
+  fields f = {0};
+  read_record(vm, args[0], AGC_TIME_DATE, &f, span);
+  return agc_int(date_days(&f) - days_from_civil(f.year, 1, 1) + 1);
+}
+
 /* The ISO 8601 text of a value: YYYY-MM-DD, HH:MM:SS.ffffff (always six digits), the two joined by T, and for an
    aware value Z at offset 0 or +HH:MM / -HH:MM. TEXT holds at least TEXT_SIZE bytes. */
 #define TEXT_SIZE 64
@@ -531,6 +658,21 @@ const agc_builtin agc_date_builtins[] = {
   {"Time.DateTime.naive_of", 1, builtin_naive_of, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
   {"Time.DateTime.to_date", 1, builtin_to_date, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
   {"Time.NaiveDateTime.to_date", 1, builtin_naive_to_date, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"Time.Date.add_days", 2, builtin_date_add_days, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"Time.NaiveDateTime.add_days", 2, builtin_naive_add_days, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"Time.DateTime.add_days", 2, builtin_datetime_add_days, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"Time.NaiveDateTime.add_us", 2, builtin_naive_add_us, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"Time.DateTime.add_us", 2, builtin_datetime_add_us, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"Time.Date.days_between", 2, builtin_days_between, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"Time.DateTime.us_between", 2, builtin_us_between, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"Time.NaiveDateTime.us_between", 2, builtin_naive_us_between, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false,
+   false},
+  {"Time.compare", 2, builtin_compare, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"Time.compare_naive", 2, builtin_compare_naive, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"Time.compare_date", 2, builtin_compare_date, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"Time.compare_time", 2, builtin_compare_time, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"Time.Date.cwday", 1, builtin_cwday, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"Time.Date.yday", 1, builtin_yday, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
   /* The text builtins allocate a String or read one of any length, so they are direct rows, not leaves. */
   {"Time.Date.format_iso8601", 1, builtin_format_date, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, true, false},
   {"Time.TimeOfDay.format_iso8601", 1, builtin_format_time_of_day, AGC_NATIVE_NONE, AGC_COST_NONE, false, false,

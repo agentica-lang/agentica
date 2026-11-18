@@ -14,6 +14,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - Dates and times as checked builtin records of the `Time` family: `Time.Date`, `Time.TimeOfDay`, `Time.NaiveDateTime` and `Time.DateTime` (at a fixed UTC offset), built by `Time.Date.new` and the like, with `Time.Date.leap?` and `Time.Date.days_in_month`; a construction or `.with` of one is the new `CHECK-NOT-CONSTRUCTIBLE` (#985).
 - Unix time and offsets in the `Time` family: `Time.at`, `Time.at_us` and `Time.now` give a `Time.DateTime`, which has the methods `to_i`, `to_us`, `getutc`, `getlocal`, `naive_of` and `to_date`; a `Time.NaiveDateTime` has `assume_offset` and `to_date` (#985).
 - ISO 8601 text in the `Time` family: `x.iso8601` writes any of the four types (RFC 3339 for a `Time.DateTime`, six fraction digits), and `Time.Date.iso8601(text)` and the like read it back as a Result (#985).
+- Arithmetic and queries in the `Time` family: `add_days`, `add_us`, `days_between`, `us_between`, `cwday` and `yday`, and `Time.compare`, `Time.compare_naive`, `Time.compare_date` and `Time.compare_time` (-1, 0 or 1); the `==` error on a `Time.DateTime` names `Time.compare` (#985).
 - Install with Nix: getting started has a flake that fetches the release archives.
 
 ### Changed

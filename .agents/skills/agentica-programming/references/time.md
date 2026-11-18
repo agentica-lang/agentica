@@ -32,6 +32,14 @@ t.to_date -> Time.Date       # also on a Time.NaiveDateTime
 x.iso8601 -> String          # any of the four; .ffffff always, Z or +HH:MM
 Time.Date.iso8601(text: String) -> Result[Time.Date]   # also TimeOfDay,
 Time.DateTime.iso8601(text) -> Result[Time.DateTime]   # NaiveDateTime
+
+d.add_days(days: Int) -> Result[...]   # Date, NaiveDateTime, DateTime
+t.add_us(us: Int) -> Result[...]       # NaiveDateTime, DateTime (same offset)
+from.days_between(to) -> Int           # Date; to - from
+from.us_between(to) -> Int             # DateTime (instants), NaiveDateTime
+Time.compare(a, b) -> Int              # -1, 0, 1 by instant; also
+                                       # compare_naive, compare_date, compare_time
+d.cwday -> Int                         # 1 Monday .. 7 Sunday; d.yday 1..366
 ```
 
 - A builtin that takes the record first is its method: write `t.to_i` (the
@@ -47,8 +55,11 @@ Time.DateTime.iso8601(text) -> Result[Time.DateTime]   # NaiveDateTime
 - No JSON: `JSON.encode`/`decode`/`schema` refuse them, also inside a struct
   (`CHECK-NOT-ENCODABLE`, `CHECK-NOT-DECODABLE`).
 - `==` works on `Time.Date`, `Time.TimeOfDay` and `Time.NaiveDateTime`, not on
-  `Time.DateTime` (`CHECK-TYPE-MISMATCH`): one instant has many readings.
+  `Time.DateTime` (`CHECK-TYPE-MISMATCH`): one instant has many readings; use
+  `Time.compare(a, b) == 0`.
   `Test.eq` still compares two `Time.DateTime` values field by field.
 - Parse is strict: `T`/`Z` any case, fraction cut (not rounded) to µs,
   `Time.DateTime.iso8601` needs an offset, `Time.NaiveDateTime.iso8601`
   refuses one; a space for `T`, `+0200`, `07:32` and sec 60 are errors.
+- An add that leaves the years 1 to 9999 is an `argument` error, for any Int
+  count. A duration is an Int of microseconds.

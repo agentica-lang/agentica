@@ -1,7 +1,7 @@
 ---
 title: Dates and times
 weight: 9
-description: Calendar dates, times of day and date-times with a fixed UTC offset, as checked values of the Time family, with Unix time, the wall clock and ISO 8601 text.
+description: Calendar dates, times of day and date-times with a fixed UTC offset, as checked values of the Time family, with Unix time, the wall clock, arithmetic and ISO 8601 text.
 ---
 
 The `Time` family has four record types. Their fields are `Int`s, named as in Ruby's `Time`:
@@ -13,7 +13,7 @@ The `Time` family has four record types. Their fields are `Int`s, named as in Ru
 
 The calendar is the proleptic Gregorian one, with the years 1 to 9999. The precision is microseconds (`usec`, 0 to 999999). Unix time has no leap seconds, so a `sec` of 60 is an error. An offset is whole minutes, from `-86340` (`-23:59`) to `86340` (`+23:59`); there are no named time zones and no daylight saving time. The fields of a `Time.DateTime` are the reading at its offset.
 
-Every value is valid, because only the builtins below build one: writing `Time.Date(year: ..., ...)` or `d.with(...)` is `CHECK-NOT-CONSTRUCTIBLE`. `JSON.encode` and `JSON.decode` refuse these types, alone or inside a struct (`CHECK-NOT-ENCODABLE`, `CHECK-NOT-DECODABLE`). `==` compares a `Time.Date`, a `Time.TimeOfDay` or a `Time.NaiveDateTime` field by field. A `Time.DateTime` has no `==` (`CHECK-TYPE-MISMATCH`): two readings of one instant at different offsets differ in their fields. `Test.eq` still compares two of them field by field, so a test asserts the exact reading.
+Every value is valid, because only the builtins below build one: writing `Time.Date(year: ..., ...)` or `d.with(...)` is `CHECK-NOT-CONSTRUCTIBLE`. `JSON.encode` and `JSON.decode` refuse these types, alone or inside a struct (`CHECK-NOT-ENCODABLE`, `CHECK-NOT-DECODABLE`). `==` compares a `Time.Date`, a `Time.TimeOfDay` or a `Time.NaiveDateTime` field by field. A `Time.DateTime` has no `==` (`CHECK-TYPE-MISMATCH`): two readings of one instant at different offsets differ in their fields, so compare instants with `Time.compare(a, b) == 0`. `Test.eq` still compares two of them field by field, so a test asserts the exact reading.
 
 A builtin that takes one of these values first is written as a method of it: `t.to_i`, `t.getlocal(3600)`. Without arguments the parentheses are optional, as for a field.
 
@@ -326,4 +326,102 @@ missing offset; use Time.NaiveDateTime.iso8601 for text without one
 expected YYYY-MM-DDTHH:MM:SS at character 11
 offset "Z" is not allowed here; use Time.DateTime.iso8601
 ok(Time.TimeOfDay(hour: 7, min: 32, sec: 0, usec: 500000))
+```
+
+## add_days and add_us
+
+```signature
+date.add_days(days: Int) -> Result[Time.Date]
+naive.add_days(days: Int) -> Result[Time.NaiveDateTime]
+time.add_days(days: Int) -> Result[Time.DateTime]
+naive.add_us(us: Int) -> Result[Time.NaiveDateTime]
+time.add_us(us: Int) -> Result[Time.DateTime]
+```
+
+The value `days` calendar days or `us` microseconds later, or earlier for a negative count. A `Time.DateTime` keeps its offset, so its reading and its instant move together; with fixed offsets every day is 86400 seconds. An error of kind `argument` when the reading leaves the years 1 to 9999, for any `Int` count: the count is checked before it is added, so it cannot overflow. A duration is a plain `Int` of microseconds; there is no arithmetic on a `Time.TimeOfDay`.
+
+```agentica
+def main() -> Void
+  d = Time.Date.new(2024, 2, 28).unwrap!
+  puts(d.add_days(1).unwrap!.iso8601)
+  t = Time.DateTime.new(2026, 10, 14, 23, 30, 0, 0, 7200).unwrap!
+  puts(t.add_us(3_600_000_000).unwrap!.iso8601)
+  puts(d.add_days(9_000_000).message)
+end
+```
+
+```output
+2024-02-29
+2026-10-15T00:30:00.000000+02:00
+the date is outside the years 1 to 9999
+```
+
+## days_between and us_between
+
+```signature
+from.days_between(to: Time.Date) -> Int
+from.us_between(to: Time.DateTime) -> Int
+from.us_between(to: Time.NaiveDateTime) -> Int
+```
+
+The difference `to - from`, positive when `to` is later: in days between two dates, in microseconds between two instants (offsets count) or between two readings.
+
+```agentica
+def main() -> Void
+  a = Time.DateTime.new(2026, 10, 14, 12, 0, 0, 0, 7200).unwrap!
+  b = Time.DateTime.new(2026, 10, 14, 12, 0, 0, 0, 0).unwrap!
+  puts(a.us_between(b))
+  puts(a.naive_of.us_between(b.naive_of))
+  puts(a.to_date.days_between(Time.Date.new(2027, 1, 1).unwrap!))
+end
+```
+
+```output
+7200000000
+0
+79
+```
+
+## Time.compare
+
+```signature
+Time.compare(time: Time.DateTime, other: Time.DateTime) -> Int
+Time.compare_naive(naive: Time.NaiveDateTime, other: Time.NaiveDateTime) -> Int
+Time.compare_date(date: Time.Date, other: Time.Date) -> Int
+Time.compare_time(time: Time.TimeOfDay, other: Time.TimeOfDay) -> Int
+```
+
+`-1`, `0` or `1` as the first value is before, the same as or after `other`, as Ruby's `<=>` gives. `Time.compare` compares instants, so one instant at two offsets is `0`; the others compare readings, days and clock readings.
+
+```agentica
+def main() -> Void
+  a = Time.DateTime.new(2026, 10, 14, 21, 0, 0, 0, 7200).unwrap!
+  puts(Time.compare(a, a.getutc.unwrap!))
+  puts(Time.compare_naive(a.naive_of, a.getutc.unwrap!.naive_of))
+end
+```
+
+```output
+0
+1
+```
+
+## cwday and yday
+
+```signature
+date.cwday() -> Int
+date.yday() -> Int
+```
+
+The ISO day of the week, `1` for Monday to `7` for Sunday, and the day of the year, `1` to `366`. A date and time gives them through `to_date`.
+
+```agentica
+def main() -> Void
+  d = Time.Date.new(2026, 10, 14).unwrap!
+  puts("#{d.cwday} #{d.yday}")
+end
+```
+
+```output
+3 287
 ```
