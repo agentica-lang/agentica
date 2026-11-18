@@ -41,6 +41,9 @@ struct agc_channel {
   /* A receiver that had parked left without a value: its recv timed out or its task was cancelled. std/http reads
      it (HttpWire.awaited?) to tell a caller that gave up from one that has not parked yet. */
   bool closed, abandoned, read_only;
+  /* The task that HttpWire.awaited? bound to the channel (agc_channel_watch): a cancel of a parked receiver cancels it,
+     and the next value sent clears it. */
+  agc_task *watcher;
   agc_resource *state;
   agc_task *receivers, *receivers_tail, *senders, *senders_tail;
   /* The channel's one address, made by its first channel.address; NULL before. */
@@ -173,6 +176,7 @@ static bool deliver(agc_vm *vm, agc_channel *c, agc_value v, bool has_slot) {
     push_back(vm, c, v, seq);
   }
   c->sent++;
+  c->watcher = NULL;
   return true;
 }
 
@@ -465,6 +469,15 @@ bool agc_channel_abandoned(agc_vm *vm, const agc_channel *c) {
   return abandoned;
 }
 
+/* Makes t the watcher of c, or false when a receiver gave up already. */
+bool agc_channel_watch(agc_vm *vm, agc_channel *c, agc_task *t) {
+  lock(vm, c);
+  bool open = !c->abandoned;
+  if (open) c->watcher = t;
+  unlock(vm, c);
+  return open;
+}
+
 /* A send that never waits, for the notice of a monitor (vm/task.c): the value goes to a waiting receiver, else into the
    ring, past the capacity when the channel is full, so an open channel never loses a notice. Senders still wait until
    the count is below the capacity, so the ring holds at most one value more than the capacity per monitor of the
@@ -583,7 +596,12 @@ void agc_channel_leave(agc_vm *vm, agc_task *t) {
   const agc_channel_wait w = t->channel;
   leave_queue(vm, c, t);
   stop_waiting(t);
-  if (!w.sending) c->abandoned = true;
+  agc_task *watcher = NULL;
+  if (!w.sending) {
+    c->abandoned = true;
+    watcher = c->watcher;
+    c->watcher = NULL;
+  }
   if (w.reserved && w.sending) {
     if (!c->closed && !reserve_slot(vm, c)) c->reserved_slots--;
   } else if (w.reserved && !reserve_value(vm, c, w.value, w.seq)) {
@@ -591,6 +609,7 @@ void agc_channel_leave(agc_vm *vm, agc_task *t) {
     c->reserved_values--;
   }
   unlock(vm, c);
+  if (watcher) agc_task_cancel(vm, watcher);
 }
 
 const agc_builtin agc_channel_builtins[] = {

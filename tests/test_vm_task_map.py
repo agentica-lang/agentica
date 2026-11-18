@@ -393,16 +393,22 @@ class Handler(BaseHTTPRequestHandler):
         else:
             time.sleep(scaled(1.4))
         body = ("item " + number if number else "slow").encode()
-        self.send_response(200)
-        self.send_header("Content-Length", str(len(body)))
-        self.end_headers()
-        self.wfile.write(body)
-        self.server.record("end", self.path)
-        if kind == "slow":
-            # A client that keeps the connection in its pool leaves it open; one that drops it shows end of file.
-            readable = select.select([self.connection], [], [], scaled(8.0))[0]
-            if readable and self.connection.recv(1, socket.MSG_PEEK) == b"":
+        try:
+            self.send_response(200)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            self.server.record("end", self.path)
+            if kind == "slow":
+                # A client that keeps the connection in its pool leaves it open; one that drops it shows end of file.
+                readable = select.select([self.connection], [], [], scaled(8.0))[0]
+                if readable and self.connection.recv(1, socket.MSG_PEEK) == b"":
+                    self.server.closed_at = time.monotonic()
+        except ConnectionError:
+            # The client closed before the answer: the cancel of its item closed the connection (#1860).
+            if kind == "slow":
                 self.server.closed_at = time.monotonic()
+            self.close_connection = True
 
 
 def compile_text(program, name, tmp_path):
@@ -505,7 +511,8 @@ def test_a_timed_out_http_item_leaves_no_pooled_connection(tmp_path, adopt, peer
     assert vm.next_line() == "call done"
     assert vm.next_line() == "main done"
     finished = time.monotonic()
-    # The detached request ends after 1.4 s and the client drops the connection then, long before the run ends.
+    # The item's cancel closes the connection, at once or at the latest when the answer comes after 1.4 s, long
+    # before the run ends.
     assert peer.closed_at is not None, "the peer saw no end of file"
     assert peer.closed_at < finished - 0.5
     assert vm.wait() == 0

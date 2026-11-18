@@ -177,10 +177,7 @@ libuv sockets (`vm/tcp.c`, `vm/net.h`) and has no platform code of its own.
   workers and a FIFO of waiting jobs. A job goes to the idle worker freed last,
   else to a new worker while fewer than `max_connections` are open, else to the
   FIFO. A waiting job is dropped, never sent, when its deadline has passed (its
-  caller has returned the timeout already) or when its caller gave up on the
-  reply channel (`HttpWire.awaited?` is false: a receiver that had parked on it
-  left without a value, by a cancel or a recv timeout; a caller that has not
-  parked yet has not given up). When `jobs` is closed, the owner
+  caller has returned the timeout already). When `jobs` is closed, the owner
   answers every waiting and running job with `http: client is closed`, closes
   the inboxes of the idle workers and ends. An origin with no connection and no
   waiting job is dropped from the owner's map.
@@ -205,9 +202,22 @@ libuv sockets (`vm/tcp.c`, `vm/net.h`) and has no platform code of its own.
   connection, then waits on its inbox for `idle_timeout_ms`; the timeout closes
   the connection and ends the worker. The worker closes its inbox before its
   last look at it, so the owner cannot hand a job to a worker that has left: the
-  send fails, and another worker takes the job. When the caller gave up on the
-  reply channel (`HttpWire.awaited?`), the worker closes the connection instead
-  of keeping it.
+  send fails, and another worker takes the job.
+- A caller that gives up: a worker asks `HttpWire.awaited?` of the job's reply
+  channel before it runs the job. It is false when a receiver that had parked
+  on the channel left without a value (a cancel or a recv timeout; a caller
+  that has not parked yet has not given up): the job is not sent, and the
+  connection stays. While it is true, the worker is bound to the channel until
+  a value is sent to it: a cancel of the caller parked on it cancels the worker
+  (`agc_channel_leave`), whose end closes the connection at once, and the
+  supervisor tells the owner the worker is gone. The owner never asks
+  `awaited?`, which would bind the owner. A caller that gave up while the
+  answer was on its way (`awaited?` is false after the job) makes the worker
+  close the connection instead of keeping it.
+- `get_response` and `post_response` queue their one job on a new `jobs`
+  channel before `HttpWire.service` starts the client, whose owner (`once`)
+  closes `jobs` once no job is in flight: the client ends with its call, also
+  when the caller is cancelled.
 - Retry: a job on a reused connection that fails before any response byte (end
   of input, a read or write error) is retried once on a new connection, within
   the same deadline, if its method is `GET`, `HEAD`, `OPTIONS`, `PUT` or

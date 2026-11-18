@@ -1,8 +1,8 @@
 /*
- * The Channel builtins, called directly with hand-made tasks and no bytecode: ring growth and its turn cost,
- * wrap-around, capacity and waiter order, a monitor's notice past the capacity, when a channel counts as abandoned by
- * its receiver, when a wait's clock starts, and addresses (one per channel, a send that waits, closed, another run, a
- * channel the collector freed). All of it again in a shared VM, where the channel and timer locks are real.
+ * The Channel builtins, called directly with hand-made tasks and no bytecode: ring growth, turn cost, wrap-around,
+ * capacity and waiter order, a monitor's notice past the capacity, abandoned channels and the worker HttpWire.awaited?
+ * binds, when a wait's clock starts, and addresses (one per channel, a send that waits, closed, another run, a channel
+ * the collector freed). All of it again in a shared VM, where the channel and timer locks are real.
  */
 #include "../core.h"
 #include "test_support.h"
@@ -15,7 +15,7 @@
 
 #if defined(__linux__) || defined(__APPLE__)
 
-enum { NEW, SEND, RECV, CLOSE, CLOSED, EMPTY, ADDRESS, ADDRESS_SEND, COUNT };
+enum { NEW, SEND, RECV, CLOSE, CLOSED, EMPTY, ADDRESS, ADDRESS_SEND, AWAITED, COUNT };
 
 static agc_vm vm;
 static agc_task *main_task;
@@ -578,6 +578,52 @@ static void test_abandoned(void) {
   assert(agc_channel_abandoned(&vm, agc_as_channel(&vm, timed)));
 }
 
+static bool awaited(agc_task *t, agc_value ch) {
+  agc_value args[1] = {ch};
+  return agc_as_bool(&vm, now(t, AWAITED, args));
+}
+
+/* A worker asks HttpWire.awaited? of reply, then parks, as an HTTP worker waits for the answer on its socket: here on a
+   channel of its own. */
+static agc_task *parked_worker(agc_value reply, bool *answer) {
+  agc_task *w = agc_test_task();
+  *answer = awaited(w, reply);
+  wait_recv(w, make_channel(1), 5000);
+  return w;
+}
+
+/* HttpWire.awaited? binds its caller (a worker) to the reply: a cancel of the receiver parked on it cancels the worker.
+   A value sent first ends the bond, even when the receiver is then cancelled with the value reserved, and a receiver
+   that gave up already is not bound to. */
+static void test_awaited_binds_the_worker(void) {
+  bool answer;
+  agc_value reply = make_channel(1);
+  agc_task *worker = parked_worker(reply, &answer), *caller = agc_test_task();
+  assert(answer);
+  wait_recv(caller, reply, 5000);
+  agc_task_cancel(&vm, caller);
+  assert(worker->state == AGC_TASK_DONE && worker->cancelled);
+
+  agc_value answered = make_channel(1);
+  agc_task *kept = parked_worker(answered, &answer), *taker = agc_test_task();
+  assert(answer);
+  wait_recv(taker, answered, 5000);
+  send(main_task, answered, 1, 0);
+  assert(ready_head() == taker);
+  agc_task_cancel(&vm, taker);
+  settle();
+  assert(kept->state == AGC_TASK_PARKED && !kept->cancelled);
+  agc_task_cancel(&vm, kept);
+
+  agc_task *idle = parked_worker(reply, &answer);
+  assert(!answer);
+  agc_task *other = agc_test_task();
+  wait_recv(other, reply, 5000);
+  agc_task_cancel(&vm, other);
+  assert(idle->state == AGC_TASK_PARKED && !idle->cancelled);
+  agc_task_cancel(&vm, idle);
+}
+
 static agc_value address_of(agc_value ch) {
   agc_value args[1] = {ch};
   return now(main_task, ADDRESS, args);
@@ -687,6 +733,7 @@ static void all(void) {
   test_timeout_before_reservation();
   test_reservation_beats_deadline();
   test_abandoned();
+  test_awaited_binds_the_worker();
   test_clock_starts_late();
   test_cancel_pending_wait();
   test_address();
@@ -702,8 +749,9 @@ int main(void) {
   agc_vm_init(&vm, NULL, stdout, stderr, INT64_MAX);
   main_task = vm.task;
   static const char *names[COUNT] = {"Channel.new",    "Channel.send",    "Channel.recv",    "Channel.close",
-                                     "Channel.closed?", "Channel.empty?", "Channel.address", "Address.send"};
-  static const uint32_t arities[COUNT] = {1, 3, 2, 1, 1, 1, 1, 3};
+                                     "Channel.closed?", "Channel.empty?", "Channel.address", "Address.send",
+                                     "HttpWire.awaited?"};
+  static const uint32_t arities[COUNT] = {1, 3, 2, 1, 1, 1, 1, 3, 1};
   for (int k = 0; k < COUNT; k++) {
     calls[k] = agc_find_builtin((const uint8_t *)names[k], strlen(names[k]), arities[k]);
     assert(calls[k]);

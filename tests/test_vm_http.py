@@ -2488,3 +2488,93 @@ def test_shutdown_does_not_wait_for_a_connection_whose_handler_crashed(tmp_path,
     stop_in(vm, 10000)
     assert stopped_ms(vm, exit_code=1) < 5000, "the crash ended its connection"
     assert "RUNTIME-INDEX-OUT-OF-RANGE" in vm.stderr_text()
+
+
+CANCEL_PROGRAM = """\
+import HTTP from "std/http"
+
+struct Call
+  how: String
+  url: String
+  options: HTTP.ClientOptions
+  pool: HTTP.Client
+end
+
+def answer(c: Call) -> Result[HTTP.Response]
+  return HTTP.get_response(c.url, c.options) if c.how == "get_response"
+  return HTTP.post_response(c.url, "hello".bytes, [], c.options) if c.how == "post_response"
+
+  HTTP.get(c.pool, c.url)
+end
+
+def status(c: Call) -> Result[Int]
+  response = try answer(c)
+  ok(response.status)
+end
+
+def main() -> Void
+  args = System.args()
+  context = TLS.client_context(TLS.ClientOptions(ca_file: args[2])).unwrap!
+  options = HTTP.ClientOptions(timeout_ms: 60000, max_connections: 1, tls: some(context))
+  c = Call(how: args[0], url: args[1], options: options, pool: HTTP.client(options).unwrap!)
+  task = Task.spawn(&status, c)
+  _ = IO.gets()
+  Task.cancel(task)
+  puts("cancelled")
+  IO.flush()
+  _ = IO.gets()
+  if c.how == "request"
+    puts(status(c))
+  end
+end
+"""
+
+
+def served_request(listener, context):
+    """The next connection (TLS with `context`) and the bytes of its request head and body."""
+    conn, _ = listener.accept()
+    conn.settimeout(scaled(10))
+    if context:
+        conn = context.wrap_socket(conn, server_side=True)
+    data = b""
+    while b"\r\n\r\n" not in data or (data.startswith(b"POST") and not data.endswith(b"hello")):
+        data += conn.recv(65536)
+    return conn, data
+
+
+def closed(conn):
+    try:
+        return conn.recv(65536) == b""
+    except (ConnectionError, ssl.SSLError):
+        return True
+
+
+@pytest.mark.parametrize("scheme", ["http", "https"])
+@pytest.mark.parametrize("how", ["get_response", "post_response", "request"])
+def test_a_cancel_closes_the_connection_of_a_request_waiting_for_its_answer(tmp_path, adopt, scheme, how):
+    """The server never answers; the task of the request is cancelled and its connection closes at once (#1860). A
+    pooled connection does not go back to the pool, and its slot is free: the next call opens a new connection."""
+    context = None
+    if scheme == "https":
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        context.load_cert_chain(CERTS / "server.pem", CERTS / "server-key.pem")
+    with socket.create_server(("127.0.0.1", 0)) as listener:
+        listener.settimeout(scaled(10))
+        url = "%s://127.0.0.1:%d/slow" % (scheme, listener.getsockname()[1])
+        vm = adopt(start_vm(compile_text(CANCEL_PROGRAM, "cancel", tmp_path), how, url, CERTS / "ca.pem", stdin=True))
+        conn, data = served_request(listener, context)
+        with conn:
+            assert data.startswith(b"POST /slow " if how == "post_response" else b"GET /slow "), data
+            vm.process.stdin.write(b"go\n")
+            vm.process.stdin.flush()
+            assert vm.next_line() == "cancelled"
+            assert closed(conn), "the cancel closed the connection before any answer"
+        vm.process.stdin.write(b"next\n")
+        vm.process.stdin.flush()
+        if how == "request":
+            conn, data = served_request(listener, context)
+            with conn:
+                conn.sendall(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok")
+                assert vm.next_line() == "ok(200)"
+        vm.close_stdin()
+        assert vm.wait() == 0, vm.stderr_text()
