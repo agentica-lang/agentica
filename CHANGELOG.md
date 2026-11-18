@@ -8,6 +8,12 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.34.2] - 2026-11-18
+
+### Fixed
+
+- A task cancelled while `HTTP.get_response`, `HTTP.post_response` or a call on an `HTTP.client` waits for the answer closes the connection at once, instead of when the server answers; a pooled connection does not go back to the pool (#1860).
+
 ## [0.34.1] - 2026-11-17
 
 ### Changed
@@ -1706,7 +1712,8 @@ First release of Agentica, a statically typed language designed for AI agents.
 - `main` returns `Void`; maps preserve insertion order and support fallible
   lookups.
 
-[unreleased]: https://github.com/agentica-lang/agentica/compare/0.34.1...HEAD
+[unreleased]: https://github.com/agentica-lang/agentica/compare/0.34.2...HEAD
+[0.34.2]: https://github.com/agentica-lang/agentica/compare/0.34.1...0.34.2
 [0.34.1]: https://github.com/agentica-lang/agentica/compare/0.34.0...0.34.1
 [0.34.0]: https://github.com/agentica-lang/agentica/compare/0.33.2...0.34.0
 [0.33.2]: https://github.com/agentica-lang/agentica/compare/0.33.1...0.33.2

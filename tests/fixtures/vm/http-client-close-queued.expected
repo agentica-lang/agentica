@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 1050,
+  "steps": 1074,
   "stdout": [
     "error(\"http: client is closed\", kind: \"http.closed\")",
     "server: network: operation timed out",

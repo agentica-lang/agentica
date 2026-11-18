@@ -368,6 +368,7 @@ class Peer(ThreadingHTTPServer):
         self.lock = threading.Lock()
         self.events = []
         self.closed_at = None
+        self.slow_at = None
         self.thread = threading.Thread(target=self.serve_forever, daemon=True)
         self.thread.start()
 
@@ -390,19 +391,26 @@ class Handler(BaseHTTPRequestHandler):
         elif kind == "b":
             # The later the request, the shorter the wait, so the responses end in reverse order.
             time.sleep(scaled(0.5 + 0.05 * (7 - int(number))))
-        else:
-            time.sleep(scaled(1.4))
+        elif self.client_closed_within(scaled(1.4)):
+            # The cancel of the item closed the connection before the answer (#1860).
+            self.close_connection = True
+            return
         body = ("item " + number if number else "slow").encode()
         self.send_response(200)
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
         self.server.record("end", self.path)
-        if kind == "slow":
-            # A client that keeps the connection in its pool leaves it open; one that drops it shows end of file.
-            readable = select.select([self.connection], [], [], scaled(8.0))[0]
-            if readable and self.connection.recv(1, socket.MSG_PEEK) == b"":
-                self.server.closed_at = time.monotonic()
+
+    def client_closed_within(self, seconds):
+        """Waits `seconds` for the answer; True, with the time in closed_at, when the client closes first."""
+        self.server.slow_at = time.monotonic()
+        readable = select.select([self.connection], [], [], seconds)[0]
+        if readable and self.connection.recv(1, socket.MSG_PEEK) == b"":
+            self.server.closed_at = time.monotonic()
+            return True
+        time.sleep(max(0.0, self.server.slow_at + seconds - time.monotonic()))
+        return False
 
 
 def compile_text(program, name, tmp_path):
@@ -504,10 +512,9 @@ def test_a_timed_out_http_item_leaves_no_pooled_connection(tmp_path, adopt, peer
     assert vm.next_line() == TIMED_OUT
     assert vm.next_line() == "call done"
     assert vm.next_line() == "main done"
-    finished = time.monotonic()
-    # The detached request ends after 1.4 s and the client drops the connection then, long before the run ends.
-    assert peer.closed_at is not None, "the peer saw no end of file"
-    assert peer.closed_at < finished - 0.5
+    # The cancel of the item at 300 ms closes the connection before the answer is due at 1.4 s.
+    assert peer.closed_at is not None, "the peer saw no end of file before the answer"
+    assert peer.closed_at - peer.slow_at < scaled(1.4)
     assert vm.wait() == 0
 
 
