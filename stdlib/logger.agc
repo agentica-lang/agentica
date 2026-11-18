@@ -9,8 +9,6 @@
 ## `Logger.Level` and `Logger.Event` are the builtin types `LogRegistry.Level` and `LogRegistry.Event`. The signatures
 ## below, a diagnostic, `help` and any printed value show `Logger.Level` and `Logger.Event`, as written.
 
-import UTC from "std/utc"
-
 export LogRegistry.Level
 export LogRegistry.Event
 
@@ -137,9 +135,9 @@ def format_json(event: LogRegistry.Event) -> String
   )
 end
 
-## Returns milliseconds since the Unix epoch as UTC text, such as `2026-10-12T10:15:02.345Z`.
-## A year outside 0 to 9999 is written with its sign and at least four digits.
-def time_text(time_ms: Int) -> String = UTC.iso8601(time_ms, 3)
+## Returns milliseconds since the Unix epoch as UTC text, `Time.DateTime#iso8601` of the instant, such as
+## `2026-10-12T10:15:02.345000Z`. An instant outside the years 1 to 9999 halts.
+def time_text(time_ms: Int) -> String = Time.at_us(time_ms * 1000).unwrap!.iso8601
 
 private
 

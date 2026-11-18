@@ -113,7 +113,7 @@ Logger.time_text(time_ms: Int) -> String
 - Text: `TIME LEVEL MESSAGE key=value ...`, with the time in UTC and the level in capitals.
 - A message, key or value is written as a JSON string when it is empty, or has `=`, a quote, a backslash or a control character. A key or value with a space is also written as a JSON string. So a line is always one line, and a value never looks like a field.
 - JSON: one object per line, with the keys `time`, `level` (`debug`, `info`, `warning` or `error`), `msg`, `fields` and `task`. The fields are nested, so a field named `level` never clashes with a fixed key.
-- `time_text` turns milliseconds since the Unix epoch into text such as `2026-10-12T10:15:02.345Z`. A year outside 0 to 9999 is written with its sign and at least four digits.
+- `time_text` turns milliseconds since the Unix epoch into text such as `2026-10-12T10:15:02.345000Z`, the [`iso8601`](/library/io-and-system/time/#iso8601) of the `Time.DateTime` at offset 0, with six fraction digits. An instant outside the years 1 to 9999 halts; the time of an event comes from `Time.now_ms()`, which is in range.
 
 ```agentica
 import Logger from "std/logger"
@@ -135,9 +135,9 @@ end
 ```
 
 ```output
-2025-10-15T10:15:02.345Z INFO request done path=/items status=200
-{"time":"2025-10-15T10:15:02.345Z","level":"info","msg":"request done","fields":{"path":"/items","status":"200"},"task":1}
-1970-01-01T00:00:00.000Z ERROR "a=b" note="two words"
+2025-10-15T10:15:02.345000Z INFO request done path=/items status=200
+{"time":"2025-10-15T10:15:02.345000Z","level":"info","msg":"request done","fields":{"path":"/items","status":"200"},"task":1}
+1970-01-01T00:00:00.000000Z ERROR "a=b" note="two words"
 ```
 
 ## File output and slow handlers

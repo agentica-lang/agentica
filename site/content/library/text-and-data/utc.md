@@ -4,7 +4,7 @@ weight: 14
 description: The std/utc module, which turns Unix milliseconds into the civil date and time in UTC and into RFC 3339 text.
 ---
 
-This module is interim: the builtin [dates and times](/library/io-and-system/time/) of `Time` (issue #985) replace it as they land.
+**Deprecated:** use the builtin [dates and times](/library/io-and-system/time/) of `Time` instead; `std/utc` is removed in 0.36.0. `UTC.iso8601(ms, 3)` becomes `Time.at_us(ms * 1000).unwrap!.iso8601` (six fraction digits, years 1 to 9999), and `UTC.parts(ms)` becomes the fields of that `Time.DateTime`.
 
 `std/utc` is written in Agentica: `import UTC from "std/utc"`. It reads the number of milliseconds since the Unix epoch, the value of `Time.now_ms()`, as a date and a time of day in UTC. The name `Time` belongs to the builtin, so the module has another one. `iso8601` is Ruby's `Time#utc.iso8601(n)` and the fields of `parts` are those of `Time#utc` (`year`, `month`, `day`, `hour`, `min`, `sec`, with the names written out). The calendar is the proleptic Gregorian one, Unix time has no leap seconds, and there are no time zones: every answer is UTC. Nothing in it halts, for any `Int`.
 

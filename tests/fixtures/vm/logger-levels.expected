@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 4603,
+  "steps": 3817,
   "stdout": [
     "true",
     "no handler named \"console\" is attached",
@@ -78,9 +78,9 @@
     "attach errors",
     "handlers: [\"again\"]",
     "the built-in handlers, one per format",
-    "2025-10-15T10:15:02.345Z INFO request done path=/items status=200",
-    "2025-10-15T10:15:02.345Z WARNING slow ms=1500",
-    "{\"time\":\"2025-10-15T10:15:02.345Z\",\"level\":\"warning\",\"msg\":\"slow\",\"fields\":{\"ms\":\"1500\"},\"task\":1}",
+    "2025-10-15T10:15:02.345000Z INFO request done path=/items status=200",
+    "2025-10-15T10:15:02.345000Z WARNING slow ms=1500",
+    "{\"time\":\"2025-10-15T10:15:02.345000Z\",\"level\":\"warning\",\"msg\":\"slow\",\"fields\":{\"ms\":\"1500\"},\"task\":1}",
     "a handler that detaches another does not change the event in progress",
     "  first: one",
     "  second: one",

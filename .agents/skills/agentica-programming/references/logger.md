@@ -33,7 +33,7 @@ Logger.time_text(time_ms: Int) -> String
   `Logger.info("done", {"path": "/items"})`.
 - No setup is needed. The first call of any `Logger` function attaches a handler
   named `console` (`stderr_text`, level `info`), so `Logger.info("started")`
-  writes `2026-10-12T10:15:02.345Z INFO started` on stderr. Change the setup at
+  writes `2026-10-12T10:15:02.345000Z INFO started` on stderr. Change the setup at
   the start of `main`: `Logger.set_level(Logger.Level.Debug)`, `_ =
   Logger.detach("console")`, `_ = Logger.attach("console", Logger.Level.Info,
   &Logger.stderr_json)`.

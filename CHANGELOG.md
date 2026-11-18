@@ -20,7 +20,12 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Breaking:** `std/logger` writes its time with `Time`, with six fraction digits (`2026-10-12T10:15:02.345000Z`, was `.345Z`), and `Logger.time_text` halts on an instant outside the years 1 to 9999 (#985).
 - A source of `agentica add` that is neither an `https://` URL nor `OWNER/REPO` is `PKG-SOURCE-INVALID` (exit 1), no longer a usage error (exit 2) (#1833).
+
+### Deprecated
+
+- `std/utc`: use the builtin `Time` dates and times; it is removed in 0.36.0 (#985).
 
 ## [0.34.1] - 2026-11-17
 

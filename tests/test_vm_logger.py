@@ -20,7 +20,7 @@ def test_default_run_prints_one_info_line_on_stderr(bytecode_of):
     assert result.code == 0
     assert result.stdout == ""
     assert re.fullmatch(
-        r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z INFO hello\n", result.stderr
+        r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z INFO hello\n", result.stderr
     )
 
 
