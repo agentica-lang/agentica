@@ -417,6 +417,7 @@ def workspace_into(
   end
 
   table = try workspace_table(place, scratch, commit)
+  try members_apart(place, table.folders)
   try members_present(place, scratch, commit, table.folders)
   root = Lock.Locked(
     name: pin.name,
@@ -494,6 +495,20 @@ def workspace_table(place: Place, scratch: Scratch, commit: String) -> Result[Me
 
     _ -> error(fail(place, "PKG-FETCH", "workspace", "the #{MANIFEST} of the repository is not a table", ""))
   end
+end
+
+# No member is inside another: deps/ keeps a member in a folder of its namespace, and the files of one member inside
+# another would be hashed as the files of both.
+def members_apart(place: Place, folders: List[String]) -> Result[Void]
+  for folder in folders
+    inner = folders.select do |other: String| folder.start_with?("#{other}/") end
+    if inner.size > 0
+      message = "the workspace member #{folder} is inside the member #{inner[0]}"
+      return error(fail(place, "PKG-FETCH", "workspace", message, "a member is a folder of its own"))
+    end
+  end
+
+  ok()
 end
 
 # Every member of the table is a folder of the commit with its own manifest, which one `ls-tree` of those paths shows.

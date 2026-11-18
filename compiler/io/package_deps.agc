@@ -88,9 +88,7 @@ def put(
 
   files = try chosen(workspace, source, place, locked)
   try prepare(workspace, deps)
-  if Lock.namespace(locked.name) != ""
-    try prepare(workspace, Paths.join(deps, Lock.namespace(locked.name)))
-  end
+  try prepare_parents(workspace, deps, locked.name)
 
   parent = try make_stage(deps)
   done = stage_and_swap(workspace, deps, parent, source, files, place, locked)
@@ -244,6 +242,17 @@ def prepare(workspace: Workspace.Workspace, deps: String) -> Result[Void]
       error(Failure.fail_file(deps, "PKG-SYMLINK", "#{deps} is a symbolic link", help))
     Kind.Other -> error(write_failure(deps, "#{deps} is not a folder", "remove it, then run install again"))
   end
+end
+
+# The folders above deps/<name> when the name has a namespace (`finn/examples/extension`: deps/finn and
+# deps/finn/examples), each made if it is not there and never a link.
+def prepare_parents(workspace: Workspace.Workspace, deps: String, name: String) -> Result[Void]
+  parts = name.split("/")
+  for count in 1...parts.size
+    try prepare(workspace, Paths.join(deps, parts.take(count).join("/")))
+  end
+
+  ok()
 end
 
 def kind_of(workspace: Workspace.Workspace, path: String) -> Result[Kind]
