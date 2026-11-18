@@ -32,6 +32,8 @@ t.to_date -> Time.Date       # also on a Time.NaiveDateTime
 x.iso8601 -> String          # any of the four; .ffffff always, Z or +HH:MM
 Time.Date.iso8601(text: String) -> Result[Time.Date]   # also TimeOfDay,
 Time.DateTime.iso8601(text) -> Result[Time.DateTime]   # NaiveDateTime
+x.strftime(format: String) -> String   # any of the four; a subset of Ruby's
+  # %Y %m %d %j %u %w %a %A %b %B %H %M %S %L %N %z %:z %%, English names
 
 d.add_days(days: Int) -> Result[...]   # Date, NaiveDateTime, DateTime
 t.add_us(us: Int) -> Result[...]       # NaiveDateTime, DateTime (same offset)
@@ -63,3 +65,6 @@ d.cwday -> Int                         # 1 Monday .. 7 Sunday; d.yday 1..366
   refuses one; a space for `T`, `+0200`, `07:32` and sec 60 are errors.
 - An add that leaves the years 1 to 9999 is an `argument` error, for any Int
   count. A duration is an Int of microseconds.
+- `strftime` has no flags or widths, and any other directive stays as
+  written: `%e`, `%y`, `%F`, `%T`, `%-d`, and one the type lacks (`%H` of a
+  date, `%z` without an offset).

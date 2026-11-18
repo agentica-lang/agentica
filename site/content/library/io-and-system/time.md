@@ -1,7 +1,7 @@
 ---
 title: Dates and times
 weight: 9
-description: Calendar dates, times of day and date-times with a fixed UTC offset, as checked values of the Time family, with Unix time, the wall clock, arithmetic and ISO 8601 text.
+description: Calendar dates, times of day and date-times with a fixed UTC offset, as checked values of the Time family, with Unix time, the wall clock, arithmetic, ISO 8601 text and strftime.
 ---
 
 The `Time` family has four record types. Their fields are `Int`s, named as in Ruby's `Time`:
@@ -326,6 +326,37 @@ missing offset; use Time.NaiveDateTime.iso8601 for text without one
 expected YYYY-MM-DDTHH:MM:SS at character 11
 offset "Z" is not allowed here; use Time.DateTime.iso8601
 ok(Time.TimeOfDay(hour: 7, min: 32, sec: 0, usec: 500000))
+```
+
+## strftime
+
+```signature
+date.strftime(format: String) -> String
+time.strftime(format: String) -> String
+naive.strftime(format: String) -> String
+```
+
+The format of a value of any of the four types (`date` a `Time.Date`, `time` a `Time.TimeOfDay` or a `Time.DateTime`, `naive` a `Time.NaiveDateTime`) with each directive replaced by a part of the value. It takes a subset of Ruby's `strftime` directives, with English names:
+
+- `%Y` the year in four digits, `%m` and `%d` the month and the day in two, `%j` the day of the year in three;
+- `%u` the ISO day of the week (`1` Monday to `7` Sunday), `%w` the day of the week from `0` (Sunday) to `6`;
+- `%a` and `%A` the day's name, short (`Wed`) and full (`Wednesday`), `%b` and `%B` the month's name, short (`Oct`) and full (`October`);
+- `%H`, `%M` and `%S` the hour, minute and second in two digits, `%L` the milliseconds in three, `%N` the nanoseconds in nine;
+- `%z` the offset as `+HHMM` and `%:z` as `+HH:MM`, and `%%` a `%`.
+
+There are no flags or widths. A directive that is not in this list, or that names a part the value does not have, stays as it is written, as does a `%` at the end: for example `%e`, `%y`, `%F`, `%T` and `%-d`, `%H` of a `Time.Date` and `%z` of a `Time.NaiveDateTime`.
+
+```agentica
+def main() -> Void
+  t = Time.DateTime.new(2026, 10, 14, 21, 5, 42, 201337, 7200).unwrap!
+  puts(t.strftime("%a %d %b %Y %H:%M:%S.%L %:z"))
+  puts(t.to_date.strftime("%A, %B %d (day %j) %H:%M"))
+end
+```
+
+```output
+Wed 14 Oct 2026 21:05:42.201 +02:00
+Wednesday, October 14 (day 287) %H:%M
 ```
 
 ## add_days and add_us

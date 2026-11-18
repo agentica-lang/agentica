@@ -1,9 +1,9 @@
 /*
  * The dates and times of the Time family (agc_date_builtins): the constructors of Time.Date, Time.TimeOfDay,
  * Time.NaiveDateTime and Time.DateTime, which check every field, the calendar queries, Unix time, the wall clock and
- * fixed offsets, arithmetic and comparison, and their ISO 8601 text (RFC 3339 for an aware value). Service layer. The
- * calendar is the proleptic Gregorian one, years 1 to 9999, with microseconds and no leap seconds: every day has 86400
- * seconds, as in POSIX time.
+ * fixed offsets, arithmetic and comparison, their ISO 8601 text (RFC 3339 for an aware value) and strftime. Service
+ * layer. The calendar is the proleptic Gregorian one, years 1 to 9999, with microseconds and no leap seconds: every day
+ * has 86400 seconds, as in POSIX time.
  * Design: issue #985 (§41) and docs/vm/05-values-execution-builtins.md §7.
  */
 #include "services.h"
@@ -11,6 +11,7 @@
 #include <inttypes.h>
 #include <stddef.h>
 #include <stdio.h>
+#include <string.h>
 #include <time.h>
 
 #define YEAR_MIN 1
@@ -507,6 +508,105 @@ static agc_value builtin_format_datetime(agc_vm *vm, agc_value *args, uint32_t s
   return format_record(vm, args[0], AGC_TIME_DATETIME, span);
 }
 
+/* strftime: the directives %Y %m %d %H %M %S %L %N %z %:z %j %u %w %a %A %b %B and %%, with English names and no
+   flags or widths. A directive that is unknown, or for a part the kind does not have (an hour of a Time.Date), is
+   copied as written. */
+#define DIRECTIVE_SIZE 16
+
+static const char *const day_names[7] = {"Sunday",   "Monday", "Tuesday", "Wednesday",
+                                         "Thursday", "Friday", "Saturday"};
+static const char *const month_names[12] = {"January", "February", "March",     "April",   "May",      "June",
+                                             "July",    "August",   "September", "October", "November", "December"};
+
+/* The text of the directive that starts at FORMAT[at], just past its %, into OUT (DIRECTIVE_SIZE bytes): its length,
+   or 0 when the kind cannot fill it. *taken is the number of format bytes it reads. */
+static size_t directive(uint32_t kind, const fields *f, const uint8_t *format, size_t length, size_t at,
+                        size_t *taken, char *out) {
+  if (at >= length) return 0;
+  bool date = kind != AGC_TIME_OF_DAY, clock = kind != AGC_TIME_DATE, zone = kind == AGC_TIME_DATETIME;
+  bool colon = format[at] == ':' && at + 1 < length && format[at + 1] == 'z';
+  char c = (char)format[at];
+  *taken = colon ? 2 : 1;
+  int64_t minutes = (f->utc_offset < 0 ? -f->utc_offset : f->utc_offset) / 60;
+  char sign = f->utc_offset < 0 ? '-' : '+';
+  int64_t days = date ? date_days(f) : 0;
+  int yday = date ? (int)(days - days_from_civil(f->year, 1, 1) + 1) : 0, wday = (int)(((days % 7 + 7) % 7 + 4) % 7);
+  int hours = (int)(minutes / 60), mins = (int)(minutes % 60);
+  int n = 0;
+  if (c == '%') n = snprintf(out, DIRECTIVE_SIZE, "%%");
+  else if (c == 'Y' && date) n = snprintf(out, DIRECTIVE_SIZE, "%04d", (int)f->year);
+  else if (c == 'm' && date) n = snprintf(out, DIRECTIVE_SIZE, "%02d", (int)f->month);
+  else if (c == 'd' && date) n = snprintf(out, DIRECTIVE_SIZE, "%02d", (int)f->day);
+  else if (c == 'j' && date) n = snprintf(out, DIRECTIVE_SIZE, "%03d", yday);
+  else if (c == 'u' && date) n = snprintf(out, DIRECTIVE_SIZE, "%d", wday == 0 ? 7 : wday);
+  else if (c == 'w' && date) n = snprintf(out, DIRECTIVE_SIZE, "%d", wday);
+  else if (c == 'a' && date) n = snprintf(out, DIRECTIVE_SIZE, "%.3s", day_names[wday]);
+  else if (c == 'A' && date) n = snprintf(out, DIRECTIVE_SIZE, "%s", day_names[wday]);
+  else if (c == 'b' && date) n = snprintf(out, DIRECTIVE_SIZE, "%.3s", month_names[f->month - 1]);
+  else if (c == 'B' && date) n = snprintf(out, DIRECTIVE_SIZE, "%s", month_names[f->month - 1]);
+  else if (c == 'H' && clock) n = snprintf(out, DIRECTIVE_SIZE, "%02d", (int)f->hour);
+  else if (c == 'M' && clock) n = snprintf(out, DIRECTIVE_SIZE, "%02d", (int)f->min);
+  else if (c == 'S' && clock) n = snprintf(out, DIRECTIVE_SIZE, "%02d", (int)f->sec);
+  else if (c == 'L' && clock) n = snprintf(out, DIRECTIVE_SIZE, "%03d", (int)(f->usec / 1000));
+  else if (c == 'N' && clock) n = snprintf(out, DIRECTIVE_SIZE, "%06d000", (int)f->usec);
+  else if (c == 'z' && zone) n = snprintf(out, DIRECTIVE_SIZE, "%c%02d%02d", sign, hours, mins);
+  else if (colon && zone) n = snprintf(out, DIRECTIVE_SIZE, "%c%02d:%02d", sign, hours, mins);
+  /* read_record keeps every field in range, so no directive passes 9 bytes; the guard keeps render's memcpy inside
+     its piece whatever the fields. */
+  return n > 0 && n < DIRECTIVE_SIZE ? (size_t)n : 0;
+}
+
+/* The text of FORMAT for the value: its byte length, and its characters in *chars. OUT is NULL to count only. */
+static size_t render(uint32_t kind, const fields *f, const agc_string *format, char *out, size_t *chars) {
+  const uint8_t *text = (const uint8_t *)format->data;
+  size_t n = 0, at = 0;
+  *chars = 0;
+  while (at < format->bytes) {
+    char piece[DIRECTIVE_SIZE];
+    size_t taken = 0;
+    size_t size = text[at] == '%' ? directive(kind, f, text, format->bytes, at + 1, &taken, piece) : 0;
+    if (size > 0) {
+      if (out) memcpy(out + n, piece, size);
+      n += size;
+      *chars += size;
+      at += 1 + taken;
+      continue;
+    }
+    if (out) out[n] = (char)text[at];
+    if ((text[at] & 0xC0) != 0x80) (*chars)++;
+    n++;
+    at++;
+  }
+  return n;
+}
+
+static agc_value strftime_record(agc_vm *vm, agc_value *args, uint32_t kind, uint32_t span) {
+  fields f = {0};
+  read_record(vm, args[0], kind, &f, span);
+  const agc_string *format = agc_as_string(vm, args[1]);
+  size_t chars = 0;
+  size_t bytes = render(kind, &f, format, NULL, &chars);
+  agc_string *s = agc_new_string(bytes, chars);
+  render(kind, &f, format, s->data, &chars);
+  return agc_string_value(s);
+}
+
+static agc_value builtin_strftime_date(agc_vm *vm, agc_value *args, uint32_t span) {
+  return strftime_record(vm, args, AGC_TIME_DATE, span);
+}
+
+static agc_value builtin_strftime_time_of_day(agc_vm *vm, agc_value *args, uint32_t span) {
+  return strftime_record(vm, args, AGC_TIME_OF_DAY, span);
+}
+
+static agc_value builtin_strftime_naive(agc_vm *vm, agc_value *args, uint32_t span) {
+  return strftime_record(vm, args, AGC_TIME_NAIVE, span);
+}
+
+static agc_value builtin_strftime_datetime(agc_vm *vm, agc_value *args, uint32_t span) {
+  return strftime_record(vm, args, AGC_TIME_DATETIME, span);
+}
+
 static bool expected(reader *r) {
   snprintf(r->message, MESSAGE_SIZE, "expected %s at character %zu", r->pattern, r->at + 1);
   return false;
@@ -685,6 +785,11 @@ const agc_builtin agc_date_builtins[] = {
   {"Time.TimeOfDay.iso8601", 1, builtin_parse_time_of_day, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true, false},
   {"Time.NaiveDateTime.iso8601", 1, builtin_parse_naive, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true, false},
   {"Time.DateTime.iso8601", 1, builtin_parse_datetime, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true, false},
+  {"Time.Date.strftime", 2, builtin_strftime_date, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true, false},
+  {"Time.TimeOfDay.strftime", 2, builtin_strftime_time_of_day, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true,
+   false},
+  {"Time.NaiveDateTime.strftime", 2, builtin_strftime_naive, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true, false},
+  {"Time.DateTime.strftime", 2, builtin_strftime_datetime, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true, false},
 };
 
 const size_t agc_date_builtin_count = sizeof agc_date_builtins / sizeof agc_date_builtins[0];

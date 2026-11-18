@@ -503,7 +503,8 @@ def run_json_cases(bytecode, cases):
     stdin = "".join(json.dumps(case) + "\n" for case in cases).encode("utf-8")
     result = run_vm(bytecode, stdin=stdin)
     assert result.code == 0, result.stderr
-    replies = [json.loads(line) for line in result.stdout.splitlines()]
+    # Only \n ends a reply: JSON leaves \x85 and \u2028 unescaped, and str.splitlines would break a line at them.
+    replies = [json.loads(line) for line in result.stdout.split("\n") if line]
     assert len(replies) == len(cases)
     return replies
 

@@ -9,11 +9,14 @@ timedelta under a day. Hypothesis draws the fields from the edges of each range 
 Unix time is a timedelta from the epoch, which Python divides with floor division, as Ruby's Time#to_i rounds; a sum
 that leaves the years 1 to 9999 overflows in Python as it errs in Agentica. The text is Python's isoformat with Z for
 +00:00; Python's fromisoformat reads more forms than the strict ones of Agentica, so the peer of a parse first matches
-the strict form with a regular expression and only then asks fromisoformat.
+the strict form with a regular expression and only then asks fromisoformat. strftime has a small model of its own
+(peer_strftime) over the fields of the Python value and calendar's English names, and is also checked against
+Python's own strftime, in the C locale, on the directives the two share.
 
 The profiles and the seed of each tier are in tests/conftest.py.
 """
 import calendar
+import locale
 import re
 import time as clock_time
 from datetime import date, datetime, time, timedelta, timezone
@@ -572,3 +575,118 @@ def test_the_ends_of_the_range_and_the_largest_counts(driver):
     check(driver, cases)
     replies = run_json_cases(driver, [request(op, args) for op, args in cases[-4:]])
     assert [r["fields"][0] for r in replies] == [3, 287, 366, 1]
+
+
+STRFTIME_KINDS = {"strftime_date": "date", "strftime_time_of_day": "time", "strftime_naive": "naive",
+                  "strftime_datetime": "aware"}
+
+
+def strftime_value(op, args):
+    return {"date": date, "time": time, "naive": datetime, "aware": aware}[STRFTIME_KINDS[op]](*args)
+
+
+def peer_strftime(op, args, format):
+    """The model of strftime: at each %, the directive the value can fill (%:z before %z) or else the % alone, which
+    then copies what follows as written."""
+    kind = STRFTIME_KINDS[op]
+    value = strftime_value(op, args)
+    parts = {"%": "%"}
+    if kind != "time":
+        parts |= {"Y": f"{value.year:04d}", "m": f"{value.month:02d}", "d": f"{value.day:02d}",
+                  "j": f"{value.timetuple().tm_yday:03d}", "u": str(value.isoweekday()),
+                  "w": str(value.isoweekday() % 7), "a": calendar.day_abbr[value.weekday()],
+                  "A": calendar.day_name[value.weekday()], "b": calendar.month_abbr[value.month],
+                  "B": calendar.month_name[value.month]}
+    if kind != "date":
+        parts |= {"H": f"{value.hour:02d}", "M": f"{value.minute:02d}", "S": f"{value.second:02d}",
+                  "L": f"{value.microsecond // 1000:03d}", "N": f"{value.microsecond * 1000:09d}"}
+    if kind == "aware":
+        minutes = int(value.utcoffset().total_seconds()) // 60
+        sign, hours, mins = "-" if minutes < 0 else "+", abs(minutes) // 60, abs(minutes) % 60
+        parts |= {"z": f"{sign}{hours:02d}{mins:02d}", ":z": f"{sign}{hours:02d}:{mins:02d}"}
+    out, at = [], 0
+    while at < len(format):
+        key = ":z" if format[at + 1:at + 3] == ":z" else format[at + 1:at + 2]
+        if format[at] == "%" and key in parts:
+            out.append(parts[key])
+            at += 1 + len(key)
+        else:
+            out.append(format[at])
+            at += 1
+    return "".join(out)
+
+
+DIRECTIVES = [f"%{c}" for c in "YmdHMSLNzjuwaAbB%"] + ["%:z"]
+STRFTIME_FORMATS = (
+    st.lists(st.sampled_from(DIRECTIVES) | st.sampled_from(["%Q", "%-d", "%5Y", "%:x", "%:", "%E", "%", ":", "z"])
+             | st.sampled_from(["-", " ", "T", "é", "日", "٣", "\n"]), max_size=12).map("".join)
+    | st.text(max_size=20)
+)
+STRFTIME = (
+    st.tuples(st.just("strftime_date"), VALID_DATES | EDGE_DATES, STRFTIME_FORMATS)
+    | st.tuples(st.just("strftime_time_of_day"), st.times().map(clock), STRFTIME_FORMATS)
+    | st.tuples(st.just("strftime_naive"), VALID_NAIVE | EDGE_NAIVE, STRFTIME_FORMATS)
+    | st.tuples(st.just("strftime_datetime"), VALID_AWARE | EDGE_AWARE, STRFTIME_FORMATS)
+)
+
+
+def test_strftime_agrees_with_python(driver):
+    counts = {}
+
+    @given(st.lists(STRFTIME, min_size=50, max_size=300))
+    def run(cases):
+        replies = run_json_cases(driver, [{"op": op, "args": list(args), "text": text} for op, args, text in cases])
+        for (op, args, text), reply in zip(cases, replies):
+            expected = peer_strftime(op, args, text)
+            assert (reply["ok"], reply["text"], reply["fields"]) == (True, expected, [len(expected)]), (op, args, text)
+            counts[op] = counts.get(op, 0) + 1
+
+    run()
+    thin = {op: counts.get(op, 0) for op in STRFTIME_KINDS if counts.get(op, 0) < 100}
+    assert thin == {}, counts
+
+
+# The directives Python's own strftime shares with Agentica, per kind. glibc writes %Y of a year under 1000 without
+# its zeros, so %Y joins only from the year 1000.
+SHARED_DATE = [f"%{c}" for c in "mdjuwaAbB%"]
+SHARED_CLOCK = [f"%{c}" for c in "HMS%"]
+SHARED_ZONE = ["%z", "%:z"]
+
+
+def shared_formats(op, args):
+    pool = {"strftime_date": SHARED_DATE, "strftime_time_of_day": SHARED_CLOCK,
+            "strftime_naive": SHARED_DATE + SHARED_CLOCK,
+            "strftime_datetime": SHARED_DATE + SHARED_CLOCK + SHARED_ZONE}[op]
+    if op != "strftime_time_of_day" and args[0] >= 1000:
+        pool = pool + ["%Y"]
+    return st.lists(st.sampled_from(pool) | st.sampled_from(["-", " ", "T", ":"]), max_size=12).map("".join)
+
+
+SHARED_STRFTIME = (
+    st.tuples(st.just("strftime_date"), VALID_DATES | EDGE_DATES)
+    | st.tuples(st.just("strftime_time_of_day"), st.times().map(clock))
+    | st.tuples(st.just("strftime_naive"), VALID_NAIVE | EDGE_NAIVE)
+    | st.tuples(st.just("strftime_datetime"), VALID_AWARE | EDGE_AWARE)
+).flatmap(lambda p: st.tuples(st.just(p[0]), st.just(p[1]), shared_formats(*p)))
+
+
+def test_strftime_agrees_with_real_python_strftime(driver):
+    counts = {}
+    saved = locale.setlocale(locale.LC_TIME)
+    locale.setlocale(locale.LC_TIME, "C")
+
+    @given(st.lists(SHARED_STRFTIME, min_size=50, max_size=300))
+    def run(cases):
+        replies = run_json_cases(driver, [{"op": op, "args": list(args), "text": text} for op, args, text in cases])
+        for (op, args, text), reply in zip(cases, replies):
+            expected = strftime_value(op, args).strftime(text)
+            assert expected == peer_strftime(op, args, text), (op, args, text)
+            assert (reply["ok"], reply["text"]) == (True, expected), (op, args, text)
+            counts[op] = counts.get(op, 0) + 1
+
+    try:
+        run()
+    finally:
+        locale.setlocale(locale.LC_TIME, saved)
+    thin = {op: counts.get(op, 0) for op in STRFTIME_KINDS if counts.get(op, 0) < 100}
+    assert thin == {}, counts

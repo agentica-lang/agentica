@@ -93,6 +93,22 @@ ROWS: List[Model.Builtin] = [
     alternatives: [],
   ),
   Model.Builtin(
+    name: "Time.Date.strftime",
+    parameters: [
+      Model.Named(name: "date", type: Types.Type.Struct("Time.Date", [])),
+      Model.Named(name: "format", type: Types.Type.String),
+    ],
+    result: Types.Type.String,
+    rule: Model.Rule.Plain,
+    implementation: "Time.Date.strftime",
+    effects: [],
+    description: (
+      "Write the date in a strftime format, a subset of Ruby's directives: %Y %m %d %j %u %w %a " +
+      "%A %b %B and %%; any other (%e, %y, %F, %-d, %H) is copied as written."
+    ),
+    alternatives: [],
+  ),
+  Model.Builtin(
     name: "Time.Date.yday",
     parameters: [Model.Named(name: "date", type: Types.Type.Struct("Time.Date", []))],
     result: Types.Type.Int,
@@ -210,6 +226,22 @@ ROWS: List[Model.Builtin] = [
     implementation: "Time.DateTime.naive_of",
     effects: [],
     description: "Drop the offset of the reading: the same fields, no longer an instant.",
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "Time.DateTime.strftime",
+    parameters: [
+      Model.Named(name: "time", type: Types.Type.Struct("Time.DateTime", [])),
+      Model.Named(name: "format", type: Types.Type.String),
+    ],
+    result: Types.Type.String,
+    rule: Model.Rule.Plain,
+    implementation: "Time.DateTime.strftime",
+    effects: [],
+    description: (
+      "Write the reading in a strftime format, a subset of Ruby's directives: those of a date " +
+      "and a time of day, %z, %:z and %%; any other (%e, %y, %F, %T, %-d) is copied as written."
+    ),
     alternatives: [],
   ),
   Model.Builtin(
@@ -336,6 +368,22 @@ ROWS: List[Model.Builtin] = [
     alternatives: [],
   ),
   Model.Builtin(
+    name: "Time.NaiveDateTime.strftime",
+    parameters: [
+      Model.Named(name: "naive", type: Types.Type.Struct("Time.NaiveDateTime", [])),
+      Model.Named(name: "format", type: Types.Type.String),
+    ],
+    result: Types.Type.String,
+    rule: Model.Rule.Plain,
+    implementation: "Time.NaiveDateTime.strftime",
+    effects: [],
+    description: (
+      "Write the reading in a strftime format, a subset of Ruby's directives: those of a date " +
+      "and a time of day, and %%; any other (%e, %y, %F, %T, %-d, %z) is copied as written."
+    ),
+    alternatives: [],
+  ),
+  Model.Builtin(
     name: "Time.NaiveDateTime.to_date",
     parameters: [Model.Named(name: "naive", type: Types.Type.Struct("Time.NaiveDateTime", []))],
     result: Types.Type.Struct("Time.Date", []),
@@ -391,6 +439,22 @@ ROWS: List[Model.Builtin] = [
     implementation: "Time.TimeOfDay.new",
     effects: [],
     description: "Build a time of day from hour, min, sec and usec; an error when a field is out of range.",
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "Time.TimeOfDay.strftime",
+    parameters: [
+      Model.Named(name: "time", type: Types.Type.Struct("Time.TimeOfDay", [])),
+      Model.Named(name: "format", type: Types.Type.String),
+    ],
+    result: Types.Type.String,
+    rule: Model.Rule.Plain,
+    implementation: "Time.TimeOfDay.strftime",
+    effects: [],
+    description: (
+      "Write the clock reading in a strftime format, a subset of Ruby's directives: %H %M %S %L " +
+      "%N and %%; any other (%T, %-H, %Y) is copied as written."
+    ),
     alternatives: [],
   ),
   Model.Builtin(

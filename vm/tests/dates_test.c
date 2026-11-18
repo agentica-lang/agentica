@@ -111,6 +111,19 @@ static void test_a_forged_value_fails_in_arithmetic_and_comparison(void) {
   forged("Time.Date.yday", 1, aware);
 }
 
+/* strftime checks the record before it reads the format, and takes only a String format. */
+static void test_a_forged_value_fails_in_strftime(void) {
+  static const int64_t good[8] = {2024, 2, 29, 23, 59, 59, 999999, 0};
+  static const int64_t noon[8] = {12, 0, 0, 0};
+  agc_value format = agc_test_str("%Y %H %z %:z");
+  forged_pair("Time.Date.strftime", changed(AGC_TIME_DATE, 3, good, 1, 13), format);
+  forged_pair("Time.TimeOfDay.strftime", changed(AGC_TIME_OF_DAY, 4, noon, 2, 60), format);
+  forged_pair("Time.NaiveDateTime.strftime", record(AGC_TIME_DATETIME, 8, good), format);
+  forged_pair("Time.DateTime.strftime", changed(AGC_TIME_DATETIME, 8, good, 7, 59), format);
+  forged_pair("Time.DateTime.strftime", changed(AGC_TIME_DATETIME, 8, good, 7, 1), agc_int(0));
+  forged_pair("Time.Date.strftime", record(AGC_TIME_DATE, 3, good), agc_int(0));
+}
+
 static void test_a_count_past_the_range_is_an_argument_error(void) {
   static const int64_t good[8] = {2024, 2, 29, 23, 59, 59, 999999, 3600};
   static const char *const adds[] = {"Time.Date.add_days", "Time.NaiveDateTime.add_days", "Time.DateTime.add_days",
@@ -164,6 +177,7 @@ int main(void) {
   test_a_forged_datetime_fails();
   test_a_forged_naive_fails();
   test_a_forged_value_fails_in_arithmetic_and_comparison();
+  test_a_forged_value_fails_in_strftime();
   test_a_count_past_the_range_is_an_argument_error();
   test_a_program_without_the_struct_fails();
   puts("dates tests passed");

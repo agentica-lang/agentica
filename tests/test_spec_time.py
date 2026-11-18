@@ -95,6 +95,16 @@ CLEAN = [
         None,
         None,
     ),
+    # Each of the four types has strftime, as a method and by its full name, and it gives a String.
+    (
+        MAIN + f"  d = {DATE}\n  a = {AWARE}\n"
+        "  t = Time.TimeOfDay.new(1, 2, 3, 4).unwrap!\n"
+        "  texts: List[String] = [d.strftime(\"%Y\"), t.strftime(\"%H\"), a.naive_of.strftime(\"%j\"),\n"
+        "    a.strftime(\"%:z\"), Time.DateTime.strftime(a, \"%z\")]\n"
+        "  puts(texts.size)\nend\n",
+        None,
+        None,
+    ),
     # A user type of the same name is not the builtin one, and a variant may be named Date or DateTime.
     (
         "struct Date\n  day: Int\nend\n\nenum Value\n  Date(Int)\n  DateTime(String)\nend\n\n"
@@ -156,6 +166,11 @@ REFUSED = [
     (MAIN + '  d: Time.Date = Time.Date.iso8601("2026-10-14")\nend\n', "CHECK-TYPE-MISMATCH",
      'Time.Date.iso8601("2026-10-14")'),
     (MAIN + f"  d = {DATE}\n  puts(d.iso8601(6))\nend\n", "CHECK-ARITY", "d.iso8601(6)"),
+    # strftime takes one String format, and a type has only its own.
+    (MAIN + f"  d = {DATE}\n  puts(d.strftime(1))\nend\n", "CHECK-TYPE-MISMATCH", "1"),
+    (MAIN + f"  d = {DATE}\n  puts(d.strftime)\nend\n", "CHECK-ARITY", "d.strftime"),
+    (MAIN + f"  d = {DATE}\n  puts(Time.DateTime.strftime(d, \"%Y\"))\nend\n", "CHECK-TYPE-MISMATCH",
+     "d"),
 ]
 
 
@@ -204,10 +219,13 @@ def test_the_equality_of_a_datetime_points_to_time_compare(agentica_check):
     [
         MAIN + f"  a = {AWARE}\n  puts([a] == [a])\nend\n",
         f"struct Stamp\n  at: Time.DateTime\nend\n\n{MAIN}  s = Stamp(at: {AWARE})\n  puts(s == s)\nend\n",
+        # The help stays true when a field after the Time.DateTime also blocks ==.
+        "struct Mix\n  at: Time.DateTime\n  f: Fn[Int, Int]\nend\n\n"
+        f"{MAIN}  m = Mix(at: {AWARE}, f: ->(x: Int) {{ x }})\n  puts(m == m)\nend\n",
     ],
-    ids=["list", "struct-field"],
+    ids=["list", "struct-field", "with-another-blocker"],
 )
 def test_the_equality_of_a_datetime_inside_points_to_time_compare(agentica_check, source):
     found = agentica_check(source)
     assert found["code"] == "CHECK-TYPE-MISMATCH"
-    assert found["help"].startswith("compare the Time.DateTime values inside"), found["help"]
+    assert found["help"].startswith("a Time.DateTime inside has no =="), found["help"]
