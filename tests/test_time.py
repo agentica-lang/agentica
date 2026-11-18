@@ -1,4 +1,5 @@
-"""The constructors, calendar queries and conversions of the Time family (#985) against Python's datetime and calendar.
+"""The constructors, calendar queries, conversions and ISO 8601 text of the Time family (#985) against Python's
+datetime and calendar.
 
 tests/fixtures/time/driver.agc reads one JSON case per line and prints one reply per line. Python is the independent
 peer: `datetime.date`, `datetime.time` and `datetime.datetime` accept exactly the real days and clock readings of the
@@ -6,11 +7,14 @@ years 1 to 9999 (proleptic Gregorian, no leap seconds), and `calendar` has the l
 The one rule Python lacks is the offset: Agentica takes whole minutes of less than a day, where Python takes any
 timedelta under a day. Hypothesis draws the fields from the edges of each range and from the whole Int range.
 Unix time is a timedelta from the epoch, which Python divides with floor division, as Ruby's Time#to_i rounds; a sum
-that leaves the years 1 to 9999 overflows in Python as it errs in Agentica.
+that leaves the years 1 to 9999 overflows in Python as it errs in Agentica. The text is Python's isoformat with Z for
++00:00; Python's fromisoformat reads more forms than the strict ones of Agentica, so the peer of a parse first matches
+the strict form with a regular expression and only then asks fromisoformat.
 
 The profiles and the seed of each tier are in tests/conftest.py.
 """
 import calendar
+import re
 import time as clock_time
 from datetime import date, datetime, time, timedelta, timezone
 from importlib.util import find_spec
@@ -204,13 +208,23 @@ CONVERSIONS = (
 CONVERSION_VERDICTS = ("at", "at_us", "getlocal", "getutc", "assume_offset")
 
 
+def request(op, args):
+    """The JSON case of the driver: a parse takes its one argument as the text, every other op takes Ints."""
+    if op.startswith("parse_"):
+        return {"op": op, "args": [], "text": args[0]}
+    return {"op": op, "args": list(args), "text": ""}
+
+
 def check(driver, cases, verdicts=None):
-    """Run the cases and compare each reply with the peer; count the verdicts by (op, ok) in `verdicts`."""
-    replies = run_json_cases(driver, [{"op": op, "args": list(args)} for op, args in cases])
+    """Run the cases and compare each reply with the peer, fields or text; count the verdicts by (op, ok) in
+    `verdicts`."""
+    replies = run_json_cases(driver, [request(op, args) for op, args in cases])
     for (op, args), reply in zip(cases, replies):
         expected = PEERS[op](*args)
         if expected is None:
             assert (reply["ok"], reply["kind"]) == (False, "argument"), (op, args, reply)
+        elif isinstance(expected, str):
+            assert (reply["ok"], reply["text"]) == (True, expected), (op, args, reply)
         else:
             assert (reply["ok"], reply["fields"]) == (True, expected), (op, args, reply)
         if verdicts is not None:
@@ -245,7 +259,7 @@ def test_unix_time_at_the_ends_of_the_range_and_before_1970(driver):
     us = (INT_MIN, FIRST_US - 1, FIRST_US, -1_000_001, -1_000_000, -999_999, -1, 0, LAST_US, LAST_US + 1, INT_MAX)
     cases = [("at", (s,)) for s in seconds] + [("at_us", (u,)) for u in us]
     check(driver, cases)
-    replies = run_json_cases(driver, [{"op": op, "args": list(args)} for op, args in cases])
+    replies = run_json_cases(driver, [request(op, args) for op, args in cases])
     built = {(op, args[0]): reply["fields"] for (op, args), reply in zip(cases, replies) if reply["ok"]}
     assert sorted(value for op, value in built if op == "at") == [FIRST_S, -86_401, -1, 0, 1, LAST_S]
     assert sorted(value for op, value in built if op == "at_us") == [
@@ -253,13 +267,13 @@ def test_unix_time_at_the_ends_of_the_range_and_before_1970(driver):
     check(driver, [(op, tuple(fields)) for fields in built.values() for op in ("to_i", "to_us", "getutc")])
     # to_i rounds toward minus infinity: the microsecond before the epoch is in second -1, as in Ruby and Python.
     instants = [built["at_us", u] for u in (-1_000_001, -1_000_000, -999_999, -1)]
-    to_i = run_json_cases(driver, [{"op": "to_i", "args": fields} for fields in instants])
+    to_i = run_json_cases(driver, [request("to_i", fields) for fields in instants])
     assert [r["fields"] for r in to_i] == [[-2], [-1], [-1], [-1]]
 
 
 def test_now_is_the_wall_clock_in_utc(driver):
     before = clock_time.time_ns() // 1000
-    reply = run_json_cases(driver, [{"op": "now", "args": []}])[0]
+    reply = run_json_cases(driver, [request("now", [])])[0]
     after = clock_time.time_ns() // 1000
     *fields, us = reply["fields"]
     assert fields[7] == 0
@@ -277,6 +291,163 @@ def test_every_day_of_the_leap_cycle_and_the_ends_of_the_range(driver):
 def test_the_first_and_last_instants_at_the_widest_offsets(driver):
     corners = [(1, 1, 1, 0, 0, 0, 0), (9999, 12, 31, 23, 59, 59, 999_999)]
     offsets = (-86_340, -86_341, -86_400, 0, 86_340, 86_341, 86_400)
-    replies = run_json_cases(driver, [{"op": "datetime", "args": [*c, o]} for c in corners for o in offsets])
+    replies = run_json_cases(driver, [request("datetime", [*c, o]) for c in corners for o in offsets])
     assert [r["ok"] for r in replies] == [True, False, False, True, True, False, False] * 2
     check(driver, [("datetime", (*c, o)) for c in corners for o in offsets])
+
+
+def iso_offset(off):
+    return "Z" if off == 0 else timedelta_text(off)
+
+
+def timedelta_text(off):
+    sign = "-" if off < 0 else "+"
+    minutes = abs(off) // 60
+    return f"{sign}{minutes // 60:02d}:{minutes % 60:02d}"
+
+
+def peer_format(value):
+    text = value.isoformat(timespec="microseconds") if not isinstance(value, date) or isinstance(value, datetime) \
+        else value.isoformat()
+    return text[:-6] + "Z" if text.endswith("+00:00") else text
+
+
+CLOCK_TEXT = r"([0-9]{2}):([0-9]{2}):([0-9]{2})(?:\.([0-9]+))?"
+DATE_TEXT = r"[0-9]{4}-[0-9]{2}-[0-9]{2}"
+STRICT = {
+    "parse_date": re.compile(f"({DATE_TEXT})", re.ASCII),
+    "parse_time_of_day": re.compile(CLOCK_TEXT, re.ASCII),
+    "parse_naive": re.compile(f"({DATE_TEXT})[Tt]{CLOCK_TEXT}", re.ASCII),
+    "parse_datetime": re.compile(f"({DATE_TEXT})[Tt]{CLOCK_TEXT}([Zz]|[+-]([0-9]{{2}}):([0-9]{{2}}))", re.ASCII),
+}
+
+
+def peer_parse(op, text):
+    """The fields Python reads from the strict form of the text, or None. The fraction is cut to six digits and the
+    offset hours and minutes checked here, which are rules of RFC 3339 that fromisoformat does not keep."""
+    match = STRICT[op].fullmatch(text)
+    if match is None:
+        return None
+    groups = match.groups()
+    if op == "parse_date":
+        return peer(lambda: [*date.fromisoformat(groups[0]).timetuple()[:3]])
+    at = 0 if op == "parse_time_of_day" else 1
+    clock_text = ":".join(groups[at:at + 3]) + "." + (groups[at + 3] or "")[:6].ljust(6, "0")
+    if op == "parse_time_of_day":
+        return peer(lambda: list(clock(time.fromisoformat(clock_text))))
+    naive = peer(lambda: datetime.fromisoformat(f"{groups[0]}T{clock_text}"))
+    if naive is None or op == "parse_naive":
+        return naive and list(naive_tuple(naive))
+    if groups[5] in "Zz":
+        return [*naive_tuple(naive), 0]
+    hours, minutes = int(groups[6]), int(groups[7])
+    if hours > 23 or minutes > 59:
+        return None
+    sign = -1 if groups[5][0] == "-" else 1
+    return [*naive_tuple(naive), sign * (hours * 3600 + minutes * 60)]
+
+
+PEERS |= {
+    "format_date": lambda *a: peer_format(date(*a)),
+    "format_time_of_day": lambda *a: peer_format(time(*a)),
+    "format_naive": lambda *a: peer_format(datetime(*a)),
+    "format_datetime": lambda *a: peer_format(aware(*a)),
+    **{op: (lambda text, op=op: peer_parse(op, text)) for op in STRICT},
+}
+
+FORMATS = (
+    st.tuples(st.just("format_date"), VALID_DATES)
+    | st.tuples(st.just("format_time_of_day"), st.times().map(clock))
+    | st.tuples(st.just("format_naive"), VALID_NAIVE | EDGE_NAIVE)
+    | st.tuples(st.just("format_datetime"), VALID_AWARE)
+)
+
+
+@st.composite
+def spelled(draw):
+    """A parse case: the text of a valid value spelled any way the strict form allows (case of T and Z, -00:00, from
+    no to many fraction digits), then one time in two broken by a change of one character or a field out of range."""
+    y, mo, d, h, mi, s, us, off = draw(VALID_AWARE)
+    day = f"{y:04d}-{mo:02d}-{d:02d}"
+    fraction = draw(st.sampled_from(["", f".{us:06d}", f".{us:06d}" + draw(st.text("0123456789", max_size=12)),
+                                     f".{us:06d}"[:draw(st.integers(2, 6))]]))
+    clock_text = f"{h:02d}:{mi:02d}:{s:02d}{fraction}"
+    zone = draw(st.sampled_from([iso_offset(off), "z" if off == 0 else timedelta_text(off), "-00:00"]))
+    t = draw(st.sampled_from("Tt"))
+    op, text = draw(st.sampled_from([("parse_date", day), ("parse_time_of_day", clock_text),
+                                     ("parse_naive", f"{day}{t}{clock_text}"),
+                                     ("parse_datetime", f"{day}{t}{clock_text}{zone}")]))
+    if draw(st.booleans()):
+        at = draw(st.integers(0, len(text)))
+        change = draw(st.sampled_from(["replace", "insert", "delete", "field"]))
+        if change == "field":
+            digits = [i for i, c in enumerate(text) if c.isdigit()]
+            at = draw(st.sampled_from(digits))
+            text = text[:at] + draw(st.sampled_from("0569")) + text[at + 1:]
+        elif change == "delete":
+            text = text[:at] + text[at + 1:]
+        else:
+            new = draw(st.sampled_from([chr(c) for c in range(128)] + ["é", "\u0663"]))
+            text = text[:at] + new + text[at + (change == "replace"):]
+    return op, (text,)
+
+
+PARSE_VERDICTS = tuple(STRICT)
+
+
+def test_parses_agree_with_python(driver):
+    agree(driver, spelled(), PARSE_VERDICTS)
+
+
+@given(st.lists(FORMATS, min_size=1, max_size=100))
+def test_the_text_is_pythons_and_a_parse_of_it_gives_the_value_back(driver, cases):
+    check(driver, cases)
+    texts = run_json_cases(driver, [request(op, args) for op, args in cases])
+    parsed = run_json_cases(driver, [request(op.replace("format_", "parse_"), [reply["text"]])
+                                     for (op, _), reply in zip(cases, texts)])
+    assert [reply["fields"] for reply in parsed] == [list(args) for _, args in cases]
+
+
+@given(st.lists(st.tuples(st.sampled_from(PARSE_VERDICTS), st.tuples(st.text(max_size=40))), max_size=100))
+def test_any_text_parses_or_is_refused_as_an_argument(driver, cases):
+    check(driver, cases)
+
+
+# Forms that Python's fromisoformat reads and RFC 3339 or the strict ISO 8601 form does not.
+PYTHON_ONLY = [
+    ("parse_datetime", "2026-10-14 19:05:42Z"),
+    ("parse_datetime", "2026-10-14T19:05:42+0200"),
+    ("parse_datetime", "2026-10-14T19:05:42+02"),
+    ("parse_datetime", "2026-10-14T19:05:42+02:00:30"),
+    ("parse_datetime", "2026-10-14T19:05Z"),
+    ("parse_datetime", "2026-10-14T19Z"),
+    ("parse_datetime", "20261014T190542Z"),
+    ("parse_datetime", "2026-10-14T19:05:42,5Z"),
+    ("parse_datetime", "2026-10-14T19:05:42"),
+    ("parse_naive", "2026-10-14T19:05:42+02:00"),
+    ("parse_naive", "2026-10-14T19:05:42Z"),
+    ("parse_naive", "2026-10-14"),
+    ("parse_naive", "2026-10-14 19:05:42"),
+    ("parse_date", "20261014"),
+    ("parse_date", "2026-W42-3"),
+    ("parse_date", "2026-10-14T00:00:00"),
+    ("parse_time_of_day", "19:05"),
+    ("parse_time_of_day", "190542"),
+    ("parse_time_of_day", "19:05:42Z"),
+    ("parse_time_of_day", "19:05:42+02:00"),
+    ("parse_time_of_day", "T19:05:42"),
+]
+# Control characters that differ from a separator in one bit (CR is "-" | 0x20, SUB is ":" | 0x20).
+CONTROLS = [
+    ("parse_date", "2026\r10\r14"),
+    ("parse_time_of_day", "19\x1a05\x1a42"),
+    ("parse_datetime", "2026\r10-14T19:05\x1a42Z"),
+    ("parse_datetime", "2026-10-14T19:05:42\x1a"),
+]
+
+
+def test_forms_python_reads_and_control_characters_are_refused(driver):
+    cases = PYTHON_ONLY + CONTROLS
+    replies = run_json_cases(driver, [request(op, [text]) for op, text in cases])
+    assert [(reply["ok"], reply["kind"]) for reply in replies] == [(False, "argument")] * len(cases)
+    check(driver, [(op, (text,)) for op, text in cases])

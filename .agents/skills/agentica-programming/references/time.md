@@ -28,6 +28,10 @@ t.getlocal(utc_offset: Int) -> Result[Time.DateTime]
 t.naive_of -> Time.NaiveDateTime                 # same reading, no offset
 n.assume_offset(utc_offset: Int) -> Result[Time.DateTime]   # same reading
 t.to_date -> Time.Date       # also on a Time.NaiveDateTime
+
+x.iso8601 -> String          # any of the four; .ffffff always, Z or +HH:MM
+Time.Date.iso8601(text: String) -> Result[Time.Date]   # also TimeOfDay,
+Time.DateTime.iso8601(text) -> Result[Time.DateTime]   # NaiveDateTime
 ```
 
 - A builtin that takes the record first is its method: write `t.to_i` (the
@@ -45,3 +49,6 @@ t.to_date -> Time.Date       # also on a Time.NaiveDateTime
 - `==` works on `Time.Date`, `Time.TimeOfDay` and `Time.NaiveDateTime`, not on
   `Time.DateTime` (`CHECK-TYPE-MISMATCH`): one instant has many readings.
   `Test.eq` still compares two `Time.DateTime` values field by field.
+- Parse is strict: `T`/`Z` any case, fraction cut (not rounded) to µs,
+  `Time.DateTime.iso8601` needs an offset, `Time.NaiveDateTime.iso8601`
+  refuses one; a space for `T`, `+0200`, `07:32` and sec 60 are errors.

@@ -141,7 +141,7 @@ def rename_line(name: String, target: String, written: String) -> String
 
     typed = name
     if asked.size == 1 and own.size > 1
-      typed = "#{own[0]}.#{name}"
+      typed = "#{own.take(own.size - 1).join(".")}.#{name}"
     end
 
     return "`#{typed}` is written `.#{written}`\n"

@@ -100,4 +100,6 @@ Read only what the task needs.
 | `analysis.md` | compiler answers in a program (`std/analysis`) |
 
 Style: `agentica-code-guidelines`. Docs:
-`https://www.agentica-lang.com/agentica/llms.txt`.
+`https://www.agentica-lang.com/agentica/llms.txt`. Packages, the web framework
+(Bond) and the database library (agentica-db):
+`https://www.agentica-lang.com/llms.txt`.

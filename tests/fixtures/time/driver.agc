@@ -1,21 +1,25 @@
 ## Test driver of tests/test_time.py: reads one JSON case per line of stdin, calls the Time builtin it names with its
-## Int arguments and prints one JSON line: whether it succeeded, the fields or value it gave, and the error kind. A
-## conversion takes the fields of a valid value first, which the driver builds with its constructor.
+## Int arguments (or its text) and prints one JSON line: whether it succeeded, the fields, value or text it gave, and
+## the error kind. A conversion takes the fields of a valid value first, which the driver builds with its constructor.
 
 struct Case
   op: String
   args: List[Int]
+  text: String
 end
 
 struct Reply
   ok: Bool
   fields: List[Int]
   kind: String
+  text: String
 end
 
-def done(fields: List[Int]) -> Reply = Reply(ok: true, fields: fields, kind: "")
+def done(fields: List[Int]) -> Reply = Reply(ok: true, fields: fields, kind: "", text: "")
 
-def failed(err: Error) -> Reply = Reply(ok: false, fields: [], kind: err.kind)
+def failed(err: Error) -> Reply = Reply(ok: false, fields: [], kind: err.kind, text: err.message)
+
+def written(text: String) -> Reply = Reply(ok: true, fields: [], kind: "", text: text)
 
 def date(a: List[Int]) -> Reply
   case Time.Date.new(a[0], a[1], a[2])
@@ -86,11 +90,45 @@ def run_case(c: Case) -> Reply
     "datetime" -> datetime(a)
     "days_in_month" -> days_in_month(a)
     "leap" -> leap(a)
-    _ -> convert(c.op, a)
+    _ -> convert(c.op, a, c.text)
   end
 end
 
-def convert(op: String, a: List[Int]) -> Reply
+def date_reply(built: Result[Time.Date]) -> Reply
+  case built
+    ok(d) -> done(date_fields(d))
+    error(err) -> failed(err)
+  end
+end
+
+def clock_reply(built: Result[Time.TimeOfDay]) -> Reply
+  case built
+    ok(t) -> done([t.hour, t.min, t.sec, t.usec])
+    error(err) -> failed(err)
+  end
+end
+
+def naive_reply(built: Result[Time.NaiveDateTime]) -> Reply
+  case built
+    ok(t) -> done(naive_fields(t))
+    error(err) -> failed(err)
+  end
+end
+
+def text_case(op: String, a: List[Int], text: String) -> Reply
+  case op
+    "format_date" -> written(Time.Date.new(a[0], a[1], a[2]).unwrap!.iso8601)
+    "format_time_of_day" -> written(Time.TimeOfDay.new(a[0], a[1], a[2], a[3]).unwrap!.iso8601)
+    "format_naive" -> written(plain(a).iso8601)
+    "format_datetime" -> written(aware(a).iso8601)
+    "parse_date" -> date_reply(Time.Date.iso8601(text))
+    "parse_time_of_day" -> clock_reply(Time.TimeOfDay.iso8601(text))
+    "parse_naive" -> naive_reply(Time.NaiveDateTime.iso8601(text))
+    _ -> aware_reply(Time.DateTime.iso8601(text))
+  end
+end
+
+def convert(op: String, a: List[Int], text: String) -> Reply
   case op
     "at" -> aware_reply(Time.at(a[0]))
     "at_us" -> aware_reply(Time.at_us(a[0]))
@@ -102,7 +140,8 @@ def convert(op: String, a: List[Int]) -> Reply
     "naive_of" -> done(naive_fields(aware(a).naive_of))
     "to_date" -> done(date_fields(aware(a).to_date))
     "naive_to_date" -> done(date_fields(plain(a).to_date))
-    _ -> now()
+    "now" -> now()
+    _ -> text_case(op, a, text)
   end
 end
 

@@ -3,11 +3,12 @@
 
 import Model from "../catalog/builtin_model"
 import Builtins from "../catalog/builtins"
-import {CALLABLE_NAMES, ENTRIES, PRELUDE_ONLY, RECORDS} from "../catalog/builtins"
+import {CALLABLE_NAMES, ENTRIES, METHOD_RECORDS, PRELUDE_ONLY, RECORDS} from "../catalog/builtins"
 import Ast from "../syntax/ast"
 import Source from "../syntax/source"
 import T from "../syntax/types"
 import Help from "check_help"
+import Tables from "check_tables"
 import Names from "check_names"
 import Named from "check_named"
 import Rules from "check_rules"
@@ -22,6 +23,7 @@ def check_call(cx: State.Cx, st: State.St, node: Ast.Call, expected: T.Type) -> 
   entry = ENTRIES.get(node.name)
   return check_plain_call(cx, st, node, expected) if entry.none? or (PRELUDE_ONLY.include?(node.name) and !cx.prelude)
 
+  try reader_given_value(cx, st, node)
   out = try Rules.check_builtin_call(cx, st, node, expected, entry.unwrap!)
   if node.piped
     try check_pipe_method(cx, out.st, node, entry.unwrap!)
@@ -930,4 +932,30 @@ def type_name_span(cx: State.Cx, node: Ast.Construct) -> Source.Span
   written = cx.texts.get(cx.file, "").slice(start.offset, node.span.stop.offset - start.offset)
   size = written.index_of("(").unwrap_or(written.length)
   node.span.with(stop: Source.Position(offset: start.offset + size, line: start.line, column: start.column + size))
+end
+
+# `Time.Date.iso8601(d)` with a Time.Date: the function of a record that reads one from text, given a value of it.
+# The record's method of the same name writes the text (an alias, `d.iso8601`), so the help names that method instead
+# of the mismatch with String.
+def reader_given_value(cx: State.Cx, st: State.St, node: Ast.Call) -> Result[Bool]
+  parts = node.name.split(".")
+  return ok(true) if parts.size != 3 or node.args.size != 1 or !Tables.method_aliases().has_key?(node.name)
+
+  record = "#{parts[0]}.#{parts[1]}"
+  return ok(true) if !METHOD_RECORDS.include?(record)
+
+  probe = State.expr(cx, st, node.args[0], T.Type.Unknown)
+  return ok(true) if !probe.ok? or probe.unwrap!.type != T.Type.Struct(record, [])
+
+  value = receiver_text(cx, node.args[0])
+  error(
+    State.fail_help(
+      cx,
+      st,
+      "CHECK-TYPE-MISMATCH",
+      "#{node.name}(text) reads a #{T.display_name(record)} from text",
+      Ast.expr_span(node.args[0]),
+      "write the text of the value with #{value}.#{parts[2]}",
+    ),
+  )
 end

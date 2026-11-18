@@ -1207,6 +1207,12 @@
   "stdout": "",
   "written": []
  },
+ "[[\"help\", \"format_iso8601\"], {}]": {
+  "code": 0,
+  "stderr": "",
+  "stdout": "`Time.Date.format_iso8601` is written `.iso8601`\ndate.iso8601() -> String\nWrite the date as ISO 8601, YYYY-MM-DD.\n\n`Time.DateTime.format_iso8601` is written `.iso8601`\ntime.iso8601() -> String\nWrite the reading as RFC 3339 with six fraction digits, Z at offset 0 and +HH:MM otherwise.\n\n`Time.NaiveDateTime.format_iso8601` is written `.iso8601`\nnaive.iso8601() -> String\nWrite the reading as ISO 8601, YYYY-MM-DDTHH:MM:SS.ffffff, with no offset.\n\n`Time.TimeOfDay.format_iso8601` is written `.iso8601`\ntime.iso8601() -> String\nWrite the time of day as ISO 8601, HH:MM:SS.ffffff with six fraction digits.\n",
+  "written": []
+ },
  "[[\"help\", \"frobnicate\", \"--json\"], {}]": {
   "code": 2,
   "stderr": "agentica: unknown builtin frobnicate\n",
@@ -1271,6 +1277,12 @@
   "code": 2,
   "stderr": "agentica: unknown builtin int; use s.to_i or f.to_i (both give a Result), or s.to_i! / f.to_i! to halt on failure\n",
   "stdout": "",
+  "written": []
+ },
+ "[[\"help\", \"iso8601\"], {}]": {
+  "code": 0,
+  "stderr": "",
+  "stdout": "date.iso8601() -> String\nWrite the date as ISO 8601, YYYY-MM-DD.\n\ntime.iso8601() -> String\nWrite the reading as RFC 3339 with six fraction digits, Z at offset 0 and +HH:MM otherwise.\n\nnaive.iso8601() -> String\nWrite the reading as ISO 8601, YYYY-MM-DDTHH:MM:SS.ffffff, with no offset.\n\ntime.iso8601() -> String\nWrite the time of day as ISO 8601, HH:MM:SS.ffffff with six fraction digits.\n\nTime.Date.iso8601(text: String) -> Result[Time.Date]\nRead a date written YYYY-MM-DD; an error for any other text or a day that does not exist.\n\nTime.DateTime.iso8601(text: String) -> Result[Time.DateTime]\nRead RFC 3339 text, YYYY-MM-DDTHH:MM:SS with an optional fraction and Z or +HH:MM; an error for any other text.\n\nTime.NaiveDateTime.iso8601(text: String) -> Result[Time.NaiveDateTime]\nRead YYYY-MM-DDTHH:MM:SS with an optional fraction and no offset; an error for any other text.\n\nTime.TimeOfDay.iso8601(text: String) -> Result[Time.TimeOfDay]\nRead HH:MM:SS with an optional fraction cut to microseconds; an error for any other text or sec 60.\n",
   "written": []
  },
  "[[\"help\", \"join\", \"--json\"], {}]": {
