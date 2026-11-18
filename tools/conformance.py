@@ -154,7 +154,7 @@ AREAS = {
             "tests/test_spec_generics.py", "tests/test_spec_bytes.py", "tests/test_spec_optional.py",
             "tests/test_spec_json_enum.py", "tests/test_spec_json_lists.py", "tests/test_spec_json_node.py",
             "tests/test_spec_equality.py", "tests/test_spec_string_repeat.py",
-            "tests/test_spec_string_distance.py",
+            "tests/test_spec_string_distance.py", "tests/test_spec_time.py",
         ],
     ),
     "golden": (
@@ -164,7 +164,7 @@ AREAS = {
             "tests/test_vm_diff_4.py", "tests/test_vm_diff_5.py", "tests/test_vm_diff_6.py",
             "tests/test_vm_diff_7.py", "tests/test_vm_bits.py", "tests/test_vm_stack.py", "tests/test_vm_heap_limit.py",
             "tests/test_vm_jit.py",
-            "tests/test_vm_equality.py", "tests/test_error_kinds.py",
+            "tests/test_vm_equality.py", "tests/test_error_kinds.py", "tests/test_time.py",
         ],
     ),
     "library": (
