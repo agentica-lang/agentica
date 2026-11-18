@@ -21,6 +21,9 @@ def failed(err: Error) -> Reply = Reply(ok: false, fields: [], kind: err.kind, t
 
 def written(text: String) -> Reply = Reply(ok: true, fields: [], kind: "", text: text)
 
+## The text and its size in characters.
+def sized(text: String) -> Reply = Reply(ok: true, fields: [text.size], kind: "", text: text)
+
 def date(a: List[Int]) -> Reply
   case Time.Date.new(a[0], a[1], a[2])
     ok(d) -> done([d.year, d.month, d.day])
@@ -188,6 +191,16 @@ end
 
 def more(op: String, a: List[Int], text: String) -> Reply
   return text_case(op, a, text) if op.start_with?("format_") or op.start_with?("parse_")
+  return strftime_case(op, a, text) if op.start_with?("strftime_")
 
   arithmetic(op, a)
+end
+
+def strftime_case(op: String, a: List[Int], format: String) -> Reply
+  case op
+    "strftime_date" -> sized(day_at(a, 0).strftime(format))
+    "strftime_time_of_day" -> sized(clock_at(a, 0).strftime(format))
+    "strftime_naive" -> sized(plain(a).strftime(format))
+    _ -> sized(aware(a).strftime(format))
+  end
 end

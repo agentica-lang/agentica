@@ -1245,7 +1245,7 @@ PURE_SYSTEM_ROWS = {
         "at", "at_us", "DateTime.getlocal", "DateTime.getutc", "DateTime.naive_of", "DateTime.to_date",
         "DateTime.to_i", "DateTime.to_us", "NaiveDateTime.assume_offset", "NaiveDateTime.to_date")},
     **{f"Time.{kind}.{name}": "the text of a value, or the value of a text; no clock" for kind in (
-        "Date", "TimeOfDay", "NaiveDateTime", "DateTime") for name in ("format_iso8601", "iso8601")},
+        "Date", "TimeOfDay", "NaiveDateTime", "DateTime") for name in ("format_iso8601", "iso8601", "strftime")},
     **{f"Time.{name}": "arithmetic, a comparison or a calendar fact of its arguments; no clock" for name in (
         "Date.add_days", "NaiveDateTime.add_days", "DateTime.add_days", "NaiveDateTime.add_us", "DateTime.add_us",
         "Date.days_between", "DateTime.us_between", "NaiveDateTime.us_between", "compare", "compare_naive",

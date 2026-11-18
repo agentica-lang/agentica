@@ -997,7 +997,7 @@ def equality_type(cx: State.Cx, sides: Sides, node: Ast.Binary) -> Result[T.Type
     if CheckTypes.instant?(sides.left)
       help = "Time.compare(a, b) == 0 compares two Time.DateTime values by instant; Test.eq compares their fields"
     elsif gap.instant
-      help = "compare the Time.DateTime values inside with Time.compare(a, b) == 0"
+      help = "a Time.DateTime inside has no ==; compare those values with Time.compare(a, b) == 0"
     end
 
     base = Failure.problem(

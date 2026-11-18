@@ -411,6 +411,7 @@ Time.Date.format_iso8601
 Time.Date.iso8601
 Time.Date.leap?
 Time.Date.new
+Time.Date.strftime
 Time.Date.yday
 Time.DateTime.add_days
 Time.DateTime.add_us
@@ -420,6 +421,7 @@ Time.DateTime.getutc
 Time.DateTime.iso8601
 Time.DateTime.naive_of
 Time.DateTime.new
+Time.DateTime.strftime
 Time.DateTime.to_date
 Time.DateTime.to_i
 Time.DateTime.to_us
@@ -430,11 +432,13 @@ Time.NaiveDateTime.assume_offset
 Time.NaiveDateTime.format_iso8601
 Time.NaiveDateTime.iso8601
 Time.NaiveDateTime.new
+Time.NaiveDateTime.strftime
 Time.NaiveDateTime.to_date
 Time.NaiveDateTime.us_between
 Time.TimeOfDay.format_iso8601
 Time.TimeOfDay.iso8601
 Time.TimeOfDay.new
+Time.TimeOfDay.strftime
 Time.at
 Time.at_us
 Time.compare
