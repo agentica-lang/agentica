@@ -59,7 +59,7 @@ typedef enum {
 typedef enum {
   OP_READ_TEXT, OP_WRITE_TEXT, OP_APPEND_TEXT, OP_STAT, OP_LIST, OP_MKDIR, OP_OPEN_READ, OP_OPEN_WRITE,
   OP_OPEN_APPEND, OP_READ_BYTES, OP_READ_LINE, OP_READ_BLOCK, OP_WRITE, OP_CLOSE, OP_REAL, OP_LSTAT,
-  OP_OPEN_CREATE, OP_MKDIR_PRIVATE, OP_REMOVE, OP_TRY_LOCK, OP_RENAME, OP_SHA256, OP_REPLACE
+  OP_OPEN_CREATE, OP_MKDIR_PRIVATE, OP_REMOVE, OP_TRY_LOCK, OP_RENAME, OP_SHA256, OP_REPLACE, OP_RENAME_OVER
 } op_kind;
 
 typedef struct {
@@ -1067,6 +1067,47 @@ static void work_rename(op *o) {
 #endif
 }
 
+/* Path.replace: the regular file from is synced, then renamed over to in one step (rename, MoveFileExW with
+   REPLACE_EXISTING), so to names the old file or the new one, never neither, and the folder is flushed. A file or a
+   link at to is replaced, the link itself and never its target. A directory at to is refused; rename(2) and
+   MoveFileExW refuse a file over a directory too, so one that appears after the check is never touched. */
+static void work_rename_over(op *o) {
+  agc_fs_info info;
+  if (agc_fs_stat(o->path, &info, false) != 0) {
+    fail_op(o, FS_RENAME, errno);
+    return;
+  }
+  if (!AGC_FS_ISREG(info.mode)) {
+    fail_op(o, FS_RENAME, AGC_FS_ISDIR(info.mode) ? EISDIR : EINVAL);
+    return;
+  }
+  if (agc_fs_stat(o->to, &info, false) == 0 && AGC_FS_ISDIR(info.mode)) {
+    fail_op(o, FS_RENAME, EISDIR);
+    return;
+  }
+  /* FlushFileBuffers needs write access on Windows; elsewhere a read-only file syncs through a read handle. */
+#ifdef _WIN32
+  int fd = agc_fs_open(o->path, AGC_FS_WRITE);
+#else
+  int fd = agc_fs_open(o->path, AGC_FS_READ);
+#endif
+  if (fd < 0) {
+    fail_op(o, FS_RENAME, errno);
+    return;
+  }
+  int synced = agc_fs_fsync(fd), err = errno;
+  (void)agc_fs_close(fd);
+  if (synced != 0) {
+    fail_op(o, FS_RENAME, err);
+    return;
+  }
+  if (agc_fs_replace(o->path, o->to) != 0) {
+    fail_op(o, FS_RENAME, errno);
+    return;
+  }
+  agc_fs_sync_folder(o->to);
+}
+
 /* File.replace: the data goes to a new file beside the real target (after every link, so a link stays a link), takes
    the target's permission bits, and is renamed over it in one step, so a reader sees the old file or the new one,
    never a part. Every failure removes the new file and leaves the target as it was; a failed rename names the new
@@ -1314,6 +1355,7 @@ static void work(void *data) {
     case OP_TRY_LOCK: work_try_lock(o); break;
     case OP_RENAME: work_rename(o); break;
     case OP_REPLACE: work_replace(o); break;
+    case OP_RENAME_OVER: work_rename_over(o); break;
     case OP_OPEN_READ:
     case OP_OPEN_WRITE:
     case OP_OPEN_CREATE:
@@ -1801,7 +1843,8 @@ static agc_value builtin_remove(agc_vm *vm, agc_value *args, uint32_t span) {
   return path_op(vm, OP_REMOVE, args[0], agc_as_int(vm, args[1]));
 }
 
-static agc_value builtin_rename(agc_vm *vm, agc_value *args, uint32_t span) {
+/* Path.rename and Path.replace: the two paths checked, then the pool job of kind. */
+static agc_value rename_call(agc_vm *vm, agc_value *args, uint32_t span, op_kind kind) {
   if (fs_denied(vm, span)) {
     const agc_string *target = agc_as_string(vm, args[1]);
     return agc_error_detail(vm, fs_refused(vm, args[0]), "to", target->data, target->bytes);
@@ -1813,10 +1856,19 @@ static agc_value builtin_rename(agc_vm *vm, agc_value *args, uint32_t span) {
   if (!path_string(from)) return bad_path(vm, from);
   if (!path_string(to)) return bad_path(vm, to);
   agc_value paths = agc_list_value(agc_list_from_array(args, 2));
-  op *o = call_op(vm, OP_RENAME, NULL);
+  op *o = call_op(vm, kind, NULL);
   o->path = agc_host_path(vm, from);
   o->to = agc_host_path(vm, to);
   return start(vm, o, paths, timeout);
+}
+
+static agc_value builtin_rename(agc_vm *vm, agc_value *args, uint32_t span) {
+  return rename_call(vm, args, span, OP_RENAME);
+}
+
+/* Path.replace(from, to, timeout_ms): see work_rename_over. */
+static agc_value builtin_rename_over(agc_vm *vm, agc_value *args, uint32_t span) {
+  return rename_call(vm, args, span, OP_RENAME_OVER);
 }
 
 /* File.replace(path, data, timeout_ms): see work_replace. */
@@ -2542,6 +2594,7 @@ const agc_builtin agc_file_builtins[] = {
   {"Path.real", 1, builtin_real, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false, true},
   {"Path.remove", 2, builtin_remove, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false, true},
   {"Path.rename", 3, builtin_rename, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false, true},
+  {"Path.replace", 3, builtin_rename_over, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false, true},
   /* New rows go last: a C test may index a table by position. */
   {"File.read_bytes.bytes", 3, builtin_read_bytes, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false, true},
   {"File.write_bytes.bytes", 3, builtin_write_bytes, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false, true},

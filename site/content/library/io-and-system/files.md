@@ -95,7 +95,7 @@ end
 
 - Only regular files are hashed; symbolic links are followed. A missing path, a directory, a FIFO, pipe or device give `error("filesystem: path does not refer to a regular file")`, as `File.read_text` does.
 - `timeout_ms` covers the whole call and must be positive, otherwise `error("filesystem: timeout must be positive milliseconds")`. When it runs out the call returns `error("filesystem: operation timed out")` and a running hash is dropped. A cancelled task detaches the same way.
-- There is no snapshot: a concurrent writer changes the digest. To verify a download, write it to a temporary name, hash it, then `Path.rename` it into place.
+- There is no snapshot: a concurrent writer changes the digest. To verify a download, write it to a temporary name, hash it, then `Path.rename` or `Path.replace` it into place.
 
 ## File.stat
 
@@ -425,5 +425,26 @@ def main() -> Void
   _ = Dir.mkdir_private("/tmp/job-new", 1000)
   claimed = Path.rename("/tmp/job-new", "/tmp/job", 1000)
   puts(claimed.ok?)
+end
+```
+
+## Path.replace
+
+```signature
+Path.replace(from: String, to: String, timeout_ms: Int = 30000) -> Result[Void]
+```
+
+Renames the regular file `from` to `to` in one step, replacing what is at `to`, as Ruby's `File.rename` does. A reader of `to` sees the old file or the new one, never neither, so it is the last step of writing a file whole: write a new file beside `to`, then replace.
+
+- A file at `to` is replaced, and so is a symbolic link: the link itself, never its target (unlike `File.replace`, which writes through a link). A missing `to` is made.
+- A directory at `to` is an `io.is_directory` error and stays as it was, and so is a `from` that is not a regular file.
+- `from` is synced to the disk before the rename and its folder after it, so a power loss leaves the old file or the whole new one.
+- The new file keeps its own permission bits and owner. Both paths must be on one file system; there is no copy fallback. POSIX uses `rename`, Windows `MoveFileExW` with `MOVEFILE_REPLACE_EXISTING`, which refuses a read-only target.
+- A timeout gives an error but does not stop a rename in progress, which then still happens whole.
+
+```agentica {mode="check"}
+def main() -> Void
+  _ = File.write_text("/tmp/settings.json.new", "{}", 1000)
+  puts(Path.replace("/tmp/settings.json.new", "/tmp/settings.json", 1000).ok?)
 end
 ```

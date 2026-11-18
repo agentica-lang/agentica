@@ -10,6 +10,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `Path.replace(from, to)` renames a file over another in one step, as Ruby's `File.rename` does: a file or a link at `to` is replaced, a directory is an error, and `from` is synced first (#1865).
 - `agentica add NAME OWNER/REPO` takes a GitHub repository as `OWNER/REPO` (stored as the full URL), and a tag `NAME-X.Y.Z` with no `--subdir` takes the folder `NAME` when the package is there (#1833).
 - Dates and times as checked builtin records of the `Time` family: `Time.Date`, `Time.TimeOfDay`, `Time.NaiveDateTime` and `Time.DateTime` (at a fixed UTC offset), built by `Time.Date.new` and the like, with `Time.Date.leap?` and `Time.Date.days_in_month`; a construction or `.with` of one is the new `CHECK-NOT-CONSTRUCTIBLE` (#985).
 - Unix time and offsets in the `Time` family: `Time.at`, `Time.at_us` and `Time.now` give a `Time.DateTime`, which has the methods `to_i`, `to_us`, `getutc`, `getlocal`, `naive_of` and `to_date`; a `Time.NaiveDateTime` has `assume_offset` and `to_date` (#985).

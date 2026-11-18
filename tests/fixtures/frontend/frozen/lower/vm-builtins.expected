@@ -273,6 +273,7 @@ Path.join
 Path.real
 Path.remove
 Path.rename
+Path.replace
 Path.resolve
 Process.channel_close
 Process.channel_read_line

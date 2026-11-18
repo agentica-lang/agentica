@@ -1022,3 +1022,50 @@ end
         assert kept.read_text() == "kept" and [path.name for path in sealed.iterdir()] == ["kept.txt"]
     finally:
         sealed.chmod(0o755)
+
+
+PATH_REPLACE_PROGRAM = r"""def show(r: Result[Void]) -> Void
+  case r
+    ok(_) -> puts("ok")
+    error(e) -> puts("#{e.kind} #{e.message.split("\n")[0]}")
+  end
+end
+
+def main() -> Void
+  root = System.args()[0]
+  show(Path.replace(root + "/new.txt", root + "/old.txt"))
+  show(Path.replace(root + "/fresh.txt", root + "/missing.txt"))
+  show(Path.replace(root + "/into-link.txt", root + "/link.txt"))
+  show(Path.replace(root + "/blocked.txt", root + "/folder"))
+  show(Path.replace(root + "/folder", root + "/other.txt"))
+  show(Path.replace(root + "/absent.txt", root + "/old.txt"))
+end
+"""
+
+
+def test_path_replace_swaps_a_file_or_link_in_one_step_and_refuses_a_directory(new_dir, run_program):
+    root = new_dir()
+    for name, text in (("new.txt", "new"), ("old.txt", "old"), ("fresh.txt", "fresh"), ("into-link.txt", "linked"),
+                       ("target.txt", "target"), ("blocked.txt", "blocked"), ("other.txt", "other")):
+        (root / name).write_text(text)
+    (root / "folder").mkdir()
+    (root / "folder" / "keep.txt").write_text("keep")
+    os.symlink(root / "target.txt", root / "link.txt")
+    output = run_program(PATH_REPLACE_PROGRAM, [str(root)])
+    assert output.splitlines() == [
+        "ok",
+        "ok",
+        "ok",
+        "io.is_directory filesystem: cannot rename path",
+        "io.is_directory filesystem: cannot rename path",
+        "io.not_found filesystem: cannot rename path",
+    ], output
+    assert (root / "old.txt").read_text() == "new"
+    assert (root / "missing.txt").read_text() == "fresh"
+    assert not (root / "link.txt").is_symlink() and (root / "link.txt").read_text() == "linked"
+    assert (root / "target.txt").read_text() == "target"
+    assert (root / "blocked.txt").read_text() == "blocked"
+    assert [path.name for path in (root / "folder").iterdir()] == ["keep.txt"]
+    assert (root / "other.txt").read_text() == "other"
+    assert sorted(path.name for path in root.iterdir()) == [
+        "blocked.txt", "folder", "link.txt", "missing.txt", "old.txt", "other.txt", "target.txt"]
