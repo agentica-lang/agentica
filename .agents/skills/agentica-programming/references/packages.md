@@ -64,8 +64,8 @@ import Sqlite from "pkg/sqlite/db"
   workspace, whatever pin it writes; any other dependency of a member stays flat
   and shared. A repository with no good `[workspace]` table at the pin is
   `PKG-FETCH` at `dependencies.NAME.workspace`; `workspace` with `subdir` or
-  `path` is `PKG-MANIFEST-INVALID`. `agentica add NAME URL --tag TAG --workspace` writes it
-  (not with `--subdir`).
+  `path` is `PKG-MANIFEST-INVALID`. `agentica add NAME URL --tag TAG
+  --workspace` writes it (not with `--subdir`).
 - A repository of packages can be a workspace: its root `agentica.toml` has
   `[workspace]` with `repository = "<git URL>"` and `members = ["sqlite",
   "postgres"]` (folders written like a `subdir`, each with its own

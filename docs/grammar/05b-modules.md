@@ -731,9 +731,10 @@ import Sqlite from "pkg/sqlite/db"
     usage error (exit code 2). A name that is a dependency already is
     `PKG-DEPENDENCY-EXISTS`. The manifest gets one new line, `NAME = { git =
     "URL", tag = "TAG" }` (with `subdir = "DIR"` or `workspace = true`, and then
-    `group = "test"` last, when asked), after the last entry of `[dependencies]` (or in a new
-    `[dependencies]` table at the end of the file); no other byte changes, so
-    comments, blank lines, the order of the keys and the line endings stay. The
+    `group = "test"` last, when asked), after the last entry of
+    `[dependencies]` (or in a new `[dependencies]` table at the end of the
+    file); no other byte changes, so comments, blank lines, the order of the
+    keys and the line endings stay. The
     new text is read as a manifest before it is saved, and a layout the edit
     cannot handle (the table written as `dependencies = {}`, say) is
     `PKG-MANIFEST-EDIT`: write the line by hand.
