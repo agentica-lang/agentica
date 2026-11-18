@@ -6,7 +6,7 @@ check clean has no code.
 
 import pytest
 
-from tests.spec_support import assert_rule
+from tests.spec_support import assert_rule, covered
 
 MAIN = "def main() -> Void\n"
 DATE = "Time.Date.new(2026, 10, 14).unwrap!"
@@ -87,3 +87,10 @@ REFUSED = [
 @pytest.mark.parametrize(("program", "code", "text"), CLEAN + REFUSED)
 def test_time_rules(agentica_check, program, code, text):
     assert_rule(agentica_check(program), program, code, text)
+
+
+def test_a_struct_field_that_holds_a_datetime_is_labeled_where_equality_is_refused(agentica_check):
+    program = "struct Meeting\n  at: Time.DateTime\nend\n\n" + MAIN + f"  m = Meeting(at: {AWARE})\n  puts(m == m)\nend\n"
+    found = agentica_check(program)
+    assert_rule(found, program, "CHECK-TYPE-MISMATCH", "==")
+    assert [covered(program, label["range"]) for label in found["labels"]] == ["at: Time.DateTime\n"]

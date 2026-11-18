@@ -382,6 +382,10 @@ typedef struct {
      after (agc_error_struct): UINT32_MAX when the program has none (an older front end, hand-made bytecode), and every
      error of the run is then a String payload, as before the struct existed. */
   uint32_t error_struct;
+  /* The structs of the Time records (AGC_TIME_*), found by agc_time_structs when the program is set (agc_vm_init, and a
+     session's next program) and never written while a scheduler runs: UINT32_MAX for one the program lacks, which the
+     constructors of vm/dates.c then report. A constructor is a leaf, so it must not scan the struct table. */
+  uint32_t time_structs[AGC_TIME_RECORDS];
   /* The text of each kind (agc_error_kinds), made once by agc_vm_init: every error built in C shares it
      (agc_error_string). */
   agc_string **kinds;
@@ -1156,6 +1160,9 @@ uint32_t agc_builtin_struct(agc_vm *vm, const char *name, const char *const *fie
    or UINT32_MAX:
    unlike agc_builtin_struct it never fails, because a program without one still runs with String errors. */
 uint32_t agc_error_struct(const agc_program *program);
+/* Fills OUT (AGC_TIME_RECORDS entries) with the struct of each Time record of PROGRAM, by name and exact field list, or
+   UINT32_MAX. */
+void agc_time_structs(const agc_program *program, uint32_t *out);
 uint32_t agc_builtin_variant(agc_vm *vm, const char *enum_name, const char *variant_name, uint32_t arity);
 
 #endif

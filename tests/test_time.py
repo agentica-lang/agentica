@@ -45,6 +45,27 @@ USECS = near(0, 999_999) | st.integers(0, 999_999)
 OFFSETS = (near(-OFFSET_MAX, OFFSET_MAX, 0, -60, 60, 30, 86_400, -86_400)
            | st.integers(-OFFSET_MAX // 60, OFFSET_MAX // 60).map(lambda m: m * 60)
            | st.integers(-90_000, 90_000))
+VALID_OFFSETS = st.integers(-OFFSET_MAX // 60, OFFSET_MAX // 60).map(lambda m: m * 60)
+DATE_EDGES = (YEARS, MONTHS, DAYS)
+CLOCK_EDGES = (HOURS, MINUTES, SECONDS, USECS)
+
+
+@st.composite
+def fields(draw, valid, edges):
+    """A valid tuple of fields; one time in three, one field of it is replaced by an edge of its range or any Int."""
+    values = list(draw(valid))
+    if draw(st.integers(0, 2)) == 0:
+        at = draw(st.integers(0, len(values) - 1))
+        values[at] = draw(edges[at])
+    return tuple(values)
+
+
+def clock(t):
+    return (t.hour, t.minute, t.second, t.microsecond)
+
+
+VALID_DATES = st.dates().map(lambda d: (d.year, d.month, d.day))
+VALID_NAIVE = st.datetimes().map(lambda t: (t.year, t.month, t.day, *clock(t)))
 
 
 def peer(build):
@@ -96,16 +117,19 @@ PEERS = {
 }
 
 CASES = (
-    st.tuples(st.just("date"), st.tuples(YEARS, MONTHS, DAYS))
-    | st.tuples(st.just("time_of_day"), st.tuples(HOURS, MINUTES, SECONDS, USECS))
-    | st.tuples(st.just("naive"), st.tuples(YEARS, MONTHS, DAYS, HOURS, MINUTES, SECONDS, USECS))
-    | st.tuples(st.just("datetime"), st.tuples(YEARS, MONTHS, DAYS, HOURS, MINUTES, SECONDS, USECS, OFFSETS))
+    st.tuples(st.just("date"), fields(VALID_DATES, DATE_EDGES))
+    | st.tuples(st.just("time_of_day"), fields(st.times().map(clock), CLOCK_EDGES))
+    | st.tuples(st.just("naive"), fields(VALID_NAIVE, DATE_EDGES + CLOCK_EDGES))
+    | st.tuples(st.just("datetime"), fields(st.tuples(VALID_NAIVE, VALID_OFFSETS).map(lambda p: (*p[0], p[1])),
+                                             DATE_EDGES + CLOCK_EDGES + (OFFSETS,)))
     | st.tuples(st.just("days_in_month"), st.tuples(YEARS, MONTHS))
     | st.tuples(st.just("leap"), st.tuples(YEARS))
 )
+VERDICT_OPS = ("date", "time_of_day", "naive", "datetime", "days_in_month")
 
 
-def check(driver, cases):
+def check(driver, cases, verdicts=None):
+    """Run the cases and compare each reply with the peer; count the verdicts by (op, ok) in `verdicts`."""
     replies = run_json_cases(driver, [{"op": op, "args": list(args)} for op, args in cases])
     for (op, args), reply in zip(cases, replies):
         expected = PEERS[op](*args)
@@ -113,11 +137,22 @@ def check(driver, cases):
             assert (reply["ok"], reply["kind"]) == (False, "argument"), (op, args, reply)
         else:
             assert (reply["ok"], reply["fields"]) == (True, expected), (op, args, reply)
+        if verdicts is not None:
+            verdicts[op, reply["ok"]] = verdicts.get((op, reply["ok"]), 0) + 1
 
 
-@given(st.lists(CASES, min_size=1, max_size=300))
-def test_constructors_and_queries_agree_with_python(driver, cases):
-    check(driver, cases)
+def test_constructors_and_queries_agree_with_python(driver):
+    verdicts = {}
+
+    @given(st.lists(CASES, min_size=50, max_size=300))
+    def agree(cases):
+        check(driver, cases, verdicts)
+
+    agree()
+    # Both answers of every constructor come up many times, so the draws keep reaching each check and its absence.
+    thin = {key: verdicts.get(key, 0) for key in [(op, ok) for op in VERDICT_OPS for ok in (True, False)]
+            if verdicts.get(key, 0) < 100}
+    assert thin == {}, verdicts
 
 
 def test_every_day_of_the_leap_cycle_and_the_ends_of_the_range(driver):
@@ -126,3 +161,10 @@ def test_every_day_of_the_leap_cycle_and_the_ends_of_the_range(driver):
     cases += [("leap", (y,)) for y in (INT_MIN, INT_MIN + 1, -400, -100, -4, -1, 0, INT_MAX, INT_MAX - 1)]
     check(driver, cases)
 
+
+def test_the_first_and_last_instants_at_the_widest_offsets(driver):
+    corners = [(1, 1, 1, 0, 0, 0, 0), (9999, 12, 31, 23, 59, 59, 999_999)]
+    offsets = (-86_340, -86_341, -86_400, 0, 86_340, 86_341, 86_400)
+    replies = run_json_cases(driver, [{"op": "datetime", "args": [*c, o]} for c in corners for o in offsets])
+    assert [r["ok"] for r in replies] == [True, False, False, True, True, False, False] * 2
+    check(driver, [("datetime", (*c, o)) for c in corners for o in offsets])

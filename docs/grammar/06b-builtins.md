@@ -74,8 +74,10 @@ functions `Family.Member.fn(args)`, two levels at most
 `OpenSSL.Random.uuid`, `data |> OpenSSL.Digest.sha256()`). A member is a group
 of functions or a builtin type. A member the family lacks is
 `CHECK-UNKNOWN-NAME`, with the members in the help; a group of functions where
-a type is wanted is `CHECK-UNKNOWN-TYPE`. The one family today is `OpenSSL`
-(`Digest`, `HMAC`, `Cipher`, `CMAC`, `KDF`, `RSA`, `Random`).
+a type is wanted is `CHECK-UNKNOWN-TYPE`. The families are `File`, `JSON`,
+`OpenSSL` (`Digest`, `HMAC`, `Cipher`, `CMAC`, `KDF`, `RSA`, `Random`),
+`Process`, `System`, `TCP`, `TLS`, `Test` and `Time` (`Date`, `TimeOfDay`,
+`NaiveDateTime`, `DateTime`).
 
 The members `Time.Date`, `Time.TimeOfDay`, `Time.NaiveDateTime` and
 `Time.DateTime` of the `Time` family are records that only their builtins build

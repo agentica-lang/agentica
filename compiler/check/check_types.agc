@@ -256,6 +256,11 @@ def equality?(cx: State.Cx, type: ResolvedType) -> Bool = data_walk(cx, type, {}
 ## (List[Fn[Int, Int]]). A struct field also gives its declaration.
 def equality_gap(cx: State.Cx, type: ResolvedType) -> Gap
   found = data_walk(cx, type, {}, true)
+  if found.why == "" and inside?(cx, type) do |current: ResolvedType| instant?(current) end
+    # Two readings of one instant at different offsets differ field by field.
+    return Gap(why: "== would compare the readings of Time.DateTime values, not their instants", file: "", field: none)
+  end
+
   Gap(why: found.why, file: found.file, field: found.field)
 end
 
@@ -1308,16 +1313,19 @@ def data_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool], equal: 
     return data_walk(cx, Types.item(type), seen, equal)
   elsif Types.is?(type, "Optional")
     return data_walk(cx, Types.item(type), seen, equal)
-  elsif equal and Types.is?(type, "Struct") and Types.name(type) == "Time.DateTime"
-    # Two readings of one instant at different offsets differ field by field.
-    why = "== would compare the readings of two Time.DateTime values, not their instants"
-    return Walk(passes: false, seen: seen, why: why, file: "", field: none)
+  elsif equal and instant?(type)
+    # No reason here, so that a struct field on the way names itself (refused_in_field); equality_gap gives the reason
+    # of a Time.DateTime that no field holds.
+    return refused(seen)
   elsif Types.is?(type, "Struct") or Types.is?(type, "Enum")
     return nominal_walk(cx, type, seen, equal)
   end
 
   refused(seen)
 end
+
+# True for Time.DateTime, whose == would compare readings, not instants.
+def instant?(type: ResolvedType) -> Bool = Types.is?(type, "Struct") and Types.name(type) == "Time.DateTime"
 
 # True for a builtin record that only its builtins build (SEALED).
 def sealed?(type: ResolvedType) -> Bool = Types.is?(type, "Struct") and SEALED.include?(Types.name(type))

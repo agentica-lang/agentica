@@ -28,3 +28,4 @@ Time.Date.days_in_month(year: Int, month: Int) -> Result[Int]
   (`CHECK-NOT-ENCODABLE`, `CHECK-NOT-DECODABLE`).
 - `==` works on `Time.Date`, `Time.TimeOfDay` and `Time.NaiveDateTime`, not on
   `Time.DateTime` (`CHECK-TYPE-MISMATCH`): one instant has many readings.
+  `Test.eq` still compares two `Time.DateTime` values field by field.

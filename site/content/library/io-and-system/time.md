@@ -13,7 +13,7 @@ The `Time` family has four record types. Their fields are `Int`s, named as in Ru
 
 The calendar is the proleptic Gregorian one, with the years 1 to 9999. The precision is microseconds (`usec`, 0 to 999999). Unix time has no leap seconds, so a `sec` of 60 is an error. An offset is whole minutes, from `-86340` (`-23:59`) to `86340` (`+23:59`); there are no named time zones and no daylight saving time. The fields of a `Time.DateTime` are the reading at its offset.
 
-Every value is valid, because only the constructors below build one: writing `Time.Date(year: ..., ...)` or `d.with(...)` is `CHECK-NOT-CONSTRUCTIBLE`. `JSON.encode` and `JSON.decode` refuse these types, alone or inside a struct (`CHECK-NOT-ENCODABLE`, `CHECK-NOT-DECODABLE`). `==` compares a `Time.Date`, a `Time.TimeOfDay` or a `Time.NaiveDateTime` field by field. A `Time.DateTime` has no `==` (`CHECK-TYPE-MISMATCH`): two readings of one instant at different offsets differ in their fields.
+Every value is valid, because only the constructors below build one: writing `Time.Date(year: ..., ...)` or `d.with(...)` is `CHECK-NOT-CONSTRUCTIBLE`. `JSON.encode` and `JSON.decode` refuse these types, alone or inside a struct (`CHECK-NOT-ENCODABLE`, `CHECK-NOT-DECODABLE`). `==` compares a `Time.Date`, a `Time.TimeOfDay` or a `Time.NaiveDateTime` field by field. A `Time.DateTime` has no `==` (`CHECK-TYPE-MISMATCH`): two readings of one instant at different offsets differ in their fields. `Test.eq` still compares two of them field by field, so a test asserts the exact reading.
 
 The clocks are on [System, Time and Random](/library/io-and-system/system/).
 

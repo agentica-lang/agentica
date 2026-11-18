@@ -470,3 +470,12 @@ def test_the_cost_of_an_entry_does_not_grow_with_the_session(tmp_path):
     finally:
         session.close()
     assert statistics.median(times[-50:]) < 1.6 * statistics.median(times[:50])
+
+
+def test_a_builtin_record_that_only_a_later_entry_uses_is_built(tmp_path):
+    # The VM finds the structs of the Time records again when a later entry grows the program (vm/session.c).
+    got = repl(tmp_path, "x = 1", "d = Time.Date.new(2024, 2, 29).unwrap!", "d.day")
+    found = answers(got)
+    assert got.code == 0, got.stderr
+    assert [answer["ok"] for answer in found] == [True] * 3
+    assert found[2]["value"] == "29"

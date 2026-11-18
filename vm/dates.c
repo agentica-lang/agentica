@@ -20,10 +20,8 @@ typedef struct {
   int64_t year, month, day, hour, min, sec, usec, utc_offset;
 } fields;
 
-static const char *const date_fields[] = {"year", "month", "day"};
-static const char *const time_fields[] = {"hour", "min", "sec", "usec"};
-static const char *const naive_fields[] = {"year", "month", "day", "hour", "min", "sec", "usec"};
-static const char *const datetime_fields[] = {"year", "month", "day", "hour", "min", "sec", "usec", "utc_offset"};
+static const char *const record_names[AGC_TIME_RECORDS] = {"Time.Date", "Time.TimeOfDay", "Time.NaiveDateTime",
+                                                           "Time.DateTime"};
 
 static bool leap(int64_t year) { return (year % 4 == 0 && year % 100 != 0) || year % 400 == 0; }
 
@@ -72,51 +70,53 @@ static void read_fields(agc_vm *vm, const agc_value *args, uint32_t first, uint3
   for (uint32_t k = 0; k < count; k++) *slots[first + k] = agc_as_int(vm, args[k]);
 }
 
-/* The ok Result of a struct of the record NAME with COUNT of the fields from FIRST, in the order of `fields` (a time
-   of day starts at hour, 3). */
-static agc_value build(agc_vm *vm, const char *name, const char *const *names, uint32_t first, uint32_t count,
-                       const fields *f) {
+/* The ok Result of the Time record KIND (AGC_TIME_*) with COUNT of the fields from FIRST, in the order of `fields` (a
+   time of day starts at hour, 3). The struct was found once for the run (agc_time_structs); a program without it is
+   forged bytecode. */
+static agc_value build(agc_vm *vm, uint32_t kind, uint32_t first, uint32_t count, const fields *f, uint32_t span) {
+  uint32_t type = vm->rt->time_structs[kind];
+  if (type == UINT32_MAX) {
+    char message[MESSAGE_SIZE];
+    snprintf(message, sizeof message, "invalid bytecode: the %s struct is missing", record_names[kind]);
+    agc_fail(vm, "RUNTIME-INTERNAL", message, span);
+  }
   const int64_t values[] = {f->year, f->month, f->day, f->hour, f->min, f->sec, f->usec, f->utc_offset};
-  agc_struct *s = agc_new_struct(agc_builtin_struct(vm, name, names, count), count);
+  agc_struct *s = agc_new_struct(type, count);
   for (uint32_t k = 0; k < count; k++) s->fields[k] = agc_int(values[first + k]);
   return agc_result_value(true, agc_struct_value(s));
 }
 
 static agc_value builtin_date_new(agc_vm *vm, agc_value *args, uint32_t span) {
-  (void)span;
   fields f = {0};
   char message[MESSAGE_SIZE];
   read_fields(vm, args, 0, 3, &f);
   if (!check_date(&f, message)) return agc_error(vm, AGC_KIND_ARGUMENT, message);
-  return build(vm, "Time.Date", date_fields, 0, 3, &f);
+  return build(vm, AGC_TIME_DATE, 0, 3, &f, span);
 }
 
 static agc_value builtin_time_of_day_new(agc_vm *vm, agc_value *args, uint32_t span) {
-  (void)span;
   fields f = {0};
   char message[MESSAGE_SIZE];
   read_fields(vm, args, 3, 4, &f);
   if (!check_clock(&f, message)) return agc_error(vm, AGC_KIND_ARGUMENT, message);
-  return build(vm, "Time.TimeOfDay", time_fields, 3, 4, &f);
+  return build(vm, AGC_TIME_OF_DAY, 3, 4, &f, span);
 }
 
 static agc_value builtin_naive_new(agc_vm *vm, agc_value *args, uint32_t span) {
-  (void)span;
   fields f = {0};
   char message[MESSAGE_SIZE];
   read_fields(vm, args, 0, 7, &f);
   if (!check_date(&f, message) || !check_clock(&f, message)) return agc_error(vm, AGC_KIND_ARGUMENT, message);
-  return build(vm, "Time.NaiveDateTime", naive_fields, 0, 7, &f);
+  return build(vm, AGC_TIME_NAIVE, 0, 7, &f, span);
 }
 
 static agc_value builtin_datetime_new(agc_vm *vm, agc_value *args, uint32_t span) {
-  (void)span;
   fields f = {0};
   char message[MESSAGE_SIZE];
   read_fields(vm, args, 0, 8, &f);
   if (!check_date(&f, message) || !check_clock(&f, message) || !check_offset(f.utc_offset, message))
     return agc_error(vm, AGC_KIND_ARGUMENT, message);
-  return build(vm, "Time.DateTime", datetime_fields, 0, 8, &f);
+  return build(vm, AGC_TIME_DATETIME, 0, 8, &f, span);
 }
 
 static agc_value builtin_leap(agc_vm *vm, agc_value *args, uint32_t span) {
