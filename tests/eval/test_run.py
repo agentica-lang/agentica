@@ -2,6 +2,7 @@ import contextlib
 import io
 import json
 import os
+import random
 import shutil
 import subprocess
 import tempfile
@@ -53,6 +54,45 @@ class ChildEnvironmentTests(unittest.TestCase):
             output = run.redact_secrets("logged secret-value", ["PROVIDER_TOKEN"])
 
         self.assertEqual(output, "logged [REDACTED]")
+
+    def test_the_pi_auth_file_is_mounted_read_only_and_its_keys_are_redacted(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            auth = Path(directory) / "pi-auth.json"
+            auth.write_text(json.dumps({"opencode-go": {"type": "api_key", "key": "sk-test-0123456789"}}))
+            secrets = run.auth_secrets(auth)
+            command = run.docker_prefix(Path(directory), "image", "name", network=True, pass_env=[], pi_auth=auth)
+            auth.write_text("{not json")
+            with self.assertRaises(SystemExit) as raised:
+                run.auth_secrets(auth)
+            auth.write_bytes(b"\xff\xfe{")
+            with self.assertRaises(SystemExit):
+                run.auth_secrets(auth)
+
+        self.assertEqual(secrets, ["sk-test-0123456789"])
+        self.assertIn(f"type=bind,src={auth},dst={run.PI_AUTH_MOUNT},readonly", command)
+        self.assertEqual(run.redact_secrets("key sk-test-0123456789", [], secrets), "key [REDACTED]")
+        self.assertNotIn("not json", str(raised.exception))
+
+    def test_a_secret_split_over_stream_deltas_or_json_escaped_never_reaches_the_log(self) -> None:
+        key = 'sk-"split\\0123456789'
+        escaped = json.dumps(key)[1:-1]
+        events = [{"type": "message_update", "assistantMessageEvent": {"type": "toolcall_delta", "delta": escaped[:6]}},
+                  {"type": "message_update", "assistantMessageEvent": {"type": "toolcall_delta", "delta": escaped[6:]}},
+                  {"type": "tool_execution_update", "toolCallId": "1", "partialResult": {"content": [
+                      {"type": "text", "text": key[:5]}]}},
+                  {"type": "message_end", "message": {"role": "assistant", "content": [{"type": "text", "text": key}]}},
+                  {"type": "tool_execution_end", "toolCallId": "1", "result": {"content": [{"type": "text", "text": key}]}}]
+        log = run.agent_log("not json " + key + "\n" + "\n".join(json.dumps(event) for event in events) + "\n", [], [key])
+
+        self.assertNotIn("sk-", log)
+        self.assertNotIn("message_update", log)
+        self.assertNotIn("tool_execution_update", log)
+        self.assertEqual(log.count("[REDACTED]"), 3)
+        with tempfile.TemporaryDirectory() as directory:
+            copy = Path(directory) / "solution.py"
+            copy.write_bytes(b"\xff key = '" + key.encode() + b"'\n")
+            run.redact_file(copy, [], [key])
+            self.assertEqual(copy.read_bytes(), b"\xff key = '[REDACTED]'\n")
 
 
 class JailCommandTests(unittest.TestCase):
@@ -264,6 +304,38 @@ def bash_events(call: str, command: str, output: str) -> list[str]:
     ]
 
 
+LEGACY_KEYS = ("interpreter_runs", "failing_runs", "check_runs", "check_failures", "outside_reads", "net_commands",
+               "query_runs", "read_runs")
+
+
+def legacy_pi_metrics(out: str) -> dict[str, int]:
+    """The call counters of pi_metrics before the call list (commit e31975ee9), the model of the differential test."""
+    m = dict.fromkeys(LEGACY_KEYS, 0)
+    pending: dict[str, str] = {}
+    for line in out.splitlines():
+        event = json.loads(line)
+        kind = event.get("type")
+        if kind == "tool_execution_start":
+            command = event.get("args", {}).get("command", "")
+            m["outside_reads"] += str(run.ROOT) in json.dumps(event.get("args", {}))
+            m["net_commands"] += run.is_net_command(command)
+            if event.get("toolName") == "bash":
+                m["query_runs"] += run.is_query_command(command)
+                m["read_runs"] += run.is_read_command(command)
+            elif event.get("toolName") == "read":
+                m["read_runs"] += 1
+            if event.get("toolName") == "bash" and ("agentica" in command or "python" in command or run.runs_mypy(command)):
+                m["interpreter_runs"] += 1
+                m["check_runs"] += run.is_check_command(command)
+                pending[event["toolCallId"]] = command
+        elif kind == "tool_execution_end" and event.get("toolCallId") in pending:
+            command = pending.pop(event["toolCallId"])
+            if run.command_failed(command, json.dumps(event.get("result", {}))):
+                m["failing_runs"] += 1
+                m["check_failures"] += run.is_check_command(command)
+    return m
+
+
 class MetricsTests(unittest.TestCase):
     def test_checker_runs_count_as_check_runs_and_failures_as_repairs(self) -> None:
         mypy_error = "solution.py:3: error: Incompatible types in assignment  [assignment]\nFound 1 error in 1 file"
@@ -360,6 +432,134 @@ class MetricsTests(unittest.TestCase):
         # read tool; `rg outline` among the others
         self.assertEqual(metrics["read_runs"], 5)
         self.assertEqual(metrics["check_runs"], 2)
+
+    def test_a_fix_round_is_a_failed_call_then_an_edit_before_the_next_check(self) -> None:
+        error = "solution.py:3: error: Incompatible types  [assignment]"
+        events = (bash_events("1", "mypy --strict solution.py", error)
+                  + [json.dumps({"type": "tool_execution_start", "toolCallId": "e1", "toolName": "edit",
+                                 "args": {"path": "solution.py"}})]
+                  + bash_events("2", "mypy --strict solution.py", error)
+                  + bash_events("3", "mypy --strict solution.py", error)
+                  + bash_events("4", "cat > solution.py <<'EOF'\nx = 1\nEOF\nmypy --strict solution.py", "Success")
+                  + bash_events("5", "go build solution.go", "./solution.go:4:2: undefined: x")
+                  + [json.dumps({"type": "tool_execution_start", "toolCallId": "w1", "toolName": "write",
+                                 "args": {"path": "solution.go"}})]
+                  + bash_events("6", "python3 solution.py", "Traceback (most recent call last):"))
+
+        metrics = run.pi_metrics("\n".join(events))
+
+        # 1 then the edit: a round; 2 then 3 with no edit between: not one; 3 then the heredoc: a round;
+        # 5 then the write: a round; 6 is never edited: not one
+        self.assertEqual((metrics["failing_runs"], metrics["check_failures"], metrics["fix_rounds"]), (5, 4, 3))
+        for command in ("echo x > solution.agc", "tee -a solution.go < x", "sed -i 's/a/b/' solution.py",
+                        "cp /tmp/x.py solution.py", "cd w && cat >> ./solution.py",
+                        "python3 -c \"open('solution.py', 'w').write(x)\""):
+            with self.subTest(command=command):
+                self.assertTrue(run.writes_solution(command))
+        for command in ("cat solution.py", "cp solution.py backup.py", "python3 solution.py > out.txt",
+                        "diff solution.py start.py", "python3 solution.py > solution.py.out",
+                        "python3 -c \"open('solution.py').read()\""):
+            with self.subTest(command=command):
+                self.assertFalse(run.writes_solution(command))
+
+    def test_only_a_successful_edit_of_the_solution_ends_a_round(self) -> None:
+        def edit(call: str, path: str, error: bool) -> list[str]:
+            return [json.dumps({"type": "tool_execution_start", "toolCallId": call, "toolName": "edit",
+                                "args": {"path": path}}),
+                    json.dumps({"type": "tool_execution_end", "toolCallId": call, "isError": error,
+                                "result": {"content": [{"type": "text", "text": "ok"}]}})]
+
+        failing = bash_events("1", "python3 solution.py", "Traceback (most recent call last):")
+        events = (failing + edit("e1", "notes.md", False) + edit("e2", "/workspace/solution.py", True)
+                  + bash_events("2", "python3 solution.py", "Traceback (most recent call last):")
+                  + edit("e3", "/workspace/solution.py", False))
+
+        self.assertEqual(run.pi_metrics("\n".join(events))["fix_rounds"], 1)
+
+    def test_a_path_that_names_a_program_is_no_run(self) -> None:
+        diagnostics = "error[CHECK-UNKNOWN-NAME] in the examples"
+        for command in ("sed -n 1,80p skills/agentica-programming/references/diagnostics.md",
+                        "ls /workspace/skills/agentica-programming", "cat python_notes.txt", "rg mypy ."):
+            with self.subTest(command=command):
+                metrics = run.pi_metrics("\n".join(bash_events("1", command, diagnostics)))
+                self.assertEqual((metrics["interpreter_runs"], metrics["failing_runs"]), (0, 0))
+        for command in ("python3.13 solution.py", "./bin/agentica solution.agc", "go run solution.go",
+                        "cd w && env X=1 python solution.py"):
+            with self.subTest(command=command):
+                self.assertTrue(run.runs_program(command))
+
+    def test_calls_that_share_an_id_or_have_none_keep_their_own_results(self) -> None:
+        traceback = "Traceback (most recent call last):"
+        events = (bash_events("", "python3 solution.py", traceback) + bash_events("", "python3 solution.py", "ok")
+                  + bash_events("same", "mypy solution.py", "a.py:1: error: x") + bash_events("same", "cat a", "x"))
+        overlapping = [json.loads(line) for line in bash_events("x", "python3 a.py", traceback)
+                       + bash_events("x", "python3 b.py", "ok")]
+        events += [json.dumps(event) for event in (overlapping[0], overlapping[2], overlapping[1], overlapping[3])]
+
+        metrics = run.pi_metrics("\n".join(events))
+
+        self.assertEqual((metrics["interpreter_runs"], metrics["check_runs"], metrics["failing_runs"],
+                          metrics["read_runs"]), (5, 1, 3, 1))
+
+    def test_unique_ids_give_the_counts_of_the_runner_before_the_call_list(self) -> None:
+        # No command names a program outside the call position: the old runner counted any command that holds
+        # "agentica" or "python" (`cat skills/agentica-programming/SKILL.md`) as a run.
+        commands = ["python3 solution.py", "mypy --strict solution.py", "agentica check s.agc", "agentica s.agc",
+                    "cat task.md", "curl https://x.y", "agentica outline s.agc", "cat /etc/hosts", "rg x . | head",
+                    "cd /workspace && printf '1' | agentica s.agc", "timeout 5 python3 -m mypy s.py",
+                    "for f in a b; do python3 s.py < $f; done", "if true; then agentica s.agc; else python3 s.py; fi",
+                    "! agentica check s.agc", "{ python3 s.py; }", "(cd w && python3 s.py)", "out=$(python3 s.py)",
+                    "`python3 s.py`", "bash -c 'cd w && python3 s.py'", 'sh -lc "agentica check \\"s.agc\\""',
+                    "env -i X=1 python3 s.py", "/usr/bin/env python3 s.py", "timeout -s KILL 5 agentica s.agc",
+                    "time -p python3 s.py", "nohup python3 s.py", "echo in | xargs -n 1 python3 s.py",
+                    "uv run python s.py", "uv run mypy --strict s.py", "go env GOPATH", "go mod tidy"]
+        outputs = ["ok", "Traceback (most recent call last):\nValueError", "a.py:1: error: bad", "error[CHECK-X]",
+                   "SyntaxError: x", "plain"]
+        rng = random.Random(1843)
+        for trial in range(200):
+            events: list[str] = []
+            for number in range(rng.randrange(1, 12)):
+                if rng.random() < 0.1:
+                    events.append(json.dumps({"type": "tool_execution_start", "toolCallId": f"r{number}",
+                                              "toolName": "read", "args": {"path": "a"}}))
+                else:
+                    events += bash_events(f"c{number}", rng.choice(commands), rng.choice(outputs))
+            with self.subTest(trial=trial):
+                new = run.pi_metrics("\n".join(events))
+                self.assertEqual({key: new[key] for key in LEGACY_KEYS}, legacy_pi_metrics("\n".join(events)))
+
+    def test_only_the_go_run_and_check_subcommands_are_runs(self) -> None:
+        for command in ("go vet solution.go", "go build solution.go", "go run solution.go", "go test ./...",
+                        "bash -c 'go run solution.go'"):
+            with self.subTest(command=command):
+                self.assertTrue(run.runs_program(command))
+        for command in ("go env GOPATH", "go mod tidy", "go version", "cat go.mod"):
+            with self.subTest(command=command):
+                self.assertFalse(run.runs_program(command))
+
+    def test_go_vet_and_go_build_are_checks_and_their_errors_failures(self) -> None:
+        for command in ("go vet ./...", "go build -o app solution.go", "cd w && go vet solution.go"):
+            with self.subTest(command=command):
+                self.assertTrue(run.is_check_command(command))
+        self.assertFalse(run.is_check_command("go run solution.go"))
+        self.assertTrue(run.command_failed("go build solution.go", "./solution.go:4:2: undefined: x"))
+        self.assertTrue(run.command_failed("go run solution.go", "panic: runtime error: index out of range"))
+        self.assertFalse(run.command_failed("go vet solution.go", ""))
+        self.assertFalse(run.command_failed("cat x.go", "./solution.go:4:2: undefined: x"))
+        self.assertTrue(run.command_failed("go test ./...", "    solution_test.go:12: got 3, want 4\n--- FAIL: TestX"))
+        self.assertTrue(run.command_failed("go test ./...", "--- FAIL: TestX (0.00s)"))
+        self.assertFalse(run.command_failed("go build ./...", "# example.com/solution"))
+
+    def test_spend_is_pis_cost_or_the_list_price_of_the_tokens(self) -> None:
+        model = "opencode-go/deepseek-v4.1-flash"
+        tokens = {"tokens_in": 1_000_000, "tokens_cached": 2_000_000, "tokens_cache_write": 0, "tokens_out": 1_000_000}
+        self.assertEqual(run.spend({"model": model, "cost": 0.5, **tokens}), {"cost_source": "agent"})
+        table = run.spend({"model": model, "cost": 0.0, **tokens})
+        self.assertEqual(table["cost_source"], "table")
+        self.assertAlmostEqual(table["cost"], 0.15 + 2 * 0.003 + 0.6)
+        self.assertAlmostEqual(table["cost_input"] + table["cost_cache"] + table["cost_output"], table["cost"])
+        self.assertEqual(run.spend({"model": "other/m", "cost": 0.0, **tokens}), {"cost": 0.0, "cost_source": "none"})
+        self.assertEqual(run.spend({"model": model, "cost": 0.0})["cost_source"], "none")
 
 
 class CheckerGradingTests(unittest.TestCase):
@@ -513,7 +713,14 @@ class ImageBuildTests(unittest.TestCase):
         self.assertIn("Docker daemon", str(raised.exception))
 
 
+PREFLIGHT = {"ok": True, "cost_source": "agent", "tokens": 120, "turns": 1, "cost": 0.0}
+
+
 class MainTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.preflights: list = []
+        self.preflight = PREFLIGHT
+
     def main(self, root: Path, argv: list[str], status: str,
              cost: float = 0.0) -> tuple[int, list[tuple[str, list[str], str]], list]:
         calls: list[tuple[str, list[str], str]] = []
@@ -538,8 +745,10 @@ class MainTests(unittest.TestCase):
         with (patch.object(run, "ROOT", root), patch.object(run, "EVAL", root / "eval"),
               patch.object(run, "build") as build, patch.object(run, "require_docker"),
               patch.object(run, "validate_docker", fake_validate), patch.object(run, "one_run", fake_one_run),
+              patch.object(run, "run_preflight") as preflight,
               patch.dict(os.environ, {"FOO": "bar"}), patch("sys.argv", ["run.py", *argv]),
               contextlib.redirect_stdout(io.StringIO())):
+            preflight.side_effect = lambda args: self.preflights.append(args.model) or self.preflight
             code = run.main()
         build.assert_called_once()
         return code, calls, validated
@@ -583,6 +792,47 @@ class MainTests(unittest.TestCase):
         (root / "dist" / "runtime" / "bin").mkdir(parents=True, exist_ok=True)
         (root / "dist" / "runtime" / "bin" / "agentica").write_text("binary")
         return root
+
+    def test_pi_auth_is_checked_first_and_run_json_records_only_that_one_was_used(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = self.runtime_root(directory)
+            auth = root / "pi-auth.json"
+            auth.write_text(json.dumps({"opencode-go": {"type": "api_key", "key": "sk-test-0123456789"}}))
+            comma = root / "a,b.json"
+            comma.write_text("{}")
+            for argv in (["--pi-auth", str(root / "missing.json")], ["--pi-auth", str(auth), "--agent", "claude"],
+                         ["--pi-auth", str(comma)]):
+                with self.subTest(argv=argv), self.assertRaises(SystemExit) as raised:
+                    with patch("sys.argv", ["run.py", "--tasks", "t1", *argv]):
+                        run.main()
+                self.assertIn("--pi-auth", str(raised.exception))
+            auth.chmod(0o644)
+            printed = io.StringIO()
+            with contextlib.redirect_stdout(printed):
+                code, _, _ = self.main(root, ["--pi-auth", str(auth), "--model", "opencode-go/deepseek-v4.1-flash",
+                                              "--tasks", "t1", "--arms", "skill"], "pass")
+            text = (next((root / "eval" / "results").iterdir()) / "run.json").read_text(encoding="utf-8")
+
+        self.assertEqual((code, json.loads(text)["pi_auth_file"]), (0, True))
+        self.assertNotIn("sk-test", text)
+        self.assertNotIn(str(auth), text)
+
+    def test_a_pi_round_runs_the_preflight_first_records_it_and_counts_its_cost(self) -> None:
+        self.preflight = dict(PREFLIGHT, cost=0.04)
+        with tempfile.TemporaryDirectory() as directory:
+            root = self.runtime_root(directory)
+            self.main(root, ["--model", "opencode-go/m", "--tasks", "t1", "--arms", "skill", "--max-cost", "1"],
+                      "pass", cost=0.5)
+            info = self.result_info(root)
+            shutil.rmtree(root / "eval")
+            self.main(root, ["--no-preflight", "--tasks", "t1", "--arms", "skill"], "pass")
+            skipped = self.result_info(root)
+            shutil.rmtree(root / "eval")
+            self.main(root, ["--check-references", "--tasks", "t1"], "pass")
+
+        self.assertEqual(self.preflights, ["opencode-go/m"])
+        self.assertEqual((info["preflight"], info["cost"]), (self.preflight, 0.54))
+        self.assertIsNone(skipped["preflight"])
 
     def test_an_arm_runs_only_on_its_task_subset(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -692,6 +942,73 @@ class MainTests(unittest.TestCase):
                 self.assertEqual("warning: t1-skill-1 reported no cost" in out.getvalue(), warns)
 
 
+def pi_reply(usage: dict | None = None, stop: str = "stop", error: str = "", text: str = "pong") -> str:
+    """A Pi stream in the shape Pi 1.3.0 prints for one answer (recorded from opencode-go, trimmed)."""
+    cost = {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0, "total": 0}
+    usage = usage or {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0, "totalTokens": 0, "cost": cost}
+    message = {"role": "assistant", "content": [{"type": "text", "text": text}] if text else [], "api": "openai-completions",
+               "provider": "opencode-go", "model": "deepseek-v4.1-flash", "usage": usage, "stopReason": stop}
+    if error:
+        message["errorMessage"] = error
+    events = [{"type": "message_end", "message": {"role": "user", "content": [{"type": "text", "text": "Reply"}]}},
+              {"type": "message_update", "assistantMessageEvent": {"type": "text_delta", "delta": text}},
+              {"type": "message_end", "message": message}, {"type": "agent_end", "messages": []}]
+    return "\n".join(json.dumps(event) for event in events) + "\n"
+
+
+class PreflightTests(unittest.TestCase):
+    MODEL = "opencode-go/deepseek-v4.1-flash"
+
+    def usage(self, total: float) -> dict:
+        cost = {"input": total * 0.8, "output": total * 0.2, "cacheRead": 0, "cacheWrite": 0, "total": total}
+        return {"input": 1500, "output": 3, "cacheRead": 0, "cacheWrite": 0, "totalTokens": 1503, "cost": cost}
+
+    def test_a_reported_cost_is_the_source(self) -> None:
+        result = run.preflight_result(pi_reply(self.usage(0.000227)), "", False, 0, self.MODEL)
+
+        self.assertEqual(result, {"ok": True, "cost_source": "agent", "tokens": 1503, "turns": 1, "cost": 0.000227})
+
+    def test_a_cost_of_0_falls_back_to_the_price_table_or_stops_the_round(self) -> None:
+        free = self.usage(0.0)
+        self.assertEqual(run.preflight_result(pi_reply(free), "", False, 0, self.MODEL)["cost_source"], "table")
+        with self.assertRaises(SystemExit) as raised:
+            run.preflight_result(pi_reply(free), "", False, 0, "opencode-go/unpriced")
+        self.assertIn("no cost source for opencode-go/unpriced", str(raised.exception))
+
+    def test_the_shapes_pi_wrote_offline_stop_the_round(self) -> None:
+        # Recorded from Pi 1.3.0 with the network off and a dummy key: it exits 0 after its retries.
+        offline = ('{"type": "message_end", "message": {"role": "assistant", "content": [], "api": '
+                   '"openai-completions", "provider": "opencode-go", "model": "deepseek-v4.1-flash", "usage": '
+                   '{"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0, "totalTokens": 0, "cost": {"input": 0, '
+                   '"output": 0, "cacheRead": 0, "cacheWrite": 0, "total": 0}}, "stopReason": "error", "timestamp": '
+                   '1794987127524, "errorMessage": "Connection error.", "durationMs": 36, "thinkingLevel": "high"}}')
+        unknown = 'Warning: Model "no-such-model" not found for provider "opencode-go". Using custom model id.\n'
+        for out, err, message in ((offline, "", "refused the call (auth or model?): Connection error."),
+                                  (offline, unknown, "does not know the model")):
+            with self.subTest(message=message), self.assertRaises(SystemExit) as raised:
+                run.preflight_result(out, err, False, 0, self.MODEL)
+            self.assertIn(message, str(raised.exception))
+
+    def test_an_echoed_error_is_cut_to_120_characters(self) -> None:
+        long = pi_reply(stop="error", error="401 key sk-" + "x" * 300, text="")
+        with self.assertRaises(SystemExit) as raised:
+            run.preflight_result(long, "", False, 0, self.MODEL)
+        self.assertEqual(len(str(raised.exception).split("(auth or model?): ", 1)[1]), 120)
+
+    def test_an_auth_error_an_unknown_model_or_no_answer_stops_the_round(self) -> None:
+        refused = pi_reply(stop="error", error='401: {"type":"error","error":{"message":"Invalid API key"}}', text="")
+        unknown = 'Warning: Model "no-such" not found for provider "opencode-go". Using custom model id.\n'
+        for out, err, timed_out, returncode, message in (
+                (refused, "", False, 0, "refused the call"),
+                (pi_reply(self.usage(0.1)), unknown, False, 0, "does not know the model"),
+                (pi_reply(self.usage(0.1)), "crash", False, 1, "exited 1"),
+                (pi_reply(self.usage(0.1), text=""), "", False, 0, "no answer"),
+                ("", "", True, None, "did not answer")):
+            with self.subTest(message=message), self.assertRaises(SystemExit) as raised:
+                run.preflight_result(out, err, timed_out, returncode, self.MODEL)
+            self.assertIn(message, str(raised.exception))
+
+
 class PiVersionTests(unittest.TestCase):
     def ensure(self, image: str, outcome: tuple[int | None, str, str]) -> str | None:
         with patch.object(run, "probe", return_value=outcome), patch.object(run, "dockerfile_pi_version", return_value="1.3.0"):
@@ -708,6 +1025,15 @@ class PiVersionTests(unittest.TestCase):
 
     def test_the_dockerfile_pins_a_pi_version(self) -> None:
         self.assertRegex(run.dockerfile_pi_version() or "", r"^\d+\.\d+\.\d+$")
+
+
+def summary_of(rows: list[dict]) -> str:
+    with tempfile.TemporaryDirectory() as directory:
+        results = Path(directory)
+        (results / "results.jsonl").write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+        with contextlib.redirect_stdout(io.StringIO()):
+            run.summarize(results)
+        return (results / "summary.md").read_text(encoding="utf-8")
 
 
 class SummaryTests(unittest.TestCase):
@@ -727,7 +1053,7 @@ class SummaryTests(unittest.TestCase):
 
         self.assertIn("check runs | query runs | refused | read runs | type escapes", summary)
         # no token or cost fields in these rows: the context and the cost split are unknown, not 0
-        self.assertIn("| t1 | typed-python | 2 | 1/2 | 50% | 0 | - | - | - | - | 4.0 | 2.0 | 3.0 | 1.5 | 1.5 | 5.0 | 1.5 | check:arg-type |",
+        self.assertIn("| t1 | typed-python | 2 | 1/2 | 50% | 0 | - | - | - | - | - | 4.0 | 2.0 | - | 3.0 | 1.5 | 1.5 | 5.0 | 1.5 | check:arg-type |",
                       summary)
         self.assertIn("stopped_for_budget: false", summary)
 
@@ -738,16 +1064,22 @@ class SummaryTests(unittest.TestCase):
                      cost_input=0.5, cost_cache=0.25, cost_output=1.0),
                 dict(row, tokens_in=300, tokens_out=30, tokens_cached=600, cost_input=1.5, cost_cache=0.75,
                      cost_output=2.0)]
-        with tempfile.TemporaryDirectory() as directory:
-            results = Path(directory)
-            (results / "results.jsonl").write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
-            with contextlib.redirect_stdout(io.StringIO()):
-                run.summarize(results)
-            summary = (results / "summary.md").read_text(encoding="utf-8")
+        summary = summary_of(rows)
 
-        self.assertIn("| tokens | context | cost in $ | cost cache $ | cost out $ |", summary)
+        self.assertIn("| tokens | context | spend $ | cost in $ | cost cache $ | cost out $ |", summary)
         # tokens: (110 + 330) / 2; context: (550 + 900) / 2, the cache write counted when present
-        self.assertIn("| t1 | skill | 2 | 2/2 | 100% | 220 | 725 | 1.0000 | 0.5000 | 1.5000 | 1.0 |", summary)
+        self.assertIn("| t1 | skill | 2 | 2/2 | 100% | 220 | 725 | - | 1.0000 | 0.5000 | 1.5000 | 1.0 |", summary)
+
+    def test_summary_shows_spend_and_fix_rounds_per_task_and_per_arm(self) -> None:
+        row = {"status": "pass", "passed": 1, "total": 1, "seconds": 1.0, "failure": None, "code": None}
+        rows = [dict(row, task="t1", arm="skill", cost=0.25, cost_source="agent", fix_rounds=1),
+                dict(row, task="t2", arm="skill", cost=0.75, cost_source="table", fix_rounds=2),
+                dict(row, task="t1", arm="typed-python", cost=0.5, cost_source="agent", fix_rounds=0, status="fail")]
+        summary = summary_of(rows)
+
+        self.assertIn("| t2 | skill | 1 | 1/1 | 100% | 0 | - | 0.7500 | - | - | - | 1.0 | 0.0 | 2.0 |", summary)
+        self.assertIn("| typed-python | 1 | 0/1 | 0.5000 | 0.5000 | 0.00 | agent 1 |", summary)
+        self.assertIn("| skill | 2 | 2/2 | 1.0000 | 0.5000 | 1.50 | agent 1, table 1 |", summary)
 
 
 class DockerBoundaryTests(unittest.TestCase):
@@ -779,6 +1111,41 @@ class DockerBoundaryTests(unittest.TestCase):
                     run.remove_container(name)
             self.assertEqual(json.loads(result.stdout), [False, "test-token", None, os.getuid()])
             self.assertEqual((work / "probe.txt").read_text(), "ok")
+
+    def test_pi_reads_the_auth_file_copied_into_its_home_and_the_key_never_reaches_the_log(self) -> None:
+        key = "sk-test-0123456789"
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            work = root / "workspace"
+            work.mkdir()
+            auth = root / "pi-auth.json"
+            auth.write_text(json.dumps({"opencode-go": {"type": "api_key", "key": key}}))
+            auth.chmod(0o600)
+            probe = ["sh", "-c", "cat $HOME/.pi/agent/auth.json; stat -c 'mode %a' $HOME/.pi/agent/auth.json; "
+                     "pi --list-models opencode-go"]
+            started: list[list[str]] = []
+            popen = subprocess.Popen
+
+            def recording_popen(command: list[str], **kwargs: object) -> subprocess.Popen:
+                started.append(command)
+                return popen(command, **kwargs)
+
+            with (patch.object(run, "agent_command", return_value=probe), patch.object(run, "AGENT_NETWORK", False),
+                  patch.object(run.subprocess, "Popen", recording_popen)):
+                out, err, timed_out, _ = run.run_agent("pi", work, root, "t1-stats", "skill", None, 60, "docker", [],
+                                                    run.DEFAULT_IMAGE, auth)
+            unchanged = json.loads(auth.read_text())["opencode-go"]["key"] == key
+            left = list(work.iterdir())
+
+        self.assertFalse(timed_out)
+        self.assertIn("deepseek-v4.1-flash", out, err)
+        self.assertIn("[REDACTED]", out)
+        self.assertNotIn(key, out + err)
+        self.assertIn("mode 600", out)
+        self.assertNotIn(key, " ".join(started[0]))
+        self.assertIn(f"type=bind,src={auth},dst={run.PI_AUTH_MOUNT},readonly", started[0])
+        self.assertTrue(unchanged)
+        self.assertEqual(left, [])
 
     def test_grader_has_no_secret_network_or_workspace_writes(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

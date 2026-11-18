@@ -2,6 +2,7 @@ dist/
 build/
 tools/jscpd/node_modules/
 tests/eval/results/
+tests/eval/.secrets/
 __pycache__/
 _build/
 *.agcb
