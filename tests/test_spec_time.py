@@ -166,3 +166,9 @@ def test_an_unknown_field_of_a_record_with_methods_lists_its_methods(agentica_ch
     assert "assume_offset" in naive["help"] and "to_date" in naive["help"], naive["help"]
     typo = agentica_check(MAIN + f"  a = {AWARE}\n  puts(a.yeer)\nend\n")
     assert "\"year\"" in typo["help"] and "getlocal" in typo["help"], typo["help"]
+
+
+def test_a_value_given_to_its_parse_names_the_method_that_writes_it(agentica_check):
+    found = agentica_check(MAIN + f"  d = {DATE}\n  puts(Time.Date.iso8601(d))\nend\n")
+    assert found["code"] == "CHECK-TYPE-MISMATCH"
+    assert "d.iso8601" in found["help"] and "format_iso8601" not in found["help"], found["help"]

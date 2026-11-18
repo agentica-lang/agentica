@@ -1,5 +1,6 @@
 # The ISO 8601 text of the Time family: each type written with six fraction digits and Z or +HH:MM, then the forms a
-# parse reads (lowercase t and z, -00:00, digits past the sixth cut off) and each error with its message.
+# parse reads (lowercase t and z, -00:00, digits past the sixth cut off) and each error with its message, control
+# characters one bit from a separator included.
 def show(r: Result[Time.DateTime]) -> Void
   case r
     ok(t) -> puts(t.iso8601)
@@ -37,6 +38,10 @@ def main() -> Void
   puts(Time.Date.iso8601("2026-10-14"))
   puts(Time.Date.iso8601("2026-10-14T00:00:00"))
   puts(Time.Date.iso8601("２０２６-10-14"))
+  puts(Time.Date.iso8601("2026\r10\r14"))
+  puts(Time.TimeOfDay.iso8601("19#{String.from_code(26)}05:42"))
+  puts(Time.Date.iso8601("2026-10-14Z"))
+  puts(Time.TimeOfDay.iso8601("19:05:42+01:00"))
   puts(Time.TimeOfDay.iso8601("07:32"))
   puts(Time.TimeOfDay.iso8601("07:32:00.5"))
 end

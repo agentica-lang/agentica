@@ -389,9 +389,10 @@ static bool next_is(const reader *r, char c) { return r->at < r->length && r->te
 
 static bool next_digit(const reader *r) { return r->at < r->length && r->text[r->at] >= '0' && r->text[r->at] <= '9'; }
 
-/* A separator, matched without case for T and Z as RFC 3339 allows. */
+/* A separator: exactly C, or for T either case, as RFC 3339 allows. */
 static bool separator(reader *r, char c) {
-  if (r->at >= r->length || (r->text[r->at] | 0x20) != (uint8_t)(c | 0x20)) return expected(r);
+  uint8_t got = r->at < r->length ? r->text[r->at] : 0;
+  if (r->at >= r->length || !(got == (uint8_t)c || (c == 'T' && got == 't'))) return expected(r);
   r->at++;
   return true;
 }
@@ -474,6 +475,10 @@ static agc_value parse_record(agc_vm *vm, agc_value text, uint32_t kind, uint32_
   } else if (ok && kind == AGC_TIME_DATETIME) {
     r.pattern = "Z or +HH:MM";
     ok = offset_next(&r) ? read_offset(&r, &f) : expected(&r);
+  } else if (ok && offset_next(&r) && kind != AGC_TIME_NAIVE) {
+    snprintf(message, MESSAGE_SIZE, "an offset is not allowed in a %s at character %zu",
+             kind == AGC_TIME_DATE ? "Time.Date" : "Time.TimeOfDay", r.at + 1);
+    ok = false;
   } else if (ok && offset_next(&r)) {
     /* The offset as written, up to its six characters and only while they are printable ASCII. */
     int shown = 0;

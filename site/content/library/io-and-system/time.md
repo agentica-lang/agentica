@@ -273,13 +273,12 @@ Time.Date(year: 2026, month: 10, day: 15)
 ## iso8601
 
 ```signature
-Time.Date.format_iso8601(date: Time.Date) -> String
-Time.TimeOfDay.format_iso8601(time: Time.TimeOfDay) -> String
-Time.NaiveDateTime.format_iso8601(naive: Time.NaiveDateTime) -> String
-Time.DateTime.format_iso8601(time: Time.DateTime) -> String
+date.iso8601() -> String
+time.iso8601() -> String
+naive.iso8601() -> String
 ```
 
-The ISO 8601 text of a value, written `value.iso8601`: `YYYY-MM-DD` for a date, `HH:MM:SS.ffffff` for a time of day, the two joined by `T` for a date and time, and for a `Time.DateTime` its offset, `Z` at offset 0 and `+HH:MM` or `-HH:MM` otherwise (RFC 3339). The fraction always has six digits, so texts of one offset sort as their instants do.
+The ISO 8601 text of a value of any of the four types (`date` a `Time.Date`, `time` a `Time.TimeOfDay` or a `Time.DateTime`, `naive` a `Time.NaiveDateTime`): `YYYY-MM-DD` for a date, `HH:MM:SS.ffffff` for a time of day, the two joined by `T` for a date and time, and for a `Time.DateTime` its offset, `Z` at offset 0 and `+HH:MM` or `-HH:MM` otherwise (RFC 3339). The fraction always has six digits, so texts of one offset sort as their instants do.
 
 ```agentica
 def main() -> Void

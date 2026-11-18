@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 270,
+  "steps": 288,
   "stdout": [
     "2026-10-14T21:05:42.201337+02:00",
     "2026-10-14T19:05:42.201337Z",
@@ -31,6 +31,10 @@
     "ok(Time.Date(year: 2026, month: 10, day: 14))",
     "error(\"unexpected text at character 11\", kind: \"argument\")",
     "error(\"expected YYYY-MM-DD at character 1\", kind: \"argument\")",
+    "error(\"expected YYYY-MM-DD at character 5\", kind: \"argument\")",
+    "error(\"expected HH:MM:SS at character 3\", kind: \"argument\")",
+    "error(\"an offset is not allowed in a Time.Date at character 11\", kind: \"argument\")",
+    "error(\"an offset is not allowed in a Time.TimeOfDay at character 9\", kind: \"argument\")",
     "error(\"expected HH:MM:SS at character 6\", kind: \"argument\")",
     "ok(Time.TimeOfDay(hour: 7, min: 32, sec: 0, usec: 500000))",
     ""

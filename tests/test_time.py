@@ -387,7 +387,7 @@ def spelled(draw):
         elif change == "delete":
             text = text[:at] + text[at + 1:]
         else:
-            new = draw(st.sampled_from(list("0123456789-:.+TtZz ,") + ["é", "\u0663", "\x00"]))
+            new = draw(st.sampled_from([chr(c) for c in range(128)] + ["é", "\u0663"]))
             text = text[:at] + new + text[at + (change == "replace"):]
     return op, (text,)
 
@@ -437,8 +437,17 @@ PYTHON_ONLY = [
     ("parse_time_of_day", "19:05:42+02:00"),
     ("parse_time_of_day", "T19:05:42"),
 ]
+# Control characters that differ from a separator in one bit (CR is "-" | 0x20, SUB is ":" | 0x20).
+CONTROLS = [
+    ("parse_date", "2026\r10\r14"),
+    ("parse_time_of_day", "19\x1a05\x1a42"),
+    ("parse_datetime", "2026\r10-14T19:05\x1a42Z"),
+    ("parse_datetime", "2026-10-14T19:05:42\x1a"),
+]
 
 
-def test_forms_python_reads_and_the_strict_form_refuses(driver):
-    replies = run_json_cases(driver, [request(op, [text]) for op, text in PYTHON_ONLY])
-    assert [(reply["ok"], reply["kind"]) for reply in replies] == [(False, "argument")] * len(PYTHON_ONLY)
+def test_forms_python_reads_and_control_characters_are_refused(driver):
+    cases = PYTHON_ONLY + CONTROLS
+    replies = run_json_cases(driver, [request(op, [text]) for op, text in cases])
+    assert [(reply["ok"], reply["kind"]) for reply in replies] == [(False, "argument")] * len(cases)
+    check(driver, [(op, (text,)) for op, text in cases])
