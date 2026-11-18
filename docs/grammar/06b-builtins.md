@@ -77,6 +77,15 @@ of functions or a builtin type. A member the family lacks is
 a type is wanted is `CHECK-UNKNOWN-TYPE`. The one family today is `OpenSSL`
 (`Digest`, `HMAC`, `Cipher`, `CMAC`, `KDF`, `RSA`, `Random`).
 
+The members `Time.Date`, `Time.TimeOfDay`, `Time.NaiveDateTime` and
+`Time.DateTime` of the `Time` family are records that only their builtins build
+(`Time.Date.new`, ...), so every value is a valid date or time: a construction
+or a `.with` of one is `CHECK-NOT-CONSTRUCTIBLE`, `JSON` neither encodes nor
+decodes one, and a `Time.DateTime` has no `==` (`CHECK-TYPE-MISMATCH`), since
+two readings of one instant at different offsets differ field by field. The
+functions are in the
+[dates and times page](../../site/content/library/io-and-system/time.md).
+
 Callbacks (`List.map`, `select`, `reduce`, `each`, `any?`, `all?`, `sort_by`
 and the other methods that take a function) take a block, `&name` or a function
 variable. Parameter and return types must match exactly, and a `map` callback

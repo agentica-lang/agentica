@@ -1,0 +1,1 @@
+ERROR CHECK-NOT-CONSTRUCTIBLE 25:2:7-65:2:47 "Time.Date is built only by its builtins" "use Time.Date.new(...), which checks the fields and returns a Result" signature="main() -> Void" file="not-constructible.agc"

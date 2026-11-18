@@ -13,6 +13,7 @@ const agc_builtin_table agc_builtin_tables[] = {
   {agc_bytes_builtins, &agc_bytes_builtin_count},
   {agc_text_codec_builtins, &agc_text_codec_builtin_count},
   {agc_number_builtins, &agc_number_builtin_count},
+  {agc_date_builtins, &agc_date_builtin_count},
   {agc_crypto_builtins, &agc_crypto_builtin_count},
   {agc_json_builtins, &agc_json_builtin_count},
   {agc_file_builtins, &agc_file_builtin_count},

@@ -11,6 +11,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 ### Added
 
 - `agentica add NAME OWNER/REPO` takes a GitHub repository as `OWNER/REPO` (stored as the full URL), and a tag `NAME-X.Y.Z` with no `--subdir` takes the folder `NAME` when the package is there (#1833).
+- Dates and times as checked builtin records of the `Time` family: `Time.Date`, `Time.TimeOfDay`, `Time.NaiveDateTime` and `Time.DateTime` (at a fixed UTC offset), built by `Time.Date.new` and the like, with `Time.Date.leap?` and `Time.Date.days_in_month`; a construction or `.with` of one is the new `CHECK-NOT-CONSTRUCTIBLE` (#985).
 
 ### Changed
 

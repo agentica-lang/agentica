@@ -242,6 +242,50 @@ RECORDS: List[Model.Record] = [
       Model.Named(name: "alpn", type: Types.Type.List(Types.Type.String), default: Model.Default.EmptyList),
     ],
   ),
+  # The dates and times of the Time family. Only their builtins build them (SEALED_RECORDS), and vm/dates.c makes them
+  # by name with these fields in this order: keep them in step.
+  Model.Record(
+    name: "Time.Date",
+    fields: [
+      Model.Named(name: "year", type: Types.Type.Int),
+      Model.Named(name: "month", type: Types.Type.Int),
+      Model.Named(name: "day", type: Types.Type.Int),
+    ],
+  ),
+  Model.Record(
+    name: "Time.TimeOfDay",
+    fields: [
+      Model.Named(name: "hour", type: Types.Type.Int),
+      Model.Named(name: "min", type: Types.Type.Int),
+      Model.Named(name: "sec", type: Types.Type.Int),
+      Model.Named(name: "usec", type: Types.Type.Int),
+    ],
+  ),
+  Model.Record(
+    name: "Time.NaiveDateTime",
+    fields: [
+      Model.Named(name: "year", type: Types.Type.Int),
+      Model.Named(name: "month", type: Types.Type.Int),
+      Model.Named(name: "day", type: Types.Type.Int),
+      Model.Named(name: "hour", type: Types.Type.Int),
+      Model.Named(name: "min", type: Types.Type.Int),
+      Model.Named(name: "sec", type: Types.Type.Int),
+      Model.Named(name: "usec", type: Types.Type.Int),
+    ],
+  ),
+  Model.Record(
+    name: "Time.DateTime",
+    fields: [
+      Model.Named(name: "year", type: Types.Type.Int),
+      Model.Named(name: "month", type: Types.Type.Int),
+      Model.Named(name: "day", type: Types.Type.Int),
+      Model.Named(name: "hour", type: Types.Type.Int),
+      Model.Named(name: "min", type: Types.Type.Int),
+      Model.Named(name: "sec", type: Types.Type.Int),
+      Model.Named(name: "usec", type: Types.Type.Int),
+      Model.Named(name: "utc_offset", type: Types.Type.Int),
+    ],
+  ),
 ]
 
 ## The builtin enums, whose variants are written without an import.
@@ -347,6 +391,10 @@ TYPE_DESCRIPTIONS: Map[String, String] = {
   "TaskExit": "How a task ended: Ok, Crashed or Cancelled.",
   "TaskRef": "The running task, from Task.current, which Task.monitor, Task.cancel and id take.",
   "Test.Case": "A test case, from Test.test; Test.run runs a list of them.",
+  "Time.Date": "A day of the calendar, from Time.Date.new.",
+  "Time.DateTime": "A date and time of day at a fixed offset from UTC, an instant, from Time.DateTime.new.",
+  "Time.NaiveDateTime": "A date and time of day with no offset, so no instant, from Time.NaiveDateTime.new.",
+  "Time.TimeOfDay": "A time of day with no date and no offset, from Time.TimeOfDay.new.",
 }
 
 ## The type names no declaration or import alias may take.
@@ -398,7 +446,11 @@ RESERVED_TYPE_NAMES: List[String] = [
 ## Family.Member: a group of functions (the rows named Family.Member.fn) or a builtin type named Family.Member (a
 ## record, an enum or an opaque type). A new member, or a new function of a member, only adds its rows or its type and
 ## reserves no name.
-FAMILIES: List[String] = ["File", "JSON", "OpenSSL", "Process", "System", "TCP", "TLS", "Test"]
+FAMILIES: List[String] = ["File", "JSON", "OpenSSL", "Process", "System", "TCP", "TLS", "Test", "Time"]
+
+## The builtin records that only their builtins build, because a value must be valid (a Time.Date is a real day): a
+## construction or a .with of one is CHECK-NOT-CONSTRUCTIBLE, and JSON neither encodes nor decodes one.
+SEALED_RECORDS: List[String] = ["Time.Date", "Time.DateTime", "Time.NaiveDateTime", "Time.TimeOfDay"]
 
 ## The kinds of the errors that the builtins and std/ build (issue #671): the C kinds of kind_names in vm/value.c, in
 ## its order, then the kinds of the std/ modules. A kind is a contract, only added and never renamed. A first segment

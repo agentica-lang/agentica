@@ -2,7 +2,7 @@
 ## uses, each in the order of the catalog; enums likewise, and their variants are numbered in table order.
 
 import Model from "../catalog/builtin_model"
-import {ENUMS, RECORDS} from "../catalog/builtins"
+import {ENUMS, RECORDS, SEALED} from "../catalog/builtins"
 import Ast from "../syntax/ast"
 import Types from "../syntax/types"
 import Ir from "ir"
@@ -264,12 +264,13 @@ def json_list_structs(targets: List[Types.Type], decodable: Map[String, List[Typ
   found
 end
 
-# The field types of the builtin records JSON.decode can build: all but those with a field of an UNDECODABLE type.
+# The field types of the builtin records JSON.decode can build: all but the sealed ones (Time.Date), which only their
+# builtins build, and those with a field of an UNDECODABLE type.
 def builtin_decodable() -> Map[String, List[Types.Type]]
   found: Map[String, List[Types.Type]] = {}
   for name in BUILTIN_STRUCTS
     types = RECORDS[name].map do |field: Model.Named| field.type end
-    if !types.any? do |type: Types.Type| undecodable?(type) end
+    if !SEALED.include?(name) and !types.any? do |type: Types.Type| undecodable?(type) end
       found = found.put(name, types)
     end
   end

@@ -403,6 +403,12 @@ Test.error?
 Test.ok?
 Test.run
 Test.test
+Time.Date.days_in_month
+Time.Date.leap?
+Time.Date.new
+Time.DateTime.new
+Time.NaiveDateTime.new
+Time.TimeOfDay.new
 Time.monotonic_ms
 Time.monotonic_ns
 Time.now_ms

@@ -3,7 +3,7 @@
 ## (substitute, unify). These are the helpers that do not depend on the walk of the tree.
 
 import Model from "../catalog/builtin_model"
-import {ENUMS, JSON_VALUE, OPAQUE_TYPES} from "../catalog/builtins"
+import {ENUMS, JSON_VALUE, OPAQUE_TYPES, SEALED} from "../catalog/builtins"
 import Ast from "../syntax/ast"
 import Source from "../syntax/source"
 import Types from "../syntax/types"
@@ -90,6 +90,12 @@ end
 ## that nests itself with other arguments ends.
 def bytes_inside?(cx: State.Cx, type: ResolvedType) -> Bool
   inside?(cx, type) do |current: ResolvedType| Types.is?(current, "Bytes") end
+end
+
+## True when the type holds a builtin record that only its builtins build (Time.Date), which JSON neither writes nor
+## reads.
+def sealed_inside?(cx: State.Cx, type: ResolvedType) -> Bool
+  inside?(cx, type) do |current: ResolvedType| sealed?(current) end
 end
 
 ## CHECK-PRIVATE-FIELD at `span` when the type holds, anywhere in its fields, items or enum payloads, a struct with a
@@ -1146,6 +1152,8 @@ def encode_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool]) -> Wa
     return refused(seen) if !Types.is?(Types.key(type), "String")
 
     return encode_walk(cx, Types.value(type), seen)
+  elsif sealed?(type)
+    return refused(seen)
   elsif Types.is?(type, "Struct")
     return struct_walk(cx, type, seen, 0)
   elsif Types.is?(type, "Enum")
@@ -1168,6 +1176,8 @@ def decode_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool]) -> Wa
     return refused(seen) if !Types.is?(Types.key(type), "String")
 
     return decode_walk(cx, Types.value(type), seen)
+  elsif sealed?(type)
+    return refused(seen)
   elsif Types.is?(type, "Struct")
     return instance_walk(cx, type, seen) if Types.args(type).size != 0
 
@@ -1298,12 +1308,19 @@ def data_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool], equal: 
     return data_walk(cx, Types.item(type), seen, equal)
   elsif Types.is?(type, "Optional")
     return data_walk(cx, Types.item(type), seen, equal)
+  elsif equal and Types.is?(type, "Struct") and Types.name(type) == "Time.DateTime"
+    # Two readings of one instant at different offsets differ field by field.
+    why = "== would compare the readings of two Time.DateTime values, not their instants"
+    return Walk(passes: false, seen: seen, why: why, file: "", field: none)
   elsif Types.is?(type, "Struct") or Types.is?(type, "Enum")
     return nominal_walk(cx, type, seen, equal)
   end
 
   refused(seen)
 end
+
+# True for a builtin record that only its builtins build (SEALED).
+def sealed?(type: ResolvedType) -> Bool = Types.is?(type, "Struct") and SEALED.include?(Types.name(type))
 
 # The walk of a struct type for the test: 0 for encodable, 1 for decodable. The type arguments are tested first, each
 # as a type of its own, whether or not the struct was seen (Box[Box[Fn[Int, Int]]] reaches the inner Box by an

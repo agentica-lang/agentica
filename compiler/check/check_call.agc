@@ -146,6 +146,8 @@ def check_struct_update(cx: State.Cx, st: State.St, node: Ast.StructUpdate) -> R
   end
 
   name = T.name(target.type)
+  return error(not_constructible(cx, target.st, name, node.span)) if Builtins.SEALED.include?(name)
+
   if !updatable?(cx, node.visible, name)
     return error(
       State.fail_help(
@@ -722,6 +724,19 @@ def finish_constructor(
   ok(State.Out(st: st, type: type))
 end
 
+# CHECK-NOT-CONSTRUCTIBLE for a construction or a .with of a builtin record that only its builtins build, so that each
+# value is valid (a Time.Date is a real day).
+def not_constructible(cx: State.Cx, st: State.St, name: String, span: Source.Span) -> String
+  State.fail_help(
+    cx,
+    st,
+    "CHECK-NOT-CONSTRUCTIBLE",
+    "#{T.display_name(name)} is built only by its builtins",
+    span,
+    "use #{T.display_name(name)}.new(...), which checks the fields and returns a Result",
+  )
+end
+
 # Type(name: value, ...) for a struct. A generic struct takes its type arguments from the field values, left to right
 # as they are written, and from the expected type.
 def check_struct_construct(cx: State.Cx, st: State.St, node: Ast.Construct, expected: T.Type) -> Result[State.Out]
@@ -739,6 +754,8 @@ def check_struct_construct(cx: State.Cx, st: State.St, node: Ast.Construct, expe
       ),
     )
   end
+
+  return error(not_constructible(cx, st, name, node.span)) if Builtins.SEALED.include?(name)
 
   fields = cx.structs.get(name)
   if fields.none?

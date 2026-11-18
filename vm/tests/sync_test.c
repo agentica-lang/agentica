@@ -130,7 +130,7 @@ static void table_marked(const agc_builtin *table, size_t count, bool shared) {
 
 /* Which builtins the interpreter locks: marked by row. Every row of the tables of tasks, Task.map, channels, the
    logger, processes, duplex channels, TCP and HTTP is locked (but the rows in `expected`); no row of the
-   pure libraries (String, Bytes, numbers, JSON, Profile, Std, the regex matcher) or of DNS.lookup (own data) is.
+   pure libraries (String, Bytes, numbers, dates, JSON, Profile, Std, the regex matcher) or of DNS.lookup (own data) is.
    The mixed tables (the core one and File) are checked by row: stdin, handles and closes are locked, the output and
    the file calls that name a path are not. */
 static void test_builtin_classes(void) {
@@ -146,6 +146,7 @@ static void test_builtin_classes(void) {
   table_marked(agc_string_builtins, agc_string_builtin_count, false);
   table_marked(agc_bytes_builtins, agc_bytes_builtin_count, false);
   table_marked(agc_number_builtins, agc_number_builtin_count, false);
+  table_marked(agc_date_builtins, agc_date_builtin_count, false);
   table_marked(agc_crypto_builtins, agc_crypto_builtin_count, false);
   table_marked(agc_json_builtins, agc_json_builtin_count, false);
   table_marked(agc_lazy_builtins, agc_lazy_builtin_count, false);

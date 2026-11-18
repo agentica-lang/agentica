@@ -212,6 +212,8 @@ extern const agc_builtin agc_text_codec_builtins[];
 extern const size_t agc_text_codec_builtin_count;
 extern const agc_builtin agc_number_builtins[];
 extern const size_t agc_number_builtin_count;
+extern const agc_builtin agc_date_builtins[];
+extern const size_t agc_date_builtin_count;
 extern const agc_builtin agc_crypto_builtins[];
 extern const size_t agc_crypto_builtin_count;
 extern const agc_builtin agc_json_builtins[];
