@@ -25,7 +25,7 @@ def main() -> Void
   download = HTTP.Download(status: 200, headers: [header], bytes_written: 3)
   puts(download)
   puts([some(HTTP.Message.Close(1000, "bye"))].inspect)
-  puts("#{HTTP.DownloadOptions(timeout_ms: 5)}")
+  puts("#{HTTP.DownloadOptions(timeout_ms: some(5))}")
   puts(Toml.Value.Array([Toml.Value.Int(1)]))
   puts(Kind.Flag)
 end

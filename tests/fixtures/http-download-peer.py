@@ -21,6 +21,7 @@ Routes:
   /status/<code>           a short ASCII body with that status (a 3xx answer also carries
                            Location: /bin/5, whose body differs, so a client that followed
                            redirects would show it)
+  /redirect/<route>        302 with Location: /<route>
 """
 import http.server
 import importlib.util
@@ -116,6 +117,8 @@ class Web(http.server.BaseHTTPRequestHandler):
             for piece in pieces(int(parts[3])):
                 self.wfile.write(piece)
             self.close_connection = True
+        elif len(parts) > 2 and parts[1] == "redirect":
+            self.reply(302, "moved", location="/" + "/".join(parts[2:]))
         elif len(parts) == 3 and parts[1] == "status" and parts[2].isdigit():
             code = int(parts[2])
             self.reply(code, "status %s" % parts[2], location="/bin/5" if 300 <= code < 400 else None)

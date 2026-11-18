@@ -1,4 +1,4 @@
-"""HTTP.download: binary downloads to a file with bounded memory, against an independent peer.
+"""HTTP.download, read_body and open: binary bodies streamed with bounded memory, against an independent peer.
 
 The VM program downloads from tests/fixtures/http-download-peer.py (plain HTTP and a local
 TLS server, both ThreadingHTTPServer from the standard library). Everything is on 127.0.0.1
@@ -26,6 +26,8 @@ PATTERN = bytes(range(256))
 PIECE = 65536
 BIG = 80 * 1024 * 1024
 BIG_CHUNKED = 70 * 1024 * 1024
+# Past the 256 MiB that every streamed body was capped at before #1865.
+HUGE = 256 * 1024 * 1024 + 1024 * 1024 + 7
 
 
 def expected_bytes(count):
@@ -88,20 +90,48 @@ def main() -> Void
   base = System.args()[0]
   dir = System.args()[1]
   options = HTTP.DownloadOptions()
+  ten = HTTP.DownloadOptions(max_total_bytes: some(10))
   show(HTTP.download(pool, "ftp://example.com/x", dir + "/u.bin", options))
-  show(HTTP.download(pool, base + "/bin/10", dir + "/zero.bin", HTTP.DownloadOptions(timeout_ms: 0, max_total_bytes: 10)))
-  show(HTTP.download(pool, base + "/bin/10", dir + "/huge-opt.bin", HTTP.DownloadOptions(timeout_ms: 5000, max_total_bytes: 268435457)))
+  show(HTTP.download(pool, base + "/bin/10", dir + "/zero.bin", HTTP.DownloadOptions(timeout_ms: some(0))))
+  show(HTTP.download(pool, base + "/bin/10", dir + "/neg.bin", HTTP.DownloadOptions(max_total_bytes: some(-1))))
+  show(HTTP.download(pool, base + "/bin/10", dir + "/hex.bin", HTTP.DownloadOptions(sha256: some("zz"))))
   show(HTTP.download(pool, base + "/over-ceiling", dir + "/ceiling.bin", options))
-  show(HTTP.download(pool, base + "/bin/100", dir + "/over.bin", HTTP.DownloadOptions(timeout_ms: 5000, max_total_bytes: 10)))
-  show(HTTP.download(pool, base + "/chunked/1000", dir + "/overc.bin", HTTP.DownloadOptions(timeout_ms: 5000, max_total_bytes: 10)))
-  show(HTTP.download(pool, base + "/close/1000", dir + "/overu.bin", HTTP.DownloadOptions(timeout_ms: 5000, max_total_bytes: 10)))
+  show(HTTP.download(pool, base + "/bin/100", dir + "/over.bin", ten))
+  show(HTTP.download(pool, base + "/chunked/1000", dir + "/overc.bin", ten))
+  show(HTTP.download(pool, base + "/close/1000", dir + "/overu.bin", ten))
   show(HTTP.download(pool, base + "/truncate/100/40", dir + "/trunc.bin", options))
   show(HTTP.download(pool, base + "/cut-chunk", dir + "/cut.bin", options))
   show(HTTP.download(pool, base + "/bad-chunk", dir + "/bad.bin", options))
-  show(HTTP.download(pool, base + "/slow-head", dir + "/slow.bin", HTTP.DownloadOptions(timeout_ms: 500, max_total_bytes: 1048576)))
-  show(HTTP.download(pool, base + "/bin/10", dir + "/pre.bin", options))
+  show(HTTP.download(pool, base + "/slow-head", dir + "/slow.bin", HTTP.DownloadOptions(timeout_ms: some(500))))
   show(HTTP.download(pool, base + "/bin/10", dir + "/absent/x.bin", options))
+  show(HTTP.download(pool, base + "/bin/10", dir + "/folder", options))
   show(HTTP.download(pool, base + "/bin/7", dir + "/with space/seven.bin", options))
+  HTTP.close_client(pool)
+end
+""".replace("SHOW", SHOW)
+
+REPLACE_PROGRAM = """\
+import HTTP from "std/http"
+
+SHOW
+
+# A download that follows one redirect by hand: download has no redirect follow of its own.
+def follow(pool: HTTP.Client, base: String, url: String, path: String, options: HTTP.DownloadOptions) -> Result[HTTP.Download]
+  first = try HTTP.download(pool, url, path, HTTP.DownloadOptions())
+  return ok(first) if first.status != 302
+  HTTP.download(pool, base + HTTP.header_values(first.headers, "location")[0], path, options)
+end
+
+def main() -> Void
+  pool = Result.unwrap!(HTTP.client())
+  base = System.args()[0]
+  dir = System.args()[1]
+  right = HTTP.DownloadOptions(max_total_bytes: some(1000), sha256: some(System.args()[2]))
+  show(follow(pool, base, base + "/redirect/chunked/1000", dir + "/moved.bin", right))
+  show(HTTP.download(pool, base + "/bin/1000", dir + "/wrong.bin", HTTP.DownloadOptions(sha256: some(System.args()[3]))))
+  show(HTTP.download(pool, base + "/bin/1000", dir + "/kept.bin", HTTP.DownloadOptions(sha256: some(System.args()[3]))))
+  show(HTTP.download(pool, base + "/truncate/100/40", dir + "/kept.bin", HTTP.DownloadOptions()))
+  show(HTTP.download(pool, base + "/bin/1000", dir + "/replaced.bin", right))
   HTTP.close_client(pool)
 end
 """.replace("SHOW", SHOW)
@@ -127,12 +157,67 @@ def main() -> Void
   pool = Result.unwrap!(HTTP.client())
   base = System.args()[0]
   dir = System.args()[1]
-  options = HTTP.DownloadOptions()
+  options = HTTP.DownloadOptions(timeout_ms: some(60000))
   show(HTTP.download(pool, base + "/bin/BIG", dir + "/big.bin", options))
   show(HTTP.download(pool, base + "/chunked/CHUNKED", dir + "/big-chunked.bin", options))
   HTTP.close_client(pool)
 end
 """.replace("SHOW", SHOW).replace("BIG", str(BIG)).replace("CHUNKED", str(BIG_CHUNKED))
+
+HUGE_PROGRAM = """\
+import HTTP from "std/http"
+
+SHOW
+
+def location(headers: List[HTTP.Header]) -> String = HTTP.header_values(headers, "location")[0]
+
+# The body of the last response on `conn` counted to its end.
+def drained(conn: HTTP.Connection) -> Int
+  total = 0
+  while true
+    piece = HTTP.read_body(conn, 1048576).unwrap!
+    return total if piece.empty?
+    total = total + piece.size
+  end
+  total
+end
+
+# The body of `open` counted to its end through the channel.
+def streamed(stream: HTTP.Stream) -> String
+  total = 0
+  while true
+    case stream.body.recv(30000)
+      ok(piece) -> total = total + piece.size
+      error(_) -> break
+    end
+  end
+  case Task.await(stream.done)
+    ok(_) -> return "open #{total}"
+    error(e) -> return "open ERR #{e.message}"
+  end
+end
+
+def main() -> Void
+  pool = Result.unwrap!(HTTP.client())
+  base = System.args()[0]
+  dir = System.args()[1]
+  moved = HTTP.download(pool, base + "/redirect/bin/HUGE", dir + "/huge.bin").unwrap!
+  checked = HTTP.DownloadOptions(sha256: some(System.args()[2]))
+  show(HTTP.download(pool, base + location(moved.headers), dir + "/huge.bin", checked))
+  HTTP.close_client(pool)
+
+  conn = HTTP.start(base).unwrap!
+  head = HTTP.send_request(conn, "GET", "/redirect/chunked/HUGE", "".bytes).unwrap!
+  _ = drained(conn)
+  _ = HTTP.send_request(conn, "GET", location(head.headers), "".bytes).unwrap!
+  puts("read_body #{drained(conn)}")
+  HTTP.finish(conn)
+
+  first = HTTP.open("GET", base + "/redirect/close/HUGE", "".bytes).unwrap!
+  _ = streamed(first)
+  puts(streamed(HTTP.open("GET", base + location(first.headers), "".bytes).unwrap!))
+end
+""".replace("SHOW", SHOW).replace("HUGE", str(HUGE))
 
 TLS_PROGRAM = """\
 import HTTP from "std/http"
@@ -184,17 +269,19 @@ def test_small_bodies_in_every_framing_write_exact_bytes(tmp_path, ports):
     assert (directory / "moved.bin").read_bytes() == b"status 301"
 
 
-def test_failures_keep_bounds_and_leave_what_the_policy_says(tmp_path, ports):
+def test_failures_leave_no_file_and_check_options_first(tmp_path, ports):
     directory = tmp_path / "errors"
     (directory / "with space").mkdir(parents=True)
-    (directory / "pre.bin").write_bytes(b"keep")
+    (directory / "folder").mkdir()
     base = "http://127.0.0.1:%d" % ports["plain"]
     lines = run_program(tmp_path, "errors", ERRORS_PROGRAM, [base, str(directory)])
     check_lines(lines, [
         "ERR http: the URL must be http:// or https:// with a host, and without user info",
         "ERR http: every download option must be positive",
-        "ERR http: max_total_bytes must be at most 268435456",
-        "ERR http: body exceeds max_body_bytes",
+        "ERR http: every download option must be positive",
+        "ERR http: sha256 must be 64 hex digits",
+        # A Content-Length past the old 256 MiB ceiling is read, and the peer closes before the body.
+        "ERR http: truncated HTTP body",
         "ERR http: body exceeds max_body_bytes",
         "ERR http: body exceeds max_body_bytes",
         "ERR http: body exceeds max_body_bytes",
@@ -203,23 +290,34 @@ def test_failures_keep_bounds_and_leave_what_the_policy_says(tmp_path, ports):
         "ERR http: invalid chunk size",
         "ERR network: operation timed out",
         ("prefix", "ERR filesystem: cannot open file for writing"),
-        ("prefix", "ERR filesystem: cannot open file for writing"),
+        "ERR http: the download path is a directory, not a file",
         "200 7",
     ], "download errors")
-    assert (directory / "pre.bin").read_bytes() == b"keep"
-    assert not (directory / "u.bin").exists()
-    assert not (directory / "zero.bin").exists()
-    assert not (directory / "huge-opt.bin").exists()
-    assert (directory / "ceiling.bin").read_bytes() == b""
-    assert (directory / "over.bin").read_bytes() == b""
-    assert (directory / "overc.bin").read_bytes() == b""
-    assert len((directory / "overu.bin").read_bytes()) <= 10
-    assert (directory / "trunc.bin").read_bytes() == expected_bytes(40)
-    assert (directory / "cut.bin").read_bytes() == expected_bytes(100)
-    assert (directory / "bad.bin").read_bytes() == b""
-    assert (directory / "slow.bin").read_bytes() == b""
-    assert not (directory / "absent").exists()
+    assert sorted(path.name for path in directory.iterdir()) == ["folder", "with space"]
+    assert list((directory / "folder").iterdir()) == []
+    assert [path.name for path in (directory / "with space").iterdir()] == ["seven.bin"]
     assert (directory / "with space" / "seven.bin").read_bytes() == expected_bytes(7)
+
+
+def test_a_file_is_replaced_only_by_a_clean_body_with_its_digest(tmp_path, ports):
+    directory = tmp_path / "replace"
+    directory.mkdir()
+    (directory / "kept.bin").write_bytes(b"keep")
+    (directory / "replaced.bin").write_bytes(b"old")
+    base = "http://127.0.0.1:%d" % ports["plain"]
+    args = [base, str(directory), expected_digest(1000), "0" * 64]
+    lines = output_lines(run_program(tmp_path, "replace", REPLACE_PROGRAM, args))
+    assert lines == [
+        "200 1000",
+        "ERR http: the body does not match the sha256 digest",
+        "ERR http: the body does not match the sha256 digest",
+        "ERR http: truncated HTTP body",
+        "200 1000",
+    ], lines
+    assert sorted(path.name for path in directory.iterdir()) == ["kept.bin", "moved.bin", "replaced.bin"]
+    assert (directory / "moved.bin").read_bytes() == expected_bytes(1000)
+    assert (directory / "kept.bin").read_bytes() == b"keep"
+    assert (directory / "replaced.bin").read_bytes() == expected_bytes(1000)
 
 
 def test_big_bodies_stream_past_the_old_text_ceiling(tmp_path, ports):
@@ -232,6 +330,16 @@ def test_big_bodies_stream_past_the_old_text_ceiling(tmp_path, ports):
         data = (directory / name).read_bytes()
         assert len(data) == count
         assert hashlib.sha256(data).hexdigest() == expected_digest(count)
+
+
+def test_bodies_past_256_mib_stream_whole_through_a_redirect(tmp_path, ports):
+    directory = tmp_path / "huge"
+    directory.mkdir()
+    base = "http://127.0.0.1:%d" % ports["plain"]
+    lines = output_lines(run_program(tmp_path, "huge", HUGE_PROGRAM, [base, str(directory), expected_digest(HUGE)]))
+    assert lines == ["200 %d" % HUGE, "read_body %d" % HUGE, "open %d" % HUGE], lines
+    assert [path.name for path in directory.iterdir()] == ["huge.bin"]
+    assert (directory / "huge.bin").stat().st_size == HUGE
 
 
 def test_tls_download_keeps_certificate_verification(tmp_path, ports):

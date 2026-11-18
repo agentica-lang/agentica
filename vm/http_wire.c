@@ -17,9 +17,9 @@
 #include <string.h>
 #include <time.h>
 
-/* The widest body HttpWire takes: std/http caps the bodies of the client at 64 MiB
-   itself, and a server's max_body_bytes and a file download may use up to this. */
-#define MAX_BODY ((int64_t)256 * 1024 * 1024)
+/* The widest body HttpWire takes: any. std/http caps the bodies it holds itself (a
+   client's at 64 MiB, a server's at 256 MiB); the streamed ones have no limit. */
+#define MAX_BODY INT64_MAX
 
 typedef struct {
   int code;
@@ -92,7 +92,7 @@ static agc_value ascii(const uint8_t *data, size_t n) {
 
 int64_t agc_http_max_body(agc_vm *vm, agc_value v, uint32_t span) {
   int64_t limit = agc_as_int(vm, v);
-  if (limit < 1 || limit > MAX_BODY) misuse(vm, "HttpWire: max_body_bytes must be 1..268435456", span);
+  if (limit < 1 || limit > MAX_BODY) misuse(vm, "HttpWire: max_body_bytes must be positive", span);
   return limit;
 }
 
