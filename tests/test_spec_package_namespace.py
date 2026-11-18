@@ -5,13 +5,10 @@ The remote of every case is a bare git repository behind a throwaway HOME (tests
 nothing touches the network. Cases assert codes and the file and key path, never message text (AGENTS.md).
 """
 import os
-import shutil
-import stat
-from pathlib import Path
 
 import pytest
 
-from tests.agentica_test import WINDOWS, cli, run
+from tests.agentica_test import cli, run
 from tests.package_support import (assert_at_key, build, cached_files, dependency, environment,  # noqa: F401
                                     git, lock_entry, package_hash, problem_of, remotes, run_json, ws)
 
@@ -44,20 +41,10 @@ def project(ws, remotes):
     return commit
 
 
-def git_logger(base):
-    """A PATH whose `git` writes each command line to a file and then runs the real one (POSIX), and that file."""
-    folder = Path(base) / "git-logger"
-    folder.mkdir()
-    log = folder / "log"
-    script = folder / "git"
-    script.write_text('#!/bin/sh\necho "$@" >> "%s"\nexec "%s" "$@"\n' % (log, shutil.which("git")), encoding="utf-8")
-    script.chmod(script.stat().st_mode | stat.S_IEXEC)
-    return folder.as_posix() + os.pathsep + os.environ["PATH"], log
-
-
-def fetches(log):
-    lines = log.read_text(encoding="utf-8").splitlines() if log.exists() else []
-    return [line for line in lines if " fetch " in line]
+def fetches(trace):
+    """The `git fetch` commands that a run started, from the file that GIT_TRACE=<file> made."""
+    lines = trace.read_text(encoding="utf-8", errors="replace").splitlines() if trace.exists() else []
+    return [line for line in lines if "trace: built-in: git fetch" in line]
 
 
 def test_install_writes_a_namespaced_package_in_a_folder_of_its_namespace_and_fetches_the_repository_once(
@@ -78,19 +65,18 @@ def test_install_writes_a_namespaced_package_in_a_folder_of_its_namespace_and_fe
     assert (ran.code, ran.stdout) == (0, "tools\n"), ran.stderr
 
 
-@pytest.mark.skipif(WINDOWS, reason="the git wrapper is a shell script")
 def test_packages_of_one_repository_pin_and_commit_are_fetched_with_one_git_fetch(ws, remotes, tmp_path):
     project(ws, remotes)
-    path, log = git_logger(tmp_path)
-    result = run(cli() + ["install"], cwd=ws.project, env=environment(ws, remotes, PATH=path))
+    trace = tmp_path / "git-trace"
+    result = run(cli() + ["install"], cwd=ws.project, env=environment(ws, remotes, GIT_TRACE=str(trace)))
     assert result.code == 0, result.stderr
-    assert len(fetches(log)) == 1
+    assert len(fetches(trace)) == 1
     # Everything is in the cache now: a second install starts no git fetch.
-    log.unlink()
-    again = run(cli() + ["install"], cwd=ws.project, env=environment(ws, remotes, PATH=path))
+    trace.unlink()
+    again = run(cli() + ["install"], cwd=ws.project, env=environment(ws, remotes, GIT_TRACE=str(trace)))
     assert (again.code, again.stdout) == (
         0, "in the cache finn/core@finn-1\nin the cache finn/llm@finn-1\nin the cache tools@finn-1\n"), again.stderr
-    assert fetches(log) == []
+    assert fetches(trace) == []
 
 
 def test_update_drops_a_namespaced_package_that_nothing_asks_for_and_its_empty_namespace_folder(ws, remotes):
@@ -115,7 +101,6 @@ def test_a_namespaced_package_that_is_edited_in_deps_is_written_again_and_a_stra
     assert sorted(os.listdir(ws.deps / "finn")) == ["note.txt"]
 
 
-@pytest.mark.skipif(WINDOWS, reason="symbolic links need a privilege on Windows")
 def test_install_does_not_write_through_a_link_in_the_place_of_the_namespace_folder(ws, remotes, tmp_path):
     project(ws, remotes)
     outside = tmp_path / "outside"
