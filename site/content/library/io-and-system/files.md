@@ -437,9 +437,10 @@ Path.replace(from: String, to: String, timeout_ms: Int = 30000) -> Result[Void]
 Renames the regular file `from` to `to` in one step, replacing what is at `to`, as Ruby's `File.rename` does. A reader of `to` sees the old file or the new one, never neither, so it is the last step of writing a file whole: write a new file beside `to`, then replace.
 
 - A file at `to` is replaced, and so is a symbolic link: the link itself, never its target (unlike `File.replace`, which writes through a link). A missing `to` is made.
-- A directory at `to` is an `io.is_directory` error and stays as it was, and so is a `from` that is not a regular file.
-- `from` is synced to the disk before the rename and its folder after it, so a power loss leaves the old file or the whole new one.
-- The new file keeps its own permission bits and owner. Both paths must be on one file system; there is no copy fallback. POSIX uses `rename`, Windows `MoveFileExW` with `MOVEFILE_REPLACE_EXISTING`, which refuses a read-only target.
+- A directory at `to` is an `io.is_directory` error and stays as it was. A directory `from` is `io.is_directory` too, and a `from` that is a symbolic link or another file that is not regular is `io.failed`.
+- `from` is synced to the disk before the rename. On POSIX the folder is flushed after it, so a power loss leaves the old file or the whole new one; Windows has no folder flush.
+- The new file keeps its own permission bits and owner. Both paths must be on one file system; there is no copy fallback. POSIX uses `rename`, Windows `MoveFileExW` with `MOVEFILE_REPLACE_EXISTING`.
+- On Windows `from` is opened for writing to flush it, so a read-only `from`, or one that another program holds open without write sharing, is `io.permission`. A read-only `to`, a `to` that another program holds open without `FILE_SHARE_DELETE`, and a directory link or junction at `to` are refused too.
 - A timeout gives an error but does not stop a rename in progress, which then still happens whole.
 
 ```agentica {mode="check"}

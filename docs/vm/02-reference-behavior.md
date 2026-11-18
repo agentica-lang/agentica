@@ -345,7 +345,9 @@ Every failure is an error value. The checks run in this order:
 - `Path.replace(from, to, timeout_ms)` is one pool job: `from` must be a
   regular file and `to` no directory (lstat), then `fsync` of `from`, one
   `rename` (`MoveFileExW` with `MOVEFILE_REPLACE_EXISTING` on Windows) and a
-  flush of the folder. A file or a link at `to` is replaced; `rename` refuses a
+  flush of the folder on POSIX (`agc_fs_sync_folder` does nothing on Windows,
+  and libuv passes no `MOVEFILE_WRITE_THROUGH`). Windows opens `from` for
+  writing to flush it, so a read-only `from` is refused there. A file or a link at `to` is replaced; `rename` refuses a
   file over a directory itself, so a directory made after the check stays.
 - `File.replace(path, data, timeout_ms)` is one pool job (at most 16 MiB). The
   target is found with `uv_fs_realpath` and must be a regular file, so a link

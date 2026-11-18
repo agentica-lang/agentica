@@ -1068,9 +1068,9 @@ static void work_rename(op *o) {
 }
 
 /* Path.replace: the regular file from is synced, then renamed over to in one step (rename, MoveFileExW with
-   REPLACE_EXISTING), so to names the old file or the new one, never neither, and the folder is flushed. A file or a
-   link at to is replaced, the link itself and never its target. A directory at to is refused; rename(2) and
-   MoveFileExW refuse a file over a directory too, so one that appears after the check is never touched. */
+   REPLACE_EXISTING), so to names the old file or the new one, never neither, and on POSIX the folder is flushed. A
+   file or a link at to is replaced, the link itself and never its target. A directory at to is refused; rename(2)
+   and MoveFileExW refuse a file over a directory too, so one that appears after the check is never touched. */
 static void work_rename_over(op *o) {
   agc_fs_info info;
   if (agc_fs_stat(o->path, &info, false) != 0) {
@@ -2594,11 +2594,11 @@ const agc_builtin agc_file_builtins[] = {
   {"Path.real", 1, builtin_real, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false, true},
   {"Path.remove", 2, builtin_remove, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false, true},
   {"Path.rename", 3, builtin_rename, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false, true},
-  {"Path.replace", 3, builtin_rename_over, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false, true},
   /* New rows go last: a C test may index a table by position. */
   {"File.read_bytes.bytes", 3, builtin_read_bytes, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false, true},
   {"File.write_bytes.bytes", 3, builtin_write_bytes, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false, true},
   {"File.sha256.bytes", 2, builtin_sha256, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false, true},
+  {"Path.replace", 3, builtin_rename_over, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false, true},
 };
 
 const size_t agc_file_builtin_count = sizeof agc_file_builtins / sizeof agc_file_builtins[0];
