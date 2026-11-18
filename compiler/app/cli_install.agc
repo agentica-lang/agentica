@@ -199,7 +199,7 @@ def install(settings: Env.Settings, dir: String, fetching: Prebuilt.Fetching) ->
       lines = try fill_all(settings, found.lock)
       scope = PackageImport.scope_of(project).with(agentica: settings.version)
       try check_cache(settings, found.lock, scope)
-      try PackageDeps.sync(settings, found.lock.file, scope.deps, found.lock.packages, [])
+      try PackageDeps.sync(settings, found.lock.file, scope.deps, found.lock.packages, [], [])
       prebuilt = try Prebuilt.fetch_all(settings, found.manifest, found.members, found.lock.packages, fetching)
       try build_natives(settings, found, scope)
       ok(with_lines(lines, prebuilt))

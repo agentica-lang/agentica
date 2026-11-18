@@ -267,8 +267,9 @@ end
 
 # A name with a namespace needs the entry of a workspace dependency of that name, at the same repository, pin and
 # commit, and the folder of such an entry holds only its members, so no other kind of entry has the name of
-# a namespace.
+# a namespace. A namespaced entry is not inside the folder of another (`finn/a` and `finn/a/b`).
 def namespaces_agree(reading: Reader.Reading, packages: List[Locked]) -> Result[Void]
+  names = Set.new(packages.map do |locked| locked.name end)
   roots: Map[String, Locked] = {}
   for locked in packages
     if root?(locked)
@@ -289,9 +290,23 @@ def namespaces_agree(reading: Reader.Reading, packages: List[Locked]) -> Result[
       message = "a namespaced package needs the workspace entry #{space} at the same source and commit"
       return error(Reader.fail(reading, here, message))
     end
+
+    if inside_another?(names, locked.name)
+      return error(Reader.fail(reading, here, "the folder is inside the folder of another package"))
+    end
   end
 
   ok()
+end
+
+# Whether a folder above the folder of the namespaced `name` is the folder of a package in `names`.
+def inside_another?(names: Set[String], name: String) -> Bool
+  parts = name.split("/")
+  for count in 2...parts.size
+    return true if names.include?(parts.take(count).join("/"))
+  end
+
+  false
 end
 
 def agrees?(found: Optional[Locked], member: Locked) -> Bool
@@ -491,9 +506,10 @@ def member_of(
     return error(Reader.fail(reading, Reader.child(path, "subdir"), "a workspace member is a folder: missing key"))
   end
 
-  for key in ["commit", "hash"]
+  for key in ["commit", "hash", "repository"]
     if entries.has_key?(key)
-      return error(Reader.fail(reading, Reader.child(path, key), "a workspace member has no commit and no hash"))
+      message = "a workspace member has no commit, no hash and no repository"
+      return error(Reader.fail(reading, Reader.child(path, key), message))
     end
   end
 

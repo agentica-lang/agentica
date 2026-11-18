@@ -123,6 +123,8 @@ def resolve_artifacts(
 
   dir = Paths.directory_of(manifest.file)
   for locked in packages
+    next if Lock.root?(locked)
+
     folder = Project.folder_of(dir, members, locked)
     if !Lock.in_place?(locked)
       folder = PackageCache.folder(cache, locked.source, locked.commit)
