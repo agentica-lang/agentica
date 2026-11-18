@@ -506,7 +506,13 @@ class MetricsTests(unittest.TestCase):
         # "agentica" or "python" (`cat skills/agentica-programming/SKILL.md`) as a run.
         commands = ["python3 solution.py", "mypy --strict solution.py", "agentica check s.agc", "agentica s.agc",
                     "cat task.md", "curl https://x.y", "agentica outline s.agc", "cat /etc/hosts", "rg x . | head",
-                    "cd /workspace && printf '1' | agentica s.agc", "timeout 5 python3 -m mypy s.py"]
+                    "cd /workspace && printf '1' | agentica s.agc", "timeout 5 python3 -m mypy s.py",
+                    "for f in a b; do python3 s.py < $f; done", "if true; then agentica s.agc; else python3 s.py; fi",
+                    "! agentica check s.agc", "{ python3 s.py; }", "(cd w && python3 s.py)", "out=$(python3 s.py)",
+                    "`python3 s.py`", "bash -c 'cd w && python3 s.py'", 'sh -lc "agentica check \\"s.agc\\""',
+                    "env -i X=1 python3 s.py", "/usr/bin/env python3 s.py", "timeout -s KILL 5 agentica s.agc",
+                    "time -p python3 s.py", "nohup python3 s.py", "echo in | xargs -n 1 python3 s.py",
+                    "uv run python s.py", "uv run mypy --strict s.py", "go env GOPATH", "go mod tidy"]
         outputs = ["ok", "Traceback (most recent call last):\nValueError", "a.py:1: error: bad", "error[CHECK-X]",
                    "SyntaxError: x", "plain"]
         rng = random.Random(1843)
@@ -521,6 +527,15 @@ class MetricsTests(unittest.TestCase):
             with self.subTest(trial=trial):
                 new = run.pi_metrics("\n".join(events))
                 self.assertEqual({key: new[key] for key in LEGACY_KEYS}, legacy_pi_metrics("\n".join(events)))
+
+    def test_only_the_go_run_and_check_subcommands_are_runs(self) -> None:
+        for command in ("go vet solution.go", "go build solution.go", "go run solution.go", "go test ./...",
+                        "bash -c 'go run solution.go'"):
+            with self.subTest(command=command):
+                self.assertTrue(run.runs_program(command))
+        for command in ("go env GOPATH", "go mod tidy", "go version", "cat go.mod"):
+            with self.subTest(command=command):
+                self.assertFalse(run.runs_program(command))
 
     def test_go_vet_and_go_build_are_checks_and_their_errors_failures(self) -> None:
         for command in ("go vet ./...", "go build -o app solution.go", "cd w && go vet solution.go"):
@@ -959,6 +974,26 @@ class PreflightTests(unittest.TestCase):
         with self.assertRaises(SystemExit) as raised:
             run.preflight_result(pi_reply(free), "", False, 0, "opencode-go/unpriced")
         self.assertIn("no cost source for opencode-go/unpriced", str(raised.exception))
+
+    def test_the_shapes_pi_wrote_offline_stop_the_round(self) -> None:
+        # Recorded from Pi 1.3.0 with the network off and a dummy key: it exits 0 after its retries.
+        offline = ('{"type": "message_end", "message": {"role": "assistant", "content": [], "api": '
+                   '"openai-completions", "provider": "opencode-go", "model": "deepseek-v4.1-flash", "usage": '
+                   '{"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0, "totalTokens": 0, "cost": {"input": 0, '
+                   '"output": 0, "cacheRead": 0, "cacheWrite": 0, "total": 0}}, "stopReason": "error", "timestamp": '
+                   '1794987127524, "errorMessage": "Connection error.", "durationMs": 36, "thinkingLevel": "high"}}')
+        unknown = 'Warning: Model "no-such-model" not found for provider "opencode-go". Using custom model id.\n'
+        for out, err, message in ((offline, "", "refused the call (auth or model?): Connection error."),
+                                  (offline, unknown, "does not know the model")):
+            with self.subTest(message=message), self.assertRaises(SystemExit) as raised:
+                run.preflight_result(out, err, False, 0, self.MODEL)
+            self.assertIn(message, str(raised.exception))
+
+    def test_an_echoed_error_is_cut_to_120_characters(self) -> None:
+        long = pi_reply(stop="error", error="401 key sk-" + "x" * 300, text="")
+        with self.assertRaises(SystemExit) as raised:
+            run.preflight_result(long, "", False, 0, self.MODEL)
+        self.assertEqual(len(str(raised.exception).split("(auth or model?): ", 1)[1]), 120)
 
     def test_an_auth_error_an_unknown_model_or_no_answer_stops_the_round(self) -> None:
         refused = pi_reply(stop="error", error='401: {"type":"error","error":{"message":"Invalid API key"}}', text="")

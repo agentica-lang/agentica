@@ -33,13 +33,22 @@ CHECK_TIMEOUT = 90
 NET_STRONG = re.compile(r"\bwget\b|\bgit\s+clone\b|github\.com|\bpip3?\s+install\b|\bnpm\b|\bapt(?:-get)?\b")
 NET_WEAK = re.compile(r"\bcurl\b|\burllib\b")
 LOOPBACK = re.compile(r"\blocalhost\b|127\.0\.0\.1")
-COMMAND_PREFIX = r"^\s*(?:(?:env|time|timeout\s+(?:-\S+\s+)*\d\S*|\w+=\S*)\s+)*"
+# A segment may open with a keyword, a group or a substitution, then wrappers: `env` (options, NAME=value),
+# `time -p`, `timeout` (options, then the duration), `nohup`, `xargs` (options), `uv run` and NAME=value.
+SEGMENT_OPENER = r"(?:(?:do|then|else)\s+|[!{(]\s*|\$\(\s*|`\s*|\w+=(?:\$\(|`)\s*)*"
+WRAPPER = (r"(?:(?:\S*/)?env(?:\s+(?:-u\s+\S+|-\S+|\w+=\S*))*|time(?:\s+-p)?"
+           r"|timeout(?:\s+(?:-[sk]\s+\S+|-\S+))*\s+\d\S*|nohup|xargs(?:\s+(?:-[nILPdsE]\s*\S+|-\S+))*"
+           r"|uv\s+run|\w+=\S*)")
+COMMAND_PREFIX = rf"^\s*{SEGMENT_OPENER}(?:{WRAPPER}\s+)*"
 CHECK_COMMAND = re.compile(COMMAND_PREFIX + r"(?:(?:python3?\s+-m\s+)?(?:\S*/)?mypy|(?:\S*/)?agentica\s+check"
                            r"|(?:\S*/)?go\s+(?:vet|build))\b")
 MYPY_COMMAND = re.compile(COMMAND_PREFIX + r"(?:python3?\s+-m\s+)?(?:\S*/)?mypy\b")
 # A check or run call starts a shell segment with the program; a path that names it (`cat skills/agentica-programming/x`)
 # is no call.
-RUN_COMMAND = re.compile(COMMAND_PREFIX + r"(?:\S*/)?(?:agentica(?:-real)?|python3?(?:\.\d+)?|mypy|go)(?=\s|$)")
+RUN_COMMAND = re.compile(COMMAND_PREFIX + r"(?:\S*/)?(?:agentica(?:-real)?|python3?(?:\.\d+)?|mypy"
+                         r"|go\s+(?:vet|build|run|test))(?=\s|$)")
+SHELL_SCRIPT = re.compile(COMMAND_PREFIX + r"(?:\S*/)?(?:ba)?sh\s+(?:-[a-z]+\s+)*?-[a-z]*c[a-z]*\s+"
+                          r"(?:'([^']*)'|\"((?:[^\"\\]|\\.)*)\")")
 GO_COMMAND = re.compile(COMMAND_PREFIX + r"(?:\S*/)?go\s+(?:vet|build|run|test)\b")
 GO_ERROR = re.compile(r"^\s*\S+\.go:\d+(?::\d+)?: |^panic: |^\s*--- FAIL", re.MULTILINE)
 # The common shell forms that write the solution: a redirection (a `cat` heredoc too), `tee`, `sed -i`, `cp` or `mv`
@@ -629,6 +638,19 @@ def run_agent(
 
 
 def command_parts(command: str, *, split_pipes: bool = True) -> list[str]:
+    """split_shell, and the script of a `bash -c` or `sh -c` is split in its place."""
+    parts: list[str] = []
+    for part in split_shell(command, split_pipes=split_pipes):
+        script = SHELL_SCRIPT.match(part)
+        if script is None:
+            parts.append(part)
+        else:
+            inner = script[1] if script[1] is not None else re.sub(r"\\(.)", r"\1", script[2])
+            parts += command_parts(inner, split_pipes=split_pipes)
+    return parts
+
+
+def split_shell(command: str, *, split_pipes: bool = True) -> list[str]:
     """Split a shell line into its commands. With split_pipes=False a pipeline stays whole, so a `| head` filter
     is not read as a command of its own."""
     parts: list[str] = []
@@ -1016,7 +1038,7 @@ def preflight_result(out: str, err: str, timed_out: bool, returncode: int | None
     for reply in replies:
         if reply.get("stopReason") == "error":
             raise SystemExit(f"preflight: the provider refused the call (auth or model?): "
-                             f"{str(reply.get('errorMessage', ''))[:300]}")
+                             f"{str(reply.get('errorMessage', ''))[:120]}")
     if returncode != 0:
         raise SystemExit(f"preflight: Pi exited {returncode}: {err.strip()[-300:]}")
     row = {"model": model, **pi_metrics(out)}
