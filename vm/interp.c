@@ -1208,6 +1208,19 @@ static _Noreturn void key_not_found(agc_vm *vm, agc_value key, uint32_t span) {
   agc_fail(vm, "RUNTIME-KEY-NOT-FOUND", message, span);
 }
 
+/* The end of a case that no arm matched: the checker makes every case exhaustive, so only a checker bug or a crafted
+   file gets here (NO_MATCH, docs/vm/03-ir-and-bytecode.md §4.2). */
+static __attribute__((noinline, cold)) _Noreturn void no_match(agc_vm *vm, agc_value value, uint32_t span) {
+  static const char before[] = "no case arm matches ";
+  const agc_string *form = agc_debug(vm, value);
+  size_t len = agc_size_add(sizeof before, form->bytes);
+  char *message = agc_alloc_atomic(len);
+  memcpy(message, before, sizeof before - 1);
+  memcpy(message + sizeof before - 1, form->data, form->bytes);
+  message[len - 1] = '\0';
+  agc_fail(vm, "RUNTIME-CASE-NO-MATCH", message, span);
+}
+
 __attribute__((noinline, cold)) _Noreturn void agc_op_fail(agc_vm *vm, agc_status status, const agc_value *a,
                                                             const agc_value *b, uint32_t span) {
   switch (status) {
@@ -1689,6 +1702,7 @@ reload:
         }
         break;
       }
+      case AGC_OP_NO_MATCH: no_match(vm, R[in.a], SPAN);
       case AGC_OP_PAYLOAD: {
         const agc_enum *e = agc_as_enum(vm, R[in.b]);
         if (in.c >= e->n) agc_fail(vm, "RUNTIME-INTERNAL", "invalid bytecode: payload index out of range", 0);

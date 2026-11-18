@@ -298,7 +298,8 @@ struct agc_output {
   agc_stdio *io;
   agc_write_mode mode;
   agc_utf8_cut cut;
-  bool writing, failed;
+  /* gone: the failure was EPIPE, the reader closed its end (agc_stdio_gone). */
+  bool writing, failed, gone;
   /* Positions in the bytes of the stream since it opened: `sent` bytes have been written, the ring holds the next
      `len` and the queue the ones after. `own_end` is the position just past the last byte of text of the program or
      the VM (bytes forwarded from a child never move it), or UINT64_MAX once such text met the failed stream. Text of
@@ -1071,6 +1072,9 @@ ssize_t agc_stdio_try(agc_output *out, const uint8_t *data, size_t n);
 void agc_stdio_start(agc_output *out, const uint8_t *first, size_t first_len, const uint8_t *second, size_t second_len,
                      void (*done)(void *data, int status), void *data);
 ssize_t agc_stdio_write(int fd, const uint8_t *data, size_t n, agc_utf8_cut *cut);
+/* True when ERR, an errno of a write or the status of a write or poller callback, says that the reader closed its end
+   (EPIPE). */
+bool agc_stdio_gone(int err);
 /* A FILE that keeps what is written to it in memory (open_memstream; Windows has none). NULL when none can be made.
    take closes it and gives the text (malloc'd) and its length; false when text was lost. */
 FILE *agc_memstream_open(agc_memstream **ms);
@@ -1154,6 +1158,11 @@ void agc_output_file_done(agc_output *out);
 /* True once a write of the stream failed (its data is dropped from then on) and text of the program or the VM was lost
    with it (agc_output.own_end): a failure that lost only bytes of a child's stderr does not fail the run. */
 bool agc_output_failed(const agc_output *out);
+/* True once a write of the stream failed because its reader closed its end (EPIPE). */
+bool agc_output_gone(const agc_output *out);
+/* The exit status of a run whose standard output lost its reader: 128 + SIGPIPE, what a shell shows for a Unix tool
+   that SIGPIPE killed. */
+#define AGC_EXIT_READER_GONE 141
 
 uint32_t agc_builtin_struct(agc_vm *vm, const char *name, const char *const *fields, uint32_t count);
 /* The builtin Error struct of PROGRAM, by its name, its exact field list (AGC_ERROR_* in value.h) and its field types,

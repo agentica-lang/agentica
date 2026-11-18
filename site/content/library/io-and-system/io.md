@@ -12,6 +12,7 @@ On Linux, macOS and Windows:
 - Reads from standard input, and writes to standard output or error, wait without stopping other tasks.
 - Each stream keeps up to 64 KiB. When a pipe is full, the printing tasks wait their turn, in order. A print has no timeout, and one print is never split by another (a crash message too).
 - Standard output and error that go to the same terminal or file (for example with `2>&1`) share one buffer, so `puts` and `IO.warn` keep their order. On Windows this holds when both descriptors are the same handle object.
+- A program whose standard output loses its reader (`prog | head`) ends quietly with status 141, as a Unix tool that SIGPIPE stops; other write errors end it with `RUNTIME-INTERNAL`.
 - On Windows, text typed on a console reaches the program as UTF-8, whatever the console's code page.
 - On Windows, after a stop signal and for the last error messages, a pipe or console gets one wait of up to 200 ms in all. So a reader that never reads cannot hold the exit.
 
@@ -238,7 +239,7 @@ ok("hi")
 IO.flush() -> Void
 ```
 
-Sends buffered standard output now (standard error is not flushed). On Linux, macOS and Windows, the task waits until the output has reached the pipe or file. So it can wait when the reader is slow. It fails if the reader has gone away.
+Sends buffered standard output now (standard error is not flushed). On Linux, macOS and Windows, the task waits until the output has reached the pipe or file. So it can wait when the reader is slow. If the reader has gone away, the program ends with status 141.
 
 A program that speaks a protocol over standard input and output writes one compact JSON message per line, flushes after each reply, and sends its logs to `IO.warn` (standard error).
 

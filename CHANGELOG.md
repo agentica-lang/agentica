@@ -31,6 +31,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- A program whose standard output loses its reader (`prog | head`) ends quietly with status 141, as SIGPIPE ends a Unix tool, instead of a `RUNTIME-INTERNAL` error (#1455).
+- A `case` that matches no arm, which only a checker bug allows, fails with the new `RUNTIME-CASE-NO-MATCH` at the case instead of going on with a stale value (#1823).
 - A task cancelled while `HTTP.get_response`, `HTTP.post_response` or a call on an `HTTP.client` waits for the answer closes the connection at once, instead of when the server answers; a pooled connection does not go back to the pool (#1860).
 
 ## [0.34.1] - 2026-11-17

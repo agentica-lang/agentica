@@ -10,6 +10,7 @@ with the reason. On Windows the socket cases use a Winsock socket that is not in
 """
 import contextlib
 import json
+import os
 import re
 import subprocess
 import time
@@ -642,7 +643,7 @@ def test_a_stderr_that_only_a_child_wrote_to_and_cannot_be_written_keeps_the_exi
 
 @not_wine
 @not_wine_child
-@pytest.mark.parametrize("late, status", [("", 0), ('IO.warn("late")', 1)])
+@pytest.mark.parametrize("late, status", [("", 0), ('IO.warn("late")', 141)])
 def test_a_stderr_lost_after_the_program_wrote_to_it_fails_the_run_only_if_a_later_write_is_lost(tmp_path, late,
                                                                                                status):
     # stderr is the stdout pipe; its reader takes the program's line and goes away, so only the child's bytes fail.
@@ -701,10 +702,29 @@ def test_a_regular_file_written_by_the_pool_is_drained_while_a_child_is_stopped_
     assert re.search(re.compile(r"\Achild started\n.*\ndone\n\Z", re.S), out)
 
 
-def test_a_reader_that_goes_away_fails_the_print_not_the_vm(tmp_path):
-    summary, _, err = run_case(tmp_path, "gone", ROWS_PROGRAM % 400, peer=["--close-after", "100000"], vm=["--json"])
-    assert summary["status"] == 1
-    assert '"code":"RUNTIME-INTERNAL"' in err
+@pytest.mark.parametrize("schedulers", ["1", "4"])
+def test_a_reader_that_goes_away_ends_the_run_quietly_with_status_141(tmp_path, schedulers):
+    # `prog | head`: the print that meets the closed pipe ends the run as SIGPIPE ends a Unix tool, with no diagnostic.
+    summary, _, err = run_case(tmp_path, "gone", ROWS_PROGRAM % 400, peer=["--close-after", "100000"],
+                               vm=["--json", "--schedulers", schedulers])
+    assert summary["status"] == 141
+    assert err == ""
+
+
+def test_a_reader_that_goes_away_after_the_last_print_still_ends_the_run_with_status_141(tmp_path):
+    # The program has returned when the ring's write meets the closed pipe: the end of the run sees it.
+    summary, _, err = run_case(tmp_path, "gone-late", ROWS_PROGRAM % 60,
+                               peer=["--close-after", "1000", "--pipe-size", "4096"], vm=["--json"])
+    assert summary["status"] == 141
+    assert err == ""
+
+
+@pytest.mark.skipif(not os.path.exists("/dev/full"), reason="host-only: /dev/full, which fails every write, is Linux")
+def test_a_standard_output_that_fails_otherwise_than_epipe_is_still_an_error(tmp_path):
+    bytecode = compile_text(ROWS_PROGRAM % 10, "full", tmp_path)
+    result = run([*vm_command(), "--json", "--", bytecode], stdout_to="/dev/full", env=vm_environment())
+    assert result.code == 1
+    assert '"code":"RUNTIME-INTERNAL"' in result.stderr
 
 
 def test_a_crashed_parent_cancels_a_child_waiting_to_print_and_nothing_partial_is_written(tmp_path):

@@ -146,6 +146,9 @@ ssize_t agc_stdio_write(int fd, const uint8_t *data, size_t n, agc_utf8_cut *cut
   return write(fd, data, n);
 }
 
+/* libuv's statuses are negative errno values on Unix. */
+bool agc_stdio_gone(int err) { return err == EPIPE || err == -EPIPE; }
+
 static void watch_ready(void *data, int status) {
   agc_stdio *io = data;
   agc_poller_pause(io->poller);

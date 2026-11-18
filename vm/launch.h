@@ -119,7 +119,8 @@ agc_vm *agc_launch_vm(agc_launch *launch, const agc_program *program, const agc_
  * is printed. It returns the exit status without leaving the process; the hand-off from the front end to the program
  * uses it to retire the front end. *OUTCOME is rewritten when a write of standard output or error, or of the
  * coverage file, failed (and no stop signal ended the run): it becomes AGC_FAILED with RUNTIME-INTERNAL and the
- * message "cannot write to standard output" (or error, or the coverage file), which is printed, and the status is 1.
+ * message "cannot write to standard output" (or error, or the coverage file), which is printed, and the status is 1. A standard output whose reader left (EPIPE) is no error:
+ * the outcome becomes AGC_EXITED with AGC_EXIT_READER_GONE, unless it already failed or exited with another status.
  * A caller that decides from the outcome afterwards must read the rewritten one. */
 int agc_launch_settle(agc_vm *vm, agc_outcome *outcome);
 

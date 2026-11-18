@@ -52,7 +52,9 @@ fn0 "depth" params=1 captures=0 slots=7 @ 0:11:1-23:1
     const r6 int:1 @ 0:20:18-20:19
     add-i r5 r4 r6 @ 0:20:16-20:17
     return r5 @ 0:20:7-21:1
+    jump L0 @ 0:12:3-22:1
   L2:
+    no-match r0 @ 0:12:3-22:1
   L0:
     const r1 void @ 0:11:1-23:1
     return r1 @ 0:11:1-23:1
@@ -131,7 +133,9 @@ fn2 "main" params=0 captures=0 slots=5 entry @ 0:31:1-41:1
     step @ 0:36:25-36:31
     const r2 "none" @ 0:36:25-36:31
     call-builtin r2 "puts" 1 @ 0:36:20-36:32 0:36:25-36:31
+    jump L0 @ 0:34:3-38:1
   L2:
+    no-match r1 @ 0:34:3-38:1
   L0:
     step @ 0:38:3-39:1
     step @ 0:38:11-38:27

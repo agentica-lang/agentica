@@ -358,8 +358,8 @@ static void test_flush_waits_for_an_empty_buffer(void) {
 }
 
 /* The reader leaves after the first text went out. A poller finds the broken pipe when it writes; a Windows request
-   reports it, so the flush waits a turn or two before it fails. */
-static void test_flush_fails_when_the_reader_left(void) {
+   reports it, so the flush waits a turn or two before it ends the run with AGC_EXIT_READER_GONE, as SIGPIPE would. */
+static void test_flush_exits_when_the_reader_left(void) {
   open_pipe();
   fresh(pipe_fds[1]);
   agc_task *a = agc_test_task();
@@ -377,7 +377,8 @@ static void test_flush_fails_when_the_reader_left(void) {
     }
     assert(false);
   }
-  assert(strcmp(vm.rt->outcome.code, "RUNTIME-INTERNAL") == 0 && agc_output_failed(out()));
+  assert(vm.rt->outcome.kind == AGC_EXITED && vm.rt->outcome.exit_code == AGC_EXIT_READER_GONE);
+  assert(agc_output_failed(out()) && agc_output_gone(out()));
   finish();
   close(pipe_fds[1]);
 }
@@ -975,7 +976,7 @@ static void test_child_bytes_queued_before_a_print_that_needs_the_whole_ring_go_
 /* The tests that fill no pipe, so they run on either kind of write end. */
 static void run_unfilled_pipe_tests(void) {
   test_small_prints_keep_order();
-  test_flush_fails_when_the_reader_left();
+  test_flush_exits_when_the_reader_left();
   test_a_stream_on_the_same_target_shares_the_buffer();
   test_a_duplicate_of_the_descriptor_is_the_same_target();
   test_the_program_writes_the_pipe_that_the_front_end_wrote();

@@ -18,7 +18,9 @@ fn0 "label" params=1 captures=0 slots=3 @ 0:6:1-12:1
     step @ 0:9:19-10:1
     step @ 0:9:19-9:26
     const r1 "small" @ 0:9:19-9:26
+    jump L0 @ 0:7:10-10:6
   L2:
+    no-match r0 @ 0:7:10-10:6
   L0:
     return r1 @ 0:7:3-11:1
     const r1 void @ 0:6:1-12:1
@@ -113,6 +115,8 @@ fn2 "block@case-value.agc:24:38" params=1 captures=0 slots=3 @ 0:24:38-29:6
     step @ 0:27:21-28:1
     step @ 0:27:21-27:24
     const r1 "S" @ 0:27:21-27:24
+    jump L0 @ 0:25:5-29:1
   L2:
+    no-match r0 @ 0:25:5-29:1
   L0:
     return r1 @ 0:25:5-29:1

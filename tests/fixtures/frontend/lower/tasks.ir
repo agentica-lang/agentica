@@ -57,7 +57,9 @@ fn2 "show" params=1 captures=0 slots=3 @ 0:12:1-18:1
     step @ 0:15:28-15:34
     const r1 "late" @ 0:15:28-15:34
     call-builtin r1 "puts" 1 @ 0:15:23-15:35 0:15:28-15:34
+    jump L0 @ 0:13:3-17:1
   L2:
+    no-match r0 @ 0:13:3-17:1
   L0:
     const r1 void @ 0:12:1-18:1
     return r1 @ 0:12:1-18:1

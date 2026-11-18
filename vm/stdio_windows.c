@@ -27,12 +27,13 @@
 #define CANCEL_TRIES 10
 
 /* The flush of one standard C stream on a thread of its own (agc_stdio_flush): THREAD while it may still run, LOCKED,
-   an event the thread sets once it holds the stream's lock, and RESULT, an agc_stdio_flush_result, once it ended. Only
+   an event the thread sets once it holds the stream's lock, and RESULT, an agc_stdio_flush_result, once it ended, with
+   ERR, the thread's errno of a failed flush, which flusher_end hands to the caller's errno, as POSIX keeps it. Only
    the main thread starts one, at the end of the run, and it closes both handles once the thread has ended. */
 typedef struct {
   FILE *stream;
   HANDLE thread, locked;
-  atomic_int result;
+  atomic_int result, err;
 } stdio_flusher;
 
 /* A pipe that libuv writes, one request at a time. libuv writes a pipe that was not opened for overlapped I/O on a
@@ -144,6 +145,9 @@ ssize_t agc_stdio_write(int fd, const uint8_t *data, size_t n, agc_utf8_cut *cut
   if (handle != INVALID_HANDLE_VALUE && GetConsoleMode(handle, &mode)) return console_write(handle, data, n, cut);
   return _write(fd, data, (unsigned)n);
 }
+
+/* The CRT maps ERROR_BROKEN_PIPE and ERROR_NO_DATA to EPIPE, and libuv to UV_EPIPE. */
+bool agc_stdio_gone(int err) { return err == EPIPE || err == UV_EPIPE; }
 
 static void pipe_closed(uv_handle_t *handle) { free(handle->data); }
 
@@ -569,6 +573,7 @@ static unsigned __stdcall flush_stream(void *arg) {
   while (fflush(f->stream) != 0) {
     if (errno != EINTR) {
       result = AGC_STDIO_FAILED;
+      atomic_store(&f->err, errno);
       break;
     }
     clearerr(f->stream);
@@ -583,7 +588,9 @@ static agc_stdio_flush_result flusher_end(stdio_flusher *f) {
   CloseHandle(f->thread);
   CloseHandle(f->locked);
   f->thread = f->locked = NULL;
-  return (agc_stdio_flush_result)atomic_load(&f->result);
+  agc_stdio_flush_result result = (agc_stdio_flush_result)atomic_load(&f->result);
+  if (result == AGC_STDIO_FAILED) errno = atomic_load(&f->err);
+  return result;
 }
 
 agc_stdio_flush_result agc_stdio_flush(FILE *stream) {
