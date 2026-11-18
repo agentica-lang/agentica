@@ -278,6 +278,54 @@ def test_add_refuses_a_bad_or_repeated_subdir_as_a_usage_error_and_a_missing_fol
     assert not (ws.project / "agentica.lock").exists()
 
 
+JOBS = {"agentica.toml": 'name = "jobs"\n', "run.agc": 'def run() -> String\n  return "jobs"\nend\n'}
+
+
+def add_line(ws, remotes, *words):
+    """Runs `add` in a project with no dependency and returns its answer and the line it wrote in the manifest."""
+    (ws.project / "agentica.toml").write_text('name = "app"\n', encoding="utf-8")
+    (ws.project / "agentica.lock").unlink(missing_ok=True)
+    result = run(cli() + ["add", *words], cwd=ws.project, env=environment(ws, remotes))
+    assert result.code == 0, result.stderr
+    return result.stdout, (ws.project / "agentica.toml").read_text(encoding="utf-8").split("[dependencies]\n")[1]
+
+
+@pytest.mark.parametrize("tag", ["jobs-0.1.0", "jobs-0.2.0-alpha.1"])
+def test_add_with_a_tag_name_version_takes_the_folder_name_when_the_package_is_there(ws, remotes, tag):
+    remotes.publish(REPOSITORY, {**{"jobs/" + path: text for path, text in JOBS.items()}, "README.md": "packages"},
+                    tag=tag)
+    tag_too(remotes, "jobs-1.0.0")
+    answer, line = add_line(ws, remotes, "jobs", url(remotes), "--tag", tag)
+    assert answer == "added jobs@%s (folder jobs)\n" % tag
+    assert line == "jobs = %s\n" % inline_table(dependency(url(remotes), tag=tag, subdir="jobs"))
+    commit = remotes.git("rev-parse", "HEAD", cwd=remotes.work / REPOSITORY)
+    lock_entry(ws, remotes, REPOSITORY, JOBS, commit, tag=tag, name="jobs", subdir="jobs")
+    assert (ws.project / "agentica.lock").read_text(encoding="utf-8") == ws.lock_text()
+
+    # The local name does not choose the folder: the tag does.
+    _, line = add_line(ws, remotes, "work", url(remotes), "--tag", "jobs-1.0.0")
+    assert line == "work = %s\n" % inline_table(dependency(url(remotes), tag="jobs-1.0.0", subdir="jobs"))
+
+
+def test_add_with_an_explicit_subdir_takes_it_over_the_folder_of_the_tag(ws, remotes):
+    files = {**{"jobs/" + path: text for path, text in JOBS.items()}, **{"sqlite/" + p: t for p, t in SQLITE.items()}}
+    remotes.publish(REPOSITORY, files, tag="jobs-0.1.0")
+    _, line = add_line(ws, remotes, "sqlite", url(remotes), "--tag", "jobs-0.1.0", "--subdir", "sqlite")
+    assert line == "sqlite = %s\n" % inline_table(dependency(url(remotes), tag="jobs-0.1.0", subdir="sqlite"))
+
+
+@pytest.mark.parametrize("files", [
+    {"run.agc": "# root\n", "other/agentica.toml": 'name = "other"\n'},
+    {"agentica.toml": 'name = "jobs"\n', **{"jobs/" + path: text for path, text in JOBS.items()}},
+    {"run.agc": "# root\n", "jobs/run.agc": "# no manifest\n"},
+], ids=["no folder of the name", "the root is the package", "a folder with no manifest"])
+def test_add_with_a_tag_name_version_and_no_package_folder_takes_the_repository_itself(ws, remotes, files):
+    remotes.publish(REPOSITORY, files, tag="jobs-0.1.0")
+    answer, line = add_line(ws, remotes, "jobs", url(remotes), "--tag", "jobs-0.1.0")
+    assert answer == "added jobs@jobs-0.1.0\n"
+    assert line == "jobs = %s\n" % inline_table(dependency(url(remotes), tag="jobs-0.1.0"))
+
+
 def test_a_package_can_declare_another_folder_of_its_own_repository(ws, remotes, tmp_path):
     manifest = 'name = "postgres"\n\n[dependencies]\ncommon = %s\n' % inline_table(
         dependency(url(remotes), tag="common-1", subdir="common"))

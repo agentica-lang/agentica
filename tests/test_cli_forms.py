@@ -38,6 +38,7 @@ FILES = {
     "tab.agc": 'def main() -> Void\n\tx: Int = "a"\n\tputs(x)\nend\n',
     "crlf.agc": 'def main() -> Void\r\n  x: Int = "a"\r\n  puts(x)\r\nend\r\n',
     "unicode.agc": 'def main() -> Void\n  puts("héllo")\n  x: Int = "éé"\nend\n',
+    "pkg/agentica.toml": 'name = "app"\n',
     "multiline.agc": 'def main() -> Void\n  x = [1, 2,\n    3] - "s"\nend\n',
     "labels.agc": (
         "def add(a: Int, b: Int) -> Int\n  return a + b\nend\n\ndef main() -> Void\n  x = add(1, \"two\")\n"
@@ -157,6 +158,9 @@ def groups(work):
     # A runtime problem is the VM's; a path typed in full names the root file as typed.
     diagnostics += [(["--max-steps", "100000", program], {}) for program in ("ok.agc", "divide.agc", "sub/boom.agc")]
     diagnostics += [(["--json", "check", str(work / program)], {}) for program in ("tab.agc", "sub/bad.agc")]
+    # A PKG- diagnostic of a command line: `add` with a source that is no URL and no OWNER/REPO.
+    diagnostics += [(style + ["add", "jobs", "gitlab.com/owner/jobs", "--tag", "jobs-0.1.0"], {"cwd": "pkg"})
+                    for style in forms]
     runs = [
         (["args.agc", "a", "b c", "--json", ""], {"stdin": "World\nline2\nline3"}),
         (["args.agc"], {}),

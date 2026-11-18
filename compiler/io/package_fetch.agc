@@ -24,6 +24,7 @@ import PackageHash from "../packages/package_hash"
 import Tree from "../packages/package_tree"
 import Reader from "../packages/toml_read"
 import GitProcess from "git_process"
+import Toml from "std/toml"
 
 ## What filling one package did: the files were fetched, or the folder was already there with the locked hash.
 enum Filled
@@ -98,6 +99,30 @@ def resolve(
   resolved
 end
 
+## The folder of the repository that `add` takes for a tag `NAME-X.Y.Z` with no `--subdir` (`package` is NAME): NAME
+## when the tagged commit has the file NAME/agentica.toml and its root has no agentica.toml whose `name` is NAME, else
+## "" (the repository itself). The tag is fetched as `resolve` fetches it, and `git ls-tree -l` of the commit lists
+## only the two manifests; the root one is read with `git cat-file` (manifest_blobs). `place` names the dependency.
+def tag_subdir(
+  workspace: Workspace.Workspace,
+  cache: String,
+  place: Place,
+  source: GitSource.Source,
+  package: String,
+) -> Result[String]
+  made = make_temp(cache)
+  if !made.ok?
+    return error(fail(place, "PKG-FETCH", "", "cannot make a folder in the package cache #{cache}", made.message))
+  end
+
+  temp = made.unwrap!
+  scratch = Scratch(temp: temp, repo: Paths.join(temp, "repo.git"), files: Paths.join(temp, "files"))
+  pin = Lock.Locked(name: package, source: source, commit: "", hash: "", member: false, override: false)
+  found = subdir_in(place, scratch, pin, package)
+  remove_temp(temp)
+  found
+end
+
 ## The failure for the key of an entry ("" for the entry as a whole). An empty help is no help.
 def fail(place: Place, code: String, key: String, message: String, help: String) -> String
   path = Reader.child(place.entry, key)
@@ -120,6 +145,9 @@ TEMP_TRIES = 5
 PINNED = "refs/fetched/pin"
 # The number of characters of git's error text that goes in the help.
 HELP_LIMIT = 600
+MANIFEST = "agentica.toml"
+FILE_MODES = Set.new(["100644", "100755"])
+NUL = String.from_code(0)
 
 # The temporary folder of one fetch: the bare repository, and the files that are copied out of it. git runs in `temp`.
 struct Scratch
@@ -272,6 +300,61 @@ def resolve_into(
   target = PackageCache.folder(cache, locked.source, commit)
   try move_into_place(workspace, place, scratch.files, target, locked)
   ok(locked)
+end
+
+def subdir_in(place: Place, scratch: Scratch, pin: Lock.Locked, package: String) -> Result[String]
+  try init_repository(place, scratch, pin)
+  try fetch_pin(place, scratch, pin)
+  commit = try peel(place, scratch)
+  folder_manifest = "#{package}/#{MANIFEST}"
+  arguments = ["ls-tree", "-z", "-l", commit, "--", MANIFEST, folder_manifest]
+  listing = try git_text(place, scratch, inside(scratch, arguments))
+  blobs = manifest_blobs(listing)
+  return ok("") if !blobs.has_key?(folder_manifest)
+  return ok(package) if !blobs.has_key?(MANIFEST)
+
+  root = try git(place, scratch, inside(scratch, ["cat-file", "blob", blobs[MANIFEST]]))
+  return ok("") if root_name(String.from_bytes(root).unwrap_or("")) == package
+
+  ok(package)
+end
+
+# The manifests of an `ls-tree -z -l` listing, path to blob id: regular files that a package may hold (at most
+# PackageHash.MAX_FILE_BYTES). A link, a submodule or a larger file is no manifest of a package.
+def manifest_blobs(listing: String) -> Map[String, String]
+  blobs: Map[String, String] = {}
+  for record in listing.split(NUL)
+    tab = record.index_of("\t")
+    next if tab.none?
+
+    fields = record.slice(0, tab.unwrap!).split(" ").select do |field: String| field != "" end
+    next if fields.size != 4 or !FILE_MODES.include?(fields[0])
+
+    size = fields[3].to_i.unwrap_or(-1)
+    if size >= 0 and size <= PackageHash.MAX_FILE_BYTES
+      blobs = blobs.put(record.slice(tab.unwrap! + 1, record.length - tab.unwrap! - 1), fields[2])
+    end
+  end
+
+  blobs
+end
+
+# The `name` of a manifest's text, "" when the text is not TOML or has no such string.
+def root_name(text: String) -> String
+  parsed = Toml.parse(text)
+  return "" if !parsed.ok?
+
+  case parsed.unwrap!
+    Toml.Value.Table(entries) -> text_of(entries.get("name").unwrap_or(Toml.Value.Bool(false)))
+    _ -> ""
+  end
+end
+
+def text_of(value: Toml.Value) -> String
+  case value
+    Toml.Value.Str(text) -> text
+    _ -> ""
+  end
 end
 
 # An empty template, so a hook from the user's template folder cannot run.

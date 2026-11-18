@@ -8,6 +8,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `agentica add NAME OWNER/REPO` takes a GitHub repository as `OWNER/REPO` (stored as the full URL), and a tag `NAME-X.Y.Z` with no `--subdir` takes the folder `NAME` when the package is there (#1833).
+
 ## [0.34.1] - 2026-11-17
 
 ### Changed

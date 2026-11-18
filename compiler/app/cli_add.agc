@@ -1,4 +1,4 @@
-## `agentica add NAME URL --tag TAG` (or `--ref COMMIT`, `--subdir DIR` and `--group test`) and `agentica update`
+## `agentica add NAME SOURCE --tag TAG` (or `--ref COMMIT`, `--subdir DIR` and `--group test`) and `agentica update`
 ## (docs/grammar/05b-modules.md). Both work on the project of the working folder, resolve its packages
 ## (io/package_resolve.agc: git runs for the pins that are new or asked to move), fill the cache (with the prebuilt
 ## native modules of the host target, io/native_prebuilt.agc), write agentica.lock and refresh deps/
@@ -10,6 +10,7 @@
 
 import Prebuilt from "../io/native_prebuilt"
 import PackageDeps from "../io/package_deps"
+import PackageFetch from "../io/package_fetch"
 import PackageResolve from "../io/package_resolve"
 import SaveFile from "../io/save_file"
 import Env from "../modules/link_env"
@@ -18,6 +19,7 @@ import GitSource from "../packages/git_source"
 import Lock from "../packages/lock"
 import Manifest from "../packages/manifest"
 import ManifestEdit from "../packages/manifest_edit"
+import Members from "../packages/members"
 import PackageImport from "../packages/package_import"
 import Project from "../packages/project"
 import Reader from "../packages/toml_read"
@@ -26,7 +28,7 @@ import CliProject from "cli_project"
 import Reply from "cli_reply"
 import Texts from "cli_text"
 
-## Runs `add`. `words` are the ones after the command: NAME URL, `--tag TAG` or `--ref COMMIT`, `--subdir DIR` and
+## Runs `add`. `words` are the ones after the command: NAME SOURCE, `--tag TAG` or `--ref COMMIT`, `--subdir DIR` and
 ## `--group test`. `fetching` says how the prebuilt native modules are downloaded.
 def add(settings: Env.Settings, style: String, fetching: Prebuilt.Fetching, words: List[String]) -> Reply.Answer
   asked = request_of(words)
@@ -54,6 +56,8 @@ private
 
 # The deadline of the write of a file, in milliseconds.
 WRITE_TIMEOUT_MS = 60_000
+# The GitHub repository that OWNER/REPO stands for, as the help of PKG-SOURCE-INVALID writes it.
+GITHUB_FORM = "https://github.com/OWNER/REPO"
 # The options of `add`, each with a value.
 ADD_FLAGS = Set.new(["--tag", "--ref", "--subdir", "--group"])
 
@@ -63,17 +67,20 @@ LOCK_WRITTEN = "; agentica.lock was written already, so run `agentica update` to
 # More help for a deps/ that could not be written after the lock was.
 DEPS_PENDING = "agentica.lock was written already; run `agentica install` to write the locked packages into deps/"
 
-# What `add` was asked: the local name, where the package comes from and whether only the tests import it.
+# What `add` was asked: the local name, the source word as typed, where the package comes from (the word as a git URL,
+# GitSource.expand_git) and whether only the tests import it.
 struct Request
   name: String
+  word: String
   source: GitSource.Source
   test: Bool
 end
 
-# NAME URL, then --tag TAG or --ref COMMIT (one of them), --subdir DIR when the package is a folder of the
+# NAME SOURCE, then --tag TAG or --ref COMMIT (one of them), --subdir DIR when the package is a folder of the
 # repository, and --group test for a dependency that only the tests import, in any order. A word that is not a good
-# name, URL, tag, commit, subdir or group is refused here, before the project is read, with the reason of the rule that
-# the manifest applies. The commit is the whole id: git fetches no abbreviation.
+# name, tag, commit, subdir or group is refused here, before the project is read, with the reason of the rule that the
+# manifest applies; a source that is no git URL is PKG-SOURCE-INVALID once the manifest is found (add_in). The commit
+# is the whole id: git fetches no abbreviation.
 def request_of(words: List[String]) -> Result[Request]
   return error(Texts.usage_text()) if words.size < 4 or words.size % 2 != 0
 
@@ -91,10 +98,6 @@ def request_of(words: List[String]) -> Result[Request]
   ref = option_of(options, "--ref")
   subdir = option_of(options, "--subdir")
   problem = GitSource.name_problem(words[0])
-  if problem == ""
-    problem = GitSource.git_problem(words[1])
-  end
-
   if problem == "" and tag != ""
     problem = GitSource.tag_problem(tag)
   elsif problem == "" and ref != ""
@@ -115,8 +118,8 @@ def request_of(words: List[String]) -> Result[Request]
 
   return error("agentica: #{problem}\n") if problem != ""
 
-  source = GitSource.Source(git: words[1], subdir: subdir, tag: tag, ref: ref, path: "")
-  ok(Request(name: words[0], source: source, test: group == Manifest.TEST_GROUP))
+  source = GitSource.Source(git: GitSource.expand_git(words[1]), subdir: subdir, tag: tag, ref: ref, path: "")
+  ok(Request(name: words[0], word: words[1], source: source, test: group == Manifest.TEST_GROUP))
 end
 
 # The value of an option, "" when it was not given.
@@ -134,18 +137,22 @@ def add_to(settings: Env.Settings, dir: String, fetching: Prebuilt.Fetching, req
   end
 end
 
-def add_in(
-  settings: Env.Settings,
-  found: Project.Found,
-  fetching: Prebuilt.Fetching,
-  request: Request,
-) -> Result[String]
+def add_in(settings: Env.Settings, found: Project.Found, fetching: Prebuilt.Fetching, asked: Request) -> Result[String]
   file = found.manifest.file
-  if found.manifest.dependencies.any? do |dependency| dependency.name == request.name end
-    message = "#{request.name} is already a dependency"
-    help = Failure.hint("change its tag or ref in #{file} and run `agentica update #{request.name}`")
-    return error(Failure.fail_key(file, "dependencies.#{request.name}", "PKG-DEPENDENCY-EXISTS", message, help))
+  problem = GitSource.git_problem(asked.source.git)
+  if problem != ""
+    message = "#{asked.word} is not a git source: write https://host/owner/repo, or OWNER/REPO for #{GITHUB_FORM}"
+    key = "dependencies.#{asked.name}.git"
+    return error(Failure.fail_key(file, key, "PKG-SOURCE-INVALID", message, Failure.hint(problem)))
   end
+
+  if found.manifest.dependencies.any? do |dependency| dependency.name == asked.name end
+    message = "#{asked.name} is already a dependency"
+    help = Failure.hint("change its tag or ref in #{file} and run `agentica update #{asked.name}`")
+    return error(Failure.fail_key(file, "dependencies.#{asked.name}", "PKG-DEPENDENCY-EXISTS", message, help))
+  end
+
+  request = try with_tag_subdir(settings, found, asked)
 
   text = try Reader.read_text(settings.workspace, Reader.Reading(file: file, code: "PKG-MANIFEST-INVALID"))
   edited = ManifestEdit.add_dependency(text, request.name, request.source, request.test)
@@ -160,6 +167,22 @@ def add_in(
   try save(settings, file, edited, LOCK_WRITTEN)
   try refresh_deps(settings, found, packages)
   ok(CliInstall.with_lines(report(found.lock, resolved, request.name), prebuilt))
+end
+
+# A tag NAME-X.Y.Z with no --subdir names the folder NAME of the repository when the tagged commit has the package
+# there and not at its root (PackageFetch.tag_subdir). A member of the workspace is that folder with no fetch.
+def with_tag_subdir(settings: Env.Settings, found: Project.Found, request: Request) -> Result[Request]
+  package = GitSource.tag_package(request.source.tag)
+  return ok(request) if package == "" or request.source.subdir != "" or GitSource.subdir_problem(package) != ""
+
+  folder = request.source.with(subdir: package)
+  return ok(request.with(source: folder)) if Members.member?(found.members, folder)
+
+  file = found.manifest.file
+  cache = try PackageFetch.cache_root(settings.env, file)
+  place = PackageFetch.Place(file: file, entry: Reader.child("dependencies", request.name))
+  subdir = try PackageFetch.tag_subdir(settings.workspace, cache, place, request.source, package)
+  ok(request.with(source: request.source.with(subdir: subdir)))
 end
 
 # The fetch takes a while, and the edit is of the text read before it: a manifest changed meanwhile is not overwritten.

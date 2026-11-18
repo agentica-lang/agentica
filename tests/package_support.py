@@ -191,6 +191,11 @@ class Remotes:
         """The https URL of a repository `owner/repo`, as a manifest writes it."""
         return self.HOST + path
 
+    def mirror(self, host):
+        """Sends the URLs of `host` (such as `https://github.com/`) to the same bare repositories, with no network."""
+        with open(self.home / ".gitconfig", "a", encoding="utf-8") as config:
+            config.write('\tinsteadOf = %s\n' % host)
+
     def git(self, *arguments, cwd, stdin=None):
         """Runs git with the isolated environment and returns its stripped stdout; `stdin` is bytes fed to it."""
         env = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
