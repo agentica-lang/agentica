@@ -3935,6 +3935,8 @@ end
 # fails, or the caller has taken its answer and nobody reads the channel again.
 def gone(pool: Pool, message: HttpWire.Job) -> Pool
   id = message.worker
+  # A worker cancelled as it ended is reported twice, by itself and by its supervisor: the second notice is dropped.
+  return pool if not Map.has_key?(pool.inboxes, id)
   case Map.get(pool.busy, id)
     some(reply) -> _ = reply.send(error(FAILED, kind: "net.failed"), 0)
     none -> id = id
@@ -4025,11 +4027,13 @@ def work(worker: Worker) -> Result[Void]
     if served
       done = run_job(worker, socket, job)
     end
-    # The caller gave up on the reply (its wait timed out, or it was cancelled as the answer came): the connection is
-    # closed, not pooled, so a timed-out call leaves no connection behind (site/content/library/concurrency/task.md,
-    # Task.map).
-    awaited = HttpWire.awaited?(job.reply)
     _ = job.reply.send(done.answer, 0)
+    # The caller gave up on the reply (its wait timed out, or it was cancelled before or as the answer came): the
+    # connection is closed, not pooled, so a timed-out call leaves no connection behind
+    # (site/content/library/concurrency/task.md, Task.map). Asked after the answer, so a worker that the
+    # caller's cancel
+    # reached on another scheduler, still running, sees it here and never goes back to the pool.
+    awaited = HttpWire.awaited?(job.reply)
     # The idle wait below keeps job only for its origin and reply.
     job = job.with(head: "", body: NO_BYTES)
     if not done.kept or (served and not awaited)

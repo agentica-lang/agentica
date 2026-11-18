@@ -541,6 +541,16 @@ static void test_cancel_pending_wait(void) {
   assert(!a->timer.heap && !ready_head());
 }
 
+/* Lets the 20 ms wait of t, parked on a channel, time out: t is ready to take its retry. */
+static void time_out(agc_task *t) {
+  agc_timers_settle(&vm);
+  struct timespec delay = {0, 80000000L};
+  while (nanosleep(&delay, &delay) != 0) {}
+  assert(agc_timers_run(&vm));
+  assert(next_ready() == t);
+  settle();
+}
+
 /* Abandoned (HttpWire.awaited? is its negation): only a receiver that parked and left without a value sets it. A
    sender before any receiver parks, a poll, and a receiver that gets its value do not. */
 static void test_abandoned(void) {
@@ -566,12 +576,7 @@ static void test_abandoned(void) {
   agc_value timed = make_channel(1);
   agc_task *d = agc_test_task();
   wait_recv(d, timed, 20);
-  agc_timers_settle(&vm);
-  struct timespec delay = {0, 80000000L};
-  while (nanosleep(&delay, &delay) != 0) {}
-  assert(agc_timers_run(&vm));
-  assert(next_ready() == d);
-  settle();
+  time_out(d);
   assert(!agc_channel_abandoned(&vm, agc_as_channel(&vm, timed)));
   agc_value args_d[2] = {timed, agc_int(20)};
   assert(failed(now(d, RECV, args_d), "channel: timed out"));
@@ -593,8 +598,9 @@ static agc_task *parked_worker(agc_value reply, bool *answer) {
 }
 
 /* HttpWire.awaited? binds its caller (a worker) to the reply: a cancel of the receiver parked on it cancels the worker.
-   A value sent first ends the bond, even when the receiver is then cancelled with the value reserved, and a receiver
-   that gave up already is not bound to. */
+   The first value sent ends the bond, even when the receiver is then cancelled with the value reserved, and an ask
+   after it binds nothing. A receiver whose wait times out cancels nothing, a receiver that gave up already is not
+   bound to, and a watcher that ended is left alone. */
 static void test_awaited_binds_the_worker(void) {
   bool answer;
   agc_value reply = make_channel(1);
@@ -610,10 +616,26 @@ static void test_awaited_binds_the_worker(void) {
   wait_recv(taker, answered, 5000);
   send(main_task, answered, 1, 0);
   assert(ready_head() == taker);
+  agc_task *late = parked_worker(answered, &answer);
+  assert(answer);
   agc_task_cancel(&vm, taker);
   settle();
   assert(kept->state == AGC_TASK_PARKED && !kept->cancelled);
+  assert(late->state == AGC_TASK_PARKED && !late->cancelled);
+  assert(!awaited(main_task, answered));
   agc_task_cancel(&vm, kept);
+  agc_task_cancel(&vm, late);
+
+  agc_value slow = make_channel(1);
+  agc_task *waiting = parked_worker(slow, &answer), *timed = agc_test_task();
+  assert(answer);
+  wait_recv(timed, slow, 20);
+  time_out(timed);
+  agc_value args[2] = {slow, agc_int(20)};
+  assert(failed(now(timed, RECV, args), "channel: timed out"));
+  assert(waiting->state == AGC_TASK_PARKED && !waiting->cancelled);
+  assert(!awaited(main_task, slow));
+  agc_task_cancel(&vm, waiting);
 
   agc_task *idle = parked_worker(reply, &answer);
   assert(!answer);
@@ -622,6 +644,14 @@ static void test_awaited_binds_the_worker(void) {
   agc_task_cancel(&vm, other);
   assert(idle->state == AGC_TASK_PARKED && !idle->cancelled);
   agc_task_cancel(&vm, idle);
+
+  agc_value orphan = make_channel(1);
+  agc_task *ended = parked_worker(orphan, &answer), *left = agc_test_task();
+  assert(answer);
+  agc_task_cancel(&vm, ended);
+  wait_recv(left, orphan, 5000);
+  agc_task_cancel(&vm, left);
+  assert(ended->state == AGC_TASK_DONE && left->state == AGC_TASK_DONE && !ready_head());
 }
 
 static agc_value address_of(agc_value ch) {
