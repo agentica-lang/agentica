@@ -43,13 +43,13 @@ One line per term, sorted. "stays" means the term is not translated.
 | file | archivo |  |
 | flag | stays | A CLI flag such as `--help` |
 | float | flotante | The type `Float` stays |
-| frame | trama | One message of a network stream |
+| frame | stays | Owner decision; a message of a network stream |
 | function | función | The keyword `def` stays |
 | garbage collector | recolector de basura | GC stays |
 | GC | GC | Garbage collector; the acronym stays |
 | generic | genérico |  |
 | guard | guarda | A `case` guard; also the `if` of `return x if c` |
-| handler | manejador | An HTTP handler; `handler` in code stays |
+| handler | stays | Owner decision; an HTTP handler |
 | header | cabecera | An HTTP header |
 | heap | stays | Owner decision: the term stays; the type `Heap` stays |
 | heredoc | stays | A multi-line string form |
@@ -81,7 +81,7 @@ One line per term, sorted. "stays" means the term is not translated.
 | parser | stays | Owner decision: the term stays |
 | path | ruta | A file path; `path` in code stays |
 | pattern | patrón | A `case` pattern |
-| payload | carga útil | The data a message carries |
+| payload | stays | Owner decision; the data a request carries |
 | peer | stays | Owner decision: the term stays; a peer program used by tests |
 | pipe | stays | The `\|>` operator |
 | pointer | puntero | Low-level, in the FFI docs |
