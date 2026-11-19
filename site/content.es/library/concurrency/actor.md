@@ -38,7 +38,7 @@ Actor.inbox() -> Channel[M]
 
 El buzón del actor en ejecución, como el `self()` de Erlang: `init`, un handler, `terminate` o un tiempo de espera pueden vigilar una tarea y enviar el aviso a él, `Task.monitor(task, inbox) do |down| Msg.Down(down) end`, o entregar `inbox.address`. Nunca recibas de él. `M` viene del tipo esperado, `inbox: Channel[Msg] = Actor.inbox`, y no se comprueba: debe ser el tipo de mensaje del actor, o un valor enviado por él hace fallar el handler del actor con `RUNTIME-INTERNAL`. Si se llama fuera de la tarea de un actor, también en una tarea que el actor lanzó, es `RUNTIME-UNWRAP-ERROR` (`actor: not in an actor`).
 
-## Actor.cast and Actor.call {#actorcast-and-actorcall}
+## Actor.cast y Actor.call {#actorcast-and-actorcall}
 
 ```signature
 Actor.cast(address: Address[M], message: M, timeout_ms: Int = 5000) -> Result[Void]
@@ -46,7 +46,7 @@ Actor.call(address: Address[M], timeout_ms: Int, make: Fn[Channel[R], M]) -> Res
 Actor.reply(channel: Channel[R], value: R) -> Bool
 ```
 
-`cast` pone un mensaje en el buzón y regresa; espera como máximo `timeout_ms` a que haya sitio cuando el buzón está lleno. `call` crea un canal de respuesta, construye el mensaje alrededor de él con el bloque, lo envía y espera la respuesta, todo dentro de `timeout_ms`. El handler responde con `Actor.reply(channel, value)`, que nunca espera: indica si quien llama recibe el valor, y cierra el canal. Una llamada tiene una sola respuesta, así que una segunda da `false`. Una llamada que se rinde cierra su canal de respuesta, así que un `reply` posterior da `false` y el valor sigue siendo del actor (un pool devuelve al trabajador a su lugar); una respuesta que llegó justo antes de que la llamada se rindiera la devuelve la propia llamada. Así, una respuesta nunca se pierde: o la llamada la devuelve, o `reply` da `false`. La única excepción es quien llama y se cancela mientras espera: su canal sigue abierto, y `reply` da `true` por un valor que nadie lee. Cada llamada tiene su propio canal de respuesta, así que una respuesta nunca llega a una llamada posterior. Un `timeout_ms` de 0 lo intenta una vez: `cast` envía solo cuando hay sitio, y `call(address, 0)` igual pone el mensaje en el buzón y, después, casi siempre da `actor: timeout`. Da a `call` un tiempo de espera mayor que 0; uno negativo es `RUNTIME-INVALID-DURATION`.
+`cast` pone un mensaje en el buzón y regresa; espera como máximo `timeout_ms` a que haya sitio cuando el buzón está lleno. `call` crea un canal de respuesta, construye el mensaje alrededor de él con el bloque, lo envía y espera la respuesta, todo dentro de `timeout_ms`. El handler responde con `Actor.reply(channel, value)`, que nunca espera: indica si el llamador recibe el valor, y cierra el canal. Una llamada tiene una sola respuesta, así que una segunda da `false`. Una llamada que se rinde cierra su canal de respuesta, así que un `reply` posterior da `false` y el valor sigue siendo del actor (un pool devuelve al trabajador a su lugar); una respuesta que llegó justo antes de que la llamada se rindiera la devuelve la propia llamada. Así, una respuesta nunca se pierde: o la llamada la devuelve, o `reply` da `false`. La única excepción es el llamador que se cancela mientras espera: su canal sigue abierto, y `reply` da `true` por un valor que nadie lee. Cada llamada tiene su propio canal de respuesta, así que una respuesta nunca llega a una llamada posterior. Un `timeout_ms` de 0 lo intenta una vez: `cast` envía solo cuando hay sitio, y `call(address, 0)` igual pone el mensaje en el buzón y, después, casi siempre da `actor: timeout`. Da a `call` un tiempo de espera mayor que 0; uno negativo es `RUNTIME-INVALID-DURATION`.
 
 Errores: `actor: timeout` (clase `channel.timeout`) cuando el buzón sigue lleno o la respuesta no llega a tiempo, y `address: gone` (clase `channel.gone`) cuando el actor ha terminado. Una llamada cuyo actor falla o termina antes de responder espera hasta su tiempo de espera. Una llamada a la dirección del propio actor desde su handler, o dos actores que se llaman entre sí, también esperan hasta su tiempo de espera, ya que un actor atiende un mensaje de uno en uno; envía el trabajo a otra tarea.
 
@@ -91,7 +91,7 @@ ok()
 error("address: gone", kind: "channel.gone")
 ```
 
-## Actor.send and Actor.await {#actorsend-and-actorawait}
+## Actor.send y Actor.await {#actorsend-and-actorawait}
 
 ```signature
 Actor.send(address: Address[M], make: Fn[Channel[R], M], timeout_ms: Int = 5000) -> Result[Actor.Request[R]]
@@ -148,9 +148,9 @@ Cierra el buzón y espera como máximo `timeout_ms` a que el actor termine: atie
 
 Solo quien tiene el `Ref` puede detener el actor. Para detenerlo a través de una dirección, da al enum de mensajes una variante `Stop` cuyo handler dé `Actor.done(state)`.
 
-## Names and addresses {#names-and-addresses}
+## Nombres y direcciones {#names-and-addresses}
 
-Un módulo guarda las direcciones de sus actores en una tabla `ATS` constante y envuelve los mensajes en sus propias funciones, así que quien llama nunca ve el enum. Quien busca el nombre en cada llamada llega al actor que tiene ese nombre en ese momento.
+Un módulo guarda las direcciones de sus actores en una tabla `ATS` constante y envuelve los mensajes en sus propias funciones, así que el llamador nunca ve el enum. Quien busca el nombre en cada llamada llega al actor que tiene ese nombre en ese momento.
 
 ```agentica
 import Actor from "std/actor"
@@ -264,7 +264,7 @@ ok(3)
 ok()
 ```
 
-## Monitors and timers {#monitors-and-timers}
+## Monitores y temporizadores {#monitors-and-timers}
 
 No hay `select`: todo lo que un actor espera llega como una variante de su enum de mensajes. `Task.monitor(task, actor.inbox) do |down| Msg.Down(down) end` envía un aviso al buzón cuando la tarea termina; un aviso que encuentra el buzón lleno entra igual, por encima de su capacidad. Para despertar cuando no llegó ningún mensaje, da al comportamiento un [`Actor.Timeout`](#actortimeout); un temporizador que envía un mensaje propio es una tarea que duerme y luego lo envía a la dirección.
 

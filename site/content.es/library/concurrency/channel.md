@@ -128,7 +128,7 @@ channel: closed
 Channel.closed?(channel: Channel[T]) -> Bool
 ```
 
-Da `true` en cuanto el canal está cerrado, aunque aún tenga valores, igual que `Queue#closed?` de Ruby; y se queda en `true`. Un productor que está ocupado entre envíos (decodificando el siguiente token, leyendo el siguiente trozo de un archivo) lo lee para saber que el lector cerró el canal antes de que su próximo `send` falle. Un receptor pregunta por [`closed? and empty?`](#channelempty) para saber que el flujo terminó.
+Da `true` en cuanto el canal está cerrado, aunque aún tenga valores, igual que `Queue#closed?` de Ruby; y se queda en `true`. Un productor que está ocupado entre envíos (decodificando el siguiente token, leyendo el siguiente trozo de un archivo) lo lee para saber que el receptor cerró el canal antes de que su próximo `send` falle. Un receptor pregunta por [`closed? and empty?`](#channelempty) para saber que el flujo terminó.
 
 ```agentica
 def main() -> Void
@@ -163,12 +163,12 @@ Da `true` cuando no queda ningún valor por recibir: el búfer está vacío y ni
 Channel.address(channel: Channel[T]) -> Address[T]
 ```
 
-Una referencia solo de envío al canal, como un pid en Erlang. El canal sigue siendo un handle con un solo lector; su dirección es un dato:
+Una referencia solo de envío al canal, como un pid en Erlang. El canal sigue siendo un handle con un solo receptor; su dirección es un dato:
 
 - Un valor de [ATS](/library/concurrency/ats/), un elemento de `List`, un valor de `Map`, un campo de estructura, el payload de una variante de enum y un mensaje pueden guardarla, y una [tabla constante](/library/concurrency/ats/#a-constant-table) de direcciones es un registro por nombre.
 - `==` da `true` para dos direcciones de un mismo canal. `puts` e `IO.inspect` imprimen `<Address N>`, donde `N` cuenta las direcciones de la ejecución desde 1.
 - No es codificable como JSON (`CHECK-NOT-ENCODABLE`), no es clave de `Map` ni elemento de `Set` (`CHECK-MAP-KEY-TYPE`, `CHECK-SET-ELEMENT-TYPE`), y no se permite en una constante (`CHECK-CONSTANT-TYPE`).
-- No mantiene vivo el canal y tampoco es un handle: `Task.spawn_owning` no la transfiere ([un handle con dueño, un canal compartido](#one-handle-owned-one-channel-shared)).
+- No mantiene vivo el canal y tampoco es un handle: `Task.spawn_owning` no la transfiere ([un handle con propietario, un canal compartido](#one-handle-owned-one-channel-shared)).
 - `Address` no es un nombre reservado: una `struct Address` de usuario está permitida, y `Address[T]` con un argumento de tipo siempre es este tipo, así que una estructura genérica, un enum o un alias llamado `Address` es `CHECK-REDEFINED-NAME`.
 
 ## Address.send {#addresssend}
@@ -200,7 +200,7 @@ true
 channel: closed
 ```
 
-## A producer and a consumer {#a-producer-and-a-consumer}
+## Un productor y un consumidor {#a-producer-and-a-consumer}
 
 El bucle de recepción: ante un error, `closed? and empty?` dice si el flujo terminó; si no, fue un tiempo de espera agotado y el bucle vuelve a recibir. El productor cierra en todos los caminos: `send_all` contiene los `try`, así que `produce` siempre llega a `jobs.close`.
 
@@ -242,9 +242,9 @@ true
 
 El mismo consumidor, hecho con un [`Lazy`](/library/data-structures/lazy/#chlazy), no necesita bucle: `jobs.lazy(1000).reduce(0) do |total, n| total + n end` es `ok(15)`.
 
-## A producer that owns the channel {#a-producer-that-owns-the-channel}
+## Un productor que posee el canal {#a-producer-that-owns-the-channel}
 
-`Task.spawn_owning(&produce, jobs)` hace que la tarea sea la propietaria. Cuando termina de cualquier forma (devuelve un valor, falla o se cancela), el canal se cierra. El receptor recibe los valores ya enviados y, después, el error de cierre al momento, sin esperar al tiempo de espera cuando el productor murió.
+`Task.spawn_owning(&produce, jobs)` hace que la tarea sea la propietaria. Cuando termina de cualquier forma (devuelve un valor, falla o se cancela), el canal se cierra. El receptor recibe los valores ya enviados y, después, el error de cierre de inmediato, sin esperar al tiempo de espera cuando el productor falló.
 
 ```agentica
 def produce(jobs: Channel[Int]) -> Result[Void]
@@ -284,7 +284,7 @@ Reglas de propiedad:
 - El primer `Task.spawn_owning` puede venir de cualquier tarea. Después, solo el propietario puede transferirlo; cualquier otra tarea, o cualquier tarea una vez cerrado el canal, se detiene con `RUNTIME-HANDLE-NOT-OWNED`. Cualquier tarea puede seguir llamando a `Channel.close`.
 - Hay un solo propietario. Para varios productores, usa el patrón siguiente.
 
-## One handle owned, one channel shared {#one-handle-owned-one-channel-shared}
+## Un handle con propietario, un canal compartido {#one-handle-owned-one-channel-shared}
 
 `Task.spawn_owning` transfiere cada handle de su argumento, así que un canal en ese argumento se cierra cuando termina la tarea. Para dar a una tarea su propio handle (un socket, un canal propio) y además un canal que otras tareas siguen usando, pon la dirección del canal compartido en el argumento: una dirección es un dato, así que el canal compartido sigue abierto.
 
@@ -319,7 +319,7 @@ false
 40
 ```
 
-## Several sources {#several-sources}
+## Varias fuentes {#several-sources}
 
 No hay `select`. Une las fuentes en un solo canal de un enum, con una variante por cada clase de evento. Un coordinador espera a cada fuente y luego cierra el canal, así el bucle de recepción termina.
 
@@ -391,9 +391,9 @@ a: 60
 c: 30
 ```
 
-## State owned by one task {#state-owned-by-one-task}
+## Estado que posee una sola tarea {#state-owned-by-one-task}
 
-Las tareas no comparten valores mutables, salvo las tablas [ATS](/library/concurrency/ats/). Por eso, el estado que varias tareas actualizan con más de una llamada a una tabla pertenece a una sola tarea dueña, que recibe mensajes por un canal y guarda el estado en sus propias variables.
+Las tareas no comparten valores mutables, salvo las tablas [ATS](/library/concurrency/ats/). Por eso, el estado que varias tareas actualizan con más de una llamada a una tabla pertenece a una sola tarea propietaria, que recibe mensajes por un canal y guarda el estado en sus propias variables.
 
 ```agentica
 def count(inbox: Channel[Int]) -> Int
@@ -428,7 +428,7 @@ end
 6
 ```
 
-## Waiting on each other {#waiting-on-each-other}
+## Tareas que se esperan entre sí {#waiting-on-each-other}
 
 Una tarea que espera a un canal siempre tiene un temporizador, así que las tareas que se esperan entre sí terminan con errores de tiempo de espera en vez de quedarse colgadas.
 

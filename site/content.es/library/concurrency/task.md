@@ -21,9 +21,9 @@ Inicia `function(argument)` en una tarea nueva y devuelve su handle de `Task`. S
 Un bloque también es la función: `Task.spawn do ... end` ejecuta el bloque como una tarea, como `Thread.new { }` de Ruby, y puede capturar variables locales. Da un bloque o una referencia a función, no las dos cosas (`CHECK-BLOCK-TARGET`). `Task.spawn_owning` siempre toma el handle.
 
 - Un archivo, socket, listener, proceso o servidor pertenece a la tarea que lo abrió y se cierra cuando esa tarea termina (devuelve un valor, falla o se cancela). Por eso, abre un handle de larga vida en la tarea que lo conserva, no en un auxiliar: no se entrega a la tarea padre, y un handle abierto en un auxiliar y devuelto por `Task.await` se cierra cuando termina el auxiliar.
-- Un archivo regular se cierra con su salida escrita antes de que `Task.await` de la tarea terminada devuelva el control, así que lo que un auxiliar escribió en un archivo regular está en disco cuando el await del padre devuelve. El await no espera el vaciado a un FIFO o a una tubería.
+- Un archivo regular se cierra con su salida escrita antes de que `Task.await` de la tarea terminada devuelva el control, así que lo que un auxiliar escribió en un archivo regular está en disco cuando la espera del padre devuelve. La espera no aguarda el vaciado a un FIFO o a una tubería.
 - La propiedad decide quién cierra un handle, no quién puede usarlo: cualquier tarea que tenga el handle puede usarlo hasta que su propietario lo cierre.
-- `Task.spawn` no mueve nada: un handle en el argumento, o en una estructura o lista de él, se queda con quien llama. Para cederlo, usa `Task.spawn_owning`, que también recibe esa estructura o lista.
+- `Task.spawn` no mueve nada: un handle en el argumento, o en una estructura o lista de él, se queda con el llamador. Para cederlo, usa `Task.spawn_owning`, que también recibe esa estructura o lista.
 
 ```agentica
 def greet(name: String) -> String = "hi #{name}"
@@ -47,8 +47,8 @@ Task.spawn_owning(function: Fn[A, R], handle: A) -> Task[R]
 Inicia `function(handle)` como `Task.spawn` y entrega `handle` a la tarea nueva en la misma llamada.
 
 - El argumento debe ser un `File.Handle`, `TCP.Socket`, `TCP.Listener`, `Process`, `HTTP.Server`, `Channel[T]`, un `C.Pointer` o un [recurso nativo o un búfer propio](/library/io-and-system/native/types/), o una estructura, enum, `List`, `Map` o `Result` cuyo tipo contenga uno (a través de campos, payloads de variantes y argumentos de tipo). Cualquier otra cosa (un `Int`, una estructura sin handle, un `HTTP.Client`) es `CHECK-NOT-A-HANDLE`. Ni un fallo ni el fin de una tarea cierran un `HTTP.Client`.
-- Un valor que guarda handles transfiere todos: la tarea nueva recibe el valor y los cierra todos cuando termina. Una variante de enum sin handle no transfiere nada. La [`Address`](/library/concurrency/channel/#channeladdress) de un canal es un dato, no un handle: pon en el valor la dirección de un canal que otras tareas siguen usando, y el canal sigue abierto ([un handle con dueño, un canal compartido](/library/concurrency/channel/#one-handle-owned-one-channel-shared)).
-- Quien llama debe ser dueño de cada handle, y puede seguir usándolo mientras corre la tarea nueva. Si no (no es suyo, ya se transfirió o está cerrado), quien llama se detiene con `RUNTIME-HANDLE-NOT-OWNED`: no se crea ninguna tarea y ningún handle se mueve: todos o ninguno. De los valores `C.Pointer`, solo un búfer propio (`Native.memory_pointer`) se puede transferir; un puntero que dio C, o una vista de un búfer (`Native.offset`), es `RUNTIME-HANDLE-NOT-OWNED`.
+- Un valor que guarda handles transfiere todos: la tarea nueva recibe el valor y los cierra todos cuando termina. Una variante de enum sin handle no transfiere nada. La [`Address`](/library/concurrency/channel/#channeladdress) de un canal es un dato, no un handle: pon en el valor la dirección de un canal que otras tareas siguen usando, y el canal sigue abierto ([un handle con propietario, un canal compartido](/library/concurrency/channel/#one-handle-owned-one-channel-shared)).
+- El llamador debe ser propietario de cada handle, y puede seguir usándolo mientras corre la tarea nueva. Si no (no es suyo, ya se transfirió o está cerrado), el llamador se detiene con `RUNTIME-HANDLE-NOT-OWNED`: no se crea ninguna tarea y ningún handle se mueve: todos o ninguno. De los valores `C.Pointer`, solo un búfer propio (`Native.memory_pointer`) se puede transferir; un puntero que dio C, o una vista de un búfer (`Native.offset`), es `RUNTIME-HANDLE-NOT-OWNED`.
 - Un bucle de servidor puede dar cada conexión aceptada a su propia tarea, así que un fallo cierra solo esa conexión. Un servidor transferido se lleva su listener y sigue atendiendo cuando termina quien lo creó.
 - Un [Channel](/library/concurrency/channel/) no tiene quien lo abra, así que cualquier tarea puede hacer la primera transferencia. Las reglas de propiedad están en [un productor que posee el canal](/library/concurrency/channel/#a-producer-that-owns-the-channel).
 
@@ -91,7 +91,7 @@ Espera a la tarea y da su resultado. Esperar otra vez da el mismo valor, y `fals
 
 - Un error de runtime en una tarea distinta de `main` es un fallo. Solo termina esa tarea: el error va a stderr de inmediato, con ` in a task` después del código (`--json` añade `"task": true`); las tareas hijas que siguen en marcha se cancelan y los handles de la tarea se cierran. Esto es seguro porque los valores son inmutables: una tarea fallida no puede dejar un valor compartido a medio actualizar, y el único estado mutable vive en los handles.
 - Esperar una tarea fallida que devuelve un `Result` da un error de clase `task.crashed` con el mensaje `"task crashed: CODE at FILE:LINE:COLUMN: MESSAGE"`. Para cualquier otro tipo, la tarea que espera se detiene con `RUNTIME-TASK-CRASHED`.
-- Un fallo que ningún await ve hace que la ejecución termine con código 1 cuando `main` termina.
+- Un fallo que ninguna espera ve hace que la ejecución termine con código 1 cuando `main` termina.
 - Esperarse a uno mismo, directamente o a través de otras tareas (un handle puede llegar por un [Channel](/library/concurrency/channel/), o dentro de un closure que lo captura), se detiene con `RUNTIME-TASK-AWAIT-CYCLE`.
 
 ```agentica
@@ -113,7 +113,7 @@ true
 still running
 ```
 
-## Task.await with a timeout {#taskawait-with-a-timeout}
+## Task.await con tiempo de espera {#taskawait-with-a-timeout}
 
 ```signature
 Task.await(task: Task[R], timeout_ms: Int) -> Await[R]
@@ -124,10 +124,10 @@ Espera como máximo `timeout_ms` milisegundos.
 - `Await[R]` es un enum integrado: `Await.Done(value)` guarda el resultado, y `Await.TimedOut` (sin payload ni paréntesis) significa que el tiempo se acabó antes.
 - Un `case` debe cubrir las dos variantes, o usar `_`. `Await` es un nombre reservado (ninguna estructura, enum o alias de importación puede usarlo), y `try` no se aplica a él.
 - El resultado puede llevar anotación (`outcome: Await[Int]`), y se puede imprimir e interpolar: `IO.inspect` muestra `Await.Done(42)` o `Await.TimedOut`. Usar `try` sobre él es `CHECK-TYPE-MISMATCH` en la llamada.
-- `timeout_ms` debe ser mayor que 0; si no, `RUNTIME-INVALID-DURATION` en el argumento. Llámalo una sola vez con el tiempo total que puedas dar; no hagas sondeos.
-- Un tiempo de espera agotado no cancela la tarea. Sigue en marcha, y un await posterior da su resultado. Una tarea terminada nunca da un tiempo de espera agotado.
-- Si la tarea falla o se cancela antes, recibes el resultado de un await normal: `Await.Done(error(text))` para una tarea de `Result`; si no, `RUNTIME-TASK-CRASHED` o `RUNTIME-TASK-CANCELLED`. Un fallo después de `Await.TimedOut` no llega a quien llama.
-- Un await con tiempo omite la comprobación de ciclos: una tarea que se espera a sí misma con tiempo de espera recibe `Await.TimedOut`, y un await normal a una tarea que espera con tiempo de espera no es `RUNTIME-TASK-AWAIT-CYCLE`.
+- `timeout_ms` debe ser mayor que 0; si no, `RUNTIME-INVALID-DURATION` en el argumento. Llámalo una sola vez con el tiempo total que puedas dar; no lo consultes en bucle.
+- Un tiempo de espera agotado no cancela la tarea. Sigue en marcha, y una espera posterior da su resultado. Una tarea terminada nunca da un tiempo de espera agotado.
+- Si la tarea falla o se cancela antes, recibes el resultado de una espera normal: `Await.Done(error(text))` para una tarea de `Result`; si no, `RUNTIME-TASK-CRASHED` o `RUNTIME-TASK-CANCELLED`. Un fallo después de `Await.TimedOut` no llega al llamador.
+- Una espera con tiempo omite la comprobación de ciclos: una tarea que se espera a sí misma con tiempo de espera recibe `Await.TimedOut`, y una espera normal a una tarea que espera con tiempo de espera no es `RUNTIME-TASK-AWAIT-CYCLE`.
 
 El trabajador espera en un [Channel](/library/concurrency/channel/). La primera espera se queda sin tiempo, el trabajador sigue esperando, y la segunda espera recibe su resultado:
 
@@ -217,7 +217,7 @@ end
 Unos 200 ms, no 400: una ventana deslizante de dos, no lotes. Los elementos empiezan en el orden de entrada.
 
 - El `error(...)` de un elemento no detiene a los demás. Un error de runtime (`RUNTIME-DIVISION-BY-ZERO`) hace fallar solo ese elemento: su hueco es un error de clase `task.crashed` (`"task crashed: ..."`), el fallo cuenta como observado, y los demás siguen. Un elemento que se cancela por su cuenta (a través de su `Task.current`) da de inmediato `error("task: cancelled", kind: "task.cancelled")`.
-- La llamada espera a todos los elementos, y los elementos son hijos de quien llama. Para usar los resultados según llegan, envíalos por un [Channel](/library/concurrency/channel/).
+- La llamada espera a todos los elementos, y los elementos son hijos del llamador. Para usar los resultados según llegan, envíalos por un [Channel](/library/concurrency/channel/).
 - Una lista vacía necesita un tipo, como cualquier lista vacía (`CHECK-EMPTY-LIST-TYPE`). El efecto es `concurrency`, igual que en `Task.spawn`.
 
 ```agentica
@@ -245,7 +245,7 @@ value 20
 
 `R` viene del tipo esperado de la llamada, o si no, del primer `ok(...)` que da el bloque. Si el bloque solo da `error(...)`, el comprobador da `CHECK-RESULT-TYPE`: anota la variable (`results: List[Result[Int]] = Task.map(...)`). Un valor de función también funciona: `Task.map(ids, 8, 5000, &fetch)`.
 
-`timeout_ms` es por elemento, desde el inicio de su tarea hasta su fin, incluido el tiempo que espera para ejecutarse. Un elemento lento se cancela y su hueco es `error("task: timed out", kind: "task.timeout")`; un bloque que devuelve ese mismo error por sí solo se ve igual. Un elemento que termina después de su plazo, pero antes de que quien llama mire el reloj, conserva su resultado. No hay tiempo total: una llamada tarda como máximo unos `ceil(items / limit) * timeout_ms`.
+`timeout_ms` es por elemento, desde el inicio de su tarea hasta su fin, incluido el tiempo que espera para ejecutarse. Un elemento lento se cancela y su hueco es `error("task: timed out", kind: "task.timeout")`; un bloque que devuelve ese mismo error por sí solo se ve igual. Un elemento que termina después de su plazo, pero antes de que el llamador mire el reloj, conserva su resultado. No hay tiempo total: una llamada tarda como máximo unos `ceil(items / limit) * timeout_ms`.
 
 ```agentica
 def fetch(n: Int) -> Result[String]
@@ -274,7 +274,7 @@ Límites, que se comprueban antes de que empiece ningún elemento (también con 
 Cancelación (de un elemento que agotó su tiempo):
 
 - No ejecuta más código, ni tampoco las tareas que inició (ni siquiera un nieto cuyo padre ya terminó, ya que una tarea que termina entrega sus hijos en marcha a su padre). Sus handles se cierran. Un elemento cuenta como terminado solo después de que se escriban y cierren los archivos regulares que abrió, así que un archivo que escribió un elemento está en disco, y su bloqueo liberado, cuando la llamada devuelve el control. Un elemento que agotó su tiempo es la excepción: su hueco se fija en el plazo, y la llamada no espera a sus archivos, que se cierran un poco después.
-- Un `Task.map` que llamó el elemento se detiene: no empieza ningún elemento pendiente y los elementos en curso se cancelan.
+- Un `Task.map` al que llamó el elemento se detiene: no empieza ningún elemento pendiente y los elementos en curso se cancelan.
 - La E/S en curso termina o agota su tiempo por sí sola, y su resultado se descarta. Nunca cierra un handle que compartan otros elementos. Un `TCP.accept` o una lectura de socket que todavía no ha tomado nada se descarta de inmediato, así que la siguiente conexión o los bytes posteriores van a la siguiente llamada. Una conexión de `HTTP.get` que agotó su tiempo se cierra y no vuelve al pool.
 - Esperar una tarea cancelada junto con el elemento se detiene con `RUNTIME-TASK-CANCELLED`, o da `error("task: cancelled")` en una tarea de `Result`.
 
@@ -336,8 +336,8 @@ Task.cancel(task: Task[R]) -> Void
 Detiene una tarea que ya no necesitas, y todas las tareas que inició. No espera: la tarea queda marcada y la llamada devuelve el control.
 
 - Una tarea se cancela con `Task.cancel`, con el fallo de uno de sus antecesores, con el tiempo de espera agotado de su elemento de `Task.map` y con `HTTP.close_server` (las tareas de los handlers). También acepta el `TaskRef` de [Task.current](#taskcurrent). `main` no se puede cancelar: cancelar su `Task.current` no hace nada. Un tipo de argumento incorrecto es `CHECK-TYPE-MISMATCH` en el argumento.
-- Una pausa, una espera de canal, un await o una espera de E/S terminan de inmediato; una tarea ocupada en un bucle de otro planificador se detiene al final de su turno actual, así que puede terminar como cancelada aunque haya llegado a su return.
-- Una cancelación que llega durante el turno gana aunque el turno haya devuelto el control, así que se pierde un elemento que una llamada que consume (lecturas de `Channel`, `TCP` o `Process`) ya tomó. Para detener un lector sin perder ningún elemento, da a la lectura un tiempo de espera (`Process.poll_line`, una recepción con tiempo de espera) y deja que la tarea termine por sí sola.
+- Una pausa, una espera de canal, una espera de tarea o una espera de E/S terminan de inmediato; una tarea ocupada en un bucle de otro planificador se detiene al final de su turno actual, así que puede terminar como cancelada aunque haya llegado a su return.
+- Una cancelación que llega durante el turno gana aunque el turno haya devuelto el control, así que se pierde un elemento que una llamada que consume (lecturas de `Channel`, `TCP` o `Process`) ya tomó. Para detener un receptor sin perder ningún elemento, da a la lectura un tiempo de espera (`Process.poll_line`, una recepción con tiempo de espera) y deja que la tarea termine por sí sola.
 - Sus handles se cierran como al terminar cualquier tarea, así que un canal que posee (de `Task.spawn_owning`) se cierra y sus receptores reciben `error("channel: closed")`.
 - Esperarla da `error("task: cancelled")` en una tarea de `Result`, y si no, detiene el programa con `RUNTIME-TASK-CANCELLED`.
 - Cancelar una tarea que ya terminó, o cancelarla dos veces, no hace nada. Cualquier tarea que tenga el handle puede cancelarla. Una tarea que se cancela a sí misma, o la que la inició, se detiene justo después de la llamada.
@@ -372,14 +372,14 @@ error("task: cancelled", kind: "task.cancelled")
 Task.monitor(task: Task[R], channel: Channel[M], message: Fn[TaskDown, M]) -> Void
 ```
 
-Cuando `task` termina por cualquier motivo (devuelve un valor, falla o se cancela), el runtime envía `message(TaskDown(...))` a `channel` una sola vez. No hay `select`, así que el canal suele ser el único canal de quien llama, un enum con una variante para el aviso: `Task.monitor(task, inbox) do |down| Msg.Down(down) end`.
+Cuando `task` termina por cualquier motivo (devuelve un valor, falla o se cancela), el runtime envía `message(TaskDown(...))` a `channel` una sola vez. No hay `select`, así que el canal suele ser el único canal del llamador, un enum con una variante para el aviso: `Task.monitor(task, inbox) do |down| Msg.Down(down) end`.
 
 - `TaskDown` es un registro integrado: `task_id: Int` (el `task.id` de la tarea), `reason: TaskExit`, y luego el diagnóstico de un fallo: `code: String` (el código estable, como `RUNTIME-DIVISION-BY-ZERO`, para comparar), `message: String`, y `file: String`, `line: Int` y `column: Int`, donde se lanzó el error. Para `TaskExit.Ok` y `TaskExit.Cancelled` las cadenas son `""` y los números `0`. `TaskExit` es un enum integrado: `TaskExit.Ok`, `TaskExit.Crashed` o `TaskExit.Cancelled`, que se leen en el mismo orden que `Task.await` (primero un fallo, luego una cancelación). Los dos nombres están reservados.
 - Una tarea que ya terminó recibe su aviso de inmediato, y una tarea puede tener varios monitores, cada uno con su propio aviso. Un monitor no se puede quitar.
 - El envío nunca espera y nunca falla. Un aviso que encuentra el canal lleno entra igual, por encima de su capacidad, después de los valores que ya hay en él; así que no se pierde mientras el canal esté abierto: un `send` sigue encontrando el canal lleno hasta que el receptor haya tomado los valores que exceden la capacidad. La capacidad no limita estos avisos: cada uno que queda por encima ocupa un valor más en memoria. Un aviso para un canal cerrado, o para el canal de [System.subscribe](/library/io-and-system/system/#systemsubscribe), se descarta sin error.
-- Un fallo cuyo aviso entra en el canal cuenta como observado, igual que un await, así que no hace que la ejecución termine con código 1. Cuenta en cuanto el aviso está en el canal, aunque nadie lo reciba nunca. Un monitor a través de un `TaskRef` no observa el fallo: solo lo observa quien tiene el `Task[R]`, que puede esperarla.
+- Un fallo cuyo aviso entra en el canal cuenta como observado, igual que una espera, así que no hace que la ejecución termine con código 1. Cuenta en cuanto el aviso está en el canal, aunque nadie lo reciba nunca. Un monitor a través de un `TaskRef` no observa el fallo: solo lo observa quien tiene el `Task[R]`, que puede esperarla.
 - `task` también puede ser el `TaskRef` de [Task.current](#taskcurrent).
-- El aviso llega en cuanto la tarea terminada ha cerrado lo que posee, igual que en `Task.await`. El bloque `message` se ejecuta en una tarea propia, fuera del árbol de quien llama, así que una cancelación nunca lo alcanza; limítalo a construir el mensaje. Un error de runtime en `message` es un fallo de esa tarea, y el aviso se pierde.
+- El aviso llega en cuanto la tarea terminada ha cerrado lo que posee, igual que en `Task.await`. El bloque `message` se ejecuta en una tarea propia, fuera del árbol del llamador, así que una cancelación nunca lo alcanza; limítalo a construir el mensaje. Un error de runtime en `message` es un fallo de esa tarea, y el aviso se pierde.
 
 Un coordinador que reinicia un trabajador que falló:
 
@@ -447,7 +447,7 @@ Task.current() -> TaskRef
 task.id() -> Int
 ```
 
-`Task.current` da la tarea en ejecución como un `TaskRef`, para que otra tarea pueda vigilarla. `TaskRef` es un tipo integrado y reservado, para una tarea cuyo tipo de resultado no se conoce en el lugar de la llamada: `Task.monitor`, `Task.cancel` e `id` lo reciben, y un await sobre él es `CHECK-TYPE-MISMATCH` en el argumento (no tiene resultado que dar; vigílalo para saber cuándo termina). Se imprime como `<Task>` y no tiene igualdad. `task.id` da el número que identifica una tarea en la ejecución, para un `Task[R]` o un `TaskRef`: el `task_id` de su `TaskDown`.
+`Task.current` da la tarea en ejecución como un `TaskRef`, para que otra tarea pueda vigilarla. `TaskRef` es un tipo integrado y reservado, para una tarea cuyo tipo de resultado no se conoce en el lugar de la llamada: `Task.monitor`, `Task.cancel` e `id` lo reciben, y una espera sobre él es `CHECK-TYPE-MISMATCH` en el argumento (no tiene resultado que dar; vigílalo para saber cuándo termina). Se imprime como `<Task>` y no tiene igualdad. `task.id` da el número que identifica una tarea en la ejecución, para un `Task[R]` o un `TaskRef`: el `task_id` de su `TaskDown`.
 
 Un hijo vigila la tarea que lo inició:
 
@@ -486,7 +486,7 @@ Task.pending_count() -> Int
 
 Da cuántas tareas aún no han terminado, sin contar `main`.
 
-- Las tareas en espera, en pausa o haciendo await cuentan, y también quien pregunta, salvo que sea `main`. Las tareas que devolvieron un valor o fallaron no cuentan, estén esperadas o no.
+- Las tareas en espera, en pausa o esperando otra tarea cuentan, y también quien pregunta, salvo que sea `main`. Las tareas que devolvieron un valor o fallaron no cuentan, estén esperadas o no.
 - Las tareas que `std/http` inicia para un `HTTP.Client` nunca cuentan, y `Test.test` no las ve como sobrantes.
 
 ```agentica
@@ -542,10 +542,10 @@ false
 true
 ```
 
-## How a run ends {#how-a-run-ends}
+## Cómo termina una ejecución {#how-a-run-ends}
 
 Algunos errores terminan toda la ejecución, sin importar qué tarea los lance: un error de runtime en `main`, `RUNTIME-STEP-LIMIT`, un error interno de la VM y `System.exit` en cualquier tarea. El primero de ellos gana.
 
-Un fallo se observa cuando un await devuelve su error o se detiene, cuando el aviso de su [monitor](#taskmonitor) a través de un `Task[R]` entra en el canal, o cuando `Test.run` lo informa. Si `main` termina con un fallo que nunca se observó, la ejecución termina con código 1 e imprime una línea en stderr: `2 task crashes were not observed; first: task crashed: ...` (con `--json`, `{"unobserved_crashes":2,"first":"task crashed: ..."}`).
+Un fallo se observa cuando una espera devuelve su error o se detiene, cuando el aviso de su [monitor](#taskmonitor) a través de un `Task[R]` entra en el canal, o cuando `Test.run` lo informa. Si `main` termina con un fallo que nunca se observó, la ejecución termina con código 1 e imprime una línea en stderr: `2 task crashes were not observed; first: task crashed: ...` (con `--json`, `{"unobserved_crashes":2,"first":"task crashed: ..."}`).
 
 Cuando `main` termina, la ejecución termina, y las tareas pendientes ya no se ejecutan. Al final de cualquier ejecución, la VM vacía y cierra los archivos abiertos, y espera a que la salida almacenada en búfer de stdout y stderr llegue a la tubería o al archivo (acotado por el límite de vaciado, 30 segundos por defecto, `--flush-timeout`), libera lo que el código nativo aún posee dentro del mismo límite, cierra sockets y listeners, y detiene y recoge los procesos hijos que inició. Los flujos estándar siguen abiertos.
