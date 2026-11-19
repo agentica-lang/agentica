@@ -9,6 +9,7 @@ import json
 import os
 import re
 import shutil
+import sys
 import tempfile
 from pathlib import Path
 
@@ -688,8 +689,7 @@ def test_a_pgroup_descendant_gets_the_whole_grace_after_its_leader_is_reaped(tmp
 
 PID_PROGRAM = """\
 def main() -> Void
-  p = Process.spawn_captured(%s, ["-c", "import os, sys; print(os.getpid(), flush=True); sys.stdin.readline()"],
-                             Process.Options(timeout_ms: 5000)).unwrap!
+  p = Process.spawn_captured(%s, [%s], Process.Options(timeout_ms: 5000)).unwrap!
   puts(Process.pid(p).unwrap!)
   puts(Process.read_line(p, 5000).unwrap!)
   Process.close_stdin(p, 5000).unwrap!
@@ -707,10 +707,25 @@ def main() -> Void
 end
 """
 
+# The OS pid: an MSYS2 Python's os.getpid() is its own number, not the Windows one.
+PID_CHILD = """\
+import ctypes, os, sys
+try:
+    pid = ctypes.CDLL("kernel32.dll").GetCurrentProcessId()
+except (OSError, AttributeError):
+    pid = os.getpid()
+print(pid, flush=True)
+sys.stdin.readline()
+"""
+
 
 @pytest.mark.parametrize("schedulers", ["1", "4"])
 def test_process_pid_is_the_childs_own_pid_until_it_is_reaped(tmp_path, schedulers):
-    result = cli_run("--schedulers", schedulers, write(tmp_path, "pid.agc", PID_PROGRAM % agc_literal(PYTHON)))
+    # The python.exe of a Windows venv is a launcher that starts the base interpreter as its child.
+    python = getattr(sys, "_base_executable", PYTHON)
+    child = write(tmp_path, "child.py", PID_CHILD)
+    program = PID_PROGRAM % (agc_literal(python), agc_literal(str(child)))
+    result = cli_run("--schedulers", schedulers, write(tmp_path, "pid.agc", program))
     assert result.code == 0, result.stderr
     ours, theirs, status, exited, closed = result.stdout.splitlines()
     assert int(ours) > 0 and ours == theirs

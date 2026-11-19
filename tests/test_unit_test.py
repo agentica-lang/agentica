@@ -111,7 +111,7 @@ class UnitTest(TestCase):
         directory = self.make_temp_dir("agentica-unit-").resolve()
         path = directory / "named_test.agc"
         path.write_text('def test_name() -> Result[Void]\n  Test.eq(System.program_name(), "%s")\nend\n'
-                        % str(path).replace("\\", "\\\\"), encoding="utf-8")
+                        % path.as_posix(), encoding="utf-8")
         status, report = self.json_test(str(path))
         self.assertEqual((status, statuses(report)), (0, ["passed"]), report)
 
