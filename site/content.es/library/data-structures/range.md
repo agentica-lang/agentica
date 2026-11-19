@@ -83,7 +83,7 @@ some(5)
 Range.size(range: Range) -> Int
 ```
 
-El recuento de valores. Un recuento que no cabe en `Int`, como en `(0..9223372036854775807).size`, detiene el programa con `RUNTIME-INTEGER-OVERFLOW`.
+La cantidad de valores. Una cantidad que no cabe en `Int`, como en `(0..9223372036854775807).size`, detiene el programa con `RUNTIME-INTEGER-OVERFLOW`.
 
 ```agentica
 def main() -> Void
@@ -188,7 +188,7 @@ Int.upto(from: Int, to: Int, block: Fn[Int, Void]) -> Void
 Int.downto(from: Int, to: Int, block: Fn[Int, Void]) -> Void
 ```
 
-Métodos de `Int` para bucles. `n.times` llama al bloque con `0` hasta `n - 1`, y no hace nada cuando `n <= 0`. `a.upto(b)` cuenta desde `a` hasta `b`, y `a.downto(b)` desde `a` hasta `b` en orden inverso, con los dos extremos incluidos; no hacen nada cuando el fin ya quedó pasado. Un receptor negativo necesita paréntesis: `(-2).upto(2)`.
+Métodos de `Int` para bucles. `n.times` llama al bloque con `0` hasta `n - 1`, y no hace nada cuando `n <= 0`. `a.upto(b)` cuenta desde `a` hasta `b`, y `a.downto(b)` desde `a` bajando hasta `b`, con los dos extremos incluidos; no hacen nada cuando el fin ya quedó pasado. Un receptor negativo necesita paréntesis: `(-2).upto(2)`.
 
 ```agentica
 def main() -> Void

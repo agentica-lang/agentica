@@ -5,7 +5,7 @@ description: El registro que guarda un Result fallido.
 source_hash: "552f91e87084"
 ---
 
-Un `Result` fallido guarda un `Error`, un registro integrado. `error("text")` construye uno, `error("text", kind: "db.constraint", code: 19)` fija más de sus campos, y el patrón `error(e)` lo vincula.
+Un `Result` fallido guarda un `Error`, un registro integrado. `error("text")` crea uno, `error("text", kind: "db.constraint", code: 19)` fija más de sus campos, y el patrón `error(e)` lo vincula.
 
 ```text
 struct Error
@@ -25,7 +25,7 @@ end
 - `cause` es el error que llevó a este, o `none`.
 - `location` es el lugar donde se creó el error, como `path:line:col`.
 
-Lee los campos como en cualquier registro, y cambia uno con `with`. Solo `error(...)` construye un `Error`: `Error(...)` es `CHECK-ERROR-CONSTRUCTOR`. Un programa no puede declarar un tipo propio llamado `Error` (`CHECK-REDEFINED-NAME`).
+Lee los campos como en cualquier registro, y cambia uno con `with`. Solo `error(...)` crea un `Error`: `Error(...)` es `CHECK-ERROR-CONSTRUCTOR`. Un programa no puede declarar un tipo propio llamado `Error` (`CHECK-REDEFINED-NAME`).
 
 ```agentica
 def parse(text: String) -> Result[Int]
@@ -55,11 +55,11 @@ main.agc:2:10
 
 `error(message, kind:, code:, details:, cause:)` toma los demás campos como argumentos con nombre después del mensaje, cada uno opcional y en cualquier orden. `code:` toma un `Int` y `cause:` un `Error`, que la llamada guarda como `some(...)`; `location` nunca se da. `Result.Err(...)` toma los mismos argumentos.
 
-Una clase es un nombre con puntos: partes de `a-z`, `0-9` y `_`, cada una empieza con una letra (`db`, `db.constraint`, `io.not_found`). Un literal de texto dado como `kind:` (de `error(...)` o `Result.Err(...)`) o a `is_a?` / `kind_of?` que no cumple eso es `CHECK-ERROR-KIND`. Nada más se comprueba: una clase calculada en tiempo de ejecución y una clase fijada con `e.with(kind: ...)` se mantienen tal cual. [`agentica lint`](/cli/#suggest-style-changes) marca un literal de `is_a?` de una familia integrada que no es ninguna de las clases de abajo, como `e.is_a?("io.notfound")` (`LINT-ERROR-KIND`): se marca una clase de una familia integrada que el archivo no crea con `kind:`. Quien llama decide según la clase o el código, nunca según el texto del mensaje.
+Una clase es un nombre con puntos: partes de `a-z`, `0-9` y `_`, cada una empieza con una letra (`db`, `db.constraint`, `io.not_found`). Un literal de texto dado como `kind:` (de `error(...)` o `Result.Err(...)`) o a `is_a?` / `kind_of?` que no cumple eso es `CHECK-ERROR-KIND`. Nada más se comprueba: una clase calculada en runtime y una clase fijada con `e.with(kind: ...)` se mantienen tal cual. [`agentica lint`](/cli/#suggest-style-changes) marca un literal de `is_a?` de una familia integrada que no es ninguna de las clases de abajo, como `e.is_a?("io.notfound")` (`LINT-ERROR-KIND`): se marca una clase de una familia integrada que el archivo no crea con `kind:`. El llamador decide según la clase o el código, nunca según el texto del mensaje.
 
 ## Clases integradas {#builtin-kinds}
 
-Los errores de los integrados tienen estas clases. Una clase nunca se renombra, así que un programa puede decidir según ella. Solo los casos de la fila `error` tienen la clase `error`, así que `e.kind == "error"` y `e.is_a?("error")` no coinciden con ninguno de los demás: decide según `e.kind` o `e.is_a?`, nunca según el mensaje. `argument` es un valor de argumento malo: fuera de rango, vacío, demasiado grande o con NUL.
+Los errores de los integrados tienen estas clases. Una clase nunca se renombra, así que un programa puede decidir según ella. Solo los casos de la fila `error` tienen la clase `error`, así que `e.kind == "error"` y `e.is_a?("error")` no coinciden con ninguno de los demás: decide según `e.kind` o `e.is_a?`, nunca según el mensaje. `argument` es un valor de argumento no válido: fuera de rango, vacío, demasiado grande o con NUL.
 
 | Familia | Clases |
 |---|---|
@@ -77,7 +77,7 @@ Los errores de los integrados tienen estas clases. Una clase nunca se renombra, 
 
 Las llamadas que apaga un flag `--deny-*` devuelven un error de la familia `denied`: `denied.env` para `--deny-env` (`System.env`), `denied.fs` para `--deny-fs` (llamadas de `File`, `Dir` y `Path` que tocan el disco, un contexto `TLS` creado desde archivos, `Process.spawn` con archivos `out:` o `err:`), `denied.net` para `--deny-net` (`TCP`, `TLS`, `HttpWire`, `DNS` y `std/http`) y `denied.run` para `--deny-run` (`Process`, `System.signal`). `--sandbox` equivale a todos estos flags, así que cada llamada recibe la clase de su propio flag, y `e.is_a?("denied")` coincide con todos ellos. El mensaje conserva su texto (`denied: --deny-fs turns off file access`). Un programa que usa código nativo con `--deny-native` (que activa cada flag `--deny-*`) no se ejecuta: se detiene al empezar con `RUNTIME-NATIVE-DENIED`, así que no hay error según el cual decidir.
 
-Un error del sistema operativo (`File`, `Dir`, `TCP`, `TLS`, `Process`) tiene el errno como `code` y una clase elegida a partir de él: `ENOENT` es `io.not_found` (`process.not_found` para un programa), `EACCES` y `EPERM` son `io.permission`, `ECONNREFUSED` es `net.refused`, `ECONNRESET` y `EPIPE` son `net.closed`. Un errno sin clase propia recibe la clase `failed` de su familia, y el errno sigue como código. El número es el del sistema, así que `ECONNREFUSED` es 111 en Linux, 61 en macOS y 107 en Windows; la clase es la misma en todas partes. Un host que no se encuentra no tiene código. Una cabecera HTTP rechazada tiene su estado como código (`400`, `413`, ...). Cada límite de tamaño de HTTP (una cabecera, una línea de cabecera, la cantidad de cabeceras, un cuerpo o una línea de trozo, leídos o escritos) es `http.too_large`, con el código `431` para una cabecera y `413` para un cuerpo; una cabecera de respuesta que el servidor de `std/http` no puede escribir no tiene código.
+Un error del sistema operativo (`File`, `Dir`, `TCP`, `TLS`, `Process`) tiene el errno como `code` y una clase elegida a partir de él: `ENOENT` es `io.not_found` (`process.not_found` para un programa), `EACCES` y `EPERM` son `io.permission`, `ECONNREFUSED` es `net.refused`, `ECONNRESET` y `EPIPE` son `net.closed`. Un errno sin clase propia recibe la clase `failed` de su familia, y el errno sigue como código. El número es el del sistema, así que `ECONNREFUSED` es 111 en Linux, 61 en macOS y 107 en Windows; la clase es la misma en todas partes. Un host que no se encuentra no tiene código. Un bloque de cabeceras HTTP rechazado tiene su estado como código (`400`, `413`, ...). Cada límite de tamaño de HTTP (un bloque de cabeceras, una línea de cabecera, la cantidad de cabeceras, un cuerpo o una línea de trozo, leídos o escritos) es `http.too_large`, con el código `431` para un bloque de cabeceras y `413` para un cuerpo; un bloque de cabeceras de respuesta que el servidor de `std/http` no puede escribir no tiene código.
 
 Los `details` de un error de una llamada a archivo, rechazada por `--deny-fs` o fallida, guardan la ruta tal como se dio a la llamada bajo `"path"`: `File.read_text("conf/app.toml", 5000)` sin ese archivo da `{"path": "conf/app.toml"}`. `Path.rename` y `Path.replace` también guardan su destino bajo `"to"`. Un error de una llamada de red que nombra un host (`TCP.connect`, `TCP.listen`, `TLS.connect`, `DNS.lookup`) guarda el host bajo `"host"`: una conexión rechazada, un host que no se encuentra, un handshake TLS fallido y un rechazo de `--deny-net`. Las llamadas sobre un handle abierto (`File.write`, `TCP.send`, ...) no tienen detalles.
 
@@ -101,11 +101,11 @@ Los módulos `std/` dan estas clases. Una función de `std/` que pasa el error d
 
 | Módulo | Clases |
 |---|---|
-| `std/http` | `http.protocol` (una cabecera rechazada tiene su estado como código; también el 407 de un proxy), `http.too_large`, `http.closed`, `http.digest` (`download` con un `sha256` que el cuerpo no tiene), `net.timeout` (el de connect tiene `details["phase"]` `"connect"`), `channel.timeout` (`open` y `upload`, un trozo que no se toma o no se entrega a tiempo), `net.eof`, `net.failed`, `text.encoding` (`HTTP.text`), `argument` |
+| `std/http` | `http.protocol` (un bloque de cabeceras rechazado tiene su estado como código; también el 407 de un proxy), `http.too_large`, `http.closed`, `http.digest` (`download` con un `sha256` que el cuerpo no tiene), `net.timeout` (el de connect tiene `details["phase"]` `"connect"`), `channel.timeout` (`open` y `upload`, un trozo que no se toma o no se entrega a tiempo), `net.eof`, `net.failed`, `text.encoding` (`HTTP.text`), `argument` |
 | `std/archive` | `archive.format` (datos truncados o no válidos), `archive.unsafe` (una ruta de entrada que no es una ruta relativa segura, o que sale del destino), `archive.too_large`, `archive.timeout`, `archive.not_found` (un miembro que el archivo no tiene), `argument` (una opción o un nombre de miembro fuera de rango o no seguro) |
 | `std/toml` | `toml.parse` (`parse`), `toml.decode` (`get` y `to_json`), `argument` (`encode`) |
 | `std/regex` | `regex.syntax` (un patrón o una plantilla de `replace`), `argument` (`named` sin ese grupo) |
-| `std/option_parser` | `option_parser.parse` (un error en las palabras), `option_parser.help` (`--help`), `argument` (una especificación mala) |
+| `std/option_parser` | `option_parser.parse` (un error en las palabras), `option_parser.help` (`--help`), `argument` (una especificación no válida) |
 | `std/actor`, `std/supervisor` | `channel.timeout`, `channel.gone` (el actor ha terminado), `task.timeout` (`stop`) |
 | `std/heap` | `heap.empty` (`pop` y `peek` de un heap vacío) |
 | `std/binary` | `binary.too_large` (una longitud de frame mayor que `max`), `number.range`, `argument` |
@@ -143,9 +143,9 @@ duplicate, code some(19)
 
 ## Ubicación {#location}
 
-`error("text")` fija `location` al lugar de esa llamada. Un error que hace un integrado recibe el lugar de la llamada al integrado: en el programa, o en el módulo de `std/` cuya función hizo la llamada. Una función de prelude (`o.to_result(...)`) y una función de un bloque `extern module` se saltan, así que sus errores apuntan a la llamada del programa. La ruta es relativa: el nombre que el archivo compilado guarda para el código fuente, relativo a la carpeta del archivo de entrada, o `std/...` para un módulo estándar.
+`error("text")` fija `location` al lugar de esa llamada. Un error que hace un integrado recibe el lugar de la llamada al integrado: en el programa, o en el módulo de `std/` cuya función hizo la llamada. Una función de preludio (`o.to_result(...)`) y una función de un bloque `extern module` se saltan, así que sus errores apuntan a la llamada del programa. La ruta es relativa: el nombre que el archivo compilado guarda para el código fuente, relativo a la carpeta del archivo de entrada, o `std/...` para un módulo estándar.
 
-`location` es `""` cuando no se conoce ningún lugar: cuando la llamada está a más de 16 frames de prelude o nativos de profundidad, o cuando ninguna tarea ejecuta el código que construye el error.
+`location` es `""` cuando no se conoce ningún lugar: cuando la llamada está a más de 16 frames de preludio o nativos de profundidad, o cuando ninguna tarea ejecuta el código que crea el error.
 
 `error(e)` y `e.with(...)` conservan la ubicación de `e`.
 
@@ -212,7 +212,7 @@ disk gone
 ## Imprimir {#printing}
 
 - `to_s`, `puts(e)` y `"#{e}"` dan el mensaje.
-- `inspect` da la llamada `error(...)` que construye el valor: el mensaje, y luego `kind:`, `code:`, `details:` y `cause:` cuando no son los predeterminados. `location` nunca se imprime.
+- `inspect` da la llamada `error(...)` que crea el valor: el mensaje, y luego `kind:`, `code:`, `details:` y `cause:` cuando no son los predeterminados. `location` nunca se imprime.
 - Un `Error` suelto se imprime como un Result fallido, así que `[e]` imprime `[error("x")]`.
 
 ```agentica

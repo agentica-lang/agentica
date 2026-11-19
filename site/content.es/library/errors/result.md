@@ -1,7 +1,7 @@
 ---
 title: Result
 weight: 1
-description: Construye y lee valores Result.
+description: Crea y lee valores Result.
 source_hash: "e1197c86f222"
 ---
 
@@ -34,7 +34,7 @@ error(message: String, kind: String, code: Int, details: Map[String, String], ca
 error(error: Error) -> Result[T]
 ```
 
-Con un `String`, construye un nuevo `Error` con ese mensaje, creado en esta llamada. Los demás campos llegan como argumentos con nombre, cada uno opcional y en cualquier orden; `code` y `cause` se guardan como `some(...)` ([Error](/library/errors/error/#kinds)). Con un `Error`, guarda ese mismo `Error`, así que una rama de `case` puede pasar un error como `Result` de otro tipo. El tipo sale de una anotación, del tipo de retorno, de un parámetro o de un campo.
+Con un `String`, crea un nuevo `Error` con ese mensaje, creado en esta llamada. Los demás campos llegan como argumentos con nombre, cada uno opcional y en cualquier orden; `code` y `cause` se guardan como `some(...)` ([Error](/library/errors/error/#kinds)). Con un `Error`, guarda ese mismo `Error`, así que una rama de `case` puede pasar un error como `Result` de otro tipo. El tipo sale de una anotación, del tipo de retorno, de un parámetro o de un campo.
 
 ```agentica
 def fail_now() -> Result[Int] = error("broken")
@@ -110,7 +110,7 @@ end
 Result.message(result: Result[T]) -> String
 ```
 
-Da el `message` del error, o `""` si todo salió bien.
+Da el `message` del error, o `""` si todo va bien.
 
 ```agentica
 def main() -> Void

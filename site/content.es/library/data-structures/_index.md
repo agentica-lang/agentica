@@ -5,7 +5,7 @@ description: Listas, mapas, conjuntos, colas, heaps, rangos, bytes, pipelines pe
 source_hash: "24a3703f3f17"
 ---
 
-- [List](/library/data-structures/list/): valores de un tipo, en orden. Recórrelos, ordénalos, transfórmalos o filtra.
+- [List](/library/data-structures/list/): valores de un tipo, en orden. Recórrelos, ordénalos, transfórmalos o filtralos.
 - [Map](/library/data-structures/map/): busca un valor por clave (`Int`, `String` o `Bytes`), en orden de inserción. Búsquedas y contadores.
 - [Set](/library/data-structures/set/): cada `Int`, `String` o `Bytes` una vez, en el orden en que se añadió por primera vez. Duplicados y pertenencia.
 - [Queue](/library/data-structures/queue/) (`std/queue`): primero en entrar, primero en salir, de cadenas.

@@ -1,11 +1,11 @@
 ---
 title: Algoritmos
 weight: 7
-description: Recetas cortas y ejecutables de ordenación, búsqueda en anchura, memorización y recursión.
+description: Recetas cortas y ejecutables de ordenación, búsqueda en anchura, memoización y recursión.
 source_hash: "ff4b63399798"
 ---
 
-Programas pequeños que usan la biblioteca en conjunto. Los valores son inmutables, así que cada receta pasa el estado a lo siguiente en lugar de cambiarlo. Para las funciones que se usan aquí, consulta [List](/library/data-structures/list/), [Map](/library/data-structures/map/) y [Result](/library/errors/result/).
+Programas pequeños que usan varias partes de la biblioteca. Los valores son inmutables, así que cada receta pasa el estado al siguiente paso en lugar de cambiarlo. Para las funciones que se usan aquí, consulta [List](/library/data-structures/list/), [Map](/library/data-structures/map/) y [Result](/library/errors/result/).
 
 ## Ordenar con sort_by {#sorting-with-sort_by}
 
@@ -82,9 +82,9 @@ ok(3)
 error("no path from home to island")
 ```
 
-## Memorización con un Map {#memoization-with-a-map}
+## Memoización con un Map {#memoization-with-a-map}
 
-Los mapas son inmutables, así que una función memorizada devuelve su caché junto con la respuesta y pasa la caché a la siguiente llamada. Sin la caché, `fib(50)` haría miles de millones de llamadas.
+Los mapas son inmutables, así que una función memoizada devuelve su caché junto con la respuesta y pasa la caché a la siguiente llamada. Sin la caché, `fib(50)` haría miles de millones de llamadas.
 
 ```agentica
 struct Memo
