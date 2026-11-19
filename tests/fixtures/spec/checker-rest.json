@@ -6608,12 +6608,12 @@
     {
       "program": [
         "def main() -> Void",
-        "  x = Result.unwrap!(JSON.parse(\"1\")) == Result.unwrap!(JSON.parse(\"1\"))",
+        "  puts(Result.unwrap!(JSON.parse(\"1\")) == Result.unwrap!(JSON.parse(\"1\")))",
         "end",
         "",
         ""
       ],
-      "code": "CHECK-TYPE-MISMATCH"
+      "code": null
     },
     {
       "program": [
@@ -10314,13 +10314,7 @@
         "",
         ""
       ],
-      "code": "CHECK-TYPE-MISMATCH",
-      "start": [
-        2,
-        8
-      ],
-      "covers": "[JSON.null]",
-      "help": true
+      "code": null
     },
     {
       "program": [
@@ -10383,13 +10377,7 @@
         "",
         ""
       ],
-      "code": "CHECK-TYPE-MISMATCH",
-      "start": [
-        2,
-        8
-      ],
-      "covers": "[JSON.null]",
-      "help": true
+      "code": null
     },
     {
       "program": [

@@ -12,7 +12,7 @@ one line of five fields joined by a tab:
 - for "ok", the text JSON.encode gives for the decoded value (struct keys in
   declaration order, map keys in object order, none as null, a Color as {"tag": name,
   "values": []}); for "error", the message, path included;
-- for "ok", "same" when that text is the document again up to key order (the
+- for "ok", "same" when that text is the document again for == (the
   round trip), else "changed"; for "error", "-".
 
 Run by hand: python3 tests/fixtures/json-list-vectors.py

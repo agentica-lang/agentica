@@ -142,9 +142,10 @@ end
 
 ## JSON.Value values
 
-- `JSON.Value` is opaque: no constructor, equality, fields, `j[key]` or
-  `j[index]`. `j.to_s`, `"#{j}"`, `puts(j)` and `JSON.encode(j)` give the JSON
-  text.
+- `JSON.Value` is opaque: no constructor, fields, `j[key]` or `j[index]`.
+  `a == b` compares two values as JSON: object keys in any order, arrays in
+  order, numbers by value (`1 == 1.0`, `-0.0 == 0.0`). `j.to_s`, `"#{j}"`,
+  `puts(j)` and `JSON.encode(j)` give the JSON text.
 - `JSON.parse` needs exactly one value; empty input, malformed JSON and
   trailing content return errors. A repeated object key keeps its last value.
 - `JSON.get` needs an object and a present key; `JSON.at` an array and an index

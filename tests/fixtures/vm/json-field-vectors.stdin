@@ -4,7 +4,7 @@
 {"id": 1, "name": "Ana", "age": 30, "score": 2.5, "address": {"zip": "08001"}, "tags": ["a", "b"], "homes": [{"zip": "1", "note": null}, {"zip": "2", "note": "x"}]}	ok	{"id":1,"name":"Ana","age":30,"score":2.5,"address":{"zip":"08001"},"tags":["a","b"],"homes":[{"zip":"1","note":null},{"zip":"2","note":"x"}]}	same
 {"age": 7, "id": 2}	ok	{"id":2,"age":7}	same
 {"id": 3, "address": {"zip": "z", "note": "n"}, "tags": []}	ok	{"id":3,"address":{"zip":"z","note":"n"},"tags":[]}	same
-{"id": 4, "score": 1}	ok	{"id":4,"score":1.0}	changed
+{"id": 4, "score": 1}	ok	{"id":4,"score":1.0}	same
 {"id": 5, "extra": true, "name": "x"}	ok	{"id":5,"name":"x"}	changed
 {}	error	id: expected required field	-
 {"name": "x"}	error	id: expected required field	-

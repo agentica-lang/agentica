@@ -1,13 +1,17 @@
 /*
  * Deep value equality (agc_equal): == and != on lists, maps, sets, Results,
  * structs and enums (the builtins Value.equal and Optional.equal), and Test.eq.
- * A Json at any depth compares as its canonical text. One explicit work stack
+ * Two JSON.Values compare as JSON: object keys in any order, numbers by value
+ * (1 == 1.0, exactly for big ones). One explicit work stack
  * of pairs, and a walker stack for long lists and maps, which are walked one
  * pair at a time; no recursion. Core layer.
  * Design: docs/grammar/06-semantics.md (Operators), site/content/library/testing/test.md.
  */
 #include "core.h"
 
+#include <inttypes.h>
+#include <math.h>
+#include <stdio.h>
 #include <string.h>
 
 /* The stacks start on the C stack and move to GC memory only when they grow past these: most compares (a small
@@ -22,7 +26,7 @@
 /* A pair still to compare, or the turn of the walker on top of the walker stack: two lists of one length, or two
    maps of one size. A walker entry is pushed with its walker and popped with it, so the two stacks stay in step and
    an entry needs no pointer to its walker. */
-typedef enum { WORK_PAIR, WORK_LISTS, WORK_MAP } work_kind;
+typedef enum { WORK_PAIR, WORK_LISTS, WORK_MAP, WORK_OBJECT } work_kind;
 
 typedef struct {
   work_kind kind;
@@ -30,13 +34,17 @@ typedef struct {
 } work;
 
 /* The state of a walk, apart from the work entries so they stay small: the cursors of two lists, whose items are
-   taken in order, or the key walk of two maps (vm/map.c). */
+   taken in order, the key walk of two maps (vm/map.c), or the members of one JSON object looked up in another. */
 typedef struct {
   union {
     struct {
       agc_list_cursor left, right;
     } lists;
     agc_map_pairs map;
+    struct {
+      const agc_json *left, *right;
+      size_t next;
+    } object;
   } as;
 } walker;
 
@@ -211,6 +219,101 @@ static bool set_equal(agc_vm *vm, const agc_map *x, const agc_map *y) {
   return agc_set_subset(vm, x, y);
 }
 
+/* The exact decimal text of a finite double with no fraction and |d| >= 2^53, in buf (at least 400 bytes): the 53-bit
+   mantissa shifted left by its binary exponent in base 10^9 limbs, up to 29 bits a pass (a limb times 2^29 plus a
+   carry stays under 2^64). */
+static size_t integral_text(double d, int shift, char *buf) {
+  int e;
+  uint64_t mantissa = (uint64_t)ldexp(frexp(fabs(d), &e), 53);
+  uint64_t limbs[40];
+  size_t n = 0, len = 0;
+  uint64_t v = mantissa;
+  do {
+    limbs[n++] = v % 1000000000;
+    v /= 1000000000;
+  } while (v);
+  while (shift > 0) {
+    int step = shift < 29 ? shift : 29;
+    uint64_t carry = 0;
+    for (size_t i = 0; i < n; i++) {
+      uint64_t moved = (limbs[i] << step) + carry;
+      limbs[i] = moved % 1000000000;
+      carry = moved / 1000000000;
+    }
+    for (; carry; carry /= 1000000000) limbs[n++] = carry % 1000000000;
+    shift -= step;
+  }
+  if (d < 0) buf[len++] = '-';
+  len += (size_t)sprintf(buf + len, "%" PRIu64, limbs[n - 1]);
+  for (size_t i = n - 1; i > 0; i--) len += (size_t)sprintf(buf + len, "%09" PRIu64, limbs[i - 1]);
+  return len;
+}
+
+static bool same_text(const agc_string *s, const char *text, size_t len) {
+  return s->bytes == len && memcmp(s->data, text, len) == 0;
+}
+
+/* Two JSON numbers by value, as Ruby's == compares them: an Int and a Float are equal when the Float has no fraction
+   and the same value, found with no lossy cast. A big integer (AGC_JSON_BIG, decimal text out of the Int range)
+   compares by its text, with an Int or with the exact text of a Float. Floats by IEEE 754, so -0.0 == 0.0; JSON holds
+   no NaN or Infinity (parse and JSON.from refuse them), and one that came anyway would be unequal, as a NaN Float is. */
+static bool same_number(agc_vm *vm, const agc_json *x, const agc_json *y) {
+  if (x->kind > y->kind) {
+    const agc_json *swap = x;
+    x = y;
+    y = swap;
+  }
+  if (x->kind == AGC_JSON_INT && y->kind == AGC_JSON_INT) return agc_as_int(vm, x->scalar) == agc_as_int(vm, y->scalar);
+  if (x->kind == AGC_JSON_FLOAT) return agc_as_float(vm, x->scalar) == agc_as_float(vm, y->scalar);
+  if (x->kind == AGC_JSON_BIG && y->kind == AGC_JSON_BIG)
+    return agc_same_string(vm, agc_as_string(vm, x->scalar), agc_as_string(vm, y->scalar));
+  char text[400];
+  if (y->kind == AGC_JSON_BIG) {
+    size_t len = (size_t)sprintf(text, "%" PRId64, agc_as_int(vm, x->scalar));
+    return same_text(agc_as_string(vm, y->scalar), text, len);
+  }
+  double d = agc_as_float(vm, y->scalar);
+  if (!isfinite(d) || d != trunc(d)) return false;
+  if (x->kind == AGC_JSON_INT) {
+    if (!(d >= -0x1p63 && d < 0x1p63)) return false;
+    return (int64_t)d == agc_as_int(vm, x->scalar);
+  }
+  /* A big integer is out of the Int range, so |d| >= 2^63: 2^(e-1) <= |d| < 2^e has floor((e-1) log10 2) + 1 or
+     floor(e log10 2) + 1 digits, and a text of another length is not equal without writing the digits. */
+  const agc_string *big = agc_as_string(vm, x->scalar);
+  int e;
+  frexp(d, &e);
+  size_t digits = big->bytes - (big->bytes && big->data[0] == '-');
+  if (e < 64 || digits < (size_t)((e - 1) * 0.30102999566398120) + 1 || digits > (size_t)(e * 0.30102999566398120) + 1)
+    return false;
+  agc_charge(vm, 1 + (e - 53) / 32);
+  return same_text(big, text, integral_text(d, e - 53, text));
+}
+
+static bool number_kind(agc_json_kind kind) {
+  return kind == AGC_JSON_INT || kind == AGC_JSON_BIG || kind == AGC_JSON_FLOAT;
+}
+
+/* Two JSON values: numbers by value, other scalars of one kind by their value, arrays in order (as lists), and objects
+   with the same keys and equal values in any order (a walker looks each member up in the other object). */
+static bool json_equal(agc_vm *vm, work_stack *s, const agc_json *x, const agc_json *y) {
+  if (number_kind(x->kind) && number_kind(y->kind)) return same_number(vm, x, y);
+  if (x->kind != y->kind) return false;
+  switch (x->kind) {
+    case AGC_JSON_NULL: return true;
+    case AGC_JSON_ARRAY: return visit_list(vm, s, agc_as_list(vm, x->scalar), agc_as_list(vm, y->scalar));
+    case AGC_JSON_OBJECT: {
+      if (x->count != y->count) return false;
+      walker *w = push_walker(s, WORK_OBJECT);
+      w->as.object.left = x;
+      w->as.object.right = y;
+      w->as.object.next = 0;
+      return true;
+    }
+    default: return x->scalar.tag == y->scalar.tag && scalar_equal(vm, x->scalar, y->scalar);
+  }
+}
+
 /* One object compared with itself is equal without a walk only when nothing inside it can be a NaN, which is not
    equal to itself (a list or struct that holds a NaN is not equal to itself either, docs/grammar/06-semantics.md).
    Strings, Bytes, sets (their elements are Ints, Strings or Bytes) and packed Int lists hold no Float; any other
@@ -233,7 +336,7 @@ static bool expand(agc_vm *vm, work_stack *s, agc_value a, agc_value b, uint32_t
   if (same_object(vm, a, b)) return true;
   if (scalar_tag(a.tag)) return scalar_equal(vm, a, b);
   switch ((agc_tag)a.tag) {
-    case AGC_T_JSON: return agc_same_string(vm, agc_json_canonical(vm, a, span), agc_json_canonical(vm, b, span));
+    case AGC_T_JSON: return json_equal(vm, s, agc_as_json(vm, a), agc_as_json(vm, b));
     case AGC_T_LIST: return visit_list(vm, s, agc_as_list(vm, a), agc_as_list(vm, b));
     case AGC_T_MAP: {
       const agc_map *x = agc_as_map(vm, a), *y = agc_as_map(vm, b);
@@ -262,14 +365,28 @@ static bool expand(agc_vm *vm, work_stack *s, agc_value a, agc_value b, uint32_t
   }
 }
 
-/* The next pair of the walker on top, or false when it is done. A map walk that met a key missing from the other
-   map is done too, and *differs says so. */
+/* The next pair of the walker on top, or false when it is done. A map or JSON object walk that met a key missing
+   from the other is done too, and *differs says so. */
 static bool walk_next(agc_vm *vm, work_stack *s, work_kind kind, agc_value *x, agc_value *y, bool *differs) {
   walker *w = &s->walkers[s->walking - 1];
   if (kind == WORK_MAP) {
     if (agc_map_pairs_next(vm, &w->as.map, x, y)) return true;
     *differs = w->as.map.missing;
     return false;
+  }
+  if (kind == WORK_OBJECT) {
+    const agc_json *left = w->as.object.left;
+    if (w->as.object.next == left->count) return false;
+    const agc_json_member *m = &left->members[w->as.object.next++];
+    const agc_json_member *found = agc_json_find(w->as.object.right, m->key);
+    agc_charge_bytes(vm, m->key->bytes);
+    if (!found) {
+      *differs = true;
+      return false;
+    }
+    *x = m->value;
+    *y = found->value;
+    return true;
   }
   /* Both lists have one length, so the cursors end together. */
   return agc_list_cursor_next(&w->as.lists.left, x) && agc_list_cursor_next(&w->as.lists.right, y);

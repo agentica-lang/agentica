@@ -19,8 +19,9 @@ section for the area you are changing.
   Its methods are prelude bodies (`stdlib/prelude/optional.agc`).
 - `==` on a list, map, set, Result, struct or enum is the VM builtin
   `Value.equal` (`lower_deep_equality`), the deep walk of `vm/equal.c` that
-  `Test.eq` shares. The checker's `CheckTypes.equality?` is `data?` with
-  JSON.Value refused; `equality_gap` names the field or variant for the message.
+  `Test.eq` shares; two `JSON.Value`s compare as JSON there (keys in any order,
+  numbers by value). The checker's `CheckTypes.equality?` is `data?`;
+  `equality_gap` names the field or variant for the message.
 - `try` is a unary expression node. It requires a Result-returning function
   (`CHECK-TRY-CONTEXT` otherwise), unwraps successes, and returns errors through
   the current function's escape. It does not guarantee a return.

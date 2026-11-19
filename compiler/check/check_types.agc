@@ -248,8 +248,8 @@ end
 ## body of a generic function it stands for any type, which could be an Fn.
 def data?(cx: State.Cx, type: ResolvedType) -> Bool = data_walk(cx, type, {}, false).passes
 
-## True for a type that == and != compare: a data type (data?) with no JSON.Value inside. Numbers, Bool, String, nil,
-## ranges, Bytes, addresses, and lists, maps, sets, Optionals, Results, structs and enums of those. A group of structs
+## True for a type that == and != compare: a data type (data?). Numbers, Bool, String, nil, ranges, Bytes, addresses,
+## JSON.Value, and lists, maps, sets, Optionals, Results, structs and enums of those. A group of structs
 ## and enums that hold one another is judged as a whole, so the answer does not depend on where the walk starts. As in
 ## data?, a type variable passes only in the files of the prelude, where == on it lowers to Value.equal. List#include?
 ## needs it (include in stdlib/prelude/list.agc); its equality limit checks the item type at the call site
@@ -1294,16 +1294,15 @@ def json_null_item?(type: ResolvedType) -> Bool
   Types.is?(item, "Nil") or (json_field?(type) and Types.is?(item, "Optional"))
 end
 
-# data? for one type, or equality? when equal is true (JSON.Value is then refused). seen holds every struct and enum
+# data? for one type, or equality? when equal is true. seen holds every struct and enum
 # walked in the whole call ("Struct:name"), not only the ones on the path (struct_walk says why that is sound), and a
 # recursive type ends.
 def data_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool], equal: Bool) -> Walk
   # An Address names a channel without holding it: a value with no state, so it is data (check_const.agc keeps it out
   # of a constant).
-  if primitive?(type) or Types.is?(type, "Range") or Types.is?(type, "Bytes") or Types.is?(type, "Address")
+  plain = primitive?(type) or Types.is?(type, "Range") or Types.is?(type, "Bytes") or Types.is?(type, "Address")
+  if plain or Types.is?(type, "Json")
     return passed(seen)
-  elsif Types.is?(type, "Json")
-    return Walk(passes: !equal, seen: seen, why: "", file: "", field: none, instant: false)
   elsif Types.is?(type, "Var")
     why = ""
     if !cx.prelude

@@ -33,7 +33,7 @@ tasks, TCP, TLS and HTTP, files and paths, processes. VM internals are in
   Optional[Nil] are refused by the walks. JSON.from shares encode eligibility
   and non-finite diagnostics.
 
-- `JSON.Value` is opaque, not primitive for equality. `JSON` is a reserved name;
+- `JSON.Value` is opaque; `==` compares it as JSON. `JSON` is a reserved name;
   `JSON.Value` and `JSON.Field` are members of its family.
 - Encoding eligibility is checked recursively, including declared struct fields
   and empty containers; a seen-struct path prevents infinite recursion without

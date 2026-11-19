@@ -25,8 +25,8 @@ def outcome(decoded: Result[Page]) -> String
   end
 end
 
-# Whether two documents are the same JSON value, in any key order.
-def same_json?(a: String, b: String) -> Bool = Test.eq(JSON.parse(a).unwrap!, JSON.parse(b).unwrap!).ok?
+# Whether two documents are the same JSON value: keys in any order, numbers by value.
+def same_json?(a: String, b: String) -> Bool = JSON.parse(a).unwrap! == JSON.parse(b).unwrap!
 
 def check(line: String) -> Int
   fields = line.split("\t")

@@ -66,20 +66,31 @@ def encode_scalar(value, kind):
     return json.dumps(value, ensure_ascii=False)
 
 
-def typed(text):
-    """The document with each number tagged as written, so 1 and 1.0 differ as they do in JSON text."""
-    return json.loads(text, parse_int=lambda digits: ("int", int(digits)), parse_float=lambda digits: ("float", digits))
+def same_json(a, b):
+    """Two json.loads values as JSON.Value == compares them: object keys in any order and numbers by value (1 == 1.0),
+    with a bool equal only to a bool."""
+    if isinstance(a, bool) or isinstance(b, bool):
+        return type(a) is type(b) and a == b
+    if isinstance(a, (int, float)) and isinstance(b, (int, float)):
+        return a == b
+    if type(a) is not type(b):
+        return False
+    if isinstance(a, list):
+        return len(a) == len(b) and all(same_json(x, y) for x, y in zip(a, b))
+    if isinstance(a, dict):
+        return a.keys() == b.keys() and all(same_json(a[k], b[k]) for k in a)
+    return a == b
 
 
 def vector_row(document, decode, encode):
     """The line of one document: the document, "ok" and the encoded text or "error" and the message, and "same" or
-    "changed" (the round trip up to key order) or "-". decode and encode take the parsed document and the decoded
-    value."""
+    "changed" (the round trip as == on two JSON.Values sees it: up to key order, numbers by value) or "-". decode
+    and encode take the parsed document and the decoded value."""
     try:
         text = encode(decode(json.loads(document)))
     except DecodeError as problem:
         return "\t".join([document, "error", str(problem), "-"])
-    same = "same" if typed(text) == typed(document) else "changed"
+    same = "same" if same_json(json.loads(text), json.loads(document)) else "changed"
     return "\t".join([document, "ok", text, same])
 
 

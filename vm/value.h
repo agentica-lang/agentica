@@ -1086,9 +1086,6 @@ agc_value agc_json_object(agc_json_member *members, size_t n);
 agc_value agc_json_array(agc_list *items);
 const agc_json_member *agc_json_find(const agc_json *j, const agc_string *key);
 agc_string *agc_json_encode(agc_vm *vm, agc_value v, uint32_t span);
-/* The text of agc_json_encode with the keys of every JSON.Value object sorted: two values that differ only in key
-   order give one text, which equality compares. */
-agc_string *agc_json_canonical(agc_vm *vm, agc_value v, uint32_t span);
 agc_value agc_json_from(agc_vm *vm, agc_value v, uint32_t span);
 
 void agc_random_seed(agc_random *r, uint64_t seed);

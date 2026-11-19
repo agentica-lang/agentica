@@ -1,7 +1,7 @@
 # json-enum-vectors.stdin: made by python3 tests/fixtures/json-enum-vectors.py (Python json module); do not edit by hand
 {"title": "t", "main": {"tag": "Empty"}, "shapes": []}	ok	{"title":"t","main":{"tag":"Empty","values":[]},"shapes":[],"spare":null}	changed
 {"title": "t", "main": {"tag": "Empty", "values": []}, "shapes": [], "spare": null}	ok	{"title":"t","main":{"tag":"Empty","values":[]},"shapes":[],"spare":null}	same
-{"title": "t", "main": {"tag": "Circle", "values": [2.5]}, "shapes": [{"values": [1, 2], "tag": "Rect"}], "spare": {"tag": "Label", "values": ["x", null]}}	ok	{"title":"t","main":{"tag":"Circle","values":[2.5]},"shapes":[{"tag":"Rect","values":[1.0,2.0]}],"spare":{"tag":"Label","values":["x",null]}}	changed
+{"title": "t", "main": {"tag": "Circle", "values": [2.5]}, "shapes": [{"values": [1, 2], "tag": "Rect"}], "spare": {"tag": "Label", "values": ["x", null]}}	ok	{"title":"t","main":{"tag":"Circle","values":[2.5]},"shapes":[{"tag":"Rect","values":[1.0,2.0]}],"spare":{"tag":"Label","values":["x",null]}}	same
 {"title": "t", "main": {"tag": "Label", "values": ["x", 7]}, "shapes": [{"tag": "Group", "values": [[{"tag": "Empty"}, {"tag": "Group", "values": [[]]}]]}], "extra": true}	ok	{"title":"t","main":{"tag":"Label","values":["x",7]},"shapes":[{"tag":"Group","values":[[{"tag":"Empty","values":[]},{"tag":"Group","values":[[]]}]]}],"spare":null}	changed
 {"title": "t", "main": {"tag": "Circle", "values": [3], "note": "ignored"}, "shapes": []}	ok	{"title":"t","main":{"tag":"Circle","values":[3.0]},"shapes":[],"spare":null}	changed
 {"title": "t", "main": 3, "shapes": []}	error	main: expected object	-

@@ -9,7 +9,7 @@ Two ways to work with JSON:
 - For a known shape, declare a struct, or an [enum](#enums) for a choice between shapes. `JSON.encode` writes it and `JSON.decode` reads it back, with type checks.
 - For data whose shape changes, use the `JSON.Value` type and the `JSON` functions to build and read it.
 
-`JSON` is a reserved name; `JSON.Value` and `JSON.Field` are its members. A `JSON.Value` has no constructor, equality, fields or indexing. It prints as JSON text with `puts`, `to_s`, interpolation and `JSON.encode`; `inspect` and `IO.inspect` show `<JSON.Value>`, also inside a list. Every object keeps its key order, as Ruby's `to_json` and `JSON.parse` do: a struct writes its fields in declaration order, a map in insertion order, and a parsed object in the order of its text (see `JSON.parse`). `JSON.from`, `JSON.object` and `JSON.decode` keep the same orders, so a list of structs and one struct show their keys alike. Functions whose first parameter is a `JSON.Value` are also methods: `JSON.get(j, "a")` is `j.get("a")`.
+`JSON` is a reserved name; `JSON.Value` and `JSON.Field` are its members. A `JSON.Value` has no constructor, fields or indexing. `a == b` is true when the two are the same JSON, as Ruby's `Hash#==` is: objects with the same keys and equal values in any key order (a repeated key counts once, with its last value), arrays with equal items in order, and numbers by value, so `1 == 1.0`, `1e2 == 100` and `-0.0 == 0.0` (an integer beyond `Int` compares exactly, with no rounding); `!=` is its negation, and a list, struct or map that holds a `JSON.Value` compares it the same way. `==` costs the size of both values. It prints as JSON text with `puts`, `to_s`, interpolation and `JSON.encode`; `inspect` and `IO.inspect` show `<JSON.Value>`, also inside a list. Every object keeps its key order, as Ruby's `to_json` and `JSON.parse` do: a struct writes its fields in declaration order, a map in insertion order, and a parsed object in the order of its text (see `JSON.parse`). `JSON.from`, `JSON.object` and `JSON.decode` keep the same orders, so a list of structs and one struct show their keys alike. Functions whose first parameter is a `JSON.Value` are also methods: `JSON.get(j, "a")` is `j.get("a")`.
 
 ## JSON.encode
 
@@ -19,7 +19,7 @@ JSON.encode(value: T) -> String
 
 Writes compact JSON. It takes numbers, `Bool`, `String`, `nil`, `JSON.Value`, lists, maps with `String` keys, structs, [enums](#enums) and [Optionals](#optional-values) of those. Struct fields keep their declaration order and map entries their insertion order. An instance of a generic struct or enum counts by its fields or payloads after substitution (`Box[List[Int]]`). `Result` values, builtin enums such as `TaskExit` and `Int`-keyed maps are `CHECK-NOT-ENCODABLE`, and an untyped empty container needs an annotation. A non-finite `Float` stops the program with `RUNTIME-JSON-ENCODE`; it is never written as `null`. A `JSON.Field` field (see [optional and nullable fields](#optional-and-nullable-fields)) writes nothing when it is `Absent`.
 
-`JSON.encode` of a `JSON.Value` writes each object's keys in the order the value holds them, so `JSON.encode(JSON.parse(x))` keeps the key order of `x`: it is no longer a canonical form, and two texts that differ only in key order give two texts. Compare the parsed values with `Test.eq` instead.
+`JSON.encode` of a `JSON.Value` writes each object's keys in the order the value holds them, so `JSON.encode(JSON.parse(x))` keeps the key order of `x`: it is no longer a canonical form, and two texts that differ only in key order give two texts. Compare the parsed values with `==` instead.
 
 ```agentica
 struct User
@@ -355,7 +355,7 @@ end
 false
 ```
 
-A parsed object keeps its keys in the order of the text. A repeated key is kept once, at its first place, with its last value, as Ruby's `JSON.parse` does. Arrays keep their order, and `1` stays different from `1.0`. `Test.eq` compares two `JSON.Value`s in any key order.
+A parsed object keeps its keys in the order of the text. A repeated key is kept once, at its first place, with its last value, as Ruby's `JSON.parse` does. Arrays keep their order, and `1` stays an integer and `1.0` a float, though `==` finds them equal. `==` and `Test.eq` compare two `JSON.Value`s in any key order.
 
 ```agentica
 def main() -> Void

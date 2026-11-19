@@ -164,10 +164,11 @@ in a PR that rewrites the goldens.
   for DEL, keeps non-ASCII raw, prints floats per 2.2 and big integers in
   decimal: struct declaration order, map insertion order, and a `JSON.Value`
   object's member order (the text order of a parse; `JSON.from`, `JSON.object`
-  and `JSON.array` keep the order of what they were given). Equality of two
-  `JSON.Value`s compares their text with sorted keys (`agc_json_canonical`). A
-  non-finite Float in either is `RUNTIME-JSON-ENCODE` at
-  the call span.
+  and `JSON.array` keep the order of what they were given). A non-finite
+  Float written as JSON text is `RUNTIME-JSON-ENCODE` at the call span.
+- Equality of two `JSON.Value`s (`vm/equal.c`) looks each member up by key, so
+  key order does not count, and compares numbers by exact value (`1 == 1.0`, a
+  big integer with the exact digits of a Float).
 
 ### 2.5 Diagnostics, streams and exit codes
 

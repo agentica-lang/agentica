@@ -80,10 +80,13 @@ nullable wildcard: `name: String = nil` is invalid; use `Optional[T]`.
   order; maps when they have the same keys with equal values, and sets the same
   elements, in any order; Optionals, Results and enums when they have the same
   variant and equal payloads (`error` compares the message, and `ok() == ok()`
-  for `Result[Void]`); structs when they have the same type and equal fields.
+  for `Result[Void]`); structs when they have the same type and equal fields;
+  two `JSON.Value`s when they are the same JSON: objects with the same keys
+  and equal values in any key order, arrays in order, and numbers by value
+  (`1 == 1.0`, `-0.0 == 0.0`).
   A struct or enum that holds itself (`children: List[Node]`) has equality when
-  no type of its group lacks it. Functions, tasks, channels, handles and
-  `JSON.Value` have no equality, nor does any type that holds one, nor a type
+  no type of its group lacks it. Functions, tasks, channels and handles have
+  no equality, nor does any type that holds one, nor a type
   variable of a generic function: `CHECK-TYPE-MISMATCH`, whose message names
   the field or variant without equality. A `Float` follows IEEE 754 at any
   depth, so a list or struct that holds a NaN is not equal to itself. A list,

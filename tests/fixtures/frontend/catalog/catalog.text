@@ -1023,7 +1023,7 @@ builtin TCP.write_limit forms=1
 builtin Test.assert forms=1
   Test.assert(condition: Bool, message: String) -> Result[Void] shape=(Bool, String) -> Result(Void) rule=Plain impl="Test.assert" effects=["test"] desc="Check a condition; a failure with message is recorded on the test."
 builtin Test.eq forms=1
-  Test.eq(actual: T, expected: T) -> Result[Void] shape=(Var(T), Var(T)) -> Result(Void) rule=TestEq impl="Test.eq" effects=["test"] desc="Compare two values of a type with equality (a JSON.Value as canonical text); a failure is recorded on the test."
+  Test.eq(actual: T, expected: T) -> Result[Void] shape=(Var(T), Var(T)) -> Result(Void) rule=TestEq impl="Test.eq" effects=["test"] desc="Compare two values of a type with equality, as == does; a failure is recorded on the test."
 builtin Test.error? forms=1
   Test.error?(result: Result[T]) -> Result[Void] shape=(Result(Var(T))) -> Result(Void) rule=TestResult impl="Test.error?" effects=["test"] desc="Check that a Result is an error; a failure is recorded on the test."
 builtin Test.ok? forms=1

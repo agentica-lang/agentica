@@ -167,8 +167,8 @@ the programming skill or the site).
   `keep`/`call` (closures `Fn[JSON.Value, Result[JSON.Value]]` that capture a
   scenario's non-JSON values: `Context` cannot hold the step program's own type,
   since functions and structs are not generic), `read_line` and the program
-  steps. The `then_*` checks compare with `Test.eq` (a `JSON.Value` line by
-  canonical text) and put the inspect texts in the `fail` record, so BDD and
+  steps. The `then_*` checks compare with `Test.eq` (a `JSON.Value` line as
+  `==` compares it) and put the inspect texts in the `fail` record, so BDD and
   unit tests show values the same way. In the child, `run` checks the step index
   and pattern, calls the handler, fails on pending tasks and an unobserved task
   crash, probes the output limit and sends `end`. Each record is one JSON line
@@ -217,8 +217,8 @@ the programming skill or the site).
   `{string}` up to the first unescaped closing quote). `resolve` gives
   `Resolved`, `CHECK-BDD-UNDEFINED` or `CHECK-BDD-AMBIGUOUS` at the step's
   span. The `json-canonical` golden pins the rule `then_json_line` relies on
-  (`JSON.encode(JSON.parse(x))` sorts keys and keeps the last duplicate,
-  `sort_members` in `vm/json.c`).
+  (`Test.eq` on two JSON.Values ignores key order and compares numbers by
+  value, `json_equal` in `vm/equal.c`).
 - `std/test/report` builds the report and imports nothing; it owns `Span` and
   `Example`, which `gherkin` and `match` import. A `Verdict` is `Pass`,
   `Fail(Failure)`, `Skipped(reason)` (not a failure, exit code stays 0) or
