@@ -48,7 +48,8 @@ static int key_compare(const agc_string *a, const agc_string *b) {
 #define SMALL_OBJECT 8
 
 /* A stable merge sort of the n members at m by key, between m and a buffer of the same size; the result is in the
-   array returned, then each key once with the value of its last member (the count is in *count). */
+   array returned, then each key once with the value of its last member (the count is in *count), and the dropped
+   tail cleared so the GC does not keep its values. */
 static agc_json_member *sort_members(agc_json_member *m, size_t n, size_t *count) {
   agc_json_member *from = m, *to = agc_alloc(agc_size_mul(n, sizeof(agc_json_member)));
   for (size_t width = 1; width < n; width = width > n / 2 ? n : width * 2) {
@@ -68,6 +69,7 @@ static agc_json_member *sort_members(agc_json_member *m, size_t n, size_t *count
   size_t kept = 0;
   for (size_t i = 0; i < n; i++)
     if (i + 1 == n || key_compare(from[i].key, from[i + 1].key) != 0) from[kept++] = from[i];
+  memset(from + kept, 0, (n - kept) * sizeof(agc_json_member));
   *count = kept;
   return from;
 }

@@ -58,8 +58,10 @@ does not make obvious:
   and `last` of an empty range are an error value.
 - **Function value.** `&name` has no captures.
 - **JSON.Value.** Big integers stay decimal text until extracted. Object members
-  keep their order (a repeated key at its first place with its last value), and
-  a copy sorted by key bytes makes `JSON.get` a binary search.
+  keep their order (a repeated key at its first place with its last value). An
+  object of more than 8 members that are not already in key order also has a
+  copy sorted by key bytes, which makes `JSON.get` a binary search; smaller
+  ones are scanned, and members in key order are their own sorted copy.
 - **Handles.** One tag and GC record per kind: Task, Channel, TCP.Socket,
   TCP.Listener, HTTP values, File.Handle and Process.
 

@@ -218,8 +218,9 @@ in a PR that rewrites the goldens.
   sign: `-0.0`, `-0e5` and a negative value that rounds to zero are `-0.0`, so
   the `-0.0` that `JSON.encode` writes reads back. `-0` is the integer 0.
 - A repeated key keeps its first place and its last value, as Ruby does.
-  Objects keep their members in text order, beside a copy sorted by key bytes
-  for lookup.
+  Objects keep their members in text order. Only an object of more than 8
+  members that are not already in key order has a copy sorted by key bytes for
+  a binary search; smaller ones are scanned.
 - The VM reads the tree with the yyjson reader (10) and copies it into
   `JSON.Value` nodes. Numbers reach the VM as text.
 
