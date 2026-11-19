@@ -1,13 +1,13 @@
 ---
 title: Logger
 weight: 6
-description: Niveles, manejadores con nombre y líneas de texto o JSON en el error estándar con std/logger.
+description: Niveles, handlers con nombre y líneas de texto o JSON en el error estándar con std/logger.
 source_hash: "185737e01ac1"
 ---
 
 `std/logger` es un logger al estilo de Elixir escrito en Agentica. Impórtalo con `import Logger from "std/logger"`.
 
-La primera llamada a cualquier función de `Logger` añade un manejador llamado `console`. Escribe líneas de texto en el error estándar con el nivel `info`. Un programa que solo registra no necesita configuración.
+La primera llamada a cualquier función de `Logger` añade un handler llamado `console`. Escribe líneas de texto en el error estándar con el nivel `info`. Un programa que solo registra no necesita configuración.
 
 ## Levels {#levels}
 
@@ -26,10 +26,10 @@ Logger.enabled?(level: Logger.Level) -> Bool
 - La función del último nivel es `err`, porque `error` está reservado. La salida sigue diciendo `error`.
 - `fields` es opcional y su predeterminado es `{}`. Así, `Logger.info("started")` y `Logger.info("request done", {"path": "/items"})` son ambas llamadas válidas.
 - El nivel global empieza en `info`, y `set_level` lo cambia. Cada llamada lo comprueba antes, y una llamada por debajo de él no crea ningún evento.
-- Cada manejador tiene su propio nivel y solo recibe los eventos en ese nivel o por encima.
-- `enabled?` es verdadero solo cuando el nivel es igual o superior al nivel global y algún manejador lo acepta. Pon un mensaje costoso dentro de un `if` sobre `enabled?`.
+- Cada handler tiene su propio nivel y solo recibe los eventos en ese nivel o por encima.
+- `enabled?` es verdadero solo cuando el nivel es igual o superior al nivel global y algún handler lo acepta. Pon un mensaje costoso dentro de un `if` sobre `enabled?`.
 
-En el ejemplo, el manejador console está en `info`. Así, `enabled?` es falso para `debug` hasta que se añada un manejador en `debug`.
+En el ejemplo, el handler console está en `info`. Así, `enabled?` es falso para `debug` hasta que se añada un handler en `debug`.
 
 ```agentica
 import Logger from "std/logger"
@@ -64,7 +64,7 @@ Logger.detach(name: String) -> Result[Void]
 Logger.handlers() -> List[String]
 ```
 
-Un manejador es una función (como `&Logger.stderr_json`) o un bloque. Recibe un `Logger.Event`, con estos campos:
+Un handler es una función (como `&Logger.stderr_json`) o un bloque. Recibe un `Logger.Event`, con estos campos:
 
 - `level: Logger.Level`
 - `message: String`
@@ -74,10 +74,10 @@ Un manejador es una función (como `&Logger.stderr_json`) o un bloque. Recibe un
 
 `attach` con un nombre ya en uso, y `detach` con un nombre que no está en uso, devuelven un error.
 
-- Los manejadores se ejecutan en el orden en que se añadieron, de forma síncrona, en la tarea que registra. Así, una línea se escribe cuando la llamada de log devuelve el control.
-- Un evento conserva los manejadores con los que empezó. Un manejador que quita a otro no cambia el evento en curso.
-- Un manejador sigue añadido cuando termina la tarea que lo añadió.
-- El error de un manejador es el error de la tarea que registró el evento.
+- Los handlers se ejecutan en el orden en que se añadieron, de forma síncrona, en la tarea que registra. Así, una línea se escribe cuando la llamada de log devuelve el control.
+- Un evento conserva los handlers con los que empezó. Un handler que quita a otro no cambia el evento en curso.
+- Un handler sigue añadido cuando termina la tarea que lo añadió.
+- El error de un handler es el error de la tarea que registró el evento.
 
 ```agentica
 import Logger from "std/logger"
@@ -109,7 +109,7 @@ Logger.format_json(event: Logger.Event) -> String
 Logger.time_text(time_ms: Int) -> String
 ```
 
-`stderr_text` y `stderr_json` son los manejadores integrados. Cada uno escribe una línea con una sola llamada a `IO.warn`. `format_text` y `format_json` crean la línea sin escribirla, para tu propio manejador.
+`stderr_text` y `stderr_json` son los handlers integrados. Cada uno escribe una línea con una sola llamada a `IO.warn`. `format_text` y `format_json` crean la línea sin escribirla, para tu propio handler.
 
 - Texto: `TIME LEVEL MESSAGE key=value ...`, con la hora en UTC y el nivel en mayúsculas.
 - Un mensaje, una clave o un valor se escribe como cadena JSON cuando está vacío, o cuando tiene `=`, una comilla, una barra invertida o un carácter de control. Una clave o un valor con un espacio también se escribe como cadena JSON. Así, una línea siempre ocupa una sola línea, y un valor nunca parece un campo.
@@ -141,9 +141,9 @@ end
 1970-01-01T00:00:00.000000Z ERROR "a=b" note="two words"
 ```
 
-## Salida a archivo y manejadores lentos {#file-output-and-slow-handlers}
+## Salida a archivo y handlers lentos {#file-output-and-slow-handlers}
 
-No hay un manejador de archivo integrado. Un bloque que añade una línea por evento hace el trabajo. El `_ =` descarta un error de escritura:
+No hay un handler de archivo integrado. Un bloque que añade una línea por evento hace el trabajo. El `_ =` descarta un error de escritura:
 
 ```agentica {mode="check"}
 import Logger from "std/logger"
@@ -157,7 +157,7 @@ def main() -> Void
 end
 ```
 
-Un manejador lento puede pasar cada evento a una tarea por un `Channel`. El escritor se lanza con `Task.spawn_owning`, así que es propietario del canal. La ejecución termina en este orden: quitar el manejador, cerrar el canal y esperar al escritor. Sin la espera, al volver de `main` la ejecución termina y las líneas en cola se pierden.
+Un handler lento puede pasar cada evento a una tarea por un `Channel`. El escritor se lanza con `Task.spawn_owning`, así que es propietario del canal. La ejecución termina en este orden: quitar el handler, cerrar el canal y esperar al escritor. Sin la espera, al volver de `main` la ejecución termina y las líneas en cola se pierden.
 
 ```agentica {mode="check"}
 import Logger from "std/logger"
@@ -191,8 +191,8 @@ end
 ## Rules {#rules}
 
 - `Logger.Level` y `Logger.Event` son los tipos integrados `LogRegistry.Level` y `LogRegistry.Event`, que `std/logger` reexporta, así que `import {Event, Level} from "std/logger"` los vincula por su nombre. Un diagnóstico, `help` y un valor impreso muestran `Logger.Level` y `Logger.Event`: `"#{level}"` es `Logger.Level.Info`, y un evento se imprime como `Logger.Event(level: ..., message: ...)`. No reservan ningún nombre: un programa puede declarar su propio `Event` o `LogEvent`.
-- Los manejadores y el nivel global viven en la VM y pertenecen a una sola ejecución. Un proceso hijo iniciado con `Process.spawn` tiene los suyos. Este registro es el único estado global del lenguaje; `std/logger` llega a él a través del módulo interno `LogRegistry`, que ningún otro módulo puede nombrar (`CHECK-UNKNOWN-NAME`).
-- No previsto para `std/logger`: archivos de log y rotación, syslog, muestreo, niveles por módulo, valores de campo `JSON.Value`, configuración por variables de entorno, ni argumentos de log perezosos (un bloque que se pasa a `attach` es un manejador, no un mensaje perezoso). No previsto para el rastreo: una traza a nivel de lenguaje, líneas de traza en la salida estándar, contadores dentro del rastreador, un flag para desactivar las trazas de pila, ni una pila de la tarea padre en el momento de lanzarla; el trazado de la VM es una herramienta de desarrollo de la VM, no una característica del lenguaje.
+- Los handlers y el nivel global viven en la VM y pertenecen a una sola ejecución. Un proceso hijo iniciado con `Process.spawn` tiene los suyos. Este registro es el único estado global del lenguaje; `std/logger` llega a él a través del módulo interno `LogRegistry`, que ningún otro módulo puede nombrar (`CHECK-UNKNOWN-NAME`).
+- No previsto para `std/logger`: archivos de log y rotación, syslog, muestreo, niveles por módulo, valores de campo `JSON.Value`, configuración por variables de entorno, ni argumentos de log perezosos (un bloque que se pasa a `attach` es un handler, no un mensaje perezoso). No previsto para el rastreo: una traza a nivel de lenguaje, líneas de traza en la salida estándar, contadores dentro del rastreador, un flag para desactivar las trazas de pila, ni una pila de la tarea padre en el momento de lanzarla; el trazado de la VM es una herramienta de desarrollo de la VM, no una característica del lenguaje.
 - No hay flags ni metadatos por tarea. Pasa `fields` en cada llamada, como segundo argumento opcional.
 - Las llamadas de log son código normal, y cuentan contra `--max-steps`.
-- Una llamada por debajo del nivel global, o una que ningún manejador acepta, cuesta una llamada a función, una llamada a un integrado y una comparación. Una llamada sin `fields` también pasa un mapa vacío.
+- Una llamada por debajo del nivel global, o una que ningún handler acepta, cuesta una llamada a función, una llamada a un integrado y una comparación. Una llamada sin `fields` también pasa un mapa vacío.
