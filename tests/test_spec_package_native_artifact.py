@@ -565,13 +565,11 @@ def test_concurrent_publishers_keep_the_winner(setup, tmp_path):
     assert open(results[0][1], "rb").read() == member_bytes(setup["lib_tar"], MEMBER)
 
 
-def test_failed_download_keeps_its_partial(setup, tmp_path):
+def test_failed_download_leaves_no_partial(setup, tmp_path):
     root = cache(tmp_path / "c0")
     sha = digest(setup["lib_tar"])
     assert fetch(setup, root, setup["plain"] + "/trunc", sha) == ("err", "PKG-FETCH", FILE, KEY + ".url")
-    partials = glob.glob(os.path.join(root, "native", ".dl-*"))
-    assert len(partials) == 1
-    assert open(partials[0], "rb").read() == b"0123456789"
+    assert glob.glob(os.path.join(root, "native", ".dl-*")) == []
 
 
 def test_success_leaves_no_temporary_download(setup, tmp_path):

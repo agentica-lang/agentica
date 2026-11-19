@@ -130,7 +130,7 @@ def download(
     end
 
     dest = Paths.join(folder, ".dl-#{System.pid()}-#{Random.int(0, 999999999)}-#{redirects}")
-    options = HTTP.DownloadOptions(timeout_ms: left, max_total_bytes: budgeted.unwrap!)
+    options = HTTP.DownloadOptions(timeout_ms: some(left), max_total_bytes: some(budgeted.unwrap!))
     case HTTP.download(pool, current, dest, options)
       error(e) ->
         HTTP.close_client(pool)

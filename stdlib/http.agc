@@ -19,13 +19,17 @@ export HttpWire.ServerOptions
 export HttpWire.Client
 export HttpWire.Server
 
-## How far a download may go: a positive `timeout_ms` for the whole call, from the connect to the last byte
-## written, and a positive `max_total_bytes` for the body, at most 256 MiB.
+## How far a download may go. `timeout_ms` bounds the whole call, from the connect to the rename, and
+## `max_total_bytes` the body bytes written; `none`, the default of both, is no limit, and a value must be positive.
+## The client's `read_timeout_ms` still bounds each wait for the head and for body bytes, so a silent server ends the
+## call. `sha256`, when given, is the hex SHA-256 digest (64 digits, either case) the body must have.
 struct DownloadOptions
-  ## The milliseconds the whole download may take.
-  timeout_ms: Int = 30000
-  ## The most body bytes written to the file.
-  max_total_bytes: Int = DOWNLOAD_MAX_BYTES
+  ## The milliseconds the whole download may take, or `none` for no limit.
+  timeout_ms: Optional[Int] = none
+  ## The most body bytes written to the file, or `none` for no limit.
+  max_total_bytes: Optional[Int] = none
+  ## The hex SHA-256 digest the body must have, or `none` for no check.
+  sha256: Optional[String] = none
 end
 
 ## What a download wrote: the response `status` and `headers` with the count of body `bytes_written` to the file.
@@ -74,8 +78,8 @@ end
 ## A response whose body arrives on a channel, from `open`: the `status` and `headers` of the head, the `body` channel
 ## and the `done` task that feeds it. The task reads the connection and sends each piece (up to 64 KiB, never empty),
 ## and it closes the channel on every path, so the reader runs the usual receive loop until the closed error and then
-## awaits `done`: `ok` means the body ended cleanly, an `error` says why it did not (a cut body, a timeout, a body over
-## 256 MiB). To stop early the reader closes the channel: the task's next `send` fails, it closes the connection and
+## awaits `done`: `ok` means the body ended cleanly, an `error` says why it did not (a cut body, a timeout, a bad
+## chunk). To stop early the reader closes the channel: the task's next `send` fails, it closes the connection and
 ## `done` is an `error`. That works only while data flows: on a quiet stream the task waits in its read until
 ## `read_timeout_ms` (for ever when it is 0), so the prompt stop is `Task.cancel(stream.done)`, which closes the
 ## connection at once. The connection belongs to the task and is never reused.
@@ -202,7 +206,9 @@ type App = Fn[HttpWire.Request, RequestBody, Result[Answer]]
 ## the strict form of an address (IPv4 `a.b.c.d` with no leading zero, IPv6 without brackets, not IPv4-mapped), and
 ## together with a proxy.
 ## Every number in `options` must be positive, except `read_timeout_ms`, which is 0 (no limit) or positive;
-## `max_connections` is at most 65536 and `max_body_bytes` at most 64 MiB, or the result is an error. `timeout_ms` is
+## `max_connections` is at most 65536 and `max_body_bytes` at most 64 MiB, or the result is an error: `max_body_bytes`
+## bounds the bodies held in memory (`get`, `post`, `request` and the response of `upload`), and a bigger body goes
+## through `download`, `read_body` or `open`, which stream it with no limit. `timeout_ms` is
 ## the whole call (the wait for a slot, the connect, the head and the body); `connect_timeout_ms` bounds the connect
 ## (DNS, TCP, the TLS handshake and a proxy `CONNECT`) inside it, and `read_timeout_ms` each wait for body
 ## bytes. With a `proxy` (`http://host:port`, an origin with no path) every `http://` request goes
@@ -308,28 +314,27 @@ def request(
 end
 
 ## Downloads the resource at `url` with a `GET` request and writes its body bytes to `path`. `options` is optional
-## and defaults to `DownloadOptions()`: a 30 s timeout and bodies up to 256 MiB. The connect takes at most the
-## client's `connect_timeout_ms` and each wait for body bytes its `read_timeout_ms`, inside the whole-call timeout.
+## and defaults to `DownloadOptions()`: no limit on the size of the body, and none on the time but a year. The
+## connect takes at most the client's `connect_timeout_ms` and each wait for the head or for body bytes its
+## `read_timeout_ms`.
 ##
-## The transfer stays bounded: at most 1 MiB is held at once, the body stops at
-## `options.max_total_bytes` with `http: body exceeds max_body_bytes`, and the file never grows past it. The file
-## must not exist: it is made with `create_private`, so an existing path is an error and stays intact, while a
-## failed download keeps the partial file. Status codes such as 404 or 500 are normal responses, as with `get`:
-## the body is still written and the status returned, so check `status` before using the file. There is no
-## redirect follow, and the connection is not pooled: it closes when the download ends. The pool gives the TLS
-## context and its certificates for `https`, whose verification stays on.
+## The body never sits in memory: at most 1 MiB is held at once. It goes to a new private file in the folder of
+## `path`, named `.<name>.<8 hex digits>.agc-part`, which `Path.replace` puts at `path` in one step only when the body
+## ended cleanly, its size is within `options.max_total_bytes` and its digest is `options.sha256` (else
+## `http.digest`): an existing file or link at `path` is then replaced, and a directory is an error. A failure removes
+## the new file and leaves `path` as it was; a cancelled task, a killed program or a timeout while the new file is
+## made can leave it behind.
+## Status codes such as 404 or 500 are normal responses, as with `get`: the body is still written and the status
+## returned, so check `status` before using the file. There is no redirect follow, and the connection is not pooled:
+## it closes when the download ends. The pool gives the TLS context and its certificates for `https`, whose
+## verification stays on.
 def download(
   pool: HttpWire.Client,
   url: String,
   path: String,
   options: DownloadOptions = DownloadOptions(),
 ) -> Result[Download]
-  if options.timeout_ms <= 0 or options.max_total_bytes <= 0
-    return error("http: every download option must be positive", kind: "argument")
-  end
-  if options.max_total_bytes > DOWNLOAD_MAX_BYTES
-    return error("http: max_total_bytes must be at most 268435456", kind: "argument")
-  end
+  try check_download(options)
   where = try parse_url(url)
   client_options = HttpWire.options(pool)
   via = try connect_target(where, client_options)
@@ -344,7 +349,8 @@ def download(
     client_options.max_body_bytes,
   )
 
-  deadline = after(options.timeout_ms)
+  deadline = after(options.timeout_ms.unwrap_or(WATCH_MS))
+  try replaceable(path, deadline)
   # What a 407 from the proxy is told as; empty when there is no proxy or the request is in a tunnel, whose 407 is the
   # server's own answer.
   denied = ""
@@ -369,8 +375,8 @@ end
 ## `proxy` (an `http` origin is then reached through the proxy, which each `send_request` addresses in absolute form)
 ## of `options` apply: nothing is pooled. The connection is for one request at a time and stays open for the next one
 ## when the response had a body that was read to its end (`read_body` gave an empty piece) and the server did not
-## close it. A response body is at most 256 MiB, the limit of `download`: a longer one is an `error`. Close it with
-## `finish`. For whole requests use `get_response` or the pooled client instead.
+## close it. A response body has no size limit, since `read_body` gives it piece by piece. Close it with `finish`.
+## For whole requests use `get_response` or the pooled client instead.
 def start(origin: String, options: HttpWire.ClientOptions = HttpWire.ClientOptions()) -> Result[Connection]
   try check_client(options)
 
@@ -442,9 +448,8 @@ end
 ## takes at most `connect_timeout_ms`). After the head, `read_timeout_ms` is the time of each wait: each read of the
 ## body and each `send` to the channel, so a reader that takes longer than that to ask for the next piece ends the
 ## stream, and so does a server that is silent for that long. 0 is no limit, for a stream that may stay quiet: it ends
-## with the body, with `Task.cancel(stream.done)` or when the server closes it. The body is at most 256 MiB, whatever
-## its framing. The connection is not pooled and ends with the body. For whole responses
-## use `get`.
+## with the body, with `Task.cancel(stream.done)` or when the server closes it. The body has no size limit: the reader
+## stops when it likes. The connection is not pooled and ends with the body. For whole responses use `get`.
 def open(
   method: String,
   url: String,
@@ -620,7 +625,7 @@ def serve(
     options.idle_timeout_ms,
     options.max_connections,
     options.max_body_bytes,
-    DOWNLOAD_MAX_BYTES,
+    SERVER_MAX_BODY,
   )
 
   listener = try TCP.listen(host, port)
@@ -641,7 +646,7 @@ def serve_tls(
     options.idle_timeout_ms,
     options.max_connections,
     options.max_body_bytes,
-    DOWNLOAD_MAX_BYTES,
+    SERVER_MAX_BODY,
   )
 
   listener = try TLS.listen(host, port, tls)
@@ -804,9 +809,15 @@ NO_BODY = "a 204 or 304 response cannot have a body"
 WRONG_SIZE = "the body is not the length it was given"
 HEAD_TOO_LARGE = "headers are too large"
 CRLF = "\r\n".bytes
-# The widest body a download may write, in bytes, and the ceiling of a server's `max_body_bytes`. A client's bodies
-# stay capped at CLIENT_MAX_BODY by check_options; only a download streamed to a file may use up to this.
-DOWNLOAD_MAX_BYTES = 268435456
+# The ceiling of a server's `max_body_bytes` and of a WebSocket message. A client's whole bodies stay capped at
+# CLIENT_MAX_BODY by check_options; the streamed ones (download, read_body, open) have no limit, NO_BODY_LIMIT.
+SERVER_MAX_BODY = 268435456
+NO_BODY_LIMIT = 9223372036854775807
+# The time a failed download takes to close and remove its new file, apart from the call's deadline.
+CLEANUP_MS = 30000
+DIGEST_MISMATCH = "http: the body does not match the sha256 digest"
+# The most characters of the file name that the hidden name of a growing download keeps.
+PART_NAME = 32
 CLIENT_MAX_BODY = 67108864
 # The error of an awaited task that was cancelled (Task.await), as the feeder of a closing server gives it.
 TASK_CANCELLED = "task: cancelled"
@@ -819,6 +830,13 @@ BODY_TOO_LONG = "http: body exceeds max_bytes"
 # The start of the error of a chunked body with a line or trailer section over the head limits, which
 # `body_refusal` answers 431, as the server answers such a head.
 FIELDS_TOO_LARGE = "http: request fields too large: "
+
+# The file a download writes, the name it has while it grows and the path it is renamed to at the end.
+struct Saving
+  out: File.Handle
+  temp: String
+  path: String
+end
 
 struct Target
   scheme: String
@@ -1103,7 +1121,7 @@ def request_once(
 end
 
 def settled(phase: Int, closes: Bool) -> Exchange
-  chunks = HttpWire.chunked(DOWNLOAD_MAX_BYTES)
+  chunks = HttpWire.chunked(NO_BODY_LIMIT)
   Exchange(phase: phase, framing: BY_LENGTH, left: 0, chunks: chunks, closes: closes)
 end
 
@@ -1683,7 +1701,7 @@ def tunnel_opened(socket: TCP.Socket, proxy: Proxy, target: String, deadline: In
 
   try TCP.send(socket, "#{head}\r\n", try time_left(socket, deadline))
   # The answer has no body to read: a 2xx is followed by the tunnel and the others are dropped with the socket.
-  response = try read_head_of(socket, true, DOWNLOAD_MAX_BYTES, deadline)
+  response = try read_head_of(socket, true, NO_BODY_LIMIT, deadline)
   ok(response.status)
 end
 
@@ -1745,7 +1763,7 @@ def sent_request(
     try TCP.send_bytes(conn.socket, piece, try time_left(conn.socket, deadline))
     at = at + piece.size
   end
-  read_head_of(conn.socket, head_only, DOWNLOAD_MAX_BYTES, deadline)
+  read_head_of(conn.socket, head_only, NO_BODY_LIMIT, deadline)
 end
 
 # Where the connection stands after a head: reading its body, which a response with no body makes an empty one that
@@ -1758,7 +1776,7 @@ def exchange_of(head: HttpWire.ResponseHead) -> Exchange
   if head.until_close
     framing = BY_CLOSE
   end
-  chunks = HttpWire.chunked(DOWNLOAD_MAX_BYTES)
+  chunks = HttpWire.chunked(NO_BODY_LIMIT)
   Exchange(phase: READING, framing: framing, left: head.length, chunks: chunks, closes: head.closes)
 end
 
@@ -1843,7 +1861,6 @@ end
 
 # A body that ends with the connection: over TLS the end must be the peer's close_notify, else it was cut. The end
 # is a body of length 0 that closes the connection, which `finished_exchange` does.
-# `left` counts the bytes given so far, for the cap that every framing has.
 def next_until_close(socket: TCP.Socket, exchange: Exchange, most: Int, deadline: Int) -> Result[Step]
   data = try recv_body(socket, most, deadline)
   if data.empty?
@@ -1851,10 +1868,7 @@ def next_until_close(socket: TCP.Socket, exchange: Exchange, most: Int, deadline
     done = Exchange(phase: READING, framing: BY_LENGTH, left: 0, chunks: exchange.chunks, closes: true)
     return ok(Step(piece: NO_BYTES, exchange: done))
   end
-  given = exchange.left + data.size
-  return error(TOO_LARGE, kind: "http.too_large", code: 413) if given > DOWNLOAD_MAX_BYTES
-  next = Exchange(phase: READING, framing: BY_CLOSE, left: given, chunks: exchange.chunks, closes: true)
-  ok(Step(piece: data, exchange: next))
+  ok(Step(piece: data, exchange: exchange))
 end
 
 def upload_whole(
@@ -1975,7 +1989,7 @@ def uploaded(
     ok(_) -> written = try upload_pieces(conn.socket, body, length, timeout)
     error(e) -> written = write_failed(e)
   end
-  case read_head_of(conn.socket, false, DOWNLOAD_MAX_BYTES, after(conn.options.timeout_ms))
+  case read_head_of(conn.socket, false, SERVER_MAX_BODY, after(conn.options.timeout_ms))
     ok(response) -> upload_answer(conn, response)
     error(message) ->
       case written
@@ -2048,6 +2062,19 @@ def read_whole(conn: Connection, most: Int) -> Result[Bytes]
 end
 
 # The options of a client: the numbers are positive, but `read_timeout_ms`, whose 0 is no limit.
+# The options of a download: positive limits and a digest of 64 hex digits.
+def check_download(options: DownloadOptions) -> Result[Void]
+  if options.timeout_ms.unwrap_or(1) <= 0 or options.max_total_bytes.unwrap_or(1) <= 0
+    return error("http: every download option must be positive", kind: "argument")
+  end
+  case options.sha256
+    some(hex) ->
+      return ok() if hex.length == 64 and OpenSSL.Digest.hexdecode(hex).ok?
+      error("http: sha256 must be 64 hex digits", kind: "argument")
+    none -> ok()
+  end
+end
+
 def check_client(options: HttpWire.ClientOptions) -> Result[Void]
   try check_options(
     options.timeout_ms,
@@ -2200,7 +2227,7 @@ def at_connect[T](answer: Result[T]) -> Result[T]
   end
 end
 
-# `most_body` is the ceiling of `max_body_bytes`: CLIENT_MAX_BODY for a client, DOWNLOAD_MAX_BYTES for a server.
+# `most_body` is the ceiling of `max_body_bytes`: CLIENT_MAX_BODY for a client, SERVER_MAX_BODY for a server.
 def check_options(
   timeout_ms: Int,
   idle_timeout_ms: Int,
@@ -2606,7 +2633,7 @@ end
 
 # Checked when accept_websocket runs, so a bad number is an error there, not a hang later.
 def check_websocket_options(options: WebSocketOptions) -> Result[Void]
-  if options.max_message_bytes < 1 or options.max_message_bytes > DOWNLOAD_MAX_BYTES
+  if options.max_message_bytes < 1 or options.max_message_bytes > SERVER_MAX_BODY
     return error("http: max_message_bytes must be 1 to 268435456", kind: "argument")
   end
 
@@ -4325,8 +4352,8 @@ def connect_download(pool: HttpWire.Client, where: Target, deadline: Int) -> Res
   at_connect(reaching(TCP.connect(address_of(options, where.host), where.port, wait), options, where))
 end
 
-# Opens the destination exclusively, then streams the response into it. Every error below closes both handles;
-# the partial file stays, while a path that existed before is never touched.
+# Opens a new file next to `path` exclusively, then streams the response into it. Every error below closes both
+# handles and removes the new file; `path` is only touched by the rename after a clean end.
 def finish_download(
   socket: TCP.Socket,
   path: String,
@@ -4335,12 +4362,17 @@ def finish_download(
   denied: String,
   step: Int,
 ) -> Result[Download]
+  temp = part_path(path)
   case time_left(socket, deadline)
     ok(left) ->
-      case File.open(path, "create_private", left)
-        ok(out) -> stream_download(socket, out, options, deadline, denied, step)
+      case File.open(temp, "create_private", left)
+        ok(out) -> stream_download(socket, Saving(out: out, temp: temp, path: path), options, deadline, denied, step)
         error(message) ->
           TCP.close(socket)
+          # An open that timed out may still make the file in the pool; any other error leaves the name to its owner.
+          if message.kind == "io.timeout"
+            remove_part(temp)
+          end
           error(message)
       end
     error(message) ->
@@ -4349,38 +4381,99 @@ def finish_download(
   end
 end
 
-# The response head (after at most MAX_INTERIM interim ones) streamed into the file.
+# The response head (after at most MAX_INTERIM interim ones) streamed into the file, which then takes `path`.
 def stream_download(
   socket: TCP.Socket,
-  out: File.Handle,
+  saving: Saving,
   options: DownloadOptions,
   deadline: Int,
   denied: String,
   step: Int,
 ) -> Result[Download]
-  case download_head(socket, options.max_total_bytes, deadline)
+  budget = options.max_total_bytes.unwrap_or(NO_BODY_LIMIT)
+  case download_head(socket, budget, smaller(deadline, after(step)))
     ok(head) ->
-      return fail_download(socket, out, deadline, denied_error(denied)) if head.status == 407 and denied != ""
+      return fail_download(socket, saving, denied_error(denied)) if head.status == 407 and denied != ""
 
-      case save_body(socket, out, head, options.max_total_bytes, deadline, step)
+      case save_body(socket, saving.out, head, budget, deadline, step)
         ok(written) ->
-          case File.close(out, larger(deadline - Time.monotonic_ms(), 1))
+          case File.close(saving.out, larger(deadline - Time.monotonic_ms(), 1))
             ok(_) ->
               TCP.close(socket)
-              ok(Download(status: head.status, headers: head.headers, bytes_written: written))
-            error(message) -> fail_download(socket, out, deadline, error(message))
+              case settle(saving, options.sha256, deadline)
+                ok(_) -> ok(Download(status: head.status, headers: head.headers, bytes_written: written))
+                error(message) ->
+                  remove_part(saving.temp)
+                  error(message)
+              end
+            error(message) -> fail_download(socket, saving, error(message))
           end
-        error(message) -> fail_download(socket, out, deadline, error(message))
+        error(message) -> fail_download(socket, saving, error(message))
       end
-    error(message) -> fail_download(socket, out, deadline, error(message))
+    error(message) -> fail_download(socket, saving, error(message))
   end
 end
 
-# Closes both handles after a failure and reports it; the partial file stays for inspection.
-def fail_download(socket: TCP.Socket, out: File.Handle, deadline: Int, failed: Result[Download]) -> Result[Download]
-  _ = File.close(out, larger(deadline - Time.monotonic_ms(), 1))
+# Closes both handles after a failure, removes the new file and reports the failure.
+def fail_download(socket: TCP.Socket, saving: Saving, failed: Result[Download]) -> Result[Download]
+  _ = File.close(saving.out, CLEANUP_MS)
   TCP.close(socket)
+  remove_part(saving.temp)
   failed
+end
+
+# Removes the new file of a failed download, with a time of its own: the call's deadline may be what failed. Only the
+# new file: a Path.replace that timed out may still finish in the pool, so `path` may already be the new file, and
+# then the new name is gone and its removal does nothing.
+def remove_part(temp: String) -> Void
+  _ = Path.remove(temp, CLEANUP_MS)
+end
+
+# The finished file checked against the digest, then renamed over `path` in one step, so `path` always names the old
+# file or the new one.
+def settle(saving: Saving, sha256: Optional[String], deadline: Int) -> Result[Void]
+  try check_digest(saving.temp, sha256, deadline)
+  Path.replace(saving.temp, saving.path, try file_left(deadline))
+end
+
+# The hidden name a download grows under, in the folder of `path`: `.<name>.<8 hex digits>.agc-part`, with at most
+# PART_NAME characters of the name, so it stays short whatever `path` is.
+def part_path(path: String) -> String
+  name = last_part(last_part(path, "/"), "\\")
+  folder = path.slice(0, path.length - name.length)
+  "#{folder}.#{name.slice(0, smaller(name.length, PART_NAME))}.#{OpenSSL.Random.hex(4)}.agc-part"
+end
+
+# What follows the last `separator` in `text`, or all of it when there is none.
+def last_part(text: String, separator: String) -> String
+  return "" if text.end_with?(separator)
+  text.split(separator).last
+end
+
+def check_digest(temp: String, sha256: Optional[String], deadline: Int) -> Result[Void]
+  case sha256
+    some(hex) ->
+      return ok() if try File.sha256(temp, try file_left(deadline)) == try OpenSSL.Digest.hexdecode(hex)
+      error(DIGEST_MISMATCH, kind: "http.digest")
+    none -> ok()
+  end
+end
+
+# Whether a download may end at `path`: nothing is there yet, or a file or a link that it replaces. It is checked
+# before the connect, so a directory fails at once; Path.replace refuses one that appears later.
+def replaceable(path: String, deadline: Int) -> Result[Void]
+  case File.lstat(path, try file_left(deadline))
+    ok(info) ->
+      return ok() if info.kind == "file" or info.kind == "link"
+      error("http: the download path is a #{info.kind}, not a file", kind: "argument")
+    error(_) -> ok()
+  end
+end
+
+def file_left(deadline: Int) -> Result[Int]
+  left = deadline - Time.monotonic_ms()
+  return error(TIMED_OUT, kind: "net.timeout") if left <= 0
+  ok(left)
 end
 
 # The response head of a download, with the download budget as the body limit.

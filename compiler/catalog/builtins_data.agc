@@ -518,6 +518,7 @@ ERROR_KINDS: List[String] = [
   "archive.unsafe",
   "binary.too_large",
   "heap.empty",
+  "http.digest",
   "option_parser.help",
   "option_parser.parse",
   "regex.syntax",
