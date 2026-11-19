@@ -33,7 +33,7 @@ Un `case` necesita las dos ramas, `some(n) ->` y `none ->`, o un `_` final. Una 
 
 ## Campos, parámetros, elementos y genéricos {#fields-parameters-items-and-generics}
 
-`Optional[T]` va donde va un tipo, `T` puede ser un parámetro de tipo, y los Optional pueden anidarse. Un parámetro o campo toma `none` como predeterminado, y quien llama lo omite o pasa `some(x)`.
+`Optional[T]` va donde va un tipo, `T` puede ser un parámetro de tipo, y los Optional pueden anidarse. Un parámetro o campo toma `none` como predeterminado, y el llamador lo omite o pasa `some(x)`.
 
 ```agentica
 struct Config
@@ -265,4 +265,4 @@ error("no even number")
 
 ## Optional o Result {#optional-or-result}
 
-Usa un Optional cuando no tener valor es normal y no necesita un motivo: una búsqueda que no encuentra nada, un ajuste que quien llama omite. Usa un [Result](/tour/results-and-try/) cuando algo falló y quien llama necesita saber por qué, como un análisis o una lectura de archivo. `to_result("message")` convierte el primero en el segundo cuando un valor que falta es un error para quien llama. `List.find` y `Lazy.find` dan un Result con `error("not found")`, no un Optional.
+Usa un Optional cuando no tener valor es normal y no necesita un motivo: una búsqueda que no encuentra nada, un ajuste que el llamador omite. Usa un [Result](/tour/results-and-try/) cuando algo falló y el llamador necesita saber por qué, como un análisis o una lectura de archivo. `to_result("message")` convierte el primero en el segundo cuando un valor que falta es un error para el llamador. `List.find` y `Lazy.find` dan un Result con `error("not found")`, no un Optional.
