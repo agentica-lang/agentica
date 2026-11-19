@@ -180,6 +180,9 @@ static void test_json_numbers(void) {
   assert(!value_equal(agc_json_number(INT64_C(9007199254740993)), json_float(9007199254740992.0)));
   assert(value_equal(agc_json_number(INT64_C(9007199254740992)), json_float(9007199254740992.0)));
   assert(!value_equal(agc_json_number(INT64_MAX), json_float(0x1p63)));
+  assert(!value_equal(agc_json_number(INT64_MIN), json_float(0x1p63)));
+  assert(!value_equal(json_big("1234567890123456789012"), json_float(0x1p64)));
+  assert(!value_equal(json_big("-18446744073709551616"), json_float(0x1p64)));
   assert(value_equal(agc_json_number(INT64_MIN), json_float(-0x1p63)));
   assert(value_equal(json_big("9223372036854775808"), json_float(0x1p63)));
   assert(value_equal(json_float(0x1p64), json_big("18446744073709551616")));

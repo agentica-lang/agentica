@@ -68,7 +68,7 @@ No code needed. `{string}` is text in double quotes, `{int}` a whole number.
 | `I close stdin` | closes the program's input |
 | `I receive the line {string} within {int} milliseconds` | checks the next output line |
 | `I receive a line within {int} milliseconds:` | checks the next line against the Doc String |
-| `I receive a JSON line within {int} milliseconds:` | compares the next line as JSON, in any key order |
+| `I receive a JSON line within {int} milliseconds:` | compares the next line as JSON, in any key order and numbers by value |
 | `stdin remains open` | checks that the program still runs |
 | `the program exits with code {int} within {int} milliseconds` | waits for the exit code |
 | `stdout is:` / `stderr is:` | after the program ends, compares the stdout that no line step has read yet, or all of stderr |

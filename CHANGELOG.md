@@ -10,7 +10,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- `==` and `!=` compare two `JSON.Value`s, as Ruby's `Hash#==` does: object keys in any order, arrays in order, and numbers by value (`1 == 1.0`, `-0.0 == 0.0`); a list, map or struct that holds one has equality too, and `Test.eq` compares the same way (#1878).
+- `==` and `!=` compare two `JSON.Value`s, as Ruby's `Hash#==` does: object keys in any order, arrays in order, and numbers by value (`1 == 1.0`, `-0.0 == 0.0`); a list, map or struct that holds one has equality too, and `Test.eq` and the BDD step `I receive a JSON line` compare the same way (#1878).
 - `Process.pid(p)` gives the OS process id of a child, and an error once it has exited and was reaped (#1868).
 - `System.program_name()` gives the path of the main program as it was given, the `.agc` or the `.agcb` file, as Ruby's `$PROGRAM_NAME` (#1869).
 - `Path.replace(from, to)` renames a file over another in one step, as Ruby's `File.rename` does: a file or a link at `to` is replaced, a directory is an error, and `from` is synced first (#1865).

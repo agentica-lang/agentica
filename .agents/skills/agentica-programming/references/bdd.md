@@ -36,7 +36,7 @@ I send input:                                      literal Doc String and flush
 I close stdin                                      EOF (closing twice is fine)
 I receive a line within {int} milliseconds:        expected Doc String
 I receive the line {string} within {int} milliseconds   expected quoted text
-I receive a JSON line within {int} milliseconds:   expected JSON Doc String; key order ignored
+I receive a JSON line within {int} milliseconds:   expected JSON Doc String; key order ignored, numbers by value
 stdin remains open                                 input open and program active
 the program exits with code {int} within {int} milliseconds   wait and check the exit code
 stdout is: / stderr is:                            after exit: the stdout no line step read yet / all of stderr

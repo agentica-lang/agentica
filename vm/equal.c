@@ -219,30 +219,29 @@ static bool set_equal(agc_vm *vm, const agc_map *x, const agc_map *y) {
   return agc_set_subset(vm, x, y);
 }
 
-/* The exact decimal text of a finite double with no fraction, in buf (at least 400 bytes): the 53-bit mantissa
-   doubled once per binary exponent, in base 10^9 limbs. */
-static size_t integral_text(double d, char *buf) {
+/* The exact decimal text of a finite double with no fraction and |d| >= 2^53, in buf (at least 400 bytes): the 53-bit
+   mantissa shifted left by its binary exponent in base 10^9 limbs, up to 29 bits a pass (a limb times 2^29 plus a
+   carry stays under 2^64). */
+static size_t integral_text(double d, int shift, char *buf) {
   int e;
-  double m = frexp(fabs(d), &e);
-  uint64_t mantissa = (uint64_t)ldexp(m, 53);
-  int shift = e - 53;
-  size_t len = 0;
-  if (d < 0) buf[len++] = '-';
-  if (shift <= 0) return len + (size_t)sprintf(buf + len, "%" PRIu64, shift <= -64 ? 0 : mantissa >> -shift);
-  uint32_t limbs[40];
-  size_t n = 0;
-  for (uint64_t v = mantissa; v; v /= 1000000000) limbs[n++] = (uint32_t)(v % 1000000000);
-  for (int k = 0; k < shift; k++) {
-    uint32_t carry = 0;
+  uint64_t mantissa = (uint64_t)ldexp(frexp(fabs(d), &e), 53);
+  uint64_t limbs[40];
+  size_t n = 0, len = 0;
+  for (uint64_t v = mantissa; v; v /= 1000000000) limbs[n++] = v % 1000000000;
+  while (shift > 0) {
+    int step = shift < 29 ? shift : 29;
+    uint64_t carry = 0;
     for (size_t i = 0; i < n; i++) {
-      uint32_t twice = limbs[i] * 2 + carry;
-      carry = twice >= 1000000000;
-      limbs[i] = twice - carry * 1000000000;
+      uint64_t moved = (limbs[i] << step) + carry;
+      limbs[i] = moved % 1000000000;
+      carry = moved / 1000000000;
     }
-    if (carry) limbs[n++] = carry;
+    for (; carry; carry /= 1000000000) limbs[n++] = carry % 1000000000;
+    shift -= step;
   }
-  len += (size_t)sprintf(buf + len, "%" PRIu32, limbs[n - 1]);
-  for (size_t i = n - 1; i > 0; i--) len += (size_t)sprintf(buf + len, "%09" PRIu32, limbs[i - 1]);
+  if (d < 0) buf[len++] = '-';
+  len += (size_t)sprintf(buf + len, "%" PRIu64, limbs[n - 1]);
+  for (size_t i = n - 1; i > 0; i--) len += (size_t)sprintf(buf + len, "%09" PRIu64, limbs[i - 1]);
   return len;
 }
 
@@ -275,8 +274,16 @@ static bool same_number(agc_vm *vm, const agc_json *x, const agc_json *y) {
     if (!(d >= -0x1p63 && d < 0x1p63)) return false;
     return (int64_t)d == agc_as_int(vm, x->scalar);
   }
-  agc_charge(vm, 1);
-  return same_text(agc_as_string(vm, x->scalar), text, integral_text(d, text));
+  /* A big integer is out of the Int range, so |d| >= 2^63: 2^(e-1) <= |d| < 2^e has floor((e-1) log10 2) + 1 or
+     floor(e log10 2) + 1 digits, and a text of another length is not equal without writing the digits. */
+  const agc_string *big = agc_as_string(vm, x->scalar);
+  int e;
+  frexp(d, &e);
+  size_t digits = big->bytes - (big->bytes && big->data[0] == '-');
+  if (e < 64 || digits < (size_t)((e - 1) * 0.30102999566398120) + 1 || digits > (size_t)(e * 0.30102999566398120) + 1)
+    return false;
+  agc_charge(vm, 1 + (e - 53) / 32);
+  return same_text(big, text, integral_text(d, e - 53, text));
 }
 
 static bool number_kind(agc_json_kind kind) {
@@ -368,7 +375,7 @@ static bool walk_next(agc_vm *vm, work_stack *s, work_kind kind, agc_value *x, a
     if (w->as.object.next == left->count) return false;
     const agc_json_member *m = &left->members[w->as.object.next++];
     const agc_json_member *found = agc_json_find(w->as.object.right, m->key);
-    agc_charge(vm, 1);
+    agc_charge_bytes(vm, m->key->bytes);
     if (!found) {
       *differs = true;
       return false;
