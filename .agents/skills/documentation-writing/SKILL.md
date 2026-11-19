@@ -13,6 +13,8 @@ description: >-
 **Document only when strictly necessary.** The default is no doc change.
 Change docs only when a reader would otherwise be wrong or blocked.
 
+A translation into Spanish (site/content.es/): `.agents/skills/docs-i18n/`.
+
 ## 1. Is a doc change needed?
 
 Ask what changed and who reads about it:
