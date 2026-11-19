@@ -85,7 +85,7 @@ false
 Bytes.scrub(bytes: Bytes, replacement: String = "�") -> String
 ```
 
-Lee los bytes como UTF-8 y nunca falla: cada secuencia inválida o cortada se vuelve el reemplazo, U+FFFD si no se indica otro, y `""` la quita. Sirve para texto que puede tener bytes malos, como un registro (log) o la salida de un proceso hijo; [`String.from_bytes`](/library/text-and-data/string/#from_bytes) es la forma estricta. Un reemplazo representa la parte inicial más larga de una secuencia válida (la «subparte máxima» de Unicode), como en `decode("utf-8", "replace")` de Python y en un navegador: un carácter de 3 bytes cortado da uno, una codificación sobrelarga o un sustituto da uno por byte, y así cada byte por encima de 0xF4. Un registro leído línea a línea nunca corta un carácter, porque una línea termina en el byte 10, que ninguna secuencia de varios bytes contiene.
+Lee los bytes como UTF-8 y nunca falla: cada secuencia inválida o cortada se vuelve el reemplazo, U+FFFD si no se indica otro, y `""` la quita. Sirve para texto que puede tener bytes malos, como un registro (log) o la salida de un proceso hijo; [`String.from_bytes`](/library/text-and-data/string/#from_bytes) es la forma estricta. Un reemplazo representa la parte inicial más larga de una secuencia válida (la «subparte máxima» de Unicode), como en `decode("utf-8", "replace")` de Python y en un navegador: un carácter de 3 bytes cortado da uno, una codificación sobrelarga o un sustituto da uno por byte, y lo mismo cada byte por encima de 0xF4. Un registro leído línea a línea nunca corta un carácter, porque una línea termina en el byte 10, que ninguna secuencia de varios bytes contiene.
 
 ```agentica
 def main() -> Void
@@ -180,7 +180,7 @@ Bytes.take(bytes: Bytes, count: Int) -> Bytes
 Bytes.drop(bytes: Bytes, count: Int) -> Bytes
 ```
 
-`slice` copia un rango y detiene el programa fuera de los límites. `take` y `drop` copian los primeros `count` bytes o el resto, y nunca se detienen por un conteo mayor que la longitud (un conteo negativo es `RUNTIME-INVALID-COUNT`). Las tres copian: un resultado no mantiene viva su fuente.
+`slice` copia un rango y detiene el programa fuera de los límites. `take` y `drop` copian los primeros `count` bytes o el resto, y nunca se detienen por una cantidad mayor que la longitud (una cantidad negativa es `RUNTIME-INVALID-COUNT`). Las tres copian: un resultado no mantiene en memoria su fuente.
 
 ```agentica
 def main() -> Void

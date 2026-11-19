@@ -18,11 +18,11 @@ source_hash: "6a1676d5d7c4"
 Cache.memory(max_bytes: Int, options: Cache.Options = Cache.Options()) -> Cache.Store
 ```
 
-Una caché vacía que guarda como mucho `max_bytes`, contando cada elemento como su clave, su valor y 64 bytes de sobrecarga. `Cache.Options` tiene tres campos, cada uno con su predeterminado:
+Una caché vacía que guarda como mucho `max_bytes`, contando cada elemento de la caché como su clave, su valor y 64 bytes de sobrecarga. `Cache.Options` tiene tres campos, cada uno con su predeterminado:
 
 - `max_entries: Int = 0`: como mucho esta cantidad de elementos, 0 para ningún límite.
 - `ttl_ms: Int = 0`: el tiempo de vida de un elemento en milisegundos, 0 para ninguno (ver [Caducidad](#expiry)).
-- `clock: Optional[Fn[Int]] = none`: la hora en milisegundos, que solo tiene que avanzar. Sirve para medir los elementos y el lease de un descarte (abajo), así que un reloj que se detiene también impide que otra tarea tome un descarte atascado. El predeterminado es el reloj monotónico; una prueba da uno falso.
+- `clock: Optional[Fn[Int]] = none`: la hora en milisegundos, que solo tiene que avanzar. Sirve para medir los elementos y el lease de un descarte (abajo), así que un reloj que se detiene también impide que otra tarea tome un descarte atascado. El predeterminado es el reloj monotónico; una prueba usa uno falso.
 
 Un elemento es demasiado grande cuando su clave, su valor y los 64 bytes de sobrecarga suman más de la mitad de `max_bytes` (ver [Desalojo](#eviction)): `fetch` y `put_new` no lo guardan, y `put` tampoco lo guarda, y quita el valor anterior de su clave.
 
@@ -32,7 +32,7 @@ Un elemento es demasiado grande cuando su clave, su valor y los 64 bytes de sobr
 Cache.fetch(cache: Cache.Store, key: String, compute: Fn[String]) -> String
 ```
 
-Da el valor de `key`. Si no está, ejecuta el bloque, guarda el resultado y lo da. El bloque se ejecuta fuera del store, así que puede ser lento o llamar al store. Dos tareas que no encuentran la misma clave a la vez ejecutan ambas el bloque, y se conserva un solo resultado; un bloque que debe ejecutarse una sola vez pertenece a una tarea dueña.
+Da el valor de `key`. Si hay un desacierto de caché, ejecuta el bloque, guarda el resultado y lo da. El bloque se ejecuta fuera del store, así que puede ser lento o llamar al store. Dos tareas con un desacierto de caché en la misma clave a la vez ejecutan ambas el bloque, y se conserva un solo resultado; un bloque que debe ejecutarse una sola vez pertenece a una tarea dueña.
 
 ```agentica
 import Cache from "std/cache"
@@ -103,7 +103,7 @@ none
 Cache.bytes(cache: Cache.Store) -> Int
 ```
 
-Los bytes que ocupan los elementos, contados como los cuenta `max_bytes`, nunca por encima de `max_bytes`. Cuando no hay ninguna llamada en curso el conteo es exacto: es la suma de los elementos que están en la caché, y delete, un reemplazo, la caducidad y `cleanup` devuelven sus bytes.
+Los bytes que ocupan los elementos, contados como los cuenta `max_bytes`, nunca por encima de `max_bytes`. Cuando no hay ninguna llamada en curso la cantidad es exacta: es la suma de los elementos que están en la caché, y delete, un reemplazo, la caducidad y `cleanup` devuelven sus bytes.
 
 ## Caducidad {#expiry}
 
@@ -117,7 +117,7 @@ Con `ttl_ms`, un elemento nunca se lee más de ese tiempo después de escribirse
 Cache.cleanup(cache: Cache.Store) -> Int
 ```
 
-`cleanup` quita cada elemento que pasó su tiempo de vida y da cuántos quitó. Es seguro desde cualquier tarea en cualquier momento, junto a `get` y `put`, y mantiene exacto el conteo de bytes. Sin `ttl_ms` no quita nada. Para barrer cada pocos segundos, ejecútalo en una tarea propia:
+`cleanup` quita cada elemento que pasó su tiempo de vida y da cuántos quitó. Es seguro desde cualquier tarea en cualquier momento, junto a `get` y `put`, y mantiene exacta la cantidad de bytes. Sin `ttl_ms` no quita nada. Para barrer cada pocos segundos, ejecútalo en una tarea propia:
 
 ```agentica {mode="check"}
 import Cache from "std/cache"
@@ -162,13 +162,13 @@ none
 
 `Cache.memory` guarda tres tablas `ATS`, llamadas generaciones. Los elementos nuevos van a la generación joven. Cuando un elemento no cabe en ella, la generación joven pasa a ser la vieja, la generación anterior se descarta entera y empieza una vacía. `get` busca en la generación joven y luego en la vieja, y no guarda nada: solo lo hacen `put` y `fetch` (solo quita un elemento caducado). Por eso un elemento sale entre una y dos rotaciones después de escribirse, por muchas veces que se lea, y una clave popular la vuelve a calcular el siguiente `fetch` aproximadamente cada dos rotaciones. Es una aproximación barata de primero en entrar, primero en salir por generaciones, sin escribir al leer, y eso es lo que mantiene `get` rápido y sin carreras con `delete`.
 
-Cada generación viva guarda como mucho la mitad de `max_bytes` y de `max_entries` (al menos un elemento), así que la caché guarda entre la mitad y el total; el tamaño de un elemento (clave, valor y los 64 bytes) se compara con `max_bytes / 2`. Con una carga desigual (20.000 claves de 1 KB, las populares pedidas mucho más a menudo, un presupuesto del 10 % de las claves) dio acierto en el 63 % de las solicitudes (37 % con una distribución más plana). Una simulación de las mismas solicitudes con el presupuesto completo da 69 % y 45 % para LRU exacto, y 60 % y 34 % para vaciar toda la caché cuando está llena.
+Cada generación vigente guarda como mucho la mitad de `max_bytes` y de `max_entries` (al menos un elemento), así que la caché guarda entre la mitad y el total; el tamaño de un elemento (clave, valor y los 64 bytes) se compara con `max_bytes / 2`. Con una carga desigual (20.000 claves de 1 KB, las populares pedidas mucho más a menudo, un presupuesto del 10 % de las claves) dio acierto en el 63 % de las solicitudes (37 % con una distribución más plana). Una simulación de las mismas solicitudes con el presupuesto completo da 69 % y 45 % para LRU exacto, y 60 % y 34 % para vaciar toda la caché cuando está llena.
 
 Descartar una generación es un [`ATS.clear`](/library/concurrency/ats/#atsdelete-and-atsclear) de su tabla, sea cual sea su tamaño, así que el put que la inicia no espera y `Cache.clear` tarda lo mismo, muy poco. Un put que encuentra un descarte en curso en otra tarea, y sin sitio, se descarta: una caché puede olvidar un elemento.
 
-## El conteo de bytes es exacto {#the-byte-count-is-exact}
+## La cantidad de bytes es exacta {#the-byte-count-is-exact}
 
-El conteo de bytes se mantiene exacto cuando las tareas compiten por los mismos elementos: ningún tamaño se cuenta dos veces ni se pierde. Sus límites:
+La cantidad de bytes se mantiene exacta cuando las tareas compiten por los mismos elementos: ningún tamaño se cuenta dos veces ni se pierde. Sus límites:
 
 - Una tarea cancelada a mitad de una escritura puede dejar un elemento sin contar, legible hasta un descarte posterior de su tabla.
 - Una tarea cancelada entre reservar los bytes de un elemento y guardarlo deja esa reserva contada hasta que se descarta su generación.

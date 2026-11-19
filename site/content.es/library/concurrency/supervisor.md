@@ -1,11 +1,11 @@
 ---
 title: Supervisor (std)
 weight: 6
-description: El módulo std/supervisor, una tarea que inicia actores y reinicia uno que falla, uno por uno, dentro de un límite de reinicios.
+description: El módulo std/supervisor, una tarea que inicia actores y reinicia solo el que falla (one for one), dentro de un límite de reinicios.
 source_hash: "9b8aa0dfe9f1"
 ---
 
-`std/supervisor` está escrito en Agentica, sobre [Actor](/library/concurrency/actor/): `import Supervisor from "std/supervisor"`. Un supervisor es una tarea que inicia actores, sus hijos, y vuelve a iniciar un hijo que falla; los otros hijos siguen corriendo (uno por uno).
+`std/supervisor` está escrito en Agentica, sobre [Actor](/library/concurrency/actor/): `import Supervisor from "std/supervisor"`. Un supervisor es una tarea que inicia actores, sus hijos, y vuelve a iniciar un hijo que falla; los otros hijos siguen ejecutándose (one for one).
 
 - Un hijo es un actor con un nombre y un bloque de registro. El supervisor ejecuta el bloque con la dirección de cada actor nuevo, así que un módulo la pone en su tabla de nombres. Después de un reinicio el actor tiene un buzón nuevo, y por tanto una dirección nueva: quien busca el nombre en cada llamada llega al actor nuevo, y quien conservó la dirección vieja recibe `error("address: gone")`.
 - Solo un fallo vuelve a iniciar un hijo. Un hijo que termina sin fallo (su handler devolvió `Actor.done`) se queda parado.
@@ -18,7 +18,7 @@ source_hash: "9b8aa0dfe9f1"
 Supervisor.child(name: String, behaviour: Actor.Behaviour[S, M], register: Fn[Address[M], Void]) -> Supervisor.Child
 ```
 
-Un hijo que ejecuta `behaviour` (ver [Actor](/library/concurrency/actor/)) y llama a `register` con la dirección de cada actor nuevo. El bloque se ejecuta en una tarea propia, antes de que el supervisor siga, durante como máximo 5 segundos: un bloque que falla, o que todavía sigue en marcha entonces (se cancela), es un inicio fallido. El bloque es obligatorio: un hijo al que nadie alcanza por nombre usa `do |_address| nil end`. Una `List[Supervisor.Child]` guarda hijos de cualquier tipo de estado y de mensaje.
+Un hijo que ejecuta `behaviour` (ver [Actor](/library/concurrency/actor/)) y llama a `register` con la dirección de cada actor nuevo. El bloque se ejecuta en una tarea propia, antes de que el supervisor siga, durante 5 segundos como máximo: un bloque que falla, o que todavía sigue en marcha entonces (se cancela), es un inicio fallido. El bloque es obligatorio: un hijo al que nadie alcanza por nombre usa `do |_address| nil end`. Una `List[Supervisor.Child]` guarda hijos de cualquier tipo de estado y de mensaje.
 
 ## Supervisor.start {#supervisorstart}
 

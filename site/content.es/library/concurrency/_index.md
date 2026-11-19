@@ -9,7 +9,7 @@ Las tareas son ligeras y se ejecutan en los planificadores de la VM, uno por nú
 
 - Usa [Task](/library/concurrency/task/) para ejecutar trabajo al mismo tiempo: iniciar, esperar, pausar y cancelar tareas.
 - Usa un [Channel](/library/concurrency/channel/) para pasar valores entre tareas. Un productor envía y un consumidor recibe.
-- Usa una tabla [ATS](/library/concurrency/ats/) para compartir un contador o una caché que las tareas actualizan en el mismo sitio.
+- Usa una tabla [ATS](/library/concurrency/ats/) para compartir un contador o una caché que las tareas actualizan directamente.
 - Usa [Cache](/library/concurrency/cache/) (`std/cache`) para guardar texto calculado que comparten las tareas, dentro de un presupuesto de bytes.
 - Usa un [Actor](/library/concurrency/actor/) (`std/actor`) para un estado que una tarea posee y que otras tareas alcanzan con `cast` y `call`.
 - Usa un [Supervisor](/library/concurrency/supervisor/) (`std/supervisor`) para iniciar actores y reiniciar uno que falla.

@@ -5,7 +5,7 @@ description: Comparte un contador o una caché entre tareas en una sola tabla mu
 source_hash: "f0c7646d4b2a"
 ---
 
-Un `ATS[K, V]` (Agentica Table Storage) es una tabla que las tareas comparten y actualizan en su sitio, como ETS de Erlang. Los valores siguen siendo inmutables; una tabla es el único lugar compartido que cambia. Usa un [Channel](/library/concurrency/channel/) para pasar mensajes, y una tabla para un estado que muchas tareas leen y actualizan, como un contador o una caché.
+Un `ATS[K, V]` (Agentica Table Storage) es una tabla que las tareas comparten y actualizan directamente, como ETS de Erlang. Los valores siguen siendo inmutables; una tabla es el único lugar compartido que cambia. Usa un [Channel](/library/concurrency/channel/) para pasar mensajes, y una tabla para un estado que muchas tareas leen y actualizan, como un contador o una caché.
 
 - Una tabla es un handle: pasarla a una función o a una tarea la comparte, nunca se copia. Puede ser un campo de estructura, un elemento de lista, un valor de `Map`, o un argumento o un resultado de `Task.spawn`, pero no un valor dentro de una tabla. Una constante solo guarda una tabla cuando es todo su inicializador, `ATS.new()` ([una tabla constante](#a-constant-table)); en cualquier otro sitio dentro de una constante es `CHECK-CONSTANT-TYPE`. `ATS` es un nombre reservado: una `struct`, un `enum` o un alias de importación de usuario llamado `ATS` es `CHECK-REDEFINED-NAME`.
 - Las claves son `Int`, `String` o `Bytes`, como en un `Map`; si no, `CHECK-MAP-KEY-TYPE`. Los valores son datos sin `Fn`, `Task`, `Channel`, handle, `Lazy` ni tabla dentro, y no `Nil`; si no, `CHECK-ATS-VALUE` en el tipo del valor. La prueba es profunda: mira dentro de los campos de estructura, los elementos de lista, los payloads de enum, los valores de `Map` y `Result`, y rechaza `Fn` porque un bloque puede capturar un handle. La [`Address`](/library/concurrency/channel/#channeladdress) de un canal es un dato, así que una tabla puede guardar las direcciones de canales. Un `Result[Void]` anidado está permitido; un `V` igual a `Void` es `CHECK-VOID-TYPE`. Un parámetro de tipo no se acepta como `V` (un payload de enum genérico `ATS[String, T]`), porque sus usos no se comprobarían; un alias genérico se comprueba donde se usa.
@@ -13,9 +13,9 @@ Un `ATS[K, V]` (Agentica Table Storage) es una tabla que las tareas comparten y 
 - Todas salvo `new` también funcionan como métodos: `hits.add("home", 1)` es `ATS.add(hits, "home", 1)`.
 - `puts`, `print`, la interpolación y `==` sobre una tabla son `CHECK-TYPE-MISMATCH`, `.to_s` es `CHECK-UNKNOWN-METHOD`, y una estructura con un campo de tabla es `CHECK-NOT-ENCODABLE` como JSON. `IO.inspect` imprime `<ATS>` sin el contenido. Usa `to_map` para verlo.
 - El recolector de basura libera una tabla cuando nada la referencia. No es un recurso del SO, así que no se aplica la regla de propiedad de los handles: la tarea que la creó no la posee, su fin no la cierra, y no hace falta `Task.spawn_owning`. Una tarea llega a una tabla por un handle que recibió o por una tabla constante. Una tabla pertenece a la ejecución que la creó, y una llamada desde otra ejecución se detiene con `RUNTIME-ATS-CONTEXT`.
-- No hay límite de tamaño ni caducidad; una caché acotada es [std/cache](/library/concurrency/cache/), un módulo de `std/` sobre `ATS`, y una con caducidad también debe ir en un módulo. No se admiten: tablas ordenadas, claves duplicadas (guarda una lista por clave con [`ATS.push`](#atspush)), un `update` basado en bloque, un `replace` con comparación y cambio (compare-and-swap), ni tablas compartidas entre procesos del SO.
+- No hay límite de tamaño ni caducidad; una caché acotada es [std/cache](/library/concurrency/cache/), un módulo de `std/` sobre `ATS`, y una con caducidad también debe ir en un módulo. No se admiten: tablas ordenadas, claves duplicadas (guarda una lista por clave con [`ATS.push`](#atspush)), un `update` basado en bloque, un `replace` con comparar e intercambiar (compare-and-swap), ni tablas compartidas entre procesos del SO.
 - `put`, `put_new`, `delete`, `clear`, `add` y `push` llevan el efecto `concurrency`, que además evita `CHECK-UNUSED-VALUE` en un `put_new`, `add` o `push` que se ignora.
-- `get`, `put`, `put_new`, `has_key?`, `delete`, `add` y `push` tardan O(1) en promedio, sea cual sea el tamaño de la tabla, y `size` y `clear` O(1). `keys` y `to_map` son O(n): copian la tabla mientras no hay escrituras y luego construyen su lista o su mapa sin retener a las otras tareas. Una lectura no toma ningún bloqueo ni escribe nada que vean los otros planificadores, así que las tareas que leen una misma tabla corren en paralelo; una lectura que se solapa con una escritura vuelve a intentarlo. Una escritura espera a las otras escrituras de esa tabla, y a una copia de `keys` o `to_map`, durante lo que dura una sola llamada. Así que las escrituras a una misma tabla no corren en paralelo, aunque escriban claves distintas.
+- `get`, `put`, `put_new`, `has_key?`, `delete`, `add` y `push` tardan O(1) en promedio, sea cual sea el tamaño de la tabla, y `size` y `clear` O(1). `keys` y `to_map` son O(n): copian la tabla mientras no hay escrituras y luego construyen su lista o su mapa sin retener a las otras tareas. Una lectura no toma ningún bloqueo ni escribe nada que vean los otros planificadores, así que las tareas que leen una misma tabla se ejecutan en paralelo; una lectura que se solapa con una escritura vuelve a intentarlo. Una escritura espera a las otras escrituras de esa tabla, y a una copia de `keys` o `to_map`, durante lo que dura una sola llamada. Así que las escrituras a una misma tabla no se ejecutan en paralelo, aunque escriban claves distintas.
 - En BDD, un proceso trabajador ejecuta el `main` del programa de pasos una vez y después muchos escenarios, así que una tabla creada en `main` y capturada por bloques de pasos es compartida por los escenarios que ese trabajador ejecuta. Para tener una nueva en cada escenario, créala en un paso y guárdala con `BDD.keep`, o ejecuta `agentica test --isolate`, que ejecuta cada escenario, y `main` de nuevo, en un proceso propio. Una tabla no puede ir en el JSON de `BDD.set`.
 
 ## ATS.new {#atsnew}
@@ -184,7 +184,7 @@ ATS.keys(table: ATS[K, V]) -> List[K]
 ATS.to_map(table: ATS[K, V]) -> Map[K, V]
 ```
 
-Cada una lee la tabla tal como está en el momento de la llamada. `keys` y `to_map` listan las claves en orden de primera inserción; una clave borrada y vuelta a poner va al final, como en `Map`. No hay `values` ni `get` con valor predeterminado: usa `to_map` y `Result.unwrap_or`.
+Cada una lee la tabla tal como está en el momento de la llamada. `keys` y `to_map` listan las claves en orden de primera inserción; una clave quitada y vuelta a poner va al final, como en `Map`. No hay `values` ni `get` con valor predeterminado: usa `to_map` y `Result.unwrap_or`.
 
 ```agentica
 def main() -> Void
@@ -208,7 +208,7 @@ end
 
 ## Una caché que llenan las tareas {#a-cache-that-tasks-fill}
 
-La primera tarea que no encuentra una clave calcula su valor y lo guarda con `put_new`; una tarea que no la encuentra al mismo tiempo también lo calcula, pero solo se guarda un valor. Una segunda tabla cuenta el trabajo.
+La primera tarea con un desacierto de caché en una clave calcula su valor y lo guarda con `put_new`; una tarea con un desacierto en esa clave al mismo tiempo también lo calcula, pero solo se guarda un valor. Una segunda tabla cuenta el trabajo.
 
 ```agentica
 struct Shared

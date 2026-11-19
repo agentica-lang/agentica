@@ -7,7 +7,7 @@ source_hash: "3b2185abcf55"
 
 Un `Lazy[T]` es una receta: una fuente y los pasos después de ella. Crearlo no hace ningún trabajo. Un método final (`to_a`, `first`, `each`, `reduce`, `find`, `write_lines`, `write_bytes`) lo ejecuta, y pide un elemento a la vez a la fuente y lo pasa por cada paso, así que ningún paso crea una lista con todos los elementos. Un paso devuelve un `Lazy` nuevo; el anterior no cambia, y cada método final vuelve a ejecutar la fuente desde el principio (un canal, que no se puede leer dos veces, sigue donde se detuvo el último método final).
 
-Usa un `Lazy` para una fuente sin fin, para las líneas de un archivo grande o los valores de un canal, o cuando solo se necesitan los primeros resultados de una cadena larga de pasos. Para una lista que vas a recorrer completa, los métodos estrictos de [List](/library/data-structures/list/) son la forma adecuada.
+Usa un `Lazy` para una fuente sin fin, para las líneas de un archivo grande o los valores de un canal, o cuando solo se necesitan los primeros resultados de un encadenamiento largo de pasos. Para una lista que vas a recorrer completa, los métodos estrictos de [List](/library/data-structures/list/) son la forma adecuada.
 
 ```agentica
 def main() -> Void
@@ -23,7 +23,7 @@ ok([1, 9, 25])
 ok([[1, 2, 3, 4], [5, 6, 7, 8], [9, 10]])
 ```
 
-Cada método final da un `Result`. `take`, `take_while`, `first` y `find` detienen la fuente cuando tienen bastante, así que una fuente sin fin termina; `to_a`, `reduce` y `each` sobre una fuente sin fin nunca terminan, y `--max-steps` los detiene con `RUNTIME-STEP-LIMIT`. Cada elemento pedido cuesta un paso, y cada callback un paso más su cuerpo, igual que en `Range.each`. Otras tareas siguen corriendo entre elementos: un método final puede quedar suspendido entre dos elementos, así que `--max-steps`, los turnos de otras tareas y una cancelación llegan a un pipeline sin callback. Los callbacks se ejecutan en la tarea que llamó al método final, y una receta puede compartirse entre tareas en cualquier planificador. Un error de runtime en un callback termina el programa como en cualquier otro lugar. Un método final sobre un archivo o un canal se suspende mientras espera, como lo hacen `File.each_line` y `recv`, y una cancelación lo alcanza allí.
+Cada método final da un `Result`. `take`, `take_while`, `first` y `find` detienen la fuente cuando tienen bastante, así que una fuente sin fin termina; `to_a`, `reduce` y `each` sobre una fuente sin fin nunca terminan, y `--max-steps` los detiene con `RUNTIME-STEP-LIMIT`. Cada elemento pedido cuesta un paso, y cada callback un paso más su cuerpo, igual que en `Range.each`. Otras tareas siguen ejecutándose entre elementos: un método final puede quedar suspendido entre dos elementos, así que `--max-steps`, los turnos de otras tareas y una cancelación llegan a un pipeline sin callback. Los callbacks se ejecutan en la tarea que llamó al método final, y una receta puede compartirse entre tareas en cualquier planificador. Un error de runtime en un callback termina el programa como en cualquier otro lugar. Un método final sobre un archivo o un canal se suspende mientras espera, como lo hacen `File.each_line` y `recv`, y una cancelación lo alcanza allí.
 
 Un `Lazy` no tiene `==`, ni `to_s` (`CHECK-TYPE-MISMATCH`), ni forma JSON (`CHECK-NOT-ENCODABLE`); `IO.inspect` imprime `<Lazy>`. `Lazy` es un nombre de tipo reservado. No hay `next`: un `Lazy` es una receta, no un cursor. Un método de `List` sobre un `Lazy`, como `lz.size`, es `CHECK-UNKNOWN-METHOD` con una ayuda que muestra `to_a`; un paso que solo tiene `Lazy`, como `xs.each_cons(2)` sobre una lista, muestra `.lazy`.
 
@@ -57,7 +57,7 @@ ok(["a", "aa", "aaa"])
 
 ### File.foreach {#fileforeach}
 
-Las líneas de un archivo, leídas como las lee [`File.each_line`](/library/io-and-system/files/#fileeach_line): un bloque de `buffer_bytes` (de 1024 a 16777216, que también es la línea más larga) a la vez, y `timeout_ms` para cada lectura. Crear el `Lazy` no abre nada. El archivo se abre cuando empieza un método final y se cierra antes de que el método final devuelva, sea cual sea lo que lo terminó (el fin del archivo, un `take` o un `find` que ya tenía bastante, un error, un `try` fallido); un fallo o una cancelación de la tarea lo cierra al final de la tarea. Tras un tiempo de espera de lectura, el handle se libera de inmediato, y el descriptor del sistema operativo se cierra cuando termina la lectura que expiró.
+Las líneas de un archivo, leídas como las lee [`File.each_line`](/library/io-and-system/files/#fileeach_line): un trozo de `buffer_bytes` (de 1024 a 16777216, que también es la línea más larga) a la vez, y `timeout_ms` para cada lectura. Crear el `Lazy` no abre nada. El archivo se abre cuando empieza un método final y se cierra antes de que el método final devuelva, sea cual sea lo que lo terminó (el fin del archivo, un `take` o un `find` que ya tenía bastante, un error, un `try` fallido); un fallo o una cancelación de la tarea lo cierra al final de la tarea. Tras un tiempo de espera de lectura, el handle se libera de inmediato, y el descriptor del sistema operativo se cierra cuando termina la lectura que expiró.
 
 Un error de lectura (UTF-8 inválido, una línea más larga que el búfer), un archivo que falta o un tiempo de espera incorrecto terminan el método final con ese error. `File.foreach(...).each do ... end` sin ningún paso entre medias, escrito como un solo encadenamiento, es `CHECK-LAZY-NO-STEP`: para eso escribe `File.each_line`. Un búfer fuera de 1024..16777216 es `RUNTIME-INVALID-COUNT` en el argumento.
 
@@ -136,7 +136,7 @@ Lazy.drop(lazy: Lazy[A], count: Int) -> Lazy[A]
 Lazy.drop_while(lazy: Lazy[A], block: Fn[A, Bool]) -> Lazy[A]
 ```
 
-Un conteo negativo es `RUNTIME-INVALID-COUNT` en el argumento, al crear el paso. `take_while` se detiene en el primer elemento que su bloque rechaza; `drop_while` deja de llamar a su bloque en el primer elemento que rechaza.
+Una cantidad negativa es `RUNTIME-INVALID-COUNT` en el argumento, al crear el paso. `take_while` se detiene en el primer elemento que su bloque rechaza; `drop_while` deja de llamar a su bloque en el primer elemento que rechaza.
 
 ```agentica
 def main() -> Void
@@ -275,7 +275,7 @@ error("not found")
 Lazy.write_lines(lazy: Lazy[String], path: String, timeout_ms: Int = 30000) -> Result[Void]
 ```
 
-Escribe cada elemento y un salto de línea en un archivo, creado o truncado, y da `ok()` al final. El archivo se abre antes de pedir el primer elemento (si la apertura falla, no se pide nada) y se vuelca y se cierra antes de que el método final devuelva, sea cual sea lo que lo terminó; un fallo o una cancelación de la tarea lo cierra al final de la tarea. Las líneas se guardan en búfer y se escriben de 64 KiB en 64 KiB. Lo que se escribió antes de un error se queda en el archivo. `timeout_ms` limita la apertura, cada escritura y el cierre. Un tiempo de espera o una ruta incorrectos, una apertura, escritura o cierre fallidos, y una línea de más de 1 MiB terminan el método final con ese error. Una línea que contiene un salto de línea se lee de vuelta como dos líneas con `File.foreach`.
+Escribe cada elemento y un salto de línea en un archivo, creado o truncado, y da `ok()` al final. El archivo se abre antes de pedir el primer elemento (si la apertura falla, no se pide nada) y se vacía y se cierra antes de que el método final devuelva, sea cual sea lo que lo terminó; un fallo o una cancelación de la tarea lo cierra al final de la tarea. Las líneas se guardan en búfer y se escriben de 64 KiB en 64 KiB. Lo que se escribió antes de un error se queda en el archivo. `timeout_ms` limita la apertura, cada escritura y el cierre. Un tiempo de espera o una ruta incorrectos, una apertura, escritura o cierre fallidos, y una línea de más de 1 MiB terminan el método final con ese error. Una línea que contiene un salto de línea se lee de vuelta como dos líneas con `File.foreach`.
 
 ```agentica {mode="check"}
 def amount(line: String) -> Result[Int] = line.split(",")[1].to_i
