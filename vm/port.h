@@ -298,7 +298,8 @@ struct agc_output {
   agc_stdio *io;
   agc_write_mode mode;
   agc_utf8_cut cut;
-  bool writing, failed;
+  /* gone: the reader closed its end (agc_stdio_gone of the failure). */
+  bool writing, failed, gone;
   /* Positions in the bytes of the stream since it opened: `sent` bytes have been written, the ring holds the next
      `len` and the queue the ones after. `own_end` is the position just past the last byte of text of the program or
      the VM (bytes forwarded from a child never move it), or UINT64_MAX once such text met the failed stream. Text of
@@ -1085,6 +1086,12 @@ bool agc_memstream_take(FILE *file, agc_memstream *ms, char **text, size_t *len)
    Only native code writes to these buffers (the VM writes its own output through vm/output.c), so a busy stream
    loses at most what native code left in its buffer. FAILED when fflush fails. */
 typedef enum { AGC_STDIO_FLUSHED, AGC_STDIO_BUSY, AGC_STDIO_FAILED } agc_stdio_flush_result;
+/* True when ERR, the errno of a failed write or flush or the status of a write or poller callback, says that the
+   reader closed its end (EPIPE; vm/stdio_windows.c maps Windows' broken pipe to it). */
+bool agc_stdio_gone(int err);
+/* Called right after a failed fwrite or fflush, on its thread: on Windows it turns the UCRT's EINVAL for a pipe whose
+   reader left into EPIPE; elsewhere it does nothing. */
+void agc_stdio_failed(void);
 #define AGC_STDIO_FLUSH_WAIT_MS 100
 agc_stdio_flush_result agc_stdio_flush(FILE *stream);
 #ifdef _WIN32
@@ -1155,6 +1162,11 @@ void agc_output_file_done(agc_output *out);
 /* True once a write of the stream failed (its data is dropped from then on) and text of the program or the VM was lost
    with it (agc_output.own_end): a failure that lost only bytes of a child's stderr does not fail the run. */
 bool agc_output_failed(const agc_output *out);
+/* True once a write of the stream failed because its reader closed its end (EPIPE). */
+bool agc_output_gone(const agc_output *out);
+/* The exit status of a run whose standard output lost its reader: 128 + SIGPIPE, what a shell shows for a Unix tool
+   that SIGPIPE killed. */
+#define AGC_EXIT_READER_GONE 141
 
 uint32_t agc_builtin_struct(agc_vm *vm, const char *name, const char *const *fields, uint32_t count);
 /* The builtin Error struct of PROGRAM, by its name, its exact field list (AGC_ERROR_* in value.h) and its field types,

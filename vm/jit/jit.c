@@ -140,7 +140,9 @@ static bool has_code(uint32_t op) {
 static uint8_t op_kind(uint32_t op) {
   uint32_t plain = plain_op(op);
   if (plain == AGC_OP_JUMP || plain == AGC_OP_JUMP_IF_FALSE || plain == AGC_OP_JUMP_IF_TRUE) return KIND_JUMP;
-  if (has_code(op)) return KIND_CODE;
+  /* NO_MATCH leaves for the interpreter, which fails there, but only when the checker was wrong: it does not count as a
+     trip out, or every function with a case would lose its code. */
+  if (has_code(op) || op == AGC_OP_NO_MATCH) return KIND_CODE;
   switch (op) {
     case AGC_OP_RETURN: return KIND_RETURN;
     case AGC_OP_CALL_VALUE: return KIND_VALUE;

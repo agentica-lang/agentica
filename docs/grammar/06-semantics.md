@@ -468,7 +468,9 @@ a complete set of nested arms is not reported (for now). An
 arm is unreachable (`CHECK-UNREACHABLE-CASE-ARM`) only when an earlier arm
 without a guard already covers its variant with names and `_`, or follows an
 unguarded catch-all. The same pattern may come again after a guarded or
-refutable arm, guarded or not.
+refutable arm, guarded or not. The VM checks it again: a case that matches no
+arm at run time, which only a bug of the checker allows, fails with
+`RUNTIME-CASE-NO-MATCH` at the case.
 
 The example declares a user generic enum, to show the rules; a value that may be
 missing is the builtin `Optional[T]` (see "Optional values").

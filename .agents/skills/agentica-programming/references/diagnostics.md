@@ -248,6 +248,8 @@ lines show. A task's stack ends with `task spawned at file:line:column`.
   `OpenSSL.Digest`, `OpenSSL.HMAC` or `Base64` call.
 - `RUNTIME-INVALID-CHARACTER`: `String.code` without exactly one character, or
   `String.from_code` outside Unicode scalar values.
+- `RUNTIME-CASE-NO-MATCH`: a `case` matched no arm; the checker makes every
+  case exhaustive, so this is a bug of the checker (report it).
 - `RUNTIME-STEP-LIMIT`: the execution step budget is exhausted; the stack shows
   where the loop runs.
 - `RUNTIME-STACK-OVERFLOW`: recursion deeper than 10000; the stack shows the

@@ -70,6 +70,11 @@ code does not show:
   not a single variant pattern (`_`, a literal, a Result pattern, any
   or-pattern, even of plain variants) fails to the next arm in order, so every
   variant arm after it keeps its tag test.
+- The checker makes every `case` exhaustive, but unless its last arm is `_`
+  with no guard, a failed test of the last arm jumps to `no-match` on the
+  scrutinee, out of line after the function's code (with a `return` after
+  it): a checker bug fails there instead of going on with a stale register,
+  and the arms run no extra instruction.
 - `try` is `try dst src`: on an error, return that Result from the function (the
   block, inside a block). A `try` that the checker found in the block of a
   `Lazy` method (`Checked.step_tries`) is `try-step dst src`.
@@ -195,6 +200,12 @@ behavior.
     `v`, it goes where entry `v - b` goes when `b <= v < b + c`, else to the
     instruction after the table.
 
+- **Group:** Trap
+  - **Opcodes:** `NO_MATCH a`
+  - **Meaning:** `NO_MATCH` (opcode 54) ends a `case` that no arm matched:
+    it fails with `RUNTIME-CASE-NO-MATCH` at its span, showing the debug form
+    of `R[a]`, the scrutinee.
+
 - **Group:** Call
   - **Opcodes:** `CALL a bx`, `CALL_VALUE a b`, `CALL_BUILTIN a bx`, `TAIL_CALL
     a bx`, `RETURN a`, `CLOSURE a bx`
@@ -234,7 +245,7 @@ behavior.
     never
     set is `RUNTIME-INTERNAL`.
 
-There are 54 opcodes. Everything else, including `ok`, `error`, `puts` and every
+There are 55 opcodes. Everything else, including `ok`, `error`, `puts` and every
 module function, is a builtin. Opcode numbers are positions in one list shared
 by `OPCODES` in `compiler/bytecode/bytecode_tables.agc` and `agc_opcode` in
 `vm/value.h`. New opcodes are appended at the end; that does not bump the

@@ -543,3 +543,47 @@ def test_a_standard_input_that_cannot_be_read_is_an_internal_error(tmp_path):
     last = decode(process.stderr).strip().split("\n")[-1]
     assert json.loads(last)["code"] == "RUNTIME-INTERNAL"
     assert json.loads(last)["message"] == "cannot read standard input"
+
+
+# Two arms of equal length, so the two files differ only in the variant each IS_VARIANT tests.
+NO_MATCH_PROGRAM = """\
+enum Color
+  Reds
+  Blue
+end
+
+def pick(color: Color) -> Int
+  case color
+    %s -> 1
+    %s -> 2
+  end
+end
+
+def main() -> Void
+  puts(pick(Color.Blue))
+end
+"""
+
+
+def test_a_case_that_matches_no_arm_fails_at_the_case_instead_of_going_on(tmp_path):
+    # A checker bug that let a case miss an arm, made by hand: both arms of the bytecode test Color.Reds.
+    paths = []
+    for folder, arms in (("a", ("Color.Reds", "Color.Blue")), ("b", ("Color.Blue", "Color.Reds"))):
+        (tmp_path / folder).mkdir()
+        source = tmp_path / folder / "pick.agc"
+        source.write_text(NO_MATCH_PROGRAM % arms, encoding="utf-8")
+        paths.append(compile_agc(source, tmp_path / folder / "pick.agcb"))
+    assert vm(tmp_path, "--", str(paths[0]))[:2] == (0, "2\n")
+    first, second = bytearray(paths[0].read_bytes()), paths[1].read_bytes()
+    text = (NO_MATCH_PROGRAM % ("Color.Reds", "Color.Blue")).encode()
+    start = first.find(text)
+    changed = [at for at in range(len(first)) if first[at] != second[at] and not start <= at < start + len(text)]
+    assert len(first) == len(second) and len(changed) == 2, changed
+    first[changed[1]] = first[changed[0]]
+    paths[0].write_bytes(bytes(first))
+    for jit in ("off", "always"):
+        code, out, err = vm(tmp_path, "--json", "--jit", jit, "--", str(paths[0]))
+        failure = json.loads(err.strip().split("\n")[-1])
+        assert (code, out, failure["code"]) == (1, "", "RUNTIME-CASE-NO-MATCH"), err
+        assert failure["range"]["start"] == {"line": 7, "column": 3}, failure
+        assert failure["message"] == "no case arm matches Color.Blue"

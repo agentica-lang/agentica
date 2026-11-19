@@ -37,7 +37,10 @@ typedef struct {
 } drain_request;
 #endif
 
-static _Noreturn void fail_write(agc_vm *vm, const agc_output *out) {
+/* A write to standard output or error whose reader closed its end ends the run quietly with AGC_EXIT_READER_GONE, as
+   SIGPIPE ends a Unix tool: `prog | head` is not an error. */
+static _Noreturn void fail_write(agc_vm *vm, const agc_output *out, bool gone) {
+  if (gone) agc_exit(vm, AGC_EXIT_READER_GONE);
   agc_fail(vm, "RUNTIME-INTERNAL",
            out == &vm->rt->err ? "cannot write to standard error" : "cannot write to standard output", 0);
 }
@@ -48,7 +51,8 @@ static _Noreturn void write_failed(agc_vm *vm, agc_output *out) {
     clearerr(out->file);
     agc_stop(vm, sig);
   }
-  fail_write(vm, out);
+  agc_stdio_failed();
+  fail_write(vm, out, agc_stdio_gone(errno));
 }
 
 bool agc_output_on_file(const agc_output *out) { return !out->base; }
@@ -91,6 +95,8 @@ bool agc_output_failed(const agc_output *out) {
   return out->base && out->base->failed && out->base->own_end > out->base->sent;
 }
 
+bool agc_output_gone(const agc_output *out) { return agc_output_failed(out) && out->base->gone; }
+
 #if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
 /* The scheduler remembers the stream lock it holds (vm->stream_lock), so a failure that jumps out of the code that holds
    it gives it back (agc_sync_reset). The streams' locks are never held together. Taking it counts as short for the I/O
@@ -113,8 +119,9 @@ CC_JUMP_RELEASES CC_RELEASES(l->mutex) static void stream_drop(agc_vm *vm, agc_l
 
 /* A failure of a call that holds the stream's lock: the lock goes first, because agc_fail jumps out of the call. */
 static _Noreturn void fail_locked(agc_vm *vm, agc_output *out) {
+  bool gone = out->base->gone;
   stream_drop(vm, out->base->lock);
-  fail_write(vm, out);
+  fail_write(vm, out, gone);
 }
 
 static size_t smaller(size_t a, size_t b) { return a < b ? a : b; }
@@ -258,10 +265,12 @@ static void stop_waiting(agc_output *s, agc_task *t) {
   t->output = (agc_output_wait){0};
 }
 
-static void fail_stream(agc_vm *vm, agc_output *s) {
+/* ERR is the errno or the status of the failed write. */
+static void fail_stream(agc_vm *vm, agc_output *s, int err) {
   /* A request in flight points into the ring; only its done half may clear it. */
   assert(!held(s));
   s->failed = true;
+  s->gone = agc_stdio_gone(err);
   s->start = s->len = 0;
   free_notices(s);
   resume_forwarders(s);
@@ -281,7 +290,7 @@ static void write_now(agc_vm *vm, agc_output *s) {
     }
     if (done < 0 && errno == EINTR) continue;
     if (done < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) return;
-    fail_stream(vm, s);
+    fail_stream(vm, s, done < 0 ? errno : EIO);
     return;
   }
 }
@@ -407,14 +416,14 @@ static agc_value drain_done_locked(agc_vm *vm, void *data) {
   if (s->mode == AGC_WRITE_POLL) {
     if (s->failed) return agc_void();
     write_now(vm, s);
-    if (status < 0 && s->len && !s->failed) fail_stream(vm, s);
+    if (status < 0 && s->len && !s->failed) fail_stream(vm, s, status);
     advance(vm, s);
     return agc_void();
   }
   s->cut = cut;
   /* WRITTEN is ignored on an error: a partial write that fails counts as not sent, which is the safe side. */
   if (status) {
-    fail_stream(vm, s);
+    fail_stream(vm, s, status);
   } else {
     consumed(s, written);
     advance(vm, s);

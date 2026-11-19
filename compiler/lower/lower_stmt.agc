@@ -73,7 +73,7 @@ def lower_function(
     params: count,
     captures: captures.size,
     slots: fx.high,
-    body: fx.code,
+    body: fx.code.concat(fx.traps),
     file: fx.file,
     span: span,
   )
@@ -104,8 +104,8 @@ def lower_block_function(
 end
 
 ## Lowers a case that gives a value (Cx.case_value): each arm computes its last expression into the register `want`, or
-## into a new one when want is -1. The checker made the case exhaustive, so some arm without a guard always runs and
-## the register is always set.
+## into a new one when want is -1. The checker made the case exhaustive, so some arm always runs and sets the register;
+## if none does, the case ends in `no-match`.
 def lower_case_value(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.CaseStmt, want: Int) -> Result[Lowering.Out]
   target = Lowering.target(fx, want)
   fx = target.fx
@@ -478,6 +478,7 @@ def lower_arms(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.CaseStmt, target: Int
   fx = Lowering.new_label(scrutinee.fx)
   end_label = fx.labels - 1
   value = scrutinee.slot
+  trap = may_fall_through?(node)
   index = 1
   for arm in node.arms
     fx = Lowering.new_label(fx)
@@ -492,9 +493,13 @@ def lower_arms(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.CaseStmt, target: Int
     fx = leave(fx, before)
     if index < node.arms.size
       fx = Lowering.emit_at(fx, "jump", [end_label], node.span)
+      fx = Lowering.place(fx, skip)
+    elsif trap
+      fx = Lowering.trap(fx, skip, value, node.span)
+    else
+      fx = Lowering.place(fx, skip)
     end
 
-    fx = Lowering.place(fx, skip)
     index += 1
   end
 
@@ -506,8 +511,8 @@ end
 # past its tag test knows the variant, so a failed nested pattern or guard goes straight to the next arm that can match
 # it. An arm that is not a single variant pattern (`_`, a literal, a Result pattern, any or-pattern, even of plain
 # variants) fails to the next arm in order, so every variant arm after it keeps its tag test, which goes to the next
-# arm when it fails. Arm k starts at label first + k, its code after the tag test at first + count + k, and the end of
-# the case is first + 2 * count.
+# arm when it fails. Arm k starts at label first + k, its code after the tag test at first + count + k, no arm matched
+# at first + 2 * count (the end, or an out-of-line `no-match`), and the case ends at the label after it.
 def lower_table_arms(
   cx: Lowering.Cx,
   scrutinee: Lowering.Out,
@@ -518,7 +523,8 @@ def lower_table_arms(
   value = scrutinee.slot
   count = node.arms.size
   first = scrutinee.fx.labels
-  end_label = first + 2 * count
+  missed = first + 2 * count
+  end_label = missed + 1
   fx = scrutinee.fx.with(labels: end_label + 1)
   ids = sets.flat_map do |found: List[Int]| found end
   low = ids.min.unwrap!
@@ -538,7 +544,7 @@ def lower_table_arms(
   chained = false
   for arm in node.arms
     fx = Lowering.place(fx, first + index)
-    next_arm = end_label
+    next_arm = missed
     if index + 1 < count
       next_arm = first + index + 1
     end
@@ -573,7 +579,24 @@ def lower_table_arms(
     index += 1
   end
 
+  if may_fall_through?(node)
+    fx = Lowering.trap(fx, missed, value, node.span)
+  else
+    fx = Lowering.place(fx, missed)
+  end
+
   ok(Lowering.place(fx, end_label))
+end
+
+# Whether no arm may run: the checker made the case exhaustive, but unless the last arm is `_` with no guard, a failed
+# test of the last arm goes to an out-of-line `no-match` (Lowering.trap), so a checker bug fails with
+# RUNTIME-CASE-NO-MATCH instead of going on with a wrong value.
+def may_fall_through?(node: Ast.CaseStmt) -> Bool
+  last = node.arms[node.arms.size - 1]
+  case last.pattern
+    Ast.Pattern.Wildcard(_) -> last.guard.some?
+    _ -> true
+  end
 end
 
 # The variant ids the top of a pattern can match, or [] when it may match any value: a wildcard, a literal, a Result

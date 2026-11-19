@@ -336,6 +336,7 @@ int agc_launch_settle(agc_vm *vm, agc_outcome *outcome) {
   agc_io_children_stopped();
   say_goodbye(vm, outcome);
   bool stdout_ok = agc_stdio_flush(stdout) != AGC_STDIO_FAILED;
+  bool stdout_gone = !stdout_ok && agc_stdio_gone(errno);
   agc_stdio_flush(stderr);
   if (outcome->kind == AGC_FAILED) announce_outcome(vm, outcome);
   flush_files(vm);
@@ -343,6 +344,7 @@ int agc_launch_settle(agc_vm *vm, agc_outcome *outcome) {
   bool covered = write_coverage(vm);
   bool freed = free_natives(vm);
   stdout_ok = stdout_ok && !agc_output_failed(&vm->rt->out);
+  stdout_gone = stdout_gone || agc_output_gone(&vm->rt->out);
   if (vm->rt->flush_expired || !freed) {
     agc_notice notice;
     agc_print_flush_timeout(agc_notice_begin(&vm->rt->err, &notice), vm->rt->flush_timeout, vm->rt->flush_expired,
@@ -351,12 +353,24 @@ int agc_launch_settle(agc_vm *vm, agc_outcome *outcome) {
   }
   const char *write_error = NULL;
   if (outcome->kind != AGC_FAILED && !agc_io_stop_signal()) {
-    if (!stdout_ok || agc_stdio_flush(stdout) == AGC_STDIO_FAILED)
+    if (stdout_ok && agc_stdio_flush(stdout) == AGC_STDIO_FAILED) {
+      stdout_ok = false;
+      stdout_gone = agc_stdio_gone(errno);
+    }
+    bool stderr_ok = !agc_output_failed(&vm->rt->err), stderr_gone = agc_output_gone(&vm->rt->err);
+    if (!stdout_ok && !stdout_gone) {
       write_error = "cannot write to standard output";
-    else if (agc_output_failed(&vm->rt->err))
+    } else if (!stderr_ok && !stderr_gone) {
       write_error = "cannot write to standard error";
-    else if (!covered)
+    } else if (stdout_gone || stderr_gone) {
+      /* The reader of standard output or error left (`prog | head`): a quiet end, as fail_write in vm/output.c. */
+      if (outcome->kind != AGC_EXITED || outcome->exit_code == 0) {
+        outcome->kind = AGC_EXITED;
+        outcome->exit_code = AGC_EXIT_READER_GONE;
+      }
+    } else if (!covered) {
       write_error = "cannot write the coverage file";
+    }
   } else if (!covered) {
     coverage_notice(vm);
   }

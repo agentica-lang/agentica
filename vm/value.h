@@ -210,6 +210,7 @@ typedef enum {
   AGC_OP_GLOBAL, AGC_OP_GLOBAL_SET,
   AGC_OP_TRY_STEP,
   AGC_OP_JUMP_VARIANT,
+  AGC_OP_NO_MATCH,
   AGC_OP_COUNT
 } agc_opcode;
 
