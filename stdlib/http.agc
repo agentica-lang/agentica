@@ -322,7 +322,8 @@ end
 ## `path`, named `.<name>.<8 hex digits>.agc-part`, which `Path.replace` puts at `path` in one step only when the body
 ## ended cleanly, its size is within `options.max_total_bytes` and its digest is `options.sha256` (else
 ## `http.digest`): an existing file or link at `path` is then replaced, and a directory is an error. A failure removes
-## the new file and leaves `path` as it was; a cancelled task or a killed program can leave the new file behind.
+## the new file and leaves `path` as it was; a cancelled task, a killed program or a timeout while the new file is
+## made can leave it behind.
 ## Status codes such as 404 or 500 are normal responses, as with `get`: the body is still written and the status
 ## returned, so check `status` before using the file. There is no redirect follow, and the connection is not pooled:
 ## it closes when the download ends. The pool gives the TLS context and its certificates for `https`, whose
@@ -4367,6 +4368,10 @@ def finish_download(
         ok(out) -> stream_download(socket, Saving(out: out, temp: temp, path: path), options, deadline, denied, step)
         error(message) ->
           TCP.close(socket)
+          # An open that timed out may still make the file in the pool; any other error leaves the name to its owner.
+          if message.kind == "io.timeout"
+            remove_part(temp)
+          end
           error(message)
       end
     error(message) ->

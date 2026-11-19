@@ -117,6 +117,13 @@ import HTTP from "std/http"
 
 SHOW
 
+def kind(result: Result[HTTP.Download]) -> Void
+  case result
+    ok(_) -> puts("ok")
+    error(e) -> puts("ERR #{e.kind} #{e.message}")
+  end
+end
+
 # A download that follows one redirect by hand: download has no redirect follow of its own.
 def follow(pool: HTTP.Client, base: String, url: String, path: String, options: HTTP.DownloadOptions) -> Result[HTTP.Download]
   first = try HTTP.download(pool, url, path, HTTP.DownloadOptions())
@@ -130,7 +137,7 @@ def main() -> Void
   dir = System.args()[1]
   right = HTTP.DownloadOptions(max_total_bytes: some(1000), sha256: some(System.args()[2]))
   show(follow(pool, base, base + "/redirect/chunked/1000", dir + "/moved.bin", right))
-  show(HTTP.download(pool, base + "/bin/1000", dir + "/wrong.bin", HTTP.DownloadOptions(sha256: some(System.args()[3]))))
+  kind(HTTP.download(pool, base + "/bin/1000", dir + "/wrong.bin", HTTP.DownloadOptions(sha256: some(System.args()[3]))))
   show(HTTP.download(pool, base + "/bin/1000", dir + "/kept.bin", HTTP.DownloadOptions(sha256: some(System.args()[3]))))
   show(HTTP.download(pool, base + "/truncate/100/40", dir + "/kept.bin", HTTP.DownloadOptions()))
   show(HTTP.download(pool, base + "/bin/1000", dir + "/replaced.bin", right))
@@ -194,10 +201,21 @@ def fetch(job: Job) -> Result[HTTP.Download]
   HTTP.download(job.pool, job.url, job.path)
 end
 
+def growing?(folder: String) -> Bool
+  names = Dir.list(folder).unwrap_or([])
+  names.any? do |name: String| name.end_with?(".agc-part") end
+end
+
 def main() -> Void
   job = Job(pool: Result.unwrap!(HTTP.client()), url: System.args()[0], path: System.args()[1])
   task = Task.spawn(&fetch, job)
-  Task.sleep(1000)
+  # The peer stalls after the first bytes: cancel once the hidden file is there, waiting at most 30 s.
+  folder = System.args()[2]
+  waited = 0
+  while waited < 30000 and not growing?(folder)
+    Task.sleep(50)
+    waited = waited + 50
+  end
   Task.cancel(task)
   puts("cancelled")
 end
@@ -348,7 +366,7 @@ def test_a_file_is_replaced_only_by_a_clean_body_with_its_digest(tmp_path, ports
     lines = output_lines(run_program(tmp_path, "replace", REPLACE_PROGRAM, args))
     assert lines == [
         "200 1000",
-        "ERR http: the body does not match the sha256 digest",
+        "ERR http.digest http: the body does not match the sha256 digest",
         "ERR http: the body does not match the sha256 digest",
         "ERR http: truncated HTTP body",
         "200 1000",
@@ -387,7 +405,7 @@ def test_a_cancelled_download_leaves_only_its_hidden_part_file(tmp_path, ports):
     directory.mkdir()
     (directory / "kept.bin").write_bytes(b"keep")
     url = "http://127.0.0.1:%d/stall/1000" % ports["plain"]
-    lines = output_lines(run_program(tmp_path, "cancel", CANCEL_PROGRAM, [url, str(directory / "kept.bin")]))
+    lines = output_lines(run_program(tmp_path, "cancel", CANCEL_PROGRAM, [url, str(directory / "kept.bin"), str(directory)]))
     assert lines == ["cancelled"], lines
     names = sorted(path.name for path in directory.iterdir())
     assert len(names) == 2 and names[1] == "kept.bin", names

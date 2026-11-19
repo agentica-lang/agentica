@@ -44,7 +44,7 @@ _spec.loader.exec_module(http_peer)
 PIECE = 65536
 PATTERN = bytes(range(256)) * (PIECE // 256)
 SLOW_SECONDS = 3
-STALL_SECONDS = 5
+STALL_SECONDS = 60
 CEILING = 256 * 1024 * 1024
 
 
