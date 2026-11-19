@@ -179,11 +179,15 @@ typedef struct {
   agc_value value;
 } agc_json_member;
 
+/* An object keeps its members in the order they came (the first place of a repeated key, with its last value), as
+   Ruby's JSON does, and `sorted` holds the same members by key for agc_json_find: `members` itself when they are in
+   key order, NULL for a small object (at most 8 members), which a lookup scans. */
 typedef struct {
   agc_json_kind kind;
   agc_value scalar;
   size_t count;
   agc_json_member *members;
+  agc_json_member *sorted;
 } agc_json;
 
 typedef struct {

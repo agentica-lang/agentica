@@ -123,9 +123,8 @@ tasks, TCP, TLS and HTTP, files and paths, processes. VM internals are in
   has no JSON types (`compiler/lower/lower_program.agc` skips it as not
   decodable), because the bytecode writer's type section (`bytecode_types.agc`)
   has no Enum clause.
-- The JSON line is `JSON.encode` of the private struct `JsonLine`, not of
-  `JSON.object`: `JSON.object` and `JSON.from` sort keys, a struct keeps
-  declaration order and a map keeps its order.
+- The JSON line is `JSON.encode` of the private struct `JsonLine`, so its keys
+  follow the field order (every JSON object keeps its key order).
 - A level function does one comparison when disabled or when no handler accepts
   the level (`if LogRegistry.floor() <= N`; -1 is below every threshold and
   takes the slow path through `ready`), measured by

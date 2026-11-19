@@ -5,7 +5,7 @@
   "stdout": [
     "User(name: \"a\", age: 1)",
     "{\"name\":\"a\",\"age\":1}",
-    "{\"age\":1,\"name\":\"a\"}",
+    "{\"name\":\"a\",\"age\":1}",
     "ok(User(name: \"a\", age: 1))",
     "ok([User(name: \"b\", age: 2), User(name: \"c\", age: 3)])",
     "age: expected required field",

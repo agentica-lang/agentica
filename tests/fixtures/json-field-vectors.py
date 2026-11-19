@@ -10,7 +10,7 @@ Patch struct of the fixture and writes one line of four fields joined by a tab:
 - for "ok", the text JSON.encode gives for the decoded struct (declaration
   order, an Absent key left out, Null as null); for "error", the message,
   path included;
-- for "ok", "same" when that text is the document again up to key order (the
+- for "ok", "same" when that text is the document again for == (the
   round trip), else "changed"; for "error", "-".
 
 Run by hand: python3 tests/fixtures/json-field-vectors.py

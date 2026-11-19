@@ -11,7 +11,7 @@ joined by a tab:
 - "ok" or "error";
 - for "ok", the text JSON.encode gives for the decoded struct (declaration
   order, every field written); for "error", the message, path included;
-- for "ok", "same" when that text is the document again up to key order (the
+- for "ok", "same" when that text is the document again for == (the
   round trip), else "changed" (a missing key comes back with its default); for
   "error", "-".
 

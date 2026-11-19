@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 11469,
+  "steps": 11418,
   "stdout": [
     "a record line: {\"event\":\"pass\",\"index\":3}",
     "text with a marker: null",

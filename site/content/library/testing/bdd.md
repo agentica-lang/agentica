@@ -345,7 +345,7 @@ The built-in steps as functions, to combine in your own steps. Pass on the conte
 
 `stdout is:` compares the output that no line step has read yet. `stdout includes:` and `stderr includes:` check the same text for a substring, as `s.include?` does (an empty text is `RUNTIME-BDD-CONTEXT`), so a log scenario can assert one line of a noisy stderr; a failure shows the whole stream as `actual`. All four need the program to have exited. Output is kept up to 1 MiB per stream.
 
-A failed `then_*` check reports `expected` and `actual` in the inspect form, as `Test.eq` does: a line or output in quotes, an exit code as a number, a JSON line as its sorted-key text. An undefined or ambiguous step's `actual` is the step text in quotes. Text over 64 Ki characters is cut and ends with `...` and the count left out. A front-end error of the step program keeps the raw type names (`Int`, `String`), so its `--json` form depends on the code.
+A failed `then_*` check reports `expected` and `actual` in the inspect form, as `Test.eq` does: a line or output in quotes, an exit code as a number, a JSON line as its JSON text, keys in their order (the check itself ignores key order). An undefined or ambiguous step's `actual` is the step text in quotes. Text over 64 Ki characters is cut and ends with `...` and the count left out. A front-end error of the step program keeps the raw type names (`Int`, `String`), so its `--json` form depends on the code.
 
 ## Running tests from a program
 

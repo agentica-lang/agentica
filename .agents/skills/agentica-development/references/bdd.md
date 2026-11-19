@@ -217,8 +217,8 @@ the programming skill or the site).
   `{string}` up to the first unescaped closing quote). `resolve` gives
   `Resolved`, `CHECK-BDD-UNDEFINED` or `CHECK-BDD-AMBIGUOUS` at the step's
   span. The `json-canonical` golden pins the rule `then_json_line` relies on
-  (`JSON.encode(JSON.parse(x))` sorts keys and keeps the last duplicate,
-  `sort_members` in `vm/json.c`).
+  (`Test.eq` on two JSON.Values ignores key order and compares numbers by
+  value, `json_equal` in `vm/equal.c`).
 - `std/test/report` builds the report and imports nothing; it owns `Span` and
   `Example`, which `gherkin` and `match` import. A `Verdict` is `Pass`,
   `Fail(Failure)`, `Skipped(reason)` (not a failure, exit code stays 0) or

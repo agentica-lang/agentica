@@ -220,8 +220,11 @@ def test_a_diagnostic_with_every_note_reads_back_to_the_same_bytes(driver, proje
         ],
     }
     (project / "note.json").write_text(json.dumps(every_note), encoding="utf-8")
-    canonical = json.dumps(every_note, sort_keys=True, separators=(",", ":"), ensure_ascii=False) + "\n"
-    assert library(driver, project, "diagnostic", "note.json") == (canonical, "")
+    # Written back in the field order of the diagnostic record, as JSON writes a struct.
+    order = ["code", "message", "file", "range", "key_path", "expected", "actual", "callee", "function", "help",
+             "labels"]
+    written = json.dumps({key: every_note[key] for key in order}, separators=(",", ":"), ensure_ascii=False) + "\n"
+    assert library(driver, project, "diagnostic", "note.json") == (written, "")
 
 
 ROUND_TRIPS = [("labelled.agc", LABELLED, '"labels":['), ("non_ascii.agc", NON_ASCII, "\u00f1")]

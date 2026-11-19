@@ -9,7 +9,7 @@ Person struct of the fixture and writes one line of four fields joined by a tab:
 - "ok" or "error";
 - for "ok", the text JSON.encode gives for the decoded struct (declaration
   order, none as null, some(x) as x); for "error", the message, path included;
-- for "ok", "same" when that text is the document again up to key order (the
+- for "ok", "same" when that text is the document again for == (the
   round trip), else "changed" (a missing key comes back as null); for "error",
   "-".
 
