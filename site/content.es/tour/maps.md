@@ -1,7 +1,7 @@
 ---
 title: Mapas
 weight: 9
-description: Literales de mapa, lectura de claves, añadir y quitar entradas.
+description: Literales de mapa, lectura de claves, añadir y quitar pares clave-valor.
 source_hash: "d815d08d4cda"
 ---
 
@@ -72,7 +72,7 @@ true
 
 ## Añadir, cambiar y quitar {#add-change-and-remove}
 
-`put` da un mapa nuevo con la entrada añadida o reemplazada. `delete` da un mapa nuevo sin la clave. El mapa anterior no cambia.
+`put` da un mapa nuevo con el par clave-valor añadido o reemplazado. `delete` da un mapa nuevo sin la clave. El mapa original no cambia.
 
 ```agentica
 def main() -> Void

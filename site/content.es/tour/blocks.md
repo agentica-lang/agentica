@@ -36,7 +36,7 @@ end
 
 ## Llaves {#braces}
 
-Una llamada sin argumentos puede dar su bloque entre llaves, en una línea o en varias. Una llamada con argumentos usa `do ... end`. Después del `end` de un bloque `do` no se encadena nada (`CHECK-CHAIN-AFTER-END`): para llamar a un método del resultado, pasa una [lambda](#lambdas) y usa un pipe, `xs |> map(->(x) { x * x }) |> sum()`, escribe el bloque entre llaves, `xs.map { |x| x * x }.sum`, o primero dale un nombre al resultado.
+Una llamada sin argumentos puede dar su bloque entre llaves, en una línea o en varias. Una llamada con argumentos usa `do ... end`. Después del `end` de un bloque `do` no se puede encadenar nada (`CHECK-CHAIN-AFTER-END`): para llamar a un método del resultado, pasa una [lambda](#lambdas) y usa un pipe, `xs |> map(->(x) { x * x }) |> sum()`, escribe el bloque entre llaves, `xs.map { |x| x * x }.sum`, o primero dale un nombre al resultado.
 
 ```agentica
 def main() -> Void
@@ -176,7 +176,7 @@ end
 [3, 4]
 ```
 
-Cuando una llamada recibe un bloque, una lambda dentro de sus paréntesis es ese bloque, con sus tipos de parámetro tomados de la llamada: `xs.map(->(x) { x + 1 })` es `xs.map do |x| x + 1 end`. Un bloque `do ... end` sigue yendo después de los paréntesis. Con un [pipe](/tour/functions/) hacia métodos, las lambdas forman una cadena que se lee un paso por línea:
+Cuando una llamada recibe un bloque, una lambda dentro de sus paréntesis es ese bloque, con sus tipos de parámetro tomados de la llamada: `xs.map(->(x) { x + 1 })` es `xs.map do |x| x + 1 end`. Un bloque `do ... end` sigue yendo después de los paréntesis. Con un [pipe](/tour/functions/) hacia métodos, las lambdas forman un encadenamiento que se lee un paso por línea:
 
 ```agentica
 def main() -> Void
@@ -198,7 +198,7 @@ end
 10
 ```
 
-## Llamadas encadenadas en varias líneas {#chains-over-several-lines}
+## Encadenamientos en varias líneas {#chains-over-several-lines}
 
 Una línea que empieza con un punto y un nombre continúa la línea anterior. Así, un encadenamiento largo de llamadas a métodos y bloques entre llaves se lee un paso por línea, sin paréntesis. Un comentario puede terminar una línea, o ir solo en una línea entre dos pasos. Una línea en blanco termina la sentencia.
 

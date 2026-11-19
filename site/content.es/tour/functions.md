@@ -213,7 +213,7 @@ Los [bloques](/tour/blocks/) son la forma corta de escribir un valor de función
 
 ## Encadenar llamadas con |> {#chain-calls-with-}
 
-`x |> f(a)` quiere decir `f(x, a)`: el valor de la izquierda pasa a ser el primer argumento.
+`x |> f(a)` significa `f(x, a)`: el valor de la izquierda pasa a ser el primer argumento.
 
 ```agentica
 def parse(text: String) -> Result[Int] = text.to_i
@@ -256,7 +256,7 @@ error("negative")
 ```
 
 - El lado derecho debe ser una llamada con paréntesis. Un encadenamiento de varias líneas va entre paréntesis, como `total` arriba.
-- Puede empezar con `try`: `x |> try f()` quiere decir `try f(x)`.
+- Puede empezar con `try`: `x |> try f()` significa `try f(x)`.
 - Un paso puede nombrar un método del valor, que luego se llama sobre él: `xs |> map(->(x) { x * 2 }) |> sum()` es `xs.map(->(x) { x * 2 }).sum`. Una función del programa con el mismo nombre que un método tiene prioridad.
 - Un integrado con forma de método se escribe con el nombre del método, no con su tipo: `s |> strip()` o `s.strip`, no `s |> String.strip()` (`CHECK-PIPE-METHOD`).
 
@@ -272,7 +272,7 @@ end
 Un parámetro puede terminar en `= value`. Una llamada puede omitirlo.
 
 - Un valor predeterminado es una constante: un número, una cadena sin `#{...}`, los bytes de esa cadena (`body: Bytes = "".bytes`), `true`, `false`, `nil`, `none`, `[]`, `{}` o una variante sin payload, como `Level.Info`. Una estructura creada sin argumentos, `options: Options = Options()`, también es un valor predeterminado cuando cada campo de `Options` tiene uno. El nombre de una constante también es un valor predeterminado cuando su valor es uno de estos, como en `limit: Int = LIMIT` o `Limits.LIMIT` (se usa el valor en lugar del nombre, también para quien llama desde otro módulo). Cualquier otra cosa, como `some(1)` o una constante como `SUM = 1 + 2`, es `CHECK-DEFAULT-VALUE`. Cada llamada recibe su propio `[]`, `{}` o estructura.
-- Los parámetros con valor predeterminado van al final (`CHECK-DEFAULT-ORDER`). La excepción es un último parámetro `Fn`, que llena un bloque.
+- Los parámetros con valor predeterminado van al final (`CHECK-DEFAULT-ORDER`). La excepción es un último parámetro `Fn`, que se llena con un bloque.
 - Los argumentos llenan los parámetros de izquierda a derecha. Un número incorrecto de argumentos es `CHECK-ARITY`, como `expects 1 to 2 arguments`.
 
 ```agentica
@@ -369,7 +369,7 @@ end
 
 ## Parámetros de tipo {#type-parameters}
 
-Una función puede recibir parámetros de tipo después de su nombre, así una sola definición funciona con cualquier tipo. La llamada no da argumentos de tipo: el comprobador los encuentra a partir de los argumentos.
+Una función puede tener parámetros de tipo después de su nombre, así una sola definición funciona con cualquier tipo. La llamada no da argumentos de tipo: el comprobador los encuentra a partir de los argumentos.
 
 ```agentica
 def first_or[T](xs: List[T], fallback: T) -> T

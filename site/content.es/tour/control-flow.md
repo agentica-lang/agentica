@@ -91,7 +91,7 @@ tick
 tick
 ```
 
-Para contar, recorre un rango: `a..b` incluye `b`, `a...b` no lo incluye. `n.times` ejecuta un bloque `n` veces. Consulta [Range](/library/data-structures/range/) para más.
+Para contar, recorre un rango: `a..b` incluye `b`, `a...b` no lo incluye. `n.times` ejecuta un bloque `n` veces. Consulta [Range](/library/data-structures/range/) para más información.
 
 ```agentica
 def main() -> Void
@@ -113,7 +113,7 @@ round 1
 
 ## break y next {#break-and-next}
 
-`break` sale del bucle. `next` pasa a la siguiente vuelta. Cuando uno de ellos, o un `return`, depende de una condición, escribe la condición después: `next if c` es el `if c` con `next` y `end` escritos. Solo `return`, `break` y `next` admiten esta guarda, y tiene una sola condición: no hay `unless` ni `else`.
+`break` sale del bucle. `next` pasa a la siguiente iteración. Cuando uno de ellos, o un `return`, depende de una condición, escribe la condición después: `next if c` es lo mismo que escribir `if c`, `next` y `end`. Solo `return`, `break` y `next` admiten esta guarda, y tiene una sola condición: no hay `unless` ni `else`.
 
 ```agentica
 def main() -> Void

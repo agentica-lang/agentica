@@ -76,7 +76,7 @@ number 42
 
 ## try {#try}
 
-`try` saca el valor de un `ok`. Ante un `error`, devuelve ese error desde la función actual de inmediato. La función debe devolver un `Result`.
+`try` saca el valor de un `ok`. Si hay un `error`, devuelve ese error desde la función actual de inmediato. La función debe devolver un `Result`.
 
 ```agentica
 def add_texts(a: String, b: String) -> Result[Int]
@@ -98,7 +98,7 @@ error("cannot convert \"three\" to Int", kind: "number.parse")
 
 ## Resultados sin valor {#results-with-no-value}
 
-`Result[Void]` quiere decir "funcionó, o falló con un mensaje". Devuelve `ok()` cuando todo sale bien.
+`Result[Void]` significa "funcionó, o falló con un mensaje". Devuelve `ok()` cuando todo sale bien.
 
 ```agentica
 def check_age(age: Int) -> Result[Void]
@@ -171,7 +171,7 @@ end
 -1
 ```
 
-Sin la anotación, `r = error("not ready")` es el error `CHECK-RESULT-TYPE`.
+Sin la anotación, `r = error("not ready")` da el error `CHECK-RESULT-TYPE`.
 
 ## ! indica que puede detener el programa {#-means-it-can-halt}
 
