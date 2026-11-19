@@ -176,8 +176,8 @@ def encode_struct(value, fields, encode):
 def struct_codec(structs, other=None):
     """The decode and encode of a model whose kinds are the scalars, ("list", T), ("map", T) with String keys,
     ("optional", T) and the names of structs, which maps to their (name, kind) fields. encode writes struct keys in
-    declaration order, map keys sorted, no spaces. other, when given, is a (decode, encode) pair for the kinds of the
-    model's own (an enum), tried first; each gives UNHANDLED for a kind that is not its own."""
+    declaration order, map keys in object order, no spaces. other, when given, is a (decode, encode) pair for the
+    kinds of the model's own (an enum), tried first; each gives UNHANDLED for a kind that is not its own."""
 
     def decode(value, kind, path):
         found = decode_common(value, kind, path, decode)
@@ -188,7 +188,7 @@ def struct_codec(structs, other=None):
         if isinstance(kind, tuple):
             if not isinstance(value, dict):
                 fail(path, "object")
-            return {key: decode(item, kind[1], f"{path}[{json.dumps(key)}]") for key, item in sorted(value.items())}
+            return {key: decode(item, kind[1], f"{path}[{json.dumps(key)}]") for key, item in value.items()}
         return decode_struct(value, structs[kind], path, decode)
 
     def encode(value, kind):

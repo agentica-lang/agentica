@@ -3,7 +3,7 @@
   "code": null,
   "steps": 21,
   "stdout": [
-    "{\"oneOf\":[{\"properties\":{\"tag\":{\"enum\":[\"L\"]},\"values\":{\"maxItems\":1,\"minItems\":1,\"prefixItems\":[{\"maximum\":9223372036854775807,\"minimum\":-9223372036854775808,\"type\":\"integer\"}],\"type\":\"array\"}},\"required\":[\"tag\",\"values\"],\"type\":\"object\"},{\"properties\":{\"tag\":{\"enum\":[\"M\"]},\"values\":{\"maxItems\":0,\"type\":\"array\"}},\"required\":[\"tag\"],\"type\":\"object\"}]}",
+    "{\"oneOf\":[{\"type\":\"object\",\"properties\":{\"tag\":{\"enum\":[\"L\"]},\"values\":{\"type\":\"array\",\"minItems\":1,\"prefixItems\":[{\"type\":\"integer\",\"minimum\":-9223372036854775808,\"maximum\":9223372036854775807}],\"maxItems\":1}},\"required\":[\"tag\",\"values\"]},{\"type\":\"object\",\"properties\":{\"tag\":{\"enum\":[\"M\"]},\"values\":{\"type\":\"array\",\"maxItems\":0}},\"required\":[\"tag\"]}]}",
     "ok(Leaf.L(4))",
     "ok(Point(x: 1))",
     ""

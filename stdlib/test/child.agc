@@ -137,6 +137,7 @@ end
 
 private
 
+# Whether `line` is a crash line of the VM (vm/diag.c), field for field.
 def vm_shape?(line: String, task: Bool) -> Bool
   parsed = JSON.parse(line)
   return false if not parsed.ok?
@@ -160,7 +161,7 @@ def vm_shape?(line: String, task: Bool) -> Bool
   if task
     fields = fields.put("task", JSON.from(true))
   end
-  JSON.encode(JSON.object(fields)) == JSON.encode(root)
+  Test.eq(JSON.object(fields), root).ok?
 end
 
 # The crash of the task a worker runs a scenario in (spawned in std/bdd) is that scenario's crash, as a crash of main
@@ -202,5 +203,5 @@ def summary?(line: String) -> Bool
     "first": JSON.from(text_of(root, "first")),
   }
 
-  JSON.encode(JSON.object(fields)) == JSON.encode(root)
+  Test.eq(JSON.object(fields), root).ok?
 end

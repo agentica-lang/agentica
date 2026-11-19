@@ -27,7 +27,7 @@ Bytecode runs only on the VM of the same Agentica version.
 - **JIT.** A JIT for x86-64 and arm64 (Linux and macOS), on by default ([`--jit`](/cli/#options)), compiles hot functions with loops, and small functions without a loop that they call. Supported arithmetic, reads, text operations and jumps run as machine code. Other machines run the interpreter.
 - **Limits.** Steps and memory have no limit unless you set `--max-steps` or `--max-heap` ([Options](/cli/#options)). Calls nest at most 10,000 deep per task, then `RUNTIME-STACK-OVERFLOW` with the call stack (a repeated function on one line with its count). A tail call adds no depth.
 - **Maps and lists.** `Map` is a persistent HAMT that keeps insertion order; `Map.put` copies only the path to its key. `List` is a persistent vector of 32 children per node plus a small tail: indexing takes at most four steps for a million items, n pushes cost O(n), and a list of only Ints or only Floats keeps 8 bytes per item. `take`, `drop` and `reverse` are O(n), `sort` O(n log n).
-- **JSON.** A parsed object keeps each key once and encodes keys sorted, so `JSON.encode(JSON.parse(text))` is canonical.
+- **JSON.** Every object keeps its key order: struct fields, map insertion order, and the text order of a parsed object, where a repeated key keeps its first place and its last value.
 - **Standard modules.** The `std/` modules are written in Agentica, embedded in the binary and linked into your bytecode like your own modules.
 
 ## What it is built on

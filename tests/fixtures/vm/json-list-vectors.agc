@@ -41,10 +41,8 @@ def outcomes(target: String, text: String) -> List[String]
   return [outcome(JSON.decode(text, Map[String, List[Item]])), outcome(JSON.decode(value, Map[String, List[Item]]))]
 end
 
-# The document with its object keys sorted, so two documents compare up to key order.
-def sorted(text: String) -> String
-  return JSON.encode(JSON.parse(text).unwrap!)
-end
+# Whether two documents are the same JSON value, in any key order.
+def same_json?(a: String, b: String) -> Bool = Test.eq(JSON.parse(a).unwrap!, JSON.parse(b).unwrap!).ok?
 
 def check(line: String) -> Int
   fields = line.split("\t")
@@ -60,7 +58,7 @@ def check(line: String) -> Int
     return 1
   end
 
-  same = fields[2] == "ok" && sorted(fields[3]) == sorted(fields[1])
+  same = fields[2] == "ok" && same_json?(fields[3], fields[1])
   if fields[4] != "-" && same != (fields[4] == "same")
     puts("#{fields[0]} #{fields[1]}: round trip #{same}, want #{fields[4]}")
     return 1

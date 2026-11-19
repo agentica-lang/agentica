@@ -160,7 +160,7 @@ end
 - `JSON.node` (or `json.node`) opens one level for a `case` over unknown JSON:
   `JSON.Node.Null`, `Bool(Bool)`, `Int(Int)`, `BigInt(String)` (an integer
   `JSON.int` refuses, as exact text), `Float(Float)`, `String(String)`,
-  `Array(List[JSON.Value])`, `Object(Map[String, JSON.Value])` (keys sorted).
+  `Array(List[JSON.Value])`, `Object(Map[String, JSON.Value])` (keys in object order).
   It never fails and cannot be encoded or decoded.
 - `JSON.list` returns elements as `JSON.Value` values, mixed arrays included.
 
@@ -171,11 +171,12 @@ end
   recursively. Results, other enums and Int-keyed maps are
   `CHECK-NOT-ENCODABLE`, even when empty or nested. Empty literals still need a
   known type.
-- Output is compact. Structs follow declaration order; maps follow insertion
-  order. A parsed object encodes with keys sorted by UTF-8 bytes, so
-  `JSON.encode(JSON.parse(x))` is canonical: compare two JSON texts by their
-  canonical forms (`1` is not `1.0`). Objects from `JSON.object` or `JSON.from`
-  have no fixed order.
+- Output is compact, and every object keeps its key order (Ruby's `to_json`):
+  structs follow declaration order, maps insertion order, and a parsed object
+  the order of its text (a repeated key stays at its first place with its last
+  value). `JSON.from`, `JSON.object` and a decoded `Map` keep them too. Compare
+  two `JSON.Value`s with `Test.eq`, which ignores key order (`1` is not
+  `1.0`), not by their encoded text.
 
 ## Prefer structs for fixed shapes
 
