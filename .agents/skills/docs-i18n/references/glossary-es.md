@@ -4,11 +4,13 @@ One line per term, sorted. "stays" means the term is not translated.
 
 | English | Spanish | Note |
 |---|---|---|
+| action | acción | A page action, such as copy page |
 | actor | stays | The type `Actor`; also in prose |
 | argument | argumento | A value passed to a call |
 | BDD | BDD | Behavior-driven development; the acronym stays |
 | block | bloque | A `do ... end` or `{ }` block; the keyword stays |
 | boolean | booleano | The type `Bool` stays |
+| breadcrumb | ruta de navegación | The trail of links above a page |
 | buffer | búfer | Memory that holds bytes or text |
 | build | compilar | Verb; `make build` stays |
 | builtin | integrado | `builtin` in code stays |
@@ -26,12 +28,14 @@ One line per term, sorted. "stays" means the term is not translated.
 | comment | comentario | Code comments only |
 | compiler | compilador | The program that turns source into bytecode |
 | constant | constante | Names like `TAX_PERCENT` stay |
+| copy | copiar | Once done: copiado |
 | coverage | cobertura | Test coverage |
 | crash | fallo | Noun. Verb: fallar |
 | default | predeterminado | Default values; `default` stays in code |
 | descriptor | descriptor | A file descriptor |
 | diagnostic | diagnóstico | Codes like `CHECK-...` stay |
 | directory | directorio |  |
+| documentation | documentación | |
 | encoding | codificación | `encode` and `decode` stay |
 | enum | stays | The keyword and the type stay |
 | error | error | Same spelling; `error(...)` stays in code |
@@ -54,8 +58,10 @@ One line per term, sorted. "stays" means the term is not translated.
 | heap | stays | Owner decision: the term stays; the type `Heap` stays |
 | heredoc | stays | A multi-line string form |
 | hint | sugerencia | The fix an error suggests |
+| home | inicio | The home page of the site |
 | immutable | inmutable |  |
 | index | índice |  |
+| input | entrada | The input of a program or an example |
 | integer | entero | The type `Int` stays |
 | interpolation | interpolación | `"#{...}"` stays in code |
 | lambda | stays | A short anonymous function |
@@ -64,19 +70,23 @@ One line per term, sorted. "stays" means the term is not translated.
 | link | enlace | Link targets stay as in English |
 | list | lista | The type `List` stays |
 | literal | literal |  |
+| loading | cargando | |
 | lock | bloqueo | A lock file, `agentica.lock`, stays |
 | map | mapa | The type `Map` stays |
 | memory | memoria |  |
+| menu | menú | |
 | method | método |  |
 | module | módulo | The keyword `module` stays |
 | name | nombre | An identifier |
 | native | nativo | Native module: módulo nativo |
+| next | siguiente | Pager link |
 | object | objeto |  |
 | operator | operador |  |
 | option | opción | A CLI flag is a flag; option names in code stay |
 | output | salida | Program output stays English (rule 2) |
 | overflow | desbordamiento |  |
 | package | paquete | `agentica.toml` stays |
+| page | página | |
 | parameter | parámetro |  |
 | parser | stays | Owner decision: the term stays |
 | path | ruta | A file path; `path` in code stays |
@@ -86,9 +96,12 @@ One line per term, sorted. "stays" means the term is not translated.
 | pipe | stays | The `\|>` operator |
 | pointer | puntero | Low-level, in the FFI docs |
 | port | puerto | A TCP or HTTP port |
+| post | artículo | A blog post; not "entrada", which is input |
+| previous | anterior | Pager link |
 | process | proceso | An OS process; the type `Process` stays |
 | profile | perfil | A profile of a run |
 | program | programa |  |
+| prompt | stays | Owner decision; text sent to a model |
 | query | consulta |  |
 | queue | cola | The type `Queue` stays |
 | range | rango | The type `Range` stays |
@@ -103,12 +116,17 @@ One line per term, sorted. "stays" means the term is not translated.
 | runtime | stays |  |
 | scenario | escenario | A BDD scenario |
 | scheduler | planificador | The task scheduler of the VM |
+| search | buscar | Noun: búsqueda |
+| section | sección | |
 | send | enviar | `send` in code stays |
 | server | servidor |  |
 | set | conjunto | The type `Set` stays |
+| share | compartir | |
 | signal | señal | An OS signal |
 | signature | firma | A function signature |
+| site | sitio | The documentation site |
 | socket | stays |  |
+| source | fuente | Source code: código fuente |
 | statement | sentencia |  |
 | step | paso | A BDD step; `BDD.step` stays |
 | stream | flujo |  |
@@ -116,10 +134,12 @@ One line per term, sorted. "stays" means the term is not translated.
 | struct | estructura | The keyword `struct` stays |
 | style | estilo |  |
 | supervisor | stays | The type `Supervisor` |
+| tab | pestaña | A browser tab |
 | table | tabla | A Markdown table or a data table |
 | tag | etiqueta | A git tag; `tag` in code stays |
 | task | tarea | The type `Task` stays |
 | test | prueba | `test` in code stays |
+| theme | tema | The site theme, dark or light |
 | thread | hilo | An OS thread |
 | timeout | tiempo de espera | `timeout_ms` stays |
 | tool | herramienta |  |
