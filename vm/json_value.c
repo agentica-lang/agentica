@@ -95,7 +95,9 @@ static void index_members(agc_json *node, size_t n) {
     memset(placed, 0, count);
     size_t kept = 0;
     for (size_t i = 0; i < n; i++) {
-      size_t at = (size_t)(find_sorted(sorted, count, node->members[i].key) - sorted);
+      const agc_json_member *found = find_sorted(sorted, count, node->members[i].key);
+      if (!found) continue; /* never: every key has its place in the sorted copy */
+      size_t at = (size_t)(found - sorted);
       if (placed[at]) continue;
       placed[at] = true;
       node->members[kept++] = sorted[at];
