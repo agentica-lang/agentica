@@ -25,7 +25,7 @@ def secret() -> Int = 42
 
 `private` va sola en su línea, con una línea en blanco antes y después, una vez por archivo. Las importaciones nunca son públicas. Un archivo sin `private` es público por completo. `export` antes de una declaración es un error (`PARSE-UNEXPECTED-TOKEN`); solo queda `export Alias.name`, para reexportar un nombre.
 
-## Diseño del archivo {#file-layout}
+## Disposición del archivo {#file-layout}
 
 Cada archivo lista sus declaraciones en este orden (si no, `CHECK-DECL-ORDER`):
 
@@ -213,7 +213,7 @@ El alias debe ser una importación del archivo, y el módulo debe exportar el no
 
 ## Bloques de módulo {#module-blocks}
 
-`module Name ... end` agrupa declaraciones bajo un nombre, así un archivo puede tener varios módulos. Un bloque tiene constantes, estructuras, enums, alias de tipo y funciones con las reglas de diseño de un archivo, incluida su propia línea `private`: lo que está encima del bloque es visible desde fuera, y un bloque sin `private` es público por completo. Guarda esto como `agents.agc`:
+`module Name ... end` agrupa declaraciones bajo un nombre, así un archivo puede tener varios módulos. Un bloque tiene constantes, estructuras, enums, alias de tipo y funciones con las reglas de disposición de un archivo, incluida su propia línea `private`: lo que está encima del bloque es visible desde fuera, y un bloque sin `private` es público por completo. Guarda esto como `agents.agc`:
 
 ```agentica {file="agents.agc"}
 module Counter

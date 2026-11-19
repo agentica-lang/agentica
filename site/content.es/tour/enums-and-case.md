@@ -54,7 +54,7 @@ end
 blue
 ```
 
-Una variante que falta es un error del comprobador, así que no se te puede olvidar ningún caso:
+Una variante que falta es un error del comprobador, así que no puedes olvidar ningún caso:
 
 ```agentica {expect="CHECK-NON-EXHAUSTIVE-CASE"}
 enum Color
@@ -179,7 +179,7 @@ small
 [1, 2]
 ```
 
-Todas las ramas tienen un mismo tipo, y el case debe cubrir cada variante, o terminar con `_`. El tipo es la anotación de la asignación; si no hay una, es el tipo de la primera rama. Por eso escribe `x: Result[Int] = case ...` cuando la primera rama es `error(...)`, `[]` o `none`. Una rama que termina con `return`, `next` o `break` no tiene valor (`CHECK-CASE-ARM-VALUE`). Un tipo que no coincide es `CHECK-TYPE-MISMATCH` en la última expresión de la rama:
+Todas las ramas tienen un mismo tipo, y el case debe cubrir cada variante, o terminar con `_`. El tipo es la anotación de la asignación; si no hay una, es el tipo de la primera rama. Por eso escribe `x: Result[Int] = case ...` cuando la primera rama es `error(...)`, `[]` o `none`. Una rama que termina con `return`, `next` o `break` no tiene valor (`CHECK-CASE-ARM-VALUE`). Un tipo incompatible es `CHECK-TYPE-MISMATCH` en la última expresión de la rama:
 
 ```agentica {expect="CHECK-TYPE-MISMATCH"}
 def main() -> Void

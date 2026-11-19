@@ -73,7 +73,7 @@ GO x2
 
 ## Pausar {#sleep}
 
-`Task.sleep(ms)` pausa la tarea actual. `Task.sleep(0)` deja correr a las demás tareas.
+`Task.sleep(ms)` pausa la tarea actual. `Task.sleep(0)` deja que las demás tareas se ejecuten.
 
 ```agentica
 def main() -> Void
@@ -93,9 +93,9 @@ true
 
 ## Reglas {#rules}
 
-- Una tarea que no es `main` y que falla se detiene sola: su error se imprime, sus tareas hijas se cancelan, y sus archivos y sockets se cierran. Esperarla da `error` si devuelve un `Result`; si no, detiene a quien espera. Un fallo sin esperar hace que el programa termine con código 1.
+- Una tarea que no es `main` y que falla se detiene sola: su error se imprime, sus tareas hijas se cancelan, y sus archivos y sockets se cierran. Esperarla da `error` si devuelve un `Result`; si no, detiene a quien espera. Un fallo que nadie espera hace que el programa termine con el código de salida 1.
 - Un archivo, socket, listener o proceso pertenece a la tarea que lo abrió y se cierra cuando esa tarea termina. `Task.spawn_owning` le pasa uno (o un `Channel`) a la nueva tarea.
 - Cuando `main` termina, las tareas en marcha se cancelan. Espera lo que necesites.
-- Las tareas corren en varios núcleos de CPU (`--schedulers 1` las ejecuta de una en una). La salida puede llegar en cualquier orden. Para pasar valores entre tareas, usa un [Channel](/library/concurrency/channel/).
+- Las tareas se ejecutan en varios núcleos de CPU (`--schedulers 1` las ejecuta de una en una). La salida puede llegar en cualquier orden. Para pasar valores entre tareas, usa un [Channel](/library/concurrency/channel/).
 
 Consulta [Task](/library/concurrency/task/) y [Channel](/library/concurrency/channel/) para la referencia.

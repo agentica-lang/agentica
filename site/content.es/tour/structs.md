@@ -62,7 +62,7 @@ Options(name: "a", retries: 3, tags: [])
 Options(name: "b", retries: 1, tags: [])
 ```
 
-Un valor predeterminado sigue las mismas reglas que el de un parámetro: un literal, los bytes de un literal de cadena (`head: Bytes = "GET".bytes`), `true`, `false`, `nil`, `none`, `[]`, `{}`, una variante de enum sin payload o el nombre de una constante con ese valor (`retries: Int = RETRIES`). No vale una estructura creada sin argumentos, que solo puede usar un parámetro. Cualquier otra cosa es `CHECK-DEFAULT-VALUE`, y un valor de tipo incorrecto es `CHECK-TYPE-MISMATCH`.
+Un valor predeterminado sigue las mismas reglas que el de un parámetro: un literal, los bytes de un literal de cadena (`head: Bytes = "GET".bytes`), `true`, `false`, `nil`, `none`, `[]`, `{}`, una variante de enum sin payload o el nombre de una constante con ese valor (`retries: Int = RETRIES`). No vale una estructura creada sin argumentos, que solo admite un parámetro. Cualquier otra cosa es `CHECK-DEFAULT-VALUE`, y un valor de tipo incorrecto es `CHECK-TYPE-MISMATCH`.
 
 ```agentica {expect="CHECK-DEFAULT-VALUE"}
 struct Options
@@ -149,7 +149,7 @@ User(name: "Ana", address: Address(city: "Lima", zip: 8))
 User(name: "Bea", address: Address(city: "Quito", zip: 1))
 ```
 
-`with` necesita al menos un campo. Cada uno debe llevar nombre (si no, `PARSE-UNEXPECTED-TOKEN`), aparecer una sola vez, existir en la estructura y tener el tipo correcto (`CHECK-TYPE-MISMATCH`):
+`with` necesita al menos un campo. Cada uno debe tener nombre (si no, `PARSE-UNEXPECTED-TOKEN`), aparecer una sola vez, existir en la estructura y tener el tipo correcto (`CHECK-TYPE-MISMATCH`):
 
 ```agentica {expect="CHECK-UNKNOWN-FIELD"}
 struct Point
@@ -163,7 +163,7 @@ def main() -> Void
 end
 ```
 
-Un `p.with(x: 2)` sin asignar no cambia nada, así que es `CHECK-UNUSED-VALUE`. Asigna el resultado: `p = p.with(x: 2)`.
+Un `p.with(x: 2)` suelto no cambia nada, así que es `CHECK-UNUSED-VALUE`. Asigna el resultado: `p = p.with(x: 2)`.
 
 ```agentica {expect="CHECK-UNUSED-VALUE"}
 struct Point
@@ -207,7 +207,7 @@ order 7: 8
 
 ## Listar los campos {#list-the-fields}
 
-`Type.members` es una `List[StructMember]` con una entrada por cada campo de un tipo estructura, en el orden de declaración. Un `StructMember` tiene dos campos `String`: `name` y `type`, el tipo del campo escrito como código fuente. Una herramienta, como un mapeador de tablas, puede construir SQL a partir de una estructura con él.
+`Type.members` es una `List[StructMember]` con una entrada por cada campo de un tipo de estructura, en el orden de declaración. Un `StructMember` tiene dos campos `String`: `name` y `type`, el tipo del campo escrito como código fuente. Una herramienta, como un mapeador de tablas, puede construir SQL a partir de una estructura con él.
 
 ```agentica
 type Id = Int
@@ -312,7 +312,7 @@ def main() -> Void
 end
 ```
 
-Los valores que no coinciden son `CHECK-TYPE-MISMATCH`. Un parámetro no puede ser clave de un `Map` (`CHECK-MAP-KEY-TYPE`), y un campo llamado `with` no puede tener como tipo un parámetro (`CHECK-REDEFINED-NAME`), porque el argumento podría ser una función. `JSON.encode` escribe una instancia genérica, pero `JSON.decode` y `JSON.schema` la rechazan (`CHECK-NOT-DECODABLE`). Una estructura importada se escribe `Models.Box[Int]`.
+Los valores incompatibles son `CHECK-TYPE-MISMATCH`. Un parámetro no puede ser clave de un `Map` (`CHECK-MAP-KEY-TYPE`), y un campo llamado `with` no puede tener como tipo un parámetro (`CHECK-REDEFINED-NAME`), porque el argumento podría ser una función. `JSON.encode` escribe una instancia genérica, pero `JSON.decode` y `JSON.schema` la rechazan (`CHECK-NOT-DECODABLE`). Una estructura importada se escribe `Models.Box[Int]`.
 
 ## Sin métodos {#no-methods}
 
@@ -360,11 +360,11 @@ true
 true
 ```
 
-Una estructura que tiene dentro un campo de función (`Fn`), una tarea, un canal o un handle no tiene igualdad: `==` sobre ella es `CHECK-TYPE-MISMATCH`, y el mensaje nombra el campo. Un campo `Float` sigue IEEE 754, así que una estructura que contiene un NaN no es igual a sí misma.
+Una estructura que contiene un campo de función (`Fn`), una tarea, un canal o un handle no tiene igualdad: `==` sobre ella es `CHECK-TYPE-MISMATCH`, y el mensaje nombra el campo. Un campo `Float` sigue IEEE 754, así que una estructura que contiene un NaN no es igual a sí misma.
 
 ## Campos privados {#private-fields}
 
-Una línea `private` en el cuerpo de una estructura, sola y con una línea en blanco antes y después, hace privados los campos que vienen después para el módulo que declara la estructura: su archivo, o el bloque `module` en el que está. Ese módulo lee, asigna y entrega los campos como de costumbre. Fuera de él, el valor puede pasarse, guardarse, enviarse, compararse e imprimirse, pero sus campos privados no se pueden leer, pasar al construir ni cambiar con `with`, y la estructura solo la construyen las funciones del módulo:
+Una línea `private` en el cuerpo de una estructura, sola y con una línea en blanco antes y después, hace privados los campos que vienen después para el módulo que declara la estructura: su archivo, o el bloque `module` en el que está. Ese módulo lee, asigna y pasa los campos como siempre. Fuera de él, el valor puede pasarse, guardarse, enviarse, compararse e imprimirse, pero sus campos privados no se pueden leer, pasar al construir ni cambiar con `with`, y solo las funciones del módulo pueden construir la estructura:
 
 ```agentica
 module Bank
