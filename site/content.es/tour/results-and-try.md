@@ -59,7 +59,7 @@ end
 
 ## case con un Result {#case-on-a-result}
 
-`ok(...)` y `error(...)` también funcionan como patrones. `error(e)` enlaza el `Error`: `"#{e}"` y `puts(e)` dan su mensaje, y `e.message` es el `String` en sí.
+`ok(...)` y `error(...)` también funcionan como patrones. `error(e)` vincula el `Error`: `"#{e}"` y `puts(e)` dan su mensaje, y `e.message` es el `String` en sí.
 
 ```agentica
 def main() -> Void
