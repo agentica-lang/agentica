@@ -19,7 +19,7 @@ from tests.agentica_test import compile_agc, require, scaled, start_vm, timeout
 
 require(find_spec("hypothesis") is not None, "hypothesis is required (poetry install --only test --no-root)")
 
-from hypothesis import example, given, strategies as st  # noqa: E402
+from hypothesis import assume, example, given, strategies as st  # noqa: E402
 
 CODEC_PROGRAM = """\
 def hex(data: Bytes) -> String = OpenSSL.Digest.hexencode(data)
@@ -268,28 +268,44 @@ def shuffled(value, rng, floats):
         keys = list(value)
         rng.shuffle(keys)
         return {key: shuffled(value[key], rng, floats) for key in keys}
-    if floats and type(value) is int:
+    if floats and type(value) is int and abs(value) < 2**1000:
         return float(value)
     return value
 
 
-INT64_JSON = json_values(INT64)
+def json_same(a, b):
+    """Python's == of two json.loads values, which compares numbers by exact value (1 == 1.0, -0.0 == 0, a big int with
+    a float exactly), with a bool equal only to a bool (Python's True == 1 is not JSON's)."""
+    if isinstance(a, bool) or isinstance(b, bool):
+        return type(a) is type(b) and a == b
+    if isinstance(a, (int, float)) and isinstance(b, (int, float)):
+        return a == b
+    if type(a) is not type(b):
+        return False
+    if isinstance(a, list):
+        return len(a) == len(b) and all(json_same(x, y) for x, y in zip(a, b))
+    if isinstance(a, dict):
+        return a.keys() == b.keys() and all(json_same(a[k], b[k]) for k in a)
+    return a == b
 
 
 @timeout(300)
-@given(INT64_JSON, INT64_JSON, st.sampled_from(["reordered", "other", "floats"]), st.randoms(use_true_random=False))
+@given(JSON_VALUES, JSON_VALUES, st.sampled_from(["reordered", "other", "floats"]), st.randoms(use_true_random=False))
 @example({"a": 1, "b": [1, {"c": None, "d": True}]}, None, "reordered", random.Random(1))
 @example({"a": 1}, None, "floats", random.Random(1))
+@example([2**64, 2**53 + 1, -2**63, 2**63], None, "floats", random.Random(1))
+@example([-0.0, 1e2], [0, 100], "other", random.Random(1))
 def test_json_equality_agrees_with_python(codec, value, other, mode, rng):
-    """== on two parsed JSON.Values is Python's == of the json.loads values, with object keys in any order, an Int not
-    equal to a Float and floats compared by their bits (so -0.0 is not 0.0); != is its negation."""
+    """== on two parsed JSON.Values is Python's == of the json.loads values: object keys in any order and numbers by
+    exact value; != is its negation."""
+    assume(representable(value) and representable(other))
     if mode == "other":
         right = other
     else:
         right = shuffled(value, rng, mode == "floats")
     left_text, right_text = json.dumps(value), json.dumps(right)
     got = codec.ask("jsoneq", (left_text + "\n" + right_text).encode("utf-8"))
-    want = same(json.loads(left_text), json.loads(right_text))
+    want = json_same(json.loads(left_text), json.loads(right_text))
     assert got == (b"true false" if want else b"false true"), (left_text, right_text, got)
 
 

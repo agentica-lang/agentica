@@ -68,7 +68,7 @@ for a test function with parameters, type parameters or another result;
   of those; `Fn`, `Task`, handles, `Test.Case` and two different types are
   `CHECK-TYPE-MISMATCH`. Maps compare in any key order and sets in any element
   order; Floats by IEEE 754 (NaN is not equal to itself); a `JSON.Value` as `==`
-  does (object keys in any order). A `Bytes` shows as quoted text, the first 32
+  does (object keys in any order, numbers by value). A `Bytes` shows as quoted text, the first 32
   bytes with the escapes of a String (`<Bytes 7 "+OK\r\n\x00\xFF">`).
 - `Test.ok?(r)` and `Test.error?(r)` check a Result's tag;
   `Test.assert(cond, message)` fails with `message`.

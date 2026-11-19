@@ -248,8 +248,8 @@ end
 ## body of a generic function it stands for any type, which could be an Fn.
 def data?(cx: State.Cx, type: ResolvedType) -> Bool = data_walk(cx, type, {}, false).passes
 
-## True for a type that == and != compare: a data type (data?) with no JSON.Value inside. Numbers, Bool, String, nil,
-## ranges, Bytes, addresses, and lists, maps, sets, Optionals, Results, structs and enums of those. A group of structs
+## True for a type that == and != compare: a data type (data?). Numbers, Bool, String, nil, ranges, Bytes, addresses,
+## JSON.Value, and lists, maps, sets, Optionals, Results, structs and enums of those. A group of structs
 ## and enums that hold one another is judged as a whole, so the answer does not depend on where the walk starts. As in
 ## data?, a type variable passes only in the files of the prelude, where == on it lowers to Value.equal. List#include?
 ## needs it (include in stdlib/prelude/list.agc); its equality limit checks the item type at the call site
@@ -1300,9 +1300,8 @@ end
 def data_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool], equal: Bool) -> Walk
   # An Address names a channel without holding it: a value with no state, so it is data (check_const.agc keeps it out
   # of a constant).
-  if primitive?(type) or Types.is?(type, "Range") or Types.is?(type, "Bytes") or Types.is?(type, "Address")
-    return passed(seen)
-  elsif Types.is?(type, "Json")
+  plain = primitive?(type) or Types.is?(type, "Range") or Types.is?(type, "Bytes") or Types.is?(type, "Address")
+  if plain or Types.is?(type, "Json")
     return passed(seen)
   elsif Types.is?(type, "Var")
     why = ""

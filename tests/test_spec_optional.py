@@ -177,7 +177,7 @@ end
     ),
     (
         "== needs items with equality",
-        "def main() -> Void\n  xs: Optional[JSON.Value] = none\n  puts(xs == none)\nend\n",
+        "def main() -> Void\n  xs: Optional[Fn[Int, Int]] = none\n  puts(xs == none)\nend\n",
         "CHECK-TYPE-MISMATCH",
         None,
     ),

@@ -167,8 +167,8 @@ the programming skill or the site).
   `keep`/`call` (closures `Fn[JSON.Value, Result[JSON.Value]]` that capture a
   scenario's non-JSON values: `Context` cannot hold the step program's own type,
   since functions and structs are not generic), `read_line` and the program
-  steps. The `then_*` checks compare with `Test.eq` (a `JSON.Value` line by
-  canonical text) and put the inspect texts in the `fail` record, so BDD and
+  steps. The `then_*` checks compare with `Test.eq` (a `JSON.Value` line as
+  `==` compares it) and put the inspect texts in the `fail` record, so BDD and
   unit tests show values the same way. In the child, `run` checks the step index
   and pattern, calls the handler, fails on pending tasks and an unobserved task
   crash, probes the output limit and sends `end`. Each record is one JSON line

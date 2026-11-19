@@ -82,8 +82,8 @@ nullable wildcard: `name: String = nil` is invalid; use `Optional[T]`.
   variant and equal payloads (`error` compares the message, and `ok() == ok()`
   for `Result[Void]`); structs when they have the same type and equal fields;
   two `JSON.Value`s when they are the same JSON: objects with the same keys
-  and equal values in any key order, arrays in order, and numbers by the text
-  JSON writes (`1` is not `1.0`).
+  and equal values in any key order, arrays in order, and numbers by value
+  (`1 == 1.0`, `-0.0 == 0.0`).
   A struct or enum that holds itself (`children: List[Node]`) has equality when
   no type of its group lacks it. Functions, tasks, channels and handles have
   no equality, nor does any type that holds one, nor a type

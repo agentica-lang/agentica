@@ -10,7 +10,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- `==` and `!=` compare two `JSON.Value`s, as Ruby's `Hash#==` does: object keys in any order, arrays in order, and `1` is not `1.0`; a list, map or struct that holds one has equality too (#1878).
+- `==` and `!=` compare two `JSON.Value`s, as Ruby's `Hash#==` does: object keys in any order, arrays in order, and numbers by value (`1 == 1.0`, `-0.0 == 0.0`); a list, map or struct that holds one has equality too, and `Test.eq` compares the same way (#1878).
 - `Process.pid(p)` gives the OS process id of a child, and an error once it has exited and was reaped (#1868).
 - `System.program_name()` gives the path of the main program as it was given, the `.agc` or the `.agcb` file, as Ruby's `$PROGRAM_NAME` (#1869).
 - `Path.replace(from, to)` renames a file over another in one step, as Ruby's `File.rename` does: a file or a link at `to` is replaced, a directory is an error, and `from` is synced first (#1865).
@@ -57,7 +57,6 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- `==` and `!=` compare two `JSON.Value`s, as Ruby's `Hash#==` does: object keys in any order, arrays in order, and `1` is not `1.0`; a list, map or struct that holds one has equality too (#1878).
 - `agentica repl` runs entries one at a time over a session in which names, declarations and tasks live on; `--json` answers each entry for agents (#1463).
 - Prebuilt native modules: `[native.NAME] prebuilt` names the files a package author built, `install` downloads the host's file, and a run uses it with no C compiler; `[native_policy]`, `--native-build` and `--native-prebuilt-only` choose per module (#1168).
 - `HTTP.ClientOptions` has `connect_to`, an IP address every connection goes to instead of the URL host (#1556).
@@ -95,7 +94,6 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- `==` and `!=` compare two `JSON.Value`s, as Ruby's `Hash#==` does: object keys in any order, arrays in order, and `1` is not `1.0`; a list, map or struct that holds one has equality too (#1878).
 - `Process.spawn` with `pty: true` runs a program on a pseudo-terminal, and `Process.resize` sets its size; Linux and macOS (#1733).
 - A run that compiles its program says `Compiling FILE…` on a terminal, and `agentica compile` with no `-o` fills the bytecode cache ahead for every `main.agc` under the working folder (#1735).
 - `Actor.send` and `Actor.await` split `Actor.call` in two, so a caller can ask several actors first and await each answer later (#1571).
@@ -131,7 +129,6 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- `==` and `!=` compare two `JSON.Value`s, as Ruby's `Hash#==` does: object keys in any order, arrays in order, and `1` is not `1.0`; a list, map or struct that holds one has equality too (#1878).
 - `JSON.decode`, `JSON.schema` and `.codec` take generic struct instances (`Box[Int]`) (#748).
 - `Actor.inbox` gives the running actor its own inbox (#1525).
 - `List.count` takes a block, as Ruby's `xs.count { |x| ... }` does (#1590).
@@ -178,7 +175,6 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- `==` and `!=` compare two `JSON.Value`s, as Ruby's `Hash#==` does: object keys in any order, arrays in order, and `1` is not `1.0`; a list, map or struct that holds one has equality too (#1878).
 - `Process.poll_line(p, timeout_ms)` reads a line, and a timeout keeps the program (#997).
 - `System.subscribe` gives a channel that receives the listed signals, and `System.signal_number` a signal's number (#1477).
 - `HTTP.shutdown(server, timeout_ms)` stops a server gracefully, letting requests in flight finish (#1479).
@@ -233,7 +229,6 @@ below.
 
 ### Added
 
-- `==` and `!=` compare two `JSON.Value`s, as Ruby's `Hash#==` does: object keys in any order, arrays in order, and `1` is not `1.0`; a list, map or struct that holds one has equality too (#1878).
 - A `private` line in a struct body makes the fields after it private to the
   module that declares the struct (`CHECK-PRIVATE-FIELD`, #1344).
 - A `private` line in a file or a module block makes every declaration above
@@ -314,7 +309,6 @@ below.
 
 ### Added
 
-- `==` and `!=` compare two `JSON.Value`s, as Ruby's `Hash#==` does: object keys in any order, arrays in order, and `1` is not `1.0`; a list, map or struct that holds one has equality too (#1878).
 - Lambdas: `->(x) { x + 1 }` is a function value; `-> { 42 }` takes no
   parameters.
 - A lambda shows as `lambda` in a stack line, a profile and `std/analysis`.
@@ -375,7 +369,6 @@ below.
 
 ### Added
 
-- `==` and `!=` compare two `JSON.Value`s, as Ruby's `Hash#==` does: object keys in any order, arrays in order, and `1` is not `1.0`; a list, map or struct that holds one has equality too (#1878).
 - `DNS.lookup(host)` gives the IPv4 and IPv6 addresses of a host name.
 - `TCP.recv_bytes(socket, max_bytes)` without a timeout waits with no limit.
 - Module blocks: `module Name ... end` holds several modules in one file, and
@@ -409,7 +402,6 @@ below.
 
 ### Added
 
-- `==` and `!=` compare two `JSON.Value`s, as Ruby's `Hash#==` does: object keys in any order, arrays in order, and `1` is not `1.0`; a list, map or struct that holds one has equality too (#1878).
 - The last expression of a function is its value, also in the branches of a last
   `if` with `else` and the arms of a last `case`; `return` stays for early
   exits.
@@ -447,7 +439,6 @@ below.
 
 ### Added
 
-- `==` and `!=` compare two `JSON.Value`s, as Ruby's `Hash#==` does: object keys in any order, arrays in order, and `1` is not `1.0`; a list, map or struct that holds one has equality too (#1878).
 - `agentica test --coverage` writes the line coverage of the sources that the
   tests ran to `coverage/lcov.info` (LCOV) and prints a summary of each file.
 - `std/analysis`: `Analysis.bodies(session, path)` gives the functions of a file
@@ -504,7 +495,6 @@ below.
 
 ### Added
 
-- `==` and `!=` compare two `JSON.Value`s, as Ruby's `Hash#==` does: object keys in any order, arrays in order, and `1` is not `1.0`; a list, map or struct that holds one has equality too (#1878).
 - `OpenSSL.RSA.public_encrypt_oaep(pem, data)` encrypts with an RSA public key
   in PEM and OAEP padding (SHA-1), as MySQL's `caching_sha2_password` needs.
 - Builtin families: `Family.Member.fn(...)` calls a builtin of a family, and a
@@ -578,7 +568,6 @@ below.
 
 ### Added
 
-- `==` and `!=` compare two `JSON.Value`s, as Ruby's `Hash#==` does: object keys in any order, arrays in order, and `1` is not `1.0`; a list, map or struct that holds one has equality too (#1878).
 - `agentica.toml` accepts a `[tool.NAME]` table for other tools; Agentica reads
   nothing inside it.
 
@@ -586,7 +575,6 @@ below.
 
 ### Added
 
-- `==` and `!=` compare two `JSON.Value`s, as Ruby's `Hash#==` does: object keys in any order, arrays in order, and `1` is not `1.0`; a list, map or struct that holds one has equality too (#1878).
 - A fetched package pinned in `agentica.lock` builds its native module when a
   file first uses it; `install` does not build it.
 - `Analysis.native_modules` in `std/analysis` describes the `extern module`
@@ -601,7 +589,6 @@ below.
 
 ### Added
 
-- `==` and `!=` compare two `JSON.Value`s, as Ruby's `Hash#==` does: object keys in any order, arrays in order, and `1` is not `1.0`; a list, map or struct that holds one has equality too (#1878).
 - `extern module "NAME"` calls C written for Agentica, with Agentica types.
 - A `compute def` of an `extern module` block runs on the compute pool.
 - `resource Name` in an `extern module` block: a handle that the module frees.
@@ -625,7 +612,6 @@ below.
 
 ### Added
 
-- `==` and `!=` compare two `JSON.Value`s, as Ruby's `Hash#==` does: object keys in any order, arrays in order, and `1` is not `1.0`; a list, map or struct that holds one has equality too (#1878).
 - `override = true` and `path = "../folder"` in a dependency of the root
   `agentica.toml`; packages cannot use either (`PKG-ROOT-ONLY`).
 - `{pid}` in `AGENTICA_VM_TRACE_FILE` is replaced by the process id.
@@ -636,7 +622,6 @@ below.
 
 ### Added
 
-- `==` and `!=` compare two `JSON.Value`s, as Ruby's `Hash#==` does: object keys in any order, arrays in order, and `1` is not `1.0`; a list, map or struct that holds one has equality too (#1878).
 - `User.codec` is the `Codec[User]` of a struct or enum, with `decode`,
   `encode`, `from` and `members`; generic code takes a `Codec[T]`.
 - `Native.function?("NAME", "symbol")` tells whether a native library exports a
@@ -682,7 +667,6 @@ below.
 
 ### Added
 
-- `==` and `!=` compare two `JSON.Value`s, as Ruby's `Hash#==` does: object keys in any order, arrays in order, and `1` is not `1.0`; a list, map or struct that holds one has equality too (#1878).
 - The documentation site has a version selector: one site per release and
   `/dev/`.
 - `ATS[Bytes, V]`: a shared table takes `Bytes` keys, as a `Map` does.
@@ -691,7 +675,6 @@ below.
 
 ### Added
 
-- `==` and `!=` compare two `JSON.Value`s, as Ruby's `Hash#==` does: object keys in any order, arrays in order, and `1` is not `1.0`; a list, map or struct that holds one has equality too (#1878).
 - `AGENTICA_PERF_MAP=1` writes `/tmp/perf-PID.map`, so Linux `perf` names the
   functions the JIT compiled.
 - `Task.monitor(task, channel, wrap)` sends a `TaskDown` notice when a task
@@ -717,7 +700,6 @@ below.
 
 ### Added
 
-- `==` and `!=` compare two `JSON.Value`s, as Ruby's `Hash#==` does: object keys in any order, arrays in order, and `1` is not `1.0`; a list, map or struct that holds one has equality too (#1878).
 - `agentica test --jobs N` runs up to `N` test files at the same time (default
   1); the report keeps the order of the files.
 
@@ -725,7 +707,6 @@ below.
 
 ### Added
 
-- `==` and `!=` compare two `JSON.Value`s, as Ruby's `Hash#==` does: object keys in any order, arrays in order, and `1` is not `1.0`; a list, map or struct that holds one has equality too (#1878).
 - `agentica lint` suggests style changes with `LINT-` codes; it exits 0, and
   `--strict` exits 1 for CI.
 - `std/bdd`: the steps `stdout includes:` and `stderr includes:`.
@@ -775,7 +756,6 @@ below.
 
 ### Added
 
-- `==` and `!=` compare two `JSON.Value`s, as Ruby's `Hash#==` does: object keys in any order, arrays in order, and `1` is not `1.0`; a list, map or struct that holds one has equality too (#1878).
 - `std/option_parser` reads the command line into typed values, in the style of
   `argparse` with Ruby names (`Arg`, `Opt`, `OP.parse`, `--help`, `OP.run!`).
 - `==` and `!=` compare structs, enums, lists, maps, sets and Results in depth.
@@ -816,7 +796,6 @@ below.
 
 ### Added
 
-- `==` and `!=` compare two `JSON.Value`s, as Ruby's `Hash#==` does: object keys in any order, arrays in order, and `1` is not `1.0`; a list, map or struct that holds one has equality too (#1878).
 - `std/utc` turns Unix milliseconds into the date and time in UTC and into RFC
   3339 text, as Ruby's `Time#utc.iso8601` does (`UTC.iso8601(Time.now_ms)`).
 - `TCP.remote_address(socket)` returns the peer's IP address without the port
@@ -865,7 +844,6 @@ below.
 
 ### Added
 
-- `==` and `!=` compare two `JSON.Value`s, as Ruby's `Hash#==` does: object keys in any order, arrays in order, and `1` is not `1.0`; a list, map or struct that holds one has equality too (#1878).
 - `agentica help std/MODULE` lists the exports of a standard library module
   with their summaries, and `agentica help std/MODULE.NAME` prints one export
   with its signature and `##` doc (`--json` too).
@@ -902,7 +880,6 @@ below.
 
 ### Added
 
-- `==` and `!=` compare two `JSON.Value`s, as Ruby's `Hash#==` does: object keys in any order, arrays in order, and `1` is not `1.0`; a list, map or struct that holds one has equality too (#1878).
 - `HTTP.listen_websocket` (and `listen_websocket_tls`) upgrades a request to a
   WebSocket (RFC 6455): `HTTP.accept_websocket` checks the handshake and runs a
   session that gets `HTTP.Message`s (text, binary, ping, pong, close) on two
@@ -967,7 +944,6 @@ The first stable release since 0.18.0, with the changes of `0.19.0-beta.1`,
 
 ### Added
 
-- `==` and `!=` compare two `JSON.Value`s, as Ruby's `Hash#==` does: object keys in any order, arrays in order, and `1` is not `1.0`; a list, map or struct that holds one has equality too (#1878).
 - `bytes.decode(encoding)` and `text.encode(encoding)` read and write UTF-8,
   UTF-16, UTF-32 (LE, BE, or with a byte order mark), ASCII, Latin-1,
   ISO-8859-15 and Windows-1252.
@@ -995,7 +971,6 @@ The first stable release since 0.18.0, with the changes of `0.19.0-beta.1`,
 
 ### Added
 
-- `==` and `!=` compare two `JSON.Value`s, as Ruby's `Hash#==` does: object keys in any order, arrays in order, and `1` is not `1.0`; a list, map or struct that holds one has equality too (#1878).
 - `HTTP.StreamResponse` takes `length: some(n)`: a streamed body of known
   size goes out with `Content-Length` and no chunk framing, and a body that
   ends short or runs over closes the connection.
@@ -1029,7 +1004,6 @@ The first stable release since 0.18.0, with the changes of `0.19.0-beta.1`,
 
 ### Added
 
-- `==` and `!=` compare two `JSON.Value`s, as Ruby's `Hash#==` does: object keys in any order, arrays in order, and `1` is not `1.0`; a list, map or struct that holds one has equality too (#1878).
 - `callback Name(params) -> result` in an extern block and
   `Native.callback(Name, &fn)`: C calls an Agentica function back (`qsort`, a
   SQLite collation); `Optional[Name]` parameters pass NULL for `none`.
@@ -1063,7 +1037,6 @@ The first stable release since 0.18.0, with the changes of `0.19.0-beta.1`,
 
 ### Added
 
-- `==` and `!=` compare two `JSON.Value`s, as Ruby's `Hash#==` does: object keys in any order, arrays in order, and `1` is not `1.0`; a list, map or struct that holds one has equality too (#1878).
 - Linux ARM64 builds and CI, with native calls; the JIT stays x86-64 only.
 - A `linux-arm64` release archive (glibc 2.28), which runs on the interpreter:
   no JIT on ARM64 yet.
@@ -1076,7 +1049,6 @@ The first stable release since 0.18.0, with the changes of `0.19.0-beta.1`,
 
 ### Added
 
-- `==` and `!=` compare two `JSON.Value`s, as Ruby's `Hash#==` does: object keys in any order, arrays in order, and `1` is not `1.0`; a list, map or struct that holds one has equality too (#1878).
 - `agentica check [PATH...]` checks several files and folders and prints a
   count; `--json` gives one entry per file.
 - `TLS.connect` takes an optional client certificate and key for mTLS.
@@ -1108,7 +1080,6 @@ The first stable release since 0.18.0, with the changes of `0.19.0-beta.1`,
 
 ### Added
 
-- `==` and `!=` compare two `JSON.Value`s, as Ruby's `Hash#==` does: object keys in any order, arrays in order, and `1` is not `1.0`; a list, map or struct that holds one has equality too (#1878).
 - `Bytes`, a compact immutable byte string: `s.bytes`, `Bytes.from_list`,
   `b.to_a`, `b[i]`, `slice`, `take`, `drop`, `+`, `Bytes.concat`, `==`, and use
   as a `Map` key or `Set` item.
@@ -1143,7 +1114,6 @@ The first stable release since 0.18.0, with the changes of `0.19.0-beta.1`,
 
 ### Added
 
-- `==` and `!=` compare two `JSON.Value`s, as Ruby's `Hash#==` does: object keys in any order, arrays in order, and `1` is not `1.0`; a list, map or struct that holds one has equality too (#1878).
 - `std/uri` encodes and decodes URL components and query strings.
 - `std/html` escapes and unescapes HTML text.
 - `std/cookie` reads a `Cookie` header and writes a `Set-Cookie` header.
@@ -1164,7 +1134,6 @@ The first stable release since 0.18.0, with the changes of `0.19.0-beta.1`,
 
 ### Added
 
-- `==` and `!=` compare two `JSON.Value`s, as Ruby's `Hash#==` does: object keys in any order, arrays in order, and `1` is not `1.0`; a list, map or struct that holds one has equality too (#1878).
 - `Base64` encodes and decodes bytes: `encode64`, `strict_encode64`,
   `urlsafe_encode64` and their decoders.
 - `Digest.hexencode` and `hexdecode` turn bytes into hex text and back.
@@ -1190,7 +1159,6 @@ The first stable release since 0.18.0, with the changes of `0.19.0-beta.1`,
 
 ### Added
 
-- `==` and `!=` compare two `JSON.Value`s, as Ruby's `Hash#==` does: object keys in any order, arrays in order, and `1` is not `1.0`; a list, map or struct that holds one has equality too (#1878).
 - Generic structs: `struct Box[T]`, with the type argument inferred.
 - Generic functions: `def first_or[T](xs: List[T], fallback: T) -> T`.
 - `Analysis.entry` and `Analysis.adopt` share a file's analysis cache between
@@ -1214,7 +1182,6 @@ The first stable release since 0.18.0, with the changes of `0.19.0-beta.1`,
 
 ### Added
 
-- `==` and `!=` compare two `JSON.Value`s, as Ruby's `Hash#==` does: object keys in any order, arrays in order, and `1` is not `1.0`; a list, map or struct that holds one has equality too (#1878).
 - `ATS[K, V]` shared tables that tasks update together, for counters and
   caches.
 - `Type.members` lists the fields of a struct type as `List[StructMember]`.
@@ -1236,7 +1203,6 @@ The first stable release since 0.18.0, with the changes of `0.19.0-beta.1`,
 
 ### Added
 
-- `==` and `!=` compare two `JSON.Value`s, as Ruby's `Hash#==` does: object keys in any order, arrays in order, and `1` is not `1.0`; a list, map or struct that holds one has equality too (#1878).
 - `resource Name, free_ref: c_function` for a resource freed by `void f(T **)`,
   such as `duckdb_close`.
 - `Native.from_string(text)` and `text.bytesize` pass text with its byte length
@@ -1294,7 +1260,6 @@ The first stable release since 0.18.0, with the changes of `0.19.0-beta.1`,
 
 ### Added
 
-- `==` and `!=` compare two `JSON.Value`s, as Ruby's `Hash#==` does: object keys in any order, arrays in order, and `1` is not `1.0`; a list, map or struct that holds one has equality too (#1878).
 - `export Alias.name` re-exports an imported name, so one facade module can
   hold the API of a package of several files.
 - `[style] blank_line_after_end = true` in `agentica.toml` requires an empty
@@ -1341,7 +1306,6 @@ The first stable release since 0.18.0, with the changes of `0.19.0-beta.1`,
 
 ### Added
 
-- `==` and `!=` compare two `JSON.Value`s, as Ruby's `Hash#==` does: object keys in any order, arrays in order, and `1` is not `1.0`; a list, map or struct that holds one has equality too (#1878).
 - Packages can download pinned native libraries from TAR or ZIP archives;
   `std/archive` safely extracts allowlisted TAR, gzip TAR and ZIP files.
 - Experimental, opt-in `--jit on` / `AGENTICA_JIT=on` compiles supported hot
@@ -1399,7 +1363,6 @@ The first stable release since 0.8.1, with the changes of `0.9.0-beta.1` and
 
 ### Added
 
-- `==` and `!=` compare two `JSON.Value`s, as Ruby's `Hash#==` does: object keys in any order, arrays in order, and `1` is not `1.0`; a list, map or struct that holds one has equality too (#1878).
 - Windows: `Native.wait_readable` and `Native.wait_writable` wait on a native
   library's socket; any other value is an error.
 - The `AGENTICA_VM_TRACE=profile` report ends with what the VM ran: an `op` row
@@ -1422,7 +1385,6 @@ The first stable release since 0.8.1, with the changes of `0.9.0-beta.1` and
 
 ### Added
 
-- `==` and `!=` compare two `JSON.Value`s, as Ruby's `Hash#==` does: object keys in any order, arrays in order, and `1` is not `1.0`; a list, map or struct that holds one has equality too (#1878).
 - `extern` blocks and `Native.wait_*` work on macOS (x86_64 and arm64).
 - `Native.string_at`, `Native.bytes_at` and `Native.pointer` read memory that C
   returns and make sentinel pointers.
@@ -1441,7 +1403,6 @@ release with these changes.
 
 ### Added
 
-- `==` and `!=` compare two `JSON.Value`s, as Ruby's `Hash#==` does: object keys in any order, arrays in order, and `1` is not `1.0`; a list, map or struct that holds one has equality too (#1878).
 - `extern` blocks call C functions of native libraries on Linux x86_64 and
   Windows x64; `--deny-native` refuses such a program.
 - Native types `C.Int`, `C.Int64`, `C.Double`, `C.Bool`, `C.String`,
@@ -1493,7 +1454,6 @@ release with these changes.
 
 ### Added
 
-- `==` and `!=` compare two `JSON.Value`s, as Ruby's `Hash#==` does: object keys in any order, arrays in order, and `1` is not `1.0`; a list, map or struct that holds one has equality too (#1878).
 - `agentica type-at` (and `std/analysis`) answers a type name in an annotation,
   a type argument, a field or a payload (`kind` `type`), with the struct, enum
   or alias as definition.
@@ -1504,7 +1464,6 @@ release with these changes.
 
 ### Added
 
-- `==` and `!=` compare two `JSON.Value`s, as Ruby's `Hash#==` does: object keys in any order, arrays in order, and `1` is not `1.0`; a list, map or struct that holds one has equality too (#1878).
 - `agentica symbol NAME [PATH...]` finds where a name is defined, with its
   signature, `##` doc and span.
 - `agentica refs NAME|FILE:LINE:COL [PATH...]` lists every reference to a name
@@ -1532,7 +1491,6 @@ release with these changes.
 
 ### Added
 
-- `==` and `!=` compare two `JSON.Value`s, as Ruby's `Hash#==` does: object keys in any order, arrays in order, and `1` is not `1.0`; a list, map or struct that holds one has equality too (#1878).
 - `agentica doc PATH [--json]` prints the exported API of a file or a `std/`
   module with its `##` docs.
 - `agentica outline FILE [--json] [--stdin FILE]` lists the declarations of a
@@ -1565,7 +1523,6 @@ release with these changes.
 
 ### Added
 
-- `==` and `!=` compare two `JSON.Value`s, as Ruby's `Hash#==` does: object keys in any order, arrays in order, and `1` is not `1.0`; a list, map or struct that holds one has equality too (#1878).
 - `agentica check --stdin FILE` checks standard input as if `FILE` held it.
 - `JSON.kind(value)` gives the kind of a JSON value as a String.
 - `agentica help --json` with no NAME prints every builtin as a JSON array.
@@ -1580,7 +1537,6 @@ release with these changes.
 
 ### Added
 
-- `==` and `!=` compare two `JSON.Value`s, as Ruby's `Hash#==` does: object keys in any order, arrays in order, and `1` is not `1.0`; a list, map or struct that holds one has equality too (#1878).
 - Packages: git dependencies in `agentica.toml`, pinned by `agentica.lock`, and
   imports as `pkg/<name>/<module>` from a cache filled by hand (no fetching
   yet). New codes `PKG-*` and `CHECK-IMPORT-PACKAGE`.
@@ -1619,7 +1575,6 @@ release with these changes.
 
 ### Added
 
-- `==` and `!=` compare two `JSON.Value`s, as Ruby's `Hash#==` does: object keys in any order, arrays in order, and `1` is not `1.0`; a list, map or struct that holds one has equality too (#1878).
 - Native release archives for Linux x86-64, Windows x86-64, macOS Intel and
   macOS Apple silicon, with `SHA256SUMS`.
 - `TCP` on Windows and macOS, and `agentica test` on Windows.
@@ -1656,7 +1611,6 @@ release with these changes.
 
 ### Added
 
-- `==` and `!=` compare two `JSON.Value`s, as Ruby's `Hash#==` does: object keys in any order, arrays in order, and `1` is not `1.0`; a list, map or struct that holds one has equality too (#1878).
 - Native Windows files, imports, environment, driver and compiler bootstrap.
 - Native compiler bootstrap and copied-binary checks on Windows and macOS.
 
@@ -1691,7 +1645,6 @@ release with these changes.
 
 ### Added
 
-- `==` and `!=` compare two `JSON.Value`s, as Ruby's `Hash#==` does: object keys in any order, arrays in order, and `1` is not `1.0`; a list, map or struct that holds one has equality too (#1878).
 - One Linux binary with the compiler, VM and standard library included.
 - CLI and test driver written in Agentica, plus `agentica run` for bytecode.
 - Bootstrap builds without Racket and checks that the compiler reproduces
@@ -1708,7 +1661,6 @@ release with these changes.
 
 ### Added
 
-- `==` and `!=` compare two `JSON.Value`s, as Ruby's `Hash#==` does: object keys in any order, arrays in order, and `1` is not `1.0`; a list, map or struct that holds one has equality too (#1878).
 - Module constants, named imports, immutable sets and struct updates.
 - TOML, binary data and structured logging libraries.
 - Task await timeouts and channel ownership.
@@ -1739,7 +1691,6 @@ release with these changes.
 
 ### Added
 
-- `==` and `!=` compare two `JSON.Value`s, as Ruby's `Hash#==` does: object keys in any order, arrays in order, and `1` is not `1.0`; a list, map or struct that holds one has equality too (#1878).
 - Ruby-style operators, string interpolation, methods, closures, ranges and
   pipes.
 - Loop controls, digit separators and documentation comments.
@@ -1776,7 +1727,6 @@ First release of Agentica, a statically typed language designed for AI agents.
 
 ### Added
 
-- `==` and `!=` compare two `JSON.Value`s, as Ruby's `Hash#==` does: object keys in any order, arrays in order, and `1` is not `1.0`; a list, map or struct that holds one has equality too (#1878).
 - Racket interpreter with a CLI for running, checking and inspecting programs.
 - Typed collections, structs, functions, modules, JSON and Result error
   handling.

@@ -25,9 +25,7 @@ ROWS: List[Model.Builtin] = [
     rule: Model.Rule.TestEq,
     implementation: "Test.eq",
     effects: ["test"],
-    description: (
-      "Compare two values of a type with equality (a JSON.Value as canonical text); a failure is recorded on the test."
-    ),
+    description: "Compare two values of a type with equality, as == does; a failure is recorded on the test.",
     alternatives: [],
   ),
   Model.Builtin(
