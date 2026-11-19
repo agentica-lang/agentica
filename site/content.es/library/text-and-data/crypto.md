@@ -1,7 +1,7 @@
 ---
 title: OpenSSL
 weight: 6
-description: La familia de integrados OpenSSL. OpenSSL.Digest calcula resúmenes de bytes con MD5, SHA-1, SHA-256 y SHA-512; OpenSSL.HMAC firma bytes con una clave y compara MAC en tiempo constante; OpenSSL.Cipher cifra con AES-256-GCM y Triple DES CBC; OpenSSL.KDF calcula hash de contraseñas con PBKDF2 y scrypt; OpenSSL.CMAC da los MAC de los formatos de pago; OpenSSL.RSA cifra con una clave pública, y OpenSSL.Random da bytes aleatorios seguros, hexadecimal y UUID.
+description: La familia de integrados OpenSSL. OpenSSL.Digest calcula resúmenes de bytes con MD5, SHA-1, SHA-256 y SHA-512; OpenSSL.HMAC firma bytes con una clave y compara MAC en tiempo constante; OpenSSL.Cipher cifra con AES-256-GCM y Triple DES CBC; OpenSSL.KDF calcula hashes de contraseñas con PBKDF2 y scrypt; OpenSSL.CMAC da los MAC de los formatos de pago; OpenSSL.RSA cifra con una clave pública, y OpenSSL.Random da bytes aleatorios seguros, hexadecimal y UUID.
 source_hash: "343f2dff2281"
 ---
 
@@ -10,7 +10,7 @@ La VM calcula estos integrados con OpenSSL, la biblioteca que ya usa para TLS; n
 - `OpenSSL.Digest`: los resúmenes criptográficos, como `Digest::SHA256.digest` y `hexdigest` de Ruby.
 - `OpenSSL.HMAC`: los MAC, como `OpenSSL::HMAC`, y la comparación en tiempo constante `OpenSSL.HMAC.secure_compare`, como `OpenSSL.secure_compare` de Ruby.
 - `OpenSSL.Cipher`: AES-256-GCM, como `OpenSSL::Cipher.new("aes-256-gcm")`, y Triple DES CBC.
-- `OpenSSL.KDF`: los hash de contraseñas, como `OpenSSL::KDF`.
+- `OpenSSL.KDF`: los hashes de contraseñas, como `OpenSSL::KDF`.
 - `OpenSSL.CMAC`: los CMAC de los formatos de pago.
 - `OpenSSL.RSA`: cifrado con una clave pública RSA, como `OpenSSL::PKey::RSA`.
 - `OpenSSL.Random`: los números aleatorios seguros, como `SecureRandom` de Ruby.
@@ -62,7 +62,7 @@ true
 - MD5 y SHA-1 están rotos para la seguridad: úsalos solo donde un formato los necesite, como ETags, nombres de objetos de git o una API antigua. Usa SHA-256 o SHA-512 para todo lo demás.
 - Dos resúmenes se comparan con `==`. `==` no es de tiempo constante: para comprobar un MAC o un token que has recibido, usa [`OpenSSL.HMAC.secure_compare`](#checking-a-mac).
 - Un OpenSSL del sistema en modo solo FIPS no tiene MD5 ni SHA-1; `OpenSSL.Digest.md5` y `OpenSSL.Digest.sha1` (y sus formas `_hexdigest`) detienen entonces el programa con `RUNTIME-INTERNAL`. Los binarios de release usan su propio OpenSSL, que tiene los cuatro.
-- El tiempo crece con los datos. Una llamada nunca se parte, pero cuenta para el turno de la tarea, así que otras tareas siguen poco después de un resumen grande.
+- El tiempo crece con los datos. Una llamada nunca se parte, pero cuenta para el turno de la tarea, así que otras tareas se ejecutan poco después de un resumen grande.
 - No necesitan etiqueta de efecto: no leen nada fuera de su argumento.
 
 Un `List[Int]` no es un `Bytes`; conviértelo una vez con `Bytes.from_list`, que da un error para un elemento fuera de 0 a 255.

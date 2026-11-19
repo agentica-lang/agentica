@@ -10,7 +10,7 @@ Dos formas de trabajar con JSON:
 - Para una forma conocida, declara una estructura, o un [enum](#enums) para elegir entre formas. `JSON.encode` lo escribe y `JSON.decode` lo lee de vuelta, con comprobación de tipos.
 - Para datos cuya forma cambia, usa el tipo `JSON.Value` y las funciones de `JSON` para crearlos y leerlos.
 
-`JSON` es un nombre reservado; `JSON.Value` y `JSON.Field` son sus miembros. Un `JSON.Value` no tiene constructor, campos ni indexación. `a == b` es verdadero cuando los dos son el mismo JSON, igual que `Hash#==` de Ruby: objetos con las mismas claves y valores iguales en cualquier orden de claves (una clave repetida cuenta una vez, con su último valor), arrays con elementos iguales en orden, y números por valor, así que `1 == 1.0`, `1e2 == 100` y `-0.0 == 0.0` (un entero fuera de `Int` se compara con exactitud, sin redondeo); `!=` es su negación, y una lista, estructura o mapa que contiene un `JSON.Value` lo compara del mismo modo. El costo de `==` es el tamaño de ambos valores. Se imprime como texto JSON con `puts`, `to_s`, interpolación y `JSON.encode`; `inspect` e `IO.inspect` muestran `<JSON.Value>`, también dentro de una lista. Cada objeto conserva el orden de sus claves, como hacen `to_json` y `JSON.parse` de Ruby: una estructura escribe sus campos en el orden de declaración, un mapa en orden de inserción, y un objeto analizado en el orden de su texto (ver `JSON.parse`). `JSON.from`, `JSON.object` y `JSON.decode` mantienen los mismos órdenes, así que una lista de estructuras y una estructura muestran sus claves de la misma forma. Las funciones cuyo primer parámetro es un `JSON.Value` también son métodos: `JSON.get(j, "a")` es `j.get("a")`.
+`JSON` es un nombre reservado; `JSON.Value` y `JSON.Field` son sus miembros. Un `JSON.Value` no tiene constructor, campos ni indexación. `a == b` es verdadero cuando los dos son el mismo JSON, igual que `Hash#==` de Ruby: objetos con las mismas claves y valores iguales en cualquier orden de claves (una clave repetida cuenta una vez, con su último valor), arreglos con elementos iguales en orden, y números por valor, así que `1 == 1.0`, `1e2 == 100` y `-0.0 == 0.0` (un entero fuera de `Int` se compara con exactitud, sin redondeo); `!=` es su negación, y una lista, estructura o mapa que contiene un `JSON.Value` lo compara del mismo modo. El costo de `==` es el tamaño de ambos valores. Se imprime como texto JSON con `puts`, `to_s`, interpolación y `JSON.encode`; `inspect` e `IO.inspect` muestran `<JSON.Value>`, también dentro de una lista. Cada objeto conserva el orden de sus claves, como hacen `to_json` y `JSON.parse` de Ruby: una estructura escribe sus campos en el orden de declaración, un mapa en orden de inserción, y un objeto analizado en el orden de su texto (ver `JSON.parse`). `JSON.from`, `JSON.object` y `JSON.decode` mantienen los mismos órdenes, así que una lista de estructuras y una estructura muestran sus claves de la misma forma. Las funciones cuyo primer parámetro es un `JSON.Value` también son métodos: `JSON.get(j, "a")` es `j.get("a")`.
 
 ## JSON.encode {#jsonencode}
 
@@ -20,7 +20,7 @@ JSON.encode(value: T) -> String
 
 Escribe JSON compacto. Acepta números, `Bool`, `String`, `nil`, `JSON.Value`, listas, mapas con claves `String`, estructuras, [enums](#enums) y [Optional](#optional-values) de esos tipos. Los campos de una estructura conservan su orden de declaración, y los pares clave-valor de un mapa su orden de inserción. Una instancia de una estructura o enum genérico cuenta por sus campos o payloads después de la sustitución (`Box[List[Int]]`). Los valores `Result`, los enums integrados como `TaskExit` y los mapas con clave `Int` son `CHECK-NOT-ENCODABLE`, y un contenedor vacío sin tipo necesita una anotación. Un `Float` no finito detiene el programa con `RUNTIME-JSON-ENCODE`; nunca se escribe como `null`. Un campo `JSON.Field` (ver [campos opcionales y nulos](#optional-and-nullable-fields)) no escribe nada cuando es `Absent`.
 
-`JSON.encode` de un `JSON.Value` escribe las claves de cada objeto en el orden que tiene el valor, así que `JSON.encode(JSON.parse(x))` conserva el orden de las claves de `x`: ya no es una forma canónica, y dos textos que solo difieren en el orden de las claves dan dos textos. Compara los valores analizados con `==`.
+`JSON.encode` de un `JSON.Value` escribe las claves de cada objeto en el orden que tiene el valor, así que `JSON.encode(JSON.parse(x))` conserva el orden de las claves de `x`: ya no es una forma canónica, y dos textos que solo difieren en el orden de las claves dan dos textos. Compara los valores analizados con `==`, en su lugar.
 
 ```agentica
 struct User
@@ -93,7 +93,7 @@ ok(Point(x: 1, y: 2))
 error("y: expected required field", kind: "json.decode")
 ```
 
-Un array o un objeto JSON de nivel superior con elementos se decodifica en una sola llamada. Una ruta de error empieza en el índice o la clave:
+Un arreglo o un objeto JSON de nivel superior con elementos se decodifica en una sola llamada. Una ruta de error empieza en el índice o la clave:
 
 ```agentica
 struct Point
@@ -165,7 +165,7 @@ end
 {"ok":true}
 ```
 
-`JSON.decode` necesita el tipo en runtime, así que una función genérica no puede llamarlo sobre `T`. En su lugar recibe un `Codec[T]`, y el llamador pasa `User.codec`, sobre los nombres de estructura y enum que `JSON.decode` recibe. `decode`, `encode` y `from` funcionan como lo hacen `JSON.decode`, `JSON.encode` y `JSON.from` para ese tipo: `codec.encode(x)` y `codec.from(x)` reciben un `x` de tipo `T`. `codec.members` es la lista que da [`User.members`](/tour/structs/#list-the-fields), vacía en un enum, así que el código genérico que necesita los campos de un tipo no necesita JSON.
+`JSON.decode` necesita el tipo en runtime, así que una función genérica no puede llamarlo sobre `T`. En su lugar recibe un `Codec[T]`, y el llamador pasa `User.codec`, el códec de un nombre de estructura o enum que `JSON.decode` recibe. `decode`, `encode` y `from` funcionan como lo hacen `JSON.decode`, `JSON.encode` y `JSON.from` para ese tipo: `codec.encode(x)` y `codec.from(x)` reciben un `x` de tipo `T`. `codec.members` es la lista que da [`User.members`](/tour/structs/#list-the-fields), vacía en un enum, así que el código genérico que necesita los campos de un tipo no necesita JSON.
 
 ```agentica
 struct User
@@ -187,7 +187,7 @@ end
 {"name":"Ana","age":25}
 ```
 
-Un codec puede ser un parámetro, un campo de estructura o un elemento de lista, igual que un valor de función. Como un valor de función, no se puede imprimir ni comparar, ni ser una constante o un valor `ATS`. `IO.inspect` rechaza un valor que contiene un codec (`CHECK-TYPE-MISMATCH`; en un cuerpo genérico, `IO.inspect(x)` de un `T` que es un codec imprime el registro de su nombre y sus miembros). `Codec` está reservado, como nombre de tipo y como alias de importación (`import Codec from "..."` es `CHECK-REDEFINED-NAME`; elige otro alias).
+Un códec puede ser un parámetro, un campo de estructura o un elemento de lista, igual que un valor de función. Como un valor de función, no se puede imprimir ni comparar, ni ser una constante o un valor `ATS`. `IO.inspect` rechaza un valor que contiene un códec (`CHECK-TYPE-MISMATCH`; en un cuerpo genérico, `IO.inspect(x)` de un `T` que es un códec imprime el registro de su nombre y sus miembros). `Codec` está reservado, como nombre de tipo y como alias de importación (`import Codec from "..."` es `CHECK-REDEFINED-NAME`; elige otro alias).
 
 ## Valores opcionales {#optional-values}
 
@@ -312,7 +312,7 @@ true
 - `JSON.encode` y `JSON.from` escriben las dos claves, `tag` primero en el texto; una variante sin payload escribe `"values":[]`. Aceptan cualquier enum de usuario cuyos payloads se puedan escribir, incluidas las instancias genéricas como `Maybe[Int]`.
 - `JSON.decode(text, Shape)` y un campo de estructura de tipo `Shape` leen la misma forma. `values` puede omitirse en una variante sin payload, y las claves extra se ignoran, como en las estructuras. Solo se puede decodificar un enum no genérico, y solo cuando sus payloads se puedan decodificar: un enum con un payload que `decode` rechaza es `CHECK-NOT-DECODABLE`, al igual que una instancia genérica como `Maybe[Int]` en cualquier parte del destino.
 - Un error da la ruta como en una estructura, con `values[i]` para un elemento de payload, para un `tag` desconocido o que falta, para un `values` que falta o es incorrecto, para un número de elementos incorrecto o para un elemento incorrecto.
-- `JSON.schema(Shape)` da un `oneOf` con un objeto para cada variante: `tag` es `{"enum": ["Rect"]}`, y `values` es un array con `minItems` y `maxItems` iguales al número de elementos de payload, y `prefixItems` con un esquema por elemento. Una variante sin payload recibe `"maxItems": 0` y solo `tag` es obligatorio. Un enum alcanzado desde una estructura va en `$defs`.
+- `JSON.schema(Shape)` da un `oneOf` con un objeto para cada variante: `tag` es `{"enum": ["Rect"]}`, y `values` es un arreglo con `minItems` y `maxItems` iguales al número de elementos de payload, y `prefixItems` con un esquema por elemento. Una variante sin payload recibe `"maxItems": 0` y solo `tag` es obligatorio. Un enum alcanzado desde una estructura va en `$defs`.
 - Un `JSON.Field` en un payload es `CHECK-JSON-FIELD-PLACE`: pertenece a un campo de estructura.
 
 ```agentica
@@ -356,7 +356,7 @@ end
 false
 ```
 
-Un objeto analizado conserva sus claves en el orden del texto. Una clave repetida se conserva una vez, en su primer lugar, con su último valor, como hace `JSON.parse` de Ruby. Los arrays conservan su orden, y `1` sigue siendo un entero y `1.0` un flotante, aunque `==` los dé por iguales. `==` y `Test.eq` comparan dos `JSON.Value` en cualquier orden de claves.
+Un objeto analizado conserva sus claves en el orden del texto. Una clave repetida se conserva una vez, en su primera posición, con su último valor, como hace `JSON.parse` de Ruby. Los arreglos conservan su orden, y `1` sigue siendo un entero y `1.0` un flotante, aunque `==` los dé por iguales. `==` y `Test.eq` comparan dos `JSON.Value` en cualquier orden de claves.
 
 ```agentica
 def main() -> Void
@@ -375,7 +375,7 @@ JSON.get(json: JSON.Value, key: String) -> Result[JSON.Value]
 JSON.at(json: JSON.Value, index: Int) -> Result[JSON.Value]
 ```
 
-`get` lee un miembro de un objeto; `at` lee un elemento de un array. Una clave que falta, un índice no válido o un tipo incorrecto dan un Result de error. `false` y `null` de JSON son valores presentes.
+`get` lee un miembro de un objeto; `at` lee un elemento de un arreglo. Una clave que falta, un índice no válido o un tipo incorrecto dan un Result de error. `false` y `null` de JSON son valores presentes.
 
 ```agentica
 def main() -> Void
@@ -448,7 +448,7 @@ false
 JSON.list(json: JSON.Value) -> Result[List[JSON.Value]]
 ```
 
-Convierte un array JSON en una lista de valores `JSON.Value`.
+Convierte un arreglo JSON en una lista de valores `JSON.Value`.
 
 ```agentica
 def main() -> Void
@@ -540,7 +540,7 @@ false
 JSON.from(value: T) -> JSON.Value
 ```
 
-Convierte un valor que acepta `JSON.encode` en un `JSON.Value`, con las mismas reglas y errores (un `Float` no finito detiene el programa con `RUNTIME-JSON-ENCODE`). `null` y `false` siguen siendo distintos, y lo mismo ocurre con los objetos vacíos y los arrays vacíos.
+Convierte un valor que acepta `JSON.encode` en un `JSON.Value`, con las mismas reglas y errores (un `Float` no finito detiene el programa con `RUNTIME-JSON-ENCODE`). `null` y `false` siguen siendo distintos, y lo mismo ocurre con los objetos vacíos y los arreglos vacíos.
 
 ```agentica
 def main() -> Void
@@ -562,7 +562,7 @@ JSON.object(fields: Map[String, JSON.Value]) -> JSON.Value
 JSON.array(items: List[JSON.Value]) -> JSON.Value
 ```
 
-Crean objetos y arrays cuyos valores tienen tipos distintos: `object` recibe un `Map[String, JSON.Value]` y `array` una `List[JSON.Value]`.
+Crean objetos y arreglos cuyos valores tienen tipos distintos: `object` recibe un `Map[String, JSON.Value]` y `array` una `List[JSON.Value]`.
 
 ```agentica
 def main() -> Void

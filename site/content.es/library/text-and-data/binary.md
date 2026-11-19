@@ -1,7 +1,7 @@
 ---
 title: Datos binarios (std)
 weight: 4
-description: El módulo std/binary, que lee y escribe números binarios en un Bytes.
+description: El módulo std/binary, que lee y escribe números en formato binario en un Bytes.
 source_hash: "d6d04e3ee42c"
 ---
 
