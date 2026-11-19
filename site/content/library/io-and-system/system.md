@@ -23,6 +23,20 @@ end
 0 arguments
 ```
 
+## System.program_name
+
+```signature
+System.program_name() -> String
+```
+
+The path of the main program as it was given, as Ruby's `$PROGRAM_NAME`: `app/tool.agc` for `agentica app/tool.agc`, and the `.agcb` file for `agentica run -- app/tool.agcb`. `System.args` does not hold it. Under `agentica test` it is the test file (or the steps file of a BDD run), in `agentica repl` it is `"(repl)"`, and an embedded program gives `""`. `Path.real` gives its full path, from which a program finds the files next to it:
+
+```agentica {mode="check"}
+def main() -> Void
+  puts(Path.real(System.program_name()).unwrap!)
+end
+```
+
 ## System.exit
 
 ```signature

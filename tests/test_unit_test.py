@@ -107,6 +107,14 @@ class UnitTest(TestCase):
             ['HTTP.Header(name: "a", value: "c")', 'HTTP.Header(name: "a", value: "b")'],
             ["Logger.Level.Error", "Logger.Level.Info"]])
 
+    def test_a_test_sees_its_test_file_as_the_program_name(self):
+        directory = self.make_temp_dir("agentica-unit-").resolve()
+        path = directory / "named_test.agc"
+        path.write_text('def test_name() -> Result[Void]\n  Test.eq(System.program_name(), "%s")\nend\n'
+                        % path.as_posix(), encoding="utf-8")
+        status, report = self.json_test(str(path))
+        self.assertEqual((status, statuses(report)), (0, ["passed"]), report)
+
     def test_a_file_without_main_runs_its_test_functions_in_source_order_named_after_them(self):
         status, report = self.json_test(fixture("functions_test.agc"))
         self.assertEqual(status, 1)

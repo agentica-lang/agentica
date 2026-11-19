@@ -39,6 +39,16 @@ ROWS: List[Model.Builtin] = [
     alternatives: [],
   ),
   Model.Builtin(
+    name: "System.program_name",
+    parameters: [],
+    result: Types.Type.String,
+    rule: Model.Rule.Plain,
+    implementation: "System.program_name",
+    effects: ["process"],
+    description: "Return the path of the main program as it was given: the .agc file, or the .agcb file of a run.",
+    alternatives: [],
+  ),
+  Model.Builtin(
     name: "System.env",
     parameters: [Model.Named(name: "name", type: Types.Type.String)],
     result: Types.Type.Result(Types.Type.String),

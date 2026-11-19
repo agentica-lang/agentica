@@ -39,7 +39,8 @@ Random.float() -> Float                 # 0.0 up to, not including, 1.0
 Random.seed() -> Int                    # the run's seed (0..2147483647), the same in every task
 ```
 
-- `IO.read_bytes`, `System.env`, `System.os`, `System.pid`: `processes.md`.
+- `IO.read_bytes`, `System.env`, `System.os`, `System.pid`,
+  `System.program_name`, `Process.pid`: `processes.md`.
 - `IO.gets` strips LF, CR or CRLF; a blank line is `ok("")`, not the end.
   `IO.eof?` consumes nothing. Reads have no timeout; step budgets do not
   interrupt blocking input.

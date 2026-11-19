@@ -115,6 +115,7 @@ def vm_flags(options: Options.Options, source: String) -> List[String]
     flags = flags.concat(["--source-root", root])
   end
 
+  flags = flags.concat(["--program-name", source])
   if options.style == "ai"
     flags = flags.push("--ai")
   elsif options.style == "json"

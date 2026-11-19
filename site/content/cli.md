@@ -224,7 +224,7 @@ Three variables have no flag. `AGENTICA_GC_HEAP` (default `32M`: bytes, or a num
 | `native source NAME` | prints the source key of the native module NAME of the project (its `build` table and the files of `native/`), the native API of the binary and the URL of each target of its `prebuilt` table; with `--json` an object with `source`, `api` and `urls` |
 | `compile FILE -o OUT` | writes VM bytecode |
 | `compile [FILE...]` | fills the [bytecode cache](#bytecode-cache) as a run with the same options would, so the next run starts at once, and prints `compiled FILE` or `fresh FILE` for each; with no FILE, every `main.agc` under the working folder outside `tests/` and `fixtures/` folders, searched as `check` searches it. With `--json` each file is a line `{"file":...,"state":"compiled"}` (or `"fresh"`). A program that does not compile is reported and the others still compile; the exit code is then 1 |
-| `run [OPTIONS] -- FILE.agcb [ARGS...]` | runs bytecode; `run` must be the first word. Options: the ones above except `--dump*`, plus `--source-root DIR`, `--ai`, `--json`. `run --version` lists the linked libraries |
+| `run [OPTIONS] -- FILE.agcb [ARGS...]` | runs bytecode; `run` must be the first word. Options: the ones above except `--dump*`, plus `--source-root DIR`, `--ai`, `--json`, and `--program-name PATH` (what `System.program_name` gives; the file by default). `run --version` lists the linked libraries |
 | `--version` | prints the version |
 
 ## Format

@@ -229,6 +229,25 @@ Process.signal_group(process: Process, signal: System.Signal) -> Result[Void]
 - `signal_group` needs a program that leads its own group, started with `Process.spawn_group` or `pgroup: true`; any other returns `error("process: the child does not lead a process group")` with kind `process.failed`.
 - On Windows both return `error("signal: not supported on this system")` with kind `system.signal`.
 
+## Process.pid
+
+```signature
+Process.pid(process: Process) -> Result[Int]
+```
+
+The operating system's process id of the program, as Ruby's `Process::Status#pid`: for logs, for `/proc/<pid>/status`, or for another tool. On Windows it is the id of `GetProcessId`.
+
+- A program that has exited and was reaped returns `error("process: the child has exited")` with kind `process.failed`, as `Process.signal` does: its pid may already belong to another process.
+- A closed program returns `error("process: process is closed")`.
+
+```agentica {mode="check"}
+def main() -> Void
+  child = Process.spawn("sleep", ["1"]).unwrap!
+  puts("started #{Process.pid(child).unwrap!}")
+  _ = Process.wait(child, 5000)
+end
+```
+
 ## Process.spawn_group
 
 ```signature

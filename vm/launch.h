@@ -28,6 +28,9 @@ typedef struct {
   agc_style style;
   const char *source_root;
   const char *embedded;
+  /* --program-name: System.program_name, the path of the main program as it was given (the front end passes the
+     .agc file; `agentica run` takes the .agcb file when the flag is absent). "" by default. */
+  const char *program_name;
   /* The file of --coverage, where the run writes the LCOV of its lines at the end (vm/cover.c); NULL without it. */
   const char *coverage;
   size_t source_root_chars;

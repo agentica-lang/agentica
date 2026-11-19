@@ -10,6 +10,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `Process.pid(p)` gives the OS process id of a child, and an error once it has exited and was reaped (#1868).
+- `System.program_name()` gives the path of the main program as it was given, the `.agc` or the `.agcb` file, as Ruby's `$PROGRAM_NAME` (#1869).
 - `Path.replace(from, to)` renames a file over another in one step, as Ruby's `File.rename` does: a file or a link at `to` is replaced, a directory is an error, and `from` is synced first (#1865).
 - `agentica add NAME OWNER/REPO` takes a GitHub repository as `OWNER/REPO` (stored as the full URL), and a tag `NAME-X.Y.Z` with no `--subdir` takes the folder `NAME` when the package is there (#1833).
 - Dates and times as checked builtin records of the `Time` family: `Time.Date`, `Time.TimeOfDay`, `Time.NaiveDateTime` and `Time.DateTime` (at a fixed UTC offset), built by `Time.Date.new` and the like, with `Time.Date.leap?` and `Time.Date.days_in_month`; a construction or `.with` of one is the new `CHECK-NOT-CONSTRUCTIBLE` (#985).
