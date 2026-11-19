@@ -16,7 +16,7 @@
     "none",
     "4 null [4,null]",
     "true",
-    "{\"properties\":{\"city\":{\"type\":\"string\"},\"zip\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}]}},\"required\":[\"city\"],\"type\":\"object\"}",
+    "{\"type\":\"object\",\"properties\":{\"city\":{\"type\":\"string\"},\"zip\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}]}},\"required\":[\"city\"]}",
     "ok(Address(city: \"y\", zip: none))",
     ""
   ],

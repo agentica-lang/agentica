@@ -172,7 +172,8 @@ def codec(tmp_path_factory):
 
 
 def same(a, b):
-    """Equal JSON values with the same types, floats compared by their bits (so -0.0 is not 0.0)."""
+    """Equal JSON values with the same types and object keys in the same order (json.loads keeps a repeated key at its
+    first place with its last value, as JSON.parse does), floats compared by their bits (so -0.0 is not 0.0)."""
     if type(a) is not type(b):
         return False
     if isinstance(a, float):
@@ -180,7 +181,7 @@ def same(a, b):
     if isinstance(a, list):
         return len(a) == len(b) and all(same(x, y) for x, y in zip(a, b))
     if isinstance(a, dict):
-        return a.keys() == b.keys() and all(same(a[k], b[k]) for k in a)
+        return list(a) == list(b) and all(same(a[k], b[k]) for k in a)
     return a == b
 
 
@@ -237,6 +238,7 @@ def json_texts(draw):
 @example("-0.0")
 @example("[-0e5, -0.0e-3, -0E0, 0.0]")
 @example('{"a": 1, "a": 2}')
+@example('{"b": 1, "a": 2, "b": 3, "": [{"z": 0, "y": 1}]}')
 @example("[" * 500 + "]" * 500)
 def test_json_parse_accepts_what_python_accepts_and_keeps_the_value(codec, text):
     """JSON.parse accepts a text if and only if json.loads does and its value is finite UTF-8 text; what it writes back

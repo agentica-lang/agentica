@@ -13,14 +13,14 @@
     "name: set to Ana",
     "{\"name\":\"Ana\",\"age\":30}",
     "{\"name\":\"Bo\",\"age\":null}",
-    "{\"age\":null,\"name\":\"Bo\"}",
+    "{\"name\":\"Bo\",\"age\":null}",
     "{}",
     "UpdateUser(name: JSON.Field.Value(\"Bo\"), age: JSON.Field.Null)",
-    "{\"properties\":{\"age\":{\"anyOf\":[{\"maximum\":9223372036854775807,\"minimum\":-9223372036854775808,\"type\":\"integer\"},{\"type\":\"null\"}]},\"name\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}]}},\"type\":\"object\"}",
+    "{\"type\":\"object\",\"properties\":{\"name\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}]},\"age\":{\"anyOf\":[{\"type\":\"integer\",\"minimum\":-9223372036854775808,\"maximum\":9223372036854775807},{\"type\":\"null\"}]}}}",
     "keep the title {}",
     "clear the title {\"title\":null}",
     "rename to Notes {\"title\":\"Notes\"}",
-    "{\"properties\":{\"title\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}]}},\"type\":\"object\"}",
+    "{\"type\":\"object\",\"properties\":{\"title\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}]}}}",
     ""
   ],
   "stderr": []

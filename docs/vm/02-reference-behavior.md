@@ -160,12 +160,13 @@ in a PR that rewrites the goldens.
   bytecode writer stores that name). A field-less
   struct prints `Name()`; a nullary variant prints `Enum.Variant`, even when
   written `Enum.Variant()`. The VM never looks a type up by its display name.
-- JSON text sorts object keys, uses short escapes (`\n`) and lowercase `\u007f`
+- JSON text keeps every object's key order, uses short escapes (`\n`) and lowercase `\u007f`
   for DEL, keeps non-ASCII raw, prints floats per 2.2 and big integers in
-  decimal. `JSON.encode` of a value that is not a `JSON.Value` keeps struct
-  declaration order and map insertion order; only a `JSON.Value` inside is
-  sorted. `JSON.from`, `JSON.object` and `JSON.array` build a `JSON.Value`, so
-  their text is sorted. A non-finite Float in either is `RUNTIME-JSON-ENCODE` at
+  decimal: struct declaration order, map insertion order, and a `JSON.Value`
+  object's member order (the text order of a parse; `JSON.from`, `JSON.object`
+  and `JSON.array` keep the order of what they were given). Equality of two
+  `JSON.Value`s compares their text with sorted keys (`agc_json_canonical`). A
+  non-finite Float in either is `RUNTIME-JSON-ENCODE` at
   the call span.
 
 ### 2.5 Diagnostics, streams and exit codes
@@ -216,7 +217,10 @@ in a PR that rewrites the goldens.
 - A Float is the exact decimal rounded to nearest, ties to even, and keeps its
   sign: `-0.0`, `-0e5` and a negative value that rounds to zero are `-0.0`, so
   the `-0.0` that `JSON.encode` writes reads back. `-0` is the integer 0.
-- A repeated key keeps the last value. Objects sort by key bytes, stably.
+- A repeated key keeps its first place and its last value, as Ruby does.
+  Objects keep their members in text order. Only an object of more than 8
+  members that are not already in key order has a copy sorted by key bytes for
+  a binary search; smaller ones are scanned.
 - The VM reads the tree with the yyjson reader (10) and copies it into
   `JSON.Value` nodes. Numbers reach the VM as text.
 
@@ -228,7 +232,7 @@ The user-facing rules (which fields are required, the `JSON.Field` and
 
 - `JSON.decode(s, T)` parses `s` like `JSON.parse`, then walks `T` in field
   order and stops at the first problem. A `JSON.Value` source skips the parse. A
-  decoded map is built in sorted key order.
+  decoded map is built in the object's key order.
 - A missing key of a field with a default takes the default of the Field
   defaults section (03 4.6): a constant, an empty List or Map, or a variant
   without a payload. Only the missing key: `null` is decoded as the field type.

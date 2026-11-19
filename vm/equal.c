@@ -233,7 +233,7 @@ static bool expand(agc_vm *vm, work_stack *s, agc_value a, agc_value b, uint32_t
   if (same_object(vm, a, b)) return true;
   if (scalar_tag(a.tag)) return scalar_equal(vm, a, b);
   switch ((agc_tag)a.tag) {
-    case AGC_T_JSON: return agc_same_string(vm, agc_json_encode(vm, a, span), agc_json_encode(vm, b, span));
+    case AGC_T_JSON: return agc_same_string(vm, agc_json_canonical(vm, a, span), agc_json_canonical(vm, b, span));
     case AGC_T_LIST: return visit_list(vm, s, agc_as_list(vm, a), agc_as_list(vm, b));
     case AGC_T_MAP: {
       const agc_map *x = agc_as_map(vm, a), *y = agc_as_map(vm, b);

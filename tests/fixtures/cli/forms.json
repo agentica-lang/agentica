@@ -259,19 +259,19 @@
  },
  "[[\"--json\", \"add\", \"jobs\", \"gitlab.com/owner/jobs\", \"--tag\", \"jobs-0.1.0\"], {\"cwd\": \"pkg\"}]": {
   "code": 1,
-  "stderr": "{\"code\":\"PKG-SOURCE-INVALID\",\"file\":\"<work>/pkg/agentica.toml\",\"help\":\"a git URL starts with https://\",\"key_path\":\"dependencies.jobs.git\",\"message\":\"gitlab.com/owner/jobs is not a git source: write https://host/owner/repo, or OWNER/REPO for https://github.com/OWNER/REPO\",\"range\":{\"end\":{\"column\":1,\"line\":1},\"start\":{\"column\":1,\"line\":1}}}\n",
+  "stderr": "{\"code\":\"PKG-SOURCE-INVALID\",\"message\":\"gitlab.com/owner/jobs is not a git source: write https://host/owner/repo, or OWNER/REPO for https://github.com/OWNER/REPO\",\"file\":\"<work>/pkg/agentica.toml\",\"range\":{\"start\":{\"line\":1,\"column\":1},\"end\":{\"line\":1,\"column\":1}},\"key_path\":\"dependencies.jobs.git\",\"help\":\"a git URL starts with https://\"}\n",
   "stdout": "",
   "written": []
  },
  "[[\"--json\", \"check\", \"<work>/sub/bad.agc\"], {}]": {
   "code": 1,
-  "stderr": "{\"actual\":\"String\",\"code\":\"CHECK-TYPE-MISMATCH\",\"expected\":\"Int\",\"file\":\"<work>/lib/util.agc\",\"function\":\"bad() -> Int\",\"help\":\"convert it with s.to_i!\",\"message\":\"expected Int, found String\",\"range\":{\"end\":{\"column\":13,\"line\":6},\"start\":{\"column\":10,\"line\":6}}}\n",
+  "stderr": "{\"code\":\"CHECK-TYPE-MISMATCH\",\"message\":\"expected Int, found String\",\"file\":\"<work>/lib/util.agc\",\"range\":{\"start\":{\"line\":6,\"column\":10},\"end\":{\"line\":6,\"column\":13}},\"expected\":\"Int\",\"actual\":\"String\",\"function\":\"bad() -> Int\",\"help\":\"convert it with s.to_i!\"}\n",
   "stdout": "",
   "written": []
  },
  "[[\"--json\", \"check\", \"<work>/tab.agc\"], {}]": {
   "code": 1,
-  "stderr": "{\"actual\":\"String\",\"code\":\"CHECK-TYPE-MISMATCH\",\"expected\":\"Int\",\"file\":\"<work>/tab.agc\",\"function\":\"main() -> Void\",\"help\":\"convert it with s.to_i!\",\"message\":\"expected Int, found String\",\"range\":{\"end\":{\"column\":14,\"line\":2},\"start\":{\"column\":11,\"line\":2}}}\n",
+  "stderr": "{\"code\":\"CHECK-TYPE-MISMATCH\",\"message\":\"expected Int, found String\",\"file\":\"<work>/tab.agc\",\"range\":{\"start\":{\"line\":2,\"column\":11},\"end\":{\"line\":2,\"column\":14}},\"expected\":\"Int\",\"actual\":\"String\",\"function\":\"main() -> Void\",\"help\":\"convert it with s.to_i!\"}\n",
   "stdout": "",
   "written": []
  },
@@ -283,7 +283,7 @@
  },
  "[[\"--json\", \"check\", \"crlf.agc\"], {}]": {
   "code": 1,
-  "stderr": "{\"actual\":\"String\",\"code\":\"CHECK-TYPE-MISMATCH\",\"expected\":\"Int\",\"file\":\"crlf.agc\",\"function\":\"main() -> Void\",\"help\":\"convert it with s.to_i!\",\"message\":\"expected Int, found String\",\"range\":{\"end\":{\"column\":15,\"line\":2},\"start\":{\"column\":12,\"line\":2}}}\n",
+  "stderr": "{\"code\":\"CHECK-TYPE-MISMATCH\",\"message\":\"expected Int, found String\",\"file\":\"crlf.agc\",\"range\":{\"start\":{\"line\":2,\"column\":12},\"end\":{\"line\":2,\"column\":15}},\"expected\":\"Int\",\"actual\":\"String\",\"function\":\"main() -> Void\",\"help\":\"convert it with s.to_i!\"}\n",
   "stdout": "",
   "written": []
  },
@@ -295,50 +295,50 @@
  },
  "[[\"--json\", \"check\", \"helped.agc\"], {}]": {
   "code": 1,
-  "stderr": "{\"code\":\"CHECK-EMPTY-LIST-TYPE\",\"file\":\"helped.agc\",\"function\":\"main() -> Void\",\"help\":\"annotate the variable: xs: List[Int] = []; a parameter, a field or a function result also gives the type\",\"message\":\"an empty list needs an expected type, for example \\\"List[Int]\\\"\",\"range\":{\"end\":{\"column\":14,\"line\":2},\"start\":{\"column\":12,\"line\":2}}}\n",
+  "stderr": "{\"code\":\"CHECK-EMPTY-LIST-TYPE\",\"message\":\"an empty list needs an expected type, for example \\\"List[Int]\\\"\",\"file\":\"helped.agc\",\"range\":{\"start\":{\"line\":2,\"column\":12},\"end\":{\"line\":2,\"column\":14}},\"function\":\"main() -> Void\",\"help\":\"annotate the variable: xs: List[Int] = []; a parameter, a field or a function result also gives the type\"}\n",
   "stdout": "",
   "written": []
  },
  "[[\"--json\", \"check\", \"invalid.agc\"], {}]": {
   "code": 1,
-  "stderr": "{\"code\":\"LEX-INVALID-UTF8\",\"file\":\"invalid.agc\",\"help\":\"source files are UTF-8: save the file as UTF-8 text\",\"message\":\"source file is not valid UTF-8\",\"range\":{\"end\":{\"column\":11,\"line\":2},\"start\":{\"column\":10,\"line\":2}}}\n",
+  "stderr": "{\"code\":\"LEX-INVALID-UTF8\",\"message\":\"source file is not valid UTF-8\",\"file\":\"invalid.agc\",\"range\":{\"start\":{\"line\":2,\"column\":10},\"end\":{\"line\":2,\"column\":11}},\"help\":\"source files are UTF-8: save the file as UTF-8 text\"}\n",
   "stdout": "",
   "written": []
  },
  "[[\"--json\", \"check\", \"labels.agc\"], {}]": {
   "code": 1,
-  "stderr": "{\"actual\":\"String\",\"code\":\"CHECK-TYPE-MISMATCH\",\"expected\":\"Int\",\"file\":\"labels.agc\",\"function\":\"main() -> Void\",\"help\":\"convert it with s.to_i!\",\"message\":\"expected Int, found String\",\"range\":{\"end\":{\"column\":19,\"line\":6},\"start\":{\"column\":14,\"line\":6}}}\n",
+  "stderr": "{\"code\":\"CHECK-TYPE-MISMATCH\",\"message\":\"expected Int, found String\",\"file\":\"labels.agc\",\"range\":{\"start\":{\"line\":6,\"column\":14},\"end\":{\"line\":6,\"column\":19}},\"expected\":\"Int\",\"actual\":\"String\",\"function\":\"main() -> Void\",\"help\":\"convert it with s.to_i!\"}\n",
   "stdout": "",
   "written": []
  },
  "[[\"--json\", \"check\", \"lazy_concat.agc\"], {}]": {
   "code": 1,
-  "stderr": "{\"code\":\"CHECK-UNKNOWN-METHOD\",\"file\":\"lazy_concat.agc\",\"function\":\"main() -> Void\",\"help\":\"Lazy[Int] methods: chunk_while, deflate, drop, drop_while, each, each_cons, each_slice, find, first, flat_map, gunzip, gzip, inflate, map, reduce, select, take, take_while, to_a, with_index, write_bytes, write_lines\",\"message\":\"Lazy[Int] has no method \\\"concat\\\"\",\"range\":{\"end\":{\"column\":31,\"line\":2},\"start\":{\"column\":11,\"line\":2}}}\n",
+  "stderr": "{\"code\":\"CHECK-UNKNOWN-METHOD\",\"message\":\"Lazy[Int] has no method \\\"concat\\\"\",\"file\":\"lazy_concat.agc\",\"range\":{\"start\":{\"line\":2,\"column\":11},\"end\":{\"line\":2,\"column\":31}},\"function\":\"main() -> Void\",\"help\":\"Lazy[Int] methods: chunk_while, deflate, drop, drop_while, each, each_cons, each_slice, find, first, flat_map, gunzip, gzip, inflate, map, reduce, select, take, take_while, to_a, with_index, write_bytes, write_lines\"}\n",
   "stdout": "",
   "written": []
  },
  "[[\"--json\", \"check\", \"lex.agc\"], {}]": {
   "code": 1,
-  "stderr": "{\"code\":\"LEX-UNTERMINATED-STRING\",\"file\":\"lex.agc\",\"message\":\"unterminated string\",\"range\":{\"end\":{\"column\":22,\"line\":2},\"start\":{\"column\":8,\"line\":2}}}\n",
+  "stderr": "{\"code\":\"LEX-UNTERMINATED-STRING\",\"message\":\"unterminated string\",\"file\":\"lex.agc\",\"range\":{\"start\":{\"line\":2,\"column\":8},\"end\":{\"line\":2,\"column\":22}}}\n",
   "stdout": "",
   "written": []
  },
  "[[\"--json\", \"check\", \"missing_import.agc\"], {}]": {
   "code": 1,
-  "stderr": "{\"code\":\"CHECK-IMPORT-IO\",\"file\":\"missing_import.agc\",\"help\":\"an import is relative to the importing file; no file at \\\"nothing.agc\\\"\",\"message\":\"cannot read import\",\"range\":{\"end\":{\"column\":1,\"line\":2},\"start\":{\"column\":1,\"line\":1}}}\n",
+  "stderr": "{\"code\":\"CHECK-IMPORT-IO\",\"message\":\"cannot read import\",\"file\":\"missing_import.agc\",\"range\":{\"start\":{\"line\":1,\"column\":1},\"end\":{\"line\":2,\"column\":1}},\"help\":\"an import is relative to the importing file; no file at \\\"nothing.agc\\\"\"}\n",
   "stdout": "",
   "written": []
  },
  "[[\"--json\", \"check\", \"multiline.agc\"], {}]": {
   "code": 1,
-  "stderr": "{\"actual\":\"String\",\"code\":\"CHECK-TYPE-MISMATCH\",\"expected\":\"List[Int]\",\"file\":\"multiline.agc\",\"function\":\"main() -> Void\",\"labels\":[{\"range\":{\"end\":{\"column\":7,\"line\":3},\"start\":{\"column\":7,\"line\":2}},\"text\":\"this is List[Int]\"},{\"range\":{\"end\":{\"column\":13,\"line\":3},\"start\":{\"column\":10,\"line\":3}},\"text\":\"this is String\"}],\"message\":\"operator expects two values of the same type, found List[Int] and String\",\"range\":{\"end\":{\"column\":9,\"line\":3},\"start\":{\"column\":8,\"line\":3}}}\n",
+  "stderr": "{\"code\":\"CHECK-TYPE-MISMATCH\",\"message\":\"operator expects two values of the same type, found List[Int] and String\",\"file\":\"multiline.agc\",\"range\":{\"start\":{\"line\":3,\"column\":8},\"end\":{\"line\":3,\"column\":9}},\"expected\":\"List[Int]\",\"actual\":\"String\",\"function\":\"main() -> Void\",\"labels\":[{\"range\":{\"start\":{\"line\":2,\"column\":7},\"end\":{\"line\":3,\"column\":7}},\"text\":\"this is List[Int]\"},{\"range\":{\"start\":{\"line\":3,\"column\":10},\"end\":{\"line\":3,\"column\":13}},\"text\":\"this is String\"}]}\n",
   "stdout": "",
   "written": []
  },
  "[[\"--json\", \"check\", \"ok.agc\", \"tab.agc\"], {}]": {
   "code": 1,
   "stderr": "",
-  "stdout": "{\"checked\":2,\"failed\":1,\"files\":[{\"file\":\"ok.agc\",\"ok\":true},{\"diagnostic\":{\"actual\":\"String\",\"code\":\"CHECK-TYPE-MISMATCH\",\"expected\":\"Int\",\"file\":\"tab.agc\",\"function\":\"main() -> Void\",\"help\":\"convert it with s.to_i!\",\"message\":\"expected Int, found String\",\"range\":{\"end\":{\"column\":14,\"line\":2},\"start\":{\"column\":11,\"line\":2}}},\"file\":\"tab.agc\",\"ok\":false}],\"ok\":false}\n",
+  "stdout": "{\"ok\":false,\"checked\":2,\"failed\":1,\"files\":[{\"file\":\"ok.agc\",\"ok\":true},{\"file\":\"tab.agc\",\"ok\":false,\"diagnostic\":{\"code\":\"CHECK-TYPE-MISMATCH\",\"message\":\"expected Int, found String\",\"file\":\"tab.agc\",\"range\":{\"start\":{\"line\":2,\"column\":11},\"end\":{\"line\":2,\"column\":14}},\"expected\":\"Int\",\"actual\":\"String\",\"function\":\"main() -> Void\",\"help\":\"convert it with s.to_i!\"}}]}\n",
   "written": []
  },
  "[[\"--json\", \"check\", \"ok.agc\"], {}]": {
@@ -349,49 +349,49 @@
  },
  "[[\"--json\", \"check\", \"parse.agc\"], {}]": {
   "code": 1,
-  "stderr": "{\"code\":\"PARSE-UNEXPECTED-TOKEN\",\"file\":\"parse.agc\",\"message\":\"expected a newline after the statement; calls need parentheses, as in puts(...)\",\"range\":{\"end\":{\"column\":15,\"line\":2},\"start\":{\"column\":8,\"line\":2}}}\n",
+  "stderr": "{\"code\":\"PARSE-UNEXPECTED-TOKEN\",\"message\":\"expected a newline after the statement; calls need parentheses, as in puts(...)\",\"file\":\"parse.agc\",\"range\":{\"start\":{\"line\":2,\"column\":8},\"end\":{\"line\":2,\"column\":15}}}\n",
   "stdout": "",
   "written": []
  },
  "[[\"--json\", \"check\", \"std_error.agc\"], {}]": {
   "code": 1,
-  "stderr": "{\"code\":\"CHECK-IMPORT-NAME\",\"file\":\"std_error.agc\",\"message\":\"unknown or private imported name\",\"range\":{\"end\":{\"column\":20,\"line\":4},\"start\":{\"column\":8,\"line\":4}}}\n",
+  "stderr": "{\"code\":\"CHECK-IMPORT-NAME\",\"message\":\"unknown or private imported name\",\"file\":\"std_error.agc\",\"range\":{\"start\":{\"line\":4,\"column\":8},\"end\":{\"line\":4,\"column\":20}}}\n",
   "stdout": "",
   "written": []
  },
  "[[\"--json\", \"check\", \"sub/bad.agc\"], {}]": {
   "code": 1,
-  "stderr": "{\"actual\":\"String\",\"code\":\"CHECK-TYPE-MISMATCH\",\"expected\":\"Int\",\"file\":\"<work>/lib/util.agc\",\"function\":\"bad() -> Int\",\"help\":\"convert it with s.to_i!\",\"message\":\"expected Int, found String\",\"range\":{\"end\":{\"column\":13,\"line\":6},\"start\":{\"column\":10,\"line\":6}}}\n",
+  "stderr": "{\"code\":\"CHECK-TYPE-MISMATCH\",\"message\":\"expected Int, found String\",\"file\":\"<work>/lib/util.agc\",\"range\":{\"start\":{\"line\":6,\"column\":10},\"end\":{\"line\":6,\"column\":13}},\"expected\":\"Int\",\"actual\":\"String\",\"function\":\"bad() -> Int\",\"help\":\"convert it with s.to_i!\"}\n",
   "stdout": "",
   "written": []
  },
  "[[\"--json\", \"check\", \"sub/boom.agc\"], {}]": {
   "code": 1,
-  "stderr": "{\"actual\":\"String\",\"code\":\"CHECK-TYPE-MISMATCH\",\"expected\":\"Int\",\"file\":\"<work>/lib/util.agc\",\"function\":\"bad() -> Int\",\"help\":\"convert it with s.to_i!\",\"message\":\"expected Int, found String\",\"range\":{\"end\":{\"column\":13,\"line\":6},\"start\":{\"column\":10,\"line\":6}}}\n",
+  "stderr": "{\"code\":\"CHECK-TYPE-MISMATCH\",\"message\":\"expected Int, found String\",\"file\":\"<work>/lib/util.agc\",\"range\":{\"start\":{\"line\":6,\"column\":10},\"end\":{\"line\":6,\"column\":13}},\"expected\":\"Int\",\"actual\":\"String\",\"function\":\"bad() -> Int\",\"help\":\"convert it with s.to_i!\"}\n",
   "stdout": "",
   "written": []
  },
  "[[\"--json\", \"check\", \"tab.agc\"], {}]": {
   "code": 1,
-  "stderr": "{\"actual\":\"String\",\"code\":\"CHECK-TYPE-MISMATCH\",\"expected\":\"Int\",\"file\":\"tab.agc\",\"function\":\"main() -> Void\",\"help\":\"convert it with s.to_i!\",\"message\":\"expected Int, found String\",\"range\":{\"end\":{\"column\":14,\"line\":2},\"start\":{\"column\":11,\"line\":2}}}\n",
+  "stderr": "{\"code\":\"CHECK-TYPE-MISMATCH\",\"message\":\"expected Int, found String\",\"file\":\"tab.agc\",\"range\":{\"start\":{\"line\":2,\"column\":11},\"end\":{\"line\":2,\"column\":14}},\"expected\":\"Int\",\"actual\":\"String\",\"function\":\"main() -> Void\",\"help\":\"convert it with s.to_i!\"}\n",
   "stdout": "",
   "written": []
  },
  "[[\"--json\", \"check\", \"twice.agc\"], {}]": {
   "code": 1,
-  "stderr": "{\"code\":\"CHECK-REDEFINED-NAME\",\"file\":\"twice.agc\",\"help\":\"main is declared more than once in this file; rename or remove one\",\"message\":\"duplicate or reserved declaration\",\"range\":{\"end\":{\"column\":1,\"line\":7},\"start\":{\"column\":1,\"line\":5}}}\n",
+  "stderr": "{\"code\":\"CHECK-REDEFINED-NAME\",\"message\":\"duplicate or reserved declaration\",\"file\":\"twice.agc\",\"range\":{\"start\":{\"line\":5,\"column\":1},\"end\":{\"line\":7,\"column\":1}},\"help\":\"main is declared more than once in this file; rename or remove one\"}\n",
   "stdout": "",
   "written": []
  },
  "[[\"--json\", \"check\", \"unicode.agc\"], {}]": {
   "code": 1,
-  "stderr": "{\"actual\":\"String\",\"code\":\"CHECK-TYPE-MISMATCH\",\"expected\":\"Int\",\"file\":\"unicode.agc\",\"function\":\"main() -> Void\",\"help\":\"convert it with s.to_i!\",\"message\":\"expected Int, found String\",\"range\":{\"end\":{\"column\":16,\"line\":3},\"start\":{\"column\":12,\"line\":3}}}\n",
+  "stderr": "{\"code\":\"CHECK-TYPE-MISMATCH\",\"message\":\"expected Int, found String\",\"file\":\"unicode.agc\",\"range\":{\"start\":{\"line\":3,\"column\":12},\"end\":{\"line\":3,\"column\":16}},\"expected\":\"Int\",\"actual\":\"String\",\"function\":\"main() -> Void\",\"help\":\"convert it with s.to_i!\"}\n",
   "stdout": "",
   "written": []
  },
  "[[\"--json\", \"compile\", \"labels.agc\", \"-o\", \"out.agcb\"], {\"outputs\": [\"out.agcb\"]}]": {
   "code": 1,
-  "stderr": "{\"actual\":\"String\",\"code\":\"CHECK-TYPE-MISMATCH\",\"expected\":\"Int\",\"file\":\"labels.agc\",\"function\":\"main() -> Void\",\"help\":\"convert it with s.to_i!\",\"message\":\"expected Int, found String\",\"range\":{\"end\":{\"column\":19,\"line\":6},\"start\":{\"column\":14,\"line\":6}}}\n",
+  "stderr": "{\"code\":\"CHECK-TYPE-MISMATCH\",\"message\":\"expected Int, found String\",\"file\":\"labels.agc\",\"range\":{\"start\":{\"line\":6,\"column\":14},\"end\":{\"line\":6,\"column\":19}},\"expected\":\"Int\",\"actual\":\"String\",\"function\":\"main() -> Void\",\"help\":\"convert it with s.to_i!\"}\n",
   "stdout": "",
   "written": [
    false
@@ -406,18 +406,18 @@
  "[[\"--json\", \"help\", \"String.to_i\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "{\"arity\":1,\"description\":\"Parse signed decimal Int as a Result.\",\"effects\":[],\"name\":\"String.to_i\",\"parameters\":[{\"name\":\"string\",\"type\":\"String\"}],\"result\":\"Result[Int]\",\"ruby\":\"string.to_i() -> Result[Int]\",\"signature\":\"String.to_i(string: String) -> Result[Int]\"}\n",
+  "stdout": "{\"name\":\"String.to_i\",\"arity\":1,\"parameters\":[{\"name\":\"string\",\"type\":\"String\"}],\"result\":\"Result[Int]\",\"signature\":\"String.to_i(string: String) -> Result[Int]\",\"ruby\":\"string.to_i() -> Result[Int]\",\"effects\":[],\"description\":\"Parse signed decimal Int as a Result.\"}\n",
   "written": []
  },
  "[[\"--json\", \"help\", \"std/queue.\"], {}]": {
   "code": 2,
-  "stderr": "{\"code\":\"QUERY-USAGE\",\"file\":\"<arguments>\",\"help\":\"usage: agentica help std/MODULE[.NAME] [--json]\",\"message\":\"missing name after std/queue.\",\"range\":{\"end\":{\"column\":1,\"line\":1},\"start\":{\"column\":1,\"line\":1}}}\n",
+  "stderr": "{\"code\":\"QUERY-USAGE\",\"message\":\"missing name after std/queue.\",\"file\":\"<arguments>\",\"range\":{\"start\":{\"line\":1,\"column\":1},\"end\":{\"line\":1,\"column\":1}},\"help\":\"usage: agentica help std/MODULE[.NAME] [--json]\"}\n",
   "stdout": "",
   "written": []
  },
  "[[\"--json\", \"sub/boom.agc\"], {}]": {
   "code": 1,
-  "stderr": "{\"actual\":\"String\",\"code\":\"CHECK-TYPE-MISMATCH\",\"expected\":\"Int\",\"file\":\"<work>/lib/util.agc\",\"function\":\"bad() -> Int\",\"help\":\"convert it with s.to_i!\",\"message\":\"expected Int, found String\",\"range\":{\"end\":{\"column\":13,\"line\":6},\"start\":{\"column\":10,\"line\":6}}}\n",
+  "stderr": "{\"code\":\"CHECK-TYPE-MISMATCH\",\"message\":\"expected Int, found String\",\"file\":\"<work>/lib/util.agc\",\"range\":{\"start\":{\"line\":6,\"column\":10},\"end\":{\"line\":6,\"column\":13}},\"expected\":\"Int\",\"actual\":\"String\",\"function\":\"bad() -> Int\",\"help\":\"convert it with s.to_i!\"}\n",
   "stdout": "",
   "written": []
  },
@@ -496,7 +496,7 @@
  "[[\"--max-steps\", \"10\", \"help\", \"String.to_i\", \"--json\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "{\"arity\":1,\"description\":\"Parse signed decimal Int as a Result.\",\"effects\":[],\"name\":\"String.to_i\",\"parameters\":[{\"name\":\"string\",\"type\":\"String\"}],\"result\":\"Result[Int]\",\"ruby\":\"string.to_i() -> Result[Int]\",\"signature\":\"String.to_i(string: String) -> Result[Int]\"}\n",
+  "stdout": "{\"name\":\"String.to_i\",\"arity\":1,\"parameters\":[{\"name\":\"string\",\"type\":\"String\"}],\"result\":\"Result[Int]\",\"signature\":\"String.to_i(string: String) -> Result[Int]\",\"ruby\":\"string.to_i() -> Result[Int]\",\"effects\":[],\"description\":\"Parse signed decimal Int as a Result.\"}\n",
   "written": []
  },
  "[[\"--max-steps\", \"1000\", \"--json\", \"loop.agc\"], {}]": {
@@ -928,7 +928,7 @@
  "[[\"help\", \"Json.get\", \"--json\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "{\"alias\":\"Json.get\",\"builtins\":[{\"arity\":2,\"description\":\"Read an object member; wrong kind or missing key returns an error.\",\"effects\":[],\"name\":\"JSON.get\",\"parameters\":[{\"name\":\"json\",\"type\":\"JSON.Value\"},{\"name\":\"key\",\"type\":\"String\"}],\"result\":\"Result[JSON.Value]\",\"ruby\":\"json.get(key: String) -> Result[JSON.Value]\",\"signature\":\"JSON.get(json: JSON.Value, key: String) -> Result[JSON.Value]\"}],\"hints\":{}}\n",
+  "stdout": "{\"alias\":\"Json.get\",\"builtins\":[{\"name\":\"JSON.get\",\"arity\":2,\"parameters\":[{\"name\":\"json\",\"type\":\"JSON.Value\"},{\"name\":\"key\",\"type\":\"String\"}],\"result\":\"Result[JSON.Value]\",\"signature\":\"JSON.get(json: JSON.Value, key: String) -> Result[JSON.Value]\",\"ruby\":\"json.get(key: String) -> Result[JSON.Value]\",\"effects\":[],\"description\":\"Read an object member; wrong kind or missing key returns an error.\"}],\"hints\":{}}\n",
   "written": []
  },
  "[[\"help\", \"Json.get\"], {}]": {
@@ -946,7 +946,7 @@
  "[[\"help\", \"List.group_by\", \"--json\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "{\"arity\":2,\"description\":\"Group elements by an Int, String or Bytes key; keys in order of first appearance, elements in order; O(n).\",\"effects\":[],\"name\":\"List.group_by\",\"parameters\":[{\"name\":\"list\",\"type\":\"List[A]\"},{\"name\":\"key\",\"type\":\"Fn[A, K]\"}],\"result\":\"Map[K, List[A]]\",\"ruby\":\"list.group_by(key: Fn[A, K]) -> Map[K, List[A]]\",\"signature\":\"List.group_by(list: List[A], key: Fn[A, K]) -> Map[K, List[A]]\"}\n",
+  "stdout": "{\"name\":\"List.group_by\",\"arity\":2,\"parameters\":[{\"name\":\"list\",\"type\":\"List[A]\"},{\"name\":\"key\",\"type\":\"Fn[A, K]\"}],\"result\":\"Map[K, List[A]]\",\"signature\":\"List.group_by(list: List[A], key: Fn[A, K]) -> Map[K, List[A]]\",\"ruby\":\"list.group_by(key: Fn[A, K]) -> Map[K, List[A]]\",\"effects\":[],\"description\":\"Group elements by an Int, String or Bytes key; keys in order of first appearance, elements in order; O(n).\"}\n",
   "written": []
  },
  "[[\"help\", \"List.group_by\"], {}]": {
@@ -964,7 +964,7 @@
  "[[\"help\", \"Map.get\", \"--json\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "{\"description\":\"Read a value as some(value) or none, or supply an eagerly evaluated default as a third argument.\",\"effects\":[],\"name\":\"Map.get\",\"overloads\":[{\"arity\":2,\"description\":\"Read a value as some(value) or none, or supply an eagerly evaluated default as a third argument.\",\"effects\":[],\"name\":\"Map.get\",\"parameters\":[{\"name\":\"map\",\"type\":\"Map[K, V]\"},{\"name\":\"key\",\"type\":\"K\"}],\"result\":\"Optional[V]\",\"ruby\":\"map.get(key: K) -> Optional[V]\",\"signature\":\"Map.get(map: Map[K, V], key: K) -> Optional[V]\"},{\"arity\":3,\"description\":\"Read a value as some(value) or none, or supply an eagerly evaluated default as a third argument.\",\"effects\":[],\"name\":\"Map.get\",\"parameters\":[{\"name\":\"map\",\"type\":\"Map[K, V]\"},{\"name\":\"key\",\"type\":\"K\"},{\"name\":\"default\",\"type\":\"V\"}],\"result\":\"V\",\"ruby\":\"map.get(key: K, default: V) -> V\",\"signature\":\"Map.get(map: Map[K, V], key: K, default: V) -> V\"}]}\n",
+  "stdout": "{\"name\":\"Map.get\",\"description\":\"Read a value as some(value) or none, or supply an eagerly evaluated default as a third argument.\",\"effects\":[],\"overloads\":[{\"name\":\"Map.get\",\"arity\":2,\"parameters\":[{\"name\":\"map\",\"type\":\"Map[K, V]\"},{\"name\":\"key\",\"type\":\"K\"}],\"result\":\"Optional[V]\",\"signature\":\"Map.get(map: Map[K, V], key: K) -> Optional[V]\",\"ruby\":\"map.get(key: K) -> Optional[V]\",\"effects\":[],\"description\":\"Read a value as some(value) or none, or supply an eagerly evaluated default as a third argument.\"},{\"name\":\"Map.get\",\"arity\":3,\"parameters\":[{\"name\":\"map\",\"type\":\"Map[K, V]\"},{\"name\":\"key\",\"type\":\"K\"},{\"name\":\"default\",\"type\":\"V\"}],\"result\":\"V\",\"signature\":\"Map.get(map: Map[K, V], key: K, default: V) -> V\",\"ruby\":\"map.get(key: K, default: V) -> V\",\"effects\":[],\"description\":\"Read a value as some(value) or none, or supply an eagerly evaluated default as a third argument.\"}]}\n",
   "written": []
  },
  "[[\"help\", \"Map.get\"], {}]": {
@@ -976,7 +976,7 @@
  "[[\"help\", \"Map.length\", \"--json\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "{\"alias\":\"Map.length\",\"builtins\":[{\"arity\":1,\"description\":\"Count map entries.\",\"effects\":[],\"name\":\"Map.size\",\"parameters\":[{\"name\":\"map\",\"type\":\"Map[K, V]\"}],\"result\":\"Int\",\"ruby\":\"map.size() -> Int\",\"signature\":\"Map.size(map: Map[K, V]) -> Int\"}],\"hints\":{}}\n",
+  "stdout": "{\"alias\":\"Map.length\",\"builtins\":[{\"name\":\"Map.size\",\"arity\":1,\"parameters\":[{\"name\":\"map\",\"type\":\"Map[K, V]\"}],\"result\":\"Int\",\"signature\":\"Map.size(map: Map[K, V]) -> Int\",\"ruby\":\"map.size() -> Int\",\"effects\":[],\"description\":\"Count map entries.\"}],\"hints\":{}}\n",
   "written": []
  },
  "[[\"help\", \"Map.length\"], {}]": {
@@ -1000,7 +1000,7 @@
  "[[\"help\", \"Result.ok?\", \"--json\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "{\"arity\":1,\"description\":\"Check whether a Result succeeded.\",\"effects\":[],\"name\":\"Result.ok?\",\"parameters\":[{\"name\":\"result\",\"type\":\"Result[T]\"}],\"result\":\"Bool\",\"ruby\":\"result.ok?() -> Bool\",\"signature\":\"Result.ok?(result: Result[T]) -> Bool\"}\n",
+  "stdout": "{\"name\":\"Result.ok?\",\"arity\":1,\"parameters\":[{\"name\":\"result\",\"type\":\"Result[T]\"}],\"result\":\"Bool\",\"signature\":\"Result.ok?(result: Result[T]) -> Bool\",\"ruby\":\"result.ok?() -> Bool\",\"effects\":[],\"description\":\"Check whether a Result succeeded.\"}\n",
   "written": []
  },
  "[[\"help\", \"Result.ok?\"], {}]": {
@@ -1024,7 +1024,7 @@
  "[[\"help\", \"String.compare\", \"--json\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "{\"arity\":2,\"description\":\"Compare two Strings in the order of sort: -1, 0 or 1.\",\"effects\":[],\"name\":\"String.compare\",\"parameters\":[{\"name\":\"string\",\"type\":\"String\"},{\"name\":\"other\",\"type\":\"String\"}],\"result\":\"Int\",\"ruby\":\"string.compare(other: String) -> Int\",\"signature\":\"String.compare(string: String, other: String) -> Int\"}\n",
+  "stdout": "{\"name\":\"String.compare\",\"arity\":2,\"parameters\":[{\"name\":\"string\",\"type\":\"String\"},{\"name\":\"other\",\"type\":\"String\"}],\"result\":\"Int\",\"signature\":\"String.compare(string: String, other: String) -> Int\",\"ruby\":\"string.compare(other: String) -> Int\",\"effects\":[],\"description\":\"Compare two Strings in the order of sort: -1, 0 or 1.\"}\n",
   "written": []
  },
  "[[\"help\", \"String.compare\"], {}]": {
@@ -1042,7 +1042,7 @@
  "[[\"help\", \"String.split\", \"--json\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "{\"arity\":2,\"description\":\"Split text; an empty separator gives characters.\",\"effects\":[],\"name\":\"String.split\",\"parameters\":[{\"name\":\"string\",\"type\":\"String\"},{\"name\":\"separator\",\"type\":\"String\"}],\"result\":\"List[String]\",\"ruby\":\"string.split(separator: String) -> List[String]\",\"signature\":\"String.split(string: String, separator: String) -> List[String]\"}\n",
+  "stdout": "{\"name\":\"String.split\",\"arity\":2,\"parameters\":[{\"name\":\"string\",\"type\":\"String\"},{\"name\":\"separator\",\"type\":\"String\"}],\"result\":\"List[String]\",\"signature\":\"String.split(string: String, separator: String) -> List[String]\",\"ruby\":\"string.split(separator: String) -> List[String]\",\"effects\":[],\"description\":\"Split text; an empty separator gives characters.\"}\n",
   "written": []
  },
  "[[\"help\", \"String.split\"], {}]": {
@@ -1054,7 +1054,7 @@
  "[[\"help\", \"String.strip\", \"--json\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "{\"arity\":1,\"description\":\"Strip surrounding whitespace.\",\"effects\":[],\"name\":\"String.strip\",\"parameters\":[{\"name\":\"string\",\"type\":\"String\"}],\"result\":\"String\",\"ruby\":\"string.strip() -> String\",\"signature\":\"String.strip(string: String) -> String\"}\n",
+  "stdout": "{\"name\":\"String.strip\",\"arity\":1,\"parameters\":[{\"name\":\"string\",\"type\":\"String\"}],\"result\":\"String\",\"signature\":\"String.strip(string: String) -> String\",\"ruby\":\"string.strip() -> String\",\"effects\":[],\"description\":\"Strip surrounding whitespace.\"}\n",
   "written": []
  },
  "[[\"help\", \"String.strip\"], {}]": {
@@ -1108,7 +1108,7 @@
  "[[\"help\", \"Task.await\", \"--json\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "{\"description\":\"Wait for a task and return its cached result; a crashed task gives error(text) when R is a Result, else RUNTIME-TASK-CRASHED.\",\"effects\":[\"concurrency\"],\"name\":\"Task.await\",\"overloads\":[{\"arity\":1,\"description\":\"Wait for a task and return its cached result; a crashed task gives error(text) when R is a Result, else RUNTIME-TASK-CRASHED.\",\"effects\":[\"concurrency\"],\"name\":\"Task.await\",\"parameters\":[{\"name\":\"task\",\"type\":\"Task[R]\"}],\"result\":\"R\",\"ruby\":null,\"signature\":\"Task.await(task: Task[R]) -> R\"},{\"arity\":2,\"description\":\"Wait for a task for at most timeout_ms; Await.Done(value) with its cached result, or Await.TimedOut, and the task keeps running; timeout_ms must be positive.\",\"effects\":[\"concurrency\"],\"name\":\"Task.await\",\"parameters\":[{\"name\":\"task\",\"type\":\"Task[R]\"},{\"name\":\"timeout_ms\",\"type\":\"Int\"}],\"result\":\"Await[R]\",\"ruby\":null,\"signature\":\"Task.await(task: Task[R], timeout_ms: Int) -> Await[R]\"}]}\n",
+  "stdout": "{\"name\":\"Task.await\",\"description\":\"Wait for a task and return its cached result; a crashed task gives error(text) when R is a Result, else RUNTIME-TASK-CRASHED.\",\"effects\":[\"concurrency\"],\"overloads\":[{\"name\":\"Task.await\",\"arity\":1,\"parameters\":[{\"name\":\"task\",\"type\":\"Task[R]\"}],\"result\":\"R\",\"signature\":\"Task.await(task: Task[R]) -> R\",\"ruby\":null,\"effects\":[\"concurrency\"],\"description\":\"Wait for a task and return its cached result; a crashed task gives error(text) when R is a Result, else RUNTIME-TASK-CRASHED.\"},{\"name\":\"Task.await\",\"arity\":2,\"parameters\":[{\"name\":\"task\",\"type\":\"Task[R]\"},{\"name\":\"timeout_ms\",\"type\":\"Int\"}],\"result\":\"Await[R]\",\"signature\":\"Task.await(task: Task[R], timeout_ms: Int) -> Await[R]\",\"ruby\":null,\"effects\":[\"concurrency\"],\"description\":\"Wait for a task for at most timeout_ms; Await.Done(value) with its cached result, or Await.TimedOut, and the task keeps running; timeout_ms must be positive.\"}]}\n",
   "written": []
  },
  "[[\"help\", \"Task.await\"], {}]": {
@@ -1132,7 +1132,7 @@
  "[[\"help\", \"collect\", \"--json\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "{\"alias\":\"collect\",\"builtins\":[{\"arity\":2,\"description\":\"Lazy step: block applied to each item.\",\"effects\":[],\"name\":\"Lazy.map\",\"parameters\":[{\"name\":\"lazy\",\"type\":\"Lazy[A]\"},{\"name\":\"block\",\"type\":\"Fn[A, B]\"}],\"result\":\"Lazy[B]\",\"ruby\":\"lazy.map(block: Fn[A, B]) -> Lazy[B]\",\"signature\":\"Lazy.map(lazy: Lazy[A], block: Fn[A, B]) -> Lazy[B]\"},{\"arity\":2,\"description\":\"Map each element in order without changing the input; O(n).\",\"effects\":[],\"name\":\"List.map\",\"parameters\":[{\"name\":\"list\",\"type\":\"List[A]\"},{\"name\":\"block\",\"type\":\"Fn[A, B]\"}],\"result\":\"List[B]\",\"ruby\":\"list.map(block: Fn[A, B]) -> List[B]\",\"signature\":\"List.map(list: List[A], block: Fn[A, B]) -> List[B]\"},{\"arity\":2,\"description\":\"List what block gives for each value, in order; O(n).\",\"effects\":[],\"name\":\"Range.map\",\"parameters\":[{\"name\":\"range\",\"type\":\"Range\"},{\"name\":\"block\",\"type\":\"Fn[Int, B]\"}],\"result\":\"List[B]\",\"ruby\":\"range.map(block: Fn[Int, B]) -> List[B]\",\"signature\":\"Range.map(range: Range, block: Fn[Int, B]) -> List[B]\"}],\"hints\":{}}\n",
+  "stdout": "{\"alias\":\"collect\",\"builtins\":[{\"name\":\"Lazy.map\",\"arity\":2,\"parameters\":[{\"name\":\"lazy\",\"type\":\"Lazy[A]\"},{\"name\":\"block\",\"type\":\"Fn[A, B]\"}],\"result\":\"Lazy[B]\",\"signature\":\"Lazy.map(lazy: Lazy[A], block: Fn[A, B]) -> Lazy[B]\",\"ruby\":\"lazy.map(block: Fn[A, B]) -> Lazy[B]\",\"effects\":[],\"description\":\"Lazy step: block applied to each item.\"},{\"name\":\"List.map\",\"arity\":2,\"parameters\":[{\"name\":\"list\",\"type\":\"List[A]\"},{\"name\":\"block\",\"type\":\"Fn[A, B]\"}],\"result\":\"List[B]\",\"signature\":\"List.map(list: List[A], block: Fn[A, B]) -> List[B]\",\"ruby\":\"list.map(block: Fn[A, B]) -> List[B]\",\"effects\":[],\"description\":\"Map each element in order without changing the input; O(n).\"},{\"name\":\"Range.map\",\"arity\":2,\"parameters\":[{\"name\":\"range\",\"type\":\"Range\"},{\"name\":\"block\",\"type\":\"Fn[Int, B]\"}],\"result\":\"List[B]\",\"signature\":\"Range.map(range: Range, block: Fn[Int, B]) -> List[B]\",\"ruby\":\"range.map(block: Fn[Int, B]) -> List[B]\",\"effects\":[],\"description\":\"List what block gives for each value, in order; O(n).\"}],\"hints\":{}}\n",
   "written": []
  },
  "[[\"help\", \"collect\"], {}]": {
@@ -1150,7 +1150,7 @@
  "[[\"help\", \"contains\", \"--json\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "{\"alias\":\"contains\",\"builtins\":[{\"arity\":2,\"description\":\"Check whether a value is in the list, comparing with ==; items need equality; O(n).\",\"effects\":[],\"name\":\"List.include?\",\"parameters\":[{\"name\":\"list\",\"type\":\"List[T]\"},{\"name\":\"value\",\"type\":\"T\"}],\"result\":\"Bool\",\"ruby\":\"list.include?(value: T) -> Bool\",\"signature\":\"List.include?(list: List[T], value: T) -> Bool\"},{\"arity\":2,\"description\":\"Check whether a key exists.\",\"effects\":[],\"name\":\"Map.has_key?\",\"parameters\":[{\"name\":\"map\",\"type\":\"Map[K, V]\"},{\"name\":\"key\",\"type\":\"K\"}],\"result\":\"Bool\",\"ruby\":\"map.key?(key: K) -> Bool\",\"signature\":\"Map.has_key?(map: Map[K, V], key: K) -> Bool\"},{\"arity\":2,\"description\":\"Check whether a value is in the range.\",\"effects\":[],\"name\":\"Range.include?\",\"parameters\":[{\"name\":\"range\",\"type\":\"Range\"},{\"name\":\"value\",\"type\":\"Int\"}],\"result\":\"Bool\",\"ruby\":\"range.include?(value: Int) -> Bool\",\"signature\":\"Range.include?(range: Range, value: Int) -> Bool\"},{\"arity\":2,\"description\":\"Check whether an element is in the set.\",\"effects\":[],\"name\":\"Set.include?\",\"parameters\":[{\"name\":\"set\",\"type\":\"Set[T]\"},{\"name\":\"value\",\"type\":\"T\"}],\"result\":\"Bool\",\"ruby\":\"set.include?(value: T) -> Bool\",\"signature\":\"Set.include?(set: Set[T], value: T) -> Bool\"},{\"arity\":2,\"description\":\"Check for a substring.\",\"effects\":[],\"name\":\"String.include?\",\"parameters\":[{\"name\":\"string\",\"type\":\"String\"},{\"name\":\"part\",\"type\":\"String\"}],\"result\":\"Bool\",\"ruby\":\"string.include?(part: String) -> Bool\",\"signature\":\"String.include?(string: String, part: String) -> Bool\"}],\"hints\":{\"List.contains\":\"a List has no membership method; use xs.any? do |x| x == value end, or a Set with include?\",\"Map.contains\":\"use m.key?(key)\",\"Set.contains\":\"use s.include?(x)\"}}\n",
+  "stdout": "{\"alias\":\"contains\",\"builtins\":[{\"name\":\"List.include?\",\"arity\":2,\"parameters\":[{\"name\":\"list\",\"type\":\"List[T]\"},{\"name\":\"value\",\"type\":\"T\"}],\"result\":\"Bool\",\"signature\":\"List.include?(list: List[T], value: T) -> Bool\",\"ruby\":\"list.include?(value: T) -> Bool\",\"effects\":[],\"description\":\"Check whether a value is in the list, comparing with ==; items need equality; O(n).\"},{\"name\":\"Map.has_key?\",\"arity\":2,\"parameters\":[{\"name\":\"map\",\"type\":\"Map[K, V]\"},{\"name\":\"key\",\"type\":\"K\"}],\"result\":\"Bool\",\"signature\":\"Map.has_key?(map: Map[K, V], key: K) -> Bool\",\"ruby\":\"map.key?(key: K) -> Bool\",\"effects\":[],\"description\":\"Check whether a key exists.\"},{\"name\":\"Range.include?\",\"arity\":2,\"parameters\":[{\"name\":\"range\",\"type\":\"Range\"},{\"name\":\"value\",\"type\":\"Int\"}],\"result\":\"Bool\",\"signature\":\"Range.include?(range: Range, value: Int) -> Bool\",\"ruby\":\"range.include?(value: Int) -> Bool\",\"effects\":[],\"description\":\"Check whether a value is in the range.\"},{\"name\":\"Set.include?\",\"arity\":2,\"parameters\":[{\"name\":\"set\",\"type\":\"Set[T]\"},{\"name\":\"value\",\"type\":\"T\"}],\"result\":\"Bool\",\"signature\":\"Set.include?(set: Set[T], value: T) -> Bool\",\"ruby\":\"set.include?(value: T) -> Bool\",\"effects\":[],\"description\":\"Check whether an element is in the set.\"},{\"name\":\"String.include?\",\"arity\":2,\"parameters\":[{\"name\":\"string\",\"type\":\"String\"},{\"name\":\"part\",\"type\":\"String\"}],\"result\":\"Bool\",\"signature\":\"String.include?(string: String, part: String) -> Bool\",\"ruby\":\"string.include?(part: String) -> Bool\",\"effects\":[],\"description\":\"Check for a substring.\"}],\"hints\":{\"List.contains\":\"a List has no membership method; use xs.any? do |x| x == value end, or a Set with include?\",\"Map.contains\":\"use m.key?(key)\",\"Set.contains\":\"use s.include?(x)\"}}\n",
   "written": []
  },
  "[[\"help\", \"contains\"], {}]": {
@@ -1174,7 +1174,7 @@
  "[[\"help\", \"detect\", \"--json\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "{\"alias\":\"detect\",\"builtins\":[{\"arity\":2,\"description\":\"Terminal: the first item block accepts, else error(\\\"not found\\\") when the source ends.\",\"effects\":[],\"name\":\"Lazy.find\",\"parameters\":[{\"name\":\"lazy\",\"type\":\"Lazy[A]\"},{\"name\":\"block\",\"type\":\"Fn[A, Bool]\"}],\"result\":\"Result[A]\",\"ruby\":\"lazy.find(block: Fn[A, Bool]) -> Result[A]\",\"signature\":\"Lazy.find(lazy: Lazy[A], block: Fn[A, Bool]) -> Result[A]\"},{\"arity\":2,\"description\":\"The first element block accepts, else error(\\\"not found\\\"); block stops being called at the first true; O(n).\",\"effects\":[],\"name\":\"List.find\",\"parameters\":[{\"name\":\"list\",\"type\":\"List[A]\"},{\"name\":\"block\",\"type\":\"Fn[A, Bool]\"}],\"result\":\"Result[A]\",\"ruby\":\"list.find(block: Fn[A, Bool]) -> Result[A]\",\"signature\":\"List.find(list: List[A], block: Fn[A, Bool]) -> Result[A]\"},{\"arity\":2,\"description\":\"The first value block accepts, else error(\\\"not found\\\"); block stops being called at the first true; O(n).\",\"effects\":[],\"name\":\"Range.find\",\"parameters\":[{\"name\":\"range\",\"type\":\"Range\"},{\"name\":\"block\",\"type\":\"Fn[Int, Bool]\"}],\"result\":\"Result[Int]\",\"ruby\":\"range.find(block: Fn[Int, Bool]) -> Result[Int]\",\"signature\":\"Range.find(range: Range, block: Fn[Int, Bool]) -> Result[Int]\"}],\"hints\":{}}\n",
+  "stdout": "{\"alias\":\"detect\",\"builtins\":[{\"name\":\"Lazy.find\",\"arity\":2,\"parameters\":[{\"name\":\"lazy\",\"type\":\"Lazy[A]\"},{\"name\":\"block\",\"type\":\"Fn[A, Bool]\"}],\"result\":\"Result[A]\",\"signature\":\"Lazy.find(lazy: Lazy[A], block: Fn[A, Bool]) -> Result[A]\",\"ruby\":\"lazy.find(block: Fn[A, Bool]) -> Result[A]\",\"effects\":[],\"description\":\"Terminal: the first item block accepts, else error(\\\"not found\\\") when the source ends.\"},{\"name\":\"List.find\",\"arity\":2,\"parameters\":[{\"name\":\"list\",\"type\":\"List[A]\"},{\"name\":\"block\",\"type\":\"Fn[A, Bool]\"}],\"result\":\"Result[A]\",\"signature\":\"List.find(list: List[A], block: Fn[A, Bool]) -> Result[A]\",\"ruby\":\"list.find(block: Fn[A, Bool]) -> Result[A]\",\"effects\":[],\"description\":\"The first element block accepts, else error(\\\"not found\\\"); block stops being called at the first true; O(n).\"},{\"name\":\"Range.find\",\"arity\":2,\"parameters\":[{\"name\":\"range\",\"type\":\"Range\"},{\"name\":\"block\",\"type\":\"Fn[Int, Bool]\"}],\"result\":\"Result[Int]\",\"signature\":\"Range.find(range: Range, block: Fn[Int, Bool]) -> Result[Int]\",\"ruby\":\"range.find(block: Fn[Int, Bool]) -> Result[Int]\",\"effects\":[],\"description\":\"The first value block accepts, else error(\\\"not found\\\"); block stops being called at the first true; O(n).\"}],\"hints\":{}}\n",
   "written": []
  },
  "[[\"help\", \"detect\"], {}]": {
@@ -1186,7 +1186,7 @@
  "[[\"help\", \"filter\", \"--json\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "{\"alias\":\"filter\",\"builtins\":[{\"arity\":2,\"description\":\"Lazy step: keep the items whose predicate is true.\",\"effects\":[],\"name\":\"Lazy.filter\",\"parameters\":[{\"name\":\"lazy\",\"type\":\"Lazy[A]\"},{\"name\":\"block\",\"type\":\"Fn[A, Bool]\"}],\"result\":\"Lazy[A]\",\"ruby\":\"lazy.select(block: Fn[A, Bool]) -> Lazy[A]\",\"signature\":\"Lazy.filter(lazy: Lazy[A], block: Fn[A, Bool]) -> Lazy[A]\"},{\"arity\":2,\"description\":\"Keep elements whose predicate is true, in order; O(n).\",\"effects\":[],\"name\":\"List.filter\",\"parameters\":[{\"name\":\"list\",\"type\":\"List[A]\"},{\"name\":\"block\",\"type\":\"Fn[A, Bool]\"}],\"result\":\"List[A]\",\"ruby\":\"list.select(block: Fn[A, Bool]) -> List[A]\",\"signature\":\"List.filter(list: List[A], block: Fn[A, Bool]) -> List[A]\"},{\"arity\":2,\"description\":\"Keep the entries block accepts, in insertion order; O(n).\",\"effects\":[],\"name\":\"Map.filter\",\"parameters\":[{\"name\":\"map\",\"type\":\"Map[K, V]\"},{\"name\":\"block\",\"type\":\"Fn[K, V, Bool]\"}],\"result\":\"Map[K, V]\",\"ruby\":\"map.select(block: Fn[K, V, Bool]) -> Map[K, V]\",\"signature\":\"Map.filter(map: Map[K, V], block: Fn[K, V, Bool]) -> Map[K, V]\"}],\"hints\":{}}\n",
+  "stdout": "{\"alias\":\"filter\",\"builtins\":[{\"name\":\"Lazy.filter\",\"arity\":2,\"parameters\":[{\"name\":\"lazy\",\"type\":\"Lazy[A]\"},{\"name\":\"block\",\"type\":\"Fn[A, Bool]\"}],\"result\":\"Lazy[A]\",\"signature\":\"Lazy.filter(lazy: Lazy[A], block: Fn[A, Bool]) -> Lazy[A]\",\"ruby\":\"lazy.select(block: Fn[A, Bool]) -> Lazy[A]\",\"effects\":[],\"description\":\"Lazy step: keep the items whose predicate is true.\"},{\"name\":\"List.filter\",\"arity\":2,\"parameters\":[{\"name\":\"list\",\"type\":\"List[A]\"},{\"name\":\"block\",\"type\":\"Fn[A, Bool]\"}],\"result\":\"List[A]\",\"signature\":\"List.filter(list: List[A], block: Fn[A, Bool]) -> List[A]\",\"ruby\":\"list.select(block: Fn[A, Bool]) -> List[A]\",\"effects\":[],\"description\":\"Keep elements whose predicate is true, in order; O(n).\"},{\"name\":\"Map.filter\",\"arity\":2,\"parameters\":[{\"name\":\"map\",\"type\":\"Map[K, V]\"},{\"name\":\"block\",\"type\":\"Fn[K, V, Bool]\"}],\"result\":\"Map[K, V]\",\"signature\":\"Map.filter(map: Map[K, V], block: Fn[K, V, Bool]) -> Map[K, V]\",\"ruby\":\"map.select(block: Fn[K, V, Bool]) -> Map[K, V]\",\"effects\":[],\"description\":\"Keep the entries block accepts, in insertion order; O(n).\"}],\"hints\":{}}\n",
   "written": []
  },
  "[[\"help\", \"filter\"], {}]": {
@@ -1240,7 +1240,7 @@
  "[[\"help\", \"has_key?\", \"--json\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "{\"alias\":\"has_key?\",\"builtins\":[{\"arity\":2,\"description\":\"Check whether a key exists; VM only.\",\"effects\":[],\"name\":\"ATS.has_key?\",\"parameters\":[{\"name\":\"table\",\"type\":\"ATS[K, V]\"},{\"name\":\"key\",\"type\":\"K\"}],\"result\":\"Bool\",\"ruby\":\"table.has_key?(key: K) -> Bool\",\"signature\":\"ATS.has_key?(table: ATS[K, V], key: K) -> Bool\"},{\"arity\":2,\"description\":\"Check whether a key exists.\",\"effects\":[],\"name\":\"Map.has_key?\",\"parameters\":[{\"name\":\"map\",\"type\":\"Map[K, V]\"},{\"name\":\"key\",\"type\":\"K\"}],\"result\":\"Bool\",\"ruby\":\"map.key?(key: K) -> Bool\",\"signature\":\"Map.has_key?(map: Map[K, V], key: K) -> Bool\"}],\"hints\":{}}\n",
+  "stdout": "{\"alias\":\"has_key?\",\"builtins\":[{\"name\":\"ATS.has_key?\",\"arity\":2,\"parameters\":[{\"name\":\"table\",\"type\":\"ATS[K, V]\"},{\"name\":\"key\",\"type\":\"K\"}],\"result\":\"Bool\",\"signature\":\"ATS.has_key?(table: ATS[K, V], key: K) -> Bool\",\"ruby\":\"table.has_key?(key: K) -> Bool\",\"effects\":[],\"description\":\"Check whether a key exists; VM only.\"},{\"name\":\"Map.has_key?\",\"arity\":2,\"parameters\":[{\"name\":\"map\",\"type\":\"Map[K, V]\"},{\"name\":\"key\",\"type\":\"K\"}],\"result\":\"Bool\",\"signature\":\"Map.has_key?(map: Map[K, V], key: K) -> Bool\",\"ruby\":\"map.key?(key: K) -> Bool\",\"effects\":[],\"description\":\"Check whether a key exists.\"}],\"hints\":{}}\n",
   "written": []
  },
  "[[\"help\", \"has_key?\"], {}]": {
@@ -1252,7 +1252,7 @@
  "[[\"help\", \"include\", \"--json\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "{\"alias\":\"include\",\"builtins\":[{\"arity\":2,\"description\":\"Check whether a value is in the list, comparing with ==; items need equality; O(n).\",\"effects\":[],\"name\":\"List.include?\",\"parameters\":[{\"name\":\"list\",\"type\":\"List[T]\"},{\"name\":\"value\",\"type\":\"T\"}],\"result\":\"Bool\",\"ruby\":\"list.include?(value: T) -> Bool\",\"signature\":\"List.include?(list: List[T], value: T) -> Bool\"},{\"arity\":2,\"description\":\"Check whether a key exists.\",\"effects\":[],\"name\":\"Map.has_key?\",\"parameters\":[{\"name\":\"map\",\"type\":\"Map[K, V]\"},{\"name\":\"key\",\"type\":\"K\"}],\"result\":\"Bool\",\"ruby\":\"map.key?(key: K) -> Bool\",\"signature\":\"Map.has_key?(map: Map[K, V], key: K) -> Bool\"},{\"arity\":2,\"description\":\"Check whether a value is in the range.\",\"effects\":[],\"name\":\"Range.include?\",\"parameters\":[{\"name\":\"range\",\"type\":\"Range\"},{\"name\":\"value\",\"type\":\"Int\"}],\"result\":\"Bool\",\"ruby\":\"range.include?(value: Int) -> Bool\",\"signature\":\"Range.include?(range: Range, value: Int) -> Bool\"},{\"arity\":2,\"description\":\"Check whether an element is in the set.\",\"effects\":[],\"name\":\"Set.include?\",\"parameters\":[{\"name\":\"set\",\"type\":\"Set[T]\"},{\"name\":\"value\",\"type\":\"T\"}],\"result\":\"Bool\",\"ruby\":\"set.include?(value: T) -> Bool\",\"signature\":\"Set.include?(set: Set[T], value: T) -> Bool\"},{\"arity\":2,\"description\":\"Check for a substring.\",\"effects\":[],\"name\":\"String.include?\",\"parameters\":[{\"name\":\"string\",\"type\":\"String\"},{\"name\":\"part\",\"type\":\"String\"}],\"result\":\"Bool\",\"ruby\":\"string.include?(part: String) -> Bool\",\"signature\":\"String.include?(string: String, part: String) -> Bool\"}],\"hints\":{}}\n",
+  "stdout": "{\"alias\":\"include\",\"builtins\":[{\"name\":\"List.include?\",\"arity\":2,\"parameters\":[{\"name\":\"list\",\"type\":\"List[T]\"},{\"name\":\"value\",\"type\":\"T\"}],\"result\":\"Bool\",\"signature\":\"List.include?(list: List[T], value: T) -> Bool\",\"ruby\":\"list.include?(value: T) -> Bool\",\"effects\":[],\"description\":\"Check whether a value is in the list, comparing with ==; items need equality; O(n).\"},{\"name\":\"Map.has_key?\",\"arity\":2,\"parameters\":[{\"name\":\"map\",\"type\":\"Map[K, V]\"},{\"name\":\"key\",\"type\":\"K\"}],\"result\":\"Bool\",\"signature\":\"Map.has_key?(map: Map[K, V], key: K) -> Bool\",\"ruby\":\"map.key?(key: K) -> Bool\",\"effects\":[],\"description\":\"Check whether a key exists.\"},{\"name\":\"Range.include?\",\"arity\":2,\"parameters\":[{\"name\":\"range\",\"type\":\"Range\"},{\"name\":\"value\",\"type\":\"Int\"}],\"result\":\"Bool\",\"signature\":\"Range.include?(range: Range, value: Int) -> Bool\",\"ruby\":\"range.include?(value: Int) -> Bool\",\"effects\":[],\"description\":\"Check whether a value is in the range.\"},{\"name\":\"Set.include?\",\"arity\":2,\"parameters\":[{\"name\":\"set\",\"type\":\"Set[T]\"},{\"name\":\"value\",\"type\":\"T\"}],\"result\":\"Bool\",\"signature\":\"Set.include?(set: Set[T], value: T) -> Bool\",\"ruby\":\"set.include?(value: T) -> Bool\",\"effects\":[],\"description\":\"Check whether an element is in the set.\"},{\"name\":\"String.include?\",\"arity\":2,\"parameters\":[{\"name\":\"string\",\"type\":\"String\"},{\"name\":\"part\",\"type\":\"String\"}],\"result\":\"Bool\",\"signature\":\"String.include?(string: String, part: String) -> Bool\",\"ruby\":\"string.include?(part: String) -> Bool\",\"effects\":[],\"description\":\"Check for a substring.\"}],\"hints\":{}}\n",
   "written": []
  },
  "[[\"help\", \"include\"], {}]": {
@@ -1264,7 +1264,7 @@
  "[[\"help\", \"inject\", \"--json\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "{\"alias\":\"inject\",\"builtins\":[{\"arity\":3,\"description\":\"Terminal: fold left from initial in order.\",\"effects\":[],\"name\":\"Lazy.reduce\",\"parameters\":[{\"name\":\"lazy\",\"type\":\"Lazy[A]\"},{\"name\":\"initial\",\"type\":\"B\"},{\"name\":\"block\",\"type\":\"Fn[B, A, B]\"}],\"result\":\"Result[B]\",\"ruby\":\"lazy.reduce(initial: B, block: Fn[B, A, B]) -> Result[B]\",\"signature\":\"Lazy.reduce(lazy: Lazy[A], initial: B, block: Fn[B, A, B]) -> Result[B]\"},{\"arity\":3,\"description\":\"Fold left with block(accumulator, item); empty lists return initial; O(n).\",\"effects\":[],\"name\":\"List.reduce\",\"parameters\":[{\"name\":\"list\",\"type\":\"List[A]\"},{\"name\":\"initial\",\"type\":\"B\"},{\"name\":\"block\",\"type\":\"Fn[B, A, B]\"}],\"result\":\"B\",\"ruby\":\"list.reduce(initial: B, block: Fn[B, A, B]) -> B\",\"signature\":\"List.reduce(list: List[A], initial: B, block: Fn[B, A, B]) -> B\"},{\"arity\":3,\"description\":\"Fold left with block(accumulator, value); an empty range returns initial; O(n).\",\"effects\":[],\"name\":\"Range.reduce\",\"parameters\":[{\"name\":\"range\",\"type\":\"Range\"},{\"name\":\"initial\",\"type\":\"B\"},{\"name\":\"block\",\"type\":\"Fn[B, Int, B]\"}],\"result\":\"B\",\"ruby\":\"range.reduce(initial: B, block: Fn[B, Int, B]) -> B\",\"signature\":\"Range.reduce(range: Range, initial: B, block: Fn[B, Int, B]) -> B\"}],\"hints\":{\"Bytes.inject\":\"Bytes has no reduce; use b.to_a.reduce(0) do |acc, x| ... end\"}}\n",
+  "stdout": "{\"alias\":\"inject\",\"builtins\":[{\"name\":\"Lazy.reduce\",\"arity\":3,\"parameters\":[{\"name\":\"lazy\",\"type\":\"Lazy[A]\"},{\"name\":\"initial\",\"type\":\"B\"},{\"name\":\"block\",\"type\":\"Fn[B, A, B]\"}],\"result\":\"Result[B]\",\"signature\":\"Lazy.reduce(lazy: Lazy[A], initial: B, block: Fn[B, A, B]) -> Result[B]\",\"ruby\":\"lazy.reduce(initial: B, block: Fn[B, A, B]) -> Result[B]\",\"effects\":[],\"description\":\"Terminal: fold left from initial in order.\"},{\"name\":\"List.reduce\",\"arity\":3,\"parameters\":[{\"name\":\"list\",\"type\":\"List[A]\"},{\"name\":\"initial\",\"type\":\"B\"},{\"name\":\"block\",\"type\":\"Fn[B, A, B]\"}],\"result\":\"B\",\"signature\":\"List.reduce(list: List[A], initial: B, block: Fn[B, A, B]) -> B\",\"ruby\":\"list.reduce(initial: B, block: Fn[B, A, B]) -> B\",\"effects\":[],\"description\":\"Fold left with block(accumulator, item); empty lists return initial; O(n).\"},{\"name\":\"Range.reduce\",\"arity\":3,\"parameters\":[{\"name\":\"range\",\"type\":\"Range\"},{\"name\":\"initial\",\"type\":\"B\"},{\"name\":\"block\",\"type\":\"Fn[B, Int, B]\"}],\"result\":\"B\",\"signature\":\"Range.reduce(range: Range, initial: B, block: Fn[B, Int, B]) -> B\",\"ruby\":\"range.reduce(initial: B, block: Fn[B, Int, B]) -> B\",\"effects\":[],\"description\":\"Fold left with block(accumulator, value); an empty range returns initial; O(n).\"}],\"hints\":{\"Bytes.inject\":\"Bytes has no reduce; use b.to_a.reduce(0) do |acc, x| ... end\"}}\n",
   "written": []
  },
  "[[\"help\", \"inject\"], {}]": {
@@ -1288,7 +1288,7 @@
  "[[\"help\", \"join\", \"--json\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "{\"alias\":\"join\",\"builtins\":[{\"arity\":2,\"description\":\"Join text elements.\",\"effects\":[],\"name\":\"List.join\",\"parameters\":[{\"name\":\"list\",\"type\":\"List[String]\"},{\"name\":\"separator\",\"type\":\"String\"}],\"result\":\"String\",\"ruby\":\"list.join(separator: String) -> String\",\"signature\":\"List.join(list: List[String], separator: String) -> String\"},{\"arity\":1,\"description\":\"Join path parts using host path semantics.\",\"effects\":[\"filesystem\"],\"name\":\"Path.join\",\"parameters\":[{\"name\":\"list\",\"type\":\"List[String]\"}],\"result\":\"Result[String]\",\"ruby\":null,\"signature\":\"Path.join(list: List[String]) -> Result[String]\"}],\"hints\":{}}\n",
+  "stdout": "{\"alias\":\"join\",\"builtins\":[{\"name\":\"List.join\",\"arity\":2,\"parameters\":[{\"name\":\"list\",\"type\":\"List[String]\"},{\"name\":\"separator\",\"type\":\"String\"}],\"result\":\"String\",\"signature\":\"List.join(list: List[String], separator: String) -> String\",\"ruby\":\"list.join(separator: String) -> String\",\"effects\":[],\"description\":\"Join text elements.\"},{\"name\":\"Path.join\",\"arity\":1,\"parameters\":[{\"name\":\"list\",\"type\":\"List[String]\"}],\"result\":\"Result[String]\",\"signature\":\"Path.join(list: List[String]) -> Result[String]\",\"ruby\":null,\"effects\":[\"filesystem\"],\"description\":\"Join path parts using host path semantics.\"}],\"hints\":{}}\n",
   "written": []
  },
  "[[\"help\", \"join\"], {}]": {
@@ -1300,7 +1300,7 @@
  "[[\"help\", \"key?\", \"--json\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "{\"alias\":\"key?\",\"builtins\":[{\"arity\":2,\"description\":\"Check whether a key exists.\",\"effects\":[],\"name\":\"Map.has_key?\",\"parameters\":[{\"name\":\"map\",\"type\":\"Map[K, V]\"},{\"name\":\"key\",\"type\":\"K\"}],\"result\":\"Bool\",\"ruby\":\"map.key?(key: K) -> Bool\",\"signature\":\"Map.has_key?(map: Map[K, V], key: K) -> Bool\"}],\"hints\":{}}\n",
+  "stdout": "{\"alias\":\"key?\",\"builtins\":[{\"name\":\"Map.has_key?\",\"arity\":2,\"parameters\":[{\"name\":\"map\",\"type\":\"Map[K, V]\"},{\"name\":\"key\",\"type\":\"K\"}],\"result\":\"Bool\",\"signature\":\"Map.has_key?(map: Map[K, V], key: K) -> Bool\",\"ruby\":\"map.key?(key: K) -> Bool\",\"effects\":[],\"description\":\"Check whether a key exists.\"}],\"hints\":{}}\n",
   "written": []
  },
  "[[\"help\", \"key?\"], {}]": {
@@ -1324,7 +1324,7 @@
  "[[\"help\", \"length\", \"--json\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "{\"alias\":\"length\",\"builtins\":[{\"arity\":1,\"description\":\"Count the entries of the table (a snapshot); VM only.\",\"effects\":[],\"name\":\"ATS.size\",\"parameters\":[{\"name\":\"table\",\"type\":\"ATS[K, V]\"}],\"result\":\"Int\",\"ruby\":\"table.size() -> Int\",\"signature\":\"ATS.size(table: ATS[K, V]) -> Int\"},{\"arity\":1,\"description\":\"Count the bytes.\",\"effects\":[],\"name\":\"Bytes.length\",\"parameters\":[{\"name\":\"bytes\",\"type\":\"Bytes\"}],\"result\":\"Int\",\"ruby\":\"bytes.length() -> Int\",\"signature\":\"Bytes.length(bytes: Bytes) -> Int\"},{\"arity\":1,\"description\":\"Count list elements.\",\"effects\":[],\"name\":\"List.size\",\"parameters\":[{\"name\":\"list\",\"type\":\"List[T]\"}],\"result\":\"Int\",\"ruby\":\"list.size() -> Int\",\"signature\":\"List.size(list: List[T]) -> Int\"},{\"arity\":1,\"description\":\"Count map entries.\",\"effects\":[],\"name\":\"Map.size\",\"parameters\":[{\"name\":\"map\",\"type\":\"Map[K, V]\"}],\"result\":\"Int\",\"ruby\":\"map.size() -> Int\",\"signature\":\"Map.size(map: Map[K, V]) -> Int\"},{\"arity\":1,\"description\":\"Count the values; halts when the count does not fit in Int.\",\"effects\":[],\"name\":\"Range.size\",\"parameters\":[{\"name\":\"range\",\"type\":\"Range\"}],\"result\":\"Int\",\"ruby\":\"range.size() -> Int\",\"signature\":\"Range.size(range: Range) -> Int\"},{\"arity\":1,\"description\":\"Count set elements.\",\"effects\":[],\"name\":\"Set.size\",\"parameters\":[{\"name\":\"set\",\"type\":\"Set[T]\"}],\"result\":\"Int\",\"ruby\":\"set.size() -> Int\",\"signature\":\"Set.size(set: Set[T]) -> Int\"},{\"arity\":1,\"description\":\"Count Unicode characters.\",\"effects\":[],\"name\":\"String.length\",\"parameters\":[{\"name\":\"string\",\"type\":\"String\"}],\"result\":\"Int\",\"ruby\":\"string.length() -> Int\",\"signature\":\"String.length(string: String) -> Int\"}],\"hints\":{}}\n",
+  "stdout": "{\"alias\":\"length\",\"builtins\":[{\"name\":\"ATS.size\",\"arity\":1,\"parameters\":[{\"name\":\"table\",\"type\":\"ATS[K, V]\"}],\"result\":\"Int\",\"signature\":\"ATS.size(table: ATS[K, V]) -> Int\",\"ruby\":\"table.size() -> Int\",\"effects\":[],\"description\":\"Count the entries of the table (a snapshot); VM only.\"},{\"name\":\"Bytes.length\",\"arity\":1,\"parameters\":[{\"name\":\"bytes\",\"type\":\"Bytes\"}],\"result\":\"Int\",\"signature\":\"Bytes.length(bytes: Bytes) -> Int\",\"ruby\":\"bytes.length() -> Int\",\"effects\":[],\"description\":\"Count the bytes.\"},{\"name\":\"List.size\",\"arity\":1,\"parameters\":[{\"name\":\"list\",\"type\":\"List[T]\"}],\"result\":\"Int\",\"signature\":\"List.size(list: List[T]) -> Int\",\"ruby\":\"list.size() -> Int\",\"effects\":[],\"description\":\"Count list elements.\"},{\"name\":\"Map.size\",\"arity\":1,\"parameters\":[{\"name\":\"map\",\"type\":\"Map[K, V]\"}],\"result\":\"Int\",\"signature\":\"Map.size(map: Map[K, V]) -> Int\",\"ruby\":\"map.size() -> Int\",\"effects\":[],\"description\":\"Count map entries.\"},{\"name\":\"Range.size\",\"arity\":1,\"parameters\":[{\"name\":\"range\",\"type\":\"Range\"}],\"result\":\"Int\",\"signature\":\"Range.size(range: Range) -> Int\",\"ruby\":\"range.size() -> Int\",\"effects\":[],\"description\":\"Count the values; halts when the count does not fit in Int.\"},{\"name\":\"Set.size\",\"arity\":1,\"parameters\":[{\"name\":\"set\",\"type\":\"Set[T]\"}],\"result\":\"Int\",\"signature\":\"Set.size(set: Set[T]) -> Int\",\"ruby\":\"set.size() -> Int\",\"effects\":[],\"description\":\"Count set elements.\"},{\"name\":\"String.length\",\"arity\":1,\"parameters\":[{\"name\":\"string\",\"type\":\"String\"}],\"result\":\"Int\",\"signature\":\"String.length(string: String) -> Int\",\"ruby\":\"string.length() -> Int\",\"effects\":[],\"description\":\"Count Unicode characters.\"}],\"hints\":{}}\n",
   "written": []
  },
  "[[\"help\", \"length\"], {}]": {
@@ -1336,7 +1336,7 @@
  "[[\"help\", \"member?\", \"--json\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "{\"alias\":\"member?\",\"builtins\":[{\"arity\":2,\"description\":\"Check whether a value is in the list, comparing with ==; items need equality; O(n).\",\"effects\":[],\"name\":\"List.include?\",\"parameters\":[{\"name\":\"list\",\"type\":\"List[T]\"},{\"name\":\"value\",\"type\":\"T\"}],\"result\":\"Bool\",\"ruby\":\"list.include?(value: T) -> Bool\",\"signature\":\"List.include?(list: List[T], value: T) -> Bool\"},{\"arity\":2,\"description\":\"Check whether a key exists.\",\"effects\":[],\"name\":\"Map.has_key?\",\"parameters\":[{\"name\":\"map\",\"type\":\"Map[K, V]\"},{\"name\":\"key\",\"type\":\"K\"}],\"result\":\"Bool\",\"ruby\":\"map.key?(key: K) -> Bool\",\"signature\":\"Map.has_key?(map: Map[K, V], key: K) -> Bool\"},{\"arity\":2,\"description\":\"Check whether a value is in the range.\",\"effects\":[],\"name\":\"Range.include?\",\"parameters\":[{\"name\":\"range\",\"type\":\"Range\"},{\"name\":\"value\",\"type\":\"Int\"}],\"result\":\"Bool\",\"ruby\":\"range.include?(value: Int) -> Bool\",\"signature\":\"Range.include?(range: Range, value: Int) -> Bool\"},{\"arity\":2,\"description\":\"Check whether an element is in the set.\",\"effects\":[],\"name\":\"Set.include?\",\"parameters\":[{\"name\":\"set\",\"type\":\"Set[T]\"},{\"name\":\"value\",\"type\":\"T\"}],\"result\":\"Bool\",\"ruby\":\"set.include?(value: T) -> Bool\",\"signature\":\"Set.include?(set: Set[T], value: T) -> Bool\"}],\"hints\":{}}\n",
+  "stdout": "{\"alias\":\"member?\",\"builtins\":[{\"name\":\"List.include?\",\"arity\":2,\"parameters\":[{\"name\":\"list\",\"type\":\"List[T]\"},{\"name\":\"value\",\"type\":\"T\"}],\"result\":\"Bool\",\"signature\":\"List.include?(list: List[T], value: T) -> Bool\",\"ruby\":\"list.include?(value: T) -> Bool\",\"effects\":[],\"description\":\"Check whether a value is in the list, comparing with ==; items need equality; O(n).\"},{\"name\":\"Map.has_key?\",\"arity\":2,\"parameters\":[{\"name\":\"map\",\"type\":\"Map[K, V]\"},{\"name\":\"key\",\"type\":\"K\"}],\"result\":\"Bool\",\"signature\":\"Map.has_key?(map: Map[K, V], key: K) -> Bool\",\"ruby\":\"map.key?(key: K) -> Bool\",\"effects\":[],\"description\":\"Check whether a key exists.\"},{\"name\":\"Range.include?\",\"arity\":2,\"parameters\":[{\"name\":\"range\",\"type\":\"Range\"},{\"name\":\"value\",\"type\":\"Int\"}],\"result\":\"Bool\",\"signature\":\"Range.include?(range: Range, value: Int) -> Bool\",\"ruby\":\"range.include?(value: Int) -> Bool\",\"effects\":[],\"description\":\"Check whether a value is in the range.\"},{\"name\":\"Set.include?\",\"arity\":2,\"parameters\":[{\"name\":\"set\",\"type\":\"Set[T]\"},{\"name\":\"value\",\"type\":\"T\"}],\"result\":\"Bool\",\"signature\":\"Set.include?(set: Set[T], value: T) -> Bool\",\"ruby\":\"set.include?(value: T) -> Bool\",\"effects\":[],\"description\":\"Check whether an element is in the set.\"}],\"hints\":{}}\n",
   "written": []
  },
  "[[\"help\", \"member?\"], {}]": {
@@ -1348,7 +1348,7 @@
  "[[\"help\", \"ok\", \"--json\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "{\"description\":\"Construct a successful Result.\",\"effects\":[],\"name\":\"ok\",\"overloads\":[{\"arity\":1,\"description\":\"Construct a successful Result.\",\"effects\":[],\"name\":\"ok\",\"parameters\":[{\"name\":\"value\",\"type\":\"T\"}],\"result\":\"Result[T]\",\"ruby\":null,\"signature\":\"ok(value: T) -> Result[T]\"},{\"arity\":0,\"description\":\"Construct successful completion.\",\"effects\":[],\"name\":\"ok\",\"parameters\":[],\"result\":\"Result[Void]\",\"ruby\":null,\"signature\":\"ok() -> Result[Void]\"}]}\n",
+  "stdout": "{\"name\":\"ok\",\"description\":\"Construct a successful Result.\",\"effects\":[],\"overloads\":[{\"name\":\"ok\",\"arity\":1,\"parameters\":[{\"name\":\"value\",\"type\":\"T\"}],\"result\":\"Result[T]\",\"signature\":\"ok(value: T) -> Result[T]\",\"ruby\":null,\"effects\":[],\"description\":\"Construct a successful Result.\"},{\"name\":\"ok\",\"arity\":0,\"parameters\":[],\"result\":\"Result[Void]\",\"signature\":\"ok() -> Result[Void]\",\"ruby\":null,\"effects\":[],\"description\":\"Construct successful completion.\"}]}\n",
   "written": []
  },
  "[[\"help\", \"ok\"], {}]": {
@@ -1360,7 +1360,7 @@
  "[[\"help\", \"ok?\", \"--json\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "{\"alias\":\"ok?\",\"builtins\":[{\"arity\":1,\"description\":\"Check whether a Result succeeded.\",\"effects\":[],\"name\":\"Result.ok?\",\"parameters\":[{\"name\":\"result\",\"type\":\"Result[T]\"}],\"result\":\"Bool\",\"ruby\":\"result.ok?() -> Bool\",\"signature\":\"Result.ok?(result: Result[T]) -> Bool\"},{\"arity\":1,\"description\":\"Check that a Result is ok; a failure is recorded on the test.\",\"effects\":[\"test\"],\"name\":\"Test.ok?\",\"parameters\":[{\"name\":\"result\",\"type\":\"Result[T]\"}],\"result\":\"Result[Void]\",\"ruby\":null,\"signature\":\"Test.ok?(result: Result[T]) -> Result[Void]\"}],\"hints\":{\"Optional.ok?\":\"an Optional has some? and none? (m.get(k) and s.index_of(part) give an Optional)\"}}\n",
+  "stdout": "{\"alias\":\"ok?\",\"builtins\":[{\"name\":\"Result.ok?\",\"arity\":1,\"parameters\":[{\"name\":\"result\",\"type\":\"Result[T]\"}],\"result\":\"Bool\",\"signature\":\"Result.ok?(result: Result[T]) -> Bool\",\"ruby\":\"result.ok?() -> Bool\",\"effects\":[],\"description\":\"Check whether a Result succeeded.\"},{\"name\":\"Test.ok?\",\"arity\":1,\"parameters\":[{\"name\":\"result\",\"type\":\"Result[T]\"}],\"result\":\"Result[Void]\",\"signature\":\"Test.ok?(result: Result[T]) -> Result[Void]\",\"ruby\":null,\"effects\":[\"test\"],\"description\":\"Check that a Result is ok; a failure is recorded on the test.\"}],\"hints\":{\"Optional.ok?\":\"an Optional has some? and none? (m.get(k) and s.index_of(part) give an Optional)\"}}\n",
   "written": []
  },
  "[[\"help\", \"ok?\"], {}]": {
@@ -1372,7 +1372,7 @@
  "[[\"help\", \"push\", \"--json\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "{\"alias\":\"push\",\"builtins\":[{\"arity\":3,\"description\":\"Append value to the list of key (absent counts as an empty list) and return the new length, atomically; VM only.\",\"effects\":[\"concurrency\"],\"name\":\"ATS.push\",\"parameters\":[{\"name\":\"table\",\"type\":\"ATS[K, List[E]]\"},{\"name\":\"key\",\"type\":\"K\"},{\"name\":\"value\",\"type\":\"E\"}],\"result\":\"Int\",\"ruby\":\"table.push(key: K, value: E) -> Int\",\"signature\":\"ATS.push(table: ATS[K, List[E]], key: K, value: E) -> Int\"},{\"arity\":2,\"description\":\"Return a new list with the value pushed on the end; near constant time.\",\"effects\":[],\"name\":\"List.append\",\"parameters\":[{\"name\":\"list\",\"type\":\"List[T]\"},{\"name\":\"value\",\"type\":\"T\"}],\"result\":\"List[T]\",\"ruby\":\"list.push(value: T) -> List[T]\",\"signature\":\"List.append(list: List[T], value: T) -> List[T]\"}],\"hints\":{\"Set.push\":\"sets are immutable; use s.add(x) and assign the result: s = s.add(x)\"}}\n",
+  "stdout": "{\"alias\":\"push\",\"builtins\":[{\"name\":\"ATS.push\",\"arity\":3,\"parameters\":[{\"name\":\"table\",\"type\":\"ATS[K, List[E]]\"},{\"name\":\"key\",\"type\":\"K\"},{\"name\":\"value\",\"type\":\"E\"}],\"result\":\"Int\",\"signature\":\"ATS.push(table: ATS[K, List[E]], key: K, value: E) -> Int\",\"ruby\":\"table.push(key: K, value: E) -> Int\",\"effects\":[\"concurrency\"],\"description\":\"Append value to the list of key (absent counts as an empty list) and return the new length, atomically; VM only.\"},{\"name\":\"List.append\",\"arity\":2,\"parameters\":[{\"name\":\"list\",\"type\":\"List[T]\"},{\"name\":\"value\",\"type\":\"T\"}],\"result\":\"List[T]\",\"signature\":\"List.append(list: List[T], value: T) -> List[T]\",\"ruby\":\"list.push(value: T) -> List[T]\",\"effects\":[],\"description\":\"Return a new list with the value pushed on the end; near constant time.\"}],\"hints\":{\"Set.push\":\"sets are immutable; use s.add(x) and assign the result: s = s.add(x)\"}}\n",
   "written": []
  },
  "[[\"help\", \"push\"], {}]": {
@@ -1384,7 +1384,7 @@
  "[[\"help\", \"puts\", \"--json\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "{\"arity\":1,\"description\":\"Write a value and a newline; non-String values print as in interpolation.\",\"effects\":[\"stdout\"],\"name\":\"puts\",\"parameters\":[{\"name\":\"value\",\"type\":\"T\"}],\"result\":\"Void\",\"ruby\":null,\"signature\":\"puts(value: T) -> Void\"}\n",
+  "stdout": "{\"name\":\"puts\",\"arity\":1,\"parameters\":[{\"name\":\"value\",\"type\":\"T\"}],\"result\":\"Void\",\"signature\":\"puts(value: T) -> Void\",\"ruby\":null,\"effects\":[\"stdout\"],\"description\":\"Write a value and a newline; non-String values print as in interpolation.\"}\n",
   "written": []
  },
  "[[\"help\", \"puts\"], {}]": {
@@ -1408,7 +1408,7 @@
  "[[\"help\", \"select\", \"--json\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "{\"alias\":\"select\",\"builtins\":[{\"arity\":2,\"description\":\"Lazy step: keep the items whose predicate is true.\",\"effects\":[],\"name\":\"Lazy.filter\",\"parameters\":[{\"name\":\"lazy\",\"type\":\"Lazy[A]\"},{\"name\":\"block\",\"type\":\"Fn[A, Bool]\"}],\"result\":\"Lazy[A]\",\"ruby\":\"lazy.select(block: Fn[A, Bool]) -> Lazy[A]\",\"signature\":\"Lazy.filter(lazy: Lazy[A], block: Fn[A, Bool]) -> Lazy[A]\"},{\"arity\":2,\"description\":\"Keep elements whose predicate is true, in order; O(n).\",\"effects\":[],\"name\":\"List.filter\",\"parameters\":[{\"name\":\"list\",\"type\":\"List[A]\"},{\"name\":\"block\",\"type\":\"Fn[A, Bool]\"}],\"result\":\"List[A]\",\"ruby\":\"list.select(block: Fn[A, Bool]) -> List[A]\",\"signature\":\"List.filter(list: List[A], block: Fn[A, Bool]) -> List[A]\"},{\"arity\":2,\"description\":\"Keep the entries block accepts, in insertion order; O(n).\",\"effects\":[],\"name\":\"Map.filter\",\"parameters\":[{\"name\":\"map\",\"type\":\"Map[K, V]\"},{\"name\":\"block\",\"type\":\"Fn[K, V, Bool]\"}],\"result\":\"Map[K, V]\",\"ruby\":\"map.select(block: Fn[K, V, Bool]) -> Map[K, V]\",\"signature\":\"Map.filter(map: Map[K, V], block: Fn[K, V, Bool]) -> Map[K, V]\"},{\"arity\":2,\"description\":\"List the values block accepts, in order; O(n).\",\"effects\":[],\"name\":\"Range.select\",\"parameters\":[{\"name\":\"range\",\"type\":\"Range\"},{\"name\":\"block\",\"type\":\"Fn[Int, Bool]\"}],\"result\":\"List[Int]\",\"ruby\":\"range.select(block: Fn[Int, Bool]) -> List[Int]\",\"signature\":\"Range.select(range: Range, block: Fn[Int, Bool]) -> List[Int]\"}],\"hints\":{\"Bytes.select\":\"Bytes has no select; use b.to_a.select do |x| ... end\"}}\n",
+  "stdout": "{\"alias\":\"select\",\"builtins\":[{\"name\":\"Lazy.filter\",\"arity\":2,\"parameters\":[{\"name\":\"lazy\",\"type\":\"Lazy[A]\"},{\"name\":\"block\",\"type\":\"Fn[A, Bool]\"}],\"result\":\"Lazy[A]\",\"signature\":\"Lazy.filter(lazy: Lazy[A], block: Fn[A, Bool]) -> Lazy[A]\",\"ruby\":\"lazy.select(block: Fn[A, Bool]) -> Lazy[A]\",\"effects\":[],\"description\":\"Lazy step: keep the items whose predicate is true.\"},{\"name\":\"List.filter\",\"arity\":2,\"parameters\":[{\"name\":\"list\",\"type\":\"List[A]\"},{\"name\":\"block\",\"type\":\"Fn[A, Bool]\"}],\"result\":\"List[A]\",\"signature\":\"List.filter(list: List[A], block: Fn[A, Bool]) -> List[A]\",\"ruby\":\"list.select(block: Fn[A, Bool]) -> List[A]\",\"effects\":[],\"description\":\"Keep elements whose predicate is true, in order; O(n).\"},{\"name\":\"Map.filter\",\"arity\":2,\"parameters\":[{\"name\":\"map\",\"type\":\"Map[K, V]\"},{\"name\":\"block\",\"type\":\"Fn[K, V, Bool]\"}],\"result\":\"Map[K, V]\",\"signature\":\"Map.filter(map: Map[K, V], block: Fn[K, V, Bool]) -> Map[K, V]\",\"ruby\":\"map.select(block: Fn[K, V, Bool]) -> Map[K, V]\",\"effects\":[],\"description\":\"Keep the entries block accepts, in insertion order; O(n).\"},{\"name\":\"Range.select\",\"arity\":2,\"parameters\":[{\"name\":\"range\",\"type\":\"Range\"},{\"name\":\"block\",\"type\":\"Fn[Int, Bool]\"}],\"result\":\"List[Int]\",\"signature\":\"Range.select(range: Range, block: Fn[Int, Bool]) -> List[Int]\",\"ruby\":\"range.select(block: Fn[Int, Bool]) -> List[Int]\",\"effects\":[],\"description\":\"List the values block accepts, in order; O(n).\"}],\"hints\":{\"Bytes.select\":\"Bytes has no select; use b.to_a.select do |x| ... end\"}}\n",
   "written": []
  },
  "[[\"help\", \"select\"], {}]": {
@@ -1420,7 +1420,7 @@
  "[[\"help\", \"size\", \"--json\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "{\"alias\":\"size\",\"builtins\":[{\"arity\":1,\"description\":\"Count the entries of the table (a snapshot); VM only.\",\"effects\":[],\"name\":\"ATS.size\",\"parameters\":[{\"name\":\"table\",\"type\":\"ATS[K, V]\"}],\"result\":\"Int\",\"ruby\":\"table.size() -> Int\",\"signature\":\"ATS.size(table: ATS[K, V]) -> Int\"},{\"arity\":1,\"description\":\"Count the bytes.\",\"effects\":[],\"name\":\"Bytes.length\",\"parameters\":[{\"name\":\"bytes\",\"type\":\"Bytes\"}],\"result\":\"Int\",\"ruby\":\"bytes.length() -> Int\",\"signature\":\"Bytes.length(bytes: Bytes) -> Int\"},{\"arity\":1,\"description\":\"Count list elements.\",\"effects\":[],\"name\":\"List.size\",\"parameters\":[{\"name\":\"list\",\"type\":\"List[T]\"}],\"result\":\"Int\",\"ruby\":\"list.size() -> Int\",\"signature\":\"List.size(list: List[T]) -> Int\"},{\"arity\":1,\"description\":\"Count map entries.\",\"effects\":[],\"name\":\"Map.size\",\"parameters\":[{\"name\":\"map\",\"type\":\"Map[K, V]\"}],\"result\":\"Int\",\"ruby\":\"map.size() -> Int\",\"signature\":\"Map.size(map: Map[K, V]) -> Int\"},{\"arity\":1,\"description\":\"Count the values; halts when the count does not fit in Int.\",\"effects\":[],\"name\":\"Range.size\",\"parameters\":[{\"name\":\"range\",\"type\":\"Range\"}],\"result\":\"Int\",\"ruby\":\"range.size() -> Int\",\"signature\":\"Range.size(range: Range) -> Int\"},{\"arity\":1,\"description\":\"Count set elements.\",\"effects\":[],\"name\":\"Set.size\",\"parameters\":[{\"name\":\"set\",\"type\":\"Set[T]\"}],\"result\":\"Int\",\"ruby\":\"set.size() -> Int\",\"signature\":\"Set.size(set: Set[T]) -> Int\"},{\"arity\":1,\"description\":\"Count Unicode characters.\",\"effects\":[],\"name\":\"String.length\",\"parameters\":[{\"name\":\"string\",\"type\":\"String\"}],\"result\":\"Int\",\"ruby\":\"string.length() -> Int\",\"signature\":\"String.length(string: String) -> Int\"}],\"hints\":{}}\n",
+  "stdout": "{\"alias\":\"size\",\"builtins\":[{\"name\":\"ATS.size\",\"arity\":1,\"parameters\":[{\"name\":\"table\",\"type\":\"ATS[K, V]\"}],\"result\":\"Int\",\"signature\":\"ATS.size(table: ATS[K, V]) -> Int\",\"ruby\":\"table.size() -> Int\",\"effects\":[],\"description\":\"Count the entries of the table (a snapshot); VM only.\"},{\"name\":\"Bytes.length\",\"arity\":1,\"parameters\":[{\"name\":\"bytes\",\"type\":\"Bytes\"}],\"result\":\"Int\",\"signature\":\"Bytes.length(bytes: Bytes) -> Int\",\"ruby\":\"bytes.length() -> Int\",\"effects\":[],\"description\":\"Count the bytes.\"},{\"name\":\"List.size\",\"arity\":1,\"parameters\":[{\"name\":\"list\",\"type\":\"List[T]\"}],\"result\":\"Int\",\"signature\":\"List.size(list: List[T]) -> Int\",\"ruby\":\"list.size() -> Int\",\"effects\":[],\"description\":\"Count list elements.\"},{\"name\":\"Map.size\",\"arity\":1,\"parameters\":[{\"name\":\"map\",\"type\":\"Map[K, V]\"}],\"result\":\"Int\",\"signature\":\"Map.size(map: Map[K, V]) -> Int\",\"ruby\":\"map.size() -> Int\",\"effects\":[],\"description\":\"Count map entries.\"},{\"name\":\"Range.size\",\"arity\":1,\"parameters\":[{\"name\":\"range\",\"type\":\"Range\"}],\"result\":\"Int\",\"signature\":\"Range.size(range: Range) -> Int\",\"ruby\":\"range.size() -> Int\",\"effects\":[],\"description\":\"Count the values; halts when the count does not fit in Int.\"},{\"name\":\"Set.size\",\"arity\":1,\"parameters\":[{\"name\":\"set\",\"type\":\"Set[T]\"}],\"result\":\"Int\",\"signature\":\"Set.size(set: Set[T]) -> Int\",\"ruby\":\"set.size() -> Int\",\"effects\":[],\"description\":\"Count set elements.\"},{\"name\":\"String.length\",\"arity\":1,\"parameters\":[{\"name\":\"string\",\"type\":\"String\"}],\"result\":\"Int\",\"signature\":\"String.length(string: String) -> Int\",\"ruby\":\"string.length() -> Int\",\"effects\":[],\"description\":\"Count Unicode characters.\"}],\"hints\":{}}\n",
   "written": []
  },
  "[[\"help\", \"size\"], {}]": {
@@ -1444,7 +1444,7 @@
  "[[\"help\", \"strip\", \"--json\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "{\"alias\":\"strip\",\"builtins\":[{\"arity\":1,\"description\":\"Strip surrounding whitespace.\",\"effects\":[],\"name\":\"String.strip\",\"parameters\":[{\"name\":\"string\",\"type\":\"String\"}],\"result\":\"String\",\"ruby\":\"string.strip() -> String\",\"signature\":\"String.strip(string: String) -> String\"}],\"hints\":{}}\n",
+  "stdout": "{\"alias\":\"strip\",\"builtins\":[{\"name\":\"String.strip\",\"arity\":1,\"parameters\":[{\"name\":\"string\",\"type\":\"String\"}],\"result\":\"String\",\"signature\":\"String.strip(string: String) -> String\",\"ruby\":\"string.strip() -> String\",\"effects\":[],\"description\":\"Strip surrounding whitespace.\"}],\"hints\":{}}\n",
   "written": []
  },
  "[[\"help\", \"strip\"], {}]": {
@@ -1468,7 +1468,7 @@
  "[[\"help\", \"to_i\", \"--json\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "{\"alias\":\"to_i\",\"builtins\":[{\"arity\":1,\"description\":\"Truncate toward zero; NaN, infinity or overflow return an error.\",\"effects\":[],\"name\":\"Float.to_i\",\"parameters\":[{\"name\":\"float\",\"type\":\"Float\"}],\"result\":\"Result[Int]\",\"ruby\":\"float.to_i() -> Result[Int]\",\"signature\":\"Float.to_i(float: Float) -> Result[Int]\"},{\"arity\":1,\"description\":\"Parse signed decimal Int as a Result.\",\"effects\":[],\"name\":\"String.to_i\",\"parameters\":[{\"name\":\"string\",\"type\":\"String\"}],\"result\":\"Result[Int]\",\"ruby\":\"string.to_i() -> Result[Int]\",\"signature\":\"String.to_i(string: String) -> Result[Int]\"},{\"arity\":1,\"description\":\"Return the seconds since the Unix epoch, rounded toward minus infinity, as Ruby's Time#to_i.\",\"effects\":[],\"name\":\"Time.DateTime.to_i\",\"parameters\":[{\"name\":\"time\",\"type\":\"Time.DateTime\"}],\"result\":\"Int\",\"ruby\":\"time.to_i() -> Int\",\"signature\":\"Time.DateTime.to_i(time: Time.DateTime) -> Int\"}],\"hints\":{}}\n",
+  "stdout": "{\"alias\":\"to_i\",\"builtins\":[{\"name\":\"Float.to_i\",\"arity\":1,\"parameters\":[{\"name\":\"float\",\"type\":\"Float\"}],\"result\":\"Result[Int]\",\"signature\":\"Float.to_i(float: Float) -> Result[Int]\",\"ruby\":\"float.to_i() -> Result[Int]\",\"effects\":[],\"description\":\"Truncate toward zero; NaN, infinity or overflow return an error.\"},{\"name\":\"String.to_i\",\"arity\":1,\"parameters\":[{\"name\":\"string\",\"type\":\"String\"}],\"result\":\"Result[Int]\",\"signature\":\"String.to_i(string: String) -> Result[Int]\",\"ruby\":\"string.to_i() -> Result[Int]\",\"effects\":[],\"description\":\"Parse signed decimal Int as a Result.\"},{\"name\":\"Time.DateTime.to_i\",\"arity\":1,\"parameters\":[{\"name\":\"time\",\"type\":\"Time.DateTime\"}],\"result\":\"Int\",\"signature\":\"Time.DateTime.to_i(time: Time.DateTime) -> Int\",\"ruby\":\"time.to_i() -> Int\",\"effects\":[],\"description\":\"Return the seconds since the Unix epoch, rounded toward minus infinity, as Ruby's Time#to_i.\"}],\"hints\":{}}\n",
   "written": []
  },
  "[[\"help\", \"to_i\"], {}]": {
@@ -1504,7 +1504,7 @@
  "[[\"help\", \"unwrap_or\", \"--json\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "{\"alias\":\"unwrap_or\",\"builtins\":[{\"arity\":2,\"description\":\"Return x of some(x), else default; both arguments run eagerly.\",\"effects\":[],\"name\":\"Optional.unwrap_or\",\"parameters\":[{\"name\":\"optional\",\"type\":\"Optional[T]\"},{\"name\":\"default\",\"type\":\"T\"}],\"result\":\"T\",\"ruby\":\"optional.unwrap_or(default: T) -> T\",\"signature\":\"Optional.unwrap_or(optional: Optional[T], default: T) -> T\"},{\"arity\":2,\"description\":\"Return success or default; both arguments run eagerly.\",\"effects\":[],\"name\":\"Result.unwrap_or\",\"parameters\":[{\"name\":\"result\",\"type\":\"Result[T]\"},{\"name\":\"default\",\"type\":\"T\"}],\"result\":\"T\",\"ruby\":\"result.unwrap_or(default: T) -> T\",\"signature\":\"Result.unwrap_or(result: Result[T], default: T) -> T\"}],\"hints\":{}}\n",
+  "stdout": "{\"alias\":\"unwrap_or\",\"builtins\":[{\"name\":\"Optional.unwrap_or\",\"arity\":2,\"parameters\":[{\"name\":\"optional\",\"type\":\"Optional[T]\"},{\"name\":\"default\",\"type\":\"T\"}],\"result\":\"T\",\"signature\":\"Optional.unwrap_or(optional: Optional[T], default: T) -> T\",\"ruby\":\"optional.unwrap_or(default: T) -> T\",\"effects\":[],\"description\":\"Return x of some(x), else default; both arguments run eagerly.\"},{\"name\":\"Result.unwrap_or\",\"arity\":2,\"parameters\":[{\"name\":\"result\",\"type\":\"Result[T]\"},{\"name\":\"default\",\"type\":\"T\"}],\"result\":\"T\",\"signature\":\"Result.unwrap_or(result: Result[T], default: T) -> T\",\"ruby\":\"result.unwrap_or(default: T) -> T\",\"effects\":[],\"description\":\"Return success or default; both arguments run eagerly.\"}],\"hints\":{}}\n",
   "written": []
  },
  "[[\"help\", \"unwrap_or\"], {}]": {
@@ -1516,7 +1516,7 @@
  "[[\"help\", \"value!\", \"--json\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "{\"alias\":\"value!\",\"builtins\":[{\"arity\":1,\"description\":\"Return x of some(x); halt on none.\",\"effects\":[],\"name\":\"Optional.unwrap!\",\"parameters\":[{\"name\":\"optional\",\"type\":\"Optional[T]\"}],\"result\":\"T\",\"ruby\":\"optional.unwrap!() -> T\",\"signature\":\"Optional.unwrap!(optional: Optional[T]) -> T\"},{\"arity\":1,\"description\":\"Return the success value; halt on error.\",\"effects\":[],\"name\":\"Result.unwrap!\",\"parameters\":[{\"name\":\"result\",\"type\":\"Result[T]\"}],\"result\":\"T\",\"ruby\":\"result.unwrap!() -> T\",\"signature\":\"Result.unwrap!(result: Result[T]) -> T\"}],\"hints\":{}}\n",
+  "stdout": "{\"alias\":\"value!\",\"builtins\":[{\"name\":\"Optional.unwrap!\",\"arity\":1,\"parameters\":[{\"name\":\"optional\",\"type\":\"Optional[T]\"}],\"result\":\"T\",\"signature\":\"Optional.unwrap!(optional: Optional[T]) -> T\",\"ruby\":\"optional.unwrap!() -> T\",\"effects\":[],\"description\":\"Return x of some(x); halt on none.\"},{\"name\":\"Result.unwrap!\",\"arity\":1,\"parameters\":[{\"name\":\"result\",\"type\":\"Result[T]\"}],\"result\":\"T\",\"signature\":\"Result.unwrap!(result: Result[T]) -> T\",\"ruby\":\"result.unwrap!() -> T\",\"effects\":[],\"description\":\"Return the success value; halt on error.\"}],\"hints\":{}}\n",
   "written": []
  },
  "[[\"help\", \"value!\"], {}]": {
@@ -1552,7 +1552,7 @@
  "[[\"repl\", \"--json\"], {\"stdin\": \"xs = [1, 2]\\nxs.size\\n\"}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "{\"bound\":{\"xs\":\"List[Int]\"},\"declared\":[],\"dropped\":[],\"entry\":1,\"line\":1,\"ok\":true,\"skipped\":[]}\n{\"bound\":{},\"declared\":[],\"dropped\":[],\"entry\":2,\"line\":2,\"ok\":true,\"skipped\":[],\"type\":\"Int\",\"value\":\"2\"}\n",
+  "stdout": "{\"ok\":true,\"bound\":{\"xs\":\"List[Int]\"},\"declared\":[],\"dropped\":[],\"skipped\":[],\"entry\":1,\"line\":1}\n{\"ok\":true,\"value\":\"2\",\"type\":\"Int\",\"bound\":{},\"declared\":[],\"dropped\":[],\"skipped\":[],\"entry\":2,\"line\":2}\n",
   "written": []
  },
  "[[\"repl\", \"--nope\"], {}]": {
