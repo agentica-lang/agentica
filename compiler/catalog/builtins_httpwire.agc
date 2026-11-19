@@ -24,7 +24,27 @@ ROWS: List[Model.Builtin] = [
     rule: Model.Rule.Plain,
     implementation: "HttpWire.awaited?",
     effects: [],
-    description: "Internal to std/http: false once a receiver that parked on reply left without a value.",
+    description: (
+      "Internal to std/http: false once a receiver that parked on reply left without a value; binds nothing."
+    ),
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "HttpWire.watch",
+    parameters: [
+      Model.Named(
+        name: "reply",
+        type: Types.Type.Channel(Types.Type.Result(Types.Type.Struct("HttpWire.Response", []))),
+      ),
+    ],
+    result: Types.Type.Bool,
+    rule: Model.Rule.Plain,
+    implementation: "HttpWire.watch",
+    effects: [],
+    description: (
+      "Internal to std/http: awaited?, and until the first value is sent to reply, a cancel of its parked receiver " +
+      "cancels the calling task."
+    ),
     alternatives: [],
   ),
   Model.Builtin(

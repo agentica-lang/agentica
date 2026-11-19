@@ -113,6 +113,7 @@ HttpWire.stopping
 HttpWire.upgrade_context
 HttpWire.upgrade_tls
 HttpWire.wait
+HttpWire.watch
 IO.eof?
 IO.flush
 IO.gets

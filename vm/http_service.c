@@ -1,5 +1,5 @@
 /*
- * HttpWire.service, jobs, options and awaited?, for stdlib/http.agc only: the
+ * HttpWire.service, jobs, options, awaited? and watch, for stdlib/http.agc only: the
  * task tree of an HttpWire.Client. service runs f(client), the owner task, in a
  * service root (agc_task_service): no caller's crash, cancel or end reaches it,
  * Task.pending_count and Test.test do not see it, and it owns the jobs channel.
@@ -54,11 +54,17 @@ static agc_value builtin_options(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_as_http_client(vm, args[0])->options;
 }
 
-/* HttpWire.awaited?(reply): false once the caller gave up on its reply. Asked before the answer is sent (a worker
-   before it runs the job), it binds the calling task to reply: a cancel of the caller while it waits on reply cancels
-   the worker, so the connection closes now and does not go back to the pool. The answer sent on reply ends the bond,
-   and a later ask, before the worker pools the connection, binds nothing (agc_channel_watch). */
+/* HttpWire.awaited?(reply): false once the caller gave up on its reply (agc_channel_abandoned). A pure check: the pool
+   owner asks it before it hands a job on, and a worker after it answered. */
 static agc_value builtin_awaited(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  return agc_bool(!agc_channel_abandoned(vm, agc_as_channel(vm, args[0])));
+}
+
+/* HttpWire.watch(reply): awaited?, and while it is true, binds the calling task (a worker before it runs the job) to
+   reply: a cancel of the caller while it waits on reply cancels the worker, so the connection closes now and does not
+   go back to the pool. The answer sent on reply ends the bond, and a later watch binds nothing (agc_channel_watch). */
+static agc_value builtin_watch(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   return agc_bool(agc_channel_watch(vm, agc_as_channel(vm, args[0]), vm->task));
 }
@@ -66,6 +72,7 @@ static agc_value builtin_awaited(agc_vm *vm, agc_value *args, uint32_t span) {
 const agc_builtin agc_http_service_builtins[] = {
   {"HttpWire.service", 3, builtin_service, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false, false},
   {"HttpWire.awaited?", 1, builtin_awaited, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false, false},
+  {"HttpWire.watch", 1, builtin_watch, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false, false},
   {"HttpWire.jobs", 1, builtin_jobs, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false, false},
   {"HttpWire.options", 1, builtin_options, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false, false},
 };
