@@ -9,7 +9,7 @@ source_hash: "33729807a2ad"
 
 - Usa [Test](/library/testing/test/) para las pruebas unitarias: un archivo `*_test.agc` con aserciones que devuelven un `Result`.
 - Usa [BDD](/library/testing/bdd/) para los archivos de características en Gherkin. Cada escenario inicia tu programa como un proceso aparte, le envía una entrada y comprueba su salida.
-- Usa [Perfil](/library/testing/profile/) para medir secciones de un programa, sujetar el código a un presupuesto de pasos, y escribir la entrada para los gráficos de llamas.
+- Usa [Perfil](/library/testing/profile/) para medir secciones de un programa, limitar el código a un presupuesto de pasos, y escribir la entrada para los gráficos de llamas.
 
 ## Cobertura {#coverage}
 

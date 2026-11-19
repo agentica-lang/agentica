@@ -40,4 +40,4 @@ end
 
 ## iso8601 {#iso8601}
 
-`iso8601` escribe texto RFC 3339 con el desfase `Z`. Con `fraction_digits` mayor que 0 añade esa cantidad de dígitos de los segundos después de un punto, como lo hace `iso8601(n)` de Ruby. La entrada tiene milisegundos, así que los dígitos después del tercero son `0`. Ruby escribe n dígitos para cualquier n; este módulo acota: una cantidad menor que 0 se toma como 0, y una mayor que 9 como 9. Un año fuera de 0 a 9999 se escribe con su signo y con al menos cuatro dígitos (`-0001`, `10000`).
+`iso8601` escribe texto RFC 3339 con el desfase UTC `Z`. Con `fraction_digits` mayor que 0 añade esa cantidad de dígitos de los segundos después de un punto, como lo hace `iso8601(n)` de Ruby. La entrada tiene milisegundos, así que los dígitos después del tercero son `0`. Ruby escribe n dígitos para cualquier n; este módulo acota: una cantidad menor que 0 se toma como 0, y una mayor que 9 como 9. Un año fuera de 0 a 9999 se escribe con su signo y con al menos cuatro dígitos (`-0001`, `10000`).

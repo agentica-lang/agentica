@@ -19,7 +19,7 @@ Zlib.gunzip(data: Bytes, max_bytes: Int = 1048576) -> Result[Bytes]
 Zlib.crc32(data: Bytes, seed: Int = 0) -> Result[Int]
 ```
 
-`Zlib.deflate` comprime bytes al envoltorio zlib y `Zlib.gzip` a gzip, con `level` de 0 a 9; una entrada vacía es válida y da el flujo o el miembro vacíos. `Zlib.inflate` descomprime un flujo, comprobando la suma Adler, y `Zlib.gunzip` cada miembro de un archivo gzip, comprobando el CRC y el tamaño de cada uno. Una entrada comprimida vacía falla.
+`Zlib.deflate` comprime bytes al envoltorio zlib y `Zlib.gzip` a gzip, con `level` de 0 a 9; una entrada vacía es válida y da el flujo o el miembro vacíos. `Zlib.inflate` descomprime un flujo, comprobando la suma de comprobación Adler, y `Zlib.gunzip` cada miembro de un archivo gzip, comprobando el CRC y el tamaño de cada uno. Una entrada comprimida vacía falla.
 
 ```agentica {mode="check"}
 def main() -> Void
@@ -65,7 +65,7 @@ lazy.gunzip(max_bytes: Int = 1073741824) -> Lazy[Bytes]
 lazy.write_bytes(path: String, timeout_ms: Int = 30000) -> Result[Int]
 ```
 
-Un flujo es un `Lazy[Bytes]` de trozos de bytes. [`File.chunks`](/library/data-structures/lazy/#filechunks) lee un archivo regular en trozos, los cuatro pasos comprimen o descomprimen los trozos que pasan, y `write_bytes` los escribe en un archivo, creado o truncado, y devuelve los bytes escritos. La memoria queda acotada a un trozo, así que un archivo que supera de largo el límite de 1 MiB de las llamadas de bytes se convierte sin retenerlo en memoria.
+Un flujo es un `Lazy[Bytes]` de trozos de bytes. [`File.chunks`](/library/data-structures/lazy/#filechunks) lee un archivo regular en trozos, los cuatro pasos comprimen o descomprimen los trozos que pasan, y `write_bytes` los escribe en un archivo, creado o truncado, y devuelve los bytes escritos. La memoria queda acotada a un trozo, así que un archivo que supera con creces el límite de 1 MiB de las llamadas de bytes se convierte sin retenerlo en memoria.
 
 ```agentica {mode="check"}
 def main() -> Void

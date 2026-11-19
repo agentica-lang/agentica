@@ -7,7 +7,7 @@ source_hash: "0c2ef488c2a6"
 
 `System.Profile` es un miembro integrado de `System`; no necesita importación. `System.Profile.measure` da nombre a una sección de un programa para el perfil, y `System.Profile.steps` cuenta los pasos de la tarea en ejecución. Ambos funcionan igual tanto si el perfil está activado como si está desactivado, así que pueden quedarse en el código.
 
-Los pasos son la unidad de trabajo de la VM: lo que cuenta `--max-steps`. Se repiten exactamente de una ejecución a otra, así que son los números que conviene comparar. El tiempo real cambia con la máquina y su carga.
+Los pasos son la unidad de trabajo de la VM: lo que cuenta `--max-steps`. Se repiten exactamente de una ejecución a otra, así que son los números que conviene comparar. El tiempo de reloj cambia con la máquina y su carga.
 
 ## System.Profile.measure {#systemprofilemeasure}
 
@@ -63,9 +63,9 @@ end
 Sin el perfil, una medida es una llamada al bloque: un paso y el trabajo propio del bloque. Con el perfil activado (abajo), cada etiqueta obtiene una fila `section`:
 
 - `calls`: cuántas veces se ejecutó una medida de la etiqueta.
-- `steps`, `us`, `gc_ms`: los pasos de la tarea, el tiempo real en microsegundos y el tiempo del recolector de basura en milisegundos, desde el inicio del bloque hasta su final.
+- `steps`, `us`, `gc_ms`: los pasos de la tarea, el tiempo de reloj en microsegundos y el tiempo del recolector de basura en milisegundos, desde el inicio del bloque hasta su final.
 
-Las secciones son inclusivas: una sección contiene las secciones anidadas en ella, así que `outer` de abajo cuenta también los pasos de ambas llamadas a `inner`. Una etiqueta que se ejecuta dentro de sí misma en la misma tarea (recursión) cuenta cada llamada, pero sus pasos y su tiempo solo una vez, para la llamada más externa. Los pasos son los de la tarea que ejecuta la medida, así que una medida en una tarea cuenta solo los pasos de esa tarea; el tiempo es tiempo real, y sigue corriendo mientras la tarea espera. Una medida cuyo bloque termina en un error de runtime o en una cancelación cuenta como una llamada sin pasos.
+Las secciones son inclusivas: una sección contiene las secciones anidadas en ella, así que `outer` de abajo cuenta también los pasos de ambas llamadas a `inner`. Una etiqueta que se ejecuta dentro de sí misma en la misma tarea (recursión) cuenta cada llamada, pero sus pasos y su tiempo solo una vez, para la llamada más externa. Los pasos son los de la tarea que ejecuta la medida, así que una medida en una tarea cuenta solo los pasos de esa tarea; el tiempo es tiempo de reloj, y sigue corriendo mientras la tarea espera. Una medida cuyo bloque termina en un error de runtime o en una cancelación cuenta como una llamada sin pasos.
 
 ```agentica
 def work(n: Int) -> Int
@@ -100,7 +100,7 @@ end
 System.Profile.steps() -> Int
 ```
 
-Los pasos que la tarea en ejecución ha ejecutado hasta ahora. La cantidad es la misma en cada ejecución del mismo trabajo, con o sin perfil, así que una prueba puede sujetar el código a un presupuesto de pasos. Cada tarea tiene su propia cantidad.
+Los pasos que la tarea en ejecución ha ejecutado hasta ahora. La cantidad es la misma en cada ejecución del mismo trabajo, con o sin perfil, así que una prueba puede limitar el código a un presupuesto de pasos. Cada tarea tiene su propia cantidad.
 
 ```agentica
 def work(n: Int) -> Int
@@ -177,7 +177,7 @@ main@app.agc:25;Int.times;block@app.agc:40:11 1000
 ```
 
 - Una función es `name@FILE:LINE`, un bloque `block@FILE:LINE:COL`, una lambda `lambda@FILE:LINE:COL`, un bucle o callback nativo (`Int.times`, `List.map`) el nombre de su integrado, y un `System.Profile.measure` es `measure:LABEL`.
-- La VM toma una muestra de la pila de la tarea en ejecución cada 1000 pasos, cada una con un peso de 1000. `AGENTICA_PROFILE_SAMPLE=N` fija N (de 1 a 1000000000); `AGENTICA_PROFILE_SAMPLE=1` cuenta cada paso, y entonces los pesos suman los `steps` del informe.
+- La VM toma una muestra de la pila de la tarea en ejecución cada 1000 pasos, cada una con un peso de 1000. `AGENTICA_PROFILE_SAMPLE=N` fija N (de 1 a 1.000.000.000); `AGENTICA_PROFILE_SAMPLE=1` cuenta cada paso, y entonces los pesos suman los `steps` del informe.
 - El muestreo cuenta pasos, no tiempo, así que el archivo es el mismo en cada ejecución del mismo programa, en cualquier sistema. No hay peso de tiempo, ya que cambiaría de una ejecución a otra.
 - Las pilas de más de 512 frames conservan las mitades externa e interna alrededor de un frame `...`. Un `;`, un `%` o un carácter de control en un nombre se escribe como `%XX` (`%3B`, `%25`), así que dos pilas distintas nunca comparten una línea.
 - El archivo guarda hasta 1.048.576 pilas distintas (y 256 MiB de frames). Pasado eso, el peso de cada pila nueva va a una única línea `[truncated]` al final, y le sigue una línea `agc-trace folded profile full`.
