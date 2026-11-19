@@ -390,6 +390,7 @@ static void check_function(reader *r, const agc_program *p, const agc_function *
         check_register(r, in.b, f);
         break;
       case AGC_OP_RETURN:
+      case AGC_OP_NO_MATCH:
         check_register(r, in.a, f);
         break;
       default:

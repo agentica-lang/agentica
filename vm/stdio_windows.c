@@ -27,12 +27,13 @@
 #define CANCEL_TRIES 10
 
 /* The flush of one standard C stream on a thread of its own (agc_stdio_flush): THREAD while it may still run, LOCKED,
-   an event the thread sets once it holds the stream's lock, and RESULT, an agc_stdio_flush_result, once it ended. Only
+   an event the thread sets once it holds the stream's lock, and RESULT, an agc_stdio_flush_result, once it ended, with
+   ERR, the thread's errno of a failed flush, which flusher_end hands to the caller's errno, as POSIX keeps it. Only
    the main thread starts one, at the end of the run, and it closes both handles once the thread has ended. */
 typedef struct {
   FILE *stream;
   HANDLE thread, locked;
-  atomic_int result;
+  atomic_int result, err;
 } stdio_flusher;
 
 /* A pipe that libuv writes, one request at a time. libuv writes a pipe that was not opened for overlapped I/O on a
@@ -138,17 +139,40 @@ static ssize_t console_write(HANDLE console, const uint8_t *data, size_t n, agc_
   return failed ? -1 : (ssize_t)n;
 }
 
+/* The UCRT's _write and fflush map ERROR_NO_DATA (a pipe whose reader closed) to EINVAL, so a failure of one of them
+   whose system error is ERROR_NO_DATA or ERROR_BROKEN_PIPE gets EPIPE, on the thread of the call, which keeps
+   _doserrno. */
+static void pipe_errno(void) {
+  if (_doserrno == ERROR_NO_DATA || _doserrno == ERROR_BROKEN_PIPE) errno = EPIPE;
+}
+
+static ssize_t crt_write(int fd, const uint8_t *data, size_t n) {
+  int done = _write(fd, data, (unsigned)n);
+  if (done < 0) pipe_errno();
+  return done;
+}
+
 ssize_t agc_stdio_write(int fd, const uint8_t *data, size_t n, agc_utf8_cut *cut) {
   DWORD mode;
   HANDLE handle = (HANDLE)_get_osfhandle(fd);
   if (handle != INVALID_HANDLE_VALUE && GetConsoleMode(handle, &mode)) return console_write(handle, data, n, cut);
-  return _write(fd, data, (unsigned)n);
+  return crt_write(fd, data, n);
+}
+
+/* EPIPE from crt_write, agc_stdio_failed or the flush thread; UV_EPIPE from pipe_written. */
+bool agc_stdio_gone(int err) { return err == EPIPE || err == UV_EPIPE; }
+
+void agc_stdio_failed(void) {
+  if (errno == EINVAL) pipe_errno();
 }
 
 static void pipe_closed(uv_handle_t *handle) { free(handle->data); }
 
+/* libuv's write completion maps ERROR_NO_DATA (the reader closed) to UV_EAGAIN and ERROR_BROKEN_PIPE to UV_EOF; a write
+   gets neither for any other reason, so both are UV_EPIPE. */
 static void pipe_written(uv_write_t *req, int status) {
   pipe_stream *w = (pipe_stream *)((char *)req - offsetof(pipe_stream, req));
+  if (status == UV_EAGAIN || status == UV_EOF) status = UV_EPIPE;
   if (w->done) w->done(w->data, status);
 }
 
@@ -285,7 +309,7 @@ bool agc_stdio_try_first(const agc_output *s) {
   return false;
 }
 
-ssize_t agc_stdio_try(agc_output *s, const uint8_t *data, size_t n) { return _write(s->fd, data, (unsigned)n); }
+ssize_t agc_stdio_try(agc_output *s, const uint8_t *data, size_t n) { return crt_write(s->fd, data, n); }
 
 /* Writes the bytes of two ranges (a ring that wrapped) as one request. They must stay unchanged until done runs, with
    the status of libuv: 0 when all went out. done also runs at once when libuv refuses the request. */
@@ -569,6 +593,8 @@ static unsigned __stdcall flush_stream(void *arg) {
   while (fflush(f->stream) != 0) {
     if (errno != EINTR) {
       result = AGC_STDIO_FAILED;
+      pipe_errno();
+      atomic_store(&f->err, errno);
       break;
     }
     clearerr(f->stream);
@@ -583,7 +609,9 @@ static agc_stdio_flush_result flusher_end(stdio_flusher *f) {
   CloseHandle(f->thread);
   CloseHandle(f->locked);
   f->thread = f->locked = NULL;
-  return (agc_stdio_flush_result)atomic_load(&f->result);
+  agc_stdio_flush_result result = (agc_stdio_flush_result)atomic_load(&f->result);
+  if (result == AGC_STDIO_FAILED) errno = atomic_load(&f->err);
+  return result;
 }
 
 agc_stdio_flush_result agc_stdio_flush(FILE *stream) {

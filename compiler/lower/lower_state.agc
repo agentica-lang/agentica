@@ -103,6 +103,8 @@ struct Fx
   loop_next: Int
   loop_exit: Int
   pending: List[Ir.Instr]
+  # The out-of-line code after the function's own (trap): the `no-match` of each case that may match no arm.
+  traps: List[Ir.Instr]
   file: Int
   blocks: Map[Int, Ir.Function]
   block_count: Int
@@ -125,6 +127,7 @@ def fresh(file: Int, blocks: Map[Int, Ir.Function], block_count: Int) -> Fx
     loop_next: -1,
     loop_exit: -1,
     pending: [],
+    traps: [],
     file: file,
     blocks: blocks,
     block_count: block_count,
@@ -145,6 +148,18 @@ end
 ## The state with an instruction emitted. The spans are those the VM reports an error or a stack frame at.
 def emit(fx: Fx, op: String, args: List[Int], spans: List[Source.Span]) -> Fx
   fx.with(code: fx.code.push(Ir.instr(op, args, fx.file, spans)))
+end
+
+## The state with a `no-match` on register value at label id, out of line: lower_function puts it after the function's
+## code, with a `return` after it, as a function ends with one.
+def trap(fx: Fx, id: Int, value: Int, span: Source.Span) -> Fx
+  code = [
+    Ir.label(id, fx.file),
+    Ir.instr("no-match", [value], fx.file, [span]),
+    Ir.instr("return", [value], fx.file, [span]),
+  ]
+
+  fx.with(traps: fx.traps.concat(code))
 end
 
 ## The state with an instruction that has one span.

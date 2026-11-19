@@ -1720,6 +1720,7 @@ static void code_load_tests(void) {
     {"exact_window", BASE, 2, 2, {{AGC_OP_LIST, 0, 0, 2}, RETURN0}, {0}, NULL},
     {"bad_list_len", BASE, 0, 2, {{AGC_OP_LIST_LEN, 0, 1, 0}, RETURN0}, {0}, "register out of range"},
     {"bad_list_get", BASE, 0, 2, {{AGC_OP_LIST_GET, 0, 0, 1}, RETURN0}, {0}, "register out of range"},
+    {"bad_no_match", BASE, 0, 2, {{AGC_OP_NO_MATCH, 1, 0, 0}, RETURN0}, {0}, "register out of range"},
     {"bad_field without tables", BASE, 0, 2, {{AGC_OP_FIELD, 0, 0, 2}, RETURN0}, {0}, "field index out of range"},
     {"value_without_step", BASE, 0, 2, {{AGC_OP_CALL_VALUE, 0, 0, 0}, RETURN0}, {0}, "does not start with STEP"},
     {"value_window", BASE, 0, 3, {STEP1, {AGC_OP_CALL_VALUE, 0, 1, 0}, RETURN0}, {1}, "register range"},
@@ -2341,6 +2342,17 @@ int main(void) {
   agc_outcome missing = run_with_tables(map_get_missing, missing_spans, 5, stdout);
   assert(missing.kind == AGC_FAILED && strcmp(missing.code, "RUNTIME-KEY-NOT-FOUND") == 0 && missing.span == 2);
   assert(strcmp(missing.message, "key 1 is not in the map") == 0);
+  static const agc_instr no_arm[] = {
+    {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_CONST, 0, 0, 0}, {AGC_OP_NO_MATCH, 0, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  static const uint32_t no_arm_spans[] = {1, 0, 2, 0};
+  s = base();
+  s.code = no_arm;
+  s.code_spans = no_arm_spans;
+  s.count = 4;
+  s.registers = 1;
+  agc_outcome unmatched = run_spec(s, stdout);
+  assert(unmatched.kind == AGC_FAILED && strcmp(unmatched.code, "RUNTIME-CASE-NO-MATCH") == 0 && unmatched.span == 2);
+  assert(strcmp(unmatched.message, "no case arm matches 1") == 0);
   static const agc_instr map_puts[] = {
     {AGC_OP_STEP, 1, 0, 0},    {AGC_OP_CONST, 0, 0, 0}, {AGC_OP_CONST, 1, 0, 0}, {AGC_OP_MAP, 3, 0, 1},
     {AGC_OP_MAP_GET, 2, 3, 0}, {AGC_OP_MAP, 0, 2, 1},   {AGC_OP_CALL_BUILTIN, 0, 0, 0},
