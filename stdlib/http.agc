@@ -3976,9 +3976,9 @@ def gone(pool: Pool, message: HttpWire.Job) -> Pool
   next_waiting(pool, message.origin)
 end
 
-# The oldest waiting job that still has time goes out, if a worker or a slot takes it. The caller of a job past its
-# deadline has returned its timeout already, so such a job is dropped. A job whose caller gave up on its reply goes
-# out, and its worker drops it without sending it (work).
+# The oldest waiting job that still has time goes out, if a worker or a slot takes it. A job past its deadline (its
+# caller has returned its timeout already) is dropped, and so is one whose caller gave up on its reply (cancelled, or
+# its wait timed out), as in dispatch.
 def next_waiting(pool: Pool, key: String) -> Pool
   origin = origin_of(pool, key)
   while queued(origin) > 0

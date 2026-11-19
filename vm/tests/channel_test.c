@@ -1,8 +1,8 @@
 /*
  * The Channel builtins, called directly with hand-made tasks and no bytecode: ring growth, turn cost, wrap-around,
- * capacity and waiter order, a monitor's notice past the capacity, abandoned channels, HttpWire.awaited? and the bond
- * of the worker's HttpWire.watch, when a wait's clock starts, and addresses (one per channel, a send that waits,
- * closed, another run, a channel the collector freed). All of it again in a shared VM, where the channel and timer locks are real.
+ * capacity and waiter order, a monitor's notice past the capacity, abandoned channels, HttpWire.awaited? and watch,
+ * when a wait's clock starts, and addresses (one per channel, a send that waits, closed, another run, a freed channel).
+ * All of it again in a shared VM, where the channel and timer locks are real.
  */
 #include "../core.h"
 #include "test_support.h"
