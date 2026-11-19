@@ -8,6 +8,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- The documentation site has a Spanish home page at `/es/` (#1886).
+
 ## [0.35.0] - 2026-11-19
 
 ### Added

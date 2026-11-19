@@ -2,12 +2,33 @@
 # merge takes its [outputs], [markup] and [minify] defaults too; this file sets only what is the site's own.
 _merge = "deep"
 baseURL = "https://www.agentica-lang.com/agentica/"
-locale = "en"
-title = "Agentica"
 theme = "docs-theme"
 disableKinds = ["taxonomy", "term", "rss"]
 # The sitemap dates each page by its last commit (pages.yml checks out the whole history).
 enableGitInfo = true
+# English at the root, Spanish under /es/. Each language has its own content mount below.
+defaultContentLanguage = "en"
+defaultContentLanguageInSubdir = false
+
+[languages.en]
+label = "English"
+locale = "en"
+title = "Agentica"
+weight = 1
+
+[languages.en.params]
+  ogLocale = "en_US"
+
+[languages.es]
+label = "Español"
+locale = "es"
+title = "Agentica"
+weight = 2
+
+[languages.es.params]
+  ogLocale = "es_ES"
+  description = "Agentica es Ruby con tipos estáticos: sintaxis parecida a Ruby, comprobada antes de ejecutar, con valores inmutables."
+  tagline = "Ruby con tipos estáticos"
 
 [params]
   description = "Agentica is Ruby with static types: Ruby-like syntax, checked before running, with immutable values."
@@ -28,6 +49,15 @@ enableGitInfo = true
 [[module.mounts]]
   source = "content"
   target = "content"
+  [module.mounts.sites.matrix]
+    languages = ["en"]
+
+# The Spanish pages. The English-only parts (the language specification, the adapter in content/) are not mounted here.
+[[module.mounts]]
+  source = "content.es"
+  target = "content"
+  [module.mounts.sites.matrix]
+    languages = ["es"]
 
 [[module.mounts]]
   source = "assets"

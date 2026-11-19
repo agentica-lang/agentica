@@ -41,6 +41,9 @@ MAKEFILE = (
     "\t@if [ -n '$(HUGO_PARAMS_VERSIONS_ENABLED)' ]; then mkdir -p site/public/_versions;"
     " echo js > site/public/_versions/selector.js; echo css > site/public/_versions/selector.css; fi\n"
     "\tprintf '<urlset></urlset>' > site/public/sitemap.xml\n"
+    "\t@if [ -e site/content.es ]; then mkdir -p site/public/es; printf '<html lang=es><head><link rel=alternate hreflang=en href=https://example.org/docs/><link rel=alternate hreflang=es href=https://example.org/docs/es/></head>"
+    "<body>es</body></html>' > site/public/es/index.html; printf '<urlset></urlset>' > site/public/es/sitemap.xml;"
+    " printf '<html lang=en><head><link rel=alternate hreflang=en href=https://example.org/docs/><link rel=alternate hreflang=es href=https://example.org/docs/es/></head><body>root</body></html>' > site/public/index.html; fi\n"
     "\tgit rev-parse --is-inside-work-tree > site/public/git.txt\n"
 )
 
@@ -120,6 +123,41 @@ def build(tmp_path, monkeypatch):
         "--tools", str(tmp_path / "tools"), "--base-url", "https://example.org/docs",
     ])
     return code, tmp_path / "out", runs.read_text().count("run") if runs.exists() else 0
+
+
+def spanish_release(repo, version):
+    """A release with a Spanish site (site/content.es), which the fixture's `make site` builds into es/."""
+    (repo / "site" / "content.es").mkdir(exist_ok=True)
+    (repo / "site" / "content.es" / "_index.md").write_text("Hola\n")
+    release(repo, version, version)
+
+
+def spanish_build(repo, tmp_path, monkeypatch):
+    """Two releases with a Spanish site, then the build; dev is the working tree, which has one too."""
+    spanish_release(repo, "0.13.0")
+    spanish_release(repo, "0.14.0")
+    code, out, _ = build(tmp_path, monkeypatch)
+    assert code == 0
+    return out
+
+
+def test_a_version_with_a_spanish_copy_lists_its_languages(repo, tmp_path, monkeypatch):
+    out = spanish_build(repo, tmp_path, monkeypatch)
+    entries = {entry["version"]: entry for entry in json.loads((out / "versions.json").read_text())}
+    for version in ("dev", "0.14.0", "0.13.0"):
+        assert entries[version]["languages"] == ["en", "es"]
+    assert "languages" not in entries["0.10.0"]
+
+
+def test_a_spanish_copy_loses_its_sitemaps_and_alternates_and_the_root_keeps_them(repo, tmp_path, monkeypatch):
+    out = spanish_build(repo, tmp_path, monkeypatch)
+    for folder in ("0.13.0", "dev"):
+        assert not list((out / folder).rglob("sitemap.xml"))
+        for page in ("index.html", "es/index.html"):
+            assert "hreflang" not in (out / folder / page).read_text().split("</head>")[0]
+    assert (out / "sitemap.xml").exists() and (out / "es" / "sitemap.xml").exists()
+    root_head = (out / "es" / "index.html").read_text().split("</head>")[0]
+    assert root_head.count("hreflang=es") == 1 and root_head.count("hreflang=en") == 1
 
 
 def test_pins_come_from_the_real_workflow():

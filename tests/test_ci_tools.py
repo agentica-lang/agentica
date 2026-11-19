@@ -123,6 +123,12 @@ def test_a_portable_std_module_with_its_tests_and_docs_takes_the_light_path(tree
     assert tests == sorted(tests) and out["std_fixtures"] == "uses-port"
 
 
+def test_a_spanish_page_is_docs_and_takes_the_light_path_too(tree):
+    out = changes.classify(["stdlib/port.agc", "tests/std/port_test.agc", "tests/fixtures/port/driver.agc",
+                            "site/content.es/_index.md"], tree)
+    assert out["std_only"] and "tests/test_std_port.py" in out["std_tests"].split()
+
+
 def test_a_change_to_the_programming_skill_adds_the_skill_catalog(tree):
     skill = ".agents/skills/agentica-programming/references/port.md"
     assert "tests/test_skill_catalog.py" in changes.classify(["stdlib/port.agc", skill], tree)["std_tests"].split()
