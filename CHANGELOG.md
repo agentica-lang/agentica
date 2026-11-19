@@ -8,39 +8,47 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.35.0] - 2026-11-19
+
 ### Added
 
-- `==` and `!=` compare two `JSON.Value`s, as Ruby's `Hash#==` does: object keys in any order, arrays in order, and numbers by value (`1 == 1.0`, `-0.0 == 0.0`); a list, map or struct that holds one has equality too, and `Test.eq` and the BDD step `I receive a JSON line` compare the same way (#1878).
-- `Process.pid(p)` gives the OS process id of a child, and an error once it has exited and was reaped (#1868).
-- `System.program_name()` gives the path of the main program as it was given, the `.agc` or the `.agcb` file, as Ruby's `$PROGRAM_NAME` (#1869).
-- `Path.replace(from, to)` renames a file over another in one step, as Ruby's `File.rename` does: a file or a link at `to` is replaced, a directory is an error, and `from` is synced first (#1865).
-- `agentica add NAME OWNER/REPO` takes a GitHub repository as `OWNER/REPO` (stored as the full URL), and a tag `NAME-X.Y.Z` with no `--subdir` takes the folder `NAME` when the package is there (#1833).
-- Dates and times as checked builtin records of the `Time` family: `Time.Date`, `Time.TimeOfDay`, `Time.NaiveDateTime` and `Time.DateTime` (at a fixed UTC offset), built by `Time.Date.new` and the like, with `Time.Date.leap?` and `Time.Date.days_in_month`; a construction or `.with` of one is the new `CHECK-NOT-CONSTRUCTIBLE` (#985).
-- Unix time and offsets in the `Time` family: `Time.at`, `Time.at_us` and `Time.now` give a `Time.DateTime`, which has the methods `to_i`, `to_us`, `getutc`, `getlocal`, `naive_of` and `to_date`; a `Time.NaiveDateTime` has `assume_offset` and `to_date` (#985).
-- ISO 8601 text in the `Time` family: `x.iso8601` writes any of the four types (RFC 3339 for a `Time.DateTime`, six fraction digits), and `Time.Date.iso8601(text)` and the like read it back as a Result (#985).
-- Arithmetic and queries in the `Time` family: `add_days`, `add_us`, `days_between`, `us_between`, `cwday` and `yday`, and `Time.compare`, `Time.compare_naive`, `Time.compare_date` and `Time.compare_time` (-1, 0 or 1); the `==` error on a `Time.DateTime` names `Time.compare` (#985).
-- `x.strftime(format)` writes any of the four `Time` types with a subset of Ruby's directives (`%Y %m %d %H %M %S %L %N %z %:z %j %u %w %a %A %b %B %%`), English names and no flags or widths (#985).
-- A dependency can be a whole workspace repository under one name: `finn = { git, tag, workspace = true }` locks every member as `finn/MEMBER`, installs it to `deps/finn/MEMBER/` and is imported as `pkg/finn/MEMBER/MODULE`, so the names of the members stay free for the project; members that depend on each other by `subdir` get the members of the same workspace; `agentica add NAME URL --tag TAG --workspace` writes it (#1850).
+- `==` and `!=` compare two `JSON.Value`s: object keys in any order, numbers by value (`1 == 1.0`); `Test.eq` compares the same way (#1878).
+- `Process.pid(p)` gives the OS process id of a child (#1868).
+- `System.program_name()` gives the path of the main program as it was given (#1869).
+- `Path.replace(from, to)` renames a file over another in one step (#1865).
+- `agentica add NAME OWNER/REPO` takes a GitHub repository, and a tag `NAME-X.Y.Z` with no `--subdir` takes the folder `NAME` when the package is there (#1833).
+- `Time.Date`, `Time.TimeOfDay`, `Time.NaiveDateTime` and `Time.DateTime`: dates and times as checked builtin records (#985).
+- `Time.at`, `Time.at_us` and `Time.now` give a `Time.DateTime`, with offsets, `to_i`, `to_us`, `getutc` and `getlocal` (#985).
+- `x.iso8601` writes any `Time` type, and `Time.Date.iso8601(text)` and the like read it back as a Result (#985).
+- Date arithmetic and queries: `add_days`, `add_us`, `days_between`, `us_between`, `cwday`, `yday` and `Time.compare` (#985).
+- `x.strftime(format)` writes a `Time` type with a subset of Ruby's directives (#985).
+- A dependency can be a whole workspace repository under one name: `finn = { git, tag, workspace = true }`; `agentica add NAME URL --tag TAG --workspace` writes it (#1850).
 - `agentica install` fetches the packages of one repository, pin and commit with one `git fetch` (#1850).
 - Install with Nix: getting started has a flake that fetches the release archives.
 
 ### Changed
 
-- **Breaking:** JSON objects keep their key order everywhere, as Ruby does: `JSON.from`, `JSON.object`, `JSON.parse`, a decoded `Map` and `JSON.node` no longer sort keys, so a struct writes its fields in declaration order whether alone or in a list, and `JSON.encode(JSON.parse(x))` keeps the order of `x`, so it no longer compares two texts regardless of key order (use `==` on the parsed values); `--json` diagnostics and reports list their keys in field order (#1760).
-- **Breaking:** `HTTP.download`, `HTTP.read_body` and `HTTP.open` have no body limit by default: `DownloadOptions.timeout_ms` and `max_total_bytes` are `Optional[Int]`, `none` by default and with no upper bound, and `download` writes to a hidden `.agc-part` file that replaces `path` in one step only after a clean end (a failure removes it; a cancelled or killed download can leave it), with an optional `sha256:` check (`http.digest`) (#1865).
-- **Breaking:** log times have six fraction digits (`2026-10-12T10:15:02.345000Z`, was `.345Z`), and `Logger.time_text` halts outside the years 1 to 9999 (#985).
+- **Breaking:** JSON objects keep their key order: `JSON.from`, `JSON.parse` and the like no longer sort keys, so `JSON.encode(JSON.parse(x))` is not canonical; use `==` on the parsed values (#1760).
+- **Breaking:** `--json` diagnostics and reports list their keys in field order (#1760).
+- **Breaking:** `HTTP.download`, `HTTP.read_body` and `HTTP.open` have no body limit by default (#1865).
+- `HTTP.download` writes a hidden `.agc-part` file and replaces `path` in one step after a clean end, with an optional `sha256:` check (#1865).
+- **Breaking:** a 0.34 VM rejects a `.agcb` built by 0.35, because nearly every one holds the new `RUNTIME-CASE-NO-MATCH` trap (#1823).
+- **Breaking:** log times have six fraction digits (`2026-10-12T10:15:02.345000Z`, was `.345Z`) (#985).
 - A source of `agentica add` that is neither an `https://` URL nor `OWNER/REPO` is `PKG-SOURCE-INVALID` (exit 1), no longer a usage error (exit 2) (#1833).
 
 ### Deprecated
 
-- `std/utc`: use the builtin `Time` dates and times; it is removed in 0.36.0 (#985).
+- `std/utc`: use the builtin `Time`; it is removed in 0.36.0 (#985).
+
+### Fixed
+
+- A program whose standard output or error loses its reader (`prog | head`) ends quietly with status 141 instead of a `RUNTIME-INTERNAL` error (#1455).
+- A `case` that matches no arm fails with the new `RUNTIME-CASE-NO-MATCH` at the case instead of going on with a stale value (#1823).
 
 ## [0.34.2] - 2026-11-18
 
 ### Fixed
 
-- A program whose standard output or error loses its reader (`prog | head`) ends quietly with status 141, as SIGPIPE ends a Unix tool, instead of a `RUNTIME-INTERNAL` error (#1455).
-- A `case` that matches no arm, which only a checker bug allows, fails with the new `RUNTIME-CASE-NO-MATCH` at the case instead of going on with a stale value; a 0.34 VM rejects a 0.35 `.agcb` that holds this trap, which is nearly every one, through the prelude (#1823).
 - A task cancelled while `HTTP.get_response`, `HTTP.post_response` or a call on an `HTTP.client` waits for the answer closes the connection at once, instead of when the server answers; a pooled connection does not go back to the pool (#1860).
 
 ## [0.34.1] - 2026-11-17
@@ -1741,7 +1749,8 @@ First release of Agentica, a statically typed language designed for AI agents.
 - `main` returns `Void`; maps preserve insertion order and support fallible
   lookups.
 
-[unreleased]: https://github.com/agentica-lang/agentica/compare/0.34.2...HEAD
+[unreleased]: https://github.com/agentica-lang/agentica/compare/0.35.0...HEAD
+[0.35.0]: https://github.com/agentica-lang/agentica/compare/0.34.2...0.35.0
 [0.34.2]: https://github.com/agentica-lang/agentica/compare/0.34.1...0.34.2
 [0.34.1]: https://github.com/agentica-lang/agentica/compare/0.34.0...0.34.1
 [0.34.0]: https://github.com/agentica-lang/agentica/compare/0.33.2...0.34.0
