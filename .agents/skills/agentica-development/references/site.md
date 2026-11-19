@@ -67,6 +67,28 @@ rule that a site page shows.
 - The programming skill is for agents and is not published.
 - Links to the GitHub repo are shown only when `params.repoPublic` is true.
 
+## Spanish pages
+
+`site/content.es/` holds the Spanish pages, each at the path of its English
+page in `site/content/`. The English page is the source: a change of meaning
+goes into English first. The rules, the glossary and the workflow are in
+`.agents/skills/docs-i18n/`.
+
+- `make site-translations` runs `tools/site_translations.py check`. It fails
+  on a structure error (headings, code blocks, links, shortcodes, front matter,
+  a Spanish page with no English page). A stale page is a warning, which
+  `check --strict` turns into a failure.
+- A page is stale when its English file changed after its `source_hash` was
+  stamped. Its readers see a note that links to the English page.
+- `pages.yml` runs `check --built` on the built site: the note must be on
+  exactly the stale pages.
+- `stamp FILE...` writes the hash of the English file into the Spanish page's
+  `source_hash`. `status` prints the coverage: the missing and the stale pages.
+
+A change to an English page makes its Spanish page stale. That is a warning,
+so the PR does not have to translate it. A later PR updates the Spanish page
+and runs `stamp` on it. Do not edit `source_hash` by hand.
+
 ## Markdown and llms.txt
 
 Every page is also published as Markdown, and `/llms.txt` and
