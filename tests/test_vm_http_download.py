@@ -202,7 +202,8 @@ def fetch(job: Job) -> Result[HTTP.Download]
 end
 
 def growing?(folder: String) -> Bool
-  names = Dir.list(folder).unwrap_or([])
+  empty: List[String] = []
+  names = Dir.list(folder).unwrap_or(empty)
   names.any? do |name: String| name.end_with?(".agc-part") end
 end
 
