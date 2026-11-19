@@ -137,6 +137,7 @@ end
 
 private
 
+# Whether `line` is a crash line of the VM (vm/diag.c), field for field and in its key order.
 def vm_shape?(line: String, task: Bool) -> Bool
   parsed = JSON.parse(line)
   return false if not parsed.ok?
@@ -148,7 +149,7 @@ def vm_shape?(line: String, task: Bool) -> Bool
     "code": JSON.from(text_of(root, "code")),
     "file": JSON.from(text_of(root, "file")),
     "message": JSON.from(text_of(root, "message")),
-    "range": JSON.object({"start": position(start), "end": position(stop)}),
+    "range": JSON.object({"end": position(stop), "start": position(start)}),
   }
 
   for key in ["spawned_at", "stack", "stack_omitted"]
@@ -189,7 +190,7 @@ def trace_kind?(key: String, value: JSON.Value) -> Bool
 end
 
 def position(at: JSON.Value) -> JSON.Value
-  fields: Map[String, JSON.Value] = {"line": JSON.from(int_of(at, "line")), "column": JSON.from(int_of(at, "column"))}
+  fields: Map[String, JSON.Value] = {"column": JSON.from(int_of(at, "column")), "line": JSON.from(int_of(at, "line"))}
   JSON.object(fields)
 end
 

@@ -16,6 +16,8 @@
 typedef struct {
   agc_value value;
   size_t next, written, n;
+  /* A JSON.Value object's members are read by key (the canonical form of equality), not in their order. */
+  bool sorted;
   agc_value *keys;
   agc_json *node;
   agc_list_builder items;
@@ -27,6 +29,7 @@ static agc_json *new_node(agc_json_kind kind, agc_value scalar) {
   j->scalar = scalar;
   j->count = 0;
   j->members = NULL;
+  j->sorted = NULL;
   return j;
 }
 
@@ -41,6 +44,7 @@ static int key_compare(const agc_string *a, const agc_string *b) {
   return a->bytes < b->bytes ? -1 : a->bytes > b->bytes;
 }
 
+/* A stable merge sort of the members by key, then each key once with the value of its last member. */
 static size_t sort_members(agc_json_member *m, size_t n) {
   agc_json_member *tmp = agc_alloc(agc_size_mul(n, sizeof(agc_json_member)));
   for (size_t width = 1; width < n; width = width > n / 2 ? n : width * 2) {
@@ -59,6 +63,46 @@ static size_t sort_members(agc_json_member *m, size_t n) {
   for (size_t i = 0; i < n; i++)
     if (i + 1 == n || key_compare(m[i].key, m[i + 1].key) != 0) m[count++] = m[i];
   return count;
+}
+
+static const agc_json_member *find_sorted(const agc_json_member *m, size_t n, const agc_string *key) {
+  size_t lo = 0, hi = n;
+  while (lo < hi) {
+    size_t mid = lo + (hi - lo) / 2;
+    int c = key_compare(m[mid].key, key);
+    if (c == 0) return &m[mid];
+    if (c < 0)
+      lo = mid + 1;
+    else
+      hi = mid;
+  }
+  return NULL;
+}
+
+/* The sorted copy of the n members, and the members in their order with each key once: at the place of its first
+   member, with the value of its last. */
+static void index_members(agc_json *node, size_t n) {
+  if (n < 2) {
+    node->count = n;
+    node->sorted = node->members;
+    return;
+  }
+  agc_json_member *sorted = agc_alloc(agc_size_mul(n, sizeof(agc_json_member)));
+  memcpy(sorted, node->members, n * sizeof(agc_json_member));
+  size_t count = sort_members(sorted, n);
+  if (count < n) {
+    bool *placed = agc_alloc_atomic(count);
+    memset(placed, 0, count);
+    size_t kept = 0;
+    for (size_t i = 0; i < n; i++) {
+      size_t at = (size_t)(find_sorted(sorted, count, node->members[i].key) - sorted);
+      if (placed[at]) continue;
+      placed[at] = true;
+      node->members[kept++] = sorted[at];
+    }
+  }
+  node->count = count;
+  node->sorted = sorted;
 }
 
 agc_json *agc_json_container(bool object, size_t n, agc_list_builder *items) {
@@ -81,7 +125,7 @@ void agc_json_store(agc_json *node, agc_list_builder *items, size_t k, agc_value
 }
 
 agc_value agc_json_finish(agc_json *node, agc_list_builder *items, size_t n) {
-  if (node->kind == AGC_JSON_OBJECT && n) node->count = sort_members(node->members, n);
+  if (node->kind == AGC_JSON_OBJECT) index_members(node, n);
   if (node->kind == AGC_JSON_ARRAY && n) node->scalar = agc_list_value(agc_list_builder_finish(items));
   return agc_json_value(node);
 }
@@ -184,6 +228,7 @@ static bool open_frame(agc_vm *vm, agc_value v, walk_frame *f) {
   f->value = v;
   f->next = 0;
   f->written = 0;
+  f->sorted = false;
   f->keys = NULL;
   if (agc_is(v, AGC_T_LIST)) {
     f->n = agc_list_len(agc_as_list(vm, v));
@@ -248,8 +293,9 @@ static agc_value child(agc_vm *vm, walk_frame *f, agc_string **key) {
     *key = NULL;
     return agc_list_get(agc_as_list(vm, j->scalar), k);
   }
-  *key = j->members[k].key;
-  return j->members[k].value;
+  const agc_json_member *m = f->sorted ? j->sorted : j->members;
+  *key = m[k].key;
+  return m[k].value;
 }
 
 /* A struct field's value as JSON writes it (docs/grammar/06b-builtins.md, typed JSON): false for JSON.Field.Absent,
@@ -297,7 +343,7 @@ static bool next_child(agc_vm *vm, walk_frame *f, agc_value *item, agc_string **
   return false;
 }
 
-agc_string *agc_json_encode(agc_vm *vm, agc_value root, uint32_t span) {
+static agc_string *encode(agc_vm *vm, agc_value root, uint32_t span, bool sorted) {
   agc_json_buffer b;
   b.cap = 64;
   b.len = 0;
@@ -309,6 +355,7 @@ agc_string *agc_json_encode(agc_vm *vm, agc_value root, uint32_t span) {
     stack = agc_json_grow(stack, &capacity, depth, sizeof(walk_frame));
     optional_value(vm, &item);
     if (open_frame(vm, item, &stack[depth])) {
+      stack[depth].sorted = sorted;
       agc_json_put(&b, is_object(vm, item) ? "{" : "[", 1);
       depth++;
     } else if (json_kind(vm, item, AGC_JSON_BIG)) {
@@ -337,6 +384,10 @@ agc_string *agc_json_encode(agc_vm *vm, agc_value root, uint32_t span) {
     }
   }
 }
+
+agc_string *agc_json_encode(agc_vm *vm, agc_value root, uint32_t span) { return encode(vm, root, span, false); }
+
+agc_string *agc_json_canonical(agc_vm *vm, agc_value root, uint32_t span) { return encode(vm, root, span, true); }
 
 static agc_value scalar_json(agc_vm *vm, agc_value v, uint32_t span) {
   if (agc_is(v, AGC_T_NIL)) return agc_json_leaf(AGC_JSON_NULL, v);
@@ -409,15 +460,5 @@ agc_value agc_json_object(agc_json_member *members, size_t n) {
 agc_value agc_json_array(agc_list *items) { return agc_json_leaf(AGC_JSON_ARRAY, agc_list_value(items)); }
 
 const agc_json_member *agc_json_find(const agc_json *j, const agc_string *key) {
-  size_t lo = 0, hi = j->count;
-  while (lo < hi) {
-    size_t mid = lo + (hi - lo) / 2;
-    int c = key_compare(j->members[mid].key, key);
-    if (c == 0) return &j->members[mid];
-    if (c < 0)
-      lo = mid + 1;
-    else
-      hi = mid;
-  }
-  return NULL;
+  return find_sorted(j->sorted, j->count, key);
 }

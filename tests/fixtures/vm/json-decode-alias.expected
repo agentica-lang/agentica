@@ -8,7 +8,7 @@
     "ok(Shape.Dots([\"p\"]))",
     "ok(Box(v: {\"a\": [1]}))",
     "ok(Shadow(v: 3))",
-    "{\"$defs\":{\"Spot\":{\"properties\":{\"x\":{\"maximum\":9223372036854775807,\"minimum\":-9223372036854775808,\"type\":\"integer\"}},\"required\":[\"x\"],\"type\":\"object\"}},\"properties\":{\"home\":{\"$ref\":\"#/$defs/Spot\"},\"names\":{\"items\":{\"type\":\"string\"},\"type\":\"array\"},\"note\":{\"anyOf\":[{\"maximum\":9223372036854775807,\"minimum\":-9223372036854775808,\"type\":\"integer\"},{\"type\":\"null\"}]},\"scores\":{\"additionalProperties\":{\"items\":{\"maximum\":9223372036854775807,\"minimum\":-9223372036854775808,\"type\":\"integer\"},\"type\":\"array\"},\"type\":\"object\"},\"spots\":{\"items\":{\"$ref\":\"#/$defs/Spot\"},\"type\":\"array\"}},\"required\":[\"names\",\"scores\",\"home\",\"spots\"],\"type\":\"object\"}",
+    "{\"type\":\"object\",\"properties\":{\"names\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"scores\":{\"type\":\"object\",\"additionalProperties\":{\"type\":\"array\",\"items\":{\"type\":\"integer\",\"minimum\":-9223372036854775808,\"maximum\":9223372036854775807}}},\"home\":{\"$ref\":\"#/$defs/Spot\"},\"spots\":{\"type\":\"array\",\"items\":{\"$ref\":\"#/$defs/Spot\"}},\"note\":{\"anyOf\":[{\"type\":\"integer\",\"minimum\":-9223372036854775808,\"maximum\":9223372036854775807},{\"type\":\"null\"}]}},\"required\":[\"names\",\"scores\",\"home\",\"spots\"],\"$defs\":{\"Spot\":{\"type\":\"object\",\"properties\":{\"x\":{\"type\":\"integer\",\"minimum\":-9223372036854775808,\"maximum\":9223372036854775807}},\"required\":[\"x\"]}}}",
     "true",
     ""
   ],

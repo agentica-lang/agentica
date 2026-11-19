@@ -799,7 +799,7 @@ def test_programs_under_test_wrong_output_literal_input_and_a_json_line_mismatch
     report = json_test(directory / "smoke.feature")
     assert codes(report) == ["RUNTIME-BDD-ASSERTION", None, "RUNTIME-BDD-ASSERTION"]
     assert [details(report_cases(report)[0]), details(report_cases(report)[2])] == [
-        ['"incorrect"', '"actual\\n"'], ['{"a":1,"b":3}', '{"a":1,"b":"3"}']]
+        ['"incorrect"', '"actual\\n"'], ['{"a":1,"b":3}', '{"b":"3","a":1}']]
 
 
 @not_wine
@@ -924,7 +924,7 @@ def test_programs_under_test_output_without_a_flush_wrong_output_the_output_limi
         "RUNTIME-BDD-OUTPUT-LIMIT"]
     results = report_cases(report)
     assert [details(results[1]), details(results[3]), details(results[11])] == [
-        ['"incorrect"', '"actual\\n"'], ["0", "3"], ['{"a":1,"b":3}', '{"a":1,"b":"3"}']]
+        ['"incorrect"', '"actual\\n"'], ["0", "3"], ['{"a":1,"b":3}', '{"b":"3","a":1}']]
     long_actual = details(results[12])[1]
     assert len(long_actual) == 65536 + len("... (534468 more characters)")
     assert long_actual.endswith("\\... (534468 more characters)")

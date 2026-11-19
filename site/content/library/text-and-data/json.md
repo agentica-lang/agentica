@@ -9,7 +9,7 @@ Two ways to work with JSON:
 - For a known shape, declare a struct, or an [enum](#enums) for a choice between shapes. `JSON.encode` writes it and `JSON.decode` reads it back, with type checks.
 - For data whose shape changes, use the `JSON.Value` type and the `JSON` functions to build and read it.
 
-`JSON` is a reserved name; `JSON.Value` and `JSON.Field` are its members. A `JSON.Value` has no constructor, equality, fields or indexing. It prints as JSON text with `puts`, `to_s`, interpolation and `JSON.encode`; `inspect` and `IO.inspect` show `<JSON.Value>`, also inside a list. A parsed object writes its keys sorted (see `JSON.parse`). A built object's key order is not fixed, while structs and maps keep theirs. Functions whose first parameter is a `JSON.Value` are also methods: `JSON.get(j, "a")` is `j.get("a")`.
+`JSON` is a reserved name; `JSON.Value` and `JSON.Field` are its members. A `JSON.Value` has no constructor, equality, fields or indexing. It prints as JSON text with `puts`, `to_s`, interpolation and `JSON.encode`; `inspect` and `IO.inspect` show `<JSON.Value>`, also inside a list. Every object keeps its key order, as Ruby's `to_json` and `JSON.parse` do: a struct writes its fields in declaration order, a map in insertion order, and a parsed object in the order of its text (see `JSON.parse`). `JSON.from`, `JSON.object` and `JSON.decode` keep the same orders, so a list of structs and one struct show their keys alike. Functions whose first parameter is a `JSON.Value` are also methods: `JSON.get(j, "a")` is `j.get("a")`.
 
 ## JSON.encode
 
@@ -19,7 +19,7 @@ JSON.encode(value: T) -> String
 
 Writes compact JSON. It takes numbers, `Bool`, `String`, `nil`, `JSON.Value`, lists, maps with `String` keys, structs, [enums](#enums) and [Optionals](#optional-values) of those. Struct fields keep their declaration order and map entries their insertion order. An instance of a generic struct or enum counts by its fields or payloads after substitution (`Box[List[Int]]`). `Result` values, builtin enums such as `TaskExit` and `Int`-keyed maps are `CHECK-NOT-ENCODABLE`, and an untyped empty container needs an annotation. A non-finite `Float` stops the program with `RUNTIME-JSON-ENCODE`; it is never written as `null`. A `JSON.Field` field (see [optional and nullable fields](#optional-and-nullable-fields)) writes nothing when it is `Absent`.
 
-A parsed object writes its keys sorted by UTF-8 bytes, so `JSON.encode(JSON.parse(x))` is canonical: texts that differ only in whitespace, key order or repeated keys give the same text, while `1` and `1.0` stay different.
+`JSON.encode` of a `JSON.Value` writes each object's keys in the order the value holds them, so `JSON.encode(JSON.parse(x))` keeps the key order of `x`.
 
 ```agentica
 struct User
@@ -48,7 +48,7 @@ JSON.decode(text: String, type: T) -> Result[T]
 JSON.decode(json: JSON.Value, type: T) -> Result[T]
 ```
 
-Reads JSON into a struct or an [enum](#enums), or into a `List[T]` or `Map[String, T]` of such a type. The first argument is JSON text or a `JSON.Value`, the second the type: a named struct or enum type, an instance of a generic struct (`Box[Int]`), or `List[T]` or `Map[String, T]` written as a type, not a value. A bare type is valid only for `decode`, `schema` and `codec`, and `schema` and `codec` take only a named type. Fields may be `Int`, `Float`, `Bool`, `String`, lists, `String`-keyed maps, nested or recursive structs and enums, generic struct instances whose fields are such types for their arguments (`Box[List[Int]]`, `Tree[String]`), and `Optional` and `JSON.Field` of those; any other nested type, a generic enum instance included, is `CHECK-NOT-DECODABLE`, and so is an instance whose arguments nest more than 32 levels deep, as a struct makes whose field passes itself a bigger argument. A missing key of a field with a default (`wire: String = ""`) gives the default, so a newer struct still reads what an older writer wrote; `null` is still an error for such a field unless it is an `Optional`. Malformed JSON, missing fields, wrong types, `Int` overflow and non-finite numbers give an error Result with a field or index path. Extra keys are ignored. A JSON integer may decode as a `Float`; a decimal or an exponent never decodes as an `Int`. Decoded maps are in sorted key order. A `JSON.Value` value is read as it is, with the same rules and errors as its text, so there is no need to write it out with `JSON.encode` first.
+Reads JSON into a struct or an [enum](#enums), or into a `List[T]` or `Map[String, T]` of such a type. The first argument is JSON text or a `JSON.Value`, the second the type: a named struct or enum type, an instance of a generic struct (`Box[Int]`), or `List[T]` or `Map[String, T]` written as a type, not a value. A bare type is valid only for `decode`, `schema` and `codec`, and `schema` and `codec` take only a named type. Fields may be `Int`, `Float`, `Bool`, `String`, lists, `String`-keyed maps, nested or recursive structs and enums, generic struct instances whose fields are such types for their arguments (`Box[List[Int]]`, `Tree[String]`), and `Optional` and `JSON.Field` of those; any other nested type, a generic enum instance included, is `CHECK-NOT-DECODABLE`, and so is an instance whose arguments nest more than 32 levels deep, as a struct makes whose field passes itself a bigger argument. A missing key of a field with a default (`wire: String = ""`) gives the default, so a newer struct still reads what an older writer wrote; `null` is still an error for such a field unless it is an `Optional`. Malformed JSON, missing fields, wrong types, `Int` overflow and non-finite numbers give an error Result with a field or index path. Extra keys are ignored. A JSON integer may decode as a `Float`; a decimal or an exponent never decodes as an `Int`. A decoded map keeps the key order of the object. A `JSON.Value` value is read as it is, with the same rules and errors as its text, so there is no need to write it out with `JSON.encode` first.
 
 ```agentica
 struct User
@@ -355,20 +355,16 @@ end
 false
 ```
 
-A parsed object keeps each key once (the last one wins) and sorts its keys, so `JSON.encode(JSON.parse(x))` gives one text per JSON value. Arrays keep their order, and `1` stays different from `1.0`.
+A parsed object keeps its keys in the order of the text. A repeated key is kept once, at its first place, with its last value, as Ruby's `JSON.parse` does. Arrays keep their order, and `1` stays different from `1.0`. `Test.eq` compares two `JSON.Value`s in any key order.
 
 ```agentica
 def main() -> Void
-  a = JSON.encode(JSON.parse("{\"b\": [2, 1], \"a\": 1, \"a\": 3}").unwrap!)
-  b = JSON.encode(JSON.parse("{\"a\":3,\"b\":[2,1]}").unwrap!)
-  puts(a)
-  puts(a == b)
+  puts(JSON.parse("{\"b\": [2, 1], \"a\": 1, \"a\": 3}").unwrap!)
 end
 ```
 
 ```output
-{"a":3,"b":[2,1]}
-true
+{"b":[2,1],"a":3}
 ```
 
 ## JSON.get and JSON.at
@@ -493,7 +489,7 @@ end
 JSON.node(value: JSON.Value) -> JSON.Node
 ```
 
-Opens one level of a `JSON.Value` for a `case`, to walk JSON whose shape is not known in advance. It never fails. `JSON.Node` is a builtin enum with the variants `Null`, `Bool(Bool)`, `Int(Int)`, `BigInt(String)`, `Float(Float)`, `String(String)`, `Array(List[JSON.Value])` and `Object(Map[String, JSON.Value])`, written `JSON.Node.Int(n)` in a `case`. `Int` holds a number that `JSON.int` takes; `BigInt` holds any other integer as its exact decimal text; `Float` holds what `JSON.float` gives, so `1.0` and `1e2` are `Float`. The keys of `Object` are sorted by code point, as `JSON.decode` into a `Map` sorts them. A `JSON.Node` cannot be encoded or decoded (`CHECK-NOT-ENCODABLE`, `CHECK-NOT-DECODABLE`). Prefer `JSON.decode` into a struct when the shape is known.
+Opens one level of a `JSON.Value` for a `case`, to walk JSON whose shape is not known in advance. It never fails. `JSON.Node` is a builtin enum with the variants `Null`, `Bool(Bool)`, `Int(Int)`, `BigInt(String)`, `Float(Float)`, `String(String)`, `Array(List[JSON.Value])` and `Object(Map[String, JSON.Value])`, written `JSON.Node.Int(n)` in a `case`. `Int` holds a number that `JSON.int` takes; `BigInt` holds any other integer as its exact decimal text; `Float` holds what `JSON.float` gives, so `1.0` and `1e2` are `Float`. The keys of `Object` keep the order of the object, as `JSON.decode` into a `Map` does. A `JSON.Node` cannot be encoded or decoded (`CHECK-NOT-ENCODABLE`, `CHECK-NOT-DECODABLE`). Prefer `JSON.decode` into a struct when the shape is known.
 
 ```agentica
 def count(value: JSON.Value) -> Int

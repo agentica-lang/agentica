@@ -68,16 +68,22 @@ int main(void) {
   for (size_t k = 0; k < keys; k++) at += (size_t)sprintf(wide + at, "%s\"k%zu\":%zu", k ? "," : "", (keys - k) % 1000, k);
   wide[at++] = '}';
   j = parse(wide, at);
+  /* The members keep the order of each key's first place (k0, k999, k998, ...) with its last value; the sorted copy
+     that lookups use is in key byte order and holds the same values. */
   assert(j->count == 1000);
+  for (size_t k = 0; k < j->count; k++) {
+    char name[16];
+    int len = snprintf(name, sizeof name, "k%zu", (keys - k) % 1000);
+    assert(j->members[k].key->bytes == (size_t)len && memcmp(j->members[k].key->data, name, (size_t)len) == 0);
+    int64_t value = agc_as_int(&vm, agc_as_json(&vm, j->members[k].value)->scalar);
+    assert((size_t)value >= keys - 1000);
+    assert(agc_json_find(j, j->members[k].key)->value.as.p == j->members[k].value.as.p);
+  }
   for (size_t k = 1; k < j->count; k++) {
-    const agc_string *a = j->members[k - 1].key, *b = j->members[k].key;
+    const agc_string *a = j->sorted[k - 1].key, *b = j->sorted[k].key;
     size_t n = a->bytes < b->bytes ? a->bytes : b->bytes;
     int c = memcmp(a->data, b->data, n);
     assert(c < 0 || (c == 0 && a->bytes < b->bytes));
-  }
-  for (size_t k = 0; k < j->count; k++) {
-    int64_t value = agc_as_int(&vm, agc_as_json(&vm, j->members[k].value)->scalar);
-    assert((size_t)value >= keys - 1000);
   }
   free(wide);
 

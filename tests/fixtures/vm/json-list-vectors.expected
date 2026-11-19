@@ -1,9 +1,10 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 3937,
+  "steps": 3858,
   "stdout": [
-    "31 vectors ok",
+    "map {\"b\": {\"name\": \"x\", \"count\": 1}, \"a\": {\"name\": \"y\", \"count\": 2}}: text gave ok\t{\"b\":{\"name\":\"x\",\"count\":1},\"a\":{\"name\":\"y\",\"count\":2}}, Json gave ok\t{\"b\":{\"name\":\"x\",\"count\":1},\"a\":{\"name\":\"y\",\"count\":2}}, want ok\t{\"a\":{\"name\":\"y\",\"count\":2},\"b\":{\"name\":\"x\",\"count\":1}}",
+    "1 of 31 vectors failed",
     ""
   ],
   "stderr": []

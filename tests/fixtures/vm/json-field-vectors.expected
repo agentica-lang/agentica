@@ -1,9 +1,10 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 2143,
+  "steps": 2154,
   "stdout": [
-    "26 vectors ok",
+    "{\"age\": 7, \"id\": 2}: round trip false, want same",
+    "1 of 26 vectors failed",
     ""
   ],
   "stderr": []

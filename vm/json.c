@@ -547,7 +547,7 @@ static agc_value builtin_node(agc_vm *vm, agc_value *args, uint32_t span) {
     case AGC_JSON_STRING: which = AGC_JSON_NODE_STRING; break;
     case AGC_JSON_ARRAY: which = AGC_JSON_NODE_ARRAY; break;
     case AGC_JSON_OBJECT: {
-      /* The members are sorted by key (agc_json_find), so the Map gets them in code point order. */
+      /* The Map gets the members in their order, as the object writes them. */
       agc_map *m = agc_as_map(vm, vm->rt->empty_map);
       for (size_t k = 0; k < j->count; k++)
         m = agc_map_put(vm, m, agc_string_value(j->members[k].key), j->members[k].value);
