@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 4520,
+  "steps": 4535,
   "stdout": [
     "ok(\"server: the client closed with 0 bytes more\")",
     "client: 200",

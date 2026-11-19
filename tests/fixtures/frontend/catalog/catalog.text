@@ -252,7 +252,9 @@ builtin FrontEnd.stdin_bytes forms=1
 builtin HttpWire.accept forms=1
   HttpWire.accept(server: HTTP.Server) -> Result[TCP.Socket] shape=(Opaque(HttpWire.Server)) -> Result(Opaque(TCP.Socket)) rule=Plain impl="HttpWire.accept" effects=["network"] desc="Internal to std/http: wait for a free slot and the next connection."
 builtin HttpWire.awaited? forms=1
-  HttpWire.awaited?(reply: Channel[Result[HTTP.Response]]) -> Bool shape=(Channel(Result(Struct(HttpWire.Response)))) -> Bool rule=Plain impl="HttpWire.awaited?" effects=[] desc="Internal to std/http: false once a receiver that parked on reply left without a value."
+  HttpWire.awaited?(reply: Channel[Result[HTTP.Response]]) -> Bool shape=(Channel(Result(Struct(HttpWire.Response)))) -> Bool rule=Plain impl="HttpWire.awaited?" effects=[] desc="Internal to std/http: false once a receiver that parked on reply left without a value; binds nothing."
+builtin HttpWire.watch forms=1
+  HttpWire.watch(reply: Channel[Result[HTTP.Response]]) -> Bool shape=(Channel(Result(Struct(HttpWire.Response)))) -> Bool rule=Plain impl="HttpWire.watch" effects=[] desc="Internal to std/http: awaited?, and until the first value is sent to reply, a cancel of its parked receiver cancels the calling task."
 builtin HttpWire.chunk forms=1
   HttpWire.chunk(state: HttpWire.Chunk, data: Bytes, from: Int) -> Result[HttpWire.Chunk] shape=(Struct(HttpWire.Chunk), Bytes, Int) -> Result(Struct(HttpWire.Chunk)) rule=Plain impl="HttpWire.chunk.bytes" effects=[] desc="Internal to std/http: decode the chunked framing in data from offset from; runs holds the start and length of each piece of body; the error is the answer status and the reason."
 builtin HttpWire.chunk_read forms=1

@@ -97,9 +97,9 @@ UNRESOLVED = "unresolved"
 SHARED_STATE: Map[String, String] = {
   "ATS.get": "concurrency", "ATS.has_key?": "concurrency", "ATS.keys": "concurrency", "ATS.size": "concurrency",
   "ATS.to_map": "concurrency", "Channel.closed?": "concurrency", "Channel.empty?": "concurrency",
-  "Channel.lazy": "concurrency", "HttpWire.awaited?": "concurrency", "File.foreach": "filesystem",
-  "File.chunks": "filesystem", "System.Profile.steps": "clock", "__lazy_file": "filesystem",
-  "__lazy_chunks": "filesystem", "__lazy_channel": "concurrency",
+  "Channel.lazy": "concurrency", "HttpWire.awaited?": "concurrency", "HttpWire.watch": "concurrency",
+  "File.foreach": "filesystem", "File.chunks": "filesystem", "System.Profile.steps": "clock",
+  "__lazy_file": "filesystem", "__lazy_chunks": "filesystem", "__lazy_channel": "concurrency",
 }
 
 # What one function does itself: its reasons (with no chain) and the functions of the program it calls, in order.
