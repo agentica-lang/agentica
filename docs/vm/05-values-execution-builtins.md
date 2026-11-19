@@ -285,12 +285,12 @@ allocate. Three things to know:
 
 ### 6.4 JIT
 
-The JIT (`vm/jit/`) compiles hot functions of the user's program to x86-64 or
-arm64 (Linux and macOS) machine code. Other hosts run the interpreter. The front
-end runs in the interpreter, except under the test-only
-`AGENTICA_VM_TEST_FRONT_END_JIT`: on the short run that compiles a small
-program, its own compiles cost more than they save. The JIT changes no exit
-code, output, diagnostic, span or step count (`tests/test_vm_jit.py`).
+The JIT (`vm/jit/`) compiles hot functions of the user's program to x86-64
+(Linux, macOS and Windows) or arm64 (Linux and macOS) machine code. Other hosts
+run the interpreter. The front end runs in the interpreter, except under the
+test-only `AGENTICA_VM_TEST_FRONT_END_JIT`: on the short run that compiles a
+small program, its own compiles cost more than they save. The JIT changes no
+exit code, output, diagnostic, span or step count (`tests/test_vm_jit.py`).
 `vm/jit/jit.h` is its only boundary with the interpreter: the interpreter asks
 for a function's code, enters it at the frame's `pc`, and handles the exit it
 returns.
