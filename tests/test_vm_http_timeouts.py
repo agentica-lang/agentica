@@ -311,7 +311,7 @@ def main() -> Void
   dir = System.args()[4]
   options = HTTP.ClientOptions(read_timeout_ms: limit)
   client = HTTP.client(options).unwrap!
-  case HTTP.download(client, base + "/slow-body", dir + "/cut.bin", HTTP.DownloadOptions(timeout_ms: pause * 5))
+  case HTTP.download(client, base + "/slow-body", dir + "/cut.bin", HTTP.DownloadOptions(timeout_ms: some(pause * 5)))
     ok(_) -> puts("download finished")
     error(e) -> puts("download #{e.kind}")
   end

@@ -21,6 +21,10 @@ Routes:
   /status/<code>           a short ASCII body with that status (a 3xx answer also carries
                            Location: /bin/5, whose body differs, so a client that followed
                            redirects would show it)
+  /redirect/<route>        302 with Location: /<route>
+  /stall/<n>               Content-Length 2n, then n bytes, then silence for STALL_SECONDS
+  /dir-at/<n>?path=<p>     a Content-Length body of n bytes, after making a directory at p (as
+                           another program would while the download runs)
 """
 import http.server
 import importlib.util
@@ -28,6 +32,7 @@ import json
 import os
 import sys
 import time
+import urllib.parse
 
 # Windows would print CRLF in the ANSI code page; the tests compare UTF-8 LF lines.
 sys.stdout.reconfigure(encoding="utf-8", newline="\n")
@@ -39,6 +44,7 @@ _spec.loader.exec_module(http_peer)
 PIECE = 65536
 PATTERN = bytes(range(256)) * (PIECE // 256)
 SLOW_SECONDS = 3
+STALL_SECONDS = 60
 CEILING = 256 * 1024 * 1024
 
 
@@ -83,7 +89,22 @@ class Web(http.server.BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def do_GET(self):
-        parts = self.path.split("/")
+        url = urllib.parse.urlsplit(self.path)
+        parts = url.path.split("/")
+        if len(parts) == 3 and parts[1] == "dir-at" and parts[2].isdigit():
+            os.mkdir(urllib.parse.parse_qs(url.query)["path"][0])
+            self.send_body(200, int(parts[2]), "length")
+            return
+        if len(parts) == 3 and parts[1] == "stall" and parts[2].isdigit():
+            self.send_response(200)
+            self.send_header("Content-Length", str(2 * int(parts[2])))
+            self.end_headers()
+            for piece in pieces(int(parts[2])):
+                self.wfile.write(piece)
+            self.wfile.flush()
+            time.sleep(STALL_SECONDS)
+            self.close_connection = True
+            return
         if self.path == "/bad-chunk":
             self.send_response(200)
             self.send_header("Transfer-Encoding", "chunked")
@@ -116,6 +137,8 @@ class Web(http.server.BaseHTTPRequestHandler):
             for piece in pieces(int(parts[3])):
                 self.wfile.write(piece)
             self.close_connection = True
+        elif len(parts) > 2 and parts[1] == "redirect":
+            self.reply(302, "moved", location="/" + "/".join(parts[2:]))
         elif len(parts) == 3 and parts[1] == "status" and parts[2].isdigit():
             code = int(parts[2])
             self.reply(code, "status %s" % parts[2], location="/bin/5" if 300 <= code < 400 else None)
