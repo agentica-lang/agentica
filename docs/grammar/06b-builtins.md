@@ -113,7 +113,8 @@ the [`Lazy` page](../../site/content/library/data-structures/lazy.md).
 ### JSON
 
 `JSON` is reserved; `JSON.Value`, `JSON.Field` and `JSON.Node` are members of
-its family. A `JSON.Value` has no constructor, equality, fields or indexing. The
+its family. A `JSON.Value` has no constructor, fields or indexing; `==`
+compares it in any key order (06-semantics.md, Operators). The
 functions, their errors, the schema and the text they read and write are in the
 [`JSON` page](../../site/content/library/text-and-data/json.md). The rules that
 the checker enforces:

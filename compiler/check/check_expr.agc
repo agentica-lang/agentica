@@ -989,8 +989,8 @@ def equality_type(cx: State.Cx, sides: Sides, node: Ast.Binary) -> Result[T.Type
     end
 
     help = (
-      "== compares numbers, Bool, String, nil, ranges, Bytes, and lists, maps, sets, Optionals, Results, " +
-      "structs and enums of those; functions, tasks, channels, handles, C.Pointer, JSON.Value, Time.DateTime and a " +
+      "== compares numbers, Bool, String, nil, ranges, Bytes, JSON.Value, and lists, maps, sets, Optionals, " +
+      "Results, structs and enums of those; functions, tasks, channels, handles, C.Pointer, Time.DateTime and a " +
       "generic T have no equality"
     )
 

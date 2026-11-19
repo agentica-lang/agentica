@@ -1,0 +1,22 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 341,
+  "stdout": [
+    "true false {\"a\": 1, \"b\": 2} {\"b\": 2, \"a\": 1}",
+    "true false {\"x\": {\"p\": [1, {\"q\": null, \"r\": true}], \"s\": \"t\"}} {\"x\": {\"s\": \"t\", \"p\": [1, {\"r\": true, \"q\": null}]}}",
+    "true false {\"a\": 1, \"a\": 2} {\"a\": 2}",
+    "false true [1, 2] [2, 1]",
+    "false true {\"a\": 1} {\"a\": 1, \"b\": 1}",
+    "false true {\"a\": {\"b\": 1}} {\"a\": {\"b\": 2}}",
+    "false true {\"a\": 1} {\"a\": 1.0}",
+    "false true \"1\" 1",
+    "true false null null",
+    "true",
+    "true",
+    "true",
+    "false",
+    ""
+  ],
+  "stderr": []
+}

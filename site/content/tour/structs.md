@@ -359,7 +359,7 @@ true
 true
 ```
 
-A struct with a function field (`Fn`), a task, a channel, a handle or a `JSON.Value` inside has no equality: `==` on it is `CHECK-TYPE-MISMATCH`, and the message names the field. A `Float` field follows IEEE 754, so a struct that holds a NaN is not equal to itself.
+A struct with a function field (`Fn`), a task, a channel or a handle inside has no equality: `==` on it is `CHECK-TYPE-MISMATCH`, and the message names the field. A `Float` field follows IEEE 754, so a struct that holds a NaN is not equal to itself.
 
 ## Private fields
 

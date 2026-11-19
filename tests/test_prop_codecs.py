@@ -68,6 +68,12 @@ def floats_reply(result: Result[List[Float]]) -> String
   end
 end
 
+def json_equal(texts: List[String]) -> String
+  a = JSON.parse(texts[0]).unwrap!
+  b = JSON.parse(texts[1]).unwrap!
+  "ok #{hex("#{a == b} #{a != b}".bytes)}"
+end
+
 def float_back(x: Float) -> String
   decoded = JSON.decode(JSON.encode([x]), List[Float]).unwrap!
   "ok #{hex("#{x.to_s.to_f!.to_bits} #{decoded[0].to_bits}".bytes)}"
@@ -85,6 +91,7 @@ def text_reply_with_length(s: String) -> String = "ok #{hex("#{s} #{s.length}".b
 def run(op: String, data: Bytes) -> String
   case op
     "json" -> value_reply(JSON.parse(text(data)))
+    "jsoneq" -> json_equal(text(data).split("\\n"))
     "ints" -> ints_reply(JSON.decode(text(data), List[Int]))
     "floats" -> floats_reply(JSON.decode(text(data), List[Float]))
     "utf8" -> text_reply(String.from_bytes(data))
@@ -213,12 +220,17 @@ def python_json(text):
     return value if representable(value) else INVALID
 
 
-JSON_VALUES = st.recursive(
-    st.none() | st.booleans() | st.integers() | st.integers(-2**63, 2**63 - 1)
-    | st.floats(allow_nan=False, allow_infinity=False) | st.text(),
-    lambda inner: st.lists(inner, max_size=4) | st.dictionaries(st.text(max_size=4), inner, max_size=4),
-    max_leaves=12,
-)
+def json_values(integers):
+    """Small JSON values (as json.loads gives them) whose integers come from `integers`."""
+    return st.recursive(
+        st.none() | st.booleans() | integers | st.floats(allow_nan=False, allow_infinity=False) | st.text(),
+        lambda inner: st.lists(inner, max_size=4) | st.dictionaries(st.text(max_size=4), inner, max_size=4),
+        max_leaves=12,
+    )
+
+
+INT64 = st.integers(-2**63, 2**63 - 1)
+JSON_VALUES = json_values(st.integers() | INT64)
 
 
 @st.composite
@@ -246,6 +258,39 @@ def test_json_parse_accepts_what_python_accepts_and_keeps_the_value(codec, text)
     assert (got is None) == (want is INVALID), (text, got)
     if got is not None:
         assert same(json.loads(got), want), (text, got)
+
+
+def shuffled(value, rng, floats):
+    """The same JSON value with every object's keys in an order from rng; floats=True also writes each Int as a Float."""
+    if isinstance(value, list):
+        return [shuffled(item, rng, floats) for item in value]
+    if isinstance(value, dict):
+        keys = list(value)
+        rng.shuffle(keys)
+        return {key: shuffled(value[key], rng, floats) for key in keys}
+    if floats and type(value) is int:
+        return float(value)
+    return value
+
+
+INT64_JSON = json_values(INT64)
+
+
+@timeout(300)
+@given(INT64_JSON, INT64_JSON, st.sampled_from(["reordered", "other", "floats"]), st.randoms(use_true_random=False))
+@example({"a": 1, "b": [1, {"c": None, "d": True}]}, None, "reordered", random.Random(1))
+@example({"a": 1}, None, "floats", random.Random(1))
+def test_json_equality_agrees_with_python(codec, value, other, mode, rng):
+    """== on two parsed JSON.Values is Python's == of the json.loads values, with object keys in any order, an Int not
+    equal to a Float and floats compared by their bits (so -0.0 is not 0.0); != is its negation."""
+    if mode == "other":
+        right = other
+    else:
+        right = shuffled(value, rng, mode == "floats")
+    left_text, right_text = json.dumps(value), json.dumps(right)
+    got = codec.ask("jsoneq", (left_text + "\n" + right_text).encode("utf-8"))
+    want = same(json.loads(left_text), json.loads(right_text))
+    assert got == (b"true false" if want else b"false true"), (left_text, right_text, got)
 
 
 NUMBER_TEXTS = st.one_of(

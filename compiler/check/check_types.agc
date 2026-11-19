@@ -1294,7 +1294,7 @@ def json_null_item?(type: ResolvedType) -> Bool
   Types.is?(item, "Nil") or (json_field?(type) and Types.is?(item, "Optional"))
 end
 
-# data? for one type, or equality? when equal is true (JSON.Value is then refused). seen holds every struct and enum
+# data? for one type, or equality? when equal is true. seen holds every struct and enum
 # walked in the whole call ("Struct:name"), not only the ones on the path (struct_walk says why that is sound), and a
 # recursive type ends.
 def data_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool], equal: Bool) -> Walk
@@ -1303,7 +1303,7 @@ def data_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool], equal: 
   if primitive?(type) or Types.is?(type, "Range") or Types.is?(type, "Bytes") or Types.is?(type, "Address")
     return passed(seen)
   elsif Types.is?(type, "Json")
-    return Walk(passes: !equal, seen: seen, why: "", file: "", field: none, instant: false)
+    return passed(seen)
   elsif Types.is?(type, "Var")
     why = ""
     if !cx.prelude
