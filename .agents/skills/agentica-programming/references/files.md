@@ -35,6 +35,7 @@ Path.resolve(path: String) -> Result[String]
 Path.real(path: String) -> Result[String]
 Path.remove(path: String, timeout_ms: Int = 30000) -> Result[Void]
 Path.rename(from: String, to: String, timeout_ms: Int = 30000) -> Result[Void]
+Path.replace(from: String, to: String, timeout_ms: Int = 30000) -> Result[Void]
 ```
 
 Every `timeout_ms` above may be left out (default 30000). `File.open(path)`
@@ -94,6 +95,10 @@ also reads, and `each_line` and `foreach` default `buffer_bytes` to 65536.
   to a path that does not exist, atomically: an existing target, even an empty
   directory, is an error and never replaced, so racing programs get one winner.
   Both paths must be on one file system.
+- `Path.replace(from, to, ms)` renames the regular file `from` over `to` in one
+  step: a file or a symlink (the link itself) at `to` is
+  replaced, a directory is an `io.is_directory` error, and `from` is synced
+  first. Write a new file beside `to`, then replace it, to swap a file whole.
 - `Path.join` uses host path rules. `Path.resolve` makes a lexical absolute path
   without resolving symlinks. `Path.cwd` and `Path.resolve` give no trailing `/`
   except at a root; `resolve` keeps one only when the path ends in `/`.
