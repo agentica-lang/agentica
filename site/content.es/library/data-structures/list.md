@@ -11,7 +11,7 @@ Las listas son inmutables: cada función da una lista nueva. `xs.length` es `xs.
 
 Un callback es un bloque, `&name` o una variable de función. Se ejecuta una vez por elemento, de izquierda a derecha, bajo el presupuesto de pasos del llamador. Los tipos de parámetro y de retorno deben coincidir exactamente, y un callback de `map` devuelve datos, no `Void`. Los parámetros de bloque con anotación permiten que una lista vacía o un valor inicial vacío de `reduce` deduzca su tipo. Los costos de esta página no incluyen el trabajo propio del callback.
 
-## Construir y leer {#build-and-read}
+## Crear y leer {#build-and-read}
 
 ```signature
 List.size(list: List[T]) -> Int
@@ -69,7 +69,7 @@ List.take(list: List[T], count: Int) -> List[T]
 List.drop(list: List[T], count: Int) -> List[T]
 ```
 
-`take` conserva los primeros `count` elementos, `drop` los quita. Un count mayor da la lista entera (`take`) o una lista vacía (`drop`), y un count negativo es `RUNTIME-INVALID-COUNT`. O(n) en el tamaño del resultado.
+`take` conserva los primeros `count` elementos, `drop` los quita. Una cantidad mayor da la lista entera (`take`) o una lista vacía (`drop`), y una cantidad negativa es `RUNTIME-INVALID-COUNT`. O(n) en el tamaño del resultado.
 
 ```agentica
 def main() -> Void
@@ -238,7 +238,7 @@ List.index(list: List[T], value: T) -> Optional[Int]
 List.find_index(list: List[A], block: Fn[A, Bool]) -> Optional[Int]
 ```
 
-`index` da `some` con la posición del primer elemento `==` al valor, si no `none`; los elementos necesitan `==`, como para `include?`. `find_index` recibe un bloque en su lugar y da la posición del primer elemento para el que da `true`, así que es la forma con bloque: `xs.index do ... end` es `CHECK-BLOCK-TARGET`. Los Float se comparan con `==`, así que un NaN nunca coincide (`[nan].index(nan)` es `none`) y `-0.0` coincide con `0.0`. Ambos se detienen en la primera coincidencia y son O(n).
+`index` da `some` con la posición del primer elemento `==` al valor, si no `none`; los elementos necesitan `==`, como para `include?`. `find_index` recibe un bloque en su lugar y da la posición del primer elemento para el que da `true`, así que es la forma con bloque: `xs.index do ... end` es `CHECK-BLOCK-TARGET`. Los `Float` se comparan con `==`, así que un NaN nunca coincide (`[nan].index(nan)` es `none`) y `-0.0` coincide con `0.0`. Ambos se detienen en la primera coincidencia y son O(n).
 
 ```agentica
 def main() -> Void
@@ -383,7 +383,7 @@ end
 List.include?(list: List[T], value: T) -> Bool
 ```
 
-Es verdadero cuando un elemento `==` al valor; `member?` es el mismo método. Los elementos pueden ser de cualquier tipo que tenga `==` (números, `Bool`, `String`, `nil`, rangos, `Bytes`, `JSON.Value`, y listas, mapas, conjuntos, Optional, Result, estructuras y enums de esos); una lista de funciones o de handles da `CHECK-TYPE-MISMATCH` en la lista, y un valor de otro tipo lo da en el valor. Se detiene en la primera coincidencia y es O(n). Un `Float` sigue IEEE 754, así que `NaN` nunca es miembro y `-0.0` coincide con `0.0`. Para muchas búsquedas en una misma lista, crea antes un `Set`.
+Es verdadero cuando un elemento `==` al valor; `member?` es el mismo método. Los elementos pueden ser de cualquier tipo que tenga `==` (números, `Bool`, `String`, `nil`, rangos, `Bytes`, `JSON.Value`, y listas, mapas, conjuntos, Optional, Result, estructuras y enums de esos); una lista de funciones o de handles da `CHECK-TYPE-MISMATCH` en la lista, y un valor de otro tipo lo da en el valor. Se detiene en la primera coincidencia y es O(n). Un Float sigue la norma IEEE 754, así que `NaN` nunca pertenece a la lista y `-0.0` coincide con `0.0`. Para muchas búsquedas en una misma lista, crea antes un `Set`.
 
 ```agentica
 def main() -> Void
@@ -471,6 +471,6 @@ some("pear")
 
 ## Costos y nombres {#costs-and-names}
 
-Son O(n), aunque menos si se detienen antes. Están escritos en Agentica (`stdlib/prelude/`), así que cuentan `--max-steps` por elemento, sin contar tu función; y un error de ejecución en ellos se reporta en la llamada de tu programa (en el argumento que lo nombra), nunca en el preludio.
+Son O(n), aunque menos si se detienen antes. Están escritos en Agentica (`stdlib/prelude/`), así que cuentan `--max-steps` por elemento, sin contar tu función; y un error de runtime en ellos se reporta en la llamada de tu programa (en el argumento que lo nombra), nunca en el preludio.
 
 `reject` es `CHECK-UNKNOWN-METHOD`. Escribe `xs.select do |x| !cond end`.

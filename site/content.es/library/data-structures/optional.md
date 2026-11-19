@@ -5,7 +5,7 @@ description: Un valor que puede faltar, con some y none.
 source_hash: "ce5dad8f1158"
 ---
 
-`Optional[T]` es `some(value)` o `none`. Úsalo para un valor que puede faltar: un campo de estructura, un parámetro, un valor devuelto, un elemento de una lista o un valor de un mapa. `map.get(key)` y `text.index_of(part)` dan uno.
+`Optional[T]` es `some(value)` o `none`. Úsalo para un valor que puede faltar: un campo de estructura, un parámetro, un tipo devuelto, un elemento de una lista o un valor de un mapa. `map.get(key)` y `text.index_of(part)` dan uno.
 
 ```agentica
 struct User
@@ -29,7 +29,7 @@ Ana is 31
 Bo gave no age
 ```
 
-Un `case` necesita las dos ramas, `some(n) ->` y `none ->`, o un `_` final. Una rama con un literal dentro, como `some(0) ->`, puede fallar, así que no cubre nada: añade `some(n) ->` o `_` después de ella. [Patrones dentro de patrones](/tour/enums-and-case/#patterns-inside-patterns) muestra un Optional dentro de un enum de usuario o de un `Result`. `==` compara dos Optional cuyos elementos tienen `==`: `age == none`, `age == some(31)`. Un Optional se imprime como `some(31)` o `none`. Un campo o un parámetro puede tener `none` como predeterminado: `port: Optional[Int] = none`. En [JSON](/library/text-and-data/json/#optional-values), `none` es `null` (una clave que falta al decodificar) y `some(x)` es `x`.
+Un `case` necesita las dos ramas, `some(n) ->` y `none ->`, o un `_` final. Una rama con un literal dentro, como `some(0) ->`, puede no coincidir, así que no cubre nada: añade `some(n) ->` o `_` después de ella. [Patrones dentro de patrones](/tour/enums-and-case/#patterns-inside-patterns) muestra un Optional dentro de un enum de usuario o de un `Result`. `==` compara dos Optional cuyos elementos tienen `==`: `age == none`, `age == some(31)`. Un Optional se imprime como `some(31)` o `none`. Un campo o un parámetro puede tener `none` como predeterminado: `port: Optional[Int] = none`. En [JSON](/library/text-and-data/json/#optional-values), `none` es `null` (una clave que falta al decodificar) y `some(x)` es `x`.
 
 ## Campos, parámetros, elementos y genéricos {#fields-parameters-items-and-generics}
 
@@ -265,4 +265,4 @@ error("no even number")
 
 ## Optional o Result {#optional-or-result}
 
-Usa un Optional cuando no tener valor es normal y no necesita un motivo: una búsqueda que no encuentra nada, un ajuste que quien llama dejó sin dar. Usa un [Result](/tour/results-and-try/) cuando algo falló y quien llama necesita saber por qué, como un análisis o una lectura de archivo. `to_result("message")` convierte el primero en el segundo cuando un valor que falta es un error para quien llama. `List.find` y `Lazy.find` dan un Result con `error("not found")`, no un Optional.
+Usa un Optional cuando no tener valor es normal y no necesita un motivo: una búsqueda que no encuentra nada, un ajuste que quien llama omite. Usa un [Result](/tour/results-and-try/) cuando algo falló y quien llama necesita saber por qué, como un análisis o una lectura de archivo. `to_result("message")` convierte el primero en el segundo cuando un valor que falta es un error para quien llama. `List.find` y `Lazy.find` dan un Result con `error("not found")`, no un Optional.

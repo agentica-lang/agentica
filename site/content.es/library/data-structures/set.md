@@ -35,7 +35,7 @@ Set["b", "a"]
 Set.new(items: List[T]) -> Set[T]
 ```
 
-Construye un conjunto a partir de una lista. Un elemento repetido se descarta, y el primero conserva su lugar. `T` debe ser `Int`, `String` o `Bytes`; si no, `CHECK-SET-ELEMENT-TYPE`. Una lista vacía necesita un tipo esperado, como `[]` y `{}`: sin él, `CHECK-EMPTY-SET-TYPE`.
+Crea un conjunto a partir de una lista. Un elemento repetido se descarta, y el primero conserva su lugar. `T` debe ser `Int`, `String` o `Bytes`; si no, `CHECK-SET-ELEMENT-TYPE`. Una lista vacía necesita un tipo esperado, como `[]` y `{}`: sin él, `CHECK-EMPTY-SET-TYPE`.
 
 ```agentica
 def main() -> Void
@@ -79,7 +79,7 @@ Set[1, 2]
 Set.delete(set: Set[T], value: T) -> Set[T]
 ```
 
-Quita un elemento. Un elemento que no está no es un error. Un elemento que se vuelve a añadir después va al final. Cuesta lo mismo que `Map.delete`.
+Quita un elemento. No pasa nada si el elemento no está. Un elemento que se vuelve a añadir después va al final. Cuesta lo mismo que `Map.delete`.
 
 ```agentica
 def main() -> Void
@@ -102,7 +102,7 @@ Set["b", "c", "a"]
 Set.include?(set: Set[T], value: T) -> Bool
 ```
 
-Comprueba si el valor pertenece al conjunto. Tarda, en la práctica, un tiempo constante, como `Map.key?`.
+Comprueba la pertenencia del valor al conjunto. Tarda, en la práctica, un tiempo constante, como `Map.key?`.
 
 ```agentica
 def main() -> Void

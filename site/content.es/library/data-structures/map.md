@@ -28,7 +28,7 @@ end
 false
 ```
 
-`size` es O(1): el mapa lleva la cuenta de sus pares.
+`size` es O(1): el mapa guarda su cantidad de pares.
 
 ## get {#get}
 
@@ -37,7 +37,7 @@ Map.get(map: Map[K, V], key: K) -> Optional[V]
 Map.get(map: Map[K, V], key: K, default: V) -> V
 ```
 
-Con dos argumentos, `get` da un [Optional](/library/data-structures/optional/): `some(value)`, o `none` cuando falta la clave. Con un tercer argumento, da el valor o el predeterminado; el predeterminado siempre se calcula, y `false` y `nil` son valores presentes.
+Con dos argumentos, `get` da un [Optional](/library/data-structures/optional/): `some(value)`, o `none` cuando falta la clave. Con un tercer argumento, da el valor o el predeterminado; el predeterminado se evalúa siempre, y `false` y `nil` son valores presentes.
 
 ```agentica
 def main() -> Void
@@ -109,7 +109,7 @@ end
 Map.delete(map: Map[K, V], key: K) -> Map[K, V]
 ```
 
-Quita una clave y conserva el orden de las demás. No pasa nada si la clave no existe, y una clave que se vuelve a poner después va al final. Cuesta O(log32 n) amortizado a lo largo de una línea de versiones, con una reconstrucción O(n) de la lista de claves tras muchas eliminaciones.
+Quita una clave y conserva el orden de las demás. No pasa nada si la clave no existe, y una clave que se vuelve a poner después va al final. Cuesta O(log32 n) amortizado a lo largo de una línea de versiones, con una reconstrucción O(n) de la lista de claves tras muchas llamadas a delete.
 
 ```agentica
 def main() -> Void
@@ -171,7 +171,7 @@ y=2
 Map.filter(map: Map[K, V], block: Fn[K, V, Bool]) -> Map[K, V]
 ```
 
-Conserva los pares para los que la función da `true`, en orden de inserción. O(n), como `each`. `m.select` es el nombre de Ruby.
+Conserva los pares clave-valor para los que la función da `true`, en orden de inserción. O(n), como `each`. `m.select` es el nombre de Ruby.
 
 ```agentica
 def main() -> Void
