@@ -9,7 +9,7 @@ source_hash: "185737e01ac1"
 
 La primera llamada a cualquier función de `Logger` añade un handler llamado `console`. Escribe líneas de texto en el error estándar con el nivel `info`. Un programa que solo registra no necesita configuración.
 
-## Levels {#levels}
+## Niveles {#levels}
 
 ```signature
 Logger.debug(message: String, fields: Map[String, String] = {}) -> Void
@@ -74,7 +74,7 @@ Un handler es una función (como `&Logger.stderr_json`) o un bloque. Recibe un `
 
 `attach` con un nombre ya en uso, y `detach` con un nombre que no está en uso, devuelven un error.
 
-- Los handlers se ejecutan en el orden en que se añadieron, de forma síncrona, en la tarea que registra. Así, una línea se escribe cuando la llamada de log devuelve el control.
+- Los handlers se ejecutan en el orden en que se añadieron, de forma síncrona, en la tarea que registra. Así, una línea se escribe cuando la llamada de registro devuelve el control.
 - Un evento conserva los handlers con los que empezó. Un handler que quita a otro no cambia el evento en curso.
 - Un handler sigue añadido cuando termina la tarea que lo añadió.
 - El error de un handler es el error de la tarea que registró el evento.
@@ -99,7 +99,7 @@ a handler named "audit" is already attached
 ["audit"]
 ```
 
-## Formats {#formats}
+## Formatos {#formats}
 
 ```signature
 Logger.stderr_text(event: Logger.Event) -> Void
@@ -188,11 +188,11 @@ def main() -> Void
 end
 ```
 
-## Rules {#rules}
+## Reglas {#rules}
 
 - `Logger.Level` y `Logger.Event` son los tipos integrados `LogRegistry.Level` y `LogRegistry.Event`, que `std/logger` reexporta, así que `import {Event, Level} from "std/logger"` los vincula por su nombre. Un diagnóstico, `help` y un valor impreso muestran `Logger.Level` y `Logger.Event`: `"#{level}"` es `Logger.Level.Info`, y un evento se imprime como `Logger.Event(level: ..., message: ...)`. No reservan ningún nombre: un programa puede declarar su propio `Event` o `LogEvent`.
 - Los handlers y el nivel global viven en la VM y pertenecen a una sola ejecución. Un proceso hijo iniciado con `Process.spawn` tiene los suyos. Este registro es el único estado global del lenguaje; `std/logger` llega a él a través del módulo interno `LogRegistry`, que ningún otro módulo puede nombrar (`CHECK-UNKNOWN-NAME`).
-- No previsto para `std/logger`: archivos de log y rotación, syslog, muestreo, niveles por módulo, valores de campo `JSON.Value`, configuración por variables de entorno, ni argumentos de log perezosos (un bloque que se pasa a `attach` es un handler, no un mensaje perezoso). No previsto para el rastreo: una traza a nivel de lenguaje, líneas de traza en la salida estándar, contadores dentro del rastreador, un flag para desactivar las trazas de pila, ni una pila de la tarea padre en el momento de lanzarla; el trazado de la VM es una herramienta de desarrollo de la VM, no una característica del lenguaje.
+- No previsto para `std/logger`: archivos de registro y rotación, syslog, muestreo, niveles por módulo, valores de campo `JSON.Value`, configuración por variables de entorno, ni argumentos de registro perezosos (un bloque que se pasa a `attach` es un handler, no un mensaje perezoso). No previsto para el rastreo: una traza a nivel de lenguaje, líneas de traza en la salida estándar, contadores dentro del rastreador, un flag para desactivar las trazas de pila, ni una pila de la tarea padre en el momento de lanzarla; el rastreo de la VM es una herramienta de desarrollo de la VM, no una característica del lenguaje.
 - No hay flags ni metadatos por tarea. Pasa `fields` en cada llamada, como segundo argumento opcional.
-- Las llamadas de log son código normal, y cuentan contra `--max-steps`.
+- Las llamadas de registro son código normal, y cuentan contra `--max-steps`.
 - Una llamada por debajo del nivel global, o una que ningún handler acepta, cuesta una llamada a función, una llamada a un integrado y una comparación. Una llamada sin `fields` también pasa un mapa vacío.

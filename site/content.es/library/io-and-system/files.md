@@ -7,7 +7,7 @@ source_hash: "24cdefeb4598"
 
 Cada función de archivo recibe un tiempo de espera en milisegundos y devuelve un `Result`. Su valor predeterminado es 30000, y puede omitirse. `File.open` también toma `"read"` como modo predeterminado, y `File.each_line` y `File.foreach` toman 65536 como predeterminado de `buffer_bytes`.
 
-- El texto es UTF-8. Una llamada de texto lee o escribe como máximo 1 MiB (`File.sha256` transmite bytes y no tiene límite). Los archivos tienen los permisos del usuario que ejecuta el programa.
+- El texto es UTF-8. Una llamada de texto lee o escribe como máximo 1 MiB (`File.sha256` lee bytes en flujo y no tiene límite). Los archivos tienen los permisos del usuario que ejecuta el programa.
 - Con `--deny-fs` (o `--sandbox`), cada llamada de esta página, salvo `Path.join`, `Lazy.write_lines` y `Lazy.write_bytes`, devuelve un error que empieza por `denied: --deny-fs`.
 - Los archivos regulares usan un grupo de 4 hilos, compartido con las consultas DNS y la carga de certificados TLS, así que las llamadas esperan a que haya un hilo libre cuando se ejecutan muchas. Auméntalo (como máximo 1024) antes de que empiece el programa: `UV_THREADPOOL_SIZE=16 agentica app.agc`.
 - Las tuberías, las FIFO y las terminales no usan el grupo y esperan en el bucle de eventos, así que su tiempo de espera siempre termina la espera. `File.read_text` de una tubería lee hasta que el escritor la cierra.
@@ -50,7 +50,7 @@ end
 - Los bytes van a un archivo nuevo en la misma carpeta, que solo el propietario puede leer mientras se escribe; después toma los bits de permiso del archivo antiguo, se vacía en el disco y se renombra sobre él. Un fallo quita el archivo nuevo y deja el antiguo como estaba. Un proceso terminado a la fuerza durante la escritura puede dejar un archivo oculto `.agc-PID-N.tmp` en la carpeta. Escribir necesita permiso de escritura en la carpeta.
 - Un enlace simbólico se sigue y sigue siendo un enlace: se reemplaza el archivo al que apunta. El archivo nuevo pertenece al usuario que ejecuta el programa, y un enlace físico al archivo antiguo conserva los bytes antiguos.
 - El archivo debe existir y ser un archivo regular: una ruta que falta da `error("filesystem: cannot resolve path ...")`, y un directorio o una FIFO dan `error("filesystem: path does not refer to a regular file")`. Usa `File.write_text` para crear un archivo.
-- En Windows, un archivo de solo lectura es un error, y no se escribe nada. De los atributos del archivo antiguo solo se conserva el bit de solo lectura: la lista de acceso viene de la carpeta, y los atributos de oculto y de sistema se descartan.
+- En Windows, un archivo de solo lectura es un error, y no se escribe nada. De los atributos del archivo antiguo solo se conserva el bit de solo lectura: la ACL viene de la carpeta, y los atributos de oculto y de sistema se descartan.
 
 ## File.append_text {#fileappend_text}
 
@@ -83,7 +83,7 @@ end
 File.sha256(path: String, timeout_ms: Int = 30000) -> Result[Bytes]
 ```
 
-Calcula el hash de un archivo entero con SHA-256 y devuelve los 32 bytes del resumen como un [`Bytes`](/library/data-structures/bytes/), los mismos bytes que da `OpenSSL.Digest.sha256` para el mismo contenido; `OpenSSL.Digest.hexencode` los escribe en hexadecimal. Lee el archivo en trozos de 64 KiB, así que un archivo que supera con mucho el límite de texto de 1 MiB también se puede calcular.
+Calcula el hash de un archivo entero con SHA-256 y devuelve los 32 bytes del resumen criptográfico como un [`Bytes`](/library/data-structures/bytes/), los mismos bytes que da `OpenSSL.Digest.sha256` para el mismo contenido; `OpenSSL.Digest.hexencode` los escribe en hexadecimal. Lee el archivo en trozos de 64 KiB, así que un archivo que supera con mucho el límite de texto de 1 MiB también se puede calcular.
 
 ```agentica {mode="check"}
 def main() -> Void
@@ -95,8 +95,8 @@ end
 ```
 
 - Solo se calculan los archivos regulares; los enlaces simbólicos se siguen. Una ruta que falta, un directorio, una FIFO, una tubería o un dispositivo dan `error("filesystem: path does not refer to a regular file")`, igual que `File.read_text`.
-- `timeout_ms` cubre la llamada entera y debe ser positivo, si no `error("filesystem: timeout must be positive milliseconds")`. Cuando se agota, la llamada devuelve `error("filesystem: operation timed out")` y el hash en curso se descarta. Una tarea cancelada se desvincula de la misma forma.
-- No hay instantánea: un escritor concurrente cambia el resumen. Para verificar una descarga, escríbela con un nombre temporal, calcula su hash y después muévela a su sitio con `Path.rename` o `Path.replace`.
+- `timeout_ms` cubre la llamada entera y debe ser positivo, si no `error("filesystem: timeout must be positive milliseconds")`. Cuando se agota, la llamada devuelve `error("filesystem: operation timed out")` y el hash en curso se descarta. Una tarea cancelada se quita de la misma forma.
+- No hay instantánea: un escritor concurrente cambia el resumen criptográfico. Para verificar una descarga, escríbela con un nombre temporal, calcula su hash y después muévela a su sitio con `Path.rename` o `Path.replace`.
 
 ## File.stat {#filestat}
 
@@ -138,8 +138,8 @@ Abre un archivo para trabajar en flujo.
 | Modo | Significado |
 |---|---|
 | `"read"` | leer un archivo existente |
-| `"write"` | crea el archivo, o lo vacía |
-| `"append"` | escribe al final del archivo |
+| `"write"` | crear el archivo, o vaciarlo |
+| `"append"` | escribir al final del archivo |
 | `"create_private"` | un archivo nuevo que solo tú puedes leer y escribir |
 
 `"create_private"` falla cuando la ruta ya existe (también un enlace colgado) y nunca sigue un enlace, así que otro usuario no puede desviar la escritura. En Unix: modo 0600, o menos cuando la umask quita bits. En Windows: una DACL protegida que solo concede acceso al usuario actual; la creación falla salvo que el objeto abierto tenga ese propietario y esa DACL.
@@ -148,7 +148,7 @@ Abre un archivo para trabajar en flujo.
 
 - Un archivo pertenece a la tarea que lo abrió y se cierra, con sus datos escritos, cuando esa tarea termina. `Task.await` de esa tarea devuelve el control después de que se escriban los datos de un archivo regular (no un vaciado a una FIFO o a una tubería), así que un padre que espera a un auxiliar lee todo lo que este escribió. Un `close` sobre un archivo que ya se está cerrando espera a ese cierre.
 - Al final del programa, la ejecución espera a que se escriban los archivos abiertos y a que la salida de `puts` e `IO.warn` llegue a su tubería o a su archivo, como máximo 30 segundos (`--flush-timeout MS` o `AGENTICA_FLUSH_TIMEOUT_MS`; el flag tiene prioridad). Cuando se acaba el tiempo, el código de salida se mantiene y el error estándar recibe una línea que dice que los datos del archivo podrían no escribirse.
-- Ante `SIGINT`, `SIGTERM`, `SIGHUP`, `SIGUSR1` o `SIGUSR2` a los que el programa no se ha suscrito ([`System.subscribe`](/library/io-and-system/system/#systemsubscribe)): primero se detienen los programas hijos, después se escriben los archivos y luego el programa termina por esa señal. `SIGQUIT` hace lo mismo y sale con 131, sin volcado de núcleo. Una segunda señal lo termina de inmediato, cuando los hijos ya se hayan detenido. Con `agentica`, Ctrl-C llega directamente al programa; `agentica` espera 2 segundos, envía `SIGTERM`, espera 2 más y después lo mata.
+- Ante `SIGINT`, `SIGTERM`, `SIGHUP`, `SIGUSR1` o `SIGUSR2` a los que el programa no se ha suscrito ([`System.subscribe`](/library/io-and-system/system/#systemsubscribe)): primero se detienen los procesos hijos, después se escriben los archivos y luego el programa termina por esa señal. `SIGQUIT` hace lo mismo y termina con código 131, sin volcado de núcleo. Una segunda señal lo termina de inmediato, cuando los hijos ya se hayan detenido. Con `agentica`, Ctrl-C llega directamente al programa; `agentica` espera 2 segundos, envía `SIGTERM`, espera 2 más y después lo mata.
 - Una ruta que vuelve a abrir una de las tuberías internas del programa, o el descriptor que hay detrás de stdout o stderr (`/proc/self/fd/5`), da `error("filesystem: path does not refer to a regular file")`. Las tuberías que el programa recibió al empezar (stdin, stdout, stderr, un `<(...)` de la shell) se abren por ruta.
 - Windows: las llamadas de archivo solo aceptan archivos regulares (y carpetas donde se pretende una carpeta); una tubería con nombre o un dispositivo se rechazan de inmediato.
 
@@ -255,7 +255,7 @@ Llama al bloque con cada línea, sin su terminador (LF y CRLF; una última líne
 
 - El bloque devuelve un `Result[Void]`: `ok()` sigue, y un `error(...)` se detiene y es el resultado. `try` y `return error(...)` funcionan en el bloque.
 - `buffer_bytes` es la línea más larga, contando su terminador: de 1024 a 16777216; si no, `RUNTIME-INVALID-COUNT` antes de abrir el archivo. Una línea más larga termina la llamada con `error("filesystem: line exceeds buffer_bytes")`.
-- `timeout_ms` limita cada lectura, la apertura y el cierre, no la llamada entera. Debe ser positivo, si no `error("filesystem: timeout must be positive milliseconds")`. Una tubería silenciosa termina la llamada con un error.
+- `timeout_ms` limita cada lectura, la apertura y el cierre, no la llamada entera. Debe ser positivo, si no `error("filesystem: timeout must be positive milliseconds")`. Una tubería sin datos termina la llamada con un error.
 - El texto es UTF-8 estricto: los bytes no válidos terminan la llamada con un error.
 - Para encadenar pasos sobre las líneas (`select`, `map`, `first(n)` ...), usa [`File.foreach`](/library/data-structures/lazy/#fileforeach), un `Lazy[String]` con las mismas lecturas. Para escribir las líneas de un `Lazy[String]` en un archivo, usa [`write_lines`](/library/data-structures/lazy/#write_lines).
 
@@ -324,7 +324,7 @@ Crea un directorio y los padres que falten. Un directorio que ya existe está bi
 Dir.mkdir_private(path: String, timeout_ms: Int = 30000) -> Result[Void]
 ```
 
-Crea un directorio al que solo tú puedes entrar, para un directorio de trabajo temporal en un lugar compartido como `/tmp`. No crea padres, y una ruta que ya existe es un error, así que el éxito significa que el directorio es nuevo y tuyo. Unix: modo 0700, o menos cuando la umask quita bits. Windows: la comprobación de propietario y DACL de `File.open`.
+Crea un directorio al que solo tú puedes entrar, para un directorio temporal en un lugar compartido como `/tmp`. No crea padres, y una ruta que ya existe es un error, así que el éxito significa que el directorio es nuevo y tuyo. Unix: modo 0700, o menos cuando la umask quita bits. Windows: la comprobación de propietario y DACL de `File.open`.
 
 ```agentica {mode="check"}
 def main() -> Void
@@ -369,12 +369,12 @@ Path.resolve(path: String) -> Result[String]
 Path.real(path: String) -> Result[String]
 ```
 
-Como `realpath` de POSIX: la ruta absoluta con cada enlace simbólico resuelto y los `.`, `..` y separadores repetidos quitados. A diferencia de `resolve`, lee el disco, así que la ruta debe existir (una ruta que falta, un bucle de enlaces o algo que no es un directorio dan error). Una ruta relativa empieza en el directorio de trabajo, y un `..` después de un enlace sigue el destino del enlace. Una ruta vacía o con NUL da el mismo error `filesystem: invalid path` que `File.stat`. La VM no pone límite de búfer a la ruta; se aplica el límite del propio sistema a su forma absoluta. Los bytes UTF-8 no válidos se convierten en U+FFFD. No tiene tiempo de espera; se ejecuta en el grupo de archivos y no detiene otras tareas.
+Como `realpath` de POSIX: la ruta absoluta con cada enlace simbólico resuelto y los `.`, `..` y separadores repetidos quitados. A diferencia de `resolve`, lee el disco, así que la ruta debe existir (una ruta que falta, un bucle de enlaces o algo que no es un directorio dan error). Una ruta relativa empieza en el directorio de trabajo, y un `..` después de un enlace sigue el destino del enlace. Una ruta vacía o con NUL da el mismo error `filesystem: invalid path` que `File.stat`. La VM no pone límite de búfer a la ruta; se aplica el límite del propio sistema a su forma absoluta. Los bytes UTF-8 no válidos se convierten en U+FFFD. No tiene tiempo de espera; se ejecuta en el grupo de hilos de archivos y no detiene otras tareas.
 
 Se ven las reglas propias del sistema:
 
 - macOS falla con una ruta de 1024 bytes o más, y acepta una `/` después de un archivo (`file/` da el archivo); Linux y Windows dan error para ella.
-- Windows quita `.` y `..` del texto escrito antes de seguir un enlace, así que `link/..` es la carpeta que contiene el enlace y `missing/..` no es un error. Un nombre bajo un archivo da ENOENT (Linux y macOS: ENOTDIR). El resultado empieza por una letra de unidad (`/` es la unidad del directorio de trabajo, como `C:/`). El binario se acoge a las rutas largas en su manifiesto. Una ruta de 260 caracteres o más solo funciona cuando la máquina pone `LongPathsEnabled` a 1; si no, es un error, como lo es `Dir.mkdir` de una así.
+- Windows quita `.` y `..` del texto escrito antes de seguir un enlace, así que `link/..` es la carpeta que contiene el enlace y `missing/..` no es un error. Un nombre bajo un archivo da ENOENT (Linux y macOS: ENOTDIR). El resultado empieza por una letra de unidad (`/` es la unidad del directorio de trabajo, como `C:/`). El binario activa las rutas largas en su manifiesto. Una ruta de 260 caracteres o más solo funciona cuando la máquina pone `LongPathsEnabled` a 1; si no, es un error, como lo es `Dir.mkdir` de una así.
 
 ```agentica
 def main() -> Void
@@ -400,7 +400,7 @@ Quita un archivo, un enlace simbólico o un directorio con todo lo que contiene.
 - Rechaza una raíz del sistema de archivos, un separador final, `.` y `..` (también como final de `dir/..`), y un árbol de más de 128 niveles de profundidad (que queda parcialmente quitado).
 - Una llamada fallida conserva lo que ya quitó; el error nombra el elemento que falló con el error del sistema. Un tiempo de espera da un error, pero la eliminación ya iniciada llega hasta el final.
 - Una ruta bajo un archivo (`file/child`) es un error (`Not a directory`), y también lo es un separador final en un enlace simbólico: `link/` nunca debe devolver `ok()`. Un fallo dentro del árbol nombra el elemento que falló.
-- Unix cruza los puntos de montaje, como lo hace `rm -rf`. Windows quita las uniones (junctions) y otros puntos de reanálisis sin recorrerlos, rechaza las raíces de unidad o de recurso compartido, la sintaxis de flujos de datos alternativos y los componentes que terminan en punto o en espacio.
+- Unix cruza los puntos de montaje, como lo hace `rm -rf`. Windows quita las uniones y otros puntos de reanálisis sin recorrerlos, rechaza las raíces de unidad o de recurso compartido, la sintaxis de flujos de datos alternativos y los componentes que terminan en punto o en espacio.
 
 ```agentica {mode="check"}
 def main() -> Void
@@ -441,7 +441,7 @@ Renombra el archivo regular `from` a `to` en un solo paso, reemplazando lo que h
 - Un directorio en `to` es un error `io.is_directory` y queda como estaba. Un directorio `from` también es `io.is_directory`, y un `from` que es un enlace simbólico u otro archivo que no es regular es `io.failed`.
 - `from` se sincroniza con el disco antes de renombrar. En POSIX, la carpeta se vacía después, así que un corte de energía deja el archivo antiguo o el nuevo completo; Windows no tiene vaciado de carpeta.
 - El archivo nuevo conserva sus propios bits de permiso y su propietario. Ambas rutas deben estar en un mismo sistema de archivos; no hay una copia de respaldo. POSIX usa `rename`, y Windows `MoveFileExW` con `MOVEFILE_REPLACE_EXISTING`.
-- En Windows, `from` se abre para escritura a fin de vaciarlo, así que un `from` de solo lectura, o uno que otro programa tiene abierto sin compartir la escritura, es `io.permission`. También se rechazan un `to` de solo lectura, un `to` que otro programa tiene abierto sin `FILE_SHARE_DELETE`, y un enlace de directorio o unión (junction) en `to`.
+- En Windows, `from` se abre para escritura a fin de vaciarlo, así que un `from` de solo lectura, o uno que otro programa tiene abierto sin compartir la escritura, es `io.permission`. También se rechazan un `to` de solo lectura, un `to` que otro programa tiene abierto sin `FILE_SHARE_DELETE`, y un enlace de directorio o una unión en `to`.
 - Un tiempo de espera da un error, pero no detiene un renombrado en curso, que entonces se completa entero.
 
 ```agentica {mode="check"}

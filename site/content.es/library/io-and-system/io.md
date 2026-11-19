@@ -11,11 +11,11 @@ En Linux, macOS y Windows:
 
 - Una impresión llega a una tubería o a un archivo sin `IO.flush()`. La VM la escribe en cuanto el lector la toma.
 - Las lecturas de la entrada estándar y las escrituras en la salida o en el error estándar esperan sin detener otras tareas.
-- Cada flujo guarda hasta 64 KiB. Cuando una tubería está llena, las tareas que imprimen esperan su turno, en orden. Una impresión no tiene tiempo de espera, y una impresión nunca se parte por otra (tampoco un mensaje de fallo).
+- Cada flujo guarda hasta 64 KiB. Cuando una tubería está llena, las tareas que imprimen esperan su turno, en orden. Una impresión no tiene tiempo de espera, y una impresión nunca se mezcla con otra (tampoco un mensaje de fallo).
 - La salida y el error estándar que van a la misma terminal o al mismo archivo (por ejemplo con `2>&1`) comparten un búfer, así que `puts` e `IO.warn` mantienen su orden. En Windows esto se cumple cuando ambos descriptores son el mismo objeto handle.
 - Un programa cuya salida o error estándar pierde a su lector (`prog | head`) termina en silencio con código de salida 141, como hace una herramienta Unix al recibir SIGPIPE; otros errores de escritura lo terminan con `RUNTIME-INTERNAL`.
 - En Windows, el texto que se escribe en una consola llega al programa como UTF-8, sea cual sea la página de códigos de la consola.
-- En Windows, después de una señal de parada y para los últimos mensajes de error, una tubería o una consola tiene en total una espera de hasta 200 ms. Así, un lector que nunca lee no puede retener la salida del programa.
+- En Windows, después de una señal de parada y para los últimos mensajes de error, una tubería o una consola tiene en total una espera de hasta 200 ms. Así, un lector que nunca lee no puede retrasar el fin del programa.
 
 En otros sistemas, la salida se guarda en búfer, así que llama a `IO.flush()` cuando otro programa espere tu salida línea a línea. Una lectura de la entrada estándar bloquea todo el programa hasta que llega la entrada. Una escritura en la salida o en el error estándar lo bloquea hasta que el lector toma el texto.
 
