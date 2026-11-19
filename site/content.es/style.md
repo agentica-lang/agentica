@@ -70,7 +70,7 @@ Pon una línea vacía después del `end` de un bloque, antes de la siguiente sen
 | Qué | Estilo | Ejemplo |
 |---|---|---|
 | funciones, variables, campos, archivos | `snake_case` | `read_line`, `max_len`, `http_client.agc` |
-| structs, enums, variantes | `CamelCase` | `User`, `Shape.Circle` |
+| estructuras, enums, variantes | `CamelCase` | `User`, `Shape.Circle` |
 | constantes | `UPPER_SNAKE_CASE` | `MAX_TRIES` |
 
 La primera letra se exige, y también que una constante vaya en mayúsculas:
@@ -110,7 +110,7 @@ def main() -> Void
 end
 ```
 
-Dilo en positivo. Pon el caso positivo primero y no emparejes una prueba negada con `else`:
+Dilo en positivo. Pon el caso positivo primero y no pongas una condición negada junto a `else`:
 
 ```agentica {mode="check"}
 # good
@@ -127,7 +127,7 @@ end
 
 ## Archivos y documentación {#files-and-docs}
 
-Un archivo tiene un orden fijo: su documentación y sus imports; la parte pública (constantes, luego structs, enums, alias de tipo, bloques de módulo y bloques extern con un recurso, luego funciones); una línea `private` con una línea vacía antes y después; y luego la parte privada en el mismo orden. Ordena los imports por ruta. Una constante se lee a través del alias (`Limits.LIMIT`) como el resto; impórtala por nombre (`import {LIMIT} from "limits"`) cuando se usa mucho, y un archivo puede importar un módulo de las dos maneras.
+Un archivo tiene un orden fijo: su documentación y sus importaciones; la parte pública (constantes, luego estructuras, enums, alias de tipo, bloques de módulo y bloques extern con un recurso, luego funciones); una línea `private` con una línea vacía antes y después; y luego la parte privada en el mismo orden. Ordena las importaciones por ruta. Una constante se lee a través del alias (`Limits.LIMIT`) como el resto; impórtala por nombre (`import {LIMIT} from "limits"`) cuando se usa mucho, y un archivo puede importar un módulo de las dos maneras.
 
 ```agentica {expect="CHECK-DECL-ORDER"}
 # bad
@@ -142,7 +142,7 @@ end
 
 Mantén un solo tema por archivo, y haz públicos solo los nombres que usan otros archivos.
 
-Documenta lo mínimo. Solo el código público recibe un `##`: una función, struct o enum público, que diga qué devuelve o qué es, no cómo. Una función privada nunca recibe `##`; cuando necesita una nota, usa un solo comentario `#`. Un campo o una variante recibe una nota solo cuando su nombre no dice lo suficiente. Un comentario `#` dice por qué el código es así, no qué hace la línea siguiente:
+Documenta lo mínimo. Solo el código público recibe un `##`: una función, estructura o enum público, que diga qué devuelve o qué es, no cómo. Una función privada nunca recibe `##`; cuando necesita una nota, usa un solo comentario `#`. Un campo o una variante recibe una nota solo cuando su nombre no dice lo suficiente. Un comentario `#` dice por qué el código es así, no qué hace la línea siguiente:
 
 ```agentica {mode="check"}
 # bad
@@ -185,9 +185,9 @@ Borra el código en lugar de comentarlo.
 
 ## Funciones {#functions}
 
-Dale a cada función un solo trabajo. Si los comentarios la dividen en partes, divídela en funciones.
+Haz que cada función tenga un solo trabajo. Si los comentarios la dividen en partes, divídela en funciones.
 
-Usa cuatro parámetros o menos. Pon más en un struct. Una función cuyo cuerpo es un solo valor es un def de una línea, `def double(n: Int) -> Int = n * 2`; `agentica fmt` la escribe así. Devuelve pronto en los casos malos, para que el flujo principal se quede plano:
+Usa cuatro parámetros o menos. Pon más en una estructura. Una función cuyo cuerpo es un solo valor es un def de una línea, `def double(n: Int) -> Int = n * 2`; `agentica fmt` la escribe así. Devuelve pronto en los casos malos, para que el flujo principal se quede plano:
 
 ```agentica {mode="check"}
 # bad
@@ -234,7 +234,7 @@ def main() -> Void
 end
 ```
 
-Un registro con campos conocidos es un struct, no un mapa:
+Un registro con campos conocidos es una estructura, no un mapa:
 
 ```agentica {mode="check"}
 # good
@@ -273,7 +273,7 @@ def main() -> Void
 end
 ```
 
-Dale a una llamada un bloque solo para un cuerpo corto, una sola expresión como `do |order| order.item end`. Un cuerpo más largo, como un handler de ruta (`|> Bond.get("/users/:id", &show_user)`) o varias sentencias, es una función con nombre que se pasa con `&name`:
+Usa un bloque en una llamada solo para un cuerpo corto, una sola expresión como `do |order| order.item end`. Un cuerpo más largo, como un handler de ruta (`|> Bond.get("/users/:id", &show_user)`) o varias sentencias, es una función con nombre que se pasa con `&name`:
 
 ```agentica {mode="check"}
 # bad
@@ -496,7 +496,7 @@ end
 
 ## Errores {#errors}
 
-Una función que puede fallar devuelve un `Result` y pasa los errores hacia arriba con `try`. Usa una forma que detenga el programa, como `to_i!`, solo cuando un fallo es un error de programación, y di por qué en un comentario. Un valor que puede faltar, sin error que informar, es un [Optional](/library/data-structures/optional/#optional-or-result) (`some(x)` o `none`), no un `Result`:
+Una función que puede fallar devuelve un `Result` y propaga los errores con `try`. Usa una forma que detenga el programa, como `to_i!`, solo cuando un fallo es un error de programación, y di por qué en un comentario. Un valor que puede faltar, sin error que informar, es un [Optional](/library/data-structures/optional/#optional-or-result) (`some(x)` o `none`), no un `Result`:
 
 ```agentica {mode="check"}
 # bad
@@ -522,7 +522,7 @@ def main() -> Void
 end
 ```
 
-Escribe el texto de error en minúsculas, sin punto final, e incluye el valor incorrecto (`error("port out of range: 70000")`). Trata los errores en el borde del programa, como `main` o un handler de solicitudes. Un parser devuelve un `Result[T]`, no un struct con un campo `valid` o `refused`:
+Escribe el texto de error en minúsculas, sin punto final, e incluye el valor incorrecto (`error("port out of range: 70000")`). Trata los errores en el borde del programa, como `main` o un handler de solicitudes. Un parser devuelve un `Result[T]`, no una estructura con un campo `valid` o `refused`:
 
 ```agentica {mode="check"}
 # good
@@ -599,11 +599,11 @@ end
 
 Un `String` que crece con `+` en un bucle se copia en cada iteración, así que el bucle es cuadrático: haz `push` de las piezas en una `List` y luego `join` una vez, después del bucle.
 
-Usa una `List` para el orden, un `Set` para la pertenencia, un `Map` para buscar por clave, y un struct para un registro con campos conocidos.
+Usa una `List` para el orden, un `Set` para la pertenencia, un `Map` para buscar por clave, y una estructura para un registro con campos conocidos.
 
 ## Efectos {#effects}
 
-Agentica no tiene monkey patching y una función no es un valor, pero una lambda sí lo es, así que un test cambia un efecto (la lectura de un archivo, el reloj, una llamada HTTP, un número aleatorio) mediante un struct de campos `Fn`: el registro de efectos. Construye el real una vez, al arrancar, a partir de la configuración; un test construye otro. El comprobador se asegura de que ambos tengan la misma forma. El compilador lo hace con `Workspace` (`compiler/modules/workspace.agc`), que `io/host.agc` construye y `app/` pasa. Hace el papel de un behaviour más un mock en otros lenguajes. Cuando un servidor real en `localhost` puerto 0 es igual de simple, úsalo en lugar de simular la red.
+Agentica no tiene monkey patching y una función no es un valor, pero una lambda sí lo es, así que una prueba cambia un efecto (la lectura de un archivo, el reloj, una llamada HTTP, un número aleatorio) mediante una estructura de campos `Fn`: el registro de efectos. Construye el real una vez, al arrancar, a partir de la configuración; una prueba construye otra. El comprobador se asegura de que ambos tengan la misma forma. El compilador lo hace con `Workspace` (`compiler/modules/workspace.agc`), que `io/host.agc` construye y `app/` pasa. Hace el papel de un behaviour más un mock en otros lenguajes. Cuando un servidor real en `localhost` puerto 0 es igual de simple, úsalo en lugar de simular la red.
 
 ```agentica {mode="check"}
 struct Effects

@@ -1,7 +1,7 @@
 ---
 title: La VM Aurora
 weight: 7
-description: Cómo ejecuta Agentica tu programa, la VM de bytecode llamada Aurora, y las bibliotecas sobre las que está construida.
+description: Cómo ejecuta Agentica tu programa, la VM de bytecode Aurora y las bibliotecas sobre las que está construida.
 source_hash: "9868f111cad2"
 ---
 
@@ -28,7 +28,7 @@ El bytecode solo se ejecuta en la VM de la misma versión de Agentica.
 - **JIT.** Un JIT para x86-64 (Linux, macOS y Windows) y para arm64 (Linux y macOS), activado por defecto ([`--jit`](/cli/#options)), compila las funciones calientes con bucles y las funciones pequeñas sin bucle que llaman. La aritmética, las lecturas, las operaciones de texto y los saltos compatibles se ejecutan como código máquina. Otras máquinas usan el intérprete.
 - **Límites.** Los pasos y la memoria no tienen límite, a menos que pongas `--max-steps` o `--max-heap` ([Opciones](/cli/#options)). Las llamadas se anidan como máximo 10 000 niveles por tarea; después, `RUNTIME-STACK-OVERFLOW` con la pila de llamadas (una función repetida, en una línea y con su cuenta). Una llamada en cola no añade profundidad.
 - **Mapas y listas.** `Map` es un HAMT persistente que conserva el orden de inserción; `Map.put` copia solo la ruta hasta su clave. `List` es un vector persistente de 32 hijos por nodo, más una cola pequeña: indexar toma como máximo cuatro pasos para un millón de elementos, añadir n elementos cuesta O(n), y una lista de solo Ints o solo Floats ocupa 8 bytes por elemento. `take`, `drop` y `reverse` son O(n), y `sort` es O(n log n).
-- **JSON.** Cada objeto conserva el orden de sus claves: los campos de un struct, el orden de inserción de un mapa y el orden del texto de un objeto analizado, donde una clave repetida conserva su primer lugar y su último valor.
+- **JSON.** Cada objeto conserva el orden de sus claves: los campos de una estructura, el orden de inserción de un mapa y el orden del texto de un objeto analizado, donde una clave repetida conserva su primer lugar y su último valor.
 - **Módulos estándar.** Los módulos de `std/` están escritos en Agentica, incrustados en el binario y enlazados a tu bytecode como tus propios módulos.
 
 ## Sobre qué está construida {#what-it-is-built-on}

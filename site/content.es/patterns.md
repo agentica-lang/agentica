@@ -1,7 +1,7 @@
 ---
 title: Patrones
 weight: 6
-description: Los patrones de diseño comunes, escritos sin clases, con structs, enums, funciones y bloques.
+description: Los patrones de diseño comunes, escritos sin clases, con estructuras, enums, funciones y bloques.
 source_hash: "c8dafd2e22df"
 ---
 
@@ -58,7 +58,7 @@ unknown shape: star
 
 ## Constructor {#builder}
 
-Da valores predeterminados a los campos del struct y luego cambia algunos con `with`.
+Da valores predeterminados a los campos de la estructura y luego cambia algunos con `with`.
 
 ```agentica
 struct Request
