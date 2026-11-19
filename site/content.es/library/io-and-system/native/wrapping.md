@@ -1,11 +1,11 @@
 ---
 title: Envolver una biblioteca de C
 weight: 5
-description: Oculta los hábitos de C de una biblioteca (códigos de retorno, punteros out, argumentos variádicos) tras una API normal de Agentica, y entrégala en un paquete.
+description: Oculta los hábitos de C de una biblioteca (códigos de retorno, punteros out, argumentos variádicos) tras una API normal de Agentica, y distribúyela en un paquete.
 source_hash: "35b71cc3c343"
 ---
 
-C le da forma a una biblioteca de C. Tiene códigos de retorno, punteros que C llena, handles con una función de liberación y funciones variádicas. Un buen envoltorio oculta todo eso. El bloque `extern` es la capa cruda. Las funciones públicas encima de ella se ven como el resto de Agentica. [SQLite](/library/io-and-system/native/sqlite/) es una biblioteca completa hecha así. Esta página da las reglas. Los ejemplos nombran las bibliotecas de Linux (`libc.so.6`, `libm.so.6`).
+Una biblioteca de C tiene la forma que le impone C. Tiene códigos de retorno, punteros que C llena, handles con una función de liberación y funciones variádicas. Un buen envoltorio oculta todo eso. El bloque `extern` es la capa cruda. Las funciones públicas encima de ella se ven como el resto de Agentica. [SQLite](/library/io-and-system/native/sqlite/) es una biblioteca completa hecha así. Esta página da las reglas. Los ejemplos nombran las bibliotecas de Linux (`libc.so.6`, `libm.so.6`).
 
 ## Dos capas {#two-layers}
 
@@ -253,6 +253,6 @@ Un tamaño que no cabe en un `C.Int32` detiene el programa en la llamada (`RUNTI
 
 Una biblioteca cuya API es una estructura de punteros a función, como onnxruntime, se envuelve igual. La capa cruda declara cada hueco que usa el envoltorio como un `def` cuyo primer parámetro es `fn: C.Function`, y cada handle como `resource Name, free: C.Function`, liberado a través del hueco de liberación de la tabla. El envoltorio obtiene la tabla una vez, guarda los números de hueco como constantes en el orden de la cabecera de C, y pasa `Native.get_pointer(api, slot * 8)` a los `def` crudos, así que el llamador nunca ve un puntero a función. Un número de hueco de otra versión de la cabecera es comportamiento indefinido, como una firma incorrecta: pide la versión de la que vienen los huecos, como lo hace `GetApi(version)` de onnxruntime, y convierte su NULL en un `error`.
 
-## Entregarla en un paquete {#shipping-it-in-a-package}
+## Distribuirla en un paquete {#shipping-it-in-a-package}
 
-Un paquete nombra la biblioteca para cada sistema en `[native.NAME]` de su `agentica.toml`. Su bloque `extern` la abre después con `extern "NAME"`. Mira la [referencia de módulos](/reference/modules/) para la forma, el lock y los códigos de error. Documenta el archivo del envoltorio como la API del paquete.
+Un paquete nombra la biblioteca para cada sistema en `[native.NAME]` de su `agentica.toml`. Su bloque `extern` la abre después con `extern "NAME"`. Mira la [referencia de módulos](/reference/modules/) para la forma, el archivo agentica.lock y los códigos de error. Documenta el archivo del envoltorio como la API del paquete.

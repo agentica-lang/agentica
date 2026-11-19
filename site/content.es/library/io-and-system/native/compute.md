@@ -1,11 +1,11 @@
 ---
 title: Llamadas compute
 weight: 3
-description: Ejecuta una llamada larga de C en el grupo de compute, para que las demás tareas sigan ejecutándose.
+description: Ejecuta una llamada larga de C en el grupo de hilos de cómputo, para que las demás tareas sigan ejecutándose.
 source_hash: "beb7a323d3f8"
 ---
 
-Una función declarada con `compute def` se ejecuta en el grupo de compute de la VM, un hilo por planificador, y la tarea llamadora espera mientras las demás tareas siguen. Úsala para una llamada que puede tardar: una consulta, una compresión, un paso de un modelo.
+Una función declarada con `compute def` se ejecuta en el grupo de hilos de cómputo de la VM, un hilo por planificador, y la tarea llamadora espera mientras las demás tareas siguen. Úsala para una llamada que puede tardar: una consulta, una compresión, un paso de un modelo.
 
 ```agentica {mode="check"}
 extern "libsqlite3.so.0"

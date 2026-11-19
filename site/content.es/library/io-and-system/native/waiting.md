@@ -28,7 +28,7 @@ end
 
 El bucle de conexión de una biblioteca espera de la misma forma, con `try Native.wait_readable(socket, 5_000)` entre sus sondeos.
 
-- Cuando pasan `timeout_ms` (positivo), el resultado es `error("native: timed out")`. Un tiempo de espera que no es positivo, un descriptor negativo y uno que no se puede sondear (cerrado, un archivo regular, `/dev/null` en Linux) dan un error que empieza con `native: `. En macOS, `/dev/null` siempre está listo.
+- Si se agota `timeout_ms` (positivo), el resultado es `error("native: timed out")`. Un tiempo de espera que no es positivo, un descriptor negativo y uno que no se puede sondear (cerrado, un archivo regular, `/dev/null` en Linux) dan un error que empieza con `native: `. En macOS, `/dev/null` siempre está listo.
 - Un error o una desconexión en el descriptor termina la espera con `ok`, como lo hace `poll(2)`: la siguiente llamada de la biblioteca lo informa.
 - La espera vigila una copia del descriptor (una nueva apertura de su archivo, `/proc/self/fd` o `F_GETPATH` en macOS, o un duplicado para un socket, el extremo maestro de una terminal, un eventfd y una tubería de macOS), así que la biblioteca conserva su descriptor y sus flags, y dos tareas pueden esperar en un mismo descriptor.
 - Si la biblioteca cierra el descriptor durante una espera, la espera sigue y termina en su tiempo de espera (`native: timed out`), a menos que el archivo quede listo.
