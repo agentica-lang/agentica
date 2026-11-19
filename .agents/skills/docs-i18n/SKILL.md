@@ -24,7 +24,8 @@ Terms come from `references/glossary-es.md`. Read it before you translate.
    block.
 3. Never translate: diagnostic codes (`CHECK-...`), API, builtin and `std/`
    names, keywords, types, config keys, env vars, and anything in backticks.
-   Shortcode names and their other attributes stay too.
+   Shortcode names stay. In an `example` shortcode, translate only the
+   `title`; every other attribute stays.
 4. Use the glossary. A new term goes into the glossary in the PR that first
    uses it, in sorted order. A rename is one PR that changes the glossary and
    every Spanish page that uses the term.
@@ -32,13 +33,16 @@ Terms come from `references/glossary-es.md`. Read it before you translate.
    lists, tables and shortcodes. One line per paragraph and per list item,
    line for line where possible (`site/content/` rule in AGENTS.md).
 6. Links: keep every target as it is in English, including external ones.
-   Translate the words inside the brackets. The build sends a reader to the
-   Spanish page when it exists, else to the English one. Anchors are set by
-   hand: `## Texto {#english-id}`, with the id the English heading has.
+   Translate the words inside the brackets. From P2 on, a link to a page with
+   no Spanish version goes to the English page. Before P2, do not link to an
+   untranslated page. Every Spanish heading ends with `{#id}`, the id its
+   English heading gets: the heading's own `{#id}` if it has one, else the id
+   Hugo makes from its text (`render-heading.html` prints it as `.Anchor`).
+   P4 checks it.
 7. Front matter: translate `title` and `description`. Copy `weight`, `slug`,
    `aliases` and `url` unchanged. Add `source_hash` (see the workflow).
 8. Tone: neutral international Spanish, *tú*, never *vosotros*. Simple words
-   and short sentences, as in documentation-writing. Add no sentence and drop
+   and short sentences (AGENTS.md, "Working style"). Add no sentence and drop
    no sentence. A sentence that is wrong in English is fixed in English first.
 9. Checks: `make site` is green, `make site-translations` is green (once P4
    lands), and a reviewer agent approves the PR with the checklist below. The
@@ -54,7 +58,8 @@ Terms come from `references/glossary-es.md`. Read it before you translate.
 2. Copy it to the same path: `mkdir -p site/content.es/DIR` then
    `cp site/content/X site/content.es/X`.
 3. Translate the prose: front matter, headings, paragraphs, list items, table
-   cells and the `title` of an example shortcode. Leave the code alone.
+   cells and the `title` attribute of an `example` shortcode. Leave the code
+   and the other shortcode attributes alone.
 4. Add `source_hash` to the front matter: the first 12 hex digits of the
    SHA-256 of the English file bytes:
    `sha256sum site/content/X | cut -c1-12`. Once P4 lands, use
@@ -80,7 +85,7 @@ Once P4 lands, `make site-translations` checks these and fails the job:
   `slug`, `aliases` and `url` equal the English ones;
 - fenced code blocks are byte-identical to English, info string included;
 - same number of headings, same levels in the same order, same anchors;
-- the backticked spans are the same, as a multiset;
+- the backticked spans are the same, with the same count of each;
 - the same link targets in the same order, and the same shortcode names;
 - the same number of list items, table rows and shortcodes.
 
@@ -91,16 +96,36 @@ checks the links.
 
 A reviewer agent checks what no tool can:
 
-- every term matches the glossary, and a new term is in the glossary;
-- code blocks and backticked spans are identical to the English page;
-- the same headings, order, lists, tables and shortcodes;
-- each Spanish heading has the English `{#id}` anchor when the English
-  heading has one;
-- front matter: the rules of rule 7;
-- no added or dropped sentences: compare the two pages sentence by sentence;
-- the tone: neutral Spanish, *tú*, no *vosotros*, simple words;
-- links: the targets are the English ones, and the labels are Spanish;
-- product names, interface strings and the glossary terms of rules 1, 4
-  and 10.
+- Terms: for each glossary term in the English page, find the same place in
+  the Spanish page. Check that its Spanish form is the one in the glossary
+  row, or "stays". A term with no row is a new term: this PR adds it to the
+  glossary.
+- Code blocks and backticked spans are identical to the English page.
+- The same headings, order, lists, tables and shortcodes. Shortcode
+  attributes are identical, except the `title` of `example`.
+- Each Spanish heading ends with `{#id}`, equal to the id its English heading
+  gets (rule 6).
+- Front matter: the rules of rule 7. `source_hash` equals the first 12 hex
+  digits of the SHA-256 of the English file. Example, with a made-up hash:
 
-A reviewer says "changes requested" with the line numbers of each problem.
+  ```yaml
+  ---
+  title: Cadenas e interpolación
+  description: Literales de cadena, escapes, interpolación y métodos.
+  weight: 3
+  source_hash: 9c1e4f0a7b2d
+  ---
+  ```
+
+- No added or dropped sentences: compare the two pages sentence by sentence.
+- Tone: neutral Spanish, *tú*, no *vosotros*, simple words.
+- Links: the targets are the English ones, and the labels are Spanish.
+- Width: the skill files and the glossary have no line over 80 columns. Run
+  `awk 'length > 80' FILE` on each one; it must print nothing. The
+  `test_style_line_width.py` test covers only `.agc` files. Site pages keep one
+  line per paragraph, so they are not checked for width.
+- Product names, interface strings, and the terms of rules 1, 4 and 10.
+
+A reviewer approves when every point passes. Otherwise the reviewer says
+"changes requested" and gives the line of each problem. The owner samples the
+published pages, and a problem found there becomes a rule here.
