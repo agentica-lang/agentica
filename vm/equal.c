@@ -227,7 +227,11 @@ static size_t integral_text(double d, int shift, char *buf) {
   uint64_t mantissa = (uint64_t)ldexp(frexp(fabs(d), &e), 53);
   uint64_t limbs[40];
   size_t n = 0, len = 0;
-  for (uint64_t v = mantissa; v; v /= 1000000000) limbs[n++] = v % 1000000000;
+  uint64_t v = mantissa;
+  do {
+    limbs[n++] = v % 1000000000;
+    v /= 1000000000;
+  } while (v);
   while (shift > 0) {
     int step = shift < 29 ? shift : 29;
     uint64_t carry = 0;
