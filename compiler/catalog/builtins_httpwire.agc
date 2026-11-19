@@ -40,7 +40,7 @@ ROWS: List[Model.Builtin] = [
     result: Types.Type.Bool,
     rule: Model.Rule.Plain,
     implementation: "HttpWire.watch",
-    effects: [],
+    effects: ["concurrency"],
     description: (
       "Internal to std/http: awaited?, and until the first value is sent to reply, a cancel of its parked receiver " +
       "cancels the calling task."
