@@ -1,7 +1,7 @@
 ---
 title: Int y Float
 weight: 2
-description: Convierte entre Int, Float y String, redondea, acota y usa otras funciones de números, y trabaja con los bits de un Int o de un Float.
+description: Convierte entre Int, Float y String, redondea, acota y usa otras funciones auxiliares de números, y trabaja con los bits de un Int o de un Float.
 source_hash: "35e7ff51e74b"
 ---
 
@@ -172,7 +172,7 @@ Float.ceil(float: Float) -> Int
 Float.round(float: Float) -> Int
 ```
 
-Dan un `Int`, como `Float#floor` de Ruby da un `Integer`. `floor` va hacia abajo, `ceil` va hacia arriba, y `round` va al entero más cercano, y las mitades se alejan de cero: `2.5.round` es `3` y `(-2.5).round` es `-3`. Como `x.to_i!`, NaN o un infinito es `RUNTIME-INVALID-NUMBER`, y un resultado fuera de `Int` es `RUNTIME-INTEGER-OVERFLOW`. `round` no recibe número de dígitos; [`format("%.2f", x)`](#format) escribe un Float con dos dígitos después del punto.
+Dan un `Int`, como `Float#floor` de Ruby da un `Integer`. `floor` va hacia abajo, `ceil` va hacia arriba, y `round` va al entero más cercano, y los empates se alejan de cero: `2.5.round` es `3` y `(-2.5).round` es `-3`. Como `x.to_i!`, NaN o un infinito es `RUNTIME-INVALID-NUMBER`, y un resultado fuera de `Int` es `RUNTIME-INTEGER-OVERFLOW`. `round` no recibe número de dígitos; [`format("%.2f", x)`](#format) escribe un Float con dos dígitos después del punto.
 
 ```agentica
 def main() -> Void

@@ -1,11 +1,11 @@
 ---
-title: Expresiones regulares (std)
+title: Regex (std)
 weight: 13
 description: El módulo std/regex, que busca, extrae, reemplaza y divide texto con expresiones regulares en tiempo lineal.
 source_hash: "5016d1429186"
 ---
 
-`std/regex` está escrito en Agentica: `import Regex from "std/regex"`. Toma la sintaxis de RE2 y de Go, da la coincidencia más a la izquierda y cuenta las posiciones en caracteres, como lo hacen `index_of` y `slice`. Su motor de coincidencias no hace retrocesos, así que una búsqueda tarda un tiempo proporcional a la longitud del texto por el tamaño del patrón, sea cual sea la entrada. Nada en él detiene el programa: un patrón o una plantilla malos dan un error.
+`std/regex` está escrito en Agentica: `import Regex from "std/regex"`. Toma la sintaxis de RE2 y de Go, da la coincidencia más a la izquierda y cuenta las posiciones en caracteres, como lo hacen `index_of` y `slice`. Su motor de coincidencias no usa retroceso, así que una búsqueda tarda un tiempo proporcional a la longitud del texto por el tamaño del patrón, sea cual sea la entrada. Nada en él detiene el programa: un patrón o una plantilla malos dan un error.
 
 ```ruby
 Regex.compile(pattern: String) -> Result[Regex.Regex]

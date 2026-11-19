@@ -43,7 +43,7 @@ text/javascript; charset=utf-8
 
 ## mime_type {#mime_type}
 
-`mime_type` lee su argumento de dos maneras. Un texto que empieza con un punto, no tiene otro punto y no tiene `/` ni `\` es una extensión, como en Rack: `.css` da `text/css`. Cualquier otro texto es una ruta: se cortan la cadena de consulta (desde el primer `?`) y el fragmento (desde el primer `#`), y luego se lee la parte después del último `/` con la regla de `File.extname` de Ruby. Solo cuenta la última extensión, en cualquier caso, así que `backup.tar.gz` es un archivo `.gz`. Un punto al inicio del nombre no empieza una extensión, así que `public/.json` no tiene ninguna, y `.env.json` es `json`.
+`mime_type` lee su argumento de dos maneras. Un texto que empieza con un punto, no tiene otro punto y no tiene `/` ni `\` es una extensión, como en Rack: `.css` da `text/css`. Cualquier otro texto es una ruta: se cortan la cadena de consulta (desde el primer `?`) y el fragmento (desde el primer `#`), y luego se lee la parte después del último `/` con la regla de `File.extname` de Ruby. Solo cuenta la última extensión, sin distinguir mayúsculas de minúsculas, así que `backup.tar.gz` es un archivo `.gz`. Un punto al inicio del nombre no empieza una extensión, así que `public/.json` no tiene ninguna, y `.env.json` es `json`.
 
 Un nombre sin punto (`css`, `README`), una extensión vacía (`a.`) y una extensión que no está en la tabla dan todos `fallback`, que es `application/octet-stream` salvo que pases otro.
 
