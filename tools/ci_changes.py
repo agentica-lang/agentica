@@ -27,7 +27,7 @@ ROOT = Path(__file__).resolve().parent.parent
 # The VM, the front end or tools/release.py also know std/logger, std/actor and std/eag by name.
 FRONT_END_STD = ("MODULES", "CORE", "agentica.toml", "prelude/", "test/", "bdd/", "bdd.agc", "analysis.agc",
                  "logger.agc", "actor.agc", "eag.agc")
-DOCS = ("docs/", "site/content/")
+DOCS = ("docs/", "site/content/", "site/content.es/")
 # tests/test_skill_catalog.py checks the builtin names this skill writes.
 PROGRAMMING_SKILL = ".agents/skills/agentica-programming/"
 # The modules that check every std module or its page; every light path runs them.

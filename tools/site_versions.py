@@ -4,9 +4,13 @@
     site_versions.py build [--out DIR] [--cache DIR] [--base-url URL] [--tools DIR]
 
 The output is one site per final release (`X.Y.Z` tags, no pre-releases) under `VERSION/`, the development site under
-`dev/`, the latest release again at the root, and `versions.json`, the list of the version selector. Only
-the root is for search engines: each page under `VERSION/` gets a canonical URL to the same page at the root when the
-root has it, else `noindex,follow`; each page under `dev/` gets `noindex,follow`; their sitemaps are removed.
+`dev/`, the latest release again at the root, and `versions.json`, the list of the version selector. A version with a
+Spanish copy (its folder has `es/index.html`) lists `"languages": ["es"]` there: the languages besides the default,
+English. Only the root is for search engines: each page under `VERSION/` gets a canonical URL to the same page at the
+root when the root has it, else `noindex,follow`; each page under `dev/` gets `noindex,follow`; their `hreflang` links
+in the `<head>` are removed. A multilingual Hugo site writes a sitemap index plus one sitemap per language
+(`sitemap.xml`, `en/sitemap.xml`, `es/sitemap.xml`): `rglob` removes all of them from the version folders, while the
+root's sitemap sits outside every version folder and is kept.
 
 Each tag is built from its own tree, a detached git worktree (so Hugo's enableGitInfo dates its pages), with `make
 site`. A tag that uses the docs theme (it pins the submodule) is built with the theme commit and the Hugo and Dart Sass
@@ -156,6 +160,7 @@ ORG_ICONS = (
 ORG_FAVICON = re.search(r'href="([^"]+)"', ORG_ICONS).group(1)
 CANONICAL = re.compile(r'<link\b[^>]*\brel="?canonical\b[^>]*>', re.I)
 ROBOTS = re.compile(r'<meta\b[^>]*\bname="?robots\b[^>]*>', re.I)
+HREFLANG = re.compile(r'<link\b[^>]*\bhreflang\b[^>]*>', re.I)
 NOINDEX = '<meta name="robots" content="noindex,follow">'
 
 
@@ -168,20 +173,21 @@ def page_url(rel: Path) -> str:
 def point_copies_at_root(out: Path, root_url: str, versions: list[str], dev: str = "dev") -> tuple[int, int]:
     """Make the root the only copy that search engines index. In the `<head>` of every page of a version folder, its own
     canonical and robots tags give way to a canonical URL to the same page at the root when the root has that file, else
-    `noindex,follow`; every page of dev (unreleased) is `noindex,follow`. The sitemaps of these folders go. The body is
-    never touched.
+    `noindex,follow`; every page of dev (unreleased) is `noindex,follow`. The sitemaps of these folders go, the language
+    ones too, and so do their `hreflang` links (the root's pages carry them). The body is never touched.
     Returns (pages with a canonical, pages with noindex)."""
     pointed = hidden = 0
     for folder in [*versions, dev]:
         site = out / folder
-        (site / "sitemap.xml").unlink(missing_ok=True)
+        for sitemap in site.rglob("sitemap.xml"):
+            sitemap.unlink()
         for page in site.rglob("*.html"):
             text = page.read_text(encoding="utf-8")
             head, end, body = text.partition("</head>")
             if not end:
                 continue
             rel = page.relative_to(site)
-            head = ROBOTS.sub("", CANONICAL.sub("", head))
+            head = HREFLANG.sub("", ROBOTS.sub("", CANONICAL.sub("", head)))
             if folder != dev and rel.as_posix() != "404.html" and (out / rel).is_file():
                 tag = '<link rel="canonical" href="%s%s">' % (root_url, page_url(rel))
                 pointed += 1
@@ -206,8 +212,10 @@ def use_org_icons(out: Path) -> int:
     return changed
 
 
-def versions_json(built: list[str], dev: bool) -> list[dict]:
-    """The order of the selector: `dev` first, then the releases newest first, the first release marked `latest`.
+def versions_json(built: list[str], dev: bool, spanish: set[str]) -> list[dict]:
+    """The order of the selector: `dev` first, then the releases newest first, the first release marked `latest`. A
+    version in `spanish` has its Spanish copy too: `languages` lists the languages besides English, the default, as the
+    selector expects them.
 
     The selector keeps the file's order and finds the latest release by the `latest` flag, not by position."""
     entries = [{"version": v, "path": v + "/"} for v in built]
@@ -215,6 +223,9 @@ def versions_json(built: list[str], dev: bool) -> list[dict]:
         entries[0]["latest"] = True
     if dev:
         entries.insert(0, {"version": "dev", "path": "dev/"})
+    for entry in entries:
+        if entry["version"] in spanish:
+            entry["languages"] = ["es"]
     return entries
 
 
@@ -554,7 +565,8 @@ def build(args: argparse.Namespace) -> int:
     copy_site(dev_folder, out / "dev")
 
     selector_files(out)
-    (out / "versions.json").write_text(json.dumps(versions_json(list(built), True), indent=2) + "\n")
+    spanish = {v for v in [*built, "dev"] if (out / v / "es" / "index.html").is_file()}
+    (out / "versions.json").write_text(json.dumps(versions_json(list(built), True, spanish), indent=2) + "\n")
     pointed, hidden = point_copies_at_root(out, root_url, list(built))
     icons = use_org_icons(out)
     pages = inject_selector(out, root_path)
