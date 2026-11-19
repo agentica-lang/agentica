@@ -106,6 +106,7 @@ broken VM or test runner cannot make its own tests pass.
 | a PR from branch to merge (reviews, fixes, CI, merge) | `.agents/skills/agentica-dev-workflow/` |
 | a release or beta (version bump, tag, notes, Pages) | `.agents/skills/agentica-release/` |
 | docs, a site page, a skill, a CHANGELOG entry, a doc comment or a PR body | `.agents/skills/documentation-writing/` |
+| translating a page of `site/content` into Spanish, or reviewing such a translation | `.agents/skills/docs-i18n/` |
 | an audit of builtin or std/ signatures (defaults, simpler APIs) | `.agents/skills/api-simplification-audit/` |
 | language rules | `docs/grammar/` |
 | builtin functions and `std/` modules | `site/content/library/` |
