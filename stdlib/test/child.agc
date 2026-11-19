@@ -137,7 +137,7 @@ end
 
 private
 
-# Whether `line` is a crash line of the VM (vm/diag.c), field for field and in its key order.
+# Whether `line` is a crash line of the VM (vm/diag.c), field for field.
 def vm_shape?(line: String, task: Bool) -> Bool
   parsed = JSON.parse(line)
   return false if not parsed.ok?
@@ -149,7 +149,7 @@ def vm_shape?(line: String, task: Bool) -> Bool
     "code": JSON.from(text_of(root, "code")),
     "file": JSON.from(text_of(root, "file")),
     "message": JSON.from(text_of(root, "message")),
-    "range": JSON.object({"end": position(stop), "start": position(start)}),
+    "range": JSON.object({"start": position(start), "end": position(stop)}),
   }
 
   for key in ["spawned_at", "stack", "stack_omitted"]
@@ -161,7 +161,7 @@ def vm_shape?(line: String, task: Bool) -> Bool
   if task
     fields = fields.put("task", JSON.from(true))
   end
-  JSON.encode(JSON.object(fields)) == JSON.encode(root)
+  Test.eq(JSON.object(fields), root).ok?
 end
 
 # The crash of the task a worker runs a scenario in (spawned in std/bdd) is that scenario's crash, as a crash of main
@@ -190,7 +190,7 @@ def trace_kind?(key: String, value: JSON.Value) -> Bool
 end
 
 def position(at: JSON.Value) -> JSON.Value
-  fields: Map[String, JSON.Value] = {"column": JSON.from(int_of(at, "column")), "line": JSON.from(int_of(at, "line"))}
+  fields: Map[String, JSON.Value] = {"line": JSON.from(int_of(at, "line")), "column": JSON.from(int_of(at, "column"))}
   JSON.object(fields)
 end
 
@@ -203,5 +203,5 @@ def summary?(line: String) -> Bool
     "first": JSON.from(text_of(root, "first")),
   }
 
-  JSON.encode(JSON.object(fields)) == JSON.encode(root)
+  Test.eq(JSON.object(fields), root).ok?
 end

@@ -19,7 +19,7 @@ JSON.encode(value: T) -> String
 
 Writes compact JSON. It takes numbers, `Bool`, `String`, `nil`, `JSON.Value`, lists, maps with `String` keys, structs, [enums](#enums) and [Optionals](#optional-values) of those. Struct fields keep their declaration order and map entries their insertion order. An instance of a generic struct or enum counts by its fields or payloads after substitution (`Box[List[Int]]`). `Result` values, builtin enums such as `TaskExit` and `Int`-keyed maps are `CHECK-NOT-ENCODABLE`, and an untyped empty container needs an annotation. A non-finite `Float` stops the program with `RUNTIME-JSON-ENCODE`; it is never written as `null`. A `JSON.Field` field (see [optional and nullable fields](#optional-and-nullable-fields)) writes nothing when it is `Absent`.
 
-`JSON.encode` of a `JSON.Value` writes each object's keys in the order the value holds them, so `JSON.encode(JSON.parse(x))` keeps the key order of `x`.
+`JSON.encode` of a `JSON.Value` writes each object's keys in the order the value holds them, so `JSON.encode(JSON.parse(x))` keeps the key order of `x`: it is no longer a canonical form, and two texts that differ only in key order give two texts. Compare the parsed values with `Test.eq` instead.
 
 ```agentica
 struct User

@@ -10,7 +10,7 @@ one line of five fields joined by a tab:
 - the JSON document;
 - "ok" or "error";
 - for "ok", the text JSON.encode gives for the decoded value (struct keys in
-  declaration order, map keys sorted, none as null, a Color as {"tag": name,
+  declaration order, map keys in object order, none as null, a Color as {"tag": name,
   "values": []}); for "error", the message, path included;
 - for "ok", "same" when that text is the document again up to key order (the
   round trip), else "changed"; for "error", "-".

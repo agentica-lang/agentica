@@ -28,8 +28,8 @@ def outcome(decoded: Result[Order]) -> String
   end
 end
 
-# The document with its object keys sorted, so two documents compare up to key order.
-def sorted(text: String) -> String = JSON.encode(JSON.parse(text).unwrap!)
+# Whether two documents are the same JSON value, in any key order.
+def same_json?(a: String, b: String) -> Bool = Test.eq(JSON.parse(a).unwrap!, JSON.parse(b).unwrap!).ok?
 
 def check(line: String) -> Int
   fields = line.split("\t")
@@ -46,7 +46,7 @@ def check(line: String) -> Int
     return 1
   end
 
-  same = fields[1] == "ok" && sorted(fields[2]) == sorted(fields[0])
+  same = fields[1] == "ok" && same_json?(fields[2], fields[0])
   if fields[3] != "-" && same != (fields[3] == "same")
     puts("#{fields[0]}: round trip #{same}, want #{fields[3]}")
     return 1
