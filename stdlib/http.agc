@@ -3881,7 +3881,8 @@ def with_origin(pool: Pool, key: String, origin: Origin) -> Pool
 end
 
 def dispatch(pool: Pool, job: HttpWire.Job) -> Pool
-  return pool if Time.monotonic_ms() >= job.deadline
+  # A job whose caller gave up (cancelled, or its wait timed out) is dropped, not handed to a worker.
+  return pool if Time.monotonic_ms() >= job.deadline or not HttpWire.awaited?(job.reply)
   result = place(pool, job)
   return result.pool if result.placed
   origin = origin_of(result.pool, job.origin)
@@ -3956,7 +3957,7 @@ def next_waiting(pool: Pool, key: String) -> Pool
   while queued(origin) > 0
     job = List.at(origin.waiting, origin.front)
     rest = popped(origin)
-    if Time.monotonic_ms() < job.deadline
+    if Time.monotonic_ms() < job.deadline and HttpWire.awaited?(job.reply)
       result = place(with_origin(pool, key, rest), job)
       return result.pool if result.placed
       kept = origin_of(result.pool, key).with(waiting: origin.waiting, front: origin.front)
@@ -4020,9 +4021,9 @@ def work(worker: Worker) -> Result[Void]
       close_socket(socket)
       return ok()
     end
-    # Once awaited? is true, a cancel of the caller while it waits cancels this worker, and with it the connection
+    # Once watch is true, a cancel of the caller while it waits cancels this worker, and with it the connection
     # (vm/http_service.c). A job whose caller gave up already is not run, and the connection, untouched, is kept.
-    served = HttpWire.awaited?(job.reply)
+    served = HttpWire.watch(job.reply)
     done = Done(socket: socket, answer: error(FAILED, kind: "net.failed"), kept: Result.ok?(socket))
     if served
       done = run_job(worker, socket, job)
