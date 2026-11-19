@@ -80,6 +80,7 @@ One line per term, sorted. "stays" means the term is not translated.
 | parameter | parámetro |  |
 | parser | stays | Owner decision: the term stays |
 | path | ruta | A file path; `path` in code stays |
+| pattern | patrón | A `case` pattern |
 | payload | carga útil | The data a message carries |
 | peer | stays | Owner decision: the term stays; a peer program used by tests |
 | pipe | stays | The `\|>` operator |
