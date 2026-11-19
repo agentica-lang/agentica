@@ -110,8 +110,8 @@ def main() -> Void
       try Test.eq(scheme.message, "http: the URL must be http:// or https:// with a host, and without user info")
       Test.eq(port.message, "http: the port must be 1..65535")
     end,
-    Test.test("download options carry the 256 MiB budget") do
-      Test.eq(HTTP.DownloadOptions(), HTTP.DownloadOptions(timeout_ms: 30000, max_total_bytes: 268435456))
+    Test.test("download options have no limit by default") do
+      Test.eq(HTTP.DownloadOptions(), HTTP.DownloadOptions(timeout_ms: none, max_total_bytes: none, sha256: none))
     end,
     Test.test("a download writes the body to a new file") do
       server = try HTTP.serve("127.0.0.1", 0, HTTP.app(&download_answer))
@@ -140,34 +140,36 @@ def main() -> Void
       try Test.eq(try File.read_text("download-gone.bin", 5000), "nope")
       Path.remove("download-gone.bin", 5000)
     end,
-    Test.test("a download refuses a body over the budget before reading it") do
+    Test.test("a download refuses a body over the budget and leaves no file") do
       server = try HTTP.serve("127.0.0.1", 0, HTTP.app(&download_answer))
       pool = try HTTP.client()
-      small = HTTP.DownloadOptions(timeout_ms: 5000, max_total_bytes: 10)
+      small = HTTP.DownloadOptions(max_total_bytes: some(10))
       got = HTTP.download(pool, "http://127.0.0.1:#{HTTP.local_port(server)}/hundred", "download-over.bin", small)
       HTTP.close_client(pool)
       HTTP.close_server(server)
       try HTTP.wait(server)
       try Test.eq(got.message, "http: body exceeds max_body_bytes")
-      handle = try File.open("download-over.bin", "read", 5000)
-      try Test.eq((try File.read_bytes(handle, 100, 5000)).size, 0)
-      try File.close(handle, 5000)
-      Path.remove("download-over.bin", 5000)
+      Test.eq(File.lstat("download-over.bin", 5000).ok?, false)
     end,
-    Test.test("a download never overwrites and checks its options first") do
+    Test.test("a download checks its options first and replaces a file only at the end") do
       pool = try HTTP.client()
-      bad = HTTP.download(pool, "http://127.0.0.1:1/tiny", "download-never.bin", HTTP.DownloadOptions(timeout_ms: 0, max_total_bytes: 10))
+      bad = HTTP.download(pool, "http://127.0.0.1:1/tiny", "download-never.bin", HTTP.DownloadOptions(timeout_ms: some(0)))
       try Test.eq(bad.message, "http: every download option must be positive")
-      huge = HTTP.download(pool, "http://127.0.0.1:1/tiny", "download-never.bin", HTTP.DownloadOptions(timeout_ms: 5000, max_total_bytes: 268435457))
-      try Test.eq(huge.message, "http: max_total_bytes must be at most 268435456")
+      digest = HTTP.download(pool, "http://127.0.0.1:1/tiny", "download-never.bin", HTTP.DownloadOptions(sha256: some("abc")))
+      try Test.eq(digest.message, "http: sha256 must be 64 hex digits")
       try File.write_text("download-kept.bin", "old", 5000)
       server = try HTTP.serve("127.0.0.1", 0, HTTP.app(&download_answer))
-      kept = HTTP.download(pool, "http://127.0.0.1:#{HTTP.local_port(server)}/tiny", "download-kept.bin")
+      of_tiny = HTTP.DownloadOptions(sha256: some("88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031589"))
+      refused = HTTP.download(pool, "http://127.0.0.1:#{HTTP.local_port(server)}/hundred", "download-kept.bin", of_tiny)
+      kept = try File.read_text("download-kept.bin", 5000)
+      replaced = HTTP.download(pool, "http://127.0.0.1:#{HTTP.local_port(server)}/tiny", "download-kept.bin", of_tiny)
       HTTP.close_client(pool)
       HTTP.close_server(server)
       try HTTP.wait(server)
-      try Test.eq(kept.message.start_with?("filesystem: cannot open file for writing"), true)
-      try Test.eq(try File.read_text("download-kept.bin", 5000), "old")
+      try Test.eq(refused.message, "http: the body does not match the sha256 digest")
+      try Test.eq(kept, "old")
+      try Test.eq((try replaced).bytes_written, 4)
+      try Test.eq(try File.read_text("download-kept.bin", 5000), "abcd")
       Path.remove("download-kept.bin", 5000)
     end
   ])

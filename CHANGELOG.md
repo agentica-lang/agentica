@@ -24,6 +24,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 ### Changed
 
 - **Breaking:** JSON objects keep their key order everywhere, as Ruby does: `JSON.from`, `JSON.object`, `JSON.parse`, a decoded `Map` and `JSON.node` no longer sort keys, so a struct writes its fields in declaration order whether alone or in a list, and `JSON.encode(JSON.parse(x))` keeps the order of `x`, so it no longer compares two texts regardless of key order (use `Test.eq` on the parsed values); `--json` diagnostics and reports list their keys in field order (#1760).
+- **Breaking:** `HTTP.download`, `HTTP.read_body` and `HTTP.open` have no body limit by default: `DownloadOptions.timeout_ms` and `max_total_bytes` are `Optional[Int]`, `none` by default and with no upper bound, and `download` writes to a hidden `.agc-part` file that replaces `path` in one step only after a clean end (a failure removes it; a cancelled or killed download can leave it), with an optional `sha256:` check (`http.digest`) (#1865).
 - **Breaking:** log times have six fraction digits (`2026-10-12T10:15:02.345000Z`, was `.345Z`), and `Logger.time_text` halts outside the years 1 to 9999 (#985).
 - A source of `agentica add` that is neither an `https://` URL nor `OWNER/REPO` is `PKG-SOURCE-INVALID` (exit 1), no longer a usage error (exit 2) (#1833).
 

@@ -100,7 +100,7 @@ The `std/` modules give these kinds. A `std/` function that passes on the error 
 
 | Module | Kinds |
 |---|---|
-| `std/http` | `http.protocol` (a refused head has its status as the code; a proxy's 407 too), `http.too_large`, `http.closed`, `net.timeout` (a connect's has `details["phase"]` `"connect"`), `channel.timeout` (`open` and `upload`, a piece that is not taken or not given in time), `net.eof`, `net.failed`, `text.encoding` (`HTTP.text`), `argument` |
+| `std/http` | `http.protocol` (a refused head has its status as the code; a proxy's 407 too), `http.too_large`, `http.closed`, `http.digest` (`download` with a `sha256` the body does not have), `net.timeout` (a connect's has `details["phase"]` `"connect"`), `channel.timeout` (`open` and `upload`, a piece that is not taken or not given in time), `net.eof`, `net.failed`, `text.encoding` (`HTTP.text`), `argument` |
 | `std/archive` | `archive.format` (truncated or invalid data), `archive.unsafe` (an entry path that is not a safe relative path, or one that leaves the destination), `archive.too_large`, `archive.timeout`, `archive.not_found` (a member the archive does not hold), `argument` (an option or a member name out of range or unsafe) |
 | `std/toml` | `toml.parse` (`parse`), `toml.decode` (`get` and `to_json`), `argument` (`encode`) |
 | `std/regex` | `regex.syntax` (a pattern or a `replace` template), `argument` (`named` with no such group) |
