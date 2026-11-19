@@ -12,7 +12,7 @@ agentica --deny-run tool.agc
 ```
 
 - Los tiempos de espera son milisegundos positivos e incluyen la espera del bloqueo del handle. Un tiempo de espera durante la E/S de un flujo mata y cierra el programa; uno durante la espera del bloqueo lo mantiene; una espera de salida que vence no lo termina.
-- Los argumentos llegan al programa tal cual. No interviene ningún shell. Toda función de espera recibe un tiempo de espera en milisegundos; las de inicio lo reciben en [Process.Options](#processoptions), que vale 30000 por defecto.
+- Los argumentos llegan al programa tal cual. No interviene ningún shell. Toda función de espera recibe un tiempo de espera en milisegundos; las de inicio lo reciben en [Process.Options](#processoptions), cuyo valor predeterminado es 30000.
 - Un programa que inicias pertenece a la tarea que lo inició y se detiene cuando esa tarea termina, sea como sea que termine. Los programas que sigan en ejecución se detienen cuando termine el tuyo. [Task.spawn_owning](/library/concurrency/task/#taskspawn_owning) lo entrega a una tarea nueva.
 
 ## Process.Options {#processoptions}
@@ -21,7 +21,7 @@ agentica --deny-run tool.agc
 Process.Options(timeout_ms: Int = 30000, chdir: String = ".", env: Map[String, String] = {}, out: String = "", err: String = "", pgroup: Bool = false, pty: Bool = false)
 ```
 
-Las opciones de `Process.spawn`, `Process.spawn_captured` y `Process.spawn_channel`, su último argumento, que vale `Process.Options()` por defecto. Indica solo los campos que necesites: `Process.Options(chdir: "build", err: "err.txt")`. Los campos son las opciones de `spawn` de Ruby (`chdir:`, `out:`, `err:`, `pgroup:`), más `timeout_ms`, `env` (Ruby recibe el entorno como primer argumento) y `pty`. Un tiempo de espera, o una carpeta en lugar de las opciones, da `CHECK-TYPE-MISMATCH`.
+Las opciones de `Process.spawn`, `Process.spawn_captured` y `Process.spawn_channel`, su último argumento, cuyo valor predeterminado es `Process.Options()`. Indica solo los campos que necesites: `Process.Options(chdir: "build", err: "err.txt")`. Los campos son las opciones de `spawn` de Ruby (`chdir:`, `out:`, `err:`, `pgroup:`), más `timeout_ms`, `env` (Ruby recibe el entorno como primer argumento) y `pty`. Un tiempo de espera, o una carpeta en lugar de las opciones, da `CHECK-TYPE-MISMATCH`.
 
 ## Process.spawn {#processspawn}
 
@@ -31,10 +31,10 @@ Process.spawn(command: String, args: List[String], options: Process.Options = Pr
 
 Inicia un programa con el entorno de tu programa, más las variables de `env`.
 
-- El programa inicia en la carpeta `chdir` (`"."`, el valor por defecto, es la actual). Un `chdir` vacío o con un byte NUL da `error("process: chdir must be nonempty and cannot contain NUL")`, y uno que no es una carpeta, `error("process: directory is unavailable")`. El comando se busca desde la carpeta actual, no desde `chdir`.
+- El programa inicia en la carpeta `chdir` (`"."`, el valor predeterminado, es la actual). Un `chdir` vacío o con un byte NUL da `error("process: chdir must be nonempty and cannot contain NUL")`, y uno que no es una carpeta, `error("process: directory is unavailable")`. El comando se busca desde la carpeta actual, no desde `chdir`.
 - Un nombre sin `/` (`"echo"`) se busca en cada carpeta de `PATH`, en orden. La carpeta actual nunca se añade y las carpetas vacías se omiten; una carpeta relativa, como `bin`, se busca dentro de la carpeta actual, como en el shell.
 - Un comando con `/` es una ruta (en Windows también `\` y una unidad como `C:`), relativa a la carpeta actual: para ejecutar un programa local usa `"./tool"`.
-- `env` define variables solo para ese programa, sobre una copia de tu entorno: un par clave-valor reemplaza la variable del mismo nombre (Windows ignora mayúsculas y minúsculas, también en letras como `Ä`, y un mapa con dos nombres que solo difieren en mayúsculas es un `error`), y un valor vacío es un valor. Tu entorno no cambia, y un `PATH` en `env` no cambia cómo se encuentra el comando: lo resuelve tu `PATH`, y solo el programa ve el nuevo. Un nombre vacío, un nombre con `=`, o un byte NUL en un nombre o en un valor es un `error`, y también lo son `AGENTICA_CHANNEL`, `AGENTICA_VM_METRICS`, `AGENTICA_VM_METRICS_FILE` y `UV_USE_IO_URING`, que son de la VM.
+- `env` define variables solo para ese programa, sobre una copia de tu entorno: un par clave-valor reemplaza la variable del mismo nombre (Windows ignora mayúsculas y minúsculas, también en letras como `Ä`, y un mapa con dos nombres que solo difieren en mayúsculas es un `error`), y un valor vacío es un valor. Tu entorno no cambia, y un `PATH` en `env` no cambia cómo se encuentra el comando: lo resuelve tu `PATH`, y solo el programa ve el nuevo. Un nombre vacío, un nombre con `=`, o un byte NUL en un nombre o en un valor es un `error`, y también lo son `AGENTICA_CHANNEL`, `AGENTICA_VM_METRICS`, `AGENTICA_VM_METRICS_FILE` y `UV_USE_IO_URING`, que administra la VM.
 - Un nombre no encontrado, o uno que nombra una carpeta, da `error("process: executable is unavailable")`. Un archivo que no se puede ejecutar (sin permiso de ejecución) es un error de `spawn`.
 - Un comando vacío, o un byte NUL en el comando o en un argumento, da `error("process: command must be nonempty and arguments cannot contain NUL")`.
 - `out` y `err`, si no están vacíos, son archivos que reciben la salida estándar y el error estándar del programa, sin shell y sin el límite de 1 MiB de una lectura o de un flujo capturado (como `spawn(cmd, out: path)` de Ruby). Cada uno se crea o se trunca; en Unix con modo 0666 menos los bits que quita la umask, como lo hacen `File.write_text` y el `>` de un shell; un archivo que ya existe conserva su modo. Una ruta relativa parte de la carpeta actual. `out` y `err` que nombran el mismo archivo lo comparten, como lo hace `> file 2>&1`. Un flujo enviado a un archivo no se puede leer: `read_line` da el fin de la salida de inmediato, y nada llega a tu error estándar. Una carpeta, el descriptor detrás de tu salida o error estándar (`/proc/self/fd/5`), una de las tuberías internas del programa, o en Windows una ruta que empieza con `\\.\` o `\\?\`, da `error("process: out does not refer to a regular file")` (o `err`), como lo rechazan las llamadas de `File`. Un archivo que no se puede abrir (falta la carpeta padre, sin permiso) da un error que empieza con `process: cannot open the out file` (o `err`) y nombra el error del sistema. En ambos casos no se inicia ningún programa. Un byte NUL da `error("process: out and err cannot contain NUL")`, y `--deny-fs` los desactiva. Los archivos se abren justo antes del inicio, así que un inicio que luego falla (un archivo que no se puede ejecutar) puede dejarlos creados o truncados, como lo hace el `>` de un shell. Solo `Process.spawn` los acepta: `spawn_captured` y `spawn_channel` dan `error("process: out and err need Process.spawn")`.
@@ -80,7 +80,7 @@ ok(0)
 ok("report\n")
 ```
 
-## Process.send and Process.send_bytes {#processsend-and-processsend_bytes}
+## Process.send y Process.send_bytes {#processsend-and-processsend_bytes}
 
 ```signature
 Process.send(process: Process, text: String, timeout_ms: Int) -> Result[Void]
@@ -102,7 +102,7 @@ end
 ok("ping")
 ```
 
-## Process.read_line and Process.read_bytes {#processread_line-and-processread_bytes}
+## Process.read_line y Process.read_bytes {#processread_line-and-processread_bytes}
 
 ```signature
 Process.read_line(process: Process, timeout_ms: Int) -> Result[String]
@@ -217,17 +217,17 @@ Process.resize(process: Process, rows: Int, cols: Int) -> Result[Void]
 
 Fija el tamaño de la terminal de un programa con `pty: true`, como lo hace una ventana de terminal al cambiar de tamaño: el programa recibe `SIGWINCH`, y `stty size` muestra el tamaño nuevo. Filas y columnas van de 1 a 65535; si no, `error("process: rows and cols must be 1..65535")`. Un programa sin pty da `error("process: the child has no pty")` con la clase `process.failed`, y uno cerrado `error("process: process is closed")`.
 
-## Process.signal and Process.signal_group {#processsignal-and-processsignal_group}
+## Process.signal y Process.signal_group {#processsignal-and-processsignal_group}
 
 ```signature
 Process.signal(process: Process, signal: System.Signal) -> Result[Void]
 Process.signal_group(process: Process, signal: System.Signal) -> Result[Void]
 ```
 
-`Process.signal` envía una señal (`System.Signal`, consulta [System.subscribe](system.md#systemsubscribe)) al programa; `signal_group` la envía al grupo de procesos que lidera el programa, así que los programas que inició también la reciben. Una señal que el programa no maneja lo termina, y `Process.wait` da entonces `128 +` el número de la señal (143 para `Term`). Ninguna de las dos llamadas espera a que el programa termine: sigue con `Process.wait` y un plazo, y con `Process.close` si el programa se retrasa.
+`Process.signal` envía una señal (`System.Signal`, consulta [System.subscribe](system.md#systemsubscribe)) al programa; `signal_group` la envía al grupo de procesos que encabeza el programa, así que los programas que inició también la reciben. Una señal que el programa no maneja lo termina, y `Process.wait` da entonces `128 +` el número de la señal (143 para `Term`). Ninguna de las dos llamadas espera a que el programa termine: sigue con `Process.wait` y un plazo, y con `Process.close` si el programa se retrasa.
 
 - Un programa cerrado devuelve `error("process: process is closed")`. Un programa que ya terminó devuelve `error("process: the child has exited")` con la clase `process.failed`: su pid puede pertenecer ya a otro proceso.
-- `signal_group` necesita un programa que lidere su propio grupo, iniciado con `Process.spawn_group` o `pgroup: true`; cualquier otro devuelve `error("process: the child does not lead a process group")` con la clase `process.failed`.
+- `signal_group` necesita un programa que encabece su propio grupo, iniciado con `Process.spawn_group` o `pgroup: true`; cualquier otro devuelve `error("process: the child does not lead a process group")` con la clase `process.failed`.
 - En Windows las dos devuelven `error("signal: not supported on this system")` con la clase `system.signal`.
 
 ## Process.pid {#processpid}
@@ -255,7 +255,7 @@ end
 Process.spawn_group(command: String, args: List[String], dir: String = ".", timeout_ms: Int = 30000) -> Result[Process]
 ```
 
-Inicia un programa en una sesión nueva, así que lidera su propio grupo de procesos, como `Popen(start_new_session=True)` de Python. Comparte la entrada, la salida y el error estándar de tu programa: su salida va adonde va la tuya (una terminal, el registro de un contenedor), nada puede llenarse, y `read_line`, `read_bytes`, `read_available`, `output`, `send`, `send_bytes` y `close_stdin` devuelven `error("process: the child uses the program's stdin, stdout and stderr")` con la clase `process.failed`. `dir` es la carpeta donde inicia; el comando se busca desde la carpeta de tu programa, así que da una ruta absoluta cuando `dir` no sea `"."`. `--deny-run` lo desactiva, y en Windows devuelve `error("process: process groups are not supported on this system")` con la clase `system.signal`.
+Inicia un programa en una sesión nueva, así que encabeza su propio grupo de procesos, como `Popen(start_new_session=True)` de Python. Comparte la entrada, la salida y el error estándar de tu programa: su salida va adonde va la tuya (una terminal, el registro de un contenedor), nada puede llenarse, y `read_line`, `read_bytes`, `read_available`, `output`, `send`, `send_bytes` y `close_stdin` devuelven `error("process: the child uses the program's stdin, stdout and stderr")` con la clase `process.failed`. `dir` es la carpeta donde inicia; el comando se busca desde la carpeta de tu programa, así que da una ruta absoluta cuando `dir` no sea `"."`. `--deny-run` lo desactiva, y en Windows devuelve `error("process: process groups are not supported on this system")` con la clase `system.signal`.
 
 La sesión nueva deja al hijo sin terminal de control: tiene los descriptores 0 a 2, pero abrir `/dev/tty` falla (`ENXIO`), así que un programa que lo necesita (un prompt de contraseña de `ssh`, `less`, `sudo`, un editor) no puede usarlo, y no hay control de trabajos de terminal. `Ctrl-C` le llega solo por la ruta de detención de la VM, que envía `SIGKILL` al grupo. El hijo lee la misma entrada estándar que tu programa, así que un `IO.gets` pendiente reparte la entrada con él, y tu salida con búfer puede aparecer después de la del hijo: vacía antes de iniciar.
 
@@ -385,7 +385,7 @@ ok("done")
 ok("working\n")
 ```
 
-## Process.parent_read_line and Process.parent_send {#processparent_read_line-and-processparent_send}
+## Process.parent_read_line y Process.parent_send {#processparent_read_line-and-processparent_send}
 
 ```signature
 Process.parent_read_line(timeout_ms: Int) -> Result[String]
@@ -397,7 +397,7 @@ El lado del programa del canal que su padre abrió con `Process.spawn_channel`, 
 - La VM toma el canal al arrancar solo si `AGENTICA_CHANNEL` es `3,4` y el descriptor 3 está abierto para lectura y el 4 para escritura, cada uno una tubería, una FIFO o un socket (en Windows, una tubería). En Linux y macOS también toma `3` con un socket o una FIFO abiertos en ambos sentidos en el descriptor 3. Cualquier otra cosa (un archivo regular, un dispositivo, una tubería al revés) se ignora: no hay canal.
 - Los hijos del propio programa no heredan los descriptores ni la variable.
 
-Estas llamadas son para el código de un ejecutor, como el de `agentica test`. Una prueba que las llame puede romper el protocolo entre el ejecutor y su archivo, y nada lo impide.
+Estas llamadas son para el código del ejecutor de pruebas, como el de `agentica test`. Una prueba que las llame puede romper el protocolo entre el ejecutor de pruebas y su archivo, y nada lo impide.
 
 ```agentica {mode="check"}
 def main() -> Void

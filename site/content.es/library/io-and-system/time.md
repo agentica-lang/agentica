@@ -5,14 +5,14 @@ description: Fechas del calendario, horas del día y fechas con hora con un desf
 source_hash: "bdaee3a9927a"
 ---
 
-La familia `Time` tiene cuatro tipos de estructura. Sus campos son `Int`s, con los nombres de `Time` en Ruby:
+La familia `Time` tiene cuatro tipos de registro. Sus campos son `Int`s, con los nombres de `Time` en Ruby:
 
 - `Time.Date`: un día del calendario (`year`, `month`, `day`).
 - `Time.TimeOfDay`: una hora del reloj sin fecha ni desfase (`hour`, `min`, `sec`, `usec`).
 - `Time.NaiveDateTime`: una fecha y una hora del reloj sin desfase, así que no nombra ningún instante (`year`, `month`, `day`, `hour`, `min`, `sec`, `usec`).
 - `Time.DateTime`: una fecha y una hora del reloj con un desfase fijo respecto de UTC, así que nombra un solo instante (los campos de `Time.NaiveDateTime`, y después `utc_offset`, en segundos al este de UTC).
 
-El calendario es el gregoriano proléptico, con los años 1 a 9999. La precisión es de microsegundos (`usec`, de 0 a 999999). El tiempo Unix no tiene segundos intercalares, así que un `sec` de 60 es un error. Un desfase son minutos enteros, de `-86340` (`-23:59`) a `86340` (`+23:59`); no hay zonas horarias con nombre ni horario de verano. Los campos de un `Time.DateTime` son la hora en ese desfase.
+El calendario es el gregoriano proléptico, con los años 1 a 9999. La precisión es de microsegundos (`usec`, de 0 a 999999). El tiempo Unix no tiene segundos intercalares, así que un `sec` de 60 es un error. Un desfase es un número entero de minutos, de `-86340` (`-23:59`) a `86340` (`+23:59`); no hay zonas horarias con nombre ni horario de verano. Los campos de un `Time.DateTime` son la hora en ese desfase.
 
 Cada valor es válido, porque solo los integrados que siguen crean uno: escribir `Time.Date(year: ..., ...)` o `d.with(...)` es `CHECK-NOT-CONSTRUCTIBLE`. `JSON.encode` y `JSON.decode` rechazan estos tipos, solos o dentro de una estructura (`CHECK-NOT-ENCODABLE`, `CHECK-NOT-DECODABLE`). `==` compara un `Time.Date`, un `Time.TimeOfDay` o un `Time.NaiveDateTime` campo por campo. Un `Time.DateTime` no tiene `==` (`CHECK-TYPE-MISMATCH`): dos lecturas de un mismo instante con desfases distintos tienen campos distintos, así que compara instantes con `Time.compare(a, b) == 0`. `Test.eq` sí compara dos de ellos campo por campo, así que una prueba afirma la hora exacta.
 
@@ -139,7 +139,7 @@ ok(29)
 month 13 is not in 1..12
 ```
 
-## Time.at and Time.at_us {#timeat-and-timeat_us}
+## Time.at y Time.at_us {#timeat-and-timeat_us}
 
 ```signature
 Time.at(seconds: Int) -> Result[Time.DateTime]
@@ -180,7 +180,7 @@ end
 0
 ```
 
-## to_i and to_us {#to_i-and-to_us}
+## to_i y to_us {#to_i-and-to_us}
 
 ```signature
 Time.DateTime.to_i(time: Time.DateTime) -> Int
@@ -202,7 +202,7 @@ end
 -1
 ```
 
-## getutc and getlocal {#getutc-and-getlocal}
+## getutc y getlocal {#getutc-and-getlocal}
 
 ```signature
 Time.DateTime.getutc(time: Time.DateTime) -> Result[Time.DateTime]
@@ -226,7 +226,7 @@ end
 utc_offset 30 is not a whole number of minutes
 ```
 
-## naive_of and assume_offset {#naive_of-and-assume_offset}
+## naive_of y assume_offset {#naive_of-and-assume_offset}
 
 ```signature
 Time.DateTime.naive_of(time: Time.DateTime) -> Time.NaiveDateTime
@@ -307,7 +307,7 @@ Time.NaiveDateTime.iso8601(text: String) -> Result[Time.NaiveDateTime]
 Time.DateTime.iso8601(text: String) -> Result[Time.DateTime]
 ```
 
-El valor que escribe el texto en la forma que escribe `iso8601`, con las comprobaciones de `new` del tipo. Los segundos pueden no llevar fracción, o llevar un `.` con cualquier cantidad de dígitos; los dígitos después del sexto se cortan, no se redondean. `T` y `Z` pueden estar en minúscula, como permite RFC 3339, y `-00:00` es el desfase 0.
+El valor que expresa el texto en la forma que escribe `iso8601`, con las comprobaciones de `new` del tipo. Los segundos pueden no llevar fracción, o llevar un `.` con cualquier cantidad de dígitos; los dígitos después del sexto se cortan, no se redondean. `T` y `Z` pueden estar en minúscula, como permite RFC 3339, y `-00:00` es el desfase 0.
 
 `Time.DateTime.iso8601` exige un desfase, y `Time.NaiveDateTime.iso8601` lo rechaza, así que un texto sin desfase nunca se lee como instante por error. Cualquier otro texto da un error de clase `argument` que indica qué se esperaba y en qué carácter (contando desde 1): un espacio en lugar de `T`, `+0200`, una hora de desfase mayor que 23, `07:32` sin segundos, texto después del valor, o un segundo de 60.
 
@@ -360,7 +360,7 @@ Wed 14 Oct 2026 21:05:42.201 +02:00
 Wednesday, October 14 (day 287) %H:%M
 ```
 
-## add_days and add_us {#add_days-and-add_us}
+## add_days y add_us {#add_days-and-add_us}
 
 ```signature
 date.add_days(days: Int) -> Result[Time.Date]
@@ -388,7 +388,7 @@ end
 the date is outside the years 1 to 9999
 ```
 
-## days_between and us_between {#days_between-and-us_between}
+## days_between y us_between {#days_between-and-us_between}
 
 ```signature
 from.days_between(to: Time.Date) -> Int
@@ -438,7 +438,7 @@ end
 1
 ```
 
-## cwday and yday {#cwday-and-yday}
+## cwday y yday {#cwday-and-yday}
 
 ```signature
 date.cwday() -> Int
