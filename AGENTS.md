@@ -28,9 +28,9 @@ docs/               grammar/ (the language definition, index: docs/grammar.md),
                     features and what was decided against), bdd.md (the BDD
                     contract), vm-benchmarks.md; the agent evaluation lives
                     in agentica-lang/evals
-site/               Hugo documentation site: content/, versions/ and the
-                    layouts/ overrides; the look and the layouts come from
-                    themes/docs-theme (a submodule)
+site/               Hugo documentation site: content/, content.es/ (Spanish
+                    pages), versions/ and the layouts/ overrides; the look
+                    and the layouts come from themes/docs-theme (a submodule)
 benchmarks/         make bench: the VM programs, with their .expected goldens
 .agents/skills/     agent skills
 ```
