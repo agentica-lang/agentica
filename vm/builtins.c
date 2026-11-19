@@ -116,10 +116,12 @@ static agc_value builtin_args(agc_vm *vm, agc_value *args, uint32_t span) {
   return vm->rt->args;
 }
 
+/* agc_launch_vm sets the name; a VM made another way (the fuzzers) has none and gives "". */
 static agc_value builtin_program_name(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)args;
   (void)span;
-  return vm->rt->program_name;
+  agc_value name = vm->rt->program_name;
+  return agc_is(name, AGC_T_STRING) ? name : agc_string_value(vm->rt->empty_string);
 }
 
 static agc_value builtin_exit(agc_vm *vm, agc_value *args, uint32_t span) {

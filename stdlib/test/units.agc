@@ -82,7 +82,7 @@ end
 
 def list(settings: Settings, path: String, bytecode: String) -> Listed
   where = Report.Span(file: path, line: 1, column: 1, end_column: 1)
-  spawned = Process.spawn_channel(settings.vm, args(settings, bytecode, 1000000, "list"))
+  spawned = Process.spawn_channel(settings.vm, args(settings, path, bytecode, 1000000, "list"))
   return broken(Report.error_at("RUNTIME-BDD-INFRA", spawned.message, where), "") if not spawned.ok?
   p = spawned.unwrap!
   _ = Process.close_stdin(p, 5000)
@@ -162,7 +162,7 @@ end
 
 def run_child(settings: Settings, path: String, bytecode: String, chosen: List[UnitTest]) -> Report.FileResult
   where = Report.Span(file: path, line: 1, column: 1, end_column: 1)
-  spawned = Process.spawn_channel(settings.vm, args(settings, bytecode, 1000000 * (chosen.size + 1), "run"))
+  spawned = Process.spawn_channel(settings.vm, args(settings, path, bytecode, 1000000 * (chosen.size + 1), "run"))
 
   if not spawned.ok?
     return Report.file_error(path, "tests", Report.error_at("RUNTIME-BDD-INFRA", spawned.message, where))
@@ -427,8 +427,9 @@ def joined(output: String, stderr: String) -> String
   parts.join("\n")
 end
 
-# The child that runs the tests writes the LCOV part of the file; the one that lists them does not.
-def args(settings: Settings, bytecode: String, steps: Int, mode: String) -> List[String]
+# The child that runs the tests writes the LCOV part of the file; the one that lists them does not. Its
+# System.program_name is the test file, not the compiled one.
+def args(settings: Settings, path: String, bytecode: String, steps: Int, mode: String) -> List[String]
   cover: List[String] = []
   if settings.coverage != "" and mode == "run"
     cover = ["--coverage", "#{settings.coverage}.info"]
@@ -437,6 +438,6 @@ def args(settings: Settings, bytecode: String, steps: Int, mode: String) -> List
     ["run", "--json", "--max-steps", steps.to_s, "--seed", settings.seed.to_s, "--source-root", settings.source_root]
       .concat(settings.deny)
       .concat(cover)
-      .concat(["--", bytecode, "--agentica-test", mode])
+      .concat(["--program-name", path, "--", bytecode, "--agentica-test", mode])
   )
 end

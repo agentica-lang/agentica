@@ -1079,6 +1079,7 @@ def vm_args(config: Config, steps: Int, mode: String, cover: String) -> List[Str
   end
   options = (
     ["run", "--json", "--seed", config.seed.to_s, "--source-root", config.steps_root]
+      .concat(["--program-name", config.steps_source])
       .concat(limit)
       .concat(deny(config))
   )

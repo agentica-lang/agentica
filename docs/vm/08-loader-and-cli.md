@@ -316,7 +316,8 @@ stages.
   standing as the binary itself. The options it may pass are exactly `--ai`,
   `--json`, the `--deny-*` flags, `--sandbox`, `--max-steps N`,
   `--max-heap SIZE`, `--seed N`, `--flush-timeout MS`, `--schedulers N`,
-  `--jit MODE`, `--source-root DIR` and `--coverage FILE`, each once; no
+  `--jit MODE`, `--source-root DIR`, `--coverage FILE` and
+  `--program-name PATH` (`System.program_name`, the `.agc` file), each once; no
   positional word, no `--version`.
   `--driver-pid` and `--embedded` are refused (exit 2): only the process that
   started this one can say so, and only `agentica run` starts an embedded

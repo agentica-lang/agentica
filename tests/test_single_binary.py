@@ -734,5 +734,6 @@ def test_program_name_is_the_main_program_as_it_was_given(tmp_path):
     cases = [([relative_source], relative_source), ([str(source)], str(source)),
              (["run", "--", relative_compiled], relative_compiled), (["run", "--", str(compiled)], str(compiled))]
     for words, name in cases:
-        got = agentica(*words, "x", cwd=tmp_path)
-        assert (got.code, got.stdout) == (0, '%s\n["x"]\n' % name), (words, got.stderr)
+        for _ in range(2 if words == [relative_source] else 1):
+            got = agentica(*words, "x", cwd=tmp_path)
+            assert (got.code, got.stdout) == (0, '%s\n["x"]\n' % name), (words, got.stderr)
