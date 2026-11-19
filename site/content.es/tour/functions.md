@@ -138,7 +138,7 @@ end
 120
 ```
 
-Una llamada que es todo el valor de un `return`, o la última expresión que da el valor de la función, reutiliza el frame de quien llama. Las demás llamadas cuentan para el límite de 10000 llamadas anidadas; una llamada a un integrado no usa frame. Los límites de anidamiento del código fuente (`PARSE-TOO-DEEP`, `CHECK-TOO-DEEP`) están en la [referencia del lenguaje](/reference/).
+Una llamada que es todo el valor de un `return`, o la última expresión que da el valor de la función, reutiliza el frame del llamador. Las demás llamadas cuentan para el límite de 10000 llamadas anidadas; una llamada a un integrado no usa frame. Los límites de anidamiento del código fuente (`PARSE-TOO-DEEP`, `CHECK-TOO-DEEP`) están en la [referencia del lenguaje](/reference/).
 
 ## Varios resultados {#many-results}
 
@@ -271,7 +271,7 @@ end
 
 Un parámetro puede terminar en `= value`. Una llamada puede omitirlo.
 
-- Un valor predeterminado es una constante: un número, una cadena sin `#{...}`, los bytes de esa cadena (`body: Bytes = "".bytes`), `true`, `false`, `nil`, `none`, `[]`, `{}` o una variante sin payload, como `Level.Info`. Una estructura creada sin argumentos, `options: Options = Options()`, también es un valor predeterminado cuando cada campo de `Options` tiene uno. El nombre de una constante también es un valor predeterminado cuando su valor es uno de estos, como en `limit: Int = LIMIT` o `Limits.LIMIT` (se usa el valor en lugar del nombre, también para quien llama desde otro módulo). Cualquier otra cosa, como `some(1)` o una constante como `SUM = 1 + 2`, es `CHECK-DEFAULT-VALUE`. Cada llamada recibe su propio `[]`, `{}` o estructura.
+- Un valor predeterminado es una constante: un número, una cadena sin `#{...}`, los bytes de esa cadena (`body: Bytes = "".bytes`), `true`, `false`, `nil`, `none`, `[]`, `{}` o una variante sin payload, como `Level.Info`. Una estructura creada sin argumentos, `options: Options = Options()`, también es un valor predeterminado cuando cada campo de `Options` tiene uno. El nombre de una constante también es un valor predeterminado cuando su valor es uno de estos, como en `limit: Int = LIMIT` o `Limits.LIMIT` (se usa el valor en lugar del nombre, también para un llamador de otro módulo). Cualquier otra cosa, como `some(1)` o una constante como `SUM = 1 + 2`, es `CHECK-DEFAULT-VALUE`. Cada llamada recibe su propio `[]`, `{}` o estructura.
 - Los parámetros con valor predeterminado van al final (`CHECK-DEFAULT-ORDER`). La excepción es un último parámetro `Fn`, que se llena con un bloque.
 - Los argumentos llenan los parámetros de izquierda a derecha. Un número incorrecto de argumentos es `CHECK-ARITY`, como `expects 1 to 2 arguments`.
 

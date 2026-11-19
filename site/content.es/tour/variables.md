@@ -111,7 +111,7 @@ end
 
 ## Variables sin usar {#unused-variables}
 
-Una variable que nunca se lee es un error (`CHECK-UNUSED-VARIABLE`): quítala, o empieza su nombre con `_` si no se usa a propósito. Lo mismo vale para una variable de `for`, un parámetro de bloque y un nombre en un patrón de `case`; usa `_` ahí, como arriba. Nunca se avisa de un parámetro de función, porque quien llama depende de la firma.
+Una variable que nunca se lee es un error (`CHECK-UNUSED-VARIABLE`): quítala, o empieza su nombre con `_` si no se usa a propósito. Lo mismo vale para una variable de `for`, un parámetro de bloque y un nombre en un patrón de `case`; usa `_` ahí, como arriba. Nunca se avisa de un parámetro de función, porque el llamador depende de la firma.
 
 Actualizar una variable no la lee: `count += 1` por sí solo deja `count` sin usar. Una variable que se asigna dos veces y se lee una vez está bien.
 
