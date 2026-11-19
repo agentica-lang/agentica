@@ -17,7 +17,7 @@
 {{ end }}
 </style>
 {{ end -}}
-<div class="switcher" role="radiogroup" aria-label="Examples">
+<div class="switcher" role="radiogroup" aria-label="{{ i18n "switcher_label" }}">
 {{- range $i, $tab := $tabs }}
 <input type="radio" name="{{ $id }}" id="{{ $id }}-{{ $i }}"{{ if eq $i 0 }} checked{{ end }}>
 {{- end }}
