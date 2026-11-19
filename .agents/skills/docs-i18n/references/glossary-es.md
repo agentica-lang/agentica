@@ -69,6 +69,7 @@ One line per term, sorted. "stays" means the term is not translated.
 | immutable | inmutable |  |
 | index | índice |  |
 | input | entrada | The input of a program or an example |
+| install | instalar | |
 | integer | entero | The type `Int` stays |
 | interpolation | interpolación | `"#{...}"` stays in code |
 | lambda | stays | A short anonymous function |
@@ -111,7 +112,7 @@ One line per term, sorted. "stays" means the term is not translated.
 | process | proceso | An OS process; the type `Process` stays |
 | profile | perfil | A profile of a run |
 | program | programa |  |
-| project | proyecto | The project of the repository |
+| project | proyecto | The Agentica project |
 | prompt | stays | Owner decision; text sent to a model |
 | query | consulta |  |
 | queue | cola | The type `Queue` stays |
@@ -123,6 +124,7 @@ One line per term, sorted. "stays" means the term is not translated.
 | result | resultado | The type `Result` and `ok`/`error` stay |
 | return | devolver | The keyword `return` stays |
 | route | ruta | An HTTP route; `route` in code stays |
+| rule | regla | |
 | run | ejecutar | Noun: ejecución; the command `run` stays |
 | runtime | stays |  |
 | scenario | escenario | A BDD scenario |
@@ -157,7 +159,7 @@ One line per term, sorted. "stays" means the term is not translated.
 | thread | hilo | An OS thread |
 | timeout | tiempo de espera | `timeout_ms` stays |
 | tool | herramienta |  |
-| tour | recorrido | The language tour of the site |
+| tour | stays | Masculine: el tour ("haz el tour") |
 | type | tipo |  |
 | type alias | alias de tipo | The keyword `alias` stays |
 | value | valor |  |

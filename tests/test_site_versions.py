@@ -41,9 +41,15 @@ MAKEFILE = (
     "\t@if [ -n '$(HUGO_PARAMS_VERSIONS_ENABLED)' ]; then mkdir -p site/public/_versions;"
     " echo js > site/public/_versions/selector.js; echo css > site/public/_versions/selector.css; fi\n"
     "\tprintf '<urlset></urlset>' > site/public/sitemap.xml\n"
-    "\t@if [ -e site/content.es ]; then mkdir -p site/public/es; printf '<html lang=es><head><link rel=alternate hreflang=en href=https://example.org/docs/><link rel=alternate hreflang=es href=https://example.org/docs/es/></head>"
-    "<body>es</body></html>' > site/public/es/index.html; printf '<urlset></urlset>' > site/public/es/sitemap.xml;"
-    " printf '<html lang=en><head><link rel=alternate hreflang=en href=https://example.org/docs/><link rel=alternate hreflang=es href=https://example.org/docs/es/></head><body>root</body></html>' > site/public/index.html; fi\n"
+    "\t@if [ -e site/content.es ]; then mkdir -p site/public/es; "
+    "printf '<html lang=es><head><link rel=alternate hreflang=en href=https://example.org/docs/>"
+    "<link rel=alternate hreflang=es href=https://example.org/docs/es/></head>"
+    "<body><a hreflang=es href=https://example.org/docs/es/>es</a></body></html>' > site/public/es/index.html; "
+    "printf '<urlset></urlset>' > site/public/es/sitemap.xml; "
+    "printf '<html lang=en><head>"
+    "<link rel=alternate hreflang=en href=https://example.org/docs/>"
+    "<link rel=alternate hreflang=es href=https://example.org/docs/es/></head>"
+    "<body>root</body></html>' > site/public/index.html; fi\n"
     "\tgit rev-parse --is-inside-work-tree > site/public/git.txt\n"
 )
 
@@ -145,7 +151,7 @@ def test_a_version_with_a_spanish_copy_lists_its_languages(repo, tmp_path, monke
     out = spanish_build(repo, tmp_path, monkeypatch)
     entries = {entry["version"]: entry for entry in json.loads((out / "versions.json").read_text())}
     for version in ("dev", "0.14.0", "0.13.0"):
-        assert entries[version]["languages"] == ["en", "es"]
+        assert entries[version]["languages"] == ["es"]
     assert "languages" not in entries["0.10.0"]
 
 
@@ -155,6 +161,8 @@ def test_a_spanish_copy_loses_its_sitemaps_and_alternates_and_the_root_keeps_the
         assert not list((out / folder).rglob("sitemap.xml"))
         for page in ("index.html", "es/index.html"):
             assert "hreflang" not in (out / folder / page).read_text().split("</head>")[0]
+        # Only the head is stripped: the body's own alternate link survives.
+        assert (out / folder / "es" / "index.html").read_text().split("</head>")[1].count("<a hreflang=es") == 1
     assert (out / "sitemap.xml").exists() and (out / "es" / "sitemap.xml").exists()
     root_head = (out / "es" / "index.html").read_text().split("</head>")[0]
     assert root_head.count("hreflang=es") == 1 and root_head.count("hreflang=en") == 1

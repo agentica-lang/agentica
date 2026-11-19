@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'site/content/**'
+      - 'site/content.es/**'
       - '.github/workflows/site-examples.yml'
   workflow_dispatch:
 

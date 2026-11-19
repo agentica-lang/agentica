@@ -22,6 +22,7 @@ import pytest
 from tests.agentica_test import ROOT, cli, run, vm_environment
 
 CONTENT = ROOT / "site" / "content"
+CONTENT_ES = ROOT / "site" / "content.es"
 FENCE_OPEN = re.compile(r"^```([A-Za-z0-9_-]+)[ \t]*(?:\{([^}]*)\})?[ \t]*$")
 FENCE_CLOSE = re.compile(r"^```[ \t]*$")
 KNOWN_ATTRIBUTES = ("mode", "file", "expect", "fmt")
@@ -89,7 +90,7 @@ def following(blocks, index):
 
 
 def site_pages():
-    return sorted(path for path in CONTENT.rglob("*.md"))
+    return sorted(path for folder in (CONTENT, CONTENT_ES) for path in folder.rglob("*.md"))
 
 
 def diagnostic_code(result):
@@ -210,7 +211,7 @@ def test_every_site_example_is_formatted(tmp_path):
     """One `fmt --check` over every block of the site, each written to a file of its own."""
     names = {}
     for page in site_pages():
-        stem = str(page.relative_to(CONTENT).with_suffix("")).replace("/", "-")
+        stem = str(page.relative_to(ROOT / "site").with_suffix("")).replace("/", "-")
         for block in blocks_of(page):
             if is_program(block) and block.attributes.get("fmt") != "off":
                 name = "%s-%d.agc" % (stem, block.line)
@@ -224,7 +225,8 @@ def test_every_site_example_is_formatted(tmp_path):
 
 
 def test_the_smoke_pages_run_their_examples(tmp_path):
-    pages = [page for page in site_pages() if str(page.relative_to(CONTENT)) in SMOKE_PAGES]
+    pages = [page for page in site_pages()
+             if page.is_relative_to(CONTENT) and str(page.relative_to(CONTENT)) in SMOKE_PAGES]
     counts = check_pages(pages, tmp_path)
     assert len(pages) == len(SMOKE_PAGES)
     assert counts["run"] > 0, "the smoke pages should have run examples"

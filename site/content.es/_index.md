@@ -88,7 +88,7 @@ total: 1631 cents
 ## Siguiente lectura {#read-next}
 
 - [Primeros pasos](/getting-started/): instala Agentica, ejecuta tu primer programa y compruébalo.
-- [Recorrido por el lenguaje](/tour/): el lenguaje en páginas cortas, una idea cada vez.
+- [Tour del lenguaje](/tour/): el lenguaje en páginas cortas, una idea cada vez.
 - [Línea de comandos](/cli/): cada comando, opción y caché del programa `agentica`.
 - [Biblioteca](/library/): cada módulo integrado, con un ejemplo por función.
 - [Especificación del lenguaje](/reference/): la gramática formal y las reglas.

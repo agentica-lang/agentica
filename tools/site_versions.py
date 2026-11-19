@@ -5,11 +5,12 @@
 
 The output is one site per final release (`X.Y.Z` tags, no pre-releases) under `VERSION/`, the development site under
 `dev/`, the latest release again at the root, and `versions.json`, the list of the version selector. A version with a
-Spanish copy (its folder has `es/index.html`) lists `"languages": ["en", "es"]` there. Only the root is for search
-engines: each page under `VERSION/` gets a canonical URL to the same page at the root when the root has it, else
-`noindex,follow`; each page under `dev/` gets `noindex,follow`; their sitemaps (the language ones too) and their
-`hreflang` links are removed, the root keeps both. The sitemap index of a multilingual site lists `en/sitemap.xml` and
-`es/sitemap.xml`, so it goes with them.
+Spanish copy (its folder has `es/index.html`) lists `"languages": ["es"]` there: the languages besides the default,
+English. Only the root is for search engines: each page under `VERSION/` gets a canonical URL to the same page at the
+root when the root has it, else `noindex,follow`; each page under `dev/` gets `noindex,follow`; their `hreflang` links
+in the `<head>` are removed. A multilingual Hugo site writes a sitemap index plus one sitemap per language
+(`sitemap.xml`, `en/sitemap.xml`, `es/sitemap.xml`): `rglob` removes all of them from the version folders, while the
+root's sitemap sits outside every version folder and is kept.
 
 Each tag is built from its own tree, a detached git worktree (so Hugo's enableGitInfo dates its pages), with `make
 site`. A tag that uses the docs theme (it pins the submodule) is built with the theme commit and the Hugo and Dart Sass
@@ -213,7 +214,8 @@ def use_org_icons(out: Path) -> int:
 
 def versions_json(built: list[str], dev: bool, spanish: set[str]) -> list[dict]:
     """The order of the selector: `dev` first, then the releases newest first, the first release marked `latest`. A
-    version in `spanish` has its Spanish copy too: `languages` lists them, English first.
+    version in `spanish` has its Spanish copy too: `languages` lists the languages besides English, the default, as the
+    selector expects them.
 
     The selector keeps the file's order and finds the latest release by the `latest` flag, not by position."""
     entries = [{"version": v, "path": v + "/"} for v in built]
@@ -223,7 +225,7 @@ def versions_json(built: list[str], dev: bool, spanish: set[str]) -> list[dict]:
         entries.insert(0, {"version": "dev", "path": "dev/"})
     for entry in entries:
         if entry["version"] in spanish:
-            entry["languages"] = ["en", "es"]
+            entry["languages"] = ["es"]
     return entries
 
 
