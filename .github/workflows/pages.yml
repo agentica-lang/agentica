@@ -10,6 +10,7 @@ on:
       - 'Makefile'
       - 'mk/**'
       - 'tools/site_versions.py'
+      - 'tools/site_translations.py'
   push:
     branches: [master]
     paths:
@@ -20,6 +21,7 @@ on:
       - 'Makefile'
       - 'mk/**'
       - 'tools/site_versions.py'
+      - 'tools/site_translations.py'
   workflow_dispatch:
 
 permissions:
@@ -52,6 +54,8 @@ jobs:
       # The docs theme (only this submodule: the VM's are not needed), with its history, so that
       # tools/site_versions.py can unpack the theme commit this checkout pins into every tag that uses the theme.
       - run: git submodule update --init site/themes/docs-theme
+      # The Spanish pages against their English pages: the structure rules, and the stale ones as warnings.
+      - run: python3 -I tools/site_translations.py check
       - uses: actions/setup-node@v7
         with:
           node-version: '24'
@@ -72,6 +76,8 @@ jobs:
             site-versions-${{ hashFiles('tools/site_versions.py') }}-
       - id: build
         run: python3 -I tools/site_versions.py build --base-url "${{ steps.pages.outputs.base_url }}/"
+      # Hugo's stale notes must be the stale pages of the check. The dev site is built from the working tree.
+      - run: python3 -I tools/site_translations.py check --built build/site-versions/public/dev
       - uses: actions/cache/save@v5
         if: ${{ !cancelled() && github.event_name != 'pull_request' && steps.build.outputs.fresh == 'true' }}
         with:

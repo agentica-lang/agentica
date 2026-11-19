@@ -1,0 +1,13 @@
+{{- /* A Spanish page whose English page changed after the translation (its source_hash differs from the hash of the
+English file; tools/site_translations.py makes the same check). The marker data-translation="stale" is what
+`check --built` reads. */ -}}
+{{- if and .File .Params.source_hash (ne .Language.Lang "en") }}
+{{- $english := replace .File.Filename "/content.es/" "/content/" }}
+{{- if ne .Params.source_hash (substr (crypto.SHA256 (readFile $english)) 0 12) }}
+{{- $link := (hugo.Sites.Default.Home).RelPermalink }}
+{{- with .Translations }}{{ $link = (index . 0).RelPermalink }}{{ end }}
+<aside class="translation-notice" data-translation="stale">
+  <p>{{ i18n "translation_stale" }} <a href="{{ $link }}" hreflang="en" lang="en">{{ i18n "translation_read_english" }}</a></p>
+</aside>
+{{- end }}
+{{- end }}

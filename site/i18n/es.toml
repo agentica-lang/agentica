@@ -1,0 +1,3 @@
+# The site's own words in Spanish (neutral, tú); the theme's i18n/es.toml has the rest.
+translation_stale = "Esta página puede estar desactualizada: la página en inglés cambió después de esta traducción."
+translation_read_english = "Lee la página en inglés."

@@ -92,6 +92,7 @@ One line per term, sorted. "stays" means the term is not translated.
 | object | objeto |  |
 | operator | operador |  |
 | option | opción | A CLI flag is a flag; option names in code stay |
+| out of date | desactualizada | |
 | output | salida | Program output stays English (rule 2) |
 | overflow | desbordamiento |  |
 | package | paquete | `agentica.toml` stays |
@@ -160,6 +161,7 @@ One line per term, sorted. "stays" means the term is not translated.
 | timeout | tiempo de espera | `timeout_ms` stays |
 | tool | herramienta |  |
 | tour | stays | Masculine: el tour ("haz el tour") |
+| translation | traducción | |
 | type | tipo |  |
 | type alias | alias de tipo | The keyword `alias` stays |
 | value | valor |  |
