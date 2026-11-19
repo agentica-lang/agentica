@@ -204,6 +204,8 @@ bool agc_memstream_take(FILE *file, agc_memstream *m, char **text, size_t *len) 
 /* libuv's statuses are negative errno values on Unix. */
 bool agc_stdio_gone(int err) { return err == EPIPE || err == -EPIPE; }
 
+void agc_stdio_failed(void) {}
+
 /* ftrylockfile is POSIX, so every system but Windows takes this flush, not only Linux and macOS. */
 agc_stdio_flush_result agc_stdio_flush(FILE *stream) {
   int saved_errno = errno;

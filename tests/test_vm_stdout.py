@@ -731,12 +731,15 @@ def test_a_stderr_whose_reader_left_ends_the_run_quietly_with_status_141(tmp_pat
     assert process.returncode == 141
 
 
-@pytest.mark.skipif(not os.path.exists("/dev/full"), reason="host-only: /dev/full, which fails every write, is Linux")
 def test_a_standard_output_that_fails_otherwise_than_epipe_is_still_an_error(tmp_path):
-    bytecode = compile_text(ROWS_PROGRAM % 10, "full", tmp_path)
-    result = run([*vm_command(), "--json", "--", bytecode], stdout_to="/dev/full", env=vm_environment())
-    assert result.code == 1
-    assert '"code":"RUNTIME-INTERNAL"' in result.stderr
+    bytecode = compile_text(ROWS_PROGRAM % 10, "read-only", tmp_path)
+    target = tmp_path / "read-only.txt"
+    target.write_bytes(b"")
+    with open(target, "rb") as read_only:
+        process = subprocess.run([*vm_command(), "--json", "--", bytecode], stdout=read_only, stderr=subprocess.PIPE,
+                                 env=vm_environment(), timeout=PEER_LIMIT)
+    assert process.returncode == 1
+    assert b'"code":"RUNTIME-INTERNAL"' in process.stderr
 
 
 def test_a_crashed_parent_cancels_a_child_waiting_to_print_and_nothing_partial_is_written(tmp_path):

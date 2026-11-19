@@ -159,18 +159,20 @@ ssize_t agc_stdio_write(int fd, const uint8_t *data, size_t n, agc_utf8_cut *cut
   return crt_write(fd, data, n);
 }
 
-/* EPIPE from crt_write, pipe_errno or the flush thread; libuv's write completion maps ERROR_BROKEN_PIPE to UV_EOF and
-   ERROR_PIPE_NOT_CONNECTED to UV_EPIPE. A write is never told UV_EOF for any other reason. The FILE fallback of
-   vm/output.c (write_failed) reads errno on the thread of the failed fwrite or fflush, which still holds _doserrno. */
-bool agc_stdio_gone(int err) {
-  if (err == EINVAL && (_doserrno == ERROR_NO_DATA || _doserrno == ERROR_BROKEN_PIPE)) return true;
-  return err == EPIPE || err == UV_EPIPE || err == UV_EOF;
+/* EPIPE from crt_write, agc_stdio_failed or the flush thread; UV_EPIPE from pipe_written. */
+bool agc_stdio_gone(int err) { return err == EPIPE || err == UV_EPIPE; }
+
+void agc_stdio_failed(void) {
+  if (errno == EINVAL) pipe_errno();
 }
 
 static void pipe_closed(uv_handle_t *handle) { free(handle->data); }
 
+/* libuv's write completion maps ERROR_NO_DATA (the reader closed) to UV_EAGAIN and ERROR_BROKEN_PIPE to UV_EOF; a write
+   gets neither for any other reason, so both are UV_EPIPE. */
 static void pipe_written(uv_write_t *req, int status) {
   pipe_stream *w = (pipe_stream *)((char *)req - offsetof(pipe_stream, req));
+  if (status == UV_EAGAIN || status == UV_EOF) status = UV_EPIPE;
   if (w->done) w->done(w->data, status);
 }
 

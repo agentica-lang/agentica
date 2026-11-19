@@ -39,8 +39,8 @@ typedef struct {
 
 /* A write to standard output or error whose reader closed its end ends the run quietly with AGC_EXIT_READER_GONE, as
    SIGPIPE ends a Unix tool: `prog | head` is not an error. */
-static _Noreturn void fail_write(agc_vm *vm, const agc_output *out) {
-  if (out->base && out->base->gone) agc_exit(vm, AGC_EXIT_READER_GONE);
+static _Noreturn void fail_write(agc_vm *vm, const agc_output *out, bool gone) {
+  if (gone) agc_exit(vm, AGC_EXIT_READER_GONE);
   agc_fail(vm, "RUNTIME-INTERNAL",
            out == &vm->rt->err ? "cannot write to standard error" : "cannot write to standard output", 0);
 }
@@ -51,8 +51,8 @@ static _Noreturn void write_failed(agc_vm *vm, agc_output *out) {
     clearerr(out->file);
     agc_stop(vm, sig);
   }
-  if (agc_stdio_gone(errno)) agc_exit(vm, AGC_EXIT_READER_GONE);
-  fail_write(vm, out);
+  agc_stdio_failed();
+  fail_write(vm, out, agc_stdio_gone(errno));
 }
 
 bool agc_output_on_file(const agc_output *out) { return !out->base; }
@@ -119,8 +119,9 @@ CC_JUMP_RELEASES CC_RELEASES(l->mutex) static void stream_drop(agc_vm *vm, agc_l
 
 /* A failure of a call that holds the stream's lock: the lock goes first, because agc_fail jumps out of the call. */
 static _Noreturn void fail_locked(agc_vm *vm, agc_output *out) {
+  bool gone = out->base->gone;
   stream_drop(vm, out->base->lock);
-  fail_write(vm, out);
+  fail_write(vm, out, gone);
 }
 
 static size_t smaller(size_t a, size_t b) { return a < b ? a : b; }

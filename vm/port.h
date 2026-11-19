@@ -1088,6 +1088,9 @@ typedef enum { AGC_STDIO_FLUSHED, AGC_STDIO_BUSY, AGC_STDIO_FAILED } agc_stdio_f
 /* True when ERR, the errno of a failed write or flush or the status of a write or poller callback, says that the
    reader closed its end (EPIPE; vm/stdio_windows.c maps Windows' broken pipe to it). */
 bool agc_stdio_gone(int err);
+/* Called right after a failed fwrite or fflush, on its thread: on Windows it turns the UCRT's EINVAL for a pipe whose
+   reader left into EPIPE; elsewhere it does nothing. */
+void agc_stdio_failed(void);
 #define AGC_STDIO_FLUSH_WAIT_MS 100
 agc_stdio_flush_result agc_stdio_flush(FILE *stream);
 #ifdef _WIN32
