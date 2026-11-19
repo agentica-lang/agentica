@@ -18,7 +18,8 @@ Terms come from `references/glossary-es.md`. Read it before you translate.
 ## The rules
 
 1. Names of products and projects are never translated: Agentica, Finn,
-   OpenSSL, libgc, Hugo, GitHub, Node, Python, ripgrep.
+   OpenSSL, libgc, Hugo, GitHub, Node, Python, ripgrep. Agentica is
+   masculine, like "el lenguaje": "Este es Agentica".
 2. Code is always English: identifiers, comments, strings, file names, CLI
    commands and flags, program output. Translate only the prose around a
    block.

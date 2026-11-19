@@ -1,5 +1,5 @@
 # The site's own words in Spanish (neutral, tú); the theme's i18n/es.toml has the rest.
 translation_stale = "Esta página puede estar desactualizada: la página en inglés cambió después de esta traducción."
 translation_read_english = "Lee la página en inglés."
-release_intro = "Esta es Agentica {{ .Version }}. La [release {{ .Version }}]({{ .URL }}) tiene el archivo de código fuente de esa versión y los cinco archivos comprimidos ya compilados que genera el flujo de release (Linux x86-64, Linux ARM64, Windows x86-64, macOS Intel y macOS Apple silicon), con un archivo `SHA256SUMS`. [Todas las releases]({{ .All }}) muestra las demás versiones."
+release_intro = "Este es Agentica {{ .Version }}. La [release {{ .Version }}]({{ .URL }}) tiene el archivo de código fuente de esa versión y los cinco archivos comprimidos ya compilados que genera el flujo de release (Linux x86-64, Linux ARM64, Windows x86-64, macOS Intel y macOS Apple silicon), con un archivo `SHA256SUMS`. [Todas las releases]({{ .All }}) muestra las demás versiones."
 switcher_label = "Ejemplos"
