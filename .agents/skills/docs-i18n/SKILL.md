@@ -111,7 +111,7 @@ A reviewer agent checks what no tool can:
   title: Cadenas e interpolación
   description: Literales de cadena, escapes, interpolación y métodos.
   weight: 3
-  source_hash: 9c1e4f0a7b2d
+  source_hash: "9c1e4f0a7b2d"
   ---
   ```
 

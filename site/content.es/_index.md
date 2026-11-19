@@ -1,7 +1,7 @@
 ---
 title: Agentica
 description: Agentica es Ruby con tipos estáticos. Sintaxis parecida a Ruby, comprobada antes de ejecutar, con valores inmutables.
-source_hash: 5a32d41d8d0f
+source_hash: "5a32d41d8d0f"
 ---
 
 Agentica es Ruby con tipos estáticos. Tiene una sintaxis parecida a la de Ruby. Cada programa se comprueba antes de ejecutarse, y los valores nunca cambian en su lugar. El lenguaje es pequeño a propósito, para que personas y agentes de IA puedan escribir, leer y corregir programas con pocas sorpresas. Cada error tiene un código estable, una posición en el código fuente y, a menudo, una sugerencia para corregirlo.
