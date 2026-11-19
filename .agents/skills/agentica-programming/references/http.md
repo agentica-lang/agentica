@@ -33,7 +33,7 @@ HTTP.upload(method: String, url: String, body: Channel[Bytes], length: Int = -1,
 
 HTTP.Header(name: String, value: String)
 HTTP.Response(status: Int, headers: List[HTTP.Header], body: Bytes)
-DownloadOptions(timeout_ms: Int = 30000, max_total_bytes: Int = 268435456)
+DownloadOptions(timeout_ms: Optional[Int] = none, max_total_bytes: Optional[Int] = none, sha256: Optional[String] = none)
 Download(status: Int, headers: List[HTTP.Header], bytes_written: Int)
 HTTP.ClientOptions(timeout_ms: Int = 30000, idle_timeout_ms: Int = 30000, max_connections: Int = 4, max_body_bytes: Int = 1048576, proxy: String = "", tls: Optional[TLS.Context] = none, connect_timeout_ms: Int = 10000, read_timeout_ms: Int = 300000, connect_to: String = "")
 ```
@@ -70,8 +70,8 @@ HTTP.ClientOptions(timeout_ms: Int = 30000, idle_timeout_ms: Int = 30000, max_co
   (`status`, `headers`), `HTTP.read_body(conn, max_bytes)` gives the body piece
   by piece and an empty `Bytes` at its end, `HTTP.finish(conn)` closes. After a
   body read to its end the same connection takes the next request, unless the
-  server closed it. Use it for a body read as it arrives (up to 256 MiB); whole
-  responses use `get` or the client. One call at a time, in the task that opened
+  server closed it. Use it for a body read as it arrives (no size limit);
+  whole responses use `get` or the client. One call at a time, in the task that opened
   it.
 - One request: `HTTP.get_response(url)` and `HTTP.post_response(url, body)`
   make a client of their own, send it and close it before they return (Ruby's
@@ -82,7 +82,7 @@ HTTP.ClientOptions(timeout_ms: Int = 30000, idle_timeout_ms: Int = 30000, max_co
   body)` returns at the head as `HTTP.Stream(status, headers, body, done)`. Read
   `stream.body` (a `Channel[Bytes]`, pieces up to 64 KiB) until the closed
   error, then `Task.await(stream.done)`: only `done` tells a whole body from a
-  cut one (a timeout, a body over 256 MiB). Close `body` to stop early while
+  cut one (a timeout, a bad chunk); the body has no size limit. Close `body` to stop early while
   data flows; on a quiet stream use `Task.cancel(stream.done)`.
   `HTTP.upload(method, url, body_channel, length)` sends the pieces another task
   puts in the channel, as chunks until it closes (`length` -1, the default;
@@ -99,10 +99,19 @@ HTTP.ClientOptions(timeout_ms: Int = 30000, idle_timeout_ms: Int = 30000, max_co
   responses. Errors are Results: protocol and limit errors start with `http: `,
   a timeout is `network: operation timed out`. `HTTP.get` has no
   streaming (see `HTTP.start`), redirect following or gzip decoding.
-- `download` streams a `GET` body to a new file instead of `Bytes`: the
-  file must not exist (an existing path fails untouched), a failed download
-  keeps the partial file, and `max_total_bytes` (default 256 MiB) caps what is
-  written. 4xx and 5xx still return `ok` with their status and written body.
+- `download` streams a `GET` body to a hidden file
+  `.<name>.<hex>.agc-part` beside `path` and `Path.replace`s it over `path`
+  (a file or link there is replaced, in one step) only after a clean end; a
+  failure removes it and leaves `path` as it was, but a cancelled or killed
+  download (or a timeout while the file is made) can leave the `.agc-part`
+  file. By default it has no size limit and
+  a one-year time limit (each wait still takes at most `read_timeout_ms`);
+  `some(...)` sets `timeout_ms` or `max_total_bytes`, and
+  `sha256: some(hex)` checks the digest (`http.digest` when it differs).
+  4xx and 5xx still return `ok` with their status and written body.
+- `max_body_bytes` (at most 64 MiB) caps only the bodies held in memory
+  (`get`, `post`, `request`, `upload`'s response); a bigger body goes
+  through `download`, `read_body` or `open`.
 - A body is `Bytes`: send text as `"...".bytes` (no body: `"".bytes`) and read
   it with `HTTP.text(response.body, response.headers)`, which decodes the
   `charset` of `Content-Type` (UTF-8 without one) when `b.decode` knows it
