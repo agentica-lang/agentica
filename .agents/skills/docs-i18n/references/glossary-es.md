@@ -69,7 +69,7 @@ One line per term, sorted. "stays" means the term is not translated.
 | immutable | inmutable |  |
 | index | índice |  |
 | input | entrada | The input of a program or an example |
-| install | instalar | |
+| install | instalar |  |
 | integer | entero | The type `Int` stays |
 | interpolation | interpolación | `"#{...}"` stays in code |
 | lambda | stays | A short anonymous function |
@@ -92,6 +92,7 @@ One line per term, sorted. "stays" means the term is not translated.
 | object | objeto |  |
 | operator | operador |  |
 | option | opción | A CLI flag is a flag; option names in code stay |
+| out of date | desactualizada |  |
 | output | salida | Program output stays English (rule 2) |
 | overflow | desbordamiento |  |
 | package | paquete | `agentica.toml` stays |
@@ -124,7 +125,7 @@ One line per term, sorted. "stays" means the term is not translated.
 | result | resultado | The type `Result` and `ok`/`error` stay |
 | return | devolver | The keyword `return` stays |
 | route | ruta | An HTTP route; `route` in code stays |
-| rule | regla | |
+| rule | regla |  |
 | run | ejecutar | Noun: ejecución; the command `run` stays |
 | runtime | stays |  |
 | scenario | escenario | A BDD scenario |
@@ -160,6 +161,7 @@ One line per term, sorted. "stays" means the term is not translated.
 | timeout | tiempo de espera | `timeout_ms` stays |
 | tool | herramienta |  |
 | tour | stays | Masculine: el tour ("haz el tour") |
+| translation | traducción |  |
 | type | tipo |  |
 | type alias | alias de tipo | The keyword `alias` stays |
 | value | valor |  |

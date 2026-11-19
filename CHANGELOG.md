@@ -11,6 +11,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 ### Added
 
 - The documentation site has a Spanish home page at `/es/` (#1886).
+- A Spanish page shows a note when its English page changed after the translation (#1886).
 
 ## [0.35.0] - 2026-11-19
 

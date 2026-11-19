@@ -38,14 +38,14 @@ Terms come from `references/glossary-es.md`. Read it before you translate.
    untranslated page. Every Spanish heading ends with `{#id}`, the id its
    English heading gets: the heading's own `{#id}` if it has one, else the id
    Hugo makes from its text (`render-heading.html` prints it as `.Anchor`).
-   P4 checks it.
+   `make site-translations` checks it.
 7. Front matter: translate `title` and `description`. Copy `weight`, `slug`,
    `aliases` and `url` unchanged. Add `source_hash` (see the workflow).
 8. Tone: neutral international Spanish, *tú*, never *vosotros*. Simple words
    and short sentences (AGENTS.md, "Working style"). Add no sentence and drop
    no sentence. A sentence that is wrong in English is fixed in English first.
-9. Checks: `make site` is green, `make site-translations` is green (once P4
-   lands), and a reviewer agent approves the PR with the checklist below. The
+9. Checks: `make site` is green, `make site-translations` is green, and a
+   reviewer agent approves the PR with the checklist below. The
    owner samples the published pages; a problem found there becomes a rule
    here.
 10. Interface strings (the theme's `i18n/es.toml` keys, button labels, search
@@ -61,16 +61,12 @@ Terms come from `references/glossary-es.md`. Read it before you translate.
    cells and the `title` attribute of an `example` shortcode. Leave the code
    and the other shortcode attributes alone.
 4. Add `source_hash` to the front matter: the first 12 hex digits of the
-   SHA-256 of the English file bytes:
-   `sha256sum site/content/X | cut -c1-12`. Once P4 lands, use
-   `python3 tools/site_translations.py stamp site/content.es/X`.
-5. Check. Once P4 lands, run `make site-translations`. Before that, check the
-   code blocks by hand. No output means they match:
-
-   ```sh
-   diff <(awk '/^```/{f=!f} f' site/content/X) \
-     <(awk '/^```/{f=!f} f' site/content.es/X)
-   ```
+   SHA-256 of the English file bytes. Run
+   `python3 -I tools/site_translations.py stamp site/content.es/X`; it writes
+   the hash of `site/content/X` into the front matter.
+5. Check: run `make site-translations`. It reports the structure errors and
+   the stale pages. `python3 -I tools/site_translations.py status` prints the
+   coverage: the missing and the stale pages.
 
 6. Run `make site`. It builds with `--panicOnWarning`, so a broken link fails.
 7. Open the PR. The body says which English page and which commit you
@@ -78,7 +74,7 @@ Terms come from `references/glossary-es.md`. Read it before you translate.
 
 ## What CI checks and what a reviewer checks
 
-Once P4 lands, `make site-translations` checks these and fails the job:
+`make site-translations` checks these and fails the job:
 
 - the English page exists (no orphan);
 - front matter: `title`, `description` and `source_hash` exist; `weight`,
@@ -91,8 +87,10 @@ Once P4 lands, `make site-translations` checks these and fails the job:
 
 It warns, and does not fail, when a paragraph has another number of lines
 than English, and when `source_hash` no longer matches the English file
-(a stale page). `--strict` turns the stale warning into a failure. `make site`
-checks the links.
+(a stale page). `--strict` turns the stale warning into a failure. A stale
+page shows its readers a note that links to the English page. CI checks that
+the note is on exactly the stale pages (`check --built`). `make site` checks
+the links.
 
 A reviewer agent checks what no tool can:
 
@@ -113,7 +111,7 @@ A reviewer agent checks what no tool can:
   title: Cadenas e interpolación
   description: Literales de cadena, escapes, interpolación y métodos.
   weight: 3
-  source_hash: 9c1e4f0a7b2d
+  source_hash: "9c1e4f0a7b2d"
   ---
   ```
 

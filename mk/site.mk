@@ -1,7 +1,8 @@
-# The documentation site (Hugo): site, site-serve, site-sass, the highlighter's npm install and site-versions (every release).
+# The documentation site (Hugo): site, site-serve, site-sass, the highlighter's npm install, site-versions (every release)
+# and site-translations (the Spanish pages against the English ones).
 # The look, the layouts and the highlighter come from the docs theme, the submodule site/themes/docs-theme.
 
-.PHONY: site site-serve site-sass site-versions
+.PHONY: site site-serve site-sass site-versions site-translations
 
 DART_SASS ?= $(HOME)/.local/opt/dart-sass
 
@@ -33,3 +34,7 @@ SITE_BASE_URL ?= http://localhost:8000/
 
 site-versions:
 	$(PYTHON) -I tools/site_versions.py build --base-url $(SITE_BASE_URL)
+
+# The structure of each Spanish page against its English page; pages.yml also checks the built site (`check --built`).
+site-translations:
+	$(PYTHON) -I tools/site_translations.py check

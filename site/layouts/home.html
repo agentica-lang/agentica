@@ -1,0 +1,15 @@
+{{- /* A copy of the theme's home.html that also calls the page notice: the theme calls that hook from single.html and
+list.html only, and the Spanish home is a home page. Keep it in step with the theme's home.html. */ -}}
+{{ define "main" }}
+{{ partial "page-notice.html" . }}<article class="content">
+  {{- /* As in single.html: a page whose text starts with an h1 (a README used as the home page) shows that heading. */ -}}
+  {{- $actions := partial "page-actions.html" . }}
+  {{- if partial "heading.html" . }}
+  {{ replace (replace .Content "<h1" `<div class="page-head"><h1` 1) "</h1>" (printf "</h1>%s</div>" $actions) 1 | safeHTML }}
+  {{- else }}
+  <div class="page-head"><h1>{{ site.Title }}</h1>{{ $actions }}</div>
+  {{ .Content }}
+  {{- end }}
+  {{- partial "home-extra.html" . }}
+</article>
+{{ end }}
