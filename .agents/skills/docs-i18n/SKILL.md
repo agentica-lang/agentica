@@ -33,9 +33,12 @@ Terms come from `references/glossary-es.md`. Read it before you translate.
    lists, tables and shortcodes. One line per paragraph and per list item,
    line for line where possible (`site/content/` rule in AGENTS.md).
 6. Links: keep every target as it is in English, including external ones.
-   Translate the words inside the brackets. From P2 on, a link to a page with
-   no Spanish version goes to the English page. Before P2, do not link to an
-   untranslated page. Every Spanish heading ends with `{#id}`, the id its
+   Translate the words inside the brackets. A link to a page of the same site
+   (`../tour/x.md`, `/ecosystem/`) goes to its Spanish page when there is one,
+   else to the English page; the build does it. On a site with no
+   `make site-translations`, a full URL to a page of the same site may become
+   its site path, so it reaches the Spanish page. Every Spanish heading ends
+   with `{#id}`, the id its
    English heading gets: the heading's own `{#id}` if it has one, else the id
    Hugo makes from its text (`render-heading.html` prints it as `.Anchor`).
    `make site-translations` checks it.
@@ -77,13 +80,16 @@ Terms come from `references/glossary-es.md`. Read it before you translate.
 `make site-translations` checks these and fails the job:
 
 - the English page exists (no orphan);
-- front matter: `title`, `description` and `source_hash` exist; `weight`,
-  `slug`, `aliases` and `url` equal the English ones;
+- front matter: the same keys as English plus `source_hash`, which is quoted
+  and 12 hex digits; `weight`, `slug`, `aliases` and `url` equal the English
+  ones; the backticked spans of the values are the same;
 - fenced code blocks are byte-identical to English, info string included;
 - same number of headings, same levels in the same order, same anchors;
 - the backticked spans are the same, with the same count of each;
-- the same link targets in the same order, and the same shortcode names;
-- the same number of list items, table rows and shortcodes.
+- the same link targets in the same order;
+- the same shortcodes with the same attributes, except the `title` of
+  `example`;
+- the same number of paragraphs, list items and table rows.
 
 It warns, and does not fail, when a paragraph has another number of lines
 than English, and when `source_hash` no longer matches the English file
