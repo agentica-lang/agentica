@@ -51,7 +51,7 @@ Cada valor tiene un tipo. El comprobador de tipos conoce el tipo de cada expresi
 | `Int` | números enteros de 64 bits: `42`, `-7` |
 | `Float` | números decimales: `3.14`, `0.5` |
 | `Bool` | `true` y `false` |
-| `String` | texto: `"hello"` |
+| `String` | cadenas: `"hello"` |
 | `Nil` | el único valor `nil` |
 
 ```agentica
@@ -94,7 +94,7 @@ end
 
 ## to_s e inspect {#to_s-and-inspect}
 
-`puts` imprime cualquier valor como su texto `to_s`: las cadenas tal cual, y los demás valores en una forma corta y legible (`[1, 2, 3]`, `{"a": 1}`, `ok(5)`). Una función, una tarea o un manejador, como un `TCP.Listener`, no tiene `to_s`: `f.to_s` es `CHECK-UNKNOWN-METHOD`. `inspect` es la forma de depuración: las cadenas conservan sus comillas.
+`puts` imprime cualquier valor como su texto `to_s`: las cadenas tal cual, y los demás valores en una forma corta y legible (`[1, 2, 3]`, `{"a": 1}`, `ok(5)`). Una función, una tarea o un handle, como un `TCP.Listener`, no tiene `to_s`: `f.to_s` es `CHECK-UNKNOWN-METHOD`. `inspect` es la forma de depuración: las cadenas conservan sus comillas.
 
 ```agentica
 def main() -> Void

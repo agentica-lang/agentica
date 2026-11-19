@@ -85,7 +85,7 @@ end
 9223372036854775807
 ```
 
-El rango es el de `Int`: `0x8000_0000_0000_0000` es `CHECK-INT-RANGE`. Un prefijo sin dígito (`0x`), un dígito fuera de la base (`0b102`, `0o8`) o un `_` mal colocado (`0xFF_`) es `LEX-INVALID-NUMBER`. Un cero inicial sigue siendo decimal: `0755` es `755`.
+El rango es el de `Int`: `0x8000_0000_0000_0000` es `CHECK-INT-RANGE`. Un prefijo sin dígito (`0x`), un dígito fuera de la base (`0b102`, `0o8`) o un `_` mal colocado (`0xFF_`) es `LEX-INVALID-NUMBER`. Un cero inicial, por sí solo, sigue siendo decimal: `0755` es `755`.
 
 ## División {#division}
 
@@ -172,7 +172,7 @@ end
 
 ## De texto a números {#text-to-numbers}
 
-`to_i` y `to_f` leen un número de una cadena. Devuelven un [Result](/tour/results-and-try/), porque el texto puede no ser un número. `to_i!` y `to_f!` devuelven el número y detienen el programa si el texto no sirve.
+`to_i` y `to_f` leen un número de una cadena. Devuelven un [Result](/tour/results-and-try/), porque el texto puede no ser un número. `to_i!` y `to_f!` devuelven el número y detienen el programa si el texto no es un número válido.
 
 ```agentica
 def main() -> Void
@@ -192,7 +192,7 @@ error("cannot convert \"4x\" to Int", kind: "number.parse")
 
 ## Desbordamiento {#overflow}
 
-El desbordamiento de `Int` es un error. Nunca da la vuelta.
+El desbordamiento de `Int` es un error. Nunca pasa al otro extremo.
 
 ```agentica {expect="RUNTIME-INTEGER-OVERFLOW"}
 def main() -> Void

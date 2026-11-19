@@ -11,7 +11,7 @@ source_hash: "a63ab4186c96"
 
 Descarga el archivo comprimido de tu sistema, compruébalo con `SHA256SUMS`, descomprímelo donde quieras (los espacios y las letras no ASCII están bien) y pon su carpeta `bin` en tu `PATH`. Contiene un solo programa y no necesita ninguna otra biblioteca.
 
-| Sistema | Archivo | Mínimo |
+| Sistema | Archivo comprimido | Mínimo |
 |---|---|---|
 | Linux x86-64 | `agentica-VERSION-linux-x86_64.tar.gz` | glibc 2.28 |
 | Linux ARM64 | `agentica-VERSION-linux-arm64.tar.gz` | glibc 2.28 |

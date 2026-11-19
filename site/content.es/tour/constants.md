@@ -33,7 +33,7 @@ end
 ```
 
 - Las constantes van después de las importaciones y antes de los tipos y las funciones, sin línea vacía entre ellas.
-- Indica un tipo como en una asignación (`RATIO: Float = 1.5`). También da tipo a `[]` y `{}`.
+- Indica un tipo como en una asignación (`RATIO: Float = 1.5`). También indica el tipo de `[]` y `{}`.
 
 ## Construye una tabla una sola vez {#build-a-table-once}
 
@@ -93,7 +93,7 @@ def main() -> Void
 end
 ```
 
-- Su tipo es números, texto, listas, mapas, conjuntos, rangos, `Result`, o estructuras y enums de esos. Un canal, una tarea o una función es `CHECK-CONSTANT-TYPE`. La única excepción es un inicializador completo `ATS.new()`, una tabla que comparten todas las tareas ([una tabla constante](/library/concurrency/ats/#a-constant-table)).
+- Su tipo es números, cadenas, listas, mapas, conjuntos, rangos, `Result`, o estructuras y enums de esos. Un canal, una tarea o una función es `CHECK-CONSTANT-TYPE`. La única excepción es un inicializador completo `ATS.new()`, una tabla que comparten todas las tareas ([una tabla constante](/library/concurrency/ats/#a-constant-table)).
 - Nada asigna un valor a una constante: `LIMIT = 2` dentro de una función es `PARSE-INVALID-ASSIGNMENT-TARGET`.
 
 ## Compartir una constante entre archivos {#share-a-constant-between-files}

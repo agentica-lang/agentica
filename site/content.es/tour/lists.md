@@ -161,7 +161,7 @@ end
 ["fig", "pear", "banana"]
 ```
 
-## Preguntar por los elementos {#ask-questions}
+## Comprobar los elementos {#ask-questions}
 
 ```agentica
 def main() -> Void
