@@ -203,7 +203,7 @@ One line per term, sorted. "stays" means the term is not translated.
 | peer | stays | Owner decision: the term stays; a peer program used by tests |
 | pin | fijar | A pinned version: fijada |
 | pipe | stays | The `\|>` operator |
-| pipe (OS) | tubería | The `|>` pipe stays pipe |
+| pipe (OS) | tubería | An OS pipe; the operator stays pipe |
 | pipeline | stays |  |
 | pointer | puntero | Low-level, in the FFI docs |
 | port | puerto | A TCP or HTTP port |
