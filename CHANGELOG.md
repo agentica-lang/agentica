@@ -8,9 +8,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.35.1] - 2026-11-20
+
 ### Added
 
-- The documentation site has a Spanish home page at `/es/` (#1886).
+- The documentation site is available in Spanish at `/es/`, with a language selector in the header (#1886).
 - A Spanish page shows a note when its English page changed after the translation (#1886).
 
 ## [0.35.0] - 2026-11-19
@@ -1754,7 +1756,8 @@ First release of Agentica, a statically typed language designed for AI agents.
 - `main` returns `Void`; maps preserve insertion order and support fallible
   lookups.
 
-[unreleased]: https://github.com/agentica-lang/agentica/compare/0.35.0...HEAD
+[unreleased]: https://github.com/agentica-lang/agentica/compare/0.35.1...HEAD
+[0.35.1]: https://github.com/agentica-lang/agentica/compare/0.35.0...0.35.1
 [0.35.0]: https://github.com/agentica-lang/agentica/compare/0.34.2...0.35.0
 [0.34.2]: https://github.com/agentica-lang/agentica/compare/0.34.1...0.34.2
 [0.34.1]: https://github.com/agentica-lang/agentica/compare/0.34.0...0.34.1
