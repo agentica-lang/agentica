@@ -1,0 +1,13 @@
+{
+  "exit": 1,
+  "code": "RUNTIME-INDEX-OUT-OF-RANGE",
+  "steps": 58,
+  "stdout": [
+    "error(\"filesystem: file handle is not open for reading\", kind: \"io.failed\")",
+    "ok()",
+    "ok()",
+    "error(\"filesystem: file handle is closed\", kind: \"io.closed\")",
+    ""
+  ],
+  "stderr": []
+}

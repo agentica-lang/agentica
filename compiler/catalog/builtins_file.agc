@@ -204,6 +204,23 @@ ROWS: List[Model.Builtin] = [
     alternatives: [],
   ),
   Model.Builtin(
+    name: "File.seek",
+    parameters: [
+      Model.Named(name: "handle", type: Types.Type.Opaque("File.Handle")),
+      Model.Named(name: "offset", type: Types.Type.Int),
+      Model.Named(name: "timeout_ms", type: Types.Type.Int, default: Model.Default.Whole(30000)),
+    ],
+    result: Types.Type.Result(Types.Type.Void),
+    rule: Model.Rule.Plain,
+    implementation: "File.seek",
+    effects: ["filesystem"],
+    description: (
+      "Move a read handle to offset bytes from the start; past the end the next read gives empty bytes; a negative " +
+      "offset halts; VM only."
+    ),
+    alternatives: [],
+  ),
+  Model.Builtin(
     name: "File.sha256",
     parameters: [
       Model.Named(name: "path", type: Types.Type.String),
