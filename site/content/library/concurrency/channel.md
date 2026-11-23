@@ -23,7 +23,7 @@ Channel.new() -> Channel[T]
 
 With a capacity, the channel holds 1 to 1048576 values, else `RUNTIME-INVALID-COUNT`, and a full channel makes the sender wait. With none, the channel is unbounded, as Ruby's `Queue.new` (an Erlang mailbox): a send never waits, and its `timeout_ms` is still checked but never used. It needs an expected type (annotation, parameter, field or return type), else `CHECK-EXPECTED-TYPE`.
 
-Every value in an unbounded channel is kept until it is received, and its buffer grows to hold them and does not shrink. Only the memory limit of the run, `--max-heap` ([Options](/cli/#options)), bounds it. When the receiver may fall behind the senders, pick a capacity: a full channel slows the senders down instead of growing memory.
+Every value in an unbounded channel is kept until it is received, and its buffer grows to hold them and does not shrink. It grows until the memory of the run runs out; with `--max-heap` ([Options](/cli/#options)) the run then stops with `RUNTIME-HEAP-LIMIT`. When the receiver may fall behind the senders, pick a capacity: a full channel slows the senders down instead of growing memory.
 
 ```agentica {expect="CHECK-EXPECTED-TYPE"}
 def main() -> Void

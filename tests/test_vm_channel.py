@@ -142,7 +142,7 @@ def produce(round: Round) -> Void
 end
 
 def run_round(count: Int, reason: String) -> Void
-  ch: Channel[Int] = Channel.new(2)
+  ch: Channel[Int] = {new}
   producer = Task.spawn(&produce, Round(ch: ch, count: count, reason: reason))
   while true
     r = ch.recv(10000)
@@ -202,7 +202,7 @@ def test_a_producer_on_another_scheduler_gives_every_value_then_the_reason(tmp_p
     rng = random.Random(29)
     rounds = [(rng.randint(1, most), rng.choice(["", "cut %d" % i])) for i in range(150)]
     calls = ["  run_round(%d, \"%s\")" % (count, reason) for count, reason in rounds]
-    rounds_text = ROUNDS.replace("Channel.new(2)", new_channel(capacity))
+    rounds_text = ROUNDS.replace("{new}", new_channel(capacity))
     text = ROUND + CLOSE_HELPERS + rounds_text + "def main() -> Void\n" + "\n".join(calls) + "\nend\n"
     vm = run_vm(compile_text(text, "close_rounds", tmp_path), "--schedulers", schedulers, env=vm_environment())
     assert vm.code == 0, vm.stderr

@@ -124,9 +124,10 @@ def arity_failure(cx: State.Cx, st: State.St, node: Ast.Call, entry: Model.Built
     name = RubyForm.shown(entry.name)
   end
 
-  # Forms of one arity (JSON.decode of text or of a JSON.Value) count once.
+  # Forms of one arity (JSON.decode of text or of a JSON.Value) count once, fewest arguments first.
   counts: List[String] = []
-  for form in [entry].concat(entry.alternatives)
+  forms = [entry].concat(entry.alternatives).sort_by do |form: Model.Builtin| form.parameters.size end
+  for form in forms
     text = Builtins.arity_text(form, skipped)
     if !counts.any? do |seen: String| seen == text end
       counts = counts.push(text)
