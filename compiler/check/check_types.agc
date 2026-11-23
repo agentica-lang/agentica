@@ -814,8 +814,8 @@ def resolve_plain(cx: State.Cx, st: State.St, ref: TypeRef, completion: Bool) ->
     return ok(Types.Type.Bytes)
   elsif name == Types.REF_TYPE
     return ok(Types.Type.Opaque("Ref"))
-  elsif cx.resources.include?(name) or (OPAQUE_TYPES.include?(name) and name != "Ref")
-    # A plain Ref is a type of the root file: the linker names the builtin Types.REF_TYPE.
+  elsif cx.resources.include?(name) or (OPAQUE_TYPES.include?(name) and (name != "Ref" or prelude_file?(cx)))
+    # Outside a prelude file, a plain Ref is a type of the root file: the linker names the builtin Types.REF_TYPE.
     return ok(Types.Type.Opaque(name))
   end
 
@@ -1571,3 +1571,6 @@ def variable_needs(type: ResolvedType, found: List[ResolvedType]) -> List[Resolv
 
   found
 end
+
+## A file of the prelude, such as the wrappers of builtin references: its types are written as text.
+def prelude_file?(cx: State.Cx) -> Bool = cx.file.start_with?("<prelude>/")

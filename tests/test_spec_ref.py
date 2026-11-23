@@ -31,6 +31,8 @@ RULES = {
     "Refs sort": (
         "struct Node\n  id: Ref\nend\n\n"
         + main(REF, "puts([r].sort == [r])", "puts([Node(id: r)].sort_by { |n| n.id }.size)"), None, None),
+    "&Ref.new is a function value, also beside a program's own Ref": (
+        "struct Ref\n  n: Int\nend\n\n" + main("fresh = &Ref.new", "puts(fresh.call() == fresh.call())"), None, None),
     "a Ref has no <": (main(REF, "puts(r < r)"), "CHECK-TYPE-MISMATCH", "<"),
     "a Ref is no Int": (main("n: Int = Ref.new()"), "CHECK-TYPE-MISMATCH", "Ref.new()"),
     "a Ref has no arithmetic": (main(REF, "puts(r + 1)"), "CHECK-TYPE-MISMATCH", "+"),
