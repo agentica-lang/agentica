@@ -4,8 +4,8 @@
  * order mark), ASCII, Latin-1, ISO-8859-15 and Windows-1252. A String holds UTF-8, so a decode walks its input twice:
  * once to check it and to size the String, once to fill it. Errors are strict: the first input the encoding does not
  * allow gives an error Result with its offset, the one Python reports as the start of its UnicodeDecodeError (a byte
- * offset) or UnicodeEncodeError (a character index). Bytes.scrub(replacement) is the lossy UTF-8 decode. Other
- * encodings live in the agentica-lang/charset package.
+ * offset) or UnicodeEncodeError (a character index). Bytes.scrub(replacement) is the lossy UTF-8 decode and
+ * Bytes.incomplete_utf8_length counts the cut bytes to keep. Other encodings: agentica-lang/charset.
  * Service layer.
  */
 #include "services.h"
@@ -252,6 +252,13 @@ static agc_value builtin_scrub(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_string_value(s);
 }
 
+static agc_value builtin_incomplete_utf8_length(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  size_t len;
+  const uint8_t *data = agc_bytes_data(vm, args[0], &len);
+  return agc_int((int64_t)agc_utf8_cut_tail(data, len));
+}
+
 static void write_unit(uint8_t *out, uint32_t u, size_t width) {
   for (size_t k = 0; k < width; k++) out[k] = (uint8_t)(u >> (8 * (width - 1 - k)));
 }
@@ -326,6 +333,8 @@ static agc_value builtin_encode(agc_vm *vm, agc_value *args, uint32_t span) {
 const agc_builtin agc_text_codec_builtins[] = {
   {"Bytes.decode", 2, builtin_decode, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true, false},
   {"Bytes.scrub", 2, builtin_scrub, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true, false},
+  {"Bytes.incomplete_utf8_length", 1, builtin_incomplete_utf8_length, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false,
+   false},
   {"String.encode", 2, builtin_encode, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true, false},
 };
 

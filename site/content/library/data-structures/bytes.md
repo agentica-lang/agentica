@@ -101,6 +101,31 @@ h?i?
 hi
 ```
 
+## incomplete_utf8_length
+
+```signature
+Bytes.incomplete_utf8_length(bytes: Bytes) -> Int
+```
+
+Counts the bytes at the end that start a valid UTF-8 character which the bytes cut short: 0 to 3. A reader that decodes chunks of a stream keeps these bytes and puts them in front of the next chunk, so [`scrub`](#scrub) never turns a character that a chunk boundary splits into U+FFFD. A bad sequence or a complete character at the end counts 0, and at the end of the stream `scrub` replaces what is left. A line reader does not need it.
+
+```agentica
+def main() -> Void
+  carry = Bytes.from_list([]).unwrap!
+  for part in [[104, 226, 130], [172, 33]]
+    chunk = carry + Bytes.from_list(part).unwrap!
+    kept = chunk.incomplete_utf8_length
+    puts(chunk.take(chunk.length - kept).scrub)
+    carry = chunk.drop(chunk.length - kept)
+  end
+end
+```
+
+```output
+h
+€!
+```
+
 ## from_list
 
 ```signature

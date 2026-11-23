@@ -1,9 +1,7 @@
 # Bytes.decode and String.encode: each built-in encoding both ways, the byte order mark of the plain UTF-16 and UTF-32
 # (read, written, and big-endian without one), names matched without case and with `_` as `-`, and the error Results:
 # the byte offset of a bad input, the index of a character the encoding cannot hold, and an unknown name.
-def bytes_of(list: List[Int]) -> Bytes
-  return Bytes.from_list(list).unwrap!
-end
+def bytes_of(list: List[Int]) -> Bytes = Bytes.from_list(list).unwrap!
 
 def show_bytes(encoding: String, r: Result[Bytes]) -> Void
   case r
@@ -72,4 +70,28 @@ def main() -> Void
   puts(bytes_of([104, 225, 128, 105, 255]).scrub(""))
   puts(bytes_of([226, 130, 172]).scrub("?"))
   puts(bytes_of([]).scrub.inspect)
+  # incomplete_utf8_length: the cut start of a valid character at the end, 0 to 3; a bad sequence or a whole one is 0.
+  puts("[]: #{bytes_of([]).incomplete_utf8_length}")
+  for cut in [
+    [97],
+    [97, 226],
+    [97, 226, 130],
+    [226, 130, 172],
+    [240, 159, 152],
+    [240, 159],
+    [240],
+    [240, 128],
+    [237, 160],
+    [224, 128],
+    [244, 144],
+    [245],
+    [192],
+    [226, 97],
+    [130],
+    [226, 130, 130],
+    [240, 159, 152, 128],
+    [195, 169],
+  ]
+    puts("#{cut}: #{bytes_of(cut).incomplete_utf8_length}")
+  end
 end

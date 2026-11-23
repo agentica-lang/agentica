@@ -288,4 +288,14 @@ ROWS: List[Model.Builtin] = [
     description: "Read UTF-8, with the replacement for each invalid or cut sequence; never fails.",
     alternatives: [],
   ),
+  Model.Builtin(
+    name: "Bytes.incomplete_utf8_length",
+    parameters: [Model.Named(name: "bytes", type: Types.Type.Bytes)],
+    result: Types.Type.Int,
+    rule: Model.Rule.Plain,
+    implementation: "Bytes.incomplete_utf8_length",
+    effects: [],
+    description: "Count the bytes at the end that start a UTF-8 character cut short (0 to 3).",
+    alternatives: [],
+  ),
 ]

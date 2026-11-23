@@ -2,7 +2,7 @@
 title: Bytes
 weight: 7
 description: Bytes, una cadena de bytes compacta e inmutable, y los métodos que la leen, la cortan, la unen y la construyen.
-source_hash: "6e66f925565d"
+source_hash: "bc41b2814c86"
 ---
 
 `Bytes` guarda datos que no son texto: resúmenes criptográficos, contenido de archivos, formatos de red. Guarda un byte por cada elemento, mientras que una `List[Int]` con los mismos datos ocupa ocho. Un byte se lee como un `Int` de 0 a 255. `Bytes` es inmutable, como todos los valores: un método da un valor nuevo. `Bytes` es un nombre reservado, así que una estructura, un enum o un alias de importación no puede llamarse `Bytes`.
@@ -100,6 +100,31 @@ end
 h�i�
 h?i?
 hi
+```
+
+## incomplete_utf8_length {#incomplete_utf8_length}
+
+```signature
+Bytes.incomplete_utf8_length(bytes: Bytes) -> Int
+```
+
+Cuenta los bytes del final que empiezan un carácter UTF-8 válido que los bytes dejan cortado: de 0 a 3. Un lector que decodifica trozos de un flujo guarda esos bytes y los pone delante del trozo siguiente, así [`scrub`](#scrub) nunca convierte en U+FFFD un carácter que el límite de un trozo parte. Una secuencia inválida o un carácter completo al final cuenta 0, y al final del flujo `scrub` reemplaza lo que queda. Un lector de líneas no lo necesita.
+
+```agentica
+def main() -> Void
+  carry = Bytes.from_list([]).unwrap!
+  for part in [[104, 226, 130], [172, 33]]
+    chunk = carry + Bytes.from_list(part).unwrap!
+    kept = chunk.incomplete_utf8_length
+    puts(chunk.take(chunk.length - kept).scrub)
+    carry = chunk.drop(chunk.length - kept)
+  end
+end
+```
+
+```output
+h
+€!
 ```
 
 ## from_list {#from_list}

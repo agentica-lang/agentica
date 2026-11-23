@@ -8,6 +8,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `bytes.incomplete_utf8_length` counts the bytes at the end that cut a UTF-8 character, so a stream reader can keep them for the next chunk (#1789).
+
 ## [0.37.0] - 2026-11-23
 
 ### Added
