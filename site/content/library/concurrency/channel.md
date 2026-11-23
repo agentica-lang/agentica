@@ -1,16 +1,16 @@
 ---
 title: Channel
 weight: 2
-description: Send values from one task to another through a bounded queue.
+description: Send values from one task to another through a queue.
 ---
 
-A channel is a bounded queue: one task sends values, another receives them. See also [Tasks](/tour/tasks/).
+A channel is a queue, bounded or unbounded: one task sends values, another receives them. See also [Tasks](/tour/tasks/).
 
 - `Channel[T]` holds values of one type, any type a variable can have: a task handle, a socket, a file or another channel is allowed, and `Channel[Void]` is `CHECK-VOID-TYPE`.
 - A channel is a handle: passing it to a function or task shares it. `Channel` is a reserved name: a user `struct`, `enum` or import alias named `Channel` is `CHECK-REDEFINED-NAME`.
 - `puts`, `print`, interpolation and `==` on a channel are `CHECK-TYPE-MISMATCH`, `.to_s` is `CHECK-UNKNOWN-METHOD`, and a struct with a channel field is `CHECK-NOT-ENCODABLE` as JSON. `IO.inspect` prints `<Channel>`.
 - `send`, `recv`, `close` and `Address.send` carry the `concurrency` effect; `new`, `closed?`, `empty?` and `address` carry none.
-- There is no `select`, no `for x in channel`, and no unbounded or unbuffered channel.
+- There is no `select`, no `for x in channel`, and no unbuffered channel.
 - `send`, `recv`, `close`, `closed?`, `empty?` and `address` also work as methods: `jobs.send(5, 1000)` is `Channel.send(jobs, 5, 1000)`.
 - A channel's [address](#channeladdress) is data that names it: a table, a message or a constant table can hold it where the channel itself cannot go.
 
@@ -18,9 +18,12 @@ A channel is a bounded queue: one task sends values, another receives them. See 
 
 ```signature
 Channel.new(capacity: Int) -> Channel[T]
+Channel.new() -> Channel[T]
 ```
 
-Holds `capacity` values, 1 to 1048576, else `RUNTIME-INVALID-COUNT`. It is always bounded: a full channel makes the sender wait. It needs an expected type (annotation, parameter, field or return type), else `CHECK-EXPECTED-TYPE`.
+With a capacity, the channel holds 1 to 1048576 values, else `RUNTIME-INVALID-COUNT`, and a full channel makes the sender wait. With none, the channel is unbounded, as Ruby's `Queue.new` (an Erlang mailbox): a send never waits, and its `timeout_ms` is still checked but never used. It needs an expected type (annotation, parameter, field or return type), else `CHECK-EXPECTED-TYPE`.
+
+Every value in an unbounded channel is kept until it is received, and its buffer grows to hold them and does not shrink. It grows until the memory of the run runs out; with `--max-heap` ([Options](/cli/#options)) the run then stops with `RUNTIME-HEAP-LIMIT`. When the receiver may fall behind the senders, pick a capacity: a full channel slows the senders down instead of growing memory.
 
 ```agentica {expect="CHECK-EXPECTED-TYPE"}
 def main() -> Void
@@ -32,11 +35,15 @@ end
 def main() -> Void
   jobs: Channel[Int] = Channel.new(4)
   puts(jobs.closed?)
+  mailbox: Channel[String] = Channel.new
+  (1..1000).each do |n| _ = mailbox.send("message #{n}", 0) end
+  puts(mailbox.recv(0).unwrap!)
 end
 ```
 
 ```output
 false
+message 1
 ```
 
 ## Channel.send
@@ -45,7 +52,7 @@ false
 Channel.send(channel: Channel[T], value: T, timeout_ms: Int) -> Result[Void]
 ```
 
-Adds the value at the back and gives `ok()`. When full, the task waits for room, a close or `timeout_ms`. The value is not added on:
+Adds the value at the back and gives `ok()`. When a bounded channel is full, the task waits for room, a close or `timeout_ms`. The value is not added on:
 
 - `error("channel: closed")`, the reason of a [close with a reason](#channelclose), or `error("channel: timed out")`.
 

@@ -1,17 +1,17 @@
 ---
 title: Canal
 weight: 2
-description: Envía valores de una tarea a otra por una cola acotada.
-source_hash: "5d389ca1814b"
+description: Envía valores de una tarea a otra por una cola.
+source_hash: "73db9375412b"
 ---
 
-Un canal es una cola acotada: una tarea envía valores y otra los recibe. Consulta también [Tareas](/tour/tasks/).
+Un canal es una cola, acotada o sin límite: una tarea envía valores y otra los recibe. Consulta también [Tareas](/tour/tasks/).
 
 - `Channel[T]` guarda valores de un solo tipo, cualquier tipo que pueda tener una variable: se admite un handle de tarea, un socket, un archivo u otro canal, y `Channel[Void]` es `CHECK-VOID-TYPE`.
 - Un canal es un handle: pasarlo a una función o a una tarea lo comparte. `Channel` es un nombre reservado: una `struct`, `enum` o alias de importación de usuario que se llame `Channel` es `CHECK-REDEFINED-NAME`.
 - `puts`, `print`, la interpolación y `==` sobre un canal dan `CHECK-TYPE-MISMATCH`, `.to_s` da `CHECK-UNKNOWN-METHOD`, y una estructura con un campo de canal es `CHECK-NOT-ENCODABLE` como JSON. `IO.inspect` imprime `<Channel>`.
 - `send`, `recv`, `close` y `Address.send` llevan el efecto `concurrency`; `new`, `closed?`, `empty?` y `address` no llevan ninguno.
-- No hay `select`, ni `for x in channel`, ni canales sin límite o sin búfer.
+- No hay `select`, ni `for x in channel`, ni canales sin búfer.
 - `send`, `recv`, `close`, `closed?`, `empty?` y `address` también funcionan como métodos: `jobs.send(5, 1000)` es `Channel.send(jobs, 5, 1000)`.
 - La [dirección](#channeladdress) de un canal es un dato que lo nombra: una tabla, un mensaje o una tabla constante pueden guardarla donde el canal en sí no puede ir.
 
@@ -19,9 +19,12 @@ Un canal es una cola acotada: una tarea envía valores y otra los recibe. Consul
 
 ```signature
 Channel.new(capacity: Int) -> Channel[T]
+Channel.new() -> Channel[T]
 ```
 
-Guarda `capacity` valores, de 1 a 1048576; si no, `RUNTIME-INVALID-COUNT`. Siempre tiene límite: un canal lleno hace esperar al emisor. Necesita un tipo esperado (anotación, parámetro, campo o tipo de retorno); si no, `CHECK-EXPECTED-TYPE`.
+Con una capacidad, el canal guarda de 1 a 1048576 valores; si no, `RUNTIME-INVALID-COUNT`, y un canal lleno hace esperar al emisor. Sin ella, el canal no tiene límite, como `Queue.new` de Ruby (un buzón de Erlang): un envío nunca espera, y su `timeout_ms` se sigue comprobando pero nunca se usa. Necesita un tipo esperado (anotación, parámetro, campo o tipo de retorno); si no, `CHECK-EXPECTED-TYPE`.
+
+Cada valor de un canal sin límite se guarda hasta que se recibe, y su búfer crece para guardarlos y no se encoge. Crece hasta que se agota la memoria de la ejecución; con `--max-heap` ([Opciones](/cli/#options)) la ejecución se detiene entonces con `RUNTIME-HEAP-LIMIT`. Si el receptor puede quedarse atrás de los emisores, elige una capacidad: un canal lleno frena a los emisores en vez de hacer crecer la memoria.
 
 ```agentica {expect="CHECK-EXPECTED-TYPE"}
 def main() -> Void
@@ -33,11 +36,15 @@ end
 def main() -> Void
   jobs: Channel[Int] = Channel.new(4)
   puts(jobs.closed?)
+  mailbox: Channel[String] = Channel.new
+  (1..1000).each do |n| _ = mailbox.send("message #{n}", 0) end
+  puts(mailbox.recv(0).unwrap!)
 end
 ```
 
 ```output
 false
+message 1
 ```
 
 ## Channel.send {#channelsend}
@@ -46,7 +53,7 @@ false
 Channel.send(channel: Channel[T], value: T, timeout_ms: Int) -> Result[Void]
 ```
 
-Añade el valor al final y da `ok()`. Si está lleno, la tarea espera a que haya sitio, a que se cierre el canal o a `timeout_ms`. El valor no se añade en estos casos:
+Añade el valor al final y da `ok()`. Si un canal acotado está lleno, la tarea espera a que haya sitio, a que se cierre el canal o a `timeout_ms`. El valor no se añade en estos casos:
 
 - `error("channel: closed")`, la razón de un [cierre con razón](#channelclose), o `error("channel: timed out")`.
 

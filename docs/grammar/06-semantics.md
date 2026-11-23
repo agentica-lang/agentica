@@ -45,8 +45,8 @@ programs are valid and how they run.
   `task_id: Int`, `reason: TaskExit`, and the diagnostic of a crash, `code:
   String`, `message: String`, `file: String`, `line: Int` and `column: Int`; it
   is not JSON-decodable
-- `Channel[T]`: Opaque bounded queue of `T` values that tasks send into and
-  receive from
+- `Channel[T]`: Opaque queue of `T` values, bounded or not, that tasks send
+  into and receive from
 - `Address[T]`: Send-only reference to a `Channel[T]` (`channel.address`); it
   is data, not a handle. `Address` is not reserved: written with one type
   argument it is this builtin, so a program may still declare its own

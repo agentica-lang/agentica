@@ -14,6 +14,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `agentica init [NAME]` starts a project: it writes `agentica.toml` (the name and the running version) and a `main.agc` hello world, and never changes an existing manifest (`PKG-MANIFEST-EXISTS`) (#1759).
 - `Math.exp`, `Math.log`, `Math.log10`, `Math.sin` and `Math.cos`, as in Ruby; `log` and `log10` of a negative number stop with `RUNTIME-INVALID-NUMBER` (#1925).
 - `Channel.close(channel, error)` closes with a reason: senders, and receivers once the values left are taken, get that error in place of `error("channel: closed")` (#1790).
+- `Channel.new` with no capacity makes an unbounded channel, as Ruby's `Queue.new`: a send to it never waits (#1933).
 - `File.seek(handle, offset)` moves a read handle to a byte offset, so a program can read one part of a large file (#1927).
 
 ## [0.36.0] - 2026-11-23

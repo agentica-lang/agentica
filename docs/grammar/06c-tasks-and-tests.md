@@ -35,11 +35,11 @@ language and the checker:
 
 ### Channels
 
-`Channel` is reserved. A `Channel[T]` is a bounded queue that tasks send values
-into and receive values from, and a handle: assigning or passing it shares the
-same channel. The functions, the timeouts, the order of waiters, the ownership
-of a channel and the checker rules (the type `T`, the expected type of
-`Channel.new`, what `puts`, `==` and JSON do with a channel) are in the
+`Channel` is reserved. A `Channel[T]` is a queue, bounded or not, that tasks
+send values into and receive values from, and a handle: assigning or passing it
+shares the same channel. The functions, the timeouts, the order of waiters, the
+ownership of a channel and the checker rules (the type `T`, the expected type
+of `Channel.new`, what `puts`, `==` and JSON do with a channel) are in the
 [`Channel` page](../../site/content/library/concurrency/channel.md).
 
 `channel.address` gives an `Address[T]`: a send-only reference to the channel

@@ -8,6 +8,8 @@
 #include "core.h"
 
 #define FIRST_SLOTS 8
+/* The capacity of Channel.new with no capacity: no count reaches it, so a send never waits. */
+#define UNBOUNDED SIZE_MAX
 
 _Static_assert(AGC_CHANNEL_LOCKS == 64, "lock_of keeps 6 bits");
 
@@ -92,6 +94,8 @@ static void assert_locked(const agc_vm *vm, const agc_channel *c) {
     agc_internal_abort("a channel changed without its lock");
 }
 
+/* Doubles the ring, up to the capacity, under the channel's lock: the copy is charged, and the doubling copies a value
+   of an unbounded channel about once on average. */
 static void grow(agc_vm *vm, agc_channel *c) {
   size_t slots = agc_size_mul(c->slots, 2);
   if (slots > c->capacity && c->slots < c->capacity) slots = c->capacity;
@@ -240,15 +244,27 @@ static void park(agc_vm *vm, status s, int64_t timeout) {
   if (s == WAIT) agc_task_park_within(vm, agc_timeout_length(vm, timeout));
 }
 
+static agc_value new_channel(size_t capacity) {
+  agc_channel *c = agc_alloc(sizeof(agc_channel));
+  c->capacity = capacity;
+  c->slots = c->capacity < FIRST_SLOTS ? c->capacity : FIRST_SLOTS;
+  c->ring = agc_alloc(agc_size_mul(c->slots, sizeof(entry)));
+  return agc_channel_value(c);
+}
+
 static agc_value builtin_new(agc_vm *vm, agc_value *args, uint32_t span) {
   int64_t capacity = agc_as_int(vm, args[0]);
   if (capacity < 1 || capacity > AGC_MAX_LIST_COUNT)
     agc_fail(vm, "RUNTIME-INVALID-COUNT", "channel capacity must be between 1 and 1048576", span + 1);
-  agc_channel *c = agc_alloc(sizeof(agc_channel));
-  c->capacity = (size_t)capacity;
-  c->slots = c->capacity < FIRST_SLOTS ? c->capacity : FIRST_SLOTS;
-  c->ring = agc_alloc(agc_size_mul(c->slots, sizeof(entry)));
-  return agc_channel_value(c);
+  return new_channel((size_t)capacity);
+}
+
+/* Channel.new with no capacity: a send never waits, and the ring doubles as values arrive. */
+static agc_value builtin_new_unbounded(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)vm;
+  (void)args;
+  (void)span;
+  return new_channel(UNBOUNDED);
 }
 
 static status send_locked(agc_vm *vm, agc_channel *c, agc_value v, int64_t timeout) {
@@ -639,6 +655,7 @@ void agc_channel_leave(agc_vm *vm, agc_task *t) {
 }
 
 const agc_builtin agc_channel_builtins[] = {
+  {"Channel.new", 0, builtin_new_unbounded, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false, false},
   {"Channel.new", 1, builtin_new, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false, false},
   {"Channel.send", 3, builtin_send, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false, true},
   {"Channel.recv", 2, builtin_recv, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false, true},

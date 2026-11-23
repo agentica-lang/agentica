@@ -41,8 +41,9 @@ static const struct {
     {"puts", 1, false},            {"File.read_text", 2, false}, {"File.write_text", 3, false},
     {"File.stat", 2, false},       {"Path.join", 1, false},  {"Task.spawn_owning", 2, false},
     {"LogRegistry.level", 0, false}, {"LogRegistry.floor", 0, false}, {"LogRegistry.lowest", 0, false},
-    {"Channel.new", 1, false},     {"Channel.send", 3, false}, {"Channel.recv", 2, false},
-    {"Channel.closed?", 1, false}, {"Channel.empty?", 1, false}, {"Address.send", 3, false},
+    {"Channel.new", 0, false},     {"Channel.new", 1, false},  {"Channel.send", 3, false},
+    {"Channel.recv", 2, false},    {"Channel.closed?", 1, false}, {"Channel.empty?", 1, false},
+    {"Address.send", 3, false},
 };
 
 /* Before agc_share nothing is taken: the count stays 0 and a drop without a take is harmless. */
