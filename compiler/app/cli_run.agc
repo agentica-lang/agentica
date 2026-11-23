@@ -17,6 +17,7 @@ COMMANDS = [
   "fmt",
   "lint",
   "install",
+  "init",
   "add",
   "update",
   "native",

@@ -220,6 +220,7 @@ Three variables have no flag. `AGENTICA_GC_HEAP` (default `32M`: bytes, or a num
 | `type-at --stdin FILE:LINE:COL`, `refs --stdin FILE:LINE:COL` | answer for the text on standard input, as if `FILE` held it |
 | `symbol NAME --stdin FILE`, `refs NAME --stdin FILE` | search that text as one more file, the first |
 | `type-at --partial`, `refs FILE:LINE:COL --partial` | answer although some functions do not check, from the ones that do and from the link: the JSON has `"partial": true` and `diagnostics`, and the exit code is 0. `refs` takes it for a position without PATH. `outline` takes the option and ignores it |
+| `init [NAME]` | starts a project in the working folder: writes `agentica.toml` and, when absent, `main.agc`; see [Packages](/tour/modules/#packages) |
 | `install`, `add NAME URL --tag TAG` (or `OWNER/REPO` for a GitHub URL, `--ref COMMIT`, `--subdir DIR` or `--workspace`, `--group test`), `update [NAME]` | keep `deps/` and `agentica.lock`; see [Packages](/tour/modules/#packages) |
 | `native source NAME` | prints the source key of the native module NAME of the project (its `build` table and the files of `native/`), the native API of the binary and the URL of each target of its `prebuilt` table; with `--json` an object with `source`, `api` and `urls` |
 | `compile FILE -o OUT` | writes VM bytecode |

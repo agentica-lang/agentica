@@ -10,6 +10,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `agentica init [NAME]` starts a project: it writes `agentica.toml` (the name and the running version) and a `main.agc` hello world, and never changes an existing manifest (`PKG-MANIFEST-EXISTS`) (#1759).
 - `Math.exp`, `Math.log`, `Math.log10`, `Math.sin` and `Math.cos`, as in Ruby; `log` and `log10` of a negative number stop with `RUNTIME-INVALID-NUMBER` (#1925).
 - `File.seek(handle, offset)` moves a read handle to a byte offset, so a program can read one part of a large file (#1927).
 - `Ref.make()` returns a `Ref`, a token unique in the run that equals only itself, like Erlang's `make_ref()`: a `Map` key or `Set` element, sorted by `sort` and `sort_by` in the order the Refs were made (#1923).

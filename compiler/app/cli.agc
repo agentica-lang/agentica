@@ -56,6 +56,7 @@ import Add from "cli_add"
 import CliCheck from "cli_check"
 import CliDoc from "cli_doc"
 import CliFmt from "cli_fmt"
+import CliInit from "cli_init"
 import CliLint from "cli_lint"
 import CliNative from "cli_native"
 import Help from "cli_help"
@@ -155,6 +156,8 @@ def dispatch(session: Session) -> Int
     return lint(session, words.drop(1))
   elsif first == "install"
     return install(building(session, "install"), words.drop(1))
+  elsif first == "init"
+    return answered(session, CliInit.init(session.settings, session.options.style, words.drop(1)), "")
   elsif first == "add"
     return answered(session, Add.add(session.settings, session.options.style, fetching(session), words.drop(1)), "")
   elsif first == "update"

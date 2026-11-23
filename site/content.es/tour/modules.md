@@ -2,7 +2,7 @@
 title: Módulos e importaciones
 weight: 13
 description: Divide un programa en archivos, haz públicas las declaraciones y usa la biblioteca estándar.
-source_hash: "418ed0ef861b"
+source_hash: "ef22be35e7f4"
 ---
 
 ## Un archivo, un módulo {#one-file-one-module}
@@ -323,6 +323,8 @@ Importa un paquete por su nombre local, y luego una ruta dentro del paquete, sin
 ```text
 import Sqlite from "pkg/sqlite/db"
 ```
+
+`agentica init [NAME]` empieza un proyecto en la carpeta de trabajo: escribe `agentica.toml` con el nombre (por defecto, el nombre de la carpeta) y la versión en ejecución como `agentica`, y un `main.agc` que imprime `Hello, world!` si no hay ninguno. Una carpeta que ya tiene un `agentica.toml` es `PKG-MANIFEST-EXISTS` y no cambia nada; un nombre que no es un nombre de paquete es `PKG-MANIFEST-INVALID`.
 
 Un manifiesto que declara dependencias necesita un `agentica.lock` a su lado, con el commit exacto y un hash de cada paquete. Una compilación nunca descarga nada: lee cada paquete de `deps/<name>/` y comprueba su hash. Tres comandos mantienen `deps/` y el bloqueo, a través del `git` del sistema:
 
