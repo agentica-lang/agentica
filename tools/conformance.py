@@ -154,7 +154,7 @@ AREAS = {
             "tests/test_spec_generics.py", "tests/test_spec_bytes.py", "tests/test_spec_optional.py",
             "tests/test_spec_json_enum.py", "tests/test_spec_json_lists.py", "tests/test_spec_json_node.py",
             "tests/test_spec_equality.py", "tests/test_spec_string_repeat.py",
-            "tests/test_spec_string_distance.py", "tests/test_spec_time.py",
+            "tests/test_spec_string_distance.py", "tests/test_spec_time.py", "tests/test_spec_math.py",
         ],
     ),
     "golden": (
