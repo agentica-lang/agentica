@@ -18,6 +18,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `File.seek(handle, offset)` moves a read handle to a byte offset, so a program can read one part of a large file (#1927).
 - `Ref.new()` returns a `Ref`, a token unique in the run that equals only itself, like Erlang's `make_ref()`: a `Map` key or `Set` element, sorted by `sort` and `sort_by` in the order the Refs were made (#1923).
 
+### Fixed
+
+- `CHECK-ARITY` lists the arities in ascending order (`expects 0 or 1 argument(s)`), and the help of "expected Ref, found Ref" tells a module's `Ref` from the file's own.
+
 ## [0.36.0] - 2026-11-23
 
 ### Added

@@ -61,12 +61,20 @@ MODULES = {
         'import M from "m"\n\ntype Ref = Int\n\n' + main("puts(M.fresh())", "r: Ref = 1", "puts(r)")),
 }
 
+# A module case that fails: m.agc, a main.agc that imports it, the code and the text that its range covers.
+MODULE_ERRORS = {
+    "a module's own Ref is not the builtin": (
+        "struct Ref\n  n: Int\nend\n\ndef make() -> Ref = Ref(n: 1)\n",
+        'import M from "m"\n\n' + main("r: Ref = M.make()", "puts(r)"), "CHECK-TYPE-MISMATCH", "M.make()"),
+}
+
 
 @pytest.fixture(scope="module")
 def batch(tmp_path_factory):
     """The programs of the tables, checked by one `check` call."""
     programs = [rule[0] for rule in RULES.values()]
     programs += [{"m.agc": lib, "main.agc": program} for lib, program in MODULES.values()]
+    programs += [{"m.agc": lib, "main.agc": program} for lib, program, _, _ in MODULE_ERRORS.values()]
     return check_many(programs, tmp_path_factory.mktemp("ref"))
 
 
@@ -80,3 +88,9 @@ def test_ref_rules(batch, name):
 def test_ref_across_modules(batch, name):
     lib, program = MODULES[name]
     assert batch({"m.agc": lib, "main.agc": program}) is None
+
+
+@pytest.mark.parametrize("name", list(MODULE_ERRORS))
+def test_ref_module_errors(batch, name):
+    lib, program, code, text = MODULE_ERRORS[name]
+    assert_rule(batch({"m.agc": lib, "main.agc": program}), program, code, text)

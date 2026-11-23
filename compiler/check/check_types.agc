@@ -5,6 +5,7 @@
 import Model from "../catalog/builtin_model"
 import {ENUMS, JSON_VALUE, OPAQUE_TYPES, SEALED} from "../catalog/builtins"
 import Ast from "../syntax/ast"
+import {PRELUDE_PREFIX} from "../syntax/prelude_name"
 import Source from "../syntax/source"
 import Types from "../syntax/types"
 import Help from "check_help"
@@ -1573,4 +1574,4 @@ def variable_needs(type: ResolvedType, found: List[ResolvedType]) -> List[Resolv
 end
 
 ## A file of the prelude, such as the wrappers of builtin references: its types are written as text.
-def prelude_file?(cx: State.Cx) -> Bool = cx.file.start_with?("<prelude>/")
+def prelude_file?(cx: State.Cx) -> Bool = cx.file.start_with?(PRELUDE_PREFIX)
