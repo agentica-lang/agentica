@@ -144,7 +144,8 @@ end
   closes, newest first, every resource and owned buffer the task opened in it,
   except what the value holds (struct fields, enum payloads, `Result`, `List`
   and `Map` items, not lambda captures), with what those come from (a kept
-  statement keeps its database). An inner arena gives what it keeps to the
+  statement keeps its database; a resource of an `AN_FRESH` module function
+  comes from nothing). An inner arena gives what it keeps to the
   outer one. A failed `try` in the block ends it as usual; a crash or cancel
   ends the task, which closes what it owns. What `Task.spawn_owning` handed
   over is the new task's; another task that got one by a channel or closure

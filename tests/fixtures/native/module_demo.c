@@ -479,7 +479,7 @@ static an_term call_kept(an_env *env, int argc, const an_term *argv) {
 /* The resource table: a Counter has an id and a count. Its free counts the frees, keeps the ids in the order freed
    (FREED_IDS, at most 64) and, once trace_frees ran, writes "freed N" to stderr, so a test sees what the end of a
    task or of the run freed, and that nothing is freed twice. */
-enum { COUNTER_RESOURCE };
+enum { COUNTER_RESOURCE, BLOB_RESOURCE };
 
 typedef struct {
   int64_t id, count;
@@ -602,8 +602,69 @@ static an_term trace_frees(an_env *env, int argc, const an_term *argv) {
   return an_void(env);
 }
 
+/* A Blob owns BLOB_SIZE bytes of malloc memory, as a tensor owns its data; LIVE_BLOBS counts the ones not freed, so
+   a test sees what an arena keeps without reading the memory of the process. Only the first byte is written: a short
+   call that fills 4 MiB takes over a millisecond under TSan, which the builds of AGC_LEAF_CHECK warn of. mix and
+   mix_fresh make a new Blob from one, the same function with and without AN_FRESH. */
+enum { BLOB_SIZE = 4 << 20 };
+
+typedef struct {
+  unsigned char *data;
+} demo_blob;
+
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
+static atomic_int live_blobs;
+
+static void blob_free(void *state) {
+  demo_blob *b = state;
+  free(b->data);
+  atomic_fetch_sub(&live_blobs, 1);
+}
+
+static an_term new_blob(an_env *env, unsigned char first) {
+  an_term t = an_void(env);
+  unsigned char *data = malloc(BLOB_SIZE);
+  if (!data) return an_raise(env, "out of memory");
+  demo_blob *b = an_resource_new(env, BLOB_RESOURCE, &t);
+  if (!b) {
+    free(data);
+    return t;
+  }
+  data[0] = first;
+  b->data = data;
+  atomic_fetch_add(&live_blobs, 1);
+  return t;
+}
+
+static an_term blob(an_env *env, int argc, const an_term *argv) {
+  (void)argc;
+  (void)argv;
+  return new_blob(env, 0);
+}
+
+static an_term mix(an_env *env, int argc, const an_term *argv) {
+  demo_blob *b;
+  (void)argc;
+  if (!an_get_resource(env, argv[0], BLOB_RESOURCE, (void **)&b)) return an_badarg(env, 0);
+  return new_blob(env, (unsigned char)(b->data[0] + 1));
+}
+
+static an_term blob_first(an_env *env, int argc, const an_term *argv) {
+  demo_blob *b;
+  (void)argc;
+  if (!an_get_resource(env, argv[0], BLOB_RESOURCE, (void **)&b)) return an_badarg(env, 0);
+  return an_int(env, b->data[0]);
+}
+
+static an_term blobs(an_env *env, int argc, const an_term *argv) {
+  (void)argc;
+  (void)argv;
+  return an_int(env, atomic_load(&live_blobs));
+}
+
 static const an_resource_type resources[] = {
   {"Counter", sizeof(demo_counter), counter_free},
+  {"Blob", sizeof(demo_blob), blob_free},
 };
 
 static const an_type types[] = {
@@ -673,6 +734,12 @@ static const an_function functions[] = {
   {"gate", "(Bool) -> Void", gate, AN_SHORT},
   {"freed", "() -> Int", free_total, AN_SHORT},
   {"trace_frees", "() -> Void", trace_frees, AN_SHORT},
+  {"blob", "() -> Blob", blob, AN_SHORT},
+  {"mix", "(Blob) -> Blob", mix, AN_SHORT},
+  {"mix_fresh", "(Blob) -> Blob", mix, AN_SHORT | AN_FRESH},
+  {"dirty_mix_fresh", "(Blob) -> Blob", mix, AN_DIRTY | AN_FRESH},
+  {"first", "(Blob) -> Int", blob_first, AN_SHORT},
+  {"blobs", "() -> Int", blobs, AN_SHORT},
 };
 
 AN_MODULE_TABLES("module_demo", functions, AN_COUNT(functions), types, AN_COUNT(types), resources, AN_COUNT(resources),

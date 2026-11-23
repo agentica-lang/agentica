@@ -10,6 +10,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Native API 1.5: a native module function marked `AN_FRESH` makes resources that do not come from its arguments, so a `Native.arena` that returns one keeps it alone (#1932).
 - `agentica init [NAME]` starts a project: it writes `agentica.toml` (the name and the running version) and a `main.agc` hello world, and never changes an existing manifest (`PKG-MANIFEST-EXISTS`) (#1759).
 - `Math.exp`, `Math.log`, `Math.log10`, `Math.sin` and `Math.cos`, as in Ruby; `log` and `log10` of a negative number stop with `RUNTIME-INVALID-NUMBER` (#1925).
 - `Channel.close(channel, error)` closes with a reason: senders, and receivers once the values left are taken, get that error in place of `error("channel: closed")` (#1790).
