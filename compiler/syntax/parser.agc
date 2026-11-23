@@ -754,11 +754,13 @@ end
 
 # Whether a `{ ... }` block may follow a target: a call written without arguments (`recv.name`, `name`,
 # `Alias.name`). In a head (if, elsif, guard, while, for, case) a method call takes it, since no head has braces of
-# its own, but a plain name does not. A call with parentheses takes only a `do` block.
+# its own, but a plain name does not (`gets`, `gets!` and `none` count as plain names). A call with parentheses takes
+# only a `do` block.
 def brace_target?(e: Base.Env, target: Ast.Expr) -> Bool
   case target
     Ast.Expr.FieldAccess(_) -> true
-    Ast.Expr.Call(call) -> !call.parenthesized and !call.piped and call.args.size == 0
+    Ast.Expr.Call(call) ->
+      !call.parenthesized and !call.piped and call.args.size == 0 and (call.name.include?(".") or e.bare_blocks)
     _ -> bare_block_name?(e, target)
   end
 end
