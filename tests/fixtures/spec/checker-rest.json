@@ -10645,6 +10645,11 @@
         "  _h: Int = 2.5.ceil",
         "  _i: Int = 2.5.round",
         "  _j: Float = Math.sqrt(2.0)",
+        "  _jexp: Float = Math.exp(2.0)",
+        "  _jlog: Float = Math.log(2.0)",
+        "  _jlog10: Float = Math.log10(2.0)",
+        "  _jsin: Float = Math.sin(2.0)",
+        "  _jcos: Float = Math.cos(2.0)",
         "  _k: Optional[Int] = [1].min",
         "  _l: Optional[Float] = [1.5].max",
         "  _m: Optional[String] = [\"a\"].min",
@@ -10764,7 +10769,7 @@
     {
       "program": [
         "def main() -> Void",
-        "  puts(Math.cos(0.0))",
+        "  puts(Math.tan(0.0))",
         "end",
         "",
         ""

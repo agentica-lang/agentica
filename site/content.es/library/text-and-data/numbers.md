@@ -2,14 +2,14 @@
 title: Int y Float
 weight: 2
 description: Convierte entre Int, Float y String, redondea, acota y usa otras funciones auxiliares de números, y trabaja con los bits de un Int o de un Float.
-source_hash: "35e7ff51e74b"
+source_hash: "aa4c9c38324a"
 ---
 
 La aritmética nunca mezcla `Int` y `Float`. Usa estos métodos para convertir: `n.to_f`, `x.to_i` y `x.to_i!`, y `to_s` para el texto.
 
 Las funciones de bits trabajan sobre la forma de complemento a dos de 64 bits de un `Int` (`Int.bit_and`, `Int.shift_left` y las demás) y sobre los bits IEEE 754 de un `Float` (`Float.to_bits` y las demás). También son métodos: `flags.bit_and(4)`, `x.to_bits`. Las máscaras se leen mejor en hexadecimal o binario: `0xFF`, `0b1010` (consulta [hexadecimal, binario y octal](/tour/numbers/#hex-binary-and-octal)).
 
-Las funciones auxiliares de números son métodos, como en Ruby: `n.abs`, `n.pow(3)`, `a.gcd(b)`, `n.clamp(lo, hi)`, `x.floor`, `x.ceil`, `x.round` y `Math.sqrt(x)`. No hay operador `**`. Para el elemento menor o mayor de una lista, consulta [mínimo y máximo](/library/data-structures/list/#min-and-max).
+Las funciones auxiliares de números son métodos, como en Ruby: `n.abs`, `n.pow(3)`, `a.gcd(b)`, `n.clamp(lo, hi)`, `x.floor`, `x.ceil`, `x.round`, y las funciones de `Math`: `Math.sqrt(x)`, `Math.exp(x)`, `Math.log(x)`, `Math.log10(x)`, `Math.sin(x)` y `Math.cos(x)`. No hay operador `**`. Para el elemento menor o mayor de una lista, consulta [mínimo y máximo](/library/data-structures/list/#min-and-max).
 
 Para leer números de un texto, consulta [to_i y to_f](/library/text-and-data/string/#to_i-and-to_f). Para los métodos de bucle `n.times`, `a.upto(b)` y `a.downto(b)`, consulta [Rango](/library/data-structures/range/#times-upto-and-downto).
 
@@ -255,6 +255,42 @@ end
 ```agentica {expect="RUNTIME-INVALID-NUMBER"}
 def main() -> Void
   puts(Math.sqrt(0.0 - 1.0))
+end
+```
+
+## Math.exp, Math.log, Math.log10, Math.sin y Math.cos {#mathexp-mathlog-mathlog10-mathsin-and-mathcos}
+
+```signature
+Math.exp(float: Float) -> Float
+Math.log(float: Float) -> Float
+Math.log10(float: Float) -> Float
+Math.sin(float: Float) -> Float
+Math.cos(float: Float) -> Float
+```
+
+`exp` es e elevado a `float`, `log` es el logaritmo natural, `log10` es el logaritmo en base 10, y `sin` y `cos` toman un ángulo en radianes. Siguen a Ruby. Un `float` negativo en `log` o `log10` detiene el programa con `RUNTIME-INVALID-NUMBER` en el argumento, como Ruby lanza `Math::DomainError`; `0.0` y `-0.0` dan -Infinity. `exp` de un número grande da infinito, `sin` y `cos` de un infinito dan NaN, y un NaN sigue siendo NaN. Para el propio e, escribe `Math.exp(1.0)` o `2.718281828459045`.
+
+```agentica
+def main() -> Void
+  puts(Math.exp(1.0))
+  puts(Math.log(1.0))
+  puts(Math.log10(1000.0))
+  puts(Math.sin(0.0))
+  puts(Math.cos(0.0))
+end
+```
+
+```output
+2.718281828459045
+0.0
+3.0
+0.0
+1.0
+```
+
+```agentica {expect="RUNTIME-INVALID-NUMBER"}
+def main() -> Void
+  puts(Math.log(0.0 - 1.0))
 end
 ```
 

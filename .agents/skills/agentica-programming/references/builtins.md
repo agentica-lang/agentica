@@ -63,6 +63,8 @@ int.gcd(other: Int) -> Int                               # never negative; 0.gcd
 int.clamp(min: Int, max: Int) -> Int                     # also on Float; min > max: RUNTIME-INVALID-RANGE
 float.floor() -> Int                                     # also ceil, round (halves away from zero); Float only
 Math.sqrt(float: Float) -> Float                         # negative float: RUNTIME-INVALID-NUMBER
+Math.log(float: Float) -> Float                          # also log10; negative: RUNTIME-INVALID-NUMBER; 0.0: -inf
+Math.exp(float: Float) -> Float                          # also sin, cos (radians); NaN stays NaN
 ```
 
 `floor`, `ceil` and `round` halt like `to_i!` on NaN, infinity or a result

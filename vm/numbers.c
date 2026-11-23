@@ -117,6 +117,37 @@ static agc_value builtin_math_sqrt(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_float(sqrt(x));
 }
 
+/* Ruby's Math.log and Math.log10 raise Math::DomainError below zero, as Math.sqrt does; 0.0 and -0.0 give -Infinity.
+   exp, sin and cos have no domain error: NaN and infinity follow libm (sin and cos of infinity are NaN). */
+static double math_log_arg(agc_vm *vm, agc_value *args, uint32_t span, const char *message) {
+  double x = agc_as_float(vm, args[0]);
+  if (x < 0) agc_fail(vm, "RUNTIME-INVALID-NUMBER", message, span + 1);
+  return x;
+}
+
+static agc_value builtin_math_log(agc_vm *vm, agc_value *args, uint32_t span) {
+  return agc_float(log(math_log_arg(vm, args, span, "Math.log of a negative number")));
+}
+
+static agc_value builtin_math_log10(agc_vm *vm, agc_value *args, uint32_t span) {
+  return agc_float(log10(math_log_arg(vm, args, span, "Math.log10 of a negative number")));
+}
+
+static agc_value builtin_math_exp(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  return agc_float(exp(agc_as_float(vm, args[0])));
+}
+
+static agc_value builtin_math_sin(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  return agc_float(sin(agc_as_float(vm, args[0])));
+}
+
+static agc_value builtin_math_cos(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  return agc_float(cos(agc_as_float(vm, args[0])));
+}
+
 static _Noreturn void int_overflow(agc_vm *vm, uint32_t span) {
   agc_fail(vm, "RUNTIME-INTEGER-OVERFLOW", "Int result is outside the 64-bit range", span);
 }
@@ -344,6 +375,11 @@ const agc_builtin agc_number_builtins[] = {
   {"Float.round", 1, builtin_float_round, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
   {"Float.clamp", 3, builtin_float_clamp, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
   {"Math.sqrt", 1, builtin_math_sqrt, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"Math.exp", 1, builtin_math_exp, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"Math.log", 1, builtin_math_log, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"Math.log10", 1, builtin_math_log10, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"Math.sin", 1, builtin_math_sin, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
+  {"Math.cos", 1, builtin_math_cos, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
 };
 
 const size_t agc_number_builtin_count = sizeof agc_number_builtins / sizeof agc_number_builtins[0];

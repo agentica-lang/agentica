@@ -8,7 +8,7 @@ Arithmetic never mixes `Int` and `Float`. Use these methods to convert: `n.to_f`
 
 The bit functions work on the 64-bit two's complement form of an `Int` (`Int.bit_and`, `Int.shift_left` and the others) and on the IEEE 754 bits of a `Float` (`Float.to_bits` and the others). They are methods too: `flags.bit_and(4)`, `x.to_bits`. Masks read best in hex or binary: `0xFF`, `0b1010` (see [hex, binary and octal](/tour/numbers/#hex-binary-and-octal)).
 
-The number helpers are methods, as in Ruby: `n.abs`, `n.pow(3)`, `a.gcd(b)`, `n.clamp(lo, hi)`, `x.floor`, `x.ceil`, `x.round`, and `Math.sqrt(x)`. There is no `**` operator. For the least or greatest item of a list, see [min and max](/library/data-structures/list/#min-and-max).
+The number helpers are methods, as in Ruby: `n.abs`, `n.pow(3)`, `a.gcd(b)`, `n.clamp(lo, hi)`, `x.floor`, `x.ceil`, `x.round`, and the functions of `Math`: `Math.sqrt(x)`, `Math.exp(x)`, `Math.log(x)`, `Math.log10(x)`, `Math.sin(x)` and `Math.cos(x)`. There is no `**` operator. For the least or greatest item of a list, see [min and max](/library/data-structures/list/#min-and-max).
 
 To read numbers from text, see [to_i and to_f](/library/text-and-data/string/#to_i-and-to_f). For the loop methods `n.times`, `a.upto(b)` and `a.downto(b)`, see [Range](/library/data-structures/range/#times-upto-and-downto).
 
@@ -254,6 +254,42 @@ end
 ```agentica {expect="RUNTIME-INVALID-NUMBER"}
 def main() -> Void
   puts(Math.sqrt(0.0 - 1.0))
+end
+```
+
+## Math.exp, Math.log, Math.log10, Math.sin and Math.cos
+
+```signature
+Math.exp(float: Float) -> Float
+Math.log(float: Float) -> Float
+Math.log10(float: Float) -> Float
+Math.sin(float: Float) -> Float
+Math.cos(float: Float) -> Float
+```
+
+`exp` is e raised to `float`, `log` is the natural logarithm, `log10` is the base-10 logarithm, and `sin` and `cos` take an angle in radians. They follow Ruby. A negative `float` in `log` or `log10` stops the program with `RUNTIME-INVALID-NUMBER` at the argument, as Ruby raises `Math::DomainError`; `0.0` and `-0.0` give -Infinity. `exp` of a large number gives infinity, `sin` and `cos` of an infinity give NaN, and a NaN stays NaN. For e itself, write `Math.exp(1.0)` or `2.718281828459045`.
+
+```agentica
+def main() -> Void
+  puts(Math.exp(1.0))
+  puts(Math.log(1.0))
+  puts(Math.log10(1000.0))
+  puts(Math.sin(0.0))
+  puts(Math.cos(0.0))
+end
+```
+
+```output
+2.718281828459045
+0.0
+3.0
+0.0
+1.0
+```
+
+```agentica {expect="RUNTIME-INVALID-NUMBER"}
+def main() -> Void
+  puts(Math.log(0.0 - 1.0))
 end
 ```
 
