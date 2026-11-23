@@ -65,7 +65,7 @@ USAGE = [
   "       agentica [--ai|--json] native source NAME",
   [
     "       agentica [--ai|--json] [--seed N] [--no-cache] test [PATH...] [--steps FILE] [--only TEXT] [--tags EXPR] ",
-    "[--jobs N] [--timing] [--coverage] [--isolate]",
+    "[--jobs N] [--max-steps N|unlimited] [--timing] [--coverage] [--isolate]",
   ].join(""),
   "       agentica run [OPTIONS] -- <file.agcb> [args...]",
 ]
@@ -93,7 +93,8 @@ SUMMARY = [
   "                                          the current folder); suggestions exit 0, --strict exits 1 for any;",
   "                                          --json prints one document",
   "  agentica test [PATH...] [--steps FILE] [--only TEXT] [--tags EXPR]",
-  "                                          [--jobs N] [--timing] [--coverage] [--isolate]",
+  "                                          [--jobs N] [--max-steps N|unlimited] [--timing] [--coverage]",
+  "                                          [--isolate]",
   "                                          run *_test.agc and .feature files (default PATH: test/ and specs/);",
   "                                          --steps FILE is the step program of the .feature files (default:",
   "                                          the nearest steps.agc in or above the folder of each PATH, up to",
@@ -102,6 +103,9 @@ SUMMARY = [
   "                                          \"@db and not @slow\" (not, and, or);",
   "                                          --jobs N runs up to N scenarios or test files at once (1 to 1024,",
   "                                          default 1);",
+  "                                          --max-steps N gives each test (each step of a scenario) N steps and",
+  "                                          the start of each file or scenario N more (default 1000000);",
+  "                                          unlimited sets no limit;",
   "                                          --timing adds the time of the run, of each file and of the 5",
   "                                          slowest scenarios;",
   "                                          --coverage writes the line coverage to coverage/lcov.info (LCOV);",

@@ -32,6 +32,8 @@ struct Config
   only: String
   test_timeout_ms: Int
   report_path: String
+  # The steps for each test, 0 for no limit. A field that may be missing: a driver of stage0 never writes it.
+  max_steps: JSON.Field[Int]
 end
 
 ## The program of the runner: a file of the run directory, or the one the binary carries (`run --embedded runner`).

@@ -199,7 +199,9 @@ BDD.then_stdout_includes(ctx, expected) / then_stderr_includes(ctx, expected)
   step starts, and prints a summary; a failing run still writes it, and a
   report that cannot be written fails the run (`RUNTIME-INTERNAL`). Without
   `--seed N` every child shares the seed the runner drew
-  (`testing.md`). A `*_test.agc` file in `specs/` is a
+  (`testing.md`). `--max-steps N|unlimited` (once) sets the steps of a
+  scenario to N x (its steps + 1); the default N is 1,000,000. A `*_test.agc`
+  file in `specs/` is a
   test file: a helper with that name fails with `RUNTIME-TEST-RUN`. Use port 0
   and fresh temporary directories, not fixed names.
 - To run a suite from a program, start `agentica test --json` with

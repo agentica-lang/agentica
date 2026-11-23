@@ -1017,6 +1017,10 @@ def test(session: Session, words: List[String]) -> Int
 
   # The --deny-* flags and --sandbox in front of `test` mean the same as after it, where the driver reads them.
   driver = driver.concat(options.deny)
+  if options.max_steps != ""
+    driver = driver.concat(["--max-steps", options.max_steps])
+  end
+
   if options.no_cache
     driver = driver.push("--no-cache")
   end

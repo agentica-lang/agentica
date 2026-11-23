@@ -307,6 +307,56 @@ class UnitTest(TestCase):
         self.assertTrue(failed[0]["error"]["message"].startswith("denied: --deny-env"))
         self.assertEqual(report["passed"], 1)
 
+    def heavy_project(self):
+        """A folder with a test file and a feature file that each spend more than the default 2,000,000 steps."""
+        directory = self.make_temp_dir("agentica-budget-").resolve()
+        (directory / "test").mkdir()
+        (directory / "test" / "heavy_test.agc").write_text(
+            "def burn(n: Int) -> Int\n  total = 0\n  i = 0\n  while i < n\n    total += i\n    i += 1\n  end\n  total\nend\n\n"
+            'def main() -> Void\n  Test.run([Test.test("heavy") do Test.eq(burn(300000) > 0, true) end])\nend\n',
+            encoding="utf-8")
+        (directory / "specs").mkdir()
+        (directory / "specs" / "steps.agc").write_text(
+            'import BDD from "std/bdd"\n\ndef burn(ctx: BDD.Context, args: List[String]) -> BDD.Context\n'
+            "  total = 0\n  i = 0\n  while i < args[0].to_i!\n    total += i\n    i += 1\n  end\n"
+            '  BDD.assert(ctx, total > 0, "no work")\nend\n\n'
+            'def main() -> Void\n  BDD.run([BDD.step("I burn {int} loops", &burn)])\nend\n', encoding="utf-8")
+        (directory / "specs" / "burn.feature").write_text(
+            "Feature: burn\n\n  Scenario: heavy\n    When I burn 700000 loops\n", encoding="utf-8")
+        return directory
+
+    def test_max_steps_sets_the_budget_of_a_test_file_and_of_a_scenario_and_unlimited_removes_it(self):
+        directory = self.heavy_project()
+        for path in ("test", "specs"):
+            for extra in ([], ["--isolate"]):
+                with self.subTest(path=path, extra=extra):
+                    _status, report = self.json_test(path, *extra, cwd=directory)
+                    self.assertEqual([field(item, "code") for item in report_cases(report)], ["RUNTIME-STEP-LIMIT"])
+                    _status, tight = self.json_test(path, "--max-steps", "100000", *extra, cwd=directory)
+                    self.assertEqual([field(item, "code") for item in report_cases(tight)], ["RUNTIME-STEP-LIMIT"])
+                    for value in ("5000000", "unlimited"):
+                        status, roomy = self.json_test(path, "--max-steps", value, *extra, cwd=directory)
+                        self.assertEqual((status, statuses(roomy)), (0, ["passed"]), value)
+        # In front of `test` a number means the same.
+        for path in ("test", "specs"):
+            result = self.agentica_test("--json", path, cwd=directory, flags=["--max-steps", "5000000"])
+            self.assertEqual((result.code, result.json()["passed"]), (0, 1))
+
+    def test_max_steps_takes_a_positive_integer_or_unlimited_once(self):
+        directory = self.heavy_project()
+        for value in ("0", "-1", "abc", "1e5", "", "1000000000001"):
+            with self.subTest(value=value):
+                status, report = self.json_test("test", "--max-steps", value, cwd=directory)
+                self.assertEqual((status, file_codes(report)), (2, [("", "RUNTIME-BDD-USAGE")]))
+        status, report = self.json_test("test", "--max-steps", "5", "--max-steps", "6", cwd=directory)
+        self.assertEqual((status, file_codes(report)), (2, [("", "RUNTIME-BDD-USAGE")]))
+        status, report = self.json_test("test", "--max-steps", cwd=directory)
+        self.assertEqual((status, file_codes(report)), (2, [("", "RUNTIME-BDD-USAGE")]))
+        # The option in front of `test` is the one of `run`: a number only, whatever follows it.
+        for value in ("0", "unlimited"):
+            result = self.agentica_test("test", cwd=directory, flags=["--max-steps", value])
+            self.assertEqual((result.code, result.stderr), (2, "agentica: --max-steps needs a positive integer\n"))
+
     def test_the_std_unit_tests_pass(self):
         status, report = self.json_test(STD_TESTS)
         self.assertEqual(status, 0)

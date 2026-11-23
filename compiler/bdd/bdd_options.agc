@@ -5,8 +5,8 @@
 ## run` for the runner and the tests), `--version V` (the Agentica version the programs it compiles are written for),
 ## `--agentica WORD` (once for each word of the command that runs `agentica`), `--style plain|ai|json`,
 ## `--seed N` and `--test-timeout-ms N`. ARGUMENTS are the words the user wrote after `test`: paths, `--steps FILE`,
-## `--only TEXT`, `--tags EXPR`, `--jobs N`, `--timing`, `--coverage`, `--isolate`, `--json`, `--ai`, `--no-cache`,
-## the `--deny-*` flags and `--sandbox` (cli.agc adds the ones in front of `test`).
+## `--only TEXT`, `--tags EXPR`, `--jobs N`, `--max-steps N|unlimited`, `--timing`, `--coverage`, `--isolate`,
+## `--json`, `--ai`, `--no-cache`, the `--deny-*` flags and `--sandbox` (cli.agc adds the ones in front of `test`).
 
 import Tags from "std/bdd/tags"
 
@@ -22,6 +22,8 @@ struct Options
   only: String
   tags: String
   jobs: Int
+  # The steps for each test of a file (for each step of a scenario), or 0 for no limit. 1,000,000 without --max-steps.
+  max_steps: Int
   steps: List[String]
   paths: List[String]
   deny: List[String]
@@ -52,6 +54,7 @@ def parse(arguments: List[String]) -> Parsed
     only: "",
     tags: "",
     jobs: 1,
+    max_steps: 1_000_000,
     steps: [],
     paths: [],
     deny: [],
@@ -86,6 +89,9 @@ private
 # The most test files that run at once: the `limit` of `Task.map` takes 1 to 1024.
 MAX_JOBS = 1024
 
+# The most --max-steps takes: a file's budget is that number times its tests, which stays far from the 64-bit limit.
+MAX_STEPS = 1_000_000_000_000
+
 # The flags that the VMs of the user's code get (the test files, the step program and the programs it starts), never
 # the runner. A flag given twice counts once.
 DENY = Set.new(["--deny-run", "--deny-net", "--deny-fs", "--deny-env", "--deny-native", "--sandbox"])
@@ -104,6 +110,15 @@ def option(options: Options, name: String, value: String) -> Options
   end
 end
 
+# The steps of a --max-steps value: the number, 0 for `unlimited`, or -1 when it is neither.
+def max_steps(value: String) -> Int
+  return 0 if value == "unlimited"
+  parsed = value.to_i
+  return -1 if !parsed.ok? or parsed.unwrap!.to_s != value or parsed.unwrap! < 1 or parsed.unwrap! > MAX_STEPS
+
+  parsed.unwrap!
+end
+
 # The words of the user. The last --json or --ai decides the style of every report, usage errors included, so they are
 # looked for first, in all the words (a value such as `--only --json` counts too, as it always did).
 def user_arguments(options: Options, words: List[String]) -> Parsed
@@ -117,10 +132,11 @@ def user_arguments(options: Options, words: List[String]) -> Parsed
   end
 
   jobs_seen = false
+  steps_seen = false
   at = 0
   while at < words.size
     word = words[at]
-    if word == "--steps" or word == "--only" or word == "--tags" or word == "--jobs"
+    if word == "--steps" or word == "--only" or word == "--tags" or word == "--jobs" or word == "--max-steps"
       return Parsed.Usage("option needs a value", shown) if at + 1 >= words.size
 
       value = words[at + 1]
@@ -148,6 +164,16 @@ def user_arguments(options: Options, words: List[String]) -> Parsed
 
         jobs_seen = true
         shown = shown.with(jobs: parsed.unwrap!)
+      elsif word == "--max-steps"
+        return Parsed.Usage("one --max-steps N", shown) if steps_seen
+
+        limit = max_steps(value)
+        if limit < 0
+          return Parsed.Usage("--max-steps needs a positive integer up to #{MAX_STEPS}, or unlimited", shown)
+        end
+
+        steps_seen = true
+        shown = shown.with(max_steps: limit)
       elsif shown.only != ""
         return Parsed.Usage("one --only TEXT", shown)
       elsif value == ""
