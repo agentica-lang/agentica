@@ -1,5 +1,10 @@
 # Packages (`agentica.toml`)
 
+`agentica init [NAME]` starts a project in the working folder: it writes
+`agentica.toml` (`name` is NAME, else the folder name; `agentica` is the running
+version) and, when absent, a hello world `main.agc`. An existing `agentica.toml`
+is `PKG-MANIFEST-EXISTS`, a bad name `PKG-MANIFEST-INVALID`; nothing is written.
+
 A project with an `agentica.toml` in the folder of the root file (or above it)
 can import the packages it declares. A build never downloads and never writes
 `agentica.lock`: `agentica add NAME URL --tag TAG` (or `--ref COMMIT`, the whole
