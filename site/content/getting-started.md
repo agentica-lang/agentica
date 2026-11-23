@@ -37,23 +37,23 @@ Needs flakes enabled (`experimental-features = nix-command flakes` in `nix.conf`
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
   outputs = { self, nixpkgs }:
     let
-      version = "0.36.0";
+      version = "0.37.0";
       releases = {
         x86_64-linux = {
           platform = "linux-x86_64";
-          hash = "sha256-O4yyiE5g7qvdMvkv76e74Odmg9wH8FBut6n6vvb5yXE=";
+          hash = "sha256-FkMqqXDOVw0pkA6PmRLgbUY54e4EUk5JgHiuvlvADKc=";
         };
         aarch64-linux = {
           platform = "linux-arm64";
-          hash = "sha256-Xb0FxSpg4CyYBo6nC6oJ1KvdukHMRPKvrDRCWJUCiAI=";
+          hash = "sha256-dN+Vgiu1/fZMsdw7Q2D9bP32UX5ykfoHH5wHLsnRXDQ=";
         };
         aarch64-darwin = {
           platform = "macos-arm64";
-          hash = "sha256-Rt7W8y0EdPcag47nUMXYodnVirIYgpNoLSudhGamYn4=";
+          hash = "sha256-iMHCDekB4fisWc/HiPJ/dFQp/mWu8IMmbUm0xY7tURU=";
         };
         x86_64-darwin = {
           platform = "macos-x86_64";
-          hash = "sha256-P+3OLBKHRUHvCM2YrAGC6ewEYEpFpiMukoRhiH+0uSE=";
+          hash = "sha256-a023o5v90gje+khcGlP4ZIbxBlDxttM+JSwrxaR1hSo=";
         };
       };
       forAllSystems = nixpkgs.lib.genAttrs (builtins.attrNames releases);
