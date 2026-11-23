@@ -72,4 +72,10 @@ def main() -> Void
   puts(bytes_of([104, 225, 128, 105, 255]).scrub(""))
   puts(bytes_of([226, 130, 172]).scrub("?"))
   puts(bytes_of([]).scrub.inspect)
+  # incomplete_utf8_length: the cut start of a valid character at the end, 0 to 3; a bad sequence or a whole one is 0.
+  puts("[]: #{bytes_of([]).incomplete_utf8_length}")
+  for cut in [[97], [97, 226], [97, 226, 130], [226, 130, 172], [240, 159, 152], [240, 159], [240], [240, 128],
+              [237, 160], [224, 128], [244, 144], [245], [192], [226, 97], [130], [226, 130, 130]]
+    puts("#{cut}: #{bytes_of(cut).incomplete_utf8_length}")
+  end
 end

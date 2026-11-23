@@ -1254,6 +1254,16 @@ static size_t maximal_subpart(const uint8_t *s, size_t len) {
   return n;
 }
 
+size_t agc_utf8_cut_tail(const uint8_t *data, size_t len) {
+  for (size_t k = 1; k <= 3 && k <= len; k++) {
+    const uint8_t *s = data + len - k;
+    if (*s >= 0x80 && *s <= 0xBF) continue;
+    bool lead = *s >= 0xC2 && *s <= 0xF4;
+    return lead && agc_utf8_width(*s) > k && maximal_subpart(s, k) == k ? k : 0;
+  }
+  return 0;
+}
+
 size_t agc_utf8_scrub(const uint8_t *data, size_t len, const char *replacement, size_t rbytes, size_t rchars,
                       char *out, size_t *chars) {
   size_t bytes = 0, count = 0;

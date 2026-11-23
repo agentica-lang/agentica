@@ -158,7 +158,8 @@ def cases(rng):
 def ask(peer, pairs):
     """The peer's answer to the case of each (case, expected) pair."""
     stdin = json.dumps({"cases": [
-        {"op": c["op"], "encoding": c["encoding"], "data": list(c.get("data", b"")), "text": c.get("text", "")}
+        {"op": c["op"], "encoding": c["encoding"], "data": list(c.get("data", b"")), "text": c.get("text", ""),
+         "size": c.get("size", 0)}
         for c, _ in pairs
     ]})
     result = run_vm(peer, stdin=stdin)
@@ -187,9 +188,9 @@ def test_the_codecs_match_python(peer):
 
 def test_an_unknown_encoding_is_an_error_both_ways(peer):
     stdin = json.dumps({"cases": [
-        {"op": "decode", "encoding": "utf-8-sig", "data": [97], "text": ""},
-        {"op": "encode", "encoding": "koi8-r", "data": [], "text": "a"},
-        {"op": "encode", "encoding": "utf-8\u0000", "data": [], "text": "a"},
+        {"op": "decode", "encoding": "utf-8-sig", "data": [97], "text": "", "size": 0},
+        {"op": "encode", "encoding": "koi8-r", "data": [], "text": "a", "size": 0},
+        {"op": "encode", "encoding": "utf-8\u0000", "data": [], "text": "a", "size": 0},
     ]})
     result = run_vm(peer, stdin=stdin)
     assert result.code == 0, result.stderr
@@ -218,3 +219,13 @@ def test_scrub_matches_python_replace(peer):
     for (case, expected), answer in zip(pairs, ask(peer, pairs)):
         assert answer["text"] == expected, case
     assert sum("\ufffd" in expected for _, expected in pairs) > 200
+
+
+def test_chunks_that_keep_a_cut_tail_scrub_like_the_whole(peer):
+    rng = random.Random(1789)
+    inputs = SCRUB_CASES + [bytes(rng.choice(UTF8_BYTES) for _ in range(rng.randrange(1, 40))) for _ in range(400)]
+    inputs += ["a\u00e9\u20ac\U0001F600".encode() * 3]
+    pairs = [({"op": "stream", "encoding": "utf-8", "data": data, "size": rng.randrange(1, 6)},
+              data.decode("utf-8", "replace")) for data in inputs]
+    for (case, expected), answer in zip(pairs, ask(peer, pairs)):
+        assert answer["text"] == expected, case

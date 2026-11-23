@@ -27,6 +27,7 @@ b.each do |byte| ... end                  # Void
 for byte in b ... end
 b.decode(encoding) -> Result[String]      # text in an encoding; see below
 b.scrub(replacement = "�") -> String      # UTF-8, each bad sequence replaced
+b.incomplete_utf8_length -> Int           # 0..3 bytes at the end that cut a character; keep them for the next chunk
 string.encode(encoding) -> Result[Bytes]
 ```
 

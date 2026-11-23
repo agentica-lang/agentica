@@ -31,6 +31,7 @@ Bytes.decode
 Bytes.drop
 Bytes.equal
 Bytes.from_list
+Bytes.incomplete_utf8_length
 Bytes.length
 Bytes.plus
 Bytes.scrub

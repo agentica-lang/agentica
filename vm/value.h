@@ -945,6 +945,9 @@ bool agc_utf8_chars(const uint8_t *data, size_t len, size_t *chars);
    when it is not NULL; returns their count, with the characters in *chars. */
 size_t agc_utf8_scrub(const uint8_t *data, size_t len, const char *replacement, size_t rbytes, size_t rchars,
                       char *out, size_t *chars);
+/* How many bytes at the end of data are the start of a valid UTF-8 character that the data cuts short (0 to 3): what a
+   reader keeps for the next chunk. A bad sequence is not one. */
+size_t agc_utf8_cut_tail(const uint8_t *data, size_t len);
 agc_string *agc_utf8_decode(const uint8_t *data, size_t len, const char *replacement);
 agc_string *agc_new_string(size_t bytes, size_t chars);
 agc_string *agc_make_string(const char *data, size_t bytes, size_t chars);
