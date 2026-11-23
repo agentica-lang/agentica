@@ -2,7 +2,7 @@
 title: Módulos nativos
 weight: 6
 description: Llama a código de C escrito para Agentica con tipos de Agentica, y un resultado completo en una sola llamada.
-source_hash: "c7c19b735942"
+source_hash: "f391d53ddeff"
 ---
 
 Un módulo nativo es código de C escrito contra la API de C de la VM, la cabecera `agentica_native.h`. Un bloque `extern module "NAME"` declara sus funciones con tipos de Agentica, y el programa las llama como cualquier `def`. Una llamada puede recibir y devolver listas, mapas, opcionales, resultados y las estructuras y enums propios del programa, como todas las filas de una consulta, donde un [bloque `extern`](/library/io-and-system/native/) necesita una llamada por cada valor de C.
@@ -46,6 +46,39 @@ end
 ## Vinculación {#binding}
 
 La primera llamada a una función del bloque abre la biblioteca, como lo hace un bloque `extern`, y llama a su `agentica_native_init` una vez por ejecución. Una biblioteca que no se abre, no tiene punto de entrada, o se compiló para otra versión mayor de la API (o una versión menor más nueva) hace que esa llamada falle con `RUNTIME-NATIVE-LOAD`. Después, la VM busca la función por su nombre en la tabla del módulo. Debe tener la misma firma, el mismo modo, y cada estructura o enum con el mismo nombre, campos o variantes y tipos; si no, la llamada falla con `RUNTIME-NATIVE-SIGNATURE`. Una firma se escribe de forma canónica: los alias expandidos, los tipos del usuario por sus nombres sueltos, `", "` entre parámetros y argumentos de tipo, y después `" -> "` y el resultado, como en `(List[Float]) -> Optional[Summary]`. La forma de una estructura es `"count: Int, mean: Float"`, la de un enum `"Empty | Number(Float) | Text(String)"`, en el orden declarado.
+
+## Un handle en datos genéricos {#a-handle-in-generic-data}
+
+Un recurso pertenece al bloque que lo declara, así que un paquete propietario de un tipo de datos, como un tensor, no puede nombrar el recurso de un backend que vive en otro paquete. No le hace falta: haz que el tipo y la tabla de operaciones sean genéricos sobre el handle, y deja que el backend rellene la tabla. El paquete de los datos no tiene código nativo, y el backend lo importa, así que no hay ciclo de imports. El comprobador lo acepta entre paquetes, y `Native.close`, `Native.arena` y `RUNTIME-NATIVE-CLOSED` funcionan con un handle guardado en los datos como con cualquier otro.
+
+```agentica {mode="check"}
+# In the package that owns the data: no native code, so no import cycle.
+struct Tensor[H]
+  handle: H
+  shape: List[Int]
+end
+
+struct Ops[H]
+  make: Fn[Int, Result[H]]
+  add: Fn[H, H, Result[H]]
+end
+
+def plus[H](ops: Ops[H], a: Tensor[H], b: Tensor[H]) -> Result[Tensor[H]]
+  handle = try ops.add(a.handle, b.handle)
+  ok(Tensor(handle: handle, shape: a.shape))
+end
+
+# In the backend: the block declares the resource and fills the table with its own functions.
+extern module "backend"
+  resource Buf
+  def make(n: Int) -> Result[Buf]
+  def add(a: Buf, b: Buf) -> Result[Buf]
+end
+
+def ops() -> Ops[Buf] = Ops(make: &make, add: &add)
+```
+
+Las funciones nativas del backend siguen recibiendo y devolviendo su propio recurso, aquí `Buf`. `Ops[Buf]` las guarda como valores `Fn` normales, y `plus` las llama para cualquier `H`. Una función nativa que recibe o devuelve `Tensor[Buf]`, recibe una estructura con un campo `Buf` o nombra el recurso de otro bloque sigue siendo `CHECK-NATIVE-TYPE`.
 
 ## El lado de C {#the-c-side}
 

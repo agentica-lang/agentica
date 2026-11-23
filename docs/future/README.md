@@ -16,7 +16,5 @@ delete its section; section numbers are never renumbered, so gaps stay.
   streams.
 - `28-vm-metrics.md`: VM metrics in Prometheus text (#992).
 - `29-tls-context.md`: later TLS options (#993).
-- `30-native-resources.md`: a native resource whose type outlives its
-  `extern module` block (#1918).
 - `48-regex.md`: Unicode classes for regex (#990), and the decisions that bound
   it.
