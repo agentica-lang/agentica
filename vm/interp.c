@@ -76,7 +76,7 @@
     (dst) = agc_fn_value(f_);                                                        \
   } while (0)
 
-typedef enum { SORT_INT, SORT_FLOAT, SORT_TEXT, SORT_REF } sort_kind;
+typedef enum { SORT_INT, SORT_FLOAT, SORT_TEXT } sort_kind;
 
 /* The result of one run_compiled call: no code ran, the turn yields or parks/done, an unsupported instruction is left
    for the opcode switch, or the new top frame (after a CALL, TAIL_CALL, CALL_VALUE or RETURN exit, or an exit from a
@@ -270,7 +270,6 @@ void agc_vm_init(agc_vm *vm, const agc_program *program, FILE *out, FILE *err, i
     rt->chars[c] = agc_make_string(&ch, 1, 1);
   }
   atomic_init(&rt->next_task_id, 1);
-  atomic_init(&rt->next_ref, 1);
   rt->runq = agc_runq_new();
   rt->sync = agc_lock_new("sync");
   rt->out.lock = agc_lock_new("stdout");
@@ -661,8 +660,6 @@ static sort_entry *sort_entries(agc_vm *vm, const agc_list *keys, size_t n, sort
     entries[k].item = carry ? agc_value_word(key) : k;
     if (kind == SORT_INT)
       entries[k].key = int_order(agc_as_int(vm, key));
-    else if (kind == SORT_REF)
-      entries[k].key = agc_as_ref(vm, key);
     else if (kind == SORT_FLOAT)
       entries[k].key = float_order(agc_as_float(vm, key));
     else
@@ -706,10 +703,7 @@ agc_value agc_sort_by_keys(agc_vm *vm, const agc_list *items, const agc_list *ke
   for (size_t width = 1; width < n; width *= 2) rounds++;
   agc_charge(vm, (uint64_t)n * rounds);
   agc_value first = agc_list_get(keys, 0);
-  sort_kind kind = agc_is(first, AGC_T_STRING)  ? SORT_TEXT
-                   : agc_is(first, AGC_T_FLOAT) ? SORT_FLOAT
-                   : agc_is(first, AGC_T_REF)   ? SORT_REF
-                                                : SORT_INT;
+  sort_kind kind = agc_is(first, AGC_T_STRING) ? SORT_TEXT : agc_is(first, AGC_T_FLOAT) ? SORT_FLOAT : SORT_INT;
   bool carry = items == keys && agc_list_kind(items);
   sort_entry *entries = sort_entries(vm, keys, n, kind, carry);
   int direction = sort_direction(kind, entries, n);

@@ -172,6 +172,7 @@ List.set
 List.size
 List.sort
 List.sort_by
+List.sort_by_ref
 List.take
 LogRegistry.attach
 LogRegistry.detach

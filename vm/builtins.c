@@ -8,6 +8,16 @@
 
 #include <string.h>
 
+/* list.sort_by with Ref keys (the front end lowers it to List.sort_by_ref): the block runs on each item in order,
+   then the items sort by the Refs it gave, as List.sort_by does by Int keys. */
+typedef struct {
+  agc_stepper stepper;
+  const agc_list *items;
+  agc_list_cursor cursor;
+  agc_list_builder refs;
+  bool started;
+} ref_sort;
+
 static agc_string *text_of(agc_vm *vm, agc_value v) {
   if (agc_is(v, AGC_T_NIL) || agc_is(v, AGC_T_BOOL) || agc_is(v, AGC_T_INT) || agc_is(v, AGC_T_FLOAT)) {
     char text[AGC_SCALAR_TEXT];
@@ -129,7 +139,7 @@ static agc_value builtin_program_name(agc_vm *vm, agc_value *args, uint32_t span
 static agc_value builtin_ref_make(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)args;
   (void)span;
-  return agc_ref(atomic_fetch_add_explicit(&vm->rt->next_ref, 1, memory_order_relaxed));
+  return agc_ref(atomic_fetch_add_explicit(&vm->rt->next_ref, 1, memory_order_relaxed) + 1);
 }
 
 static agc_value builtin_exit(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -226,10 +236,45 @@ static agc_value builtin_list_reverse(agc_vm *vm, agc_value *args, uint32_t span
   return agc_list_value(agc_list_reverse(a));
 }
 
+/* Refs sort by their numbers, which are below 2^63, as the same Ints would. The Ref sorts stay out of vm/interp.c,
+   so that its turn loop keeps its place (make layout-check). */
+static agc_value sort_by_refs(agc_vm *vm, const agc_list *items, const agc_list *refs) {
+  agc_list_builder numbers;
+  agc_list_builder_sized(&numbers, agc_list_len(refs));
+  agc_list_cursor cursor;
+  agc_value ref;
+  agc_list_cursor_begin(&cursor, refs, 0);
+  while (agc_list_cursor_next(&cursor, &ref)) agc_list_builder_push(&numbers, agc_int((int64_t)agc_as_ref(vm, ref)));
+  return agc_sort_by_keys(vm, items, agc_list_builder_finish(&numbers));
+}
+
 static agc_value builtin_list_sort(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   const agc_list *a = agc_as_list(vm, args[0]);
+  if (agc_list_len(a) > 1 && agc_is(agc_list_get(a, 0), AGC_T_REF)) return sort_by_refs(vm, a, a);
   return agc_sort_by_keys(vm, a, a);
+}
+
+static agc_step ref_sort_step(agc_vm *vm, agc_stepper *self, agc_value last) {
+  ref_sort *s = (ref_sort *)self;
+  if (s->started) agc_list_builder_push(&s->refs, last);
+  s->started = true;
+  agc_value item;
+  if (agc_list_cursor_next(&s->cursor, &item)) return (agc_step){.kind = AGC_STEP_CALL, .value = item};
+  return (agc_step){.kind = AGC_STEP_END, .value = sort_by_refs(vm, s->items, agc_list_builder_finish(&s->refs))};
+}
+
+static agc_value builtin_list_sort_by_ref(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  ref_sort *s = agc_alloc(sizeof *s);
+  s->items = agc_as_list(vm, args[0]);
+  agc_list_cursor_begin(&s->cursor, s->items, 0);
+  agc_list_builder_sized(&s->refs, agc_list_len(s->items));
+  s->stepper.step = ref_sort_step;
+  /* The step reads the immutable list and writes only this state, which belongs to the calling task. */
+  s->stepper.unlocked = true;
+  agc_task_stepper(vm, &s->stepper);
+  return agc_void();
 }
 
 static agc_value builtin_map_has_key(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -600,6 +645,7 @@ const agc_builtin agc_core_builtins[] = {
   {"List.any?", 2, NULL, AGC_NATIVE_ANY, AGC_COST_NONE, false, false, false, false},
   {"List.all?", 2, NULL, AGC_NATIVE_ALL, AGC_COST_NONE, false, false, false, false},
   {"List.sort_by", 2, NULL, AGC_NATIVE_SORT_BY, AGC_COST_NONE, false, false, false, false},
+  {"List.sort_by_ref", 2, builtin_list_sort_by_ref, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false, false},
   {"__fail_arg", 3, builtin_fail_arg, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, true, false},
   {"Range.size", 1, builtin_range_size, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
   {"Range.to_a", 1, builtin_range_to_a, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false, false},
