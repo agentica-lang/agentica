@@ -128,8 +128,8 @@ the programming skill or the site).
   `fail` record, a crash diagnostic or a non-zero exit is a file error; exit 0
   without `ready` is `RUNTIME-TEST-RUN`; the printed lines and stderr go in the
   file's `output`), the `--only` filter, then one run child (`--max-steps`
-  1,000,000 x (tests + 1)) that gets one index per test with
-  `Process.channel_send`. `await_ready` waits up to 30 s for the child's
+  N x (tests + 1), N being 1,000,000 or `--max-steps N|unlimited`) that gets
+  one index per test with `Process.channel_send`. `await_ready` waits up to 30 s for the child's
   `ready` before the first index (`docs/bdd.md`, "Unit test files"); an early
   end of the child is its crash diagnostic. Tests are walked through a
   `Map[Int, UnitTest]`.

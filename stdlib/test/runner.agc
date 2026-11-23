@@ -88,6 +88,9 @@ end
 
 private
 
+# The budget of no limit: 2^62, so that the steps another scheduler gives back cannot wrap it.
+MAX_BUDGET = 4_611_686_018_427_387_904
+
 struct Config
   # The binary, started as `run ...` for the step program and for each scenario.
   vm: String
@@ -109,6 +112,8 @@ struct Config
   only: String
   test_timeout_ms: Int
   report_path: String
+  # The steps for each test of a file and each step of a scenario, 0 for no limit; a missing field is the default.
+  max_steps: JSON.Field[Int]
 end
 
 enum Listing
@@ -221,6 +226,23 @@ end
 def min_of(a: Int, b: Int) -> Int
   return a if a < b
   b
+end
+
+# The steps for each test, which `--max-steps` sets: 0 is no limit.
+def steps_per_test(config: Config) -> Int
+  case config.max_steps
+    JSON.Field.Value(steps) -> steps
+    _ -> Units.DEFAULT_STEPS
+  end
+end
+
+# The budget of a scenario of `count` steps: each step and the start of the scenario get the steps for a test. No limit
+# is a budget that no test spends, which a worker or a child started without --max-steps takes as it is.
+def scenario_steps(config: Config, count: Int) -> Int
+  steps = steps_per_test(config)
+  return MAX_BUDGET if steps == 0
+
+  steps * (count + 1)
 end
 
 # The `--tags` expression: the line after the entries, a JSON string. No line is no filter; a line that cannot be read
@@ -537,6 +559,7 @@ def run_entry(config: Config, part: String, entry: Entry) -> Report.FileResult
       source_root: entry.source_root,
       deny: deny(config),
       coverage: part,
+      max_steps: steps_per_test(config),
     )
 
     return Units.run(settings, entry.path, entry.bytecode, entry.front_end)
@@ -570,12 +593,13 @@ def seeded(config: Config, seed: Int) -> Config
     only: config.only,
     test_timeout_ms: config.test_timeout_ms,
     report_path: config.report_path,
+    max_steps: config.max_steps,
   )
 end
 
 # The list child sends the patterns of BDD.run in order on its channel and exits, so the channel is read until it ends.
 def list_steps(config: Config, where: Report.Span) -> Listing
-  spawned = Process.spawn_channel(config.vm, vm_args(config, 1000000, "list", ""))
+  spawned = Process.spawn_channel(config.vm, vm_args(config, Units.DEFAULT_STEPS, "list", ""))
   return Listing.Broken(Report.error_at("RUNTIME-BDD-INFRA", spawned.message, where)) if not spawned.ok?
   p = spawned.unwrap!
   _ = Process.close_stdin(p, 5000)
@@ -802,7 +826,7 @@ def drive(
     "seeded": JSON.from(config.seeded),
     "seed": JSON.from(config.seed),
     "programs": JSON.from(run_folder(config)),
-    "steps": JSON.from(1000000 * (count + 1)),
+    "steps": JSON.from(scenario_steps(config, count)),
   }
 
   run = Run(failed_at: count, verdict: Report.Verdict.Pass)

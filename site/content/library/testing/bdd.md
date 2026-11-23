@@ -50,6 +50,7 @@ Exit code `0`: every scenario passes or is skipped (also when all are skipped, s
 - `--jobs N` and `--isolate` (each scenario in a process of its own, see below): [Test](/cli/#test).
 - A failed step is reported at its line and column in the feature file.
 - Each row of a `Scenario Outline` is named with the outline name and the row's values in the columns the name does not show, such as `Name (sqlite, 42)`, so `--only "(sqlite, 42)"` selects one row. Identical rows keep one name; `--json` has each row's line in `example`.
+- A scenario runs with 1,000,000 steps for each of its steps plus one (a step that spends them fails with `RUNTIME-STEP-LIMIT`); `--max-steps N` or `--max-steps unlimited` after `test` changes the 1,000,000, with or without `--isolate`. The programs under test have no step limit.
 - `--seed N` makes `Random` repeat in steps and programs. Without it, the runner draws one seed for every step program and program under test, and shows it when the run fails.
 - It also runs `*_test.agc` unit test files ([Test](/library/testing/test/)) in the same report. With no paths it searches `specs/` and `test/`.
 

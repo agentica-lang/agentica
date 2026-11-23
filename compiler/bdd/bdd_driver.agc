@@ -162,6 +162,7 @@ def prepare_and_run(
     only: options.only,
     test_timeout_ms: options.test_timeout_ms,
     report_path: "#{directory}/report.txt",
+    max_steps: JSON.Field.Value(options.max_steps),
   )
 
   # The parts of --coverage are files of the private run directory, so they go with it whatever the run's end.

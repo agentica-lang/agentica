@@ -307,6 +307,84 @@ class UnitTest(TestCase):
         self.assertTrue(failed[0]["error"]["message"].startswith("denied: --deny-env"))
         self.assertEqual(report["passed"], 1)
 
+    def heavy_project(self):
+        """A folder with a test file and a feature file that each spend more than the default 2,000,000 steps."""
+        directory = self.make_temp_dir("agentica-budget-").resolve()
+        (directory / "test").mkdir()
+        (directory / "test" / "heavy_test.agc").write_text(
+            "def burn(n: Int) -> Int\n  total = 0\n  i = 0\n  while i < n\n    total += i\n    i += 1\n  end\n  total\nend\n\n"
+            'def main() -> Void\n  Test.run([Test.test("heavy") do Test.eq(burn(265000) > 0, true) end])\nend\n',
+            encoding="utf-8")
+        (directory / "specs").mkdir()
+        (directory / "specs" / "steps.agc").write_text(
+            'import BDD from "std/bdd"\n\ndef burn(ctx: BDD.Context, args: List[String]) -> BDD.Context\n'
+            "  total = 0\n  i = 0\n  while i < args[0].to_i!\n    total += i\n    i += 1\n  end\n"
+            '  BDD.assert(ctx, total > 0, "no work")\nend\n\n'
+            'def main() -> Void\n  BDD.run([BDD.step("I burn {int} loops", &burn)])\nend\n', encoding="utf-8")
+        (directory / "specs" / "burn.feature").write_text(
+            "Feature: burn\n\n  Scenario: heavy\n    When I burn 700000 loops\n", encoding="utf-8")
+        return directory
+
+    def test_max_steps_sets_the_budget_of_a_test_file_and_of_a_scenario_and_unlimited_removes_it(self):
+        directory = self.heavy_project()
+        for path in ("test", "specs"):
+            for extra in ([], ["--isolate"]):
+                with self.subTest(path=path, extra=extra):
+                    # The default is 1,000,000: naming it changes nothing, and a smaller number fails the same way.
+                    for value in (None, "1000000", "100000"):
+                        arguments = [] if value is None else ["--max-steps", value]
+                        _status, report = self.json_test(path, *arguments, *extra, cwd=directory)
+                        self.assertEqual([field(item, "code") for item in report_cases(report)],
+                                         ["RUNTIME-STEP-LIMIT"], value)
+                    for value in ("5000000", "0005000000", "unlimited"):
+                        status, roomy = self.json_test(path, "--max-steps", value, *extra, cwd=directory)
+                        self.assertEqual((status, statuses(roomy)), (0, ["passed"]), value)
+        # In front of `test` a number means the same.
+        for path in ("test", "specs"):
+            for value in ("5000000", "0005000000"):
+                result = self.agentica_test("--json", path, cwd=directory, flags=["--max-steps", value])
+                self.assertEqual((result.code, result.json()["passed"]), (0, 1), value)
+
+    def test_max_steps_counts_the_tests_a_file_runs_so_only_lowers_the_budget(self):
+        directory = self.heavy_project()
+        test = directory / "test" / "heavy_test.agc"
+        test.write_text(test.read_text(encoding="utf-8").replace(
+            "Test.run([", 'Test.run([Test.test("light") do Test.eq(1, 1) end, Test.test("light 2") do Test.eq(2, 2) end, '),
+            encoding="utf-8")
+        # 3 tests + 1 give the file 4 times N (4,000,000); only `heavy` runs with --only, which leaves 2,000,000.
+        _status, whole = self.json_test("test", "--max-steps", "1000000", cwd=directory)
+        self.assertEqual(statuses(whole), ["passed", "passed", "passed"])
+        _status, alone = self.json_test("test", "--max-steps", "1000000", "--only", "heavy", cwd=directory)
+        self.assertEqual([field(item, "code") for item in report_cases(alone)], ["RUNTIME-STEP-LIMIT"])
+
+    def test_max_steps_takes_a_positive_integer_or_unlimited_once(self):
+        directory = self.heavy_project()
+        for value in ("0", "00", "-1", "+5", "abc", "1e5", ""):
+            with self.subTest(value=value):
+                status, report = self.json_test("test", "--max-steps", value, cwd=directory)
+                self.assertEqual((status, file_codes(report)), (2, [("", "RUNTIME-BDD-USAGE")]))
+        status, report = self.json_test("test", "--max-steps", "5", "--max-steps", "6", cwd=directory)
+        self.assertEqual((status, file_codes(report)), (2, [("", "RUNTIME-BDD-USAGE")]))
+        status, report = self.json_test("test", "--max-steps", cwd=directory)
+        self.assertEqual((status, file_codes(report)), (2, [("", "RUNTIME-BDD-USAGE")]))
+        # In front of `test` the global option refuses them too.
+        for value in ("0", "+5", "abc"):
+            with self.subTest(front=value):
+                result = self.agentica_test("test", cwd=directory, flags=["--max-steps", value])
+                self.assertEqual((result.code, result.stdout, "--max-steps" in result.stderr), (2, "", True))
+        # `unlimited` is a value of `test` only: in front of it the global option refuses it.
+        result = self.agentica_test("test", cwd=directory, flags=["--max-steps", "unlimited"])
+        self.assertEqual((result.code, result.stdout, "--max-steps" in result.stderr), (2, "", True))
+
+    def test_a_max_steps_above_the_most_counts_as_the_most(self):
+        directory = self.heavy_project()
+        for path in ("test", "specs"):
+            for value in ("1000000000001", "99999999999999999999999999"):
+                status, report = self.json_test(path, "--max-steps", value, cwd=directory)
+                self.assertEqual((status, statuses(report)), (0, ["passed"]), value)
+            result = self.agentica_test("--json", path, cwd=directory, flags=["--max-steps", "99999999999999999999"])
+            self.assertEqual((result.code, result.json()["passed"]), (0, 1))
+
     def test_the_std_unit_tests_pass(self):
         status, report = self.json_test(STD_TESTS)
         self.assertEqual(status, 0)

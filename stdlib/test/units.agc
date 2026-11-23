@@ -5,6 +5,9 @@
 import Report from "report"
 import Child from "child"
 
+## The steps for each test when `--max-steps` is not given, and the steps of the child that lists the tests.
+DEFAULT_STEPS = 1_000_000
+
 ## The options of a run: the path of the binary (started as `run ...` for each test file), the seed, the `--only` text,
 ## the timeout of each test in milliseconds, the `--source-root` of the file's bytecode ("" for none), so a trace
 ## names the file as the report does, and the user's `--deny-*` flags and `--sandbox`, which the file's VMs get.
@@ -17,6 +20,9 @@ struct Settings
   deny: List[String]
   # The LCOV part of the child that runs the tests, without its `.info`, or "" without coverage.
   coverage: String
+  # The steps for each test, or 0 for no limit. The child that runs a file gets that many for each test and for its own
+  # start, in one budget for the file.
+  max_steps: Int
 end
 
 ## Runs the tests of the file `path` from its compiled `bytecode` and returns the result. A non-empty `front_end` is a
@@ -82,7 +88,7 @@ end
 
 def list(settings: Settings, path: String, bytecode: String) -> Listed
   where = Report.Span(file: path, line: 1, column: 1, end_column: 1)
-  spawned = Process.spawn_channel(settings.vm, args(settings, path, bytecode, 1000000, "list"))
+  spawned = Process.spawn_channel(settings.vm, args(settings, path, bytecode, DEFAULT_STEPS, "list"))
   return broken(Report.error_at("RUNTIME-BDD-INFRA", spawned.message, where), "") if not spawned.ok?
   p = spawned.unwrap!
   _ = Process.close_stdin(p, 5000)
@@ -162,7 +168,8 @@ end
 
 def run_child(settings: Settings, path: String, bytecode: String, chosen: List[UnitTest]) -> Report.FileResult
   where = Report.Span(file: path, line: 1, column: 1, end_column: 1)
-  spawned = Process.spawn_channel(settings.vm, args(settings, path, bytecode, 1000000 * (chosen.size + 1), "run"))
+  steps = settings.max_steps * (chosen.size + 1)
+  spawned = Process.spawn_channel(settings.vm, args(settings, path, bytecode, steps, "run"))
 
   if not spawned.ok?
     return Report.file_error(path, "tests", Report.error_at("RUNTIME-BDD-INFRA", spawned.message, where))
@@ -430,12 +437,18 @@ end
 # The child that runs the tests writes the LCOV part of the file; the one that lists them does not. Its
 # System.program_name is the test file, not the compiled one.
 def args(settings: Settings, path: String, bytecode: String, steps: Int, mode: String) -> List[String]
+  limit: List[String] = []
+  if steps > 0
+    limit = ["--max-steps", steps.to_s]
+  end
   cover: List[String] = []
   if settings.coverage != "" and mode == "run"
     cover = ["--coverage", "#{settings.coverage}.info"]
   end
   (
-    ["run", "--json", "--max-steps", steps.to_s, "--seed", settings.seed.to_s, "--source-root", settings.source_root]
+    ["run", "--json"]
+      .concat(limit)
+      .concat(["--seed", settings.seed.to_s, "--source-root", settings.source_root])
       .concat(settings.deny)
       .concat(cover)
       .concat(["--program-name", path, "--", bytecode, "--agentica-test", mode])
