@@ -3,9 +3,9 @@
 A socket handed to workers: the program listens on port 0 and prints the port; an independent Python peer
 connects six clients, and the loop of the workers ends when the channel closes.
 
-A close with a reason: a list of sends, receives and closes against a Python model of one channel
-(tests/fixtures/channel-close-peer.py), and producers on four schedulers whose consumer gets every value, then the
-reason.
+A close with a reason, bounded and unbounded: a list of sends, receives and closes against a Python model of one
+channel (tests/fixtures/channel-close-peer.py), and producers on four schedulers whose consumer gets every value, then
+the reason.
 """
 import json
 import random
@@ -109,7 +109,7 @@ end
 """
 
 CLOSE_STATEMENTS = {
-    "new": "ch = Channel.new(3)",
+    "new": "ch = {new}",
     "send": 'puts("send {a} #{{sent(ch.send({a}, 0))}}")',
     "address_send": 'puts("address_send {a} #{{sent(ch.address.send({a}, 0))}}")',
     "recv": 'puts("recv #{{got(ch.recv(0))}}")',
@@ -142,7 +142,7 @@ def produce(round: Round) -> Void
 end
 
 def run_round(count: Int, reason: String) -> Void
-  ch: Channel[Int] = Channel.new(2)
+  ch: Channel[Int] = {new}
   producer = Task.spawn(&produce, Round(ch: ch, count: count, reason: reason))
   while true
     r = ch.recv(10000)
@@ -157,16 +157,21 @@ end
 
 
 def peer_lines(ops, capacity):
-    peer = run([PYTHON, FIXTURES / "channel-close-peer.py", "--capacity", str(capacity)],
-               stdin=json.dumps(ops).encode("utf-8"))
+    bound = [] if capacity is None else ["--capacity", str(capacity)]
+    peer = run([PYTHON, FIXTURES / "channel-close-peer.py"] + bound, stdin=json.dumps(ops).encode("utf-8"))
     assert peer.code == 0, peer.stderr
     return peer.stdout.splitlines()
 
 
-def close_operations(seed, count):
+def new_channel(capacity):
+    return "Channel.new" if capacity is None else "Channel.new(%d)" % capacity
+
+
+def close_operations(seed, count, sends):
     rng = random.Random(seed)
-    # Sends and receives are common and a close rare, so most channels fill, drain and close with values left.
-    names = ["send"] * 6 + ["recv"] * 6 + ["address_send", "closed", "empty", "close", "close_reason", "new"]
+    # Sends and receives are common and a close rare, so most channels fill, drain and close with values left. With
+    # more sends than receives an unbounded channel holds dozens of values, so its ring grows.
+    names = ["send"] * sends + ["recv"] * 6 + ["address_send", "closed", "empty", "close", "close_reason", "new"]
     ops = []
     for i in range(count):
         name = rng.choice(names)
@@ -175,24 +180,30 @@ def close_operations(seed, count):
     return ops
 
 
-def test_one_channel_closed_with_a_reason_does_what_the_python_model_does(tmp_path):
-    ops = close_operations(23, 800)
-    lines = ["  " + CLOSE_STATEMENTS[name].format(a=argument) for name, argument in ops]
-    text = CLOSE_HELPERS + "def main() -> Void\n  ch: Channel[Int] = Channel.new(3)\n" + "\n".join(lines) + "\nend\n"
+@pytest.mark.parametrize("capacity, sends", [(3, 6), (None, 30)])
+def test_one_channel_closed_with_a_reason_does_what_the_python_model_does(tmp_path, capacity, sends):
+    ops = close_operations(23, 1200, sends)
+    new = new_channel(capacity)
+    lines = ["  " + CLOSE_STATEMENTS[name].format(a=argument, new=new) for name, argument in ops]
+    text = CLOSE_HELPERS + "def main() -> Void\n  ch: Channel[Int] = %s\n" % new + "\n".join(lines) + "\nend\n"
     vm = run_vm(compile_text(text, "close_ops", tmp_path), "--schedulers", "1", env=vm_environment())
     assert vm.code == 0, vm.stderr
-    expected = peer_lines(ops, 3)
+    expected = peer_lines(ops, capacity)
     assert vm.stdout.splitlines() == expected
     assert any(line.startswith("recv stream.cut reason") for line in expected)
     assert any(line.startswith("send") and "stream.cut" in line for line in expected)
 
 
+# A producer to an unbounded channel never waits, so its ring grows while the consumer takes values on another
+# scheduler.
 @pytest.mark.parametrize("schedulers", ["1", "4"])
-def test_a_producer_on_another_scheduler_gives_every_value_then_the_reason(tmp_path, schedulers):
+@pytest.mark.parametrize("capacity, most", [(2, 12), (None, 300)])
+def test_a_producer_on_another_scheduler_gives_every_value_then_the_reason(tmp_path, schedulers, capacity, most):
     rng = random.Random(29)
-    rounds = [(rng.randint(1, 12), rng.choice(["", "cut %d" % i])) for i in range(150)]
+    rounds = [(rng.randint(1, most), rng.choice(["", "cut %d" % i])) for i in range(150)]
     calls = ["  run_round(%d, \"%s\")" % (count, reason) for count, reason in rounds]
-    text = ROUND + CLOSE_HELPERS + ROUNDS + "def main() -> Void\n" + "\n".join(calls) + "\nend\n"
+    rounds_text = ROUNDS.replace("{new}", new_channel(capacity))
+    text = ROUND + CLOSE_HELPERS + rounds_text + "def main() -> Void\n" + "\n".join(calls) + "\nend\n"
     vm = run_vm(compile_text(text, "close_rounds", tmp_path), "--schedulers", schedulers, env=vm_environment())
     assert vm.code == 0, vm.stderr
     ops = []
@@ -200,4 +211,4 @@ def test_a_producer_on_another_scheduler_gives_every_value_then_the_reason(tmp_p
         ops += [["new", 0]] + [["put", n] for n in range(1, count + 1)]
         ops.append(["close_reason", reason] if reason else ["close", 0])
         ops += [["recv", 0]] * (count + 1)
-    assert vm.stdout.splitlines() == peer_lines(ops, 100)
+    assert vm.stdout.splitlines() == peer_lines(ops, None)

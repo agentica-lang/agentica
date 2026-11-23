@@ -4401,6 +4401,69 @@
     },
     {
       "program": [
+        "struct Actor",
+        "  inbox: Channel[String]",
+        "end",
+        "",
+        "def main() -> Void",
+        "  ch: Channel[Int] = Channel.new",
+        "  actor = Actor(inbox: Channel.new())",
+        "  _sent: Result[Void] = ch.send(1, 0)",
+        "  _also: Result[Void] = actor.inbox.send(\"hi\", 0)",
+        "end",
+        "",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "struct Actor",
+        "  inbox: Channel[String]",
+        "end",
+        "",
+        "def main() -> Void",
+        "  ch = Channel.new",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-EXPECTED-TYPE",
+      "start": [6, 8],
+      "help": true
+    },
+    {
+      "program": [
+        "struct Actor",
+        "  inbox: Channel[String]",
+        "end",
+        "",
+        "def main() -> Void",
+        "  n: Int = Channel.new()",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [6, 12]
+    },
+    {
+      "program": [
+        "struct Actor",
+        "  inbox: Channel[String]",
+        "end",
+        "",
+        "def main() -> Void",
+        "  ch: Channel[Int] = Channel.new(1, 2)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-ARITY",
+      "start": [6, 22]
+    },
+    {
+      "program": [
         "struct Box",
         "  inbox: Channel[Int]",
         "end",

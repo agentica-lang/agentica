@@ -203,6 +203,7 @@ end
 
 ```text
 Channel.new(capacity: Int) -> Channel[T]
+Channel.new() -> Channel[T]
 Channel.send(channel: Channel[T], value: T, timeout_ms: Int) -> Result[Void]
 Channel.recv(channel: Channel[T], timeout_ms: Int) -> Result[T]
 Channel.close(channel: Channel[T]) -> Void
@@ -214,7 +215,7 @@ Channel.address(channel: Channel[T]) -> Address[T]
 Address.send(address: Address[T], value: T, timeout_ms: Int) -> Result[Void]
 ```
 
-A channel is a bounded queue that tasks send into and receive from. All but
+A channel is a queue that tasks send into and receive from. All but
 `new` are methods too: `ch.send(v, 1000)`, `ch.recv(1000)`, `ch.close`,
 `ch.closed?`, `ch.empty?`. `Channel[T]` takes any type a variable can have
 except `Void` (`CHECK-VOID-TYPE`; use `Bool` or `Nil` for a signal), including a
@@ -223,11 +224,15 @@ shares it. It has no equality, text or JSON encoding.
 
 `Channel.new` needs an expected type (annotation, parameter, field or return
 type): `jobs: Channel[Int] = Channel.new(16)`, else `CHECK-EXPECTED-TYPE`. The
-capacity is 1 to 1048576, else `RUNTIME-INVALID-COUNT`.
+capacity is 1 to 1048576, else `RUNTIME-INVALID-COUNT`. `Channel.new` with no
+capacity is unbounded (a mailbox): a send never waits (its timeout is checked
+and unused), and memory grows while the receiver falls behind, bounded only by
+`--max-heap`. Pick a capacity when a slow receiver should slow the senders.
 
-`send` returns `ok()` once the value is in; a full channel makes the task wait
-for room, a close or the timeout. `recv` returns `ok(v)` with the oldest value;
-an empty channel makes the task wait for a value, a close or the timeout.
+`send` returns `ok()` once the value is in; a full bounded channel makes the
+task wait for room, a close or the timeout. `recv` returns `ok(v)` with the
+oldest value; an empty channel makes the task wait for a value, a close or the
+timeout.
 Errors: `error("channel: closed")` (a send to a closed channel, or a recv from a
 closed, drained one) and `error("channel: timed out")`. Values sent before
 `close` are still received after it. Every call has a timeout: 0 tries once, a

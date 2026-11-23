@@ -3,7 +3,8 @@
 Reads the operations as JSON on stdin, one [name, argument] each, and prints what the Agentica program of the same
 list prints. Every call is made with timeout 0, so a full send or an empty receive times out. A close keeps its
 reason, if any; a second close changes nothing. Receivers get the values left, then the reason (or the closed error);
-senders get the reason at once. --capacity N sets the capacity of each new channel.
+senders get the reason at once. --capacity N sets the capacity of each new channel; without it a channel is
+unbounded, and a send to it never times out.
 """
 import argparse
 import collections
@@ -27,7 +28,7 @@ class Channel:
     def send(self, value):
         if self.closed:
             return self.end()
-        if len(self.values) >= self.capacity:
+        if self.capacity is not None and len(self.values) >= self.capacity:
             return TIMED_OUT
         self.values.append(value)
         return "ok"
@@ -45,7 +46,7 @@ class Channel:
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--capacity", type=int, required=True)
+    parser.add_argument("--capacity", type=int)
     capacity = parser.parse_args().capacity
     channel = Channel(capacity)
     for name, argument in json.load(sys.stdin):
