@@ -2,7 +2,7 @@
 title: Canal
 weight: 2
 description: Envía valores de una tarea a otra por una cola.
-source_hash: "73db9375412b"
+source_hash: "cdda108c067c"
 ---
 
 Un canal es una cola, acotada o sin límite: una tarea envía valores y otra los recibe. Consulta también [Tareas](/tour/tasks/).
@@ -24,7 +24,7 @@ Channel.new() -> Channel[T]
 
 Con una capacidad, el canal guarda de 1 a 1048576 valores; si no, `RUNTIME-INVALID-COUNT`, y un canal lleno hace esperar al emisor. Sin ella, el canal no tiene límite, como `Queue.new` de Ruby (un buzón de Erlang): un envío nunca espera, y su `timeout_ms` se sigue comprobando pero nunca se usa. Necesita un tipo esperado (anotación, parámetro, campo o tipo de retorno); si no, `CHECK-EXPECTED-TYPE`.
 
-Cada valor de un canal sin límite se guarda hasta que se recibe, y su búfer crece para guardarlos y no se encoge. Crece hasta que se agota la memoria de la ejecución; con `--max-heap` ([Opciones](/cli/#options)) la ejecución se detiene entonces con `RUNTIME-HEAP-LIMIT`. Si el receptor puede quedarse atrás de los emisores, elige una capacidad: un canal lleno frena a los emisores en vez de hacer crecer la memoria.
+Un canal sin límite guarda cada valor hasta que se recibe: su búfer crece para guardarlos y nunca se encoge. Crece hasta que se agota la memoria de la ejecución; con `--max-heap` ([Opciones](/cli/#options)) la ejecución se detiene entonces con `RUNTIME-HEAP-LIMIT`. Si el receptor puede quedarse atrás, elige una capacidad: un canal lleno frena a los emisores en vez de hacerlos crecer.
 
 ```agentica {expect="CHECK-EXPECTED-TYPE"}
 def main() -> Void
@@ -180,7 +180,7 @@ net.closed: connection reset
 Channel.closed?(channel: Channel[T]) -> Bool
 ```
 
-Da `true` en cuanto el canal está cerrado, aunque aún tenga valores, igual que `Queue#closed?` de Ruby; y se queda en `true`. Un productor que está ocupado entre envíos (decodificando el siguiente token, leyendo el siguiente trozo de un archivo) lo lee para saber que el receptor cerró el canal antes de que su próximo `send` falle. Un receptor pregunta por [`closed? and empty?`](#channelempty) para saber que el flujo terminó.
+Da `true` en cuanto el canal está cerrado, aunque aún tenga valores, igual que `Queue#closed?` de Ruby; y se queda en `true`. Un productor que está ocupado entre envíos (decodificando el siguiente token, leyendo el siguiente trozo de un archivo) lo lee para saber que el receptor cerró el canal antes de que su próximo `send` falle.
 
 ```agentica
 def main() -> Void
