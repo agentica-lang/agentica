@@ -2,7 +2,7 @@
 title: Canal
 weight: 2
 description: Envía valores de una tarea a otra por una cola.
-source_hash: "ea6208418f56"
+source_hash: "cdda108c067c"
 ---
 
 Un canal es una cola, acotada o sin límite: una tarea envía valores y otra los recibe. Consulta también [Tareas](/tour/tasks/).
@@ -24,7 +24,7 @@ Channel.new() -> Channel[T]
 
 Con una capacidad, el canal guarda de 1 a 1048576 valores; si no, `RUNTIME-INVALID-COUNT`, y un canal lleno hace esperar al emisor. Sin ella, el canal no tiene límite, como `Queue.new` de Ruby (un buzón de Erlang): un envío nunca espera, y su `timeout_ms` se sigue comprobando pero nunca se usa. Necesita un tipo esperado (anotación, parámetro, campo o tipo de retorno); si no, `CHECK-EXPECTED-TYPE`.
 
-Un canal sin límite guarda cada valor hasta que se recibe: su búfer crece para guardarlos y nunca se encoge. Cuando se agota la memoria de la ejecución, con `--max-heap` ([Opciones](/cli/#options)) la ejecución se detiene con `RUNTIME-HEAP-LIMIT`. Si el receptor puede quedarse atrás, elige una capacidad: un canal lleno frena a los emisores en vez de hacerlos crecer.
+Un canal sin límite guarda cada valor hasta que se recibe: su búfer crece para guardarlos y nunca se encoge. Crece hasta que se agota la memoria de la ejecución; con `--max-heap` ([Opciones](/cli/#options)) la ejecución se detiene entonces con `RUNTIME-HEAP-LIMIT`. Si el receptor puede quedarse atrás, elige una capacidad: un canal lleno frena a los emisores en vez de hacerlos crecer.
 
 ```agentica {expect="CHECK-EXPECTED-TYPE"}
 def main() -> Void
