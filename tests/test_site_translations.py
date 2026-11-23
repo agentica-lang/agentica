@@ -203,7 +203,6 @@ def test_a_stale_page_warns_and_strict_fails(tmp_path, capsys):
     assert run(capsys, tmp_path, "status")[1].splitlines()[0] == "English pages: 1; Spanish pages: 1; stale: 1"
 
 
-@pytest.mark.parametrize("digest", ["123456789012", "12e4567890ab"])
 def test_a_stale_page_skips_the_structure_checks_and_a_fresh_one_does_not(tmp_path, capsys):
     broken = SPANISH.replace("`x`", "`y`").replace("- dos\n", "")
     en, es = write_pages(tmp_path, spanish=broken)
@@ -223,6 +222,7 @@ def test_a_stale_page_still_checks_its_front_matter(tmp_path, capsys):
     assert code == 1 and codes(out) == {"front-matter"}, out
 
 
+@pytest.mark.parametrize("digest", ["123456789012", "12e4567890ab"])
 def test_stamp_writes_a_quoted_hash_that_is_read_back_as_a_string(tmp_path, capsys, monkeypatch, digest):
     en, es = write_pages(tmp_path, spanish=SPANISH.replace('source_hash: "{hash}"\n', ""))
     monkeypatch.setattr(tool, "digest", lambda path: digest)
