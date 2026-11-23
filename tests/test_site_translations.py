@@ -204,6 +204,25 @@ def test_a_stale_page_warns_and_strict_fails(tmp_path, capsys):
 
 
 @pytest.mark.parametrize("digest", ["123456789012", "12e4567890ab"])
+def test_a_stale_page_skips_the_structure_checks_and_a_fresh_one_does_not(tmp_path, capsys):
+    broken = SPANISH.replace("`x`", "`y`").replace("- dos\n", "")
+    en, es = write_pages(tmp_path, spanish=broken)
+    code, out = run(capsys, tmp_path, "check")
+    assert code == 1 and codes(out) == {"span", "shape"}, out
+    en.write_text(newer(), encoding="utf-8")
+    code, out = run(capsys, tmp_path, "check")
+    assert code == 0 and codes(out, "warning") == {"stale"} and codes(out) == set(), out
+    code, out = run(capsys, tmp_path, "check", "--strict")
+    assert code == 1 and codes(out) == {"stale"}, out
+
+
+def test_a_stale_page_still_checks_its_front_matter(tmp_path, capsys):
+    en, _ = write_pages(tmp_path, spanish=SPANISH.replace("weight: 2", "weight: 2\ndraft: false"))
+    en.write_text(newer(), encoding="utf-8")
+    code, out = run(capsys, tmp_path, "check")
+    assert code == 1 and codes(out) == {"front-matter"}, out
+
+
 def test_stamp_writes_a_quoted_hash_that_is_read_back_as_a_string(tmp_path, capsys, monkeypatch, digest):
     en, es = write_pages(tmp_path, spanish=SPANISH.replace('source_hash: "{hash}"\n', ""))
     monkeypatch.setattr(tool, "digest", lambda path: digest)

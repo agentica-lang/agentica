@@ -79,7 +79,9 @@ goes into English first. The rules, the glossary and the workflow are in
   a Spanish page with no English page). A stale page is a warning, which
   `check --strict` turns into a failure.
 - A page is stale when its English file changed after its `source_hash` was
-  stamped. Its readers see a note that links to the English page.
+  stamped. Its readers see a note that links to the English page. A stale
+  page skips the structure checks against the English page (only its front
+  matter is checked) until it is updated and stamped.
 - `pages.yml` runs `check --built` on the built site: the note must be on
   exactly the stale pages.
 - `stamp FILE...` writes the hash of the English file into the Spanish page's

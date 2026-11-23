@@ -177,7 +177,9 @@ def is_stale(root: Path, es_path: Path) -> bool:
 
 
 def check_page(root: Path, es_path: Path) -> tuple[list[tuple[str, str]], list[tuple[str, str]], bool]:
-    """The (code, message) errors and warnings of one Spanish page, and whether the page is stale."""
+    """The (code, message) errors and warnings of one Spanish page, and whether the page is stale.
+
+    A stale page keeps the front matter checks; the body is compared with the English page only when it is fresh."""
     en_path = english_of(root, es_path)
     if not en_path.is_file():
         return [("orphan", f"no English page {en_path.relative_to(root)}")], [], False
@@ -200,6 +202,9 @@ def check_page(root: Path, es_path: Path) -> tuple[list[tuple[str, str]], list[t
     for key in COPIED:
         if plain(en_vals.get(key, "")) != plain(es_vals.get(key, "")):
             errors.append(("front-matter", f"{key} differs from the English page"))
+    stale = is_stale(root, es_path)
+    if stale:
+        return errors, warnings, True
     en, es = scan(en_body), scan(es_body)
     if en.code != es.code:
         errors.append(("code", "the fenced code blocks differ from the English page (info string included)"))
@@ -221,7 +226,7 @@ def check_page(root: Path, es_path: Path) -> tuple[list[tuple[str, str]], list[t
         errors.append(("shape", "the paragraphs, list items or table rows differ in count from the English page"))
     elif en.paragraphs != es.paragraphs:
         warnings.append(("lines", "a paragraph has another number of lines than the English page"))
-    return errors, warnings, is_stale(root, es_path)
+    return errors, warnings, False
 
 
 def spanish_pages(root: Path) -> list[Path]:
