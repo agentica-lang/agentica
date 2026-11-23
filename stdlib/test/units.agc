@@ -5,6 +5,9 @@
 import Report from "report"
 import Child from "child"
 
+## The steps for each test when `--max-steps` is not given, and the steps of the child that lists the tests.
+DEFAULT_STEPS = 1_000_000
+
 ## The options of a run: the path of the binary (started as `run ...` for each test file), the seed, the `--only` text,
 ## the timeout of each test in milliseconds, the `--source-root` of the file's bytecode ("" for none), so a trace
 ## names the file as the report does, and the user's `--deny-*` flags and `--sandbox`, which the file's VMs get.
@@ -49,9 +52,6 @@ end
 
 private
 
-# The steps of the child that lists the tests, whatever --max-steps says.
-LISTING_STEPS = 1_000_000
-
 struct UnitTest
   index: Int
   name: String
@@ -88,7 +88,7 @@ end
 
 def list(settings: Settings, path: String, bytecode: String) -> Listed
   where = Report.Span(file: path, line: 1, column: 1, end_column: 1)
-  spawned = Process.spawn_channel(settings.vm, args(settings, path, bytecode, LISTING_STEPS, "list"))
+  spawned = Process.spawn_channel(settings.vm, args(settings, path, bytecode, DEFAULT_STEPS, "list"))
   return broken(Report.error_at("RUNTIME-BDD-INFRA", spawned.message, where), "") if not spawned.ok?
   p = spawned.unwrap!
   _ = Process.close_stdin(p, 5000)

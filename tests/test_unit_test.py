@@ -330,21 +330,36 @@ class UnitTest(TestCase):
         for path in ("test", "specs"):
             for extra in ([], ["--isolate"]):
                 with self.subTest(path=path, extra=extra):
-                    _status, report = self.json_test(path, *extra, cwd=directory)
-                    self.assertEqual([field(item, "code") for item in report_cases(report)], ["RUNTIME-STEP-LIMIT"])
-                    _status, tight = self.json_test(path, "--max-steps", "100000", *extra, cwd=directory)
-                    self.assertEqual([field(item, "code") for item in report_cases(tight)], ["RUNTIME-STEP-LIMIT"])
-                    for value in ("5000000", "unlimited"):
+                    # The default is 1,000,000: naming it changes nothing, and a smaller number fails the same way.
+                    for value in (None, "1000000", "100000"):
+                        arguments = [] if value is None else ["--max-steps", value]
+                        _status, report = self.json_test(path, *arguments, *extra, cwd=directory)
+                        self.assertEqual([field(item, "code") for item in report_cases(report)],
+                                         ["RUNTIME-STEP-LIMIT"], value)
+                    for value in ("5000000", "0005000000", "unlimited"):
                         status, roomy = self.json_test(path, "--max-steps", value, *extra, cwd=directory)
                         self.assertEqual((status, statuses(roomy)), (0, ["passed"]), value)
-        # In front of `test` a number means the same.
+        # In front of `test` a number or `unlimited` means the same.
         for path in ("test", "specs"):
-            result = self.agentica_test("--json", path, cwd=directory, flags=["--max-steps", "5000000"])
-            self.assertEqual((result.code, result.json()["passed"]), (0, 1))
+            for value in ("5000000", "0005000000", "unlimited"):
+                result = self.agentica_test("--json", path, cwd=directory, flags=["--max-steps", value])
+                self.assertEqual((result.code, result.json()["passed"]), (0, 1), value)
+
+    def test_max_steps_counts_the_tests_a_file_runs_so_only_lowers_the_budget(self):
+        directory = self.heavy_project()
+        test = directory / "test" / "heavy_test.agc"
+        test.write_text(test.read_text(encoding="utf-8").replace(
+            "Test.run([", 'Test.run([Test.test("light") do Test.eq(1, 1) end, Test.test("light 2") do Test.eq(2, 2) end, '),
+            encoding="utf-8")
+        # 3 tests + 1 give the file 4 times N; only `heavy` runs with --only, which leaves 2 times N.
+        _status, whole = self.json_test("test", "--max-steps", "1500000", cwd=directory)
+        self.assertEqual(statuses(whole), ["passed", "passed", "passed"])
+        _status, alone = self.json_test("test", "--max-steps", "1500000", "--only", "heavy", cwd=directory)
+        self.assertEqual([field(item, "code") for item in report_cases(alone)], ["RUNTIME-STEP-LIMIT"])
 
     def test_max_steps_takes_a_positive_integer_or_unlimited_once(self):
         directory = self.heavy_project()
-        for value in ("0", "-1", "abc", "1e5", "", "1000000000001"):
+        for value in ("0", "00", "-1", "+5", "abc", "1e5", "", "1000000000001"):
             with self.subTest(value=value):
                 status, report = self.json_test("test", "--max-steps", value, cwd=directory)
                 self.assertEqual((status, file_codes(report)), (2, [("", "RUNTIME-BDD-USAGE")]))
@@ -352,10 +367,15 @@ class UnitTest(TestCase):
         self.assertEqual((status, file_codes(report)), (2, [("", "RUNTIME-BDD-USAGE")]))
         status, report = self.json_test("test", "--max-steps", cwd=directory)
         self.assertEqual((status, file_codes(report)), (2, [("", "RUNTIME-BDD-USAGE")]))
-        # The option in front of `test` is the one of `run`: a number only, whatever follows it.
-        for value in ("0", "unlimited"):
-            result = self.agentica_test("test", cwd=directory, flags=["--max-steps", value])
-            self.assertEqual((result.code, result.stderr), (2, "agentica: --max-steps needs a positive integer\n"))
+        # In front of `test` the option has the same values.
+        for value in ("0", "+5", "abc", "1000000000001"):
+            with self.subTest(front=value):
+                result = self.agentica_test("test", cwd=directory, flags=["--max-steps", value])
+                self.assertEqual((result.code, result.stdout, "--max-steps" in result.stderr), (2, "", True))
+        # `unlimited` in front of a command that does not run a program is refused as a bad number is.
+        result = run(cli() + ["--max-steps", "unlimited", "check", "test/heavy_test.agc"], cwd=directory,
+                     env=vm_environment(None))
+        self.assertEqual((result.code, result.stdout, "--max-steps" in result.stderr), (2, "", True))
 
     def test_the_std_unit_tests_pass(self):
         status, report = self.json_test(STD_TESTS)

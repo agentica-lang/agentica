@@ -88,9 +88,8 @@ end
 
 private
 
-# The steps for each test when --max-steps is not given, and the largest step budget.
-DEFAULT_STEPS = 1_000_000
-MAX_BUDGET = 9_223_372_036_854_775_807
+# The budget of no limit: 2^62, so that the steps another scheduler gives back cannot wrap it.
+MAX_BUDGET = 4_611_686_018_427_387_904
 
 struct Config
   # The binary, started as `run ...` for the step program and for each scenario.
@@ -233,12 +232,12 @@ end
 def steps_per_test(config: Config) -> Int
   case config.max_steps
     JSON.Field.Value(steps) -> steps
-    _ -> DEFAULT_STEPS
+    _ -> Units.DEFAULT_STEPS
   end
 end
 
 # The budget of a scenario of `count` steps: each step and the start of the scenario get the steps for a test. No limit
-# is the largest budget, which a worker or a child started without --max-steps takes as it is.
+# is a budget that no test spends, which a worker or a child started without --max-steps takes as it is.
 def scenario_steps(config: Config, count: Int) -> Int
   steps = steps_per_test(config)
   return MAX_BUDGET if steps == 0
@@ -600,7 +599,7 @@ end
 
 # The list child sends the patterns of BDD.run in order on its channel and exits, so the channel is read until it ends.
 def list_steps(config: Config, where: Report.Span) -> Listing
-  spawned = Process.spawn_channel(config.vm, vm_args(config, DEFAULT_STEPS, "list", ""))
+  spawned = Process.spawn_channel(config.vm, vm_args(config, Units.DEFAULT_STEPS, "list", ""))
   return Listing.Broken(Report.error_at("RUNTIME-BDD-INFRA", spawned.message, where)) if not spawned.ok?
   p = spawned.unwrap!
   _ = Process.close_stdin(p, 5000)

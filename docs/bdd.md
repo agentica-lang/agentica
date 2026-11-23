@@ -19,7 +19,7 @@ dist/agentica --ai test tests/bdd/specs/json-lines.feature
 `agentica test` builds and installs nothing.
 
 ```text
-agentica [--ai|--json] [--seed N] test [PATH...] [--steps FILE] [--only TEXT] [--tags EXPR] [--jobs N] [--timing] [--coverage]
+agentica [--ai|--json] [--seed N] test [PATH...] [--steps FILE] [--only TEXT] [--tags EXPR] [--jobs N] [--max-steps N|unlimited] [--timing] [--coverage]
 ```
 
 - **Discovery.** With no paths, `specs/` and `test/` are searched; a missing
@@ -356,9 +356,10 @@ runs.
   worker's start included); it is the only bound on the CPU and memory of a
   program under test.
   Program-driving calls without a timeout get 5 seconds, and starting a program
-  gets 30. A scenario has 1,000,000 steps per step plus 1,000,000 (`steps` of
-  the settings line), set when it starts, in a worker as in a child, so its
-  verdict does not depend on the scenarios before it; that budget also pays for
+  gets 30. A scenario has N steps per step plus N (`steps` of
+  the settings line; N is 1,000,000, or `--max-steps N|unlimited`), set when it
+  starts, in a worker as in a child, so its verdict does not depend on the
+  scenarios before it; that budget also pays for
   `std/bdd`'s own work. Builtins cost steps per call, not per byte. Unread
   stdout and stderr are each kept up to 1 MiB, checked after every step.
   Handler output is limited to 1 MiB per step.
@@ -425,7 +426,7 @@ agentica test [PATH...] [--steps FILE]
   spawned in `std/bdd.agc`; the runner reads it as the scenario's crash
   (`scenario_crash` in `stdlib/test/child.agc`) and the worker exits 1. The
   list child runs with `list`, a 30-second limit and `--max-steps` of
-  1,000,000.
+  1,000,000 (`--max-steps` of `agentica test` does not change it).
 - **Protocol.** One JSON record per line, on the child channel: a pipe per
   direction of its own, opened by `Process.spawn_channel` and found by the
   child on descriptors 3 and 4 (`docs/vm/10-io-processes.md` §10.4). A record

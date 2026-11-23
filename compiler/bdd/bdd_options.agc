@@ -9,6 +9,7 @@
 ## `--json`, `--ai`, `--no-cache`, the `--deny-*` flags and `--sandbox` (cli.agc adds the ones in front of `test`).
 
 import Tags from "std/bdd/tags"
+import CliOptions from "../app/cli_options"
 
 ## Everything a run needs.
 struct Options
@@ -89,9 +90,6 @@ private
 # The most test files that run at once: the `limit` of `Task.map` takes 1 to 1024.
 MAX_JOBS = 1024
 
-# The most --max-steps takes: a file's budget is that number times its tests, which stays far from the 64-bit limit.
-MAX_STEPS = 1_000_000_000_000
-
 # The flags that the VMs of the user's code get (the test files, the step program and the programs it starts), never
 # the runner. A flag given twice counts once.
 DENY = Set.new(["--deny-run", "--deny-net", "--deny-fs", "--deny-env", "--deny-native", "--sandbox"])
@@ -108,15 +106,6 @@ def option(options: Options, name: String, value: String) -> Options
     "--test-timeout-ms" -> options.with(test_timeout_ms: value.to_i.unwrap_or(options.test_timeout_ms))
     _ -> options
   end
-end
-
-# The steps of a --max-steps value: the number, 0 for `unlimited`, or -1 when it is neither.
-def max_steps(value: String) -> Int
-  return 0 if value == "unlimited"
-  parsed = value.to_i
-  return -1 if !parsed.ok? or parsed.unwrap!.to_s != value or parsed.unwrap! < 1 or parsed.unwrap! > MAX_STEPS
-
-  parsed.unwrap!
 end
 
 # The words of the user. The last --json or --ai decides the style of every report, usage errors included, so they are
@@ -167,9 +156,9 @@ def user_arguments(options: Options, words: List[String]) -> Parsed
       elsif word == "--max-steps"
         return Parsed.Usage("one --max-steps N", shown) if steps_seen
 
-        limit = max_steps(value)
+        limit = CliOptions.steps_of(value)
         if limit < 0
-          return Parsed.Usage("--max-steps needs a positive integer up to #{MAX_STEPS}, or unlimited", shown)
+          return Parsed.Usage("--max-steps needs a positive integer up to 1000000000000, or unlimited", shown)
         end
 
         steps_seen = true
