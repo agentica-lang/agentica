@@ -238,7 +238,7 @@ ROWS: List[Model.Builtin] = [
     implementation: "",
     effects: [],
     description: (
-      "Group elements by an Int, String or Bytes key; keys in order of first appearance, elements in " +
+      "Group elements by an Int, String, Bytes or Ref key; keys in order of first appearance, elements in " +
       "order; O(n)."
     ),
     alternatives: [],
@@ -435,7 +435,7 @@ ROWS: List[Model.Builtin] = [
     rule: Model.Rule.ListSort,
     implementation: "List.sort",
     effects: [],
-    description: "Stable ascending sort of Int, Float or String; NaN goes last; O(n log n).",
+    description: "Stable ascending sort of Int, Float, String or Ref; NaN goes last; O(n log n).",
     alternatives: [],
   ),
   Model.Builtin(
@@ -448,7 +448,7 @@ ROWS: List[Model.Builtin] = [
     rule: Model.Rule.ListSortBy,
     implementation: "List.sort_by",
     effects: [],
-    description: "Stable ascending sort by an Int, Float or String key; one key call per element.",
+    description: "Stable ascending sort by an Int, Float, String or Ref key; one key call per element.",
     alternatives: [],
   ),
   Model.Builtin(
@@ -494,7 +494,7 @@ ROWS: List[Model.Builtin] = [
     rule: Model.Rule.Prelude,
     implementation: "",
     effects: [],
-    description: "Count equal Int, String or Bytes elements; keys in order of first appearance; O(n).",
+    description: "Count equal Int, String, Bytes or Ref elements; keys in order of first appearance; O(n).",
     alternatives: [],
   ),
   Model.Builtin(
@@ -504,7 +504,7 @@ ROWS: List[Model.Builtin] = [
     rule: Model.Rule.Prelude,
     implementation: "",
     effects: [],
-    description: "Drop repeated Int, String or Bytes elements, keeping the first of each; O(n).",
+    description: "Drop repeated Int, String, Bytes or Ref elements, keeping the first of each; O(n).",
     alternatives: [],
   ),
   Model.Builtin(

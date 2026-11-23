@@ -14,10 +14,10 @@ programs are valid and how they run.
 - `Nil`: A single data value, `nil`
 - `Void`: Completion without a usable value; no literal
 - `List[T]`: Homogeneous, immutable list; `Int` indexes from zero
-- `Map[K, V]`: Homogeneous, immutable map; the key `K` is `Int`, `String` or
-  `Bytes`; keeps insertion order
-- `Set[T]`: Immutable set of distinct `Int`, `String` or `Bytes` values; keeps
-  first-insertion order
+- `Map[K, V]`: Homogeneous, immutable map; the key `K` is `Int`, `String`,
+  `Bytes` or `Ref`; keeps insertion order
+- `Set[T]`: Immutable set of distinct `Int`, `String`, `Bytes` or `Ref` values;
+  keeps first-insertion order
 - `Result[T]`: `ok(value)`, or `error(...)` holding an `Error`
 - `Error`: Builtin record of a failed Result: `kind: String`, `message:
   String`, `code: Optional[Int]`, `details: Map[String, String]`, `cause:
@@ -51,6 +51,10 @@ programs are valid and how they run.
   is data, not a handle. `Address` is not reserved: written with one type
   argument it is this builtin, so a program may still declare its own
   `struct Address`, but not a generic one (section 6c)
+- `Ref`: Opaque token from `Ref.make`, equal only to itself and unique in the
+  run; data, a `Map` key and a `Set` element, sorted by `sort` and `sort_by` in
+  the order the Refs were made. `Ref` is not reserved: in a file that declares
+  or imports a type `Ref`, the name means that type
 - `Enum[T, ...]`: User-declared nominal sum type
 - Declared struct: Nominal type with typed, immutable fields
 
@@ -819,8 +823,8 @@ page](../../site/content/library/data-structures/bytes.md). The language fixes:
 
 ### Maps
 
-`Map[K, V]` has exactly two type arguments: `K` is `Int`, `String` or `Bytes`,
-and `V` is any type.
+`Map[K, V]` has exactly two type arguments: `K` is `Int`, `String`, `Bytes` or
+`Ref`, and `V` is any type.
 
 ```ruby
 stock: Map[String, Int] = {"apple": 3, "pear": 0}
@@ -840,9 +844,9 @@ more = Map.put(stock, "kiwi", 7)
 
 ### Sets
 
-`Set[T]` has one type argument, `Int`, `String` or `Bytes`, like a `Map` key:
-any other element type is `CHECK-SET-ELEMENT-TYPE`. A set holds each value once
-and keeps the order of first insertion. Its functions are in the
+`Set[T]` has one type argument, `Int`, `String`, `Bytes` or `Ref`, like a `Map`
+key: any other element type is `CHECK-SET-ELEMENT-TYPE`. A set holds each value
+once and keeps the order of first insertion. Its functions are in the
 [`Set` page](../../site/content/library/data-structures/set.md).
 
 ```ruby

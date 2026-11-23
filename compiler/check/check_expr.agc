@@ -610,7 +610,7 @@ def check_map(cx: State.Cx, st: State.St, node: Ast.MapLit, expected: T.Type) ->
         cx,
         key.st,
         "CHECK-MAP-KEY-TYPE",
-        "a Map key must be Int, String or Bytes, found #{T.to_text(key.type)}",
+        "a Map key must be Int, String, Bytes or Ref, found #{T.to_text(key.type)}",
         Ast.expr_span(first.key),
       ),
     )
@@ -955,6 +955,8 @@ def comparison_type(cx: State.Cx, sides: Sides, node: Ast.Binary) -> Result[T.Ty
     help = ""
     if T.is?(sides.left, "String")
       help = "< <= > >= only take Int or Float; compare Strings with == and !=, or order a List[String] with xs.sort"
+    elsif CheckTypes.ref?(sides.left)
+      help = "< <= > >= only take Int or Float; order Refs by when they were made with xs.sort or xs.sort_by"
     end
 
     return error(type_error(cx, sides, node, "comparison expects two numbers, found #{T.to_text(sides.left)}", help))

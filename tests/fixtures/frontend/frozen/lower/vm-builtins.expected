@@ -316,6 +316,7 @@ Range.include?
 Range.last
 Range.size
 Range.to_a
+Ref.make
 RegexEngine.search
 Result.message
 Result.ok?

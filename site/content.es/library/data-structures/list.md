@@ -2,7 +2,7 @@
 title: Lista
 weight: 1
 description: Funciones de List[T]. Cada una es también un método de las listas.
-source_hash: "eb1f74d95df3"
+source_hash: "6e217cba78cf"
 ---
 
 Las listas son inmutables: cada función da una lista nueva. `xs.length` es `xs.size`, `push` es `append`, `select` es `filter`.
@@ -92,7 +92,7 @@ end
 List.sort(list: List[T]) -> List[T]
 ```
 
-Ordena valores `Int`, `Float` o `String`, de menor a mayor; cualquier otro tipo de elemento es `CHECK-TYPE-MISMATCH`. El orden es estable y O(n log n). Las cadenas se ordenan por punto de código, así que `"B"` va antes que `"a"`, y un `NaN` va al final.
+Ordena valores `Int`, `Float`, `String` o `Ref`, de menor a mayor (un `Ref` según cuándo se creó); cualquier otro tipo de elemento es `CHECK-TYPE-MISMATCH`. El orden es estable y O(n log n). Las cadenas se ordenan por punto de código, así que `"B"` va antes que `"a"`, y un `NaN` va al final.
 
 ```agentica
 def main() -> Void
@@ -112,7 +112,7 @@ end
 List.sort_by(list: List[A], key: Fn[A, K]) -> List[A]
 ```
 
-Ordena de forma ascendente por la clave que da la función (un `Int`, `Float` o `String`; otro tipo de clave es `CHECK-TYPE-MISMATCH`). La función se ejecuta una vez por elemento, de izquierda a derecha. Las claves iguales conservan su orden, y el costo es O(n log n) más las llamadas a la función de clave.
+Ordena de forma ascendente por la clave que da la función (un `Int`, `Float`, `String` o `Ref`; otro tipo de clave es `CHECK-TYPE-MISMATCH`). La función se ejecuta una vez por elemento, de izquierda a derecha. Las claves iguales conservan su orden, y el costo es O(n log n) más las llamadas a la función de clave.
 
 ```agentica
 def main() -> Void
@@ -342,7 +342,7 @@ end
 List.group_by(list: List[A], key: Fn[A, K]) -> Map[K, List[A]]
 ```
 
-Agrupa por la clave (un `Int`, un `String` o un `Bytes`; otro tipo de clave es `CHECK-TYPE-MISMATCH` en el bloque). Las claves y los grupos conservan el orden de primera aparición.
+Agrupa por la clave (un `Int`, un `String`, un `Bytes` o un `Ref`; otro tipo de clave es `CHECK-TYPE-MISMATCH` en el bloque). Las claves y los grupos conservan el orden de primera aparición.
 
 ```agentica
 def main() -> Void
@@ -362,7 +362,7 @@ List.tally(list: List[K]) -> Map[K, Int]
 List.uniq(list: List[K]) -> List[K]
 ```
 
-`tally` cuenta los elementos iguales; `uniq` conserva el primero de cada uno. Los elementos son `Int`, `String` o `Bytes`, en orden de primera aparición.
+`tally` cuenta los elementos iguales; `uniq` conserva el primero de cada uno. Los elementos son `Int`, `String`, `Bytes` o `Ref`, en orden de primera aparición.
 
 ```agentica
 def main() -> Void

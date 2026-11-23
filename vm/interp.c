@@ -76,7 +76,7 @@
     (dst) = agc_fn_value(f_);                                                        \
   } while (0)
 
-typedef enum { SORT_INT, SORT_FLOAT, SORT_TEXT } sort_kind;
+typedef enum { SORT_INT, SORT_FLOAT, SORT_TEXT, SORT_REF } sort_kind;
 
 /* The result of one run_compiled call: no code ran, the turn yields or parks/done, an unsupported instruction is left
    for the opcode switch, or the new top frame (after a CALL, TAIL_CALL, CALL_VALUE or RETURN exit, or an exit from a
@@ -270,6 +270,7 @@ void agc_vm_init(agc_vm *vm, const agc_program *program, FILE *out, FILE *err, i
     rt->chars[c] = agc_make_string(&ch, 1, 1);
   }
   atomic_init(&rt->next_task_id, 1);
+  atomic_init(&rt->next_ref, 1);
   rt->runq = agc_runq_new();
   rt->sync = agc_lock_new("sync");
   rt->out.lock = agc_lock_new("stdout");
@@ -660,6 +661,8 @@ static sort_entry *sort_entries(agc_vm *vm, const agc_list *keys, size_t n, sort
     entries[k].item = carry ? agc_value_word(key) : k;
     if (kind == SORT_INT)
       entries[k].key = int_order(agc_as_int(vm, key));
+    else if (kind == SORT_REF)
+      entries[k].key = agc_as_ref(vm, key);
     else if (kind == SORT_FLOAT)
       entries[k].key = float_order(agc_as_float(vm, key));
     else
@@ -703,7 +706,10 @@ agc_value agc_sort_by_keys(agc_vm *vm, const agc_list *items, const agc_list *ke
   for (size_t width = 1; width < n; width *= 2) rounds++;
   agc_charge(vm, (uint64_t)n * rounds);
   agc_value first = agc_list_get(keys, 0);
-  sort_kind kind = agc_is(first, AGC_T_STRING) ? SORT_TEXT : agc_is(first, AGC_T_FLOAT) ? SORT_FLOAT : SORT_INT;
+  sort_kind kind = agc_is(first, AGC_T_STRING)  ? SORT_TEXT
+                   : agc_is(first, AGC_T_FLOAT) ? SORT_FLOAT
+                   : agc_is(first, AGC_T_REF)   ? SORT_REF
+                                                : SORT_INT;
   bool carry = items == keys && agc_list_kind(items);
   sort_entry *entries = sort_entries(vm, keys, n, kind, carry);
   int direction = sort_direction(kind, entries, n);
@@ -1856,7 +1862,7 @@ __attribute__((noinline, cold)) _Noreturn void agc_no_match(agc_vm *vm, agc_valu
 agc_status agc_op_map(agc_vm *vm, agc_value *dst, const agc_value *pairs, uint32_t count) {
   for (size_t k = 0; k < count; k++) {
     agc_value key = pairs[2 * k];
-    if (!agc_is(key, AGC_T_INT) && !agc_is(key, AGC_T_STRING) && !agc_is(key, AGC_T_BYTES)) return AGC_STATUS_WRONG_TAG;
+    if (!agc_key_tag(key)) return AGC_STATUS_WRONG_TAG;
   }
   OP_MAP(*dst, vm, pairs, 0, count);
   return AGC_STATUS_OK;
@@ -1904,8 +1910,7 @@ void agc_call_rule_check(const agc_vm *vm, const agc_call_rule *was, const agc_b
 }
 
 agc_status agc_op_map_get(agc_vm *vm, agc_value *dst, const agc_value *map, const agc_value *key) {
-  if (!agc_is(*map, AGC_T_MAP) || !(agc_is(*key, AGC_T_INT) || agc_is(*key, AGC_T_STRING) || agc_is(*key, AGC_T_BYTES)))
-    return AGC_STATUS_WRONG_TAG;
+  if (!agc_is(*map, AGC_T_MAP) || !agc_key_tag(*key)) return AGC_STATUS_WRONG_TAG;
   agc_value found;
   if (!OP_MAP_GET(vm, *map, *key, found)) return AGC_STATUS_KEY_NOT_FOUND;
   *dst = found;

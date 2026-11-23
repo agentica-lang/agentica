@@ -124,6 +124,14 @@ static agc_value builtin_program_name(agc_vm *vm, agc_value *args, uint32_t span
   return agc_is(name, AGC_T_STRING) ? name : agc_string_value(vm->rt->empty_string);
 }
 
+/* Ref.make: one atomic add, so Refs made by any scheduler thread differ, and a Ref made after another (in the order
+   that tasks see) has a larger number. */
+static agc_value builtin_ref_make(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)args;
+  (void)span;
+  return agc_ref(atomic_fetch_add_explicit(&vm->rt->next_ref, 1, memory_order_relaxed));
+}
+
 static agc_value builtin_exit(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   agc_exit(vm, agc_as_int(vm, args[0]));
@@ -542,6 +550,7 @@ const agc_builtin agc_core_builtins[] = {
   {"IO.eof?", 0, builtin_eof, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false, true},
   {"System.args", 0, builtin_args, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false, false},
   {"System.program_name", 0, builtin_program_name, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false, false},
+  {"Ref.make", 0, builtin_ref_make, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
   {"System.exit", 1, builtin_exit, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false, false},
   {"String.from_int", 1, builtin_from_int, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},
   {"String.from_float", 1, builtin_from_float, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false, false},

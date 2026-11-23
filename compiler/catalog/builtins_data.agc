@@ -359,10 +359,10 @@ ENUMS: List[Model.EnumDef] = [
 HANDLE_TYPES: List[String] = ["TCP.Socket", "TCP.Listener", "HttpWire.Server", "File.Handle", "Process"]
 
 ## The builtin types with no structure: handles, Test.Case, TLS.Context, C.Pointer (a C pointer of native code),
-## TaskRef (the running task, from Task.current) and Native.Mutex (the lock of a native library).
+## TaskRef (the running task, from Task.current), Native.Mutex (the lock of a native library) and Ref (Ref.make).
 OPAQUE_TYPES: List[String] = [
   "TCP.Socket", "TCP.Listener", "HttpWire.Client", "HttpWire.Server", "File.Handle", "Process", "Test.Case",
-  "TLS.Context", "C.Pointer", "TaskRef", "Native.Mutex", "Bytes.Builder",
+  "TLS.Context", "C.Pointer", "TaskRef", "Native.Mutex", "Bytes.Builder", "Ref",
 ]
 
 TYPE_DESCRIPTIONS: Map[String, String] = {
@@ -380,6 +380,7 @@ TYPE_DESCRIPTIONS: Map[String, String] = {
   "Process": "A program started by Process.spawn, spawn_captured, spawn_channel or spawn_group.",
   "Process.Options": "The options of Process.spawn, spawn_captured and spawn_channel; give only the fields you need.",
   "Process.Output": "What Process.output returns: the unread stdout, all stderr and whether output was dropped.",
+  "Ref": "A token unique in the run, from Ref.make: equal only to itself, a Map key or a Set element.",
   "StructMember": "A member of a struct as T.codec lists it: its name and its type as written.",
   "System.Signal": "A signal of the operating system, which System.subscribe delivers on a channel.",
   "TCP.Listener": "A listening TCP socket, from TCP.listen or TLS.listen; TCP.accept takes its connections.",

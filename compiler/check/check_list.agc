@@ -41,17 +41,16 @@ end
 
 private
 
-# List.sort: a list of Int, Float or String.
+# List.sort: a list of Int, Float, String or Ref.
 def check_sort(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
   target = try Args.list_argument(cx, st, site, T.only_list(site.expected))
-  element = T.item(target.type)
-  if !T.is?(element, "Int") and !T.is?(element, "Float") and !T.is?(element, "String")
+  if !sort_key?(T.item(target.type))
     return error(
       State.fail(
         cx,
         target.st,
         "CHECK-TYPE-MISMATCH",
-        "List.sort needs List[Int], List[Float] or List[String], found #{T.to_text(target.type)}",
+        "List.sort needs List[Int], List[Float], List[String] or List[Ref], found #{T.to_text(target.type)}",
         Ast.expr_span(site.args[0]),
       ),
     )
@@ -83,18 +82,22 @@ def sort_by_function(cx: State.Cx, st: State.St, site: State.Site, callback: Ast
   Args.list_argument(cx, key.st, site, T.Type.List(T.params(key.type)[0]))
 end
 
-# The key function takes one parameter and gives an Int, a Float or a String.
+# The key function takes one parameter and gives an Int, a Float, a String or a Ref.
 def check_sort_key(cx: State.Cx, st: State.St, callback: T.Type, span: Source.Span) -> Result[Bool]
   if !T.is?(callback, "Fn") or T.params(callback).size != 1
     return error(State.fail(cx, st, "CHECK-TYPE-MISMATCH", "sort_by requires a key function with one parameter", span))
   end
 
-  key = T.result(callback)
-  if !T.is?(key, "Int") and !T.is?(key, "Float") and !T.is?(key, "String")
-    return error(State.fail(cx, st, "CHECK-TYPE-MISMATCH", "sort_by keys must be Int, Float or String", span))
+  if !sort_key?(T.result(callback))
+    return error(State.fail(cx, st, "CHECK-TYPE-MISMATCH", "sort_by keys must be Int, Float, String or Ref", span))
   end
 
   ok(true)
+end
+
+# True for the types that sort and sort_by order: Int, Float, String and Ref (in the order the Refs were made).
+def sort_key?(type: T.Type) -> Bool
+  T.is?(type, "Int") or T.is?(type, "Float") or T.is?(type, "String") or CheckTypes.ref?(type)
 end
 
 # List.concat: both lists have one type; an empty literal takes the type of the other side.

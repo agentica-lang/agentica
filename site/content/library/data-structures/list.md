@@ -91,7 +91,7 @@ end
 List.sort(list: List[T]) -> List[T]
 ```
 
-Sorts `Int`, `Float` or `String` values, smallest first; any other element type is `CHECK-TYPE-MISMATCH`. The sort is stable and O(n log n). Strings sort by code point, so `"B"` comes before `"a"`, and a `NaN` goes last.
+Sorts `Int`, `Float`, `String` or `Ref` values, smallest first (a `Ref` by when it was made); any other element type is `CHECK-TYPE-MISMATCH`. The sort is stable and O(n log n). Strings sort by code point, so `"B"` comes before `"a"`, and a `NaN` goes last.
 
 ```agentica
 def main() -> Void
@@ -111,7 +111,7 @@ end
 List.sort_by(list: List[A], key: Fn[A, K]) -> List[A]
 ```
 
-Sorts ascending by the key from the function (an `Int`, `Float` or `String`; any other key type is `CHECK-TYPE-MISMATCH`). The function runs once per element, left to right. Equal keys keep their order, and the cost is O(n log n) plus the key calls.
+Sorts ascending by the key from the function (an `Int`, `Float`, `String` or `Ref`; any other key type is `CHECK-TYPE-MISMATCH`). The function runs once per element, left to right. Equal keys keep their order, and the cost is O(n log n) plus the key calls.
 
 ```agentica
 def main() -> Void
@@ -341,7 +341,7 @@ end
 List.group_by(list: List[A], key: Fn[A, K]) -> Map[K, List[A]]
 ```
 
-Groups by the key (an `Int`, a `String` or a `Bytes`; another key type is `CHECK-TYPE-MISMATCH` at the block). Keys and groups keep their first-appearance order.
+Groups by the key (an `Int`, a `String`, a `Bytes` or a `Ref`; another key type is `CHECK-TYPE-MISMATCH` at the block). Keys and groups keep their first-appearance order.
 
 ```agentica
 def main() -> Void
@@ -361,7 +361,7 @@ List.tally(list: List[K]) -> Map[K, Int]
 List.uniq(list: List[K]) -> List[K]
 ```
 
-`tally` counts equal items; `uniq` keeps the first of each. Items are `Int`, `String` or `Bytes`, in order of first appearance.
+`tally` counts equal items; `uniq` keeps the first of each. Items are `Int`, `String`, `Bytes` or `Ref`, in order of first appearance.
 
 ```agentica
 def main() -> Void

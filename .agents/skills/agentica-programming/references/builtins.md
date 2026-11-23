@@ -141,8 +141,8 @@ List.reduce(list: List[A], initial: B, block: Fn[B, A, B]) -> B   # folds left: 
 List.each(list: List[A], block: Fn[A, Void]) -> Void
 List.any?(list: List[A], block: Fn[A, Bool]) -> Bool     # stops at the first true
 List.all?(list: List[A], block: Fn[A, Bool]) -> Bool     # stops at the first false
-List.sort(list: List[T]) -> List[T]                      # T is Int, Float or String; stable
-List.sort_by(list: List[A], key: Fn[A, K]) -> List[A]    # key is Int, Float or String; one call per element
+List.sort(list: List[T]) -> List[T]                      # T is Int, Float, String or Ref; stable
+List.sort_by(list: List[A], key: Fn[A, K]) -> List[A]    # key is Int, Float, String or Ref; one call per element
 List.find(list: List[A], block: Fn[A, Bool]) -> Result[A]   # ok(first match; stops there) or error("not found")
 List.each_with_index(list: List[A], block: Fn[A, Int, Void]) -> Void   # block(item, index), index from 0
 List.flat_map(list: List[A], block: Fn[A, List[B]]) -> List[B]
@@ -150,9 +150,9 @@ List.partition(list: List[A], block: Fn[A, Bool]) -> List[List[A]]   # [accepted
 List.take_while(list: List[A], block: Fn[A, Bool]) -> List[A]      # stops calling the block at the first false
 List.drop_while(list: List[A], block: Fn[A, Bool]) -> List[A]
 List.each_slice(list: List[A], size: Int) -> List[List[A]]         # no block; size < 1 is RUNTIME-INVALID-COUNT
-List.group_by(list: List[A], key: Fn[A, K]) -> Map[K, List[A]]     # K is Int, String or Bytes; first-appearance order
-List.tally(list: List[K]) -> Map[K, Int]                 # K is Int, String or Bytes; first-appearance order
-List.uniq(list: List[K]) -> List[K]                      # K is Int, String or Bytes; keeps the first of each
+List.group_by(list: List[A], key: Fn[A, K]) -> Map[K, List[A]]     # K is Int, String, Bytes or Ref; first-appearance order
+List.tally(list: List[K]) -> Map[K, Int]                 # K is Int, String, Bytes or Ref; first-appearance order
+List.uniq(list: List[K]) -> List[K]                      # K is Int, String, Bytes or Ref; keeps the first of each
 List.sum(list: List[N]) -> N                             # Int or Float; empty gives 0 or 0.0; Int overflow halts
 List.include?(list: List[T], value: T) -> Bool           # any T with ==; also member?; stops at the first match
 List.index(list: List[T], value: T) -> Optional[Int]     # first position of an item == value; none when absent
@@ -200,7 +200,7 @@ m.select(block: Fn[K, V, Bool]) -> Map[K, V]             # keeps the entries the
 ## Set
 
 ```text
-Set.new(items: List[T]) -> Set[T]                        # T is Int, String or Bytes; repeats dropped, first keeps its place
+Set.new(items: List[T]) -> Set[T]                        # T is Int, String, Bytes or Ref; repeats dropped, first keeps its place
 Set.add(set: Set[T], value: T) -> Set[T]                 # a member leaves the set unchanged
 Set.delete(set: Set[T], value: T) -> Set[T]              # a missing element is ignored; O(log n) amortized
 Set.include?(set: Set[T], value: T) -> Bool
@@ -271,6 +271,18 @@ optional.some?() -> Bool
 optional.none?() -> Bool
 optional.to_result(message: String) -> Result[T]         # ok(x), or error(message) for none
 ```
+
+## Ref
+
+```text
+Ref.make() -> Ref                                        # a token unique in the run, equal only to itself
+```
+
+- A `Ref` gives a value an identity (a graph node id): a struct field, a
+  `Map`, `Set` or `ATS` key, `uniq`. `sort` and `sort_by` order Refs by
+  creation, so a Ref made after another (in a task, or after a channel or
+  `Task.await` brought the other) sorts after it. Prints `<Ref 1>`; no `<`, no
+  arithmetic, no `Int`, no JSON.
 
 ## Methods and Ruby names
 

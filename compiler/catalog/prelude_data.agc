@@ -65,7 +65,11 @@ ROWS: List[Model.PreludeRow] = [
     name: "List.group_by",
     module: "list",
     limits: [
-      Model.Limit(variable: "K", allowed: [Types.Type.Int, Types.Type.String, Types.Type.Bytes], what: "a key"),
+      Model.Limit(
+        variable: "K",
+        allowed: [Types.Type.Int, Types.Type.String, Types.Type.Bytes, Types.Type.Opaque("Ref")],
+        what: "a key",
+      ),
     ],
     selector: "",
     bodies: {"": "group_by"},
@@ -135,7 +139,11 @@ ROWS: List[Model.PreludeRow] = [
     name: "List.tally",
     module: "list",
     limits: [
-      Model.Limit(variable: "K", allowed: [Types.Type.Int, Types.Type.String, Types.Type.Bytes], what: "items"),
+      Model.Limit(
+        variable: "K",
+        allowed: [Types.Type.Int, Types.Type.String, Types.Type.Bytes, Types.Type.Opaque("Ref")],
+        what: "items",
+      ),
     ],
     selector: "",
     bodies: {"": "tally"},
@@ -144,7 +152,11 @@ ROWS: List[Model.PreludeRow] = [
     name: "List.uniq",
     module: "list",
     limits: [
-      Model.Limit(variable: "K", allowed: [Types.Type.Int, Types.Type.String, Types.Type.Bytes], what: "items"),
+      Model.Limit(
+        variable: "K",
+        allowed: [Types.Type.Int, Types.Type.String, Types.Type.Bytes, Types.Type.Opaque("Ref")],
+        what: "items",
+      ),
     ],
     selector: "",
     bodies: {"": "uniq"},
@@ -188,7 +200,11 @@ ROWS: List[Model.PreludeRow] = [
     name: "Range.group_by",
     module: "range",
     limits: [
-      Model.Limit(variable: "K", allowed: [Types.Type.Int, Types.Type.String, Types.Type.Bytes], what: "a key"),
+      Model.Limit(
+        variable: "K",
+        allowed: [Types.Type.Int, Types.Type.String, Types.Type.Bytes, Types.Type.Opaque("Ref")],
+        what: "a key",
+      ),
     ],
     selector: "",
     bodies: {"": "group_by"},
