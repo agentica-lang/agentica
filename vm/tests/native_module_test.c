@@ -233,6 +233,8 @@ static const char *count_load(void) {
 }
 
 static const an_function bad_rows[] = {{"add", "(Int, Int) -> Int", NULL, AN_SHORT}};
+/* A flag that no API version defines: the row is refused at load, before the mode is compared with the call's. */
+static const an_function bad_flags[] = {{"add", "(Int, Int) -> Int", add, AN_DIRTY | AN_FRESH | 4}};
 static const an_module v_major = {2, 0, sizeof(an_module), "v", NULL, functions, 1, NULL, 0, NULL, 0};
 static const an_module v_minor = {1, AN_API_MINOR + 1, sizeof(an_module), "v", NULL, functions, 1, NULL, 0, NULL, 0};
 /* The size of an an_module of API 1.0, as vm/native_module.c checks it: one byte less is refused. */
@@ -243,6 +245,7 @@ _Static_assert(SIZE_1_0 == 44, "the 1.0 an_module layout on LP64");
 static const an_module v_size = {1, 0, SIZE_1_0 - 1, "v", NULL, functions, 1, NULL, 0, NULL, 0};
 static const an_module v_size_1_0 = {1, 0, SIZE_1_0, "v", NULL, functions, 1, NULL, 0, NULL, 0};
 static const an_module v_rows = {1, 0, sizeof(an_module), "v", NULL, bad_rows, 1, NULL, 0, NULL, 0};
+static const an_module v_flags = {1, AN_API_MINOR, sizeof(an_module), "v", NULL, bad_flags, 1, NULL, 0, NULL, 0};
 static const an_module v_refuses = {1, 0, sizeof(an_module), "v", refuse_load, functions, 1, NULL, 0, NULL, 0};
 static const an_type twin_types[] = {{"Point", AN_STRUCT, "x: Int, y: Int"}, {"Point", AN_STRUCT, "x: Int"}};
 static const an_module v_twins = {1, 1, sizeof(an_module), "v", NULL, functions, 1, twin_types, AN_COUNT(twin_types),
@@ -281,6 +284,10 @@ static const an_module *init_rows(const an_api *api) {
   (void)api;
   return &v_rows;
 }
+static const an_module *init_flags(const an_api *api) {
+  (void)api;
+  return &v_flags;
+}
 static const an_module *init_twins(const an_api *api) {
   (void)api;
   return &v_twins;
@@ -311,7 +318,7 @@ static void test_versions(void) {
   } refused[] = {{"v_none", init_none},   {"v_major", init_major}, {"v_minor", init_minor},
                  {"v_size", init_size},   {"v_rows", init_rows},   {"v_twins", init_twins},
                  {"v_twin_resources", init_twin_resources}, {"v_type_and_resource", init_type_and_resource},
-                 {"v_refuses", init_refuses}};
+                 {"v_flags", init_flags},   {"v_refuses", init_refuses}};
   agc_value two[2] = {agc_int(1), agc_int(2)};
   char signature[96];
   for (size_t k = 0; k < sizeof refused / sizeof refused[0]; k++) {

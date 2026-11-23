@@ -336,6 +336,55 @@ def test_an_arena_closes_the_resources_of_a_module(tmp_path, demo):
     assert result.stderr == "freed 20\nfreed 2\nfreed 1\nfreed 10\nfreed 30\n"
 
 
+FRESH = """extern module "LIBRARY"
+  resource Blob
+  def blob() -> Blob
+  def mix(blob: Blob) -> Blob
+  def mix_fresh(blob: Blob) -> Blob
+  compute def dirty_mix_fresh(blob: Blob) -> Blob
+  def first(blob: Blob) -> Int
+  def blobs() -> Int
+end
+
+def chain(path: String) -> Blob
+  if path == "short"
+    return mix_fresh(mix_fresh(blob()))
+  elsif path == "dirty"
+    return dirty_mix_fresh(dirty_mix_fresh(blob()))
+  end
+  return mix(mix(blob()))
+end
+
+def arenas(path: String) -> Void
+  before = blobs()
+  last = 0
+  for _ in 0...8
+    kept = Native.arena do chain(path) end
+    last = first(kept)
+    Native.close(kept)
+  end
+  puts("#{path} #{last} #{blobs() - before}")
+end
+
+"""
+
+
+# #1932: an arena that returns the Blob of a function marked AN_FRESH keeps that Blob alone, so a loop of such arenas
+# frees every 4 MiB intermediate. Each path that makes a resource is checked on its own chain: a short call makes it
+# at once (api_resource_new), a compute call when it returns (build_node). Without the flag the Blob keeps the ones it
+# was made from, all the way up, and each arena leaves two of them open until the task ends. Each line counts the
+# Blobs left open by its own loop.
+@NATIVE_CALLS
+def test_an_arena_keeps_only_the_result_of_a_fresh_function(tmp_path, demo):
+    body = """  arenas("short")
+  arenas("dirty")
+  arenas("plain")
+"""
+    result = run_main(tmp_path, demo, body, "", FRESH)
+    assert (result.code, result.stderr) == (0, "")
+    assert result.stdout == "short 2 0\ndirty 2 0\nplain 2 16\n"
+
+
 # The profile (AGENTICA_VM_TRACE=profile) has a line per function of a module that ran: its calls, the time in C and
 # the mode.
 @NATIVE_CALLS
