@@ -58,7 +58,10 @@ end
 - `AN_FRESH` added to a row's mode (`AN_SHORT | AN_FRESH`, API 1.5): the
   resources the function makes do not come from its resource arguments (a
   tensor that owns its data), so a `Native.arena` that keeps one keeps it
-  alone. The `.agc` declaration does not change.
+  alone. The module promises that each such resource owns all its memory and
+  never points into an argument's state: the arguments may be freed while the
+  result lives, even during a call on the result. The `.agc` declaration does
+  not change.
 - A resource row is `{"Db", sizeof(db_state), db_free}`; `an_resource_new`
   makes one and gives its zeroed state, `an_get_resource` gives the state of a
   resource argument. A dirty function's getters give `false` for terms it

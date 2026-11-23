@@ -346,40 +346,43 @@ FRESH = """extern module "LIBRARY"
   def blobs() -> Int
 end
 
-def chain(fresh: Bool) -> Blob
-  if fresh
-    return dirty_mix_fresh(mix_fresh(mix_fresh(blob())))
+def chain(path: String) -> Blob
+  if path == "short"
+    return mix_fresh(mix_fresh(blob()))
+  elsif path == "dirty"
+    return dirty_mix_fresh(dirty_mix_fresh(blob()))
   end
-  return mix(mix(mix(blob())))
+  return mix(mix(blob()))
 end
 
-def once(fresh: Bool) -> Int
-  kept = Native.arena do chain(fresh) end
-  n = first(kept)
-  Native.close(kept)
-  return n
+def arenas(path: String) -> Void
+  before = blobs()
+  last = 0
+  for _ in 0...8
+    kept = Native.arena do chain(path) end
+    last = first(kept)
+    Native.close(kept)
+  end
+  puts("#{path} #{last} #{blobs() - before}")
 end
 
 """
 
 
-# #1932: an arena that returns the Blob of a function marked AN_FRESH, short or compute, keeps that Blob alone, so a
-# loop of such arenas frees every 4 MiB intermediate. Without the flag the Blob keeps the ones it was made from, all the
-# way up, and each call leaves three of them open until the task ends.
+# #1932: an arena that returns the Blob of a function marked AN_FRESH keeps that Blob alone, so a loop of such arenas
+# frees every 4 MiB intermediate. Each path that makes a resource is checked on its own chain: a short call makes it
+# at once (api_resource_new), a compute call when it returns (build_node). Without the flag the Blob keeps the ones it
+# was made from, all the way up, and each arena leaves two of them open until the task ends. Each line counts the
+# Blobs left open by its own loop.
 @NATIVE_CALLS
 def test_an_arena_keeps_only_the_result_of_a_fresh_function(tmp_path, demo):
-    body = """  for _ in 0...8
-    puts(once(true))
-  end
-  puts("fresh #{blobs()}")
-  for _ in 0...8
-    once(false)
-  end
-  puts("mixed #{blobs()}")
+    body = """  arenas("short")
+  arenas("dirty")
+  arenas("plain")
 """
     result = run_main(tmp_path, demo, body, "", FRESH)
     assert (result.code, result.stderr) == (0, "")
-    assert result.stdout == "3\n" * 8 + "fresh 0\nmixed 24\n"
+    assert result.stdout == "short 2 0\ndirty 2 0\nplain 2 16\n"
 
 
 # The profile (AGENTICA_VM_TRACE=profile) has a line per function of a module that ran: its calls, the time in C and

@@ -139,7 +139,8 @@ The design (trie, unboxed Int and Float leaves, builders, costs) is
   (`error_parts` in the arena); `an_get_error` reads an Error's fields as
   they are, or kind `error` and no details for a String payload. A resource
   that a row marked `AN_FRESH` (API 1.5) makes gets no `up` links
-  (`origin_count`), so an arena that keeps it keeps nothing above it.
+  (`origin_count`), so an arena that keeps it keeps nothing above it, and a
+  call that holds it holds nothing above it either.
   `make bench-native` times it.
 - Resources that extern functions return are `agc_c_resource` (`vm/value.h`): a
   registry entry owned like a handle, freed by `Native.close` or the owner's
