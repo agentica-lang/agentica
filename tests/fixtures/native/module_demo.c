@@ -603,8 +603,9 @@ static an_term trace_frees(an_env *env, int argc, const an_term *argv) {
 }
 
 /* A Blob owns BLOB_SIZE bytes of malloc memory, as a tensor owns its data; LIVE_BLOBS counts the ones not freed, so
-   a test sees what an arena keeps without reading the memory of the process. mix and mix_fresh make a new Blob from
-   one, the same function with and without AN_FRESH. */
+   a test sees what an arena keeps without reading the memory of the process. Only the first byte is written: a short
+   call that fills 4 MiB takes over a millisecond under TSan, which the builds of AGC_LEAF_CHECK warn of. mix and
+   mix_fresh make a new Blob from one, the same function with and without AN_FRESH. */
 enum { BLOB_SIZE = 4 << 20 };
 
 typedef struct {
@@ -622,7 +623,7 @@ static void blob_free(void *state) {
 
 static an_term new_blob(an_env *env, unsigned char first) {
   an_term t = an_void(env);
-  unsigned char *data = calloc(1, BLOB_SIZE);
+  unsigned char *data = malloc(BLOB_SIZE);
   if (!data) return an_raise(env, "out of memory");
   demo_blob *b = an_resource_new(env, BLOB_RESOURCE, &t);
   if (!b) {

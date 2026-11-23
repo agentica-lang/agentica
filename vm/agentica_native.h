@@ -4,7 +4,7 @@
  * agentica binary. Values are opaque terms, read through checked getters. Version 1.5: short and dirty calls of
  * scalars, String, Bytes, List, Map, Optional, Result, the program's structs and enums (1.1), the module's resources
  * (1.2), an_blocking, for C libraries that switch stacks (1.3), errors with a kind and details (1.4), and functions
- * whose resources do not come from their arguments (AN_FRESH, 1.5). The VM half
+ * whose resources do not come from their arguments, AN_FRESH (1.5). The VM half
  * is vm/native_module.c; this header is the contract, and it includes nothing of the VM.
  */
 #ifndef AGENTICA_NATIVE_H
