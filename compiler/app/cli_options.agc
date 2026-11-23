@@ -113,22 +113,7 @@ def parse(arguments: List[String], version: String) -> Parsed
   Parsed.Ready(options)
 end
 
-## The steps that a `--max-steps` value gives: 1 to 1000000000000 in digits (leading zeros allowed), 0 for `unlimited`,
-## or -1 for anything else. `agentica run` and `agentica test` read the option with this one rule.
-def steps_of(value: String) -> Int
-  return 0 if value == "unlimited"
-  return -1 if !digits?(value)
-
-  parsed = without_leading_zeros(value).to_i
-  return -1 if !parsed.ok? or parsed.unwrap! < 1 or parsed.unwrap! > MAX_STEPS
-
-  parsed.unwrap!
-end
-
 private
-
-# The most steps --max-steps takes: the budget of a test file is that number times its tests.
-MAX_STEPS = 1_000_000_000_000
 
 # The options that are given once at most, with the number of values each takes; --steps may repeat.
 ONCE = {
@@ -208,13 +193,11 @@ def apply(options: Options, word: String, value: String) -> Applied
   end
 end
 
-# `unlimited` is kept as it is: only `test` and a run take it (dispatch in cli.agc), and it means no limit.
 def max_steps(options: Options, value: String) -> Applied
-  steps = steps_of(value)
-  return Applied.Refused("--max-steps needs a positive integer") if steps < 0
-  return Applied.Changed(options.with(max_steps: value)) if steps == 0
+  digits = without_leading_zeros(value)
+  return Applied.Refused("--max-steps needs a positive integer") if !digits?(value) or digits == "0"
 
-  Applied.Changed(options.with(max_steps: steps.to_s))
+  Applied.Changed(options.with(max_steps: digits))
 end
 
 # The size goes to the VM as typed, which reads it (vm/launch.c): digits, then K, M or G at most.

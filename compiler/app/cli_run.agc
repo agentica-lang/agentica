@@ -81,7 +81,7 @@ PREBUILT_ONLY_VARIABLE = "AGENTICA_NATIVE_PREBUILT_ONLY"
 # The options the VM gets, in a fixed order.
 def vm_flags(options: Options.Options, source: String) -> List[String]
   flags: List[String] = []
-  if options.max_steps != "" and options.max_steps != "unlimited"
+  if options.max_steps != ""
     flags = flags.concat(["--max-steps", options.max_steps])
   end
 

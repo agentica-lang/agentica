@@ -313,7 +313,7 @@ class UnitTest(TestCase):
         (directory / "test").mkdir()
         (directory / "test" / "heavy_test.agc").write_text(
             "def burn(n: Int) -> Int\n  total = 0\n  i = 0\n  while i < n\n    total += i\n    i += 1\n  end\n  total\nend\n\n"
-            'def main() -> Void\n  Test.run([Test.test("heavy") do Test.eq(burn(300000) > 0, true) end])\nend\n',
+            'def main() -> Void\n  Test.run([Test.test("heavy") do Test.eq(burn(265000) > 0, true) end])\nend\n',
             encoding="utf-8")
         (directory / "specs").mkdir()
         (directory / "specs" / "steps.agc").write_text(
@@ -339,9 +339,9 @@ class UnitTest(TestCase):
                     for value in ("5000000", "0005000000", "unlimited"):
                         status, roomy = self.json_test(path, "--max-steps", value, *extra, cwd=directory)
                         self.assertEqual((status, statuses(roomy)), (0, ["passed"]), value)
-        # In front of `test` a number or `unlimited` means the same.
+        # In front of `test` a number means the same.
         for path in ("test", "specs"):
-            for value in ("5000000", "0005000000", "unlimited"):
+            for value in ("5000000", "0005000000"):
                 result = self.agentica_test("--json", path, cwd=directory, flags=["--max-steps", value])
                 self.assertEqual((result.code, result.json()["passed"]), (0, 1), value)
 
@@ -351,15 +351,15 @@ class UnitTest(TestCase):
         test.write_text(test.read_text(encoding="utf-8").replace(
             "Test.run([", 'Test.run([Test.test("light") do Test.eq(1, 1) end, Test.test("light 2") do Test.eq(2, 2) end, '),
             encoding="utf-8")
-        # 3 tests + 1 give the file 4 times N; only `heavy` runs with --only, which leaves 2 times N.
-        _status, whole = self.json_test("test", "--max-steps", "1500000", cwd=directory)
+        # 3 tests + 1 give the file 4 times N (4,000,000); only `heavy` runs with --only, which leaves 2,000,000.
+        _status, whole = self.json_test("test", "--max-steps", "1000000", cwd=directory)
         self.assertEqual(statuses(whole), ["passed", "passed", "passed"])
-        _status, alone = self.json_test("test", "--max-steps", "1500000", "--only", "heavy", cwd=directory)
+        _status, alone = self.json_test("test", "--max-steps", "1000000", "--only", "heavy", cwd=directory)
         self.assertEqual([field(item, "code") for item in report_cases(alone)], ["RUNTIME-STEP-LIMIT"])
 
     def test_max_steps_takes_a_positive_integer_or_unlimited_once(self):
         directory = self.heavy_project()
-        for value in ("0", "00", "-1", "+5", "abc", "1e5", "", "1000000000001"):
+        for value in ("0", "00", "-1", "+5", "abc", "1e5", ""):
             with self.subTest(value=value):
                 status, report = self.json_test("test", "--max-steps", value, cwd=directory)
                 self.assertEqual((status, file_codes(report)), (2, [("", "RUNTIME-BDD-USAGE")]))
@@ -367,15 +367,23 @@ class UnitTest(TestCase):
         self.assertEqual((status, file_codes(report)), (2, [("", "RUNTIME-BDD-USAGE")]))
         status, report = self.json_test("test", "--max-steps", cwd=directory)
         self.assertEqual((status, file_codes(report)), (2, [("", "RUNTIME-BDD-USAGE")]))
-        # In front of `test` the option has the same values.
-        for value in ("0", "+5", "abc", "1000000000001"):
+        # In front of `test` the global option refuses them too.
+        for value in ("0", "+5", "abc"):
             with self.subTest(front=value):
                 result = self.agentica_test("test", cwd=directory, flags=["--max-steps", value])
                 self.assertEqual((result.code, result.stdout, "--max-steps" in result.stderr), (2, "", True))
-        # `unlimited` in front of a command that does not run a program is refused as a bad number is.
-        result = run(cli() + ["--max-steps", "unlimited", "check", "test/heavy_test.agc"], cwd=directory,
-                     env=vm_environment(None))
+        # `unlimited` is a value of `test` only: in front of it the global option refuses it.
+        result = self.agentica_test("test", cwd=directory, flags=["--max-steps", "unlimited"])
         self.assertEqual((result.code, result.stdout, "--max-steps" in result.stderr), (2, "", True))
+
+    def test_a_max_steps_above_the_most_counts_as_the_most(self):
+        directory = self.heavy_project()
+        for path in ("test", "specs"):
+            for value in ("1000000000001", "99999999999999999999999999"):
+                status, report = self.json_test(path, "--max-steps", value, cwd=directory)
+                self.assertEqual((status, statuses(report)), (0, ["passed"]), value)
+            result = self.agentica_test("--json", path, cwd=directory, flags=["--max-steps", "99999999999999999999"])
+            self.assertEqual((result.code, result.json()["passed"]), (0, 1))
 
     def test_the_std_unit_tests_pass(self):
         status, report = self.json_test(STD_TESTS)

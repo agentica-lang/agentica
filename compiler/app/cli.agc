@@ -143,10 +143,6 @@ def dispatch(session: Session) -> Int
 
   return program(building(session, first), first, words) if CliRun.file_run?(words)
 
-  if session.options.max_steps == "unlimited" and first != "test" and first != "run"
-    return emit(Reply.failed(2, "agentica: --max-steps needs a positive integer\n"))
-  end
-
   if first == "test"
     return test(session, words.drop(1))
   elsif first == "help"

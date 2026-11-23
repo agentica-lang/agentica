@@ -9,7 +9,6 @@
 ## `--json`, `--ai`, `--no-cache`, the `--deny-*` flags and `--sandbox` (cli.agc adds the ones in front of `test`).
 
 import Tags from "std/bdd/tags"
-import CliOptions from "../app/cli_options"
 
 ## Everything a run needs.
 struct Options
@@ -90,6 +89,9 @@ private
 # The most test files that run at once: the `limit` of `Task.map` takes 1 to 1024.
 MAX_JOBS = 1024
 
+# The most --max-steps takes: a file's budget is that number times its tests, which stays far from the 64-bit limit.
+MAX_STEPS = 1_000_000_000_000
+
 # The flags that the VMs of the user's code get (the test files, the step program and the programs it starts), never
 # the runner. A flag given twice counts once.
 DENY = Set.new(["--deny-run", "--deny-net", "--deny-fs", "--deny-env", "--deny-native", "--sandbox"])
@@ -106,6 +108,20 @@ def option(options: Options, name: String, value: String) -> Options
     "--test-timeout-ms" -> options.with(test_timeout_ms: value.to_i.unwrap_or(options.test_timeout_ms))
     _ -> options
   end
+end
+
+# The steps of a --max-steps value: digits (leading zeros allowed) of at least 1, clamped to MAX_STEPS as the VM clamps
+# a number it cannot hold; 0 for `unlimited`; -1 for anything else.
+def steps_of(value: String) -> Int
+  return 0 if value == "unlimited"
+  return -1 if value == "" or !value.split("").all? do |c| "0123456789".include?(c) end
+
+  parsed = value.to_i
+  return MAX_STEPS if !parsed.ok?
+  return -1 if parsed.unwrap! < 1
+  return MAX_STEPS if parsed.unwrap! > MAX_STEPS
+
+  parsed.unwrap!
 end
 
 # The words of the user. The last --json or --ai decides the style of every report, usage errors included, so they are
@@ -156,10 +172,8 @@ def user_arguments(options: Options, words: List[String]) -> Parsed
       elsif word == "--max-steps"
         return Parsed.Usage("one --max-steps N", shown) if steps_seen
 
-        limit = CliOptions.steps_of(value)
-        if limit < 0
-          return Parsed.Usage("--max-steps needs a positive integer up to 1000000000000, or unlimited", shown)
-        end
+        limit = steps_of(value)
+        return Parsed.Usage("--max-steps needs a positive integer or unlimited", shown) if limit < 0
 
         steps_seen = true
         shown = shown.with(max_steps: limit)

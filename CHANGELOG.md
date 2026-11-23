@@ -8,7 +8,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-- `agentica test --max-steps N|unlimited` sets the step budget of each test and scenario (default 1,000,000); in front of `test` the option now applies instead of being ignored.
+- `agentica test --max-steps N|unlimited` sets the step budget of each test and scenario (default 1,000,000); `agentica --max-steps N test` now applies instead of being ignored.
 
 ## [0.35.1] - 2026-11-20
 
